@@ -23,6 +23,17 @@ val apply_proj_loans_on_symbolic_expansion :
   eval_ctx ->
   tavalue
 
+(** Similar to [apply_proj_loans_on_symbolic_expansion] but evaluates to an
+    abstraction expression *)
+val apply_eproj_loans_on_symbolic_expansion :
+  Meta.span ->
+  RegionId.Set.t ->
+  symbolic_expansion ->
+  rty ->
+  rty ->
+  eval_ctx ->
+  tevalue
+
 (** Convert a symbolic expansion *which is not a borrow* to a value *)
 val symbolic_expansion_non_borrow_to_value :
   Meta.span -> symbolic_value -> symbolic_expansion -> tvalue
@@ -76,12 +87,25 @@ val symbolic_expansion_non_shared_borrow_to_value :
 val apply_proj_borrows :
   Meta.span -> bool -> eval_ctx -> RegionId.Set.t -> tvalue -> rty -> tavalue
 
+(** Similar to [apply_proj_borrows] but evaluates to an abstraction expression
+*)
+val apply_eproj_borrows :
+  Meta.span -> bool -> eval_ctx -> RegionId.Set.t -> tvalue -> rty -> tevalue
+
 (** Parameters:
     - [config]
     - [ctx]
     - [regions]: the regions to project
     - [v]: the value on which to apply the projection
     - [ty]: the type (with regions) to use for the projection (shouldn't have
-      erased regions) *)
+      erased regions)
+
+    We use this function to project input values into region abstractions when
+    evaluating function calls. *)
 val apply_proj_borrows_on_input_value :
-  Meta.span -> eval_ctx -> RegionId.Set.t -> tvalue -> rty -> eval_ctx * tavalue
+  Meta.span -> eval_ctx -> RegionId.Set.t -> tvalue -> rty -> tavalue
+
+(** Similar to [apply_eproj_borrows_on_input_value] but evaluates to an
+    abstraction expression *)
+val apply_eproj_borrows_on_input_value :
+  Meta.span -> eval_ctx -> RegionId.Set.t -> tvalue -> rty -> tevalue

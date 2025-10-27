@@ -28,7 +28,7 @@ let expand_if_borrows_at_place (span : Meta.span) (access : access_kind)
   (* Small helper *)
   let rec expand : cm_fun =
    fun ctx ->
-    let v = read_place span access p ctx in
+    let _, v = read_place span access p ctx in
     match
       find_first_expandable_sv_with_borrows (Some span) ctx.type_ctx.type_decls
         ctx.type_ctx.type_infos v
@@ -49,8 +49,8 @@ let expand_if_borrows_at_place (span : Meta.span) (access : access_kind)
 
     We check that the value *doesn't contain bottoms or reserved borrows*. *)
 let read_place_check (span : Meta.span) (access : access_kind) (p : place)
-    (ctx : eval_ctx) : tvalue =
-  let v = read_place span access p ctx in
+    (ctx : eval_ctx) : loan_id option * tvalue =
+  let lid, v = read_place span access p ctx in
   (* Check that there are no bottoms in the value *)
   [%cassert] span
     (not (bottom_in_value ctx.ended_regions v))
@@ -60,11 +60,12 @@ let read_place_check (span : Meta.span) (access : access_kind) (p : place)
     (not (reserved_in_value v))
     "There should be no reserved borrows in the value";
   (* Return *)
-  v
+  (lid, v)
 
 let access_rplace_reorganize_and_read (config : config) (span : Meta.span)
     (greedy_expand : bool) (access : access_kind) (p : place) (ctx : eval_ctx) :
-    tvalue * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
+    loan_id option * tvalue * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr)
+    =
   (* Make sure we can evaluate the path *)
   let ctx, cc = update_ctx_along_read_place config span access p ctx in
   (* End the proper loans at the place itself *)
@@ -77,16 +78,16 @@ let access_rplace_reorganize_and_read (config : config) (span : Meta.span)
        else (ctx, fun e -> e))
   in
   (* Read the place - note that this checks that the value doesn't contain bottoms *)
-  let ty_value = read_place_check span access p ctx in
+  let lid, value = read_place_check span access p ctx in
   (* Compose *)
-  (ty_value, ctx, cc)
+  (lid, value, ctx, cc)
 
 let access_rplace_reorganize (config : config) (span : Meta.span)
     (greedy_expand : bool) (access : access_kind) (p : place) : cm_fun =
  fun ctx ->
   if ExpressionsUtils.place_accesses_global p then (ctx, fun x -> x)
   else
-    let _, ctx, f =
+    let _, _, ctx, f =
       access_rplace_reorganize_and_read config span greedy_expand access p ctx
     in
     (ctx, f)
@@ -185,13 +186,11 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
             in
             ((ctx, cc_comp cc cc1), (v, copied)))
           (ctx, fun e -> e)
-          av.field_values
+          av.fields
       in
       let fields, copied_fields = List.split fields in
-      let copied =
-        { v with value = VAdt { av with field_values = copied_fields } }
-      in
-      let v = { v with value = VAdt { av with field_values = fields } } in
+      let copied = { v with value = VAdt { av with fields = copied_fields } } in
+      let v = { v with value = VAdt { av with fields } } in
       (v, copied, ctx, cc)
   | VBottom -> [%craise] span "Can't copy ⊥"
   | VBorrow bc -> (
@@ -248,26 +247,24 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
         in
         let updated_sv = mk_fresh_symbolic_value span ty in
         let copied_sv = mk_fresh_symbolic_value span ty in
-        let mk_abs (r_id : RegionId.id) (avalues : tavalue list) : abs =
-          let abs =
-            {
-              abs_id = fresh_abstraction_id ();
-              kind = CopySymbolicValue;
-              can_end = true;
-              parents = AbstractionId.Set.empty;
-              original_parents = [];
-              regions = { owned = RegionId.Set.singleton r_id };
-              avalues;
-            }
-          in
-          Invariants.opt_type_check_abs span ctx abs;
-          (* *)
-          abs
-        in
 
         let abs =
           List.map
             (fun rid ->
+              let owned = RegionId.Set.singleton rid in
+
+              (* Create the continuation, for the translation *)
+              let abs_cont : abs_cont =
+                (* Note that the values don't give back anything (we will
+                   simplify the given back value to unit when translating
+                   to pure) so we can simply ignore them. *)
+                {
+                  input = Some (mk_eignored mk_unit_ty);
+                  output = Some { value = EIgnored; ty };
+                }
+              in
+
+              (* Create the abstraction values *)
               let mk_proj (is_borrows : bool) sv_id : tavalue =
                 let proj : symbolic_proj = { sv_id; proj_ty = ty } in
                 let proj =
@@ -280,7 +277,23 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
               let sv = mk_proj true sp.sv_id in
               let updated_sv = mk_proj false updated_sv.sv_id in
               let copied_sv = mk_proj false copied_sv.sv_id in
-              mk_abs rid [ sv; updated_sv; copied_sv ])
+
+              let abs =
+                {
+                  abs_id = fresh_abs_id ();
+                  kind = CopySymbolicValue;
+                  can_end = true;
+                  parents = AbsId.Set.empty;
+                  original_parents = [];
+                  regions = { owned };
+                  avalues = [ sv; updated_sv; copied_sv ];
+                  cont = Some abs_cont;
+                }
+              in
+              Invariants.opt_type_check_abs span ctx abs;
+              (* *)
+              abs
+              (*mk_abs rid [ sv; updated_sv; copied_sv ]*))
             (RegionId.Map.values regions)
         in
         let abs = List.map (fun a -> EAbs a) (List.rev abs) in
@@ -446,7 +459,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
   | Copy p ->
       (* Access the value *)
       let access = Read in
-      let v = read_place_check span access p ctx in
+      let _, v = read_place_check span access p ctx in
       (* Sanity checks *)
       [%cassert] span
         (not (bottom_in_value ctx.ended_regions v))
@@ -467,7 +480,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
   | Move p ->
       (* Access the value *)
       let access = Move in
-      let v = read_place_check span access p ctx in
+      let _, v = read_place_check span access p ctx in
       (* Check that there are no bottoms in the value we are about to move *)
       [%cassert] span
         (not (bottom_in_value ctx.ended_regions v))
@@ -885,17 +898,17 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
       in
 
       let greedy_expand = false in
-      let v, ctx, cc =
+      let lid, v, ctx, cc =
         access_rplace_reorganize_and_read config span greedy_expand access p ctx
       in
       (* Generate the fresh shared borrow id *)
       let sid = fresh_shared_borrow_id () in
       (* Compute the loan value, with which to replace the value at place p *)
       let bid, nv =
-        match v.value with
-        | VLoan (VSharedLoan (bid, _)) ->
-            (* The value is a shared loan: we do not need to do anything *)
-            (bid, v)
+        match (lid, v.value) with
+        | Some lid, _ | None, VLoan (VSharedLoan (lid, _)) ->
+            (* The value is (directly inside) a shared loan: we do not need to do anything *)
+            (lid, v)
         | _ ->
             (* Not a shared loan: add a wrapper *)
             let bid = fresh_borrow_id () in
@@ -929,7 +942,7 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
       (* Access the value *)
       let access = Write in
       let greedy_expand = false in
-      let v, ctx, cc =
+      let _, v, ctx, cc =
         access_rplace_reorganize_and_read config span greedy_expand access p ctx
       in
       (* Compute the rvalue - wrap the value in a mutable borrow with a fresh id *)
@@ -959,7 +972,7 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
         match type_id with
         | TTuple ->
             let tys = List.map (fun (v : tvalue) -> v.ty) values in
-            let v = VAdt { variant_id = None; field_values = values } in
+            let v = VAdt { variant_id = None; fields = values } in
             let generics = mk_generic_args [] tys [] [] in
             let ty = TAdt { id = TTuple; generics } in
             let aggregated : tvalue = { value = v; ty } in
@@ -978,7 +991,7 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
               (expected_field_types = List.map (fun (v : tvalue) -> v.ty) values);
             (* Construct the value *)
             let av : adt_value =
-              { variant_id = opt_variant_id; field_values = values }
+              { variant_id = opt_variant_id; fields = values }
             in
             let aty = TAdt { id = TAdtId def_id; generics } in
             let aggregated : tvalue = { value = VAdt av; ty = aty } in
@@ -1014,7 +1027,7 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
            array doesn't contain borrows.
         *)
         if ty_has_borrows (Some span) ctx.type_ctx.type_infos ty then
-          let value = VAdt { variant_id = None; field_values = values } in
+          let value = VAdt { variant_id = None; fields = values } in
           let value : tvalue = { value; ty } in
           (value, fun e -> e)
         else
@@ -1060,7 +1073,7 @@ let eval_rvalue_not_global (config : config) (span : Meta.span)
 let eval_fake_read (config : config) (span : Meta.span) (p : place) : cm_fun =
  fun ctx ->
   let greedy_expand = false in
-  let v, ctx, cc =
+  let _, v, ctx, cc =
     access_rplace_reorganize_and_read config span greedy_expand Read p ctx
   in
   [%cassert] span

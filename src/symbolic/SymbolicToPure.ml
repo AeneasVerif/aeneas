@@ -30,7 +30,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expr option) : fun_decl =
           ^ bs_ctx_expr_to_string ctx body];
 
         let effect_info =
-          get_fun_effect_info ctx (FunId (FRegular def_id)) None None
+          get_fun_effect_info ctx (FunId (FRegular def_id)) None
         in
         let mk_return (ctx : bs_ctx) v =
           match v with
@@ -47,19 +47,10 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expr option) : fun_decl =
         let mk_panic =
           (* TODO: we should use a [Fail] function *)
           let mk_output output_ty =
-            if effect_info.stateful then
-              (* Create the [Fail] value *)
-              let ret_ty = mk_simpl_tuple_ty [ mk_state_ty; output_ty ] in
-              let ret_v =
-                mk_result_fail_texpr_with_error_id ctx.span error_failure_id
-                  ret_ty
-              in
-              ret_v
-            else
-              mk_result_fail_texpr_with_error_id ctx.span error_failure_id
-                output_ty
+            mk_result_fail_texpr_with_error_id ctx.span error_failure_id
+              output_ty
           in
-          let back_tys = compute_back_tys ctx.sg.fun_ty None in
+          let back_tys = compute_back_tys ctx.sg.fun_ty in
           let back_tys = List.filter_map (fun x -> x) back_tys in
           let tys =
             if ctx.sg.fun_ty.fwd_info.ignore_output then back_tys
@@ -93,40 +84,13 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expr option) : fun_decl =
             (List.for_all
                (fun (var, ty) -> (var : fvar).ty = ty)
                (List.combine inputs signature.inputs));
-        let inputs = List.map (fun v -> mk_tpattern_from_fvar v None) inputs in
+        let inputs = List.map (mk_tpat_from_fvar None) inputs in
         Some (mk_closed_fun_body def.item_meta.span inputs body)
-  in
-
-  (* Cleanup the meta-data in the body: some meta-data may refer to variables which
-     are actually not bound. We remove those to make sure the body is well-formed.
-     TODO: this is really hacky.
-  *)
-  let body =
-    if Config.allow_unbound_variables_in_metadata then
-      Option.map
-        (fun (body : fun_body) ->
-          let visitor =
-            object
-              inherit [_] Pure.map_expr
-
-              (* We only need to visit those *)
-              method! visit_SymbolicAssignments () assigns =
-                SymbolicAssignments
-                  (List.filter_map
-                     (fun (var, value) ->
-                       if texpr_has_fvars value then None else Some (var, value))
-                     assigns)
-            end
-          in
-          { body with body = visitor#visit_texpr () body.body })
-        body
-    else body
   in
 
   (* Note that for now, the loops are still *inside* the function body (and we
      haven't counted them): we will extract them from there later, in {!PureMicroPasses}
-     (by "splitting" the definition).
-  *)
+     (by "splitting" the definition). *)
   let num_loops = 0 in
   let loop_id = None in
 
@@ -142,7 +106,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expr option) : fun_decl =
       def_id;
       item_meta = def.item_meta;
       builtin_info;
-      kind = def.src;
+      src = def.src;
       backend_attributes;
       num_loops;
       loop_id;
@@ -383,6 +347,6 @@ let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
     explicit_info;
     preds;
     ty;
-    kind = src;
+    src;
     body_id;
   }

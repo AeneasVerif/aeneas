@@ -512,7 +512,7 @@ Definition ite : result unit :=
 (** [arrays::zero_slice]: loop 0:
     Source: 'tests/src/arrays.rs', lines 336:4-339:5 *)
 Fixpoint zero_slice_loop
-  (n : nat) (a : slice u8) (i : usize) (len : usize) : result (slice u8) :=
+  (n : nat) (len : usize) (a : slice u8) (i : usize) : result (slice u8) :=
   match n with
   | O => Fail_ OutOfFuel
   | S n1 =>
@@ -520,7 +520,7 @@ Fixpoint zero_slice_loop
     then (
       a1 <- slice_update_usize a i 0%u8;
       i1 <- usize_add i 1%usize;
-      zero_slice_loop n1 a1 i1 len)
+      zero_slice_loop n1 len a1 i1)
     else Ok a
   end
 .
@@ -528,7 +528,7 @@ Fixpoint zero_slice_loop
 (** [arrays::zero_slice]:
     Source: 'tests/src/arrays.rs', lines 333:0-340:1 *)
 Definition zero_slice (n : nat) (a : slice u8) : result (slice u8) :=
-  let len := slice_len a in zero_slice_loop n a 0%usize len
+  let len := slice_len a in zero_slice_loop n len a 0%usize
 .
 
 (** [arrays::iter_mut_slice]: loop 0:
@@ -572,7 +572,7 @@ Fixpoint sum_mut_slice_loop
     Source: 'tests/src/arrays.rs', lines 350:0-358:1 *)
 Definition sum_mut_slice
   (n : nat) (a : slice u32) : result (u32 * (slice u32)) :=
-  i <- sum_mut_slice_loop n a 0%usize 0%u32; Ok (i, a)
+  s <- sum_mut_slice_loop n a 0%usize 0%u32; Ok (s, a)
 .
 
 (** [arrays::add_acc]: loop 0:

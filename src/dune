@@ -53,6 +53,7 @@
   InterpreterLoops
   InterpreterPaths
   InterpreterProjectors
+  InterpreterReduceCollapse
   InterpreterStatements
   InterpreterUtils
   Invariants
@@ -79,6 +80,7 @@
   Substitute
   SymbolicAst
   SymbolicToPure
+  SymbolicToPureAbs
   SymbolicToPureCore
   SymbolicToPureExpressions
   SymbolicToPureTypes

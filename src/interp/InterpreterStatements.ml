@@ -36,7 +36,7 @@ let drop_value (config : config) (span : Meta.span) (p : place) : cm_fun =
   let ctx =
     (* Move the value at destination (that we will overwrite) to a dummy variable
      * to preserve the borrows it may contain *)
-    let mv = InterpreterPaths.read_place span access p ctx in
+    let _, mv = InterpreterPaths.read_place span access p ctx in
     let dummy_id = fresh_dummy_var_id () in
     let ctx = ctx_push_dummy_var ctx dummy_id mv in
     (* Update the destination to ⊥ *)
@@ -104,7 +104,7 @@ let assign_to_place (config : config) (span : Meta.span) (rv : tvalue)
   let rv, ctx = remove_dummy_var span rvalue_vid ctx in
   (* Move the value at destination (that we will overwrite) to a dummy variable
      to preserve the borrows *)
-  let mv = InterpreterPaths.read_place span Write p ctx in
+  let _, mv = InterpreterPaths.read_place span Write p ctx in
   let dest_vid = fresh_dummy_var_id () in
   let ctx = ctx_push_dummy_var ctx dest_vid mv in
   (* Write to the destination *)
@@ -395,7 +395,7 @@ let eval_box_new_concrete (config : config) (span : Meta.span)
       (* Create the box value *)
       let generics = TypesUtils.mk_generic_args_from_types [ boxed_ty ] in
       let box_ty = TAdt { id = TBuiltin TBox; generics } in
-      let box_v = VAdt { variant_id = None; field_values = [ v ] } in
+      let box_v = VAdt { variant_id = None; fields = [ v ] } in
       let box_v = mk_tvalue span box_ty box_v in
 
       (* Move this value to the return variable *)
@@ -481,8 +481,8 @@ let create_empty_abstractions_from_abs_region_groups
    * - the regions of the ancestors of abs_id
    * - the regions of abs_id
    *)
-  let abs_to_ancestors_regions : RegionId.Set.t AbstractionId.Map.t ref =
-    ref AbstractionId.Map.empty
+  let abs_to_ancestors_regions : RegionId.Set.t AbsId.Map.t ref =
+    ref AbsId.Map.empty
   in
   (* Auxiliary function to create one abstraction *)
   let create_abs (rg_id : RegionGroupId.id) (rg : abs_region_group) : abs =
@@ -490,8 +490,8 @@ let create_empty_abstractions_from_abs_region_groups
     let original_parents = rg.parents in
     let parents =
       List.fold_left
-        (fun s pid -> AbstractionId.Set.add pid s)
-        AbstractionId.Set.empty rg.parents
+        (fun s pid -> AbsId.Set.add pid s)
+        AbsId.Set.empty rg.parents
     in
     let regions =
       let owned = RegionId.Set.of_list rg.regions in
@@ -502,7 +502,7 @@ let create_empty_abstractions_from_abs_region_groups
     in
     let can_end = region_can_end rg_id in
     abs_to_ancestors_regions :=
-      AbstractionId.Map.add abs_id ancestors_regions_union_current_regions
+      AbsId.Map.add abs_id ancestors_regions_union_current_regions
         !abs_to_ancestors_regions;
     (* Create the abstraction *)
     {
@@ -513,6 +513,10 @@ let create_empty_abstractions_from_abs_region_groups
       original_parents;
       regions;
       avalues = [];
+      (* For now the continuation is empty: we will initialize it later, when
+         actually inserting the avalues. TODO: this two-phase initialization is
+         not super clean. *)
+      cont = None;
     }
   in
   (* Apply *)
@@ -521,26 +525,29 @@ let create_empty_abstractions_from_abs_region_groups
 let create_push_abstractions_from_abs_region_groups
     (kind : RegionGroupId.id -> abs_kind) (rgl : abs_region_group list)
     (region_can_end : RegionGroupId.id -> bool)
-    (compute_abs_avalues : abs -> eval_ctx -> eval_ctx * tavalue list)
+    (compute_abs_avalues :
+      region_group_id -> abs -> eval_ctx -> tavalue list * abs_cont option)
     (ctx : eval_ctx) : eval_ctx =
   (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
   let empty_absl =
     create_empty_abstractions_from_abs_region_groups kind rgl region_can_end
   in
+  let rg_ids = RegionGroupId.mapi (fun rg_id _ -> rg_id) rgl in
 
   (* Compute and add the avalues to the abstractions, the insert the abstractions
    * in the context. *)
-  let insert_abs (ctx : eval_ctx) (abs : abs) : eval_ctx =
+  let insert_abs (ctx : eval_ctx) ((rg_id, abs) : region_group_id * abs) :
+      eval_ctx =
     (* Compute the values to insert in the abstraction *)
-    let ctx, avalues = compute_abs_avalues abs ctx in
+    let avalues, cont = compute_abs_avalues rg_id abs ctx in
     (* Add the avalues to the abstraction *)
-    let abs = { abs with avalues } in
+    let abs = { abs with avalues; cont } in
     (* Insert the abstraction in the context *)
     let ctx = { ctx with env = EAbs abs :: ctx.env } in
     (* Return *)
     ctx
   in
-  List.fold_left insert_abs ctx empty_absl
+  List.fold_left insert_abs ctx (List.combine rg_ids empty_absl)
 
 (** Auxiliary helper for [eval_transparent_function_call_symbolic] Instantiate
     the signature and introduce fresh abstractions and region ids while doing
@@ -777,13 +784,7 @@ and eval_statement_list (config : config) span (stmts : statement list) :
             (* Evaluation successful: evaluate the second statement *)
             | Unit -> eval_statement_list config span tl ctx
             (* Control-flow break: transmit. We enumerate the cases on purpose *)
-            | Panic
-            | Break _
-            | Continue _
-            | Return
-            | LoopReturn _
-            | EndEnterLoop _
-            | EndContinue _ ->
+            | Panic | Break _ | Continue _ | Return ->
                 ([ (ctx, res) ], cf_singleton __FILE__ __LINE__ span))
           ctx_resl
       in
@@ -1045,7 +1046,7 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
       (* Access the place *)
       let access = Read in
       let expand_prim_copy = false in
-      let p_v, ctx, cf_read_p =
+      let _, p_v, ctx, cf_read_p =
         access_rplace_reorganize_and_read config span expand_prim_copy access p
           ctx
       in
@@ -1207,12 +1208,7 @@ and eval_transparent_function_call_concrete (config : config) (span : Meta.span)
                    its destination and continue *)
                 let ctx, cf = pop_frame_assign config span dest ctx in
                 ((ctx, Unit), cf)
-            | Break _
-            | Continue _
-            | Unit
-            | LoopReturn _
-            | EndEnterLoop _
-            | EndContinue _ -> [%craise] span "Unreachable")
+            | Break _ | Continue _ | Unit -> [%craise] span "Unreachable")
           ctx_resl
       in
       let ctx_resl, cfl = List.split ctx_resl_cfl in
@@ -1267,13 +1263,13 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
     ^ String.concat ", " (List.map (operand_to_string ctx) args)
     ^ "\n- dest:\n" ^ place_to_string ctx dest];
 
+  (* Unique identifier for the call *)
+  let call_id = fresh_fun_call_id () in
+
   (* Generate a fresh symbolic value for the return value *)
   let ret_sv_ty = inst_sg.output in
   let ret_spc = mk_fresh_symbolic_value span ret_sv_ty in
   let ret_value = mk_tvalue_from_symbolic_value ret_spc in
-  let ret_av regions =
-    mk_aproj_loans_value_from_symbolic_value regions ret_spc ret_sv_ty
-  in
   let args_places =
     List.map (fun p -> S.mk_opt_place_from_op span p ctx) args
   in
@@ -1308,21 +1304,43 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
    * First, we define the function which, given an initialized, empty
    * abstraction, computes the avalues which should be inserted inside.
    *)
-  let compute_abs_avalues (abs : abs) (ctx : eval_ctx) : eval_ctx * tavalue list
-      =
+  let compute_abs_avalues (_rg_id : RegionGroupId.id) (abs : abs)
+      (ctx : eval_ctx) : tavalue list * abs_cont option =
     (* Project over the input values *)
-    let ctx, args_projs =
-      List.fold_left_map
-        (fun ctx (arg, arg_rty) ->
+    let args_projs =
+      List.map
+        (fun (arg, arg_rty) ->
           apply_proj_borrows_on_input_value span ctx abs.regions.owned arg
             arg_rty)
-        ctx args_with_rtypes
+        args_with_rtypes
+    in
+    (* Introduce the output value *)
+    let ret_v =
+      mk_aproj_loans_value_from_symbolic_value abs.regions.owned ret_spc
+        ret_sv_ty
+    in
+    (* Compute the continuation used in the translation *)
+    let cont : abs_cont =
+      let outputs =
+        List.map
+          (fun (arg, arg_rty) ->
+            apply_eproj_borrows_on_input_value span ctx abs.regions.owned arg
+              arg_rty)
+          args_with_rtypes
+      in
+      let output = mk_simpl_etuple outputs in
+      let input =
+        mk_eproj_loans_value_from_symbolic_value abs.regions.owned ret_spc
+          ret_sv_ty
+      in
+      let input = EApp (EFunCall abs.abs_id, [ input ]) in
+      let input : tevalue = { value = input; ty = ret_sv_ty } in
+      { output = Some output; input = Some input }
     in
     (* Group the input and output values *)
-    (ctx, List.append args_projs [ ret_av abs.regions.owned ])
+    (List.append args_projs [ ret_v ], Some cont)
   in
   (* Actually initialize and insert the abstractions *)
-  let call_id = fresh_fun_call_id () in
   let region_can_end _ = true in
   let ctx =
     create_push_abstractions_from_abs_region_groups
@@ -1354,7 +1372,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
           (* Lookup the abstraction *)
           let abs = ctx_lookup_abs ctx abs_id in
           (* Check if it has parents *)
-          AbstractionId.Set.is_empty abs.parents
+          AbsId.Set.is_empty abs.parents
           (* Check if it contains non-ignored loans *)
           && Option.is_none
                (InterpreterBorrowsCore
@@ -1366,7 +1384,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
       (* Update the reference to the list of asbtraction ids, for the recursive calls *)
       abs_ids := with_loans_abs;
       (* End the abstractions which can be ended *)
-      let no_loans_abs = AbstractionId.Set.of_list no_loans_abs in
+      let no_loans_abs = AbsId.Set.of_list no_loans_abs in
       let ctx, cc =
         InterpreterBorrows.end_abstractions config span no_loans_abs ctx
       in

@@ -23,7 +23,6 @@ structure Wrapper (T : Type) where
    Source: 'tests/src/dynamic_size.rs', lines 11:0-13:1 -/
 def alloc_wrapper (N : Usize) : Result (Wrapper (Slice U8)) :=
   let a := Array.repeat N 0#u8
-  let w := ({ data := a } : Wrapper (Array U8 N))
-  ok { w with data := (Array.to_slice w.data) }
+  ok { data := (Array.to_slice a) }
 
 end dynamic_size

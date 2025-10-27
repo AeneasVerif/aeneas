@@ -9,7 +9,8 @@ open InterpreterPaths
 
     Prepare the access to a place in a right-value (typically an operand) by
     reorganizing the environment to end outer loans, then read the value and
-    check that this value *doesn't contain any bottom nor reserved borrows*.
+    check that this value *doesn't contain any bottom nor reserved borrows*. We
+    also return a loan id if the value is directly below a shared loan.
 
     We reorganize the environment so that:
     - we can access the place (we prepare *along* the path)
@@ -25,7 +26,7 @@ val access_rplace_reorganize_and_read :
   access_kind ->
   place ->
   eval_ctx ->
-  tvalue * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr)
+  loan_id option * tvalue * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr)
 
 (** Evaluate an operand.
 

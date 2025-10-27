@@ -6,8 +6,6 @@ Require Import Coq.ZArith.ZArith.
 Require Import List.
 Import ListNotations.
 Local Open Scope Primitives_scope.
-Require Import Hashmap_TypesExternal.
-Include Hashmap_TypesExternal.
 Module Hashmap_Types.
 
 (** [hashmap::AList]

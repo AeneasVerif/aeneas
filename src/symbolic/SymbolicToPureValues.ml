@@ -1,14 +1,15 @@
 open Pure
 open PureUtils
-open InterpreterUtils
 open SymbolicToPureCore
 open SymbolicToPureTypes
 
 (** The local logger *)
 let log = Logging.symbolic_to_pure_values_log
 
-(** WARNING: do not call this function directly. Call
-    [fresh_named_var_for_symbolic_value] instead. *)
+(** WARNING: do not call this function directly when translating symbolic values
+    from LLBC. Call [fresh_named_var_for_symbolic_value] instead: it will
+    register the mapping from the LLBC symbolic value to the (fresh) pure
+    symbolic value. *)
 let fresh_var_llbc_ty (basename : string option) (ty : T.ty) (ctx : bs_ctx) :
     bs_ctx * fvar =
   let ty = ctx_translate_fwd_ty ctx ty in
@@ -49,7 +50,7 @@ let symbolic_value_to_texpr (ctx : bs_ctx) (sv : V.symbolic_value) : texpr =
   (* Translate the type *)
   let ty = ctx_translate_fwd_ty ctx sv.sv_ty in
   (* If the type is unit, directly return unit *)
-  if ty_is_unit ty then mk_unit_rvalue
+  if ty_is_unit ty then mk_unit_texpr
   else
     (* Otherwise lookup the variable *)
     match lookup_var_for_symbolic_value sv.sv_id ctx with
@@ -92,12 +93,12 @@ let rec tvalue_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (v : V.tvalue) :
     | VLiteral cv -> { e = Const cv; ty }
     | VAdt av -> (
         let variant_id = av.variant_id in
-        let field_values = List.map translate av.field_values in
+        let fields = List.map translate av.fields in
         (* Eliminate the tuple wrapper if it is a tuple with exactly one field *)
         match v.ty with
         | TAdt { id = TTuple; _ } ->
             [%sanity_check] ctx.span (variant_id = None);
-            mk_simpl_tuple_texpr ctx.span field_values
+            mk_simpl_tuple_texpr ctx.span fields
         | _ ->
             (* Retrieve the type and the translated generics from the translated
                type (simpler this way) *)
@@ -106,11 +107,11 @@ let rec tvalue_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (v : V.tvalue) :
             let qualif_id = AdtCons { adt_id; variant_id = av.variant_id } in
             let qualif = { id = qualif_id; generics } in
             let cons_e = Qualif qualif in
-            let field_tys = List.map (fun (v : texpr) -> v.ty) field_values in
+            let field_tys = List.map (fun (v : texpr) -> v.ty) fields in
             let cons_ty = mk_arrows field_tys ty in
             let cons = { e = cons_e; ty = cons_ty } in
             (* Apply the constructor *)
-            mk_apps ctx.span cons field_values)
+            [%add_loc] mk_apps ctx.span cons fields)
     | VBottom -> [%craise] ctx.span "Unexpected bottom value"
     | VLoan lc -> (
         match lc with
@@ -121,7 +122,7 @@ let rec tvalue_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (v : V.tvalue) :
         | VSharedBorrow (bid, _) ->
             (* Lookup the shared value in the context, and continue *)
             let sv =
-              InterpreterBorrowsCore.lookup_shared_value ctx.span ectx bid
+              InterpreterBorrowsCore.ctx_lookup_shared_value ctx.span ectx bid
             in
             translate sv
         | VReservedMutBorrow (bid, _) ->
@@ -129,7 +130,7 @@ let rec tvalue_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (v : V.tvalue) :
              * only in *meta-data*: a value *actually used* in the translation can't come
              * from an unpromoted reserved borrow *)
             let sv =
-              InterpreterBorrowsCore.lookup_shared_value ctx.span ectx bid
+              InterpreterBorrowsCore.ctx_lookup_shared_value ctx.span ectx bid
             in
             translate sv
         | VMutBorrow (_, v) ->
@@ -148,9 +149,9 @@ let rec tvalue_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (v : V.tvalue) :
 
 type borrow_kind = BMut | BShared
 
-(** An avalue is either produced from a borrow projector (if it is an input to a
-    function) or from a loan projector (if it is an ouptput). This means that an
-    avalue has either:
+(** An avalue/evalue is either produced from a borrow projector (if it is an
+    input to a function) or from a loan projector (if it is an ouptput). This
+    means that an avalue has either:
     - only borrows and borrow projections over symbolic values
     - only loans and loan projections over symbolic values
     - none of those
@@ -159,7 +160,7 @@ type borrow_kind = BMut | BShared
     an ended proj loan can contain borrows in one of its children. In this
     situation, we will need to first project the avalues at the proper level,
     before translating them. *)
-type tavalue_kind =
+type proj_kind =
   | BorrowProj of borrow_kind
       (** The value was produced by a borrow projector (it contains borrows or
           borrow projections).
@@ -177,7 +178,7 @@ type tavalue_kind =
           sure *)
 
 let compute_tavalue_proj_kind span type_infos (abs_regions : T.RegionId.Set.t)
-    (av : V.tavalue) : tavalue_kind =
+    (av : V.tavalue) : proj_kind =
   let has_borrows = ref false in
   let has_mut_borrows = ref false in
   let has_loans = ref false in
@@ -236,8 +237,12 @@ let compute_tavalue_proj_kind span type_infos (abs_regions : T.RegionId.Set.t)
             (* Continue exploring (same reasons as above) *)
             super#visit_ASymbolic ty pm aproj
         | AProjLoans _ ->
-            (* TODO: we should probably fail here *)
             has_loans := true;
+            (* We need to check wether the projected loans are mutable or not *)
+            if
+              TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
+                keep_region ty
+            then has_mut_loans := true;
             (* Continue exploring (same reasons as above) *)
             super#visit_ASymbolic ty pm aproj
         | AEndedProjBorrows _ ->
@@ -250,8 +255,12 @@ let compute_tavalue_proj_kind span type_infos (abs_regions : T.RegionId.Set.t)
             (* Continue exploring (same reasons as above) *)
             super#visit_ASymbolic ty pm aproj
         | AProjBorrows _ ->
-            (* TODO: we should probably fail here *)
             has_borrows := true;
+            (* We need to check wether the projected borrows are mutable or not *)
+            if
+              TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
+                keep_region ty
+            then has_mut_borrows := true;
             (* Continue exploring (same reasons as above) *)
             super#visit_ASymbolic ty pm aproj
         | AEmpty ->
@@ -265,6 +274,100 @@ let compute_tavalue_proj_kind span type_infos (abs_regions : T.RegionId.Set.t)
   if !has_borrows then BorrowProj (to_borrow_kind !has_mut_borrows)
   else if !has_loans then LoanProj (to_borrow_kind !has_mut_loans)
   else UnknownProj
+
+(** A smaller helper which allows us to isolate the logic by which we handle
+    ADTs. *)
+let gtranslate_adt_fields ~(project_borrows : bool)
+    (input_to_string : 'v -> string) (output_to_string : 'o -> string)
+    (translate : filter:bool -> bs_ctx -> 'v -> bs_ctx * ('info * 'o) option)
+    (compute_proj_kind : 'v -> proj_kind) (mk_adt : 'o list -> 'o)
+    (mk_tuple : 'o list -> 'o) ~(filter : bool) (ctx : bs_ctx) (av : 'v)
+    (av_ty : T.ty) (fields : 'v list) : bs_ctx * ('info list * 'o) option =
+  let span = ctx.span in
+  (* We do not do the same thing depending on whether we visit a tuple
+     or a "regular" ADT *)
+  let adt_id, _ = TypesUtils.ty_as_adt av_ty in
+  (* Check if the ADT contains borrows *)
+  let proj_kind = compute_proj_kind av in
+  match proj_kind with
+  | UnknownProj when filter ->
+      (* If we filter: ignore the value.
+         Otherwise, translate everything (case below). *)
+      (ctx, None)
+  | UnknownProj | BorrowProj _ | LoanProj _ -> begin
+      begin
+        match proj_kind with
+        | BorrowProj _ -> [%sanity_check] span project_borrows
+        | LoanProj _ -> [%sanity_check] span (not project_borrows)
+        | UnknownProj -> ()
+      end;
+
+      (* Translate the field values *)
+      let filter_fields =
+        filter
+        &&
+        match adt_id with
+        | TTuple | TBuiltin TBox -> true
+        | TBuiltin _ | TAdtId _ -> (
+            match proj_kind with
+            | UnknownProj | BorrowProj BShared | LoanProj BShared -> true
+            | _ -> false)
+      in
+      let ctx, info_fields =
+        List.fold_left_map (translate ~filter:filter_fields) ctx fields
+      in
+      [%ldebug
+        "- input fields (length: "
+        ^ string_of_int (List.length fields)
+        ^ "):\n"
+        ^ String.concat "\n" (List.map input_to_string fields)
+        ^ "\n- output fields:\n"
+        ^ String.concat "\n"
+            (List.map
+               (Print.option_to_string (fun (_, x) -> output_to_string x))
+               info_fields)];
+      match adt_id with
+      | TAdtId _ ->
+          if filter_fields then (
+            [%sanity_check] span (List.for_all Option.is_none info_fields);
+            (ctx, None))
+          else
+            (* We should preserve all the fields *)
+            let infos, fields =
+              List.split (List.map ([%try_unwrap] span) info_fields)
+            in
+            let pat = mk_adt fields in
+            (ctx, Some (infos, pat))
+      | TBuiltin TBox -> begin
+          (* The box type becomes the identity in the translation *)
+          match info_fields with
+          | [ None ] -> (ctx, None)
+          | [ Some (info, v) ] -> (ctx, Some ([ info ], v))
+          | _ -> [%craise] span "Unreachable"
+        end
+      | TBuiltin (TArray | TSlice | TStr) ->
+          (* This case is unreachable:
+             - for array and slice: in order to access one of their elements
+               we need to go through an index function
+             - for strings: the [str] is not polymorphic.
+          *)
+          [%craise] span "Unreachable"
+      | TTuple ->
+          (* If the filtering is activated, we ignore the fields which do not
+             consume values (i.e., which do not contain ended mutable borrows). *)
+          if filter then
+            let info_fields = List.filter_map (fun x -> x) info_fields in
+            if info_fields = [] then (ctx, None)
+            else
+              (* Note that if there is exactly one field value,
+               * [mk_simpl_tuple_rvalue] is the identity *)
+              let info, fields = List.split info_fields in
+              (ctx, Some (info, mk_tuple fields))
+          else
+            (* If we do not filter the fields, all the values should be [Some ...] *)
+            let infos, fields = List.split (List.map Option.get info_fields) in
+            (ctx, Some (infos, mk_tuple fields))
+    end
 
 (** Explore an abstraction value and convert it to a consumed value by
     collecting all the meta-values from the ended *loans*. We assume the avalue
@@ -288,7 +391,6 @@ let rec tavalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
     match av.value with
     | AAdt adt_v ->
         adt_avalue_to_consumed_aux ~filter ctx ectx abs_regions av adt_v
-    | ABottom -> [%craise] ctx.span "Unreachable"
     | ALoan lc -> aloan_content_to_consumed_aux ~filter ctx ectx abs_regions lc
     | ABorrow _ ->
         (* This value should have been generated by a loan projector: there
@@ -321,87 +423,24 @@ let rec tavalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
 and adt_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
     (ectx : C.eval_ctx) (abs_regions : T.RegionId.Set.t) (av : V.tavalue)
     (adt_v : V.adt_avalue) : texpr option =
-  (* We do not do the same thing depending on whether we visit a tuple
-     or a "regular" ADT *)
-  let adt_id, _ = TypesUtils.ty_as_adt av.ty in
-  (* Check if the ADT contains borrows *)
-  match
-    compute_tavalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions av
-  with
-  | BorrowProj _ -> [%craise] ctx.span "Unreachable"
-  | UnknownProj ->
-      (* If we filter: ignore the value.
-         Otherwise, translate everything. *)
-      if filter then None
-      else
-        let fields =
-          List.map
-            (tavalue_to_consumed_aux ~filter ctx ectx abs_regions)
-            adt_v.field_values
+  let _, out =
+    gtranslate_adt_fields ~project_borrows:false (tavalue_to_string ctx)
+      (texpr_to_string ctx)
+      (fun ~filter ctx v ->
+        ( ctx,
+          match tavalue_to_consumed_aux ~filter ctx ectx abs_regions v with
+          | None -> None
+          | Some x -> Some ((), x) ))
+      (compute_tavalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions)
+      (fun fields ->
+        let ty =
+          translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos av.ty
         in
-        let fields = List.map Option.get fields in
-        begin
-          match adt_id with
-          | TAdtId _ | TBuiltin (TBox | TArray | TSlice | TStr) ->
-              let ty =
-                translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos av.ty
-              in
-              Some (mk_adt_value ctx.span ty adt_v.variant_id fields)
-          | TTuple -> Some (mk_simpl_tuple_texpr ctx.span fields)
-        end
-  | LoanProj borrow_kind -> begin
-      (* Translate the field values *)
-      let field_values =
-        let filter =
-          filter
-          &&
-          match adt_id with
-          | TTuple | TBuiltin TBox -> true
-          | TBuiltin _ | TAdtId _ -> borrow_kind = BShared
-        in
-        List.map
-          (tavalue_to_consumed_aux ~filter ctx ectx abs_regions)
-          adt_v.field_values
-      in
-      match adt_id with
-      | TAdtId _ ->
-          (* We should preserve all the fields *)
-          let fields = List.map Option.get field_values in
-          let ty =
-            translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos av.ty
-          in
-          let pat = mk_adt_value ctx.span ty adt_v.variant_id fields in
-          Some pat
-      | TBuiltin TBox -> begin
-          (* The box type becomes the identity in the translation *)
-          match field_values with
-          | [ v ] -> v
-          | _ -> [%craise] ctx.span "Unreachable"
-        end
-      | TBuiltin (TArray | TSlice | TStr) ->
-          (* This case is unreachable:
-             - for array and slice: in order to access one of their elements
-               we need to go through an index function
-             - for strings: the [str] is not polymorphic.
-          *)
-          [%craise] ctx.span "Unreachable"
-      | TTuple ->
-          (* If the filtering is activated, we ignore the fields which do not
-             consume values (i.e., which do not contain ended mutable borrows). *)
-          if filter then
-            let field_values = List.filter_map (fun x -> x) field_values in
-            if field_values = [] then None
-            else
-              (* Note that if there is exactly one field value,
-               * [mk_simpl_tuple_rvalue] is the identity *)
-              let rv = mk_simpl_tuple_texpr ctx.span field_values in
-              Some rv
-          else
-            (* If we do not filter the fields, all the values should be [Some ...] *)
-            let field_values = List.map Option.get field_values in
-            let v = mk_simpl_tuple_texpr ctx.span field_values in
-            Some v
-    end
+        mk_adt_texpr ctx.span ty adt_v.variant_id fields)
+      (mk_simpl_tuple_texpr ctx.span)
+      ~filter ctx av av.ty adt_v.fields
+  in
+  Option.map snd out
 
 and aloan_content_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
     (ectx : C.eval_ctx) (_abs_regions : T.RegionId.Set.t) (lc : V.aloan_content)
@@ -479,7 +518,7 @@ let tavalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
      it contains mutable loans, then we generate a consumed value (because
      upon ending the borrow we consumed a value).
      Otherwise we ignore it. *)
-  [%ltrace tavalue_to_string ~with_ended:true ectx av];
+  [%ltrace tavalue_to_string ~with_ended:true ctx av];
   match
     compute_tavalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions av
   with
@@ -575,12 +614,11 @@ type borrow_or_symbolic_id =
     - the pattern *)
 let rec tavalue_to_given_back_aux ~(filter : bool)
     (abs_regions : T.RegionId.Set.t) (mp : mplace option) (av : V.tavalue)
-    (ctx : bs_ctx) : bs_ctx * tpattern option =
-  let (ctx, value) : _ * tpattern option =
+    (ctx : bs_ctx) : bs_ctx * tpat option =
+  let (ctx, value) : _ * tpat option =
     match av.value with
     | AAdt adt_v ->
         adt_avalue_to_given_back_aux ~filter abs_regions av adt_v ctx
-    | ABottom -> [%craise] ctx.span "Unreachable"
     | ALoan _ ->
         (* The avalue should have been generated by a borrow projector: this case is unreachable *)
         [%craise] ctx.span "Unreachable"
@@ -589,107 +627,45 @@ let rec tavalue_to_given_back_aux ~(filter : bool)
         [%sanity_check] ctx.span (pm = PNone);
         aproj_to_given_back_aux mp aproj av.ty ctx
     | AIgnored _ ->
-        (* If we do not filter, we have to create a dummy pattern *)
+        (* If we do not filter, we have to create an ignored pattern *)
         if filter then (ctx, None)
         else
           let ty =
             translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos av.ty
           in
-          (ctx, Some (mk_dummy_pattern ty))
+          (ctx, Some (mk_ignored_pat ty))
   in
   (* Sanity checks - Rk.: we do this at every recursive call, which is a bit
    * expansive... *)
   (match value with
   | None -> ()
-  | Some value -> type_check_pattern ctx value);
+  | Some value -> type_check_pat ctx value);
   (* Return *)
   (ctx, value)
 
 and adt_avalue_to_given_back_aux ~(filter : bool)
     (abs_regions : T.RegionId.Set.t) (av : V.tavalue) (adt_v : V.adt_avalue)
-    (ctx : bs_ctx) : bs_ctx * tpattern option =
-  (* Check if the ADT contains borrows *)
-  match
-    compute_tavalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions av
-  with
-  | LoanProj _ -> [%craise] ctx.span "Unreachable"
-  | UnknownProj ->
-      (* If we filter: ignore the pattern.
-         Otherwise, return a dummy value. *)
-      if filter then (ctx, None)
-      else
+    (ctx : bs_ctx) : bs_ctx * tpat option =
+  let ctx, out =
+    gtranslate_adt_fields ~project_borrows:true (tavalue_to_string ctx)
+      (tpat_to_string ctx)
+      (fun ~filter ctx v ->
+        let ctx, v = tavalue_to_given_back_aux ~filter abs_regions None v ctx in
+        match v with
+        | None -> (ctx, None)
+        | Some x -> (ctx, Some ((), x)))
+      (compute_tavalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions)
+      (fun fields ->
         let ty =
           translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos av.ty
         in
-        (ctx, Some (mk_dummy_pattern ty))
-  | BorrowProj borrow_kind -> begin
-      (* We do not do the same thing depending on whether we visit a tuple
-         or a "regular" ADT *)
-      let adt_id, _ = TypesUtils.ty_as_adt av.ty in
-      (* Translate the field values *)
-      (* For now we forget the meta-place information so that it doesn't get used
-         by several fields (which would then all have the same name...), but we
-         might want to do something smarter *)
-      let mp = None in
-      let ctx, field_values =
-        let filter =
-          filter
-          &&
-          match adt_id with
-          | TTuple | TBuiltin TBox -> true
-          | TBuiltin _ | TAdtId _ -> borrow_kind = BShared
-        in
-        List.fold_left_map
-          (fun ctx fv ->
-            tavalue_to_given_back_aux ~filter abs_regions mp fv ctx)
-          ctx adt_v.field_values
-      in
-      match adt_id with
-      | TAdtId _ ->
-          (* None of the fields must have been ignored *)
-          let fields = List.map Option.get field_values in
-          let adt_ty =
-            translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos av.ty
-          in
-          let pat = mk_adt_pattern adt_ty adt_v.variant_id fields in
-          (ctx, Some pat)
-      | TBuiltin TBox -> begin
-          (* The box type becomes the identity in the translation *)
-          match field_values with
-          | [ pat ] -> (ctx, pat)
-          | _ -> [%craise] ctx.span "Unreachable"
-        end
-      | TBuiltin (TArray | TSlice | TStr) ->
-          (* This case is unreachable:
-             - for array and slice: in order to access one of their elements
-               we need to go through an index function
-             - for strings: the [str] is not polymorphic.
-          *)
-          [%craise] ctx.span "Unreachable"
-      | TTuple ->
-          (* Sanity checks *)
-          let variant_id = adt_v.variant_id in
-          [%sanity_check] ctx.span (variant_id = None);
-          (* If the filtering is activated, we ignore the fields which do not
-             give values back (i.e., which do not contain mutable borrows). *)
-          if filter then
-            let field_values = List.filter_map (fun x -> x) field_values in
-            if field_values = [] then (ctx, None)
-            else
-              (* Note that if there is exactly one field value, [mk_simpl_tuple_pattern]
-               * is the identity *)
-              let lv = mk_simpl_tuple_pattern field_values in
-              (ctx, Some lv)
-          else
-            (* If we do not filter the fields, all the patterns should be [Some ...] *)
-            let field_values = List.map Option.get field_values in
-            let lv = mk_simpl_tuple_pattern field_values in
-            (ctx, Some lv)
-    end
+        mk_adt_pat ty adt_v.variant_id fields)
+      mk_simpl_tuple_pat ~filter ctx av av.ty adt_v.fields
+  in
+  (ctx, Option.map snd out)
 
 and aborrow_content_to_given_back_aux ~(filter : bool) (mp : mplace option)
-    (bc : V.aborrow_content) (ty : T.ty) (ctx : bs_ctx) :
-    bs_ctx * tpattern option =
+    (bc : V.aborrow_content) (ty : T.ty) (ctx : bs_ctx) : bs_ctx * tpat option =
   match bc with
   | V.AMutBorrow _ | ASharedBorrow _ | AIgnoredMutBorrow _ ->
       (* All the borrows should have been ended upon ending the abstraction *)
@@ -697,7 +673,7 @@ and aborrow_content_to_given_back_aux ~(filter : bool) (mp : mplace option)
   | AEndedMutBorrow (msv, _) ->
       (* Return the meta symbolic-value *)
       let ctx, var = fresh_var_for_symbolic_value msv.given_back ctx in
-      let pat = mk_tpattern_from_fvar var mp in
+      let pat = mk_tpat_from_fvar mp var in
       (* Lookup the default value and update the [var_id_to_default] map.
          Note that the default value might be missing, for instance for
          abstractions which were not introduced because of function calls but
@@ -721,17 +697,17 @@ and aborrow_content_to_given_back_aux ~(filter : bool) (mp : mplace option)
       if filter then (ctx, None)
       else
         let ty = translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos ty in
-        (ctx, Some (mk_dummy_pattern ty))
+        (ctx, Some (mk_ignored_pat ty))
 
 and aproj_to_given_back_aux (mp : mplace option) (aproj : V.aproj) (ty : T.ty)
-    (ctx : bs_ctx) : bs_ctx * tpattern option =
+    (ctx : bs_ctx) : bs_ctx * tpat option =
   match aproj with
   | V.AEndedProjLoans _ -> [%craise] ctx.span "Unreachable"
   | AEndedProjBorrows { mvalues = mv; loans } ->
       [%cassert] ctx.span (loans = []) "Unreachable";
       (* Return the meta-value *)
       let ctx, var = fresh_var_for_symbolic_value mv.given_back ctx in
-      let pat = mk_tpattern_from_fvar var mp in
+      let pat = mk_tpat_from_fvar mp var in
       (* Register the default value *)
       let ctx =
         (* Using the projection type as the type of the symbolic value - it
@@ -749,7 +725,7 @@ and aproj_to_given_back_aux (mp : mplace option) (aproj : V.aproj) (ty : T.ty)
   | AEmpty | AProjLoans _ | AProjBorrows _ -> [%craise] ctx.span "Unreachable"
 
 let tavalue_to_given_back (abs_regions : T.RegionId.Set.t) (mp : mplace option)
-    (v : V.tavalue) (ctx : bs_ctx) : bs_ctx * tpattern option =
+    (v : V.tavalue) (ctx : bs_ctx) : bs_ctx * tpat option =
   (* Check if the value was generated from a borrow projector: if yes, and if
      it contains mutable borrows we generate a given back pattern (because
      upon ending the borrow the abstraction gave back a value).
@@ -769,7 +745,7 @@ let tavalue_to_given_back (abs_regions : T.RegionId.Set.t) (mp : mplace option)
 
     See [tavalue_to_given_back]. *)
 let abs_to_given_back (mpl : mplace option list option) (abs : V.abs)
-    (ctx : bs_ctx) : bs_ctx * tpattern list =
+    (ctx : bs_ctx) : bs_ctx * tpat list =
   let avalues =
     match mpl with
     | None -> List.map (fun av -> (None, av)) abs.avalues
@@ -785,12 +761,11 @@ let abs_to_given_back (mpl : mplace option list option) (abs : V.abs)
     "- abs: "
     ^ abs_to_string ~with_ended:true ctx abs
     ^ "\n- values: "
-    ^ Print.list_to_string (tpattern_to_string ctx) values];
+    ^ Print.list_to_string (tpat_to_string ctx) values];
   (ctx, values)
 
 (** Simply calls [abs_to_given_back] *)
-let abs_to_given_back_no_mp (abs : V.abs) (ctx : bs_ctx) :
-    bs_ctx * tpattern list =
+let abs_to_given_back_no_mp (abs : V.abs) (ctx : bs_ctx) : bs_ctx * tpat list =
   let mpl = List.map (fun _ -> None) abs.avalues in
   abs_to_given_back (Some mpl) abs ctx
 
