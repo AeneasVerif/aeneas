@@ -272,7 +272,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
         let func = Fun (FromLlbc (fid_t, None)) in
         (* Retrieve the effect information about this function (can fail,
          * takes a state as input, etc.) *)
-        let effect_info = get_fun_effect_info ctx fid None None in
+        let effect_info = get_fun_effect_info ctx fid None in
         (* Generate the variables for the backward functions returned by the forward
            function. *)
         let ctx, ignore_fwd_output, back_funs_map, back_funs =
@@ -702,7 +702,7 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
         (* Those don't have backward functions *)
         [%craise] ctx.span "Unreachable"
   in
-  let effect_info = get_fun_effect_info ctx fun_id None (Some rg_id) in
+  let effect_info = get_fun_effect_info ctx fun_id (Some rg_id) in
   (* Retrieve the values consumed upon ending the loans inside this
    * abstraction: those give us the input values *)
   let back_inputs = abs_to_consumed ctx ectx abs in

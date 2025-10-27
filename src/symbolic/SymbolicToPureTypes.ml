@@ -505,8 +505,7 @@ let list_ancestor_abstractions (ctx : bs_ctx) (abs : V.abs)
 (** Small utility. *)
 let compute_raw_fun_effect_info (span : Meta.span option)
     (fun_infos : fun_info A.FunDeclId.Map.t) (fun_id : A.fn_ptr_kind)
-    (lid : V.LoopId.id option) (gid : T.RegionGroupId.id option) :
-    fun_effect_info =
+    (gid : T.RegionGroupId.id option) : fun_effect_info =
   match fun_id with
   | TraitMethod (_, _, fid) | FunId (FRegular fid) ->
       let info =
@@ -516,10 +515,9 @@ let compute_raw_fun_effect_info (span : Meta.span option)
         (* Note that backward functions can't fail *)
         can_fail = info.can_fail && gid = None;
         can_diverge = info.can_diverge;
-        is_rec = (info.is_rec || Option.is_some lid) && gid = None;
+        is_rec = info.is_rec && gid = None;
       }
   | FunId (FBuiltin aid) ->
-      [%sanity_check_opt_span] span (lid = None);
       {
         (* Note that backward functions can't fail *)
         can_fail = Builtin.builtin_fun_can_fail aid && gid = None;
@@ -561,7 +559,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
 
   (* Is the forward function stateful, and can it fail? *)
   let fwd_effect_info =
-    compute_raw_fun_effect_info span fun_infos fun_id None None
+    compute_raw_fun_effect_info span fun_infos fun_id None
   in
   (* Compute the forward inputs *)
   let fwd_inputs = List.map (translate_fwd_ty span type_infos) sg.inputs in
@@ -668,7 +666,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
       RegionGroupId.id * back_sg_info =
     let gid = rg.id in
     let back_effect_info =
-      compute_raw_fun_effect_info span fun_infos fun_id None (Some gid)
+      compute_raw_fun_effect_info span fun_infos fun_id (Some gid)
     in
     let inputs = translate_back_inputs_for_gid gid in
     let inputs = List.map (fun ty -> (Some "ret", ty)) inputs in
@@ -919,35 +917,17 @@ let translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
 
 (** TODO: not very clean. *)
 let get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fn_ptr_kind)
-    (lid : V.LoopId.id option) (gid : T.RegionGroupId.id option) :
-    fun_effect_info =
-  match lid with
-  | None -> (
-      match fun_id with
-      | TraitMethod (_, _, fid) | FunId (FRegular fid) ->
-          let dsg = A.FunDeclId.Map.find fid ctx.fun_dsigs in
-          let info =
-            match gid with
-            | None -> dsg.fun_ty.fwd_info.effect_info
-            | Some gid ->
-                (RegionGroupId.Map.find gid dsg.fun_ty.back_sg).effect_info
-          in
-          {
-            info with
-            is_rec = (info.is_rec || Option.is_some lid) && gid = None;
-          }
-      | FunId (FBuiltin _) ->
-          compute_raw_fun_effect_info (Some ctx.span) ctx.fun_ctx.fun_infos
-            fun_id lid gid)
-  | Some lid -> (
-      (* This is necessarily for the current function *)
-      match fun_id with
-      | FunId (FRegular fid) -> (
-          [%sanity_check] ctx.span (fid = ctx.fun_decl.def_id);
-          (* Lookup the loop *)
-          let lid = V.LoopId.Map.find lid ctx.loop_ids_map in
-          let loop_info = LoopId.Map.find lid ctx.loops in
-          match gid with
-          | None -> loop_info.fwd_effect_info
-          | Some gid -> RegionGroupId.Map.find gid loop_info.back_effect_infos)
-      | _ -> [%craise] ctx.span "Unreachable")
+    (gid : T.RegionGroupId.id option) : fun_effect_info =
+  match fun_id with
+  | TraitMethod (_, _, fid) | FunId (FRegular fid) ->
+      let dsg = A.FunDeclId.Map.find fid ctx.fun_dsigs in
+      let info =
+        match gid with
+        | None -> dsg.fun_ty.fwd_info.effect_info
+        | Some gid ->
+            (RegionGroupId.Map.find gid dsg.fun_ty.back_sg).effect_info
+      in
+      { info with is_rec = info.is_rec && gid = None }
+  | FunId (FBuiltin _) ->
+      compute_raw_fun_effect_info (Some ctx.span) ctx.fun_ctx.fun_infos fun_id
+        gid

@@ -223,13 +223,6 @@ type bs_ctx = {
 
           TODO: remove. *)
   loop_ids_map : LoopId.id V.LoopId.Map.t;  (** Ids to use for the loops *)
-  loops : loop_info LoopId.Map.t;
-      (** TODO: remove
-
-          The loops we encountered so far.
-
-          We are using a map to be general - in practice we will fail if we
-          encounter more than one loop on a single path. *)
   mk_return : (bs_ctx -> texpr option -> texpr) option;
       (** Small helper: translate a [return] expression, given a value to
           "return". The translation of [return] depends on the context, and in

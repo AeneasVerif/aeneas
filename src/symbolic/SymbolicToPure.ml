@@ -30,7 +30,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expr option) : fun_decl =
           ^ bs_ctx_expr_to_string ctx body];
 
         let effect_info =
-          get_fun_effect_info ctx (FunId (FRegular def_id)) None None
+          get_fun_effect_info ctx (FunId (FRegular def_id)) None
         in
         let mk_return (ctx : bs_ctx) v =
           match v with

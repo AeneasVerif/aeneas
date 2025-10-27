@@ -647,9 +647,7 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
                     (* Those don't have backward functions *)
                     [%craise] ctx.span "Unreachable"
               in
-              let effect_info =
-                get_fun_effect_info ctx fun_id None (Some rg_id)
-              in
+              let effect_info = get_fun_effect_info ctx fun_id (Some rg_id) in
               let can_fail = effect_info.can_fail in
               (* Lookup the variable introduced for the backward function *)
               let func =
