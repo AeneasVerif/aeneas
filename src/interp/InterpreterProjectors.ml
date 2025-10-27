@@ -266,7 +266,7 @@ let rec apply_eproj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
                   apply_eproj_borrows span check_symbolic_no_ended ctx regions
                     bv ref_ty
                 in
-                EBorrow (EMutBorrow (PNone, bid, Some bv, bv'))
+                EBorrow (EMutBorrow (PNone, bid, bv'))
             | VSharedBorrow (_, _), RShared ->
                 (* We do not need to track shared borrows *)
                 EIgnored

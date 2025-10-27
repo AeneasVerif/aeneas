@@ -815,7 +815,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           { value; ty = ref_ty }
         in
         let output : tevalue =
-          let value = EBorrow (EMutBorrow (PNone, lid, None, mk_eignored ty)) in
+          let value = EBorrow (EMutBorrow (PNone, lid, mk_eignored ty)) in
           { value; ty = ref_ty }
         in
         let input : tevalue =
@@ -1079,9 +1079,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
               let bv_ty = bv.ty in
               [%cassert] span (ty_no_regions bv_ty)
                 "Nested borrows are not supported yet";
-              let value =
-                EBorrow (EMutBorrow (pm, bid, None, mk_eignored bv_ty))
-              in
+              let value = EBorrow (EMutBorrow (pm, bid, mk_eignored bv_ty)) in
               { value; ty = borrow_ty }
             in
             mk_etuple [ mk_output PLeft bid0 bv0; mk_output PRight bid1 bv1 ]
@@ -1229,9 +1227,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             { value = v; ty = borrow_ty }
           in
           let output : tevalue =
-            let value =
-              EBorrow (EMutBorrow (PNone, nbid, None, mk_eignored bv_ty))
-            in
+            let value = EBorrow (EMutBorrow (PNone, nbid, mk_eignored bv_ty)) in
             { value; ty = borrow_ty }
           in
           Some { output = Some output; input = Some input }
@@ -1562,9 +1558,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           { value = v; ty = borrow_ty }
         in
         let output : tevalue =
-          let value =
-            EBorrow (EMutBorrow (PNone, nbid, None, mk_eignored bv_ty))
-          in
+          let value = EBorrow (EMutBorrow (PNone, nbid, mk_eignored bv_ty)) in
           { value; ty = borrow_ty }
         in
         Some { output = Some output; input = Some input }

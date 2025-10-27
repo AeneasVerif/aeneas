@@ -229,10 +229,8 @@ module Values = struct
 
   let eended_mut_borrow_meta_to_string (env : fmt_env)
       (mv : eended_mut_borrow_meta) : string =
-    let { bid; initial_value; given_back } = mv in
-    "{ bid = " ^ BorrowId.to_string bid ^ "; initial_value = "
-    ^ option_to_string (tvalue_to_string env) initial_value
-    ^ "; given_back = "
+    let { bid; given_back } = mv in
+    "{ bid = " ^ BorrowId.to_string bid ^ "; given_back = "
     ^ symbolic_value_to_string env given_back
     ^ " }"
 
@@ -657,7 +655,7 @@ module Values = struct
       (indent : string) (indent_incr : string) (ty : ty) (bc : eborrow_content)
       : string =
     match bc with
-    | EMutBorrow (pm, bid, _, av) ->
+    | EMutBorrow (pm, bid, av) ->
         "@mb(" ^ BorrowId.to_string bid ^ ", "
         ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr av
         ^ ") : " ^ ty_to_string env ty

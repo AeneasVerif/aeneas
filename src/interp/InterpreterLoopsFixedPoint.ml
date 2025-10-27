@@ -252,7 +252,7 @@ let loop_abs_reorder_and_add_info (span : Meta.span) (fixed_ids : ids_sets)
           | AMutBorrow (pm, bid, child) ->
               [%sanity_check] span (is_aignored child.value);
               let value : evalue =
-                EBorrow (EMutBorrow (pm, bid, None, mk_eignored child.ty))
+                EBorrow (EMutBorrow (pm, bid, mk_eignored child.ty))
               in
               borrows := { value; ty } :: !borrows
           | ASharedBorrow _ -> (* We ignore shared borrows *) ()

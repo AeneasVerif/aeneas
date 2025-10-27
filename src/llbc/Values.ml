@@ -216,9 +216,6 @@ type aended_mut_borrow_meta = {
 
 type eended_mut_borrow_meta = {
   bid : borrow_id;
-  initial_value : mvalue option;
-      (** The value consumed upon inserting the mutable borrow into the region
-          abstraction *)
   given_back : msymbolic_value;
       (** The value given back upon ending the borrow *)
 }
@@ -1277,10 +1274,8 @@ and eended_ignored_mut_loan = {
     Note that because shared borrows do not give back anything we do not track
     them. *)
 and eborrow_content =
-  | EMutBorrow of proj_marker * borrow_id * mvalue option * tevalue
+  | EMutBorrow of proj_marker * borrow_id * tevalue
       (** A mutable borrow owned by an abstraction.
-
-          TODO: remove the meta-value.
 
           Is used when an abstraction "consumes" borrows, when giving borrows as
           arguments to a function.

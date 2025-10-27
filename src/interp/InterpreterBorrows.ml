@@ -1278,15 +1278,15 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
             let sv = convert_avalue_to_given_back_value span av in
             (* Replace the mut borrow to register the fact that we ended
                it and store with it the freshly generated given back value *)
-            let meta = { bid; given_back = sv } in
+            let meta : aended_mut_borrow_meta = { bid; given_back = sv } in
             let ended_borrow = ABorrow (AEndedMutBorrow (meta, av)) in
             let ended_eborrow =
               match lookup_eborrow_opt span ek_all bid ctx with
               | None -> None
-              | Some (EMutBorrow (pm, bid, mv, av)) ->
+              | Some (EMutBorrow (pm, bid, av)) ->
                   [%sanity_check] span (pm = PNone);
                   let meta : eended_mut_borrow_meta =
-                    { bid; given_back = sv; initial_value = mv }
+                    { bid; given_back = sv }
                   in
                   Some (EBorrow (EEndedMutBorrow (meta, av)))
               | Some _ -> [%internal_error] span

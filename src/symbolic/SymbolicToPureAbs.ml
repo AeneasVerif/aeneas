@@ -406,7 +406,7 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
         | V.EIgnoredMutBorrow _
         | V.EEndedMutBorrow _
         | V.EEndedIgnoredMutBorrow _ -> [%internal_error] span
-        | V.EMutBorrow (pm, bid, _mv, child) ->
+        | V.EMutBorrow (pm, bid, child) ->
             [%sanity_check] span (pm = PNone);
             [%sanity_check] span (ValuesUtils.is_eignored child.value);
             let ctx, e = add_concrete ctx bid output.ty in

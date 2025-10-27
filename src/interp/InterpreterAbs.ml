@@ -172,7 +172,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             (* Create the output expression *)
             let output : tevalue =
               let ignored = mk_eignored ref_ty in
-              let value = EBorrow (EMutBorrow (PNone, bid, Some bv, ignored)) in
+              let value = EBorrow (EMutBorrow (PNone, bid, ignored)) in
               { value; ty }
             in
             (* Recursively explore the expression to look for shared loans
@@ -301,7 +301,7 @@ let convert_value_to_output_avalues (span : Meta.span) (ctx : eval_ctx)
               (* Create the output expression *)
               let output : tevalue =
                 let ignored = mk_eignored ref_ty in
-                let value = EBorrow (EMutBorrow (pm, bid, Some bv, ignored)) in
+                let value = EBorrow (EMutBorrow (pm, bid, ignored)) in
                 { value; ty = proj_ty }
               in
               (* Check the borrowed value *)
@@ -1379,7 +1379,7 @@ let bind_outputs_from_output_input (span : Meta.span) (ctx : eval_ctx)
         (* Two cases depending on whether we are inside a loan or not *)
         begin
           match borrow with
-          | EMutBorrow (pm, bid, _mv, child) ->
+          | EMutBorrow (pm, bid, child) ->
               [%cassert] span (is_eignored child.value) "Unimplemented";
               (* Compute the binding pattern *)
               let fid = fresh_abs_fvar_id () in
@@ -1471,8 +1471,7 @@ let merge_abs_conts_generate_output (span : Meta.span) (_ctx : eval_ctx)
               | [ (pm, fid, ty) ] ->
                   let output : tevalue =
                     {
-                      value =
-                        EBorrow (EMutBorrow (pm, bid, None, mk_eignored ty));
+                      value = EBorrow (EMutBorrow (pm, bid, mk_eignored ty));
                       ty;
                     }
                   in
@@ -1487,8 +1486,7 @@ let merge_abs_conts_generate_output (span : Meta.span) (_ctx : eval_ctx)
                   in
                   let output =
                     {
-                      value =
-                        EBorrow (EMutBorrow (PNone, bid, None, mk_eignored tyl));
+                      value = EBorrow (EMutBorrow (PNone, bid, mk_eignored tyl));
                       ty = tyl;
                     }
                   in
@@ -2342,10 +2340,10 @@ let project_context (span : Meta.span) (fixed_ids : InterpreterUtils.ids_sets)
 
       method! visit_EBorrow env lc =
         match lc with
-        | EMutBorrow (pm, bid, mv, child) ->
+        | EMutBorrow (pm, bid, child) ->
             if preserve pm then
               let child = self#visit_tevalue env child in
-              EBorrow (EMutBorrow (PNone, bid, mv, child))
+              EBorrow (EMutBorrow (PNone, bid, child))
             else (
               [%cassert] span (is_eignored child.value) "Not implemented";
               if env.inside_output then EIgnored else EBottom)

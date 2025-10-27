@@ -517,11 +517,11 @@ let lookup_eborrow_opt (span : Meta.span) (ek : exploration_kind)
 
       method! visit_eborrow_content env bc =
         match bc with
-        | EMutBorrow (pm, bid, mv, av) ->
+        | EMutBorrow (pm, bid, av) ->
             (* Sanity check: projection markers can only appear when we're doing a join *)
             [%sanity_check] span (pm = PNone);
             if bid = l then raise (FoundEBorrowContent bc)
-            else super#visit_EMutBorrow env pm bid mv av
+            else super#visit_EMutBorrow env pm bid av
         | EIgnoredMutBorrow (_, _)
         | EEndedMutBorrow _ | EEndedIgnoredMutBorrow _ ->
             super#visit_eborrow_content env bc
@@ -683,11 +683,11 @@ let update_aborrow (span : Meta.span) (ek : exploration_kind)
 
       method! visit_EBorrow env bc =
         match bc with
-        | EMutBorrow (pm, bid, mv, av) ->
+        | EMutBorrow (pm, bid, av) ->
             (* Sanity check: projection markers can only appear when we're doing a join *)
             [%sanity_check] span (pm = PNone);
             if UMut bid = l then update_evalue ()
-            else EBorrow (super#visit_EMutBorrow env pm bid mv av)
+            else EBorrow (super#visit_EMutBorrow env pm bid av)
         | EIgnoredMutBorrow _ | EEndedMutBorrow _ | EEndedIgnoredMutBorrow _ ->
             super#visit_EBorrow env bc
 
