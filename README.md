@@ -45,7 +45,7 @@ it will be the case.
 You can then install the dependencies with the following command:
 ```
 opam install ppx_deriving visitors easy_logging zarith yojson core_unix odoc \
-  ocamlgraph menhir ocamlformat unionFind zarith
+  ocamlgraph menhir ocamlformat unionFind zarith progress
 ```
 
 Moreover, Aeneas uses the [Charon](https://github.com/AeneasVerif/charon) project and library.
