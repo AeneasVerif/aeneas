@@ -22,7 +22,8 @@ val update_ctx_along_write_place :
   config -> Meta.span -> access_kind -> place -> cm_fun
 
 (** Read the value at a given place, provided the place **does not refer to a
-    global** (globals are handled elsewhere).
+    global** (globals are handled elsewhere). Also returns a loan id if the
+    value is directly beneath a shared loan.
 
     This function doesn't update the environment to make sure the value is
     accessible: if needs be, you should call {!update_ctx_along_read_place}
@@ -30,7 +31,8 @@ val update_ctx_along_write_place :
 
     Note that we only access the value at the place, and do not check that the
     value is "well-formed" (for instance that it doesn't contain bottoms). *)
-val read_place : Meta.span -> access_kind -> place -> eval_ctx -> tvalue
+val read_place :
+  Meta.span -> access_kind -> place -> eval_ctx -> loan_id option * tvalue
 
 (** Update the value at a given place, provided the place **does not refer to a
     global** (globals are handled elsewhere).

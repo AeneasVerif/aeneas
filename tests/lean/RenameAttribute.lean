@@ -92,13 +92,14 @@ def No_borrows_sum_loop (max : U32) (i : U32) (s : U32) : Result U32 :=
        let s1 ← s + i
        let i1 ← i + 1#u32
        No_borrows_sum_loop max i1 s1
-  else s * 2#u32
+  else ok s
 partial_fixpoint
 
 /- [rename_attribute::sum]:
    Source: 'tests/src/rename_attribute.rs', lines 66:0-76:1 -/
-@[reducible]
 def No_borrows_sum (max : U32) : Result U32 :=
-  No_borrows_sum_loop max 0#u32 0#u32
+  do
+  let s ← No_borrows_sum_loop max 0#u32 0#u32
+  s * 2#u32
 
 end rename_attribute

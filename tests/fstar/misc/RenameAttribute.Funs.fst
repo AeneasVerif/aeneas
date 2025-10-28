@@ -63,10 +63,10 @@ let rec no_borrows_sum_loop
     let* s1 = u32_add s i in
     let* i1 = u32_add i 1 in
     no_borrows_sum_loop max i1 s1
-  else u32_mul s 2
+  else Ok s
 
 (** [rename_attribute::sum]:
     Source: 'tests/src/rename_attribute.rs', lines 66:0-76:1 *)
 let no_borrows_sum (max : u32) : result u32 =
-  no_borrows_sum_loop max 0 0
+  let* s = no_borrows_sum_loop max 0 0 in u32_mul s 2
 

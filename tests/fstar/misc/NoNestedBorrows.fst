@@ -267,21 +267,27 @@ let list_rev (#t : Type0) (l : list_t t) : result (list_t t) =
 (** [no_nested_borrows::test_list_functions]:
     Source: 'tests/src/no_nested_borrows.rs', lines 319:0-333:1 *)
 let test_list_functions : result unit =
-  let l = List_Cons 2 List_Nil in
-  let l1 = List_Cons 1 l in
-  let* i = list_length (List_Cons 0 l1) in
+  let* i = list_length (List_Cons 0 (List_Cons 1 (List_Cons 2 List_Nil))) in
   if i = 3
   then
-    let* i1 = list_nth_shared (List_Cons 0 l1) 0 in
+    let* i1 =
+      list_nth_shared (List_Cons 0 (List_Cons 1 (List_Cons 2 List_Nil))) 0
+    in
     if i1 = 0
     then
-      let* i2 = list_nth_shared (List_Cons 0 l1) 1 in
+      let* i2 =
+        list_nth_shared (List_Cons 0 (List_Cons 1 (List_Cons 2 List_Nil))) 1
+      in
       if i2 = 1
       then
-        let* i3 = list_nth_shared (List_Cons 0 l1) 2 in
+        let* i3 =
+          list_nth_shared (List_Cons 0 (List_Cons 1 (List_Cons 2 List_Nil))) 2
+        in
         if i3 = 2
         then
-          let* (_, list_nth_mut_back) = list_nth_mut (List_Cons 0 l1) 1 in
+          let* (_, list_nth_mut_back) =
+            list_nth_mut (List_Cons 0 (List_Cons 1 (List_Cons 2 List_Nil))) 1
+          in
           let ls = list_nth_mut_back 3 in
           let* i4 = list_nth_shared ls 0 in
           if i4 = 0

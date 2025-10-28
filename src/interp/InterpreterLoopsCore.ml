@@ -7,10 +7,10 @@ open InterpreterUtils
 open InterpreterBorrowsCore
 
 type updt_env_kind =
-  | AbsInLeft of AbstractionId.id
+  | AbsInLeft of AbsId.id
   | LoanInLeft of BorrowId.id
   | LoansInLeft of BorrowId.Set.t
-  | AbsInRight of AbstractionId.id
+  | AbsInRight of AbsId.id
   | LoanInRight of BorrowId.id
   | LoansInRight of BorrowId.Set.t
 [@@deriving show]
@@ -21,7 +21,16 @@ exception ValueMatchFailure of updt_env_kind
 (** Utility exception *)
 exception Distinct of string
 
-type ctx_or_update = (eval_ctx, updt_env_kind) result
+(** Information about the way contexts were joined *)
+type ctx_join_info = {
+  symbolic_to_value : (tvalue * tvalue) SymbolicValueId.Map.t;
+      (** Map from fresh symbolic value to the values coming from the left and
+          right contexts *)
+  refreshed_aids : abs_id AbsId.Map.t;
+      (** The refreshed abstraction ids in the right environment *)
+}
+
+type ctx_or_update = (eval_ctx * ctx_join_info, updt_env_kind) result
 
 (** A small utility.
 
@@ -32,19 +41,19 @@ type ctx_or_update = (eval_ctx, updt_env_kind) result
     markers because we performed a join and are progressively transforming the
     environment to get rid of those markers). *)
 type abs_borrows_loans_maps = {
-  abs_ids : AbstractionId.id list;
-  abs_to_borrows : MarkedUniqueBorrowId.Set.t AbstractionId.Map.t;
-  abs_to_non_unique_borrows : MarkedBorrowId.Set.t AbstractionId.Map.t;
-  abs_to_loans : MarkedLoanId.Set.t AbstractionId.Map.t;
-  borrow_to_abs : AbstractionId.Set.t MarkedUniqueBorrowId.Map.t;
-  non_unique_borrow_to_abs : AbstractionId.Set.t MarkedBorrowId.Map.t;
+  abs_ids : AbsId.id list;
+  abs_to_borrows : MarkedUniqueBorrowId.Set.t AbsId.Map.t;
+  abs_to_non_unique_borrows : MarkedBorrowId.Set.t AbsId.Map.t;
+  abs_to_loans : MarkedLoanId.Set.t AbsId.Map.t;
+  borrow_to_abs : AbsId.Set.t MarkedUniqueBorrowId.Map.t;
+  non_unique_borrow_to_abs : AbsId.Set.t MarkedBorrowId.Map.t;
       (** A map from a non unique borrow id (in case of shared borrows) to the
           set of region abstractions refering to this borrow *)
-  loan_to_abs : AbstractionId.Set.t MarkedLoanId.Map.t;
-  abs_to_borrow_projs : MarkedNormSymbProj.Set.t AbstractionId.Map.t;
-  abs_to_loan_projs : MarkedNormSymbProj.Set.t AbstractionId.Map.t;
-  borrow_proj_to_abs : AbstractionId.Set.t MarkedNormSymbProj.Map.t;
-  loan_proj_to_abs : AbstractionId.Set.t MarkedNormSymbProj.Map.t;
+  loan_to_abs : AbsId.Set.t MarkedLoanId.Map.t;
+  abs_to_borrow_projs : MarkedNormSymbProj.Set.t AbsId.Map.t;
+  abs_to_loan_projs : MarkedNormSymbProj.Set.t AbsId.Map.t;
+  borrow_proj_to_abs : AbsId.Set.t MarkedNormSymbProj.Map.t;
+  loan_proj_to_abs : AbsId.Set.t MarkedNormSymbProj.Map.t;
 }
 
 type tvalue_matcher = tvalue -> tvalue -> tvalue
@@ -78,7 +87,9 @@ module type PrimMatcher = sig
     eval_ctx ->
     eval_ctx ->
     ety ->
+    ety ->
     adt_value ->
+    ety ->
     adt_value ->
     tvalue
 
@@ -116,9 +127,11 @@ module type PrimMatcher = sig
 
   (** Parameters:
       - [match_values]
+      - [ctx0]
+      - [ctx1]
       - [ty]
-      - [ids0]
-      - [ids1]
+      - [id0]
+      - [id1]
       - [v]: the result of matching the shared values coming from the two loans
   *)
   val match_shared_loans :
@@ -129,7 +142,43 @@ module type PrimMatcher = sig
     loan_id ->
     loan_id ->
     tvalue ->
-    loan_id * tvalue
+    tvalue
+
+  (** Parameters:
+      - [match_values]
+      - [ctx0]
+      - [ctx1]
+      - [loan_is_left]
+      - [loan_id]
+      - [shared_value]
+      - [other_value] *)
+  val match_shared_loan_with_other :
+    tvalue_matcher ->
+    eval_ctx ->
+    eval_ctx ->
+    loan_is_left:bool ->
+    ty ->
+    loan_id ->
+    tvalue ->
+    tvalue ->
+    tvalue
+
+  (** Parameters:
+      - [match_values]
+      - [ctx0]
+      - [ctx1]
+      - [loan_is_left]
+      - [loan_id]
+      - [other_value] *)
+  val match_mut_loan_with_other :
+    tvalue_matcher ->
+    eval_ctx ->
+    eval_ctx ->
+    loan_is_left:bool ->
+    ty ->
+    loan_id ->
+    tvalue ->
+    tvalue
 
   val match_mut_loans :
     tvalue_matcher ->
@@ -138,7 +187,7 @@ module type PrimMatcher = sig
     ety ->
     loan_id ->
     loan_id ->
-    loan_id
+    tvalue
 
   (** There are no constraints on the input symbolic values *)
   val match_symbolic_values :
@@ -159,7 +208,7 @@ module type PrimMatcher = sig
     tvalue_matcher ->
     eval_ctx ->
     eval_ctx ->
-    bool ->
+    symbolic_is_left:bool ->
     symbolic_value ->
     tvalue ->
     tvalue
@@ -171,7 +220,12 @@ module type PrimMatcher = sig
       important when throwing exceptions, for instance when we need to end loans
       in one of the two environments). *)
   val match_bottom_with_other :
-    tvalue_matcher -> eval_ctx -> eval_ctx -> bool -> tvalue -> tvalue
+    tvalue_matcher ->
+    eval_ctx ->
+    eval_ctx ->
+    bottom_is_left:bool ->
+    tvalue ->
+    tvalue
 
   (** The input ADTs don't have the same variant *)
   val match_distinct_aadts :
@@ -406,7 +460,7 @@ module type MatchCheckEquivState = sig
 
   val sid_map : SymbolicValueId.InjSubst.t ref
   val sid_to_value_map : tvalue SymbolicValueId.Map.t ref
-  val aid_map : AbstractionId.InjSubst.t ref
+  val aid_map : AbsId.InjSubst.t ref
   val lookup_shared_value_in_ctx0 : BorrowId.id -> tvalue
   val lookup_shared_value_in_ctx1 : BorrowId.id -> tvalue
 end
@@ -414,14 +468,9 @@ end
 module type CheckEquivMatcher = sig
   include PrimMatcher
 
-  val match_aid : abstraction_id -> abstraction_id -> abstraction_id
-
-  val match_aidl :
-    abstraction_id list -> abstraction_id list -> abstraction_id list
-
-  val match_aids :
-    abstraction_id_set -> abstraction_id_set -> abstraction_id_set
-
+  val match_aid : abs_id -> abs_id -> abs_id
+  val match_aidl : abs_id list -> abs_id list -> abs_id list
+  val match_aids : abs_id_set -> abs_id_set -> abs_id_set
   val match_rid : region_id -> region_id -> region_id
   val match_rids : region_id_set -> region_id_set -> region_id_set
   val match_borrow_id : borrow_id -> borrow_id -> borrow_id
@@ -434,7 +483,7 @@ end
 
 (** See {!InterpreterLoopsMatchCtxs.match_ctxs} *)
 type ids_maps = {
-  aid_map : AbstractionId.InjSubst.t;
+  aid_map : AbsId.InjSubst.t;
   blid_map : BorrowId.InjSubst.t;
       (** Substitution for the loan and borrow ids *)
   borrow_id_map : BorrowId.InjSubst.t;  (** Substitution for the borrow ids *)
@@ -457,9 +506,9 @@ let ids_maps_to_string (ctx : eval_ctx) (m : ids_maps) : string =
   } =
     m
   in
-  let indent = Some "  " in
+  let indent = Some "    " in
   "{" ^ "\n  aid_map = "
-  ^ AbstractionId.InjSubst.to_string indent aid_map
+  ^ AbsId.InjSubst.to_string indent aid_map
   ^ "\n  blid_map = "
   ^ BorrowId.InjSubst.to_string indent blid_map
   ^ "\n  borrow_id_map = "
@@ -491,6 +540,16 @@ module type MatchJoinState = sig
   val nabs : abs list ref
 
   val span : Meta.span
+
+  (** Whenever we create fresh abstractions, do we provide an abstraction
+      expression or not? We do not need to compute abstraction expressions when
+      computing fixed-points (but we need them for the synthesis). *)
+  val with_abs_conts : bool
+
+  (** Map from the fresh symbolic values to the values coming from the left and
+      right environment and whose join led to the introduction of the symbolic
+      value *)
+  val symbolic_to_value : (tvalue * tvalue) SymbolicValueId.Map.t ref
 end
 
 (** Split an environment between the fixed abstractions, values, etc. and the
@@ -502,8 +561,8 @@ let ctx_split_fixed_new (span : Meta.span) (fixed_ids : ids_sets)
   let is_fresh_did (id : DummyVarId.id) : bool =
     not (DummyVarId.Set.mem id fixed_ids.dids)
   in
-  let is_fresh_abs_id (id : AbstractionId.id) : bool =
-    not (AbstractionId.Set.mem id fixed_ids.aids)
+  let is_fresh_abs_id (id : AbsId.id) : bool =
+    not (AbsId.Set.mem id fixed_ids.aids)
   in
   (* Filter the new abstractions and dummy variables (there shouldn't be any new dummy variable
      though) in the target context *)
@@ -544,8 +603,10 @@ let ids_sets_empty_borrows_loans (ids : ids_sets) : ids_sets =
     blids = _;
     borrow_ids = _;
     loan_ids = _;
+    shared_loans_to_values = _;
     unique_borrow_ids = _;
     shared_borrow_ids = _;
+    non_unique_shared_borrow_ids = _;
     dids;
     rids;
     sids;
@@ -560,6 +621,8 @@ let ids_sets_empty_borrows_loans (ids : ids_sets) : ids_sets =
       borrow_ids = empty;
       unique_borrow_ids = UniqueBorrowIdSet.empty;
       shared_borrow_ids = SharedBorrowId.Set.empty;
+      non_unique_shared_borrow_ids = BorrowId.Set.empty;
+      shared_loans_to_values = BorrowId.Map.empty;
       loan_ids = empty;
       dids;
       rids;
@@ -596,7 +659,11 @@ let tavalue_add_marker (span : Meta.span) (ctx : eval_ctx) (pm : proj_marker)
         | ASharedLoan (pm0, bids, av, child) ->
             [%sanity_check] span (pm0 = PNone);
             super#visit_aloan_content env (ASharedLoan (pm, bids, av, child))
-        | _ -> [%internal_error] span
+        | _ ->
+            [%craise] span
+              ("(Internal error: please file an issue (unexpected value: "
+              ^ aloan_content_to_string ctx lc
+              ^ ")")
 
       method! visit_aborrow_content env bc =
         match bc with

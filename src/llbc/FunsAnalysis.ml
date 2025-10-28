@@ -35,8 +35,8 @@ type fun_info = {
 (** Various information about a module's functions *)
 type modules_funs_info = fun_info FunDeclId.Map.t
 
-let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
-    (use_state : bool) : modules_funs_info =
+let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
+    modules_funs_info =
   let fmt_env = Charon.PrintLlbcAst.Crate.crate_to_fmt_env m in
   let infos = ref FunDeclId.Map.empty in
   let register_info (id : FunDeclId.id) (info : fun_info) : unit =
@@ -97,7 +97,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
                 [%unwrap_opt_span] (Some span) info
                   "The function called here is missing from the crate \
                    (probably because of a previous error, or because of the \
-                   use of --exclude"
+                   use of --exclude)"
               in
               self#may_fail info.can_fail;
               stateful := !stateful || info.stateful;
@@ -159,16 +159,12 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
       group_has_builtin_info := !group_has_builtin_info || has_builtin_info;
       match f.body with
       | None ->
-          let info_can_fail, info_stateful =
+          let info_can_fail =
             match builtin_info with
-            | None -> (true, use_state)
-            | Some { can_fail; stateful } -> (can_fail, stateful)
+            | None -> true
+            | Some { can_fail } -> can_fail
           in
-          obj#may_fail info_can_fail;
-          obj#maybe_stateful
-            (if Option.is_some f.is_global_initializer then false
-             else if not use_state then false
-             else info_stateful)
+          obj#may_fail info_can_fail
       | Some body -> obj#visit_block body.body.span body.body
     in
     List.iter visit_fun d;
@@ -239,11 +235,14 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t)
            let decls = String.concat "\n" decls in
            [%save_error_opt_span] error.span
              ("Encountered an error when analyzing the following function \
-               declaration group:\n" ^ decls));
+               declaration group:\n" ^ decls ^ "\n\nInitial error:\n"
+            ^ error.msg));
         analyze_decl_groups decls'
     | MixedGroup ids :: _ ->
         [%save_error_opt_span] None
-          ("Mixed declaration groups are not supported yet: ["
+          ("Mixed declaration groups (which contain both type and function \
+            declarations or functions and traits, for instance) are not \
+            supported yet: ["
           ^ String.concat ", "
               (List.map Charon.PrintGAst.item_id_to_string
                  (Charon.GAstUtils.g_declaration_group_to_list ids))

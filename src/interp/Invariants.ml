@@ -260,7 +260,7 @@ let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
   borrows_visitor#visit_eval_ctx () ctx;
 
   (* Debugging *)
-  [%ltrace "About to check context invariant:\n" ^ context_to_string ()];
+  [%ldebug "About to check context invariant:\n" ^ context_to_string ()];
 
   (* Finally, check that everything is consistant *)
   (* First, check all the ignored loans are present at the proper place *)
@@ -289,10 +289,6 @@ let check_borrowed_values_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
         (* No ⊥ inside borrowed values *)
         [%sanity_check] span
           (Config.allow_bottom_below_borrow || not info.outer_borrow)
-
-      method! visit_ABottom _info =
-        (* ⊥ inside an abstraction is not the same as in a regular value *)
-        ()
 
       method! visit_loan_content info lc =
         (* Update the info *)
@@ -432,7 +428,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
             Substitute.type_decl_get_instantiated_field_etypes def av.variant_id
               generics
           in
-          let fields_with_types = List.combine av.field_values field_types in
+          let fields_with_types = List.combine av.fields field_types in
           List.iter
             (fun ((v, ty) : tvalue * ty) -> [%sanity_check] span (v.ty = ty))
             fields_with_types
@@ -443,7 +439,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
           [%sanity_check] span (av.variant_id = None);
           (* Check that the fields have the proper values - and check that there
            * are as many fields as field types at the same time *)
-          let fields_with_types = List.combine av.field_values generics.types in
+          let fields_with_types = List.combine av.fields generics.types in
           List.iter
             (fun ((v, ty) : tvalue * ty) -> [%sanity_check] span (v.ty = ty))
             fields_with_types
@@ -452,7 +448,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
           [%sanity_check] span (av.variant_id = None);
           match
             ( aty_id,
-              av.field_values,
+              av.fields,
               generics.regions,
               generics.types,
               generics.const_generics )
@@ -486,7 +482,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
                    checking the loan itself. *)
                 lookups
               then
-                let _, glc = lookup_loan span ek_all bid ctx in
+                let _, glc = ctx_lookup_loan span ek_all bid ctx in
                 match glc with
                 | Concrete (VSharedLoan (_, sv))
                 | Abstract (ASharedLoan (_, _, sv, _)) ->
@@ -556,7 +552,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
             Substitute.type_decl_get_instantiated_field_types def av.variant_id
               generics
           in
-          let fields_with_types = List.combine av.field_values field_types in
+          let fields_with_types = List.combine av.fields field_types in
           List.iter
             (fun ((v, ty) : tavalue * ty) -> [%sanity_check] span (v.ty = ty))
             fields_with_types
@@ -567,7 +563,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
           [%sanity_check] span (av.variant_id = None);
           (* Check that the fields have the proper values - and check that there
            * are as many fields as field types at the same time *)
-          let fields_with_types = List.combine av.field_values generics.types in
+          let fields_with_types = List.combine av.fields generics.types in
           List.iter
             (fun ((v, ty) : tavalue * ty) -> [%sanity_check] span (v.ty = ty))
             fields_with_types
@@ -576,7 +572,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
           [%sanity_check] span (av.variant_id = None);
           match
             ( aty_id,
-              av.field_values,
+              av.fields,
               generics.regions,
               generics.types,
               generics.const_generics )
@@ -585,7 +581,6 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
           | TBox, [ boxed_value ], [], [ boxed_ty ], [] ->
               [%sanity_check] span (boxed_value.ty = boxed_ty)
           | _ -> [%craise] span "Erroneous type")
-      | ABottom, _ -> (* Nothing to check *) ()
       | ABorrow bc, TRef (region, ref_ty, rkind) -> (
           let abs = Option.get info in
           (* Check the borrow content *)
@@ -600,7 +595,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
               [%sanity_check] span (region_is_owned abs region);
               if lookups then
                 (* Lookup the borrowed value to check it has the proper type *)
-                let _, glc = lookup_loan span ek_all bid ctx in
+                let _, glc = ctx_lookup_loan span ek_all bid ctx in
                 match glc with
                 | Concrete (VSharedLoan (_, sv))
                 | Abstract (ASharedLoan (_, _, sv, _)) ->
@@ -710,7 +705,7 @@ let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) (lookups : bool)
     ctx
 
 type proj_borrows_info = {
-  abs_id : AbstractionId.id;
+  abs_id : AbsId.id;
   regions : RegionId.Set.t;
   proj_ty : rty;  (** The regions shouldn't be erased *)
   as_shared_value : bool;  (** True if the value is below a shared borrow *)
@@ -718,7 +713,7 @@ type proj_borrows_info = {
 [@@deriving show]
 
 type proj_loans_info = {
-  abs_id : AbstractionId.id;
+  abs_id : AbsId.id;
   regions : RegionId.Set.t;
   proj_ty : rty;
 }
@@ -734,9 +729,7 @@ type sv_info = {
 let proj_borrows_info_to_string (ctx : eval_ctx) (info : proj_borrows_info) :
     string =
   let { abs_id; regions; proj_ty; as_shared_value } = info in
-  "{ abs_id = "
-  ^ AbstractionId.to_string abs_id
-  ^ "; regions = "
+  "{ abs_id = " ^ AbsId.to_string abs_id ^ "; regions = "
   ^ RegionId.Set.to_string None regions
   ^ "; proj_ty = " ^ ty_to_string ctx proj_ty ^ "; as_shared_value = "
   ^ Print.bool_to_string as_shared_value
@@ -745,9 +738,7 @@ let proj_borrows_info_to_string (ctx : eval_ctx) (info : proj_borrows_info) :
 let proj_loans_info_to_string (ctx : eval_ctx) (info : proj_loans_info) : string
     =
   let { abs_id; regions; proj_ty } = info in
-  "{ abs_id = "
-  ^ AbstractionId.to_string abs_id
-  ^ "; regions = "
+  "{ abs_id = " ^ AbsId.to_string abs_id ^ "; regions = "
   ^ RegionId.Set.to_string None regions
   ^ "; proj_ty = " ^ ty_to_string ctx proj_ty ^ "}"
 
@@ -834,7 +825,7 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
 
   (* Check *)
   let check_info id info =
-    [%ltrace
+    [%ldebug
       "checking info (sid: )"
       ^ SymbolicValueId.to_string id
       ^ ":\n" ^ sv_info_to_string ctx info];
@@ -843,6 +834,10 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
       (* TODO: check that:
        * - the borrows are mutually disjoint
        *)
+      (* The borrows of a symbolic value must come from somewhere: if we find a
+         symbolic values with live borrows (and particular a projection over the
+         borrows of a symbolic value), there *must* be a projection over its loans
+         (otherwise its borrows don't have corresponding loans). *)
       [%sanity_check] span (info.aproj_borrows = [] || info.aproj_loans <> []);
       (* Check that the loan projections don't intersect and compute
          the normalized union of those projections *)
@@ -886,15 +881,25 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
 
   M.iter check_info !infos
 
+(** Check that all abstraction ids are unique *)
+let check_unique_abs_ids (span : Meta.span) (ctx : eval_ctx) : unit =
+  let ids = ref AbsId.Set.empty in
+  env_iter_abs
+    (fun (abs : abs) ->
+      [%sanity_check] span (not (AbsId.Set.mem abs.abs_id !ids));
+      ids := AbsId.Set.add abs.abs_id !ids)
+    ctx.env
+
 let check_invariants (span : Meta.span) (ctx : eval_ctx) : unit =
   if !Config.sanity_checks then (
     [%ltrace
-      "Checking invariants:\n" ^ eval_ctx_to_string ~span:(Some span) ctx];
+      "Checking invariants in context:\n"
+      ^ eval_ctx_to_string ~span:(Some span) ctx];
     check_loans_borrows_relation_invariant span ctx;
     check_borrowed_values_invariant span ctx;
     check_typing_invariant span ctx true;
-    check_symbolic_values span ctx)
-  else [%ltrace "Not checking invariants (check is not activated)"]
+    check_symbolic_values span ctx;
+    check_unique_abs_ids span ctx)
 
 let check_typing_invariant (span : Meta.span) (ctx : eval_ctx) : unit =
   if !Config.sanity_checks then check_typing_invariant span ctx true

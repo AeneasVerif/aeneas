@@ -4,6 +4,8 @@ open Contexts
 
 (** Turn a value into a abstractions.
 
+    We generally use this to turn anonymous values into region abstractions.
+
     We are conservative, and don't group borrows/loans into the same abstraction
     unless necessary.
 
@@ -20,18 +22,32 @@ open Contexts
     Parameters:
     - [abs_kind]
     - [can_end]
-    - [destructure_shared_values]: this is similar to
-      [destructure_shared_values] for {!destructure_abs}.
     - [ctx]
     - [v] *)
 val convert_value_to_abstractions :
+  Meta.span -> abs_kind -> can_end:bool -> eval_ctx -> tvalue -> abs list
+
+(** Convert a value to a list of *output* avalues (the value should contain
+    borrows but no loans), and output and input expressions, so that we can put
+    it in a region abstraction.
+
+    We use this when performing joins. *)
+val convert_value_to_output_avalues :
   Meta.span ->
-  abs_kind ->
-  can_end:bool ->
-  destructure_shared_values:bool ->
   eval_ctx ->
+  proj_marker ->
   tvalue ->
-  abs list
+  RegionId.Set.t ->
+  ty ->
+  tavalue list * tevalue
+
+val convert_value_to_input_avalues :
+  Meta.span ->
+  eval_ctx ->
+  proj_marker ->
+  tvalue ->
+  RegionId.id ->
+  tavalue list * tevalue
 
 (** See {!merge_into_abstraction}.
 
@@ -190,6 +206,7 @@ type merge_duplicates_funcs = {
     Parameters:
     - [kind]
     - [can_end]
+    - [with_abs_conts]
     - [merge_funs]: those functions are used to merge borrows/loans with the
       *same ids* but different markers. This is necessary when doing a collapse
       (see the computation of joins). If [merge_funs] are not provided, we check
@@ -203,12 +220,13 @@ type merge_duplicates_funcs = {
 val merge_into_first_abstraction :
   Meta.span ->
   abs_kind ->
-  bool ->
+  can_end:bool ->
+  with_abs_conts:bool ->
   merge_duplicates_funcs option ->
   eval_ctx ->
-  AbstractionId.id ->
-  AbstractionId.id ->
-  eval_ctx * AbstractionId.id
+  AbsId.id ->
+  AbsId.id ->
+  eval_ctx * AbsId.id
 
 (** Reorder the fresh abstractions, as well as the loans and borrows inside
     them.
@@ -228,5 +246,11 @@ val merge_into_first_abstraction :
       markers don't appear).
     - [old_abs_ids]
     - [eval_ctx] *)
-val reorder_fresh_abs :
-  Meta.span -> bool -> AbstractionId.Set.t -> eval_ctx -> eval_ctx
+val reorder_fresh_abs : Meta.span -> bool -> AbsId.Set.t -> eval_ctx -> eval_ctx
+
+(** Project a context to only preserve the values appearing on the left or the
+    values appearing on the right.
+
+    The [proj_marker] must be [PLeft] or [PRight]. *)
+val project_context :
+  Meta.span -> InterpreterUtils.ids_sets -> proj_marker -> eval_ctx -> eval_ctx
