@@ -2,7 +2,6 @@
 -- [hashmap]: function definitions
 import Aeneas
 import Hashmap.Types
-import Hashmap.FunsExternal
 open Aeneas.Std Result Error
 set_option linter.dupNamespace false
 set_option linter.hashCommand false
@@ -133,8 +132,9 @@ def HashMap.insert_in_list_loop
     then ok (false, AList.Cons ckey value tl)
     else
       do
-      let (b, tl1) ← HashMap.insert_in_list_loop key value tl
-      ok (b, AList.Cons ckey cvalue tl1)
+      let (b, back) ← HashMap.insert_in_list_loop key value tl
+      let back1 := AList.Cons ckey cvalue back
+      ok (b, back1)
   | AList.Nil => ok (true, AList.Cons key value AList.Nil)
 partial_fixpoint
 
@@ -325,21 +325,19 @@ def HashMap.get_mut_in_list_loop
   | AList.Cons ckey cvalue tl =>
     if ckey = key
     then
-      let back :=
+      ok (some cvalue,
         fun ret =>
           let t := match ret with
                    | some t1 => t1
                    | _ => cvalue
-          AList.Cons ckey t tl
-      ok (some cvalue, back)
+          AList.Cons ckey t tl)
     else
       do
       let (o, back) ← HashMap.get_mut_in_list_loop tl key
-      let back1 := fun ret => let tl1 := back ret
-                              AList.Cons ckey cvalue tl1
+      let back1 := fun ret => let a := back ret
+                              AList.Cons ckey cvalue a
       ok (o, back1)
-  | AList.Nil => let back := fun ret => AList.Nil
-                 ok (none, back)
+  | AList.Nil => ok (none, fun ret => AList.Nil)
 partial_fixpoint
 
 /- [hashmap::{hashmap::HashMap<T>}::get_mut_in_list]:
@@ -386,8 +384,9 @@ def HashMap.remove_from_list_loop
       | AList.Nil => fail panic
     else
       do
-      let (o, tl1) ← HashMap.remove_from_list_loop key tl
-      ok (o, AList.Cons ckey t tl1)
+      let (o, back) ← HashMap.remove_from_list_loop key tl
+      let back1 := AList.Cons ckey t back
+      ok (o, back1)
   | AList.Nil => ok (none, AList.Nil)
 partial_fixpoint
 
@@ -420,14 +419,5 @@ def HashMap.remove
     let i1 ← self.num_entries - 1#usize
     let v := index_mut_back a1
     ok (x, { self with num_entries := i1, slots := v })
-
-/- [hashmap::insert_on_disk]:
-   Source: 'tests/src/hashmap.rs', lines 334:0-341:1 -/
-def insert_on_disk
-  (key : Usize) (value : U64) (st : State) : Result (State × Unit) :=
-  do
-  let (st1, hm) ← utils.deserialize st
-  let hm1 ← HashMap.insert hm key value
-  utils.serialize hm1 st1
 
 end hashmap

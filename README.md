@@ -39,8 +39,6 @@ We are developing Aeneas by using **OCaml 5**. For instance, if you want to use 
 ```
 opam switch create 5.2.0
 ```
-Note that any recent version of **OCaml 4** should actually work, though we do not guarantee that
-it will be the case.
 
 You can then install the dependencies with the following command:
 ```

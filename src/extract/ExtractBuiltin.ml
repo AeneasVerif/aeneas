@@ -222,6 +222,9 @@ let builtin_types () : Pure.builtin_type_info list =
         mk_type "core::result::Result"
           ~kind:(KEnum [ ("Ok", None); ("Err", None) ])
           ();
+        mk_type "core::result::Sum"
+          ~kind:(KEnum [ ("Left", None); ("Right", None) ])
+          ();
         mk_type "core::fmt::Error" ();
         mk_type "core::array::TryFromSliceError" ();
         mk_type "core::ops::range::RangeFrom"
@@ -1159,13 +1162,13 @@ let mk_builtin_funs_map () =
 
 let builtin_funs_map = mk_memoized mk_builtin_funs_map
 
-type effect_info = { can_fail : bool; stateful : bool }
+type effect_info = { can_fail : bool }
 
 let mk_builtin_fun_effects () : (pattern * effect_info) list =
   let builtin_funs : (pattern * Pure.builtin_fun_info) list = builtin_funs () in
   List.map
     (fun ((pattern, info) : _ * Pure.builtin_fun_info) ->
-      let info = { can_fail = info.can_fail; stateful = info.stateful } in
+      let info = { can_fail = info.can_fail } in
       (pattern, info))
     builtin_funs
 

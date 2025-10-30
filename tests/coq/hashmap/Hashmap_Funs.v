@@ -8,8 +8,6 @@ Import ListNotations.
 Local Open Scope Primitives_scope.
 Require Import Hashmap_Types.
 Include Hashmap_Types.
-Require Import Hashmap_FunsExternal.
-Include Hashmap_FunsExternal.
 Module Hashmap_Funs.
 
 (** [hashmap::hash_key]:
@@ -156,8 +154,9 @@ Fixpoint hashMap_insert_in_list_loop
       then Ok (false, AList_Cons ckey value tl)
       else (
         p <- hashMap_insert_in_list_loop n1 key value tl;
-        let (b, tl1) := p in
-        Ok (b, AList_Cons ckey cvalue tl1))
+        let (b, back) := p in
+        let back1 := AList_Cons ckey cvalue back in
+        Ok (b, back1))
     | AList_Nil => Ok (true, AList_Cons key value AList_Nil)
     end
   end
@@ -427,22 +426,18 @@ Fixpoint hashMap_get_mut_in_list_loop
     | AList_Cons ckey cvalue tl =>
       if ckey s= key
       then
-        let back :=
+        Ok (Some cvalue,
           fun (ret : option T) =>
             let t := match ret with | Some t1 => t1 | _ => cvalue end in
-            AList_Cons ckey t tl
-        in
-        Ok (Some cvalue, back)
+            AList_Cons ckey t tl)
       else (
         p <- hashMap_get_mut_in_list_loop n1 tl key;
         let (o, back) := p in
         let back1 :=
-          fun (ret : option T) =>
-            let tl1 := back ret in AList_Cons ckey cvalue tl1
+          fun (ret : option T) => let a := back ret in AList_Cons ckey cvalue a
         in
         Ok (o, back1))
-    | AList_Nil =>
-      let back := fun (ret : option T) => AList_Nil in Ok (None, back)
+    | AList_Nil => Ok (None, fun (ret : option T) => AList_Nil)
     end
   end
 .
@@ -506,8 +501,9 @@ Fixpoint hashMap_remove_from_list_loop
         end
       else (
         p <- hashMap_remove_from_list_loop n1 key tl;
-        let (o, tl1) := p in
-        Ok (o, AList_Cons ckey t tl1))
+        let (o, back) := p in
+        let back1 := AList_Cons ckey t back in
+        Ok (o, back1))
     | AList_Nil => Ok (None, AList_Nil)
     end
   end
@@ -560,16 +556,6 @@ Definition hashMap_remove
         hashMap_slots := v
       |})
   end
-.
-
-(** [hashmap::insert_on_disk]:
-    Source: 'tests/src/hashmap.rs', lines 334:0-341:1 *)
-Definition insert_on_disk
-  (n : nat) (key : usize) (value : u64) (st : state) : result (state * unit) :=
-  p <- utils_deserialize st;
-  let (st1, hm) := p in
-  hm1 <- hashMap_insert n hm key value;
-  utils_serialize hm1 st1
 .
 
 End Hashmap_Funs.

@@ -19,5 +19,5 @@ let rec foo_loop (t : list_t (list_t u8)) : result unit =
 (** [issue_270_loop_list::foo]:
     Source: 'tests/src/issue-270-loop-list.rs', lines 7:0-14:1 *)
 let foo (v : list_t (list_t u8)) : result unit =
-  begin match v with | List_Cons l t -> foo_loop t | List_Nil -> Ok () end
+  begin match v with | List_Cons _ t -> foo_loop t | List_Nil -> Ok () end
 

@@ -1,5 +1,5 @@
 //@ charon-args=--opaque=crate::utils --translate-all-methods --include=core::clone::Clone::clone_from
-//@ [!borrow-check] aeneas-args=-state -split-files
+//@ [!borrow-check] aeneas-args=-split-files
 //@ [coq] aeneas-args=-use-fuel
 //@ [coq,fstar] subdir=hashmap
 //@ [lean] subdir=Hashmap
@@ -313,31 +313,6 @@ impl<T> HashMap<T> {
             }
         }
     }
-}
-
-// This is a module so we can tell charon to leave it opaque
-mod utils {
-    use crate::*;
-
-    /// Serialize a hash map - we don't have traits, so we fix the type of the
-    /// values (this is not the interesting part anyway)
-    pub(crate) fn serialize(_hm: HashMap<u64>) {
-        unimplemented!();
-    }
-    /// Deserialize a hash map - we don't have traits, so we fix the type of the
-    /// values (this is not the interesting part anyway)
-    pub(crate) fn deserialize() -> HashMap<u64> {
-        unimplemented!();
-    }
-}
-
-pub fn insert_on_disk(key: Key, value: u64) {
-    // Deserialize
-    let mut hm = utils::deserialize();
-    // Update
-    hm.insert(key, value);
-    // Serialize
-    utils::serialize(hm);
 }
 
 /*
