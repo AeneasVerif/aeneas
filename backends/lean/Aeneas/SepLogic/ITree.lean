@@ -1,6 +1,6 @@
-import Aeneas.Std
+import Lean
 
-namespace Aeneas
+set_option grind.warning false
 
 -- TODO: make the tree parametric in the type of the action
 inductive Action : (α : Type) -> Type 2 where
@@ -22,55 +22,145 @@ namespace Test
   | Act {β : Type} (f : β → Tree α)
 end Test
 
-inductive Tree (α : Type u) where
-| Ret (x: α)
-| Fail
-| Act {β : Type} (a : Action β) (f : β → Tree α) -- TODO: the continuation introduces to universe issues
-| Div
--- Missing: Par (from PulseCore paper)
--- Missing: Tau (necessary?)
+/- Adapated from the following Rocq definition:
 
-/-namespace test
-  inductive itreeAux (R : Type) (E : Type -> Type) (itree : Type) : Type where
+inductive itree (R : Type) (E : Type -> Type) : Type where
   | RetF (r : R)
-  | TauF (t : itree)
-  | VisF {X : Type} (e : E X) (k : X -> itree)
+  | TauF (t : itree R E)
+  | VisF {X : Type} (e : E X) (k : X -> itree R E)
 
-end test-/
+The differences are that:
+- we removed `TauF` (we don't guarded recursion through stuttering)
+- we add a `div` case ("divergence") to hide the parts of the tree which are too deep
+-/
+inductive Tree (E : Type v → Type w) (α : Type u) where
+| ret (x : α)
+| vis (X : Type v) (e : E X) (k : X → Tree E α)
+| div
 
--- TODO: there are universe issues
-def ITree (α : Type u) := ℕ → Tree α
+#check Tree
+
+def ITree α e := Nat → Tree α e
 
 open Tree
 
-def bindAux {α : Type u} {β : Type v} (x: ITree α) (f: α → ITree β) (n : ℕ) : Tree β :=
-  match n with
-  | 0 => Div
-  | n + 1 =>
-    match x n with
-    | .Ret x => f x n
-    | .Fail => .Fail
-    | .Div => Tree.Div
-    | .Act a f' =>
-      Tree.Act a (fun x => bindAux (fun _ => f' x) f (n - 1))
+def Tree.bind {α : Type u} {β : Type v} (x: Tree E α) (f: α → Tree E β) : Tree E β :=
+  match x with
+  | .ret x => f x
+  | .vis X e k => .vis X e (fun x => bind (k x) f)
+  | .div => .div
 
-def bind {α : Type u} {β : Type v} (x: ITree α) (f: α → ITree β) : ITree β :=
-  bindAux x f
+def ITree.bind {α : Type u} {β : Type v} (x: ITree E α) (f: α → ITree E β) : ITree E β :=
+  fun n =>
+  match n with
+  | 0 => Tree.div
+  | n + 1 =>
+    Tree.bind (x n) (fun e => f e n)
 
 -- Allows using ITree in do-blocks
-instance : Bind ITree where
-  bind := bind
+instance : Bind (ITree E) where
+  bind := ITree.bind
 
-instance : Pure ITree where
-  pure := fun x => fun _ => .Ret x
+instance : Pure (ITree E) where
+  pure := fun x => fun _ => .ret x
 
-instance : Monad ITree where
+instance : Monad (ITree E) where
 
-def div α : ITree α := fun _ => .Div
+def ITree.div E α : ITree E α := fun _ => .div
 
 section Order
 
 open Lean.Order
+
+/-- `≤` relation up to some depth `n` -/
+inductive Tree.le_n : Nat → (Tree E α) → (Tree E α) → Prop where
+| div (n : Nat) (t : Tree E α) : le_n n .div t
+| outOfFuel (n : Nat) (t : Tree E α) : le_n n .div t
+| divRet x : le (.ret x) (.ret x)
+| visLe X e (k1 k2 : X → Tree E α) (h : ∀ x, le (k1 x) (k2 x)) :
+  le (.vis X e k1) (.vis X e k2)
+
+inductive Tree.le : (Tree E α) → (Tree E α) → Prop where
+| le (t : Tree E α) : le .div t
+| ret x : le (.ret x) (.ret x)
+| vis X e (k1 k2 : X → Tree E α) (h : ∀ x, le (k1 x) (k2 x)) :
+  le (.vis X e k1) (.vis X e k2)
+
+def ITree.le (t1 t2 : ITree E α) : Prop := ∀ n, Tree.le (t1 n) (t2 n)
+
+theorem Tree.le_refl (x : Tree E α) : le x x := by
+  induction x
+  · constructor
+  · constructor
+    grind
+  · constructor
+
+theorem ITree.le_refl (x : ITree E α) : ITree.le x x := by
+  intros n
+  apply Tree.le_refl
+
+theorem Tree.le_trans (x y z: Tree E α) (h0 : Tree.le x y) (h1 : Tree.le y z) : le x z := by
+  cases x
+  · cases h0; grind
+  · rename_i X0 e0 k0
+    cases h0
+    rename_i k1 h1
+    cases h1
+    rename_i k2 h2
+    constructor
+    intros x
+    apply Tree.le_trans _ (k1 x) _ <;> grind
+  · constructor
+
+theorem ITree.le_trans (x y z: ITree E α) (h0 : ITree.le x y) (h1 : ITree.le y z) : ITree.le x z := by
+  intros n
+  unfold ITree.le at *
+  apply Tree.le_trans _ (y n) _ <;> grind
+
+theorem Tree.le_antisymm (x y : Tree E α) (h0 : Tree.le x y) (h1 : Tree.le y x) :
+  x = y := by
+  cases x
+  · cases h0; grind
+  · rename_i X0 e0 k0
+    cases h0
+    rename_i k1 h1
+    cases h1
+    have : k0 = k1 := by
+      apply funext; intro x
+      apply Tree.le_antisymm <;> grind
+    grind
+  · cases h1
+    constructor
+
+theorem ITree.le_antisymm (x y : ITree E α) (h0 : ITree.le x y) (h1 : ITree.le y x) :
+  x = y := by
+  unfold ITree.le at *
+  apply funext; intro n
+  apply Tree.le_antisymm <;> grind
+
+instance : Lean.Order.PartialOrder (ITree E α) where
+  rel := ITree.le
+  rel_refl {x} := ITree.le_refl x
+  rel_trans {x y z} := ITree.le_trans x y z
+  rel_antisymm {x y} := ITree.le_antisymm x y
+
+noncomputable def ITree.csup (c : ITree E α → Prop) : ITree E α :=
+  fun n => by
+  -- TODO: can probably do simpler with using epsilon
+  by_cases h : ∃ (t : ITree E α), c t ∧ t n ≠ .div
+  · let t := Classical.choose h
+    have h := Classical.choose_spec h
+    match t n with
+    | .ret x => exact .ret x
+    | .vis X e k =>
+
+      sorry
+    | .div => exact .div -- Actually we can't get there
+  · exact .div
+
+instance : CCPO (ITree E α) where
+  csup := sorry --: (α → Prop) → α
+  csup_spec := sorry --{c : α → Prop} (hc : chain c) : csup c ⊑ x ↔ (∀ y, c y → y ⊑ x)
 
 -- TODO: change order to take step-indexing into account (don't use FlatOrder)
 instance : Lean.Order.PartialOrder (ITree α) := inferInstanceAs (Lean.Order.PartialOrder (FlatOrder (div α)))
