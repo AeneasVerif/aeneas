@@ -72,65 +72,81 @@ section Order
 
 open Lean.Order
 
-/-- `≤` relation up to some depth `n` -/
+/-- `≤` relation up to some depth `n`
+
+    The interesting case is `vis`, where we decrement the fuel. -/
 inductive Tree.le_n : Nat → (Tree E α) → (Tree E α) → Prop where
 | div (n : Nat) (t : Tree E α) : le_n n .div t
-| outOfFuel (n : Nat) (t : Tree E α) : le_n n .div t
-| divRet x : le (.ret x) (.ret x)
-| visLe X e (k1 k2 : X → Tree E α) (h : ∀ x, le (k1 x) (k2 x)) :
-  le (.vis X e k1) (.vis X e k2)
+| outOfFuel (t0 t1 : Tree E α) : le_n 0 t0 t1
+| ret n x : le_n n (.ret x) (.ret x)
+| vis n X e (k1 k2 : X → Tree E α) (h : ∀ x, le_n n (k1 x) (k2 x)) :
+  le_n (n+1) (.vis X e k1) (.vis X e k2)
 
-inductive Tree.le : (Tree E α) → (Tree E α) → Prop where
-| le (t : Tree E α) : le .div t
-| ret x : le (.ret x) (.ret x)
-| vis X e (k1 k2 : X → Tree E α) (h : ∀ x, le (k1 x) (k2 x)) :
-  le (.vis X e k1) (.vis X e k2)
+def Tree.le (t1 t2 : Tree E α) : Prop := ∀ n, Tree.le_n n t1 t2
 
 def ITree.le (t1 t2 : ITree E α) : Prop := ∀ n, Tree.le (t1 n) (t2 n)
 
-theorem Tree.le_refl (x : Tree E α) : le x x := by
+theorem Tree.le_n_refl (x : Tree E α) : le_n n x x := by
   induction x
   · constructor
+  · cases n <;> constructor
+    intro; apply Tree.le_n_refl
   · constructor
-    grind
-  · constructor
+
+theorem Tree.le_refl (x : Tree E α) : le x x := by
+  intro n; apply Tree.le_n_refl
 
 theorem ITree.le_refl (x : ITree E α) : ITree.le x x := by
-  intros n
-  apply Tree.le_refl
+  intros n; apply Tree.le_refl
 
-theorem Tree.le_trans (x y z: Tree E α) (h0 : Tree.le x y) (h1 : Tree.le y z) : le x z := by
+theorem Tree.le_n_trans n (x y z: Tree E α)
+  (h0 : Tree.le_n n x y) (h1 : Tree.le_n n y z) :
+  le_n n x z := by
   cases x
-  · cases h0; grind
+  · cases h0
+    · constructor
+    · grind
   · rename_i X0 e0 k0
     cases h0
-    rename_i k1 h1
-    cases h1
-    rename_i k2 h2
-    constructor
-    intros x
-    apply Tree.le_trans _ (k1 x) _ <;> grind
+    · constructor
+    · rename_i k1 h1
+      cases h1
+      rename_i k2 h2
+      constructor
+      intros x
+      apply Tree.le_n_trans _ _ (k1 x) _ <;> grind
   · constructor
 
-theorem ITree.le_trans (x y z: ITree E α) (h0 : ITree.le x y) (h1 : ITree.le y z) : ITree.le x z := by
+theorem Tree.le_trans (x y z: Tree E α) (h0 : Tree.le x y) (h1 : Tree.le y z) :
+  le x z := by
+  unfold Tree.le at *
+  intro n; apply Tree.le_n_trans _ x y z <;> grind
+
+theorem ITree.le_trans (x y z: ITree E α) (h0 : ITree.le x y) (h1 : ITree.le y z) :
+  ITree.le x z := by
   intros n
   unfold ITree.le at *
   apply Tree.le_trans _ (y n) _ <;> grind
 
 theorem Tree.le_antisymm (x y : Tree E α) (h0 : Tree.le x y) (h1 : Tree.le y x) :
   x = y := by
+  unfold le at *
   cases x
-  · cases h0; grind
+  · have := h0 1
+    cases this; rfl
   · rename_i X0 e0 k0
-    cases h0
-    rename_i k1 h1
-    cases h1
-    have : k0 = k1 := by
+    cases y
+    · -- Contra
+      have := h0 1; cases this
+    · have := h0 1; cases this
+      congr
       apply funext; intro x
-      apply Tree.le_antisymm <;> grind
-    grind
-  · cases h1
-    constructor
+      apply Tree.le_antisymm
+      · intro n; have := h0 (n + 1); cases this; grind
+      · intro n; have := h1 (n + 1); cases this; grind
+    · -- Contra
+      have := h0 1; cases this
+  · have := h1 1; cases this; rfl
 
 theorem ITree.le_antisymm (x y : ITree E α) (h0 : ITree.le x y) (h1 : ITree.le y x) :
   x = y := by
@@ -144,23 +160,47 @@ instance : Lean.Order.PartialOrder (ITree E α) where
   rel_trans {x y z} := ITree.le_trans x y z
   rel_antisymm {x y} := ITree.le_antisymm x y
 
-noncomputable def ITree.csup (c : ITree E α → Prop) : ITree E α :=
-  fun n => by
-  -- TODO: can probably do simpler with using epsilon
-  by_cases h : ∃ (t : ITree E α), c t ∧ t n ≠ .div
-  · let t := Classical.choose h
-    have h := Classical.choose_spec h
-    match t n with
-    | .ret x => exact .ret x
-    | .vis X e k =>
+/-- Small helper for `CCPO.csup`: truncate a tree at a given depth -/
+def Tree.truncate (n : Nat) (t : Tree E α) : Tree E α :=
+  match n with
+  | 0 => .div
+  | n + 1 =>
+    match t with
+    | .ret x => .ret x
+    | .vis X e k => .vis X e (fun x => truncate n (k x))
+    | .div => .div
 
-      sorry
-    | .div => exact .div -- Actually we can't get there
+/-- The least upper bound at depth `n`  -/
+noncomputable def ITree.csup_n (n : Nat) (c : ITree E α → Prop) : Tree E α := by
+  by_cases h : ∃ (t : ITree E α), c t ∧ (∀ t', c t' → Tree.le_n n (t' n) (t n))
+  · let t := Classical.choose h
+    exact (t n).truncate n -- note that we truncate at depth `n`
   · exact .div
 
-instance : CCPO (ITree E α) where
-  csup := sorry --: (α → Prop) → α
-  csup_spec := sorry --{c : α → Prop} (hc : chain c) : csup c ⊑ x ↔ (∀ y, c y → y ⊑ x)
+noncomputable def ITree.csup (c : ITree E α → Prop) : ITree E α :=
+  fun n => ITree.csup_n n c
+
+theorem ITree.csup_spec_mp (c : ITree E α → Prop) (hc : Lean.Order.chain c) :
+  csup c ⊑ x → (∀ y, c y → y ⊑ x) := by
+  simp [PartialOrder.rel]
+  intro h0 y hc
+  sorry
+
+theorem ITree.csup_spec_imp (c : ITree E α → Prop) (hc : Lean.Order.chain c) :
+  (∀ y, c y → y ⊑ x) → csup c ⊑ x := by
+  simp [PartialOrder.rel]
+  sorry
+
+theorem ITree.csup_spec (c : ITree E α → Prop) (hc : Lean.Order.chain c) :
+  csup c ⊑ x ↔ (∀ y, c y → y ⊑ x) := by
+  simp [PartialOrder.rel]
+  apply Iff.intro
+  · apply csup_spec_mp _ hc
+  · apply csup_spec_imp _ hc
+
+noncomputable instance : CCPO (ITree E α) where
+  csup := ITree.csup
+  csup_spec {_} hc := ITree.csup_spec hc --:= sorry --{c : α → Prop} (hc : chain c) : csup c ⊑ x ↔ (∀ y, c y → y ⊑ x)
 
 -- TODO: change order to take step-indexing into account (don't use FlatOrder)
 instance : Lean.Order.PartialOrder (ITree α) := inferInstanceAs (Lean.Order.PartialOrder (FlatOrder (div α)))
