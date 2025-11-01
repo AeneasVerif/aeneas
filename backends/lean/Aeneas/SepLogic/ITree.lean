@@ -38,57 +38,176 @@ inductive Tree (E : Type v → Type w) (α : Type u) where
 | vis (X : Type v) (e : E X) (k : X → Tree E α)
 | div
 
-#check Tree
+def TreeStream (E : Type v → Type w) (α : Type u) := Nat → Tree E α
 
-def ITree α e := Nat → Tree α e
+/-- `≤` relation up to some depth `n`
+
+    The interesting case is `vis`, where we decrement the fuel. -/
+inductive Tree.le_n {E α} : Nat → (Tree E α) → (Tree E α) → Prop where
+| div (n : Nat) (t : Tree E α) : le_n n .div t
+| outOfFuel (t0 t1 : Tree E α) : le_n 0 t0 t1
+| ret n x : le_n (n + 1) (.ret x) (.ret x)
+| vis n X e (k1 k2 : X → Tree E α) (h : ∀ x, le_n n (k1 x) (k2 x)) :
+  le_n (n+1) (.vis X e k1) (.vis X e k2)
+
+def Tree.le (t1 t2 : Tree E α) : Prop := ∀ n, Tree.le_n n t1 t2
+
+def TreeStream.le (t1 t2 : TreeStream E α) : Prop := ∀ n, Tree.le (t1 n) (t2 n)
+
+def TreeStream.wf (t : TreeStream E α) : Prop :=
+  ∀ n m, n ≤ m → Tree.le (t n) (t m)
+
+structure ITree (E : Type v → Type w) (α : Type u) where
+  tree : TreeStream E α
+  wf : TreeStream.wf tree
 
 open Tree
 
-def Tree.bind {α : Type u} {β : Type v} (x: Tree E α) (f: α → Tree E β) : Tree E β :=
+def Tree.bind {α : Type u} {β : Type v} (x : Tree E α) (f : α → Tree E β) : Tree E β :=
   match x with
   | .ret x => f x
   | .vis X e k => .vis X e (fun x => bind (k x) f)
   | .div => .div
 
-def ITree.bind {α : Type u} {β : Type v} (x: ITree E α) (f: α → ITree E β) : ITree E β :=
+def TreeStream.bind {α : Type u} {β : Type v} (x : TreeStream E α)
+  (f : α → TreeStream E β) : TreeStream E β :=
   fun n =>
   match n with
   | 0 => Tree.div
   | n + 1 =>
     Tree.bind (x n) (fun e => f e n)
 
+theorem Tree.le_ret {E} {α : Type u} {x0 x1 : Tree E α} (hle : le x0 x1) {v}
+  (h : x0 = .ret v) :
+  x1 = .ret v := by
+  replace hle := hle 1
+  cases hle <;> grind
+
+theorem Tree.le_vis {E} {α : Type u} {x0 x1 : Tree E α} (hle : le x0 x1) {X e k0}
+  (h : x0 = .vis X e k0) :
+  ∃ k1, x1 = .vis X e k1 ∧ ∀ y, le (k0 y) (k1 y) := by
+  have ⟨ k1, h1 ⟩ : ∃ k1, x1 = .vis X e k1 := by
+    replace hle := hle 1
+    cases hle <;> cases h
+    grind
+  exists k1; simp [h1]
+  intro y n
+  replace hle := hle (n + 1)
+  cases hle <;> cases h
+  cases h1
+  grind
+
+theorem TreeStream.wf_ret {E} {α : Type u} {x : TreeStream E α} (hwf : x.wf) {n : Nat} {v}
+  (h : x n = .ret v) (m : Nat) (hnm : n ≤ m) :
+  x m = .ret v := by
+  replace hwf := hwf n m hnm 1
+  simp [h] at hwf
+  generalize hxm : (x m) = xm -- annoying: cases fails without this
+  rw [hxm] at hwf
+  cases hwf
+  grind
+
+theorem TreeStream.wf_vis_aux {E} {α : Type u} {x : TreeStream E α} (hwf : x.wf) {n : Nat} {X e k1}
+  (h : x n = .vis X e k1) (m : Nat) (hnm : n ≤ m) :
+  ∃ k2, x m = .vis X e k2 ∧ ∀ y, Tree.le (k1 y) (k2 y) := by
+  have ⟨ k2, h2 ⟩ : ∃ k2, x m = .vis X e k2 := by
+    replace hwf := hwf n m hnm 1
+    simp [h] at hwf
+    generalize hxm : (x m) = xm -- annoying: cases fails without this
+    rw [hxm] at hwf
+    cases hwf
+    grind
+  simp [h2]
+  --
+  intro y n'
+  replace hwf := hwf n m hnm (n' + 1)
+  simp [h] at hwf
+  generalize hxm : (x m) = xm -- annoying: cases fails without this
+  rw [hxm] at hwf
+  cases hwf
+  grind
+
+theorem Tree.bind_le_n {α : Type u} {β : Type v} (x0 x1 : Tree E α)
+  (f0 f1 : α → Tree E β)
+  (hx : Tree.le x0 x1) (hf : ∀ y, Tree.le (f0 y) (f1 y)) :
+  le_n n (bind x0 f0) (bind x1 f1) := by
+  cases n
+  · constructor
+  · cases hxnEq : x0
+    · have hxmEq := le_ret hx hxnEq
+      simp [hxmEq]
+      simp [Tree.bind]
+      apply hf
+    · rename_i X e k1
+      have ⟨ k2, hxmEq ⟩ := le_vis hx hxnEq
+      simp [hxmEq]
+      simp [Tree.bind]
+      constructor
+      intro x
+      apply bind_le_n <;> grind
+    · simp [bind]
+      constructor
+
+theorem TreeStream.bind_wf {α : Type u} {β : Type v} (x : TreeStream E α)
+  (f : α → TreeStream E β)
+  (hx : wf x) (hf : ∀ y, wf (f y)) : TreeStream.wf (bind x f) := by
+  unfold wf at *
+  intros n m hnm depth
+  simp [bind]
+  cases n <;> simp only
+  · cases m <;> simp
+    · constructor
+    · constructor
+  · rename_i n
+    cases m <;> simp
+    · omega
+    · rename_i m
+      apply Tree.bind_le_n <;> grind
+
 -- Allows using ITree in do-blocks
+instance : Bind (TreeStream E) where
+  bind := TreeStream.bind
+
+instance : Pure (TreeStream E) where
+  pure := fun x => fun _ => .ret x
+
+instance : Monad (TreeStream E) where
+
+def TreeStream.div E α : TreeStream E α := fun _ => .div
+
+def ITree.pure {E α} (x : α) : ITree E α := {
+  tree := fun _ => .ret x
+  wf := by intro n m hnm n'; simp; cases n' <;> constructor
+}
+
+def ITree.div E α : ITree E α := {
+  tree := TreeStream.div E α
+  wf := by intro n m hnm n'; constructor
+}
+
+def ITree.bind (x : ITree E α) (f : α → ITree E β) : ITree E β := {
+  tree := TreeStream.bind x.tree (fun y => (f y).tree)
+  wf := by
+    apply TreeStream.bind_wf
+    · apply x.wf
+    · intro y; apply (f y).wf
+}
+
 instance : Bind (ITree E) where
   bind := ITree.bind
 
 instance : Pure (ITree E) where
-  pure := fun x => fun _ => .ret x
+  pure := ITree.pure
 
 instance : Monad (ITree E) where
-
-def ITree.div E α : ITree E α := fun _ => .div
 
 section Order
 
 open Lean.Order
 
-/-- `≤` relation up to some depth `n`
-
-    The interesting case is `vis`, where we decrement the fuel. -/
-inductive Tree.le_n : Nat → (Tree E α) → (Tree E α) → Prop where
-| div (n : Nat) (t : Tree E α) : le_n n .div t
-| outOfFuel (t0 t1 : Tree E α) : le_n 0 t0 t1
-| ret n x : le_n n (.ret x) (.ret x)
-| vis n X e (k1 k2 : X → Tree E α) (h : ∀ x, le_n n (k1 x) (k2 x)) :
-  le_n (n+1) (.vis X e k1) (.vis X e k2)
-
-def Tree.le (t1 t2 : Tree E α) : Prop := ∀ n, Tree.le_n n t1 t2
-
-def ITree.le (t1 t2 : ITree E α) : Prop := ∀ n, Tree.le (t1 n) (t2 n)
-
 theorem Tree.le_n_refl (x : Tree E α) : le_n n x x := by
   induction x
-  · constructor
+  · cases n <;> constructor
   · cases n <;> constructor
     intro; apply Tree.le_n_refl
   · constructor
@@ -96,7 +215,7 @@ theorem Tree.le_n_refl (x : Tree E α) : le_n n x x := by
 theorem Tree.le_refl (x : Tree E α) : le x x := by
   intro n; apply Tree.le_n_refl
 
-theorem ITree.le_refl (x : ITree E α) : ITree.le x x := by
+theorem TreeStream.le_refl (x : TreeStream E α) : TreeStream.le x x := by
   intros n; apply Tree.le_refl
 
 theorem Tree.le_n_trans n (x y z: Tree E α)
@@ -122,10 +241,10 @@ theorem Tree.le_trans (x y z: Tree E α) (h0 : Tree.le x y) (h1 : Tree.le y z) :
   unfold Tree.le at *
   intro n; apply Tree.le_n_trans _ x y z <;> grind
 
-theorem ITree.le_trans (x y z: ITree E α) (h0 : ITree.le x y) (h1 : ITree.le y z) :
-  ITree.le x z := by
+theorem TreeStream.le_trans (x y z: TreeStream E α) (h0 : TreeStream.le x y) (h1 : TreeStream.le y z) :
+  TreeStream.le x z := by
   intros n
-  unfold ITree.le at *
+  unfold TreeStream.le at *
   apply Tree.le_trans _ (y n) _ <;> grind
 
 theorem Tree.le_antisymm (x y : Tree E α) (h0 : Tree.le x y) (h1 : Tree.le y x) :
@@ -148,17 +267,17 @@ theorem Tree.le_antisymm (x y : Tree E α) (h0 : Tree.le x y) (h1 : Tree.le y x)
       have := h0 1; cases this
   · have := h1 1; cases this; rfl
 
-theorem ITree.le_antisymm (x y : ITree E α) (h0 : ITree.le x y) (h1 : ITree.le y x) :
+theorem TreeStream.le_antisymm (x y : TreeStream E α) (h0 : TreeStream.le x y) (h1 : TreeStream.le y x) :
   x = y := by
-  unfold ITree.le at *
+  unfold TreeStream.le at *
   apply funext; intro n
   apply Tree.le_antisymm <;> grind
 
-instance : Lean.Order.PartialOrder (ITree E α) where
-  rel := ITree.le
-  rel_refl {x} := ITree.le_refl x
-  rel_trans {x y z} := ITree.le_trans x y z
-  rel_antisymm {x y} := ITree.le_antisymm x y
+instance : Lean.Order.PartialOrder (TreeStream E α) where
+  rel := TreeStream.le
+  rel_refl {x} := TreeStream.le_refl x
+  rel_trans {x y z} := TreeStream.le_trans x y z
+  rel_antisymm {x y} := TreeStream.le_antisymm x y
 
 /-- Small helper for `CCPO.csup`: truncate a tree at a given depth -/
 def Tree.truncate (n : Nat) (t : Tree E α) : Tree E α :=
@@ -171,36 +290,43 @@ def Tree.truncate (n : Nat) (t : Tree E α) : Tree E α :=
     | .div => .div
 
 /-- The least upper bound at depth `n`  -/
-noncomputable def ITree.csup_n (n : Nat) (c : ITree E α → Prop) : Tree E α := by
-  by_cases h : ∃ (t : ITree E α), c t ∧ (∀ t', c t' → Tree.le_n n (t' n) (t n))
+noncomputable def TreeStream.csup_n (n : Nat) (c : TreeStream E α → Prop) : Tree E α := by
+  by_cases h : ∃ (t : TreeStream E α), c t ∧ (∀ t', c t' → Tree.le_n n (t' n) (t n))
   · let t := Classical.choose h
-    exact (t n).truncate n -- note that we truncate at depth `n`
+    exact (t n).truncate n -- we truncate at depth `n`
   · exact .div
 
-noncomputable def ITree.csup (c : ITree E α → Prop) : ITree E α :=
-  fun n => ITree.csup_n n c
+noncomputable def TreeStream.csup (c : TreeStream E α → Prop) : TreeStream E α :=
+  fun n => TreeStream.csup_n n c
 
-theorem ITree.csup_spec_mp (c : ITree E α → Prop) (hc : Lean.Order.chain c) :
+theorem TreeStream.csup_wf (c : TreeStream E α → Prop) : TreeStream E α := sorry
+
+
+theorem TreeStream.csup_spec_mp (c : TreeStream E α → Prop) (hc : Lean.Order.chain c) :
   csup c ⊑ x → (∀ y, c y → y ⊑ x) := by
   simp [PartialOrder.rel]
   intro h0 y hc
+  intro n depth
+  unfold le at h0
+  have n' := max n depth
+  have h1 := h0 n'
   sorry
 
-theorem ITree.csup_spec_imp (c : ITree E α → Prop) (hc : Lean.Order.chain c) :
+theorem TreeStream.csup_spec_imp (c : TreeStream E α → Prop) (hc : Lean.Order.chain c) :
   (∀ y, c y → y ⊑ x) → csup c ⊑ x := by
   simp [PartialOrder.rel]
   sorry
 
-theorem ITree.csup_spec (c : ITree E α → Prop) (hc : Lean.Order.chain c) :
+theorem TreeStream.csup_spec (c : TreeStream E α → Prop) (hc : Lean.Order.chain c) :
   csup c ⊑ x ↔ (∀ y, c y → y ⊑ x) := by
   simp [PartialOrder.rel]
   apply Iff.intro
   · apply csup_spec_mp _ hc
   · apply csup_spec_imp _ hc
 
-noncomputable instance : CCPO (ITree E α) where
-  csup := ITree.csup
-  csup_spec {_} hc := ITree.csup_spec hc --:= sorry --{c : α → Prop} (hc : chain c) : csup c ⊑ x ↔ (∀ y, c y → y ⊑ x)
+noncomputable instance : CCPO (TreeStream E α) where
+  csup := TreeStream.csup
+  csup_spec {_} hc := TreeStream.csup_spec hc --:= sorry --{c : α → Prop} (hc : chain c) : csup c ⊑ x ↔ (∀ y, c y → y ⊑ x)
 
 -- TODO: change order to take step-indexing into account (don't use FlatOrder)
 instance : Lean.Order.PartialOrder (ITree α) := inferInstanceAs (Lean.Order.PartialOrder (FlatOrder (div α)))
