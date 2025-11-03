@@ -13,4 +13,4 @@ Source: 'tests/src/borrow-check-negative.rs', lines 64:12-64:17
 Source: 'tests/src/borrow-check-negative.rs', lines 79:12-79:17
 [[91mError[39m] Can not apply a projection to the ⊥ value
 Source: 'tests/src/borrow-check-negative.rs', lines 90:12-90:15
-[[92mInfo[39m ] Total execution time: 0.046551 seconds
+[[92mInfo[39m ] Total execution time: 0.042007 seconds
