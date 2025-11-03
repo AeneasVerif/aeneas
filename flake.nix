@@ -87,19 +87,6 @@
           ]);
         };
 
-        # This test is a full crate with dependencies. We generate the
-        # corresponding llbc file here; this function takes care of cargo
-        # dependencies for us.
-        betree-llbc = charon.extractCrateWithCharon.${system} {
-          name = "betree";
-          src = ./tests/src/betree;
-          charonFlags = "--rustc-arg=-Zpolonius --opaque=crate::betree_utils --preset=aeneas";
-          craneExtraArgs.checkPhaseCargoCommand = ''
-            cargo rustc -- --test -Zpolonius
-            ./target/debug/betree
-          '';
-        };
-
         # Run the translation on various files.
         # Make sure we don't need to recompile the package whenever we make
         # unnecessary changes - we list the exact files and folders the package
@@ -127,8 +114,6 @@
 
             mkdir tests/llbc
             export LLBC_DIR=tests/llbc
-            # Copy over the llbc file we can't generate ourselves.
-            cp ${betree-llbc}/llbc/betree.llbc $LLBC_DIR
 
             # Run the tests with extra sanity checks enabled
             IN_CI=1 make test-all -j $NIX_BUILD_CORES
