@@ -121,28 +121,38 @@ let ctx_lookup_real_var_binder (span : Meta.span) (ctx : eval_ctx)
 
 let ctx_lookup_type_decl (span : Meta.span) (ctx : eval_ctx)
     (tid : TypeDeclId.id) : type_decl =
-  [%silent_unwrap_opt_span] (Some span)
+  [%unwrap_opt_span] (Some span)
     (TypeDeclId.Map.find_opt tid ctx.crate.type_decls)
+    "Could not lookup type declaration, probably because of a previous error \
+     or an --exclude option"
 
 let ctx_lookup_fun_decl (span : Meta.span) (ctx : eval_ctx) (fid : FunDeclId.id)
     : fun_decl =
-  [%silent_unwrap_opt_span] (Some span)
+  [%unwrap_opt_span] (Some span)
     (FunDeclId.Map.find_opt fid ctx.crate.fun_decls)
+    "Could not lookup function declaration, probably because of a previous \
+     error or an --exclude option"
 
 let ctx_lookup_global_decl (span : Meta.span) (ctx : eval_ctx)
     (gid : GlobalDeclId.id) : global_decl =
-  [%silent_unwrap_opt_span] (Some span)
+  [%unwrap_opt_span] (Some span)
     (GlobalDeclId.Map.find_opt gid ctx.crate.global_decls)
+    "Could not lookup global declaration, probably because of a previous error \
+     or an --exclude option"
 
 let ctx_lookup_trait_decl (span : Meta.span) (ctx : eval_ctx)
     (id : TraitDeclId.id) : trait_decl =
-  [%silent_unwrap_opt_span] (Some span)
+  [%unwrap_opt_span] (Some span)
     (TraitDeclId.Map.find_opt id ctx.crate.trait_decls)
+    "Could not lookup trait declaration, probably because of a previous error \
+     or an --exclude option"
 
 let ctx_lookup_trait_impl (span : Meta.span) (ctx : eval_ctx)
     (id : TraitImplId.id) : trait_impl =
-  [%silent_unwrap_opt_span] (Some span)
+  [%unwrap_opt_span] (Some span)
     (TraitImplId.Map.find_opt id ctx.crate.trait_impls)
+    "Could not lookup trait implementation, probably because of a previous \
+     error or an --exclude option"
 
 (** Retrieve a variable's value in the current frame *)
 let env_lookup_var_value (span : Meta.span) (env : env) (vid : LocalId.id) :

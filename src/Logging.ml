@@ -16,6 +16,11 @@ let to_log_msg (f : string) (line : int) (msg : string) : string =
   let line = ", line " ^ string_of_int line in
   if msg = "" then f ^ line ^ "\n" else f ^ line ^ ":\n" ^ msg ^ "\n"
 
+(** The main logger - this one is created in Charon *)
+let () =
+  loggers := StringMap.add "MainLogger" main_log !loggers;
+  main_log#set_level Info
+
 (** Logger for Errors *)
 let errors_log = create_logger "Errors"
 

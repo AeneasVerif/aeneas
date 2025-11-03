@@ -153,6 +153,14 @@ let () =
         Arg.String (add_activated_loggers EL.Debug),
         " Same as '-log' but sets the level to the more verbose 'debug' rather \
          than 'trace'" );
+      ( "-log-error",
+        Arg.String (add_activated_loggers EL.Error),
+        " Activate error log for a given logger designated by its name. It is \
+         possible to specifiy a list of names if they are separated by commas \
+         without spaces; for instance: '-log Interpreter,SymbolicToPure'. The \
+         existing loggers are: {"
+        ^ String.concat ", " (Collections.StringMap.keys !loggers)
+        ^ "}" );
       ( "-mark-ids",
         Arg.String add_marked_ids,
         " For developers: mark some identifiers to throw an exception if we \
@@ -551,22 +559,19 @@ let () =
       if !borrow_check then Aeneas.BorrowCheck.borrow_check_crate m
       else Aeneas.Translate.translate_crate filename dest_dir !Config.subdir m;
 
-      if !Errors.error_list <> [] then (
-        List.iter
-          (fun (file, line, span, msg) ->
-            if !print_error_emitters then
-              log#serror
-                (Errors.format_error_message_with_file_line file line span msg)
-            else log#serror (Errors.format_error_message span msg))
-          (* Reverse the list of error messages so that we print them from the
-             earliest to the latest. *)
-          (List.rev !Errors.error_list);
-        exit 1)
-      else if !borrow_check then
-        log#linfo (lazy "Crate successfully borrow-checked");
+      let has_errors =
+        if !Errors.error_list <> [] then true
+        else (
+          if !borrow_check then
+            log#linfo (lazy "Crate successfully borrow-checked");
+          false)
+      in
 
       (* Print total elapsed time *)
       log#linfo
         (lazy
           (Printf.sprintf "Total execution time: %f seconds"
-             (Unix.gettimeofday () -. start_time)))
+             (Unix.gettimeofday () -. start_time)));
+
+      (* *)
+      if has_errors then exit 1

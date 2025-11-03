@@ -6420,7 +6420,17 @@ let apply_passes_to_pure_fun_translations (trans_ctx : trans_ctx)
 
     trans
   in
-  let transl = List.map apply transl in
+  let transl =
+    let num_decls = List.length transl in
+    ProgressBar.with_reporter num_decls "Post-processed translated functions: "
+      (fun report ->
+        List.map
+          (fun x ->
+            let x = apply x in
+            report 1;
+            x)
+          transl)
+  in
 
   (* Add the type annotations - we add those only now because we need
      to use the final types of the functions (in particular, we introduce

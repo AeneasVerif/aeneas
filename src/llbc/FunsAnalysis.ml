@@ -97,7 +97,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
                 [%unwrap_opt_span] (Some span) info
                   "The function called here is missing from the crate \
                    (probably because of a previous error, or because of the \
-                   use of --exclude"
+                   use of --exclude)"
               in
               self#may_fail info.can_fail;
               stateful := !stateful || info.stateful;
@@ -235,11 +235,14 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
            let decls = String.concat "\n" decls in
            [%save_error_opt_span] error.span
              ("Encountered an error when analyzing the following function \
-               declaration group:\n" ^ decls));
+               declaration group:\n" ^ decls ^ "\n\nInitial error:\n"
+            ^ error.msg));
         analyze_decl_groups decls'
     | MixedGroup ids :: _ ->
         [%save_error_opt_span] None
-          ("Mixed declaration groups are not supported yet: ["
+          ("Mixed declaration groups (which contain both type and function \
+            declarations or functions and traits, for instance) are not \
+            supported yet: ["
           ^ String.concat ", "
               (List.map Charon.PrintGAst.item_id_to_string
                  (Charon.GAstUtils.g_declaration_group_to_list ids))

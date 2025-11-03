@@ -986,11 +986,19 @@ let apply_passes (crate : crate) : crate =
         ("Ignoring the body of '" ^ name ^ "' because of previous error");
       { f with body = None }
   in
-  let fun_decls =
-    List.fold_left
-      (fun fl (name, pass) ->
-        FunDeclId.Map.map (apply_function_pass name pass) fl)
-      crate.fun_decls function_passes
+  let fun_decls : fun_decl FunDeclId.Map.t =
+    let num_decls = FunDeclId.Map.cardinal crate.fun_decls in
+    ProgressBar.with_reporter num_decls "Applied prepasses: " (fun report ->
+        FunDeclId.Map.map
+          (fun f ->
+            let f : fun_decl =
+              List.fold_left
+                (fun f (name, pass) -> apply_function_pass name pass f)
+                f function_passes
+            in
+            report 1;
+            f)
+          crate.fun_decls)
   in
   let crate = { crate with fun_decls } in
   let crate = filter_type_aliases crate in
