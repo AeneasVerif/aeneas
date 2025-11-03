@@ -1,6 +1,7 @@
 //@ charon-args=--skip-borrowck
 //@ [!borrow-check] skip
 //@ [borrow-check] known-failure
+//@ [borrow-check] aeneas-args=-log-error MainLogger
 // Some negative tests for borrow checking
 
 // This succeeds

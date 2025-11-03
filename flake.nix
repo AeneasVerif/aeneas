@@ -69,6 +69,7 @@
             yojson
             zarith
             ocamlgraph
+            progress
           ]);
           postInstall = ''
             ln -s ${charon.packages.${system}.charon}/bin/charon $out/bin
