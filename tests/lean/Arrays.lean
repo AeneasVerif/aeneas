@@ -486,13 +486,13 @@ def ite : Result Unit :=
 /- [arrays::zero_slice]: loop 0:
    Source: 'tests/src/arrays.rs', lines 336:4-339:5 -/
 def zero_slice_loop
-  (a : Slice U8) (i : Usize) (len : Usize) : Result (Slice U8) :=
+  (len : Usize) (a : Slice U8) (i : Usize) : Result (Slice U8) :=
   if i < len
   then
     do
     let a1 ← Slice.update a i 0#u8
     let i1 ← i + 1#usize
-    zero_slice_loop a1 i1 len
+    zero_slice_loop len a1 i1
   else ok a
 partial_fixpoint
 
@@ -500,7 +500,7 @@ partial_fixpoint
    Source: 'tests/src/arrays.rs', lines 333:0-340:1 -/
 def zero_slice (a : Slice U8) : Result (Slice U8) :=
   let len := Slice.len a
-  zero_slice_loop a 0#usize len
+  zero_slice_loop len a 0#usize
 
 /- [arrays::iter_mut_slice]: loop 0:
    Source: 'tests/src/arrays.rs', lines 345:4-347:5 -/
@@ -538,8 +538,8 @@ partial_fixpoint
    Source: 'tests/src/arrays.rs', lines 350:0-358:1 -/
 def sum_mut_slice (a : Slice U32) : Result (U32 × (Slice U32)) :=
   do
-  let i ← sum_mut_slice_loop a 0#usize 0#u32
-  ok (i, a)
+  let s ← sum_mut_slice_loop a 0#usize 0#u32
+  ok (s, a)
 
 /- [arrays::add_acc]: loop 0:
    Source: 'tests/src/arrays.rs', lines 362:4-371:5 -/

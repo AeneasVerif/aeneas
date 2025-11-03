@@ -308,17 +308,24 @@ Definition list_rev {T : Type} (l : List_t T) : result (List_t T) :=
 (** [no_nested_borrows::test_list_functions]:
     Source: 'tests/src/no_nested_borrows.rs', lines 319:0-333:1 *)
 Definition test_list_functions : result unit :=
-  let l := List_Cons 2%i32 List_Nil in
-  let l1 := List_Cons 1%i32 l in
-  i <- list_length (List_Cons 0%i32 l1);
+  i <-
+    list_length (List_Cons 0%i32 (List_Cons 1%i32 (List_Cons 2%i32 List_Nil)));
   _ <- massert (i s= 3%u32);
-  i1 <- list_nth_shared (List_Cons 0%i32 l1) 0%u32;
+  i1 <-
+    list_nth_shared (List_Cons 0%i32 (List_Cons 1%i32 (List_Cons 2%i32
+      List_Nil))) 0%u32;
   _ <- massert (i1 s= 0%i32);
-  i2 <- list_nth_shared (List_Cons 0%i32 l1) 1%u32;
+  i2 <-
+    list_nth_shared (List_Cons 0%i32 (List_Cons 1%i32 (List_Cons 2%i32
+      List_Nil))) 1%u32;
   _ <- massert (i2 s= 1%i32);
-  i3 <- list_nth_shared (List_Cons 0%i32 l1) 2%u32;
+  i3 <-
+    list_nth_shared (List_Cons 0%i32 (List_Cons 1%i32 (List_Cons 2%i32
+      List_Nil))) 2%u32;
   _ <- massert (i3 s= 2%i32);
-  p <- list_nth_mut (List_Cons 0%i32 l1) 1%u32;
+  p <-
+    list_nth_mut (List_Cons 0%i32 (List_Cons 1%i32 (List_Cons 2%i32 List_Nil)))
+      1%u32;
   let (_, list_nth_mut_back) := p in
   let ls := list_nth_mut_back 3%i32 in
   i4 <- list_nth_shared ls 0%u32;

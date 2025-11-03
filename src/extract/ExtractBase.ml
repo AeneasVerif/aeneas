@@ -1045,40 +1045,30 @@ let keywords () =
   List.concat [ named_unops; named_binops; misc ]
 
 let builtin_adts () : (builtin_ty * string) list =
-  let state =
-    if !use_state then
-      match backend () with
-      | Lean -> [ (TState, "State") ]
-      | Coq | FStar | HOL4 -> [ (TState, "state") ]
-    else []
-  in
   (* We voluntarily omit the type [Error]: it is never directly
      referenced in the generated translation, and easily collides
      with user-defined types *)
-  let adts =
-    match backend () with
-    | Lean ->
-        [
-          (TResult, "Result");
-          (TFuel, "Nat");
-          (TArray, "Array");
-          (TSlice, "Slice");
-          (TStr, "Str");
-          (TRawPtr Mut, "MutRawPtr");
-          (TRawPtr Const, "ConstRawPtr");
-        ]
-    | Coq | FStar | HOL4 ->
-        [
-          (TResult, "result");
-          (TFuel, if backend () = HOL4 then "num" else "nat");
-          (TArray, "array");
-          (TSlice, "slice");
-          (TStr, "str");
-          (TRawPtr Mut, "mut_raw_ptr");
-          (TRawPtr Const, "const_raw_ptr");
-        ]
-  in
-  state @ adts
+  match backend () with
+  | Lean ->
+      [
+        (TResult, "Result");
+        (TFuel, "Nat");
+        (TArray, "Array");
+        (TSlice, "Slice");
+        (TStr, "Str");
+        (TRawPtr Mut, "MutRawPtr");
+        (TRawPtr Const, "ConstRawPtr");
+      ]
+  | Coq | FStar | HOL4 ->
+      [
+        (TResult, "result");
+        (TFuel, if backend () = HOL4 then "num" else "nat");
+        (TArray, "array");
+        (TSlice, "slice");
+        (TStr, "str");
+        (TRawPtr Mut, "mut_raw_ptr");
+        (TRawPtr Const, "const_raw_ptr");
+      ]
 
 let builtin_struct_constructors () : (builtin_ty * string) list =
   match backend () with
@@ -1698,7 +1688,7 @@ let ctx_compute_trait_clause_name (ctx : extraction_ctx)
   String.concat "" clause
 
 let ctx_compute_trait_parent_clause_name (ctx : extraction_ctx)
-    (trait_decl : trait_decl) (clause : trait_clause) : string =
+    (trait_decl : trait_decl) (clause : trait_param) : string =
   (* We derive the name of the clause from the trait instance.
      For instance, if the clause gives us an instance of `Foo<u32>`,
      we generate a name along the lines of "fooU32Inst".
@@ -1755,7 +1745,7 @@ let ctx_compute_trait_method_name (ctx : extraction_ctx)
   else ctx_compute_trait_decl_name ctx trait_decl ^ "_" ^ item
 
 let ctx_compute_trait_type_clause_name (ctx : extraction_ctx)
-    (trait_decl : trait_decl) (item : string) (clause : trait_clause) : string =
+    (trait_decl : trait_decl) (item : string) (clause : trait_param) : string =
   (* TODO: improve - it would be better to not use indices *)
   ctx_compute_trait_type_name ctx trait_decl item
   ^ "_clause_"
@@ -1862,10 +1852,11 @@ let ctx_compute_var_basename (span : Meta.span) (ctx : extraction_ctx)
           | TBuiltin TResult -> "r"
           | TBuiltin TError -> ConstStrings.error_basename
           | TBuiltin TFuel -> ConstStrings.fuel_basename
+          | TBuiltin TSum -> "s"
+          | TBuiltin TLoopResult -> "r"
           | TBuiltin TArray -> "a"
           | TBuiltin TSlice -> "s"
           | TBuiltin TStr -> "s"
-          | TBuiltin TState -> ConstStrings.state_basename
           | TBuiltin (TRawPtr _) -> "p"
           | TAdtId adt_id ->
               let def =
@@ -2006,18 +1997,18 @@ let ctx_add_vars (span : Meta.span) (vars : fvar list) (ctx : extraction_ctx) :
     ctx vars
 
 let ctx_add_type_params (span : Meta.span) (origin : generic_origin)
-    (vars : type_var list) (ctx : extraction_ctx) : extraction_ctx * string list
-    =
+    (vars : type_param list) (ctx : extraction_ctx) :
+    extraction_ctx * string list =
   List.fold_left_map
-    (fun ctx (var : type_var) ->
+    (fun ctx (var : type_param) ->
       ctx_add_type_var span origin var.name var.index ctx)
     ctx vars
 
 let ctx_add_const_generic_params (span : Meta.span) (origin : generic_origin)
-    (vars : const_generic_var list) (ctx : extraction_ctx) :
+    (vars : const_generic_param list) (ctx : extraction_ctx) :
     extraction_ctx * string list =
   List.fold_left_map
-    (fun ctx (var : const_generic_var) ->
+    (fun ctx (var : const_generic_param) ->
       ctx_add_const_generic_var span origin var.name var.index ctx)
     ctx vars
 
@@ -2031,10 +2022,10 @@ let ctx_add_const_generic_params (span : Meta.span) (origin : generic_origin)
     additional information. *)
 let ctx_add_local_trait_clauses (span : Meta.span)
     (current_def_name : Types.name) (origin : generic_origin)
-    (llbc_generics : Types.generic_params) (clauses : trait_clause list)
+    (llbc_generics : Types.generic_params) (clauses : trait_param list)
     (ctx : extraction_ctx) : extraction_ctx * string list =
   List.fold_left_map
-    (fun ctx (c : trait_clause) ->
+    (fun ctx (c : trait_param) ->
       let basename =
         ctx_compute_trait_clause_basename ctx current_def_name llbc_generics
           c.clause_id
@@ -2108,7 +2099,7 @@ let ctx_add_global_decl_and_body (def : global_decl) (ctx : extraction_ctx) :
          between the name for the default constant and the name for the field
          in the trait declaration *)
       let suffix =
-        match def.kind with
+        match def.src with
         | TraitDeclItem (_, _, true) -> "_default"
         | _ -> ""
       in
@@ -2131,7 +2122,7 @@ let ctx_compute_fun_name (def : fun_decl) (is_trait_decl_field : bool)
      we keep this one.
   *)
   let item_meta =
-    match def.kind with
+    match def.src with
     | TraitImplItem (_, trait_decl_ref, item_name, _) -> (
         if Option.is_some def.item_meta.attr_info.rename then def.item_meta
         else
@@ -2168,7 +2159,7 @@ let ctx_compute_fun_name (def : fun_decl) (is_trait_decl_field : bool)
   let llbc_name =
     if is_trait_decl_field then llbc_name
     else
-      match def.kind with
+      match def.src with
       | TraitDeclItem (_, _, true) ->
           llbc_name @ [ PeIdent ("default", Disambiguator.zero) ]
       | _ -> llbc_name

@@ -146,8 +146,7 @@ def Tree.insert_in_opt_node
   Result (Bool × (Option (Node T)))
   :=
   match node with
-  | none => let n := Node.mk value none none 0#i8
-            ok (true, some n)
+  | none => ok (true, some (Node.mk value none none 0#i8))
   | some node1 =>
     do
     let (b, node2) ← Node.insert OrdInst node1 value

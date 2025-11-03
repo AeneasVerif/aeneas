@@ -1,4 +1,0 @@
-charon-args=--rustc-arg=-Zpolonius --opaque=crate::betree_utils
-[!borrow-check] aeneas-args=-test-trans-units -state -split-files
-[coq] aeneas-args=-use-fuel
-[fstar] aeneas-args=-decreases-clauses

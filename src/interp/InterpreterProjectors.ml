@@ -31,7 +31,7 @@ let rec apply_proj_borrows_on_shared_borrow (span : Meta.span) (ctx : eval_ctx)
         in
 
         (* Project over the field values *)
-        let fields_types = List.combine adt.field_values field_types in
+        let fields_types = List.combine adt.fields field_types in
         let proj_fields =
           List.map
             (fun (fv, fty) ->
@@ -54,7 +54,7 @@ let rec apply_proj_borrows_on_shared_borrow (span : Meta.span) (ctx : eval_ctx)
           | VSharedBorrow (bid, _), RShared ->
               (* Lookup the shared value *)
               let ek = ek_all in
-              let sv = lookup_loan span ek bid ctx in
+              let sv = ctx_lookup_loan span ek bid ctx in
               let asb =
                 match sv with
                 | _, Concrete (VSharedLoan (_, sv))
@@ -108,7 +108,7 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
               generics
           in
           (* Project over the field values *)
-          let fields_types = List.combine adt.field_values field_types in
+          let fields_types = List.combine adt.fields field_types in
           let proj_fields =
             List.map
               (fun (fv, fty) ->
@@ -116,7 +116,7 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
                   fty)
               fields_types
           in
-          AAdt { variant_id = adt.variant_id; field_values = proj_fields }
+          AAdt { variant_id = adt.variant_id; fields = proj_fields }
       | VBottom, _ -> [%craise] span "Unreachable"
       | VBorrow bc, TRef (r, ref_ty, kind) ->
           if
@@ -176,7 +176,7 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
               | VSharedBorrow (bid, _), RShared ->
                   (* Lookup the shared value *)
                   let ek = ek_all in
-                  let sv = lookup_loan span ek bid ctx in
+                  let sv = ctx_lookup_loan span ek bid ctx in
                   let asb =
                     match sv with
                     | _, Concrete (VSharedLoan (_, sv))
@@ -222,17 +222,124 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
     in
     { value; ty }
 
+let rec apply_eproj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
+    (ctx : eval_ctx) (regions : RegionId.Set.t) (v : tvalue) (ty : rty) :
+    tevalue =
+  (* Sanity check - TODO: move this elsewhere (here we perform the check at every
+   * recursive call which is a bit overkill...) *)
+  let ety = Substitute.erase_regions ty in
+  [%sanity_check] span (ty_is_rty ty && ety = v.ty);
+  (* Project - if there are no regions from the abstraction in the type, return [_] *)
+  if not (ty_has_regions_in_set regions ty) then { value = EIgnored; ty }
+  else
+    let value : evalue =
+      match (v.value, ty) with
+      | VLiteral _, TLiteral _ -> EIgnored
+      | VAdt adt, TAdt { id; generics } ->
+          (* Retrieve the types of the fields *)
+          let field_types =
+            ctx_adt_get_instantiated_field_types span ctx id adt.variant_id
+              generics
+          in
+          (* Project over the field values *)
+          let fields_types = List.combine adt.fields field_types in
+          let proj_fields =
+            List.map
+              (fun (fv, fty) ->
+                apply_eproj_borrows span check_symbolic_no_ended ctx regions fv
+                  fty)
+              fields_types
+          in
+          EAdt { variant_id = adt.variant_id; fields = proj_fields }
+      | VBottom, _ -> [%craise] span "Unreachable"
+      | VBorrow bc, TRef (r, ref_ty, kind) ->
+          if
+            (* Check if the region is in the set of projected regions (note that
+             * we never project over static regions) *)
+            region_in_set r regions
+          then
+            (* In the set *)
+            match (bc, kind) with
+            | VMutBorrow (bid, bv), RMut ->
+                (* Apply the projection on the borrowed value *)
+                let bv' =
+                  apply_eproj_borrows span check_symbolic_no_ended ctx regions
+                    bv ref_ty
+                in
+                EBorrow (EMutBorrow (PNone, bid, bv'))
+            | VSharedBorrow (_, _), RShared ->
+                (* We do not need to track shared borrows *)
+                EIgnored
+            | VReservedMutBorrow _, _ ->
+                [%craise] span
+                  "Can't apply a proj_borrow over a reserved mutable borrow"
+            | _ -> [%craise] span "Unreachable"
+          else begin
+            (* Not in the set: ignore the borrow, but project the borrowed
+               value (maybe some borrows *inside* the borrowed value are in
+               the region set) *)
+            match (bc, kind) with
+            | VMutBorrow (bid, bv), RMut ->
+                (* Apply the projection on the borrowed value *)
+                let bv =
+                  apply_eproj_borrows span check_symbolic_no_ended ctx regions
+                    bv ref_ty
+                in
+                (* If the referenced type contains the region, we still need
+                 * to remember it *)
+                let opt_bid =
+                  if ty_has_regions_in_set regions ref_ty then Some bid
+                  else None
+                in
+                (* Return *)
+                EBorrow (EIgnoredMutBorrow (opt_bid, bv))
+            | VSharedBorrow (_, _), RShared ->
+                (* We ignore shared borrows *)
+                EIgnored
+            | VReservedMutBorrow _, _ ->
+                [%craise] span
+                  "Can't apply a proj_borrow over a reserved mutable borrow"
+            | _ -> [%craise] span "Unreachable"
+          end
+      | VLoan _, _ -> [%craise] span "Unreachable"
+      | VSymbolic s, _ ->
+          (* Check that the projection doesn't contain already ended regions,
+           * if necessary *)
+          if check_symbolic_no_ended then (
+            let ty1 = s.sv_ty in
+            let rset1 = ctx.ended_regions in
+            let ty2 = ty in
+            let rset2 = regions in
+            [%ltrace
+              "- ty1: " ^ ty_to_string ctx ty1 ^ "\n- rset1: "
+              ^ RegionId.Set.to_string None rset1
+              ^ "\n- ty2: " ^ ty_to_string ctx ty2 ^ "\n- rset2: "
+              ^ RegionId.Set.to_string None rset2
+              ^ "\n"];
+            [%sanity_check] span
+              (not (projections_intersect span rset1 ty1 rset2 ty2)));
+          ESymbolic
+            ( PNone,
+              EProjBorrows
+                { proj = { sv_id = s.sv_id; proj_ty = ty }; loans = [] } )
+      | _ ->
+          [%ltrace
+            "unexpected inputs:\n- input value: "
+            ^ tvalue_to_string ~span:(Some span) ctx v
+            ^ "\n- proj rty: " ^ ty_to_string ctx ty];
+          [%internal_error] span
+    in
+    { value; ty }
+
 let symbolic_expansion_non_borrow_to_value (span : Meta.span)
     (sv : symbolic_value) (see : symbolic_expansion) : tvalue =
   let ty = Subst.erase_regions sv.sv_ty in
   let value =
     match see with
     | SeLiteral cv -> VLiteral cv
-    | SeAdt (variant_id, field_values) ->
-        let field_values =
-          List.map mk_tvalue_from_symbolic_value field_values
-        in
-        VAdt { variant_id; field_values }
+    | SeAdt (variant_id, fields) ->
+        let fields = List.map mk_tvalue_from_symbolic_value fields in
+        VAdt { variant_id; fields }
     | SeMutRef (_, _) | SeSharedRef (_, _) ->
         [%craise] span "Unexpected symbolic reference expansion"
   in
@@ -267,18 +374,18 @@ let apply_proj_loans_on_symbolic_expansion (span : Meta.span)
     | SeLiteral lit, TLiteral _ ->
         ( AIgnored (Some { value = VLiteral lit; ty = original_sv_ty }),
           original_sv_ty )
-    | SeAdt (variant_id, field_values), TAdt { id = adt_id; generics } ->
+    | SeAdt (variant_id, fields), TAdt { id = adt_id; generics } ->
         (* Project over the field values *)
         let field_types =
           ctx_adt_get_instantiated_field_types span ctx adt_id variant_id
             generics
         in
-        let field_values =
+        let fields =
           List.map2
             (mk_aproj_loans_value_from_symbolic_value regions)
-            field_values field_types
+            fields field_types
         in
-        (AAdt { variant_id; field_values }, original_sv_ty)
+        (AAdt { variant_id; fields }, original_sv_ty)
     | SeMutRef (bid, spc), TRef (r, ref_ty, RMut) ->
         (* Sanity check *)
         [%sanity_check] span (spc.sv_ty = ref_ty);
@@ -319,12 +426,64 @@ let apply_proj_loans_on_symbolic_expansion (span : Meta.span)
   in
   { value; ty }
 
+let apply_eproj_loans_on_symbolic_expansion (span : Meta.span)
+    (regions : RegionId.Set.t) (see : symbolic_expansion) (original_sv_ty : rty)
+    (proj_ty : rty) (ctx : eval_ctx) : tevalue =
+  (* Sanity check: if we have a proj_loans over a symbolic value, it should
+   * contain regions which we will project *)
+  [%sanity_check] span (ty_has_regions_in_set regions original_sv_ty);
+  (* Match *)
+  let (value, ty) : evalue * ty =
+    match (see, proj_ty) with
+    | SeLiteral _, TLiteral _ -> (EIgnored, original_sv_ty)
+    | SeAdt (variant_id, fields), TAdt { id = adt_id; generics } ->
+        (* Project over the field values *)
+        let field_types =
+          ctx_adt_get_instantiated_field_types span ctx adt_id variant_id
+            generics
+        in
+        let fields =
+          List.map2
+            (mk_eproj_loans_value_from_symbolic_value regions)
+            fields field_types
+        in
+        (EAdt { variant_id; fields }, original_sv_ty)
+    | SeMutRef (bid, spc), TRef (r, ref_ty, RMut) ->
+        (* Sanity check *)
+        [%sanity_check] span (spc.sv_ty = ref_ty);
+        (* Apply the projector to the borrowed value *)
+        let child_av =
+          mk_eproj_loans_value_from_symbolic_value regions spc ref_ty
+        in
+        (* Check if the region is in the set of projected regions (note that
+         * we never project over static regions) *)
+        if region_in_set r regions then
+          (* In the set: keep *)
+          (ELoan (EMutLoan (PNone, bid, child_av)), ref_ty)
+        else
+          (* Not in the set: ignore *)
+          (* If the type of the referenced value contains the region, we still
+             need to remember it *)
+          let opt_bid =
+            if ty_has_regions_in_set regions ref_ty then Some bid else None
+          in
+          (ELoan (EIgnoredMutLoan (opt_bid, child_av)), ref_ty)
+    | SeSharedRef (_, _), TRef (_, _, RShared) ->
+        (* We ignore shared borrows/loans in the abstraction expressions *)
+        (EIgnored, proj_ty)
+    | _ -> [%craise] span "Unreachable"
+  in
+  { value; ty }
+
 (** [ty] shouldn't have erased regions *)
 let apply_proj_borrows_on_input_value (span : Meta.span) (ctx : eval_ctx)
-    (regions : RegionId.Set.t) (v : tvalue) (ty : rty) : eval_ctx * tavalue =
+    (regions : RegionId.Set.t) (v : tvalue) (ty : rty) : tavalue =
   [%sanity_check] span (ty_is_rty ty);
   let check_symbolic_no_ended = true in
-  (* Apply the projector *)
-  let av = apply_proj_borrows span check_symbolic_no_ended ctx regions v ty in
-  (* Return *)
-  (ctx, av)
+  apply_proj_borrows span check_symbolic_no_ended ctx regions v ty
+
+let apply_eproj_borrows_on_input_value (span : Meta.span) (ctx : eval_ctx)
+    (regions : RegionId.Set.t) (v : tvalue) (ty : rty) : tevalue =
+  [%sanity_check] span (ty_is_rty ty);
+  let check_symbolic_no_ended = true in
+  apply_eproj_borrows span check_symbolic_no_ended ctx regions v ty

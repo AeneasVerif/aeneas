@@ -1,21 +1,9 @@
 open Types
-open Expressions
 open Values
-open Identifiers
 module L = Logging
 
 (** The local logger *)
 let log = L.contexts_log
-
-(** The [Id] module for dummy variables.
-
-    Dummy variables are used to store values that we don't want to forget in the
-    environment, because they contain borrows for instance, typically because
-    they might be overwritten during an assignment. *)
-module DummyVarId =
-IdGen ()
-
-type dummy_var_id = DummyVarId.id [@@deriving show, ord]
 
 (** Some global counters.
 
@@ -91,11 +79,15 @@ let ( region_id_counter,
       fresh_region_id ) =
   RegionId.fresh_marked_stateful_generator ()
 
-let ( abstraction_id_counter,
-      marked_abstraction_ids,
-      marked_abstraction_ids_insert_from_int,
-      fresh_abstraction_id ) =
-  AbstractionId.fresh_marked_stateful_generator ()
+let abs_id_counter, marked_abs_ids, marked_abs_ids_insert_from_int, fresh_abs_id
+    =
+  AbsId.fresh_marked_stateful_generator ()
+
+let ( abs_fvar_id_counter,
+      marked_abs_fvar_ids,
+      marked_abs_fvar_ids_insert_from_int,
+      fresh_abs_fvar_id ) =
+  AbsFVarId.fresh_marked_stateful_generator ()
 
 let loop_id_counter, fresh_loop_id = LoopId.fresh_stateful_generator ()
 
@@ -116,71 +108,18 @@ let dummy_var_id_counter, fresh_dummy_var_id =
     - most importantly, it allows to always manipulate small values, which is
       always a lot more readable when debugging *)
 let reset_global_counters () =
+  (* This one comes from Values.ml *)
+  abs_fvar_id_counter := AbsFVarId.generator_zero;
+  (* *)
   symbolic_value_id_counter := SymbolicValueId.generator_zero;
   borrow_id_counter := BorrowId.generator_zero;
   shared_borrow_id_counter := SharedBorrowId.generator_zero;
   region_id_counter := RegionId.generator_zero;
-  abstraction_id_counter := AbstractionId.generator_zero;
+  abs_id_counter := AbsId.generator_zero;
   loop_id_counter := LoopId.generator_zero;
-  (* We want the loop id to start at 1 *)
-  let _ = fresh_loop_id () in
+  let _ =
+    (* We want the loop id to start at 1 *)
+    fresh_loop_id ()
+  in
   fun_call_id_counter := FunCallId.generator_zero;
   dummy_var_id_counter := DummyVarId.generator_zero
-
-(** Ancestor for {!type:env} iter visitor *)
-class ['self] iter_env_base =
-  object (_self : 'self)
-    inherit [_] iter_abs
-    method visit_local_id : 'env -> local_id -> unit = fun _ _ -> ()
-    method visit_dummy_var_id : 'env -> dummy_var_id -> unit = fun _ _ -> ()
-  end
-
-(** Ancestor for {!type:env} map visitor *)
-class ['self] map_env_base =
-  object (_self : 'self)
-    inherit [_] map_abs
-    method visit_local_id : 'env -> local_id -> local_id = fun _ x -> x
-
-    method visit_dummy_var_id : 'env -> dummy_var_id -> dummy_var_id =
-      fun _ x -> x
-  end
-
-(** A binder used in an environment, to map a variable to a value *)
-type real_var_binder = {
-  index : local_id;  (** Unique variable identifier *)
-  name : string option;  (** Possible name *)
-}
-
-(** A binder, for a "real" variable or a dummy variable *)
-and var_binder = BVar of real_var_binder | BDummy of dummy_var_id
-
-(** Environment value: mapping from variable to value, abstraction (only used in
-    symbolic mode) or stack frame delimiter. *)
-and env_elem =
-  | EBinding of var_binder * tvalue
-      (** Variable binding - the binder is None if the variable is a dummy
-          variable (we use dummy variables to store temporaries while doing
-          bookkeeping such as ending borrows for instance). *)
-  | EAbs of abs
-  | EFrame
-
-and env = env_elem list
-[@@deriving
-  show,
-  ord,
-  visitors
-    {
-      name = "iter_env";
-      variety = "iter";
-      ancestors = [ "iter_env_base" ];
-      nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
-      concrete = true;
-    },
-  visitors
-    {
-      name = "map_env";
-      variety = "map";
-      ancestors = [ "map_env_base" ];
-      nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
-      concrete = true;
-    }]

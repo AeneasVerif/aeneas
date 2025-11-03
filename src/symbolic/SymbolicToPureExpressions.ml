@@ -4,50 +4,10 @@ open InterpreterUtils
 open SymbolicToPureCore
 open SymbolicToPureTypes
 open SymbolicToPureValues
+open SymbolicToPureAbs
 
 (** The local logger *)
 let log = Logging.symbolic_to_pure_expressions_log
-
-let mk_closed_checked_let file line ctx can_fail pat bound next =
-  mk_closed_checked_let file line ctx.span can_fail pat bound next
-
-let mk_closed_checked_lets file line ctx can_fail pat_bounds next =
-  mk_closed_checked_lets file line ctx.span can_fail pat_bounds next
-
-(** TODO: not very clean. *)
-let get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fn_ptr_kind)
-    (lid : V.LoopId.id option) (gid : T.RegionGroupId.id option) :
-    fun_effect_info =
-  match lid with
-  | None -> (
-      match fun_id with
-      | TraitMethod (_, _, fid) | FunId (FRegular fid) ->
-          let dsg = A.FunDeclId.Map.find fid ctx.fun_dsigs in
-          let info =
-            match gid with
-            | None -> dsg.fun_ty.fwd_info.effect_info
-            | Some gid ->
-                (RegionGroupId.Map.find gid dsg.fun_ty.back_sg).effect_info
-          in
-          {
-            info with
-            is_rec = (info.is_rec || Option.is_some lid) && gid = None;
-          }
-      | FunId (FBuiltin _) ->
-          compute_raw_fun_effect_info (Some ctx.span) ctx.fun_ctx.fun_infos
-            fun_id lid gid)
-  | Some lid -> (
-      (* This is necessarily for the current function *)
-      match fun_id with
-      | FunId (FRegular fid) -> (
-          [%sanity_check] ctx.span (fid = ctx.fun_decl.def_id);
-          (* Lookup the loop *)
-          let lid = V.LoopId.Map.find lid ctx.loop_ids_map in
-          let loop_info = LoopId.Map.find lid ctx.loops in
-          match gid with
-          | None -> loop_info.fwd_effect_info
-          | Some gid -> RegionGroupId.Map.find gid loop_info.back_effect_infos)
-      | _ -> [%craise] ctx.span "Unreachable")
 
 let translate_fn_ptr_kind (ctx : bs_ctx) (id : A.fn_ptr_kind) : fn_ptr_kind =
   match id with
@@ -61,12 +21,9 @@ let translate_fn_ptr_kind (ctx : bs_ctx) (id : A.fn_ptr_kind) : fn_ptr_kind =
 
 (* Introduce variables for the backward functions.
 
-   We may filter the region group ids. This is useful for the loops: not all the
-   parent function region groups can be linked to a region abstraction
-   introduced by the loop.
+   We may filter the region group ids.
 *)
-let fresh_back_vars_for_current_fun (ctx : bs_ctx)
-    (keep_rg_ids : RegionGroupId.Set.t option) : bs_ctx * fvar option list =
+let fresh_back_vars_for_current_fun (ctx : bs_ctx) : bs_ctx * fvar option list =
   (* We lookup the LLBC definition in an attempt to derive pretty names
      for the backward functions. *)
   let back_var_names =
@@ -97,7 +54,7 @@ let fresh_back_vars_for_current_fun (ctx : bs_ctx)
       (RegionGroupId.Map.bindings ctx.sg.fun_ty.back_sg)
   in
   let back_vars =
-    List.combine back_var_names (compute_back_tys ctx.sg.fun_ty keep_rg_ids)
+    List.combine back_var_names (compute_back_tys ctx.sg.fun_ty)
   in
   let back_vars =
     List.map
@@ -135,13 +92,14 @@ let mk_emeta_symbolic_assignments (vars : fvar list) (values : texpr list)
 
     We explore the LLBC context and look in which bindings the symbolic values
     appear: we use this information to derive naming information. *)
-let eval_ctx_to_symbolic_assignments_info (ctx : bs_ctx)
-    (ectx : Contexts.eval_ctx) : (fvar * string) list =
+let eval_ctx_to_symbolic_assignments_info (ctx : bs_ctx) (ectx : C.eval_ctx) :
+    (fvar * string) list =
   let info : (fvar * string) list ref = ref [] in
   let push_info fv name = info := (fv, name) :: !info in
+  let shared_loans = (fst (compute_ctx_ids ectx)).shared_loans_to_values in
   let visitor =
     object (self)
-      inherit [_] Contexts.iter_eval_ctx
+      inherit [_] C.iter_eval_ctx
 
       method! visit_env_elem _ ee =
         match ee with
@@ -152,6 +110,9 @@ let eval_ctx_to_symbolic_assignments_info (ctx : bs_ctx)
       method! visit_value name v =
         match v with
         | VLiteral _ | VBottom -> ()
+        | VBorrow (VSharedBorrow (bid, _)) ->
+            let v = V.BorrowId.Map.find bid shared_loans in
+            self#visit_tvalue name v
         | VBorrow (VMutBorrow (_, v)) | VLoan (VSharedLoan (_, v)) ->
             self#visit_tvalue name v
         | VSymbolic sv ->
@@ -182,132 +143,43 @@ let translate_error (span : Meta.span option) (msg : string) : texpr =
 
     We use this to properly deconstruct the values given back by backward
     functions in the presence of enumerations. See
-    [bs_ctx.mut_borrow_to_consumed].
-
-    This helper transforms a let-bound pattern and a bound expression to
-    properly introduce matches if necessary.
-
-    For instance, we use it to transform this:
-    {[
-      let Some x = e in
-          ^^^^^^   ^
-           pat     let-bound expression
-    ]}
-    into:
-    {[
-       let x = match e with | Some x -> x | _ -> default_value in
-           ^   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-      new pat     new let-bound expression
-    ]}
-
-    **Remarks:** the function receives an open pattern and outputs an open
-    pattern. *)
-let decompose_let_match (ctx : bs_ctx) ((pat, bound) : tpattern * texpr) :
-    bs_ctx * (tpattern * texpr) =
+    [bs_ctx.mut_borrow_to_consumed] and [PureUtils.decompose_let_match]. *)
+let decompose_let_match (ctx : bs_ctx) (pat : tpat) (bound : texpr) :
+    bs_ctx * (tpat * texpr) =
   [%ltrace
-    "- pat: " ^ tpattern_to_string ctx pat ^ "\n- bound: "
+    "- pat: " ^ tpat_to_string ctx pat ^ "\n- bound: "
     ^ texpr_to_string ctx bound];
-
-  let found_enum = ref false in
-  (* We update the pattern if it deconstructs an enumeration with > 1 variants *)
-  let visitor =
-    object
-      inherit [_] reduce_expr as super
-      method zero : fvar list = []
-      method plus vars0 vars1 = vars0 @ vars1
-      method! visit_tpattern _ pat = super#visit_tpattern pat.ty pat
-
-      method! visit_adt_pattern ty pat =
-        (* Lookup the type decl *)
-        let type_id, _ = ty_as_adt ctx.span ty in
-        match type_id with
-        | TAdtId id ->
-            let decl = bs_ctx_lookup_type_decl id ctx in
-            begin
-              match decl.kind with
-              | Struct _ | Opaque -> ()
-              | Enum vl -> if List.length vl > 1 then found_enum := true else ()
-            end;
-            super#visit_adt_pattern ty pat
-        | TTuple ->
-            (* ok *)
-            super#visit_adt_pattern ty pat
-        | TBuiltin _ ->
-            (* Shouldn't happen *)
-            [%craise] ctx.span "Unreachable"
-
-      method! visit_PBound _ _ _ = [%internal_error] ctx.span
-      method! visit_POpen _ var _ = [ var ]
-    end
+  let span = ctx.span in
+  let ctx = ref ctx in
+  let refresh_var (var : fvar) =
+    let ctx', var' = fresh_var var.basename var.ty !ctx in
+    ctx := ctx';
+    var'
   in
-
-  (* Visit the pattern *)
-  let vars : fvar list = visitor#visit_tpattern pat.ty pat in
-
-  (* *)
-  if !found_enum then
-    (* Found an enumeration with > 1 variants: we have to deconstruct
-       the pattern *)
-    (* First, refresh the variables - we will use fresh variables
-       in the patterns of the internal match *)
-    let (ctx, fresh_vars) : _ * fvar list =
-      List.fold_left_map
-        (fun ctx (var : fvar) -> fresh_var var.basename var.ty ctx)
-        ctx vars
-    in
-    (* Create the new pattern for the match, with the fresh variables *)
-    let subst =
-      FVarId.Map.of_list
-        (List.map2 (fun (v0 : fvar) (v1 : fvar) -> (v0.id, v1)) vars fresh_vars)
-    in
-    let subst_visitor =
-      object
-        inherit [_] map_expr
-        method! visit_POpen _ v mp = POpen (FVarId.Map.find v.id subst, mp)
-        method! visit_PBound _ _ = [%internal_error] ctx.span
-      end
-    in
-    (* Create the correct branch *)
-    let match_pat = subst_visitor#visit_tpattern () pat in
-    let match_e = List.map mk_texpr_from_fvar fresh_vars in
-    let match_e = mk_simpl_tuple_texpr ctx.span match_e in
-    let match_branch = close_branch ctx.span match_pat match_e in
-    (* Create the otherwise branch *)
-    let default_e =
-      List.map
-        (fun (v : fvar) ->
-          (* We need to lookup the default values corresponding to
+  (* Using [bs_ctx.mut_borrow_to_consumed] *)
+  let get_default_expr (v : fvar) =
+    (* We need to lookup the default values corresponding to
              each given back symbolic value *)
-          match FVarId.Map.find_opt v.id ctx.var_id_to_default with
-          | Some e -> e
-          | None ->
-              (* This is a bug, but we might want to continue generating the model:
+    match FVarId.Map.find_opt v.id !ctx.var_id_to_default with
+    | Some e -> e
+    | None ->
+        (* This is a bug, but we might want to continue generating the model:
                  as an escape hatch, simply use the original variable (this will
                  lead to incorrect code of course) *)
-              [%save_error] ctx.span
-                ("Internal error: could not find variable. Please report an \
-                  issue. Debugging information:" ^ "\n- v.id: "
-               ^ FVarId.to_string v.id ^ "\n- ctx.var_id_to_default: "
-                ^ FVarId.Map.to_string None (texpr_to_string ctx)
-                    ctx.var_id_to_default
-                ^ "\n");
-              mk_texpr_from_fvar v)
-        vars
-    in
-    let default_e = mk_simpl_tuple_texpr ctx.span default_e in
-    let default_pat = mk_dummy_pattern pat.ty in
-    let default_branch = close_branch ctx.span default_pat default_e in
-    let switch_e = Switch (bound, Match [ match_branch; default_branch ]) in
-    let bound = { e = switch_e; ty = match_e.ty } in
-    (* Update the pattern itself *)
-    let pat =
-      mk_simpl_tuple_pattern
-        (List.map (fun v -> mk_tpattern_from_fvar v None) vars)
-    in
-    (* *)
-    (ctx, (pat, bound))
-  else (* Nothing to do *)
-    (ctx, (pat, bound))
+        [%save_error] span
+          ("Internal error: could not find variable. Please report an issue. \
+            Debugging information:" ^ "\n- v.id: " ^ FVarId.to_string v.id
+         ^ "\n- ctx.var_id_to_default: "
+          ^ FVarId.Map.to_string None (texpr_to_string !ctx)
+              !ctx.var_id_to_default
+          ^ "\n");
+        mk_texpr_from_fvar v
+  in
+  let pat, bound =
+    PureUtils.decompose_let_match span refresh_var get_default_expr
+      !ctx.type_ctx.type_decls pat bound
+  in
+  (!ctx, (pat, bound))
 
 let rec translate_expr (e : S.expr) (ctx : bs_ctx) : texpr =
   [%ldebug "e:\n" ^ bs_ctx_expr_to_string ctx e];
@@ -316,88 +188,40 @@ let rec translate_expr (e : S.expr) (ctx : bs_ctx) : texpr =
       (* We reached a return.
          Remark: we can't get there if we are inside a loop. *)
       translate_return ectx opt_v ctx
-  | ReturnWithLoop (loop_id, is_continue) ->
-      (* We reached a return and are inside a loop. *)
-      translate_return_with_loop loop_id is_continue ctx
   | Panic -> translate_panic ctx
   | FunCall (call, e) -> translate_function_call call e ctx
-  | EndAbstraction (ectx, abs, e) -> translate_end_abstraction ectx abs e ctx
+  | EndAbs (ectx, abs, e) -> translate_end_abs ectx abs e ctx
   | EvalGlobal (gid, generics, sv, e) ->
       translate_global_eval gid generics sv e ctx
   | Assertion (ectx, v, e) -> translate_assertion ectx v e ctx
   | Expansion (p, sv, exp) -> translate_expansion p sv exp ctx
   | IntroSymbolic (ectx, p, sv, v, e) ->
       translate_intro_symbolic ectx p sv v e ctx
-  | Meta (span, e) -> translate_espan span e ctx
-  | ForwardEnd (return_value, ectx, loop_sid_maps, e, back_e) ->
-      (* Translate the end of a function, or the end of a loop.
-
-         The case where we (re-)enter a loop is handled here.
-      *)
-      translate_forward_end return_value ectx loop_sid_maps e back_e ctx
+  | SubstituteAbsIds (aids, e) -> translate_substitute_abs_ids ctx aids e
+  | Meta (meta, e) -> translate_emeta meta e ctx
+  | ForwardEnd (return_value, ectx, e, back_e) ->
+      (* Translate the end of a function (this is introduced when we reach a [return] statement). *)
+      translate_forward_end return_value ectx e back_e ctx
   | Loop loop -> translate_loop loop ctx
   | Error (span, msg) -> translate_error span msg
+  | LoopContinue (ectx, loop_id, input_values, input_abs) ->
+      translate_continue_break ctx ~continue:true ectx loop_id input_values
+        input_abs
+  | LoopBreak (ectx, loop_id, input_values, input_abs) ->
+      translate_continue_break ctx ~continue:false ectx loop_id input_values
+        input_abs
 
 and translate_panic (ctx : bs_ctx) : texpr = Option.get ctx.mk_panic
 
 (** [opt_v]: the value to return, in case we translate a forward body.
 
-    Remark: for now, we can't get there if we are inside a loop. If inside a
-    loop, we use {!translate_return_with_loop}.
-
     Remark: in case we merge the forward/backward functions, we introduce those
     in [translate_forward_end]. *)
 and translate_return (ectx : C.eval_ctx) (opt_v : V.tvalue option)
     (ctx : bs_ctx) : texpr =
+  [%ldebug "e: return " ^ Print.option_to_string (tvalue_to_string ctx) opt_v];
   let opt_v = Option.map (tvalue_to_texpr ctx ectx) opt_v in
   (Option.get ctx.mk_return) ctx opt_v
-
-and translate_return_with_loop (loop_id : V.LoopId.id) (is_continue : bool)
-    (ctx : bs_ctx) : texpr =
-  [%sanity_check] ctx.span (is_continue = ctx.inside_loop);
-  let loop_id = V.LoopId.Map.find loop_id ctx.loop_ids_map in
-  [%sanity_check] ctx.span (loop_id = Option.get ctx.loop_id);
-
-  (* Lookup the loop information *)
-  let loop_id = Option.get ctx.loop_id in
-  let loop_info = LoopId.Map.find loop_id ctx.loops in
-
-  (* There are two cases depending on whether we translate a backward function
-     or not.
-  *)
-  let output =
-    match ctx.bid with
-    | None -> Option.get loop_info.forward_output_no_state_no_result
-    | Some _ ->
-        (* Backward *)
-        (* Group the variables in which we stored the values we need to give back.
-         * See the explanations for the [SynthInput] case in [translate_end_abstraction] *)
-        (* It can happen that we did not end any output abstraction, because the
-           loop didn't use borrows corresponding to the region we just ended.
-           If this happens, there are no backward outputs.
-        *)
-        let backward_outputs =
-          match ctx.backward_outputs with
-          | Some outputs -> outputs
-          | None -> []
-        in
-        let field_values = List.map mk_texpr_from_fvar backward_outputs in
-        mk_simpl_tuple_texpr ctx.span field_values
-  in
-
-  (* We may need to return a state
-   * - error-monad: Return x
-   * - state-error: Return (state, x)
-   * Note that the loop function and the parent function live in the same
-   * effect - in particular, one manipulates a state iff the other does
-   * the same.
-   *)
-  let effect_info = ctx_get_effect_info ctx in
-  (* Wrap in a result if the backward function cal fail *)
-  let output =
-    if effect_info.can_fail then mk_result_ok_texpr ctx.span output else output
-  in
-  mk_emeta (Tag "return_with_loop") output
 
 and translate_function_call (call : S.call) (e : S.expr) (ctx : bs_ctx) : texpr
     =
@@ -448,10 +272,10 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
         let func = Fun (FromLlbc (fid_t, None)) in
         (* Retrieve the effect information about this function (can fail,
          * takes a state as input, etc.) *)
-        let effect_info = get_fun_effect_info ctx fid None None in
+        let effect_info = get_fun_effect_info ctx fid None in
         (* Generate the variables for the backward functions returned by the forward
            function. *)
-        let ctx, ignore_fwd_output, back_funs_map, back_funs =
+        let ctx, ignore_fwd_output, back_funs =
           (* We need to compute the signatures of the backward functions. *)
           let sg = Option.get call.sg in
           let inst_sg = Option.get call.inst_sg in
@@ -461,7 +285,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               decls_ctx fid inst_sg
               (List.map (fun _ -> None) sg.inputs)
           in
-          let back_tys = compute_back_tys_with_info dsg None in
+          let back_tys = compute_back_tys_with_info dsg in
           [%ltrace
             "back_tys:\n "
             ^ String.concat "\n"
@@ -523,27 +347,41 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               ctx
           in
           let back_funs =
-            List.filter_map
-              (fun v ->
-                match v with
-                | None -> None
-                | Some v -> Some (mk_tpattern_from_fvar v None))
-              back_vars
+            List.filter_map (Option.map (mk_tpat_from_fvar None)) back_vars
           in
-          let gids =
-            List.map
-              (fun (g : T.region_var_group) -> g.id)
-              inst_sg.regions_hierarchy
+
+          (* Update the information about the backward functions *)
+          let ctx =
+            let backs, ignored =
+              List.partition
+                (fun (_, v) -> Option.is_some v)
+                (List.combine call.abstractions back_vars)
+            in
+            let ignored = List.map fst ignored in
+            let backs =
+              List.map
+                (fun (aid, fv) ->
+                  let fvar = mk_texpr_from_fvar (Option.get fv) in
+                  (aid, { fvar; can_fail = false }))
+                backs
+            in
+            let ctx =
+              {
+                ctx with
+                abs_id_to_info = V.AbsId.Map.add_list backs ctx.abs_id_to_info;
+                ignored_abs_ids =
+                  V.AbsId.Set.add_list ignored ctx.ignored_abs_ids;
+              }
+            in
+            ctx
           in
-          let back_vars = List.map (Option.map mk_texpr_from_fvar) back_vars in
-          let back_funs_map =
-            RegionGroupId.Map.of_list (List.combine gids back_vars)
-          in
-          (ctx, dsg.fwd_info.ignore_output, Some back_funs_map, back_funs)
+
+          (* *)
+          (ctx, dsg.fwd_info.ignore_output, back_funs)
         in
         (* Compute the pattern for the destination *)
         let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
-        let dest = mk_tpattern_from_fvar dest dest_mplace in
+        let dest = mk_tpat_from_fvar dest_mplace dest in
         let dest =
           (* Here there is something subtle: as we might ignore the output
              of the forward function (because it translates to unit) we do NOT
@@ -557,11 +395,13 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
           let vars =
             if ignore_fwd_output then back_funs else dest :: back_funs
           in
-          mk_simpl_tuple_pattern vars
+          mk_simpl_tuple_pat vars
         in
-        (* Register the function call *)
+        (* Register the forward call (some information, for instance about
+           the places where the values come from, will be useful later to
+           compute names for the values given back by the backward functions) *)
         let ctx =
-          bs_ctx_register_forward_call call_id call args back_funs_map ctx
+          { ctx with calls = V.FunCallId.Map.add call_id call ctx.calls }
         in
         (ctx, func, effect_info, args, back_funs, dest)
     | S.Unop E.Not -> (
@@ -576,16 +416,10 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               | _ -> [%craise] ctx.span "Unreachable"
             in
             let effect_info =
-              {
-                can_fail = false;
-                stateful_group = false;
-                stateful = false;
-                can_diverge = false;
-                is_rec = false;
-              }
+              { can_fail = false; can_diverge = false; is_rec = false }
             in
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
-            let dest = mk_tpattern_from_fvar dest dest_mplace in
+            let dest = mk_tpat_from_fvar dest_mplace dest in
             (ctx, Unop (Not ty), effect_info, args, [], dest)
         | _ -> [%craise] ctx.span "Unreachable")
     | S.Unop (E.Neg overflow) -> (
@@ -597,14 +431,12 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
             let effect_info =
               {
                 can_fail = overflow <> OWrap;
-                stateful_group = false;
-                stateful = false;
                 can_diverge = false;
                 is_rec = false;
               }
             in
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
-            let dest = mk_tpattern_from_fvar dest dest_mplace in
+            let dest = mk_tpat_from_fvar dest_mplace dest in
             (ctx, Unop (Neg int_ty), effect_info, args, [], dest)
         | _ -> [%craise] ctx.span "Unreachable")
     | S.Unop (E.Cast cast_kind) -> begin
@@ -614,14 +446,12 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
             let effect_info =
               {
                 can_fail = not (Config.backend () = Lean);
-                stateful_group = false;
-                stateful = false;
                 can_diverge = false;
                 is_rec = false;
               }
             in
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
-            let dest = mk_tpattern_from_fvar dest dest_mplace in
+            let dest = mk_tpat_from_fvar dest_mplace dest in
             (ctx, Unop (Cast (src_ty, tgt_ty)), effect_info, args, [], dest)
         | CastFnPtr _ -> [%craise] ctx.span "TODO: function casts"
         | CastUnsize _ ->
@@ -645,14 +475,12 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
             let effect_info =
               {
                 can_fail = ExpressionsUtils.binop_can_fail binop;
-                stateful_group = false;
-                stateful = false;
                 can_diverge = false;
                 is_rec = false;
               }
             in
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
-            let dest = mk_tpattern_from_fvar dest dest_mplace in
+            let dest = mk_tpat_from_fvar dest_mplace dest in
             (ctx, Binop (binop, int_ty0), effect_info, args, [], dest)
         | _ -> [%craise] ctx.span "Unreachable")
   in
@@ -663,7 +491,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
   in
   let func_ty = mk_arrows input_tys ret_ty in
   let func = { e = Qualif func; ty = func_ty } in
-  let call_e = mk_apps ctx.span func args in
+  let call_e = [%add_loc] mk_apps ctx.span func args in
   (* This is a **hack** for [Box::new]: introduce backward functions
      which are the identity if we instantiated [Box::new] with types
      containing mutable borrows.
@@ -677,10 +505,10 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
     | S.Fun (FunId (FBuiltin BoxNew), _) ->
         let ctx, back_funs_bodies =
           List.fold_left_map
-            (fun ctx (f : tpattern) ->
+            (fun ctx (f : tpat) ->
               let ty, _ = dest_arrow_ty ctx.span f.ty in
               let ctx, v = fresh_var (Some "back") ty ctx in
-              let pat = mk_tpattern_from_fvar v None in
+              let pat = mk_tpat_from_fvar None v in
               (ctx, mk_closed_lambda ctx.span pat (mk_texpr_from_fvar v)))
             ctx back_funs
         in
@@ -690,7 +518,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
           match args with
           | [ x ] ->
               let call = { call with ty = mk_arrows [ x.ty ] x.ty } in
-              mk_app ctx.span call x
+              [%add_loc] mk_app ctx.span call x
           | _ -> [%internal_error] ctx.span
         in
         let call_e =
@@ -714,8 +542,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
   (* Translate the next expression *)
   let next_e = translate_expr e ctx in
   (* Put together *)
-  mk_closed_checked_let __FILE__ __LINE__ ctx effect_info.can_fail dest_v call_e
-    next_e
+  [%add_loc] mk_closed_checked_let ctx effect_info.can_fail dest_v call_e next_e
 
 and translate_cast_unsize (call : S.call) (e : S.expr) (ty0 : T.ty) (ty1 : T.ty)
     (ctx : bs_ctx) : texpr =
@@ -731,7 +558,7 @@ and translate_cast_unsize (call : S.call) (e : S.expr) (ty0 : T.ty) (ty1 : T.ty)
       call.dest_place
   in
   let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
-  let dest = mk_tpattern_from_fvar dest dest_mplace in
+  let dest = mk_tpat_from_fvar dest_mplace dest in
   let arg =
     match call.args with
     | [ arg ] -> arg
@@ -755,7 +582,7 @@ and translate_cast_unsize (call : S.call) (e : S.expr) (ty0 : T.ty) (ty1 : T.ty)
     let ret_ty = TAdt (TBuiltin TSlice, mk_generic_args_from_types [ ty ]) in
     let func_ty = mk_arrows [ input_ty ] ret_ty in
     let func = { e = Qualif func; ty = func_ty } in
-    mk_apps ctx.span func [ v ]
+    [%add_loc] mk_apps ctx.span func [ v ]
   in
 
   (* Create the cast expression *)
@@ -778,7 +605,7 @@ and translate_cast_unsize (call : S.call) (e : S.expr) (ty0 : T.ty) (ty1 : T.ty)
           let qualif : qualif = { id = Proj { adt_id; field_id }; generics } in
           let qualif_ty = mk_arrows [ adt_ty ] ty0 in
           let qualif = { e = Qualif qualif; ty = qualif_ty } in
-          mk_app ctx.span qualif arg
+          [%add_loc] mk_app ctx.span qualif arg
         in
 
         (* Create the array to slice expression *)
@@ -803,21 +630,20 @@ and translate_cast_unsize (call : S.call) (e : S.expr) (ty0 : T.ty) (ty1 : T.ty)
   (* Create the let-binding *)
   let next_e = translate_expr e ctx in
   let monadic = false in
-  mk_closed_checked_let __FILE__ __LINE__ ctx monadic dest cast_expr next_e
+  [%add_loc] mk_closed_checked_let ctx monadic dest cast_expr next_e
 
-and translate_end_abstraction (ectx : C.eval_ctx) (abs : V.abs) (e : S.expr)
+and translate_end_abs (ectx : C.eval_ctx) (abs : V.abs) (e : S.expr)
     (ctx : bs_ctx) : texpr =
   [%ltrace "abstraction kind: " ^ V.show_abs_kind abs.kind];
   match abs.kind with
   | V.SynthInput rg_id ->
       translate_end_abstraction_synth_input ectx abs e ctx rg_id
-  | V.FunCall (call_id, rg_id) ->
-      translate_end_abstraction_fun_call ectx abs e ctx call_id rg_id
+  | V.FunCall (call_id, _) ->
+      translate_end_abstraction_fun_call ectx abs e call_id ctx
   | V.SynthRet rg_id -> translate_end_abstraction_synth_ret ectx abs e ctx rg_id
-  | V.Loop (loop_id, rg_id, abs_kind) ->
-      translate_end_abstraction_loop ectx abs e ctx loop_id rg_id abs_kind
+  | V.Loop loop_id -> translate_end_abstraction_loop ectx abs e ctx loop_id
   | V.Identity | V.CopySymbolicValue ->
-      translate_end_abstraction_identity ectx abs e ctx
+      translate_end_abs_identity ectx abs e ctx
 
 and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
     (e : S.expr) (ctx : bs_ctx) (rg_id : T.RegionGroupId.id) : texpr =
@@ -826,8 +652,6 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
     ^ name_to_string ctx ctx.fun_decl.item_meta.name
     ^ "\n- rg_id: "
     ^ T.RegionGroupId.to_string rg_id
-    ^ "\n- loop_id: "
-    ^ Print.option_to_string Pure.LoopId.to_string ctx.loop_id
     ^ "\n- eval_ctx:\n"
     ^ eval_ctx_to_string ~span:(Some ctx.span) ectx
     ^ "\n- abs:\n" ^ abs_to_string ctx abs];
@@ -845,24 +669,10 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
   let bid = Option.get ctx.bid in
   [%sanity_check] ctx.span (rg_id = bid);
 
-  (* First, introduce the given back variables.
-
-     We don't use the same given back variables if we translate a loop or
-     the standard body of a function.
-  *)
+  (* First, introduce the given back variables. *)
   let ctx, given_back_variables =
-    let vars =
-      if ctx.inside_loop then
-        (* We are synthesizing a loop body *)
-        let loop_id = Option.get ctx.loop_id in
-        let loop = LoopId.Map.find loop_id ctx.loops in
-        let tys = RegionGroupId.Map.find bid loop.back_outputs in
-        List.map (fun ty -> (None, ty)) tys
-      else
-        (* Regular function body *)
-        let back_sg = RegionGroupId.Map.find bid ctx.sg.fun_ty.back_sg in
-        List.combine back_sg.output_names back_sg.outputs
-    in
+    let back_sg = RegionGroupId.Map.find bid ctx.sg.fun_ty.back_sg in
+    let vars = List.combine back_sg.output_names back_sg.outputs in
     let ctx, vars = fresh_vars vars ctx in
     ({ ctx with backward_outputs = Some vars }, vars)
   in
@@ -882,7 +692,7 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
 
   (* Prepare the let-bindings by introducing a match if necessary *)
   let given_back_variables =
-    List.map (fun v -> mk_tpattern_from_fvar v None) given_back_variables
+    List.map (mk_tpat_from_fvar None) given_back_variables
   in
   [%sanity_check] ctx.span
     (List.length given_back_variables = List.length consumed_values);
@@ -893,7 +703,7 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
   if !Config.type_check_pure_code then
     List.iter
       (fun (var, v) ->
-        [%sanity_check] ctx.span ((var : tpattern).ty = (v : texpr).ty))
+        [%sanity_check] ctx.span ((var : tpat).ty = (v : texpr).ty))
       variables_values;
   (* Translate the next expression *)
   let next_e = translate_expr e ctx in
@@ -902,20 +712,11 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
   mk_closed_checked_lets __FILE__ __LINE__ ctx monadic variables_values next_e
 
 and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
-    (e : S.expr) (ctx : bs_ctx) (call_id : V.FunCallId.id)
-    (rg_id : T.RegionGroupId.id) : texpr =
-  let call_info = V.FunCallId.Map.find call_id ctx.calls in
-  let call = call_info.forward in
-  let fun_id =
-    match call.call_id with
-    | S.Fun (fun_id, _) -> fun_id
-    | Unop _ | Binop _ ->
-        (* Those don't have backward functions *)
-        [%craise] ctx.span "Unreachable"
-  in
-  let effect_info = get_fun_effect_info ctx fun_id None (Some rg_id) in
+    (e : S.expr) (call_id : V.fun_call_id) (ctx : bs_ctx) : texpr =
+  let call = V.FunCallId.Map.find call_id ctx.calls in
+  let info = V.AbsId.Map.find_opt abs.abs_id ctx.abs_id_to_info in
   (* Retrieve the values consumed upon ending the loans inside this
-   * abstraction: those give us the remaining input values *)
+   * abstraction: those give us the input values *)
   let back_inputs = abs_to_consumed ctx ectx abs in
   (* Retrieve the values given back by this function: those are the output
    * values. We rely on the fact that there are no nested borrows to use the
@@ -930,12 +731,7 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
   in
   let ctx, outputs = abs_to_given_back (Some output_mpl) abs ctx in
   (* Group the output values together *)
-  let output = mk_simpl_tuple_pattern outputs in
-  (* Retrieve the function id, and register the function call in the context
-     if necessary. *)
-  let ctx, func =
-    bs_ctx_register_backward_call abs call_id rg_id back_inputs ctx
-  in
+  let output = mk_simpl_tuple_pat outputs in
   (* Translate the next expression *)
   let next_e ctx = translate_expr e ctx in
   (* Put everything together *)
@@ -948,23 +744,25 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
   in
   (* The backward function might have been filtered if it does nothing
      (consumes unit and returns unit). *)
-  match func with
+  match info with
   | None -> next_e ctx
-  | Some func ->
+  | Some info ->
       [%ltrace
         let args = List.map (texpr_to_string ctx) args in
-        "func: " ^ texpr_to_string ctx func ^ "\nfunc type: "
-        ^ pure_ty_to_string ctx func.ty
+        "func: "
+        ^ texpr_to_string ctx info.fvar
+        ^ "\nfunc type: "
+        ^ pure_ty_to_string ctx info.fvar.ty
         ^ "\n\nargs:\n" ^ String.concat "\n" args];
-      let call = mk_apps ctx.span func args in
+      let call = [%add_loc] mk_apps ctx.span info.fvar args in
       (* Introduce a match if necessary *)
-      let ctx, (output, call) = decompose_let_match ctx (output, call) in
+      let ctx, (output, call) = decompose_let_match ctx output call in
       (* Translate the next expression and construct the let *)
-      mk_closed_checked_let __FILE__ __LINE__ ctx effect_info.can_fail output
-        call (next_e ctx)
+      [%add_loc] mk_closed_checked_let ctx info.can_fail output call
+        (next_e ctx)
 
-and translate_end_abstraction_identity (ectx : C.eval_ctx) (abs : V.abs)
-    (e : S.expr) (ctx : bs_ctx) : texpr =
+and translate_end_abs_identity (ectx : C.eval_ctx) (abs : V.abs) (e : S.expr)
+    (ctx : bs_ctx) : texpr =
   (* We simply check that the abstraction only contains shared borrows/loans,
      and translate the next expression *)
 
@@ -1023,13 +821,13 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
   [%ltrace "abs: " ^ abs_to_string ctx abs];
   let ctx, given_back = abs_to_given_back_no_mp abs ctx in
   [%ltrace
-    "given back: " ^ Print.list_to_string (tpattern_to_string ctx) given_back];
+    "given back: " ^ Print.list_to_string (tpat_to_string ctx) given_back];
   (* Link the inputs to those given back values - note that this also
      checks we have the same number of values, of course *)
   let given_back_inputs = List.combine given_back inputs in
   (* Sanity check *)
   List.iter
-    (fun ((given_back, input) : tpattern * fvar) ->
+    (fun ((given_back, input) : tpat * fvar) ->
       [%ltrace
         "- given_back ty: "
         ^ pure_ty_to_string ctx given_back.ty
@@ -1042,7 +840,9 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
     List.map (fun (v, e) -> (v, mk_texpr_from_fvar e)) given_back_inputs
   in
   let ctx, given_back_inputs =
-    List.fold_left_map decompose_let_match ctx given_back_inputs
+    List.fold_left_map
+      (fun ctx (v, e) -> decompose_let_match ctx v e)
+      ctx given_back_inputs
   in
   (* Translate the next expression *)
   let next_e = translate_expr e ctx in
@@ -1051,104 +851,57 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
   mk_closed_checked_lets __FILE__ __LINE__ ctx monadic given_back_inputs next_e
 
 and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
-    (e : S.expr) (ctx : bs_ctx) (loop_id : V.LoopId.id)
-    (rg_id : T.RegionGroupId.id option) (abs_kind : V.loop_abs_kind) : texpr =
-  let vloop_id = loop_id in
-  let loop_id = V.LoopId.Map.find loop_id ctx.loop_ids_map in
-  [%sanity_check] ctx.span (loop_id = Option.get ctx.loop_id);
-  let rg_id = Option.get rg_id in
-  (* There are two cases depending on the [abs_kind] (whether this is a
-     synth input or a regular loop call) *)
-  match abs_kind with
-  | V.LoopSynthInput ->
-      (* Actually the same case as [SynthInput] *)
-      translate_end_abstraction_synth_input ectx abs e ctx rg_id
-  | V.LoopCall -> (
-      (* We need to introduce a call to the backward function corresponding
-         to a forward call which happened earlier *)
-      let fun_id = T.FRegular ctx.fun_decl.def_id in
-      let effect_info =
-        get_fun_effect_info ctx (FunId fun_id) (Some vloop_id) (Some rg_id)
-      in
-      let loop_info = LoopId.Map.find loop_id ctx.loops in
-      (* Retrieve the additional backward inputs. Note that those are actually
-         the backward inputs of the function we are synthesizing (and that we
-         need to *transmit* to the loop backward function): they are not the
-         values consumed upon ending the abstraction (i.e., we don't use
-         [abs_to_consumed]) *)
-      let back_inputs_vars =
-        T.RegionGroupId.Map.find rg_id ctx.backward_inputs
-      in
-      let inputs = List.map mk_texpr_from_fvar back_inputs_vars in
-      (* Retrieve the values given back by this function *)
-      let ctx, outputs = abs_to_given_back None abs ctx in
-      (* Group the output values together: first the updated inputs *)
-      let output = mk_simpl_tuple_pattern outputs in
-      (* Translate the next expression *)
-      let next_e ctx = translate_expr e ctx in
-      (* Put everything together *)
-      let args_mplaces = List.map (fun _ -> None) inputs in
-      let args =
-        List.map
-          (fun (arg, mp) -> mk_opt_mplace_texpr mp arg)
-          (List.combine inputs args_mplaces)
-      in
-      (* Create the expression for the function:
-         - it is either a call to a top-level function, if we split the
-           forward/backward functions
-         - or a call to the variable we introduced for the backward function,
-           if we merge the forward/backward functions *)
-      let func =
-        RegionGroupId.Map.find rg_id (Option.get loop_info.back_funs)
-      in
-      (* We may have filtered the backward function elsewhere if it doesn't
-         do anything (doesn't consume anything and doesn't return anything) *)
-      match func with
-      | None -> next_e ctx
-      | Some func ->
-          let call = mk_apps ctx.span func args in
-          (* Create the let-binding - we may have to introduce a match *)
-          let ctx, (output, call) = decompose_let_match ctx (output, call) in
+    (e : S.expr) (ctx : bs_ctx) (_loop_id : V.LoopId.id) : texpr =
+  let span = ctx.span in
+  (* Compute the input and output values *)
+  let back_inputs = abs_to_consumed ctx ectx abs in
+  let ctx, outputs = abs_to_given_back None abs ctx in
+  let output = mk_simpl_tuple_pat outputs in
+  (* Lookup the continuation - it might not be there if the backward function
+     was filtered, if it consumes nothing and outputs nothing *)
+  let func = V.AbsId.Map.find_opt abs.abs_id ctx.abs_id_to_info in
+  (* Translate the next expression *)
+  let next_e ctx = translate_expr e ctx in
+  (* Put everything together *)
+  let inputs = back_inputs in
+  let args_mplaces = List.map (fun _ -> None) inputs in
+  let args =
+    List.map
+      (fun (arg, mp) -> mk_opt_mplace_texpr mp arg)
+      (List.combine inputs args_mplaces)
+  in
+  match func with
+  | None ->
+      [%ldebug
+        "No backward function found for abstraction: "
+        ^ V.AbsId.to_string abs.abs_id];
+      (* TODO: generalize. We should always translate the continuation expression
+         directly.
 
-          let next_e = next_e ctx in
-
-          (* Add meta-information - this is slightly hacky: we look at the
-             values consumed by the abstraction (note that those come from
-             *before* we applied the fixed-point context) and use them to
-             guide the naming of the output vars. Because of this, the meta
-             information might reference *some variables which are not in
-             the context*. This forces us to cleanup the meta-data later
-             to make sure the expressions are well-formed.
-
-             Also, we need to convert the backward outputs from patterns to
-             variables.
-
-             Finally, in practice, this works well only for loop bodies:
-             we do this only in this case.
-             TODO: improve the heuristics, to give weight to the hints for
-             instance.
-          *)
-          let next_e =
-            if ctx.inside_loop && Config.allow_unbound_variables_in_metadata
-            then
-              let consumed_values = abs_to_consumed ctx ectx abs in
-              let var_values = List.combine outputs consumed_values in
-              let var_values =
-                List.filter_map
-                  (fun ((var, v) : tpattern * _) ->
-                    match var.Pure.pat with
-                    | POpen (var, _) -> Some (var, v)
-                    | PBound _ -> [%internal_error] ctx.span
-                    | _ -> None)
-                  var_values
-              in
-              let vars, values = List.split var_values in
-              mk_emeta_symbolic_assignments vars values next_e
-            else next_e
-          in
-
-          mk_closed_checked_let __FILE__ __LINE__ ctx effect_info.can_fail
-            output call next_e)
+         Note that we can get here when ending a loop abstraction which has
+         to be ignored, but also when ending an abstraction which comes from
+         converting the shared loan introduced when accessing a global value
+         through a reference. *)
+      [%sanity_check] span
+        (V.AbsId.Set.mem abs.abs_id ctx.ignored_abs_ids
+        || (back_inputs = [] && outputs = []));
+      next_e ctx
+  | Some { fvar = func; can_fail } ->
+      [%ltrace
+        let args = List.map (texpr_to_string ctx) args in
+        "func: " ^ texpr_to_string ctx func ^ "\nfunc type: "
+        ^ pure_ty_to_string ctx func.ty
+        ^ "\n\nargs:\n" ^ String.concat "\n" args];
+      let call = [%add_loc] mk_apps ctx.span func args in
+      (* Introduce a match if necessary *)
+      let ctx, (output, call) = decompose_let_match ctx output call in
+      (* Translate the next expression and construct the let *)
+      let next_e = next_e ctx in
+      [%ltrace
+        "About to reconstruct let-bindings:" ^ "\n- output: "
+        ^ tpat_to_string ctx output ^ "\n- call: " ^ texpr_to_string ctx call
+        ^ "\n- next:\n" ^ texpr_to_string ctx next_e];
+      [%add_loc] mk_closed_checked_let ctx can_fail output call next_e
 
 and translate_global_eval (gid : A.GlobalDeclId.id) (generics : T.generic_args)
     (sval : V.symbolic_value) (e : S.expr) (ctx : bs_ctx) : texpr =
@@ -1160,9 +913,7 @@ and translate_global_eval (gid : A.GlobalDeclId.id) (generics : T.generic_args)
   let ty = ctx_translate_fwd_ty ctx decl.ty in
   let gval = { e = Qualif global_expr; ty } in
   let e = translate_expr e ctx in
-  mk_closed_checked_let __FILE__ __LINE__ ctx false
-    (mk_tpattern_from_fvar var None)
-    gval e
+  [%add_loc] mk_closed_checked_let ctx false (mk_tpat_from_fvar None var) gval e
 
 and translate_assertion (ectx : C.eval_ctx) (v : V.tvalue) (e : S.expr)
     (ctx : bs_ctx) : texpr =
@@ -1175,9 +926,9 @@ and translate_assertion (ectx : C.eval_ctx) (v : V.tvalue) (e : S.expr)
   in
   let func_ty = mk_arrow (TLiteral TBool) (mk_result_ty mk_unit_ty) in
   let func = { e = Qualif func; ty = func_ty } in
-  let assertion = mk_apps ctx.span func args in
-  mk_closed_checked_let __FILE__ __LINE__ ctx monadic
-    (mk_dummy_pattern mk_unit_ty)
+  let assertion = [%add_loc] mk_apps ctx.span func args in
+  [%add_loc] mk_closed_checked_let ctx monadic
+    (mk_ignored_pat mk_unit_ty)
     assertion next_e
 
 and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
@@ -1202,8 +953,8 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
           let ctx, var = fresh_var_for_symbolic_value nsv ctx in
           let next_e = translate_expr e ctx in
           let monadic = false in
-          mk_closed_checked_let __FILE__ __LINE__ ctx monadic
-            (mk_tpattern_from_fvar var None)
+          [%add_loc] mk_closed_checked_let ctx monadic
+            (mk_tpat_from_fvar None var)
             (mk_opt_mplace_texpr scrutinee_mplace scrutinee)
             next_e
       | SeAdt _ ->
@@ -1230,9 +981,9 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
           let translate_branch (variant_id : T.VariantId.id option)
               (svl : V.symbolic_value list) (branch : S.expr) : match_branch =
             let ctx, vars = fresh_vars_for_symbolic_values svl ctx in
-            let vars = List.map (fun x -> mk_tpattern_from_fvar x None) vars in
+            let vars = List.map (fun x -> mk_tpat_from_fvar None x) vars in
             let pat_ty = scrutinee.ty in
-            let pat = mk_adt_pattern pat_ty variant_id vars in
+            let pat = mk_adt_pat pat_ty variant_id vars in
             let branch = translate_expr branch ctx in
             close_branch ctx.span pat branch
           in
@@ -1265,9 +1016,8 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
         "true_e.ty: "
         ^ pure_ty_to_string ctx true_e.ty
         ^ "\n\nfalse_e.ty: "
-        ^ pure_ty_to_string ctx false_e.ty];
-      [%ltrace
-        "true_e: " ^ texpr_to_string ctx true_e ^ " \n\nfalse_e: "
+        ^ pure_ty_to_string ctx false_e.ty
+        ^ "\n\n- true_e:\n" ^ texpr_to_string ctx true_e ^ " \n\nfalse_e:\n"
         ^ texpr_to_string ctx false_e];
       [%sanity_check] ctx.span (ty = false_e.ty);
       { e; ty }
@@ -1277,13 +1027,13 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
         (* We don't need to update the context: we don't introduce any
            new values/variables *)
         let branch = translate_expr branch_e ctx in
-        let pat = mk_tpattern_from_literal (VScalar v) in
+        let pat = mk_tpat_from_literal (VScalar v) in
         close_branch ctx.span pat branch
       in
       let branches = List.map translate_branch branches in
       let otherwise = translate_expr otherwise ctx in
       let pat_ty = TLiteral (TypesUtils.integer_as_literal int_ty) in
-      let otherwise_pat : tpattern = { pat = PDummy; ty = pat_ty } in
+      let otherwise_pat : tpat = { pat = PIgnored; ty = pat_ty } in
       let otherwise : match_branch =
         { pat = otherwise_pat; branch = otherwise }
       in
@@ -1315,17 +1065,16 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value) (scrutinee : texpr)
   let branch = translate_expr branch ctx in
   match type_id with
   | TAdtId _ ->
-      let lvars = List.map (fun v -> mk_tpattern_from_fvar v None) vars in
-      let lv = mk_adt_pattern scrutinee.ty variant_id lvars in
+      let lvars = List.map (fun v -> mk_tpat_from_fvar None v) vars in
+      let lv = mk_adt_pat scrutinee.ty variant_id lvars in
       let monadic = false in
-      mk_closed_checked_let __FILE__ __LINE__ ctx monadic lv
+      [%add_loc] mk_closed_checked_let ctx monadic lv
         (mk_opt_mplace_texpr scrutinee_mplace scrutinee)
         branch
   | TTuple ->
-      let vars = List.map (fun x -> mk_tpattern_from_fvar x None) vars in
+      let vars = List.map (fun x -> mk_tpat_from_fvar None x) vars in
       let monadic = false in
-      mk_closed_checked_let __FILE__ __LINE__ ctx monadic
-        (mk_simpl_tuple_pattern vars)
+      [%add_loc] mk_closed_checked_let ctx monadic (mk_simpl_tuple_pat vars)
         (mk_opt_mplace_texpr scrutinee_mplace scrutinee)
         branch
   | TBuiltin TBox ->
@@ -1338,8 +1087,8 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value) (scrutinee : texpr)
       (* We simply introduce an assignment - the box type is the
        * identity when extracted ([box a = a]) *)
       let monadic = false in
-      mk_closed_checked_let __FILE__ __LINE__ ctx monadic
-        (mk_tpattern_from_fvar var None)
+      [%add_loc] mk_closed_checked_let ctx monadic
+        (mk_tpat_from_fvar None var)
         (mk_opt_mplace_texpr scrutinee_mplace scrutinee)
         branch
   | TBuiltin (TArray | TSlice | TStr) ->
@@ -1391,16 +1140,12 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
 
   (* Make the let-binding *)
   let monadic = false in
-  let var = mk_tpattern_from_fvar var mplace in
-  mk_closed_checked_let __FILE__ __LINE__ ctx monadic var v next_e
+  let var = mk_tpat_from_fvar mplace var in
+  [%add_loc] mk_closed_checked_let ctx monadic var v next_e
 
 and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
-    (ectx : C.eval_ctx)
-    (loop_sid_maps :
-      (V.tvalue S.symbolic_value_id_map
-      * V.symbolic_value_id S.symbolic_value_id_map)
-      option) (fwd_e : S.expr) (back_e : S.expr S.region_group_id_map)
-    (ctx : bs_ctx) : texpr =
+    (_ectx : C.eval_ctx) (fwd_e : S.expr)
+    (back_e : S.expr S.region_group_id_map) (ctx : bs_ctx) : texpr =
   (* Register the consumed mutable borrows to compute default values *)
   let ctx =
     match return_value with
@@ -1482,513 +1227,346 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
      Update the current state with the additional state received by the backward
      function, if needs be, and lookup the proper expression.
   *)
-  let translate_end ctx =
-    (* Compute the output of the forward function *)
-    let fwd_effect_info = ctx.sg.fun_ty.fwd_info.effect_info in
-    let ctx, pure_fwd_var = fresh_var None ctx.sg.fun_ty.fwd_output ctx in
-    let fwd_e = translate_one_end ctx None in
 
-    (* If we reached a loop: if we are *inside* a loop, we need to ignore the
+  (* Compute the output of the forward function *)
+  let fwd_effect_info = ctx.sg.fun_ty.fwd_info.effect_info in
+  let ctx, pure_fwd_var = fresh_var None ctx.sg.fun_ty.fwd_output ctx in
+  let fwd_e = translate_one_end ctx None in
+
+  (* If we reached a loop: if we are *inside* a loop, we need to ignore the
        backward functions which are not associated to region abstractions.
     *)
-    let keep_rg_ids =
-      match ctx.loop_id with
-      | None -> None
-      | Some loop_id ->
-          if ctx.inside_loop then
-            let loop_info = LoopId.Map.find loop_id ctx.loops in
-            Some
-              (RegionGroupId.Set.of_list
-                 (RegionGroupId.Map.keys loop_info.back_outputs))
-          else None
-    in
-    let keep_rg_id =
-      match keep_rg_ids with
-      | None -> fun _ -> true
-      | Some ids -> fun id -> RegionGroupId.Set.mem id ids
-    in
+  let back_el =
+    List.map
+      (fun ((gid, _) : RegionGroupId.id * back_sg_info) ->
+        Some (translate_one_end ctx (Some gid)))
+      (RegionGroupId.Map.bindings ctx.sg.fun_ty.back_sg)
+  in
 
-    let back_el =
-      List.map
-        (fun ((gid, _) : RegionGroupId.id * back_sg_info) ->
-          if keep_rg_id gid then Some (translate_one_end ctx (Some gid))
-          else None)
-        (RegionGroupId.Map.bindings ctx.sg.fun_ty.back_sg)
-    in
+  (* Compute whether the backward expressions should be evaluated straight
+     away or not (i.e., if we should bind them with monadic let-bindings
+     or not). We evaluate them straight away if they can fail and have no
+     inputs. *)
+  let evaluate_backs =
+    List.map
+      (fun (sg : back_sg_info) ->
+        if !Config.simplify_merged_fwd_backs then
+          sg.inputs = [] && sg.effect_info.can_fail
+        else false)
+      (RegionGroupId.Map.values ctx.sg.fun_ty.back_sg)
+  in
 
-    (* Compute whether the backward expressions should be evaluated straight
-       away or not (i.e., if we should bind them with monadic let-bindings
-       or not). We evaluate them straight away if they can fail and have no
-       inputs. *)
-    let evaluate_backs =
-      List.map
-        (fun ((rg_id, sg) : RegionGroupId.id * back_sg_info) ->
-          if keep_rg_id rg_id then
-            Some
-              (if !Config.simplify_merged_fwd_backs then
-                 sg.inputs = [] && sg.effect_info.can_fail
-               else false)
-          else None)
-        (RegionGroupId.Map.bindings ctx.sg.fun_ty.back_sg)
-    in
-
-    (* Introduce variables for the backward functions.
+  (* Introduce variables for the backward functions.
        We lookup the LLBC definition in an attempt to derive pretty names
        for those functions. *)
-    let _, back_vars = fresh_back_vars_for_current_fun ctx keep_rg_ids in
+  let _, back_vars = fresh_back_vars_for_current_fun ctx in
 
-    (* Create the return expressions *)
-    let vars =
-      let back_vars = List.filter_map (fun x -> x) back_vars in
-      if ctx.sg.fun_ty.fwd_info.ignore_output then back_vars
-      else pure_fwd_var :: back_vars
-    in
-    let vars = List.map mk_texpr_from_fvar vars in
-    let ret = mk_simpl_tuple_texpr ctx.span vars in
-    let ret = mk_result_ok_texpr ctx.span ret in
+  (* Create the return expressions *)
+  let vars =
+    let back_vars = List.filter_map (fun x -> x) back_vars in
+    if ctx.sg.fun_ty.fwd_info.ignore_output then back_vars
+    else pure_fwd_var :: back_vars
+  in
+  let vars = List.map mk_texpr_from_fvar vars in
+  let ret = mk_simpl_tuple_texpr ctx.span vars in
+  let ret = mk_result_ok_texpr ctx.span ret in
 
-    (* Introduce all the let-bindings *)
+  (* Introduce all the let-bindings *)
 
-    (* Combine:
+  (* Combine:
        - the backward variables
        - whether we should evaluate the expression for the backward function
          (i.e., should we use a monadic let-binding or not - we do if the
          backward functions don't have inputs and can fail)
        - the expressions for the backward functions
     *)
-    let back_vars_els =
-      List.filter_map
-        (fun (v, (eval, el)) ->
-          match v with
-          | None -> None
-          | Some v -> Some (v, Option.get eval, Option.get el))
-        (List.combine back_vars (List.combine evaluate_backs back_el))
-    in
-    let e =
-      List.fold_right
-        (fun (var, evaluate, back_e) e ->
-          mk_closed_checked_let __FILE__ __LINE__ ctx evaluate
-            (mk_tpattern_from_fvar var None)
-            back_e e)
-        back_vars_els ret
-    in
-
-    (* Bind the expression for the forward output *)
-    let pat = mk_tpattern_from_fvar pure_fwd_var None in
-    mk_closed_checked_let __FILE__ __LINE__ ctx fwd_effect_info.can_fail pat
-      fwd_e e
+  let back_vars_els =
+    List.filter_map
+      (fun (v, (eval, el)) ->
+        match v with
+        | None -> None
+        | Some v -> Some (v, eval, Option.get el))
+      (List.combine back_vars (List.combine evaluate_backs back_el))
+  in
+  let e =
+    List.fold_right
+      (fun (var, evaluate, back_e) e ->
+        [%add_loc] mk_closed_checked_let ctx evaluate
+          (mk_tpat_from_fvar None var)
+          back_e e)
+      back_vars_els ret
   in
 
-  (* If we are (re-)entering a loop, we need to introduce a call to the
-     forward translation of the loop. *)
-  match loop_sid_maps with
-  | None ->
-      (* "Regular" case: we reached a return *)
-      translate_end ctx
-  | Some (loop_input_values_map, refreshed_sids) ->
-      (* Loop *)
-      let loop_id = Option.get ctx.loop_id in
+  (* Bind the expression for the forward output *)
+  let pat = mk_tpat_from_fvar None pure_fwd_var in
+  [%add_loc] mk_closed_checked_let ctx fwd_effect_info.can_fail pat fwd_e e
 
-      (* Lookup the loop information *)
-      let loop_info = LoopId.Map.find loop_id ctx.loops in
-
-      [%ltrace
-        "- loop_input_values_map:\n"
-        ^ V.SymbolicValueId.Map.show (tvalue_to_string ctx)
-            loop_input_values_map
-        ^ "\n- loop_info.input_svl:\n"
-        ^ Print.list_to_string
-            (symbolic_value_to_string ctx)
-            loop_info.input_svl];
-
-      (* Translate the input values *)
-      let loop_input_values =
-        List.map
-          (fun (sv : V.symbolic_value) ->
-            [%ltrace
-              "looking up input_svl: " ^ V.SymbolicValueId.to_string sv.V.sv_id];
-            V.SymbolicValueId.Map.find sv.V.sv_id loop_input_values_map)
-          loop_info.input_svl
-      in
-      [%ltrace
-        "loop_input_values: "
-        ^ String.concat "," (List.map (tvalue_to_string ctx) loop_input_values)];
-      let args = List.map (tvalue_to_texpr ctx ectx) loop_input_values in
-
-      (* Lookup the effect info for the loop function *)
-      let fid = T.FRegular ctx.fun_decl.def_id in
-      let effect_info = get_fun_effect_info ctx (FunId fid) None ctx.bid in
-
-      (* Introduce a fresh output value for the forward function *)
-      let ctx, fwd_output, output_pat =
-        if ctx.sg.fun_ty.fwd_info.ignore_output then
-          (* Note that we still need the forward output (which is unit),
-             because even though the loop function will ignore the forward output,
-             the forward expression will still compute an output (which
-             will have type unit - otherwise we can't ignore it). *)
-          (ctx, mk_unit_rvalue, [])
-        else
-          let ctx, output_var = fresh_var None ctx.sg.fun_ty.fwd_output ctx in
-          ( ctx,
-            mk_texpr_from_fvar output_var,
-            [ mk_tpattern_from_fvar output_var None ] )
-      in
-
-      (* Introduce fresh variables for the backward functions of the loop.
-
-         For now, the backward functions of the loop are the same as the
-         backward functions of the outer function.
-      *)
-      let ctx, back_funs_map, back_funs =
-        (* We need to filter the region groups which are not linked to region
-           abstractions appearing in the loop, so as not to introduce unnecessary
-           backward functions. *)
-        let keep_rg_ids =
-          RegionGroupId.Set.of_list
-            (RegionGroupId.Map.keys loop_info.back_outputs)
-        in
-        let ctx, back_vars =
-          fresh_back_vars_for_current_fun ctx (Some keep_rg_ids)
-        in
-        let back_funs =
-          List.filter_map
-            (fun v ->
-              match v with
-              | None -> None
-              | Some v -> Some (mk_tpattern_from_fvar v None))
-            back_vars
-        in
-        let gids = RegionGroupId.Map.keys ctx.sg.fun_ty.back_sg in
-        let back_funs_map =
-          RegionGroupId.Map.of_list
-            (List.combine gids
-               (List.map (Option.map mk_texpr_from_fvar) back_vars))
-        in
-        (ctx, Some back_funs_map, back_funs)
-      in
-
-      (* Introduce patterns *)
-      let args, ctx, out_pats =
-        (* Add the returned backward functions (they might be empty) *)
-        let output_pat = mk_simpl_tuple_pattern (output_pat @ back_funs) in
-        (List.concat [ args ], ctx, [ output_pat ])
-      in
-
-      (* Update the loop information in the context *)
-      let loop_info =
-        {
-          loop_info with
-          forward_inputs = Some args;
-          forward_output_no_state_no_result = Some fwd_output;
-          back_funs = back_funs_map;
-        }
-      in
-      let ctx =
-        { ctx with loops = LoopId.Map.add loop_id loop_info ctx.loops }
-      in
-
-      (* Introduce the refreshed input symbolic values.
-
-         TODO: remove. We used to need them, but we don't anymore, though we
-         have to make sure they are in the context.
-      *)
-      let ctx, _ =
-        List.fold_left_map
-          (fun ctx (sid, nid) ->
-            let sv_ty =
-              (SymbolicValueId.Map.find sid loop_input_values_map).ty
-            in
-            let sv : V.symbolic_value = { sv_ty; sv_id = sid } in
-            let nsv : V.symbolic_value = { sv_ty; sv_id = nid } in
-            let ctx, nsv = fresh_var_for_symbolic_value nsv ctx in
-            let sv = symbolic_value_to_texpr ctx sv in
-            (ctx, (PureUtils.mk_tpattern_from_fvar nsv None, sv)))
-          ctx
-          (SymbolicValueId.Map.bindings refreshed_sids)
-      in
-
-      (* Translate the end of the function *)
-      let next_e = translate_end ctx in
-
-      (* Introduce the call to the loop forward function in the generated AST *)
-      let out_pat = mk_simpl_tuple_pattern out_pats in
-
-      let loop_call =
-        let fun_id = Fun (FromLlbc (FunId fid, Some loop_id)) in
-        let func = { id = FunOrOp fun_id; generics = loop_info.generics } in
-        let input_tys = (List.map (fun (x : texpr) -> x.ty)) args in
-        let ret_ty =
-          if effect_info.can_fail then mk_result_ty out_pat.ty else out_pat.ty
-        in
-        let func_ty = mk_arrows input_tys ret_ty in
-        let func = { e = Qualif func; ty = func_ty } in
-        let call = mk_apps ctx.span func args in
-        call
-      in
-
-      (* Create the let expression with the loop call *)
-      mk_closed_checked_let __FILE__ __LINE__ ctx effect_info.can_fail out_pat
-        loop_call next_e
-
-and translate_loop (loop : S.loop) (ctx : bs_ctx) : texpr =
+and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
+  let ctx = ctx0 in
   let loop_id = V.LoopId.Map.find loop.loop_id ctx.loop_ids_map in
 
-  (* Translate the loop inputs - some inputs are symbolic values already
-     in the context, some inputs are introduced by the loop fixed point:
-     we need to introduce fresh variables for those. *)
-  (* First introduce fresh variables for the new inputs *)
-  let ctx =
-    (* We have to filter the list of symbolic values, to remove the not fresh ones *)
-    let svl =
-      List.filter
-        (fun (sv : V.symbolic_value) ->
-          V.SymbolicValueId.Set.mem sv.sv_id loop.fresh_svalues)
-        loop.input_svalues
+  (* Some helpers *)
+  let translate_input_abs (absl : V.abs_id list)
+      (abs_to_value : V.abs V.AbsId.Map.t) : texpr list =
+    let input_abs =
+      List.map (fun abs_id -> V.AbsId.Map.find abs_id abs_to_value) absl
     in
-    [%ltrace
-      "- input_svalues: "
-      ^ (Print.list_to_string (symbolic_value_to_string ctx)) loop.input_svalues
-      ^ "\n- filtered svl: "
-      ^ (Print.list_to_string (symbolic_value_to_string ctx)) svl
-      ^ "\n- rg_to_abs:\n"
-      ^ T.RegionGroupId.Map.show
-          (Print.list_to_string (pure_ty_to_string ctx))
-          loop.rg_to_given_back_tys];
-    let ctx, _ = fresh_vars_for_symbolic_values svl ctx in
-    ctx
+    List.filter_map (translate_abs_to_cont ctx loop.ctx) input_abs
   in
-
-  (* Sanity check: all the non-fresh symbolic values are in the context *)
-  [%sanity_check] ctx.span
-    (List.for_all
-       (fun (sv : V.symbolic_value) ->
-         V.SymbolicValueId.Map.mem sv.sv_id ctx.sv_to_var)
-       loop.input_svalues);
-
-  (* Translate the loop inputs *)
-  let inputs =
-    List.map
-      (fun (sv : V.symbolic_value) ->
-        V.SymbolicValueId.Map.find sv.V.sv_id ctx.sv_to_var)
-      loop.input_svalues
-  in
-
-  (* Compute the backward outputs *)
-  let rg_to_given_back_tys = loop.rg_to_given_back_tys in
-
-  (* The output type of the loop function *)
-  let fwd_effect_info =
-    { ctx.sg.fun_ty.fwd_info.effect_info with is_rec = true }
-  in
-  let back_effect_infos, output_ty =
-    (* The loop backward functions consume the same additional inputs as the parent
-       function, but have custom outputs *)
-    [%ltrace
-      let back_sgs = RegionGroupId.Map.bindings ctx.sg.fun_ty.back_sg in
-      "- back_sgs: "
-      ^ (Print.list_to_string
-           (Print.pair_to_string RegionGroupId.to_string show_back_sg_info))
-          back_sgs
-      ^ "\n- given_back_tys: "
-      ^ (RegionGroupId.Map.to_string None
-           (Print.list_to_string (pure_ty_to_string ctx)))
-          rg_to_given_back_tys];
-    let back_info_tys =
+  let translate_input_values (vl : V.symbolic_value list)
+      (symb_to_value : V.tvalue V.SymbolicValueId.Map.t) : texpr list =
+    let input_values =
       List.map
-        (fun ((rg_id, given_back) : RegionGroupId.id * ty list) ->
-          (* Lookup the effect information about the parent function region group
-             associated to this loop region abstraction *)
-          let back_sg = RegionGroupId.Map.find rg_id ctx.sg.fun_ty.back_sg in
-          (* Remark: the effect info of the backward function for the loop
-             is almost the same as for the backward function of the parent function.
-             Quite importantly, the fact that the function is stateful and/or can fail
-             mostly depends on whether it has inputs or not, and the backward functions
-             for the loops have the same inputs as the backward functions for the parent
-             function.
-          *)
-          let effect_info = back_sg.effect_info in
-          (* Compute the input/output types *)
-          let inputs = List.map snd back_sg.inputs in
-          let outputs = given_back in
-          (* Filter if necessary *)
-          let ty =
-            if !Config.simplify_merged_fwd_backs && inputs = [] && outputs = []
-            then None
-            else
-              let output = mk_simpl_tuple_ty outputs in
-              let output =
-                mk_back_output_ty_from_effect_info effect_info inputs output
-              in
-              let ty = mk_arrows inputs output in
-              Some ty
-          in
-          ((rg_id, effect_info), ty))
-        (RegionGroupId.Map.bindings rg_to_given_back_tys)
+        (fun (sv : V.symbolic_value) ->
+          V.SymbolicValueId.Map.find sv.sv_id symb_to_value)
+        vl
     in
-    let back_info = List.map fst back_info_tys in
-    let back_info = RegionGroupId.Map.of_list back_info in
-    let back_tys = List.filter_map snd back_info_tys in
-    let output =
-      let output =
-        if ctx.sg.fun_ty.fwd_info.ignore_output then back_tys
-        else ctx.sg.fun_ty.fwd_output :: back_tys
+    List.map (tvalue_to_texpr ctx loop.ctx) input_values
+  in
+  (* Introduce free variables for the inputs *)
+  let bind_inputs (ctx : bs_ctx) (absl : V.abs list)
+      (values : V.symbolic_value list) : bs_ctx * tpat list * tpat list =
+    let ctx, absl =
+      (* Compute the type of the break abstractions *)
+      let abs_tys = List.map (abs_to_ty ctx) absl in
+      let abs_tys, ignored =
+        List.partition_map
+          (fun (abs, ty) ->
+            match ty with
+            | Some ty -> Left (abs.V.abs_id, ty)
+            | None -> Right abs.abs_id)
+          (List.combine absl abs_tys)
       in
-      let output = mk_simpl_tuple_ty output in
-      let effect_info = ctx.sg.fun_ty.fwd_info.effect_info in
-      if effect_info.can_fail then mk_result_ty output else output
+      (* Introduce free variables for the abs *)
+      let ctx, fvars =
+        List.fold_left_map
+          (fun ctx (aid, ty) ->
+            let ctx, fvar = fresh_var (Some "back") ty ctx in
+            (ctx, (aid, fvar)))
+          ctx abs_tys
+      in
+      (* Register the mapping from abs to free variable *)
+      let ctx =
+        let fvars =
+          List.map
+            (fun (aid, fv) ->
+              (aid, { fvar = mk_texpr_from_fvar fv; can_fail = false }))
+            fvars
+        in
+        {
+          ctx with
+          abs_id_to_info = V.AbsId.Map.add_list fvars ctx.abs_id_to_info;
+          ignored_abs_ids = V.AbsId.Set.add_list ignored ctx.ignored_abs_ids;
+        }
+      in
+      (* *)
+      (ctx, List.map snd fvars)
     in
-    (back_info, output)
+    let ctx, values = fresh_vars_for_symbolic_values values ctx in
+    let mk_pats = List.map (mk_tpat_from_fvar None) in
+    (ctx, mk_pats absl, mk_pats values)
   in
 
-  (* Add the loop information in the context *)
-  let ctx =
-    [%sanity_check] ctx.span (not (LoopId.Map.mem loop_id ctx.loops));
+  (* Translate the loop input abstractions *)
+  let input_abs =
+    translate_input_abs
+      (List.map (fun a -> a.V.abs_id) loop.input_abs)
+      loop.input_abs_to_abs
+  in
 
-    (* Note that we will retrieve the input values later in the [ForwardEnd]
-       (and will introduce the outputs at that moment, together with the actual
-       call to the loop forward function) *)
-    let generics =
-      let { types; const_generics; trait_clauses } = ctx.sg.generics in
-      let types =
-        List.map (fun (ty : T.type_param) -> TVar (Free ty.T.index)) types
-      in
-      let const_generics =
-        List.map
-          (fun (cg : T.const_generic_param) -> T.CgVar (Free cg.T.index))
-          const_generics
-      in
-      let trait_refs =
-        List.map
-          (fun (c : trait_clause) ->
-            let trait_decl_ref =
-              { trait_decl_id = c.trait_id; decl_generics = c.generics }
-            in
-            { trait_id = Clause (Free c.clause_id); trait_decl_ref })
-          trait_clauses
-      in
-      { types; const_generics; trait_refs }
+  (* Translate the loop input values *)
+  let input_values =
+    translate_input_values loop.input_svalues loop.input_value_to_value
+  in
+  let inputs = input_abs @ input_values in
+  [%ldebug
+    "- loop input abstractions:\n "
+    ^ String.concat "\n\n"
+        (List.map (abs_to_string ctx)
+           (V.AbsId.Map.values loop.input_abs_to_abs))
+    ^ "\n\n- loop input values:\n"
+    ^ String.concat "\n"
+        (List.map (tvalue_to_string ctx)
+           (V.SymbolicValueId.Map.values loop.input_value_to_value))
+    ^ "\n\n- loop translated inputs:\n"
+    ^ String.concat "\n\n" (List.map (texpr_to_string ctx) inputs)];
+
+  (* Introduce the binders for the loop outputs *)
+  let ctx, break_abs, break_values =
+    bind_inputs ctx loop.break_abs loop.break_svalues
+  in
+  let outputs = break_values @ break_abs in
+  let output = mk_simpl_tuple_pat outputs in
+
+  [%ldebug
+    "- loop output values:\n"
+    ^ String.concat "\n"
+        (List.map (symbolic_value_to_string ctx) loop.break_svalues)
+    ^ "\n\n- loop output abstractions:\n"
+    ^ String.concat "\n\n" (List.map (abs_to_string ctx) loop.break_abs)
+    ^ "\n\n- loop translated outputs:\n"
+    ^ String.concat "\n" (List.map (tpat_to_string ctx) outputs)];
+
+  (* Translate the body *)
+  let loop_body =
+    (* Introduce free variables for the inputs *)
+    let ctx, input_conts, input_values =
+      bind_inputs ctx0 loop.input_abs loop.input_svalues
     in
 
-    (* Update the helpers to translate the fail and return expressions *)
+    (* Update the [mk_panic] and [mk_result] functions *)
+    let continue_ty = List.map (fun (e : texpr) -> e.ty) inputs in
+    let continue_ty = mk_simpl_tuple_ty continue_ty in
+    let break_ty = output.ty in
     let mk_panic =
-      (* Note that we reuse the effect information from the parent function *)
-      let effect_info = ctx_get_effect_info ctx in
-      let back_tys =
-        (* We need to filter the region abstractions which are not used by the
-         loop - TODO: update this, it will become useless once we allow non
-         terminal loops.
-      *)
-        let fun_ty = ctx.sg.fun_ty in
-        let fun_ty =
-          {
-            fun_ty with
-            back_sg =
-              RegionGroupId.Map.filter
-                (fun rg_id _ ->
-                  RegionGroupId.Map.mem rg_id rg_to_given_back_tys)
-                fun_ty.back_sg;
-          }
-        in
-        compute_back_tys fun_ty None
-      in
-      let back_tys = List.filter_map (fun x -> x) back_tys in
-      let tys =
-        if ctx.sg.fun_ty.fwd_info.ignore_output then back_tys
-        else ctx.sg.fun_ty.fwd_output :: back_tys
-      in
-      let output_ty = mk_simpl_tuple_ty tys in
-      if effect_info.stateful then
-        (* Create the [Fail] value *)
-        let ret_ty = output_ty in
-        let ret_v =
-          mk_result_fail_texpr_with_error_id ctx.span error_failure_id ret_ty
-        in
-        ret_v
-      else
-        mk_result_fail_texpr_with_error_id ctx.span error_failure_id output_ty
+      mk_loop_result_fail_texpr_with_error_id ctx.span continue_ty break_ty
+        error_failure_id
     in
-    let mk_return ctx v =
-      match v with
-      | None -> raise (Failure "Unexpected")
-      | Some output ->
-          let effect_info = ctx_get_effect_info ctx in
-          (* Wrap in a result if the function can fail *)
-          if effect_info.can_fail then mk_result_ok_texpr ctx.span output
-          else output
-    in
-
-    let loop_info =
+    let mk_continue ctx output = mk_continue_texpr ctx.span output break_ty in
+    let mk_break ctx output = mk_break_texpr ctx.span continue_ty output in
+    let ctx =
       {
-        loop_id;
-        input_vars = inputs;
-        input_svl = loop.input_svalues;
-        generics;
-        forward_inputs = None;
-        forward_output_no_state_no_result = None;
-        back_outputs = rg_to_given_back_tys;
-        back_funs = None;
-        fwd_effect_info;
-        back_effect_infos;
+        ctx with
+        mk_panic = Some mk_panic;
+        mk_return = None;
+        mk_continue = Some mk_continue;
+        mk_break = Some mk_break;
       }
     in
-    let loops = LoopId.Map.add loop_id loop_info ctx.loops in
-    { ctx with loops; mk_return = Some mk_return; mk_panic = Some mk_panic }
+
+    (* Translate the body *)
+    let body = translate_expr loop.loop_expr ctx in
+
+    (* Put everything together *)
+    let inputs = input_conts @ input_values in
+
+    (* We need to close the binders *)
+    let inputs, loop_body = close_binders ctx.span inputs body in
+    { inputs; loop_body }
   in
 
-  (* Update the context to translate the function end *)
-  let ctx_end = { ctx with loop_id = Some loop_id } in
-  let fun_end = translate_expr loop.end_expr ctx_end in
-
-  (* Update the context for the loop body *)
-  let ctx_loop = { ctx_end with inside_loop = true } in
-
-  (* Translate the loop body *)
-  let loop_body = translate_expr loop.loop_expr ctx_loop in
-
-  (* Create the loop node and return *)
-  let loop =
-    let loop =
-      close_loop loop.span
-        {
-          fun_end;
-          loop_id;
-          span = loop.span;
-          inputs = List.map (fun v -> mk_tpattern_from_fvar v None) inputs;
-          output_ty;
-          loop_body;
-        }
-    in
-    Loop loop
+  (* Make the loop expression *)
+  let loop_e : loop =
+    {
+      loop_id;
+      span = loop.span;
+      output_tys = List.map (fun (pat : tpat) -> pat.ty) outputs;
+      num_output_values = List.length break_values;
+      inputs = input_abs @ input_values;
+      num_input_conts = List.length input_abs;
+      loop_body;
+    }
   in
-  let ty = fun_end.ty in
-  { e = loop; ty }
+  [%sanity_check] loop.span
+    (List.length loop_e.loop_body.inputs = List.length loop_e.inputs);
+  let loop_ty = mk_result_ty output.ty in
+  let loop_e : texpr = { e = Loop loop_e; ty = loop_ty } in
 
-and translate_espan (span : S.espan) (e : S.expr) (ctx : bs_ctx) : texpr =
-  let next_e = translate_expr e ctx in
-  let span =
-    match span with
+  [%ltrace
+    "- loop expression:\n" ^ texpr_to_string ctx loop_e ^ "\n\n- num inputs: "
+    ^ string_of_int (List.length inputs)];
+
+  (* Translate the next expression *)
+  let next_e = translate_expr loop.next_expr ctx in
+
+  (* Create the let-binding *)
+  [%add_loc] mk_closed_checked_let ctx true output loop_e next_e
+
+and translate_continue_break (ctx : bs_ctx) ~(continue : bool)
+    (ectx : C.eval_ctx) (_loop_id : V.loop_id) (input_values : V.tvalue list)
+    (input_abs : V.abs list) : texpr =
+  [%ldebug
+    "- input_values:\n"
+    ^ String.concat "\n" (List.map (tvalue_to_string ctx) input_values)
+    ^ "\n- input_abs:\n"
+    ^ String.concat "\n\n" (List.map (abs_to_string ctx) input_abs)];
+  let conts = List.filter_map (translate_abs_to_cont ctx ectx) input_abs in
+  let values = List.map (tvalue_to_texpr ctx ectx) input_values in
+  [%ldebug
+    "- translated values:\n"
+    ^ String.concat "\n" (List.map (texpr_to_string ctx) values)
+    ^ "\n- translated abs:\n"
+    ^ String.concat "\n\n" (List.map (texpr_to_string ctx) conts)];
+  (* Note that the order between the values and the continuations is not the same
+     depending on whether we reach a break or a continue *)
+  let outputs, mk =
+    if continue then (conts @ values, ctx.mk_continue)
+    else (values @ conts, ctx.mk_break)
+  in
+  let output = mk_simpl_tuple_texpr ctx.span outputs in
+  Option.get mk ctx output
+
+and translate_substitute_abs_ids (ctx : bs_ctx) (aids : V.abs_id V.AbsId.Map.t)
+    (e : S.expr) : texpr =
+  (* We need to update the information we have in the various maps of the context *)
+  let { abs_id_to_info; ignored_abs_ids; _ } = ctx in
+  let update (aid : V.AbsId.id) : V.AbsId.id =
+    match V.AbsId.Map.find_opt aid aids with
+    | Some aid -> aid
+    | None -> aid
+  in
+
+  (* *)
+  let abs_id_to_info' =
+    V.AbsId.Map.of_list
+      ((List.map (fun (aid, x) -> (update aid, x)))
+         (V.AbsId.Map.bindings abs_id_to_info))
+  in
+  (* Check for collisions *)
+  [%sanity_check] ctx.span
+    (V.AbsId.Map.cardinal abs_id_to_info = V.AbsId.Map.cardinal abs_id_to_info');
+
+  (* *)
+  let ignored_abs_ids' = V.AbsId.Set.map update ignored_abs_ids in
+  (* Check for collisions *)
+  [%sanity_check] ctx.span
+    (V.AbsId.Set.cardinal ignored_abs_ids
+    = V.AbsId.Set.cardinal ignored_abs_ids');
+
+  (* Translate the next expression with the updated context *)
+  let ctx =
+    {
+      ctx with
+      abs_id_to_info = abs_id_to_info';
+      ignored_abs_ids = ignored_abs_ids';
+    }
+  in
+  translate_expr e ctx
+
+and translate_emeta (meta : S.emeta) (e : S.expr) (ctx : bs_ctx) : texpr =
+  let ctx, meta =
+    match meta with
     | S.Assignment (ectx, lp, rv, rp) ->
         let type_infos = ctx.type_ctx.type_infos in
         let lp = translate_mplace (Some ctx.span) type_infos lp in
         let rv = tvalue_to_texpr ctx ectx rv in
         let rp = translate_opt_mplace (Some ctx.span) type_infos rp in
-        Some (Assignment (lp, rv, rp))
+        (ctx, Some (Assignment (lp, rv, rp)))
     | S.Snapshot ectx ->
         let infos = eval_ctx_to_symbolic_assignments_info ctx ectx in
         let infos =
           List.map (fun (fv, s) -> (mk_texpr_from_fvar fv, s)) infos
         in
-        if infos <> [] then
-          (* If often happens that the next expression contains exactly the
-             same meta information *)
-          match next_e.e with
-          | Meta (SymbolicPlaces infos1, _) when infos1 = infos -> None
-          | _ -> Some (SymbolicPlaces infos)
-        else None
+        (* Filter the information to remove the redundant bits *)
+        let infos =
+          List.filter
+            (fun x -> not (MetaSymbPlaceSet.mem x ctx.meta_symb_places))
+            infos
+        in
+        let ctx =
+          {
+            ctx with
+            meta_symb_places =
+              MetaSymbPlaceSet.add_list infos ctx.meta_symb_places;
+          }
+        in
+        let infos = if infos <> [] then Some (SymbolicPlaces infos) else None in
+        (ctx, infos)
   in
-  match span with
-  | Some span ->
-      let e = Meta (span, next_e) in
+  let next_e = translate_expr e ctx in
+  match meta with
+  | Some meta ->
+      let e = Meta (meta, next_e) in
       let ty = next_e.ty in
       { e; ty }
   | None -> next_e

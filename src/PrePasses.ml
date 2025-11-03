@@ -11,29 +11,6 @@ open Errors
 
 let log = Logging.pre_passes_log
 
-(* Copy the statement list onto each branch of this switch. *)
-let append_to_switch (switch : switch) (new_stmts : statement list) : switch =
-  let append_to_block (b : block) (stmts : statement list) : block =
-    { b with statements = b.statements @ stmts }
-  in
-  match switch with
-  | If (op, st0, st1) ->
-      If (op, append_to_block st0 new_stmts, append_to_block st1 new_stmts)
-  | SwitchInt (op, int_ty, branches, otherwise) ->
-      let branches =
-        List.map (fun (svl, br) -> (svl, append_to_block br new_stmts)) branches
-      in
-      let otherwise = append_to_block otherwise new_stmts in
-      SwitchInt (op, int_ty, branches, otherwise)
-  | Match (op, branches, otherwise) ->
-      let branches =
-        List.map (fun (svl, br) -> (svl, append_to_block br new_stmts)) branches
-      in
-      let otherwise =
-        Option.map (fun b -> append_to_block b new_stmts) otherwise
-      in
-      Match (op, branches, otherwise)
-
 (** The Rust compiler generates a unique implementation of [Default] for arrays
     for every choice of length. For instance, if we write:
     {[
@@ -286,252 +263,208 @@ let update_array_default (crate : crate) : crate =
       in
       visitor#visit_crate None crate
 
-(** This pass slightly restructures the control-flow to remove the need to merge
-    branches during the symbolic execution in some quite common cases where
-    doing a merge is actually not necessary and leads to an ugly translation.
+(** Check that loops:
+    - do not contain early returns
+    - do not continue/break to outer loops
 
-    TODO: this is useless
+    We also attempt to update the loops so that they have the proper shape (for
+    instance, if a loop has returns but no breaks, we replace the returns with
+    breaks, and move the returns after the loop).
 
-    For instance, it performs the following transformation:
-    {[
-      if b {
-          var@0 := &mut *x;
-      }
-      else {
-          var@0 := move y;
-      }
-      return;
+    We do the following transformations:
 
-      ~~>
-
-      if b {
-          var@0 := &mut *x;
-          return;
-      }
-      else {
-          var@0 := move y;
-          return;
-      }
-    ]}
-
-    This way, the translated body doesn't have an intermediate assignment, for
-    the `if ... then ... else ...` expression (together with a backward
-    function).
-
-    More precisly, we move (and duplicate) a statement happening after a
-    branching inside the branches if:
-    - this statement ends with [return] or [panic]
-    - this statement is only made of a sequence of nops, assignments (with some
-      restrictions on the rvalue), fake reads, drops (usually, returns will be
-      followed by such statements) *)
-let remove_useless_cf_merges (crate : crate) (f : fun_decl) : fun_decl =
-  let f0 = f in
-  (* Return [true] if the statement can be moved inside the branches of a switch.
-   *
-   * [must_end_with_exit]: we need this boolean because the inner statements
-   * (inside the encountered sequences) don't need to end with [return] or [panic],
-   * but all the paths inside the whole statement have to.
-   *)
-  let rec can_be_moved_aux (must_end_with_exit : bool) (st : statement) : bool =
-    match st.kind with
-    | SetDiscriminant _
-    | CopyNonOverlapping _
-    | Assert _
-    | Call _
-    | Break _
-    | Continue _
-    | Switch _
-    | Loop _
-    | Error _ -> false
-    | Assign (_, rv) -> (
-        match rv with
-        | Use _ | RvRef _ -> not must_end_with_exit
-        | Aggregate (AggregatedAdt ({ id = TTuple; _ }, _, _), []) ->
-            not must_end_with_exit
-        | _ -> false)
-    | StorageDead _ | StorageLive _ | Deinit _ | Drop _ | Nop ->
-        not must_end_with_exit
-    | Abort _ | Return -> true
-  and can_be_moved_seq (stmts : statement list) : bool =
-    match stmts with
-    | [] -> true
-    | [ single ] -> can_be_moved_aux true single
-    | hd :: tl -> can_be_moved_aux false hd && can_be_moved_seq tl
-  in
-
-  (* The visitor *)
-  let obj =
-    object
-      inherit [_] map_statement as super
-
-      method! visit_block_suffix env stmts =
-        match stmts with
-        | ({ kind = Switch switch; _ } as st) :: tl when can_be_moved_seq tl ->
-            let kind = super#visit_Switch env (append_to_switch switch tl) in
-            [ { st with kind } ]
-        | _ -> super#visit_block_suffix env stmts
-    end
-  in
-
-  (* Map  *)
-  let body =
-    match f.body with
-    | Some body -> Some { body with body = obj#visit_block () body.body }
-    | None -> None
-  in
-  let f = { f with body } in
-  [%ldebug
-    "Before/after [remove_useless_cf_merges]:\n"
-    ^ Print.Crate.crate_fun_decl_to_string crate f0
-    ^ "\n\n"
-    ^ Print.Crate.crate_fun_decl_to_string crate f];
-  f
-
-(** This pass restructures the control-flow by inserting all the statements
-    which occur after loops *inside* the loops, thus removing the need to have
-    breaks (we later check that we removed all the breaks).
-
-    This is needed because of the way we perform the symbolic execution on the
-    loops for now.
-
-    Rem.: we check that there are no nested loops (all the breaks must break to
-    the first outer loop, and the statements we insert inside the loops mustn't
-    contain breaks themselves).
-
-    For instance, it performs the following transformation:
+    # Transformation 1:
     {[
       loop {
-        if b {
-          ...
-          continue 0;
+        if e {
+          return;
+        } else {
+          continue;
         }
-        else {
-          ...
-          break 0;
-        }
-      };
-      x := x + 1;
-      return;
+      }
 
-      ~~>
+        ~~>
 
       loop {
-        if b {
-          ...
-          continue 0;
-        }
-        else {
-          ...
-          x := x + 1;
-          return;
+        if e {
+          break;
+        } else {
+          continue;
         }
       };
+      return;
     ]}
 
-    We also insert the statements occurring after branchings (matches or if then
-    else) inside the branches. For instance:
+    # Transformation 2:
     {[
-      if b {
-        s0;
+      loop {
+        if e0 {
+          st0;
+          return;
+        } else if e1 {
+          break;
+        } else {
+          continue;
+        }
       }
-      else {
-        s1;
-      }
+      st1;
       return;
 
         ~~>
 
-      if b {
-        s0;
-        return;
+      loop {
+        if e0 {
+          st0;
+          break;
+        } else if e1 {
+          st1;
+          break;
+        } else {
+          continue;
+        }
       }
-      else {
-        s1;
-        return;
-      }
-    ]}
-
-    This is necessary because loops might appear inside branchings: if we don't
-    do this some paths inside the loop might not end with a
-    break/continue/return.Aeneas *)
-let remove_loop_breaks (crate : crate) (f : fun_decl) : fun_decl =
+      return;
+    ]} *)
+let update_loops (crate : crate) (f : fun_decl) : fun_decl =
   let f0 = f in
+  let span = f.item_meta.span in
 
-  (* Check that a statement doesn't contain loops, breaks or continues *)
-  let statement_has_no_loop_break_continue (st : statement) : bool =
-    let obj =
-      object
-        inherit [_] iter_statement
-        method! visit_Loop _ _ = raise Found
-        method! visit_Break _ _ = raise Found
-        method! visit_Continue _ _ = raise Found
-      end
-    in
-    try
-      obj#visit_statement () st;
-      true
-    with Found -> false
-  in
-
-  (* Replace a break statement with another statement (we check that the
-     break statement breaks exactly one level, and that there are no nested
-     loops.
-     TODO: call this on a loop directly to avoid tracking `entered_loop`
-  *)
-  let replace_breaks_with (st : statement) (new_stmts : statement list) :
-      statement =
-    let obj =
-      object (self : 'self)
-        inherit [_] map_statement as super
-
-        method! visit_block_suffix entered_loop stmts =
-          match stmts with
-          | ({ kind = Loop loop; _ } as st) :: tl ->
-              [%cassert] st.span (not entered_loop)
-                "Nested loops are not supported yet";
-              { st with kind = super#visit_Loop true loop }
-              :: self#visit_block_suffix entered_loop tl
-          | ({ kind = Break i; _ } as st) :: tl ->
-              [%cassert] st.span (i = 0)
-                "Breaks to outer loops are not supported yet";
-              new_stmts @ self#visit_block_suffix entered_loop tl
-          | _ -> super#visit_block_suffix entered_loop stmts
-      end
-    in
-    obj#visit_statement false st
-  in
-
-  let replace_visitor =
-    object
+  let visitor =
+    object (self)
       inherit [_] map_statement as super
 
-      method! visit_block_suffix env stmts =
-        match stmts with
-        | ({ kind = Loop _; _ } as st) :: tl ->
-            [%cassert] st.span
-              (List.for_all statement_has_no_loop_break_continue tl)
-              "Sequences of loops are not supported yet";
-            [ super#visit_statement env (replace_breaks_with st tl) ]
-        | ({ kind = Switch switch; _ } as st) :: tl ->
-            (* Push the remaining statements inside of the switch *)
-            let kind = Switch (append_to_switch switch tl) in
-            let st = { st with kind } in
-            [ super#visit_statement env st ]
-        | _ -> super#visit_block_suffix env stmts
+      (* [after]: the list of statements coming *after* this one in this block.
+
+         We return:
+         - the list of statements resulting from updating the current statement
+         - the list of statements to put after and that are yet to be updated
+           (the reason is that we might have moved some of those statements
+           inside the current statement).
+      *)
+      method update_statement (depth : int) (st : statement)
+          (after : statement list) : statement list * statement list =
+        match st.kind with
+        | Loop loop -> (
+            try ([ { st with kind = super#visit_Loop (depth + 1) loop } ], after)
+            with Found ->
+              (* We found a return in the loop: attempt to replace it with a break.
+
+                 There are two cases:
+                 - either the loop does not contain any break, in which case we
+                   can simply replace the return with a break, and move the return
+                   after the loop (this is transformation 1 above)
+                 - or there is already a break in the loop: we can apply transformation
+                   2 if the statements after the loop end with a return.
+              *)
+              let block_has_no_breaks (b : block) : bool =
+                let visitor =
+                  object
+                    inherit [_] iter_statement
+                    method! visit_Break _ _ = raise Found
+                  end
+                in
+                try
+                  visitor#visit_block () b;
+                  true
+                with Found -> false
+              in
+              if block_has_no_breaks loop then (* Transformation 1 *)
+                let block_replace (b : block) : block =
+                  let visitor =
+                    object
+                      inherit [_] map_statement
+
+                      method! visit_Return _ =
+                        (* Replace the return with a break *)
+                        Break 0
+                    end
+                  in
+                  visitor#visit_block () b
+                in
+                let loop = block_replace loop in
+                let loop : statement = { st with kind = Loop loop } in
+                let loop = super#visit_statement depth loop in
+                let return : statement =
+                  {
+                    span = st.span;
+                    statement_id =
+                      StatementId.zero (* we'll refresh this later *);
+                    kind = Return;
+                    comments_before = [];
+                  }
+                in
+                ([ loop; return ], after)
+              else
+                (* Transformation 2 *)
+                (* Check if the statements after the loop end with a return *)
+                let rec decompose_after (after : statement list) :
+                    statement list * statement =
+                  match after with
+                  | [] ->
+                      [%craise] span
+                        "Early returns inside of loops are not supported yet"
+                  | st :: after -> (
+                      match st.kind with
+                      | Return -> ([], st)
+                      | _ ->
+                          let after, return = decompose_after after in
+                          (st :: after, return))
+                in
+                let after, return = decompose_after after in
+                let replace (st : statement) : statement list =
+                  match st.kind with
+                  | Return ->
+                      (* Replace the return with a break *)
+                      [ { st with kind = Break 0 } ]
+                  | Break i ->
+                      (* Move the statements [after] before the break *)
+                      [%cassert] span (i = 0)
+                        "Breaks to outer loops are not supported yet";
+                      after @ [ st ]
+                  | _ -> [ st ]
+                in
+                let loop = map_statement replace loop in
+                let loop : statement = { st with kind = Loop loop } in
+                let loop = super#visit_statement depth loop in
+                ([ loop; return ], []))
+        | _ -> ([ super#visit_statement depth st ], after)
+
+      method! visit_block depth (block : block) : block =
+        let rec update (stl : statement list) : statement list =
+          match stl with
+          | [] -> []
+          | st :: stl ->
+              let stl0, stl1 = self#update_statement depth st stl in
+              stl0 @ update stl1
+        in
+        { block with statements = update block.statements }
+
+      method! visit_Break depth i =
+        [%cassert] span (i = 0) "Breaks to outer loops are not supported yet";
+        super#visit_Break depth i
+
+      method! visit_Continue depth i =
+        [%cassert] span (i = 0) "Continue to outer loops are not supported yet";
+        super#visit_Continue depth i
+
+      method! visit_Return depth =
+        [%cassert] span (depth <= 1)
+          "Returns inside of nested loops are not supported yet";
+        (* If we are inside a loop we need to get rid of the return *)
+        if depth = 1 then raise Found else super#visit_Return depth
     end
   in
 
   (* Map  *)
   let body =
     match f.body with
-    | Some body ->
-        Some { body with body = replace_visitor#visit_block () body.body }
+    | Some body -> Some { body with body = visitor#visit_block 0 body.body }
     | None -> None
   in
 
-  let f = { f with body } in
+  let f : fun_decl = { f with body } in
   [%ldebug
-    "Before/after [remove_loop_breaks]:\n"
+    "Before/after [update_loops]:\n"
     ^ Print.Crate.crate_fun_decl_to_string crate f0
     ^ "\n\n"
     ^ Print.Crate.crate_fun_decl_to_string crate f];
@@ -571,39 +504,28 @@ let remove_shallow_borrows_storage_live_dead (crate : crate) (f : fun_decl) :
   let filter_in_body (body : block) : block =
     let filtered = ref LocalId.Set.empty in
 
-    let filter_visitor =
-      object
-        inherit [_] map_statement as super
-
-        method! visit_Assign env p rv =
+    let filter_shallow (st : statement) : statement list =
+      match st.kind with
+      | Assign (p, rv) -> (
           match (p.kind, rv) with
           | PlaceLocal var_id, RvRef (_, BShallow, _) ->
               (* Filter *)
               filtered := LocalId.Set.add var_id !filtered;
-              Nop
-          | _ ->
-              (* Don't filter *)
-              super#visit_Assign env p rv
-      end
+              []
+          | _ -> [ st ])
+      | _ -> [ st ]
     in
 
-    let storage_rem_visitor =
-      object
-        inherit [_] map_statement as super
-
-        method! visit_StorageLive env loc =
-          if LocalId.Set.mem loc !filtered then Nop
-          else super#visit_StorageLive env loc
-
-        method! visit_StorageDead env loc =
-          if LocalId.Set.mem loc !filtered then Nop
-          else super#visit_StorageDead env loc
-      end
+    let filter_storage (st : statement) : statement list =
+      match st.kind with
+      | StorageLive _ -> []
+      | StorageDead loc when LocalId.Set.mem loc !filtered -> []
+      | _ -> [ st ]
     in
 
     (* Filter the variables *)
-    let body = filter_visitor#visit_block () body in
-    let body = storage_rem_visitor#visit_block () body in
+    let body = map_statement filter_shallow body in
+    let body = map_statement filter_storage body in
 
     (* Check that the filtered variables have completely disappeared from the body *)
     let check_visitor =
@@ -746,7 +668,7 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
                  intermediate statements: the string initialization, then
                  the borrow, that we can finally move.
               *)
-              method! visit_Constant env cv =
+              method! visit_Constant env (cv : constant_expr) =
                 match (cv.kind, cv.ty) with
                 | ( CLiteral (VStr str),
                     TRef
@@ -1036,18 +958,24 @@ let apply_passes (crate : crate) : crate =
   (* Passes that apply to individual function bodies *)
   let function_passes =
     [
-      remove_loop_breaks;
-      remove_shallow_borrows_storage_live_dead;
-      decompose_str_borrows;
-      unify_drops;
-      decompose_global_accesses;
-      refresh_statement_ids;
+      ("update_loop", update_loops);
+      ( "remove_shallow_borrows_storage_live_dead",
+        remove_shallow_borrows_storage_live_dead );
+      ("decompose_str_borrows", decompose_str_borrows);
+      ("unify_drops", unify_drops);
+      ("decompose_global_accesses", decompose_global_accesses);
+      ("refresh_statement_ids", refresh_statement_ids);
     ]
   in
   (* Attempt to apply a pass: if it fails we replace the body by [None] *)
-  let apply_function_pass (pass : crate -> fun_decl -> fun_decl) (f : fun_decl)
-      =
-    try pass crate f
+  let apply_function_pass (pass_name : string)
+      (pass : crate -> fun_decl -> fun_decl) (f : fun_decl) =
+    try
+      let f = pass crate f in
+      [%ltrace
+        "After applying [" ^ pass_name ^ "]:\n"
+        ^ Print.Crate.crate_fun_decl_to_string crate f];
+      f
     with CFailure _ ->
       (* The error was already registered, we don't need to register it twice.
          However, we replace the body of the function, and save an error to
@@ -1060,10 +988,11 @@ let apply_passes (crate : crate) : crate =
   in
   let fun_decls =
     List.fold_left
-      (fun fl pass -> FunDeclId.Map.map (apply_function_pass pass) fl)
+      (fun fl (name, pass) ->
+        FunDeclId.Map.map (apply_function_pass name pass) fl)
       crate.fun_decls function_passes
   in
   let crate = { crate with fun_decls } in
   let crate = filter_type_aliases crate in
-  [%ldebug "After pre-passes:\n" ^ Print.Crate.crate_to_string crate ^ "\n"];
+  [%ltrace "After pre-passes:\n" ^ Print.Crate.crate_to_string crate ^ "\n"];
   crate

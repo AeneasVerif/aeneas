@@ -12,7 +12,6 @@ package «tests» {}
 @[default_target] lean_lib AsMut
 @[default_target] lean_lib Avl
 @[default_target] lean_lib BaseTutorial
-@[default_target] lean_lib Betree
 @[default_target] lean_lib Bitwise
 @[default_target] lean_lib BlanketImpl
 @[default_target] lean_lib Builtin
@@ -23,12 +22,14 @@ package «tests» {}
 @[default_target] lean_lib Deref
 @[default_target] lean_lib DynamicSize
 @[default_target] lean_lib Hashmap
-@[default_target] lean_lib InfiniteLoop
 @[default_target] lean_lib Issue194RecursiveStructProjector
 @[default_target] lean_lib Issue270LoopList
 @[default_target] lean_lib Issue440TypeError
 @[default_target] lean_lib Loops
+@[default_target] lean_lib LoopsAdts
 @[default_target] lean_lib LoopsIssues
+@[default_target] lean_lib LoopsNested
+@[default_target] lean_lib LoopsSequences
 @[default_target] lean_lib MiniTree
 @[default_target] lean_lib NoNestedBorrows
 @[default_target] lean_lib Options

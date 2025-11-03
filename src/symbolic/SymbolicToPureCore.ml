@@ -1,5 +1,6 @@
 open LlbcAstUtils
 open Pure
+open PureUtils
 open FunsAnalysis
 open TypesAnalysis
 open PrintSymbolicAst
@@ -48,33 +49,6 @@ type fun_ctx = {
 }
 [@@deriving show]
 
-(** Whenever we translate a function call or an ended abstraction, we store the
-    related information (this is useful when translating ended children
-    abstractions). *)
-type call_info = {
-  forward : S.call;
-  forward_inputs : texpr list;
-      (** Remember the list of inputs given to the forward function.
-
-          Those inputs include the fuel and the state, if pertinent. *)
-  back_funs : texpr option RegionGroupId.Map.t option;
-      (** If we do not split between the forward/backward functions: the
-          variables we introduced for the backward functions.
-
-          Example:
-          {[
-            let x, back = Vec.index_mut n v in
-                   ^^^^
-                   here
-            ...
-          ]}
-
-          The expression might be [None] in case the backward function has to be
-          filtered (because it does nothing - the backward functions for shared
-          borrows for instance). *)
-}
-[@@deriving show]
-
 (** Contains information about a loop we entered.
 
     Note that a path in a translated function body can have at most one call to
@@ -117,12 +91,44 @@ type loop_info = {
       (** The map from region group ids to the types of the values given back by
           the corresponding loop abstractions. This map is partial. *)
   back_funs : texpr option RegionGroupId.Map.t option;
-      (** Same as {!call_info.back_funs}. Initialized with [None], gets updated
-          to [Some] only if we merge the fwd/back functions. *)
+      (** If we do not split between the forward/backward functions: the
+          variables we introduced for the backward functions.
+
+          Example:
+          {[
+            let x, back = Vec.index_mut n v in
+                   ^^^^
+                   here
+            ...
+          ]}
+
+          The expression might be [None] in case the backward function has to be
+          filtered (because it does nothing - the backward functions for shared
+          borrows for instance).
+
+          Initialized with [None], gets updated to [Some] only if we merge the
+          fwd/back functions. *)
   fwd_effect_info : fun_effect_info;
   back_effect_infos : fun_effect_info RegionGroupId.Map.t;
 }
 [@@deriving show]
+
+type back_fun_info = { fvar : texpr; can_fail : bool } [@@deriving show]
+
+(** Some meta-information. See [bs_ctx.meta_symb_places] *)
+type meta_symb_place = texpr * string [@@deriving show, ord]
+
+module MetaSymbPlaceOrd :
+  Collections.OrderedType with type t = meta_symb_place = struct
+  type t = meta_symb_place
+
+  let compare = compare_meta_symb_place
+  let to_string = show_meta_symb_place
+  let pp_t = pp_meta_symb_place
+  let show_t = show_meta_symb_place
+end
+
+module MetaSymbPlaceSet = Collections.MakeSet (MetaSymbPlaceOrd)
 
 (** Body synthesis context *)
 type bs_ctx = {
@@ -136,11 +142,9 @@ type bs_ctx = {
   bid : RegionGroupId.id option;
       (** TODO: rename
 
-          The id of the group region we are currently translating. If we split
-          the forward/backward functions, we set this id at the very beginning
-          of the translation. If we don't split, we set it to `None`, then
-          update it when we enter an expression which is specific to a backward
-          function. *)
+          The id of the group region we are currently translating. We initially
+          set it to `None`, then update it when we enter an expression which is
+          specific to a backward function. *)
   sg : decomposed_fun_sig;
       (** Information about the function signature - useful in particular to
           translate [Panic] *)
@@ -193,30 +197,9 @@ type bs_ctx = {
 
           The option is [None] before we detect the ended input abstraction, and
           [Some] afterwards. *)
-  calls : call_info V.FunCallId.Map.t;
+  calls : S.call V.FunCallId.Map.t;
       (** The function calls we encountered so far *)
-  abstractions : (V.abs * texpr list) V.AbstractionId.Map.t;
-      (** The ended abstractions we encountered so far, with their additional
-          input arguments. We store it here and not in {!call_info} because we
-          need a map from abstraction id to abstraction (and not from call id +
-          region group id to abstraction). *)
   loop_ids_map : LoopId.id V.LoopId.Map.t;  (** Ids to use for the loops *)
-  loops : loop_info LoopId.Map.t;
-      (** The loops we encountered so far.
-
-          We are using a map to be general - in practice we will fail if we
-          encounter more than one loop on a single path. *)
-  loop_id : LoopId.id option;
-      (** [Some] if we reached a loop (we are synthesizing a function, and
-          reached a loop, or are synthesizing the loop body itself) *)
-  inside_loop : bool;
-      (** In case {!loop_id} is [Some]:
-          - if [true]: we are synthesizing a loop body
-          - if [false]: we reached a loop and are synthesizing the end of the
-            function (after the loop body)
-
-          Note that when a function contains a loop, we group the function
-          symbolic AST and the loop symbolic AST in a single function. *)
   mk_return : (bs_ctx -> texpr option -> texpr) option;
       (** Small helper: translate a [return] expression, given a value to
           "return". The translation of [return] depends on the context, and in
@@ -232,6 +215,8 @@ type bs_ctx = {
       (** Small helper: translate a [fail] expression.
 
           We initialize this at [None]. *)
+  mk_continue : (bs_ctx -> texpr -> texpr) option;
+  mk_break : (bs_ctx -> texpr -> texpr) option;
   mut_borrow_to_consumed : texpr V.BorrowId.Map.t;
       (** A map from mutable borrows consumed by region abstractions to consumed
           values.
@@ -294,6 +279,19 @@ type bs_ctx = {
           when deconstructing an ended abstraction, to the default value that we
           can use when introducing the otherwise branch of the deconstructing
           match (see [mut_borrow_to_consumed]). *)
+  abs_id_to_info : back_fun_info V.AbsId.Map.t;
+      (** This maps the abstraction ids to the corresponding variables we
+          introduced in the translation, together with additional information.
+      *)
+  ignored_abs_ids : V.AbsId.Set.t;
+      (** For sanity purposes, we keep track of the region abstractions for
+          which we did not introduce any variable in the translation: when we
+          fail to lookup a region abstraction in [abs_id_to_fvar] we check that
+          it is registered in this set. *)
+  meta_symb_places : MetaSymbPlaceSet.t;
+      (** Keep track of the [SymbolicPlaces] meta-information that we already
+          inserted, to prevent duplication (there tends to be a *lot* of
+          meta-information in the generated expressions. *)
 }
 [@@deriving show]
 
@@ -331,6 +329,23 @@ let tvalue_to_string (ctx : bs_ctx) (v : V.tvalue) : string =
   let env = bs_ctx_to_fmt_env ctx in
   Print.Values.tvalue_to_string ~span:(Some ctx.span) env v
 
+let tavalue_to_string (ctx : bs_ctx) ?(with_ended = false) (v : V.tavalue) :
+    string =
+  let env = bs_ctx_to_fmt_env ctx in
+  Print.Values.tavalue_to_string ~span:(Some ctx.span) ~with_ended env v
+
+let tepat_to_string (ctx : bs_ctx) (v : V.tepat) : string =
+  let env = bs_ctx_to_fmt_env ctx in
+  snd
+    (Print.Values.tepat_to_string ~span:(Some ctx.span) env
+       Print.Values.empty_evalue_env "" "  " v)
+
+let tevalue_to_string (ctx : bs_ctx) ?(with_ended = false) (v : V.tevalue) :
+    string =
+  let env = bs_ctx_to_fmt_env ctx in
+  Print.Values.tevalue_to_string ~span:(Some ctx.span) ~with_ended env
+    Print.Values.empty_evalue_env "" "  " v
+
 let pure_ty_to_string (ctx : bs_ctx) (ty : ty) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
   PrintPure.ty_to_string env false ty
@@ -367,9 +382,9 @@ let fun_decl_to_string (ctx : bs_ctx) (def : Pure.fun_decl) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
   PrintPure.fun_decl_to_string env def
 
-let tpattern_to_string (ctx : bs_ctx) (p : Pure.tpattern) : string =
+let tpat_to_string (ctx : bs_ctx) (p : Pure.tpat) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
-  PrintPure.tpattern_to_string ~span:ctx.span env p
+  PrintPure.tpat_to_string ~span:ctx.span env p
 
 let abs_to_string ?(with_ended : bool = false) (ctx : bs_ctx) (abs : V.abs) :
     string =
@@ -411,42 +426,6 @@ let bs_ctx_lookup_llbc_fun_decl (id : A.FunDeclId.id) (ctx : bs_ctx) :
 let bs_ctx_lookup_type_decl (id : TypeDeclId.id) (ctx : bs_ctx) : type_decl =
   TypeDeclId.Map.find id ctx.type_ctx.type_decls
 
-let bs_ctx_register_forward_call (call_id : V.FunCallId.id) (forward : S.call)
-    (args : texpr list) (back_funs : texpr option RegionGroupId.Map.t option)
-    (ctx : bs_ctx) : bs_ctx =
-  let calls = ctx.calls in
-  [%sanity_check] ctx.span (not (V.FunCallId.Map.mem call_id calls));
-  let info = { forward; forward_inputs = args; back_funs } in
-  let calls = V.FunCallId.Map.add call_id info calls in
-  { ctx with calls }
-
-(** [inherit_args]: the list of inputs inherited from the forward function and
-    the ancestors backward functions, if pertinent. [back_args]: the
-    *additional* list of inputs received by the backward function, including the
-    state.
-
-    Returns the updated context and the expression corresponding to the function
-    that we need to call. This function may be [None] if it has to be ignored
-    (because it does nothing). *)
-let bs_ctx_register_backward_call (abs : V.abs) (call_id : V.FunCallId.id)
-    (back_id : T.RegionGroupId.id) (back_args : texpr list) (ctx : bs_ctx) :
-    bs_ctx * texpr option =
-  (* Insert the abstraction in the call informations *)
-  let info = V.FunCallId.Map.find call_id ctx.calls in
-  let calls = V.FunCallId.Map.add call_id info ctx.calls in
-  (* Insert the abstraction in the abstractions map *)
-  let abstractions = ctx.abstractions in
-  [%sanity_check] ctx.span
-    (not (V.AbstractionId.Map.mem abs.abs_id abstractions));
-  let abstractions =
-    V.AbstractionId.Map.add abs.abs_id (abs, back_args) abstractions
-  in
-  (* Compute the expression corresponding to the function.
-     We simply lookup the variable introduced for the backward function. *)
-  let func = RegionGroupId.Map.find back_id (Option.get info.back_funs) in
-  (* Update the context and return *)
-  ({ ctx with calls; abstractions }, func)
-
 (** This generates a fresh variable **which is not to be linked to any symbolic
     value** *)
 let fresh_var (basename : string option) (ty : ty) (ctx : bs_ctx) :
@@ -486,3 +465,9 @@ let lookup_var_for_symbolic_value (id : V.symbolic_value_id) (ctx : bs_ctx) :
         ("Could not find var for symbolic value: "
         ^ V.SymbolicValueId.to_string id);
       None
+
+let mk_closed_checked_let file line ctx can_fail pat bound next =
+  mk_closed_checked_let file line ctx.span can_fail pat bound next
+
+let mk_closed_checked_lets file line ctx can_fail pat_bounds next =
+  mk_closed_checked_lets file line ctx.span can_fail pat_bounds next

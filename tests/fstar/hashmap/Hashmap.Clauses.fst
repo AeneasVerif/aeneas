@@ -58,4 +58,3 @@ unfold
 let hashMap_remove_from_list_loop_decreases (#t : Type0) (key : usize)
   (ls : aList_t t) : aList_t t =
   ls
-
