@@ -1,16 +1,14 @@
-[[92mInfo[39m ] Imported: tests/llbc/borrow_check_negative.llbc
 [[91mError[39m] Can not apply a projection to the ⊥ value
-Source: 'tests/src/borrow-check-negative.rs', lines 24:12-24:14
+Source: 'tests/src/borrow-check-negative.rs', lines 25:12-25:14
 [[91mError[39m] Can't end abstraction 8 as it is set as non-endable
-Source: 'tests/src/borrow-check-negative.rs', lines 27:0-33:1
+Source: 'tests/src/borrow-check-negative.rs', lines 28:0-34:1
 [[91mError[39m] Can not apply a projection to the ⊥ value
-Source: 'tests/src/borrow-check-negative.rs', lines 41:4-41:11
+Source: 'tests/src/borrow-check-negative.rs', lines 42:4-42:11
 [[91mError[39m] Can not apply a projection to the ⊥ value
-Source: 'tests/src/borrow-check-negative.rs', lines 50:12-50:14
+Source: 'tests/src/borrow-check-negative.rs', lines 51:12-51:14
 [[91mError[39m] Can not apply a projection to the ⊥ value
-Source: 'tests/src/borrow-check-negative.rs', lines 64:12-64:17
+Source: 'tests/src/borrow-check-negative.rs', lines 65:12-65:17
 [[91mError[39m] Can not apply a projection to the ⊥ value
-Source: 'tests/src/borrow-check-negative.rs', lines 79:12-79:17
+Source: 'tests/src/borrow-check-negative.rs', lines 80:12-80:17
 [[91mError[39m] Can not apply a projection to the ⊥ value
-Source: 'tests/src/borrow-check-negative.rs', lines 90:12-90:15
-[[92mInfo[39m ] Total execution time: 0.042007 seconds
+Source: 'tests/src/borrow-check-negative.rs', lines 91:12-91:15

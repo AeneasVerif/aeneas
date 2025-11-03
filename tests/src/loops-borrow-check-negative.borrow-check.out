@@ -1,4 +1,2 @@
-[[92mInfo[39m ] Imported: tests/llbc/loops_borrow_check_negative.llbc
 [[91mError[39m] Can't end abstraction 8 as it is set as non-endable
-Source: 'tests/src/loops-borrow-check-negative.rs', lines 19:0-29:1
-[[92mInfo[39m ] Total execution time: 0.047211 seconds
+Source: 'tests/src/loops-borrow-check-negative.rs', lines 20:0-30:1

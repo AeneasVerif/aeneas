@@ -1,6 +1,7 @@
 //@ charon-args=--skip-borrowck
 //@ [!borrow-check] skip
 //@ [borrow-check] known-failure
+//@ [borrow-check] aeneas-args=-log-error MainLogger
 
 // This succeeds
 fn loop_a<'a>(a: &'a mut u32, b: &'a mut u32) -> &'a mut u32 {

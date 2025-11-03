@@ -153,6 +153,14 @@ let () =
         Arg.String (add_activated_loggers EL.Debug),
         " Same as '-log' but sets the level to the more verbose 'debug' rather \
          than 'trace'" );
+      ( "-log-error",
+        Arg.String (add_activated_loggers EL.Error),
+        " Activate error log for a given logger designated by its name. It is \
+         possible to specifiy a list of names if they are separated by commas \
+         without spaces; for instance: '-log Interpreter,SymbolicToPure'. The \
+         existing loggers are: {"
+        ^ String.concat ", " (Collections.StringMap.keys !loggers)
+        ^ "}" );
       ( "-mark-ids",
         Arg.String add_marked_ids,
         " For developers: mark some identifiers to throw an exception if we \
