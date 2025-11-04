@@ -1584,13 +1584,13 @@ let extract_template_fstar_decreases_clause (ctx : extraction_ctx)
     ctx_get_termination_measure def.item_meta.span def.def_id def.loop_id ctx
   in
   (* Open the binders - it is easier to only manipulate variables which have unique ids *)
-  reset_fvar_id_counter ();
+  let _, fresh_fvar_id = FVarId.fresh_stateful_generator () in
   let def =
     {
       def with
       body =
         Option.map
-          (fun b -> snd (open_all_fun_body def.item_meta.span b))
+          (fun b -> snd (open_all_fun_body fresh_fvar_id def.item_meta.span b))
           def.body;
     }
   in
@@ -1662,13 +1662,13 @@ let extract_template_lean_termination_and_decreasing (ctx : extraction_ctx)
    * Extract a template for the termination measure
    *)
   (* Open the binders - it is easier to only manipulate variables which have unique ids *)
-  reset_fvar_id_counter ();
+  let _, fresh_fvar_id = FVarId.fresh_stateful_generator () in
   let def =
     {
       def with
       body =
         Option.map
-          (fun b -> snd (open_all_fun_body def.item_meta.span b))
+          (fun b -> snd (open_all_fun_body fresh_fvar_id def.item_meta.span b))
           def.body;
     }
   in
@@ -1804,13 +1804,13 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   in
   [%ltrace "Extracting function: " ^ def_name];
   (* Open the binders - it is easier to only manipulate variables which have unique ids *)
-  reset_fvar_id_counter ();
+  let _, fresh_fvar_id = FVarId.fresh_stateful_generator () in
   let def =
     {
       def with
       body =
         Option.map
-          (fun b -> snd (open_all_fun_body def.item_meta.span b))
+          (fun b -> snd (open_all_fun_body fresh_fvar_id def.item_meta.span b))
           def.body;
     }
   in
@@ -2086,13 +2086,13 @@ let extract_fun_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
     ctx_get_local_function def.item_meta.span def.def_id def.loop_id ctx
   in
   (* Open the binders - it is easier to only manipulate variables which have unique ids *)
-  reset_fvar_id_counter ();
+  let _, fresh_fvar_id = FVarId.fresh_stateful_generator () in
   let def =
     {
       def with
       body =
         Option.map
-          (fun b -> snd (open_all_fun_body def.item_meta.span b))
+          (fun b -> snd (open_all_fun_body fresh_fvar_id def.item_meta.span b))
           def.body;
     }
   in
@@ -2311,13 +2311,13 @@ let extract_global_decl_aux (ctx : extraction_ctx) (fmt : F.formatter)
   [%sanity_check] span body.is_global_decl_body;
   [%sanity_check] span (body.signature.inputs = []);
   (* Open the binders - it is easier to only manipulate variables which have unique ids *)
-  reset_fvar_id_counter ();
+  let _, fresh_fvar_id = FVarId.fresh_stateful_generator () in
   let body =
     {
       body with
       body =
         Option.map
-          (fun b -> snd (open_all_fun_body body.item_meta.span b))
+          (fun b -> snd (open_all_fun_body fresh_fvar_id body.item_meta.span b))
           body.body;
     }
   in

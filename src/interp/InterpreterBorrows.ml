@@ -745,9 +745,9 @@ let give_back_symbolic_value (_config : config) (span : Meta.span)
     should be ⊥. In practice, we will give back a symbolic value which can't be
     expanded (because expanding this symbolic value would require expanding a
     reference whose region has already ended). *)
-let convert_avalue_to_given_back_value (span : Meta.span) (av : tavalue) :
+let convert_avalue_to_given_back_value (span : Meta.span) ctx (av : tavalue) :
     symbolic_value =
-  mk_fresh_symbolic_value span av.ty
+  mk_fresh_symbolic_value span ctx av.ty
 
 (** Auxiliary function: see {!end_borrow_aux}.
 
@@ -1275,7 +1275,7 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
         | AMutBorrow (pm, bid, av) ->
             [%sanity_check] span (pm = PNone);
             (* First, convert the avalue to a (fresh symbolic) value *)
-            let sv = convert_avalue_to_given_back_value span av in
+            let sv = convert_avalue_to_given_back_value span ctx av in
             (* Replace the mut borrow to register the fact that we ended
                it and store with it the freshly generated given back value *)
             let meta : aended_mut_borrow_meta = { bid; given_back = sv } in
@@ -1335,7 +1335,7 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
       [%ltrace
         "found aproj borrows: " ^ aproj_to_string ctx (AProjBorrows aproj)];
       (* Generate a fresh symbolic value *)
-      let nsv = mk_fresh_symbolic_value span aproj.proj.proj_ty in
+      let nsv = mk_fresh_symbolic_value span ctx aproj.proj.proj_ty in
       (* Replace the proj_borrows - there should be exactly one *)
       let ctx = end_aproj_borrows span abs.regions.owned aproj.proj nsv ctx in
       (* Give back the symbolic value *)
@@ -1915,7 +1915,7 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) ~(can_end : bool)
                       inherit [_] map_tavalue
 
                       method! visit_symbolic_value_id _ _ =
-                        fresh_symbolic_value_id ()
+                        ctx.fresh_symbolic_value_id ()
                     end
                   in
                   visitor#visit_tvalue () v

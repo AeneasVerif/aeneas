@@ -585,7 +585,7 @@ let drop_outer_loans_at_lplace (config : config) (span : Meta.span) (p : place)
   let access = Write in
   let _, v = read_place span access p ctx in
   let ctx = write_place span access p (mk_bottom span v.ty) ctx in
-  let dummy_id = fresh_dummy_var_id () in
+  let dummy_id = ctx.fresh_dummy_var_id () in
   let ctx = ctx_push_dummy_var ctx dummy_id v in
   (* Auxiliary function: while there are loans to end in the
      temporary value, end them *)

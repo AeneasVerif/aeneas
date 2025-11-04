@@ -79,6 +79,15 @@ type eval_ctx = {
           introduce fresh symbolic values. *)
   env : env;
   ended_regions : RegionId.Set.t;
+  fresh_symbolic_value_id : unit -> symbolic_value_id;
+  fresh_dummy_var_id : unit -> dummy_var_id;
+  fresh_fun_call_id : unit -> fun_call_id;
+  fresh_borrow_id : unit -> borrow_id;
+  fresh_shared_borrow_id : unit -> shared_borrow_id;
+  fresh_abs_id : unit -> abs_id;
+  fresh_region_id : unit -> region_id;
+  fresh_abs_fvar_id : unit -> abs_fvar_id;
+  fresh_loop_id : unit -> loop_id;
 }
 [@@deriving show]
 
@@ -244,7 +253,7 @@ let ctx_push_dummy_var (ctx : eval_ctx) (vid : DummyVarId.id) (v : tvalue) :
   { ctx with env = EBinding (BDummy vid, v) :: ctx.env }
 
 let ctx_push_fresh_dummy_var (ctx : eval_ctx) (v : tvalue) : eval_ctx =
-  ctx_push_dummy_var ctx (fresh_dummy_var_id ()) v
+  ctx_push_dummy_var ctx (ctx.fresh_dummy_var_id ()) v
 
 let ctx_push_fresh_dummy_vars (ctx : eval_ctx) (vl : tvalue list) : eval_ctx =
   List.fold_left (fun ctx v -> ctx_push_fresh_dummy_var ctx v) ctx vl
