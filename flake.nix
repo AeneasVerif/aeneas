@@ -70,6 +70,7 @@
             zarith
             ocamlgraph
             progress
+            domainslib
           ]);
           postInstall = ''
             ln -s ${charon.packages.${system}.charon}/bin/charon $out/bin
