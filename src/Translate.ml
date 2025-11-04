@@ -359,7 +359,8 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
   *)
   let pure_translations =
     let num_decls = FunDeclId.Map.cardinal crate.fun_decls in
-    ProgressBar.with_reporter num_decls "Translated functions: " (fun report ->
+    ProgressBar.with_parallel_reporter num_decls "Translated functions: "
+      (fun report ->
         parallel_filter_map
           (fun x ->
             let f =

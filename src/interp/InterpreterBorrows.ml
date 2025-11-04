@@ -2335,7 +2335,7 @@ let simplify_dummy_values_useless_abs (config : config) (span : Meta.span)
       simplify_dummy_values_useless_abs_aux config span fixed_abs_ids ctx0
     in
     Invariants.check_invariants span ctx;
-    if ctx = ctx0 then (
+    if ctx.env = ctx0.env then (
       [%ldebug "Done:\n" ^ eval_ctx_to_string ctx];
       (ctx, cc))
     else (

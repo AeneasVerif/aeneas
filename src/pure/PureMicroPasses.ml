@@ -6455,8 +6455,8 @@ let apply_passes_to_pure_fun_translations (trans_ctx : trans_ctx)
   in
   let transl =
     let num_decls = List.length transl in
-    ProgressBar.with_reporter num_decls "Post-processed translated functions: "
-      (fun report ->
+    ProgressBar.with_parallel_reporter num_decls
+      "Post-processed translated functions: " (fun report ->
         Parallel.parallel_map
           (fun x ->
             let x = apply x in
