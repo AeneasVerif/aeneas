@@ -421,11 +421,6 @@ let () =
       log#error "error: %s\n" s;
       exit 1
   | Ok m ->
-      log#linfo
-        (lazy
-          ("Recommended domain count: "
-          ^ string_of_int (Domain.recommended_domain_count ())));
-
       (* Logging *)
       log#linfo (lazy ("Imported: " ^ filename));
       if !print_llbc then
