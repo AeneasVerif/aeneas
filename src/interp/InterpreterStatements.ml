@@ -943,13 +943,12 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
     stl_cm_fun =
  fun ctx ->
   (* We evaluate the operand in two steps:
-   * first we prepare it, then we check if its value is concrete or
-   * symbolic. If it is concrete, we can then evaluate the operand
-   * directly, otherwise we must first expand the value.
-   * Note that we can't fully evaluate the operand *then* expand the
-   * value if it is symbolic, because the value may have been move
-   * (and would thus floating in thin air...)!
-   * *)
+     first we prepare it, then we check if its value is concrete or
+     symbolic. If it is concrete, we can then evaluate the operand
+     directly, otherwise we must first expand the value.
+     Note that we can't fully evaluate the operand *then* expand the
+     value if it is symbolic, because the value may have been move
+     (and would thus floating in thin air...)! *)
   (* Match on the targets *)
   match (switch : LlbcAst.switch) with
   | If (op, true_block, false_block) ->
