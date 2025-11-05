@@ -578,3 +578,21 @@ let ctx_adt_get_instantiated_field_types (span : Meta.span) (ctx : eval_ctx)
       | TArray | TSlice | TStr ->
           (* Those types don't have fields *)
           [%craise] span "Unreachable")
+
+let env_get_dummy_var_ids (env : env) : DummyVarId.Set.t =
+  DummyVarId.Set.of_list
+    (List.filter_map
+       (fun (e : env_elem) ->
+         match e with
+         | EBinding (BDummy id, _) -> Some id
+         | _ -> None)
+       env)
+
+let env_get_local_ids (env : env) : LocalId.Set.t =
+  LocalId.Set.of_list
+    (List.filter_map
+       (fun (e : env_elem) ->
+         match e with
+         | EBinding (BVar v, _) -> Some v.index
+         | _ -> None)
+       env)

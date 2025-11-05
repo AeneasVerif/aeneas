@@ -2407,7 +2407,25 @@ let prepare_match_ctx_with_target (config : config) (span : Meta.span)
     let module JM = MakeJoinMatcher (S) in
     let module M = MakeMatcher (JM) in
     try
-      (* Match the bindings which are common between the two environments *)
+      (* Match the bindings appear in both environments *)
+      let src_dummy_ids = env_get_dummy_var_ids filt_src_env in
+      let src_local_ids = env_get_local_ids filt_src_env in
+      let tgt_dummy_ids = env_get_dummy_var_ids filt_tgt_env in
+      let tgt_local_ids = env_get_local_ids filt_tgt_env in
+      let dummy_ids = DummyVarId.Set.inter src_dummy_ids tgt_dummy_ids in
+      let local_ids =
+        Expressions.LocalId.Set.inter src_local_ids tgt_local_ids
+      in
+      (* We need to filter the environments further *)
+      let keep (e : env_elem) : bool =
+        match e with
+        | EBinding (BDummy id, _) when DummyVarId.Set.mem id dummy_ids -> true
+        | EBinding (BVar v, _)
+          when Expressions.LocalId.Set.mem v.index local_ids -> true
+        | _ -> false
+      in
+      let filt_src_env = List.filter keep filt_src_env in
+      let filt_tgt_env = List.filter keep filt_tgt_env in
       [%sanity_check] span (List.length filt_src_env = List.length filt_tgt_env);
       let _ =
         List.iter
