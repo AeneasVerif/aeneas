@@ -1431,7 +1431,7 @@ let inline_useless_var_assignments ~inline_named ~inline_const ~inline_pure
 
       let x = if b then 1 else 0 in …
     ]} *)
-let simplify_let_tuple (ctx : ctx) span (pat : tpat) (bound : texpr) :
+let simplify_let_tuple span (ctx : ctx) (pat : tpat) (bound : texpr) :
     tpat * texpr * bool =
   let span = span in
   (* We attempt to filter only if:
@@ -1475,13 +1475,39 @@ let simplify_let_tuple (ctx : ctx) span (pat : tpat) (bound : texpr) :
         match e.e with
         | FVar _ | App _ | Loop _ | Const _ ->
             (* We need to introduce an intermediate let-binding *)
-            raise (Failure "TODO")
+            let pats, out =
+              List.split
+                (List.map
+                   (fun (keep, ty) ->
+                     if keep then
+                       let fv = mk_fresh_fvar ctx ty in
+                       (mk_tpat_from_fvar None fv, Some (mk_texpr_from_fvar fv))
+                     else (mk_ignored_pat ty, None))
+                   (List.combine keep tys))
+            in
+            let pats = mk_simpl_tuple_pat pats in
+            let out = List.filter_map (fun x -> x) out in
+            let out = mk_simpl_tuple_texpr span out in
+
+            let monadic = is_result_ty e.ty in
+            let out = if monadic then mk_result_ok_texpr span out else out in
+            (mk_opened_let monadic pats e out).e
         | BVar _ | CVar _ | Qualif _ | StructUpdate _ -> [%internal_error] span
-        | Lambda (_, _) -> _
+        | Lambda (pat, inner) -> Lambda (pat, update inner)
         | Let (monadic, pat, bound, next) ->
             let next = update next in
             Let (monadic, pat, bound, next)
-        | Switch (_, _) -> _
+        | Switch (scrut, body) -> (
+            match body with
+            | If (e0, e1) -> Switch (scrut, If (update e0, update e1))
+            | Match branches ->
+                let branches =
+                  List.map
+                    (fun (br : match_branch) ->
+                      { br with branch = update br.branch })
+                    branches
+                in
+                Switch (scrut, Match branches))
         | Meta (m, inner) -> Meta (m, update inner)
         | EError _ -> e.e
       in
@@ -1583,11 +1609,11 @@ let filter_useless (ctx : ctx) (def : fun_decl) : fun_decl =
               in
               (* If there are ignored patterns, attempt to simplify
                  the binding and the right expression. *)
-              let lv, re, updated = simplify_let_tuple ctx lv re in
+              let lv, re, updated = simplify_let_tuple span ctx lv re in
 
               (* We may need to revisited the bound expression if we modified it:
                  some values may now be unused. *)
-              let re, _ = if updated then self#visit_texpr env re else re in
+              let re = if updated then fst (self#visit_texpr env re) else re in
 
               (* Put everything together *)
               (Let (monadic, lv, re, e), fun _ -> used)
