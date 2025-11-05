@@ -284,8 +284,12 @@ val loop_join_origin_with_continue_ctxs :
     - [src_ctx]
     - [tgt_ctx]
 
-    Outputs: the first context is the source context, the second context is the
-    (potentially updated) target context. *)
+    Outputs:
+    - the first context is the source context
+    - the second context is the (potentially updated) target context
+    - input values
+    - input abstractions
+    - the continuation function which generates the symbolic AST *)
 val match_ctx_with_target :
   config ->
   Meta.span ->

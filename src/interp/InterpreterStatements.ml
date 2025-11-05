@@ -1006,28 +1006,108 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
                       [%ldebug "Joined ctx:\n" ^ eval_ctx_to_string joined_ctx];
 
                       (* Compute the output values *)
-                      let input_svalues =
+                      let output_svalues =
                         InterpreterJoin
                         .compute_ctx_fresh_ordered_symbolic_values span
                           ~only_modified_svalues:true ctx0 joined_ctx
                       in
-                      let input_svalue_ids =
+                      let output_svalue_ids =
                         List.map
                           (fun (sv : symbolic_value) -> sv.sv_id)
-                          input_svalues
+                          output_svalues
+                      in
+
+                      let output_abs =
+                        List.filter_map
+                          (fun (e : env_elem) ->
+                            match e with
+                            | EAbs abs
+                              when not (AbsId.Set.mem abs.abs_id fixed_ids.aids)
+                              -> Some abs
+                            | _ -> None)
+                          joined_ctx.env
+                      in
+                      let output_abs_ids =
+                        List.map (fun (abs : abs) -> abs.abs_id) output_abs
                       in
 
                       (* Match the contexts with the joined context to determine
                          the output *)
-                      let _ =
+                      let ( (_, true_ctx, true_output_values, true_output_abs),
+                            true_cf ) =
                         InterpreterJoin.match_ctx_with_target config span Join
-                          input_svalue_ids fixed_ids joined_ctx true_ctx
+                          output_svalue_ids fixed_ids joined_ctx true_ctx
                       in
-                      let _ =
+                      let ( (_, false_ctx, false_output_values, false_output_abs),
+                            false_cf ) =
                         InterpreterJoin.match_ctx_with_target config span Join
-                          input_svalue_ids fixed_ids joined_ctx false_ctx
+                          output_svalue_ids fixed_ids joined_ctx false_ctx
                       in
-                      raise (Failure "TODO")
+
+                      (* Generate the expressions for the branches *)
+                      let reorder_output_abs (map : abs AbsId.Map.t)
+                          (absl : abs_id list) : abs list =
+                        List.map (fun id -> AbsId.Map.find id map) absl
+                      in
+                      let reorder_output_values
+                          (map : tvalue SymbolicValueId.Map.t)
+                          (values : symbolic_value_id list) : tvalue list =
+                        List.map
+                          (fun id -> SymbolicValueId.Map.find id map)
+                          values
+                      in
+                      let true_output_values =
+                        reorder_output_values true_output_values
+                          output_svalue_ids
+                      in
+                      let true_output_abs =
+                        reorder_output_abs true_output_abs output_abs_ids
+                      in
+                      let false_output_values =
+                        reorder_output_values false_output_values
+                          output_svalue_ids
+                      in
+                      let false_output_abs =
+                        reorder_output_abs false_output_abs output_abs_ids
+                      in
+
+                      (* Generate the let expression *)
+                      let e_true =
+                        e_true
+                          [
+                            true_cf
+                              (SA.Join
+                                 (true_ctx, true_output_values, true_output_abs));
+                          ]
+                      in
+                      let e_false =
+                        e_false
+                          [
+                            false_cf
+                              (SA.Join
+                                 ( false_ctx,
+                                   false_output_values,
+                                   false_output_abs ));
+                          ]
+                      in
+                      let bound_expr = cf_bool (e_true, e_false) in
+
+                      let cf (el : SA.expr list) : SA.expr =
+                        match el with
+                        | [ next_expr ] ->
+                            Let
+                              {
+                                bound_expr;
+                                out_svalues = output_svalues;
+                                out_abs = output_abs;
+                                next_expr;
+                                span;
+                              }
+                        | _ -> [%internal_error] span
+                      in
+
+                      (* Output the joined context *)
+                      ([ (joined_ctx, Unit) ], cf)
                   | Unit, Panic | Panic, Unit ->
                       (* There is a single context, so we have nothing to join *)
                       raise (Failure "TODO")
