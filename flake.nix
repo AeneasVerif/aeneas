@@ -31,6 +31,19 @@
           buildInputs = [ ocamlPackages.calendar ];
         };
 
+        # The nix package of domainslib is broken
+        domainslib = ocamlPackages.buildDunePackage rec {
+          pname = "domainslib";
+          version = "0.5.1";
+          src = pkgs.fetchFromGitHub {
+            owner = "ocaml-multicore";
+            repo = "domainslib";
+            rev = "2a884868ff69c13ecef8efecca9ba1102ff11a7f";
+            sha256 = "sha256-FgEgVTvAyv6Tj+57Zj6KnT6h1qF2VFkwAjK1Me8F+I4=";
+          };
+          buildInputs = [ ocamlPackages.saturn ocamlPackages.domain-local-await ];
+        };
+
         aeneas-check-tidiness = pkgs.stdenv.mkDerivation rec {
           name = "aeneas-check-tidiness";
           src = ./.;
@@ -60,6 +73,7 @@
           OCAMLPARAM = "_,warn-error=+A"; # Turn all warnings into errors.
           propagatedBuildInputs = [
             easy_logging
+            domainslib
             charon-ml
           ] ++ (with ocamlPackages; [
             calendar
@@ -70,7 +84,6 @@
             zarith
             ocamlgraph
             progress
-            domainslib
           ]);
           postInstall = ''
             ln -s ${charon.packages.${system}.charon}/bin/charon $out/bin
