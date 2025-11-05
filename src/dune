@@ -46,8 +46,8 @@
   InterpreterExpansion
   InterpreterExpressions
   Interpreter
-  InterpreterJoinCtxs
-  InterpreterLoopsCore
+  InterpreterJoin
+  InterpreterJoinCore
   InterpreterLoopsFixedPoint
   InterpreterLoops
   InterpreterMatchCtxs

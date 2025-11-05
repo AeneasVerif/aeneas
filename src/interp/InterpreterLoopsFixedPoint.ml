@@ -8,7 +8,7 @@ open Cps
 open InterpreterUtils
 open InterpreterAbs
 open InterpreterMatchCtxs
-open InterpreterJoinCtxs
+open InterpreterJoin
 
 (** The local logger *)
 let log = Logging.loops_fixed_point_log

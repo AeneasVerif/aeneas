@@ -1,7 +1,7 @@
 open Values
 open Contexts
 open InterpreterUtils
-open InterpreterLoopsCore
+open InterpreterJoinCore
 
 (** Join two contexts.
 

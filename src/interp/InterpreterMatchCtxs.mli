@@ -7,7 +7,7 @@ open Values
 open Contexts
 open Cps
 open InterpreterUtils
-open InterpreterLoopsCore
+open InterpreterJoinCore
 
 (** Compute various maps linking the abstractions and the borrows/loans they
     contain.

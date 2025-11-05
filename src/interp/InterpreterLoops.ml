@@ -6,7 +6,7 @@ module SA = SymbolicAst
 open Cps
 open InterpreterUtils
 open InterpreterMatchCtxs
-open InterpreterJoinCtxs
+open InterpreterJoin
 open InterpreterLoopsFixedPoint
 
 (** The local logger *)

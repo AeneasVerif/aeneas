@@ -12,7 +12,7 @@ open Cps
 open InterpreterUtils
 open InterpreterBorrowsCore
 open InterpreterAbs
-open InterpreterLoopsCore
+open InterpreterJoinCore
 module S = SynthesizeSymbolic
 
 (** The local logger *)

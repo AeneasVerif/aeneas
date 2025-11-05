@@ -6,7 +6,7 @@ open ValuesUtils
 open InterpreterUtils
 open InterpreterBorrowsCore
 open InterpreterAbs
-open InterpreterLoopsCore
+open InterpreterJoinCore
 open InterpreterMatchCtxs
 
 (** The local logger *)

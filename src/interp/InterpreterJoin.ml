@@ -5,7 +5,7 @@ open Contexts
 open InterpreterUtils
 open InterpreterBorrows
 open InterpreterAbs
-open InterpreterLoopsCore
+open InterpreterJoinCore
 open InterpreterReduceCollapse
 open InterpreterMatchCtxs
 
