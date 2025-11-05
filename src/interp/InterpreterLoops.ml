@@ -5,8 +5,8 @@ module S = SynthesizeSymbolic
 module SA = SymbolicAst
 open Cps
 open InterpreterUtils
-open InterpreterLoopsMatchCtxs
-open InterpreterLoopsJoinCtxs
+open InterpreterMatchCtxs
+open InterpreterJoinCtxs
 open InterpreterLoopsFixedPoint
 
 (** The local logger *)

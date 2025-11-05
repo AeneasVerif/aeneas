@@ -7,7 +7,7 @@ open InterpreterUtils
 open InterpreterBorrowsCore
 open InterpreterAbs
 open InterpreterLoopsCore
-open InterpreterLoopsMatchCtxs
+open InterpreterMatchCtxs
 
 (** The local logger *)
 let log = Logging.reduce_collapse_log

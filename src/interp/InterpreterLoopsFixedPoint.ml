@@ -7,8 +7,8 @@ module S = SynthesizeSymbolic
 open Cps
 open InterpreterUtils
 open InterpreterAbs
-open InterpreterLoopsMatchCtxs
-open InterpreterLoopsJoinCtxs
+open InterpreterMatchCtxs
+open InterpreterJoinCtxs
 
 (** The local logger *)
 let log = Logging.loops_fixed_point_log
