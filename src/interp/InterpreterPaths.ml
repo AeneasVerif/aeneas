@@ -336,7 +336,7 @@ let try_read_place (span : Meta.span) (access : access_kind) (p : place)
          original one.
       *)
       (if !Config.sanity_checks then
-         if ctx1 <> ctx then
+         if ctx1.env <> ctx.env then
            let msg =
              "Unexpected environment update:\nNew environment:\n"
              ^ show_env ctx1.env ^ "\n\nOld environment:\n" ^ show_env ctx.env
