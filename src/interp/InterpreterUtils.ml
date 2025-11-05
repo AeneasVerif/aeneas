@@ -89,38 +89,39 @@ let mk_place_from_var_id (ctx : eval_ctx) (span : Meta.span)
   { kind = PlaceLocal var_id; ty = typed_val.ty }
 
 (** Create a fresh symbolic value *)
-let mk_fresh_symbolic_value_opt_span (span : Meta.span option) (ty : ty) :
-    symbolic_value =
+let mk_fresh_symbolic_value_opt_span (span : Meta.span option)
+    fresh_symbolic_value_id (ty : ty) : symbolic_value =
   (* Sanity check *)
   [%sanity_check_opt_span] span (ty_is_rty ty);
   let sv_id = fresh_symbolic_value_id () in
   let svalue = { sv_id; sv_ty = ty } in
   svalue
 
-let mk_fresh_symbolic_value span = mk_fresh_symbolic_value_opt_span (Some span)
+let mk_fresh_symbolic_value span (ctx : eval_ctx) =
+  mk_fresh_symbolic_value_opt_span (Some span) ctx.fresh_symbolic_value_id
 
-let mk_fresh_symbolic_value_from_no_regions_ty (span : Meta.span) (ty : ty) :
-    symbolic_value =
+let mk_fresh_symbolic_value_from_no_regions_ty (span : Meta.span) ctx (ty : ty)
+    : symbolic_value =
   [%sanity_check] span (ty_no_regions ty);
-  mk_fresh_symbolic_value span ty
+  mk_fresh_symbolic_value span ctx ty
 
 (** Create a fresh symbolic value *)
-let mk_fresh_symbolic_tvalue_opt_span (span : Meta.span option) (rty : ty) :
+let mk_fresh_symbolic_tvalue_opt_span (span : Meta.span option) ctx (rty : ty) :
     tvalue =
   [%sanity_check_opt_span] span (ty_is_rty rty);
   let ty = Substitute.erase_regions rty in
   (* Generate the fresh a symbolic value *)
-  let value = mk_fresh_symbolic_value_opt_span span rty in
+  let value = mk_fresh_symbolic_value_opt_span span ctx rty in
   let value = VSymbolic value in
   { value; ty }
 
-let mk_fresh_symbolic_tvalue span =
-  mk_fresh_symbolic_tvalue_opt_span (Some span)
+let mk_fresh_symbolic_tvalue span ctx =
+  mk_fresh_symbolic_tvalue_opt_span (Some span) ctx.fresh_symbolic_value_id
 
-let mk_fresh_symbolic_tvalue_from_no_regions_ty (span : Meta.span) (ty : ty) :
-    tvalue =
+let mk_fresh_symbolic_tvalue_from_no_regions_ty (span : Meta.span) ctx (ty : ty)
+    : tvalue =
   [%sanity_check] span (ty_no_regions ty);
-  mk_fresh_symbolic_tvalue span ty
+  mk_fresh_symbolic_tvalue span ctx ty
 
 let symbolic_tvalue_get_id file line (span : Meta.span) (v : tvalue) =
   match v.value with
@@ -608,14 +609,48 @@ let empty_ids_set = fst (compute_ctxs_ids [])
 
 let initialize_eval_ctx (span : Meta.span option) (ctx : decls_ctx)
     (region_groups : RegionGroupId.id list) (type_vars : type_param list)
-    (const_generic_vars : const_generic_param list) : eval_ctx =
-  reset_global_counters ();
+    (const_generic_vars : const_generic_param list) (marked_ids : marked_ids) :
+    eval_ctx =
+  let _, _, _, fresh_symbolic_value_id =
+    SymbolicValueId.fresh_stateful_generator_with_marked
+      marked_ids.symbolic_value_ids
+  in
+  let _, _, _, fresh_borrow_id =
+    BorrowId.fresh_stateful_generator_with_marked marked_ids.borrow_ids
+  in
+
+  let _, _, _, fresh_shared_borrow_id =
+    SharedBorrowId.fresh_stateful_generator_with_marked
+      marked_ids.shared_borrow_ids
+  in
+
+  let _, _, _, fresh_region_id =
+    RegionId.fresh_stateful_generator_with_marked marked_ids.region_ids
+  in
+  let _, _, _, fresh_abs_id =
+    AbsId.fresh_stateful_generator_with_marked marked_ids.abs_ids
+  in
+  let _, _, _, fresh_abs_fvar_id =
+    AbsFVarId.fresh_stateful_generator_with_marked marked_ids.abs_fvar_ids
+  in
+  let _, _, _, fresh_dummy_var_id =
+    DummyVarId.fresh_stateful_generator_with_marked marked_ids.dummy_var_ids
+  in
+  let _, _, _, fresh_fun_call_id =
+    FunCallId.fresh_stateful_generator_with_marked marked_ids.fun_call_ids
+  in
+  let _, _, _, fresh_loop_id =
+    LoopId.fresh_stateful_generator_with_marked marked_ids.loop_ids
+  in
+
   let const_generic_vars_map =
     ConstGenericVarId.Map.of_list
       (List.map
          (fun (cg : const_generic_param) ->
            let ty = TLiteral cg.ty in
-           let cv = mk_fresh_symbolic_tvalue_opt_span span ty in
+           let cv =
+             mk_fresh_symbolic_tvalue_opt_span span fresh_symbolic_value_id ty
+           in
            (cg.index, cv))
          const_generic_vars)
   in
@@ -629,6 +664,15 @@ let initialize_eval_ctx (span : Meta.span option) (ctx : decls_ctx)
     const_generic_vars_map;
     env = [ EFrame ];
     ended_regions = RegionId.Set.empty;
+    fresh_symbolic_value_id;
+    fresh_fun_call_id;
+    fresh_dummy_var_id;
+    fresh_borrow_id;
+    fresh_shared_borrow_id;
+    fresh_abs_id;
+    fresh_region_id;
+    fresh_abs_fvar_id;
+    fresh_loop_id;
   }
 
 (** Instantiate a function signature, introducing **fresh** abstraction ids and
@@ -650,7 +694,7 @@ let instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
    * group ids to abstraction ids *)
   let asubst_map : AbsId.id RegionGroupId.Map.t =
     RegionGroupId.Map.of_list
-      (List.map (fun rg -> (rg.id, fresh_abs_id ())) regions_hierarchy)
+      (List.map (fun rg -> (rg.id, ctx.fresh_abs_id ())) regions_hierarchy)
   in
   let asubst (rg_id : RegionGroupId.id) : AbsId.id =
     RegionGroupId.Map.find rg_id asubst_map
@@ -658,7 +702,7 @@ let instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
   (* Generate fresh regions *)
   let rsubst =
     Substitute.fresh_regions_with_substs_from_vars sg.generics.regions
-      fresh_region_id
+      ctx.fresh_region_id
   in
   (* Generate the type substitution. *)
   [%sanity_check] span (TypesUtils.trait_instance_id_no_regions tr_self);
@@ -692,8 +736,9 @@ let instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
     - [generic_args]: the generic arguments given to the function
     - [sg]: the original, uninstantiated signature (we need to retrieve, for
       instance, the region outlives constraints) *)
-let compute_regions_hierarchy_for_fun_call (span : Meta.span option)
-    (crate : crate) (fun_name : string) (type_vars : type_param list)
+let compute_regions_hierarchy_for_fun_call fresh_abs_id
+    (span : Meta.span option) (crate : crate) (fun_name : string)
+    (type_vars : type_param list)
     (const_generic_vars : const_generic_param list)
     (generic_args : generic_args) (sg : fun_sig) : inst_fun_sig =
   (* We simply put everything into a "fake" signature, then call

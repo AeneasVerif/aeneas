@@ -908,7 +908,7 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
     (* Same remarks as for [merge_amut_borrows] *)
     let ty = ty0 in
     let value =
-      ABorrow (ASharedBorrow (PNone, id, fresh_shared_borrow_id ()))
+      ABorrow (ASharedBorrow (PNone, id, ctx.fresh_shared_borrow_id ()))
     in
     { value; ty }
   in

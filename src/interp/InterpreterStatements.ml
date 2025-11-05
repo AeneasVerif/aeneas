@@ -38,7 +38,7 @@ let drop_value (config : config) (span : Meta.span) (p : place) : cm_fun =
     (* Move the value at destination (that we will overwrite) to a dummy variable
      * to preserve the borrows it may contain *)
     let _, mv = InterpreterPaths.read_place span access p ctx in
-    let dummy_id = fresh_dummy_var_id () in
+    let dummy_id = ctx.fresh_dummy_var_id () in
     let ctx = ctx_push_dummy_var ctx dummy_id mv in
     (* Update the destination to ⊥ *)
     let nv = { v with value = VBottom } in
@@ -97,7 +97,7 @@ let assign_to_place (config : config) (span : Meta.span) (rv : tvalue)
     ^ "\n- p: " ^ place_to_string ctx p ^ "\n- Initial context:\n"
     ^ eval_ctx_to_string ~span:(Some span) ctx];
   (* Push the rvalue to a dummy variable, for bookkeeping *)
-  let rvalue_vid = fresh_dummy_var_id () in
+  let rvalue_vid = ctx.fresh_dummy_var_id () in
   let ctx = push_dummy_var rvalue_vid rv ctx in
   (* Prepare the destination *)
   let _, ctx, cc = prepare_lplace config span p ctx in
@@ -106,7 +106,7 @@ let assign_to_place (config : config) (span : Meta.span) (rv : tvalue)
   (* Move the value at destination (that we will overwrite) to a dummy variable
      to preserve the borrows *)
   let _, mv = InterpreterPaths.read_place span Write p ctx in
-  let dest_vid = fresh_dummy_var_id () in
+  let dest_vid = ctx.fresh_dummy_var_id () in
   let ctx = ctx_push_dummy_var ctx dest_vid mv in
   (* Write to the destination *)
   (* Checks - maybe the bookkeeping updated the rvalue and introduced bottoms *)
@@ -350,7 +350,7 @@ let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
     | [] -> [%craise] span "Inconsistent environment"
     | EAbs abs :: env -> EAbs abs :: pop env
     | EBinding (_, v) :: env ->
-        let vid = fresh_dummy_var_id () in
+        let vid = ctx.fresh_dummy_var_id () in
         EBinding (BDummy vid, v) :: pop env
     | EFrame :: env -> (* Stop here *) env
   in
@@ -743,7 +743,7 @@ let eval_global_as_fresh_symbolic_value (span : Meta.span)
   let generics = Subst.generic_args_erase_regions generics in
   let subst = Subst.make_subst_from_generics global.generics generics in
   let ty = Subst.erase_regions_substitute_types subst global.ty in
-  mk_fresh_symbolic_value span ty
+  mk_fresh_symbolic_value span ctx ty
 
 (** Evaluate a statement *)
 let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
@@ -919,8 +919,8 @@ and eval_global_ref (config : config) (span : Meta.span) (dest : place)
       let sval = eval_global_as_fresh_symbolic_value span gref ctx in
       let typed_sval = mk_tvalue_from_symbolic_value sval in
       (* Create a shared loan containing the global, as well as a shared borrow *)
-      let bid = fresh_borrow_id () in
-      let sid = fresh_shared_borrow_id () in
+      let bid = ctx.fresh_borrow_id () in
+      let sid = ctx.fresh_shared_borrow_id () in
       let loan : tvalue =
         { value = VLoan (VSharedLoan (bid, typed_sval)); ty = sval.sv_ty }
       in
@@ -931,7 +931,7 @@ and eval_global_ref (config : config) (span : Meta.span) (dest : place)
         }
       in
       (* We need to push the shared loan in a dummy variable *)
-      let dummy_id = fresh_dummy_var_id () in
+      let dummy_id = ctx.fresh_dummy_var_id () in
       let ctx = ctx_push_dummy_var ctx dummy_id loan in
       (* Assign the borrow to its destination *)
       let ctx, cc = assign_to_place config span borrow dest ctx in
@@ -1406,11 +1406,11 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
     ^ "\n- dest:\n" ^ place_to_string ctx dest];
 
   (* Unique identifier for the call *)
-  let call_id = fresh_fun_call_id () in
+  let call_id = ctx.fresh_fun_call_id () in
 
   (* Generate a fresh symbolic value for the return value *)
   let ret_sv_ty = inst_sg.output in
-  let ret_spc = mk_fresh_symbolic_value span ret_sv_ty in
+  let ret_spc = mk_fresh_symbolic_value span ctx ret_sv_ty in
   let ret_value = mk_tvalue_from_symbolic_value ret_spc in
   let args_places =
     List.map (fun p -> S.mk_opt_place_from_op span p ctx) args
@@ -1582,8 +1582,8 @@ and eval_builtin_function_call_symbolic (config : config) (span : Meta.span)
        we have to recompute the regions hierarchy. *)
     let fun_name = Print.Types.builtin_fun_id_to_string fid in
     let inst_sig =
-      compute_regions_hierarchy_for_fun_call (Some span) ctx.crate fun_name
-        ctx.type_vars ctx.const_generic_vars func.generics sg
+      compute_regions_hierarchy_for_fun_call ctx.fresh_abs_id (Some span)
+        ctx.crate fun_name ctx.type_vars ctx.const_generic_vars func.generics sg
     in
     [%ltrace
       "special case:" ^ "\n- inst_sig:" ^ inst_fun_sig_to_string ctx inst_sig];

@@ -220,7 +220,7 @@ let eval_loop_symbolic (config : config) (span : span)
   [%ltrace "Context:\n" ^ eval_ctx_to_string ~span:(Some span) ctx ^ "\n"];
 
   (* Generate a fresh loop id *)
-  let loop_id = fresh_loop_id () in
+  let loop_id = ctx.fresh_loop_id () in
 
   (* Compute the fixed point at the loop entrance *)
   let fp_ctx, fixed_ids =

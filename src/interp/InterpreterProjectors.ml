@@ -73,7 +73,7 @@ let rec apply_proj_borrows_on_shared_borrow (span : Meta.span) (ctx : eval_ctx)
           (* Check if the region is in the set of projected regions (note that
            * we never project over static regions) *)
           if region_in_set r regions then
-            let sid' = fresh_shared_borrow_id () in
+            let sid' = ctx.fresh_shared_borrow_id () in
             AsbBorrow (bid, sid') :: asb
           else asb
         in

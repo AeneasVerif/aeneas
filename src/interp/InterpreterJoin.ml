@@ -188,7 +188,7 @@ let refresh_non_fixed_abs_ids (_span : Meta.span) (fixed_ids : ids_sets)
           match AbsId.Map.find_opt id !fresh_map with
           | Some id -> id
           | None ->
-              let nid = fresh_abs_id () in
+              let nid = ctx.fresh_abs_id () in
               fresh_map := AbsId.Map.add id nid !fresh_map;
               nid
     end
@@ -379,6 +379,7 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
       const_generic_vars_map;
       env = _;
       ended_regions = ended_regions0;
+      _;
     } =
       ctx0
     in
@@ -392,12 +393,14 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
       const_generic_vars_map = _;
       env = _;
       ended_regions = ended_regions1;
+      _;
     } =
       ctx1
     in
     let ended_regions = RegionId.Set.union ended_regions0 ended_regions1 in
     let ctx : eval_ctx =
       {
+        ctx0 with
         crate;
         type_ctx;
         fun_ctx;
@@ -453,7 +456,7 @@ let refresh_abs (old_abs : AbsId.Set.t) (ctx : eval_ctx) : eval_ctx =
   let abs_to_refresh = AbsId.Set.diff ids.aids old_abs in
   let aids_subst =
     List.map
-      (fun id -> (id, fresh_abs_id ()))
+      (fun id -> (id, ctx.fresh_abs_id ()))
       (AbsId.Set.elements abs_to_refresh)
   in
   let aids_subst = AbsId.Map.of_list aids_subst in
@@ -749,7 +752,10 @@ let destructure_shared_loans (span : Meta.span) (fixed_ids : ids_sets) : cm_fun
         [%cassert] span
           (not (symbolic_value_has_borrows (Some span) ctx sv))
           "Not implemented";
-        let sv' = mk_fresh_symbolic_value_opt_span (Some span) sv.sv_ty in
+        let sv' =
+          mk_fresh_symbolic_value_opt_span (Some span)
+            ctx.fresh_symbolic_value_id sv.sv_ty
+        in
         bindings := (sv', v) :: !bindings;
         { value = VSymbolic sv'; ty = sv.sv_ty }
   in

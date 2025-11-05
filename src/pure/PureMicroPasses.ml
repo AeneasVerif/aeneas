@@ -11,6 +11,7 @@ type ctx = {
   fun_decls : fun_decl FunDeclId.Map.t;
   type_decls : type_decl TypeDeclId.Map.t;
   trans_ctx : trans_ctx;
+  fresh_fvar_id : unit -> fvar_id;
 }
 
 let fun_decl_to_string (ctx : ctx) (def : fun_decl) : string =
@@ -78,7 +79,7 @@ let lift_map_fun_decl_body (f : ctx -> fun_decl -> fun_body -> fun_body)
   (* We open all the bound variables in the body before exploring it, then
      close them all after performing the updates - this makes it easier to
      deal with variables *)
-  map_open_all_fun_decl_body (f ctx def) def
+  map_open_all_fun_decl_body ctx.fresh_fvar_id (f ctx def) def
 
 (** Lift a visitor of expressions to a function which updates a function body *)
 let lift_expr_map_visitor_with_state
@@ -87,7 +88,9 @@ let lift_expr_map_visitor_with_state
   (* We open all the bound variables in the body before exploring it, then
      close them all after performing the updates - this makes it easier to
      deal with variables *)
-  map_open_all_fun_decl_body_expr ((obj ctx def)#visit_texpr state) def
+  map_open_all_fun_decl_body_expr ctx.fresh_fvar_id
+    ((obj ctx def)#visit_texpr state)
+    def
 
 (** Lift a visitor of expressions to a function which updates a function body *)
 let lift_expr_map_visitor
@@ -100,7 +103,7 @@ let lift_iter_fun_decl_body (f : ctx -> fun_decl -> fun_body -> unit)
   (* We open all the bound variables in the body before exploring it, then
      close them all after performing the updates - this makes it easier to
      deal with variables *)
-  iter_open_all_fun_decl_body (f ctx def) def
+  iter_open_all_fun_decl_body ctx.fresh_fvar_id (f ctx def) def
 
 (** Lift a visitor of expressions to a function which updates a function body *)
 let lift_expr_iter_visitor_with_state
@@ -109,13 +112,28 @@ let lift_expr_iter_visitor_with_state
   (* We open all the bound variables in the body before exploring it, then
      close them all after performing the updates - this makes it easier to
      deal with variables *)
-  iter_open_all_fun_decl_body_expr ((obj ctx def)#visit_texpr state) def
+  iter_open_all_fun_decl_body_expr ctx.fresh_fvar_id
+    ((obj ctx def)#visit_texpr state)
+    def
 
 (** Lift a visitor of expressions to a function which updates a function body *)
 let lift_expr_iter_visitor
     (obj : ctx -> fun_decl -> < visit_texpr : unit -> texpr -> unit ; .. >)
     (ctx : ctx) (def : fun_decl) : unit =
   lift_expr_iter_visitor_with_state obj () ctx def
+
+let open_fun_body ctx = open_fun_body ctx.fresh_fvar_id
+let open_all_fun_body ctx = open_all_fun_body ctx.fresh_fvar_id
+let open_lambdas ctx = open_lambdas ctx.fresh_fvar_id
+let open_binder ctx = open_binder ctx.fresh_fvar_id
+let open_binders ctx = open_binders ctx.fresh_fvar_id
+let open_lets ctx = open_lets ctx.fresh_fvar_id
+let open_loop_body ctx = open_loop_body ctx.fresh_fvar_id
+let mk_fresh_fvar ctx = mk_fresh_fvar ctx.fresh_fvar_id
+let open_all_texpr ctx = open_all_texpr ctx.fresh_fvar_id
+
+let opt_destruct_loop_result_decompose_outputs ctx =
+  opt_destruct_loop_result_decompose_outputs ctx.fresh_fvar_id
 
 (** A node in the constraints graph *)
 type nc_node = Pure of fvar_id | Llbc of E.local_id [@@deriving show, ord]
@@ -634,11 +652,11 @@ let compute_pretty_names_update (def : fun_decl) (names : string FVarId.Map.t)
 (** This function computes pretty names for the variables in the pure AST. It
     relies on the "meta"-place information in the AST to generate naming
     constraints, and then uses those to compute the names. *)
-let compute_pretty_names ctx (def : fun_decl) : fun_decl =
+let compute_pretty_names (ctx : ctx) (def : fun_decl) : fun_decl =
   (* We open all the bound variables in the body before exploring it, then
      close them all after performing the updates - this makes it easier to
      deal with variables *)
-  map_open_all_fun_decl_body
+  map_open_all_fun_decl_body ctx.fresh_fvar_id
     (fun (body : fun_body) ->
       let var_at_place, assign =
         compute_pretty_names_accumulate_constraints ctx def body
@@ -650,8 +668,8 @@ let compute_pretty_names ctx (def : fun_decl) : fun_decl =
     def
 
 (** Remove the meta-information *)
-let remove_meta (def : fun_decl) : fun_decl =
-  map_open_all_fun_decl_body_expr PureUtils.remove_meta def
+let remove_meta (ctx : ctx) (def : fun_decl) : fun_decl =
+  map_open_all_fun_decl_body_expr ctx.fresh_fvar_id PureUtils.remove_meta def
 
 (** Introduce calls to [massert] (monadic assertion).
 
@@ -1476,7 +1494,7 @@ let simplify_let_tuple (ctx : ctx) span (pat : tpat) (bound : texpr) :
 
 (** Filter the useless assignments (removes the useless variables, filters the
     function calls) *)
-let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
+let filter_useless (ctx : ctx) (def : fun_decl) : fun_decl =
   let span = def.item_meta.span in
   (* We first need a transformation on *left-values*, which filters the useless
      variables and tells us whether the value contains any variable which has
@@ -1611,7 +1629,7 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
     end
     (* We filter only inside of transparent (i.e., non-opaque) definitions *)
   in
-  map_open_all_fun_decl_body
+  map_open_all_fun_decl_body ctx.fresh_fvar_id
     (fun body ->
       (* Visit the body *)
       let body_exp, used_vars = expr_visitor#visit_texpr () body.body in
@@ -1892,7 +1910,7 @@ let simplify_aggregates = lift_expr_map_visitor simplify_aggregates_visitor
       { x with field1 = 1 }.field2 ~> x.field1
     ]
 *)
-let flatten_struct_updates (_ctx : ctx) (def : fun_decl) : fun_decl =
+let flatten_struct_updates (ctx : ctx) (def : fun_decl) : fun_decl =
   let span = def.item_meta.span in
   let visitor =
     object (self)
@@ -1958,7 +1976,7 @@ let flatten_struct_updates (_ctx : ctx) (def : fun_decl) : fun_decl =
         | _ -> ([%add_loc] mk_app span f arg).e
     end
   in
-  map_open_all_fun_decl_body_expr (visitor#visit_texpr ()) def
+  map_open_all_fun_decl_body_expr ctx.fresh_fvar_id (visitor#visit_texpr ()) def
 
 (** Remark: it might be better to use egraphs *)
 type simp_aggr_env = {
@@ -2191,7 +2209,7 @@ let update_continue_breaks (ctx : ctx) (def : fun_decl) (loop_func : texpr)
     | App _ | Qualif _ -> (
         (* Check if this is a continue, break, or a recLoopCall *)
         match
-          opt_destruct_loop_result_decompose_outputs span ~intro_let:true e
+          opt_destruct_loop_result_decompose_outputs ctx span ~intro_let:true e
         with
         | Some ({ variant_id; args; break_ty; _ }, rebind) ->
             if variant_id = loop_result_continue_id then (
@@ -2275,9 +2293,7 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
     fun_decl * fun_decl list =
   let span = def.item_meta.span in
 
-  (* Reset the fvar counter and open all the binders - it is easier to manipulate unique variable indices *)
-  reset_fvar_id_counter ();
-  let fvars, body = open_all_fun_body span body in
+  let fvars, body = open_all_fun_body ctx span body in
 
   (* Count the number of loops *)
   let loops = ref LoopId.Set.empty in
@@ -2539,7 +2555,7 @@ let decompose_loops (ctx : ctx) (def : fun_decl) =
 
 (** Convert the unit variables to [()] if they are used as right-values or [_]
     if they are used as left values in patterns. *)
-let unit_vars_to_unit _ (def : fun_decl) : fun_decl =
+let unit_vars_to_unit (ctx : ctx) (def : fun_decl) : fun_decl =
   let span = def.item_meta.span in
 
   (* The map visitor *)
@@ -2560,7 +2576,7 @@ let unit_vars_to_unit _ (def : fun_decl) : fun_decl =
     end
   in
   (* Update the body *)
-  map_open_all_fun_decl_body
+  map_open_all_fun_decl_body ctx.fresh_fvar_id
     (fun body ->
       let body_exp = obj#visit_texpr () body.body in
       (* Update the input parameters *)
@@ -2909,12 +2925,12 @@ let simplify_array_slice_update =
     [decompose_monadic]: always decompose a monadic let-binding
     [decompose_nested_patterns]: decompose the nested patterns *)
 let decompose_let_bindings_visitor (decompose_monadic : bool)
-    (decompose_nested_patterns : bool) (_ctx : ctx) (def : fun_decl) =
+    (decompose_nested_patterns : bool) (ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
 
   (* Set up the var id generator *)
   let mk_fresh (ty : ty) : tpat * texpr =
-    let vid = fresh_fvar_id () in
+    let vid = ctx.fresh_fvar_id () in
     let tmp : fvar = { id = vid; basename = None; ty } in
     let ltmp = mk_tpat_from_fvar None tmp in
     let rtmp = mk_texpr_from_fvar tmp in
@@ -3031,7 +3047,7 @@ let decompose_nested_let_patterns (ctx : ctx) (def : fun_decl) : fun_decl =
   decompose_let_bindings false true ctx def
 
 (** Unfold the monadic let-bindings to explicit matches. *)
-let unfold_monadic_let_bindings_visitors (_ctx : ctx) (def : fun_decl) =
+let unfold_monadic_let_bindings_visitors (ctx : ctx) (def : fun_decl) =
   (* It is a very simple map *)
   object (_self)
     inherit [_] map_expr as super
@@ -3060,7 +3076,7 @@ let unfold_monadic_let_bindings_visitors (_ctx : ctx) (def : fun_decl) =
          * store in an enum ("monadic" should be an enum, not a bool). *)
         let re_ty = Option.get (opt_destruct_result def.item_meta.span re.ty) in
         [%sanity_check] def.item_meta.span (lv.ty = re_ty);
-        let err_vid = fresh_fvar_id () in
+        let err_vid = ctx.fresh_fvar_id () in
         let err_var : fvar =
           {
             id = err_vid;
@@ -3154,8 +3170,8 @@ let lift_pure_function_calls =
   lift_expr_map_visitor_with_state lift_pure_function_calls_visitor
     FVarId.Map.empty
 
-let mk_fresh_fuel_var () : fvar =
-  let id = fresh_fvar_id () in
+let mk_fresh_fuel_var (ctx : ctx) : fvar =
+  let id = ctx.fresh_fvar_id () in
   { id; basename = Some ConstStrings.fuel_basename; ty = mk_fuel_ty }
 
 (** Add the fuel parameter, if necessary *)
@@ -3164,17 +3180,18 @@ let add_fuel_one (ctx : ctx) (loops : fun_decl LoopId.Map.t) (def : fun_decl) :
   [%ldebug fun_decl_to_string ctx def];
   let span = def.item_meta.span in
   (* Open the binders - this is more convenient *)
-  reset_fvar_id_counter ();
-  let body = Option.map (fun b -> snd (open_all_fun_body span b)) def.body in
+  let body =
+    Option.map (fun b -> snd (open_all_fun_body ctx span b)) def.body
+  in
 
   (* Introduce variables for the fuel and the state *)
   let effect = def.signature.fwd_info.effect_info in
   let fuel0 =
-    if effect.can_diverge && !Config.use_fuel then Some (mk_fresh_fuel_var ())
+    if effect.can_diverge && !Config.use_fuel then Some (mk_fresh_fuel_var ctx)
     else None
   in
   let fuel =
-    if effect.can_diverge && !Config.use_fuel then Some (mk_fresh_fuel_var ())
+    if effect.can_diverge && !Config.use_fuel then Some (mk_fresh_fuel_var ctx)
     else None
   in
   let fuel_expr = Option.map mk_texpr_from_fvar fuel in
@@ -3386,7 +3403,7 @@ let add_fuel (ctx : ctx) (trans : pure_fun_translation) : pure_fun_translation =
       let (a, b) <-- f x
       ...
     ]} *)
-let merge_let_app_then_decompose_tuple_visitor (_ctx : ctx) (def : fun_decl) =
+let merge_let_app_then_decompose_tuple_visitor (ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
   object (self)
     inherit [_] map_expr
@@ -3404,7 +3421,7 @@ let merge_let_app_then_decompose_tuple_visitor (_ctx : ctx) (def : fun_decl) =
               (* Introduce fresh variables for all the ignored variables
                    to make sure we can turn the pattern into an expression *)
               let pat1 =
-                tpat_replace_ignored_vars_with_free_vars fresh_fvar_id pat1
+                tpat_replace_ignored_vars_with_free_vars ctx.fresh_fvar_id pat1
               in
               let pat1_expr = Option.get (tpat_to_texpr span pat1) in
               (* Register the mapping from the variable we remove to the expression *)
@@ -3448,8 +3465,8 @@ let merge_let_app_then_decompose_tuple =
     ]}
 
     We do this by doing a (slightly imprecise) control-flow analysis. *)
-let expr_chains_loop_conts span _ctx (loop_vars : FVarId.Set.t) (e : texpr) :
-    bool =
+let expr_chains_loop_conts span (ctx : ctx) (loop_vars : FVarId.Set.t)
+    (e : texpr) : bool =
   let flatten_set_list (s : FVarId.Set.t list) : FVarId.Set.t =
     List.fold_left (fun s0 s1 -> FVarId.Set.union s0 s1) FVarId.Set.empty s
   in
@@ -3527,11 +3544,11 @@ let expr_chains_loop_conts span _ctx (loop_vars : FVarId.Set.t) (e : texpr) :
             let args = List.map (check env) args in
             Some [ flatten_set_list_opt_list (f :: args) ])
     | Lambda _ ->
-        let _, _, body = open_lambdas span e in
+        let _, _, body = open_lambdas ctx span e in
         check env body
     | Let (_, pat, bound, next) ->
         let bound = flatten_set_list_opt (check env bound) in
-        let _, pat, next = open_binder span pat next in
+        let _, pat, next = open_binder ctx span pat next in
         (* Update the environment - this is not very precise *)
         let env = extend_env env pat bound in
         check env next
@@ -3546,7 +3563,7 @@ let expr_chains_loop_conts span _ctx (loop_vars : FVarId.Set.t) (e : texpr) :
             let branches =
               List.map
                 (fun ({ pat; branch } : match_branch) ->
-                  let _, pat, branch = open_binder span pat branch in
+                  let _, pat, branch = open_binder ctx span pat branch in
                   let env = extend_env env pat scrut in
                   check env branch)
                 branches
@@ -3554,7 +3571,9 @@ let expr_chains_loop_conts span _ctx (loop_vars : FVarId.Set.t) (e : texpr) :
             merge_sets_opt_lists branches)
     | Loop { inputs; loop_body = { inputs = input_pats; loop_body }; _ } ->
         let inputs = List.map (check env) inputs in
-        let _, input_pats, loop_body = open_binders span input_pats loop_body in
+        let _, input_pats, loop_body =
+          open_binders ctx span input_pats loop_body
+        in
         let env =
           List.fold_left2
             (fun env pat bound ->
@@ -3602,7 +3621,7 @@ let simplify_loop_output_conts (ctx : ctx) (def : fun_decl) =
     let fresh_values = ref [] in
     let fresh_conts = ref [] in
     let fresh_output_var ~(is_value : bool) (e : texpr) : texpr =
-      let fid = fresh_fvar_id () in
+      let fid = ctx.fresh_fvar_id () in
       let fv : texpr = { e = FVar fid; ty = e.ty } in
       let fresh = if is_value then fresh_values else fresh_conts in
       fresh := (fid, e) :: !fresh;
@@ -3621,7 +3640,7 @@ let simplify_loop_output_conts (ctx : ctx) (def : fun_decl) =
       | Loop _ -> e
       | Let (monadic, pat, bound, next) ->
           let bound = simplify bound in
-          let _, pat, next = open_binder span pat next in
+          let _, pat, next = open_binder ctx span pat next in
           let next = simplify next in
           mk_closed_let span monadic pat bound next
       | Meta (m, e) -> mk_emeta m (simplify e)
@@ -3664,7 +3683,7 @@ let simplify_loop_output_conts (ctx : ctx) (def : fun_decl) =
             fresh_output_var ~is_value:false e)
           else
             (* No: dive into the lambda as there might be sub-expressions we can isolate *)
-            let _, patl, body = open_lambdas span e in
+            let _, patl, body = open_lambdas ctx span e in
             let body = simplify body in
             close_lambdas span patl body
       | App _ -> (
@@ -3694,7 +3713,7 @@ let simplify_loop_output_conts (ctx : ctx) (def : fun_decl) =
       (keep_outputs : (bool * FVarId.id option) list)
       (fresh_output_values : texpr list) (fresh_output_conts : texpr list)
       (continue_ty : ty) (break_ty : ty) (body : loop_body) : loop_body =
-    let _, body = open_loop_body span body in
+    let _, body = open_loop_body ctx span body in
 
     (* Introduce an intermediate let-binding for a loop.
 
@@ -3703,7 +3722,7 @@ let simplify_loop_output_conts (ctx : ctx) (def : fun_decl) =
        it elsewhere.
     *)
     let rebind_loop (loop : loop) : texpr =
-      let fvars = List.map mk_fresh_fvar loop.output_tys in
+      let fvars = List.map (mk_fresh_fvar ctx) loop.output_tys in
       let pats = List.map (mk_tpat_from_fvar None) fvars in
       let pat = mk_simpl_tuple_pat pats in
       let outputs = List.map mk_texpr_from_fvar fvars in
@@ -3726,7 +3745,8 @@ let simplify_loop_output_conts (ctx : ctx) (def : fun_decl) =
           (* This might be a break or a continue *)
           begin
             match
-              opt_destruct_loop_result_decompose_outputs span ~intro_let:true e
+              opt_destruct_loop_result_decompose_outputs ctx span
+                ~intro_let:true e
             with
             | None -> e
             | Some ({ variant_id; args = outputs; _ }, rebind) ->
@@ -3793,7 +3813,7 @@ let simplify_loop_output_conts (ctx : ctx) (def : fun_decl) =
           end
       | Let (monadic, pat, bound, next) ->
           (* No need to update the bound expression *)
-          let _, pat, next = open_binder span pat next in
+          let _, pat, next = open_binder ctx span pat next in
           let next = update next in
           mk_closed_let span monadic pat bound next
       | Switch (scrut, switch) ->
@@ -3805,7 +3825,7 @@ let simplify_loop_output_conts (ctx : ctx) (def : fun_decl) =
                 let branches =
                   List.map
                     (fun ({ pat; branch } : match_branch) ->
-                      let _, pat, branch = open_binder span pat branch in
+                      let _, pat, branch = open_binder ctx span pat branch in
                       let branch = update branch in
                       let pat, branch = close_binder span pat branch in
                       { pat; branch })
@@ -3840,7 +3860,7 @@ let simplify_loop_output_conts (ctx : ctx) (def : fun_decl) =
         (* A loop should always be bound by a let *)
         [%internal_error] span
     | Lambda _ ->
-        let vars', pats, body = open_lambdas span e in
+        let vars', pats, body = open_lambdas ctx span e in
         let vars = fvarset_union vars vars' in
         let body = update vars body in
         mk_closed_lambdas span pats body
@@ -3857,7 +3877,7 @@ let simplify_loop_output_conts (ctx : ctx) (def : fun_decl) =
               let branches =
                 List.map
                   (fun ({ pat; branch } : match_branch) ->
-                    let vars', pat, branch = open_binder span pat branch in
+                    let vars', pat, branch = open_binder ctx span pat branch in
                     let vars = fvarset_union vars vars' in
                     let branch = update vars branch in
                     let pat, branch = close_binder span pat branch in
@@ -3870,7 +3890,7 @@ let simplify_loop_output_conts (ctx : ctx) (def : fun_decl) =
         { e = Switch (scrut, switch); ty }
     | Let (monadic, pat, bound, next) -> (
         [%ldebug "About to simplify the outputs of:\n" ^ texpr_to_string ctx e];
-        let vars', pat, next = open_binder span pat next in
+        let vars', pat, next = open_binder ctx span pat next in
         let vars = fvarset_union vars vars' in
         [%ldebug
           "After opening the binders in the let:\n"
@@ -4011,7 +4031,7 @@ let simplify_loop_output_conts (ctx : ctx) (def : fun_decl) =
   let body =
     Option.map
       (fun body ->
-        let fvars, body = open_fun_body span body in
+        let fvars, body = open_fun_body ctx span body in
         let fvars = FVarId.Set.of_list (FVarId.Map.keys fvars) in
         let body = { body with body = update fvars body.body } in
         close_fun_body span body)
@@ -4066,7 +4086,8 @@ let compute_loop_input_output_rel (span : Meta.span) (ctx : ctx) (loop : loop) :
               "- e.ty: " ^ ty_to_string ctx e.ty ^ "\n- e:\n"
               ^ texpr_to_string ctx e];
             match
-              opt_destruct_loop_result_decompose_outputs span ~intro_let:false e
+              opt_destruct_loop_result_decompose_outputs ctx span
+                ~intro_let:false e
             with
             | None ->
                 (* We need to visit the sub-expressions *)
@@ -4177,7 +4198,8 @@ let filter_loop_useless_inputs_outputs (ctx : ctx)
           (* This might be a break or a continue *)
           begin
             match
-              opt_destruct_loop_result_decompose_outputs span ~intro_let:true e
+              opt_destruct_loop_result_decompose_outputs ctx span
+                ~intro_let:true e
             with
             | None -> e
             | Some ({ variant_id; args = outputs; _ }, rebind) ->
@@ -4205,7 +4227,7 @@ let filter_loop_useless_inputs_outputs (ctx : ctx)
           end
       | Let (monadic, pat, bound, next) ->
           (* No need to update the bound expression *)
-          let _, pat, next = open_binder span pat next in
+          let _, pat, next = open_binder ctx span pat next in
           let next = update next in
           mk_closed_let span monadic pat bound next
       | Switch (scrut, switch) ->
@@ -4217,7 +4239,7 @@ let filter_loop_useless_inputs_outputs (ctx : ctx)
                 let branches =
                   List.map
                     (fun ({ pat; branch } : match_branch) ->
-                      let _, pat, branch = open_binder span pat branch in
+                      let _, pat, branch = open_binder ctx span pat branch in
                       let branch = update branch in
                       let pat, branch = close_binder span pat branch in
                       { pat; branch })
@@ -4254,7 +4276,7 @@ let filter_loop_useless_inputs_outputs (ctx : ctx)
         [%internal_error] span
     | Meta (m, e) -> mk_emeta m (update e)
     | Let (monadic, pat, bound, next) -> (
-        let _, pat, next = open_binder span pat next in
+        let _, pat, next = open_binder ctx span pat next in
 
         (* Update the next expression first - there may be loops in there *)
         let next = update next in
@@ -4262,7 +4284,7 @@ let filter_loop_useless_inputs_outputs (ctx : ctx)
         (* Check if the bound expression is a loop *)
         match bound.e with
         | Loop loop ->
-            let _, body = open_loop_body span loop.loop_body in
+            let _, body = open_loop_body ctx span loop.loop_body in
 
             (* First explore the loop body: we want to simplify the inner loops *)
             let body = { body with loop_body = update body.loop_body } in
@@ -4362,7 +4384,7 @@ let filter_loop_useless_inputs_outputs (ctx : ctx)
                 List.exists
                   (fun x -> x)
                   (List.map
-                     (fun e -> texpr_has_bvars (open_all_texpr span e))
+                     (fun e -> texpr_has_bvars (open_all_texpr ctx span e))
                      el)
               in
               if have_bvars then false
@@ -4573,7 +4595,7 @@ let filter_loop_useless_inputs_outputs (ctx : ctx)
               Match
                 (List.map
                    (fun ({ pat; branch } : match_branch) ->
-                     let _, pat, branch = open_binder span pat branch in
+                     let _, pat, branch = open_binder ctx span pat branch in
                      let branch = update branch in
                      let pat, branch = close_binder span pat branch in
                      { pat; branch })
@@ -4584,7 +4606,7 @@ let filter_loop_useless_inputs_outputs (ctx : ctx)
   let body =
     Option.map
       (fun body ->
-        let _, body = open_fun_body span body in
+        let _, body = open_fun_body ctx span body in
         let body = { body with body = update body.body } in
         close_fun_body span body)
       def.body
@@ -4657,7 +4679,8 @@ let reorder_loop_outputs (ctx : ctx) (def : fun_decl) =
           (* This might be a break or a continue *)
           begin
             match
-              opt_destruct_loop_result_decompose_outputs span ~intro_let:true e
+              opt_destruct_loop_result_decompose_outputs ctx span
+                ~intro_let:true e
             with
             | None -> e
             | Some ({ variant_id; args; _ }, rebind) ->
@@ -4678,7 +4701,7 @@ let reorder_loop_outputs (ctx : ctx) (def : fun_decl) =
           end
       | Let (monadic, pat, bound, next) ->
           (* No need to update the bound expression *)
-          let _, pat, next = open_binder span pat next in
+          let _, pat, next = open_binder ctx span pat next in
           let next = update next in
           mk_closed_let span monadic pat bound next
       | Switch (scrut, switch) ->
@@ -4690,7 +4713,7 @@ let reorder_loop_outputs (ctx : ctx) (def : fun_decl) =
                 let branches =
                   List.map
                     (fun ({ pat; branch } : match_branch) ->
-                      let _, pat, branch = open_binder span pat branch in
+                      let _, pat, branch = open_binder ctx span pat branch in
                       let branch = update branch in
                       let pat, branch = close_binder span pat branch in
                       { pat; branch })
@@ -5018,12 +5041,12 @@ let reorder_loop_outputs (ctx : ctx) (def : fun_decl) =
         [%internal_error] span
     | Meta (m, e) -> mk_emeta m (explore e)
     | Let (monadic, pat, bound, next) -> (
-        let _, pat, next = open_binder span pat next in
+        let _, pat, next = open_binder ctx span pat next in
 
         (* Check if the bound expression is a loop *)
         match bound.e with
         | Loop loop -> (
-            let _, body = open_loop_body span loop.loop_body in
+            let _, body = open_loop_body ctx span loop.loop_body in
             [%ldebug "body:\n" ^ loop_body_to_string ctx body];
 
             let loop = { loop with loop_body = body } in
@@ -5086,7 +5109,7 @@ let reorder_loop_outputs (ctx : ctx) (def : fun_decl) =
               Match
                 (List.map
                    (fun ({ pat; branch } : match_branch) ->
-                     let _, pat, branch = open_binder span pat branch in
+                     let _, pat, branch = open_binder ctx span pat branch in
                      let branch = explore branch in
                      let pat, branch = close_binder span pat branch in
                      { pat; branch })
@@ -5097,7 +5120,7 @@ let reorder_loop_outputs (ctx : ctx) (def : fun_decl) =
   let body =
     Option.map
       (fun body ->
-        let _, body = open_fun_body span body in
+        let _, body = open_fun_body ctx span body in
         let body = { body with body = explore body.body } in
         close_fun_body span body)
       def.body
@@ -5165,7 +5188,8 @@ let loops_to_recursive (ctx : ctx) (def : fun_decl) =
           (* This might be a break or a continue *)
           begin
             match
-              opt_destruct_loop_result_decompose_outputs span ~intro_let:true e
+              opt_destruct_loop_result_decompose_outputs ctx span
+                ~intro_let:true e
             with
             | None -> e
             | Some ({ variant_id; args = outputs; _ }, rebind) ->
@@ -5176,8 +5200,8 @@ let loops_to_recursive (ctx : ctx) (def : fun_decl) =
                   *)
                   let update_back (e : texpr) =
                     [%ldebug "- e:\n" ^ texpr_to_string ctx e];
-                    let _, lam_pats, body = open_lambdas span e in
-                    let lets, body = open_lets span body in
+                    let _, lam_pats, body = open_lambdas ctx span e in
+                    let lets, body = open_lets ctx span body in
                     let _, args = destruct_apps body in
                     match args with
                     | [ arg ] ->
@@ -5227,8 +5251,8 @@ let loops_to_recursive (ctx : ctx) (def : fun_decl) =
                       "- input: " ^ texpr_to_string ctx input ^ "\n- back: "
                       ^ fvar_to_string ctx back ^ "\n- back_inputs: "
                       ^ Print.list_to_string (fvar_to_string ctx) back_inputs];
-                    let _, lam_pats, body = open_lambdas span input in
-                    let let_pats, body = open_lets span body in
+                    let _, lam_pats, body = open_lambdas ctx span input in
+                    let let_pats, body = open_lets ctx span body in
                     let f, args = destruct_apps body in
                     match (f.e, lam_pats, args) with
                     | FVar _, [ pat ], [ arg ] ->
@@ -5278,7 +5302,7 @@ let loops_to_recursive (ctx : ctx) (def : fun_decl) =
                   let backl =
                     List.map
                       (fun (e : texpr) ->
-                        let id = fresh_fvar_id () in
+                        let id = ctx.fresh_fvar_id () in
                         let fv : fvar =
                           { id; ty = e.ty; basename = Some "back" }
                         in
@@ -5313,7 +5337,7 @@ let loops_to_recursive (ctx : ctx) (def : fun_decl) =
           end
       | Let (monadic, pat, bound, next) ->
           (* No need to update the bound expression *)
-          let _, pat, next = open_binder span pat next in
+          let _, pat, next = open_binder ctx span pat next in
           let next = update next in
           mk_closed_let span monadic pat bound next
       | Switch (scrut, switch) ->
@@ -5325,7 +5349,7 @@ let loops_to_recursive (ctx : ctx) (def : fun_decl) =
                 let branches =
                   List.map
                     (fun ({ pat; branch } : match_branch) ->
-                      let _, pat, branch = open_binder span pat branch in
+                      let _, pat, branch = open_binder ctx span pat branch in
                       let branch = update branch in
                       let pat, branch = close_binder span pat branch in
                       { pat; branch })
@@ -5364,12 +5388,12 @@ let loops_to_recursive (ctx : ctx) (def : fun_decl) =
         [%internal_error] span
     | Meta (m, e) -> mk_emeta m (update e)
     | Let (monadic, pat, bound, next) -> (
-        let _, pat, next = open_binder span pat next in
+        let _, pat, next = open_binder ctx span pat next in
 
         (* Check if the bound expression is a loop *)
         match bound.e with
         | Loop loop ->
-            let _, body = open_loop_body span loop.loop_body in
+            let _, body = open_loop_body ctx span loop.loop_body in
             [%ldebug "body:\n" ^ loop_body_to_string ctx body];
 
             (* Explore the loop body: we want to simplify the inner loops *)
@@ -5392,7 +5416,7 @@ let loops_to_recursive (ctx : ctx) (def : fun_decl) =
             in
             (* Helper: is a continuation exactly the identity? *)
             let is_identity (x : texpr) : bool =
-              let _, pats, body = open_lambdas span x in
+              let _, pats, body = open_lambdas ctx span x in
               match (pats, body.e) with
               | [ { pat = POpen (fv, _); _ } ], FVar fid -> fv.id = fid
               | _ -> false
@@ -5496,7 +5520,7 @@ let loops_to_recursive (ctx : ctx) (def : fun_decl) =
               let break_outputs =
                 List.mapi
                   (fun i ty ->
-                    let id = fresh_fvar_id () in
+                    let id = ctx.fresh_fvar_id () in
                     let basename =
                       if i < loop.num_output_values then None else Some "back"
                     in
@@ -5514,7 +5538,7 @@ let loops_to_recursive (ctx : ctx) (def : fun_decl) =
                   (fun el ->
                     match el with
                     | e :: _ ->
-                        let _, pats, _ = open_lambdas span e in
+                        let _, pats, _ = open_lambdas ctx span e in
                         List.map
                           (fun x -> fst ([%add_loc] as_pat_open span x))
                           pats
@@ -5581,7 +5605,7 @@ let loops_to_recursive (ctx : ctx) (def : fun_decl) =
               Match
                 (List.map
                    (fun ({ pat; branch } : match_branch) ->
-                     let _, pat, branch = open_binder span pat branch in
+                     let _, pat, branch = open_binder ctx span pat branch in
                      let branch = update branch in
                      let pat, branch = close_binder span pat branch in
                      { pat; branch })
@@ -5592,7 +5616,7 @@ let loops_to_recursive (ctx : ctx) (def : fun_decl) =
   let body =
     Option.map
       (fun body ->
-        let _, body = open_fun_body span body in
+        let _, body = open_fun_body ctx span body in
         let body = { body with body = update body.body } in
         close_fun_body span body)
       def.body
@@ -5701,7 +5725,7 @@ let let_to_match (ctx : ctx) (def : fun_decl) =
   let update_let (env : (int * texpr) TyMap.t) (pat : tpat) (bound : texpr) :
       tpat * texpr =
     let refresh_var (var : fvar) =
-      mk_fresh_fvar ~basename:var.basename var.ty
+      mk_fresh_fvar ctx ~basename:var.basename var.ty
     in
     let get_default_expr (var : fvar) =
       match TyMap.find_opt var.ty env with
@@ -5722,12 +5746,12 @@ let let_to_match (ctx : ctx) (def : fun_decl) =
         let env, nx, x = update env x in
         (env, nf + nx + 1, [%add_loc] mk_app span f x)
     | Lambda (pat, body) ->
-        let _, pat, body = open_binder span pat body in
+        let _, pat, body = open_binder ctx span pat body in
         let env', size = add_pat env pat in
         let _, size', body = update env' body in
         (env, size + size' + 1, mk_closed_lambda span pat body)
     | Let (monadic, pat, bound, next) ->
-        let _, pat, next = open_binder span pat next in
+        let _, pat, next = open_binder ctx span pat next in
         let pat, bound = update_let env pat bound in
         let env, s0, bound = update env bound in
         let env', s1 = add_pat env pat in
@@ -5746,7 +5770,7 @@ let let_to_match (ctx : ctx) (def : fun_decl) =
                 List.split
                   (List.map
                      (fun ({ pat; branch } : match_branch) ->
-                       let _, pat, branch = open_binder span pat branch in
+                       let _, pat, branch = open_binder ctx span pat branch in
                        let env, size = add_pat env pat in
                        let _, size', branch = update env branch in
                        let pat, branch = close_binder span pat branch in
@@ -5767,7 +5791,7 @@ let let_to_match (ctx : ctx) (def : fun_decl) =
         in
         let size', loop_body =
           let ({ inputs; loop_body } : loop_body) = loop.loop_body in
-          let _, inputs, loop_body = open_binders span inputs loop_body in
+          let _, inputs, loop_body = open_binders ctx span inputs loop_body in
           let env', size =
             List.fold_left
               (fun (env, size) input ->
@@ -5812,7 +5836,7 @@ let let_to_match (ctx : ctx) (def : fun_decl) =
       (fun (body : fun_body) ->
         (* Quick check: explore while updating only if necessary *)
         if needs_update body.body then
-          let _, body = open_fun_body span body in
+          let _, body = open_fun_body ctx span body in
           let env =
             List.fold_left
               (fun env input ->
@@ -5840,7 +5864,7 @@ let passes :
 
        Remark: some passes below use the fact that we removed the meta-data
        (otherwise we would have to "unmeta" expressions before matching) *)
-    (None, "remove_meta_def", fun _ -> remove_meta);
+    (None, "remove_meta_def", remove_meta);
     (* Convert the unit variables to [()] if they are used as right-values or
      * [_] if they are used as left values. *)
     (None, "unit_vars_to_unit", unit_vars_to_unit);
@@ -6061,6 +6085,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
   let fmt = trans_ctx_to_pure_fmt_env trans_ctx in
   [%ldebug PrintPure.fun_decl_to_string fmt def];
   let span = def.item_meta.span in
+  let _, fresh_fvar_id = FVarId.fresh_stateful_generator () in
   let fmt = trans_ctx_to_pure_fmt_env trans_ctx in
   let texpr_to_string (x : texpr) : string =
     PrintPure.texpr_to_string fmt false "" "  " x
@@ -6402,7 +6427,9 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
   in
 
   (* Update the body *)
-  map_open_all_fun_decl_body_expr (fun (body : texpr) -> visit body.ty body) def
+  map_open_all_fun_decl_body_expr fresh_fvar_id
+    (fun (body : texpr) -> visit body.ty body)
+    def
 
 (** Introduce type annotations.
 
@@ -6459,10 +6486,16 @@ let apply_passes_to_pure_fun_translations (trans_ctx : trans_ctx)
     TypeDeclId.Map.of_list
       (List.map (fun (d : type_decl) -> (d.def_id, d)) type_decls)
   in
-  let ctx = { trans_ctx; type_decls; fun_decls } in
+
+  let mk_ctx () : ctx =
+    let _, fresh_fvar_id = FVarId.fresh_stateful_generator () in
+    { trans_ctx; type_decls; fun_decls; fresh_fvar_id }
+  in
 
   (* Apply the micro-passes *)
   let apply (f : fun_decl) : pure_fun_translation =
+    let ctx = mk_ctx () in
+
     (* Apply the micro-passes *)
     let f = apply_passes_to_def ctx f in
 
@@ -6502,9 +6535,9 @@ let apply_passes_to_pure_fun_translations (trans_ctx : trans_ctx)
   in
   let transl =
     let num_decls = List.length transl in
-    ProgressBar.with_reporter num_decls "Post-processed translated functions: "
-      (fun report ->
-        List.map
+    ProgressBar.with_parallel_reporter num_decls
+      "Post-processed translated functions: " (fun report ->
+        Parallel.parallel_map
           (fun x ->
             let x = apply x in
             report 1;
@@ -6521,4 +6554,4 @@ let apply_passes_to_pure_fun_translations (trans_ctx : trans_ctx)
   let transl = add_type_annotations trans_ctx transl builtin_sigs type_decls in
 
   (* Update the "reducible" attribute *)
-  compute_reducible ctx transl
+  compute_reducible (mk_ctx ()) transl

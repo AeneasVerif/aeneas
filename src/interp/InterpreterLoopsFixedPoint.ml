@@ -51,7 +51,7 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
         r_subst = (fun r -> if RegionId.Set.mem r rids then nrid else r);
         ssubst =
           (fun id ->
-            let nid = fresh_symbolic_value_id () in
+            let nid = ctx.fresh_symbolic_value_id () in
             let sv = SymbolicValueId.Map.find id absl_id_maps.sids_to_values in
             sid_subst := (nid, sv) :: !sid_subst;
             nid);
@@ -85,11 +85,11 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
   let push_abs_for_shared_value (abs : abs) (sv : tvalue) (lid : BorrowId.id)
       (sid : SharedBorrowId.id) : BorrowId.id * SharedBorrowId.id =
     (* Create fresh borrows (for the reborrow) *)
-    let nlid = fresh_borrow_id () in
-    let nsid = fresh_shared_borrow_id () in
+    let nlid = ctx.fresh_borrow_id () in
+    let nsid = ctx.fresh_shared_borrow_id () in
 
     (* We need a fresh region for the new abstraction *)
-    let nrid = fresh_region_id () in
+    let nrid = ctx.fresh_region_id () in
 
     (* Prepare the shared value *)
     let nsv =
@@ -134,7 +134,7 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
     in
     let fresh_abs =
       {
-        abs_id = fresh_abs_id ();
+        abs_id = ctx.fresh_abs_id ();
         kind;
         can_end;
         parents = AbsId.Set.empty;
