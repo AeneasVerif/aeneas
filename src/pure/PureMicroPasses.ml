@@ -1403,6 +1403,77 @@ let inline_useless_var_assignments ~inline_named ~inline_const ~inline_pure
        ~inline_pure ~inline_identity ~inline_loop_back_calls)
     empty_inline_env
 
+(** Simplify let-bindings which bind tuples and which contain ignored patterns.
+
+    Ex.:
+    {[
+      let (_, x) = if b then (true, 1) else (false, 0) in …
+
+          ~>
+
+      let x = if b then 1 else 0 in …
+    ]} *)
+let simplify_let_tuple (ctx : ctx) span (pat : tpat) (bound : texpr) :
+    tpat * texpr * bool =
+  let span = span in
+  (* We attempt to filter only if:
+     - the pattern is a tuple containing ignored patterns
+     - the bound expression is "non trivial" (for instance, not just a
+       function call) *)
+  let pats =
+    match pat.ty with
+    | TAdt (TTuple, generics) ->
+        [%sanity_check] span (generics.const_generics = []);
+        [%sanity_check] span (generics.trait_refs = []);
+        begin
+          match pat.pat with
+          | PAdt { fields; _ } -> Some fields
+          | _ -> None
+        end
+    | _ -> None
+  in
+  let has_ignored_pats =
+    match pats with
+    | None -> false
+    | Some pats -> List.exists is_ignored_pat pats
+  in
+  let bound_non_trivial =
+    match bound.e with
+    | Lambda _ | Let _ | Switch _ -> true
+    | _ -> false
+  in
+
+  if has_ignored_pats && bound_non_trivial then
+    (* Update *)
+    let pats = Option.get pats in
+    let keep = List.map (fun p -> not (is_ignored_pat p)) pats in
+    let tys = List.map (fun (p : tpat) -> p.ty) pats in
+    let pats = List.filter (fun p -> not (is_ignored_pat p)) pats in
+    let pats = mk_simpl_tuple_pat pats in
+
+    (* Update an expression to filter its outputs *)
+    let rec update (e : texpr) : texpr =
+      let e' =
+        match e.e with
+        | FVar _ | App _ | Loop _ | Const _ ->
+            (* We need to introduce an intermediate let-binding *)
+            raise (Failure "TODO")
+        | BVar _ | CVar _ | Qualif _ | StructUpdate _ -> [%internal_error] span
+        | Lambda (_, _) -> _
+        | Let (monadic, pat, bound, next) ->
+            let next = update next in
+            Let (monadic, pat, bound, next)
+        | Switch (_, _) -> _
+        | Meta (m, inner) -> Meta (m, update inner)
+        | EError _ -> e.e
+      in
+      { e with e = e' }
+    in
+
+    let bound = update bound in
+    (pats, bound, true)
+  else (pat, bound, false)
+
 (** Filter the useless assignments (removes the useless variables, filters the
     function calls) *)
 let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
@@ -1492,6 +1563,15 @@ let filter_useless (_ctx : ctx) (def : fun_decl) : fun_decl =
                   { pat; ty }
                 else lv
               in
+              (* If there are ignored patterns, attempt to simplify
+                 the binding and the right expression. *)
+              let lv, re, updated = simplify_let_tuple ctx lv re in
+
+              (* We may need to revisited the bound expression if we modified it:
+                 some values may now be unused. *)
+              let re, _ = if updated then self#visit_texpr env re else re in
+
+              (* Put everything together *)
               (Let (monadic, lv, re, e), fun _ -> used)
             in
             (* Potentially filter the let-binding *)
