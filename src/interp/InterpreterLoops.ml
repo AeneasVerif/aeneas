@@ -263,17 +263,17 @@ let eval_loop_symbolic (config : config) (span : span)
     ^ eval_ctx_to_string ~span:(Some span) break_ctx];
 
   (* Compute the loop input parameters *)
-  let _fresh_sids, fp_input_svalues =
-    compute_fp_ctx_symbolic_values span ~only_modified_input_svalues:true ctx
-      fp_ctx
+  let fp_input_svalues =
+    compute_ctx_fresh_ordered_symbolic_values span ~only_modified_svalues:true
+      ctx fp_ctx
   in
   let fp_input_svalue_ids =
     List.map (fun (sv : symbolic_value) -> sv.sv_id) fp_input_svalues
   in
 
-  let _fresh_sids, break_input_svalues =
-    compute_fp_ctx_symbolic_values span ~only_modified_input_svalues:true ctx
-      break_ctx
+  let break_input_svalues =
+    compute_ctx_fresh_ordered_symbolic_values span ~only_modified_svalues:true
+      ctx break_ctx
   in
   let break_input_svalue_ids =
     List.map (fun (sv : symbolic_value) -> sv.sv_id) break_input_svalues

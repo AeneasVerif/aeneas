@@ -5,6 +5,7 @@ open ValuesUtils
 open Expressions
 open Contexts
 open LlbcAst
+open LlbcAstUtils
 open Cps
 open InterpreterUtils
 open InterpreterProjectors
@@ -947,13 +948,14 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
      symbolic. If it is concrete, we can then evaluate the operand
      directly, otherwise we must first expand the value.
      Note that we can't fully evaluate the operand *then* expand the
-     value if it is symbolic, because the value may have been move
+     value if it is symbolic, because the value may have been moved
      (and would thus floating in thin air...)! *)
   (* Match on the targets *)
   match (switch : LlbcAst.switch) with
   | If (op, true_block, false_block) ->
       (* Evaluate the operand *)
       let op_v, ctx, cf_eval_op = eval_operand config span op ctx in
+      let ctx0 = ctx in
       (* Switch on the value *)
       let ctx_resl, cf_if =
         match op_v.value with
@@ -964,22 +966,83 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
         | VSymbolic sv ->
             (* Expand the symbolic boolean, and continue by evaluating
                the branches *)
-            let (ctx_true, ctx_false), cf_bool =
+            let (true_ctx, false_ctx), cf_bool =
               expand_symbolic_bool span sv
                 (S.mk_opt_place_from_op span op ctx)
                 ctx
             in
-            let resl_true = eval_block config true_block ctx_true in
-            let resl_false = eval_block config false_block ctx_false in
-            let ctx_resl, cf_branches =
-              comp_seqs __FILE__ __LINE__ span [ resl_true; resl_false ]
+            (* Check if we should join the states after the if then else *)
+            let join =
+              (not (block_has_break_continue_return true_block))
+              && not (block_has_break_continue_return false_block)
             in
-            let cc el =
-              match cf_branches el with
-              | [ e_true; e_false ] -> cf_bool (e_true, e_false)
+            let resl_true = eval_block config true_block true_ctx in
+            let resl_false = eval_block config false_block false_ctx in
+            if join then
+              (* Join the contexts.
+
+                 Note that if we can join the contexts (there are no statements
+                 breaking the control flow) then we should join the contexts after
+                 all the inner branchings, which means we should get exactly one
+                 context for each branch.
+              *)
+              match (resl_true, resl_false) with
+              | ( ([ (true_ctx, true_res) ], e_true),
+                  ([ (false_ctx, false_res) ], e_false) ) -> (
+                  [%ldebug
+                    "About to join contexts after an [if then else]."
+                    ^ "\n- initial ctx:\n" ^ eval_ctx_to_string ctx
+                    ^ "\n\n- true ctx:\n"
+                    ^ eval_ctx_to_string true_ctx
+                    ^ "\n\n- false ctx:\n"
+                    ^ eval_ctx_to_string false_ctx];
+                  match (true_res, false_res) with
+                  | Unit, Unit ->
+                      let fixed_ids, _ = compute_ctx_ids ctx0 in
+                      let _, joined_ctx =
+                        InterpreterJoin.join_ctxs_list config span Join
+                          fixed_ids [ true_ctx; false_ctx ]
+                      in
+                      [%ldebug "Joined ctx:\n" ^ eval_ctx_to_string joined_ctx];
+
+                      (* Compute the output values *)
+                      let input_svalues =
+                        InterpreterJoin
+                        .compute_ctx_fresh_ordered_symbolic_values span
+                          ~only_modified_svalues:true ctx0 joined_ctx
+                      in
+                      let input_svalue_ids =
+                        List.map
+                          (fun (sv : symbolic_value) -> sv.sv_id)
+                          input_svalues
+                      in
+
+                      (* Match the contexts with the joined context to determine
+                         the output *)
+                      let _ =
+                        InterpreterJoin.match_ctx_with_target config span Join
+                          input_svalue_ids fixed_ids joined_ctx true_ctx
+                      in
+                      let _ =
+                        InterpreterJoin.match_ctx_with_target config span Join
+                          input_svalue_ids fixed_ids joined_ctx false_ctx
+                      in
+                      raise (Failure "TODO")
+                  | Unit, Panic | Panic, Unit ->
+                      (* There is a single context, so we have nothing to join *)
+                      raise (Failure "TODO")
+                  | _ -> [%internal_error] span)
               | _ -> [%internal_error] span
-            in
-            (ctx_resl, cc)
+            else
+              let ctx_resl, cf_branches =
+                comp_seqs __FILE__ __LINE__ span [ resl_true; resl_false ]
+              in
+              let cc el =
+                match cf_branches el with
+                | [ e_true; e_false ] -> cf_bool (e_true, e_false)
+                | _ -> [%internal_error] span
+              in
+              (ctx_resl, cc)
         | _ -> [%craise] span "Inconsistent state"
       in
       (* Compose *)

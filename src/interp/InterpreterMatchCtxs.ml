@@ -16,7 +16,7 @@ open InterpreterJoinCore
 module S = SynthesizeSymbolic
 
 (** The local logger *)
-let log = Logging.loops_match_ctxs_log
+let log = Logging.match_ctxs_log
 
 let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
     (ctx : eval_ctx) (env : env) : abs_borrows_loans_maps =
@@ -2407,6 +2407,8 @@ let prepare_match_ctx_with_target (config : config) (span : Meta.span)
     let module JM = MakeJoinMatcher (S) in
     let module M = MakeMatcher (JM) in
     try
+      (* Match the bindings which are common between the two environments *)
+      [%sanity_check] span (List.length filt_src_env = List.length filt_tgt_env);
       let _ =
         List.iter
           (fun (var0, var1) ->

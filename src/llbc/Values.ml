@@ -255,6 +255,9 @@ type abs_kind =
       (** See [InterpreterExpressions.copy_value]: a auxiliary region
           abstraction which we introduced because of a copy of a symbolic value
           containing borrows. *)
+  | Join
+      (** The abstraction was introduced after joining contexts, typically after
+          an [if then else] or a [match] *)
 [@@deriving show, ord]
 
 module AbsBVarId = IdGen ()

@@ -10,7 +10,165 @@ open InterpreterReduceCollapse
 open InterpreterMatchCtxs
 
 (** The local logger *)
-let log = Logging.loops_join_ctxs_log
+let log = Logging.join_ctxs_log
+
+(* TODO: this could be drastically simplified.
+
+   TODO: the output set of fresh values is probably useless.
+*)
+let compute_ctx_fresh_ordered_symbolic_values (span : Meta.span)
+    ~(only_modified_svalues : bool) (ctx : eval_ctx) (fp_ctx : eval_ctx) :
+    symbolic_value list =
+  let old_ids, _ = compute_ctx_ids ctx in
+  let fp_ids, fp_ids_maps = compute_ctx_ids fp_ctx in
+  let fresh_sids = SymbolicValueId.Set.diff fp_ids.sids old_ids.sids in
+
+  (* Compute the set of symbolic values which appear inside *fixed* abstractions.
+     There are two kinds of values:
+     - shared symbolic values (appearing in shared loans): because we introduce
+       fresh abstractions and reborrows with {!prepare_ashared_loans}, those
+       values are never accessed directly inside the loop iterations: we can
+       ignore them (and should, because otherwise it leads to a very ugly
+       translation with duplicated, unused values)
+     - projections over symbolic values.
+       TODO: actually it may happen that a projector inside a fixed abstraction
+       gets expanded. We need to update the way we compute joins and check
+       whether two contexts are equivalent to make it more general.
+  *)
+  let sids_in_fixed_abs =
+    let fixed_absl =
+      List.filter
+        (fun (ee : env_elem) ->
+          match ee with
+          | EBinding _ | EFrame -> false
+          | EAbs abs -> AbsId.Set.mem abs.abs_id old_ids.aids)
+        ctx.env
+    in
+
+    (* Rem.: as we greedily expand the symbolic values containing borrows, and
+       in particular the (mutable/shared) borrows, we could simply list the
+       symbolic values appearing in the abstractions: those are necessarily
+       shared values. We prefer to be more general, in prevision of later
+       changes.
+    *)
+    let sids = ref SymbolicValueId.Set.empty in
+    let visitor =
+      object (self)
+        inherit [_] iter_env
+
+        method! visit_ASharedLoan register _ _ sv child_av =
+          self#visit_tvalue true sv;
+          self#visit_tavalue register child_av
+
+        method! visit_AProjLoans register proj =
+          let { proj = { sv_id; proj_ty }; consumed; borrows } : aproj_loans =
+            proj
+          in
+          self#visit_symbolic_value_id true sv_id;
+          self#visit_ty register proj_ty;
+          [%sanity_check] span (consumed = []);
+          [%sanity_check] span (borrows = [])
+        (*self#visit_list
+            (fun register ((s, p) : mconsumed_symb * _) ->
+              self#visit_msymbolic_value_id register s.sv_id;
+              self#visit_aproj register p)
+            register consumed;
+          self#visit_list
+            (fun register ((s, p) : mconsumed_symb * _) ->
+              self#visit_msymbolic_value_id register s.sv_id;
+              self#visit_aproj register p)
+            register borrows*)
+
+        method! visit_symbolic_value_id register sid =
+          if register then sids := SymbolicValueId.Set.add sid !sids
+      end
+    in
+    visitor#visit_env false fixed_absl;
+    !sids
+  in
+
+  (* Remove the shared symbolic values present in the fixed abstractions -
+     see comments for [shared_sids_in_fixed_abs]. *)
+  let sids_to_values = fp_ids_maps.sids_to_values in
+
+  (* Also remove the symbolic values which appear inside of projectors in
+     fixed abstractions - those are "fixed" and not modified between iterations
+     of the loop *)
+  [%ltrace
+    "- sids_in_fixed_abs:"
+    ^ SymbolicValueId.Set.show sids_in_fixed_abs
+    ^ "\n- all_sids_to_values: "
+    ^ SymbolicValueId.Map.show (symbolic_value_to_string ctx) sids_to_values];
+
+  let sids_to_values =
+    SymbolicValueId.Map.filter
+      (fun sid _ -> not (SymbolicValueId.Set.mem sid sids_in_fixed_abs))
+      sids_to_values
+  in
+
+  (* Remove the symbolic values which are not modified, if the option
+     [only_modified_input_svalues] is [true] *)
+  let sids_to_values =
+    if only_modified_svalues then
+      SymbolicValueId.Map.filter
+        (fun sid _ -> SymbolicValueId.Set.mem sid fresh_sids)
+        sids_to_values
+    else sids_to_values
+  in
+
+  (* List the input symbolic values in proper order.
+
+     We explore the environment, and order the symbolic values in the order
+     in which they are found - this way, the symbolic values found in a
+     variable [x] which appears before [y] are listed first, for instance.
+  *)
+  let input_svalues =
+    let found_sids = ref SymbolicValueId.Set.empty in
+    let ordered_sids = ref [] in
+
+    let visitor =
+      object (self)
+        inherit [_] iter_env
+
+        (** We lookup the shared values *)
+        method! visit_VSharedBorrow env bid _ =
+          let open InterpreterBorrowsCore in
+          let v =
+            match snd (ctx_lookup_loan span ek_all bid fp_ctx) with
+            | Concrete (VSharedLoan (_, v)) -> v
+            | Abstract (ASharedLoan (pm, _, v, _)) ->
+                [%sanity_check] span (pm = PNone);
+                v
+            | _ -> [%craise] span "Unreachable"
+          in
+          self#visit_tvalue env v
+
+        method! visit_symbolic_value_id _ id =
+          if not (SymbolicValueId.Set.mem id !found_sids) then (
+            found_sids := SymbolicValueId.Set.add id !found_sids;
+            ordered_sids := id :: !ordered_sids)
+      end
+    in
+
+    List.iter (visitor#visit_env_elem ()) (List.rev fp_ctx.env);
+
+    List.filter_map
+      (fun id -> SymbolicValueId.Map.find_opt id sids_to_values)
+      (List.rev !ordered_sids)
+  in
+
+  [%ltrace
+    "- src context:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx
+    ^ "\n- fixed point:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ~filter:false fp_ctx
+    ^ "\n- fresh_sids: "
+    ^ SymbolicValueId.Set.show fresh_sids
+    ^ "\n- input_svalues: "
+    ^ Print.list_to_string (symbolic_value_to_string ctx) input_svalues
+    ^ "\n"];
+
+  input_svalues
 
 let refresh_non_fixed_abs_ids (_span : Meta.span) (fixed_ids : ids_sets)
     (ctx : eval_ctx) : eval_ctx * abs_id AbsId.Map.t =
@@ -262,10 +420,9 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
   with ValueMatchFailure e -> Error e
 
 (** Destructure all the new abstractions *)
-let destructure_new_abs (span : Meta.span) (loop_id : LoopId.id)
+let destructure_new_abs (span : Meta.span) (fresh_abs_kind : abs_kind)
     (old_abs_ids : AbsId.Set.t) (ctx : eval_ctx) : eval_ctx =
   [%ltrace "ctx:\n\n" ^ eval_ctx_to_string ctx];
-  let abs_kind : abs_kind = Loop loop_id in
   let is_fresh_abs_id (id : AbsId.id) : bool =
     not (AbsId.Set.mem id old_abs_ids)
   in
@@ -274,7 +431,7 @@ let destructure_new_abs (span : Meta.span) (loop_id : LoopId.id)
       (fun abs ->
         if is_fresh_abs_id abs.abs_id then
           let abs =
-            destructure_abs span abs_kind ~can_end:true
+            destructure_abs span fresh_abs_kind ~can_end:true
               ~destructure_shared_values:true ctx abs
           in
           abs
@@ -310,18 +467,60 @@ let refresh_abs (old_abs : AbsId.Set.t) (ctx : eval_ctx) : eval_ctx =
   in
   { ctx with env }
 
-let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
-    (loop_id : LoopId.id) (fixed_ids : ids_sets) (old_ctx : eval_ctx)
-    (ctxl : eval_ctx list) : (eval_ctx * eval_ctx list) * eval_ctx =
+let join_ctxs_list (config : config) (span : Meta.span)
+    (fresh_abs_kind : abs_kind) (fixed_ids : ids_sets)
+    ?(preprocess_first_ctx : bool = true) (ctxl : eval_ctx list) :
+    eval_ctx list * eval_ctx =
+  (* The list of contexts should be non empty *)
+  let ctx0, ctxl =
+    match ctxl with
+    | [] -> [%internal_error] span
+    | ctx0 :: ctxl -> (ctx0, ctxl)
+  in
+
+  (* Small helper *)
+  let preprocess_ctx (ctx : eval_ctx) : eval_ctx =
+    (* Simplify the dummy values, by removing as many as we can -
+       we ignore the synthesis continuation *)
+    let ctx, _ =
+      simplify_dummy_values_useless_abs config span fixed_ids.aids ctx
+    in
+    [%ltrace
+      "after simplify_dummy_values_useless_abs (fixed_ids.abs_ids = "
+      ^ AbsId.Set.to_string None fixed_ids.aids
+      ^ "):\n"
+      ^ eval_ctx_to_string ~span:(Some span) ctx];
+
+    (* Destructure the abstractions introduced in the new context *)
+    let ctx = destructure_new_abs span fresh_abs_kind fixed_ids.aids ctx in
+    [%ltrace "after destructure:\n" ^ eval_ctx_to_string ~span:(Some span) ctx];
+
+    (* Reduce the context we want to add to the join *)
+    let ctx =
+      reduce_ctx config span ~with_abs_conts:false fresh_abs_kind fixed_ids ctx
+    in
+    [%ltrace "after reduce:\n" ^ eval_ctx_to_string ~span:(Some span) ctx];
+    (* Sanity check *)
+    if !Config.sanity_checks then Invariants.check_invariants span ctx;
+
+    (* Refresh the fresh abstractions *)
+    let ctx = refresh_abs fixed_ids.aids ctx in
+    (* Sanity check *)
+    if !Config.sanity_checks then Invariants.check_invariants span ctx;
+
+    ctx
+  in
+
+  let ctx0 = if preprocess_first_ctx then preprocess_ctx ctx0 else ctx0 in
+
   let with_abs_conts = false in
-  let fresh_abs_kind : abs_kind = Loop loop_id in
   (* # Join with the new contexts, one by one
 
      For every context, we repeteadly attempt to join it with the current
      result of the join: if we fail (because we need to end loans for instance),
      we update the context and retry.
   *)
-  let joined_ctx = ref old_ctx in
+  let joined_ctx = ref ctx0 in
   let rec join_one_aux (ctx : eval_ctx) : eval_ctx =
     match
       join_ctxs span fresh_abs_kind fixed_ids ~with_abs_conts !joined_ctx ctx
@@ -356,34 +555,7 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
 
     (* Simplify the dummy values, by removing as many as we can -
        we ignore the synthesis continuation *)
-    let ctx, _ =
-      simplify_dummy_values_useless_abs config span fixed_ids.aids ctx
-    in
-    [%ltrace
-      "join_one: after simplify_dummy_values_useless_abs (fixed_ids.abs_ids = "
-      ^ AbsId.Set.to_string None fixed_ids.aids
-      ^ "):\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx];
-
-    (* Destructure the abstractions introduced in the new context *)
-    let ctx = destructure_new_abs span loop_id fixed_ids.aids ctx in
-    [%ltrace
-      "join_one: after destructure:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ctx];
-
-    (* Reduce the context we want to add to the join *)
-    let ctx =
-      reduce_ctx config span ~with_abs_conts:false fresh_abs_kind fixed_ids ctx
-    in
-    [%ltrace
-      "join_one: after reduce:\n" ^ eval_ctx_to_string ~span:(Some span) ctx];
-    (* Sanity check *)
-    if !Config.sanity_checks then Invariants.check_invariants span ctx;
-
-    (* Refresh the fresh abstractions *)
-    let ctx = refresh_abs fixed_ids.aids ctx in
-    (* Sanity check *)
-    if !Config.sanity_checks then Invariants.check_invariants span ctx;
+    let ctx = preprocess_ctx ctx in
 
     (* Join the two contexts  *)
     let ctx1 = join_one_aux ctx in
@@ -417,7 +589,17 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
   let ctxl = List.map join_one ctxl in
 
   (* # Return *)
-  ((old_ctx, ctxl), !joined_ctx)
+  (ctx0 :: ctxl, !joined_ctx)
+
+let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
+    (loop_id : LoopId.id) (fixed_ids : ids_sets) (ctx0 : eval_ctx)
+    (ctxl : eval_ctx list) : (eval_ctx * eval_ctx list) * eval_ctx =
+  let ctxl', joined_ctx =
+    join_ctxs_list config span (Loop loop_id) fixed_ids
+      ~preprocess_first_ctx:false (ctx0 :: ctxl)
+  in
+  [%sanity_check] span (List.length ctxl' = List.length ctxl + 1);
+  ((List.hd ctxl', List.tl ctxl'), joined_ctx)
 
 let loop_join_break_ctxs (config : config) (span : Meta.span)
     (loop_id : LoopId.id) (fixed_ids : ids_sets) (ctxl : eval_ctx list) :
@@ -441,7 +623,7 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
       ^ eval_ctx_to_string ~span:(Some span) ctx];
 
     (* Destructure the abstractions introduced in the new context *)
-    let ctx = destructure_new_abs span loop_id fixed_ids.aids ctx in
+    let ctx = destructure_new_abs span (Loop loop_id) fixed_ids.aids ctx in
     [%ltrace
       "join_one: after destructure:\n"
       ^ eval_ctx_to_string ~span:(Some span) ctx];

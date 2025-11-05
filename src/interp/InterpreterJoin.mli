@@ -3,6 +3,19 @@ open Contexts
 open InterpreterUtils
 open InterpreterJoinCore
 
+(** Compute the list of symbolic values which appear in the 2nd context and not
+    the first one, and order them following their position in the environment.
+
+    If [only_modified_svalues] is true, we only include in the list of input
+    symbolic values the ones which are modified from one context to the other.
+*)
+val compute_ctx_fresh_ordered_symbolic_values :
+  Meta.span ->
+  only_modified_svalues:bool ->
+  eval_ctx ->
+  eval_ctx ->
+  symbolic_value list
+
 (** Join two contexts.
 
     We use this to join environments, for instance at loop (re-)entry to
@@ -79,9 +92,7 @@ val join_ctxs :
   eval_ctx ->
   ctx_or_update
 
-(** Join the context at the entry of the loop with the contexts upon reentry
-    (upon reaching the [Continue] statement - the goal is to compute a fixed
-    point for the loop entry).
+(** Join a list of contexts, which must be non empty.
 
     As we may have to end loans in the environments before doing the join, we
     return those updated environments, and the joined environment.
@@ -89,6 +100,30 @@ val join_ctxs :
     This function is mostly built on top of {!join_ctxs}. Note that as the goal
     is to compute a fixed point we do not introduce continuations in the fresh
     region abstractions.
+
+    Parameters:
+    - [config]
+    - [loop_id]
+    - [fixed_ids]
+    - [old_ctx]
+    - [ctxl] *)
+val join_ctxs_list :
+  config ->
+  Meta.span ->
+  abs_kind ->
+  ids_sets ->
+  ?preprocess_first_ctx:bool ->
+  eval_ctx list ->
+  eval_ctx list * eval_ctx
+
+(** Join the context at the entry of the loop with the contexts upon reentry
+    (upon reaching the [Continue] statement - the goal is to compute a fixed
+    point for the loop entry).
+
+    As we may have to end loans in the environments before doing the join, we
+    return those updated environments, and the joined environment.
+
+    This function simply calls [join_ctxs_list].
 
     Parameters:
     - [config]
@@ -241,9 +276,10 @@ val loop_join_origin_with_continue_ctxs :
     - [config]
     - [span]
     - [fresh_abs_kind]
-    - [fp_input_svalues]: the list of symbolic values appearing in the fixed
-      point (the source context) and which must be instantiated during the match
-      (this is the list of input parameters of the loop).
+    - [input_svalues]: the list of symbolic values appearing in the source
+      context (e.g., the fixed-point context) and which must be instantiated
+      during the match (in the case of loops, this is the list of input
+      parameters of the loop).
     - [fixed_ids]
     - [src_ctx]
     - [tgt_ctx]

@@ -210,6 +210,8 @@ let rec translate_expr (e : S.expr) (ctx : bs_ctx) : texpr =
   | LoopBreak (ectx, loop_id, input_values, input_abs) ->
       translate_continue_break ctx ~continue:false ectx loop_id input_values
         input_abs
+  | Let _ -> raise (Failure "TODO")
+  | Join _ -> raise (Failure "TODO")
 
 and translate_panic (ctx : bs_ctx) : texpr = Option.get ctx.mk_panic
 
@@ -641,7 +643,7 @@ and translate_end_abs (ectx : C.eval_ctx) (abs : V.abs) (e : S.expr)
   | V.FunCall (call_id, _) ->
       translate_end_abstraction_fun_call ectx abs e call_id ctx
   | V.SynthRet rg_id -> translate_end_abstraction_synth_ret ectx abs e ctx rg_id
-  | V.Loop loop_id -> translate_end_abstraction_loop ectx abs e ctx loop_id
+  | V.Loop _ | V.Join -> translate_end_abstraction_join_or_loop ectx abs e ctx
   | V.Identity | V.CopySymbolicValue ->
       translate_end_abs_identity ectx abs e ctx
 
@@ -850,8 +852,8 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
   let monadic = false in
   mk_closed_checked_lets __FILE__ __LINE__ ctx monadic given_back_inputs next_e
 
-and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
-    (e : S.expr) (ctx : bs_ctx) (_loop_id : V.LoopId.id) : texpr =
+and translate_end_abstraction_join_or_loop (ectx : C.eval_ctx) (abs : V.abs)
+    (e : S.expr) (ctx : bs_ctx) : texpr =
   let span = ctx.span in
   (* Compute the input and output values *)
   let back_inputs = abs_to_consumed ctx ectx abs in

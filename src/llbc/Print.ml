@@ -696,6 +696,7 @@ module Values = struct
     | Loop lp_id -> "Loop(loop_id:" ^ LoopId.to_string lp_id ^ ")"
     | Identity -> "Identity"
     | CopySymbolicValue -> "CopySymbolicValue"
+    | Join -> "Join"
 
   let abs_cont_to_string ?(span : Meta.span option = None) (env : fmt_env)
       ?(with_ended : bool = false) (indent : string) (indent_incr : string)
