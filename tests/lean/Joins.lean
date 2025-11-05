@@ -11,8 +11,10 @@ namespace joins
 /- [joins::opt_add_1]:
    Source: 'tests/src/joins.rs', lines 3:0-6:1 -/
 def opt_add_1 (b : Bool) (x : U32) : Result U32 :=
-  if b
-  then x + 1#u32
-  else x + 0#u32
+  do
+  let y ← if b
+            then ok 1#u32
+            else ok 0#u32
+  x + y
 
 end joins
