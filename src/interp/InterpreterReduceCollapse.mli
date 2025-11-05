@@ -16,7 +16,6 @@ open InterpreterUtils
     - [aid1] *)
 val merge_into_first_abstraction :
   Meta.span ->
-  loop_id ->
   abs_kind ->
   can_end:bool ->
   with_abs_conts:bool ->
@@ -41,7 +40,7 @@ val merge_into_first_abstraction :
     - sequence: used to save the sequence of merged abstractions, in reverse
       order (the last merge is pushed to the front of the list).
     - with_abs_conts
-    - loop id
+    - fresh abs kind
     - fixed ids
     - ctx *)
 val reduce_ctx :
@@ -49,7 +48,7 @@ val reduce_ctx :
   Meta.span ->
   ?sequence:(abs_id * abs_id * abs_id) list ref option ->
   with_abs_conts:bool ->
-  loop_id ->
+  abs_kind ->
   ids_sets ->
   eval_ctx ->
   eval_ctx
@@ -75,7 +74,7 @@ val collapse_ctx :
   config ->
   Meta.span ->
   ?sequence:(abs_id * abs_id * abs_id) list ref option ->
-  LoopId.id ->
+  abs_kind ->
   ids_sets ->
   with_abs_conts:bool ->
   eval_ctx ->
@@ -97,7 +96,7 @@ val collapse_ctx :
 val collapse_ctx_no_markers_following_sequence :
   Meta.span ->
   (abs_id * abs_id * abs_id) list ->
-  LoopId.id ->
+  abs_kind ->
   ids_sets ->
   with_abs_conts:bool ->
   eval_ctx ->

@@ -38,9 +38,9 @@ let refresh_non_fixed_abs_ids (_span : Meta.span) (fixed_ids : ids_sets)
   let ctx = visitor#visit_eval_ctx () ctx in
   (ctx, !fresh_map)
 
-let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
-    ~(with_abs_conts : bool) (ctx0 : eval_ctx) (ctx1 : eval_ctx) : ctx_or_update
-    =
+let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
+    (fixed_ids : ids_sets) ~(with_abs_conts : bool) (ctx0 : eval_ctx)
+    (ctx1 : eval_ctx) : ctx_or_update =
   (* Debug *)
   [%ltrace
     "\n- fixed_ids:\n" ^ show_ids_sets fixed_ids ^ "\n\n- ctx0:\n"
@@ -114,8 +114,8 @@ let join_ctxs (span : Meta.span) (loop_id : LoopId.id) (fixed_ids : ids_sets)
 
   let symbolic_to_value = ref SymbolicValueId.Map.empty in
   let module S : MatchJoinState = struct
+    let fresh_abs_kind = fresh_abs_kind
     let span = span
-    let loop_id = loop_id
     let nabs = nabs
     let with_abs_conts = with_abs_conts
     let symbolic_to_value = symbolic_to_value
@@ -314,6 +314,7 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
     (loop_id : LoopId.id) (fixed_ids : ids_sets) (old_ctx : eval_ctx)
     (ctxl : eval_ctx list) : (eval_ctx * eval_ctx list) * eval_ctx =
   let with_abs_conts = false in
+  let fresh_abs_kind : abs_kind = Loop loop_id in
   (* # Join with the new contexts, one by one
 
      For every context, we repeteadly attempt to join it with the current
@@ -322,7 +323,9 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
   *)
   let joined_ctx = ref old_ctx in
   let rec join_one_aux (ctx : eval_ctx) : eval_ctx =
-    match join_ctxs span loop_id fixed_ids ~with_abs_conts !joined_ctx ctx with
+    match
+      join_ctxs span fresh_abs_kind fixed_ids ~with_abs_conts !joined_ctx ctx
+    with
     | Ok (nctx, _) ->
         joined_ctx := nctx;
         ctx
@@ -370,7 +373,7 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
 
     (* Reduce the context we want to add to the join *)
     let ctx =
-      reduce_ctx config span ~with_abs_conts:false loop_id fixed_ids ctx
+      reduce_ctx config span ~with_abs_conts:false fresh_abs_kind fixed_ids ctx
     in
     [%ltrace
       "join_one: after reduce:\n" ^ eval_ctx_to_string ~span:(Some span) ctx];
@@ -389,7 +392,8 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
 
     (* Collapse to eliminate the markers *)
     joined_ctx :=
-      collapse_ctx config span loop_id fixed_ids ~with_abs_conts !joined_ctx;
+      collapse_ctx config span fresh_abs_kind fixed_ids ~with_abs_conts
+        !joined_ctx;
     [%ltrace
       "join_one: after join-collapse:\n"
       ^ eval_ctx_to_string ~span:(Some span) !joined_ctx];
@@ -398,7 +402,8 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
 
     (* Reduce again to reach a fixed point *)
     joined_ctx :=
-      reduce_ctx config span ~with_abs_conts:false loop_id fixed_ids !joined_ctx;
+      reduce_ctx config span ~with_abs_conts:false fresh_abs_kind fixed_ids
+        !joined_ctx;
     [%ltrace
       "join_one: after last reduce:\n"
       ^ eval_ctx_to_string ~span:(Some span) !joined_ctx];
@@ -419,6 +424,7 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
     eval_ctx =
   (* Simplify the contexts *)
   let with_abs_conts = false in
+  let fresh_abs_kind : abs_kind = Loop loop_id in
   let prepare_ctx (ctx : eval_ctx) : eval_ctx =
     [%ltrace
       "join_one: initial ctx:\n" ^ eval_ctx_to_string ~span:(Some span) ctx];
@@ -442,7 +448,7 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
 
     (* Reduce the context we want to add to the join *)
     let ctx =
-      reduce_ctx config span ~with_abs_conts:false loop_id fixed_ids ctx
+      reduce_ctx config span ~with_abs_conts:false fresh_abs_kind fixed_ids ctx
     in
     [%ltrace
       "join_one: after reduce:\n" ^ eval_ctx_to_string ~span:(Some span) ctx];
@@ -481,7 +487,8 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
        *)
       let rec join_one_aux (ctx : eval_ctx) =
         match
-          join_ctxs span loop_id fixed_ids ~with_abs_conts !joined_ctx ctx
+          join_ctxs span fresh_abs_kind fixed_ids ~with_abs_conts !joined_ctx
+            ctx
         with
         | Ok (nctx, _) ->
             joined_ctx := nctx;
@@ -516,7 +523,8 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
 
         (* Collapse to eliminate the markers *)
         joined_ctx :=
-          collapse_ctx config span loop_id fixed_ids ~with_abs_conts !joined_ctx;
+          collapse_ctx config span fresh_abs_kind fixed_ids ~with_abs_conts
+            !joined_ctx;
         [%ltrace
           "join_one: after join-collapse:\n"
           ^ eval_ctx_to_string ~span:(Some span) !joined_ctx];
@@ -526,7 +534,7 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
 
         (* Reduce again to reach a fixed point *)
         joined_ctx :=
-          reduce_ctx config span ~with_abs_conts:false loop_id fixed_ids
+          reduce_ctx config span ~with_abs_conts:false fresh_abs_kind fixed_ids
             !joined_ctx;
         [%ltrace
           "join_one: after last reduce:\n"
@@ -541,7 +549,7 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
       (* Update the fresh region abstractions *)
       !joined_ctx
 
-(** TODO: this is a bit of a hack: remove one the avalues are properly
+(** TODO: this is a bit of a hack: remove once the avalues are properly
     destructured. *)
 let destructure_shared_loans (span : Meta.span) (fixed_ids : ids_sets) : cm_fun
     =
@@ -683,8 +691,8 @@ let destructure_shared_loans (span : Meta.span) (fixed_ids : ids_sets) : cm_fun
 
   (ctx, cc)
 
-let loop_match_ctx_with_target (config : config) (span : Meta.span)
-    (loop_id : LoopId.id) (fp_input_svalues : SymbolicValueId.id list)
+let match_ctx_with_target (config : config) (span : Meta.span)
+    (fresh_abs_kind : abs_kind) (fp_input_svalues : SymbolicValueId.id list)
     (fixed_ids : ids_sets) (src_ctx : eval_ctx) (tgt_ctx : eval_ctx) :
     (eval_ctx * eval_ctx * tvalue SymbolicValueId.Map.t * abs AbsId.Map.t)
     * (SymbolicAst.expr -> SymbolicAst.expr) =
@@ -702,7 +710,7 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
      values.
   *)
   let tgt_ctx, cc =
-    prepare_loop_match_ctx_with_target config span loop_id fixed_ids src_ctx
+    prepare_match_ctx_with_target config span fresh_abs_kind fixed_ids src_ctx
       tgt_ctx
   in
   [%ltrace
@@ -729,14 +737,15 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
 
   (* Reduce the context *)
   let tgt_ctx =
-    reduce_ctx config span ~with_abs_conts:true loop_id fixed_ids tgt_ctx
+    reduce_ctx config span ~with_abs_conts:true fresh_abs_kind fixed_ids tgt_ctx
   in
   [%ltrace "- tgt_ctx after reduce_ctx:\n" ^ eval_ctx_to_string tgt_ctx];
 
   (* Join the source context with the target context *)
   let joined_ctx, join_info =
     match
-      join_ctxs span loop_id fixed_ids ~with_abs_conts:true src_ctx tgt_ctx
+      join_ctxs span fresh_abs_kind fixed_ids ~with_abs_conts:true src_ctx
+        tgt_ctx
     with
     | Ok x -> x
     | Error _ -> [%craise] span "Could not join the contexts"
@@ -776,7 +785,7 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
   let merge_seq = ref [] in
   let joined_ctx_not_projected =
     collapse_ctx config span ~sequence:(Some merge_seq) ~with_abs_conts:false
-      loop_id fixed_ids joined_ctx
+      fresh_abs_kind fixed_ids joined_ctx
   in
   let merge_seq = List.rev !merge_seq in
   [%ltrace
@@ -806,7 +815,7 @@ let loop_match_ctx_with_target (config : config) (span : Meta.span)
   (* Apply the sequence of merges to the projected context *)
   let joined_ctx =
     collapse_ctx_no_markers_following_sequence span merge_seq
-      ~with_abs_conts:true loop_id fixed_ids joined_ctx
+      ~with_abs_conts:true fresh_abs_kind fixed_ids joined_ctx
   in
   [%ltrace
     "After collapsing the context: joined_ctx:\n"
@@ -1027,5 +1036,5 @@ let loop_match_break_ctx_with_target (config : config) (span : Meta.span)
   | _ ->
       [%ltrace "Match not successful"];
 
-      loop_match_ctx_with_target config span loop_id fp_input_svalues fixed_ids
-        src_ctx tgt_ctx
+      match_ctx_with_target config span (Loop loop_id) fp_input_svalues
+        fixed_ids src_ctx tgt_ctx

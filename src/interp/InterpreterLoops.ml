@@ -92,7 +92,8 @@ let eval_loop_symbolic_apply_loop (config : config) (span : span)
   (* Preemptively end borrows/move values by matching the current
      context with the target context *)
   let ctx, cf_prepare =
-    prepare_loop_match_ctx_with_target config span loop_id fixed_ids fp_ctx ctx
+    prepare_match_ctx_with_target config span (Loop loop_id) fixed_ids fp_ctx
+      ctx
   in
 
   (* Actually match *)
@@ -107,8 +108,8 @@ let eval_loop_symbolic_apply_loop (config : config) (span : span)
      we never get out) *)
   let (ctx, tgt_ctx, input_values, input_abs), cc =
     comp cf_prepare
-      (loop_match_ctx_with_target config span loop_id fp_input_svalues fixed_ids
-         fp_ctx ctx)
+      (match_ctx_with_target config span (Loop loop_id) fp_input_svalues
+         fixed_ids fp_ctx ctx)
   in
 
   [%ltrace "Resulting context:\n- ctx" ^ eval_ctx_to_string ctx];
@@ -196,7 +197,7 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
           ^ "\n\n-tgt ctx (ctx at continue):\n"
           ^ eval_ctx_to_string ~span:(Some span) ctx];
         let (_ctx, tgt_ctx, input_values, input_abs), cc =
-          loop_match_ctx_with_target config span loop_id fp_input_svalues
+          match_ctx_with_target config span (Loop loop_id) fp_input_svalues
             fixed_ids fp_ctx ctx
         in
         let input_values = reorder_input_values input_values fp_input_svalues in

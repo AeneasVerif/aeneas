@@ -5,8 +5,9 @@ open InterpreterJoinCore
 
 (** Join two contexts.
 
-    We use this to join the environments at loop (re-)entry to progressively
-    compute a fixed point.
+    We use this to join environments, for instance at loop (re-)entry to
+    progressively compute a fixed point, or when joining the control-flow after
+    a branching statement ([if then else], etc.).
 
     We make the hypothesis (and check it) that the environments have the same
     prefixes (same variable ids, same abstractions, etc.). The prefix of
@@ -16,6 +17,11 @@ open InterpreterJoinCore
     which are not dummy, then group the additional dummy variables/abstractions
     together. In a sense, the [fixed_ids] define a frame (in a separation logic
     sense).
+
+    TODO: update the explanations below. The new formalism uses a notion of
+    markers, a reduce operation (to get rid of markers) and a collapse operation
+    (to simplify the context - equivalent of the widening operation in
+    abstraction interpretation).
 
     Note that when joining the values mapped to by the non-dummy variables, we
     may introduce duplicated borrows. Also, we don't match the abstractions
@@ -58,14 +64,15 @@ open InterpreterJoinCore
     have this structure: this is a *completeness issue*.
 
     Parameters:
-    - [loop_id]
+    - [span]
+    - [fresh_abs_kind]
     - [fixed_ids]
-    - 
+    - [with_abs_conts]
     - [ctx0]
     - [ctx1] *)
 val join_ctxs :
   Meta.span ->
-  loop_id ->
+  abs_kind ->
   ids_sets ->
   with_abs_conts:bool ->
   eval_ctx ->
@@ -99,6 +106,8 @@ val loop_join_origin_with_continue_ctxs :
   (eval_ctx * eval_ctx list) * eval_ctx
 
 (** Match a context with a target context.
+
+    TODO: update comments: we're not using this only for loops anymore.
 
     This is used to compute application of loop translations: we use this to
     introduce "identity" abstractions upon (re-)entering the loop.
@@ -230,21 +239,21 @@ val loop_join_origin_with_continue_ctxs :
 
     **Parameters**:
     - [config]
-    - [loop_id]
-    - [is_loop_entry]: [true] if first entry into the loop, [false] if re-entry
-      (i.e., continue).
+    - [span]
+    - [fresh_abs_kind]
     - [fp_input_svalues]: the list of symbolic values appearing in the fixed
       point (the source context) and which must be instantiated during the match
       (this is the list of input parameters of the loop).
     - [fixed_ids]
     - [src_ctx]
+    - [tgt_ctx]
 
     Outputs: the first context is the source context, the second context is the
     (potentially updated) target context. *)
-val loop_match_ctx_with_target :
+val match_ctx_with_target :
   config ->
   Meta.span ->
-  loop_id ->
+  abs_kind ->
   symbolic_value_id list ->
   ids_sets ->
   eval_ctx ->

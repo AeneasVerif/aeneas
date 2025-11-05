@@ -533,8 +533,8 @@ type borrow_loan_corresp = {
 
 (* Very annoying: functors only take modules as inputs... *)
 module type MatchJoinState = sig
-  (** The current loop *)
-  val loop_id : LoopId.id
+  (** The kind to use for the fresh abstractions *)
+  val fresh_abs_kind : abs_kind
 
   (** The abstractions introduced when performing the matches *)
   val nabs : abs list ref

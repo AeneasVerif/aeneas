@@ -403,7 +403,7 @@ let repeat_iter_borrows_merge (span : Meta.span) (old_ids : ids_sets)
     ]} *)
 let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
     (sequence : (abs_id * abs_id * abs_id) list ref option)
-    ~(with_abs_conts : bool) (span : Meta.span) (loop_id : LoopId.id)
+    ~(with_abs_conts : bool) (span : Meta.span) (fresh_abs_kind : abs_kind)
     (old_ids : ids_sets) (ctx0 : eval_ctx) : eval_ctx =
   (* Debug *)
   [%ltrace
@@ -412,8 +412,6 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
     ^ "\n"];
 
   let with_markers = merge_funs <> None in
-
-  let abs_kind : abs_kind = Loop loop_id in
   let can_end = true in
   let is_fresh_did (id : DummyVarId.id) : bool =
     not (DummyVarId.Set.mem id old_ids.dids)
@@ -433,7 +431,8 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
            | EBinding (BDummy id, v) ->
                if is_fresh_did id then (
                  let absl =
-                   convert_value_to_abstractions span abs_kind ~can_end ctx v
+                   convert_value_to_abstractions span fresh_abs_kind ~can_end
+                     ctx v
                  in
                  Invariants.opt_type_check_absl span ctx absl;
                  List.map (fun abs -> EAbs abs) absl)
@@ -509,8 +508,8 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
 
     (* Iterate over the loans and merge the abstractions *)
     let iter_merge (ctx : eval_ctx) : eval_ctx =
-      repeat_iter_borrows_merge span old_ids abs_kind ~can_end ~with_abs_conts
-        sequence merge_funs iterate_loans merge_policy ctx
+      repeat_iter_borrows_merge span old_ids fresh_abs_kind ~can_end
+        ~with_abs_conts sequence merge_funs iterate_loans merge_policy ctx
   end in
   (* Instantiate the functor for the concrete borrows and loans *)
   let module IterMergeConcrete =
@@ -556,7 +555,7 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
 (** reduce_ctx can only be called in a context with no markers *)
 let reduce_ctx config (span : Meta.span)
     ?(sequence : (abs_id * abs_id * abs_id) list ref option = None)
-    ~(with_abs_conts : bool) (loop_id : loop_id) (fixed_ids : ids_sets)
+    ~(with_abs_conts : bool) (fresh_abs_kind : abs_kind) (fixed_ids : ids_sets)
     (ctx : eval_ctx) : eval_ctx =
   (* Simplify the context *)
   let ctx, _ =
@@ -565,8 +564,8 @@ let reduce_ctx config (span : Meta.span)
   in
   (* Reduce *)
   let ctx =
-    reduce_ctx_with_markers None sequence span ~with_abs_conts loop_id fixed_ids
-      ctx
+    reduce_ctx_with_markers None sequence span ~with_abs_conts fresh_abs_kind
+      fixed_ids ctx
   in
   eliminate_shared_loans span fixed_ids ctx
 
@@ -589,7 +588,7 @@ let reduce_ctx config (span : Meta.span)
     ]} *)
 let collapse_ctx_collapse (span : Meta.span)
     (sequence : (abs_id * abs_id * abs_id) list ref option)
-    (loop_id : LoopId.id) ~(with_abs_conts : bool)
+    (fresh_abs_kind : abs_kind) ~(with_abs_conts : bool)
     (merge_funs : merge_duplicates_funcs) (old_ids : ids_sets) (ctx : eval_ctx)
     : eval_ctx =
   (* Debug *)
@@ -598,7 +597,6 @@ let collapse_ctx_collapse (span : Meta.span)
     ^ eval_ctx_to_string ~span:(Some span) ctx
     ^ "\n"];
 
-  let abs_kind : abs_kind = Loop loop_id in
   let can_end = true in
 
   let invert_proj_marker = function
@@ -716,8 +714,8 @@ let collapse_ctx_collapse (span : Meta.span)
 
     (* Iterate and merge *)
     let iter_merge (ctx : eval_ctx) : eval_ctx =
-      repeat_iter_borrows_merge span old_ids abs_kind ~can_end ~with_abs_conts
-        sequence (Some merge_funs) iter merge_policy ctx
+      repeat_iter_borrows_merge span old_ids fresh_abs_kind ~can_end
+        ~with_abs_conts sequence (Some merge_funs) iter merge_policy ctx
   end in
   (* Instantiate the functor for concrete loans and borrows *)
   let module IterMergeConcrete =
@@ -821,18 +819,18 @@ let eval_ctx_has_markers (ctx : eval_ctx) : bool =
     resulting environment. *)
 let collapse_ctx_aux config (span : Meta.span)
     (sequence : (abs_id * abs_id * abs_id) list ref option)
-    (loop_id : LoopId.id) ~(with_abs_conts : bool)
+    (fresh_abs_kind : abs_kind) ~(with_abs_conts : bool)
     (merge_funs : merge_duplicates_funcs) (old_ids : ids_sets) (ctx0 : eval_ctx)
     : eval_ctx =
   [%ldebug "ctx0:\n" ^ eval_ctx_to_string ctx0];
   let ctx =
     reduce_ctx_with_markers (Some merge_funs) sequence span ~with_abs_conts
-      loop_id old_ids ctx0
+      fresh_abs_kind old_ids ctx0
   in
   [%ldebug "ctx after collapse:\n" ^ eval_ctx_to_string ctx];
   let ctx =
-    collapse_ctx_collapse span ~with_abs_conts sequence loop_id merge_funs
-      old_ids ctx
+    collapse_ctx_collapse span ~with_abs_conts sequence fresh_abs_kind
+      merge_funs old_ids ctx
   in
   [%ldebug "ctx after reduce and collapse:\n" ^ eval_ctx_to_string ctx];
 
@@ -857,12 +855,12 @@ let collapse_ctx_aux config (span : Meta.span)
   ctx
 
 let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
-    (loop_id : LoopId.id) (with_abs_conts : bool) (ctx : eval_ctx) :
+    (fresh_abs_kind : abs_kind) (with_abs_conts : bool) (ctx : eval_ctx) :
     merge_duplicates_funcs =
   (* Rem.: the merge functions raise exceptions (that we catch). *)
   let module S : MatchJoinState = struct
     let span = span
-    let loop_id = loop_id
+    let fresh_abs_kind = fresh_abs_kind
     let nabs = ref []
     let with_abs_conts = with_abs_conts
     let symbolic_to_value = ref SymbolicValueId.Map.empty
@@ -1012,31 +1010,31 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
     merge_aloan_projs;
   }
 
-let merge_into_first_abstraction (span : Meta.span) (loop_id : LoopId.id)
-    (abs_kind : abs_kind) ~(can_end : bool) ~(with_abs_conts : bool)
-    (ctx : eval_ctx) (aid0 : AbsId.id) (aid1 : AbsId.id) : eval_ctx * AbsId.id =
+let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
+    ~(can_end : bool) ~(with_abs_conts : bool) (ctx : eval_ctx)
+    (aid0 : AbsId.id) (aid1 : AbsId.id) : eval_ctx * AbsId.id =
   let merge_funs =
-    mk_collapse_ctx_merge_duplicate_funs span loop_id with_abs_conts ctx
+    mk_collapse_ctx_merge_duplicate_funs span abs_kind with_abs_conts ctx
   in
   InterpreterAbs.merge_into_first_abstraction span abs_kind ~can_end
     ~with_abs_conts (Some merge_funs) ctx aid0 aid1
 
 let collapse_ctx config (span : Meta.span)
     ?(sequence : (abs_id * abs_id * abs_id) list ref option = None)
-    (loop_id : LoopId.id) (old_ids : ids_sets) ~(with_abs_conts : bool)
+    (fresh_abs_kind : abs_kind) (old_ids : ids_sets) ~(with_abs_conts : bool)
     (ctx : eval_ctx) : eval_ctx =
   [%ldebug "Initial ctx:\n" ^ eval_ctx_to_string ctx];
   let merge_funs =
-    mk_collapse_ctx_merge_duplicate_funs span loop_id with_abs_conts ctx
+    mk_collapse_ctx_merge_duplicate_funs span fresh_abs_kind with_abs_conts ctx
   in
   try
-    collapse_ctx_aux config span ~with_abs_conts sequence loop_id merge_funs
-      old_ids ctx
+    collapse_ctx_aux config span ~with_abs_conts sequence fresh_abs_kind
+      merge_funs old_ids ctx
   with ValueMatchFailure _ -> [%internal_error] span
 
 (** Collapse a context following a sequence *)
 let collapse_ctx_following_sequence (span : Meta.span)
-    (sequence : (abs_id * abs_id * abs_id) list) (loop_id : LoopId.id)
+    (sequence : (abs_id * abs_id * abs_id) list) (fresh_abs_kind : abs_kind)
     ~(with_abs_conts : bool) (old_ids : ids_sets) (ctx0 : eval_ctx) : eval_ctx =
   [%ltrace
     "- ctx0:\n" ^ eval_ctx_to_string ctx0 ^ "\n- sequence:\n"
@@ -1053,7 +1051,7 @@ let collapse_ctx_following_sequence (span : Meta.span)
     | None -> aid
     | Some aid -> aid
   in
-  let abs_kind : abs_kind = Loop loop_id in
+
   List.iter
     (fun (abs0, abs1, nabs) ->
       (* Substitute - the ids may have changed *)
@@ -1067,7 +1065,7 @@ let collapse_ctx_following_sequence (span : Meta.span)
           [%ldebug
             "Merging: " ^ AbsId.to_string abs0 ^ " <- " ^ AbsId.to_string abs1];
           let nctx, nabs' =
-            InterpreterAbs.merge_into_first_abstraction span abs_kind
+            InterpreterAbs.merge_into_first_abstraction span fresh_abs_kind
               ~can_end:true ~with_abs_conts None !ctx abs0 abs1
           in
           ctx := nctx;
@@ -1095,9 +1093,9 @@ let collapse_ctx_following_sequence (span : Meta.span)
   ctx
 
 let collapse_ctx_no_markers_following_sequence (span : Meta.span)
-    (sequence : (abs_id * abs_id * abs_id) list) (loop_id : LoopId.id)
+    (sequence : (abs_id * abs_id * abs_id) list) (fresh_abs_kind : abs_kind)
     (old_ids : ids_sets) ~(with_abs_conts : bool) (ctx : eval_ctx) : eval_ctx =
   try
-    collapse_ctx_following_sequence span ~with_abs_conts sequence loop_id
+    collapse_ctx_following_sequence span ~with_abs_conts sequence fresh_abs_kind
       old_ids ctx
   with ValueMatchFailure _ -> [%internal_error] span

@@ -693,7 +693,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let abs =
         {
           abs_id = fresh_abs_id ();
-          kind = Loop S.loop_id;
+          kind = S.fresh_abs_kind;
           can_end = true;
           parents = AbsId.Set.empty;
           original_parents = [];
@@ -754,7 +754,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         tvalue_has_outer_loans v0 || tvalue_has_outer_loans v1
       in
       (* Move the values to region abstractions *)
-      let abs_kind = Loop S.loop_id in
+      let abs_kind = S.fresh_abs_kind in
       let to_absl pm ctx v =
         let absl =
           convert_value_to_abstractions span abs_kind ~can_end:true ctx v
@@ -838,7 +838,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         let abs =
           {
             abs_id = fresh_abs_id ();
-            kind = Loop S.loop_id;
+            kind = S.fresh_abs_kind;
             can_end = true;
             parents = AbsId.Set.empty;
             original_parents = [];
@@ -925,7 +925,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let abs =
         {
           abs_id = fresh_abs_id ();
-          kind = Loop S.loop_id;
+          kind = S.fresh_abs_kind;
           can_end = true;
           parents = AbsId.Set.empty;
           original_parents = [];
@@ -1092,7 +1092,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let abs =
         {
           abs_id = fresh_abs_id ();
-          kind = Loop S.loop_id;
+          kind = S.fresh_abs_kind;
           can_end = true;
           parents = AbsId.Set.empty;
           original_parents = [];
@@ -1162,7 +1162,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let abs =
         {
           abs_id = fresh_abs_id ();
-          kind = Loop S.loop_id;
+          kind = S.fresh_abs_kind;
           can_end = true;
           parents = AbsId.Set.empty;
           original_parents = [];
@@ -1238,7 +1238,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let abs =
         {
           abs_id = fresh_abs_id ();
-          kind = Loop S.loop_id;
+          kind = S.fresh_abs_kind;
           can_end = true;
           parents = AbsId.Set.empty;
           original_parents = [];
@@ -1351,7 +1351,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             let abs =
               {
                 abs_id = fresh_abs_id ();
-                kind = Loop S.loop_id;
+                kind = S.fresh_abs_kind;
                 can_end = true;
                 parents = AbsId.Set.empty;
                 original_parents = [];
@@ -1400,10 +1400,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             else raise (ValueMatchFailure (LoanInRight id)))
     | None ->
         (* Convert the value to an abstraction *)
-        let abs_kind : abs_kind = Loop S.loop_id in
         let ctx = if value_is_left then ctx0 else ctx1 in
         let absl =
-          convert_value_to_abstractions span abs_kind ~can_end:true ctx v
+          convert_value_to_abstractions span S.fresh_abs_kind ~can_end:true ctx
+            v
         in
         (* Add a marker to the abstraction indicating the provenance of the value *)
         let pm = if value_is_left then PLeft else PRight in
@@ -1471,7 +1471,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     let abs =
       {
         abs_id = fresh_abs_id ();
-        kind = Loop S.loop_id;
+        kind = S.fresh_abs_kind;
         can_end = true;
         parents = AbsId.Set.empty;
         original_parents = [];
@@ -1569,7 +1569,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     let abs =
       {
         abs_id = fresh_abs_id ();
-        kind = Loop S.loop_id;
+        kind = S.fresh_abs_kind;
         can_end = true;
         parents = AbsId.Set.empty;
         original_parents = [];
@@ -1602,9 +1602,6 @@ end
 (* Very annoying: functors only take modules as inputs... *)
 module type MatchMoveState = sig
   val span : Meta.span
-
-  (** The current loop *)
-  val loop_id : LoopId.id
 
   (** The moved values *)
   val nvalues : tvalue list ref
@@ -2358,8 +2355,9 @@ let ctxs_are_equivalent (span : Meta.span) (fixed_ids : ids_sets)
     (match_ctxs span ~check_equiv:true fixed_ids lookup_shared_value
        lookup_shared_value ctx0 ctx1)
 
-let prepare_loop_match_ctx_with_target (config : config) (span : Meta.span)
-    (loop_id : LoopId.id) (fixed_ids : ids_sets) (src_ctx : eval_ctx) : cm_fun =
+let prepare_match_ctx_with_target (config : config) (span : Meta.span)
+    (fresh_abs_kind : abs_kind) (fixed_ids : ids_sets) (src_ctx : eval_ctx) :
+    cm_fun =
  fun tgt_ctx ->
   (* Debug *)
   [%ldebug
@@ -2396,7 +2394,7 @@ let prepare_loop_match_ctx_with_target (config : config) (span : Meta.span)
 
     let module S : MatchJoinState = struct
       let span = span
-      let loop_id = loop_id
+      let fresh_abs_kind = fresh_abs_kind
       let nabs = nabs
 
       (* We're only preparing the match by ending loans, etc., and shouldn't introduce
@@ -2440,7 +2438,6 @@ let prepare_loop_match_ctx_with_target (config : config) (span : Meta.span)
       let nvalues = ref [] in
       let module S : MatchMoveState = struct
         let span = span
-        let loop_id = loop_id
         let nvalues = nvalues
       end in
       let module MM = MakeMoveMatcher (S) in
