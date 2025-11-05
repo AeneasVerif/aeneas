@@ -10,7 +10,7 @@ open InterpreterReduceCollapse
 open InterpreterMatchCtxs
 
 (** The local logger *)
-let log = Logging.join_ctxs_log
+let log = Logging.join_log
 
 (* TODO: this could be drastically simplified.
 

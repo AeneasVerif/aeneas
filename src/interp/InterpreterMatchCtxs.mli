@@ -144,7 +144,7 @@ val ctxs_are_equivalent : Meta.span -> ids_sets -> eval_ctx -> eval_ctx -> bool
     loop, which results from joins during which we ended the loans which were
     introduced during the loop iterations).
 
-    TODO: this is probably not necessary anymore.
+    TODO: remove?
 
     **Parameters**:
     - [config]

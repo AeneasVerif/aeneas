@@ -82,14 +82,14 @@ let builtin_log = create_logger "Builtin"
 (** Logger for Interpreter *)
 let interpreter_log = create_logger "Interpreter"
 
-(** Logger for InterpreterLoopsMatchCtxs *)
+(** Logger for InterpreterMatchCtxs *)
 let match_ctxs_log = create_logger "InterpreterMatchCtxs"
 
 (** Logger for InterpreterReduceCollapse *)
 let reduce_collapse_log = create_logger "InterpreterReduceCollapse"
 
-(** Logger for InterpreterLoopsJoinCtxs *)
-let join_ctxs_log = create_logger "InterpreterJoinCtxs"
+(** Logger for InterpreterJoin *)
+let join_log = create_logger "InterpreterJoin"
 
 (** Logger for InterpreterLoopsFixedPoint *)
 let loops_fixed_point_log = create_logger "InterpreterLoopsFixedPoint"
