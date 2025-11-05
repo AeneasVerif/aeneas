@@ -152,6 +152,7 @@ type bs_ctx = {
       (** Whenever we encounter a new symbolic value (introduced because of a
           symbolic expansion or upon ending an abstraction, for instance) we
           introduce a new variable (with a let-binding). *)
+  fresh_fvar_id : unit -> fvar_id;
   fvars : fvar FVarId.Map.t;
       (** The free variables introduced so far.
 
@@ -431,7 +432,7 @@ let bs_ctx_lookup_type_decl (id : TypeDeclId.id) (ctx : bs_ctx) : type_decl =
 let fresh_var (basename : string option) (ty : ty) (ctx : bs_ctx) :
     bs_ctx * fvar =
   (* Generate the fresh variable *)
-  let id = fresh_fvar_id () in
+  let id = ctx.fresh_fvar_id () in
   let var = { id; basename; ty } in
   (* Insert in the context *)
   let ctx = { ctx with fvars = FVarId.Map.add id var ctx.fvars } in

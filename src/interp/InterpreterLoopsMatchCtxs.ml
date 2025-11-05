@@ -563,15 +563,16 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     S.symbolic_to_value :=
       SymbolicValueId.Map.add sv_id (left, right) !S.symbolic_to_value
 
-  let add_fresh_symbolic_value_from_no_regions_ty ty (left : tvalue)
-      (right : tvalue) : tvalue =
-    let sv = mk_fresh_symbolic_tvalue_from_no_regions_ty span ty in
+  let add_fresh_symbolic_value_from_no_regions_ty (ctx : eval_ctx) ty
+      (left : tvalue) (right : tvalue) : tvalue =
+    let sv = mk_fresh_symbolic_tvalue_from_no_regions_ty span ctx ty in
     let sv_id = [%add_loc] symbolic_tvalue_get_id span sv in
     add_symbolic_value sv_id left right;
     sv
 
-  let add_fresh_symbolic_value ty (left : tvalue) (right : tvalue) : tvalue =
-    let sv = mk_fresh_symbolic_tvalue span ty in
+  let add_fresh_symbolic_value (ctx : eval_ctx) ty (left : tvalue)
+      (right : tvalue) : tvalue =
+    let sv = mk_fresh_symbolic_tvalue span ctx ty in
     let sv_id = [%add_loc] symbolic_tvalue_get_id span sv in
     add_symbolic_value sv_id left right;
     sv
@@ -604,10 +605,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           match SymbolicValueId.Map.find_opt sv.sv_id !S.symbolic_to_value with
           | None ->
               (* The symbolic value is not fresh: let's just copy it *)
-              (add_fresh_symbolic_value sv.sv_ty v v).value
+              (add_fresh_symbolic_value ctx sv.sv_ty v v).value
           | Some (lv, rv) ->
               (* Introduce a fresh symbolic value which derives from the same values *)
-              (add_fresh_symbolic_value sv.sv_ty lv rv).value)
+              (add_fresh_symbolic_value ctx sv.sv_ty lv rv).value)
     in
     { v with value }
 
@@ -621,9 +622,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     [%sanity_check] span (ty0 = ty1);
     ty0
 
-  let match_distinct_literals (_ : tvalue_matcher) (_ : eval_ctx) (_ : eval_ctx)
-      (ty : ety) (v0 : literal) (v1 : literal) : tvalue =
-    add_fresh_symbolic_value_from_no_regions_ty ty
+  let match_distinct_literals (_ : tvalue_matcher) (ctx0 : eval_ctx)
+      (_ : eval_ctx) (ty : ety) (v0 : literal) (v1 : literal) : tvalue =
+    add_fresh_symbolic_value_from_no_regions_ty ctx0 ty
       { value = VLiteral v0; ty }
       { value = VLiteral v1; ty }
 
@@ -640,11 +641,11 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
        TODO: we might have to do some unification to determine whether some
        regions should be equal or not. *)
     let fresh_regions, ty_with_regions =
-      ty_refresh_regions (Some span) fresh_region_id v0.ty
+      ty_refresh_regions (Some span) ctx0.fresh_region_id v0.ty
     in
 
     (* Introduce a fresh symbolic value for the join *)
-    let sv = add_fresh_symbolic_value ty_with_regions v0 v1 in
+    let sv = add_fresh_symbolic_value ctx0 ty_with_regions v0 v1 in
     let sv_s = tvalue_as_symbolic span sv in
 
     (* Project the ADTs into different region abstractions *)
@@ -692,7 +693,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* Generate the abstraction *)
       let abs =
         {
-          abs_id = fresh_abs_id ();
+          abs_id = ctx0.fresh_abs_id ();
           kind = Loop S.loop_id;
           can_end = true;
           parents = AbsId.Set.empty;
@@ -767,7 +768,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let v = mk_bottom span (erase_regions v0.ty) in
       let v, absl =
         if has_outer_loans then
-          let lid = fresh_borrow_id () in
+          let lid = ctx0.fresh_borrow_id () in
           let absl =
             List.map
               (fun (abs : abs) ->
@@ -776,7 +777,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
                   {
                     value =
                       ABorrow
-                        (ASharedBorrow (PNone, lid, fresh_shared_borrow_id ()));
+                        (ASharedBorrow
+                           (PNone, lid, ctx0.fresh_shared_borrow_id ()));
                     ty = TRef (RVar (Free rid), v0.ty, RShared);
                   }
                 in
@@ -795,7 +797,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* Note the values can't contain bottoms (the case where they contain
          bottom values is handled above) *)
       (* We put everything in the same region *)
-      let rid = fresh_region_id () in
+      let rid = ctx0.fresh_region_id () in
       let avl0, input0 =
         convert_value_to_input_avalues span ctx0 PLeft v0 rid
       in
@@ -805,7 +807,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       [%cassert] span (ty_no_regions v0.ty) "Not implemented yet";
       let _, ty = ty_refresh_regions (Some span) (fun _ -> rid) v0.ty in
 
-      let lid = fresh_borrow_id () in
+      let lid = ctx0.fresh_borrow_id () in
       if tvalue_has_mutable_loans v0 || tvalue_has_mutable_loans v1 then (
         let ref_ty = mk_ref_ty (RVar (Free rid)) ty RMut in
         let av : tavalue =
@@ -837,7 +839,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
         let abs =
           {
-            abs_id = fresh_abs_id ();
+            abs_id = ctx0.fresh_abs_id ();
             kind = Loop S.loop_id;
             can_end = true;
             parents = AbsId.Set.empty;
@@ -875,7 +877,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* We always generate a fresh borrow id: borrows may be duplicated, and
          we have to make sure that shared borrow ids remain unique.
        *)
-      let sid = fresh_shared_borrow_id () in
+      let sid = ctx0.fresh_shared_borrow_id () in
       (bid0, sid)
     else
       (* We replace bid0 and bid1 with a fresh borrow id, and introduce
@@ -884,8 +886,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
            { SB bid0, SB bid1, SL bid2 }
          ]}
       *)
-      let rid = fresh_region_id () in
-      let bid2 = fresh_borrow_id () in
+      let rid = ctx0.fresh_region_id () in
+      let bid2 = ctx0.fresh_borrow_id () in
 
       (* Update the type of the shared loan to use the fresh region *)
       let _, bv_ty, kind = ty_as_ref ty in
@@ -924,7 +926,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* Generate the abstraction *)
       let abs =
         {
-          abs_id = fresh_abs_id ();
+          abs_id = ctx0.fresh_abs_id ();
           kind = Loop S.loop_id;
           can_end = true;
           parents = AbsId.Set.empty;
@@ -940,7 +942,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* We always generate a fresh borrow id: borrows may be duplicated, and
          we have to make sure that shared borrow ids remain unique.
       *)
-      let sid = fresh_shared_borrow_id () in
+      let sid = ctx0.fresh_shared_borrow_id () in
       (bid2, sid)
 
   let match_mut_borrows (_ : tvalue_matcher) (ctx0 : eval_ctx) (_ : eval_ctx)
@@ -1022,8 +1024,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
            { |MB bid0|, ︙MB bid1︙, ML bid2 }
          ]}
       *)
-      let rid = fresh_region_id () in
-      let bid2 = fresh_borrow_id () in
+      let rid = ctx0.fresh_region_id () in
+      let bid2 = ctx0.fresh_borrow_id () in
 
       (* [bv] is the result of the join  *)
       let _, bv_ty, kind = ty_as_ref ty in
@@ -1091,7 +1093,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* Generate the abstraction *)
       let abs =
         {
-          abs_id = fresh_abs_id ();
+          abs_id = ctx0.fresh_abs_id ();
           kind = Loop S.loop_id;
           can_end = true;
           parents = AbsId.Set.empty;
@@ -1120,8 +1122,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         "Nested borrows are not supported yet.";
 
       (* We need to introduce a fresh shared loan. *)
-      let rid = fresh_region_id () in
-      let nbid = fresh_borrow_id () in
+      let rid = ctx0.fresh_region_id () in
+      let nbid = ctx0.fresh_borrow_id () in
 
       let kind = RShared in
       let bv_ty = ty in
@@ -1130,7 +1132,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let borrow_av =
         let ty = borrow_ty in
         let value =
-          ABorrow (ASharedBorrow (PNone, nbid, fresh_shared_borrow_id ()))
+          ABorrow (ASharedBorrow (PNone, nbid, ctx0.fresh_shared_borrow_id ()))
         in
         mk_tavalue span ty value
       in
@@ -1161,7 +1163,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* Generate the abstraction *)
       let abs =
         {
-          abs_id = fresh_abs_id ();
+          abs_id = ctx0.fresh_abs_id ();
           kind = Loop S.loop_id;
           can_end = true;
           parents = AbsId.Set.empty;
@@ -1187,8 +1189,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         "Nested borrows are not supported yet.";
 
       (* We need to introduce a fresh loan and a fresh region abstraction *)
-      let rid = fresh_region_id () in
-      let nbid = fresh_borrow_id () in
+      let rid = ctx0.fresh_region_id () in
+      let nbid = ctx0.fresh_borrow_id () in
 
       let kind = RMut in
       let bv_ty = ty in
@@ -1237,7 +1239,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* Generate the abstraction *)
       let abs =
         {
-          abs_id = fresh_abs_id ();
+          abs_id = ctx0.fresh_abs_id ();
           kind = Loop S.loop_id;
           can_end = true;
           parents = AbsId.Set.empty;
@@ -1307,10 +1309,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         *)
         (* Introduce one region abstraction per region appearing in the symbolic value *)
         let fresh_regions, proj_ty =
-          ty_refresh_regions (Some span) fresh_region_id sv0.sv_ty
+          ty_refresh_regions (Some span) ctx0.fresh_region_id sv0.sv_ty
         in
         let svj =
-          add_fresh_symbolic_value proj_ty
+          add_fresh_symbolic_value ctx0 proj_ty
             { value = VSymbolic sv0; ty = sv0.sv_ty }
             { value = VSymbolic sv1; ty = sv1.sv_ty }
         in
@@ -1350,7 +1352,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             (* Create the abstraction *)
             let abs =
               {
-                abs_id = fresh_abs_id ();
+                abs_id = ctx0.fresh_abs_id ();
                 kind = Loop S.loop_id;
                 can_end = true;
                 parents = AbsId.Set.empty;
@@ -1366,7 +1368,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       else
         (* Otherwise we simply introduce a fresh symbolic value *)
         let sv =
-          add_fresh_symbolic_value sv0.sv_ty
+          add_fresh_symbolic_value ctx0 sv0.sv_ty
             { value = VSymbolic sv0; ty = sv0.sv_ty }
             { value = VSymbolic sv1; ty = sv1.sv_ty }
         in
@@ -1434,8 +1436,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     let joined_value = match_rec shared_value other in
 
     (* We need to introduce a fresh shared loan. *)
-    let rid = fresh_region_id () in
-    let nbid = fresh_borrow_id () in
+    let rid = ctx0.fresh_region_id () in
+    let nbid = ctx0.fresh_borrow_id () in
 
     let kind = RShared in
     let bv_ty = ty in
@@ -1444,7 +1446,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     let borrow_av =
       let ty = borrow_ty in
       let value =
-        ABorrow (ASharedBorrow (PNone, nbid, fresh_shared_borrow_id ()))
+        ABorrow (ASharedBorrow (PNone, nbid, ctx0.fresh_shared_borrow_id ()))
       in
       mk_tavalue span ty value
     in
@@ -1470,7 +1472,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     (* Generate the abstraction *)
     let abs =
       {
-        abs_id = fresh_abs_id ();
+        abs_id = ctx0.fresh_abs_id ();
         kind = Loop S.loop_id;
         can_end = true;
         parents = AbsId.Set.empty;
@@ -1509,8 +1511,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       ^ ty_to_string other_ctx other.ty];
 
     (* We need to introduce a fresh loan and a fresh region abstraction *)
-    let rid = fresh_region_id () in
-    let nbid = fresh_borrow_id () in
+    let rid = ctx0.fresh_region_id () in
+    let nbid = ctx0.fresh_borrow_id () in
 
     let kind = RMut in
     let bv_ty = ty in
@@ -1568,7 +1570,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     (* Generate the abstraction *)
     let abs =
       {
-        abs_id = fresh_abs_id ();
+        abs_id = ctx0.fresh_abs_id ();
         kind = Loop S.loop_id;
         can_end = true;
         parents = AbsId.Set.empty;
@@ -1873,9 +1875,9 @@ struct
     in
     match_types span ctx0 ctx1 match_distinct_types match_regions ty0 ty1
 
-  let match_distinct_literals (_ : tvalue_matcher) (_ : eval_ctx) (_ : eval_ctx)
-      (ty : ety) (_ : literal) (_ : literal) : tvalue =
-    mk_fresh_symbolic_tvalue_from_no_regions_ty span ty
+  let match_distinct_literals (_ : tvalue_matcher) (ctx0 : eval_ctx)
+      (_ : eval_ctx) (ty : ety) (_ : literal) (_ : literal) : tvalue =
+    mk_fresh_symbolic_tvalue_from_no_regions_ty span ctx0 ty
 
   let match_distinct_adts (_ : tvalue_matcher) (_ : eval_ctx) (_ : eval_ctx)
       (_ty : ety) _ (_adt0 : adt_value) _ (_adt1 : adt_value) : tvalue =
@@ -1907,7 +1909,7 @@ struct
         ()
     in
     (* The shared borrow id doesn't really matter but it's always safer to refresh it *)
-    (bid, fresh_shared_borrow_id ())
+    (bid, ctx0.fresh_shared_borrow_id ())
 
   let match_mut_borrows (_ : tvalue_matcher) (_ : eval_ctx) (_ : eval_ctx)
       (_ty : ety) (bid0 : borrow_id) (_bv0 : tvalue) (bid1 : borrow_id)
@@ -2012,14 +2014,14 @@ struct
   let match_distinct_aadts _ _ _ _ _ _ _ =
     raise (Distinct "match_distinct_adts")
 
-  let match_ashared_borrows (_ : tvalue_matcher) (_ : eval_ctx) (_ : eval_ctx)
-      _ty0 pm0 bid0 _sid0 _ty1 pm1 bid1 _sid1 ty : tavalue =
+  let match_ashared_borrows (_ : tvalue_matcher) (ctx0 : eval_ctx)
+      (_ : eval_ctx) _ty0 pm0 bid0 _sid0 _ty1 pm1 bid1 _sid1 ty : tavalue =
     (* We are checking whether that two environments are equivalent:
        there shouldn't be any projection markers *)
     [%sanity_check] span (pm0 = PNone && pm1 = PNone);
     let bid = match_borrow_id bid0 bid1 in
     (* It's always safer to refresh shared borrow ids *)
-    let sid = fresh_shared_borrow_id () in
+    let sid = ctx0.fresh_shared_borrow_id () in
     let value = ABorrow (ASharedBorrow (PNone, bid, sid)) in
     { value; ty }
 

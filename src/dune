@@ -63,6 +63,7 @@
   Logging
   Meta
   NameMatcher
+  Parallel
   PrePasses
   Print
   PrintPure

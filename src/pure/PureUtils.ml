@@ -190,7 +190,8 @@ class ['self] scoped_map_expr =
       { inputs; loop_body }
   end
 
-let mk_fresh_fvar ?(basename = None) (ty : ty) : fvar =
+let mk_fresh_fvar (fresh_fvar_id : unit -> fvar_id) ?(basename = None) (ty : ty)
+    : fvar =
   let id = fresh_fvar_id () in
   { id; basename; ty }
 
@@ -1136,8 +1137,8 @@ let close_tpat (span : Meta.span) (pat : tpat) : BVarId.id FVarId.Map.t * tpat =
 
     We use this when handling function bodies: the list of type patterns is the
     list of input variables, that we treat as a single binder group. *)
-let open_binders (span : Meta.span) (patl : tpat list) (e : texpr) :
-    fvar FVarId.Map.t * tpat list * texpr =
+let open_binders fresh_fvar_id (span : Meta.span) (patl : tpat list) (e : texpr)
+    : fvar FVarId.Map.t * tpat list * texpr =
   (* We start by introducing the free variables in the pattern *)
   (* The map from bound var ids to freshly introduced fvar ids *)
   let m = ref BVarId.Map.empty in
@@ -1169,9 +1170,9 @@ let open_binders (span : Meta.span) (patl : tpat list) (e : texpr) :
 
     Return the opened binder (where the bound variables have been replaced with
     fresh free variables).*)
-let open_binder (span : Meta.span) (pat : tpat) (e : texpr) :
+let open_binder fresh_fvar_id (span : Meta.span) (pat : tpat) (e : texpr) :
     fvar FVarId.Map.t * tpat * texpr =
-  let fvars, patl, e = open_binders span [ pat ] e in
+  let fvars, patl, e = open_binders fresh_fvar_id span [ pat ] e in
   (fvars, List.hd patl, e)
 
 (** Helper visitor to close a binder group.
@@ -1228,12 +1229,13 @@ let close_binder (span : Meta.span) (pat : tpat) (e : texpr) : tpat * texpr =
 
     We introduce free variables for the variables bound in the lets while doing
     so. *)
-let rec open_lets span ?(fresh_fvars : FVarId.Set.t ref option = None)
-    (e : texpr) : (bool * tpat * texpr) list * texpr =
+let rec open_lets fresh_fvar_id span
+    ?(fresh_fvars : FVarId.Set.t ref option = None) (e : texpr) :
+    (bool * tpat * texpr) list * texpr =
   match e.e with
   | Let (monadic, lv, re, next_e) ->
-      let _, lv, next_e = open_binder span lv next_e in
-      let lets, last_e = open_lets ~fresh_fvars span next_e in
+      let _, lv, next_e = open_binder fresh_fvar_id span lv next_e in
+      let lets, last_e = open_lets ~fresh_fvars fresh_fvar_id span next_e in
       ((monadic, lv, re) :: lets, last_e)
   | _ -> ([], e)
 
@@ -1406,11 +1408,12 @@ let mk_opened_lambdas_from_fvars span (vars : fvar list)
 
     We introduce free variables for the variables bound in the lambdas while
     doing so. *)
-let rec open_lambdas span (e : texpr) : fvar FVarId.Map.t * tpat list * texpr =
+let rec open_lambdas fresh_fvar_id span (e : texpr) :
+    fvar FVarId.Map.t * tpat list * texpr =
   match e.e with
   | Lambda (pat, e) ->
-      let fvars, pat, e = open_binder span pat e in
-      let fvars', pats, e = open_lambdas span e in
+      let fvars, pat, e = open_binder fresh_fvar_id span pat e in
+      let fvars', pats, e = open_lambdas fresh_fvar_id span e in
       ( FVarId.Map.union (fun _ _ _ -> [%internal_error] span) fvars fvars',
         pat :: pats,
         e )
@@ -1704,10 +1707,10 @@ let mk_opened_checked_let file line span (monadic : bool) (lv : tpat)
   mk_opened_let monadic lv re next_e
 
 (** This helper opens the binder *)
-let open_branch span (branch : match_branch) : fvar FVarId.Map.t * tpat * texpr
-    =
+let open_branch fresh_fvar_id span (branch : match_branch) :
+    fvar FVarId.Map.t * tpat * texpr =
   let { pat; branch } = branch in
-  open_binder span pat branch
+  open_binder fresh_fvar_id span pat branch
 
 (** This helper closes the binder *)
 let close_branch span (pat : tpat) (branch : texpr) : match_branch =
@@ -1954,7 +1957,7 @@ let open_all_env_pop_scope (env : open_all_env) : open_all_env =
 
     Only call this between [open_all_env_start_penv] and
     [open_all_env_push_penv]. *)
-let open_all_env_push_var (env : open_all_env) (v : var) :
+let open_all_env_push_var fresh_fvar_id (env : open_all_env) (v : var) :
     open_all_env * fvar_id =
   let penv = Option.get env.penv in
   let bvar_id = env.pvarid in
@@ -1984,7 +1987,7 @@ let open_all_env_get_var span (env : open_all_env) (v : bvar) : fvar_id option =
     We use a reference to the environment to update the bindings. As a
     consequence we pay attention to pop binders whenever they become out of
     scope. *)
-let open_all_visitor (span : Meta.span) =
+let open_all_visitor fresh_fvar_id (span : Meta.span) =
   object (_ : 'self)
     inherit [_] open_close_all_visitor
 
@@ -1998,7 +2001,7 @@ let open_all_visitor (span : Meta.span) =
       env := open_all_env_pop_scope !env
 
     method push_var (env : open_all_env ref) v =
-      let env', id = open_all_env_push_var !env v in
+      let env', id = open_all_env_push_var fresh_fvar_id !env v in
       env := env';
       id
 
@@ -2013,13 +2016,13 @@ let open_all_visitor (span : Meta.span) =
       (* Leave it unchanged (it is already open) *) POpen (fv, mp)
   end
 
-let open_all_texpr (span : Meta.span) (e : texpr) : texpr =
-  (open_all_visitor span)#visit_texpr (ref empty_open_all_env) e
+let open_all_texpr fresh_fvar_id (span : Meta.span) (e : texpr) : texpr =
+  (open_all_visitor fresh_fvar_id span)#visit_texpr (ref empty_open_all_env) e
 
-let open_all_fun_body (span : Meta.span) (fbody : fun_body) :
+let open_all_fun_body fresh_fvar_id (span : Meta.span) (fbody : fun_body) :
     fvar FVarId.Map.t * fun_body =
   let env = ref empty_open_all_env in
-  let fbody = (open_all_visitor span)#visit_fun_body env fbody in
+  let fbody = (open_all_visitor fresh_fvar_id span)#visit_fun_body env fbody in
   (!env.fvars, fbody)
 
 type close_all_env = {
@@ -2111,10 +2114,10 @@ let close_all_texpr (span : Meta.span) (e : texpr) : texpr =
 let close_all_fun_body (span : Meta.span) (fbody : fun_body) : fun_body =
   (close_all_visitor span)#visit_fun_body (ref empty_close_all_env) fbody
 
-let open_fun_body (span : Meta.span) (fbody : fun_body) :
+let open_fun_body fresh_fvar_id (span : Meta.span) (fbody : fun_body) :
     fvar FVarId.Map.t * fun_body =
   let { inputs; body } = fbody in
-  let fvars, inputs, body = open_binders span inputs body in
+  let fvars, inputs, body = open_binders fresh_fvar_id span inputs body in
   (fvars, { inputs; body })
 
 let close_fun_body (span : Meta.span) (fbody : fun_body) : fun_body =
@@ -2122,10 +2125,12 @@ let close_fun_body (span : Meta.span) (fbody : fun_body) : fun_body =
   let inputs, body = close_binders span inputs body in
   { inputs; body }
 
-let open_loop_body (span : Meta.span) (body : loop_body) :
+let open_loop_body fresh_fvar_id (span : Meta.span) (body : loop_body) :
     fvar FVarId.Map.t * loop_body =
   let { inputs; loop_body } = body in
-  let fvars, inputs, loop_body = open_binders span inputs loop_body in
+  let fvars, inputs, loop_body =
+    open_binders fresh_fvar_id span inputs loop_body
+  in
   (fvars, { inputs; loop_body })
 
 let close_loop_body (span : Meta.span) (body : loop_body) : loop_body =
@@ -2135,11 +2140,11 @@ let close_loop_body (span : Meta.span) (body : loop_body) : loop_body =
 
 (** Open all the bound variables in a function body, apply a function, then
     close those bound variables *)
-let open_close_all_fun_body (span : Meta.span) (f : fun_body -> fun_body)
-    (fbody : fun_body) : fun_body =
+let open_close_all_fun_body fresh_fvar_id (span : Meta.span)
+    (f : fun_body -> fun_body) (fbody : fun_body) : fun_body =
   if !Config.sanity_checks then
     [%sanity_check] span (not (texpr_has_fvars fbody.body));
-  let _, fbody = open_all_fun_body span fbody in
+  let _, fbody = open_all_fun_body fresh_fvar_id span fbody in
   if !Config.sanity_checks then
     [%sanity_check] span (not (texpr_has_bvars fbody.body));
   let fbody = f fbody in
@@ -2152,10 +2157,12 @@ let open_close_all_fun_body (span : Meta.span) (f : fun_body -> fun_body)
 
 (** Open all the bound variables in a function body, apply a function, then
     close those bound variables *)
-let open_close_all_fun_decl (f : fun_body -> fun_body) (fdef : fun_decl) :
-    fun_decl =
+let open_close_all_fun_decl fresh_fvar_id (f : fun_body -> fun_body)
+    (fdef : fun_decl) : fun_decl =
   let body =
-    Option.map (open_close_all_fun_body fdef.item_meta.span f) fdef.body
+    Option.map
+      (open_close_all_fun_body fresh_fvar_id fdef.item_meta.span f)
+      fdef.body
   in
   { fdef with body }
 
@@ -2163,11 +2170,12 @@ let open_close_all_fun_decl (f : fun_body -> fun_body) (fdef : fun_decl) :
     close those bound variables.
 
     We reset the fvar id counter before doing this. *)
-let map_open_all_fun_decl_body (f : fun_body -> fun_body) (fdef : fun_decl) :
-    fun_decl =
-  reset_fvar_id_counter ();
+let map_open_all_fun_decl_body fresh_fvar_id (f : fun_body -> fun_body)
+    (fdef : fun_decl) : fun_decl =
   let body =
-    Option.map (open_close_all_fun_body fdef.item_meta.span f) fdef.body
+    Option.map
+      (open_close_all_fun_body fresh_fvar_id fdef.item_meta.span f)
+      fdef.body
   in
   { fdef with body }
 
@@ -2175,9 +2183,9 @@ let map_open_all_fun_decl_body (f : fun_body -> fun_body) (fdef : fun_decl) :
     close those bound variables.
 
     We reset the fvar id counter before doing this. *)
-let map_open_all_fun_decl_body_expr (f : texpr -> texpr) (fdef : fun_decl) :
-    fun_decl =
-  map_open_all_fun_decl_body
+let map_open_all_fun_decl_body_expr fresh_fvar_id (f : texpr -> texpr)
+    (fdef : fun_decl) : fun_decl =
+  map_open_all_fun_decl_body fresh_fvar_id
     (fun (fb : fun_body) -> { fb with body = f fb.body })
     fdef
 
@@ -2185,13 +2193,12 @@ let map_open_all_fun_decl_body_expr (f : texpr -> texpr) (fdef : fun_decl) :
     close those bound variables.
 
     We reset the fvar id counter before doing this. *)
-let iter_open_all_fun_decl_body (f : fun_body -> unit) (fdef : fun_decl) : unit
-    =
-  reset_fvar_id_counter ();
+let iter_open_all_fun_decl_body fresh_fvar_id (f : fun_body -> unit)
+    (fdef : fun_decl) : unit =
   Option.iter
     (fun x ->
       let _ =
-        open_close_all_fun_body fdef.item_meta.span
+        open_close_all_fun_body fresh_fvar_id fdef.item_meta.span
           (fun x ->
             f x;
             x)
@@ -2204,9 +2211,11 @@ let iter_open_all_fun_decl_body (f : fun_body -> unit) (fdef : fun_decl) : unit
     close those bound variables.
 
     We reset the fvar id counter before doing this. *)
-let iter_open_all_fun_decl_body_expr (f : texpr -> unit) (fdef : fun_decl) :
-    unit =
-  iter_open_all_fun_decl_body (fun (fb : fun_body) -> f fb.body) fdef
+let iter_open_all_fun_decl_body_expr fresh_fvar_id (f : texpr -> unit)
+    (fdef : fun_decl) : unit =
+  iter_open_all_fun_decl_body fresh_fvar_id
+    (fun (fb : fun_body) -> f fb.body)
+    fdef
 
 type generics_filter = {
   types : bool list;  (** [true] means we should keep the parameter *)
@@ -2336,8 +2345,9 @@ type decomposed_loop_result = {
 
     The returned continuation allows reconstructing the decomposition, in case
     we introduced a let-binding. *)
-let opt_destruct_loop_result_decompose_outputs span ~(intro_let : bool)
-    (e : texpr) : (decomposed_loop_result * (texpr -> texpr)) option =
+let opt_destruct_loop_result_decompose_outputs fresh_fvar_id span
+    ~(intro_let : bool) (e : texpr) :
+    (decomposed_loop_result * (texpr -> texpr)) option =
   let f, args = destruct_apps e in
   match f.e with
   | Qualif
@@ -2381,7 +2391,9 @@ let opt_destruct_loop_result_decompose_outputs span ~(intro_let : bool)
                    (this duplicates the expression) or we introduce an intermediate
                    let-bindings *)
                 if intro_let then
-                  let fvars = List.map mk_fresh_fvar generics.types in
+                  let fvars =
+                    List.map (mk_fresh_fvar fresh_fvar_id) generics.types
+                  in
                   let pat =
                     mk_simpl_tuple_pat (List.map (mk_tpat_from_fvar None) fvars)
                   in

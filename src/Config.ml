@@ -442,3 +442,6 @@ let match_patterns_with_trait_decl_refs = true
 
 (** Decompose loops to recursive functions *)
 let loops_to_recursive_functions = ref true
+
+(** Should we run the translation in parallel? *)
+let parallel = ref true

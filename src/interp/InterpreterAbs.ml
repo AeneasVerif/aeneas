@@ -69,7 +69,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
                avalues)];
       let abs =
         {
-          abs_id = fresh_abs_id ();
+          abs_id = ctx.fresh_abs_id ();
           kind = abs_kind;
           can_end;
           parents = AbsId.Set.empty;
@@ -150,7 +150,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
         match bc with
         | VSharedBorrow (bid, sid) ->
             (* Push a region abstraction for this borrow *)
-            let rid = fresh_region_id () in
+            let rid = ctx.fresh_region_id () in
             let ty = TRef (RVar (Free rid), ref_ty, kind) in
             let value = ABorrow (ASharedBorrow (PNone, bid, sid)) in
             let value : tavalue = { value; ty } in
@@ -162,7 +162,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
               (not (value_has_borrows (Some span) ctx bv.value))
               "Nested borrows are not supported yet";
             (* Create an avalue to push - note that we use [AIgnore] for the inner avalue *)
-            let rid = fresh_region_id () in
+            let rid = ctx.fresh_region_id () in
             let ty = TRef (RVar (Free rid), ref_ty, kind) in
             let av : tavalue =
               let ignored = mk_aignored span ref_ty None in
@@ -183,7 +183,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             (* This borrow should have been activated *)
             [%craise] span "Unexpected")
     | VLoan _ ->
-        let rid = fresh_region_id () in
+        let rid = ctx.fresh_region_id () in
         let avl, input = to_inputs rid v in
         (* Create a let-binding to ignore the input *)
         let rids = RegionId.Set.singleton rid in
@@ -281,7 +281,7 @@ let convert_value_to_output_avalues (span : Meta.span) (ctx : eval_ctx)
           match bc with
           | VSharedBorrow (bid, sid) ->
               (* Push a region abstraction for this borrow *)
-              let rid = fresh_region_id () in
+              let rid = ctx.fresh_region_id () in
               let ty = TRef (RVar (Free rid), ref_ty, kind) in
               let value = ABorrow (ASharedBorrow (pm, bid, sid)) in
               let value : tavalue = { value; ty } in
@@ -1859,7 +1859,7 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind)
   let cont = merge_abs_conts span ctx ~with_abs_conts abs0 abs1 in
 
   (* Create the new abstraction *)
-  let abs_id = fresh_abs_id () in
+  let abs_id = ctx.fresh_abs_id () in
   let abs =
     {
       abs_id;

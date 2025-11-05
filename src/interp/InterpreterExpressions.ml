@@ -199,7 +199,7 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
       | VSharedBorrow (bid, _) ->
           (* We need to create a new borrow id for the copied borrow, and
            * update the context accordingly *)
-          let sid' = fresh_shared_borrow_id () in
+          let sid' = ctx.fresh_shared_borrow_id () in
           ( v,
             { v with value = VBorrow (VSharedBorrow (bid, sid')) },
             ctx,
@@ -245,8 +245,8 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
         let regions, ty =
           InterpreterBorrowsCore.refresh_live_regions_in_ty span ctx sp.sv_ty
         in
-        let updated_sv = mk_fresh_symbolic_value span ty in
-        let copied_sv = mk_fresh_symbolic_value span ty in
+        let updated_sv = mk_fresh_symbolic_value span ctx ty in
+        let copied_sv = mk_fresh_symbolic_value span ctx ty in
 
         let abs =
           List.map
@@ -280,7 +280,7 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
 
               let abs =
                 {
-                  abs_id = fresh_abs_id ();
+                  abs_id = ctx.fresh_abs_id ();
                   kind = CopySymbolicValue;
                   can_end = true;
                   parents = AbsId.Set.empty;
@@ -397,7 +397,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
           let ctx0 = ctx in
           (* Simply introduce a fresh symbolic value *)
           let ty = cv.ty in
-          let v = mk_fresh_symbolic_tvalue span ty in
+          let v = mk_fresh_symbolic_tvalue span ctx ty in
           (* Wrap the generated expression *)
           let cf e =
             SymbolicAst.IntroSymbolic
@@ -433,7 +433,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
                 (ctx, copied_value, cc)
             | SymbolicMode ->
                 (* We use the looked up value only for its type *)
-                let v = mk_fresh_symbolic_tvalue span cv.ty in
+                let v = mk_fresh_symbolic_tvalue span ctx cv.ty in
                 (ctx, v, fun e -> e)
           in
           (* We have to wrap the generated expression *)
@@ -676,7 +676,7 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
   (* Evaluate the operand *)
   let v, ctx, cc = eval_operand config span op ctx in
   (* Generate a fresh symbolic value to store the result *)
-  let res_sv_id = fresh_symbolic_value_id () in
+  let res_sv_id = ctx.fresh_symbolic_value_id () in
   let res_sv_ty =
     match (unop, v.ty) with
     | Not, (TLiteral TBool as lty) -> lty
@@ -818,7 +818,7 @@ let eval_binary_op_symbolic (config : config) (span : Meta.span) (binop : binop)
   (* Evaluate the operands *)
   let (v1, v2), ctx, cc = eval_two_operands config span op1 op2 ctx in
   (* Generate a fresh symbolic value to store the result *)
-  let res_sv_id = fresh_symbolic_value_id () in
+  let res_sv_id = ctx.fresh_symbolic_value_id () in
   let res_sv_ty =
     if binop = Eq || binop = Ne then (
       (* Equality operations *)
@@ -902,7 +902,7 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
         access_rplace_reorganize_and_read config span greedy_expand access p ctx
       in
       (* Generate the fresh shared borrow id *)
-      let sid = fresh_shared_borrow_id () in
+      let sid = ctx.fresh_shared_borrow_id () in
       (* Compute the loan value, with which to replace the value at place p *)
       let bid, nv =
         match (lid, v.value) with
@@ -911,7 +911,7 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
             (lid, v)
         | _ ->
             (* Not a shared loan: add a wrapper *)
-            let bid = fresh_borrow_id () in
+            let bid = ctx.fresh_borrow_id () in
             let v' = VLoan (VSharedLoan (bid, v)) in
             (bid, { v with value = v' })
       in
@@ -946,7 +946,7 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
         access_rplace_reorganize_and_read config span greedy_expand access p ctx
       in
       (* Compute the rvalue - wrap the value in a mutable borrow with a fresh id *)
-      let bid = fresh_borrow_id () in
+      let bid = ctx.fresh_borrow_id () in
       let rv_ty = TRef (RErased, v.ty, RMut) in
       let rv : tvalue = { value = VBorrow (VMutBorrow (bid, v)); ty = rv_ty } in
       (* Compute the loan value with which to replace the value at place p *)
@@ -1031,7 +1031,7 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
           let value : tvalue = { value; ty } in
           (value, fun e -> e)
         else
-          let saggregated = mk_fresh_symbolic_tvalue span ty in
+          let saggregated = mk_fresh_symbolic_tvalue span ctx ty in
           (* Update the symbolic ast *)
           let cf e =
             (* Introduce the symbolic value in the AST *)

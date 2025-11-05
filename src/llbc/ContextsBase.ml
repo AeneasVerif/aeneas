@@ -5,6 +5,7 @@ module L = Logging
 (** The local logger *)
 let log = L.contexts_log
 
+(*
 (** Some global counters.
 
     Note that those counters were initially stored in {!eval_ctx} values, but it
@@ -123,3 +124,31 @@ let reset_global_counters () =
   in
   fun_call_id_counter := FunCallId.generator_zero;
   dummy_var_id_counter := DummyVarId.generator_zero
+    *)
+
+type marked_ids = {
+  symbolic_value_ids : SymbolicValueId.Set.t;
+  fun_call_ids : FunCallId.Set.t;
+  dummy_var_ids : DummyVarId.Set.t;
+  borrow_ids : BorrowId.Set.t;
+  shared_borrow_ids : SharedBorrowId.Set.t;
+  abs_ids : AbsId.Set.t;
+  region_ids : RegionId.Set.t;
+  abs_fvar_ids : AbsFVarId.Set.t;
+  pure_fvar_ids : Pure.FVarId.Set.t;
+  loop_ids : LoopId.Set.t;
+}
+
+let empty_marked_ids : marked_ids =
+  {
+    symbolic_value_ids = SymbolicValueId.Set.empty;
+    fun_call_ids = FunCallId.Set.empty;
+    dummy_var_ids = DummyVarId.Set.empty;
+    borrow_ids = BorrowId.Set.empty;
+    shared_borrow_ids = SharedBorrowId.Set.empty;
+    abs_ids = AbsId.Set.empty;
+    region_ids = RegionId.Set.empty;
+    abs_fvar_ids = AbsFVarId.Set.empty;
+    pure_fvar_ids = Pure.FVarId.Set.empty;
+    loop_ids = LoopId.Set.empty;
+  }
