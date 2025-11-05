@@ -1,4 +1,4 @@
-(** Core definitions for the [IntepreterLoops*] *)
+(** Core definitions for the [joins] *)
 
 open Types
 open Values
