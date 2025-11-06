@@ -14,6 +14,8 @@ type statement_eval_res =
   | Continue of int
   | Return
   | Panic
+      (** TODO: this one should only be used in concrete executions, not when
+          synthesizing code *)
 [@@deriving show]
 
 (** Function which takes a context as input, and evaluates to:
@@ -79,6 +81,11 @@ let cc_singleton file line span cf el =
 let cf_singleton file line span el =
   match el with
   | [ e ] -> e
+  | _ -> internal_error file line span
+
+let cf_empty file line span e el =
+  match el with
+  | [] -> e
   | _ -> internal_error file line span
 
 (** It happens that we need to concatenate lists of results, for instance when
