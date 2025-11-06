@@ -948,7 +948,7 @@ and eval_global_ref (config : config) (span : Meta.span) (dest : place)
 and eval_switch (config : config) (span : Meta.span) (switch : switch) :
     stl_cm_fun =
  fun ctx ->
-  (* We evaluate the operand in two steps:
+  (* We evaluate the scrutinee in two steps:
      first we prepare it, then we check if its value is concrete or
      symbolic. If it is concrete, we can then evaluate the operand
      directly, otherwise we must first expand the value.
@@ -984,140 +984,13 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
             let resl_true = eval_block config true_block true_ctx in
             let resl_false = eval_block config false_block false_ctx in
             if join then
-              (* Join the contexts.
-
-                 Note that if we can join the contexts (there are no statements
-                 breaking the control flow) then we should join the contexts after
-                 all the inner branchings, which means we should get exactly one
-                 context for each branch.
-              *)
-              match (resl_true, resl_false) with
-              | ( ([ (true_ctx, true_res) ], e_true),
-                  ([ (false_ctx, false_res) ], e_false) ) -> (
-                  [%ldebug
-                    "About to join contexts after an [if then else]."
-                    ^ "\n- initial ctx:\n" ^ eval_ctx_to_string ctx
-                    ^ "\n\n- true ctx:\n"
-                    ^ eval_ctx_to_string true_ctx
-                    ^ "\n\n- false ctx:\n"
-                    ^ eval_ctx_to_string false_ctx];
-                  match (true_res, false_res) with
-                  | Unit, Unit ->
-                      let fixed_ids, _ = compute_ctx_ids ctx0 in
-                      let _, joined_ctx =
-                        InterpreterJoin.join_ctxs_list config span Join
-                          fixed_ids [ true_ctx; false_ctx ]
-                      in
-                      [%ldebug "Joined ctx:\n" ^ eval_ctx_to_string joined_ctx];
-
-                      (* Compute the output values *)
-                      let output_svalues =
-                        InterpreterJoin
-                        .compute_ctx_fresh_ordered_symbolic_values span
-                          ~only_modified_svalues:true ctx0 joined_ctx
-                      in
-                      let output_svalue_ids =
-                        List.map
-                          (fun (sv : symbolic_value) -> sv.sv_id)
-                          output_svalues
-                      in
-
-                      let output_abs =
-                        List.filter_map
-                          (fun (e : env_elem) ->
-                            match e with
-                            | EAbs abs
-                              when not (AbsId.Set.mem abs.abs_id fixed_ids.aids)
-                              -> Some abs
-                            | _ -> None)
-                          joined_ctx.env
-                      in
-                      let output_abs_ids =
-                        List.map (fun (abs : abs) -> abs.abs_id) output_abs
-                      in
-
-                      (* Match the contexts with the joined context to determine
-                         the output *)
-                      let ( (_, true_ctx, true_output_values, true_output_abs),
-                            true_cf ) =
-                        InterpreterJoin.match_ctx_with_target config span Join
-                          output_svalue_ids fixed_ids joined_ctx true_ctx
-                      in
-                      let ( (_, false_ctx, false_output_values, false_output_abs),
-                            false_cf ) =
-                        InterpreterJoin.match_ctx_with_target config span Join
-                          output_svalue_ids fixed_ids joined_ctx false_ctx
-                      in
-
-                      (* Generate the expressions for the branches *)
-                      let reorder_output_abs (map : abs AbsId.Map.t)
-                          (absl : abs_id list) : abs list =
-                        List.map (fun id -> AbsId.Map.find id map) absl
-                      in
-                      let reorder_output_values
-                          (map : tvalue SymbolicValueId.Map.t)
-                          (values : symbolic_value_id list) : tvalue list =
-                        List.map
-                          (fun id -> SymbolicValueId.Map.find id map)
-                          values
-                      in
-                      let true_output_values =
-                        reorder_output_values true_output_values
-                          output_svalue_ids
-                      in
-                      let true_output_abs =
-                        reorder_output_abs true_output_abs output_abs_ids
-                      in
-                      let false_output_values =
-                        reorder_output_values false_output_values
-                          output_svalue_ids
-                      in
-                      let false_output_abs =
-                        reorder_output_abs false_output_abs output_abs_ids
-                      in
-
-                      (* Generate the let expression *)
-                      let e_true =
-                        e_true
-                          [
-                            true_cf
-                              (SA.Join
-                                 (true_ctx, true_output_values, true_output_abs));
-                          ]
-                      in
-                      let e_false =
-                        e_false
-                          [
-                            false_cf
-                              (SA.Join
-                                 ( false_ctx,
-                                   false_output_values,
-                                   false_output_abs ));
-                          ]
-                      in
-                      let bound_expr = cf_bool (e_true, e_false) in
-
-                      let cf (el : SA.expr list) : SA.expr =
-                        match el with
-                        | [ next_expr ] ->
-                            Let
-                              {
-                                bound_expr;
-                                out_svalues = output_svalues;
-                                out_abs = output_abs;
-                                next_expr;
-                                span;
-                              }
-                        | _ -> [%internal_error] span
-                      in
-
-                      (* Output the joined context *)
-                      ([ (joined_ctx, Unit) ], cf)
-                  | Unit, Panic | Panic, Unit ->
-                      (* There is a single context, so we have nothing to join *)
-                      raise (Failure "TODO")
-                  | _ -> [%internal_error] span)
-              | _ -> [%internal_error] span
+              let cf_bool (el : SA.expr list) : SA.expr =
+                match el with
+                | [ e_true; e_false ] -> cf_bool (e_true, e_false)
+                | _ -> [%internal_error] span
+              in
+              eval_switch_with_join config span cf_bool ctx0
+                [ resl_true; resl_false ]
             else
               let ctx_resl, cf_branches =
                 comp_seqs __FILE__ __LINE__ span [ resl_true; resl_false ]
@@ -1231,6 +1104,147 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
       in
       (* Compose *)
       (ctx_resl, cc_comp cf_read_p cf_match)
+
+(** Evaluate a switch in case we need to branch and want to join the contexts
+    afterwards *)
+and eval_switch_with_join (config : config) (span : Meta.span)
+    (cf_switch_scrut : SA.expr list -> SA.expr) (ctx0 : eval_ctx)
+    (resl_branches :
+      ((eval_ctx * statement_eval_res) list * (SA.expr list -> SA.expr)) list) :
+    (eval_ctx * statement_eval_res) list * (SA.expr list -> SA.expr) =
+  (* Check whether we have branches to join *)
+  let ctx_resl = List.flatten (List.map fst resl_branches) in
+  (* Count the number of contexts to join.
+
+     Note that all evaluation results should be [Unit]: break, continue and
+     return should not happen as we attempt to join only if the code in the
+     branches doesn't contain break, etc. instructions. It can also not be
+     panic as once we reach a panic we stop the symbolic execution (we simply
+     synthesize a panic node in the symbolic AST). *)
+  let num_units =
+    List.length
+      (List.filter
+         (fun ((_, res) : _ * statement_eval_res) ->
+           match res with
+           | Unit -> true
+           | Break _ | Continue _ | Return | Panic -> [%internal_error] span)
+         ctx_resl)
+  in
+  if num_units = 0 then (
+    (* We only have panics: nothing to do *)
+    let exprl = List.map (fun (_, cf) -> cf []) resl_branches in
+    ( [],
+      fun el ->
+        [%sanity_check] span (el = []);
+        cf_switch_scrut exprl ))
+  else if num_units = 1 then
+    (* No need to join the contexts: continue with the current context *)
+    raise (Failure "TODO")
+  else (
+    (* We need to join the contexts *)
+    [%ldebug
+      "About to join contexts after an [if then else]." ^ "\n- initial ctx:\n"
+      ^ eval_ctx_to_string ctx0 ^ "\n\n"
+      ^ String.concat "\n\n"
+          (List.map
+             (fun (ctx, res) ->
+               "- eval_ctx (res: "
+               ^ show_statement_eval_res res
+               ^ "):\n" ^ eval_ctx_to_string ctx)
+             ctx_resl)];
+    let fixed_ids, _ = compute_ctx_ids ctx0 in
+    let ctx_to_join =
+      List.filter_map
+        (fun (ctx, res) -> if res = Unit then Some ctx else None)
+        ctx_resl
+    in
+    let _, joined_ctx =
+      InterpreterJoin.join_ctxs_list config span Join fixed_ids ctx_to_join
+    in
+    [%ldebug "Joined ctx:\n" ^ eval_ctx_to_string joined_ctx];
+
+    (* Compute the output values *)
+    let output_svalues =
+      InterpreterJoin.compute_ctx_fresh_ordered_symbolic_values span
+        ~only_modified_svalues:true ctx0 joined_ctx
+    in
+    let output_svalue_ids =
+      List.map (fun (sv : symbolic_value) -> sv.sv_id) output_svalues
+    in
+
+    let output_abs =
+      List.filter_map
+        (fun (e : env_elem) ->
+          match e with
+          | EAbs abs when not (AbsId.Set.mem abs.abs_id fixed_ids.aids) ->
+              Some abs
+          | _ -> None)
+        joined_ctx.env
+    in
+    let output_abs_ids = List.map (fun (abs : abs) -> abs.abs_id) output_abs in
+
+    (* For every branch:
+       - match every context resulting from evaluating the branch (there should be
+         one if no explicit panic was encountered, or 0 it we encountered a panic)
+         with the joined context
+       - the result of the match allows determining the output of the branch.
+         We use this to call the branch continuation to generate the symbolic
+         expression for the branch *)
+    let match_resl_branch
+        ((resl, cf_branch) :
+          (eval_ctx * statement_eval_res) list * (SA.expr list -> SA.expr)) :
+        SA.expr =
+      let match_ctx (ctx : eval_ctx) : SA.expr =
+        (* Match the contexts with the joined context to determine the output of the branch *)
+        let (_, ctx, output_values, output_abs), cf =
+          InterpreterJoin.match_ctx_with_target config span Join
+            output_svalue_ids fixed_ids joined_ctx ctx
+        in
+
+        let reorder_output_abs (map : abs AbsId.Map.t) (absl : abs_id list) :
+            abs list =
+          List.map (fun id -> AbsId.Map.find id map) absl
+        in
+        let reorder_output_values (map : tvalue SymbolicValueId.Map.t)
+            (values : symbolic_value_id list) : tvalue list =
+          List.map (fun id -> SymbolicValueId.Map.find id map) values
+        in
+        let output_values =
+          reorder_output_values output_values output_svalue_ids
+        in
+        let output_abs = reorder_output_abs output_abs output_abs_ids in
+
+        (* Generate the let expression *)
+        cf (SA.Join (ctx, output_values, output_abs))
+      in
+      let el = List.map (fun (ctx, _) -> match_ctx ctx) resl in
+      cf_branch el
+    in
+    let resl_branches = List.map match_resl_branch resl_branches in
+
+    (* We can now call the continuation introduced when branching to group the
+       expressions of the branches into a single branching expression (i.e.,
+       we group the expressions for the [then] and [else] branches into a single
+       [if then else] expression. *)
+    let bound_expr = cf_switch_scrut resl_branches in
+
+    (* Generate the let expression *)
+    let cf (el : SA.expr list) : SA.expr =
+      match el with
+      | [ next_expr ] ->
+          Let
+            {
+              bound_expr;
+              out_svalues = output_svalues;
+              out_abs = output_abs;
+              next_expr;
+              span;
+            }
+      | _ -> [%internal_error] span
+    in
+
+    (* Output the joined context *)
+    ([ (joined_ctx, Unit) ], cf))
 
 (** Evaluate a function call (auxiliary helper for [eval_statement]) *)
 and eval_function_call (config : config) (span : Meta.span) (call : call) :
