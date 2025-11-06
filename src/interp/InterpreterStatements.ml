@@ -1008,6 +1008,7 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
   | SwitchInt (op, (int_ty : literal_type), stgts, otherwise) ->
       (* Evaluate the operand *)
       let op_v, ctx, cf_eval_op = eval_operand config span op ctx in
+      let ctx0 = ctx in
       (* Switch on the value *)
       let ctx_resl, cf_switch =
         match (op_v.value, int_ty) with
@@ -1048,16 +1049,32 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
             in
             (* Then evaluate the "otherwise" branch *)
             let resl_otherwise = eval_block config otherwise ctx_otherwise in
-            (* Compose the continuations *)
-            let resl, cf =
-              comp_seqs __FILE__ __LINE__ span
+
+            (* Should we join the contexts after the switch? *)
+            let join =
+              (not (List.exists block_has_break_continue_return branches))
+              && not (block_has_break_continue_return otherwise)
+            in
+            if join then
+              (* Join the contexts *)
+              let cf_int (el : SA.expr list) : SA.expr =
+                [%sanity_check] span (List.length el = List.length branches + 1);
+                let el_branches, e_otherwise = Collections.List.pop_last el in
+                cf_int (el_branches, e_otherwise)
+              in
+              eval_switch_with_join config span cf_int ctx0
                 (resl_branches @ [ resl_otherwise ])
-            in
-            let cc el =
-              let el, e_otherwise = Collections.List.pop_last el in
-              cf_int (el, e_otherwise)
-            in
-            (resl, cc_comp cc cf)
+            else
+              (* Do not join the contexts: compose the continuations and continue *)
+              let resl, cf =
+                comp_seqs __FILE__ __LINE__ span
+                  (resl_branches @ [ resl_otherwise ])
+              in
+              let cc el =
+                let el, e_otherwise = Collections.List.pop_last el in
+                cf_int (el, e_otherwise)
+              in
+              (resl, cc_comp cc cf)
         | _ -> [%craise] span "Inconsistent state"
       in
       (* Compose *)
