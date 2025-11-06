@@ -1474,24 +1474,28 @@ let simplify_let_tuple span (ctx : ctx) (pat : tpat) (bound : texpr) :
       let e' =
         match e.e with
         | FVar _ | App _ | Loop _ | Const _ ->
-            (* We need to introduce an intermediate let-binding *)
-            let pats, out =
-              List.split
-                (List.map
-                   (fun (keep, ty) ->
-                     if keep then
-                       let fv = mk_fresh_fvar ctx ty in
-                       (mk_tpat_from_fvar None fv, Some (mk_texpr_from_fvar fv))
-                     else (mk_ignored_pat ty, None))
-                   (List.combine keep tys))
-            in
-            let pats = mk_simpl_tuple_pat pats in
-            let out = List.filter_map (fun x -> x) out in
-            let out = mk_simpl_tuple_texpr span out in
+            (* If this is a panic/break/continue, we do nothing *)
+            if is_result_fail e || is_loop_result_fail_break_continue e then e.e
+            else
+              (* We need to introduce an intermediate let-binding *)
+              let pats, out =
+                List.split
+                  (List.map
+                     (fun (keep, ty) ->
+                       if keep then
+                         let fv = mk_fresh_fvar ctx ty in
+                         ( mk_tpat_from_fvar None fv,
+                           Some (mk_texpr_from_fvar fv) )
+                       else (mk_ignored_pat ty, None))
+                     (List.combine keep tys))
+              in
+              let pats = mk_simpl_tuple_pat pats in
+              let out = List.filter_map (fun x -> x) out in
+              let out = mk_simpl_tuple_texpr span out in
 
-            let monadic = is_result_ty e.ty in
-            let out = if monadic then mk_result_ok_texpr span out else out in
-            (mk_opened_let monadic pats e out).e
+              let monadic = is_result_ty e.ty in
+              let out = if monadic then mk_result_ok_texpr span out else out in
+              (mk_opened_let monadic pats e out).e
         | BVar _ | CVar _ | Qualif _ | StructUpdate _ -> [%internal_error] span
         | Lambda (pat, inner) -> Lambda (pat, update inner)
         | Let (monadic, pat, bound, next) ->

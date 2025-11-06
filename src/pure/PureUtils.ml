@@ -2573,3 +2573,29 @@ let decompose_let_match span (refresh_var : fvar -> fvar)
     (pat, bound)
   else (* Nothing to do *)
     (pat, bound)
+
+let is_result_fail (e : texpr) : bool =
+  let f, args = destruct_apps e in
+  match f.e with
+  | Qualif
+      {
+        id = AdtCons { adt_id = TBuiltin TResult; variant_id = Some variant_id };
+        _;
+      }
+    when variant_id = result_fail_id -> List.length args = 1
+  | _ -> false
+
+let is_loop_result_fail_break_continue (e : texpr) : bool =
+  let f, args = destruct_apps e in
+  match f.e with
+  | Qualif
+      {
+        id =
+          AdtCons
+            { adt_id = TBuiltin TLoopResult; variant_id = Some variant_id };
+        _;
+      }
+    when variant_id = loop_result_break_id
+         || variant_id = loop_result_continue_id
+         || variant_id = loop_result_fail_id -> List.length args = 1
+  | _ -> false
