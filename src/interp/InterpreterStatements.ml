@@ -1106,7 +1106,20 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
       (ctx_resl, cc_comp cf_read_p cf_match)
 
 (** Evaluate a switch in case we need to branch and want to join the contexts
-    afterwards *)
+    afterwards.
+
+    - [cf_switch_scrut]: the continuation introduced after branching on the
+      symbolic scrutinee. Expects the symbolic expressions for the branches, and
+      builds the branching expressions (e.g., for an [if then else]: given
+      expressions for the [then] and [else] branches, reconstructs the full
+      [if then else] expression).
+    - [resl_branches]: each element of the list corresponds to the result of
+      evaluating a branch. The list of eval contexts and evaluation results
+      should be either empty (if we reached a panic statement: we abort the
+      symbolic execution there) or a list with one element (if we did not abort
+      execution because of a panic statement). The continuation expects the
+      symbolic expression for what happens at the end of the branch, and
+      reconstructs the expression for the full branch. *)
 and eval_switch_with_join (config : config) (span : Meta.span)
     (cf_switch_scrut : SA.expr list -> SA.expr) (ctx0 : eval_ctx)
     (resl_branches :
