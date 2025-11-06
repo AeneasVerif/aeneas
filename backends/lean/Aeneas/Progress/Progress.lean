@@ -626,28 +626,12 @@ def evalProgressCore (async : Bool) (keep keepPretty : Option Name) (withArg: Op
   let splitPost := true
   /- Preprocessing step for `singleAssumptionTac` -/
   let singleAssumptionTacDtree ← singleAssumptionTacPreprocess
-  /- For scalarTac we have a fast track: if the goal is not a linear
-     arithmetic goal, we skip (note that otherwise, scalarTac would try
-     to prove a contradiction) -/
-  let scalarTac : TacticM Unit := do
-    withTraceNode `Progress (fun _ => pure m!"Attempting to solve with `scalarTac`") do
-    if ← ScalarTac.goalIsLinearInt then
-      /- Also: we don't try to split the goal if it is a conjunction
-         (it shouldn't be), but we split the disjunctions. -/
-      ScalarTac.scalarTac { split := false, auxTheorem := false }
-    else
-      throwError "Not a linear arithmetic goal"
-  let simpLemmas ← Aeneas.ScalarTac.scalarTacSimpExt.getTheorems
-  let localAsms ← pure ((← (← getLCtx).getAssumptions).map LocalDecl.fvarId)
-  let simpArgs : Simp.SimpArgs := {simpThms := #[simpLemmas], hypsToUse := localAsms.toArray}
-  let simpTac : TacticM Unit := do
-    withTraceNode `Progress (fun _ => pure m!"Attempting to solve with `simp [*]`") do
-    -- Simplify the goal
-    let r ← Simp.simpAt false { maxDischargeDepth := 1 } simpArgs (.targets #[] true)
-    -- Raise an error if the goal is not proved
-    if r.isSome then throwError "Goal not proved"
-  /- We use our custom assumption tactic, which instantiates meta-variables only if there is a single
-     assumption matching the goal. -/
+  let grindTac : TacticM Unit := do
+    withTraceNode `Progress (fun _ => pure m!"Attempting to solve with `grind`") do
+    -- TODO: It would be better to have a concrete Syntax node instead of the
+    -- mkNullNode placeholder
+    let config ← elabGrindConfig mkNullNode
+    discard <| evalGrindCore (← `(Progress)) config none none none
   let customAssumTac : TacticM Unit := do
     withTraceNode `Progress (fun _ => pure m!"Attempting to solve with `singleAssumptionTac`") do
     singleAssumptionTacCore singleAssumptionTacDtree
@@ -672,7 +656,7 @@ def evalProgressCore (async : Bool) (keep keepPretty : Option Name) (withArg: Op
     withTraceNode `Progress (fun _ => pure m!"Trying to solve a precondition") do
     trace[Progress] "Precondition: {← getMainGoal}"
     try
-      firstTacSolve ([simpTac, scalarTac] ++ byTac)
+      firstTacSolve (grindTac :: byTac)
       trace[Progress] "Precondition solved!"
     catch _ =>
       trace[Progress] "Precondition not solved"
