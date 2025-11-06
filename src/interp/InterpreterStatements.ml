@@ -1087,6 +1087,7 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
         access_rplace_reorganize_and_read config span expand_prim_copy access p
           ctx
       in
+      let ctx0 = ctx in
       (* Match on the value *)
       let ctx_resl, cf_match =
         (* The value may be shared: we need to ignore the shared loans
@@ -1114,9 +1115,23 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
             let resl =
               List.map (fun ctx -> (eval_switch config span switch) ctx) ctxl
             in
-            (* Compose the continuations *)
-            let ctx_resl, cf = comp_seqs __FILE__ __LINE__ span resl in
-            (ctx_resl, cc_comp cf_expand cf)
+            (* Should we join the contexts after the match? *)
+            let join =
+              (not
+                 (List.exists
+                    (fun (_, b) -> block_has_break_continue_return b)
+                    stgts))
+              &&
+              match otherwise with
+              | None -> true
+              | Some block -> not (block_has_break_continue_return block)
+            in
+            if join then (* Join the contexts *)
+              eval_switch_with_join config span cf_expand ctx0 resl
+            else
+              (* Compose the continuations *)
+              let ctx_resl, cf = comp_seqs __FILE__ __LINE__ span resl in
+              (ctx_resl, cc_comp cf_expand cf)
         | _ -> [%craise] span "Inconsistent state"
       in
       (* Compose *)
