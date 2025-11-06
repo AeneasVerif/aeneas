@@ -53,4 +53,17 @@ def use_enum (e : Enum) (x : U32) : Result U32 :=
     | Enum.V2 => ok 2#u32
   x + y
 
+/- [joins::call_choose]:
+   Source: 'tests/src/joins.rs', lines 36:0-39:1 -/
+def call_choose (b : Bool) (x : U32) (y : U32) : Result (U32 × U32) :=
+  do
+  let (z, back) ←
+    if b
+    then let f := fun i => (i, y)
+         ok (x, f)
+    else let f := fun i => (x, i)
+         ok (y, f)
+  let z1 ← z + 1#u32
+  ok (back z1)
+
 end joins

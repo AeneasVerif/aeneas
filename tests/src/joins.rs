@@ -32,3 +32,8 @@ fn use_enum(e : Enum, x : u32) -> u32 {
     };
     x + y
 }
+
+fn call_choose(b : bool, x : &mut u32, y : &mut u32) {
+    let z = if b { x } else { y };
+    *z = *z + 1;
+}
