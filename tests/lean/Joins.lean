@@ -17,4 +17,40 @@ def opt_add_1 (b : Bool) (x : U32) : Result U32 :=
             else ok 0#u32
   x + y
 
+/- [joins::opt_add_1_or_panic]:
+   Source: 'tests/src/joins.rs', lines 8:0-11:1 -/
+def opt_add_1_or_panic (b : Bool) (x : U32) : Result U32 :=
+  do
+  massert b
+  x + 1#u32
+
+/- [joins::opt_add_switch_1]:
+   Source: 'tests/src/joins.rs', lines 13:0-20:1 -/
+def opt_add_switch_1 (a : U32) (x : U32) : Result U32 :=
+  do
+  let y ←
+    match a with
+    | 0#uscalar => ok 0#u32
+    | 1#uscalar => ok 1#u32
+    | _ => fail panic
+  x + y
+
+/- [joins::Enum]
+   Source: 'tests/src/joins.rs', lines 22:0-24:1 -/
+inductive Enum where
+| V0 : Enum
+| V1 : Enum
+| V2 : Enum
+
+/- [joins::use_enum]:
+   Source: 'tests/src/joins.rs', lines 26:0-34:1 -/
+def use_enum (e : Enum) (x : U32) : Result U32 :=
+  do
+  let y ←
+    match e with
+    | Enum.V0 => ok 0#u32
+    | Enum.V1 => ok 1#u32
+    | Enum.V2 => ok 2#u32
+  x + y
+
 end joins
