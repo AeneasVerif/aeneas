@@ -407,9 +407,10 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
     (old_ids : ids_sets) (ctx0 : eval_ctx) : eval_ctx =
   (* Debug *)
   [%ltrace
-    "\n- fixed_ids:\n" ^ show_ids_sets old_ids ^ "\n\n- ctx0:\n"
+    "- ctx0:\n"
     ^ eval_ctx_to_string ~span:(Some span) ctx0
-    ^ "\n"];
+    ^ "\n\n- fixed_ids.aids: "
+    ^ AbsId.Set.to_string None old_ids.aids];
 
   let with_markers = merge_funs <> None in
   let can_end = true in
@@ -441,14 +442,12 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
   in
   let ctx = { ctx with env } in
   [%ltrace
-    "after converting values to abstractions:\n" ^ show_ids_sets old_ids
-    ^ "\n\n- ctx:\n"
+    "after converting values to abstractions:" ^ "\n- ctx:\n"
     ^ eval_ctx_to_string ~span:(Some span) ctx
     ^ "\n"];
 
   [%ltrace
-    "after decomposing the shared values in the abstractions:\n"
-    ^ show_ids_sets old_ids ^ "\n\n- ctx:\n"
+    "after decomposing the shared values in the abstractions:" ^ "\n- ctx:\n"
     ^ eval_ctx_to_string ~span:(Some span) ctx
     ^ "\n"];
 
@@ -535,17 +534,14 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
 
   (* Debugging *)
   [%ltrace
-    "\n- fixed_ids:\n" ^ show_ids_sets old_ids ^ "\n\n- after reduce:\n"
-    ^ eval_ctx_to_string ~span:(Some span) ctx
-    ^ "\n"];
+    "- after reduce:\n" ^ eval_ctx_to_string ~span:(Some span) ctx ^ "\n"];
 
   (* Reorder the fresh region abstractions - note that we may not have eliminated
      all the markers at this point. *)
   let ctx = reorder_fresh_abs span true old_ids.aids ctx in
 
   [%ltrace
-    "\n- fixed_ids:\n" ^ show_ids_sets old_ids
-    ^ "\n\n- after reduce and reorder borrows/loans and abstractions:\n"
+    "- after reduce and reorder borrows/loans and abstractions:\n"
     ^ eval_ctx_to_string ~span:(Some span) ctx
     ^ "\n"];
 
@@ -593,9 +589,7 @@ let collapse_ctx_collapse (span : Meta.span)
     : eval_ctx =
   (* Debug *)
   [%ltrace
-    "\n- fixed_ids:\n" ^ show_ids_sets old_ids ^ "\n\n- initial ctx:\n"
-    ^ eval_ctx_to_string ~span:(Some span) ctx
-    ^ "\n"];
+    "\n- initial ctx:\n" ^ eval_ctx_to_string ~span:(Some span) ctx ^ "\n"];
 
   let can_end = true in
 
@@ -605,7 +599,7 @@ let collapse_ctx_collapse (span : Meta.span)
     | PRight -> PLeft
   in
 
-  (* Merge all the mergeable abs where the same element in present in both abs,
+  (* Merge all the mergeable abs where the same element is present in both abs,
      but with left and right markers respectively.
 
      As we have to operate over different types, with both concrete borrows and loans and
@@ -748,17 +742,14 @@ let collapse_ctx_collapse (span : Meta.span)
   let ctx = IterMergeSymbolic.iter_merge ctx in
 
   [%ltrace
-    "\n- fixed_ids:\n" ^ show_ids_sets old_ids ^ "\n\n- after collapse:\n"
-    ^ eval_ctx_to_string ~span:(Some span) ctx
-    ^ "\n"];
+    "- after collapse:\n" ^ eval_ctx_to_string ~span:(Some span) ctx ^ "\n"];
 
   (* Reorder the fresh region abstractions - note that we may not have eliminated
      all the markers yet *)
   let ctx = reorder_fresh_abs span true old_ids.aids ctx in
 
   [%ltrace
-    "\n- fixed_ids:\n" ^ show_ids_sets old_ids
-    ^ "\n\n- after collapse and reorder borrows/loans:\n"
+    "- after collapse and reorder borrows/loans:\n"
     ^ eval_ctx_to_string ~span:(Some span) ctx
     ^ "\n"];
 
