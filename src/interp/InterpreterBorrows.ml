@@ -2348,5 +2348,5 @@ let simplify_dummy_values_useless_abs (config : config) (span : Meta.span)
     "- fixed_aids: "
     ^ AbsId.Set.to_string None fixed_abs_ids
     ^ "\n- ctx0:\n" ^ eval_ctx_to_string ctx0 ^ "\n- ctx1:\n"
-    ^ if ctx = ctx0 then "UNCHANGED" else eval_ctx_to_string ctx];
+    ^ if ctx.env = ctx0.env then "UNCHANGED" else eval_ctx_to_string ctx];
   (ctx, cc)
