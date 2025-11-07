@@ -641,6 +641,11 @@ let tavalue_add_marker (span : Meta.span) (ctx : eval_ctx) (pm : proj_marker)
       method! visit_borrow_content _ _ = [%craise] span "Unexpected borrow"
       method! visit_loan_content _ _ = [%craise] span "Unexpected loan"
 
+      method! visit_proj_marker _ pm =
+        (* We do this to make sure we don't miss a projection marker *)
+        [%sanity_check] span (pm <> PNone);
+        pm
+
       method! visit_ASymbolic _ pm0 aproj =
         [%sanity_check] span (pm0 = PNone);
         ASymbolic (pm, aproj)
@@ -678,8 +683,67 @@ let tavalue_add_marker (span : Meta.span) (ctx : eval_ctx) (pm : proj_marker)
   in
   obj#visit_tavalue () av
 
+(** Small utility: add a projection marker to a typed evalue. This can be used
+    in combination with List.map to add markers to an entire abstraction *)
+let tevalue_add_marker (span : Meta.span) (ctx : eval_ctx) (pm : proj_marker)
+    (ev : tevalue) : tevalue =
+  let obj =
+    object
+      inherit [_] map_tavalue as super
+      method! visit_borrow_content _ _ = [%craise] span "Unexpected borrow"
+      method! visit_loan_content _ _ = [%craise] span "Unexpected loan"
+
+      method! visit_proj_marker _ pm =
+        (* We do this to make sure we don't miss a projection marker *)
+        [%sanity_check] span (pm <> PNone);
+        pm
+
+      method! visit_tevalue _ ev = super#visit_tevalue ev.ty ev
+
+      method! visit_ESymbolic _ pm0 aproj =
+        [%sanity_check] span (pm0 = PNone);
+        ESymbolic (pm, aproj)
+
+      method! visit_symbolic_value _ sv =
+        (* Symbolic values can appear in shared values *)
+        [%sanity_check] span
+          (not (symbolic_value_has_borrows (Some span) ctx sv));
+        sv
+
+      method! visit_eloan_content ty lc =
+        match lc with
+        | EMutLoan (pm0, bid, av) ->
+            [%sanity_check] span (pm0 = PNone);
+            super#visit_eloan_content ty (EMutLoan (pm, bid, av))
+        | _ ->
+            [%craise] span
+              ("(Internal error: please file an issue (unexpected value: "
+              ^ eloan_content_to_string ctx ty lc
+              ^ ")")
+
+      method! visit_eborrow_content env bc =
+        match bc with
+        | EMutBorrow (pm0, bid, av) ->
+            [%sanity_check] span (pm0 = PNone);
+            super#visit_eborrow_content env (EMutBorrow (pm, bid, av))
+        | _ -> [%internal_error] span
+    end
+  in
+  obj#visit_tevalue ev.ty ev
+
+(** Small utility: add a projection marker to an abs continuation. *)
+let abs_cont_add_marker (span : Meta.span) (ctx : eval_ctx) (pm : proj_marker)
+    (cont : abs_cont) : abs_cont =
+  let add_marker = Option.map (tevalue_add_marker span ctx pm) in
+  let { output; input } = cont in
+  { output = add_marker output; input = add_marker input }
+
 (** Small utility: add a projection marker to an abstraction. This can be used
     in combination with List.map to add markers to an entire abstraction *)
 let abs_add_marker (span : Meta.span) (ctx : eval_ctx) (pm : proj_marker)
     (abs : abs) : abs =
-  { abs with avalues = List.map (tavalue_add_marker span ctx pm) abs.avalues }
+  {
+    abs with
+    avalues = List.map (tavalue_add_marker span ctx pm) abs.avalues;
+    cont = Option.map (abs_cont_add_marker span ctx pm) abs.cont;
+  }
