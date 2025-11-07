@@ -120,7 +120,7 @@ module Values = struct
     match lc with
     | VSharedLoan (lid, v) ->
         let lid = BorrowId.to_string lid in
-        "@shared_loan(@" ^ lid ^ ", " ^ tvalue_to_string ~span env v ^ ")"
+        "shared_loan@" ^ lid ^ "(" ^ tvalue_to_string ~span env v ^ ")"
     | VMutLoan bid -> "ml@" ^ BorrowId.to_string bid
 
   let abstract_shared_borrow_to_string (env : fmt_env)
@@ -1012,10 +1012,22 @@ module EvalCtx = struct
     let env = eval_ctx_to_fmt_env ctx in
     aborrow_content_to_string ~span env bc
 
+  let eborrow_content_to_string ?(span : Meta.span option = None)
+      (ctx : eval_ctx) (ty : ty) (bc : eborrow_content) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    let aenv = empty_evalue_env in
+    eborrow_content_to_string ~span env aenv "" "  " ty bc
+
   let aloan_content_to_string ?(span : Meta.span option = None) (ctx : eval_ctx)
       (lc : aloan_content) : string =
     let env = eval_ctx_to_fmt_env ctx in
     aloan_content_to_string ~span env lc
+
+  let eloan_content_to_string ?(span : Meta.span option = None) (ctx : eval_ctx)
+      (ty : ty) (lc : eloan_content) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    let aenv = empty_evalue_env in
+    eloan_content_to_string ~span env aenv "" "  " ty lc
 
   let aproj_to_string (ctx : eval_ctx) (p : aproj) : string =
     let env = eval_ctx_to_fmt_env ctx in

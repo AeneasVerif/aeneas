@@ -222,53 +222,51 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
 
   let env0 = List.rev ctx0.env in
   let env1 = List.rev ctx1.env in
-  let nabs = ref [] in
 
-  (* Explore the environments. *)
-  let join_suffixes (env0 : env) (env1 : env) : env =
-    (* Debug *)
-    [%ldebug
-      "join_suffixes:\n\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
-      ^ "\n\n- ctx0:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ~filter:false
-          { ctx0 with env = List.rev env0 }
-      ^ "\n\n- ctx1:\n"
-      ^ eval_ctx_to_string ~span:(Some span) ~filter:false
-          { ctx1 with env = List.rev env1 }
-      ^ "\n"];
+  (* Split the environments in two:
+     - we preserve the dummy variables and abstractions which appear in both
+       environments: we will match those pairwise
+     - for the others:
+       - we mark the region abstractions with left/right markers
+       - we lift the dummy values into region abstractions and mark them as well
+  *)
+  let dummy_ids0 = env_get_dummy_var_ids env0 in
+  let abs_ids0 = env_get_abs_ids env0 in
+  let dummy_ids1 = env_get_dummy_var_ids env1 in
+  let abs_ids1 = env_get_abs_ids env1 in
 
-    (* Sanity check: there are no values/abstractions which should be in the prefix *)
-    let check_valid (ee : env_elem) : unit =
-      match ee with
-      | EBinding (BVar _, _) ->
-          (* Variables are necessarily in the prefix *)
-          [%craise] span "Unreachable"
-      | EBinding (BDummy did, _) ->
-          [%sanity_check] span (not (DummyVarId.Set.mem did fixed_ids.dids))
-      | EAbs abs ->
-          [%sanity_check] span (not (AbsId.Set.mem abs.abs_id fixed_ids.aids))
-      | EFrame ->
-          (* This should have been eliminated *)
-          [%craise] span "Unreachable"
-    in
+  let dummy_ids = DummyVarId.Set.inter dummy_ids0 dummy_ids1 in
+  let abs_ids = AbsId.Set.inter abs_ids0 abs_ids1 in
 
-    (* Add projection marker to all abstractions in the left and right environments *)
-    let add_marker (pm : proj_marker) (ee : env_elem) : env_elem =
-      match ee with
-      | EAbs abs -> EAbs (abs_add_marker span ctx0 pm abs)
-      | x -> x
-    in
-
-    let env0 = List.map (add_marker PLeft) env0 in
-    let env1 = List.map (add_marker PRight) env1 in
-
-    List.iter check_valid env0;
-    List.iter check_valid env1;
-    (* Concatenate the suffixes and append the abstractions introduced while
-       joining the prefixes *)
-    let absl = List.map (fun abs -> EAbs abs) (List.rev !nabs) in
-    List.concat [ env0; env1; absl ]
+  let partition (env : env) : env * env =
+    List.partition
+      (fun (e : env_elem) ->
+        match e with
+        | EBinding (BVar _, _) ->
+            (* All the locals should appear on both sides *) true
+        | EBinding (BDummy id, _) -> DummyVarId.Set.mem id dummy_ids
+        | EAbs abs -> AbsId.Set.mem abs.abs_id abs_ids
+        | EFrame -> true)
+      env
   in
+  let env0, env0_suffix = partition env0 in
+  let env1, env1_suffix = partition env1 in
+  [%ldebug
+    "\n\n- env0:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ~filter:false
+        { ctx0 with env = List.rev env0 }
+    ^ "\n\n- env0_suffix:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ~filter:false
+        { ctx0 with env = List.rev env0_suffix }
+    ^ "\n\n- env1:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ~filter:false
+        { ctx1 with env = List.rev env1 }
+    ^ "\n\n- env1_suffix:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ~filter:false
+        { ctx1 with env = List.rev env1_suffix }
+    ^ "\n"];
+
+  let nabs = ref [] in
 
   let symbolic_to_value = ref SymbolicValueId.Map.empty in
   let module S : MatchJoinState = struct
@@ -287,32 +285,24 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
         (EBinding (BDummy b1, v1) as var1) :: env1' ) ->
         (* Debug *)
         [%ldebug
-          "join_prefixes: BDummys:\n\n- fixed_ids:\n" ^ "\n"
-          ^ show_ids_sets fixed_ids ^ "\n\n- value0:\n"
+          "join_prefixes: BDummys:\n- value0:\n"
           ^ env_elem_to_string span ctx0 var0
           ^ "\n\n- value1:\n"
           ^ env_elem_to_string span ctx1 var1
           ^ "\n"];
 
-        (* Two cases: the dummy value is an old value, in which case the bindings
-           must be the same and we must join their values. Otherwise, it means we
-           are not in the prefix anymore *)
-        if DummyVarId.Set.mem b0 fixed_ids.dids then (
-          (* Still in the prefix: match the values *)
-          [%sanity_check] span (b0 = b1);
-          let b = b0 in
-          let v = M.match_tvalues ctx0 ctx1 v0 v1 in
-          let var = EBinding (BDummy b, v) in
-          (* Continue *)
-          var :: join_prefixes env0' env1')
-        else (* Not in the prefix anymore *)
-          join_suffixes env0 env1
+        (* Match the values *)
+        [%sanity_check] span (b0 = b1);
+        let b = b0 in
+        let v = M.match_tvalues ctx0 ctx1 v0 v1 in
+        let var = EBinding (BDummy b, v) in
+        (* Continue *)
+        var :: join_prefixes env0' env1'
     | ( (EBinding (BVar b0, v0) as var0) :: env0',
         (EBinding (BVar b1, v1) as var1) :: env1' ) ->
         (* Debug *)
         [%ldebug
-          "join_prefixes: BVars:\n\n- fixed_ids:\n" ^ "\n"
-          ^ show_ids_sets fixed_ids ^ "\n\n- value0:\n"
+          "join_prefixes: BVars:\n- value0:\n"
           ^ env_elem_to_string span ctx0 var0
           ^ "\n\n- value1:\n"
           ^ env_elem_to_string span ctx1 var1
@@ -330,24 +320,25 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
     | (EAbs abs0 as abs) :: env0', EAbs abs1 :: env1' ->
         (* Debug *)
         [%ldebug
-          "join_prefixes: Abs:\n\n- fixed_ids:\n" ^ "\n"
-          ^ show_ids_sets fixed_ids ^ "\n\n- abs0:\n"
+          "join_prefixes:\n- abs0:\n"
           ^ abs_to_string span ctx0 abs0
           ^ "\n\n- abs1:\n"
           ^ abs_to_string span ctx1 abs1
           ^ "\n"];
 
-        (* Same as for the dummy values: there are two cases *)
-        if AbsId.Set.mem abs0.abs_id fixed_ids.aids then (
-          (* Still in the prefix: the abstractions must be the same *)
-          [%sanity_check] span (abs0 = abs1);
-          (* Continue *)
-          abs :: join_prefixes env0' env1')
-        else (* Not in the prefix anymore *)
-          join_suffixes env0 env1
+        (* The abstractions in the prefix must be the same *)
+        [%sanity_check] span (abs0 = abs1);
+        (* Continue *)
+        abs :: join_prefixes env0' env1'
+    | [], [] -> []
     | _ ->
-        (* The elements don't match: we are not in the prefix anymore *)
-        join_suffixes env0 env1
+        [%craise] span
+          ("Internal error: please file an issue.\nCould not match:\n- env0:\n"
+          ^ eval_ctx_to_string ~span:(Some span) ~filter:false
+              { ctx0 with env = List.rev env0 }
+          ^ "\n\n- env1:\n"
+          ^ eval_ctx_to_string ~span:(Some span) ~filter:false
+              { ctx0 with env = List.rev env0 })
   in
 
   try
@@ -358,14 +349,48 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
       | _ -> [%craise] span "Unreachable"
     in
 
-    [%ldebug
-      "- env0:\n"
-      ^ env_to_string span ctx0 (List.rev env0) ~filter:false
-      ^ "\n\n- env1:\n"
-      ^ env_to_string span ctx1 (List.rev env1) ~filter:false
-      ^ "\n"];
+    (* Match the prefixes *)
+    let prefix = join_prefixes env0 env1 in
 
-    let env = List.rev (EFrame :: join_prefixes env0 env1) in
+    (* We do not match the suffixes: we transform the dummy values into
+       region abstractions and add projection markers. *)
+    let suffix =
+      let env0 = env0_suffix in
+      let env1 = env1_suffix in
+      (* Debug *)
+      [%ldebug
+        "join_suffixes:" ^ "\n\n- ctx0:\n"
+        ^ eval_ctx_to_string ~span:(Some span) ~filter:false
+            { ctx0 with env = List.rev env0 }
+        ^ "\n\n- ctx1:\n"
+        ^ eval_ctx_to_string ~span:(Some span) ~filter:false
+            { ctx1 with env = List.rev env1 }
+        ^ "\n"];
+
+      (* Add projection marker to all abstractions in the left and right environments *)
+      let add_marker ctx (pm : proj_marker) (ee : env_elem) : env_elem list =
+        match ee with
+        | EAbs abs -> [ EAbs (abs_add_marker span ctx pm abs) ]
+        | EBinding (BDummy _, v) ->
+            (* Transform into a region abstraction and project *)
+            let absl =
+              convert_value_to_abstractions span fresh_abs_kind ~can_end:true
+                ctx v
+            in
+            List.map (fun abs -> EAbs (abs_add_marker span ctx pm abs)) absl
+        | EBinding (BVar _, _) | EFrame -> [%internal_error] span
+      in
+
+      let env0 = List.flatten (List.map (add_marker ctx0 PLeft) env0) in
+      let env1 = List.flatten (List.map (add_marker ctx1 PRight) env1) in
+
+      (* Concatenate the suffixes and append the abstractions introduced while
+       joining the prefixes *)
+      let absl = List.map (fun abs -> EAbs abs) (List.rev !nabs) in
+      List.concat [ env0; env1; absl ]
+    in
+
+    let env = List.rev (EFrame :: (prefix @ suffix)) in
 
     (* Construct the joined context - of course, the type, fun, etc. contexts
      * should be the same in the two contexts *)
@@ -500,7 +525,7 @@ let join_ctxs_list (config : config) (span : Meta.span)
 
     (* Reduce the context we want to add to the join *)
     let ctx =
-      reduce_ctx config span ~with_abs_conts:false fresh_abs_kind fixed_ids ctx
+      reduce_ctx config span ~with_abs_conts:true fresh_abs_kind fixed_ids ctx
     in
     [%ltrace "after reduce:\n" ^ eval_ctx_to_string ~span:(Some span) ctx];
     (* Sanity check *)
@@ -516,7 +541,7 @@ let join_ctxs_list (config : config) (span : Meta.span)
 
   let ctx0 = if preprocess_first_ctx then preprocess_ctx ctx0 else ctx0 in
 
-  let with_abs_conts = false in
+  let with_abs_conts = true in
   (* # Join with the new contexts, one by one
 
      For every context, we repeteadly attempt to join it with the current
@@ -563,7 +588,8 @@ let join_ctxs_list (config : config) (span : Meta.span)
     (* Join the two contexts  *)
     let ctx1 = join_one_aux ctx in
     [%ltrace
-      "join_one: after join:\n" ^ eval_ctx_to_string ~span:(Some span) ctx1];
+      "join_one: after join:\n"
+      ^ eval_ctx_to_string ~span:(Some span) !joined_ctx];
 
     (* Collapse to eliminate the markers *)
     joined_ctx :=
@@ -577,7 +603,7 @@ let join_ctxs_list (config : config) (span : Meta.span)
 
     (* Reduce again to reach a fixed point *)
     joined_ctx :=
-      reduce_ctx config span ~with_abs_conts:false fresh_abs_kind fixed_ids
+      reduce_ctx config span ~with_abs_conts:true fresh_abs_kind fixed_ids
         !joined_ctx;
     [%ltrace
       "join_one: after last reduce:\n"
@@ -608,7 +634,7 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
     (loop_id : LoopId.id) (fixed_ids : ids_sets) (ctxl : eval_ctx list) :
     eval_ctx =
   (* Simplify the contexts *)
-  let with_abs_conts = false in
+  let with_abs_conts = true in
   let fresh_abs_kind : abs_kind = Loop loop_id in
   let prepare_ctx (ctx : eval_ctx) : eval_ctx =
     [%ltrace
@@ -633,7 +659,7 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
 
     (* Reduce the context we want to add to the join *)
     let ctx =
-      reduce_ctx config span ~with_abs_conts:false fresh_abs_kind fixed_ids ctx
+      reduce_ctx config span ~with_abs_conts:true fresh_abs_kind fixed_ids ctx
     in
     [%ltrace
       "join_one: after reduce:\n" ^ eval_ctx_to_string ~span:(Some span) ctx];
@@ -719,7 +745,7 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
 
         (* Reduce again to reach a fixed point *)
         joined_ctx :=
-          reduce_ctx config span ~with_abs_conts:false fresh_abs_kind fixed_ids
+          reduce_ctx config span ~with_abs_conts:true fresh_abs_kind fixed_ids
             !joined_ctx;
         [%ltrace
           "join_one: after last reduce:\n"
@@ -972,7 +998,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
   *)
   let merge_seq = ref [] in
   let joined_ctx_not_projected =
-    collapse_ctx config span ~sequence:(Some merge_seq) ~with_abs_conts:false
+    collapse_ctx config span ~sequence:(Some merge_seq) ~with_abs_conts:true
       fresh_abs_kind fixed_ids joined_ctx
   in
   let merge_seq = List.rev !merge_seq in

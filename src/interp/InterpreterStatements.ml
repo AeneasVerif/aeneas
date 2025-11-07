@@ -745,7 +745,7 @@ let eval_global_as_fresh_symbolic_value (span : Meta.span)
   let ty = Subst.erase_regions_substitute_types subst global.ty in
   mk_fresh_symbolic_value span ctx ty
 
-(** Evaluate a statement *)
+(** Evaluate a statement. *)
 let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
  fun ctx ->
   (* Debugging *)
@@ -1177,11 +1177,15 @@ and eval_switch_with_join (config : config) (span : Meta.span)
                ^ show_statement_eval_res res
                ^ "):\n" ^ eval_ctx_to_string ctx)
              ctx_resl)];
-    let fixed_ids, _ = compute_ctx_ids ctx0 in
     let ctx_to_join =
       List.filter_map
         (fun (ctx, res) -> if res = Unit then Some ctx else None)
         ctx_resl
+    in
+    let fixed_ids =
+      List.fold_left ids_sets_inter
+        (fst (compute_ctx_ids ctx0))
+        (List.map (fun x -> compute_ctx_ids x |> fst) ctx_to_join)
     in
     let _, joined_ctx =
       InterpreterJoin.join_ctxs_list config span Join fixed_ids ctx_to_join

@@ -605,3 +605,12 @@ let env_get_local_ids (env : env) : LocalId.Set.t =
          | EBinding (BVar v, _) -> Some v.index
          | _ -> None)
        env)
+
+let env_get_abs_ids (env : env) : AbsId.Set.t =
+  AbsId.Set.of_list
+    (List.filter_map
+       (fun (e : env_elem) ->
+         match e with
+         | EAbs abs -> Some abs.abs_id
+         | _ -> None)
+       env)
