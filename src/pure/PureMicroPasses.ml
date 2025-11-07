@@ -1462,61 +1462,60 @@ let simplify_let_tuple span (ctx : ctx) (pat : tpat) (bound : texpr) :
     (* Update an expression to filter its outputs *)
     let rec update (e : texpr) : texpr =
       [%ldebug "e:\n" ^ texpr_to_string ctx e];
-      let e' =
-        match e.e with
-        | FVar _ | App _ | Loop _ | Const _ ->
-            [%ldebug "expression is FVar, App, Loop, Const"];
-            (* If this is a panic/break/continue, we do nothing *)
-            if is_result_fail e || is_loop_result_fail_break_continue e then (
-              [%ldebug "expression is a fail, break or a continue"];
-              e.e (* If this is an [ok] we update the inner expression *))
-            else if is_result_ok e then (
-              [%ldebug "expression is an ok"];
-              let f, args = destruct_apps e in
-              match args with
-              | [ x ] ->
-                  let x = update x in
-                  ([%add_loc] mk_app span f x).e
-              | _ -> [%internal_error] span
-              (* If this is a tuple we filter the arguments *))
-            else if get_tuple_size e = Some num_nonfiltered_pats then (
-              [%ldebug "expression is a tuple"];
-              let args = [%add_loc] destruct_tuple_texpr span e in
-              let args =
-                List.filter_map
-                  (fun (keep, arg) -> if keep then Some arg else None)
-                  (List.combine keep args)
-              in
-              (mk_simpl_tuple_texpr span args).e)
-            else (
-              [%ldebug "expression is of an unknown kind"];
-              (* We need to introduce an intermediate let-binding *)
-              let pats, out =
-                List.split
-                  (List.map
-                     (fun (keep, ty) ->
-                       if keep then
-                         let fv = mk_fresh_fvar ctx ty in
-                         ( mk_tpat_from_fvar None fv,
-                           Some (mk_texpr_from_fvar fv) )
-                       else (mk_ignored_pat ty, None))
-                     (List.combine keep tys))
-              in
-              let pats = mk_simpl_tuple_pat pats in
-              let out = List.filter_map (fun x -> x) out in
-              let out = mk_simpl_tuple_texpr span out in
+      match e.e with
+      | FVar _ | App _ | Loop _ | Const _ ->
+          [%ldebug "expression is FVar, App, Loop, Const"];
+          (* If this is a panic/break/continue, we do nothing *)
+          if is_result_fail e || is_loop_result_fail_break_continue e then (
+            [%ldebug "expression is a fail, break or a continue"];
+            e)
+          else if is_result_ok e then (
+            (* If this is an [ok] we update the inner expression *)
+            [%ldebug "expression is an ok"];
+            let f, args = destruct_apps e in
+            match args with
+            | [ x ] ->
+                let x = update x in
+                [%add_loc] mk_app span f x
+            | _ -> [%internal_error] span
+            (* If this is a tuple we filter the arguments *))
+          else if get_tuple_size e = Some num_nonfiltered_pats then (
+            [%ldebug "expression is a tuple"];
+            let args = [%add_loc] destruct_tuple_texpr span e in
+            let args =
+              List.filter_map
+                (fun (keep, arg) -> if keep then Some arg else None)
+                (List.combine keep args)
+            in
+            mk_simpl_tuple_texpr span args)
+          else (
+            [%ldebug "expression is of an unknown kind"];
+            (* We need to introduce an intermediate let-binding *)
+            let pats, out =
+              List.split
+                (List.map
+                   (fun (keep, ty) ->
+                     if keep then
+                       let fv = mk_fresh_fvar ctx ty in
+                       (mk_tpat_from_fvar None fv, Some (mk_texpr_from_fvar fv))
+                     else (mk_ignored_pat ty, None))
+                   (List.combine keep tys))
+            in
+            let pats = mk_simpl_tuple_pat pats in
+            let out = List.filter_map (fun x -> x) out in
+            let out = mk_simpl_tuple_texpr span out in
 
-              let monadic = is_result_ty e.ty in
-              let out = if monadic then mk_result_ok_texpr span out else out in
-              (mk_opened_let monadic pats e out).e)
-        | BVar _ | CVar _ | Qualif _ | StructUpdate _ -> [%internal_error] span
-        | Lambda (pat, inner) -> Lambda (pat, update inner)
-        | Let (monadic, pat, bound, next) ->
-            let next = update next in
-            Let (monadic, pat, bound, next)
-        | Switch (scrut, body) -> (
+            let monadic = is_result_ty e.ty in
+            let out = if monadic then mk_result_ok_texpr span out else out in
+            mk_opened_let monadic pats e out)
+      | BVar _ | CVar _ | Qualif _ | StructUpdate _ -> [%internal_error] span
+      | Lambda (pat, inner) -> mk_opened_lambda span pat (update inner)
+      | Let (monadic, pat, bound, next) ->
+          mk_opened_let monadic pat bound (update next)
+      | Switch (scrut, body) ->
+          let switch =
             match body with
-            | If (e0, e1) -> Switch (scrut, If (update e0, update e1))
+            | If (e0, e1) -> If (update e0, update e1)
             | Match branches ->
                 let branches =
                   List.map
@@ -1524,11 +1523,12 @@ let simplify_let_tuple span (ctx : ctx) (pat : tpat) (bound : texpr) :
                       { br with branch = update br.branch })
                     branches
                 in
-                Switch (scrut, Match branches))
-        | Meta (m, inner) -> Meta (m, update inner)
-        | EError _ -> e.e
-      in
-      { e with e = e' }
+                Match branches
+          in
+          let ty = get_switch_body_ty switch in
+          { e = Switch (scrut, body); ty }
+      | Meta (m, inner) -> mk_emeta m (update inner)
+      | EError _ -> e
     in
 
     let bound = update bound in
