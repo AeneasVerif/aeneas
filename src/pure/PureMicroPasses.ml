@@ -1466,17 +1466,41 @@ let simplify_let_tuple span (ctx : ctx) (pat : tpat) (bound : texpr) :
     let pats = Option.get pats in
     let keep = List.map (fun p -> not (is_ignored_pat p)) pats in
     let tys = List.map (fun (p : tpat) -> p.ty) pats in
+    let num_nonfiltered_pats = List.length pats in
     let pats = List.filter (fun p -> not (is_ignored_pat p)) pats in
     let pats = mk_simpl_tuple_pat pats in
 
     (* Update an expression to filter its outputs *)
     let rec update (e : texpr) : texpr =
+      [%ldebug "e:\n" ^ texpr_to_string ctx e];
       let e' =
         match e.e with
         | FVar _ | App _ | Loop _ | Const _ ->
+            [%ldebug "expression is FVar, App, Loop, Const"];
             (* If this is a panic/break/continue, we do nothing *)
-            if is_result_fail e || is_loop_result_fail_break_continue e then e.e
-            else
+            if is_result_fail e || is_loop_result_fail_break_continue e then (
+              [%ldebug "expression is a fail, break or a continue"];
+              e.e (* If this is an [ok] we update the inner expression *))
+            else if is_result_ok e then (
+              [%ldebug "expression is an ok"];
+              let f, args = destruct_apps e in
+              match args with
+              | [ x ] ->
+                  let x = update x in
+                  ([%add_loc] mk_app span f x).e
+              | _ -> [%internal_error] span
+              (* If this is a tuple we filter the arguments *))
+            else if get_tuple_size e = Some num_nonfiltered_pats then (
+              [%ldebug "expression is a tuple"];
+              let args = [%add_loc] destruct_tuple_texpr span e in
+              let args =
+                List.filter_map
+                  (fun (keep, arg) -> if keep then Some arg else None)
+                  (List.combine keep args)
+              in
+              (mk_simpl_tuple_texpr span args).e)
+            else (
+              [%ldebug "expression is of an unknown kind"];
               (* We need to introduce an intermediate let-binding *)
               let pats, out =
                 List.split
@@ -1495,7 +1519,7 @@ let simplify_let_tuple span (ctx : ctx) (pat : tpat) (bound : texpr) :
 
               let monadic = is_result_ty e.ty in
               let out = if monadic then mk_result_ok_texpr span out else out in
-              (mk_opened_let monadic pats e out).e
+              (mk_opened_let monadic pats e out).e)
         | BVar _ | CVar _ | Qualif _ | StructUpdate _ -> [%internal_error] span
         | Lambda (pat, inner) -> Lambda (pat, update inner)
         | Let (monadic, pat, bound, next) ->

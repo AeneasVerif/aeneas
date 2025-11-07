@@ -461,7 +461,7 @@ let adt_variant_to_string ?(span = None) (env : fmt_env) (adt_id : type_id)
           [%craise_opt_span] span "Unreachable"
       | TResult ->
           let variant_id = Option.get variant_id in
-          if variant_id = result_ok_id then "@Result::Return"
+          if variant_id = result_ok_id then "@Result::Ok"
           else if variant_id = result_fail_id then "@Result::Fail"
           else
             [%craise_opt_span] span

@@ -676,6 +676,11 @@ let opt_destruct_tuple_texpr (span : Meta.span) (e : texpr) : texpr list option
       Some fields
   | _ -> None
 
+let destruct_tuple_texpr file line (span : Meta.span) (e : texpr) : texpr list =
+  match opt_destruct_tuple_texpr span e with
+  | None -> Errors.internal_error file line span
+  | Some xl -> xl
+
 let try_destruct_tuple_texpr span e =
   match opt_destruct_tuple_texpr span e with
   | None -> [ e ]
@@ -2585,6 +2590,17 @@ let is_result_fail (e : texpr) : bool =
     when variant_id = result_fail_id -> List.length args = 1
   | _ -> false
 
+let is_result_ok (e : texpr) : bool =
+  let f, args = destruct_apps e in
+  match f.e with
+  | Qualif
+      {
+        id = AdtCons { adt_id = TBuiltin TResult; variant_id = Some variant_id };
+        _;
+      }
+    when variant_id = result_ok_id -> List.length args = 1
+  | _ -> false
+
 let is_loop_result_fail_break_continue (e : texpr) : bool =
   let f, args = destruct_apps e in
   match f.e with
@@ -2599,3 +2615,9 @@ let is_loop_result_fail_break_continue (e : texpr) : bool =
          || variant_id = loop_result_continue_id
          || variant_id = loop_result_fail_id -> List.length args = 1
   | _ -> false
+
+let get_tuple_size (e : texpr) : int option =
+  let f, args = destruct_apps e in
+  match f.e with
+  | Qualif { id = AdtCons { adt_id = TTuple; _ }; _ } -> Some (List.length args)
+  | _ -> None
