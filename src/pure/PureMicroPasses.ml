@@ -1438,18 +1438,7 @@ let simplify_let_tuple span (ctx : ctx) (pat : tpat) (bound : texpr) :
      - the pattern is a tuple containing ignored patterns
      - the bound expression is "non trivial" (for instance, not just a
        function call) *)
-  let pats =
-    match pat.ty with
-    | TAdt (TTuple, generics) ->
-        [%sanity_check] span (generics.const_generics = []);
-        [%sanity_check] span (generics.trait_refs = []);
-        begin
-          match pat.pat with
-          | PAdt { fields; _ } -> Some fields
-          | _ -> None
-        end
-    | _ -> None
-  in
+  let pats = opt_destruct_tuple_tpat span pat in
   let has_ignored_pats =
     match pats with
     | None -> false
@@ -1701,6 +1690,293 @@ let filter_useless (ctx : ctx) (def : fun_decl) : fun_decl =
       in
       (* Return *)
       { body = body_exp; inputs })
+    def
+
+(** Simplify let bindings which bind expressions containing a branching.
+
+    This micro-pass does transformations of the following kind:
+    {[
+      let (b', x) := if b then (true, 1) else (false, 0) in
+      ...
+
+        ~~>
+
+      let x := if b then 1 else 0 in
+      let b' := b in // inlined afterwards by [inline_useless_var_assignments]
+      ...
+    ]}
+
+    Expressions like the above one are often introduced when merging contexts
+    after a branching. *)
+let simplify_let_branching (ctx : ctx) (def : fun_decl) =
+  let span = def.item_meta.span in
+  (* Helper to compute the output *)
+  let simplify_aux (monadic : bool) (pats : tpat list) (bound : texpr)
+      (next : texpr) : tpat * texpr * texpr =
+    let num_outs = List.length pats in
+    (* We will accumulate the outputs we find in this array *)
+    let outs = Array.init num_outs (fun _ -> []) in
+    let push_to_outs i el =
+      Array.set outs i (TExprSet.of_list el :: Array.get outs i)
+    in
+
+    (* Compute the set of variables which are bound inside the bound expression
+       (we will ignored those, as they were not introduced before) *)
+    let bound_fvars = texpr_get_bound_fvars bound in
+
+    (* Small helper.
+
+       When exploring expressions, we keep track of the variables we branched
+       upon together with the values they were expanded to, whenever we dive into a branch.
+
+       For instance:
+       {[
+         if b then
+           // here we remember: b -> true
+           ...
+         else
+           // here we remember: b -> false
+           ...
+       ]}
+
+       This small helper allows, given an expression [e], to retrieve the
+       list of variables that it may be equal to, in the current branch.
+       For instance, in the branch [then] of the example above, [true] might
+       be equal to [b]. *)
+    let get_equal_values (branchings : fvar_id list TExprMap.t) (e : texpr) :
+        texpr list =
+      (* For now we do something simple: we simply check if there is
+         exactly [e] which appears as a key in the map. We could recursively
+         explore the sub-expressions of [e] instead. *)
+      match TExprMap.find_opt e branchings with
+      | None -> []
+      | Some el -> List.map (fun id -> ({ e = FVar id; ty = e.ty } : texpr)) el
+    in
+
+    (* When we can't compute the exact list of values an expression evaluates
+           to, we store an empty set of possible values for all the outputs, meaning
+           we will not simplify anything. *)
+    let push_empty_possibilities () =
+      for i = 0 to num_outs - 1 do
+        push_to_outs i []
+      done
+    in
+
+    (* Is this expression a free variable which was bound before (we ignore
+       the variables bound inside the bound expression of the let, as we
+       can't refer to them from outside the let-binding) *)
+    let is_bound_before_fvar (e : texpr) : bool =
+      match e.e with
+      | FVar id -> not (FVarId.Set.mem id bound_fvars)
+      | _ -> false
+    in
+
+    (* Explore the bound expression. *)
+    let rec explore (branchings : fvar_id list TExprMap.t) (e : texpr) : unit =
+      match e.e with
+      | FVar _ | CVar _ | Const _ | StructUpdate _ | Qualif _ | Lambda _ ->
+          [%sanity_check] span (num_outs = 1);
+          push_to_outs 0 (e :: get_equal_values branchings e)
+      | BVar _ -> [%internal_error] span
+      | App _ ->
+          (* *)
+          if is_result_fail e || is_loop_result_fail_break_continue e then ()
+          else if is_result_ok e then
+            let _, args = destruct_apps e in
+            match args with
+            | [ x ] -> explore branchings x
+            | _ -> [%internal_error] span
+          else if get_tuple_size e = Some num_outs then
+            let args = [%add_loc] destruct_tuple_texpr span e in
+            List.iteri
+              (fun i arg ->
+                let vl = get_equal_values branchings arg in
+                push_to_outs i (arg :: vl))
+              args
+          else push_empty_possibilities ()
+      | Let (_, _, _, next) -> explore branchings next
+      | Switch (scrut, switch) -> (
+          if
+            (* Remember the branching, in case we branch over a variable that
+               we shouldn't ignore *)
+            is_bound_before_fvar scrut
+          then
+            let scrut_id = as_fvar span scrut in
+            match switch with
+            | If (e0, e1) ->
+                let branchings0 =
+                  TExprMap.add_to_list mk_true scrut_id branchings
+                in
+                explore branchings0 e0;
+                let branchings1 =
+                  TExprMap.add_to_list mk_false scrut_id branchings
+                in
+                explore branchings1 e1
+            | Match branches ->
+                List.iter
+                  (fun ({ pat; branch } : match_branch) ->
+                    let branchings =
+                      match tpat_to_texpr span pat with
+                      | None -> branchings
+                      | Some e -> TExprMap.add_to_list e scrut_id branchings
+                    in
+                    explore branchings branch)
+                  branches
+          else
+            match switch with
+            | If (e0, e1) ->
+                explore branchings e0;
+                explore branchings e1
+            | Match branches ->
+                List.iter
+                  (fun ({ pat = _; branch } : match_branch) ->
+                    explore branchings branch)
+                  branches)
+      | Loop _ -> push_empty_possibilities ()
+      | Meta (_, e) -> explore branchings e
+      | EError _ -> ()
+    in
+    explore TExprMap.empty bound;
+
+    (* Check if some of the outputs can be mapped to the same value.
+       We simply check if the potential outputs have a non empty intersection
+       for all the branches. *)
+    let possible_outputs =
+      Array.map
+        (fun (ls : TExprSet.t list) ->
+          match ls with
+          | [] -> TExprSet.empty
+          | s :: ls -> List.fold_left (fun s s' -> TExprSet.inter s s') s ls)
+        outs
+    in
+    [%ldebug
+      "possible_outputs:\n"
+      ^ String.concat ",\n\n"
+          ((List.map (fun s ->
+                "["
+                ^ String.concat ", "
+                    (List.map (texpr_to_string ctx) (TExprSet.to_list s))
+                ^ "]"))
+             (Array.to_list possible_outputs))];
+
+    (* Pick outputs whenever possible *)
+    let keep, outputs =
+      List.split
+        (List.map
+           (fun s ->
+             (* For now, we simply pick the first output which works *)
+             match TExprSet.to_list s with
+             | [] -> (true, None)
+             | x :: _ -> (false, Some x))
+           (Array.to_list possible_outputs))
+    in
+    let new_ty =
+      mk_simpl_tuple_ty
+        (List.map
+           (fun (e : texpr) -> e.ty)
+           (List.filter_map (fun x -> x) outputs))
+    in
+    let new_ty = if monadic then mk_result_ty new_ty else new_ty in
+
+    (* Update the bound expression *)
+    let rec update (e : texpr) : texpr =
+      match e.e with
+      | FVar _ | CVar _ | Const _ | StructUpdate _ | Qualif _ | Lambda _ -> (
+          [%sanity_check] span (num_outs = 1);
+          match List.hd outputs with
+          | None -> e
+          | Some e -> e)
+      | BVar _ -> [%internal_error] span
+      | App _ ->
+          (* *)
+          if is_result_fail e || is_loop_result_fail_break_continue e then e
+          else if is_result_ok e then
+            let _, args = destruct_apps e in
+            match args with
+            | [ x ] -> mk_result_ok_texpr span (update x)
+            | _ -> [%internal_error] span
+          else if get_tuple_size e = Some num_outs then
+            let args = [%add_loc] destruct_tuple_texpr span e in
+            let args =
+              List.filter_map
+                (fun (i, arg) ->
+                  match Collections.List.nth_opt outputs i with
+                  | None -> Some arg
+                  | Some _ -> None)
+                (List.mapi (fun i x -> (i, x)) args)
+            in
+            mk_simpl_tuple_texpr span args
+          else e
+      | Let (monadic, bound, pat, next) ->
+          mk_opened_let monadic bound pat (update next)
+      | Switch (scrut, switch) ->
+          let switch =
+            match switch with
+            | If (e0, e1) -> If (update e0, update e1)
+            | Match branches ->
+                Match
+                  (List.map
+                     (fun (br : match_branch) ->
+                       { br with branch = update br.branch })
+                     branches)
+          in
+          { e = Switch (scrut, switch); ty = new_ty }
+      | Loop _ -> e
+      | Meta (m, inner) -> mk_emeta m (update inner)
+      | EError _ -> { e = e.e; ty = new_ty }
+    in
+    let bound = update bound in
+
+    (* Update the pattern *)
+    let pat =
+      let pats =
+        List.filter_map
+          (fun (keep, pat) -> if keep then Some pat else None)
+          (List.combine keep pats)
+      in
+      mk_simpl_tuple_pat pats
+    in
+
+    (* Introduce let-bindings for the outputs we removed *)
+    let next =
+      mk_opened_lets false
+        (List.filter_map
+           (fun (pat, out) ->
+             match out with
+             | None -> None
+             | Some out -> Some (pat, out))
+           (List.combine pats outputs))
+        next
+    in
+
+    (* Create the let-binding *)
+    (pat, bound, next)
+  in
+
+  (* Helper to compute the output *)
+  let simplify (monadic : bool) (pat : tpat) (bound : texpr) (next : texpr) :
+      tpat * texpr * texpr =
+    match opt_destruct_tuple_tpat span pat with
+    | None -> (pat, bound, next)
+    | Some pats -> simplify_aux monadic pats bound next
+  in
+
+  let visitor =
+    object
+      inherit [_] map_expr as super
+
+      method! visit_Let env monadic pat bound next =
+        (* Only attempt to simplify if there is a branching in the bound expression *)
+        match bound.e with
+        | Switch _ ->
+            let pat, bound, next = simplify monadic pat bound next in
+            super#visit_Let env monadic pat bound next
+        | _ -> super#visit_Let env monadic pat bound next
+    end
+  in
+
+  map_open_all_fun_decl_body ctx.fresh_fvar_id
+    (fun body -> { body with body = visitor#visit_texpr () body.body })
     def
 
 (** Simplify the lets immediately followed by an ok.
@@ -5953,6 +6229,22 @@ let passes :
       merge_let_app_then_decompose_tuple );
     (* Filter the useless variables, assignments, function calls, etc. *)
     (None, "filter_useless", filter_useless);
+    (* Do the following kind of transformations (note that such expressions
+       are frequently introduced when joining the contexts after a branching
+       expression):
+
+       {[
+         let (b', x) := if b then (true, 1) else (false, 0) in
+         ...
+
+           ~~>
+
+         let x := if b then 1 else 0 in
+         let b' := b in // inlined afterwards by [inline_useless_var_assignments]
+         ...
+       ]}
+    *)
+    (None, "simplify_let_branching", simplify_let_branching);
     (* Simplify the lets immediately followed by a return.
 
        Ex.:

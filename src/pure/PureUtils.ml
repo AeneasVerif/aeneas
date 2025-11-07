@@ -699,7 +699,7 @@ let opt_destruct_tuple_tpat (span : Meta.span) (e : tpat) : tpat list option =
       begin
         match e.pat with
         | PAdt { fields; _ } -> Some fields
-        | _ -> [%internal_error] span
+        | _ -> None
       end
   | _ -> None
 
