@@ -1483,7 +1483,7 @@ let simplify_let_tuple span (ctx : ctx) (pat : tpat) (bound : texpr) :
                 [%add_loc] mk_app span f x
             | _ -> [%internal_error] span
             (* If this is a tuple we filter the arguments *))
-          else if get_tuple_size e = Some num_nonfiltered_pats then (
+          else if tuple_size = Some num_nonfiltered_pats then (
             [%ldebug "expression is a tuple"];
             let args = [%add_loc] destruct_tuple_texpr span e in
             [%ldebug
@@ -1877,6 +1877,11 @@ let simplify_let_branching (ctx : ctx) (def : fun_decl) =
              | x :: _ -> (false, Some x))
            (Array.to_list possible_outputs))
     in
+    [%ldebug
+      "chosen outputs:\n"
+      ^ String.concat ",\n\n"
+          (List.map (Print.option_to_string (texpr_to_string ctx)) outputs)];
+
     let new_ty =
       mk_simpl_tuple_ty
         (List.map
@@ -1887,6 +1892,7 @@ let simplify_let_branching (ctx : ctx) (def : fun_decl) =
 
     (* Update the bound expression *)
     let rec update (e : texpr) : texpr =
+      [%ldebug "About to update expression:\n" ^ texpr_to_string ctx e];
       match e.e with
       | FVar _ | CVar _ | Const _ | StructUpdate _ | Qualif _ | Lambda _ -> (
           [%sanity_check] span (num_outs = 1);
@@ -1895,25 +1901,45 @@ let simplify_let_branching (ctx : ctx) (def : fun_decl) =
           | Some e -> e)
       | BVar _ -> [%internal_error] span
       | App _ ->
+          [%ldebug "is app"];
           (* *)
-          if is_result_fail e || is_loop_result_fail_break_continue e then e
-          else if is_result_ok e then
+          let tuple_size = get_tuple_size e in
+          [%sanity_check] span (tuple_size = None || tuple_size = Some num_outs);
+          if is_result_fail e || is_loop_result_fail_break_continue e then (
+            [%ldebug "is fail, break or continue"];
+            e)
+          else if is_result_ok e then (
+            [%ldebug "is ok"];
             let _, args = destruct_apps e in
-            match args with
-            | [ x ] -> mk_result_ok_texpr span (update x)
-            | _ -> [%internal_error] span
-          else if get_tuple_size e = Some num_outs then
+            let e =
+              match args with
+              | [ x ] -> mk_result_ok_texpr span (update x)
+              | _ -> [%internal_error] span
+            in
+            [%ldebug
+              "result::ok expression after update:\n" ^ texpr_to_string ctx e];
+            e)
+          else if tuple_size = Some num_outs then (
+            [%ldebug "is tuple"];
             let args = [%add_loc] destruct_tuple_texpr span e in
+            [%ldebug
+              "args:\n"
+              ^ String.concat ",\n" (List.map (texpr_to_string ctx) args)];
+
             let args =
               List.filter_map
-                (fun (i, arg) ->
-                  match Collections.List.nth_opt outputs i with
+                (fun (arg, out) ->
+                  match out with
                   | None -> Some arg
                   | Some _ -> None)
-                (List.mapi (fun i x -> (i, x)) args)
+                (List.combine args outputs)
             in
-            mk_simpl_tuple_texpr span args
-          else e
+            let e = mk_simpl_tuple_texpr span args in
+            [%ldebug "Tuple after update:\n" ^ texpr_to_string ctx e];
+            e)
+          else (
+            [%ldebug "unknown kind of expression"];
+            e)
       | Let (monadic, bound, pat, next) ->
           mk_opened_let monadic bound pat (update next)
       | Switch (scrut, switch) ->
