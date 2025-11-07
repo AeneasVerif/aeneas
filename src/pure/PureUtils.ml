@@ -398,6 +398,11 @@ let as_fvar (span : Meta.span) (e : texpr) : fvar_id =
   | FVar v -> v
   | _ -> [%craise] span "Not an fvar"
 
+let as_qualif (span : Meta.span) (e : texpr) : qualif =
+  match e.e with
+  | Qualif qualif -> qualif
+  | _ -> [%craise] span "Not a qualif"
+
 let is_bvar (e : texpr) : bool =
   match e.e with
   | BVar _ -> true
@@ -620,22 +625,32 @@ let mk_apps (file : string) (line : int) (span : Meta.span) (app : texpr)
     (args : texpr list) : texpr =
   List.fold_left (fun app arg -> mk_app file line span app arg) app args
 
+let mk_qualif_apps (file : string) (line : int) (span : Meta.span)
+    (app : qualif) (args : texpr list) (ty : ty) : texpr =
+  let app =
+    {
+      e = Qualif app;
+      ty = mk_arrows (List.map (fun (e : texpr) -> e.ty) args) ty;
+    }
+  in
+  mk_apps file line span app args
+
 (** Destruct an expression into a qualif identifier and a list of arguments, *
     if possible *)
-let opt_destruct_qualif_app (e : texpr) : (qualif * texpr list) option =
+let opt_destruct_qualif_apps (e : texpr) : (qualif * texpr list) option =
   let app, args = destruct_apps e in
   match app.e with
   | Qualif qualif -> Some (qualif, args)
   | _ -> None
 
 (** Destruct an expression into a qualif identifier and a list of arguments *)
-let destruct_qualif_app (e : texpr) : qualif * texpr list =
-  Option.get (opt_destruct_qualif_app e)
+let destruct_qualif_apps (e : texpr) : qualif * texpr list =
+  Option.get (opt_destruct_qualif_apps e)
 
 (** Destruct an expression into a function call, if possible *)
 let opt_destruct_function_call (e : texpr) :
     (fun_or_op_id * generic_args * texpr list) option =
-  match opt_destruct_qualif_app e with
+  match opt_destruct_qualif_apps e with
   | None -> None
   | Some (qualif, args) -> (
       match qualif.id with

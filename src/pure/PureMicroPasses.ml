@@ -1431,8 +1431,8 @@ let inline_useless_var_assignments ~inline_named ~inline_const ~inline_pure
 
       let x = if b then 1 else 0 in …
     ]} *)
-let simplify_let_tuple span (ctx : ctx) (pat : tpat) (bound : texpr) :
-    tpat * texpr * bool =
+let simplify_let_tuple span (ctx : ctx) (monadic : bool) (pat : tpat)
+    (bound : texpr) : tpat * texpr * bool =
   let span = span in
   (* We attempt to filter only if:
      - the pattern is a tuple containing ignored patterns
@@ -1459,6 +1459,7 @@ let simplify_let_tuple span (ctx : ctx) (pat : tpat) (bound : texpr) :
     let num_nonfiltered_pats = List.length pats in
     let pats = List.filter (fun p -> not (is_ignored_pat p)) pats in
     let pats = mk_simpl_tuple_pat pats in
+    let new_ty = if monadic then mk_result_ty pats.ty else pats.ty in
 
     (* Update an expression to filter its outputs *)
     let rec update (e : texpr) : texpr =
@@ -1472,15 +1473,16 @@ let simplify_let_tuple span (ctx : ctx) (pat : tpat) (bound : texpr) :
           (* If this is a panic/break/continue, we do nothing *)
           if is_result_fail e || is_loop_result_fail_break_continue e then (
             [%ldebug "expression is a fail, break or a continue"];
-            e)
+            let f, args = destruct_qualif_apps e in
+            [%add_loc] mk_qualif_apps span f args new_ty)
           else if is_result_ok e then (
             (* If this is an [ok] we update the inner expression *)
             [%ldebug "expression is an ok"];
-            let f, args = destruct_apps e in
+            let f, args = destruct_qualif_apps e in
             match args with
             | [ x ] ->
                 let x = update x in
-                [%add_loc] mk_app span f x
+                [%add_loc] mk_qualif_apps span f [ x ] new_ty
             | _ -> [%internal_error] span
             (* If this is a tuple we filter the arguments *))
           else if tuple_size = Some num_nonfiltered_pats then (
@@ -1535,7 +1537,7 @@ let simplify_let_tuple span (ctx : ctx) (pat : tpat) (bound : texpr) :
           let ty = get_switch_body_ty switch in
           { e = Switch (scrut, switch); ty }
       | Meta (m, inner) -> mk_emeta m (update inner)
-      | EError _ -> e
+      | EError _ -> { e with ty = new_ty }
     in
 
     let bound = update bound in
@@ -1633,7 +1635,7 @@ let filter_useless (ctx : ctx) (def : fun_decl) : fun_decl =
               in
               (* If there are ignored patterns, attempt to simplify
                  the binding and the right expression. *)
-              let lv, re, updated = simplify_let_tuple span ctx lv re in
+              let lv, re, updated = simplify_let_tuple span ctx monadic lv re in
 
               (* We may need to revisited the bound expression if we modified it:
                  some values may now be unused. *)
@@ -1877,6 +1879,7 @@ let simplify_let_branching (ctx : ctx) (def : fun_decl) =
              | x :: _ -> (false, Some x))
            (Array.to_list possible_outputs))
     in
+    let apply_update = List.exists Option.is_some outputs in
     [%ldebug
       "chosen outputs:\n"
       ^ String.concat ",\n\n"
@@ -1907,7 +1910,8 @@ let simplify_let_branching (ctx : ctx) (def : fun_decl) =
           [%sanity_check] span (tuple_size = None || tuple_size = Some num_outs);
           if is_result_fail e || is_loop_result_fail_break_continue e then (
             [%ldebug "is fail, break or continue"];
-            e)
+            let f, args = destruct_qualif_apps e in
+            [%add_loc] mk_qualif_apps span f args new_ty)
           else if is_result_ok e then (
             [%ldebug "is ok"];
             let _, args = destruct_apps e in
@@ -1939,7 +1943,8 @@ let simplify_let_branching (ctx : ctx) (def : fun_decl) =
             e)
           else (
             [%ldebug "unknown kind of expression"];
-            e)
+            (* TODO: we may have issues if we can't properly update the type *)
+            [%internal_error] span)
       | Let (monadic, bound, pat, next) ->
           mk_opened_let monadic bound pat (update next)
       | Switch (scrut, switch) ->
@@ -1954,11 +1959,13 @@ let simplify_let_branching (ctx : ctx) (def : fun_decl) =
                      branches)
           in
           { e = Switch (scrut, switch); ty = new_ty }
-      | Loop _ -> e
+      | Loop _ ->
+          (* TODO: we may have issues if we can't properly update the type *)
+          [%internal_error] span
       | Meta (m, inner) -> mk_emeta m (update inner)
       | EError _ -> { e = e.e; ty = new_ty }
     in
-    let bound = update bound in
+    let bound = if apply_update then update bound else bound in
 
     (* Update the pattern *)
     let pat =
@@ -6509,6 +6516,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
   in
 
   let rec visit (ty : ty) (e : texpr) : texpr =
+    [%ldebug "visit:\n- ty: " ^ ty_to_string ty ^ "\n- e: " ^ texpr_to_string e];
     match e.e with
     | FVar _ | CVar _ | Const _ | EError _ | Qualif _ -> e
     | BVar _ -> [%internal_error] span
@@ -6564,12 +6572,22 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
                     PureTypeCheck.get_adt_field_types span type_decls adt_id
                       None generics
               in
+              [%ldebug
+                "- ty: " ^ ty_to_string ty ^ "\n- field_tys:\n"
+                ^ String.concat "\n" (List.map ty_to_string field_tys)
+                ^ "\n- supd.update:\n"
+                ^ String.concat "\n"
+                    (List.map
+                       (fun (fid, f) ->
+                         FieldId.to_string fid ^ " -> " ^ texpr_to_string f)
+                       supd.updates)];
               (* Update the fields *)
               let updates =
                 List.map
                   (fun ((fid, fe) : _ * texpr) ->
-                    let field_ty = FieldId.nth field_tys fid in
-                    (fid, visit field_ty fe))
+                    match FieldId.nth_opt field_tys fid with
+                    | None -> [%internal_error] span
+                    | Some field_ty -> (fid, visit field_ty fe))
                   supd.updates
               in
               { e with e = StructUpdate { supd with updates } }
