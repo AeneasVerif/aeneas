@@ -983,24 +983,16 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
             in
             let resl_true = eval_block config true_block true_ctx in
             let resl_false = eval_block config false_block false_ctx in
-            if join then
-              let cf_bool (el : SA.expr list) : SA.expr =
-                match el with
-                | [ e_true; e_false ] -> cf_bool (e_true, e_false)
-                | _ -> [%internal_error] span
-              in
-              eval_switch_with_join config span cf_bool ctx0
-                [ resl_true; resl_false ]
-            else
-              let ctx_resl, cf_branches =
-                comp_seqs __FILE__ __LINE__ span [ resl_true; resl_false ]
-              in
-              let cc el =
-                match cf_branches el with
-                | [ e_true; e_false ] -> cf_bool (e_true, e_false)
-                | _ -> [%internal_error] span
-              in
-              (ctx_resl, cc)
+            let ctx_resl, cf_branches =
+              comp_seqs __FILE__ __LINE__ span [ resl_true; resl_false ]
+            in
+            let cc el =
+              match cf_branches el with
+              | [ e_true; e_false ] -> cf_bool (e_true, e_false)
+              | _ -> [%internal_error] span
+            in
+            if join then eval_switch_with_join config span cc ctx0 ctx_resl
+            else (ctx_resl, cc)
         | _ -> [%craise] span "Inconsistent state"
       in
       (* Compose *)
@@ -1055,26 +1047,21 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
               (not (List.exists block_has_break_continue_return branches))
               && not (block_has_break_continue_return otherwise)
             in
+            let resl, cf =
+              comp_seqs __FILE__ __LINE__ span
+                (resl_branches @ [ resl_otherwise ])
+            in
+            let cc el =
+              let el, e_otherwise = Collections.List.pop_last el in
+              cf_int (el, e_otherwise)
+            in
+            let cf = cc_comp cc cf in
             if join then
               (* Join the contexts *)
-              let cf_int (el : SA.expr list) : SA.expr =
-                [%sanity_check] span (List.length el = List.length branches + 1);
-                let el_branches, e_otherwise = Collections.List.pop_last el in
-                cf_int (el_branches, e_otherwise)
-              in
-              eval_switch_with_join config span cf_int ctx0
-                (resl_branches @ [ resl_otherwise ])
+              eval_switch_with_join config span cf ctx0 resl
             else
               (* Do not join the contexts: compose the continuations and continue *)
-              let resl, cf =
-                comp_seqs __FILE__ __LINE__ span
-                  (resl_branches @ [ resl_otherwise ])
-              in
-              let cc el =
-                let el, e_otherwise = Collections.List.pop_last el in
-                cf_int (el, e_otherwise)
-              in
-              (resl, cc_comp cc cf)
+              (resl, cf)
         | _ -> [%craise] span "Inconsistent state"
       in
       (* Compose *)
@@ -1126,12 +1113,13 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
               | None -> true
               | Some block -> not (block_has_break_continue_return block)
             in
+            let ctx_resl, cf = comp_seqs __FILE__ __LINE__ span resl in
+            let cc = cc_comp cf_expand cf in
             if join then (* Join the contexts *)
-              eval_switch_with_join config span cf_expand ctx0 resl
+              eval_switch_with_join config span cc ctx0 ctx_resl
             else
               (* Compose the continuations *)
-              let ctx_resl, cf = comp_seqs __FILE__ __LINE__ span resl in
-              (ctx_resl, cc_comp cf_expand cf)
+              (ctx_resl, cc)
         | _ -> [%craise] span "Inconsistent state"
       in
       (* Compose *)
@@ -1153,12 +1141,9 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
       symbolic expression for what happens at the end of the branch, and
       reconstructs the expression for the full branch. *)
 and eval_switch_with_join (config : config) (span : Meta.span)
-    (cf_switch_scrut : SA.expr list -> SA.expr) (ctx0 : eval_ctx)
-    (resl_branches :
-      ((eval_ctx * statement_eval_res) list * (SA.expr list -> SA.expr)) list) :
+    (cf : SA.expr list -> SA.expr) (ctx0 : eval_ctx)
+    (ctx_resl : (eval_ctx * statement_eval_res) list) :
     (eval_ctx * statement_eval_res) list * (SA.expr list -> SA.expr) =
-  (* Check whether we have branches to join *)
-  let ctx_resl = List.flatten (List.map fst resl_branches) in
   (* Count the number of contexts to join.
 
      Note that all evaluation results should be [Unit]: break, continue and
@@ -1166,25 +1151,20 @@ and eval_switch_with_join (config : config) (span : Meta.span)
      branches doesn't contain break, etc. instructions. It can also not be
      panic as once we reach a panic we stop the symbolic execution (we simply
      synthesize a panic node in the symbolic AST). *)
-  let num_units =
-    List.length
-      (List.filter
-         (fun ((_, res) : _ * statement_eval_res) ->
-           match res with
-           | Unit -> true
-           | Break _ | Continue _ | Return | Panic -> [%internal_error] span)
-         ctx_resl)
-  in
+  [%sanity_check] span (List.for_all (fun (_, res) -> res = Unit) ctx_resl);
+  let ctxl = List.map fst ctx_resl in
+  let num_units = List.length ctxl in
   if num_units = 0 then (
-    (* We only have panics: nothing to do *)
-    let exprl = List.map (fun (_, cf) -> cf []) resl_branches in
-    ( [],
+    ( (* We only have panics: nothing to do *)
+      [],
       fun el ->
         [%sanity_check] span (el = []);
-        cf_switch_scrut exprl ))
+        cf [] ))
   else if num_units = 1 then
-    (* No need to join the contexts: continue with the current context *)
-    raise (Failure "TODO")
+    (* No need to join the contexts: continue with the current context, and inline
+       what happens inside the loop inside the branching expression. *)
+    let ctx = List.hd ctxl in
+    ([ (ctx, Unit) ], cf)
   else (
     (* We need to join the contexts *)
     [%ldebug
@@ -1228,50 +1208,39 @@ and eval_switch_with_join (config : config) (span : Meta.span)
     in
     let output_abs_ids = List.map (fun (abs : abs) -> abs.abs_id) output_abs in
 
-    (* For every branch:
-       - match every context resulting from evaluating the branch (there should be
-         one if no explicit panic was encountered, or 0 it we encountered a panic)
-         with the joined context
-       - the result of the match allows determining the output of the branch.
-         We use this to call the branch continuation to generate the symbolic
-         expression for the branch *)
-    let match_resl_branch
-        ((resl, cf_branch) :
-          (eval_ctx * statement_eval_res) list * (SA.expr list -> SA.expr)) :
-        SA.expr =
-      let match_ctx (ctx : eval_ctx) : SA.expr =
-        (* Match the contexts with the joined context to determine the output of the branch *)
-        let (_, ctx, output_values, output_abs), cf =
-          InterpreterJoin.match_ctx_with_target config span Join
-            output_svalue_ids fixed_ids joined_ctx ctx
-        in
-
-        let reorder_output_abs (map : abs AbsId.Map.t) (absl : abs_id list) :
-            abs list =
-          List.map (fun id -> AbsId.Map.find id map) absl
-        in
-        let reorder_output_values (map : tvalue SymbolicValueId.Map.t)
-            (values : symbolic_value_id list) : tvalue list =
-          List.map (fun id -> SymbolicValueId.Map.find id map) values
-        in
-        let output_values =
-          reorder_output_values output_values output_svalue_ids
-        in
-        let output_abs = reorder_output_abs output_abs output_abs_ids in
-
-        (* Generate the let expression *)
-        cf (SA.Join (ctx, output_values, output_abs))
+    (* Match every context resulting from evaluating a branch (there should be
+       one if no explicit panic was encountered, or 0 it we encountered a panic)
+       with the joined context. *)
+    let match_ctx (ctx : eval_ctx) : SA.expr =
+      (* Match the contexts with the joined context to determine the output of the branch *)
+      let (_, ctx, output_values, output_abs), cf =
+        InterpreterJoin.match_ctx_with_target config span Join output_svalue_ids
+          fixed_ids joined_ctx ctx
       in
-      let el = List.map (fun (ctx, _) -> match_ctx ctx) resl in
-      cf_branch el
+
+      let reorder_output_abs (map : abs AbsId.Map.t) (absl : abs_id list) :
+          abs list =
+        List.map (fun id -> AbsId.Map.find id map) absl
+      in
+      let reorder_output_values (map : tvalue SymbolicValueId.Map.t)
+          (values : symbolic_value_id list) : tvalue list =
+        List.map (fun id -> SymbolicValueId.Map.find id map) values
+      in
+      let output_values =
+        reorder_output_values output_values output_svalue_ids
+      in
+      let output_abs = reorder_output_abs output_abs output_abs_ids in
+
+      (* Generate the let expression *)
+      cf (SA.Join (ctx, output_values, output_abs))
     in
-    let resl_branches = List.map match_resl_branch resl_branches in
+    let resl = List.map match_ctx ctxl in
 
     (* We can now call the continuation introduced when branching to group the
        expressions of the branches into a single branching expression (i.e.,
        we group the expressions for the [then] and [else] branches into a single
        [if then else] expression. *)
-    let bound_expr = cf_switch_scrut resl_branches in
+    let bound_expr = cf resl in
 
     (* Generate the let expression *)
     let cf (el : SA.expr list) : SA.expr =
