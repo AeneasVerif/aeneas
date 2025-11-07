@@ -676,7 +676,7 @@ example (x y : U32) (h : x.val * y.val ≤ U32.max):
     let z0 ← x * y
     let z1 ← y * x
     massert (z1 == z0)) = ok () := by
-    progress* by (ring_nf at *; simp [*] <;> scalar_tac)
+    progress*
 
 end Examples
 

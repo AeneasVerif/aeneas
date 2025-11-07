@@ -1111,6 +1111,7 @@ hf : ∀ (x y : U32), ↑x < 10 → ↑y < 10 → ∃ z, f x y = ok z
     := by
     let* ⟨⟩ ← massert_spec
     extract_goal0
+    simp only [UScalar.lt_equiv, UScalar.ofNat_val_eq]
     let* ⟨⟩ ← massert_spec
 
   /--
@@ -1181,7 +1182,7 @@ info: example
       := by
       unfold ntt
       progress; fsimp [Nat.log2_def]
-      progress;
+      progress; fsimp [Nat.log2_def]
       progress; fsimp [Nat.log2_def]
       progress; fsimp [Nat.log2_def]
       progress; fsimp [Nat.log2_def]
@@ -1203,7 +1204,7 @@ info: example
       := by
       unfold ntt
       progress; fsimp [Nat.log2_def]
-      progress;
+      progress; fsimp [Nat.log2_def]
       progress; fsimp [Nat.log2_def]
       progress; fsimp [Nat.log2_def]
       progress; fsimp [Nat.log2_def]

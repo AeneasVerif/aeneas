@@ -63,9 +63,7 @@ theorem Array.index_usize_const_spec {α} [Inhabited α]
     match l with
     | [] =>
       -- Contradiction
-      fsimp at hi
-      have : i = n := by omega
-      omega
+      grind
     | hd :: l =>
       fsimp [Std.Array.allIdx] at h
       have : i ≤ U32.max := by scalar_tac
