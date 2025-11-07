@@ -1450,10 +1450,11 @@ let simplify_let_tuple span (ctx : ctx) (pat : tpat) (bound : texpr) :
     | _ -> false
   in
 
-  if has_ignored_pats && bound_non_trivial then
+  if has_ignored_pats && bound_non_trivial then (
     (* Update *)
     let pats = Option.get pats in
     let keep = List.map (fun p -> not (is_ignored_pat p)) pats in
+    [%ldebug "keep: " ^ Print.list_to_string Print.bool_to_string keep];
     let tys = List.map (fun (p : tpat) -> p.ty) pats in
     let num_nonfiltered_pats = List.length pats in
     let pats = List.filter (fun p -> not (is_ignored_pat p)) pats in
@@ -1465,6 +1466,9 @@ let simplify_let_tuple span (ctx : ctx) (pat : tpat) (bound : texpr) :
       match e.e with
       | FVar _ | App _ | Loop _ | Const _ ->
           [%ldebug "expression is FVar, App, Loop, Const"];
+          let tuple_size = get_tuple_size e in
+          [%sanity_check] span
+            (tuple_size = None || tuple_size = Some num_nonfiltered_pats);
           (* If this is a panic/break/continue, we do nothing *)
           if is_result_fail e || is_loop_result_fail_break_continue e then (
             [%ldebug "expression is a fail, break or a continue"];
@@ -1482,6 +1486,9 @@ let simplify_let_tuple span (ctx : ctx) (pat : tpat) (bound : texpr) :
           else if get_tuple_size e = Some num_nonfiltered_pats then (
             [%ldebug "expression is a tuple"];
             let args = [%add_loc] destruct_tuple_texpr span e in
+            [%ldebug
+              "args:\n"
+              ^ Print.list_to_string ~sep:"\n" (texpr_to_string ctx) args];
             let args =
               List.filter_map
                 (fun (keep, arg) -> if keep then Some arg else None)
@@ -1526,13 +1533,13 @@ let simplify_let_tuple span (ctx : ctx) (pat : tpat) (bound : texpr) :
                 Match branches
           in
           let ty = get_switch_body_ty switch in
-          { e = Switch (scrut, body); ty }
+          { e = Switch (scrut, switch); ty }
       | Meta (m, inner) -> mk_emeta m (update inner)
       | EError _ -> e
     in
 
     let bound = update bound in
-    (pats, bound, true)
+    (pats, bound, true))
   else (pat, bound, false)
 
 (** Filter the useless assignments (removes the useless variables, filters the
