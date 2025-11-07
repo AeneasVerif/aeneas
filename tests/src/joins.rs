@@ -5,6 +5,12 @@ fn opt_add_1(b : bool, x : u32) -> u32 {
     x + y
 }
 
+fn opt_add_2(b : bool, x : u32) -> u32 {
+    let y = if b { 1 } else { 0 };
+    let z = if b { 1 } else { 0 };
+    x + y + z
+}
+
 fn opt_add_1_or_panic(b : bool, x : u32) -> u32 {
     let y = if b { 1 } else { panic!() };
     x + y
@@ -14,6 +20,14 @@ fn opt_add_switch_1(a : u32, x : u32) -> u32 {
     let y = match a {
         | 0 => 0,
         | 1 => 1,
+        | _ => panic!(),
+    };
+    x + y
+}
+
+fn opt_add_switch_2(a : u32, x : u32) -> u32 {
+    let y = match a {
+        | 0 => 0,
         | _ => panic!(),
     };
     x + y

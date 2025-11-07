@@ -17,15 +17,28 @@ def opt_add_1 (b : Bool) (x : U32) : Result U32 :=
             else ok 0#u32
   x + y
 
+/- [joins::opt_add_2]:
+   Source: 'tests/src/joins.rs', lines 8:0-12:1 -/
+def opt_add_2 (b : Bool) (x : U32) : Result U32 :=
+  do
+  let y ← if b
+            then ok 1#u32
+            else ok 0#u32
+  let z ← if b
+            then ok 1#u32
+            else ok 0#u32
+  let i ← x + y
+  i + z
+
 /- [joins::opt_add_1_or_panic]:
-   Source: 'tests/src/joins.rs', lines 8:0-11:1 -/
+   Source: 'tests/src/joins.rs', lines 14:0-17:1 -/
 def opt_add_1_or_panic (b : Bool) (x : U32) : Result U32 :=
   do
   massert b
   x + 1#u32
 
 /- [joins::opt_add_switch_1]:
-   Source: 'tests/src/joins.rs', lines 13:0-20:1 -/
+   Source: 'tests/src/joins.rs', lines 19:0-26:1 -/
 def opt_add_switch_1 (a : U32) (x : U32) : Result U32 :=
   do
   let y ←
@@ -35,15 +48,22 @@ def opt_add_switch_1 (a : U32) (x : U32) : Result U32 :=
     | _ => fail panic
   x + y
 
+/- [joins::opt_add_switch_2]:
+   Source: 'tests/src/joins.rs', lines 28:0-34:1 -/
+def opt_add_switch_2 (a : U32) (x : U32) : Result U32 :=
+  match a with
+  | 0#uscalar => x + 0#u32
+  | _ => fail panic
+
 /- [joins::Enum]
-   Source: 'tests/src/joins.rs', lines 22:0-24:1 -/
+   Source: 'tests/src/joins.rs', lines 36:0-38:1 -/
 inductive Enum where
 | V0 : Enum
 | V1 : Enum
 | V2 : Enum
 
 /- [joins::use_enum]:
-   Source: 'tests/src/joins.rs', lines 26:0-34:1 -/
+   Source: 'tests/src/joins.rs', lines 40:0-48:1 -/
 def use_enum (e : Enum) (x : U32) : Result U32 :=
   do
   let y ←
@@ -54,15 +74,13 @@ def use_enum (e : Enum) (x : U32) : Result U32 :=
   x + y
 
 /- [joins::call_choose]:
-   Source: 'tests/src/joins.rs', lines 36:0-39:1 -/
+   Source: 'tests/src/joins.rs', lines 50:0-53:1 -/
 def call_choose (b : Bool) (x : U32) (y : U32) : Result (U32 × U32) :=
   do
   let (z, back) ←
     if b
-    then let f := fun i => (i, y)
-         ok (x, f)
-    else let f := fun i => (x, i)
-         ok (y, f)
+    then ok (x, fun i => (i, y))
+    else ok (y, fun i => (x, i))
   let z1 ← z + 1#u32
   ok (back z1)
 
