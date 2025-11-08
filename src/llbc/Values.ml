@@ -1059,6 +1059,9 @@ and abs_fun =
           to the loop backward function. This is useful after joining region
           abstractions: we know which was the original region abstraction, which
           is helpful for the translation. *)
+  | EJoin of abs_id
+      (** Similar to [ELoop], but the abstraction was introduced when joining
+          contexts after a branching *)
 
 (** Abstraction values are used inside of abstractions to properly model
     borrowing relations introduced by function calls.

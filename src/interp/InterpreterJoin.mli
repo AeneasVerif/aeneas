@@ -113,6 +113,7 @@ val join_ctxs_list :
   abs_kind ->
   ids_sets ->
   ?preprocess_first_ctx:bool ->
+  with_abs_conts:bool ->
   eval_ctx list ->
   eval_ctx list * eval_ctx
 

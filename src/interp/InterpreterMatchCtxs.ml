@@ -2410,6 +2410,7 @@ let prepare_match_ctx_with_target (config : config) (span : Meta.span)
     let module M = MakeMatcher (JM) in
     try
       (* Match the bindings appear in both environments *)
+      (* TODO: we shouldn't filter the locals (they should appear in both envs)? *)
       let src_dummy_ids = env_get_dummy_var_ids filt_src_env in
       let src_local_ids = env_get_local_ids filt_src_env in
       let tgt_dummy_ids = env_get_dummy_var_ids filt_tgt_env in

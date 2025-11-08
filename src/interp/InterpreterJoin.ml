@@ -497,8 +497,8 @@ let refresh_abs (old_abs : AbsId.Set.t) (ctx : eval_ctx) : eval_ctx =
 
 let join_ctxs_list (config : config) (span : Meta.span)
     (fresh_abs_kind : abs_kind) (fixed_ids : ids_sets)
-    ?(preprocess_first_ctx : bool = true) (ctxl : eval_ctx list) :
-    eval_ctx list * eval_ctx =
+    ?(preprocess_first_ctx : bool = true) ~(with_abs_conts : bool)
+    (ctxl : eval_ctx list) : eval_ctx list * eval_ctx =
   (* The list of contexts should be non empty *)
   let ctx0, ctxl =
     match ctxl with
@@ -525,7 +525,7 @@ let join_ctxs_list (config : config) (span : Meta.span)
 
     (* Reduce the context we want to add to the join *)
     let ctx =
-      reduce_ctx config span ~with_abs_conts:true fresh_abs_kind fixed_ids ctx
+      reduce_ctx config span ~with_abs_conts fresh_abs_kind fixed_ids ctx
     in
     [%ltrace "after reduce:\n" ^ eval_ctx_to_string ~span:(Some span) ctx];
     (* Sanity check *)
@@ -541,7 +541,6 @@ let join_ctxs_list (config : config) (span : Meta.span)
 
   let ctx0 = if preprocess_first_ctx then preprocess_ctx ctx0 else ctx0 in
 
-  let with_abs_conts = true in
   (* # Join with the new contexts, one by one
 
      For every context, we repeteadly attempt to join it with the current
@@ -603,7 +602,7 @@ let join_ctxs_list (config : config) (span : Meta.span)
 
     (* Reduce again to reach a fixed point *)
     joined_ctx :=
-      reduce_ctx config span ~with_abs_conts:true fresh_abs_kind fixed_ids
+      reduce_ctx config span ~with_abs_conts fresh_abs_kind fixed_ids
         !joined_ctx;
     [%ltrace
       "join_one: after last reduce:\n"
@@ -625,7 +624,7 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
     (ctxl : eval_ctx list) : (eval_ctx * eval_ctx list) * eval_ctx =
   let ctxl', joined_ctx =
     join_ctxs_list config span (Loop loop_id) fixed_ids
-      ~preprocess_first_ctx:false (ctx0 :: ctxl)
+      ~preprocess_first_ctx:false ~with_abs_conts:false (ctx0 :: ctxl)
   in
   [%sanity_check] span (List.length ctxl' = List.length ctxl + 1);
   ((List.hd ctxl', List.tl ctxl'), joined_ctx)
@@ -634,7 +633,7 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
     (loop_id : LoopId.id) (fixed_ids : ids_sets) (ctxl : eval_ctx list) :
     eval_ctx =
   (* Simplify the contexts *)
-  let with_abs_conts = true in
+  let with_abs_conts = false in
   let fresh_abs_kind : abs_kind = Loop loop_id in
   let prepare_ctx (ctx : eval_ctx) : eval_ctx =
     [%ltrace
@@ -659,7 +658,7 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
 
     (* Reduce the context we want to add to the join *)
     let ctx =
-      reduce_ctx config span ~with_abs_conts:true fresh_abs_kind fixed_ids ctx
+      reduce_ctx config span ~with_abs_conts fresh_abs_kind fixed_ids ctx
     in
     [%ltrace
       "join_one: after reduce:\n" ^ eval_ctx_to_string ~span:(Some span) ctx];
@@ -745,7 +744,7 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
 
         (* Reduce again to reach a fixed point *)
         joined_ctx :=
-          reduce_ctx config span ~with_abs_conts:true fresh_abs_kind fixed_ids
+          reduce_ctx config span ~with_abs_conts fresh_abs_kind fixed_ids
             !joined_ctx;
         [%ltrace
           "join_one: after last reduce:\n"

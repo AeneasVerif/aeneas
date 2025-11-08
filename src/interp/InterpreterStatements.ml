@@ -1188,9 +1188,28 @@ and eval_switch_with_join (config : config) (span : Meta.span)
         (List.map (fun x -> compute_ctx_ids x |> fst) ctx_to_join)
     in
     let _, joined_ctx =
-      InterpreterJoin.join_ctxs_list config span Join fixed_ids ctx_to_join
+      InterpreterJoin.join_ctxs_list config span ~with_abs_conts:true Join
+        fixed_ids ctx_to_join
     in
     [%ldebug "Joined ctx:\n" ^ eval_ctx_to_string joined_ctx];
+
+    (* We need to update the abstraction continuations in the joined context,
+       to reflect the fact that they should be introduced by the branching
+       expression *)
+    let joined_ctx =
+      Contexts.ctx_map_abs
+        (fun abs ->
+          if AbsId.Set.mem abs.abs_id fixed_ids.aids then abs
+          else
+            (* The abstraction is fresh and is thus introduced by the join:
+             we need to update its continuation *)
+            InterpreterAbs.add_abs_cont_to_abs span joined_ctx abs
+              (EJoin abs.abs_id))
+        joined_ctx
+    in
+    [%ldebug
+      "Joined ctx (after updating the abs conts):\n"
+      ^ eval_ctx_to_string joined_ctx];
 
     (* Compute the output values *)
     let output_svalues =

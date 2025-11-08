@@ -443,6 +443,7 @@ module Values = struct
     | ELoop (abs_id, lp_id) ->
         "Loop(abs_id@" ^ AbsId.to_string abs_id ^ ",loop_id@"
         ^ LoopId.to_string lp_id ^ ")"
+    | EJoin abs_id -> "Join(abs_id@" ^ AbsId.to_string abs_id ^ ")"
 
   let rec eproj_to_string ?(with_ended : bool = false) (env : fmt_env)
       (pv : eproj) : string =

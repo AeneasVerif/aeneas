@@ -225,78 +225,8 @@ let loop_abs_reorder_and_add_info (span : Meta.span) (fixed_ids : ids_sets)
 
   (* Introduce continuation expressions. *)
   let add_abs_cont_to_abs (abs : abs) (loop_id : loop_id) : abs =
-    (* Retrieve the *mutable* borrows/loans from the abstraction values *)
-    let borrows : tevalue list ref = ref [] in
-    let loans : tevalue list ref = ref [] in
-    let get_borrow_loan (x : tavalue) : unit =
-      let ty = x.ty in
-      match x.value with
-      | ALoan lc -> (
-          match lc with
-          | AMutLoan (pm, bid, child) ->
-              [%sanity_check] span (is_aignored child.value);
-              let value : evalue =
-                ELoan (EMutLoan (pm, bid, mk_eignored child.ty))
-              in
-              loans := { value; ty } :: !loans
-          | ASharedLoan _ ->
-              (* We ignore shared loans *)
-              ()
-          | AEndedMutLoan _
-          | AEndedSharedLoan _
-          | AIgnoredMutLoan _
-          | AEndedIgnoredMutLoan _
-          | AIgnoredSharedLoan _ -> [%internal_error] span)
-      | ABorrow bc -> (
-          match bc with
-          | AMutBorrow (pm, bid, child) ->
-              [%sanity_check] span (is_aignored child.value);
-              let value : evalue =
-                EBorrow (EMutBorrow (pm, bid, mk_eignored child.ty))
-              in
-              borrows := { value; ty } :: !borrows
-          | ASharedBorrow _ -> (* We ignore shared borrows *) ()
-          | AIgnoredMutBorrow _
-          | AEndedMutBorrow _
-          | AEndedSharedBorrow
-          | AEndedIgnoredMutBorrow _
-          | AProjSharedBorrow _ -> [%internal_error] span)
-      | ASymbolic (pm, aproj) -> (
-          match aproj with
-          | AProjLoans { proj = { sv_id; proj_ty }; consumed; borrows } ->
-              [%sanity_check] span (consumed = []);
-              [%sanity_check] span (borrows = []);
-              let value : evalue =
-                ESymbolic
-                  ( pm,
-                    EProjLoans
-                      { proj = { sv_id; proj_ty }; consumed = []; borrows = [] }
-                  )
-              in
-              loans := { value; ty } :: !loans
-          | AProjBorrows { proj = { sv_id; proj_ty }; loans } ->
-              [%sanity_check] span (loans = []);
-              let value : evalue =
-                ESymbolic
-                  (pm, EProjBorrows { proj = { sv_id; proj_ty }; loans = [] })
-              in
-              borrows := { value; ty } :: !borrows
-          | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty ->
-              [%internal_error] span)
-      | AAdt _ | AIgnored _ -> [%internal_error] span
-    in
-    List.iter get_borrow_loan abs.avalues;
-
-    (* Transform them into input/output expressions *)
-    let output = mk_etuple (List.rev !borrows) in
-    let input = EApp (ELoop (abs.abs_id, loop_id), List.rev !loans) in
-    let input : tevalue = { value = input; ty = output.ty } in
-
-    (* Put everything together *)
-    let cont : abs_cont option =
-      Some { output = Some output; input = Some input }
-    in
-    { abs with cont }
+    InterpreterAbs.add_abs_cont_to_abs span ctx abs
+      (ELoop (abs.abs_id, loop_id))
   in
   let add_abs_conts ctx =
     let visitor =
@@ -305,9 +235,7 @@ let loop_abs_reorder_and_add_info (span : Meta.span) (fixed_ids : ids_sets)
 
         method! visit_abs _ abs =
           match abs.kind with
-          | Loop loop_id ->
-              [%sanity_check] span (abs.cont = None);
-              add_abs_cont_to_abs abs loop_id
+          | Loop loop_id -> add_abs_cont_to_abs abs loop_id
           | _ -> abs
       end
     in
@@ -466,13 +394,15 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
   in
   let fp = compute_fixed_point ctx max_num_iter max_num_iter in
 
+  [%ltrace
+    "- fixed point:\n" ^ eval_ctx_to_string ~span:(Some span) ~filter:false fp];
+
   (* Update the region abstractions to introduce continuation expressions, etc. *)
   update_fixed_ids [ fp ];
   let fp = loop_abs_reorder_and_add_info span !fixed_ids fp in
 
   [%ltrace
-    "fixed point:\n- fp:\n"
-    ^ eval_ctx_to_string ~span:(Some span) ~filter:false fp];
+    "- fixed point:\n" ^ eval_ctx_to_string ~span:(Some span) ~filter:false fp];
 
   (* Return *)
   (fp, !fixed_ids)

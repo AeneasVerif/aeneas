@@ -637,7 +637,7 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
           | V.EOutputAbs _ | V.EInputAbs _ ->
               (* Those shouln't get merged *)
               [%internal_error] span
-          | V.EFunCall abs_id | V.ELoop (abs_id, _) ->
+          | V.EFunCall abs_id | V.ELoop (abs_id, _) | V.EJoin abs_id ->
               (* Lookup the variable introduced for the backward function *)
               let e, can_fail =
                 match V.AbsId.Map.find_opt abs_id ctx.abs_id_to_info with
