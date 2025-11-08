@@ -1192,17 +1192,20 @@ and eval_switch_with_join (config : config) (span : Meta.span)
         fixed_ids ctx_to_join
     in
     [%ldebug "Joined ctx:\n" ^ eval_ctx_to_string joined_ctx];
+    let ctx0_aids = env_get_abs_ids ctx0.env in
+    [%ldebug "ctx0_aids:\n" ^ AbsId.Set.to_string None ctx0_aids];
+    let fixed_ids = { fixed_ids with aids = ctx0_aids } in
 
-    (* We need to update the abstraction continuations in the joined context,
+    (* We need to update the fresh abstraction continuations in the joined context,
        to reflect the fact that they should be introduced by the branching
        expression *)
     let joined_ctx =
       Contexts.ctx_map_abs
         (fun abs ->
-          if AbsId.Set.mem abs.abs_id fixed_ids.aids then abs
+          if AbsId.Set.mem abs.abs_id ctx0_aids then abs
           else
             (* The abstraction is fresh and is thus introduced by the join:
-             we need to update its continuation *)
+                we need to update its continuation *)
             InterpreterAbs.add_abs_cont_to_abs span joined_ctx abs
               (EJoin abs.abs_id))
         joined_ctx
@@ -1224,8 +1227,7 @@ and eval_switch_with_join (config : config) (span : Meta.span)
       List.filter_map
         (fun (e : env_elem) ->
           match e with
-          | EAbs abs when not (AbsId.Set.mem abs.abs_id fixed_ids.aids) ->
-              Some abs
+          | EAbs abs when not (AbsId.Set.mem abs.abs_id ctx0_aids) -> Some abs
           | _ -> None)
         joined_ctx.env
     in

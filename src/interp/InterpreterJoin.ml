@@ -170,7 +170,7 @@ let compute_ctx_fresh_ordered_symbolic_values (span : Meta.span)
 
   input_svalues
 
-let refresh_non_fixed_abs_ids (_span : Meta.span) (fixed_ids : ids_sets)
+let refresh_non_fixed_abs_ids (_span : Meta.span) (fixed_aids : AbsId.Set.t)
     (ctx : eval_ctx) : eval_ctx * abs_id AbsId.Map.t =
   (* Note that abstraction ids appear both inside of region abstractions
      but also inside of evalues (some evalues refer to region abstractions).
@@ -183,7 +183,7 @@ let refresh_non_fixed_abs_ids (_span : Meta.span) (fixed_ids : ids_sets)
       inherit [_] map_eval_ctx
 
       method! visit_abs_id _ id =
-        if AbsId.Set.mem id fixed_ids.aids then id
+        if AbsId.Set.mem id fixed_aids then id
         else
           match AbsId.Map.find_opt id !fresh_map with
           | Some id -> id
@@ -207,36 +207,48 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
     ^ eval_ctx_to_string ~span:(Some span) ~filter:true ctx1
     ^ "\n"];
 
+  (* Split the environments in two:
+     - we preserve the dummy variables and abstractions which appear in both
+       environments: we will match those pairwise. However, for the abstractions:
+       we only preserve those which are the same in both abstractions.
+     - for the others:
+       - we mark the region abstractions with left/right markers
+       - we lift the dummy values into region abstractions and mark them as well
+  *)
+  let dummy_ids0 = env_get_dummy_var_ids ctx0.env in
+  let abs_ids0 = env_get_abs_ids ctx0.env in
+  let abs0 = env_get_abs ctx0.env in
+  let dummy_ids1 = env_get_dummy_var_ids ctx1.env in
+  let abs_ids1 = env_get_abs_ids ctx1.env in
+  let abs1 = env_get_abs ctx1.env in
+
+  let dummy_ids = DummyVarId.Set.inter dummy_ids0 dummy_ids1 in
+  let abs_ids = AbsId.Set.inter abs_ids0 abs_ids1 in
+
+  (* Check which abs are the same on the left and the right - TODO: generalize
+     the join of abstractions. *)
+  let abs_ids =
+    AbsId.Set.filter
+      (fun aid ->
+        let a0 = AbsId.Map.find aid abs0 in
+        let a1 = AbsId.Map.find aid abs1 in
+        a0 = a1)
+      abs_ids
+  in
+
   (* Refresh the non fixed abstraction ids.
 
-     We need to refresh the non-fixed abstraction ids in one of the two contexts,
+     We need to refresh the non-fixed abstraction ids (the ones which do appear,
+     while being equal, in both environments) in one of the two contexts,
      because otherwise the join might have twice an abstraction with the same id,
      which is a problem.
 
      TODO: make the join more general.
   *)
-  let ctx1, refreshed_aids = refresh_non_fixed_abs_ids span fixed_ids ctx1 in
+  let ctx1, refreshed_aids = refresh_non_fixed_abs_ids span abs_ids ctx1 in
   [%ltrace
     "After refreshing the non-fixed abstraction ids of ctx1:\n"
     ^ eval_ctx_to_string ~span:(Some span) ~filter:true ctx1];
-
-  let env0 = List.rev ctx0.env in
-  let env1 = List.rev ctx1.env in
-
-  (* Split the environments in two:
-     - we preserve the dummy variables and abstractions which appear in both
-       environments: we will match those pairwise
-     - for the others:
-       - we mark the region abstractions with left/right markers
-       - we lift the dummy values into region abstractions and mark them as well
-  *)
-  let dummy_ids0 = env_get_dummy_var_ids env0 in
-  let abs_ids0 = env_get_abs_ids env0 in
-  let dummy_ids1 = env_get_dummy_var_ids env1 in
-  let abs_ids1 = env_get_abs_ids env1 in
-
-  let dummy_ids = DummyVarId.Set.inter dummy_ids0 dummy_ids1 in
-  let abs_ids = AbsId.Set.inter abs_ids0 abs_ids1 in
 
   let partition (env : env) : env * env =
     List.partition
@@ -249,8 +261,8 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
         | EFrame -> true)
       env
   in
-  let env0, env0_suffix = partition env0 in
-  let env1, env1_suffix = partition env1 in
+  let env0, env0_suffix = partition (List.rev ctx0.env) in
+  let env1, env1_suffix = partition (List.rev ctx1.env) in
   [%ldebug
     "\n\n- env0:\n"
     ^ eval_ctx_to_string ~span:(Some span) ~filter:false

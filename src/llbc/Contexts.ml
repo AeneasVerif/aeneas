@@ -614,3 +614,12 @@ let env_get_abs_ids (env : env) : AbsId.Set.t =
          | EAbs abs -> Some abs.abs_id
          | _ -> None)
        env)
+
+let env_get_abs (env : env) : abs AbsId.Map.t =
+  AbsId.Map.of_list
+    (List.filter_map
+       (fun (e : env_elem) ->
+         match e with
+         | EAbs abs -> Some (abs.abs_id, abs)
+         | _ -> None)
+       env)
