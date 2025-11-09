@@ -260,7 +260,7 @@ module Values = struct
         ^ ")"
         |> add_proj_marker pm
     | ASharedLoan (pm, lid, v, av) ->
-        "@shared_loan(@" ^ BorrowId.to_string lid ^ ", "
+        "shared_loan@" ^ BorrowId.to_string lid ^ "("
         ^ tvalue_to_string ~span env v
         ^ ", "
         ^ tavalue_to_string ~span ~with_ended env av
