@@ -9,7 +9,7 @@ Local Open Scope Primitives_scope.
 Module DefaultedMethod.
 
 (** Trait declaration: [core::cmp::PartialEq]
-    Source: '/rustc/library/core/src/cmp.rs', lines 252:0-252:59
+    Source: '/rustc/library/core/src/cmp.rs', lines 251:0-251:65
     Name pattern: [core::cmp::PartialEq] *)
 Record core_cmp_PartialEq_t (Self : Type) (Rhs : Type)
   := mkcore_cmp_PartialEq_t {
@@ -20,7 +20,7 @@ Arguments mkcore_cmp_PartialEq_t { _ } { _ }.
 Arguments core_cmp_PartialEq_t_eq { _ } { _ } _.
 
 (** Trait declaration: [core::cmp::Eq]
-    Source: '/rustc/library/core/src/cmp.rs', lines 338:0-338:44
+    Source: '/rustc/library/core/src/cmp.rs', lines 338:0-338:58
     Name pattern: [core::cmp::Eq] *)
 Record core_cmp_Eq_t (Self : Type) := mkcore_cmp_Eq_t {
   core_cmp_Eq_tcore_cmp_Eq_t_PartialEqInst : core_cmp_PartialEq_t Self Self;
@@ -39,7 +39,7 @@ Inductive core_cmp_Ordering_t :=
 .
 
 (** Trait declaration: [core::cmp::PartialOrd]
-    Source: '/rustc/library/core/src/cmp.rs', lines 1345:0-1345:77
+    Source: '/rustc/library/core/src/cmp.rs', lines 1354:0-1355:41
     Name pattern: [core::cmp::PartialOrd] *)
 Record core_cmp_PartialOrd_t (Self : Type) (Rhs : Type)
   := mkcore_cmp_PartialOrd_t {
@@ -55,7 +55,7 @@ Arguments core_cmp_PartialOrd_tcore_cmp_PartialOrd_t_PartialEqInst { _ } { _ }
 Arguments core_cmp_PartialOrd_t_partial_cmp { _ } { _ } _.
 
 (** Trait declaration: [core::cmp::Ord]
-    Source: '/rustc/library/core/src/cmp.rs', lines 961:0-961:51
+    Source: '/rustc/library/core/src/cmp.rs', lines 969:0-969:73
     Name pattern: [core::cmp::Ord] *)
 Record core_cmp_Ord_t (Self : Type) := mkcore_cmp_Ord_t {
   core_cmp_Ord_tcore_cmp_Ord_t_EqInst : core_cmp_Eq_t Self;
@@ -72,7 +72,7 @@ Arguments core_cmp_Ord_t_cmp { _ } _.
 Arguments core_cmp_Ord_t_min { _ } _.
 
 (** [core::cmp::Ord::min]:
-    Source: '/rustc/library/core/src/cmp.rs', lines 1052:4-1054:20
+    Source: '/rustc/library/core/src/cmp.rs', lines 1060:4-1062:39
     Name pattern: [core::cmp::Ord::min] *)
 Axiom core_cmp_Ord_min_default :
   forall{Self : Type} (ordInst : core_cmp_Ord_t Self),
@@ -80,24 +80,24 @@ Axiom core_cmp_Ord_min_default :
 .
 
 (** [core::cmp::impls::{core::cmp::PartialEq<i32> for i32}::eq]:
-    Source: '/rustc/library/core/src/cmp.rs', lines 1816:16-1816:50
+    Source: '/rustc/library/core/src/cmp.rs', lines 1865:16-1865:50
     Name pattern: [core::cmp::impls::{core::cmp::PartialEq<i32, i32>}::eq] *)
 Axiom core_cmp_impls_PartialEqI32I32_eq : i32 -> i32 -> result bool.
 
 (** [core::cmp::impls::{core::cmp::PartialOrd<i32> for i32}::partial_cmp]:
-    Source: '/rustc/library/core/src/cmp.rs', lines 1931:16-1931:71
+    Source: '/rustc/library/core/src/cmp.rs', lines 1986:16-1986:71
     Name pattern: [core::cmp::impls::{core::cmp::PartialOrd<i32, i32>}::partial_cmp] *)
 Axiom core_cmp_impls_PartialOrdI32I32_partial_cmp
   : i32 -> i32 -> result (option core_cmp_Ordering_t)
 .
 
 (** [core::cmp::impls::{core::cmp::Ord for i32}::cmp]:
-    Source: '/rustc/library/core/src/cmp.rs', lines 1941:16-1941:55
+    Source: '/rustc/library/core/src/cmp.rs', lines 1997:16-1997:55
     Name pattern: [core::cmp::impls::{core::cmp::Ord<i32>}::cmp] *)
 Axiom core_cmp_impls_OrdI32_cmp : i32 -> i32 -> result core_cmp_Ordering_t.
 
 (** [core::cmp::impls::{core::cmp::Ord for i32}::min]:
-    Source: '/rustc/library/core/src/cmp.rs', lines 1939:12-1939:27
+    Source: '/rustc/library/core/src/cmp.rs', lines 1995:12-1995:33
     Name pattern: [core::cmp::impls::{core::cmp::Ord<i32>}::min] *)
 Axiom core_cmp_impls_OrdI32_min : i32 -> i32 -> result i32.
 
