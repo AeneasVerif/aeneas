@@ -13,9 +13,9 @@ open Contexts
 module Types = Charon.PrintTypes
 module Expressions = Charon.PrintExpressions
 
-let list_to_string ?(sep = " ") (to_string : 'a -> string) (ls : 'a list) :
+let list_to_string ?(sep = "; ") (to_string : 'a -> string) (ls : 'a list) :
     string =
-  "[" ^ String.concat (";" ^ sep) (List.map to_string ls) ^ "]"
+  "[" ^ String.concat sep (List.map to_string ls) ^ "]"
 
 let pair_to_string (to_string0 : 'a -> string) (to_string1 : 'b -> string)
     ((x, y) : 'a * 'b) : string =

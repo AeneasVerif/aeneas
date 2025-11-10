@@ -154,4 +154,4 @@ val ctxs_are_equivalent : Meta.span -> ids_sets -> eval_ctx -> eval_ctx -> bool
     - [fixed_ids]
     - [src_ctx] *)
 val prepare_match_ctx_with_target :
-  config -> Meta.span -> abs_kind -> ids_sets -> eval_ctx -> cm_fun
+  config -> Meta.span -> abs_kind -> eval_ctx -> cm_fun

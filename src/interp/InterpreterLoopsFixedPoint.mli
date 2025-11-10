@@ -82,5 +82,5 @@ val compute_loop_break_context :
   LoopId.id ->
   stl_cm_fun ->
   eval_ctx ->
-  ids_sets ->
+  AbsId.Set.t ->
   (eval_ctx * abs list) option

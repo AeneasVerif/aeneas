@@ -19,8 +19,7 @@ let log = Logging.reduce_collapse_log
     borrows.
 
     TODO: will not be necessary once we destructure the avalues. *)
-let eliminate_shared_loans (span : Meta.span) (fixed_ids : ids_sets)
-    (ctx : eval_ctx) : eval_ctx =
+let eliminate_shared_loans (span : Meta.span) (ctx : eval_ctx) : eval_ctx =
   (* Compute the set of shared borrows *)
   let ids, _ = compute_ctx_ids ctx in
   let shared_borrows = ids.non_unique_shared_borrow_ids in
@@ -42,9 +41,8 @@ let eliminate_shared_loans (span : Meta.span) (fixed_ids : ids_sets)
     end
   in
   let update_abs (abs : abs) : abs =
-    if not (AbsId.Set.mem abs.abs_id fixed_ids.aids) then
-      update_loans#visit_abs () abs
-    else abs
+    (* Only update the non-frozen abstractions *)
+    if not abs.can_end then update_loans#visit_abs () abs else abs
   in
   let ctx = ctx_map_abs update_abs ctx in
 
@@ -286,7 +284,7 @@ exception AbsToMerge of abs_id * abs_id
 
     [sequence]: we save the sequence of merges there, in reverse order (the last
     merges are pushed at the front). *)
-let repeat_iter_borrows_merge (span : Meta.span) (old_ids : ids_sets)
+let repeat_iter_borrows_merge (span : Meta.span) (fixed_abs_ids : AbsId.Set.t)
     (abs_kind : abs_kind) ~(can_end : bool) ~(with_abs_conts : bool)
     (sequence : (abs_id * abs_id * abs_id) list ref option)
     (merge_funs : merge_duplicates_funcs option)
@@ -296,7 +294,7 @@ let repeat_iter_borrows_merge (span : Meta.span) (old_ids : ids_sets)
   (* Compute the information *)
   let ctx =
     let is_fresh_abs_id (id : AbsId.id) : bool =
-      not (AbsId.Set.mem id old_ids.aids)
+      not (AbsId.Set.mem id fixed_abs_ids)
     in
     let explore (abs : abs) = is_fresh_abs_id abs.abs_id in
     let info = compute_abs_borrows_loans_maps span explore ctx ctx.env in
@@ -336,7 +334,8 @@ let repeat_iter_borrows_merge (span : Meta.span) (old_ids : ids_sets)
 
     We do the following:
     - we look for all the *new* dummy values (we use sets of old ids to decide
-      wether a value is new or not) and convert them into abstractions
+      wether a value is new or not) and convert them into abstractions. TODO: we
+      don't do this anymore
     - whenever there is a new abstraction in the context, and some of its
       borrows are associated to loans in another new abstraction, we merge them.
       We also do this with loan/borrow projectors over symbolic values. In
@@ -404,53 +403,14 @@ let repeat_iter_borrows_merge (span : Meta.span) (old_ids : ids_sets)
 let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
     (sequence : (abs_id * abs_id * abs_id) list ref option)
     ~(with_abs_conts : bool) (span : Meta.span) (fresh_abs_kind : abs_kind)
-    (old_ids : ids_sets) (ctx0 : eval_ctx) : eval_ctx =
+    (fixed_abs_ids : AbsId.Set.t) (ctx0 : eval_ctx) : eval_ctx =
   (* Debug *)
-  [%ltrace
-    "- ctx0:\n"
-    ^ eval_ctx_to_string ~span:(Some span) ctx0
-    ^ "\n\n- fixed_ids.aids: "
-    ^ AbsId.Set.to_string None old_ids.aids];
+  [%ltrace "- ctx0:\n" ^ eval_ctx_to_string ~span:(Some span) ctx0];
 
   let with_markers = merge_funs <> None in
   let can_end = true in
-  let is_fresh_did (id : DummyVarId.id) : bool =
-    not (DummyVarId.Set.mem id old_ids.dids)
-  in
 
   let ctx = ctx0 in
-  (* Convert the dummy values to abstractions (note that when we convert
-     values to abstractions, the resulting abstraction should be destructured) *)
-  (* Note that we preserve the order of the dummy values: we replace them with
-     abstractions in place - this makes matching easier *)
-  let env =
-    List.concat
-      (List.map
-         (fun ee ->
-           match ee with
-           | EAbs _ | EFrame | EBinding (BVar _, _) -> [ ee ]
-           | EBinding (BDummy id, v) ->
-               if is_fresh_did id then (
-                 let absl =
-                   convert_value_to_abstractions span fresh_abs_kind ~can_end
-                     ctx v
-                 in
-                 Invariants.opt_type_check_absl span ctx absl;
-                 List.map (fun abs -> EAbs abs) absl)
-               else [ ee ])
-         ctx.env)
-  in
-  let ctx = { ctx with env } in
-  [%ltrace
-    "after converting values to abstractions:" ^ "\n- ctx:\n"
-    ^ eval_ctx_to_string ~span:(Some span) ctx
-    ^ "\n"];
-
-  [%ltrace
-    "after decomposing the shared values in the abstractions:" ^ "\n- ctx:\n"
-    ^ eval_ctx_to_string ~span:(Some span) ctx
-    ^ "\n"];
-
   (*
    * Merge all the mergeable abs.
    *)
@@ -507,7 +467,7 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
 
     (* Iterate over the loans and merge the abstractions *)
     let iter_merge (ctx : eval_ctx) : eval_ctx =
-      repeat_iter_borrows_merge span old_ids fresh_abs_kind ~can_end
+      repeat_iter_borrows_merge span fixed_abs_ids fresh_abs_kind ~can_end
         ~with_abs_conts sequence merge_funs iterate_loans merge_policy ctx
   end in
   (* Instantiate the functor for the concrete borrows and loans *)
@@ -538,7 +498,7 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
 
   (* Reorder the fresh region abstractions - note that we may not have eliminated
      all the markers at this point. *)
-  let ctx = reorder_fresh_abs span true old_ids.aids ctx in
+  let ctx = reorder_fresh_abs span true fixed_abs_ids ctx in
 
   [%ltrace
     "- after reduce and reorder borrows/loans and abstractions:\n"
@@ -551,19 +511,18 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
 (** reduce_ctx can only be called in a context with no markers *)
 let reduce_ctx config (span : Meta.span)
     ?(sequence : (abs_id * abs_id * abs_id) list ref option = None)
-    ~(with_abs_conts : bool) (fresh_abs_kind : abs_kind) (fixed_ids : ids_sets)
-    (ctx : eval_ctx) : eval_ctx =
+    ~(with_abs_conts : bool) (fresh_abs_kind : abs_kind)
+    (fixed_abs_ids : AbsId.Set.t) (ctx : eval_ctx) : eval_ctx =
   (* Simplify the context *)
   let ctx, _ =
-    InterpreterBorrows.simplify_dummy_values_useless_abs config span
-      fixed_ids.aids ctx
+    InterpreterBorrows.simplify_dummy_values_useless_abs config span ctx
   in
   (* Reduce *)
   let ctx =
     reduce_ctx_with_markers None sequence span ~with_abs_conts fresh_abs_kind
-      fixed_ids ctx
+      fixed_abs_ids ctx
   in
-  eliminate_shared_loans span fixed_ids ctx
+  eliminate_shared_loans span ctx
 
 (** Auxiliary function for collapse (see below).
 
@@ -585,19 +544,21 @@ let reduce_ctx config (span : Meta.span)
 let collapse_ctx_collapse (span : Meta.span)
     (sequence : (abs_id * abs_id * abs_id) list ref option)
     (fresh_abs_kind : abs_kind) ~(with_abs_conts : bool)
-    (merge_funs : merge_duplicates_funcs) (old_ids : ids_sets) (ctx : eval_ctx)
-    : eval_ctx =
+    (merge_funs : merge_duplicates_funcs) (ctx : eval_ctx) : eval_ctx =
   (* Debug *)
   [%ltrace
     "\n- initial ctx:\n" ^ eval_ctx_to_string ~span:(Some span) ctx ^ "\n"];
 
   let can_end = true in
+  let ctx0 = ctx in
 
   let invert_proj_marker = function
     | PNone -> [%craise] span "Unreachable"
     | PLeft -> PRight
     | PRight -> PLeft
   in
+
+  let fixed_aids = ctx_get_frozen_abs_set ctx in
 
   (* Merge all the mergeable abs where the same element is present in both abs,
      but with left and right markers respectively.
@@ -708,7 +669,7 @@ let collapse_ctx_collapse (span : Meta.span)
 
     (* Iterate and merge *)
     let iter_merge (ctx : eval_ctx) : eval_ctx =
-      repeat_iter_borrows_merge span old_ids fresh_abs_kind ~can_end
+      repeat_iter_borrows_merge span fixed_aids fresh_abs_kind ~can_end
         ~with_abs_conts sequence (Some merge_funs) iter merge_policy ctx
   end in
   (* Instantiate the functor for concrete loans and borrows *)
@@ -746,7 +707,8 @@ let collapse_ctx_collapse (span : Meta.span)
 
   (* Reorder the fresh region abstractions - note that we may not have eliminated
      all the markers yet *)
-  let ctx = reorder_fresh_abs span true old_ids.aids ctx in
+  let fixed_aids = compute_fixed_abs_ids ctx0 ctx in
+  let ctx = reorder_fresh_abs span true fixed_aids ctx in
 
   [%ltrace
     "- after collapse and reorder borrows/loans:\n"
@@ -811,17 +773,19 @@ let eval_ctx_has_markers (ctx : eval_ctx) : bool =
 let collapse_ctx_aux config (span : Meta.span)
     (sequence : (abs_id * abs_id * abs_id) list ref option)
     (fresh_abs_kind : abs_kind) ~(with_abs_conts : bool)
-    (merge_funs : merge_duplicates_funcs) (old_ids : ids_sets) (ctx0 : eval_ctx)
-    : eval_ctx =
+    (merge_funs : merge_duplicates_funcs) (ctx0 : eval_ctx) : eval_ctx =
   [%ldebug "ctx0:\n" ^ eval_ctx_to_string ctx0];
+  let fixed_aids = ctx_get_frozen_abs_set ctx0 in
+  [%ldebug "fixed_aids: " ^ AbsId.Set.to_string None fixed_aids];
+
   let ctx =
     reduce_ctx_with_markers (Some merge_funs) sequence span ~with_abs_conts
-      fresh_abs_kind old_ids ctx0
+      fresh_abs_kind fixed_aids ctx0
   in
   [%ldebug "ctx after collapse:\n" ^ eval_ctx_to_string ctx];
   let ctx =
     collapse_ctx_collapse span ~with_abs_conts sequence fresh_abs_kind
-      merge_funs old_ids ctx
+      merge_funs ctx
   in
   [%ldebug "ctx after reduce and collapse:\n" ^ eval_ctx_to_string ctx];
 
@@ -830,7 +794,7 @@ let collapse_ctx_aux config (span : Meta.span)
     "ctx after reduce, collapse and eliminate_shared_borrow_markers:\n"
     ^ eval_ctx_to_string ctx];
 
-  let ctx = eliminate_shared_loans span old_ids ctx in
+  let ctx = eliminate_shared_loans span ctx in
   [%ldebug
     "ctx after reduce, collapse and eliminate_shared_loans:\n"
     ^ eval_ctx_to_string ctx];
@@ -840,8 +804,7 @@ let collapse_ctx_aux config (span : Meta.span)
 
   (* One last cleanup *)
   let ctx, _ =
-    InterpreterBorrows.simplify_dummy_values_useless_abs config span
-      old_ids.aids ctx
+    InterpreterBorrows.simplify_dummy_values_useless_abs config span ctx
   in
   ctx
 
@@ -1012,21 +975,21 @@ let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
 
 let collapse_ctx config (span : Meta.span)
     ?(sequence : (abs_id * abs_id * abs_id) list ref option = None)
-    (fresh_abs_kind : abs_kind) (old_ids : ids_sets) ~(with_abs_conts : bool)
-    (ctx : eval_ctx) : eval_ctx =
+    (fresh_abs_kind : abs_kind) ~(with_abs_conts : bool) (ctx : eval_ctx) :
+    eval_ctx =
   [%ldebug "Initial ctx:\n" ^ eval_ctx_to_string ctx];
   let merge_funs =
     mk_collapse_ctx_merge_duplicate_funs span fresh_abs_kind with_abs_conts ctx
   in
   try
     collapse_ctx_aux config span ~with_abs_conts sequence fresh_abs_kind
-      merge_funs old_ids ctx
+      merge_funs ctx
   with ValueMatchFailure _ -> [%internal_error] span
 
 (** Collapse a context following a sequence *)
 let collapse_ctx_following_sequence (span : Meta.span)
     (sequence : (abs_id * abs_id * abs_id) list) (fresh_abs_kind : abs_kind)
-    ~(with_abs_conts : bool) (old_ids : ids_sets) (ctx0 : eval_ctx) : eval_ctx =
+    ~(with_abs_conts : bool) (ctx0 : eval_ctx) : eval_ctx =
   [%ltrace
     "- ctx0:\n" ^ eval_ctx_to_string ctx0 ^ "\n- sequence:\n"
     ^ String.concat "\n"
@@ -1079,14 +1042,60 @@ let collapse_ctx_following_sequence (span : Meta.span)
           [%internal_error] span)
     sequence;
 
-  let ctx = reorder_fresh_abs span true old_ids.aids !ctx in
+  let fixed_aids = compute_fixed_abs_ids ctx0 !ctx in
+  let ctx = reorder_fresh_abs span true fixed_aids !ctx in
 
   ctx
 
 let collapse_ctx_no_markers_following_sequence (span : Meta.span)
     (sequence : (abs_id * abs_id * abs_id) list) (fresh_abs_kind : abs_kind)
-    (old_ids : ids_sets) ~(with_abs_conts : bool) (ctx : eval_ctx) : eval_ctx =
+    ~(with_abs_conts : bool) (ctx : eval_ctx) : eval_ctx =
   try
     collapse_ctx_following_sequence span ~with_abs_conts sequence fresh_abs_kind
-      old_ids ctx
+      ctx
   with ValueMatchFailure _ -> [%internal_error] span
+
+let convert_fresh_dummy_values_to_abstractions (span : Meta.span)
+    (fresh_abs_kind : abs_kind) (fixed_dids : DummyVarId.Set.t)
+    (ctx0 : eval_ctx) : eval_ctx =
+  (* Debug *)
+  [%ltrace
+    "- ctx0:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx0
+    ^ "\n\n- fixed_dids: "
+    ^ DummyVarId.Set.to_string None fixed_dids];
+
+  let can_end = true in
+  let is_fresh_did (id : DummyVarId.id) : bool =
+    not (DummyVarId.Set.mem id fixed_dids)
+  in
+
+  let ctx = ctx0 in
+  (* Convert the dummy values to abstractions (note that when we convert
+     values to abstractions, the resulting abstraction should be destructured) *)
+  (* Note that we preserve the order of the dummy values: we replace them with
+     abstractions in place - this makes matching easier *)
+  let env =
+    List.concat
+      (List.map
+         (fun ee ->
+           match ee with
+           | EAbs _ | EFrame | EBinding (BVar _, _) -> [ ee ]
+           | EBinding (BDummy id, v) ->
+               if is_fresh_did id then (
+                 let absl =
+                   convert_value_to_abstractions span fresh_abs_kind ~can_end
+                     ctx v
+                 in
+                 Invariants.opt_type_check_absl span ctx absl;
+                 List.map (fun abs -> EAbs abs) absl)
+               else [ ee ])
+         ctx.env)
+  in
+  let ctx = { ctx with env } in
+  [%ltrace
+    "after converting values to abstractions:" ^ "\n- ctx:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx
+    ^ "\n"];
+
+  ctx

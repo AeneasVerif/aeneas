@@ -1,6 +1,5 @@
 open Values
 open Contexts
-open InterpreterUtils
 
 (** Merge an abstraction into another abstraction in a context.
 
@@ -41,7 +40,7 @@ val merge_into_first_abstraction :
       order (the last merge is pushed to the front of the list).
     - with_abs_conts
     - fresh abs kind
-    - fixed ids
+    - fixed abstraction ids
     - ctx *)
 val reduce_ctx :
   config ->
@@ -49,7 +48,7 @@ val reduce_ctx :
   ?sequence:(abs_id * abs_id * abs_id) list ref option ->
   with_abs_conts:bool ->
   abs_kind ->
-  ids_sets ->
+  AbsId.Set.t ->
   eval_ctx ->
   eval_ctx
 
@@ -75,7 +74,6 @@ val collapse_ctx :
   Meta.span ->
   ?sequence:(abs_id * abs_id * abs_id) list ref option ->
   abs_kind ->
-  ids_sets ->
   with_abs_conts:bool ->
   eval_ctx ->
   eval_ctx
@@ -97,7 +95,9 @@ val collapse_ctx_no_markers_following_sequence :
   Meta.span ->
   (abs_id * abs_id * abs_id) list ->
   abs_kind ->
-  ids_sets ->
   with_abs_conts:bool ->
   eval_ctx ->
   eval_ctx
+
+val convert_fresh_dummy_values_to_abstractions :
+  Meta.span -> abs_kind -> DummyVarId.Set.t -> eval_ctx -> eval_ctx

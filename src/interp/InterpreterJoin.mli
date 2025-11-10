@@ -1,6 +1,5 @@
 open Values
 open Contexts
-open InterpreterUtils
 open InterpreterJoinCore
 
 (** Compute the list of symbolic values which appear in the 2nd context and not
@@ -79,14 +78,12 @@ val compute_ctx_fresh_ordered_symbolic_values :
     Parameters:
     - [span]
     - [fresh_abs_kind]
-    - [fixed_ids]
     - [with_abs_conts]
     - [ctx0]
     - [ctx1] *)
 val join_ctxs :
   Meta.span ->
   abs_kind ->
-  ids_sets ->
   with_abs_conts:bool ->
   eval_ctx ->
   eval_ctx ->
@@ -104,14 +101,12 @@ val join_ctxs :
     Parameters:
     - [config]
     - [loop_id]
-    - [fixed_ids]
     - [old_ctx]
     - [ctxl] *)
 val join_ctxs_list :
   config ->
   Meta.span ->
   abs_kind ->
-  ids_sets ->
   ?preprocess_first_ctx:bool ->
   with_abs_conts:bool ->
   eval_ctx list ->
@@ -136,7 +131,6 @@ val loop_join_origin_with_continue_ctxs :
   config ->
   Meta.span ->
   loop_id ->
-  ids_sets ->
   eval_ctx ->
   eval_ctx list ->
   (eval_ctx * eval_ctx list) * eval_ctx
@@ -295,22 +289,22 @@ val match_ctx_with_target :
   config ->
   Meta.span ->
   abs_kind ->
+  abs_id list ->
   symbolic_value_id list ->
-  ids_sets ->
   eval_ctx ->
   eval_ctx ->
   (eval_ctx * eval_ctx * tvalue SymbolicValueId.Map.t * abs AbsId.Map.t)
   * (SymbolicAst.expr -> SymbolicAst.expr)
 
 val loop_join_break_ctxs :
-  config -> Meta.span -> loop_id -> ids_sets -> eval_ctx list -> eval_ctx
+  config -> Meta.span -> loop_id -> AbsId.Set.t -> eval_ctx list -> eval_ctx
 
 val loop_match_break_ctx_with_target :
   config ->
   Meta.span ->
   loop_id ->
+  abs_id list ->
   symbolic_value_id list ->
-  ids_sets ->
   eval_ctx ->
   eval_ctx ->
   (eval_ctx * eval_ctx * tvalue SymbolicValueId.Map.t * abs AbsId.Map.t)

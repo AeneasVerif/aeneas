@@ -252,8 +252,7 @@ val reorder_fresh_abs : Meta.span -> bool -> AbsId.Set.t -> eval_ctx -> eval_ctx
     values appearing on the right.
 
     The [proj_marker] must be [PLeft] or [PRight]. *)
-val project_context :
-  Meta.span -> InterpreterUtils.ids_sets -> proj_marker -> eval_ctx -> eval_ctx
+val project_context : Meta.span -> proj_marker -> eval_ctx -> eval_ctx
 
 (** Introduce a continuation expression to a region abstraction.
 

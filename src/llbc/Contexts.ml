@@ -597,6 +597,9 @@ let env_get_dummy_var_ids (env : env) : DummyVarId.Set.t =
          | _ -> None)
        env)
 
+let ctx_get_dummy_var_ids (ctx : eval_ctx) : DummyVarId.Set.t =
+  env_get_dummy_var_ids ctx.env
+
 let env_get_local_ids (env : env) : LocalId.Set.t =
   LocalId.Set.of_list
     (List.filter_map
@@ -615,6 +618,8 @@ let env_get_abs_ids (env : env) : AbsId.Set.t =
          | _ -> None)
        env)
 
+let ctx_get_abs_ids (ctx : eval_ctx) : AbsId.Set.t = env_get_abs_ids ctx.env
+
 let env_get_abs (env : env) : abs AbsId.Map.t =
   AbsId.Map.of_list
     (List.filter_map
@@ -623,3 +628,12 @@ let env_get_abs (env : env) : abs AbsId.Map.t =
          | EAbs abs -> Some (abs.abs_id, abs)
          | _ -> None)
        env)
+
+let ctx_get_abs (ctx : eval_ctx) : abs AbsId.Map.t = env_get_abs ctx.env
+
+let ctx_get_frozen_abs_set (ctx : eval_ctx) : AbsId.Set.t =
+  let abs = ctx_get_abs ctx in
+  AbsId.Set.of_list
+    (List.filter_map
+       (fun abs -> if abs.can_end then None else Some abs.abs_id)
+       (AbsId.Map.values abs))

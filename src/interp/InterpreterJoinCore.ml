@@ -552,17 +552,18 @@ module type MatchJoinState = sig
   val symbolic_to_value : (tvalue * tvalue) SymbolicValueId.Map.t ref
 end
 
-(** Split an environment between the fixed abstractions, values, etc. and the
-    new abstractions, values, etc.
+(** Split an environment between some old abstractions and dummy values and the
+    new abstractions and dummy values.
 
     Returns: (fixed, new abs, new dummies) *)
-let ctx_split_fixed_new (span : Meta.span) (fixed_ids : ids_sets)
-    (ctx : eval_ctx) : env * abs list * tvalue list =
+let ctx_split (span : Meta.span) (old_aids : AbsId.Set.t)
+    (old_dids : DummyVarId.Set.t) (ctx : eval_ctx) :
+    env * abs list * tvalue list =
   let is_fresh_did (id : DummyVarId.id) : bool =
-    not (DummyVarId.Set.mem id fixed_ids.dids)
+    not (DummyVarId.Set.mem id old_dids)
   in
   let is_fresh_abs_id (id : AbsId.id) : bool =
-    not (AbsId.Set.mem id fixed_ids.aids)
+    not (AbsId.Set.mem id old_aids)
   in
   (* Filter the new abstractions and dummy variables (there shouldn't be any new dummy variable
      though) in the target context *)
@@ -747,3 +748,16 @@ let abs_add_marker (span : Meta.span) (ctx : eval_ctx) (pm : proj_marker)
     avalues = List.map (tavalue_add_marker span ctx pm) abs.avalues;
     cont = Option.map (abs_cont_add_marker span ctx pm) abs.cont;
   }
+
+let compute_fixed_abs_ids (ctx0 : eval_ctx) (ctx1 : eval_ctx) : AbsId.Set.t =
+  let aids0 = ctx_get_abs_ids ctx0 in
+  let aids1 = ctx_get_abs_ids ctx1 in
+  let abs0 = ctx_get_abs ctx0 in
+  let abs1 = ctx_get_abs ctx1 in
+  let abs_ids = AbsId.Set.inter aids0 aids1 in
+  AbsId.Set.filter
+    (fun aid ->
+      let a0 = AbsId.Map.find aid abs0 in
+      let a1 = AbsId.Map.find aid abs1 in
+      a0 = a1)
+    abs_ids

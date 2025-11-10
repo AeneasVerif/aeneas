@@ -247,6 +247,7 @@ let loop_abs_reorder_and_add_info (span : Meta.span) (fixed_ids : ids_sets)
   (* Return *)
   fp
 
+(* TODO: remove the output ids_sets *)
 let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
     (loop_id : LoopId.id) (eval_loop_body : stl_cm_fun) (ctx0 : eval_ctx) :
     eval_ctx * ids_sets =
@@ -269,7 +270,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
     ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx
     ^ "\n"];
 
-  (* The fixed ids *)
+  (* The fixed ids - TODO: remove *)
   let fixed_ids, _ = compute_ctx_ids ctx0 in
   let fixed_ids = ref fixed_ids in
 
@@ -324,8 +325,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
     (* Join the context with the context at the loop entry *)
     update_fixed_ids ctxs;
     let (_, _), ctx2 =
-      loop_join_origin_with_continue_ctxs config span loop_id !fixed_ids ctx1
-        ctxs
+      loop_join_origin_with_continue_ctxs config span loop_id ctx1 ctxs
     in
     ctx2
   in
@@ -409,7 +409,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
 
 let compute_loop_break_context (config : config) (span : Meta.span)
     (loop_id : LoopId.id) (eval_loop_body : stl_cm_fun) (fp_ctx : eval_ctx)
-    (fixed_ids : ids_sets) : (eval_ctx * abs list) option =
+    (fixed_aids : AbsId.Set.t) : (eval_ctx * abs list) option =
   [%ltrace
     "Initial fixed-point context:\n"
     ^ eval_ctx_to_string ~span:(Some span) ~filter:false fp_ctx];
@@ -466,18 +466,62 @@ let compute_loop_break_context (config : config) (span : Meta.span)
       None
   | ctxs ->
       (* Join the contexts *)
-      let break_ctx = loop_join_break_ctxs config span loop_id fixed_ids ctxs in
-
+      let break_ctx =
+        loop_join_break_ctxs config span loop_id fixed_aids ctxs
+      in
       (* Debug *)
       [%ltrace
         "after joining break ctxs" ^ "\n\n- ctx0:\n"
         ^ eval_ctx_to_string ~span:(Some span) ~filter:false break_ctx];
 
+      (* Convert the fresh dummy values to region abstractions *)
+      let fixed_dids =
+        let dids0 = ctx_get_dummy_var_ids fp_ctx in
+        let dids1 = ctx_get_dummy_var_ids break_ctx in
+        DummyVarId.Set.inter dids0 dids1
+      in
+      [%ltrace "fixed_dids:\n" ^ DummyVarId.Set.to_string None fixed_dids];
+
+      let break_ctx =
+        InterpreterReduceCollapse.convert_fresh_dummy_values_to_abstractions
+          span (Loop loop_id) fixed_dids break_ctx
+      in
+
+      (* Reduce the context - TODO: generalize so that we don't have to do this *)
+      let break_ctx =
+        InterpreterReduceCollapse.reduce_ctx config span ~with_abs_conts:true
+          (Loop loop_id) fixed_aids break_ctx
+      in
+      [%ltrace
+        "break_ctx after reduce:\n"
+        ^ eval_ctx_to_string ~span:(Some span) break_ctx];
+      (* Sanity check *)
+      if !Config.sanity_checks then Invariants.check_invariants span break_ctx;
+
+      (* Introduce continuation expressions. *)
+      let add_abs_cont_to_abs (abs : abs) (loop_id : loop_id) : abs =
+        InterpreterAbs.add_abs_cont_to_abs span break_ctx abs
+          (ELoop (abs.abs_id, loop_id))
+      in
+      let add_abs_conts ctx =
+        let visitor =
+          object
+            inherit [_] map_eval_ctx
+
+            method! visit_abs _ abs =
+              match abs.kind with
+              | Loop loop_id -> add_abs_cont_to_abs abs loop_id
+              | _ -> abs
+          end
+        in
+        visitor#visit_eval_ctx () ctx
+      in
+      let break_ctx = add_abs_conts break_ctx in
+
       let get_fresh_abs (e : env_elem) : abs option =
         match e with
         | EAbs abs ->
-            if not (AbsId.Set.mem abs.abs_id fixed_ids.aids) then Some abs
-            else None
+            if not (AbsId.Set.mem abs.abs_id fixed_aids) then Some abs else None
         | EBinding _ | EFrame -> None
       in
       (* Pay attention to the fact that the elements are stored in reverse order *)

@@ -1182,23 +1182,17 @@ and eval_switch_with_join (config : config) (span : Meta.span)
         (fun (ctx, res) -> if res = Unit then Some ctx else None)
         ctx_resl
     in
-    let fixed_ids =
-      List.fold_left ids_sets_inter
-        (fst (compute_ctx_ids ctx0))
-        (List.map (fun x -> compute_ctx_ids x |> fst) ctx_to_join)
-    in
     let _, joined_ctx =
       InterpreterJoin.join_ctxs_list config span ~with_abs_conts:true Join
-        fixed_ids ctx_to_join
+        ctx_to_join
     in
     [%ldebug "Joined ctx:\n" ^ eval_ctx_to_string joined_ctx];
     let ctx0_aids = env_get_abs_ids ctx0.env in
     [%ldebug "ctx0_aids:\n" ^ AbsId.Set.to_string None ctx0_aids];
-    let fixed_ids = { fixed_ids with aids = ctx0_aids } in
 
     (* We need to update the fresh abstraction continuations in the joined context,
-       to reflect the fact that they should be introduced by the branching
-       expression *)
+       to reflect the fact that in the symbolic AST they should be introduced by
+       the branching expression (they are bound by the let-binding we introduce) *)
     let joined_ctx =
       Contexts.ctx_map_abs
         (fun abs ->
@@ -1239,8 +1233,8 @@ and eval_switch_with_join (config : config) (span : Meta.span)
     let match_ctx (ctx : eval_ctx) : SA.expr =
       (* Match the contexts with the joined context to determine the output of the branch *)
       let (_, ctx, output_values, output_abs), cf =
-        InterpreterJoin.match_ctx_with_target config span Join output_svalue_ids
-          fixed_ids joined_ctx ctx
+        InterpreterJoin.match_ctx_with_target config span Join output_abs_ids
+          output_svalue_ids joined_ctx ctx
       in
 
       let reorder_output_abs (map : abs AbsId.Map.t) (absl : abs_id list) :

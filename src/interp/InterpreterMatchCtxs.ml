@@ -2358,26 +2358,28 @@ let ctxs_are_equivalent (span : Meta.span) (fixed_ids : ids_sets)
        lookup_shared_value ctx0 ctx1)
 
 let prepare_match_ctx_with_target (config : config) (span : Meta.span)
-    (fresh_abs_kind : abs_kind) (fixed_ids : ids_sets) (src_ctx : eval_ctx) :
-    cm_fun =
+    (fresh_abs_kind : abs_kind) (src_ctx : eval_ctx) : cm_fun =
  fun tgt_ctx ->
   (* Debug *)
   [%ldebug
-    "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
+    "- src_ctx: "
     ^ eval_ctx_to_string ~span:(Some span) src_ctx
     ^ "\n- tgt_ctx: "
     ^ eval_ctx_to_string ~span:(Some span) tgt_ctx];
   (* End the loans which lead to mismatches when joining *)
   let rec reorganize_join_tgt : cm_fun =
    fun tgt_ctx ->
-    (* Collect fixed values in the source and target contexts: end the loans in the
-       source context which don't appear in the target context *)
-    let filt_src_env, _, _ = ctx_split_fixed_new span fixed_ids src_ctx in
-    let filt_tgt_env, _, _ = ctx_split_fixed_new span fixed_ids tgt_ctx in
+    (* We match only the values which appear in both environments *)
+    let dummy_ids0 = env_get_dummy_var_ids src_ctx.env in
+    let dummy_ids1 = env_get_dummy_var_ids tgt_ctx.env in
+    let dummy_ids = DummyVarId.Set.inter dummy_ids0 dummy_ids1 in
+    let abs_ids = compute_fixed_abs_ids src_ctx tgt_ctx in
+
+    let filt_src_env, _, _ = ctx_split span abs_ids dummy_ids src_ctx in
+    let filt_tgt_env, _, _ = ctx_split span abs_ids dummy_ids tgt_ctx in
 
     [%ldebug
-      "reorganize_join_tgt:\n" ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids
-      ^ "\n" ^ "\n- filt_src_ctx: "
+      "reorganize_join_tgt:" ^ "\n- filt_src_ctx: "
       ^ env_to_string span src_ctx filt_src_env
       ^ "\n- filt_tgt_ctx: "
       ^ env_to_string span tgt_ctx filt_tgt_env];
@@ -2447,8 +2449,7 @@ let prepare_match_ctx_with_target (config : config) (span : Meta.span)
       in
       (* No exception was thrown: continue *)
       [%ldebug
-        "reorganize_join_tgt: done with borrows/loans:\n" ^ "\n- fixed_ids: "
-        ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- filt_src_ctx: "
+        "reorganize_join_tgt: done with borrows/loans:" ^ "\n- filt_src_ctx: "
         ^ env_to_string span src_ctx filt_src_env
         ^ "\n- filt_tgt_ctx: "
         ^ env_to_string span tgt_ctx filt_tgt_env];
@@ -2502,8 +2503,8 @@ let prepare_match_ctx_with_target (config : config) (span : Meta.span)
       in
 
       [%ldebug
-        "reorganize_join_tgt: done with borrows/loans and moves:\n"
-        ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
+        "reorganize_join_tgt: done with borrows/loans and moves:"
+        ^ "\n- src_ctx: "
         ^ eval_ctx_to_string ~span:(Some span) src_ctx
         ^ "\n- tgt_ctx: "
         ^ eval_ctx_to_string ~span:(Some span) tgt_ctx];

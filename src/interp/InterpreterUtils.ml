@@ -476,6 +476,22 @@ type ids_sets = {
 }
 [@@deriving show]
 
+let empty_ids_sets : ids_sets =
+  let empty = BorrowId.Set.empty in
+  {
+    aids = AbsId.Set.empty;
+    blids = empty;
+    borrow_ids = empty;
+    unique_borrow_ids = UniqueBorrowIdSet.empty;
+    shared_borrow_ids = SharedBorrowId.Set.empty;
+    non_unique_shared_borrow_ids = BorrowId.Set.empty;
+    shared_loans_to_values = BorrowId.Map.empty;
+    loan_ids = empty;
+    dids = DummyVarId.Set.empty;
+    rids = RegionId.Set.empty;
+    sids = SymbolicValueId.Set.empty;
+  }
+
 let ids_sets_inter (ids0 : ids_sets) (ids1 : ids_sets) : ids_sets =
   let aids = AbsId.Set.inter ids0.aids ids1.aids in
   let blids = BorrowId.Set.inter ids0.blids ids1.blids in
