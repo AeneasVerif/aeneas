@@ -22,7 +22,7 @@ let sum2_loop_decreases (s : slice u32) (s2 : slice u32) (sum1 : u32)
 (** [arrays::zero_slice]: decreases clause
     Source: 'tests/src/arrays.rs', lines 336:4-339:5 *)
 unfold
-let zero_slice_loop_decreases (len : usize) (a : slice u8) (i : usize) : nat =
+let zero_slice_loop_decreases (a : slice u8) (i : usize) (len : usize) : nat =
   admit ()
 
 (** [arrays::iter_mut_slice]: decreases clause
