@@ -968,7 +968,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
 
   (* Project the context to only preserve the right part, which corresponds to the
      target *)
-  let joined_ctx = project_context span PRight joined_ctx in
+  let joined_ctx = project_context span fixed_aids PRight joined_ctx in
   let joined_symbolic_to_tgt_value =
     SymbolicValueId.Map.map (fun (_, x) -> x) join_info.symbolic_to_value
   in

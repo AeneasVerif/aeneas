@@ -2208,8 +2208,8 @@ type proj_ctx = {
   inside_output : bool;  (** Are we inside an abstraction output expression? *)
 }
 
-let project_context (span : Meta.span) (pm : proj_marker) (ctx : eval_ctx) :
-    eval_ctx =
+let project_context (span : Meta.span) (fixed_aids : AbsId.Set.t)
+    (pm : proj_marker) (ctx : eval_ctx) : eval_ctx =
   [%cassert] span (pm = PLeft || pm = PRight) "Invalid input";
   let project_left = pm = PLeft in
 
@@ -2370,7 +2370,7 @@ let project_context (span : Meta.span) (pm : proj_marker) (ctx : eval_ctx) :
   let update_binding (e : env_elem) : env_elem option =
     match e with
     | EAbs abs ->
-        if not abs.can_end then Some e
+        if (not abs.can_end) || AbsId.Set.mem abs.abs_id fixed_aids then Some e
         else
           let keep_value (e : tavalue) : bool = not (is_aignored e.value) in
           let avalues = List.filter keep_value abs.avalues in
