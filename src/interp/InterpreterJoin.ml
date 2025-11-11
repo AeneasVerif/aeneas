@@ -1023,11 +1023,21 @@ let match_ctx_with_target (config : config) (span : Meta.span)
      TODO: we need to make the match more general so that we do not have to do this.
   *)
   let merge_seq = ref [] in
+  let add_borrows_seq = ref [] in
   let joined_ctx_not_projected =
-    collapse_ctx config span ~sequence:(Some merge_seq) ~with_abs_conts:true
+    collapse_ctx config span ~sequence:(Some merge_seq)
+      ~shared_borrows_seq:(Some add_borrows_seq) ~with_abs_conts:true
       fresh_abs_kind joined_ctx
   in
   let merge_seq = List.rev !merge_seq in
+  (* Update the sequence of shared borrows to introduce: we only want to add
+     borrows to the right *)
+  let add_borrows_seq =
+    List.filter_map
+      (fun (abs_id, i, pm, bid, ty) ->
+        if pm = PRight then Some (abs_id, i, PNone, bid, ty) else None)
+      (List.rev !add_borrows_seq)
+  in
   [%ltrace
     "After collapsing the (unprojected) context: joined_ctx_not_projected:\n"
     ^ eval_ctx_to_string joined_ctx_not_projected
@@ -1054,7 +1064,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
 
   (* Apply the sequence of merges to the projected context *)
   let joined_ctx =
-    collapse_ctx_no_markers_following_sequence span merge_seq
+    collapse_ctx_no_markers_following_sequence span merge_seq add_borrows_seq
       ~with_abs_conts:true fresh_abs_kind joined_ctx
   in
   [%ltrace

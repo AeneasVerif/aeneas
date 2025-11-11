@@ -1,4 +1,5 @@
 open Values
+open Types
 open Contexts
 
 (** Merge an abstraction into another abstraction in a context.
@@ -69,6 +70,13 @@ val reduce_ctx :
     - span
     - sequence: used to save the sequence of merged abstractions, in reverse
       order (the last merge is pushed to the front of the list).
+    - the shared borrows we had to introduce in region abstractions to eliminate
+      markers (if we find a marked borrow and its corresponding loan doesn't
+      have a marker, it's safe to remove the marker because it is tantamount to
+      adding a shared borrow in the other environment, which we're allowed to
+      do). The last borrow to add is pushed to the front of the list (the order
+      is important, like with the abstraction merges, because it controls the
+      offsets at which to introduce the borrows).
     - loop id
     - fixed ids
     - with_abs_conts
@@ -77,6 +85,8 @@ val collapse_ctx :
   config ->
   Meta.span ->
   ?sequence:(abs_id * abs_id * abs_id) list ref option ->
+  ?shared_borrows_seq:
+    (abs_id * int * proj_marker * borrow_id * ty) list ref option ->
   abs_kind ->
   with_abs_conts:bool ->
   eval_ctx ->
@@ -98,6 +108,7 @@ val collapse_ctx :
 val collapse_ctx_no_markers_following_sequence :
   Meta.span ->
   (abs_id * abs_id * abs_id) list ->
+  (abs_id * int * proj_marker * borrow_id * ty) list ->
   abs_kind ->
   with_abs_conts:bool ->
   eval_ctx ->

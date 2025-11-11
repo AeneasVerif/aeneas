@@ -1,4 +1,5 @@
 open Values
+open Types
 open Contexts
 open Utils
 open TypesUtils
@@ -52,6 +53,26 @@ let eliminate_shared_loans (span : Meta.span) (ctx : eval_ctx) : eval_ctx =
   (* *)
   ctx
 
+(** Compute the set of shared loans without markers appearing in the context *)
+let get_non_marked_shared_loans (ctx : eval_ctx) : BorrowId.Set.t =
+  let non_marked_loans = ref BorrowId.Set.empty in
+  let collect_loans =
+    object
+      inherit [_] iter_eval_ctx as super
+
+      method! visit_ASharedLoan env pm lid sv child =
+        if pm = PNone then
+          non_marked_loans := BorrowId.Set.add lid !non_marked_loans;
+        super#visit_ASharedLoan env pm lid sv child
+
+      method! visit_VSharedLoan env lid sv =
+        non_marked_loans := BorrowId.Set.add lid !non_marked_loans;
+        super#visit_VSharedLoan env lid sv
+    end
+  in
+  collect_loans#visit_eval_ctx () ctx;
+  !non_marked_loans
+
 (** Attempts to eliminate remaining markers over shared borrows.
 
     We can eliminate a marker over a shared borrow if the corresponding loan in
@@ -70,36 +91,66 @@ let eliminate_shared_loans (span : Meta.span) (ctx : eval_ctx) : eval_ctx =
       abs { SB l } // introduce SB l in the right environment and add it to the abstraction
     ]} *)
 
-let eliminate_shared_borrow_markers (_span : Meta.span) (ctx : eval_ctx) :
-    eval_ctx =
+let eliminate_shared_borrow_markers (span : Meta.span)
+    (shared_borrows_seq :
+      (abs_id * int * proj_marker * borrow_id * ty) list ref option)
+    (ctx : eval_ctx) : eval_ctx =
   (* Compute the set of loans without markers *)
-  let non_marked_loans = ref BorrowId.Set.empty in
-  let collect_loans =
-    object
-      inherit [_] iter_eval_ctx as super
+  let non_marked_loans = get_non_marked_shared_loans ctx in
 
-      method! visit_ASharedLoan env pm lid sv child =
-        if pm = PNone then
-          non_marked_loans := BorrowId.Set.add lid !non_marked_loans;
-        super#visit_ASharedLoan env pm lid sv child
+  match shared_borrows_seq with
+  | None ->
+      let update_borrows =
+        object
+          inherit [_] map_eval_ctx as super
 
-      method! visit_VSharedLoan env lid sv =
-        non_marked_loans := BorrowId.Set.add lid !non_marked_loans;
-        super#visit_VSharedLoan env lid sv
-    end
-  in
-  collect_loans#visit_eval_ctx () ctx;
+          method! visit_ASharedBorrow env pm bid sid =
+            let pm =
+              if BorrowId.Set.mem bid non_marked_loans then PNone else pm
+            in
+            super#visit_ASharedBorrow env pm bid sid
+        end
+      in
+      update_borrows#visit_eval_ctx () ctx
+  | Some shared_borrows ->
+      (* We need to register the borrows out of which we eliminate the markers.
+         For now, we can't register the addition of shared borrows at arbitrary
+         positions. TODO: generalize. *)
+      let update_avalue (offset : int ref) (aid : abs_id) (i : int)
+          (av : tavalue) : tavalue =
+        match av.value with
+        | ABorrow (ASharedBorrow (pm, bid, sid)) ->
+            let pm =
+              if pm <> PNone && BorrowId.Set.mem bid non_marked_loans then (
+                (* Register the fact that we need to introduce a new shared borrow *)
+                let pm' =
+                  match pm with
+                  | PNone -> [%internal_error] span
+                  | PLeft -> PRight
+                  | PRight -> PLeft
+                in
+                let _, ty, _ = ty_get_ref av.ty in
+                shared_borrows :=
+                  (aid, i + !offset, pm', bid, ty) :: !shared_borrows;
+                offset := !offset + 1;
+                PNone)
+              else pm
+            in
+            { av with value = ABorrow (ASharedBorrow (pm, bid, sid)) }
+        | _ -> av
+      in
+      let update_borrows =
+        object
+          inherit [_] map_eval_ctx
 
-  let update_borrows =
-    object
-      inherit [_] map_eval_ctx as super
-
-      method! visit_ASharedBorrow env pm bid sid =
-        let pm = if BorrowId.Set.mem bid !non_marked_loans then PNone else pm in
-        super#visit_ASharedBorrow env pm bid sid
-    end
-  in
-  update_borrows#visit_eval_ctx () ctx
+          method! visit_abs _ abs =
+            {
+              abs with
+              avalues = List.mapi (update_avalue (ref 0) abs.abs_id) abs.avalues;
+            }
+        end
+      in
+      update_borrows#visit_eval_ctx () ctx
 
 (** Utility.
 
@@ -839,6 +890,8 @@ let eval_ctx_has_markers (ctx : eval_ctx) : bool =
     resulting environment. *)
 let collapse_ctx_aux config (span : Meta.span)
     (sequence : (abs_id * abs_id * abs_id) list ref option)
+    (shared_borrows_seq :
+      (abs_id * int * proj_marker * borrow_id * ty) list ref option)
     (fresh_abs_kind : abs_kind) ~(with_abs_conts : bool)
     (merge_funs : merge_duplicates_funcs) (ctx0 : eval_ctx) : eval_ctx =
   [%ldebug "ctx0:\n" ^ eval_ctx_to_string ctx0];
@@ -868,7 +921,7 @@ let collapse_ctx_aux config (span : Meta.span)
   in
   [%ldebug "ctx after reduce and collapse:\n" ^ eval_ctx_to_string ctx];
 
-  let ctx = eliminate_shared_borrow_markers span ctx in
+  let ctx = eliminate_shared_borrow_markers span shared_borrows_seq ctx in
   [%ldebug
     "ctx after reduce, collapse and eliminate_shared_borrow_markers:\n"
     ^ eval_ctx_to_string ctx];
@@ -1054,21 +1107,63 @@ let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
 
 let collapse_ctx config (span : Meta.span)
     ?(sequence : (abs_id * abs_id * abs_id) list ref option = None)
-    (fresh_abs_kind : abs_kind) ~(with_abs_conts : bool) (ctx : eval_ctx) :
-    eval_ctx =
+    ?(shared_borrows_seq :
+        (abs_id * int * proj_marker * borrow_id * ty) list ref option =
+      None) (fresh_abs_kind : abs_kind) ~(with_abs_conts : bool)
+    (ctx : eval_ctx) : eval_ctx =
   [%ldebug "Initial ctx:\n" ^ eval_ctx_to_string ctx];
   let merge_funs =
     mk_collapse_ctx_merge_duplicate_funs span fresh_abs_kind with_abs_conts ctx
   in
   try
-    collapse_ctx_aux config span ~with_abs_conts sequence fresh_abs_kind
-      merge_funs ctx
+    collapse_ctx_aux config span ~with_abs_conts sequence shared_borrows_seq
+      fresh_abs_kind merge_funs ctx
   with ValueMatchFailure _ -> [%internal_error] span
+
+let add_shared_borrows (span : Meta.span)
+    (shared_borrows_seq : (abs_id * int * proj_marker * borrow_id * ty) list)
+    (ctx : eval_ctx) : eval_ctx =
+  let loans = get_non_marked_shared_loans ctx in
+
+  let ctx = ref ctx in
+  let update
+      ((abs_id, i, pm, bid, ty) : abs_id * int * proj_marker * borrow_id * ty) :
+      unit =
+    [%sanity_check] span (BorrowId.Set.mem bid loans);
+    let abs = ctx_lookup_abs !ctx abs_id in
+    let rid = RegionId.Set.choose abs.regions.owned in
+    let r : region = RVar (Free rid) in
+    let rec update_avalues (i : int) (avl : tavalue list) : tavalue list =
+      if i = 0 then (
+        (* TODO: really annoying to have to insert a type here *)
+        [%sanity_check] span (ty_no_regions ty);
+        let nv : tavalue =
+          {
+            value =
+              ABorrow (ASharedBorrow (pm, bid, !ctx.fresh_shared_borrow_id ()));
+            ty = mk_ref_ty r ty RShared;
+          }
+        in
+        nv :: avl)
+      else
+        match avl with
+        | [] -> [%internal_error] span
+        | av :: avl' -> av :: update_avalues (i - 1) avl'
+    in
+    let abs = { abs with avalues = update_avalues i abs.avalues } in
+    let ctx', _ = ctx_subst_abs span !ctx abs.abs_id abs in
+    ctx := ctx'
+  in
+  List.iter update shared_borrows_seq;
+
+  !ctx
 
 (** Collapse a context following a sequence *)
 let collapse_ctx_following_sequence (span : Meta.span)
-    (sequence : (abs_id * abs_id * abs_id) list) (fresh_abs_kind : abs_kind)
-    ~(with_abs_conts : bool) (ctx0 : eval_ctx) : eval_ctx =
+    (sequence : (abs_id * abs_id * abs_id) list)
+    (shared_borrows_seq : (abs_id * int * proj_marker * borrow_id * ty) list)
+    (fresh_abs_kind : abs_kind) ~(with_abs_conts : bool) (ctx0 : eval_ctx) :
+    eval_ctx =
   [%ltrace
     "- ctx0:\n" ^ eval_ctx_to_string ctx0 ^ "\n- sequence:\n"
     ^ String.concat "\n"
@@ -1085,6 +1180,7 @@ let collapse_ctx_following_sequence (span : Meta.span)
     | Some aid -> aid
   in
 
+  (* Apply the sequence of merges *)
   List.iter
     (fun (abs0, abs1, nabs) ->
       (* Substitute - the ids may have changed *)
@@ -1120,16 +1216,34 @@ let collapse_ctx_following_sequence (span : Meta.span)
           (* The abs, after substitution of its id, should be in one of the two environments *)
           [%internal_error] span)
     sequence;
+  let ctx = !ctx in
+  [%ldebug "ctx after applying the merge sequence:\n" ^ eval_ctx_to_string ctx];
 
-  let fixed_aids = compute_fixed_abs_ids ctx0 !ctx in
-  let ctx = reorder_fresh_abs span true fixed_aids !ctx in
+  let fixed_aids = compute_fixed_abs_ids ctx0 ctx in
+  let ctx = reorder_fresh_abs span true fixed_aids ctx in
+  [%ldebug "ctx after reordering the fresh abs:\n" ^ eval_ctx_to_string ctx];
+
+  (* Update the ids used in the sequence of shared borrows *)
+  let shared_borrows_seq =
+    List.map
+      (fun (abs_id, i, pm, bid, ty) ->
+        (AbsId.Map.find abs_id !nabs_map, i, pm, bid, ty))
+      shared_borrows_seq
+  in
+  let ctx = add_shared_borrows span shared_borrows_seq ctx in
+  [%ldebug "ctx after adding the shared borrows:\n" ^ eval_ctx_to_string ctx];
+
+  let ctx = eliminate_shared_loans span ctx in
+  [%ldebug "ctx after eliminating the shared loans:\n" ^ eval_ctx_to_string ctx];
 
   ctx
 
 let collapse_ctx_no_markers_following_sequence (span : Meta.span)
-    (sequence : (abs_id * abs_id * abs_id) list) (fresh_abs_kind : abs_kind)
-    ~(with_abs_conts : bool) (ctx : eval_ctx) : eval_ctx =
+    (sequence : (abs_id * abs_id * abs_id) list)
+    (shared_borrows_seq : (abs_id * int * proj_marker * borrow_id * ty) list)
+    (fresh_abs_kind : abs_kind) ~(with_abs_conts : bool) (ctx : eval_ctx) :
+    eval_ctx =
   try
-    collapse_ctx_following_sequence span ~with_abs_conts sequence fresh_abs_kind
-      ctx
+    collapse_ctx_following_sequence span ~with_abs_conts sequence
+      shared_borrows_seq fresh_abs_kind ctx
   with ValueMatchFailure _ -> [%internal_error] span
