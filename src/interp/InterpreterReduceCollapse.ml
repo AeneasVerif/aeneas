@@ -82,6 +82,10 @@ let eliminate_shared_borrow_markers (_span : Meta.span) (ctx : eval_ctx) :
         if pm = PNone then
           non_marked_loans := BorrowId.Set.add lid !non_marked_loans;
         super#visit_ASharedLoan env pm lid sv child
+
+      method! visit_VSharedLoan env lid sv =
+        non_marked_loans := BorrowId.Set.add lid !non_marked_loans;
+        super#visit_VSharedLoan env lid sv
     end
   in
   collect_loans#visit_eval_ctx () ctx;
