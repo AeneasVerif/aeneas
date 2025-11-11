@@ -719,17 +719,15 @@ def issue400_1_loop
   :=
   if i < 32#i32
   then
-    if cond
-    then
-      do
-      let (a, b) := back y
-      let i1 ← i + 1#i32
-      issue400_1_loop (fun i2 => (i2, b)) true a i1
-    else
-      do
-      let (a, b) := back y
-      let i1 ← i + 1#i32
-      issue400_1_loop (fun i2 => (a, i2)) false b i1
+    do
+    let (y1, back1) ←
+      if cond
+      then let (a, b) := back y
+           ok (a, fun i1 => (i1, b))
+      else let (a, b) := back y
+           ok (b, fun i1 => (a, i1))
+    let i1 ← i + 1#i32
+    issue400_1_loop back1 cond y1 i1
   else ok (back y)
 partial_fixpoint
 
@@ -751,17 +749,14 @@ def issue400_2_loop
   then
     do
     let b ← Slice.index_usize conds i
-    if b
-    then
-      do
-      let (a, b1, c) := back y z
-      let i2 ← i + 1#usize
-      issue400_2_loop (fun i3 i4 => (i3, i4, c)) conds a b1 i2
-    else
-      do
-      let (a, b1, c) := back y z
-      let i2 ← i + 1#usize
-      issue400_2_loop (fun i3 i4 => (a, i3, i4)) conds b1 c i2
+    let (y1, z1, back1) ←
+      if b
+      then let (a, b1, c) := back y z
+           ok (a, b1, fun i2 i3 => (i2, i3, c))
+      else let (a, b1, c) := back y z
+           ok (b1, c, fun i2 i3 => (a, i2, i3))
+    let i2 ← i + 1#usize
+    issue400_2_loop back1 conds y1 z1 i2
   else ok (y, z, back)
 partial_fixpoint
 
