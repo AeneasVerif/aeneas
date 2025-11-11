@@ -187,8 +187,11 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
             (* Do nothing *)
             super#visit_VSharedBorrow env bid sid
         | Some (abs, sv) ->
-            let bid, sid = push_abs_for_shared_value abs sv bid sid in
-            VSharedBorrow (bid, sid)
+            (* Check if the region abstraction is frozen *)
+            if not abs.can_end then
+              let bid, sid = push_abs_for_shared_value abs sv bid sid in
+              VSharedBorrow (bid, sid)
+            else super#visit_VSharedBorrow env bid sid
     end
   in
   let ctx = visitor#visit_eval_ctx () ctx in
