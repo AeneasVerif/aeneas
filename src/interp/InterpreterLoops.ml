@@ -106,10 +106,12 @@ let eval_loop_symbolic_apply_loop (config : config) (span : span)
   (* Compute the end expression, that is the expresion corresponding to the
      end of the function where we call the loop (for now, when calling a loop
      we never get out) *)
+  let fixed_aids = InterpreterJoinCore.compute_fixed_abs_ids init_ctx fp_ctx in
+  let fixed_dids = ctx_get_dummy_var_ids init_ctx in
   let (ctx, tgt_ctx, input_values, input_abs), cc =
     comp cf_prepare
-      (match_ctx_with_target config span (Loop loop_id) fp_input_abs
-         fp_input_svalues fp_ctx ctx)
+      (match_ctx_with_target config span (Loop loop_id) fixed_aids fixed_dids
+         fp_input_abs fp_input_svalues fp_ctx ctx)
   in
 
   [%ltrace "Resulting context:\n- ctx" ^ eval_ctx_to_string ctx];
@@ -122,6 +124,7 @@ let eval_loop_symbolic_apply_loop (config : config) (span : span)
 let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
     (eval_loop_body : stl_cm_fun) (loop_id : LoopId.id) (fp_ctx : eval_ctx)
     (fp_input_abs : AbsId.id list) (fp_input_svalues : SymbolicValueId.id list)
+    (fixed_aids : AbsId.Set.t) (fixed_dids : DummyVarId.Set.t)
     (break_ctx : eval_ctx) (break_input_abs : AbsId.id list)
     (break_input_svalues : SymbolicValueId.id list) : SA.expr =
   [%ldebug "fp_ctx:\n" ^ eval_ctx_to_string fp_ctx];
@@ -164,8 +167,8 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
           ^ "\n\n-tgt ctx (ctx at this break):\n"
           ^ eval_ctx_to_string ~span:(Some span) ctx];
         let (_ctx, tgt_ctx, input_values, input_abs), cc =
-          loop_match_break_ctx_with_target config span loop_id break_input_abs
-            break_input_svalues break_ctx ctx
+          loop_match_break_ctx_with_target config span loop_id fixed_aids
+            fixed_dids break_input_abs break_input_svalues break_ctx ctx
         in
         [%ldebug
           "after matching the break context with the context at a break:\n\
@@ -190,13 +193,16 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
         [%cassert] span (i = 0) "Nested loops are not supported yet";
         [%ltrace
           "about to match the fixed-point context with the context at a \
-           continue:" ^ "\n- src ctx (fixed-point ctx):\n"
+           continue:" ^ "\n- fixed_aids: "
+          ^ AbsId.Set.to_string None fixed_aids
+          ^ "\n- src ctx (fixed-point ctx):\n"
           ^ eval_ctx_to_string ~span:(Some span) fp_ctx
           ^ "\n\n-tgt ctx (ctx at continue):\n"
           ^ eval_ctx_to_string ~span:(Some span) ctx];
+
         let (_ctx, tgt_ctx, input_values, input_abs), cc =
-          match_ctx_with_target config span (Loop loop_id) fp_input_abs
-            fp_input_svalues fp_ctx ctx
+          match_ctx_with_target config span (Loop loop_id) fixed_aids fixed_dids
+            fp_input_abs fp_input_svalues fp_ctx ctx
         in
         let input_values = reorder_input_values input_values fp_input_svalues in
         let input_abs = reorder_input_abs input_abs fp_input_abs in
@@ -246,9 +252,11 @@ let eval_loop_symbolic (config : config) (span : span)
     "fixed point:\n- fp:\n" ^ eval_ctx_to_string ~span:(Some span) fp_ctx];
 
   (* Compute the context at the breaks *)
+  let fixed_aids = InterpreterJoinCore.compute_fixed_abs_ids ctx fp_ctx in
+  let fixed_dids = ctx_get_dummy_var_ids ctx in
   let break_info =
     compute_loop_break_context config span loop_id eval_loop_body fp_ctx
-      fixed_ids.aids
+      fixed_aids fixed_dids
   in
   [%cassert] span
     (Option.is_some break_info)
@@ -301,9 +309,11 @@ let eval_loop_symbolic (config : config) (span : span)
 
   (* Synthesize the loop body *)
   let loop_body =
+    let fixed_aids = InterpreterJoinCore.compute_fixed_abs_ids ctx fp_ctx in
+    let fixed_dids = ctx_get_dummy_var_ids ctx in
     eval_loop_symbolic_synthesize_loop_body config span eval_loop_body loop_id
-      fp_ctx input_abs_ids_list fp_input_svalue_ids break_ctx
-      break_input_abs_ids break_input_svalue_ids
+      fp_ctx input_abs_ids_list fp_input_svalue_ids fixed_aids fixed_dids
+      break_ctx break_input_abs_ids break_input_svalue_ids
   in
 
   [%ltrace

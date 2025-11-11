@@ -23,6 +23,9 @@ val merge_into_first_abstraction :
   abs_id ->
   eval_ctx * abs_id
 
+val convert_fresh_dummy_values_to_abstractions :
+  Meta.span -> abs_kind -> DummyVarId.Set.t -> eval_ctx -> eval_ctx
+
 (** Reduce a context to simplify it, by merging abstractions together for
     instance.
 
@@ -49,6 +52,7 @@ val reduce_ctx :
   with_abs_conts:bool ->
   abs_kind ->
   AbsId.Set.t ->
+  DummyVarId.Set.t ->
   eval_ctx ->
   eval_ctx
 
@@ -98,6 +102,3 @@ val collapse_ctx_no_markers_following_sequence :
   with_abs_conts:bool ->
   eval_ctx ->
   eval_ctx
-
-val convert_fresh_dummy_values_to_abstractions :
-  Meta.span -> abs_kind -> DummyVarId.Set.t -> eval_ctx -> eval_ctx

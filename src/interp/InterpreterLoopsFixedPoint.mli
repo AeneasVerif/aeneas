@@ -83,4 +83,5 @@ val compute_loop_break_context :
   stl_cm_fun ->
   eval_ctx ->
   AbsId.Set.t ->
+  DummyVarId.Set.t ->
   (eval_ctx * abs list) option

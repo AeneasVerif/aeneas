@@ -1227,14 +1227,19 @@ and eval_switch_with_join (config : config) (span : Meta.span)
     in
     let output_abs_ids = List.map (fun (abs : abs) -> abs.abs_id) output_abs in
 
+    let fixed_aids =
+      InterpreterJoinCore.compute_fixed_abs_ids ctx0 joined_ctx
+    in
+    let fixed_dids = Contexts.ctx_get_dummy_var_ids ctx0 in
+
     (* Match every context resulting from evaluating a branch (there should be
        one if no explicit panic was encountered, or 0 it we encountered a panic)
        with the joined context. *)
     let match_ctx (ctx : eval_ctx) : SA.expr =
       (* Match the contexts with the joined context to determine the output of the branch *)
       let (_, ctx, output_values, output_abs), cf =
-        InterpreterJoin.match_ctx_with_target config span Join output_abs_ids
-          output_svalue_ids joined_ctx ctx
+        InterpreterJoin.match_ctx_with_target config span Join fixed_aids
+          fixed_dids output_abs_ids output_svalue_ids joined_ctx ctx
       in
 
       let reorder_output_abs (map : abs AbsId.Map.t) (absl : abs_id list) :

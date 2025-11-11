@@ -271,6 +271,7 @@ val loop_join_origin_with_continue_ctxs :
     - [config]
     - [span]
     - [fresh_abs_kind]
+    - [fixed_abs_ids]
     - [input_svalues]: the list of symbolic values appearing in the source
       context (e.g., the fixed-point context) and which must be instantiated
       during the match (in the case of loops, this is the list of input
@@ -289,6 +290,8 @@ val match_ctx_with_target :
   config ->
   Meta.span ->
   abs_kind ->
+  AbsId.Set.t ->
+  DummyVarId.Set.t ->
   abs_id list ->
   symbolic_value_id list ->
   eval_ctx ->
@@ -297,12 +300,20 @@ val match_ctx_with_target :
   * (SymbolicAst.expr -> SymbolicAst.expr)
 
 val loop_join_break_ctxs :
-  config -> Meta.span -> loop_id -> AbsId.Set.t -> eval_ctx list -> eval_ctx
+  config ->
+  Meta.span ->
+  loop_id ->
+  AbsId.Set.t ->
+  DummyVarId.Set.t ->
+  eval_ctx list ->
+  eval_ctx
 
 val loop_match_break_ctx_with_target :
   config ->
   Meta.span ->
   loop_id ->
+  AbsId.Set.t ->
+  DummyVarId.Set.t ->
   abs_id list ->
   symbolic_value_id list ->
   eval_ctx ->

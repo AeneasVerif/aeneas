@@ -381,6 +381,14 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
          upon reentry *)
       let ctx1 = join_ctxs ctx continue_ctxs in
 
+      (* Reduce the context in order to reach a fixed-point *)
+      let fixed_aids = InterpreterJoinCore.compute_fixed_abs_ids ctx0 ctx1 in
+      let fixed_dids = ctx_get_dummy_var_ids ctx0 in
+      let ctx1 =
+        InterpreterReduceCollapse.reduce_ctx config span ~with_abs_conts:false
+          (Loop loop_id) fixed_aids fixed_dids ctx1
+      in
+
       (* Debug *)
       [%ltrace
         "after joining continue ctxs" ^ "\n\n- ctx0:\n"
@@ -409,7 +417,8 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
 
 let compute_loop_break_context (config : config) (span : Meta.span)
     (loop_id : LoopId.id) (eval_loop_body : stl_cm_fun) (fp_ctx : eval_ctx)
-    (fixed_aids : AbsId.Set.t) : (eval_ctx * abs list) option =
+    (fixed_aids : AbsId.Set.t) (fixed_dids : DummyVarId.Set.t) :
+    (eval_ctx * abs list) option =
   [%ltrace
     "Initial fixed-point context:\n"
     ^ eval_ctx_to_string ~span:(Some span) ~filter:false fp_ctx];
@@ -467,30 +476,17 @@ let compute_loop_break_context (config : config) (span : Meta.span)
   | ctxs ->
       (* Join the contexts *)
       let break_ctx =
-        loop_join_break_ctxs config span loop_id fixed_aids ctxs
+        loop_join_break_ctxs config span loop_id fixed_aids fixed_dids ctxs
       in
       (* Debug *)
       [%ltrace
         "after joining break ctxs" ^ "\n\n- ctx0:\n"
         ^ eval_ctx_to_string ~span:(Some span) ~filter:false break_ctx];
 
-      (* Convert the fresh dummy values to region abstractions *)
-      let fixed_dids =
-        let dids0 = ctx_get_dummy_var_ids fp_ctx in
-        let dids1 = ctx_get_dummy_var_ids break_ctx in
-        DummyVarId.Set.inter dids0 dids1
-      in
-      [%ltrace "fixed_dids:\n" ^ DummyVarId.Set.to_string None fixed_dids];
-
-      let break_ctx =
-        InterpreterReduceCollapse.convert_fresh_dummy_values_to_abstractions
-          span (Loop loop_id) fixed_dids break_ctx
-      in
-
       (* Reduce the context - TODO: generalize so that we don't have to do this *)
       let break_ctx =
         InterpreterReduceCollapse.reduce_ctx config span ~with_abs_conts:true
-          (Loop loop_id) fixed_aids break_ctx
+          (Loop loop_id) fixed_aids fixed_dids break_ctx
       in
       [%ltrace
         "break_ctx after reduce:\n"
@@ -498,7 +494,10 @@ let compute_loop_break_context (config : config) (span : Meta.span)
       (* Sanity check *)
       if !Config.sanity_checks then Invariants.check_invariants span break_ctx;
 
-      (* Introduce continuation expressions. *)
+      (* Reorder the fresh abstractions *)
+      let break_ctx = reorder_fresh_abs span false fixed_aids break_ctx in
+
+      (* Introduce continuation expressions and destructure the region abstractions. *)
       let add_abs_cont_to_abs (abs : abs) (loop_id : loop_id) : abs =
         InterpreterAbs.add_abs_cont_to_abs span break_ctx abs
           (ELoop (abs.abs_id, loop_id))
@@ -510,7 +509,10 @@ let compute_loop_break_context (config : config) (span : Meta.span)
 
             method! visit_abs _ abs =
               match abs.kind with
-              | Loop loop_id -> add_abs_cont_to_abs abs loop_id
+              | Loop loop_id ->
+                  let abs = add_abs_cont_to_abs abs loop_id in
+                  InterpreterBorrows.destructure_abs span abs.kind ~can_end:true
+                    ~destructure_shared_values:true ctx abs
               | _ -> abs
           end
         in

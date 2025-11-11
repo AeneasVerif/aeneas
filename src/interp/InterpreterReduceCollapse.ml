@@ -326,6 +326,51 @@ let repeat_iter_borrows_merge (span : Meta.span) (fixed_abs_ids : AbsId.Set.t)
   in
   explore_merge ctx
 
+let convert_fresh_dummy_values_to_abstractions (span : Meta.span)
+    (fresh_abs_kind : abs_kind) (fixed_dids : DummyVarId.Set.t)
+    (ctx0 : eval_ctx) : eval_ctx =
+  (* Debug *)
+  [%ltrace
+    "- ctx0:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx0
+    ^ "\n\n- fixed_dids: "
+    ^ DummyVarId.Set.to_string None fixed_dids];
+
+  let can_end = true in
+  let is_fresh_did (id : DummyVarId.id) : bool =
+    not (DummyVarId.Set.mem id fixed_dids)
+  in
+
+  let ctx = ctx0 in
+  (* Convert the dummy values to abstractions (note that when we convert
+     values to abstractions, the resulting abstraction should be destructured) *)
+  (* Note that we preserve the order of the dummy values: we replace them with
+     abstractions in place - this makes matching easier *)
+  let env =
+    List.concat
+      (List.map
+         (fun ee ->
+           match ee with
+           | EAbs _ | EFrame | EBinding (BVar _, _) -> [ ee ]
+           | EBinding (BDummy id, v) ->
+               if is_fresh_did id then (
+                 let absl =
+                   convert_value_to_abstractions span fresh_abs_kind ~can_end
+                     ctx v
+                 in
+                 Invariants.opt_type_check_absl span ctx absl;
+                 List.map (fun abs -> EAbs abs) absl)
+               else [ ee ])
+         ctx.env)
+  in
+  let ctx = { ctx with env } in
+  [%ltrace
+    "after converting values to abstractions:" ^ "\n- ctx:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ctx
+    ^ "\n"];
+
+  ctx
+
 (** Reduce an environment.
 
     We do this to simplify an environment, for the purpose of finding a loop
@@ -403,7 +448,8 @@ let repeat_iter_borrows_merge (span : Meta.span) (fixed_abs_ids : AbsId.Set.t)
 let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
     (sequence : (abs_id * abs_id * abs_id) list ref option)
     ~(with_abs_conts : bool) (span : Meta.span) (fresh_abs_kind : abs_kind)
-    (fixed_abs_ids : AbsId.Set.t) (ctx0 : eval_ctx) : eval_ctx =
+    (fixed_abs_ids : AbsId.Set.t) ?(fixed_dids : DummyVarId.Set.t option = None)
+    (ctx0 : eval_ctx) : eval_ctx =
   (* Debug *)
   [%ltrace "- ctx0:\n" ^ eval_ctx_to_string ~span:(Some span) ctx0];
 
@@ -411,6 +457,17 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
   let can_end = true in
 
   let ctx = ctx0 in
+  (* Convert the fresh dummy values to abstractions, if the caller requests so
+     (note that when we convert values to abstractions, the resulting abstraction
+     should be destructured) *)
+  let ctx =
+    match fixed_dids with
+    | None -> ctx
+    | Some fixed_dids ->
+        convert_fresh_dummy_values_to_abstractions span fresh_abs_kind
+          fixed_dids ctx
+  in
+
   (*
    * Merge all the mergeable abs.
    *)
@@ -512,7 +569,8 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
 let reduce_ctx config (span : Meta.span)
     ?(sequence : (abs_id * abs_id * abs_id) list ref option = None)
     ~(with_abs_conts : bool) (fresh_abs_kind : abs_kind)
-    (fixed_abs_ids : AbsId.Set.t) (ctx : eval_ctx) : eval_ctx =
+    (fixed_abs_ids : AbsId.Set.t) (fixed_dids : DummyVarId.Set.t)
+    (ctx : eval_ctx) : eval_ctx =
   (* Simplify the context *)
   let ctx, _ =
     InterpreterBorrows.simplify_dummy_values_useless_abs config span ctx
@@ -520,7 +578,7 @@ let reduce_ctx config (span : Meta.span)
   (* Reduce *)
   let ctx =
     reduce_ctx_with_markers None sequence span ~with_abs_conts fresh_abs_kind
-      fixed_abs_ids ctx
+      fixed_abs_ids ~fixed_dids:(Some fixed_dids) ctx
   in
   eliminate_shared_loans span ctx
 
@@ -1054,48 +1112,3 @@ let collapse_ctx_no_markers_following_sequence (span : Meta.span)
     collapse_ctx_following_sequence span ~with_abs_conts sequence fresh_abs_kind
       ctx
   with ValueMatchFailure _ -> [%internal_error] span
-
-let convert_fresh_dummy_values_to_abstractions (span : Meta.span)
-    (fresh_abs_kind : abs_kind) (fixed_dids : DummyVarId.Set.t)
-    (ctx0 : eval_ctx) : eval_ctx =
-  (* Debug *)
-  [%ltrace
-    "- ctx0:\n"
-    ^ eval_ctx_to_string ~span:(Some span) ctx0
-    ^ "\n\n- fixed_dids: "
-    ^ DummyVarId.Set.to_string None fixed_dids];
-
-  let can_end = true in
-  let is_fresh_did (id : DummyVarId.id) : bool =
-    not (DummyVarId.Set.mem id fixed_dids)
-  in
-
-  let ctx = ctx0 in
-  (* Convert the dummy values to abstractions (note that when we convert
-     values to abstractions, the resulting abstraction should be destructured) *)
-  (* Note that we preserve the order of the dummy values: we replace them with
-     abstractions in place - this makes matching easier *)
-  let env =
-    List.concat
-      (List.map
-         (fun ee ->
-           match ee with
-           | EAbs _ | EFrame | EBinding (BVar _, _) -> [ ee ]
-           | EBinding (BDummy id, v) ->
-               if is_fresh_did id then (
-                 let absl =
-                   convert_value_to_abstractions span fresh_abs_kind ~can_end
-                     ctx v
-                 in
-                 Invariants.opt_type_check_absl span ctx absl;
-                 List.map (fun abs -> EAbs abs) absl)
-               else [ ee ])
-         ctx.env)
-  in
-  let ctx = { ctx with env } in
-  [%ltrace
-    "after converting values to abstractions:" ^ "\n- ctx:\n"
-    ^ eval_ctx_to_string ~span:(Some span) ctx
-    ^ "\n"];
-
-  ctx

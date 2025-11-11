@@ -334,7 +334,7 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
               { ctx0 with env = List.rev env0 }
           ^ "\n\n- env1:\n"
           ^ eval_ctx_to_string ~span:(Some span) ~filter:false
-              { ctx0 with env = List.rev env0 })
+              { ctx1 with env = List.rev env1 })
   in
 
   try
@@ -472,27 +472,6 @@ let join_ctxs_list (config : config) (span : Meta.span)
     [%ltrace
       "after simplify_dummy_values_useless_abs:\n"
       ^ eval_ctx_to_string ~span:(Some span) ctx];
-
-    (*
-    (* Destructure the abstractions introduced in the new context *)
-    let ctx = destructure_new_abs span fresh_abs_kind fixed_ids.aids ctx in
-    [%ltrace "after destructure:\n" ^ eval_ctx_to_string ~span:(Some span) ctx];
-
-    (* Reduce the context we want to add to the join.
-
-       TODO: is this necessary?
-    *)
-    let ctx =
-      reduce_ctx config span ~with_abs_conts fresh_abs_kind fixed_ids ctx
-    in
-    [%ltrace "after reduce:\n" ^ eval_ctx_to_string ~span:(Some span) ctx];
-    (* Sanity check *)
-    if !Config.sanity_checks then Invariants.check_invariants span ctx;
-
-    (* Refresh the fresh abstractions *)
-    let ctx = refresh_abs fixed_ids.aids ctx in
-    (* Sanity check *)
-    if !Config.sanity_checks then Invariants.check_invariants span ctx;*)
     ctx
   in
 
@@ -554,22 +533,6 @@ let join_ctxs_list (config : config) (span : Meta.span)
     (* Sanity check *)
     if !Config.sanity_checks then Invariants.check_invariants span !joined_ctx;
 
-    (* We fix the abstraction ids which appear in both the original joined context
-       and the context after joining ctx (those abstractions were left unchanged, so
-       we don't want to simplify them away during the reduce operation) *)
-    let fixed_aids = compute_fixed_abs_ids ctx0 !joined_ctx in
-
-    (* Reduce again to reach a fixed point - TODO: don't do this here, this function
-       is not used only to compute fixed points anymore *)
-    joined_ctx :=
-      reduce_ctx config span ~with_abs_conts fresh_abs_kind fixed_aids
-        !joined_ctx;
-    [%ltrace
-      "join_one: after last reduce:\n"
-      ^ eval_ctx_to_string ~span:(Some span) !joined_ctx];
-
-    (* Sanity check *)
-    if !Config.sanity_checks then Invariants.check_invariants span !joined_ctx;
     (* Return *)
     ctx1
   in
@@ -590,8 +553,8 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
   ((List.hd ctxl', List.tl ctxl'), joined_ctx)
 
 let loop_join_break_ctxs (config : config) (span : Meta.span)
-    (loop_id : LoopId.id) (old_aids : AbsId.Set.t) (ctxl : eval_ctx list) :
-    eval_ctx =
+    (loop_id : LoopId.id) (fixed_aids : AbsId.Set.t)
+    (fixed_dids : DummyVarId.Set.t) (ctxl : eval_ctx list) : eval_ctx =
   (* Simplify the contexts *)
   let with_abs_conts = false in
   let fresh_abs_kind : abs_kind = Loop loop_id in
@@ -617,7 +580,7 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
       let update (e : env_elem) : env_elem =
         match (e : env_elem) with
         | EAbs abs ->
-            if AbsId.Set.mem abs.abs_id old_aids then e
+            if AbsId.Set.mem abs.abs_id fixed_aids then e
             else EAbs { abs with cont = None; kind = Loop loop_id }
         | EBinding _ | EFrame -> e
       in
@@ -665,7 +628,6 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
           "join_one: after join:\n" ^ eval_ctx_to_string ~span:(Some span) ctx1];
 
         (* Collapse to eliminate the markers *)
-        let joined_ctx0 = !joined_ctx in
         joined_ctx :=
           collapse_ctx config span fresh_abs_kind ~with_abs_conts !joined_ctx;
         [%ltrace
@@ -675,15 +637,10 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
         if !Config.sanity_checks then
           Invariants.check_invariants span !joined_ctx;
 
-        (* We fix the abstraction ids which appear in both the original joined context
-           and the context after joining ctx (those abstractions were left unchanged, so
-           we don't want to simplify them away during the reduce operation) *)
-        let fixed_aids = compute_fixed_abs_ids joined_ctx0 !joined_ctx in
-
-        (* Reduce again to reach a fixed point *)
+        (* Reduce (it helps matching afterwards) *)
         joined_ctx :=
           reduce_ctx config span ~with_abs_conts fresh_abs_kind fixed_aids
-            !joined_ctx;
+            fixed_dids !joined_ctx;
         [%ltrace
           "join_one: after last reduce:\n"
           ^ eval_ctx_to_string ~span:(Some span) !joined_ctx];
@@ -843,7 +800,8 @@ let destructure_shared_loans (span : Meta.span) (fixed_aids : AbsId.Set.t) :
   (ctx, cc)
 
 let match_ctx_with_target (config : config) (span : Meta.span)
-    (fresh_abs_kind : abs_kind) (input_abs : AbsId.id list)
+    (fresh_abs_kind : abs_kind) (fixed_aids : AbsId.Set.t)
+    (fixed_dids : DummyVarId.Set.t) (input_abs : AbsId.id list)
     (input_svalues : SymbolicValueId.id list) (src_ctx : eval_ctx)
     (tgt_ctx : eval_ctx) :
     (eval_ctx * eval_ctx * tvalue SymbolicValueId.Map.t * abs AbsId.Map.t)
@@ -878,8 +836,6 @@ let match_ctx_with_target (config : config) (span : Meta.span)
     "- tgt_ctx after simplify_dummy_values_useless_abs:\n"
     ^ eval_ctx_to_string tgt_ctx];
 
-  let fixed_aids = compute_fixed_abs_ids src_ctx tgt_ctx in
-
   (* Removed the ended shared loans and destructure the shared loans.
      We destructure the shared loans in the abstractions which appear in
      [tgt_ctx] but not [src_ctx]. TODO: generalize. *)
@@ -889,6 +845,13 @@ let match_ctx_with_target (config : config) (span : Meta.span)
   [%ltrace
     "- tgt_ctx after simplify_ended_shared_loans:\n"
     ^ eval_ctx_to_string tgt_ctx];
+
+  (* Reduce the context - TODO: generalize the join so that we don't need to do this *)
+  let tgt_ctx =
+    reduce_ctx config span ~with_abs_conts:true fresh_abs_kind fixed_aids
+      fixed_dids tgt_ctx
+  in
+  [%ltrace "- tgt_ctx after reduce_ctx:\n" ^ eval_ctx_to_string tgt_ctx];
 
   (* Join the source context with the target context *)
   let joined_ctx, join_info =
@@ -969,11 +932,13 @@ let match_ctx_with_target (config : config) (span : Meta.span)
     "After collapsing the context: joined_ctx:\n"
     ^ eval_ctx_to_string joined_ctx];
 
-  (* Reorder the fresh region abstractions in the joined context -
+  (* Reorder the region abstractions in the target context -
      TODO: generalize the match so that we don't have to do this *)
   let joined_ctx = reorder_fresh_abs span true fixed_aids joined_ctx in
   [%ltrace
-    "After reorder_fresh_abs: joined_ctx:\n"
+    "After reorder_fresh_abs (fixed_aids: "
+    ^ AbsId.Set.to_string None fixed_aids
+    ^ "): joined_ctx:\n"
     ^ eval_ctx_to_string ~span:(Some span) joined_ctx];
 
   [%ltrace
@@ -1101,15 +1066,16 @@ let match_ctx_with_target (config : config) (span : Meta.span)
   ((src_ctx, tgt_ctx, input_values, input_abs), cc)
 
 let loop_match_break_ctx_with_target (config : config) (span : Meta.span)
-    (loop_id : LoopId.id) (fp_input_abs : abs_id list)
+    (loop_id : LoopId.id) (fixed_aids : AbsId.Set.t)
+    (fixed_dids : DummyVarId.Set.t) (fp_input_abs : abs_id list)
     (fp_input_svalues : SymbolicValueId.id list) (src_ctx : eval_ctx)
     (tgt_ctx : eval_ctx) :
     (eval_ctx * eval_ctx * tvalue SymbolicValueId.Map.t * abs AbsId.Map.t)
     * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Debug *)
   [%ltrace
-    "- src_ctx: " ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: "
+    "- src_ctx:\n" ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx:\n"
     ^ eval_ctx_to_string tgt_ctx];
 
-  match_ctx_with_target config span (Loop loop_id) fp_input_abs fp_input_svalues
-    src_ctx tgt_ctx
+  match_ctx_with_target config span (Loop loop_id) fixed_aids fixed_dids
+    fp_input_abs fp_input_svalues src_ctx tgt_ctx
