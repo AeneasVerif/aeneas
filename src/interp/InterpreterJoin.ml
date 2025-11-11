@@ -274,11 +274,61 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
   end in
   let module JM = MakeJoinMatcher (S) in
   let module M = MakeMatcher (JM) in
-  (* Rem.: this function raises exceptions *)
+  (* Small helper: lookup a binding satisfying some predicate and remove it
+     from the enviromnent *)
+  let rec pop_binding : 'a. (env_elem -> 'a option) -> env -> 'a * env =
+   fun f env ->
+    match env with
+    | [] -> [%internal_error] span
+    | b :: env' -> (
+        match f b with
+        | None ->
+            let out, env' = pop_binding f env' in
+            (out, b :: env')
+        | Some out -> (out, env'))
+  in
+
+  (* Remove a variable from an environment and return the corresponding value *)
+  let rec pop_var (v : real_var_binder) (env : env) : tvalue * env =
+    pop_binding
+      (fun e ->
+        match e with
+        | EBinding (BVar v', value) when v' = v -> Some value
+        | _ -> None)
+      env
+  in
+
+  (* Remove a dummy variable from an environment and return the corresponding value *)
+  let rec pop_dummy (v : dummy_var_id) (env : env) : tvalue * env =
+    pop_binding
+      (fun e ->
+        match e with
+        | EBinding (BDummy v', value) when v' = v -> Some value
+        | _ -> None)
+      env
+  in
+
+  (* Remove an abs from an environment *)
+  let rec pop_abs (abs_id : abs_id) (env : env) : abs * env =
+    pop_binding
+      (fun e ->
+        match e with
+        | EAbs abs when abs.abs_id = abs_id -> Some abs
+        | _ -> None)
+      env
+  in
+
+  (* Rem.: this function raises exceptions.
+
+     We match on the first environment, then pop the corresponding binding
+     from the second environment.
+  *)
   let rec join_prefixes (env0 : env) (env1 : env) : env =
-    match (env0, env1) with
-    | ( (EBinding (BDummy b0, v0) as var0) :: env0',
-        (EBinding (BDummy b1, v1) as var1) :: env1' ) ->
+    match env0 with
+    | (EBinding (BDummy b0, v0) as var0) :: env0' ->
+        let v1, env1' = pop_dummy b0 env1 in
+        let var1 = EBinding (BDummy b0, v1) in
+
         (* Debug *)
         [%ldebug
           "join_prefixes: BDummys:\n- value0:\n"
@@ -288,14 +338,15 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
           ^ "\n"];
 
         (* Match the values *)
-        [%sanity_check] span (b0 = b1);
         let b = b0 in
         let v = M.match_tvalues ctx0 ctx1 v0 v1 in
         let var = EBinding (BDummy b, v) in
         (* Continue *)
         var :: join_prefixes env0' env1'
-    | ( (EBinding (BVar b0, v0) as var0) :: env0',
-        (EBinding (BVar b1, v1) as var1) :: env1' ) ->
+    | (EBinding (BVar b0, v0) as var0) :: env0' ->
+        let v1, env1' = pop_var b0 env1 in
+        let var1 = EBinding (BVar b0, v1) in
+
         (* Debug *)
         [%ldebug
           "join_prefixes: BVars:\n- value0:\n"
@@ -306,14 +357,15 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
 
         (* Variable bindings *must* be in the prefix and consequently their
            ids must be the same *)
-        [%sanity_check] span (b0 = b1);
         (* Match the values *)
         let b = b0 in
         let v = M.match_tvalues ctx0 ctx1 v0 v1 in
         let var = EBinding (BVar b, v) in
         (* Continue *)
         var :: join_prefixes env0' env1'
-    | (EAbs abs0 as abs) :: env0', EAbs abs1 :: env1' ->
+    | (EAbs abs0 as abs) :: env0' ->
+        let abs1, env1' = pop_abs abs0.abs_id env1 in
+
         (* Debug *)
         [%ldebug
           "join_prefixes:\n- abs0:\n"
@@ -326,15 +378,19 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
         [%sanity_check] span (abs0 = abs1);
         (* Continue *)
         abs :: join_prefixes env0' env1'
-    | [], [] -> []
-    | _ ->
-        [%craise] span
-          ("Internal error: please file an issue.\nCould not match:\n- env0:\n"
-          ^ eval_ctx_to_string ~span:(Some span) ~filter:false
-              { ctx0 with env = List.rev env0 }
-          ^ "\n\n- env1:\n"
-          ^ eval_ctx_to_string ~span:(Some span) ~filter:false
-              { ctx1 with env = List.rev env1 })
+    | [] ->
+        if env1 = [] then []
+        else
+          [%craise] span
+            ("Internal error: please file an issue.\n\
+              Could not match:\n\
+              - env0:\n"
+            ^ eval_ctx_to_string ~span:(Some span) ~filter:false
+                { ctx0 with env = List.rev env0 }
+            ^ "\n\n- env1:\n"
+            ^ eval_ctx_to_string ~span:(Some span) ~filter:false
+                { ctx1 with env = List.rev env1 })
+    | _ -> [%internal_error] span
   in
 
   try
