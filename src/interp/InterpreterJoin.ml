@@ -220,10 +220,7 @@ let prepare_ashared_loans_no_synth (span : Meta.span) (loop_id : LoopId.id)
     ~(with_abs_conts : bool) (ctx : eval_ctx) : eval_ctx =
   fst (prepare_ashared_loans span (Some loop_id) ~with_abs_conts ctx)
 
-(* TODO: this could be drastically simplified.
-
-   TODO: the output set of fresh values is probably useless.
-*)
+(* TODO: this could be drastically simplified. *)
 let compute_ctx_fresh_ordered_symbolic_values (span : Meta.span)
     ~(only_modified_svalues : bool) (ctx : eval_ctx) (fp_ctx : eval_ctx) :
     symbolic_value list =
@@ -231,7 +228,7 @@ let compute_ctx_fresh_ordered_symbolic_values (span : Meta.span)
   let fp_ids, fp_ids_maps = compute_ctx_ids fp_ctx in
   let fresh_sids = SymbolicValueId.Set.diff fp_ids.sids old_ids.sids in
 
-  (* Compute the set of symbolic values which appear inside *fixed* abstractions.
+  (* Compute the set of symbolic values which appear inside *frozen* abstractions.
      There are two kinds of values:
      - shared symbolic values (appearing in shared loans): because we introduce
        fresh abstractions and reborrows with {!prepare_ashared_loans}, those
@@ -249,7 +246,7 @@ let compute_ctx_fresh_ordered_symbolic_values (span : Meta.span)
         (fun (ee : env_elem) ->
           match ee with
           | EBinding _ | EFrame -> false
-          | EAbs abs -> AbsId.Set.mem abs.abs_id old_ids.aids)
+          | EAbs abs -> not abs.can_end)
         ctx.env
     in
 

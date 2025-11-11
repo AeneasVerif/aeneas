@@ -740,7 +740,7 @@ def issue400_1 (a : I32) (b : I32) (cond : Bool) : Result (I32 × I32) :=
 /- [loops::issue400_2]: loop 0:
    Source: 'tests/src/loops.rs', lines 455:4-464:5 -/
 def issue400_2_loop
-  (conds : Slice Bool) (back : I32 → I32 → (I32 × I32 × I32)) (y : I32)
+  (back : I32 → I32 → (I32 × I32 × I32)) (conds : Slice Bool) (y : I32)
   (z : I32) (i : Usize) :
   Result (I32 × I32 × (I32 → I32 → (I32 × I32 × I32)))
   :=
@@ -756,7 +756,7 @@ def issue400_2_loop
       else let (a, b1, c) := back y z
            ok (b1, c, fun i2 i3 => (a, i2, i3))
     let i2 ← i + 1#usize
-    issue400_2_loop conds back1 y1 z1 i2
+    issue400_2_loop back1 conds y1 z1 i2
   else ok (y, z, back)
 partial_fixpoint
 
@@ -768,7 +768,7 @@ def issue400_2
   :=
   do
   let (y, z, back) ←
-    issue400_2_loop conds (fun i i1 => (i, i1, c)) a b 0#usize
+    issue400_2_loop (fun i i1 => (i, i1, c)) conds a b 0#usize
   let y1 ← y + 3#i32
   let z1 ← z + 5#i32
   ok (back y1 z1)

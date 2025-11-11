@@ -100,14 +100,14 @@ def read_global_loop (b : Bool) (n_rows : Usize) : Result Unit :=
 
 /- [loops_issues::mut_loop_len]: loop 0:
    Source: 'tests/src/loops-issues.rs', lines 55:10-55:11 -/
-def mut_loop_len_loop (buf : Array U8 4#usize) (b : Bool) : Result Unit :=
+def mut_loop_len_loop (b : Bool) (buf : Array U8 4#usize) : Result Unit :=
   if b
   then
     do
     let s ← (↑(Array.to_slice buf) : Result (Slice U8))
     let i := Slice.len s
     if 0#usize <= i
-    then mut_loop_len_loop buf true
+    then mut_loop_len_loop true buf
     else fail panic
   else ok ()
 partial_fixpoint
@@ -117,7 +117,7 @@ partial_fixpoint
 def mut_loop_len (i : U32) (b : Bool) : Result U32 :=
   do
   let buf := Array.repeat 4#usize 0#u8
-  mut_loop_len_loop buf b
+  mut_loop_len_loop b buf
   ok i
 
 /- [loops_issues::test]: loop 0:
@@ -125,14 +125,12 @@ def mut_loop_len (i : U32) (b : Bool) : Result U32 :=
 def test_loop (b0 : Bool) (b1 : Bool) (buf : Array U8 4#usize) : Result Unit :=
   if b0
   then
-    if b1
-    then do
-         let buf1 ← write buf
-         read buf1
-         test_loop true true buf1
-    else do
-         read buf
-         test_loop true false buf
+    do
+    let buf1 ← if b1
+                 then write buf
+                 else ok buf
+    read buf1
+    test_loop true b1 buf1
   else ok ()
 partial_fixpoint
 

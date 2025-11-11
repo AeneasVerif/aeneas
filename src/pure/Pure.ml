@@ -1193,8 +1193,8 @@ and loop = {
           the output abstractions. The output values come first in the list of
           outputs. *)
   inputs : texpr list;
-      (** The inputs of the loop.loop receives as inputs, and which come from
-          the input region abstractions.
+      (** The inputs of the loop, coming from the input symbolic values and the
+          input abstractions.
 
           Those should be variables bound in the [loop_body]. *)
   num_input_conts : int;

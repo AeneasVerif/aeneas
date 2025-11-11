@@ -4472,17 +4472,35 @@ let compute_loop_input_output_rel (span : Meta.span) (ctx : ctx) (loop : loop) :
                   ^ Print.list_to_string ~sep:"\n" (texpr_to_string ctx) args];
 
                 if variant_id = loop_result_break_id then (
+                  [%sanity_check] span (List.length outputs = List.length args);
                   (* Update the output map *)
                   List.iter
                     (fun (l, arg) -> l := arg :: !l)
                     (List.combine outputs args);
                   (* Also visit the arguments: we want to register the used variables *)
                   List.iter (self#visit_texpr env) args)
-                else if variant_id = loop_result_continue_id then
-                  (* Update the input map *)
-                  List.iter
-                    (fun (l, arg) -> l := arg :: !l)
-                    (List.combine inputs args)
+                else if variant_id = loop_result_continue_id then (
+                  [%ldebug
+                    "- inputs:\n"
+                    ^ Print.list_to_string ~sep:"\n"
+                        (fun el ->
+                          Print.list_to_string (texpr_to_string ctx) !el)
+                        inputs
+                    ^ "\n\n- args:\n"
+                    ^ Print.list_to_string ~sep:"\n" (texpr_to_string ctx) args];
+
+                  (* There is a special case if the loop has a single input of type
+                     unit *)
+                  match loop.inputs with
+                  | [ input ] when input.ty = mk_unit_ty ->
+                      List.iter (fun l -> l := mk_unit_texpr :: !l) inputs
+                  | _ ->
+                      [%sanity_check] span
+                        (List.length inputs = List.length args);
+                      (* Update the input map *)
+                      List.iter
+                        (fun (l, arg) -> l := arg :: !l)
+                        (List.combine inputs args))
                 else (
                   [%sanity_check] span (variant_id = loop_result_fail_id);
                   (* Also visit the arguments: we want to register the used variables *)
@@ -4575,9 +4593,14 @@ let filter_loop_useless_inputs_outputs (ctx : ctx)
             | Some ({ variant_id; args = outputs; _ }, rebind) ->
                 let filter keep el =
                   let el =
-                    List.filter_map
-                      (fun (keep, x) -> if keep then Some x else None)
-                      (List.combine keep el)
+                    (* There is a special case if the loop has a single input of type unit *)
+                    match body.inputs with
+                    | [ pat ] when pat.ty = mk_unit_ty -> []
+                    | _ ->
+                        [%sanity_check] span (List.length keep = List.length el);
+                        List.filter_map
+                          (fun (keep, x) -> if keep then Some x else None)
+                          (List.combine keep el)
                   in
                   mk_simpl_tuple_texpr span el
                 in
@@ -4697,38 +4720,53 @@ let filter_loop_useless_inputs_outputs (ctx : ctx)
                 output_vars
             in
             let input_vars =
-              List.map ([%add_loc] as_pat_open span) body.inputs
+              List.map
+                (fun (p : tpat) ->
+                  match p.pat with
+                  | POpen (v, _) -> Some v
+                  | PIgnored -> None
+                  | _ -> [%internal_error] span)
+                body.inputs
             in
-            let input_vars = List.map fst input_vars in
             let input_var_ids =
-              List.map (fun (fv : fvar) -> fv.id) input_vars
+              List.map (Option.map (fun (fv : fvar) -> fv.id)) input_vars
             in
 
             (* First, the inputs *)
             let non_constant_inputs =
               List.map
-                (fun ((fv, el) : fvar * texpr list) ->
+                (fun ((fv, el) : fvar option * texpr list) ->
                   (* Check if all the expressions are actually exactly the
                      input expression *)
-                  not
-                    (List.for_all
-                       (fun (e : texpr) ->
-                         match e.e with
-                         | FVar fid -> fid = fv.id
-                         | _ -> false)
-                       el))
+                  match fv with
+                  | None -> false
+                  | Some fv ->
+                      not
+                        (List.for_all
+                           (fun (e : texpr) ->
+                             match e.e with
+                             | FVar fid -> fid = fv.id
+                             | _ -> false)
+                           el))
                 (List.combine input_vars rel.inputs)
             in
             let used_inputs =
               List.map
-                (fun (fv : fvar) -> FVarId.Set.mem fv.id rel.used_fvars)
+                (fun (fv : fvar option) ->
+                  match fv with
+                  | None -> false
+                  | Some fv -> FVarId.Set.mem fv.id rel.used_fvars)
                 input_vars
             in
             let constant_inputs =
               FVarId.Set.of_list
                 (List.filter_map
-                   (fun ((keep, fv) : _ * fvar) ->
-                     if keep then None else Some fv.id)
+                   (fun ((keep, fv) : _ * fvar option) ->
+                     if keep then None
+                     else
+                       match fv with
+                       | None -> None
+                       | Some fv -> Some fv.id)
                    (List.combine non_constant_inputs input_vars))
             in
             (* Then, the outputs.
@@ -4801,7 +4839,13 @@ let filter_loop_useless_inputs_outputs (ctx : ctx)
                (which are inputs bound locally in the loop) with the initial inputs
                with which the loop is "called". We can then introduce the let-bindings. *)
             let to_initial_input =
-              FVarId.Map.of_list (List.combine input_var_ids loop.inputs)
+              FVarId.Map.of_list
+                (List.filter_map
+                   (fun (fv, v) ->
+                     match fv with
+                     | None -> None
+                     | Some fv -> Some (fv, v))
+                   (List.combine input_var_ids loop.inputs))
             in
             let update_initial_inputs (e : texpr) : texpr =
               let visitor =
@@ -4863,11 +4907,17 @@ let filter_loop_useless_inputs_outputs (ctx : ctx)
 
             (* Substitute the constant values in the body *)
             let body =
-              let input_vars = List.map (fun (fv : fvar) -> fv.id) input_vars in
+              [%sanity_check] span
+                (List.length input_vars = List.length loop.inputs);
               let bindings = List.combine input_vars loop.inputs in
               let bindings =
                 List.filter_map
-                  (fun (keep, x) -> if keep then None else Some x)
+                  (fun ((keep, (fv, v)) : _ * (fvar option * _)) ->
+                    if keep then None
+                    else
+                      match fv with
+                      | None -> None
+                      | Some fv -> Some (fv.id, v))
                   (List.combine keep_inputs bindings)
               in
               let subst = FVarId.Map.of_list bindings in

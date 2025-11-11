@@ -275,7 +275,7 @@ let eval_loop_symbolic (config : config) (span : span)
 
   (* Compute the loop input parameters *)
   let fp_input_svalues =
-    compute_ctx_fresh_ordered_symbolic_values span ~only_modified_svalues:true
+    compute_ctx_fresh_ordered_symbolic_values span ~only_modified_svalues:false
       ctx fp_ctx
   in
   let fp_input_svalue_ids =
@@ -283,7 +283,7 @@ let eval_loop_symbolic (config : config) (span : span)
   in
 
   let break_input_svalues =
-    compute_ctx_fresh_ordered_symbolic_values span ~only_modified_svalues:true
+    compute_ctx_fresh_ordered_symbolic_values span ~only_modified_svalues:false
       ctx break_ctx
   in
   let break_input_svalue_ids =
