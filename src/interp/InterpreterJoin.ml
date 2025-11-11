@@ -289,7 +289,7 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
   in
 
   (* Remove a variable from an environment and return the corresponding value *)
-  let rec pop_var (v : real_var_binder) (env : env) : tvalue * env =
+  let pop_var (v : real_var_binder) (env : env) : tvalue * env =
     pop_binding
       (fun e ->
         match e with
@@ -299,7 +299,7 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
   in
 
   (* Remove a dummy variable from an environment and return the corresponding value *)
-  let rec pop_dummy (v : dummy_var_id) (env : env) : tvalue * env =
+  let pop_dummy (v : dummy_var_id) (env : env) : tvalue * env =
     pop_binding
       (fun e ->
         match e with
@@ -309,7 +309,7 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
   in
 
   (* Remove an abs from an environment *)
-  let rec pop_abs (abs_id : abs_id) (env : env) : abs * env =
+  let pop_abs (abs_id : abs_id) (env : env) : abs * env =
     pop_binding
       (fun e ->
         match e with
@@ -608,6 +608,30 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
   [%sanity_check] span (List.length ctxl' = List.length ctxl + 1);
   ((List.hd ctxl', List.tl ctxl'), joined_ctx)
 
+(** Destructure all the new abstractions *)
+let destructure_new_abs (span : Meta.span) (old_abs_ids : AbsId.Set.t)
+    (ctx : eval_ctx) : eval_ctx =
+  [%ltrace "ctx:\n\n" ^ eval_ctx_to_string ctx];
+  let is_fresh_abs_id (id : AbsId.id) : bool =
+    not (AbsId.Set.mem id old_abs_ids)
+  in
+  let env =
+    env_map_abs
+      (fun abs ->
+        if is_fresh_abs_id abs.abs_id then
+          let abs =
+            destructure_abs span abs.kind ~can_end:true
+              ~destructure_shared_values:true ctx abs
+          in
+          abs
+        else abs)
+      ctx.env
+  in
+  let ctx = { ctx with env } in
+  [%ltrace "resulting ctx:\n\n" ^ eval_ctx_to_string ctx];
+  Invariants.check_invariants span ctx;
+  ctx
+
 let loop_join_break_ctxs (config : config) (span : Meta.span)
     (loop_id : LoopId.id) (fixed_aids : AbsId.Set.t)
     (fixed_dids : DummyVarId.Set.t) (ctxl : eval_ctx list) : eval_ctx =
@@ -624,6 +648,22 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
     [%ltrace
       "prepare_ctx: after simplify_dummy_values_useless_abs:\n"
       ^ eval_ctx_to_string ~span:(Some span) ctx];
+
+    (* Destructure the abstractions introduced in the new context *)
+    let ctx = destructure_new_abs span fixed_aids ctx in
+    [%ltrace
+      "prepare_ctx: after destructure:\n"
+      ^ eval_ctx_to_string ~span:(Some span) ctx];
+
+    (* Reduce the context we want to add to the join *)
+    let ctx =
+      reduce_ctx config span ~with_abs_conts:false (Loop loop_id) fixed_aids
+        fixed_dids ctx
+    in
+    [%ltrace
+      "prepare_ctx: after reduce:\n" ^ eval_ctx_to_string ~span:(Some span) ctx];
+    (* Sanity check *)
+    if !Config.sanity_checks then Invariants.check_invariants span ctx;
 
     ctx
   in
