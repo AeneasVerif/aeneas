@@ -948,6 +948,24 @@ and eval_global_ref (config : config) (span : Meta.span) (dest : place)
 and eval_switch (config : config) (span : Meta.span) (switch : switch) :
     stl_cm_fun =
  fun ctx ->
+  let ctx, cc = eval_switch_prepare config span switch ctx in
+  comp cc (eval_switch_raw config span switch ctx)
+
+(** Prepare the context before evaluating a switch.
+
+    TODO: generalize the join so that we don't have to do so. The problem is
+    that we may symbolically expand some shared values which are in frozen
+    region abstractions (and which we thus want to remain the same in the left
+    and right branches). *)
+and eval_switch_prepare (_config : config) (span : Meta.span) (_switch : switch)
+    : cm_fun =
+ fun ctx ->
+  InterpreterLoopsFixedPoint.prepare_ashared_loans span None
+    ~with_abs_conts:true ctx
+
+and eval_switch_raw (config : config) (span : Meta.span) (switch : switch) :
+    stl_cm_fun =
+ fun ctx ->
   (* We evaluate the scrutinee in two steps:
      first we prepare it, then we check if its value is concrete or
      symbolic. If it is concrete, we can then evaluate the operand
