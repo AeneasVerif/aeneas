@@ -522,7 +522,12 @@ let reduce_ctx_with_markers (merge_funs : merge_duplicates_funcs option)
             | abs_id1 :: _ ->
                 [%ltrace
                   "merging abstraction " ^ AbsId.to_string abs_id1 ^ " into "
-                  ^ AbsId.to_string abs_id0 ^ ":\n\n"
+                  ^ AbsId.to_string abs_id0 ^ ":" ^ "\n- abs "
+                  ^ AbsId.to_string abs_id1 ^ ":\n"
+                  ^ abs_to_string span ctx.ctx (ctx_lookup_abs ctx.ctx abs_id1)
+                  ^ "\n\n- abs " ^ AbsId.to_string abs_id0 ^ ":\n"
+                  ^ abs_to_string span ctx.ctx (ctx_lookup_abs ctx.ctx abs_id0)
+                  ^ "\n\n"
                   ^ eval_ctx_to_string ~span:(Some span) ctx.ctx];
                 Some (abs_id0, abs_id1))
 

@@ -520,7 +520,8 @@ let join_ctxs_list (config : config) (span : Meta.span)
     | ctx0 :: ctxl -> (ctx0, ctxl)
   in
 
-  (* Small helper *)
+  (* Small helper - TODO: probably not necessary anymore as we now preprocess
+     the contexts depending on the situation *)
   let preprocess_ctx (ctx : eval_ctx) : eval_ctx =
     (* Simplify the dummy values, by removing as many as we can -
        we ignore the synthesis continuation *)
@@ -597,16 +598,6 @@ let join_ctxs_list (config : config) (span : Meta.span)
   (* # Return *)
   (ctx0 :: ctxl, !joined_ctx)
 
-let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
-    (loop_id : LoopId.id) (ctx0 : eval_ctx) (ctxl : eval_ctx list) :
-    (eval_ctx * eval_ctx list) * eval_ctx =
-  let ctxl', joined_ctx =
-    join_ctxs_list config span (Loop loop_id) ~preprocess_first_ctx:false
-      ~with_abs_conts:false (ctx0 :: ctxl)
-  in
-  [%sanity_check] span (List.length ctxl' = List.length ctxl + 1);
-  ((List.hd ctxl', List.tl ctxl'), joined_ctx)
-
 (** Destructure all the new abstractions *)
 let destructure_new_abs (span : Meta.span) (old_abs_ids : AbsId.Set.t)
     (ctx : eval_ctx) : eval_ctx =
@@ -630,6 +621,49 @@ let destructure_new_abs (span : Meta.span) (old_abs_ids : AbsId.Set.t)
   [%ltrace "resulting ctx:\n\n" ^ eval_ctx_to_string ctx];
   Invariants.check_invariants span ctx;
   ctx
+
+let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
+    (loop_id : LoopId.id) (ctx0 : eval_ctx) (ctxl : eval_ctx list) :
+    (eval_ctx * eval_ctx list) * eval_ctx =
+  (* Simplify the contexts we want to join *)
+  let simplify (ctx : eval_ctx) : eval_ctx =
+    let fixed_aids = compute_fixed_abs_ids ctx0 ctx in
+    let fixed_dids = ctx_get_dummy_var_ids ctx0 in
+
+    (* Simplify the dummy values, by removing as many as we can -
+       we ignore the synthesis continuation, as we are only computing a fixed point *)
+    let ctx, _ = simplify_dummy_values_useless_abs config span ctx in
+    [%ltrace
+      "simplify: after simplify_dummy_values_useless_abs:\n"
+      ^ eval_ctx_to_string ~span:(Some span) ctx];
+
+    (* Destructure the abstractions introduced in the new context *)
+    let ctx = destructure_new_abs span fixed_aids ctx in
+    [%ltrace
+      "simplify: after destructure:\n"
+      ^ eval_ctx_to_string ~span:(Some span) ctx];
+
+    (* Reduce the context we want to add to the join *)
+    let ctx =
+      reduce_ctx config span ~with_abs_conts:false (Loop loop_id) fixed_aids
+        fixed_dids ctx
+    in
+    [%ltrace
+      "simplify: after reduce:\n" ^ eval_ctx_to_string ~span:(Some span) ctx];
+    (* Sanity check *)
+    if !Config.sanity_checks then Invariants.check_invariants span ctx;
+
+    ctx
+  in
+
+  let ctxl = List.map simplify ctxl in
+
+  let ctxl', joined_ctx =
+    join_ctxs_list config span (Loop loop_id) ~preprocess_first_ctx:false
+      ~with_abs_conts:false (ctx0 :: ctxl)
+  in
+  [%sanity_check] span (List.length ctxl' = List.length ctxl + 1);
+  ((List.hd ctxl', List.tl ctxl'), joined_ctx)
 
 let loop_join_break_ctxs (config : config) (span : Meta.span)
     (loop_id : LoopId.id) (fixed_aids : AbsId.Set.t)
