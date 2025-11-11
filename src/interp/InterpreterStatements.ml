@@ -960,8 +960,7 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
 and eval_switch_prepare (_config : config) (span : Meta.span) (_switch : switch)
     : cm_fun =
  fun ctx ->
-  InterpreterLoopsFixedPoint.prepare_ashared_loans span None
-    ~with_abs_conts:true ctx
+  InterpreterJoin.prepare_ashared_loans span None ~with_abs_conts:true ctx
 
 and eval_switch_raw (config : config) (span : Meta.span) (switch : switch) :
     stl_cm_fun =

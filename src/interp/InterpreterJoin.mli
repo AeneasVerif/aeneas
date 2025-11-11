@@ -2,6 +2,59 @@ open Values
 open Contexts
 open InterpreterJoinCore
 
+(** Prepare the shared loans in the abstractions by moving them to fresh
+    abstractions.
+
+    We use this for instance to prepare an evaluation context before computing a
+    fixed point.
+
+    Because a loop iteration might lead to symbolic value expansions and create
+    shared loans in shared values inside the *fixed* abstractions, which we want
+    to leave unchanged, we introduce some reborrows in the following way:
+
+    {[
+      abs'0 { SL l s0 }
+      x0 -> SB l
+      x1 -> SB l
+
+        ~~>
+
+      abs'0 { SL l s0 }
+      x0 -> SB l1
+      x1 -> SB l2
+      abs'1 { SB l, SL l1 s1 }
+      abs'2 { SB l, SL l2 s2 }
+    ]}
+
+    This is sound but leads to information loss. This way, the fixed abstraction
+    [abs'0] is never modified because [s0] is never accessed (and thus never
+    expanded).
+
+    We do this because it makes it easier to compute joins and fixed points.
+
+    **REMARK**: As a side note, we only reborrow the loan ids whose
+    corresponding borrows appear in values (i.e., not in abstractions).
+
+    For instance, if we have:
+    {[
+      abs'0 {
+        SL l0 s0
+        SL l1 s1
+      }
+      abs'1 { SB l0 }
+      x -> SB l1
+    ]}
+
+    we only introduce a fresh abstraction for [l1].
+
+    The boolean is [with_abs_conts]: if [true] we synthesize continuations
+    expressions for the fresh region abstractions we introduce. *)
+val prepare_ashared_loans :
+  Meta.span -> loop_id option -> with_abs_conts:bool -> Cps.cm_fun
+
+val prepare_ashared_loans_no_synth :
+  Meta.span -> loop_id -> with_abs_conts:bool -> eval_ctx -> eval_ctx
+
 (** Compute the list of symbolic values which appear in the 2nd context and not
     the first one, and order them following their position in the environment.
 
