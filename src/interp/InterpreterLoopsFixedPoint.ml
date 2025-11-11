@@ -381,6 +381,14 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
          upon reentry *)
       let ctx1 = join_ctxs ctx continue_ctxs in
 
+      (* Debug *)
+      [%ltrace
+        "after joining continue ctxs" ^ "\n\n- ctx0:\n"
+        ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx
+        ^ "\n\n- ctx1:\n"
+        ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx1
+        ^ "\n"];
+
       (* Reduce the context in order to reach a fixed-point *)
       let fixed_aids = InterpreterJoinCore.compute_fixed_abs_ids ctx0 ctx1 in
       let fixed_dids = ctx_get_dummy_var_ids ctx0 in
@@ -388,12 +396,11 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
         InterpreterReduceCollapse.reduce_ctx config span ~with_abs_conts:false
           (Loop loop_id) fixed_aids fixed_dids ctx1
       in
-
       (* Debug *)
       [%ltrace
-        "after joining continue ctxs" ^ "\n\n- ctx0:\n"
-        ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx
-        ^ "\n\n- ctx1:\n"
+        "after reducing the joined context (fixed_aids: "
+        ^ AbsId.Set.to_string None fixed_aids
+        ^ "):" ^ "\n- ctx1:\n"
         ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx1
         ^ "\n"];
 

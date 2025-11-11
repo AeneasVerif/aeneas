@@ -833,7 +833,19 @@ let collapse_ctx_aux config (span : Meta.span)
     (fresh_abs_kind : abs_kind) ~(with_abs_conts : bool)
     (merge_funs : merge_duplicates_funcs) (ctx0 : eval_ctx) : eval_ctx =
   [%ldebug "ctx0:\n" ^ eval_ctx_to_string ctx0];
-  let fixed_aids = ctx_get_frozen_abs_set ctx0 in
+  let fixed_aids =
+    (* We forbid modifying the abs which are frozen or which don't have any markers *)
+    let frozen = ctx_get_frozen_abs_set ctx0 in
+    let abs = AbsId.Map.values (ctx_get_abs ctx0) in
+    let no_markers =
+      List.filter_map
+        (fun (abs : abs) ->
+          if abs_has_markers abs then None else Some abs.abs_id)
+        abs
+    in
+    AbsId.Set.add_list no_markers frozen
+  in
+
   [%ldebug "fixed_aids: " ^ AbsId.Set.to_string None fixed_aids];
 
   let ctx =

@@ -993,3 +993,15 @@ let abs_is_empty (abs : abs) : bool =
     visitor#visit_abs () abs;
     true
   with Found -> false
+
+let abs_has_markers (abs : abs) : bool =
+  let visitor =
+    object
+      inherit [_] iter_abs
+      method! visit_proj_marker _ pm = if pm = PNone then () else raise Found
+    end
+  in
+  try
+    List.iter (visitor#visit_tavalue ()) abs.avalues;
+    false
+  with Found -> true

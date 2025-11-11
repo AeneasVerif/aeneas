@@ -570,8 +570,7 @@ let join_ctxs_list (config : config) (span : Meta.span)
     [%ltrace
       "join_one: initial ctx:\n" ^ eval_ctx_to_string ~span:(Some span) ctx];
 
-    (* Simplify the dummy values, by removing as many as we can -
-       we ignore the synthesis continuation *)
+    (* Simplify the dummy values *)
     let ctx = preprocess_ctx ctx in
 
     (* Join the two contexts  *)

@@ -2291,7 +2291,11 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
         (* Continue *)
         match_envs env0' env1'
     | EAbs abs0 :: env0', EAbs abs1 :: env1' ->
-        [%ldebug "match_envs: matching abs"];
+        [%ldebug
+          "match_envs: matching abs:\n- abs0: "
+          ^ abs_to_string span ctx0 abs0
+          ^ "\n- abs1: "
+          ^ abs_to_string span ctx1 abs1];
         (* Same as for the dummy values: there are two cases *)
         if AbsId.Set.mem abs0.abs_id fixed_ids.aids then (
           [%ldebug "match_envs: matching abs: fixed abs"];
