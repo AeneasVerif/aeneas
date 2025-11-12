@@ -676,6 +676,23 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             TypesUtils.ty_has_mut_borrows ctx0.type_ctx.type_infos
               ty_with_regions
           then
+            (* We used to generate a continuation of the following shape:
+               {[
+                 join(|(s0 <: Option<&'a mut (T)>)|, Option::Some (︙MB l0))︙) :=
+                 ⌊s1 <: Option<&'a mut (T)>⌋
+               ]}
+
+               but joins in abstraction outputs are a bit annoying to handle
+               when merging continuations, so now we generate something like this:
+
+               {[
+                 (|(s0 <: Option<&'a mut (T)>)|, Option::Some (︙MB l0))︙) :=
+                 let x := ⌊s1 <: Option<&'a mut (T)>⌋ in
+                 (x, x)
+               ]}
+
+               TODO: generalize the merge of continuations and revert the changes.
+            *)
             let input : tevalue =
               let proj : esymbolic_proj =
                 { sv_id = sv_s.sv_id; proj_ty = ty_with_regions }
@@ -684,13 +701,16 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
                 ESymbolic
                   (PNone, EProjLoans { proj; consumed = []; borrows = [] })
               in
-              { value; ty = ty_with_regions }
+              let input = { value; ty = ty_with_regions } in
+
+              (* Create the let-binding *)
+              let fvar = mk_fresh_abs_fvar ty_with_regions in
+              let pair = mk_etuple [ fvar; fvar ] in
+              let pat = mk_epat_from_fvar fvar in
+              mk_let span regions pat input pair
             in
 
-            let output : tevalue =
-              let value = EJoinMarkers (output0, output1) in
-              { value; ty = ty_with_regions }
-            in
+            let output = mk_simpl_etuple [ output0; output1 ] in
             Some { output = Some output; input = Some input }
           else
             Some

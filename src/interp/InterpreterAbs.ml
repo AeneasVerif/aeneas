@@ -1553,7 +1553,7 @@ let merge_abs_conts_generate_output (span : Meta.span) (_ctx : eval_ctx)
   (output, input)
 
 (** Create the input binding all inputs of a composed continuation. *)
-let merge_abs_conts_generate_input (span : Meta.span) (_ctx : eval_ctx)
+let merge_abs_conts_generate_input (span : Meta.span) (ctx : eval_ctx)
     (all_bindings : (BorrowId.id, SymbolicValueId.id) Either.t list)
     (bound : bound_inputs_outputs) : tepat * tevalue =
   let bindings = all_bindings in
@@ -1585,12 +1585,15 @@ let merge_abs_conts_generate_input (span : Meta.span) (_ctx : eval_ctx)
     | Right sv_id -> begin
         match SymbolicValueId.Map.find_opt sv_id !symbolic with
         | None -> ()
-        | Some (fid, pml, _, ty) ->
+        | Some ((fid, pml, _, ty) as bsymb) ->
             let pm =
               match pml with
               | [ pm ] -> pm
               | [ PLeft; PRight ] | [ PRight; PLeft ] -> PNone
-              | _ -> [%internal_error] span
+              | _ ->
+                  [%ldebug
+                    "Unexpected:\n" ^ input_symbolic_to_string ctx (sv_id, bsymb)];
+                  [%internal_error] span
             in
             let pat : tepat = { pat = POpen fid; ty } in
             let input : tevalue =
