@@ -1034,6 +1034,10 @@ module EvalCtx = struct
     let env = eval_ctx_to_fmt_env ctx in
     aproj_to_string env p
 
+  let eproj_to_string (ctx : eval_ctx) (p : eproj) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    eproj_to_string env p
+
   let symbolic_value_to_string (ctx : eval_ctx) (sv : symbolic_value) : string =
     let env = eval_ctx_to_fmt_env ctx in
     symbolic_value_to_string env sv

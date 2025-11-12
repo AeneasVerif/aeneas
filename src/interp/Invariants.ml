@@ -826,10 +826,17 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
          | EProjLoans { proj; consumed = _; borrows = _ }
          | EProjBorrows { proj; loans = _ } ->
              (* Symbolic projections in evalues should be over values which contain
-              mutable borrows/loans *)
-             [%sanity_check] span
-               (ty_has_mut_borrow_for_region_in_set ctx.type_ctx.type_infos
-                  abs.regions.owned proj.proj_ty)
+                mutable borrows/loans *)
+             if
+               not
+                 (ty_has_mut_borrow_for_region_in_set ctx.type_ctx.type_infos
+                    abs.regions.owned proj.proj_ty)
+             then (
+               [%ldebug
+                 "Abs contains evalues with no mutable borrows/loans:\n"
+                 ^ abs_to_string span ctx abs ^ "\n\nProblematic eproj:\n"
+                 ^ eproj_to_string ctx eproj];
+               [%internal_error] span)
          | EEndedProjLoans _ | EEndedProjBorrows _ | EEmpty -> ());
         super#visit_eproj abs eproj
     end

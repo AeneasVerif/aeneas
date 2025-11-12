@@ -1362,22 +1362,36 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
                    the case of mutable borrows):
                    {[
                      output := (|proj_borrows (s0 <: ...)|, ︙proj_borrows (s1 <: ...︙)
-                     input := let x = proj_loans (s2 : ...)
+                     input := let x = proj_loans (s2 : ...) in (x, x)
                    ]}
+
+                   Note that we introduce projections only if the symbolic values
+                   contain mutable borrows for the projected regions. Otherwise
+                   we ignore them.
                 *)
-                let proj_s0 = mk_eproj_borrows PLeft sv0.sv_id proj_ty in
-                let proj_s1 = mk_eproj_borrows PRight sv1.sv_id proj_ty in
-                let proj_svj = mk_eproj_loans PNone svj.sv_id proj_ty in
-                let input : tevalue =
-                  let loan = proj_svj in
-                  (* Create the let-binding *)
-                  let fvar = mk_fresh_abs_fvar proj_ty in
-                  let pair = mk_etuple [ fvar; fvar ] in
-                  let pat = mk_epat_from_fvar fvar in
-                  mk_let span owned pat loan pair
-                in
-                let output : tevalue = mk_etuple [ proj_s0; proj_s1 ] in
-                Some { output = Some output; input = Some input }
+                if
+                  ty_has_mut_borrow_for_region_in_set ctx0.type_ctx.type_infos
+                    owned proj_ty
+                then
+                  let proj_s0 = mk_eproj_borrows PLeft sv0.sv_id proj_ty in
+                  let proj_s1 = mk_eproj_borrows PRight sv1.sv_id proj_ty in
+                  let proj_svj = mk_eproj_loans PNone svj.sv_id proj_ty in
+                  let input : tevalue =
+                    let loan = proj_svj in
+                    (* Create the let-binding *)
+                    let fvar = mk_fresh_abs_fvar proj_ty in
+                    let pair = mk_etuple [ fvar; fvar ] in
+                    let pat = mk_epat_from_fvar fvar in
+                    mk_let span owned pat loan pair
+                  in
+                  let output : tevalue = mk_etuple [ proj_s0; proj_s1 ] in
+                  Some { output = Some output; input = Some input }
+                else
+                  Some
+                    {
+                      output = Some (mk_simpl_etuple []);
+                      input = Some (mk_simpl_etuple []);
+                    }
               else None
             in
             (* Create the abstraction *)

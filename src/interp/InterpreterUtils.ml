@@ -28,6 +28,7 @@ let eborrow_content_to_string = Print.EvalCtx.eborrow_content_to_string
 let aloan_content_to_string = Print.EvalCtx.aloan_content_to_string
 let eloan_content_to_string = Print.EvalCtx.eloan_content_to_string
 let aproj_to_string = Print.EvalCtx.aproj_to_string
+let eproj_to_string = Print.EvalCtx.eproj_to_string
 let tvalue_to_string = Print.EvalCtx.tvalue_to_string
 let tavalue_to_string = Print.EvalCtx.tavalue_to_string
 let tevalue_to_string = Print.EvalCtx.tevalue_to_string
@@ -162,9 +163,10 @@ let mk_aproj_loans_value_from_symbolic_value (proj_regions : RegionId.Set.t)
       ty = svalue.sv_ty;
     }
 
-let mk_eproj_loans_value_from_symbolic_value (proj_regions : RegionId.Set.t)
+let mk_eproj_loans_value_from_symbolic_value
+    (type_infos : TypesAnalysis.type_infos) (proj_regions : RegionId.Set.t)
     (svalue : symbolic_value) (proj_ty : ty) : tevalue =
-  if ty_has_regions_in_set proj_regions proj_ty then
+  if ty_has_mut_borrow_for_region_in_set type_infos proj_regions proj_ty then
     let av =
       ESymbolic
         ( PNone,
