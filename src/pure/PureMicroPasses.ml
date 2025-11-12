@@ -4526,9 +4526,10 @@ let compute_loop_input_output_rel (span : Meta.span) (ctx : ctx) (loop : loop) :
 
     2. We filter the loop outputs which are actually equal to some of its
     inputs, while filtering the inputs which are equal throughout the execution
-    of the loop (we do the latter only if [filter_constant_inputs] is [true] -
-    we have this option because we want to filter those inputs *after*
-    introducing auxiliary functions, if there are).
+    of the loop (we do the latter only if [filter_constant_inputs] is [true] or
+    if the input is actually not used within the loop body - we have this option
+    because we want to filter those inputs *after* introducing auxiliary
+    functions, if there are).
 
     For instance:
     {[
@@ -4819,13 +4820,45 @@ let filter_loop_useless_inputs_outputs (ctx : ctx)
             in
 
             let keep_inputs =
-              let non_constant_inputs =
-                if filter_constant_inputs then non_constant_inputs
-                else List.map (fun _ -> true) input_vars
+              (* We preserve the inputs if:
+                 - they are modified throughout the loop and are used inside it
+                 - they are are used within the loop *and* we extract auxiliary
+                   functions for the loops (we want to preserve the order of the
+                   input). *)
+              let constant_inputs =
+                List.map (fun b -> not b) non_constant_inputs
               in
-              List.map
-                (fun (b0, b1) -> b0 && b1)
-                (List.combine non_constant_inputs used_inputs)
+              let unit_or_ignored_inputs =
+                List.map
+                  (fun (p : tpat) -> p.ty = mk_unit_ty || is_ignored_pat p)
+                  body.inputs
+              in
+              [%ldebug
+                let bool_list_to_string =
+                  Print.list_to_string ~sep:"; " string_of_bool
+                in
+                "- inputs: "
+                ^ Print.list_to_string ~sep:"; " (tpat_to_string ctx)
+                    body.inputs
+                ^ "\n- constant_inputs: "
+                ^ bool_list_to_string constant_inputs
+                ^ "\n- used: "
+                ^ bool_list_to_string used_inputs
+                ^ "\n- unit_or_ignored: "
+                ^ bool_list_to_string unit_or_ignored_inputs];
+              let filter =
+                Collections.List.map3
+                  (fun constant used unit_or_ignored ->
+                    (* Constant inputs: filter them if it is allowed or if
+                        the input is not used *)
+                    (constant && (filter_constant_inputs || not used))
+                    (* We filter all inputs which have unit type or are
+                       the ignored pattern *)
+                    || unit_or_ignored)
+                  constant_inputs used_inputs unit_or_ignored_inputs
+              in
+              (* Revert: we want to know which inputs to *keep* *)
+              List.map (fun b -> not b) filter
             in
 
             [%ldebug
@@ -6348,6 +6381,9 @@ let passes :
        ]}
     *)
     (None, "simplify_let_then_ok", simplify_let_then_ok ~ignore_loops:true);
+    (* Simplify the lambdas again: this simplification might have been unlocked
+       by [simplify_let_then_ok], and is useful for [filter_loop_useless_inputs_outputs] *)
+    (None, "simplify_lambdas (pass 2)", simplify_lambdas);
     (* Filter the useless loop inputs and outputs.
 
        For now we do not filter the constant inputs: we will do this after
