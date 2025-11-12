@@ -2380,7 +2380,7 @@ let project_context (span : Meta.span) (fixed_aids : AbsId.Set.t)
   let env = List.filter_map update_binding ctx.env in
   { ctx with env }
 
-let add_abs_cont_to_abs span (_ctx : eval_ctx) (abs : abs) (abs_fun : abs_fun) :
+let add_abs_cont_to_abs span (ctx : eval_ctx) (abs : abs) (abs_fun : abs_fun) :
     abs =
   (* Retrieve the *mutable* borrows/loans from the abstraction values *)
   let borrows : tevalue list ref = ref [] in
@@ -2421,23 +2421,27 @@ let add_abs_cont_to_abs span (_ctx : eval_ctx) (abs : abs) (abs_fun : abs_fun) :
     | ASymbolic (pm, aproj) -> (
         match aproj with
         | AProjLoans { proj = { sv_id; proj_ty }; consumed; borrows } ->
-            [%sanity_check] span (consumed = []);
-            [%sanity_check] span (borrows = []);
-            let value : evalue =
-              ESymbolic
-                ( pm,
-                  EProjLoans
-                    { proj = { sv_id; proj_ty }; consumed = []; borrows = [] }
-                )
-            in
-            loans := { value; ty } :: !loans
+            if TypesUtils.ty_has_mut_borrows ctx.type_ctx.type_infos proj_ty
+            then (
+              [%sanity_check] span (consumed = []);
+              [%sanity_check] span (borrows = []);
+              let value : evalue =
+                ESymbolic
+                  ( pm,
+                    EProjLoans
+                      { proj = { sv_id; proj_ty }; consumed = []; borrows = [] }
+                  )
+              in
+              loans := { value; ty } :: !loans)
         | AProjBorrows { proj = { sv_id; proj_ty }; loans } ->
-            [%sanity_check] span (loans = []);
-            let value : evalue =
-              ESymbolic
-                (pm, EProjBorrows { proj = { sv_id; proj_ty }; loans = [] })
-            in
-            borrows := { value; ty } :: !borrows
+            if TypesUtils.ty_has_mut_borrows ctx.type_ctx.type_infos proj_ty
+            then (
+              [%sanity_check] span (loans = []);
+              let value : evalue =
+                ESymbolic
+                  (pm, EProjBorrows { proj = { sv_id; proj_ty }; loans = [] })
+              in
+              borrows := { value; ty } :: !borrows)
         | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty ->
             [%internal_error] span)
     | AAdt _ | AIgnored _ -> [%internal_error] span

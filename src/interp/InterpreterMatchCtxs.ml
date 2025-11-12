@@ -672,21 +672,32 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* Create the abstraction expression *)
       let cont : abs_cont option =
         if S.with_abs_conts then
-          let input : tevalue =
-            let proj : esymbolic_proj =
-              { sv_id = sv_s.sv_id; proj_ty = ty_with_regions }
+          if
+            TypesUtils.ty_has_mut_borrows ctx0.type_ctx.type_infos
+              ty_with_regions
+          then
+            let input : tevalue =
+              let proj : esymbolic_proj =
+                { sv_id = sv_s.sv_id; proj_ty = ty_with_regions }
+              in
+              let value =
+                ESymbolic
+                  (PNone, EProjLoans { proj; consumed = []; borrows = [] })
+              in
+              { value; ty = ty_with_regions }
             in
-            let value =
-              ESymbolic (PNone, EProjLoans { proj; consumed = []; borrows = [] })
-            in
-            { value; ty = ty_with_regions }
-          in
 
-          let output : tevalue =
-            let value = EJoinMarkers (output0, output1) in
-            { value; ty = ty_with_regions }
-          in
-          Some { output = Some output; input = Some input }
+            let output : tevalue =
+              let value = EJoinMarkers (output0, output1) in
+              { value; ty = ty_with_regions }
+            in
+            Some { output = Some output; input = Some input }
+          else
+            Some
+              {
+                output = Some (mk_simpl_etuple []);
+                input = Some (mk_simpl_etuple []);
+              }
         else None
       in
 
