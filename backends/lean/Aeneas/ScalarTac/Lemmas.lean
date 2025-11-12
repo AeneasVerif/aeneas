@@ -51,9 +51,6 @@ local macro_rules
       UScalar.size, IScalar.size,
       UScalar.cMax, IScalar.cMin, IScalar.cMax])
 
-@[scalar_tac_simps] theorem UScalar.max_USize_eq : UScalar.max .Usize = Usize.max := by simp_scalar_consts
-@[scalar_tac_simps] theorem IScalar.min_ISize_eq : IScalar.min .Isize = Isize.min := by simp_scalar_consts
-@[scalar_tac_simps] theorem IScalar.max_ISize_eq : IScalar.max .Isize = Isize.max := by simp_scalar_consts
 
 theorem Usize.max_succ_eq_pow : Usize.max + 1 = 2^System.Platform.numBits := by
   simp [Usize.max, Usize.numBits]
@@ -65,48 +62,70 @@ theorem Usize.cMax_bound : UScalar.cMax .Usize ≤ Usize.max ∧ Usize.max + 1 =
   simp [Usize.max, UScalar.cMax, UScalar.rMax, U32.rMax, Usize.numBits]
   have := System.Platform.numBits_eq; cases this <;> simp [*]
 
+grind_pattern Usize.cMax_bound => Usize.max
+
 @[scalar_tac Usize.size]
 theorem Usize.size_scalarTac_eq : Usize.size = Usize.max + 1 ∧ Usize.size = 2^System.Platform.numBits := by
   simp [Usize.max, Usize.numBits, Usize.size]
   have := System.Platform.numBits_eq; cases this <;> simp [*]
 
+grind_pattern Usize.size_scalarTac_eq => Usize.size
+
 abbrev Usize.maxAbbrevPow := 2^System.Platform.numBits
 @[scalar_tac Usize.maxAbbrevPow]
 theorem Usize.cMax_bound' : UScalar.cMax .Usize ≤ Usize.max ∧ Usize.max + 1 = 2^System.Platform.numBits := Usize.cMax_bound
 
+grind_pattern Usize.cMax_bound' => Usize.maxAbbrevPow
+
 abbrev Usize.maxAbbrevPow' := 2^Usize.numBits
 @[scalar_tac Usize.maxAbbrevPow']
 theorem Usize.cMax_bound'' : UScalar.cMax .Usize ≤ Usize.max ∧ Usize.max + 1 = 2^System.Platform.numBits := Usize.cMax_bound
+
+grind_pattern Usize.cMax_bound'' => Usize.maxAbbrevPow'
 
 @[scalar_tac Isize.min]
 theorem Isize.cMin_bound : Isize.min ≤ IScalar.cMin .Isize ∧ Isize.min = - 2^(System.Platform.numBits - 1) := by
   simp [Isize.min, IScalar.cMin, IScalar.rMin, I32.rMin, Isize.numBits]
   have := System.Platform.numBits_eq; cases this <;> simp [*]
 
+grind_pattern Isize.cMin_bound => Isize.min
+
 abbrev Isize.minAbbrevPow :Int := -2^(System.Platform.numBits-1)
 @[scalar_tac Isize.minAbbrevPow]
 theorem Isize.cMin_bound' : Isize.min ≤ IScalar.cMin .Isize ∧ Isize.min = - 2^(System.Platform.numBits - 1) := Isize.cMin_bound
 
+grind_pattern Isize.cMin_bound' => Isize.minAbbrevPow
+
 abbrev Isize.minAbbrevPow' :Int := -2^(Isize.numBits-1)
 @[scalar_tac Isize.minAbbrevPow']
 theorem Isize.cMin_bound'' : Isize.min ≤ IScalar.cMin .Isize ∧ Isize.min = - 2^(System.Platform.numBits - 1) := Isize.cMin_bound
+
+grind_pattern Isize.cMin_bound'' => Isize.minAbbrevPow'
 
 @[scalar_tac Isize.max]
 theorem Isize.cMax_bound : IScalar.cMax .Isize ≤ Isize.max ∧ Isize.max + 1 = 2^(System.Platform.numBits - 1) := by
   simp [Isize.numBits, Isize.max, IScalar.cMax, IScalar.rMax, I32.rMax]
   have := System.Platform.numBits_eq; cases this <;> simp [*]
 
+grind_pattern Isize.cMax_bound => Isize.max
+
 @[scalar_tac Usize.size]
 theorem Isize.size_scalarTac_eq : Isize.size = 2^System.Platform.numBits := by
   simp [Isize.numBits, Isize.size]
+
+grind_pattern Isize.size_scalarTac_eq => Isize.size
 
 abbrev Isize.maxAbbrevPow : Int := 2^(System.Platform.numBits-1)
 @[scalar_tac Isize.maxAbbrevPow]
 theorem Isize.cMax_bound' : IScalar.cMax .Isize ≤ Isize.max ∧ Isize.max + 1 = 2^(System.Platform.numBits - 1) := Isize.cMax_bound
 
+grind_pattern Isize.cMax_bound' => Isize.maxAbbrevPow
+
 abbrev Isize.maxAbbrevPow' : Int := 2^(Isize.numBits-1)
 @[scalar_tac Isize.maxAbbrevPow']
 theorem Isize.cMax_bound'' : IScalar.cMax .Isize ≤ Isize.max ∧ Isize.max + 1 = 2^(System.Platform.numBits - 1) := Isize.cMax_bound
+
+grind_pattern Isize.cMax_bound'' => Isize.maxAbbrevPow'
 
 @[scalar_tac_simps] theorem U8.numBits_eq    : U8.numBits = 8 := by simp_scalar_consts
 @[scalar_tac_simps] theorem U16.numBits_eq   : U16.numBits = 16 := by simp_scalar_consts
@@ -122,28 +141,11 @@ theorem Isize.cMax_bound'' : IScalar.cMax .Isize ≤ Isize.max ∧ Isize.max + 1
 @[scalar_tac_simps] theorem I128.numBits_eq  : I128.numBits = 128 := by simp_scalar_consts
 @[scalar_tac_simps] theorem Isize.numBits_eq : Isize.numBits = System.Platform.numBits := by simp_scalar_consts
 
-@[scalar_tac_simps] theorem U8.max_eq    : U8.max = 255 := by simp_scalar_consts
-@[scalar_tac_simps] theorem U16.max_eq   : U16.max = 65535 := by simp_scalar_consts
-@[scalar_tac_simps] theorem U32.max_eq   : U32.max = 4294967295 := by simp_scalar_consts
-@[scalar_tac_simps] theorem U64.max_eq   : U64.max = 18446744073709551615 := by simp_scalar_consts
-@[scalar_tac_simps] theorem U128.max_eq  : U128.max = 340282366920938463463374607431768211455 := by simp_scalar_consts
-
 @[scalar_tac_simps] theorem UScalar.max_U8_eq    : UScalar.max .U8 = 255 := by simp_scalar_consts
 @[scalar_tac_simps] theorem UScalar.max_U16_eq   : UScalar.max .U16 = 65535 := by simp_scalar_consts
 @[scalar_tac_simps] theorem UScalar.max_U32_eq   : UScalar.max .U32 = 4294967295 := by simp_scalar_consts
 @[scalar_tac_simps] theorem UScalar.max_U64_eq   : UScalar.max .U64 = 18446744073709551615 := by simp_scalar_consts
 @[scalar_tac_simps] theorem UScalar.max_U128_eq  : UScalar.max .U128 = 340282366920938463463374607431768211455 := by simp_scalar_consts
-
-@[scalar_tac_simps] theorem I8.min_eq    : I8.min = -128 := by simp_scalar_consts
-@[scalar_tac_simps] theorem I8.max_eq    : I8.max = 127 := by simp_scalar_consts
-@[scalar_tac_simps] theorem I16.min_eq   : I16.min = -32768 := by simp_scalar_consts
-@[scalar_tac_simps] theorem I16.max_eq   : I16.max = 32767 := by simp_scalar_consts
-@[scalar_tac_simps] theorem I32.min_eq   : I32.min = -2147483648 := by simp_scalar_consts
-@[scalar_tac_simps] theorem I32.max_eq   : I32.max = 2147483647 := by simp_scalar_consts
-@[scalar_tac_simps] theorem I64.min_eq   : I64.min = -9223372036854775808 := by simp_scalar_consts
-@[scalar_tac_simps] theorem I64.max_eq   : I64.max = 9223372036854775807 := by simp_scalar_consts
-@[scalar_tac_simps] theorem I128.min_eq  : I128.min = -170141183460469231731687303715884105728 := by simp_scalar_consts
-@[scalar_tac_simps] theorem I128.max_eq  : I128.max = 170141183460469231731687303715884105727 := by simp_scalar_consts
 
 @[scalar_tac_simps] theorem IScalar.min_I8_eq    : IScalar.min .I8 = -128 := by simp_scalar_consts
 @[scalar_tac_simps] theorem IScalar.max_I8_eq    : IScalar.max .I8 = 127 := by simp_scalar_consts
@@ -227,12 +229,16 @@ theorem UScalar.bounds {ty : UScalarTy} (x : UScalar ty) :
   have := x.hBounds
   omega
 
+grind_pattern UScalar.bounds => UScalar.val x
+
 @[scalar_tac x.val]
 theorem IScalar.bounds {ty : IScalarTy} (x : IScalar ty) :
   IScalar.min ty ≤ x.val ∧ x.val ≤ IScalar.max ty := by
   simp [IScalar.max, IScalar.min]
   have := x.hBounds
   omega
+
+grind_pattern IScalar.bounds => IScalar.val x
 
 attribute [scalar_tac a.toNat] Int.toNat_eq_max
 

@@ -321,9 +321,6 @@ theorem add_no_overflow_loop_spec
   . progress as ⟨ yv ⟩
     progress as ⟨ xv ⟩
     progress as ⟨ sum ⟩
-    . -- This precondition is not proven automatically
-      have := hNoOverflow i.val (by scalar_tac) (by scalar_tac)
-      scalar_tac
     progress as ⟨ i' ⟩
     progress as ⟨ x1 ⟩
     . -- This precondition is not proven automatically
@@ -356,7 +353,7 @@ theorem add_no_overflow_spec (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
   x'.length = y.length ∧
   toInt x' = toInt x + toInt y := by
   unfold add_no_overflow
-  progress as ⟨ x' ⟩ <;>
+  progress as ⟨ x' ⟩
   simp_all
 
 /-- The proof about `add_with_carry_loop` -/
