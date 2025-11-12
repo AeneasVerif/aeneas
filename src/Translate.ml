@@ -573,6 +573,9 @@ let export_types_group (fmt : Format.formatter) (config : gen_config)
     | Enum _ | Struct _ -> not config.extract_transparent
     | Opaque -> not config.extract_opaque
   in
+  let contains_opaque =
+    List.exists (fun (d : Pure.type_decl) -> d.kind = Opaque) defs
+  in
 
   if List.exists (fun b -> b) builtin then
     (* Sanity check *)
@@ -582,9 +585,12 @@ let export_types_group (fmt : Format.formatter) (config : gen_config)
     (* Sanity check *)
     assert (List.for_all dont_extract defs)
   else (
-    (* Extract the type declarations.
+    (* Extract the type declarations. *)
 
-       Because some declaration groups are delimited, we wrap the declarations
+    (* Save the fact that we extract opaque definitions, if we do *)
+    ctx.extracted_opaque := contains_opaque || !(ctx.extracted_opaque);
+
+    (* Because some declaration groups are delimited, we wrap the declarations
        between [{start,end}_type_decl_group].
 
        Ex.:
@@ -633,6 +639,10 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
   let body = trans.f in
 
   let is_opaque = Option.is_none body.Pure.body in
+
+  (* Save the fact that we extract opaque definitions, if we do *)
+  ctx.extracted_opaque := is_opaque || !(ctx.extracted_opaque);
+
   (* Check if we extract the global *)
   let extract =
     config.extract_globals
@@ -742,6 +752,12 @@ let export_functions_group_scc (fmt : Format.formatter) (config : gen_config)
   in
   let extract_defs = List.filter_map (fun x -> x) extract_defs in
   if extract_defs <> [] then (
+    (* Save the fact that we extract opaque definitions, if we do *)
+    let contains_opaque =
+      List.exists (fun (d : Pure.fun_decl) -> Option.is_none d.body) decls
+    in
+    ctx.extracted_opaque := contains_opaque || !(ctx.extracted_opaque);
+
     Extract.start_fun_decl_group ctx fmt is_rec decls;
     List.iter (fun f -> f ()) extract_defs;
     Extract.end_fun_decl_group fmt is_rec decls)
@@ -1109,7 +1125,7 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
 
 let extract_translated_crate (filename : string) (dest_dir : string)
     (subdir : string option) (crate : crate) (trans_ctx : trans_ctx)
-    (trans_crate : translated_crate) : unit =
+    (trans_crate : translated_crate) (extracted_opaque : bool ref) : unit =
   let {
     type_decls = trans_types;
     builtin_fun_sigs = builtin_sigs;
@@ -1196,6 +1212,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
       types_filter_type_args_map = Pure.TypeDeclId.Map.empty;
       funs_filter_type_args_map = Pure.FunDeclId.Map.empty;
       trait_impls_filter_type_args_map = Pure.TraitImplId.Map.empty;
+      extracted_opaque;
     }
   in
 
@@ -1808,7 +1825,8 @@ let extract_translated_crate (filename : string) (dest_dir : string)
 
 (** Translate a crate and write the synthesized code to an output file. *)
 let translate_crate (filename : string) (dest_dir : string)
-    (subdir : string option) (crate : crate) (marked_ids : marked_ids) : unit =
+    (subdir : string option) (crate : crate) (extracted_opaque : bool ref)
+    (marked_ids : marked_ids) : unit =
   [%ltrace
     "- filename: " ^ filename ^ "\n- dest_dir: " ^ dest_dir ^ "\n- subdir: "
     ^ Print.option_to_string (fun x -> x) subdir];
@@ -1817,3 +1835,4 @@ let translate_crate (filename : string) (dest_dir : string)
   let trans_ctx, trans_crate = translate_crate_to_pure crate marked_ids in
 
   extract_translated_crate filename dest_dir subdir crate trans_ctx trans_crate
+    extracted_opaque

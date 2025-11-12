@@ -6,7 +6,7 @@ open Primitives
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [core::result::Result]
-    Source: '/rustc/library/core/src/result.rs', lines 548:0-548:21
+    Source: '/rustc/library/core/src/result.rs', lines 557:0-557:21
     Name pattern: [core::result::Result] *)
 type core_result_Result_t (t : Type0) (e : Type0) =
 | Core_result_Result_Ok : t -> core_result_Result_t t e
