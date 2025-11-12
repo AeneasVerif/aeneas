@@ -1393,6 +1393,7 @@ let ctx_prepare_name (meta : T.item_meta) (ctx : extraction_ctx)
     (name : llbc_name) : llbc_name =
   (* Rmk.: initially we only filtered the disambiguators equal to 0 *)
   match name with
+  | [ _ ] -> name
   | (PeIdent (crate, _) as id) :: name ->
       if crate = ctx.crate.name then name else id :: name
   | _ ->
@@ -1524,6 +1525,7 @@ let ctx_compute_fun_name_no_suffix (meta : T.item_meta) (ctx : extraction_ctx)
     | _ :: name -> is_blanket_method name
   in
   let is_blanket = is_blanket_method fname in
+  [%ldebug "fname: " ^ name_to_string ctx fname];
   let fname = ctx_compute_simple_name meta ctx fname in
   (* Add the blanket path elem if the method is a blanket method *)
   let fname =
