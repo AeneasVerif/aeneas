@@ -592,10 +592,11 @@ let () =
       if !test_unit_functions then Test.test_unit_functions m;
 
       (* Translate or borrow-check the crate *)
+      let extracted_opaque = ref false in
       if !borrow_check then Aeneas.BorrowCheck.borrow_check_crate m marked_ids
       else
         Aeneas.Translate.translate_crate filename dest_dir !Config.subdir m
-          marked_ids;
+          extracted_opaque marked_ids;
 
       let has_errors =
         if !Errors.error_list <> [] then true
@@ -604,6 +605,15 @@ let () =
             log#linfo (lazy "Crate successfully borrow-checked");
           false)
       in
+
+      (* Print a warning if we had to extract opaque definitions and the option
+         [-split-file] is not on *)
+      if !extracted_opaque && not !split_files then
+        log#lwarning
+          (lazy
+            "The crate contains extracted external, unknown definitions: we \
+             advise using the option -split-files to allow manually providing \
+             these definitions in separate files.");
 
       (* Print total elapsed time *)
       log#linfo

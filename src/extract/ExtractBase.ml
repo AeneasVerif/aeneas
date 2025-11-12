@@ -544,6 +544,10 @@ type extraction_ctx = {
   trait_impls_filter_type_args_map : bool list TraitImplId.Map.t;
       (** Same as {!types_filter_type_args_map}, but for trait implementations
       *)
+  extracted_opaque : bool ref;
+      (** Set to true if at some point we extract a definition which is opaque,
+          meaning we generate an axiom. If yes, and in case the user does not
+          use the option [-split-files] we suggest it to the user. *)
 }
 
 let extraction_ctx_to_fmt_env (ctx : extraction_ctx) : PrintPure.fmt_env =
