@@ -323,24 +323,8 @@ theorem add_no_overflow_loop_spec
     progress as ⟨ sum ⟩
     progress as ⟨ i' ⟩
     progress as ⟨ x1 ⟩
-    . -- This precondition is not proven automatically
-      intro j h0 h1
-      simp_all
-      -- Simplifying (x.update ...).index:
-      have := List.getElem!_set_ne x.val i.val j sum (by scalar_tac)
-      simp [*]
-      apply hNoOverflow j (by scalar_tac) (by scalar_tac)
-    -- Postcondition
-    /- Note that you don't have to manually call the lemmas `toInt_update`
-        and `toInt_drop` below if you first do:
-        ```
-        have : i.val < x.length := by scalar_tac
-        ```
-        (simp_all will automatically apply the lemmas and prove the
-        the precondition sby using the context)
-      -/
     simp_all
-    scalar_eq_nf
+    grind
   . simp_all
 termination_by x.length - i.val
 decreasing_by scalar_decr_tac

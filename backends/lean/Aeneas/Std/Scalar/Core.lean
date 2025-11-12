@@ -294,12 +294,17 @@ theorem Usize.bounds_eq :
   simp [*] <;>
   simp_bounds
 
+grind_pattern Usize.bounds_eq => Usize.max
+
 theorem Isize.bounds_eq :
   (Isize.min = I32.min ∧ Isize.max = I32.max)
   ∨ (Isize.min = I64.min ∧ Isize.max = I64.max) := by
   simp [Isize.min, Isize.max, Isize.numBits]
   cases System.Platform.numBits_eq <;>
   simp [*] <;> simp [*, I32.min, I32.numBits, I32.max, I64.min, I64.numBits, I64.max]
+
+grind_pattern Isize.bounds_eq => Isize.max
+grind_pattern Isize.bounds_eq => Isize.min
 
 theorem UScalar.rMax_eq_max (ty : UScalarTy) : UScalar.rMax ty = UScalar.max ty := by
   cases ty <;>
