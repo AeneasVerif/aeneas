@@ -544,6 +544,10 @@ type extraction_ctx = {
   trait_impls_filter_type_args_map : bool list TraitImplId.Map.t;
       (** Same as {!types_filter_type_args_map}, but for trait implementations
       *)
+  extracted_opaque : bool ref;
+      (** Set to true if at some point we extract a definition which is opaque,
+          meaning we generate an axiom. If yes, and in case the user does not
+          use the option [-split-files] we suggest it to the user. *)
 }
 
 let extraction_ctx_to_fmt_env (ctx : extraction_ctx) : PrintPure.fmt_env =
@@ -1393,6 +1397,7 @@ let ctx_prepare_name (meta : T.item_meta) (ctx : extraction_ctx)
     (name : llbc_name) : llbc_name =
   (* Rmk.: initially we only filtered the disambiguators equal to 0 *)
   match name with
+  | [ _ ] -> name
   | (PeIdent (crate, _) as id) :: name ->
       if crate = ctx.crate.name then name else id :: name
   | _ ->
@@ -1524,6 +1529,7 @@ let ctx_compute_fun_name_no_suffix (meta : T.item_meta) (ctx : extraction_ctx)
     | _ :: name -> is_blanket_method name
   in
   let is_blanket = is_blanket_method fname in
+  [%ldebug "fname: " ^ name_to_string ctx fname];
   let fname = ctx_compute_simple_name meta ctx fname in
   (* Add the blanket path elem if the method is a blanket method *)
   let fname =
