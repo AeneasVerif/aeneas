@@ -4572,6 +4572,33 @@ let compute_loop_input_output_rel (span : Meta.span) (ctx : ctx) (loop : loop) :
   (* *)
   { inputs; outputs; used_fvars }
 
+(** Small helper: decompose a pattern if it is a variable or an ignored pattern
+    of type tuple. Returns an optional substitution (if the pattern was a
+    variable) *)
+let decompose_tuple_pat span (ctx : ctx) (pat : tpat) :
+    bool * tpat * (FVarId.id * texpr) option =
+  if (is_pat_open pat || is_ignored_pat pat) && is_tuple_ty pat.ty then
+    (* Decompose the pattern *)
+    let pat, subst =
+      let tys = [%add_loc] as_tuple_ty span pat.ty in
+      if is_pat_open pat then
+        (* Introduce auxiliary variables *)
+        let fv, _ = [%add_loc] as_pat_open span pat in
+        let fvars = List.map (mk_fresh_fvar ctx) tys in
+        let pat =
+          mk_simpl_tuple_pat (List.map (mk_tpat_from_fvar None) fvars)
+        in
+        let tuple =
+          mk_simpl_tuple_texpr span (List.map mk_texpr_from_fvar fvars)
+        in
+        (pat, Some (fv.id, tuple))
+      else
+        (* Simply decompose into a tuple of ignored patterns *)
+        (mk_simpl_tuple_pat (List.map mk_ignored_pat tys), None)
+    in
+    (true, pat, subst)
+  else (false, pat, None)
+
 let decompose_loop_outputs (ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
   let visitor =
@@ -4581,31 +4608,20 @@ let decompose_loop_outputs (ctx : ctx) (def : fun_decl) =
       method! visit_Let env monadic pat bound next =
         match bound.e with
         | Loop _ ->
-            (* Check if the pattern is a free variable with type tuple *)
-            if (is_pat_open pat || is_ignored_pat pat) && is_tuple_ty pat.ty
-            then
+            (* Attempt to decompose the pattern *)
+            let decompose, pat, subst = decompose_tuple_pat span ctx pat in
+            if decompose then
               (* Update the bound expression first *)
               let bound = self#visit_texpr env bound in
-              (* Decompose the pattern *)
-              let pat, env =
-                let tys = [%add_loc] as_tuple_ty span pat.ty in
-                if is_pat_open pat then
-                  (* Introduce auxiliary variables *)
-                  let fv, _ = [%add_loc] as_pat_open span pat in
-                  let fvars = List.map (mk_fresh_fvar ctx) tys in
-                  let pat =
-                    mk_simpl_tuple_pat (List.map (mk_tpat_from_fvar None) fvars)
-                  in
-                  let tuple =
-                    mk_simpl_tuple_texpr span
-                      (List.map mk_texpr_from_fvar fvars)
-                  in
-                  (pat, FVarId.Map.add fv.id tuple env)
-                else
-                  (* Simply decompose into a tuple of ignored patterns *)
-                  (mk_simpl_tuple_pat (List.map mk_ignored_pat tys), env)
+              (* Register the substitution *)
+              let env =
+                match subst with
+                | None -> env
+                | Some (fid, tuple) -> FVarId.Map.add fid tuple env
               in
+              (* Update the next expression *)
               let next = self#visit_texpr env next in
+              (* Recreate the let-binding *)
               (mk_opened_let monadic pat bound next).e
             else super#visit_Let env monadic pat bound next
         | _ -> super#visit_Let env monadic pat bound next
@@ -4790,7 +4806,30 @@ let filter_loop_useless_inputs_outputs (ctx : ctx)
     [%ldebug
       "- used_inputs: "
       ^ FVarId.Set.to_string None rel.used_fvars
-      ^ "\n- loop: " ^ loop_to_string ctx loop];
+      ^ "\n- pat: " ^ tpat_to_string ctx pat ^ "\n- loop:\n"
+      ^ loop_to_string ctx loop ^ "\n- next:\n" ^ texpr_to_string ctx next];
+
+    (* We need to decompose the pattern, if it is a tuple, before attempting
+       to destruct it below. *)
+    let pat, next =
+      let _, pat, subst = decompose_tuple_pat span ctx pat in
+      let next =
+        match subst with
+        | None -> next
+        | Some (fid, e) ->
+            (* We need to update the next expression *)
+            let visitor =
+              object
+                inherit [_] map_expr
+
+                method! visit_FVar _ fid' =
+                  if fid' = fid then e.e else FVar fid'
+              end
+            in
+            visitor#visit_texpr () next
+      in
+      (pat, next)
+    in
 
     (* We go through the inputs and identify those which are
        mapped to exactly themselves (i.e., remain unchanged throughout
@@ -6526,7 +6565,8 @@ let passes :
 
        We do so to make it simpler to analyze the relationship between inputs
        and outputs and that we need to do in [simplify_loop_output_conts],
-       [filter_loop_useless_inputs_outputs], etc.
+       [filter_loop_useless_inputs_outputs], etc. Importantly, the passes below
+       will not be correct (they might crash) if we don't do this here first.
     *)
     (None, "decompose_loop_outputs", decompose_loop_outputs);
     (* Simplify and filter the loop outputs.
