@@ -56,14 +56,14 @@ def opt_add_switch_2 (a : U32) (x : U32) : Result U32 :=
   | _ => fail panic
 
 /- [joins::Enum]
-   Source: 'tests/src/joins.rs', lines 36:0-38:1 -/
+   Source: 'tests/src/joins.rs', lines 36:0-40:1 -/
 inductive Enum where
 | V0 : Enum
 | V1 : Enum
 | V2 : Enum
 
 /- [joins::use_enum]:
-   Source: 'tests/src/joins.rs', lines 40:0-48:1 -/
+   Source: 'tests/src/joins.rs', lines 42:0-50:1 -/
 def use_enum (e : Enum) (x : U32) : Result U32 :=
   do
   let y ←
@@ -74,7 +74,7 @@ def use_enum (e : Enum) (x : U32) : Result U32 :=
   x + y
 
 /- [joins::call_choose]:
-   Source: 'tests/src/joins.rs', lines 50:0-53:1 -/
+   Source: 'tests/src/joins.rs', lines 52:0-55:1 -/
 def call_choose (b : Bool) (x : U32) (y : U32) : Result (U32 × U32) :=
   do
   let (z, back) ←
