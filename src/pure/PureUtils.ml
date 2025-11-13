@@ -200,6 +200,16 @@ let opt_dest_arrow_ty (ty : ty) : (ty * ty) option =
   | TArrow (arg_ty, ret_ty) -> Some (arg_ty, ret_ty)
   | _ -> None
 
+let as_tuple_ty file line span (ty : ty) : ty list =
+  match ty with
+  | TAdt (TTuple, generics) -> generics.types
+  | _ -> Errors.internal_error file line span
+
+let is_tuple_ty (ty : ty) : bool =
+  match ty with
+  | TAdt (TTuple, _) -> true
+  | _ -> false
+
 let is_arrow_ty (ty : ty) : bool = Option.is_some (opt_dest_arrow_ty ty)
 
 let opt_dest_result_ty (ty : ty) : ty option =

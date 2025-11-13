@@ -4283,6 +4283,12 @@ let simplify_loop_output_conts (ctx : ctx) (def : fun_decl) =
                 (List.filter_map (Option.map (fun (v : fvar) -> v.id)) pvars)
             in
             let loop_varset = to_set pvars in
+            [%ldebug
+              "\n- loop.num_output_values: "
+              ^ string_of_int loop.num_output_values
+              ^ "- pats: "
+              ^ Print.list_to_string (tpat_to_string ctx) pats];
+            [%sanity_check] span (loop.num_output_values <= List.length pvars);
             let loop_conts =
               to_set (Collections.List.drop loop.num_output_values pvars)
             in
@@ -4566,6 +4572,63 @@ let compute_loop_input_output_rel (span : Meta.span) (ctx : ctx) (loop : loop) :
   (* *)
   { inputs; outputs; used_fvars }
 
+let decompose_loop_outputs (ctx : ctx) (def : fun_decl) =
+  let span = def.item_meta.span in
+  let visitor =
+    object (self)
+      inherit [_] map_expr as super
+
+      method! visit_Let env monadic pat bound next =
+        match bound.e with
+        | Loop _ ->
+            (* Check if the pattern is a free variable with type tuple *)
+            if (is_pat_open pat || is_ignored_pat pat) && is_tuple_ty pat.ty
+            then
+              (* Update the bound expression first *)
+              let bound = self#visit_texpr env bound in
+              (* Decompose the pattern *)
+              let pat, env =
+                let tys = [%add_loc] as_tuple_ty span pat.ty in
+                if is_pat_open pat then
+                  (* Introduce auxiliary variables *)
+                  let fv, _ = [%add_loc] as_pat_open span pat in
+                  let fvars = List.map (mk_fresh_fvar ctx) tys in
+                  let pat =
+                    mk_simpl_tuple_pat (List.map (mk_tpat_from_fvar None) fvars)
+                  in
+                  let tuple =
+                    mk_simpl_tuple_texpr span
+                      (List.map mk_texpr_from_fvar fvars)
+                  in
+                  (pat, FVarId.Map.add fv.id tuple env)
+                else
+                  (* Simply decompose into a tuple of ignored patterns *)
+                  (mk_simpl_tuple_pat (List.map mk_ignored_pat tys), env)
+              in
+              let next = self#visit_texpr env next in
+              (mk_opened_let monadic pat bound next).e
+            else super#visit_Let env monadic pat bound next
+        | _ -> super#visit_Let env monadic pat bound next
+
+      method! visit_FVar env fid =
+        match FVarId.Map.find_opt fid env with
+        | None -> FVar fid
+        | Some e -> e.e
+    end
+  in
+
+  let body =
+    Option.map
+      (fun body ->
+        let _, body = open_all_fun_body ctx span body in
+        let body =
+          { body with body = visitor#visit_texpr FVarId.Map.empty body.body }
+        in
+        close_all_fun_body span body)
+      def.body
+  in
+  { def with body }
+
 (** We do several things.
 
     1. We filter the loop outputs which are not used.
@@ -4743,6 +4806,7 @@ let filter_loop_useless_inputs_outputs (ctx : ctx)
        throughout the loop and so that the output can be computed from
        the *initial* input. We thus filter it.
     *)
+    [%ldebug tpat_to_string ctx pat];
     let output_vars = try_destruct_tuple_or_ignored_tpat span pat in
     let output_vars =
       List.map
@@ -6458,6 +6522,13 @@ let passes :
     (* Simplify the lambdas again: this simplification might have been unlocked
        by [simplify_let_then_ok], and is useful for [filter_loop_useless_inputs_outputs] *)
     (None, "simplify_lambdas (pass 2)", simplify_lambdas);
+    (* Decompose the loop outputs if they have the type tuple.
+
+       We do so to make it simpler to analyze the relationship between inputs
+       and outputs and that we need to do in [simplify_loop_output_conts],
+       [filter_loop_useless_inputs_outputs], etc.
+    *)
+    (None, "decompose_loop_outputs", decompose_loop_outputs);
     (* Simplify and filter the loop outputs.
 
        Note that calling [simplify_loop_output_conts] *before*
