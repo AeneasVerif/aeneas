@@ -5830,6 +5830,23 @@ let loops_to_recursive (ctx : ctx) (def : fun_decl) =
                   *)
                   let update_back (e : texpr) =
                     [%ldebug "- e:\n" ^ texpr_to_string ctx e];
+                    (* It can happen that we directly call the backward function,
+                       which is thus not a lambda. If this happens, we update it
+                       so that it matches the more general case.
+
+                       TODO: this will not work once we add support for
+                       function pointers and closures.
+                    *)
+                    let e =
+                      if is_fvar e then
+                        let arg_ty, _ = destruct_arrow span e.ty in
+                        let fv = mk_fresh_fvar ctx arg_ty in
+                        let arg = mk_texpr_from_fvar fv in
+                        let pat = mk_tpat_from_fvar None fv in
+                        let app = [%add_loc] mk_app span e arg in
+                        mk_closed_lambda span pat app
+                      else e
+                    in
                     let _, lam_pats, body = open_lambdas ctx span e in
                     let lets, body = open_lets ctx span body in
                     let _, args = destruct_apps body in
@@ -6168,10 +6185,19 @@ let loops_to_recursive (ctx : ctx) (def : fun_decl) =
                   (fun el ->
                     match el with
                     | e :: _ ->
-                        let _, pats, _ = open_lambdas ctx span e in
-                        List.map
-                          (fun x -> fst ([%add_loc] as_pat_open span x))
-                          pats
+                        (* The function may have been simplified: if it is the case,
+                           we need to reintroduce lambdas *)
+                        if is_fvar e then
+                          (* TODO: this will not work once we add support for
+                             function pointers and closures. *)
+                          let tys, _ = destruct_arrows e.ty in
+                          List.map (mk_fresh_fvar ctx) tys
+                        else
+                          (* Open the lambdas *)
+                          let _, pats, _ = open_lambdas ctx span e in
+                          List.map
+                            (fun x -> fst ([%add_loc] as_pat_open span x))
+                            pats
                     | _ -> [%internal_error] span)
                   (Collections.List.drop loop.num_output_values rel.outputs)
               in
@@ -6693,11 +6719,13 @@ let apply_passes_to_def (ctx : ctx) (def : fun_decl) : fun_decl =
 
       if apply then (
         [%ltrace "About to apply: '" ^ pass_name ^ "'"];
-        let def = pass ctx def in
+        let def' = pass ctx def in
+        let updated = string_of_bool (def' <> def) in
         [%ltrace
-          "After applying '" ^ pass_name ^ "'" ^ ":\n\n"
-          ^ fun_decl_to_string ctx def];
-        def)
+          "After applying '" ^ pass_name ^ "'" ^ "(updated:" ^ updated
+          ^ "):\n\n"
+          ^ fun_decl_to_string ctx def'];
+        def')
       else (
         [%ltrace "Ignoring " ^ pass_name ^ " due to the configuration\n"];
         def))
