@@ -832,4 +832,37 @@ partial_fixpoint
 def iter_local_shared_borrow : Result Unit :=
   iter_local_shared_borrow_loop
 
+/- [loops::AList]
+   Source: 'tests/src/loops.rs', lines 506:0-509:1 -/
+inductive AList (T : Type) where
+| Cons : Usize → T → AList T → AList T
+| Nil : AList T
+
+/- [loops::insert_in_list]: loop 0:
+   Source: 'tests/src/loops.rs', lines 1:0-528:5 -/
+def insert_in_list_loop
+  {T : Type} (key : Usize) (value : T) (ls : AList T) :
+  Result (Bool × (AList T))
+  :=
+  match ls with
+  | AList.Cons ckey cvalue tl =>
+    if ckey = key
+    then ok (false, AList.Cons ckey value tl)
+    else
+      do
+      let (b, back) ← insert_in_list_loop key value tl
+      let back1 := AList.Cons ckey cvalue back
+      ok (b, back1)
+  | AList.Nil => ok (true, AList.Cons key value AList.Nil)
+partial_fixpoint
+
+/- [loops::insert_in_list]:
+   Source: 'tests/src/loops.rs', lines 512:0-529:1 -/
+@[reducible]
+def insert_in_list
+  {T : Type} (key : Usize) (value : T) (ls : AList T) :
+  Result (Bool × (AList T))
+  :=
+  insert_in_list_loop key value ls
+
 end loops
