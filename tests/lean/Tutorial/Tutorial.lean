@@ -215,7 +215,7 @@ def append_in_place
   ok (list_tail_back l1)
 
 /- [tutorial::reverse]: loop 0:
-   Source: 'src/lib.rs', lines 148:4-152:5 -/
+   Source: 'src/lib.rs', lines 148:4-154:1 -/
 def reverse_loop {T : Type} (l : CList T) (out : CList T) : Result (CList T) :=
   match l with
   | CList.CCons hd tl => reverse_loop tl (CList.CCons hd out)

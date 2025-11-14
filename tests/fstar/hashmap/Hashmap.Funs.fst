@@ -78,7 +78,7 @@ let hashMap_new (t : Type0) : result (hashMap_t t) =
   hashMap_new_with_capacity t 32 { dividend = 4; divisor = 5 }
 
 (** [hashmap::{hashmap::HashMap<T>}::clear]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 104:8-107:9 *)
+    Source: 'tests/src/hashmap.rs', lines 104:8-108:5 *)
 let rec hashMap_clear_loop
   (#t : Type0) (slots : alloc_vec_Vec (aList_t t)) (i : usize) :
   Tot (result (alloc_vec_Vec (aList_t t)))
@@ -99,8 +99,8 @@ let rec hashMap_clear_loop
 (** [hashmap::{hashmap::HashMap<T>}::clear]:
     Source: 'tests/src/hashmap.rs', lines 100:4-108:5 *)
 let hashMap_clear (#t : Type0) (self : hashMap_t t) : result (hashMap_t t) =
-  let* slots = hashMap_clear_loop self.slots 0 in
-  Ok { self with num_entries = 0; slots }
+  let* v = hashMap_clear_loop self.slots 0 in
+  Ok { self with num_entries = 0; slots = v }
 
 (** [hashmap::{hashmap::HashMap<T>}::len]:
     Source: 'tests/src/hashmap.rs', lines 110:4-112:5 *)
@@ -108,7 +108,7 @@ let hashMap_len (#t : Type0) (self : hashMap_t t) : result usize =
   Ok self.num_entries
 
 (** [hashmap::{hashmap::HashMap<T>}::insert_in_list]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 1:0-133:9 *)
+    Source: 'tests/src/hashmap.rs', lines 118:8-134:5 *)
 let rec hashMap_insert_in_list_loop
   (#t : Type0) (key : usize) (value : t) (ls : aList_t t) :
   Tot (result (bool & (aList_t t)))
@@ -155,7 +155,7 @@ let hashMap_insert_no_resize
   else let v = index_mut_back a1 in Ok { self with slots = v }
 
 (** [hashmap::{hashmap::HashMap<T>}::move_elements_from_list]: loop 0:
-    Source: 'tests/src/hashmap.rs', lines 199:12-206:17 *)
+    Source: 'tests/src/hashmap.rs', lines 199:12-209:5 *)
 let rec hashMap_move_elements_from_list_loop
   (#t : Type0) (ntable : hashMap_t t) (ls : aList_t t) :
   Tot (result (hashMap_t t))
