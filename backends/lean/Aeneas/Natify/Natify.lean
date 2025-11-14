@@ -10,8 +10,8 @@ import Aeneas.SimpBoolProp.SimpBoolProp
 /-!
 # `natify` tactic
 
-The `natify` tactic is used to shift propositions about, e.g., `ZMod` or `BitVec`, to `Nat`.
-This tactic is adapted from `zify`.
+The `natify` tactic is used to convert propositions about, e.g., `ZMod` or `BitVec`, to
+propositions about `Nat`. This tactic is adapted from `zify`.
 -/
 
 namespace Aeneas.Natify
@@ -22,6 +22,15 @@ open Lean.Parser.Tactic
 open Lean.Elab.Tactic
 open Arith Std
 
+/--
+The `natify` ("nat-ify") tactic is used to convert propositions about, e.g., `ZMod`, `ℤ`,
+`BitVec`, etc., to propositions about `ℕ`.
+
+This tactic is adapted from `zify`.
+
+One can give lemmas to `natify` by annotating them with the attribute `@[natify_simps]`,
+or by passing them directly as arguments to the tactic, e.g., `natify [my_lemma1, my_lemma2]`.
+-/
 syntax (name := natify) "natify" (simpArgs)? (location)? : tactic
 
 macro_rules
