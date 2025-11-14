@@ -56,6 +56,22 @@ def simpListsTac (config : ScalarTac.CondSimpTacConfig)
     }
   ScalarTac.condSimpTac config {maxDischargeDepth := 2, failIfUnchanged := false, contextual := true} hypsArgs args addSimpThms false loc
 
+/-- `simp_lists` simplifies expressions involving lists, in particular when they have getters and setters.
+
+It works by following the same principle as `simp_scalar`, but focuses on lists instead of scalars - see the
+documentation of `simp_scalar` for more details.
+
+It can simplify an expression like `List.get (List.set (List.set l i v0) j v1) i` to `v1` when `i ≠ j`,
+or `List.get (l0 ++ l1) i` to `List.get l1 (i - l0.length)` when `i ≥ l0.length`, etc.
+
+You can mark lemmas to be used by `simp_lists` by annotating them with the attribute `@[simp_lists_simps]`,
+or by passing them as arguments to the tactic, e.g., `simp_lists [my_lemma1, my_lemma2]`.
+
+Note that we try to be conservative when registering `simp_lists_simps` lemmas in the standard library,
+to avoid applying unwanted simplifications. For this reason, it often happens that nested calls to `simp_lists`
+and `simp` allow making progress on the goal.
+TODO: add an option `simp_lists +simp` to use more lemmas
+-/
 syntax (name := simp_lists) "simp_lists" Parser.Tactic.optConfig ("[" (term<|>"*"),* "]")? (location)? : tactic
 
 def parseSimpLists :

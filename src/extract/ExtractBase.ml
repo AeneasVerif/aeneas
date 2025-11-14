@@ -227,7 +227,21 @@ let report_name_collision (id_to_string : id -> string)
   let err =
     "Name clash detected: the following identifiers are bound to the same name \
      \"" ^ name ^ "\":" ^ id1 ^ id2
-    ^ "\nYou may want to rename some of your definitions, or report an issue."
+    ^ "\n\n\
+       You may want to rename some of your definitions, or report an issue.\n\
+       Note that you can change the name used in the generated code by using \
+       the attribute #[aeneas::rename(\"NAME\")] or \
+       #[charon::rename(\"NAME\")]. For instance:\n\n\
+       ```\n\
+       #![feature(register_tool)]\n\
+       #![register_tool(aeneas)]\n\n\
+       #[aeneas::rename(\"Bar\")]\n\
+       type Foo = i32;\n\
+       ```\n\n\
+       Those attributes can be applied to type definitions, functions, \
+       methods, trait\n\
+       declarations or trait implementations. For more examples, see:\n\
+       https://github.com/AeneasVerif/aeneas/blob/main/tests/src/rename_attribute.rs\n\n\n"
   in
   (* Register the error.
 

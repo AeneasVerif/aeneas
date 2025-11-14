@@ -110,12 +110,12 @@ let extract_adt_g_value (span : Meta.span)
          Also, for Coq, we need the special syntax ['(...)] if we destruct
          a tuple pattern in a let-binding and the tuple has > 2 values.
       *)
-      let lb, rb =
-        if List.length field_values = 1 then ("", "")
+      let use_parentheses, lb, rb =
+        if List.length field_values = 1 then (false, "", "")
         else if
           backend () = Coq && is_single_pat && List.length field_values > 2
-        then ("'(", ")")
-        else ("(", ")")
+        then (true, "'(", ")")
+        else (true, "(", ")")
       in
       F.pp_print_string fmt lb;
       (* F* doesn't parse lambdas and tuples the same way as other backends: the
@@ -123,7 +123,10 @@ let extract_adt_g_value (span : Meta.span)
       let inside =
         match backend () with
         | FStar -> true
-        | _ -> false
+        | _ ->
+            (* We may need to insert parentheses if there is a single value (meaning
+               we did not already inserted parentheses outside) *)
+            (not use_parentheses) && inside && List.length field_values = 1
       in
       let ctx =
         Collections.List.fold_left_link

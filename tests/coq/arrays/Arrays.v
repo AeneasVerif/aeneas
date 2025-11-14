@@ -607,4 +607,20 @@ Definition add_acc
   add_acc_loop n pa_src pe_dst 0%usize
 .
 
+(** [arrays::ARRAY1]
+    Source: 'tests/src/arrays.rs', lines 374:0-374:32 *)
+Definition array1_body : result (array u32 2%usize) :=
+  Ok (mk_array 2%usize [ 0%u32; 1%u32 ])
+.
+Definition array1 : array u32 2%usize := array1_body%global.
+
+(** [arrays::Scalar]
+    Source: 'tests/src/arrays.rs', lines 377:0-377:24 *)
+Definition Scalar_t : Type := array u32 2%usize.
+
+(** [arrays::L]
+    Source: 'tests/src/arrays.rs', lines 378:0-378:33 *)
+Definition l_body : result Scalar_t := Ok (mk_array 2%usize [ 0%u32; 1%u32 ]).
+Definition l : Scalar_t := l_body%global.
+
 End Arrays.

@@ -569,4 +569,22 @@ def add_acc
   :=
   add_acc_loop paSrc peDst 0#usize
 
+/- [arrays::ARRAY1]
+   Source: 'tests/src/arrays.rs', lines 374:0-374:32 -/
+@[global_simps]
+def ARRAY1_body : Result (Array U32 2#usize) :=
+  ok (Array.make 2#usize [ 0#u32, 1#u32 ])
+@[global_simps, irreducible]
+def ARRAY1 : Array U32 2#usize := eval_global ARRAY1_body
+
+/- [arrays::Scalar]
+   Source: 'tests/src/arrays.rs', lines 377:0-377:24 -/
+@[reducible] def Scalar := Array U32 2#usize
+
+/- [arrays::L]
+   Source: 'tests/src/arrays.rs', lines 378:0-378:33 -/
+@[global_simps]
+def L_body : Result Scalar := ok (Array.make 2#usize [ 0#u32, 1#u32 ])
+@[global_simps, irreducible] def L : Scalar := eval_global L_body
+
 end arrays

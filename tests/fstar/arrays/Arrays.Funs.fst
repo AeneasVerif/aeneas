@@ -501,3 +501,13 @@ let add_acc
   =
   add_acc_loop pa_src pe_dst 0
 
+(** [arrays::ARRAY1]
+    Source: 'tests/src/arrays.rs', lines 374:0-374:32 *)
+let array1_body : result (array u32 2) = Ok (mk_array 2 [ 0; 1 ])
+let array1 : array u32 2 = eval_global array1_body
+
+(** [arrays::L]
+    Source: 'tests/src/arrays.rs', lines 378:0-378:33 *)
+let l_body : result scalar_t = Ok (mk_array 2 [ 0; 1 ])
+let l : scalar_t = eval_global l_body
+
