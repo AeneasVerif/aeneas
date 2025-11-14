@@ -573,17 +573,6 @@ def incrScalarTac (config : Config) (state : State) (toClear : Array FVarId) (as
       g.assign e
   else incrScalarTacCore config state toClear assumptions
 
--- For termination proofs
-syntax "int_decr_tac" : tactic
-macro_rules
-  | `(tactic| int_decr_tac) =>
-    `(tactic|
-      simp_wf;
-      -- TODO: don't use a macro (namespace problems)
-      (first | apply ScalarTac.to_int_to_nat_lt
-             | apply ScalarTac.to_int_sub_to_nat_lt) <;>
-      simp_all <;> scalar_tac)
-
 end ScalarTac
 
 end Aeneas
