@@ -523,10 +523,18 @@ def parseArgs: TSyntax `Aeneas.ProgressStar.«progress*_args» → CoreM Config
     return {preconditionTac}
 | _ => throwUnsupportedSyntax
 
+/-- The `progress*` tactic repeatedly applies `progress` and `split` on the goal.
+
+It is possible to turn a call to `progress*` into the equivalent proof script by using `progress*?`.
+-/
 elab "progress" noWs "*" stx:«progress*_args»: tactic => do
   let cfg ← parseArgs stx
   evalProgressStar cfg *> pure ()
 
+/-- The `progress*?` tactic allows turning a call to `progress*` into the equivalent proof script.
+
+See the documentation of `progress*` for more information.
+-/
 elab tk:"progress" noWs "*?" stx:«progress*_args»: tactic => do
   let cfg ← parseArgs stx
   let info ← evalProgressStar cfg
