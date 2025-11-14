@@ -525,7 +525,7 @@ def scalarTac (config : Config) : TacticM Unit := do
     introduce the bound `x.val ≤ UScalar.max ty`.
 
   **Decreasing proofs**:
-  When proving that a termination measure decreases (i.e., a `decreasing` clause) you may want
+  When proving that a termination measure decreases (i.e., a `decreasing_by` clause) you may want
   to use `scalar_decr_tac` instead of `scalar_tac`. This tactic does approximately the same thing
   as `scalar_tac` but for performance reasons also cleans up the goal further by removing useless
   assumptions automatically introduced by Lean and which can lead to serious slow-downs.

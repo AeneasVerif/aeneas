@@ -44,6 +44,13 @@ def simpListsScalarTac (config : ScalarTac.CondSimpTacConfig)
     }
   ScalarTac.condSimpTac config {maxDischargeDepth := 2, failIfUnchanged := false, contextual := true} hypsArgs args addSimpThms false loc
 
+/-- `simp_lists_scalar` simplifies expressions involving lists and scalars.
+
+It is a combination of `simp_scalar` and `simp_lists` - see the documentation of `simp_scalar` for more details.
+
+You can mark lemmas to be used by `simp_lists_scalar` by annotating them with the attribute `@[simp_lists_scalar]`,
+or by passing them as arguments to the tactic, e.g., `simp_lists [my_lemma1, my_lemma2]`.
+-/
 syntax (name := simp_lists) "simp_lists_scalar" Parser.Tactic.optConfig ("[" (term<|>"*"),* "]")? (location)? : tactic
 
 def parseSimpListsScalar :
