@@ -870,7 +870,8 @@ let extract_type_decl_tuple_struct_body (span : Meta.span)
         F.pp_print_string fmt sep)
       (fun (f : field) ->
         F.pp_print_space fmt ();
-        extract_ty span ctx fmt TypeDeclId.Set.empty true f.field_ty)
+        let inside = false in
+        extract_ty span ctx fmt TypeDeclId.Set.empty inside f.field_ty)
       fields
 
 let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
