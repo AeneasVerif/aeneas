@@ -524,6 +524,12 @@ def scalarTac (config : Config) : TacticM Unit := do
     states that whenever we have an expression of the shape `x.val` in the context, we can
     introduce the bound `x.val ≤ UScalar.max ty`.
 
+  **Decreasing proofs**:
+  When proving that a termination measure decreases (i.e., a `decreasing` clause) you may want
+  to use `scalar_decr_tac` instead of `scalar_tac`. This tactic does approximately the same thing
+  as `scalar_tac` but for performance reasons also cleans up the goal further by removing useless
+  assumptions automatically introduced by Lean and which can lead to serious slow-downs.
+
   **Debugging**:
   If you want to debug a failing call to `scalar_tac`, you can replace `scalar_tac` with
   `scalar_tac_preprocess; simp_all only [simp_bool_prop_simps, scalar_tac_simps]; omega`:
