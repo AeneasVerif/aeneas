@@ -525,22 +525,27 @@ def parseArgs: TSyntax `Aeneas.ProgressStar.«progress*_args» → CoreM Config
 
 /-- The `progress*` tactic repeatedly applies `progress` and `split` on the goal.
 
-It is possible to turn a call to `progress*` into the equivalent proof script by using `progress*?`.
+Its variant `progress*?` allows automatically generating the equivalent proof script.
 -/
-elab "progress" noWs "*" stx:«progress*_args»: tactic => do
-  let cfg ← parseArgs stx
-  evalProgressStar cfg *> pure ()
+syntax (name := progressStar) "progress" noWs ("*" <|> "*?") «progress*_args»: tactic
 
-/-- The `progress*?` tactic allows turning a call to `progress*` into the equivalent proof script.
-
-See the documentation of `progress*` for more information.
--/
-elab tk:"progress" noWs "*?" stx:«progress*_args»: tactic => do
-  let cfg ← parseArgs stx
-  let info ← evalProgressStar cfg
-  let suggestion ← info.script.toSyntax
-  let suggestion ← `(tacticSeq|$(suggestion)*)
-  Aesop.addTryThisTacticSeqSuggestion tk suggestion (origSpan? := ← getRef)
+@[tactic progressStar]
+def evalProgressStarTac : Tactic := fun stx => do
+  match stx with
+  | `(tactic| progress* $args:«progress*_args») =>
+    let cfg ← parseArgs args
+    evalProgressStar cfg *> pure ()
+  | `(tactic| progress*? $args:«progress*_args») =>
+    let cfg ← parseArgs args
+    let info ← evalProgressStar cfg
+    let suggestion ← info.script.toSyntax
+    let suggestion ← `(tacticSeq|$(suggestion)*)
+    /- TODO: do not use the Aesop helper but our own (it mentions Aesop in the message)
+       See https://github.com/AeneasVerif/aeneas/issues/476 -/
+    Aesop.addTryThisTacticSeqSuggestion stx suggestion (origSpan? := ← getRef)
+    --TODO: if we use this the indentation is not correct
+    --Meta.Tactic.TryThis.addSuggestion stx suggestion (origSpan? := ← getRef)
+  | _ => throwUnsupportedSyntax
 
 end ProgressStar
 
