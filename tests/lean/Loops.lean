@@ -632,7 +632,7 @@ partial_fixpoint
 
 /- [loops::issue500_2::A]
    Source: 'tests/src/loops.rs', lines 390:4-390:24 -/
-@[reducible] def issue500_2.A := (Array Bool 1#usize)
+@[reducible] def issue500_2.A := Array Bool 1#usize
 
 /- [loops::issue500_2::bar]:
    Source: 'tests/src/loops.rs', lines 391:4-391:33 -/
@@ -653,7 +653,7 @@ def issue500_2 (s : Array Bool 1#usize) : Result (Array Bool 1#usize) :=
 
 /- [loops::issue500_3::A]
    Source: 'tests/src/loops.rs', lines 402:4-402:24 -/
-@[reducible] def issue500_3.A := (Array Bool 1#usize)
+@[reducible] def issue500_3.A := Array Bool 1#usize
 
 /- [loops::issue500_3]: loop 0:
    Source: 'tests/src/loops.rs', lines 404:4-404:18 -/

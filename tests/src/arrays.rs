@@ -370,3 +370,9 @@ fn add_acc(paSrc: &mut [u32; 256], peDst: &mut [u32; 256]) {
         i += 1;
     }
 }
+
+const ARRAY1: [u32; 2] = [0, 1];
+
+// Issue https://github.com/AeneasVerif/aeneas/issues/622
+struct Scalar([u32; 2]);
+const L: Scalar = Scalar([0, 1]);
