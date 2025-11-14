@@ -3,55 +3,6 @@ open Cps
 open Contexts
 open InterpreterUtils
 
-(** Prepare the shared loans in the abstractions by moving them to fresh
-    abstractions.
-
-    We use this to prepare an evaluation context before computing a fixed point.
-
-    Because a loop iteration might lead to symbolic value expansions and create
-    shared loans in shared values inside the *fixed* abstractions, which we want
-    to leave unchanged, we introduce some reborrows in the following way:
-
-    {[
-      abs'0 { SL l s0 }
-      x0 -> SB l
-      x1 -> SB l
-
-        ~~>
-
-      abs'0 { SL l s0 }
-      x0 -> SB l1
-      x1 -> SB l2
-      abs'1 { SB l, SL l1 s1 }
-      abs'2 { SB l, SL l2 s2 }
-    ]}
-
-    This is sound but leads to information loss. This way, the fixed abstraction
-    [abs'0] is never modified because [s0] is never accessed (and thus never
-    expanded).
-
-    We do this because it makes it easier to compute joins and fixed points.
-
-    **REMARK**: As a side note, we only reborrow the loan ids whose
-    corresponding borrows appear in values (i.e., not in abstractions).
-
-    For instance, if we have:
-    {[
-      abs'0 {
-        SL l0 s0
-        SL l1 s1
-      }
-      abs'1 { SB l0 }
-      x -> SB l1
-    ]}
-
-    we only introduce a fresh abstraction for [l1].
-
-    The boolean is [with_abs_conts]: if [true] we synthesize continuations
-    expressions for the fresh region abstractions we introduce. *)
-val prepare_ashared_loans :
-  Meta.span -> loop_id option -> with_abs_conts:bool -> Cps.cm_fun
-
 (** Compute a fixed-point for the context at the entry of the loop. We also
     return:
     - the sets of fixed ids
@@ -76,27 +27,12 @@ val compute_loop_entry_fixed_point :
   eval_ctx ->
   eval_ctx * ids_sets
 
-(** Compute the set of "quantified" symbolic value ids in a fixed-point context.
-
-    We compute:
-    - the set of symbolic value ids that are freshly introduced
-    - the list of input symbolic values
-
-    If [only_modified_input_svalues] is true, we only include in the list of
-    input symbolic values the ones which are modified from one context to the
-    other. *)
-val compute_fp_ctx_symbolic_values :
-  Meta.span ->
-  only_modified_input_svalues:bool ->
-  eval_ctx ->
-  eval_ctx ->
-  symbolic_value_id_set * symbolic_value list
-
 val compute_loop_break_context :
   config ->
   Meta.span ->
   LoopId.id ->
   stl_cm_fun ->
   eval_ctx ->
-  ids_sets ->
+  AbsId.Set.t ->
+  DummyVarId.Set.t ->
   (eval_ctx * abs list) option

@@ -502,3 +502,28 @@ fn iter_local_shared_borrow() {
         }
     }
 }
+
+pub enum AList<T> {
+    Cons(usize, T, Box<AList<T>>),
+    Nil,
+}
+
+// This is adapted from the hashmap
+fn insert_in_list<T>(key: usize, value: T, mut ls: &mut AList<T>) -> bool {
+    loop {
+        match ls {
+            AList::Nil => {
+                *ls = AList::Cons(key, value, Box::new(AList::Nil));
+                return true;
+            }
+            AList::Cons(ckey, cvalue, tl) => {
+                if *ckey == key {
+                    *cvalue = value;
+                    return false;
+                } else {
+                    ls = tl;
+                }
+            }
+        }
+    }
+}

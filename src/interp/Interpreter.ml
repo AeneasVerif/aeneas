@@ -211,8 +211,8 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx)
       let inputs =
         List.map
           (fun (sv : symbolic_value) ->
-            mk_eproj_loans_value_from_symbolic_value abs.regions.owned sv
-              sv.sv_ty)
+            mk_eproj_loans_value_from_symbolic_value ctx.type_ctx.type_infos
+              abs.regions.owned sv sv.sv_ty)
           input_svs
       in
       (* Note that we don't really care about the type of the input *)

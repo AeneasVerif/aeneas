@@ -152,5 +152,4 @@ val eliminate_ended_shared_loans : Meta.span -> eval_ctx -> eval_ctx
       symbolic value doesn't appear anywhere else in the context We ignore the
       abstractions which are specified by the set of abstraction ids (we do not
       end them, nor their loans). *)
-val simplify_dummy_values_useless_abs :
-  config -> Meta.span -> AbsId.Set.t -> cm_fun
+val simplify_dummy_values_useless_abs : config -> Meta.span -> cm_fun

@@ -632,16 +632,23 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
             ctx args
         in
         let args = List.filter_map (fun x -> x) args in
+        [%ldebug
+          "- app:\n"
+          ^ tevalue_to_string ctx input
+          ^ "\n\n- args:\n"
+          ^ Print.list_to_string ~sep:"\n" (texpr_to_string ctx) args];
         begin
           match f with
           | V.EOutputAbs _ | V.EInputAbs _ ->
               (* Those shouln't get merged *)
               [%internal_error] span
-          | V.EFunCall abs_id | V.ELoop (abs_id, _) ->
+          | V.EFunCall abs_id | V.ELoop (abs_id, _) | V.EJoin abs_id ->
               (* Lookup the variable introduced for the backward function *)
               let e, can_fail =
                 match V.AbsId.Map.find_opt abs_id ctx.abs_id_to_info with
                 | None ->
+                    (* No variable was introduced: it means the abstraction should
+                       be ignored (it consumes unit and outputs unit). *)
                     [%sanity_check] span (args = []);
                     [%sanity_check] span
                       (V.AbsId.Set.mem abs_id ctx.ignored_abs_ids);

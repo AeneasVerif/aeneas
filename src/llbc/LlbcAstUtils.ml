@@ -113,3 +113,36 @@ let trait_impl_with_crate_to_pattern_string (span : Meta.span option)
     (trait_impl : LlbcAst.trait_impl) : string =
   name_with_generics_crate_to_pattern_string span crate
     trait_decl.item_meta.name trait_decl.generics trait_impl.impl_trait.generics
+
+(** Return true if the statement contains an instruction which breaks the
+    control flow, at the exception of panics (that is: a break, a continue or a
+    return) *)
+let statement_has_break_continue_return (st : statement) : bool =
+  let visitor =
+    object
+      inherit [_] iter_statement
+      method! visit_Break _ _ = raise Utils.Found
+      method! visit_Continue _ _ = raise Utils.Found
+      method! visit_Return _ = raise Utils.Found
+    end
+  in
+  try
+    visitor#visit_statement () st;
+    false
+  with Utils.Found -> true
+
+(** Return true if the block contains a statement which breaks the control flow,
+    at the exception of panics (that is: a break, a continue or a return) *)
+let block_has_break_continue_return (st : block) : bool =
+  let visitor =
+    object
+      inherit [_] iter_statement
+      method! visit_Break _ _ = raise Utils.Found
+      method! visit_Continue _ _ = raise Utils.Found
+      method! visit_Return _ = raise Utils.Found
+    end
+  in
+  try
+    visitor#visit_block () st;
+    false
+  with Utils.Found -> true

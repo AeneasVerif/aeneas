@@ -1152,7 +1152,11 @@ let bound_inputs_outputs_update_input_loan (span : Meta.span)
             let lv : tevalue = { value = EFVar fvidl; ty = tyl } in
             let rv : tevalue = { value = EFVar fvidr; ty = tyr } in
             ([], { value = EJoinMarkers (lv, rv); ty = tyl })
-        | _ -> [%internal_error] span
+        | _ ->
+            [%ldebug
+              "- pm: " ^ show_proj_marker pm ^ "\n- bound:\n"
+              ^ bound_borrow_to_string (bid, bound)];
+            [%internal_error] span
       in
       let out =
         let bound =
@@ -1549,7 +1553,7 @@ let merge_abs_conts_generate_output (span : Meta.span) (_ctx : eval_ctx)
   (output, input)
 
 (** Create the input binding all inputs of a composed continuation. *)
-let merge_abs_conts_generate_input (span : Meta.span) (_ctx : eval_ctx)
+let merge_abs_conts_generate_input (span : Meta.span) (ctx : eval_ctx)
     (all_bindings : (BorrowId.id, SymbolicValueId.id) Either.t list)
     (bound : bound_inputs_outputs) : tepat * tevalue =
   let bindings = all_bindings in
@@ -1581,12 +1585,15 @@ let merge_abs_conts_generate_input (span : Meta.span) (_ctx : eval_ctx)
     | Right sv_id -> begin
         match SymbolicValueId.Map.find_opt sv_id !symbolic with
         | None -> ()
-        | Some (fid, pml, _, ty) ->
+        | Some ((fid, pml, _, ty) as bsymb) ->
             let pm =
               match pml with
               | [ pm ] -> pm
               | [ PLeft; PRight ] | [ PRight; PLeft ] -> PNone
-              | _ -> [%internal_error] span
+              | _ ->
+                  [%ldebug
+                    "Unexpected:\n" ^ input_symbolic_to_string ctx (sv_id, bsymb)];
+                  [%internal_error] span
             in
             let pat : tepat = { pat = POpen fid; ty } in
             let input : tevalue =
@@ -1754,9 +1761,7 @@ let merge_abs_conts_aux (span : Meta.span) (ctx : eval_ctx) (abs0 : abs)
 let merge_abs_conts (span : Meta.span) (ctx : eval_ctx) ~(with_abs_conts : bool)
     (abs0 : abs) (abs1 : abs) : abs_cont option =
   match (abs0.cont, abs1.cont) with
-  | None, None | None, Some _ | Some _, None ->
-      [%sanity_check] span (not with_abs_conts);
-      None
+  | None, None | None, Some _ | Some _, None -> None
   | Some cont0, Some cont1 ->
       if with_abs_conts then
         Some (merge_abs_conts_aux span ctx abs0 abs1 cont0 cont1)
@@ -2206,7 +2211,7 @@ type proj_ctx = {
   inside_output : bool;  (** Are we inside an abstraction output expression? *)
 }
 
-let project_context (span : Meta.span) (fixed_ids : InterpreterUtils.ids_sets)
+let project_context (span : Meta.span) (fixed_aids : AbsId.Set.t)
     (pm : proj_marker) (ctx : eval_ctx) : eval_ctx =
   [%cassert] span (pm = PLeft || pm = PRight) "Invalid input";
   let project_left = pm = PLeft in
@@ -2368,7 +2373,7 @@ let project_context (span : Meta.span) (fixed_ids : InterpreterUtils.ids_sets)
   let update_binding (e : env_elem) : env_elem option =
     match e with
     | EAbs abs ->
-        if AbsId.Set.mem abs.abs_id fixed_ids.aids then Some e
+        if (not abs.can_end) || AbsId.Set.mem abs.abs_id fixed_aids then Some e
         else
           let keep_value (e : tavalue) : bool = not (is_aignored e.value) in
           let avalues = List.filter keep_value abs.avalues in
@@ -2377,3 +2382,82 @@ let project_context (span : Meta.span) (fixed_ids : InterpreterUtils.ids_sets)
   in
   let env = List.filter_map update_binding ctx.env in
   { ctx with env }
+
+let add_abs_cont_to_abs span (ctx : eval_ctx) (abs : abs) (abs_fun : abs_fun) :
+    abs =
+  (* Retrieve the *mutable* borrows/loans from the abstraction values *)
+  let borrows : tevalue list ref = ref [] in
+  let loans : tevalue list ref = ref [] in
+  let get_borrow_loan (x : tavalue) : unit =
+    let ty = x.ty in
+    match x.value with
+    | ALoan lc -> (
+        match lc with
+        | AMutLoan (pm, bid, child) ->
+            [%sanity_check] span (is_aignored child.value);
+            let value : evalue =
+              ELoan (EMutLoan (pm, bid, mk_eignored child.ty))
+            in
+            loans := { value; ty } :: !loans
+        | ASharedLoan _ ->
+            (* We ignore shared loans *)
+            ()
+        | AEndedMutLoan _
+        | AEndedSharedLoan _
+        | AIgnoredMutLoan _
+        | AEndedIgnoredMutLoan _
+        | AIgnoredSharedLoan _ -> [%internal_error] span)
+    | ABorrow bc -> (
+        match bc with
+        | AMutBorrow (pm, bid, child) ->
+            [%sanity_check] span (is_aignored child.value);
+            let value : evalue =
+              EBorrow (EMutBorrow (pm, bid, mk_eignored child.ty))
+            in
+            borrows := { value; ty } :: !borrows
+        | ASharedBorrow _ -> (* We ignore shared borrows *) ()
+        | AIgnoredMutBorrow _
+        | AEndedMutBorrow _
+        | AEndedSharedBorrow
+        | AEndedIgnoredMutBorrow _
+        | AProjSharedBorrow _ -> [%internal_error] span)
+    | ASymbolic (pm, aproj) -> (
+        match aproj with
+        | AProjLoans { proj = { sv_id; proj_ty }; consumed; borrows } ->
+            if TypesUtils.ty_has_mut_borrows ctx.type_ctx.type_infos proj_ty
+            then (
+              [%sanity_check] span (consumed = []);
+              [%sanity_check] span (borrows = []);
+              let value : evalue =
+                ESymbolic
+                  ( pm,
+                    EProjLoans
+                      { proj = { sv_id; proj_ty }; consumed = []; borrows = [] }
+                  )
+              in
+              loans := { value; ty } :: !loans)
+        | AProjBorrows { proj = { sv_id; proj_ty }; loans } ->
+            if TypesUtils.ty_has_mut_borrows ctx.type_ctx.type_infos proj_ty
+            then (
+              [%sanity_check] span (loans = []);
+              let value : evalue =
+                ESymbolic
+                  (pm, EProjBorrows { proj = { sv_id; proj_ty }; loans = [] })
+              in
+              borrows := { value; ty } :: !borrows)
+        | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty ->
+            [%internal_error] span)
+    | AAdt _ | AIgnored _ -> [%internal_error] span
+  in
+  List.iter get_borrow_loan abs.avalues;
+
+  (* Transform them into input/output expressions *)
+  let output = mk_etuple (List.rev !borrows) in
+  let input = EApp (abs_fun, List.rev !loans) in
+  let input : tevalue = { value = input; ty = output.ty } in
+
+  (* Put everything together *)
+  let cont : abs_cont option =
+    Some { output = Some output; input = Some input }
+  in
+  { abs with cont }

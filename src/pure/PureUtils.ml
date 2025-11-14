@@ -200,6 +200,16 @@ let opt_dest_arrow_ty (ty : ty) : (ty * ty) option =
   | TArrow (arg_ty, ret_ty) -> Some (arg_ty, ret_ty)
   | _ -> None
 
+let as_tuple_ty file line span (ty : ty) : ty list =
+  match ty with
+  | TAdt (TTuple, generics) -> generics.types
+  | _ -> Errors.internal_error file line span
+
+let is_tuple_ty (ty : ty) : bool =
+  match ty with
+  | TAdt (TTuple, _) -> true
+  | _ -> false
+
 let is_arrow_ty (ty : ty) : bool = Option.is_some (opt_dest_arrow_ty ty)
 
 let opt_dest_result_ty (ty : ty) : ty option =
@@ -397,6 +407,11 @@ let as_fvar (span : Meta.span) (e : texpr) : fvar_id =
   match e.e with
   | FVar v -> v
   | _ -> [%craise] span "Not an fvar"
+
+let as_qualif (span : Meta.span) (e : texpr) : qualif =
+  match e.e with
+  | Qualif qualif -> qualif
+  | _ -> [%craise] span "Not a qualif"
 
 let is_bvar (e : texpr) : bool =
   match e.e with
@@ -620,22 +635,32 @@ let mk_apps (file : string) (line : int) (span : Meta.span) (app : texpr)
     (args : texpr list) : texpr =
   List.fold_left (fun app arg -> mk_app file line span app arg) app args
 
+let mk_qualif_apps (file : string) (line : int) (span : Meta.span)
+    (app : qualif) (args : texpr list) (ty : ty) : texpr =
+  let app =
+    {
+      e = Qualif app;
+      ty = mk_arrows (List.map (fun (e : texpr) -> e.ty) args) ty;
+    }
+  in
+  mk_apps file line span app args
+
 (** Destruct an expression into a qualif identifier and a list of arguments, *
     if possible *)
-let opt_destruct_qualif_app (e : texpr) : (qualif * texpr list) option =
+let opt_destruct_qualif_apps (e : texpr) : (qualif * texpr list) option =
   let app, args = destruct_apps e in
   match app.e with
   | Qualif qualif -> Some (qualif, args)
   | _ -> None
 
 (** Destruct an expression into a qualif identifier and a list of arguments *)
-let destruct_qualif_app (e : texpr) : qualif * texpr list =
-  Option.get (opt_destruct_qualif_app e)
+let destruct_qualif_apps (e : texpr) : qualif * texpr list =
+  Option.get (opt_destruct_qualif_apps e)
 
 (** Destruct an expression into a function call, if possible *)
 let opt_destruct_function_call (e : texpr) :
     (fun_or_op_id * generic_args * texpr list) option =
-  match opt_destruct_qualif_app e with
+  match opt_destruct_qualif_apps e with
   | None -> None
   | Some (qualif, args) -> (
       match qualif.id with
@@ -676,6 +701,11 @@ let opt_destruct_tuple_texpr (span : Meta.span) (e : texpr) : texpr list option
       Some fields
   | _ -> None
 
+let destruct_tuple_texpr file line (span : Meta.span) (e : texpr) : texpr list =
+  match opt_destruct_tuple_texpr span e with
+  | None -> Errors.internal_error file line span
+  | Some xl -> xl
+
 let try_destruct_tuple_texpr span e =
   match opt_destruct_tuple_texpr span e with
   | None -> [ e ]
@@ -694,7 +724,7 @@ let opt_destruct_tuple_tpat (span : Meta.span) (e : tpat) : tpat list option =
       begin
         match e.pat with
         | PAdt { fields; _ } -> Some fields
-        | _ -> [%internal_error] span
+        | _ -> None
       end
   | _ -> None
 
@@ -2573,3 +2603,46 @@ let decompose_let_match span (refresh_var : fvar -> fvar)
     (pat, bound)
   else (* Nothing to do *)
     (pat, bound)
+
+let is_result_fail (e : texpr) : bool =
+  let f, args = destruct_apps e in
+  match f.e with
+  | Qualif
+      {
+        id = AdtCons { adt_id = TBuiltin TResult; variant_id = Some variant_id };
+        _;
+      }
+    when variant_id = result_fail_id -> List.length args = 1
+  | _ -> false
+
+let is_result_ok (e : texpr) : bool =
+  let f, args = destruct_apps e in
+  match f.e with
+  | Qualif
+      {
+        id = AdtCons { adt_id = TBuiltin TResult; variant_id = Some variant_id };
+        _;
+      }
+    when variant_id = result_ok_id -> List.length args = 1
+  | _ -> false
+
+let is_loop_result_fail_break_continue (e : texpr) : bool =
+  let f, args = destruct_apps e in
+  match f.e with
+  | Qualif
+      {
+        id =
+          AdtCons
+            { adt_id = TBuiltin TLoopResult; variant_id = Some variant_id };
+        _;
+      }
+    when variant_id = loop_result_break_id
+         || variant_id = loop_result_continue_id
+         || variant_id = loop_result_fail_id -> List.length args = 1
+  | _ -> false
+
+let get_tuple_size (e : texpr) : int option =
+  let f, args = destruct_apps e in
+  match f.e with
+  | Qualif { id = AdtCons { adt_id = TTuple; _ }; _ } -> Some (List.length args)
+  | _ -> None

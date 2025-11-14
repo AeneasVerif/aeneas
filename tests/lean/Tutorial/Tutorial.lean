@@ -340,7 +340,7 @@ def get_or_zero (y : alloc.vec.Vec U32) (i : Usize) : Result U32 :=
 /- [tutorial::add]: loop 0:
    Source: 'src/lib.rs', lines 221:4-229:5 -/
 def add_loop
-  (max1 : Usize) (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (c0 : U8)
+  (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (max1 : Usize) (c0 : U8)
   (i : Usize) :
   Result ((alloc.vec.Vec U32) × U8)
   :=
@@ -363,7 +363,7 @@ def add_loop
         i
     let i5 ← i + 1#usize
     let x1 := index_mut_back sum1
-    add_loop max1 x1 y c01 i5
+    add_loop x1 y max1 c01 i5
   else ok (x, c0)
 partial_fixpoint
 
@@ -378,7 +378,7 @@ def add
   let i1 := alloc.vec.Vec.len y
   let max1 ← max i i1
   let x1 ← alloc.vec.Vec.resize core.clone.CloneU32 x max1 0#u32
-  let (x2, c0) ← add_loop max1 x1 y 0#u8 0#usize
+  let (x2, c0) ← add_loop x1 y max1 0#u8 0#usize
   if c0 != 0#u8
   then
     do

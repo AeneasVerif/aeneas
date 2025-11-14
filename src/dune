@@ -46,11 +46,11 @@
   InterpreterExpansion
   InterpreterExpressions
   Interpreter
-  InterpreterLoopsCore
-  InterpreterLoopsMatchCtxs
-  InterpreterLoopsJoinCtxs
+  InterpreterJoin
+  InterpreterJoinCore
   InterpreterLoopsFixedPoint
   InterpreterLoops
+  InterpreterMatchCtxs
   InterpreterPaths
   InterpreterProjectors
   InterpreterReduceCollapse

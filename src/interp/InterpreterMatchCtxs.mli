@@ -7,7 +7,7 @@ open Values
 open Contexts
 open Cps
 open InterpreterUtils
-open InterpreterLoopsCore
+open InterpreterJoinCore
 
 (** Compute various maps linking the abstractions and the borrows/loans they
     contain.
@@ -140,15 +140,18 @@ val match_ctxs :
 val ctxs_are_equivalent : Meta.span -> ids_sets -> eval_ctx -> eval_ctx -> bool
 
 (** Reorganize a target context so that we can match it with a source context
-    (remember that the source context is generally the fixed point context,
-    which results from joins during which we ended the loans which were
+    (remember that the source context is generally the fixed point context of a
+    loop, which results from joins during which we ended the loans which were
     introduced during the loop iterations).
+
+    TODO: remove?
 
     **Parameters**:
     - [config]
     - [span]
-    - [loop_id]
+    - [fresh_abs_kind]: the abs kind to use for the freshly introduced
+      abstractions
     - [fixed_ids]
     - [src_ctx] *)
-val prepare_loop_match_ctx_with_target :
-  config -> Meta.span -> LoopId.id -> ids_sets -> eval_ctx -> cm_fun
+val prepare_match_ctx_with_target :
+  config -> Meta.span -> abs_kind -> eval_ctx -> cm_fun

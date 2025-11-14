@@ -129,7 +129,7 @@ def mod_sub (a : U32) (b : U32) : Result U32 :=
 /- [loops_nested::ntt_layer]: loop 1:
    Source: 'tests/src/loops-nested.rs', lines 66:8-78:9 -/
 def ntt_layer_loop1
-  (len : Usize) (start : Usize) (factor : U32) (a : Array U16 256#usize)
+  (a : Array U16 256#usize) (len : Usize) (start : Usize) (factor : U32)
   (j : Usize) :
   Result (Array U16 256#usize)
   :=
@@ -151,14 +151,14 @@ def ntt_layer_loop1
     let i6 ← (↑(UScalar.cast .U16 c11) : Result U16)
     let a2 ← Array.update a1 i5 i6
     let j1 ← j + 1#usize
-    ntt_layer_loop1 len start factor a2 j1
+    ntt_layer_loop1 a2 len start factor j1
   else ok a
 partial_fixpoint
 
 /- [loops_nested::ntt_layer]: loop 0:
    Source: 'tests/src/loops-nested.rs', lines 61:4-80:5 -/
 def ntt_layer_loop0
-  (len : Usize) (a : Array U16 256#usize) (k : Usize) (start : Usize) :
+  (a : Array U16 256#usize) (k : Usize) (len : Usize) (start : Usize) :
   Result (Array U16 256#usize)
   :=
   if start < 256#usize
@@ -167,10 +167,10 @@ def ntt_layer_loop0
     let i ← Array.index_usize FACTORS k
     let factor ← core.convert.IntoFrom.into core.convert.FromU32U16 i
     let k1 ← k + 1#usize
-    let a1 ← ntt_layer_loop1 len start factor a 0#usize
+    let a1 ← ntt_layer_loop1 a len start factor 0#usize
     let i1 ← 2#usize * len
     let start1 ← start + i1
-    ntt_layer_loop0 len a1 k1 start1
+    ntt_layer_loop0 a1 k1 len start1
   else ok a
 partial_fixpoint
 
@@ -181,7 +181,7 @@ def ntt_layer
   (a : Array U16 256#usize) (k : Usize) (len : Usize) :
   Result (Array U16 256#usize)
   :=
-  ntt_layer_loop0 len a k 0#usize
+  ntt_layer_loop0 a k len 0#usize
 
 /- [loops_nested::Key]
    Source: 'tests/src/loops-nested.rs', lines 83:0-86:1 -/
@@ -256,8 +256,8 @@ def generate_matrix_inner
 /- [loops_nested::generate_matrix]: loop 1:
    Source: 'tests/src/loops-nested.rs', lines 123:8-131:9 -/
 def generate_matrix_loop1
-  (state_base : Array U8 8#usize) (i : U8) (key : Key)
-  (state_work : Array U8 8#usize) (coordinates : Array U8 2#usize) (j : U8) :
+  (key : Key) (state_base : Array U8 8#usize) (state_work : Array U8 8#usize)
+  (coordinates : Array U8 2#usize) (i : U8) (j : U8) :
   Result (Key × (Array U8 8#usize) × (Array U8 2#usize))
   :=
   if j < 4#u8
@@ -276,26 +276,26 @@ def generate_matrix_loop1
     let j1 ← j + 1#u8
     let a_transpose1 := index_mut_back i5
     let key1 := atranspose_mut_back a_transpose1
-    generate_matrix_loop1 state_base i key1 state_work3 coordinates1 j1
+    generate_matrix_loop1 key1 state_base state_work3 coordinates1 i j1
   else ok (key, state_work, coordinates)
 partial_fixpoint
 
 /- [loops_nested::generate_matrix]: loop 0:
    Source: 'tests/src/loops-nested.rs', lines 120:4-133:5 -/
 def generate_matrix_loop0
-  (state_base : Array U8 8#usize) (key : Key) (state_work : Array U8 8#usize)
+  (key : Key) (state_base : Array U8 8#usize) (state_work : Array U8 8#usize)
   (coordinates : Array U8 2#usize) (i : U8) :
-  Result (Key × (Array U8 8#usize))
+  Result (Key × (Array U8 8#usize) × (Array U8 8#usize))
   :=
   if i < 4#u8
   then
     do
     let coordinates1 ← Array.update coordinates 1#usize i
     let (key1, state_work1, coordinates2) ←
-      generate_matrix_loop1 state_base i key state_work coordinates1 0#u8
+      generate_matrix_loop1 key state_base state_work coordinates1 i 0#u8
     let i1 ← i + 1#u8
-    generate_matrix_loop0 state_base key1 state_work1 coordinates2 i1
-  else ok (key, state_work)
+    generate_matrix_loop0 key1 state_base state_work1 coordinates2 i1
+  else ok (key, state_base, state_work)
 partial_fixpoint
 
 /- [loops_nested::generate_matrix]:
@@ -309,8 +309,6 @@ def generate_matrix
   let state_base1 ← shake_init state_base
   let s ← (↑(Array.to_slice key.seed) : Result (Slice U8))
   let state_base2 ← shake_append state_base1 s
-  let (key1, state_work1) ←
-    generate_matrix_loop0 state_base2 key state_work coordinates 0#u8
-  ok (key1, state_base2, state_work1)
+  generate_matrix_loop0 key state_base2 state_work coordinates 0#u8
 
 end loops_nested

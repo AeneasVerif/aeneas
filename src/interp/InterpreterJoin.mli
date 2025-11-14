@@ -1,12 +1,78 @@
 open Values
 open Contexts
-open InterpreterUtils
-open InterpreterLoopsCore
+open InterpreterJoinCore
+
+(** Prepare the shared loans in the abstractions by moving them to fresh
+    abstractions.
+
+    We use this for instance to prepare an evaluation context before computing a
+    fixed point.
+
+    Because a loop iteration might lead to symbolic value expansions and create
+    shared loans in shared values inside the *fixed* abstractions, which we want
+    to leave unchanged, we introduce some reborrows in the following way:
+
+    {[
+      abs'0 { SL l s0 }
+      x0 -> SB l
+      x1 -> SB l
+
+        ~~>
+
+      abs'0 { SL l s0 }
+      x0 -> SB l1
+      x1 -> SB l2
+      abs'1 { SB l, SL l1 s1 }
+      abs'2 { SB l, SL l2 s2 }
+    ]}
+
+    This is sound but leads to information loss. This way, the fixed abstraction
+    [abs'0] is never modified because [s0] is never accessed (and thus never
+    expanded).
+
+    We do this because it makes it easier to compute joins and fixed points.
+
+    **REMARK**: As a side note, we only reborrow the loan ids whose
+    corresponding borrows appear in values (i.e., not in abstractions).
+
+    For instance, if we have:
+    {[
+      abs'0 {
+        SL l0 s0
+        SL l1 s1
+      }
+      abs'1 { SB l0 }
+      x -> SB l1
+    ]}
+
+    we only introduce a fresh abstraction for [l1].
+
+    The boolean is [with_abs_conts]: if [true] we synthesize continuations
+    expressions for the fresh region abstractions we introduce. *)
+val prepare_ashared_loans :
+  Meta.span -> loop_id option -> with_abs_conts:bool -> Cps.cm_fun
+
+val prepare_ashared_loans_no_synth :
+  Meta.span -> loop_id -> with_abs_conts:bool -> eval_ctx -> eval_ctx
+
+(** Compute the list of symbolic values which appear in the 2nd context and not
+    the first one, and order them following their position in the environment.
+
+    If [only_modified_svalues] is true, we only include in the list of input
+    symbolic values the ones which are modified from one context to the other.
+*)
+val compute_ctx_fresh_ordered_symbolic_values :
+  Meta.span ->
+  only_modified_svalues:bool ->
+  eval_ctx ->
+  eval_ctx ->
+  symbolic_value list
 
 (** Join two contexts.
 
-    We use this to join the environments at loop (re-)entry to progressively
-    compute a fixed point.
+    We use this to join environments, for instance at loop (re-)entry to
+    progressively compute a fixed point, or when joining the control-flow after
+    a branching statement ([if then else], etc.).
 
     We make the hypothesis (and check it) that the environments have the same
     prefixes (same variable ids, same abstractions, etc.). The prefix of
@@ -16,6 +82,11 @@ open InterpreterLoopsCore
     which are not dummy, then group the additional dummy variables/abstractions
     together. In a sense, the [fixed_ids] define a frame (in a separation logic
     sense).
+
+    TODO: update the explanations below. The new formalism uses a notion of
+    markers, a reduce operation (to get rid of markers) and a collapse operation
+    (to simplify the context - equivalent of the widening operation in
+    abstraction interpretation).
 
     Note that when joining the values mapped to by the non-dummy variables, we
     may introduce duplicated borrows. Also, we don't match the abstractions
@@ -58,23 +129,20 @@ open InterpreterLoopsCore
     have this structure: this is a *completeness issue*.
 
     Parameters:
-    - [loop_id]
-    - [fixed_ids]
-    - 
+    - [span]
+    - [fresh_abs_kind]
+    - [with_abs_conts]
     - [ctx0]
     - [ctx1] *)
 val join_ctxs :
   Meta.span ->
-  loop_id ->
-  ids_sets ->
+  abs_kind ->
   with_abs_conts:bool ->
   eval_ctx ->
   eval_ctx ->
   ctx_or_update
 
-(** Join the context at the entry of the loop with the contexts upon reentry
-    (upon reaching the [Continue] statement - the goal is to compute a fixed
-    point for the loop entry).
+(** Join a list of contexts, which must be non empty.
 
     As we may have to end loans in the environments before doing the join, we
     return those updated environments, and the joined environment.
@@ -86,6 +154,29 @@ val join_ctxs :
     Parameters:
     - [config]
     - [loop_id]
+    - [old_ctx]
+    - [ctxl] *)
+val join_ctxs_list :
+  config ->
+  Meta.span ->
+  abs_kind ->
+  ?preprocess_first_ctx:bool ->
+  with_abs_conts:bool ->
+  eval_ctx list ->
+  eval_ctx list * eval_ctx
+
+(** Join the context at the entry of the loop with the contexts upon reentry
+    (upon reaching the [Continue] statement - the goal is to compute a fixed
+    point for the loop entry).
+
+    As we may have to end loans in the environments before doing the join, we
+    return those updated environments, and the joined environment.
+
+    This function simply calls [join_ctxs_list].
+
+    Parameters:
+    - [config]
+    - [loop_id]
     - [fixed_ids]
     - [old_ctx]
     - [ctxl] *)
@@ -93,12 +184,13 @@ val loop_join_origin_with_continue_ctxs :
   config ->
   Meta.span ->
   loop_id ->
-  ids_sets ->
   eval_ctx ->
   eval_ctx list ->
   (eval_ctx * eval_ctx list) * eval_ctx
 
 (** Match a context with a target context.
+
+    TODO: update comments: we're not using this only for loops anymore.
 
     This is used to compute application of loop translations: we use this to
     introduce "identity" abstractions upon (re-)entering the loop.
@@ -230,37 +322,53 @@ val loop_join_origin_with_continue_ctxs :
 
     **Parameters**:
     - [config]
-    - [loop_id]
-    - [is_loop_entry]: [true] if first entry into the loop, [false] if re-entry
-      (i.e., continue).
-    - [fp_input_svalues]: the list of symbolic values appearing in the fixed
-      point (the source context) and which must be instantiated during the match
-      (this is the list of input parameters of the loop).
+    - [span]
+    - [fresh_abs_kind]
+    - [fixed_abs_ids]
+    - [input_svalues]: the list of symbolic values appearing in the source
+      context (e.g., the fixed-point context) and which must be instantiated
+      during the match (in the case of loops, this is the list of input
+      parameters of the loop).
     - [fixed_ids]
     - [src_ctx]
+    - [tgt_ctx]
 
-    Outputs: the first context is the source context, the second context is the
-    (potentially updated) target context. *)
-val loop_match_ctx_with_target :
+    Outputs:
+    - the first context is the source context
+    - the second context is the (potentially updated) target context
+    - input values
+    - input abstractions
+    - the continuation function which generates the symbolic AST *)
+val match_ctx_with_target :
   config ->
   Meta.span ->
-  loop_id ->
+  abs_kind ->
+  AbsId.Set.t ->
+  DummyVarId.Set.t ->
+  abs_id list ->
   symbolic_value_id list ->
-  ids_sets ->
   eval_ctx ->
   eval_ctx ->
   (eval_ctx * eval_ctx * tvalue SymbolicValueId.Map.t * abs AbsId.Map.t)
   * (SymbolicAst.expr -> SymbolicAst.expr)
 
 val loop_join_break_ctxs :
-  config -> Meta.span -> loop_id -> ids_sets -> eval_ctx list -> eval_ctx
+  config ->
+  Meta.span ->
+  loop_id ->
+  AbsId.Set.t ->
+  DummyVarId.Set.t ->
+  eval_ctx list ->
+  eval_ctx
 
 val loop_match_break_ctx_with_target :
   config ->
   Meta.span ->
   loop_id ->
+  AbsId.Set.t ->
+  DummyVarId.Set.t ->
+  abs_id list ->
   symbolic_value_id list ->
-  ids_sets ->
   eval_ctx ->
   eval_ctx ->
   (eval_ctx * eval_ctx * tvalue SymbolicValueId.Map.t * abs AbsId.Map.t)

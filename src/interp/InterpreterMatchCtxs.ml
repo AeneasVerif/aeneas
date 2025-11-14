@@ -12,11 +12,11 @@ open Cps
 open InterpreterUtils
 open InterpreterBorrowsCore
 open InterpreterAbs
-open InterpreterLoopsCore
+open InterpreterJoinCore
 module S = SynthesizeSymbolic
 
 (** The local logger *)
-let log = Logging.loops_match_ctxs_log
+let log = Logging.match_ctxs_log
 
 let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
     (ctx : eval_ctx) (env : env) : abs_borrows_loans_maps =
@@ -672,21 +672,52 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* Create the abstraction expression *)
       let cont : abs_cont option =
         if S.with_abs_conts then
-          let input : tevalue =
-            let proj : esymbolic_proj =
-              { sv_id = sv_s.sv_id; proj_ty = ty_with_regions }
-            in
-            let value =
-              ESymbolic (PNone, EProjLoans { proj; consumed = []; borrows = [] })
-            in
-            { value; ty = ty_with_regions }
-          in
+          if
+            TypesUtils.ty_has_mut_borrows ctx0.type_ctx.type_infos
+              ty_with_regions
+          then
+            (* We used to generate a continuation of the following shape:
+               {[
+                 join(|(s0 <: Option<&'a mut (T)>)|, Option::Some (︙MB l0))︙) :=
+                 ⌊s1 <: Option<&'a mut (T)>⌋
+               ]}
 
-          let output : tevalue =
-            let value = EJoinMarkers (output0, output1) in
-            { value; ty = ty_with_regions }
-          in
-          Some { output = Some output; input = Some input }
+               but joins in abstraction outputs are a bit annoying to handle
+               when merging continuations, so now we generate something like this:
+
+               {[
+                 (|(s0 <: Option<&'a mut (T)>)|, Option::Some (︙MB l0))︙) :=
+                 let x := ⌊s1 <: Option<&'a mut (T)>⌋ in
+                 (x, x)
+               ]}
+
+               TODO: generalize the merge of continuations and revert the changes.
+            *)
+            let input : tevalue =
+              let proj : esymbolic_proj =
+                { sv_id = sv_s.sv_id; proj_ty = ty_with_regions }
+              in
+              let value =
+                ESymbolic
+                  (PNone, EProjLoans { proj; consumed = []; borrows = [] })
+              in
+              let input = { value; ty = ty_with_regions } in
+
+              (* Create the let-binding *)
+              let fvar = mk_fresh_abs_fvar ty_with_regions in
+              let pair = mk_etuple [ fvar; fvar ] in
+              let pat = mk_epat_from_fvar fvar in
+              mk_let span regions pat input pair
+            in
+
+            let output = mk_simpl_etuple [ output0; output1 ] in
+            Some { output = Some output; input = Some input }
+          else
+            Some
+              {
+                output = Some (mk_simpl_etuple []);
+                input = Some (mk_simpl_etuple []);
+              }
         else None
       in
 
@@ -694,7 +725,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let abs =
         {
           abs_id = ctx0.fresh_abs_id ();
-          kind = Loop S.loop_id;
+          kind = S.fresh_abs_kind;
           can_end = true;
           parents = AbsId.Set.empty;
           original_parents = [];
@@ -755,7 +786,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         tvalue_has_outer_loans v0 || tvalue_has_outer_loans v1
       in
       (* Move the values to region abstractions *)
-      let abs_kind = Loop S.loop_id in
+      let abs_kind = S.fresh_abs_kind in
       let to_absl pm ctx v =
         let absl =
           convert_value_to_abstractions span abs_kind ~can_end:true ctx v
@@ -840,7 +871,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         let abs =
           {
             abs_id = ctx0.fresh_abs_id ();
-            kind = Loop S.loop_id;
+            kind = S.fresh_abs_kind;
             can_end = true;
             parents = AbsId.Set.empty;
             original_parents = [];
@@ -927,7 +958,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let abs =
         {
           abs_id = ctx0.fresh_abs_id ();
-          kind = Loop S.loop_id;
+          kind = S.fresh_abs_kind;
           can_end = true;
           parents = AbsId.Set.empty;
           original_parents = [];
@@ -1094,7 +1125,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let abs =
         {
           abs_id = ctx0.fresh_abs_id ();
-          kind = Loop S.loop_id;
+          kind = S.fresh_abs_kind;
           can_end = true;
           parents = AbsId.Set.empty;
           original_parents = [];
@@ -1164,7 +1195,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let abs =
         {
           abs_id = ctx0.fresh_abs_id ();
-          kind = Loop S.loop_id;
+          kind = S.fresh_abs_kind;
           can_end = true;
           parents = AbsId.Set.empty;
           original_parents = [];
@@ -1240,7 +1271,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let abs =
         {
           abs_id = ctx0.fresh_abs_id ();
-          kind = Loop S.loop_id;
+          kind = S.fresh_abs_kind;
           can_end = true;
           parents = AbsId.Set.empty;
           original_parents = [];
@@ -1331,29 +1362,43 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
                    the case of mutable borrows):
                    {[
                      output := (|proj_borrows (s0 <: ...)|, ︙proj_borrows (s1 <: ...︙)
-                     input := let x = proj_loans (s2 : ...)
+                     input := let x = proj_loans (s2 : ...) in (x, x)
                    ]}
+
+                   Note that we introduce projections only if the symbolic values
+                   contain mutable borrows for the projected regions. Otherwise
+                   we ignore them.
                 *)
-                let proj_s0 = mk_eproj_borrows PLeft sv0.sv_id proj_ty in
-                let proj_s1 = mk_eproj_borrows PRight sv1.sv_id proj_ty in
-                let proj_svj = mk_eproj_loans PNone svj.sv_id proj_ty in
-                let input : tevalue =
-                  let loan = proj_svj in
-                  (* Create the let-binding *)
-                  let fvar = mk_fresh_abs_fvar proj_ty in
-                  let pair = mk_etuple [ fvar; fvar ] in
-                  let pat = mk_epat_from_fvar fvar in
-                  mk_let span owned pat loan pair
-                in
-                let output : tevalue = mk_etuple [ proj_s0; proj_s1 ] in
-                Some { output = Some output; input = Some input }
+                if
+                  ty_has_mut_borrow_for_region_in_set ctx0.type_ctx.type_infos
+                    owned proj_ty
+                then
+                  let proj_s0 = mk_eproj_borrows PLeft sv0.sv_id proj_ty in
+                  let proj_s1 = mk_eproj_borrows PRight sv1.sv_id proj_ty in
+                  let proj_svj = mk_eproj_loans PNone svj.sv_id proj_ty in
+                  let input : tevalue =
+                    let loan = proj_svj in
+                    (* Create the let-binding *)
+                    let fvar = mk_fresh_abs_fvar proj_ty in
+                    let pair = mk_etuple [ fvar; fvar ] in
+                    let pat = mk_epat_from_fvar fvar in
+                    mk_let span owned pat loan pair
+                  in
+                  let output : tevalue = mk_etuple [ proj_s0; proj_s1 ] in
+                  Some { output = Some output; input = Some input }
+                else
+                  Some
+                    {
+                      output = Some (mk_simpl_etuple []);
+                      input = Some (mk_simpl_etuple []);
+                    }
               else None
             in
             (* Create the abstraction *)
             let abs =
               {
                 abs_id = ctx0.fresh_abs_id ();
-                kind = Loop S.loop_id;
+                kind = S.fresh_abs_kind;
                 can_end = true;
                 parents = AbsId.Set.empty;
                 original_parents = [];
@@ -1402,10 +1447,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             else raise (ValueMatchFailure (LoanInRight id)))
     | None ->
         (* Convert the value to an abstraction *)
-        let abs_kind : abs_kind = Loop S.loop_id in
         let ctx = if value_is_left then ctx0 else ctx1 in
         let absl =
-          convert_value_to_abstractions span abs_kind ~can_end:true ctx v
+          convert_value_to_abstractions span S.fresh_abs_kind ~can_end:true ctx
+            v
         in
         (* Add a marker to the abstraction indicating the provenance of the value *)
         let pm = if value_is_left then PLeft else PRight in
@@ -1473,7 +1518,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     let abs =
       {
         abs_id = ctx0.fresh_abs_id ();
-        kind = Loop S.loop_id;
+        kind = S.fresh_abs_kind;
         can_end = true;
         parents = AbsId.Set.empty;
         original_parents = [];
@@ -1571,7 +1616,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     let abs =
       {
         abs_id = ctx0.fresh_abs_id ();
-        kind = Loop S.loop_id;
+        kind = S.fresh_abs_kind;
         can_end = true;
         parents = AbsId.Set.empty;
         original_parents = [];
@@ -1604,9 +1649,6 @@ end
 (* Very annoying: functors only take modules as inputs... *)
 module type MatchMoveState = sig
   val span : Meta.span
-
-  (** The current loop *)
-  val loop_id : LoopId.id
 
   (** The moved values *)
   val nvalues : tvalue list ref
@@ -2294,7 +2336,11 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
         (* Continue *)
         match_envs env0' env1'
     | EAbs abs0 :: env0', EAbs abs1 :: env1' ->
-        [%ldebug "match_envs: matching abs"];
+        [%ldebug
+          "match_envs: matching abs:\n- abs0: "
+          ^ abs_to_string span ctx0 abs0
+          ^ "\n- abs1: "
+          ^ abs_to_string span ctx1 abs1];
         (* Same as for the dummy values: there are two cases *)
         if AbsId.Set.mem abs0.abs_id fixed_ids.aids then (
           [%ldebug "match_envs: matching abs: fixed abs"];
@@ -2360,26 +2406,29 @@ let ctxs_are_equivalent (span : Meta.span) (fixed_ids : ids_sets)
     (match_ctxs span ~check_equiv:true fixed_ids lookup_shared_value
        lookup_shared_value ctx0 ctx1)
 
-let prepare_loop_match_ctx_with_target (config : config) (span : Meta.span)
-    (loop_id : LoopId.id) (fixed_ids : ids_sets) (src_ctx : eval_ctx) : cm_fun =
+let prepare_match_ctx_with_target (config : config) (span : Meta.span)
+    (fresh_abs_kind : abs_kind) (src_ctx : eval_ctx) : cm_fun =
  fun tgt_ctx ->
   (* Debug *)
   [%ldebug
-    "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
+    "- src_ctx: "
     ^ eval_ctx_to_string ~span:(Some span) src_ctx
     ^ "\n- tgt_ctx: "
     ^ eval_ctx_to_string ~span:(Some span) tgt_ctx];
   (* End the loans which lead to mismatches when joining *)
   let rec reorganize_join_tgt : cm_fun =
    fun tgt_ctx ->
-    (* Collect fixed values in the source and target contexts: end the loans in the
-       source context which don't appear in the target context *)
-    let filt_src_env, _, _ = ctx_split_fixed_new span fixed_ids src_ctx in
-    let filt_tgt_env, _, _ = ctx_split_fixed_new span fixed_ids tgt_ctx in
+    (* We match only the values which appear in both environments *)
+    let dummy_ids0 = env_get_dummy_var_ids src_ctx.env in
+    let dummy_ids1 = env_get_dummy_var_ids tgt_ctx.env in
+    let dummy_ids = DummyVarId.Set.inter dummy_ids0 dummy_ids1 in
+    let abs_ids = compute_fixed_abs_ids src_ctx tgt_ctx in
+
+    let filt_src_env, _, _ = ctx_split span abs_ids dummy_ids src_ctx in
+    let filt_tgt_env, _, _ = ctx_split span abs_ids dummy_ids tgt_ctx in
 
     [%ldebug
-      "reorganize_join_tgt:\n" ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids
-      ^ "\n" ^ "\n- filt_src_ctx: "
+      "reorganize_join_tgt:" ^ "\n- filt_src_ctx: "
       ^ env_to_string span src_ctx filt_src_env
       ^ "\n- filt_tgt_ctx: "
       ^ env_to_string span tgt_ctx filt_tgt_env];
@@ -2398,7 +2447,7 @@ let prepare_loop_match_ctx_with_target (config : config) (span : Meta.span)
 
     let module S : MatchJoinState = struct
       let span = span
-      let loop_id = loop_id
+      let fresh_abs_kind = fresh_abs_kind
       let nabs = nabs
 
       (* We're only preparing the match by ending loans, etc., and shouldn't introduce
@@ -2411,6 +2460,27 @@ let prepare_loop_match_ctx_with_target (config : config) (span : Meta.span)
     let module JM = MakeJoinMatcher (S) in
     let module M = MakeMatcher (JM) in
     try
+      (* Match the bindings appear in both environments *)
+      (* TODO: we shouldn't filter the locals (they should appear in both envs)? *)
+      let src_dummy_ids = env_get_dummy_var_ids filt_src_env in
+      let src_local_ids = env_get_local_ids filt_src_env in
+      let tgt_dummy_ids = env_get_dummy_var_ids filt_tgt_env in
+      let tgt_local_ids = env_get_local_ids filt_tgt_env in
+      let dummy_ids = DummyVarId.Set.inter src_dummy_ids tgt_dummy_ids in
+      let local_ids =
+        Expressions.LocalId.Set.inter src_local_ids tgt_local_ids
+      in
+      (* We need to filter the environments further *)
+      let keep (e : env_elem) : bool =
+        match e with
+        | EBinding (BDummy id, _) when DummyVarId.Set.mem id dummy_ids -> true
+        | EBinding (BVar v, _)
+          when Expressions.LocalId.Set.mem v.index local_ids -> true
+        | _ -> false
+      in
+      let filt_src_env = List.filter keep filt_src_env in
+      let filt_tgt_env = List.filter keep filt_tgt_env in
+      [%sanity_check] span (List.length filt_src_env = List.length filt_tgt_env);
       let _ =
         List.iter
           (fun (var0, var1) ->
@@ -2428,8 +2498,7 @@ let prepare_loop_match_ctx_with_target (config : config) (span : Meta.span)
       in
       (* No exception was thrown: continue *)
       [%ldebug
-        "reorganize_join_tgt: done with borrows/loans:\n" ^ "\n- fixed_ids: "
-        ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- filt_src_ctx: "
+        "reorganize_join_tgt: done with borrows/loans:" ^ "\n- filt_src_ctx: "
         ^ env_to_string span src_ctx filt_src_env
         ^ "\n- filt_tgt_ctx: "
         ^ env_to_string span tgt_ctx filt_tgt_env];
@@ -2442,7 +2511,6 @@ let prepare_loop_match_ctx_with_target (config : config) (span : Meta.span)
       let nvalues = ref [] in
       let module S : MatchMoveState = struct
         let span = span
-        let loop_id = loop_id
         let nvalues = nvalues
       end in
       let module MM = MakeMoveMatcher (S) in
@@ -2484,8 +2552,8 @@ let prepare_loop_match_ctx_with_target (config : config) (span : Meta.span)
       in
 
       [%ldebug
-        "reorganize_join_tgt: done with borrows/loans and moves:\n"
-        ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
+        "reorganize_join_tgt: done with borrows/loans and moves:"
+        ^ "\n- src_ctx: "
         ^ eval_ctx_to_string ~span:(Some span) src_ctx
         ^ "\n- tgt_ctx: "
         ^ eval_ctx_to_string ~span:(Some span) tgt_ctx];

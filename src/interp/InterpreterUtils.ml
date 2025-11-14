@@ -24,8 +24,11 @@ let symbolic_value_id_to_pretty_string =
 let borrow_content_to_string = Print.EvalCtx.borrow_content_to_string
 let loan_content_to_string = Print.EvalCtx.loan_content_to_string
 let aborrow_content_to_string = Print.EvalCtx.aborrow_content_to_string
+let eborrow_content_to_string = Print.EvalCtx.eborrow_content_to_string
 let aloan_content_to_string = Print.EvalCtx.aloan_content_to_string
+let eloan_content_to_string = Print.EvalCtx.eloan_content_to_string
 let aproj_to_string = Print.EvalCtx.aproj_to_string
+let eproj_to_string = Print.EvalCtx.eproj_to_string
 let tvalue_to_string = Print.EvalCtx.tvalue_to_string
 let tavalue_to_string = Print.EvalCtx.tavalue_to_string
 let tevalue_to_string = Print.EvalCtx.tevalue_to_string
@@ -160,9 +163,10 @@ let mk_aproj_loans_value_from_symbolic_value (proj_regions : RegionId.Set.t)
       ty = svalue.sv_ty;
     }
 
-let mk_eproj_loans_value_from_symbolic_value (proj_regions : RegionId.Set.t)
+let mk_eproj_loans_value_from_symbolic_value
+    (type_infos : TypesAnalysis.type_infos) (proj_regions : RegionId.Set.t)
     (svalue : symbolic_value) (proj_ty : ty) : tevalue =
-  if ty_has_regions_in_set proj_regions proj_ty then
+  if ty_has_mut_borrow_for_region_in_set type_infos proj_regions proj_ty then
     let av =
       ESymbolic
         ( PNone,
@@ -473,6 +477,55 @@ type ids_sets = {
   sids : SymbolicValueId.Set.t;
 }
 [@@deriving show]
+
+let empty_ids_sets : ids_sets =
+  let empty = BorrowId.Set.empty in
+  {
+    aids = AbsId.Set.empty;
+    blids = empty;
+    borrow_ids = empty;
+    unique_borrow_ids = UniqueBorrowIdSet.empty;
+    shared_borrow_ids = SharedBorrowId.Set.empty;
+    non_unique_shared_borrow_ids = BorrowId.Set.empty;
+    shared_loans_to_values = BorrowId.Map.empty;
+    loan_ids = empty;
+    dids = DummyVarId.Set.empty;
+    rids = RegionId.Set.empty;
+    sids = SymbolicValueId.Set.empty;
+  }
+
+let ids_sets_inter (ids0 : ids_sets) (ids1 : ids_sets) : ids_sets =
+  let aids = AbsId.Set.inter ids0.aids ids1.aids in
+  let blids = BorrowId.Set.inter ids0.blids ids1.blids in
+  let borrow_ids = BorrowId.Set.inter ids0.borrow_ids ids1.borrow_ids in
+  let unique_borrow_ids =
+    UniqueBorrowIdSet.inter ids0.unique_borrow_ids ids1.unique_borrow_ids
+  in
+  let non_unique_shared_borrow_ids =
+    BorrowId.Set.inter ids0.non_unique_shared_borrow_ids
+      ids1.non_unique_shared_borrow_ids
+  in
+  let shared_borrow_ids =
+    SharedBorrowId.Set.inter ids0.shared_borrow_ids ids1.shared_borrow_ids
+  in
+  let loan_ids = BorrowId.Set.inter ids0.loan_ids ids1.loan_ids in
+  let shared_loans_to_values = BorrowId.Map.empty in
+  let dids = DummyVarId.Set.inter ids0.dids ids1.dids in
+  let rids = RegionId.Set.inter ids0.rids ids1.rids in
+  let sids = SymbolicValueId.Set.inter ids0.sids ids1.sids in
+  {
+    aids;
+    blids;
+    borrow_ids;
+    unique_borrow_ids;
+    non_unique_shared_borrow_ids;
+    shared_borrow_ids;
+    loan_ids;
+    shared_loans_to_values;
+    dids;
+    rids;
+    sids;
+  }
 
 (** See {!compute_tvalue_ids}, {!compute_context_ids}, etc.
 
@@ -942,3 +995,15 @@ let abs_is_empty (abs : abs) : bool =
     visitor#visit_abs () abs;
     true
   with Found -> false
+
+let abs_has_markers (abs : abs) : bool =
+  let visitor =
+    object
+      inherit [_] iter_abs
+      method! visit_proj_marker _ pm = if pm = PNone then () else raise Found
+    end
+  in
+  try
+    List.iter (visitor#visit_tavalue ()) abs.avalues;
+    false
+  with Found -> true
