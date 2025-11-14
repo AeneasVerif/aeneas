@@ -14,21 +14,21 @@ let hashMap_allocate_slots_loop_decreases (#t : Type0)
   admit ()
 
 (** [hashmap::{hashmap::HashMap<T>}::clear]: decreases clause
-    Source: 'tests/src/hashmap.rs', lines 104:8-107:9 *)
+    Source: 'tests/src/hashmap.rs', lines 104:8-108:5 *)
 unfold
 let hashMap_clear_loop_decreases (#t : Type0)
   (slots : alloc_vec_Vec (aList_t t)) (i : usize) : nat =
   admit ()
 
 (** [hashmap::{hashmap::HashMap<T>}::insert_in_list]: decreases clause
-    Source: 'tests/src/hashmap.rs', lines 1:0-133:9 *)
+    Source: 'tests/src/hashmap.rs', lines 118:8-134:5 *)
 unfold
 let hashMap_insert_in_list_loop_decreases (#t : Type0) (key : usize)
   (value : t) (ls : aList_t t) : nat =
   admit ()
 
 (** [hashmap::{hashmap::HashMap<T>}::move_elements_from_list]: decreases clause
-    Source: 'tests/src/hashmap.rs', lines 199:12-206:17 *)
+    Source: 'tests/src/hashmap.rs', lines 199:12-209:5 *)
 unfold
 let hashMap_move_elements_from_list_loop_decreases (#t : Type0)
   (ntable : hashMap_t t) (ls : aList_t t) : nat =
