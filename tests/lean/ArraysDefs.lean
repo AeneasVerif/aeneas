@@ -14,7 +14,7 @@ def clone_array
   {T : Type} {N : Usize} (corecloneCloneInst : core.clone.Clone T)
   (x : Array T N) :
   Result (Array T N)
-  :=
+  := do
   core.array.CloneArray.clone corecloneCloneInst x
 
 end arrays_defs

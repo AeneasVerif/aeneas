@@ -10,13 +10,12 @@ namespace paper
 
 /- [paper::ref_incr]:
    Source: 'tests/src/paper.rs', lines 6:0-8:1 -/
-def ref_incr (x : I32) : Result I32 :=
+def ref_incr (x : I32) : Result I32 := do
   x + 1#i32
 
 /- [paper::test_incr]:
    Source: 'tests/src/paper.rs', lines 10:0-14:1 -/
-def test_incr : Result Unit :=
-  do
+def test_incr : Result Unit := do
   let x ← ref_incr 0#i32
   massert (x = 1#i32)
 
@@ -26,7 +25,7 @@ def test_incr : Result Unit :=
 /- [paper::choose]:
    Source: 'tests/src/paper.rs', lines 17:0-23:1 -/
 def choose
-  {T : Type} (b : Bool) (x : T) (y : T) : Result (T × (T → (T × T))) :=
+  {T : Type} (b : Bool) (x : T) (y : T) : Result (T × (T → (T × T))) := do
   if b
   then let back := fun ret => (ret, y)
        ok (x, back)
@@ -35,8 +34,7 @@ def choose
 
 /- [paper::test_choose]:
    Source: 'tests/src/paper.rs', lines 25:0-33:1 -/
-def test_choose : Result Unit :=
-  do
+def test_choose : Result Unit := do
   let (z, choose_back) ← choose true 0#i32 0#i32
   let z1 ← z + 1#i32
   massert (z1 = 1#i32)
@@ -56,14 +54,13 @@ inductive List (T : Type) where
 /- [paper::list_nth_mut]:
    Source: 'tests/src/paper.rs', lines 44:0-57:1 -/
 def list_nth_mut
-  {T : Type} (l : List T) (i : U32) : Result (T × (T → List T)) :=
+  {T : Type} (l : List T) (i : U32) : Result (T × (T → List T)) := do
   match l with
   | List.Cons x tl =>
     if i = 0#u32
     then let back := fun ret => List.Cons ret tl
          ok (x, back)
     else
-      do
       let i1 ← i - 1#u32
       let (x1, list_nth_mut_back) ← list_nth_mut tl i1
       let back := fun ret => let tl1 := list_nth_mut_back ret
@@ -74,18 +71,16 @@ partial_fixpoint
 
 /- [paper::sum]:
    Source: 'tests/src/paper.rs', lines 59:0-68:1 -/
-def sum (l : List I32) : Result I32 :=
+def sum (l : List I32) : Result I32 := do
   match l with
-  | List.Cons x tl => do
-                      let i ← sum tl
+  | List.Cons x tl => let i ← sum tl
                       x + i
   | List.Nil => ok 0#i32
 partial_fixpoint
 
 /- [paper::test_nth]:
    Source: 'tests/src/paper.rs', lines 70:0-75:1 -/
-def test_nth : Result Unit :=
-  do
+def test_nth : Result Unit := do
   let (x, list_nth_mut_back) ←
     list_nth_mut (List.Cons 1#i32 (List.Cons 2#i32 (List.Cons 3#i32 List.Nil)))
       2#u32
@@ -99,8 +94,7 @@ def test_nth : Result Unit :=
 
 /- [paper::call_choose]:
    Source: 'tests/src/paper.rs', lines 78:0-84:1 -/
-def call_choose (p : (U32 × U32)) : Result U32 :=
-  do
+def call_choose (p : (U32 × U32)) : Result U32 := do
   let (px, py) := p
   let (pz, choose_back) ← choose true px py
   let pz1 ← pz + 1#u32

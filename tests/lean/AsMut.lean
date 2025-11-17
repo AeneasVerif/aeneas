@@ -10,7 +10,7 @@ namespace as_mut
 
 /- [as_mut::use_box_as_mut]:
    Source: 'tests/src/as_mut.rs', lines 2:0-4:1 -/
-def use_box_as_mut {T : Type} (x : T) : Result (T × (T → T)) :=
+def use_box_as_mut {T : Type} (x : T) : Result (T × (T → T)) := do
   ok (alloc.boxed.AsMutBoxT.as_mut x)
 
 /- [as_mut::use_as_mut]:
@@ -19,7 +19,7 @@ def use_as_mut
   {S : Type} {T : Type} (coreconvertAsMutInst : core.convert.AsMut T S) 
   (x : T) :
   Result (S × (S → T))
-  :=
+  := do
   coreconvertAsMutInst.as_mut x
 
 end as_mut

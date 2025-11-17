@@ -10,7 +10,7 @@ namespace switch_test
 
 /- [switch_test::match_u32]:
    Source: 'tests/src/switch_test.rs', lines 4:0-10:1 -/
-def match_u32 (x : U32) : Result U32 :=
+def match_u32 (x : U32) : Result U32 := do
   match x with
   | 0#uscalar => ok 0#u32
   | 1#uscalar => ok 1#u32

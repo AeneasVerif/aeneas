@@ -10,32 +10,33 @@ namespace array_slice_index
 
 /- [array_slice_index::slice_use_index_range_from]:
    Source: 'tests/src/array_slice_index.rs', lines 5:0-7:1 -/
-def slice_use_index_range_from (s : Slice U32) : Result (Slice U32) :=
+def slice_use_index_range_from (s : Slice U32) : Result (Slice U32) := do
   core.slice.index.Slice.index (core.slice.index.SliceIndexRangeFromUsizeSlice
     U32) s { start := 0#usize }
 
 /- [array_slice_index::slice_use_get_range_from]:
    Source: 'tests/src/array_slice_index.rs', lines 9:0-11:1 -/
-def slice_use_get_range_from (s : Slice U32) : Result (Option (Slice U32)) :=
+def slice_use_get_range_from
+  (s : Slice U32) : Result (Option (Slice U32)) := do
   core.slice.Slice.get (core.slice.index.SliceIndexRangeFromUsizeSlice U32) s
     { start := 0#usize }
 
 /- [array_slice_index::slice_use_index_range]:
    Source: 'tests/src/array_slice_index.rs', lines 13:0-15:1 -/
-def slice_use_index_range (s : Slice U32) : Result (Slice U32) :=
+def slice_use_index_range (s : Slice U32) : Result (Slice U32) := do
   core.slice.index.Slice.index (core.slice.index.SliceIndexRangeUsizeSliceInst
     U32) s { start := 0#usize, end_ := 1#usize }
 
 /- [array_slice_index::slice_use_get_range]:
    Source: 'tests/src/array_slice_index.rs', lines 17:0-19:1 -/
-def slice_use_get_range (s : Slice U32) : Result (Option (Slice U32)) :=
+def slice_use_get_range (s : Slice U32) : Result (Option (Slice U32)) := do
   core.slice.Slice.get (core.slice.index.SliceIndexRangeUsizeSliceInst U32) s
     { start := 0#usize, end_ := 1#usize }
 
 /- [array_slice_index::slice_use_index_mut_range_from]:
    Source: 'tests/src/array_slice_index.rs', lines 21:0-23:1 -/
 def slice_use_index_mut_range_from
-  (s : Slice U32) : Result ((Slice U32) × (Slice U32 → Slice U32)) :=
+  (s : Slice U32) : Result ((Slice U32) × (Slice U32 → Slice U32)) := do
   core.slice.index.Slice.index_mut
     (core.slice.index.SliceIndexRangeFromUsizeSlice U32) s { start := 0#usize }
 
@@ -44,7 +45,7 @@ def slice_use_index_mut_range_from
 def slice_use_get_mut_range_from
   (s : Slice U32) :
   Result ((Option (Slice U32)) × (Option (Slice U32) → Slice U32))
-  :=
+  := do
   core.slice.Slice.get_mut (core.slice.index.SliceIndexRangeFromUsizeSlice U32)
     s { start := 0#usize }
 
