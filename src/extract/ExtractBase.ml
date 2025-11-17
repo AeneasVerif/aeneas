@@ -430,10 +430,12 @@ let names_maps_get (span : Meta.span option) (id_to_string : id -> string)
     let m = nm.names_map.id_to_name in
     match IdMap.find_opt id m with
     | Some s -> s
-    | None ->
+    | None -> (
         let err = "Could not find: " ^ id_to_string id in
         [%save_error_opt_span] span err;
-        "(ERROR: \"" ^ id_to_string id ^ "\")"
+        match backend () with
+        | Lean -> "sorry /- " ^ err ^ "-/"
+        | _ -> "(ERROR: " ^ id_to_string id ^ ")")
 
 type names_map_init = {
   keywords : string list;

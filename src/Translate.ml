@@ -1117,7 +1117,10 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
   (* Some logging *)
   if !Errors.error_list <> [] then
     log#linfo
-      (lazy ("Generated the partial file (because of errors): " ^ fi.filename))
+      (lazy
+        ("Generated the partial file (because of "
+        ^ string_of_int (List.length !Errors.error_list)
+        ^ " errors): " ^ fi.filename))
   else log#linfo (lazy ("Generated: " ^ fi.filename));
 
   (* Flush and close the file *)

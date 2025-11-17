@@ -7149,9 +7149,24 @@ let add_type_annotations (trans_ctx : trans_ctx)
          (fun (fl : pure_fun_translation) -> (fl.f.def_id, fl))
          trans_funs)
   in
-  let add_annot =
-    add_type_annotations_to_fun_decl trans_ctx trans_funs_map builtin_sigs
-      type_decls
+  let add_annot (decl : fun_decl) =
+    try
+      add_type_annotations_to_fun_decl trans_ctx trans_funs_map builtin_sigs
+        type_decls decl
+    with Errors.CFailure error ->
+      let name = name_to_string trans_ctx decl.item_meta.name in
+      let name_pattern =
+        try
+          name_to_pattern_string (Some decl.item_meta.span) trans_ctx
+            decl.item_meta.name
+        with Errors.CFailure _ ->
+          "(could not compute the name pattern due to a different error)"
+      in
+      [%save_error_opt_span] error.span
+        ("Could not add type annotations to the fun declaration '" ^ name
+       ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'");
+      (* Keep the unchanged decl *)
+      decl
   in
   List.map
     (fun (fl : pure_fun_translation) ->

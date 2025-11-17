@@ -43,8 +43,8 @@ let format_error_message (span : Meta.span option) (msg : string) =
 
 let format_error_message_with_file_line (file : string) (line : int)
     (span : Meta.span option) (msg : string) =
-  "In file " ^ file ^ ", line " ^ string_of_int line ^ ":\n"
-  ^ format_error_message span msg
+  format_error_message span msg
+  ^ "\nCompiler source: " ^ file ^ ", line " ^ string_of_int line
 
 type cfailure = {
   span : Meta.span option;

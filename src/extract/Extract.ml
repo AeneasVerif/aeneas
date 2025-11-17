@@ -748,24 +748,29 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
       (* Compute the information about the explicit/implicit input type parameters *)
       let explicit =
         let lookup is_trait_method fun_decl_id lp_id =
-          (* Lookup the function to retrieve the signature information *)
-          let trans_fun =
-            [%silent_unwrap] span
-              (A.FunDeclId.Map.find_opt fun_decl_id ctx.trans_funs)
-          in
-          let trans_fun =
-            match lp_id with
-            | None -> trans_fun.f
-            | Some lp_id -> Pure.LoopId.nth trans_fun.loops lp_id
-          in
-          let explicit = trans_fun.signature.explicit_info in
-          (* If it is a trait method, we need to remove the prefix
-             which accounts for the generics of the impl. *)
-          let explicit =
-            adjust_explicit_info explicit is_trait_method generics
-          in
-          (* *)
-          Some explicit
+          try
+            (* Lookup the function to retrieve the signature information *)
+            let trans_fun =
+              [%silent_unwrap] span
+                (A.FunDeclId.Map.find_opt fun_decl_id ctx.trans_funs)
+            in
+            let trans_fun =
+              match lp_id with
+              | None -> trans_fun.f
+              | Some lp_id -> Pure.LoopId.nth trans_fun.loops lp_id
+            in
+            let explicit = trans_fun.signature.explicit_info in
+            (* If it is a trait method, we need to remove the prefix
+               which accounts for the generics of the impl. *)
+            let explicit =
+              adjust_explicit_info explicit is_trait_method generics
+            in
+            (* *)
+            Some explicit
+          with CFailure _ ->
+            (* Fallback if, for instance, we could not lookup the declaration *)
+            [%save_error] span "Internal error";
+            None
         in
         match fun_id with
         | FromLlbc (FunId (FRegular fun_decl_id), lp_id) ->
