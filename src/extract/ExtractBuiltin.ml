@@ -437,7 +437,7 @@ let builtin_trait_impls_info () : (pattern * Pure.builtin_trait_impl_info) list
       in
       flatten_name name
     in
-    (rust_name, { filter_params = filter; impl_name = name })
+    (rust_name, { filter_params = filter; extract_name = name })
   in
   [
     (* core::ops::Deref<alloc::boxed::Box<T>> *)
