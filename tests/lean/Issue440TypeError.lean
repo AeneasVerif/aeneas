@@ -16,7 +16,7 @@ inductive PeanoNum where
 
 /- [issue_440_type_error::f]:
    Source: 'tests/src/issue-440-type-error.rs', lines 8:0-15:1 -/
-def f (x : PeanoNum) (value : Isize) : Result PeanoNum :=
+def f (x : PeanoNum) (value : Isize) : Result PeanoNum := do
   match x with
   | PeanoNum.Zero =>
     let (_, x1) := core.mem.replace PeanoNum.Zero (PeanoNum.Succ PeanoNum.Zero)

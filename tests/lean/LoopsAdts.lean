@@ -16,13 +16,13 @@ inductive List (T : Type) where
 
 /- [loops_adts::nth_shared]: loop 0:
    Source: 'tests/src/loops-adts.rs', lines 9:4-18:1 -/
-def nth_shared_loop {T : Type} (ls : List T) (i : U32) : Result (Option T) :=
+def nth_shared_loop
+  {T : Type} (ls : List T) (i : U32) : Result (Option T) := do
   match ls with
   | List.Cons x tl =>
     if i = 0#u32
     then ok (some x)
-    else do
-         let i1 ← i - 1#u32
+    else let i1 ← i - 1#u32
          nth_shared_loop tl i1
   | List.Nil => ok none
 partial_fixpoint
@@ -30,7 +30,7 @@ partial_fixpoint
 /- [loops_adts::nth_shared]:
    Source: 'tests/src/loops-adts.rs', lines 8:0-18:1 -/
 @[reducible]
-def nth_shared {T : Type} (ls : List T) (i : U32) : Result (Option T) :=
+def nth_shared {T : Type} (ls : List T) (i : U32) : Result (Option T) := do
   nth_shared_loop ls i
 
 /- [loops_adts::nth_mut]: loop 0:
@@ -38,7 +38,7 @@ def nth_shared {T : Type} (ls : List T) (i : U32) : Result (Option T) :=
 def nth_mut_loop
   {T : Type} (ls : List T) (i : U32) :
   Result ((Option T) × (Option T → List T))
-  :=
+  := do
   match ls with
   | List.Cons x tl =>
     if i = 0#u32
@@ -50,7 +50,6 @@ def nth_mut_loop
                    | _ => x
           List.Cons t tl)
     else
-      do
       let i1 ← i - 1#u32
       let (o, back) ← nth_mut_loop tl i1
       let back1 := fun ret => let l := back ret
@@ -65,7 +64,7 @@ partial_fixpoint
 def nth_mut
   {T : Type} (ls : List T) (i : U32) :
   Result ((Option T) × (Option T → List T))
-  :=
+  := do
   nth_mut_loop ls i
 
 /- [loops_adts::update_array_mut_borrow]:
@@ -73,16 +72,15 @@ def nth_mut
 def update_array_mut_borrow
   (a : Array U32 32#usize) :
   Result ((Array U32 32#usize) × (Array U32 32#usize → Array U32 32#usize))
-  :=
+  := do
   ok (a, fun ret => ret)
 
 /- [loops_adts::array_mut_borrow_loop1]: loop 0:
    Source: 'tests/src/loops-adts.rs', lines 37:4-39:5 -/
 def array_mut_borrow_loop1_loop
-  (b : Bool) (a : Array U32 32#usize) : Result (Array U32 32#usize) :=
+  (b : Bool) (a : Array U32 32#usize) : Result (Array U32 32#usize) := do
   if b
   then
-    do
     let (a1, update_array_mut_borrow_back) ← update_array_mut_borrow a
     let back ← array_mut_borrow_loop1_loop true a1
     ok (update_array_mut_borrow_back back)
@@ -93,7 +91,7 @@ partial_fixpoint
    Source: 'tests/src/loops-adts.rs', lines 36:0-40:1 -/
 @[reducible]
 def array_mut_borrow_loop1
-  (b : Bool) (a : Array U32 32#usize) : Result (Array U32 32#usize) :=
+  (b : Bool) (a : Array U32 32#usize) : Result (Array U32 32#usize) := do
   array_mut_borrow_loop1_loop b a
 
 /- [loops_adts::array_mut_borrow_loop2]: loop 0:
@@ -101,10 +99,9 @@ def array_mut_borrow_loop1
 def array_mut_borrow_loop2_loop
   (b : Bool) (a : Array U32 32#usize) :
   Result ((Array U32 32#usize) × (Array U32 32#usize → Array U32 32#usize))
-  :=
+  := do
   if b
   then
-    do
     let (a1, update_array_mut_borrow_back) ← update_array_mut_borrow a
     let (a2, back) ← array_mut_borrow_loop2_loop true a1
     let back1 := fun a3 => let a4 := back a3
@@ -119,21 +116,21 @@ partial_fixpoint
 def array_mut_borrow_loop2
   (b : Bool) (a : Array U32 32#usize) :
   Result ((Array U32 32#usize) × (Array U32 32#usize → Array U32 32#usize))
-  :=
+  := do
   array_mut_borrow_loop2_loop b a
 
 /- [loops_adts::copy_shared_array]:
    Source: 'tests/src/loops-adts.rs', lines 49:0-51:1 -/
-def copy_shared_array (a : Array U32 32#usize) : Result (Array U32 32#usize) :=
+def copy_shared_array
+  (a : Array U32 32#usize) : Result (Array U32 32#usize) := do
   ok a
 
 /- [loops_adts::array_shared_borrow_loop1]: loop 0:
    Source: 'tests/src/loops-adts.rs', lines 54:4-56:5 -/
 def array_shared_borrow_loop1_loop
-  (b : Bool) (a : Array U32 32#usize) : Result Unit :=
+  (b : Bool) (a : Array U32 32#usize) : Result Unit := do
   if b
-  then do
-       let a1 ← copy_shared_array a
+  then let a1 ← copy_shared_array a
        array_shared_borrow_loop1_loop true a1
   else ok ()
 partial_fixpoint
@@ -142,16 +139,15 @@ partial_fixpoint
    Source: 'tests/src/loops-adts.rs', lines 53:0-57:1 -/
 @[reducible]
 def array_shared_borrow_loop1
-  (b : Bool) (a : Array U32 32#usize) : Result Unit :=
+  (b : Bool) (a : Array U32 32#usize) : Result Unit := do
   array_shared_borrow_loop1_loop b a
 
 /- [loops_adts::array_shared_borrow_loop2]: loop 0:
    Source: 'tests/src/loops-adts.rs', lines 60:4-62:5 -/
 def array_shared_borrow_loop2_loop
-  (b : Bool) (a : Array U32 32#usize) : Result (Array U32 32#usize) :=
+  (b : Bool) (a : Array U32 32#usize) : Result (Array U32 32#usize) := do
   if b
-  then do
-       let a1 ← copy_shared_array a
+  then let a1 ← copy_shared_array a
        array_shared_borrow_loop2_loop true a1
   else ok a
 partial_fixpoint
@@ -160,7 +156,7 @@ partial_fixpoint
    Source: 'tests/src/loops-adts.rs', lines 59:0-64:1 -/
 @[reducible]
 def array_shared_borrow_loop2
-  (b : Bool) (a : Array U32 32#usize) : Result (Array U32 32#usize) :=
+  (b : Bool) (a : Array U32 32#usize) : Result (Array U32 32#usize) := do
   array_shared_borrow_loop2_loop b a
 
 end loops_adts
