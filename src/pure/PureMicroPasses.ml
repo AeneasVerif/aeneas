@@ -7163,7 +7163,7 @@ let add_type_annotations (trans_ctx : trans_ctx)
           "(could not compute the name pattern due to a different error)"
       in
       [%save_error_opt_span] error.span
-        ("Could not translate the global declaration '" ^ name
+        ("Could not add type annotations to the fun declaration '" ^ name
        ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'");
       (* Keep the unchanged decl *)
       decl
