@@ -3555,13 +3555,13 @@ let add_fuel_one (ctx : ctx) (loops : fun_decl LoopId.Map.t) (def : fun_decl) :
   in
 
   (* Introduce variables for the fuel and the state *)
-  let effect = def.signature.fwd_info.effect_info in
+  let effekt = def.signature.fwd_info.effect_info in
   let fuel0 =
-    if effect.can_diverge && !Config.use_fuel then Some (mk_fresh_fuel_var ctx)
+    if effekt.can_diverge && !Config.use_fuel then Some (mk_fresh_fuel_var ctx)
     else None
   in
   let fuel =
-    if effect.can_diverge && !Config.use_fuel then Some (mk_fresh_fuel_var ctx)
+    if effekt.can_diverge && !Config.use_fuel then Some (mk_fresh_fuel_var ctx)
     else None
   in
   let fuel_expr = Option.map mk_texpr_from_fvar fuel in
@@ -3717,7 +3717,7 @@ let add_fuel_one (ctx : ctx) (loops : fun_decl LoopId.Map.t) (def : fun_decl) :
         let body = update fuel_expr body in
         (* Wrap it in a match over the fuel if necessary *)
         let body, fuel_input =
-          if effect.is_rec && !Config.use_fuel then
+          if effekt.is_rec && !Config.use_fuel then
             ( wrap_in_match_fuel span (Option.get fuel0).id (Option.get fuel).id
                 ~close:false body,
               fuel0 )
