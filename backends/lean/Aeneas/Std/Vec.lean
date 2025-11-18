@@ -257,7 +257,7 @@ def core.slice.Slice.reverse {T : Type} (s : Slice T) : Slice T :=
 
 def alloc.vec.Vec.with_capacity (T : Type) (_ : Usize) : alloc.vec.Vec T := Vec.new T
 
-/- [alloc::vec::{alloc::vec::Vec<T, A>}::extend_from_slice] -/
+@[rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::extend_from_slice" (filterParams := [true, false])]
 def alloc.vec.Vec.extend_from_slice {T : Type} (cloneInst : core.clone.Clone T)
   (v : alloc.vec.Vec T) (s : Slice T) : Result (alloc.vec.Vec T) :=
   if h : v.length + s.length ≤ Usize.max then do

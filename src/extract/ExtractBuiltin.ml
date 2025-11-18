@@ -481,6 +481,7 @@ let builtin_trait_impls_info () : (pattern * Pure.builtin_trait_impl_info) list
            [@T], [@T]>"
           ~extract_name:(Some "core.slice.index.SliceIndexRangeToUsizeSlice") ();
         fmt "core::convert::AsMut<Box<@T>, @T>"
+          ~extract_name:(Some "core.convert.AsMutBox")
           ~filter:(Some [ true; false ])
           ();
         fmt "core::clone::Clone<[@T; @N]>" ();
@@ -871,114 +872,16 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
       ]
   (* Lean-only definitions *)
   @ mk_lean_only
-      ([
-         mk_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone"
-           ~extract_name:(Some "core.array.CloneArray.clone") ();
-         mk_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone_from"
-           ~extract_name:(Some "core.array.CloneArray.clone_from") ();
-         mk_fun "core::slice::{[@T]}::split_at" ();
-         mk_fun "core::slice::{[@T]}::split_at_mut" ();
-         mk_fun "core::slice::{[@T]}::swap" ();
-         mk_fun "core::option::{core::option::Option<@T>}::take"
-           ~extract_name:
-             (backend_choice None (Some "core::option::Option::take"))
-           ~can_fail:false ~lift:false ();
-         mk_fun "core::option::{core::option::Option<@T>}::unwrap_or"
-           ~can_fail:false ~extract_name:(Some "core.option.Option.unwrap_or")
-           ();
-         mk_fun "core::option::{core::option::Option<@T>}::is_none"
-           ~extract_name:
-             (backend_choice None (Some "core::option::Option::is_none"))
-           ~can_fail:false ~lift:false ();
-         (* Into<T, U: From<T>> *)
-         mk_fun "core::convert::{core::convert::Into<@T, @U>}::into"
-           ~extract_name:(Some "core.convert.IntoFrom.into") ();
-         (* From<T, T> *)
-         mk_fun "core::convert::{core::convert::From<@T, @T>}::from"
-           ~can_fail:false ~extract_name:(Some "core.convert.FromSame.from_") ();
-         (* [core::slice::{@Slice<T>}::copy_from_slice] *)
-         mk_fun "core::slice::{[@T]}::copy_from_slice" ();
-         mk_fun "core::result::{core::result::Result<@T, @E>}::unwrap" ();
-         (* Vec *)
-         mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::extend_from_slice"
-           ~filter:(Some [ true; false ])
-           ();
-         mk_fun
-           "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
-            [@T], [@T]>}::get"
-           ~extract_name:
-             (Some "core::slice::index::SliceIndexRangeFromUsizeSlize::get") ();
-         mk_fun
-           "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
-            [@T], [@T]>}::get_mut"
-           ~extract_name:
-             (Some "core::slice::index::SliceIndexRangeFromUsizeSlize::get_mut")
-           ();
-         mk_fun
-           "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
-            [@T], [@T]>}::get_unchecked"
-           ~extract_name:
-             (Some
-                "core::slice::index::SliceIndexRangeFromUsizeSlize::get_unchecked")
-           ();
-         mk_fun
-           "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
-            [@T], [@T]>}::get_unchecked_mut"
-           ~extract_name:
-             (Some
-                "core::slice::index::SliceIndexRangeFromUsizeSlize::get_unchecked_mut")
-           ();
-         mk_fun
-           "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
-            [@T], [@T]>}::index"
-           ~extract_name:
-             (Some "core::slice::index::SliceIndexRangeFromUsizeSlize::index")
-           ();
-         mk_fun
-           "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
-            [@T], [@T]>}::index_mut"
-           ~extract_name:
-             (Some
-                "core::slice::index::SliceIndexRangeFromUsizeSlize::index_mut")
-           ();
-         (* *)
-         mk_fun "alloc::boxed::{core::convert::AsMut<Box<@T>, @T>}::as_mut"
-           ~can_fail:false
-           ~filter:(Some [ true; false ])
-           ();
-         (* This function actually does not exist in Rust: rustc generates
-            an implementation for each concrete choice of const generic @N.
-            On our side, we define a unique model generic in @N for the cases
-            where @N != 0. *)
-         mk_fun "core::array::{core::default::Default<[@T; @N]>}::default"
-           ~extract_name:(Some "core.default.DefaultArray.default") ();
-         mk_fun "core::array::{core::default::Default<[@T; 0]>}::default"
-           ~extract_name:(Some "core.default.DefaultArrayEmpty.default") ();
-       ]
-      (* SliceIndex for RangeTo and Slice *)
-      @ mk_funs
-          (fun f ->
-            "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, \
-             [@T], [@T]>}::" ^ f)
-          (fun f -> "core.slice.index.SliceIndexRangeToUsizeSlice." ^ f)
-          [
-            (true, "get");
-            (true, "get_mut");
-            (true, "get_unchecked");
-            (true, "get_unchecked_mut");
-            (true, "index");
-            (true, "index_mut");
-          ]
-      (* PartialEq, Eq, PartialOrd, Ord *)
-      @ mk_scalar_funs
-          (fun ty fun_name ->
-            "core::cmp::impls::{core::cmp::PartialEq<" ^ ty ^ "," ^ ty ^ ">}::"
-            ^ fun_name)
-          (fun ty fun_name ->
-            "core.cmp.impls.PartialEq"
-            ^ StringUtils.capitalize_first_letter ty
-            ^ "." ^ fun_name)
-          [ (false, "eq"); (false, "ne") ]
+      ((* PartialEq, Eq, PartialOrd, Ord *)
+       mk_scalar_funs
+         (fun ty fun_name ->
+           "core::cmp::impls::{core::cmp::PartialEq<" ^ ty ^ "," ^ ty ^ ">}::"
+           ^ fun_name)
+         (fun ty fun_name ->
+           "core.cmp.impls.PartialEq"
+           ^ StringUtils.capitalize_first_letter ty
+           ^ "." ^ fun_name)
+         [ (false, "eq"); (false, "ne") ]
       (* Eq: no methods *)
       (* PartialOrd *)
       @ mk_scalar_funs
@@ -1014,28 +917,6 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
             ^ StringUtils.capitalize_first_letter ty
             ^ "." ^ fun_name)
           [ (false, "cmp"); (false, "max"); (false, "min"); (true, "clamp") ]
-      (* Default methods *)
-      @ [
-          (* PartialEq *)
-          mk_fun "core::cmp::PartialEq::ne"
-            ~extract_name:(Some "core::cmp::PartialEq::ne::default") ();
-          (* PartialOrd *)
-          mk_fun "core::cmp::PartialOrd::lt"
-            ~extract_name:(Some "core::cmp::PartialOrd::lt::default") ();
-          mk_fun "core::cmp::PartialOrd::le"
-            ~extract_name:(Some "core::cmp::PartialOrd::le::default") ();
-          mk_fun "core::cmp::PartialOrd::gt"
-            ~extract_name:(Some "core::cmp::PartialOrd::gt::default") ();
-          mk_fun "core::cmp::PartialOrd::ge"
-            ~extract_name:(Some "core::cmp::PartialOrd::ge::default") ();
-          (* Ord *)
-          mk_fun "core::cmp::Ord::max"
-            ~extract_name:(Some "core::cmp::PartialOrd::max::default") ();
-          mk_fun "core::cmp::Ord::min"
-            ~extract_name:(Some "core::cmp::PartialOrd::min::default") ();
-          mk_fun "core::cmp::Ord::clamp"
-            ~extract_name:(Some "core::cmp::PartialOrd::max::clamp") ();
-        ]
       (* Binops *)
       @ List.flatten
           (List.map

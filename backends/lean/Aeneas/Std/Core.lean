@@ -8,8 +8,8 @@ namespace Std
 
 open Result
 
-/- [alloc::boxed::{core::convert::AsMut<T> for alloc::boxed::Box<T>}::as_mut] -/
-def alloc.boxed.AsMutBoxT.as_mut {T : Type} (x : T) : T × (T → T) :=
+@[rust_fun "alloc::boxed::{core::convert::AsMut<Box<@T>, @T>}::as_mut" -canFail (filterParams := [true,false])]
+def alloc.boxed.AsMutBox.as_mut {T : Type} (x : T) : T × (T → T) :=
   (x, fun x => x)
 
 namespace core
@@ -84,13 +84,11 @@ def mem.swap {T : Type} (a b : T): T × T := (b, a)
 
 end core
 
-/- [core::option::{core::option::Option<T>}::unwrap] -/
 @[simp, progress_simps, rust_fun "core::option::{core::option::Option<@T>}::unwrap"]
 def core.option.Option.unwrap {T : Type} (x : Option T) : Result T :=
   Result.ofOption x Error.panic
 
-/- [core::option::{core::option::Option<T>}::unwrap_or] -/
-@[progress_pure_def]
+@[progress_pure_def, rust_fun "core::option::{core::option::Option<@T>}::unwrap_or" -canFail]
 def core.option.Option.unwrap_or (self : Option T) (default : T) : T :=
   match self with
   | none => default
@@ -102,18 +100,17 @@ def core.option.Option.unwrap_or (self : Option T) (default : T) : T :=
 @[simp] def core.option.Option.unwrap_or_none (default : T) :
   core.option.Option.unwrap_or none default = default := by simp [unwrap_or]
 
-/- [core::option::Option::take] -/
-@[simp, progress_simps] def core.option.Option.take {T: Type} (self: Option T): Option T × Option T := (self, .none)
+@[simp, progress_simps, rust_fun "core::option::{core::option::Option<@T>}::take" -canFail -lift]
+def core.option.Option.take {T: Type} (self: Option T): Option T × Option T := (self, .none)
 
-/- [core::option::Option::is_none] -/
-@[simp, progress_simps] def core.option.Option.is_none {T: Type} (self: Option T): Bool := self.isNone
+@[simp, progress_simps, rust_fun "core::option::{core::option::Option<@T>}::is_none" -canFail -lift]
+def core.option.Option.is_none {T: Type} (self: Option T): Bool := self.isNone
 
 /- [core::convert::Into] -/
 structure core.convert.Into (Self : Type) (T : Type) where
   into : Self → Result T
 
-/- [core::convert::{core::convert::Into<U> for T}::into] -/
-@[reducible, simp, progress_simps]
+@[reducible, simp, progress_simps, rust_fun "core::convert::{core::convert::Into<@T, @U>}::into"]
 def core.convert.IntoFrom.into {T : Type} {U : Type}
   (fromInst : core.convert.From U T) (x : T) : Result U :=
   fromInst.from_ x
@@ -125,8 +122,8 @@ def core.convert.IntoFrom {T : Type} {U : Type} (fromInst : core.convert.From U 
   into := core.convert.IntoFrom.into fromInst
 }
 
-/- [core::convert::{core::convert::From<T> for T}::from] -/
-@[simp, progress_simps] def core.convert.FromSame.from_ {T : Type} (x : T) : T := x
+@[simp, progress_simps, rust_fun "core::convert::{core::convert::From<@T, @T>}::from" -canFail]
+def core.convert.FromSame.from_ {T : Type} (x : T) : T := x
 
 /- [core::convert::{core::convert::From<T> for T}] -/
 @[reducible]
@@ -167,8 +164,8 @@ structure core.convert.AsMut (Self : Type) (T : Type) where
 
 /- [alloc::boxed::{core::convert::AsMut<T> for alloc::boxed::Box<T>}] -/
 @[reducible]
-def core.convert.AsMutBoxT (T : Type) : core.convert.AsMut T T := {
-  as_mut := fun x => ok (alloc.boxed.AsMutBoxT.as_mut x)
+def core.convert.AsMutBox (T : Type) : core.convert.AsMut T T := {
+  as_mut := fun x => ok (alloc.boxed.AsMutBox.as_mut x)
 }
 
 /- TODO: -/
@@ -177,6 +174,7 @@ axiom Formatter : Type
 structure core.fmt.Debug (T : Type) where
   fmt : T → Formatter → Result (Formatter × Formatter → Formatter)
 
+@[rust_fun "core::result::{core::result::Result<@T, @E>}::unwrap"]
 def core.result.Result.unwrap {T E : Type}
   (_ : core.fmt.Debug T) (e : core.result.Result T E) : Std.Result T :=
   match e with
@@ -198,9 +196,8 @@ structure core.cmp.PartialEq (Self : Type) (Rhs : Type) where
 structure core.cmp.Eq (Self : Type) where
   partialEqInst : core.cmp.PartialEq Self Self
 
-/- Default method
-   Name pattern: core::cmp::PartialEq::ne
--/
+/- Default method -/
+@[rust_fun "core::cmp::PartialEq::ne"]
 def core.cmp.PartialEq.ne.default {Self Rhs : Type} (eq : Self → Rhs → Result Bool)
   (self : Self) (other : Rhs) : Result Bool := do
   ok (¬ (← eq self other))
@@ -215,32 +212,32 @@ structure core.cmp.PartialOrd (Self : Type) (Rhs : Type) where
   gt : Self → Rhs → Result Bool
   ge : Self → Rhs → Result Bool
 
-/- Default method
-   Name pattern: core::cmp::PartialOrd::lt -/
+/- Default method -/
+@[rust_fun "core::cmp::PartialOrd::lt"]
 def core.cmp.PartialOrd.lt.default {Self Rhs : Type}
   (partial_cmp : Self → Rhs → Result (Option Ordering))
   (x : Self) (y : Rhs) : Result Bool := do
   let cmp ← partial_cmp x y
   ok (cmp = some .lt)
 
-/- Default method
-   Name pattern: core::cmp::PartialOrd::le -/
+/- Default method -/
+@[rust_fun "core::cmp::PartialOrd::le"]
 def core.cmp.PartialOrd.le.default {Self Rhs : Type}
   (partial_cmp : Self → Rhs → Result (Option Ordering))
   (x : Self) (y : Rhs) : Result Bool := do
   let cmp ← partial_cmp x y
   ok (cmp = some .lt ∨ cmp = some .eq)
 
-/- Default method
-   Name pattern: core::cmp::PartialOrd::gt -/
+/- Default method -/
+@[rust_fun "core::cmp::PartialOrd::gt"]
 def core.cmp.PartialOrd.gt.default {Self Rhs : Type}
   (partial_cmp : Self → Rhs → Result (Option Ordering))
   (x : Self) (y : Rhs) : Result Bool := do
   let cmp ← partial_cmp x y
   ok (cmp = some .gt)
 
-/- Default method
-   Name pattern: core::cmp::PartialOrd::ge -/
+/- Default method -/
+@[rust_fun "core::cmp::PartialOrd::ge"]
 def core.cmp.PartialOrd.ge.default {Self Rhs : Type}
   (partial_cmp : Self → Rhs → Result (Option Ordering))
   (x : Self) (y : Rhs) : Result Bool := do
@@ -257,21 +254,21 @@ structure core.cmp.Ord (Self : Type) where
   min : Self → Self → Result Self
   clamp : Self → Self → Self → Result Self
 
-/- Default method for: [core::cmp::Ord::max]:
-   Name pattern: core::cmp::Ord::max -/
+/- Default method -/
+@[rust_fun "core::cmp::Ord::max"]
 def core.cmp.Ord.max.default {Self : Type} (lt : Self → Self → Result Bool)
   (x y : Self) : Result Self := do
   if ← lt x y then ok y else ok x
 
-/- Default method for: [core::cmp::Ord::min]:
-   Name pattern: core::cmp::Ord::min -/
+/- Default method -/
+@[rust_fun "core::cmp::Ord::min"]
 def core.cmp.Ord.min.default {Self : Type} (lt : Self → Self → Result Bool)
   (x y : Self) : Result Self := do
   if ← lt x y then ok x else ok y
 
-/- Default method for: [core::cmp::Ord::clamp]:
-   Name pattern: core::cmp::Ord::clamp -/
-def core.cmp.Ord.min.clamp {Self : Type} (le lt gt : Self → Self → Result Bool)
+/- Default method -/
+@[rust_fun "core::cmp::Ord::clamp"]
+def core.cmp.Ord.clamp.default {Self : Type} (le lt gt : Self → Self → Result Bool)
   (self min max : Self) : Result Self := do
   massert (← le min max)
   if ← lt self min then ok min

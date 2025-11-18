@@ -318,18 +318,14 @@ def core.slice.index.private_slice_index.SealedRangeToUsize :
   core.slice.index.private_slice_index.Sealed (core.ops.range.RangeTo Usize)
   := {}
 
-/- [core::slice::index::{core::slice::index::SliceIndex<@Slice<T>, @Slice<T>> for core::ops::range::RangeTo<usize>}#6::get]:
-   Source: '/rustc/library/core/src/slice/index.rs', lines 499:4-499:45
-   Name pattern: [core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::get] -/
+@[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::get"]
 def core.slice.index.SliceIndexRangeToUsizeSlice.get
   {T : Type} (r : core.ops.range.RangeTo Usize) (s : Slice T) : Result (Option (Slice T)) :=
   if r.end_ ≤ s.length then
     ok (some ⟨ s.val.slice r.end_ s.length, by scalar_tac⟩)
   else ok none
 
-/- [core::slice::index::{core::slice::index::SliceIndex<@Slice<T>, @Slice<T>> for core::ops::range::RangeTo<usize>}#6::get_mut]:
-   Source: '/rustc/library/core/src/slice/index.rs', lines 504:4-504:57
-   Name pattern: [core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::get_mut] -/
+@[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::get_mut"]
 def core.slice.index.SliceIndexRangeToUsizeSlice.get_mut
   {T : Type} (r : core.ops.range.RangeTo Usize) (s : Slice T) :
   Result ((Option (Slice T)) × (Option (Slice T) → Slice T)) :=
@@ -344,35 +340,27 @@ def core.slice.index.SliceIndexRangeToUsizeSlice.get_mut
           else s )
   else ok (none, fun _ => s)
 
-/- [core::slice::index::{core::slice::index::SliceIndex<@Slice<T>, @Slice<T>> for core::ops::range::RangeTo<usize>}#6::get_unchecked]:
-   Source: '/rustc/library/core/src/slice/index.rs', lines 509:4-509:66
-   Name pattern: [core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::get_unchecked] -/
+@[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::get_unchecked"]
 def core.slice.index.SliceIndexRangeToUsizeSlice.get_unchecked
   {T : Type} (_ : core.ops.range.RangeTo Usize) (_ : ConstRawPtr (Slice T)) : Result (ConstRawPtr (Slice T)) :=
   -- Don't know what the model should be - for now we always fail
   fail .undef
 
-/- [core::slice::index::{core::slice::index::SliceIndex<@Slice<T>, @Slice<T>> for core::ops::range::RangeTo<usize>}#6::get_unchecked_mut]:
-   Source: '/rustc/library/core/src/slice/index.rs', lines 515:4-515:66
-   Name pattern: [core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::get_unchecked_mut] -/
+@[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::get_unchecked_mut"]
 def core.slice.index.SliceIndexRangeToUsizeSlice.get_unchecked_mut
   {T : Type} (_ : core.ops.range.RangeTo Usize) (_ : MutRawPtr (Slice T)) :
   Result (MutRawPtr (Slice T)) :=
   -- Don't know what the model should be - for now we always fail
   fail .undef
 
-/- [core::slice::index::{core::slice::index::SliceIndex<@Slice<T>, @Slice<T>> for core::ops::range::RangeTo<usize>}#6::index]:
-   Source: '/rustc/library/core/src/slice/index.rs', lines 521:4-521:39
-   Name pattern: [core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::index] -/
+@[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::index"]
 def core.slice.index.SliceIndexRangeToUsizeSlice.index
   {T : Type} (r : core.ops.range.RangeTo Usize) (s : Slice T) : Result (Slice T) :=
   if r.end_ ≤ s.length then
     ok (⟨ s.val.slice r.end_ s.length, by scalar_tac⟩)
   else fail .panic
 
-/- [core::slice::index::{core::slice::index::SliceIndex<@Slice<T>, @Slice<T>> for core::ops::range::RangeTo<usize>}#6::index_mut]:
-   Source: '/rustc/library/core/src/slice/index.rs', lines 526:4-526:51
-   Name pattern: [core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::index_mut] -/
+@[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::index_mut"]
 def core.slice.index.SliceIndexRangeToUsizeSlice.index_mut
   {T : Type} (r : core.ops.range.RangeTo Usize) (s : Slice T) :
   Result ((Slice T) × (Slice T → Slice T)) :=
@@ -463,18 +451,19 @@ def core.slice.index.SliceIndexUsizeSliceInst (T : Type) :
   index_mut := core.slice.index.Usize.index_mut
 }
 
+@[rust_fun "core::slice::{[@T]}::copy_from_slice"]
 def core.slice.Slice.copy_from_slice {T : Type} (_ : core.marker.Copy T)
   (s : Slice T) (src: Slice T) : Result (Slice T) :=
   if s.len = src.len then ok src
   else fail panic
 
-/- [core::slice::index::{core::slice::index::SliceIndex<@Slice<T>> for core::ops::range::RangeFrom<usize>}::get] -/
+@[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, [@T], [@T]>}::get"]
 def core.slice.index.SliceIndexRangeFromUsizeSlice.get {T : Type} (r : core.ops.range.RangeFrom Usize) (s : Slice T) : Result (Option (Slice T)) :=
   if  r.start ≤ s.length then
     ok (some (s.drop r.start))
   else ok none
 
-/- [core::slice::index::{core::slice::index::SliceIndex<@Slice<T>> for core::ops::range::RangeFrom<usize>}::get_mut] -/
+@[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, [@T], [@T]>}::get_mut"]
 def core.slice.index.SliceIndexRangeFromUsizeSlice.get_mut
   {T : Type} (r : core.ops.range.RangeFrom Usize) (s : Slice T) :
   Result ((Option (Slice T)) × (Option (Slice T) → Slice T)) :=
@@ -488,26 +477,26 @@ def core.slice.index.SliceIndexRangeFromUsizeSlice.get_mut
           else s)
   else ok (none, fun _ => s)
 
-/- [core::slice::index::{core::slice::index::SliceIndex<@Slice<T>> for core::ops::range::RangeFrom<usize>}::get_unchecked] -/
+@[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, [@T], [@T]>}::get_unchecked"]
 def core.slice.index.SliceIndexRangeFromUsizeSlice.get_unchecked {T : Type} :
   core.ops.range.RangeFrom Usize → ConstRawPtr (Slice T) → Result (ConstRawPtr (Slice T)) :=
   -- We don't have a model for now
   fun _ _ => fail .undef
 
-/- [core::slice::index::{core::slice::index::SliceIndex<@Slice<T>> for core::ops::range::RangeFrom<usize>}::get_unchecked_mut] -/
+@[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, [@T], [@T]>}::get_unchecked_mut"]
 def core.slice.index.SliceIndexRangeFromUsizeSlice.get_unchecked_mut {T : Type} :
   core.ops.range.RangeFrom Usize → MutRawPtr (Slice T) → Result (MutRawPtr (Slice T)) :=
   -- We don't have a model for now
   fun _ _ => fail .undef
 
-/- [core::slice::index::{core::slice::index::SliceIndex<@Slice<T>> for core::ops::range::RangeFrom<usize>}::index] -/
+@[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, [@T], [@T]>}::index"]
 def core.slice.index.SliceIndexRangeFromUsizeSlice.index {T : Type}
   (r : core.ops.range.RangeFrom Usize) (s : Slice T) : Result (Slice T) :=
   if r.start.val ≤ s.length then
     ok (s.drop r.start)
   else fail .undef
 
-/- [core::slice::index::{core::slice::index::SliceIndex<@Slice<T>> for core::ops::range::RangeFrom<usize>}::index_mut] -/
+@[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, [@T], [@T]>}::index_mut"]
 def core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut {T : Type}
   (r : core.ops.range.RangeFrom Usize) (s : Slice T) : Result ((Slice T) × (Slice T → Slice T)) :=
   if r.start ≤ s.length then
@@ -572,9 +561,7 @@ theorem Slice.clone_spec {T : Type} {clone : T → Result T} {s : Slice T} (h : 
   have ⟨ l', h ⟩ := List.clone_spec h
   simp [h]
 
-/- [core::slice::{@Slice<T>}::split_at]:
-   Source: '/rustc/library/core/src/slice/mod.rs', lines 1908:4-1908:76
-   Name pattern: [core::slice::{[@T]}::split_at] -/
+@[rust_fun "core::slice::{[@T]}::split_at"]
 def core.slice.Slice.split_at {T : Type} (s : Slice T) (n : Usize) :
   Result ((Slice T) × (Slice T)) :=
   if h0 : n ≤ s.length then
@@ -585,9 +572,7 @@ def core.slice.Slice.split_at {T : Type} (s : Slice T) (n : Usize) :
     ok (s0, s1)
   else fail .panic
 
-/- [core::slice::{@Slice<T>}::split_at_mut]:
-   Source: '/rustc/library/core/src/slice/mod.rs', lines 1908:4-1908:76
-   Name pattern: [core::slice::{[@T]}::split_at_mut] -/
+@[rust_fun "core::slice::{[@T]}::split_at_mut"]
 def core.slice.Slice.split_at_mut {T : Type} (s : Slice T) (n : Usize) :
   Result (((Slice T) × (Slice T)) × (((Slice T) × (Slice T)) → Slice T)) :=
   if h0 : n ≤ s.length then
@@ -605,9 +590,7 @@ def core.slice.Slice.split_at_mut {T : Type} (s : Slice T) (n : Usize) :
     ok ((s0, s1), back)
   else fail .panic
 
-/- [core::slice::{@Slice<T>}::swap]:
-   Source: '/rustc/library/core/src/slice/mod.rs', lines 882:4-882:52
-   Name pattern: [core::slice::{[@T]}::swap] -/
+@[rust_fun "core::slice::{[@T]}::swap"]
 def core.slice.Slice.swap {T : Type} (s : Slice T) (a b : Usize) : Result (Slice T) := do
   let av ← Slice.index_usize s a
   let bv ← Slice.index_usize s b
