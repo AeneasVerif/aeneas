@@ -81,6 +81,7 @@ build-bin-dir: build-bin build-lib build-runner
 .PHONY: lean-extract-builtins
 lean-extract-builtins:
 	cd backends/lean && lake exe extract
+	cd src && dune fmt || true
 
 # TODO: using ppx (in aeneas-ppx) breaks this command
 .PHONY: doc
