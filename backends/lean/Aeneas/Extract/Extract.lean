@@ -115,8 +115,47 @@ structure RustTraitImplInfo where
   filterInfo : Option (List Bool)
 deriving Repr, Inhabited
 
+def getLocalFileName : AttrM (Option String) := do
+  let name ← getFileName
+  /- Remove the prefix (we want to get rid of the part of the path which is local
+     to the machine - we do this by spotting the first occurrence of the path which
+     is equal to `Aeneas`, when exploring the path by starting at the end) -/
+  let elems := name.splitOn "/"
+  let elems := (elems.map (String.splitOn (sep := "\\"))).flatten
+  let elems := elems.filterMap (fun s => if s = "" then none else some s)
+  let mut out := []
+  let mut found := false
+  for e in elems.reverse do
+    if e = "Aeneas" then
+      found := true
+      break
+    out := e :: out
+  if found
+  then pure (some (List.foldl (fun s0 s1 => s0 ++ "/" ++ s1) "Aeneas" out))
+  else pure none
+
+structure Span where
+  fileName : String
+  pos : Position
+deriving Inhabited
+
+/- Remark: we retrieve the span of some syntax, rather than a definition (by using `findDeclarationRange?`)
+   because when processing the attribute the range is not saved in the environment yet.
+
+   TODO: how to retrieve the file in which a definition was defined?
+   For now I can only retrieve the name of the current file and the code of `Lean/Server/Goto.lean`
+   does quite a few things (in particular, does it work in non-interactive mode?). -/
+def getLocalSyntaxSpan (stx : Syntax) : AttrM (Option Span) := do
+  let some fileName ← getLocalFileName
+    | trace[Extract] "Could not compute the local file name"; return none
+  let some pos := stx.getPos?
+    | trace[Extract] "Could not retrieve the declaration range"; return none
+  let fileMap ← getFileMap
+  let pos := fileMap.toPosition pos
+  pure (some ⟨ fileName, pos ⟩)
+
 def mkExtension (α : Type) (name : Name := by exact decl_name%) :
-  IO (SimpleScopedEnvExtension (String × α) (Array (String × α))) :=
+  IO (SimpleScopedEnvExtension (String × Span × α) (Array (String × Span × α))) :=
   registerSimpleScopedEnvExtension {
     name        := name,
     initial     := #[],
@@ -124,7 +163,7 @@ def mkExtension (α : Type) (name : Name := by exact decl_name%) :
   }
 
 structure Attribute (α : Type) where
-  ext : SimpleScopedEnvExtension (String × α) (Array (String × α))
+  ext : SimpleScopedEnvExtension (String × Span × α) (Array (String × Span × α))
   attr : AttributeImpl
 deriving Inhabited
 
@@ -139,8 +178,11 @@ def mkAttribute {α} (extName : Name)
     descr
     add := fun declName stx attrKind => do
       let (pat, info) ← elabInfo stx
+      let some span ← getLocalSyntaxSpan stx
+        | throwError "Could not compute the span of the definition"
+      trace[Extract] "File: {span.fileName}, pos: {span.pos}"
       let info ← processDecl declName pat info
-      ScopedEnvExtension.add ext (pat, info) attrKind
+      ScopedEnvExtension.add ext (pat, span, info) attrKind
   }
   registerBuiltinAttribute attr
   pure { ext, attr }
@@ -208,6 +250,7 @@ def processType (declName : Name) (_pat : String) (info : TypeInfo) : AttrM Type
       trace[Extract] "Generating the extraction name"
       pure (← (removeNamePrefix declName)).toString
   let info : TypeInfo := { info with extract := extractName }
+
   -- Analyze the body
   let some decl := env.findAsync? declName
       | throwError "Could not find theorem {declName}"
@@ -344,17 +387,17 @@ def FunInfo.toExtract (info : FunInfo) : MessageData :=
   let hasDefault := if info.hasDefault then m!" ~lift:{info.hasDefault}" else m!""
   m!"{extract}{filterParams}{canFail}{lift}{hasDefault}"
 
-def sortDescriptors {α} [ToMessageData α] (st : Array (String × α)) : IO (Array (String × α)) := do
-  let mut map : RBMap String α Ord.compare := RBMap.empty
-  for (pat, info) in st do
+def sortDescriptors {α} [ToMessageData α] (st : Array (String × Span × α)) : IO (Array (String × Span × α)) := do
+  let mut map : RBMap String (Span × α) Ord.compare := RBMap.empty
+  for (pat, span, info) in st do
     match map.find? pat with
-    | some info' =>
+    | some (_, info') =>
       let msg := m!"Found two descriptors for the same name pattern `{pat}`:\n- info1: {info}\n- info2: {info'}"
       let msg ← msg.toString
       println! "Error: {msg}"
       throw (IO.userError msg)
     | none =>
-      map := map.insert pat info
+      map := map.insert pat (span, info)
   pure map.toArray
 
 /-- Export the extraction information to an OCaml file -/
@@ -371,7 +414,10 @@ def writeToFile (moduleName : Name) (filename : System.FilePath) : IO Unit := do
   -- Retrieve the types, sort them by pattern and export
   let infos ← sortDescriptors (rustTypes.ext.getState env)
   handle.putStrLn "let lean_builtin_types = ["
-  for (pat, info) in infos do
+  let printSpan (span : Span) : IO Unit :=
+    handle.putStrLn ("  (* file: \"" ++ span.fileName ++ "\", line: " ++ toString span.pos.line ++ " *)")
+  for (pat, span, info) in infos do
+    printSpan span
     let msg ← m!"  mk_type \"{pat}\" {info.toExtract};".toString
     handle.putStrLn msg
   handle.putStrLn "]"
@@ -379,7 +425,8 @@ def writeToFile (moduleName : Name) (filename : System.FilePath) : IO Unit := do
   -- # Funs
   let infos ← sortDescriptors (rustFuns.ext.getState env)
   handle.putStrLn "let lean_builtin_funs = ["
-  for (pat, info) in infos do
+  for (pat, span, info) in infos do
+    printSpan span
     let msg ← m!"  mk_fun \"{pat}\" {info.toExtract};".toString
     handle.putStrLn msg
   handle.putStrLn "]"
