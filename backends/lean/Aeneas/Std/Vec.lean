@@ -39,13 +39,14 @@ abbrev Vec.v {α : Type u} (v : Vec α) : List α := v.val
 example {a: Type u} (v : Vec a) : v.length ≤ Usize.max := by
   scalar_tac
 
+@[rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::new" -canFail -lift]
 abbrev Vec.new (α : Type u): Vec α := ⟨ [], by simp ⟩
 
 instance (α : Type u) : Inhabited (Vec α) := by
   constructor
   apply Vec.new
 
-@[simp]
+@[simp, rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::len" -canFail -lift (filterParams := [true,false])]
 abbrev Vec.len {α : Type u} (v : Vec α) : Usize :=
   Usize.ofNatCore v.val.length (by scalar_tac)
 
@@ -95,7 +96,7 @@ theorem Vec.set_opt_val_eq {α : Type u} (v: Vec α) (i: Usize) (x: Option α) :
   (v.set_opt i x) = v.val.set_opt i.val x := by
   simp [set_opt]
 
-@[irreducible]
+@[irreducible, rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::push" (filterParams := [true,false])]
 def Vec.push {α : Type u} (v : Vec α) (x : α) : Result (Vec α)
   :=
   let nlen := List.length v.val + 1
@@ -112,6 +113,7 @@ theorem Vec.push_spec {α : Type u} (v : Vec α) (x : α) (h : v.val.length < Us
   split <;> simp_all
   scalar_tac
 
+@[rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::insert" (filterParams := [true, false])]
 def Vec.insert {α : Type u} (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
   if i.val < v.length then
     ok ⟨ v.val.set i x, by have := v.property; simp [*] ⟩
@@ -221,7 +223,7 @@ theorem Vec.index_mut_slice_index {α : Type} (v : Vec α) (i : Usize) :
 
 end alloc.vec
 
-/-- [alloc::slice::{@Slice<T>}::to_vec] -/
+@[rust_fun "alloc::slice::{[@T]}::to_vec"]
 def alloc.slice.Slice.to_vec
   {T : Type} (cloneInst : core.clone.Clone T) (s : Slice T) : Result (alloc.vec.Vec T) := do
   Slice.clone cloneInst.clone s
@@ -251,10 +253,7 @@ theorem alloc.vec.from_elem_spec {T : Type} (cloneInst : core.clone.Clone T)
   have ⟨ l, h ⟩ := @List.clone_spec _ cloneInst.clone (List.replicate n.val x) (by intros; simp_all)
   simp [h]
 
-/-- [core::slice::{@Slice<T>}::reverse] -/
-def core.slice.Slice.reverse {T : Type} (s : Slice T) : Slice T :=
-  ⟨ s.val.reverse, by scalar_tac ⟩
-
+@[rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::with_capacity" -canFail -lift]
 def alloc.vec.Vec.with_capacity (T : Type) (_ : Usize) : alloc.vec.Vec T := Vec.new T
 
 @[rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::extend_from_slice" (filterParams := [true, false])]
@@ -268,9 +267,8 @@ def alloc.vec.Vec.extend_from_slice {T : Type} (cloneInst : core.clone.Clone T)
     | div => div
   else fail .panic
 
-/- [alloc::vec::{(core::ops::deref::Deref for alloc::vec::Vec<T, A>)#9}::deref]:
-   Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/alloc/src/vec/mod.rs', lines 2624:4-2624:27
-   Name pattern: alloc::vec::{core::ops::deref::Deref<alloc::vec::Vec<@T, @A>>}::deref -/
+@[rust_fun "alloc::vec::{core::ops::deref::Deref<alloc::vec::Vec<@T>, [@T]>}::deref"
+           -canFail -lift (filterParams := [true, false])]
 def alloc.vec.Vec.deref {T : Type} (v : alloc.vec.Vec T) : Slice T :=
   ⟨ v.val, v.property ⟩
 
@@ -279,9 +277,8 @@ def core.ops.deref.DerefVec {T : Type} : core.ops.deref.Deref (alloc.vec.Vec T) 
   deref := fun v => ok (alloc.vec.Vec.deref v)
 }
 
-/- [alloc::vec::{(core::ops::deref::DerefMut for alloc::vec::Vec<T, A>)#10}::deref_mut]:
-   Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/alloc/src/vec/mod.rs', lines 2632:4-2632:39
-   Name pattern: alloc::vec::{core::ops::deref::DerefMut<alloc::vec::Vec<@T, @A>>}::deref_mut -/
+@[rust_fun "alloc::vec::{core::ops::deref::DerefMut<alloc::vec::Vec<@T>, [@T]>}::deref_mut"
+           -canFail (filterParams := [true, false])]
 def alloc.vec.Vec.deref_mut {T : Type} (v :  alloc.vec.Vec T) :
    (Slice T) × (Slice T → alloc.vec.Vec T) :=
    (⟨ v.val, v.property ⟩, λ s => ⟨ s.val, s.property ⟩)

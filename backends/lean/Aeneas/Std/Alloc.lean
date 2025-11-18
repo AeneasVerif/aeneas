@@ -7,7 +7,10 @@ namespace Std
 
 open Result
 
+@[rust_fun "alloc::boxed::{core::ops::deref::Deref<Box<@T>, @T>}::deref" -canFail (filterParams := [true, false])]
 def alloc.boxed.Box.deref {T : Type} (x : T) : T := x
+
+@[rust_fun "alloc::boxed::{core::ops::deref::DerefMut<Box<@T>, @T>}::deref_mut" -canFail (filterParams := [true, false])]
 def alloc.boxed.Box.deref_mut {T : Type} (x : T) : (T × (T → T)) := (x, λ x => x)
 
 /-- Trait instance -/

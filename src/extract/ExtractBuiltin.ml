@@ -659,86 +659,14 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
              funs)
          all_int_names)
   in
-  [
-    mk_fun "core::slice::{[@T]}::len"
-      ~extract_name:(Some (backend_choice "slice::len" "Slice::len"))
-      ~can_fail:false ~lift:false ();
-    mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::new"
-      ~extract_name:(Some "alloc::vec::Vec::new") ~can_fail:false ~lift:false ();
-    mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::push"
-      ~filter:(Some [ true; false ])
-      ();
-    mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::insert"
-      ~filter:(Some [ true; false ])
-      ();
-    mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::len"
-      ~filter:(Some [ true; false ])
-      ~can_fail:false ~lift:false ();
-    mk_fun "alloc::boxed::{core::ops::deref::Deref<Box<@T>, @T>}::deref"
-      ~can_fail:false ~extract_name:(Some "alloc.boxed.Box.deref")
-      ~filter:(Some [ true; false ])
-      ();
-    mk_fun "alloc::boxed::{core::ops::deref::DerefMut<Box<@T>, @T>}::deref_mut"
-      ~can_fail:false ~extract_name:(Some "alloc.boxed.Box.deref_mut")
-      ~filter:(Some [ true; false ])
-      ();
-    mk_fun "core::array::{core::ops::index::Index<[@T; @N], @I, @O>}::index"
-      ~extract_name:(Some "core.array.Array.index") ();
-    mk_fun
-      "core::array::{core::ops::index::IndexMut<[@T; @N], @I, @O>}::index_mut"
-      ~extract_name:(Some "core.array.Array.index_mut") ();
-    mk_fun
-      "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
-       @T>}::get"
-      ();
-    mk_fun
-      "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
-       @T>}::get_mut"
-      ();
-    mk_fun
-      "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
-       @T>}::get_unchecked"
-      ();
-    mk_fun
-      "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
-       @T>}::get_unchecked_mut"
-      ();
-    mk_fun
-      "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
-       @T>}::index"
-      ~extract_name:(Some "core_slice_index_Slice_index") ();
-    mk_fun
-      "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
-       @T>}::index_mut"
-      ~extract_name:(Some "core_slice_index_Slice_index_mut") ();
-    mk_fun "alloc::slice::{[@T]}::to_vec"
-      ~extract_name:(Some "alloc.slice.Slice.to_vec") ();
-    mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::with_capacity"
-      ~extract_name:(Some "alloc.vec.Vec.with_capacity") ~can_fail:false
-      ~lift:false ();
-    mk_fun "core::slice::{[@T]}::reverse"
-      ~extract_name:(Some "core.slice.Slice.reverse") ~can_fail:false ();
-    mk_fun
-      "alloc::vec::{core::ops::deref::Deref<alloc::vec::Vec<@T>, [@T]>}::deref"
-      ~extract_name:(Some "alloc::vec::Vec::deref")
-      ~filter:(Some [ true; false ])
-      ~can_fail:false ~lift:false ();
-    mk_fun
-      "alloc::vec::{core::ops::deref::DerefMut<alloc::vec::Vec<@T>, \
-       [@T]>}::deref_mut"
-      ~extract_name:(Some "alloc::vec::Vec::deref_mut") ~can_fail:false
-      ~filter:(Some [ true; false ])
-      ();
-  ]
-  @ List.flatten
-      (List.map
-         (fun op ->
-           mk_scalar_fun
-             (fun ty -> "core::num::{" ^ ty ^ "}::checked_" ^ op)
-             (fun ty ->
-               StringUtils.capitalize_first_letter ty ^ ".checked_" ^ op)
-             ~can_fail:false ())
-         [ "add"; "sub"; "mul"; "div"; "rem" ])
+  List.flatten
+    (List.map
+       (fun op ->
+         mk_scalar_fun
+           (fun ty -> "core::num::{" ^ ty ^ "}::checked_" ^ op)
+           (fun ty -> StringUtils.capitalize_first_letter ty ^ ".checked_" ^ op)
+           ~can_fail:false ())
+       [ "add"; "sub"; "mul"; "div"; "rem" ])
   (* From<INT, bool> *)
   @ mk_scalar_fun
       (fun ty ->
@@ -868,6 +796,78 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
            @O>}::index_mut"
           ~extract_name:(Some "alloc.vec.Vec.index_mut")
           ~filter:(Some [ true; true; false; true ])
+          ();
+        mk_fun "core::slice::{[@T]}::len" ~extract_name:(Some "slice::len")
+          ~can_fail:false ~lift:false ();
+        mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::new"
+          ~extract_name:(Some "alloc::vec::Vec::new") ~can_fail:false
+          ~lift:false ();
+        mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::push"
+          ~filter:(Some [ true; false ])
+          ();
+        mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::insert"
+          ~filter:(Some [ true; false ])
+          ();
+        mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::len"
+          ~filter:(Some [ true; false ])
+          ~can_fail:false ~lift:false ();
+        mk_fun "alloc::boxed::{core::ops::deref::Deref<Box<@T>, @T>}::deref"
+          ~can_fail:false ~extract_name:(Some "alloc.boxed.Box.deref")
+          ~filter:(Some [ true; false ])
+          ();
+        mk_fun
+          "alloc::boxed::{core::ops::deref::DerefMut<Box<@T>, @T>}::deref_mut"
+          ~can_fail:false ~extract_name:(Some "alloc.boxed.Box.deref_mut")
+          ~filter:(Some [ true; false ])
+          ();
+        mk_fun "core::array::{core::ops::index::Index<[@T; @N], @I, @O>}::index"
+          ~extract_name:(Some "core.array.Array.index") ();
+        mk_fun
+          "core::array::{core::ops::index::IndexMut<[@T; @N], @I, \
+           @O>}::index_mut"
+          ~extract_name:(Some "core.array.Array.index_mut") ();
+        mk_fun
+          "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
+           @T>}::get"
+          ();
+        mk_fun
+          "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
+           @T>}::get_mut"
+          ();
+        mk_fun
+          "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
+           @T>}::get_unchecked"
+          ();
+        mk_fun
+          "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
+           @T>}::get_unchecked_mut"
+          ();
+        mk_fun
+          "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
+           @T>}::index"
+          ~extract_name:(Some "core_slice_index_Slice_index") ();
+        mk_fun
+          "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
+           @T>}::index_mut"
+          ~extract_name:(Some "core_slice_index_Slice_index_mut") ();
+        mk_fun "alloc::slice::{[@T]}::to_vec"
+          ~extract_name:(Some "alloc.slice.Slice.to_vec") ();
+        mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::with_capacity"
+          ~extract_name:(Some "alloc.vec.Vec.with_capacity") ~can_fail:false
+          ~lift:false ();
+        mk_fun "core::slice::{[@T]}::reverse"
+          ~extract_name:(Some "core.slice.Slice.reverse") ~can_fail:false ();
+        mk_fun
+          "alloc::vec::{core::ops::deref::Deref<alloc::vec::Vec<@T>, \
+           [@T]>}::deref"
+          ~extract_name:(Some "alloc::vec::Vec::deref")
+          ~filter:(Some [ true; false ])
+          ~can_fail:false ~lift:false ();
+        mk_fun
+          "alloc::vec::{core::ops::deref::DerefMut<alloc::vec::Vec<@T>, \
+           [@T]>}::deref_mut"
+          ~extract_name:(Some "alloc::vec::Vec::deref_mut") ~can_fail:false
+          ~filter:(Some [ true; false ])
           ();
       ]
   (* Lean-only definitions *)

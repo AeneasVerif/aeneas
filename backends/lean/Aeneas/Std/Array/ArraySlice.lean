@@ -78,13 +78,13 @@ theorem Array.update_subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a :
   . simp_lists
   . scalar_tac
 
-/- [core::array::[T; N]::index]: forward function -/
+@[rust_fun "core::array::{core::ops::index::Index<[@T; @N], @I, @O>}::index"]
 def core.array.Array.index
   {T I Output : Type} {N : Usize} (inst : core.ops.index.Index (Slice T) I Output)
   (a : Array T N) (i : I) : Result Output :=
   inst.index a.to_slice i
 
-/- [core::array::[T; N]::index_mut]: forward function -/
+@[rust_fun "core::array::{core::ops::index::IndexMut<[@T; @N], @I, @O>}::index_mut"]
 def core.array.Array.index_mut
   {T I Output : Type} {N : Usize} (inst : core.ops.index.IndexMut (Slice T) I Output)
   (a : Array T N) (i : I) :

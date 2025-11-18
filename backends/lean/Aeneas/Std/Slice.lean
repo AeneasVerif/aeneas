@@ -40,7 +40,7 @@ example {a: Type u} (v : Slice a) : v.length ≤ Usize.max := by
 
 def Slice.new (α : Type u) : Slice α := ⟨ [], by simp ⟩
 
--- TODO: very annoying that the α is an explicit parameter
+@[rust_fun "core::slice::{[@T]}::len" -canFail -lift]
 abbrev Slice.len {α : Type u} (v : Slice α) : Usize :=
   Usize.ofNatCore v.val.length (by scalar_tac)
 
@@ -204,6 +204,10 @@ theorem Slice.update_subslice_spec {α : Type u} [Inhabited α] (a : Slice α) (
   simp only [update_subslice, length, and_self, ↓reduceDIte, ok.injEq, getElem!_Nat_eq,
     exists_eq_left', *]
   simp_lists
+
+@[rust_fun "core::slice::{[@T]}::reverse" -canFail]
+def core.slice.Slice.reverse {T : Type} (s : Slice T) : Slice T :=
+  ⟨ s.val.reverse, by scalar_tac ⟩
 
 /- Trait declaration: [core::slice::index::private_slice_index::Sealed] -/
 structure core.slice.index.private_slice_index.Sealed (Self : Type) where
@@ -403,34 +407,34 @@ def core.ops.index.IndexMutSliceInst {T I Output : Type}
   index_mut := core.slice.index.Slice.index_mut inst
 }
 
-/- [core::slice::index::usize::get]: forward function -/
-@[simp, progress_simps] abbrev core.slice.index.Usize.get
+@[simp, progress_simps, rust_fun "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], @T>}::get"]
+abbrev core.slice.index.Usize.get
   {T : Type} (i : Usize) (s : Slice T) : Result (Option T) :=
   ok s[i]?
 
-/- [core::slice::index::usize::get_mut]: forward function -/
-@[simp, progress_simps] abbrev core.slice.index.Usize.get_mut
+@[simp, progress_simps, rust_fun "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], @T>}::get_mut"]
+abbrev core.slice.index.Usize.get_mut
   {T : Type} (i : Usize) (s : Slice T) : Result (Option T × (Option T → Slice T)) :=
   ok (s[i]?, s.set_opt i)
 
-/- [core::slice::index::usize::get_unchecked]: forward function -/
+@[rust_fun "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], @T>}::get_unchecked"]
 def core.slice.index.Usize.get_unchecked
   {T : Type} : Usize → ConstRawPtr (Slice T) → Result (ConstRawPtr T) :=
   -- We don't have a model for now
   fun _ _ => fail .undef
 
-/- [core::slice::index::usize::get_unchecked_mut]: forward function -/
+@[rust_fun "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], @T>}::get_unchecked_mut"]
 def core.slice.index.Usize.get_unchecked_mut
   {T : Type} : Usize → MutRawPtr (Slice T) → Result (MutRawPtr T) :=
   -- We don't have a model for now
   fun _ _ => fail .undef
 
-/- [core::slice::index::usize::index]: forward function -/
-@[simp, progress_simps] abbrev core.slice.index.Usize.index {T : Type} (i : Usize) (s : Slice T) : Result T :=
+@[simp, progress_simps, rust_fun "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], @T>}::index"]
+abbrev core.slice.index.Usize.index {T : Type} (i : Usize) (s : Slice T) : Result T :=
   Slice.index_usize s i
 
-/- [core::slice::index::usize::index_mut]: forward function -/
-@[simp, progress_simps] abbrev core.slice.index.Usize.index_mut {T : Type}
+@[simp, progress_simps, rust_fun "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], @T>}::index_mut"]
+abbrev core.slice.index.Usize.index_mut {T : Type}
   (i : Usize) (s : Slice T) : Result (T × (T → (Slice T))) :=
   Slice.index_mut_usize s i
 
