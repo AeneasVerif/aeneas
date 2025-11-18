@@ -8,7 +8,7 @@ namespace Aeneas.Extract
 initialize registerTraceClass `Extract
 
 structure Field where
-  rust : Option String := none
+  rust : String
   extract : String
 deriving Repr, Inhabited
 
@@ -17,7 +17,7 @@ instance : ToMessageData Field where
 
 structure Variant where
   -- Name of the variant, in Rust
-  rust : Option String := none
+  rust : String
   -- Name of the variant, once extracted
   extract : String
   -- Names of the fields
@@ -28,9 +28,9 @@ instance : ToMessageData Variant where
   toMessageData x := m!"\{ rust : {x.rust}, extract : {x.extract}, fields: {x.fields} }"
 
 inductive TypeBody where
--- The constructor name and the map for the field names
+/-- The constructor name and the map for the field names -/
 | struct (fieldNames : List Field)
--- For every variant, a map for the field names
+/-- For every variant, a map for the field names -/
 | enum (variants : List Variant)
 deriving Repr, Inhabited
 
@@ -41,8 +41,7 @@ instance : ToMessageData TypeBody where
     | .enum variants => m!"Enum ({variants})"
 
 structure TypeInfo where
-  /- The name pattern which uniquely identifies the function in Rust -/
-  rust : Option String := none
+  /-- The name to use for extraction -/
   extract : Option String := none
   /-- We might want to filter some of the type parameters.
 
@@ -54,14 +53,15 @@ deriving Repr, Inhabited
 
 instance : ToMessageData TypeInfo where
   toMessageData x :=
-    m!"\{ rust : {x.rust},\n  extract : {x.extract},\n  keepParams : {x.keepParams},\n  body : {x.body} }"
+    m!"\{ extract : {x.extract},\n  keepParams : {x.keepParams},\n  body : {x.body} }"
 
 structure GlobalInfo where
   extract : Option String := none
 deriving Repr, Inhabited
 
 structure FunInfo where
-  extract : String
+  /-- The name to use for the extraction -/
+  extract : Option String := none
   /-- We might want to filter some of the function parameters, for instance
       the `Allocator` parameter, which we actually don't use. -/
   filterParams : Option (List Bool) := none
@@ -108,7 +108,7 @@ structure RustTraitImplInfo where
 deriving Repr, Inhabited
 
 def mkExtension (α : Type) (name : Name := by exact decl_name%) :
-  IO (SimpleScopedEnvExtension α (Array α)) :=
+  IO (SimpleScopedEnvExtension (String × α) (Array (String × α))) :=
   registerSimpleScopedEnvExtension {
     name        := name,
     initial     := #[],
@@ -116,23 +116,23 @@ def mkExtension (α : Type) (name : Name := by exact decl_name%) :
   }
 
 structure Attribute (α : Type) where
-  ext : SimpleScopedEnvExtension α (Array α)
+  ext : SimpleScopedEnvExtension (String × α) (Array (String × α))
   attr : AttributeImpl
 deriving Inhabited
 
 def mkAttribute {α} (extName : Name)
   (attrName : Name) -- this has to be the same name as the syntax
-  (descr : String) (elabInfo : Syntax → AttrM α)
-  (processDecl : Name → α → AttrM α)
+  (descr : String) (elabInfo : Syntax → AttrM (String × α))
+  (processDecl : Name → String → α → AttrM α)
    : IO (Attribute α) := do
   let ext ← mkExtension α extName
   let attr : AttributeImpl := {
     name := attrName
     descr
     add := fun declName stx attrKind => do
-      let info ← elabInfo stx
-      let info ← processDecl declName info
-      ScopedEnvExtension.add ext info attrKind
+      let (pat, info) ← elabInfo stx
+      let info ← processDecl declName pat info
+      ScopedEnvExtension.add ext (pat, info) attrKind
   }
   registerBuiltinAttribute attr
   pure { ext, attr }
@@ -175,87 +175,119 @@ def variantNameToString (declName n : Name) : AttrM String := do
    This allows to have nice syntax for optional fields and at a small cost. -/
 declare_command_config_elab elabRustTypeInfo TypeInfo
 
-syntax (name := rustType) "rust_type" Parser.Tactic.optConfig : attr
+syntax (name := rustType) "rust_type" str Parser.Tactic.optConfig : attr
 
-def elabTypeNameInfo (stx : Syntax) : AttrM TypeInfo :=
+def elabTypeNameInfo (stx : Syntax) : AttrM (String × TypeInfo) :=
   withRef stx do
     match stx with
-    | `(attr| rust_type $config) => do
+    | `(attr| rust_type $pat $config) => do
+      let pat := pat.getString
+      if pat = "" then throwError "Not a valid name pattern: {pat}"
       let info ← liftCommandElabM (elabRustTypeInfo config)
-      pure info
+      pure (pat, info)
     | _ => Lean.Elab.throwUnsupportedSyntax
 
 /-- This helper completes the information available in the information provided by the user by
     looking at the definition itself. -/
-def processType (declName : Name) (info : TypeInfo) : AttrM TypeInfo := do
+def processType (declName : Name) (_pat : String) (info : TypeInfo) : AttrM TypeInfo := do
   trace[Extract] "declName: {declName}"
   let env ← getEnv
-  let some decl := env.findAsync? declName
-      | throwError "Could not find theorem {declName}"
-  let const ← do match decl.constInfo.get with
-      | .inductInfo info => pure info
-      | _ => throwError "Not a type definition {declName}"
   -- Retrieve the extraction name
   let extractName : String ← do
     match info.extract with
     | some name => pure name
     | none =>
-      trace[Extract] "Generating the Rust name"
-      pure (← (removeNamePrefix declName)).toString
-  /- Compute the pattern, if it was not provided (we use the extraction name, that we
-     convert to a Rust name without parameters) -/
-  let rustPattern : String ← do
-    match info.rust with
-    | some pat => pure pat
-    | none =>
-      -- Use the Lean name
       trace[Extract] "Generating the extraction name"
-      pure (← leanNameToRust (← (removeNamePrefix declName)))
-  --
-  let info : TypeInfo := { info with extract := extractName, rust := rustPattern }
+      pure (← (removeNamePrefix declName)).toString
+  let info : TypeInfo := { info with extract := extractName }
+  -- Analyze the body
+  let some decl := env.findAsync? declName
+      | throwError "Could not find theorem {declName}"
 
-  /- Compute the information about the variants/fields -/
-  let structInfo := getStructureInfo? env declName
-  match structInfo with
-  | none =>
-    trace[Extract] "The type definition is for an enumeration"
-    let variants ← do
-      match info.body with
-      | .some (.enum variants) => pure variants
-      | .none => pure []
-      | .some (.struct _) => throwError "The user-provided information is for a structure while the type is an inductive"
-    -- Go through the variants and retrieve their names
-    let providedVariants := Std.HashMap.ofList (List.map (fun x => (x.extract, x)) variants)
-    let variants : List Variant ← List.mapM (fun ctorName => do
-      let ctorName ← variantNameToString declName ctorName
-      match providedVariants.get? ctorName with
-      | some info =>
-        let rust := info.rust.getD info.extract
-        pure { info with rust }
-      | none => pure { rust := some ctorName, extract := ctorName }) const.ctors
-    trace[Extract] "variants: {variants}"
-    pure { info with body := some (.enum variants) }
-  | some structInfo =>
-    trace[Extract] "The type definition is for a structure"
-    let fields ← do
-      match info.body with
-      | .some (.struct fields) => pure fields
-      | .none => pure []
-      | .some (.enum _) => throwError "The user-provided information is for a variant while the type is a structure"
-    let providedFields := Std.HashMap.ofList (List.map (fun x => (x.extract, x)) fields)
-    -- Go through the fields and retrieve their names
-    let fields : List Field ← List.mapM (fun fieldName => do
-      let fieldName ← fieldNameToString fieldName
-      match providedFields.get? fieldName with
-      | some info =>
-        let rust := info.rust.getD info.extract.capitalize
-        pure { info with rust }
-      | none => pure { rust := some fieldName, extract := fieldName }) structInfo.fieldNames.toList
-    trace[Extract] "fields: {fields}"
-    pure { info with body := some (.struct fields) }
+  match decl.constInfo.get with
+  | .inductInfo const =>
+    trace[Extract] "Found a type definition"
+    /- Compute the information about the variants/fields -/
+    let structInfo := getStructureInfo? env declName
+    match structInfo with
+    | none =>
+      trace[Extract] "The type definition is for an enumeration"
+      let variants ← do
+        match info.body with
+        | .some (.enum variants) => pure variants
+        | .none => pure []
+        | .some (.struct _) => throwError "The user-provided information is for a structure while the type is an inductive"
+      -- Go through the variants and retrieve their names
+      let providedVariants := Std.HashMap.ofList (List.map (fun x => (x.extract, x)) variants)
+      let variants : List Variant ← List.mapM (fun ctorName => do
+        let ctorName ← variantNameToString declName ctorName
+        match providedVariants.get? ctorName with
+        | some info => pure info
+        | none => pure { rust := ctorName, extract := ctorName }) const.ctors
+      trace[Extract] "variants: {variants}"
+      pure { info with body := some (.enum variants) }
+    | some structInfo =>
+      trace[Extract] "The type definition is for a structure"
+      let fields ← do
+        match info.body with
+        | .some (.struct fields) => pure fields
+        | .none => pure []
+        | .some (.enum _) => throwError "The user-provided information is for a variant while the type is a structure"
+      let providedFields := Std.HashMap.ofList (List.map (fun x => (x.extract, x)) fields)
+      -- Go through the fields and retrieve their names
+      let fields : List Field ← List.mapM (fun fieldName => do
+        let fieldName ← fieldNameToString fieldName
+        match providedFields.get? fieldName with
+        | some info => pure info
+        | none => pure { rust := fieldName, extract := fieldName }) structInfo.fieldNames.toList
+      trace[Extract] "fields: {fields}"
+      pure { info with body := some (.struct fields) }
+    pure info
+  | .axiomInfo _ =>
+    trace[Extract] "Found an axiomatized type"
+    pure info
+  | _ => throwError "Not a type definition {declName}"
 
 initialize rustTypes : Attribute TypeInfo ← do
   mkAttribute `rustTypesArray `rustType "Register Rust type definitions"
     elabTypeNameInfo processType
+
+/-!
+# Functions
+-/
+
+/- Cheating a bit: we elaborate the optional information by using the command config elaborator.
+   This allows to have nice syntax for optional fields and at a small cost. -/
+declare_command_config_elab elabRustFunInfo FunInfo
+
+syntax (name := rustFun) "rust_fun" str Parser.Tactic.optConfig : attr
+
+def elabFunNameInfo (stx : Syntax) : AttrM (String × FunInfo) :=
+  withRef stx do
+    match stx with
+    | `(attr| rust_fun $pat $config) => do
+      let pat := pat.getString
+      if pat = "" then throwError "Not a valid name pattern: {pat}"
+      let info ← liftCommandElabM (elabRustFunInfo config)
+      pure (pat, info)
+    | _ => Lean.Elab.throwUnsupportedSyntax
+
+/-- This helper completes the information available in the information provided by the user by
+    looking at the definition itself. -/
+def processFun (declName : Name) (_pat : String) (info : FunInfo) : AttrM FunInfo := do
+  trace[Extract] "declName: {declName}"
+  -- Retrieve the extraction name
+  let extractName : String ← do
+    match info.extract with
+    | some name => pure name
+    | none =>
+      trace[Extract] "Generating the extraction name"
+      pure (← (removeNamePrefix declName)).toString
+  --
+  pure { info with extract := extractName }
+
+initialize rustFuns : Attribute FunInfo ← do
+  mkAttribute `rustFunsArray `rustFun "Register Rust Fun definitions"
+    elabFunNameInfo processFun
 
 end Aeneas.Extract
