@@ -59,6 +59,10 @@ structure GlobalInfo where
   extract : Option String := none
 deriving Repr, Inhabited
 
+instance : ToMessageData GlobalInfo where
+  toMessageData x :=
+    m!"\{ extract : {x.extract} }"
+
 structure FunInfo where
   /-- The name to use for the extraction -/
   extract : Option String := none
@@ -74,6 +78,10 @@ structure FunInfo where
       implementation? If yes, we might want to register it as well. -/
   hasDefault : Bool := false
 deriving Repr, Inhabited
+
+instance : ToMessageData FunInfo where
+  toMessageData x :=
+    m!"\{ extract : {x.extract},\n  filterParams : {x.filterParams},\n  canFail : {x.canFail},\n  lift : {x.lift},\n  hasDefault : {x.hasDefault} }"
 
 structure TraitConst where
   rust : Option String := none
@@ -289,5 +297,83 @@ def processFun (declName : Name) (_pat : String) (info : FunInfo) : AttrM FunInf
 initialize rustFuns : Attribute FunInfo ← do
   mkAttribute `rustFunsArray `rustFun "Register Rust Fun definitions"
     elabFunNameInfo processFun
+
+/-!
+# Code Generation
+-/
+
+def TypeInfo.toExtract (info : TypeInfo) : MessageData :=
+  let extract := info.extract.getD "ERROR_MISSING_FIELD"
+  let extract := m!"\"{extract}\""
+  let keepParams :=
+    match info.keepParams with
+    | none => m!""
+    | some keepParams => m!" ~keep_params:{keepParams}"
+  let body :=
+    match info.body with
+    | none => m!""
+    | some body =>
+      match body with
+      | .enum variants => m!" ~kind:{variants.map (fun ⟨ x, y, _ ⟩ => (x, some y))}"
+      | .struct fields => m!" ~kind:{fields.map (fun ⟨ x, y ⟩ => (x, some y))}"
+  m!"{extract}{keepParams}{body}"
+
+def boolToString (x : Bool) : String :=
+  if x then "true" else "false"
+
+def FunInfo.toExtract (info : FunInfo) : MessageData :=
+  let extract := info.extract.getD "ERROR_MISSING_FIELD"
+  let extract := m!"\"{extract}\""
+  let filterParams :=
+    match info.filterParams with
+    | none => m!""
+    | some filter => m!" ~filter:{filter}"
+  let canFail := if ¬ info.canFail then m!" ~can_fail:{boolToString info.canFail}" else m!""
+  let lift := if ¬ info.lift then m!" ~lift:{boolToString info.lift}" else m!""
+  let hasDefault := if info.hasDefault then m!" ~lift:{boolToString info.hasDefault}" else m!""
+  m!"{extract}{filterParams}{canFail}{lift}{hasDefault}"
+
+def sortDescriptors {α} [ToMessageData α] (st : Array (String × α)) : IO (Array (String × α)) := do
+  let mut map : RBMap String α Ord.compare := RBMap.empty
+  for (pat, info) in st do
+    match map.find? pat with
+    | some info' =>
+      let msg := m!"Found two descriptors for the same name pattern `{pat}`:\n- info1: {info}\n- info2: {info'}"
+      let msg ← msg.toString
+      println! "Error: {msg}"
+      throw (IO.userError msg)
+    | none =>
+      map := map.insert pat info
+  pure map.toArray
+
+/-- Export the extraction information to an OCaml file -/
+def writeToFile (moduleName : Name) (filename : System.FilePath) : IO Unit := do
+  -- Import the environment
+  let env ← Lean.importModules #[{ module := moduleName }] {} 0 (loadExts := true)
+  -- Open the file
+  let handle ← IO.FS.Handle.mk filename IO.FS.Mode.write
+  -- # Header
+  handle.putStrLn "(** THIS FILE WAS AUTOMATICALLY GENERATED FROM LEAN: DO NOT MODIFY DIRECTLY *)"
+  handle.putStrLn "open ExtractBuiltinCore"
+  handle.putStrLn ""
+  -- # Types
+  -- Retrieve the types, sort them by pattern and export
+  let infos ← sortDescriptors (rustTypes.ext.getState env)
+  handle.putStrLn "let lean_builtin_types = ["
+  for (pat, info) in infos do
+    let msg ← m!"  mk_type \"{pat}\" {info.toExtract};".toString
+    handle.putStrLn msg
+  handle.putStrLn "]"
+  handle.putStrLn ""
+  -- # Funs
+  let infos ← sortDescriptors (rustFuns.ext.getState env)
+  handle.putStrLn "let lean_builtin_funs = ["
+  for (pat, info) in infos do
+    let msg ← m!"  mk_fun \"{pat}\" {info.toExtract};".toString
+    handle.putStrLn msg
+  handle.putStrLn "]"
+  handle.putStrLn ""
+  handle.flush
+  pure ()
 
 end Aeneas.Extract
