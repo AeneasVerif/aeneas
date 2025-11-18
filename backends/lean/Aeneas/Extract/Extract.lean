@@ -302,24 +302,35 @@ initialize rustFuns : Attribute FunInfo ← do
 # Code Generation
 -/
 
+def listToString {α} [ToString α] (ls : List α) : String := Id.run do
+  let mut s := "["
+  let mut first := true
+  for e in ls do
+    if ¬ first then s := s ++ "; "
+    first := false
+    s := s ++ toString e
+  pure (s ++ "]")
+
+def optionToString {α} [ToString α] (x : Option α) : String :=
+  match x with
+  | none => "None"
+  | some x => "Some " ++ toString x
+
 def TypeInfo.toExtract (info : TypeInfo) : MessageData :=
   let extract := info.extract.getD "ERROR_MISSING_FIELD"
   let extract := m!"\"{extract}\""
   let keepParams :=
     match info.keepParams with
     | none => m!""
-    | some keepParams => m!" ~keep_params:{keepParams}"
+    | some keepParams => m!" ~keep_params:{listToString keepParams}"
   let body :=
     match info.body with
     | none => m!""
     | some body =>
       match body with
-      | .enum variants => m!" ~kind:{variants.map (fun ⟨ x, y, _ ⟩ => (x, some y))}"
-      | .struct fields => m!" ~kind:{fields.map (fun ⟨ x, y ⟩ => (x, some y))}"
+      | .enum variants => m!" ~kind:{variants.map (fun ⟨ x, y, _ ⟩ => (x, "Some " ++ toString y))}"
+      | .struct fields => m!" ~kind:{fields.map (fun ⟨ x, y ⟩ => (x, "Some " ++ toString y))}"
   m!"{extract}{keepParams}{body}"
-
-def boolToString (x : Bool) : String :=
-  if x then "true" else "false"
 
 def FunInfo.toExtract (info : FunInfo) : MessageData :=
   let extract := info.extract.getD "ERROR_MISSING_FIELD"
@@ -327,10 +338,10 @@ def FunInfo.toExtract (info : FunInfo) : MessageData :=
   let filterParams :=
     match info.filterParams with
     | none => m!""
-    | some filter => m!" ~filter:{filter}"
-  let canFail := if ¬ info.canFail then m!" ~can_fail:{boolToString info.canFail}" else m!""
-  let lift := if ¬ info.lift then m!" ~lift:{boolToString info.lift}" else m!""
-  let hasDefault := if info.hasDefault then m!" ~lift:{boolToString info.hasDefault}" else m!""
+    | some filter => m!" ~filter:(Some {listToString filter})"
+  let canFail := if ¬ info.canFail then m!" ~can_fail:{info.canFail}" else m!""
+  let lift := if ¬ info.lift then m!" ~lift:{info.lift}" else m!""
+  let hasDefault := if info.hasDefault then m!" ~lift:{info.hasDefault}" else m!""
   m!"{extract}{filterParams}{canFail}{lift}{hasDefault}"
 
 def sortDescriptors {α} [ToMessageData α] (st : Array (String × α)) : IO (Array (String × α)) := do

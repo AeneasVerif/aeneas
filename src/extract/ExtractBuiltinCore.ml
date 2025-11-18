@@ -1,0 +1,97 @@
+(** This file declares external identifiers that we catch to map them to
+    definitions coming from the standard libraries in our backends.
+
+    TODO: there misses trait **implementations** *)
+
+open Config
+open NameMatcher (* TODO: include? *)
+include ExtractName (* TODO: only open? *)
+
+let log = Logging.builtin_log
+
+(** Small utility to memoize some computations *)
+let mk_memoized (f : unit -> 'a) : unit -> 'a =
+  let r = ref None in
+  let g () =
+    match !r with
+    | Some x -> x
+    | None ->
+        let x = f () in
+        r := Some x;
+        x
+  in
+  g
+
+let split_on_separator (s : string) : string list =
+  Str.split (Str.regexp "\\(::\\|\\.\\)") s
+
+let flatten_name (name : string list) : string =
+  match backend () with
+  | FStar | Coq | HOL4 -> String.concat "_" name
+  | Lean -> String.concat "." name
+
+(** Utility for Lean-only definitions **)
+let mk_lean_only (funs : 'a list) : 'a list =
+  match backend () with
+  | Lean -> funs
+  | _ -> []
+
+let mk_not_lean (funs : 'a list) : 'a list =
+  match backend () with
+  | Lean -> []
+  | _ -> funs
+
+let () =
+  assert (split_on_separator "x::y::z" = [ "x"; "y"; "z" ]);
+  assert (split_on_separator "x.y.z" = [ "x"; "y"; "z" ])
+
+(** Switch between two values depending on the target backend.
+
+    We often compute the same value (typically: a name) if the target is F*, Coq
+    or HOL4, and a different value if the target is Lean. *)
+let backend_choice (fstar_coq_hol4 : 'a) (lean : 'a) : 'a =
+  match backend () with
+  | Coq | FStar | HOL4 -> fstar_coq_hol4
+  | Lean -> lean
+
+type type_variant_kind =
+  | KOpaque
+  | KStruct of (string * string option) list
+      (** Contains the list of (field rust name, field extracted name) *)
+  | KEnum of (string * string option) list
+
+let mk_struct_constructor (type_name : string) : string =
+  let prefix =
+    match backend () with
+    | FStar -> "Mk"
+    | Coq | HOL4 -> "mk"
+    | Lean -> ""
+  in
+  let suffix =
+    match backend () with
+    | FStar | Coq | HOL4 -> ""
+    | Lean -> ".mk"
+  in
+  prefix ^ type_name ^ suffix
+
+let mk_fun ?(filter : bool list option = None) ?(can_fail = true)
+    ?(stateful = false) ?(lift = true) ?(has_default = false)
+    (rust_name : string) (extract_name : string) :
+    pattern * Pure.builtin_fun_info =
+  [%ldebug "About to parse pattern: " ^ rust_name];
+  let rust_name =
+    try parse_pattern rust_name
+    with Failure _ ->
+      raise (Failure ("Could not parse pattern: " ^ rust_name))
+  in
+  let f : Pure.builtin_fun_info =
+    {
+      filter_params = filter;
+      extract_name;
+      can_fail;
+      stateful;
+      lift;
+      has_default;
+    }
+  in
+  (rust_name, f)

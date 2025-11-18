@@ -4,50 +4,12 @@
     TODO: there misses trait **implementations** *)
 
 open Config
+include ExtractBuiltinCore
+include ExtractBuiltinLean
 open NameMatcher (* TODO: include? *)
 include ExtractName (* TODO: only open? *)
 
 let log = Logging.builtin_log
-
-(** Small utility to memoize some computations *)
-let mk_memoized (f : unit -> 'a) : unit -> 'a =
-  let r = ref None in
-  let g () =
-    match !r with
-    | Some x -> x
-    | None ->
-        let x = f () in
-        r := Some x;
-        x
-  in
-  g
-
-let split_on_separator (s : string) : string list =
-  Str.split (Str.regexp "\\(::\\|\\.\\)") s
-
-let flatten_name (name : string list) : string =
-  match backend () with
-  | FStar | Coq | HOL4 -> String.concat "_" name
-  | Lean -> String.concat "." name
-
-(** Utility for Lean-only definitions **)
-let mk_lean_only (funs : 'a list) : 'a list =
-  match backend () with
-  | Lean -> funs
-  | _ -> []
-
-let () =
-  assert (split_on_separator "x::y::z" = [ "x"; "y"; "z" ]);
-  assert (split_on_separator "x.y.z" = [ "x"; "y"; "z" ])
-
-(** Switch between two values depending on the target backend.
-
-    We often compute the same value (typically: a name) if the target is F*, Coq
-    or HOL4, and a different value if the target is Lean. *)
-let backend_choice (fstar_coq_hol4 : 'a) (lean : 'a) : 'a =
-  match backend () with
-  | Coq | FStar | HOL4 -> fstar_coq_hol4
-  | Lean -> lean
 
 let builtin_globals () : (string * string) list =
   let mk_int_global (ty : string) (name : string) : string * string =
@@ -78,26 +40,6 @@ let mk_builtin_globals_map () : Pure.builtin_global_info NameMatcherMap.t =
        (builtin_globals ()))
 
 let builtin_globals_map = mk_memoized mk_builtin_globals_map
-
-type type_variant_kind =
-  | KOpaque
-  | KStruct of (string * string option) list
-      (** Contains the list of (field rust name, field extracted name) *)
-  | KEnum of (string * string option) list
-
-let mk_struct_constructor (type_name : string) : string =
-  let prefix =
-    match backend () with
-    | FStar -> "Mk"
-    | Coq | HOL4 -> "mk"
-    | Lean -> ""
-  in
-  let suffix =
-    match backend () with
-    | FStar | Coq | HOL4 -> ""
-    | Lean -> ".mk"
-  in
-  prefix ^ type_name ^ suffix
 
 (** The assumed types.
 
@@ -161,7 +103,6 @@ let builtin_types () : Pure.builtin_type_info list =
     in
     { rust_name; extract_name; keep_params; body_info }
   in
-
   [
     (* Alloc *)
     mk_type "alloc::alloc::Global" ();
@@ -217,30 +158,31 @@ let builtin_types () : Pure.builtin_type_info list =
     };
   ]
   @ mk_lean_only
-      [
-        mk_type "core::fmt::Formatter" ();
-        mk_type "core::result::Result"
-          ~kind:(KEnum [ ("Ok", None); ("Err", None) ])
-          ();
-        mk_type "core::result::Sum"
-          ~kind:(KEnum [ ("Left", None); ("Right", None) ])
-          ();
-        mk_type "core::fmt::Error" ();
-        mk_type "core::array::TryFromSliceError" ();
-        mk_type "core::ops::range::RangeFrom"
-          ~kind:(KStruct [ ("start", None) ])
-          ();
-        (* We model the Rust ordering with the native Lean ordering *)
-        mk_type "core::cmp::Ordering" ~custom_name:(Some "Ordering")
-          ~kind:
-            (KEnum
-               [
-                 ("Less", Some "lt");
-                 ("Equal", Some "eq");
-                 ("Greater", Some "gt");
-               ])
-          ();
-      ]
+      ([
+         mk_type "core::fmt::Formatter" ();
+         mk_type "core::result::Result"
+           ~kind:(KEnum [ ("Ok", None); ("Err", None) ])
+           ();
+         mk_type "core::result::Sum"
+           ~kind:(KEnum [ ("Left", None); ("Right", None) ])
+           ();
+         mk_type "core::fmt::Error" ();
+         mk_type "core::array::TryFromSliceError" ();
+         mk_type "core::ops::range::RangeFrom"
+           ~kind:(KStruct [ ("start", None) ])
+           ();
+         (* We model the Rust ordering with the native Lean ordering *)
+         mk_type "core::cmp::Ordering" ~custom_name:(Some "Ordering")
+           ~kind:
+             (KEnum
+                [
+                  ("Less", Some "lt");
+                  ("Equal", Some "eq");
+                  ("Greater", Some "gt");
+                ])
+           ();
+       ]
+      @ lean_builtin_types)
 
 let mk_builtin_types_map () =
   NameMatcherMap.of_list
@@ -658,7 +600,11 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
       ?(extract_name : string option = None) () :
       pattern * Pure.builtin_fun_info =
     let rust_name =
-      try parse_pattern rust_name
+      [%ldebug "About to parse pattern: " ^ rust_name];
+      try
+        let pat = parse_pattern rust_name in
+        [%ldebug "Successfully parsed the pattern"];
+        pat
       with Failure _ ->
         raise (Failure ("Could not parse pattern: " ^ rust_name))
     in
@@ -713,8 +659,6 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
          all_int_names)
   in
   [
-    mk_fun "core::mem::replace" ~can_fail:false ~lift:false ();
-    mk_fun "core::mem::take" ~can_fail:false ~lift:false ();
     mk_fun "core::slice::{[@T]}::len"
       ~extract_name:(Some (backend_choice "slice::len" "Slice::len"))
       ~can_fail:false ~lift:false ();
@@ -729,18 +673,6 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
     mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::len"
       ~filter:(Some [ true; false ])
       ~can_fail:false ~lift:false ();
-    mk_fun
-      "alloc::vec::{core::ops::index::Index<alloc::vec::Vec<@T>, @I, \
-       @O>}::index"
-      ~extract_name:(Some "alloc.vec.Vec.index")
-      ~filter:(Some [ true; true; false; true ])
-      ();
-    mk_fun
-      "alloc::vec::{core::ops::index::IndexMut<alloc::vec::Vec<@T>, @I, \
-       @O>}::index_mut"
-      ~extract_name:(Some "alloc.vec.Vec.index_mut")
-      ~filter:(Some [ true; true; false; true ])
-      ();
     mk_fun "alloc::boxed::{core::ops::deref::Deref<Box<@T>, @T>}::deref"
       ~can_fail:false ~extract_name:(Some "alloc.boxed.Box.deref")
       ~filter:(Some [ true; false ])
@@ -749,52 +681,11 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
       ~can_fail:false ~extract_name:(Some "alloc.boxed.Box.deref_mut")
       ~filter:(Some [ true; false ])
       ();
-    mk_fun "core::slice::index::{core::ops::index::Index<[@T], @I, @O>}::index"
-      ~extract_name:(Some "core.slice.index.Slice.index") ();
-    mk_fun "core::slice::{[@T]}::get"
-      ~extract_name:(Some "core.slice.Slice.get") ();
-    mk_fun "core::slice::{[@T]}::get_mut"
-      ~extract_name:(Some "core.slice.Slice.get_mut") ();
-    mk_fun
-      "core::slice::index::{core::ops::index::IndexMut<[@T], @I, \
-       @O>}::index_mut"
-      ~extract_name:(Some "core.slice.index.Slice.index_mut") ();
     mk_fun "core::array::{core::ops::index::Index<[@T; @N], @I, @O>}::index"
       ~extract_name:(Some "core.array.Array.index") ();
     mk_fun
       "core::array::{core::ops::index::IndexMut<[@T; @N], @I, @O>}::index_mut"
       ~extract_name:(Some "core.array.Array.index_mut") ();
-    mk_fun
-      "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
-       [@T], [@T]>}::get"
-      ~extract_name:(Some "core::slice::index::SliceIndexRangeUsizeSlice::get")
-      ();
-    mk_fun
-      "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
-       [@T], [@T]>}::get_mut"
-      ~extract_name:
-        (Some "core::slice::index::SliceIndexRangeUsizeSlice::get_mut") ();
-    mk_fun
-      "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
-       [@T], [@T]>}::index"
-      ~extract_name:
-        (Some "core::slice::index::SliceIndexRangeUsizeSlice::index") ();
-    mk_fun
-      "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
-       [@T], [@T]>}::index_mut"
-      ~extract_name:
-        (Some "core::slice::index::SliceIndexRangeUsizeSlice::index_mut") ();
-    mk_fun
-      "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
-       [@T], [@T]>}::get_unchecked"
-      ~extract_name:
-        (Some "core::slice::index::SliceIndexRangeUsizeSlice::get_unchecked") ();
-    mk_fun
-      "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
-       [@T], [@T]>}::get_unchecked_mut"
-      ~extract_name:
-        (Some "core::slice::index::SliceIndexRangeUsizeSlice::get_unchecked_mut")
-      ();
     mk_fun
       "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], \
        @T>}::get"
@@ -837,8 +728,6 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
       ~extract_name:(Some "alloc::vec::Vec::deref_mut") ~can_fail:false
       ~filter:(Some [ true; false ])
       ();
-    mk_fun "core::option::{core::option::Option<@T>}::unwrap"
-      ~extract_name:(Some "core.option.Option.unwrap") ();
   ]
   @ List.flatten
       (List.map
@@ -916,23 +805,77 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
         ^ StringUtils.capitalize_first_letter ty
         ^ "." ^ fn)
       [ (false, "clone"); (false, "clone_from") ]
+  (* Definitions not for Lean *)
+  @ mk_not_lean
+      [
+        mk_fun "core::mem::replace" ~can_fail:false ~lift:false ();
+        mk_fun "core::mem::take" ~can_fail:false ~lift:false ();
+        mk_fun "core::option::{core::option::Option<@T>}::unwrap"
+          ~extract_name:(Some "core.option.Option.unwrap") ();
+        mk_fun
+          "core::slice::index::{core::ops::index::Index<[@T], @I, @O>}::index"
+          ~extract_name:(Some "core.slice.index.Slice.index") ();
+        mk_fun
+          "core::slice::index::{core::ops::index::IndexMut<[@T], @I, \
+           @O>}::index_mut"
+          ~extract_name:(Some "core.slice.index.Slice.index_mut") ();
+        mk_fun "core::slice::{[@T]}::get"
+          ~extract_name:(Some "core.slice.Slice.get") ();
+        mk_fun "core::slice::{[@T]}::get_mut"
+          ~extract_name:(Some "core.slice.Slice.get_mut") ();
+        mk_fun
+          "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
+           [@T], [@T]>}::get"
+          ~extract_name:
+            (Some "core::slice::index::SliceIndexRangeUsizeSlice::get") ();
+        mk_fun
+          "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
+           [@T], [@T]>}::get_mut"
+          ~extract_name:
+            (Some "core::slice::index::SliceIndexRangeUsizeSlice::get_mut") ();
+        mk_fun
+          "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
+           [@T], [@T]>}::index"
+          ~extract_name:
+            (Some "core::slice::index::SliceIndexRangeUsizeSlice::index") ();
+        mk_fun
+          "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
+           [@T], [@T]>}::index_mut"
+          ~extract_name:
+            (Some "core::slice::index::SliceIndexRangeUsizeSlice::index_mut") ();
+        mk_fun
+          "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
+           [@T], [@T]>}::get_unchecked"
+          ~extract_name:
+            (Some "core::slice::index::SliceIndexRangeUsizeSlice::get_unchecked")
+          ();
+        mk_fun
+          "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, \
+           [@T], [@T]>}::get_unchecked_mut"
+          ~extract_name:
+            (Some
+               "core::slice::index::SliceIndexRangeUsizeSlice::get_unchecked_mut")
+          ();
+        mk_fun
+          "alloc::vec::{core::ops::index::Index<alloc::vec::Vec<@T>, @I, \
+           @O>}::index"
+          ~extract_name:(Some "alloc.vec.Vec.index")
+          ~filter:(Some [ true; true; false; true ])
+          ();
+        mk_fun
+          "alloc::vec::{core::ops::index::IndexMut<alloc::vec::Vec<@T>, @I, \
+           @O>}::index_mut"
+          ~extract_name:(Some "alloc.vec.Vec.index_mut")
+          ~filter:(Some [ true; true; false; true ])
+          ();
+      ]
   (* Lean-only definitions *)
   @ mk_lean_only
       ([
-         mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::resize"
-           ~filter:(Some [ true; false ])
-           ();
-         mk_fun "alloc::vec::from_elem" ();
-         mk_fun
-           "alloc::vec::{core::convert::From<Box<[@T]>, \
-            alloc::vec::Vec<@T>>}::from"
-           ~filter:(Some [ true; false ])
-           ~extract_name:(Some "alloc.vec.FromBoxSliceVec.from") ();
          mk_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone"
            ~extract_name:(Some "core.array.CloneArray.clone") ();
          mk_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone_from"
            ~extract_name:(Some "core.array.CloneArray.clone_from") ();
-         mk_fun "core::mem::swap" ~can_fail:false ~lift:false ();
          mk_fun "core::slice::{[@T]}::split_at" ();
          mk_fun "core::slice::{[@T]}::split_at_mut" ();
          mk_fun "core::slice::{[@T]}::swap" ();
@@ -1117,7 +1060,8 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
                    (false, "rotate_left");
                    (false, "rotate_right");
                  ])
-             all_int_names))
+             all_int_names)
+      @ lean_builtin_funs)
 
 let builtin_funs : unit -> (pattern * Pure.builtin_fun_info) list =
   (* We need to take into account the default trait methods *)
@@ -1152,9 +1096,23 @@ let builtin_funs : unit -> (pattern * Pure.builtin_fun_info) list =
   in
   mk_memoized mk
 
+let name_matcher_map_of_list (ls : (pattern * 'a) list) : 'a NameMatcherMap.t =
+  let config : print_config = { tgt = TkPattern } in
+  List.fold_left
+    (fun m (pat, info) ->
+      [%ldebug "About to add pattern: " ^ pattern_to_string config pat];
+      (* [replace] inserts and checks whether we replaced a pattern *)
+      let m, old = NameMatcherMap.replace pat info m in
+      [%cassert_opt_span] None (old = None)
+        ("Pattern registered twice for a builtin definition: "
+        ^ pattern_to_string config pat);
+      m)
+    NameMatcherMap.empty ls
+
 let mk_builtin_funs_map () =
+  [%ldebug "Builting the builtin funs map"];
   let m =
-    NameMatcherMap.of_list
+    name_matcher_map_of_list
       (List.map (fun (name, info) -> (name, info)) (builtin_funs ()))
   in
   [%ltrace NameMatcherMap.to_string (fun _ -> "...") m];
@@ -1173,6 +1131,7 @@ let mk_builtin_fun_effects () : (pattern * effect_info) list =
     builtin_funs
 
 let mk_builtin_fun_effects_map () =
-  NameMatcherMap.of_list (if_backend mk_builtin_fun_effects [])
+  [%ldebug "Builting the builtin funs effects map"];
+  name_matcher_map_of_list (if_backend mk_builtin_fun_effects [])
 
 let builtin_fun_effects_map = mk_memoized mk_builtin_fun_effects_map

@@ -75,15 +75,18 @@ structure marker.Copy (Self : Type) where
    This acts like a swap effectively in a functional pure world.
    We return the old value of `dst`, i.e. `dst` itself.
    The new value of `dst` is `src`. -/
-@[simp, progress_simps] def mem.replace {a : Type} (dst : a) (src : a) : a × a := (dst, src)
+@[simp, progress_simps, rust_fun "core::mem::replace" (canFail := false) (lift := false)]
+def mem.replace {a : Type} (dst : a) (src : a) : a × a := (dst, src)
 
 /- [core::mem::swap] -/
-@[simp, progress_simps] def mem.swap {T : Type} (a b : T): T × T := (b, a)
+@[simp, progress_simps, rust_fun "core::mem::swap" (canFail := false) (lift := false)]
+def mem.swap {T : Type} (a b : T): T × T := (b, a)
 
 end core
 
 /- [core::option::{core::option::Option<T>}::unwrap] -/
-@[simp, progress_simps] def core.option.Option.unwrap {T : Type} (x : Option T) : Result T :=
+@[simp, progress_simps, rust_fun "core::option::{core::option::Option<@T>}::unwrap"]
+def core.option.Option.unwrap {T : Type} (x : Option T) : Result T :=
   Result.ofOption x Error.panic
 
 /- [core::option::{core::option::Option<T>}::unwrap_or] -/

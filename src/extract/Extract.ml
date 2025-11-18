@@ -2739,7 +2739,7 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
   let name =
     match builtin_info with
     | None -> ctx_compute_trait_impl_name ctx trait_decl trait_impl
-    | Some info -> info.impl_name
+    | Some info -> info.extract_name
   in
   ctx_add trait_impl.item_meta.span (TraitImplId trait_impl.def_id) name ctx
 

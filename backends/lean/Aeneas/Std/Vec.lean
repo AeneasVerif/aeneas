@@ -175,12 +175,14 @@ theorem Vec.index_mut_usize_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Us
   have ⟨ x, h ⟩ := index_usize_spec v i hbound
   simp [h]
 
-/- [alloc::vec::Vec::index]: forward function -/
+@[rust_fun "alloc::vec::{core::ops::index::Index<alloc::vec::Vec<@T>, @I, @O>}::index"
+  (filterParams := [true,true,false, true])]
 def Vec.index {T I Output : Type} (inst : core.slice.index.SliceIndex I (Slice T) Output)
   (self : Vec T) (i : I) : Result Output :=
   inst.index i self
 
-/- [alloc::vec::Vec::index_mut]: forward function -/
+@[rust_fun "alloc::vec::{core::ops::index::IndexMut<alloc::vec::Vec<@T>, @I, @O>}::index_mut"
+  (filterParams := [true,true,false, true])]
 def Vec.index_mut {T I Output : Type} (inst : core.slice.index.SliceIndex I (Slice T) Output)
   (self : Vec T) (i : I) :
   Result (Output × (Output → Vec T)) :=
@@ -231,9 +233,8 @@ theorem alloc.slice.Slice.to_vec_spec {T : Type} (cloneInst : core.clone.Clone T
   simp only [to_vec]
   rw [Slice.clone_spec h]
 
-/- [alloc::vec::from_elem]:
-   Source: '/rustc/library/alloc/src/vec/mod.rs', lines 3174:0-3174:55
-   Name pattern: [alloc::vec::from_elem] -/
+/- Source: '/rustc/library/alloc/src/vec/mod.rs', lines 3174:0-3174:55 -/
+@[rust_fun "alloc::vec::from_elem"]
 def alloc.vec.from_elem
   {T : Type} (cloneInst : core.clone.Clone T)
   (x : T) (n : Usize) : Result (alloc.vec.Vec T) := do
@@ -295,6 +296,7 @@ def core.ops.deref.DerefMutVec {T : Type} :
   deref_mut v := ok (alloc.vec.Vec.deref_mut v)
 }
 
+@[rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::resize" (filterParams := [true,false])]
 def alloc.vec.Vec.resize {T : Type} (cloneInst : core.clone.Clone T)
   (v : alloc.vec.Vec T) (new_len : Usize) (value : T) : Result (alloc.vec.Vec T) := do
   if new_len.val < v.length then
@@ -320,9 +322,8 @@ theorem alloc.vec.Vec.set_getElem!_eq α [Inhabited α] (x : alloc.vec.Vec α) (
   simp only [getElem!_Usize_eq]
   simp only [Vec, set_val_eq, Subtype.eq_iff, List.set_getElem!]
 
-/- [alloc::vec::{core::convert::From<alloc::vec::Vec<T, A>> for alloc::boxed::Box<@Slice<T>>}::from]:
-   Source: '/rustc/library/alloc/src/vec/mod.rs', lines 3967:4-3967:33
-   Name pattern: [alloc::vec::{core::convert::From<Box<[@T]>, alloc::vec::Vec<@T, @A>>}::from] -/
+/- Source: '/rustc/library/alloc/src/vec/mod.rs', lines 3967:4-3967:33 -/
+@[rust_fun "alloc::vec::{core::convert::From<Box<[@T]>, alloc::vec::Vec<@T>>}::from" (filterParams := [true,false])]
 def alloc.vec.FromBoxSliceVec.from {T : Type} (v : alloc.vec.Vec T) : Result (Slice T) := ok v
 
 @[progress]
