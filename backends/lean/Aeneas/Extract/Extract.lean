@@ -92,15 +92,6 @@ instance : ToMessageData FunInfo where
   toMessageData x :=
     m!"\{ extract : {x.extract},\n  filterParams : {x.filterParams},\n  canFail : {x.canFail},\n  lift : {x.lift},\n  hasDefault : {x.hasDefault} }"
 
-structure ParentClause where
-  rust : String
-  extract : String
-deriving Repr, Inhabited
-
-instance : ToMessageData ParentClause where
-  toMessageData x :=
-    m!"\{ rust : {x.rust}, extract : {x.extract} }"
-
 structure TraitConst where
   rust : String
   extract : String
@@ -143,7 +134,6 @@ be a lot more methods than elements of the other kinds).
 structure TraitDecl where
   extract : Option String := none
   parentClauses : List String := []
-  parentClausesInfo : List ParentClause := []
   consts : List String := []
   constsInfo : List TraitConst := []
   types : List String := []
@@ -156,7 +146,7 @@ deriving Repr, Inhabited
 
 instance : ToMessageData TraitDecl where
   toMessageData x :=
-    m!"\{ extract : {x.extract},\n  parentClauses : {x.parentClauses},\n  parentClausesInfo : {x.parentClausesInfo},
+    m!"\{ extract : {x.extract},\n  parentClauses : {x.parentClauses},
   consts : {x.consts},\n  constsInfo : {x.constsInfo},
   types : {x.types},\n  typesInfo : {x.typesInfo},
   methods : {x.methods},\n  methodsInfo : {x.methodsInfo},
@@ -439,12 +429,11 @@ def processTraitDecl (declName : Name) (_pat : String) (info : TraitDecl) : Attr
   /- First, merge the fields `consts`/`constsInfo`, `types`/`typesInfo` and `methods`/`methodsInfo` while
      performing sanity checks -/
   let info : TraitDecl :=
-    let parentClausesInfo := info.parentClauses.map (fun x => ⟨ x, x ⟩) ++ info.parentClausesInfo
     let constsInfo := info.consts.map (fun x => ⟨ x, x ⟩) ++ info.constsInfo
     let typesInfo := info.types.map (fun x => ⟨ x, x ⟩) ++ info.typesInfo
     let methodsInfo := info.methods.map (fun x => ⟨ x, x ⟩) ++ info.methodsInfo
-    { info with parentClauses := [], consts := [], types := [], methods := [],
-                parentClausesInfo, constsInfo, typesInfo, methodsInfo }
+    { info with consts := [], types := [], methods := [],
+                constsInfo, typesInfo, methodsInfo }
 
   match getStructureInfo? env declName with
   | none =>
@@ -454,7 +443,7 @@ def processTraitDecl (declName : Name) (_pat : String) (info : TraitDecl) : Attr
     /- This is a structure: compute the missing informaton about the fields.
        If the user did not provide any information about a field, we consider it is a method by default. -/
     -- First compute maps to lookup the user information
-    let userParentClauses := Std.HashMap.ofList (info.parentClausesInfo.map (fun x => (x.extract, x)))
+    let userParentClauses := Std.HashSet.ofList info.parentClauses
     let userConsts := Std.HashMap.ofList (info.constsInfo.map (fun x => (x.extract, x)))
     let userTypes := Std.HashMap.ofList (info.typesInfo.map (fun x => (x.extract, x)))
     let userMethods := Std.HashMap.ofList (info.methodsInfo.map (fun x => (x.extract, x)))
@@ -476,7 +465,10 @@ def processTraitDecl (declName : Name) (_pat : String) (info : TraitDecl) : Attr
         methods := methods.push info
       else
         methods := methods.push ⟨ field, field ⟩
-    pure info
+    pure { info with parentClauses := parentClauses.toList,
+                     constsInfo := consts.toList,
+                     typesInfo := types.toList,
+                     methodsInfo := methods.toList }
 
 initialize rustTraitDecls : Attribute TraitDecl ← do
   mkAttribute `rustTraitDeclsArray `rustTraitDecl "Register Rust trait definitions"
@@ -612,25 +604,25 @@ def TraitDecl.toExtract (info : TraitDecl) : MessageData :=
   let extract := info.extract.getD "ERROR_MISSING_FIELD"
   let extract := m!"\"{extract}\""
   let parentClauses :=
-    match info.parentClausesInfo with
+    match info.parentClauses with
     | [] => m!""
-    | _ => m!" ~parent_clauses:{listToString (info.parentClausesInfo.map (fun (x : ParentClause) => (x.rust, x.extract)))}"
+    | _ => m!" ~parent_clauses:{listToString (info.parentClauses.map addQuotes)}"
   let types :=
     match info.typesInfo with
     | [] => m!""
-    | _ => m!" ~types:{listToString (info.typesInfo.map (fun (x : TraitType) => (x.rust, x.extract)))}"
+    | _ => m!" ~types:{listToString (info.typesInfo.map (fun (x : TraitType) => (addQuotes x.rust, addQuotes x.extract)))}"
   let consts :=
     match info.constsInfo with
     | [] => m!""
-    | _ => m!" ~consts:{listToString (info.constsInfo.map (fun (x : TraitConst) => (x.rust, x.extract)))}"
+    | _ => m!" ~consts:{listToString (info.constsInfo.map (fun (x : TraitConst) => (addQuotes x.rust, addQuotes x.extract)))}"
   let methods :=
     match info.methodsInfo with
     | [] => m!""
-    | _ => m!" ~methods:{listToString (info.methodsInfo.map (fun (x : TraitMethod) => (x.rust, x.extract)))}"
+    | _ => m!" ~methods:{listToString (info.methodsInfo.map (fun (x : TraitMethod) => (addQuotes x.rust, addQuotes x.extract)))}"
   let defaultMethods :=
-    match info.methodsInfo with
+    match info.defaultMethods with
     | [] => m!""
-    | _ => m!" ~default_methods:{listToString info.defaultMethods}"
+    | _ => m!" ~default_methods:{listToString (info.defaultMethods.map addQuotes)}"
   m!"{extract}{parentClauses}{types}{consts}{methods}{defaultMethods}"
 
 def TraitImpl.toExtract (info : TraitImpl) : MessageData :=

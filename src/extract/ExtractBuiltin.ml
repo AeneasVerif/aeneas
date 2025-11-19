@@ -271,66 +271,44 @@ let builtin_trait_decls_info () =
       methods;
     }
   in
-  [
-    (* Deref *)
-    mk_trait "core::ops::deref::Deref" ~types:[] ~methods:[ "deref" ] ();
-    (* DerefMut *)
-    mk_trait "core::ops::deref::DerefMut" ~parent_clauses:[ "derefInst" ]
-      ~methods:[ "deref_mut" ] ();
-    (* Index *)
-    mk_trait "core::ops::index::Index" ~types:[] ~methods:[ "index" ] ();
-    (* IndexMut *)
-    mk_trait "core::ops::index::IndexMut" ~parent_clauses:[ "indexInst" ]
-      ~methods:[ "index_mut" ] ();
-    (* Sealed *)
-    mk_trait "core::slice::index::private_slice_index::Sealed" ();
-    (* SliceIndex *)
-    mk_trait "core::slice::index::SliceIndex" ~parent_clauses:[ "sealedInst" ]
-      ~types:[ "Output" ]
-      ~methods:
-        [
-          "get";
-          "get_mut";
-          "get_unchecked";
-          "get_unchecked_mut";
-          "index";
-          "index_mut";
-        ]
-      ();
-    (* From *)
-    mk_trait "core::convert::From"
-      ~methods_with_extract:(Some [ ("from", "from_") ])
-      ();
-    (* Clone *)
-    mk_trait "core::clone::Clone" ~methods:[ "clone" ]
-      ~default_methods:[ "clone_from" ] ();
-    (* Copy *)
-    mk_trait "core::marker::Copy" ~parent_clauses:[ "cloneInst" ] ();
-  ]
-  @ mk_lean_only
-      ([
-         (* Into *)
-         mk_trait "core::convert::Into" ~types:[ "T"; "U" ] ~methods:[ "into" ]
-           ();
-         (* Debug *)
-         mk_trait "core::fmt::Debug" ~types:[ "T" ] ~methods:[ "fmt" ] ();
-         (* *)
-         mk_trait "core::convert::TryFrom" ~methods:[ "try_from" ] ();
-         mk_trait "core::convert::TryInto" ~methods:[ "try_into" ] ();
-         mk_trait "core::convert::AsMut" ~methods:[ "as_mut" ] ();
-         (* Eq, Ord *)
-         mk_trait "core::cmp::PartialEq" ~methods:[ "eq"; "ne" ] ();
-         mk_trait "core::cmp::Eq" ~parent_clauses:[ "partialEqInst" ] ();
-         mk_trait "core::cmp::PartialOrd" ~parent_clauses:[ "partialEqInst" ]
-           ~methods:[ "partial_cmp"; "lt"; "le"; "gt"; "ge" ]
-           ();
-         mk_trait "core::cmp::Ord"
-           ~parent_clauses:[ "eqInst"; "partialOrdInst" ]
-           ~methods:[ "cmp"; "max"; "min"; "clamp" ]
-           ();
-         mk_trait "core::default::Default" ~methods:[ "default" ] ();
-       ]
-      @ lean_builtin_trait_decls)
+  mk_not_lean
+    [
+      (* Deref *)
+      mk_trait "core::ops::deref::Deref" ~types:[] ~methods:[ "deref" ] ();
+      (* DerefMut *)
+      mk_trait "core::ops::deref::DerefMut" ~parent_clauses:[ "derefInst" ]
+        ~methods:[ "deref_mut" ] ();
+      (* Index *)
+      mk_trait "core::ops::index::Index" ~types:[] ~methods:[ "index" ] ();
+      (* IndexMut *)
+      mk_trait "core::ops::index::IndexMut" ~parent_clauses:[ "indexInst" ]
+        ~methods:[ "index_mut" ] ();
+      (* Sealed *)
+      mk_trait "core::slice::index::private_slice_index::Sealed" ();
+      (* SliceIndex *)
+      mk_trait "core::slice::index::SliceIndex" ~parent_clauses:[ "sealedInst" ]
+        ~types:[ "Output" ]
+        ~methods:
+          [
+            "get";
+            "get_mut";
+            "get_unchecked";
+            "get_unchecked_mut";
+            "index";
+            "index_mut";
+          ]
+        ();
+      (* From *)
+      mk_trait "core::convert::From"
+        ~methods_with_extract:(Some [ ("from", "from_") ])
+        ();
+      (* Clone *)
+      mk_trait "core::clone::Clone" ~methods:[ "clone" ]
+        ~default_methods:[ "clone_from" ] ();
+      (* Copy *)
+      mk_trait "core::marker::Copy" ~parent_clauses:[ "cloneInst" ] ();
+    ]
+  @ mk_lean_only lean_builtin_trait_decls
 
 let mk_builtin_trait_decls_map () =
   NameMatcherMap.of_list

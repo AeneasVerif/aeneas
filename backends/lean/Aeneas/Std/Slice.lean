@@ -209,10 +209,10 @@ theorem Slice.update_subslice_spec {α : Type u} [Inhabited α] (a : Slice α) (
 def core.slice.Slice.reverse {T : Type} (s : Slice T) : Slice T :=
   ⟨ s.val.reverse, by scalar_tac ⟩
 
-/- Trait declaration: [core::slice::index::private_slice_index::Sealed] -/
+@[rust_trait "core::slice::index::private_slice_index::Sealed"]
 structure core.slice.index.private_slice_index.Sealed (Self : Type) where
 
-/- Trait declaration: [core::slice::index::SliceIndex] -/
+@[rust_trait "core::slice::index::SliceIndex" (parentClauses := ["sealedInst"])]
 structure core.slice.index.SliceIndex (Self T Output : Type) where
   sealedInst : core.slice.index.private_slice_index.Sealed Self
   get : Self → T → Result (Option Output)

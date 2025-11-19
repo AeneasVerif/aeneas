@@ -16,7 +16,7 @@ def alloc.boxed.AsMutBox.as_mut {T : Type} (x : T) : T × (T → T) :=
 
 namespace core
 
-/- Trait declaration: [core::convert::From] -/
+@[rust_trait "core::convert::From" (methodsInfo := [⟨ "from", "from_" ⟩])]
 structure convert.From (Self T : Type) where
   from_ : T → Result Self
 
@@ -24,11 +24,11 @@ namespace ops -- core.ops
 
 namespace index -- core.ops.index
 
-/- Trait declaration: [core::ops::index::Index] -/
+@[rust_trait "core::ops::index::Index"]
 structure Index (Self Idx Output : Type) where
   index : Self → Idx → Result Output
 
-/- Trait declaration: [core::ops::index::IndexMut] -/
+@[rust_trait "core::ops::index::IndexMut" (parentClauses := ["indexInst"])]
 structure IndexMut (Self Idx Output : Type) where
   indexInst : Index Self Idx Output
   index_mut : Self → Idx → Result (Output × (Output → Self))
@@ -37,9 +37,11 @@ end index -- core.ops.index
 
 namespace deref -- core.ops.deref
 
+@[rust_trait "core::ops::deref::Deref"]
 structure Deref (Self Target : Type) where
   deref : Self → Result Target
 
+@[rust_trait "core::ops::deref::DerefMut" (parentClauses := ["derefInst"])]
 structure DerefMut (Self Target : Type) where
   derefInst : Deref Self Target
   deref_mut : Self → Result (Target × (Target → Self))
@@ -48,7 +50,7 @@ end deref -- core.ops.deref
 
 end ops -- core.ops
 
-/- Trait declaration: [core::clone::Clone] -/
+@[rust_trait "core::clone::Clone" (defaultMethods := ["clone_from"])]
 structure clone.Clone (Self : Type) where
   clone : Self → Result Self
   clone_from : Self → Self → Result Self := fun _ => clone
@@ -68,7 +70,7 @@ def clone.CloneBool : clone.Clone Bool := {
   clone_from := fun _ b => ok (clone.impls.CloneBool.clone b)
 }
 
-/- [core::marker::Copy] -/
+@[rust_trait "core::marker::Copy" (parentClauses := ["cloneInst"])]
 structure marker.Copy (Self : Type) where
   cloneInst : core.clone.Clone Self
 
@@ -108,7 +110,7 @@ def core.option.Option.take {T: Type} (self: Option T): Option T × Option T := 
 @[simp, progress_simps, rust_fun "core::option::{core::option::Option<@T>}::is_none" -canFail -lift]
 def core.option.Option.is_none {T: Type} (self: Option T): Bool := self.isNone
 
-/- [core::convert::Into] -/
+@[rust_trait "core::convert::Into"]
 structure core.convert.Into (Self : Type) (T : Type) where
   into : Self → Result T
 
@@ -139,26 +141,26 @@ inductive core.result.Result (T : Type) (E : Type) where
 @[reducible, rust_type "core::fmt::Error"]
 def core.fmt.Error := Unit
 
-structure core.convert.TryFrom (Self T : Type) where
-  Error : Type
+@[rust_trait "core::convert::TryFrom"]
+structure core.convert.TryFrom (Self T Error : Type) where
   try_from : T → Result (core.result.Result Self Error)
 
-structure core.convert.TryInto (Self T : Type) where
-  Error : Type
+@[rust_trait "core::convert::TryInto"]
+structure core.convert.TryInto (Self T Error : Type) where
   try_into : Self → Result (core.result.Result T Error)
 
 @[reducible, simp]
-def core.convert.TryIntoFrom.try_into {T U : Type} (fromInst : core.convert.TryFrom U T)
-  (x : T) : Result (core.result.Result U fromInst.Error) :=
+def core.convert.TryIntoFrom.try_into {T U Error : Type} (fromInst : core.convert.TryFrom U T Error)
+  (x : T) : Result (core.result.Result U Error) :=
   fromInst.try_from x
 
 @[reducible, rust_trait_impl "core::convert::{core::convert::TryInto<@T, @U>}"]
-def core.convert.TryIntoFrom {T U : Type} (fromInst : core.convert.TryFrom U T) :
-  core.convert.TryInto T U := {
-  Error := fromInst.Error
+def core.convert.TryIntoFrom {T U Error : Type} (fromInst : core.convert.TryFrom U T Error) :
+  core.convert.TryInto T U Error := {
   try_into := core.convert.TryIntoFrom.try_into fromInst
 }
 
+@[rust_trait "core::convert::AsMut"]
 structure core.convert.AsMut (Self : Type) (T : Type) where
   as_mut : Self → Result (T × (T → Self))
 
@@ -171,6 +173,7 @@ def core.convert.AsMutBox (T : Type) : core.convert.AsMut T T := {
 @[rust_type "core::fmt::Formatter"]
 axiom Formatter : Type
 
+@[rust_trait "core::fmt::Debug"]
 structure core.fmt.Debug (T : Type) where
   fmt : T → Formatter → Result (Formatter × Formatter → Formatter)
 
@@ -185,14 +188,14 @@ def core.result.Result.unwrap {T E : Type}
 structure core.ops.range.RangeFrom (Idx : Type) where
   start : Idx
 
-/- Trait declaration: [core::cmp::PartialEq]
-   Name pattern: core::cmp::PartialEq -/
+@[rust_trait "core::cmp::PartialEq"]
 structure core.cmp.PartialEq (Self : Type) (Rhs : Type) where
   eq : Self → Rhs → Result Bool
   ne : Self → Rhs → Result Bool := fun self other => do not (← eq self other)
 
 /- Trait declaration: [core::cmp::Eq]
    Name pattern: core::cmp::Eq -/
+@[rust_trait "core::cmp::Eq" (parentClauses := ["partialEqInst"])]
 structure core.cmp.Eq (Self : Type) where
   partialEqInst : core.cmp.PartialEq Self Self
 
@@ -208,8 +211,7 @@ attribute
   (body := .enum [⟨"Less", "lt", none⟩, ⟨"Equal", "eq", none⟩, ⟨"Greater", "gt", none⟩])]
   Ordering
 
-/- Trait declaration: [core::cmp::PartialOrd]
-   Name pattern: core::cmp::PartialOrd -/
+@[rust_trait "core::cmp::PartialOrd" (parentClauses := ["partialEqInst"])]
 structure core.cmp.PartialOrd (Self : Type) (Rhs : Type) where
   partialEqInst : core.cmp.PartialEq Self Rhs
   partial_cmp : Self → Rhs → Result (Option Ordering)
@@ -250,8 +252,7 @@ def core.cmp.PartialOrd.ge.default {Self Rhs : Type}
   let cmp ← partial_cmp x y
   ok (cmp = some .gt ∨ cmp = some .eq)
 
-/- Trait declaration: [core::cmp::Ord]
-   Name pattern: core::cmp::Ord -/
+@[rust_trait "core::cmp::Ord" (parentClauses := ["eqInst", "partialOrdInst"])]
 structure core.cmp.Ord (Self : Type) where
   eqInst : core.cmp.Eq Self
   partialOrdInst : core.cmp.PartialOrd Self Self

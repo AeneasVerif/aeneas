@@ -145,7 +145,7 @@ let mk_type ?(keep_params : bool list option = None)
   in
   { rust_name = pattern; extract_name; keep_params; body_info }
 
-let mk_trait ?(parent_clauses : string list = [])
+let mk_trait_decl ?(parent_clauses : string list = [])
     ?(consts : (string * string) list = [])
     ?(types : (string * string) list = [])
     ?(methods : (string * string) list = [])
