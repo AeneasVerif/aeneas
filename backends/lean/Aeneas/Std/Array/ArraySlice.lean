@@ -107,8 +107,8 @@ def core.ops.index.IndexMutArrayInst {T I Output : Type} {N : Usize}
   index_mut := core.array.Array.index_mut inst
 }
 
-/- [core::array::TryFromSliceError] -/
-def core.array.TryFromSliceError := ()
+@[rust_type "core::array::TryFromSliceError"]
+def core.array.TryFromSliceError := Unit
 
 @[simp, simp_lists_simps]
 theorem Array.val_to_slice {α} {n} (a : Array α n) : a.to_slice.val = a.val := by

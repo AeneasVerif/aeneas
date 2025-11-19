@@ -1,7 +1,26 @@
 (** THIS FILE WAS AUTOMATICALLY GENERATED FROM LEAN: DO NOT MODIFY DIRECTLY *)
 open ExtractBuiltinCore
 
-let lean_builtin_types = []
+let lean_builtin_types =
+  [
+    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 110 *)
+    mk_type "core::array::TryFromSliceError" "core.array.TryFromSliceError";
+    (* file: "Aeneas/Std/Core.lean", line: 208 *)
+    mk_type "core::cmp::Ordering" "Ordering"
+      ~kind:
+        (KEnum
+           [ ("Less", Some "lt"); ("Equal", Some "eq"); ("Greater", Some "gt") ]);
+    (* file: "Aeneas/Std/Core.lean", line: 139 *)
+    mk_type "core::fmt::Error" "core.fmt.Error";
+    (* file: "Aeneas/Std/Core.lean", line: 172 *)
+    mk_type "core::fmt::Formatter" "Formatter";
+    (* file: "Aeneas/Std/Core.lean", line: 185 *)
+    mk_type "core::ops::range::RangeFrom" "core.ops.range.RangeFrom"
+      ~kind:(KStruct [ ("start", Some "start") ]);
+    (* file: "Aeneas/Std/Core.lean", line: 134 *)
+    mk_type "core::result::Result" "core.result.Result"
+      ~kind:(KEnum [ ("Ok", Some "Ok"); ("Err", Some "Err") ]);
+  ]
 
 let lean_builtin_funs =
   [
@@ -96,21 +115,21 @@ let lean_builtin_funs =
     mk_fun
       "core::array::{core::ops::index::IndexMut<[@T; @N], @I, @O>}::index_mut"
       "core.array.Array.index_mut";
-    (* file: "Aeneas/Std/Core.lean", line: 270 *)
+    (* file: "Aeneas/Std/Core.lean", line: 277 *)
     mk_fun "core::cmp::Ord::clamp" "core.cmp.Ord.clamp.default";
-    (* file: "Aeneas/Std/Core.lean", line: 258 *)
+    (* file: "Aeneas/Std/Core.lean", line: 265 *)
     mk_fun "core::cmp::Ord::max" "core.cmp.Ord.max.default";
-    (* file: "Aeneas/Std/Core.lean", line: 264 *)
+    (* file: "Aeneas/Std/Core.lean", line: 271 *)
     mk_fun "core::cmp::Ord::min" "core.cmp.Ord.min.default";
-    (* file: "Aeneas/Std/Core.lean", line: 200 *)
+    (* file: "Aeneas/Std/Core.lean", line: 201 *)
     mk_fun "core::cmp::PartialEq::ne" "core.cmp.PartialEq.ne.default";
-    (* file: "Aeneas/Std/Core.lean", line: 240 *)
+    (* file: "Aeneas/Std/Core.lean", line: 247 *)
     mk_fun "core::cmp::PartialOrd::ge" "core.cmp.PartialOrd.ge.default";
-    (* file: "Aeneas/Std/Core.lean", line: 232 *)
+    (* file: "Aeneas/Std/Core.lean", line: 239 *)
     mk_fun "core::cmp::PartialOrd::gt" "core.cmp.PartialOrd.gt.default";
-    (* file: "Aeneas/Std/Core.lean", line: 224 *)
+    (* file: "Aeneas/Std/Core.lean", line: 231 *)
     mk_fun "core::cmp::PartialOrd::le" "core.cmp.PartialOrd.le.default";
-    (* file: "Aeneas/Std/Core.lean", line: 216 *)
+    (* file: "Aeneas/Std/Core.lean", line: 223 *)
     mk_fun "core::cmp::PartialOrd::lt" "core.cmp.PartialOrd.lt.default";
     (* file: "Aeneas/Std/Core.lean", line: 125 *)
     mk_fun "core::convert::{core::convert::From<@T, @T>}::from"
@@ -134,7 +153,7 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core.lean", line: 91 *)
     mk_fun "core::option::{core::option::Option<@T>}::unwrap_or"
       "core.option.Option.unwrap_or" ~can_fail:false;
-    (* file: "Aeneas/Std/Core.lean", line: 177 *)
+    (* file: "Aeneas/Std/Core.lean", line: 178 *)
     mk_fun "core::result::{core::result::Result<@T, @E>}::unwrap"
       "core.result.Result.unwrap";
     (* file: "Aeneas/Std/Slice.lean", line: 225 *)

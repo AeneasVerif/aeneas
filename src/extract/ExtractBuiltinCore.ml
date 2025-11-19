@@ -95,3 +95,47 @@ let mk_fun ?(filter : bool list option = None) ?(can_fail = true)
     }
   in
   (rust_name, f)
+
+let mk_type ?(keep_params : bool list option = None)
+    ?(kind : type_variant_kind = KOpaque) (rust_name : string)
+    (extract_name : string) : Pure.builtin_type_info =
+  let pattern = parse_pattern rust_name in
+  let body_info : Pure.builtin_type_body_info option =
+    match kind with
+    | KOpaque -> None
+    | KStruct fields ->
+        let fields =
+          List.map
+            (fun (rname, name) ->
+              ( rname,
+                match name with
+                | None ->
+                    [%craise_opt_span] None
+                      ("Missing Lean field name: type: '" ^ rust_name
+                     ^ "', rust field: '" ^ rname ^ "'")
+                | Some name -> name ))
+            fields
+        in
+        let constructor = extract_name ^ ".mk" in
+        Some (Struct (constructor, fields))
+    | KEnum variants ->
+        let variants =
+          List.map
+            (fun (variant, evariant) ->
+              let evariant =
+                match evariant with
+                | Some variant -> variant
+                | None -> variant
+              in
+              let extract_variant_name = extract_name ^ "." ^ evariant in
+              ({
+                 rust_variant_name = variant;
+                 extract_variant_name;
+                 fields = None;
+               }
+                : Pure.builtin_enum_variant_info))
+            variants
+        in
+        Some (Enum variants)
+  in
+  { rust_name = pattern; extract_name; keep_params; body_info }

@@ -192,8 +192,14 @@ def removeNamePrefix (n0 : Name) : AttrM Name := do
   let rec remove (n : Name) := do
     match n with
     | .str (.str .anonymous "Aeneas") "Std" => pure .anonymous
+    | .str .anonymous "Lean" =>
+      /- We allow mapping Rust definitions to definition from the standard Lean library -/
+      pure .anonymous
     | .str pre str => pure (.str (← remove pre) str)
-    | _ => throwError "Ill-formed name: `{n0}` (the name should start with `Aeneas.Std.`)"
+    | _ =>
+      /- Sometimes, the definitions from the standard library don't even have the `Lean` prefix
+         (happens with `core::cmp::Ordering` → `Ordering`) -/
+      pure n
   remove n0
 
 def leanNameToRust (n0 : Name) : AttrM String := do
@@ -268,8 +274,23 @@ def processType (declName : Name) (_pat : String) (info : TypeInfo) : AttrM Type
         | .some (.enum variants) => pure variants
         | .none => pure []
         | .some (.struct _) => throwError "The user-provided information is for a structure while the type is an inductive"
-      -- Go through the variants and retrieve their names
-      let providedVariants := Std.HashMap.ofList (List.map (fun x => (x.extract, x)) variants)
+      /- Go through the variants and retrieve their names.
+         We first need to use the user provided information to compute a map from Lean name to user information. -/
+      let mut providedVariants := Std.HashMap.emptyWithCapacity
+      let mut rustVariants := Std.HashSet.emptyWithCapacity
+      let leanVariants := Std.HashSet.ofList (← const.ctors.mapM (variantNameToString declName))
+      /- We want to check the user-provided information before using it, for instance to detect name collisions -/
+      for x in variants do
+        if providedVariants.contains x.extract then
+          throwError "A variant has been defined twice: `{x.extract}`"
+        if rustVariants.contains x.rust then
+          throwError "The Rust variant name `{x.rust}` is used twice"
+        if ¬ leanVariants.contains x.extract then
+          throwError "The user provides a mapping for a variant which is not present in the Lean definition: {x.extract}"
+        providedVariants := providedVariants.insert x.extract x
+        rustVariants := rustVariants.insert x.rust
+      /- Now we go through the Lean variants and use the user provided information if there is, and automatically
+         compute the Rust name otherwise -/
       let variants : List Variant ← List.mapM (fun ctorName => do
         let ctorName ← variantNameToString declName ctorName
         match providedVariants.get? ctorName with
@@ -279,13 +300,28 @@ def processType (declName : Name) (_pat : String) (info : TypeInfo) : AttrM Type
       pure { info with body := some (.enum variants) }
     | some structInfo =>
       trace[Extract] "The type definition is for a structure"
+      /- Similar to the inductive case: we check the user-provided information before using it, for instance
+         to detect name collisions. -/
       let fields ← do
         match info.body with
         | .some (.struct fields) => pure fields
         | .none => pure []
         | .some (.enum _) => throwError "The user-provided information is for a variant while the type is a structure"
-      let providedFields := Std.HashMap.ofList (List.map (fun x => (x.extract, x)) fields)
-      -- Go through the fields and retrieve their names
+      /- Compute the map from Lean field name to user information while doing the sanity checks -/
+      let mut providedFields := Std.HashMap.emptyWithCapacity
+      let mut rustFields := Std.HashSet.emptyWithCapacity
+      let leanFields := Std.HashSet.ofList (← structInfo.fieldNames.toList.mapM fieldNameToString)
+      for x in fields do
+        if providedFields.contains x.extract then
+          throwError "A variant has been defined twice: `{x.extract}`"
+        if rustFields.contains x.rust then
+          throwError "The Rust variant name `{x.rust}` is used twice"
+        if ¬ leanFields.contains x.extract then
+          throwError "The user provides a mapping for a variant which is not present in the Lean definition: {x.extract}"
+        providedFields := providedFields.insert x.extract x
+        rustFields := rustFields.insert x.rust
+      /- Go through the fields and either use the user provided information (if there is) or compute the Rust names
+         automatically. -/
       let fields : List Field ← List.mapM (fun fieldName => do
         let fieldName ← fieldNameToString fieldName
         match providedFields.get? fieldName with
@@ -293,9 +329,11 @@ def processType (declName : Name) (_pat : String) (info : TypeInfo) : AttrM Type
         | none => pure { rust := fieldName, extract := fieldName }) structInfo.fieldNames.toList
       trace[Extract] "fields: {fields}"
       pure { info with body := some (.struct fields) }
-    pure info
   | .axiomInfo _ =>
     trace[Extract] "Found an axiomatized type"
+    pure info
+  | .defnInfo _ =>
+    trace[Extract] "Found a regular definition: treating it as an axiomatized type"
     pure info
   | _ => throwError "Not a type definition {declName}"
 
@@ -359,6 +397,8 @@ def optionToString {α} [ToString α] (x : Option α) : String :=
   | none => "None"
   | some x => "Some " ++ toString x
 
+def addQuotes (x : String) : String := "\"" ++ x ++ "\""
+
 def TypeInfo.toExtract (info : TypeInfo) : MessageData :=
   let extract := info.extract.getD "ERROR_MISSING_FIELD"
   let extract := m!"\"{extract}\""
@@ -371,8 +411,10 @@ def TypeInfo.toExtract (info : TypeInfo) : MessageData :=
     | none => m!""
     | some body =>
       match body with
-      | .enum variants => m!" ~kind:{variants.map (fun ⟨ x, y, _ ⟩ => (x, "Some " ++ toString y))}"
-      | .struct fields => m!" ~kind:{fields.map (fun ⟨ x, y ⟩ => (x, "Some " ++ toString y))}"
+      | .enum variants =>
+        m!" ~kind:(KEnum {listToString (variants.map (fun ⟨ x, y, _ ⟩ => (addQuotes x, "Some " ++ addQuotes (toString y))))})"
+      | .struct fields =>
+        m!" ~kind:(KStruct {listToString (fields.map (fun ⟨ x, y ⟩ => (addQuotes x, "Some " ++ addQuotes (toString y))))})"
   m!"{extract}{keepParams}{body}"
 
 def FunInfo.toExtract (info : FunInfo) : MessageData :=
@@ -400,38 +442,50 @@ def sortDescriptors {α} [ToMessageData α] (st : Array (String × Span × α)) 
       map := map.insert pat (span, info)
   pure map.toArray
 
+/-- Helper to print the content of the descriptors -/
+def write (env : Environment) (printLn : String → IO Unit) : IO Unit := do
+  -- # Header
+  printLn "(** THIS FILE WAS AUTOMATICALLY GENERATED FROM LEAN: DO NOT MODIFY DIRECTLY *)"
+  printLn "open ExtractBuiltinCore"
+  printLn ""
+  -- # Types
+  -- Retrieve the types, sort them by pattern and export
+  let infos ← sortDescriptors (rustTypes.ext.getState env)
+  printLn "let lean_builtin_types = ["
+  let printSpan (span : Span) : IO Unit :=
+    printLn ("  (* file: \"" ++ span.fileName ++ "\", line: " ++ toString span.pos.line ++ " *)")
+  for (pat, span, info) in infos do
+    printSpan span
+    let msg ← m!"  mk_type \"{pat}\" {info.toExtract};".toString
+    printLn msg
+  printLn "]"
+  printLn ""
+  -- # Funs
+  let infos ← sortDescriptors (rustFuns.ext.getState env)
+  printLn "let lean_builtin_funs = ["
+  for (pat, span, info) in infos do
+    printSpan span
+    let msg ← m!"  mk_fun \"{pat}\" {info.toExtract};".toString
+    printLn msg
+  printLn "]"
+  printLn ""
+
 /-- Export the extraction information to an OCaml file -/
 def writeToFile (moduleName : Name) (filename : System.FilePath) : IO Unit := do
   -- Import the environment
   let env ← Lean.importModules #[{ module := moduleName }] {} 0 (loadExts := true)
   -- Open the file
   let handle ← IO.FS.Handle.mk filename IO.FS.Mode.write
-  -- # Header
-  handle.putStrLn "(** THIS FILE WAS AUTOMATICALLY GENERATED FROM LEAN: DO NOT MODIFY DIRECTLY *)"
-  handle.putStrLn "open ExtractBuiltinCore"
-  handle.putStrLn ""
-  -- # Types
-  -- Retrieve the types, sort them by pattern and export
-  let infos ← sortDescriptors (rustTypes.ext.getState env)
-  handle.putStrLn "let lean_builtin_types = ["
-  let printSpan (span : Span) : IO Unit :=
-    handle.putStrLn ("  (* file: \"" ++ span.fileName ++ "\", line: " ++ toString span.pos.line ++ " *)")
-  for (pat, span, info) in infos do
-    printSpan span
-    let msg ← m!"  mk_type \"{pat}\" {info.toExtract};".toString
-    handle.putStrLn msg
-  handle.putStrLn "]"
-  handle.putStrLn ""
-  -- # Funs
-  let infos ← sortDescriptors (rustFuns.ext.getState env)
-  handle.putStrLn "let lean_builtin_funs = ["
-  for (pat, span, info) in infos do
-    printSpan span
-    let msg ← m!"  mk_fun \"{pat}\" {info.toExtract};".toString
-    handle.putStrLn msg
-  handle.putStrLn "]"
-  handle.putStrLn ""
+  -- Write to the file
+  write env handle.putStrLn
+  -- Close the file
   handle.flush
-  pure ()
+
+/-- Print the content of the descriptors -/
+def print : MetaM Unit := do
+  -- Import the environment
+  let env ← getEnv
+  -- Print
+  write env IO.println
 
 end Aeneas.Extract

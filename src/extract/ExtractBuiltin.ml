@@ -157,32 +157,7 @@ let builtin_types () : Pure.builtin_type_info list =
              ]);
     };
   ]
-  @ mk_lean_only
-      ([
-         mk_type "core::fmt::Formatter" ();
-         mk_type "core::result::Result"
-           ~kind:(KEnum [ ("Ok", None); ("Err", None) ])
-           ();
-         mk_type "core::result::Sum"
-           ~kind:(KEnum [ ("Left", None); ("Right", None) ])
-           ();
-         mk_type "core::fmt::Error" ();
-         mk_type "core::array::TryFromSliceError" ();
-         mk_type "core::ops::range::RangeFrom"
-           ~kind:(KStruct [ ("start", None) ])
-           ();
-         (* We model the Rust ordering with the native Lean ordering *)
-         mk_type "core::cmp::Ordering" ~custom_name:(Some "Ordering")
-           ~kind:
-             (KEnum
-                [
-                  ("Less", Some "lt");
-                  ("Equal", Some "eq");
-                  ("Greater", Some "gt");
-                ])
-           ();
-       ]
-      @ lean_builtin_types)
+  @ mk_lean_only lean_builtin_types
 
 let mk_builtin_types_map () =
   NameMatcherMap.of_list

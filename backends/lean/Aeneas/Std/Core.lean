@@ -131,13 +131,13 @@ def core.convert.FromSame (T : Type) : core.convert.From T T := {
   from_ := fun x => ok (core.convert.FromSame.from_ x)
 }
 
-/- [core::result::Result] -/
+@[rust_type "core::result::Result"]
 inductive core.result.Result (T : Type) (E : Type) where
 | Ok : T → core.result.Result T E
 | Err : E → core.result.Result T E
 
-/- [core::fmt::Error] -/
-@[reducible] def core.fmt.Error := Unit
+@[reducible, rust_type "core::fmt::Error"]
+def core.fmt.Error := Unit
 
 structure core.convert.TryFrom (Self T : Type) where
   Error : Type
@@ -169,6 +169,7 @@ def core.convert.AsMutBox (T : Type) : core.convert.AsMut T T := {
 }
 
 /- TODO: -/
+@[rust_type "core::fmt::Formatter"]
 axiom Formatter : Type
 
 structure core.fmt.Debug (T : Type) where
@@ -181,7 +182,7 @@ def core.result.Result.unwrap {T E : Type}
   | .Ok x => ok x
   | .Err _ => fail .panic
 
-/- [core::ops::range::RangeFrom] -/
+@[rust_type "core::ops::range::RangeFrom"]
 structure core.ops.range.RangeFrom (Idx : Type) where
   start : Idx
 
@@ -201,6 +202,12 @@ structure core.cmp.Eq (Self : Type) where
 def core.cmp.PartialEq.ne.default {Self Rhs : Type} (eq : Self → Rhs → Result Bool)
   (self : Self) (other : Rhs) : Result Bool := do
   ok (¬ (← eq self other))
+
+/- We model the Rust ordering with the native Lean ordering -/
+attribute
+  [rust_type "core::cmp::Ordering"
+  (body := some (.enum [⟨"Less", "lt", none⟩, ⟨"Equal", "eq", none⟩, ⟨"Greater", "gt", none⟩]))]
+  Ordering
 
 /- Trait declaration: [core::cmp::PartialOrd]
    Name pattern: core::cmp::PartialOrd -/
