@@ -92,37 +92,84 @@ instance : ToMessageData FunInfo where
   toMessageData x :=
     m!"\{ extract : {x.extract},\n  filterParams : {x.filterParams},\n  canFail : {x.canFail},\n  lift : {x.lift},\n  hasDefault : {x.hasDefault} }"
 
-structure TraitConst where
-  rust : Option String := none
-  extract : Option String := none
+structure ParentClause where
+  rust : String
+  extract : String
 deriving Repr, Inhabited
+
+instance : ToMessageData ParentClause where
+  toMessageData x :=
+    m!"\{ rust : {x.rust}, extract : {x.extract} }"
+
+structure TraitConst where
+  rust : String
+  extract : String
+deriving Repr, Inhabited
+
+instance : ToMessageData TraitConst where
+  toMessageData x :=
+    m!"\{ rust : {x.rust}, extract : {x.extract} }"
 
 structure TraitType where
-  rust : Option String := none
-  extract : Option String := none
+  rust : String
+  extract : String
 deriving Repr, Inhabited
+
+instance : ToMessageData TraitType where
+  toMessageData x :=
+    m!"\{ rust : {x.rust}, extract : {x.extract} }"
 
 structure TraitMethod where
-  rust : Option String := none
-  info : Option FunInfo := none
+  rust : String
+  extract : String
 deriving Repr, Inhabited
 
-structure TraitDeclInfo where
+instance : ToMessageData TraitMethod where
+  toMessageData x :=
+    m!"\{ rust : {x.rust}, extract : {x.extract} }"
+
+/-- A trait declaration.
+
+For every kind of trait elements (parent clauses, consts, types and methods) we use two lists:
+a list of names and a list of names augmented with additional information. Those lists should
+be disjoint, and we use them only for convenience:
+- if the user wants to indicate that a field stands for a type in the Rust trait declaration, they
+  can simply put it in the `types` list
+- if a field stands for a type *and* the Rust and Lean names are not the same, they can use the `typesInfo` list
+When processing the attribute, we augment the list of names by filling the missing information and merge the two
+lists. Finally, by default we consider that a field represents a method (the reason being that there tends to
+be a lot more methods than elements of the other kinds).
+-/
+structure TraitDecl where
   extract : Option String := none
-  constructor : Option String := none
   parentClauses : List String := []
-  -- Every const has: a Rust name, an extraction name
-  consts : List TraitConst := []
-  -- Every type has: a Rust name, an extraction name
-  types : List TraitType := []
-  -- Every method has: a Rust name, information
-  methods : List (String × FunInfo) := []
+  parentClausesInfo : List ParentClause := []
+  consts : List String := []
+  constsInfo : List TraitConst := []
+  types : List String := []
+  typesInfo : List TraitType := []
+  methods : List String := []
+  methodsInfo : List TraitMethod := []
+  /-- The list of default methods -/
+  defaultMethods : List String := []
 deriving Repr, Inhabited
 
-structure RustTraitImplInfo where
-  extractName : Option String
-  filterInfo : Option (List Bool)
+instance : ToMessageData TraitDecl where
+  toMessageData x :=
+    m!"\{ extract : {x.extract},\n  parentClauses : {x.parentClauses},\n  parentClausesInfo : {x.parentClausesInfo},
+  consts : {x.consts},\n  constsInfo : {x.constsInfo},
+  types : {x.types},\n  typesInfo : {x.typesInfo},
+  methods : {x.methods},\n  methodsInfo : {x.methodsInfo},
+  defaultMethods : {x.defaultMethods} }"
+
+structure TraitImpl where
+  extract : Option String := none
+  filterParams : Option (List Bool) := none
 deriving Repr, Inhabited
+
+instance : ToMessageData TraitImpl where
+  toMessageData x :=
+    m!"\{ extract : {x.extract}, filterParams : {x.filterParams} }"
 
 def getLocalFileName : AttrM (Option String) := do
   let name ← getFileName
@@ -356,6 +403,86 @@ initialize rustTypes : Attribute TypeInfo ← do
     elabTypeNameInfo processType
 
 /-!
+# Trait Declarations
+-/
+
+/- Cheating a bit: we elaborate the optional information by using the command config elaborator.
+   This allows to have nice syntax for optional fields and at a small cost. -/
+declare_command_config_elab elabRustTraitDecl TraitDecl
+
+syntax (name := rustTraitDecl) "rust_trait" str Parser.Tactic.optConfig : attr
+
+def elabTraitDeclNameInfo (stx : Syntax) : AttrM (String × TraitDecl) :=
+  withRef stx do
+    match stx with
+    | `(attr| rust_trait $pat $config) => do
+      let pat := pat.getString
+      if pat = "" then throwError "Not a valid name pattern: {pat}"
+      let info ← liftCommandElabM (elabRustTraitDecl config)
+      pure (pat, info)
+    | _ => Lean.Elab.throwUnsupportedSyntax
+
+/-- This helper completes the information available in the information provided by the user by
+    looking at the definition itself. -/
+def processTraitDecl (declName : Name) (_pat : String) (info : TraitDecl) : AttrM TraitDecl := do
+  trace[Extract] "declName: {declName}"
+  let env ← getEnv
+  -- Retrieve the extraction name
+  let extractName : String ← do
+    match info.extract with
+    | some name => pure name
+    | none =>
+      trace[Extract] "Generating the extraction name"
+      pure (← (removeNamePrefix declName)).toString
+  let info : TraitDecl := { info with extract := extractName }
+
+  /- First, merge the fields `consts`/`constsInfo`, `types`/`typesInfo` and `methods`/`methodsInfo` while
+     performing sanity checks -/
+  let info : TraitDecl :=
+    let parentClausesInfo := info.parentClauses.map (fun x => ⟨ x, x ⟩) ++ info.parentClausesInfo
+    let constsInfo := info.consts.map (fun x => ⟨ x, x ⟩) ++ info.constsInfo
+    let typesInfo := info.types.map (fun x => ⟨ x, x ⟩) ++ info.typesInfo
+    let methodsInfo := info.methods.map (fun x => ⟨ x, x ⟩) ++ info.methodsInfo
+    { info with parentClauses := [], consts := [], types := [], methods := [],
+                parentClausesInfo, constsInfo, typesInfo, methodsInfo }
+
+  match getStructureInfo? env declName with
+  | none =>
+    -- Nothing to do
+    pure info
+  | some structInfo =>
+    /- This is a structure: compute the missing informaton about the fields.
+       If the user did not provide any information about a field, we consider it is a method by default. -/
+    -- First compute maps to lookup the user information
+    let userParentClauses := Std.HashMap.ofList (info.parentClausesInfo.map (fun x => (x.extract, x)))
+    let userConsts := Std.HashMap.ofList (info.constsInfo.map (fun x => (x.extract, x)))
+    let userTypes := Std.HashMap.ofList (info.typesInfo.map (fun x => (x.extract, x)))
+    let userMethods := Std.HashMap.ofList (info.methodsInfo.map (fun x => (x.extract, x)))
+
+    -- Go through all the fields
+    let mut parentClauses := #[]
+    let mut consts := #[]
+    let mut types := #[]
+    let mut methods := #[]
+    let fields ← structInfo.fieldNames.toList.mapM fieldNameToString
+    for field in fields do
+      if let some info := userParentClauses.get? field then
+        parentClauses := parentClauses.push info
+      else if let some info := userConsts.get? field then
+        consts := consts.push info
+      else if let some info := userTypes.get? field then
+        types := types.push info
+      else if let some info := userMethods.get? field then
+        methods := methods.push info
+      else
+        methods := methods.push ⟨ field, field ⟩
+    pure info
+
+initialize rustTraitDecls : Attribute TraitDecl ← do
+  mkAttribute `rustTraitDeclsArray `rustTraitDecl "Register Rust trait definitions"
+    elabTraitDeclNameInfo processTraitDecl
+
+/-!
 # Functions
 -/
 
@@ -392,6 +519,44 @@ def processFun (declName : Name) (_pat : String) (info : FunInfo) : AttrM FunInf
 initialize rustFuns : Attribute FunInfo ← do
   mkAttribute `rustFunsArray `rustFun "Register Rust Fun definitions"
     elabFunNameInfo processFun
+
+/-!
+# Trait Impls
+-/
+
+/- Cheating a bit: we elaborate the optional information by using the command config elaborator.
+   This allows to have nice syntax for optional fields and at a small cost. -/
+declare_command_config_elab elabRustTraitImplInfo TraitImpl
+
+syntax (name := rustTraitImpl) "rust_trait_impl" str Parser.Tactic.optConfig : attr
+
+def elabTraitImplNameInfo (stx : Syntax) : AttrM (String × TraitImpl) :=
+  withRef stx do
+    match stx with
+    | `(attr| rust_trait_impl $pat $config) => do
+      let pat := pat.getString
+      if pat = "" then throwError "Not a valid name pattern: {pat}"
+      let info ← liftCommandElabM (elabRustTraitImplInfo config)
+      pure (pat, info)
+    | _ => Lean.Elab.throwUnsupportedSyntax
+
+/-- This helper completes the information available in the information provided by the user by
+    looking at the definition itself. -/
+def processTraitImpl (declName : Name) (_pat : String) (info : TraitImpl) : AttrM TraitImpl := do
+  trace[Extract] "declName: {declName}"
+  -- Retrieve the extraction name
+  let extract : String ← do
+    match info.extract with
+    | some name => pure name
+    | none =>
+      trace[Extract] "Generating the extraction name"
+      pure (← (removeNamePrefix declName)).toString
+  --
+  pure { info with extract }
+
+initialize rustTraitImpls : Attribute TraitImpl ← do
+  mkAttribute `rustTraitImplsArray `rustTraitImpl "Register Rust TraitImpl definitions"
+    elabTraitImplNameInfo processTraitImpl
 
 /-!
 # Code Generation
@@ -443,6 +608,40 @@ def FunInfo.toExtract (info : FunInfo) : MessageData :=
   let hasDefault := if info.hasDefault then m!" ~lift:{info.hasDefault}" else m!""
   m!"{extract}{filterParams}{canFail}{lift}{hasDefault}"
 
+def TraitDecl.toExtract (info : TraitDecl) : MessageData :=
+  let extract := info.extract.getD "ERROR_MISSING_FIELD"
+  let extract := m!"\"{extract}\""
+  let parentClauses :=
+    match info.parentClausesInfo with
+    | [] => m!""
+    | _ => m!" ~parent_clauses:{listToString (info.parentClausesInfo.map (fun (x : ParentClause) => (x.rust, x.extract)))}"
+  let types :=
+    match info.typesInfo with
+    | [] => m!""
+    | _ => m!" ~types:{listToString (info.typesInfo.map (fun (x : TraitType) => (x.rust, x.extract)))}"
+  let consts :=
+    match info.constsInfo with
+    | [] => m!""
+    | _ => m!" ~consts:{listToString (info.constsInfo.map (fun (x : TraitConst) => (x.rust, x.extract)))}"
+  let methods :=
+    match info.methodsInfo with
+    | [] => m!""
+    | _ => m!" ~methods:{listToString (info.methodsInfo.map (fun (x : TraitMethod) => (x.rust, x.extract)))}"
+  let defaultMethods :=
+    match info.methodsInfo with
+    | [] => m!""
+    | _ => m!" ~default_methods:{listToString info.defaultMethods}"
+  m!"{extract}{parentClauses}{types}{consts}{methods}{defaultMethods}"
+
+def TraitImpl.toExtract (info : TraitImpl) : MessageData :=
+  let extract := info.extract.getD "ERROR_MISSING_FIELD"
+  let extract := m!"\"{extract}\""
+  let filterParams :=
+    match info.filterParams with
+    | none => m!""
+    | some filter => m!" ~filter_params:(Some {listToString filter})"
+  m!"{extract}{filterParams}"
+
 def sortDescriptors {α} [ToMessageData α] (st : Array (String × Span × α)) : IO (Array (String × Span × α)) := do
   let mut map : RBMap String (Span × α) Ord.compare := RBMap.empty
   for (pat, span, info) in st do
@@ -483,6 +682,31 @@ def write (env : Environment) (printLn : String → IO Unit) : IO Unit := do
     printLn msg
   printLn "]"
   printLn ""
+  -- # Trait Decls
+  let infos ← sortDescriptors (rustTraitDecls.ext.getState env)
+  printLn "let lean_builtin_trait_decls = ["
+  for (pat, span, info) in infos do
+    printSpan span
+    let msg ← m!"  mk_trait_decl \"{pat}\" {info.toExtract};".toString
+    printLn msg
+  printLn "]"
+  printLn ""
+  -- # Trait Impls
+  let infos ← sortDescriptors (rustTraitImpls.ext.getState env)
+  printLn "let lean_builtin_trait_impls = ["
+  for (pat, span, info) in infos do
+    printSpan span
+    let msg ← m!"  mk_trait_impl \"{pat}\" {info.toExtract};".toString
+    printLn msg
+  printLn "]"
+  printLn ""
+
+/-- Print the content of the descriptors -/
+def print : MetaM Unit := do
+  -- Import the environment
+  let env ← getEnv
+  -- Print
+  write env IO.println
 
 /-- Export the extraction information to an OCaml file -/
 def writeToFile (moduleName : Name) (filename : System.FilePath) : IO Unit := do
@@ -494,12 +718,5 @@ def writeToFile (moduleName : Name) (filename : System.FilePath) : IO Unit := do
   write env handle.putStrLn
   -- Close the file
   handle.flush
-
-/-- Print the content of the descriptors -/
-def print : MetaM Unit := do
-  -- Import the environment
-  let env ← getEnv
-  -- Print
-  write env IO.println
 
 end Aeneas.Extract
