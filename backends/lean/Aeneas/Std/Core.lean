@@ -8,6 +8,8 @@ namespace Std
 
 open Result
 
+attribute [rust_type "core::option::Option" -prefixVariantNames] Option
+
 @[rust_fun "alloc::boxed::{core::convert::AsMut<Box<@T>, @T>}::as_mut" -canFail (filterParams := [true,false])]
 def alloc.boxed.AsMutBox.as_mut {T : Type} (x : T) : T × (T → T) :=
   (x, fun x => x)
@@ -206,7 +208,7 @@ def core.cmp.PartialEq.ne.default {Self Rhs : Type} (eq : Self → Rhs → Resul
 /- We model the Rust ordering with the native Lean ordering -/
 attribute
   [rust_type "core::cmp::Ordering"
-  (body := some (.enum [⟨"Less", "lt", none⟩, ⟨"Equal", "eq", none⟩, ⟨"Greater", "gt", none⟩]))]
+  (body := .enum [⟨"Less", "lt", none⟩, ⟨"Equal", "eq", none⟩, ⟨"Greater", "gt", none⟩])]
   Ordering
 
 /- Trait declaration: [core::cmp::PartialOrd]

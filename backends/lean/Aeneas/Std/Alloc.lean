@@ -7,6 +7,12 @@ namespace Std
 
 open Result
 
+attribute [rust_type "alloc::string::String"] String
+
+/-- The type of the global allocator -/
+@[rust_type "alloc::alloc::Global"]
+inductive Global where | mk
+
 @[rust_fun "alloc::boxed::{core::ops::deref::Deref<Box<@T>, @T>}::deref" -canFail (filterParams := [true, false])]
 def alloc.boxed.Box.deref {T : Type} (x : T) : T := x
 

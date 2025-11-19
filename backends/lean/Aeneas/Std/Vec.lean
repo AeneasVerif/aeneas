@@ -15,6 +15,7 @@ open Result Error
 
 namespace alloc.vec
 
+@[rust_type "alloc::vec::Vec"]
 def Vec (α : Type u) := { l : List α // l.length ≤ Usize.max }
 
 /-- We need this to coerce vectors to lists without marking `Vec` as reducible.

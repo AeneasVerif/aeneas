@@ -32,6 +32,7 @@ inductive TypeBody where
 | struct (fieldNames : List Field)
 /-- For every variant, a map for the field names -/
 | enum (variants : List Variant)
+| opaque
 deriving Repr, Inhabited
 
 instance : ToMessageData TypeBody where
@@ -39,6 +40,7 @@ instance : ToMessageData TypeBody where
     match x with
     | .struct fields => m!"Struct ({fields})"
     | .enum variants => m!"Enum ({variants})"
+    | .opaque => m!"Opaque"
 
 structure TypeInfo where
   /-- The name to use for extraction -/
@@ -48,7 +50,14 @@ structure TypeInfo where
       For instance, `Vec` type takes a type parameter for the allocator,
       which we want to ignore. -/
   keepParams : Option (List Bool) := none
-  body : Option TypeBody := none
+  /-- Whenever printing the variants, should we prefix them with the type name or not?
+
+    Generally speaking we need to (e.g., we generate `Foo.bar` instead of `bar`) but for
+    some enumerations we don't (it's the case of `Option`, for which we can write `some`
+    directly, rather than `Option.some`).
+    -/
+  prefixVariantNames : Bool := true
+  body : TypeBody := .opaque
 deriving Repr, Inhabited
 
 instance : ToMessageData TypeInfo where
@@ -223,9 +232,9 @@ def fieldNameToString (n : Name) : AttrM String := do
 
 def variantNameToString (declName n : Name) : AttrM String := do
   match n with
-  | .str pre field =>
+  | .str pre variant =>
     if pre ≠ declName then throwError "Ill-formed variant name: `{n}`"
-    pure field
+    pure variant
   | _ => throwError "Ill-formed field name: `{n}`"
 
 /-!
@@ -276,9 +285,9 @@ def processType (declName : Name) (_pat : String) (info : TypeInfo) : AttrM Type
       trace[Extract] "The type definition is for an enumeration"
       let variants ← do
         match info.body with
-        | .some (.enum variants) => pure variants
-        | .none => pure []
-        | .some (.struct _) => throwError "The user-provided information is for a structure while the type is an inductive"
+        | .enum variants => pure variants
+        | .opaque => pure []
+        | .struct _ => throwError "The user-provided information is for a structure while the type is an inductive"
       /- Go through the variants and retrieve their names.
          We first need to use the user provided information to compute a map from Lean name to user information. -/
       let mut providedVariants := Std.HashMap.emptyWithCapacity
@@ -300,18 +309,18 @@ def processType (declName : Name) (_pat : String) (info : TypeInfo) : AttrM Type
         let ctorName ← variantNameToString declName ctorName
         match providedVariants.get? ctorName with
         | some info => pure info
-        | none => pure { rust := ctorName, extract := ctorName }) const.ctors
+        | none => pure { rust := ctorName.capitalize, extract := ctorName }) const.ctors
       trace[Extract] "variants: {variants}"
-      pure { info with body := some (.enum variants) }
+      pure { info with body := .enum variants }
     | some structInfo =>
       trace[Extract] "The type definition is for a structure"
       /- Similar to the inductive case: we check the user-provided information before using it, for instance
          to detect name collisions. -/
       let fields ← do
         match info.body with
-        | .some (.struct fields) => pure fields
-        | .none => pure []
-        | .some (.enum _) => throwError "The user-provided information is for a variant while the type is a structure"
+        | .struct fields => pure fields
+        | .opaque => pure []
+        | .enum _ => throwError "The user-provided information is for a variant while the type is a structure"
       /- Compute the map from Lean field name to user information while doing the sanity checks -/
       let mut providedFields := Std.HashMap.emptyWithCapacity
       let mut rustFields := Std.HashSet.emptyWithCapacity
@@ -333,7 +342,7 @@ def processType (declName : Name) (_pat : String) (info : TypeInfo) : AttrM Type
         | some info => pure info
         | none => pure { rust := fieldName, extract := fieldName }) structInfo.fieldNames.toList
       trace[Extract] "fields: {fields}"
-      pure { info with body := some (.struct fields) }
+      pure { info with body := .struct fields }
   | .axiomInfo _ =>
     trace[Extract] "Found an axiomatized type"
     pure info
@@ -411,16 +420,16 @@ def TypeInfo.toExtract (info : TypeInfo) : MessageData :=
     match info.keepParams with
     | none => m!""
     | some keepParams => m!" ~keep_params:{listToString keepParams}"
+  let prefixVariantNames :=
+    if info.prefixVariantNames then m!"" else m!" ~prefix_variant_names:false"
   let body :=
     match info.body with
-    | none => m!""
-    | some body =>
-      match body with
-      | .enum variants =>
-        m!" ~kind:(KEnum {listToString (variants.map (fun ⟨ x, y, _ ⟩ => (addQuotes x, "Some " ++ addQuotes (toString y))))})"
-      | .struct fields =>
-        m!" ~kind:(KStruct {listToString (fields.map (fun ⟨ x, y ⟩ => (addQuotes x, "Some " ++ addQuotes (toString y))))})"
-  m!"{extract}{keepParams}{body}"
+    | .opaque => m!""
+    | .enum variants =>
+      m!" ~kind:(KEnum {listToString (variants.map (fun ⟨ x, y, _ ⟩ => (addQuotes x, "Some " ++ addQuotes (toString y))))})"
+    | .struct fields =>
+      m!" ~kind:(KStruct {listToString (fields.map (fun ⟨ x, y ⟩ => (addQuotes x, "Some " ++ addQuotes (toString y))))})"
+  m!"{extract}{keepParams}{prefixVariantNames}{body}"
 
 def FunInfo.toExtract (info : FunInfo) : MessageData :=
   let extract := info.extract.getD "ERROR_MISSING_FIELD"

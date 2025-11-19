@@ -47,116 +47,115 @@ let builtin_globals_map = mk_memoized mk_builtin_globals_map
     parameters. For instance, in the case of the `Vec` functions, there is a
     type parameter for the allocator to use, which we want to filter. *)
 let builtin_types () : Pure.builtin_type_info list =
-  let mk_type (rust_name : string) ?(custom_name : string option = None)
-      ?(keep_params : bool list option = None)
-      ?(kind : type_variant_kind = KOpaque) () : Pure.builtin_type_info =
-    let rust_name = parse_pattern rust_name in
-    let extract_name =
-      match custom_name with
-      | None -> flatten_name (pattern_to_type_extract_name rust_name)
-      | Some name -> flatten_name (split_on_separator name)
-    in
-    let body_info : Pure.builtin_type_body_info option =
-      match kind with
-      | KOpaque -> None
-      | KStruct fields ->
-          let fields =
-            List.map
-              (fun (rname, name) ->
-                ( rname,
-                  let name =
-                    match name with
-                    | None -> rname
-                    | Some name -> name
-                  in
-                  match backend () with
-                  | FStar | Lean -> name
-                  | Coq | HOL4 -> extract_name ^ "_" ^ name ))
-              fields
-          in
-          let constructor = mk_struct_constructor extract_name in
-          Some (Struct (constructor, fields))
-      | KEnum variants ->
-          let variants =
-            List.map
-              (fun (variant, evariant) ->
-                let evariant =
-                  match evariant with
-                  | Some variant -> variant
-                  | None -> variant
-                in
-                let extract_variant_name =
-                  match backend () with
-                  | FStar | Coq -> extract_name ^ "_" ^ evariant
-                  | Lean -> extract_name ^ "." ^ evariant
-                  | HOL4 -> extract_name ^ evariant
-                in
-                ({
-                   rust_variant_name = variant;
-                   extract_variant_name;
-                   fields = None;
-                 }
-                  : Pure.builtin_enum_variant_info))
-              variants
-          in
-          Some (Enum variants)
-    in
-    { rust_name; extract_name; keep_params; body_info }
-  in
-  [
-    (* Alloc *)
-    mk_type "alloc::alloc::Global" ();
-    (* String *)
-    mk_type "alloc::string::String"
-      ~custom_name:(Some (backend_choice "string" "String"))
-      ();
-    (* Vec *)
-    mk_type "alloc::vec::Vec" ();
-    (* Range *)
-    mk_type "core::ops::range::Range"
-      ~kind:(KStruct [ ("start", None); ("end", Some "end_") ])
-      ();
-    (* RangeTo *)
-    mk_type "core::ops::range::RangeTo"
-      ~kind:(KStruct [ ("end", Some "end_") ])
-      ();
-    (* Option
+  (let mk_type (rust_name : string) ?(custom_name : string option = None)
+       ?(keep_params : bool list option = None)
+       ?(kind : type_variant_kind = KOpaque) () : Pure.builtin_type_info =
+     let rust_name = parse_pattern rust_name in
+     let extract_name =
+       match custom_name with
+       | None -> flatten_name (pattern_to_type_extract_name rust_name)
+       | Some name -> flatten_name (split_on_separator name)
+     in
+     let body_info : Pure.builtin_type_body_info option =
+       match kind with
+       | KOpaque -> None
+       | KStruct fields ->
+           let fields =
+             List.map
+               (fun (rname, name) ->
+                 ( rname,
+                   let name =
+                     match name with
+                     | None -> rname
+                     | Some name -> name
+                   in
+                   match backend () with
+                   | FStar | Lean -> name
+                   | Coq | HOL4 -> extract_name ^ "_" ^ name ))
+               fields
+           in
+           let constructor = mk_struct_constructor extract_name in
+           Some (Struct (constructor, fields))
+       | KEnum variants ->
+           let variants =
+             List.map
+               (fun (variant, evariant) ->
+                 let evariant =
+                   match evariant with
+                   | Some variant -> variant
+                   | None -> variant
+                 in
+                 let extract_variant_name =
+                   match backend () with
+                   | FStar | Coq -> extract_name ^ "_" ^ evariant
+                   | Lean -> extract_name ^ "." ^ evariant
+                   | HOL4 -> extract_name ^ evariant
+                 in
+                 ({
+                    rust_variant_name = variant;
+                    extract_variant_name;
+                    fields = None;
+                  }
+                   : Pure.builtin_enum_variant_info))
+               variants
+           in
+           Some (Enum variants)
+     in
+     { rust_name; extract_name; keep_params; body_info }
+   in
+   []
+   @ mk_not_lean
+       [
+         (* Alloc *)
+         mk_type "alloc::alloc::Global" ();
+         (* String *)
+         mk_type "alloc::string::String" ~custom_name:(Some "string") ();
+         (* Vec *)
+         mk_type "alloc::vec::Vec" ();
+         (* Range *)
+         mk_type "core::ops::range::Range"
+           ~kind:(KStruct [ ("start", None); ("end", Some "end_") ])
+           ();
+         (* RangeTo *)
+         mk_type "core::ops::range::RangeTo"
+           ~kind:(KStruct [ ("end", Some "end_") ])
+           ();
+         (* Option
 
-       This one is more custom because we use the standard "option" type from
-       the target backend.
-    *)
-    {
-      rust_name = parse_pattern "core::option::Option";
-      extract_name =
-        (match backend () with
-        | Lean -> "Option"
-        | Coq | FStar | HOL4 -> "option");
-      keep_params = None;
-      body_info =
-        Some
-          (Enum
-             [
-               {
-                 rust_variant_name = "None";
-                 extract_variant_name =
-                   (match backend () with
-                   | FStar | Coq -> "None"
-                   | Lean -> "none"
-                   | HOL4 -> "NONE");
-                 fields = None;
-               };
-               {
-                 rust_variant_name = "Some";
-                 extract_variant_name =
-                   (match backend () with
-                   | FStar | Coq -> "Some"
-                   | Lean -> "some"
-                   | HOL4 -> "SOME");
-                 fields = None;
-               };
-             ]);
-    };
-  ]
+            This one is more custom because we use the standard "option" type
+            from the target backend. *)
+         {
+           rust_name = parse_pattern "core::option::Option";
+           extract_name =
+             (match backend () with
+             | Lean -> "Option"
+             | Coq | FStar | HOL4 -> "option");
+           keep_params = None;
+           body_info =
+             Some
+               (Enum
+                  [
+                    {
+                      rust_variant_name = "None";
+                      extract_variant_name =
+                        (match backend () with
+                        | FStar | Coq -> "None"
+                        | Lean -> "none"
+                        | HOL4 -> "NONE");
+                      fields = None;
+                    };
+                    {
+                      rust_variant_name = "Some";
+                      extract_variant_name =
+                        (match backend () with
+                        | FStar | Coq -> "Some"
+                        | Lean -> "some"
+                        | HOL4 -> "SOME");
+                      fields = None;
+                    };
+                  ]);
+         };
+       ])
   @ mk_lean_only lean_builtin_types
 
 let mk_builtin_types_map () =

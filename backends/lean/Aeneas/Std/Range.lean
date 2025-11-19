@@ -11,13 +11,13 @@ namespace Aeneas
 
 namespace Std
 
-/-- [core::ops::range::Range] -/
+@[rust_type "core::ops::range::Range" (body := .struct [⟨ "end", "end_" ⟩])]
 structure core.ops.range.Range (Idx : Type u) where
   mk ::
   start: Idx
   end_: Idx
 
-/-- [core::ops::range::RangeTo] -/
+@[rust_type "core::ops::range::RangeTo" (body := .struct [⟨ "end", "end_" ⟩])]
 structure core.ops.range.RangeTo (Idx : Type u) where
   mk ::
   end_: Idx

@@ -3,94 +3,110 @@ open ExtractBuiltinCore
 
 let lean_builtin_types =
   [
+    (* file: "Aeneas/Std/Alloc.lean", line: 13 *)
+    mk_type "alloc::alloc::Global" "Global" ~kind:(KEnum [ ("Mk", Some "mk") ]);
+    (* file: "Aeneas/Std/Alloc.lean", line: 10 *)
+    mk_type "alloc::string::String" "String"
+      ~kind:(KStruct [ ("data", Some "data") ]);
+    (* file: "Aeneas/Std/Vec.lean", line: 18 *)
+    mk_type "alloc::vec::Vec" "alloc.vec.Vec";
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 110 *)
     mk_type "core::array::TryFromSliceError" "core.array.TryFromSliceError";
-    (* file: "Aeneas/Std/Core.lean", line: 208 *)
+    (* file: "Aeneas/Std/Core.lean", line: 210 *)
     mk_type "core::cmp::Ordering" "Ordering"
       ~kind:
         (KEnum
            [ ("Less", Some "lt"); ("Equal", Some "eq"); ("Greater", Some "gt") ]);
-    (* file: "Aeneas/Std/Core.lean", line: 139 *)
+    (* file: "Aeneas/Std/Core.lean", line: 141 *)
     mk_type "core::fmt::Error" "core.fmt.Error";
-    (* file: "Aeneas/Std/Core.lean", line: 172 *)
+    (* file: "Aeneas/Std/Core.lean", line: 174 *)
     mk_type "core::fmt::Formatter" "Formatter";
-    (* file: "Aeneas/Std/Core.lean", line: 185 *)
+    (* file: "Aeneas/Std/Range.lean", line: 14 *)
+    mk_type "core::ops::range::Range" "core.ops.range.Range"
+      ~kind:(KStruct [ ("start", Some "start"); ("end", Some "end_") ]);
+    (* file: "Aeneas/Std/Core.lean", line: 187 *)
     mk_type "core::ops::range::RangeFrom" "core.ops.range.RangeFrom"
       ~kind:(KStruct [ ("start", Some "start") ]);
-    (* file: "Aeneas/Std/Core.lean", line: 134 *)
+    (* file: "Aeneas/Std/Range.lean", line: 20 *)
+    mk_type "core::ops::range::RangeTo" "core.ops.range.RangeTo"
+      ~kind:(KStruct [ ("end", Some "end_") ]);
+    (* file: "Aeneas/Std/Core.lean", line: 11 *)
+    mk_type "core::option::Option" "Option" ~prefix_variant_names:false
+      ~kind:(KEnum [ ("None", Some "none"); ("Some", Some "some") ]);
+    (* file: "Aeneas/Std/Core.lean", line: 136 *)
     mk_type "core::result::Result" "core.result.Result"
       ~kind:(KEnum [ ("Ok", Some "Ok"); ("Err", Some "Err") ]);
   ]
 
 let lean_builtin_funs =
   [
-    (* file: "Aeneas/Std/Core.lean", line: 11 *)
+    (* file: "Aeneas/Std/Core.lean", line: 13 *)
     mk_fun "alloc::boxed::{core::convert::AsMut<Box<@T>, @T>}::as_mut"
       "alloc.boxed.AsMutBox.as_mut"
       ~filter:(Some [ true; false ])
       ~can_fail:false;
-    (* file: "Aeneas/Std/Alloc.lean", line: 10 *)
+    (* file: "Aeneas/Std/Alloc.lean", line: 16 *)
     mk_fun "alloc::boxed::{core::ops::deref::Deref<Box<@T>, @T>}::deref"
       "alloc.boxed.Box.deref"
       ~filter:(Some [ true; false ])
       ~can_fail:false;
-    (* file: "Aeneas/Std/Alloc.lean", line: 13 *)
+    (* file: "Aeneas/Std/Alloc.lean", line: 19 *)
     mk_fun "alloc::boxed::{core::ops::deref::DerefMut<Box<@T>, @T>}::deref_mut"
       "alloc.boxed.Box.deref_mut"
       ~filter:(Some [ true; false ])
       ~can_fail:false;
-    (* file: "Aeneas/Std/Vec.lean", line: 226 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 227 *)
     mk_fun "alloc::slice::{[@T]}::to_vec" "alloc.slice.Slice.to_vec";
-    (* file: "Aeneas/Std/Vec.lean", line: 239 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 240 *)
     mk_fun "alloc::vec::from_elem" "alloc.vec.from_elem";
-    (* file: "Aeneas/Std/Vec.lean", line: 259 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 260 *)
     mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::extend_from_slice"
       "alloc.vec.Vec.extend_from_slice"
       ~filter:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 116 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 117 *)
     mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::insert" "alloc.vec.Vec.insert"
       ~filter:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 49 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 50 *)
     mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::len" "alloc.vec.Vec.len"
       ~filter:(Some [ true; false ])
       ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Vec.lean", line: 42 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 43 *)
     mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::new" "alloc.vec.Vec.new"
       ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Vec.lean", line: 99 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 100 *)
     mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::push" "alloc.vec.Vec.push"
       ~filter:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 296 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 297 *)
     mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::resize" "alloc.vec.Vec.resize"
       ~filter:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 256 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 257 *)
     mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::with_capacity"
       "alloc.vec.Vec.with_capacity" ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Vec.lean", line: 323 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 324 *)
     mk_fun
       "alloc::vec::{core::convert::From<Box<[@T]>, alloc::vec::Vec<@T>>}::from"
       "alloc.vec.FromBoxSliceVec.from"
       ~filter:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 270 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 271 *)
     mk_fun
       "alloc::vec::{core::ops::deref::Deref<alloc::vec::Vec<@T>, [@T]>}::deref"
       "alloc.vec.Vec.deref"
       ~filter:(Some [ true; false ])
       ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Vec.lean", line: 280 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 281 *)
     mk_fun
       "alloc::vec::{core::ops::deref::DerefMut<alloc::vec::Vec<@T>, \
        [@T]>}::deref_mut"
       "alloc.vec.Vec.deref_mut"
       ~filter:(Some [ true; false ])
       ~can_fail:false;
-    (* file: "Aeneas/Std/Vec.lean", line: 180 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 181 *)
     mk_fun
       "alloc::vec::{core::ops::index::Index<alloc::vec::Vec<@T>, @I, \
        @O>}::index"
       "alloc.vec.Vec.index"
       ~filter:(Some [ true; true; false; true ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 186 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 187 *)
     mk_fun
       "alloc::vec::{core::ops::index::IndexMut<alloc::vec::Vec<@T>, @I, \
        @O>}::index_mut"
@@ -115,45 +131,45 @@ let lean_builtin_funs =
     mk_fun
       "core::array::{core::ops::index::IndexMut<[@T; @N], @I, @O>}::index_mut"
       "core.array.Array.index_mut";
-    (* file: "Aeneas/Std/Core.lean", line: 277 *)
+    (* file: "Aeneas/Std/Core.lean", line: 279 *)
     mk_fun "core::cmp::Ord::clamp" "core.cmp.Ord.clamp.default";
-    (* file: "Aeneas/Std/Core.lean", line: 265 *)
+    (* file: "Aeneas/Std/Core.lean", line: 267 *)
     mk_fun "core::cmp::Ord::max" "core.cmp.Ord.max.default";
-    (* file: "Aeneas/Std/Core.lean", line: 271 *)
+    (* file: "Aeneas/Std/Core.lean", line: 273 *)
     mk_fun "core::cmp::Ord::min" "core.cmp.Ord.min.default";
-    (* file: "Aeneas/Std/Core.lean", line: 201 *)
+    (* file: "Aeneas/Std/Core.lean", line: 203 *)
     mk_fun "core::cmp::PartialEq::ne" "core.cmp.PartialEq.ne.default";
-    (* file: "Aeneas/Std/Core.lean", line: 247 *)
+    (* file: "Aeneas/Std/Core.lean", line: 249 *)
     mk_fun "core::cmp::PartialOrd::ge" "core.cmp.PartialOrd.ge.default";
-    (* file: "Aeneas/Std/Core.lean", line: 239 *)
+    (* file: "Aeneas/Std/Core.lean", line: 241 *)
     mk_fun "core::cmp::PartialOrd::gt" "core.cmp.PartialOrd.gt.default";
-    (* file: "Aeneas/Std/Core.lean", line: 231 *)
+    (* file: "Aeneas/Std/Core.lean", line: 233 *)
     mk_fun "core::cmp::PartialOrd::le" "core.cmp.PartialOrd.le.default";
-    (* file: "Aeneas/Std/Core.lean", line: 223 *)
+    (* file: "Aeneas/Std/Core.lean", line: 225 *)
     mk_fun "core::cmp::PartialOrd::lt" "core.cmp.PartialOrd.lt.default";
-    (* file: "Aeneas/Std/Core.lean", line: 125 *)
+    (* file: "Aeneas/Std/Core.lean", line: 127 *)
     mk_fun "core::convert::{core::convert::From<@T, @T>}::from"
       "core.convert.FromSame.from_" ~can_fail:false;
-    (* file: "Aeneas/Std/Core.lean", line: 113 *)
+    (* file: "Aeneas/Std/Core.lean", line: 115 *)
     mk_fun "core::convert::{core::convert::Into<@T, @U>}::into"
       "core.convert.IntoFrom.into";
-    (* file: "Aeneas/Std/Core.lean", line: 78 *)
+    (* file: "Aeneas/Std/Core.lean", line: 80 *)
     mk_fun "core::mem::replace" "core.mem.replace" ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Core.lean", line: 82 *)
+    (* file: "Aeneas/Std/Core.lean", line: 84 *)
     mk_fun "core::mem::swap" "core.mem.swap" ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Core.lean", line: 106 *)
+    (* file: "Aeneas/Std/Core.lean", line: 108 *)
     mk_fun "core::option::{core::option::Option<@T>}::is_none"
       "core.option.Option.is_none" ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Core.lean", line: 103 *)
+    (* file: "Aeneas/Std/Core.lean", line: 105 *)
     mk_fun "core::option::{core::option::Option<@T>}::take"
       "core.option.Option.take" ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Core.lean", line: 87 *)
+    (* file: "Aeneas/Std/Core.lean", line: 89 *)
     mk_fun "core::option::{core::option::Option<@T>}::unwrap"
       "core.option.Option.unwrap";
-    (* file: "Aeneas/Std/Core.lean", line: 91 *)
+    (* file: "Aeneas/Std/Core.lean", line: 93 *)
     mk_fun "core::option::{core::option::Option<@T>}::unwrap_or"
       "core.option.Option.unwrap_or" ~can_fail:false;
-    (* file: "Aeneas/Std/Core.lean", line: 178 *)
+    (* file: "Aeneas/Std/Core.lean", line: 180 *)
     mk_fun "core::result::{core::result::Result<@T, @E>}::unwrap"
       "core.result.Result.unwrap";
     (* file: "Aeneas/Std/Slice.lean", line: 225 *)

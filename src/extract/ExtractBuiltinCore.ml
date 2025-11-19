@@ -97,8 +97,8 @@ let mk_fun ?(filter : bool list option = None) ?(can_fail = true)
   (rust_name, f)
 
 let mk_type ?(keep_params : bool list option = None)
-    ?(kind : type_variant_kind = KOpaque) (rust_name : string)
-    (extract_name : string) : Pure.builtin_type_info =
+    ?(kind : type_variant_kind = KOpaque) ?(prefix_variant_names : bool = true)
+    (rust_name : string) (extract_name : string) : Pure.builtin_type_info =
   let pattern = parse_pattern rust_name in
   let body_info : Pure.builtin_type_body_info option =
     match kind with
@@ -127,7 +127,10 @@ let mk_type ?(keep_params : bool list option = None)
                 | Some variant -> variant
                 | None -> variant
               in
-              let extract_variant_name = extract_name ^ "." ^ evariant in
+              let extract_variant_name =
+                if prefix_variant_names then extract_name ^ "." ^ evariant
+                else evariant
+              in
               ({
                  rust_variant_name = variant;
                  extract_variant_name;
