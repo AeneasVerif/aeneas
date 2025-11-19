@@ -329,10 +329,7 @@ theorem alloc.vec.FromBoxSliceVec.from_spec {T : Type} (v : alloc.vec.Vec T) :
   ∃ s, alloc.vec.FromBoxSliceVec.from v = ok s ∧ s.length = v.length ∧ s.val = v.val := by
   simp [alloc.vec.FromBoxSliceVec.from]
 
-/- Trait implementation: [alloc::vec::{core::convert::From<alloc::vec::Vec<T, A>> for alloc::boxed::Box<@Slice<T>>}#39]
-   Source: '/rustc/library/alloc/src/vec/mod.rs', lines 3945:0-3945:53
-   Name pattern: [core::convert::From<Box<[@T]>, alloc::vec::Vec<@T, @A>>] -/
-@[reducible]
+@[reducible, rust_trait_impl "core::convert::From<Box<[@T]>, alloc::vec::Vec<@T>>" (filterParams := [true, false])]
 def core.convert.FromBoxSliceVec (T : Type) :
   core.convert.From (Slice T) (alloc.vec.Vec T) := {
   from_ := alloc.vec.FromBoxSliceVec.from

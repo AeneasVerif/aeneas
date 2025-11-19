@@ -117,8 +117,7 @@ def core.convert.IntoFrom.into {T : Type} {U : Type}
   (fromInst : core.convert.From U T) (x : T) : Result U :=
   fromInst.from_ x
 
-/- Trait implementation: [core::convert::{core::convert::Into<U> for T}] -/
-@[reducible]
+@[reducible, rust_trait_impl "core::convert::Into<@Self, @T>"]
 def core.convert.IntoFrom {T : Type} {U : Type} (fromInst : core.convert.From U T)
   : core.convert.Into T U := {
   into := core.convert.IntoFrom.into fromInst
@@ -127,8 +126,7 @@ def core.convert.IntoFrom {T : Type} {U : Type} (fromInst : core.convert.From U 
 @[simp, progress_simps, rust_fun "core::convert::{core::convert::From<@T, @T>}::from" -canFail]
 def core.convert.FromSame.from_ {T : Type} (x : T) : T := x
 
-/- [core::convert::{core::convert::From<T> for T}] -/
-@[reducible]
+@[reducible, rust_trait_impl "core::convert::From<@Self, @Self>"]
 def core.convert.FromSame (T : Type) : core.convert.From T T := {
   from_ := fun x => ok (core.convert.FromSame.from_ x)
 }
@@ -154,7 +152,7 @@ def core.convert.TryIntoFrom.try_into {T U : Type} (fromInst : core.convert.TryF
   (x : T) : Result (core.result.Result U fromInst.Error) :=
   fromInst.try_from x
 
-@[reducible]
+@[reducible, rust_trait_impl "core::convert::{core::convert::TryInto<@T, @U>}"]
 def core.convert.TryIntoFrom {T U : Type} (fromInst : core.convert.TryFrom U T) :
   core.convert.TryInto T U := {
   Error := fromInst.Error
@@ -164,8 +162,7 @@ def core.convert.TryIntoFrom {T U : Type} (fromInst : core.convert.TryFrom U T) 
 structure core.convert.AsMut (Self : Type) (T : Type) where
   as_mut : Self → Result (T × (T → Self))
 
-/- [alloc::boxed::{core::convert::AsMut<T> for alloc::boxed::Box<T>}] -/
-@[reducible]
+@[reducible, rust_trait_impl "core::convert::AsMut<Box<@T>, @T>"]
 def core.convert.AsMutBox (T : Type) : core.convert.AsMut T T := {
   as_mut := fun x => ok (alloc.boxed.AsMutBox.as_mut x)
 }

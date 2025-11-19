@@ -308,28 +308,29 @@ let builtin_trait_decls_info () =
     mk_trait "core::marker::Copy" ~parent_clauses:[ "cloneInst" ] ();
   ]
   @ mk_lean_only
-      [
-        (* Into *)
-        mk_trait "core::convert::Into" ~types:[ "T"; "U" ] ~methods:[ "into" ]
-          ();
-        (* Debug *)
-        mk_trait "core::fmt::Debug" ~types:[ "T" ] ~methods:[ "fmt" ] ();
-        (* *)
-        mk_trait "core::convert::TryFrom" ~methods:[ "try_from" ] ();
-        mk_trait "core::convert::TryInto" ~methods:[ "try_into" ] ();
-        mk_trait "core::convert::AsMut" ~methods:[ "as_mut" ] ();
-        (* Eq, Ord *)
-        mk_trait "core::cmp::PartialEq" ~methods:[ "eq"; "ne" ] ();
-        mk_trait "core::cmp::Eq" ~parent_clauses:[ "partialEqInst" ] ();
-        mk_trait "core::cmp::PartialOrd" ~parent_clauses:[ "partialEqInst" ]
-          ~methods:[ "partial_cmp"; "lt"; "le"; "gt"; "ge" ]
-          ();
-        mk_trait "core::cmp::Ord"
-          ~parent_clauses:[ "eqInst"; "partialOrdInst" ]
-          ~methods:[ "cmp"; "max"; "min"; "clamp" ]
-          ();
-        mk_trait "core::default::Default" ~methods:[ "default" ] ();
-      ]
+      ([
+         (* Into *)
+         mk_trait "core::convert::Into" ~types:[ "T"; "U" ] ~methods:[ "into" ]
+           ();
+         (* Debug *)
+         mk_trait "core::fmt::Debug" ~types:[ "T" ] ~methods:[ "fmt" ] ();
+         (* *)
+         mk_trait "core::convert::TryFrom" ~methods:[ "try_from" ] ();
+         mk_trait "core::convert::TryInto" ~methods:[ "try_into" ] ();
+         mk_trait "core::convert::AsMut" ~methods:[ "as_mut" ] ();
+         (* Eq, Ord *)
+         mk_trait "core::cmp::PartialEq" ~methods:[ "eq"; "ne" ] ();
+         mk_trait "core::cmp::Eq" ~parent_clauses:[ "partialEqInst" ] ();
+         mk_trait "core::cmp::PartialOrd" ~parent_clauses:[ "partialEqInst" ]
+           ~methods:[ "partial_cmp"; "lt"; "le"; "gt"; "ge" ]
+           ();
+         mk_trait "core::cmp::Ord"
+           ~parent_clauses:[ "eqInst"; "partialOrdInst" ]
+           ~methods:[ "cmp"; "max"; "min"; "clamp" ]
+           ();
+         mk_trait "core::default::Default" ~methods:[ "default" ] ();
+       ]
+      @ lean_builtin_trait_decls)
 
 let mk_builtin_trait_decls_map () =
   NameMatcherMap.of_list
@@ -424,54 +425,8 @@ let builtin_trait_impls_info () : (pattern * Pure.builtin_trait_impl_info) list
       ~filter:(Some [ true; false ])
       ();
   ]
-  @ mk_lean_only
-      [
-        (* Into<T, U: From<T>> *)
-        fmt "core::convert::Into<@Self, @T>"
-          ~extract_name:(Some "core::convert::IntoFrom") ();
-        (* From<T, T> *)
-        fmt "core::convert::From<@Self, @Self>"
-          ~extract_name:(Some "core::convert::FromSame") ();
-        (* TryInto<T, U : TryFrom<T>> *)
-        fmt "core::convert::{core::convert::TryInto<@T, @U>}"
-          ~extract_name:(Some "core::convert::TryIntoFrom") ();
-        fmt
-          "core::slice::index::private_slice_index::Sealed<core::ops::range::RangeFrom<usize>>"
-          ~extract_name:
-            (Some
-               "core::slice::index::private_slice_index::SealedRangeFromUsize")
-          ();
-        fmt
-          "core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, \
-           [@T], [@T]>"
-          ~extract_name:
-            (Some "core::slice::index::SliceIndexRangeFromUsizeSlice") ();
-        fmt
-          "core::slice::index::private_slice_index::Sealed<core::ops::range::RangeTo<usize>>"
-          ~extract_name:
-            (Some "core.slice.index.private_slice_index.SealedRangeToUsize") ();
-        fmt
-          "core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, \
-           [@T], [@T]>"
-          ~extract_name:(Some "core.slice.index.SliceIndexRangeToUsizeSlice") ();
-        fmt "core::convert::AsMut<Box<@T>, @T>"
-          ~extract_name:(Some "core.convert.AsMutBox")
-          ~filter:(Some [ true; false ])
-          ();
-        fmt "core::clone::Clone<[@T; @N]>" ();
-        fmt "core::convert::From<Box<[@T]>, alloc::vec::Vec<@T>>"
-          ~extract_name:(Some "core.convert.FromBoxSliceVec")
-          ~filter:(Some [ true; false ])
-          ();
-        (* This function actually does not exist in Rust: rustc generates
-           an implementation for each concrete choice of const generic @N.
-           On our side, we define a unique model generic in @N for the cases
-           where @N != 0. *)
-        fmt "core::default::Default<[@T; @N]>"
-          ~extract_name:(Some "core.default.DefaultArray") ();
-        fmt "core::default::Default<[@T; 0]>"
-          ~extract_name:(Some "core.default.DefaultArrayEmpty") ();
-      ]
+  @ mk_not_lean []
+  @ mk_lean_only lean_builtin_trait_impls
   (* From<INT, bool> *)
   @ List.map
       (fun ty ->

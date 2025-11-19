@@ -60,6 +60,8 @@ type type_variant_kind =
       (** Contains the list of (field rust name, field extracted name) *)
   | KEnum of (string * string option) list
 
+let mk_lean_struct_constructor (type_name : string) : string = type_name ^ ".mk"
+
 let mk_struct_constructor (type_name : string) : string =
   let prefix =
     match backend () with
@@ -116,7 +118,7 @@ let mk_type ?(keep_params : bool list option = None)
                 | Some name -> name ))
             fields
         in
-        let constructor = extract_name ^ ".mk" in
+        let constructor = mk_lean_struct_constructor extract_name in
         Some (Struct (constructor, fields))
     | KEnum variants ->
         let variants =
@@ -142,3 +144,43 @@ let mk_type ?(keep_params : bool list option = None)
         Some (Enum variants)
   in
   { rust_name = pattern; extract_name; keep_params; body_info }
+
+let mk_trait ?(parent_clauses : string list = [])
+    ?(consts : (string * string) list = [])
+    ?(types : (string * string) list = [])
+    ?(methods : (string * string) list = [])
+    ?(default_methods : string list = []) (rust_name : string)
+    (extract_name : string) : Pure.builtin_trait_decl_info =
+  let rust_name = parse_pattern rust_name in
+  let constructor = mk_lean_struct_constructor extract_name in
+  let default_methods = Collections.StringSet.of_list default_methods in
+  let methods =
+    List.map
+      (fun (rname, lname) ->
+        ( rname,
+          ({
+             filter_params = None;
+             extract_name = lname;
+             can_fail = true;
+             stateful = false;
+             lift = true;
+             has_default = Collections.StringSet.mem lname default_methods;
+           }
+            : Pure.builtin_fun_info) ))
+      methods
+  in
+  {
+    rust_name;
+    extract_name;
+    constructor;
+    parent_clauses;
+    consts;
+    types;
+    methods;
+  }
+
+let mk_trait_impl ?(filter_params : bool list option = None)
+    (rust_name : string) (extract_name : string) :
+    pattern * Pure.builtin_trait_impl_info =
+  let rust_name = parse_pattern rust_name in
+  (rust_name, { extract_name; filter_params })

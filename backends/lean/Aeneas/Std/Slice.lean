@@ -314,10 +314,7 @@ def core.slice.index.SliceIndexRangeUsizeSliceInst (T : Type) :
   index_mut := core.slice.index.SliceIndexRangeUsizeSlice.index_mut
 }
 
-/- Trait implementation: [core::slice::index::private_slice_index::{core::slice::index::private_slice_index::Sealed for core::ops::range::RangeTo<usize>}#2]
-   Source: '/rustc/library/core/src/slice/index.rs', lines 133:4-133:39
-   Name pattern: [core::slice::index::private_slice_index::Sealed<core::ops::range::RangeTo<usize>>] -/
-@[reducible]
+@[reducible, rust_trait_impl "core::slice::index::private_slice_index::Sealed<core::ops::range::RangeTo<usize>>"]
 def core.slice.index.private_slice_index.SealedRangeToUsize :
   core.slice.index.private_slice_index.Sealed (core.ops.range.RangeTo Usize)
   := {}
@@ -376,10 +373,7 @@ def core.slice.index.SliceIndexRangeToUsizeSlice.index_mut
         else s )
   else fail .panic
 
-/- Trait implementation: [core::slice::index::{core::slice::index::SliceIndex<@Slice<T>, @Slice<T>> for core::ops::range::RangeTo<usize>}#6]
-   Source: '/rustc/library/core/src/slice/index.rs', lines 495:0-495:54
-   Name pattern: [core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>] -/
-@[reducible]
+@[reducible, rust_trait_impl "core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>"]
 def core.slice.index.SliceIndexRangeToUsizeSlice (T : Type) :
   core.slice.index.SliceIndex (core.ops.range.RangeTo Usize) (Slice T) (Slice
   T) := {
@@ -520,14 +514,12 @@ theorem _SliceIndexRangeFromUsizeSlice.index_mut.test {T} (s : Slice T) (r : cor
   unfold core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut
   simp [h]
 
-/- Trait implementation: [core::slice::index::private_slice_index::{core::slice::index::private_slice_index::Sealed for core::ops::range::RangeFrom<usize>}] -/
-@[reducible]
+@[reducible, rust_trait_impl "core::slice::index::private_slice_index::Sealed<core::ops::range::RangeFrom<usize>>"]
 def core.slice.index.private_slice_index.SealedRangeFromUsize :
   core.slice.index.private_slice_index.Sealed (core.ops.range.RangeFrom Usize)
   := {}
 
-/- Trait implementation: [core::slice::index::{core::slice::index::SliceIndex<[T]> for core::ops::range::RangeFrom<usize>}] -/
-@[reducible]
+@[reducible, rust_trait_impl "core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, [@T], [@T]>"]
 def core.slice.index.SliceIndexRangeFromUsizeSlice (T : Type) :
   core.slice.index.SliceIndex (core.ops.range.RangeFrom Usize) (Slice T) (Slice T) := {
   sealedInst :=
