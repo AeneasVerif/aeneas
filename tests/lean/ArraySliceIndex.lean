@@ -24,13 +24,13 @@ def slice_use_get_range_from
 /- [array_slice_index::slice_use_index_range]:
    Source: 'tests/src/array_slice_index.rs', lines 13:0-15:1 -/
 def slice_use_index_range (s : Slice U32) : Result (Slice U32) := do
-  core.slice.index.Slice.index (core.slice.index.SliceIndexRangeUsizeSliceInst
-    U32) s { start := 0#usize, end_ := 1#usize }
+  core.slice.index.Slice.index (core.slice.index.SliceIndexRangeUsizeSlice U32)
+    s { start := 0#usize, end_ := 1#usize }
 
 /- [array_slice_index::slice_use_get_range]:
    Source: 'tests/src/array_slice_index.rs', lines 17:0-19:1 -/
 def slice_use_get_range (s : Slice U32) : Result (Option (Slice U32)) := do
-  core.slice.Slice.get (core.slice.index.SliceIndexRangeUsizeSliceInst U32) s
+  core.slice.Slice.get (core.slice.index.SliceIndexRangeUsizeSlice U32) s
     { start := 0#usize, end_ := 1#usize }
 
 /- [array_slice_index::slice_use_index_mut_range_from]:

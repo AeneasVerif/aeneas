@@ -191,33 +191,33 @@ def Vec.index_mut {T I Output : Type} (inst : core.slice.index.SliceIndex I (Sli
   Result (Output × (Output → Vec T)) :=
   inst.index_mut i self
 
-/- Trait implementation: [alloc::vec::Vec] -/
-@[reducible]
-def Vec.IndexInst {T I Output : Type}
+@[reducible,
+  rust_trait_impl "core::ops::index::Index<alloc::vec::Vec<@T>, @T, @O>" (filterParams := [true, true, false, true])]
+def Vec.Index {T I Output : Type}
   (inst : core.slice.index.SliceIndex I (Slice T) Output) :
   core.ops.index.Index (alloc.vec.Vec T) I Output := {
   index := Vec.index inst
 }
 
-/- Trait implementation: [alloc::vec::Vec] -/
-@[reducible]
-def Vec.IndexMutInst {T I Output : Type}
+@[reducible,
+  rust_trait_impl "core::ops::index::IndexMut<alloc::vec::Vec<@T>, @T, @O>" (filterParams := [true, true, false, true])]
+def Vec.IndexMut {T I Output : Type}
   (inst : core.slice.index.SliceIndex I (Slice T) Output) :
   core.ops.index.IndexMut (alloc.vec.Vec T) I Output := {
-  indexInst := Vec.IndexInst inst
+  indexInst := Vec.Index inst
   index_mut := Vec.index_mut inst
 }
 
 @[simp, progress_simps]
 theorem Vec.index_slice_index {α : Type} (v : Vec α) (i : Usize) :
-  Vec.index (core.slice.index.SliceIndexUsizeSliceInst α) v i =
+  Vec.index (core.slice.index.SliceIndexUsizeSlice α) v i =
   Vec.index_usize v i := by
   simp [Vec.index, Vec.index_usize, Slice.index_usize]
   rfl
 
 @[simp, progress_simps]
 theorem Vec.index_mut_slice_index {α : Type} (v : Vec α) (i : Usize) :
-  Vec.index_mut (core.slice.index.SliceIndexUsizeSliceInst α) v i =
+  Vec.index_mut (core.slice.index.SliceIndexUsizeSlice α) v i =
   index_mut_usize v i := by
   simp [Vec.index_mut, Vec.index_mut_usize, Slice.index_mut_usize]
   rfl
@@ -273,7 +273,7 @@ def alloc.vec.Vec.extend_from_slice {T : Type} (cloneInst : core.clone.Clone T)
 def alloc.vec.Vec.deref {T : Type} (v : alloc.vec.Vec T) : Slice T :=
   ⟨ v.val, v.property ⟩
 
-@[reducible]
+@[reducible, rust_trait_impl "core::ops::deref::Deref<alloc::vec::Vec<@T>, [@T]>" (filterParams := [true, false])]
 def core.ops.deref.DerefVec {T : Type} : core.ops.deref.Deref (alloc.vec.Vec T) (Slice T) := {
   deref := fun v => ok (alloc.vec.Vec.deref v)
 }
@@ -284,10 +284,7 @@ def alloc.vec.Vec.deref_mut {T : Type} (v :  alloc.vec.Vec T) :
    (Slice T) × (Slice T → alloc.vec.Vec T) :=
    (⟨ v.val, v.property ⟩, λ s => ⟨ s.val, s.property ⟩)
 
-/- Trait implementation: [alloc::vec::{(core::ops::deref::DerefMut for alloc::vec::Vec<T, A>)#10}]
-   Source: '/rustc/d59363ad0b6391b7fc5bbb02c9ccf9300eef3753/library/alloc/src/vec/mod.rs', lines 2630:0-2630:49
-   Name pattern: core::ops::deref::DerefMut<alloc::vec::Vec<@Self, @>> -/
-@[reducible]
+@[reducible, rust_trait_impl "core::ops::deref::DerefMut<alloc::vec::Vec<@T>, [@T]>" (filterParams := [true, false])]
 def core.ops.deref.DerefMutVec {T : Type} :
   core.ops.deref.DerefMut (alloc.vec.Vec T) (Slice T):= {
   derefInst := core.ops.deref.DerefVec

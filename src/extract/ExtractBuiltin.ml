@@ -356,76 +356,76 @@ let builtin_trait_impls_info () : (pattern * Pure.builtin_trait_impl_info) list
     in
     (rust_name, { filter_params = filter; extract_name = name })
   in
-  [
-    (* core::ops::Deref<alloc::boxed::Box<T>> *)
-    fmt "core::ops::deref::Deref<Box<@T>, @T>"
-      ~extract_name:(Some "core::ops::deref::DerefBoxInst") ();
-    (* core::ops::DerefMut<alloc::boxed::Box<T>> *)
-    fmt "core::ops::deref::DerefMut<Box<@T>, @T>"
-      ~extract_name:(Some "core::ops::deref::DerefBoxMutInst") ();
-    (* core::ops::Deref<alloc::vec::Vec<T>> *)
-    fmt "core::ops::deref::Deref<alloc::vec::Vec<@T>, [@T]>"
-      ~extract_name:(Some "core::ops::deref::DerefVecInst")
-      ~filter:(Some [ true; false ])
-      ();
-    (* core::ops::DerefMut<alloc::vec::Vec<T>> *)
-    fmt "core::ops::deref::DerefMut<alloc::vec::Vec<@T>, [@T]>"
-      ~extract_name:(Some "core::ops::deref::DerefMutVecInst")
-      ~filter:(Some [ true; false ])
-      ();
-    (* core::ops::index::Index<[T], I> *)
-    fmt "core::ops::index::Index<[@T], @I, @O>"
-      ~extract_name:(Some "core::ops::index::IndexSliceInst") ();
-    (* core::ops::index::IndexMut<[T], I> *)
-    fmt "core::ops::index::IndexMut<[@T], @I, @O>"
-      ~extract_name:(Some "core::ops::index::IndexMutSliceInst") ();
-    (* core::slice::index::private_slice_index::Sealed<Range<usize>> *)
-    fmt
-      "core::slice::index::private_slice_index::Sealed<core::ops::range::Range<usize>>"
-      ~extract_name:
-        (Some "core.slice.index.private_slice_index.SealedRangeUsizeInst") ();
-    (* core::slice::index::SliceIndex<Range<usize>, [T]> *)
-    fmt
-      "core::slice::index::SliceIndex<core::ops::range::Range<usize>, [@T], \
-       [@T]>"
-      ~extract_name:(Some "core::slice::index::SliceIndexRangeUsizeSliceInst")
-      ();
-    (* core::ops::index::Index<[T; N], I> *)
-    fmt "core::ops::index::Index<[@T; @N], @I, @O>"
-      ~extract_name:(Some "core::ops::index::IndexArrayInst") ();
-    (* core::ops::index::IndexMut<[T; N], I> *)
-    fmt "core::ops::index::IndexMut<[@T; @N], @I, @O>"
-      ~extract_name:(Some "core::ops::index::IndexMutArrayInst") ();
-    (* core::slice::index::private_slice_index::Sealed<usize> *)
-    fmt "core::slice::index::private_slice_index::Sealed<usize>"
-      ~extract_name:
-        (Some "core::slice::index::private_slice_index::SealedUsizeInst") ();
-    (* core::slice::index::SliceIndex<usize, [T]> *)
-    fmt "core::slice::index::SliceIndex<usize, [@T], @T>"
-      ~extract_name:(Some "core::slice::index::SliceIndexUsizeSliceInst") ();
-    (* core::ops::index::Index<alloc::vec::Vec<T>, T> *)
-    fmt "core::ops::index::Index<alloc::vec::Vec<@T>, @T, @O>"
-      ~extract_name:(Some "alloc::vec::Vec::IndexInst")
-      ~filter:(Some [ true; true; false; true ])
-      ();
-    (* core::ops::index::IndexMut<alloc::vec::Vec<T>, T> *)
-    fmt "core::ops::index::IndexMut<alloc::vec::Vec<@T>, @T, @O>"
-      ~extract_name:(Some "alloc::vec::Vec::IndexMutInst")
-      ~filter:(Some [ true; true; false; true ])
-      ();
-    (* core::clone::impls::{core::clone::Clone for bool} *)
-    fmt "core::clone::Clone<bool>" ~extract_name:(Some "core::clone::CloneBool")
-      ();
-    fmt "core::ops::deref::Deref<alloc::vec::Vec<@Self>>"
-      ~extract_name:(Some "alloc.vec.DerefVec")
-      ~filter:(Some [ true; false ])
-      ();
-    fmt "core::ops::deref::DerefMut<alloc::vec::Vec<@Self>>"
-      ~extract_name:(Some "alloc.vec.DerefMutVec")
-      ~filter:(Some [ true; false ])
-      ();
-  ]
-  @ mk_not_lean []
+  mk_not_lean
+    [
+      (* core::ops::Deref<alloc::boxed::Box<T>> *)
+      fmt "core::ops::deref::Deref<Box<@T>, @T>"
+        ~extract_name:(Some "core::ops::deref::DerefBoxInst") ();
+      (* Core::ops::DerefMut<alloc::boxed::Box<T>> *)
+      fmt "core::ops::deref::DerefMut<Box<@T>, @T>"
+        ~extract_name:(Some "core::ops::deref::DerefBoxMutInst") ();
+      (* core::ops::Deref<alloc::vec::Vec<T>> *)
+      fmt "core::ops::deref::Deref<alloc::vec::Vec<@T>, [@T]>"
+        ~extract_name:(Some "core::ops::deref::DerefVecInst")
+        ~filter:(Some [ true; false ])
+        ();
+      (* core::ops::DerefMut<alloc::vec::Vec<T>> *)
+      fmt "core::ops::deref::DerefMut<alloc::vec::Vec<@T>, [@T]>"
+        ~extract_name:(Some "core::ops::deref::DerefMutVecInst")
+        ~filter:(Some [ true; false ])
+        ();
+      (* core::ops::index::Index<[T], I> *)
+      fmt "core::ops::index::Index<[@T], @I, @O>"
+        ~extract_name:(Some "core::ops::index::IndexSliceInst") ();
+      (* core::ops::index::IndexMut<[T], I> *)
+      fmt "core::ops::index::IndexMut<[@T], @I, @O>"
+        ~extract_name:(Some "core::ops::index::IndexMutSliceInst") ();
+      (* core::slice::index::private_slice_index::Sealed<Range<usize>> *)
+      fmt
+        "core::slice::index::private_slice_index::Sealed<core::ops::range::Range<usize>>"
+        ~extract_name:
+          (Some "core.slice.index.private_slice_index.SealedRangeUsizeInst") ();
+      (* core::slice::index::SliceIndex<Range<usize>, [T]> *)
+      fmt
+        "core::slice::index::SliceIndex<core::ops::range::Range<usize>, [@T], \
+         [@T]>"
+        ~extract_name:(Some "core::slice::index::SliceIndexRangeUsizeSliceInst")
+        ();
+      (* core::ops::index::Index<[T; N], I> *)
+      fmt "core::ops::index::Index<[@T; @N], @I, @O>"
+        ~extract_name:(Some "core::ops::index::IndexArrayInst") ();
+      (* core::ops::index::IndexMut<[T; N], I> *)
+      fmt "core::ops::index::IndexMut<[@T; @N], @I, @O>"
+        ~extract_name:(Some "core::ops::index::IndexMutArrayInst") ();
+      (* core::slice::index::private_slice_index::Sealed<usize> *)
+      fmt "core::slice::index::private_slice_index::Sealed<usize>"
+        ~extract_name:
+          (Some "core::slice::index::private_slice_index::SealedUsizeInst") ();
+      (* core::slice::index::SliceIndex<usize, [T]> *)
+      fmt "core::slice::index::SliceIndex<usize, [@T], @T>"
+        ~extract_name:(Some "core::slice::index::SliceIndexUsizeSliceInst") ();
+      (* core::ops::index::Index<alloc::vec::Vec<T>, T> *)
+      fmt "core::ops::index::Index<alloc::vec::Vec<@T>, @T, @O>"
+        ~extract_name:(Some "alloc::vec::Vec::IndexInst")
+        ~filter:(Some [ true; true; false; true ])
+        ();
+      (* core::ops::index::IndexMut<alloc::vec::Vec<T>, T> *)
+      fmt "core::ops::index::IndexMut<alloc::vec::Vec<@T>, @T, @O>"
+        ~extract_name:(Some "alloc::vec::Vec::IndexMutInst")
+        ~filter:(Some [ true; true; false; true ])
+        ();
+      fmt "core::ops::deref::Deref<alloc::vec::Vec<@Self>>"
+        ~extract_name:(Some "alloc.vec.DerefVec")
+        ~filter:(Some [ true; false ])
+        ();
+      fmt "core::ops::deref::DerefMut<alloc::vec::Vec<@Self>>"
+        ~extract_name:(Some "alloc.vec.DerefMutVec")
+        ~filter:(Some [ true; false ])
+        ();
+      (* core::clone::impls::{core::clone::Clone for bool} *)
+      fmt "core::clone::Clone<bool>"
+        ~extract_name:(Some "core::clone::CloneBool") ();
+    ]
   @ mk_lean_only lean_builtin_trait_impls
   (* From<INT, bool> *)
   @ List.map

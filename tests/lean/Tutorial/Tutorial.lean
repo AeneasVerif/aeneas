@@ -224,8 +224,7 @@ def zero_loop
   if i < i1
   then
     let (_, index_mut_back) ←
-      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSliceInst U32) x
-        i
+      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice U32) x i
     let i2 ← i + 1#usize
     let x1 := index_mut_back 0#u32
     zero_loop x1 i2
@@ -248,10 +247,9 @@ def add_no_overflow_loop
   if i < i1
   then
     let i2 ←
-      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceInst U32) y i
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice U32) y i
     let (i3, index_mut_back) ←
-      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSliceInst U32) x
-        i
+      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice U32) x i
     let i4 ← i3 + i2
     let i5 ← i + 1#usize
     let x1 := index_mut_back i4
@@ -278,20 +276,19 @@ def add_with_carry_loop
   if i < i1
   then
     let i2 ←
-      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceInst U32) x i
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice U32) x i
     let i3 ← (↑(UScalar.cast .U32 c0) : Result U32)
     let (sum, c1) ←
       (↑(core.num.U32.overflowing_add i2 i3) : Result (U32 × Bool))
     let i4 ←
-      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceInst U32) y i
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice U32) y i
     let (sum1, c2) ←
       (↑(core.num.U32.overflowing_add sum i4) : Result (U32 × Bool))
     let i5 ← (↑(UScalar.cast_fromBool .U8 c1) : Result U8)
     let i6 ← (↑(UScalar.cast_fromBool .U8 c2) : Result U8)
     let c01 ← i5 + i6
     let (_, index_mut_back) ←
-      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSliceInst U32) x
-        i
+      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice U32) x i
     let i7 ← i + 1#usize
     let x1 := index_mut_back sum1
     add_with_carry_loop x1 y c01 i7
@@ -319,7 +316,7 @@ def max (x : Usize) (y : Usize) : Result Usize := do
 def get_or_zero (y : alloc.vec.Vec U32) (i : Usize) : Result U32 := do
   let i1 := alloc.vec.Vec.len y
   if i < i1
-  then alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceInst U32) y i
+  then alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice U32) y i
   else ok 0#u32
 
 /- [tutorial::add]: loop 0:
@@ -333,7 +330,7 @@ def add_loop
   then
     let yi ← get_or_zero y i
     let i1 ←
-      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceInst U32) x i
+      alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice U32) x i
     let i2 ← (↑(UScalar.cast .U32 c0) : Result U32)
     let (sum, c1) ←
       (↑(core.num.U32.overflowing_add i1 i2) : Result (U32 × Bool))
@@ -343,8 +340,7 @@ def add_loop
     let i4 ← (↑(UScalar.cast_fromBool .U8 c2) : Result U8)
     let c01 ← i3 + i4
     let (_, index_mut_back) ←
-      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSliceInst U32) x
-        i
+      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice U32) x i
     let i5 ← i + 1#usize
     let x1 := index_mut_back sum1
     add_loop x1 y max1 c01 i5

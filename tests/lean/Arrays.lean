@@ -89,8 +89,8 @@ def index_mut_slice
    Source: 'tests/src/arrays.rs', lines 68:0-70:1 -/
 def slice_subslice_shared_
   (x : Slice U32) (y : Usize) (z : Usize) : Result (Slice U32) := do
-  core.slice.index.Slice.index (core.slice.index.SliceIndexRangeUsizeSliceInst
-    U32) x { start := y, end_ := z }
+  core.slice.index.Slice.index (core.slice.index.SliceIndexRangeUsizeSlice U32)
+    x { start := y, end_ := z }
 
 /- [arrays::slice_subslice_mut_]:
    Source: 'tests/src/arrays.rs', lines 72:0-74:1 -/
@@ -98,9 +98,8 @@ def slice_subslice_mut_
   (x : Slice U32) (y : Usize) (z : Usize) :
   Result ((Slice U32) × (Slice U32 → Slice U32))
   := do
-  core.slice.index.Slice.index_mut
-    (core.slice.index.SliceIndexRangeUsizeSliceInst U32) x
-    { start := y, end_ := z }
+  core.slice.index.Slice.index_mut (core.slice.index.SliceIndexRangeUsizeSlice
+    U32) x { start := y, end_ := z }
 
 /- [arrays::array_to_slice_shared_]:
    Source: 'tests/src/arrays.rs', lines 76:0-78:1 -/
@@ -119,8 +118,8 @@ def array_to_slice_mut_
    Source: 'tests/src/arrays.rs', lines 84:0-86:1 -/
 def array_subslice_shared_
   (x : Array U32 32#usize) (y : Usize) (z : Usize) : Result (Slice U32) := do
-  core.array.Array.index (core.ops.index.IndexSliceInst
-    (core.slice.index.SliceIndexRangeUsizeSliceInst U32)) x
+  core.array.Array.index (core.ops.index.IndexSlice
+    (core.slice.index.SliceIndexRangeUsizeSlice U32)) x
     { start := y, end_ := z }
 
 /- [arrays::array_subslice_mut_]:
@@ -129,8 +128,8 @@ def array_subslice_mut_
   (x : Array U32 32#usize) (y : Usize) (z : Usize) :
   Result ((Slice U32) × (Slice U32 → Array U32 32#usize))
   := do
-  core.array.Array.index_mut (core.ops.index.IndexMutSliceInst
-    (core.slice.index.SliceIndexRangeUsizeSliceInst U32)) x
+  core.array.Array.index_mut (core.ops.index.IndexMutSlice
+    (core.slice.index.SliceIndexRangeUsizeSlice U32)) x
     { start := y, end_ := z }
 
 /- [arrays::index_slice_0]:
@@ -328,8 +327,8 @@ def incr_slice (x : Slice U32) : Result (Slice U32) := do
 def range_all : Result Unit := do
   let x := Array.repeat 4#usize 0#u32
   let (s, _) ←
-    core.array.Array.index_mut (core.ops.index.IndexMutSliceInst
-      (core.slice.index.SliceIndexRangeUsizeSliceInst U32)) x
+    core.array.Array.index_mut (core.ops.index.IndexMutSlice
+      (core.slice.index.SliceIndexRangeUsizeSlice U32)) x
       { start := 1#usize, end_ := 3#usize }
   let _ ← update_mut_slice s
   ok ()
@@ -423,8 +422,8 @@ def f2 (i : U32) : Result Unit := do
    Source: 'tests/src/arrays.rs', lines 312:0-314:1 -/
 def f4
   (x : Array U32 32#usize) (y : Usize) (z : Usize) : Result (Slice U32) := do
-  core.array.Array.index (core.ops.index.IndexSliceInst
-    (core.slice.index.SliceIndexRangeUsizeSliceInst U32)) x
+  core.array.Array.index (core.ops.index.IndexSlice
+    (core.slice.index.SliceIndexRangeUsizeSlice U32)) x
     { start := y, end_ := z }
 
 /- [arrays::f3]:

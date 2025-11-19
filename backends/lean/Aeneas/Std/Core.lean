@@ -62,7 +62,7 @@ def clone.Clone.from_from.default {Self : Type} (clone : Self → Result Self)
 @[reducible, simp, progress_simps]
 def clone.impls.CloneBool.clone (b : Bool) : Bool := b
 
-@[reducible]
+@[reducible, rust_trait_impl "core::clone::Clone<bool>"]
 def clone.CloneBool : clone.Clone Bool := {
   clone := fun b => ok (clone.impls.CloneBool.clone b)
   clone_from := fun _ b => ok (clone.impls.CloneBool.clone b)
