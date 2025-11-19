@@ -140,7 +140,12 @@ structure Span where
 deriving Inhabited
 
 /- Remark: we retrieve the span of some syntax, rather than a definition (by using `findDeclarationRange?`)
-   because when processing the attribute the range is not saved in the environment yet.
+   because:
+  - when processing the attribute the range is not saved in the environment yet
+  - it can happen that the attribute is not added exactly on the definition, when we're mapping a Rust definition
+    to a definition in the Lean standard library for instance (in that case, we write somewhere `attribute [rust_type "..."] ...`).
+    When this happens, the most important information is to know where the attribute was written, not where the definition
+    is (we can always jump to the definition from where the attribute is declared).
 
    TODO: how to retrieve the file in which a definition was defined?
    For now I can only retrieve the name of the current file and the code of `Lean/Server/Goto.lean`
