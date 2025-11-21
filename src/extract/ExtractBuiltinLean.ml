@@ -38,6 +38,8 @@ let lean_builtin_types =
       ~kind:(KEnum [ ("Ok", Some "Ok"); ("Err", Some "Err") ]);
   ]
 
+let lean_builtin_consts = []
+
 let lean_builtin_funs =
   [
     (* file: "Aeneas/Std/Core.lean", line: 13 *)

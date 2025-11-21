@@ -64,11 +64,11 @@ instance : ToMessageData TypeInfo where
   toMessageData x :=
     m!"\{ extract : {x.extract},\n  keepParams : {x.keepParams},\n  body : {x.body} }"
 
-structure GlobalInfo where
+structure ConstInfo where
   extract : Option String := none
 deriving Repr, Inhabited
 
-instance : ToMessageData GlobalInfo where
+instance : ToMessageData ConstInfo where
   toMessageData x :=
     m!"\{ extract : {x.extract} }"
 
@@ -645,6 +645,49 @@ initialize rustTraitImpls : Attribute TraitImpl ← do
     elabTraitImplNameInfo processTraitImpl
 
 /-!
+# Consts
+-/
+
+/- Cheating a bit: we elaborate the optional information by using the command config elaborator.
+   This allows to have nice syntax for optional fields and at a small cost. -/
+declare_command_config_elab elabRustConstInfo ConstInfo
+
+/-- Declare that a definition models a Rust top-level const.
+
+The syntax is `rust_const "NAME_PATTERN"`. The name pattern is given by Aeneas when generating
+a declaration for a missing definition: one just has to copy-paste it.
+-/
+syntax (name := rustConst) "rust_const" str Parser.Tactic.optConfig : attr
+
+def elabConstNameInfo (stx : Syntax) : AttrM (String × ConstInfo) :=
+  withRef stx do
+    match stx with
+    | `(attr| rust_trait_impl $pat $config) => do
+      let pat := pat.getString
+      if pat = "" then throwError "Not a valid name pattern: {pat}"
+      let info ← liftCommandElabM (elabRustConstInfo config)
+      pure (pat, info)
+    | _ => Lean.Elab.throwUnsupportedSyntax
+
+/-- This helper completes the information available in the information provided by the user by
+    looking at the definition itself. -/
+def processConst (declName : Name) (_pat : String) (info : ConstInfo) : AttrM ConstInfo := do
+  trace[Extract] "declName: {declName}"
+  -- Retrieve the extraction name
+  let extract : String ← do
+    match info.extract with
+    | some name => pure name
+    | none =>
+      trace[Extract] "Generating the extraction name"
+      pure (← (removeNamePrefix declName)).toString
+  --
+  pure { info with extract }
+
+initialize rustConsts : Attribute ConstInfo ← do
+  mkAttribute `rustConstsArray `rustConst "Register Rust top-level const definitions"
+    elabConstNameInfo processConst
+
+/-!
 # Code Generation
 -/
 
@@ -681,6 +724,10 @@ def TypeInfo.toExtract (info : TypeInfo) : MessageData :=
     | .struct fields =>
       m!" ~kind:(KStruct {listToString (fields.map (fun ⟨ x, y ⟩ => (addQuotes x, "Some " ++ addQuotes (toString y))))})"
   m!"{extract}{keepParams}{prefixVariantNames}{body}"
+
+def ConstInfo.toExtract (info : ConstInfo) : MessageData :=
+  let extract := info.extract.getD "ERROR_MISSING_FIELD"
+  m!"\"{extract}\""
 
 def FunInfo.toExtract (info : FunInfo) : MessageData :=
   let extract := info.extract.getD "ERROR_MISSING_FIELD"
@@ -756,6 +803,15 @@ def write (env : Environment) (printLn : String → IO Unit) : IO Unit := do
   for (pat, span, info) in infos do
     printSpan span
     let msg ← m!"  mk_type \"{pat}\" {info.toExtract};".toString
+    printLn msg
+  printLn "]"
+  printLn ""
+  -- # Consts
+  let infos ← sortDescriptors (rustConsts.ext.getState env)
+  printLn "let lean_builtin_consts = ["
+  for (pat, span, info) in infos do
+    printSpan span
+    let msg ← m!"  mk_trait_impl \"{pat}\" {info.toExtract};".toString
     printLn msg
   printLn "]"
   printLn ""
