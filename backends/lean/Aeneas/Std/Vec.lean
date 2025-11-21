@@ -47,7 +47,7 @@ instance (α : Type u) : Inhabited (Vec α) := by
   constructor
   apply Vec.new
 
-@[simp, rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::len" -canFail -lift (filterParams := [true,false])]
+@[simp, rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::len" -canFail -lift (keepParams := [true,false])]
 abbrev Vec.len {α : Type u} (v : Vec α) : Usize :=
   Usize.ofNatCore v.val.length (by scalar_tac)
 
@@ -97,7 +97,7 @@ theorem Vec.set_opt_val_eq {α : Type u} (v: Vec α) (i: Usize) (x: Option α) :
   (v.set_opt i x) = v.val.set_opt i.val x := by
   simp [set_opt]
 
-@[irreducible, rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::push" (filterParams := [true,false])]
+@[irreducible, rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::push" (keepParams := [true,false])]
 def Vec.push {α : Type u} (v : Vec α) (x : α) : Result (Vec α)
   :=
   let nlen := List.length v.val + 1
@@ -114,7 +114,7 @@ theorem Vec.push_spec {α : Type u} (v : Vec α) (x : α) (h : v.val.length < Us
   split <;> simp_all
   scalar_tac
 
-@[rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::insert" (filterParams := [true, false])]
+@[rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::insert" (keepParams := [true, false])]
 def Vec.insert {α : Type u} (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
   if i.val < v.length then
     ok ⟨ v.val.set i x, by have := v.property; simp [*] ⟩
@@ -179,20 +179,20 @@ theorem Vec.index_mut_usize_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Us
   simp [h]
 
 @[rust_fun "alloc::vec::{core::ops::index::Index<alloc::vec::Vec<@T>, @I, @O>}::index"
-  (filterParams := [true,true,false, true])]
+  (keepParams := [true,true,false, true])]
 def Vec.index {T I Output : Type} (inst : core.slice.index.SliceIndex I (Slice T) Output)
   (self : Vec T) (i : I) : Result Output :=
   inst.index i self
 
 @[rust_fun "alloc::vec::{core::ops::index::IndexMut<alloc::vec::Vec<@T>, @I, @O>}::index_mut"
-  (filterParams := [true,true,false, true])]
+  (keepParams := [true,true,false, true])]
 def Vec.index_mut {T I Output : Type} (inst : core.slice.index.SliceIndex I (Slice T) Output)
   (self : Vec T) (i : I) :
   Result (Output × (Output → Vec T)) :=
   inst.index_mut i self
 
 @[reducible,
-  rust_trait_impl "core::ops::index::Index<alloc::vec::Vec<@T>, @T, @O>" (filterParams := [true, true, false, true])]
+  rust_trait_impl "core::ops::index::Index<alloc::vec::Vec<@T>, @T, @O>" (keepParams := [true, true, false, true])]
 def Vec.Index {T I Output : Type}
   (inst : core.slice.index.SliceIndex I (Slice T) Output) :
   core.ops.index.Index (alloc.vec.Vec T) I Output := {
@@ -200,7 +200,7 @@ def Vec.Index {T I Output : Type}
 }
 
 @[reducible,
-  rust_trait_impl "core::ops::index::IndexMut<alloc::vec::Vec<@T>, @T, @O>" (filterParams := [true, true, false, true])]
+  rust_trait_impl "core::ops::index::IndexMut<alloc::vec::Vec<@T>, @T, @O>" (keepParams := [true, true, false, true])]
 def Vec.IndexMut {T I Output : Type}
   (inst : core.slice.index.SliceIndex I (Slice T) Output) :
   core.ops.index.IndexMut (alloc.vec.Vec T) I Output := {
@@ -257,7 +257,7 @@ theorem alloc.vec.from_elem_spec {T : Type} (cloneInst : core.clone.Clone T)
 @[rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::with_capacity" -canFail -lift]
 def alloc.vec.Vec.with_capacity (T : Type) (_ : Usize) : alloc.vec.Vec T := Vec.new T
 
-@[rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::extend_from_slice" (filterParams := [true, false])]
+@[rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::extend_from_slice" (keepParams := [true, false])]
 def alloc.vec.Vec.extend_from_slice {T : Type} (cloneInst : core.clone.Clone T)
   (v : alloc.vec.Vec T) (s : Slice T) : Result (alloc.vec.Vec T) :=
   if h : v.length + s.length ≤ Usize.max then do
@@ -269,29 +269,29 @@ def alloc.vec.Vec.extend_from_slice {T : Type} (cloneInst : core.clone.Clone T)
   else fail .panic
 
 @[rust_fun "alloc::vec::{core::ops::deref::Deref<alloc::vec::Vec<@T>, [@T]>}::deref"
-           -canFail -lift (filterParams := [true, false])]
+           -canFail -lift (keepParams := [true, false])]
 def alloc.vec.Vec.deref {T : Type} (v : alloc.vec.Vec T) : Slice T :=
   ⟨ v.val, v.property ⟩
 
-@[reducible, rust_trait_impl "core::ops::deref::Deref<alloc::vec::Vec<@T>, [@T]>" (filterParams := [true, false])]
+@[reducible, rust_trait_impl "core::ops::deref::Deref<alloc::vec::Vec<@T>, [@T]>" (keepParams := [true, false])]
 def core.ops.deref.DerefVec {T : Type} : core.ops.deref.Deref (alloc.vec.Vec T) (Slice T) := {
   deref := fun v => ok (alloc.vec.Vec.deref v)
 }
 
 @[rust_fun "alloc::vec::{core::ops::deref::DerefMut<alloc::vec::Vec<@T>, [@T]>}::deref_mut"
-           -canFail (filterParams := [true, false])]
+           -canFail (keepParams := [true, false])]
 def alloc.vec.Vec.deref_mut {T : Type} (v :  alloc.vec.Vec T) :
    (Slice T) × (Slice T → alloc.vec.Vec T) :=
    (⟨ v.val, v.property ⟩, λ s => ⟨ s.val, s.property ⟩)
 
-@[reducible, rust_trait_impl "core::ops::deref::DerefMut<alloc::vec::Vec<@T>, [@T]>" (filterParams := [true, false])]
+@[reducible, rust_trait_impl "core::ops::deref::DerefMut<alloc::vec::Vec<@T>, [@T]>" (keepParams := [true, false])]
 def core.ops.deref.DerefMutVec {T : Type} :
   core.ops.deref.DerefMut (alloc.vec.Vec T) (Slice T):= {
   derefInst := core.ops.deref.DerefVec
   deref_mut v := ok (alloc.vec.Vec.deref_mut v)
 }
 
-@[rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::resize" (filterParams := [true,false])]
+@[rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::resize" (keepParams := [true,false])]
 def alloc.vec.Vec.resize {T : Type} (cloneInst : core.clone.Clone T)
   (v : alloc.vec.Vec T) (new_len : Usize) (value : T) : Result (alloc.vec.Vec T) := do
   if new_len.val < v.length then
@@ -318,7 +318,7 @@ theorem alloc.vec.Vec.set_getElem!_eq α [Inhabited α] (x : alloc.vec.Vec α) (
   simp only [Vec, set_val_eq, Subtype.eq_iff, List.set_getElem!]
 
 /- Source: '/rustc/library/alloc/src/vec/mod.rs', lines 3967:4-3967:33 -/
-@[rust_fun "alloc::vec::{core::convert::From<Box<[@T]>, alloc::vec::Vec<@T>>}::from" (filterParams := [true,false])]
+@[rust_fun "alloc::vec::{core::convert::From<Box<[@T]>, alloc::vec::Vec<@T>>}::from" (keepParams := [true,false])]
 def alloc.vec.FromBoxSliceVec.from {T : Type} (v : alloc.vec.Vec T) : Result (Slice T) := ok v
 
 @[progress]
@@ -326,7 +326,7 @@ theorem alloc.vec.FromBoxSliceVec.from_spec {T : Type} (v : alloc.vec.Vec T) :
   ∃ s, alloc.vec.FromBoxSliceVec.from v = ok s ∧ s.length = v.length ∧ s.val = v.val := by
   simp [alloc.vec.FromBoxSliceVec.from]
 
-@[reducible, rust_trait_impl "core::convert::From<Box<[@T]>, alloc::vec::Vec<@T>>" (filterParams := [true, false])]
+@[reducible, rust_trait_impl "core::convert::From<Box<[@T]>, alloc::vec::Vec<@T>>" (keepParams := [true, false])]
 def core.convert.FromBoxSliceVec (T : Type) :
   core.convert.From (Slice T) (alloc.vec.Vec T) := {
   from_ := alloc.vec.FromBoxSliceVec.from

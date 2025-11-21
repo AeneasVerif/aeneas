@@ -10,7 +10,7 @@ open Result
 
 attribute [rust_type "core::option::Option" -prefixVariantNames] Option
 
-@[rust_fun "alloc::boxed::{core::convert::AsMut<Box<@T>, @T>}::as_mut" -canFail (filterParams := [true,false])]
+@[rust_fun "alloc::boxed::{core::convert::AsMut<Box<@T>, @T>}::as_mut" -canFail (keepParams := [true,false])]
 def alloc.boxed.AsMutBox.as_mut {T : Type} (x : T) : T × (T → T) :=
   (x, fun x => x)
 
