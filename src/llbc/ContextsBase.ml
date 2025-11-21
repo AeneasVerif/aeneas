@@ -137,6 +137,7 @@ type marked_ids = {
   abs_fvar_ids : AbsFVarId.Set.t;
   pure_fvar_ids : Pure.FVarId.Set.t;
   loop_ids : LoopId.Set.t;
+  meta_ids : MetaId.Set.t;
 }
 
 let empty_marked_ids : marked_ids =
@@ -151,4 +152,5 @@ let empty_marked_ids : marked_ids =
     abs_fvar_ids = AbsFVarId.Set.empty;
     pure_fvar_ids = Pure.FVarId.Set.empty;
     loop_ids = LoopId.Set.empty;
+    meta_ids = MetaId.Set.empty;
   }

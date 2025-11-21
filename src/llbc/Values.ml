@@ -13,10 +13,12 @@ module SymbolicValueId = IdGen ()
 module AbsId = IdGen ()
 module FunCallId = IdGen ()
 module LoopId = IdGen ()
+module MetaId = IdGen ()
 
 type symbolic_value_id = SymbolicValueId.id [@@deriving show, ord]
 type symbolic_value_id_set = SymbolicValueId.Set.t [@@deriving show, ord]
 type loop_id = LoopId.id [@@deriving show, ord]
+type meta_id = MetaId.id [@@deriving show, ord]
 type fun_call_id = FunCallId.id [@@deriving show, ord]
 type borrow_id = BorrowId.id [@@deriving show, ord]
 type borrow_id_set = BorrowId.Set.t [@@deriving show, ord]

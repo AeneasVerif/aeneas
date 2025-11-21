@@ -65,9 +65,15 @@ type call = {
 type emeta =
   | Assignment of Contexts.eval_ctx * mplace * tvalue * mplace option
       (** We generated an assignment (destination, assigned value, src) *)
-  | Snapshot of Contexts.eval_ctx
+  | Snapshot of meta_id * Contexts.eval_ctx
       (** Remember an environment snapshot - this is useful to check where the
-          symbolic values are, to compute proper names for instance *)
+          symbolic values are, to compute proper names for instance.
+
+          We use the meta id for debugging purposes: it allows us to use the
+          option `-mark-ids` to stop the execution when this meta-information is
+          introduced (this is useful, because it allows us to figure out where
+          for instance the context introduced in the meta-information comes
+          from). *)
 [@@deriving show]
 
 type variant_id = VariantId.id [@@deriving show]

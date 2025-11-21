@@ -1656,7 +1656,9 @@ and translate_emeta (meta : S.emeta) (e : S.expr) (ctx : bs_ctx) : texpr =
         let rv = tvalue_to_texpr ctx ectx rv in
         let rp = translate_opt_mplace (Some ctx.span) type_infos rp in
         (ctx, Some (Assignment (lp, rv, rp)))
-    | S.Snapshot ectx ->
+    | S.Snapshot (mid, ectx) ->
+        [%ldebug
+          "Translating snapshot: meta id: m@" ^ Values.MetaId.to_string mid];
         let infos = eval_ctx_to_symbolic_assignments_info ctx ectx in
         let infos =
           List.map (fun (fv, s) -> (mk_texpr_from_fvar fv, s)) infos

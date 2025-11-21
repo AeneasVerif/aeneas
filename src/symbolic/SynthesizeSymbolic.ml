@@ -181,5 +181,10 @@ let synthesize_assignment (ctx : Contexts.eval_ctx) (lplace : mplace)
 let synthesize_assertion (ctx : Contexts.eval_ctx) (v : tvalue) (e : expr) =
   Assertion (ctx, v, e)
 
-let save_snapshot (ctx : Contexts.eval_ctx) (e : expr) : expr =
-  Meta (Snapshot ctx, e)
+let save_snapshot (ctx : Contexts.eval_ctx) : expr -> expr =
+  (* Note that we take care to generate the fresh meta id immediately, so
+     that we can use `-mark-ids` to stop at the moment when this function is
+     called, rather than the moment when the expression is reconstructed
+     (which happens at the end of the symbolic execution) *)
+  let mid = ctx.fresh_meta_id () in
+  fun e -> Meta (Snapshot (mid, ctx), e)

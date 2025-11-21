@@ -88,6 +88,7 @@ type eval_ctx = {
   fresh_region_id : unit -> region_id;
   fresh_abs_fvar_id : unit -> abs_fvar_id;
   fresh_loop_id : unit -> loop_id;
+  fresh_meta_id : unit -> meta_id;
 }
 [@@deriving show]
 

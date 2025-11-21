@@ -695,6 +695,9 @@ let initialize_eval_ctx (span : Meta.span option) (ctx : decls_ctx)
   let _, _, _, fresh_loop_id =
     LoopId.fresh_stateful_generator_with_marked marked_ids.loop_ids
   in
+  let _, _, _, fresh_meta_id =
+    MetaId.fresh_stateful_generator_with_marked marked_ids.meta_ids
+  in
 
   let const_generic_vars_map =
     ConstGenericVarId.Map.of_list
@@ -726,6 +729,7 @@ let initialize_eval_ctx (span : Meta.span option) (ctx : decls_ctx)
     fresh_region_id;
     fresh_abs_fvar_id;
     fresh_loop_id;
+    fresh_meta_id;
   }
 
 (** Instantiate a function signature, introducing **fresh** abstraction ids and
