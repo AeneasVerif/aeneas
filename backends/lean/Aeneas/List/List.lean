@@ -18,7 +18,6 @@ open Aeneas.Simp
 
 attribute [scalar_tac_simps, grind]
   List.length_nil List.length_cons List.length_append List.length_reverse
-  List.get!_eq_getElem! List.get?_eq_getElem?
 
 attribute [simp_lists_simps, grind]
   List.append_nil List.nil_append List.take_of_length_le getElem?_eq_none

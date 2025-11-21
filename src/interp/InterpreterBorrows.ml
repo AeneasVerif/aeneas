@@ -471,8 +471,8 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : tvalue)
                   (* The loan projector *)
                   let _, ty, _ = ty_as_ref ty in
                   let given_back =
-                    mk_eproj_loans_value_from_symbolic_value abs.regions.owned
-                      sv ty
+                    mk_eproj_loans_value_from_symbolic_value
+                      ctx.type_ctx.type_infos abs.regions.owned sv ty
                   in
                   (* Continue giving back in the child value *)
                   let child = super#visit_tevalue opt_abs child in
@@ -745,9 +745,9 @@ let give_back_symbolic_value (_config : config) (span : Meta.span)
     should be ⊥. In practice, we will give back a symbolic value which can't be
     expanded (because expanding this symbolic value would require expanding a
     reference whose region has already ended). *)
-let convert_avalue_to_given_back_value (span : Meta.span) (av : tavalue) :
+let convert_avalue_to_given_back_value (span : Meta.span) ctx (av : tavalue) :
     symbolic_value =
-  mk_fresh_symbolic_value span av.ty
+  mk_fresh_symbolic_value span ctx av.ty
 
 (** Auxiliary function: see {!end_borrow_aux}.
 
@@ -1275,7 +1275,7 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
         | AMutBorrow (pm, bid, av) ->
             [%sanity_check] span (pm = PNone);
             (* First, convert the avalue to a (fresh symbolic) value *)
-            let sv = convert_avalue_to_given_back_value span av in
+            let sv = convert_avalue_to_given_back_value span ctx av in
             (* Replace the mut borrow to register the fact that we ended
                it and store with it the freshly generated given back value *)
             let meta : aended_mut_borrow_meta = { bid; given_back = sv } in
@@ -1335,7 +1335,7 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
       [%ltrace
         "found aproj borrows: " ^ aproj_to_string ctx (AProjBorrows aproj)];
       (* Generate a fresh symbolic value *)
-      let nsv = mk_fresh_symbolic_value span aproj.proj.proj_ty in
+      let nsv = mk_fresh_symbolic_value span ctx aproj.proj.proj_ty in
       (* Replace the proj_borrows - there should be exactly one *)
       let ctx = end_aproj_borrows span abs.regions.owned aproj.proj nsv ctx in
       (* Give back the symbolic value *)
@@ -1915,7 +1915,7 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) ~(can_end : bool)
                       inherit [_] map_tavalue
 
                       method! visit_symbolic_value_id _ _ =
-                        fresh_symbolic_value_id ()
+                        ctx.fresh_symbolic_value_id ()
                     end
                   in
                   visitor#visit_tvalue () v
@@ -2132,16 +2132,23 @@ let eliminate_ended_shared_loans (span : Meta.span) (ctx : eval_ctx) : eval_ctx
    However we ignore the "fixed" abstractions.
 *)
 let rec simplify_dummy_values_useless_abs_aux (config : config)
-    (span : Meta.span) (fixed_abs_ids : AbsId.Set.t) : cm_fun =
+    (span : Meta.span) : cm_fun =
  fun ctx ->
   let simplify_abs = true in
   let simplify_borrows = true in
-  (* Small utility: check that the loan corresponding to a borrow
-     does not belong to an abstraction in the fixed set.
-  *)
+  (* Small utilities: we do not modify the region abstractions marked as frozen
+     (i.e., which should not be ended) - it is usually important that those remain
+     the same, for instance when computing fixed points. *)
+  let frozen_abs =
+    let abs = env_get_abs ctx.env in
+    AbsId.Set.of_list
+      (List.filter_map
+         (fun (abs : abs) -> if abs.can_end then None else Some abs.abs_id)
+         (AbsId.Map.values abs))
+  in
   let loan_id_not_in_fixed_abs (lid : BorrowId.id) : bool =
     match fst (ctx_lookup_loan span ek_all lid ctx) with
-    | AbsId abs_id -> not (AbsId.Set.mem abs_id fixed_abs_ids)
+    | AbsId abs_id -> not (AbsId.Set.mem abs_id frozen_abs)
     | _ -> true
   in
   let rec explore_env (ctx : eval_ctx) (env : env) : env =
@@ -2248,7 +2255,7 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
         EBinding (BVar vid, v) :: explore_env ctx env
     | EAbs abs :: env
       when simplify_abs && abs.can_end
-           && not (AbsId.Set.mem abs.abs_id fixed_abs_ids) -> (
+           && not (AbsId.Set.mem abs.abs_id frozen_abs) -> (
         [%ldebug "Diving into abs:\n" ^ abs_to_string span ctx abs];
         (* End the shared loans with no corresponding borrows *)
         let visitor =
@@ -2290,8 +2297,8 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
 
                TODO: this limitation is annoying. We need to generalize the join.
             *)
-            if not (abs_mut_borrows_loans_in_fixed span ctx fixed_abs_ids abs)
-            then raise (FoundAbsId abs.abs_id)
+            if not (abs_mut_borrows_loans_in_fixed span ctx frozen_abs abs) then
+              raise (FoundAbsId abs.abs_id)
             else EAbs abs :: explore_env ctx env
         | Some _ ->
             (* There are remaining loans: we can't end the abstraction *)
@@ -2302,9 +2309,7 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
             EAbs abs :: explore_env ctx env)
     | b :: env -> b :: explore_env ctx env
   in
-  let rec_call =
-    simplify_dummy_values_useless_abs_aux config span fixed_abs_ids
-  in
+  let rec_call = simplify_dummy_values_useless_abs_aux config span in
   try
     (* Explore the environment.
 
@@ -2325,17 +2330,15 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
       let ctx = update_aproj_loans_to_ended span abs_id sv ctx in
       rec_call ctx
 
-let simplify_dummy_values_useless_abs (config : config) (span : Meta.span)
-    (fixed_abs_ids : AbsId.Set.t) : cm_fun =
+let simplify_dummy_values_useless_abs (config : config) (span : Meta.span) :
+    cm_fun =
  fun ctx0 ->
   [%ldebug eval_ctx_to_string ctx0];
   (* Simplify the context as long as it leads to changes - TODO: make this more efficient *)
   let rec simplify ctx0 =
-    let ctx, cc =
-      simplify_dummy_values_useless_abs_aux config span fixed_abs_ids ctx0
-    in
+    let ctx, cc = simplify_dummy_values_useless_abs_aux config span ctx0 in
     Invariants.check_invariants span ctx;
-    if ctx = ctx0 then (
+    if ctx.env = ctx0.env then (
       [%ldebug "Done:\n" ^ eval_ctx_to_string ctx];
       (ctx, cc))
     else (
@@ -2345,8 +2348,6 @@ let simplify_dummy_values_useless_abs (config : config) (span : Meta.span)
   let ctx, cc = simplify ctx0 in
   let ctx = eliminate_ended_shared_loans span ctx in
   [%ltrace
-    "- fixed_aids: "
-    ^ AbsId.Set.to_string None fixed_abs_ids
-    ^ "\n- ctx0:\n" ^ eval_ctx_to_string ctx0 ^ "\n- ctx1:\n"
-    ^ if ctx = ctx0 then "UNCHANGED" else eval_ctx_to_string ctx];
+    "- ctx0:\n" ^ eval_ctx_to_string ctx0 ^ "\n- ctx1:\n"
+    ^ if ctx.env = ctx0.env then "UNCHANGED" else eval_ctx_to_string ctx];
   (ctx, cc)

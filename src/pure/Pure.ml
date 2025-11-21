@@ -62,14 +62,14 @@ type db_scope_id = int [@@deriving show, ord]
 type bvar_id = BVarId.id [@@deriving show, ord]
 type fvar_id = FVarId.id [@@deriving show, ord]
 
-let ( fvar_id_counter,
+(*let ( fvar_id_counter,
       marked_fvar_ids,
       marked_fvar_ids_insert_from_int,
       fresh_fvar_id ) =
   FVarId.fresh_marked_stateful_generator ()
 
 let reset_global_counters () = fvar_id_counter := FVarId.generator_zero
-let reset_fvar_id_counter () = fvar_id_counter := FVarId.generator_zero
+  let reset_fvar_id_counter () = fvar_id_counter := FVarId.generator_zero*)
 
 (** The builtin types for the pure AST.
 
@@ -1193,8 +1193,8 @@ and loop = {
           the output abstractions. The output values come first in the list of
           outputs. *)
   inputs : texpr list;
-      (** The inputs of the loop.loop receives as inputs, and which come from
-          the input region abstractions.
+      (** The inputs of the loop, coming from the input symbolic values and the
+          input abstractions.
 
           Those should be variables bound in the [loop_body]. *)
   num_input_conts : int;

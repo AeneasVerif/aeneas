@@ -19,19 +19,21 @@ structure Key where
 def Key.t_mut
   (self : Key) :
   Result ((Array U16 32#usize) × (Array U16 32#usize → Key))
-  :=
+  := do
   let back := fun ret => { self with t := ret }
   ok (self.t, back)
 
 /- [loops_sequences::shake_init]:
    Source: 'tests/src/loops-sequences.rs', lines 16:0-16:40 -/
-def shake_init (_state : Array U8 8#usize) : Result (Array U8 8#usize) :=
+def shake_init (_state : Array U8 8#usize) : Result (Array U8 8#usize) := do
   ok _state
 
 /- [loops_sequences::shake_append]:
    Source: 'tests/src/loops-sequences.rs', lines 17:0-17:56 -/
 def shake_append
-  (_state : Array U8 8#usize) (_data : Slice U8) : Result (Array U8 8#usize) :=
+  (_state : Array U8 8#usize) (_data : Slice U8) :
+  Result (Array U8 8#usize)
+  := do
   ok _state
 
 /- [loops_sequences::shake_state_copy]:
@@ -39,13 +41,13 @@ def shake_append
 def shake_state_copy
   (_src : Array U8 8#usize) (_dst : Array U8 8#usize) :
   Result (Array U8 8#usize)
-  :=
+  := do
   ok _dst
 
 /- [loops_sequences::shake_extract]:
    Source: 'tests/src/loops-sequences.rs', lines 19:0-19:54 -/
 def shake_extract
-  (_src : Array U8 8#usize) (_dst : Slice U8) : Result (Slice U8) :=
+  (_src : Array U8 8#usize) (_dst : Slice U8) : Result (Slice U8) := do
   ok _dst
 
 /- [loops_sequences::sample_cbd]:
@@ -53,19 +55,18 @@ def shake_extract
 def sample_cbd
   (_src : Slice U8) (_dst : Array U16 32#usize) :
   Result (Array U16 32#usize)
-  :=
+  := do
   ok _dst
 
 /- [loops_sequences::key_expand]: loop 0:
    Source: 'tests/src/loops-sequences.rs', lines 29:4-36:5 -/
 def key_expand_loop0
-  (state_base : Array U8 8#usize) (key : Key) (state_work : Array U8 8#usize)
+  (key : Key) (state_base : Array U8 8#usize) (state_work : Array U8 8#usize)
   (sample_buffer : Array U8 1#usize) (i : I32) :
   Result (Key × (Array U8 8#usize) × (Array U8 1#usize))
-  :=
+  := do
   if i < 32#i32
   then
-    do
     let i1 ← (↑(IScalar.hcast .U8 i) : Result U8)
     let sample_buffer1 ← Array.update sample_buffer 0#usize i1
     let state_work1 ← shake_state_copy state_base state_work
@@ -81,20 +82,19 @@ def key_expand_loop0
     let i2 ← i + 1#i32
     let key1 := t_mut_back a1
     let sample_buffer2 := to_slice_mut_back s2
-    key_expand_loop0 state_base key1 state_work2 sample_buffer2 i2
+    key_expand_loop0 key1 state_base state_work2 sample_buffer2 i2
   else ok (key, state_work, sample_buffer)
 partial_fixpoint
 
 /- [loops_sequences::key_expand]: loop 1:
    Source: 'tests/src/loops-sequences.rs', lines 39:4-46:5 -/
 def key_expand_loop1
-  (state_base : Array U8 8#usize) (key : Key) (state_work : Array U8 8#usize)
+  (key : Key) (state_base : Array U8 8#usize) (state_work : Array U8 8#usize)
   (sample_buffer : Array U8 1#usize) (i : I32) :
   Result (Key × (Array U8 8#usize))
-  :=
+  := do
   if i < 32#i32
   then
-    do
     let i1 ← (↑(IScalar.hcast .U8 i) : Result U8)
     let sample_buffer1 ← Array.update sample_buffer 0#usize i1
     let state_work1 ← shake_state_copy state_base state_work
@@ -110,7 +110,7 @@ def key_expand_loop1
     let i2 ← i + 1#i32
     let key1 := t_mut_back a1
     let sample_buffer2 := to_slice_mut_back s2
-    key_expand_loop1 state_base key1 state_work2 sample_buffer2 i2
+    key_expand_loop1 key1 state_base state_work2 sample_buffer2 i2
   else ok (key, state_work)
 partial_fixpoint
 
@@ -119,16 +119,15 @@ partial_fixpoint
 def key_expand
   (key : Key) (state_base : Array U8 8#usize) (state_work : Array U8 8#usize) :
   Result (Key × (Array U8 8#usize) × (Array U8 8#usize))
-  :=
-  do
+  := do
   let state_base1 ← shake_init state_base
   let s ← (↑(Array.to_slice key.seed) : Result (Slice U8))
   let state_base2 ← shake_append state_base1 s
   let (key1, state_work1, sample_buffer) ←
-    key_expand_loop0 state_base2 key state_work (Array.make 1#usize [ 0#u8 ])
+    key_expand_loop0 key state_base2 state_work (Array.make 1#usize [ 0#u8 ])
       0#i32
   let (key2, state_work2) ←
-    key_expand_loop1 state_base2 key1 state_work1 sample_buffer 0#i32
+    key_expand_loop1 key1 state_base2 state_work1 sample_buffer 0#i32
   ok (key2, state_base2, state_work2)
 
 end loops_sequences

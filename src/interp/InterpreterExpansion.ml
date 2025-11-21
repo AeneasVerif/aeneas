@@ -294,7 +294,9 @@ let compute_expanded_symbolic_non_builtin_adt_value (span : Meta.span)
   let initialize ((variant_id, field_types) : VariantId.id option * rty list) :
       symbolic_expansion =
     let field_values =
-      List.map (fun (ty : rty) -> mk_fresh_symbolic_value span ty) field_types
+      List.map
+        (fun (ty : rty) -> mk_fresh_symbolic_value span ctx ty)
+        field_types
     in
     let see = SeAdt (variant_id, field_values) in
     see
@@ -302,20 +304,20 @@ let compute_expanded_symbolic_non_builtin_adt_value (span : Meta.span)
   (* Initialize all the expanded values of all the variants *)
   List.map initialize variants_fields_types
 
-let compute_expanded_symbolic_tuple_value (span : Meta.span)
+let compute_expanded_symbolic_tuple_value (span : Meta.span) (ctx : eval_ctx)
     (field_types : rty list) : symbolic_expansion =
   (* Generate the field values *)
   let field_values =
-    List.map (fun sv_ty -> mk_fresh_symbolic_value span sv_ty) field_types
+    List.map (fun sv_ty -> mk_fresh_symbolic_value span ctx sv_ty) field_types
   in
   let variant_id = None in
   let see = SeAdt (variant_id, field_values) in
   see
 
-let compute_expanded_symbolic_box_value (span : Meta.span) (boxed_ty : rty) :
-    symbolic_expansion =
+let compute_expanded_symbolic_box_value (span : Meta.span) (ctx : eval_ctx)
+    (boxed_ty : rty) : symbolic_expansion =
   (* Introduce a fresh symbolic value *)
-  let boxed_value = mk_fresh_symbolic_value span boxed_ty in
+  let boxed_value = mk_fresh_symbolic_value span ctx boxed_ty in
   let see = SeAdt (None, [ boxed_value ]) in
   see
 
@@ -335,9 +337,9 @@ let compute_expanded_symbolic_adt_value (span : Meta.span)
       compute_expanded_symbolic_non_builtin_adt_value span expand_enumerations
         def_id generics ctx
   | TTuple, [], _ ->
-      [ compute_expanded_symbolic_tuple_value span generics.types ]
+      [ compute_expanded_symbolic_tuple_value span ctx generics.types ]
   | TBuiltin TBox, [], [ boxed_ty ] ->
-      [ compute_expanded_symbolic_box_value span boxed_ty ]
+      [ compute_expanded_symbolic_box_value span ctx boxed_ty ]
   | _ ->
       [%craise] span
         "compute_expanded_symbolic_adt_value: unexpected combination"
@@ -347,9 +349,9 @@ let expand_symbolic_value_shared_borrow (span : Meta.span)
     (ref_ty : rty) : cm_fun =
  fun ctx ->
   (* First, replace the projectors on borrows. *)
-  let bid = fresh_borrow_id () in
+  let bid = ctx.fresh_borrow_id () in
   (* The fresh symbolic value for the shared value *)
-  let shared_sv = mk_fresh_symbolic_value span ref_ty in
+  let shared_sv = mk_fresh_symbolic_value span ctx ref_ty in
   (* Small utility used on shared borrows in abstractions (regular borrow
      projector and asb).
      Returns [Some] if the symbolic value has been expanded to an asb list,
@@ -366,7 +368,7 @@ let expand_symbolic_value_shared_borrow (span : Meta.span)
           (* Check if the region is in the set of projected regions *)
           if region_in_set r proj_regions then
             (* In the set: we need to reborrow *)
-            let sid = fresh_shared_borrow_id () in
+            let sid = ctx.fresh_shared_borrow_id () in
             Some [ AsbBorrow (bid, sid); shared_asb ]
           else (* Not in the set: ignore *)
             Some [ shared_asb ]
@@ -380,7 +382,7 @@ let expand_symbolic_value_shared_borrow (span : Meta.span)
 
       method! visit_VSymbolic env sv =
         if same_symbolic_id sv original_sv then
-          let sid = fresh_shared_borrow_id () in
+          let sid = ctx.fresh_shared_borrow_id () in
           VBorrow (VSharedBorrow (bid, sid))
         else super#visit_VSymbolic env sv
 
@@ -499,8 +501,8 @@ let expand_symbolic_value_borrow (span : Meta.span)
   | RMut ->
       (* Simple case: simply create a fresh symbolic value and a fresh
        * borrow id *)
-      let sv = mk_fresh_symbolic_value span ref_ty in
-      let bid = fresh_borrow_id () in
+      let sv = mk_fresh_symbolic_value span ctx ref_ty in
+      let bid = ctx.fresh_borrow_id () in
       let see = SeMutRef (bid, sv) in
       (* Expand the symbolic values - we simply perform a substitution (and
        * check that we perform exactly one substitution) *)

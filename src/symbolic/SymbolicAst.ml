@@ -209,6 +209,34 @@ type expr =
       (Contexts.eval_ctx[@opaque]) * loop_id * tvalue list * abs list
   | LoopBreak of (Contexts.eval_ctx[@opaque]) * loop_id * tvalue list * abs list
   | Loop of loop  (** Loop: call to a loop *)
+  | Let of let_expr  (** A let binding. See the comments for [let_expr]. *)
+  | Join of (Contexts.eval_ctx[@opaque]) * tvalue list * abs list
+      (** The output of an expression which is bound (this is the result of
+          matching the context at the end of a branch with the joined context).
+
+          Ex.:
+          {[
+            if b {
+              x = 0;
+            }
+            else {
+              x = 1;
+            }; // We need to join contexts here
+            x + y;
+          ]}
+
+          The symbolic AST resulting from symbolically executing the code looks
+          like this:
+          {[
+            Let {
+              bound = (
+                ExpansionBool // introduced by the if then else
+                   (Join (..., [0], []), // then branch
+                    Join (..., [1], [])  // else branch
+                    ));
+              next_expr = ...; // result of translating [x + y]
+              ... }
+          ]} *)
   | Meta of (emeta[@opaque]) * expr  (** Meta information *)
   | Error of Meta.span option * string
 
@@ -236,6 +264,23 @@ and loop = {
   loop_expr : expr;  (** The symbolically executed loop body *)
   next_expr : expr;  (** The expression for *after* the loop call *)
   span : Meta.span;  (** Information about the origin of the loop body *)
+}
+
+(** A let-binding.
+
+    We use this when joining the contexts after a branching expression (e.g., an
+    [if then else]): the resulting pure code binds the "output" of the
+    [if then else]. *)
+and let_expr = {
+  bound_expr : expr;  (** The bound expression *)
+  out_svalues : symbolic_value list;
+      (** The symbolic values introduced in the joined environment (those are
+          output by the bound expression) *)
+  out_abs : abs list;
+      (** The abstractions introduced in the joined environment (those are
+          output by the bound expression) *)
+  next_expr : expr;  (** The expression for *after* the let *)
+  span : Meta.span;  (** Information about the origin of the expression *)
 }
 
 and expansion =

@@ -210,6 +210,9 @@ let rec translate_expr (e : S.expr) (ctx : bs_ctx) : texpr =
   | LoopBreak (ectx, loop_id, input_values, input_abs) ->
       translate_continue_break ctx ~continue:false ectx loop_id input_values
         input_abs
+  | Let lete -> translate_let ctx lete
+  | Join (ectx, input_values, input_abs) ->
+      translate_join ctx ectx input_values input_abs
 
 and translate_panic (ctx : bs_ctx) : texpr = Option.get ctx.mk_panic
 
@@ -641,7 +644,7 @@ and translate_end_abs (ectx : C.eval_ctx) (abs : V.abs) (e : S.expr)
   | V.FunCall (call_id, _) ->
       translate_end_abstraction_fun_call ectx abs e call_id ctx
   | V.SynthRet rg_id -> translate_end_abstraction_synth_ret ectx abs e ctx rg_id
-  | V.Loop loop_id -> translate_end_abstraction_loop ectx abs e ctx loop_id
+  | V.Loop _ | V.Join -> translate_end_abstraction_join_or_loop ectx abs e ctx
   | V.Identity | V.CopySymbolicValue ->
       translate_end_abs_identity ectx abs e ctx
 
@@ -850,8 +853,8 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
   let monadic = false in
   mk_closed_checked_lets __FILE__ __LINE__ ctx monadic given_back_inputs next_e
 
-and translate_end_abstraction_loop (ectx : C.eval_ctx) (abs : V.abs)
-    (e : S.expr) (ctx : bs_ctx) (_loop_id : V.LoopId.id) : texpr =
+and translate_end_abstraction_join_or_loop (ectx : C.eval_ctx) (abs : V.abs)
+    (e : S.expr) (ctx : bs_ctx) : texpr =
   let span = ctx.span in
   (* Compute the input and output values *)
   let back_inputs = abs_to_consumed ctx ectx abs in
@@ -1414,7 +1417,7 @@ and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
       bind_inputs ctx0 loop.input_abs loop.input_svalues
     in
 
-    (* Update the [mk_panic] and [mk_result] functions *)
+    (* Update the [mk_panic], [mk_result], etc. functions *)
     let continue_ty = List.map (fun (e : texpr) -> e.ty) inputs in
     let continue_ty = mk_simpl_tuple_ty continue_ty in
     let break_ty = output.ty in
@@ -1495,6 +1498,117 @@ and translate_continue_break (ctx : bs_ctx) ~(continue : bool)
   in
   let output = mk_simpl_tuple_texpr ctx.span outputs in
   Option.get mk ctx output
+
+and translate_let (ctx0 : bs_ctx) (lete : S.let_expr) : texpr =
+  let ctx = ctx0 in
+
+  (* Introduce free variables for the outputs *)
+  let bind_outputs (ctx : bs_ctx) (absl : V.abs list)
+      (values : V.symbolic_value list) : bs_ctx * tpat list * tpat list =
+    let ctx, absl =
+      (* Compute the type of the break abstractions *)
+      let abs_tys = List.map (abs_to_ty ctx) absl in
+      let abs_tys, ignored =
+        List.partition_map
+          (fun (abs, ty) ->
+            match ty with
+            | Some ty -> Left (abs.V.abs_id, ty)
+            | None -> Right abs.abs_id)
+          (List.combine absl abs_tys)
+      in
+      (* Introduce free variables for the abs *)
+      let ctx, fvars =
+        List.fold_left_map
+          (fun ctx (aid, ty) ->
+            let ctx, fvar = fresh_var (Some "back") ty ctx in
+            (ctx, (aid, fvar)))
+          ctx abs_tys
+      in
+      (* Register the mapping from abs to free variable *)
+      let ctx =
+        let fvars =
+          List.map
+            (fun (aid, fv) ->
+              (aid, { fvar = mk_texpr_from_fvar fv; can_fail = false }))
+            fvars
+        in
+        {
+          ctx with
+          abs_id_to_info = V.AbsId.Map.add_list fvars ctx.abs_id_to_info;
+          ignored_abs_ids = V.AbsId.Set.add_list ignored ctx.ignored_abs_ids;
+        }
+      in
+      (* *)
+      (ctx, List.map snd fvars)
+    in
+    let ctx, values = fresh_vars_for_symbolic_values values ctx in
+    let mk_pats = List.map (mk_tpat_from_fvar None) in
+    (ctx, mk_pats absl, mk_pats values)
+  in
+
+  (* Introduce the binders for the outputs *)
+  let ctx, out_abs, out_values =
+    bind_outputs ctx lete.out_abs lete.out_svalues
+  in
+  let outputs = out_values @ out_abs in
+  let output = mk_simpl_tuple_pat outputs in
+
+  [%ldebug
+    "- output values:\n"
+    ^ String.concat "\n"
+        (List.map (symbolic_value_to_string ctx) lete.out_svalues)
+    ^ "\n\n- output abstractions:\n"
+    ^ String.concat "\n\n" (List.map (abs_to_string ctx) lete.out_abs)
+    ^ "\n\n- translated outputs:\n"
+    ^ String.concat "\n" (List.map (tpat_to_string ctx) outputs)];
+
+  (* Translate the bound expression *)
+  let bound_e =
+    (* Update the [mk_panic], [mk_continue], etc. functions *)
+    let output_ty = output.ty in
+    let mk_panic =
+      mk_result_fail_texpr_with_error_id ctx.span error_failure_id output_ty
+    in
+    let ctx =
+      {
+        ctx with
+        mk_panic = Some mk_panic;
+        mk_return = None;
+        mk_continue = None;
+        mk_break = None;
+      }
+    in
+
+    (* Translate the bound expression *)
+    translate_expr lete.bound_expr ctx
+  in
+  [%ltrace "- bound expression:\n" ^ texpr_to_string ctx bound_e];
+
+  (* Translate the next expression *)
+  let next_e = translate_expr lete.next_expr ctx in
+
+  (* Create the let-binding *)
+  [%add_loc] mk_closed_checked_let ctx true output bound_e next_e
+
+and translate_join (ctx : bs_ctx) (ectx : C.eval_ctx)
+    (input_values : V.tvalue list) (input_abs : V.abs list) : texpr =
+  [%ldebug
+    "- input_values:\n"
+    ^ String.concat "\n" (List.map (tvalue_to_string ctx) input_values)
+    ^ "\n- input_abs:\n"
+    ^ String.concat "\n\n" (List.map (abs_to_string ctx) input_abs)];
+  let conts = List.filter_map (translate_abs_to_cont ctx ectx) input_abs in
+  let values = List.map (tvalue_to_texpr ctx ectx) input_values in
+  [%ldebug
+    "- translated values:\n"
+    ^ String.concat "\n" (List.map (texpr_to_string ctx) values)
+    ^ "\n- translated abs:\n"
+    ^ String.concat "\n\n" (List.map (texpr_to_string ctx) conts)];
+  (* Note that the order between the values and the continuations is not the same
+     depending on whether we reach a break or a continue *)
+  let outputs = values @ conts in
+  let output = mk_simpl_tuple_texpr ctx.span outputs in
+  mk_result_ok_texpr ctx.span output
 
 and translate_substitute_abs_ids (ctx : bs_ctx) (aids : V.abs_id V.AbsId.Map.t)
     (e : S.expr) : texpr =

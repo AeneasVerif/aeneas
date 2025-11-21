@@ -11,7 +11,7 @@ namespace tutorial
 /- [tutorial::choose]:
    Source: 'src/lib.rs', lines 1:0-7:1 -/
 def choose
-  {T : Type} (b : Bool) (x : T) (y : T) : Result (T × (T → (T × T))) :=
+  {T : Type} (b : Bool) (x : T) (y : T) : Result (T × (T → (T × T))) := do
   if b
   then let back := fun ret => (ret, y)
        ok (x, back)
@@ -20,27 +20,24 @@ def choose
 
 /- [tutorial::mul2_add1]:
    Source: 'src/lib.rs', lines 9:0-11:1 -/
-def mul2_add1 (x : U32) : Result U32 :=
-  do
+def mul2_add1 (x : U32) : Result U32 := do
   let i ← x + x
   i + 1#u32
 
 /- [tutorial::mul2_add1_add]:
    Source: 'src/lib.rs', lines 13:0-15:1 -/
-def mul2_add1_add (x : U32) (y : U32) : Result U32 :=
-  do
+def mul2_add1_add (x : U32) (y : U32) : Result U32 := do
   let i ← mul2_add1 x
   i + y
 
 /- [tutorial::incr]:
    Source: 'src/lib.rs', lines 17:0-19:1 -/
-def incr (x : U32) : Result U32 :=
+def incr (x : U32) : Result U32 := do
   x + 1#u32
 
 /- [tutorial::use_incr]:
    Source: 'src/lib.rs', lines 21:0-26:1 -/
-def use_incr : Result Unit :=
-  do
+def use_incr : Result Unit := do
   let x ← incr 0#u32
   let x1 ← incr x
   let _ ← incr x1
@@ -54,13 +51,12 @@ inductive CList (T : Type) where
 
 /- [tutorial::list_nth]:
    Source: 'src/lib.rs', lines 35:0-48:1 -/
-def list_nth {T : Type} (l : CList T) (i : U32) : Result T :=
+def list_nth {T : Type} (l : CList T) (i : U32) : Result T := do
   match l with
   | CList.CCons x tl =>
     if i = 0#u32
     then ok x
-    else do
-         let i1 ← i - 1#u32
+    else let i1 ← i - 1#u32
          list_nth tl i1
   | CList.CNil => fail panic
 partial_fixpoint
@@ -68,14 +64,13 @@ partial_fixpoint
 /- [tutorial::list_nth_mut]:
    Source: 'src/lib.rs', lines 50:0-63:1 -/
 def list_nth_mut
-  {T : Type} (l : CList T) (i : U32) : Result (T × (T → CList T)) :=
+  {T : Type} (l : CList T) (i : U32) : Result (T × (T → CList T)) := do
   match l with
   | CList.CCons x tl =>
     if i = 0#u32
     then let back := fun ret => CList.CCons ret tl
          ok (x, back)
     else
-      do
       let i1 ← i - 1#u32
       let (x1, list_nth_mut_back) ← list_nth_mut tl i1
       let back := fun ret => let tl1 := list_nth_mut_back ret
@@ -86,13 +81,12 @@ partial_fixpoint
 
 /- [tutorial::list_nth1]: loop 0:
    Source: 'src/lib.rs', lines 66:4-74:1 -/
-def list_nth1_loop {T : Type} (l : CList T) (i : U32) : Result T :=
+def list_nth1_loop {T : Type} (l : CList T) (i : U32) : Result T := do
   match l with
   | CList.CCons x tl =>
     if i = 0#u32
     then ok x
-    else do
-         let i1 ← i - 1#u32
+    else let i1 ← i - 1#u32
          list_nth1_loop tl i1
   | CList.CNil => fail panic
 partial_fixpoint
@@ -100,37 +94,34 @@ partial_fixpoint
 /- [tutorial::list_nth1]:
    Source: 'src/lib.rs', lines 65:0-74:1 -/
 @[reducible]
-def list_nth1 {T : Type} (l : CList T) (i : U32) : Result T :=
+def list_nth1 {T : Type} (l : CList T) (i : U32) : Result T := do
   list_nth1_loop l i
 
 /- [tutorial::i32_id]:
    Source: 'src/lib.rs', lines 76:0-83:1 -/
-def i32_id (i : I32) : Result I32 :=
+def i32_id (i : I32) : Result I32 := do
   if i = 0#i32
   then ok 0#i32
-  else do
-       let i1 ← i - 1#i32
+  else let i1 ← i - 1#i32
        let i2 ← i32_id i1
        i2 + 1#i32
 partial_fixpoint
 
 /- [tutorial::even]:
    Source: 'src/lib.rs', lines 85:0-92:1 -/
-mutual def even (i : U32) : Result Bool :=
+mutual def even (i : U32) : Result Bool := do
   if i = 0#u32
   then ok true
-  else do
-       let i1 ← i - 1#u32
+  else let i1 ← i - 1#u32
        odd i1
 partial_fixpoint
 
 /- [tutorial::odd]:
    Source: 'src/lib.rs', lines 94:0-101:1 -/
-def odd (i : U32) : Result Bool :=
+def odd (i : U32) : Result Bool := do
   if i = 0#u32
   then ok false
-  else do
-       let i1 ← i - 1#u32
+  else let i1 ← i - 1#u32
        even i1
 partial_fixpoint
 
@@ -143,8 +134,7 @@ structure Counter (Self : Type) where
 
 /- [tutorial::{tutorial::Counter for usize}::incr]:
    Source: 'src/lib.rs', lines 110:4-114:5 -/
-def CounterUsize.incr (self : Usize) : Result (Usize × Usize) :=
-  do
+def CounterUsize.incr (self : Usize) : Result (Usize × Usize) := do
   let self1 ← self + 1#usize
   ok (self, self1)
 
@@ -158,19 +148,18 @@ def CounterUsize : Counter Usize := {
 /- [tutorial::use_counter]:
    Source: 'src/lib.rs', lines 117:0-119:1 -/
 def use_counter
-  {T : Type} (CounterInst : Counter T) (cnt : T) : Result (Usize × T) :=
+  {T : Type} (CounterInst : Counter T) (cnt : T) : Result (Usize × T) := do
   CounterInst.incr cnt
 
 /- [tutorial::list_nth_mut1]: loop 0:
    Source: 'src/lib.rs', lines 124:4-132:1 -/
 def list_nth_mut1_loop
-  {T : Type} (l : CList T) (i : U32) : Result (T × (T → CList T)) :=
+  {T : Type} (l : CList T) (i : U32) : Result (T × (T → CList T)) := do
   match l with
   | CList.CCons x tl =>
     if i = 0#u32
     then ok (x, fun ret => CList.CCons ret tl)
     else
-      do
       let i1 ← i - 1#u32
       let (t, back) ← list_nth_mut1_loop tl i1
       let back1 := fun ret => let c := back ret
@@ -183,15 +172,15 @@ partial_fixpoint
    Source: 'src/lib.rs', lines 123:0-132:1 -/
 @[reducible]
 def list_nth_mut1
-  {T : Type} (l : CList T) (i : U32) : Result (T × (T → CList T)) :=
+  {T : Type} (l : CList T) (i : U32) : Result (T × (T → CList T)) := do
   list_nth_mut1_loop l i
 
 /- [tutorial::list_tail]: loop 0:
    Source: 'src/lib.rs', lines 135:4-137:5 -/
-def list_tail_loop {T : Type} (l : CList T) : Result (CList T → CList T) :=
+def list_tail_loop
+  {T : Type} (l : CList T) : Result (CList T → CList T) := do
   match l with
   | CList.CCons t tl =>
-    do
     let back ← list_tail_loop tl
     ok (fun c => let c1 := back c
                  CList.CCons t c1)
@@ -201,22 +190,21 @@ partial_fixpoint
 /- [tutorial::list_tail]:
    Source: 'src/lib.rs', lines 134:0-139:1 -/
 def list_tail
-  {T : Type} (l : CList T) : Result ((CList T) × (CList T → CList T)) :=
-  do
+  {T : Type} (l : CList T) : Result ((CList T) × (CList T → CList T)) := do
   let back ← list_tail_loop l
   ok (CList.CNil, back)
 
 /- [tutorial::append_in_place]:
    Source: 'src/lib.rs', lines 141:0-144:1 -/
 def append_in_place
-  {T : Type} (l0 : CList T) (l1 : CList T) : Result (CList T) :=
-  do
+  {T : Type} (l0 : CList T) (l1 : CList T) : Result (CList T) := do
   let (_, list_tail_back) ← list_tail l0
   ok (list_tail_back l1)
 
 /- [tutorial::reverse]: loop 0:
    Source: 'src/lib.rs', lines 148:4-152:5 -/
-def reverse_loop {T : Type} (l : CList T) (out : CList T) : Result (CList T) :=
+def reverse_loop
+  {T : Type} (l : CList T) (out : CList T) : Result (CList T) := do
   match l with
   | CList.CCons hd tl => reverse_loop tl (CList.CCons hd out)
   | CList.CNil => ok out
@@ -225,17 +213,16 @@ partial_fixpoint
 /- [tutorial::reverse]:
    Source: 'src/lib.rs', lines 146:0-154:1 -/
 @[reducible]
-def reverse {T : Type} (l : CList T) : Result (CList T) :=
+def reverse {T : Type} (l : CList T) : Result (CList T) := do
   reverse_loop l CList.CNil
 
 /- [tutorial::zero]: loop 0:
    Source: 'src/lib.rs', lines 164:4-167:5 -/
 def zero_loop
-  (x : alloc.vec.Vec U32) (i : Usize) : Result (alloc.vec.Vec U32) :=
+  (x : alloc.vec.Vec U32) (i : Usize) : Result (alloc.vec.Vec U32) := do
   let i1 := alloc.vec.Vec.len x
   if i < i1
   then
-    do
     let (_, index_mut_back) ←
       alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSliceInst U32) x
         i
@@ -248,7 +235,7 @@ partial_fixpoint
 /- [tutorial::zero]:
    Source: 'src/lib.rs', lines 162:0-168:1 -/
 @[reducible]
-def zero (x : alloc.vec.Vec U32) : Result (alloc.vec.Vec U32) :=
+def zero (x : alloc.vec.Vec U32) : Result (alloc.vec.Vec U32) := do
   zero_loop x 0#usize
 
 /- [tutorial::add_no_overflow]: loop 0:
@@ -256,11 +243,10 @@ def zero (x : alloc.vec.Vec U32) : Result (alloc.vec.Vec U32) :=
 def add_no_overflow_loop
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (i : Usize) :
   Result (alloc.vec.Vec U32)
-  :=
+  := do
   let i1 := alloc.vec.Vec.len x
   if i < i1
   then
-    do
     let i2 ←
       alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceInst U32) y i
     let (i3, index_mut_back) ←
@@ -279,7 +265,7 @@ partial_fixpoint
 def add_no_overflow
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) :
   Result (alloc.vec.Vec U32)
-  :=
+  := do
   add_no_overflow_loop x y 0#usize
 
 /- [tutorial::add_with_carry]: loop 0:
@@ -287,11 +273,10 @@ def add_no_overflow
 def add_with_carry_loop
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (c0 : U8) (i : Usize) :
   Result (U8 × (alloc.vec.Vec U32))
-  :=
+  := do
   let i1 := alloc.vec.Vec.len x
   if i < i1
   then
-    do
     let i2 ←
       alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceInst U32) x i
     let i3 ← (↑(UScalar.cast .U32 c0) : Result U32)
@@ -319,19 +304,19 @@ partial_fixpoint
 def add_with_carry
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) :
   Result (U8 × (alloc.vec.Vec U32))
-  :=
+  := do
   add_with_carry_loop x y 0#u8 0#usize
 
 /- [tutorial::max]:
    Source: 'src/lib.rs', lines 201:0-203:1 -/
-def max (x : Usize) (y : Usize) : Result Usize :=
+def max (x : Usize) (y : Usize) : Result Usize := do
   if x > y
   then ok x
   else ok y
 
 /- [tutorial::get_or_zero]:
    Source: 'src/lib.rs', lines 205:0-207:1 -/
-def get_or_zero (y : alloc.vec.Vec U32) (i : Usize) : Result U32 :=
+def get_or_zero (y : alloc.vec.Vec U32) (i : Usize) : Result U32 := do
   let i1 := alloc.vec.Vec.len y
   if i < i1
   then alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceInst U32) y i
@@ -340,13 +325,12 @@ def get_or_zero (y : alloc.vec.Vec U32) (i : Usize) : Result U32 :=
 /- [tutorial::add]: loop 0:
    Source: 'src/lib.rs', lines 221:4-229:5 -/
 def add_loop
-  (max1 : Usize) (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (c0 : U8)
+  (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (max1 : Usize) (c0 : U8)
   (i : Usize) :
   Result ((alloc.vec.Vec U32) × U8)
-  :=
+  := do
   if i < max1
   then
-    do
     let yi ← get_or_zero y i
     let i1 ←
       alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceInst U32) x i
@@ -363,7 +347,7 @@ def add_loop
         i
     let i5 ← i + 1#usize
     let x1 := index_mut_back sum1
-    add_loop max1 x1 y c01 i5
+    add_loop x1 y max1 c01 i5
   else ok (x, c0)
 partial_fixpoint
 
@@ -372,16 +356,14 @@ partial_fixpoint
 def add
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) :
   Result (alloc.vec.Vec U32)
-  :=
-  do
+  := do
   let i := alloc.vec.Vec.len x
   let i1 := alloc.vec.Vec.len y
   let max1 ← max i i1
   let x1 ← alloc.vec.Vec.resize core.clone.CloneU32 x max1 0#u32
-  let (x2, c0) ← add_loop max1 x1 y 0#u8 0#usize
+  let (x2, c0) ← add_loop x1 y max1 0#u8 0#usize
   if c0 != 0#u8
   then
-    do
     let i2 ← (↑(UScalar.cast .U32 c0) : Result U32)
     alloc.vec.Vec.push x2 i2
   else ok x2

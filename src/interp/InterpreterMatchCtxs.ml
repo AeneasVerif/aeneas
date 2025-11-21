@@ -12,11 +12,11 @@ open Cps
 open InterpreterUtils
 open InterpreterBorrowsCore
 open InterpreterAbs
-open InterpreterLoopsCore
+open InterpreterJoinCore
 module S = SynthesizeSymbolic
 
 (** The local logger *)
-let log = Logging.loops_match_ctxs_log
+let log = Logging.match_ctxs_log
 
 let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
     (ctx : eval_ctx) (env : env) : abs_borrows_loans_maps =
@@ -563,15 +563,16 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     S.symbolic_to_value :=
       SymbolicValueId.Map.add sv_id (left, right) !S.symbolic_to_value
 
-  let add_fresh_symbolic_value_from_no_regions_ty ty (left : tvalue)
-      (right : tvalue) : tvalue =
-    let sv = mk_fresh_symbolic_tvalue_from_no_regions_ty span ty in
+  let add_fresh_symbolic_value_from_no_regions_ty (ctx : eval_ctx) ty
+      (left : tvalue) (right : tvalue) : tvalue =
+    let sv = mk_fresh_symbolic_tvalue_from_no_regions_ty span ctx ty in
     let sv_id = [%add_loc] symbolic_tvalue_get_id span sv in
     add_symbolic_value sv_id left right;
     sv
 
-  let add_fresh_symbolic_value ty (left : tvalue) (right : tvalue) : tvalue =
-    let sv = mk_fresh_symbolic_tvalue span ty in
+  let add_fresh_symbolic_value (ctx : eval_ctx) ty (left : tvalue)
+      (right : tvalue) : tvalue =
+    let sv = mk_fresh_symbolic_tvalue span ctx ty in
     let sv_id = [%add_loc] symbolic_tvalue_get_id span sv in
     add_symbolic_value sv_id left right;
     sv
@@ -604,10 +605,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           match SymbolicValueId.Map.find_opt sv.sv_id !S.symbolic_to_value with
           | None ->
               (* The symbolic value is not fresh: let's just copy it *)
-              (add_fresh_symbolic_value sv.sv_ty v v).value
+              (add_fresh_symbolic_value ctx sv.sv_ty v v).value
           | Some (lv, rv) ->
               (* Introduce a fresh symbolic value which derives from the same values *)
-              (add_fresh_symbolic_value sv.sv_ty lv rv).value)
+              (add_fresh_symbolic_value ctx sv.sv_ty lv rv).value)
     in
     { v with value }
 
@@ -621,9 +622,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     [%sanity_check] span (ty0 = ty1);
     ty0
 
-  let match_distinct_literals (_ : tvalue_matcher) (_ : eval_ctx) (_ : eval_ctx)
-      (ty : ety) (v0 : literal) (v1 : literal) : tvalue =
-    add_fresh_symbolic_value_from_no_regions_ty ty
+  let match_distinct_literals (_ : tvalue_matcher) (ctx0 : eval_ctx)
+      (_ : eval_ctx) (ty : ety) (v0 : literal) (v1 : literal) : tvalue =
+    add_fresh_symbolic_value_from_no_regions_ty ctx0 ty
       { value = VLiteral v0; ty }
       { value = VLiteral v1; ty }
 
@@ -640,11 +641,11 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
        TODO: we might have to do some unification to determine whether some
        regions should be equal or not. *)
     let fresh_regions, ty_with_regions =
-      ty_refresh_regions (Some span) fresh_region_id v0.ty
+      ty_refresh_regions (Some span) ctx0.fresh_region_id v0.ty
     in
 
     (* Introduce a fresh symbolic value for the join *)
-    let sv = add_fresh_symbolic_value ty_with_regions v0 v1 in
+    let sv = add_fresh_symbolic_value ctx0 ty_with_regions v0 v1 in
     let sv_s = tvalue_as_symbolic span sv in
 
     (* Project the ADTs into different region abstractions *)
@@ -671,29 +672,60 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* Create the abstraction expression *)
       let cont : abs_cont option =
         if S.with_abs_conts then
-          let input : tevalue =
-            let proj : esymbolic_proj =
-              { sv_id = sv_s.sv_id; proj_ty = ty_with_regions }
-            in
-            let value =
-              ESymbolic (PNone, EProjLoans { proj; consumed = []; borrows = [] })
-            in
-            { value; ty = ty_with_regions }
-          in
+          if
+            TypesUtils.ty_has_mut_borrows ctx0.type_ctx.type_infos
+              ty_with_regions
+          then
+            (* We used to generate a continuation of the following shape:
+               {[
+                 join(|(s0 <: Option<&'a mut (T)>)|, Option::Some (︙MB l0))︙) :=
+                 ⌊s1 <: Option<&'a mut (T)>⌋
+               ]}
 
-          let output : tevalue =
-            let value = EJoinMarkers (output0, output1) in
-            { value; ty = ty_with_regions }
-          in
-          Some { output = Some output; input = Some input }
+               but joins in abstraction outputs are a bit annoying to handle
+               when merging continuations, so now we generate something like this:
+
+               {[
+                 (|(s0 <: Option<&'a mut (T)>)|, Option::Some (︙MB l0))︙) :=
+                 let x := ⌊s1 <: Option<&'a mut (T)>⌋ in
+                 (x, x)
+               ]}
+
+               TODO: generalize the merge of continuations and revert the changes.
+            *)
+            let input : tevalue =
+              let proj : esymbolic_proj =
+                { sv_id = sv_s.sv_id; proj_ty = ty_with_regions }
+              in
+              let value =
+                ESymbolic
+                  (PNone, EProjLoans { proj; consumed = []; borrows = [] })
+              in
+              let input = { value; ty = ty_with_regions } in
+
+              (* Create the let-binding *)
+              let fvar = mk_fresh_abs_fvar ty_with_regions in
+              let pair = mk_etuple [ fvar; fvar ] in
+              let pat = mk_epat_from_fvar fvar in
+              mk_let span regions pat input pair
+            in
+
+            let output = mk_simpl_etuple [ output0; output1 ] in
+            Some { output = Some output; input = Some input }
+          else
+            Some
+              {
+                output = Some (mk_simpl_etuple []);
+                input = Some (mk_simpl_etuple []);
+              }
         else None
       in
 
       (* Generate the abstraction *)
       let abs =
         {
-          abs_id = fresh_abs_id ();
-          kind = Loop S.loop_id;
+          abs_id = ctx0.fresh_abs_id ();
+          kind = S.fresh_abs_kind;
           can_end = true;
           parents = AbsId.Set.empty;
           original_parents = [];
@@ -754,7 +786,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         tvalue_has_outer_loans v0 || tvalue_has_outer_loans v1
       in
       (* Move the values to region abstractions *)
-      let abs_kind = Loop S.loop_id in
+      let abs_kind = S.fresh_abs_kind in
       let to_absl pm ctx v =
         let absl =
           convert_value_to_abstractions span abs_kind ~can_end:true ctx v
@@ -767,7 +799,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let v = mk_bottom span (erase_regions v0.ty) in
       let v, absl =
         if has_outer_loans then
-          let lid = fresh_borrow_id () in
+          let lid = ctx0.fresh_borrow_id () in
           let absl =
             List.map
               (fun (abs : abs) ->
@@ -776,7 +808,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
                   {
                     value =
                       ABorrow
-                        (ASharedBorrow (PNone, lid, fresh_shared_borrow_id ()));
+                        (ASharedBorrow
+                           (PNone, lid, ctx0.fresh_shared_borrow_id ()));
                     ty = TRef (RVar (Free rid), v0.ty, RShared);
                   }
                 in
@@ -795,7 +828,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* Note the values can't contain bottoms (the case where they contain
          bottom values is handled above) *)
       (* We put everything in the same region *)
-      let rid = fresh_region_id () in
+      let rid = ctx0.fresh_region_id () in
       let avl0, input0 =
         convert_value_to_input_avalues span ctx0 PLeft v0 rid
       in
@@ -805,7 +838,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       [%cassert] span (ty_no_regions v0.ty) "Not implemented yet";
       let _, ty = ty_refresh_regions (Some span) (fun _ -> rid) v0.ty in
 
-      let lid = fresh_borrow_id () in
+      let lid = ctx0.fresh_borrow_id () in
       if tvalue_has_mutable_loans v0 || tvalue_has_mutable_loans v1 then (
         let ref_ty = mk_ref_ty (RVar (Free rid)) ty RMut in
         let av : tavalue =
@@ -837,8 +870,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
         let abs =
           {
-            abs_id = fresh_abs_id ();
-            kind = Loop S.loop_id;
+            abs_id = ctx0.fresh_abs_id ();
+            kind = S.fresh_abs_kind;
             can_end = true;
             parents = AbsId.Set.empty;
             original_parents = [];
@@ -875,7 +908,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* We always generate a fresh borrow id: borrows may be duplicated, and
          we have to make sure that shared borrow ids remain unique.
        *)
-      let sid = fresh_shared_borrow_id () in
+      let sid = ctx0.fresh_shared_borrow_id () in
       (bid0, sid)
     else
       (* We replace bid0 and bid1 with a fresh borrow id, and introduce
@@ -884,8 +917,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
            { SB bid0, SB bid1, SL bid2 }
          ]}
       *)
-      let rid = fresh_region_id () in
-      let bid2 = fresh_borrow_id () in
+      let rid = ctx0.fresh_region_id () in
+      let bid2 = ctx0.fresh_borrow_id () in
 
       (* Update the type of the shared loan to use the fresh region *)
       let _, bv_ty, kind = ty_as_ref ty in
@@ -924,8 +957,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* Generate the abstraction *)
       let abs =
         {
-          abs_id = fresh_abs_id ();
-          kind = Loop S.loop_id;
+          abs_id = ctx0.fresh_abs_id ();
+          kind = S.fresh_abs_kind;
           can_end = true;
           parents = AbsId.Set.empty;
           original_parents = [];
@@ -940,7 +973,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* We always generate a fresh borrow id: borrows may be duplicated, and
          we have to make sure that shared borrow ids remain unique.
       *)
-      let sid = fresh_shared_borrow_id () in
+      let sid = ctx0.fresh_shared_borrow_id () in
       (bid2, sid)
 
   let match_mut_borrows (_ : tvalue_matcher) (ctx0 : eval_ctx) (_ : eval_ctx)
@@ -1022,8 +1055,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
            { |MB bid0|, ︙MB bid1︙, ML bid2 }
          ]}
       *)
-      let rid = fresh_region_id () in
-      let bid2 = fresh_borrow_id () in
+      let rid = ctx0.fresh_region_id () in
+      let bid2 = ctx0.fresh_borrow_id () in
 
       (* [bv] is the result of the join  *)
       let _, bv_ty, kind = ty_as_ref ty in
@@ -1091,8 +1124,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* Generate the abstraction *)
       let abs =
         {
-          abs_id = fresh_abs_id ();
-          kind = Loop S.loop_id;
+          abs_id = ctx0.fresh_abs_id ();
+          kind = S.fresh_abs_kind;
           can_end = true;
           parents = AbsId.Set.empty;
           original_parents = [];
@@ -1120,8 +1153,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         "Nested borrows are not supported yet.";
 
       (* We need to introduce a fresh shared loan. *)
-      let rid = fresh_region_id () in
-      let nbid = fresh_borrow_id () in
+      let rid = ctx0.fresh_region_id () in
+      let nbid = ctx0.fresh_borrow_id () in
 
       let kind = RShared in
       let bv_ty = ty in
@@ -1130,7 +1163,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let borrow_av =
         let ty = borrow_ty in
         let value =
-          ABorrow (ASharedBorrow (PNone, nbid, fresh_shared_borrow_id ()))
+          ABorrow (ASharedBorrow (PNone, nbid, ctx0.fresh_shared_borrow_id ()))
         in
         mk_tavalue span ty value
       in
@@ -1161,8 +1194,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* Generate the abstraction *)
       let abs =
         {
-          abs_id = fresh_abs_id ();
-          kind = Loop S.loop_id;
+          abs_id = ctx0.fresh_abs_id ();
+          kind = S.fresh_abs_kind;
           can_end = true;
           parents = AbsId.Set.empty;
           original_parents = [];
@@ -1187,8 +1220,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         "Nested borrows are not supported yet.";
 
       (* We need to introduce a fresh loan and a fresh region abstraction *)
-      let rid = fresh_region_id () in
-      let nbid = fresh_borrow_id () in
+      let rid = ctx0.fresh_region_id () in
+      let nbid = ctx0.fresh_borrow_id () in
 
       let kind = RMut in
       let bv_ty = ty in
@@ -1237,8 +1270,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* Generate the abstraction *)
       let abs =
         {
-          abs_id = fresh_abs_id ();
-          kind = Loop S.loop_id;
+          abs_id = ctx0.fresh_abs_id ();
+          kind = S.fresh_abs_kind;
           can_end = true;
           parents = AbsId.Set.empty;
           original_parents = [];
@@ -1307,10 +1340,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         *)
         (* Introduce one region abstraction per region appearing in the symbolic value *)
         let fresh_regions, proj_ty =
-          ty_refresh_regions (Some span) fresh_region_id sv0.sv_ty
+          ty_refresh_regions (Some span) ctx0.fresh_region_id sv0.sv_ty
         in
         let svj =
-          add_fresh_symbolic_value proj_ty
+          add_fresh_symbolic_value ctx0 proj_ty
             { value = VSymbolic sv0; ty = sv0.sv_ty }
             { value = VSymbolic sv1; ty = sv1.sv_ty }
         in
@@ -1329,29 +1362,43 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
                    the case of mutable borrows):
                    {[
                      output := (|proj_borrows (s0 <: ...)|, ︙proj_borrows (s1 <: ...︙)
-                     input := let x = proj_loans (s2 : ...)
+                     input := let x = proj_loans (s2 : ...) in (x, x)
                    ]}
+
+                   Note that we introduce projections only if the symbolic values
+                   contain mutable borrows for the projected regions. Otherwise
+                   we ignore them.
                 *)
-                let proj_s0 = mk_eproj_borrows PLeft sv0.sv_id proj_ty in
-                let proj_s1 = mk_eproj_borrows PRight sv1.sv_id proj_ty in
-                let proj_svj = mk_eproj_loans PNone svj.sv_id proj_ty in
-                let input : tevalue =
-                  let loan = proj_svj in
-                  (* Create the let-binding *)
-                  let fvar = mk_fresh_abs_fvar proj_ty in
-                  let pair = mk_etuple [ fvar; fvar ] in
-                  let pat = mk_epat_from_fvar fvar in
-                  mk_let span owned pat loan pair
-                in
-                let output : tevalue = mk_etuple [ proj_s0; proj_s1 ] in
-                Some { output = Some output; input = Some input }
+                if
+                  ty_has_mut_borrow_for_region_in_set ctx0.type_ctx.type_infos
+                    owned proj_ty
+                then
+                  let proj_s0 = mk_eproj_borrows PLeft sv0.sv_id proj_ty in
+                  let proj_s1 = mk_eproj_borrows PRight sv1.sv_id proj_ty in
+                  let proj_svj = mk_eproj_loans PNone svj.sv_id proj_ty in
+                  let input : tevalue =
+                    let loan = proj_svj in
+                    (* Create the let-binding *)
+                    let fvar = mk_fresh_abs_fvar proj_ty in
+                    let pair = mk_etuple [ fvar; fvar ] in
+                    let pat = mk_epat_from_fvar fvar in
+                    mk_let span owned pat loan pair
+                  in
+                  let output : tevalue = mk_etuple [ proj_s0; proj_s1 ] in
+                  Some { output = Some output; input = Some input }
+                else
+                  Some
+                    {
+                      output = Some (mk_simpl_etuple []);
+                      input = Some (mk_simpl_etuple []);
+                    }
               else None
             in
             (* Create the abstraction *)
             let abs =
               {
-                abs_id = fresh_abs_id ();
-                kind = Loop S.loop_id;
+                abs_id = ctx0.fresh_abs_id ();
+                kind = S.fresh_abs_kind;
                 can_end = true;
                 parents = AbsId.Set.empty;
                 original_parents = [];
@@ -1366,7 +1413,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       else
         (* Otherwise we simply introduce a fresh symbolic value *)
         let sv =
-          add_fresh_symbolic_value sv0.sv_ty
+          add_fresh_symbolic_value ctx0 sv0.sv_ty
             { value = VSymbolic sv0; ty = sv0.sv_ty }
             { value = VSymbolic sv1; ty = sv1.sv_ty }
         in
@@ -1400,10 +1447,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             else raise (ValueMatchFailure (LoanInRight id)))
     | None ->
         (* Convert the value to an abstraction *)
-        let abs_kind : abs_kind = Loop S.loop_id in
         let ctx = if value_is_left then ctx0 else ctx1 in
         let absl =
-          convert_value_to_abstractions span abs_kind ~can_end:true ctx v
+          convert_value_to_abstractions span S.fresh_abs_kind ~can_end:true ctx
+            v
         in
         (* Add a marker to the abstraction indicating the provenance of the value *)
         let pm = if value_is_left then PLeft else PRight in
@@ -1434,8 +1481,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     let joined_value = match_rec shared_value other in
 
     (* We need to introduce a fresh shared loan. *)
-    let rid = fresh_region_id () in
-    let nbid = fresh_borrow_id () in
+    let rid = ctx0.fresh_region_id () in
+    let nbid = ctx0.fresh_borrow_id () in
 
     let kind = RShared in
     let bv_ty = ty in
@@ -1444,7 +1491,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     let borrow_av =
       let ty = borrow_ty in
       let value =
-        ABorrow (ASharedBorrow (PNone, nbid, fresh_shared_borrow_id ()))
+        ABorrow (ASharedBorrow (PNone, nbid, ctx0.fresh_shared_borrow_id ()))
       in
       mk_tavalue span ty value
     in
@@ -1470,8 +1517,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     (* Generate the abstraction *)
     let abs =
       {
-        abs_id = fresh_abs_id ();
-        kind = Loop S.loop_id;
+        abs_id = ctx0.fresh_abs_id ();
+        kind = S.fresh_abs_kind;
         can_end = true;
         parents = AbsId.Set.empty;
         original_parents = [];
@@ -1509,8 +1556,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       ^ ty_to_string other_ctx other.ty];
 
     (* We need to introduce a fresh loan and a fresh region abstraction *)
-    let rid = fresh_region_id () in
-    let nbid = fresh_borrow_id () in
+    let rid = ctx0.fresh_region_id () in
+    let nbid = ctx0.fresh_borrow_id () in
 
     let kind = RMut in
     let bv_ty = ty in
@@ -1568,8 +1615,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     (* Generate the abstraction *)
     let abs =
       {
-        abs_id = fresh_abs_id ();
-        kind = Loop S.loop_id;
+        abs_id = ctx0.fresh_abs_id ();
+        kind = S.fresh_abs_kind;
         can_end = true;
         parents = AbsId.Set.empty;
         original_parents = [];
@@ -1602,9 +1649,6 @@ end
 (* Very annoying: functors only take modules as inputs... *)
 module type MatchMoveState = sig
   val span : Meta.span
-
-  (** The current loop *)
-  val loop_id : LoopId.id
 
   (** The moved values *)
   val nvalues : tvalue list ref
@@ -1873,9 +1917,9 @@ struct
     in
     match_types span ctx0 ctx1 match_distinct_types match_regions ty0 ty1
 
-  let match_distinct_literals (_ : tvalue_matcher) (_ : eval_ctx) (_ : eval_ctx)
-      (ty : ety) (_ : literal) (_ : literal) : tvalue =
-    mk_fresh_symbolic_tvalue_from_no_regions_ty span ty
+  let match_distinct_literals (_ : tvalue_matcher) (ctx0 : eval_ctx)
+      (_ : eval_ctx) (ty : ety) (_ : literal) (_ : literal) : tvalue =
+    mk_fresh_symbolic_tvalue_from_no_regions_ty span ctx0 ty
 
   let match_distinct_adts (_ : tvalue_matcher) (_ : eval_ctx) (_ : eval_ctx)
       (_ty : ety) _ (_adt0 : adt_value) _ (_adt1 : adt_value) : tvalue =
@@ -1907,7 +1951,7 @@ struct
         ()
     in
     (* The shared borrow id doesn't really matter but it's always safer to refresh it *)
-    (bid, fresh_shared_borrow_id ())
+    (bid, ctx0.fresh_shared_borrow_id ())
 
   let match_mut_borrows (_ : tvalue_matcher) (_ : eval_ctx) (_ : eval_ctx)
       (_ty : ety) (bid0 : borrow_id) (_bv0 : tvalue) (bid1 : borrow_id)
@@ -2012,14 +2056,14 @@ struct
   let match_distinct_aadts _ _ _ _ _ _ _ =
     raise (Distinct "match_distinct_adts")
 
-  let match_ashared_borrows (_ : tvalue_matcher) (_ : eval_ctx) (_ : eval_ctx)
-      _ty0 pm0 bid0 _sid0 _ty1 pm1 bid1 _sid1 ty : tavalue =
+  let match_ashared_borrows (_ : tvalue_matcher) (ctx0 : eval_ctx)
+      (_ : eval_ctx) _ty0 pm0 bid0 _sid0 _ty1 pm1 bid1 _sid1 ty : tavalue =
     (* We are checking whether that two environments are equivalent:
        there shouldn't be any projection markers *)
     [%sanity_check] span (pm0 = PNone && pm1 = PNone);
     let bid = match_borrow_id bid0 bid1 in
     (* It's always safer to refresh shared borrow ids *)
-    let sid = fresh_shared_borrow_id () in
+    let sid = ctx0.fresh_shared_borrow_id () in
     let value = ABorrow (ASharedBorrow (PNone, bid, sid)) in
     { value; ty }
 
@@ -2292,7 +2336,11 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
         (* Continue *)
         match_envs env0' env1'
     | EAbs abs0 :: env0', EAbs abs1 :: env1' ->
-        [%ldebug "match_envs: matching abs"];
+        [%ldebug
+          "match_envs: matching abs:\n- abs0: "
+          ^ abs_to_string span ctx0 abs0
+          ^ "\n- abs1: "
+          ^ abs_to_string span ctx1 abs1];
         (* Same as for the dummy values: there are two cases *)
         if AbsId.Set.mem abs0.abs_id fixed_ids.aids then (
           [%ldebug "match_envs: matching abs: fixed abs"];
@@ -2358,26 +2406,29 @@ let ctxs_are_equivalent (span : Meta.span) (fixed_ids : ids_sets)
     (match_ctxs span ~check_equiv:true fixed_ids lookup_shared_value
        lookup_shared_value ctx0 ctx1)
 
-let prepare_loop_match_ctx_with_target (config : config) (span : Meta.span)
-    (loop_id : LoopId.id) (fixed_ids : ids_sets) (src_ctx : eval_ctx) : cm_fun =
+let prepare_match_ctx_with_target (config : config) (span : Meta.span)
+    (fresh_abs_kind : abs_kind) (src_ctx : eval_ctx) : cm_fun =
  fun tgt_ctx ->
   (* Debug *)
   [%ldebug
-    "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
+    "- src_ctx: "
     ^ eval_ctx_to_string ~span:(Some span) src_ctx
     ^ "\n- tgt_ctx: "
     ^ eval_ctx_to_string ~span:(Some span) tgt_ctx];
   (* End the loans which lead to mismatches when joining *)
   let rec reorganize_join_tgt : cm_fun =
    fun tgt_ctx ->
-    (* Collect fixed values in the source and target contexts: end the loans in the
-       source context which don't appear in the target context *)
-    let filt_src_env, _, _ = ctx_split_fixed_new span fixed_ids src_ctx in
-    let filt_tgt_env, _, _ = ctx_split_fixed_new span fixed_ids tgt_ctx in
+    (* We match only the values which appear in both environments *)
+    let dummy_ids0 = env_get_dummy_var_ids src_ctx.env in
+    let dummy_ids1 = env_get_dummy_var_ids tgt_ctx.env in
+    let dummy_ids = DummyVarId.Set.inter dummy_ids0 dummy_ids1 in
+    let abs_ids = compute_fixed_abs_ids src_ctx tgt_ctx in
+
+    let filt_src_env, _, _ = ctx_split span abs_ids dummy_ids src_ctx in
+    let filt_tgt_env, _, _ = ctx_split span abs_ids dummy_ids tgt_ctx in
 
     [%ldebug
-      "reorganize_join_tgt:\n" ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids
-      ^ "\n" ^ "\n- filt_src_ctx: "
+      "reorganize_join_tgt:" ^ "\n- filt_src_ctx: "
       ^ env_to_string span src_ctx filt_src_env
       ^ "\n- filt_tgt_ctx: "
       ^ env_to_string span tgt_ctx filt_tgt_env];
@@ -2396,7 +2447,7 @@ let prepare_loop_match_ctx_with_target (config : config) (span : Meta.span)
 
     let module S : MatchJoinState = struct
       let span = span
-      let loop_id = loop_id
+      let fresh_abs_kind = fresh_abs_kind
       let nabs = nabs
 
       (* We're only preparing the match by ending loans, etc., and shouldn't introduce
@@ -2409,6 +2460,27 @@ let prepare_loop_match_ctx_with_target (config : config) (span : Meta.span)
     let module JM = MakeJoinMatcher (S) in
     let module M = MakeMatcher (JM) in
     try
+      (* Match the bindings appear in both environments *)
+      (* TODO: we shouldn't filter the locals (they should appear in both envs)? *)
+      let src_dummy_ids = env_get_dummy_var_ids filt_src_env in
+      let src_local_ids = env_get_local_ids filt_src_env in
+      let tgt_dummy_ids = env_get_dummy_var_ids filt_tgt_env in
+      let tgt_local_ids = env_get_local_ids filt_tgt_env in
+      let dummy_ids = DummyVarId.Set.inter src_dummy_ids tgt_dummy_ids in
+      let local_ids =
+        Expressions.LocalId.Set.inter src_local_ids tgt_local_ids
+      in
+      (* We need to filter the environments further *)
+      let keep (e : env_elem) : bool =
+        match e with
+        | EBinding (BDummy id, _) when DummyVarId.Set.mem id dummy_ids -> true
+        | EBinding (BVar v, _)
+          when Expressions.LocalId.Set.mem v.index local_ids -> true
+        | _ -> false
+      in
+      let filt_src_env = List.filter keep filt_src_env in
+      let filt_tgt_env = List.filter keep filt_tgt_env in
+      [%sanity_check] span (List.length filt_src_env = List.length filt_tgt_env);
       let _ =
         List.iter
           (fun (var0, var1) ->
@@ -2426,8 +2498,7 @@ let prepare_loop_match_ctx_with_target (config : config) (span : Meta.span)
       in
       (* No exception was thrown: continue *)
       [%ldebug
-        "reorganize_join_tgt: done with borrows/loans:\n" ^ "\n- fixed_ids: "
-        ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- filt_src_ctx: "
+        "reorganize_join_tgt: done with borrows/loans:" ^ "\n- filt_src_ctx: "
         ^ env_to_string span src_ctx filt_src_env
         ^ "\n- filt_tgt_ctx: "
         ^ env_to_string span tgt_ctx filt_tgt_env];
@@ -2440,7 +2511,6 @@ let prepare_loop_match_ctx_with_target (config : config) (span : Meta.span)
       let nvalues = ref [] in
       let module S : MatchMoveState = struct
         let span = span
-        let loop_id = loop_id
         let nvalues = nvalues
       end in
       let module MM = MakeMoveMatcher (S) in
@@ -2482,8 +2552,8 @@ let prepare_loop_match_ctx_with_target (config : config) (span : Meta.span)
       in
 
       [%ldebug
-        "reorganize_join_tgt: done with borrows/loans and moves:\n"
-        ^ "\n- fixed_ids: " ^ show_ids_sets fixed_ids ^ "\n" ^ "\n- src_ctx: "
+        "reorganize_join_tgt: done with borrows/loans and moves:"
+        ^ "\n- src_ctx: "
         ^ eval_ctx_to_string ~span:(Some span) src_ctx
         ^ "\n- tgt_ctx: "
         ^ eval_ctx_to_string ~span:(Some span) tgt_ctx];

@@ -194,6 +194,23 @@ def simpScalarTac (config : ScalarTac.CondSimpTacConfig)
     {maxDischargeDepth := 2, failIfUnchanged := false, contextual := true}
     hypsArgs args addSimpThms false loc
 
+/-- `simp_scalar` simplifies arithmetic expressions.
+
+It is essentially equivalent to `simp (discharger := scalar_tac) [simp_bool_prop_simps, simp_scalar_simps]`
+but implemented in a way which allows factoring out most of the preprocessing step of `scalar_tac`, resulting
+in a significant gain in performance. In practice, this is extremely powerful when working on goals which use
+non-linear arithmetic expressions. For instance, it automatically simplifies `min a b` to `a` when `a ≤ b`,
+or `a % n` to `a` when `a < n`, etc, meaning for instance that `min (a % b) b` gets simplified to `a` when `a < b`,
+etc.
+
+You can mark lemmas to be used by `simp_scalar` by annotating them with the attribute `@[simp_scalar_simps]`,
+or by passing them as arguments to the tactic, e.g., `simp_scalar [my_lemma1, my_lemma2]`.
+
+Note that we try to be conservative when registering `simp_scalar_simps` lemmas in the standard library,
+to avoid applying unwanted simplifications. For this reason, it often happens that nested calls to `simp_scalar`
+and `simp` allow making progress on the goal.
+TODO: add an option `simp_scalar +simp` to use more lemmas
+-/
 syntax (name := simp_scalar) "simp_scalar" Parser.Tactic.optConfig ("[" (term<|>"*"),* "]")? (location)? : tactic
 
 def parseSimpScalar :

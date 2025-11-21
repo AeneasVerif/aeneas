@@ -8,6 +8,7 @@
  *)
 
 let log = Logging.errors_log
+let error_mutex = Mutex.create ()
 
 let span_data_to_string (span_data : Meta.span_data) =
   let file =
@@ -42,8 +43,8 @@ let format_error_message (span : Meta.span option) (msg : string) =
 
 let format_error_message_with_file_line (file : string) (line : int)
     (span : Meta.span option) (msg : string) =
-  "In file " ^ file ^ ", line " ^ string_of_int line ^ ":\n"
-  ^ format_error_message span msg
+  format_error_message span msg
+  ^ "\nCompiler source: " ^ file ^ ", line " ^ string_of_int line
 
 type cfailure = {
   span : Meta.span option;
@@ -63,7 +64,8 @@ let error_list : (string * int * Meta.span option * string) list ref = ref []
     very end. *)
 let push_error (file : string) (line : int) (span : Meta.span option)
     (msg : string) =
-  error_list := (file, line, span, msg) :: !error_list;
+  Mutex.protect error_mutex (fun _ ->
+      error_list := (file, line, span, msg) :: !error_list);
   if !Config.print_error_emitters then
     log#serror (format_error_message_with_file_line file line span msg)
   else log#serror (format_error_message span msg)

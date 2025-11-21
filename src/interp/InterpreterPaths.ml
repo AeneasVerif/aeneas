@@ -336,7 +336,7 @@ let try_read_place (span : Meta.span) (access : access_kind) (p : place)
          original one.
       *)
       (if !Config.sanity_checks then
-         if ctx1 <> ctx then
+         if ctx1.env <> ctx.env then
            let msg =
              "Unexpected environment update:\nNew environment:\n"
              ^ show_env ctx1.env ^ "\n\nOld environment:\n" ^ show_env ctx.env
@@ -585,7 +585,7 @@ let drop_outer_loans_at_lplace (config : config) (span : Meta.span) (p : place)
   let access = Write in
   let _, v = read_place span access p ctx in
   let ctx = write_place span access p (mk_bottom span v.ty) ctx in
-  let dummy_id = fresh_dummy_var_id () in
+  let dummy_id = ctx.fresh_dummy_var_id () in
   let ctx = ctx_push_dummy_var ctx dummy_id v in
   (* Auxiliary function: while there are loans to end in the
      temporary value, end them *)

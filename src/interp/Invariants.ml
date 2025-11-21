@@ -762,7 +762,8 @@ let sv_info_to_string (ctx : eval_ctx) (info : sv_info) : string =
     - aproj_loans are mutually disjoint
     - TODO: aproj_borrows are mutually disjoint
     - the union of the aproj_loans contains the aproj_borrows applied on the
-      same symbolic values *)
+      same symbolic values
+    - all symbolic evalues should contain mutable borrows/loans *)
 let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
   (* Small utility *)
   let module M = SymbolicValueId.Map in
@@ -818,6 +819,26 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
              add_aproj_borrows abs.abs_id abs.regions.owned proj false
          | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty -> ());
         super#visit_aproj abs aproj
+
+      method! visit_eproj abs eproj =
+        (let abs = Option.get abs in
+         match eproj with
+         | EProjLoans { proj; consumed = _; borrows = _ }
+         | EProjBorrows { proj; loans = _ } ->
+             (* Symbolic projections in evalues should be over values which contain
+                mutable borrows/loans *)
+             if
+               not
+                 (ty_has_mut_borrow_for_region_in_set ctx.type_ctx.type_infos
+                    abs.regions.owned proj.proj_ty)
+             then (
+               [%ldebug
+                 "Abs contains evalues with no mutable borrows/loans:\n"
+                 ^ abs_to_string span ctx abs ^ "\n\nProblematic eproj:\n"
+                 ^ eproj_to_string ctx eproj];
+               [%internal_error] span)
+         | EEndedProjLoans _ | EEndedProjBorrows _ | EEmpty -> ());
+        super#visit_eproj abs eproj
     end
   in
   (* Collect the information *)

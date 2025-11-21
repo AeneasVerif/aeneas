@@ -253,4 +253,12 @@ val reorder_fresh_abs : Meta.span -> bool -> AbsId.Set.t -> eval_ctx -> eval_ctx
 
     The [proj_marker] must be [PLeft] or [PRight]. *)
 val project_context :
-  Meta.span -> InterpreterUtils.ids_sets -> proj_marker -> eval_ctx -> eval_ctx
+  Meta.span -> AbsId.Set.t -> proj_marker -> eval_ctx -> eval_ctx
+
+(** Introduce a continuation expression to a region abstraction.
+
+    We use this for instance for loops and joins (after branchings): in the
+    joined context, we replace the abstraction continuations of the fresh
+    abstractions to reflect the fact that they should be introduced by the
+    loop/join. *)
+val add_abs_cont_to_abs : Meta.span -> eval_ctx -> abs -> abs_fun -> abs

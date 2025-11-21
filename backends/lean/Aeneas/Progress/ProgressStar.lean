@@ -523,16 +523,29 @@ def parseArgs: TSyntax `Aeneas.ProgressStar.«progress*_args» → CoreM Config
     return {preconditionTac}
 | _ => throwUnsupportedSyntax
 
-elab "progress" noWs "*" stx:«progress*_args»: tactic => do
-  let cfg ← parseArgs stx
-  evalProgressStar cfg *> pure ()
+/-- The `progress*` tactic repeatedly applies `progress` and `split` on the goal.
 
-elab tk:"progress" noWs "*?" stx:«progress*_args»: tactic => do
-  let cfg ← parseArgs stx
-  let info ← evalProgressStar cfg
-  let suggestion ← info.script.toSyntax
-  let suggestion ← `(tacticSeq|$(suggestion)*)
-  Aesop.addTryThisTacticSeqSuggestion tk suggestion (origSpan? := ← getRef)
+Its variant `progress*?` allows automatically generating the equivalent proof script.
+-/
+syntax (name := progressStar) "progress" noWs ("*" <|> "*?") «progress*_args»: tactic
+
+@[tactic progressStar]
+def evalProgressStarTac : Tactic := fun stx => do
+  match stx with
+  | `(tactic| progress* $args:«progress*_args») =>
+    let cfg ← parseArgs args
+    evalProgressStar cfg *> pure ()
+  | `(tactic| progress*? $args:«progress*_args») =>
+    let cfg ← parseArgs args
+    let info ← evalProgressStar cfg
+    let suggestion ← info.script.toSyntax
+    let suggestion ← `(tacticSeq|$(suggestion)*)
+    /- TODO: do not use the Aesop helper but our own (it mentions Aesop in the message)
+       See https://github.com/AeneasVerif/aeneas/issues/476 -/
+    Aesop.addTryThisTacticSeqSuggestion stx suggestion (origSpan? := ← getRef)
+    --TODO: if we use this the indentation is not correct
+    --Meta.Tactic.TryThis.addSuggestion stx suggestion (origSpan? := ← getRef)
+  | _ => throwUnsupportedSyntax
 
 end ProgressStar
 
@@ -541,7 +554,7 @@ section Examples
 /--
 info: Try this:
 
-    simp only [progress_simps]
+  [apply]   simp only [progress_simps]
 -/
 #guard_msgs in
 example : True := by progress*?
@@ -556,7 +569,7 @@ def add1 (x0 x1 : U32) : Std.Result U32 := do
 /--
 info: Try this:
 
-      let* ⟨ x2, x2_post ⟩ ← U32.add_spec
+  [apply]     let* ⟨ x2, x2_post ⟩ ← U32.add_spec
     let* ⟨ x3, x3_post ⟩ ← U32.add_spec
     let* ⟨ res, res_post ⟩ ← U32.add_spec
 -/
@@ -569,7 +582,7 @@ example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
 /--
 info: Try this:
 
-      simp only [progress_simps]
+  [apply]     simp only [progress_simps]
     let* ⟨ x2, x2_post ⟩ ← U32.add_spec
     let* ⟨ x3, x3_post ⟩ ← U32.add_spec
     let* ⟨ res, res_post ⟩ ← U32.add_spec
@@ -594,7 +607,7 @@ def add2 (b : Bool) (x0 x1 : U32) : Std.Result U32 := do
 /--
 info: Try this:
 
-      split
+  [apply]     split
     . let* ⟨ x2, x2_post ⟩ ← U32.add_spec
       let* ⟨ x3, x3_post ⟩ ← U32.add_spec
       let* ⟨ res, res_post ⟩ ← U32.add_spec
@@ -610,7 +623,7 @@ example b (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
 /--
 info: Try this:
 
-      split
+  [apply]     split
     . let* ⟨ x2, x2_post ⟩ ← U32.add_spec
       · sorry
       let* ⟨ x3, x3_post ⟩ ← U32.add_spec

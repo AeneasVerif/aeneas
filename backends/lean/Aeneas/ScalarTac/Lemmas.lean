@@ -25,7 +25,7 @@ instance (x y : IScalar ty) : IsLinearIntProp (x ≥ y) where
 instance (x y : IScalar ty) : IsLinearIntProp (x ≥ y) where
 instance (x y : IScalar ty) : IsLinearIntProp (x = y) where
 
-attribute [scalar_tac_simps] Prod.mk.injEq Membership.mem Int.ofNat_toNat zero_add
+attribute [scalar_tac_simps] Prod.mk.injEq Membership.mem Int.ofNat_toNat zero_add bne_iff_ne
 
 local syntax "simp_scalar_consts" : tactic
 local macro_rules
@@ -455,6 +455,19 @@ example (i j n1 n2 : ℕ)
 -/
 @[scalar_tac x % y]
 theorem mod_lt (x y : ℕ) (h : 0 < y) : x % y < y := by exact Nat.mod_lt x h
+
+/-!
+# Size
+-/
+
+/- Remark: we're omitting a similar theorem for `IScalar` because the theorem is a bit cumbersome
+   to use (it has to be expressed in terms of `x.bv.toNat`). -/
+@[scalar_tac_simps]
+theorem UScalar.sizeOf {ty} (x : UScalar ty) : sizeOf x = x.val + 3 := by
+  cases x; simp only [UScalar.mk.sizeOf_spec, BitVec.sizeOf, Fin.sizeOf, BitVec.val_toFin]
+  unfold UScalar.val
+  simp only
+  omega
 
 end ScalarTac
 

@@ -113,7 +113,12 @@ macro_rules
       --
       clear_redundant_hyps)
 
--- For termination proofs
+/-- This tactic is a variant of `scalar_tac` specialized for `decreasing_by` proofs.
+
+It does a slightly different preprocessing step to remove useless assumptions introduced
+automatically by Lean when doing termination proofs and which tend to slow down `scalar_tac`
+considerably.
+-/
 syntax "scalar_decr_tac" : tactic
 macro_rules
   | `(tactic| scalar_decr_tac) =>

@@ -1908,7 +1908,7 @@ let refresh_live_regions_in_ty (span : Meta.span) (ctx : eval_ctx) (ty : rty) :
       match RegionId.Map.find_opt rid !regions with
       | Some rid -> rid
       | None ->
-          let nrid = fresh_region_id () in
+          let nrid = ctx.fresh_region_id () in
           regions := RegionId.Map.add rid nrid !regions;
           nrid)
     else rid

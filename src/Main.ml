@@ -169,6 +169,9 @@ let () =
          2 with '-mark-ids s1,s2', or '-mark-ids s@1, s@2. The supported \
          prefixes are: 's' (symbolic value id), 'b' (borrow id), 'a' \
          (abstraction id), 'r' (region id), 'f' (pure free variable id)." );
+      ( "-sequential",
+        Arg.Clear parallel,
+        " Execute sequentially (no parallelism)" );
     ]
   in
 
@@ -258,6 +261,11 @@ let () =
     !activated_loggers;
 
   (* Properly register the marked ids *)
+  let marked_symbolic_value_ids = ref Values.SymbolicValueId.Set.empty in
+  let marked_borrow_ids = ref Values.BorrowId.Set.empty in
+  let marked_abs_ids = ref Values.AbsId.Set.empty in
+  let marked_region_ids = ref Types.RegionId.Set.empty in
+  let marked_fvar_ids = ref Pure.FVarId.Set.empty in
   List.iter
     (fun id ->
       let i = if String.length id >= 2 && String.get id 1 = '@' then 2 else 1 in
@@ -271,17 +279,45 @@ let () =
       | Some i -> (
           let open ContextsBase in
           match String.get id 0 with
-          | 's' -> marked_symbolic_value_ids_insert_from_int i
-          | 'b' -> marked_borrow_ids_insert_from_int i
-          | 'a' -> marked_abs_ids_insert_from_int i
-          | 'r' -> marked_region_ids_insert_from_int i
-          | 'f' -> Pure.marked_fvar_ids_insert_from_int i
+          | 's' ->
+              marked_symbolic_value_ids :=
+                Values.SymbolicValueId.Set.add
+                  (Values.SymbolicValueId.of_int i)
+                  !marked_symbolic_value_ids
+          | 'b' ->
+              marked_borrow_ids :=
+                Values.BorrowId.Set.add (Values.BorrowId.of_int i)
+                  !marked_borrow_ids
+          | 'a' ->
+              marked_abs_ids :=
+                Values.AbsId.Set.add (Values.AbsId.of_int i) !marked_abs_ids
+          | 'r' ->
+              marked_region_ids :=
+                Types.RegionId.Set.add (Types.RegionId.of_int i)
+                  !marked_region_ids
+          | 'f' ->
+              marked_fvar_ids :=
+                Pure.FVarId.Set.add (Pure.FVarId.of_int i) !marked_fvar_ids
           | _ ->
               log#serror
                 ("Invalid identifier provided to option: '" ^ id
                ^ "': the first character should be in {'s', 'b', 'a', 'r'}");
               fail false))
     !marked_ids;
+  let marked_ids : ContextsBase.marked_ids =
+    {
+      symbolic_value_ids = !marked_symbolic_value_ids;
+      borrow_ids = !marked_borrow_ids;
+      abs_ids = !marked_abs_ids;
+      region_ids = !marked_region_ids;
+      pure_fvar_ids = !marked_fvar_ids;
+      fun_call_ids = Values.FunCallId.Set.empty;
+      dummy_var_ids = Values.DummyVarId.Set.empty;
+      shared_borrow_ids = Values.SharedBorrowId.Set.empty;
+      abs_fvar_ids = Values.AbsFVarId.Set.empty;
+      loop_ids = Values.LoopId.Set.empty;
+    }
+  in
 
   (* Sanity check (now that the arguments are parsed!) *)
   check_arg_implies
@@ -556,8 +592,11 @@ let () =
       if !test_unit_functions then Test.test_unit_functions m;
 
       (* Translate or borrow-check the crate *)
-      if !borrow_check then Aeneas.BorrowCheck.borrow_check_crate m
-      else Aeneas.Translate.translate_crate filename dest_dir !Config.subdir m;
+      let extracted_opaque = ref false in
+      if !borrow_check then Aeneas.BorrowCheck.borrow_check_crate m marked_ids
+      else
+        Aeneas.Translate.translate_crate filename dest_dir !Config.subdir m
+          extracted_opaque marked_ids;
 
       let has_errors =
         if !Errors.error_list <> [] then true
@@ -566,6 +605,15 @@ let () =
             log#linfo (lazy "Crate successfully borrow-checked");
           false)
       in
+
+      (* Print a warning if we had to extract opaque definitions and the option
+         [-split-file] is not on *)
+      if !extracted_opaque && not !split_files then
+        log#lwarning
+          (lazy
+            "The crate contains extracted external, unknown definitions: we \
+             advise using the option -split-files to allow manually providing \
+             these definitions in separate files.");
 
       (* Print total elapsed time *)
       log#linfo

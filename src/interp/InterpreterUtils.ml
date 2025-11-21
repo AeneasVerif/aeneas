@@ -24,8 +24,11 @@ let symbolic_value_id_to_pretty_string =
 let borrow_content_to_string = Print.EvalCtx.borrow_content_to_string
 let loan_content_to_string = Print.EvalCtx.loan_content_to_string
 let aborrow_content_to_string = Print.EvalCtx.aborrow_content_to_string
+let eborrow_content_to_string = Print.EvalCtx.eborrow_content_to_string
 let aloan_content_to_string = Print.EvalCtx.aloan_content_to_string
+let eloan_content_to_string = Print.EvalCtx.eloan_content_to_string
 let aproj_to_string = Print.EvalCtx.aproj_to_string
+let eproj_to_string = Print.EvalCtx.eproj_to_string
 let tvalue_to_string = Print.EvalCtx.tvalue_to_string
 let tavalue_to_string = Print.EvalCtx.tavalue_to_string
 let tevalue_to_string = Print.EvalCtx.tevalue_to_string
@@ -89,38 +92,39 @@ let mk_place_from_var_id (ctx : eval_ctx) (span : Meta.span)
   { kind = PlaceLocal var_id; ty = typed_val.ty }
 
 (** Create a fresh symbolic value *)
-let mk_fresh_symbolic_value_opt_span (span : Meta.span option) (ty : ty) :
-    symbolic_value =
+let mk_fresh_symbolic_value_opt_span (span : Meta.span option)
+    fresh_symbolic_value_id (ty : ty) : symbolic_value =
   (* Sanity check *)
   [%sanity_check_opt_span] span (ty_is_rty ty);
   let sv_id = fresh_symbolic_value_id () in
   let svalue = { sv_id; sv_ty = ty } in
   svalue
 
-let mk_fresh_symbolic_value span = mk_fresh_symbolic_value_opt_span (Some span)
+let mk_fresh_symbolic_value span (ctx : eval_ctx) =
+  mk_fresh_symbolic_value_opt_span (Some span) ctx.fresh_symbolic_value_id
 
-let mk_fresh_symbolic_value_from_no_regions_ty (span : Meta.span) (ty : ty) :
-    symbolic_value =
+let mk_fresh_symbolic_value_from_no_regions_ty (span : Meta.span) ctx (ty : ty)
+    : symbolic_value =
   [%sanity_check] span (ty_no_regions ty);
-  mk_fresh_symbolic_value span ty
+  mk_fresh_symbolic_value span ctx ty
 
 (** Create a fresh symbolic value *)
-let mk_fresh_symbolic_tvalue_opt_span (span : Meta.span option) (rty : ty) :
+let mk_fresh_symbolic_tvalue_opt_span (span : Meta.span option) ctx (rty : ty) :
     tvalue =
   [%sanity_check_opt_span] span (ty_is_rty rty);
   let ty = Substitute.erase_regions rty in
   (* Generate the fresh a symbolic value *)
-  let value = mk_fresh_symbolic_value_opt_span span rty in
+  let value = mk_fresh_symbolic_value_opt_span span ctx rty in
   let value = VSymbolic value in
   { value; ty }
 
-let mk_fresh_symbolic_tvalue span =
-  mk_fresh_symbolic_tvalue_opt_span (Some span)
+let mk_fresh_symbolic_tvalue span ctx =
+  mk_fresh_symbolic_tvalue_opt_span (Some span) ctx.fresh_symbolic_value_id
 
-let mk_fresh_symbolic_tvalue_from_no_regions_ty (span : Meta.span) (ty : ty) :
-    tvalue =
+let mk_fresh_symbolic_tvalue_from_no_regions_ty (span : Meta.span) ctx (ty : ty)
+    : tvalue =
   [%sanity_check] span (ty_no_regions ty);
-  mk_fresh_symbolic_tvalue span ty
+  mk_fresh_symbolic_tvalue span ctx ty
 
 let symbolic_tvalue_get_id file line (span : Meta.span) (v : tvalue) =
   match v.value with
@@ -159,9 +163,10 @@ let mk_aproj_loans_value_from_symbolic_value (proj_regions : RegionId.Set.t)
       ty = svalue.sv_ty;
     }
 
-let mk_eproj_loans_value_from_symbolic_value (proj_regions : RegionId.Set.t)
+let mk_eproj_loans_value_from_symbolic_value
+    (type_infos : TypesAnalysis.type_infos) (proj_regions : RegionId.Set.t)
     (svalue : symbolic_value) (proj_ty : ty) : tevalue =
-  if ty_has_regions_in_set proj_regions proj_ty then
+  if ty_has_mut_borrow_for_region_in_set type_infos proj_regions proj_ty then
     let av =
       ESymbolic
         ( PNone,
@@ -473,6 +478,55 @@ type ids_sets = {
 }
 [@@deriving show]
 
+let empty_ids_sets : ids_sets =
+  let empty = BorrowId.Set.empty in
+  {
+    aids = AbsId.Set.empty;
+    blids = empty;
+    borrow_ids = empty;
+    unique_borrow_ids = UniqueBorrowIdSet.empty;
+    shared_borrow_ids = SharedBorrowId.Set.empty;
+    non_unique_shared_borrow_ids = BorrowId.Set.empty;
+    shared_loans_to_values = BorrowId.Map.empty;
+    loan_ids = empty;
+    dids = DummyVarId.Set.empty;
+    rids = RegionId.Set.empty;
+    sids = SymbolicValueId.Set.empty;
+  }
+
+let ids_sets_inter (ids0 : ids_sets) (ids1 : ids_sets) : ids_sets =
+  let aids = AbsId.Set.inter ids0.aids ids1.aids in
+  let blids = BorrowId.Set.inter ids0.blids ids1.blids in
+  let borrow_ids = BorrowId.Set.inter ids0.borrow_ids ids1.borrow_ids in
+  let unique_borrow_ids =
+    UniqueBorrowIdSet.inter ids0.unique_borrow_ids ids1.unique_borrow_ids
+  in
+  let non_unique_shared_borrow_ids =
+    BorrowId.Set.inter ids0.non_unique_shared_borrow_ids
+      ids1.non_unique_shared_borrow_ids
+  in
+  let shared_borrow_ids =
+    SharedBorrowId.Set.inter ids0.shared_borrow_ids ids1.shared_borrow_ids
+  in
+  let loan_ids = BorrowId.Set.inter ids0.loan_ids ids1.loan_ids in
+  let shared_loans_to_values = BorrowId.Map.empty in
+  let dids = DummyVarId.Set.inter ids0.dids ids1.dids in
+  let rids = RegionId.Set.inter ids0.rids ids1.rids in
+  let sids = SymbolicValueId.Set.inter ids0.sids ids1.sids in
+  {
+    aids;
+    blids;
+    borrow_ids;
+    unique_borrow_ids;
+    non_unique_shared_borrow_ids;
+    shared_borrow_ids;
+    loan_ids;
+    shared_loans_to_values;
+    dids;
+    rids;
+    sids;
+  }
+
 (** See {!compute_tvalue_ids}, {!compute_context_ids}, etc.
 
     TODO: there misses information. *)
@@ -608,14 +662,48 @@ let empty_ids_set = fst (compute_ctxs_ids [])
 
 let initialize_eval_ctx (span : Meta.span option) (ctx : decls_ctx)
     (region_groups : RegionGroupId.id list) (type_vars : type_param list)
-    (const_generic_vars : const_generic_param list) : eval_ctx =
-  reset_global_counters ();
+    (const_generic_vars : const_generic_param list) (marked_ids : marked_ids) :
+    eval_ctx =
+  let _, _, _, fresh_symbolic_value_id =
+    SymbolicValueId.fresh_stateful_generator_with_marked
+      marked_ids.symbolic_value_ids
+  in
+  let _, _, _, fresh_borrow_id =
+    BorrowId.fresh_stateful_generator_with_marked marked_ids.borrow_ids
+  in
+
+  let _, _, _, fresh_shared_borrow_id =
+    SharedBorrowId.fresh_stateful_generator_with_marked
+      marked_ids.shared_borrow_ids
+  in
+
+  let _, _, _, fresh_region_id =
+    RegionId.fresh_stateful_generator_with_marked marked_ids.region_ids
+  in
+  let _, _, _, fresh_abs_id =
+    AbsId.fresh_stateful_generator_with_marked marked_ids.abs_ids
+  in
+  let _, _, _, fresh_abs_fvar_id =
+    AbsFVarId.fresh_stateful_generator_with_marked marked_ids.abs_fvar_ids
+  in
+  let _, _, _, fresh_dummy_var_id =
+    DummyVarId.fresh_stateful_generator_with_marked marked_ids.dummy_var_ids
+  in
+  let _, _, _, fresh_fun_call_id =
+    FunCallId.fresh_stateful_generator_with_marked marked_ids.fun_call_ids
+  in
+  let _, _, _, fresh_loop_id =
+    LoopId.fresh_stateful_generator_with_marked marked_ids.loop_ids
+  in
+
   let const_generic_vars_map =
     ConstGenericVarId.Map.of_list
       (List.map
          (fun (cg : const_generic_param) ->
            let ty = TLiteral cg.ty in
-           let cv = mk_fresh_symbolic_tvalue_opt_span span ty in
+           let cv =
+             mk_fresh_symbolic_tvalue_opt_span span fresh_symbolic_value_id ty
+           in
            (cg.index, cv))
          const_generic_vars)
   in
@@ -629,6 +717,15 @@ let initialize_eval_ctx (span : Meta.span option) (ctx : decls_ctx)
     const_generic_vars_map;
     env = [ EFrame ];
     ended_regions = RegionId.Set.empty;
+    fresh_symbolic_value_id;
+    fresh_fun_call_id;
+    fresh_dummy_var_id;
+    fresh_borrow_id;
+    fresh_shared_borrow_id;
+    fresh_abs_id;
+    fresh_region_id;
+    fresh_abs_fvar_id;
+    fresh_loop_id;
   }
 
 (** Instantiate a function signature, introducing **fresh** abstraction ids and
@@ -650,7 +747,7 @@ let instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
    * group ids to abstraction ids *)
   let asubst_map : AbsId.id RegionGroupId.Map.t =
     RegionGroupId.Map.of_list
-      (List.map (fun rg -> (rg.id, fresh_abs_id ())) regions_hierarchy)
+      (List.map (fun rg -> (rg.id, ctx.fresh_abs_id ())) regions_hierarchy)
   in
   let asubst (rg_id : RegionGroupId.id) : AbsId.id =
     RegionGroupId.Map.find rg_id asubst_map
@@ -658,7 +755,7 @@ let instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
   (* Generate fresh regions *)
   let rsubst =
     Substitute.fresh_regions_with_substs_from_vars sg.generics.regions
-      fresh_region_id
+      ctx.fresh_region_id
   in
   (* Generate the type substitution. *)
   [%sanity_check] span (TypesUtils.trait_instance_id_no_regions tr_self);
@@ -692,8 +789,9 @@ let instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
     - [generic_args]: the generic arguments given to the function
     - [sg]: the original, uninstantiated signature (we need to retrieve, for
       instance, the region outlives constraints) *)
-let compute_regions_hierarchy_for_fun_call (span : Meta.span option)
-    (crate : crate) (fun_name : string) (type_vars : type_param list)
+let compute_regions_hierarchy_for_fun_call fresh_abs_id
+    (span : Meta.span option) (crate : crate) (fun_name : string)
+    (type_vars : type_param list)
     (const_generic_vars : const_generic_param list)
     (generic_args : generic_args) (sg : fun_sig) : inst_fun_sig =
   (* We simply put everything into a "fake" signature, then call
@@ -897,3 +995,15 @@ let abs_is_empty (abs : abs) : bool =
     visitor#visit_abs () abs;
     true
   with Found -> false
+
+let abs_has_markers (abs : abs) : bool =
+  let visitor =
+    object
+      inherit [_] iter_abs
+      method! visit_proj_marker _ pm = if pm = PNone then () else raise Found
+    end
+  in
+  try
+    List.iter (visitor#visit_tavalue ()) abs.avalues;
+    false
+  with Found -> true

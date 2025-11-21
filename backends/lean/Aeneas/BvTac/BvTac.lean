@@ -80,13 +80,24 @@ elab "bv_tac_preprocess" config:Parser.Tactic.optConfig n:(colGt term)? : tactic
   bvTacPreprocess (← elabConfig config) (← optElabTerm n)
 
 open Lean.Elab.Tactic.BVDecide.Frontend Lean.Elab in
-/--
-  `bv_tac` solves goals about bit-vectors.
+/-- `bv_tac n` solves goals about bit-vectors.
 
-  Calling `bv_tac n` is equivalent to:
-  `bv_tac_preprocess n; bv_decide`
-  which is itself mostly equivalent to:
-  `bvify n at *; simp_all only; bv_decide`
+**Usage**: `bv_tac n` where `n` is the bitwidth to use for the bit-vectors.
+The bitwidth `n` can sometimes be inferred automatically from the goal in which case
+it can be omitted.
+
+**Preprocessing**:
+`bv_tac` first preprocesses the goal (essentially by using `bvify`) to lift inequalities
+so that they use bit-vectors rather than `ℕ` or `ℤ`, before calling `bv_decide`.
+This can sometimes fail as lifting those inequalities requires solving arithmetic proof
+obligations. For this reason, when `bv_tac` fails, we advise looking carefully at the goal
+to check if all the expected inequalities have been lifted to bit-vectors. If some could not
+be lifted, one can try lifting them manually - see the documentation of `bvify` for some tips
+and tricks.
+
+**Debugging**:
+Calling `bv_tac n` is (roughly) equivalent to: `bv_tac_preprocess n; bv_decide`,
+which is itself roughly equivalent to: `bvify n at *; simp_all only; bv_decide`.
 -/
 elab "bv_tac" config:Parser.Tactic.optConfig n:(colGt term)? : tactic =>
   withMainContext do

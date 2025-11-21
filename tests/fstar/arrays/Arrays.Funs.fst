@@ -425,20 +425,20 @@ let ite : result unit =
 (** [arrays::zero_slice]: loop 0:
     Source: 'tests/src/arrays.rs', lines 336:4-339:5 *)
 let rec zero_slice_loop
-  (len : usize) (a : slice u8) (i : usize) :
-  Tot (result (slice u8)) (decreases (zero_slice_loop_decreases len a i))
+  (a : slice u8) (i : usize) (len : usize) :
+  Tot (result (slice u8)) (decreases (zero_slice_loop_decreases a i len))
   =
   if i < len
   then
     let* a1 = slice_update_usize a i 0 in
     let* i1 = usize_add i 1 in
-    zero_slice_loop len a1 i1
+    zero_slice_loop a1 i1 len
   else Ok a
 
 (** [arrays::zero_slice]:
     Source: 'tests/src/arrays.rs', lines 333:0-340:1 *)
 let zero_slice (a : slice u8) : result (slice u8) =
-  let len = slice_len a in zero_slice_loop len a 0
+  let len = slice_len a in zero_slice_loop a 0 len
 
 (** [arrays::iter_mut_slice]: loop 0:
     Source: 'tests/src/arrays.rs', lines 345:4-347:5 *)
@@ -500,4 +500,14 @@ let add_acc
   result ((array u32 256) & (array u32 256))
   =
   add_acc_loop pa_src pe_dst 0
+
+(** [arrays::ARRAY1]
+    Source: 'tests/src/arrays.rs', lines 374:0-374:32 *)
+let array1_body : result (array u32 2) = Ok (mk_array 2 [ 0; 1 ])
+let array1 : array u32 2 = eval_global array1_body
+
+(** [arrays::L]
+    Source: 'tests/src/arrays.rs', lines 378:0-378:33 *)
+let l_body : result scalar_t = Ok (mk_array 2 [ 0; 1 ])
+let l : scalar_t = eval_global l_body
 

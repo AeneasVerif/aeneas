@@ -300,6 +300,33 @@ def bvifyTac (config : Config) (n : Expr) (loc : Utils.Location) : TacticM Unit 
   let config := { nonLin := config.nonLin, saturationPasses := config.saturationPasses }
   ScalarTac.condSimpTac config bvifySimpConfig hypsArgs args (bvifyAddSimpThms n) true loc
 
+/--
+The `bvify` (to be read "bv-ify") tactic is used to lift propositions about, e.g., `Nat`, to `BitVec`.
+This tactic is inspired from `zify` which converts propositions about `ℕ` to propositions about `ℤ`.
+
+**Usage**: `bvify <n> [at <loc>]`, where `<n>` is the number of bits to use for the `BitVec`
+representation.
+
+**Example:**
+```lean
+example (x y : U8) (h : x.val < y.val) : x.bv < y.bv := by
+  bvify 8 at h -- turns `h` into: `h : x.bv < y.bv`
+  apply h
+```
+
+**Adding custom lemmas:**
+One can give lemmas to `bvify` by annotating them with the attribute `@[bvify_simps]`,
+or by passing them directly as arguments to the tactic, e.g., `bvify [my_lemma1, my_lemma2]`.
+
+**Remark:**
+This kind of conversions does not come for free and requires some proof obligations to be discharged.
+For instance, one can convert `a < b` into `BitVec.ofNat n a < BitVec.ofNat n b` only when `b < 2^n`
+(`n` is the number of bits used for the `BitVec`).
+
+In case `bvify` fails to lift some inequality, a workaround consists in writing the expected assumption
+with an `have` (e.g., `have h' : BitVec.ofNat n a < BitVec.ofNat n b := ...`), and proving it by using
+`natify`, `simp_scalar` (to get rid of, e.g., the modulos introduced in the conversion) and `simp`.
+-/
 syntax (name := bvify) "bvify " colGt Parser.Tactic.optConfig term (location)? : tactic
 
 def parseBvify : TSyntax ``bvify -> TacticM (Config × Expr × Utils.Location)
@@ -318,7 +345,7 @@ elab stx:bvify : tactic => do
   bvifyTac config n loc
 
 example (x y : U8) (h : x.val < y.val) : x.bv < y.bv := by
-  bvify 8
+  bvify 8 at h
   apply h
 
 example (x y : U8) (h : x.val < y.val) : x.bv < y.bv := by

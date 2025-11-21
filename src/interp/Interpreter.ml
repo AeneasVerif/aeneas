@@ -144,7 +144,8 @@ let symbolic_instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
     - the initialized evaluation context
     - the list of symbolic values introduced for the input values
     - the instantiated function signature *)
-let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
+let initialize_symbolic_context_for_fun (ctx : decls_ctx)
+    (marked_ids : marked_ids) (fdef : fun_decl) :
     eval_ctx * symbolic_value list * inst_fun_sig =
   (* The abstractions are not initialized the same way as for function
    * calls: they contain *loan* projectors, because they "provide" us
@@ -177,7 +178,7 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
   in
   let ctx =
     initialize_eval_ctx (Some span) ctx region_groups sg.generics.types
-      sg.generics.const_generics
+      sg.generics.const_generics marked_ids
   in
   (* Instantiate the signature. This updates the context because we compute
      at the same time the normalization map for the associated types.
@@ -188,10 +189,10 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
   in
   (* Create fresh symbolic values for the inputs *)
   let input_svs =
-    List.map (fun ty -> mk_fresh_symbolic_value span ty) inst_sg.inputs
+    List.map (fun ty -> mk_fresh_symbolic_value span ctx ty) inst_sg.inputs
   in
   (* Initialize the abstractions as empty (i.e., with no avalues) abstractions *)
-  let call_id = fresh_fun_call_id () in
+  let call_id = ctx.fresh_fun_call_id () in
   [%sanity_check] span (call_id = FunCallId.zero);
   let compute_abs_avalues (rg_id : region_group_id) (abs : abs)
       (_ctx : eval_ctx) : tavalue list * abs_cont option =
@@ -210,8 +211,8 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx) (fdef : fun_decl) :
       let inputs =
         List.map
           (fun (sv : symbolic_value) ->
-            mk_eproj_loans_value_from_symbolic_value abs.regions.owned sv
-              sv.sv_ty)
+            mk_eproj_loans_value_from_symbolic_value ctx.type_ctx.type_infos
+              abs.regions.owned sv sv.sv_ty)
           input_svs
       in
       (* Note that we don't really care about the type of the input *)
@@ -376,7 +377,8 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
     the translation. Otherwise, we do not (the symbolic execution then simply
     borrow-checks the function). *)
 let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
-    (fdef : fun_decl) : symbolic_value list * SA.expr option =
+    (marked_ids : marked_ids) (fdef : fun_decl) :
+    symbolic_value list * SA.expr option =
   (* Debug *)
   let span = fdef.item_meta.span in
   let name_to_string () =
@@ -387,7 +389,9 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
   [%ltrace name_to_string ()];
 
   (* Create the evaluation context *)
-  let ctx, input_svs, inst_sg = initialize_symbolic_context_for_fun ctx fdef in
+  let ctx, input_svs, inst_sg =
+    initialize_symbolic_context_for_fun ctx marked_ids fdef
+  in
 
   let regions_hierarchy =
     FunIdMap.find (FRegular fdef.def_id) ctx.fun_ctx.regions_hierarchies
@@ -486,7 +490,9 @@ module Test = struct
     [%sanity_check] span (body.locals.arg_count = 0);
 
     (* Create the evaluation context *)
-    let ctx = initialize_eval_ctx (Some span) decls_ctx [] [] [] in
+    let ctx =
+      initialize_eval_ctx (Some span) decls_ctx [] [] [] empty_marked_ids
+    in
 
     (* Insert the (uninitialized) local variables *)
     let ctx = ctx_push_uninitialized_vars span ctx body.locals.locals in

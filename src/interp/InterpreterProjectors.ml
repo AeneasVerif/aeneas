@@ -73,7 +73,7 @@ let rec apply_proj_borrows_on_shared_borrow (span : Meta.span) (ctx : eval_ctx)
           (* Check if the region is in the set of projected regions (note that
            * we never project over static regions) *)
           if region_in_set r regions then
-            let sid' = fresh_shared_borrow_id () in
+            let sid' = ctx.fresh_shared_borrow_id () in
             AsbBorrow (bid, sid') :: asb
           else asb
         in
@@ -318,10 +318,15 @@ let rec apply_eproj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
               ^ "\n"];
             [%sanity_check] span
               (not (projections_intersect span rset1 ty1 rset2 ty2)));
-          ESymbolic
-            ( PNone,
-              EProjBorrows
-                { proj = { sv_id = s.sv_id; proj_ty = ty }; loans = [] } )
+          (* Only introduce a projection if the value contains mutable
+             borrows which intersect the current regions *)
+          let type_infos = ctx.type_ctx.type_infos in
+          if ty_has_mut_borrow_for_region_in_set type_infos regions ty then
+            ESymbolic
+              ( PNone,
+                EProjBorrows
+                  { proj = { sv_id = s.sv_id; proj_ty = ty }; loans = [] } )
+          else EIgnored
       | _ ->
           [%ltrace
             "unexpected inputs:\n- input value: "
@@ -432,6 +437,7 @@ let apply_eproj_loans_on_symbolic_expansion (span : Meta.span)
   (* Sanity check: if we have a proj_loans over a symbolic value, it should
    * contain regions which we will project *)
   [%sanity_check] span (ty_has_regions_in_set regions original_sv_ty);
+  let type_infos = ctx.type_ctx.type_infos in
   (* Match *)
   let (value, ty) : evalue * ty =
     match (see, proj_ty) with
@@ -444,7 +450,7 @@ let apply_eproj_loans_on_symbolic_expansion (span : Meta.span)
         in
         let fields =
           List.map2
-            (mk_eproj_loans_value_from_symbolic_value regions)
+            (mk_eproj_loans_value_from_symbolic_value type_infos regions)
             fields field_types
         in
         (EAdt { variant_id; fields }, original_sv_ty)
@@ -453,7 +459,7 @@ let apply_eproj_loans_on_symbolic_expansion (span : Meta.span)
         [%sanity_check] span (spc.sv_ty = ref_ty);
         (* Apply the projector to the borrowed value *)
         let child_av =
-          mk_eproj_loans_value_from_symbolic_value regions spc ref_ty
+          mk_eproj_loans_value_from_symbolic_value type_infos regions spc ref_ty
         in
         (* Check if the region is in the set of projected regions (note that
          * we never project over static regions) *)

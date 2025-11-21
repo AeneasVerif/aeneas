@@ -13,12 +13,12 @@ namespace order
 def compare
   {T : Type} (corecmpOrdInst : core.cmp.Ord T) (x : T) (y : T) :
   Result Ordering
-  :=
+  := do
   corecmpOrdInst.cmp x y
 
 /- [order::u32_compare]:
    Source: 'tests/src/order.rs', lines 9:0-11:1 -/
-def u32_compare (x : U32) (y : U32) : Result Ordering :=
+def u32_compare (x : U32) (y : U32) : Result Ordering := do
   ok (core.cmp.impls.OrdU32.cmp x y)
 
 end order

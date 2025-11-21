@@ -20,7 +20,7 @@ let sum2_loop_decreases (s : slice u32) (s2 : slice u32) (sum : u32)
 (** [arrays::zero_slice]: decreases clause
     Source: 'src/arrays.rs', lines 303:0-310:1 *)
 unfold
-let zero_slice_loop_decreases (len : usize) (a : slice u8) (i : usize) : nat =
+let zero_slice_loop_decreases (a : slice u8) (i : usize) (len : usize) : nat =
   if i < len then len - i else 0
 
 (** [arrays::iter_mut_slice]: decreases clause

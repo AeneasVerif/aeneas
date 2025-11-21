@@ -11,7 +11,7 @@ namespace bst
 
 /- [bst::{bst::TreeSet<T>}::new]:
    Source: 'src/bst.rs', lines 28:4-30:5 -/
-def TreeSet.new {T : Type} (OrdInst : Ord T) : Result (TreeSet T) :=
+def TreeSet.new {T : Type} (OrdInst : Ord T) : Result (TreeSet T) := do
   ok { root := none }
 
 /- [bst::{bst::TreeSet<T>}::find]: loop 0:
@@ -19,11 +19,10 @@ def TreeSet.new {T : Type} (OrdInst : Ord T) : Result (TreeSet T) :=
 def TreeSet.find_loop
   {T : Type} (OrdInst : Ord T) (value : T) (current_tree : Option (Node T)) :
   Result Bool
-  :=
+  := do
   match current_tree with
   | none => ok false
   | some current_node =>
-    do
     let o ← OrdInst.cmp current_node.value value
     match o with
     | Ordering.Less => TreeSet.find_loop OrdInst value current_node.right
@@ -35,7 +34,9 @@ partial_fixpoint
    Source: 'src/bst.rs', lines 32:4-44:5 -/
 @[reducible]
 def TreeSet.find
-  {T : Type} (OrdInst : Ord T) (self : TreeSet T) (value : T) : Result Bool :=
+  {T : Type} (OrdInst : Ord T) (self : TreeSet T) (value : T) :
+  Result Bool
+  := do
   TreeSet.find_loop OrdInst value self.root
 
 /- [bst::{bst::TreeSet<T>}::insert]: loop 0:
@@ -43,21 +44,18 @@ def TreeSet.find
 def TreeSet.insert_loop
   {T : Type} (OrdInst : Ord T) (value : T) (current_tree : Option (Node T)) :
   Result (Bool × (Option (Node T)))
-  :=
+  := do
   match current_tree with
   | none => ok (true, some (Node.mk value none none))
   | some current_node =>
-    do
     let o ← OrdInst.cmp current_node.value value
     match o with
     | Ordering.Less =>
-      do
       let (b, back) ← TreeSet.insert_loop OrdInst value current_node.right
       let back1 := some (Node.mk current_node.value current_node.left back)
       ok (b, back1)
     | Ordering.Equal => ok (false, current_tree)
     | Ordering.Greater =>
-      do
       let (b, back) ← TreeSet.insert_loop OrdInst value current_node.left
       let back1 := some (Node.mk current_node.value back current_node.right)
       ok (b, back1)
@@ -68,8 +66,7 @@ partial_fixpoint
 def TreeSet.insert
   {T : Type} (OrdInst : Ord T) (self : TreeSet T) (value : T) :
   Result (Bool × (TreeSet T))
-  :=
-  do
+  := do
   let (b, o) ← TreeSet.insert_loop OrdInst value self.root
   ok (b, { root := o })
 

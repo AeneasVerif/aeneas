@@ -31,6 +31,13 @@ def simpIfsTac (config : ScalarTac.CondSimpTacConfig)
     }
   ScalarTac.condSimpTac config {maxDischargeDepth := 2, failIfUnchanged := false} hypsArgs args addSimpThms false loc
 
+/-- `simp_ifs` simplifies `if then else` expressions exclusively.
+
+This is particularly useful when one wants to simplify a function in the goal without having to resort
+to a cumbersome gymnastic to simplify exactly the `if then else` expression.
+
+It works by following the same principle as `simp_scalar` - see the documentation of `simp_scalar` for more details.
+-/
 syntax (name := simp_ifs) "simp_ifs" Parser.Tactic.optConfig ("[" term,* "]")? (location)? : tactic
 
 @[simp_ifs_simps]

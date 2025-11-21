@@ -103,6 +103,9 @@ let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
   | LoopBreak (ectx, loop_id, values, abs) ->
       loop_continue_break_to_string env indent indent_incr ~is_continue:false
         ectx loop_id values abs
+  | Join (ectx, values, abs) ->
+      join_to_string env indent indent_incr ectx values abs
+  | Let lete -> let_expr_to_string env indent indent_incr lete
   | Meta (_, next) -> expr_to_string env indent indent_incr next
   | Error (_, error) -> indent ^ "ERROR(" ^ error ^ ")"
 
@@ -129,6 +132,27 @@ and loop_continue_break_to_string (env : fmt_env) (indent : string)
   indent ^ keyword ^ " {\n" ^ indent1 ^ loop_id ^ ",\n" ^ indent1
   ^ "values = [\n" ^ String.concat "" values ^ indent1 ^ "]\n\n" ^ indent1
   ^ "abs = [\n" ^ String.concat "" abs ^ indent1 ^ "]\n" ^ indent ^ "}"
+
+and join_to_string (env : fmt_env) (indent : string) (indent_incr : string) _ctx
+    (values : tvalue list) (abs : abs list) : string =
+  let indent1 = indent ^ indent_incr in
+  let indent2 = indent1 ^ indent_incr in
+  let values =
+    List.map
+      (fun v -> indent2 ^ Print.Values.tvalue_to_string env v ^ ",\n")
+      values
+  in
+  let abs =
+    List.map
+      (fun a ->
+        Print.Values.abs_to_string ~with_ended:true env true indent2 indent_incr
+          a
+        ^ ",\n")
+      abs
+  in
+  indent ^ "@join" ^ " {\n" ^ indent1 ^ "values = [\n" ^ String.concat "" values
+  ^ indent1 ^ "]\n\n" ^ indent1 ^ "abs = [\n" ^ String.concat "" abs ^ indent1
+  ^ "]\n" ^ indent ^ "}"
 
 and expansion_to_string (env : fmt_env) (indent : string) (indent_incr : string)
     (scrut : symbolic_value) (e : expansion) : string =
@@ -173,8 +197,42 @@ and expansion_to_string (env : fmt_env) (indent : string) (indent_incr : string)
 and loop_to_string (env : fmt_env) (indent : string) (indent_incr : string)
     (loop : loop) : string =
   let indent1 = indent ^ indent_incr in
+  let indent2 = indent1 ^ indent_incr in
   let loop_id = LoopId.to_string loop.loop_id in
-  let next_expr = expr_to_string env indent1 indent_incr loop.next_expr in
-  let loop_expr = expr_to_string env indent1 indent_incr loop.loop_expr in
-  "loop@" ^ loop_id ^ " {\n\n" ^ indent1 ^ "loop_expr=\n" ^ loop_expr ^ "\n\n"
-  ^ indent1 ^ "next_expr=\n" ^ next_expr ^ "\n" ^ indent ^ "}"
+  let next_expr = expr_to_string env indent2 indent_incr loop.next_expr in
+  let loop_expr = expr_to_string env indent2 indent_incr loop.loop_expr in
+  indent ^ "loop@" ^ loop_id ^ " {\n" ^ indent1 ^ "input_svalues= "
+  ^ Print.list_to_string ~sep:", "
+      (fun (v : symbolic_value) -> SymbolicValueId.to_string v.sv_id)
+      loop.input_svalues
+  ^ "\n" ^ indent1 ^ "input_abs= "
+  ^ Print.list_to_string ~sep:", "
+      (fun (a : abs) -> AbsId.to_string a.abs_id)
+      loop.input_abs
+  ^ "\n" ^ indent1 ^ "break_svalues= "
+  ^ Print.list_to_string ~sep:", "
+      (fun (v : symbolic_value) -> SymbolicValueId.to_string v.sv_id)
+      loop.break_svalues
+  ^ "\n" ^ indent1 ^ "break_abs= "
+  ^ Print.list_to_string ~sep:", "
+      (fun (a : abs) -> AbsId.to_string a.abs_id)
+      loop.break_abs
+  ^ "\n" ^ indent1 ^ "loop_expr=\n" ^ loop_expr ^ "\n\n" ^ indent1
+  ^ "next_expr=\n" ^ next_expr ^ "\n" ^ indent ^ "}"
+
+and let_expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
+    (lete : let_expr) : string =
+  let indent1 = indent ^ indent_incr in
+  let indent2 = indent1 ^ indent_incr in
+  let next_expr = expr_to_string env indent2 indent_incr lete.next_expr in
+  let bound_expr = expr_to_string env indent2 indent_incr lete.bound_expr in
+  indent ^ "@let {" ^ "\n" ^ indent1 ^ "out_svalues= "
+  ^ Print.list_to_string ~sep:", "
+      (fun (v : symbolic_value) -> SymbolicValueId.to_string v.sv_id)
+      lete.out_svalues
+  ^ "\n" ^ indent1 ^ "out_abs= "
+  ^ Print.list_to_string ~sep:", "
+      (fun (a : abs) -> AbsId.to_string a.abs_id)
+      lete.out_abs
+  ^ "\n" ^ indent1 ^ "bound_expr=\n" ^ bound_expr ^ "\n\n" ^ indent1
+  ^ "next_expr=\n" ^ next_expr ^ "\n" ^ indent ^ "}"

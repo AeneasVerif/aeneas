@@ -980,8 +980,7 @@ theorem get_mut_in_list_spec {α} (key : Usize) (slot : AList α)
    (∀ key', slot.v.allP (fun x => key' ≠ x.1) → slot'.v.allP (fun x => key' ≠ x.1)))
    := by
   induction slot <;>
-  unfold get_mut_in_list get_mut_in_list_loop <;>
-  fsimp_all
+  unfold get_mut_in_list get_mut_in_list_loop
   split
   . -- Non-recursive case
     fsimp_all [slot_t_inv]
@@ -989,21 +988,22 @@ theorem get_mut_in_list_spec {α} (key : Usize) (slot : AList α)
     split <;> fsimp_all
   . -- Recursive case
     -- TODO: progress by
-    progress as ⟨ opt_v, back, _, hBackNone, hBackSome ⟩
+    progress as ⟨ opt_v, back, _, hbackNone, hBackSome ⟩
     . fsimp_all [slot_t_inv]
     . simp [*]
       -- Proving the post-condition about back
       -- Case disjunction on v
       split_conjs
       . split <;> fsimp_all
-      . fsimp_all
+      . grind
       . intro v v' heq
-        have := hBackSome v v'
+        have h := hBackSome v v'
         split_conjs
         . fsimp_all [slot_t_inv, slot_s_inv, slot_s_inv_hash]
         . split <;> fsimp_all
         . fsimp_all
         . fsimp_all
+  . fsimp_all
 
 @[progress]
 theorem get_mut_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) :
@@ -1042,18 +1042,7 @@ theorem get_mut_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) :
         simp_all [alloc.vec.Vec.set]
       fsimp [hSlotsEq]
     . -- case: some
-      intro v v' hVeq
-      fsimp_all
-      -- Last postcondition
-      replace hBackSome := hBackSome v v' (by simp)
-      have ⟨ _, _, _, _ ⟩ := hBackSome
-      clear hBackSome
-      intro key' hNotEq
-      -- TODO: simplify
-      have : key'.val % hm.slots.val.length < hm.slots.val.length := by scalar_tac
-      -- We need to do a case disjunction
-      cases h: (key.val % hm.slots.val.length == key'.val % hm.slots.val.length) <;>
-      simp_all
+      grind
 
 @[progress]
 theorem remove_from_list_spec {α} (key : Usize) (slot : AList α) {l i} (hInv : slot_t_inv l i slot) :

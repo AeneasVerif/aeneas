@@ -8,6 +8,7 @@ module SA = SymbolicAst
 module Micro = PureMicroPasses
 open TranslateCore
 open Errors
+open Parallel
 
 (** The local logger *)
 let log = TranslateCore.log
@@ -19,7 +20,8 @@ type symbolic_fun_translation = symbolic_value list * SA.expr
 
 (** Execute the symbolic interpreter on a function to generate a list of
     symbolic ASTs, for the forward function and the backward functions. *)
-let translate_function_to_symbolics (trans_ctx : trans_ctx) (fdef : fun_decl) :
+let translate_function_to_symbolics (trans_ctx : trans_ctx)
+    (marked_ids : marked_ids) (fdef : fun_decl) :
     symbolic_fun_translation option =
   (* Debug *)
   [%ltrace name_to_string trans_ctx fdef.item_meta.name];
@@ -30,7 +32,9 @@ let translate_function_to_symbolics (trans_ctx : trans_ctx) (fdef : fun_decl) :
       (* Evaluate - note that [evaluate_function_symbolic synthesize] catches
          exceptions to at least generate a dummy body if we do not abort on failure. *)
       let synthesize = true in
-      let inputs, symb = evaluate_function_symbolic synthesize trans_ctx fdef in
+      let inputs, symb =
+        evaluate_function_symbolic synthesize trans_ctx marked_ids fdef
+      in
       Some (inputs, Option.get symb)
 
 (** Sanity check helper.
@@ -75,7 +79,8 @@ let check_fun_decl_vars_are_well_bound (trans_ctx : trans_ctx)
 
         (* Open all the free variables: if there is a bound variable which is not well-bound,
            this will raise an exception *)
-        let _ = PureUtils.open_all_fun_body span body in
+        let _, fresh_fvar_id = Pure.FVarId.fresh_stateful_generator () in
+        let _ = PureUtils.open_all_fun_body fresh_fvar_id span body in
         ())
   else ()
 
@@ -85,6 +90,7 @@ let check_fun_decl_vars_are_well_bound (trans_ctx : trans_ctx)
     of backward functions, we also provide names for the outputs. TODO: maybe we
     should introduce a record for this. *)
 let translate_function_to_pure_aux (trans_ctx : trans_ctx)
+    (marked_ids : marked_ids)
     (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t)
     (fun_dsigs : Pure.decomposed_fun_sig FunDeclId.Map.t) (fdef : fun_decl) :
     pure_fun_translation_no_loops =
@@ -92,12 +98,13 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
   [%ltrace name_to_string trans_ctx fdef.item_meta.name];
 
   (* Compute the symbolic ASTs, if the function is transparent *)
-  let symbolic_trans = translate_function_to_symbolics trans_ctx fdef in
+  let symbolic_trans =
+    translate_function_to_symbolics trans_ctx marked_ids fdef
+  in
 
   (* Convert the symbolic ASTs to pure ASTs: *)
 
   (* Initialize the context *)
-  Pure.reset_fvar_id_counter ();
   let sv_to_var = SymbolicValueId.Map.empty in
   let fvars = Pure.FVarId.Map.empty in
   let fvars_tys = Pure.FVarId.Map.map (fun (v : Pure.fvar) -> v.ty) fvars in
@@ -157,6 +164,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
     SymbolicToPureTypes.translate_fun_sig_from_decl_to_decomposed trans_ctx fdef
   in
 
+  let _, fresh_fvar_id = Pure.FVarId.fresh_stateful_generator () in
   let ctx =
     {
       SymbolicToPureCore.span = fdef.item_meta.span;
@@ -166,6 +174,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
       fun_dsigs;
       (* Will need to be updated for the backward functions *)
       sv_to_var;
+      fresh_fvar_id;
       fvars;
       fvars_tys;
       type_ctx;
@@ -228,13 +237,14 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
   (* *)
   f
 
-let translate_function_to_pure (trans_ctx : trans_ctx)
+let translate_function_to_pure (trans_ctx : trans_ctx) (marked_ids : marked_ids)
     (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t)
     (fun_dsigs : Pure.decomposed_fun_sig FunDeclId.Map.t) (fdef : fun_decl) :
     pure_fun_translation_no_loops option =
   try
     Some
-      (translate_function_to_pure_aux trans_ctx pure_type_decls fun_dsigs fdef)
+      (translate_function_to_pure_aux trans_ctx marked_ids pure_type_decls
+         fun_dsigs fdef)
   with CFailure error ->
     let name = name_to_string trans_ctx fdef.item_meta.name in
     let name_pattern =
@@ -259,7 +269,8 @@ type translated_crate = {
 }
 
 (* TODO: factor out the return type *)
-let translate_crate_to_pure (crate : crate) : trans_ctx * translated_crate =
+let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
+    trans_ctx * translated_crate =
   (* Debug *)
   [%ltrace ""];
 
@@ -348,11 +359,13 @@ let translate_crate_to_pure (crate : crate) : trans_ctx * translated_crate =
   *)
   let pure_translations =
     let num_decls = FunDeclId.Map.cardinal crate.fun_decls in
-    ProgressBar.with_reporter num_decls "Translated functions: " (fun report ->
-        List.filter_map
+    ProgressBar.with_parallel_reporter num_decls "Translated functions: "
+      (fun report ->
+        parallel_filter_map
           (fun x ->
             let f =
-              translate_function_to_pure trans_ctx type_decls_map fun_dsigs x
+              translate_function_to_pure trans_ctx marked_ids type_decls_map
+                fun_dsigs x
             in
             report 1;
             f)
@@ -560,6 +573,9 @@ let export_types_group (fmt : Format.formatter) (config : gen_config)
     | Enum _ | Struct _ -> not config.extract_transparent
     | Opaque -> not config.extract_opaque
   in
+  let contains_opaque =
+    List.exists (fun (d : Pure.type_decl) -> d.kind = Opaque) defs
+  in
 
   if List.exists (fun b -> b) builtin then
     (* Sanity check *)
@@ -569,9 +585,12 @@ let export_types_group (fmt : Format.formatter) (config : gen_config)
     (* Sanity check *)
     assert (List.for_all dont_extract defs)
   else (
-    (* Extract the type declarations.
+    (* Extract the type declarations. *)
 
-       Because some declaration groups are delimited, we wrap the declarations
+    (* Save the fact that we extract opaque definitions, if we do *)
+    ctx.extracted_opaque := contains_opaque || !(ctx.extracted_opaque);
+
+    (* Because some declaration groups are delimited, we wrap the declarations
        between [{start,end}_type_decl_group].
 
        Ex.:
@@ -620,6 +639,10 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
   let body = trans.f in
 
   let is_opaque = Option.is_none body.Pure.body in
+
+  (* Save the fact that we extract opaque definitions, if we do *)
+  ctx.extracted_opaque := is_opaque || !(ctx.extracted_opaque);
+
   (* Check if we extract the global *)
   let extract =
     config.extract_globals
@@ -729,6 +752,12 @@ let export_functions_group_scc (fmt : Format.formatter) (config : gen_config)
   in
   let extract_defs = List.filter_map (fun x -> x) extract_defs in
   if extract_defs <> [] then (
+    (* Save the fact that we extract opaque definitions, if we do *)
+    let contains_opaque =
+      List.exists (fun (d : Pure.fun_decl) -> Option.is_none d.body) decls
+    in
+    ctx.extracted_opaque := contains_opaque || !(ctx.extracted_opaque);
+
     Extract.start_fun_decl_group ctx fmt is_rec decls;
     List.iter (fun f -> f ()) extract_defs;
     Extract.end_fun_decl_group fmt is_rec decls)
@@ -1088,7 +1117,10 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
   (* Some logging *)
   if !Errors.error_list <> [] then
     log#linfo
-      (lazy ("Generated the partial file (because of errors): " ^ fi.filename))
+      (lazy
+        ("Generated the partial file (because of "
+        ^ string_of_int (List.length !Errors.error_list)
+        ^ " errors): " ^ fi.filename))
   else log#linfo (lazy ("Generated: " ^ fi.filename));
 
   (* Flush and close the file *)
@@ -1096,7 +1128,7 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
 
 let extract_translated_crate (filename : string) (dest_dir : string)
     (subdir : string option) (crate : crate) (trans_ctx : trans_ctx)
-    (trans_crate : translated_crate) : unit =
+    (trans_crate : translated_crate) (extracted_opaque : bool ref) : unit =
   let {
     type_decls = trans_types;
     builtin_fun_sigs = builtin_sigs;
@@ -1183,6 +1215,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
       types_filter_type_args_map = Pure.TypeDeclId.Map.empty;
       funs_filter_type_args_map = Pure.FunDeclId.Map.empty;
       trait_impls_filter_type_args_map = Pure.TraitImplId.Map.empty;
+      extracted_opaque;
     }
   in
 
@@ -1795,12 +1828,14 @@ let extract_translated_crate (filename : string) (dest_dir : string)
 
 (** Translate a crate and write the synthesized code to an output file. *)
 let translate_crate (filename : string) (dest_dir : string)
-    (subdir : string option) (crate : crate) : unit =
+    (subdir : string option) (crate : crate) (extracted_opaque : bool ref)
+    (marked_ids : marked_ids) : unit =
   [%ltrace
     "- filename: " ^ filename ^ "\n- dest_dir: " ^ dest_dir ^ "\n- subdir: "
     ^ Print.option_to_string (fun x -> x) subdir];
 
   (* Translate the module to the pure AST *)
-  let trans_ctx, trans_crate = translate_crate_to_pure crate in
+  let trans_ctx, trans_crate = translate_crate_to_pure crate marked_ids in
 
   extract_translated_crate filename dest_dir subdir crate trans_ctx trans_crate
+    extracted_opaque

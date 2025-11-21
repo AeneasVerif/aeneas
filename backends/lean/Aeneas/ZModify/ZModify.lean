@@ -11,7 +11,7 @@ import Aeneas.SimpBoolProp.SimpBoolProp
 /-!
 # ZMod-ify tactic
 
-The `zmodify` tactic is used to shift propositions about, e.g., `Nat`, to `ZMod`.
+The `zmodify` tactic is used to convert propositions about, e.g., `Nat`, to propositions about `ZMod`.
 This tactic is adapted from `zify`.
 -/
 
@@ -70,6 +70,19 @@ def zmodifyTac (config : Config)
   let config := { nonLin := config.nonLin, saturationPasses := config.saturationPasses }
   ScalarTac.condSimpTac config {maxDischargeDepth := 2, failIfUnchanged := false, contextual := true} hypsArgs args addSimpThms false loc
 
+/--
+The `zmodify` ("ZMod-ify") tactic is used to convert propositions about, e.g., `ℕ`, `ℤ`,
+`BitVec`, etc., to propositions about `ZMod`.
+
+This tactic is inspired by `zify`.
+
+**Usage**: `zmodify [to <n>] [<simp_args>] [at <loc>]`, where `<n>` is the modulus to use for `ZMod`.
+The parameter `<n>` is optional and can be omitted if the tactic can infer it from the context.
+For instance, `zmodify` will successfully infer it should use `256` if the goal is `⊢ a % 256 = b % 256`.
+
+One can give lemmas to `zmodify` by annotating them with the attribute `@[zmodify_simps]`,
+or by passing them directly as arguments to the tactic, e.g., `zmodify [my_lemma1, my_lemma2]`.
+-/
 syntax (name := zmodify) "zmodify" Parser.Tactic.optConfig ("to" term)? ("[" (term<|>"*"),* "]")? (location)? : tactic
 
 def parseZModify :

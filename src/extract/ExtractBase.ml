@@ -227,7 +227,21 @@ let report_name_collision (id_to_string : id -> string)
   let err =
     "Name clash detected: the following identifiers are bound to the same name \
      \"" ^ name ^ "\":" ^ id1 ^ id2
-    ^ "\nYou may want to rename some of your definitions, or report an issue."
+    ^ "\n\n\
+       You may want to rename some of your definitions, or report an issue.\n\
+       Note that you can change the name used in the generated code by using \
+       the attribute #[aeneas::rename(\"NAME\")] or \
+       #[charon::rename(\"NAME\")]. For instance:\n\n\
+       ```\n\
+       #![feature(register_tool)]\n\
+       #![register_tool(aeneas)]\n\n\
+       #[aeneas::rename(\"Bar\")]\n\
+       type Foo = i32;\n\
+       ```\n\n\
+       Those attributes can be applied to type definitions, functions, \
+       methods, trait\n\
+       declarations or trait implementations. For more examples, see:\n\
+       https://github.com/AeneasVerif/aeneas/blob/main/tests/src/rename_attribute.rs\n\n\n"
   in
   (* Register the error.
 
@@ -416,10 +430,12 @@ let names_maps_get (span : Meta.span option) (id_to_string : id -> string)
     let m = nm.names_map.id_to_name in
     match IdMap.find_opt id m with
     | Some s -> s
-    | None ->
+    | None -> (
         let err = "Could not find: " ^ id_to_string id in
         [%save_error_opt_span] span err;
-        "(ERROR: \"" ^ id_to_string id ^ "\")"
+        match backend () with
+        | Lean -> "sorry /- " ^ err ^ "-/"
+        | _ -> "(ERROR: " ^ id_to_string id ^ ")")
 
 type names_map_init = {
   keywords : string list;
@@ -544,6 +560,10 @@ type extraction_ctx = {
   trait_impls_filter_type_args_map : bool list TraitImplId.Map.t;
       (** Same as {!types_filter_type_args_map}, but for trait implementations
       *)
+  extracted_opaque : bool ref;
+      (** Set to true if at some point we extract a definition which is opaque,
+          meaning we generate an axiom. If yes, and in case the user does not
+          use the option [-split-files] we suggest it to the user. *)
 }
 
 let extraction_ctx_to_fmt_env (ctx : extraction_ctx) : PrintPure.fmt_env =
@@ -1393,6 +1413,7 @@ let ctx_prepare_name (meta : T.item_meta) (ctx : extraction_ctx)
     (name : llbc_name) : llbc_name =
   (* Rmk.: initially we only filtered the disambiguators equal to 0 *)
   match name with
+  | [ _ ] -> name
   | (PeIdent (crate, _) as id) :: name ->
       if crate = ctx.crate.name then name else id :: name
   | _ ->
@@ -1524,6 +1545,7 @@ let ctx_compute_fun_name_no_suffix (meta : T.item_meta) (ctx : extraction_ctx)
     | _ :: name -> is_blanket_method name
   in
   let is_blanket = is_blanket_method fname in
+  [%ldebug "fname: " ^ name_to_string ctx fname];
   let fname = ctx_compute_simple_name meta ctx fname in
   (* Add the blanket path elem if the method is a blanket method *)
   let fname =

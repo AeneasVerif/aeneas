@@ -5,6 +5,7 @@ open ValuesUtils
 open Expressions
 open Contexts
 open LlbcAst
+open LlbcAstUtils
 open Cps
 open InterpreterUtils
 open InterpreterProjectors
@@ -37,7 +38,7 @@ let drop_value (config : config) (span : Meta.span) (p : place) : cm_fun =
     (* Move the value at destination (that we will overwrite) to a dummy variable
      * to preserve the borrows it may contain *)
     let _, mv = InterpreterPaths.read_place span access p ctx in
-    let dummy_id = fresh_dummy_var_id () in
+    let dummy_id = ctx.fresh_dummy_var_id () in
     let ctx = ctx_push_dummy_var ctx dummy_id mv in
     (* Update the destination to ⊥ *)
     let nv = { v with value = VBottom } in
@@ -96,7 +97,7 @@ let assign_to_place (config : config) (span : Meta.span) (rv : tvalue)
     ^ "\n- p: " ^ place_to_string ctx p ^ "\n- Initial context:\n"
     ^ eval_ctx_to_string ~span:(Some span) ctx];
   (* Push the rvalue to a dummy variable, for bookkeeping *)
-  let rvalue_vid = fresh_dummy_var_id () in
+  let rvalue_vid = ctx.fresh_dummy_var_id () in
   let ctx = push_dummy_var rvalue_vid rv ctx in
   (* Prepare the destination *)
   let _, ctx, cc = prepare_lplace config span p ctx in
@@ -105,7 +106,7 @@ let assign_to_place (config : config) (span : Meta.span) (rv : tvalue)
   (* Move the value at destination (that we will overwrite) to a dummy variable
      to preserve the borrows *)
   let _, mv = InterpreterPaths.read_place span Write p ctx in
-  let dest_vid = fresh_dummy_var_id () in
+  let dest_vid = ctx.fresh_dummy_var_id () in
   let ctx = ctx_push_dummy_var ctx dest_vid mv in
   (* Write to the destination *)
   (* Checks - maybe the bookkeeping updated the rvalue and introduced bottoms *)
@@ -349,7 +350,7 @@ let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
     | [] -> [%craise] span "Inconsistent environment"
     | EAbs abs :: env -> EAbs abs :: pop env
     | EBinding (_, v) :: env ->
-        let vid = fresh_dummy_var_id () in
+        let vid = ctx.fresh_dummy_var_id () in
         EBinding (BDummy vid, v) :: pop env
     | EFrame :: env -> (* Stop here *) env
   in
@@ -742,9 +743,9 @@ let eval_global_as_fresh_symbolic_value (span : Meta.span)
   let generics = Subst.generic_args_erase_regions generics in
   let subst = Subst.make_subst_from_generics global.generics generics in
   let ty = Subst.erase_regions_substitute_types subst global.ty in
-  mk_fresh_symbolic_value span ty
+  mk_fresh_symbolic_value span ctx ty
 
-(** Evaluate a statement *)
+(** Evaluate a statement. *)
 let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
  fun ctx ->
   (* Debugging *)
@@ -871,7 +872,12 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
       let (ctx, res), cc = eval_assertion config st.span assertion ctx in
       ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc)
   | Call call -> eval_function_call config st.span call ctx
-  | Abort _ -> ([ (ctx, Panic) ], cf_singleton __FILE__ __LINE__ st.span)
+  | Abort _ ->
+      (* Evaluate to a panic only if the execution is concrete, otherwise we stop
+         evaluating there and synthesize a [panic] node in the symbolic AST. *)
+      if config.mode = ConcreteMode then
+        ([ (ctx, Panic) ], cf_singleton __FILE__ __LINE__ st.span)
+      else ([], cf_empty __FILE__ __LINE__ st.span SA.Panic)
   | Return -> ([ (ctx, Return) ], cf_singleton __FILE__ __LINE__ st.span)
   | Break i -> ([ (ctx, Break i) ], cf_singleton __FILE__ __LINE__ st.span)
   | Continue i -> ([ (ctx, Continue i) ], cf_singleton __FILE__ __LINE__ st.span)
@@ -918,8 +924,8 @@ and eval_global_ref (config : config) (span : Meta.span) (dest : place)
       let sval = eval_global_as_fresh_symbolic_value span gref ctx in
       let typed_sval = mk_tvalue_from_symbolic_value sval in
       (* Create a shared loan containing the global, as well as a shared borrow *)
-      let bid = fresh_borrow_id () in
-      let sid = fresh_shared_borrow_id () in
+      let bid = ctx.fresh_borrow_id () in
+      let sid = ctx.fresh_shared_borrow_id () in
       let loan : tvalue =
         { value = VLoan (VSharedLoan (bid, typed_sval)); ty = sval.sv_ty }
       in
@@ -930,7 +936,7 @@ and eval_global_ref (config : config) (span : Meta.span) (dest : place)
         }
       in
       (* We need to push the shared loan in a dummy variable *)
-      let dummy_id = fresh_dummy_var_id () in
+      let dummy_id = ctx.fresh_dummy_var_id () in
       let ctx = ctx_push_dummy_var ctx dummy_id loan in
       (* Assign the borrow to its destination *)
       let ctx, cc = assign_to_place config span borrow dest ctx in
@@ -942,19 +948,36 @@ and eval_global_ref (config : config) (span : Meta.span) (dest : place)
 and eval_switch (config : config) (span : Meta.span) (switch : switch) :
     stl_cm_fun =
  fun ctx ->
-  (* We evaluate the operand in two steps:
-   * first we prepare it, then we check if its value is concrete or
-   * symbolic. If it is concrete, we can then evaluate the operand
-   * directly, otherwise we must first expand the value.
-   * Note that we can't fully evaluate the operand *then* expand the
-   * value if it is symbolic, because the value may have been move
-   * (and would thus floating in thin air...)!
-   * *)
+  let ctx, cc = eval_switch_prepare config span switch ctx in
+  comp cc (eval_switch_raw config span switch ctx)
+
+(** Prepare the context before evaluating a switch.
+
+    TODO: generalize the join so that we don't have to do so. The problem is
+    that we may symbolically expand some shared values which are in frozen
+    region abstractions (and which we thus want to remain the same in the left
+    and right branches). *)
+and eval_switch_prepare (_config : config) (span : Meta.span) (_switch : switch)
+    : cm_fun =
+ fun ctx ->
+  InterpreterJoin.prepare_ashared_loans span None ~with_abs_conts:true ctx
+
+and eval_switch_raw (config : config) (span : Meta.span) (switch : switch) :
+    stl_cm_fun =
+ fun ctx ->
+  (* We evaluate the scrutinee in two steps:
+     first we prepare it, then we check if its value is concrete or
+     symbolic. If it is concrete, we can then evaluate the operand
+     directly, otherwise we must first expand the value.
+     Note that we can't fully evaluate the operand *then* expand the
+     value if it is symbolic, because the value may have been moved
+     (and would thus floating in thin air...)! *)
   (* Match on the targets *)
   match (switch : LlbcAst.switch) with
   | If (op, true_block, false_block) ->
       (* Evaluate the operand *)
       let op_v, ctx, cf_eval_op = eval_operand config span op ctx in
+      let ctx0 = ctx in
       (* Switch on the value *)
       let ctx_resl, cf_if =
         match op_v.value with
@@ -965,13 +988,18 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
         | VSymbolic sv ->
             (* Expand the symbolic boolean, and continue by evaluating
                the branches *)
-            let (ctx_true, ctx_false), cf_bool =
+            let (true_ctx, false_ctx), cf_bool =
               expand_symbolic_bool span sv
                 (S.mk_opt_place_from_op span op ctx)
                 ctx
             in
-            let resl_true = eval_block config true_block ctx_true in
-            let resl_false = eval_block config false_block ctx_false in
+            (* Check if we should join the states after the if then else *)
+            let join =
+              (not (block_has_break_continue_return true_block))
+              && not (block_has_break_continue_return false_block)
+            in
+            let resl_true = eval_block config true_block true_ctx in
+            let resl_false = eval_block config false_block false_ctx in
             let ctx_resl, cf_branches =
               comp_seqs __FILE__ __LINE__ span [ resl_true; resl_false ]
             in
@@ -980,7 +1008,8 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
               | [ e_true; e_false ] -> cf_bool (e_true, e_false)
               | _ -> [%internal_error] span
             in
-            (ctx_resl, cc)
+            if join then eval_switch_with_join config span cc ctx0 ctx_resl
+            else (ctx_resl, cc)
         | _ -> [%craise] span "Inconsistent state"
       in
       (* Compose *)
@@ -988,6 +1017,7 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
   | SwitchInt (op, (int_ty : literal_type), stgts, otherwise) ->
       (* Evaluate the operand *)
       let op_v, ctx, cf_eval_op = eval_operand config span op ctx in
+      let ctx0 = ctx in
       (* Switch on the value *)
       let ctx_resl, cf_switch =
         match (op_v.value, int_ty) with
@@ -1028,7 +1058,12 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
             in
             (* Then evaluate the "otherwise" branch *)
             let resl_otherwise = eval_block config otherwise ctx_otherwise in
-            (* Compose the continuations *)
+
+            (* Should we join the contexts after the switch? *)
+            let join =
+              (not (List.exists block_has_break_continue_return branches))
+              && not (block_has_break_continue_return otherwise)
+            in
             let resl, cf =
               comp_seqs __FILE__ __LINE__ span
                 (resl_branches @ [ resl_otherwise ])
@@ -1037,7 +1072,13 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
               let el, e_otherwise = Collections.List.pop_last el in
               cf_int (el, e_otherwise)
             in
-            (resl, cc_comp cc cf)
+            let cf = cc_comp cc cf in
+            if join then
+              (* Join the contexts *)
+              eval_switch_with_join config span cf ctx0 resl
+            else
+              (* Do not join the contexts: compose the continuations and continue *)
+              (resl, cf)
         | _ -> [%craise] span "Inconsistent state"
       in
       (* Compose *)
@@ -1050,6 +1091,7 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
         access_rplace_reorganize_and_read config span expand_prim_copy access p
           ctx
       in
+      let ctx0 = ctx in
       (* Match on the value *)
       let ctx_resl, cf_match =
         (* The value may be shared: we need to ignore the shared loans
@@ -1077,13 +1119,187 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
             let resl =
               List.map (fun ctx -> (eval_switch config span switch) ctx) ctxl
             in
-            (* Compose the continuations *)
+            (* Should we join the contexts after the match? *)
+            let join =
+              (not
+                 (List.exists
+                    (fun (_, b) -> block_has_break_continue_return b)
+                    stgts))
+              &&
+              match otherwise with
+              | None -> true
+              | Some block -> not (block_has_break_continue_return block)
+            in
             let ctx_resl, cf = comp_seqs __FILE__ __LINE__ span resl in
-            (ctx_resl, cc_comp cf_expand cf)
+            let cc = cc_comp cf_expand cf in
+            if join then (* Join the contexts *)
+              eval_switch_with_join config span cc ctx0 ctx_resl
+            else
+              (* Compose the continuations *)
+              (ctx_resl, cc)
         | _ -> [%craise] span "Inconsistent state"
       in
       (* Compose *)
       (ctx_resl, cc_comp cf_read_p cf_match)
+
+(** Evaluate a switch in case we need to branch and want to join the contexts
+    afterwards.
+
+    - [cf_switch_scrut]: the continuation introduced after branching on the
+      symbolic scrutinee. Expects the symbolic expressions for the branches, and
+      builds the branching expressions (e.g., for an [if then else]: given
+      expressions for the [then] and [else] branches, reconstructs the full
+      [if then else] expression).
+    - [resl_branches]: each element of the list corresponds to the result of
+      evaluating a branch. The list of eval contexts and evaluation results
+      should be either empty (if we reached a panic statement: we abort the
+      symbolic execution there) or a list with one element (if we did not abort
+      execution because of a panic statement). The continuation expects the
+      symbolic expression for what happens at the end of the branch, and
+      reconstructs the expression for the full branch. *)
+and eval_switch_with_join (config : config) (span : Meta.span)
+    (cf : SA.expr list -> SA.expr) (ctx0 : eval_ctx)
+    (ctx_resl : (eval_ctx * statement_eval_res) list) :
+    (eval_ctx * statement_eval_res) list * (SA.expr list -> SA.expr) =
+  (* Count the number of contexts to join.
+
+     Note that all evaluation results should be [Unit]: break, continue and
+     return should not happen as we attempt to join only if the code in the
+     branches doesn't contain break, etc. instructions. It can also not be
+     panic as once we reach a panic we stop the symbolic execution (we simply
+     synthesize a panic node in the symbolic AST). *)
+  [%sanity_check] span (List.for_all (fun (_, res) -> res = Unit) ctx_resl);
+  let ctxl = List.map fst ctx_resl in
+  let num_units = List.length ctxl in
+  if num_units = 0 then (
+    ( (* We only have panics: nothing to do *)
+      [],
+      fun el ->
+        [%sanity_check] span (el = []);
+        cf [] ))
+  else if num_units = 1 then
+    (* No need to join the contexts: continue with the current context, and inline
+       what happens inside the loop inside the branching expression. *)
+    let ctx = List.hd ctxl in
+    ([ (ctx, Unit) ], cf)
+  else (
+    (* We need to join the contexts *)
+    [%ldebug
+      "About to join contexts after an [if then else]." ^ "\n- initial ctx:\n"
+      ^ eval_ctx_to_string ctx0 ^ "\n\n"
+      ^ String.concat "\n\n"
+          (List.map
+             (fun (ctx, res) ->
+               "- eval_ctx (res: "
+               ^ show_statement_eval_res res
+               ^ "):\n" ^ eval_ctx_to_string ctx)
+             ctx_resl)];
+    let ctx_to_join =
+      List.filter_map
+        (fun (ctx, res) -> if res = Unit then Some ctx else None)
+        ctx_resl
+    in
+    let _, joined_ctx =
+      InterpreterJoin.join_ctxs_list config span ~with_abs_conts:true Join
+        ctx_to_join
+    in
+    [%ldebug "Joined ctx:\n" ^ eval_ctx_to_string joined_ctx];
+    let ctx0_aids = env_get_abs_ids ctx0.env in
+    [%ldebug "ctx0_aids:\n" ^ AbsId.Set.to_string None ctx0_aids];
+
+    (* We need to update the fresh abstraction continuations in the joined context,
+       to reflect the fact that in the symbolic AST they should be introduced by
+       the branching expression (they are bound by the let-binding we introduce) *)
+    let joined_ctx =
+      Contexts.ctx_map_abs
+        (fun abs ->
+          if AbsId.Set.mem abs.abs_id ctx0_aids then abs
+          else
+            (* The abstraction is fresh and is thus introduced by the join:
+                we need to update its continuation *)
+            InterpreterAbs.add_abs_cont_to_abs span joined_ctx abs
+              (EJoin abs.abs_id))
+        joined_ctx
+    in
+    [%ldebug
+      "Joined ctx (after updating the abs conts):\n"
+      ^ eval_ctx_to_string joined_ctx];
+
+    (* Compute the output values *)
+    let output_svalues =
+      InterpreterJoin.compute_ctx_fresh_ordered_symbolic_values span
+        ~only_modified_svalues:true ctx0 joined_ctx
+    in
+    let output_svalue_ids =
+      List.map (fun (sv : symbolic_value) -> sv.sv_id) output_svalues
+    in
+
+    let output_abs =
+      List.filter_map
+        (fun (e : env_elem) ->
+          match e with
+          | EAbs abs when not (AbsId.Set.mem abs.abs_id ctx0_aids) -> Some abs
+          | _ -> None)
+        joined_ctx.env
+    in
+    let output_abs_ids = List.map (fun (abs : abs) -> abs.abs_id) output_abs in
+
+    let fixed_aids =
+      InterpreterJoinCore.compute_fixed_abs_ids ctx0 joined_ctx
+    in
+    let fixed_dids = Contexts.ctx_get_dummy_var_ids ctx0 in
+
+    (* Match every context resulting from evaluating a branch (there should be
+       one if no explicit panic was encountered, or 0 it we encountered a panic)
+       with the joined context. *)
+    let match_ctx (ctx : eval_ctx) : SA.expr =
+      (* Match the contexts with the joined context to determine the output of the branch *)
+      let (_, ctx, output_values, output_abs), cf =
+        InterpreterJoin.match_ctx_with_target config span Join fixed_aids
+          fixed_dids output_abs_ids output_svalue_ids joined_ctx ctx
+      in
+
+      let reorder_output_abs (map : abs AbsId.Map.t) (absl : abs_id list) :
+          abs list =
+        List.map (fun id -> AbsId.Map.find id map) absl
+      in
+      let reorder_output_values (map : tvalue SymbolicValueId.Map.t)
+          (values : symbolic_value_id list) : tvalue list =
+        List.map (fun id -> SymbolicValueId.Map.find id map) values
+      in
+      let output_values =
+        reorder_output_values output_values output_svalue_ids
+      in
+      let output_abs = reorder_output_abs output_abs output_abs_ids in
+
+      (* Generate the let expression *)
+      cf (SA.Join (ctx, output_values, output_abs))
+    in
+    let resl = List.map match_ctx ctxl in
+
+    (* We can now call the continuation introduced when branching to group the
+       expressions of the branches into a single branching expression (i.e.,
+       we group the expressions for the [then] and [else] branches into a single
+       [if then else] expression. *)
+    let bound_expr = cf resl in
+
+    (* Generate the let expression *)
+    let cf (el : SA.expr list) : SA.expr =
+      match el with
+      | [ next_expr ] ->
+          Let
+            {
+              bound_expr;
+              out_svalues = output_svalues;
+              out_abs = output_abs;
+              next_expr;
+              span;
+            }
+      | _ -> [%internal_error] span
+    in
+
+    (* Output the joined context *)
+    ([ (joined_ctx, Unit) ], cf))
 
 (** Evaluate a function call (auxiliary helper for [eval_statement]) *)
 and eval_function_call (config : config) (span : Meta.span) (call : call) :
@@ -1264,11 +1480,11 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
     ^ "\n- dest:\n" ^ place_to_string ctx dest];
 
   (* Unique identifier for the call *)
-  let call_id = fresh_fun_call_id () in
+  let call_id = ctx.fresh_fun_call_id () in
 
   (* Generate a fresh symbolic value for the return value *)
   let ret_sv_ty = inst_sg.output in
-  let ret_spc = mk_fresh_symbolic_value span ret_sv_ty in
+  let ret_spc = mk_fresh_symbolic_value span ctx ret_sv_ty in
   let ret_value = mk_tvalue_from_symbolic_value ret_spc in
   let args_places =
     List.map (fun p -> S.mk_opt_place_from_op span p ctx) args
@@ -1330,8 +1546,8 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
       in
       let output = mk_simpl_etuple outputs in
       let input =
-        mk_eproj_loans_value_from_symbolic_value abs.regions.owned ret_spc
-          ret_sv_ty
+        mk_eproj_loans_value_from_symbolic_value ctx.type_ctx.type_infos
+          abs.regions.owned ret_spc ret_sv_ty
       in
       let input = EApp (EFunCall abs.abs_id, [ input ]) in
       let input : tevalue = { value = input; ty = ret_sv_ty } in
@@ -1440,8 +1656,8 @@ and eval_builtin_function_call_symbolic (config : config) (span : Meta.span)
        we have to recompute the regions hierarchy. *)
     let fun_name = Print.Types.builtin_fun_id_to_string fid in
     let inst_sig =
-      compute_regions_hierarchy_for_fun_call (Some span) ctx.crate fun_name
-        ctx.type_vars ctx.const_generic_vars func.generics sg
+      compute_regions_hierarchy_for_fun_call ctx.fresh_abs_id (Some span)
+        ctx.crate fun_name ctx.type_vars ctx.const_generic_vars func.generics sg
     in
     [%ltrace
       "special case:" ^ "\n- inst_sig:" ^ inst_fun_sig_to_string ctx inst_sig];

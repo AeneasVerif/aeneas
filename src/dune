@@ -19,7 +19,7 @@
  (public_name aeneas) ;; The name as revealed to the projects importing this library
  (preprocess
   (pps ppx_deriving.show ppx_deriving.ord visitors.ppx aeneas.ppx))
- (libraries charon core_unix ocamlgraph str progress)
+ (libraries charon core_unix ocamlgraph str progress domainslib)
  (modules
   BorrowCheck
   Builtin
@@ -46,11 +46,11 @@
   InterpreterExpansion
   InterpreterExpressions
   Interpreter
-  InterpreterLoopsCore
-  InterpreterLoopsMatchCtxs
-  InterpreterLoopsJoinCtxs
+  InterpreterJoin
+  InterpreterJoinCore
   InterpreterLoopsFixedPoint
   InterpreterLoops
+  InterpreterMatchCtxs
   InterpreterPaths
   InterpreterProjectors
   InterpreterReduceCollapse
@@ -63,6 +63,7 @@
   Logging
   Meta
   NameMatcher
+  Parallel
   PrePasses
   Print
   PrintPure

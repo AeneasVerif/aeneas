@@ -691,10 +691,100 @@ def evalProgress
   setGoals (goals.unassignedVars.toList ++ sgs.toList ++ mainGoal)
   pure usedTheorem
 
+/-- The `progress` tactic is used to reason about monadic goals.
+It is a bit equivalent to the `mvcgen` tactic from the Lean standard library.
+
+The `progress`tactic works by looking for a suitable theorem (either provided by the user
+or looked up in the database of `progress` theorems) which describes the behavior of a monadic
+function, then applying it to the current goal. It then introduces the
+existentially quantified variables and splits the conjunctions in the
+post-condition, before trying to solve the preconditions.
+
+For instance, given the goal:
+```lean
+h : 2 * (a.val + 1) < U32.max
+⊢ ∃ c, (do
+  let b ← a + 1#u32
+  2 * b) = ok c ∧ c > 0
+```
+`progress as ⟨ b ⟩` will lookup the theorem:
+```lean
+theorem UScalar.add_spec (x y : UScalar ty) (h : x.val + y.val < UScalar.max ty) :
+  ∃ z, UScalar.add x y = ok z ∧
+  z.val = x.val + y.val
+```
+instantiate it with `x := a` and `y := 1#u32`, (attempt to) prove the precondition
+`a.val + 1 < U32.max`, introduce the free variable `b` in the context together
+with the assumption `b.val = a.val + 1`, and simplify the goal to remove `let b ← a + 1#u32`,
+resulting in:
+```lean
+h : 2 * (a.val + 1) < U32.max
+b : U32
+h_b : b.val = a.val + 1
+⊢ ∃ c, 2 * b = ok c ∧ c > 0
+```
+
+Note that `progress` is able to use the current theorem when doing recursive proofs.
+
+*Remark:** `progress` actually also introduces a dummy variable in the context,
+which is pretty printed to display information to the user. For instance, in the
+goal above we actually insert a variable `_ : [> b ← a + 1#u32 <]` so that the user keeps
+track of the origin of `b`.
+
+**Options:**
+The user can provide several optional arguments:
+- `keep <name>`: if provided, the equality `f ... = .ok ...` is kept
+  in the context under the name `<name>` (e.g., `h : a + 1#u32 = ok b`).
+  Otherwise, it is cleared.
+- `with <thm>`: if provided, use the given theorem or local assumption
+  to make progress. Otherwise, look for a suitable theorem/assumption.
+  The user can provide either the name of a local assumption/theorem,
+  or a term representing it.
+- `as ⟨ id1, id2, ... ⟩`: provide names for the introduced
+  variables and for the post-conditions (in order). If there are more
+  variables/conditions than names provided by the user, fresh names are generated.
+  If there are more names than variables/conditions, a warning is displayed.
+- `by <tactic>`: use the given tactic to solve the preconditions.
+- `progress?`: displays the name of the theorem/assumption used.
+
+**The `progress` attribute:**
+To make a theorem available for `progress`, the user can tag it with the
+`@[progress]` attribute. The theorem must have the following shape:
+```lean
+theorem thm_name (arg1 : ty1) ... (argn : tyn)
+  (h_pre1 : precondition_1) ... (h_prem : precondition_m) :
+  ∃ (res1 : res_ty1) ... (resk : res_tyk),
+    f arg1 ... argn = ok res1 ∧ postcondition_1 ∧ ... ∧ postcondition_k
+```
+where `f` is a monadic function with type `Result ...`.
+
+**Ghost Variables:**
+It is possible to write progress theorems which use ghost variables, i.e., variables
+which do not appear as an input of the monadic function. For instance, in the theorem
+below, `map` is a ghost variable as it does not appear in the arguments of `hashmap_insert`.
+```lean
+theorem hashmap_insert_spec {k v : Type} [BEq k] [Hashable k]
+  (hmap : HashMap k v) (key : k) (val : v) (map : k → Option v)
+  (hInv : HashMap.inv hmap map) :
+  ∃ (newMap : HashMap k v),
+    HashMap.insert hmap key val = ok newMap ∧
+    ...
+```
+When encoutering ghost variables, `progress` will try to instantiate them by looking
+for local assumptions which match the theorem assumptions, using heuristics to find
+the best instantiation when several are possible.
+
+**Progress\*:**
+When the user wants to make progress by several step, they can use the `progress*` tactic,
+which repeatedly calls `progress` until no further progress can be made. See the documentation
+of `progress*` for more details.
+-/
 elab (name := progress) "progress" args:progressArgs : tactic => do
   let (keep?, withArg, ids, byTac) ← parseProgressArgs args
   evalProgress asyncOption keep? none withArg ids byTac *> return ()
 
+/-- The `progress?` tactic calls `progress` and displays additional information -
+see the documentation for the `progress` tactic itself. -/
 elab tk:"progress?" args:progressArgs : tactic => do
   let (keep?, withArg, ids, byTac) ← parseProgressArgs args
   let stats ← evalProgress asyncOption keep? none withArg ids byTac
@@ -703,8 +793,15 @@ elab tk:"progress?" args:progressArgs : tactic => do
     let withArg := mkNullNode #[mkAtom "with", ← stats.toSyntax]
     stxArgs := stxArgs.setArg 1 withArg
   let tac := mkNode `Aeneas.Progress.progress #[mkAtom "progress", stxArgs]
-  Meta.Tactic.TryThis.addSuggestion tk tac (origSpan? := ← getRef)
+  let fmt ← PrettyPrinter.ppCategory ``Lean.Parser.Tactic.tacticSeq tac
+  Meta.Tactic.TryThis.addSuggestion tk fmt.pretty (origSpan? := ← getRef)
 
+/-- This is alternative syntax for the `progress` tactic - see the documentation for `progress`.
+
+`let ⟨ id1, id2, ... ⟩ ← <withArg> by <tactic>`
+is equivalent to:
+`progress with <withArg> as ⟨ id1, id2, ... ⟩ by <tactic>`
+-/
 syntax (name := letProgress) "let" noWs "*" " ⟨ " binderIdent,* " ⟩" colGe
   " ← " colGe (term <|> "*" <|> "*?") ("by" tacticSeq)? : tactic
 
@@ -799,7 +896,7 @@ x y : UScalar ty
 
   /--
   info: Try this:
-  let* ⟨ z, h1 ⟩ ← UScalar.add_spec
+  [apply] let* ⟨ z, h1 ⟩ ← UScalar.add_spec
   -/
   #guard_msgs in
   example {ty} {x y : UScalar ty} (h : x.val + y.val ≤ UScalar.max ty) :

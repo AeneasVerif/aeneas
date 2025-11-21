@@ -486,6 +486,56 @@ def scalarTac (config : Config) : TacticM Unit := do
       g.assign e
   else scalarTacAux config
 
+/-- `scalar_tac` is a tactic to solve arithmetic goals.
+
+  This tactic does a heavy preprocessing of the goal before calling `omega` under the hood.
+  This allows reasoning about goals manipulating scalars (`scalar_tac` is aware of the bounds for
+  `U32`, `Usize`, etc.) and about a limited form of non-linear arithmetic. Notably, it can prove
+  goals of the shape `a b c d : ℕ, h0 : a ≤ c, h1 : b ≤ d ⊢ a * b ≤ c * d`.
+
+  **Options**:
+  - `scalar_tac +split` will split all the `if then else` and `match` expressions in the context
+    before calling `omega`. Note that `omega` already splits disjunctions appearing in the
+    assumptions (e.g., `A ∨ B`).
+  - `scalar_tac +nonLin` will use some heuristics to decompose certain non-linear goals. For instance,
+    it will attempt to prove `a % b = a` (where `a b : ℕ`) by proving `a < b`. Note that this might
+    get deprecated in the future in favour of `simp_scalar`, which performs the same kind of reasoning
+    in a more general and extensible manner.
+
+  **Registering lemmas**:
+  One can provide lemmas to `scalar_tac` in two ways:
+  - `scalar_tac_simps`: registers a simp lemma to be applied during the preprocessing phase of
+    `scalar_tac`. For instance:
+    ```
+    @[scalar_tac_simps]
+    theorem UScalar.ofNat_val (x : UScalar ty) (hInBounds : x.val ≤ UScalar.cMax ty) :
+      UScalar.ofNat x hInBounds = x
+    ```
+    allows reducing: `3#u32.val` to `3` during the preprocessing phase.
+  - `scalar_tac`: registers a lemma as a forward reasoning rule to be used during the preprocessing
+    phase.
+
+    Note that generally speaking it requires providing a pattern to guide the instantiations.
+    For instance:
+    ```
+    @[scalar_tac x.val]
+    theorem UScalar.bounds {ty : UScalarTy} (x : UScalar ty) : x.val ≤ UScalar.max ty := by
+    ```
+    states that whenever we have an expression of the shape `x.val` in the context, we can
+    introduce the bound `x.val ≤ UScalar.max ty`.
+
+  **Decreasing proofs**:
+  When proving that a termination measure decreases (i.e., a `decreasing_by` clause) you may want
+  to use `scalar_decr_tac` instead of `scalar_tac`. This tactic does approximately the same thing
+  as `scalar_tac` but for performance reasons also cleans up the goal further by removing useless
+  assumptions automatically introduced by Lean and which can lead to serious slow-downs.
+
+  **Debugging**:
+  If you want to debug a failing call to `scalar_tac`, you can replace `scalar_tac` with
+  `scalar_tac_preprocess; simp_all only [simp_bool_prop_simps, scalar_tac_simps]; omega`:
+  this sequence of tactics is *roughly* equivalent to `scalar_tac`, and will allow you
+  to see the goal after preprocessing.
+ -/
 elab "scalar_tac" config:Parser.Tactic.optConfig : tactic => do
   let config ← elabConfig config
   scalarTac config
@@ -522,17 +572,6 @@ def incrScalarTac (config : Config) (state : State) (toClear : Array FVarId) (as
       let e ← mkAuxTheorem type (← instantiateMVarsProfiling g') (zetaDelta := true)
       g.assign e
   else incrScalarTacCore config state toClear assumptions
-
--- For termination proofs
-syntax "int_decr_tac" : tactic
-macro_rules
-  | `(tactic| int_decr_tac) =>
-    `(tactic|
-      simp_wf;
-      -- TODO: don't use a macro (namespace problems)
-      (first | apply ScalarTac.to_int_to_nat_lt
-             | apply ScalarTac.to_int_sub_to_nat_lt) <;>
-      simp_all <;> scalar_tac)
 
 end ScalarTac
 

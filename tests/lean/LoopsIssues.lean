@@ -10,27 +10,27 @@ namespace loops_issues
 
 /- [loops_issues::write]:
    Source: 'tests/src/loops-issues.rs', lines 5:0-5:28 -/
-def write (a : Array U8 4#usize) : Result (Array U8 4#usize) :=
+def write (a : Array U8 4#usize) : Result (Array U8 4#usize) := do
   ok a
 
 /- [loops_issues::read]:
    Source: 'tests/src/loops-issues.rs', lines 8:0-8:23 -/
-def read (a : Array U8 4#usize) : Result Unit :=
+def read (a : Array U8 4#usize) : Result Unit := do
   ok ()
 
 /- [loops_issues::CARRAY]
    Source: 'tests/src/loops-issues.rs', lines 10:0-10:38 -/
 @[global_simps]
-def CARRAY_body : Result (Array U16 4#usize) := ok (Array.repeat 4#usize 0#u16)
+def CARRAY_body : Result (Array U16 4#usize) := do
+  ok (Array.repeat 4#usize 0#u16)
 @[global_simps, irreducible]
 def CARRAY : Array U16 4#usize := eval_global CARRAY_body
 
 /- [loops_issues::loop_access_array]: loop 0:
    Source: 'tests/src/loops-issues.rs', lines 15:4-18:5 -/
-def loop_access_array_loop (k : Usize) (start : Usize) : Result Unit :=
+def loop_access_array_loop (k : Usize) (start : Usize) : Result Unit := do
   if start < 4#usize
   then
-    do
     massert (k < 4#usize)
     let start1 ← start + 1#usize
     loop_access_array_loop k start1
@@ -40,12 +40,12 @@ partial_fixpoint
 /- [loops_issues::loop_access_array]:
    Source: 'tests/src/loops-issues.rs', lines 13:0-19:1 -/
 @[reducible]
-def loop_access_array (k : Usize) : Result Unit :=
+def loop_access_array (k : Usize) : Result Unit := do
   loop_access_array_loop k 0#usize
 
 /- [loops_issues::loop_array_len]: loop 0:
    Source: 'tests/src/loops-issues.rs', lines 26:4-28:5 -/
-def loop_array_len_loop (b : Bool) : Result Unit :=
+def loop_array_len_loop (b : Bool) : Result Unit := do
   if b
   then loop_array_len_loop true
   else ok ()
@@ -54,18 +54,17 @@ partial_fixpoint
 /- [loops_issues::loop_array_len]:
    Source: 'tests/src/loops-issues.rs', lines 22:0-29:1 -/
 @[reducible]
-def loop_array_len (b : Bool) : Result Unit :=
+def loop_array_len (b : Bool) : Result Unit := do
   loop_array_len_loop b
 
 /- [loops_issues::loop_array_len_write]: loop 0:
    Source: 'tests/src/loops-issues.rs', lines 36:4-40:5 -/
 def loop_array_len_write_loop
-  (b0 : Bool) (b1 : Bool) (buf : Array U8 4#usize) : Result Unit :=
+  (b0 : Bool) (b1 : Bool) (buf : Array U8 4#usize) : Result Unit := do
   if b0
   then
     if b1
-    then do
-         let buf1 ← write buf
+    then let buf1 ← write buf
          loop_array_len_write_loop true true buf1
     else loop_array_len_write_loop true false buf
   else ok ()
@@ -73,19 +72,19 @@ partial_fixpoint
 
 /- [loops_issues::loop_array_len_write]:
    Source: 'tests/src/loops-issues.rs', lines 32:0-41:1 -/
-def loop_array_len_write (b0 : Bool) (b1 : Bool) : Result Unit :=
+def loop_array_len_write (b0 : Bool) (b1 : Bool) : Result Unit := do
   let buf := Array.repeat 4#usize 0#u8
   loop_array_len_write_loop b0 b1 buf
 
 /- [loops_issues::MAX_NROWS]
    Source: 'tests/src/loops-issues.rs', lines 43:0-43:27 -/
-@[global_simps] def MAX_NROWS_body : Result Usize := ok 4#usize
+@[global_simps] def MAX_NROWS_body : Result Usize := do ok 4#usize
 @[global_simps, irreducible]
 def MAX_NROWS : Usize := eval_global MAX_NROWS_body
 
 /- [loops_issues::read_global_loop]: loop 0:
    Source: 'tests/src/loops-issues.rs', lines 48:4-48:14 -/
-def read_global_loop_loop (b : Bool) : Result Unit :=
+def read_global_loop_loop (b : Bool) : Result Unit := do
   if b
   then read_global_loop_loop true
   else ok ()
@@ -93,52 +92,47 @@ partial_fixpoint
 
 /- [loops_issues::read_global_loop]:
    Source: 'tests/src/loops-issues.rs', lines 46:0-49:1 -/
-def read_global_loop (b : Bool) (n_rows : Usize) : Result Unit :=
-  do
+def read_global_loop (b : Bool) (n_rows : Usize) : Result Unit := do
   massert (n_rows <= MAX_NROWS)
   read_global_loop_loop b
 
 /- [loops_issues::mut_loop_len]: loop 0:
    Source: 'tests/src/loops-issues.rs', lines 55:10-55:11 -/
-def mut_loop_len_loop (buf : Array U8 4#usize) (b : Bool) : Result Unit :=
+def mut_loop_len_loop (b : Bool) (buf : Array U8 4#usize) : Result Unit := do
   if b
   then
-    do
     let s ← (↑(Array.to_slice buf) : Result (Slice U8))
     let i := Slice.len s
     if 0#usize <= i
-    then mut_loop_len_loop buf true
+    then mut_loop_len_loop true buf
     else fail panic
   else ok ()
 partial_fixpoint
 
 /- [loops_issues::mut_loop_len]:
    Source: 'tests/src/loops-issues.rs', lines 52:0-58:1 -/
-def mut_loop_len (i : U32) (b : Bool) : Result U32 :=
-  do
+def mut_loop_len (i : U32) (b : Bool) : Result U32 := do
   let buf := Array.repeat 4#usize 0#u8
-  mut_loop_len_loop buf b
+  mut_loop_len_loop b buf
   ok i
 
 /- [loops_issues::test]: loop 0:
    Source: 'tests/src/loops-issues.rs', lines 65:4-71:5 -/
-def test_loop (b0 : Bool) (b1 : Bool) (buf : Array U8 4#usize) : Result Unit :=
+def test_loop
+  (b0 : Bool) (b1 : Bool) (buf : Array U8 4#usize) : Result Unit := do
   if b0
   then
-    if b1
-    then do
-         let buf1 ← write buf
-         read buf1
-         test_loop true true buf1
-    else do
-         read buf
-         test_loop true false buf
+    let buf1 ← if b1
+                 then write buf
+                 else ok buf
+    read buf1
+    test_loop true b1 buf1
   else ok ()
 partial_fixpoint
 
 /- [loops_issues::test]:
    Source: 'tests/src/loops-issues.rs', lines 61:0-72:1 -/
-def test (b0 : Bool) (b1 : Bool) : Result Unit :=
+def test (b0 : Bool) (b1 : Bool) : Result Unit := do
   let buf := Array.repeat 4#usize 0#u8
   test_loop b0 b1 buf
 

@@ -15,8 +15,8 @@ module T = Types
     - [inside]: if [true], the value should be wrapped in parentheses if it is
       made of an application (ex.: [U32 3])
     - the constant value *)
-let extract_literal (span : Meta.span) (fmt : F.formatter) (is_pattern : bool)
-    (inside : bool) (cv : literal) : unit =
+let extract_literal (span : Meta.span) (fmt : F.formatter) ~(is_pattern : bool)
+    ~(inside : bool) (cv : literal) : unit =
   match cv with
   | VScalar sv -> (
       match backend () with
@@ -248,12 +248,12 @@ let extract_arrow (fmt : F.formatter) () : unit =
   else F.pp_print_string fmt "->"
 
 let extract_const_generic (span : Meta.span) (ctx : extraction_ctx)
-    (fmt : F.formatter) (inside : bool) (cg : const_generic) : unit =
+    (fmt : F.formatter) ~(inside : bool) (cg : const_generic) : unit =
   match cg with
   | CgGlobal id ->
       let s = ctx_get_global span id ctx in
       F.pp_print_string fmt s
-  | CgValue v -> extract_literal span fmt false inside v
+  | CgValue v -> extract_literal span fmt ~is_pattern:false ~inside v
   | CgVar var ->
       let origin, id = origin_from_de_bruijn_var var in
       let s = ctx_get_const_generic_var span origin id ctx in
@@ -295,7 +295,7 @@ let extract_ty_errors (fmt : F.formatter) : unit =
   | HOL4 -> F.pp_print_string fmt "(* ERROR: could not generate the code *)"
 
 let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
-    (no_params_tys : TypeDeclId.Set.t) (inside : bool) (ty : ty) : unit =
+    (no_params_tys : TypeDeclId.Set.t) ~(inside : bool) (ty : ty) : unit =
   let extract_rec = extract_ty span ctx fmt no_params_tys in
   match ty with
   | TAdt (type_id, generics) -> (
@@ -319,7 +319,7 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
                 in
                 F.pp_print_string fmt product;
                 F.pp_print_space fmt ())
-              (extract_rec true) generics.types;
+              (extract_rec ~inside:true) generics.types;
             F.pp_print_string fmt ")")
       | TAdtId _ | TBuiltin _ -> (
           (* HOL4 behaves differently. Where in Coq/FStar/Lean we would write:
@@ -399,14 +399,14 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
                   (fun () ->
                     F.pp_print_string fmt ",";
                     F.pp_print_space fmt ())
-                  (extract_rec true) types;
+                  (extract_rec ~inside:true) types;
                 if print_paren then F.pp_print_string fmt ")";
                 F.pp_print_space fmt ());
               F.pp_print_string fmt (ctx_get_type (Some span) type_id ctx);
               if trait_refs <> [] then (
                 F.pp_print_space fmt ();
                 Collections.List.iter_link (F.pp_print_space fmt)
-                  (extract_trait_ref span ctx fmt no_params_tys true)
+                  (extract_trait_ref span ctx fmt no_params_tys ~inside:true)
                   trait_refs)))
   | TVar var ->
       let origin, id = origin_from_de_bruijn_var var in
@@ -414,11 +414,11 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
   | TLiteral lty -> extract_literal_type ctx fmt lty
   | TArrow (arg_ty, ret_ty) ->
       if inside then F.pp_print_string fmt "(";
-      extract_rec false arg_ty;
+      extract_rec ~inside:false arg_ty;
       F.pp_print_space fmt ();
       extract_arrow fmt ();
       F.pp_print_space fmt ();
-      extract_rec false ret_ty;
+      extract_rec ~inside:false ret_ty;
       if inside then F.pp_print_string fmt ")"
   | TTraitType (trait_ref, type_name) -> (
       if !parameterize_trait_types then [%admit_raise] span "Unimplemented" fmt
@@ -440,24 +440,24 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
         match trait_ref.trait_id with
         | Self ->
             extract_trait_instance_id_if_not_self span ctx fmt no_params_tys
-              false trait_ref.trait_id;
+              ~inside:false trait_ref.trait_id;
             F.pp_print_string fmt type_name
         | _ ->
             (* HOL4 doesn't have 1st class types *)
             [%cassert] span
               (backend () <> HOL4)
               "Trait types are not supported yet when generating code for HOL4";
-            extract_trait_ref span ctx fmt no_params_tys false trait_ref;
+            extract_trait_ref span ctx fmt no_params_tys ~inside:false trait_ref;
             F.pp_print_string fmt ("." ^ add_brackets type_name))
   | Error -> extract_ty_errors fmt
 
 and extract_trait_ref (span : Meta.span) (ctx : extraction_ctx)
-    (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) (inside : bool)
+    (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) ~(inside : bool)
     (tr : trait_ref) : unit =
-  extract_trait_instance_id span ctx fmt no_params_tys inside tr.trait_id
+  extract_trait_instance_id span ctx fmt no_params_tys ~inside tr.trait_id
 
 and extract_trait_decl_ref (span : Meta.span) (ctx : extraction_ctx)
-    (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) (inside : bool)
+    (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) ~(inside : bool)
     (tr : trait_decl_ref) : unit =
   let use_brackets = tr.decl_generics <> empty_generic_args && inside in
   let name = ctx_get_trait_decl span tr.trait_decl_id ctx in
@@ -495,7 +495,7 @@ and extract_generic_args (span : Meta.span) (ctx : extraction_ctx)
     if types <> [] then (
       F.pp_print_space fmt ();
       Collections.List.iter_link (F.pp_print_space fmt)
-        (extract_ty span ctx fmt no_params_tys true)
+        (extract_ty span ctx fmt no_params_tys ~inside:true)
         types);
     if const_generics <> [] then (
       [%cassert] span
@@ -503,12 +503,12 @@ and extract_generic_args (span : Meta.span) (ctx : extraction_ctx)
         "Constant generics are not supported yet when generating code for HOL4";
       F.pp_print_space fmt ();
       Collections.List.iter_link (F.pp_print_space fmt)
-        (extract_const_generic span ctx fmt true)
+        (extract_const_generic span ctx fmt ~inside:true)
         const_generics));
   if trait_refs <> [] then (
     F.pp_print_space fmt ();
     Collections.List.iter_link (F.pp_print_space fmt)
-      (extract_trait_ref span ctx fmt no_params_tys true)
+      (extract_trait_ref span ctx fmt no_params_tys ~inside:true)
       trait_refs)
 
 (** We sometimes need to ignore references to `Self` when generating the code,
@@ -517,7 +517,7 @@ and extract_generic_args (span : Meta.span) (ctx : extraction_ctx)
     `<Self as Foo>::foo`). *)
 and extract_trait_instance_id_if_not_self (span : Meta.span)
     (ctx : extraction_ctx) (fmt : F.formatter)
-    (no_params_tys : TypeDeclId.Set.t) (inside : bool) (id : trait_instance_id)
+    (no_params_tys : TypeDeclId.Set.t) ~(inside : bool) (id : trait_instance_id)
     : unit =
   match id with
   | Self ->
@@ -526,11 +526,11 @@ and extract_trait_instance_id_if_not_self (span : Meta.span)
       ()
   | _ ->
       (* Other cases *)
-      extract_trait_instance_id span ctx fmt no_params_tys inside id;
+      extract_trait_instance_id span ctx fmt no_params_tys ~inside id;
       F.pp_print_string fmt "."
 
 and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
-    (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) (inside : bool)
+    (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) ~(inside : bool)
     (id : trait_instance_id) : unit =
   let add_brackets (s : string) =
     if backend () = Coq then "(" ^ s ^ ")" else s
@@ -586,8 +586,8 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
   | ParentClause (inst_id, decl_id, clause_id) ->
       (* Use the trait decl id to lookup the name *)
       let name = ctx_get_trait_parent_clause span decl_id clause_id ctx in
-      extract_trait_instance_id_if_not_self span ctx fmt no_params_tys true
-        inst_id;
+      extract_trait_instance_id_if_not_self span ctx fmt no_params_tys
+        ~inside:true inst_id;
       F.pp_print_string fmt (add_brackets name)
   | UnknownTrait _ ->
       (* This is an error case *)
@@ -771,7 +771,7 @@ let extract_type_decl_variant (span : Meta.span) (ctx : extraction_ctx)
     in
     (* Print the field type *)
     let inside = backend () = HOL4 in
-    extract_ty span ctx fmt type_decl_group inside f.field_ty;
+    extract_ty span ctx fmt type_decl_group ~inside f.field_ty;
     (* Print the arrow [->] *)
     if backend () <> HOL4 then (
       F.pp_print_space fmt ();
@@ -870,7 +870,7 @@ let extract_type_decl_tuple_struct_body (span : Meta.span)
         F.pp_print_string fmt sep)
       (fun (f : field) ->
         F.pp_print_space fmt ();
-        extract_ty span ctx fmt TypeDeclId.Set.empty true f.field_ty)
+        extract_ty span ctx fmt TypeDeclId.Set.empty ~inside:false f.field_ty)
       fields
 
 let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
@@ -970,7 +970,8 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_space fmt ();
         F.pp_print_string fmt ":";
         F.pp_print_space fmt ();
-        extract_ty def.item_meta.span ctx fmt type_decl_group false f.field_ty;
+        extract_ty def.item_meta.span ctx fmt type_decl_group ~inside:false
+          f.field_ty;
         if backend () <> Lean then F.pp_print_string fmt ";";
         (* Close the box for the field *)
         F.pp_close_box fmt ()
@@ -1761,7 +1762,8 @@ let extract_type_decl_record_field_projectors_simp_lemmas (ctx : extraction_ctx)
             F.pp_print_space fmt ();
             F.pp_print_string fmt ":";
             F.pp_print_space fmt ();
-            extract_ty span ctx fmt TypeDeclId.Set.empty false f.field_ty;
+            extract_ty span ctx fmt TypeDeclId.Set.empty ~inside:false
+              f.field_ty;
             F.pp_print_string fmt ")";
             (ctx, field_name)
           in

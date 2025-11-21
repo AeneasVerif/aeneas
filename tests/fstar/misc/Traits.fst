@@ -6,7 +6,7 @@ open Primitives
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [core::result::Result]
-    Source: '/rustc/library/core/src/result.rs', lines 548:0-548:21
+    Source: '/rustc/library/core/src/result.rs', lines 557:0-557:21
     Name pattern: [core::result::Result] *)
 type core_result_Result_t (t : Type0) (e : Type0) =
 | Core_result_Result_Ok : t -> core_result_Result_t t e
@@ -289,8 +289,8 @@ let withConstTyBoolU8U6432 : withConstTy_t bool u8 u64 32 = {
 (** [traits::use_with_const_ty1]:
     Source: 'tests/src/traits.rs', lines 185:0-187:1 *)
 let use_with_const_ty1
-  (#h : Type0) (#clause1_v : Type0) (#clause1_w : Type0) (#len : usize)
-  (withConstTyInst : withConstTy_t h clause1_v clause1_w len) :
+  (#h : Type0) (#clause0_v : Type0) (#clause0_w : Type0) (#len : usize)
+  (withConstTyInst : withConstTy_t h clause0_v clause0_w len) :
   result usize
   =
   Ok withConstTyInst.cLEN1
@@ -298,8 +298,8 @@ let use_with_const_ty1
 (** [traits::use_with_const_ty2]:
     Source: 'tests/src/traits.rs', lines 189:0-189:76 *)
 let use_with_const_ty2
-  (#h : Type0) (#clause1_v : Type0) (#clause1_w : Type0) (#len : usize)
-  (withConstTyInst : withConstTy_t h clause1_v clause1_w len) (x : clause1_w) :
+  (#h : Type0) (#clause0_v : Type0) (#clause0_w : Type0) (#len : usize)
+  (withConstTyInst : withConstTy_t h clause0_v clause0_w len) (x : clause0_w) :
   result unit
   =
   Ok ()
@@ -307,8 +307,8 @@ let use_with_const_ty2
 (** [traits::use_with_const_ty3]:
     Source: 'tests/src/traits.rs', lines 191:0-193:1 *)
 let use_with_const_ty3
-  (#h : Type0) (#clause1_v : Type0) (#clause1_w : Type0) (#len : usize)
-  (withConstTyInst : withConstTy_t h clause1_v clause1_w len) (x : clause1_w) :
+  (#h : Type0) (#clause0_v : Type0) (#clause0_w : Type0) (#len : usize)
+  (withConstTyInst : withConstTy_t h clause0_v clause0_w len) (x : clause0_w) :
   result u64
   =
   withConstTyInst.toU64Inst.to_u64 x
@@ -321,8 +321,9 @@ let test_where1 (#t : Type0) (_x : t) : result unit =
 (** [traits::test_where2]:
     Source: 'tests/src/traits.rs', lines 196:0-196:60 *)
 let test_where2
-  (#t : Type0) (#clause1_w : Type0) (withConstTyTU32Clause1_W32Inst :
-  withConstTy_t t u32 clause1_w 32) (_x : u32) :
+  (#t : Type0) (#clause0_v : Type0) (#clause0_w : Type0)
+  (withConstTyTClause0_VClause0_W32Inst : withConstTy_t t clause0_v clause0_w
+  32) (_x : u32) :
   result unit
   =
   Ok ()
@@ -340,16 +341,16 @@ type parentTrait1_t (self : Type0) = unit
 
 (** Trait declaration: [traits::ChildTrait]
     Source: 'tests/src/traits.rs', lines 208:0-208:52 *)
-noeq type childTrait_t (self : Type0) (self_clause1_w : Type0) = {
-  parentTrait0Inst : parentTrait0_t self self_clause1_w;
+noeq type childTrait_t (self : Type0) (self_clause0_w : Type0) = {
+  parentTrait0Inst : parentTrait0_t self self_clause0_w;
   parentTrait1Inst : parentTrait1_t self;
 }
 
 (** [traits::test_child_trait1]:
     Source: 'tests/src/traits.rs', lines 211:0-213:1 *)
 let test_child_trait1
-  (#t : Type0) (#clause1_clause1_w : Type0) (childTraitInst : childTrait_t t
-  clause1_clause1_w) (x : t) :
+  (#t : Type0) (#clause0_clause0_w : Type0) (childTraitInst : childTrait_t t
+  clause0_clause0_w) (x : t) :
   result string
   =
   childTraitInst.parentTrait0Inst.get_name x
@@ -357,18 +358,18 @@ let test_child_trait1
 (** [traits::test_child_trait2]:
     Source: 'tests/src/traits.rs', lines 215:0-217:1 *)
 let test_child_trait2
-  (#t : Type0) (#clause1_clause1_w : Type0) (childTraitInst : childTrait_t t
-  clause1_clause1_w) (x : t) :
-  result clause1_clause1_w
+  (#t : Type0) (#clause0_clause0_w : Type0) (childTraitInst : childTrait_t t
+  clause0_clause0_w) (x : t) :
+  result clause0_clause0_w
   =
   childTraitInst.parentTrait0Inst.get_w x
 
 (** [traits::order1]:
     Source: 'tests/src/traits.rs', lines 221:0-221:62 *)
 let order1
-  (#t : Type0) (#u : Type0) (#clause3_w : Type0) (parentTrait0Inst :
-  parentTrait0_t t clause3_w) (parentTrait0Inst1 : parentTrait0_t u clause3_w)
-  :
+  (#t : Type0) (#u : Type0) (#clause0_w : Type0) (#clause1_w : Type0)
+  (parentTrait0Inst : parentTrait0_t t clause0_w) (parentTrait0Inst1 :
+  parentTrait0_t u clause1_w) :
   result unit
   =
   Ok ()
@@ -396,8 +397,8 @@ type iterator_t (self : Type0) (self_item : Type0) = unit
 (** Trait declaration: [traits::IntoIterator]
     Source: 'tests/src/traits.rs', lines 235:0-241:1 *)
 noeq type intoIterator_t (self : Type0) (self_item : Type0) (self_into_iter :
-  Type0) = {
-  iteratorInst : iterator_t self_into_iter self_item;
+  Type0) (self_clause0_item : Type0) = {
+  iteratorInst : iterator_t self_into_iter self_clause0_item;
   into_iter : self -> result self_into_iter;
 }
 
@@ -417,18 +418,18 @@ type withTarget_t (self : Type0) (self_target : Type0) = unit
 
 (** Trait declaration: [traits::ParentTrait2]
     Source: 'tests/src/traits.rs', lines 258:0-260:1 *)
-noeq type parentTrait2_t (self : Type0) (self_u : Type0) (self_clause2_target :
+noeq type parentTrait2_t (self : Type0) (self_u : Type0) (self_clause0_target :
   Type0) = {
-  withTargetInst : withTarget_t self_u self_clause2_target;
+  withTargetInst : withTarget_t self_u self_clause0_target;
 }
 
 (** Trait declaration: [traits::ChildTrait2]
     Source: 'tests/src/traits.rs', lines 262:0-264:1 *)
-noeq type childTrait2_t (self : Type0) (self_clause1_u : Type0)
-  (self_clause1_clause2_target : Type0) = {
-  parentTrait2Inst : parentTrait2_t self self_clause1_u
-    self_clause1_clause2_target;
-  convert : self_clause1_u -> result self_clause1_clause2_target;
+noeq type childTrait2_t (self : Type0) (self_clause0_u : Type0)
+  (self_clause0_clause0_target : Type0) = {
+  parentTrait2Inst : parentTrait2_t self self_clause0_u
+    self_clause0_clause0_target;
+  convert : self_clause0_u -> result self_clause0_clause0_target;
 }
 
 (** Trait implementation: [traits::{traits::WithTarget<u32> for u32}]
@@ -461,18 +462,18 @@ noeq type cFnOnce_t (self : Type0) (args : Type0) (self_output : Type0) = {
 
 (** Trait declaration: [traits::CFnMut]
     Source: 'tests/src/traits.rs', lines 294:0-296:1 *)
-noeq type cFnMut_t (self : Type0) (args : Type0) (self_clause1_output : Type0)
+noeq type cFnMut_t (self : Type0) (args : Type0) (self_clause0_output : Type0)
   = {
-  cFnOnceInst : cFnOnce_t self args self_clause1_output;
-  call_mut : self -> args -> result (self_clause1_output & self);
+  cFnOnceInst : cFnOnce_t self args self_clause0_output;
+  call_mut : self -> args -> result (self_clause0_output & self);
 }
 
 (** Trait declaration: [traits::CFn]
     Source: 'tests/src/traits.rs', lines 298:0-300:1 *)
-noeq type cFn_t (self : Type0) (args : Type0) (self_clause1_clause1_output :
+noeq type cFn_t (self : Type0) (args : Type0) (self_clause0_clause0_output :
   Type0) = {
-  cFnMutInst : cFnMut_t self args self_clause1_clause1_output;
-  call : self -> args -> result self_clause1_clause1_output;
+  cFnMutInst : cFnMut_t self args self_clause0_clause0_output;
+  call : self -> args -> result self_clause0_clause0_output;
 }
 
 (** Trait declaration: [traits::GetTrait]
@@ -484,9 +485,9 @@ noeq type getTrait_t (self : Type0) (self_w : Type0) = {
 (** [traits::test_get_trait]:
     Source: 'tests/src/traits.rs', lines 307:0-309:1 *)
 let test_get_trait
-  (#t : Type0) (#clause1_w : Type0) (getTraitInst : getTrait_t t clause1_w)
+  (#t : Type0) (#clause0_w : Type0) (getTraitInst : getTrait_t t clause0_w)
   (x : t) :
-  result clause1_w
+  result clause0_w
   =
   getTraitInst.get_w x
 

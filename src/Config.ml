@@ -5,15 +5,15 @@
 (** The choice of backend *)
 type backend = FStar | Coq | Lean | HOL4
 
-let backend_names = [ "fstar"; "coq"; "lean"; "hol4" ]
+let backend_names = [ "fstar"; "coq"; "rocq"; "lean"; "hol4" ]
 
 (** Utility to compute the backend from an input parameter *)
 let backend_of_string (b : string) : backend option =
   match b with
-  | "fstar" -> Some FStar
-  | "coq" -> Some Coq
-  | "lean" -> Some Lean
-  | "hol4" -> Some HOL4
+  | "fstar" | "FStar" -> Some FStar
+  | "coq" | "Coq" | "rocq" | "Rocq" -> Some Coq
+  | "lean" | "Lean" -> Some Lean
+  | "hol4" | "HOL4" -> Some HOL4
   | _ -> None
 
 let opt_backend : backend option ref = ref None
@@ -442,3 +442,6 @@ let match_patterns_with_trait_decl_refs = true
 
 (** Decompose loops to recursive functions *)
 let loops_to_recursive_functions = ref true
+
+(** Should we run the translation in parallel? *)
+let parallel = ref true

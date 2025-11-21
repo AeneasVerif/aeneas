@@ -43,7 +43,7 @@ opam switch create 5.2.0
 You can then install the dependencies with the following command:
 ```
 opam install ppx_deriving visitors easy_logging zarith yojson core_unix odoc \
-  ocamlgraph menhir ocamlformat unionFind zarith progress
+  ocamlgraph menhir ocamlformat unionFind zarith progress domainslib
 ```
 
 Moreover, Aeneas uses the [Charon](https://github.com/AeneasVerif/charon) project and library.

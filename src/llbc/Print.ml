@@ -13,9 +13,9 @@ open Contexts
 module Types = Charon.PrintTypes
 module Expressions = Charon.PrintExpressions
 
-let list_to_string ?(sep = " ") (to_string : 'a -> string) (ls : 'a list) :
+let list_to_string ?(sep = "; ") (to_string : 'a -> string) (ls : 'a list) :
     string =
-  "[" ^ String.concat (";" ^ sep) (List.map to_string ls) ^ "]"
+  "[" ^ String.concat sep (List.map to_string ls) ^ "]"
 
 let pair_to_string (to_string0 : 'a -> string) (to_string1 : 'b -> string)
     ((x, y) : 'a * 'b) : string =
@@ -120,7 +120,7 @@ module Values = struct
     match lc with
     | VSharedLoan (lid, v) ->
         let lid = BorrowId.to_string lid in
-        "@shared_loan(@" ^ lid ^ ", " ^ tvalue_to_string ~span env v ^ ")"
+        "shared_loan@" ^ lid ^ "(" ^ tvalue_to_string ~span env v ^ ")"
     | VMutLoan bid -> "ml@" ^ BorrowId.to_string bid
 
   let abstract_shared_borrow_to_string (env : fmt_env)
@@ -260,7 +260,7 @@ module Values = struct
         ^ ")"
         |> add_proj_marker pm
     | ASharedLoan (pm, lid, v, av) ->
-        "@shared_loan(@" ^ BorrowId.to_string lid ^ ", "
+        "shared_loan@" ^ BorrowId.to_string lid ^ "("
         ^ tvalue_to_string ~span env v
         ^ ", "
         ^ tavalue_to_string ~span ~with_ended env av
@@ -443,6 +443,7 @@ module Values = struct
     | ELoop (abs_id, lp_id) ->
         "Loop(abs_id@" ^ AbsId.to_string abs_id ^ ",loop_id@"
         ^ LoopId.to_string lp_id ^ ")"
+    | EJoin abs_id -> "Join(abs_id@" ^ AbsId.to_string abs_id ^ ")"
 
   let rec eproj_to_string ?(with_ended : bool = false) (env : fmt_env)
       (pv : eproj) : string =
@@ -696,6 +697,7 @@ module Values = struct
     | Loop lp_id -> "Loop(loop_id:" ^ LoopId.to_string lp_id ^ ")"
     | Identity -> "Identity"
     | CopySymbolicValue -> "CopySymbolicValue"
+    | Join -> "Join"
 
   let abs_cont_to_string ?(span : Meta.span option = None) (env : fmt_env)
       ?(with_ended : bool = false) (indent : string) (indent_incr : string)
@@ -1011,14 +1013,30 @@ module EvalCtx = struct
     let env = eval_ctx_to_fmt_env ctx in
     aborrow_content_to_string ~span env bc
 
+  let eborrow_content_to_string ?(span : Meta.span option = None)
+      (ctx : eval_ctx) (ty : ty) (bc : eborrow_content) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    let aenv = empty_evalue_env in
+    eborrow_content_to_string ~span env aenv "" "  " ty bc
+
   let aloan_content_to_string ?(span : Meta.span option = None) (ctx : eval_ctx)
       (lc : aloan_content) : string =
     let env = eval_ctx_to_fmt_env ctx in
     aloan_content_to_string ~span env lc
 
+  let eloan_content_to_string ?(span : Meta.span option = None) (ctx : eval_ctx)
+      (ty : ty) (lc : eloan_content) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    let aenv = empty_evalue_env in
+    eloan_content_to_string ~span env aenv "" "  " ty lc
+
   let aproj_to_string (ctx : eval_ctx) (p : aproj) : string =
     let env = eval_ctx_to_fmt_env ctx in
     aproj_to_string env p
+
+  let eproj_to_string (ctx : eval_ctx) (p : eproj) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    eproj_to_string env p
 
   let symbolic_value_to_string (ctx : eval_ctx) (sv : symbolic_value) : string =
     let env = eval_ctx_to_fmt_env ctx in

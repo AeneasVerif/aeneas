@@ -11,6 +11,10 @@ open Errors
 
 let log = Logging.pre_passes_log
 
+let statement_to_string (crate : crate) =
+  let fmt_env = Print.Crate.crate_to_fmt_env crate in
+  Print.Ast.statement_to_string fmt_env "" "  "
+
 (** The Rust compiler generates a unique implementation of [Default] for arrays
     for every choice of length. For instance, if we write:
     {[
@@ -465,6 +469,90 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
   let f : fun_decl = { f with body } in
   [%ldebug
     "Before/after [update_loops]:\n"
+    ^ Print.Crate.crate_fun_decl_to_string crate f0
+    ^ "\n\n"
+    ^ Print.Crate.crate_fun_decl_to_string crate f];
+  f
+
+(** Inline what comes after an [if then else], a [switch] or a [match], etc.
+    under certain conditions, to prevent useless joins from being performed by
+    the symbolic execution.
+
+    The main goal of this pass is to improve the quality of the generated code.
+*)
+let remove_useless_joins (crate : crate) (f : fun_decl) : fun_decl =
+  let f0 = f in
+
+  let rec update_block (to_inline : statement list) (block : block) :
+      bool * block =
+    let can_inline, statements = update_statements to_inline block.statements in
+    (can_inline, { block with statements })
+  and update_statements (to_inline : statement list) (ls : statement list) :
+      bool * statement list =
+    match ls with
+    | [] -> (true, to_inline)
+    | st :: ls -> (
+        [%ldebug
+          "ls:\n"
+          ^ Print.list_to_string ~sep:"\n" (statement_to_string crate) ls];
+        let can_inline, ls = update_statements to_inline ls in
+        match st.kind with
+        | Nop | StorageLive _ | StorageDead _ | Deinit _ | Drop _ ->
+            (can_inline, st :: ls)
+        | Abort _ | Return | Break _ | Continue _ -> (true, [ st ])
+        | Switch switch ->
+            [%ldebug "Switch: can_inline: " ^ Print.bool_to_string can_inline];
+            (* Attempt to inline inside the body *)
+            let to_inline, ls = if can_inline then (ls, []) else ([], ls) in
+            let update b = snd (update_block to_inline b) in
+            let switch =
+              match switch with
+              | If (scrut, st0, st1) -> If (scrut, update st0, update st1)
+              | SwitchInt (op, ty, branches, otherwise) ->
+                  let branches =
+                    List.map (fun (pats, br) -> (pats, update br)) branches
+                  in
+                  let otherwise = update otherwise in
+                  SwitchInt (op, ty, branches, otherwise)
+              | Match (scrut, branches, otherwise) ->
+                  let branches =
+                    List.map (fun (id, br) -> (id, update br)) branches
+                  in
+                  let otherwise = Option.map update otherwise in
+                  Match (scrut, branches, otherwise)
+            in
+            let ls = { st with kind = Switch switch } :: ls in
+            [%ldebug
+              "after updating the switch:\n"
+              ^ Print.list_to_string ~sep:"\n" (statement_to_string crate) ls];
+            (false, ls)
+        | Loop loop ->
+            (* Update the inside of the loop *)
+            (false, { st with kind = Loop (snd (update_block [] loop)) } :: ls)
+        | Assign (_, rv) -> (
+            (* We allow inlining some assignments (otherwise the pass is too restrictive) *)
+            match rv with
+            | Use _ | RvRef _ | RawPtr _ | NullaryOp _ | Aggregate _ ->
+                (can_inline, st :: ls)
+            | BinaryOp _
+            | UnaryOp _
+            | Discriminant _
+            | Len _
+            | Repeat _
+            | ShallowInitBox _ -> (false, st :: ls))
+        | SetDiscriminant _ | CopyNonOverlapping _ | Assert _ | Call _ | Error _
+          -> (false, st :: ls))
+  in
+
+  let body =
+    match f.body with
+    | Some body -> Some { body with body = snd (update_block [] body.body) }
+    | None -> None
+  in
+
+  let f : fun_decl = { f with body } in
+  [%ldebug
+    "Before/after [remove_useless_joins]:\n"
     ^ Print.Crate.crate_fun_decl_to_string crate f0
     ^ "\n\n"
     ^ Print.Crate.crate_fun_decl_to_string crate f];
@@ -959,6 +1047,7 @@ let apply_passes (crate : crate) : crate =
   let function_passes =
     [
       ("update_loop", update_loops);
+      ("remove_useless_joins", remove_useless_joins);
       ( "remove_shallow_borrows_storage_live_dead",
         remove_shallow_borrows_storage_live_dead );
       ("decompose_str_borrows", decompose_str_borrows);

@@ -512,7 +512,7 @@ Definition ite : result unit :=
 (** [arrays::zero_slice]: loop 0:
     Source: 'tests/src/arrays.rs', lines 336:4-339:5 *)
 Fixpoint zero_slice_loop
-  (n : nat) (len : usize) (a : slice u8) (i : usize) : result (slice u8) :=
+  (n : nat) (a : slice u8) (i : usize) (len : usize) : result (slice u8) :=
   match n with
   | O => Fail_ OutOfFuel
   | S n1 =>
@@ -520,7 +520,7 @@ Fixpoint zero_slice_loop
     then (
       a1 <- slice_update_usize a i 0%u8;
       i1 <- usize_add i 1%usize;
-      zero_slice_loop n1 len a1 i1)
+      zero_slice_loop n1 a1 i1 len)
     else Ok a
   end
 .
@@ -528,7 +528,7 @@ Fixpoint zero_slice_loop
 (** [arrays::zero_slice]:
     Source: 'tests/src/arrays.rs', lines 333:0-340:1 *)
 Definition zero_slice (n : nat) (a : slice u8) : result (slice u8) :=
-  let len := slice_len a in zero_slice_loop n len a 0%usize
+  let len := slice_len a in zero_slice_loop n a 0%usize len
 .
 
 (** [arrays::iter_mut_slice]: loop 0:
@@ -606,5 +606,21 @@ Definition add_acc
   :=
   add_acc_loop n pa_src pe_dst 0%usize
 .
+
+(** [arrays::ARRAY1]
+    Source: 'tests/src/arrays.rs', lines 374:0-374:32 *)
+Definition array1_body : result (array u32 2%usize) :=
+  Ok (mk_array 2%usize [ 0%u32; 1%u32 ])
+.
+Definition array1 : array u32 2%usize := array1_body%global.
+
+(** [arrays::Scalar]
+    Source: 'tests/src/arrays.rs', lines 377:0-377:24 *)
+Definition Scalar_t : Type := array u32 2%usize.
+
+(** [arrays::L]
+    Source: 'tests/src/arrays.rs', lines 378:0-378:33 *)
+Definition l_body : result Scalar_t := Ok (mk_array 2%usize [ 0%u32; 1%u32 ]).
+Definition l : Scalar_t := l_body%global.
 
 End Arrays.

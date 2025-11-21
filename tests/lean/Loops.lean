@@ -10,25 +10,23 @@ namespace loops
 
 /- [loops::iter]: loop 0:
    Source: 'tests/src/loops.rs', lines 6:4-8:5 -/
-def iter_loop (max : U32) (i : U32) : Result U32 :=
+def iter_loop (max : U32) (i : U32) : Result U32 := do
   if i < max
-  then do
-       let i1 ← i + 1#u32
+  then let i1 ← i + 1#u32
        iter_loop max i1
   else ok i
 partial_fixpoint
 
 /- [loops::iter]:
    Source: 'tests/src/loops.rs', lines 4:0-11:1 -/
-@[reducible] def iter (max : U32) : Result U32 :=
+@[reducible] def iter (max : U32) : Result U32 := do
                iter_loop max 0#u32
 
 /- [loops::sum]: loop 0:
    Source: 'tests/src/loops.rs', lines 17:4-20:5 -/
-def sum_loop (max : U32) (i : U32) (s : U32) : Result U32 :=
+def sum_loop (max : U32) (i : U32) (s : U32) : Result U32 := do
   if i < max
-  then do
-       let s1 ← s + i
+  then let s1 ← s + i
        let i1 ← i + 1#u32
        sum_loop max i1 s1
   else ok s
@@ -36,17 +34,16 @@ partial_fixpoint
 
 /- [loops::sum]:
    Source: 'tests/src/loops.rs', lines 14:0-24:1 -/
-def sum (max : U32) : Result U32 :=
-  do
+def sum (max : U32) : Result U32 := do
   let s ← sum_loop max 0#u32 0#u32
   s * 2#u32
 
 /- [loops::sum_with_mut_borrows]: loop 0:
    Source: 'tests/src/loops.rs', lines 32:4-37:5 -/
-def sum_with_mut_borrows_loop (max : U32) (i : U32) (s : U32) : Result U32 :=
+def sum_with_mut_borrows_loop
+  (max : U32) (i : U32) (s : U32) : Result U32 := do
   if i < max
   then
-    do
     let ms ← s + i
     let mi ← i + 1#u32
     sum_with_mut_borrows_loop max mi ms
@@ -55,18 +52,16 @@ partial_fixpoint
 
 /- [loops::sum_with_mut_borrows]:
    Source: 'tests/src/loops.rs', lines 29:0-41:1 -/
-def sum_with_mut_borrows (max : U32) : Result U32 :=
-  do
+def sum_with_mut_borrows (max : U32) : Result U32 := do
   let s ← sum_with_mut_borrows_loop max 0#u32 0#u32
   s * 2#u32
 
 /- [loops::sum_with_shared_borrows]: loop 0:
    Source: 'tests/src/loops.rs', lines 47:4-54:5 -/
 def sum_with_shared_borrows_loop
-  (max : U32) (i : U32) (s : U32) : Result U32 :=
+  (max : U32) (i : U32) (s : U32) : Result U32 := do
   if i < max
   then
-    do
     let i1 ← i + 1#u32
     let s1 ← s + i1
     sum_with_shared_borrows_loop max i1 s1
@@ -75,18 +70,16 @@ partial_fixpoint
 
 /- [loops::sum_with_shared_borrows]:
    Source: 'tests/src/loops.rs', lines 44:0-58:1 -/
-def sum_with_shared_borrows (max : U32) : Result U32 :=
-  do
+def sum_with_shared_borrows (max : U32) : Result U32 := do
   let s ← sum_with_shared_borrows_loop max 0#u32 0#u32
   s * 2#u32
 
 /- [loops::sum_array]: loop 0:
    Source: 'tests/src/loops.rs', lines 63:4-66:5 -/
 def sum_array_loop
-  {N : Usize} (a : Array U32 N) (i : Usize) (s : U32) : Result U32 :=
+  {N : Usize} (a : Array U32 N) (i : Usize) (s : U32) : Result U32 := do
   if i < N
   then
-    do
     let i1 ← Array.index_usize a i
     let s1 ← s + i1
     let i2 ← i + 1#usize
@@ -97,17 +90,16 @@ partial_fixpoint
 /- [loops::sum_array]:
    Source: 'tests/src/loops.rs', lines 60:0-68:1 -/
 @[reducible]
-def sum_array {N : Usize} (a : Array U32 N) : Result U32 :=
+def sum_array {N : Usize} (a : Array U32 N) : Result U32 := do
   sum_array_loop a 0#usize 0#u32
 
 /- [loops::clear]: loop 0:
    Source: 'tests/src/loops.rs', lines 74:4-77:5 -/
 def clear_loop
-  (v : alloc.vec.Vec U32) (i : Usize) : Result (alloc.vec.Vec U32) :=
+  (v : alloc.vec.Vec U32) (i : Usize) : Result (alloc.vec.Vec U32) := do
   let i1 := alloc.vec.Vec.len v
   if i < i1
   then
-    do
     let (_, index_mut_back) ←
       alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSliceInst U32) v
         i
@@ -120,7 +112,7 @@ partial_fixpoint
 /- [loops::clear]:
    Source: 'tests/src/loops.rs', lines 72:0-78:1 -/
 @[reducible]
-def clear (v : alloc.vec.Vec U32) : Result (alloc.vec.Vec U32) :=
+def clear (v : alloc.vec.Vec U32) : Result (alloc.vec.Vec U32) := do
   clear_loop v 0#usize
 
 /- [loops::List]
@@ -131,7 +123,7 @@ inductive List (T : Type) where
 
 /- [loops::list_mem]: loop 0:
    Source: 'tests/src/loops.rs', lines 87:4-95:1 -/
-def list_mem_loop (x : U32) (ls : List U32) : Result Bool :=
+def list_mem_loop (x : U32) (ls : List U32) : Result Bool := do
   match ls with
   | List.Cons y tl => if y = x
                       then ok true
@@ -142,19 +134,18 @@ partial_fixpoint
 /- [loops::list_mem]:
    Source: 'tests/src/loops.rs', lines 86:0-95:1 -/
 @[reducible]
-def list_mem (x : U32) (ls : List U32) : Result Bool :=
+def list_mem (x : U32) (ls : List U32) : Result Bool := do
   list_mem_loop x ls
 
 /- [loops::list_nth_mut]: loop 0:
    Source: 'tests/src/loops.rs', lines 98:4-107:1 -/
 def list_nth_mut_loop
-  {T : Type} (ls : List T) (i : U32) : Result (T × (T → List T)) :=
+  {T : Type} (ls : List T) (i : U32) : Result (T × (T → List T)) := do
   match ls with
   | List.Cons x tl =>
     if i = 0#u32
     then ok (x, fun ret => List.Cons ret tl)
     else
-      do
       let i1 ← i - 1#u32
       let (t, back) ← list_nth_mut_loop tl i1
       let back1 := fun ret => let l := back ret
@@ -167,18 +158,17 @@ partial_fixpoint
    Source: 'tests/src/loops.rs', lines 97:0-107:1 -/
 @[reducible]
 def list_nth_mut
-  {T : Type} (ls : List T) (i : U32) : Result (T × (T → List T)) :=
+  {T : Type} (ls : List T) (i : U32) : Result (T × (T → List T)) := do
   list_nth_mut_loop ls i
 
 /- [loops::list_nth_shared]: loop 0:
    Source: 'tests/src/loops.rs', lines 111:4-120:1 -/
-def list_nth_shared_loop {T : Type} (ls : List T) (i : U32) : Result T :=
+def list_nth_shared_loop {T : Type} (ls : List T) (i : U32) : Result T := do
   match ls with
   | List.Cons x tl =>
     if i = 0#u32
     then ok x
-    else do
-         let i1 ← i - 1#u32
+    else let i1 ← i - 1#u32
          list_nth_shared_loop tl i1
   | List.Nil => fail panic
 partial_fixpoint
@@ -186,19 +176,20 @@ partial_fixpoint
 /- [loops::list_nth_shared]:
    Source: 'tests/src/loops.rs', lines 110:0-120:1 -/
 @[reducible]
-def list_nth_shared {T : Type} (ls : List T) (i : U32) : Result T :=
+def list_nth_shared {T : Type} (ls : List T) (i : U32) : Result T := do
   list_nth_shared_loop ls i
 
 /- [loops::get_elem_mut]: loop 0:
    Source: 'tests/src/loops.rs', lines 124:4-136:1 -/
 def get_elem_mut_loop
-  (x : Usize) (ls : List Usize) : Result (Usize × (Usize → List Usize)) :=
+  (x : Usize) (ls : List Usize) :
+  Result (Usize × (Usize → List Usize))
+  := do
   match ls with
   | List.Cons y tl =>
     if y = x
     then ok (y, fun i => List.Cons i tl)
     else
-      do
       let (i, back) ← get_elem_mut_loop x tl
       let back1 := fun i1 => let l := back i1
                              List.Cons y l
@@ -211,8 +202,7 @@ partial_fixpoint
 def get_elem_mut
   (slots : alloc.vec.Vec (List Usize)) (x : Usize) :
   Result (Usize × (Usize → alloc.vec.Vec (List Usize)))
-  :=
-  do
+  := do
   let (ls, index_mut_back) ←
     alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSliceInst (List
       Usize)) slots 0#usize
@@ -223,7 +213,7 @@ def get_elem_mut
 
 /- [loops::get_elem_shared]: loop 0:
    Source: 'tests/src/loops.rs', lines 140:4-152:1 -/
-def get_elem_shared_loop (x : Usize) (ls : List Usize) : Result Usize :=
+def get_elem_shared_loop (x : Usize) (ls : List Usize) : Result Usize := do
   match ls with
   | List.Cons y tl => if y = x
                       then ok y
@@ -234,8 +224,7 @@ partial_fixpoint
 /- [loops::get_elem_shared]:
    Source: 'tests/src/loops.rs', lines 138:0-152:1 -/
 def get_elem_shared
-  (slots : alloc.vec.Vec (List Usize)) (x : Usize) : Result Usize :=
-  do
+  (slots : alloc.vec.Vec (List Usize)) (x : Usize) : Result Usize := do
   let ls ←
     alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceInst (List
       Usize)) slots 0#usize
@@ -244,24 +233,23 @@ def get_elem_shared
 /- [loops::id_mut]:
    Source: 'tests/src/loops.rs', lines 154:0-156:1 -/
 def id_mut
-  {T : Type} (ls : List T) : Result ((List T) × (List T → List T)) :=
+  {T : Type} (ls : List T) : Result ((List T) × (List T → List T)) := do
   ok (ls, fun ret => ret)
 
 /- [loops::id_shared]:
    Source: 'tests/src/loops.rs', lines 158:0-160:1 -/
-def id_shared {T : Type} (ls : List T) : Result (List T) :=
+def id_shared {T : Type} (ls : List T) : Result (List T) := do
   ok ls
 
 /- [loops::list_nth_mut_with_id]: loop 0:
    Source: 'tests/src/loops.rs', lines 165:4-174:1 -/
 def list_nth_mut_with_id_loop
-  {T : Type} (i : U32) (ls : List T) : Result (T × (T → List T)) :=
+  {T : Type} (i : U32) (ls : List T) : Result (T × (T → List T)) := do
   match ls with
   | List.Cons x tl =>
     if i = 0#u32
     then ok (x, fun t => List.Cons t tl)
     else
-      do
       let i1 ← i - 1#u32
       let (t, back) ← list_nth_mut_with_id_loop i1 tl
       let back1 := fun t1 => let l := back t1
@@ -273,8 +261,7 @@ partial_fixpoint
 /- [loops::list_nth_mut_with_id]:
    Source: 'tests/src/loops.rs', lines 163:0-174:1 -/
 def list_nth_mut_with_id
-  {T : Type} (ls : List T) (i : U32) : Result (T × (T → List T)) :=
-  do
+  {T : Type} (ls : List T) (i : U32) : Result (T × (T → List T)) := do
   let (ls1, id_mut_back) ← id_mut ls
   let (t, back) ← list_nth_mut_with_id_loop i ls1
   let back1 := fun ret => let l := back ret
@@ -284,21 +271,19 @@ def list_nth_mut_with_id
 /- [loops::list_nth_shared_with_id]: loop 0:
    Source: 'tests/src/loops.rs', lines 179:4-188:1 -/
 def list_nth_shared_with_id_loop
-  {T : Type} (i : U32) (ls : List T) : Result T :=
+  {T : Type} (i : U32) (ls : List T) : Result T := do
   match ls with
   | List.Cons x tl =>
     if i = 0#u32
     then ok x
-    else do
-         let i1 ← i - 1#u32
+    else let i1 ← i - 1#u32
          list_nth_shared_with_id_loop i1 tl
   | List.Nil => fail panic
 partial_fixpoint
 
 /- [loops::list_nth_shared_with_id]:
    Source: 'tests/src/loops.rs', lines 177:0-188:1 -/
-def list_nth_shared_with_id {T : Type} (ls : List T) (i : U32) : Result T :=
-  do
+def list_nth_shared_with_id {T : Type} (ls : List T) (i : U32) : Result T := do
   let ls1 ← id_shared ls
   list_nth_shared_with_id_loop i ls1
 
@@ -307,7 +292,7 @@ def list_nth_shared_with_id {T : Type} (ls : List T) (i : U32) : Result T :=
 def list_nth_mut_pair_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) :
   Result (T × T × (T → List T) × (T → List T))
-  :=
+  := do
   match ls0 with
   | List.Cons x0 tl0 =>
     match ls1 with
@@ -315,7 +300,6 @@ def list_nth_mut_pair_loop
       if i = 0#u32
       then ok (x0, x1, fun t => List.Cons t tl0, fun t => List.Cons t tl1)
       else
-        do
         let i1 ← i - 1#u32
         let (t, t1, back, back1) ← list_nth_mut_pair_loop tl0 tl1 i1
         let back2 := fun t2 => let l := back t2
@@ -332,23 +316,21 @@ partial_fixpoint
 def list_nth_mut_pair
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × (T → List T) × (T → List T))
-  :=
-  do
+  := do
   let (t, t1, back, back1) ← list_nth_mut_pair_loop ls0 ls1 i
   ok ((t, t1), back, back1)
 
 /- [loops::list_nth_shared_pair]: loop 0:
    Source: 'tests/src/loops.rs', lines 223:8-223:24 -/
 def list_nth_shared_pair_loop
-  {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
+  {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) := do
   match ls0 with
   | List.Cons x0 tl0 =>
     match ls1 with
     | List.Cons x1 tl1 =>
       if i = 0#u32
       then ok (x0, x1)
-      else do
-           let i1 ← i - 1#u32
+      else let i1 ← i - 1#u32
            list_nth_shared_pair_loop tl0 tl1 i1
     | List.Nil => fail panic
   | List.Nil => fail panic
@@ -358,7 +340,7 @@ partial_fixpoint
    Source: 'tests/src/loops.rs', lines 217:0-238:1 -/
 @[reducible]
 def list_nth_shared_pair
-  {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
+  {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) := do
   list_nth_shared_pair_loop ls0 ls1 i
 
 /- [loops::list_nth_mut_pair_merge]: loop 0:
@@ -366,7 +348,7 @@ def list_nth_shared_pair
 def list_nth_mut_pair_merge_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) :
   Result (T × T × (T → List T) × (T → List T))
-  :=
+  := do
   match ls0 with
   | List.Cons x0 tl0 =>
     match ls1 with
@@ -374,7 +356,6 @@ def list_nth_mut_pair_merge_loop
       if i = 0#u32
       then ok (x0, x1, fun t => List.Cons t tl0, fun t => List.Cons t tl1)
       else
-        do
         let i1 ← i - 1#u32
         let (t, t1, back, back1) ← list_nth_mut_pair_merge_loop tl0 tl1 i1
         let back2 := fun t2 => let l := back t2
@@ -391,8 +372,7 @@ partial_fixpoint
 def list_nth_mut_pair_merge
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × ((T × T) → ((List T) × (List T))))
-  :=
-  do
+  := do
   let (t, t1, back, back1) ← list_nth_mut_pair_merge_loop ls0 ls1 i
   let back2 :=
     fun ret =>
@@ -405,15 +385,14 @@ def list_nth_mut_pair_merge
 /- [loops::list_nth_shared_pair_merge]: loop 0:
    Source: 'tests/src/loops.rs', lines 265:4-275:1 -/
 def list_nth_shared_pair_merge_loop
-  {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
+  {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) := do
   match ls0 with
   | List.Cons x0 tl0 =>
     match ls1 with
     | List.Cons x1 tl1 =>
       if i = 0#u32
       then ok (x0, x1)
-      else do
-           let i1 ← i - 1#u32
+      else let i1 ← i - 1#u32
            list_nth_shared_pair_merge_loop tl0 tl1 i1
     | List.Nil => fail panic
   | List.Nil => fail panic
@@ -423,7 +402,7 @@ partial_fixpoint
    Source: 'tests/src/loops.rs', lines 260:0-275:1 -/
 @[reducible]
 def list_nth_shared_pair_merge
-  {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) :=
+  {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) : Result (T × T) := do
   list_nth_shared_pair_merge_loop ls0 ls1 i
 
 /- [loops::list_nth_mut_shared_pair]: loop 0:
@@ -431,7 +410,7 @@ def list_nth_shared_pair_merge
 def list_nth_mut_shared_pair_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) :
   Result (T × T × (T → List T))
-  :=
+  := do
   match ls0 with
   | List.Cons x0 tl0 =>
     match ls1 with
@@ -439,7 +418,6 @@ def list_nth_mut_shared_pair_loop
       if i = 0#u32
       then ok (x0, x1, fun t => List.Cons t tl0)
       else
-        do
         let i1 ← i - 1#u32
         let (t, t1, back) ← list_nth_mut_shared_pair_loop tl0 tl1 i1
         let back1 := fun t2 => let l := back t2
@@ -454,8 +432,7 @@ partial_fixpoint
 def list_nth_mut_shared_pair
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × (T → List T))
-  :=
-  do
+  := do
   let (t, t1, back) ← list_nth_mut_shared_pair_loop ls0 ls1 i
   ok ((t, t1), back)
 
@@ -464,7 +441,7 @@ def list_nth_mut_shared_pair
 def list_nth_mut_shared_pair_merge_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) :
   Result (T × T × (T → List T))
-  :=
+  := do
   match ls0 with
   | List.Cons x0 tl0 =>
     match ls1 with
@@ -472,7 +449,6 @@ def list_nth_mut_shared_pair_merge_loop
       if i = 0#u32
       then ok (x0, x1, fun t => List.Cons t tl0)
       else
-        do
         let i1 ← i - 1#u32
         let (t, t1, back) ← list_nth_mut_shared_pair_merge_loop tl0 tl1 i1
         let back1 := fun t2 => let l := back t2
@@ -487,8 +463,7 @@ partial_fixpoint
 def list_nth_mut_shared_pair_merge
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × (T → List T))
-  :=
-  do
+  := do
   let (t, t1, back) ← list_nth_mut_shared_pair_merge_loop ls0 ls1 i
   ok ((t, t1), back)
 
@@ -497,7 +472,7 @@ def list_nth_mut_shared_pair_merge
 def list_nth_shared_mut_pair_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) :
   Result (T × T × (T → List T))
-  :=
+  := do
   match ls0 with
   | List.Cons x0 tl0 =>
     match ls1 with
@@ -505,7 +480,6 @@ def list_nth_shared_mut_pair_loop
       if i = 0#u32
       then ok (x0, x1, fun t => List.Cons t tl1)
       else
-        do
         let i1 ← i - 1#u32
         let (t, t1, back) ← list_nth_shared_mut_pair_loop tl0 tl1 i1
         let back1 := fun t2 => let l := back t2
@@ -520,8 +494,7 @@ partial_fixpoint
 def list_nth_shared_mut_pair
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × (T → List T))
-  :=
-  do
+  := do
   let (t, t1, back) ← list_nth_shared_mut_pair_loop ls0 ls1 i
   ok ((t, t1), back)
 
@@ -530,7 +503,7 @@ def list_nth_shared_mut_pair
 def list_nth_shared_mut_pair_merge_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) :
   Result (T × T × (T → List T))
-  :=
+  := do
   match ls0 with
   | List.Cons x0 tl0 =>
     match ls1 with
@@ -538,7 +511,6 @@ def list_nth_shared_mut_pair_merge_loop
       if i = 0#u32
       then ok (x0, x1, fun t => List.Cons t tl1)
       else
-        do
         let i1 ← i - 1#u32
         let (t, t1, back) ← list_nth_shared_mut_pair_merge_loop tl0 tl1 i1
         let back1 := fun t2 => let l := back t2
@@ -553,111 +525,103 @@ partial_fixpoint
 def list_nth_shared_mut_pair_merge
   {T : Type} (ls0 : List T) (ls1 : List T) (i : U32) :
   Result ((T × T) × (T → List T))
-  :=
-  do
+  := do
   let (t, t1, back) ← list_nth_shared_mut_pair_merge_loop ls0 ls1 i
   ok ((t, t1), back)
 
 /- [loops::ignore_input_mut_borrow]: loop 0:
    Source: 'tests/src/loops.rs', lines 355:4-357:5 -/
-def ignore_input_mut_borrow_loop (i : U32) : Result Unit :=
+def ignore_input_mut_borrow_loop (i : U32) : Result Unit := do
   if i > 0#u32
-  then do
-       let i1 ← i - 1#u32
+  then let i1 ← i - 1#u32
        ignore_input_mut_borrow_loop i1
   else ok ()
 partial_fixpoint
 
 /- [loops::ignore_input_mut_borrow]:
    Source: 'tests/src/loops.rs', lines 354:0-358:1 -/
-def ignore_input_mut_borrow (_a : U32) (i : U32) : Result U32 :=
-  do
+def ignore_input_mut_borrow (_a : U32) (i : U32) : Result U32 := do
   ignore_input_mut_borrow_loop i
   ok _a
 
 /- [loops::incr_ignore_input_mut_borrow]: loop 0:
    Source: 'tests/src/loops.rs', lines 364:4-366:5 -/
-def incr_ignore_input_mut_borrow_loop (i : U32) : Result Unit :=
+def incr_ignore_input_mut_borrow_loop (i : U32) : Result Unit := do
   if i > 0#u32
-  then do
-       let i1 ← i - 1#u32
+  then let i1 ← i - 1#u32
        incr_ignore_input_mut_borrow_loop i1
   else ok ()
 partial_fixpoint
 
 /- [loops::incr_ignore_input_mut_borrow]:
    Source: 'tests/src/loops.rs', lines 362:0-367:1 -/
-def incr_ignore_input_mut_borrow (a : U32) (i : U32) : Result U32 :=
-  do
+def incr_ignore_input_mut_borrow (a : U32) (i : U32) : Result U32 := do
   let a1 ← a + 1#u32
   incr_ignore_input_mut_borrow_loop i
   ok a1
 
 /- [loops::ignore_input_shared_borrow]: loop 0:
    Source: 'tests/src/loops.rs', lines 372:4-374:5 -/
-def ignore_input_shared_borrow_loop (i : U32) : Result Unit :=
+def ignore_input_shared_borrow_loop (i : U32) : Result Unit := do
   if i > 0#u32
-  then do
-       let i1 ← i - 1#u32
+  then let i1 ← i - 1#u32
        ignore_input_shared_borrow_loop i1
   else ok ()
 partial_fixpoint
 
 /- [loops::ignore_input_shared_borrow]:
    Source: 'tests/src/loops.rs', lines 371:0-375:1 -/
-def ignore_input_shared_borrow (_a : U32) (i : U32) : Result U32 :=
-  do
+def ignore_input_shared_borrow (_a : U32) (i : U32) : Result U32 := do
   ignore_input_shared_borrow_loop i
   ok _a
 
 /- [loops::issue500_1::bar]:
    Source: 'tests/src/loops.rs', lines 379:4-379:28 -/
-def issue500_1.bar (_a : Bool) : Result Bool :=
+def issue500_1.bar (_a : Bool) : Result Bool := do
   ok _a
 
 /- [loops::issue500_1]: loop 0:
    Source: 'tests/src/loops.rs', lines 382:4-384:5 -/
-def issue500_1_loop (a : Bool) : Result Bool :=
+def issue500_1_loop (a : Bool) : Result Bool := do
   if 0#i32 < 0#i32
-  then do
-       let a1 ← issue500_1.bar a
+  then let a1 ← issue500_1.bar a
        issue500_1_loop a1
   else ok a
 partial_fixpoint
 
 /- [loops::issue500_1]:
    Source: 'tests/src/loops.rs', lines 378:0-386:1 -/
-@[reducible] def issue500_1 (s : Bool) : Result Bool :=
+@[reducible] def issue500_1 (s : Bool) : Result Bool := do
                issue500_1_loop s
 
 /- [loops::issue500_2::A]
    Source: 'tests/src/loops.rs', lines 390:4-390:24 -/
-@[reducible] def issue500_2.A := (Array Bool 1#usize)
+@[reducible] def issue500_2.A := Array Bool 1#usize
 
 /- [loops::issue500_2::bar]:
    Source: 'tests/src/loops.rs', lines 391:4-391:33 -/
-def issue500_2.bar (_a : Array Bool 1#usize) : Result (Array Bool 1#usize) :=
+def issue500_2.bar
+  (_a : Array Bool 1#usize) : Result (Array Bool 1#usize) := do
   ok _a
 
 /- [loops::issue500_2]: loop 0:
    Source: 'tests/src/loops.rs', lines 394:4-396:5 -/
-def issue500_2_loop : Result Unit :=
+def issue500_2_loop : Result Unit := do
   ok ()
 
 /- [loops::issue500_2]:
    Source: 'tests/src/loops.rs', lines 389:0-398:1 -/
-def issue500_2 (s : Array Bool 1#usize) : Result (Array Bool 1#usize) :=
-  do
+def issue500_2 (s : Array Bool 1#usize) : Result (Array Bool 1#usize) := do
   issue500_2_loop
   ok s
 
 /- [loops::issue500_3::A]
    Source: 'tests/src/loops.rs', lines 402:4-402:24 -/
-@[reducible] def issue500_3.A := (Array Bool 1#usize)
+@[reducible] def issue500_3.A := Array Bool 1#usize
 
 /- [loops::issue500_3]: loop 0:
    Source: 'tests/src/loops.rs', lines 404:4-404:18 -/
-def issue500_3_loop : Result Unit :=
+def issue500_3_loop : Result Unit := do
   if 0#i32 < 0#i32
   then issue500_3_loop
   else ok ()
@@ -665,14 +629,13 @@ partial_fixpoint
 
 /- [loops::issue500_3]:
    Source: 'tests/src/loops.rs', lines 401:0-406:1 -/
-def issue500_3 (s : Array Bool 1#usize) : Result (Array Bool 1#usize) :=
-  do
+def issue500_3 (s : Array Bool 1#usize) : Result (Array Bool 1#usize) := do
   issue500_3_loop
   ok s
 
 /- [loops::issue351]: loop 0:
    Source: 'tests/src/loops.rs', lines 411:4-414:5 -/
-def issue351_loop (t : List U8) (last : U8) : Result U8 :=
+def issue351_loop (t : List U8) (last : U8) : Result U8 := do
   match t with
   | List.Cons ht tt => issue351_loop tt ht
   | List.Nil => ok last
@@ -681,20 +644,20 @@ partial_fixpoint
 /- [loops::issue351]:
    Source: 'tests/src/loops.rs', lines 409:0-416:1 -/
 @[reducible]
-def issue351 (h : U8) (t : List U8) : Result U8 :=
+def issue351 (h : U8) (t : List U8) : Result U8 := do
   issue351_loop t h
 
 /- [loops::issue270::box_get_borrow]:
    Source: 'tests/src/loops.rs', lines 420:4-422:5 -/
-def issue270.box_get_borrow {T : Type} (x : T) : Result T :=
+def issue270.box_get_borrow {T : Type} (x : T) : Result T := do
   ok x
 
 /- [loops::issue270]: loop 0:
    Source: 'tests/src/loops.rs', lines 426:8-429:9 -/
-def issue270_loop (t : List (List U8)) (last : List U8) : Result (List U8) :=
+def issue270_loop
+  (t : List (List U8)) (last : List U8) : Result (List U8) := do
   match t with
   | List.Cons ht tt =>
-    do
     let t1 ← issue270.box_get_borrow tt
     issue270_loop t1 ht
   | List.Nil => ok last
@@ -702,10 +665,9 @@ partial_fixpoint
 
 /- [loops::issue270]:
    Source: 'tests/src/loops.rs', lines 419:0-434:1 -/
-def issue270 (v : List (List U8)) : Result (Option (List U8)) :=
+def issue270 (v : List (List U8)) : Result (Option (List U8)) := do
   match v with
   | List.Cons h t =>
-    do
     let t1 ← issue270.box_get_borrow t
     let last ← issue270_loop t1 h
     ok (some last)
@@ -716,27 +678,24 @@ def issue270 (v : List (List U8)) : Result (Option (List U8)) :=
 def issue400_1_loop
   (back : I32 → (I32 × I32)) (cond : Bool) (y : I32) (i : I32) :
   Result (I32 × I32)
-  :=
+  := do
   if i < 32#i32
   then
-    if cond
-    then
-      do
-      let (a, b) := back y
-      let i1 ← i + 1#i32
-      issue400_1_loop (fun i2 => (i2, b)) true a i1
-    else
-      do
-      let (a, b) := back y
-      let i1 ← i + 1#i32
-      issue400_1_loop (fun i2 => (a, i2)) false b i1
+    let (y1, back1) ←
+      if cond
+      then let (a, b) := back y
+           ok (a, fun i1 => (i1, b))
+      else let (a, b) := back y
+           ok (b, fun i1 => (a, i1))
+    let i1 ← i + 1#i32
+    issue400_1_loop back1 cond y1 i1
   else ok (back y)
 partial_fixpoint
 
 /- [loops::issue400_1]:
    Source: 'tests/src/loops.rs', lines 437:0-448:1 -/
 @[reducible]
-def issue400_1 (a : I32) (b : I32) (cond : Bool) : Result (I32 × I32) :=
+def issue400_1 (a : I32) (b : I32) (cond : Bool) : Result (I32 × I32) := do
   issue400_1_loop (fun i => (i, b)) cond a 0#i32
 
 /- [loops::issue400_2]: loop 0:
@@ -745,23 +704,19 @@ def issue400_2_loop
   (back : I32 → I32 → (I32 × I32 × I32)) (conds : Slice Bool) (y : I32)
   (z : I32) (i : Usize) :
   Result (I32 × I32 × (I32 → I32 → (I32 × I32 × I32)))
-  :=
+  := do
   let i1 := Slice.len conds
   if i < i1
   then
-    do
     let b ← Slice.index_usize conds i
-    if b
-    then
-      do
-      let (a, b1, c) := back y z
-      let i2 ← i + 1#usize
-      issue400_2_loop (fun i3 i4 => (i3, i4, c)) conds a b1 i2
-    else
-      do
-      let (a, b1, c) := back y z
-      let i2 ← i + 1#usize
-      issue400_2_loop (fun i3 i4 => (a, i3, i4)) conds b1 c i2
+    let (y1, z1, back1) ←
+      if b
+      then let (a, b1, c) := back y z
+           ok (a, b1, fun i2 i3 => (i2, i3, c))
+      else let (a, b1, c) := back y z
+           ok (b1, c, fun i2 i3 => (a, i2, i3))
+    let i2 ← i + 1#usize
+    issue400_2_loop back1 conds y1 z1 i2
   else ok (y, z, back)
 partial_fixpoint
 
@@ -770,8 +725,7 @@ partial_fixpoint
 def issue400_2
   (a : I32) (b : I32) (c : I32) (conds : Slice Bool) :
   Result (I32 × I32 × I32)
-  :=
-  do
+  := do
   let (y, z, back) ←
     issue400_2_loop (fun i i1 => (i, i1, c)) conds a b 0#usize
   let y1 ← y + 3#i32
@@ -781,7 +735,7 @@ def issue400_2
 /- [loops::copy_carray::CARRAY]
    Source: 'tests/src/loops.rs', lines 471:4-471:36 -/
 @[global_simps]
-def copy_carray.CARRAY_body : Result (Array U32 2#usize) :=
+def copy_carray.CARRAY_body : Result (Array U32 2#usize) := do
   ok (Array.make 2#usize [ 0#u32, 1#u32 ])
 @[global_simps, irreducible]
 def copy_carray.CARRAY : Array U32 2#usize :=
@@ -790,10 +744,9 @@ def copy_carray.CARRAY : Array U32 2#usize :=
 /- [loops::copy_carray]: loop 0:
    Source: 'tests/src/loops.rs', lines 473:4-476:5 -/
 def copy_carray_loop
-  (a : Array U32 2#usize) (i : Usize) : Result (Array U32 2#usize) :=
+  (a : Array U32 2#usize) (i : Usize) : Result (Array U32 2#usize) := do
   if i < 2#usize
   then
-    do
     let i1 ← Array.index_usize copy_carray.CARRAY i
     let a1 ← Array.update a i i1
     let i2 ← i + 1#usize
@@ -804,13 +757,12 @@ partial_fixpoint
 /- [loops::copy_carray]:
    Source: 'tests/src/loops.rs', lines 470:0-477:1 -/
 @[reducible]
-def copy_carray (a : Array U32 2#usize) : Result (Array U32 2#usize) :=
+def copy_carray (a : Array U32 2#usize) : Result (Array U32 2#usize) := do
   copy_carray_loop a 0#usize
 
 /- [loops::iter_local_mut_borrow]: loop 0:
    Source: 'tests/src/loops.rs', lines 483:4-490:5 -/
-def iter_local_mut_borrow_loop (p : I32) : Result Unit :=
-  do
+def iter_local_mut_borrow_loop (p : I32) : Result Unit := do
   let p1 ← p + 1#i32
   if p1 = 10#i32
   then ok ()
@@ -820,12 +772,12 @@ partial_fixpoint
 /- [loops::iter_local_mut_borrow]:
    Source: 'tests/src/loops.rs', lines 480:0-491:1 -/
 @[reducible]
-def iter_local_mut_borrow : Result Unit :=
+def iter_local_mut_borrow : Result Unit := do
   iter_local_mut_borrow_loop 0#i32
 
 /- [loops::iter_local_shared_borrow]: loop 0:
    Source: 'tests/src/loops.rs', lines 497:4-503:5 -/
-def iter_local_shared_borrow_loop : Result Unit :=
+def iter_local_shared_borrow_loop : Result Unit := do
   if 0#i32 = 0#i32
   then ok ()
   else iter_local_shared_borrow_loop
@@ -834,7 +786,39 @@ partial_fixpoint
 /- [loops::iter_local_shared_borrow]:
    Source: 'tests/src/loops.rs', lines 494:0-504:1 -/
 @[reducible]
-def iter_local_shared_borrow : Result Unit :=
+def iter_local_shared_borrow : Result Unit := do
   iter_local_shared_borrow_loop
+
+/- [loops::AList]
+   Source: 'tests/src/loops.rs', lines 506:0-509:1 -/
+inductive AList (T : Type) where
+| Cons : Usize → T → AList T → AList T
+| Nil : AList T
+
+/- [loops::insert_in_list]: loop 0:
+   Source: 'tests/src/loops.rs', lines 1:0-528:5 -/
+def insert_in_list_loop
+  {T : Type} (key : Usize) (value : T) (ls : AList T) :
+  Result (Bool × (AList T))
+  := do
+  match ls with
+  | AList.Cons ckey cvalue tl =>
+    if ckey = key
+    then ok (false, AList.Cons ckey value tl)
+    else
+      let (b, back) ← insert_in_list_loop key value tl
+      let back1 := AList.Cons ckey cvalue back
+      ok (b, back1)
+  | AList.Nil => ok (true, AList.Cons key value AList.Nil)
+partial_fixpoint
+
+/- [loops::insert_in_list]:
+   Source: 'tests/src/loops.rs', lines 512:0-529:1 -/
+@[reducible]
+def insert_in_list
+  {T : Type} (key : Usize) (value : T) (ls : AList T) :
+  Result (Bool × (AList T))
+  := do
+  insert_in_list_loop key value ls
 
 end loops

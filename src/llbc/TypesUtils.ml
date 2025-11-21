@@ -163,6 +163,9 @@ let ty_has_mut_borrow_for_region_in_set (infos : TypesAnalysis.type_infos)
       | _ -> false)
     ty
 
+let ty_has_mut_borrows (infos : TypesAnalysis.type_infos) (ty : ty) : bool =
+  ty_has_mut_borrow_for_region_in_pred infos (fun _ -> true) ty
+
 (** Small helper *)
 let raise_if_not_rty_visitor =
   object
@@ -221,6 +224,14 @@ let ty_no_regions (ty : ty) : bool =
     raise_if_region_ty_visitor#visit_ty () ty;
     true
   with Found -> false
+
+(** Return [true] if the type doesn't contain regions (including erased regions)
+*)
+let ty_has_regions (ty : ty) : bool =
+  try
+    raise_if_region_ty_visitor#visit_ty () ty;
+    false
+  with Found -> true
 
 (** Return [true] if the trait ref doesn't contain regions (including erased
     regions) *)
