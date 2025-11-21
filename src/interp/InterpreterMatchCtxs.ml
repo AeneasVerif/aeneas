@@ -2572,4 +2572,6 @@ let prepare_match_ctx_with_target (config : config) (span : Meta.span)
       comp cc (reorganize_join_tgt ctx)
   in
   (* Apply the reorganization *)
-  reorganize_join_tgt tgt_ctx
+  let ctx, cc = reorganize_join_tgt tgt_ctx in
+  Invariants.check_invariants span ctx;
+  (ctx, cc)
