@@ -795,7 +795,7 @@ inductive AList (T : Type) where
 | Nil : AList T
 
 /- [loops::insert_in_list]: loop 0:
-   Source: 'tests/src/loops.rs', lines 513:4-529:1 -/
+   Source: 'tests/src/loops.rs', lines 1:0-528:5 -/
 def insert_in_list_loop
   {T : Type} (key : Usize) (value : T) (ls : AList T) :
   Result (Bool × (AList T))

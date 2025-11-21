@@ -88,7 +88,7 @@ def HashMap.new (T : Type) : Result (HashMap T) := do
     { dividend := 4#usize, divisor := 5#usize }
 
 /- [hashmap::{hashmap::HashMap<T>}::clear]: loop 0:
-   Source: 'tests/src/hashmap.rs', lines 104:8-108:5 -/
+   Source: 'tests/src/hashmap.rs', lines 104:8-107:9 -/
 def HashMap.clear_loop
   {T : Type} (slots : alloc.vec.Vec (AList T)) (i : Usize) :
   Result (alloc.vec.Vec (AList T))
@@ -108,8 +108,8 @@ partial_fixpoint
 /- [hashmap::{hashmap::HashMap<T>}::clear]:
    Source: 'tests/src/hashmap.rs', lines 100:4-108:5 -/
 def HashMap.clear {T : Type} (self : HashMap T) : Result (HashMap T) := do
-  let v ← HashMap.clear_loop self.slots 0#usize
-  ok { self with num_entries := 0#usize, slots := v }
+  let slots ← HashMap.clear_loop self.slots 0#usize
+  ok { self with num_entries := 0#usize, slots }
 
 /- [hashmap::{hashmap::HashMap<T>}::len]:
    Source: 'tests/src/hashmap.rs', lines 110:4-112:5 -/
@@ -117,7 +117,7 @@ def HashMap.len {T : Type} (self : HashMap T) : Result Usize := do
   ok self.num_entries
 
 /- [hashmap::{hashmap::HashMap<T>}::insert_in_list]: loop 0:
-   Source: 'tests/src/hashmap.rs', lines 118:8-134:5 -/
+   Source: 'tests/src/hashmap.rs', lines 1:0-133:9 -/
 def HashMap.insert_in_list_loop
   {T : Type} (key : Usize) (value : T) (ls : AList T) :
   Result (Bool × (AList T))
@@ -164,7 +164,7 @@ def HashMap.insert_no_resize
        ok { self with slots := v }
 
 /- [hashmap::{hashmap::HashMap<T>}::move_elements_from_list]: loop 0:
-   Source: 'tests/src/hashmap.rs', lines 199:12-209:5 -/
+   Source: 'tests/src/hashmap.rs', lines 199:12-206:17 -/
 def HashMap.move_elements_from_list_loop
   {T : Type} (ntable : HashMap T) (ls : AList T) : Result (HashMap T) := do
   match ls with
