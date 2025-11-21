@@ -115,22 +115,28 @@ to display a detailed documentation.
 
 ## Targeted Subset And Current Limitations
 
-We target **safe** Rust. This means we have no support for unsafe Rust, though we plan to
-design a mechanism to allow using Aeneas in combination with tools targeting unsafe Rust.
+Aeneas currently functionalizes a subset of safe Rust, and we are in the process
+of extending the functional model with reasoning based on separation logic to
+support unsafe code and concurrent code.
 
-We have the following limitations, that we plan to address one by one:
+We currently have the following limitations on the *safe* subset, that we plan to address
+one by one:
+- **loops**: `return` inside *nested* loops, or `break`/`continue` to *outer* loops
+  are not supported yet (e.g., `'a : loop { loop { break 'a; } } `). This is a
+  technical limitation, not a fundamental issue, that we plan to address in the
+  near future and that we can prioritize depending on our users' needs.
+- **no nested borrows in function signatures**: ongoing work, coming very soon, starting
+  with nested shared borrows.
+- **no functions pointers/closures**: ongoing work. We currently have support for traits
+  and will have support for function pointers and closures soon.
 
-- **loops**: no nested loops for now. We are working on lifting this limitation.
-- **no functions pointers/closures**: ongoing work. We have support for traits and
-  will have support for function pointers and closures soon.
-- **limited type parametricity**: it is not possible for now to instantiate a type
-  parameter with a type containing a borrow. This is mostly an engineering
-  issue.
-- **no nested borrows in function signatures**: ongoing work.
-- **interior mutability**: ongoing work. We are thinking of modeling the effects of
-  interior mutability by using ghost states.
-- **no concurrent execution**: long-term effort. We plan to address coarse-grained
-  parallelism as a long-term goal.
+The following limitations will be lifted by the ongoing work on separation logic:
+- **unsafe code**
+- **interior mutability**
+- **concurrency**
+
+Feel free to contact the team or join the Zulip if you need some specific features or if
+you're interested iun contributing.
 
 ## Backend Support
 
