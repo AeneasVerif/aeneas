@@ -645,6 +645,7 @@ and translate_end_abs (ectx : C.eval_ctx) (abs : V.abs) (e : S.expr)
       translate_end_abstraction_fun_call ectx abs e call_id ctx
   | V.SynthRet rg_id -> translate_end_abstraction_synth_ret ectx abs e ctx rg_id
   | V.Loop _ | V.Join -> translate_end_abstraction_join_or_loop ectx abs e ctx
+  | V.WithCont -> translate_end_abstraction_with_cont ectx abs e ctx
   | V.Identity | V.CopySymbolicValue ->
       translate_end_abs_identity ectx abs e ctx
 
@@ -860,8 +861,9 @@ and translate_end_abstraction_join_or_loop (ectx : C.eval_ctx) (abs : V.abs)
   let back_inputs = abs_to_consumed ctx ectx abs in
   let ctx, outputs = abs_to_given_back None abs ctx in
   let output = mk_simpl_tuple_pat outputs in
-  (* Lookup the continuation - it might not be there if the backward function
-     was filtered, if it consumes nothing and outputs nothing *)
+  (* Lookup the continuation to check if the abstraction is output by a join
+     or a loop - note that it might not be there if the backward function was
+     filtered because if it consumes nothing and outputs nothing *)
   let func = V.AbsId.Map.find_opt abs.abs_id ctx.abs_id_to_info in
   (* Translate the next expression *)
   let next_e ctx = translate_expr e ctx in
@@ -905,6 +907,21 @@ and translate_end_abstraction_join_or_loop (ectx : C.eval_ctx) (abs : V.abs)
         ^ tpat_to_string ctx output ^ "\n- call: " ^ texpr_to_string ctx call
         ^ "\n- next:\n" ^ texpr_to_string ctx next_e];
       [%add_loc] mk_closed_checked_let ctx can_fail output call next_e
+
+and translate_end_abstraction_with_cont (ectx : C.eval_ctx) (abs : V.abs)
+    (e : S.expr) (ctx : bs_ctx) : texpr =
+  [%ldebug "abs:\n" ^ abs_to_string ctx abs];
+  (* Translate the continuation *)
+  let ctx, can_fail, output, abs_e =
+    translate_ended_abs_to_texpr ctx ectx abs
+  in
+  [%ldebug
+    "- output:\n" ^ tpat_to_string ctx output ^ "\n- abs_e:\n"
+    ^ texpr_to_string ctx abs_e];
+  (* Translate the next expression *)
+  let next_e = translate_expr e ctx in
+  (* Put everything together *)
+  [%add_loc] mk_closed_checked_let ctx can_fail output abs_e next_e
 
 and translate_global_eval (gid : A.GlobalDeclId.id) (generics : T.generic_args)
     (sval : V.symbolic_value) (e : S.expr) (ctx : bs_ctx) : texpr =

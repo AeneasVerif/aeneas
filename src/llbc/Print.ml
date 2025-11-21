@@ -698,6 +698,7 @@ module Values = struct
     | Identity -> "Identity"
     | CopySymbolicValue -> "CopySymbolicValue"
     | Join -> "Join"
+    | WithCont -> "WithCont"
 
   let abs_cont_to_string ?(span : Meta.span option = None) (env : fmt_env)
       ?(with_ended : bool = false) (indent : string) (indent_incr : string)

@@ -257,6 +257,10 @@ type abs_kind =
       (** See [InterpreterExpressions.copy_value]: a auxiliary region
           abstraction which we introduced because of a copy of a symbolic value
           containing borrows. *)
+  | WithCont
+      (** Introduced when simplifying the context before matching with a loop
+          for instance. The abstraction should have a continuation which
+          describes its computational behavior. *)
   | Join
       (** The abstraction was introduced after joining contexts, typically after
           an [if then else] or a [match] *)
