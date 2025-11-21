@@ -7,58 +7,73 @@ open InterpreterUtils
 
     If the borrow is inside another borrow/an abstraction or contains loans,
     [end_borrow] will end those borrows/abstractions/loans first. *)
-val end_borrow : config -> Meta.span -> unique_borrow_id -> cm_fun
+val end_borrow :
+  config -> Meta.span -> ?snapshots:bool -> unique_borrow_id -> cm_fun
 
 (** End a set of borrows identified by their ids, while preserving the
     invariants. *)
-val end_borrows : config -> Meta.span -> unique_borrow_id_set -> cm_fun
+val end_borrows :
+  config -> Meta.span -> ?snapshots:bool -> unique_borrow_id_set -> cm_fun
 
 (** End a loan identified by its id, while preserving the invariants *)
-val end_loan : config -> Meta.span -> loan_id -> cm_fun
+val end_loan : config -> Meta.span -> ?snapshots:bool -> loan_id -> cm_fun
 
 (** End a set of loans identified by their ids, while preserving the invariants
 *)
-val end_loans : config -> Meta.span -> loan_id_set -> cm_fun
+val end_loans : config -> Meta.span -> ?snapshots:bool -> loan_id_set -> cm_fun
 
 (** End an abstraction while preserving the invariants. *)
-val end_abstraction : config -> Meta.span -> AbsId.id -> cm_fun
+val end_abstraction :
+  config -> Meta.span -> ?snapshots:bool -> AbsId.id -> cm_fun
 
 (** End a set of abstractions while preserving the invariants. *)
-val end_abstractions : config -> Meta.span -> AbsId.Set.t -> cm_fun
+val end_abstractions :
+  config -> Meta.span -> ?snapshots:bool -> AbsId.Set.t -> cm_fun
 
 (** End a borrow and return the resulting environment, ignoring synthesis *)
 val end_borrow_no_synth :
-  config -> Meta.span -> unique_borrow_id -> eval_ctx -> eval_ctx
+  config ->
+  Meta.span ->
+  ?snapshots:bool ->
+  unique_borrow_id ->
+  eval_ctx ->
+  eval_ctx
 
 (** End a set of borrows and return the resulting environment, ignoring
     synthesis *)
 val end_borrows_no_synth :
-  config -> Meta.span -> unique_borrow_id_set -> eval_ctx -> eval_ctx
+  config ->
+  Meta.span ->
+  ?snapshots:bool ->
+  unique_borrow_id_set ->
+  eval_ctx ->
+  eval_ctx
 
 (** End a loan and return the resulting environment, ignoring synthesis *)
-val end_loan_no_synth : config -> Meta.span -> loan_id -> eval_ctx -> eval_ctx
+val end_loan_no_synth :
+  config -> Meta.span -> ?snapshots:bool -> loan_id -> eval_ctx -> eval_ctx
 
 (** End a set of loans and return the resulting environment, ignoring synthesis
 *)
 val end_loans_no_synth :
-  config -> Meta.span -> loan_id_set -> eval_ctx -> eval_ctx
+  config -> Meta.span -> ?snapshots:bool -> loan_id_set -> eval_ctx -> eval_ctx
 
 (** End a set of loans and return the resulting environment, ignoring synthesis.
 
     Contrary to [end_loans_no_synth], the function doesn't fail if one of the
     loan ids actually doesn't exist in the context. *)
 val try_end_loans_no_synth :
-  config -> Meta.span -> loan_id_set -> eval_ctx -> eval_ctx
+  config -> Meta.span -> ?snapshots:bool -> loan_id_set -> eval_ctx -> eval_ctx
 
 (** End an abstraction and return the resulting environment, ignoring synthesis
 *)
 val end_abstraction_no_synth :
-  config -> Meta.span -> AbsId.id -> eval_ctx -> eval_ctx
+  config -> Meta.span -> ?snapshots:bool -> AbsId.id -> eval_ctx -> eval_ctx
 
 (** End a set of abstractions and return the resulting environment, ignoring
     synthesis *)
 val end_abstractions_no_synth :
-  config -> Meta.span -> AbsId.Set.t -> eval_ctx -> eval_ctx
+  config -> Meta.span -> ?snapshots:bool -> AbsId.Set.t -> eval_ctx -> eval_ctx
 
 (** Promote a reserved mut borrow to a mut borrow, while preserving the
     invariants.
@@ -152,4 +167,5 @@ val eliminate_ended_shared_loans : Meta.span -> eval_ctx -> eval_ctx
       symbolic value doesn't appear anywhere else in the context We ignore the
       abstractions which are specified by the set of abstraction ids (we do not
       end them, nor their loans). *)
-val simplify_dummy_values_useless_abs : config -> Meta.span -> cm_fun
+val simplify_dummy_values_useless_abs :
+  config -> ?snapshots:bool -> Meta.span -> cm_fun
