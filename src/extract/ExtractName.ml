@@ -30,6 +30,7 @@ module NameMatcherMap = struct
   type 'a t = 'a NMM.t
 
   let config = { map_vars_to_vars = true; match_with_trait_decl_refs }
+  let empty = NMM.empty
 
   let find_opt (ctx : 'stt ctx) (name : Types.name) (m : 'a t) : 'a option =
     NMM.find_opt ctx config name m
@@ -42,6 +43,8 @@ module NameMatcherMap = struct
     NMM.mem ctx config name m
 
   let of_list (ls : (pattern * 'a) list) : 'a t = NMM.of_list ls
+  let add = NMM.add
+  let replace = NMM.replace
   let to_string = NMM.to_string
 end
 

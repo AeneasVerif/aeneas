@@ -210,8 +210,8 @@ type builtin_trait_decl_info = {
 [@@deriving show]
 
 type builtin_trait_impl_info = {
+  extract_name : string;
   filter_params : bool list option;
-  impl_name : string;
 }
 [@@deriving show]
 

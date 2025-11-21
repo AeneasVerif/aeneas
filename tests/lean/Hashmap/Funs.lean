@@ -97,8 +97,8 @@ def HashMap.clear_loop
   if i < i1
   then
     let (_, index_mut_back) ←
-      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSliceInst (AList
-        T)) slots i
+      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice (AList T))
+        slots i
     let i2 ← i + 1#usize
     let slots1 := index_mut_back AList.Nil
     HashMap.clear_loop slots1 i2
@@ -152,8 +152,8 @@ def HashMap.insert_no_resize
   let i := alloc.vec.Vec.len self.slots
   let hash_mod ← hash % i
   let (a, index_mut_back) ←
-    alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSliceInst (AList
-      T)) self.slots hash_mod
+    alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice (AList T))
+      self.slots hash_mod
   let (inserted, a1) ← HashMap.insert_in_list key value a
   if inserted
   then
@@ -192,8 +192,8 @@ def HashMap.move_elements_loop
   if i < i1
   then
     let (a, index_mut_back) ←
-      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSliceInst (AList
-        T)) slots i
+      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice (AList T))
+        slots i
     let (ls, a1) := core.mem.replace a AList.Nil
     let ntable1 ← HashMap.move_elements_from_list ntable ls
     let i2 ← i + 1#usize
@@ -266,7 +266,7 @@ def HashMap.contains_key
   let i := alloc.vec.Vec.len self.slots
   let hash_mod ← hash % i
   let a ←
-    alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceInst (AList T))
+    alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice (AList T))
       self.slots hash_mod
   HashMap.contains_key_in_list key a
 
@@ -297,7 +297,7 @@ def HashMap.get
   let i := alloc.vec.Vec.len self.slots
   let hash_mod ← hash % i
   let a ←
-    alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceInst (AList T))
+    alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice (AList T))
       self.slots hash_mod
   HashMap.get_in_list key a
 
@@ -344,8 +344,8 @@ def HashMap.get_mut
   let i := alloc.vec.Vec.len self.slots
   let hash_mod ← hash % i
   let (a, index_mut_back) ←
-    alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSliceInst (AList
-      T)) self.slots hash_mod
+    alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice (AList T))
+      self.slots hash_mod
   let (o, get_mut_in_list_back) ← HashMap.get_mut_in_list a key
   let back :=
     fun ret =>
@@ -394,8 +394,8 @@ def HashMap.remove
   let i := alloc.vec.Vec.len self.slots
   let hash_mod ← hash % i
   let (a, index_mut_back) ←
-    alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSliceInst (AList
-      T)) self.slots hash_mod
+    alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice (AList T))
+      self.slots hash_mod
   let (x, a1) ← HashMap.remove_from_list key a
   match x with
   | none => let v := index_mut_back a1

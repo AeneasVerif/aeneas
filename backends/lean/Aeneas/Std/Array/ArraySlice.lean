@@ -78,13 +78,13 @@ theorem Array.update_subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a :
   . simp_lists
   . scalar_tac
 
-/- [core::array::[T; N]::index]: forward function -/
+@[rust_fun "core::array::{core::ops::index::Index<[@T; @N], @I, @O>}::index"]
 def core.array.Array.index
   {T I Output : Type} {N : Usize} (inst : core.ops.index.Index (Slice T) I Output)
   (a : Array T N) (i : I) : Result Output :=
   inst.index a.to_slice i
 
-/- [core::array::[T; N]::index_mut]: forward function -/
+@[rust_fun "core::array::{core::ops::index::IndexMut<[@T; @N], @I, @O>}::index_mut"]
 def core.array.Array.index_mut
   {T I Output : Type} {N : Usize} (inst : core.ops.index.IndexMut (Slice T) I Output)
   (a : Array T N) (i : I) :
@@ -92,23 +92,23 @@ def core.array.Array.index_mut
   let (s, back) ← inst.index_mut a.to_slice i
   ok (s, fun o => Array.from_slice a (back o))
 
-/- Trait implementation: [core::array::[T; N]] -/
-def core.ops.index.IndexArrayInst {T I Output : Type} {N : Usize}
+@[rust_trait_impl "core::ops::index::Index<[@T; @N], @I, @O>"]
+def core.ops.index.IndexArray {T I Output : Type} {N : Usize}
   (inst : core.ops.index.Index (Slice T) I Output) :
   core.ops.index.Index (Array T N) I Output := {
   index := core.array.Array.index inst
 }
 
-/- Trait implementation: [core::array::[T; N]] -/
-def core.ops.index.IndexMutArrayInst {T I Output : Type} {N : Usize}
+@[rust_trait_impl "core::ops::index::IndexMut<[@T; @N], @I, @O>"]
+def core.ops.index.IndexMutArray {T I Output : Type} {N : Usize}
   (inst : core.ops.index.IndexMut (Slice T) I Output) :
   core.ops.index.IndexMut (Array T N) I Output := {
-  indexInst := core.ops.index.IndexArrayInst inst.indexInst
+  indexInst := core.ops.index.IndexArray inst.indexInst
   index_mut := core.array.Array.index_mut inst
 }
 
-/- [core::array::TryFromSliceError] -/
-def core.array.TryFromSliceError := ()
+@[rust_type "core::array::TryFromSliceError"]
+def core.array.TryFromSliceError := Unit
 
 @[simp, simp_lists_simps]
 theorem Array.val_to_slice {α} {n} (a : Array α n) : a.to_slice.val = a.val := by

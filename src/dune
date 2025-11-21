@@ -35,6 +35,8 @@
   Extract
   ExtractBase
   ExtractBuiltin
+  ExtractBuiltinCore
+  ExtractBuiltinLean
   ExtractErrors
   ExtractName
   ExtractTypes
