@@ -914,7 +914,7 @@ let collapse_ctx_aux config (span : Meta.span)
     reduce_ctx_with_markers (Some merge_funs) sequence span ~with_abs_conts
       fresh_abs_kind fixed_aids ctx0
   in
-  [%ldebug "ctx after collapse:\n" ^ eval_ctx_to_string ctx];
+  [%ldebug "ctx after reduce:\n" ^ eval_ctx_to_string ctx];
   let ctx =
     collapse_ctx_collapse span ~with_abs_conts sequence fresh_abs_kind
       merge_funs ctx

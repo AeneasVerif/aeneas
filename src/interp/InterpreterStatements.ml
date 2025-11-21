@@ -1255,7 +1255,7 @@ and eval_switch_with_join (config : config) (span : Meta.span)
     let match_ctx (ctx : eval_ctx) : SA.expr =
       (* Match the contexts with the joined context to determine the output of the branch *)
       let (_, ctx, output_values, output_abs), cf =
-        InterpreterJoin.match_ctx_with_target config span Join fixed_aids
+        InterpreterJoin.match_ctx_with_target config span WithCont fixed_aids
           fixed_dids output_abs_ids output_svalue_ids joined_ctx ctx
       in
 

@@ -834,6 +834,7 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
   let simplify (ctx : eval_ctx) : eval_ctx =
     let fixed_aids = compute_fixed_abs_ids ctx0 ctx in
     let fixed_dids = ctx_get_dummy_var_ids ctx0 in
+    [%ldebug "- fixed_aids: " ^ AbsId.Set.to_string None fixed_aids];
 
     (* Simplify the dummy values, by removing as many as we can -
        we ignore the synthesis continuation, as we are only computing a fixed point *)
@@ -1276,6 +1277,20 @@ let match_ctx_with_target (config : config) (span : Meta.span)
     "After collapsing the context: joined_ctx:\n"
     ^ eval_ctx_to_string joined_ctx];
 
+  (* There may be empty abstractions in the projected context: end them.
+
+     Remark: we forbid the introduction of (meta) snapshots, because they may
+     refer to values which are introduced as, for instance, output of a loop
+     and are not bound yet (this may lead to issues). *)
+  let joined_ctx, cc =
+    comp cc
+      (simplify_dummy_values_useless_abs config span ~snapshots:false joined_ctx)
+  in
+  [%ltrace
+    "After applying [simplify_dummy_values_useless_abs] to the joined context: \
+     joined_ctx:\n"
+    ^ eval_ctx_to_string joined_ctx];
+
   (* Reorder the region abstractions in the target context -
      TODO: generalize the match so that we don't have to do this *)
   let joined_ctx = reorder_fresh_abs span true fixed_aids joined_ctx in
@@ -1410,7 +1425,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
   ((src_ctx, tgt_ctx, input_values, input_abs), cc)
 
 let loop_match_break_ctx_with_target (config : config) (span : Meta.span)
-    (loop_id : LoopId.id) (fixed_aids : AbsId.Set.t)
+    (_loop_id : LoopId.id) (fixed_aids : AbsId.Set.t)
     (fixed_dids : DummyVarId.Set.t) (fp_input_abs : abs_id list)
     (fp_input_svalues : SymbolicValueId.id list) (src_ctx : eval_ctx)
     (tgt_ctx : eval_ctx) :
@@ -1421,5 +1436,5 @@ let loop_match_break_ctx_with_target (config : config) (span : Meta.span)
     "- src_ctx:\n" ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx:\n"
     ^ eval_ctx_to_string tgt_ctx];
 
-  match_ctx_with_target config span (Loop loop_id) fixed_aids fixed_dids
-    fp_input_abs fp_input_svalues src_ctx tgt_ctx
+  match_ctx_with_target config span WithCont fixed_aids fixed_dids fp_input_abs
+    fp_input_svalues src_ctx tgt_ctx

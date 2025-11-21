@@ -110,7 +110,7 @@ let eval_loop_symbolic_apply_loop (config : config) (span : span)
   let fixed_dids = ctx_get_dummy_var_ids init_ctx in
   let (ctx, tgt_ctx, input_values, input_abs), cc =
     comp cf_prepare
-      (match_ctx_with_target config span (Loop loop_id) fixed_aids fixed_dids
+      (match_ctx_with_target config span WithCont fixed_aids fixed_dids
          fp_input_abs fp_input_svalues fp_ctx ctx)
   in
 
@@ -201,7 +201,7 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
           ^ eval_ctx_to_string ~span:(Some span) ctx];
 
         let (_ctx, tgt_ctx, input_values, input_abs), cc =
-          match_ctx_with_target config span (Loop loop_id) fixed_aids fixed_dids
+          match_ctx_with_target config span WithCont fixed_aids fixed_dids
             fp_input_abs fp_input_svalues fp_ctx ctx
         in
         let input_values = reorder_input_values input_values fp_input_svalues in

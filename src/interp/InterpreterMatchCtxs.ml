@@ -1646,174 +1646,6 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
   let match_avalues _ _ _ _ = [%craise] span "Unreachable"
 end
 
-(* Very annoying: functors only take modules as inputs... *)
-module type MatchMoveState = sig
-  val span : Meta.span
-
-  (** The moved values *)
-  val nvalues : tvalue list ref
-end
-
-(* We use this matcher to move values in environment.
-
-   To be more precise, we use this to update the target environment
-   (typically, the environment we have when we reach a continue statement)
-   by moving values into anonymous variables when the matched value
-   coming from the source environment (typically, a loop fixed-point)
-   is a bottom.
-
-   Importantly, put aside the case where the source value is bottom
-   and the target value is not bottom, we always return the target value.
-
-   Also note that the role of this matcher is simply to perform a reorganization:
-   the resulting environment will be matched again with the source.
-   This means that it is ok if we are not sure if the source environment
-   indeed matches the resulting target environment: it will be re-checked later.
-*)
-module MakeMoveMatcher (S : MatchMoveState) : PrimMatcher = struct
-  let span = S.span
-
-  (** Small utility *)
-  let push_moved_value (v : tvalue) : unit = S.nvalues := v :: !S.nvalues
-
-  let match_etys _ _ ty0 ty1 =
-    [%sanity_check] span (ty0 = ty1);
-    ty0
-
-  let match_rtys _ _ ty0 ty1 =
-    (* The types must be equal - in effect, this forbids to match symbolic
-       values containing borrows *)
-    [%sanity_check] span (ty0 = ty1);
-    ty0
-
-  let match_distinct_literals (_ : tvalue_matcher) (_ : eval_ctx) (_ : eval_ctx)
-      (ty : ety) (_ : literal) (l : literal) : tvalue =
-    { value = VLiteral l; ty }
-
-  let match_distinct_adts (_ : tvalue_matcher) (_ : eval_ctx) (_ : eval_ctx)
-      (ty : ety) _ (_ : adt_value) _ (adt1 : adt_value) : tvalue =
-    (* Note that if there was a bottom inside the ADT on the left,
-       the value on the left should have been simplified to bottom. *)
-    { ty; value = VAdt adt1 }
-
-  let match_shared_borrows (_ : tvalue_matcher) (_ : eval_ctx) (_ : eval_ctx)
-      (_ : ety) (_ : borrow_id) (_ : shared_borrow_id) (bid1 : borrow_id)
-      (sid1 : shared_borrow_id) : borrow_id * shared_borrow_id =
-    (* There can't be bottoms in shared values *)
-    (bid1, sid1)
-
-  let match_mut_borrows (_ : tvalue_matcher) (_ : eval_ctx) (_ : eval_ctx)
-      (_ : ety) (_ : borrow_id) (_ : tvalue) (bid1 : borrow_id) (bv1 : tvalue)
-      (_ : tvalue) : borrow_id * tvalue =
-    (* There can't be bottoms in borrowed values *)
-    (bid1, bv1)
-
-  let match_shared_loans (_ : tvalue_matcher) (_ : eval_ctx) (_ : eval_ctx)
-      (ty : ety) (_ : loan_id) (id1 : loan_id) (sv : tvalue) : tvalue =
-    (* There can't be bottoms in shared loans *)
-    { value = VLoan (VSharedLoan (id1, sv)); ty }
-
-  let match_mut_loans (_ : tvalue_matcher) (_ : eval_ctx) (_ : eval_ctx)
-      (ty : ety) (_ : loan_id) (id1 : loan_id) : tvalue =
-    { value = VLoan (VMutLoan id1); ty }
-
-  let match_symbolic_values (_ : tvalue_matcher) (_ : eval_ctx) (_ : eval_ctx)
-      (_ : symbolic_value) (sv1 : symbolic_value) : symbolic_value =
-    sv1
-
-  let match_symbolic_with_other (_ : tvalue_matcher) (ctx0 : eval_ctx)
-      (ctx1 : eval_ctx) ~(symbolic_is_left : bool) (sv : symbolic_value)
-      (v : tvalue) : tvalue =
-    (* We're being conservative for now: if any of the two values contains
-       a bottom, the join is bottom *)
-    let ctx_symb, ctx_v =
-      if symbolic_is_left then (ctx0, ctx1) else (ctx1, ctx0)
-    in
-    if
-      symbolic_value_has_ended_regions ctx_symb.ended_regions sv
-      || bottom_in_value ctx_v.ended_regions v
-    then mk_bottom span sv.sv_ty
-    else if symbolic_is_left then v
-    else mk_tvalue_from_symbolic_value sv
-
-  let match_shared_loan_with_other (_ : tvalue_matcher) (ctx0 : eval_ctx)
-      (ctx1 : eval_ctx) ~(loan_is_left : bool) (ty : ty) (lid : loan_id)
-      (shared_value : tvalue) (other : tvalue) : tvalue =
-    let ctx_loan, ctx_v = if loan_is_left then (ctx0, ctx1) else (ctx1, ctx0) in
-    [%cassert] span
-      (not
-         (ValuesUtils.value_has_loans_or_borrows (Some span)
-            ctx_loan.type_ctx.type_infos shared_value.value))
-      "Unimplemented";
-    [%cassert] span
-      (not
-         (ValuesUtils.value_has_loans_or_borrows (Some span)
-            ctx_v.type_ctx.type_infos other.value))
-      "Unimplemented";
-    if bottom_in_value ctx_v.ended_regions other then mk_bottom span ty
-    else if loan_is_left then other
-    else { value = VLoan (VSharedLoan (lid, shared_value)); ty }
-
-  let match_mut_loan_with_other (_ : tvalue_matcher) (ctx0 : eval_ctx)
-      (ctx1 : eval_ctx) ~(loan_is_left : bool) (ty : ty) (lid : loan_id)
-      (other : tvalue) : tvalue =
-    let _ctx_loan, ctx_v =
-      if loan_is_left then (ctx0, ctx1) else (ctx1, ctx0)
-    in
-    if
-      (not
-         (ValuesUtils.value_has_loans_or_borrows (Some span)
-            ctx_v.type_ctx.type_infos other.value))
-      && bottom_in_value ctx_v.ended_regions other
-    then mk_bottom span ty
-    else if loan_is_left then other
-    else { value = VLoan (VMutLoan lid); ty }
-
-  let match_bottom_with_other (_ : tvalue_matcher) (_ : eval_ctx) (_ : eval_ctx)
-      ~(bottom_is_left : bool) (v : tvalue) : tvalue =
-    let with_borrows = false in
-    if bottom_is_left then (
-      (* The bottom is on the left *)
-      (* Small sanity check *)
-      match
-        InterpreterBorrowsCore.get_first_outer_loan_or_borrow_in_value
-          with_borrows v
-      with
-      | Some (BorrowContent _) ->
-          (* Can't get there: we only ask for outer *loans* *)
-          [%craise] span "Unreachable"
-      | Some (LoanContent _) ->
-          (* We should have ended all the outer loans *)
-          [%craise] span "Unexpected outer loan"
-      | None ->
-          (* Move the value - note that we shouldn't get there if we
-             were not allowed to move the value in the first place. *)
-          push_moved_value v;
-          (* Return [Bottom] *)
-          mk_bottom span v.ty)
-    else
-      (* If we get there it means the source environment (e.g., the
-         fixed-point) has a non-bottom value, while the target environment
-         (e.g., the environment we have when we reach the continue)
-         has bottom: we shouldn't get there. *)
-      [%craise] span "Unreachable"
-
-  (* As explained in comments: we don't use the join matcher to join avalues,
-     only concrete values *)
-
-  let match_distinct_aadts _ _ _ _ _ _ _ = [%craise] span "Unreachable"
-  let match_ashared_borrows _ _ _ _ _ _ = [%craise] span "Unreachable"
-  let match_amut_borrows _ _ _ _ _ _ _ _ _ = [%craise] span "Unreachable"
-
-  let match_ashared_loans _ _ _ _ _ _ _ _ _ _ _ _ _ =
-    [%craise] span "Unreachable"
-
-  let match_amut_loans _ _ _ _ _ _ _ _ _ _ = [%craise] span "Unreachable"
-  let match_avalues _ _ _ _ = [%craise] span "Unreachable"
-  let match_aproj_borrows _ _ _ _ _ _ _ _ _ _ = [%craise] span "Unreachable"
-  let match_aproj_loans _ _ _ _ _ _ _ _ _ _ = [%craise] span "Unreachable"
-end
-
 module MakeCheckEquivMatcher (S : MatchCheckEquivState) : CheckEquivMatcher =
 struct
   let span = S.span
@@ -2460,7 +2292,7 @@ let prepare_match_ctx_with_target (config : config) (span : Meta.span)
     let module JM = MakeJoinMatcher (S) in
     let module M = MakeMatcher (JM) in
     try
-      (* Match the bindings appear in both environments *)
+      (* Match the bindings which appear in both environments *)
       (* TODO: we shouldn't filter the locals (they should appear in both envs)? *)
       let src_dummy_ids = env_get_dummy_var_ids filt_src_env in
       let src_local_ids = env_get_local_ids filt_src_env in
@@ -2502,69 +2334,16 @@ let prepare_match_ctx_with_target (config : config) (span : Meta.span)
         ^ env_to_string span src_ctx filt_src_env
         ^ "\n- filt_tgt_ctx: "
         ^ env_to_string span tgt_ctx filt_tgt_env];
-
-      (* We are done with the borrows/loans: now make sure we move all
-         the values which are bottom in the src environment (i.e., the
-         fixed-point environment) *)
-      (* First compute the map from binder to new value for the target
-         environment *)
-      let nvalues = ref [] in
-      let module S : MatchMoveState = struct
-        let span = span
-        let nvalues = nvalues
-      end in
-      let module MM = MakeMoveMatcher (S) in
-      let module M = MakeMatcher (MM) in
-      let var_to_new_val =
-        List.map
-          (fun (var0, var1) ->
-            match (var0, var1) with
-            | EBinding (BDummy b0, v0), EBinding ((BDummy b1 as var1), v1) ->
-                [%sanity_check] span (b0 = b1);
-                let v = M.match_tvalues src_ctx tgt_ctx v0 v1 in
-                (var1, v)
-            | EBinding (BVar b0, v0), EBinding ((BVar b1 as var1), v1) ->
-                [%sanity_check] span (b0 = b1);
-                let v = M.match_tvalues src_ctx tgt_ctx v0 v1 in
-                (var1, v)
-            | _ -> [%craise] span "Unexpected")
-          (List.combine filt_src_env filt_tgt_env)
-      in
-      let var_to_new_val = BinderMap.of_list var_to_new_val in
-
-      (* Update the target environment to take into account the moved values *)
-      let tgt_ctx =
-        (* Update the bindings *)
-        let tgt_env =
-          List.map
-            (fun b ->
-              match b with
-              | EBinding (bv, _) -> (
-                  match BinderMap.find_opt bv var_to_new_val with
-                  | None -> b
-                  | Some nv -> EBinding (bv, nv))
-              | _ -> b)
-            tgt_ctx.env
-        in
-        (* Insert the moved values *)
-        let tgt_ctx = { tgt_ctx with env = tgt_env } in
-        ctx_push_fresh_dummy_vars tgt_ctx (List.rev !nvalues)
-      in
-
-      [%ldebug
-        "reorganize_join_tgt: done with borrows/loans and moves:"
-        ^ "\n- src_ctx: "
-        ^ eval_ctx_to_string ~span:(Some span) src_ctx
-        ^ "\n- tgt_ctx: "
-        ^ eval_ctx_to_string ~span:(Some span) tgt_ctx];
-
       (tgt_ctx, fun e -> e)
     with ValueMatchFailure e ->
       (* Exception: end the corresponding borrows, and continue *)
       let ctx, cc =
         match e with
-        | LoanInRight bid -> InterpreterBorrows.end_loan config span bid tgt_ctx
+        | LoanInRight bid ->
+            [%ldebug "LoanInRight: " ^ BorrowId.to_string bid];
+            InterpreterBorrows.end_loan config span bid tgt_ctx
         | LoansInRight bids ->
+            [%ldebug "LoansInRight: " ^ BorrowId.Set.to_string None bids];
             InterpreterBorrows.end_loans config span bids tgt_ctx
         | AbsInRight _ | AbsInLeft _ | LoanInLeft _ | LoansInLeft _ ->
             [%craise] span "Unexpected"
@@ -2572,4 +2351,6 @@ let prepare_match_ctx_with_target (config : config) (span : Meta.span)
       comp cc (reorganize_join_tgt ctx)
   in
   (* Apply the reorganization *)
-  reorganize_join_tgt tgt_ctx
+  let ctx, cc = reorganize_join_tgt tgt_ctx in
+  Invariants.check_invariants span ctx;
+  (ctx, cc)

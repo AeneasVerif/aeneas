@@ -469,9 +469,9 @@ def zero_slice_loop
   (a : Slice U8) (i : Usize) (len : Usize) : Result (Slice U8) := do
   if i < len
   then
-    let a1 ← Slice.update a i 0#u8
+    let s ← Slice.update a i 0#u8
     let i1 ← i + 1#usize
-    zero_slice_loop a1 i1 len
+    zero_slice_loop s i1 len
   else ok a
 partial_fixpoint
 
@@ -525,12 +525,12 @@ def add_acc_loop
   if i < 256#usize
   then
     let a ← Array.index_usize paSrc i
-    let paSrc1 ← Array.update paSrc i 0#u32
+    let a1 ← Array.update paSrc i 0#u32
     let c ← Array.index_usize peDst i
     let c1 ← c + a
-    let peDst1 ← Array.update peDst i c1
+    let a2 ← Array.update peDst i c1
     let i1 ← i + 1#usize
-    add_acc_loop paSrc1 peDst1 i1
+    add_acc_loop a1 a2 i1
   else ok (paSrc, peDst)
 partial_fixpoint
 

@@ -820,4 +820,23 @@ def insert_in_list
   := do
   insert_in_list_loop key value ls
 
+/- [loops::reborrow_const::reborrow]:
+   Source: 'tests/src/loops.rs', lines 534:4-538:5 -/
+def reborrow_const.reborrow (x : U64) : Result U64 := do
+  ok x
+
+/- [loops::reborrow_const]: loop 0:
+   Source: 'tests/src/loops.rs', lines 0:0-542:5 -/
+def reborrow_const_loop : Result Unit := do
+  if 0#i32 < 5#i32
+  then let _ ← reborrow_const.reborrow 0#u64
+       reborrow_const_loop
+  else ok ()
+partial_fixpoint
+
+/- [loops::reborrow_const]:
+   Source: 'tests/src/loops.rs', lines 533:0-543:1 -/
+@[reducible] def reborrow_const : Result Unit := do
+               reborrow_const_loop
+
 end loops

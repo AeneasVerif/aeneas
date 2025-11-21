@@ -159,7 +159,12 @@ let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
   (* Then, register all the borrows *)
   (* Some utilities to register the borrows *)
   let find_info (bid : BorrowId.id) : borrow_info =
-    BorrowId.Map.find bid !borrows_infos
+    match BorrowId.Map.find_opt bid !borrows_infos with
+    | Some info -> info
+    | None ->
+        [%craise] span
+          ("Internal error: please find an issue.\n\nCould not find borrow b@"
+         ^ BorrowId.to_string bid)
   in
 
   let update_info (bid : BorrowId.id) (info : borrow_info) : unit =
