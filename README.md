@@ -147,6 +147,35 @@ support for partial functions and extrinsic proofs of termination (see
 and tactics specialized for monadic programs (see
 `./backends/lean/Base/Progress/Progress.lean` and `./backends/hol4/primitivesLib.sml`).
 
+## Adding Models of Rust Definitions to the Lean Backend
+
+When translating a crate which requires external definitions (i.e., definitions
+coming from external dependencies such as the Rust standard library), we advise using the
+`-split-files` option. With `-split-files`, Aeneas will generate template files listing
+the missing definitions for which the user will have to provide hand-written models.
+For instance, it can lead to the following structure in Lean:
+```
+... // Files containing type definitions, etc.
+FunsExternal_Template.lean // automatically generated template file
+FunsExternal.lean // hand-written file maintained by the user (not overwritten during the translation)
+Funs.lean // automatically generated file which imports FunsExternal.lean
+```
+
+Rather than adding models to the `TypesExternal.lean`, `FunsExternal.lean`, etc. files it
+is possible to port the models to the Aeneas standard library, so that all client projects
+can benefit from them. When doing so, it is important to make Aeneas aware of those new
+models. This is done by annotating the Lean models with the appropriate attribute
+(`rust_type`, `rust_fun`, `rust_trait` or `rust_trait_impl`) then running the
+command `make lean-extract-builtins`. This command will build the Lean library for Aeneas,
+collect those definitions, and regenerate the `src/extract/ExtractBuiltinLean.ml` file,
+which provides information about those models.
+
+Note that Aeneas automatically introduces the `rust_type`, etc. attributes when
+listing the missing external definitions in the `TypesExternal.lean`, etc. files:
+the user just needs to copy/paste those definitions and fill in the holes. Also note that
+those attributes have quite a few options to tweak the behavior of the extraction: we
+invite the users to read their docstrings for more information.
+
 ## Quick start for Nix users
 
 Assuming Nix is installed, with a support for Flakes (`*`):
