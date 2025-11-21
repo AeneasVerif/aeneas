@@ -1056,6 +1056,67 @@ let extract_comment_with_span (ctx : extraction_ctx) (fmt : F.formatter)
   let span = Errors.span_to_string span in
   extract_comment fmt (sl @ [ span ] @ name)
 
+let extract_attributes (span : Meta.span) (ctx : extraction_ctx)
+    (fmt : F.formatter) (name : Types.name)
+    (generics : (Types.generic_params * Types.generic_args) option)
+    (attributes : string list) (rust_model_attr : string)
+    (rust_model_attr_options : string list) ~(is_external : bool) : unit =
+  if backend () = Lean then (
+    let name_pattern : string list list =
+      if is_external then
+        match generics with
+        | None ->
+            [
+              [
+                rust_model_attr;
+                "\""
+                ^ name_to_pattern_string (Some span) ctx.trans_ctx name
+                ^ "\"";
+              ]
+              @ rust_model_attr_options;
+            ]
+        | Some (params, args) ->
+            [
+              [
+                rust_model_attr;
+                "\""
+                ^ name_with_generics_to_pattern_string (Some span) ctx.trans_ctx
+                    name params args
+                ^ "\"";
+              ]
+              @ rust_model_attr_options;
+            ]
+      else []
+    in
+    let attributes =
+      if attributes = [] then name_pattern
+      else List.map (fun x -> [ x ]) attributes @ name_pattern
+    in
+    if attributes <> [] then (
+      F.pp_open_hovbox fmt 2;
+      F.pp_print_string fmt "@[";
+      let first = ref true in
+      List.iter
+        (fun attrl ->
+          if not !first then (
+            F.pp_print_string fmt ",";
+            F.pp_print_space fmt ());
+          first := false;
+          match attrl with
+          | [] -> [%internal_error] span
+          | x :: attrl ->
+              F.pp_print_string fmt x;
+              List.iter
+                (fun attr ->
+                  F.pp_print_space fmt ();
+                  F.pp_print_string fmt attr)
+                attrl)
+        attributes;
+      F.pp_print_string fmt "]";
+      F.pp_close_box fmt ();
+      F.pp_print_space fmt ()))
+  else ()
+
 let extract_trait_clause_type (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t)
     (clause : trait_param) : unit =
@@ -1249,8 +1310,12 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
    in
    extract_comment_with_span ctx fmt
      [ "[" ^ name_to_string ctx def.item_meta.name ^ "]" ]
-     name def.item_meta.span);
-  F.pp_print_break fmt 0 0;
+     name def.item_meta.span;
+   F.pp_print_break fmt 0 0;
+   (* Extract the attributes *)
+   extract_attributes def.item_meta.span ctx fmt def.item_meta.name None []
+     "rust_type" []
+     ~is_external:(not def.item_meta.is_local));
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line. Note however that in the case of Lean line breaks are important
    * for parsing: we thus use a hovbox. *)
