@@ -430,9 +430,9 @@ let rec zero_slice_loop
   =
   if i < len
   then
-    let* a1 = slice_update_usize a i 0 in
+    let* s = slice_update_usize a i 0 in
     let* i1 = usize_add i 1 in
-    zero_slice_loop a1 i1 len
+    zero_slice_loop s i1 len
   else Ok a
 
 (** [arrays::zero_slice]:
@@ -485,12 +485,12 @@ let rec add_acc_loop
   if i < 256
   then
     let* a = array_index_usize pa_src i in
-    let* pa_src1 = array_update_usize pa_src i 0 in
+    let* a1 = array_update_usize pa_src i 0 in
     let* c = array_index_usize pe_dst i in
     let* c1 = u32_add c a in
-    let* pe_dst1 = array_update_usize pe_dst i c1 in
+    let* a2 = array_update_usize pe_dst i c1 in
     let* i1 = usize_add i 1 in
-    add_acc_loop pa_src1 pe_dst1 i1
+    add_acc_loop a1 a2 i1
   else Ok (pa_src, pe_dst)
 
 (** [arrays::add_acc]:
