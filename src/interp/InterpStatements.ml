@@ -616,74 +616,65 @@ let eval_non_builtin_function_call_symbolic_inst (span : Meta.span)
   | FnOpMove _ ->
       (* Closure case: TODO *)
       [%craise] span "Closures are not supported yet"
-  | FnOpRegular func -> (
-      match func.kind with
-      | FunId (FRegular fid) ->
-          let def = ctx_lookup_fun_decl span ctx fid in
-          [%ltrace
-            "- call: " ^ call_to_string ctx call ^ "\n- call.generics:\n"
-            ^ generic_args_to_string ctx func.generics
-            ^ "\n- def.signature:\n"
-            ^ fun_sig_to_string ctx def.signature];
-          let tr_self = UnknownTrait __FUNCTION__ in
-          let regions_hierarchy =
-            [%silent_unwrap] span
-              (LlbcAstUtils.FunIdMap.find_opt (FRegular fid)
-                 ctx.fun_ctx.regions_hierarchies)
-          in
-          let inst_sg =
-            instantiate_fun_sig span ctx func.generics tr_self def.signature
-              regions_hierarchy
-          in
-          (func.kind, func.generics, def, inst_sg)
-      | FunId (FBuiltin _) ->
-          (* Unreachable: must be a transparent function *)
-          [%craise] span "Unreachable"
-      | TraitMethod (trait_ref, method_name, _) ->
-          [%ltrace
-            "trait method call:\n- call: " ^ call_to_string ctx call
-            ^ "\n- method name: " ^ method_name ^ "\n- call.generics:\n"
-            ^ generic_args_to_string ctx func.generics
-            ^ "\n- trait_ref.trait_decl_ref: "
-            ^ trait_decl_ref_region_binder_to_string ctx
-                trait_ref.trait_decl_ref];
-          (* Check that there are no bound regions *)
-          [%cassert] span
-            (trait_ref.trait_decl_ref.binder_regions = [])
-            "Unexpected bound regions";
-          let trait_decl_ref = trait_ref.trait_decl_ref.binder_value in
-          (* This should be a call to a trait clause method (if it were a method
-             coming from an impl, there should be no indirection through the trait
-             reference itself (Charon should have simplified this). *)
-          [%sanity_check] span
-            (match trait_ref.kind with
-            | TraitImpl _ -> false
-            | _ -> true);
-          (* Lookup the trait decl *)
-          let trait_decl = ctx_lookup_trait_decl span ctx trait_decl_ref.id in
-          (* Lookup the method decl in the required *and* the provided methods *)
-          let fn_ref =
-            Option.get
-              (Substitute.lookup_and_subst_trait_decl_method trait_decl
-                 method_name trait_ref func.generics)
-          in
-          let method_id = fn_ref.id in
-          let generics = fn_ref.generics in
-          let method_def = ctx_lookup_fun_decl span ctx method_id in
-          [%ltrace "method:\n" ^ fun_decl_to_string ctx method_def];
-          (* Instantiate *)
-          (* When instantiating, we need to group the generics for the
-                 trait ref and the generics for the method *)
-          let regions_hierarchy =
-            LlbcAstUtils.FunIdMap.find (FRegular method_id)
-              ctx.fun_ctx.regions_hierarchies
-          in
-          let tr_self = trait_ref.kind in
-          let inst_sg =
-            instantiate_fun_sig span ctx generics tr_self method_def.signature
-              regions_hierarchy
-          in
-          (func.kind, func.generics, method_def, inst_sg))
+  | FnOpRegular func ->
+      let fid, generics, tr_self =
+        match func.kind with
+        | FunId (FRegular fid) ->
+            [%ltrace "Regular function"];
+            let tr_self = UnknownTrait __FUNCTION__ in
+            (fid, func.generics, tr_self)
+        | FunId (FBuiltin _) ->
+            (* Unreachable: must be a transparent function *)
+            [%craise] span "Unreachable"
+        | TraitMethod (trait_ref, method_name, _) ->
+            [%ltrace
+              "trait method call:\n- call: " ^ call_to_string ctx call
+              ^ "\n- method name: " ^ method_name ^ "\n- call.generics:\n"
+              ^ generic_args_to_string ctx func.generics
+              ^ "\n- trait_ref.trait_decl_ref: "
+              ^ trait_decl_ref_region_binder_to_string ctx
+                  trait_ref.trait_decl_ref];
+            (* Check that there are no bound regions *)
+            [%cassert] span
+              (trait_ref.trait_decl_ref.binder_regions = [])
+              "Unexpected bound regions";
+            let trait_decl_ref = trait_ref.trait_decl_ref.binder_value in
+            (* This should be a call to a trait clause method (if it were a method
+               coming from an impl, there should be no indirection through the trait
+               reference itself (Charon should have simplified this). *)
+            [%sanity_check] span
+              (match trait_ref.kind with
+              | TraitImpl _ -> false
+              | _ -> true);
+            (* Lookup the trait decl and substitution *)
+            let trait_decl = ctx_lookup_trait_decl span ctx trait_decl_ref.id in
+            let fn_ref =
+              Option.get
+                (Substitute.lookup_and_subst_trait_decl_method trait_decl
+                   method_name trait_ref func.generics)
+            in
+            (* *)
+            let tr_self = trait_ref.kind in
+            (fn_ref.id, fn_ref.generics, tr_self)
+      in
+      (* Lookup the declaration *)
+      let def = ctx_lookup_fun_decl span ctx fid in
+      [%ltrace
+        "- call: " ^ call_to_string ctx call ^ "\n- call.generics:\n"
+        ^ generic_args_to_string ctx func.generics
+        ^ "\n- def.signature:\n"
+        ^ fun_sig_to_string ctx def.signature];
+      (* Instantiate *)
+      let regions_hierarchy =
+        [%silent_unwrap] span
+          (LlbcAstUtils.FunIdMap.find_opt (FRegular fid)
+             ctx.fun_ctx.regions_hierarchies)
+      in
+      let inst_sg =
+        instantiate_fun_sig span ctx generics tr_self def.signature
+          regions_hierarchy
+      in
+      (func.kind, func.generics, def, inst_sg)
 
 (** Helper: introduce a fresh symbolic value for a global *)
 let eval_global_as_fresh_symbolic_value (span : Meta.span)
