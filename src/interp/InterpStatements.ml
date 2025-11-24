@@ -608,20 +608,10 @@ let create_push_abstractions_from_abs_region_groups
     {[
       let option_has_value (T : Type) (x : Option T) : result bool =
         OptionHasValueImpl.has_value T x
-    ]}
-
-    # Provided trait methods ======================== Calls to provided trait
-    methods also have a special treatment because for now we forbid overriding
-    provided trait methods in the trait implementations, which means that
-    whenever we call a provided trait method, we do not refer to a trait clause
-    but directly to the method provided in the trait declaration. *)
+    ]} *)
 let eval_transparent_function_call_symbolic_inst (span : Meta.span)
     (call : call) (ctx : eval_ctx) :
-    fn_ptr_kind
-    * generic_args
-    * (generic_args * trait_ref_kind) option
-    * fun_decl
-    * inst_fun_sig =
+    fn_ptr_kind * generic_args * fun_decl * inst_fun_sig =
   match call.func with
   | FnOpMove _ ->
       (* Closure case: TODO *)
@@ -697,7 +687,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
               *)
               let func = FunId fid in
               (* TODO: the `trait_method_generics` look fishy *)
-              (func, generics, Some (generics, tr_self), method_def, inst_sg)
+              (func, generics, method_def, inst_sg)
             end
           | _ ->
               (* We are using a local clause - we lookup the trait decl *)
@@ -726,11 +716,7 @@ let eval_transparent_function_call_symbolic_inst (span : Meta.span)
                 instantiate_fun_sig span ctx generics tr_self
                   method_def.signature regions_hierarchy
               in
-              ( func.kind,
-                func.generics,
-                Some (generics, tr_self),
-                method_def,
-                inst_sg )))
+              (func.kind, func.generics, method_def, inst_sg)))
 
 (** Helper: introduce a fresh symbolic value for a global *)
 let eval_global_as_fresh_symbolic_value (span : Meta.span)
@@ -1432,7 +1418,7 @@ and eval_transparent_function_call_concrete (config : config) (span : Meta.span)
 and eval_transparent_function_call_symbolic (config : config) (span : Meta.span)
     (call : call) : stl_cm_fun =
  fun ctx ->
-  let func, generics, trait_method_generics, def, inst_sg =
+  let func, generics, def, inst_sg =
     eval_transparent_function_call_symbolic_inst span call ctx
   in
   (* Sanity check: same number of inputs *)
@@ -1446,7 +1432,7 @@ and eval_transparent_function_call_symbolic (config : config) (span : Meta.span)
     "Nested borrows are not supported yet";
   (* Evaluate the function call *)
   eval_function_call_symbolic_from_inst_sig config def.item_meta.span func
-    def.signature inst_sg generics trait_method_generics call.args call.dest ctx
+    def.signature inst_sg generics call.args call.dest ctx
 
 (** Evaluate a function call in symbolic mode by using the function signature.
 
@@ -1460,9 +1446,8 @@ and eval_transparent_function_call_symbolic (config : config) (span : Meta.span)
     trait ref as input. *)
 and eval_function_call_symbolic_from_inst_sig (config : config)
     (span : Meta.span) (fid : fn_ptr_kind) (sg : fun_sig)
-    (inst_sg : inst_fun_sig) (generics : generic_args)
-    (trait_method_generics : (generic_args * trait_ref_kind) option)
-    (args : operand list) (dest : place) : stl_cm_fun =
+    (inst_sg : inst_fun_sig) (generics : generic_args) (args : operand list)
+    (dest : place) : stl_cm_fun =
  fun ctx ->
   [%ltrace
     "- fid: "
@@ -1563,8 +1548,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
   let cc =
     cc_comp cc
       (S.synthesize_regular_function_call span fid call_id ctx sg inst_sg
-         abs_ids generics trait_method_generics args args_places ret_spc
-         dest_place)
+         abs_ids generics args args_places ret_spc dest_place)
   in
 
   (* Move the return value to its destination *)
@@ -1660,7 +1644,7 @@ and eval_builtin_function_call_symbolic (config : config) (span : Meta.span)
 
     (* Evaluate the function call *)
     eval_function_call_symbolic_from_inst_sig config span (FunId (FBuiltin fid))
-      sg inst_sig func.generics None args dest ctx
+      sg inst_sig func.generics args dest ctx
   end
   else begin
     (* Sanity check: make sure the type parameters don't contain regions -
@@ -1686,7 +1670,7 @@ and eval_builtin_function_call_symbolic (config : config) (span : Meta.span)
 
     (* Evaluate the function call *)
     eval_function_call_symbolic_from_inst_sig config span (FunId (FBuiltin fid))
-      sg inst_sig func.generics None args dest ctx
+      sg inst_sig func.generics args dest ctx
   end
 
 (** Evaluate a statement seen as a function body *)
