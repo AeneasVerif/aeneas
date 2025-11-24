@@ -28,7 +28,7 @@ theorem mem_range'_step_one (x start len : Nat) :
   . exists x - start
     omega
 
-@[simp, grind]
+@[simp]
 theorem mem_std_range_step_one (x n0 n1 : Nat) :
   x ∈ [n0:n1] ↔ (n0 ≤ x ∧ x < n1) := by
   simp only [Membership.mem, Nat.mod_one, and_true]
