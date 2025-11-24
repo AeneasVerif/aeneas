@@ -550,7 +550,7 @@ let create_push_abstractions_from_abs_region_groups
   in
   List.fold_left insert_abs ctx (List.combine rg_ids empty_absl)
 
-(** Auxiliary helper for [eval_transparent_function_call_symbolic] Instantiate
+(** Auxiliary helper for [eval_non_builtin_function_call_symbolic] Instantiate
     the signature and introduce fresh abstractions and region ids while doing
     so.
 
@@ -609,7 +609,7 @@ let create_push_abstractions_from_abs_region_groups
       let option_has_value (T : Type) (x : Option T) : result bool =
         OptionHasValueImpl.has_value T x
     ]} *)
-let eval_transparent_function_call_symbolic_inst (span : Meta.span)
+let eval_non_builtin_function_call_symbolic_inst (span : Meta.span)
     (call : call) (ctx : eval_ctx) :
     fn_ptr_kind * generic_args * fun_decl * inst_fun_sig =
   match call.func with
@@ -1303,7 +1303,7 @@ and eval_function_call_concrete (config : config) (span : Meta.span)
   | FnOpRegular func -> (
       match func.kind with
       | FunId (FRegular fid) ->
-          eval_transparent_function_call_concrete config span fid call ctx
+          eval_non_builtin_function_call_concrete config span fid call ctx
       | FunId (FBuiltin fid) ->
           (* Continue - note that we do as if the function call has been successful,
            * by giving {!Unit} to the continuation, because we place us in the case
@@ -1322,13 +1322,13 @@ and eval_function_call_symbolic (config : config) (span : Meta.span)
   | FnOpRegular func -> (
       match func.kind with
       | FunId (FRegular _) | TraitMethod _ ->
-          eval_transparent_function_call_symbolic config span call
+          eval_non_builtin_function_call_symbolic config span call
       | FunId (FBuiltin fid) ->
           eval_builtin_function_call_symbolic config span fid func call.args
             call.dest)
 
 (** Evaluate a local (i.e., non-builtin) function call in concrete mode *)
-and eval_transparent_function_call_concrete (config : config) (span : Meta.span)
+and eval_non_builtin_function_call_concrete (config : config) (span : Meta.span)
     (fid : FunDeclId.id) (call : call) : stl_cm_fun =
  fun ctx ->
   let args = call.args in
@@ -1415,11 +1415,11 @@ and eval_transparent_function_call_concrete (config : config) (span : Meta.span)
       (ctx_resl, cc_comp cc cf_pop)
 
 (** Evaluate a local (i.e., non-builtin) function call in symbolic mode *)
-and eval_transparent_function_call_symbolic (config : config) (span : Meta.span)
+and eval_non_builtin_function_call_symbolic (config : config) (span : Meta.span)
     (call : call) : stl_cm_fun =
  fun ctx ->
   let func, generics, def, inst_sg =
-    eval_transparent_function_call_symbolic_inst span call ctx
+    eval_non_builtin_function_call_symbolic_inst span call ctx
   in
   (* Sanity check: same number of inputs *)
   [%sanity_check] span (List.length call.args = List.length def.signature.inputs);
