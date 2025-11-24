@@ -143,7 +143,7 @@ attribute [-simp] List.length_flatten List.flatten_eq_nil_iff List.lookup_eq_non
 attribute [local simp] List.lookup
 
 /- Adding some theorems for `scalar_tac` -/
-@[local scalar_tac h, grind]
+@[local scalar_tac h, grind →]
 theorem inv_imp_eqs_ineqs {hm : HashMap α} (h : hm.inv) :
   0 < hm.slots.length ∧ hm.num_entries.val = hm.al_v.length := by
   simp_all [inv]
