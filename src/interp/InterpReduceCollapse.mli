@@ -4,7 +4,7 @@ open Contexts
 
 (** Merge an abstraction into another abstraction in a context.
 
-    This function is similar to {!InterpreterBorrows.merge_into_abstraction}.
+    This function is similar to {!InterpBorrows.merge_into_abstraction}.
 
     Parameters:
     - [loop_id]

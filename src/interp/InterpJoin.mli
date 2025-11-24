@@ -1,6 +1,6 @@
 open Values
 open Contexts
-open InterpreterJoinCore
+open InterpJoinCore
 
 (** Prepare the shared loans in the abstractions by moving them to fresh
     abstractions.

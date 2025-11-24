@@ -1,13 +1,13 @@
 (** This file defines the basic blocks to implement the semantics of borrows.
-    Note that those functions are not only used in InterpreterBorrows, but also
-    in Invariants or InterpreterProjectors *)
+    Note that those functions are not only used in InterpBorrows, but also in
+    Invariants or InterpProjectors *)
 
 open Types
 open Values
 open Contexts
 open Utils
 open TypesUtils
-open InterpreterUtils
+open InterpUtils
 
 (** The local logger *)
 let log = Logging.borrows_log
@@ -206,12 +206,12 @@ let projection_contains (span : Meta.span) (rset1 : RegionId.Set.t) (ty1 : rty)
 
     The loan is referred to by a borrow id.
 
-    Rem.: if the {!InterpreterUtils.g_loan_content} is
-    {!constructor:Aeneas.InterpreterUtils.concrete_or_abs.Concrete}, the
-    {!InterpreterUtils.abs_or_var_id} is not necessarily
-    {!constructor:Aeneas.InterpreterUtils.abs_or_var_id.LocalId} or
-    {!constructor:Aeneas.InterpreterUtils.abs_or_var_id.DummyVarId}: there can
-    be concrete loans in abstractions (in the shared values). *)
+    Rem.: if the {!InterpUtils.g_loan_content} is
+    {!constructor:Aeneas.InterpUtils.concrete_or_abs.Concrete}, the
+    {!InterpUtils.abs_or_var_id} is not necessarily
+    {!constructor:Aeneas.InterpUtils.abs_or_var_id.LocalId} or
+    {!constructor:Aeneas.InterpUtils.abs_or_var_id.DummyVarId}: there can be
+    concrete loans in abstractions (in the shared values). *)
 let lookup_loan_opt (span : Meta.span) (ek : exploration_kind) (l : BorrowId.id)
     (env : env) : (abs_or_var_id * g_loan_content) option =
   (* We store here whether we are inside an abstraction or a value - note that we

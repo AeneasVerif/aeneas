@@ -8,9 +8,9 @@ open TypesUtils
 open ValuesUtils
 open SynthesizeSymbolic
 open Cps
-open InterpreterUtils
-open InterpreterExpansion
-open InterpreterPaths
+open InterpUtils
+open InterpExpansion
+open InterpPaths
 
 (** The local logger *)
 let log = Logging.expressions_log
@@ -243,7 +243,7 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
         (* There are borrows: we need to introduce one region abstraction per live
            region present in the type *)
         let regions, ty =
-          InterpreterBorrowsCore.refresh_live_regions_in_ty span ctx sp.sv_ty
+          InterpBorrowsCore.refresh_live_regions_in_ty span ctx sp.sv_ty
         in
         let updated_sv = mk_fresh_symbolic_value span ctx ty in
         let copied_sv = mk_fresh_symbolic_value span ctx ty in

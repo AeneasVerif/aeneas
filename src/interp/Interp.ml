@@ -1,8 +1,8 @@
 open Cps
-open InterpreterUtils
-open InterpreterProjectors
-open InterpreterBorrows
-open InterpreterStatements
+open InterpUtils
+open InterpProjectors
+open InterpBorrows
+open InterpStatements
 open LlbcAstUtils
 open Types
 open TypesUtils
@@ -14,15 +14,15 @@ open Errors
 module SA = SymbolicAst
 
 (** The local logger *)
-let log = Logging.interpreter_log
+let log = Logging.interp_log
 
 (** Compute the type information for every *type definition* in a list of
     declarations. This type definition information is later used to easily
     compute the information of arbitrary types.
 
     Rem.: pay attention to the difference between type definitions and types!
-    Rem.: this definition is in Interpreter.ml and not in TypesAnalysis.ml
-    because otherwise we have cyclic dependencies. *)
+    Rem.: this definition is in Interp.ml and not in TypesAnalysis.ml because
+    otherwise we have cyclic dependencies. *)
 let analyze_type_declarations (crate : crate)
     (type_decls : type_decl TypeDeclId.Map.t)
     (decls : type_declaration_group list) : TypesAnalysis.type_infos =
@@ -351,9 +351,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
   let target_abs_ids = List.append parent_input_abs_ids [ current_abs_id ] in
 
   (* Set the abstrations as endable *)
-  let ctx =
-    InterpreterBorrowsCore.update_endable ctx target_abs_ids ~can_end:true
-  in
+  let ctx = InterpBorrowsCore.update_endable ctx target_abs_ids ~can_end:true in
 
   (* Actually end them *)
   let ctx, cc =

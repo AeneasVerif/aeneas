@@ -5,9 +5,9 @@ open Cps
 open Utils
 open ValuesUtils
 open TypesUtils
-open InterpreterUtils
-open InterpreterBorrowsCore
-open InterpreterProjectors
+open InterpUtils
+open InterpBorrowsCore
+open InterpProjectors
 
 (** The local logger *)
 let log = Logging.borrows_log
@@ -1224,7 +1224,7 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
      inner borrows to end: we can thus trigger an exception for the current
      borrow.
 
-     TODO: we should implement a function in InterpreterBorrowsCore to do
+     TODO: we should implement a function in InterpBorrowsCore to do
      exactly that.
   *)
   let visitor =

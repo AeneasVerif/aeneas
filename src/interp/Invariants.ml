@@ -5,8 +5,8 @@ open Types
 open Values
 open Contexts
 open TypesUtils
-open InterpreterUtils
-open InterpreterBorrowsCore
+open InterpUtils
+open InterpBorrowsCore
 
 (** The local logger *)
 let log = Logging.invariants_log

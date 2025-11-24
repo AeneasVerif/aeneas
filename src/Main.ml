@@ -1,7 +1,7 @@
 open Aeneas.LlbcOfJson
 open Aeneas.Logging
 open Aeneas.LlbcAst
-open Aeneas.Interpreter
+open Aeneas.Interp
 module EL = Easy_logging.Logging
 open Aeneas.Config
 open Aeneas
@@ -145,7 +145,7 @@ let () =
         Arg.String (add_activated_loggers EL.Trace),
         " Activate trace log for a given logger designated by its name. It is \
          possible to specifiy a list of names if they are separated by commas \
-         without spaces; for instance: '-log Interpreter,SymbolicToPure'. The \
+         without spaces; for instance: '-log Interp,SymbolicToPure'. The \
          existing loggers are: {"
         ^ String.concat ", " (Collections.StringMap.keys !loggers)
         ^ "}" );
@@ -157,7 +157,7 @@ let () =
         Arg.String (add_activated_loggers EL.Error),
         " Activate error log for a given logger designated by its name. It is \
          possible to specifiy a list of names if they are separated by commas \
-         without spaces; for instance: '-log Interpreter,SymbolicToPure'. The \
+         without spaces; for instance: '-log Interp,SymbolicToPure'. The \
          existing loggers are: {"
         ^ String.concat ", " (Collections.StringMap.keys !loggers)
         ^ "}" );

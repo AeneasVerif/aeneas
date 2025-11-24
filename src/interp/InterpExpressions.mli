@@ -3,7 +3,7 @@ open Types
 open Values
 open Contexts
 open Cps
-open InterpreterPaths
+open InterpPaths
 
 (** Auxiliary function.
 

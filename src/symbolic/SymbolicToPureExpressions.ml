@@ -1,6 +1,6 @@
 open Pure
 open PureUtils
-open InterpreterUtils
+open InterpUtils
 open SymbolicToPureCore
 open SymbolicToPureTypes
 open SymbolicToPureValues
@@ -551,8 +551,7 @@ and translate_cast_unsize (call : S.call) (e : S.expr) (ty0 : T.ty) (ty1 : T.ty)
     (ctx : bs_ctx) : texpr =
   (* Retrieve the information about the cast *)
   let info =
-    InterpreterExpressions.cast_unsize_to_modified_fields ctx.span call.ctx ty0
-      ty1
+    InterpExpressions.cast_unsize_to_modified_fields ctx.span call.ctx ty0 ty1
   in
 
   (* Process the arguments and the destination *)

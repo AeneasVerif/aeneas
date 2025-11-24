@@ -4,7 +4,7 @@ open TypesAnalysis
 open SymbolicToPureCore
 open SymbolicToPureTypes
 open SymbolicToPureValues
-module NormSymbProjMap = InterpreterBorrowsCore.NormSymbProjMap
+module NormSymbProjMap = InterpBorrowsCore.NormSymbProjMap
 
 (** The local logger *)
 let log = Logging.symbolic_to_pure_abs_log
@@ -379,7 +379,7 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
   let add_symbolic ctx (sv_id : SymbolicValueId.id) (proj_ty : T.ty) :
       bs_ctx * tpat =
     let ctx, e, pat = fresh_fvar ctx proj_ty in
-    let norm_proj_ty = InterpreterBorrowsCore.normalize_proj_ty rids proj_ty in
+    let norm_proj_ty = InterpBorrowsCore.normalize_proj_ty rids proj_ty in
     symbolic := NormSymbProjMap.add { sv_id; norm_proj_ty } e !symbolic;
     (ctx, pat)
   in
@@ -577,14 +577,14 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) ?(to_consumed = false)
               { input with value = ELet (rids', pat, bound, next) }];
         [%ldebug
           "- pat: " ^ tepat_to_string ctx pat ^ "\n- pat.ty: "
-          ^ InterpreterUtils.ty_to_string ectx pat.ty];
+          ^ InterpUtils.ty_to_string ectx pat.ty];
         (* Translate *)
         let ctx, bound_can_fail, bound = to_texpr ~filter rids' ctx bound in
         let llbc_pat = pat in
         let ctx, pat = tepat_to_tpat ctx fvar_to_texpr rids' pat in
         [%ldebug
           "Let-binding:\n- pat: " ^ tpat_to_string ctx pat ^ "\n- LLBC pat.ty: "
-          ^ InterpreterUtils.ty_to_string ectx llbc_pat.ty
+          ^ InterpUtils.ty_to_string ectx llbc_pat.ty
           ^ "\n- bound: "
           ^ Print.option_to_string (texpr_to_string ctx) bound];
         let ctx, next_can_fail, next = to_texpr ~filter rids ctx next in
@@ -712,7 +712,7 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) ?(to_consumed = false)
             [%sanity_check] span (consumed = []);
             [%sanity_check] span (borrows = []);
             let norm_proj_ty =
-              InterpreterBorrowsCore.normalize_proj_ty rids proj_ty
+              InterpBorrowsCore.normalize_proj_ty rids proj_ty
             in
             let e =
               NormSymbProjMap.find_opt { sv_id; norm_proj_ty }
@@ -824,7 +824,7 @@ let register_inputs (ctx : bs_ctx) (rids : T.RegionId.Set.t)
   in
   let add_symbolic (sv_id : SymbolicValueId.id) (proj_ty : T.ty) : unit =
     let e = fresh_fvar proj_ty in
-    let norm_proj_ty = InterpreterBorrowsCore.normalize_proj_ty rids proj_ty in
+    let norm_proj_ty = InterpBorrowsCore.normalize_proj_ty rids proj_ty in
     symbolic := NormSymbProjMap.add { sv_id; norm_proj_ty } e !symbolic
   in
   let add_concrete (bid : V.BorrowId.id) (ty : T.ty) : unit =
@@ -903,7 +903,7 @@ let register_outputs (ctx : bs_ctx) (bound_outputs : bound_borrows_loans)
     | _ -> false
   in
   let add_symbolic (sv_id : SymbolicValueId.id) (proj_ty : T.ty) : unit =
-    let norm_proj_ty = InterpreterBorrowsCore.normalize_proj_ty rids proj_ty in
+    let norm_proj_ty = InterpBorrowsCore.normalize_proj_ty rids proj_ty in
     let e =
       NormSymbProjMap.find { sv_id; norm_proj_ty } bound_outputs.symbolic
     in
