@@ -4,8 +4,8 @@ open Contexts
 module Subst = Substitute
 open TypesUtils
 open ValuesUtils
-open InterpreterUtils
-open InterpreterBorrowsCore
+open InterpUtils
+open InterpBorrowsCore
 
 (** The local logger *)
 let log = Logging.projectors_log

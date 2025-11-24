@@ -4,10 +4,10 @@ open Meta
 module S = SynthesizeSymbolic
 module SA = SymbolicAst
 open Cps
-open InterpreterUtils
-open InterpreterMatchCtxs
-open InterpreterJoin
-open InterpreterLoopsFixedPoint
+open InterpUtils
+open InterpMatchCtxs
+open InterpJoin
+open InterpLoopsFixedPoint
 
 (** The local logger *)
 let log = Logging.loops_log
@@ -106,7 +106,7 @@ let eval_loop_symbolic_apply_loop (config : config) (span : span)
   (* Compute the end expression, that is the expresion corresponding to the
      end of the function where we call the loop (for now, when calling a loop
      we never get out) *)
-  let fixed_aids = InterpreterJoinCore.compute_fixed_abs_ids init_ctx fp_ctx in
+  let fixed_aids = InterpJoinCore.compute_fixed_abs_ids init_ctx fp_ctx in
   let fixed_dids = ctx_get_dummy_var_ids init_ctx in
   let (ctx, tgt_ctx, input_values, input_abs), cc =
     comp cf_prepare
@@ -252,7 +252,7 @@ let eval_loop_symbolic (config : config) (span : span)
     "fixed point:\n- fp:\n" ^ eval_ctx_to_string ~span:(Some span) fp_ctx];
 
   (* Compute the context at the breaks *)
-  let fixed_aids = InterpreterJoinCore.compute_fixed_abs_ids ctx fp_ctx in
+  let fixed_aids = InterpJoinCore.compute_fixed_abs_ids ctx fp_ctx in
   let fixed_dids = ctx_get_dummy_var_ids ctx in
   let break_info =
     compute_loop_break_context config span loop_id eval_loop_body fp_ctx
@@ -309,7 +309,7 @@ let eval_loop_symbolic (config : config) (span : span)
 
   (* Synthesize the loop body *)
   let loop_body =
-    let fixed_aids = InterpreterJoinCore.compute_fixed_abs_ids ctx fp_ctx in
+    let fixed_aids = InterpJoinCore.compute_fixed_abs_ids ctx fp_ctx in
     let fixed_dids = ctx_get_dummy_var_ids ctx in
     eval_loop_symbolic_synthesize_loop_body config span eval_loop_body loop_id
       fp_ctx input_abs_ids_list fp_input_svalue_ids fixed_aids fixed_dids
@@ -364,7 +364,7 @@ let eval_loop (config : config) (span : span) (eval_loop_body : stl_cm_fun) :
       (* Preemptively simplify the context by ending the unnecessary borrows/loans and getting
          rid of the useless symbolic values (which are in anonymous variables) *)
       let ctx, cc =
-        InterpreterBorrows.simplify_dummy_values_useless_abs config span ctx
+        InterpBorrows.simplify_dummy_values_useless_abs config span ctx
       in
 
       (* We want to make sure the loop will *not* manipulate shared avalues

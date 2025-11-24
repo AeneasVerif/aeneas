@@ -1,7 +1,7 @@
 open Values
 open Contexts
 open Cps
-open InterpreterUtils
+open InterpUtils
 
 (** End a borrow identified by its id, while preserving the invariants.
 

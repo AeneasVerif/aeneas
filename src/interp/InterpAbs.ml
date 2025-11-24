@@ -3,9 +3,9 @@ open Values
 open Contexts
 open ValuesUtils
 open TypesUtils
-open InterpreterUtils
-open InterpreterBorrowsCore
-open InterpreterBorrows
+open InterpUtils
+open InterpBorrowsCore
+open InterpBorrows
 
 (** The local logger *)
 let log = Logging.abs_log

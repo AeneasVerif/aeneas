@@ -10,7 +10,7 @@ open ValuesUtils
 (* TODO: we should probably rename the file to ContextsUtils *)
 
 (** The local logger *)
-let log = Logging.interpreter_log
+let log = Logging.interp_log
 
 (** Some utilities *)
 

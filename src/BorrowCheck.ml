@@ -1,4 +1,4 @@
-open Interpreter
+open Interp
 open LlbcAst
 
 (** The local logger *)

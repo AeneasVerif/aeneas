@@ -10,8 +10,8 @@ open TypesUtils
 module SA = SymbolicAst
 open Cps
 open ValuesUtils
-open InterpreterUtils
-open InterpreterProjectors
+open InterpUtils
+open InterpProjectors
 open Print.EvalCtx
 module S = SynthesizeSymbolic
 

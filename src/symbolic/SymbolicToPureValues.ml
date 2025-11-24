@@ -122,7 +122,7 @@ let rec tvalue_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (v : V.tvalue) :
         | VSharedBorrow (bid, _) ->
             (* Lookup the shared value in the context, and continue *)
             let sv =
-              InterpreterBorrowsCore.ctx_lookup_shared_value ctx.span ectx bid
+              InterpBorrowsCore.ctx_lookup_shared_value ctx.span ectx bid
             in
             translate sv
         | VReservedMutBorrow (bid, _) ->
@@ -130,7 +130,7 @@ let rec tvalue_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (v : V.tvalue) :
              * only in *meta-data*: a value *actually used* in the translation can't come
              * from an unpromoted reserved borrow *)
             let sv =
-              InterpreterBorrowsCore.ctx_lookup_shared_value ctx.span ectx bid
+              InterpBorrowsCore.ctx_lookup_shared_value ctx.span ectx bid
             in
             translate sv
         | VMutBorrow (_, v) ->

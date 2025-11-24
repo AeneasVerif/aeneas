@@ -6,8 +6,8 @@
 open Values
 open Contexts
 open Cps
-open InterpreterUtils
-open InterpreterJoinCore
+open InterpUtils
+open InterpJoinCore
 
 (** Compute various maps linking the abstractions and the borrows/loans they
     contain.
@@ -27,14 +27,14 @@ val compute_abs_borrows_loans_maps :
     for instance {!MakeJoinMatcher} and {!MakeCheckEquivMatcher}.
 
     The functor is parameterized by a
-    {!module-type:InterpreterLoopsCore.PrimMatcher}, which implements the
-    non-generic part of the match. More precisely, the role of
-    {!module-type:InterpreterLoopsCore.PrimMatcher} is two provide generic
-    functions which recursively match two values (by recursively matching the
-    fields of ADT values for instance). When it does need to match values in a
-    non-trivial manner (if two ADT values don't have the same variant for
-    instance) it calls the corresponding specialized function from
-    {!module-type:InterpreterLoopsCore.PrimMatcher}. *)
+    {!module-type:InterpLoopsCore.PrimMatcher}, which implements the non-generic
+    part of the match. More precisely, the role of
+    {!module-type:InterpLoopsCore.PrimMatcher} is two provide generic functions
+    which recursively match two values (by recursively matching the fields of
+    ADT values for instance). When it does need to match values in a non-trivial
+    manner (if two ADT values don't have the same variant for instance) it calls
+    the corresponding specialized function from
+    {!module-type:InterpLoopsCore.PrimMatcher}. *)
 module MakeMatcher : functor (_ : PrimMatcher) -> Matcher
 
 (** A matcher for joins (we use joins to compute loop fixed points).
@@ -68,7 +68,7 @@ module MakeCheckEquivMatcher : functor (_ : MatchCheckEquivState) ->
 
     We also take advantage of the structure of the environments, which should
     have the same prefixes (we check it). See the explanations for
-    {!InterpreterLoopsJoinCtxs.join_ctxs}.
+    {!InterpLoopsJoinCtxs.join_ctxs}.
 
     TODO: explanations.
 
@@ -107,7 +107,7 @@ val match_ctxs :
 
     We also take advantage of the structure of the environments, which should
     have the same prefixes (we check it). See the explanations for
-    {!InterpreterLoopsJoinCtxs.join_ctxs}.
+    {!InterpLoopsJoinCtxs.join_ctxs}.
 
     For instance, the following environments are equivalent:
     {[

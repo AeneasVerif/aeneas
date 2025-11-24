@@ -2,10 +2,10 @@ open Values
 open Contexts
 module S = SynthesizeSymbolic
 open Cps
-open InterpreterUtils
-open InterpreterAbs
-open InterpreterMatchCtxs
-open InterpreterJoin
+open InterpUtils
+open InterpAbs
+open InterpMatchCtxs
+open InterpJoin
 
 (** The local logger *)
 let log = Logging.loops_fixed_point_log
@@ -19,8 +19,7 @@ let loop_abs_reorder_and_add_info (span : Meta.span) (fixed_ids : ids_sets)
 
   (* Introduce continuation expressions. *)
   let add_abs_cont_to_abs (abs : abs) (loop_id : loop_id) : abs =
-    InterpreterAbs.add_abs_cont_to_abs span ctx abs
-      (ELoop (abs.abs_id, loop_id))
+    InterpAbs.add_abs_cont_to_abs span ctx abs (ELoop (abs.abs_id, loop_id))
   in
   let add_abs_conts ctx =
     let visitor =
@@ -53,8 +52,8 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
      For more details, see the comments for {!prepare_ashared_loans}
   *)
   let ctx =
-    InterpreterJoin.prepare_ashared_loans_no_synth span loop_id
-      ~with_abs_conts:false ctx0
+    InterpJoin.prepare_ashared_loans_no_synth span loop_id ~with_abs_conts:false
+      ctx0
   in
 
   (* Debug *)
@@ -185,10 +184,10 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
         ^ "\n"];
 
       (* Reduce the context in order to reach a fixed-point *)
-      let fixed_aids = InterpreterJoinCore.compute_fixed_abs_ids ctx0 ctx1 in
+      let fixed_aids = InterpJoinCore.compute_fixed_abs_ids ctx0 ctx1 in
       let fixed_dids = ctx_get_dummy_var_ids ctx0 in
       let ctx1 =
-        InterpreterReduceCollapse.reduce_ctx config span ~with_abs_conts:false
+        InterpReduceCollapse.reduce_ctx config span ~with_abs_conts:false
           (Loop loop_id) fixed_aids fixed_dids ctx1
       in
       (* Debug *)
@@ -287,7 +286,7 @@ let compute_loop_break_context (config : config) (span : Meta.span)
 
       (* Reduce the context - TODO: generalize so that we don't have to do this *)
       let break_ctx =
-        InterpreterReduceCollapse.reduce_ctx config span ~with_abs_conts:true
+        InterpReduceCollapse.reduce_ctx config span ~with_abs_conts:true
           (Loop loop_id) fixed_aids fixed_dids break_ctx
       in
       [%ltrace
@@ -301,7 +300,7 @@ let compute_loop_break_context (config : config) (span : Meta.span)
 
       (* Introduce continuation expressions and destructure the region abstractions. *)
       let add_abs_cont_to_abs (abs : abs) (loop_id : loop_id) : abs =
-        InterpreterAbs.add_abs_cont_to_abs span break_ctx abs
+        InterpAbs.add_abs_cont_to_abs span break_ctx abs
           (ELoop (abs.abs_id, loop_id))
       in
       let add_abs_conts ctx =
@@ -313,7 +312,7 @@ let compute_loop_break_context (config : config) (span : Meta.span)
               match abs.kind with
               | Loop loop_id ->
                   let abs = add_abs_cont_to_abs abs loop_id in
-                  InterpreterBorrows.destructure_abs span abs.kind ~can_end:true
+                  InterpBorrows.destructure_abs span abs.kind ~can_end:true
                     ~destructure_shared_values:true ctx abs
               | _ -> abs
           end

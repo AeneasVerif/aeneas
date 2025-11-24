@@ -4,10 +4,10 @@ open Expressions
 open Contexts
 open Cps
 open ValuesUtils
-open InterpreterUtils
-open InterpreterBorrowsCore
-open InterpreterBorrows
-open InterpreterExpansion
+open InterpUtils
+open InterpBorrowsCore
+open InterpBorrows
+open InterpExpansion
 module Synth = SynthesizeSymbolic
 
 (** The local logger *)

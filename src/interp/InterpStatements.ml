@@ -7,11 +7,11 @@ open Contexts
 open LlbcAst
 open LlbcAstUtils
 open Cps
-open InterpreterUtils
-open InterpreterProjectors
-open InterpreterExpansion
-open InterpreterPaths
-open InterpreterExpressions
+open InterpUtils
+open InterpProjectors
+open InterpExpansion
+open InterpPaths
+open InterpExpressions
 module Subst = Substitute
 module S = SynthesizeSymbolic
 
@@ -37,7 +37,7 @@ let drop_value (config : config) (span : Meta.span) (p : place) : cm_fun =
   let ctx =
     (* Move the value at destination (that we will overwrite) to a dummy variable
      * to preserve the borrows it may contain *)
-    let _, mv = InterpreterPaths.read_place span access p ctx in
+    let _, mv = InterpPaths.read_place span access p ctx in
     let dummy_id = ctx.fresh_dummy_var_id () in
     let ctx = ctx_push_dummy_var ctx dummy_id mv in
     (* Update the destination to ⊥ *)
@@ -105,7 +105,7 @@ let assign_to_place (config : config) (span : Meta.span) (rv : tvalue)
   let rv, ctx = remove_dummy_var span rvalue_vid ctx in
   (* Move the value at destination (that we will overwrite) to a dummy variable
      to preserve the borrows *)
-  let _, mv = InterpreterPaths.read_place span Write p ctx in
+  let _, mv = InterpPaths.read_place span Write p ctx in
   let dest_vid = ctx.fresh_dummy_var_id () in
   let ctx = ctx_push_dummy_var ctx dest_vid mv in
   (* Write to the destination *)
@@ -887,7 +887,7 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
       [%craise] st.span "CopyNonOverlapping is not supported yet"
   | Loop loop_body ->
       let eval_loop_body = eval_block config loop_body in
-      InterpreterLoops.eval_loop config st.span eval_loop_body ctx
+      InterpLoops.eval_loop config st.span eval_loop_body ctx
   | Switch switch -> eval_switch config st.span switch ctx
   | Drop _ | StorageDead _ ->
       [%craise] st.span "StorageDead/Drop should have been removed in a prepass"
@@ -959,8 +959,7 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
     and right branches). *)
 and eval_switch_prepare (_config : config) (span : Meta.span) (_switch : switch)
     : cm_fun =
- fun ctx ->
-  InterpreterJoin.prepare_ashared_loans span None ~with_abs_conts:true ctx
+ fun ctx -> InterpJoin.prepare_ashared_loans span None ~with_abs_conts:true ctx
 
 and eval_switch_raw (config : config) (span : Meta.span) (switch : switch) :
     stl_cm_fun =
@@ -1200,7 +1199,7 @@ and eval_switch_with_join (config : config) (span : Meta.span)
         ctx_resl
     in
     let _, joined_ctx =
-      InterpreterJoin.join_ctxs_list config span ~with_abs_conts:true Join
+      InterpJoin.join_ctxs_list config span ~with_abs_conts:true Join
         ctx_to_join
     in
     [%ldebug "Joined ctx:\n" ^ eval_ctx_to_string joined_ctx];
@@ -1217,8 +1216,7 @@ and eval_switch_with_join (config : config) (span : Meta.span)
           else
             (* The abstraction is fresh and is thus introduced by the join:
                 we need to update its continuation *)
-            InterpreterAbs.add_abs_cont_to_abs span joined_ctx abs
-              (EJoin abs.abs_id))
+            InterpAbs.add_abs_cont_to_abs span joined_ctx abs (EJoin abs.abs_id))
         joined_ctx
     in
     [%ldebug
@@ -1227,7 +1225,7 @@ and eval_switch_with_join (config : config) (span : Meta.span)
 
     (* Compute the output values *)
     let output_svalues =
-      InterpreterJoin.compute_ctx_fresh_ordered_symbolic_values span
+      InterpJoin.compute_ctx_fresh_ordered_symbolic_values span
         ~only_modified_svalues:true ctx0 joined_ctx
     in
     let output_svalue_ids =
@@ -1244,9 +1242,7 @@ and eval_switch_with_join (config : config) (span : Meta.span)
     in
     let output_abs_ids = List.map (fun (abs : abs) -> abs.abs_id) output_abs in
 
-    let fixed_aids =
-      InterpreterJoinCore.compute_fixed_abs_ids ctx0 joined_ctx
-    in
+    let fixed_aids = InterpJoinCore.compute_fixed_abs_ids ctx0 joined_ctx in
     let fixed_dids = Contexts.ctx_get_dummy_var_ids ctx0 in
 
     (* Match every context resulting from evaluating a branch (there should be
@@ -1255,7 +1251,7 @@ and eval_switch_with_join (config : config) (span : Meta.span)
     let match_ctx (ctx : eval_ctx) : SA.expr =
       (* Match the contexts with the joined context to determine the output of the branch *)
       let (_, ctx, output_values, output_abs), cf =
-        InterpreterJoin.match_ctx_with_target config span WithCont fixed_aids
+        InterpJoin.match_ctx_with_target config span WithCont fixed_aids
           fixed_dids output_abs_ids output_svalue_ids joined_ctx ctx
       in
 
@@ -1591,8 +1587,8 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
           AbsId.Set.is_empty abs.parents
           (* Check if it contains non-ignored loans *)
           && Option.is_none
-               (InterpreterBorrowsCore
-                .get_first_non_ignored_aloan_in_abstraction span abs))
+               (InterpBorrowsCore.get_first_non_ignored_aloan_in_abstraction
+                  span abs))
         !abs_ids
     in
     (* Check if there are abstractions to end *)
@@ -1602,7 +1598,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
       (* End the abstractions which can be ended *)
       let no_loans_abs = AbsId.Set.of_list no_loans_abs in
       let ctx, cc =
-        InterpreterBorrows.end_abstractions config span no_loans_abs ctx
+        InterpBorrows.end_abstractions config span no_loans_abs ctx
       in
       (* Recursive call *)
       comp cc (end_abs_with_no_loans ctx))

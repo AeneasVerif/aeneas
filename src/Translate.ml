@@ -1,4 +1,4 @@
-open Interpreter
+open Interp
 open Types
 open Values
 open LlbcAst

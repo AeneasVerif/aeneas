@@ -4,12 +4,12 @@ open ValuesUtils
 open TypesUtils
 open Cps
 open Contexts
-open InterpreterUtils
-open InterpreterBorrows
-open InterpreterAbs
-open InterpreterJoinCore
-open InterpreterReduceCollapse
-open InterpreterMatchCtxs
+open InterpUtils
+open InterpBorrows
+open InterpAbs
+open InterpJoinCore
+open InterpReduceCollapse
+open InterpMatchCtxs
 
 (** The local logger *)
 let log = Logging.join_log
@@ -337,7 +337,7 @@ let compute_ctx_fresh_ordered_symbolic_values (span : Meta.span)
 
         (** We lookup the shared values *)
         method! visit_VSharedBorrow env bid _ =
-          let open InterpreterBorrowsCore in
+          let open InterpBorrowsCore in
           let v =
             match snd (ctx_lookup_loan span ek_all bid fp_ctx) with
             | Concrete (VSharedLoan (_, v)) -> v
@@ -756,17 +756,16 @@ let join_ctxs_list (config : config) (span : Meta.span)
           (* TODO: simplify *)
           match err with
           | LoanInRight bid ->
-              InterpreterBorrows.end_loan_no_synth config span bid ctx
+              InterpBorrows.end_loan_no_synth config span bid ctx
           | LoansInRight bids ->
-              InterpreterBorrows.end_loans_no_synth config span bids ctx
+              InterpBorrows.end_loans_no_synth config span bids ctx
           | LoanInLeft bid ->
               joined_ctx :=
-                InterpreterBorrows.end_loan_no_synth config span bid !joined_ctx;
+                InterpBorrows.end_loan_no_synth config span bid !joined_ctx;
               ctx
           | LoansInLeft bids ->
               joined_ctx :=
-                InterpreterBorrows.end_loans_no_synth config span bids
-                  !joined_ctx;
+                InterpBorrows.end_loans_no_synth config span bids !joined_ctx;
               ctx
           | AbsInRight _ | AbsInLeft _ -> [%craise] span "Unexpected"
         in
@@ -939,17 +938,16 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
               (* TODO: simplify *)
               match err with
               | LoanInRight bid ->
-                  InterpreterBorrows.end_loan_no_synth config span bid ctx
+                  InterpBorrows.end_loan_no_synth config span bid ctx
               | LoansInRight bids ->
-                  InterpreterBorrows.end_loans_no_synth config span bids ctx
+                  InterpBorrows.end_loans_no_synth config span bids ctx
               | LoanInLeft bid ->
                   joined_ctx :=
-                    InterpreterBorrows.end_loan_no_synth config span bid
-                      !joined_ctx;
+                    InterpBorrows.end_loan_no_synth config span bid !joined_ctx;
                   ctx
               | LoansInLeft bids ->
                   joined_ctx :=
-                    InterpreterBorrows.end_loans_no_synth config span bids
+                    InterpBorrows.end_loans_no_synth config span bids
                       !joined_ctx;
                   ctx
               | AbsInRight _ | AbsInLeft _ -> [%craise] span "Unexpected"
@@ -1308,7 +1306,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
   (* Check that the source context (i.e., the fixed-point context) matches
      the resulting target context. *)
   let src_to_joined_maps =
-    let open InterpreterBorrowsCore in
+    let open InterpBorrowsCore in
     let lookup_shared_loan lid ctx : tvalue =
       match snd (ctx_lookup_loan span ek_all lid ctx) with
       | Concrete (VSharedLoan (_, v)) -> v

@@ -3,8 +3,8 @@
 open Types
 open Values
 open Contexts
-open InterpreterUtils
-open InterpreterBorrowsCore
+open InterpUtils
+open InterpBorrowsCore
 
 type updt_env_kind =
   | AbsInLeft of AbsId.id
@@ -58,10 +58,10 @@ type abs_borrows_loans_maps = {
 
 type tvalue_matcher = tvalue -> tvalue -> tvalue
 
-(** See {!module:Aeneas.InterpreterLoopsMatchCtxs.MakeMatcher} and [Matcher].
+(** See {!module:Aeneas.InterpLoopsMatchCtxs.MakeMatcher} and [Matcher].
 
     This module contains primitive match functions to instantiate the generic
-    {!module:Aeneas.InterpreterLoopsMatchCtxs.MakeMatcher} functor.
+    {!module:Aeneas.InterpLoopsMatchCtxs.MakeMatcher} functor.
 
     Remark: all the functions receive as input the left context and the right
     context. This is useful for printing, lookups, and also in order to check
@@ -425,18 +425,18 @@ module type Matcher = sig
   (** Match two values.
 
       Rem.: this function raises exceptions of type
-      {!Aeneas.InterpreterLoopsCore.ValueMatchFailure}. *)
+      {!Aeneas.InterpLoopsCore.ValueMatchFailure}. *)
   val match_tvalues : eval_ctx -> eval_ctx -> tvalue -> tvalue -> tvalue
 
   (** Match two avalues.
 
       Rem.: this function raises exceptions of type
-      {!Aeneas.InterpreterLoopsCore.ValueMatchFailure}. *)
+      {!Aeneas.InterpLoopsCore.ValueMatchFailure}. *)
   val match_tavalues : eval_ctx -> eval_ctx -> tavalue -> tavalue -> tavalue
 end
 
-(** See {!module:InterpreterLoopsMatchCtxs.MakeCheckEquivMatcher} and
-    {!module-type:InterpreterLoopsCore.CheckEquivMatcher}.
+(** See {!module:InterpLoopsMatchCtxs.MakeCheckEquivMatcher} and
+    {!module-type:InterpLoopsCore.CheckEquivMatcher}.
 
     Very annoying: functors only take modules as inputs... *)
 module type MatchCheckEquivState = sig
@@ -481,7 +481,7 @@ module type CheckEquivMatcher = sig
   val match_loan_ids : loan_id_set -> loan_id_set -> loan_id_set
 end
 
-(** See {!InterpreterLoopsMatchCtxs.match_ctxs} *)
+(** See {!InterpLoopsMatchCtxs.match_ctxs} *)
 type ids_maps = {
   aid_map : AbsId.InjSubst.t;
   blid_map : BorrowId.InjSubst.t;

@@ -4,11 +4,11 @@ open Contexts
 open Utils
 open TypesUtils
 open ValuesUtils
-open InterpreterUtils
-open InterpreterBorrowsCore
-open InterpreterAbs
-open InterpreterJoinCore
-open InterpreterMatchCtxs
+open InterpUtils
+open InterpBorrowsCore
+open InterpAbs
+open InterpJoinCore
+open InterpMatchCtxs
 
 (** The local logger *)
 let log = Logging.reduce_collapse_log
@@ -48,7 +48,7 @@ let eliminate_shared_loans (span : Meta.span) (ctx : eval_ctx) : eval_ctx =
   let ctx = ctx_map_abs update_abs ctx in
 
   (* Remove the ended shared loans, if possible *)
-  let ctx = InterpreterBorrows.eliminate_ended_shared_loans span ctx in
+  let ctx = InterpBorrows.eliminate_ended_shared_loans span ctx in
 
   (* *)
   ctx
@@ -633,7 +633,7 @@ let reduce_ctx config (span : Meta.span)
     (ctx : eval_ctx) : eval_ctx =
   (* Simplify the context *)
   let ctx, _ =
-    InterpreterBorrows.simplify_dummy_values_useless_abs config span ctx
+    InterpBorrows.simplify_dummy_values_useless_abs config span ctx
   in
   (* Reduce *)
   let ctx =
@@ -936,7 +936,7 @@ let collapse_ctx_aux config (span : Meta.span)
 
   (* One last cleanup *)
   let ctx, _ =
-    InterpreterBorrows.simplify_dummy_values_useless_abs config span ctx
+    InterpBorrows.simplify_dummy_values_useless_abs config span ctx
   in
   ctx
 
@@ -1102,8 +1102,8 @@ let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
   let merge_funs =
     mk_collapse_ctx_merge_duplicate_funs span abs_kind with_abs_conts ctx
   in
-  InterpreterAbs.merge_into_first_abstraction span abs_kind ~can_end
-    ~with_abs_conts (Some merge_funs) ctx aid0 aid1
+  InterpAbs.merge_into_first_abstraction span abs_kind ~can_end ~with_abs_conts
+    (Some merge_funs) ctx aid0 aid1
 
 let collapse_ctx config (span : Meta.span)
     ?(sequence : (abs_id * abs_id * abs_id) list ref option = None)
@@ -1194,7 +1194,7 @@ let collapse_ctx_following_sequence (span : Meta.span)
           [%ldebug
             "Merging: " ^ AbsId.to_string abs0 ^ " <- " ^ AbsId.to_string abs1];
           let nctx, nabs' =
-            InterpreterAbs.merge_into_first_abstraction span fresh_abs_kind
+            InterpAbs.merge_into_first_abstraction span fresh_abs_kind
               ~can_end:true ~with_abs_conts None !ctx abs0 abs1
           in
           ctx := nctx;

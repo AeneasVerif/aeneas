@@ -9,10 +9,10 @@ open Contexts
 open TypesUtils
 open ValuesUtils
 open Cps
-open InterpreterUtils
-open InterpreterBorrowsCore
-open InterpreterAbs
-open InterpreterJoinCore
+open InterpUtils
+open InterpBorrowsCore
+open InterpAbs
+open InterpJoinCore
 module S = SynthesizeSymbolic
 
 (** The local logger *)
@@ -147,7 +147,7 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
       (binding_to_string abs_id_to_string borrow_proj_to_string)
       false abs_to_borrow_projs abs.abs_id proj;
     (* This mapping is *actually* injective because we refresh symbolic values
-       with borrows when copying them. See [InterpreterExpressions.copy_value]. *)
+       with borrows when copying them. See [InterpExpressions.copy_value]. *)
     RSymbProjAbs.register_mapping
       (binding_to_string borrow_proj_to_string abs_id_to_string)
       true borrow_proj_to_abs proj abs.abs_id
@@ -1434,8 +1434,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     *)
     let with_borrows = false in
     match
-      InterpreterBorrowsCore.get_first_outer_loan_or_borrow_in_value
-        with_borrows v
+      InterpBorrowsCore.get_first_outer_loan_or_borrow_in_value with_borrows v
     with
     | Some (BorrowContent _) ->
         (* Can't get there: we only ask for outer *loans* *)
@@ -2341,10 +2340,10 @@ let prepare_match_ctx_with_target (config : config) (span : Meta.span)
         match e with
         | LoanInRight bid ->
             [%ldebug "LoanInRight: " ^ BorrowId.to_string bid];
-            InterpreterBorrows.end_loan config span bid tgt_ctx
+            InterpBorrows.end_loan config span bid tgt_ctx
         | LoansInRight bids ->
             [%ldebug "LoansInRight: " ^ BorrowId.Set.to_string None bids];
-            InterpreterBorrows.end_loans config span bids tgt_ctx
+            InterpBorrows.end_loans config span bids tgt_ctx
         | AbsInRight _ | AbsInLeft _ | LoanInLeft _ | LoansInLeft _ ->
             [%craise] span "Unexpected"
       in
