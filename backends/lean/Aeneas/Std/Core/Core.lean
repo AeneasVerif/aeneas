@@ -25,7 +25,6 @@ structure clone.Clone (Self : Type) where
   clone : Self → Result Self
   clone_from : Self → Self → Result Self := fun _ => clone
 
-
 def clone.Clone.from_from.default {Self : Type} (clone : Self → Result Self)
   (_self source : Self) : Result Self :=
   clone source
@@ -272,6 +271,12 @@ structure core.error.Error (Self : Type) where
 @[rust_trait "core::fmt::LowerHex"]
 structure core.fmt.LowerHex (Self : Type) where
   fmt : Self → core.fmt.Formatter → Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter)
+
+@[rust_type "core::panicking::AssertKind"]
+inductive core.panicking.AssertKind where
+| Eq : core.panicking.AssertKind
+| Ne : core.panicking.AssertKind
+| Match : core.panicking.AssertKind
 
 end Std
 
