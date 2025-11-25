@@ -2402,10 +2402,11 @@ let extract_global_decl_aux (ctx : extraction_ctx) (fmt : F.formatter)
       if backend () = HOL4 then
         extract_global_decl_hol4_opaque span ctx fmt decl_name global.generics
           decl_ty
-      else
+      else (
         extract_global_decl_body_gen span ctx fmt global kind ~irreducible:false
           ~with_do:false decl_name global.generics global.explicit_info
-          type_params cg_params trait_clauses decl_ty None
+          type_params cg_params trait_clauses decl_ty None;
+        F.pp_print_space fmt ())
   | Some body ->
       (* There is a body *)
       (* Generate: [let x_body : result u32 = Return 3] *)
