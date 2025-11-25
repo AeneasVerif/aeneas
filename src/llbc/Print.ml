@@ -989,6 +989,10 @@ module EvalCtx = struct
     let env = eval_ctx_to_fmt_env ctx in
     region_binder_to_string trait_decl_ref_to_string env x
 
+  let trait_impl_ref_to_string (ctx : eval_ctx) (x : trait_impl_ref) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    trait_impl_ref_to_string env x
+
   let trait_decl_ref_to_string (ctx : eval_ctx) (x : trait_decl_ref) : string =
     let env = eval_ctx_to_fmt_env ctx in
     trait_decl_ref_to_string env x

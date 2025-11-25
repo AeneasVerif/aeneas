@@ -43,6 +43,7 @@ let unop_to_string = Print.EvalCtx.unop_to_string
 let binop_to_string = Print.Expressions.binop_to_string
 let generic_args_to_string = Print.EvalCtx.generic_args_to_string
 let trait_ref_to_string = Print.EvalCtx.trait_ref_to_string
+let trait_impl_ref_to_string = Print.EvalCtx.trait_impl_ref_to_string
 let trait_decl_ref_to_string = Print.EvalCtx.trait_decl_ref_to_string
 
 let fn_ptr_to_string (ctx : eval_ctx) (fn_ptr : fn_ptr) : string =

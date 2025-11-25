@@ -2402,10 +2402,11 @@ let extract_global_decl_aux (ctx : extraction_ctx) (fmt : F.formatter)
       if backend () = HOL4 then
         extract_global_decl_hol4_opaque span ctx fmt decl_name global.generics
           decl_ty
-      else
+      else (
         extract_global_decl_body_gen span ctx fmt global kind ~irreducible:false
           ~with_do:false decl_name global.generics global.explicit_info
-          type_params cg_params trait_clauses decl_ty None
+          type_params cg_params trait_clauses decl_ty None;
+        F.pp_print_space fmt ())
   | Some body ->
       (* There is a body *)
       (* Generate: [let x_body : result u32 = Return 3] *)
@@ -2892,9 +2893,17 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
            clause.clause_id ctx)
        decl.parent_clauses
    in
+   let add_quotes (ls : string list) : string list =
+     List.map (fun s -> "\"" ^ s ^ "\"") ls
+   in
    let parent_clauses =
      if parent_clauses = [] then []
-     else [ "(parentClauses := [" ^ String.concat ", " parent_clauses ^ "])" ]
+     else
+       [
+         "(parentClauses := ["
+         ^ String.concat ", " (add_quotes parent_clauses)
+         ^ "])";
+       ]
    in
    let types =
      List.map
@@ -2903,7 +2912,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
    in
    let types =
      if types = [] then []
-     else [ "(types := [" ^ String.concat ", " types ^ "])" ]
+     else [ "(types := [" ^ String.concat ", " (add_quotes types) ^ "])" ]
    in
    let consts =
      List.map
@@ -2913,7 +2922,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
    in
    let consts =
      if consts = [] then []
-     else [ "(consts := [" ^ String.concat ", " consts ^ "])" ]
+     else [ "(consts := [" ^ String.concat ", " (add_quotes consts) ^ "])" ]
    in
    (* TODO: default methods *)
    extract_attributes decl.item_meta.span ctx fmt decl.item_meta.name None []

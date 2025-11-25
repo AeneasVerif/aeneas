@@ -161,7 +161,7 @@ instance : ToMessageData TraitImpl where
   toMessageData x :=
     m!"\{ extract : {x.extract}, keepParams : {x.keepParams} }"
 
-def getLocalFileName : AttrM (Option String) := do
+def getLocalFileName : AttrM String := do
   let name ← getFileName
   /- Remove the prefix (we want to get rid of the part of the path which is local
      to the machine - we do this by spotting the first occurrence of the path which
@@ -176,9 +176,14 @@ def getLocalFileName : AttrM (Option String) := do
       found := true
       break
     out := e :: out
+  /- It can happen that we can't process the file, in particular when Aeneas generates models/axioms
+     for external definitions when one extracts a crate outside of the Aeneas repo (in which case
+     the path will not be prefixed with `Aeneas`). This is fine because in that case we will not
+     need to output the list of models for the standard library, together with the paths to the
+     Lean definitions, so we can simply reuse the original name. -/
   if found
-  then pure (some (List.foldl (fun s0 s1 => s0 ++ "/" ++ s1) "Aeneas" out))
-  else pure none
+  then pure (List.foldl (fun s0 s1 => s0 ++ "/" ++ s1) "Aeneas" out)
+  else pure name
 
 structure Span where
   fileName : String
@@ -197,8 +202,7 @@ deriving Inhabited
    For now I can only retrieve the name of the current file and the code of `Lean/Server/Goto.lean`
    does quite a few things (in particular, does it work in non-interactive mode?). -/
 def getLocalSyntaxSpan (stx : Syntax) : AttrM (Option Span) := do
-  let some fileName ← getLocalFileName
-    | trace[Extract] "Could not compute the local file name"; return none
+  let fileName ← getLocalFileName
   let some pos := stx.getPos?
     | trace[Extract] "Could not retrieve the declaration range"; return none
   let fileMap ← getFileMap
@@ -779,8 +783,12 @@ def sortDescriptors {α} [ToMessageData α] (st : Array (String × Span × α)) 
   let mut map : RBMap String (Span × α) Ord.compare := RBMap.empty
   for (pat, span, info) in st do
     match map.find? pat with
-    | some (_, info') =>
-      let msg := m!"Found two descriptors for the same name pattern `{pat}`:\n- info1: {info}\n- info2: {info'}"
+    | some (span', info') =>
+      let msg := m!"Found two descriptors for the same name pattern `{pat}`:\
+        \n- info1: {info}\
+        \n- span1: file: {span.fileName}, line: {toString span.pos.line}\
+        \n- info2: {info'}\
+        \n- span2: file: {span'.fileName}, line: {toString span'.pos.line}"
       let msg ← msg.toString
       println! "Error: {msg}"
       throw (IO.userError msg)

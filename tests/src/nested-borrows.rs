@@ -1,6 +1,11 @@
-//@ skip
+//@ [!lean] skip
 //! This module contains functions with nested borrows in their signatures.
 
+trait Trait1 {
+    fn f(x: &&u32);
+}
+
+/*
 pub fn id_mut_mut<'a, 'b, T>(x: &'a mut &'b mut T) -> &'a mut &'b mut T {
     x
 }
@@ -44,7 +49,7 @@ pub fn id_mut_mut_test1() {
     assert!(*px == 1);
     // Ending the other abstraction
     assert!(x == 1);
-}
+}*/
 
 /*
 /// For symbolic execution: testing what happens with several abstractions.
@@ -109,6 +114,7 @@ pub fn id_mut_mut_test4() {
 }
 */
 
+/*
 fn id<'a, T>(x: &'a mut T) -> &'a mut T {
     x
 }
@@ -180,3 +186,4 @@ fn nested_borrows2_test1() {
     assert!(**ppy == 0);
     assert!(x == 0);
 }
+*/

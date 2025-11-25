@@ -38,7 +38,8 @@ inductive Enum where
 
 /- [no_nested_borrows::EmptyStruct]
    Source: 'tests/src/no_nested_borrows.rs', lines 41:0-41:25 -/
-@[reducible] def EmptyStruct := Unit
+@[reducible]
+def EmptyStruct := Unit
 
 /- [no_nested_borrows::Sum]
    Source: 'tests/src/no_nested_borrows.rs', lines 43:0-46:1 -/
@@ -489,7 +490,8 @@ def create_tuple_struct (x : U32) (y : U64) : Result (Tuple U32 U64) := do
 
 /- [no_nested_borrows::IdType]
    Source: 'tests/src/no_nested_borrows.rs', lines 498:0-498:24 -/
-@[reducible] def IdType (T : Type) := T
+@[reducible]
+def IdType (T : Type) := T
 
 /- [no_nested_borrows::use_id_type]:
    Source: 'tests/src/no_nested_borrows.rs', lines 500:0-502:1 -/
