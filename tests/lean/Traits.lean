@@ -546,7 +546,7 @@ def TraittraitsWrapper {T : Type} (TraitInst : Trait T) : Trait (Wrapper T)
 /- [traits::use_wrapper_len]:
    Source: 'tests/src/traits.rs', lines 324:0-326:1 -/
 def use_wrapper_len {T : Type} (TraitInst : Trait T) : Result Usize := do
-  ok (TraittraitsWrapper TraitInst).LEN
+  ok (TraittraitsWrapper.LEN TraitInst)
 
 /- [traits::Foo]
    Source: 'tests/src/traits.rs', lines 328:0-331:1 -/
