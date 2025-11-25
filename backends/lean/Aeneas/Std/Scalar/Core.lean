@@ -1,6 +1,6 @@
 import Lean
 import Lean.Meta.Tactic.Simp
-import Aeneas.Std.Core
+import Aeneas.Std.Core.Core
 import Aeneas.Progress.Init
 import Aeneas.ScalarTac.ScalarTac
 import Aeneas.Bvify.Init

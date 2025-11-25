@@ -1,6 +1,5 @@
 import Aeneas.Std.Scalar.Core
 import Aeneas.ScalarTac
-import Aeneas.Std.Core
 import Mathlib.Data.BitVec
 
 namespace Aeneas.Std
