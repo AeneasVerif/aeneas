@@ -728,23 +728,23 @@ theorem UScalar.eq_equiv_bv_eq {ty : UScalarTy} (x y : UScalar ty) :
   x = y ↔ x.bv = y.bv := by
   cases x; cases y; simp
 
-@[bvify_simps] theorem U8.eq_equiv_bv_eq (x y : U8) : x = y ↔ x.bv = y.bv := by apply UScalar.eq_equiv_bv_eq
-@[bvify_simps] theorem U16.eq_equiv_bv_eq (x y : U16) : x = y ↔ x.bv = y.bv := by apply UScalar.eq_equiv_bv_eq
-@[bvify_simps] theorem U32.eq_equiv_bv_eq (x y : U32) : x = y ↔ x.bv = y.bv := by apply UScalar.eq_equiv_bv_eq
-@[bvify_simps] theorem U64.eq_equiv_bv_eq (x y : U64) : x = y ↔ x.bv = y.bv := by apply UScalar.eq_equiv_bv_eq
-@[bvify_simps] theorem U128.eq_equiv_bv_eq (x y : U128) : x = y ↔ x.bv = y.bv := by apply UScalar.eq_equiv_bv_eq
-@[bvify_simps] theorem Usize.eq_equiv_bv_eq (x y : Usize) : x = y ↔ x.bv = y.bv := by apply UScalar.eq_equiv_bv_eq
+@[bvify_simps, grind =_] theorem U8.eq_equiv_bv_eq (x y : U8) : x = y ↔ x.bv = y.bv := by apply UScalar.eq_equiv_bv_eq
+@[bvify_simps, grind =_] theorem U16.eq_equiv_bv_eq (x y : U16) : x = y ↔ x.bv = y.bv := by apply UScalar.eq_equiv_bv_eq
+@[bvify_simps, grind =_] theorem U32.eq_equiv_bv_eq (x y : U32) : x = y ↔ x.bv = y.bv := by apply UScalar.eq_equiv_bv_eq
+@[bvify_simps, grind =_] theorem U64.eq_equiv_bv_eq (x y : U64) : x = y ↔ x.bv = y.bv := by apply UScalar.eq_equiv_bv_eq
+@[bvify_simps, grind =_] theorem U128.eq_equiv_bv_eq (x y : U128) : x = y ↔ x.bv = y.bv := by apply UScalar.eq_equiv_bv_eq
+@[bvify_simps, grind =_] theorem Usize.eq_equiv_bv_eq (x y : Usize) : x = y ↔ x.bv = y.bv := by apply UScalar.eq_equiv_bv_eq
 
 theorem UScalar.ofNatCore_bv {ty : UScalarTy} (x : Nat) h :
   (@UScalar.ofNatCore ty x h).bv = BitVec.ofNat _ x := by
   simp only [ofNatCore, BitVec.ofNat, Fin.Internal.ofNat, Nat.mod_eq_of_lt h]
 
-@[simp, simp_scalar_simps, bvify_simps] theorem U8.ofNat_bv (x : Nat) h : (U8.ofNat x h).bv = BitVec.ofNat _ x := by apply UScalar.ofNatCore_bv
-@[simp, simp_scalar_simps, bvify_simps] theorem U16.ofNat_bv (x : Nat) h : (U16.ofNat x h).bv = BitVec.ofNat _ x := by apply UScalar.ofNatCore_bv
-@[simp, simp_scalar_simps, bvify_simps] theorem U32.ofNat_bv (x : Nat) h : (U32.ofNat x h).bv = BitVec.ofNat _ x := by apply UScalar.ofNatCore_bv
-@[simp, simp_scalar_simps, bvify_simps] theorem U64.ofNat_bv (x : Nat) h : (U64.ofNat x h).bv = BitVec.ofNat _ x := by apply UScalar.ofNatCore_bv
-@[simp, simp_scalar_simps, bvify_simps] theorem U128.ofNat_bv (x : Nat) h : (U128.ofNat x h).bv = BitVec.ofNat _ x := by apply UScalar.ofNatCore_bv
-@[simp, simp_scalar_simps, bvify_simps] theorem Usize.ofNat_bv (x : Nat) h : (Usize.ofNat x h).bv = BitVec.ofNat _ x := by apply UScalar.ofNatCore_bv
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem U8.ofNat_bv (x : Nat) h : (U8.ofNat x h).bv = BitVec.ofNat _ x := by apply UScalar.ofNatCore_bv
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem U16.ofNat_bv (x : Nat) h : (U16.ofNat x h).bv = BitVec.ofNat _ x := by apply UScalar.ofNatCore_bv
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem U32.ofNat_bv (x : Nat) h : (U32.ofNat x h).bv = BitVec.ofNat _ x := by apply UScalar.ofNatCore_bv
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem U64.ofNat_bv (x : Nat) h : (U64.ofNat x h).bv = BitVec.ofNat _ x := by apply UScalar.ofNatCore_bv
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem U128.ofNat_bv (x : Nat) h : (U128.ofNat x h).bv = BitVec.ofNat _ x := by apply UScalar.ofNatCore_bv
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem Usize.ofNat_bv (x : Nat) h : (Usize.ofNat x h).bv = BitVec.ofNat _ x := by apply UScalar.ofNatCore_bv
 
 theorem IScalar.eq_equiv_bv_eq {ty : IScalarTy} (x y : IScalar ty) :
   x = y ↔ x.bv = y.bv := by
@@ -762,12 +762,12 @@ theorem IScalar.ofIntCore_bv {ty : IScalarTy} (x : Int) h :
   simp only [ofIntCore, BitVec.ofInt, Int.ofNat_eq_coe, Nat.cast_pow, Nat.cast_ofNat]
   congr
 
-@[simp, simp_scalar_simps, bvify_simps] theorem I8.ofInt_bv (x : Int) h : (I8.ofInt x h).bv = BitVec.ofInt _ x := by apply IScalar.ofIntCore_bv
-@[simp, simp_scalar_simps, bvify_simps] theorem I16.ofInt_bv (x : Int) h : (I16.ofInt x h).bv = BitVec.ofInt _ x := by apply IScalar.ofIntCore_bv
-@[simp, simp_scalar_simps, bvify_simps] theorem I32.ofInt_bv (x : Int) h : (I32.ofInt x h).bv = BitVec.ofInt _ x := by apply IScalar.ofIntCore_bv
-@[simp, simp_scalar_simps, bvify_simps] theorem I64.ofInt_bv (x : Int) h : (I64.ofInt x h).bv = BitVec.ofInt _ x := by apply IScalar.ofIntCore_bv
-@[simp, simp_scalar_simps, bvify_simps] theorem I128.ofInt_bv (x : Int) h : (I128.ofInt x h).bv = BitVec.ofInt _ x := by apply IScalar.ofIntCore_bv
-@[simp, simp_scalar_simps, bvify_simps] theorem Isize.ofInt_bv (x : Int) h : (Isize.ofInt x h).bv = BitVec.ofInt _ x := by apply IScalar.ofIntCore_bv
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem I8.ofInt_bv (x : Int) h : (I8.ofInt x h).bv = BitVec.ofInt _ x := by apply IScalar.ofIntCore_bv
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem I16.ofInt_bv (x : Int) h : (I16.ofInt x h).bv = BitVec.ofInt _ x := by apply IScalar.ofIntCore_bv
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem I32.ofInt_bv (x : Int) h : (I32.ofInt x h).bv = BitVec.ofInt _ x := by apply IScalar.ofIntCore_bv
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem I64.ofInt_bv (x : Int) h : (I64.ofInt x h).bv = BitVec.ofInt _ x := by apply IScalar.ofIntCore_bv
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem I128.ofInt_bv (x : Int) h : (I128.ofInt x h).bv = BitVec.ofInt _ x := by apply IScalar.ofIntCore_bv
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem Isize.ofInt_bv (x : Int) h : (Isize.ofInt x h).bv = BitVec.ofInt _ x := by apply IScalar.ofIntCore_bv
 
 instance (ty : UScalarTy) : Inhabited (UScalar ty) := by
   constructor; cases ty <;> apply (UScalar.ofNat 0 (by simp))
@@ -775,11 +775,11 @@ instance (ty : UScalarTy) : Inhabited (UScalar ty) := by
 instance (ty : IScalarTy) : Inhabited (IScalar ty) := by
   constructor; cases ty <;> apply (IScalar.ofInt 0 (by simp [IScalar.cMin, IScalar.cMax, IScalar.rMin, IScalar.rMax]; simp_bounds))
 
-@[simp, simp_scalar_simps]
+@[simp, simp_scalar_simps, grind =]
 theorem UScalar.default_val {ty} : (default : UScalar ty).val = 0 := by
   simp only [default]; cases ty <;> simp
 
-@[simp, simp_scalar_simps]
+@[simp, simp_scalar_simps, grind =]
 theorem UScalar.default_bv {ty} : (default : UScalar ty).bv = 0 := by
   simp only [default]; cases ty <;> simp
 
