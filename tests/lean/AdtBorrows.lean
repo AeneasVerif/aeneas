@@ -10,7 +10,8 @@ namespace adt_borrows
 
 /- [adt_borrows::SharedWrapper]
    Source: 'tests/src/adt-borrows.rs', lines 7:0-7:35 -/
-@[reducible] def SharedWrapper (T : Type) := T
+@[reducible]
+def SharedWrapper (T : Type) := T
 
 /- [adt_borrows::{adt_borrows::SharedWrapper<'a, T>}::create]:
    Source: 'tests/src/adt-borrows.rs', lines 10:4-12:5 -/
@@ -79,7 +80,8 @@ def use_shared_wrapper2 : Result Unit := do
 
 /- [adt_borrows::MutWrapper]
    Source: 'tests/src/adt-borrows.rs', lines 71:0-71:36 -/
-@[reducible] def MutWrapper (T : Type) := T
+@[reducible]
+def MutWrapper (T : Type) := T
 
 /- [adt_borrows::{adt_borrows::MutWrapper<'a, T>}::create]:
    Source: 'tests/src/adt-borrows.rs', lines 74:4-76:5 -/

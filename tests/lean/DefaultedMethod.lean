@@ -22,7 +22,8 @@ def Trait.provided_method.default
 
 /- [defaulted_method::NoOverride]
    Source: 'tests/src/defaulted_method.rs', lines 9:0-9:18 -/
-@[reducible] def NoOverride := Unit
+@[reducible]
+def NoOverride := Unit
 
 /- [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}::provided_method]:
    Source: 'tests/src/defaulted_method.rs', lines 11:4-13:5 -/
@@ -46,7 +47,8 @@ def Traitdefaulted_methodNoOverride : Trait NoOverride := {
 
 /- [defaulted_method::YesOverride]
    Source: 'tests/src/defaulted_method.rs', lines 19:0-19:19 -/
-@[reducible] def YesOverride := Unit
+@[reducible]
+def YesOverride := Unit
 
 /- [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}::required_method]:
    Source: 'tests/src/defaulted_method.rs', lines 21:4-23:5 -/

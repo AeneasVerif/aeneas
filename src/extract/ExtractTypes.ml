@@ -1312,9 +1312,17 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
      [ "[" ^ name_to_string ctx def.item_meta.name ^ "]" ]
      name def.item_meta.span;
    F.pp_print_break fmt 0 0;
-   (* Extract the attributes *)
-   extract_attributes def.item_meta.span ctx fmt def.item_meta.name None []
-     "rust_type" []
+   (* Extract the attributes.
+
+      Note that we need the [reducible] attribute in Lean, otherwise Lean sometimes
+      doesn't manage to typecheck the expressions when it needs to coerce the type. *)
+   let attributes =
+     if is_tuple_struct_one_or_zero_field && backend () = Lean then
+       [ "reducible" ]
+     else []
+   in
+   extract_attributes def.item_meta.span ctx fmt def.item_meta.name None
+     attributes "rust_type" []
      ~is_external:(not def.item_meta.is_local));
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line. Note however that in the case of Lean line breaks are important
@@ -1325,14 +1333,6 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
       if is_tuple_struct then F.pp_open_hvbox fmt 0 else F.pp_open_vbox fmt 0);
   (* Open a box for "type TYPE_NAME (TYPE_PARAMS CONST_GEN_PARAMS) =" *)
   F.pp_open_hovbox fmt ctx.indent_incr;
-  (* > "@[reducible]"
-     We need this annotation, otherwise Lean sometimes doesn't manage to typecheck
-     the expressions when it needs to coerce the type.
-  *)
-  if is_tuple_struct_one_or_zero_field && backend () = Lean then (
-    F.pp_print_string fmt "@[reducible]";
-    F.pp_print_space fmt ())
-  else ();
   (* > "type TYPE_NAME" *)
   let qualif = type_decl_kind_to_qualif def.item_meta.span kind type_kind in
   (match qualif with

@@ -205,11 +205,13 @@ def h4
 
 /- [traits::TestType]
    Source: 'tests/src/traits.rs', lines 124:0-124:26 -/
-@[reducible] def TestType (T : Type) := T
+@[reducible]
+def TestType (T : Type) := T
 
 /- [traits::{traits::TestType<T>}::test::TestType1]
    Source: 'tests/src/traits.rs', lines 129:8-129:30 -/
-@[reducible] def TestType.test.TestType1 := U64
+@[reducible]
+def TestType.test.TestType1 := U64
 
 /- [traits::{traits::TestType<T>}::test::{traits::{traits::TestType<T>}::test::TestTrait for traits::{traits::TestType<T>}::test::TestType1}::test]:
    Source: 'tests/src/traits.rs', lines 141:12-143:13 -/
@@ -243,7 +245,8 @@ def TestType.test.TestTraittraitsTestTypetestTestType1 :
 
 /- [traits::BoolWrapper]
    Source: 'tests/src/traits.rs', lines 152:0-152:33 -/
-@[reducible] def BoolWrapper := Bool
+@[reducible]
+def BoolWrapper := Bool
 
 /- [traits::{traits::ToType<T> for traits::BoolWrapper}::to_type]:
    Source: 'tests/src/traits.rs', lines 158:4-160:5 -/

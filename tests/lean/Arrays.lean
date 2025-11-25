@@ -553,7 +553,8 @@ def ARRAY1 : Array U32 2#usize := eval_global ARRAY1_body
 
 /- [arrays::Scalar]
    Source: 'tests/src/arrays.rs', lines 377:0-377:24 -/
-@[reducible] def Scalar := Array U32 2#usize
+@[reducible]
+def Scalar := Array U32 2#usize
 
 /- [arrays::L]
    Source: 'tests/src/arrays.rs', lines 378:0-378:33 -/
