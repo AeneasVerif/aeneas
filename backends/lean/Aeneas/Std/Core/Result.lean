@@ -1,12 +1,10 @@
-import Aeneas.Std.Core.Fmt
+import Aeneas.Extract
 
 namespace Aeneas.Std
 
-@[rust_fun "core::result::{core::result::Result<@T, @E>}::unwrap"]
-def core.result.Result.unwrap {T E : Type}
-  (_ : core.fmt.Debug T) (e : core.result.Result T E) : Std.Result T :=
-  match e with
-  | .Ok x => .ok x
-  | .Err _ => .fail .panic
+@[rust_type "core::result::Result"]
+inductive core.result.Result (T : Type) (E : Type) where
+| Ok : T → core.result.Result T E
+| Err : E → core.result.Result T E
 
 end Aeneas.Std

@@ -2,7 +2,7 @@
 import Aeneas.List
 import Aeneas.Progress.Init
 import Aeneas.Std.Array.Core
-import Aeneas.Std.Default
+import Aeneas.Std.Core.Default
 
 namespace Aeneas.Std
 

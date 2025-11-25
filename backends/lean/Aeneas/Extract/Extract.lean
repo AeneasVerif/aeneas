@@ -783,8 +783,12 @@ def sortDescriptors {α} [ToMessageData α] (st : Array (String × Span × α)) 
   let mut map : RBMap String (Span × α) Ord.compare := RBMap.empty
   for (pat, span, info) in st do
     match map.find? pat with
-    | some (_, info') =>
-      let msg := m!"Found two descriptors for the same name pattern `{pat}`:\n- info1: {info}\n- info2: {info'}"
+    | some (span', info') =>
+      let msg := m!"Found two descriptors for the same name pattern `{pat}`:\
+        \n- info1: {info}\
+        \n- span1: file: {span.fileName}, line: {toString span.pos.line}\
+        \n- info2: {info'}\
+        \n- span2: file: {span'.fileName}, line: {toString span'.pos.line}"
       let msg ← msg.toString
       println! "Error: {msg}"
       throw (IO.userError msg)

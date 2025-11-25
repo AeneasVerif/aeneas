@@ -653,4 +653,27 @@ theorem Slice.setSlice!_length {α : Type u} (s : Slice α) (i : ℕ) (s' : List
   (s.setSlice! i s').length = s.length := by
   simp only [Slice.length, Slice.setSlice!, List.length_setSlice!]
 
+@[rust_type "core::slice::iter::Iter"]
+structure core.slice.iter.Iter (T : Type) where
+  /- We need to remember the slice and an index inside the slice (this is necessary)
+     for double ended iterators) -/
+  slice : Slice T
+  i : Nat
+
+@[rust_type "core::slice::iter::IterMut"]
+structure core.slice.iter.IterMut (T : Type) where
+  /- We need to remember the slice and an index inside the slice (this is necessary)
+     for double ended iterators) -/
+  slice : Slice T
+  i : Nat
+
+@[rust_fun "core::slice::{[@T]}::iter"]
+def core.slice.Slice.iter {T : Type} (s : Slice T) : Result (core.slice.iter.Iter T) :=
+  ok ⟨ s, 0 ⟩
+
+@[rust_fun "core::slice::{[@T]}::contains"]
+def core.slice.Slice.contains {T : Type} (partialEqInst : core.cmp.PartialEq T T)
+  (s : Slice T) (x : T) : Result Bool :=
+  List.anyM (partialEqInst.eq x) s.val
+
 end Aeneas.Std
