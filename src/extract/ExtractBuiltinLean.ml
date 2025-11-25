@@ -13,20 +13,24 @@ let lean_builtin_types =
     (* file: "Aeneas/Std/Core/Ptr.lean", line: 77 *)
     mk_type "core::alloc::layout::Layout" "core.alloc.layout.Layout"
       ~kind:(KStruct [ ("size", Some "size"); ("align", Some "align") ]);
-    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 110 *)
+    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 112 *)
     mk_type "core::array::TryFromSliceError" "core.array.TryFromSliceError";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 188 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 166 *)
     mk_type "core::cmp::Ordering" "Ordering"
       ~kind:
         (KEnum
            [ ("Less", Some "lt"); ("Equal", Some "eq"); ("Greater", Some "gt") ]);
-    (* file: "Aeneas/Std/Core/Core.lean", line: 263 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 265 *)
     mk_type "core::convert::Infallible" "core.convert.Infallible"
       ~kind:(KEnum []);
-    (* file: "Aeneas/Std/Core/Core.lean", line: 115 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 5 *)
+    mk_type "core::fmt::Arguments" "core.fmt.Arguments";
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 11 *)
     mk_type "core::fmt::Error" "core.fmt.Error";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 147 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 15 *)
     mk_type "core::fmt::Formatter" "core.fmt.Formatter";
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 8 *)
+    mk_type "core::fmt::rt::Argument" "core.fmt.rt.Argument";
     (* file: "Aeneas/Std/Core/Ops.lean", line: 65 *)
     mk_type "core::ops::control_flow::ControlFlow"
       "core.ops.control_flow.ControlFlow"
@@ -34,7 +38,7 @@ let lean_builtin_types =
     (* file: "Aeneas/Std/Range.lean", line: 14 *)
     mk_type "core::ops::range::Range" "core.ops.range.Range"
       ~kind:(KStruct [ ("start", Some "start"); ("end", Some "end_") ]);
-    (* file: "Aeneas/Std/Core/Core.lean", line: 165 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 143 *)
     mk_type "core::ops::range::RangeFrom" "core.ops.range.RangeFrom"
       ~kind:(KStruct [ ("start", Some "start") ]);
     (* file: "Aeneas/Std/Range.lean", line: 20 *)
@@ -43,7 +47,7 @@ let lean_builtin_types =
     (* file: "Aeneas/Std/Core/Core.lean", line: 11 *)
     mk_type "core::option::Option" "Option" ~prefix_variant_names:false
       ~kind:(KEnum [ ("None", Some "none"); ("Some", Some "some") ]);
-    (* file: "Aeneas/Std/Core/Core.lean", line: 275 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 268 *)
     mk_type "core::panicking::AssertKind" "core.panicking.AssertKind"
       ~kind:
         (KEnum [ ("Eq", Some "Eq"); ("Ne", Some "Ne"); ("Match", Some "Match") ]);
@@ -201,41 +205,95 @@ let lean_builtin_funs =
        @O>}::index_mut"
       "alloc.vec.Vec.index_mut"
       ~filter:(Some [ true; true; false; true ]);
+    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 124 *)
+    mk_fun
+      "core::array::equality::{core::cmp::PartialEq<[@T; @N], [@U; @N]>}::eq"
+      "core.array.equality.PartialEqArray.eq";
+    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 132 *)
+    mk_fun
+      "core::array::equality::{core::cmp::PartialEq<[@T; @N], [@U; @N]>}::ne"
+      "core.array.equality.PartialEqArray.ne";
+    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 193 *)
+    mk_fun "core::array::{[@T; @N]}::as_mut_slice"
+      "core.array.Array.as_mut_slice";
+    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 189 *)
+    mk_fun "core::array::{[@T; @N]}::as_slice" "core.array.Array.as_slice";
     (* file: "Aeneas/Std/Array/Array.lean", line: 190 *)
     mk_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone"
       "core.array.CloneArray.clone";
     (* file: "Aeneas/Std/Array/Array.lean", line: 202 *)
     mk_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone_from"
       "core.array.CloneArray.clone_from";
+    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 159 *)
+    mk_fun
+      "core::array::{core::convert::TryFrom<&'a [@T; @N], &'a [@T], \
+       core::array::TryFromSliceError>}::try_from"
+      "core.array.TryFromSharedArraySlice.try_from";
+    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 166 *)
+    mk_fun
+      "core::array::{core::convert::TryFrom<&'a mut [@T; @N], &'a mut [@T], \
+       core::array::TryFromSliceError>}::try_from"
+      "core.array.TryFromMutArraySlice.try_from";
+    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 147 *)
+    mk_fun
+      "core::array::{core::convert::TryFrom<[@T; @N], &'0 [@T], \
+       core::array::TryFromSliceError>}::try_from"
+      "core.array.TryFromArrayCopySlice.try_from";
     (* file: "Aeneas/Std/Array/Array.lean", line: 261 *)
     mk_fun "core::array::{core::default::Default<[@T; 0]>}::default"
       "core.default.DefaultArrayEmpty.default";
     (* file: "Aeneas/Std/Array/Array.lean", line: 245 *)
     mk_fun "core::array::{core::default::Default<[@T; @N]>}::default"
       "core.default.DefaultArray.default";
-    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 81 *)
+    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 182 *)
+    mk_fun "core::array::{core::fmt::Debug<[@T; @N]>}::fmt"
+      "core.array.DebugArray.fmt";
+    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 140 *)
+    mk_fun
+      "core::array::{core::fmt::Debug<core::array::TryFromSliceError>}::fmt"
+      "core.array.DebugcorearrayTryFromSliceError.fmt";
+    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 83 *)
     mk_fun "core::array::{core::ops::index::Index<[@T; @N], @I, @O>}::index"
       "core.array.Array.index";
-    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 87 *)
+    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 89 *)
     mk_fun
       "core::array::{core::ops::index::IndexMut<[@T; @N], @I, @O>}::index_mut"
       "core.array.Array.index_mut";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 255 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 274 *)
+    mk_fun "core::clone::impls::{core::clone::Clone<&'0 @T>}::clone"
+      "core.clone.impls.CloneShared.clone";
+    (* file: "Aeneas/Std/Core/Core.lean", line: 233 *)
     mk_fun "core::cmp::Ord::clamp" "core.cmp.Ord.clamp.default";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 243 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 221 *)
     mk_fun "core::cmp::Ord::max" "core.cmp.Ord.max.default";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 249 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 227 *)
     mk_fun "core::cmp::Ord::min" "core.cmp.Ord.min.default";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 181 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 159 *)
     mk_fun "core::cmp::PartialEq::ne" "core.cmp.PartialEq.ne.default";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 226 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 204 *)
     mk_fun "core::cmp::PartialOrd::ge" "core.cmp.PartialOrd.ge.default";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 218 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 196 *)
     mk_fun "core::cmp::PartialOrd::gt" "core.cmp.PartialOrd.gt.default";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 210 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 188 *)
     mk_fun "core::cmp::PartialOrd::le" "core.cmp.PartialOrd.le.default";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 202 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 180 *)
     mk_fun "core::cmp::PartialOrd::lt" "core.cmp.PartialOrd.lt.default";
+    (* file: "Aeneas/Std/Core/Core.lean", line: 261 *)
+    mk_fun "core::cmp::impls::{core::cmp::Ord<()>}::cmp"
+      "core.cmp.impls.OrdUnit.cmp";
+    (* file: "Aeneas/Std/Core/Core.lean", line: 251 *)
+    mk_fun "core::cmp::impls::{core::cmp::PartialEq<(), ()>}::eq"
+      "core.cmp.impls.PartialEqUnit.eq";
+    (* file: "Aeneas/Std/Core/Core.lean", line: 254 *)
+    mk_fun "core::cmp::impls::{core::cmp::PartialEq<(), ()>}::ne"
+      "core.cmp.impls.PartialEqUnit.ne";
+    (* file: "Aeneas/Std/Core/Core.lean", line: 257 *)
+    mk_fun "core::cmp::impls::{core::cmp::PartialOrd<(), ()>}::partial_cmp"
+      "core.cmp.impls.PartialOrdUnit.partial_cmp";
+    (* file: "Aeneas/Std/Core/Core.lean", line: 246 *)
+    mk_fun "core::cmp::max" "core.cmp.max";
+    (* file: "Aeneas/Std/Core/Core.lean", line: 241 *)
+    mk_fun "core::cmp::min" "core.cmp.min";
     (* file: "Aeneas/Std/Core/Core.lean", line: 102 *)
     mk_fun "core::convert::{core::convert::From<@T, @T>}::from"
       "core.convert.FromSame.from_" ~can_fail:false;
@@ -258,7 +316,7 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Core.lean", line: 69 *)
     mk_fun "core::option::{core::option::Option<@T>}::unwrap_or"
       "core.option.Option.unwrap_or" ~can_fail:false;
-    (* file: "Aeneas/Std/Core/Core.lean", line: 158 *)
+    (* file: "Aeneas/Std/Core/Result.lean", line: 5 *)
     mk_fun "core::result::{core::result::Result<@T, @E>}::unwrap"
       "core.result.Result.unwrap";
     (* file: "Aeneas/Std/Slice.lean", line: 226 *)
@@ -419,18 +477,18 @@ let lean_builtin_trait_decls =
     mk_trait_decl "core::clone::Clone" "core.clone.Clone"
       ~methods:[ ("clone", "clone"); ("clone_from", "clone_from") ]
       ~default_methods:[ "clone_from" ];
-    (* file: "Aeneas/Std/Core/Core.lean", line: 176 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 154 *)
     mk_trait_decl "core::cmp::Eq" "core.cmp.Eq"
       ~parent_clauses:[ "partialEqInst" ];
-    (* file: "Aeneas/Std/Core/Core.lean", line: 233 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 211 *)
     mk_trait_decl "core::cmp::Ord" "core.cmp.Ord"
       ~parent_clauses:[ "eqInst"; "partialOrdInst" ]
       ~methods:
         [ ("cmp", "cmp"); ("max", "max"); ("min", "min"); ("clamp", "clamp") ];
-    (* file: "Aeneas/Std/Core/Core.lean", line: 169 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 147 *)
     mk_trait_decl "core::cmp::PartialEq" "core.cmp.PartialEq"
       ~methods:[ ("eq", "eq"); ("ne", "ne") ];
-    (* file: "Aeneas/Std/Core/Core.lean", line: 192 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 170 *)
     mk_trait_decl "core::cmp::PartialOrd" "core.cmp.PartialOrd"
       ~parent_clauses:[ "partialEqInst" ]
       ~methods:
@@ -441,7 +499,7 @@ let lean_builtin_trait_decls =
           ("gt", "gt");
           ("ge", "ge");
         ];
-    (* file: "Aeneas/Std/Core/Core.lean", line: 137 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 134 *)
     mk_trait_decl "core::convert::AsMut" "core.convert.AsMut"
       ~methods:[ ("as_mut", "as_mut") ];
     (* file: "Aeneas/Std/Core/Core.lean", line: 19 *)
@@ -450,25 +508,25 @@ let lean_builtin_trait_decls =
     (* file: "Aeneas/Std/Core/Core.lean", line: 87 *)
     mk_trait_decl "core::convert::Into" "core.convert.Into"
       ~methods:[ ("into", "into") ];
-    (* file: "Aeneas/Std/Core/Core.lean", line: 118 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 115 *)
     mk_trait_decl "core::convert::TryFrom" "core.convert.TryFrom"
       ~methods:[ ("try_from", "try_from") ];
-    (* file: "Aeneas/Std/Core/Core.lean", line: 122 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 119 *)
     mk_trait_decl "core::convert::TryInto" "core.convert.TryInto"
       ~methods:[ ("try_into", "try_into") ];
     (* file: "Aeneas/Std/Default.lean", line: 5 *)
     mk_trait_decl "core::default::Default" "core.default.Default"
       ~methods:[ ("default", "default") ];
-    (* file: "Aeneas/Std/Core/Core.lean", line: 266 *)
+    (* file: "Aeneas/Std/Core/Error.lean", line: 5 *)
     mk_trait_decl "core::error::Error" "core.error.Error"
       ~parent_clauses:[ "fmtDebugInst"; "fmtDisplayInst" ];
-    (* file: "Aeneas/Std/Core/Core.lean", line: 150 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 18 *)
     mk_trait_decl "core::fmt::Debug" "core.fmt.Debug"
       ~methods:[ ("fmt", "fmt") ];
-    (* file: "Aeneas/Std/Core/Core.lean", line: 154 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 22 *)
     mk_trait_decl "core::fmt::Display" "core.fmt.Display"
       ~methods:[ ("fmt", "fmt") ];
-    (* file: "Aeneas/Std/Core/Core.lean", line: 271 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 26 *)
     mk_trait_decl "core::fmt::LowerHex" "core.fmt.LowerHex"
       ~methods:[ ("fmt", "fmt") ];
     (* file: "Aeneas/Std/Core/Hash.lean", line: 11 *)
@@ -547,7 +605,7 @@ let lean_builtin_trait_impls =
     mk_trait_impl "core::clone::Clone<[@T; @N]>" "core.clone.CloneArray";
     (* file: "Aeneas/Std/Core/Core.lean", line: 36 *)
     mk_trait_impl "core::clone::Clone<bool>" "core.clone.CloneBool";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 141 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 138 *)
     mk_trait_impl "core::convert::AsMut<Box<@T>, @T>" "core.convert.AsMutBox";
     (* file: "Aeneas/Std/Core/Core.lean", line: 105 *)
     mk_trait_impl "core::convert::From<@Self, @Self>" "core.convert.FromSame";
@@ -557,7 +615,7 @@ let lean_builtin_trait_impls =
       ~filter_params:(Some [ true; false ]);
     (* file: "Aeneas/Std/Core/Core.lean", line: 96 *)
     mk_trait_impl "core::convert::Into<@Self, @T>" "core.convert.IntoFrom";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 131 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 128 *)
     mk_trait_impl "core::convert::{core::convert::TryInto<@T, @U>}"
       "core.convert.TryIntoFrom";
     (* file: "Aeneas/Std/Array/Array.lean", line: 266 *)
@@ -581,7 +639,7 @@ let lean_builtin_trait_impls =
     mk_trait_impl "core::ops::deref::DerefMut<alloc::vec::Vec<@T>, [@T]>"
       "core.ops.deref.DerefMutVec"
       ~filter_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 95 *)
+    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 97 *)
     mk_trait_impl "core::ops::index::Index<[@T; @N], @I, @O>"
       "core.ops.index.IndexArray";
     (* file: "Aeneas/Std/Slice.lean", line: 389 *)
@@ -591,7 +649,7 @@ let lean_builtin_trait_impls =
     mk_trait_impl "core::ops::index::Index<alloc::vec::Vec<@T>, @T, @O>"
       "alloc.vec.Vec.Index"
       ~filter_params:(Some [ true; true; false; true ]);
-    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 102 *)
+    (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 104 *)
     mk_trait_impl "core::ops::index::IndexMut<[@T; @N], @I, @O>"
       "core.ops.index.IndexMutArray";
     (* file: "Aeneas/Std/Slice.lean", line: 396 *)

@@ -112,9 +112,6 @@ inductive core.result.Result (T : Type) (E : Type) where
 | Ok : T → core.result.Result T E
 | Err : E → core.result.Result T E
 
-@[reducible, rust_type "core::fmt::Error"]
-def core.fmt.Error := Unit
-
 @[rust_trait "core::convert::TryFrom"]
 structure core.convert.TryFrom (Self T Error : Type) where
   try_from : T → Result (core.result.Result Self Error)
@@ -142,25 +139,6 @@ structure core.convert.AsMut (Self : Type) (T : Type) where
 def core.convert.AsMutBox (T : Type) : core.convert.AsMut T T := {
   as_mut := fun x => ok (alloc.boxed.AsMutBox.as_mut x)
 }
-
-/- TODO: -/
-@[rust_type "core::fmt::Formatter"]
-axiom core.fmt.Formatter : Type
-
-@[rust_trait "core::fmt::Debug"]
-structure core.fmt.Debug (T : Type) where
-  fmt : T → Formatter → Result (Formatter × Formatter → Formatter)
-
-@[rust_trait "core::fmt::Display"]
-structure core.fmt.Display (Self : Type) where
-  fmt : Self → core.fmt.Formatter → Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter)
-
-@[rust_fun "core::result::{core::result::Result<@T, @E>}::unwrap"]
-def core.result.Result.unwrap {T E : Type}
-  (_ : core.fmt.Debug T) (e : core.result.Result T E) : Std.Result T :=
-  match e with
-  | .Ok x => ok x
-  | .Err _ => fail .panic
 
 @[rust_type "core::ops::range::RangeFrom"]
 structure core.ops.range.RangeFrom (Idx : Type) where
@@ -260,23 +238,41 @@ def core.cmp.Ord.clamp.default {Self : Type} (le lt gt : Self → Self → Resul
   else if ← gt self max then ok max
   else ok self
 
+@[simp, rust_fun "core::cmp::min"]
+def core.cmp.min {T : Type} (OrdInst : core.cmp.Ord T) (x y : T) : Result T :=
+  -- TODO: is this the correct model?
+  OrdInst.min x y
+
+@[simp, rust_fun "core::cmp::max"]
+def core.cmp.max {T : Type} (OrdInst : core.cmp.Ord T) (x y : T) : Result T :=
+  -- TODO: is this the correct model?
+  OrdInst.max x y
+
+@[simp, rust_fun "core::cmp::impls::{core::cmp::PartialEq<(), ()>}::eq"]
+def core.cmp.impls.PartialEqUnit.eq (_ _ : Unit) : Result Bool := ok true
+
+@[simp, rust_fun "core::cmp::impls::{core::cmp::PartialEq<(), ()>}::ne"]
+def core.cmp.impls.PartialEqUnit.ne (_ _ : Unit) : Result Bool := ok false
+
+@[simp, rust_fun "core::cmp::impls::{core::cmp::PartialOrd<(), ()>}::partial_cmp"]
+def core.cmp.impls.PartialOrdUnit.partial_cmp (_ _ : Unit) : Result (Option Ordering) :=
+  ok (some .eq)
+
+@[simp, rust_fun "core::cmp::impls::{core::cmp::Ord<()>}::cmp"]
+def core.cmp.impls.OrdUnit.cmp (_ _ : Unit) : Result Ordering :=
+  ok .eq
+
 @[rust_type "core::convert::Infallible"]
 inductive core.convert.Infallible where
-
-@[rust_trait "core::error::Error" (parentClauses := ["fmtDebugInst", "fmtDisplayInst"])]
-structure core.error.Error (Self : Type) where
-  fmtDebugInst : core.fmt.Debug Self
-  fmtDisplayInst : core.fmt.Display Self
-
-@[rust_trait "core::fmt::LowerHex"]
-structure core.fmt.LowerHex (Self : Type) where
-  fmt : Self → core.fmt.Formatter → Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter)
 
 @[rust_type "core::panicking::AssertKind"]
 inductive core.panicking.AssertKind where
 | Eq : core.panicking.AssertKind
 | Ne : core.panicking.AssertKind
 | Match : core.panicking.AssertKind
+
+@[rust_fun "core::clone::impls::{core::clone::Clone<&'0 @T>}::clone"]
+def core.clone.impls.CloneShared.clone {T : Type} (x : T) : Result T := .ok x
 
 end Std
 
