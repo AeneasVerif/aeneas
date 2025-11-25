@@ -9,7 +9,7 @@ set_option linter.unusedVariables false
 namespace nested_borrows
 
 /- Trait declaration: [nested_borrows::Trait1]
-   Source: 'tests/src/nested_borrows.rs', lines 4:0-6:1 -/
+   Source: 'tests/src/nested-borrows.rs', lines 4:0-6:1 -/
 structure Trait1 (Self : Type) where
   f : U32 → Result Unit
 
