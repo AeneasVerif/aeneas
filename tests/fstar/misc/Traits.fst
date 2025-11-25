@@ -525,7 +525,7 @@ let traittraitsWrapper (#t : Type0) (traitInst : trait_t t) : trait_t
 (** [traits::use_wrapper_len]:
     Source: 'tests/src/traits.rs', lines 324:0-326:1 *)
 let use_wrapper_len (#t : Type0) (traitInst : trait_t t) : result usize =
-  Ok (traittraitsWrapper traitInst).cLEN
+  Ok (traittraits_wrapper_len traitInst)
 
 (** [traits::Foo]
     Source: 'tests/src/traits.rs', lines 328:0-331:1 *)
