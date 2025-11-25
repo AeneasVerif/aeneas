@@ -2,7 +2,7 @@
 //! This module contains functions with nested borrows in their signatures.
 
 trait Trait1 {
-    fn f(x : &&u32);
+    fn f(x: &&u32);
 }
 
 /*
