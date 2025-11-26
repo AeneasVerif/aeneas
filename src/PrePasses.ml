@@ -661,7 +661,7 @@ let unify_drops (_ : crate) (f : fun_decl) : fun_decl =
   let unify_visitor =
     object
       inherit [_] map_statement
-      method! visit_Drop _ p _ = Deinit p
+      method! visit_Drop _ p _ _ = Deinit p
 
       method! visit_StorageDead locals var_id =
         let ty = (lookup_local locals var_id).local_ty in
