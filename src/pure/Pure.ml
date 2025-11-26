@@ -180,7 +180,8 @@ type builtin_type_info = {
 type builtin_global_info = { global_name : string } [@@deriving show]
 
 type builtin_fun_info = {
-  filter_params : bool list option;
+  keep_params : bool list option;
+  keep_trait_clauses : bool list option;
   extract_name : string;
   can_fail : bool;
   stateful : bool;
@@ -211,7 +212,8 @@ type builtin_trait_decl_info = {
 
 type builtin_trait_impl_info = {
   extract_name : string;
-  filter_params : bool list option;
+  keep_params : bool list option;
+  keep_trait_clauses : bool list option;
 }
 [@@deriving show]
 

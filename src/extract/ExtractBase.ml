@@ -557,9 +557,12 @@ type extraction_ctx = {
           rather than at code generation time. *)
   funs_filter_type_args_map : bool list FunDeclId.Map.t;
       (** Same as {!types_filter_type_args_map}, but for functions *)
+  funs_filter_trait_clauses_map : bool list FunDeclId.Map.t;
+      (** Same as {!types_filter_type_args_map}, but for functions *)
   trait_impls_filter_type_args_map : bool list TraitImplId.Map.t;
       (** Same as {!types_filter_type_args_map}, but for trait implementations
       *)
+  trait_impls_filter_trait_clauses_map : bool list TraitImplId.Map.t;
   extracted_opaque : bool ref;
       (** Set to true if at some point we extract a definition which is opaque,
           meaning we generate an axiom. If yes, and in case the user does not
@@ -577,6 +580,9 @@ let name_to_string (ctx : extraction_ctx) =
 
 let ty_to_string (ctx : extraction_ctx) =
   PrintPure.ty_to_string (extraction_ctx_to_fmt_env ctx) false
+
+let trait_ref_to_string (ctx : extraction_ctx) =
+  PrintPure.trait_ref_to_string (extraction_ctx_to_fmt_env ctx) false
 
 let llbc_generic_params_to_strings (ctx : extraction_ctx) =
   Print.Types.generic_params_to_strings (extraction_ctx_to_llbc_fmt_env ctx)

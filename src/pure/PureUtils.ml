@@ -1636,7 +1636,13 @@ let mk_visited_params_visitor () =
     ]}
 
     The [input_tys] are the types of the input arguments, in case we are
-    translating a function. *)
+    translating a function.
+
+    TODO: we allow filtering trait clauses when providing builtin information,
+    and this may have an impact on which parameters should be explicit or not.
+    For now, we only filter trait clauses of the shape [A : Allocator], while
+    filtering the corresponding argument at the same time, so this should not be
+    a problem, but it may be in the future. *)
 let compute_explicit_info (generics : Pure.generic_params) (input_tys : ty list)
     : explicit_info =
   let visitor, implicit_tys, implicit_cgs = mk_visited_params_visitor () in

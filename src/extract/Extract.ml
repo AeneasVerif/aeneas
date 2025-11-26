@@ -38,13 +38,24 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
       | Some info ->
           (* Builtin function: register the filtering information, if there is *)
           let ctx =
-            match info.filter_params with
+            match info.keep_params with
             | Some keep ->
                 {
                   ctx with
                   funs_filter_type_args_map =
                     FunDeclId.Map.add def.f.def_id keep
                       ctx.funs_filter_type_args_map;
+                }
+            | _ -> ctx
+          in
+          let ctx =
+            match info.keep_trait_clauses with
+            | Some keep ->
+                {
+                  ctx with
+                  funs_filter_trait_clauses_map =
+                    FunDeclId.Map.add def.f.def_id keep
+                      ctx.funs_filter_trait_clauses_map;
                 }
             | _ -> ctx
           in
@@ -240,46 +251,69 @@ let extract_global (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_close_box fmt ()
 
 (* Filter the generics of a function if it is builtin *)
-let fun_builtin_filter_types (id : FunDeclId.id) (types : 'a list)
-    (explicit : explicit_info option) (ctx : extraction_ctx) :
-    ('a list * explicit_info option, 'a list * string) Result.result =
-  match FunDeclId.Map.find_opt id ctx.funs_filter_type_args_map with
-  | None -> Result.Ok (types, explicit)
-  | Some filter ->
-      if List.length filter <> List.length types then (
-        let decl = FunDeclId.Map.find id ctx.trans_funs in
-        let err =
-          "Ill-formed builtin information for function "
-          ^ name_to_string ctx decl.f.item_meta.name
-          ^ ": "
-          ^ string_of_int (List.length filter)
-          ^ " filtering arguments provided for "
-          ^ string_of_int (List.length types)
-          ^ " type arguments ("
-          ^ String.concat ", " (List.map (ty_to_string ctx) types)
-          ^ ")"
-        in
-        [%save_error_opt_span] None err;
-        Result.Error (types, err))
-      else
-        let filter_f =
-          List.filter_map (fun (b, ty) -> if b then Some ty else None)
-        in
-        let types = List.combine filter types in
-        let types = filter_f types in
-        let filter_f =
-          List.filter_map (fun (b, x) -> if b then Some x else None)
-        in
-        let explicit =
-          Option.map
-            (fun e ->
-              {
-                e with
-                explicit_types = filter_f (List.combine filter e.explicit_types);
-              })
-            explicit
-        in
-        Result.Ok (types, explicit)
+let fun_builtin_filter_types_trait_clauses (ty_to_string : 'a -> string)
+    (clause_to_string : 'b -> string) (id : FunDeclId.id) (types : 'a list)
+    (explicit : explicit_info option) (clauses : 'b list) (ctx : extraction_ctx)
+    : ('a list * explicit_info option * 'b list, string) Result.result =
+  let filter_f filter ls =
+    List.filter_map
+      (fun (b, ty) -> if b then Some ty else None)
+      (List.combine filter ls)
+  in
+  let clauses =
+    match FunDeclId.Map.find_opt id ctx.funs_filter_trait_clauses_map with
+    | None -> Result.Ok clauses
+    | Some filter ->
+        if List.length filter <> List.length types then (
+          let decl = FunDeclId.Map.find id ctx.trans_funs in
+          let err =
+            "Ill-formed builtin information for function "
+            ^ name_to_string ctx decl.f.item_meta.name
+            ^ ": "
+            ^ string_of_int (List.length filter)
+            ^ " filtering arguments provided for "
+            ^ string_of_int (List.length clauses)
+            ^ " trait clauses ("
+            ^ String.concat ", " (List.map clause_to_string clauses)
+            ^ ")"
+          in
+          [%save_error_opt_span] None err;
+          Result.Error err)
+        else Result.Ok (filter_f filter clauses)
+  in
+  let types =
+    match FunDeclId.Map.find_opt id ctx.funs_filter_type_args_map with
+    | None -> Result.Ok (types, explicit)
+    | Some filter ->
+        if List.length filter <> List.length types then (
+          let decl = FunDeclId.Map.find id ctx.trans_funs in
+          let err =
+            "Ill-formed builtin information for function "
+            ^ name_to_string ctx decl.f.item_meta.name
+            ^ ": "
+            ^ string_of_int (List.length filter)
+            ^ " filtering arguments provided for "
+            ^ string_of_int (List.length types)
+            ^ " type arguments ("
+            ^ String.concat ", " (List.map ty_to_string types)
+            ^ ")"
+          in
+          [%save_error_opt_span] None err;
+          Result.Error err)
+        else
+          let types = filter_f filter types in
+          let explicit =
+            Option.map
+              (fun e ->
+                { e with explicit_types = filter_f filter e.explicit_types })
+              explicit
+          in
+          Result.Ok (types, explicit)
+  in
+  match (clauses, types) with
+  | Result.Ok clauses, Result.Ok (types, explicit) ->
+      Result.Ok (types, explicit, clauses)
+  | Result.Error msg, _ | _, Result.Error msg -> Result.Error msg
 
 (** [inside]: see {!extract_ty}. [with_type]: do we also generate a type
     annotation? This is necessary for backends like Coq when we write lambdas
@@ -805,23 +839,25 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
          is builtin (for instance, we filter the global allocator type
          argument for `Vec::new`).
       *)
-      let types_explicit =
+      let types_explicit_traits =
         match fun_id with
         | FromLlbc (FunId (FRegular id), _) ->
-            fun_builtin_filter_types id generics.types explicit ctx
-        | _ -> Result.Ok (generics.types, explicit)
+            fun_builtin_filter_types_trait_clauses (ty_to_string ctx)
+              (trait_ref_to_string ctx) id generics.types explicit
+              generics.trait_refs ctx
+        | _ -> Result.Ok (generics.types, explicit, generics.trait_refs)
       in
-      (match types_explicit with
-      | Ok (types, explicit) ->
+      (match types_explicit_traits with
+      | Ok (types, explicit, trait_refs) ->
           extract_generic_args span ctx fmt TypeDeclId.Set.empty ~explicit
-            { generics with types }
-      | Error (types, err) ->
+            { generics with types; trait_refs }
+      | Error err ->
           extract_generic_args span ctx fmt TypeDeclId.Set.empty ~explicit
-            { generics with types };
+            generics;
           [%save_error] span err;
           F.pp_print_string fmt
-            "(\"ERROR: ill-formed builtin: invalid number of filtering \
-             arguments\")");
+            "/- ERROR: ill-formed builtin: invalid number of filtering \
+             arguments -/");
       (* Print the arguments *)
       let print_space = ref print_first_space in
       List.iter
@@ -2732,7 +2768,7 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
     | None -> (ctx, None)
     | Some builtin_info ->
         let ctx =
-          match builtin_info.filter_params with
+          match builtin_info.keep_params with
           | None -> ctx
           | Some filter ->
               {
@@ -2740,6 +2776,17 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
                 trait_impls_filter_type_args_map =
                   TraitImplId.Map.add trait_impl.def_id filter
                     ctx.trait_impls_filter_type_args_map;
+              }
+        in
+        let ctx =
+          match builtin_info.keep_trait_clauses with
+          | None -> ctx
+          | Some filter ->
+              {
+                ctx with
+                trait_impls_filter_trait_clauses_map =
+                  TraitImplId.Map.add trait_impl.def_id filter
+                    ctx.trait_impls_filter_trait_clauses_map;
               }
         in
         (ctx, Some builtin_info)

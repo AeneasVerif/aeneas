@@ -573,6 +573,19 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
             in
             (generics, explicit)
       in
+      let generics =
+        match
+          TraitImplId.Map.find_opt id ctx.trait_impls_filter_trait_clauses_map
+        with
+        | None -> generics
+        | Some filter ->
+            let trait_refs =
+              List.filter_map
+                (fun (b, x) -> if b then Some x else None)
+                (List.combine filter generics.trait_refs)
+            in
+            { generics with trait_refs }
+      in
       let name = ctx_get_trait_impl span id ctx in
       let use_brackets = generics <> empty_generic_args && inside in
       if use_brackets then F.pp_print_string fmt "(";
