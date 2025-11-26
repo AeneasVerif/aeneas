@@ -361,6 +361,10 @@ val loop_join_break_ctxs :
   eval_ctx list ->
   eval_ctx
 
+(** TODO: this is a bit of a hack: remove once the avalues are properly
+    destructured. *)
+val destructure_shared_loans : Meta.span -> AbsId.Set.t -> Cps.cm_fun
+
 val loop_match_break_ctx_with_target :
   config ->
   Meta.span ->
