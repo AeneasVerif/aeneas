@@ -1856,10 +1856,15 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open two boxes for the definition, so that whenever possible it gets printed on
    * one line and indents are correct *)
   F.pp_open_hvbox fmt 0;
-  (* Print the attributes *)
-  if def.backend_attributes.reducible && backend () = Lean then (
-    F.pp_print_string fmt "@[reducible]";
-    F.pp_print_space fmt ());
+  (* Extract the attributes *)
+  let attributes =
+    if def.backend_attributes.reducible && backend () = Lean then
+      [ "reducible" ]
+    else []
+  in
+  extract_attributes span ctx fmt def.item_meta.name None attributes "rust_fun"
+    []
+    ~is_external:(not def.item_meta.is_local);
   F.pp_open_vbox fmt ctx.indent_incr;
   (* For HOL4: we may need to put parentheses around the definition *)
   let parenthesize = backend () = HOL4 && decl_is_not_last_from_group kind in
@@ -2191,10 +2196,11 @@ let extract_fun_decl (ctx : extraction_ctx) (fmt : F.formatter)
     extracted to two declarations, and we can actually factor out the generation
     of those declarations. See {!extract_global_decl} for more explanations. *)
 let extract_global_decl_body_gen (span : Meta.span) (ctx : extraction_ctx)
-    (fmt : F.formatter) (kind : decl_kind) ~(irreducible : bool)
-    ~(with_do : bool) (name : string) (generics : generic_params)
-    (explicit : explicit_info) (type_params : string list)
-    (cg_params : string list) (trait_clauses : string list) (ty : ty)
+    (fmt : F.formatter) (decl : global_decl) (kind : decl_kind)
+    ~(irreducible : bool) ~(with_do : bool) (name : string)
+    (generics : generic_params) (explicit : explicit_info)
+    (type_params : string list) (cg_params : string list)
+    (trait_clauses : string list) (ty : ty)
     (extract_body : (F.formatter -> unit) Option.t) : unit =
   let is_opaque = Option.is_none extract_body in
 
@@ -2212,10 +2218,15 @@ let extract_global_decl_body_gen (span : Meta.span) (ctx : extraction_ctx)
 
   (* For lean: add the irreducible attribute *)
   [%sanity_check] span (backend () = Lean || not irreducible);
-  if backend () = Lean then (
-    if irreducible then F.pp_print_string fmt "@[global_simps, irreducible]"
-    else F.pp_print_string fmt "@[global_simps]";
-    F.pp_print_space fmt ());
+  let attributes =
+    if backend () = Lean then
+      if irreducible then [ "global_simps"; "irreducible" ]
+      else [ "global_simps" ]
+    else []
+  in
+  extract_attributes span ctx fmt decl.item_meta.name None attributes
+    "rust_const" []
+    ~is_external:(not decl.item_meta.is_local);
 
   (* Second definition box *)
   F.pp_open_hvbox fmt ctx.indent_incr;
@@ -2391,22 +2402,23 @@ let extract_global_decl_aux (ctx : extraction_ctx) (fmt : F.formatter)
       if backend () = HOL4 then
         extract_global_decl_hol4_opaque span ctx fmt decl_name global.generics
           decl_ty
-      else
-        extract_global_decl_body_gen span ctx fmt kind ~irreducible:false
+      else (
+        extract_global_decl_body_gen span ctx fmt global kind ~irreducible:false
           ~with_do:false decl_name global.generics global.explicit_info
-          type_params cg_params trait_clauses decl_ty None
+          type_params cg_params trait_clauses decl_ty None;
+        F.pp_print_space fmt ())
   | Some body ->
       (* There is a body *)
       (* Generate: [let x_body : result u32 = Return 3] *)
-      extract_global_decl_body_gen span ctx fmt SingleNonRec ~irreducible:false
-        ~with_do:true body_name global.generics global.explicit_info type_params
-        cg_params trait_clauses body_ty
+      extract_global_decl_body_gen span ctx fmt global SingleNonRec
+        ~irreducible:false ~with_do:true body_name global.generics
+        global.explicit_info type_params cg_params trait_clauses body_ty
         (Some
            (fun fmt ->
              extract_texpr span ctx fmt ~inside:false ~inside_do:true body.body));
       F.pp_print_break fmt 0 0;
       (* Generate: [let x_c : u32 = eval_global x_body] *)
-      extract_global_decl_body_gen span ctx fmt SingleNonRec
+      extract_global_decl_body_gen span ctx fmt global SingleNonRec
         ~irreducible:(backend () = Lean)
         ~with_do:false decl_name global.generics global.explicit_info
         type_params cg_params trait_clauses decl_ty
@@ -2739,7 +2751,7 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
   let name =
     match builtin_info with
     | None -> ctx_compute_trait_impl_name ctx trait_decl trait_impl
-    | Some info -> info.impl_name
+    | Some info -> info.extract_name
   in
   ctx_add trait_impl.item_meta.span (TraitImplId trait_impl.def_id) name ctx
 
@@ -2872,6 +2884,51 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
      [ "Trait declaration: [" ^ name_to_string ctx decl.item_meta.name ^ "]" ]
      name decl.item_meta.span);
   F.pp_print_break fmt 0 0;
+  (* Extract the attributes *)
+  ((* We need to list the extract options *)
+   let parent_clauses : string list =
+     List.map
+       (fun clause ->
+         ctx_get_trait_parent_clause decl.item_meta.span decl.def_id
+           clause.clause_id ctx)
+       decl.parent_clauses
+   in
+   let add_quotes (ls : string list) : string list =
+     List.map (fun s -> "\"" ^ s ^ "\"") ls
+   in
+   let parent_clauses =
+     if parent_clauses = [] then []
+     else
+       [
+         "(parentClauses := ["
+         ^ String.concat ", " (add_quotes parent_clauses)
+         ^ "])";
+       ]
+   in
+   let types =
+     List.map
+       (fun name -> ctx_get_trait_type decl.item_meta.span decl.def_id name ctx)
+       decl.types
+   in
+   let types =
+     if types = [] then []
+     else [ "(types := [" ^ String.concat ", " (add_quotes types) ^ "])" ]
+   in
+   let consts =
+     List.map
+       (fun (name, _) ->
+         ctx_get_trait_const decl.item_meta.span decl.def_id name ctx)
+       decl.consts
+   in
+   let consts =
+     if consts = [] then []
+     else [ "(consts := [" ^ String.concat ", " (add_quotes consts) ^ "])" ]
+   in
+   (* TODO: default methods *)
+   extract_attributes decl.item_meta.span ctx fmt decl.item_meta.name None []
+     "rust_trait"
+     (parent_clauses @ types @ consts)
+     ~is_external:(not decl.item_meta.is_local));
   (* Open two outer boxes for the definition, so that whenever possible it gets printed on
      one line and indents are correct.
 
@@ -3133,38 +3190,44 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
-  (let name, generics =
-     if !extract_external_name_patterns && not impl.item_meta.is_local then (
-       let decl_id = impl.impl_trait.trait_decl_id in
-       let trait_decl = TraitDeclId.Map.find decl_id ctx.trans_trait_decls in
-       let decl_ref = impl.llbc_impl_trait in
-       [%ldebug
-         let params0, params1 =
-           llbc_generic_params_to_strings ctx impl.llbc_generics
-         in
-         let params = String.concat ", " (params0 @ params1) in
-         let args0, args1 =
-           llbc_generic_args_to_strings ctx decl_ref.generics
-         in
-         let args = String.concat ", " (args0 @ args1) in
-         "- trait_decl.llbc_generics: [" ^ params ^ "]"
-         ^ "\n- decl_ref.decl_generics: [" ^ args ^ "]"];
-       ( Some trait_decl.item_meta.name,
-         Some (impl.llbc_generics, decl_ref.generics) ))
-     else (None, None)
-   in
-   extract_comment_with_span ctx fmt
-     [
-       "Trait implementation: [" ^ name_to_string ctx impl.item_meta.name ^ "]";
-     ]
-     (* TODO: why option option for the generics? Looks like a bug in OCaml!? *)
-     name ?generics:(Some generics) impl.item_meta.span);
-  F.pp_print_break fmt 0 0;
-
-  (* If extracting for Lean, mark the definition as reducible *)
-  if backend () = Lean then (
-    F.pp_print_string fmt "@[reducible]";
-    F.pp_print_break fmt 0 0);
+  begin
+    let decl_id = impl.impl_trait.trait_decl_id in
+    let trait_decl = TraitDeclId.Map.find decl_id ctx.trans_trait_decls in
+    let decl_ref = impl.llbc_impl_trait in
+    let name = trait_decl.item_meta.name in
+    let generics = (impl.llbc_generics, decl_ref.generics) in
+    (* Extract the comment *)
+    (let name, generics =
+       if !extract_external_name_patterns && not impl.item_meta.is_local then (
+         [%ldebug
+           let params0, params1 =
+             llbc_generic_params_to_strings ctx impl.llbc_generics
+           in
+           let params = String.concat ", " (params0 @ params1) in
+           let args0, args1 =
+             llbc_generic_args_to_strings ctx decl_ref.generics
+           in
+           let args = String.concat ", " (args0 @ args1) in
+           "- trait_decl.llbc_generics: [" ^ params ^ "]"
+           ^ "\n- decl_ref.decl_generics: [" ^ args ^ "]"];
+         (Some name, Some generics))
+       else (None, None)
+     in
+     extract_comment_with_span ctx fmt
+       [
+         "Trait implementation: ["
+         ^ name_to_string ctx impl.item_meta.name
+         ^ "]";
+       ]
+       (* TODO: why option option for the generics? Looks like a bug in OCaml!? *)
+       name ?generics:(Some generics) impl.item_meta.span);
+    F.pp_print_break fmt 0 0;
+    (* Extract the attributes *)
+    let attributes = if backend () = Lean then [ "reducible" ] else [] in
+    extract_attributes impl.item_meta.span ctx fmt name (Some generics)
+      attributes "rust_trait_impl" []
+      ~is_external:(not impl.item_meta.is_local)
+  end;
 
   (* Open two outer boxes for the definition, so that whenever possible it gets printed on
      one line and indents are correct.

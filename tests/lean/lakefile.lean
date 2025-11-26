@@ -32,6 +32,7 @@ package «tests» {}
 @[default_target] lean_lib LoopsNested
 @[default_target] lean_lib LoopsSequences
 @[default_target] lean_lib MiniTree
+@[default_target] lean_lib NestedBorrows
 @[default_target] lean_lib NoNestedBorrows
 @[default_target] lean_lib Options
 @[default_target] lean_lib Order

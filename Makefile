@@ -78,6 +78,11 @@ build-bin-dir: build-bin build-lib build-runner
 	cp -rf backends/fstar/*.fst* bin/backends/fstar/
 	cp -rf backends/coq/*.v bin/backends/coq/
 
+.PHONY: extract-lean-builtins
+extract-lean-builtins:
+	cd backends/lean && lake exe extract
+	cd src && dune fmt || true
+
 # TODO: using ppx (in aeneas-ppx) breaks this command
 .PHONY: doc
 doc:

@@ -65,9 +65,9 @@ def update_array_loop1
   (out : Array U8 4#usize) (j : Usize) : Result (Array U8 4#usize) := do
   if j < 4#usize
   then
-    let out1 ← Array.update out j 1#u8
+    let a ← Array.update out j 1#u8
     let j1 ← j + 1#usize
-    update_array_loop1 out1 j1
+    update_array_loop1 a j1
   else ok out
 partial_fixpoint
 
@@ -76,10 +76,10 @@ partial_fixpoint
 def update_array_loop0 (out : Array U8 4#usize) (i : Usize) : Result Unit := do
   if i < 4#usize
   then
-    let out1 ← Array.update out i 0#u8
-    let out2 ← update_array_loop1 out1 0#usize
+    let a ← Array.update out i 0#u8
+    let out1 ← update_array_loop1 a 0#usize
     let i1 ← i + 1#usize
-    update_array_loop0 out2 i1
+    update_array_loop0 out1 i1
   else ok ()
 partial_fixpoint
 
@@ -229,9 +229,9 @@ def generate_matrix_inner_loop
     let (i, index_mut_back) ← Array.index_mut_usize a_transpose j
     let (state1, i1) ← sample_ntt state i
     let j1 ← j + 1#usize
-    let a_transpose1 := index_mut_back i1
-    let key1 := atranspose_mut_back a_transpose1
-    generate_matrix_inner_loop key1 state1 j1
+    let a := index_mut_back i1
+    let k := atranspose_mut_back a
+    generate_matrix_inner_loop k state1 j1
   else ok (key, state)
 partial_fixpoint
 
@@ -264,9 +264,9 @@ def generate_matrix_loop1
     let (i4, index_mut_back) ← Array.index_mut_usize a_transpose i3
     let (state_work3, i5) ← sample_ntt state_work2 i4
     let j1 ← j + 1#u8
-    let a_transpose1 := index_mut_back i5
-    let key1 := atranspose_mut_back a_transpose1
-    generate_matrix_loop1 key1 state_base state_work3 coordinates1 i j1
+    let a := index_mut_back i5
+    let k := atranspose_mut_back a
+    generate_matrix_loop1 k state_base state_work3 coordinates1 i j1
   else ok (key, state_work, coordinates)
 partial_fixpoint
 
@@ -279,11 +279,11 @@ def generate_matrix_loop0
   := do
   if i < 4#u8
   then
-    let coordinates1 ← Array.update coordinates 1#usize i
-    let (key1, state_work1, coordinates2) ←
-      generate_matrix_loop1 key state_base state_work coordinates1 i 0#u8
+    let a ← Array.update coordinates 1#usize i
+    let (key1, state_work1, coordinates1) ←
+      generate_matrix_loop1 key state_base state_work a i 0#u8
     let i1 ← i + 1#u8
-    generate_matrix_loop0 key1 state_base state_work1 coordinates2 i1
+    generate_matrix_loop0 key1 state_base state_work1 coordinates1 i1
   else ok (key, state_base, state_work)
 partial_fixpoint
 

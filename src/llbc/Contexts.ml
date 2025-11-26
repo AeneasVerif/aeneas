@@ -88,6 +88,7 @@ type eval_ctx = {
   fresh_region_id : unit -> region_id;
   fresh_abs_fvar_id : unit -> abs_fvar_id;
   fresh_loop_id : unit -> loop_id;
+  fresh_meta_id : unit -> meta_id;
 }
 [@@deriving show]
 
@@ -549,6 +550,7 @@ let ctx_type_get_instantiated_field_types (span : Meta.span) (ctx : eval_ctx)
     (def_id : TypeDeclId.id) (opt_variant_id : VariantId.id option)
     (generics : generic_args) : ty list =
   let def = ctx_lookup_type_decl span ctx def_id in
+  [%sanity_check] span (def.generics.trait_clauses = []);
   Substitute.type_decl_get_instantiated_field_types def opt_variant_id generics
 
 (** Same as [ctx_type_get_instantiated_field_types] but also erases the regions

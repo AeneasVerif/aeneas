@@ -4,7 +4,7 @@ open TypesAnalysis
 open SymbolicToPureCore
 open SymbolicToPureTypes
 open SymbolicToPureValues
-module NormSymbProjMap = InterpreterBorrowsCore.NormSymbProjMap
+module NormSymbProjMap = InterpBorrowsCore.NormSymbProjMap
 
 (** The local logger *)
 let log = Logging.symbolic_to_pure_abs_log
@@ -379,7 +379,7 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
   let add_symbolic ctx (sv_id : SymbolicValueId.id) (proj_ty : T.ty) :
       bs_ctx * tpat =
     let ctx, e, pat = fresh_fvar ctx proj_ty in
-    let norm_proj_ty = InterpreterBorrowsCore.normalize_proj_ty rids proj_ty in
+    let norm_proj_ty = InterpBorrowsCore.normalize_proj_ty rids proj_ty in
     symbolic := NormSymbProjMap.add { sv_id; norm_proj_ty } e !symbolic;
     (ctx, pat)
   in
@@ -548,8 +548,8 @@ let tepat_to_tpat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
     monad?).
 
     [bound_inputs]: see the doc of [bound_inputs] *)
-let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
-    (bound_inputs : bound_borrows_loans)
+let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) ?(to_consumed = false)
+    (rids : T.RegionId.Set.t) (bound_inputs : bound_borrows_loans)
     (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref) (input : V.tevalue) :
     bs_ctx * bool * texpr =
   [%ldebug
@@ -577,14 +577,14 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
               { input with value = ELet (rids', pat, bound, next) }];
         [%ldebug
           "- pat: " ^ tepat_to_string ctx pat ^ "\n- pat.ty: "
-          ^ InterpreterUtils.ty_to_string ectx pat.ty];
+          ^ InterpUtils.ty_to_string ectx pat.ty];
         (* Translate *)
         let ctx, bound_can_fail, bound = to_texpr ~filter rids' ctx bound in
         let llbc_pat = pat in
         let ctx, pat = tepat_to_tpat ctx fvar_to_texpr rids' pat in
         [%ldebug
           "Let-binding:\n- pat: " ^ tpat_to_string ctx pat ^ "\n- LLBC pat.ty: "
-          ^ InterpreterUtils.ty_to_string ectx llbc_pat.ty
+          ^ InterpUtils.ty_to_string ectx llbc_pat.ty
           ^ "\n- bound: "
           ^ Print.option_to_string (texpr_to_string ctx) bound];
         let ctx, next_can_fail, next = to_texpr ~filter rids ctx next in
@@ -604,9 +604,7 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
             mk_result_ok_texpr span next
           else next
         in
-        let e =
-          mk_closed_checked_let __FILE__ __LINE__ ctx false pat bound next
-        in
+        let e = [%add_loc] mk_closed_checked_let ctx false pat bound next in
         let can_fail = bound_can_fail || next_can_fail in
         (ctx, can_fail, Some e)
     | V.EJoinMarkers _ | V.EBVar _ ->
@@ -686,6 +684,7 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
         [%ldebug "loan"];
         match lc with
         | V.EMutLoan (pm, lid, child) ->
+            [%sanity_check] span (not to_consumed);
             [%sanity_check] span (pm = PNone);
             [%sanity_check] span (ValuesUtils.is_eignored child.value);
             let e =
@@ -694,7 +693,14 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
                 "Unexpected"
             in
             (ctx, false, Some e)
-        | V.EEndedMutLoan _ | V.EIgnoredMutLoan _ | V.EEndedIgnoredMutLoan _ ->
+        | V.EEndedMutLoan { child; given_back; given_back_meta } ->
+            [%sanity_check] span to_consumed;
+            [%sanity_check] ctx.span (ValuesUtils.is_eignored child.value);
+            [%sanity_check] ctx.span (ValuesUtils.is_eignored given_back.value);
+            (* Return the meta-value *)
+            let out = Some (tvalue_to_texpr ctx ectx given_back_meta) in
+            (ctx, false, out)
+        | V.EIgnoredMutLoan _ | V.EEndedIgnoredMutLoan _ ->
             [%internal_error] span)
     | V.EBorrow _ -> [%internal_error] span
     | V.ESymbolic (pm, proj) -> begin
@@ -702,20 +708,55 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
         [%sanity_check] span (pm = PNone);
         match proj with
         | V.EProjLoans { proj = { sv_id; proj_ty }; consumed; borrows } ->
+            [%sanity_check] span (not to_consumed);
             [%sanity_check] span (consumed = []);
             [%sanity_check] span (borrows = []);
             let norm_proj_ty =
-              InterpreterBorrowsCore.normalize_proj_ty rids proj_ty
+              InterpBorrowsCore.normalize_proj_ty rids proj_ty
             in
             let e =
               NormSymbProjMap.find_opt { sv_id; norm_proj_ty }
                 bound_inputs.symbolic
             in
             (ctx, false, e)
-        | V.EProjBorrows _
-        | V.EEndedProjLoans _
-        | V.EEndedProjBorrows _
-        | V.EEmpty -> [%internal_error] span
+        | V.EEndedProjLoans { proj = msv; consumed = []; borrows = [] } ->
+            (* The symbolic value was left unchanged.
+
+         We're using the projection type as the type of the symbolic value -
+         it doesn't really matter. *)
+            let msv : V.symbolic_value = { sv_id = msv; sv_ty = input.ty } in
+            let out = Some (symbolic_value_to_texpr ctx msv) in
+            (ctx, false, out)
+        | V.EEndedProjLoans
+            { proj = _; consumed = [ (mnv, child_aproj) ]; borrows = [] } ->
+            [%sanity_check] span to_consumed;
+            [%sanity_check] ctx.span (child_aproj = EEmpty);
+            (* TODO: check that the updated symbolic values covers all the cases
+               (part of the symbolic value might have been updated, and the rest
+               left unchanged) - it might happen with nested borrows (see the documentation
+               of [AProjLoans]). For now we check that there are no nested borrows
+               to make sure we have to update this part of the code once we add support
+               for nested borrows.
+            *)
+            [%sanity_check] ctx.span
+              (not
+                 (TypesUtils.ty_has_nested_borrows (Some ctx.span)
+                    ctx.type_ctx.type_infos input.ty));
+            (* The symbolic value was updated.
+
+               We're using the projection type as the type of the symbolic value -
+               it doesn't really matter. *)
+            let mnv : V.symbolic_value =
+              { sv_id = mnv.sv_id; sv_ty = input.ty }
+            in
+            let out = Some (symbolic_value_to_texpr ctx mnv) in
+            (ctx, false, out)
+        | V.EEndedProjLoans _ ->
+            (* The symbolic value was updated, and the given back values come from several
+             abstractions *)
+            [%craise] ctx.span "Unimplemented"
+        | V.EProjBorrows _ | V.EEndedProjBorrows _ | V.EEmpty ->
+            [%internal_error] span
       end
     | V.EValue (env, mv) ->
         [%ldebug "value"];
@@ -783,7 +824,7 @@ let register_inputs (ctx : bs_ctx) (rids : T.RegionId.Set.t)
   in
   let add_symbolic (sv_id : SymbolicValueId.id) (proj_ty : T.ty) : unit =
     let e = fresh_fvar proj_ty in
-    let norm_proj_ty = InterpreterBorrowsCore.normalize_proj_ty rids proj_ty in
+    let norm_proj_ty = InterpBorrowsCore.normalize_proj_ty rids proj_ty in
     symbolic := NormSymbProjMap.add { sv_id; norm_proj_ty } e !symbolic
   in
   let add_concrete (bid : V.BorrowId.id) (ty : T.ty) : unit =
@@ -862,7 +903,7 @@ let register_outputs (ctx : bs_ctx) (bound_outputs : bound_borrows_loans)
     | _ -> false
   in
   let add_symbolic (sv_id : SymbolicValueId.id) (proj_ty : T.ty) : unit =
-    let norm_proj_ty = InterpreterBorrowsCore.normalize_proj_ty rids proj_ty in
+    let norm_proj_ty = InterpBorrowsCore.normalize_proj_ty rids proj_ty in
     let e =
       NormSymbProjMap.find { sv_id; norm_proj_ty } bound_outputs.symbolic
     in
@@ -969,4 +1010,178 @@ let translate_abs_to_cont (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs) :
       match (cont.output, cont.input) with
       | Some output, Some input ->
           abs_cont_to_texpr_aux ctx ectx abs output input
+      | _ -> [%internal_error] ctx.span)
+
+let rec tevalue_to_given_back_aux ~(filter : bool)
+    (abs_regions : T.RegionId.Set.t) (mp : mplace option) (ev : V.tevalue)
+    (ctx : bs_ctx) : bs_ctx * tpat option =
+  let (ctx, value) : _ * tpat option =
+    match ev.value with
+    | EAdt adt_v ->
+        adt_evalue_to_given_back_aux ~filter abs_regions ev adt_v ctx
+    | ELoan _ ->
+        (* The evalue should have been generated by a borrow projector: this case is unreachable *)
+        [%craise] ctx.span "Unreachable"
+    | EBorrow bc -> eborrow_content_to_given_back_aux ~filter mp bc ev.ty ctx
+    | ESymbolic (pm, eproj) ->
+        [%sanity_check] ctx.span (pm = PNone);
+        eproj_to_given_back_aux mp eproj ev.ty ctx
+    | EIgnored ->
+        (* If we do not filter, we have to create an ignored pattern *)
+        if filter then (ctx, None)
+        else
+          let ty =
+            translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos ev.ty
+          in
+          (ctx, Some (mk_ignored_pat ty))
+    | EBottom -> (ctx, None)
+    | ELet _
+    | EJoinMarkers _
+    | EBVar _
+    | EFVar _
+    | EApp _
+    | EValue _
+    | EMutBorrowInput _ -> [%internal_error] ctx.span
+  in
+  (* Sanity checks - Rk.: we do this at every recursive call, which is a bit
+   * expansive... *)
+  (match value with
+  | None -> ()
+  | Some value -> type_check_pat ctx value);
+  (* Return *)
+  (ctx, value)
+
+and adt_evalue_to_given_back_aux ~(filter : bool)
+    (abs_regions : T.RegionId.Set.t) (av : V.tevalue) (adt_v : V.adt_evalue)
+    (ctx : bs_ctx) : bs_ctx * tpat option =
+  let ctx, out =
+    gtranslate_adt_fields ~project_borrows:true (tevalue_to_string ctx)
+      (tpat_to_string ctx)
+      (fun ~filter ctx v ->
+        let ctx, v = tevalue_to_given_back_aux ~filter abs_regions None v ctx in
+        match v with
+        | None -> (ctx, None)
+        | Some x -> (ctx, Some ((), x)))
+      (compute_tevalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions)
+      (fun fields ->
+        let ty =
+          translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos av.ty
+        in
+        mk_adt_pat ty adt_v.variant_id fields)
+      mk_simpl_tuple_pat ~filter ctx av av.ty adt_v.fields
+  in
+  (ctx, Option.map snd out)
+
+and eborrow_content_to_given_back_aux ~(filter : bool) (mp : mplace option)
+    (bc : V.eborrow_content) (_ty : T.ty) (ctx : bs_ctx) : bs_ctx * tpat option
+    =
+  let _ = filter in
+  match bc with
+  | V.EMutBorrow _ | EIgnoredMutBorrow _ ->
+      (* All the borrows should have been ended upon ending the abstraction *)
+      [%craise] ctx.span "Unreachable"
+  | EEndedMutBorrow (msv, _) ->
+      (* Return the meta symbolic-value *)
+      let ctx, var = fresh_var_for_symbolic_value msv.given_back ctx in
+      let pat = mk_tpat_from_fvar mp var in
+      (* Lookup the default value and update the [var_id_to_default] map.
+         Note that the default value might be missing, for instance for
+         abstractions which were not introduced because of function calls but
+         rather because of loops.
+      *)
+      let ctx =
+        match V.BorrowId.Map.find_opt msv.bid ctx.mut_borrow_to_consumed with
+        | None -> ctx
+        | Some e ->
+            {
+              ctx with
+              var_id_to_default = FVarId.Map.add var.id e ctx.var_id_to_default;
+            }
+      in
+      (* *)
+      (ctx, Some pat)
+  | EEndedIgnoredMutBorrow _ ->
+      (* This happens with nested borrows: we need to dive in *)
+      [%craise] ctx.span "Unimplemented"
+
+and eproj_to_given_back_aux (mp : mplace option) (eproj : V.eproj) (ty : T.ty)
+    (ctx : bs_ctx) : bs_ctx * tpat option =
+  match eproj with
+  | V.EEndedProjLoans _ -> [%craise] ctx.span "Unreachable"
+  | EEndedProjBorrows { mvalues = mv; loans } ->
+      [%cassert] ctx.span (loans = []) "Unreachable";
+      (* Return the meta-value *)
+      let ctx, var = fresh_var_for_symbolic_value mv.given_back ctx in
+      let pat = mk_tpat_from_fvar mp var in
+      (* Register the default value *)
+      let ctx =
+        (* Using the projection type as the type of the symbolic value - it
+           doesn't really matter *)
+        let sv : V.symbolic_value = { sv_id = mv.consumed; sv_ty = ty } in
+        {
+          ctx with
+          var_id_to_default =
+            FVarId.Map.add var.id
+              (symbolic_value_to_texpr ctx sv)
+              ctx.var_id_to_default;
+        }
+      in
+      (ctx, Some pat)
+  | EEmpty | EProjLoans _ | EProjBorrows _ -> [%craise] ctx.span "Unreachable"
+
+let tevalue_to_given_back (abs_regions : T.RegionId.Set.t) (mp : mplace option)
+    (v : V.tevalue) (ctx : bs_ctx) : bs_ctx * tpat option =
+  (* Check if the value was generated from a borrow projector: if yes, and if
+     it contains mutable borrows we generate a given back pattern (because
+     upon ending the borrow the abstraction gave back a value).
+     Otherwise we ignore it. *)
+  match
+    compute_tevalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions v
+  with
+  | BorrowProj BMut ->
+      tevalue_to_given_back_aux abs_regions mp ~filter:true v ctx
+  | BorrowProj BShared | LoanProj _ | UnknownProj ->
+      (* If it is a loan proj we ignore it. If it is an unknown projection,
+         it means the value doesn't contain loans nor borrows, so nothing
+         is given back: we can ignore it as well. *)
+      (ctx, None)
+
+let ended_abs_cont_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
+    (output : V.tevalue) (input : V.tevalue) : bs_ctx * bool * tpat * texpr =
+  let span = ctx.span in
+  (*(* Go through the *avalues* to introduce free variables for the loans:
+     we need to do this to fix the order of the *inputs* (the order given
+     by the abstraction expression itself is arbitrary)
+  *)
+  let bound_inputs, inputs =
+    register_inputs ctx abs.regions.owned abs.avalues
+    in*)
+
+  (* Translate the abstraction expression *)
+  let fvar_to_texpr = ref V.AbsFVarId.Map.empty in
+  let ctx, can_fail, input_e =
+    einput_to_texpr ctx ectx abs.regions.owned empty_bound_borrows_loans
+      fvar_to_texpr ~to_consumed:true input
+  in
+  [%sanity_check] span (not can_fail);
+  let ctx, pat = tevalue_to_given_back abs.regions.owned None output ctx in
+
+  let pat =
+    match pat with
+    | None -> mk_ignored_pat input_e.ty
+    | Some pat -> pat
+  in
+  (ctx, can_fail, pat, input_e)
+
+(** Translate the continuation of an ended region abstraction to a pure
+    continuation. *)
+let translate_ended_abs_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx)
+    (abs : V.abs) : bs_ctx * bool * tpat * texpr =
+  [%ltrace "abs:\n" ^ abs_to_string ctx abs];
+  match abs.cont with
+  | None -> [%internal_error] ctx.span
+  | Some cont -> (
+      match (cont.output, cont.input) with
+      | Some output, Some input ->
+          ended_abs_cont_to_texpr_aux ctx ectx abs output input
       | _ -> [%internal_error] ctx.span)

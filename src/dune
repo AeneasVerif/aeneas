@@ -35,27 +35,29 @@
   Extract
   ExtractBase
   ExtractBuiltin
+  ExtractBuiltinCore
+  ExtractBuiltinLean
   ExtractErrors
   ExtractName
   ExtractTypes
   FunsAnalysis
   Identifiers
-  InterpreterAbs
-  InterpreterBorrowsCore
-  InterpreterBorrows
-  InterpreterExpansion
-  InterpreterExpressions
-  Interpreter
-  InterpreterJoin
-  InterpreterJoinCore
-  InterpreterLoopsFixedPoint
-  InterpreterLoops
-  InterpreterMatchCtxs
-  InterpreterPaths
-  InterpreterProjectors
-  InterpreterReduceCollapse
-  InterpreterStatements
-  InterpreterUtils
+  InterpAbs
+  InterpBorrowsCore
+  InterpBorrows
+  InterpExpansion
+  InterpExpressions
+  Interp
+  InterpJoin
+  InterpJoinCore
+  InterpLoopsFixedPoint
+  InterpLoops
+  InterpMatchCtxs
+  InterpPaths
+  InterpProjectors
+  InterpReduceCollapse
+  InterpStatements
+  InterpUtils
   Invariants
   LlbcAst
   LlbcAstUtils

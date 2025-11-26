@@ -89,8 +89,8 @@ def index_mut_slice
    Source: 'tests/src/arrays.rs', lines 68:0-70:1 -/
 def slice_subslice_shared_
   (x : Slice U32) (y : Usize) (z : Usize) : Result (Slice U32) := do
-  core.slice.index.Slice.index (core.slice.index.SliceIndexRangeUsizeSliceInst
-    U32) x { start := y, end_ := z }
+  core.slice.index.Slice.index (core.slice.index.SliceIndexRangeUsizeSlice U32)
+    x { start := y, end_ := z }
 
 /- [arrays::slice_subslice_mut_]:
    Source: 'tests/src/arrays.rs', lines 72:0-74:1 -/
@@ -98,9 +98,8 @@ def slice_subslice_mut_
   (x : Slice U32) (y : Usize) (z : Usize) :
   Result ((Slice U32) × (Slice U32 → Slice U32))
   := do
-  core.slice.index.Slice.index_mut
-    (core.slice.index.SliceIndexRangeUsizeSliceInst U32) x
-    { start := y, end_ := z }
+  core.slice.index.Slice.index_mut (core.slice.index.SliceIndexRangeUsizeSlice
+    U32) x { start := y, end_ := z }
 
 /- [arrays::array_to_slice_shared_]:
    Source: 'tests/src/arrays.rs', lines 76:0-78:1 -/
@@ -119,8 +118,8 @@ def array_to_slice_mut_
    Source: 'tests/src/arrays.rs', lines 84:0-86:1 -/
 def array_subslice_shared_
   (x : Array U32 32#usize) (y : Usize) (z : Usize) : Result (Slice U32) := do
-  core.array.Array.index (core.ops.index.IndexSliceInst
-    (core.slice.index.SliceIndexRangeUsizeSliceInst U32)) x
+  core.array.Array.index (core.ops.index.IndexSlice
+    (core.slice.index.SliceIndexRangeUsizeSlice U32)) x
     { start := y, end_ := z }
 
 /- [arrays::array_subslice_mut_]:
@@ -129,8 +128,8 @@ def array_subslice_mut_
   (x : Array U32 32#usize) (y : Usize) (z : Usize) :
   Result ((Slice U32) × (Slice U32 → Array U32 32#usize))
   := do
-  core.array.Array.index_mut (core.ops.index.IndexMutSliceInst
-    (core.slice.index.SliceIndexRangeUsizeSliceInst U32)) x
+  core.array.Array.index_mut (core.ops.index.IndexMutSlice
+    (core.slice.index.SliceIndexRangeUsizeSlice U32)) x
     { start := y, end_ := z }
 
 /- [arrays::index_slice_0]:
@@ -328,8 +327,8 @@ def incr_slice (x : Slice U32) : Result (Slice U32) := do
 def range_all : Result Unit := do
   let x := Array.repeat 4#usize 0#u32
   let (s, _) ←
-    core.array.Array.index_mut (core.ops.index.IndexMutSliceInst
-      (core.slice.index.SliceIndexRangeUsizeSliceInst U32)) x
+    core.array.Array.index_mut (core.ops.index.IndexMutSlice
+      (core.slice.index.SliceIndexRangeUsizeSlice U32)) x
       { start := 1#usize, end_ := 3#usize }
   let _ ← update_mut_slice s
   ok ()
@@ -423,8 +422,8 @@ def f2 (i : U32) : Result Unit := do
    Source: 'tests/src/arrays.rs', lines 312:0-314:1 -/
 def f4
   (x : Array U32 32#usize) (y : Usize) (z : Usize) : Result (Slice U32) := do
-  core.array.Array.index (core.ops.index.IndexSliceInst
-    (core.slice.index.SliceIndexRangeUsizeSliceInst U32)) x
+  core.array.Array.index (core.ops.index.IndexSlice
+    (core.slice.index.SliceIndexRangeUsizeSlice U32)) x
     { start := y, end_ := z }
 
 /- [arrays::f3]:
@@ -470,9 +469,9 @@ def zero_slice_loop
   (a : Slice U8) (i : Usize) (len : Usize) : Result (Slice U8) := do
   if i < len
   then
-    let a1 ← Slice.update a i 0#u8
+    let s ← Slice.update a i 0#u8
     let i1 ← i + 1#usize
-    zero_slice_loop a1 i1 len
+    zero_slice_loop s i1 len
   else ok a
 partial_fixpoint
 
@@ -526,12 +525,12 @@ def add_acc_loop
   if i < 256#usize
   then
     let a ← Array.index_usize paSrc i
-    let paSrc1 ← Array.update paSrc i 0#u32
+    let a1 ← Array.update paSrc i 0#u32
     let c ← Array.index_usize peDst i
     let c1 ← c + a
-    let peDst1 ← Array.update peDst i c1
+    let a2 ← Array.update peDst i c1
     let i1 ← i + 1#usize
-    add_acc_loop paSrc1 peDst1 i1
+    add_acc_loop a1 a2 i1
   else ok (paSrc, peDst)
 partial_fixpoint
 
@@ -554,7 +553,8 @@ def ARRAY1 : Array U32 2#usize := eval_global ARRAY1_body
 
 /- [arrays::Scalar]
    Source: 'tests/src/arrays.rs', lines 377:0-377:24 -/
-@[reducible] def Scalar := Array U32 2#usize
+@[reducible]
+def Scalar := Array U32 2#usize
 
 /- [arrays::L]
    Source: 'tests/src/arrays.rs', lines 378:0-378:33 -/

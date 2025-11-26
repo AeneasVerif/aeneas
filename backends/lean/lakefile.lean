@@ -13,3 +13,8 @@ package «aeneas» {}
   -- TODO: activating this makes the Nix CI fail
   --precompileModules := true
 }
+
+/-- Generate the `.ml` file listing the definitions supported by the standard library. -/
+lean_exe extract where
+  root := `AeneasExtract
+  supportInterpreter := false
