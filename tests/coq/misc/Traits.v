@@ -395,9 +395,8 @@ Definition test_where1 {T : Type} (_x : T) : result unit :=
 (** [traits::test_where2]:
     Source: 'tests/src/traits.rs', lines 196:0-196:60 *)
 Definition test_where2
-  {T : Type} {Clause0_V : Type} {Clause0_W : Type}
-  (withConstTyTClause0_VClause0_W32Inst : WithConstTy_t T Clause0_V Clause0_W
-  32%usize) (_x : u32) :
+  {T : Type} {Clause0_W : Type} (withConstTyTU32Clause0_W32Inst : WithConstTy_t
+  T u32 Clause0_W 32%usize) (_x : u32) :
   result unit
   :=
   Ok tt
@@ -457,9 +456,8 @@ Definition test_child_trait2
 (** [traits::order1]:
     Source: 'tests/src/traits.rs', lines 221:0-221:62 *)
 Definition order1
-  {T : Type} {U : Type} {Clause0_W : Type} {Clause1_W : Type} (parentTrait0Inst
-  : ParentTrait0_t T Clause0_W) (parentTrait0Inst1 : ParentTrait0_t U
-  Clause1_W) :
+  {T : Type} {U : Type} {Clause1_W : Type} (parentTrait0Inst : ParentTrait0_t T
+  Clause1_W) (parentTrait0Inst1 : ParentTrait0_t U Clause1_W) :
   result unit
   :=
   Ok tt
@@ -493,15 +491,15 @@ Arguments mkIterator_t { _ } { _ }.
 (** Trait declaration: [traits::IntoIterator]
     Source: 'tests/src/traits.rs', lines 235:0-241:1 *)
 Record IntoIterator_t (Self : Type) (Self_Item : Type) (Self_IntoIter : Type)
-  (Self_Clause0_Item : Type) := mkIntoIterator_t {
+  := mkIntoIterator_t {
   IntoIterator_tIntoIterator_t_IteratorInst : Iterator_t Self_IntoIter
-    Self_Clause0_Item;
+    Self_Item;
   IntoIterator_t_into_iter : Self -> result Self_IntoIter;
 }.
 
-Arguments mkIntoIterator_t { _ } { _ } { _ } { _ }.
-Arguments IntoIterator_tIntoIterator_t_IteratorInst { _ } { _ } { _ } { _ } _.
-Arguments IntoIterator_t_into_iter { _ } { _ } { _ } { _ } _.
+Arguments mkIntoIterator_t { _ } { _ } { _ }.
+Arguments IntoIterator_tIntoIterator_t_IteratorInst { _ } { _ } { _ } _.
+Arguments IntoIterator_t_into_iter { _ } { _ } { _ } _.
 
 (** Trait declaration: [traits::FromResidual]
     Source: 'tests/src/traits.rs', lines 252:0-252:24 *)
