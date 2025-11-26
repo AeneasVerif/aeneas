@@ -216,10 +216,16 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
   (* Return *)
   (fp, !fixed_ids)
 
+type break_ctx =
+  | NoBreak  (** The loop doesn't contain any break *)
+  | Single
+      (** There is a single break statement, so we don't join the break contexts
+      *)
+  | Multiple of (eval_ctx * abs list)  (** We joined multiple break contexts *)
+
 let compute_loop_break_context (config : config) (span : Meta.span)
     (loop_id : LoopId.id) (eval_loop_body : stl_cm_fun) (fp_ctx : eval_ctx)
-    (fixed_aids : AbsId.Set.t) (fixed_dids : DummyVarId.Set.t) :
-    (eval_ctx * abs list) option =
+    (fixed_aids : AbsId.Set.t) (fixed_dids : DummyVarId.Set.t) : break_ctx =
   [%ltrace
     "Initial fixed-point context:\n"
     ^ eval_ctx_to_string ~span:(Some span) ~filter:false fp_ctx];
@@ -244,7 +250,7 @@ let compute_loop_break_context (config : config) (span : Meta.span)
   (* Evaluate the loop body to register the different contexts upon reentry *)
   let ctx_resl, _ = eval_loop_body fp_ctx in
   (* Keep only the contexts which reached a `continue`. *)
-  let keep_break_ctx (ctx, res) =
+  let keep_break_ctx (ctx, res) : eval_ctx option =
     [%ltrace "register_continue_ctx"];
     match res with
     | Return | Panic | Continue _ -> None
@@ -273,7 +279,10 @@ let compute_loop_break_context (config : config) (span : Meta.span)
   match break_ctxs with
   | [] ->
       (* There is no break! *)
-      None
+      NoBreak
+  | [ _ ] ->
+      (* Single break context *)
+      Single
   | ctxs ->
       (* Join the contexts *)
       let break_ctx =
@@ -330,4 +339,4 @@ let compute_loop_break_context (config : config) (span : Meta.span)
       (* Pay attention to the fact that the elements are stored in reverse order *)
       let abs = List.rev (List.filter_map get_fresh_abs break_ctx.env) in
 
-      Some (break_ctx, abs)
+      Multiple (break_ctx, abs)

@@ -27,6 +27,13 @@ val compute_loop_entry_fixed_point :
   eval_ctx ->
   eval_ctx * ids_sets
 
+type break_ctx =
+  | NoBreak  (** The loop doesn't contain any break *)
+  | Single
+      (** There is a single break statement, so we don't join the break contexts
+      *)
+  | Multiple of (eval_ctx * abs list)  (** We joined multiple break contexts *)
+
 val compute_loop_break_context :
   config ->
   Meta.span ->
@@ -35,4 +42,4 @@ val compute_loop_break_context :
   eval_ctx ->
   AbsId.Set.t ->
   DummyVarId.Set.t ->
-  (eval_ctx * abs list) option
+  break_ctx
