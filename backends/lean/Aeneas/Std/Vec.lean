@@ -355,6 +355,18 @@ theorem alloc.vec.Vec.setSlice!_getElem!_suffix {α} [Inhabited α]
   simp only [Vec.setSlice!, Vec.getElem!_Nat_eq]
   simp_lists
 
+@[rust_fun "alloc::vec::{core::clone::Clone<alloc::vec::Vec<@T>>}::clone"
+    (keepParams := [true, false]) (keepTraitClauses := [true, false])]
+def alloc.vec.CloneVec.clone {T : Type} (cloneInst : core.clone.Clone T)
+  (v : alloc.vec.Vec T) : Result (alloc.vec.Vec T) :=
+  Slice.clone cloneInst.clone v
+
+@[reducible, rust_trait_impl "core::clone::Clone<alloc::vec::Vec<@T>>"
+    (keepParams := [true, false]) (keepTraitClauses := [true, false])]
+def core.clone.CloneallocvecVec {T : Type} (cloneInst : core.clone.Clone T) :
+  core.clone.Clone (alloc.vec.Vec T) := {
+  clone := alloc.vec.CloneVec.clone cloneInst
+}
 
 namespace Tests
   example

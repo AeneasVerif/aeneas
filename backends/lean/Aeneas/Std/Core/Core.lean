@@ -1,6 +1,7 @@
 import Lean
 import Aeneas.Std.Primitives
 import Aeneas.Progress.Init
+import Aeneas.Std.Alloc
 
 namespace Aeneas
 
@@ -28,6 +29,11 @@ structure clone.Clone (Self : Type) where
 def clone.Clone.from_from.default {Self : Type} (clone : Self → Result Self)
   (_self source : Self) : Result Self :=
   clone source
+
+@[reducible, rust_trait_impl "core::clone::Clone<alloc::alloc::Global>"]
+def core.clone.CloneGlobal : core.clone.Clone Global := {
+  clone := alloc.alloc.CloneGlobal.clone
+}
 
 /- [core::clone::impls::{(core::clone::Clone for bool)#19}::clone] -/
 @[reducible, simp, progress_simps]
