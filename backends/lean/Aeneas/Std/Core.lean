@@ -1,4 +1,5 @@
 import Aeneas.Std.Core.Atomic
+import Aeneas.Std.Core.Cmp
 import Aeneas.Std.Core.Convert
 import Aeneas.Std.Core.Core
 import Aeneas.Std.Core.Default
