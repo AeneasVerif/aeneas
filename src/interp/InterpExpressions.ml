@@ -450,7 +450,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
                 e )
           in
           (cv, ctx, cc_comp cc cf)
-      | CFnPtr _ -> [%craise] span "Function pointers are not supported yet"
+      | CFnDef _ -> [%craise] span "Function definitions are not supported yet"
       | CRawMemory _ ->
           [%craise] span "Raw memory cannot be interpreted by the interpreter"
       | COpaque reason ->
