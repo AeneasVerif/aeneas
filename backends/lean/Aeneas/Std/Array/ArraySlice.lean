@@ -110,7 +110,7 @@ def core.ops.index.IndexMutArrayInst {T I Output : Type} {N : Usize}
 /- [core::array::TryFromSliceError] -/
 def core.array.TryFromSliceError := ()
 
-@[simp, simp_lists_simps]
+@[simp, simp_lists_simps, grind =]
 theorem Array.val_to_slice {α} {n} (a : Array α n) : a.to_slice.val = a.val := by
   simp only [Array.to_slice]
 
@@ -118,5 +118,7 @@ theorem Array.val_to_slice {α} {n} (a : Array α n) : a.to_slice.val = a.val :=
 theorem Array.length_to_slice (a : Array α n) :
   a.to_slice.length = n := by
   simp only [Slice.length, Array.to_slice, List.Vector.length_val]
+
+grind_pattern Array.length_to_slice => a.to_slice
 
 end Aeneas.Std
