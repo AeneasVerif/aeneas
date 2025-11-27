@@ -255,9 +255,55 @@ def unexpPtr : Unexpander | `($_ $x $y) => `($x ~> $y) | _ => throw ()
 
 example (x y : RawPtr ℕ) (xv yv : ℕ) : HProp := (x ~> xv) * (y ~> yv)
 
+
+/-
+fn choose<'a, T>(b : bool, x : &'a mut T, y : &'a mut T) -> &'a mut T {
+  if b { x } else { y }
+}
+
+let x = 0;
+let y = 1;
+let z = choose(true, &mut x, &mut y);
+*z = 2;
+assert!(x == 2);
+assert!(y == 1);
+
+def choose {T} (b : Bool) (x y : T) : T × (T → (T × T))
+
+fn incr(x : &mut u32) {
+  *x = *x + 1;
+}
+
+def incr (x : u32) : U32
+-/
+
 /- fn mut_to_raw<'a, T>(x : &'a mut T) -> *T -/
 axiom mut_to_raw {α} (x : α) : ITree (RawPtr α)
 axiom mut_to_raw.spec {α} (x : α) : ⦃ ∅ ⦄ (mut_to_raw x) ⦃ fun p => p ~> x ⦄ {{ fun _ => True }}
+
+/-
+def mut_to_raw {α} (x : α) : ITree (RawPtr α × ITree α)
+  ⦃ ∅ ⦄
+  ⦃ fun (p, back) => p ~> x * (∀ x', ⦃ p ~> x' ⦄ back ⦃ fun x => x = x' ⦄) ⦄
+
+// Rust
+let x = 0;
+let px = &mut x;
+let p = px.mut_to_raw();
+*p = 1;
+assert!(x == 1);
+
+let x = 0
+let px = x
+// ∅
+let (p, back) ← mut_raw px
+// p ~> px
+write_ptr p 1
+// p ~> 1
+let x ← back
+// ∅ * pure(x = 1)
+massert (x == 1)
+-/
 
 axiom end_mut_to_raw {α} (p : RawPtr α) : ITree α
 axiom end_mut_to_raw.spec {α : Type} {x : α} (p : RawPtr α) :
