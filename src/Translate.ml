@@ -432,8 +432,8 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
 
   (* Apply the micro-passes *)
   let pure_translations =
-    Micro.apply_passes_to_pure_fun_translations trans_ctx builtin_fun_sigs
-      type_decls pure_translations
+    Micro.apply_passes_to_pure_fun_translations crate trans_ctx builtin_fun_sigs
+      type_decls trait_impls pure_translations
   in
 
   (* Return *)
