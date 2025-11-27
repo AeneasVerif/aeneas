@@ -554,7 +554,7 @@ section Examples
 /--
 info: Try this:
 
-    simp only [progress_simps]
+  [apply]   simp only [progress_simps]
 -/
 #guard_msgs in
 example : True := by progress*?
@@ -569,7 +569,7 @@ def add1 (x0 x1 : U32) : Std.Result U32 := do
 /--
 info: Try this:
 
-      let* ⟨ x2, x2_post ⟩ ← U32.add_spec
+  [apply]     let* ⟨ x2, x2_post ⟩ ← U32.add_spec
     let* ⟨ x3, x3_post ⟩ ← U32.add_spec
     let* ⟨ res, res_post ⟩ ← U32.add_spec
 -/
@@ -582,7 +582,7 @@ example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
 /--
 info: Try this:
 
-      simp only [progress_simps]
+  [apply]     simp only [progress_simps]
     let* ⟨ x2, x2_post ⟩ ← U32.add_spec
     let* ⟨ x3, x3_post ⟩ ← U32.add_spec
     let* ⟨ res, res_post ⟩ ← U32.add_spec
@@ -607,7 +607,7 @@ def add2 (b : Bool) (x0 x1 : U32) : Std.Result U32 := do
 /--
 info: Try this:
 
-      split
+  [apply]     split
     . let* ⟨ x2, x2_post ⟩ ← U32.add_spec
       let* ⟨ x3, x3_post ⟩ ← U32.add_spec
       let* ⟨ res, res_post ⟩ ← U32.add_spec
@@ -623,7 +623,7 @@ example b (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
 /--
 info: Try this:
 
-      split
+  [apply]     split
     . let* ⟨ x2, x2_post ⟩ ← U32.add_spec
       · sorry
       let* ⟨ x3, x3_post ⟩ ← U32.add_spec
