@@ -166,7 +166,7 @@ is possible to port the models to the Aeneas standard library, so that all clien
 can benefit from them. When doing so, it is important to make Aeneas aware of those new
 models. This is done by annotating the Lean models with the appropriate attribute
 (`rust_type`, `rust_const`, `rust_fun`, `rust_trait` or `rust_trait_impl`) then running the
-command `make extract-lean-builtins`. This command will build the Lean library for Aeneas,
+command `make extract-lean-std`. This command will build the Lean library for Aeneas,
 collect those definitions, and regenerate the `src/extract/ExtractBuiltinLean.ml` file,
 which provides information about those models.
 
