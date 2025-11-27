@@ -45,6 +45,17 @@ def clone.CloneBool : clone.Clone Bool := {
   clone_from := fun _ b => ok (clone.impls.CloneBool.clone b)
 }
 
+@[rust_fun "alloc::boxed::{core::clone::Clone<Box<@T>>}::clone"
+    (keepParams := [true, false]) (keepTraitClauses := [true, false])]
+def alloc.boxed.CloneBox.clone {T : Type} (cloneInst : core.clone.Clone T) : T → Result T :=
+  cloneInst.clone
+
+@[reducible, rust_trait_impl "core::clone::Clone<Box<@T>>"
+    (keepParams := [true, false]) (keepTraitClauses := [true, false])]
+def core.clone.CloneBox {T : Type} (cloneInst : core.clone.Clone T) : core.clone.Clone T := {
+  clone := alloc.boxed.CloneBox.clone cloneInst
+}
+
 @[rust_trait "core::marker::Copy" (parentClauses := ["cloneInst"])]
 structure marker.Copy (Self : Type) where
   cloneInst : core.clone.Clone Self
