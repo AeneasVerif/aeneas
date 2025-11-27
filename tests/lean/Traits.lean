@@ -205,11 +205,13 @@ def h4
 
 /- [traits::TestType]
    Source: 'tests/src/traits.rs', lines 124:0-124:26 -/
-@[reducible] def TestType (T : Type) := T
+@[reducible]
+def TestType (T : Type) := T
 
 /- [traits::{traits::TestType<T>}::test::TestType1]
    Source: 'tests/src/traits.rs', lines 129:8-129:30 -/
-@[reducible] def TestType.test.TestType1 := U64
+@[reducible]
+def TestType.test.TestType1 := U64
 
 /- [traits::{traits::TestType<T>}::test::{traits::{traits::TestType<T>}::test::TestTrait for traits::{traits::TestType<T>}::test::TestType1}::test]:
    Source: 'tests/src/traits.rs', lines 141:12-143:13 -/
@@ -243,7 +245,8 @@ def TestType.test.TestTraittraitsTestTypetestTestType1 :
 
 /- [traits::BoolWrapper]
    Source: 'tests/src/traits.rs', lines 152:0-152:33 -/
-@[reducible] def BoolWrapper := Bool
+@[reducible]
+def BoolWrapper := Bool
 
 /- [traits::{traits::ToType<T> for traits::BoolWrapper}::to_type]:
    Source: 'tests/src/traits.rs', lines 158:4-160:5 -/
@@ -339,9 +342,8 @@ def test_where1 {T : Type} (_x : T) : Result Unit := do
 /- [traits::test_where2]:
    Source: 'tests/src/traits.rs', lines 196:0-196:60 -/
 def test_where2
-  {T : Type} {Clause0_V : Type} {Clause0_W : Type}
-  (WithConstTyTClause0_VClause0_W32Inst : WithConstTy T Clause0_V Clause0_W
-  32#usize) (_x : U32) :
+  {T : Type} {Clause0_W : Type} (WithConstTyTU32Clause0_W32Inst : WithConstTy T
+  U32 Clause0_W 32#usize) (_x : U32) :
   Result Unit
   := do
   ok ()
@@ -383,8 +385,8 @@ def test_child_trait2
 /- [traits::order1]:
    Source: 'tests/src/traits.rs', lines 221:0-221:62 -/
 def order1
-  {T : Type} {U : Type} {Clause0_W : Type} {Clause1_W : Type} (ParentTrait0Inst
-  : ParentTrait0 T Clause0_W) (ParentTrait0Inst1 : ParentTrait0 U Clause1_W) :
+  {T : Type} {U : Type} {Clause1_W : Type} (ParentTrait0Inst : ParentTrait0 T
+  Clause1_W) (ParentTrait0Inst1 : ParentTrait0 U Clause1_W) :
   Result Unit
   := do
   ok ()
@@ -414,8 +416,8 @@ structure Iterator (Self : Type) (Self_Item : Type) where
 /- Trait declaration: [traits::IntoIterator]
    Source: 'tests/src/traits.rs', lines 235:0-241:1 -/
 structure IntoIterator (Self : Type) (Self_Item : Type) (Self_IntoIter : Type)
-  (Self_Clause0_Item : Type) where
-  IteratorInst : Iterator Self_IntoIter Self_Clause0_Item
+  where
+  IteratorInst : Iterator Self_IntoIter Self_Item
   into_iter : Self → Result Self_IntoIter
 
 /- Trait declaration: [traits::FromResidual]
@@ -543,7 +545,7 @@ def TraittraitsWrapper {T : Type} (TraitInst : Trait T) : Trait (Wrapper T)
 /- [traits::use_wrapper_len]:
    Source: 'tests/src/traits.rs', lines 324:0-326:1 -/
 def use_wrapper_len {T : Type} (TraitInst : Trait T) : Result Usize := do
-  ok (TraittraitsWrapper TraitInst).LEN
+  ok (TraittraitsWrapper.LEN TraitInst)
 
 /- [traits::Foo]
    Source: 'tests/src/traits.rs', lines 328:0-331:1 -/

@@ -551,17 +551,23 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
     let inside_mut = false in
     translate_back_ty span type_infos keep_region inside_mut ty
   in
-  let translate_back_inputs_for_gid (gid : T.RegionGroupId.id) : ty list =
-    (* For now we don't support nested borrows, so we check that there
-       aren't parent regions *)
+  (* Memoize the results *)
+  let gid_to_back_inputs = ref T.RegionGroupId.Map.empty in
+  let rec translate_back_inputs_for_gid_aux (gid : T.RegionGroupId.id) : ty list
+      =
+    (* For now we don't support nested mutable borrows, so we check that if
+       there are parent regions they don't consume anything *)
     let parents = list_ancestor_region_groups sg.regions_hierarchy gid in
-    [%classert_opt_span] span
-      (T.RegionGroupId.Set.is_empty parents)
-      (lazy
-        (let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
-         "Nested borrows are not supported yet (found in the signature of: "
-         ^ Charon.PrintTypes.fn_ptr_kind_to_string ctx fun_id
-         ^ ")"));
+    T.RegionGroupId.Set.iter
+      (fun gid ->
+        let tys = translate_back_inputs_for_gid gid in
+        [%classert_opt_span] span (tys = [])
+          (lazy
+            (let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
+             "Nested borrows are not supported yet (found in the signature of: "
+             ^ Charon.PrintTypes.fn_ptr_kind_to_string ctx fun_id
+             ^ ")")))
+      parents;
     (* For now, we don't allow nested borrows, so the additional inputs to the
        backward function can only come from borrows that were returned like
        in (for the backward function we introduce for 'a):
@@ -587,6 +593,14 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
       ^ RegionGroupId.to_string gid
       ^ "\n- output: " ^ output ^ "\n- back inputs: " ^ inputs];
     inputs
+  and translate_back_inputs_for_gid (gid : T.RegionGroupId.id) : ty list =
+    match T.RegionGroupId.Map.find_opt gid !gid_to_back_inputs with
+    | Some tys -> tys
+    | None ->
+        let tys = translate_back_inputs_for_gid_aux gid in
+        gid_to_back_inputs :=
+          T.RegionGroupId.Map.add gid tys !gid_to_back_inputs;
+        tys
   in
   let compute_back_outputs_for_gid (gid : RegionGroupId.id) :
       string option list * ty list =

@@ -1,5 +1,6 @@
 import Lean
 import Aeneas.Std.Global
+import Aeneas.Extract
 
 namespace Aeneas
 
@@ -222,6 +223,8 @@ end Test
 /-!
 # Misc
 -/
+
+abbrev Str := String
 
 instance SubtypeBEq [BEq α] (p : α → Prop) : BEq (Subtype p) where
   beq v0 v1 := v0.val == v1.val

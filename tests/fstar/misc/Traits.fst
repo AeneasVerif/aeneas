@@ -321,9 +321,8 @@ let test_where1 (#t : Type0) (_x : t) : result unit =
 (** [traits::test_where2]:
     Source: 'tests/src/traits.rs', lines 196:0-196:60 *)
 let test_where2
-  (#t : Type0) (#clause0_v : Type0) (#clause0_w : Type0)
-  (withConstTyTClause0_VClause0_W32Inst : withConstTy_t t clause0_v clause0_w
-  32) (_x : u32) :
+  (#t : Type0) (#clause0_w : Type0) (withConstTyTU32Clause0_W32Inst :
+  withConstTy_t t u32 clause0_w 32) (_x : u32) :
   result unit
   =
   Ok ()
@@ -367,9 +366,9 @@ let test_child_trait2
 (** [traits::order1]:
     Source: 'tests/src/traits.rs', lines 221:0-221:62 *)
 let order1
-  (#t : Type0) (#u : Type0) (#clause0_w : Type0) (#clause1_w : Type0)
-  (parentTrait0Inst : parentTrait0_t t clause0_w) (parentTrait0Inst1 :
-  parentTrait0_t u clause1_w) :
+  (#t : Type0) (#u : Type0) (#clause1_w : Type0) (parentTrait0Inst :
+  parentTrait0_t t clause1_w) (parentTrait0Inst1 : parentTrait0_t u clause1_w)
+  :
   result unit
   =
   Ok ()
@@ -397,8 +396,8 @@ type iterator_t (self : Type0) (self_item : Type0) = unit
 (** Trait declaration: [traits::IntoIterator]
     Source: 'tests/src/traits.rs', lines 235:0-241:1 *)
 noeq type intoIterator_t (self : Type0) (self_item : Type0) (self_into_iter :
-  Type0) (self_clause0_item : Type0) = {
-  iteratorInst : iterator_t self_into_iter self_clause0_item;
+  Type0) = {
+  iteratorInst : iterator_t self_into_iter self_item;
   into_iter : self -> result self_into_iter;
 }
 
@@ -525,7 +524,7 @@ let traittraitsWrapper (#t : Type0) (traitInst : trait_t t) : trait_t
 (** [traits::use_wrapper_len]:
     Source: 'tests/src/traits.rs', lines 324:0-326:1 *)
 let use_wrapper_len (#t : Type0) (traitInst : trait_t t) : result usize =
-  Ok (traittraitsWrapper traitInst).cLEN
+  Ok (traittraits_wrapper_len traitInst)
 
 (** [traits::Foo]
     Source: 'tests/src/traits.rs', lines 328:0-331:1 *)

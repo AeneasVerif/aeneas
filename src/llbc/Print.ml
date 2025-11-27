@@ -698,6 +698,7 @@ module Values = struct
     | Identity -> "Identity"
     | CopySymbolicValue -> "CopySymbolicValue"
     | Join -> "Join"
+    | WithCont -> "WithCont"
 
   let abs_cont_to_string ?(span : Meta.span option = None) (env : fmt_env)
       ?(with_ended : bool = false) (indent : string) (indent_incr : string)
@@ -987,6 +988,10 @@ module EvalCtx = struct
       (x : trait_decl_ref region_binder) : string =
     let env = eval_ctx_to_fmt_env ctx in
     region_binder_to_string trait_decl_ref_to_string env x
+
+  let trait_impl_ref_to_string (ctx : eval_ctx) (x : trait_impl_ref) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    trait_impl_ref_to_string env x
 
   let trait_decl_ref_to_string (ctx : eval_ctx) (x : trait_decl_ref) : string =
     let env = eval_ctx_to_fmt_env ctx in

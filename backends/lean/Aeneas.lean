@@ -3,6 +3,7 @@ import Aeneas.Array
 import Aeneas.BitVec
 import Aeneas.Bvify
 import Aeneas.BvTac
+import Aeneas.Extract
 import Aeneas.FCongr
 import Aeneas.Fin
 import Aeneas.FSimp

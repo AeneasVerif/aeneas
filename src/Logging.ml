@@ -79,44 +79,44 @@ let extract_log = create_logger "Extract"
 (** Logger for ExtractBuiltin *)
 let builtin_log = create_logger "Builtin"
 
-(** Logger for Interpreter *)
-let interpreter_log = create_logger "Interpreter"
+(** Logger for Interp *)
+let interp_log = create_logger "Interp"
 
-(** Logger for InterpreterMatchCtxs *)
-let match_ctxs_log = create_logger "InterpreterMatchCtxs"
+(** Logger for InterpMatchCtxs *)
+let match_ctxs_log = create_logger "InterpMatchCtxs"
 
-(** Logger for InterpreterReduceCollapse *)
-let reduce_collapse_log = create_logger "InterpreterReduceCollapse"
+(** Logger for InterpReduceCollapse *)
+let reduce_collapse_log = create_logger "InterpReduceCollapse"
 
-(** Logger for InterpreterJoin *)
-let join_log = create_logger "InterpreterJoin"
+(** Logger for InterpJoin *)
+let join_log = create_logger "InterpJoin"
 
-(** Logger for InterpreterLoopsFixedPoint *)
-let loops_fixed_point_log = create_logger "InterpreterLoopsFixedPoint"
+(** Logger for InterpLoopsFixedPoint *)
+let loops_fixed_point_log = create_logger "InterpLoopsFixedPoint"
 
-(** Logger for InterpreterLoops *)
-let loops_log = create_logger "InterpreterLoops"
+(** Logger for InterpLoops *)
+let loops_log = create_logger "InterpLoops"
 
-(** Logger for InterpreterStatements *)
-let statements_log = create_logger "InterpreterStatements"
+(** Logger for InterpStatements *)
+let statements_log = create_logger "InterpStatements"
 
-(** Logger for InterpreterExpressions *)
-let expressions_log = create_logger "InterpreterExpressions"
+(** Logger for InterpExpressions *)
+let expressions_log = create_logger "InterpExpressions"
 
-(** Logger for InterpreterPaths *)
-let paths_log = create_logger "InterpreterPaths"
+(** Logger for InterpPaths *)
+let paths_log = create_logger "InterpPaths"
 
-(** Logger for InterpreterExpansion *)
-let expansion_log = create_logger "InterpreterExpansion"
+(** Logger for InterpExpansion *)
+let expansion_log = create_logger "InterpExpansion"
 
-(** Logger for InterpreterProjectors *)
-let projectors_log = create_logger "InterpreterProjectors"
+(** Logger for InterpProjectors *)
+let projectors_log = create_logger "InterpProjectors"
 
-(** Logger for InterpreterBorrows *)
-let borrows_log = create_logger "InterpreterBorrows"
+(** Logger for InterpBorrows *)
+let borrows_log = create_logger "InterpBorrows"
 
-(** Logger for InterpreterAbs *)
-let abs_log = create_logger "InterpreterAbs"
+(** Logger for InterpAbs *)
+let abs_log = create_logger "InterpAbs"
 
 (** Logger for Invariants *)
 let invariants_log = create_logger "Invariants"

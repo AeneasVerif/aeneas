@@ -1,7 +1,7 @@
 open Aeneas.LlbcOfJson
 open Aeneas.Logging
 open Aeneas.LlbcAst
-open Aeneas.Interpreter
+open Aeneas.Interp
 module EL = Easy_logging.Logging
 open Aeneas.Config
 open Aeneas
@@ -145,7 +145,7 @@ let () =
         Arg.String (add_activated_loggers EL.Trace),
         " Activate trace log for a given logger designated by its name. It is \
          possible to specifiy a list of names if they are separated by commas \
-         without spaces; for instance: '-log Interpreter,SymbolicToPure'. The \
+         without spaces; for instance: '-log Interp,SymbolicToPure'. The \
          existing loggers are: {"
         ^ String.concat ", " (Collections.StringMap.keys !loggers)
         ^ "}" );
@@ -157,7 +157,7 @@ let () =
         Arg.String (add_activated_loggers EL.Error),
         " Activate error log for a given logger designated by its name. It is \
          possible to specifiy a list of names if they are separated by commas \
-         without spaces; for instance: '-log Interpreter,SymbolicToPure'. The \
+         without spaces; for instance: '-log Interp,SymbolicToPure'. The \
          existing loggers are: {"
         ^ String.concat ", " (Collections.StringMap.keys !loggers)
         ^ "}" );
@@ -266,6 +266,7 @@ let () =
   let marked_abs_ids = ref Values.AbsId.Set.empty in
   let marked_region_ids = ref Types.RegionId.Set.empty in
   let marked_fvar_ids = ref Pure.FVarId.Set.empty in
+  let marked_meta_ids = ref Values.MetaId.Set.empty in
   List.iter
     (fun id ->
       let i = if String.length id >= 2 && String.get id 1 = '@' then 2 else 1 in
@@ -298,6 +299,9 @@ let () =
           | 'f' ->
               marked_fvar_ids :=
                 Pure.FVarId.Set.add (Pure.FVarId.of_int i) !marked_fvar_ids
+          | 'm' ->
+              marked_meta_ids :=
+                Values.MetaId.Set.add (Values.MetaId.of_int i) !marked_meta_ids
           | _ ->
               log#serror
                 ("Invalid identifier provided to option: '" ^ id
@@ -316,6 +320,7 @@ let () =
       shared_borrow_ids = Values.SharedBorrowId.Set.empty;
       abs_fvar_ids = Values.AbsFVarId.Set.empty;
       loop_ids = Values.LoopId.Set.empty;
+      meta_ids = !marked_meta_ids;
     }
   in
 

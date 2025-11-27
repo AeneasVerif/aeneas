@@ -101,8 +101,7 @@ def clear_loop
   if i < i1
   then
     let (_, index_mut_back) ←
-      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSliceInst U32) v
-        i
+      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice U32) v i
     let i2 ← i + 1#usize
     let v1 := index_mut_back 0#u32
     clear_loop v1 i2
@@ -204,7 +203,7 @@ def get_elem_mut
   Result (Usize × (Usize → alloc.vec.Vec (List Usize)))
   := do
   let (ls, index_mut_back) ←
-    alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSliceInst (List
+    alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice (List
       Usize)) slots 0#usize
   let (i, back) ← get_elem_mut_loop x ls
   let back1 := fun ret => let l := back ret
@@ -226,8 +225,8 @@ partial_fixpoint
 def get_elem_shared
   (slots : alloc.vec.Vec (List Usize)) (x : Usize) : Result Usize := do
   let ls ←
-    alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSliceInst (List
-      Usize)) slots 0#usize
+    alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice (List Usize))
+      slots 0#usize
   get_elem_shared_loop x ls
 
 /- [loops::id_mut]:
@@ -596,7 +595,8 @@ partial_fixpoint
 
 /- [loops::issue500_2::A]
    Source: 'tests/src/loops.rs', lines 390:4-390:24 -/
-@[reducible] def issue500_2.A := Array Bool 1#usize
+@[reducible]
+def issue500_2.A := Array Bool 1#usize
 
 /- [loops::issue500_2::bar]:
    Source: 'tests/src/loops.rs', lines 391:4-391:33 -/
@@ -617,7 +617,8 @@ def issue500_2 (s : Array Bool 1#usize) : Result (Array Bool 1#usize) := do
 
 /- [loops::issue500_3::A]
    Source: 'tests/src/loops.rs', lines 402:4-402:24 -/
-@[reducible] def issue500_3.A := Array Bool 1#usize
+@[reducible]
+def issue500_3.A := Array Bool 1#usize
 
 /- [loops::issue500_3]: loop 0:
    Source: 'tests/src/loops.rs', lines 404:4-404:18 -/
@@ -820,5 +821,24 @@ def insert_in_list
   Result (Bool × (AList T))
   := do
   insert_in_list_loop key value ls
+
+/- [loops::reborrow_const::reborrow]:
+   Source: 'tests/src/loops.rs', lines 534:4-538:5 -/
+def reborrow_const.reborrow (x : U64) : Result U64 := do
+  ok x
+
+/- [loops::reborrow_const]: loop 0:
+   Source: 'tests/src/loops.rs', lines 0:0-542:5 -/
+def reborrow_const_loop : Result Unit := do
+  if 0#i32 < 5#i32
+  then let _ ← reborrow_const.reborrow 0#u64
+       reborrow_const_loop
+  else ok ()
+partial_fixpoint
+
+/- [loops::reborrow_const]:
+   Source: 'tests/src/loops.rs', lines 533:0-543:1 -/
+@[reducible] def reborrow_const : Result Unit := do
+               reborrow_const_loop
 
 end loops

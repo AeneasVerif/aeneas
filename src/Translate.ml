@@ -1,4 +1,4 @@
-open Interpreter
+open Interp
 open Types
 open Values
 open LlbcAst
@@ -873,7 +873,10 @@ let export_trait_decl (fmt : Format.formatter) (_config : gen_config)
 let export_trait_impl (fmt : Format.formatter) (_config : gen_config)
     (ctx : gen_ctx) (trait_impl_id : Pure.trait_impl_id) : unit =
   (* Lookup the definition *)
-  let trait_impl = TraitImplId.Map.find trait_impl_id ctx.trans_trait_impls in
+  let trait_impl =
+    [%silent_unwrap_opt_span] None
+      (TraitImplId.Map.find_opt trait_impl_id ctx.trans_trait_impls)
+  in
   let trait_decl =
     Pure.TraitDeclId.Map.find trait_impl.impl_trait.trait_decl_id
       ctx.trans_trait_decls

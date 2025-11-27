@@ -2,7 +2,7 @@
 import Aeneas.List
 import Aeneas.Progress.Init
 import Aeneas.Std.Array.Core
-import Aeneas.Std.Default
+import Aeneas.Std.Core.Default
 
 namespace Aeneas.Std
 
@@ -187,9 +187,7 @@ theorem Array.clone_spec {α : Type u} {n : Usize} {clone : α → Result α} {s
   have ⟨ l', h ⟩ := List.clone_spec h
   simp [h]
 
-/- [core::array::{core::clone::Clone for @Array<T, N>}#20::clone]:
-   Source: '/rustc/library/core/src/array/mod.rs', lines 432:4-432:27
-   Name pattern: [core::array::{core::clone::Clone<[@T; @N]>}::clone] -/
+@[rust_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone"]
 def core.array.CloneArray.clone
   {T : Type} {N : Usize} (cloneInst : core.clone.Clone T) (a : Array T N) : Result (Array T N) :=
   Array.clone cloneInst.clone a
@@ -201,9 +199,7 @@ theorem core.array.CloneArray.clone_spec {T : Type} {N : Usize} (cloneInst : cor
   unfold clone
   rw [Array.clone_spec h]
 
-/- [core::array::{core::clone::Clone for @Array<T, N>}#20::clone_from]:
-   Source: '/rustc/library/core/src/array/mod.rs', lines 424:4-424:42
-   Name pattern: [core::array::{core::clone::Clone<[@T; @N]>}::clone_from] -/
+@[rust_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone_from"]
 def core.array.CloneArray.clone_from {T : Type} {N : Usize} (cloneInst : core.clone.Clone T)
   (_self source : Array T N) : Result (Array T N) :=
   Array.clone cloneInst.clone source
@@ -215,10 +211,7 @@ theorem core.array.CloneArray.clone_from_spec {T : Type} {N : Usize} (cloneInst 
   unfold clone_from
   rw [Array.clone_spec h]
 
-/- Trait implementation: [core::array::{core::clone::Clone for @Array<T, N>}#20]
-   Source: '/rustc/library/core/src/array/mod.rs', lines 430:0-430:47
-   Name pattern: [core::clone::Clone<[@T; @N]>] -/
-@[reducible]
+@[reducible, rust_trait_impl "core::clone::Clone<[@T; @N]>"]
 def core.clone.CloneArray {T : Type} (N : Usize)
   (cloneCloneInst : core.clone.Clone T) : core.clone.Clone (Array T N) := {
   clone := core.array.CloneArray.clone cloneCloneInst
@@ -248,41 +241,29 @@ theorem Array.setSlice!_getElem!_suffix {α} {n} [Inhabited α]
   simp only [Array.setSlice!, Array.getElem!_Nat_eq]
   simp_lists
 
-/- [core::array::{core::default::Default for @Array<T, N>}#36::default]:
-   Source: '/rustc/library/core/src/array/mod.rs', lines 455:12-455:35
-   Name pattern: [core::array::{core::default::Default<[@T; @N]>}::default]
-
-   Remark: see the comment for `core.default.DefaultArray`
--/
+/- Remark: see the comment for `core.default.DefaultArray` -/
+@[rust_fun "core::array::{core::default::Default<[@T; @N]>}::default"]
 def core.default.DefaultArray.default {T : Type} (N : Usize) (defaultInst : core.default.Default T) : Result (Array T N) := do
   let x ← defaultInst.default
   .ok (Array.repeat N x)
 
-/- Trait implementation: [core::array::{core::default::Default for @Array<T, N>}#36]
-   Source: '/rustc/library/core/src/array/mod.rs', lines 454:8-454:52
-   Name pattern: [core::default::Default<[@T; @N]>]
-
-   Remark: the `Default` instance actually doesn't exist for *any* const generic `N`. Rather,
+/- Remark: the `Default` instance actually doesn't exist for *any* const generic `N`. Rather,
    there exists one instance per known length different from 0 (and a different instance for
    the case where the length is equal to 0, because in this case we don't need the type of
    the elements to have a default value). We factor the cases where `N` is ≠ 0 in the Lean model.
  -/
-@[reducible]
+@[reducible, rust_trait_impl "core::default::Default<[@T; @N]>"]
 def core.default.DefaultArray {T : Type} {N : Usize}
   (defaultInst : core.default.Default T) : core.default.Default (Array T N) := {
   default := core.default.DefaultArray.default N defaultInst
 }
 
-/- [core::array::{core::default::Default for @Array<T, 0: usize>}#61::default]:
-   Source: '/rustc/library/core/src/array/mod.rs', lines 464:12-464:35
-   Name pattern: [core::array::{core::default::Default<[@T; 0]>}::default] -/
+@[rust_fun "core::array::{core::default::Default<[@T; 0]>}::default"]
 def core.default.DefaultArrayEmpty.default (T : Type) : Result (Array T (Usize.ofNat 0)) :=
   ok ⟨ [], by scalar_tac ⟩
 
-/- Trait implementation: [core::array::{core::default::Default for @Array<T, 0: usize>}#61]
-   Source: '/rustc/library/core/src/array/mod.rs', lines 463:8-463:35
-   Name pattern: [core::default::Default<[@T; 0]>] -/
-@[reducible]
+/- See the comments for `core.default.DefaultArray` -/
+@[reducible, rust_trait_impl "core::default::Default<[@T; 0]>"]
 def core.default.DefaultArrayEmpty (T : Type) : core.default.Default (Array T (Usize.ofNat 0)) := {
   default := core.default.DefaultArrayEmpty.default T
 }

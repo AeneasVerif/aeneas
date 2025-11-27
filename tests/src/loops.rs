@@ -527,3 +527,17 @@ fn insert_in_list<T>(key: usize, value: T, mut ls: &mut AList<T>) -> bool {
         }
     }
 }
+
+// Issue: https://github.com/AeneasVerif/aeneas/issues/641
+// The code is adapted from https://github.com/dalek-cryptography/curve25519-dalek
+fn reborrow_const() {
+    fn reborrow(x: &u64) -> u64 {
+        {
+            *x
+        }
+    }
+    let i = 0;
+    while i < 5 {
+        let x = reborrow(&0);
+    }
+}

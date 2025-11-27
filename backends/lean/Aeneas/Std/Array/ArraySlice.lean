@@ -1,6 +1,8 @@
+import Aeneas.Std.Core.Fmt
 import Aeneas.Std.Array.Array
 import Aeneas.Std.Slice
 import Aeneas.Std.Range
+import Aeneas.List.List
 
 /-! Array definitions which mention slices -/
 
@@ -78,13 +80,13 @@ theorem Array.update_subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a :
   . simp_lists
   . scalar_tac
 
-/- [core::array::[T; N]::index]: forward function -/
+@[rust_fun "core::array::{core::ops::index::Index<[@T; @N], @I, @O>}::index"]
 def core.array.Array.index
   {T I Output : Type} {N : Usize} (inst : core.ops.index.Index (Slice T) I Output)
   (a : Array T N) (i : I) : Result Output :=
   inst.index a.to_slice i
 
-/- [core::array::[T; N]::index_mut]: forward function -/
+@[rust_fun "core::array::{core::ops::index::IndexMut<[@T; @N], @I, @O>}::index_mut"]
 def core.array.Array.index_mut
   {T I Output : Type} {N : Usize} (inst : core.ops.index.IndexMut (Slice T) I Output)
   (a : Array T N) (i : I) :
@@ -92,23 +94,23 @@ def core.array.Array.index_mut
   let (s, back) ← inst.index_mut a.to_slice i
   ok (s, fun o => Array.from_slice a (back o))
 
-/- Trait implementation: [core::array::[T; N]] -/
-def core.ops.index.IndexArrayInst {T I Output : Type} {N : Usize}
+@[rust_trait_impl "core::ops::index::Index<[@T; @N], @I, @O>"]
+def core.ops.index.IndexArray {T I Output : Type} {N : Usize}
   (inst : core.ops.index.Index (Slice T) I Output) :
   core.ops.index.Index (Array T N) I Output := {
   index := core.array.Array.index inst
 }
 
-/- Trait implementation: [core::array::[T; N]] -/
-def core.ops.index.IndexMutArrayInst {T I Output : Type} {N : Usize}
+@[rust_trait_impl "core::ops::index::IndexMut<[@T; @N], @I, @O>"]
+def core.ops.index.IndexMutArray {T I Output : Type} {N : Usize}
   (inst : core.ops.index.IndexMut (Slice T) I Output) :
   core.ops.index.IndexMut (Array T N) I Output := {
-  indexInst := core.ops.index.IndexArrayInst inst.indexInst
+  indexInst := core.ops.index.IndexArray inst.indexInst
   index_mut := core.array.Array.index_mut inst
 }
 
-/- [core::array::TryFromSliceError] -/
-def core.array.TryFromSliceError := ()
+@[reducible, rust_type "core::array::TryFromSliceError"]
+def core.array.TryFromSliceError := Unit
 
 @[simp, simp_lists_simps, grind =]
 theorem Array.val_to_slice {α} {n} (a : Array α n) : a.to_slice.val = a.val := by
@@ -120,5 +122,83 @@ theorem Array.length_to_slice (a : Array α n) :
   simp only [Slice.length, Array.to_slice, List.Vector.length_val]
 
 grind_pattern Array.length_to_slice => a.to_slice
+
+@[rust_fun "core::array::equality::{core::cmp::PartialEq<[@T; @N], [@U; @N]>}::eq"]
+def core.array.equality.PartialEqArray.eq
+  {T : Type} {U : Type} {N : Usize} (partialEqInst : core.cmp.PartialEq T U)
+  (a0 : Array T N) (a1 : Array U N) : Result Bool := do
+  if a0.length = a1.length then
+    List.allM (fun (x, y) => partialEqInst.eq x y) (List.zip a0.val a1.val)
+  else .ok false
+
+@[rust_fun "core::array::equality::{core::cmp::PartialEq<[@T; @N], [@U; @N]>}::ne"]
+def core.array.equality.PartialEqArray.ne
+  {T : Type} {U : Type} {N : Usize} (partialEqInst : core.cmp.PartialEq T U)
+  (a0 : Array T N) (a1 : Array U N) : Result Bool := do
+  if a0.length = a1.length then
+    List.anyM (fun (x, y) => partialEqInst.ne x y) (List.zip a0.val a1.val)
+  else .ok true
+
+@[rust_fun "core::array::{core::fmt::Debug<core::array::TryFromSliceError>}::fmt"]
+def core.array.DebugcorearrayTryFromSliceError.fmt
+  (_ : core.array.TryFromSliceError) (fmt : core.fmt.Formatter) :
+  Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=
+  -- TODO: this model is simplistic
+  .ok (.Ok (), fmt)
+
+@[rust_fun "core::array::{core::convert::TryFrom<[@T; @N], &'0 [@T], core::array::TryFromSliceError>}::try_from"]
+def core.array.TryFromArrayCopySlice.try_from
+  {T : Type} (N : Usize) (copyInst : core.marker.Copy T) (s : Slice T) :
+  Result (core.result.Result (Array T N) core.array.TryFromSliceError) := do
+  if h0: s.length = N then
+    match h1: List.mapM copyInst.cloneInst.clone s.val with
+    | ok s =>
+      ok (.Ok ⟨s, by have := List.mapM_Result_length h1; scalar_tac ⟩)
+    | fail e => fail e
+    | div => div
+  else ok (.Err ())
+
+@[rust_fun "core::array::{core::convert::TryFrom<&'a [@T; @N], &'a [@T], core::array::TryFromSliceError>}::try_from"]
+def core.array.TryFromSharedArraySlice.try_from
+  {T : Type} (N : Usize) (s : Slice T) :
+  Result (core.result.Result (Array T N) core.array.TryFromSliceError) := do
+  if h: s.len = N then .ok (.Ok ⟨s.val, by scalar_tac⟩)
+  else .ok (.Err ())
+
+@[rust_fun "core::array::{core::convert::TryFrom<&'a mut [@T; @N], &'a mut [@T], core::array::TryFromSliceError>}::try_from"]
+def core.array.TryFromMutArraySlice.try_from
+  {T : Type} (N : Usize) (s : Slice T) :
+  Result (
+    core.result.Result (Array T N) core.array.TryFromSliceError ×
+    (core.result.Result (Array T N) core.array.TryFromSliceError → Slice T)) :=
+  if h: s.len = N then
+    let back (a : core.result.Result (Array T N) core.array.TryFromSliceError) : Slice T :=
+      match a with
+      | .Ok a =>
+        if a.length = s.length then ⟨ a.val, by scalar_tac ⟩
+        else s
+      | _ => s
+    ok ((.Ok ⟨ s.val, by scalar_tac⟩, back))
+  else ok ((.Err (), fun _ => s))
+
+@[simp, rust_fun "core::array::{core::fmt::Debug<[@T; @N]>}::fmt"]
+def core.array.DebugArray.fmt
+  {T : Type} {N : Usize} (_ : core.fmt.Debug T) (_ : Array T N) (fmt : core.fmt.Formatter) :
+  Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=
+  -- TODO: this model is simplistic
+  ok (.Ok (), fmt)
+
+@[rust_fun "core::array::{[@T; @N]}::as_slice"]
+def core.array.Array.as_slice {T : Type} {N : Usize} (a : Array T N) : Result (Slice T) :=
+  ok (⟨ a.val, by scalar_tac ⟩)
+
+@[rust_fun "core::array::{[@T; @N]}::as_mut_slice"]
+def core.array.Array.as_mut_slice
+  {T : Type} {N : Usize} (a : Array T N) :
+  Result (Slice T × (Slice T → Array T N)) :=
+  let back (s : Slice T) : Array T N :=
+    if h: s.length = N then ⟨ s.val, by scalar_tac ⟩
+    else a
+  ok (⟨ a.val, by scalar_tac ⟩, back)
 
 end Aeneas.Std

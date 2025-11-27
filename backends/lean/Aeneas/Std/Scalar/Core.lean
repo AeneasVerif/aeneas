@@ -1,6 +1,6 @@
 import Lean
 import Lean.Meta.Tactic.Simp
-import Aeneas.Std.Core
+import Aeneas.Std.Core.Core
 import Aeneas.Progress.Init
 import Aeneas.ScalarTac.ScalarTac
 import Aeneas.Bvify.Init
@@ -983,12 +983,12 @@ instance (ty: IScalarTy) : LinearOrder (IScalar ty) where
     This is helpful whenever you want to "push" casts to the innermost nodes
     and make the cast normalization happen more magically. -/
 
-@[simp, norm_cast, grind =]
+@[simp, norm_cast, scalar_tac_simps, grind =]
 theorem UScalar.coe_max {ty: UScalarTy} (a b: UScalar ty): ↑(Max.max a b) = (Max.max (↑a) (↑b): ℕ) := by
   rw[_root_.max_def, _root_.max_def]
   split_ifs <;> simp_all
 
-@[simp, norm_cast, grind =]
+@[simp, norm_cast, scalar_tac_simps, grind =]
 theorem IScalar.coe_max {ty: IScalarTy} (a b: IScalar ty): ↑(Max.max a b) = (Max.max (↑a) (↑b): ℤ) := by
   rw[_root_.max_def, _root_.max_def]
   split_ifs <;> simp_all
