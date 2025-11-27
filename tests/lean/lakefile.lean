@@ -18,6 +18,7 @@ package «tests» {}
 @[default_target] lean_lib Constants
 @[default_target] lean_lib Default
 @[default_target] lean_lib DefaultedMethod
+@[default_target] lean_lib Derive
 @[default_target] lean_lib Demo
 @[default_target] lean_lib Deref
 @[default_target] lean_lib DynamicSize
