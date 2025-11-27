@@ -2652,3 +2652,13 @@ let get_tuple_size (e : texpr) : int option =
   match f.e with
   | Qualif { id = AdtCons { adt_id = TTuple; _ }; _ } -> Some (List.length args)
   | _ -> None
+
+let binop_can_fail : binop -> bool = function
+  | BitXor _ | BitAnd _ | BitOr _ | Eq _ | Lt _ | Le _ | Ne _ | Ge _ | Gt _
+  | Add (OWrap, _)
+  | Sub (OWrap, _)
+  | Mul (OWrap, _)
+  | Shl (OWrap, _, _)
+  | Shr (OWrap, _, _)
+  | AddChecked _ | SubChecked _ | MulChecked _ | Cmp _ -> false
+  | Div _ | Rem _ | Add _ | Sub _ | Mul _ | Shl _ | Shr _ -> true

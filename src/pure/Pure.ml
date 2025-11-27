@@ -54,22 +54,13 @@ type span = Meta.span [@@deriving show, ord]
 type ref_kind = Types.ref_kind [@@deriving show, ord]
 type 'a de_bruijn_var = 'a Types.de_bruijn_var [@@deriving show, ord]
 type llbc_fun_id = A.fun_id [@@deriving show, ord]
-type binop = E.binop [@@deriving show, ord]
+type overflow_mode = E.overflow_mode [@@deriving show, ord]
 
 (** A DeBruijn index identifying a group of bound variables *)
 type db_scope_id = int [@@deriving show, ord]
 
 type bvar_id = BVarId.id [@@deriving show, ord]
 type fvar_id = FVarId.id [@@deriving show, ord]
-
-(*let ( fvar_id_counter,
-      marked_fvar_ids,
-      marked_fvar_ids_insert_from_int,
-      fresh_fvar_id ) =
-  FVarId.fresh_marked_stateful_generator ()
-
-let reset_global_counters () = fvar_id_counter := FVarId.generator_zero
-  let reset_fvar_id_counter () = fvar_id_counter := FVarId.generator_zero*)
 
 (** The builtin types for the pure AST.
 
@@ -247,6 +238,7 @@ class ['self] iter_type_id_base =
     inherit [_] VisitorsRuntime.iter
     method visit_type_decl_id : 'env -> type_decl_id -> unit = fun _ _ -> ()
     method visit_builtin_ty : 'env -> builtin_ty -> unit = fun _ _ -> ()
+    method visit_overflow_mode : 'env -> overflow_mode -> unit = fun _ _ -> ()
   end
 
 (** Ancestor for map visitor for [ty] *)
@@ -258,6 +250,9 @@ class ['self] map_type_id_base =
       fun _ x -> x
 
     method visit_builtin_ty : 'env -> builtin_ty -> builtin_ty = fun _ x -> x
+
+    method visit_overflow_mode : 'env -> overflow_mode -> overflow_mode =
+      fun _ x -> x
   end
 
 (** Ancestor for reduce visitor for [ty] *)
@@ -269,6 +264,9 @@ class virtual ['self] reduce_type_id_base =
       fun _ _ -> self#zero
 
     method visit_builtin_ty : 'env -> builtin_ty -> 'a = fun _ _ -> self#zero
+
+    method visit_overflow_mode : 'env -> overflow_mode -> 'a =
+      fun _ _ -> self#zero
   end
 
 (** Ancestor for mapreduce visitor for [ty] *)
@@ -280,6 +278,9 @@ class virtual ['self] mapreduce_type_id_base =
       fun _ x -> (x, self#zero)
 
     method visit_builtin_ty : 'env -> builtin_ty -> builtin_ty * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_overflow_mode : 'env -> overflow_mode -> overflow_mode * 'a =
       fun _ x -> (x, self#zero)
   end
 
@@ -397,6 +398,29 @@ and generic_args = {
   const_generics : const_generic list;
   trait_refs : trait_ref list;
 }
+
+(** See the documentation of [E.binop] *)
+and binop =
+  | BitXor of integer_type
+  | BitAnd of integer_type
+  | BitOr of integer_type
+  | Eq of ty
+  | Ne of ty
+  | Lt of integer_type
+  | Le of integer_type
+  | Ge of integer_type
+  | Gt of integer_type
+  | Add of overflow_mode * integer_type
+  | Sub of overflow_mode * integer_type
+  | Mul of overflow_mode * integer_type
+  | Div of overflow_mode * integer_type
+  | Rem of overflow_mode * integer_type
+  | AddChecked of integer_type
+  | SubChecked of integer_type
+  | MulChecked of integer_type
+  | Shl of overflow_mode * integer_type * integer_type
+  | Shr of overflow_mode * integer_type * integer_type
+  | Cmp of integer_type
 
 and builtin_impl_data = BuiltinCopy | BuiltinClone
 
@@ -785,7 +809,6 @@ class ['self] iter_tpat_base =
     method visit_pure_builtin_fun_id : 'env -> pure_builtin_fun_id -> unit =
       fun _ _ -> ()
 
-    method visit_binop : 'env -> binop -> unit = fun _ _ -> ()
     method visit_field_id : 'env -> field_id -> unit = fun _ _ -> ()
   end
 
@@ -820,7 +843,6 @@ class ['self] map_tpat_base =
         'env -> pure_builtin_fun_id -> pure_builtin_fun_id =
       fun _ x -> x
 
-    method visit_binop : 'env -> binop -> binop = fun _ x -> x
     method visit_field_id : 'env -> field_id -> field_id = fun _ x -> x
   end
 
@@ -852,7 +874,6 @@ class virtual ['self] reduce_tpat_base =
     method visit_pure_builtin_fun_id : 'env -> pure_builtin_fun_id -> 'a =
       fun _ _ -> self#zero
 
-    method visit_binop : 'env -> binop -> 'a = fun _ _ -> self#zero
     method visit_field_id : 'env -> field_id -> 'a = fun _ _ -> self#zero
   end
 
@@ -895,8 +916,6 @@ class virtual ['self] mapreduce_tpat_base =
     method visit_pure_builtin_fun_id :
         'env -> pure_builtin_fun_id -> pure_builtin_fun_id * 'a =
       fun _ x -> (x, self#zero)
-
-    method visit_binop : 'env -> binop -> binop * 'a = fun _ x -> (x, self#zero)
 
     method visit_field_id : 'env -> field_id -> field_id * 'a =
       fun _ x -> (x, self#zero)
@@ -1015,10 +1034,7 @@ and fun_id =
       (** A function only used in the pure translation *)
 
 (** A function or an operation id *)
-and fun_or_op_id =
-  | Fun of fun_id
-  | Unop of unop
-  | Binop of binop * integer_type
+and fun_or_op_id = Fun of fun_id | Unop of unop | Binop of binop
 
 (** An identifier for an ADT constructor *)
 and adt_cons_id = { adt_id : type_id; variant_id : variant_id option }

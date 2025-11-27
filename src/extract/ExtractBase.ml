@@ -826,29 +826,29 @@ let unop_name (unop : unop) : string =
 (** Small helper to compute the name of a binary operation (note that many
     binary operations like "less than" are extracted to primitive operations,
     like [<]). *)
-let named_binop_name (binop : E.binop) (int_ty : integer_type) : string =
-  let binop_s =
-    match binop with
-    | Div _ -> "div"
-    | Rem _ -> "rem"
-    | Add _ -> "add"
-    | Sub _ -> "sub"
-    | Mul _ -> "mul"
-    | Lt -> "lt"
-    | Le -> "le"
-    | Ge -> "ge"
-    | Gt -> "gt"
-    | BitXor -> "xor"
-    | BitAnd -> "and"
-    | BitOr -> "or"
-    | Shl _ -> "shl"
-    | Shr _ -> "shr"
-    | _ -> raise (Failure "Unreachable")
+let named_binop_name (binop : binop) : string =
+  let add_int_name int_ty =
+    (* Remark: the Lean case is actually not used *)
+    match backend () with
+    | Lean -> int_name int_ty ^ "."
+    | FStar | Coq | HOL4 -> int_name int_ty ^ "_"
   in
-  (* Remark: the Lean case is actually not used *)
-  match backend () with
-  | Lean -> int_name int_ty ^ "." ^ binop_s
-  | FStar | Coq | HOL4 -> int_name int_ty ^ "_" ^ binop_s
+  match binop with
+  | Div (_, ty) -> add_int_name ty ^ "div"
+  | Rem (_, ty) -> add_int_name ty ^ "rem"
+  | Add (_, ty) -> add_int_name ty ^ "add"
+  | Sub (_, ty) -> add_int_name ty ^ "sub"
+  | Mul (_, ty) -> add_int_name ty ^ "mul"
+  | Lt ty -> add_int_name ty ^ "lt"
+  | Le ty -> add_int_name ty ^ "le"
+  | Ge ty -> add_int_name ty ^ "ge"
+  | Gt ty -> add_int_name ty ^ "gt"
+  | BitXor ty -> add_int_name ty ^ "xor"
+  | BitAnd ty -> add_int_name ty ^ "and"
+  | BitOr ty -> add_int_name ty ^ "or"
+  | Shl (_, ty, _) -> add_int_name ty ^ "shl"
+  | Shr (_, ty, _) -> add_int_name ty ^ "shr"
+  | _ -> raise (Failure "Unreachable")
 
 (** A list of keywords/identifiers used by the backend and with which we want to
     check collision.
@@ -863,13 +863,27 @@ let keywords () =
          T.all_signed_int_types
     @ List.map (fun it -> unop_name (Neg (Signed it))) T.all_signed_int_types
   in
-  let named_binops =
-    [ E.Div OPanic; Rem OPanic; Add OPanic; Sub OPanic; Mul OPanic ]
+  let mk_binops (ty : integer_type) =
+    [
+      Div (OPanic, ty);
+      Rem (OPanic, ty);
+      Add (OPanic, ty);
+      Sub (OPanic, ty);
+      Mul (OPanic, ty);
+      Lt ty;
+      Le ty;
+      Ge ty;
+      Gt ty;
+      BitXor ty;
+      BitAnd ty;
+      BitOr ty;
+      Shl (OPanic, ty, ty);
+      Shr (OPanic, ty, ty);
+    ]
   in
   let named_binops =
-    List.concat_map
-      (fun bn -> List.map (fun it -> named_binop_name bn it) T.all_int_types)
-      named_binops
+    List.map named_binop_name
+      (List.flatten (List.map mk_binops T.all_int_types))
   in
   let misc =
     match backend () with

@@ -834,14 +834,50 @@ let unop_to_string (unop : unop) : string =
       ^ ">"
   | ArrayToSlice -> "array_to_slice"
 
-let binop_to_string = Print.Expressions.binop_to_string
+let binop_to_string (env : fmt_env) (binop : binop) =
+  let open Print.Expressions in
+  let int_ty_to_string int_ty = "::<" ^ integer_type_to_string int_ty ^ ">" in
+  let int_tys_to_string int_ty0 int_ty1 =
+    "::<"
+    ^ integer_type_to_string int_ty0
+    ^ ",  "
+    ^ integer_type_to_string int_ty1
+    ^ ">"
+  in
+  match binop with
+  | BitXor int_ty -> "^" ^ int_ty_to_string int_ty
+  | BitAnd int_ty -> "&" ^ int_ty_to_string int_ty
+  | BitOr int_ty -> "|" ^ int_ty_to_string int_ty
+  | Eq ty -> "==" ^ "::<" ^ ty_to_string env false ty ^ ">"
+  | Ne ty -> "!=" ^ "::<" ^ ty_to_string env false ty ^ ">"
+  | Lt int_ty -> "<" ^ int_ty_to_string int_ty
+  | Le int_ty -> "<=" ^ int_ty_to_string int_ty
+  | Ge int_ty -> ">=" ^ int_ty_to_string int_ty
+  | Gt int_ty -> ">" ^ int_ty_to_string int_ty
+  | Div (om, int_ty) ->
+      overflow_mode_to_string om ^ "./" ^ int_ty_to_string int_ty
+  | Rem (om, int_ty) ->
+      overflow_mode_to_string om ^ ".%" ^ int_ty_to_string int_ty
+  | Add (om, int_ty) ->
+      overflow_mode_to_string om ^ ".+" ^ int_ty_to_string int_ty
+  | Sub (om, int_ty) ->
+      overflow_mode_to_string om ^ ".-" ^ int_ty_to_string int_ty
+  | Mul (om, int_ty) ->
+      overflow_mode_to_string om ^ ".*" ^ int_ty_to_string int_ty
+  | Shl (om, int_ty0, int_ty1) ->
+      overflow_mode_to_string om ^ ".<<" ^ int_tys_to_string int_ty0 int_ty1
+  | Shr (om, int_ty0, int_ty1) ->
+      overflow_mode_to_string om ^ ".>>" ^ int_tys_to_string int_ty0 int_ty1
+  | AddChecked int_ty -> "checked.+" ^ int_ty_to_string int_ty
+  | SubChecked int_ty -> "checked.-" ^ int_ty_to_string int_ty
+  | MulChecked int_ty -> "checked.*" ^ int_ty_to_string int_ty
+  | Cmp int_ty -> "cmp" ^ int_ty_to_string int_ty
 
 let fun_or_op_id_to_string (env : fmt_env) (fun_id : fun_or_op_id) : string =
   match fun_id with
   | Fun fun_id -> regular_fun_id_to_string env fun_id
   | Unop unop -> unop_to_string unop
-  | Binop (binop, int_ty) ->
-      binop_to_string binop ^ "::<" ^ integer_type_to_string int_ty ^ ">"
+  | Binop binop -> binop_to_string env binop
 
 (** [inside]: controls the introduction of parentheses *)
 let rec texpr_to_string ?(span : Meta.span option = None) (env : fmt_env)

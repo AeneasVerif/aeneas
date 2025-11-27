@@ -11,6 +11,9 @@ open Errors
 open ExtractErrors
 include ExtractTypes
 
+let binop_to_string (ctx : extraction_ctx) =
+  PrintPure.binop_to_string (extraction_ctx_to_fmt_env ctx)
+
 let fun_or_op_id_to_string (ctx : extraction_ctx) =
   PrintPure.fun_or_op_id_to_string (extraction_ctx_to_fmt_env ctx)
 
@@ -505,46 +508,44 @@ let extract_unop (span : Meta.span)
     - binop
     - argument 0
     - argument 1 *)
-let extract_binop (span : Meta.span)
+let extract_binop (span : Meta.span) (ctx : extraction_ctx)
     (extract_expr : inside:bool -> texpr -> unit) (fmt : F.formatter)
-    ~(inside : bool) (binop : E.binop) (int_ty : integer_type) (arg0 : texpr)
-    (arg1 : texpr) : unit =
+    ~(inside : bool) (binop : binop) (arg0 : texpr) (arg1 : texpr) : unit =
   if inside then F.pp_print_string fmt "(";
   (* Some binary operations have a special notation depending on the backend *)
   (match (backend (), binop) with
-  | HOL4, (Eq | Ne)
-  | (FStar | Coq | Lean), (Eq | Lt | Le | Ne | Ge | Gt)
+  | HOL4, (Eq _ | Ne _)
+  | (FStar | Coq | Lean), (Eq _ | Lt _ | Le _ | Ne _ | Ge _ | Gt _)
   | ( Lean,
-      ( Div OPanic
-      | Rem OPanic
-      | Add OPanic
-      | Sub OPanic
-      | Mul OPanic
-      | Shl OPanic
-      | Shr OPanic
-      | BitXor | BitOr | BitAnd ) ) ->
+      ( Div (OPanic, _)
+      | Rem (OPanic, _)
+      | Add (OPanic, _)
+      | Sub (OPanic, _)
+      | Mul (OPanic, _)
+      | Shl (OPanic, _, _)
+      | Shr (OPanic, _, _)
+      | BitXor _ | BitOr _ | BitAnd _ ) ) ->
       let binop =
         match binop with
-        | Eq -> "="
-        | Lt -> "<"
-        | Le -> "<="
-        | Ne -> if backend () = Lean then "!=" else "<>"
-        | Ge -> ">="
-        | Gt -> ">"
-        | Div OPanic -> "/"
-        | Rem OPanic -> "%"
-        | Add OPanic -> "+"
-        | Sub OPanic -> "-"
-        | Mul OPanic -> "*"
-        | Shl OPanic -> "<<<"
-        | Shr OPanic -> ">>>"
-        | BitXor -> "^^^"
-        | BitOr -> "|||"
-        | BitAnd -> "&&&"
+        | Eq _ -> "="
+        | Lt _ -> "<"
+        | Le _ -> "<="
+        | Ne _ -> if backend () = Lean then "!=" else "<>"
+        | Ge _ -> ">="
+        | Gt _ -> ">"
+        | Div (OPanic, _) -> "/"
+        | Rem (OPanic, _) -> "%"
+        | Add (OPanic, _) -> "+"
+        | Sub (OPanic, _) -> "-"
+        | Mul (OPanic, _) -> "*"
+        | Shl (OPanic, _, _) -> "<<<"
+        | Shr (OPanic, _, _) -> ">>>"
+        | BitXor _ -> "^^^"
+        | BitOr _ -> "|||"
+        | BitAnd _ -> "&&&"
         | _ ->
             admit_string __FILE__ __LINE__ span
-              ("Unimplemented binary operation: "
-              ^ Charon.PrintExpressions.binop_to_string binop)
+              ("Unimplemented binary operation: " ^ binop_to_string ctx binop)
       in
       let binop =
         match backend () with
@@ -562,7 +563,7 @@ let extract_binop (span : Meta.span)
         | Shl _ | Shr _ -> true
         | _ -> false
       in
-      let binop = named_binop_name binop int_ty in
+      let binop = named_binop_name binop in
       F.pp_print_string fmt binop;
       (* In the case of F*, for shift operations, because machine integers
          are simply integers with a refinement, if the second argument is a
@@ -697,11 +698,11 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
       extract_unop span
         (extract_texpr span ctx fmt ~inside_do)
         fmt ~inside unop arg
-  | Binop (binop, int_ty), [ arg0; arg1 ] ->
+  | Binop binop, [ arg0; arg1 ] ->
       (* Number of arguments: similar to unop *)
-      extract_binop span
+      extract_binop span ctx
         (extract_texpr span ctx fmt ~inside_do)
-        fmt ~inside binop int_ty arg0 arg1
+        fmt ~inside binop arg0 arg1
   | Fun fun_id, _ ->
       let use_brackets = inside in
       if use_brackets then F.pp_print_string fmt "(";

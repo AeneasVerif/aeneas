@@ -1184,22 +1184,21 @@ let inline_unop unop = not (lift_unop unop)
 (** A helper predicate *)
 let lift_binop (binop : binop) : bool =
   match binop with
-  | Eq | Lt | Le | Ne | Ge | Gt -> false
-  | BitXor
-  | BitAnd
-  | BitOr
+  | Eq _ | Lt _ | Le _ | Ne _ | Ge _ | Gt _ -> false
+  | BitXor _
+  | BitAnd _
+  | BitOr _
   | Div _
   | Rem _
   | Add _
   | Sub _
   | Mul _
-  | AddChecked
-  | SubChecked
-  | MulChecked
+  | AddChecked _
+  | SubChecked _
+  | MulChecked _
   | Shl _
   | Shr _
-  | Offset
-  | Cmp -> true
+  | Cmp _ -> true
 
 (** A helper predicate *)
 let inline_binop binop = not (lift_binop binop)
@@ -1319,7 +1318,7 @@ let inline_useless_var_assignments_visitor ~(inline_named : bool)
                   | AdtCons _ -> true (* ADT constructor *)
                   | Proj _ -> true (* Projector *)
                   | FunOrOp (Unop unop) -> inline_unop unop
-                  | FunOrOp (Binop (binop, _)) -> inline_binop binop
+                  | FunOrOp (Binop binop) -> inline_binop binop
                   | FunOrOp (Fun fun_id) -> inline_fun fun_id
                   | _ -> false)
               | StructUpdate _ -> true (* ADT constructor *)
@@ -3573,7 +3572,7 @@ let lift_pure_function_calls_visitor (ctx : ctx) (def : fun_decl) =
     let lift =
       match f.e with
       | Qualif { id = FunOrOp (Unop unop); _ } -> lift_unop unop
-      | Qualif { id = FunOrOp (Binop (binop, _)); _ } -> lift_binop binop
+      | Qualif { id = FunOrOp (Binop binop); _ } -> lift_binop binop
       | Qualif { id = FunOrOp (Fun fun_id); _ } -> lift_fun ctx fun_id
       | _ -> false
     in

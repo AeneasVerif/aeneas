@@ -467,14 +467,14 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
             [%craise] ctx.span "Unsupported: `dyn Trait` concretization"
       end
     | S.Binop binop -> (
+        [%ldebug
+          "- binop: " ^ binop_to_string binop ^ "\n- args:\n"
+          ^ Print.list_to_string ~sep:"\n"
+              (fun (e : texpr) ->
+                texpr_to_string ctx e ^ " : " ^ pure_ty_to_string ctx e.ty)
+              args];
         match args with
         | [ arg0; arg1 ] ->
-            let int_ty0 = ty_as_integer ctx.span arg0.ty in
-            let int_ty1 = ty_as_integer ctx.span arg1.ty in
-            (match binop with
-            (* The Rust compiler accepts bitshifts for any integer type combination for ty0, ty1 *)
-            | E.Shl _ | E.Shr _ -> ()
-            | _ -> [%sanity_check] ctx.span (int_ty0 = int_ty1));
             let effect_info =
               {
                 can_fail = ExpressionsUtils.binop_can_fail binop;
@@ -484,7 +484,48 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
             in
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
             let dest = mk_tpat_from_fvar dest_mplace dest in
-            (ctx, Binop (binop, int_ty0), effect_info, args, [], dest)
+            let get_single_int_ty () =
+              let int_ty0 = ty_as_integer ctx.span arg0.ty in
+              let int_ty1 = ty_as_integer ctx.span arg1.ty in
+              [%sanity_check] ctx.span (int_ty0 = int_ty1);
+              int_ty0
+            in
+            let binop =
+              match binop with
+              | Expressions.BitXor -> BitXor (get_single_int_ty ())
+              | Expressions.BitAnd -> BitAnd (get_single_int_ty ())
+              | Expressions.BitOr -> BitOr (get_single_int_ty ())
+              | Expressions.Eq ->
+                  [%sanity_check] ctx.span (arg0.ty = arg1.ty);
+                  Eq arg0.ty
+              | Expressions.Ne ->
+                  [%sanity_check] ctx.span (arg0.ty = arg1.ty);
+                  Ne arg0.ty
+              | Expressions.Lt -> Lt (get_single_int_ty ())
+              | Expressions.Le -> Le (get_single_int_ty ())
+              | Expressions.Ge -> Ge (get_single_int_ty ())
+              | Expressions.Gt -> Gt (get_single_int_ty ())
+              | Expressions.Add om -> Add (om, get_single_int_ty ())
+              | Expressions.Sub om -> Sub (om, get_single_int_ty ())
+              | Expressions.Mul om -> Mul (om, get_single_int_ty ())
+              | Expressions.Div om -> Div (om, get_single_int_ty ())
+              | Expressions.Rem om -> Rem (om, get_single_int_ty ())
+              | Expressions.AddChecked -> AddChecked (get_single_int_ty ())
+              | Expressions.SubChecked -> SubChecked (get_single_int_ty ())
+              | Expressions.MulChecked -> MulChecked (get_single_int_ty ())
+              | Expressions.Shl om ->
+                  let ty0 = ty_as_integer ctx.span arg0.ty in
+                  let ty1 = ty_as_integer ctx.span arg1.ty in
+                  Shl (om, ty0, ty1)
+              | Expressions.Shr om ->
+                  let ty0 = ty_as_integer ctx.span arg0.ty in
+                  let ty1 = ty_as_integer ctx.span arg1.ty in
+                  Shr (om, ty0, ty1)
+              | Expressions.Offset ->
+                  [%craise] ctx.span "Not supported: `binop::offset`"
+              | Expressions.Cmp -> Cmp (get_single_int_ty ())
+            in
+            (ctx, Binop binop, effect_info, args, [], dest)
         | _ -> [%craise] ctx.span "Unreachable")
   in
   let func = { id = FunOrOp fun_id; generics } in
