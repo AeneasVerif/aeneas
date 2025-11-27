@@ -3,6 +3,7 @@ import Tutorial.Tutorial
 open Aeneas.Std Result
 
 set_option maxHeartbeats 1000000
+set_option maxRecDepth 2000
 
 namespace tutorial
 
@@ -60,13 +61,13 @@ theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
       simp
       split_conjs
       . -- Reasoning about `List.index`:
-        have hi : i.val = 0 := by scalar_tac
+        have hi : i.val = 0 := by grind
         simp only [hi] -- Without the `only`, this actually finished the goal
         have hIndex := @List.getElem!_cons_zero _ hd _ tl.toList
         simp only [hIndex]
       . intro x
         -- Reasoning about `List.update`:
-        have hi : i.val = 0 := by scalar_tac
+        have hi : i.val = 0 := by grind
         simp only [hi] -- Without the `only`, this actually finished the goal
         have hUpdate := @List.set_cons_zero _ hd tl.toList x
         simp only [hUpdate]
@@ -75,17 +76,17 @@ theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
       progress as ⟨ tl1, back, htl1, hback ⟩
       simp
       split_conjs
-      . have hIndex := List.getElem!_cons_nzero hd tl.toList i.val (by scalar_tac)
+      . have hIndex := List.getElem!_cons_nzero hd tl.toList i.val (by grind)
         simp only [hIndex]
         simp only [htl1]
-        have hiEq : i1.val = i.val - 1 := by scalar_tac
+        have hiEq : i1.val = i.val - 1 := by grind
         simp only [hiEq]
       . -- Backward function
         intro x'
         simp [hback]
-        have hUpdate := List.set_cons_nzero hd tl.toList i.val (by scalar_tac) x'
+        have hUpdate := List.set_cons_nzero hd tl.toList i.val (by grind) x'
         simp only [hUpdate]
-        have hiEq : i1.val = i.val - 1 := by scalar_tac
+        have hiEq : i1.val = i.val - 1 := by grind
         simp only [hiEq]
   . simp_all
 
@@ -214,15 +215,15 @@ theorem zero_loop_spec
     simp_all
     split_conjs
     . intro j h0
-      replace hSame := hSame j (by scalar_tac)
+      replace hSame := hSame j (by grind)
       simp_all
     . intro j h0 h1
       dcases j = i.val <;> try simp [*]
-      have := hZero j (by scalar_tac)
+      have := hZero j (by grind)
       simp_all
-  . simp; scalar_tac
+  . grind
 termination_by x.length - i.val
-decreasing_by scalar_decr_tac
+decreasing_by grind
 
 theorem all_nil_impl_toInt_eq_zero
   (l : List U32) (h : ∀ (j : ℕ), j < l.length → l[j]! = 0#u32) :
@@ -234,10 +235,7 @@ theorem all_nil_impl_toInt_eq_zero
     simp at *
     simp [*]
     apply all_nil_impl_toInt_eq_zero
-    intro j h2
-    have := h (j + 1) (by simp [*])
-    simp at this
-    simp_all
+    grind
 
 /-- The theorem about `zero` -/
 theorem zero_spec (x : alloc.vec.Vec U32) :
@@ -263,10 +261,10 @@ theorem toInt_drop (l : List U32) (i : Nat) (h0 : i < l.length) :
   | cons hd tl =>
     simp_all
     dcases i = 0 <;> simp_all
-    have := toInt_drop tl (i - 1) (by scalar_tac)
+    have := toInt_drop tl (i - 1) (by grind)
     simp_all
     scalar_nf at *
-    have : 1 + (i - 1) = i := by scalar_tac
+    have : 1 + (i - 1) = i := by grind
     simp [*]
 
 @[simp]
@@ -277,18 +275,15 @@ theorem toInt_update (l : List U32) (i : Nat) (x : U32) (h0 : i < l.length) :
   | cons hd tl =>
     simp_all
     dcases i = 0 <;> simp_all
-    . scalar_eq_nf
-    . have := toInt_update tl (i - 1) x (by scalar_tac)
-      simp_all
-      scalar_nf at *
-      scalar_eq_nf
-      /- Note that we coerce the righ-hand side (also works with the left-hand side) so that
+    . grind
+    . have := toInt_update tl (i - 1) x (by grind)
+      /- Note that we coerce the right-hand side (also works with the left-hand side) so that
          it gets interpreted as an ℤ and not a ℕ. It is important: `(2 : ℕ) ^ ...` is not (at all)
          the same as `2 : ℤ`.
        -/
       have : 2 ^ (i * 32) = (2 ^ ((i - 1) * 32) * 4294967296 : Int) := by
         scalar_nf
-        have : i = i - 1 + 1 := by scalar_tac
+        have : i = i - 1 + 1 := by grind
         /- This is slightly technical: we use a "conversion" to apply the rewriting only
            to the left-hand-side of the goal. Also note that we're using `rw` instead of
            `simp` otherwise the rewriting will be applied indefinitely (we can apply `i = i - 1 + 1``
@@ -296,14 +291,13 @@ theorem toInt_update (l : List U32) (i : Nat) (x : U32) (h0 : i < l.length) :
 
            If you don't want to go into too many technicalities, you can also do:
            ```
-           have : i * 32 = (i - 1) * 32 + 32 := by scalar_tac
+           have : i * 32 = (i - 1) * 32 + 32 := by grind
            simp [*]
            ```
          -/
         conv => lhs; rw [this]
-        scalar_nf
-      simp [mul_assoc, *]
-      scalar_eq_nf
+        grind
+      grind
 
 /-- The proof about `add_no_overflow_loop` -/
 @[progress]
@@ -357,7 +351,6 @@ theorem add_with_carry_loop_spec
   split
   . progress as ⟨ xi ⟩
     progress as ⟨ c0u ⟩
-    have : c0u.val = c0.val := by scalar_tac
     progress as ⟨ s1, c1, hConv1 ⟩
     progress as ⟨ yi ⟩
     progress as ⟨ s2, c2, hConv2 ⟩
@@ -380,36 +373,36 @@ theorem add_with_carry_loop_spec
     . simp [*]
     . simp [*]
     . simp [hc4]
-      have hxUpdate := toInt_update x.val i.val s2 (by scalar_tac)
+      have hxUpdate := toInt_update x.val i.val s2 (by grind)
       simp [hxUpdate]; clear hxUpdate
-      have hyDrop := toInt_drop y.val i.val (by scalar_tac)
+      have hyDrop := toInt_drop y.val i.val (by grind)
       simp [hyDrop]; clear hyDrop
       scalar_eq_nf
       -- The best way is to do a case disjunction and treat each sub-case separately
       split at hConv1 <;>
       split at hConv2
-      . have hConv1' : (s1.val : Int) = xi.val + c0u.val - U32.size := by scalar_tac
-        have hConv2' : (s2.val : Int) = s1.val + yi.val - U32.size := by scalar_tac
+      . have hConv1' : (s1.val : Int) = xi.val + c0u.val - U32.size := by grind
+        have hConv2' : (s2.val : Int) = s1.val + yi.val - U32.size := by grind
         simp [hConv2', hConv1']
         /- `U32.size_eq` is a lemma which allows to simplify `U32.size`.
            But you can also simply do `simp [U32.size]`, which simplifies
            `U32.size` to `2^U32.numBits`, then simplify `U32.numBits`. -/
         simp [*, U32.size_eq]
         scalar_eq_nf
-      . have hConv1' : (s1.val : Int) = xi.val + c0u.val - U32.size := by scalar_tac
+      . have hConv1' : (s1.val : Int) = xi.val + c0u.val - U32.size := by grind
         simp [hConv2, hConv1']
         simp [*, U32.size_eq]
         scalar_eq_nf
-      . have hConv2' : (s2.val : Int) = s1.val + yi.val - U32.size := by scalar_tac
+      . have hConv2' : (s2.val : Int) = s1.val + yi.val - U32.size := by grind
         simp [hConv2', hConv1]
         simp [*, U32.size_eq]
         scalar_eq_nf
       . simp [*]
         scalar_eq_nf
   . simp_all
-    scalar_tac
+    grind
 termination_by x.length - i.val
-decreasing_by scalar_decr_tac
+decreasing_by grind
 
 /-- The proof about `add_with_carry` -/
 @[progress]

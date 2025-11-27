@@ -75,7 +75,7 @@ def Node.forall (p: Node T -> Prop) (node : Node T) : Prop :=
   p node ∧
   Subtree.forall p node.left ∧ Subtree.forall p node.right
 termination_by Node.size node
-decreasing_by all_goals (simp_wf; fsimp [Node.left, Node.right]; split; fsimp <;> scalar_tac)
+decreasing_by all_goals (simp_wf; fsimp [Node.left, Node.right]; split; fsimp <;> grind)
 end
 
 @[simp]
@@ -224,7 +224,7 @@ theorem Node.value_not_in_left [LinearOrder T] (node : Node T) (hInv : node.inv)
   have := ne_of_lt this
   tauto
 
-attribute [scalar_tac_simps]
+attribute [scalar_tac_simps, grind =]
   Subtree.height
   Node.height
   Subtree.some_balanceFactor
@@ -334,26 +334,23 @@ theorem Node.rotate_left_spec
     -- TODO: scalar_tac should succeed below
     have hHeightEq : Subtree.height b = Subtree.height c := by
       fsimp_all [balanceFactor, Node.invAux]
-      scalar_tac
+      grind
     -- TODO: scalar_tac should succeed below
     have : 1 + Subtree.height c = Subtree.height a + 2 := by
       fsimp_all [balanceFactor, Node.invAux]
-      scalar_tac
+      grind
     fsimp_all
     split_conjs
     . -- Partial invariant for the final tree starting at z
       fsimp [Node.invAux, balanceFactor, *]
-      split_conjs <;> (try omega)
+      grind
     . -- Partial invariant for the subtree x
       fsimp [Node.invAux, balanceFactor, *]
-      split_conjs <;> (try omega) <;> fsimp_all
+      grind
     . -- The sets are the same
-      apply Set.ext; simp; tauto
+      grind
     . -- The height didn't change
-      fsimp [balanceFactor] at *
-      replace hInvX := hInvX.left
-      fsimp_all
-      scalar_tac
+      grind
   . -- BF(Z) == 1
     rename _ => hNotEq
     fsimp at *
@@ -365,31 +362,23 @@ theorem Node.rotate_left_spec
     clear hNotEq hBfZ
     have : Subtree.height c = 1 + Subtree.height b := by
       fsimp [balanceFactor, Node.invAux] at *
-      replace hInvZ := hInvZ.left
-      omega
-    have : max (Subtree.height c) (Subtree.height b) = Subtree.height c := by
-      scalar_tac
+      grind
     -- TODO: we shouldn't need this: scalar_tac should succeed
     have : Subtree.height c = 1 + Subtree.height a := by
       -- TODO: scalar_tac fails here (conversion int/nat)
       fsimp_all [balanceFactor, Node.invAux]
       omega
-    have : Subtree.height a = Subtree.height b := by
-      fsimp_all
     split_conjs
     . -- Invariant for whole tree (starting at z)
       fsimp [invAux, balanceFactor]
-      split_conjs <;> (try omega)
+      grind
     . -- Invariant for subtree x
       fsimp [invAux, balanceFactor]
-      split_conjs <;> (try omega) <;> fsimp_all
+      grind
     . -- The sets are the same
-      apply Set.ext; simp; tauto
+      grind
     . -- The height didn't change
-      fsimp [balanceFactor] at *
-      replace hInvX := hInvX.left
-      fsimp_all
-      scalar_tac
+      grind
 
 @[progress]
 theorem Node.rotate_right_spec
@@ -455,53 +444,45 @@ theorem Node.rotate_right_spec
     split_conjs
     . -- Partial invariant for the final tree starting at z
       fsimp [Node.invAux, balanceFactor, *]
-      split_conjs <;> (try omega)
+      grind
     . -- Partial invariant for the subtree x
       fsimp [Node.invAux, balanceFactor, *]
-      split_conjs <;> (try omega) <;> fsimp_all
+      grind
     . -- The sets are the same
-      apply Set.ext; simp; tauto
+      grind
     . -- The height didn't change
       fsimp [balanceFactor] at *
-      replace hInvX := hInvX.left
-      fsimp_all
-      scalar_tac
+      grind
   . -- BF(Z) == -1
     rename _ => hNotEq
-    fsimp at *
-    fsimp [*]
-    fsimp_all
+    -- fsimp at *
+    -- fsimp [*]
+    -- fsimp_all
     have : bf_z.val = -1 := by
       fsimp [Node.invAux] at hInvZ
-      omega
+      grind
     clear hNotEq hBfZ
     have : Subtree.height a = 1 + Subtree.height b := by
       fsimp [balanceFactor, Node.invAux] at *
-      replace hInvZ := hInvZ.left
-      omega
-    have : max (Subtree.height a) (Subtree.height b) = Subtree.height a := by
-      scalar_tac
+      grind
     -- TODO: we shouldn't need this: scalar_tac should succeed
     have : Subtree.height a = 1 + Subtree.height c := by
       -- TODO: scalar_tac fails here (conversion int/nat)
       fsimp_all [balanceFactor, Node.invAux]
-      omega
-    have : Subtree.height c = Subtree.height b := by
-      fsimp_all
+      grind
+    fsimp_all
     split_conjs
     . -- Invariant for whole tree (starting at z)
       fsimp [invAux, balanceFactor]
-      split_conjs <;> (try omega)
+      grind
     . -- Invariant for subtree x
       fsimp [invAux, balanceFactor]
-      split_conjs <;> (try omega) <;> fsimp_all
+      grind
     . -- The sets are the same
-      apply Set.ext; simp; tauto
+      grind
     . -- The height didn't change
       fsimp [balanceFactor] at *
-      replace hInvX := hInvX.left
-      fsimp_all
-      scalar_tac
+      grind
 
 @[progress]
 theorem Node.rotate_left_right_spec
@@ -535,8 +516,7 @@ theorem Node.rotate_left_right_spec
   fsimp [rotate_left_right] -- TODO: this inlines the local decls
   -- Some facts about the heights and the balance factors
   -- TODO: automate that
-  have : Node.height z_tree = Subtree.height t1 + 2 := by
-    fsimp [y_tree, z_tree, inv, invAux, balanceFactor] at *; omega
+  have : Node.height z_tree = Subtree.height t1 + 2 := by grind
   have : Node.height y_tree = Subtree.height t0 + 1 := by
     fsimp [y_tree, z_tree, inv, invAux, balanceFactor] at *; omega
   have : bf_y.val + Subtree.height a = Subtree.height b := by
@@ -551,7 +531,7 @@ theorem Node.rotate_left_right_spec
     . rename _ => hIn
       -- TODO: those cases are cumbersome
       cases hIn
-      . fsimp_all
+      .fsimp_all
       . have : e < z := by tauto
         have : z < y := by tauto
         apply lt_trans <;> tauto
@@ -592,13 +572,15 @@ theorem Node.rotate_left_right_spec
     . -- invAux for y
       split_conjs <;> (try omega)
     . -- invAux for z
-      split_conjs <;> (try assumption) <;> (try scalar_tac)
+      fsimp_all [Subtree.height]
+      grind
     . -- invAux for x
-      split_conjs <;> (try assumption) <;> (try scalar_tac)
+      fsimp_all [Subtree.height]
+      grind
     . -- The sets are the same
-      apply Set.ext; fsimp [tree, z_tree, y_tree]; tauto
+      grind
     . -- Height
-      scalar_tac
+      grind
   . split <;> simp
     . -- BF(Y) < 0
       have : bf_y.val = -1 := by fsimp [Node.invAux] at *; omega
@@ -611,22 +593,22 @@ theorem Node.rotate_left_right_spec
       . -- invAux for x
         split_conjs <;> (try assumption) <;> (try scalar_tac)
       . -- The sets are the same
-        apply Set.ext; fsimp [tree, z_tree, y_tree]; tauto
+        grind
       . -- Height
-        scalar_tac
+        grind
     . -- BF(Y) > 0
       have : bf_y.val = 1 := by fsimp [Node.invAux] at *; omega
       split_conjs <;> (try fsimp [Node.invAux, balanceFactor, *])
       . -- invAux for y
         split_conjs <;> (try omega)
       . -- invAux for z
-        split_conjs <;> (try assumption) <;> (try scalar_tac)
+        split_conjs <;> grind
       . -- invAux for x
-        split_conjs <;> (try assumption) <;> (try scalar_tac)
+        split_conjs <;> grind
       . -- The sets are the same
-        apply Set.ext; fsimp [tree, z_tree, y_tree]; tauto
+        grind
       . -- Height
-        scalar_tac
+        grind
 
 @[progress]
 theorem Node.rotate_right_left_spec
@@ -660,8 +642,8 @@ theorem Node.rotate_right_left_spec
   fsimp [rotate_right_left] -- TODO: this inlines the local decls
   -- Some facts about the heights and the balance factors
   -- TODO: automate that
-  have : Node.height z_tree = Subtree.height t1 + 2 := by
-    fsimp [y_tree, z_tree, inv, invAux, balanceFactor] at *; omega
+  have : Node.height z_tree = Subtree.height t1 + 2 := by grind
+    -- fsimp [y_tree, z_tree, inv, invAux, balanceFactor] at *; omega
   have : Node.height y_tree = Subtree.height t0 + 1 := by
     fsimp [y_tree, z_tree, inv, invAux, balanceFactor] at *; omega
   have : bf_y.val + Subtree.height b = Subtree.height a := by
@@ -717,13 +699,13 @@ theorem Node.rotate_right_left_spec
     . -- invAux for y
       split_conjs <;> (try omega)
     . -- invAux for z
-      split_conjs <;> (try assumption) <;> (try scalar_tac)
+      split_conjs <;> grind
     . -- invAux for x
-      split_conjs <;> (try assumption) <;> (try scalar_tac)
+      split_conjs <;> grind
     . -- The sets are the same
-      apply Set.ext; fsimp [tree, z_tree, y_tree]; tauto
+      grind
     . -- Height
-      scalar_tac
+      grind
   . split <;> simp
     . -- BF(Y) > 0
       have : bf_y.val = 1 := by fsimp [Node.invAux] at *; omega
@@ -736,33 +718,33 @@ theorem Node.rotate_right_left_spec
       . -- invAux for x
         split_conjs <;> (try assumption) <;> (try scalar_tac)
       . -- The sets are the same
-        apply Set.ext; fsimp [tree, z_tree, y_tree]; tauto
+        grind
       . -- Height
-        scalar_tac
+        grind
     . -- BF(Y) < 0
       have : bf_y.val = -1 := by fsimp [Node.invAux] at *; omega
       split_conjs <;> (try fsimp [Node.invAux, balanceFactor, *])
       . -- invAux for y
         split_conjs <;> (try omega)
       . -- invAux for z
-        split_conjs <;> (try assumption) <;> (try scalar_tac)
+        split_conjs <;> grind
       . -- invAux for x
-        split_conjs <;> (try assumption) <;> (try scalar_tac)
+        split_conjs <;> grind
       . -- The sets are the same
-        apply Set.ext; fsimp [tree, z_tree, y_tree]; tauto
+        grind
       . -- Height
-        scalar_tac
+        grind
 
 -- For the proofs of termination
 @[simp]
 theorem Node.left_height_lt_height (n : Node T) :
   Subtree.height n.left < n.height := by
-  cases n; simp; scalar_tac
+  cases n; grind
 
 @[simp]
 theorem Node.right_height_lt_height (n : Node T) :
   Subtree.height n.right < n.height := by
-  cases n; simp; scalar_tac
+  cases n; grind
 
 mutual
 
@@ -813,7 +795,7 @@ theorem Tree.insert_in_opt_node_spec
     progress as ⟨ updt, tree' ⟩
     fsimp_all
 termination_by (Subtree.height tree, 2)
-decreasing_by simp_wf; fsimp [*]
+decreasing_by grind
 
 -- TODO: any modification triggers the replay of the whole proof
 @[progress]
@@ -853,8 +835,8 @@ theorem Node.insert_in_left_spec
           -- TODO: syntax for preconditions
           . fsimp_all
           . fsimp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]
-            scalar_tac
-          . fsimp_all [Node.balanceFactor]
+            grind
+          -- . fsimp_all [Node.balanceFactor]
           . fsimp [*]
             split_conjs
             . -- set reasoning
@@ -865,8 +847,8 @@ theorem Node.insert_in_left_spec
               fsimp_all [Node.invAux, Node.balanceFactor]
               -- This assertion is not necessary for the proof, but it is important that it holds.
               -- We can prove it because of the post-conditions `b → node'.balanceFactor ≠ 0` (see above)
-              have : bf_z.val = -1 := by scalar_tac
-              scalar_tac
+              have : bf_z.val = -1 := by grind
+              grind
         . -- rotate_left_right
           simp
           cases h:left'
@@ -953,7 +935,6 @@ theorem Node.insert_in_right_spec
           -- TODO: syntax for preconditions
           . fsimp_all
           . fsimp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac
-          . fsimp_all [Node.balanceFactor]
           . -- End of the proof
             fsimp [*]
             split_conjs
