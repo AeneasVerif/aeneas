@@ -456,13 +456,15 @@ example (i j n1 n2 : ℕ)
 @[scalar_tac x % y]
 theorem mod_lt (x y : ℕ) (h : 0 < y) : x % y < y := by exact Nat.mod_lt x h
 
+grind_pattern mod_lt => x % y
+
 /-!
 # Size
 -/
 
 /- Remark: we're omitting a similar theorem for `IScalar` because the theorem is a bit cumbersome
    to use (it has to be expressed in terms of `x.bv.toNat`). -/
-@[scalar_tac_simps]
+@[scalar_tac_simps, grind =]
 theorem UScalar.sizeOf {ty} (x : UScalar ty) : sizeOf x = x.val + 3 := by
   cases x; simp only [UScalar.mk.sizeOf_spec, BitVec.sizeOf, Fin.sizeOf, BitVec.val_toFin]
   unfold UScalar.val
