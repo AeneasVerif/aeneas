@@ -10,11 +10,15 @@ structure core.cmp.PartialEq (Self : Type) (Rhs : Type) where
   eq : Self → Rhs → Result Bool
   ne : Self → Rhs → Result Bool := fun self other => do not (← eq self other)
 
-/- Trait declaration: [core::cmp::Eq]
-   Name pattern: core::cmp::Eq -/
 @[rust_trait "core::cmp::Eq" (parentClauses := ["partialEqInst"])]
 structure core.cmp.Eq (Self : Type) where
   partialEqInst : core.cmp.PartialEq Self Self
+  assert_receiver_is_total_eq (_ : Self) : Result Unit := .ok ()
+
+@[simp, rust_fun "core::cmp::Eq::assert_receiver_is_total_eq"]
+def core.cmp.Eq.assert_receiver_is_total_eq.default
+  {Self : Type} (EqInst : core.cmp.Eq Self) (x : Self) : Result Unit :=
+  EqInst.assert_receiver_is_total_eq x
 
 /- Default method -/
 @[rust_fun "core::cmp::PartialEq::ne"]
