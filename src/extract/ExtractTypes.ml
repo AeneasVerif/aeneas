@@ -440,7 +440,7 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
         match trait_ref.trait_id with
         | Self ->
             extract_trait_instance_id_if_not_self span ctx fmt no_params_tys
-              ~inside:false trait_ref.trait_id;
+              ~inside:false trait_ref.trait_decl_ref trait_ref.trait_id;
             F.pp_print_string fmt type_name
         | _ ->
             (* HOL4 doesn't have 1st class types *)
@@ -454,7 +454,8 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
 and extract_trait_ref (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) ~(inside : bool)
     (tr : trait_ref) : unit =
-  extract_trait_instance_id span ctx fmt no_params_tys ~inside tr.trait_id
+  extract_trait_instance_id span ctx fmt no_params_tys ~inside tr.trait_decl_ref
+    tr.trait_id
 
 and extract_trait_decl_ref (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) ~(inside : bool)
@@ -517,8 +518,8 @@ and extract_generic_args (span : Meta.span) (ctx : extraction_ctx)
     `<Self as Foo>::foo`). *)
 and extract_trait_instance_id_if_not_self (span : Meta.span)
     (ctx : extraction_ctx) (fmt : F.formatter)
-    (no_params_tys : TypeDeclId.Set.t) ~(inside : bool) (id : trait_instance_id)
-    : unit =
+    (no_params_tys : TypeDeclId.Set.t) ~(inside : bool)
+    (trait_ref : trait_decl_ref) (id : trait_instance_id) : unit =
   match id with
   | Self ->
       (* This can only happen inside a trait (not inside its methods) so there
@@ -526,12 +527,12 @@ and extract_trait_instance_id_if_not_self (span : Meta.span)
       ()
   | _ ->
       (* Other cases *)
-      extract_trait_instance_id span ctx fmt no_params_tys ~inside id;
+      extract_trait_instance_id span ctx fmt no_params_tys ~inside trait_ref id;
       F.pp_print_string fmt "."
 
 and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) ~(inside : bool)
-    (id : trait_instance_id) : unit =
+    (trait_ref : trait_decl_ref) (id : trait_instance_id) : unit =
   let add_brackets (s : string) =
     if backend () = Coq then "(" ^ s ^ ")" else s
   in
@@ -600,8 +601,18 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
       (* Use the trait decl id to lookup the name *)
       let name = ctx_get_trait_parent_clause span decl_id clause_id ctx in
       extract_trait_instance_id_if_not_self span ctx fmt no_params_tys
-        ~inside:true inst_id;
+        ~inside:true trait_ref inst_id;
       F.pp_print_string fmt (add_brackets name)
+  | BuiltinOrAuto data ->
+      let name =
+        match data with
+        | BuiltinClone -> "BuiltinClone"
+        | BuiltinCopy -> "BuiltinCopy"
+      in
+      if inside then F.pp_print_string fmt "(";
+      F.pp_print_string fmt name;
+      extract_generic_args span ctx fmt no_params_tys trait_ref.decl_generics;
+      if inside then F.pp_print_string fmt ")"
   | UnknownTrait _ ->
       (* This is an error case *)
       [%admit_raise] span "Unexpected" fmt

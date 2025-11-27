@@ -266,6 +266,9 @@ let const_generic_to_string (env : fmt_env) (cg : const_generic) : string =
   | CgVar var -> const_generic_db_var_to_string env var
   | CgValue lit -> literal_to_string lit
 
+let builtin_impl_data_to_string (data : builtin_impl_data) : string =
+  show_builtin_impl_data data
+
 let rec ty_to_string (env : fmt_env) (inside : bool) (ty : ty) : string =
   match ty with
   | TAdt (id, generics) -> (
@@ -337,6 +340,7 @@ and trait_instance_id_to_string (env : fmt_env) (id : trait_instance_id) :
       let inst_id = trait_instance_id_to_string env inst_id in
       let clause_id = trait_clause_id_to_string env clause_id in
       "parent(" ^ inst_id ^ ")::" ^ clause_id
+  | BuiltinOrAuto data -> builtin_impl_data_to_string data
   | UnknownTrait msg -> "UNKNOWN(" ^ msg ^ ")"
 
 let trait_clause_to_string (env : fmt_env) (clause : trait_param) : string =

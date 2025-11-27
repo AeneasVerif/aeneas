@@ -79,6 +79,15 @@ def mem.swap {T : Type} (a b : T): T × T := (b, a)
 
 end core
 
+/-- Builtin clone implementation (used for some builtin types) -/
+def BuiltinClone (Self : Type) : core.clone.Clone Self where
+  clone := .ok
+  clone_from := fun _ x => .ok x
+
+/-- Builtin clone implementation (used for some builtin types) -/
+def BuiltinCopy (Self : Type) : core.marker.Copy Self where
+  cloneInst := BuiltinClone Self
+
 @[simp, progress_simps, rust_fun "core::option::{core::option::Option<@T>}::unwrap"]
 def core.option.Option.unwrap {T : Type} (x : Option T) : Result T :=
   Result.ofOption x Error.panic

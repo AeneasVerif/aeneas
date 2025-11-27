@@ -63,11 +63,19 @@ and translate_trait_ref_kind (span : Meta.span option)
         translate_generic_args span translate_ty impl_ref.generics
       in
       TraitImpl (impl_ref.id, generics)
-  | BuiltinOrAuto _ ->
-      (* We should have eliminated those in the prepasses *)
-      [%craise_opt_span] span
-        ("Unhandled `BuiltinOrAuto` for trait "
-        ^ TraitDeclId.to_string tref.trait_decl_ref.binder_value.id)
+  | BuiltinOrAuto (data, _, _) ->
+      let data =
+        match data with
+        | BuiltinClone -> BuiltinClone
+        | BuiltinCopy -> BuiltinCopy
+        | _ ->
+            [%craise_opt_span] span
+              ("Unhandled `BuiltinOrAuto` for trait "
+              ^ TraitDeclId.to_string tref.trait_decl_ref.binder_value.id
+              ^ "; builtin_impl_data: "
+              ^ Types.show_builtin_impl_data data)
+      in
+      BuiltinOrAuto data
   | Clause var ->
       Clause var
       (* Note: the `de_bruijn_id`s are incorrect, see comment on `translate_region_binder` *)

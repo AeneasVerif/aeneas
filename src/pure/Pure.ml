@@ -398,12 +398,15 @@ and generic_args = {
   trait_refs : trait_ref list;
 }
 
+and builtin_impl_data = BuiltinCopy | BuiltinClone
+
 and trait_instance_id =
   | Self
   | TraitImpl of trait_impl_id * generic_args
   | Clause of trait_clause_id de_bruijn_var
     (* Note: the `de_bruijn_id`s are incorrect, see comment on `translate_region_binder` *)
   | ParentClause of trait_instance_id * trait_decl_id * trait_clause_id
+  | BuiltinOrAuto of builtin_impl_data
   | UnknownTrait of string
 [@@deriving
   show,
