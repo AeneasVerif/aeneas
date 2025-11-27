@@ -32,7 +32,7 @@ update:
 
 .PHONY: verify
 verify:
-	lake build
+	lake exe cache get && lake build
 
 .PHONY: clean
 clean:
