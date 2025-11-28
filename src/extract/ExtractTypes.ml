@@ -608,6 +608,11 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
         match data with
         | BuiltinClone -> "BuiltinClone"
         | BuiltinCopy -> "BuiltinCopy"
+        | BuiltinDiscriminantKind ->
+            [%lwarning
+              "Extracted an unexpected builtin clause of kind `Discriminant`: \
+               this will not type-check"];
+            "BuiltinDiscriminantKind"
       in
       if inside then F.pp_print_string fmt "(";
       F.pp_print_string fmt name;

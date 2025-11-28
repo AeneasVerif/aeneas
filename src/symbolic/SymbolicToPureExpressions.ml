@@ -1196,6 +1196,20 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
         let qualif_id = TraitConst (trait_ref, const_name) in
         let qualif = { id = qualif_id; generics = empty_generic_args } in
         { e = Qualif qualif; ty = var.ty }
+    | VaDiscriminant adt_sv ->
+        (* Discriminant read *)
+        let adt_ty = ctx_translate_fwd_ty ctx adt_sv.sv_ty in
+        let qualif_id = FunOrOp (Fun (Pure Discriminant)) in
+        let qualif =
+          {
+            id = qualif_id;
+            generics = mk_generic_args_from_types [ adt_ty; var.ty ];
+          }
+        in
+        let qualif : texpr =
+          { e = Qualif qualif; ty = mk_arrow adt_ty var.ty }
+        in
+        [%add_loc] mk_app ctx.span qualif (symbolic_value_to_texpr ctx adt_sv)
   in
 
   (* Make the let-binding *)

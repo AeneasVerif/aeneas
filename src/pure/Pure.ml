@@ -129,6 +129,7 @@ type pure_builtin_fun_id =
 
           We use this when using `ok ...` would result in let-bindings getting
           simplified away (in a backend like Lean). *)
+  | Discriminant  (** Discriminant read *)
 [@@deriving show, ord]
 
 (* Builtin declarations coming from external libraries.
@@ -422,7 +423,15 @@ and binop =
   | Shr of overflow_mode * integer_type * integer_type
   | Cmp of integer_type
 
-and builtin_impl_data = BuiltinCopy | BuiltinClone
+and builtin_impl_data =
+  | BuiltinCopy
+  | BuiltinClone
+  | BuiltinDiscriminantKind
+      (** This one appears in [core::intrinsics::discriminant_value].
+
+          Note that in practice, we should never use this function or this
+          builtin trait impl (though they happen to appear in the crates
+          serialized by Charon). *)
 
 and trait_instance_id =
   | Self

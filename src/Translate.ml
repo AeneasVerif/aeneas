@@ -321,6 +321,9 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
       (List.filter_map
          (fun (fdef : LlbcAst.fun_decl) ->
            try
+             [%ltrace
+               "Translating the signature of: "
+               ^ name_to_string trans_ctx fdef.item_meta.name];
              Some
                ( fdef.def_id,
                  SymbolicToPureTypes.translate_fun_sig_from_decl_to_decomposed

@@ -68,6 +68,7 @@ and translate_trait_ref_kind (span : Meta.span option)
         match data with
         | BuiltinClone -> BuiltinClone
         | BuiltinCopy -> BuiltinCopy
+        | BuiltinDiscriminantKind -> BuiltinDiscriminantKind
         | _ ->
             [%craise_opt_span] span
               ("Unhandled `BuiltinOrAuto` for trait "
@@ -421,7 +422,7 @@ let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
       None
   | TTraitType (trait_ref, type_name) ->
       [%sanity_check_opt_span] span
-        (TypesUtils.trait_ref_kind_is_local_clause trait_ref.kind);
+        (TypesUtils.trait_ref_kind_is_local_clause_or_builtin trait_ref.kind);
       if inside_mut then
         (* Translate the trait ref as a "forward" trait ref -
            we do not want to filter any type *)

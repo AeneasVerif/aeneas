@@ -1058,6 +1058,7 @@ let keywords () =
           "variables";
           "where";
           "with";
+          "read_discriminant";
         ]
     | HOL4 ->
         [

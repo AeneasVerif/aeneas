@@ -7022,7 +7022,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
                   else (known_f_ty, known_args_tys, false)
               | _ -> (known_f_ty, known_args_tys, false)
             end
-          | Loop _ | RecLoopCall _ -> (hole, mk_holes (), true)
+          | Loop _ | RecLoopCall _ | Discriminant -> (hole, mk_holes (), true)
           | Fail | Assert | FuelDecrease | FuelEqZero ->
               (f.ty, mk_known (), false)
           | UpdateAtIndex _ -> (known_f_ty, known_args_tys, false)

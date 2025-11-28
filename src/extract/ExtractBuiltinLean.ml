@@ -631,6 +631,17 @@ let lean_builtin_trait_decls =
     (* file: "Aeneas/Std/Core/Core.lean", line: 59 *)
     mk_trait_decl "core::marker::Copy" "core.marker.Copy"
       ~parent_clauses:[ "cloneInst" ];
+    (* file: "Aeneas/Std/Core/Discriminant.lean", line: 8 *)
+    mk_trait_decl "core::marker::DiscriminantKind" "DisciminantKind"
+      ~methods:
+        [
+          ("cloneInst", "cloneInst");
+          ("copyInst", "copyInst");
+          ("debugInst", "debugInst");
+          ("partialEqInst", "partialEqInst");
+          ("eqInst", "eqInst");
+          ("hashInst", "hashInst");
+        ];
     (* file: "Aeneas/Std/Core/Marker.lean", line: 8 *)
     mk_trait_decl "core::marker::Freeze" "core.marker.Freeze";
     (* file: "Aeneas/Std/Core/Marker.lean", line: 5 *)

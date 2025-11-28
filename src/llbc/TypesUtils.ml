@@ -294,6 +294,15 @@ let rec trait_ref_kind_is_local_clause (id : trait_ref_kind) : bool =
       trait_ref_kind_is_local_clause tref.kind
   | TraitImpl _ | BuiltinOrAuto _ | UnknownTrait _ | Dyn -> false
 
+(** A trait instance id refers to a local clause if it only uses the variants:
+    [Self], [Clause], [ParentClause] *)
+let trait_ref_kind_is_local_clause_or_builtin (id : trait_ref_kind) : bool =
+  trait_ref_kind_is_local_clause id
+  ||
+  match id with
+  | BuiltinOrAuto _ -> true
+  | _ -> false
+
 (** Check that it is ok for a trait instance id not to be normalizable.
 
     We use this in sanity checks. If we can't normalize a trait instance id (and

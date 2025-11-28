@@ -804,13 +804,14 @@ let pure_builtin_fun_id_to_string (fid : pure_builtin_fun_id) : string =
   | RecLoopCall n ->
       if n = 0 then "@recLoopCall" else "@recLoopCall(" ^ string_of_int n ^ ")"
   | ToResult -> "@toResult"
-  | FuelDecrease -> "@fuel_decrease"
-  | FuelEqZero -> "@fuel_eq_zero"
+  | FuelDecrease -> "@fuelDecrease"
+  | FuelEqZero -> "@fuelEqZero"
   | UpdateAtIndex array_or_slice -> begin
       match array_or_slice with
-      | Array -> "@ArrayUpdate"
-      | Slice -> "@SliceUpdate"
+      | Array -> "@arrayUpdate"
+      | Slice -> "@sliceUpdate"
     end
+  | Discriminant -> "@discriminant"
 
 let regular_fun_id_to_string (env : fmt_env) (fun_id : fun_id) : string =
   match fun_id with
