@@ -484,6 +484,8 @@ theorem Node.rotate_right_spec
       fsimp [balanceFactor] at *
       grind
 
+attribute [grind =] sup_of_le_right
+
 @[progress]
 theorem Node.rotate_left_right_spec
   {T : Type} [LinearOrder T]
@@ -531,84 +533,42 @@ theorem Node.rotate_left_right_spec
     . rename _ => hIn
       -- TODO: those cases are cumbersome
       cases hIn
-      .fsimp_all
-      . have : e < z := by tauto
-        have : z < y := by tauto
-        apply lt_trans <;> tauto
+      . fsimp_all
+      . have : z < y := by tauto
+        grind
     . tauto
   have : ∀ (e : T), (e = x ∨ e ∈ Subtree.v b) ∨ e ∈ Subtree.v t1 → y < e := by
+    fsimp [invAux] at *
     intro e hIn; fsimp [invAux] at *
     cases hIn
-    . rename _ => hIn
-      cases hIn
-      . fsimp_all
-      . tauto
-    . have : y < x := by
-        replace hInvX := hInvX.right.left y
-        tauto
-      have : x < e := by tauto
-      apply lt_trans <;> tauto
+    . grind
+    . have : y < x := by grind
+      grind
   -- Auxiliary proofs for invAux for z
   have : ∀ e ∈ Subtree.v t0, e < z := by
-    intro x hIn; fsimp [invAux] at *
-    tauto
+    fsimp [invAux] at *
+    grind
   have : ∀ e ∈ Subtree.v a, z < e := by
-    intro e hIn; fsimp [invAux] at *
-    replace hInvZ := hInvZ.right.right.left e
-    tauto
+    fsimp [invAux] at *
+    grind
   -- Auxiliary proofs for invAux for x
-  have : ∀ e ∈ Subtree.v b, e < x := by
-    intro e hIn; fsimp [invAux] at *
-    replace hInvX := hInvX.right.left e
-    tauto
-  have : ∀ e ∈ Subtree.v t1, x < e := by
-    intro e hIn; fsimp [invAux] at *
-    tauto
+  have : ∀ e ∈ Subtree.v b, e < x := by grind
+  have : ∀ e ∈ Subtree.v t1, x < e := by grind
   -- Case disjunction on the balance factor of Y
   split
   . -- BF(Y) = 0
     fsimp [balanceFactor] at *
-    split_conjs <;> (try fsimp [Node.invAux, balanceFactor, *])
-    . -- invAux for y
-      split_conjs <;> (try omega)
-    . -- invAux for z
-      fsimp_all [Subtree.height]
-      grind
-    . -- invAux for x
-      fsimp_all [Subtree.height]
-      grind
-    . -- The sets are the same
-      grind
-    . -- Height
-      grind
+    fsimp [Node.invAux, balanceFactor, *]
+    split_conjs <;> grind
   . split <;> simp
     . -- BF(Y) < 0
       have : bf_y.val = -1 := by fsimp [Node.invAux] at *; omega
       fsimp [balanceFactor] at *
-      split_conjs <;> (try fsimp [Node.invAux, balanceFactor, *])
-      . -- invAux for y
-        split_conjs <;> (try omega)
-      . -- invAux for z
-        split_conjs <;> (try assumption) <;> (try scalar_tac)
-      . -- invAux for x
-        split_conjs <;> (try assumption) <;> (try scalar_tac)
-      . -- The sets are the same
-        grind
-      . -- Height
-        grind
+      split_conjs <;> (try fsimp [Node.invAux, balanceFactor, *]) <;> grind
     . -- BF(Y) > 0
       have : bf_y.val = 1 := by fsimp [Node.invAux] at *; omega
-      split_conjs <;> (try fsimp [Node.invAux, balanceFactor, *])
-      . -- invAux for y
-        split_conjs <;> (try omega)
-      . -- invAux for z
-        split_conjs <;> grind
-      . -- invAux for x
-        split_conjs <;> grind
-      . -- The sets are the same
-        grind
-      . -- Height
-        grind
+      fsimp [Node.invAux, balanceFactor, *]
+      split_conjs <;> grind
 
 @[progress]
 theorem Node.rotate_right_left_spec
