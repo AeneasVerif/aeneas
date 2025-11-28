@@ -809,8 +809,7 @@ elab tk:"progress?" args:progressArgs : tactic => do
     let withArg := mkNullNode #[mkAtom "with", ← stats.toSyntax]
     stxArgs := stxArgs.setArg 1 withArg
   let tac := mkNode `Aeneas.Progress.progress #[mkAtom "progress", stxArgs]
-  let fmt ← PrettyPrinter.ppCategory ``Lean.Parser.Tactic.tacticSeq tac
-  Meta.Tactic.TryThis.addSuggestion tk fmt.pretty (origSpan? := ← getRef)
+  Meta.Tactic.TryThis.addSuggestion tk tac (origSpan? := ← getRef)
 
 /-- This is alternative syntax for the `progress` tactic - see the documentation for `progress`.
 
@@ -912,7 +911,7 @@ x y : UScalar ty
 
   /--
   info: Try this:
-  [apply] let* ⟨ z, h1 ⟩ ← UScalar.add_spec
+  let* ⟨ z, h1 ⟩ ← UScalar.add_spec
   -/
   #guard_msgs in
   example {ty} {x y : UScalar ty} (h : x.val + y.val ≤ UScalar.max ty) :
