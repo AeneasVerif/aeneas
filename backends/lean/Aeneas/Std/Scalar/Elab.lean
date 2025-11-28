@@ -58,14 +58,14 @@ def isSubstring (sub str : List Char) : Option (List Char) :=
   | _, _ => none
 
 partial def elabString (ty : String) (str : String) : String :=
-  let rec replace (str : List Char) : List Char :=
-    match isSubstring "'S".toList str with
-    | some str => ty.toList ++ replace str
+  let rec replace (str : List Char) :=
+    match isSubstring "'S".data str with
+    | some str => ty.data ++ replace str
     | none =>
       match str with
       | [] => []
       | c :: str => c :: replace str
-  (replace str.toList).asString
+  ⟨ replace str.data ⟩
 
 def elabSpecialName (ty : String) (n : Name) : CommandElabM Name := do
   trace[ScalarElabSubst] "elabSpecialName: {n}"
