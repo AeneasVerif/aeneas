@@ -1381,13 +1381,10 @@ and eval_non_builtin_function_call_symbolic (config : config) (span : Meta.span)
   in
   (* Sanity check: same number of inputs *)
   [%sanity_check] span (List.length call.args = List.length def.signature.inputs);
-  (* Sanity check: no nested borrows, borrows in ADTs, etc. *)
-  [%cassert] span
-    (List.for_all
-       (fun ty ->
-         not (ty_has_nested_borrows (Some span) ctx.type_ctx.type_infos ty))
-       (inst_sg.output :: inst_sg.inputs))
-    "Nested borrows are not supported yet";
+  (* Sanity check: the class of borrows present in the type is supported *)
+  List.iter
+    ([%add_loc] check_ty_is_supported span ctx)
+    (inst_sg.output :: inst_sg.inputs);
   (* Evaluate the function call *)
   eval_function_call_symbolic_from_inst_sig config def.item_meta.span func
     def.signature inst_sg generics call.args call.dest ctx

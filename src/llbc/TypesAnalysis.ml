@@ -26,6 +26,7 @@ type type_borrows_info = {
   contains_nested_borrows : bool;
       (** Does the type (transitively) contain nested borrows? *)
   contains_borrow_under_mut : bool;
+  contains_nested_mut : bool;
 }
 [@@deriving show]
 
@@ -66,6 +67,7 @@ let type_borrows_info_init : type_borrows_info =
     contains_mut_borrow = false;
     contains_nested_borrows = false;
     contains_borrow_under_mut = false;
+    contains_nested_mut = false;
   }
 
 (** Return true if a type declaration is a structure with unnamed fields.
@@ -174,6 +176,10 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
       check_update_bool original.contains_borrow_under_mut
         ty_b_info.contains_borrow_under_mut
     in
+    let contains_nested_mut =
+      check_update_bool original.contains_nested_mut
+        ty_b_info.contains_nested_mut
+    in
     let updated_borrows_info =
       {
         contains_static;
@@ -181,6 +187,7 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
         contains_mut_borrow;
         contains_nested_borrows;
         contains_borrow_under_mut;
+        contains_nested_mut;
       }
     in
     (* Add the region *)
@@ -242,13 +249,15 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
         (* Update the type info *)
         let contains_static = r_is_static r in
         let contains_borrow = true in
-        let contains_mut_borrow, region =
+        let is_mut, region =
           match rkind with
           | RMut -> (true, Some r)
           | RShared -> (false, None)
         in
+        let contains_mut_borrow = is_mut in
         let contains_nested_borrows = expl_info.under_borrow in
         let contains_borrow_under_mut = expl_info.under_mut_borrow in
+        let contains_nested_mut = expl_info.under_mut_borrow && is_mut in
         let ty_b_info =
           {
             contains_static;
@@ -256,6 +265,7 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
             contains_mut_borrow;
             contains_nested_borrows;
             contains_borrow_under_mut;
+            contains_nested_mut;
           }
         in
         let ty_info = update_ty_info ty_info region ty_b_info in
@@ -313,6 +323,9 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
               let contains_borrow_under_mut =
                 expl_info.under_mut_borrow && param_info.under_borrow
               in
+              let contains_nested_mut =
+                expl_info.under_mut_borrow && param_info.under_mut_borrow
+              in
               let ty_b_info =
                 {
                   contains_static;
@@ -320,6 +333,7 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
                   contains_mut_borrow;
                   contains_nested_borrows;
                   contains_borrow_under_mut;
+                  contains_nested_mut;
                 }
               in
               let ty_info = update_ty_info ty_info None ty_b_info in
