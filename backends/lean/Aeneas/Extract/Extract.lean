@@ -799,7 +799,7 @@ def TraitImpl.toExtract (info : TraitImpl) : MessageData :=
     | none => m!""
     | some keep => m!" ~keep_params:(Some {listToString keep})"
   let keepTraitClauses :=
-    match info.keepParams with
+    match info.keepTraitClauses with
     | none => m!""
     | some keep => m!" ~keep_trait_clauses:(Some {listToString keep})"
   m!"{extract}{keepParams}{keepTraitClauses}"
