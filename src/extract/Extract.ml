@@ -706,8 +706,6 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
   | Fun fun_id, _ ->
       let use_brackets = inside in
       if use_brackets then F.pp_print_string fmt "(";
-      (* Open a box for the function call *)
-      (*F.pp_open_hovbox fmt ctx.indent_incr;*)
       (* Print the function name.
 
          For the function name: the id is not the same depending on whether
@@ -2618,8 +2616,15 @@ let extract_trait_decl_type_names (ctx : extraction_ctx)
         let type_map = StringMap.of_list info.types in
         List.map
           (fun item_name ->
-            let type_name = StringMap.find item_name type_map in
-            (item_name, type_name))
+            match StringMap.find_opt item_name type_map with
+            | Some type_name -> (item_name, type_name)
+            | None ->
+                [%craise] trait_decl.item_meta.span
+                  ("Unexpected error: could not find the information for the \
+                    trait associated type '" ^ item_name
+                 ^ "' for trait declaration '"
+                  ^ name_to_string ctx trait_decl.item_meta.name
+                  ^ "'"))
           types
   in
   (* Register the names *)
@@ -2650,8 +2655,9 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
             | None ->
                 [%craise] trait_decl.item_meta.span
                   ("Unexpected error: could not find the declaration for \
-                    method " ^ item_name ^ " for trait declaration "
-                  ^ name_to_string ctx trait_decl.item_meta.name)
+                    method '" ^ item_name ^ "' for trait declaration '"
+                  ^ name_to_string ctx trait_decl.item_meta.name
+                  ^ "'")
           in
 
           let f = trans.f in

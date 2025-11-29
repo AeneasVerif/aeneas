@@ -177,26 +177,41 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
   } : A.trait_decl =
     trait_decl
   in
-  let span = Some item_meta.span in
+  let span = item_meta.span in
+  let opt_span = Some span in
   let type_infos = ctx.type_ctx.type_infos in
-  let translate_ty = translate_fwd_ty span type_infos in
+  let translate_ty = translate_fwd_ty opt_span type_infos in
   let name =
     Print.Types.name_to_string
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
       item_meta.name
   in
-  let generics, preds = translate_generic_params span llbc_generics in
+  let generics, preds = translate_generic_params opt_span llbc_generics in
   let explicit_info = compute_explicit_info generics [] in
   let parent_clauses =
-    List.map (translate_trait_clause span) llbc_parent_clauses
+    List.map (translate_trait_clause opt_span) llbc_parent_clauses
   in
   if types <> [] then
     (* Most associated types are removed by Charon's `--remove-associated-types`. *)
-    [%craise_opt_span] span
-      "Found an unhandled trait associated type; this can happen with \
-       mutually-recursive traits as well as GATs. Aeneas cannot handle such \
-       types today.";
-  let types = [] in
+    [%lwarning
+      "Found an associated type in a trait declaration; trait associated types \
+       are usually lifted to become parameters of the trait definition, but \
+       this can fail with mutually-recursive traits as well as GATs. Aeneas \
+       cannot handle such types today, and the generated code will likely be \
+       incorrect." ^ "\nTrait declaration: " ^ name ^ "\nSource: "
+      ^ Errors.span_to_string span];
+  let types =
+    List.map
+      (fun (t : A.trait_assoc_ty T.binder) ->
+        [%cassert] span
+          (t.binder_params = TypesUtils.empty_generic_params)
+          "Can not extract trait associated types with parameters";
+        let t = t.binder_value in
+        [%cassert] span (t.implied_clauses = [])
+          "Can not extract trait associated types with implied trait clauses";
+        t.name)
+      types
+  in
   let consts =
     List.map
       (fun (c : A.trait_assoc_const) -> (c.name, translate_ty c.ty))
@@ -205,7 +220,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
   let methods =
     List.map
       (fun (m : A.trait_method T.binder) ->
-        (m.binder_value.name, translate_trait_method span translate_ty m))
+        (m.binder_value.name, translate_trait_method opt_span translate_ty m))
       methods
   in
   (* Lookup the builtin information, if there is *)

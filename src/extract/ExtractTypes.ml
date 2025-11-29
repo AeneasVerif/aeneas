@@ -537,12 +537,18 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
     if backend () = Coq then "(" ^ s ^ ")" else s
   in
   match id with
-  | Self ->
+  | Self -> (
       (* This has a specific treatment depending on the item we're extracting
          (associated type, etc.). We should have caught this elsewhere. *)
       [%save_error] span "Unexpected occurrence of `Self`";
-      F.pp_print_string fmt "ERROR(\"Unexpected Self\")"
+      match backend () with
+      | Lean ->
+          F.pp_print_string fmt "sorry";
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt "/- Unexpected occurrence of Self -/"
+      | _ -> F.pp_print_string fmt "ERROR(\"Unexpected Self\")")
   | TraitImpl (id, generics) ->
+      let name = ctx_get_trait_impl span id ctx in
       (* Lookup the the information about the explicit/implicit parameters. *)
       let explicit =
         match TraitImplId.Map.find_opt id ctx.trans_trait_impls with
@@ -580,14 +586,25 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
         with
         | None -> generics
         | Some filter ->
-            let trait_refs =
-              List.filter_map
-                (fun (b, x) -> if b then Some x else None)
-                (List.combine filter generics.trait_refs)
-            in
-            { generics with trait_refs }
+            if List.length filter = List.length generics.trait_refs then
+              let trait_refs =
+                List.filter_map
+                  (fun (b, x) -> if b then Some x else None)
+                  (List.combine filter generics.trait_refs)
+              in
+              { generics with trait_refs }
+            else (
+              [%save_error] span
+                ("Incorrect parameter filtering information: incorrect number \
+                  of trait clauses: the trait declaration has "
+                ^ string_of_int (List.length generics.trait_refs)
+                ^ ", the filtering information has: "
+                ^ string_of_int (List.length filter)
+                ^ "\nImplemented trait ref: "
+                ^ trait_decl_ref_to_string ctx trait_ref
+                ^ "\nExtracted trait name: " ^ name);
+              generics)
       in
-      let name = ctx_get_trait_impl span id ctx in
       let use_brackets = generics <> empty_generic_args && inside in
       if use_brackets then F.pp_print_string fmt "(";
       F.pp_print_string fmt name;

@@ -418,14 +418,17 @@ let names_maps_get (span : Meta.span option) (id_to_string : id -> string)
            (IdMap.bindings m))
     ^ "\n]"
   in
-  if allow_collisions id then (
+  if allow_collisions id then
     let m = nm.unsafe_names_map.id_to_name in
     match IdMap.find_opt id m with
     | Some s -> s
-    | None ->
+    | None -> (
         let err = "Could not find: " ^ id_to_string id in
         [%save_error_opt_span] span err;
-        "(%%%ERROR: unknown identifier\": " ^ id_to_string id ^ "\"%%%)")
+        match backend () with
+        | Lean ->
+            "sorry /- ERROR: unknown identifier\": " ^ id_to_string id ^ "-/)"
+        | _ -> "(%%%ERROR: unknown identifier\": " ^ id_to_string id ^ "\"%%%)")
   else
     let m = nm.names_map.id_to_name in
     match IdMap.find_opt id m with
@@ -1215,6 +1218,7 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (Return, "return");
         (Fail, "fail_");
         (Assert, "massert");
+        (Discriminant, "get_discriminant");
         (UpdateAtIndex Slice, "Slice.update");
         (UpdateAtIndex Array, "Array.update");
         (ToResult, "↑");
