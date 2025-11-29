@@ -326,12 +326,18 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 132 *)
     mk_fun "core::cmp::impls::{core::cmp::Ord<()>}::cmp"
       "core.cmp.impls.OrdUnit.cmp";
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 144 *)
+    mk_fun "core::cmp::impls::{core::cmp::PartialEq<&'a @A, &'b @B>}::eq"
+      "core.cmp.impls.PartialEqShared.eq";
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 116 *)
     mk_fun "core::cmp::impls::{core::cmp::PartialEq<(), ()>}::eq"
       "core.cmp.impls.PartialEqUnit.eq";
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 119 *)
     mk_fun "core::cmp::impls::{core::cmp::PartialEq<(), ()>}::ne"
       "core.cmp.impls.PartialEqUnit.ne";
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 136 *)
+    mk_fun "core::cmp::impls::{core::cmp::PartialEq<bool, bool>}::eq"
+      "core.cmp.impls.PartialEqBool.eq";
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 128 *)
     mk_fun "core::cmp::impls::{core::cmp::PartialOrd<(), ()>}::partial_cmp"
       "core.cmp.impls.PartialOrdUnit.partial_cmp";
@@ -387,6 +393,9 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Fmt.lean", line: 39 *)
     mk_fun "core::fmt::{core::fmt::Formatter<'a>}::write_str"
       "core.fmt.Formatter.write_str";
+    (* file: "Aeneas/Std/Core/Discriminant.lean", line: 26 *)
+    mk_fun "core::intrinsics::discriminant_value"
+      "core.intrinsics.discriminant_value";
     (* file: "Aeneas/Std/Core/Core.lean", line: 73 *)
     mk_fun "core::mem::replace" "core.mem.replace" ~can_fail:false ~lift:false;
     (* file: "Aeneas/Std/Core/Core.lean", line: 77 *)
@@ -632,16 +641,17 @@ let lean_builtin_trait_decls =
     mk_trait_decl "core::marker::Copy" "core.marker.Copy"
       ~parent_clauses:[ "cloneInst" ];
     (* file: "Aeneas/Std/Core/Discriminant.lean", line: 8 *)
-    mk_trait_decl "core::marker::DiscriminantKind" "DisciminantKind"
-      ~methods:
+    mk_trait_decl "core::marker::DiscriminantKind" "DiscriminantKind"
+      ~parent_clauses:
         [
-          ("cloneInst", "cloneInst");
-          ("copyInst", "copyInst");
-          ("debugInst", "debugInst");
-          ("partialEqInst", "partialEqInst");
-          ("eqInst", "eqInst");
-          ("hashInst", "hashInst");
-        ];
+          "cloneInst";
+          "copyInst";
+          "debugInst";
+          "partialEqInst";
+          "eqInst";
+          "hashInst";
+        ]
+      ~types:[ ("Discriminant", "Discriminant") ];
     (* file: "Aeneas/Std/Core/Marker.lean", line: 8 *)
     mk_trait_decl "core::marker::Freeze" "core.marker.Freeze";
     (* file: "Aeneas/Std/Core/Marker.lean", line: 5 *)
@@ -721,14 +731,18 @@ let lean_builtin_trait_impls =
       ~keep_trait_clauses:(Some [ true; false ]);
     (* file: "Aeneas/Std/Core/Core.lean", line: 42 *)
     mk_trait_impl "core::clone::Clone<bool>" "core.clone.CloneBool";
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 149 *)
+    mk_trait_impl "core::cmp::PartialEq<&'a @A, &'b @B>"
+      "core.cmp.PartialEqShared";
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 122 *)
     mk_trait_impl "core::cmp::PartialEq<(), ()>" "core.cmp.PartialEqUnit";
     (* file: "Aeneas/Std/Vec.lean", line: 392 *)
     mk_trait_impl
       "core::cmp::PartialEq<alloc::vec::Vec<@T>, alloc::vec::Vec<@U>>"
       "core.cmp.PartialEqVec"
-      ~keep_params:(Some [ true; true; false; false ])
-      ~keep_trait_clauses:(Some [ true; true; false; false ]);
+      ~keep_params:(Some [ true; true; false; false ]);
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 139 *)
+    mk_trait_impl "core::cmp::PartialEq<bool, bool>" "core.cmp.PartialEqBool";
     (* file: "Aeneas/Std/Core/Convert.lean", line: 63 *)
     mk_trait_impl "core::convert::AsMut<Box<@T>, @T>" "core.convert.AsMutBox";
     (* file: "Aeneas/Std/Core/Convert.lean", line: 29 *)
@@ -736,8 +750,7 @@ let lean_builtin_trait_impls =
     (* file: "Aeneas/Std/Vec.lean", line: 329 *)
     mk_trait_impl "core::convert::From<Box<[@T]>, alloc::vec::Vec<@T>>"
       "core.convert.FromBoxSliceVec"
-      ~keep_params:(Some [ true; false ])
-      ~keep_trait_clauses:(Some [ true; false ]);
+      ~keep_params:(Some [ true; false ]);
     (* file: "Aeneas/Std/Core/Convert.lean", line: 20 *)
     mk_trait_impl "core::convert::Into<@Self, @T>" "core.convert.IntoFrom";
     (* file: "Aeneas/Std/Core/Convert.lean", line: 53 *)
@@ -756,16 +769,14 @@ let lean_builtin_trait_impls =
     (* file: "Aeneas/Std/Vec.lean", line: 276 *)
     mk_trait_impl "core::ops::deref::Deref<alloc::vec::Vec<@T>, [@T]>"
       "core.ops.deref.DerefVec"
-      ~keep_params:(Some [ true; false ])
-      ~keep_trait_clauses:(Some [ true; false ]);
+      ~keep_params:(Some [ true; false ]);
     (* file: "Aeneas/Std/Core/Ops.lean", line: 36 *)
     mk_trait_impl "core::ops::deref::DerefMut<Box<@T>, @T>"
       "core.ops.deref.DerefMutBoxInst";
     (* file: "Aeneas/Std/Vec.lean", line: 287 *)
     mk_trait_impl "core::ops::deref::DerefMut<alloc::vec::Vec<@T>, [@T]>"
       "core.ops.deref.DerefMutVec"
-      ~keep_params:(Some [ true; false ])
-      ~keep_trait_clauses:(Some [ true; false ]);
+      ~keep_params:(Some [ true; false ]);
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 97 *)
     mk_trait_impl "core::ops::index::Index<[@T; @N], @I, @O>"
       "core.ops.index.IndexArray";
@@ -775,8 +786,7 @@ let lean_builtin_trait_impls =
     (* file: "Aeneas/Std/Vec.lean", line: 195 *)
     mk_trait_impl "core::ops::index::Index<alloc::vec::Vec<@T>, @T, @O>"
       "alloc.vec.Vec.Index"
-      ~keep_params:(Some [ true; true; false; true ])
-      ~keep_trait_clauses:(Some [ true; true; false; true ]);
+      ~keep_params:(Some [ true; true; false; true ]);
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 104 *)
     mk_trait_impl "core::ops::index::IndexMut<[@T; @N], @I, @O>"
       "core.ops.index.IndexMutArray";
@@ -786,8 +796,7 @@ let lean_builtin_trait_impls =
     (* file: "Aeneas/Std/Vec.lean", line: 203 *)
     mk_trait_impl "core::ops::index::IndexMut<alloc::vec::Vec<@T>, @T, @O>"
       "alloc.vec.Vec.IndexMut"
-      ~keep_params:(Some [ true; true; false; true ])
-      ~keep_trait_clauses:(Some [ true; true; false; true ]);
+      ~keep_params:(Some [ true; true; false; true ]);
     (* file: "Aeneas/Std/Slice.lean", line: 305 *)
     mk_trait_impl
       "core::slice::index::SliceIndex<core::ops::range::Range<usize>, [@T], \

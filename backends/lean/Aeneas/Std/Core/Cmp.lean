@@ -133,4 +133,23 @@ def core.cmp.impls.PartialOrdUnit.partial_cmp (_ _ : Unit) : Result (Option Orde
 def core.cmp.impls.OrdUnit.cmp (_ _ : Unit) : Result Ordering :=
   ok .eq
 
+@[rust_fun "core::cmp::impls::{core::cmp::PartialEq<bool, bool>}::eq"]
+def core.cmp.impls.PartialEqBool.eq (b0 b1 : Bool) : Result Bool := .ok (b0 = b1)
+
+@[reducible, rust_trait_impl "core::cmp::PartialEq<bool, bool>"]
+def core.cmp.PartialEqBool : core.cmp.PartialEq Bool Bool := {
+  eq := core.cmp.impls.PartialEqBool.eq
+}
+
+@[rust_fun "core::cmp::impls::{core::cmp::PartialEq<&'a @A, &'b @B>}::eq"]
+def core.cmp.impls.PartialEqShared.eq {A : Type} {B : Type} (PartialEqInst : core.cmp.PartialEq A B)
+  (x : A) (y : B) : Result Bool :=
+  PartialEqInst.eq x y
+
+@[reducible, rust_trait_impl "core::cmp::PartialEq<&'a @A, &'b @B>"]
+def core.cmp.PartialEqShared {A : Type} {B : Type}
+  (PartialEqInst : core.cmp.PartialEq A B) : core.cmp.PartialEq A B := {
+  eq := core.cmp.impls.PartialEqShared.eq PartialEqInst
+}
+
 end Aeneas.Std
