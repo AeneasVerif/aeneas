@@ -21,19 +21,19 @@ def IScalar.wrapping_mul {ty} (x y : IScalar ty) : IScalar ty := ⟨ x.bv * y.bv
 iscalar @[progress_pure_def]
 def core.num.«%S».wrapping_mul : «%S» → «%S» → «%S»  := @IScalar.wrapping_mul IScalarTy.«%S»
 
-@[simp, bvify_simps] theorem UScalar.wrapping_mul_bv_eq {ty} (x y : UScalar ty) :
+@[simp, bvify_simps, grind =] theorem UScalar.wrapping_mul_bv_eq {ty} (x y : UScalar ty) :
   (wrapping_mul x y).bv = x.bv * y.bv := by
   simp only [wrapping_mul]
 
-uscalar @[simp, bvify_simps] theorem «%S».wrapping_mul_bv_eq (x y : «%S») :
+uscalar @[simp, bvify_simps, grind =] theorem «%S».wrapping_mul_bv_eq (x y : «%S») :
   (core.num.«%S».wrapping_mul x y).bv = x.bv * y.bv := by
   simp [core.num.«%S».wrapping_mul, bv]
 
-@[simp, bvify_simps] theorem IScalar.wrapping_mul_bv_eq {ty} (x y : IScalar ty) :
+@[simp, bvify_simps, grind =] theorem IScalar.wrapping_mul_bv_eq {ty} (x y : IScalar ty) :
   (wrapping_mul x y).bv = x.bv * y.bv := by
   simp only [wrapping_mul]
 
-iscalar @[simp, bvify_simps] theorem «%S».wrapping_mul_bv_eq (x y : «%S») :
+iscalar @[simp, bvify_simps, grind =] theorem «%S».wrapping_mul_bv_eq (x y : «%S») :
   (core.num.«%S».wrapping_mul x y).bv = x.bv * y.bv := by
   simp [core.num.«%S».wrapping_mul, bv]
 
