@@ -2968,20 +2968,7 @@ let unit_vars_to_unit (ctx : ctx) (def : fun_decl) : fun_decl =
     at the same time is that we would need to eliminate them in two different
     places: when translating function calls, and when translating end
     abstractions. Here, we can do something simpler, in one micro-pass. *)
-let eliminate_box_functions_visitor (ctx : ctx) (def : fun_decl) =
-  let box_clone_pat =
-    NameMatcher.parse_pattern
-      "alloc::boxed::{core::clone::Clone<Box<@T>>}::clone"
-  in
-  (* TODO: we shouldn't have to build a names map to check whether a name
-     satisfies a pattern *)
-  let names_map = NameMatcher.NameMatcherMap.of_list [ (box_clone_pat, ()) ] in
-  let match_ctx = Charon.NameMatcher.ctx_from_crate ctx.crate in
-  let is_box_clone (d : fun_decl) : bool =
-    let config = ExtractName.default_config in
-    NameMatcher.NameMatcherMap.mem match_ctx config d.item_meta.name names_map
-  in
-
+let eliminate_box_functions_visitor (_ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
 
   (* The map visitor *)
@@ -2990,11 +2977,10 @@ let eliminate_box_functions_visitor (ctx : ctx) (def : fun_decl) =
 
     method! visit_texpr env e =
       match opt_destruct_function_call e with
-      | Some (fun_id, generics, args) -> (
+      | Some (fun_id, _generics, args) -> (
           (* Below, when dealing with the arguments: we consider the very
-           * general case, where functions could be boxed (meaning we
-           * could have: [box_new f x])
-           *)
+             general case, where functions could be boxed (meaning we
+             could have: [box_new f x]) *)
           match fun_id with
           | Fun (FromLlbc (FunId (FBuiltin aid), _lp_id)) -> (
               match aid with
@@ -3006,68 +2992,121 @@ let eliminate_box_functions_visitor (ctx : ctx) (def : fun_decl) =
               | ArrayToSliceMut
               | ArrayRepeat
               | PtrFromParts _ -> super#visit_texpr env e)
-          | Fun (FromLlbc (FunId (FRegular fid), _)) -> (
-              (* Eliminate [alloc::boxed::{core::clone::Clone<Box<@T>>}::clone].
-
-                 TODO: we do this because otherwise we have recursion issues when
-                 deriving [Clone] for recursive types which use box. This is
-                 a hack: we need a general solution (the same issue happens if
-                 you use other datatypes like [Vec] - we introduce a workaround for
-                 [Box] because it is really common).
-              *)
-              match FunDeclId.Map.find_opt fid ctx.fun_decls with
-              | Some d
-                when is_box_clone d
-                     && List.length generics.trait_refs = 2
-                     && List.length args = 1 -> (
-                  (* Retrieve the first clause *)
-                  let trait_ref = List.hd generics.trait_refs in
-                  match trait_ref.trait_id with
-                  | TraitImpl (impl_id, impl_generics) ->
-                      (* Lookup the impl to retrieve the method id *)
-                      let impl =
-                        [%unwrap_with_span] span
-                          (TraitImplId.Map.find_opt impl_id ctx.trait_impls)
-                          "Internal error"
-                      in
-                      let method_decl =
-                        snd
-                          ([%unwrap_with_span] span
-                             (List.find_opt
-                                (fun (name, _) -> name = "clone")
-                                impl.methods)
-                             "Internal error")
-                      in
-
-                      (* Create a call to the method *)
-                      let qualif =
-                        FunOrOp
-                          (Fun
-                             (FromLlbc
-                                ( FunId
-                                    (FRegular method_decl.binder_value.fun_id),
-                                  None )))
-                      in
-                      (* TODO: should we handle the binder? *)
-                      let qualif : qualif =
-                        { id = qualif; generics = impl_generics }
-                      in
-                      let arg = List.hd args in
-                      let qualif : texpr =
-                        {
-                          e = Qualif qualif;
-                          ty = mk_arrow arg.ty (mk_result_ty arg.ty);
-                        }
-                      in
-                      [%add_loc] mk_app span qualif arg
-                  | _ -> super#visit_texpr env e)
-              | _ -> super#visit_texpr env e)
           | _ -> super#visit_texpr env e)
       | _ -> super#visit_texpr env e
   end
 
 let eliminate_box_functions =
   lift_expr_map_visitor eliminate_box_functions_visitor
+
+(** Simplify some trait calls.
+
+    For instance, we do:
+    {
+      alloc.boxed.CloneBox.clone CloneInst x
+
+          ~>
+
+      CloneInst.clone x
+    }
+
+    TODO: we do this because otherwise we have recursion issues when for instance
+    deriving [Clone] for recursive types which use box. This is a hack: we need
+    a general solution (the same issue happens if you use other datatypes like [Vec]
+    - we introduce a workaround for a few types like [Box] or [&T] because those uses
+    are really common and we consider them as builtin). *)
+let simplify_trait_calls_visitor (ctx : ctx) (def : fun_decl) =
+  (* Create a map from pattern to method *)
+  let pats =
+    [
+      ("alloc::boxed::{core::clone::Clone<Box<@T>>}", "clone");
+      ("core::cmp::impls::{core::cmp::PartialEq<&'a @A, &'b @B>}", "eq");
+      ("alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}", "eq");
+    ]
+  in
+  let pats =
+    List.map
+      (fun (pat, x) -> (NameMatcher.parse_pattern (pat ^ "::" ^ x), x))
+      pats
+  in
+  let names_map = NameMatcher.NameMatcherMap.of_list pats in
+  let match_ctx = Charon.NameMatcher.ctx_from_crate ctx.crate in
+  let get_method (d : fun_decl) : string option =
+    let config = ExtractName.default_config in
+    NameMatcher.NameMatcherMap.find_opt match_ctx config d.item_meta.name
+      names_map
+  in
+
+  let span = def.item_meta.span in
+
+  (* The map visitor *)
+  object (self)
+    inherit [_] map_expr as super
+
+    method! visit_texpr env e =
+      let ret_ty = e.ty in
+      match opt_destruct_function_call e with
+      | Some (fun_id, generics, args) -> (
+          match fun_id with
+          | Fun (FromLlbc (FunId (FRegular fid), _)) -> (
+              match FunDeclId.Map.find_opt fid ctx.fun_decls with
+              | Some d
+                when List.length generics.trait_refs > 0 && List.length args > 0
+                -> (
+                  match get_method d with
+                  | Some method_name -> (
+                      (* Retrieve the first clause - TODO: is it always the first clause? *)
+                      let trait_ref = List.hd generics.trait_refs in
+                      match trait_ref.trait_id with
+                      | TraitImpl (impl_id, impl_generics) ->
+                          (* Lookup the impl to retrieve the method id *)
+                          let impl =
+                            [%unwrap_with_span] span
+                              (TraitImplId.Map.find_opt impl_id ctx.trait_impls)
+                              "Internal error"
+                          in
+                          let method_decl =
+                            snd
+                              ([%unwrap_with_span] span
+                                 (List.find_opt
+                                    (fun (name, _) -> name = method_name)
+                                    impl.methods)
+                                 "Internal error")
+                          in
+
+                          (* Create a call to the method *)
+                          let qualif =
+                            FunOrOp
+                              (Fun
+                                 (FromLlbc
+                                    ( FunId
+                                        (FRegular
+                                           method_decl.binder_value.fun_id),
+                                      None )))
+                          in
+                          (* TODO: should we handle the binder? *)
+                          let qualif : qualif =
+                            { id = qualif; generics = impl_generics }
+                          in
+                          let arg_tys =
+                            List.map (fun (a : texpr) -> a.ty) args
+                          in
+                          let qualif : texpr =
+                            { e = Qualif qualif; ty = mk_arrows arg_tys ret_ty }
+                          in
+                          let e = [%add_loc] mk_apps span qualif args in
+                          (* Re-explore *)
+                          self#visit_texpr env e
+                      | _ ->
+                          (* TODO: simplify calls to non-impls *)
+                          super#visit_texpr env e)
+                  | None -> super#visit_texpr env e)
+              | _ -> super#visit_texpr env e)
+          | _ -> super#visit_texpr env e)
+      | _ -> super#visit_texpr env e
+  end
+
+let simplify_trait_calls = lift_expr_map_visitor simplify_trait_calls_visitor
 
 (** Simplify the lambdas by applying beta-reduction *)
 let apply_beta_reduction_visitor (ctx : ctx) (def : fun_decl) =
@@ -6623,6 +6662,8 @@ let passes :
     (* Eliminate the box functions - note that the "box" types were eliminated
        during the symbolic to pure phase: see the comments for [eliminate_box_functions] *)
     (None, "eliminate_box_functions", eliminate_box_functions);
+    (* Simplify some traits like [Clone::clone] for type [Box] *)
+    (None, "simplify_trait_calls", simplify_trait_calls);
     (* Remove the duplicated function calls *)
     (None, "simplify_duplicate_calls", simplify_duplicate_calls);
     (* Merge let bindings which bind an expression then decompose a tuple *)
