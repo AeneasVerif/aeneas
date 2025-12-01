@@ -191,7 +191,12 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
   let parent_clauses =
     List.map (translate_trait_clause opt_span) llbc_parent_clauses
   in
-  if types <> [] then
+  (* Lookup the builtin information, if there is *)
+  let builtin_info =
+    match_name_find_opt ctx trait_decl.item_meta.name
+      (ExtractBuiltin.builtin_trait_decls_map ())
+  in
+  if types <> [] && builtin_info = None then
     (* Most associated types are removed by Charon's `--remove-associated-types`. *)
     [%lwarning
       "Found an associated type in a trait declaration; trait associated types \
@@ -222,11 +227,6 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
       (fun (m : A.trait_method T.binder) ->
         (m.binder_value.name, translate_trait_method opt_span translate_ty m))
       methods
-  in
-  (* Lookup the builtin information, if there is *)
-  let builtin_info =
-    match_name_find_opt ctx trait_decl.item_meta.name
-      (ExtractBuiltin.builtin_trait_decls_map ())
   in
   {
     def_id;
