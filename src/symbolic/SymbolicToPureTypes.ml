@@ -117,7 +117,7 @@ let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
       TVar var
       (* Note: the `de_bruijn_id`s are incorrect, see comment on `translate_region_binder` *)
   | TLiteral ty -> TLiteral ty
-  | TNever -> [%craise_opt_span] span "Unreachable"
+  | TNever -> TNever
   | TRef (_, rty, _) -> translate span rty
   | TRawPtr (ty, rkind) ->
       let mut =
@@ -409,7 +409,7 @@ let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
                  * is the identity *)
                 Some (mk_simpl_tuple_ty tys_t)))
   | TVar var -> wrap (TVar var)
-  | TNever -> [%craise_opt_span] span "Unreachable"
+  | TNever -> wrap TNever
   | TLiteral lty -> wrap (TLiteral lty)
   | TRef (r, rty, rkind) -> (
       match rkind with
