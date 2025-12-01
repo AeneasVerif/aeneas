@@ -141,7 +141,7 @@ def core.cmp.PartialEqBool : core.cmp.PartialEq Bool Bool := {
   eq := core.cmp.impls.PartialEqBool.eq
 }
 
-@[rust_fun "core::cmp::impls::{core::cmp::PartialEq<&'a @A, &'b @B>}::eq"]
+@[simp, rust_fun "core::cmp::impls::{core::cmp::PartialEq<&'a @A, &'b @B>}::eq"]
 def core.cmp.impls.PartialEqShared.eq {A : Type} {B : Type} (PartialEqInst : core.cmp.PartialEq A B)
   (x : A) (y : B) : Result Bool :=
   PartialEqInst.eq x y
