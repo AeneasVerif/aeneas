@@ -226,6 +226,9 @@ end Test
 
 abbrev Str := String
 
+/-- The Never type in Rust -/
+inductive Never where
+
 instance SubtypeBEq [BEq α] (p : α → Prop) : BEq (Subtype p) where
   beq v0 v1 := v0.val == v1.val
 

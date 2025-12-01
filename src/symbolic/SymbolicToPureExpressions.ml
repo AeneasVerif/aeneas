@@ -137,7 +137,7 @@ let eval_ctx_to_symbolic_assignments_info (ctx : bs_ctx) (ectx : C.eval_ctx) :
   !info
 
 let translate_error (span : Meta.span option) (msg : string) : texpr =
-  { e = EError (span, msg); ty = Error }
+  { e = EError (span, msg); ty = TError }
 
 (** Small helper.
 

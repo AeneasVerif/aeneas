@@ -1928,7 +1928,7 @@ let ctx_compute_var_basename (span : Meta.span) (ctx : extraction_ctx)
           | TFloat _ -> "fl")
       | TArrow _ -> "f"
       | TTraitType (_, name) -> name_from_type_ident name
-      | Error -> "x")
+      | TNever | TError -> "x")
 
 (** Generates a type variable basename. *)
 let ctx_compute_type_var_basename (_ctx : extraction_ctx) (basename : string) :

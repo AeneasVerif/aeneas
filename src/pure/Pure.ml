@@ -372,7 +372,8 @@ type ty =
   | TArrow of ty * ty
   | TTraitType of trait_ref * string
       (** The string is for the name of the associated type *)
-  | Error
+  | TNever
+  | TError
 
 and trait_ref = {
   trait_id : trait_instance_id;

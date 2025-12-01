@@ -304,7 +304,7 @@ let rec translate_fwd_ty (span : Meta.span option) (type_infos : type_infos)
                 "Unreachable: box/vec/option receives exactly one type \
                  parameter"))
   | TVar var -> TVar var
-  | TNever -> [%craise_opt_span] span "Unreachable"
+  | TNever -> TNever
   | TLiteral lty -> TLiteral lty
   | TRef (_, rty, _) -> translate rty
   | TRawPtr (ty, rkind) ->
