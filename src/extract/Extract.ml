@@ -821,6 +821,8 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
               }
         | Pure (UpdateAtIndex Slice) ->
             Some { explicit_types = [ Implicit ]; explicit_const_generics = [] }
+        | Pure Discriminant ->
+            Some { explicit_types = [ Implicit ]; explicit_const_generics = [] }
         | Pure ToResult ->
             Some { explicit_types = [ Implicit ]; explicit_const_generics = [] }
         | Pure _ -> None

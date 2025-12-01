@@ -1201,10 +1201,7 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
         let adt_ty = ctx_translate_fwd_ty ctx adt_sv.sv_ty in
         let qualif_id = FunOrOp (Fun (Pure Discriminant)) in
         let qualif =
-          {
-            id = qualif_id;
-            generics = mk_generic_args_from_types [ adt_ty; var.ty ];
-          }
+          { id = qualif_id; generics = mk_generic_args_from_types [ adt_ty ] }
         in
         let qualif : texpr =
           { e = Qualif qualif; ty = mk_arrow adt_ty var.ty }
