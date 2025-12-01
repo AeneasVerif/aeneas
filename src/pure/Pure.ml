@@ -609,6 +609,7 @@ and variant = {
   variant_name : string;
   fields : field list;
   variant_attr_info : (attr_info[@opaque]);
+  discriminant : int;
 }
 
 and type_decl_kind = Struct of field list | Enum of variant list | Opaque

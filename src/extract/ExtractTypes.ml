@@ -1362,11 +1362,34 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
 
       Note that we need the [reducible] attribute in Lean, otherwise Lean sometimes
       doesn't manage to typecheck the expressions when it needs to coerce the type. *)
-   let attributes =
+   let reducible_attr =
      if is_tuple_struct_one_or_zero_field && backend () = Lean then
        [ "reducible" ]
      else []
    in
+   (* The attribute to automatically generate the [read_discriminant] function *)
+   let discr_attr =
+     match def.kind with
+     | Enum variants ->
+         (* Check if the discriminant values are exactly 0, 1, etc. or if the user
+            provided custom values. *)
+         if
+           List.for_all
+             (fun b -> b)
+             (List.mapi (fun i (v : variant) -> v.discriminant = i) variants)
+         then [ "discriminant" ]
+         else
+           [
+             "discriminant " ^ "["
+             ^ String.concat ","
+                 (List.map
+                    (fun (v : variant) -> string_of_int v.discriminant)
+                    variants)
+             ^ "]";
+           ]
+     | _ -> []
+   in
+   let attributes = reducible_attr @ discr_attr in
    extract_attributes def.item_meta.span ctx fmt def.item_meta.name None
      attributes "rust_type" []
      ~is_external:(not def.item_meta.is_local));

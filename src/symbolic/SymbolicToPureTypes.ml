@@ -197,7 +197,12 @@ let translate_variant (span : Meta.span) (v : T.variant) : variant =
   let variant_name = v.variant_name in
   let fields = translate_fields span v.fields in
   let variant_attr_info = v.attr_info in
-  { variant_name; fields; variant_attr_info }
+  let discriminant =
+    match v.discriminant with
+    | VScalar (SignedScalar (_, v)) -> Z.to_int v
+    | _ -> [%internal_error] span
+  in
+  { variant_name; fields; variant_attr_info; discriminant }
 
 let translate_variants (span : Meta.span) (vl : T.variant list) : variant list =
   List.map (translate_variant span) vl

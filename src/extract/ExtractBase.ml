@@ -1061,7 +1061,6 @@ let keywords () =
           "variables";
           "where";
           "with";
-          "read_discriminant";
         ]
     | HOL4 ->
         [
@@ -1218,7 +1217,7 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (Return, "return");
         (Fail, "fail_");
         (Assert, "massert");
-        (Discriminant, "get_discriminant");
+        (Discriminant, "read_discriminant");
         (UpdateAtIndex Slice, "Slice.update");
         (UpdateAtIndex Array, "Array.update");
         (ToResult, "↑");
