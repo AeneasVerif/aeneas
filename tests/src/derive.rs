@@ -35,7 +35,7 @@ enum List<T> {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct CopyStruct<T> {
-    f0 : (),
+    f0: (),
     f1: bool,
     f2: u32,
     f3: T,
