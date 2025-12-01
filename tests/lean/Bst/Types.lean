@@ -10,6 +10,7 @@ namespace bst
 
 /- [bst::Ordering]
    Source: 'src/bst.rs', lines 5:0-9:1 -/
+@[discriminant]
 inductive Ordering where
 | Less : Ordering
 | Equal : Ordering
