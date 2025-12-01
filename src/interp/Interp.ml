@@ -449,7 +449,9 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
         SA.Panic
     | Unit | Break _ | Continue _ ->
         [%craise] span
-          ("evaluate_function_symbolic failed on: " ^ name_to_string ())
+          ("evaluate_function_symbolic failed on: " ^ name_to_string ()
+         ^ "\nUnexpected result: "
+          ^ show_statement_eval_res res)
   in
 
   (* Evaluate the function *)
