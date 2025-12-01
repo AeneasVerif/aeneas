@@ -1097,12 +1097,20 @@ let eval_discriminant (config : config) (span : Meta.span) (p : place)
          ^ ty_to_string ctx v.ty ^ ")")
   in
 
-  let compute_discr_ty (v : literal) : ty =
-    match v with
+  (* Retrieve the type of the discriminants - we simply look at the first variant *)
+  let discr_ty =
+    [%sanity_check] span (variants <> []);
+    let variant0 = List.hd variants in
+    match variant0.discriminant with
     | VScalar (SignedScalar (ty, _)) -> TLiteral (TInt ty)
     | VScalar (UnsignedScalar (ty, _)) -> TLiteral (TUInt ty)
     | _ -> [%internal_error] span
   in
+  (* It should actually always be an [isize] - this is not important for the
+     symbolic execution, but is for the translation, because in the Lean model
+     we use a typeclass which is only generic in the enumeration, not in the
+     output type (which we expect to always be [isize]) *)
+  [%sanity_check] span (discr_ty = TLiteral (TInt Isize));
 
   (* Case disjunction: is the value concrete or symbolic?
      If we have a concrete variant, we can compute the discriminant directly.
@@ -1118,20 +1126,14 @@ let eval_discriminant (config : config) (span : Meta.span) (p : place)
 
       let v : tvalue =
         let value = variant.discriminant in
-        let ty = compute_discr_ty value in
-        { value = VLiteral value; ty }
+        { value = VLiteral value; ty = discr_ty }
       in
       (v, ctx, cf_read)
   | VSymbolic adt_sv ->
-      (* Retrieve the type of the discriminants - we simply look at the first variant *)
-      [%sanity_check] span (variants <> []);
-      let variant0 = List.hd variants in
-      let ty = compute_discr_ty variant0.discriminant in
-
       (* Introduce a fresh symbolic value *)
       let sv_id = ctx.fresh_symbolic_value_id () in
-      let sv : symbolic_value = { sv_id; sv_ty = ty } in
-      let v : tvalue = { value = VSymbolic sv; ty } in
+      let sv : symbolic_value = { sv_id; sv_ty = discr_ty } in
+      let v : tvalue = { value = VSymbolic sv; ty = discr_ty } in
 
       (* Add a node in the symbolic AST to register the fact that we read a
          discriminant *)
