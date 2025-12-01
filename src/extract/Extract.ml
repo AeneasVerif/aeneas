@@ -2940,24 +2940,8 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_print_break fmt 0 0;
   (* Extract the attributes *)
   ((* We need to list the extract options *)
-   let parent_clauses : string list =
-     List.map
-       (fun clause ->
-         ctx_get_trait_parent_clause decl.item_meta.span decl.def_id
-           clause.clause_id ctx)
-       decl.parent_clauses
-   in
    let add_quotes (ls : string list) : string list =
      List.map (fun s -> "\"" ^ s ^ "\"") ls
-   in
-   let parent_clauses =
-     if parent_clauses = [] then []
-     else
-       [
-         "(parentClauses := ["
-         ^ String.concat ", " (add_quotes parent_clauses)
-         ^ "])";
-       ]
    in
    let types =
      List.map
@@ -2967,6 +2951,22 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
    let types =
      if types = [] then []
      else [ "(types := [" ^ String.concat ", " (add_quotes types) ^ "])" ]
+   in
+   let parent_clauses : string list =
+     List.map
+       (fun clause ->
+         ctx_get_trait_parent_clause decl.item_meta.span decl.def_id
+           clause.clause_id ctx)
+       decl.parent_clauses
+   in
+   let parent_clauses =
+     if parent_clauses = [] then []
+     else
+       [
+         "(parentClauses := ["
+         ^ String.concat ", " (add_quotes parent_clauses)
+         ^ "])";
+       ]
    in
    let consts =
      List.map
