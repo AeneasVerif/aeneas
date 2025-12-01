@@ -158,6 +158,10 @@ let lean_builtin_funs =
       "core.alloc.boxed.CloneBox.clone"
       ~keep_params:(Some [ true; false ])
       ~keep_trait_clauses:(Some [ true; false ]);
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 155 *)
+    mk_fun "alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}::eq"
+      "alloc.boxed.PartialEqBox.eq"
+      ~keep_params:(Some [ true; false ]);
     (* file: "Aeneas/Std/Core/Core.lean", line: 14 *)
     mk_fun "alloc::boxed::{core::convert::AsMut<Box<@T>, @T>}::as_mut"
       "alloc.boxed.AsMutBox.as_mut"
@@ -736,6 +740,10 @@ let lean_builtin_trait_impls =
       "core.cmp.PartialEqShared";
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 122 *)
     mk_trait_impl "core::cmp::PartialEq<(), ()>" "core.cmp.PartialEqUnit";
+    (* file: "Aeneas/Std/Core/Cmp.lean", line: 160 *)
+    mk_trait_impl "core::cmp::PartialEq<Box<@T>, Box<@T>>"
+      "core.cmp.PartialEqBox"
+      ~keep_params:(Some [ true; false ]);
     (* file: "Aeneas/Std/Vec.lean", line: 392 *)
     mk_trait_impl
       "core::cmp::PartialEq<alloc::vec::Vec<@T>, alloc::vec::Vec<@U>>"
