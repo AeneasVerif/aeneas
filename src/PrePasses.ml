@@ -896,11 +896,15 @@ let refresh_statement_ids (_ : crate) (f : fun_decl) : fun_decl =
 
     TODO: remove *)
 let simplify_panics (crate : crate) (f : fun_decl) : fun_decl =
-  let pat =
-    NameMatcher.parse_pattern "core::fmt::{core::fmt::Arguments<'a>}::from_str"
+  let pats =
+    [
+      "core::fmt::{core::fmt::Arguments<'a>}::from_str";
+      "core::fmt::{core::fmt::Arguments<'a>}::from_str_nonconst";
+    ]
   in
+  let pats = List.map (fun p -> (NameMatcher.parse_pattern p, ())) pats in
   (* TODO: we shouldn't need to use a names map *)
-  let names_map = NameMatcher.NameMatcherMap.of_list [ (pat, ()) ] in
+  let names_map = NameMatcher.NameMatcherMap.of_list pats in
   let match_ctx = Charon.NameMatcher.ctx_from_crate crate in
   let is_from_str (d : fun_decl) =
     let config = ExtractName.default_config in
