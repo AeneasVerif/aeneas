@@ -62,7 +62,7 @@ deriving Repr, Inhabited
 
 instance : ToMessageData TypeInfo where
   toMessageData x :=
-    m!"\{ extract : {x.extract},\n  keepParams : {x.keepParams},\n  body : {x.body} }"
+    m!"\{ extract : {x.extract},\n  keepParams : {x.keepParams},\n,  \n  body : {x.body} }"
 
 structure ConstInfo where
   extract : Option String := none
@@ -78,6 +78,12 @@ structure FunInfo where
   /-- We might want to filter some of the function parameters, for instance
       the `Allocator` parameter, which we actually don't use. -/
   keepParams : Option (List Bool) := none
+  /-- Similar to `keepParams`, but for trait clauses.
+
+    We generally use this to filter clauses of the shape `A : Allocator` (as we filter
+    the type parameters corresponding to the allocators).
+  -/
+  keepTraitClauses : Option (List Bool) := none
   canFail : Bool := true
   /-- If the function can not fail, should we still lift it to the [Result]
       monad? This can make reasonings easier, as we can then use [progress]
@@ -90,7 +96,12 @@ deriving Repr, Inhabited
 
 instance : ToMessageData FunInfo where
   toMessageData x :=
-    m!"\{ extract : {x.extract},\n  keepParams : {x.keepParams},\n  canFail : {x.canFail},\n  lift : {x.lift},\n  hasDefault : {x.hasDefault} }"
+    m!"\{ extract : {x.extract},
+  keepParams : {x.keepParams},
+  keepTraitClauses : {x.keepTraitClauses},
+  canFail : {x.canFail},
+  lift : {x.lift},
+  hasDefault : {x.hasDefault} }"
 
 structure TraitConst where
   rust : String
@@ -155,11 +166,17 @@ instance : ToMessageData TraitDecl where
 structure TraitImpl where
   extract : Option String := none
   keepParams : Option (List Bool) := none
+  /-- Similar to `keepParams`, but for trait clauses.
+
+    We generally use this to filter clauses of the shape `A : Allocator` (as we filter
+    the type parameters corresponding to the allocators).
+  -/
+  keepTraitClauses : Option (List Bool) := none
 deriving Repr, Inhabited
 
 instance : ToMessageData TraitImpl where
   toMessageData x :=
-    m!"\{ extract : {x.extract}, keepParams : {x.keepParams} }"
+    m!"\{ extract : {x.extract}, keepParams : {x.keepParams}, keepTraitClauses : {x.keepTraitClauses} }"
 
 def getLocalFileName : AttrM String := do
   let name ← getFileName
@@ -739,11 +756,15 @@ def FunInfo.toExtract (info : FunInfo) : MessageData :=
   let keepParams :=
     match info.keepParams with
     | none => m!""
-    | some filter => m!" ~filter:(Some {listToString filter})"
+    | some keep => m!" ~keep_params:(Some {listToString keep})"
+  let keepTraitClauses :=
+    match info.keepTraitClauses with
+    | none => m!""
+    | some keep => m!" ~keep_trait_clauses:(Some {listToString keep})"
   let canFail := if ¬ info.canFail then m!" ~can_fail:{info.canFail}" else m!""
   let lift := if ¬ info.lift then m!" ~lift:{info.lift}" else m!""
   let hasDefault := if info.hasDefault then m!" ~lift:{info.hasDefault}" else m!""
-  m!"{extract}{keepParams}{canFail}{lift}{hasDefault}"
+  m!"{extract}{keepParams}{keepTraitClauses}{canFail}{lift}{hasDefault}"
 
 def TraitDecl.toExtract (info : TraitDecl) : MessageData :=
   let extract := info.extract.getD "ERROR_MISSING_FIELD"
@@ -776,8 +797,12 @@ def TraitImpl.toExtract (info : TraitImpl) : MessageData :=
   let keepParams :=
     match info.keepParams with
     | none => m!""
-    | some filter => m!" ~filter_params:(Some {listToString filter})"
-  m!"{extract}{keepParams}"
+    | some keep => m!" ~keep_params:(Some {listToString keep})"
+  let keepTraitClauses :=
+    match info.keepTraitClauses with
+    | none => m!""
+    | some keep => m!" ~keep_trait_clauses:(Some {listToString keep})"
+  m!"{extract}{keepParams}{keepTraitClauses}"
 
 def sortDescriptors {α} [ToMessageData α] (st : Array (String × Span × α)) : IO (Array (String × Span × α)) := do
   let mut map : RBMap String (Span × α) Ord.compare := RBMap.empty

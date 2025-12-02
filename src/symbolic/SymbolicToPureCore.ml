@@ -387,6 +387,10 @@ let tpat_to_string (ctx : bs_ctx) (p : Pure.tpat) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
   PrintPure.tpat_to_string ~span:ctx.span env p
 
+let unop_to_string (ctx : bs_ctx) (x : unop) : string =
+  let env = bs_ctx_to_pure_fmt_env ctx in
+  PrintPure.unop_to_string env x
+
 let abs_to_string ?(with_ended : bool = false) (ctx : bs_ctx) (abs : V.abs) :
     string =
   let env = bs_ctx_to_fmt_env ctx in

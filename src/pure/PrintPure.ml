@@ -266,6 +266,9 @@ let const_generic_to_string (env : fmt_env) (cg : const_generic) : string =
   | CgVar var -> const_generic_db_var_to_string env var
   | CgValue lit -> literal_to_string lit
 
+let builtin_impl_data_to_string (data : builtin_impl_data) : string =
+  show_builtin_impl_data data
+
 let rec ty_to_string (env : fmt_env) (inside : bool) (ty : ty) : string =
   match ty with
   | TAdt (id, generics) -> (
@@ -291,7 +294,8 @@ let rec ty_to_string (env : fmt_env) (inside : bool) (ty : ty) : string =
       let trait_ref = trait_ref_to_string env false trait_ref in
       let s = trait_ref ^ "::" ^ type_name in
       if inside then "(" ^ s ^ ")" else s
-  | Error -> "@Error"
+  | TNever -> "@Never"
+  | TError -> "@Error"
 
 and generic_args_to_strings (env : fmt_env) (inside : bool)
     (generics : generic_args) : string list =
@@ -337,6 +341,7 @@ and trait_instance_id_to_string (env : fmt_env) (id : trait_instance_id) :
       let inst_id = trait_instance_id_to_string env inst_id in
       let clause_id = trait_clause_id_to_string env clause_id in
       "parent(" ^ inst_id ^ ")::" ^ clause_id
+  | BuiltinOrAuto data -> builtin_impl_data_to_string data
   | UnknownTrait msg -> "UNKNOWN(" ^ msg ^ ")"
 
 let trait_clause_to_string (env : fmt_env) (clause : trait_param) : string =
@@ -800,13 +805,14 @@ let pure_builtin_fun_id_to_string (fid : pure_builtin_fun_id) : string =
   | RecLoopCall n ->
       if n = 0 then "@recLoopCall" else "@recLoopCall(" ^ string_of_int n ^ ")"
   | ToResult -> "@toResult"
-  | FuelDecrease -> "@fuel_decrease"
-  | FuelEqZero -> "@fuel_eq_zero"
+  | FuelDecrease -> "@fuelDecrease"
+  | FuelEqZero -> "@fuelEqZero"
   | UpdateAtIndex array_or_slice -> begin
       match array_or_slice with
-      | Array -> "@ArrayUpdate"
-      | Slice -> "@SliceUpdate"
+      | Array -> "@arrayUpdate"
+      | Slice -> "@sliceUpdate"
     end
+  | Discriminant -> "@discriminant"
 
 let regular_fun_id_to_string (env : fmt_env) (fun_id : fun_id) : string =
   match fun_id with
@@ -821,23 +827,73 @@ let regular_fun_id_to_string (env : fmt_env) (fun_id : fun_id) : string =
       f ^ fun_suffix lp_id
   | Pure fid -> pure_builtin_fun_id_to_string fid
 
-let unop_to_string (unop : unop) : string =
+let cast_kind_to_string (env : fmt_env) (kind : cast_kind) : string =
+  let src, tgt =
+    match kind with
+    | CastLit (src, tgt) ->
+        (literal_type_to_string src, literal_type_to_string tgt)
+    | CastRawPtr ((src, src_mut), (tgt, tgt_mut)) ->
+        let mk ty mut =
+          ty_to_string env false
+            (TAdt
+               ( TBuiltin (TRawPtr mut),
+                 mk_generic_args_from_types [ TLiteral ty ] ))
+        in
+        (mk src src_mut, mk tgt tgt_mut)
+  in
+  "cast<" ^ src ^ "," ^ tgt ^ ">"
+
+let unop_to_string (env : fmt_env) (unop : unop) : string =
   match unop with
   | Not _ -> "¬"
   | Neg _ -> "-"
-  | Cast (src, tgt) ->
-      "cast<" ^ literal_type_to_string src ^ "," ^ literal_type_to_string tgt
-      ^ ">"
+  | Cast kind -> cast_kind_to_string env kind
   | ArrayToSlice -> "array_to_slice"
 
-let binop_to_string = Print.Expressions.binop_to_string
+let binop_to_string (env : fmt_env) (binop : binop) =
+  let open Print.Expressions in
+  let int_ty_to_string int_ty = "::<" ^ integer_type_to_string int_ty ^ ">" in
+  let int_tys_to_string int_ty0 int_ty1 =
+    "::<"
+    ^ integer_type_to_string int_ty0
+    ^ ",  "
+    ^ integer_type_to_string int_ty1
+    ^ ">"
+  in
+  match binop with
+  | BitXor int_ty -> "^" ^ int_ty_to_string int_ty
+  | BitAnd int_ty -> "&" ^ int_ty_to_string int_ty
+  | BitOr int_ty -> "|" ^ int_ty_to_string int_ty
+  | Eq ty -> "==" ^ "::<" ^ ty_to_string env false ty ^ ">"
+  | Ne ty -> "!=" ^ "::<" ^ ty_to_string env false ty ^ ">"
+  | Lt int_ty -> "<" ^ int_ty_to_string int_ty
+  | Le int_ty -> "<=" ^ int_ty_to_string int_ty
+  | Ge int_ty -> ">=" ^ int_ty_to_string int_ty
+  | Gt int_ty -> ">" ^ int_ty_to_string int_ty
+  | Div (om, int_ty) ->
+      overflow_mode_to_string om ^ "./" ^ int_ty_to_string int_ty
+  | Rem (om, int_ty) ->
+      overflow_mode_to_string om ^ ".%" ^ int_ty_to_string int_ty
+  | Add (om, int_ty) ->
+      overflow_mode_to_string om ^ ".+" ^ int_ty_to_string int_ty
+  | Sub (om, int_ty) ->
+      overflow_mode_to_string om ^ ".-" ^ int_ty_to_string int_ty
+  | Mul (om, int_ty) ->
+      overflow_mode_to_string om ^ ".*" ^ int_ty_to_string int_ty
+  | Shl (om, int_ty0, int_ty1) ->
+      overflow_mode_to_string om ^ ".<<" ^ int_tys_to_string int_ty0 int_ty1
+  | Shr (om, int_ty0, int_ty1) ->
+      overflow_mode_to_string om ^ ".>>" ^ int_tys_to_string int_ty0 int_ty1
+  | AddChecked int_ty -> "checked.+" ^ int_ty_to_string int_ty
+  | SubChecked int_ty -> "checked.-" ^ int_ty_to_string int_ty
+  | MulChecked int_ty -> "checked.*" ^ int_ty_to_string int_ty
+  | Cmp int_ty -> "cmp" ^ int_ty_to_string int_ty
 
 let fun_or_op_id_to_string (env : fmt_env) (fun_id : fun_or_op_id) : string =
   match fun_id with
   | Fun fun_id -> regular_fun_id_to_string env fun_id
-  | Unop unop -> unop_to_string unop
-  | Binop (binop, int_ty) ->
-      binop_to_string binop ^ "::<" ^ integer_type_to_string int_ty ^ ">"
+  | Unop unop -> unop_to_string env unop
+  | Binop binop -> binop_to_string env binop
 
 (** [inside]: controls the introduction of parentheses *)
 let rec texpr_to_string ?(span : Meta.span option = None) (env : fmt_env)

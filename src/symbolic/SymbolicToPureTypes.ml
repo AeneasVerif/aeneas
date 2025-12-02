@@ -63,11 +63,20 @@ and translate_trait_ref_kind (span : Meta.span option)
         translate_generic_args span translate_ty impl_ref.generics
       in
       TraitImpl (impl_ref.id, generics)
-  | BuiltinOrAuto _ ->
-      (* We should have eliminated those in the prepasses *)
-      [%craise_opt_span] span
-        ("Unhandled `BuiltinOrAuto` for trait "
-        ^ TraitDeclId.to_string tref.trait_decl_ref.binder_value.id)
+  | BuiltinOrAuto (data, _, _) ->
+      let data =
+        match data with
+        | BuiltinClone -> BuiltinClone
+        | BuiltinCopy -> BuiltinCopy
+        | BuiltinDiscriminantKind -> BuiltinDiscriminantKind
+        | _ ->
+            [%craise_opt_span] span
+              ("Unhandled `BuiltinOrAuto` for trait "
+              ^ TraitDeclId.to_string tref.trait_decl_ref.binder_value.id
+              ^ "; builtin_impl_data: "
+              ^ Types.show_builtin_impl_data data)
+      in
+      BuiltinOrAuto data
   | Clause var ->
       Clause var
       (* Note: the `de_bruijn_id`s are incorrect, see comment on `translate_region_binder` *)
@@ -108,7 +117,7 @@ let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
       TVar var
       (* Note: the `de_bruijn_id`s are incorrect, see comment on `translate_region_binder` *)
   | TLiteral ty -> TLiteral ty
-  | TNever -> [%craise_opt_span] span "Unreachable"
+  | TNever -> TNever
   | TRef (_, rty, _) -> translate span rty
   | TRawPtr (ty, rkind) ->
       let mut =
@@ -188,7 +197,12 @@ let translate_variant (span : Meta.span) (v : T.variant) : variant =
   let variant_name = v.variant_name in
   let fields = translate_fields span v.fields in
   let variant_attr_info = v.attr_info in
-  { variant_name; fields; variant_attr_info }
+  let discriminant =
+    match v.discriminant with
+    | VScalar (SignedScalar (_, v)) -> Z.to_int v
+    | _ -> [%internal_error] span
+  in
+  { variant_name; fields; variant_attr_info; discriminant }
 
 let translate_variants (span : Meta.span) (vl : T.variant list) : variant list =
   List.map (translate_variant span) vl
@@ -290,7 +304,7 @@ let rec translate_fwd_ty (span : Meta.span option) (type_infos : type_infos)
                 "Unreachable: box/vec/option receives exactly one type \
                  parameter"))
   | TVar var -> TVar var
-  | TNever -> [%craise_opt_span] span "Unreachable"
+  | TNever -> TNever
   | TLiteral lty -> TLiteral lty
   | TRef (_, rty, _) -> translate rty
   | TRawPtr (ty, rkind) ->
@@ -395,7 +409,7 @@ let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
                  * is the identity *)
                 Some (mk_simpl_tuple_ty tys_t)))
   | TVar var -> wrap (TVar var)
-  | TNever -> [%craise_opt_span] span "Unreachable"
+  | TNever -> wrap TNever
   | TLiteral lty -> wrap (TLiteral lty)
   | TRef (r, rty, rkind) -> (
       match rkind with
@@ -413,7 +427,7 @@ let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
       None
   | TTraitType (trait_ref, type_name) ->
       [%sanity_check_opt_span] span
-        (TypesUtils.trait_ref_kind_is_local_clause trait_ref.kind);
+        (TypesUtils.trait_ref_kind_is_local_clause_or_builtin trait_ref.kind);
       if inside_mut then
         (* Translate the trait ref as a "forward" trait ref -
            we do not want to filter any type *)

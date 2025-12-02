@@ -690,6 +690,7 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
            (otherwise it throws an exception) *)
         let _ = cast_unsize_to_modified_fields span ctx ty0 ty1 in
         ty1
+    | Cast (CastRawPtr (_, tgt_ty)), _ -> tgt_ty
     | _ ->
         [%craise] span
           ("Invalid input for unop: " ^ unop_to_string ctx unop ^ " on "
@@ -1044,6 +1045,108 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
   in
   (v, ctx, cc_comp cc cf_compute)
 
+let eval_discriminant (config : config) (span : Meta.span) (p : place)
+    (ctx : eval_ctx) :
+    tvalue * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
+  (* TODO: not implemented yet in concrete mode *)
+  [%sanity_check] span (config.mode = SymbolicMode);
+
+  (* Read the place *)
+  let access = Read in
+  let expand_prim_copy = false in
+  let _, v, ctx, cf_read =
+    access_rplace_reorganize_and_read config span expand_prim_copy access p ctx
+  in
+  let v = value_strip_shared_loans v in
+
+  let adt_id, _generics =
+    match v.ty with
+    | TAdt { id; generics } -> (
+        match id with
+        | TAdtId id -> (id, generics)
+        | TTuple ->
+            [%craise] span
+              ("Attempting to read the discriminant of a tuple: ("
+             ^ tvalue_to_string ctx v ^ " : " ^ ty_to_string ctx v.ty ^ ")")
+        | TBuiltin _ ->
+            [%craise] span
+              ("Attempting to read the discriminant of a builtin type: ("
+             ^ tvalue_to_string ctx v ^ " : " ^ ty_to_string ctx v.ty ^ ")"))
+    | _ ->
+        [%craise] span
+          ("Attempting to read the discriminant of a value which is not an \
+            adt: (" ^ tvalue_to_string ctx v ^ " : " ^ ty_to_string ctx v.ty
+         ^ ")")
+  in
+
+  (* We need to lookup the type declaration to retrieve the values of the
+     discriminants - this is important even when reading the discriminant
+     of a symbolic value, because we need to compute its type *)
+  let decl =
+    [%unwrap_with_span] span
+      (TypeDeclId.Map.find_opt adt_id ctx.type_ctx.type_decls)
+      "Could not lookup the definition of the type we're reading the \
+       discriminant from"
+  in
+  let variants =
+    match decl.kind with
+    | Enum variants -> variants
+    | _ ->
+        [%craise] span
+          ("Attempting to read the discriminant of a value which is not an \
+            enumeration: (" ^ tvalue_to_string ctx v ^ " : "
+         ^ ty_to_string ctx v.ty ^ ")")
+  in
+
+  (* Retrieve the type of the discriminants - we simply look at the first variant *)
+  let discr_ty =
+    [%sanity_check] span (variants <> []);
+    let variant0 = List.hd variants in
+    match variant0.discriminant with
+    | VScalar (SignedScalar (ty, _)) -> TLiteral (TInt ty)
+    | VScalar (UnsignedScalar (ty, _)) -> TLiteral (TUInt ty)
+    | _ -> [%internal_error] span
+  in
+  (* It should actually always be an [isize] - this is not important for the
+     symbolic execution, but is for the translation, because in the Lean model
+     we use a typeclass which is only generic in the enumeration, not in the
+     output type (which we expect to always be [isize]) *)
+  [%sanity_check] span (discr_ty = TLiteral (TInt Isize));
+
+  (* Case disjunction: is the value concrete or symbolic?
+     If we have a concrete variant, we can compute the discriminant directly.
+     Otherwise, we introduce a symbolic value. *)
+  match v.value with
+  | VAdt { variant_id = Some variant_id; fields = _ } ->
+      (* Lookup the proper variant *)
+      let variant =
+        [%unwrap_with_span] span
+          (VariantId.nth_opt variants variant_id)
+          "Internal error: please find an issue"
+      in
+
+      let v : tvalue =
+        let value = variant.discriminant in
+        { value = VLiteral value; ty = discr_ty }
+      in
+      (v, ctx, cf_read)
+  | VSymbolic adt_sv ->
+      (* Introduce a fresh symbolic value *)
+      let sv_id = ctx.fresh_symbolic_value_id () in
+      let sv : symbolic_value = { sv_id; sv_ty = discr_ty } in
+      let v : tvalue = { value = VSymbolic sv; ty = discr_ty } in
+
+      (* Add a node in the symbolic AST to register the fact that we read a
+         discriminant *)
+      let cf_discr (e : SA.expr) : SA.expr =
+        let mp = mk_mplace span p ctx in
+        SA.IntroSymbolic (ctx, Some mp, sv, VaDiscriminant adt_sv, e)
+      in
+
+      (* *)
+      (v, ctx, cc_comp cf_read cf_discr)
+  | _ -> [%internal_error] span
+
 let eval_rvalue_not_global (config : config) (span : Meta.span)
     (rvalue : rvalue) (ctx : eval_ctx) :
     (tvalue, eval_error) result
@@ -1061,10 +1164,7 @@ let eval_rvalue_not_global (config : config) (span : Meta.span)
   | BinaryOp (binop, op1, op2) -> eval_binary_op config span binop op1 op2 ctx
   | Aggregate (aggregate_kind, ops) ->
       wrap_in_result (eval_rvalue_aggregate config span aggregate_kind ops ctx)
-  | Discriminant _ ->
-      [%craise] span
-        "Unreachable: discriminant reads should have been eliminated from the \
-         AST"
+  | Discriminant p -> wrap_in_result (eval_discriminant config span p ctx)
   | Len _ -> [%craise] span "Unhandled Len"
   | _ ->
       [%craise] span

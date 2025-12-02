@@ -8,8 +8,10 @@ open TranslateCore
 let log = Logging.pure_micro_passes_log
 
 type ctx = {
+  crate : LlbcAst.crate;
   fun_decls : fun_decl FunDeclId.Map.t;
   type_decls : type_decl TypeDeclId.Map.t;
+  trait_impls : trait_impl TraitImplId.Map.t;
   trans_ctx : trans_ctx;
   fresh_fvar_id : unit -> fvar_id;
 }
@@ -49,6 +51,10 @@ let fvar_to_string (ctx : ctx) (x : fvar) : string =
 let generic_params_to_string (ctx : ctx) (x : generic_params) : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
   PrintPure.generic_params_to_string fmt x
+
+let generic_args_to_string (ctx : ctx) (x : generic_args) : string =
+  let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
+  PrintPure.generic_args_to_string fmt x
 
 let ty_to_string (ctx : ctx) (x : ty) : string =
   let fmt = trans_ctx_to_pure_fmt_env ctx.trans_ctx in
@@ -1178,22 +1184,21 @@ let inline_unop unop = not (lift_unop unop)
 (** A helper predicate *)
 let lift_binop (binop : binop) : bool =
   match binop with
-  | Eq | Lt | Le | Ne | Ge | Gt -> false
-  | BitXor
-  | BitAnd
-  | BitOr
+  | Eq _ | Lt _ | Le _ | Ne _ | Ge _ | Gt _ -> false
+  | BitXor _
+  | BitAnd _
+  | BitOr _
   | Div _
   | Rem _
   | Add _
   | Sub _
   | Mul _
-  | AddChecked
-  | SubChecked
-  | MulChecked
+  | AddChecked _
+  | SubChecked _
+  | MulChecked _
   | Shl _
   | Shr _
-  | Offset
-  | Cmp -> true
+  | Cmp _ -> true
 
 (** A helper predicate *)
 let inline_binop binop = not (lift_binop binop)
@@ -1313,7 +1318,7 @@ let inline_useless_var_assignments_visitor ~(inline_named : bool)
                   | AdtCons _ -> true (* ADT constructor *)
                   | Proj _ -> true (* Projector *)
                   | FunOrOp (Unop unop) -> inline_unop unop
-                  | FunOrOp (Binop (binop, _)) -> inline_binop binop
+                  | FunOrOp (Binop binop) -> inline_binop binop
                   | FunOrOp (Fun fun_id) -> inline_fun fun_id
                   | _ -> false)
               | StructUpdate _ -> true (* ADT constructor *)
@@ -2964,23 +2969,24 @@ let unit_vars_to_unit (ctx : ctx) (def : fun_decl) : fun_decl =
     places: when translating function calls, and when translating end
     abstractions. Here, we can do something simpler, in one micro-pass. *)
 let eliminate_box_functions_visitor (_ctx : ctx) (def : fun_decl) =
+  let span = def.item_meta.span in
+
   (* The map visitor *)
   object
     inherit [_] map_expr as super
 
     method! visit_texpr env e =
       match opt_destruct_function_call e with
-      | Some (fun_id, _tys, args) -> (
+      | Some (fun_id, _generics, args) -> (
           (* Below, when dealing with the arguments: we consider the very
-           * general case, where functions could be boxed (meaning we
-           * could have: [box_new f x])
-           *)
+             general case, where functions could be boxed (meaning we
+             could have: [box_new f x]) *)
           match fun_id with
           | Fun (FromLlbc (FunId (FBuiltin aid), _lp_id)) -> (
               match aid with
               | BoxNew ->
                   let arg, args = Collections.List.pop args in
-                  [%add_loc] mk_apps def.item_meta.span arg args
+                  [%add_loc] mk_apps span arg args
               | Index _
               | ArrayToSliceShared
               | ArrayToSliceMut
@@ -2992,6 +2998,115 @@ let eliminate_box_functions_visitor (_ctx : ctx) (def : fun_decl) =
 
 let eliminate_box_functions =
   lift_expr_map_visitor eliminate_box_functions_visitor
+
+(** Simplify some trait calls.
+
+    For instance, we do:
+    {
+      alloc.boxed.CloneBox.clone CloneInst x
+
+          ~>
+
+      CloneInst.clone x
+    }
+
+    TODO: we do this because otherwise we have recursion issues when for instance
+    deriving [Clone] for recursive types which use box. This is a hack: we need
+    a general solution (the same issue happens if you use other datatypes like [Vec]
+    - we introduce a workaround for a few types like [Box] or [&T] because those uses
+    are really common and we consider them as builtin). *)
+let simplify_trait_calls_visitor (ctx : ctx) (def : fun_decl) =
+  (* Create a map from pattern to method *)
+  let pats =
+    [
+      ("alloc::boxed::{core::clone::Clone<Box<@T>>}", "clone");
+      ("core::cmp::impls::{core::cmp::PartialEq<&'a @A, &'b @B>}", "eq");
+      ("alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}", "eq");
+    ]
+  in
+  let pats =
+    List.map
+      (fun (pat, x) -> (NameMatcher.parse_pattern (pat ^ "::" ^ x), x))
+      pats
+  in
+  let names_map = NameMatcher.NameMatcherMap.of_list pats in
+  let match_ctx = Charon.NameMatcher.ctx_from_crate ctx.crate in
+  let get_method (d : fun_decl) : string option =
+    let config = ExtractName.default_config in
+    NameMatcher.NameMatcherMap.find_opt match_ctx config d.item_meta.name
+      names_map
+  in
+
+  let span = def.item_meta.span in
+
+  (* The map visitor *)
+  object (self)
+    inherit [_] map_expr as super
+
+    method! visit_texpr env e =
+      let ret_ty = e.ty in
+      match opt_destruct_function_call e with
+      | Some (fun_id, generics, args) -> (
+          match fun_id with
+          | Fun (FromLlbc (FunId (FRegular fid), _)) -> (
+              match FunDeclId.Map.find_opt fid ctx.fun_decls with
+              | Some d
+                when List.length generics.trait_refs > 0 && List.length args > 0
+                -> (
+                  match get_method d with
+                  | Some method_name -> (
+                      (* Retrieve the first clause - TODO: is it always the first clause? *)
+                      let trait_ref = List.hd generics.trait_refs in
+                      match trait_ref.trait_id with
+                      | TraitImpl (impl_id, impl_generics) ->
+                          (* Lookup the impl to retrieve the method id *)
+                          let impl =
+                            [%unwrap_with_span] span
+                              (TraitImplId.Map.find_opt impl_id ctx.trait_impls)
+                              "Internal error"
+                          in
+                          let method_decl =
+                            snd
+                              ([%unwrap_with_span] span
+                                 (List.find_opt
+                                    (fun (name, _) -> name = method_name)
+                                    impl.methods)
+                                 "Internal error")
+                          in
+
+                          (* Create a call to the method *)
+                          let qualif =
+                            FunOrOp
+                              (Fun
+                                 (FromLlbc
+                                    ( FunId
+                                        (FRegular
+                                           method_decl.binder_value.fun_id),
+                                      None )))
+                          in
+                          (* TODO: should we handle the binder? *)
+                          let qualif : qualif =
+                            { id = qualif; generics = impl_generics }
+                          in
+                          let arg_tys =
+                            List.map (fun (a : texpr) -> a.ty) args
+                          in
+                          let qualif : texpr =
+                            { e = Qualif qualif; ty = mk_arrows arg_tys ret_ty }
+                          in
+                          let e = [%add_loc] mk_apps span qualif args in
+                          (* Re-explore *)
+                          self#visit_texpr env e
+                      | _ ->
+                          (* TODO: simplify calls to non-impls *)
+                          super#visit_texpr env e)
+                  | None -> super#visit_texpr env e)
+              | _ -> super#visit_texpr env e)
+          | _ -> super#visit_texpr env e)
+      | _ -> super#visit_texpr env e
+  end
+
+let simplify_trait_calls = lift_expr_map_visitor simplify_trait_calls_visitor
 
 (** Simplify the lambdas by applying beta-reduction *)
 let apply_beta_reduction_visitor (ctx : ctx) (def : fun_decl) =
@@ -3496,7 +3611,7 @@ let lift_pure_function_calls_visitor (ctx : ctx) (def : fun_decl) =
     let lift =
       match f.e with
       | Qualif { id = FunOrOp (Unop unop); _ } -> lift_unop unop
-      | Qualif { id = FunOrOp (Binop (binop, _)); _ } -> lift_binop binop
+      | Qualif { id = FunOrOp (Binop binop); _ } -> lift_binop binop
       | Qualif { id = FunOrOp (Fun fun_id); _ } -> lift_fun ctx fun_id
       | _ -> false
     in
@@ -6547,6 +6662,8 @@ let passes :
     (* Eliminate the box functions - note that the "box" types were eliminated
        during the symbolic to pure phase: see the comments for [eliminate_box_functions] *)
     (None, "eliminate_box_functions", eliminate_box_functions);
+    (* Simplify some traits like [Clone::clone] for type [Box] *)
+    (None, "simplify_trait_calls", simplify_trait_calls);
     (* Remove the duplicated function calls *)
     (None, "simplify_duplicate_calls", simplify_duplicate_calls);
     (* Merge let bindings which bind an expression then decompose a tuple *)
@@ -6947,6 +7064,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
               | _ -> (known_f_ty, known_args_tys, false)
             end
           | Loop _ | RecLoopCall _ -> (hole, mk_holes (), true)
+          | Discriminant -> (hole, mk_holes (), false)
           | Fail | Assert | FuelDecrease | FuelEqZero ->
               (f.ty, mk_known (), false)
           | UpdateAtIndex _ -> (known_f_ty, known_args_tys, false)
@@ -7188,10 +7306,10 @@ let add_type_annotations (trans_ctx : trans_ctx)
     instead, because this function contains useful information to extract the
     backward functions. Note that here, keeping the forward function it is not
     *necessary* but convenient. *)
-let apply_passes_to_pure_fun_translations (trans_ctx : trans_ctx)
-    (builtin_sigs : fun_sig Builtin.BuiltinFunIdMap.t)
-    (type_decls : type_decl list) (transl : fun_decl list) :
-    pure_fun_translation list =
+let apply_passes_to_pure_fun_translations (crate : LlbcAst.crate)
+    (trans_ctx : trans_ctx) (builtin_sigs : fun_sig Builtin.BuiltinFunIdMap.t)
+    (type_decls : type_decl list) (trait_impls : trait_impl list)
+    (transl : fun_decl list) : pure_fun_translation list =
   let fun_decls =
     FunDeclId.Map.of_list
       (List.map (fun (f : fun_decl) -> (f.def_id, f)) transl)
@@ -7200,10 +7318,14 @@ let apply_passes_to_pure_fun_translations (trans_ctx : trans_ctx)
     TypeDeclId.Map.of_list
       (List.map (fun (d : type_decl) -> (d.def_id, d)) type_decls)
   in
+  let trait_impls =
+    TraitImplId.Map.of_list
+      (List.map (fun (d : trait_impl) -> (d.def_id, d)) trait_impls)
+  in
 
   let mk_ctx () : ctx =
     let _, fresh_fvar_id = FVarId.fresh_stateful_generator () in
-    { trans_ctx; type_decls; fun_decls; fresh_fvar_id }
+    { crate; trans_ctx; type_decls; trait_impls; fun_decls; fresh_fvar_id }
   in
 
   (* Apply the micro-passes *)

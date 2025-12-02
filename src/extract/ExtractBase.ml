@@ -418,14 +418,17 @@ let names_maps_get (span : Meta.span option) (id_to_string : id -> string)
            (IdMap.bindings m))
     ^ "\n]"
   in
-  if allow_collisions id then (
+  if allow_collisions id then
     let m = nm.unsafe_names_map.id_to_name in
     match IdMap.find_opt id m with
     | Some s -> s
-    | None ->
+    | None -> (
         let err = "Could not find: " ^ id_to_string id in
         [%save_error_opt_span] span err;
-        "(%%%ERROR: unknown identifier\": " ^ id_to_string id ^ "\"%%%)")
+        match backend () with
+        | Lean ->
+            "sorry /- ERROR: unknown identifier\": " ^ id_to_string id ^ "-/)"
+        | _ -> "(%%%ERROR: unknown identifier\": " ^ id_to_string id ^ "\"%%%)")
   else
     let m = nm.names_map.id_to_name in
     match IdMap.find_opt id m with
@@ -557,9 +560,12 @@ type extraction_ctx = {
           rather than at code generation time. *)
   funs_filter_type_args_map : bool list FunDeclId.Map.t;
       (** Same as {!types_filter_type_args_map}, but for functions *)
+  funs_filter_trait_clauses_map : bool list FunDeclId.Map.t;
+      (** Same as {!types_filter_type_args_map}, but for functions *)
   trait_impls_filter_type_args_map : bool list TraitImplId.Map.t;
       (** Same as {!types_filter_type_args_map}, but for trait implementations
       *)
+  trait_impls_filter_trait_clauses_map : bool list TraitImplId.Map.t;
   extracted_opaque : bool ref;
       (** Set to true if at some point we extract a definition which is opaque,
           meaning we generate an axiom. If yes, and in case the user does not
@@ -577,6 +583,9 @@ let name_to_string (ctx : extraction_ctx) =
 
 let ty_to_string (ctx : extraction_ctx) =
   PrintPure.ty_to_string (extraction_ctx_to_fmt_env ctx) false
+
+let trait_ref_to_string (ctx : extraction_ctx) =
+  PrintPure.trait_ref_to_string (extraction_ctx_to_fmt_env ctx) false
 
 let llbc_generic_params_to_strings (ctx : extraction_ctx) =
   Print.Types.generic_params_to_strings (extraction_ctx_to_llbc_fmt_env ctx)
@@ -820,29 +829,29 @@ let unop_name (unop : unop) : string =
 (** Small helper to compute the name of a binary operation (note that many
     binary operations like "less than" are extracted to primitive operations,
     like [<]). *)
-let named_binop_name (binop : E.binop) (int_ty : integer_type) : string =
-  let binop_s =
-    match binop with
-    | Div _ -> "div"
-    | Rem _ -> "rem"
-    | Add _ -> "add"
-    | Sub _ -> "sub"
-    | Mul _ -> "mul"
-    | Lt -> "lt"
-    | Le -> "le"
-    | Ge -> "ge"
-    | Gt -> "gt"
-    | BitXor -> "xor"
-    | BitAnd -> "and"
-    | BitOr -> "or"
-    | Shl _ -> "shl"
-    | Shr _ -> "shr"
-    | _ -> raise (Failure "Unreachable")
+let named_binop_name (binop : binop) : string =
+  let add_int_name int_ty =
+    (* Remark: the Lean case is actually not used *)
+    match backend () with
+    | Lean -> int_name int_ty ^ "."
+    | FStar | Coq | HOL4 -> int_name int_ty ^ "_"
   in
-  (* Remark: the Lean case is actually not used *)
-  match backend () with
-  | Lean -> int_name int_ty ^ "." ^ binop_s
-  | FStar | Coq | HOL4 -> int_name int_ty ^ "_" ^ binop_s
+  match binop with
+  | Div (_, ty) -> add_int_name ty ^ "div"
+  | Rem (_, ty) -> add_int_name ty ^ "rem"
+  | Add (_, ty) -> add_int_name ty ^ "add"
+  | Sub (_, ty) -> add_int_name ty ^ "sub"
+  | Mul (_, ty) -> add_int_name ty ^ "mul"
+  | Lt ty -> add_int_name ty ^ "lt"
+  | Le ty -> add_int_name ty ^ "le"
+  | Ge ty -> add_int_name ty ^ "ge"
+  | Gt ty -> add_int_name ty ^ "gt"
+  | BitXor ty -> add_int_name ty ^ "xor"
+  | BitAnd ty -> add_int_name ty ^ "and"
+  | BitOr ty -> add_int_name ty ^ "or"
+  | Shl (_, ty, _) -> add_int_name ty ^ "shl"
+  | Shr (_, ty, _) -> add_int_name ty ^ "shr"
+  | _ -> raise (Failure "Unreachable")
 
 (** A list of keywords/identifiers used by the backend and with which we want to
     check collision.
@@ -857,13 +866,27 @@ let keywords () =
          T.all_signed_int_types
     @ List.map (fun it -> unop_name (Neg (Signed it))) T.all_signed_int_types
   in
-  let named_binops =
-    [ E.Div OPanic; Rem OPanic; Add OPanic; Sub OPanic; Mul OPanic ]
+  let mk_binops (ty : integer_type) =
+    [
+      Div (OPanic, ty);
+      Rem (OPanic, ty);
+      Add (OPanic, ty);
+      Sub (OPanic, ty);
+      Mul (OPanic, ty);
+      Lt ty;
+      Le ty;
+      Ge ty;
+      Gt ty;
+      BitXor ty;
+      BitAnd ty;
+      BitOr ty;
+      Shl (OPanic, ty, ty);
+      Shr (OPanic, ty, ty);
+    ]
   in
   let named_binops =
-    List.concat_map
-      (fun bn -> List.map (fun it -> named_binop_name bn it) T.all_int_types)
-      named_binops
+    List.map named_binop_name
+      (List.flatten (List.map mk_binops T.all_int_types))
   in
   let misc =
     match backend () with
@@ -1194,6 +1217,7 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (Return, "return");
         (Fail, "fail_");
         (Assert, "massert");
+        (Discriminant, "read_discriminant");
         (UpdateAtIndex Slice, "Slice.update");
         (UpdateAtIndex Array, "Array.update");
         (ToResult, "↑");
@@ -1904,7 +1928,7 @@ let ctx_compute_var_basename (span : Meta.span) (ctx : extraction_ctx)
           | TFloat _ -> "fl")
       | TArrow _ -> "f"
       | TTraitType (_, name) -> name_from_type_ident name
-      | Error -> "x")
+      | TNever | TError -> "x")
 
 (** Generates a type variable basename. *)
 let ctx_compute_type_var_basename (_ctx : extraction_ctx) (basename : string) :

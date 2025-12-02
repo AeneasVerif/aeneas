@@ -10,6 +10,7 @@ namespace avl
 
 /- [avl::Ordering]
    Source: 'src/avl.rs', lines 18:0-22:1 -/
+@[discriminant]
 inductive Ordering where
 | Less : Ordering
 | Equal : Ordering
