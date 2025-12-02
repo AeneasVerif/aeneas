@@ -256,7 +256,9 @@ let translate_function_to_pure (trans_ctx : trans_ctx) (marked_ids : marked_ids)
     in
     [%save_error_opt_span] error.span
       ("Could not translate the function '" ^ name
-     ^ " because of previous error.\nName pattern: '" ^ name_pattern ^ "'");
+     ^ " because of previous error.\nName pattern: '" ^ name_pattern ^ "'"
+     ^ "\nDefinition span: "
+      ^ Errors.raw_span_to_string fdef.item_meta.span);
     None
 
 type translated_crate = {
@@ -310,7 +312,8 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
               [%save_error_opt_span] error.span
                 ("Could not translate the global declaration '" ^ name
                ^ " because of previous error\nName pattern: '" ^ name_pattern
-               ^ "'");
+               ^ "'" ^ "\nDefinition span: "
+                ^ Errors.raw_span_to_string global.item_meta.span);
               None)
           (GlobalDeclId.Map.values crate.global_decls))
   in
@@ -340,7 +343,8 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
              [%save_error_opt_span] error.span
                ("Could not translate the function signature of '" ^ name
               ^ " because of previous error\nName pattern: '" ^ name_pattern
-              ^ "'");
+              ^ "'" ^ "\nDefinition span: "
+               ^ Errors.raw_span_to_string fdef.item_meta.span);
              None)
          (FunDeclId.Map.values crate.fun_decls))
   in
@@ -399,7 +403,8 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
               [%save_error_opt_span] error.span
                 ("Could not translate the trait declaration '" ^ name
                ^ " because of previous error\nName pattern: '" ^ name_pattern
-               ^ "'");
+               ^ "'" ^ "\nDefinition span: "
+                ^ Errors.raw_span_to_string d.item_meta.span);
               None)
           (TraitDeclId.Map.values trans_ctx.crate.trait_decls))
   in
@@ -428,7 +433,8 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
               [%save_error_opt_span] error.span
                 ("Could not translate the trait instance '" ^ name
                ^ " because of previous error\nName pattern: '" ^ name_pattern
-               ^ "'");
+               ^ "'" ^ "\nDefinition span: "
+                ^ Errors.raw_span_to_string d.item_meta.span);
               None)
           (TraitImplId.Map.values trans_ctx.crate.trait_impls))
   in
@@ -958,9 +964,24 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
     | GlobalGroup (NonRecGroup id) -> export_global id
     | GlobalGroup (RecGroup _ids) ->
         [%craise_opt_span] None "Mutually recursive globals are not supported"
-    | TraitDeclGroup (RecGroup _ids) ->
+    | TraitDeclGroup (RecGroup ids) ->
+        (* Lookup the trait decls to print a nice error message *)
+        let to_string (id : trait_decl_id) : string =
+          match TraitDeclId.Map.find_opt id ctx.trans_trait_decls with
+          | None ->
+              "unknown trait (lookup failed, probably because of a previous \
+               error"
+          | Some d ->
+              "'"
+              ^ name_to_string ctx.trans_ctx d.item_meta.name
+              ^ "', source: "
+              ^ Errors.raw_span_to_string d.item_meta.span
+        in
+        let decls = List.map to_string ids in
         [%craise_opt_span] None
-          "Mutually recursive trait declarations are not supported"
+          ("Mutually recursive trait declarations are not supported; found the \
+            following group of mutually recursive traits:\n"
+         ^ String.concat "\n" decls)
     | TraitDeclGroup (NonRecGroup id) ->
         (* TODO: update to extract groups *)
         if config.extract_trait_decls && config.extract_transparent then (
@@ -1248,7 +1269,8 @@ let extract_translated_crate (filename : string) (dest_dir : string)
           [%save_error_opt_span] error.span
             ("Could not generate names for the type declaration '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
-            );
+           ^ "\nDefinition span: "
+            ^ Errors.raw_span_to_string def.item_meta.span);
           ctx)
       ctx
       (Pure.TypeDeclId.Map.values trans_types)
@@ -1284,7 +1306,8 @@ let extract_translated_crate (filename : string) (dest_dir : string)
           [%save_error_opt_span] error.span
             ("Could not generate names for the function declaration '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
-            );
+           ^ "\nDefinition span: "
+            ^ Errors.raw_span_to_string trans.f.item_meta.span);
           ctx)
       ctx
       (FunDeclId.Map.values trans_funs)
@@ -1307,7 +1330,8 @@ let extract_translated_crate (filename : string) (dest_dir : string)
           [%save_error_opt_span] error.span
             ("Could not generate names for the global declaration '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
-            );
+           ^ "\nDefinition span: "
+            ^ Errors.raw_span_to_string def.item_meta.span);
           ctx)
       ctx trans_globals
   in
@@ -1329,7 +1353,8 @@ let extract_translated_crate (filename : string) (dest_dir : string)
           [%save_error_opt_span] error.span
             ("Could not generate names for the trait declaration '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
-            );
+           ^ "\nDefinition span: "
+            ^ Errors.raw_span_to_string def.item_meta.span);
           ctx)
       ctx trans_trait_decls
   in
@@ -1351,7 +1376,8 @@ let extract_translated_crate (filename : string) (dest_dir : string)
           [%save_error_opt_span] error.span
             ("Could not generate names for the trait implementation '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
-            );
+           ^ "\nDefinition span: "
+            ^ Errors.raw_span_to_string def.item_meta.span);
           ctx)
       ctx trans_trait_impls
   in
