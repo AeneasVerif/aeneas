@@ -690,6 +690,7 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
            (otherwise it throws an exception) *)
         let _ = cast_unsize_to_modified_fields span ctx ty0 ty1 in
         ty1
+    | Cast (CastRawPtr (_, tgt_ty)), _ -> tgt_ty
     | _ ->
         [%craise] span
           ("Invalid input for unop: " ^ unop_to_string ctx unop ^ " on "

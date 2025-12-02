@@ -821,6 +821,8 @@ class ['self] iter_tpat_base =
       fun _ _ -> ()
 
     method visit_field_id : 'env -> field_id -> unit = fun _ _ -> ()
+    method visit_ref_kind : 'env -> ref_kind -> unit = fun _ _ -> ()
+    method visit_mutability : 'env -> mutability -> unit = fun _ _ -> ()
   end
 
 (** Ancestor for {!map_tpat} visitor *)
@@ -855,6 +857,8 @@ class ['self] map_tpat_base =
       fun _ x -> x
 
     method visit_field_id : 'env -> field_id -> field_id = fun _ x -> x
+    method visit_ref_kind : 'env -> ref_kind -> ref_kind = fun _ x -> x
+    method visit_mutability : 'env -> mutability -> mutability = fun _ x -> x
   end
 
 (** Ancestor for {!reduce_tpat} visitor *)
@@ -886,6 +890,8 @@ class virtual ['self] reduce_tpat_base =
       fun _ _ -> self#zero
 
     method visit_field_id : 'env -> field_id -> 'a = fun _ _ -> self#zero
+    method visit_ref_kind : 'env -> ref_kind -> 'a = fun _ _ -> self#zero
+    method visit_mutability : 'env -> mutability -> 'a = fun _ _ -> self#zero
   end
 
 (** Ancestor for {!mapreduce_tpat} visitor *)
@@ -929,6 +935,12 @@ class virtual ['self] mapreduce_tpat_base =
       fun _ x -> (x, self#zero)
 
     method visit_field_id : 'env -> field_id -> field_id * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_ref_kind : 'env -> ref_kind -> ref_kind * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_mutability : 'env -> mutability -> mutability * 'a =
       fun _ x -> (x, self#zero)
   end
 
@@ -1019,8 +1031,14 @@ and tpat = { pat : pat; ty : ty }
 type unop =
   | Not of integer_type option
   | Neg of integer_type
-  | Cast of literal_type * literal_type
+  | Cast of cast_kind
   | ArrayToSlice
+
+and cast_kind =
+  | CastLit of literal_type * literal_type
+  | CastRawPtr of (literal_type * mutability) * (literal_type * mutability)
+      (** When casting between raw pointers, we only support a subset of casts
+      *)
 
 and fn_ptr_kind =
   | FunId of llbc_fun_id

@@ -827,13 +827,27 @@ let regular_fun_id_to_string (env : fmt_env) (fun_id : fun_id) : string =
       f ^ fun_suffix lp_id
   | Pure fid -> pure_builtin_fun_id_to_string fid
 
-let unop_to_string (unop : unop) : string =
+let cast_kind_to_string (env : fmt_env) (kind : cast_kind) : string =
+  let src, tgt =
+    match kind with
+    | CastLit (src, tgt) ->
+        (literal_type_to_string src, literal_type_to_string tgt)
+    | CastRawPtr ((src, src_mut), (tgt, tgt_mut)) ->
+        let mk ty mut =
+          ty_to_string env false
+            (TAdt
+               ( TBuiltin (TRawPtr mut),
+                 mk_generic_args_from_types [ TLiteral ty ] ))
+        in
+        (mk src src_mut, mk tgt tgt_mut)
+  in
+  "cast<" ^ src ^ "," ^ tgt ^ ">"
+
+let unop_to_string (env : fmt_env) (unop : unop) : string =
   match unop with
   | Not _ -> "¬"
   | Neg _ -> "-"
-  | Cast (src, tgt) ->
-      "cast<" ^ literal_type_to_string src ^ "," ^ literal_type_to_string tgt
-      ^ ">"
+  | Cast kind -> cast_kind_to_string env kind
   | ArrayToSlice -> "array_to_slice"
 
 let binop_to_string (env : fmt_env) (binop : binop) =
@@ -878,7 +892,7 @@ let binop_to_string (env : fmt_env) (binop : binop) =
 let fun_or_op_id_to_string (env : fmt_env) (fun_id : fun_or_op_id) : string =
   match fun_id with
   | Fun fun_id -> regular_fun_id_to_string env fun_id
-  | Unop unop -> unop_to_string unop
+  | Unop unop -> unop_to_string env unop
   | Binop binop -> binop_to_string env binop
 
 (** [inside]: controls the introduction of parentheses *)

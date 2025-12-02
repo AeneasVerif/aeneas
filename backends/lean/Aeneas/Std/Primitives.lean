@@ -244,17 +244,6 @@ def Option.ofResult {a : Type u} (x : Result a) :
   | ok x => some x
   | _ => none
 
-/-!
-# Misc Primitive Types
--/
-
--- We don't really use raw pointers for now
-structure MutRawPtr (T : Type) where
-  v : T
-
-structure ConstRawPtr (T : Type) where
-  v : T
-
 end Std
 
 end Aeneas

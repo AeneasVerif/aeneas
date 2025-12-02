@@ -377,6 +377,153 @@ let lets_require_wrap_in_do (span : Meta.span)
       wrap_in_do
   | FStar | Coq -> false
 
+(** HOL4 has a special treatment: because it doesn't support dependent types, we
+    don't have a specific operator for the casts *)
+let extract_cast_kind_hol4 (span : Meta.span)
+    (extract_expr : inside:bool -> texpr -> unit) (fmt : F.formatter)
+    ~(inside : bool) (kind : cast_kind) (arg : texpr) : unit =
+  match kind with
+  | CastLit (src, tgt) ->
+      (* Casting, say, an u32 to an i32 would be done as follows:
+         {[
+           mk_i32 (u32_to_int x)
+         ]}
+      *)
+      if inside then F.pp_print_string fmt "(";
+      F.pp_print_string fmt ("mk_" ^ scalar_name tgt);
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt "(";
+      F.pp_print_string fmt (scalar_name src ^ "_to_int");
+      F.pp_print_space fmt ();
+      extract_expr ~inside:true arg;
+      F.pp_print_string fmt ")";
+      if inside then F.pp_print_string fmt ")"
+  | CastRawPtr _ ->
+      [%craise] span "Raw pointer casts are not implemented for HOL4"
+
+(** Extract a cast when the backend is not HOL4 (which receives a special
+    treatment) *)
+let extract_cast_kind_gen (span : Meta.span)
+    (extract_expr : inside:bool -> texpr -> unit) (fmt : F.formatter)
+    ~(inside : bool) (kind : cast_kind) (arg : texpr) : unit =
+  let integer_type_to_string (ty : integer_type) : string =
+    if backend () = Lean then "." ^ int_name ty
+    else
+      StringUtils.capitalize_first_letter (PrintPure.integer_type_to_string ty)
+  in
+  match kind with
+  | CastLit (src, tgt) ->
+      if inside then F.pp_print_string fmt "(";
+      (* Rem.: the source type is an implicit parameter *)
+      (* Different cases depending on the conversion *)
+      (let cast_str, src, tgt =
+         match (src, tgt) with
+         | _, _
+           when ValuesUtils.literal_type_is_integer src
+                && ValuesUtils.literal_type_is_integer tgt ->
+             let src, tgt =
+               ( TypesUtils.literal_as_integer src,
+                 TypesUtils.literal_as_integer tgt )
+             in
+             let cast_str =
+               match backend () with
+               | Coq | FStar -> "scalar_cast"
+               | Lean ->
+                   let signed_src = Scalars.integer_type_is_signed src in
+                   let signed_tgt = Scalars.integer_type_is_signed tgt in
+                   if signed_src = signed_tgt then
+                     if signed_src then "IScalar.cast" else "UScalar.cast"
+                   else if signed_src then "IScalar.hcast"
+                   else "UScalar.hcast"
+               | HOL4 -> admit_string __FILE__ __LINE__ span "Unreachable"
+             in
+             let src =
+               if backend () <> Lean then Some (integer_type_to_string src)
+               else None
+             in
+             let tgt = integer_type_to_string tgt in
+             (cast_str, src, Some tgt)
+         | TBool, TInt _ | TBool, TUInt _ ->
+             let tgt = TypesUtils.literal_as_integer tgt in
+             let cast_str =
+               match backend () with
+               | Coq | FStar -> "scalar_cast_bool"
+               | Lean ->
+                   if Scalars.integer_type_is_signed tgt then
+                     "IScalar.cast_fromBool"
+                   else "UScalar.cast_fromBool"
+               | HOL4 -> admit_string __FILE__ __LINE__ span "Unreachable"
+             in
+             let tgt = integer_type_to_string tgt in
+             (cast_str, None, Some tgt)
+         | TInt _, TBool | TUInt _, TBool ->
+             (* This is not allowed by rustc: the way of doing it in Rust is: [x != 0] *)
+             [%craise] span "Unexpected cast: integer to bool"
+         | TBool, TBool ->
+             (* There shouldn't be any cast here. Note that if
+                one writes [b as bool] in Rust (where [b] is a
+                boolean), it gets compiled to [b] (i.e., no cast
+                is introduced). *)
+             [%craise] span "Unexpected cast: bool to bool"
+         | _ -> [%craise] span "Unreachable"
+       in
+       (* Print the name of the function *)
+       F.pp_print_string fmt cast_str;
+       (* Print the src type argument *)
+       (match src with
+       | None -> ()
+       | Some src ->
+           F.pp_print_space fmt ();
+           F.pp_print_string fmt src);
+       (* Print the tgt type argument *)
+       match tgt with
+       | None -> ()
+       | Some tgt ->
+           F.pp_print_space fmt ();
+           F.pp_print_string fmt tgt);
+      (* Extract the argument *)
+      F.pp_print_space fmt ();
+      extract_expr ~inside:true arg;
+      if inside then F.pp_print_string fmt ")"
+  | CastRawPtr ((_, _), (tgt_ty, tgt_mut)) ->
+      [%cassert] span
+        (backend () = Lean)
+        "Casts between raw pointers are only supported in the Lean backend";
+      if inside then F.pp_print_string fmt "(";
+      (* Print the name of the function *)
+      F.pp_print_string fmt "RawPtr.cast_scalar";
+      (* Print the target type argument and mutability *)
+      let tgt_ty : integer_type =
+        match tgt_ty with
+        | TInt ty -> Signed ty
+        | TUInt ty -> Unsigned ty
+        | _ ->
+            [%craise] span "Can only generate code for casts between integers"
+      in
+      let tgt = integer_type_to_string tgt_ty in
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt tgt;
+      let tgt_mut =
+        match tgt_mut with
+        | Mut -> ".Mut"
+        | Const -> ".Const"
+      in
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt tgt_mut;
+      (* Extract the argument *)
+      F.pp_print_space fmt ();
+      extract_expr ~inside:true arg;
+      if inside then F.pp_print_string fmt ")"
+
+let extract_cast_kind (span : Meta.span)
+    (extract_expr : inside:bool -> texpr -> unit) (fmt : F.formatter)
+    ~(inside : bool) (kind : cast_kind) (arg : texpr) : unit =
+  (* HOL4 has a special treatment *)
+  match backend () with
+  | HOL4 -> extract_cast_kind_hol4 span extract_expr fmt ~inside kind arg
+  | FStar | Coq | Lean ->
+      extract_cast_kind_gen span extract_expr fmt ~inside kind arg
+
 (** Format a unary operation
 
     Inputs:
@@ -398,104 +545,7 @@ let extract_unop (span : Meta.span)
       F.pp_print_space fmt ();
       extract_expr ~inside:true arg;
       if inside then F.pp_print_string fmt ")"
-  | Cast (src, tgt) -> (
-      (* HOL4 has a special treatment: because it doesn't support dependent
-         types, we don't have a specific operator for the cast *)
-      match backend () with
-      | HOL4 ->
-          (* Casting, say, an u32 to an i32 would be done as follows:
-             {[
-               mk_i32 (u32_to_int x)
-             ]}
-          *)
-          if inside then F.pp_print_string fmt "(";
-          F.pp_print_string fmt ("mk_" ^ scalar_name tgt);
-          F.pp_print_space fmt ();
-          F.pp_print_string fmt "(";
-          F.pp_print_string fmt (scalar_name src ^ "_to_int");
-          F.pp_print_space fmt ();
-          extract_expr ~inside:true arg;
-          F.pp_print_string fmt ")";
-          if inside then F.pp_print_string fmt ")"
-      | FStar | Coq | Lean ->
-          if inside then F.pp_print_string fmt "(";
-          (* Rem.: the source type is an implicit parameter *)
-          (* Different cases depending on the conversion *)
-          (let cast_str, src, tgt =
-             let integer_type_to_string (ty : integer_type) : string =
-               if backend () = Lean then "." ^ int_name ty
-               else
-                 StringUtils.capitalize_first_letter
-                   (PrintPure.integer_type_to_string ty)
-             in
-             match (src, tgt) with
-             | _, _
-               when ValuesUtils.literal_type_is_integer src
-                    && ValuesUtils.literal_type_is_integer tgt ->
-                 let src, tgt =
-                   ( TypesUtils.literal_as_integer src,
-                     TypesUtils.literal_as_integer tgt )
-                 in
-                 let cast_str =
-                   match backend () with
-                   | Coq | FStar -> "scalar_cast"
-                   | Lean ->
-                       let signed_src = Scalars.integer_type_is_signed src in
-                       let signed_tgt = Scalars.integer_type_is_signed tgt in
-                       if signed_src = signed_tgt then
-                         if signed_src then "IScalar.cast" else "UScalar.cast"
-                       else if signed_src then "IScalar.hcast"
-                       else "UScalar.hcast"
-                   | HOL4 -> admit_string __FILE__ __LINE__ span "Unreachable"
-                 in
-                 let src =
-                   if backend () <> Lean then Some (integer_type_to_string src)
-                   else None
-                 in
-                 let tgt = integer_type_to_string tgt in
-                 (cast_str, src, Some tgt)
-             | TBool, TInt _ | TBool, TUInt _ ->
-                 let tgt = TypesUtils.literal_as_integer tgt in
-                 let cast_str =
-                   match backend () with
-                   | Coq | FStar -> "scalar_cast_bool"
-                   | Lean ->
-                       if Scalars.integer_type_is_signed tgt then
-                         "IScalar.cast_fromBool"
-                       else "UScalar.cast_fromBool"
-                   | HOL4 -> admit_string __FILE__ __LINE__ span "Unreachable"
-                 in
-                 let tgt = integer_type_to_string tgt in
-                 (cast_str, None, Some tgt)
-             | TInt _, TBool | TUInt _, TBool ->
-                 (* This is not allowed by rustc: the way of doing it in Rust is: [x != 0] *)
-                 [%craise] span "Unexpected cast: integer to bool"
-             | TBool, TBool ->
-                 (* There shouldn't be any cast here. Note that if
-                    one writes [b as bool] in Rust (where [b] is a
-                    boolean), it gets compiled to [b] (i.e., no cast
-                    is introduced). *)
-                 [%craise] span "Unexpected cast: bool to bool"
-             | _ -> [%craise] span "Unreachable"
-           in
-           (* Print the name of the function *)
-           F.pp_print_string fmt cast_str;
-           (* Print the src type argument *)
-           (match src with
-           | None -> ()
-           | Some src ->
-               F.pp_print_space fmt ();
-               F.pp_print_string fmt src);
-           (* Print the tgt type argument *)
-           match tgt with
-           | None -> ()
-           | Some tgt ->
-               F.pp_print_space fmt ();
-               F.pp_print_string fmt tgt);
-          (* Extract the argument *)
-          F.pp_print_space fmt ();
-          extract_expr ~inside:true arg;
-          if inside then F.pp_print_string fmt ")")
+  | Cast kind -> extract_cast_kind span extract_expr fmt ~inside kind arg
 
 (** Format a binary operation
 

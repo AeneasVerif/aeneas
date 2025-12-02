@@ -442,29 +442,46 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
             let dest = mk_tpat_from_fvar dest_mplace dest in
             (ctx, Unop (Neg int_ty), effect_info, args, [], dest)
         | _ -> [%craise] ctx.span "Unreachable")
-    | S.Unop (E.Cast cast_kind) -> begin
-        match cast_kind with
-        | CastScalar (src_ty, tgt_ty) ->
-            (* Note that cast can fail *)
-            let effect_info =
-              {
-                can_fail = not (Config.backend () = Lean);
-                can_diverge = false;
-                is_rec = false;
-              }
-            in
-            let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
-            let dest = mk_tpat_from_fvar dest_mplace dest in
-            (ctx, Unop (Cast (src_ty, tgt_ty)), effect_info, args, [], dest)
-        | CastFnPtr _ -> [%craise] ctx.span "TODO: function casts"
-        | CastUnsize _ ->
-            (* We shouldn't get there: this case should have been detected before
+    | S.Unop (E.Cast kind) -> begin
+        let kind, can_fail =
+          match kind with
+          | CastScalar (src_ty, tgt_ty) ->
+              (CastLit (src_ty, tgt_ty), not (Config.backend () = Lean))
+          | CastRawPtr (src_ty, tgt_ty) ->
+              (* We only support casts between pointers to literal types for now *)
+              let get_ty (ty : T.ty) =
+                match ty with
+                | TRawPtr (TLiteral lit, rkind) ->
+                    let mut =
+                      match rkind with
+                      | RMut -> Mut
+                      | RShared -> Const
+                    in
+                    (lit, mut)
+                | _ ->
+                    let env = bs_ctx_to_fmt_env ctx in
+                    [%craise] ctx.span
+                      ("Raw ptr casts are only supported between pointers to \
+                        literal types; found: "
+                      ^ Charon.PrintExpressions.cast_kind_to_string env kind)
+              in
+              let src_ty, src_mut = get_ty src_ty in
+              let tgt_ty, tgt_mut = get_ty tgt_ty in
+              (CastRawPtr ((src_ty, src_mut), (tgt_ty, tgt_mut)), true)
+          | CastFnPtr _ -> [%craise] ctx.span "TODO: function casts"
+          | CastUnsize _ ->
+              (* We shouldn't get there: this case should have been detected before
                and handled in [translate_cast_unsize] *)
-            [%internal_error] ctx.span
-        | CastRawPtr _ -> [%craise] ctx.span "Unsupported: raw ptr casts"
-        | CastTransmute _ -> [%craise] ctx.span "Unsupported: transmute"
-        | CastConcretize _ ->
-            [%craise] ctx.span "Unsupported: `dyn Trait` concretization"
+              [%internal_error] ctx.span
+          | CastTransmute _ -> [%craise] ctx.span "Unsupported: transmute"
+          | CastConcretize _ ->
+              [%craise] ctx.span "Unsupported: `dyn Trait` concretization"
+        in
+        (* Note that casts can fail *)
+        let effect_info = { can_fail; can_diverge = false; is_rec = false } in
+        let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
+        let dest = mk_tpat_from_fvar dest_mplace dest in
+        (ctx, Unop (Cast kind), effect_info, args, [], dest)
       end
     | S.Binop binop -> (
         [%ldebug

@@ -3,6 +3,7 @@ import Aeneas.List
 import Aeneas.Std.Array.Core
 import Aeneas.Std.Range
 import Aeneas.Std.Core.Ops
+import Aeneas.Std.RawPtr
 import Aeneas.SimpScalar.SimpScalar
 
 namespace Aeneas.Std
