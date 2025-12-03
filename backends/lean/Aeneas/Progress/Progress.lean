@@ -628,9 +628,10 @@ def evalProgressCore (async : Bool) (keep keepPretty : Option Name) (withArg: Op
   let singleAssumptionTacDtree ← singleAssumptionTacPreprocess
   let grindTac : TacticM Unit := do
     withTraceNode `Progress (fun _ => pure m!"Attempting to solve with `grind`") do
-    -- TODO: It would be better to have a concrete Syntax node instead of the
-    -- mkNullNode placeholder
+    /- TODO: It would be better to have a concrete Syntax node instead of the
+       mkNullNode placeholder -/
     let config ← elabGrindConfig mkNullNode
+    let config := { config with splits := 0, gen := 3 }
     discard <| evalGrindCore (← `(Progress)) config none none none
   let customAssumTac : TacticM Unit := do
     withTraceNode `Progress (fun _ => pure m!"Attempting to solve with `singleAssumptionTac`") do
