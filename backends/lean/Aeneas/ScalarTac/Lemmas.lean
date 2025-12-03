@@ -266,6 +266,7 @@ attribute [scalar_tac_simps, simp_lists_hyps_simps, simp_scalar_hyps_simps] Int.
 @[scalar_tac_simps] theorem Nat.max_eq_Max_max (x y : Nat) : Nat.max x y = x ⊔ y := by simp
 @[scalar_tac_simps] theorem Nat.min_eq_Min_min (x y : Nat) : Nat.min x y = x ⊓ y := by simp
 
+-- TODO: commit to Mathlib
 attribute [grind! .] inf_le_left inf_lt_left inf_le_right inf_lt_right
 
 example (x y : Nat) : x ≤ x ⊔ y := by scalar_tac
