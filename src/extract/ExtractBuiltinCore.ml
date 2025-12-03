@@ -76,7 +76,8 @@ let mk_struct_constructor (type_name : string) : string =
   in
   prefix ^ type_name ^ suffix
 
-let mk_fun ?(filter : bool list option = None) ?(can_fail = true)
+let mk_fun ?(keep_params : bool list option = None)
+    ?(keep_trait_clauses : bool list option = None) ?(can_fail = true)
     ?(stateful = false) ?(lift = true) ?(has_default = false)
     (rust_name : string) (extract_name : string) :
     pattern * Pure.builtin_fun_info =
@@ -88,7 +89,8 @@ let mk_fun ?(filter : bool list option = None) ?(can_fail = true)
   in
   let f : Pure.builtin_fun_info =
     {
-      filter_params = filter;
+      keep_params;
+      keep_trait_clauses;
       extract_name;
       can_fail;
       stateful;
@@ -159,7 +161,8 @@ let mk_trait_decl ?(parent_clauses : string list = [])
       (fun (rname, lname) ->
         ( rname,
           ({
-             filter_params = None;
+             keep_params = None;
+             keep_trait_clauses = None;
              extract_name = lname;
              can_fail = true;
              stateful = false;
@@ -179,8 +182,8 @@ let mk_trait_decl ?(parent_clauses : string list = [])
     methods;
   }
 
-let mk_trait_impl ?(filter_params : bool list option = None)
-    (rust_name : string) (extract_name : string) :
-    pattern * Pure.builtin_trait_impl_info =
+let mk_trait_impl ?(keep_params : bool list option = None)
+    ?(keep_trait_clauses : bool list option = None) (rust_name : string)
+    (extract_name : string) : pattern * Pure.builtin_trait_impl_info =
   let rust_name = parse_pattern rust_name in
-  (rust_name, { extract_name; filter_params })
+  (rust_name, { extract_name; keep_params; keep_trait_clauses })

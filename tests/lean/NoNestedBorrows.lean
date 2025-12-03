@@ -16,22 +16,26 @@ structure Pair (T1 : Type) (T2 : Type) where
 
 /- [no_nested_borrows::List]
    Source: 'tests/src/no_nested_borrows.rs', lines 11:0-14:1 -/
+@[discriminant]
 inductive List (T : Type) where
 | Cons : T → List T → List T
 | Nil : List T
 
 /- [no_nested_borrows::One]
    Source: 'tests/src/no_nested_borrows.rs', lines 22:0-24:1 -/
+@[discriminant]
 inductive One (T1 : Type) where
 | One : T1 → One T1
 
 /- [no_nested_borrows::EmptyEnum]
    Source: 'tests/src/no_nested_borrows.rs', lines 28:0-30:1 -/
+@[discriminant]
 inductive EmptyEnum where
 | Empty : EmptyEnum
 
 /- [no_nested_borrows::Enum]
    Source: 'tests/src/no_nested_borrows.rs', lines 34:0-37:1 -/
+@[discriminant]
 inductive Enum where
 | Variant1 : Enum
 | Variant2 : Enum
@@ -43,6 +47,7 @@ def EmptyStruct := Unit
 
 /- [no_nested_borrows::Sum]
    Source: 'tests/src/no_nested_borrows.rs', lines 43:0-46:1 -/
+@[discriminant]
 inductive Sum (T1 : Type) (T2 : Type) where
 | Left : T1 → Sum T1 T2
 | Right : T2 → Sum T1 T2
@@ -223,12 +228,14 @@ mutual
 
 /- [no_nested_borrows::Tree]
    Source: 'tests/src/no_nested_borrows.rs', lines 220:0-223:1 -/
+@[discriminant]
 inductive Tree (T : Type) where
 | Leaf : T → Tree T
 | Node : T → NodeElem T → Tree T → Tree T
 
 /- [no_nested_borrows::NodeElem]
    Source: 'tests/src/no_nested_borrows.rs', lines 225:0-228:1 -/
+@[discriminant]
 inductive NodeElem (T : Type) where
 | Cons : Tree T → NodeElem T → NodeElem T
 | Nil : NodeElem T

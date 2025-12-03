@@ -44,12 +44,24 @@ let ty_has_adt_with_borrows span (infos : TypesAnalysis.type_infos) (ty : ty) :
 
     Note that we can't simply explore the type and look for regions: sometimes
     we erase the lists of regions (by replacing them with [[]] when using
-    {!type:Types.ty}, and when a type uses 'static this region doesn't appear in
-    the region parameters. *)
+    {!type:Types.ty}), and when a type uses 'static this region doesn't appear
+    in the region parameters. *)
 let ty_has_nested_borrows (span : Meta.span option)
     (infos : TypesAnalysis.type_infos) (ty : ty) : bool =
   let info = TypesAnalysis.analyze_ty span infos ty in
   info.TypesAnalysis.contains_nested_borrows
+
+let ty_has_nested_mut_borrows (span : Meta.span option)
+    (infos : TypesAnalysis.type_infos) (ty : ty) : bool =
+  let info = TypesAnalysis.analyze_ty span infos ty in
+  info.TypesAnalysis.contains_nested_mut
+
+(** Check that a type is supported.
+
+    For now, we support types which do not contain nested mutable borrows. *)
+let ty_is_supported (span : Meta.span option) (infos : TypesAnalysis.type_infos)
+    (ty : ty) : bool =
+  not (ty_has_nested_mut_borrows span infos ty)
 
 (* Refresh the regions appearing inside a type, and introduce
    fresh regions for its erased regions *)
@@ -293,6 +305,15 @@ let rec trait_ref_kind_is_local_clause (id : trait_ref_kind) : bool =
   | ParentClause (tref, _) | ItemClause (tref, _, _) ->
       trait_ref_kind_is_local_clause tref.kind
   | TraitImpl _ | BuiltinOrAuto _ | UnknownTrait _ | Dyn -> false
+
+(** A trait instance id refers to a local clause if it only uses the variants:
+    [Self], [Clause], [ParentClause] *)
+let trait_ref_kind_is_local_clause_or_builtin (id : trait_ref_kind) : bool =
+  trait_ref_kind_is_local_clause id
+  ||
+  match id with
+  | BuiltinOrAuto _ -> true
+  | _ -> false
 
 (** Check that it is ok for a trait instance id not to be normalizable.
 

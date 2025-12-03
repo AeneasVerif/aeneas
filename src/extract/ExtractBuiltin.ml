@@ -235,7 +235,8 @@ let builtin_trait_decls_info () =
             in
             let fwd : Pure.builtin_fun_info =
               {
-                filter_params = None;
+                keep_params = None;
+                keep_trait_clauses = None;
                 extract_name = basename;
                 can_fail = true;
                 stateful = false;
@@ -252,7 +253,8 @@ let builtin_trait_decls_info () =
             (fun (item_name, extract_name) ->
               ( item_name,
                 ({
-                   filter_params = None;
+                   keep_params = None;
+                   keep_trait_clauses = None;
                    extract_name;
                    can_fail = true;
                    stateful = false;
@@ -322,7 +324,7 @@ let builtin_trait_decls_map = mk_memoized mk_builtin_trait_decls_map
 let builtin_trait_impls_info () : (pattern * Pure.builtin_trait_impl_info) list
     =
   let fmt (rust_name : string) ?(extract_name : string option = None)
-      ?(filter : bool list option = None) () :
+      ?(keep_params : bool list option = None) () :
       pattern * Pure.builtin_trait_impl_info =
     let rust_name = parse_pattern rust_name in
     let name =
@@ -333,7 +335,7 @@ let builtin_trait_impls_info () : (pattern * Pure.builtin_trait_impl_info) list
       in
       flatten_name name
     in
-    (rust_name, { filter_params = filter; extract_name = name })
+    (rust_name, { keep_params; keep_trait_clauses = None; extract_name = name })
   in
   mk_not_lean
     [
@@ -346,12 +348,12 @@ let builtin_trait_impls_info () : (pattern * Pure.builtin_trait_impl_info) list
       (* core::ops::Deref<alloc::vec::Vec<T>> *)
       fmt "core::ops::deref::Deref<alloc::vec::Vec<@T>, [@T]>"
         ~extract_name:(Some "core::ops::deref::DerefVecInst")
-        ~filter:(Some [ true; false ])
+        ~keep_params:(Some [ true; false ])
         ();
       (* core::ops::DerefMut<alloc::vec::Vec<T>> *)
       fmt "core::ops::deref::DerefMut<alloc::vec::Vec<@T>, [@T]>"
         ~extract_name:(Some "core::ops::deref::DerefMutVecInst")
-        ~filter:(Some [ true; false ])
+        ~keep_params:(Some [ true; false ])
         ();
       (* core::ops::index::Index<[T], I> *)
       fmt "core::ops::index::Index<[@T], @I, @O>"
@@ -386,20 +388,20 @@ let builtin_trait_impls_info () : (pattern * Pure.builtin_trait_impl_info) list
       (* core::ops::index::Index<alloc::vec::Vec<T>, T> *)
       fmt "core::ops::index::Index<alloc::vec::Vec<@T>, @T, @O>"
         ~extract_name:(Some "alloc::vec::Vec::IndexInst")
-        ~filter:(Some [ true; true; false; true ])
+        ~keep_params:(Some [ true; true; false; true ])
         ();
       (* core::ops::index::IndexMut<alloc::vec::Vec<T>, T> *)
       fmt "core::ops::index::IndexMut<alloc::vec::Vec<@T>, @T, @O>"
         ~extract_name:(Some "alloc::vec::Vec::IndexMutInst")
-        ~filter:(Some [ true; true; false; true ])
+        ~keep_params:(Some [ true; true; false; true ])
         ();
       fmt "core::ops::deref::Deref<alloc::vec::Vec<@Self>>"
         ~extract_name:(Some "alloc.vec.DerefVec")
-        ~filter:(Some [ true; false ])
+        ~keep_params:(Some [ true; false ])
         ();
       fmt "core::ops::deref::DerefMut<alloc::vec::Vec<@Self>>"
         ~extract_name:(Some "alloc.vec.DerefMutVec")
-        ~filter:(Some [ true; false ])
+        ~keep_params:(Some [ true; false ])
         ();
       (* core::clone::impls::{core::clone::Clone for bool} *)
       fmt "core::clone::Clone<bool>"
@@ -504,10 +506,10 @@ let builtin_trait_impls_map = mk_memoized mk_builtin_trait_impls_map
     type parameter for the allocator to use, which we want to filter. *)
 let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
   (* Small utility. *)
-  let mk_fun (rust_name : string) ?(filter : bool list option = None)
-      ?(can_fail = true) ?(stateful = false) ?(lift = true)
-      ?(extract_name : string option = None) () :
-      pattern * Pure.builtin_fun_info =
+  let mk_fun (rust_name : string) ?(keep_params : bool list option = None)
+      ?(keep_trait_clauses : bool list option = None) ?(can_fail = true)
+      ?(stateful = false) ?(lift = true) ?(extract_name : string option = None)
+      () : pattern * Pure.builtin_fun_info =
     let rust_name =
       [%ldebug "About to parse pattern: " ^ rust_name];
       try
@@ -525,7 +527,8 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
     let basename = flatten_name extract_name in
     let f : Pure.builtin_fun_info =
       {
-        filter_params = filter;
+        keep_params;
+        keep_trait_clauses;
         extract_name = basename;
         can_fail;
         stateful;
@@ -697,13 +700,13 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
           "alloc::vec::{core::ops::index::Index<alloc::vec::Vec<@T>, @I, \
            @O>}::index"
           ~extract_name:(Some "alloc.vec.Vec.index")
-          ~filter:(Some [ true; true; false; true ])
+          ~keep_params:(Some [ true; true; false; true ])
           ();
         mk_fun
           "alloc::vec::{core::ops::index::IndexMut<alloc::vec::Vec<@T>, @I, \
            @O>}::index_mut"
           ~extract_name:(Some "alloc.vec.Vec.index_mut")
-          ~filter:(Some [ true; true; false; true ])
+          ~keep_params:(Some [ true; true; false; true ])
           ();
         mk_fun "core::slice::{[@T]}::len" ~extract_name:(Some "slice::len")
           ~can_fail:false ~lift:false ();
@@ -711,22 +714,22 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
           ~extract_name:(Some "alloc::vec::Vec::new") ~can_fail:false
           ~lift:false ();
         mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::push"
-          ~filter:(Some [ true; false ])
+          ~keep_params:(Some [ true; false ])
           ();
         mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::insert"
-          ~filter:(Some [ true; false ])
+          ~keep_params:(Some [ true; false ])
           ();
         mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::len"
-          ~filter:(Some [ true; false ])
+          ~keep_params:(Some [ true; false ])
           ~can_fail:false ~lift:false ();
         mk_fun "alloc::boxed::{core::ops::deref::Deref<Box<@T>, @T>}::deref"
           ~can_fail:false ~extract_name:(Some "alloc.boxed.Box.deref")
-          ~filter:(Some [ true; false ])
+          ~keep_params:(Some [ true; false ])
           ();
         mk_fun
           "alloc::boxed::{core::ops::deref::DerefMut<Box<@T>, @T>}::deref_mut"
           ~can_fail:false ~extract_name:(Some "alloc.boxed.Box.deref_mut")
-          ~filter:(Some [ true; false ])
+          ~keep_params:(Some [ true; false ])
           ();
         mk_fun "core::array::{core::ops::index::Index<[@T; @N], @I, @O>}::index"
           ~extract_name:(Some "core.array.Array.index") ();
@@ -769,13 +772,13 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
           "alloc::vec::{core::ops::deref::Deref<alloc::vec::Vec<@T>, \
            [@T]>}::deref"
           ~extract_name:(Some "alloc::vec::Vec::deref")
-          ~filter:(Some [ true; false ])
+          ~keep_params:(Some [ true; false ])
           ~can_fail:false ~lift:false ();
         mk_fun
           "alloc::vec::{core::ops::deref::DerefMut<alloc::vec::Vec<@T>, \
            [@T]>}::deref_mut"
           ~extract_name:(Some "alloc::vec::Vec::deref_mut") ~can_fail:false
-          ~filter:(Some [ true; false ])
+          ~keep_params:(Some [ true; false ])
           ();
       ]
   (* Lean-only definitions *)

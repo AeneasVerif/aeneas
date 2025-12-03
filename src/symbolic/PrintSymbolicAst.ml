@@ -33,6 +33,8 @@ let value_aggregate_to_string (env : fmt_env) (v : value_aggregate) : string =
   | VaCgValue cg_id -> const_generic_db_var_to_string env (Free cg_id)
   | VaTraitConstValue (trait_ref, item) ->
       trait_ref_to_string env trait_ref ^ "." ^ item
+  | VaDiscriminant sv ->
+      "@discriminant(" ^ Values.symbolic_value_to_string env sv ^ ")"
 
 let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
     (e : expr) : string =

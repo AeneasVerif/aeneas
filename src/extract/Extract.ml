@@ -11,6 +11,9 @@ open Errors
 open ExtractErrors
 include ExtractTypes
 
+let binop_to_string (ctx : extraction_ctx) =
+  PrintPure.binop_to_string (extraction_ctx_to_fmt_env ctx)
+
 let fun_or_op_id_to_string (ctx : extraction_ctx) =
   PrintPure.fun_or_op_id_to_string (extraction_ctx_to_fmt_env ctx)
 
@@ -38,13 +41,24 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
       | Some info ->
           (* Builtin function: register the filtering information, if there is *)
           let ctx =
-            match info.filter_params with
+            match info.keep_params with
             | Some keep ->
                 {
                   ctx with
                   funs_filter_type_args_map =
                     FunDeclId.Map.add def.f.def_id keep
                       ctx.funs_filter_type_args_map;
+                }
+            | _ -> ctx
+          in
+          let ctx =
+            match info.keep_trait_clauses with
+            | Some keep ->
+                {
+                  ctx with
+                  funs_filter_trait_clauses_map =
+                    FunDeclId.Map.add def.f.def_id keep
+                      ctx.funs_filter_trait_clauses_map;
                 }
             | _ -> ctx
           in
@@ -240,46 +254,69 @@ let extract_global (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_close_box fmt ()
 
 (* Filter the generics of a function if it is builtin *)
-let fun_builtin_filter_types (id : FunDeclId.id) (types : 'a list)
-    (explicit : explicit_info option) (ctx : extraction_ctx) :
-    ('a list * explicit_info option, 'a list * string) Result.result =
-  match FunDeclId.Map.find_opt id ctx.funs_filter_type_args_map with
-  | None -> Result.Ok (types, explicit)
-  | Some filter ->
-      if List.length filter <> List.length types then (
-        let decl = FunDeclId.Map.find id ctx.trans_funs in
-        let err =
-          "Ill-formed builtin information for function "
-          ^ name_to_string ctx decl.f.item_meta.name
-          ^ ": "
-          ^ string_of_int (List.length filter)
-          ^ " filtering arguments provided for "
-          ^ string_of_int (List.length types)
-          ^ " type arguments ("
-          ^ String.concat ", " (List.map (ty_to_string ctx) types)
-          ^ ")"
-        in
-        [%save_error_opt_span] None err;
-        Result.Error (types, err))
-      else
-        let filter_f =
-          List.filter_map (fun (b, ty) -> if b then Some ty else None)
-        in
-        let types = List.combine filter types in
-        let types = filter_f types in
-        let filter_f =
-          List.filter_map (fun (b, x) -> if b then Some x else None)
-        in
-        let explicit =
-          Option.map
-            (fun e ->
-              {
-                e with
-                explicit_types = filter_f (List.combine filter e.explicit_types);
-              })
-            explicit
-        in
-        Result.Ok (types, explicit)
+let fun_builtin_filter_types_trait_clauses (ty_to_string : 'a -> string)
+    (clause_to_string : 'b -> string) (id : FunDeclId.id) (types : 'a list)
+    (explicit : explicit_info option) (clauses : 'b list) (ctx : extraction_ctx)
+    : ('a list * explicit_info option * 'b list, string) Result.result =
+  let filter_f filter ls =
+    List.filter_map
+      (fun (b, ty) -> if b then Some ty else None)
+      (List.combine filter ls)
+  in
+  let clauses =
+    match FunDeclId.Map.find_opt id ctx.funs_filter_trait_clauses_map with
+    | None -> Result.Ok clauses
+    | Some filter ->
+        if List.length filter <> List.length types then (
+          let decl = FunDeclId.Map.find id ctx.trans_funs in
+          let err =
+            "Ill-formed builtin information for function "
+            ^ name_to_string ctx decl.f.item_meta.name
+            ^ ": "
+            ^ string_of_int (List.length filter)
+            ^ " filtering arguments provided for "
+            ^ string_of_int (List.length clauses)
+            ^ " trait clauses ("
+            ^ String.concat ", " (List.map clause_to_string clauses)
+            ^ ")"
+          in
+          [%save_error_opt_span] None err;
+          Result.Error err)
+        else Result.Ok (filter_f filter clauses)
+  in
+  let types =
+    match FunDeclId.Map.find_opt id ctx.funs_filter_type_args_map with
+    | None -> Result.Ok (types, explicit)
+    | Some filter ->
+        if List.length filter <> List.length types then (
+          let decl = FunDeclId.Map.find id ctx.trans_funs in
+          let err =
+            "Ill-formed builtin information for function "
+            ^ name_to_string ctx decl.f.item_meta.name
+            ^ ": "
+            ^ string_of_int (List.length filter)
+            ^ " filtering arguments provided for "
+            ^ string_of_int (List.length types)
+            ^ " type arguments ("
+            ^ String.concat ", " (List.map ty_to_string types)
+            ^ ")"
+          in
+          [%save_error_opt_span] None err;
+          Result.Error err)
+        else
+          let types = filter_f filter types in
+          let explicit =
+            Option.map
+              (fun e ->
+                { e with explicit_types = filter_f filter e.explicit_types })
+              explicit
+          in
+          Result.Ok (types, explicit)
+  in
+  match (clauses, types) with
+  | Result.Ok clauses, Result.Ok (types, explicit) ->
+      Result.Ok (types, explicit, clauses)
+  | Result.Error msg, _ | _, Result.Error msg -> Result.Error msg
 
 (** [inside]: see {!extract_ty}. [with_type]: do we also generate a type
     annotation? This is necessary for backends like Coq when we write lambdas
@@ -340,6 +377,153 @@ let lets_require_wrap_in_do (span : Meta.span)
       wrap_in_do
   | FStar | Coq -> false
 
+(** HOL4 has a special treatment: because it doesn't support dependent types, we
+    don't have a specific operator for the casts *)
+let extract_cast_kind_hol4 (span : Meta.span)
+    (extract_expr : inside:bool -> texpr -> unit) (fmt : F.formatter)
+    ~(inside : bool) (kind : cast_kind) (arg : texpr) : unit =
+  match kind with
+  | CastLit (src, tgt) ->
+      (* Casting, say, an u32 to an i32 would be done as follows:
+         {[
+           mk_i32 (u32_to_int x)
+         ]}
+      *)
+      if inside then F.pp_print_string fmt "(";
+      F.pp_print_string fmt ("mk_" ^ scalar_name tgt);
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt "(";
+      F.pp_print_string fmt (scalar_name src ^ "_to_int");
+      F.pp_print_space fmt ();
+      extract_expr ~inside:true arg;
+      F.pp_print_string fmt ")";
+      if inside then F.pp_print_string fmt ")"
+  | CastRawPtr _ ->
+      [%craise] span "Raw pointer casts are not implemented for HOL4"
+
+(** Extract a cast when the backend is not HOL4 (which receives a special
+    treatment) *)
+let extract_cast_kind_gen (span : Meta.span)
+    (extract_expr : inside:bool -> texpr -> unit) (fmt : F.formatter)
+    ~(inside : bool) (kind : cast_kind) (arg : texpr) : unit =
+  let integer_type_to_string (ty : integer_type) : string =
+    if backend () = Lean then "." ^ int_name ty
+    else
+      StringUtils.capitalize_first_letter (PrintPure.integer_type_to_string ty)
+  in
+  match kind with
+  | CastLit (src, tgt) ->
+      if inside then F.pp_print_string fmt "(";
+      (* Rem.: the source type is an implicit parameter *)
+      (* Different cases depending on the conversion *)
+      (let cast_str, src, tgt =
+         match (src, tgt) with
+         | _, _
+           when ValuesUtils.literal_type_is_integer src
+                && ValuesUtils.literal_type_is_integer tgt ->
+             let src, tgt =
+               ( TypesUtils.literal_as_integer src,
+                 TypesUtils.literal_as_integer tgt )
+             in
+             let cast_str =
+               match backend () with
+               | Coq | FStar -> "scalar_cast"
+               | Lean ->
+                   let signed_src = Scalars.integer_type_is_signed src in
+                   let signed_tgt = Scalars.integer_type_is_signed tgt in
+                   if signed_src = signed_tgt then
+                     if signed_src then "IScalar.cast" else "UScalar.cast"
+                   else if signed_src then "IScalar.hcast"
+                   else "UScalar.hcast"
+               | HOL4 -> admit_string __FILE__ __LINE__ span "Unreachable"
+             in
+             let src =
+               if backend () <> Lean then Some (integer_type_to_string src)
+               else None
+             in
+             let tgt = integer_type_to_string tgt in
+             (cast_str, src, Some tgt)
+         | TBool, TInt _ | TBool, TUInt _ ->
+             let tgt = TypesUtils.literal_as_integer tgt in
+             let cast_str =
+               match backend () with
+               | Coq | FStar -> "scalar_cast_bool"
+               | Lean ->
+                   if Scalars.integer_type_is_signed tgt then
+                     "IScalar.cast_fromBool"
+                   else "UScalar.cast_fromBool"
+               | HOL4 -> admit_string __FILE__ __LINE__ span "Unreachable"
+             in
+             let tgt = integer_type_to_string tgt in
+             (cast_str, None, Some tgt)
+         | TInt _, TBool | TUInt _, TBool ->
+             (* This is not allowed by rustc: the way of doing it in Rust is: [x != 0] *)
+             [%craise] span "Unexpected cast: integer to bool"
+         | TBool, TBool ->
+             (* There shouldn't be any cast here. Note that if
+                one writes [b as bool] in Rust (where [b] is a
+                boolean), it gets compiled to [b] (i.e., no cast
+                is introduced). *)
+             [%craise] span "Unexpected cast: bool to bool"
+         | _ -> [%craise] span "Unreachable"
+       in
+       (* Print the name of the function *)
+       F.pp_print_string fmt cast_str;
+       (* Print the src type argument *)
+       (match src with
+       | None -> ()
+       | Some src ->
+           F.pp_print_space fmt ();
+           F.pp_print_string fmt src);
+       (* Print the tgt type argument *)
+       match tgt with
+       | None -> ()
+       | Some tgt ->
+           F.pp_print_space fmt ();
+           F.pp_print_string fmt tgt);
+      (* Extract the argument *)
+      F.pp_print_space fmt ();
+      extract_expr ~inside:true arg;
+      if inside then F.pp_print_string fmt ")"
+  | CastRawPtr ((_, _), (tgt_ty, tgt_mut)) ->
+      [%cassert] span
+        (backend () = Lean)
+        "Casts between raw pointers are only supported in the Lean backend";
+      if inside then F.pp_print_string fmt "(";
+      (* Print the name of the function *)
+      F.pp_print_string fmt "RawPtr.cast_scalar";
+      (* Print the target type argument and mutability *)
+      let tgt_ty : integer_type =
+        match tgt_ty with
+        | TInt ty -> Signed ty
+        | TUInt ty -> Unsigned ty
+        | _ ->
+            [%craise] span "Can only generate code for casts between integers"
+      in
+      let tgt = integer_type_to_string tgt_ty in
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt tgt;
+      let tgt_mut =
+        match tgt_mut with
+        | Mut -> ".Mut"
+        | Const -> ".Const"
+      in
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt tgt_mut;
+      (* Extract the argument *)
+      F.pp_print_space fmt ();
+      extract_expr ~inside:true arg;
+      if inside then F.pp_print_string fmt ")"
+
+let extract_cast_kind (span : Meta.span)
+    (extract_expr : inside:bool -> texpr -> unit) (fmt : F.formatter)
+    ~(inside : bool) (kind : cast_kind) (arg : texpr) : unit =
+  (* HOL4 has a special treatment *)
+  match backend () with
+  | HOL4 -> extract_cast_kind_hol4 span extract_expr fmt ~inside kind arg
+  | FStar | Coq | Lean ->
+      extract_cast_kind_gen span extract_expr fmt ~inside kind arg
+
 (** Format a unary operation
 
     Inputs:
@@ -361,104 +545,7 @@ let extract_unop (span : Meta.span)
       F.pp_print_space fmt ();
       extract_expr ~inside:true arg;
       if inside then F.pp_print_string fmt ")"
-  | Cast (src, tgt) -> (
-      (* HOL4 has a special treatment: because it doesn't support dependent
-         types, we don't have a specific operator for the cast *)
-      match backend () with
-      | HOL4 ->
-          (* Casting, say, an u32 to an i32 would be done as follows:
-             {[
-               mk_i32 (u32_to_int x)
-             ]}
-          *)
-          if inside then F.pp_print_string fmt "(";
-          F.pp_print_string fmt ("mk_" ^ scalar_name tgt);
-          F.pp_print_space fmt ();
-          F.pp_print_string fmt "(";
-          F.pp_print_string fmt (scalar_name src ^ "_to_int");
-          F.pp_print_space fmt ();
-          extract_expr ~inside:true arg;
-          F.pp_print_string fmt ")";
-          if inside then F.pp_print_string fmt ")"
-      | FStar | Coq | Lean ->
-          if inside then F.pp_print_string fmt "(";
-          (* Rem.: the source type is an implicit parameter *)
-          (* Different cases depending on the conversion *)
-          (let cast_str, src, tgt =
-             let integer_type_to_string (ty : integer_type) : string =
-               if backend () = Lean then "." ^ int_name ty
-               else
-                 StringUtils.capitalize_first_letter
-                   (PrintPure.integer_type_to_string ty)
-             in
-             match (src, tgt) with
-             | _, _
-               when ValuesUtils.literal_type_is_integer src
-                    && ValuesUtils.literal_type_is_integer tgt ->
-                 let src, tgt =
-                   ( TypesUtils.literal_as_integer src,
-                     TypesUtils.literal_as_integer tgt )
-                 in
-                 let cast_str =
-                   match backend () with
-                   | Coq | FStar -> "scalar_cast"
-                   | Lean ->
-                       let signed_src = Scalars.integer_type_is_signed src in
-                       let signed_tgt = Scalars.integer_type_is_signed tgt in
-                       if signed_src = signed_tgt then
-                         if signed_src then "IScalar.cast" else "UScalar.cast"
-                       else if signed_src then "IScalar.hcast"
-                       else "UScalar.hcast"
-                   | HOL4 -> admit_string __FILE__ __LINE__ span "Unreachable"
-                 in
-                 let src =
-                   if backend () <> Lean then Some (integer_type_to_string src)
-                   else None
-                 in
-                 let tgt = integer_type_to_string tgt in
-                 (cast_str, src, Some tgt)
-             | TBool, TInt _ | TBool, TUInt _ ->
-                 let tgt = TypesUtils.literal_as_integer tgt in
-                 let cast_str =
-                   match backend () with
-                   | Coq | FStar -> "scalar_cast_bool"
-                   | Lean ->
-                       if Scalars.integer_type_is_signed tgt then
-                         "IScalar.cast_fromBool"
-                       else "UScalar.cast_fromBool"
-                   | HOL4 -> admit_string __FILE__ __LINE__ span "Unreachable"
-                 in
-                 let tgt = integer_type_to_string tgt in
-                 (cast_str, None, Some tgt)
-             | TInt _, TBool | TUInt _, TBool ->
-                 (* This is not allowed by rustc: the way of doing it in Rust is: [x != 0] *)
-                 [%craise] span "Unexpected cast: integer to bool"
-             | TBool, TBool ->
-                 (* There shouldn't be any cast here. Note that if
-                    one writes [b as bool] in Rust (where [b] is a
-                    boolean), it gets compiled to [b] (i.e., no cast
-                    is introduced). *)
-                 [%craise] span "Unexpected cast: bool to bool"
-             | _ -> [%craise] span "Unreachable"
-           in
-           (* Print the name of the function *)
-           F.pp_print_string fmt cast_str;
-           (* Print the src type argument *)
-           (match src with
-           | None -> ()
-           | Some src ->
-               F.pp_print_space fmt ();
-               F.pp_print_string fmt src);
-           (* Print the tgt type argument *)
-           match tgt with
-           | None -> ()
-           | Some tgt ->
-               F.pp_print_space fmt ();
-               F.pp_print_string fmt tgt);
-          (* Extract the argument *)
-          F.pp_print_space fmt ();
-          extract_expr ~inside:true arg;
-          if inside then F.pp_print_string fmt ")")
+  | Cast kind -> extract_cast_kind span extract_expr fmt ~inside kind arg
 
 (** Format a binary operation
 
@@ -471,46 +558,44 @@ let extract_unop (span : Meta.span)
     - binop
     - argument 0
     - argument 1 *)
-let extract_binop (span : Meta.span)
+let extract_binop (span : Meta.span) (ctx : extraction_ctx)
     (extract_expr : inside:bool -> texpr -> unit) (fmt : F.formatter)
-    ~(inside : bool) (binop : E.binop) (int_ty : integer_type) (arg0 : texpr)
-    (arg1 : texpr) : unit =
+    ~(inside : bool) (binop : binop) (arg0 : texpr) (arg1 : texpr) : unit =
   if inside then F.pp_print_string fmt "(";
   (* Some binary operations have a special notation depending on the backend *)
   (match (backend (), binop) with
-  | HOL4, (Eq | Ne)
-  | (FStar | Coq | Lean), (Eq | Lt | Le | Ne | Ge | Gt)
+  | HOL4, (Eq _ | Ne _)
+  | (FStar | Coq | Lean), (Eq _ | Lt _ | Le _ | Ne _ | Ge _ | Gt _)
   | ( Lean,
-      ( Div OPanic
-      | Rem OPanic
-      | Add OPanic
-      | Sub OPanic
-      | Mul OPanic
-      | Shl OPanic
-      | Shr OPanic
-      | BitXor | BitOr | BitAnd ) ) ->
+      ( Div (OPanic, _)
+      | Rem (OPanic, _)
+      | Add (OPanic, _)
+      | Sub (OPanic, _)
+      | Mul (OPanic, _)
+      | Shl (OPanic, _, _)
+      | Shr (OPanic, _, _)
+      | BitXor _ | BitOr _ | BitAnd _ ) ) ->
       let binop =
         match binop with
-        | Eq -> "="
-        | Lt -> "<"
-        | Le -> "<="
-        | Ne -> if backend () = Lean then "!=" else "<>"
-        | Ge -> ">="
-        | Gt -> ">"
-        | Div OPanic -> "/"
-        | Rem OPanic -> "%"
-        | Add OPanic -> "+"
-        | Sub OPanic -> "-"
-        | Mul OPanic -> "*"
-        | Shl OPanic -> "<<<"
-        | Shr OPanic -> ">>>"
-        | BitXor -> "^^^"
-        | BitOr -> "|||"
-        | BitAnd -> "&&&"
+        | Eq _ -> "="
+        | Lt _ -> "<"
+        | Le _ -> "<="
+        | Ne _ -> if backend () = Lean then "!=" else "<>"
+        | Ge _ -> ">="
+        | Gt _ -> ">"
+        | Div (OPanic, _) -> "/"
+        | Rem (OPanic, _) -> "%"
+        | Add (OPanic, _) -> "+"
+        | Sub (OPanic, _) -> "-"
+        | Mul (OPanic, _) -> "*"
+        | Shl (OPanic, _, _) -> "<<<"
+        | Shr (OPanic, _, _) -> ">>>"
+        | BitXor _ -> "^^^"
+        | BitOr _ -> "|||"
+        | BitAnd _ -> "&&&"
         | _ ->
             admit_string __FILE__ __LINE__ span
-              ("Unimplemented binary operation: "
-              ^ Charon.PrintExpressions.binop_to_string binop)
+              ("Unimplemented binary operation: " ^ binop_to_string ctx binop)
       in
       let binop =
         match backend () with
@@ -528,7 +613,7 @@ let extract_binop (span : Meta.span)
         | Shl _ | Shr _ -> true
         | _ -> false
       in
-      let binop = named_binop_name binop int_ty in
+      let binop = named_binop_name binop in
       F.pp_print_string fmt binop;
       (* In the case of F*, for shift operations, because machine integers
          are simply integers with a refinement, if the second argument is a
@@ -663,16 +748,14 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
       extract_unop span
         (extract_texpr span ctx fmt ~inside_do)
         fmt ~inside unop arg
-  | Binop (binop, int_ty), [ arg0; arg1 ] ->
+  | Binop binop, [ arg0; arg1 ] ->
       (* Number of arguments: similar to unop *)
-      extract_binop span
+      extract_binop span ctx
         (extract_texpr span ctx fmt ~inside_do)
-        fmt ~inside binop int_ty arg0 arg1
+        fmt ~inside binop arg0 arg1
   | Fun fun_id, _ ->
       let use_brackets = inside in
       if use_brackets then F.pp_print_string fmt "(";
-      (* Open a box for the function call *)
-      (*F.pp_open_hovbox fmt ctx.indent_incr;*)
       (* Print the function name.
 
          For the function name: the id is not the same depending on whether
@@ -788,6 +871,8 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
               }
         | Pure (UpdateAtIndex Slice) ->
             Some { explicit_types = [ Implicit ]; explicit_const_generics = [] }
+        | Pure Discriminant ->
+            Some { explicit_types = [ Implicit ]; explicit_const_generics = [] }
         | Pure ToResult ->
             Some { explicit_types = [ Implicit ]; explicit_const_generics = [] }
         | Pure _ -> None
@@ -805,23 +890,25 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
          is builtin (for instance, we filter the global allocator type
          argument for `Vec::new`).
       *)
-      let types_explicit =
+      let types_explicit_traits =
         match fun_id with
         | FromLlbc (FunId (FRegular id), _) ->
-            fun_builtin_filter_types id generics.types explicit ctx
-        | _ -> Result.Ok (generics.types, explicit)
+            fun_builtin_filter_types_trait_clauses (ty_to_string ctx)
+              (trait_ref_to_string ctx) id generics.types explicit
+              generics.trait_refs ctx
+        | _ -> Result.Ok (generics.types, explicit, generics.trait_refs)
       in
-      (match types_explicit with
-      | Ok (types, explicit) ->
+      (match types_explicit_traits with
+      | Ok (types, explicit, trait_refs) ->
           extract_generic_args span ctx fmt TypeDeclId.Set.empty ~explicit
-            { generics with types }
-      | Error (types, err) ->
+            { generics with types; trait_refs }
+      | Error err ->
           extract_generic_args span ctx fmt TypeDeclId.Set.empty ~explicit
-            { generics with types };
+            generics;
           [%save_error] span err;
           F.pp_print_string fmt
-            "(\"ERROR: ill-formed builtin: invalid number of filtering \
-             arguments\")");
+            "/- ERROR: ill-formed builtin: invalid number of filtering \
+             arguments -/");
       (* Print the arguments *)
       let print_space = ref print_first_space in
       List.iter
@@ -2581,8 +2668,15 @@ let extract_trait_decl_type_names (ctx : extraction_ctx)
         let type_map = StringMap.of_list info.types in
         List.map
           (fun item_name ->
-            let type_name = StringMap.find item_name type_map in
-            (item_name, type_name))
+            match StringMap.find_opt item_name type_map with
+            | Some type_name -> (item_name, type_name)
+            | None ->
+                [%craise] trait_decl.item_meta.span
+                  ("Unexpected error: could not find the information for the \
+                    trait associated type '" ^ item_name
+                 ^ "' for trait declaration '"
+                  ^ name_to_string ctx trait_decl.item_meta.name
+                  ^ "'"))
           types
   in
   (* Register the names *)
@@ -2613,8 +2707,9 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
             | None ->
                 [%craise] trait_decl.item_meta.span
                   ("Unexpected error: could not find the declaration for \
-                    method " ^ item_name ^ " for trait declaration "
-                  ^ name_to_string ctx trait_decl.item_meta.name)
+                    method '" ^ item_name ^ "' for trait declaration '"
+                  ^ name_to_string ctx trait_decl.item_meta.name
+                  ^ "'")
           in
 
           let f = trans.f in
@@ -2732,7 +2827,7 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
     | None -> (ctx, None)
     | Some builtin_info ->
         let ctx =
-          match builtin_info.filter_params with
+          match builtin_info.keep_params with
           | None -> ctx
           | Some filter ->
               {
@@ -2740,6 +2835,17 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
                 trait_impls_filter_type_args_map =
                   TraitImplId.Map.add trait_impl.def_id filter
                     ctx.trait_impls_filter_type_args_map;
+              }
+        in
+        let ctx =
+          match builtin_info.keep_trait_clauses with
+          | None -> ctx
+          | Some filter ->
+              {
+                ctx with
+                trait_impls_filter_trait_clauses_map =
+                  TraitImplId.Map.add trait_impl.def_id filter
+                    ctx.trait_impls_filter_trait_clauses_map;
               }
         in
         (ctx, Some builtin_info)
@@ -2886,24 +2992,8 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_print_break fmt 0 0;
   (* Extract the attributes *)
   ((* We need to list the extract options *)
-   let parent_clauses : string list =
-     List.map
-       (fun clause ->
-         ctx_get_trait_parent_clause decl.item_meta.span decl.def_id
-           clause.clause_id ctx)
-       decl.parent_clauses
-   in
    let add_quotes (ls : string list) : string list =
      List.map (fun s -> "\"" ^ s ^ "\"") ls
-   in
-   let parent_clauses =
-     if parent_clauses = [] then []
-     else
-       [
-         "(parentClauses := ["
-         ^ String.concat ", " (add_quotes parent_clauses)
-         ^ "])";
-       ]
    in
    let types =
      List.map
@@ -2913,6 +3003,22 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
    let types =
      if types = [] then []
      else [ "(types := [" ^ String.concat ", " (add_quotes types) ^ "])" ]
+   in
+   let parent_clauses : string list =
+     List.map
+       (fun clause ->
+         ctx_get_trait_parent_clause decl.item_meta.span decl.def_id
+           clause.clause_id ctx)
+       decl.parent_clauses
+   in
+   let parent_clauses =
+     if parent_clauses = [] then []
+     else
+       [
+         "(parentClauses := ["
+         ^ String.concat ", " (add_quotes parent_clauses)
+         ^ "])";
+       ]
    in
    let consts =
      List.map

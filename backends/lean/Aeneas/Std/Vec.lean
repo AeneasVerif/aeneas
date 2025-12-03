@@ -357,6 +357,49 @@ theorem alloc.vec.Vec.setSlice!_getElem!_suffix {α} [Inhabited α]
   simp only [Vec.setSlice!, Vec.getElem!_Nat_eq]
   simp_lists
 
+@[rust_fun "alloc::vec::{core::clone::Clone<alloc::vec::Vec<@T>>}::clone"
+    (keepParams := [true, false]) (keepTraitClauses := [true, false])]
+def alloc.vec.CloneVec.clone {T : Type} (cloneInst : core.clone.Clone T)
+  (v : alloc.vec.Vec T) : Result (alloc.vec.Vec T) :=
+  Slice.clone cloneInst.clone v
+
+@[reducible, rust_trait_impl "core::clone::Clone<alloc::vec::Vec<@T>>"
+    (keepParams := [true, false]) (keepTraitClauses := [true, false])]
+def core.clone.CloneallocvecVec {T : Type} (cloneInst : core.clone.Clone T) :
+  core.clone.Clone (alloc.vec.Vec T) := {
+  clone := alloc.vec.CloneVec.clone cloneInst
+}
+
+@[rust_fun
+  "alloc::vec::partial_eq::{core::cmp::PartialEq<alloc::vec::Vec<@T>, alloc::vec::Vec<@U>>}::eq"
+  (keepParams := [true, true, false, false])]
+def alloc.vec.partial_eq.PartialEqVec.eq
+  {T : Type} {U : Type} (PartialEqInst : core.cmp.PartialEq T U)
+  (v0 : alloc.vec.Vec T) (v1 : alloc.vec.Vec U) : Result Bool :=
+  if v0.length = v1.length then
+    List.allM (fun (x0, x1) => PartialEqInst.eq x0 x1) (List.zip v0.val v1.val)
+  else .ok false
+
+@[rust_fun
+  "alloc::vec::partial_eq::{core::cmp::PartialEq<alloc::vec::Vec<@T>, alloc::vec::Vec<@U>>}::ne"
+  (keepParams := [true, true, false, false])]
+def alloc.vec.partial_eq.PartialEqVec.ne
+  {T : Type} {U : Type} (PartialEqInst : core.cmp.PartialEq T U)
+  (v0 : alloc.vec.Vec T) (v1 : alloc.vec.Vec U) : Result Bool :=
+  if v0.length = v1.length then
+    List.anyM (fun (x0, x1) => PartialEqInst.ne x0 x1) (List.zip v0.val v1.val)
+  else .ok true
+
+@[reducible,
+  rust_trait_impl
+    "core::cmp::PartialEq<alloc::vec::Vec<@T>, alloc::vec::Vec<@U>>"
+    (keepParams := [true, true, false, false])]
+def core.cmp.PartialEqVec {T : Type} {U : Type}
+ (PartialEqInst : core.cmp.PartialEq T U) :
+  core.cmp.PartialEq (alloc.vec.Vec T) (alloc.vec.Vec U) := {
+  eq := alloc.vec.partial_eq.PartialEqVec.eq PartialEqInst
+  ne := alloc.vec.partial_eq.PartialEqVec.ne PartialEqInst
+}
 
 namespace Tests
   example

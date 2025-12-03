@@ -54,22 +54,13 @@ type span = Meta.span [@@deriving show, ord]
 type ref_kind = Types.ref_kind [@@deriving show, ord]
 type 'a de_bruijn_var = 'a Types.de_bruijn_var [@@deriving show, ord]
 type llbc_fun_id = A.fun_id [@@deriving show, ord]
-type binop = E.binop [@@deriving show, ord]
+type overflow_mode = E.overflow_mode [@@deriving show, ord]
 
 (** A DeBruijn index identifying a group of bound variables *)
 type db_scope_id = int [@@deriving show, ord]
 
 type bvar_id = BVarId.id [@@deriving show, ord]
 type fvar_id = FVarId.id [@@deriving show, ord]
-
-(*let ( fvar_id_counter,
-      marked_fvar_ids,
-      marked_fvar_ids_insert_from_int,
-      fresh_fvar_id ) =
-  FVarId.fresh_marked_stateful_generator ()
-
-let reset_global_counters () = fvar_id_counter := FVarId.generator_zero
-  let reset_fvar_id_counter () = fvar_id_counter := FVarId.generator_zero*)
 
 (** The builtin types for the pure AST.
 
@@ -138,6 +129,7 @@ type pure_builtin_fun_id =
 
           We use this when using `ok ...` would result in let-bindings getting
           simplified away (in a backend like Lean). *)
+  | Discriminant  (** Discriminant read *)
 [@@deriving show, ord]
 
 (* Builtin declarations coming from external libraries.
@@ -180,7 +172,8 @@ type builtin_type_info = {
 type builtin_global_info = { global_name : string } [@@deriving show]
 
 type builtin_fun_info = {
-  filter_params : bool list option;
+  keep_params : bool list option;
+  keep_trait_clauses : bool list option;
   extract_name : string;
   can_fail : bool;
   stateful : bool;
@@ -211,7 +204,8 @@ type builtin_trait_decl_info = {
 
 type builtin_trait_impl_info = {
   extract_name : string;
-  filter_params : bool list option;
+  keep_params : bool list option;
+  keep_trait_clauses : bool list option;
 }
 [@@deriving show]
 
@@ -245,6 +239,7 @@ class ['self] iter_type_id_base =
     inherit [_] VisitorsRuntime.iter
     method visit_type_decl_id : 'env -> type_decl_id -> unit = fun _ _ -> ()
     method visit_builtin_ty : 'env -> builtin_ty -> unit = fun _ _ -> ()
+    method visit_overflow_mode : 'env -> overflow_mode -> unit = fun _ _ -> ()
   end
 
 (** Ancestor for map visitor for [ty] *)
@@ -256,6 +251,9 @@ class ['self] map_type_id_base =
       fun _ x -> x
 
     method visit_builtin_ty : 'env -> builtin_ty -> builtin_ty = fun _ x -> x
+
+    method visit_overflow_mode : 'env -> overflow_mode -> overflow_mode =
+      fun _ x -> x
   end
 
 (** Ancestor for reduce visitor for [ty] *)
@@ -267,6 +265,9 @@ class virtual ['self] reduce_type_id_base =
       fun _ _ -> self#zero
 
     method visit_builtin_ty : 'env -> builtin_ty -> 'a = fun _ _ -> self#zero
+
+    method visit_overflow_mode : 'env -> overflow_mode -> 'a =
+      fun _ _ -> self#zero
   end
 
 (** Ancestor for mapreduce visitor for [ty] *)
@@ -278,6 +279,9 @@ class virtual ['self] mapreduce_type_id_base =
       fun _ x -> (x, self#zero)
 
     method visit_builtin_ty : 'env -> builtin_ty -> builtin_ty * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_overflow_mode : 'env -> overflow_mode -> overflow_mode * 'a =
       fun _ x -> (x, self#zero)
   end
 
@@ -368,7 +372,8 @@ type ty =
   | TArrow of ty * ty
   | TTraitType of trait_ref * string
       (** The string is for the name of the associated type *)
-  | Error
+  | TNever
+  | TError
 
 and trait_ref = {
   trait_id : trait_instance_id;
@@ -396,12 +401,46 @@ and generic_args = {
   trait_refs : trait_ref list;
 }
 
+(** See the documentation of [E.binop] *)
+and binop =
+  | BitXor of integer_type
+  | BitAnd of integer_type
+  | BitOr of integer_type
+  | Eq of ty
+  | Ne of ty
+  | Lt of integer_type
+  | Le of integer_type
+  | Ge of integer_type
+  | Gt of integer_type
+  | Add of overflow_mode * integer_type
+  | Sub of overflow_mode * integer_type
+  | Mul of overflow_mode * integer_type
+  | Div of overflow_mode * integer_type
+  | Rem of overflow_mode * integer_type
+  | AddChecked of integer_type
+  | SubChecked of integer_type
+  | MulChecked of integer_type
+  | Shl of overflow_mode * integer_type * integer_type
+  | Shr of overflow_mode * integer_type * integer_type
+  | Cmp of integer_type
+
+and builtin_impl_data =
+  | BuiltinCopy
+  | BuiltinClone
+  | BuiltinDiscriminantKind
+      (** This one appears in [core::intrinsics::discriminant_value].
+
+          Note that in practice, we should never use this function or this
+          builtin trait impl (though they happen to appear in the crates
+          serialized by Charon). *)
+
 and trait_instance_id =
   | Self
   | TraitImpl of trait_impl_id * generic_args
   | Clause of trait_clause_id de_bruijn_var
     (* Note: the `de_bruijn_id`s are incorrect, see comment on `translate_region_binder` *)
   | ParentClause of trait_instance_id * trait_decl_id * trait_clause_id
+  | BuiltinOrAuto of builtin_impl_data
   | UnknownTrait of string
 [@@deriving
   show,
@@ -571,6 +610,7 @@ and variant = {
   variant_name : string;
   fields : field list;
   variant_attr_info : (attr_info[@opaque]);
+  discriminant : int;
 }
 
 and type_decl_kind = Struct of field list | Enum of variant list | Opaque
@@ -780,8 +820,9 @@ class ['self] iter_tpat_base =
     method visit_pure_builtin_fun_id : 'env -> pure_builtin_fun_id -> unit =
       fun _ _ -> ()
 
-    method visit_binop : 'env -> binop -> unit = fun _ _ -> ()
     method visit_field_id : 'env -> field_id -> unit = fun _ _ -> ()
+    method visit_ref_kind : 'env -> ref_kind -> unit = fun _ _ -> ()
+    method visit_mutability : 'env -> mutability -> unit = fun _ _ -> ()
   end
 
 (** Ancestor for {!map_tpat} visitor *)
@@ -815,8 +856,9 @@ class ['self] map_tpat_base =
         'env -> pure_builtin_fun_id -> pure_builtin_fun_id =
       fun _ x -> x
 
-    method visit_binop : 'env -> binop -> binop = fun _ x -> x
     method visit_field_id : 'env -> field_id -> field_id = fun _ x -> x
+    method visit_ref_kind : 'env -> ref_kind -> ref_kind = fun _ x -> x
+    method visit_mutability : 'env -> mutability -> mutability = fun _ x -> x
   end
 
 (** Ancestor for {!reduce_tpat} visitor *)
@@ -847,8 +889,9 @@ class virtual ['self] reduce_tpat_base =
     method visit_pure_builtin_fun_id : 'env -> pure_builtin_fun_id -> 'a =
       fun _ _ -> self#zero
 
-    method visit_binop : 'env -> binop -> 'a = fun _ _ -> self#zero
     method visit_field_id : 'env -> field_id -> 'a = fun _ _ -> self#zero
+    method visit_ref_kind : 'env -> ref_kind -> 'a = fun _ _ -> self#zero
+    method visit_mutability : 'env -> mutability -> 'a = fun _ _ -> self#zero
   end
 
 (** Ancestor for {!mapreduce_tpat} visitor *)
@@ -891,9 +934,13 @@ class virtual ['self] mapreduce_tpat_base =
         'env -> pure_builtin_fun_id -> pure_builtin_fun_id * 'a =
       fun _ x -> (x, self#zero)
 
-    method visit_binop : 'env -> binop -> binop * 'a = fun _ x -> (x, self#zero)
-
     method visit_field_id : 'env -> field_id -> field_id * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_ref_kind : 'env -> ref_kind -> ref_kind * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_mutability : 'env -> mutability -> mutability * 'a =
       fun _ x -> (x, self#zero)
   end
 
@@ -984,8 +1031,14 @@ and tpat = { pat : pat; ty : ty }
 type unop =
   | Not of integer_type option
   | Neg of integer_type
-  | Cast of literal_type * literal_type
+  | Cast of cast_kind
   | ArrayToSlice
+
+and cast_kind =
+  | CastLit of literal_type * literal_type
+  | CastRawPtr of (literal_type * mutability) * (literal_type * mutability)
+      (** When casting between raw pointers, we only support a subset of casts
+      *)
 
 and fn_ptr_kind =
   | FunId of llbc_fun_id
@@ -1010,10 +1063,7 @@ and fun_id =
       (** A function only used in the pure translation *)
 
 (** A function or an operation id *)
-and fun_or_op_id =
-  | Fun of fun_id
-  | Unop of unop
-  | Binop of binop * integer_type
+and fun_or_op_id = Fun of fun_id | Unop of unop | Binop of binop
 
 (** An identifier for an ADT constructor *)
 and adt_cons_id = { adt_id : type_id; variant_id : variant_id option }

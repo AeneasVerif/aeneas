@@ -440,7 +440,7 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
         match trait_ref.trait_id with
         | Self ->
             extract_trait_instance_id_if_not_self span ctx fmt no_params_tys
-              ~inside:false trait_ref.trait_id;
+              ~inside:false trait_ref.trait_decl_ref trait_ref.trait_id;
             F.pp_print_string fmt type_name
         | _ ->
             (* HOL4 doesn't have 1st class types *)
@@ -449,12 +449,14 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
               "Trait types are not supported yet when generating code for HOL4";
             extract_trait_ref span ctx fmt no_params_tys ~inside:false trait_ref;
             F.pp_print_string fmt ("." ^ add_brackets type_name))
-  | Error -> extract_ty_errors fmt
+  | TNever -> F.pp_print_string fmt "Never"
+  | TError -> extract_ty_errors fmt
 
 and extract_trait_ref (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) ~(inside : bool)
     (tr : trait_ref) : unit =
-  extract_trait_instance_id span ctx fmt no_params_tys ~inside tr.trait_id
+  extract_trait_instance_id span ctx fmt no_params_tys ~inside tr.trait_decl_ref
+    tr.trait_id
 
 and extract_trait_decl_ref (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) ~(inside : bool)
@@ -517,8 +519,8 @@ and extract_generic_args (span : Meta.span) (ctx : extraction_ctx)
     `<Self as Foo>::foo`). *)
 and extract_trait_instance_id_if_not_self (span : Meta.span)
     (ctx : extraction_ctx) (fmt : F.formatter)
-    (no_params_tys : TypeDeclId.Set.t) ~(inside : bool) (id : trait_instance_id)
-    : unit =
+    (no_params_tys : TypeDeclId.Set.t) ~(inside : bool)
+    (trait_ref : trait_decl_ref) (id : trait_instance_id) : unit =
   match id with
   | Self ->
       (* This can only happen inside a trait (not inside its methods) so there
@@ -526,22 +528,28 @@ and extract_trait_instance_id_if_not_self (span : Meta.span)
       ()
   | _ ->
       (* Other cases *)
-      extract_trait_instance_id span ctx fmt no_params_tys ~inside id;
+      extract_trait_instance_id span ctx fmt no_params_tys ~inside trait_ref id;
       F.pp_print_string fmt "."
 
 and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) ~(inside : bool)
-    (id : trait_instance_id) : unit =
+    (trait_ref : trait_decl_ref) (id : trait_instance_id) : unit =
   let add_brackets (s : string) =
     if backend () = Coq then "(" ^ s ^ ")" else s
   in
   match id with
-  | Self ->
+  | Self -> (
       (* This has a specific treatment depending on the item we're extracting
          (associated type, etc.). We should have caught this elsewhere. *)
       [%save_error] span "Unexpected occurrence of `Self`";
-      F.pp_print_string fmt "ERROR(\"Unexpected Self\")"
+      match backend () with
+      | Lean ->
+          F.pp_print_string fmt "sorry";
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt "/- Unexpected occurrence of Self -/"
+      | _ -> F.pp_print_string fmt "ERROR(\"Unexpected Self\")")
   | TraitImpl (id, generics) ->
+      let name = ctx_get_trait_impl span id ctx in
       (* Lookup the the information about the explicit/implicit parameters. *)
       let explicit =
         match TraitImplId.Map.find_opt id ctx.trans_trait_impls with
@@ -573,7 +581,31 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
             in
             (generics, explicit)
       in
-      let name = ctx_get_trait_impl span id ctx in
+      let generics =
+        match
+          TraitImplId.Map.find_opt id ctx.trait_impls_filter_trait_clauses_map
+        with
+        | None -> generics
+        | Some filter ->
+            if List.length filter = List.length generics.trait_refs then
+              let trait_refs =
+                List.filter_map
+                  (fun (b, x) -> if b then Some x else None)
+                  (List.combine filter generics.trait_refs)
+              in
+              { generics with trait_refs }
+            else (
+              [%save_error] span
+                ("Incorrect parameter filtering information: incorrect number \
+                  of trait clauses: the trait declaration has "
+                ^ string_of_int (List.length generics.trait_refs)
+                ^ ", the filtering information has: "
+                ^ string_of_int (List.length filter)
+                ^ "\nImplemented trait ref: "
+                ^ trait_decl_ref_to_string ctx trait_ref
+                ^ "\nExtracted trait name: " ^ name);
+              generics)
+      in
       let use_brackets = generics <> empty_generic_args && inside in
       if use_brackets then F.pp_print_string fmt "(";
       F.pp_print_string fmt name;
@@ -587,8 +619,23 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
       (* Use the trait decl id to lookup the name *)
       let name = ctx_get_trait_parent_clause span decl_id clause_id ctx in
       extract_trait_instance_id_if_not_self span ctx fmt no_params_tys
-        ~inside:true inst_id;
+        ~inside:true trait_ref inst_id;
       F.pp_print_string fmt (add_brackets name)
+  | BuiltinOrAuto data ->
+      let name =
+        match data with
+        | BuiltinClone -> "BuiltinClone"
+        | BuiltinCopy -> "BuiltinCopy"
+        | BuiltinDiscriminantKind ->
+            [%lwarning
+              "Extracted an unexpected builtin clause of kind `Discriminant`: \
+               this will not type-check"];
+            "BuiltinDiscriminantKind"
+      in
+      if inside then F.pp_print_string fmt "(";
+      F.pp_print_string fmt name;
+      extract_generic_args span ctx fmt no_params_tys trait_ref.decl_generics;
+      if inside then F.pp_print_string fmt ")"
   | UnknownTrait _ ->
       (* This is an error case *)
       [%admit_raise] span "Unexpected" fmt
@@ -1316,11 +1363,34 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
 
       Note that we need the [reducible] attribute in Lean, otherwise Lean sometimes
       doesn't manage to typecheck the expressions when it needs to coerce the type. *)
-   let attributes =
+   let reducible_attr =
      if is_tuple_struct_one_or_zero_field && backend () = Lean then
        [ "reducible" ]
      else []
    in
+   (* The attribute to automatically generate the [read_discriminant] function *)
+   let discr_attr =
+     match def.kind with
+     | Enum variants ->
+         (* Check if the discriminant values are exactly 0, 1, etc. or if the user
+            provided custom values. *)
+         if
+           List.for_all
+             (fun b -> b)
+             (List.mapi (fun i (v : variant) -> v.discriminant = i) variants)
+         then [ "discriminant" ]
+         else
+           [
+             "discriminant " ^ "["
+             ^ String.concat ","
+                 (List.map
+                    (fun (v : variant) -> string_of_int v.discriminant)
+                    variants)
+             ^ "]";
+           ]
+     | _ -> []
+   in
+   let attributes = reducible_attr @ discr_attr in
    extract_attributes def.item_meta.span ctx fmt def.item_meta.name None
      attributes "rust_type" []
      ~is_external:(not def.item_meta.is_local));

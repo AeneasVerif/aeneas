@@ -309,6 +309,7 @@ and value_aggregate =
       (** This is used when evaluating a const generic value: in the
           interpreter, we introduce a fresh symbolic value. *)
   | VaTraitConstValue of trait_ref * string  (** A trait constant value *)
+  | VaDiscriminant of symbolic_value  (** A discriminant read *)
 [@@deriving
   show,
   visitors

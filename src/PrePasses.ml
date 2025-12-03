@@ -884,6 +884,69 @@ let refresh_statement_ids (_ : crate) (f : fun_decl) : fun_decl =
   in
   { f with body }
 
+(** We simplify statements of the shape:
+    {[
+      x := from_str<'_>(const ("Error"));
+      panic(core::panicking::panic_fmt)
+
+        ~>
+
+      panic(core::panicking::panic_fmt)
+    ]}
+
+    TODO: remove *)
+let simplify_panics (crate : crate) (f : fun_decl) : fun_decl =
+  let pats =
+    [
+      "core::fmt::{core::fmt::Arguments<'a>}::from_str";
+      "core::fmt::{core::fmt::Arguments<'a>}::from_str_nonconst";
+    ]
+  in
+  let pats = List.map (fun p -> (NameMatcher.parse_pattern p, ())) pats in
+  (* TODO: we shouldn't need to use a names map *)
+  let names_map = NameMatcher.NameMatcherMap.of_list pats in
+  let match_ctx = Charon.NameMatcher.ctx_from_crate crate in
+  let is_from_str (d : fun_decl) =
+    let config = ExtractName.default_config in
+    NameMatcher.NameMatcherMap.mem match_ctx config d.item_meta.name names_map
+  in
+
+  let visitor =
+    object (self)
+      inherit [_] map_statement
+
+      method! visit_block env (block : block) =
+        let rec update (stl : statement list) : statement list =
+          match stl with
+          | [] -> []
+          | [ st0; st1 ] -> (
+              match (st0.kind, st1.kind) with
+              | ( Call
+                    { func = FnOpRegular { kind = FunId (FRegular fid); _ }; _ },
+                  Abort (Panic _) ) -> (
+                  match FunDeclId.Map.find_opt fid crate.fun_decls with
+                  | Some decl when is_from_str decl -> [ st1 ]
+                  | _ ->
+                      [
+                        self#visit_statement env st0;
+                        self#visit_statement env st1;
+                      ])
+              | _ ->
+                  [ self#visit_statement env st0; self#visit_statement env st1 ]
+              )
+          | st0 :: stl -> self#visit_statement env st0 :: update stl
+        in
+        { block with statements = update block.statements }
+    end
+  in
+
+  let body =
+    match f.body with
+    | None -> None
+    | Some body -> Some { body with body = visitor#visit_block () body.body }
+  in
+  { f with body }
+
 (** This micro-pass introduces intermediate assignments to access the global
     values in order to simplify the semantics.
 
@@ -1052,6 +1115,7 @@ let apply_passes (crate : crate) : crate =
         remove_shallow_borrows_storage_live_dead );
       ("decompose_str_borrows", decompose_str_borrows);
       ("unify_drops", unify_drops);
+      ("simplify_panics", simplify_panics);
       ("decompose_global_accesses", decompose_global_accesses);
       ("refresh_statement_ids", refresh_statement_ids);
     ]

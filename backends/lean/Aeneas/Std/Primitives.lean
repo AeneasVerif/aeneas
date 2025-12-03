@@ -226,6 +226,9 @@ end Test
 
 abbrev Str := String
 
+/-- The Never type in Rust -/
+inductive Never where
+
 instance SubtypeBEq [BEq α] (p : α → Prop) : BEq (Subtype p) where
   beq v0 v1 := v0.val == v1.val
 
@@ -240,17 +243,6 @@ def Option.ofResult {a : Type u} (x : Result a) :
   match x with
   | ok x => some x
   | _ => none
-
-/-!
-# Misc Primitive Types
--/
-
--- We don't really use raw pointers for now
-structure MutRawPtr (T : Type) where
-  v : T
-
-structure ConstRawPtr (T : Type) where
-  v : T
 
 end Std
 
