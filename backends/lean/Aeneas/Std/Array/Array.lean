@@ -59,10 +59,10 @@ example : Result (Array Int (Usize.ofNat 2)) := do
 @[reducible] instance {α : Type u} {n : Usize} : GetElem? (Array α n) Nat α (fun a i => i < a.val.length) where
   getElem? a i := getElem? a.val i
 
-@[simp, scalar_tac_simps, simp_lists_hyps_simps]
+@[simp, scalar_tac_simps, simp_lists_hyps_simps, grind =]
 theorem Array.getElem?_Nat_eq {α : Type u} {n : Usize} (v : Array α n) (i : Nat) : v[i]? = v.val[i]? := by rfl
 
-@[simp, scalar_tac_simps, simp_lists_hyps_simps]
+@[simp, scalar_tac_simps, simp_lists_hyps_simps, grind = _]
 theorem Array.getElem!_Nat_eq {α : Type u} [Inhabited α] {n : Usize} (v : Array α n) (i : Nat) : v[i]! = v.val[i]! := by
   simp only [instGetElem?ArrayNatLtLengthValListEqVal, List.getElem!_eq_getElem?_getD]; split <;> simp_all
   rfl
