@@ -78,8 +78,8 @@ build-bin-dir: build-bin build-lib build-runner
 	cp -rf backends/fstar/*.fst* bin/backends/fstar/
 	cp -rf backends/coq/*.v bin/backends/coq/
 
-.PHONY: extract-lean-builtins
-extract-lean-builtins:
+.PHONY: extract-lean-std
+extract-lean-std:
 	cd backends/lean && lake exe extract
 	cd src && dune fmt || true
 

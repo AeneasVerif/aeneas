@@ -46,6 +46,15 @@ let trait_ref_to_string = Print.EvalCtx.trait_ref_to_string
 let trait_impl_ref_to_string = Print.EvalCtx.trait_impl_ref_to_string
 let trait_decl_ref_to_string = Print.EvalCtx.trait_decl_ref_to_string
 
+(** Check that a type is supported.
+
+    For now, we support types which do not contain nested mutable borrows. *)
+let check_ty_is_supported file line (span : Meta.span) (ctx : eval_ctx)
+    (ty : ty) : unit =
+  Errors.cassert file line span
+    (TypesUtils.ty_is_supported (Some span) ctx.type_ctx.type_infos ty)
+    ("Unsupported use of borrows found in type:\n" ^ ty_to_string ctx ty)
+
 let fn_ptr_to_string (ctx : eval_ctx) (fn_ptr : fn_ptr) : string =
   let env = Print.Contexts.eval_ctx_to_fmt_env ctx in
   Print.Types.fn_ptr_to_string env fn_ptr

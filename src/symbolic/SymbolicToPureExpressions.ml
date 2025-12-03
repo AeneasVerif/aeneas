@@ -137,7 +137,7 @@ let eval_ctx_to_symbolic_assignments_info (ctx : bs_ctx) (ectx : C.eval_ctx) :
   !info
 
 let translate_error (span : Meta.span option) (msg : string) : texpr =
-  { e = EError (span, msg); ty = Error }
+  { e = EError (span, msg); ty = TError }
 
 (** Small helper.
 
@@ -442,39 +442,56 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
             let dest = mk_tpat_from_fvar dest_mplace dest in
             (ctx, Unop (Neg int_ty), effect_info, args, [], dest)
         | _ -> [%craise] ctx.span "Unreachable")
-    | S.Unop (E.Cast cast_kind) -> begin
-        match cast_kind with
-        | CastScalar (src_ty, tgt_ty) ->
-            (* Note that cast can fail *)
-            let effect_info =
-              {
-                can_fail = not (Config.backend () = Lean);
-                can_diverge = false;
-                is_rec = false;
-              }
-            in
-            let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
-            let dest = mk_tpat_from_fvar dest_mplace dest in
-            (ctx, Unop (Cast (src_ty, tgt_ty)), effect_info, args, [], dest)
-        | CastFnPtr _ -> [%craise] ctx.span "TODO: function casts"
-        | CastUnsize _ ->
-            (* We shouldn't get there: this case should have been detected before
+    | S.Unop (E.Cast kind) -> begin
+        let kind, can_fail =
+          match kind with
+          | CastScalar (src_ty, tgt_ty) ->
+              (CastLit (src_ty, tgt_ty), not (Config.backend () = Lean))
+          | CastRawPtr (src_ty, tgt_ty) ->
+              (* We only support casts between pointers to literal types for now *)
+              let get_ty (ty : T.ty) =
+                match ty with
+                | TRawPtr (TLiteral lit, rkind) ->
+                    let mut =
+                      match rkind with
+                      | RMut -> Mut
+                      | RShared -> Const
+                    in
+                    (lit, mut)
+                | _ ->
+                    let env = bs_ctx_to_fmt_env ctx in
+                    [%craise] ctx.span
+                      ("Raw ptr casts are only supported between pointers to \
+                        literal types; found: "
+                      ^ Charon.PrintExpressions.cast_kind_to_string env kind)
+              in
+              let src_ty, src_mut = get_ty src_ty in
+              let tgt_ty, tgt_mut = get_ty tgt_ty in
+              (CastRawPtr ((src_ty, src_mut), (tgt_ty, tgt_mut)), true)
+          | CastFnPtr _ -> [%craise] ctx.span "TODO: function casts"
+          | CastUnsize _ ->
+              (* We shouldn't get there: this case should have been detected before
                and handled in [translate_cast_unsize] *)
-            [%internal_error] ctx.span
-        | CastRawPtr _ -> [%craise] ctx.span "Unsupported: raw ptr casts"
-        | CastTransmute _ -> [%craise] ctx.span "Unsupported: transmute"
-        | CastConcretize _ ->
-            [%craise] ctx.span "Unsupported: `dyn Trait` concretization"
+              [%internal_error] ctx.span
+          | CastTransmute _ -> [%craise] ctx.span "Unsupported: transmute"
+          | CastConcretize _ ->
+              [%craise] ctx.span "Unsupported: `dyn Trait` concretization"
+        in
+        (* Note that casts can fail *)
+        let effect_info = { can_fail; can_diverge = false; is_rec = false } in
+        let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
+        let dest = mk_tpat_from_fvar dest_mplace dest in
+        (ctx, Unop (Cast kind), effect_info, args, [], dest)
       end
     | S.Binop binop -> (
+        [%ldebug
+          "- binop: " ^ binop_to_string binop ^ "\n- args:\n"
+          ^ Print.list_to_string ~sep:"\n"
+              (fun (e : texpr) ->
+                texpr_to_string ctx e ^ " : " ^ pure_ty_to_string ctx e.ty)
+              args];
         match args with
         | [ arg0; arg1 ] ->
-            let int_ty0 = ty_as_integer ctx.span arg0.ty in
-            let int_ty1 = ty_as_integer ctx.span arg1.ty in
-            (match binop with
-            (* The Rust compiler accepts bitshifts for any integer type combination for ty0, ty1 *)
-            | E.Shl _ | E.Shr _ -> ()
-            | _ -> [%sanity_check] ctx.span (int_ty0 = int_ty1));
             let effect_info =
               {
                 can_fail = ExpressionsUtils.binop_can_fail binop;
@@ -484,7 +501,48 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
             in
             let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
             let dest = mk_tpat_from_fvar dest_mplace dest in
-            (ctx, Binop (binop, int_ty0), effect_info, args, [], dest)
+            let get_single_int_ty () =
+              let int_ty0 = ty_as_integer ctx.span arg0.ty in
+              let int_ty1 = ty_as_integer ctx.span arg1.ty in
+              [%sanity_check] ctx.span (int_ty0 = int_ty1);
+              int_ty0
+            in
+            let binop =
+              match binop with
+              | Expressions.BitXor -> BitXor (get_single_int_ty ())
+              | Expressions.BitAnd -> BitAnd (get_single_int_ty ())
+              | Expressions.BitOr -> BitOr (get_single_int_ty ())
+              | Expressions.Eq ->
+                  [%sanity_check] ctx.span (arg0.ty = arg1.ty);
+                  Eq arg0.ty
+              | Expressions.Ne ->
+                  [%sanity_check] ctx.span (arg0.ty = arg1.ty);
+                  Ne arg0.ty
+              | Expressions.Lt -> Lt (get_single_int_ty ())
+              | Expressions.Le -> Le (get_single_int_ty ())
+              | Expressions.Ge -> Ge (get_single_int_ty ())
+              | Expressions.Gt -> Gt (get_single_int_ty ())
+              | Expressions.Add om -> Add (om, get_single_int_ty ())
+              | Expressions.Sub om -> Sub (om, get_single_int_ty ())
+              | Expressions.Mul om -> Mul (om, get_single_int_ty ())
+              | Expressions.Div om -> Div (om, get_single_int_ty ())
+              | Expressions.Rem om -> Rem (om, get_single_int_ty ())
+              | Expressions.AddChecked -> AddChecked (get_single_int_ty ())
+              | Expressions.SubChecked -> SubChecked (get_single_int_ty ())
+              | Expressions.MulChecked -> MulChecked (get_single_int_ty ())
+              | Expressions.Shl om ->
+                  let ty0 = ty_as_integer ctx.span arg0.ty in
+                  let ty1 = ty_as_integer ctx.span arg1.ty in
+                  Shl (om, ty0, ty1)
+              | Expressions.Shr om ->
+                  let ty0 = ty_as_integer ctx.span arg0.ty in
+                  let ty1 = ty_as_integer ctx.span arg1.ty in
+                  Shr (om, ty0, ty1)
+              | Expressions.Offset ->
+                  [%craise] ctx.span "Not supported: `binop::offset`"
+              | Expressions.Cmp -> Cmp (get_single_int_ty ())
+            in
+            (ctx, Binop binop, effect_info, args, [], dest)
         | _ -> [%craise] ctx.span "Unreachable")
   in
   let func = { id = FunOrOp fun_id; generics } in
@@ -1155,6 +1213,17 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
         let qualif_id = TraitConst (trait_ref, const_name) in
         let qualif = { id = qualif_id; generics = empty_generic_args } in
         { e = Qualif qualif; ty = var.ty }
+    | VaDiscriminant adt_sv ->
+        (* Discriminant read *)
+        let adt_ty = ctx_translate_fwd_ty ctx adt_sv.sv_ty in
+        let qualif_id = FunOrOp (Fun (Pure Discriminant)) in
+        let qualif =
+          { id = qualif_id; generics = mk_generic_args_from_types [ adt_ty ] }
+        in
+        let qualif : texpr =
+          { e = Qualif qualif; ty = mk_arrow adt_ty var.ty }
+        in
+        [%add_loc] mk_app ctx.span qualif (symbolic_value_to_texpr ctx adt_sv)
   in
 
   (* Make the let-binding *)

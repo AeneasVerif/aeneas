@@ -10,6 +10,7 @@ namespace issue_440_type_error
 
 /- [issue_440_type_error::PeanoNum]
    Source: 'tests/src/issue-440-type-error.rs', lines 3:0-6:1 -/
+@[discriminant]
 inductive PeanoNum where
 | Zero : PeanoNum
 | Succ : PeanoNum → PeanoNum

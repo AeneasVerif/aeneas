@@ -136,8 +136,10 @@ let () =
            (true, "linfo");
            (true, "ldebug");
            (true, "ltrace");
+           (true, "lwarning");
            (true, "sinfo");
            (true, "sdebug");
            (true, "strace");
+           (true, "swarning");
          ])
     "expand_loggers"

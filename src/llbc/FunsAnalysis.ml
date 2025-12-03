@@ -124,7 +124,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
 
           method! visit_Call env call =
             (match call.func with
-            | FnOpMove _ ->
+            | FnOpDynamic _ ->
                 (* Ignoring this: we lookup the called function upon creating
                    the closure *)
                 ()

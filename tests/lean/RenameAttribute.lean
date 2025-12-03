@@ -47,6 +47,7 @@ def BoolFn (T : Type) (x : Bool) : Result Bool := do
 
 /- [rename_attribute::SimpleEnum]
    Source: 'tests/src/rename_attribute.rs', lines 37:0-42:1 -/
+@[discriminant]
 inductive VariantsTest where
 | Variant1 : VariantsTest
 | SecondVariant : VariantsTest

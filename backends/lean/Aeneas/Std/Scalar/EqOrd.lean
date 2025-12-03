@@ -1,5 +1,6 @@
 import Aeneas.Std.Scalar.Core
 import Aeneas.Std.Scalar.Elab
+import Aeneas.Std.Core.Cmp
 
 namespace Aeneas.Std
 

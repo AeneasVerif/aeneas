@@ -23,7 +23,7 @@ let span_data_to_string (span_data : Meta.span_data) =
   ^ "-"
   ^ loc_to_string span_data.end_loc
 
-let span_to_string (span : Meta.span) =
+let raw_span_to_string (span : Meta.span) =
   let generated_from =
     match span.generated_from_span with
     | None -> ""
@@ -31,7 +31,9 @@ let span_to_string (span : Meta.span) =
         "; this code is generated from a macro invocation at: "
         ^ span_data_to_string span
   in
-  "Source: " ^ span_data_to_string span.data ^ generated_from
+  span_data_to_string span.data ^ generated_from
+
+let span_to_string (span : Meta.span) = "Source: " ^ raw_span_to_string span
 
 let format_error_message (span : Meta.span option) (msg : string) =
   let span =

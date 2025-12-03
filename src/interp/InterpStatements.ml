@@ -411,9 +411,9 @@ let eval_builtin_function_call_concrete (config : config) (span : Meta.span)
   let args = call.args in
   let dest = call.dest in
   match call.func with
-  | FnOpMove _ ->
-      (* Closure case: TODO *)
-      [%craise] span "Closures are not supported yet"
+  | FnOpDynamic _ ->
+      (* Function pointer case: TODO *)
+      [%craise] span "Function pointers are not supported yet"
   | FnOpRegular func ->
       let generics = func.generics in
       (* Sanity check: we don't fully handle the const generic vars environment
@@ -613,9 +613,9 @@ let eval_non_builtin_function_call_symbolic_inst (span : Meta.span)
     (call : call) (ctx : eval_ctx) :
     fn_ptr_kind * generic_args * fun_decl * inst_fun_sig =
   match call.func with
-  | FnOpMove _ ->
-      (* Closure case: TODO *)
-      [%craise] span "Closures are not supported yet"
+  | FnOpDynamic _ ->
+      (* Function pointer case: TODO *)
+      [%craise] span "Function pointers are not supported yet"
   | FnOpRegular func ->
       let fid, generics, tr_self =
         match func.kind with
@@ -1257,7 +1257,7 @@ and eval_function_call_concrete (config : config) (span : Meta.span)
     (call : call) : stl_cm_fun =
  fun ctx ->
   match call.func with
-  | FnOpMove _ -> [%craise] span "Closures are not supported yet"
+  | FnOpDynamic _ -> [%craise] span "Function pointers are not supported yet"
   | FnOpRegular func -> (
       match func.kind with
       | FunId (FRegular fid) ->
@@ -1276,7 +1276,7 @@ and eval_function_call_concrete (config : config) (span : Meta.span)
 and eval_function_call_symbolic (config : config) (span : Meta.span)
     (call : call) : stl_cm_fun =
   match call.func with
-  | FnOpMove _ -> [%craise] span "Closures are not supported yet"
+  | FnOpDynamic _ -> [%craise] span "Function pointers are not supported yet"
   | FnOpRegular func -> (
       match func.kind with
       | FunId (FRegular _) | TraitMethod _ ->
@@ -1292,7 +1292,7 @@ and eval_non_builtin_function_call_concrete (config : config) (span : Meta.span)
   let args = call.args in
   let dest = call.dest in
   match call.func with
-  | FnOpMove _ -> [%craise] span "Closures are not supported yet"
+  | FnOpDynamic _ -> [%craise] span "Function pointers are not supported yet"
   | FnOpRegular func ->
       let generics = func.generics in
       (* Sanity check: we don't fully handle the const generic vars environment
@@ -1381,13 +1381,10 @@ and eval_non_builtin_function_call_symbolic (config : config) (span : Meta.span)
   in
   (* Sanity check: same number of inputs *)
   [%sanity_check] span (List.length call.args = List.length def.signature.inputs);
-  (* Sanity check: no nested borrows, borrows in ADTs, etc. *)
-  [%cassert] span
-    (List.for_all
-       (fun ty ->
-         not (ty_has_nested_borrows (Some span) ctx.type_ctx.type_infos ty))
-       (inst_sg.output :: inst_sg.inputs))
-    "Nested borrows are not supported yet";
+  (* Sanity check: the class of borrows present in the type is supported *)
+  List.iter
+    ([%add_loc] check_ty_is_supported span ctx)
+    (inst_sg.output :: inst_sg.inputs);
   (* Evaluate the function call *)
   eval_function_call_symbolic_from_inst_sig config def.item_meta.span func
     def.signature inst_sg generics call.args call.dest ctx

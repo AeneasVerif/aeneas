@@ -1636,7 +1636,13 @@ let mk_visited_params_visitor () =
     ]}
 
     The [input_tys] are the types of the input arguments, in case we are
-    translating a function. *)
+    translating a function.
+
+    TODO: we allow filtering trait clauses when providing builtin information,
+    and this may have an impact on which parameters should be explicit or not.
+    For now, we only filter trait clauses of the shape [A : Allocator], while
+    filtering the corresponding argument at the same time, so this should not be
+    a problem, but it may be in the future. *)
 let compute_explicit_info (generics : Pure.generic_params) (input_tys : ty list)
     : explicit_info =
   let visitor, implicit_tys, implicit_cgs = mk_visited_params_visitor () in
@@ -2646,3 +2652,13 @@ let get_tuple_size (e : texpr) : int option =
   match f.e with
   | Qualif { id = AdtCons { adt_id = TTuple; _ }; _ } -> Some (List.length args)
   | _ -> None
+
+let binop_can_fail : binop -> bool = function
+  | BitXor _ | BitAnd _ | BitOr _ | Eq _ | Lt _ | Le _ | Ne _ | Ge _ | Gt _
+  | Add (OWrap, _)
+  | Sub (OWrap, _)
+  | Mul (OWrap, _)
+  | Shl (OWrap, _, _)
+  | Shr (OWrap, _, _)
+  | AddChecked _ | SubChecked _ | MulChecked _ | Cmp _ -> false
+  | Div _ | Rem _ | Add _ | Sub _ | Mul _ | Shl _ | Shr _ -> true

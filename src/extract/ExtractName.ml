@@ -5,6 +5,9 @@ open Charon.NameMatcher
 let log = Logging.extract_log
 let match_with_trait_decl_refs = Config.match_patterns_with_trait_decl_refs
 
+let default_config : match_config =
+  { map_vars_to_vars = true; match_with_trait_decl_refs }
+
 let all_int_names =
   [
     "usize";
@@ -29,7 +32,7 @@ module NameMatcherMap = struct
 
   type 'a t = 'a NMM.t
 
-  let config = { map_vars_to_vars = true; match_with_trait_decl_refs }
+  let config = default_config
   let empty = NMM.empty
 
   let find_opt (ctx : 'stt ctx) (name : Types.name) (m : 'a t) : 'a option =

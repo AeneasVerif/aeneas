@@ -8,6 +8,67 @@ open Errors
 (** The local logger *)
 let log = Logging.symbolic_to_pure_log
 
+let translate_fun_decl_body (ctx : bs_ctx) (signature : fun_sig) (body : S.expr)
+    : fun_body =
+  let def = ctx.fun_decl in
+  let def_id = def.def_id in
+  [%ltrace
+    name_to_string ctx def.item_meta.name
+    ^ "\n- body:\n"
+    ^ bs_ctx_expr_to_string ctx body];
+
+  let effect_info = get_fun_effect_info ctx (FunId (FRegular def_id)) None in
+  let mk_return (ctx : bs_ctx) v =
+    match v with
+    | None ->
+        raise
+          (Failure
+             "Unexpected: reached a return expression without value in a \
+              function forward expression")
+    | Some output ->
+        (* Wrap in a result if the function can fail *)
+        if effect_info.can_fail then mk_result_ok_texpr ctx.span output
+        else output
+  in
+  let mk_panic =
+    (* TODO: we should use a [Fail] function *)
+    let mk_output output_ty =
+      mk_result_fail_texpr_with_error_id ctx.span error_failure_id output_ty
+    in
+    let back_tys = compute_back_tys ctx.sg.fun_ty in
+    let back_tys = List.filter_map (fun x -> x) back_tys in
+    let tys =
+      if ctx.sg.fun_ty.fwd_info.ignore_output then back_tys
+      else ctx.sg.fun_ty.fwd_output :: back_tys
+    in
+    let output = mk_simpl_tuple_ty tys in
+    mk_output output
+  in
+  let ctx = { ctx with mk_return = Some mk_return; mk_panic = Some mk_panic } in
+  let body = translate_expr body ctx in
+  (* Sanity check *)
+  type_check_texpr ctx body;
+  (* Group the inputs together *)
+  let inputs = ctx.forward_inputs in
+  (* Sanity check *)
+  [%ltrace
+    name_to_string ctx def.item_meta.name
+    ^ "\n- ctx.forward_inputs: "
+    ^ String.concat ", " (List.map show_fvar ctx.forward_inputs)
+    ^ "\n- signature.inputs: "
+    ^ String.concat ", " (List.map (pure_ty_to_string ctx) signature.inputs)
+    ^ "\n- inputs: "
+    ^ String.concat ", " (List.map (fvar_to_string ctx) inputs)
+    ^ "\n- body:\n" ^ texpr_to_string ctx body];
+  (* TODO: we need to normalize the types *)
+  if !Config.type_check_pure_code then
+    [%sanity_check] def.item_meta.span
+      (List.for_all
+         (fun (var, ty) -> (var : fvar).ty = ty)
+         (List.combine inputs signature.inputs));
+  let inputs = List.map (mk_tpat_from_fvar None) inputs in
+  mk_closed_fun_body def.item_meta.span inputs body
+
 let translate_fun_decl (ctx : bs_ctx) (body : S.expr option) : fun_decl =
   (* Translate *)
   let def = ctx.fun_decl in
@@ -23,69 +84,13 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expr option) : fun_decl =
   let body =
     match body with
     | None -> None
-    | Some body ->
-        [%ltrace
-          name_to_string ctx def.item_meta.name
-          ^ "\n- body:\n"
-          ^ bs_ctx_expr_to_string ctx body];
-
-        let effect_info =
-          get_fun_effect_info ctx (FunId (FRegular def_id)) None
-        in
-        let mk_return (ctx : bs_ctx) v =
-          match v with
-          | None ->
-              raise
-                (Failure
-                   "Unexpected: reached a return expression without value in a \
-                    function forward expression")
-          | Some output ->
-              (* Wrap in a result if the function can fail *)
-              if effect_info.can_fail then mk_result_ok_texpr ctx.span output
-              else output
-        in
-        let mk_panic =
-          (* TODO: we should use a [Fail] function *)
-          let mk_output output_ty =
-            mk_result_fail_texpr_with_error_id ctx.span error_failure_id
-              output_ty
-          in
-          let back_tys = compute_back_tys ctx.sg.fun_ty in
-          let back_tys = List.filter_map (fun x -> x) back_tys in
-          let tys =
-            if ctx.sg.fun_ty.fwd_info.ignore_output then back_tys
-            else ctx.sg.fun_ty.fwd_output :: back_tys
-          in
-          let output = mk_simpl_tuple_ty tys in
-          mk_output output
-        in
-        let ctx =
-          { ctx with mk_return = Some mk_return; mk_panic = Some mk_panic }
-        in
-        let body = translate_expr body ctx in
-        (* Sanity check *)
-        type_check_texpr ctx body;
-        (* Group the inputs together *)
-        let inputs = ctx.forward_inputs in
-        (* Sanity check *)
-        [%ltrace
-          name_to_string ctx def.item_meta.name
-          ^ "\n- ctx.forward_inputs: "
-          ^ String.concat ", " (List.map show_fvar ctx.forward_inputs)
-          ^ "\n- signature.inputs: "
-          ^ String.concat ", "
-              (List.map (pure_ty_to_string ctx) signature.inputs)
-          ^ "\n- inputs: "
-          ^ String.concat ", " (List.map (fvar_to_string ctx) inputs)
-          ^ "\n- body:\n" ^ texpr_to_string ctx body];
-        (* TODO: we need to normalize the types *)
-        if !Config.type_check_pure_code then
-          [%sanity_check] def.item_meta.span
-            (List.for_all
-               (fun (var, ty) -> (var : fvar).ty = ty)
-               (List.combine inputs signature.inputs));
-        let inputs = List.map (mk_tpat_from_fvar None) inputs in
-        Some (mk_closed_fun_body def.item_meta.span inputs body)
+    | Some body -> (
+        try Some (translate_fun_decl_body ctx signature body)
+        with CFailure _ ->
+          (* We could not translate the body because of an error (note that we do
+           not need to rethrow the error as it was already registered and will
+           be showed to the user) *)
+          None)
   in
 
   (* Note that for now, the loops are still *inside* the function body (and we
@@ -177,26 +182,46 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
   } : A.trait_decl =
     trait_decl
   in
-  let span = Some item_meta.span in
+  let span = item_meta.span in
+  let opt_span = Some span in
   let type_infos = ctx.type_ctx.type_infos in
-  let translate_ty = translate_fwd_ty span type_infos in
+  let translate_ty = translate_fwd_ty opt_span type_infos in
   let name =
     Print.Types.name_to_string
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
       item_meta.name
   in
-  let generics, preds = translate_generic_params span llbc_generics in
+  let generics, preds = translate_generic_params opt_span llbc_generics in
   let explicit_info = compute_explicit_info generics [] in
   let parent_clauses =
-    List.map (translate_trait_clause span) llbc_parent_clauses
+    List.map (translate_trait_clause opt_span) llbc_parent_clauses
   in
-  if types <> [] then
+  (* Lookup the builtin information, if there is *)
+  let builtin_info =
+    match_name_find_opt ctx trait_decl.item_meta.name
+      (ExtractBuiltin.builtin_trait_decls_map ())
+  in
+  if types <> [] && builtin_info = None then
     (* Most associated types are removed by Charon's `--remove-associated-types`. *)
-    [%craise_opt_span] span
-      "Found an unhandled trait associated type; this can happen with \
-       mutually-recursive traits as well as GATs. Aeneas cannot handle such \
-       types today.";
-  let types = [] in
+    [%lwarning
+      "Found an associated type in a trait declaration; trait associated types \
+       are usually lifted to become parameters of the trait definition, but \
+       this can fail with mutually-recursive traits as well as GATs. Aeneas \
+       cannot handle such types today, and the generated code will likely be \
+       incorrect." ^ "\nTrait declaration: " ^ name ^ "\nSource: "
+      ^ Errors.span_to_string span];
+  let types =
+    List.map
+      (fun (t : A.trait_assoc_ty T.binder) ->
+        [%cassert] span
+          (t.binder_params = TypesUtils.empty_generic_params)
+          "Can not extract trait associated types with parameters";
+        let t = t.binder_value in
+        [%cassert] span (t.implied_clauses = [])
+          "Can not extract trait associated types with implied trait clauses";
+        t.name)
+      types
+  in
   let consts =
     List.map
       (fun (c : A.trait_assoc_const) -> (c.name, translate_ty c.ty))
@@ -205,13 +230,8 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
   let methods =
     List.map
       (fun (m : A.trait_method T.binder) ->
-        (m.binder_value.name, translate_trait_method span translate_ty m))
+        (m.binder_value.name, translate_trait_method opt_span translate_ty m))
       methods
-  in
-  (* Lookup the builtin information, if there is *)
-  let builtin_info =
-    match_name_find_opt ctx trait_decl.item_meta.name
-      (ExtractBuiltin.builtin_trait_decls_map ())
   in
   {
     def_id;
