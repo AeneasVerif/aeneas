@@ -373,17 +373,25 @@ theorem nat_subset_eq_iff (p : ℕ → Prop) (x y : {n : ℕ // p n}) : x = y �
 theorem lt_mul_lt_le (x y a b : ℕ) (h0 : x < a) (h1 : y < b) :
   x * y ≤ (a - 1) * (b - 1) := by apply Nat.le_mul_le; omega
 
+grind_pattern lt_mul_lt_le => x * y, x < a, y < b
+
 @[scalar_tac x * y]
 theorem le_mul_lt_le (x y a b : ℕ) (h0 : x ≤ a) (h1 : y < b) :
   x * y ≤ a * (b - 1) := by apply Nat.le_mul_le; omega
+
+grind_pattern le_mul_lt_le => x * y, x ≤ a, y < b
 
 @[scalar_tac x * y]
 theorem lt_mul_le_le (x y a b : ℕ) (h0 : x < a) (h1 : y ≤ b) :
   x * y ≤ (a - 1) * b := by apply Nat.le_mul_le; omega
 
+grind_pattern lt_mul_le_le => x * y, x < a, y ≤ b
+
 @[scalar_tac x * y]
 theorem le_mul_le_le (x y a b : ℕ) (h0 : x ≤ a) (h1 : y ≤ b) :
   x * y ≤ a * b := by apply Nat.le_mul_le; omega
+
+grind_pattern le_mul_le_le => x * y, x ≤ a, y ≤ b
 
 /-!
 Not activating those lemmas for now, because there are a lot of them
