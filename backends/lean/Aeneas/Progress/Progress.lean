@@ -628,9 +628,15 @@ def evalProgressCore (async : Bool) (keep keepPretty : Option Name) (withArg: Op
   let singleAssumptionTacDtree ← singleAssumptionTacPreprocess
   let grindTac : TacticM Unit := do
     withTraceNode `Progress (fun _ => pure m!"Attempting to solve with `grind`") do
-    -- TODO: It would be better to have a concrete Syntax node instead of the
-    -- mkNullNode placeholder
+    /- TODO: It would be better to have a concrete Syntax node instead of the
+       mkNullNode placeholder -/
     let config ← elabGrindConfig mkNullNode
+    /- We reduce the search space but increase the number of instances (we need this when the
+       context is big).
+
+       TODO: an issue is that `omega` used to split all disjunctions.
+       TODO: make those options of `progress` -/
+    let config := { config with splits := 3, gen := 2, instances := 3000 }
     discard <| evalGrindCore (← `(Progress)) config none none none
   let customAssumTac : TacticM Unit := do
     withTraceNode `Progress (fun _ => pure m!"Attempting to solve with `singleAssumptionTac`") do
