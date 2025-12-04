@@ -127,20 +127,37 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
   (* Check if two contexts are equivalent - modulo alpha conversion on the
      existentially quantified borrows/abstractions/symbolic values.
   *)
-  let equiv_ctxs (ctx1 : eval_ctx) (ctx2 : eval_ctx) : bool =
+  let equiv_ctxs (i : int) (ctx1 : eval_ctx) (ctx2 : eval_ctx) : bool =
     [%ltrace "equiv_ctx:"];
     update_fixed_ids [ ctx2 ];
     let lookup_shared_value _ = [%craise] span "Unreachable" in
-    Option.is_some
-      (match_ctxs span ~check_equiv:true !fixed_ids lookup_shared_value
-         lookup_shared_value ctx1 ctx2)
+    (* If there is just a single iteration left it means we *should* have reached
+       a fixed point (otherwise we will fail). In case the fail hard option is on,
+       we directly call [match_ctxs]: this way exceptions will not be caught and
+       the user will see a full call stack, which eases deboguing. *)
+    if i = 1 && !Config.fail_hard then
+      let _ =
+        match_ctxs span ~check_equiv:true !fixed_ids lookup_shared_value
+          lookup_shared_value ctx1 ctx2
+      in
+      true
+    else
+      Option.is_some
+        (try_match_ctxs span ~check_equiv:true !fixed_ids lookup_shared_value
+           lookup_shared_value ctx1 ctx2)
   in
   let max_num_iter = Config.loop_fixed_point_max_num_iters in
+  (* Keep a trace of the subsequent contexts we computed *)
+  let joined_ctxs = ref [ ctx ] in
   let rec compute_fixed_point (ctx : eval_ctx) (i0 : int) (i : int) : eval_ctx =
-    if i = 0 then
+    if i = 0 then (
+      [%ltrace
+        "Joined contexts:\n"
+        ^ String.concat "\n\n"
+            (List.map eval_ctx_to_string (List.rev !joined_ctxs))];
       [%craise] span
         ("Could not compute a loop fixed point in " ^ string_of_int i0
-       ^ " iterations")
+       ^ " iterations"))
     else
       (* Evaluate the loop body to register the different contexts upon reentry *)
       let ctx_resl, _ = eval_loop_body ctx in
@@ -199,7 +216,10 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
         ^ "\n"];
 
       (* Check if we reached a fixed point: if not, iterate *)
-      if equiv_ctxs ctx ctx1 then ctx1 else compute_fixed_point ctx1 i0 (i - 1)
+      if equiv_ctxs i ctx ctx1 then ctx1
+      else (
+        joined_ctxs := ctx1 :: !joined_ctxs;
+        compute_fixed_point ctx1 i0 (i - 1))
   in
   let fp = compute_fixed_point ctx max_num_iter max_num_iter in
 

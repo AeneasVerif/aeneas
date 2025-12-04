@@ -1322,8 +1322,9 @@ let match_ctx_with_target (config : config) (span : Meta.span)
       { empty_ids_sets with aids = ctx_get_frozen_abs_set src_ctx }
     in
     match
-      match_ctxs span ~check_equiv:false ~check_kind:false ~check_can_end:false
-        fixed_ids lookup_in_src lookup_in_joined src_ctx joined_ctx
+      try_match_ctxs span ~check_equiv:false ~check_kind:false
+        ~check_can_end:false fixed_ids lookup_in_src lookup_in_joined src_ctx
+        joined_ctx
     with
     | Some ctx -> ctx
     | None -> [%craise] span "Could not match the contexts"
