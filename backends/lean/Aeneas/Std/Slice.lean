@@ -508,7 +508,7 @@ def core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut {T : Type}
 
 theorem _SliceIndexRangeFromUsizeSlice.index_mut.test {T} (s : Slice T) (r : core.ops.range.RangeFrom Usize) (h : r.start ≤ s.length) :
   match core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut r s with
-  | ok (s1, back) =>
+  | .ok (s1, back) =>
     back s1 = s
   | _ => False := by
   unfold core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut
@@ -545,10 +545,11 @@ theorem Slice.clone_length {T : Type} {clone : T → Result T} {s s' : Slice T} 
   simp [Slice.clone] at h
   simp [List.clone] at h
   split at h <;> simp_all
-  rename_i heq
-  have := List.mapM_Result_length heq
-  cases s'; simp_all
-  cases h; simp_all
+  . rename_i heq
+    have := List.mapM_Result_length heq
+    cases s'; simp_all
+    cases h; simp_all
+  . rename_i e _; cases e
 
 @[progress]
 theorem Slice.clone_spec {T : Type} {clone : T → Result T} {s : Slice T} (h : ∀ x ∈ s.val, clone x = ok x) :
