@@ -55,7 +55,10 @@
         aeneas-check-lean-builtins = pkgs.stdenv.mkDerivation rec {
           name = "aeneas-check-lean-builtins";
           src = ./.;
-          buildInputs = [ charon.packages.${system}.rustToolchain ];
+          buildInputs = [
+            pkgs.elan
+            charon.packages.${system}.rustToolchain
+          ];
           buildPhase = ''
             make extract-lean-std
             rm -rf ./src/_build
