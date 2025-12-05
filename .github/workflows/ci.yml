@@ -25,6 +25,7 @@ jobs:
       - run: nix build -L .#checks.x86_64-linux.aeneas-check-tidiness
       - run: nix build -L .#checks.x86_64-linux.check-charon-pin
       - run: nix build -L .#aeneas
+      - run: nix build -L .#checks.x86_64-linux.aeneas-check-lean-builtins
       - run: nix build -L .#checks.x86_64-linux.default
 
   diff_lean_files:
