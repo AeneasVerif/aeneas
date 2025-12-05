@@ -25,8 +25,13 @@ jobs:
       - run: nix build -L .#checks.x86_64-linux.aeneas-check-tidiness
       - run: nix build -L .#checks.x86_64-linux.check-charon-pin
       - run: nix build -L .#aeneas
-      - run: nix build -L .#checks.x86_64-linux.aeneas-check-lean-builtins
       - run: nix build -L .#checks.x86_64-linux.default
+      - run: nix develop --comand bash -c
+          "make extract-lean-std &&
+           if git diff --quiet src/extract/; then
+             echo 'ERROR: Lean builtins extraction does not match Aeneas Lean std library. Run `make extract-lean-std` to regenerate ExtractBuiltinLean.ml.'
+             exit 1
+           fi"
 
   diff_lean_files:
     runs-on: [self-hosted, linux, nix]
