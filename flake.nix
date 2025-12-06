@@ -52,6 +52,24 @@
           installPhase = "touch $out";
         };
 
+        aeneas-check-lean-builtins = pkgs.stdenv.mkDerivation rec {
+          name = "aeneas-check-lean-builtins";
+          src = ./.;
+          buildInputs = [
+            pkgs.elan
+            charon.packages.${system}.rustToolchain
+          ];
+          buildPhase = ''
+            make extract-lean-std
+            rm -rf ./src/_build
+            if ! diff --no-dereference -ru . ${src}; then
+              echo 'ERROR: Lean builtins extraction does not match Aeneas Lean std library. Run `make extract-lean-std` to regenerate ExtractBuiltinLean.ml.'
+              exit 1
+            fi
+          '';
+          installPhase = "touch $out";
+        };
+
         aeneas = ocamlPackages.buildDunePackage {
           pname = "aeneas";
           version = "0.1.0";
@@ -249,6 +267,7 @@
             aeneas-verify-fstar
             aeneas-verify-hol4
             aeneas-check-tidiness
+            aeneas-check-lean-builtins
             check-charon-pin;
         };
       });
