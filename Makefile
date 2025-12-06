@@ -83,6 +83,12 @@ extract-lean-std:
 	cd backends/lean && lake exe extract
 	cd src && dune fmt || true
 
+.PHONY: extract-lean-std-cached
+extract-lean-std-cached:
+	cd backends/lean && lake exe cache get && lake exe extract
+	cd src && dune fmt || true
+
+
 # TODO: using ppx (in aeneas-ppx) breaks this command
 .PHONY: doc
 doc:
