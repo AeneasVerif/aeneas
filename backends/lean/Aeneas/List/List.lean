@@ -476,9 +476,10 @@ theorem mapM_Result_length {α : Type w} {β : Type u} {f : α → Std.Result β
       simp
     . rename_i hd tl ih
       cases hf : f hd <;> simp_all
-      replace ih := ih _ _ h
-      simp [ih]
-      omega
+      . replace ih := ih _ _ h
+        simp [ih]
+        omega
+      . rename_i e; cases e
   have := hind l l' [] h
   simp [this]
 

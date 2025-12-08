@@ -581,7 +581,7 @@ syntax progressArgs := ("keep" binderIdent)? ("with" term)? ("as" " ⟨ " binder
 
 def parseProgressArgs
 : TSyntax ``Aeneas.Progress.progressArgs -> TacticM (Option Name × Option Expr × Array (Option Name) × Option Syntax.Tactic)
-| args@`(progressArgs| $[keep $x]? $[with $pspec:term]? $[as ⟨ $ids,* ⟩]? $[by $byTac]? ) =>  withMainContext do
+| args@`(progressArgs| $[keep $x]? $[with $pspec:term]? $[as ⟨ $ids,* ⟩]? $[by $byTac]? ) => withMainContext do
   trace[Progress] "Progress arguments: {args.raw}"
   let keep?: Option Name ← Option.sequence <| x.map fun
     | `(binderIdent| _) => mkFreshAnonPropUserName

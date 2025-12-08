@@ -36,10 +36,10 @@ instance {ty} : HAdd (IScalar ty) (IScalar ty) (Result (IScalar ty)) where
 
 theorem UScalar.add_equiv {ty} (x y : UScalar ty) :
   match x + y with
-  | ok z => x.val + y.val < 2^ty.numBits ∧
+  | .ok z => x.val + y.val < 2^ty.numBits ∧
     z.val = x.val + y.val ∧
     z.bv = x.bv + y.bv
-  | fail _ => ¬ (UScalar.inBounds ty (x.val + y.val))
+  | .fail _ => ¬ (UScalar.inBounds ty (x.val + y.val))
   | _ => ⊥ := by
   have : x + y = add x y := by rfl
   rw [this]
@@ -54,11 +54,11 @@ theorem UScalar.add_equiv {ty} (x y : UScalar ty) :
 
 theorem IScalar.add_equiv {ty} (x y : IScalar ty) :
   match x + y with
-  | ok z =>
+  | .ok z =>
     IScalar.inBounds ty (x.val + y.val) ∧
     z.val = x.val + y.val ∧
     z.bv = x.bv + y.bv
-  | fail _ => ¬ (IScalar.inBounds ty (x.val + y.val))
+  | .fail _ => ¬ (IScalar.inBounds ty (x.val + y.val))
   | _ => ⊥ := by
   have : x + y = add x y := by rfl
   rw [this]
