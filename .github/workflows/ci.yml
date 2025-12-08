@@ -43,6 +43,13 @@ jobs:
               echo 'lean files were changed in this PR.'
               echo "CHECK_LEAN=true" >> "$GITHUB_ENV"
           fi
+          if git diff origin/main --quiet -- src/extract/ExtractLeanBuiltins.ml; then
+            echo 'ExtractLeanBuiltins.ml not modified in this PR'
+            echo "CHECK_LEAN_EXTRACT=false" >> "$GITHUB_ENV"
+          else
+            echo 'ExtractLeanBuiltins.ml modified in this PR'
+            echo "CHECK_LEAN_EXTRACT=true" >> "$GITHUB_ENV"
+          fi
     outputs:
       check_lean: ${{ env.CHECK_LEAN }}
 
@@ -54,6 +61,8 @@ jobs:
       - if: needs.diff_lean_files.outputs.check_lean == 'true'
         # Lean cannot run its tests in the nix sandbox because `elan` will download things
         run: nix develop --command bash -c "cd tests/lean && make"
+      - if: needs.diff_lean_files.outputs.check_lean == 'true' || needs.diff_lean_files.outputs.check_lean_extract == 'true'
+        run: nix develop --command ./scripts/check-extract-lean-builtins.sh
 
   charon-pin-is-forward:
     runs-on: [self-hosted, linux, nix]
