@@ -6,7 +6,7 @@ require mathlib from git
   "https://github.com/leanprover-community/mathlib4.git" @ "v4.25.2"
 
 require «nola-lean» from git
-  "https://github.com/AeneasVerif/nola-lean"
+  "git@github.com:AeneasVerif/nola-lean.git"
 
 package «aeneas» {}
 

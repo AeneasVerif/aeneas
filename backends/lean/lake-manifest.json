@@ -1,7 +1,7 @@
 {"version": "1.1.0",
  "packagesDir": ".lake/packages",
  "packages":
- [{"url": "https://github.com/AeneasVerif/nola-lean",
+ [{"url": "git@github.com:AeneasVerif/nola-lean.git",
    "type": "git",
    "subDir": null,
    "scope": "",
