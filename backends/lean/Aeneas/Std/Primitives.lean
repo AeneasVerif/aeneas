@@ -59,11 +59,19 @@ deriving Repr, BEq
 
 open Error
 
+structure Addr where
+  blockId : Nat
+  offset : Nat
+
+inductive Event : Type 0 → Type 1 where
+| Read {α:Type 0} (ptr:Addr) : Event α
+| Write {α:Type 0} (ptr:Addr) (v:α) : Event Unit
+
 inductive Result (α : Type u) where
   | ok (v: α): Result α
   | fail (e: Error): Result α
+  | act {β} (ev:Event β) (k:β → Result α): Result α
   | div
-deriving Repr, BEq
 
 open Result
 
@@ -81,12 +89,12 @@ instance Result_Nonempty (α : Type u) : Nonempty (Result α) :=
 def ok? {α: Type u} (r: Result α): Bool :=
   match r with
   | ok _ => true
-  | fail _ | div => false
+  | act _ _ | fail _ | div => false
 
 def div? {α: Type u} (r: Result α): Bool :=
   match r with
   | div => true
-  | ok _ | fail _ => false
+  | ok _ | act _ _ | fail _ => false
 
 def massert (b : Prop) [Decidable b] : Result Unit :=
   if b then ok () else fail assertionFailure
@@ -96,7 +104,6 @@ macro "prove_eval_global" : tactic => `(tactic| simp (failIfUnchanged := false) 
 @[global_simps]
 def eval_global {α: Type u} (x: Result α) (_: ok? x := by prove_eval_global) : α :=
   match x with
-  | fail _ | div => by contradiction
   | ok x => x
 
 @[simp]
@@ -117,6 +124,7 @@ def Result.ofOption {a : Type u} (x : Option a) (e : Error) : Result a :=
 def bind {α : Type u} {β : Type v} (x: Result α) (f: α → Result β) : Result β :=
   match x with
   | ok v  => f v
+  | act ev k => act ev (fun r => bind (k r) f)
   | fail v => fail v
   | div => div
 
@@ -131,6 +139,8 @@ instance : Pure Result where
 @[simp] theorem bind_ok (x : α) (f : α → Result β) : bind (.ok x) f = f x := by simp [bind]
 @[simp] theorem bind_fail (x : Error) (f : α → Result β) : bind (.fail x) f = .fail x := by simp [bind]
 @[simp] theorem bind_div (f : α → Result β) : bind .div f = .div := by simp [bind]
+@[simp] theorem bind_act (ev : Event α) (k:α → Result β) (f : β → Result χ)
+  : bind (.act ev k) f = .act ev (fun r => bind (k r) f) := by simp [bind]
 
 @[simp] theorem bind_tc_ok (x : α) (f : α → Result β) :
   (do let y ← .ok x; f y) = f x := by simp [Bind.bind, bind]
@@ -174,6 +184,7 @@ noncomputable instance : MonoBind Result where
   bind_mono_right h := by
     cases ‹Result _›
     · exact h _
+    · exact FlatOrder.rel.refl
     · exact FlatOrder.rel.refl
     · exact FlatOrder.rel.refl
 
