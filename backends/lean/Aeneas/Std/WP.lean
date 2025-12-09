@@ -33,7 +33,10 @@ def spec_general (x:Result α) (p:Post α) :=
 def spec (x:Result α) (p:Post α) :=
   theta x p
 
-theorem progress_thm (m:Result α) (k:α -> Result β) (Pₘ:Post α) (Pₖ:Post β) :
+@[simp, grind =]
+theorem spec_ok (x : α) : spec (.ok x) p ↔ p x := by simp [spec, theta, wp_return]
+
+theorem spec_bind (m:Result α) (k:α -> Result β) (Pₘ:Post α) (Pₖ:Post β) :
   spec m Pₘ →
     (forall x, Pₘ x → spec (k x) Pₖ) →
       spec (Std.bind m k) Pₖ := by
@@ -47,8 +50,20 @@ theorem progress_thm (m:Result α) (k:α -> Result β) (Pₘ:Post α) (Pₖ:Post
   · simp
     apply Hm
 
-@[simp]
-theorem spec_ok (x : α) : spec (.ok x) p ↔ p x := by simp [spec, theta, wp_return]
+theorem spec_mono (m:Result α) (h : spec m P₀):
+  (∀ x, P₀ x → P₁ x) → spec m P₁ := by
+  intros HMonPost
+  revert h
+  unfold spec theta wp_return
+  cases m <;> grind
+
+theorem progress_spec_exists (m:Result α) (P:Post α) :
+  spec m P ↔ (∃ y, m = .ok y /\ P y) :=
+  by
+    cases m
+    · simp [spec, theta, wp_return]
+    · simp [spec, theta]
+    · simp [spec, theta]
 
 scoped syntax:lead (name := specSyntax) term:lead " ⦃" "⇓" term " => " term "⦄" : term
 
@@ -56,6 +71,33 @@ macro_rules
   | `($x ⦃⇓ $r => $P⦄)  => `(Aeneas.Std.WP.spec $x (fun $r => $P))
 
 example : .ok 0 ⦃⇓ r => r = 0⦄ := by simp
+
+def add1 (x : Nat) := Result.ok (x + 1, x + 2)
+theorem  add1_spec (x : Nat) : add1 x ⦃⇓ (y, z) => y = x + 1 ∧ z = x + 2⦄ :=
+  by simp [add1]
+
+
+example (x : Nat) :
+  (do
+    let (y, z) ← add1 x
+    add1 y) ⦃⇓ (y, _) => y = x + 2 ⦄ := by
+    -- progress as ⟨ y, z ⟩
+    apply spec_bind
+    . apply add1_spec
+    intro tmp h
+    split at h
+    rename_i tmp y z
+    clear tmp
+    -- progress as ⟨ y1, z1⟩
+    apply spec_mono
+    . apply add1_spec
+    intro tmp h
+    split at h
+    rename_i tmp y1 z1
+    clear tmp
+    --
+    grind
+
 
 end Aeneas.Std.WP
 

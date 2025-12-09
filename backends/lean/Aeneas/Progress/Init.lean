@@ -3,6 +3,7 @@ import AeneasMeta.Utils
 import Aeneas.Std.Primitives
 import AeneasMeta.Extensions
 import Aeneas.Progress.Trace
+import Aeneas.Std.WP
 
 namespace Aeneas
 
@@ -173,8 +174,26 @@ section Methods
     withLocalDeclsD ⟨ tys ⟩ k
 end Methods
 
-def getProgressSpecFunArgsExpr (isGoal : Bool) (th : Expr) : MetaM Expr :=
-  withProgressSpec isGoal th (fun d => do pure d.fArgsExpr)
+/- Analyze a goal or a progress theorem to decompose its arguments.
+
+  ProgressSpec theorems should be of the following shape:
+  ```
+  ∀ x1 ... xn, H1 → ... Hn → spec (f x1 ... xn) P
+  ```
+-/
+def getProgressSpecFunArgsExpr (ty : Expr) :
+  MetaM Expr := do
+  let ty := ty.consumeMData
+  unless ← isProp ty do
+    throwError "Expected a proposition, got {←inferType ty}"
+  -- ty == ∀ xs, spec (f x1 ... xn) P
+  let (xs, xs_bi, ty₂) ← forallMetaTelescope ty
+  trace[Progress] "Universally quantified arguments and assumptions: {xs}"
+  -- ty₂ == spec (f x1 ... xn) P
+  let (spec?, args) := ty.consumeMData.withApp (fun f args => (f, args))
+  if h: spec?.isConstOf ``Std.WP.spec ∧ args.size = 3
+  then pure args[1] -- this is `f x1 ... xn`
+  else throwError "Expected to be a `spec (f x1 ... xn) P`, got {ty}"
 
 structure Rules where
   rules : DiscrTree Name
@@ -225,7 +244,7 @@ private def saveProgressSpecFromThm (ext : Extension) (attrKind : AttributeKind)
       -- Normalize to eliminate the let-bindings
       let ty ← normalizeLetBindings type
       trace[Progress] "Theorem after normalization (to eliminate the let bindings): {ty}"
-      let fExpr ← getProgressSpecFunArgsExpr false ty
+      let fExpr ← getProgressSpecFunArgsExpr ty
       trace[Progress] "Registering spec theorem for expr: {fExpr}"
       -- Convert the function expression to a discrimination tree key
       DiscrTree.mkPath fExpr)
