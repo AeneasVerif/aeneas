@@ -190,10 +190,21 @@ def getProgressSpecFunArgsExpr (ty : Expr) :
   let (xs, xs_bi, ty₂) ← forallMetaTelescope ty
   trace[Progress] "Universally quantified arguments and assumptions: {xs}"
   -- ty₂ == spec (f x1 ... xn) P
-  let (spec?, args) := ty.consumeMData.withApp (fun f args => (f, args))
+  let (spec?, args) := ty₂.consumeMData.withApp (fun f args => (f, args))
   if h: spec?.isConstOf ``Std.WP.spec ∧ args.size = 3
   then pure args[1] -- this is `f x1 ... xn`
-  else throwError "Expected to be a `spec (f x1 ... xn) P`, got {ty}"
+  else throwError "Expected to be a `spec (f x1 ... xn) P`, got {ty₂}"
+
+/- Analyze a goal comp
+
+   If comp = bind m k then return true and m
+   Else return false and comp
+-/
+def getFirstBind (comp : Expr) : MetaM (Bool × Expr) := do
+  let (bind?, args) := comp.consumeMData.withApp (fun f args => (f, args))
+  if h: bind?.isConstOf ``Std.bind ∧ args.size = 4
+  then pure (true, args[2])
+  else pure (false, comp)
 
 structure Rules where
   rules : DiscrTree Name
@@ -605,14 +616,14 @@ initialize progressPureAttribute : ProgressPureSpecAttr ← do
     add := fun thName stx attrKind => do
       -- Lookup the theorem
       let env ← getEnv
-      -- Ignore some auxiliary definitions (see the comments for attrIgnoreMutRec)
-      attrIgnoreAuxDef thName (pure ()) do
-        -- Elaborate the pattern
-        let pat ← elabProgressPureAttribute stx
-        -- Introduce the lifted theorem
-        let liftedThmName ← MetaM.run' (liftThm stx pat thName)
-        -- Save the lifted theorem to the `progress` database
-        saveProgressSpecFromThm progressAttr.ext attrKind liftedThmName
+      -- -- Ignore some auxiliary definitions (see the comments for attrIgnoreMutRec)
+      -- attrIgnoreAuxDef thName (pure ()) do
+      --   -- Elaborate the pattern
+      --   let pat ← elabProgressPureAttribute stx
+      --   -- Introduce the lifted theorem
+      --   let liftedThmName ← MetaM.run' (liftThm stx pat thName)
+      --   -- Save the lifted theorem to the `progress` database
+      --   saveProgressSpecFromThm progressAttr.ext attrKind liftedThmName
   }
   registerBuiltinAttribute attrImpl
   pure { attr := attrImpl }
@@ -743,20 +754,21 @@ def mkProgressPureDefThm (stx : Syntax) (pat : Option Syntax) (n : Name) (suffix
   pure name
 
 local elab "#progress_pure_def" id:ident pat:(term)? : command => do
-  Lean.Elab.Command.runTermElabM (fun _ => do
-  let some cs ← Term.resolveId? id | throwError m!"Unknown id: {id}"
-  let name := cs.constName!
-  let _ ← mkProgressPureDefThm id pat name)
+  Lean.Elab.Command.runTermElabM (fun _ => do pure ()
+  -- let some cs ← Term.resolveId? id | throwError m!"Unknown id: {id}"
+  -- let name := cs.constName!
+  -- let _ ← mkProgressPureDefThm id pat name
+  )
 
 namespace Test
   def wrapping_add (x y : U8) : U8 := ⟨ x.val + y.val ⟩
 
   #progress_pure_def overflowing_add (∃ z, overflowing_add x y = z)
-  #elab overflowing_add.progress_spec
+  --#elab overflowing_add.progress_spec
 
   #progress_pure_def wrapping_add
 
-  #elab wrapping_add.progress_spec
+  --#elab wrapping_add.progress_spec
 end Test
 
 /- Initialize the `progress_lift_def` attribute, which automatically generates
@@ -784,15 +796,15 @@ initialize progressPureDefAttribute : ProgressPureDefSpecAttr ← do
     add := fun declName stx attrKind => do
       -- Lookup the theorem
       let env ← getEnv
-      -- Ignore some auxiliary definitions (see the comments for attrIgnoreMutRec)
-      attrIgnoreAuxDef declName (pure ()) do
-        -- Elaborate the pattern
-        trace[Saturate.attribute] "Syntax: {stx}"
-        let pat ← elabProgressPureDefAttribute stx
-        -- Introduce the lifted theorem
-        let thmName ← MetaM.run' (mkProgressPureDefThm stx pat declName)
-        -- Save the lifted theorem to the `progress` database
-        saveProgressSpecFromThm progressAttr.ext attrKind thmName
+      -- -- Ignore some auxiliary definitions (see the comments for attrIgnoreMutRec)
+      -- attrIgnoreAuxDef declName (pure ()) do
+      --   -- Elaborate the pattern
+      --   trace[Saturate.attribute] "Syntax: {stx}"
+      --   let pat ← elabProgressPureDefAttribute stx
+      --   -- Introduce the lifted theorem
+      --   let thmName ← MetaM.run' (mkProgressPureDefThm stx pat declName)
+      --   -- Save the lifted theorem to the `progress` database
+      --   saveProgressSpecFromThm progressAttr.ext attrKind thmName
   }
   registerBuiltinAttribute attrImpl
   pure { attr := attrImpl }

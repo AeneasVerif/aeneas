@@ -57,13 +57,21 @@ theorem spec_mono (m:Result α) (h : spec m P₀):
   unfold spec theta wp_return
   cases m <;> grind
 
-theorem progress_spec_exists (m:Result α) (P:Post α) :
-  spec m P ↔ (∃ y, m = .ok y /\ P y) :=
+theorem progress_spec_equiv_exists (m:Result α) (P:Post α) :
+  spec m P ↔ (∃ y, m = .ok y ∧ P y) :=
   by
     cases m
     · simp [spec, theta, wp_return]
     · simp [spec, theta]
     · simp [spec, theta]
+
+theorem progress_spec_exists {m:Result α} {P:Post α} :
+  spec m P → (∃ y, m = .ok y ∧ P y) := by
+  exact (progress_spec_equiv_exists m P).1
+
+theorem progress_exists_spec {m:Result α} {P:Post α} :
+  (∃ y, m = .ok y ∧ P y) → spec m P := by
+  exact (progress_spec_equiv_exists m P).2
 
 scoped syntax:lead (name := specSyntax) term:lead " ⦃" "⇓" term " => " term "⦄" : term
 
@@ -79,7 +87,7 @@ theorem  add1_spec (x : Nat) : add1 x ⦃⇓ (y, z) => y = x + 1 ∧ z = x + 2�
 
 example (x : Nat) :
   (do
-    let (y, z) ← add1 x
+    let (y, _) ← add1 x
     add1 y) ⦃⇓ (y, _) => y = x + 2 ⦄ := by
     -- progress as ⟨ y, z ⟩
     apply spec_bind

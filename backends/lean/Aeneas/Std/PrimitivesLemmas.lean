@@ -6,7 +6,7 @@ namespace Aeneas.Std
 
 open Result
 
-@[progress]
+-- @[progress] TODO
 theorem massert_spec (b : Prop) [Decidable b] (h : b) :
   massert b = ok () := by
   simp [massert, *]

@@ -8,7 +8,7 @@ import Aeneas.List.List
 
 namespace Aeneas.Std
 
-open Result Error core.ops.range
+open Result Error core.ops.range WP
 
 attribute [-simp] List.getElem!_eq_getElem?_getD
 
@@ -46,11 +46,11 @@ def Array.subslice {α : Type u} {n : Usize} (a : Array α n) (r : Range Usize) 
 @[progress]
 theorem Array.subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array α n) (r : Range Usize)
   (h0 : r.start.val < r.end_.val) (h1 : r.end_.val ≤ a.val.length) :
-  ∃ s, subslice a r = ok s ∧
+  subslice a r ⦃⇓ s =>
   s.val = a.val.slice r.start.val r.end_.val ∧
-  (∀ i, i + r.start.val < r.end_.val → s.val[i]! = a.val[r.start.val + i]!)
+  (∀ i, i + r.start.val < r.end_.val → s.val[i]! = a.val[r.start.val + i]!) ⦄
   := by
-  simp only [subslice, true_and, h0, h1, ↓reduceIte, ok.injEq, exists_eq_left', true_and]
+  simp only [subslice, true_and, h0, h1, ↓reduceIte, spec_ok, true_and]
   intro i _
   have := List.getElem!_slice r.start.val r.end_.val i a.val (by scalar_tac)
   simp only [this]
@@ -71,13 +71,14 @@ def Array.update_subslice {α : Type u} {n : Usize} (a : Array α n) (r : Range 
 @[progress]
 theorem Array.update_subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array α n) (r : Range Usize) (s : Slice α)
   (_ : r.start.val < r.end_.val) (_ : r.end_.val ≤ a.length) (_ : s.length = r.end_.val - r.start.val) :
-  ∃ na, update_subslice a r s = ok na ∧
+  update_subslice a r s ⦃⇓ na =>
   (∀ i, i < r.start.val → na[i]! = a[i]!) ∧
   (∀ i, r.start.val ≤ i → i < r.end_.val → na[i]! = s[i - r.start.val]!) ∧
-  (∀ i, r.end_.val ≤ i → i < n.val → na[i]! = a[i]!) := by
+  (∀ i, r.end_.val ≤ i → i < n.val → na[i]! = a[i]!) ⦄ := by
   simp [update_subslice]
-  split <;> simp only [reduceCtorEq, false_and, exists_false, ok.injEq, exists_eq_left']
-  . simp_lists
+  split
+  . simp [spec_ok]
+    simp_lists
   . scalar_tac
 
 @[rust_fun "core::array::{core::ops::index::Index<[@T; @N], @I, @O>}::index"]

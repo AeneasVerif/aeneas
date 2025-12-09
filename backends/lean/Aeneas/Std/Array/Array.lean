@@ -6,7 +6,7 @@ import Aeneas.Std.Core.Default
 
 namespace Aeneas.Std
 
-open Result Error
+open Result Error WP
 
 /-!
 # Array
@@ -94,7 +94,7 @@ def Array.index_usize {α : Type u} {n : Usize} (v: Array α n) (i: Usize) : Res
 def Array.repeat {α : Type u} (n : Usize) (x : α) : Array α n :=
   ⟨ List.replicate n.val x, by simp_all ⟩
 
-@[progress]
+-- @[progress] TODO
 theorem Array.repeat_spec {α : Type u} (n : Usize) (x : α) :
   ∃ a, Array.repeat n x = a ∧ a.val = List.replicate n.val x := by
   simp [Array.repeat]
@@ -107,11 +107,12 @@ theorem Array.repeat_spec {α : Type u} (n : Usize) (x : α) :
 @[progress]
 theorem Array.index_usize_spec {α : Type u} {n : Usize} [Inhabited α] (v: Array α n) (i: Usize)
   (hbound : i.val < v.length) :
-  ∃ x, v.index_usize i = ok x ∧ x = v.val[i.val]! := by
+  (v.index_usize i) ⦃⇓ x => x = v.val[i.val]! ⦄ := by
   simp only [index_usize]
   simp at *
   split <;> simp_all only [List.Vector.length_val, List.getElem?_eq_getElem, Option.some.injEq,
     Option.getD_some, reduceCtorEq]
+  simp
 
 def Array.set {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) : Array α n :=
   ⟨ v.val.set i.val x, by have := v.property; simp [*] ⟩
@@ -142,8 +143,7 @@ def Array.update {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) : 
 @[progress]
 theorem Array.update_spec {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x : α)
   (hbound : i.val < v.length) :
-  ∃ nv, v.update i x = ok nv ∧
-  nv = v.set i x
+  v.update i x ⦃⇓ nv => nv = v.set i x ⦄
   := by
   simp only [update, set]
   simp at *
@@ -157,10 +157,10 @@ def Array.index_mut_usize {α : Type u} {n : Usize} (v: Array α n) (i: Usize) :
 @[progress]
 theorem Array.index_mut_usize_spec {α : Type u} {n : Usize} [Inhabited α] (v: Array α n) (i: Usize)
   (hbound : i.val < v.length) :
-  ∃ x, v.index_mut_usize i = ok (x, set v i) ∧
-  x = v.val[i.val]! := by
+  v.index_mut_usize i ⦃⇓ (x, y) => y = set v i ∧
+  x = v.val[i.val]! ⦄ := by
   simp only [index_mut_usize, Bind.bind, bind]
-  have ⟨ x, h ⟩ := index_usize_spec v i hbound
+  have ⟨ x, h ⟩ := progress_spec_exists (index_usize_spec v i hbound)
   simp [h]
 
 @[simp]
@@ -182,9 +182,9 @@ theorem Array.clone_length {α : Type u} {n : Usize} (clone : α → Result α) 
 
 @[progress]
 theorem Array.clone_spec {α : Type u} {n : Usize} {clone : α → Result α} {s : Array α n} (h : ∀ x ∈ s.val, clone x = ok x) :
-  Array.clone clone s = ok s := by
+  Array.clone clone s ⦃⇓ s' => s' = s ⦄ := by
   simp only [Array.clone]
-  have ⟨ l', h ⟩ := List.clone_spec h
+  have ⟨ l', h ⟩ := progress_spec_exists (List.clone_spec h)
   simp [h]
 
 @[rust_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone"]
@@ -195,9 +195,10 @@ def core.array.CloneArray.clone
 @[progress]
 theorem core.array.CloneArray.clone_spec {T : Type} {N : Usize} (cloneInst : core.clone.Clone T) (a : Array T N)
   (h : ∀ x ∈ a.val, cloneInst.clone x = ok x) :
-  core.array.CloneArray.clone cloneInst a = ok a := by
+  core.array.CloneArray.clone cloneInst a ⦃⇓ a' => a = a' ⦄:= by
   unfold clone
-  rw [Array.clone_spec h]
+  have := progress_spec_exists (Array.clone_spec h)
+  grind
 
 @[rust_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone_from"]
 def core.array.CloneArray.clone_from {T : Type} {N : Usize} (cloneInst : core.clone.Clone T)
@@ -207,9 +208,10 @@ def core.array.CloneArray.clone_from {T : Type} {N : Usize} (cloneInst : core.cl
 @[progress]
 theorem core.array.CloneArray.clone_from_spec {T : Type} {N : Usize} (cloneInst : core.clone.Clone T)
   (self source : Array T N) (h : ∀ x ∈ source.val, cloneInst.clone x = ok x) :
-  core.array.CloneArray.clone_from cloneInst self source = ok source := by
+  core.array.CloneArray.clone_from cloneInst self source ⦃⇓ source' => source = source' ⦄ := by
   unfold clone_from
-  rw [Array.clone_spec h]
+  have := progress_spec_exists (Array.clone_spec h)
+  grind
 
 @[reducible, rust_trait_impl "core::clone::Clone<[@T; @N]>"]
 def core.clone.CloneArray {T : Type} (N : Usize)
