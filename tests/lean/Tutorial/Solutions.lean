@@ -321,29 +321,10 @@ theorem add_no_overflow_loop_spec
   . progress as ⟨ yv ⟩
     progress as ⟨ xv ⟩
     progress as ⟨ sum ⟩
-    . -- This precondition is not proven automatically
-      have := hNoOverflow i.val (by scalar_tac) (by scalar_tac)
-      scalar_tac
     progress as ⟨ i' ⟩
     progress as ⟨ x1 ⟩
-    . -- This precondition is not proven automatically
-      intro j h0 h1
-      simp_all
-      -- Simplifying (x.update ...).index:
-      have := List.getElem!_set_ne x.val i.val j sum (by scalar_tac)
-      simp [*]
-      apply hNoOverflow j (by scalar_tac) (by scalar_tac)
-    -- Postcondition
-    /- Note that you don't have to manually call the lemmas `toInt_update`
-        and `toInt_drop` below if you first do:
-        ```
-        have : i.val < x.length := by scalar_tac
-        ```
-        (simp_all will automatically apply the lemmas and prove the
-        the precondition sby using the context)
-      -/
     simp_all
-    scalar_eq_nf
+    grind
   . simp_all
 termination_by x.length - i.val
 decreasing_by scalar_decr_tac
@@ -356,7 +337,7 @@ theorem add_no_overflow_spec (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
   x'.length = y.length ∧
   toInt x' = toInt x + toInt y := by
   unfold add_no_overflow
-  progress as ⟨ x' ⟩ <;>
+  progress as ⟨ x' ⟩
   simp_all
 
 /-- The proof about `add_with_carry_loop` -/

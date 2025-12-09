@@ -852,9 +852,9 @@ theorem Node.insert_in_left_spec
           progress as ⟨ tree', hInv', hTree'Set, hTree'Height ⟩
           -- TODO: syntax for preconditions
           . fsimp_all
-          . fsimp_all
           . fsimp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]
             scalar_tac
+          . fsimp_all [Node.balanceFactor]
           . fsimp [*]
             split_conjs
             . -- set reasoning
@@ -879,7 +879,6 @@ theorem Node.insert_in_left_spec
             progress as ⟨ tree', hInv', hTree'Set, hTree'Height ⟩
             -- TODO: syntax for preconditions
             . fsimp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac
-            . fsimp_all
             . fsimp_all
             . fsimp_all [Node.invAux, Node.balanceFactor]; scalar_tac
             . -- End of the proof
@@ -953,8 +952,8 @@ theorem Node.insert_in_right_spec
           progress as ⟨ tree', hInv', hTree'Set, hTree'Height ⟩
           -- TODO: syntax for preconditions
           . fsimp_all
-          . fsimp_all
           . fsimp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac
+          . fsimp_all [Node.balanceFactor]
           . -- End of the proof
             fsimp [*]
             split_conjs
@@ -980,7 +979,6 @@ theorem Node.insert_in_right_spec
             progress as ⟨ tree', hInv', hTree'Set, hTree'Height ⟩
             -- TODO: syntax for preconditions
             . fsimp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac
-            . fsimp_all
             . fsimp_all
             . fsimp_all [Node.invAux, Node.balanceFactor]; scalar_tac
             . -- End of the proof
