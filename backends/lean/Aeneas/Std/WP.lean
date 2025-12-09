@@ -4,6 +4,65 @@ import Std.Do
 namespace Aeneas.Std.WP
 
 open Std
+
+def Post α := (α -> Prop)
+def Pre := Prop
+
+def Wp α := Post α → Pre
+
+def wp_return (x:α) : Wp α := fun p => p x
+
+def wp_bind (m:Wp α) (k:α -> Wp β) : Wp β :=
+  fun p => m (fun r => k r p)
+
+def wp_ord (wp1 wp2:Wp α) :=
+  forall p, wp1 p → wp2 p
+
+def theta (m:Result α) : Wp α :=
+  match m with
+  | .ok x => wp_return x
+  | .fail _ => fun _ => False
+  | .div => fun _ => False
+
+def p2wp (post:Post α) : Wp α :=
+  fun p => forall r, post r → p r
+
+def spec_general (x:Result α) (p:Post α) :=
+  wp_ord (p2wp p) (theta x)
+
+def spec (x:Result α) (p:Post α) :=
+  theta x p
+
+theorem progress_thm (m:Result α) (k:α -> Result β) (Pₘ:Post α) (Pₖ:Post β) :
+  spec m Pₘ →
+    (forall x, Pₘ x → spec (k x) Pₖ) →
+      spec (Std.bind m k) Pₖ := by
+  intro Hm Hk
+  cases m
+  · simp
+    apply Hk
+    apply Hm
+  · simp
+    apply Hm
+  · simp
+    apply Hm
+
+@[simp]
+theorem spec_ok (x : α) : spec (.ok x) p ↔ p x := by simp [spec, theta, wp_return]
+
+scoped syntax:lead (name := specSyntax) term:lead " ⦃" "⇓" term " => " term "⦄" : term
+
+macro_rules
+  | `($x ⦃⇓ $r => $P⦄)  => `(Aeneas.Std.WP.spec $x (fun $r => $P))
+
+example : .ok 0 ⦃⇓ r => r = 0⦄ := by simp
+
+end Aeneas.Std.WP
+
+
+namespace Aeneas.Std.WP
+
+open Std Result
 open Std.Do
 
 instance Result.instWP : WP (Result) (.except Error .pure) where
@@ -33,26 +92,11 @@ instance : WPMonad Result (.except Error .pure) where
     ext Q
     cases x <;> simp [PredTrans.const]
 
-
 theorem Result.of_wp {α} {x : Result α} (P : Result α → Prop) :
     (⊢ₛ wp⟦x⟧ post⟨fun a => ⌜P (.ok a)⌝,
                   fun e => ⌜P (.fail e)⌝⟩) → P x := by
   intro hspec
   simp only [instWP] at hspec
   split at hspec <;> simp_all
-
-def post (x : Result α) (P: α -> Prop) :=
-  (⊢ₛ wp⟦x⟧ post⟨fun a => ⌜P a⌝, fun e => ⌜False⌝⟩)
-
-def triple (pre:Prop) (x : Result α) (P: α -> Prop) :=
-  ⌜pre⌝ ⊢ₛ wp⟦x⟧ post⟨fun a => ⌜P a⌝, fun e => ⌜False⌝⟩
-
-def f (x:Int) : Result Int := if x ≥ 0 then .ok x else .ok 0
-
-theorem myt x : triple (x ≥ 0) (f x) (fun r => r = x) := by
-  intro pre
-  unfold f
-  simp
-  sorry
 
 end Aeneas.Std.WP
