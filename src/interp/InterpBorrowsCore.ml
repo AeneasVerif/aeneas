@@ -1784,6 +1784,7 @@ let normalize_proj_ty (regions : RegionId.Set.t) (ty : rty) : rty =
             if RegionId.Set.mem r regions then RVar (Free (RegionId.of_int 0))
             else RErased
         | RVar (Bound _) | RStatic | RErased -> r
+        | RBody _ -> [%craise_opt_span] None "unsupported: Body region"
     end
   in
   visitor#visit_ty () ty
