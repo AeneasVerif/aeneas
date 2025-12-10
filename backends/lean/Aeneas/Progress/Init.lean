@@ -250,7 +250,6 @@ namespace Test
 
 end Test
 
-/-
 def reduceProdProjs (e : Expr) : MetaM Expr := do
   let pre (e : Expr) : MetaM TransformStep := do
     trace[Utils] "Attempting to reduce: {e}"
@@ -272,8 +271,12 @@ def reduceProdProjs (e : Expr) : MetaM Expr := do
 
 /-- Given a theorem of type `P x` and a pattern of the shape `∃ y₀ ... yₙ, x = (y₀, ..., yₙ)`,
     introduce a lifted version of the theorem of the shape:
+    ```lean
+    spec (toResult x) (fun z => ∃ y₀ ... yₙ, z = (y₀, ..., yₙ) ∧ P (y₀, ..., yₙ))
     ```
-    ∃ y₀ ... yₙ, toResult x = ok (y₀, ..., yₙ) ∧ P (y₀, ..., yₙ)
+    that is, using syntactic sugar:
+    ```lean
+    (toResult x) ⦃ fun z => ∃ y₀ ... yₙ, z = (y₀, ..., yₙ) ∧ P (y₀, ..., yₙ) ⦄
     ```
 
     The output of the function is the name of the new theorem.
@@ -288,7 +291,7 @@ def reduceProdProjs (e : Expr) : MetaM Expr := do
     ```
     gets lifted to:
     ```
-    ∃ x y, toResult some_pair = ok (x, y) ∧ P x ∧ Q y
+    (toResult some_pair) ⦃ fun z => z = (x, y) ∧ P x ∧ Q y ⦄
     ```
 -/
 def liftThm (stx pat : Syntax) (n : Name) (suffix : String := "progress_spec") : MetaM Name := do
@@ -426,6 +429,8 @@ def liftThm (stx pat : Syntax) (n : Name) (suffix : String := "progress_spec") :
 
 /-!
 # Command: `#progress_pure_lift_thm`
+
+We do not really use it - it is mostly for testing purposes.
 -/
 
 local elab "#progress_pure_lift_thm" id:ident pat:term : command => do
@@ -444,7 +449,6 @@ namespace Test
 
   #progress_pure_lift_thm overflowing_add_eq (overflowing_add x y)
 end Test
--/
 
 /-!
 # Attribute: `#progress_pure`
@@ -453,168 +457,132 @@ end Test
 /- The ident is the name of the saturation set, the term is the pattern. -/
 syntax (name := progress_pure) "progress_pure" term : attr
 
-/-partial def parseCommaSeparated (stx : Syntax) : TermElabM (Array Syntax) := do
-  let rec go (stx : Syntax) (acc : Array Syntax) : TermElabM (Array Syntax) := do
+section
+  variable {m : Type → Type} [Monad m] [MonadOptions m] [MonadTrace m] [AddMessageContext m] [MonadError m]
+
+  partial def parseCommaSeparated (isTuple : Bool) (stx : Syntax) (acc : Array Syntax := #[]) :
+    m (Array Syntax) := do
+    trace[ProgressElab] "parsing comma separated: {stx} with acc: {acc}"
+    -- TODO: check if ident
     match stx with
-    | `(term| ($x, $xs)) => go `(term| $xs) (acc.push x)
-    | _ => pure (acc.push stx)
-  go stx #[]-/
-
-partial def parseCommaSeparated (stx : Syntax) (acc : Array Syntax := #[]) : TermElabM (Array Syntax) := do
-  trace[Progress] "parsing comma separated: {stx} with acc: {acc}"
-  let args := stx.getArgs
-  trace[Progress] "args.size: {args.size}"
-  -- TODO: check if ident
-  if args.size = 0 then pure acc
-  else if h: args.size = 1 then pure (acc.push args[0])
-  else if h: args.size = 3 then
-    let arg0 := args[0]
-    let arg1 := args[1]
-    let arg2 := args[2]
-    trace[Progress] "parsing comma separated:\n- arg0: {arg0}\n- arg1: {arg1}\n- arg2: {arg2}"
-    let isComma ← do
-      match arg1 with
-      | .atom _ "," => pure true
-      | _ => pure false
-    if isComma then
-      trace[Progress] "arg1 is a comma"
-      parseCommaSeparated arg2 (acc.push arg0)
-    else
-      -- Maybe we have a tuple: we simply return the current syntax
-      trace[Progress] "arg1 is not a comma"
+    | `(ident| $name:ident) =>
+      trace[ProgressElab] "is an ident"
       pure (acc.push stx)
-  else if h: args.size = 2 then
-    let arg0 := args[0]
-    let arg1 := args[1]
-    trace[Progress] "parsing comma separated:\n- arg0: {arg0}\n- arg1: {arg1}"
-    /-let isComma :=
-      match arg1 with
-      | .atom _ "," => true
-      | _ => false
-    if isComma then throwError "Unsupported comma separated syntax: {stx}, unexpected trailing ','"
-    pure (acc.push arg0)-/
-    throwError "TODO"
-  else throwError "Unsupported comma separated syntax: {stx}"
+    | _ =>
+      trace[ProgressElab] "not an ident"
+      let args := stx.getArgs
+      trace[ProgressElab] "args.size: {args.size}"
+      /- Parsing is not the same if we have `(...)` or `⟨ ... ⟩`:
+        - in the first case, the syntax looks like this (we have nested lists): `["x", "," ["y", ...]]`
+        - in the second case, the syntax looks like this (the list is flattened): `["x", ",", "y", ...]`
+        -/
+      if args.size = 0 then pure acc
+      else if h: args.size = 1 then pure (acc.push args[0])
+      else if h: isTuple ∧ args.size = 3 then
+        let arg0 := args[0]
+        let arg1 := args[1]
+        let arg2 := args[2]
+        trace[ProgressElab] "parsing comma separated:\n- arg0: {arg0}\n- arg1: {arg1}\n- arg2: {arg2}"
+        let isComma ← do
+          match arg1 with
+          | .atom _ "," => pure true
+          | _ => pure false
+        if isComma then
+          trace[ProgressElab] "arg1 is a comma"
+          parseCommaSeparated isTuple arg2 (acc.push arg0)
+        else
+          -- Maybe we have a tuple: we simply return the current syntax
+          trace[ProgressElab] "arg1 is not a comma"
+          pure (acc.push stx)
+      else if not isTuple then
+        -- There should be an odd number of elements: element, comma, element, ...
+        if args.size % 2 ≠ 1 then throwError "Expected an odd number of elements in comma separated syntax, got: {stx}"
+        -- Check that the odd elements are commas
+        let mut acc := acc
+        for i in [0:args.size] do
+          let arg := args[i]!
+          if i % 2 = 0 then
+            -- Should be an element
+            acc := acc.push arg
+          else
+            -- Should be a comma
+            match arg with
+            | .atom _ "," => pure ()
+            | _ => throwError "Expected a comma, got: {arg}"
+        pure acc
+      else throwError "Unsupported comma separated syntax: {stx}"
 
-/-- Given a pattern which decomposes a tuple or a struct (`(x, y, z)` or `⟨x, z, z⟩`, `((x, y), z, ⟨a, b⟩), etc.)`,
-  return the list of identifiers appearing inside the pattern. -/
-partial def elabProgressPurePattern (stx : Syntax) : TermElabM (Array Ident) := do
-  trace[Progress] "syntax: {stx}"
-  -- Check if this is an identifier
-  match stx with
-  | `(term| $name:ident) => pure #[name]
-  |_ =>
-  let args := stx.getArgs
-  trace[Progress] "args.size: {args.size}"
+  /-- Given a pattern which decomposes a tuple or a struct (`(x, y, z)` or `⟨x, z, z⟩`, `((x, y), z, ⟨a, b⟩), etc.)`,
+    return the list of identifiers appearing inside the pattern.
 
-  -- Check if the syntax is `⟨ ... ⟩` or `( ... )`
-  if args.size = 0 then throwError "Unsupported pattern syntax: empty syntax"
-
-  /-if h: args.size = 1 then
+  Remark: I tried implementing something simpler based on pattern matching but couldn't get it to work. -/
+  partial def getProgressPurePatternIdents (stx : Syntax) : m (Array Ident) := do
+    trace[ProgressElab] "syntax: {stx}"
     -- Check if this is an identifier
-    match args[0] with
-    | `(term| $name:ident) => throwError "Unexpected" pure #[name]
-    |_ => throwError "Unsupported pattern syntax: expected an identifier: {stx}"-/
+    match stx with
+    | `(term| $name:ident) => pure #[name]
+    |_ =>
+    let args := stx.getArgs
+    trace[ProgressElab] "args.size: {args.size}"
 
-  if h: args.size = 3 then
-    -- It should be a tuple: decompose it
-    let arg0 := args[0]
-    let arg1 := args[1]
-    let arg2 := args[2]
-    let isTuple :=
-      match arg0, arg2 with
-      | .atom _ "⟨", .atom _ "⟩"
-      | .node _ _ #[.atom _ "(", _], .atom _ ")" => true
-      | _, _ => false
-    if not isTuple then throwError "Unsupported pattern syntax: {stx}"
-    let args ← parseCommaSeparated arg1
-    trace[Progress] "parsed args: {args}"
-    -- Recursively decompose
-    let xs ← args.mapM elabProgressPurePattern
-    -- Flatten
-    pure xs.flatten
-    /-match arg1 with
-    | `($xs,*) => do
-      throwError "TODO"
-      /-let xs := xs.getElems.mapM fun
-        | `(binderIdent| $name:ident) => pure name
-        | _ => throwError "Unexpected syntax in pattern"
-      -- Recursive calls:
-      let xs ← (#[x0] ++ xs).mapM elabProgressPurePattern
+    -- Check if the syntax is `⟨ ... ⟩` or `( ... )`
+    if args.size = 0 then throwError "Unsupported pattern syntax: empty syntax"
+    if h: args.size = 3 then
+      -- It should be a tuple: decompose it
+      let arg0 := args[0]
+      let arg1 := args[1]
+      let arg2 := args[2]
+      let (isTupleOrRecord, isTuple) :=
+        match arg0, arg2 with
+        | .atom _ "⟨", .atom _ "⟩" => (true, false)
+        | .node _ _ #[.atom _ "(", _], .atom _ ")" => (true, true)
+        | _, _ => (false, false)
+      if not isTupleOrRecord then throwError "Unsupported pattern syntax: {stx}"
+      let args ← parseCommaSeparated isTuple arg1
+      trace[ProgressElab] "parsed args: {args}"
+      -- Recursively decompose
+      let xs ← args.mapM getProgressPurePatternIdents
       -- Flatten
-      pure xs.flatten-/
-    |_ => throwError "Unsupported pattern syntax: {stx}"-/
-  else throwError "Unsupported pattern syntax: {stx}"
-  /-trace[Progress] "args: {args}"
-  match stx with
-  | `(term| ⟨$xs,*⟩) => do
-    let xs ← xs.getElems.mapM fun
-      | `(binderIdent| $name:ident) => pure name
-      | _ => throwError "Unexpected syntax in pattern"
-    -- Recursive calls:
-    let xs ← xs.mapM elabProgressPurePattern
-    -- Flatten
-    pure xs.flatten
-  /-| `(term| ⟨$x0, $xs,*⟩) => do
-    let xs ← xs.getElems.mapM fun
-      | `(binderIdent| $name:ident) => pure name
-      | _ => throwError "Unexpected syntax in pattern"
-    -- Recursive calls:
-    let xs ← (#[x0] ++ xs).mapM elabProgressPurePattern
-    -- Flatten
-    pure xs.flatten-/
-  --| `(term| ($x0)) => do elabProgressPurePattern x0
-  | `(term| ($x0, $xs,*)) => do
-    let xs ← xs.getElems.mapM fun
-      | `(binderIdent| $name:ident) => pure name
-      | _ => throwError "Unexpected syntax in pattern"
-    -- Recursive calls:
-    let xs ← (#[x0] ++ xs).mapM elabProgressPurePattern
-    -- Flatten
-    pure xs.flatten
-  | `(term| ()) => pure #[]
-  | `(term| $name:ident) => pure #[name]
-  | _ =>
-    throwError "Unsupported pattern syntax"-/
+      pure xs.flatten
+    else throwError "Unsupported pattern syntax: {stx}"
 
-open Lean Elab Command Term in
-elab "#elab_pattern" pat:term : command => do
-  let ids ← liftTermElabM (elabProgressPurePattern pat)
-  trace[Progress] "Identifiers: {ids.toList}"
-  pure ()
+  open Lean Elab Command Term in
+  /-- Command to check that we correctly parse tuples -/
+  local elab "#check_elab_pattern" pat:term " as " ids:ident,* : command => do
+    let ids' ← liftTermElabM (getProgressPurePatternIdents pat)
+    trace[ProgressElab] "Identifiers: {ids'.toList}"
+    let ids ← ids.getElems.mapM fun x => do
+      match x with
+      | `(ident| $name:ident) => pure name
+      | _ => throwError "not an identifier: {x}"
+    if ids == ids' then
+      trace[ProgressElab] "Success!"
+    else
+      throwError "Mismatch! Expected: {ids}, got: {ids'}"
 
-example (x y : Nat) := (x, y)
-example (x : Nat × Nat) := let ⟨ y, z ⟩ := x; y + z
+  #check_elab_pattern ⟨⟩ as
+  #check_elab_pattern () as
+  #check_elab_pattern ⟨x⟩ as x
+  #check_elab_pattern (x) as x
+  #check_elab_pattern (x, y) as x, y
+  #check_elab_pattern (x, y, z) as x, y, z
+  #check_elab_pattern ((x, w), y, (a, b, c)) as x, w, y, a, b, c
+  #check_elab_pattern (⟨x, w⟩, y, ⟨ a, b, c ⟩) as x, w, y, a, b, c
+end
 
-#check Syntax
-#check mkFreshUserName
-#check matchMatcherApp?
-#check isMatcherApp
-
-set_option trace.Progress true
-set_option pp.rawOnError true
-
-#elab_pattern ⟨⟩
-#elab_pattern ()
-
-#elab_pattern ⟨x⟩
-#elab_pattern (x)
-#elab_pattern (x, y)
-#elab_pattern (x, y, z)
-#elab_pattern ((x, w), y, (a, b, c))
---#elab_pattern ⟨x, y⟩
-
-#check MVarId.introN
-
+open Elab Term Attribute in
 /-- We desugar patterns of the shape `foo = (x, y, z)` to `∃ x y z, foo = (x, y, z)` in order to bind
     the variables introduced in the right-hand side, allowing us to elaborate the patterns. -/
-def elabProgressPureAttribute (stx : Syntax) : AttrM (TSyntax `term × Option (Array Ident)) :=
+def elabProgressPureAttribute (stx : Syntax) : AttrM (TSyntax `term) :=
   withRef stx do
     match stx with
     | `(attr| progress_pure $x = $pat) => do
-      let ids ← elabProgressPurePattern pat
-      pure (x, some ids)
-    | `(attr| progress_pure $pat) => do pure (pat, none)
+      let ids ← getProgressPurePatternIdents pat
+      let term ← ids.foldrM (fun id term => do
+        `(term| ∃ $id:ident, $term)
+        ) (← `(term| $x = $pat))
+      pure term
+    | `(attr| progress_pure $pat) => do pure pat
     | _ => throwUnsupportedSyntax
 
 /-- The progress pure attribute -/
@@ -674,14 +642,14 @@ initialize progressPureAttribute : ProgressPureSpecAttr ← do
     add := fun thName stx attrKind => do
       -- Lookup the theorem
       let env ← getEnv
-      -- -- Ignore some auxiliary definitions (see the comments for attrIgnoreMutRec)
-      -- attrIgnoreAuxDef thName (pure ()) do
-      --   -- Elaborate the pattern
-      --   let pat ← elabProgressPureAttribute stx
-      --   -- Introduce the lifted theorem
-      --   let liftedThmName ← MetaM.run' (liftThm stx pat thName)
-      --   -- Save the lifted theorem to the `progress` database
-      --   saveProgressSpecFromThm progressAttr.ext attrKind liftedThmName
+      -- Ignore some auxiliary definitions (see the comments for attrIgnoreMutRec)
+      attrIgnoreAuxDef thName (pure ()) do
+        -- Elaborate the pattern
+        let pat ← elabProgressPureAttribute stx
+        -- Introduce the lifted theorem
+        let liftedThmName ← MetaM.run' (liftThm stx pat thName)
+        -- Save the lifted theorem to the `progress` database
+        saveProgressSpecFromThm progressAttr.ext attrKind liftedThmName
   }
   registerBuiltinAttribute attrImpl
   pure { attr := attrImpl }
@@ -814,10 +782,10 @@ def mkProgressPureDefThm (stx : Syntax) (pat : Option Syntax) (n : Name) (suffix
   pure name
 
 local elab "#progress_pure_def" id:ident pat:(term)? : command => do
-  Lean.Elab.Command.runTermElabM (fun _ => do pure ()
-  -- let some cs ← Term.resolveId? id | throwError m!"Unknown id: {id}"
-  -- let name := cs.constName!
-  -- let _ ← mkProgressPureDefThm id pat name
+  Lean.Elab.Command.runTermElabM (fun _ => do
+    let some cs ← Term.resolveId? id | throwError m!"Unknown id: {id}"
+    let name := cs.constName!
+    let _ ← mkProgressPureDefThm id pat name
   )
 
 namespace Test
@@ -829,7 +797,8 @@ namespace Test
 
   #progress_pure_def wrapping_add
 
-  --#elab wrapping_add.progress_spec
+  #elab wrapping_add.progress_spec
+  #check wrapping_add.progress_spec
 end Test
 
 /- Initialize the `progress_pure_def` attribute, which automatically generates
