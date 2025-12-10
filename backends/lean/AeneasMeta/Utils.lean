@@ -988,6 +988,18 @@ def splitAny : TacticM (List MVarId) := do
   let some mvarIds ← splitTarget? mvarId | Meta.throwTacticEx `splitAny mvarId "Could not split"
   return mvarIds
 
+def splitLocalDecl (mvarId : MVarId) (fvarId : FVarId) : TacticM (Option (List (MVarId × Array FVarId))) := do
+  -- Get the local context of mvarId
+  let oldFvarIds := Std.HashSet.ofArray ((← mvarId.getDecl).lctx.getFVarIds)
+  match ← Lean.Meta.splitLocalDecl? mvarId fvarId with
+  | none => pure .none
+  | some mvarIds =>
+    -- Find the new fvar ids introduced in each goal
+    mvarIds.mapM fun (mvarId : MVarId) => do
+      let fvarIds := (← mvarId.getDecl).lctx.getFVarIds
+      let nfvarIds := fvarIds.filter fun id => ! oldFvarIds.contains id
+      pure (mvarId, nfvarIds)
+
 /-- Repeteadly split the disjunctions in the context, then apply a tactic when we can't split anymore -/
 partial def splitAll (endTac : TacticM Unit) : TacticM Unit := do
   withMainContext do
