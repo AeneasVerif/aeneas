@@ -560,6 +560,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
           [%craise_opt_span] span
             ("Unexpected bound region: "
             ^ Charon.PrintTypes.region_db_var_to_pretty_string var)
+      | RBody _ -> [%craise_opt_span] None "unsupported: Body region"
       | RVar (Free rid) -> T.RegionId.Set.mem rid gr_regions
     in
     let inside_mut = false in

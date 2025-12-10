@@ -187,6 +187,7 @@ let raise_if_not_rty_visitor =
       match r with
       | RVar (Bound _) | RErased -> raise Found
       | RStatic | RVar (Free _) -> ()
+      | RBody _ -> [%craise_opt_span] None "unsupported: Body region"
   end
 
 (** Return [true] if the type is a region type (i.e., it doesn't contain erased
@@ -206,6 +207,7 @@ let raise_if_not_erased_ty_visitor =
       match r with
       | RStatic | RVar _ -> raise Found
       | RErased -> ()
+      | RBody _ -> [%craise_opt_span] None "unsupported: Body region"
   end
 
 (** Return [true] if the type is a region type (i.e., it doesn't contain erased
