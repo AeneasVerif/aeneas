@@ -36,10 +36,10 @@ def spec (x:Result α) (p:Post α) :=
 @[simp, grind =]
 theorem spec_ok (x : α) : spec (.ok x) p ↔ p x := by simp [spec, theta, wp_return]
 
-theorem spec_bind (m:Result α) (k:α -> Result β) (Pₘ:Post α) (Pₖ:Post β) :
+theorem spec_bind {k:α -> Result β} {Pₖ:Post β} {m:Result α} {Pₘ:Post α} :
   spec m Pₘ →
-    (forall x, Pₘ x → spec (k x) Pₖ) →
-      spec (Std.bind m k) Pₖ := by
+  (forall x, Pₘ x → spec (k x) Pₖ) →
+  spec (Std.bind m k) Pₖ := by
   intro Hm Hk
   cases m
   · simp
@@ -50,7 +50,7 @@ theorem spec_bind (m:Result α) (k:α -> Result β) (Pₘ:Post α) (Pₖ:Post β
   · simp
     apply Hm
 
-theorem spec_mono (m:Result α) (h : spec m P₀):
+theorem spec_mono {P₁:Post α} {m:Result α} {P₀:Post α} (h : spec m P₀):
   (∀ x, P₀ x → P₁ x) → spec m P₁ := by
   intros HMonPost
   revert h
@@ -80,25 +80,41 @@ macro_rules
 
 example : .ok 0 ⦃⇓ r => r = 0⦄ := by simp
 
-def add1 (x : Nat) := Result.ok (x + 1, x + 2)
-theorem  add1_spec (x : Nat) : add1 x ⦃⇓ (y, z) => y = x + 1 ∧ z = x + 2⦄ :=
+def add1 (x : Nat) := Result.ok (x + 1)
+theorem  add1_spec (x : Nat) : add1 x ⦃⇓ y => y = x + 1⦄ :=
   by simp [add1]
-
 
 example (x : Nat) :
   (do
-    let (y, _) ← add1 x
-    add1 y) ⦃⇓ (y, _) => y = x + 2 ⦄ := by
+    let y ← add1 x
+    add1 y) ⦃⇓ y => y = x + 2 ⦄ := by
+    -- progress as ⟨ y, z ⟩
+    apply spec_bind (add1_spec _)
+    intro y h
+    -- progress as ⟨ y1, z1⟩
+    apply spec_mono (add1_spec _)
+    intro y' h
+    --
+    grind
+
+def add2 (x : Nat) := Result.ok (x + 1, x + 2)
+theorem  add2_spec (x : Nat) : add2 x ⦃⇓ (y, z) => y = x + 1 ∧ z = x + 2⦄ :=
+  by simp [add2]
+
+example (x : Nat) :
+  (do
+    let (y, _) ← add2 x
+    add2 y) ⦃⇓ (y, _) => y = x + 2 ⦄ := by
     -- progress as ⟨ y, z ⟩
     apply spec_bind
-    . apply add1_spec
+    . apply add2_spec
     intro tmp h
     split at h
     rename_i tmp y z
     clear tmp
     -- progress as ⟨ y1, z1⟩
     apply spec_mono
-    . apply add1_spec
+    . apply add2_spec
     intro tmp h
     split at h
     rename_i tmp y1 z1

@@ -101,17 +101,6 @@ def getProgressSpecFunArgsExpr (ty : Expr) :
   then pure args[1] -- this is `f x1 ... xn`
   else throwError "Expected to be a `spec (f x1 ... xn) P`, got {ty₂}"
 
-/- Analyze a goal comp
-
-   If comp = bind m k then return true and m
-   Else return false and comp
--/
-def getFirstBind (comp : Expr) : MetaM (Bool × Expr) := do
-  let (bind?, args) := comp.consumeMData.withApp (fun f args => (f, args))
-  if h: bind?.isConstOf ``Std.bind ∧ args.size = 4
-  then pure (true, args[2])
-  else pure (false, comp)
-
 structure Rules where
   rules : DiscrTree Name
   /- We can't remove keys from a discrimination tree, so to support

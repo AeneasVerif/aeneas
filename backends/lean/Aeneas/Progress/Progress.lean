@@ -170,6 +170,27 @@ structure Args where
   /- Syntax of the tactic provided by the user to solve the remaining proof obligations -/
   byTacSyntax : Option Syntax
 
+/- Analyze a goal comp
+
+   If comp = bind m k then return true and m
+   Else return false and comp
+-/
+def getFirstBind (goalTy : Expr) : MetaM (Bool × Expr) := do
+  forallTelescope goalTy fun nvars goalTy => do
+
+  let (spec?, args) := goalTy.consumeMData.withApp (fun f args => (f, args))
+  let compTy ← if h: spec?.isConstOf ``Std.WP.spec ∧ args.size = 3
+               then pure (args[1])
+               else throwError "Goal is not a `spec m P`"
+
+  trace[Progress] "compTy: {compTy}"
+
+  let (bind?, args) := compTy.consumeMData.withApp (fun f args => (f, args))
+  trace[Progress] "bind?: {bind?}"
+  if h: bind?.isConstOf ``bind ∧ args.size = 6
+  then pure (true, args[4])
+  else pure (false, compTy)
+
 /-- Attempt to match a given theorem with the monadic call in the goal,
     and introduce the instantiated theorem in the context if it succeeds.
 
@@ -177,8 +198,8 @@ structure Args where
     well as the new assumption corresponding to the instantiated theorem (the
     expression is an fvar). We raise an exception otherwise.
  -/
-def tryMatch (args : Args) (fExpr : Expr) (th : Expr) :
-  TacticM (Array MVarId × Expr) := do
+def tryMatch (args : Args) (isLet : Bool) (fExpr : Expr) (th : Expr) :
+  TacticM (Array MVarId × Array FVarId × Expr) := do
   withTraceNode `Progress (fun _ => pure m!"tryMatch") do
   /- Apply the theorem
      We try to match the theorem with the goal
@@ -192,7 +213,83 @@ def tryMatch (args : Args) (fExpr : Expr) (th : Expr) :
   -- Normalize to inline the let-bindings
   let thTy ← normalizeLetBindings thTy
   trace[Progress] "After normalizing the let-bindings: {thTy}"
-  monadTelescope thTy fun xs _zs thBody _ _ => do
+  trace[Progress] "Theorem: {th}: {← inferType th}"
+  let (mvars, _, thTy) ← forallMetaTelescope thTy
+  let th := mkAppN th mvars
+  trace[Progress] "Uninstantiated theorem: {th}: {← inferType th}"
+
+  let thArgs := thTy.consumeMData.withApp (fun _ args => args)
+  let (comp, P) ← (if h: thArgs.size = 3
+                   then pure (thArgs[1], thArgs[2])
+                   else throwError "Not spec?")
+
+  let (specMonoBindName, varNum) :=
+    if isLet
+    then (``Std.WP.spec_bind, 4)
+    else (``Std.WP.spec_mono, 2)
+  let specMonoBind ← Term.mkConst specMonoBindName
+  let specMonoBindTy ← inferType specMonoBind
+  trace[Progress] "specMonoBind (isLet:{isLet}): {specMonoBind}: {← inferType specMonoBind}"
+  let (specMonoBindMVars, _, specMonoBindTy) ← forallMetaBoundedTelescope specMonoBindTy varNum
+  let specMonoBind := mkAppN specMonoBind specMonoBindMVars
+  trace[Progress] "Uninstantiated specMonoBind: {specMonoBind}: {← inferType specMonoBind}"
+
+  let specMonoBind := mkAppN specMonoBind #[comp, P, th]
+  let specMonoBindTy ← inferType specMonoBind
+  trace[Progress] "Applied specMonoBind with theorem: {specMonoBind}: {specMonoBindTy}"
+
+  let (specMonoBindMVars, _, specMonoBindTy) ← forallMetaBoundedTelescope specMonoBindTy 1
+  if (specMonoBindMVars.size ≠ 1) then throwError "Unreachable"
+  let ngoal := specMonoBindMVars[0]!.mvarId!
+  let specMonoBind := mkAppN specMonoBind specMonoBindMVars
+  trace[Progress] "Applied specMonoBind with theorem: {specMonoBind}: {specMonoBindTy}"
+
+  let mgoal ← Tactic.getMainGoal
+  let specMonoBindTy ← inferType specMonoBind
+  let goalTy ← mgoal.getType
+  let ok ← isDefEq specMonoBindTy goalTy
+  if ¬ ok then
+    trace[Progress] "Could not unify the theorem with the target"
+    throwError "Could not unify the theorem with the target:\n- theorem: {specMonoBindTy}\n- target: {goalTy}"
+
+  mgoal.assign specMonoBind
+  -- setGoals [ngoal]
+  trace[Progress] "New goal: {ngoal}"
+
+  let (fvars, ngoal) ← ngoal.introN 2 [← mkFreshUserName `x, ← mkFreshUserName `h]
+  setGoals [ngoal]
+  ngoal.withContext do
+  trace[Progress] "New goal after intro: {ngoal}"
+
+  let #[x, post] := fvars
+    | throwError "Unreacheable. Introduced bad variables"
+
+  let isCases := match isMatcherAppCore? (← getEnv) (← inferType (.fvar post)) with
+    | .some cases => cases.numDiscrs == 1
+    | _ => false
+
+
+  let mvarsIds := mvars.map Expr.mvarId!
+
+  if isCases
+  then
+    match ← splitLocalDecl ngoal post with
+    | .some [(ngoal, nfvars)] => do
+      if nfvars.size < 2 then throwError "Unreachable. Bad number of fvars after splitting matcher"
+      let x := nfvars.getD 0 x
+      let ngoal ← ngoal.tryClear x
+      setGoals [ngoal]
+      let post := nfvars.getD (nfvars.size-1) post
+      let nfvars := nfvars.extract 1 (nfvars.size-1)
+      ngoal.withContext do
+      trace[Progress] "New fvars: {nfvars.map Expr.fvar} and {Expr.fvar post}"
+      trace[Progress] "New goal after splitting matcher: {ngoal}"
+      return (mvarsIds, nfvars, Expr.fvar post)
+    | _ => return (mvarsIds, #[x], Expr.fvar post)
+
+  else return (mvarsIds, #[x], Expr.fvar post)
+
+  /-monadTelescope thTy fun xs _zs thBody _ _ => do
   let (mvars, binders) := xs.unzip
   let mvars := mvars.map .mvar
   -- Match the body with the target
@@ -218,7 +315,7 @@ def tryMatch (args : Args) (fExpr : Expr) (th : Expr) :
   -- TODO: actually we might want to let the user insert them in the context
   let thTy ← normalizeLetBindings thTy
   trace[Progress] "thTy (after normalizing let-bindings): {thTy}"
-  Utils.addDeclTac asmName th thTy (asLet := false) fun thAsm => pure (mvars.map Expr.mvarId!, thAsm)
+  Utils.addDeclTac asmName th thTy (asLet := false) fun thAsm => pure (mvars.map Expr.mvarId!, thAsm)-/
 
 /-- Under the condition that `thAsm` is of the shape:
    `∃ x1 ... xn, f args = ... ∧ ...`
@@ -406,11 +503,27 @@ def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option MainGoal)
         pure (some ({ goal := ← getMainGoal, posts} : MainGoal))
       else pure none
 
-def progressWith (args : Args) (fExpr : Expr) (th : Expr) :
+def renameFVarsWithIds (fvars : Array FVarId) (ids : Array (Option Name)) :
+  TacticM (Array (Option Name)) := do
+  let mut goal ← getMainGoal
+  let minSize := min fvars.size ids.size
+  for i in [0:minSize] do
+    match ids[i]! with
+    | none => pure ()
+    | some id => do
+      goal ← goal.rename fvars[i]! id
+  replaceMainGoal [goal]
+  pure (ids.drop minSize)
+
+def progressWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
   TacticM Goals := do
   withTraceNode `Progress (fun _ => pure m!"progressWith") do
   -- Attempt to instantiate the theorem and introduce it in the context
-  let (newGoals, thAsm) ← tryMatch args fExpr th
+  let (newGoals, fvars, thAsm) ← tryMatch args isLet fExpr th
+  -- Rename the introduced fvars according to `args.ids`
+  let ids ← renameFVarsWithIds fvars args.ids
+  let args := { args with ids }
+  --
   withMainContext do
   traceGoalWithNode "current goal"
   let mainGoal ← getMainGoal
@@ -458,7 +571,7 @@ def getFirstArg (args : Array Expr) : Option Expr := do
 /-- Helper: try to apply a theorem.
 
     Return the list of post-conditions we introduced if it succeeded. -/
-def tryApply (args : Args) (fExpr : Expr) (kind : String) (th : Option Expr) :
+def tryApply (args : Args) (isLet:Bool) (fExpr : Expr) (kind : String) (th : Option Expr) :
   TacticM (Option Goals) := do
   let res ← do
     match th with
@@ -470,7 +583,7 @@ def tryApply (args : Args) (fExpr : Expr) (kind : String) (th : Option Expr) :
       -- Apply the theorem
       let res ← do
         try
-          let res ← progressWith args fExpr th
+          let res ← progressWith args isLet fExpr th
           pure (some res)
         catch _ => pure none
   match res with
@@ -480,7 +593,7 @@ def tryApply (args : Args) (fExpr : Expr) (kind : String) (th : Option Expr) :
 /-- Try to progress with an assumption.
     Return `some` if we succeed, `none` otherwise.
 -/
-def tryAssumptions (args : Args) (fExpr : Expr) :
+def tryAssumptions (args : Args) (isLet:Bool) (fExpr : Expr) :
   TacticM (Option (Goals × UsedTheorem)) := do
   withTraceNode `Progress (fun _ => pure m!"tryAssumptions") do run
 where
@@ -491,7 +604,7 @@ where
   for decl in decls.reverse do
     trace[Progress] "Trying assumption: {decl.userName} : {decl.type}"
     try
-      let goal ← progressWith args fExpr decl.toExpr
+      let goal ← progressWith args isLet fExpr decl.toExpr
       return (some (goal, .localHyp decl))
     catch _ => continue
   pure none
@@ -514,21 +627,18 @@ def progressAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
      TODO: we should also check that no quantified variable appears in fExpr.
      If such variables appear, we should just fail because the goal doesn't
      have the proper shape. -/
-  let fExpr ← do
-    let isGoal := true
-    withTraceNode `Progress (fun _ => pure m!"Calling withProgressSpec to deconstruct the target") do
-    withProgressSpec isGoal goalTy fun {fArgsExpr := fExpr, ..} => do
-    trace[Progress] "Expression to match: {fExpr}"
-    pure fExpr
+  let (goalIsLet, fExpr) ← do
+    withTraceNode `Progress (fun _ => pure m!"Calling getFirstBind to deconstruct the target") do
+    getFirstBind goalTy
   -- If the user provided a theorem/assumption: use it.
   -- Otherwise, lookup one.
   match withTh with
   | some th => do
-    let goals ← progressWith args fExpr th
+    let goals ← progressWith args goalIsLet fExpr th
     return (goals, .givenExpr th)
   | none =>
     -- Try all the assumptions one by one and if it fails try to lookup a theorem.
-    if let some res ← tryAssumptions args fExpr then return res
+    if let some res ← tryAssumptions args goalIsLet fExpr then return res
     /- It failed: lookup the pspec theorems which match the expression *only
        if the function is a constant* -/
     let fIsConst ← do
@@ -551,7 +661,7 @@ def progressAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
       -- Try the theorems one by one
       for pspec in pspecs do
         let pspecExpr ← Term.mkConst pspec
-        match ← tryApply args fExpr "pspec theorem" pspecExpr with
+        match ← tryApply args goalIsLet fExpr "pspec theorem" pspecExpr with
         | some goals => return (goals, .progressThm pspec)
         | none => pure ()
       -- It failed: try to use the recursive assumptions
@@ -565,7 +675,7 @@ def progressAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
       for decl in decls.reverse do
         trace[Progress] "Trying recursive assumption: {decl.userName} : {decl.type}"
         try
-          let goals ← progressWith args fExpr decl.toExpr
+          let goals ← progressWith args goalIsLet fExpr decl.toExpr
           return (goals, .localHyp decl)
         catch _ => continue
       -- Nothing worked: failed
@@ -877,7 +987,7 @@ elab tk:letProgress : tactic => do
     Meta.Tactic.TryThis.addSuggestion tk stxArgs' (origSpan? := ← getRef)
 
 namespace Test
-  open Std Result
+  open Std Result WP
 
   -- Show the traces:
   -- set_option trace.Progress true
@@ -903,20 +1013,33 @@ x y : UScalar ty
   -/
   #guard_msgs in
   example {ty} {x y : UScalar ty} :
-    ∃ z, x + y = ok z := by
+    (x + y) ⦃⇓ _ => True ⦄ := by
     progress keep _ as ⟨ z, h1 ⟩
 
+  set_option trace.Progress true in
   example {ty} {x y : UScalar ty} (h : x.val + y.val ≤ UScalar.max ty) :
-    ∃ z, x + y = ok z := by
+    (x + y) ⦃⇓ _ => True ⦄ := by
     let* ⟨ z, h1 ⟩ ← *
+
+  def add2 (x : Nat) := Result.ok (x + 1, x + 2)
+  theorem  add2_spec (x : Nat) : add2 x ⦃⇓ (y, z) => y = x + 1 ∧ z = x + 2⦄ :=
+    by simp [add2]
+
+  example (x : Nat) :
+    (do
+      let (y, _) ← add2 x
+      add2 y) ⦃⇓ (y, _) => y = x + 2 ⦄ := by
+    progress with add2_spec as ⟨ y, z, h ⟩
+    progress with add2_spec
 
   /--
   info: Try this:
   [apply] let* ⟨ z, h1 ⟩ ← UScalar.add_spec
   -/
   #guard_msgs in
+  set_option trace.Progress true in
   example {ty} {x y : UScalar ty} (h : x.val + y.val ≤ UScalar.max ty) :
-    ∃ z, x + y = ok z := by
+    x + y ⦃⇓ _ => True ⦄ := by
     let* ⟨ z, h1 ⟩ ← *?
 
   /--
@@ -955,11 +1078,12 @@ info: example
   := by sorry
 -/
   #guard_msgs in
+  set_option trace.Progress true in
   set_option linter.unusedTactic false in
   example {ty} {x y : UScalar ty} (h : 2 * x.val + y.val ≤ UScalar.max ty) :
-    ∃ z, (do
+    (do
       let z1 ← x + y
-      z1 + x) = ok z ∧ z.val = 2 * x.val + y.val := by
+      z1 + x) ⦃⇓ z => z.val = 2 * x.val + y.val ⦄ := by
     let* ⟨ z1, h1 ⟩ ← UScalar.add_spec
     let* ⟨ z2, h2 ⟩ ← UScalar.add_spec
     extract_goal0
