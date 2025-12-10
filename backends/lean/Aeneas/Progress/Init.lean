@@ -66,102 +66,8 @@ structure ProgressSpecDesc where
   postcond? : Option Expr
 
 section Methods
-  variable {m} [MonadLiftT MetaM m] [MonadControlT MetaM m] [Monad m] [MonadOptions m]
-  variable [MonadTrace m] [MonadLiftT IO m] [MonadRef m] [AddMessageContext m]
-  variable [MonadError m]
+  variable {m} [MonadControlT MetaM m] [Monad m]
   variable {a : Type}
-
-
-  /-- Given ty := ∀ xs.., ∃ zs.., program = res ∧ post?, destruct and run continuation -/
-  def monadTelescope {α} [Inhabited (m α)] [Nonempty (m α)] (ty: Expr)
-    (k: (xs:Array (MVarId × BinderInfo)) → (zs:Array FVarId) → (program:Expr) → (res:Expr) → (post:Option Expr) → m α)
-  : m α := do
-    let ty := ty.consumeMData
-    unless ←isProp ty do
-      throwError "Expected a proposition, got {←inferType ty}"
-    -- ty == ∀ xs, ty₂
-    let (xs, xs_bi, ty₂) ← forallMetaTelescope ty
-    trace[Progress] "Universally quantified arguments and assumptions: {xs}"
-    -- ty₂ == ∃ zs, ty₃ ≃ Exists {α} (fun zs => ty₃)
-    existsTelescope ty₂.consumeMData fun zs ty₃ => do
-      trace[Progress] "Existentials: {zs}"
-      trace[Progress] "Proposition after stripping the quantifiers: {ty₃}"
-      -- ty₃ == ty₄ ∧ post?
-      let (ty₄, post?) := Utils.optSplitConj ty₃.consumeMData
-      trace[Progress] "After splitting the conjunction:\n- eq: {ty₄}\n- post: {post?}"
-      -- ty₄ == (program = res)
-      let (program, res) ← Utils.destEq ty₄.consumeMData
-      trace[Progress] "After splitting the equality:\n- lhs: {program}\n- rhs: {res}"
-      k (xs.map (·.mvarId!) |>.zip xs_bi) (zs.map (·.fvarId!)) program res post?
-
-  /- Analyze a goal or a progress theorem to decompose its arguments.
-
-     ProgressSpec theorems should be of the following shape:
-     ```
-     ∀ x1 ... xn, H1 → ... Hn → ∃ y1 ... ym. f x1 ... xn = .ret ... ∧ Post1 ∧ ... ∧ Postk
-     ```
-
-     The continuation `k` receives the following inputs:
-     - universally quantified variables
-     - assumptions
-     - existentially quantified variables
-     - function name
-     - function arguments
-     - return
-     - postconditions
-  -/
-  partial
-  def withProgressSpec [Inhabited (m a)] [Nonempty (m a)]
-    (isGoal : Bool) (th : Expr) (k : ProgressSpecDesc → m a) :
-    m a := do
-    monadTelescope th fun xs evars mExpr ret post => do
-    -- Recursively destruct the monadic application to dive into the binds,
-    -- if necessary (this is for when we use `withProgressSpec` inside of the `progress` tactic),
-    -- and destruct the application to get the function name
-    let rec strip_monad mExpr := do
-      mExpr.consumeMData.withApp fun mf margs => do
-      trace[Progress] "After stripping the arguments of the monad expression:\n- mf: {mf}\n- margs: {margs}"
-      if mf.isConst ∧ mf.constName = ``Bind.bind then do
-        -- Dive into the bind
-        let fExpr := margs[4]!.consumeMData
-        -- Recursve
-        strip_monad fExpr
-      else
-        -- No bind
-        pure (mExpr, mf, margs)
-    let (fArgsExpr, f, args) ← strip_monad mExpr
-    trace[Progress] "After stripping the arguments of the function call:\n- f: {f}\n- args: {args}"
-    let fLevels ← do
-      -- If we are registering a theorem, then the function must be a constant
-      if ¬ f.isConst then
-        if isGoal then pure []
-        else throwError "{f} should be a constant"
-      else pure f.constLevels!
-    -- *Sanity check* (activated if we are analyzing a theorem to register it in a DB)
-    -- Check if some existentially quantified variables
-    let _ := do
-      -- Collect all the free variables in the arguments
-      let allArgsFVars ← args.foldlM (fun hs arg => getFVarIds arg hs) Std.HashSet.emptyWithCapacity
-      -- Check if they intersect the fvars we introduced for the existentially quantified variables
-      let evarsSet : Std.HashSet FVarId := Std.HashSet.emptyWithCapacity.insertMany evars
-      let filtArgsFVars := allArgsFVars.toArray.filter (fun var => evarsSet.contains var)
-      if filtArgsFVars.isEmpty then pure ()
-      else
-        let filtArgsFVars := filtArgsFVars.map (fun fvarId => Expr.fvar fvarId)
-        throwError "Some of the function inputs are not universally quantified: {filtArgsFVars}"
-    -- Return
-    trace[Progress] "Function with arguments: {fArgsExpr}";
-    let thDesc := {
-      preconds := xs.map (·.1)
-      evars := evars
-      fArgsExpr
-      fIsConst := f.isConst
-      fLevels
-      args := args
-      ret := ret
-      postcond? := post
-    }
-    k thDesc
 
   /- Auxiliary helper.
 
@@ -355,6 +261,7 @@ namespace Test
 
 end Test
 
+/-
 def reduceProdProjs (e : Expr) : MetaM Expr := do
   let pre (e : Expr) : MetaM TransformStep := do
     trace[Utils] "Attempting to reduce: {e}"
@@ -528,6 +435,10 @@ def liftThm (stx pat : Syntax) (n : Name) (suffix : String := "progress_spec") :
   /- -/
   pure name
 
+/-!
+# Command: `#progress_pure_lift_thm`
+-/
+
 local elab "#progress_pure_lift_thm" id:ident pat:term : command => do
   Lean.Elab.Command.runTermElabM (fun _ => do
   let some cs ← Term.resolveId? id | throwError m!"Unknown id: {id}"
@@ -544,16 +455,177 @@ namespace Test
 
   #progress_pure_lift_thm overflowing_add_eq (overflowing_add x y)
 end Test
+-/
 
+/-!
+# Attribute: `#progress_pure`
+-/
 
 /- The ident is the name of the saturation set, the term is the pattern. -/
 syntax (name := progress_pure) "progress_pure" term : attr
 
-def elabProgressPureAttribute (stx : Syntax) : AttrM (TSyntax `term) :=
+/-partial def parseCommaSeparated (stx : Syntax) : TermElabM (Array Syntax) := do
+  let rec go (stx : Syntax) (acc : Array Syntax) : TermElabM (Array Syntax) := do
+    match stx with
+    | `(term| ($x, $xs)) => go `(term| $xs) (acc.push x)
+    | _ => pure (acc.push stx)
+  go stx #[]-/
+
+partial def parseCommaSeparated (stx : Syntax) (acc : Array Syntax := #[]) : TermElabM (Array Syntax) := do
+  trace[Progress] "parsing comma separated: {stx} with acc: {acc}"
+  let args := stx.getArgs
+  trace[Progress] "args.size: {args.size}"
+  -- TODO: check if ident
+  if args.size = 0 then pure acc
+  else if h: args.size = 1 then pure (acc.push args[0])
+  else if h: args.size = 3 then
+    let arg0 := args[0]
+    let arg1 := args[1]
+    let arg2 := args[2]
+    trace[Progress] "parsing comma separated:\n- arg0: {arg0}\n- arg1: {arg1}\n- arg2: {arg2}"
+    let isComma ← do
+      match arg1 with
+      | .atom _ "," => pure true
+      | _ => pure false
+    if isComma then
+      trace[Progress] "arg1 is a comma"
+      parseCommaSeparated arg2 (acc.push arg0)
+    else
+      -- Maybe we have a tuple: we simply return the current syntax
+      trace[Progress] "arg1 is not a comma"
+      pure (acc.push stx)
+  else if h: args.size = 2 then
+    let arg0 := args[0]
+    let arg1 := args[1]
+    trace[Progress] "parsing comma separated:\n- arg0: {arg0}\n- arg1: {arg1}"
+    /-let isComma :=
+      match arg1 with
+      | .atom _ "," => true
+      | _ => false
+    if isComma then throwError "Unsupported comma separated syntax: {stx}, unexpected trailing ','"
+    pure (acc.push arg0)-/
+    throwError "TODO"
+  else throwError "Unsupported comma separated syntax: {stx}"
+
+/-- Given a pattern which decomposes a tuple or a struct (`(x, y, z)` or `⟨x, z, z⟩`, `((x, y), z, ⟨a, b⟩), etc.)`,
+  return the list of identifiers appearing inside the pattern. -/
+partial def elabProgressPurePattern (stx : Syntax) : TermElabM (Array Ident) := do
+  trace[Progress] "syntax: {stx}"
+  -- Check if this is an identifier
+  match stx with
+  | `(term| $name:ident) => pure #[name]
+  |_ =>
+  let args := stx.getArgs
+  trace[Progress] "args.size: {args.size}"
+
+  -- Check if the syntax is `⟨ ... ⟩` or `( ... )`
+  if args.size = 0 then throwError "Unsupported pattern syntax: empty syntax"
+
+  /-if h: args.size = 1 then
+    -- Check if this is an identifier
+    match args[0] with
+    | `(term| $name:ident) => throwError "Unexpected" pure #[name]
+    |_ => throwError "Unsupported pattern syntax: expected an identifier: {stx}"-/
+
+  if h: args.size = 3 then
+    -- It should be a tuple: decompose it
+    let arg0 := args[0]
+    let arg1 := args[1]
+    let arg2 := args[2]
+    let isTuple :=
+      match arg0, arg2 with
+      | .atom _ "⟨", .atom _ "⟩"
+      | .node _ _ #[.atom _ "(", _], .atom _ ")" => true
+      | _, _ => false
+    if not isTuple then throwError "Unsupported pattern syntax: {stx}"
+    let args ← parseCommaSeparated arg1
+    trace[Progress] "parsed args: {args}"
+    -- Recursively decompose
+    let xs ← args.mapM elabProgressPurePattern
+    -- Flatten
+    pure xs.flatten
+    /-match arg1 with
+    | `($xs,*) => do
+      throwError "TODO"
+      /-let xs := xs.getElems.mapM fun
+        | `(binderIdent| $name:ident) => pure name
+        | _ => throwError "Unexpected syntax in pattern"
+      -- Recursive calls:
+      let xs ← (#[x0] ++ xs).mapM elabProgressPurePattern
+      -- Flatten
+      pure xs.flatten-/
+    |_ => throwError "Unsupported pattern syntax: {stx}"-/
+  else throwError "Unsupported pattern syntax: {stx}"
+  /-trace[Progress] "args: {args}"
+  match stx with
+  | `(term| ⟨$xs,*⟩) => do
+    let xs ← xs.getElems.mapM fun
+      | `(binderIdent| $name:ident) => pure name
+      | _ => throwError "Unexpected syntax in pattern"
+    -- Recursive calls:
+    let xs ← xs.mapM elabProgressPurePattern
+    -- Flatten
+    pure xs.flatten
+  /-| `(term| ⟨$x0, $xs,*⟩) => do
+    let xs ← xs.getElems.mapM fun
+      | `(binderIdent| $name:ident) => pure name
+      | _ => throwError "Unexpected syntax in pattern"
+    -- Recursive calls:
+    let xs ← (#[x0] ++ xs).mapM elabProgressPurePattern
+    -- Flatten
+    pure xs.flatten-/
+  --| `(term| ($x0)) => do elabProgressPurePattern x0
+  | `(term| ($x0, $xs,*)) => do
+    let xs ← xs.getElems.mapM fun
+      | `(binderIdent| $name:ident) => pure name
+      | _ => throwError "Unexpected syntax in pattern"
+    -- Recursive calls:
+    let xs ← (#[x0] ++ xs).mapM elabProgressPurePattern
+    -- Flatten
+    pure xs.flatten
+  | `(term| ()) => pure #[]
+  | `(term| $name:ident) => pure #[name]
+  | _ =>
+    throwError "Unsupported pattern syntax"-/
+
+open Lean Elab Command Term in
+elab "#elab_pattern" pat:term : command => do
+  let ids ← liftTermElabM (elabProgressPurePattern pat)
+  trace[Progress] "Identifiers: {ids.toList}"
+  pure ()
+
+example (x y : Nat) := (x, y)
+example (x : Nat × Nat) := let ⟨ y, z ⟩ := x; y + z
+
+#check Syntax
+#check mkFreshUserName
+#check matchMatcherApp?
+#check isMatcherApp
+
+set_option trace.Progress true
+set_option pp.rawOnError true
+
+#elab_pattern ⟨⟩
+#elab_pattern ()
+
+#elab_pattern ⟨x⟩
+#elab_pattern (x)
+#elab_pattern (x, y)
+#elab_pattern (x, y, z)
+#elab_pattern ((x, w), y, (a, b, c))
+--#elab_pattern ⟨x, y⟩
+
+#check MVarId.introN
+
+/-- We desugar patterns of the shape `foo = (x, y, z)` to `∃ x y z, foo = (x, y, z)` in order to bind
+    the variables introduced in the right-hand side, allowing us to elaborate the patterns. -/
+def elabProgressPureAttribute (stx : Syntax) : AttrM (TSyntax `term × Option (Array Ident)) :=
   withRef stx do
     match stx with
-    | `(attr| progress_pure $pat) => do
-      pure pat
+    | `(attr| progress_pure $x = $pat) => do
+      let ids ← elabProgressPurePattern pat
+      pure (x, some ids)
+    | `(attr| progress_pure $pat) => do pure (pat, none)
     | _ => throwUnsupportedSyntax
 
 /-- The progress pure attribute -/
@@ -565,45 +637,42 @@ structure ProgressPureSpecAttr where
    `progress` lemmas.
 
    For instance, if we annotate the following theorem with `progress_pure`:
-   ```
+   ```lean
    @[progress_pure wrapping x y]
    theorem U32.wrapping_add_eq (x y : U32) :
     (wrapping_add x y).bv = x.bv + y.bv
    ```
    `progress_pure` performs operations which are equivalent to introducing the following lemma:
-   ```
+   ```lean
    @[progress]
    theorem U32.wrapping_add_eq.progress_spec (x y : U32) :
-    ∃ z, ↑(wrapping_add x y) = ok z ∧
-    z.bv = x.bv + y.bv
+    ↑(wrapping_add x y) ⦃⇓z => z.bv = x.bv + y.bv⦄
    ```
 
-   Note that it is possible to control how existential variables are introduced in the generated lemma
+   Note that it is possible to control how the output variable is decomposed in the generated lemma
    by writing an equality in the pattern we want to abstract over.
    For instance if we write:
-   ```
-   @[progress_pure ∃ x y, pos_pair = (x, y)]
+   ```lean
+   @[progress_pure pos_pair = (x, y)]
    theorem pos_pair_is_pos : pos_pair.fst ≥ 0 ∧ pos_pair.snd ≥ 0
    ```
    we get:
-   ```
+   ```lean
    @[progress]
    theorem pos_pair_is_pos.progress_spec :
-    ∃ x y, ↑pos_pair = ok (x, y) ∧
-    x ≥ 0 ∧ y ≥ 0
+    ↑pos_pair ⦃ ⇓(x, y) => x ≥ 0 ∧ y ≥ 0 ⦄
    ```
 
    Similarly if we write:
-   ```
-   @[progress_pure ∃ x, pos_pair = x]
+   ```lean
+   @[progress_pure pos_pair = z]
    theorem pos_pair_is_pos : pos_pair.fst ≥ 0 ∧ pos_pair.snd ≥ 0
    ```
    we get:
-   ```
+   ```lean
    @[progress]
    theorem pos_pair_is_pos.progress_spec :
-    ∃ x, ↑pos_pair = ok x ∧
-    x.fst ≥ 0 ∧ y.fst ≥ 0
+    ↑pos_pair ⦃⇓z => z.fst ≥ 0 ∧ z.fst ≥ 0⦄
    ```
 
    If we don't put an equality in the pattern, `progress_pure` will introduce one variable
@@ -627,6 +696,8 @@ initialize progressPureAttribute : ProgressPureSpecAttr ← do
   }
   registerBuiltinAttribute attrImpl
   pure { attr := attrImpl }
+
+syntax (name := progressPat) term (" = " term)? : term
 
 /-! # Attribute: `progress_pure_def` -/
 
@@ -764,14 +835,15 @@ namespace Test
   def wrapping_add (x y : U8) : U8 := ⟨ x.val + y.val ⟩
 
   #progress_pure_def overflowing_add (∃ z, overflowing_add x y = z)
-  --#elab overflowing_add.progress_spec
+  #elab overflowing_add.progress_spec
+  #check overflowing_add.progress_spec
 
   #progress_pure_def wrapping_add
 
   --#elab wrapping_add.progress_spec
 end Test
 
-/- Initialize the `progress_lift_def` attribute, which automatically generates
+/- Initialize the `progress_pure_def` attribute, which automatically generates
    progress lemams for pure definitions.
 
    For instance, if we annotate the following definition with `progress_pure_def`:
