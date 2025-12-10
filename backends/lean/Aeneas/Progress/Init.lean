@@ -250,6 +250,11 @@ namespace Test
 
 end Test
 
+theorem spec_toResult {α : Type} (x : α) (P : α → Prop) (h : P x) :
+  Std.WP.spec (Std.toResult x) P := by
+  simp [Std.toResult]
+  apply h
+
 def reduceProdProjs (e : Expr) : MetaM Expr := do
   let pre (e : Expr) : MetaM TransformStep := do
     trace[Utils] "Attempting to reduce: {e}"
@@ -321,6 +326,7 @@ def liftThm (stx pat : Syntax) (n : Name) (suffix : String := "progress_spec") :
      - another for variables which will be bound by the ∃ quantifiers -/
   tryDestEq "x" eqMatch fun pat decompPatMatch => do
   tryDestEq "y" eqExists fun _ decompPatExists => do
+  trace[Progress] "Decomposed patterns: pat: {pat}, decompPatMatch: {decompPatMatch}"
   trace[Progress] "Decomposed equality: {pat}, {decompPatMatch}, {decompPatExists}"
   /- The decomposed patterns should be tuple expressions: decompose them further into lists of variables -/
   let fvarsMatch : Array Expr := ⟨ destProdsVal decompPatMatch ⟩
@@ -333,38 +339,36 @@ def liftThm (stx pat : Syntax) (n : Name) (suffix : String := "progress_spec") :
     let thm ← normalizeLetBindings thm
     reduceProdProjs thm
   /- Introduce the binder for the pure theorem - it will be bound outside of the ∃ but we need to use it
-     right now to generate an expression of type:
-     ```
-     toResult ... = ok x ∧
-     P x -- HERE
-     ```
+    right now to generate an expression of type:
+    ```
+    pat = (x₁, ...) ∧
+    P (x₁, ...) -- HERE
+    ```
   -/
   let pureThmType ← mkPureThmType decompPatMatch
   let pureThmName ← mkFreshUserName (.str .anonymous "pureThm")
   withLocalDeclD pureThmName pureThmType fun pureThm => do
   /- Introduce the equality -/
-  let okDecompPat ← mkAppM ``Std.Result.ok #[decompPatMatch]
+  let okDecompPat := decompPatMatch -- mkAppM ``Std.Result.ok #[decompPatMatch]
   let eqExpr ← mkEqRefl okDecompPat
   let thm ← mkAppM ``And.intro #[eqExpr, pureThm]
   trace[Progress] "Theorem after introducing the lifted equality: {thm}\n  :\n{← inferType thm}"
   /- Auxiliary helper which computes the type of the (intermediate) theorems when adding the existentials.
 
-     Given `toResultArg`, `xl0` and `xl1`, generates:
-     ```
-     ∃ $xl1,
-     toResult $toResultArg = ($xl0 ++ $xl1) ∧
-     P ($xl0 ++ $xl1)
-     ```
-   -/
-  let mkThmType (toResultArg : Expr) (xl0 : List Expr) (xl1 : List Expr) : MetaM Expr := do
-    trace[Progress] "mkThmType:\n- {toResultArg}\n- {xl0}\n- {xl1}"
+    Given `pat`, `xl0` and `xl1`, generates:
+    ```
+    ∃ $xl1,
+    $pat = ($xl0 ++ $xl1) ∧
+    P ($xl0 ++ $xl1)
+    ```
+  -/
+  let mkThmType (pat : Expr) (xl0 : List Expr) (xl1 : List Expr) : MetaM Expr := do
+    trace[Progress] "mkThmType:\n- {pat}\n- {xl0}\n- {xl1}"
     let npatExists ← mkProdsVal (xl0 ++ xl1)
     /- Update the theorem statement to replace the pattern with the decomposed pattern -/
     let thmType ← mkPureThmType npatExists
     trace[Progress] "mkThmType: without lifted equality: {thmType}"
-    let toResultPat ← mkAppM ``Std.toResult #[toResultArg]
-    let okDecompPat ← mkAppM ``Std.Result.ok #[npatExists]
-    let eqType ← mkEq toResultPat okDecompPat
+    let eqType ← mkEq pat npatExists
     let thmType := mkAnd eqType thmType
     trace[Progress] "mkThmType: after lifting equality: {thmType}"
     /- Introduce the existentials, only for the suffix of the list of variables -/
@@ -399,19 +403,28 @@ def liftThm (stx pat : Syntax) (n : Name) (suffix : String := "progress_spec") :
   let thm ← mkProdsMatch fvarsMatch.toList thm
   trace[Progress] "Theorem after introducing the matches: {thm} :\n{← inferType thm}"
   /- Apply to the scrutinee (which is the pattern provided by the user): `mkProdsMatch` generates
-     a lambda expression, where the bound value is the scrutinee we should match over. -/
+    a lambda expression, where the bound value is the scrutinee we should match over. -/
   let thm := mkApp thm pat
   trace[Progress] "Theorem after introducing the scrutinee: {thm} :\n{← inferType thm}"
   /- Apply to the pure theorem (the expression inside the match is a function which expects to receive this theorem) -/
   let pureThm := mkAppN (.const decl.name (List.map Level.param sig.levelParams)) fvars
   let thm := mkAppN thm #[pureThm]
   trace[Progress] "Theorem after introducing the matches and the app: {thm} :\n{← inferType thm}"
-  let thm ← mkLambdaFVars fvars thm
   /- Prepare the theorem type -/
-  let thmType ← do
-    let thmType ← mkThmType pat [] fvarsExists.toList
-    let thmType ← mkForallFVars fvars thmType
-    pure thmType
+  let thmType ← mkThmType pat [] fvarsExists.toList
+  -- Generate the predicate: we simply replace the pattern with a fresh variable
+  let patVarName ← mkFreshUserName `z
+  let patTy ← inferType pat
+  withLocalDeclD patVarName patTy fun patVar => do
+  let pred ← mapVisit (fun _ e => do if e == pat then pure patVar else pure e) thmType
+  let pred ← mkLambdaFVars #[patVar] pred
+  trace[Progress] "Predicate: {pred}\n  :\n{← inferType pred}"
+  -- Lift to a Hoare triple
+  let specThm ← mkAppM ``spec_toResult #[pat, pred, thm]
+  trace[Progress] "Spec theorem before binding the parameters: {specThm}:\n{← inferType specThm}"
+  -- Bind the parameters
+  let thm ← mkLambdaFVars fvars specThm
+  let thmType ← inferType thm
   trace[Progress] "Final theorem: {thm}\n  :\n{thmType}"
   /- Save the auxiliary theorem -/
   let name := Name.str decl.name suffix
@@ -442,12 +455,53 @@ local elab "#progress_pure_lift_thm" id:ident pat:term : command => do
 namespace Test
   #progress_pure_lift_thm pos_pair_is_pos (∃ x y, pos_pair = (x, y))
 
+  /--
+info: Aeneas.Progress.Test.pos_pair_is_pos.progress_spec :
+  Std.WP.spec ↑pos_pair fun z =>
+    ∃ x y,
+      z = (x, y) ∧
+        match (x, y) with
+        | (x, y) => x ≥ 0 ∧ y ≥ 0
+  -/
+  #guard_msgs in
+  #check pos_pair_is_pos.progress_spec
+
   #progress_pure_lift_thm pos_triple_is_pos pos_triple
+
+  /--
+info: Aeneas.Progress.Test.pos_triple_is_pos.progress_spec :
+  Std.WP.spec ↑pos_triple fun z =>
+    ∃ y.0 y.1 y.2,
+      z = (y.0, y.1, y.2) ∧
+        match (y.0, y.1, y.2) with
+        | (x, y, z) => x ≥ 0 ∧ y ≥ 0 ∧ z ≥ 0
+  -/
+  #guard_msgs in
+  #check pos_triple_is_pos.progress_spec
 
   def pos_triple_is_pos' := pos_triple_is_pos
   #progress_pure_lift_thm pos_triple_is_pos' (∃ z, pos_triple = z)
 
+  /--
+info: Aeneas.Progress.Test.pos_triple_is_pos'.progress_spec :
+  Std.WP.spec ↑pos_triple fun z =>
+    ∃ z_1,
+      z = z_1 ∧
+        match z_1 with
+        | (x, y, z) => x ≥ 0 ∧ y ≥ 0 ∧ z ≥ 0
+  -/
+  #guard_msgs in
+  #check pos_triple_is_pos'.progress_spec
+
   #progress_pure_lift_thm overflowing_add_eq (overflowing_add x y)
+
+  /--
+info: Aeneas.Progress.Test.overflowing_add_eq.progress_spec (x y : U8) :
+  Std.WP.spec ↑(overflowing_add x y) fun z =>
+    ∃ y.0 y.1, z = (y.0, y.1) ∧ if x.val + y.val > 255 then y.1 = true else y.1 = false
+  -/
+  #guard_msgs in
+  #check overflowing_add_eq.progress_spec
 end Test
 
 /-!
@@ -789,14 +843,14 @@ local elab "#progress_pure_def" id:ident pat:(term)? : command => do
   )
 
 namespace Test
-  def wrapping_add (x y : U8) : U8 := ⟨ x.val + y.val ⟩
-
   #progress_pure_def overflowing_add (∃ z, overflowing_add x y = z)
   #elab overflowing_add.progress_spec
+
+
   #check overflowing_add.progress_spec
 
+  def wrapping_add (x y : U8) : U8 × Bool := (⟨ x.val + y.val ⟩, x.val + y.val ≥ 256)
   #progress_pure_def wrapping_add
-
   #elab wrapping_add.progress_spec
   #check wrapping_add.progress_spec
 end Test
