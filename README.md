@@ -37,7 +37,7 @@ and install OPAM on the way (same instructions).
 
 We are developing Aeneas by using **OCaml 5**. For instance, if you want to use OCaml 5.2.0:
 ```
-opam switch create 5.2.0
+opam switch create 5.3.0
 ```
 
 You can then install the dependencies with the following command:
