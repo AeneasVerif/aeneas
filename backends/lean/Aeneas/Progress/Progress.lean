@@ -57,7 +57,7 @@ def scalar_eqs := #[
 ]
 
 attribute [progress_simps]
-  Std.bind_tc_ok Std.bind_tc_fail Std.bind_tc_div
+  bind_assoc Std.bind_tc_ok Std.bind_tc_fail Std.bind_tc_div
   /- Those are quite useful to simplify the goal further by eliminating existential quantifiers for instance. -/
   and_assoc Std.Result.ok.injEq Prod.mk.injEq
   exists_eq_left exists_eq_left' exists_eq_right exists_eq_right' exists_eq exists_eq' true_and and_true
@@ -1299,7 +1299,6 @@ info: example
         .ok ()) ⦃⇓ _ => True ⦄
       := by
     progress
-    simp [*]
 
   /- Checking the case where simplifying the goal after instantiating the
      pspec theorem actually solves it, and where the function is not a constant.
