@@ -407,7 +407,8 @@ def splitExistsEqAndPost (args : Args) (fExpr : Expr) (toEliminate : Option FVar
   traceGoalWithNode "goal after applying the eq and simplifying the binds"
   -- TODO: remove this? (some types get unfolded too much: we "fold" them back)
   withTraceNode `Progress (fun _ => pure m!"simpAt: folding back scalar types") do
-    Simp.dsimpAt true {implicitDefEqProofs := true, failIfUnchanged := false} {addSimpThms := scalar_eqs} (.targets (fvarIds.map Expr.fvarId!) false)
+    Simp.dsimpAt true {implicitDefEqProofs := true, failIfUnchanged := false} {addSimpThms := scalar_eqs}
+      (.targets ((outputFVars ++ fvarIds).map Expr.fvarId!) false)
   if (← getUnsolvedGoals).isEmpty then trace[Progress] "The main goal was solved!"; return none
   traceGoalWithNode "goal after folding back scalar types"
   --
