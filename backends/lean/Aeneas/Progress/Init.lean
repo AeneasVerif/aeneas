@@ -739,7 +739,7 @@ initialize progressPureAttribute : ProgressPureSpecAttr ← do
 
 /-! # Attribute: `progress_pure_def` -/
 
-/-- Automatically generates a `progress` theorem from a pure definition.
+/-- Automatically generate a `progress` theorem from a pure definition.
 
 Example:
 ```lean
@@ -893,23 +893,7 @@ def elabProgressPureDefAttribute (stx : Syntax) : AttrM (Option (TSyntax `term))
     | _ => throwError "Unsupported syntax"
 
 /- Initialize the `progress_pure_def` attribute, which automatically generates
-   progress lemmas for pure definitions.
-
-   For instance, if we annotate the following definition with `progress_pure_def`:
-   ```
-   @[progress_pure_def]
-   def wrapping_add (x y : U32) : U32 := ...
-   ```
-   `progress_pure_def` performs operations which are equivalent to introducing the following lemma:
-   ```
-   @[progress]
-   theorem wrapping_add.progress_spec (x y : U32) :
-    ∃ z, ↑(wrapping_add x y) = ok z ∧
-    z = wrapping_add x y
-   ```
-
-   Note that `progress_pure_def` takes a,n
- -/
+   progress lemmas for pure definitions. -/
 initialize progressPureDefAttribute : ProgressPureDefSpecAttr ← do
   let attrImpl : AttributeImpl := {
     name := `progress_pure_def
