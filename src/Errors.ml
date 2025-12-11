@@ -13,7 +13,7 @@ let error_mutex = Mutex.create ()
 let span_data_to_string (span_data : Meta.span_data) =
   let file =
     match span_data.file.name with
-    | Virtual s | Local s -> s
+    | Virtual s | Local s | NotReal s -> s
   in
   let loc_to_string (l : Meta.loc) : string =
     string_of_int l.line ^ ":" ^ string_of_int l.col
