@@ -302,12 +302,16 @@ def reduceProdProjs (e : Expr) : MetaM Expr := do
 def liftToThm (stx : Syntax) (pat : Option Syntax) (n : Name)
   (mkPat : Array Expr → Expr → MetaM Expr)
   /- Receives:
-    - type of the definition/theorem after stripping the quantifiers
-    - pattern
-    - new pattern
-    - the fvars -/
-  (mkPureThmType : Expr → Expr → Expr → Array Expr → MetaM Expr)
-  (mkPureThm : Expr → Expr → Array Expr → MetaM Expr)
+    - the type of the definition/theorem after stripping the quantifiers
+    - the pattern
+    - the new pattern (can be `(y₀, ..., yₙ)` for instance)
+    - the parameters of the definition
+
+    Should generate the `P (y₀, ..., yₙ)`)
+   -/
+  (mkPred : Expr → Expr → Expr → Array Expr → MetaM Expr)
+  /- Should generate a proof term of type `P x` -/
+  (mkPredProofTerm : Expr → Expr → Array Expr → MetaM Expr)
   (suffix : String := "progress_spec") : MetaM Name := do
   trace[Progress] "Name: {n}"
   let env ← getEnv
@@ -346,7 +350,7 @@ def liftToThm (stx : Syntax) (pat : Option Syntax) (n : Name)
   let fvarsExists : Array Expr := ⟨ destProdsVal decompPatExists ⟩
   trace[Progress] "Fvars: {fvarsMatch}, {fvarsExists}"
   /- Small helper that we use to substitute the pattern in the original theorem -/
-  let mkPureThmType (npat : Expr) : MetaM Expr := mkPureThmType thm0 pat npat fvars
+  let mkPred (npat : Expr) : MetaM Expr := mkPred thm0 pat npat fvars
   /- Introduce the binder for the pure theorem - it will be bound outside of the ∃ but we need to use it
     right now to generate an expression of type:
     ```
@@ -354,7 +358,7 @@ def liftToThm (stx : Syntax) (pat : Option Syntax) (n : Name)
     P (x₁, ...) -- HERE
     ```
   -/
-  let pureThmType ← mkPureThmType decompPatMatch
+  let pureThmType ← mkPred decompPatMatch
   let pureThmName ← mkFreshUserName (.str .anonymous "pureThm")
   withLocalDeclD pureThmName pureThmType fun pureThm => do
   /- Introduce the equality -/
@@ -375,7 +379,7 @@ def liftToThm (stx : Syntax) (pat : Option Syntax) (n : Name)
     trace[Progress] "mkThmType:\n- {pat}\n- {xl0}\n- {xl1}"
     let npatExists ← mkProdsVal (xl0 ++ xl1)
     /- Update the theorem statement to replace the pattern with the decomposed pattern -/
-    let thmType ← mkPureThmType npatExists
+    let thmType ← mkPred npatExists
     trace[Progress] "mkThmType: without lifted equality: {thmType}"
     let eqType ← mkEq pat npatExists
     let thmType := mkAnd eqType thmType
@@ -420,7 +424,7 @@ def liftToThm (stx : Syntax) (pat : Option Syntax) (n : Name)
   let thm := mkApp thm pat
   trace[Progress] "Theorem after introducing the scrutinee: {thm} :\n{← inferType thm}"
   /- Apply to the pure theorem (the expression inside the match is a function which expects to receive this theorem). -/
-  let pureThm ← mkPureThm thm0 pat fvars
+  let pureThm ← mkPredProofTerm thm0 pat fvars
   trace[Progress] "pureThm: {← inferType pureThm}"
   /- Remark: we could use `mkAppN`, but if we do so with incorrect arguments, we detect the type-checking
     error only very late (typically when checking the term in the kernel), which is why we prefer using `mkAppOptM'`. -/
@@ -455,15 +459,15 @@ def liftToThm (stx : Syntax) (pat : Option Syntax) (n : Name)
   pure name
 
 def liftThm (stx pat : Syntax) (n : Name) (suffix : String := "progress_spec") : MetaM Name := do
-  let mkPureThmType (thm0 pat npat : Expr) (_ : Array Expr) : MetaM Expr := do
+  let mkPred (thm0 pat npat : Expr) (_ : Array Expr) : MetaM Expr := do
     let thm ← mapVisit (fun _ e => do if e == pat then pure npat else pure e) thm0
     /- Reduce a bit the expression, but in a controlled manner, to make it cleaner -/
     let thm ← normalizeLetBindings thm
     reduceProdProjs thm
-  let mkPureThm (_thm0 _pat : Expr) (fvars : Array Expr) : MetaM Expr := do
+  let mkPredProofTerm (_thm0 _pat : Expr) (fvars : Array Expr) : MetaM Expr := do
     mkAppOptM n (fvars.map some)
     --pure (mkAppN (.const decl.name (List.map Level.param sig.levelParams)) fvars)
-  liftToThm stx pat n (fun _ _ => throwError "Unreachable") mkPureThmType mkPureThm suffix
+  liftToThm stx pat n (fun _ _ => throwError "Unreachable") mkPred mkPredProofTerm suffix
 
 /-!
 # Command: `#progress_pure_lift_thm`
@@ -829,12 +833,12 @@ def mkProgressPureDefThm (stx : Syntax) (pat : Option Syntax) (n : Name)
       let eq ← mkEq x v
       let eq ← mkLambdaFVars #[v] eq
       mkAppM ``Exists #[eq]
-    let mkPureThmType (_ _ npat : Expr) (fvars : Array Expr) : MetaM Expr := do
+    let mkPred (_ _ npat : Expr) (fvars : Array Expr) : MetaM Expr := do
       mkEq npat (← mkAppOptM n (fvars.map some))
-    let mkPureThm (_ _ : Expr) (fvars : Array Expr) : MetaM Expr := do
+    let mkPredProofTerm (_ _ : Expr) (fvars : Array Expr) : MetaM Expr := do
       let e ← mkAppOptM n (fvars.map some)
       mkEqRefl e
-    liftToThm stx pat n mkPat mkPureThmType mkPureThm suffix
+    liftToThm stx pat n mkPat mkPred mkPredProofTerm suffix
 
 local elab "#progress_pure_def" id:ident pat:(term)? : command => do
   Lean.Elab.Command.runTermElabM (fun _ => do
