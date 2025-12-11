@@ -312,7 +312,7 @@ def liftToThm (stx : Syntax) (pat : Option Syntax) (n : Name)
   trace[Progress] "Name: {n}"
   let env ← getEnv
   let some decl := env.findAsync? n
-    | throwError "Could not find theorem {n}"
+    | throwError "Could not find declaration {n}"
   let sig := decl.sig.get
   /- Strip the quantifiers *before* elaborating the pattern -/
   forallTelescope sig.type.consumeMData fun fvars thm0 => do
@@ -775,19 +775,66 @@ structure ProgressPureDefSpecAttr where
   attr : AttributeImpl
   deriving Inhabited
 
-def mkProgressPureDefThm (stx : Syntax) (pat : Option Syntax) (n : Name) (suffix : String := "progress_spec") : MetaM Name := do
-  let mkPat (fvars : Array Expr) (ty : Expr) : MetaM Expr := do
-    withLocalDeclD (← mkFreshUserName `x) ty fun v => do
-    let x ← mkAppOptM n (fvars.map some)
-    let eq ← mkEq x v
-    let eq ← mkLambdaFVars #[v] eq
-    mkAppM ``Exists #[eq]
-  let mkPureThmType (_ _ npat : Expr) (fvars : Array Expr) : MetaM Expr := do
-    mkEq npat (← mkAppOptM n (fvars.map some))
-  let mkPureThm (_ _ : Expr) (fvars : Array Expr) : MetaM Expr := do
+theorem specLiftDef {α} (x : α) : Std.WP.spec (Std.toResult x) (fun y => y = x) := by
+  simp only [Std.toResult, Std.WP.spec_ok]
+
+def mkProgressPureDefThm (stx : Syntax) (pat : Option Syntax) (n : Name)
+  (suffix : String := "progress_spec") : MetaM Name := do
+  /- There is a shortcut (leading to simpler theorems) if there is no pattern and the output type is not a tuple:
+     we do not introduce existentials; that is instead of generating a theorem of the shape:
+     ```lean
+     spec (toResult e) (fun x => ∃ y1 ... yn, x = (y1, ..., yn) ∧ (y1, ..., yn) = e)
+     ```
+     we generate:
+     ```lean
+     spec (toResult e) (fun x => x = e)
+     ```
+     -/
+  let env ← getEnv
+  let some decl := env.findAsync? n
+    | throwError "Could not find definition {n}"
+  let sig := decl.sig.get
+  let noExists ← do
+    match pat with
+    | some _ => pure false
+    | none => do
+      /- Strip the quantifiers -/
+      forallTelescope sig.type.consumeMData fun _ ty => do
+      pure (Option.isNone (← destEqOpt ty))
+  if noExists then
+    -- We simply use the theorem `specDef`
+    forallTelescope sig.type.consumeMData fun fvars _ => do
     let e ← mkAppOptM n (fvars.map some)
-    mkEqRefl e
-  liftToThm stx pat n mkPat mkPureThmType mkPureThm suffix
+    let thm ← mkAppM ``specLiftDef #[e]
+    let thm ← mkLambdaFVars fvars thm
+    let thmTy ← inferType thm
+    /- Save the auxiliary theorem -/
+    let name := Name.str decl.name suffix
+    let auxDecl : TheoremVal := {
+      name
+      levelParams := sig.levelParams
+      type := thmTy
+      value := thm
+    }
+    addDecl (.thmDecl auxDecl)
+    /- Save the range -/
+    addDeclarationRangesFromSyntax name stx
+    /- -/
+    pure name
+  else
+    -- Regular case
+    let mkPat (fvars : Array Expr) (ty : Expr) : MetaM Expr := do
+      withLocalDeclD (← mkFreshUserName `x) ty fun v => do
+      let x ← mkAppOptM n (fvars.map some)
+      let eq ← mkEq x v
+      let eq ← mkLambdaFVars #[v] eq
+      mkAppM ``Exists #[eq]
+    let mkPureThmType (_ _ npat : Expr) (fvars : Array Expr) : MetaM Expr := do
+      mkEq npat (← mkAppOptM n (fvars.map some))
+    let mkPureThm (_ _ : Expr) (fvars : Array Expr) : MetaM Expr := do
+      let e ← mkAppOptM n (fvars.map some)
+      mkEqRefl e
+    liftToThm stx pat n mkPat mkPureThmType mkPureThm suffix
 
 local elab "#progress_pure_def" id:ident pat:(term)? : command => do
   Lean.Elab.Command.runTermElabM (fun _ => do
@@ -801,16 +848,24 @@ local elab "#progress_pure_def" id:ident pat:(term)? : command => do
   )
 
 namespace Test
-
-  #progress_pure_def overflowing_add (overflowing_add x y = z)
+  #progress_pure_def overflowing_add
   #elab overflowing_add.progress_spec
+
+  /--
+info: Aeneas.Progress.Test.overflowing_add.progress_spec (x y : U8) :
+  Std.WP.spec ↑(overflowing_add x y) fun y_1 => y_1 = overflowing_add x y
+  -/
+  #guard_msgs in
   #check overflowing_add.progress_spec
 
   def wrapping_add (x y : U8) : U8 × Bool := (⟨ x.val + y.val ⟩, x.val + y.val ≥ 256)
-
-  set_option trace.Progress true in
   #progress_pure_def wrapping_add (wrapping_add x y = (b, z))
-  #elab wrapping_add.progress_spec
+
+  /--
+info: Aeneas.Progress.Test.wrapping_add.progress_spec (x y : U8) :
+  Std.WP.spec ↑(wrapping_add x y) fun z => ∃ b z_1, z = (b, z_1) ∧ (b, z_1) = wrapping_add x y
+  -/
+  #guard_msgs in
   #check wrapping_add.progress_spec
 end Test
 
