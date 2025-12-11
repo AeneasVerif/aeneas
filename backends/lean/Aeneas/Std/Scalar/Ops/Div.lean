@@ -6,7 +6,7 @@ import Mathlib.Data.BitVec
 
 namespace Aeneas.Std
 
-open Result Error Arith ScalarElab
+open Result Error Arith ScalarElab WP
 
 /-!
 # Division: Definitions
@@ -416,12 +416,12 @@ theorem IScalar.div_spec {ty} {x y : IScalar ty}
   simp [hz]
 
 uscalar @[progress] theorem «%S».div_spec (x : «%S») {y : «%S»} (hnz : ↑y ≠ (0 : Nat)) :
-  ∃ z, x / y = ok z ∧ (↑z : Nat) = ↑x / ↑y :=
-  UScalar.div_spec x hnz
+  (x / y) ⦃⇓ z => (↑z : Nat) = ↑x / ↑y ⦄ :=
+  progress_exists_spec (UScalar.div_spec x hnz)
 
 iscalar @[progress] theorem «%S».div_spec {x y : «%S»} (hnz : ↑y ≠ (0 : Int))
   (hNoOverflow : ¬ (x.val = «%S».min ∧ y.val = -1)) :
-  ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y :=
-  IScalar.div_spec hnz (by scalar_tac)
+  (x / y) ⦃⇓ z => (↑z : Int) = Int.tdiv ↑x ↑y ⦄ :=
+  progress_exists_spec (IScalar.div_spec hnz (by scalar_tac))
 
 end Aeneas.Std
