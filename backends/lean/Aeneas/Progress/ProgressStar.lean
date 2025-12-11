@@ -199,16 +199,23 @@ inductive TargetKind where
 def analyzeTarget : TacticM TargetKind := do
   withTraceNode `Progress (fun _ => do pure m!"analyzeTarget") do
   try
-    Progress.monadTelescope (← getMainTarget) fun _xs _zs program _res _post => do
-    let e ← Utils.normalizeLetBindings program
-    if let .const ``Bind.bind .. := e.getAppFn then
-      let #[_m, _self, _α, _β, _value, cont] := e.getAppArgs
-        | throwError "Expected bind to have 4 arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
-      Utils.lambdaOne cont fun x _ => do
-        let name ← x.fvarId!.getUserName
-        pure (.bind name)
-    else if let .some bfInfo ← Bifurcation.Info.ofExpr e then
-      pure (.switch bfInfo)
+    let goalTy ← (← getMainGoal).getType
+    -- Dive into the `spec program post`
+    goalTy.withApp fun spec? args => do
+    if h: spec?.isConstOf ``Std.WP.spec ∧ args.size = 3 then
+      let program := args[1]
+      -- Check if this is a bind
+      let e ← Utils.normalizeLetBindings program
+      if let .const ``Bind.bind .. := e.getAppFn then
+        let #[_m, _self, _α, _β, _value, cont] := e.getAppArgs
+          | throwError "Expected bind to have 4 arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
+        Utils.lambdaOne cont fun x _ => do
+          let name ← x.fvarId!.getUserName
+          pure (.bind name)
+      else if let .some bfInfo ← Bifurcation.Info.ofExpr e then
+        pure (.switch bfInfo)
+      else
+        pure .result
     else
       pure .result
   catch _ => pure .unknown
@@ -392,8 +399,8 @@ where
         withTraceNode `Progress (fun _ => pure m!"New main goal:") do
         trace[Progress] "{goal.goal}"
       withTraceNode `Progress (fun _ => pure m!"all preconditions") do trace[Progress] "All preconditions:\n{preconditions.map Prod.fst}"
-      /- Update the main goal, if necessary -/
-      let ids ← getIdsFromUsedTheorem varName.eraseMacroScopes usedTheorem
+      /- Update the main goal by renaming the fresh variables, if necessary -/
+      let ids := match mainGoal with | none => #[] | some goal => makeIds varName.eraseMacroScopes goal.outputs.size goal.posts.size
       trace[Progress] "ids from used theorem: {ids}"
       let mainGoal ← do mainGoal.mapM fun mainGoal => do
         if ¬ ids.isEmpty then
@@ -479,16 +486,25 @@ where
     try some <$> Progress.evalProgressCore cfg.async none (some (.str .anonymous "_")) none #[] cfg.preconditionTac
     catch _ => pure none
 
-  getIdsFromUsedTheorem name usedTheorem: TacticM (Array _) := do
+  /-getIdsFromUsedTheorem name usedTheorem: TacticM (Array _) := do
     withTraceNode `Progress (fun _ => do pure m!"getIdsFromUsedTheorem") do
     let some thm ← usedTheorem.getType
       | throwError "Could not infer proposition of {usedTheorem}"
-    let (numElem, numPost) ← Progress.monadTelescope thm
-      fun _xs zs _program _res postconds => do
-        let numPost := Utils.numOfConjuncts <$> postconds |>.getD 0
-        trace[Progress] "Number of conjuncts for `{←liftM (Option.traverse ppExpr postconds)}` is {numPost}"
-        pure (zs.size, numPost)
-    return makeIds (base := name) numElem numPost
+    let (numElem, numPost) ← do
+      forallTelescope thm fun _ thm => do
+      thm.withApp fun spec? args =>
+      if h: spec?.isConstOf ``Std.WP.spec ∧ args.size = 3 then
+        -- Dive into the post to check the outputs
+        let post := args[2]
+        -- This should be a lambda
+
+        Progress.monadTelescope thm
+        fun _xs zs _program _res postconds => do
+          let numPost := Utils.numOfConjuncts <$> postconds |>.getD 0
+          trace[Progress] "Number of conjuncts for `{←liftM (Option.traverse ppExpr postconds)}` is {numPost}"
+          pure (zs.size, numPost)
+      else throwError "Not a spec"
+    return makeIds (base := name) numElem numPost-/
 
   makeIds (base: Name) (numElem numPost : Nat) (defaultId := "x"): Array (TSyntax ``Lean.binderIdent) :=
     let (root, base?) := match base with
@@ -551,6 +567,8 @@ end ProgressStar
 
 section Examples
 
+open Std.WP
+
 /--
 info: Try this:
 
@@ -571,11 +589,11 @@ info: Try this:
 
   [apply]     let* ⟨ x2, x2_post ⟩ ← U32.add_spec
     let* ⟨ x3, x3_post ⟩ ← U32.add_spec
-    let* ⟨ res, res_post ⟩ ← U32.add_spec
+    let* ⟨ ⟩ ← U32.add_spec
 -/
 #guard_msgs in
 example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
-  ∃ z, add1 x y = ok z := by
+  add1 x y ⦃⇓ _ => True ⦄ := by
   unfold add1
   progress*?
 
@@ -591,7 +609,7 @@ info: Try this:
 #guard_msgs in
 example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
   let v := 2 * x.val + 2 * y.val + 4
-  ∃ z, add1 x y = ok z ∧ z.val = v:= by
+  add1 x y ⦃⇓ z => z.val = v ⦄ := by
   unfold add1
   progress*?
 
@@ -610,13 +628,13 @@ info: Try this:
   [apply]     split
     . let* ⟨ x2, x2_post ⟩ ← U32.add_spec
       let* ⟨ x3, x3_post ⟩ ← U32.add_spec
-      let* ⟨ res, res_post ⟩ ← U32.add_spec
+      let* ⟨ ⟩ ← U32.add_spec
     . let* ⟨ y, y_post ⟩ ← U32.add_spec
-      let* ⟨ res, res_post ⟩ ← U32.add_spec
+      let* ⟨ ⟩ ← U32.add_spec
 -/
 #guard_msgs in
 example b (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
-      ∃ z, add2 b x y = ok z := by
+      add2 b x y ⦃⇓ _ => True ⦄ := by
   unfold add2
   progress*?
 
@@ -628,15 +646,15 @@ info: Try this:
       · sorry
       let* ⟨ x3, x3_post ⟩ ← U32.add_spec
       · sorry
-      let* ⟨ res, res_post ⟩ ← U32.add_spec
+      let* ⟨ ⟩ ← U32.add_spec
       · sorry
     . let* ⟨ y, y_post ⟩ ← U32.add_spec
       · sorry
-      let* ⟨ res, res_post ⟩ ← U32.add_spec
+      let* ⟨ ⟩ ← U32.add_spec
       · sorry
 ---
 error: unsolved goals
-case isTrue.hmax
+case hmax
 b : Bool
 x y : U32
 h✝ : b = true
@@ -663,7 +681,7 @@ _ : [> let x3 ← x2 + x2 <]
 x3_post : ↑x3 = ↑x2 + ↑x2
 ⊢ ↑x3 + ↑4#u32 ≤ U32.max
 
-case isFalse.hmax
+case hmax
 b : Bool
 x y : U32
 h✝ : ¬b = true
@@ -680,15 +698,45 @@ y_post : ↑y = ↑x + ↑y✝
 -/
 #guard_msgs in
 example b (x y : U32) :
-      ∃ z, add2 b x y = ok z := by
+      add2 b x y ⦃⇓ _ => True ⦄ := by
   unfold add2
+  progress*?
+
+/- Checking that if we can't prove the final goal, we do introduce names for the outputs of the last
+   monadic call -/
+/--
+info: Try this:
+
+  [apply]     let* ⟨ x2, x2_post ⟩ ← U32.add_spec
+    let* ⟨ x3, x3_post ⟩ ← U32.add_spec
+    let* ⟨ res, res_post ⟩ ← U32.add_spec
+    sorry
+---
+error: unsolved goals
+x y : U32
+h : 2 * ↑x + 2 * ↑y + 4 ≤ U32.max
+x2 : U32
+_✝¹ : [> let x2 ← x + y <]
+x2_post : ↑x2 = ↑x + ↑y
+x3 : U32
+_✝ : [> let x3 ← x2 + x2 <]
+x3_post : ↑x3 = ↑x2 + ↑x2
+res : U32
+_ : [> let res ← x3 + 4#u32 <]
+res_post : ↑res = ↑x3 + 4
+⊢ ↑x < 32
+-/
+#guard_msgs in
+example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
+      add1 x y ⦃⇓ _ => x.val < 32 ⦄ := by
+  unfold add1
   progress*?
 
 example (x y : U32) (h : x.val * y.val ≤ U32.max):
   (do
     let z0 ← x * y
     let z1 ← y * x
-    massert (z1 == z0)) = ok () := by
+    massert (z1 == z0)) ⦃⇓ _ => True ⦄ := by
     progress* by (ring_nf at *; simp [*] <;> scalar_tac)
 
 end Examples

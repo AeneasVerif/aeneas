@@ -111,6 +111,8 @@ end UsedTheorem
 
 structure MainGoal where
   goal : MVarId
+  /-- The variables "output" by the monadic function call and introduced in the context -/
+  outputs : Array FVarId
   /-- The post-conditions introduced in the context -/
   posts : Array FVarId
 
@@ -353,22 +355,29 @@ def splitExistsEqAndPost (args : Args) (fExpr : Expr) (toEliminate : Option FVar
   TacticM (Option MainGoal) := do
   withTraceNode `Progress (fun _ => pure m!"splitExistsEqAndPost") do
   trace[Progress] "ids: {args.ids},\n post before introducing the existentials ({thAsm}): {← inferType thAsm}"
-  splitAllExistsTac thAsm args.ids.toList fun fvarIds h ids => do
+  splitAllExistsTac thAsm args.ids.toList fun existsVars h ids => do
   trace[Progress] "ids: {ids},\n post after introducing the existentials ({h}): {← inferType h}"
   /- Introduce the pretty equality if the user requests it.
       We take care of introducing it *before* splitting the post-conditions, so that those appear
       after it. -/
-  let h ← introPrettyEquality args fExpr toEliminate outputFVars fvarIds h
+  let h ← introPrettyEquality args fExpr toEliminate outputFVars existsVars h
+  trace[Progress] "Introduced the pretty equality"
 
   /- If the post-condition has the shape `∃ y1 ... yn, x = (y1, ..., yn) ∧ P (y1, ..., yn)`,
    eliminate `x` as well as the equation `x = (y1, ..., yn)` from the context. Note that we
    need to simplify the goal with the equation before eliminating it. We return `true` if
-   by doing so we actually proved the goal. -/
+   by doing so we actually proved the goal.
+
+   TODO: there is not point in having a continuation anymore
+  -/
   let elimDecomposeEq (k : Option Expr → List (Option Name) → TacticM (Option MainGoal)) :
     TacticM (Option MainGoal) := do
     match toEliminate with
-    | none => k (some h) ids
+    | none =>
+      trace[Progress] "No need to eliminate the output"
+      k (some h) ids
     | some toEliminate =>
+      trace[Progress] "Eliminating the output"
       /- Small helper to simplify the goal with the equality and some simp lemmas for the monads,
          then eliminate the useless variables -/
       let simpAndElim (hEq : Expr) (hPost : Option Expr) (ids : List (Option Name))
@@ -399,12 +408,13 @@ def splitExistsEqAndPost (args : Args) (fExpr : Expr) (toEliminate : Option FVar
   -- TODO: this is dangerous if we want to use a local assumption to make progress.
   -- We shouldn't simplify the goal with the equality, then simplify again.
   elimDecomposeEq fun hPost ids => do
+  withMainContext do
   trace[Progress] "post ({hPost}):\n{← liftM (Option.mapM inferType hPost)}"
   traceGoalWithNode "goal after applying the eq and simplifying the binds"
   -- TODO: remove this? (some types get unfolded too much: we "fold" them back)
   withTraceNode `Progress (fun _ => pure m!"simpAt: folding back scalar types") do
     Simp.dsimpAt true {implicitDefEqProofs := true, failIfUnchanged := false} {addSimpThms := scalar_eqs}
-      (.targets ((outputFVars ++ fvarIds).map Expr.fvarId!) false)
+      (.targets ((outputFVars ++ existsVars).map Expr.fvarId!) false)
   if (← getUnsolvedGoals).isEmpty then trace[Progress] "The main goal was solved!"; return none
   traceGoalWithNode "goal after folding back scalar types"
   --
@@ -418,7 +428,7 @@ def splitExistsEqAndPost (args : Args) (fExpr : Expr) (toEliminate : Option FVar
     if ¬ ids.isEmpty then
       logWarning m!"Too many ids provided ({ids}): there is no postcondition to split"
     trace[Progress] "No post to split"
-    pure (some { goal := ← getMainGoal, posts := #[]})
+    pure (some { goal := ← getMainGoal, outputs := outputFVars.map Expr.fvarId!, posts := #[]})
   | some hPost => do
     trace[Progress] "Post to split: {hPost}: {← inferType hPost}\nids: {ids}"
     -- Small helper
@@ -459,7 +469,7 @@ def splitExistsEqAndPost (args : Args) (fExpr : Expr) (toEliminate : Option FVar
         pure (hPost.fvarId! :: hPosts).reverse.toArray
     let curPostId := (← hPost.fvarId!.getDecl).userName
     let posts ← splitPostWithIds curPostId [] hPost ids
-    pure (some ⟨ ← getMainGoal, posts⟩)
+    pure (some ⟨ ← getMainGoal, outputFVars.map Expr.fvarId!, posts⟩)
 
 /-- Attempt to solve the preconditions.
 
@@ -520,7 +530,7 @@ def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option MainGoal)
       let r ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
         {simpThms := #[← progressSimpExt.getTheorems], declsToUnfold := #[``pure]} (.targets #[] true)
       if r.isSome then
-        pure (some ({ goal := ← getMainGoal, posts} : MainGoal))
+        pure (some ({mainGoal with goal := ← getMainGoal, posts} : MainGoal))
       else pure none
 
 /-- Attempt to decompose an array of fvars -/

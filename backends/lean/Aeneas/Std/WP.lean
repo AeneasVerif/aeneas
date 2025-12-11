@@ -36,6 +36,9 @@ def spec (x:Result α) (p:Post α) :=
 @[simp, grind =]
 theorem spec_ok (x : α) : spec (.ok x) p ↔ p x := by simp [spec, theta, wp_return]
 
+@[simp, grind =]
+theorem spec_fail (e : Error) : spec (.fail e) p ↔ False := by simp [spec, theta]
+
 theorem spec_bind {k:α -> Result β} {Pₖ:Post β} {m:Result α} {Pₘ:Post α} :
   spec m Pₘ →
   (forall x, Pₘ x → spec (k x) Pₖ) →
