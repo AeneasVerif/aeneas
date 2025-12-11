@@ -151,15 +151,15 @@ instance Result.instWP : WP (Result) (.except Error .pure) where
         | .div => PredTrans.const ⌜False⌝
 
 instance : LawfulMonad Result where
-    map_const := sorry
-    id_map := sorry
-    seqLeft_eq := sorry
-    seqRight_eq := sorry
-    pure_seq := sorry
-    pure_bind := sorry
-    bind_pure_comp := sorry
-    bind_map := sorry
-    bind_assoc := sorry
+    map_const := by intros; rfl
+    id_map := by intros _ x; cases x <;> rfl
+    seqLeft_eq := by intros _ _ x y; cases x <;> cases y <;> rfl
+    seqRight_eq := by intros _ _ x y; cases x <;> cases y <;> rfl
+    pure_seq := by intros _ _ _ x; cases x <;> rfl
+    pure_bind := by intros; rfl
+    bind_pure_comp := by intros; rfl
+    bind_map := by intros; rfl
+    bind_assoc := by intros _ _ _ x _ _; cases x <;> rfl
 
 instance : WPMonad Result (.except Error .pure) where
   wp_pure := by
