@@ -73,12 +73,25 @@ theorem progress_exists_spec {m:Result α} {P:Post α} :
   (∃ y, m = .ok y ∧ P y) → spec m P := by
   exact (progress_spec_equiv_exists m P).2
 
-scoped syntax:lead (name := specSyntax) term:lead " ⦃" "⇓" term " => " term "⦄" : term
+scoped syntax:lead (name := specSyntax) term:lead " ⦃" "⇓ " Lean.Parser.Term.funBinder " => " term " ⦄" : term
+scoped syntax:lead (name := specSyntaxPred) term:lead " ⦃" "⇓ " term " ⦄" : term
 
 macro_rules
   | `($x ⦃⇓ $r => $P⦄)  => `(Aeneas.Std.WP.spec $x (fun $r => $P))
+  | `($x ⦃⇓ $P:term⦄)  => `(Aeneas.Std.WP.spec $x $P)
 
-example : .ok 0 ⦃⇓ r => r = 0⦄ := by simp
+@[app_unexpander spec]
+def unexpSpec : Lean.PrettyPrinter.Unexpander
+  | `($_ $e fun $v => $P) | `($_ $e (fun $v => $P)) => `($e ⦃⇓ $v => $P ⦄)
+  | `($_ $e $P:term) => `($e ⦃⇓ $P ⦄)
+  | _ => throw ()
+
+example : .ok 0 ⦃⇓ r => r = 0 ⦄ := by simp
+example : spec (.ok 0) fun _ => True := by simp
+example : .ok 0 ⦃⇓ _ => True ⦄ := by simp
+example : spec (.ok (0, 1)) fun (x, y) => x = 0 ∧ y = 1 := by simp
+example : .ok (0, 1) ⦃⇓ (x, y) => x = 0 ∧ y = 1 ⦄ := by simp
+example : let P (x : Nat) := x = 0; .ok 0 ⦃⇓ P ⦄ := by simp
 
 def add1 (x : Nat) := Result.ok (x + 1)
 theorem  add1_spec (x : Nat) : add1 x ⦃⇓ y => y = x + 1⦄ :=

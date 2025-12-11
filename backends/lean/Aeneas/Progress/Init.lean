@@ -487,11 +487,11 @@ namespace Test
 
   /--
 info: Aeneas.Progress.Test.pos_pair_is_pos.progress_spec :
-  Std.WP.spec ↑pos_pair fun z =>
+  ↑pos_pair ⦃⇓ z =>
     ∃ x y,
       z = (x, y) ∧
         match (x, y) with
-        | (x, y) => x ≥ 0 ∧ y ≥ 0
+        | (x, y) => x ≥ 0 ∧ y ≥ 0 ⦄
   -/
   #guard_msgs in
   #check pos_pair_is_pos.progress_spec
@@ -500,11 +500,11 @@ info: Aeneas.Progress.Test.pos_pair_is_pos.progress_spec :
 
   /--
 info: Aeneas.Progress.Test.pos_triple_is_pos.progress_spec :
-  Std.WP.spec ↑pos_triple fun z =>
+  ↑pos_triple ⦃⇓ z =>
     ∃ y.0 y.1 y.2,
       z = (y.0, y.1, y.2) ∧
         match (y.0, y.1, y.2) with
-        | (x, y, z) => x ≥ 0 ∧ y ≥ 0 ∧ z ≥ 0
+        | (x, y, z) => x ≥ 0 ∧ y ≥ 0 ∧ z ≥ 0 ⦄
   -/
   #guard_msgs in
   #check pos_triple_is_pos.progress_spec
@@ -514,11 +514,11 @@ info: Aeneas.Progress.Test.pos_triple_is_pos.progress_spec :
 
   /--
 info: Aeneas.Progress.Test.pos_triple_is_pos'.progress_spec :
-  Std.WP.spec ↑pos_triple fun z =>
+  ↑pos_triple ⦃⇓ z =>
     ∃ z_1,
       z = z_1 ∧
         match z_1 with
-        | (x, y, z) => x ≥ 0 ∧ y ≥ 0 ∧ z ≥ 0
+        | (x, y, z) => x ≥ 0 ∧ y ≥ 0 ∧ z ≥ 0 ⦄
   -/
   #guard_msgs in
   #check pos_triple_is_pos'.progress_spec
@@ -527,8 +527,7 @@ info: Aeneas.Progress.Test.pos_triple_is_pos'.progress_spec :
 
   /--
 info: Aeneas.Progress.Test.overflowing_add_eq.progress_spec (x y : U8) :
-  Std.WP.spec ↑(overflowing_add x y) fun z =>
-    ∃ y.0 y.1, z = (y.0, y.1) ∧ if x.val + y.val > 255 then y.1 = true else y.1 = false
+  ↑(overflowing_add x y) ⦃⇓ z => ∃ y.0 y.1, z = (y.0, y.1) ∧ if x.val + y.val > 255 then y.1 = true else y.1 = false ⦄
   -/
   #guard_msgs in
   #check overflowing_add_eq.progress_spec
@@ -857,7 +856,7 @@ namespace Test
 
   /--
 info: Aeneas.Progress.Test.overflowing_add.progress_spec (x y : U8) :
-  Std.WP.spec ↑(overflowing_add x y) fun y_1 => y_1 = overflowing_add x y
+  ↑(overflowing_add x y) ⦃⇓ y_1 => y_1 = overflowing_add x y ⦄
   -/
   #guard_msgs in
   #check overflowing_add.progress_spec
@@ -867,7 +866,7 @@ info: Aeneas.Progress.Test.overflowing_add.progress_spec (x y : U8) :
 
   /--
 info: Aeneas.Progress.Test.wrapping_add.progress_spec (x y : U8) :
-  Std.WP.spec ↑(wrapping_add x y) fun z => ∃ b z_1, z = (b, z_1) ∧ (b, z_1) = wrapping_add x y
+  ↑(wrapping_add x y) ⦃⇓ z => ∃ b z_1, z = (b, z_1) ∧ (b, z_1) = wrapping_add x y ⦄
   -/
   #guard_msgs in
   #check wrapping_add.progress_spec
