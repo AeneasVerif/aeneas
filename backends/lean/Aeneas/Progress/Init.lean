@@ -299,15 +299,28 @@ def reduceProdProjs (e : Expr) : MetaM Expr := do
     (toResult some_pair) ⦃ fun z => z = (x, y) ∧ P x ∧ Q y ⦄
     ```
 -/
-def liftThm (stx pat : Syntax) (n : Name) (suffix : String := "progress_spec") : MetaM Name := do
+def liftToThm (stx : Syntax) (pat : Option Syntax) (n : Name)
+  (mkPat : Array Expr → Expr → MetaM Expr)
+  /- Receives:
+    - type of the definition/theorem after stripping the quantifiers
+    - pattern
+    - new pattern
+    - the fvars -/
+  (mkPureThmType : Expr → Expr → Expr → Array Expr → MetaM Expr)
+  (mkPureThm : Expr → Expr → Array Expr → MetaM Expr)
+  (suffix : String := "progress_spec") : MetaM Name := do
   trace[Progress] "Name: {n}"
   let env ← getEnv
   let some decl := env.findAsync? n
     | throwError "Could not find theorem {n}"
   let sig := decl.sig.get
-  /- Strip the quantifiers before elaborating the pattern -/
+  /- Strip the quantifiers *before* elaborating the pattern -/
   forallTelescope sig.type.consumeMData fun fvars thm0 => do
-  let (pat, _) ← Elab.Term.elabTerm pat none |>.run
+  let pat ← do
+    match pat with
+    | none => mkPat fvars thm0
+    | some pat => do
+      pure ((← Elab.Term.elabTerm pat none |>.run).fst)
   trace[Progress] "Elaborated pattern: {pat}"
   /- -/
   existsTelescope pat.consumeMData fun _ eqMatch => do
@@ -333,11 +346,7 @@ def liftThm (stx pat : Syntax) (n : Name) (suffix : String := "progress_spec") :
   let fvarsExists : Array Expr := ⟨ destProdsVal decompPatExists ⟩
   trace[Progress] "Fvars: {fvarsMatch}, {fvarsExists}"
   /- Small helper that we use to substitute the pattern in the original theorem -/
-  let mkPureThmType (npat : Expr) : MetaM Expr := do
-    let thm ← mapVisit (fun _ e => do if e == pat then pure npat else pure e) thm0
-    /- Reduce a bit the expression, but in a controlled manner, to make it cleaner -/
-    let thm ← normalizeLetBindings thm
-    reduceProdProjs thm
+  let mkPureThmType (npat : Expr) : MetaM Expr := mkPureThmType thm0 pat npat fvars
   /- Introduce the binder for the pure theorem - it will be bound outside of the ∃ but we need to use it
     right now to generate an expression of type:
     ```
@@ -394,29 +403,34 @@ def liftThm (stx pat : Syntax) (n : Name) (suffix : String := "progress_spec") :
       let thm ← mkAppOptM ``Exists.intro #[α, p, x, h]
       trace[Progress] "introExists: resulting theorem:\n{thm}\n  :\n{← inferType thm}"
       pure thm
-  let thm ← introExists [] (List.zip fvarsMatch.toList fvarsExists.toList)
+  let thm ←
+    withTraceNode `Progress (fun _ => pure m!"introExists") do
+    introExists [] (List.zip fvarsMatch.toList fvarsExists.toList)
   trace[Progress] "Theorem after introducing the existentials: {thm} :\n{← inferType thm}"
   /- Introduce the λ which binds the pure theorem -/
   let thm ← mkLambdaFVars #[pureThm] thm
   trace[Progress] "Theorem after introducing the lambda: {thm} :\n{← inferType thm}"
   /- Introduce the matches -/
-  let thm ← mkProdsMatch fvarsMatch.toList thm
+  let thm ←
+    withTraceNode `Progress (fun _ => pure m!"mkProdsMatch") do
+    mkProdsMatch fvarsMatch.toList thm
   trace[Progress] "Theorem after introducing the matches: {thm} :\n{← inferType thm}"
   /- Apply to the scrutinee (which is the pattern provided by the user): `mkProdsMatch` generates
     a lambda expression, where the bound value is the scrutinee we should match over. -/
   let thm := mkApp thm pat
   trace[Progress] "Theorem after introducing the scrutinee: {thm} :\n{← inferType thm}"
-  /- Apply to the pure theorem (the expression inside the match is a function which expects to receive this theorem) -/
-  let pureThm := mkAppN (.const decl.name (List.map Level.param sig.levelParams)) fvars
-  let thm := mkAppN thm #[pureThm]
+  /- Apply to the pure theorem (the expression inside the match is a function which expects to receive this theorem). -/
+  let pureThm ← mkPureThm thm0 pat fvars
+  trace[Progress] "pureThm: {← inferType pureThm}"
+  /- Remark: we could use `mkAppN`, but if we do so with incorrect arguments, we detect the type-checking
+    error only very late (typically when checking the term in the kernel), which is why we prefer using `mkAppOptM'`. -/
+  let thm ← mkAppOptM' thm #[pureThm]
   trace[Progress] "Theorem after introducing the matches and the app: {thm} :\n{← inferType thm}"
-  /- Prepare the theorem type -/
-  let thmType ← mkThmType pat [] fvarsExists.toList
   -- Generate the predicate: we simply replace the pattern with a fresh variable
   let patVarName ← mkFreshUserName `z
   let patTy ← inferType pat
   withLocalDeclD patVarName patTy fun patVar => do
-  let pred ← mapVisit (fun _ e => do if e == pat then pure patVar else pure e) thmType
+  let pred ← mkThmType patVar [] fvarsExists.toList
   let pred ← mkLambdaFVars #[patVar] pred
   trace[Progress] "Predicate: {pred}\n  :\n{← inferType pred}"
   -- Lift to a Hoare triple
@@ -440,11 +454,23 @@ def liftThm (stx pat : Syntax) (n : Name) (suffix : String := "progress_spec") :
   /- -/
   pure name
 
+def liftThm (stx pat : Syntax) (n : Name) (suffix : String := "progress_spec") : MetaM Name := do
+  let mkPureThmType (thm0 pat npat : Expr) (_ : Array Expr) : MetaM Expr := do
+    let thm ← mapVisit (fun _ e => do if e == pat then pure npat else pure e) thm0
+    /- Reduce a bit the expression, but in a controlled manner, to make it cleaner -/
+    let thm ← normalizeLetBindings thm
+    reduceProdProjs thm
+  let mkPureThm (_thm0 _pat : Expr) (fvars : Array Expr) : MetaM Expr := do
+    mkAppOptM n (fvars.map some)
+    --pure (mkAppN (.const decl.name (List.map Level.param sig.levelParams)) fvars)
+  liftToThm stx pat n (fun _ _ => throwError "Unreachable") mkPureThmType mkPureThm suffix
+
 /-!
 # Command: `#progress_pure_lift_thm`
 
 We do not really use it - it is mostly for testing purposes.
 -/
+
 
 local elab "#progress_pure_lift_thm" id:ident pat:term : command => do
   Lean.Elab.Command.runTermElabM (fun _ => do
@@ -508,7 +534,6 @@ end Test
 # Attribute: `#progress_pure`
 -/
 
-/- The ident is the name of the saturation set, the term is the pattern. -/
 syntax (name := progress_pure) "progress_pure" term : attr
 
 section
@@ -708,16 +733,42 @@ initialize progressPureAttribute : ProgressPureSpecAttr ← do
   registerBuiltinAttribute attrImpl
   pure { attr := attrImpl }
 
-syntax (name := progressPat) term (" = " term)? : term
-
 /-! # Attribute: `progress_pure_def` -/
 
-/- The ident is the name of the saturation set, the term is the pattern. -/
+/-- Automatically generates a `progress` theorem from a pure definition.
+
+Example:
+```lean
+@[progress_pure_def wrapping_add = (b, x)]
+def wrapping_add (x y : U32) : Bool × U32 := ...
+```
+generates the theorem:
+```lean
+@[progress]
+theorem wrapping_add.progress_spec (x y : U32) :
+  (toResult (wrapping_add x y)) ⦃ ⇓z => ∃ b x, z = (b, x) ∧ (b, x) = wrapping_add x y ⦄
+```
+(note that the `z` appearing in the post-condition is eliminated when calling `progress`,
+leaving only `b` and `x` in the environment).
+ -/
 syntax (name := progress_pure_def) "progress_pure_def" (term)? : attr
 
-def elabProgressPureDefAttribute (stx : Syntax) : AttrM (Option Syntax) := do
-  if stx[1].isNone then pure none
-  else pure (stx[1])
+/-- We desugar patterns of the shape `foo = (x, y, z)` to `∃ x y z, foo = (x, y, z)` in order to bind
+    the variables introduced in the right-hand side, allowing us to elaborate the patterns. -/
+def elabProgressPureDefPattern (stx : Syntax) : AttrM (TSyntax `term) :=
+  withRef stx do
+    match stx with
+    | `(term| $x = $pat)
+    | `(term| ($x = $pat)) => do
+      trace[ProgressElab] "elabProgressPureDefPattern: equality pattern"
+      let ids ← getProgressPurePatternIdents pat
+      let term ← ids.foldrM (fun id term => do
+        `(term| ∃ $id:ident, $term)
+        ) (← `(term| $x = $pat))
+      pure term
+    | `(term| $pat) => do
+      trace[ProgressElab] "elabProgressPureDefPattern: not an equality"
+      pure pat
 
 /-- The progress pure def attribute -/
 structure ProgressPureDefSpecAttr where
@@ -725,138 +776,46 @@ structure ProgressPureDefSpecAttr where
   deriving Inhabited
 
 def mkProgressPureDefThm (stx : Syntax) (pat : Option Syntax) (n : Name) (suffix : String := "progress_spec") : MetaM Name := do
-  trace[Progress] "Name: {n}"
-  let env ← getEnv
-  let some decl := env.findAsync? n
-    | throwError "Could not find theorem {n}"
-  let sig := decl.sig.get
-  /- Strip the quantifiers before elaborating the pattern -/
-  forallTelescope sig.type.consumeMData fun fvars _ => do
-  let declTerm := mkAppN (.const decl.name (List.map Level.param sig.levelParams)) fvars
-  /- Elaborate the pattern, if there is -/
-  let elabDecomposePat (basename : String) (k : Expr → Array Expr → MetaM Name) : MetaM Name := do
-    match pat with
-    | none =>
-      withFreshTupleFieldFVars (.str .anonymous basename) (← inferType declTerm) fun fvars => do
-      let pat ← mkProdsVal fvars.toList
-      k pat fvars
-    | some pat =>
-      /- Elaborate the pattern -/
-      let (pat, _) ← Elab.Term.elabTerm pat none |>.run
-      trace[Progress] "Elaborated pattern: {pat}"
-      /- Introduce the existentials -/
-      existsTelescope pat.consumeMData fun fvarsExists eq => do
-      /- Destruct the equality -/
-      let (lhs, rhs) ← destEq eq
-      /- Sanity check: the lhs should be equal to the definition -/
-      assert! (lhs == declTerm)
-      /- -/
-      k rhs fvarsExists
-  /- We need to introduce two sets of variables:
-     - one for the variables bound at the external case
-     - one for the variables bound in the existential quantifiers
-   -/
-  elabDecomposePat "x" fun decompPatMatch fvarsMatch => do
-  elabDecomposePat "y" fun _ fvarsExists => do
-  /- Introduce the lifted and pure equalities -/
-  let liftedEq ← do
-    let okDecompPat ← mkAppM ``Std.Result.ok #[decompPatMatch]
-    mkEqRefl okDecompPat
-  let pureEq ← mkEqRefl decompPatMatch
-  let thm ← mkAppM ``And.intro #[liftedEq, pureEq]
-  trace[Progress] "Theorem after introducing the lifted and pure equalities: {thm}\n  :\n{← inferType thm}"
-  /- Auxiliary helper which computes the type of the (intermediate) theorems when adding the existentials.
-
-     Given `toResultArg`, `xl0` and `xl1`, generates:
-     ```
-     ∃ $xl1,
-     toResult $toResultArg = ($xl0 ++ $xl1) ∧
-     ($xl0 ++ $xl1) = $toResultArg
-     ```
-   -/
-  let mkThmType (toResultArg : Expr) (xl0 : List Expr) (xl1 : List Expr) : MetaM Expr := do
-    trace[Progress] "mkThmType:\n- {toResultArg}\n- {xl0}\n- {xl1}"
-    let npatExists ← mkProdsVal (xl0 ++ xl1)
-    let liftedEqTy ←
-      mkAppM ``Eq #[← mkAppM ``Std.toResult #[toResultArg], ← mkAppM ``Std.Result.ok #[npatExists]]
-    let pureEqTy ← mkAppM ``Eq #[npatExists, toResultArg]
-    let thmType := mkAnd liftedEqTy pureEqTy
-    trace[Progress] "mkThmType: conjunction: {thmType}"
-    /- Introduce the existentials, only for the suffix of the list of variables -/
-    let thmType ← List.foldrM (fun fvar thmType => do
-        let p ← mkLambdaFVars #[fvar] thmType
-        mkAppM ``Exists #[p]
-        ) thmType xl1
-    trace[Progress] "mkThmType: after adding the existentials: {thmType}"
-    pure thmType
-  /- Introduce the existentials -/
-  let rec introExists (xl0 xl1 : List (Expr × Expr)) : MetaM Expr := do
-    match xl1 with
-    | [] => pure thm
-    | fvarPair :: xl1 =>
-      let thm ← introExists (fvarPair :: xl0) xl1
-      let (fvarMatch, fvarExists) := fvarPair
-      let α ← inferType fvarMatch
-      let thmType ← mkThmType decompPatMatch (fvarExists :: (List.unzip xl0).fst).reverse (List.unzip xl1).snd
-      let p ← mkLambdaFVars #[fvarExists] thmType
-      let x := fvarMatch
-      let h := thm
-      trace[Progress] "introExists: about to insert existential:\n- α: {α}\n- p: {p}\n- x: {x}\n- h: {h}"
-      let thm ← mkAppOptM ``Exists.intro #[α, p, x, h]
-      trace[Progress] "introExists: resulting theorem:\n{thm}\n  :\n{← inferType thm}"
-      pure thm
-  let thm ← introExists [] (List.zip fvarsMatch.toList fvarsExists.toList)
-  trace[Progress] "Theorem after introducing the existentials: {thm} :\n{← inferType thm}"
-  /- Introduce the matches -/
-  let thm ← mkProdsMatch fvarsMatch.toList thm
-  trace[Progress] "Theorem after introducing the matches: {thm} :\n{← inferType thm}"
-  /- Apply to the scrutinee (which is the pattern provided by the user): `mkProdsMatch` generates
-     a lambda expression, where the bound value is the scrutinee we should match over. -/
-  let thm := mkApp thm declTerm
-  trace[Progress] "Theorem after introducing the scrutinee: {thm} :\n{← inferType thm}"
-  let thm ← mkLambdaFVars fvars thm
-  /- Prepare the theorem type -/
-  let thmType ← do
-    let thmType ← mkThmType declTerm [] fvarsExists.toList
-    let thmType ← mkForallFVars fvars thmType
-    pure thmType
-  trace[Progress] "Final theorem: {thm}\n  :\n{thmType}"
-  /- Save the auxiliary theorem -/
-  let name := Name.str decl.name suffix
-  let auxDecl : TheoremVal := {
-    name
-    levelParams := sig.levelParams
-    type := thmType
-    value := thm
-  }
-  addDecl (.thmDecl auxDecl)
-  /- Save the range -/
-  addDeclarationRangesFromSyntax name stx
-  /- -/
-  pure name
+  let mkPat (fvars : Array Expr) (ty : Expr) : MetaM Expr := do
+    withLocalDeclD (← mkFreshUserName `x) ty fun v => do
+    let x ← mkAppOptM n (fvars.map some)
+    let eq ← mkEq x v
+    let eq ← mkLambdaFVars #[v] eq
+    mkAppM ``Exists #[eq]
+  let mkPureThmType (_ _ npat : Expr) (fvars : Array Expr) : MetaM Expr := do
+    mkEq npat (← mkAppOptM n (fvars.map some))
+  let mkPureThm (_ _ : Expr) (fvars : Array Expr) : MetaM Expr := do
+    let e ← mkAppOptM n (fvars.map some)
+    mkEqRefl e
+  liftToThm stx pat n mkPat mkPureThmType mkPureThm suffix
 
 local elab "#progress_pure_def" id:ident pat:(term)? : command => do
   Lean.Elab.Command.runTermElabM (fun _ => do
     let some cs ← Term.resolveId? id | throwError m!"Unknown id: {id}"
     let name := cs.constName!
+    trace[ProgressElab] "pat: {pat}"
+    let pat ← match pat with
+      | some p => do pure (some (← elabProgressPureDefPattern p))
+      | none => pure none
     let _ ← mkProgressPureDefThm id pat name
   )
 
 namespace Test
-  #progress_pure_def overflowing_add (∃ z, overflowing_add x y = z)
+
+  #progress_pure_def overflowing_add (overflowing_add x y = z)
   #elab overflowing_add.progress_spec
-
-
   #check overflowing_add.progress_spec
 
   def wrapping_add (x y : U8) : U8 × Bool := (⟨ x.val + y.val ⟩, x.val + y.val ≥ 256)
-  #progress_pure_def wrapping_add
+
+  set_option trace.Progress true in
+  #progress_pure_def wrapping_add (wrapping_add x y = (b, z))
   #elab wrapping_add.progress_spec
   #check wrapping_add.progress_spec
 end Test
 
 /- Initialize the `progress_pure_def` attribute, which automatically generates
-   progress lemams for pure definitions.
+   progress lemmas for pure definitions.
 
    For instance, if we annotate the following definition with `progress_pure_def`:
    ```
