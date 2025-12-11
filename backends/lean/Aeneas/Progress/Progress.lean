@@ -352,7 +352,9 @@ def splitExistsEqAndPost (args : Args) (fExpr : Expr) (toEliminate : Option FVar
   (outputFVars : Array Expr) (thAsm : Expr) :
   TacticM (Option MainGoal) := do
   withTraceNode `Progress (fun _ => pure m!"splitExistsEqAndPost") do
+  trace[Progress] "ids: {args.ids},\n post before introducing the existentials ({thAsm}): {← inferType thAsm}"
   splitAllExistsTac thAsm args.ids.toList fun fvarIds h ids => do
+  trace[Progress] "ids: {ids},\n post after introducing the existentials ({h}): {← inferType h}"
   /- Introduce the pretty equality if the user requests it.
       We take care of introducing it *before* splitting the post-conditions, so that those appear
       after it. -/
@@ -389,13 +391,7 @@ def splitExistsEqAndPost (args : Args) (fExpr : Expr) (toEliminate : Option FVar
       -- Decompose the post-condition to isolate the equality, if it is a conjunction
       let hTy ← inferType h
       if ← isConj hTy then
-        let hName := (← h.fvarId!.getDecl).userName
-        let (optIds, ids) ← do
-          match ids with
-          | [] => do pure (some (hName, ← mkFreshAnonPropUserName), [])
-          | none :: ids => do pure (some (hName, ← mkFreshAnonPropUserName), ids)
-          | some id :: ids => do pure (some (hName, id), ids)
-        splitConjTac h optIds (fun hEq hPost => k hEq (some hPost) ids)
+        splitConjTac h none (fun hEq hPost => k hEq (some hPost) ids)
       else
         k h none ids
   /- Simplify the target by using the equality and some monad simplifications,
@@ -403,7 +399,7 @@ def splitExistsEqAndPost (args : Args) (fExpr : Expr) (toEliminate : Option FVar
   -- TODO: this is dangerous if we want to use a local assumption to make progress.
   -- We shouldn't simplify the goal with the equality, then simplify again.
   elimDecomposeEq fun hPost ids => do
-  trace[Progress] "post:\n{← liftM (Option.mapM inferType hPost)}"
+  trace[Progress] "post ({hPost}):\n{← liftM (Option.mapM inferType hPost)}"
   traceGoalWithNode "goal after applying the eq and simplifying the binds"
   -- TODO: remove this? (some types get unfolded too much: we "fold" them back)
   withTraceNode `Progress (fun _ => pure m!"simpAt: folding back scalar types") do
@@ -424,7 +420,7 @@ def splitExistsEqAndPost (args : Args) (fExpr : Expr) (toEliminate : Option FVar
     trace[Progress] "No post to split"
     pure (some { goal := ← getMainGoal, posts := #[]})
   | some hPost => do
-    trace[Progress] "Post to split: {hPost}: {← inferType hPost}"
+    trace[Progress] "Post to split: {hPost}: {← inferType hPost}\nids: {ids}"
     -- Small helper
     let idToName (id : Option Name) : MetaM Name :=
       match id with
@@ -1134,6 +1130,9 @@ x y : UScalar ty
   theorem  addToPair_spec (x : Nat) : addToPair x ⦃⇓ (y, z) => y = x + 1 ∧ z = x + 2⦄ :=
     by simp [addToPair]
 
+  theorem  addToPair_spec1 (x : Nat) : addToPair x ⦃⇓ x' => ∃ y z, x' = (y, z) ∧ y = x + 1 ∧ z = x + 2⦄ :=
+    by simp [addToPair]
+
   /--
 error: unsolved goals
 case h_1
@@ -1150,8 +1149,28 @@ _✝ : z1 = y + 2
     (do
       let (y, _) ← addToPair x
       addToPair y) ⦃⇓ (y, _) => y = x + 2 ⦄ := by
-    progress with add2_spec as ⟨ y, z, h ⟩
-    progress with add2_spec as ⟨ y1, z1, h1 ⟩
+    progress with addToPair_spec as ⟨ y, z, h ⟩
+    progress with addToPair_spec as ⟨ y1, z1, h1 ⟩
+
+  /--
+error: unsolved goals
+case a
+x y z : ℕ
+hy : y = x + 1
+hz : z = x + 2
+y1 z1 : ℕ
+hy1 : y1 = y + 1
+hz1 : z1 = y + 2
+⊢ y1 = x + 2
+  -/
+  #guard_msgs in
+  example (x : Nat) :
+    (do
+      let (y, _) ← addToPair x
+      addToPair y) ⦃⇓ (y, _) => y = x + 2 ⦄ := by
+    progress with addToPair_spec1 as ⟨ y, z, hy, hz ⟩
+    progress with addToPair_spec1 as ⟨ y1, z1, hy1, hz1 ⟩
+
 
 
   /--
