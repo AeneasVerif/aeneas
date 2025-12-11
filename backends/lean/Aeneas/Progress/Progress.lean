@@ -205,7 +205,7 @@ def getFirstBind (goalTy : Expr) : MetaM (Bool × Expr) := do
     well as the new assumption corresponding to the instantiated theorem (the
     expression is an fvar). We raise an exception otherwise.
  -/
-def tryMatch (args : Args) (isLet : Bool) (fExpr : Expr) (th : Expr) :
+def tryMatch (isLet : Bool) (th : Expr) :
   TacticM (Array MVarId × Array FVarId × Expr) := do
   withTraceNode `Progress (fun _ => pure m!"tryMatch") do
   /- Apply the theorem
@@ -619,7 +619,7 @@ def progressWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
   TacticM Goals := do
   withTraceNode `Progress (fun _ => pure m!"progressWith") do
   -- Attempt to instantiate the theorem and introduce it in the context
-  let (newGoals, fvars, thAsm) ← tryMatch args isLet fExpr th
+  let (newGoals, fvars, thAsm) ← tryMatch isLet th
   -- Rename the introduced fvars according to `args.ids`
   let (toEliminate, fvars, ids) ← renameFVarsWithIds fvars args.ids thAsm
   trace[Progress] "toEliminate: {toEliminate.map Expr.fvar}"
