@@ -5,6 +5,9 @@ open Lake DSL
 require mathlib from git
   "https://github.com/leanprover-community/mathlib4.git" @ "v4.25.2"
 
+require «nola-lean» from git
+  "git@github.com:AeneasVerif/nola-lean.git"
+
 package «aeneas» {}
 
 @[default_target] lean_lib «Aeneas» {}
