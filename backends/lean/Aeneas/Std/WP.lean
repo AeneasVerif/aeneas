@@ -1,7 +1,6 @@
 import Aeneas.Std.Primitives
 import Std.Do
 import Iris.BI
-import Iris.Std.Heap
 -- import Iris.ProofMode
 import Nola
 
@@ -11,9 +10,7 @@ axiom GF : Iris.BundledGFunctors
 abbrev sProp := aProp.{1} GF -- TODO: we have to be constant in the universe,
                              -- otherwise we have problems when lifting from Pure
 
--- open Iris.BI
 open Std
-
 
 abbrev Post α := (α -> Prop)
 abbrev Pre := Prop
@@ -63,6 +60,46 @@ def slspec (P:SLPre) (x:Result α) (Q:SLPost α) :=
 def spec (x:Result α) (Q:Post α) :=
   slspec iprop(True) x (lift_to_SLPost Q)
 
+-- Base theorems
+-- Proofs about slspec
+theorem slspec_ok (P:SLPre) (x : α) (Q:SLPost α): slspec P (.ok x) Q ↔ P ⊢ Q x := by
+  simp [slspec, theta, wp_return]
+
+
+theorem slspec_frame {m:Result α} :
+  slspec P m Q →
+  (forall F, slspec iprop(P ∗ F) m (fun x => iprop(Q x ∗ F))) := by
+  intro Hspec F
+  sorry
+
+theorem slspec_mono
+  {P₁:SLPre} {Q₁:SLPost α} {m:Result α}
+  {P₀:SLPre} {Q₀:SLPost α} (h : slspec P₀ m Q₀) :
+  (P₁ ⊢ P₀ ∗ F) →
+  (∀ x, F ∗ Q₀ x ⊢ Q₁ x) →
+  slspec P₁ m Q₁ := by
+  intros HMonPre HMonPost
+  sorry
+
+-- Derived theorems
+theorem slspec_bind {F:sProp} {k:α -> Result β} {P:SLPre} {Qₖ:SLPost β} {m:Result α} {Pₘ:SLPre} {Qₘ:SLPost α} :
+  slspec Pₘ m Qₘ →
+  (P ⊢  Pₘ ∗ F) →
+  (forall x, slspec iprop((Qₘ x) ∗ F) (k x) Qₖ) →
+  slspec P (Std.bind m k) Qₖ := by
+  intro Hm Hk Hx
+  cases m
+  · rename_i x
+    simp
+    apply slspec_mono (Hx x) --iprop((Qₘ x) ∗ F) Qₖ
+    · sorry
+    · sorry
+    · sorry
+    -- · have := slspec_frame (.ok x) Hm F
+    -- apply (slspec_ok _ _ Hm)
+  · sorry
+  · sorry
+
 -- Proofs about spec
 @[simp, grind =]
 theorem spec_ok (x : α) : spec (.ok x) Q ↔ Q x := by
@@ -95,8 +132,20 @@ theorem spec_bind {k:α -> Result β} {Qₖ:Post β} {m:Result α} {Qₘ:Post α
 theorem spec_mono {Q₁:Post α} {m:Result α} {Q₀:Post α} (h : spec m Q₀):
   (∀ x, Q₀ x → Q₁ x) → spec m Q₁ := by
   intros HMonPost
-  revert h
-  sorry
+  unfold spec
+  apply slspec_mono h
+  rotate_right
+  · apply iprop(⌜True⌝)
+  · iintro %H
+    ipure_intro
+    simp
+  · intro x
+    unfold lift_to_SLPost
+    iintro ⟨ %_, %HQ₀ ⟩
+    ipure_intro
+    apply HMonPost
+    exact HQ₀
+
 
 theorem progress_spec_equiv_exists (m:Result α) (P:Post α) :
   spec m P ↔ (∃ y, m = .ok y ∧ P y) :=
@@ -114,43 +163,26 @@ theorem progress_exists_spec {m:Result α} {P:Post α} :
   (∃ y, m = .ok y ∧ P y) → spec m P := by
   exact (progress_spec_equiv_exists m P).2
 
-
--- Proofs about slspec
-theorem slspec_ok (P:SLPre) (x : α) (Q:SLPost α): slspec P (.ok x) Q ↔ P ⊢ Q x := by
-  simp [slspec, theta, wp_return]
-
-theorem slspec_frame (m:Result α) :
-  slspec P m Q →
-  (forall F, slspec iprop(P ∗ F) m (fun x => iprop(Q x ∗ F))) := by
+theorem spec_frame {m:Result α} :
+  spec m Q →
+  (forall F, slspec F m (fun x => iprop((lift_to_SLPost Q x) ∗ F))) := by
   intro Hspec F
   sorry
 
-theorem slspec_mono
-  {P₁:SLPre} {Q₁:SLPost α} {m:Result α}
-  (P₀:SLPre) (Q₀:SLPost α) (h : slspec P₀ m Q₀) :
-  (⊢ P₁ -∗ P₀) →
-  (∀ x, Q₀ x ⊢ Q₁ x) →
-  slspec P₁ m Q₁ := by
-  intros HMonPre HMonPost
+theorem lift_spec_bind {k:α -> Result β} {P:SLPre} {Qₖ:SLPost β} {m:Result α} {Qₘ:Post α} :
+  spec m Qₘ →
+  (forall x, slspec iprop(⌜(Qₘ x)⌝ ∗ P) (k x) Qₖ) →
+  slspec P (Std.bind m k) Qₖ := by
   sorry
 
-theorem slspec_bind {k:α -> Result β} {P:SLPre} {Qₖ:SLPost β} {m:Result α} {Pₘ:SLPre} {Qₘ:SLPost α} :
-  slspec Pₘ m Qₘ →
-  (⊢ P -∗ Pₘ ∗ F) →
-  (forall x, slspec iprop((Qₘ x) ∗ F) (k x) Qₖ) →
-  slspec P (Std.bind m k) Qₖ := by
-  intro Hm Hk Hx
-  cases m
-  · rename_i x
-    simp
-    apply slspec_mono iprop((Qₘ x) ∗ F) Qₖ
-    · apply Hx
-    · sorry
-    · sorry
-    -- · have := slspec_frame (.ok x) Hm F
-    -- apply (slspec_ok _ _ Hm)
-  · sorry
-  · sorry
+theorem spec_bind_lift {k:α -> Result β} {P:SLPre} {Qₖ:Post β} {m:Result α} {Qₘ:SLPost α} :
+  slspec P m Qₘ →
+  (forall x, slspec iprop(Qₘ x) (k x) (lift_to_SLPost Qₖ)) →
+  spec (Std.bind m k) Qₖ := by
+  sorry
+
+theorem lift_spec_mono {P:SLPre} {Q₁:SLPost α} {m:Result α} {Q₀:Post α} (h : spec m Q₀):
+  (∀ x, ⌜Q₀ x⌝ ⊢ Q₁ x) → slspec P m Q₁ := by sorry
 
 scoped syntax:lead (name := specSyntax) "(" term:lead ")" " ⦃" "⇓ " Lean.Parser.Term.funBinder " => " term " ⦄" : term
 scoped syntax:lead (name := specSyntaxPred) "(" term:lead ")" " ⦃" "⇓ " term " ⦄" : term
@@ -159,9 +191,9 @@ scoped syntax:lead (name := slSpecSyntaxPred) " ⦃" term " ⦄" term:lead " ⦃
 
 macro_rules
   | `(($x) ⦃⇓ $r => $Q⦄)  => `(Aeneas.Std.WP.spec $x (fun $r => $Q))
-  | `(($x) ⦃⇓ $Q:term⦄)  => `(Aeneas.Std.WP.spec $x $Q)
-  | `(⦃$P⦄ $x ⦃⇓ $r =>  $Q⦄)  => `(Aeneas.Std.WP.slspec $x $P (fun $r => $Q))
-  | `(⦃$P⦄ $x ⦃⇓ $Q⦄)  => `(Aeneas.Std.WP.slspec $x $P $Q)
+  | `(($x) ⦃⇓ $Q:term⦄)  => `(Aeneas.Std.WP.spec $x (fun _ => $Q))
+  | `(⦃$P⦄ $x ⦃⇓ $r =>  $Q⦄)  => `(Aeneas.Std.WP.slspec $P $x (fun $r => iprop($Q)))
+  | `(⦃$P⦄ $x ⦃⇓ $Q⦄)  => `(Aeneas.Std.WP.slspec $P $x (fun _ => iprop($Q)))
 -- scoped syntax:lead (name := slspecSyntax)
 --   " ⦃" term "⦄" term:lead " ⦃" "⇓" term " => " term "⦄" : term
 
@@ -219,28 +251,198 @@ example (x : Nat) :
 --   let x1 ← UScalar.add x0 1#u32
 --   write_ptr p x1
 
--- def RawPtr (_ : Type) := Nat
--- axiom ptr {α} : RawPtr α → α → HProp
+def RawPtr (_ : Type) := Nat
+axiom ptr {α} : RawPtr α → α → sProp
+axiom eqPtr {α} : RawPtr α → RawPtr α → sProp
 
--- macro:max x:term " ~> " y:term : term => `(ptr $x $y)
+noncomputable
+def emp : sProp := iprop(True)
+notation " ∅ " => emp
 
--- axiom mut_to_raw {α} (x : α) : Result (RawPtr α)
--- axiom mut_to_raw.spec {α} (x : α) : ⦃ ∅ ⦄ (mut_to_raw x) ⦃ fun p => p ~> x ⦄
--- axiom end_mut_to_raw {α} (p : RawPtr α) : Result α
--- axiom end_mut_to_raw.spec {α : Type} {x : α} (p : RawPtr α) :
---   ⦃ p ~> x ⦄ (end_mut_to_raw p) ⦃ fun _ => ∅ ⦄
+macro:max x:term " ↦ " y:term : term => `(ptr $x $y)
+
+axiom read_ptr {α : Type} (p : RawPtr α) : Result α
+axiom read_ptr.spec {α} {x : α} {p : RawPtr α} :
+  ⦃ p ↦ x ⦄ read_ptr p ⦃⇓ x' => (p ↦ x) ∧ ⌜x = x'⌝ ⦄
+
+axiom write_ptr {α : Type} (p : RawPtr α) (x : α) : Result Unit
+axiom write_ptr.spec {α} (x:α) {x' : α} {p : RawPtr α} :
+  ⦃ p ↦ x ⦄ write_ptr p x' ⦃⇓ p ↦ x' ⦄
+
+axiom mut_to_raw {α} (x : α) : Result (RawPtr α)
+axiom mut_to_raw.spec {α} (x : α) : ⦃ ∅ ⦄ mut_to_raw x ⦃⇓ p => p ↦ x ⦄
+
+axiom end_mut_to_raw {α} (p : RawPtr α) : Result α
+axiom end_mut_to_raw.spec {α : Type} {x : α} (p : RawPtr α) :
+  ⦃ p ↦ x ⦄ end_mut_to_raw p ⦃⇓ ∅ ⦄
 
 
--- axiom read_ptr {α : Type} (p : RawPtr α) : ITree α
--- axiom write_ptr {α : Type} (p : RawPtr α) (x : α) : ITree Unit
+noncomputable
+def incr_ptr (p : RawPtr Nat) : Result Unit := do
+  let x0 ← read_ptr p
+  let x1 ← add1 x0
+  write_ptr p x1
 
--- axiom read_ptr.spec {α} {x : α} {p : RawPtr α} :
---   ⦃ p ~> x ⦄ (read_ptr p) ⦃ fun _ => p ~> x ⦄ {{ fun x' => x' = x }}
+theorem entails_empty : ⊢ ∅ := by sorry
+def incr_ptr.spec (p : RawPtr Nat) (x : Nat) :
+  ⦃ p ↦ x ⦄ incr_ptr p ⦃⇓ p ↦ (x+1) ⦄
+  := by
+  unfold incr_ptr
+  -- progress as ⟨ x' ⟩
+  apply slspec_bind read_ptr.spec
+  · -- TODO: iframe
+    iintro H
+    isplitl [H]
+    · iapply H
+    · apply entails_empty
+  intro x'
+  -- progress as ⟨ y ⟩
+  apply lift_spec_bind (add1_spec _)
+  intro y
+  -- progress
+  apply slspec_mono (write_ptr.spec _)
+  · -- TODO: iframe
+    iintro ⟨ Hy, ⟨ Hp, Hx' ⟩ , _ ⟩ -- TODO: bug, one cannot use % on Hy and Hx here
+    isplitl [Hp]
+    iapply Hp
+    iapply Hy -- TODO: need icombine tactic
+    -- icombine [Hy, Hx'] as Hyx
+    -- iapply Hyx
+  · intro _
+    sorry
+    -- iintro ⟨ ⟨ Hy, Hx'⟩ , Hp ⟩
+    -- rewrite [Hx', Hy]
+    -- iframe
+    -- isplitl [Hy]
+    -- iexact Hy
+    -- iexact Hx'
 
--- axiom write_ptr.spec {α} {x x' : α} {p : RawPtr α} :
---   ⦃ p ~> x ⦄ (write_ptr p x') ⦃ fun _ => p ~> x' ⦄ {{ fun () => True }}
+noncomputable
+def incr_borrow (x : Nat) : Result Nat := do
+  let xp ← mut_to_raw x
+  let xv ← read_ptr xp
+  let xv1 ← add1 xv
+  let _ ← write_ptr xp xv1
+  end_mut_to_raw xp -- inserted by Aeneas as the backward function for `mut_to_raw`:
+
+theorem incr_borrow.spec (x : Nat) :
+  (incr_borrow x) ⦃⇓ y => y = x + 1 ⦄ := by
+  unfold incr_borrow
+  -- progress as ⟨ p ⟩
+  apply spec_bind_lift (mut_to_raw.spec _)
+  intro p
+  -- progress as ⟨ x' ⟩
+  apply slspec_bind (read_ptr.spec)
+  · --iframe
+    iintro Hp
+    isplitl [Hp]
+    · iapply Hp
+    · apply entails_empty
+  intro x'
+  -- progress as ⟨ y ⟩
+  apply lift_spec_bind (add1_spec _)
+  intro y
+  -- progress
+  apply slspec_bind (write_ptr.spec _)
+  · iintro ⟨ Hy, ⟨ ⟨ Hp, Hx⟩ , _ ⟩  ⟩
+    isplitl [Hp]
+    · iapply Hp
+    · iapply Hy -- TODO: need icombine to combine Hy and Hx
+  simp
+  -- progress
+  apply slspec_mono (end_mut_to_raw.spec _)
+  · --iframe
+    iintro ⟨ Hp, Hy ⟩
+    isplitl [Hp]
+    · iapply Hp
+    · iapply Hy
+  · intro x'
+    iintro ⟨ %Hy, _ ⟩
+    unfold lift_to_SLPost
+    ipure_intro
+    simp
+    sorry -- TODO: related to previous TODO, need icombine tactic
+
+-- Equal or Disjoint pointers
+inductive EqOrDisj (α : Type) where
+| equal (v : α)
+| disjoint (v1 v2 : α)
+
+noncomputable
+def isEqOrDisj {α} (xp yp : RawPtr α) (v : EqOrDisj α) : sProp :=
+  match v with
+  | .equal v => iprop((xp ↦ v) ∗ (yp ↦ v) ∗ eqPtr xp yp)
+  | .disjoint xv yv => iprop((xp ↦ xv) ∗ (yp ↦ yv))
+
+def EqOrDisj.read {α} (eod : EqOrDisj α) : α :=
+  match eod with
+  | .equal v => v
+  | .disjoint v _ => v
+
+def EqOrDisj.write {α} (eod : EqOrDisj α) (yv:α): EqOrDisj α :=
+  match eod with
+  | .equal _ => equal yv
+  | .disjoint xv _ => disjoint xv yv
+
+theorem read_ptr.spec' {α} {eod : EqOrDisj α} {xp yp : RawPtr α} :
+  ⦃ isEqOrDisj xp yp eod ⦄ read_ptr xp ⦃⇓ x => ⌜x = eod.read⌝ ∗ isEqOrDisj xp yp eod ⦄
+  := by
+  simp [isEqOrDisj, EqOrDisj.read]
+  cases eod <;> simp <;> apply slspec_mono (read_ptr.spec)
+  · -- iframe?
+    iintro ⟨ Hx, Hyeq ⟩
+    isplitl [Hx]
+    · iapply Hx
+    · iapply Hyeq
+  · intro x
+    -- iframe
+    iintro ⟨ ⟨ Hy, Heq ⟩, Hx, %Hxv ⟩
+    isplitl []
+    · symm at Hxv
+      ipure_intro
+      apply Hxv
+    isplitl [Hx]
+    · iapply Hx
+    isplitl [Hy]
+    · iapply Hy
+    iapply Heq
+  · -- iframe
+    iintro ⟨ Hx, Hy ⟩
+    isplitl [Hx]
+    · iapply Hx
+    · iapply Hy
+  · intro x
+    -- iframe
+    iintro ⟨ Hy, Hx, %Hxv ⟩
+    isplitl []
+    · symm at Hxv
+      ipure_intro
+      apply Hxv
+    isplitl [Hx]
+    · iapply Hx
+    · iapply Hy
 
 
+theorem write_ptr.spec' {α} {eod: EqOrDisj α} {xp yp : RawPtr α} {v:α} :
+  ⦃ isEqOrDisj xp yp eod ⦄ write_ptr yp v ⦃⇓ isEqOrDisj xp yp (eod.write v) ⦄ := by
+  simp [isEqOrDisj, EqOrDisj.write]
+  cases eod <;> simp_all <;> apply slspec_mono (write_ptr.spec _)
+  · iintro ⟨ Hx, Hy, Heq ⟩
+    isplitl [Hy]
+    · iapply Hy
+    · iapply Hx -- TODO: need icombine tactic
+  · sorry -- TODO: related to previous TODO
+  · -- iframe
+    iintro ⟨ Hx, Hy ⟩
+    isplitl [Hy]
+    · iapply Hy
+    · iapply Hx
+  · -- iframe
+    intro _
+    iintro ⟨ Hx, Hy ⟩
+    isplitl [Hx]
+    iapply Hx
+    iapply Hy
 end Aeneas.Std.WP
 
 
