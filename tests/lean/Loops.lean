@@ -852,7 +852,7 @@ def decode_loop1 (dst_coeff : U8) : Result Unit := do
 partial_fixpoint
 
 /- [loops::decode]: loop 0:
-   Source: 'tests/src/loops.rs', lines 550:4-564:1 -/
+   Source: 'tests/src/loops.rs', lines 550:4-563:1 -/
 def decode_loop0
   (pe_dst : Slice U8) (i : Usize) : Result (Bool × (Slice U8)) := do
   if i < 128#usize
@@ -869,7 +869,7 @@ def decode_loop0
 partial_fixpoint
 
 /- [loops::decode]:
-   Source: 'tests/src/loops.rs', lines 546:0-564:1 -/
+   Source: 'tests/src/loops.rs', lines 546:0-563:1 -/
 @[reducible]
 def decode (pe_dst : Slice U8) : Result (Bool × (Slice U8)) := do
   decode_loop0 pe_dst 0#usize

@@ -551,14 +551,13 @@ fn decode(pe_dst: &mut [u8]) -> bool {
         let dst_coeff = &mut pe_dst[i];
         while *dst_coeff > 32 {}
 
-        if *dst_coeff > 32
-        {
+        if *dst_coeff > 32 {
             return true;
         }
 
         *dst_coeff = 0;
         i += 1;
-    };
+    }
 
     false
 }
