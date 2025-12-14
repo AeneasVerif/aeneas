@@ -94,10 +94,9 @@ def Array.index_usize {α : Type u} {n : Usize} (v: Array α n) (i: Usize) : Res
 def Array.repeat {α : Type u} (n : Usize) (x : α) : Array α n :=
   ⟨ List.replicate n.val x, by simp_all ⟩
 
-@[progress]
-theorem Array.repeat_spec {α : Type u} (n : Usize) (x : α) :
-  ∃ a, Array.repeat n x = a ∧ a.val = List.replicate n.val x := by
-  simp [Array.repeat]
+@[simp]
+theorem Array.repeat_val (n : Usize) (x : α) : (Array.repeat n x).val = List.replicate n.val x := by
+  simp only [Array.repeat]
 
 /- In the theorems below: we don't always need the `∃ ..`, but we use one
    so that `progress` introduces an opaque variable and an equality. This
