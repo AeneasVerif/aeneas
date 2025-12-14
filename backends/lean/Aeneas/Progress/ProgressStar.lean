@@ -233,7 +233,7 @@ partial def evalProgressStar (cfg: Config) : TacticM Result :=
         match proof.get with
         | none => sgs := sgs.push mvarId
         | some proof =>
-          -- Introduce an auxiliary theorem
+          -- Introduce an auxiliary theorem (TODO: is this really a good idea?)
           let declName? ← Term.getDeclName?
           mvarId.withContext do
           let e ← mkAuxTheorem (← mvarId.getType) proof (zetaDelta := true)
@@ -308,10 +308,12 @@ where
         | some mainGoal => pure #[(mainGoal, none)]
       pure { info with subgoals := info.subgoals ++ mainGoal }
     | .unknown => do
-      trace[Progress] "don't know what to do: inserting a sorry"
-      let subgoals ← pure ((← getUnsolvedGoals).toArray.map fun g => (g, none))
-      let tac ←`(tactic| sorry)
-      return ({ script := .tacs #[TaskOrDone.mk (some tac)], subgoals })
+      trace[Progress] "don't know what to do: it may be a terminal goal, attempting to solve it with grind"
+      let (info, mainGoal) ← onResult cfg
+      let mainGoal ← match mainGoal with
+        | none => pure #[]
+        | some mainGoal => pure #[(mainGoal, none)]
+      pure { info with subgoals := info.subgoals ++ mainGoal }
 
   onResult (cfg : Config) : TacticM (Info × Option MVarId) := do
     withTraceNode `Progress (fun _ => pure m!"onResult") do
@@ -345,8 +347,7 @@ where
       /- Attempt to finish with a tactic -/
       -- TODO: don't use syntax
       -- TODO: use global options
-      let grindTac : TacticM Unit := do
-        Grind.evalGrind { splits := 3, gen := 2, instances := 3000 }
+      let grindTac : TacticM Unit := Progress.evalGrindWithPreprocess
       -- TODO: add the tactic given by the user
       let tacStx : IO.Promise Syntax.Tactic ← IO.Promise.new
       let rec tryFinish (tacl : List (String × Syntax.Tactic × TacticM Unit)) : TacticM Unit := do
@@ -356,7 +357,7 @@ where
           tacStx.resolve (← `(tactic| sorry))
         | (name, stx, tac) :: tacl =>
           let stx : Option Syntax.Tactic ←
-            withTraceNode `Progress (fun _ => pure m!"Attempting to solve with `{name}`") do
+            withTraceNode `Progress (fun _ => do pure m!"Attempting to solve finish goal with `{name}`:\n{← getMainGoal}") do
             try
               tac
               -- Check that there are no remaining goals

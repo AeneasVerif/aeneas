@@ -615,6 +615,26 @@ def parseProgressArgs
   return (keep?, withTh?, ids, byTac)
 | _ => throwUnsupportedSyntax
 
+/-- Use `grind` after preprocessing goal the goal, in particular to simplify arithmetic expressions.
+
+  TODO: remove the preprocessing once the fix to the following PR gets into a release candidate:
+  https://github.com/leanprover/lean4/issues/11498
+-/
+def evalGrindWithPreprocess : TacticM Unit := do
+  let simpArgs : Simp.SimpArgs ← ScalarTac.getSimpArgs
+  let config : Simp.Config := {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1}
+  match ← ScalarTac.simpAsmsTarget true config simpArgs with
+  | none => pure ()
+  | some _ =>
+    /- We reduce the search space but increase the number of instances (we need this when the
+       context is big).
+
+       TODO: an issue is that `omega` used to split all disjunctions.
+       TODO: make those options of `progress`
+       TODO: fine tune the paramters
+     -/
+    Aeneas.Grind.evalGrind { splits := 4, gen := 4, instances := 3000 }
+
 def evalProgressCore (async : Bool) (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Array (Option Name))
   (byTacStx : Option Syntax.Tactic)
   : TacticM Stats := do
@@ -628,13 +648,8 @@ def evalProgressCore (async : Bool) (keep keepPretty : Option Name) (withArg: Op
   /- Preprocessing step for `singleAssumptionTac` -/
   let singleAssumptionTacDtree ← singleAssumptionTacPreprocess
   let grindTac : TacticM Unit := do
-    withTraceNode `Progress (fun _ => pure m!"Attempting to solve with `grind`") do
-    /- We reduce the search space but increase the number of instances (we need this when the
-       context is big).
-
-       TODO: an issue is that `omega` used to split all disjunctions.
-       TODO: make those options of `progress` -/
-    Aeneas.Grind.evalGrind { splits := 3, gen := 2, instances := 3000 }
+    withTraceNode `Progress (fun _ => do pure m!"Attempting to solve with `grind`:\n{← getMainGoal}") do
+    evalGrindWithPreprocess
   let customAssumTac : TacticM Unit := do
     withTraceNode `Progress (fun _ => pure m!"Attempting to solve with `singleAssumptionTac`") do
     singleAssumptionTacCore singleAssumptionTacDtree
