@@ -247,12 +247,7 @@ theorem new_spec (α : Type) :
   ∃ hm, new α = ok hm ∧
   hm.inv ∧ hm.len_s = 0 ∧ ∀ k, hm.lookup k = none := by
   unfold new
-  -- have h: 128 ≤ Usize.max := by sorry
-  progress as ⟨ hm ⟩ <;> fsimp_all
-  grind
-
-
-example (key : Usize) : key == key := by fsimp [beq_iff_eq]
+  progress*
 
 theorem insert_in_list_spec_aux {α : Type} (l : Nat) (key: Usize) (value: α) (l0: AList α)
   (hinv : slot_s_inv_hash l (hash_mod_key key l) l0.v)
@@ -306,7 +301,7 @@ theorem insert_in_list_spec_aux {α : Type} (l : Nat) (key: Usize) (value: α) (
         UScalar.neq_to_neq_val, and_true, AList.lookup, ne_eq, length, true_and, not_false_eq_true,
         and_self, exists_and_left, exists_eq_left', List.lookup, implies_true, List.length_cons,
         Nat.add_right_cancel_iff, List.allP_cons]
-      split <;> fsimp_all
+      grind
 
 @[progress]
 theorem insert_in_list_spec {α : Type} (l : Nat) (key: Usize) (value: α) (l0: AList α)
