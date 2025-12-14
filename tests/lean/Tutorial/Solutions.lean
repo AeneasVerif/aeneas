@@ -41,7 +41,7 @@ example (a b c d : Prop) (h0 : a → b → c) (h1 : c → d → e)
 
 open CList
 
-@[simp] def CList.toList {α : Type} (x : CList α) : List α :=
+@[simp, grind] def CList.toList {α : Type} (x : CList α) : List α :=
   match x with
   | CNil => []
   | CCons hd tl => hd :: tl.toList
@@ -145,6 +145,9 @@ theorem list_tail_loop_spec' {T : Type} (l : CList T) :
   ∃ back, list_tail_loop l = ok back ∧
   ∀ tl', (back tl').toList = l.toList ++ tl'.toList := by
   unfold list_tail_loop
+  /- `progress*` repeatedly applies `progress`, while doing a case disjunction whenever it
+      encounters a branching. Note that one can automatically generate the corresponding
+      proof script by using `progress*?`. -/
   progress*
 
 @[progress]
@@ -160,10 +163,9 @@ theorem append_in_place_spec {T : Type} (l0 l1 : CList T) :
   ∃ l2, append_in_place l0 l1 = ok l2 ∧
   l2.toList = l0.toList ++ l1.toList := by
   unfold append_in_place
-  progress as ⟨ tl, back ⟩
-  progress as ⟨ l2 ⟩
+  progress*
 
-@[progress]
+-- Verbose version
 theorem reverse_loop_spec {T : Type} (l : CList T) (out : CList T) :
   ∃ l', reverse_loop l out = ok l' ∧
   l'.toList = l.toList.reverse ++ out.toList := by
@@ -173,6 +175,14 @@ theorem reverse_loop_spec {T : Type} (l : CList T) (out : CList T) :
     simp at *
     simp [hl1]
   . simp
+
+-- Simple version
+@[progress]
+theorem reverse_loop_spec' {T : Type} (l : CList T) (out : CList T) :
+  ∃ l', reverse_loop l out = ok l' ∧
+  l'.toList = l.toList.reverse ++ out.toList := by
+  unfold reverse_loop
+  progress*
 
 theorem reverse_spec {T : Type} (l : CList T) :
   ∃ l', reverse l = ok l' ∧
