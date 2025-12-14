@@ -736,7 +736,6 @@ namespace Test
   #elab overflowing_add.progress_spec
 
   #progress_pure_def wrapping_add
-
   #elab wrapping_add.progress_spec
 end Test
 
