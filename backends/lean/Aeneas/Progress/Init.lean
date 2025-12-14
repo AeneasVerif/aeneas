@@ -91,7 +91,12 @@ section Methods
       -- ty₄ == (program = res)
       let (program, res) ← Utils.destEq ty₄.consumeMData
       trace[Progress] "After splitting the equality:\n- lhs: {program}\n- rhs: {res}"
-      k (xs.map (·.mvarId!) |>.zip xs_bi) (zs.map (·.fvarId!)) program res post?
+      -- Check that we have something of type `Result ...`
+      let programTy ← inferType program
+      programTy.consumeMData.withApp fun app args =>
+      if app.isConstOf ``Std.Result ∧ args.size = 1 then
+        k (xs.map (·.mvarId!) |>.zip xs_bi) (zs.map (·.fvarId!)) program res post?
+      else throwError "Not a monad in type `Result`, found: {program} : {programTy}"
 
   /- Analyze a goal or a progress theorem to decompose its arguments.
 
