@@ -843,4 +843,35 @@ partial_fixpoint
 @[reducible] def reborrow_const : Result Unit := do
                reborrow_const_loop
 
+/- [loops::decode]: loop 1:
+   Source: 'tests/src/loops.rs', lines 552:8-552:32 -/
+def decode_loop1 (dst_coeff : U8) : Result Unit := do
+  if dst_coeff > 32#u8
+  then decode_loop1 dst_coeff
+  else ok ()
+partial_fixpoint
+
+/- [loops::decode]: loop 0:
+   Source: 'tests/src/loops.rs', lines 550:4-563:1 -/
+def decode_loop0
+  (pe_dst : Slice U8) (i : Usize) : Result (Bool × (Slice U8)) := do
+  if i < 128#usize
+  then
+    let (dst_coeff, index_mut_back) ← Slice.index_mut_usize pe_dst i
+    decode_loop1 dst_coeff
+    if dst_coeff > 32#u8
+    then let s := index_mut_back dst_coeff
+         ok (true, s)
+    else let i1 ← i + 1#usize
+         let s := index_mut_back 0#u8
+         decode_loop0 s i1
+  else ok (false, pe_dst)
+partial_fixpoint
+
+/- [loops::decode]:
+   Source: 'tests/src/loops.rs', lines 546:0-563:1 -/
+@[reducible]
+def decode (pe_dst : Slice U8) : Result (Bool × (Slice U8)) := do
+  decode_loop0 pe_dst 0#usize
+
 end loops

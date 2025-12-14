@@ -694,7 +694,9 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
  fun ctx ->
   (* Debugging *)
   [%ltrace
-    "\n**About to evaluate statement**: [\n"
+    "\n**About to evaluate statement** ("
+    ^ Errors.raw_span_to_string st.span
+    ^ "): [\n"
     ^ statement_to_string_with_tab ctx st
     ^ "\n]\n\n**Context**:\n"
     ^ eval_ctx_to_string ~span:(Some st.span) ctx
@@ -742,7 +744,14 @@ and eval_statement_list (config : config) span (stmts : statement list) :
       (ctx_resl, cc_comp cf_st1 cf_st2)
 
 and eval_block (config : config) (b : block) : stl_cm_fun =
-  eval_statement_list config b.span b.statements
+ fun ctx ->
+  [%ltrace
+    "About to evaluate block ("
+    ^ Errors.raw_span_to_string b.span
+    ^ "):\n"
+    ^ block_to_string_with_tab ctx b
+    ^ "\n"];
+  eval_statement_list config b.span b.statements ctx
 
 and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
  fun ctx ->
