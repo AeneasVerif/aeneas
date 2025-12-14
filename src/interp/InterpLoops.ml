@@ -349,7 +349,10 @@ let eval_loop_symbolic (config : config) (span : span)
     List.map (fun (abs : abs) -> abs.abs_id) input_abs_list
   in
   [%ltrace
-    "fixed point:\n- fp:\n" ^ eval_ctx_to_string ~span:(Some span) fp_ctx];
+    "fixed point (loop: "
+    ^ Errors.raw_span_to_string span
+    ^ "):\n- fp:\n"
+    ^ eval_ctx_to_string ~span:(Some span) fp_ctx];
 
   (* Compute the context at the breaks *)
   let fixed_aids = InterpJoinCore.compute_fixed_abs_ids ctx fp_ctx in
@@ -443,7 +446,9 @@ let eval_loop_symbolic (config : config) (span : span)
   in
 
   [%ltrace
-    "result:" ^ "\n- src context:\n"
+    "result (loop: "
+    ^ Errors.raw_span_to_string span
+    ^ "):" ^ "\n- src context:\n"
     ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx
     ^ "\n- fixed point:\n"
     ^ eval_ctx_to_string ~span:(Some span) ~filter:false fp_ctx

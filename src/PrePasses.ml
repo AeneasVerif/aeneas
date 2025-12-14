@@ -1144,6 +1144,9 @@ let apply_passes (crate : crate) : crate =
     ProgressBar.with_reporter num_decls "Applied prepasses: " (fun report ->
         FunDeclId.Map.map
           (fun f ->
+            [%ltrace
+              "Before applying the prepasses:\n"
+              ^ Print.Crate.crate_fun_decl_to_string crate f];
             let f : fun_decl =
               List.fold_left
                 (fun f (name, pass) -> apply_function_pass name pass f)

@@ -70,6 +70,7 @@ let trait_impl_to_string ctx =
   Print.EvalCtx.trait_impl_to_string
     { ctx with type_vars = []; const_generic_vars = [] }
 
+let block_to_string_with_tab ctx = Print.EvalCtx.block_to_string ctx "  " "  "
 let statement_to_string ctx = Print.EvalCtx.statement_to_string ctx "" "  "
 
 let statement_to_string_with_tab ctx =
