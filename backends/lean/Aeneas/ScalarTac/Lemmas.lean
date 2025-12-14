@@ -263,6 +263,9 @@ attribute [scalar_tac_simps, simp_lists_hyps_simps, simp_scalar_hyps_simps] Int.
 # Min, Max
 -/
 
+-- TODO: commit to Mathlib
+attribute [scalar_tac_simps, grind =] Nat.shiftLeft_eq Int.shiftLeft_eq
+
 @[scalar_tac_simps] theorem Nat.max_eq_Max_max (x y : Nat) : Nat.max x y = x ⊔ y := by simp
 @[scalar_tac_simps] theorem Nat.min_eq_Min_min (x y : Nat) : Nat.min x y = x ⊓ y := by simp
 
