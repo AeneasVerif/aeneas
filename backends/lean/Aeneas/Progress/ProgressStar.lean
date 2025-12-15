@@ -739,6 +739,14 @@ example (x y : U32) (h : x.val * y.val ≤ U32.max):
     massert (z1 == z0)) ⦃⇓ _ => True ⦄ := by
     progress* by (ring_nf at *; simp [*] <;> scalar_tac)
 
+/-example (x : Option α) :
+  (match x with | none => .ok 0 | some _ => .ok 1) ⦃⇓ _ => True ⦄ := by
+  progress*-/
+
+example (x y : U32) :
+  (toResult (core.num.U32.overflowing_add x y)) ⦃⇓ (_, _) => True ⦄ := by
+  progress*
+
 end Examples
 
 end Aeneas

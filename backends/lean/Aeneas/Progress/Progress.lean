@@ -403,7 +403,9 @@ def splitExistsEqAndPost (args : Args) (fExpr : Expr) (toEliminate : Option FVar
       let simpAndElim (hEq : Expr) (hPost : Option Expr) (ids : List (Option Name))
         (k : Option Expr → List (Option Name) → TacticM (Option MainGoal)) :
         TacticM (Option MainGoal) := do
+        withTraceNode `Progress (fun _ => pure m!"simpAndElim") do
         let r ← withTraceNode `Progress (fun _ => pure m!"simpAt target") do
+          trace[Progress] "goal: {← getMainGoal}"
           Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
             {simpThms := #[← progressSimpExt.getTheorems], hypsToUse := #[hEq.fvarId!]} (.targets #[] true)
         -- Check if we closed the goal
@@ -418,10 +420,13 @@ def splitExistsEqAndPost (args : Args) (fExpr : Expr) (toEliminate : Option FVar
       let k hEq hPost ids : TacticM (Option MainGoal) := simpAndElim hEq hPost ids k
 
       -- Decompose the post-condition to isolate the equality, if it is a conjunction
+      withMainContext do
       let hTy ← inferType h
       if ← isConj hTy then
+        trace[Progress] "Splitting the post-condition"
         splitConjTac h none (fun hEq hPost => k hEq (some hPost) ids)
       else
+        trace[Progress] "Not splitting the post-condition"
         k h none ids
   /- Simplify the target by using the equality and some monad simplifications,
       then continue splitting the post-condition -/
