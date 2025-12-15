@@ -2,6 +2,7 @@
     function bodies, etc. *)
 
 include Charon.Substitute
+open Charon.TypesUtils
 open Types
 open Values
 open LlbcAst
@@ -34,8 +35,9 @@ let substitute_signature (asubst : RegionGroupId.id -> AbsId.id)
     (r_id_subst : RegionId.id -> RegionId.id) (ty_sb_subst : TypeVarId.id -> ty)
     (cg_sb_subst : ConstGenericVarId.id -> const_generic)
     (tr_sb_subst : TraitClauseId.id -> trait_ref_kind)
-    (tr_sb_self : trait_ref_kind) (sg : fun_sig)
+    (tr_sb_self : trait_ref_kind) (sg : bound_fun_sig)
     (regions_hierarchy : region_var_groups) : inst_fun_sig =
+  let { item_binder_params = generics; item_binder_value = sg } = sg in
   let r_sb_subst id = RVar (Free (r_id_subst id)) in
   let subst =
     subst_free_vars
@@ -63,7 +65,7 @@ let substitute_signature (asubst : RegionGroupId.id -> AbsId.id)
     List.map
       (st_substitute_visitor#visit_region_binder
          trait_type_constraint_substitute subst)
-      sg.generics.trait_type_constraints
+      generics.trait_type_constraints
   in
   {
     inputs;

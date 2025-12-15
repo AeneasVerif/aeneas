@@ -721,11 +721,12 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
 
 let translate_fun_sig_with_regions_hierarchy_to_decomposed (span : span option)
     (decls_ctx : C.decls_ctx) (fun_id : A.fn_ptr_kind)
-    (regions_hierarchy : T.region_var_groups) (sg : A.fun_sig)
+    (regions_hierarchy : T.region_var_groups) (sg : A.bound_fun_sig)
     (input_names : string option list) : decomposed_fun_sig =
   let inst_sg : LlbcAst.inst_fun_sig =
-    let ({ A.inputs; output; _ } : A.fun_sig) = sg in
-    [%sanity_check_opt_span] span (sg.generics.trait_type_constraints = []);
+    let ({ T.inputs; output; _ } : T.fun_sig) = sg.item_binder_value in
+    [%sanity_check_opt_span] span
+      (sg.item_binder_params.trait_type_constraints = []);
 
     let _, fresh_abs_id = V.AbsId.fresh_stateful_generator () in
     let region_gr_id_abs_id_list =
@@ -756,17 +757,17 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed (span : span option)
   in
 
   (* Generic parameters *)
-  let generics, preds = translate_generic_params span sg.generics in
+  let generics, preds = translate_generic_params span sg.item_binder_params in
 
   let fun_ty =
     translate_inst_fun_sig_to_decomposed_fun_type span decls_ctx fun_id inst_sg
       input_names
   in
-  { generics; llbc_generics = sg.generics; preds; fun_ty }
+  { generics; llbc_generics = sg.item_binder_params; preds; fun_ty }
 
 let translate_fun_sig_to_decomposed (decls_ctx : C.decls_ctx)
-    (fun_id : FunDeclId.id) (sg : A.fun_sig) (input_names : string option list)
-    : decomposed_fun_sig =
+    (fun_id : FunDeclId.id) (sg : A.bound_fun_sig)
+    (input_names : string option list) : decomposed_fun_sig =
   let span =
     ([%silent_unwrap_opt_span] None
        (FunDeclId.Map.find_opt fun_id decls_ctx.fun_ctx.fun_decls))
@@ -793,7 +794,8 @@ let translate_fun_sig_from_decl_to_decomposed (decls_ctx : C.decls_ctx)
           (LlbcAstUtils.fun_body_get_input_vars body)
   in
   let sg =
-    translate_fun_sig_to_decomposed decls_ctx fdef.def_id fdef.signature
+    translate_fun_sig_to_decomposed decls_ctx fdef.def_id
+      (bound_fun_sig_of_decl fdef)
       input_names
   in
   [%ltrace
@@ -894,8 +896,8 @@ let translate_fun_sig_from_decomposed (dsg : Pure.decomposed_fun_sig) : fun_sig
   }
 
 let translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
-    (fun_name : string) (sg : A.fun_sig) (input_names : string option list) :
-    Pure.fun_sig =
+    (fun_name : string) (sg : A.bound_fun_sig)
+    (input_names : string option list) : Pure.fun_sig =
   (* Compute the regions hierarchy *)
   let regions_hierarchy =
     RegionsHierarchy.compute_regions_hierarchy_for_sig None decls_ctx.crate
