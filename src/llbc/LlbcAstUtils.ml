@@ -1,4 +1,5 @@
 open Types
+open TypesUtils
 open LlbcAst
 include Charon.LlbcAstUtils
 open Collections
@@ -16,9 +17,11 @@ module FunIdMap = Collections.MakeMap (FunIdOrderedType)
 module FunIdSet = Collections.MakeSet (FunIdOrderedType)
 
 let lookup_fun_sig (fun_id : fun_id) (fun_decls : fun_decl FunDeclId.Map.t) :
-    fun_sig =
+    bound_fun_sig =
   match fun_id with
-  | FRegular id -> (FunDeclId.Map.find id fun_decls).signature
+  | FRegular id ->
+      let fun_decl = FunDeclId.Map.find id fun_decls in
+      bound_fun_sig_of_decl fun_decl
   | FBuiltin aid -> Builtin.get_builtin_fun_sig aid
 
 (** Return the opaque declarations found in the crate, which are also *not

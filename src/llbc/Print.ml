@@ -5,6 +5,7 @@ open Charon.PrintTypes
 open Charon.PrintExpressions
 open Charon.PrintLlbcAst.Ast
 open Types
+open TypesUtils
 open Values
 open ValuesUtils
 open Expressions
@@ -1097,7 +1098,7 @@ module EvalCtx = struct
     let env = eval_ctx_to_fmt_env ctx in
     fun_decl_to_string env "" "  " f
 
-  let fun_sig_to_string (ctx : eval_ctx) (x : fun_sig) : string =
+  let fun_sig_to_string (ctx : eval_ctx) (x : bound_fun_sig) : string =
     let env = eval_ctx_to_fmt_env ctx in
     fun_sig_to_string env "" "  " x
 

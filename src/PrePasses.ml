@@ -189,7 +189,7 @@ let update_array_default (crate : crate) : crate =
                   in
                   let generics =
                     {
-                      sg.generics with
+                      fdecl.generics with
                       const_generics =
                         [ { index = cg_id; name = "N"; ty = TUInt Usize } ];
                     }
@@ -197,12 +197,11 @@ let update_array_default (crate : crate) : crate =
                   let sg =
                     {
                       sg with
-                      generics;
                       output =
                         TAdt { id = TBuiltin TArray; generics = array_generics };
                     }
                   in
-                  let fdecl = { fdecl with signature = sg } in
+                  let fdecl = { fdecl with signature = sg; generics } in
                   Some fdecl
               | _ -> [%internal_error] fdecl.item_meta.span)
             else (* Filter *)

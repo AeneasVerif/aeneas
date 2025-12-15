@@ -747,7 +747,7 @@ let initialize_eval_ctx (span : Meta.span option) (ctx : decls_ctx)
     region ids. This is mostly used in preparation of function calls (when
     evaluating in symbolic mode). *)
 let instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
-    (generics : generic_args) (tr_self : trait_ref_kind) (sg : fun_sig)
+    (generics : generic_args) (tr_self : trait_ref_kind) (sg : bound_fun_sig)
     (regions_hierarchy : region_var_groups) : inst_fun_sig =
   [%ldebug
     "- generics: "
@@ -769,20 +769,21 @@ let instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
   in
   (* Generate fresh regions *)
   let rsubst =
-    Substitute.fresh_regions_with_substs_from_vars sg.generics.regions
+    Substitute.fresh_regions_with_substs_from_vars sg.item_binder_params.regions
       ctx.fresh_region_id
   in
   (* Generate the type substitution. *)
   [%sanity_check] span (TypesUtils.trait_instance_id_no_regions tr_self);
   let tsubst =
-    Substitute.make_type_subst_from_vars sg.generics.types generics.types
+    Substitute.make_type_subst_from_vars sg.item_binder_params.types
+      generics.types
   in
   let cgsubst =
-    Substitute.make_const_generic_subst_from_vars sg.generics.const_generics
-      generics.const_generics
+    Substitute.make_const_generic_subst_from_vars
+      sg.item_binder_params.const_generics generics.const_generics
   in
   let tr_subst =
-    Substitute.make_trait_subst_from_clauses sg.generics.trait_clauses
+    Substitute.make_trait_subst_from_clauses sg.item_binder_params.trait_clauses
       generics.trait_refs
   in
   (* Substitute the signature *)
@@ -808,7 +809,7 @@ let compute_regions_hierarchy_for_fun_call fresh_abs_id
     (span : Meta.span option) (crate : crate) (fun_name : string)
     (type_vars : type_param list)
     (const_generic_vars : const_generic_param list)
-    (generic_args : generic_args) (sg : fun_sig) : inst_fun_sig =
+    (generic_args : generic_args) (sg : bound_fun_sig) : inst_fun_sig =
   (* We simply put everything into a "fake" signature, then call
      [compute_regions_hierarchy_for_sig].
 
@@ -816,7 +817,12 @@ let compute_regions_hierarchy_for_fun_call fresh_abs_id
      the erased regions. When doing so, in order to make sure there are
      no collisions, we also refresh the other regions. *)
   (* Decompose the signature *)
-  let { is_unsafe; generics; inputs; output } = sg in
+  let {
+    item_binder_params = generics;
+    item_binder_value = { is_unsafe; inputs; output };
+  } =
+    sg
+  in
   (* Introduce the fresh regions *)
   let region_map = ref RegionId.Map.empty in
   let fresh_regions = ref RegionId.Set.empty in
@@ -872,7 +878,7 @@ let compute_regions_hierarchy_for_fun_call fresh_abs_id
         (* Keeping the same trait refs: it shouldn't have an impact *);
       }
     in
-    Substitute.make_subst_from_generics sg.generics generic_args
+    Substitute.make_subst_from_generics sg.item_binder_params generic_args
   in
 
   (* Substitute the inputs and outputs *)
@@ -931,7 +937,12 @@ let compute_regions_hierarchy_for_fun_call fresh_abs_id
       }
     in
 
-    let sg = { is_unsafe; generics; inputs; output } in
+    let sg =
+      {
+        item_binder_params = generics;
+        item_binder_value = { is_unsafe; inputs; output };
+      }
+    in
     let regions_hierarchy =
       RegionsHierarchy.compute_regions_hierarchy_for_sig span crate fun_name sg
     in

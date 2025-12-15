@@ -371,7 +371,7 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
         (* Return *)
         { ty_info with mut_regions }
     | TFnPtr fn_sig ->
-        let inputs, output = fn_sig.binder_value in
+        let { Types.inputs; output; _ } = fn_sig.binder_value in
         (* Just dive into the arrow *)
         let ty_info =
           List.fold_left
