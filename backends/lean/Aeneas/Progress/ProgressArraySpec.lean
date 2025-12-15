@@ -92,7 +92,6 @@ theorem Array.index_usize_const_spec {α} [Inhabited α]
   have hi := aux a.val 0 (by scalar_tac) (by fsimp) hPred i (by scalar_tac) (by scalar_tac)
   fsimp at hi
   progress as ⟨ x, hx ⟩
-  assumption -- TODO: shouldn't have to do this
   grind
 
 end Std

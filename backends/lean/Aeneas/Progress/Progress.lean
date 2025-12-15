@@ -223,12 +223,14 @@ def tryMatch (isLet : Bool) (th : Expr) :
   let thTy ← normalizeLetBindings thTy
   trace[Progress] "After normalizing the let-bindings: {thTy}"
   trace[Progress] "Theorem: {th}: {← inferType th}"
+  -- Introduce the meta-variables for the quantified parameters
   let (mvars, _, thTy) ← forallMetaTelescope thTy
   let th := mkAppN th mvars
   trace[Progress] "Uninstantiated theorem: {th}: {← inferType th}"
 
+  -- `thTy` should be of the shape `spec program post`: we need to retrieve `program`
   let thArgs := thTy.consumeMData.withApp (fun _ args => args)
-  let (comp, P) ← (if h: thArgs.size = 3
+  let (program, P) ← (if h: thArgs.size = 3
                    then pure (thArgs[1], thArgs[2])
                    else throwError "Not spec?")
 
@@ -240,22 +242,23 @@ def tryMatch (isLet : Bool) (th : Expr) :
   let specMonoBindTy ← inferType specMonoBind
   trace[Progress] "specMonoBind (isLet:{isLet}): {specMonoBind}: {← inferType specMonoBind}"
   let (specMonoBindMVars, _, specMonoBindTy) ← forallMetaBoundedTelescope specMonoBindTy varNum
-  let specMonoBind := mkAppN specMonoBind specMonoBindMVars
+  let specMonoBind ← mkAppOptM' specMonoBind (specMonoBindMVars.map some)
   trace[Progress] "Uninstantiated specMonoBind: {specMonoBind}: {← inferType specMonoBind}"
 
-  let specMonoBind := mkAppN specMonoBind #[comp, P, th]
+  let specMonoBind := mkAppN specMonoBind #[program, P, th]
   let specMonoBindTy ← inferType specMonoBind
   trace[Progress] "Applied specMonoBind with theorem: {specMonoBind}: {specMonoBindTy}"
 
   let (specMonoBindMVars, _, specMonoBindTy) ← forallMetaBoundedTelescope specMonoBindTy 1
   if (specMonoBindMVars.size ≠ 1) then throwError "Unreachable"
   let ngoal := specMonoBindMVars[0]!.mvarId!
-  let specMonoBind := mkAppN specMonoBind specMonoBindMVars
+  let specMonoBind ← mkAppOptM' specMonoBind (specMonoBindMVars.map some)
   trace[Progress] "Applied specMonoBind with theorem: {specMonoBind}: {specMonoBindTy}"
 
   let mgoal ← Tactic.getMainGoal
   let specMonoBindTy ← inferType specMonoBind
   let goalTy ← mgoal.getType
+  trace[Progress] "About to check defeq:\n- specMonoBindTy: {specMonoBindTy}\n- goalTy: {goalTy}"
   let ok ← isDefEq specMonoBindTy goalTy
   if ¬ ok then
     trace[Progress] "Could not unify the theorem with the target"
@@ -263,6 +266,26 @@ def tryMatch (isLet : Bool) (th : Expr) :
 
   mgoal.assign specMonoBind
   trace[Progress] "New goal: {ngoal}"
+
+  let env ← getEnv
+  let mvarsIds := mvars.map Expr.mvarId!
+  let mvarsIds ← mvarsIds.filterM (fun mvar => do pure (not (← mvar.isAssigned)))
+
+  -- Attempt to resolve the typeclass instances
+  let mvarsIds ← mvarsIds.filterMapM fun mvar => do
+    let ty ← mvar.getType
+    ty.withApp fun app _ =>
+    if let some (name, _) := app.const? then
+      if isClass env name then
+        -- Attempt to resolve the typeclass
+        try
+          let inst ← synthInstance ty
+          mvar.assign inst
+          pure none
+        catch _ =>
+          pure mvar
+      else pure mvar
+    else pure mvar
 
   let (fvars, ngoal) ← ngoal.introN 2 [← mkFreshUserName `x, ← mkFreshUserName `h]
   setGoals [ngoal]
@@ -272,13 +295,10 @@ def tryMatch (isLet : Bool) (th : Expr) :
   let #[x, post] := fvars
     | throwError "Unreacheable. Introduced bad variables"
 
-  let isCases := match isMatcherAppCore? (← getEnv) (← inferType (.fvar post)) with
+
+  let isCases := match isMatcherAppCore? env (← inferType (.fvar post)) with
     | .some cases => cases.numDiscrs == 1
     | _ => false
-
-
-  let mvarsIds := mvars.map Expr.mvarId!
-
   if isCases
   then
     match ← splitLocalDecl ngoal post with
@@ -1513,6 +1533,18 @@ info: example
     extract_goal1
     fsimp [hc']
 
+  /- Inhabited -/
+  def get (x : Option α) : Result α :=
+    match x with
+    | none => fail .panic
+    | some x => ok x
+
+  -- `Inhabited α` is not necessary: we add it for the purpose of testing
+  theorem get_spec [Inhabited α] (x : Option α) (h : x.isSome) : get x ⦃⇓ _ => True ⦄ := by
+    cases x <;> grind [get]
+
+  example [Inhabited α] (x : Option α) (h : x.isSome) : get x ⦃⇓ _ => True ⦄ := by
+    progress with get_spec
 
   namespace Ntt
     def wfArray (_ : Array U16 256#usize) : Prop := True
