@@ -368,7 +368,7 @@ theorem add_no_overflow_spec (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
   progress as ⟨ x' ⟩ <;>
   simp_all
 
-/-- The proof about `add_with_carry_loop` -/
+/-- The proof about `add_with_carry_loop`: detailed version -/
 @[progress]
 theorem add_with_carry_loop_spec
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (c0 : U8) (i : Usize)
@@ -392,7 +392,7 @@ theorem add_with_carry_loop_spec
     progress as ⟨ c1u, hc1u ⟩
     progress as ⟨ c2u, hc2u ⟩
     progress as ⟨ c3, hc3 ⟩
-    progress as ⟨ _ ⟩
+    progress as ⟨ fst, index_back, _, hIndexBack ⟩
     progress as ⟨ i1 ⟩
     have : c3.val ≤ 1 := by
       /- We need to make a case disjunction on hConv1 and hConv2.
@@ -407,12 +407,13 @@ theorem add_with_carry_loop_spec
     split_conjs
     . simp [*]
     . simp [*]
-    . simp [hc4]
+    . simp [hc4, hIndexBack]
       have hxUpdate := toInt_update x.val i.val s2 (by scalar_tac)
       simp [hxUpdate]; clear hxUpdate
       have hyDrop := toInt_drop y.val i.val (by scalar_tac)
       simp [hyDrop]; clear hyDrop
       scalar_eq_nf
+
       -- The best way is to do a case disjunction and treat each sub-case separately
       split at hConv1 <;>
       split at hConv2
