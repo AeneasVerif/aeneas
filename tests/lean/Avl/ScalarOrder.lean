@@ -27,8 +27,7 @@ instance : OrdSpecLinearOrderEq OrdI32 where
     simp [LinearOrder.compare_eq_compareOfLessAndEq, compareOfLessAndEq]
     rw [compare, Ord.opposite]
     simp [LinearOrder.compare_eq_compareOfLessAndEq, compareOfLessAndEq]
-    split_ifs with hab hba hba' hab' hba'' _ hba₃ _ <;> (try simp_all) <;> try omega
-    simp at *
+    grind
   equivalence := fun a b => by
     unfold Ord.cmp
     unfold OrdI32

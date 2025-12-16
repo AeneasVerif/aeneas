@@ -317,7 +317,7 @@ theorem alloc.vec.Vec.resize_spec {T} (cloneInst : core.clone.Clone T)
 theorem alloc.vec.Vec.set_getElem!_eq α [Inhabited α] (x : alloc.vec.Vec α) (i : Usize) :
   x.set i x[i]! = x := by
   simp only [getElem!_Usize_eq]
-  simp only [Vec, set_val_eq, Subtype.eq_iff, List.set_getElem!]
+  simp only [Vec, set_val_eq, Subtype.ext_iff, List.set_getElem!]
 
 /- Source: '/rustc/library/alloc/src/vec/mod.rs', lines 3967:4-3967:33 -/
 @[rust_fun "alloc::vec::{core::convert::From<Box<[@T]>, alloc::vec::Vec<@T>>}::from" (keepParams := [true,false])]
