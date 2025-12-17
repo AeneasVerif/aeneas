@@ -135,27 +135,26 @@ structure Wrapper (T : Type) where
 
 /- [traits::{traits::ToU64 for traits::Wrapper<T>}::to_u64]:
    Source: 'tests/src/traits.rs', lines 77:4-79:5 -/
-def ToU64traitsWrapper.to_u64
+def ToU64Wrapper.to_u64
   {T : Type} (ToU64Inst : ToU64 T) (self : Wrapper T) : Result U64 := do
   ToU64Inst.to_u64 self.x
 
 /- Trait implementation: [traits::{traits::ToU64 for traits::Wrapper<T>}]
    Source: 'tests/src/traits.rs', lines 76:0-80:1 -/
 @[reducible]
-def ToU64traitsWrapper {T : Type} (ToU64Inst : ToU64 T) : ToU64 (Wrapper T)
-  := {
-  to_u64 := ToU64traitsWrapper.to_u64 ToU64Inst
+def ToU64Wrapper {T : Type} (ToU64Inst : ToU64 T) : ToU64 (Wrapper T) := {
+  to_u64 := ToU64Wrapper.to_u64 ToU64Inst
 }
 
 /- [traits::h1]:
    Source: 'tests/src/traits.rs', lines 82:0-84:1 -/
 def h1 (x : Wrapper U64) : Result U64 := do
-  ToU64traitsWrapper.to_u64 ToU64U64 x
+  ToU64Wrapper.to_u64 ToU64U64 x
 
 /- [traits::h2]:
    Source: 'tests/src/traits.rs', lines 86:0-88:1 -/
 def h2 {T : Type} (ToU64Inst : ToU64 T) (x : Wrapper T) : Result U64 := do
-  ToU64traitsWrapper.to_u64 ToU64Inst x
+  ToU64Wrapper.to_u64 ToU64Inst x
 
 /- Trait declaration: [traits::ToType]
    Source: 'tests/src/traits.rs', lines 90:0-92:1 -/
@@ -215,7 +214,7 @@ def TestType.test.TestType1 := U64
 
 /- [traits::{traits::TestType<T>}::test::{traits::{traits::TestType<T>}::test::TestTrait for traits::{traits::TestType<T>}::test::TestType1}::test]:
    Source: 'tests/src/traits.rs', lines 141:12-143:13 -/
-def TestType.test.TestTraittraitsTestTypetestTestType1.test
+def TestType.test.TestTraitTestType1.test
   (self : TestType.test.TestType1) : Result Bool := do
   ok (self > 1#u64)
 
@@ -227,7 +226,7 @@ def TestType.test
   := do
   let x1 ← ToU64Inst.to_u64 x
   if x1 > 0#u64
-  then TestType.test.TestTraittraitsTestTypetestTestType1.test 0#u64
+  then TestType.test.TestTraitTestType1.test 0#u64
   else ok false
 
 /- Trait declaration: [traits::{traits::TestType<T>}::test::TestTrait]
@@ -238,9 +237,9 @@ structure TestType.test.TestTrait (Self : Type) where
 /- Trait implementation: [traits::{traits::TestType<T>}::test::{traits::{traits::TestType<T>}::test::TestTrait for traits::{traits::TestType<T>}::test::TestType1}]
    Source: 'tests/src/traits.rs', lines 140:8-144:9 -/
 @[reducible]
-def TestType.test.TestTraittraitsTestTypetestTestType1 :
-  TestType.test.TestTrait TestType.test.TestType1 := {
-  test := TestType.test.TestTraittraitsTestTypetestTestType1.test
+def TestType.test.TestTraitTestType1 : TestType.test.TestTrait
+  TestType.test.TestType1 := {
+  test := TestType.test.TestTraitTestType1.test
 }
 
 /- [traits::BoolWrapper]
@@ -250,7 +249,7 @@ def BoolWrapper := Bool
 
 /- [traits::{traits::ToType<T> for traits::BoolWrapper}::to_type]:
    Source: 'tests/src/traits.rs', lines 158:4-160:5 -/
-def ToTypetraitsBoolWrapperT.to_type
+def ToTypeBoolWrapperT.to_type
   {T : Type} (ToTypeBoolTInst : ToType Bool T) (self : BoolWrapper) :
   Result T
   := do
@@ -259,9 +258,9 @@ def ToTypetraitsBoolWrapperT.to_type
 /- Trait implementation: [traits::{traits::ToType<T> for traits::BoolWrapper}]
    Source: 'tests/src/traits.rs', lines 154:0-161:1 -/
 @[reducible]
-def ToTypetraitsBoolWrapperT {T : Type} (ToTypeBoolTInst : ToType Bool T) :
-  ToType BoolWrapper T := {
-  to_type := ToTypetraitsBoolWrapperT.to_type ToTypeBoolTInst
+def ToTypeBoolWrapperT {T : Type} (ToTypeBoolTInst : ToType Bool T) : ToType
+  BoolWrapper T := {
+  to_type := ToTypeBoolWrapperT.to_type ToTypeBoolTInst
 }
 
 /- Trait declaration: [traits::WithConstTy]
@@ -527,25 +526,23 @@ def TraitArray (T : Type) (N : Usize) : Trait (Array T N) := {
 /- [traits::{traits::Trait for traits::Wrapper<T>}::LEN]
    Source: 'tests/src/traits.rs', lines 321:4-321:25 -/
 @[global_simps]
-def TraittraitsWrapper.LEN_body {T : Type} (TraitInst : Trait T)
-  : Result Usize := do
+def TraitWrapper.LEN_body {T : Type} (TraitInst : Trait T) : Result Usize := do
   ok 0#usize
 @[global_simps, irreducible]
-def TraittraitsWrapper.LEN {T : Type} (TraitInst : Trait T) : Usize :=
-  eval_global (TraittraitsWrapper.LEN_body TraitInst)
+def TraitWrapper.LEN {T : Type} (TraitInst : Trait T) : Usize :=
+  eval_global (TraitWrapper.LEN_body TraitInst)
 
 /- Trait implementation: [traits::{traits::Trait for traits::Wrapper<T>}]
    Source: 'tests/src/traits.rs', lines 320:0-322:1 -/
 @[reducible]
-def TraittraitsWrapper {T : Type} (TraitInst : Trait T) : Trait (Wrapper T)
-  := {
-  LEN := TraittraitsWrapper.LEN TraitInst
+def TraitWrapper {T : Type} (TraitInst : Trait T) : Trait (Wrapper T) := {
+  LEN := TraitWrapper.LEN TraitInst
 }
 
 /- [traits::use_wrapper_len]:
    Source: 'tests/src/traits.rs', lines 324:0-326:1 -/
 def use_wrapper_len {T : Type} (TraitInst : Trait T) : Result Usize := do
-  ok (TraittraitsWrapper.LEN TraitInst)
+  ok (TraitWrapper.LEN TraitInst)
 
 /- [traits::Foo]
    Source: 'tests/src/traits.rs', lines 328:0-331:1 -/

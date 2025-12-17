@@ -696,6 +696,7 @@ def evalProgress
   (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Array (Option Name))
   (byTac : Option Syntax.Tactic)
   : TacticM UsedTheorem := do
+  focus do
   let ⟨goals, usedTheorem⟩ ← evalProgressCore async keep keepPretty withArg ids byTac
   -- Wait for all the proof attempts to finish
   let mut sgs := #[]
@@ -769,6 +770,14 @@ The user can provide several optional arguments:
 - `by <tactic>`: use the given tactic to solve the preconditions.
 - `progress?`: displays the name of the theorem/assumption used.
 
+**`progress?`**: displays the name of the theorem used.
+
+**Alternative syntax:**
+The `progress` tactic also supports the following syntax:
+`let ⟨ id1, id2, ... ⟩ ← <withArg> by <tactic>`
+which is equivalent to:
+`progress with <withArg> as ⟨ id1, id2, ... ⟩ by <tactic>`
+
 **The `progress` attribute:**
 To make a theorem available for `progress`, the user can tag it with the
 `@[progress]` attribute. The theorem must have the following shape:
@@ -805,8 +814,7 @@ elab (name := progress) "progress" args:progressArgs : tactic => do
   let (keep?, withArg, ids, byTac) ← parseProgressArgs args
   evalProgress asyncOption keep? none withArg ids byTac *> return ()
 
-/-- The `progress?` tactic calls `progress` and displays additional information -
-see the documentation for the `progress` tactic itself. -/
+@[inherit_doc progress]
 elab tk:"progress?" args:progressArgs : tactic => do
   let (keep?, withArg, ids, byTac) ← parseProgressArgs args
   let stats ← evalProgress asyncOption keep? none withArg ids byTac
@@ -818,12 +826,7 @@ elab tk:"progress?" args:progressArgs : tactic => do
   let fmt ← PrettyPrinter.ppCategory ``Lean.Parser.Tactic.tacticSeq tac
   Meta.Tactic.TryThis.addSuggestion tk fmt.pretty (origSpan? := ← getRef)
 
-/-- This is alternative syntax for the `progress` tactic - see the documentation for `progress`.
-
-`let ⟨ id1, id2, ... ⟩ ← <withArg> by <tactic>`
-is equivalent to:
-`progress with <withArg> as ⟨ id1, id2, ... ⟩ by <tactic>`
--/
+@[inherit_doc progress]
 syntax (name := letProgress) "let" noWs "*" " ⟨ " binderIdent,* " ⟩" colGe
   " ← " colGe (term <|> "*" <|> "*?") ("by" tacticSeq)? : tactic
 
@@ -1181,6 +1184,24 @@ hf : ∀ (x y : U32), ↑x < 10 → ↑y < 10 → ∃ z, f x y = ok z
       rw [add1]
       progress? as ⟨ z1, h ⟩ says progress with add_spec' as ⟨ z1, h ⟩
       progress? as ⟨ z2, h ⟩ says progress with add_spec' as ⟨ z2, h ⟩
+
+    /--
+    error: unsolved goals
+case h
+x y x✝ : U32
+_✝ : ↑x✝ = ↑x + ↑y
+⊢ ↑x✝ + ↑x✝ ≤ U32.max
+
+case h
+x y : U32
+⊢ ↑x + ↑y ≤ U32.max
+    -/
+    #guard_msgs in
+    example (x y : U32) :
+      ∃ z, add1 x y = ok z := by
+      rw [add1]
+      progress
+      swap; progress
   end
 
   /- Checking that `add_spec'` went out of scope -/
