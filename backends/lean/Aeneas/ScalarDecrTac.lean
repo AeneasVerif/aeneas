@@ -105,7 +105,7 @@ syntax "scalar_decr_tac_preprocess" : tactic
 macro_rules
   | `(tactic| scalar_decr_tac_preprocess) =>
     `(tactic|
-      simp_wf <;>
+      simp_wf <;> -- TODO: simp_wf is not necessary anymore?
       -- Simplify the context - otherwise simp_all below will blow up
       remove_invImage_assumptions <;>
       --

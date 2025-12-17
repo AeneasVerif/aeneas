@@ -158,7 +158,7 @@ theorem Nat.testBit_add_two_pow_gt {i j : ℕ} (j_lt_i : j < i) (x : ℕ) : (x +
 theorem Nat.testBit_one : Nat.testBit 1 i = decide (i = 0) := by
   cases i
   . simp only [Nat.testBit_zero, Nat.mod_succ, decide_true]
-  . simp only [Nat.add_eq_zero, one_ne_zero, and_false, decide_false, Nat.testBit_add_one, Nat.reduceDiv, Nat.zero_testBit]
+  . simp only [Nat.add_eq_zero_iff, one_ne_zero, and_false, decide_false, Nat.testBit_add_one, Nat.reduceDiv, Nat.zero_testBit]
 
 @[simp, simp_scalar_simps]
 theorem one_le_pow (a n : ℕ) (h : 0 < a) : 1 ≤ a ^ n := by

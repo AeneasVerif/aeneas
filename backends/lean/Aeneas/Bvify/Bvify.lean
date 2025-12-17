@@ -35,42 +35,42 @@ attribute [bvify_simps]
   BitVec.reduceMul BitVec.reduceAdd BitVec.reduceSub BitVec.reduceMod BitVec.reduceDiv
   Nat.dvd_iff_mod_eq_zero
 
-@[simp, simp_scalar_simps, bvify_simps] theorem U8.UScalar_bv (x : U8) : UScalar.bv x = x.bv := by simp
-@[simp, simp_scalar_simps, bvify_simps] theorem U16.UScalar_bv (x : U16) : UScalar.bv x = x.bv := by simp
-@[simp, simp_scalar_simps, bvify_simps] theorem U32.UScalar_bv (x : U32) : UScalar.bv x = x.bv := by simp
-@[simp, simp_scalar_simps, bvify_simps] theorem U64.UScalar_bv (x : U64) : UScalar.bv x = x.bv := by simp
-@[simp, simp_scalar_simps, bvify_simps] theorem U128.UScalar_bv (x : U128) : UScalar.bv x = x.bv := by simp
-@[simp, simp_scalar_simps, bvify_simps] theorem Usize.UScalar_bv (x : Usize) : UScalar.bv x = x.bv := by simp
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem U8.UScalar_bv (x : U8) : UScalar.bv x = x.bv := by simp
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem U16.UScalar_bv (x : U16) : UScalar.bv x = x.bv := by simp
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem U32.UScalar_bv (x : U32) : UScalar.bv x = x.bv := by simp
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem U64.UScalar_bv (x : U64) : UScalar.bv x = x.bv := by simp
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem U128.UScalar_bv (x : U128) : UScalar.bv x = x.bv := by simp
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem Usize.UScalar_bv (x : Usize) : UScalar.bv x = x.bv := by simp
 
-@[simp, simp_scalar_simps, bvify_simps] theorem I8.IScalar_bv (x : I8) : IScalar.bv x = x.bv := by simp
-@[simp, simp_scalar_simps, bvify_simps] theorem I16.IScalar_bv (x : I16) : IScalar.bv x = x.bv := by simp
-@[simp, simp_scalar_simps, bvify_simps] theorem I32.IScalar_bv (x : I32) : IScalar.bv x = x.bv := by simp
-@[simp, simp_scalar_simps, bvify_simps] theorem I64.IScalar_bv (x : I64) : IScalar.bv x = x.bv := by simp
-@[simp, simp_scalar_simps, bvify_simps] theorem I128.IScalar_bv (x : I128) : IScalar.bv x = x.bv := by simp
-@[simp, simp_scalar_simps, bvify_simps] theorem Isize.IScalar_bv (x : Isize) : IScalar.bv x = x.bv := by simp
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem I8.IScalar_bv (x : I8) : IScalar.bv x = x.bv := by simp
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem I16.IScalar_bv (x : I16) : IScalar.bv x = x.bv := by simp
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem I32.IScalar_bv (x : I32) : IScalar.bv x = x.bv := by simp
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem I64.IScalar_bv (x : I64) : IScalar.bv x = x.bv := by simp
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem I128.IScalar_bv (x : I128) : IScalar.bv x = x.bv := by simp
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem Isize.IScalar_bv (x : Isize) : IScalar.bv x = x.bv := by simp
 
-@[simp, simp_scalar_simps, bvify_simps]
+@[simp, simp_scalar_simps, bvify_simps, grind =]
 theorem UScalar.bv_setWidth (x : UScalar ty) : x.bv.setWidth ty.numBits = x.bv := by simp only [BitVec.setWidth_eq]
 
-@[simp, simp_scalar_simps, bvify_simps] theorem U8.bv_setWidth (x : U8) : x.bv.setWidth 8 = x.bv := UScalar.bv_setWidth x
-@[simp, simp_scalar_simps, bvify_simps] theorem U16.bv_setWidth (x : U16) : x.bv.setWidth 16 = x.bv := UScalar.bv_setWidth x
-@[simp, simp_scalar_simps, bvify_simps] theorem U32.bv_setWidth (x : U32) : x.bv.setWidth 32 = x.bv := UScalar.bv_setWidth x
-@[simp, simp_scalar_simps, bvify_simps] theorem U64.bv_setWidth (x : U64) : x.bv.setWidth 64 = x.bv := UScalar.bv_setWidth x
-@[simp, simp_scalar_simps, bvify_simps] theorem U128.bv_setWidth (x : U128) : x.bv.setWidth 128 = x.bv := UScalar.bv_setWidth x
-@[simp, simp_scalar_simps, bvify_simps] theorem Usize.bv_setWidth (x : Usize) : x.bv.setWidth System.Platform.numBits = x.bv := UScalar.bv_setWidth x
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem U8.bv_setWidth (x : U8) : x.bv.setWidth 8 = x.bv := UScalar.bv_setWidth x
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem U16.bv_setWidth (x : U16) : x.bv.setWidth 16 = x.bv := UScalar.bv_setWidth x
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem U32.bv_setWidth (x : U32) : x.bv.setWidth 32 = x.bv := UScalar.bv_setWidth x
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem U64.bv_setWidth (x : U64) : x.bv.setWidth 64 = x.bv := UScalar.bv_setWidth x
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem U128.bv_setWidth (x : U128) : x.bv.setWidth 128 = x.bv := UScalar.bv_setWidth x
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem Usize.bv_setWidth (x : Usize) : x.bv.setWidth System.Platform.numBits = x.bv := UScalar.bv_setWidth x
 
-@[simp, simp_scalar_simps, bvify_simps]
+@[simp, simp_scalar_simps, bvify_simps, grind =]
 theorem IScalar.bv_signExtend (x : IScalar ty) : x.bv.signExtend ty.numBits = x.bv := by
   simp only [BitVec.signExtend, IScalar.bv_toInt_eq, IScalar.BitVec_ofInt_val]
 
-@[simp, simp_scalar_simps, bvify_simps] theorem I8.bv_signExtend (x : I8) : x.bv.signExtend 8 = x.bv := IScalar.bv_signExtend x
-@[simp, simp_scalar_simps, bvify_simps] theorem I16.bv_signExtend (x : I16) : x.bv.signExtend 16 = x.bv := IScalar.bv_signExtend x
-@[simp, simp_scalar_simps, bvify_simps] theorem I32.bv_signExtend (x : I32) : x.bv.signExtend 32 = x.bv := IScalar.bv_signExtend x
-@[simp, simp_scalar_simps, bvify_simps] theorem I64.bv_signExtend (x : I64) : x.bv.signExtend 64 = x.bv := IScalar.bv_signExtend x
-@[simp, simp_scalar_simps, bvify_simps] theorem I128.bv_signExtend (x : I128) : x.bv.signExtend 128 = x.bv := IScalar.bv_signExtend x
-@[simp, simp_scalar_simps, bvify_simps] theorem Isize.bv_signExtend (x : Isize) : x.bv.signExtend System.Platform.numBits = x.bv := IScalar.bv_signExtend x
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem I8.bv_signExtend (x : I8) : x.bv.signExtend 8 = x.bv := IScalar.bv_signExtend x
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem I16.bv_signExtend (x : I16) : x.bv.signExtend 16 = x.bv := IScalar.bv_signExtend x
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem I32.bv_signExtend (x : I32) : x.bv.signExtend 32 = x.bv := IScalar.bv_signExtend x
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem I64.bv_signExtend (x : I64) : x.bv.signExtend 64 = x.bv := IScalar.bv_signExtend x
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem I128.bv_signExtend (x : I128) : x.bv.signExtend 128 = x.bv := IScalar.bv_signExtend x
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem Isize.bv_signExtend (x : Isize) : x.bv.signExtend System.Platform.numBits = x.bv := IScalar.bv_signExtend x
 
-@[simp, simp_scalar_simps, bvify_simps]
+@[simp, simp_scalar_simps, bvify_simps, grind =]
 theorem UScalar.cast_bv (x : UScalar ty) : (UScalar.cast tgt x).bv = x.bv.setWidth tgt.numBits := by
   simp
 
@@ -227,22 +227,22 @@ theorem BitVec.ofNat_shift_UScalar_val (x : UScalar ty) (n : Nat) :
     scalar_tac
   rw [this]
 
-@[simp, simp_scalar_simps, bvify_simps] theorem BitVec.ofNat_shift_U8_val (x : U8) (n : Nat) :
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem BitVec.ofNat_shift_U8_val (x : U8) (n : Nat) :
   BitVec.ofNat 8 (x.val >>> n) = x.bv >>> n := BitVec.ofNat_shift_UScalar_val x n
 
-@[simp, simp_scalar_simps, bvify_simps] theorem BitVec.ofNat_shift_U16_val (x : U16) (n : Nat) :
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem BitVec.ofNat_shift_U16_val (x : U16) (n : Nat) :
   BitVec.ofNat 16 (x.val >>> n) = x.bv >>> n := BitVec.ofNat_shift_UScalar_val x n
 
-@[simp, simp_scalar_simps, bvify_simps] theorem BitVec.ofNat_shift_U32_val (x : U32) (n : Nat) :
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem BitVec.ofNat_shift_U32_val (x : U32) (n : Nat) :
   BitVec.ofNat 32 (x.val >>> n) = x.bv >>> n := BitVec.ofNat_shift_UScalar_val x n
 
-@[simp, simp_scalar_simps, bvify_simps] theorem BitVec.ofNat_shift_U64_val (x : U64) (n : Nat) :
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem BitVec.ofNat_shift_U64_val (x : U64) (n : Nat) :
   BitVec.ofNat 64 (x.val >>> n) = x.bv >>> n := BitVec.ofNat_shift_UScalar_val x n
 
-@[simp, simp_scalar_simps, bvify_simps] theorem BitVec.ofNat_shift_U128_val (x : U128) (n : Nat) :
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem BitVec.ofNat_shift_U128_val (x : U128) (n : Nat) :
   BitVec.ofNat 128 (x.val >>> n) = x.bv >>> n := BitVec.ofNat_shift_UScalar_val x n
 
-@[simp, simp_scalar_simps, bvify_simps] theorem BitVec.ofNat_shift_Usize_val (x : Usize) (n : Nat) :
+@[simp, simp_scalar_simps, bvify_simps, grind =] theorem BitVec.ofNat_shift_Usize_val (x : Usize) (n : Nat) :
   BitVec.ofNat System.Platform.numBits (x.val >>> n) = x.bv >>> n := BitVec.ofNat_shift_UScalar_val x n
 
 /-!
@@ -250,7 +250,7 @@ Simplification lemmas about `setWidth`
 -/
 attribute [bvify_simps] BitVec.setWidth_eq
 
-@[simp, simp_scalar_simps, bvify_simps, simp_scalar_simps]
+@[simp, simp_scalar_simps, bvify_simps, simp_scalar_simps, grind =]
 theorem UScalar.BitVec_ofNat_setWidth (x : UScalar ty) : BitVec.ofNat n x.val = x.bv.setWidth n := by
   simp only [UScalar.val, BitVec.toNat_eq]; simp
 

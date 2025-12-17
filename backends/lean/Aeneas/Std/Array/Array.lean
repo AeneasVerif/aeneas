@@ -25,14 +25,14 @@ instance [BEq α] : BEq (Array α n) := SubtypeBEq _
 instance [BEq α] [LawfulBEq α] : LawfulBEq (Array α n) := SubtypeLawfulBEq _
 
 /- Registering some theorems for `scalar_tac` -/
-@[scalar_tac_simps]
+@[scalar_tac_simps, grind =]
 theorem Array.length_eq {α : Type u} {n : Usize} (a : Array α n) : a.val.length = n.val := by
   cases a; simp[*]
 
-@[simp, scalar_tac_simps, simp_scalar_simps, simp_lists_simps]
+@[simp, scalar_tac_simps, simp_scalar_simps, simp_lists_simps, grind]
 abbrev Array.length {α : Type u} {n : Usize} (v : Array α n) : Nat := v.val.length
 
-@[simp, scalar_tac_simps, simp_scalar_simps, simp_lists_simps]
+@[simp, scalar_tac_simps, simp_scalar_simps, simp_lists_simps, grind]
 abbrev Array.v {α : Type u} {n : Usize} (v : Array α n) : List α := v.val
 
 example {α: Type u} {n : Usize} (v : Array α n) : v.length ≤ Usize.max := by
@@ -59,10 +59,10 @@ example : Result (Array Int (Usize.ofNat 2)) := do
 @[reducible] instance {α : Type u} {n : Usize} : GetElem? (Array α n) Nat α (fun a i => i < a.val.length) where
   getElem? a i := getElem? a.val i
 
-@[simp, scalar_tac_simps, simp_lists_hyps_simps]
+@[simp, scalar_tac_simps, simp_lists_hyps_simps, grind =]
 theorem Array.getElem?_Nat_eq {α : Type u} {n : Usize} (v : Array α n) (i : Nat) : v[i]? = v.val[i]? := by rfl
 
-@[simp, scalar_tac_simps, simp_lists_hyps_simps]
+@[simp, scalar_tac_simps, simp_lists_hyps_simps, grind = _]
 theorem Array.getElem!_Nat_eq {α : Type u} [Inhabited α] {n : Usize} (v : Array α n) (i : Nat) : v[i]! = v.val[i]! := by
   simp only [instGetElem?ArrayNatLtLengthValListEqVal, List.getElem!_eq_getElem?_getD]; split <;> simp_all
   rfl
@@ -78,8 +78,8 @@ theorem Array.getElem!_Nat_eq {α : Type u} [Inhabited α] {n : Usize} (v : Arra
   simp [instGetElem?ArrayUsizeLtNatValLengthValListEq]; split <;> simp_all
   rfl
 
-@[simp, scalar_tac_simps, simp_lists_hyps_simps] abbrev Array.get? {α : Type u} {n : Usize} (v : Array α n) (i : Nat) : Option α := getElem? v i
-@[simp, scalar_tac_simps, simp_lists_hyps_simps] abbrev Array.get! {α : Type u} {n : Usize} [Inhabited α] (v : Array α n) (i : Nat) : α := getElem! v i
+@[simp, scalar_tac_simps, simp_lists_hyps_simps, grind] abbrev Array.get? {α : Type u} {n : Usize} (v : Array α n) (i : Nat) : Option α := getElem? v i
+@[simp, scalar_tac_simps, simp_lists_hyps_simps, grind] abbrev Array.get! {α : Type u} {n : Usize} [Inhabited α] (v : Array α n) (i : Nat) : α := getElem! v i
 
 @[simp]
 abbrev Array.slice {α : Type u} {n : Usize} [Inhabited α] (v : Array α n) (i j : Nat) : List α :=
@@ -94,10 +94,9 @@ def Array.index_usize {α : Type u} {n : Usize} (v: Array α n) (i: Usize) : Res
 def Array.repeat {α : Type u} (n : Usize) (x : α) : Array α n :=
   ⟨ List.replicate n.val x, by simp_all ⟩
 
-@[progress]
-theorem Array.repeat_spec {α : Type u} (n : Usize) (x : α) :
-  ∃ a, Array.repeat n x = a ∧ a.val = List.replicate n.val x := by
-  simp [Array.repeat]
+@[simp]
+theorem Array.repeat_val (n : Usize) (x : α) : (Array.repeat n x).val = List.replicate n.val x := by
+  simp only [Array.repeat]
 
 /- In the theorems below: we don't always need the `∃ ..`, but we use one
    so that `progress` introduces an opaque variable and an equality. This
@@ -119,17 +118,17 @@ def Array.set {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) : Arr
 def Array.set_opt {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: Option α) : Array α n :=
   ⟨ v.val.set_opt i.val x, by have := v.property; simp [*] ⟩
 
-@[simp, scalar_tac_simps, simp_lists_hyps_simps]
+@[simp, scalar_tac_simps, simp_lists_hyps_simps, grind =]
 theorem Array.set_val_eq {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) :
   (v.set i x).val = v.val.set i.val x := by
   simp [set]
 
-@[simp, scalar_tac_simps, simp_lists_hyps_simps]
+@[simp, scalar_tac_simps, simp_lists_hyps_simps, grind =]
 theorem Array.set_opt_val_eq {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: Option α) :
   (v.set_opt i x).val = v.val.set_opt i.val x := by
   simp [set_opt]
 
-@[scalar_tac_simps]
+@[scalar_tac_simps, grind =]
 theorem Array.set_length {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) :
   (v.set i x).length = v.length := by simp
 
@@ -167,7 +166,7 @@ theorem Array.index_mut_usize_spec {α : Type u} {n : Usize} [Inhabited α] (v: 
 theorem Array.set_getElem!_eq α n [Inhabited α] (x : Array α n) (i : Usize) :
   x.set i (x.val[i.val]!) = x := by
   have := @List.set_getElem_self _ x.val i.val
-  simp only [Array, Subtype.eq_iff, set_val_eq, List.set_getElem!]
+  simp only [Array, Subtype.ext_iff, set_val_eq, List.set_getElem!]
 
 /-- Small helper (this function doesn't model a specific Rust function) -/
 def Array.clone {α : Type u} {n : Usize} (clone : α → Result α) (s : Array α n) : Result (Array α n) := do

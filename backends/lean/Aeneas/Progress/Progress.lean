@@ -4,6 +4,7 @@ import Aeneas.Progress.Init
 import Aeneas.Std
 import Aeneas.FSimp
 import AeneasMeta.Async
+import AeneasMeta.Grind
 
 namespace Aeneas
 
@@ -618,6 +619,26 @@ def parseProgressArgs
   return (keep?, withTh?, ids, byTac)
 | _ => throwUnsupportedSyntax
 
+/-- Use `grind` after preprocessing goal the goal, in particular to simplify arithmetic expressions.
+
+  TODO: remove the preprocessing once the fix to the following PR gets into a release candidate:
+  https://github.com/leanprover/lean4/issues/11498
+-/
+def evalGrindWithPreprocess : TacticM Unit := do
+  let simpArgs : Simp.SimpArgs ← ScalarTac.getSimpArgs
+  let config : Simp.Config := {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1}
+  match ← ScalarTac.simpAsmsTarget true config simpArgs with
+  | none => pure ()
+  | some _ =>
+    /- We reduce the search space but increase the number of instances (we need this when the
+       context is big).
+
+       TODO: an issue is that `omega` used to split all disjunctions.
+       TODO: make those options of `progress`
+       TODO: fine tune the paramters
+     -/
+    Aeneas.Grind.evalGrind { splits := 4, gen := 4, instances := 3000 }
+
 def evalProgressCore (async : Bool) (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Array (Option Name))
   (byTacStx : Option Syntax.Tactic)
   : TacticM Stats := do
@@ -630,28 +651,9 @@ def evalProgressCore (async : Bool) (keep keepPretty : Option Name) (withArg: Op
   let splitPost := true
   /- Preprocessing step for `singleAssumptionTac` -/
   let singleAssumptionTacDtree ← singleAssumptionTacPreprocess
-  /- For scalarTac we have a fast track: if the goal is not a linear
-     arithmetic goal, we skip (note that otherwise, scalarTac would try
-     to prove a contradiction) -/
-  let scalarTac : TacticM Unit := do
-    withTraceNode `Progress (fun _ => pure m!"Attempting to solve with `scalarTac`") do
-    if ← ScalarTac.goalIsLinearInt then
-      /- Also: we don't try to split the goal if it is a conjunction
-         (it shouldn't be), but we split the disjunctions. -/
-      ScalarTac.scalarTac { split := false, auxTheorem := false }
-    else
-      throwError "Not a linear arithmetic goal"
-  let simpLemmas ← Aeneas.ScalarTac.scalarTacSimpExt.getTheorems
-  let localAsms ← pure ((← (← getLCtx).getAssumptions).map LocalDecl.fvarId)
-  let simpArgs : Simp.SimpArgs := {simpThms := #[simpLemmas], hypsToUse := localAsms.toArray}
-  let simpTac : TacticM Unit := do
-    withTraceNode `Progress (fun _ => pure m!"Attempting to solve with `simp [*]`") do
-    -- Simplify the goal
-    let r ← Simp.simpAt false { maxDischargeDepth := 1 } simpArgs (.targets #[] true)
-    -- Raise an error if the goal is not proved
-    if r.isSome then throwError "Goal not proved"
-  /- We use our custom assumption tactic, which instantiates meta-variables only if there is a single
-     assumption matching the goal. -/
+  let grindTac : TacticM Unit := do
+    withTraceNode `Progress (fun _ => do pure m!"Attempting to solve with `grind`:\n{← getMainGoal}") do
+    evalGrindWithPreprocess
   let customAssumTac : TacticM Unit := do
     withTraceNode `Progress (fun _ => pure m!"Attempting to solve with `singleAssumptionTac`") do
     singleAssumptionTacCore singleAssumptionTacDtree
@@ -676,7 +678,7 @@ def evalProgressCore (async : Bool) (keep keepPretty : Option Name) (withArg: Op
     withTraceNode `Progress (fun _ => pure m!"Trying to solve a precondition") do
     trace[Progress] "Precondition: {← getMainGoal}"
     try
-      firstTacSolve ([simpTac, scalarTac] ++ byTac)
+      firstTacSolve (grindTac :: byTac)
       trace[Progress] "Precondition solved!"
     catch _ =>
       trace[Progress] "Precondition not solved"
@@ -1228,6 +1230,7 @@ hf : ∀ (x y : U32), ↑x < 10 → ↑y < 10 → ∃ z, f x y = ok z
     := by
     let* ⟨⟩ ← massert_spec
     extract_goal0
+    simp only [UScalar.lt_equiv, UScalar.ofNat_val_eq]
     let* ⟨⟩ ← massert_spec
 
   /--
@@ -1297,7 +1300,7 @@ info: example
       := by
       unfold ntt
       progress; fsimp [Nat.log2_def]
-      progress;
+      progress; fsimp [Nat.log2_def]
       progress; fsimp [Nat.log2_def]
       progress; fsimp [Nat.log2_def]
       progress; fsimp [Nat.log2_def]
@@ -1319,7 +1322,7 @@ info: example
       := by
       unfold ntt
       progress; fsimp [Nat.log2_def]
-      progress;
+      progress; fsimp [Nat.log2_def]
       progress; fsimp [Nat.log2_def]
       progress; fsimp [Nat.log2_def]
       progress; fsimp [Nat.log2_def]

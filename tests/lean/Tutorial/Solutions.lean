@@ -41,7 +41,7 @@ example (a b c d : Prop) (h0 : a → b → c) (h1 : c → d → e)
 
 open CList
 
-@[simp] def CList.toList {α : Type} (x : CList α) : List α :=
+@[simp, grind] def CList.toList {α : Type} (x : CList α) : List α :=
   match x with
   | CNil => []
   | CCons hd tl => hd :: tl.toList
@@ -145,6 +145,9 @@ theorem list_tail_loop_spec' {T : Type} (l : CList T) :
   ∃ back, list_tail_loop l = ok back ∧
   ∀ tl', (back tl').toList = l.toList ++ tl'.toList := by
   unfold list_tail_loop
+  /- `progress*` repeatedly applies `progress`, while doing a case disjunction whenever it
+      encounters a branching. Note that one can automatically generate the corresponding
+      proof script by using `progress*?`. -/
   progress*
 
 @[progress]
@@ -160,10 +163,9 @@ theorem append_in_place_spec {T : Type} (l0 l1 : CList T) :
   ∃ l2, append_in_place l0 l1 = ok l2 ∧
   l2.toList = l0.toList ++ l1.toList := by
   unfold append_in_place
-  progress as ⟨ tl, back ⟩
-  progress as ⟨ l2 ⟩
+  progress*
 
-@[progress]
+-- Verbose version
 theorem reverse_loop_spec {T : Type} (l : CList T) (out : CList T) :
   ∃ l', reverse_loop l out = ok l' ∧
   l'.toList = l.toList.reverse ++ out.toList := by
@@ -173,6 +175,14 @@ theorem reverse_loop_spec {T : Type} (l : CList T) (out : CList T) :
     simp at *
     simp [hl1]
   . simp
+
+-- Simple version
+@[progress]
+theorem reverse_loop_spec' {T : Type} (l : CList T) (out : CList T) :
+  ∃ l', reverse_loop l out = ok l' ∧
+  l'.toList = l.toList.reverse ++ out.toList := by
+  unfold reverse_loop
+  progress*
 
 theorem reverse_spec {T : Type} (l : CList T) :
   ∃ l', reverse l = ok l' ∧
@@ -321,29 +331,10 @@ theorem add_no_overflow_loop_spec
   . progress as ⟨ yv ⟩
     progress as ⟨ xv ⟩
     progress as ⟨ sum ⟩
-    . -- This precondition is not proven automatically
-      have := hNoOverflow i.val (by scalar_tac) (by scalar_tac)
-      scalar_tac
     progress as ⟨ i' ⟩
     progress as ⟨ x1 ⟩
-    . -- This precondition is not proven automatically
-      intro j h0 h1
-      simp_all
-      -- Simplifying (x.update ...).index:
-      have := List.getElem!_set_ne x.val i.val j sum (by scalar_tac)
-      simp [*]
-      apply hNoOverflow j (by scalar_tac) (by scalar_tac)
-    -- Postcondition
-    /- Note that you don't have to manually call the lemmas `toInt_update`
-        and `toInt_drop` below if you first do:
-        ```
-        have : i.val < x.length := by scalar_tac
-        ```
-        (simp_all will automatically apply the lemmas and prove the
-        the precondition sby using the context)
-      -/
     simp_all
-    scalar_eq_nf
+    grind
   . simp_all
 termination_by x.length - i.val
 decreasing_by scalar_decr_tac
@@ -356,7 +347,7 @@ theorem add_no_overflow_spec (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
   x'.length = y.length ∧
   toInt x' = toInt x + toInt y := by
   unfold add_no_overflow
-  progress as ⟨ x' ⟩ <;>
+  progress as ⟨ x' ⟩
   simp_all
 
 /-- The proof about `add_with_carry_loop` -/

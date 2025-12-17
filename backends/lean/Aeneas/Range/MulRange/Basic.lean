@@ -55,7 +55,7 @@ universe u v
         pure b
   loop (range.stop + 1) init range.start (by exists 0; simp) (by omega)
 
-instance : ForIn' m MulRange Nat inferInstance where
+instance {m} [Monad m] : ForIn' m MulRange Nat inferInstance where
   forIn' := MulRange.forIn'
 
 -- No separate `ForIn` instance is required because it can be derived from `ForIn'`.
