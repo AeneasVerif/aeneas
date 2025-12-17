@@ -69,9 +69,18 @@ let pattern_to_extract_name (_span : Meta.span option) (name : pattern) :
 
   (* Make the names shorter. For now, we simply remove all prefixes. *)
   let rec simplify_name (id : pattern) =
+    let shorten (id : pattern) =
+      match id with
+      | [] | [ _ ] -> id
+      | _ :: id -> simplify_name id
+    in
+    (* We have a special case for the literals *)
     match id with
-    | [] | [ _ ] -> id
-    | _ :: id -> simplify_name id
+    | [ PIdent (id, _, []) ]
+      when Collections.StringSet.mem id literal_type_nameset ->
+        (* Literals: we want to capitalize the first letter *)
+        [ PIdent (StringUtils.capitalize_first_letter id, 0, []) ]
+    | _ -> shorten id
   in
   let visitor =
     object
