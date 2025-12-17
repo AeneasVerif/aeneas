@@ -768,6 +768,14 @@ The user can provide several optional arguments:
 - `by <tactic>`: use the given tactic to solve the preconditions.
 - `progress?`: displays the name of the theorem/assumption used.
 
+**`progress?`**: displays the name of the theorem used.
+
+**Alternative syntax:**
+The `progress` tactic also supports the following syntax:
+`let ⟨ id1, id2, ... ⟩ ← <withArg> by <tactic>`
+which is equivalent to:
+`progress with <withArg> as ⟨ id1, id2, ... ⟩ by <tactic>`
+
 **The `progress` attribute:**
 To make a theorem available for `progress`, the user can tag it with the
 `@[progress]` attribute. The theorem must have the following shape:
@@ -804,8 +812,7 @@ elab (name := progress) "progress" args:progressArgs : tactic => do
   let (keep?, withArg, ids, byTac) ← parseProgressArgs args
   evalProgress asyncOption keep? none withArg ids byTac *> return ()
 
-/-- The `progress?` tactic calls `progress` and displays additional information -
-see the documentation for the `progress` tactic itself. -/
+@[inherit_doc progress]
 elab tk:"progress?" args:progressArgs : tactic => do
   let (keep?, withArg, ids, byTac) ← parseProgressArgs args
   let stats ← evalProgress asyncOption keep? none withArg ids byTac
@@ -817,12 +824,7 @@ elab tk:"progress?" args:progressArgs : tactic => do
   let fmt ← PrettyPrinter.ppCategory ``Lean.Parser.Tactic.tacticSeq tac
   Meta.Tactic.TryThis.addSuggestion tk fmt.pretty (origSpan? := ← getRef)
 
-/-- This is alternative syntax for the `progress` tactic - see the documentation for `progress`.
-
-`let ⟨ id1, id2, ... ⟩ ← <withArg> by <tactic>`
-is equivalent to:
-`progress with <withArg> as ⟨ id1, id2, ... ⟩ by <tactic>`
--/
+@[inherit_doc progress]
 syntax (name := letProgress) "let" noWs "*" " ⟨ " binderIdent,* " ⟩" colGe
   " ← " colGe (term <|> "*" <|> "*?") ("by" tacticSeq)? : tactic
 
