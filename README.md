@@ -9,7 +9,7 @@ Wall in Pompei, digital image from Michael Lahanis.
 </figcaption>
 </div></p>
 
-# Aeneas [Ay-nay-as]
+# Aeneas [Eh-nee-as]
 
 Aeneas (pronunced [Ay-nay-as]) is a verification toolchain for Rust programs.  It relies on a translation from Rusts's MIR
 internal language to a pure lamdba calculus.  It is intended to be used in combination with
