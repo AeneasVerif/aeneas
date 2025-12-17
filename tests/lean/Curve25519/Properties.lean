@@ -21,8 +21,7 @@ theorem m_spec (x y : U64) :
   unfold m
   progress*
 
-/-! ## Spec for `mul_internal` -/
-
+set_option maxHeartbeats 2000000 in
 set_option trace.profiler true in
 @[progress]
 theorem mul_internal_spec (a b : Array U64 5#usize)

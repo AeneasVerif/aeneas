@@ -1,5 +1,6 @@
 //@ [!lean] skip
 //@ [lean] subdir=Curve25519
+// This code is adapted from curve25519-dalek: https://github.com/dalek-cryptography/curve25519-dalek
 
 use std::ops::Index;
 
