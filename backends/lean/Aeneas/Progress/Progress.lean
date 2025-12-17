@@ -694,6 +694,7 @@ def evalProgress
   (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Array (Option Name))
   (byTac : Option Syntax.Tactic)
   : TacticM UsedTheorem := do
+  focus do
   let ⟨goals, usedTheorem⟩ ← evalProgressCore async keep keepPretty withArg ids byTac
   -- Wait for all the proof attempts to finish
   let mut sgs := #[]
@@ -1179,6 +1180,24 @@ hf : ∀ (x y : U32), ↑x < 10 → ↑y < 10 → ∃ z, f x y = ok z
       rw [add1]
       progress? as ⟨ z1, h ⟩ says progress with add_spec' as ⟨ z1, h ⟩
       progress? as ⟨ z2, h ⟩ says progress with add_spec' as ⟨ z2, h ⟩
+
+    /--
+    error: unsolved goals
+case h
+x y x✝ : U32
+_✝ : ↑x✝ = ↑x + ↑y
+⊢ ↑x✝ + ↑x✝ ≤ U32.max
+
+case h
+x y : U32
+⊢ ↑x + ↑y ≤ U32.max
+    -/
+    #guard_msgs in
+    example (x y : U32) :
+      ∃ z, add1 x y = ok z := by
+      rw [add1]
+      progress
+      swap; progress
   end
 
   /- Checking that `add_spec'` went out of scope -/
