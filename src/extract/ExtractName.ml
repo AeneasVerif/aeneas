@@ -67,21 +67,11 @@ let pattern_to_extract_name (_span : Meta.span option) (name : pattern) :
     List.for_all check
   in
 
-  (* This is a bit of a hack: we want to simplify some names.
-     We explore the pattern and replace such occurrences with a specific name.
-  *)
-  let simplify_name (id : pattern) =
+  (* Make the names shorter. For now, we simply remove all prefixes. *)
+  let rec simplify_name (id : pattern) =
     match id with
-    | [
-     PIdent ("core", _, []); PIdent ("option", _, []); PIdent ("Option", _, g);
-    ] ->
-        (* Option *)
-        [ PIdent ("Option", 0, g) ]
-    | [ PIdent (id, _, []) ]
-      when Collections.StringSet.mem id literal_type_nameset ->
-        (* Literals: we want to capitalize the first letter *)
-        [ PIdent (StringUtils.capitalize_first_letter id, 0, []) ]
-    | _ -> id
+    | [] | [ _ ] -> id
+    | _ :: id -> simplify_name id
   in
   let visitor =
     object
