@@ -2,6 +2,7 @@ open Types
 open Values
 include Charon.LlbcAst
 
+type bound_fun_sig = Charon.TypesUtils.bound_fun_sig
 type abs_region_group = (RegionId.id, AbsId.id) g_region_group [@@deriving show]
 type abs_region_groups = abs_region_group list [@@deriving show]
 

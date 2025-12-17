@@ -90,7 +90,7 @@ module MakeCheckEquivMatcher : functor (_ : MatchCheckEquivState) ->
 
     We return an optional ids map: [Some] if the match succeeded, [None]
     otherwise. *)
-val match_ctxs :
+val try_match_ctxs :
   Meta.span ->
   check_equiv:bool ->
   ?check_kind:bool ->
@@ -101,6 +101,21 @@ val match_ctxs :
   eval_ctx ->
   eval_ctx ->
   ids_maps option
+
+(** See [try_match_ctxs]: [try_match_ctxs] calls [match_ctxs], the latter
+    raising exceptions of type [Distinct] and [ValueMatchFailure], and the
+    former catching those exceptions. *)
+val match_ctxs :
+  Meta.span ->
+  check_equiv:bool ->
+  ?check_kind:bool ->
+  ?check_can_end:bool ->
+  ids_sets ->
+  (loan_id -> tvalue) ->
+  (loan_id -> tvalue) ->
+  eval_ctx ->
+  eval_ctx ->
+  ids_maps
 
 (** Compute whether two contexts are equivalent modulo an identifier
     substitution.

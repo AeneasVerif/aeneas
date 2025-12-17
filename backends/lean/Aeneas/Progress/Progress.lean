@@ -57,6 +57,10 @@ attribute [progress_simps]
   and_assoc Std.Result.ok.injEq Prod.mk.injEq
   exists_eq_left exists_eq_left' exists_eq_right exists_eq_right' exists_eq exists_eq' true_and and_true
 
+attribute [progress_post_simps]
+  -- We often see expressions like `Int.ofNat 3`
+  Int.reduceToNat
+
 inductive TheoremOrLocal where
 | Theorem (thName : Name)
 | Local (asm : LocalDecl)
@@ -390,7 +394,7 @@ def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option MainGoal)
     -- Simplify the post-conditions
     let args : Simp.SimpArgs :=
       {simpThms := #[← progressPostSimpExt.getTheorems],
-        simprocs := #[← ScalarTac.scalarTacSimprocExt.getSimprocs]}
+       simprocs := #[← progressPostSimprocExt.getSimprocs] }
     let posts ← Simp.simpAt true { maxDischargeDepth := 0, failIfUnchanged := false }
           args (.targets mainGoal.posts false)
     match posts with
@@ -1249,7 +1253,6 @@ info: example
     progress as ⟨ c', _, hc' ⟩ -- we have: `hc' : c'.bv = c.bv >>> 16`
     extract_goal1
     fsimp [hc']
-
 
   namespace Ntt
     def wfArray (_ : Array U16 256#usize) : Prop := True

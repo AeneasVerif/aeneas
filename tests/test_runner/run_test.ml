@@ -155,7 +155,7 @@ let run_charon (env : runner_env) (case : Input.t) =
             env.charon_path;
             "cargo";
             "--preset=aeneas";
-            "--rustc-flag=--allow=unused";
+            "--rustc-arg=--allow=unused";
             "--dest-file";
             llbc_name;
           ]

@@ -44,6 +44,12 @@ initialize progressPostSimpExt : SimpExtension ←
     The `progress_post_simps` attribute registers simp lemmas to be used by `progress`
     to post-process post-conditions after introducing them in the context."
 
+/-- The `progress_post_simps_proc` simp attribute for the simp rocs. -/
+initialize progressPostSimprocExt : Simp.SimprocExtension ←
+  Simp.registerSimprocAttr `progress_post_simps_proc "\
+    The `progress_post_simps_proc` attribute registers simp procedures to be used by `progress`
+    during its preprocessing phase." none
+
 /-! # Attribute: `progress` -/
 
 structure ProgressSpecDesc where

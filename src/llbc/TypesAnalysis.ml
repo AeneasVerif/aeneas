@@ -152,6 +152,7 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
         mut_regions (* We can have bound vars because of arrows *)
     | RErased -> [%internal_error_opt_span] span
     | RVar (Free rid) -> update_mut_regions_with_rid mut_regions rid
+    | RBody _ -> [%craise_opt_span] span "unsupported: Body region"
   in
 
   (* Update a partial_type_info, while registering if we actually performed an update *)
@@ -362,14 +363,15 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
               | RVar (Free rid) ->
                   if RegionId.Set.mem adt_rid adt_info.mut_regions then
                     update_mut_regions_with_rid mut_regions rid
-                  else mut_regions)
+                  else mut_regions
+              | RBody _ -> [%craise_opt_span] span "unsupported: Body region")
             ty_info.mut_regions
             (RegionId.mapi (fun adt_rid r -> (adt_rid, r)) generics.regions)
         in
         (* Return *)
         { ty_info with mut_regions }
     | TFnPtr fn_sig ->
-        let inputs, output = fn_sig.binder_value in
+        let { Types.inputs; output; _ } = fn_sig.binder_value in
         (* Just dive into the arrow *)
         let ty_info =
           List.fold_left
@@ -552,6 +554,7 @@ let compute_outlive_proj_ty (span : Meta.span option)
           | RVar (Free rid) -> RegionId.Set.mem rid regions
           | RVar (Bound _) -> [%craise_opt_span] span "Not handled yet"
           | RStatic -> false
+          | RBody _ -> [%craise_opt_span] span "unsupported: Body region"
         in
         if add then (
           add_region r;
@@ -613,7 +616,8 @@ let compute_outlive_proj_ty (span : Meta.span option)
                       [%craise_opt_span] span
                         "Bound regions are not handled yet"
                   | RVar (Free _) -> add_outlives r0 [ r1 ]
-                  | RStatic | RErased -> [%internal_error_opt_span] span
+                  | RStatic | RErased | RBody _ ->
+                      [%internal_error_opt_span] span
                 in
 
                 let outlive_visitor =

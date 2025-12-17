@@ -39,7 +39,7 @@ module Subst = Substitute
 let log = Logging.regions_hierarchy_log
 
 let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
-    (fun_name : string) (sg : fun_sig) : region_var_groups =
+    (fun_name : string) (sg : bound_fun_sig) : region_var_groups =
   [%ltrace fun_name];
   (* Create the dependency graph.
 
@@ -62,7 +62,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
     let m =
       List.map
         (fun (r : region_param) -> (RVar (Free r.index), s_set))
-        sg.generics.regions
+        sg.item_binder_params.regions
     in
     let s = (RStatic, RegionSet.empty) in
     ref (RegionMap.of_list (s :: m))
@@ -101,7 +101,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
      not the "type outlives" clauses *)
   List.iter
     (add_edges_from_region_binder add_edge_from_region_constraint)
-    sg.generics.regions_outlive;
+    sg.item_binder_params.regions_outlive;
 
   (* Explore the types in the signature to add the edges *)
   let rec explore_ty (outer : region list) (ty : ty) =
@@ -165,7 +165,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
           (binder.binder_regions = [])
           "We don't support arrow types with locally quantified regions";
         (* We can ignore the outer regions *)
-        let inputs, output = binder.binder_value in
+        let { Types.inputs; output; _ } = binder.binder_value in
         List.iter (explore_ty []) (output :: inputs)
     | TFnDef _ -> [%craise_opt_span] span "unsupported: FnDef"
     | TDynTrait _ ->
@@ -181,7 +181,8 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
 
   (* Substitute the regions in a type, then explore *)
   let explore_ty_subst ty = explore_ty [] ty in
-  List.iter explore_ty_subst (sg.output :: sg.inputs);
+  List.iter explore_ty_subst
+    (sg.item_binder_value.output :: sg.item_binder_value.inputs);
 
   (* Compute the ordered SCCs *)
   let module Scc = SCC.Make (RegionOrderedType) in
@@ -286,7 +287,7 @@ let compute_regions_hierarchies (crate : crate) : region_var_groups FunIdMap.t =
       (fun ((fid, d) : FunDeclId.id * fun_decl) ->
         ( FRegular fid,
           ( Types.name_to_string env d.item_meta.name,
-            d.signature,
+            bound_fun_sig_of_decl d,
             Some d.item_meta.span ) ))
       (FunDeclId.Map.bindings crate.fun_decls)
   in
