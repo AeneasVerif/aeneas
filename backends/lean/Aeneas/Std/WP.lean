@@ -76,34 +76,34 @@ theorem progress_exists_spec {m:Result α} {P:Post α} :
   (∃ y, m = .ok y ∧ P y) → spec m P := by
   exact (progress_spec_equiv_exists m P).2
 
-scoped syntax:lead (name := specSyntax) term:lead " ⦃" "⇓ " Lean.Parser.Term.funBinder " => " term " ⦄" : term
-scoped syntax:lead (name := specSyntaxPred) term:lead " ⦃" "⇓ " term " ⦄" : term
+scoped syntax:lead (name := specSyntax) term:lead " ⦃ " Lean.Parser.Term.funBinder " => " term " ⦄" : term
+scoped syntax:lead (name := specSyntaxPred) term:lead " ⦃ " term " ⦄" : term
 
 macro_rules
-  | `($x ⦃⇓ $r => $P⦄)  => `(Aeneas.Std.WP.spec $x (fun $r => $P))
-  | `($x ⦃⇓ $P:term⦄)  => `(Aeneas.Std.WP.spec $x $P)
+  | `($x ⦃ $r => $P⦄)  => `(Aeneas.Std.WP.spec $x (fun $r => $P))
+  | `($x ⦃ $P:term⦄)  => `(Aeneas.Std.WP.spec $x $P)
 
 @[app_unexpander spec]
 def unexpSpec : Lean.PrettyPrinter.Unexpander
-  | `($_ $e fun $v => $P) | `($_ $e (fun $v => $P)) => `($e ⦃⇓ $v => $P ⦄)
-  | `($_ $e $P:term) => `($e ⦃⇓ $P ⦄)
+  | `($_ $e fun $v => $P) | `($_ $e (fun $v => $P)) => `($e ⦃ $v => $P ⦄)
+  | `($_ $e $P:term) => `($e ⦃ $P ⦄)
   | _ => throw ()
 
-example : .ok 0 ⦃⇓ r => r = 0 ⦄ := by simp
+example : .ok 0 ⦃ r => r = 0 ⦄ := by simp
 example : spec (.ok 0) fun _ => True := by simp
-example : .ok 0 ⦃⇓ _ => True ⦄ := by simp
+example : .ok 0 ⦃ _ => True ⦄ := by simp
 example : spec (.ok (0, 1)) fun (x, y) => x = 0 ∧ y = 1 := by simp
-example : .ok (0, 1) ⦃⇓ (x, y) => x = 0 ∧ y = 1 ⦄ := by simp
-example : let P (x : Nat) := x = 0; .ok 0 ⦃⇓ P ⦄ := by simp
+example : .ok (0, 1) ⦃ (x, y) => x = 0 ∧ y = 1 ⦄ := by simp
+example : let P (x : Nat) := x = 0; .ok 0 ⦃ P ⦄ := by simp
 
 def add1 (x : Nat) := Result.ok (x + 1)
-theorem  add1_spec (x : Nat) : add1 x ⦃⇓ y => y = x + 1⦄ :=
+theorem  add1_spec (x : Nat) : add1 x ⦃ y => y = x + 1⦄ :=
   by simp [add1]
 
 example (x : Nat) :
   (do
     let y ← add1 x
-    add1 y) ⦃⇓ y => y = x + 2 ⦄ := by
+    add1 y) ⦃ y => y = x + 2 ⦄ := by
     -- progress as ⟨ y, z ⟩
     apply spec_bind (add1_spec _)
     intro y h
@@ -114,13 +114,13 @@ example (x : Nat) :
     grind
 
 def add2 (x : Nat) := Result.ok (x + 1, x + 2)
-theorem  add2_spec (x : Nat) : add2 x ⦃⇓ (y, z) => y = x + 1 ∧ z = x + 2⦄ :=
+theorem  add2_spec (x : Nat) : add2 x ⦃ (y, z) => y = x + 1 ∧ z = x + 2⦄ :=
   by simp [add2]
 
 example (x : Nat) :
   (do
     let (y, _) ← add2 x
-    add2 y) ⦃⇓ (y, _) => y = x + 2 ⦄ := by
+    add2 y) ⦃ (y, _) => y = x + 2 ⦄ := by
     -- progress as ⟨ y, z ⟩
     apply spec_bind
     . apply add2_spec
@@ -138,11 +138,13 @@ example (x : Nat) :
     --
     grind
 
-
 end Aeneas.Std.WP
 
-
 namespace Aeneas.Std.WP
+
+/-!
+# mvcgen
+-/
 
 open Std Result
 open Std.Do
