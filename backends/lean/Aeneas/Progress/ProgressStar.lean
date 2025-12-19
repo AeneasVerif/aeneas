@@ -44,7 +44,7 @@ def mkOrSeq (disjs : List Expr) : MetaM Expr := do
   | [x] => pure x
   | x :: y => pure (mkOr x (← mkOrSeq y))
 
-/-- Dependent split over a `casesOn` theorem.
+/-- Dependent split over an inductive type.
 
 Ex.: given goal `α : Type, l : List α ⊢ P`, `dsplit l "h" [[], ["hd", "tl"]]` will introduce the following goals:
 ```
@@ -80,6 +80,8 @@ def dsplit (e : Expr) (h : Name) (vars : List (List Name)) :
   --let thTy := th.sig.get.type.consumeMData
   let (args, binderInfo, thTy) ← forallMetaTelescope thTy
   trace[Utils] "args: {args}, thTy: {thTy}"
+  -- Put everything together
+  let th ← mkAppOptM casesOnName (args.map some)
   /- Find the first non implicit parameter: this is the scrutinee, and the
      parameter just before is the motive -/
   let mut i := 0
@@ -135,8 +137,6 @@ def dsplit (e : Expr) (h : Name) (vars : List (List Name)) :
     trace[Utils] "Proving: {case}"
     let (out, _) ← simpTarget case.mvarId! simpCtx simprocs
     if out.isSome then throwError "Could not prove: {case}"
-  -- Put everything together
-  let th := mkAppN th args
   trace[Utils] "th: {← inferType th}"
   -- Introduce the theorem
   Utils.addDeclTac h th thTy (asLet := false) fun th => do
