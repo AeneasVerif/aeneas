@@ -256,6 +256,34 @@ local elab "esplit" x:term : tactic => do
   let x ← Term.elabTerm x none
   let _ ← esplit x `h []
 
+theorem bool_disj_imp (b : Bool) (P : Prop) : (b = true → P) → (b = false → P) → P := by
+  grind
+
+/-- Split a boolean and introduce an equality.
+
+Example: given goal `b : Bool ⊢ P`, `esplitBool b h` generates the following goals:
+```
+b : Bool, h : b = true ⊢ P
+b : Bool, h : b = false ⊢ P
+```
+-/
+def esplitBool (b : Expr) (h : Name) : TacticM (List (FVarId × MVarId)) := do
+  focus do withMainContext do
+  -- Apply the theorem
+  let tgt ← getMainTarget
+  let thm ← mkAppM ``bool_disj_imp #[b, tgt]
+  let thmTy ← inferType thm
+  let (goals, _, _) ← forallMetaTelescope thmTy
+  let thm := mkAppN thm goals
+  let goal ← getMainGoal
+  goal.assign thm
+  let goals := goals.toList.map Expr.mvarId!
+  -- Introduce the equality
+  let goals ← goals.mapM fun goal => goal.intro h
+  --
+  setGoals (goals.map Prod.snd)
+  pure goals
+
 /--
 error: unsolved goals
 α : Type u_1
@@ -271,7 +299,7 @@ h : l = x✝¹ :: x✝
 ⊢ True
 -/
 #guard_msgs in
-example (l : List α) : True := by
+example {α} (l : List α) : True := by
   esplit l
 
 /-- Given a goal of the shape `spec (match ... with ...) post`, perform a case split
@@ -320,42 +348,16 @@ def esplitMatchAtSpecTac (h : Name) (names : Option (List (List (Option Name))))
 elab "spec_split": tactic => do setGoals (← esplitMatchAtSpecTac (← mkFreshUserName `h) (some []))
 elab "spec_split" "as" h:ident : tactic => do setGoals (← esplitMatchAtSpecTac h.getId (some []))
 
-example (x : Option α) :
+example {α} (x : Option α) :
   Std.WP.spec (match x with | none => .ok 0 | some _ => .ok 1) (fun _ => True) := by
   spec_split <;> simp
-
-theorem bool_disj_imp (b : Bool) (P : Prop) : (b = true → P) → (b = false → P) → P := by
-  grind
-
-/-- Split a boolean and introduce an equality.
-
-Example: given goal `b : Bool ⊢ P`, `esplitIf b h` generates the following goals:
-```
-b : Bool, h : b = true ⊢ P
-b : Bool, h : b = false ⊢ P
-```
--/
-def esplitBool (b : Expr) (h : Name) : TacticM (List (FVarId × MVarId)) := do
-  focus do withMainContext do
-  -- Apply the theorem
-  let tgt ← getMainTarget
-  let thm ← mkAppM ``bool_disj_imp #[b, tgt]
-  let thmTy ← inferType thm
-  let (goals, _, _) ← forallMetaTelescope thmTy
-  let thm := mkAppN thm goals
-  let goal ← getMainGoal
-  goal.assign thm
-  let goals := goals.toList.map Expr.mvarId!
-  -- Introduce the equality
-  let goals ← goals.mapM fun goal => goal.intro h
-  --
-  setGoals (goals.map Prod.snd)
-  pure goals
 
 theorem dite_true: (dite True t e) = t (by simp) := by simp
 theorem dite_false : (dite False t e) = e (by simp) := by simp
 
-/-- Split an `if then else` in a spec theorem. -/
+/-- Split an `if then else` in a spec predicate:
+`⊢ spec (if ... then ... else ...) post`
+-/
 def esplitIteAtSpec (h : Name) : TacticM (List (FVarId × MVarId)) := do
   focus do withMainContext do
   let tgt ← getMainTarget
