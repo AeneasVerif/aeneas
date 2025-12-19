@@ -181,7 +181,8 @@ def dsplitCasesOn (isMatcher : Bool) (e : Expr) (casesOnName : Name) (h : Name) 
       let goals ← applyImpOr goal1.mvarId! hTy cases
       pure (goal0.mvarId! :: goals)
   let goals ← applyImpOr goal thTy cases.toList
-  --We need to intro the equality and destruct the existentials -- first we need to resize the list of names (just in case)
+  /- We need to intro the equality and destruct the existentials -- first we need to resize
+    the list of names (just in case) -/
   let varsEnd := List.map (fun _ => []) (List.range' 0 (goals.length - vars.length))
   let vars : List (List (Option Name)) := (vars.take goals.length) ++ varsEnd
   let goals ← (goals.zip vars).mapM fun (goal, vars) => do
@@ -285,17 +286,108 @@ def dsplitAtSpec (h : Name) : TacticM (List MVarId) := do
   --
   pure goals
 
-local elab "dsplit_spec" h:ident : tactic => do
+local elab "dsplit_at_spec" h:ident : tactic => do
   let goals ← dsplitAtSpec h.getId
   setGoals goals
 
 example (x : Option α) :
   Std.WP.spec (match x with | none => .ok 0 | some y => .ok 1) (fun _ => True) := by
-  dsplit_spec h
+  dsplit_at_spec h
   <;> simp
 
 theorem bool_disj_imp (b : Bool) (P : Prop) : (b = true → P) → (b = false → P) → P := by
   grind
+
+/-- Dependent split of a boolean.
+
+Example: given goal `b : Bool ⊢ P`, `dsplitIf b h` generates the following goals:
+```
+b : Bool, h : b = true ⊢ P
+b : Bool, h : b = false ⊢ P
+```
+-/
+def dsplitBool (b : Expr) (h : Name) : TacticM (List (FVarId × MVarId)) := do
+  focus do withMainContext do
+  -- Apply the theorem
+  let tgt ← getMainTarget
+  let thm ← mkAppM ``bool_disj_imp #[b, tgt]
+  let thmTy ← inferType thm
+  let (goals, _, _) ← forallMetaTelescope thmTy
+  let thm := mkAppN thm goals
+  let goal ← getMainGoal
+  goal.assign thm
+  let goals := goals.toList.map Expr.mvarId!
+  -- Introduce the equality
+  let goals ← goals.mapM fun goal => goal.intro h
+  --
+  setGoals (goals.map Prod.snd)
+  pure goals
+
+theorem dite_true (h : True) : (dite True t e) = t h := by simp
+theorem dite_false (h : ¬ False) : (dite False t e) = e h := by simp
+
+/-theorem Decidable.equiv (p : Prop) [Decidable Prop] :
+  p ↔ -/
+
+/-- Split an `if then else` in a spec theorem. -/
+def splitIteAtSpec (h : Name) : TacticM (List MVarId) := do
+  focus do withMainContext do
+  let tgt ← getMainTarget
+  tgt.consumeMData.withApp fun spec? args => do
+  if ¬ (spec?.isConstOf ``Std.WP.spec) ∨ args.size ≠ 3 then throwError "Not a valid spec goal"
+  let prog := args[1]!
+  -- Check that we have an if then else
+  prog.withApp fun ite? args => do
+  trace[Utils] "ite?: {ite?}, args: {args}"
+  if ¬ ite?.isConstOf ``ite ∧ ¬ ite?.isConstOf ``dite then throwError "Not an if then else"
+  if args.size ≠ 5 then throwError "Incorrect number of arguments"
+  -- `if then else` expressions receive a decidable `Prop` as input
+  let prop := args[1]!
+  let decInst := args[2]!
+  let thm ← mkAppOptM ``Decidable.byCases #[prop, tgt, decInst]
+  let thmTy ← inferType thm
+  -- Apply the theorem
+  let (goals, _, _) ← forallMetaTelescope thmTy
+  let thm := mkAppN thm goals
+  let goal ← getMainGoal
+  goal.assign thm
+  let goals := goals.toList.map Expr.mvarId!
+  -- Introduce the equality and simplify
+  let goals ← goals.filterMapM fun goal => do
+    let (h, goal) ← goal.intro h
+    setGoals [goal]
+    let args : Simp.SimpArgs := {
+      hypsToUse := #[h],
+      addSimpThms := #[``Bool.false_eq_true, ``ite_false, ``ite_true, ``dite_true, ``dite_false] }
+    match ← Simp.simpAt true {} args (.targets #[] true) with
+    | none => pure none
+    | some _ => pure (some (← getMainGoal))
+  --
+  setGoals goals
+  pure goals
+
+local elab "dsplit_bool" h:ident b:term : tactic => do
+  let b ← Term.elabTerm b none
+  let _ ← dsplitBool b h.getId
+
+example (b : Bool) : if b then True else True := by
+  dsplit_bool h b <;> simp only [h]
+  · simp only [↓reduceIte]
+  · simp only [Bool.false_eq_true, ↓reduceIte]
+
+example (b : Bool) : if h: b then True else True := by
+  dsplit_bool h b <;> simp only [h]
+  · simp only [↓reduceDIte]
+  · simp only [Bool.false_eq_true, ↓reduceDIte]
+
+local elab "dsplit_ite_at_spec" h:ident : tactic => do
+  let _ ← splitIteAtSpec h.getId
+
+example (b : Bool) : Std.WP.spec (if b then .ok 0 else .ok 1) (fun _ => True) := by
+  dsplit_ite_at_spec h <;> simp
+
+example (b : Bool) : Std.WP.spec (if h: b then .ok 0 else .ok 1) (fun _ => True) := by
+  dsplit_ite_at_spec h <;> simp
 
 namespace Bifurcation
 
