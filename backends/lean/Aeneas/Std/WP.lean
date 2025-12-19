@@ -3,7 +3,7 @@ import Std.Do
 
 namespace Aeneas.Std.WP
 
-open Std
+open Std Result
 
 def Post α := (α -> Prop)
 def Pre := Prop
@@ -20,9 +20,9 @@ def wp_ord (wp1 wp2:Wp α) :=
 
 def theta (m:Result α) : Wp α :=
   match m with
-  | .ok x => wp_return x
-  | .fail _ => fun _ => False
-  | .div => fun _ => False
+  | ok x => wp_return x
+  | fail _ => fun _ => False
+  | div => fun _ => False
 
 def p2wp (post:Post α) : Wp α :=
   fun p => forall r, post r → p r
@@ -34,10 +34,10 @@ def spec (x:Result α) (p:Post α) :=
   theta x p
 
 @[simp, grind =]
-theorem spec_ok (x : α) : spec (.ok x) p ↔ p x := by simp [spec, theta, wp_return]
+theorem spec_ok (x : α) : spec (ok x) p ↔ p x := by simp [spec, theta, wp_return]
 
 @[simp, grind =]
-theorem spec_fail (e : Error) : spec (.fail e) p ↔ False := by simp [spec, theta]
+theorem spec_fail (e : Error) : spec (fail e) p ↔ False := by simp [spec, theta]
 
 theorem spec_bind {k:α -> Result β} {Pₖ:Post β} {m:Result α} {Pₘ:Post α} :
   spec m Pₘ →
@@ -61,7 +61,7 @@ theorem spec_mono {P₁:Post α} {m:Result α} {P₀:Post α} (h : spec m P₀):
   cases m <;> grind
 
 theorem progress_spec_equiv_exists (m:Result α) (P:Post α) :
-  spec m P ↔ (∃ y, m = .ok y ∧ P y) :=
+  spec m P ↔ (∃ y, m = ok y ∧ P y) :=
   by
     cases m
     · simp [spec, theta, wp_return]
@@ -69,15 +69,17 @@ theorem progress_spec_equiv_exists (m:Result α) (P:Post α) :
     · simp [spec, theta]
 
 theorem progress_spec_exists {m:Result α} {P:Post α} :
-  spec m P → (∃ y, m = .ok y ∧ P y) := by
+  spec m P → (∃ y, m = ok y ∧ P y) := by
   exact (progress_spec_equiv_exists m P).1
 
 theorem progress_exists_spec {m:Result α} {P:Post α} :
-  (∃ y, m = .ok y ∧ P y) → spec m P := by
+  (∃ y, m = ok y ∧ P y) → spec m P := by
   exact (progress_spec_equiv_exists m P).2
 
-scoped syntax:lead (name := specSyntax) term:lead " ⦃ " Lean.Parser.Term.funBinder " => " term " ⦄" : term
-scoped syntax:lead (name := specSyntaxPred) term:lead " ⦃ " term " ⦄" : term
+/- We use a priority of 55 for the inner term, which is exactly the priority for `|||`.
+This way we can expressions like: `x + y ⦃ z => ... ⦄` without having to put parentheses around `x + y`. -/
+scoped syntax:54 (name := specSyntax) term:55 " ⦃ " Lean.Parser.Term.funBinder " => " term " ⦄" : term
+scoped syntax:54 (name := specSyntaxPred) term:55 " ⦃ " term " ⦄" : term
 
 macro_rules
   | `($x ⦃ $r => $P⦄)  => `(Aeneas.Std.WP.spec $x (fun $r => $P))
@@ -89,12 +91,26 @@ def unexpSpec : Lean.PrettyPrinter.Unexpander
   | `($_ $e $P:term) => `($e ⦃ $P ⦄)
   | _ => throw ()
 
-example : .ok 0 ⦃ r => r = 0 ⦄ := by simp
-example : spec (.ok 0) fun _ => True := by simp
-example : .ok 0 ⦃ _ => True ⦄ := by simp
-example : spec (.ok (0, 1)) fun (x, y) => x = 0 ∧ y = 1 := by simp
-example : .ok (0, 1) ⦃ (x, y) => x = 0 ∧ y = 1 ⦄ := by simp
-example : let P (x : Nat) := x = 0; .ok 0 ⦃ P ⦄ := by simp
+example : ok 0 ⦃ r => r = 0 ⦄ := by simp
+example : spec (ok 0) fun _ => True := by simp
+example : ok 0 ⦃ _ => True ⦄ := by simp
+example : spec (ok (0, 1)) fun (x, y) => x = 0 ∧ y = 1 := by simp
+example : ok (0, 1) ⦃ (x, y) => x = 0 ∧ y = 1 ⦄ := by simp
+example : let P (x : Nat) := x = 0; ok 0 ⦃ P ⦄ := by simp
+
+section
+  variable (U32 : Type) [HAdd U32 U32 (Result U32)]
+  variable (x y : U32)
+
+  #elab x + y ⦃ _ => True ⦄
+  #elab True → x + y ⦃ _ => True ⦄
+  #elab True ∧ x + y ⦃ _ => True ⦄
+
+  -- Checking what happpens if we put post-conditions inside post-conditions
+  example (f : Nat → Result (Nat × (Nat → Result Nat)))
+          (_ : ∀ x, f x ⦃ (y, g) => y > 0 ∧ ∀ x, g x ⦃ z => z > y ⦄ ⦄ ∧ True)
+   : True := by simp only
+end
 
 def add1 (x : Nat) := Result.ok (x + 1)
 theorem  add1_spec (x : Nat) : add1 x ⦃ y => y = x + 1⦄ :=
