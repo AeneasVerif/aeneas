@@ -3,31 +3,6 @@ open Lean Meta Elab Tactic
 
 namespace Aeneas
 
-theorem imp_or {A B C : Prop} : (A → C) → (B → C) → (A ∨ B) → C := by grind
-
-example (l : List α) : True := by
-  have :=
-    @List.casesOn α (fun (l : List α) => (l = []) ∨ (∃ (hd : α) (tl : List α), l = hd :: tl)) l
-      (by simp only [true_or])
-      (by
-        simp only [
-          reduceCtorEq,
-          List.cons.injEq,
-          existsAndEq,
-          and_true,
-          or_true,
-          implies_true
-          ])
-  simp only at this
-  revert this
-  apply imp_or
-  · intro h
-    sorry
-  · intro h
-    have ⟨ hd, tl, h1 ⟩ := h
-    clear h
-    sorry
-
 def mkExists (var body : Expr) : MetaM Expr := do
   mkAppM ``Exists #[← mkLambdaFVars #[var] body]
 
@@ -44,7 +19,18 @@ def mkOrSeq (disjs : List Expr) : MetaM Expr := do
   | [x] => pure x
   | x :: y => pure (mkOr x (← mkOrSeq y))
 
-/-- Dependent split over a `casesOn` theorem.
+/- This example show how to use a `casesOn` lemma to generate case disjunctions. -/
+example (l : List α) : l = [] ∨ ∃ hd tl, l = hd :: tl :=
+  @List.casesOn α (fun (l : List α) => (l = []) ∨ (∃ (hd : α) (tl : List α), l = hd :: tl)) l
+    (by simp)
+    (by simp)
+
+theorem imp_or {A B C : Prop} : (A → C) → (B → C) → (A ∨ B) → C := by grind
+
+/-- Split over a `casesOn` theorem or a `matcher` and introduce an **e**quality.
+
+This function does not attempt to substitute the expression we split on, but rather
+introduces an equality in the context, hence the name "esplit" (equality split).
 
 Ex.: given goal `α : Type, l : List α ⊢ P` and theorem:
 ```
@@ -55,7 +41,7 @@ List.casesOn : {α : Type u} →
     ((head : α) → (tail : List α) → motive (head :: tail)) →
     motive t
 ```
-`dsplit l "h" [[], ["hd", "tl"]]` will introduce the following goals:
+`esplit l "h" [[], ["hd", "tl"]]` will introduce the following goals:
 ```
 α : Type, l : List α, h : l = [] ⊢ P
 α : Type, l : List α, hd : α, tl : List α, h : l = hd :: tl ⊢ P
@@ -63,9 +49,9 @@ List.casesOn : {α : Type u} →
 
 We return the fvars introduced for the variables appearing af
 -/
-def dsplitCasesOn (isMatcher : Bool) (e : Expr) (casesOnName : Name) (h : Name) (vars : List (List (Option Name))) :
+def esplitCasesOn (isMatcher : Bool) (e : Expr) (casesOnName : Name) (h : Name) (vars : List (List (Option Name))) :
   TacticM (List (Array FVarId × FVarId × MVarId)) :=
-  withTraceNode `Utils (fun _ => do pure m!"dsplitCasesOn") do
+  withTraceNode `Utils (fun _ => do pure m!"esplitCasesOn") do
   Tactic.focus do
   -- Check that the expression is an inductive
   let ety ← inferType e
@@ -203,20 +189,53 @@ def dsplitCasesOn (isMatcher : Bool) (e : Expr) (casesOnName : Name) (h : Name) 
   trace[Utils] "Done: {ngoals}"
   pure goals
 
-/-- Dependent split over an inductive type.
+local elab "esplitCasesOn" th:ident x:term : tactic => do
+  let some th ← Term.resolveId? th (withInfo := true)
+    | throwError m!"Could not find theorem: {th}"
+  th.withApp fun th _ => do
+  let .const thName _ := th
+    | throwError "Unexpected"
+  let x ← Term.elabTerm x none
+  let _ ← esplitCasesOn true x thName `h []
 
-Ex.: given goal `α : Type, l : List α ⊢ P`, `dsplit l "h" [[], ["hd", "tl"]]` will introduce the following goals:
+def Test.test {α} (x : Option α) : Nat := match x with | none => 0 | some _ => 1
+
+example α (x : Option α) : x = none ∨ ∃ v, x = some v :=
+  @Test.test.match_1 α (fun x => x = none ∨ ∃ v, x = some v) x (by simp) (by simp)
+
+/--
+error: unsolved goals
+α : Type u_1
+x : Option α
+h : x = none
+⊢ True
+
+α : Type u_1
+x : Option α
+x✝ : α
+h : x = some x✝
+⊢ True
+-/
+#guard_msgs in
+example {α} (x : Option α) : True := by
+  esplitCasesOn Test.test.match_1 x
+
+/-- Split over an inductive type and introduce an **e**quality.
+
+Ex.: given goal `α : Type, l : List α ⊢ P`, `esplit l "h" [[], ["hd", "tl"]]` will introduce the following goals:
 ```
 α : Type, l : List α, h : l = [] ⊢ P
 α : Type, l : List α, hd : α, tl : List α, h : l = hd :: tl ⊢ P
 ```
 
-We return the fvars introduced for the variables appearing af
+We return the fvars introduced for:
+- the variables introduced when decomposing the inductive
+- the equality introduced in the context
 -/
-def dsplit (e : Expr) (h : Name) (vars : List (List (Option Name))) :
+def esplit (e : Expr) (h : Name) (vars : List (List (Option Name))) :
   TacticM (List (Array FVarId × FVarId × MVarId)) :=
   Tactic.focus do
-  withTraceNode `Utils (fun _ => do pure m!"dsplit") do
+  withTraceNode `Utils (fun _ => do pure m!"esplit") do
   -- Check that the expression is an inductive
   let ety ← inferType e
   ety.consumeMData.withApp fun ty _ => do
@@ -231,35 +250,35 @@ def dsplit (e : Expr) (h : Name) (vars : List (List (Option Name))) :
   trace[Utils] "Inductive"
   -- Lookup the `casesOn` theorem
   let casesOnName := tyName ++ `casesOn
-  dsplitCasesOn false e casesOnName h vars
+  esplitCasesOn false e casesOnName h vars
 
-local elab "dsplit" x:term : tactic => do
+local elab "esplit" x:term : tactic => do
   let x ← Term.elabTerm x none
-  let _ ← dsplit x `h []
+  let _ ← esplit x `h []
 
-local elab "dsplitCasesOn" th:ident x:term : tactic => do
-  let some th ← Term.resolveId? th (withInfo := true)
-    | throwError m!"Could not find theorem: {th}"
-  th.withApp fun th _ => do
-  let .const thName _ := th
-    | throwError "Unexpected"
-  let x ← Term.elabTerm x none
-  let _ ← dsplitCasesOn true x thName `h []
+/--
+error: unsolved goals
+α : Type u_1
+l : List α
+h : l = []
+⊢ True
 
+α : Type u_1
+l : List α
+x✝¹ : α
+x✝ : List α
+h : l = x✝¹ :: x✝
+⊢ True
+-/
+#guard_msgs in
 example (l : List α) : True := by
-  set_option trace.Utils true in
-  dsplit l <;> simp
+  esplit l
 
-def test (x : Option α) : Nat := match x with | none => 0 | some _ => 1
-example (x : Option α) : True := by
-  have := @test.match_1 α (fun x => x = none ∨ ∃ v, x = some v) x (by simp) (by simp)
-  set_option trace.Utils true in
-  dsplitCasesOn test.match_1 x <;> simp
-
-/-- Given a goal of the shape `spec (match ... with ...) post`, perform a case split. -/
-def dsplitMatchAtSpec (h : Name) (names : Option (List (List (Option Name)))) :
+/-- Given a goal of the shape `spec (match ... with ...) post`, perform a case split
+and introduce an equality. -/
+def esplitMatchAtSpec (h : Name) (names : Option (List (List (Option Name)))) :
   TacticM (List (Array FVarId × FVarId × MVarId)) := do
-  withTraceNode `Utils (fun _ => do pure m!"dsplitMatchAtSpec") do
+  withTraceNode `Utils (fun _ => do pure m!"esplitMatchAtSpec") do
   focus do withMainContext do
   let tgt ← getMainTarget
   tgt.consumeMData.withApp fun spec? args => do
@@ -281,8 +300,8 @@ def dsplitMatchAtSpec (h : Name) (names : Option (List (List (Option Name)))) :
       pure (some (← arg.fvarId!.getDecl).userName)
     | some names => pure names
   -- Split
-  let goals ← dsplitCasesOn true scrut matcherName h names
-  trace[Utils] "after dsplitCasesOn:\n{goals.map fun (_, _, g) => g}"
+  let goals ← esplitCasesOn true scrut matcherName h names
+  trace[Utils] "after esplitCasesOn:\n{goals.map fun (_, _, g) => g}"
   -- Simplify the goal with the equality we just introduced
   let goals ← goals.filterMapM fun (vars, h, goal) => do
     goal.withContext do
@@ -294,12 +313,12 @@ def dsplitMatchAtSpec (h : Name) (names : Option (List (List (Option Name)))) :
   --
   pure goals
 
-def dsplitMatchAtSpecTac (h : Name) (names : Option (List (List (Option Name)))) :
+def esplitMatchAtSpecTac (h : Name) (names : Option (List (List (Option Name)))) :
   TacticM (List (MVarId)) := do
-  (← dsplitMatchAtSpec h names).mapM fun (_, _, g) => pure g
+  (← esplitMatchAtSpec h names).mapM fun (_, _, g) => pure g
 
-elab "spec_split": tactic => do setGoals (← dsplitMatchAtSpecTac (← mkFreshUserName `h) (some []))
-elab "spec_split" "as" h:ident : tactic => do setGoals (← dsplitMatchAtSpecTac h.getId (some []))
+elab "spec_split": tactic => do setGoals (← esplitMatchAtSpecTac (← mkFreshUserName `h) (some []))
+elab "spec_split" "as" h:ident : tactic => do setGoals (← esplitMatchAtSpecTac h.getId (some []))
 
 example (x : Option α) :
   Std.WP.spec (match x with | none => .ok 0 | some _ => .ok 1) (fun _ => True) := by
@@ -308,15 +327,15 @@ example (x : Option α) :
 theorem bool_disj_imp (b : Bool) (P : Prop) : (b = true → P) → (b = false → P) → P := by
   grind
 
-/-- Dependent split of a boolean.
+/-- Split a boolean and introduce an equality.
 
-Example: given goal `b : Bool ⊢ P`, `dsplitIf b h` generates the following goals:
+Example: given goal `b : Bool ⊢ P`, `esplitIf b h` generates the following goals:
 ```
 b : Bool, h : b = true ⊢ P
 b : Bool, h : b = false ⊢ P
 ```
 -/
-def dsplitBool (b : Expr) (h : Name) : TacticM (List (FVarId × MVarId)) := do
+def esplitBool (b : Expr) (h : Name) : TacticM (List (FVarId × MVarId)) := do
   focus do withMainContext do
   -- Apply the theorem
   let tgt ← getMainTarget
@@ -337,7 +356,7 @@ theorem dite_true: (dite True t e) = t (by simp) := by simp
 theorem dite_false : (dite False t e) = e (by simp) := by simp
 
 /-- Split an `if then else` in a spec theorem. -/
-def dsplitIteAtSpec (h : Name) : TacticM (List (FVarId × MVarId)) := do
+def esplitIteAtSpec (h : Name) : TacticM (List (FVarId × MVarId)) := do
   focus do withMainContext do
   let tgt ← getMainTarget
   tgt.consumeMData.withApp fun spec? args => do
@@ -373,11 +392,11 @@ def dsplitIteAtSpec (h : Name) : TacticM (List (FVarId × MVarId)) := do
   setGoals (goals.map Prod.snd)
   pure goals
 
-def dsplitIteAtSpecTac (h : Name) : TacticM (List MVarId) := do
-  pure ((← dsplitIteAtSpec h).map Prod.snd)
+def esplitIteAtSpecTac (h : Name) : TacticM (List MVarId) := do
+  pure ((← esplitIteAtSpec h).map Prod.snd)
 
-elab "spec_split_if": tactic => do setGoals (← dsplitIteAtSpecTac (← mkFreshUserName `h))
-elab "spec_split_if" "as" h:ident : tactic => do setGoals (← dsplitIteAtSpecTac h.getId)
+elab "spec_split_if": tactic => do setGoals (← esplitIteAtSpecTac (← mkFreshUserName `h))
+elab "spec_split_if" "as" h:ident : tactic => do setGoals (← esplitIteAtSpecTac h.getId)
 
 /--
 error: unsolved goals
@@ -413,8 +432,8 @@ example (b : Bool) : Std.WP.spec (if h: b then .ok 0 else .ok 1) (fun _ => True)
 
 /-- Given a goal of the shape `spec (match ... with ...) post` or `spec (if ... then ... else ...)`,
 perform a case split. -/
-def dsplitAtSpec (h : Name) (names : Option (List (List (Option Name)))) : TacticM (List (Array FVarId × FVarId × MVarId)) := do
-  withTraceNode `Utils (fun _ => do pure m!"dsplitAtSpec") do
+def esplitAtSpec (h : Name) (names : Option (List (List (Option Name)))) : TacticM (List (Array FVarId × FVarId × MVarId)) := do
+  withTraceNode `Utils (fun _ => do pure m!"esplitAtSpec") do
   focus do withMainContext do
   let tgt ← getMainTarget
   tgt.consumeMData.withApp fun spec? args => do
@@ -425,16 +444,16 @@ def dsplitAtSpec (h : Name) (names : Option (List (List (Option Name)))) : Tacti
   if ma.isSome
   then
     trace[Utils] "splitting a match"
-    dsplitMatchAtSpec h names
+    esplitMatchAtSpec h names
   else
     trace[Utils] "splitting an if then else"
-    pure ((← dsplitIteAtSpec h).map fun (h, g) => (#[], h, g))
+    pure ((← esplitIteAtSpec h).map fun (h, g) => (#[], h, g))
 
-def dsplitAtSpecTac (h : Name) : TacticM (List MVarId) := do
-  pure ((← dsplitAtSpec h (some [])).map fun (_, _, g) => g)
+def esplitAtSpecTac (h : Name) : TacticM (List MVarId) := do
+  pure ((← esplitAtSpec h (some [])).map fun (_, _, g) => g)
 
-elab "spec_split": tactic => do setGoals (← dsplitAtSpecTac (← mkFreshUserName `h))
-elab "spec_split" "as" h:ident : tactic => do setGoals (← dsplitAtSpecTac h.getId)
+elab "spec_split": tactic => do setGoals (← esplitAtSpecTac (← mkFreshUserName `h))
+elab "spec_split" "as" h:ident : tactic => do setGoals (← esplitAtSpecTac h.getId)
 
 namespace Bifurcation
 
@@ -910,7 +929,7 @@ where
     Tactic.focus do
       let h ← mkFreshUserName `h
       let splitStx ← `(tactic| spec_split)
-      let subgoals ← dsplitAtSpec h none
+      let subgoals ← esplitAtSpec h none
       --
       trace[Progress] "onMatch: Bifurcation generated {subgoals.length} subgoals"
       unless subgoals.length == toBeProcessed.size do
