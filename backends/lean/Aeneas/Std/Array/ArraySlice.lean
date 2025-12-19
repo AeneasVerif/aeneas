@@ -46,7 +46,7 @@ def Array.subslice {α : Type u} {n : Usize} (a : Array α n) (r : Range Usize) 
 @[progress]
 theorem Array.subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array α n) (r : Range Usize)
   (h0 : r.start.val < r.end_.val) (h1 : r.end_.val ≤ a.val.length) :
-  subslice a r ⦃⇓ s =>
+  subslice a r ⦃ s =>
   s.val = a.val.slice r.start.val r.end_.val ∧
   (∀ i, i + r.start.val < r.end_.val → s.val[i]! = a.val[r.start.val + i]!) ⦄
   := by
@@ -71,7 +71,7 @@ def Array.update_subslice {α : Type u} {n : Usize} (a : Array α n) (r : Range 
 @[progress]
 theorem Array.update_subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array α n) (r : Range Usize) (s : Slice α)
   (_ : r.start.val < r.end_.val) (_ : r.end_.val ≤ a.length) (_ : s.length = r.end_.val - r.start.val) :
-  update_subslice a r s ⦃⇓ na =>
+  update_subslice a r s ⦃ na =>
   (∀ i, i < r.start.val → na[i]! = a[i]!) ∧
   (∀ i, r.start.val ≤ i → i < r.end_.val → na[i]! = s[i - r.start.val]!) ∧
   (∀ i, r.end_.val ≤ i → i < n.val → na[i]! = a[i]!) ⦄ := by

@@ -53,7 +53,7 @@ theorem Array.index_usize_const_spec {α} [Inhabited α]
   (hp : ∀ i x, p i x ↔ p' i x)
   (hPred : Std.Array.allIdx p a.val)
   (i : Usize) (h : i.val < n.val) (hn : n.val ≤ U32.max) :
-  Array.index_usize a i ⦃⇓ v => p' i v ⦄ := by
+  Array.index_usize a i ⦃ v => p' i v ⦄ := by
   let rec aux (l : List α) (i : Nat) (hi : i + l.length = n)
     (hl : ∀ j, l[j]! = a[i + j]!)
     (h : Std.Array.allIdx p l i)

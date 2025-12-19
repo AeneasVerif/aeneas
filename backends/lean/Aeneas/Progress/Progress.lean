@@ -26,7 +26,7 @@ macro:max "[> " "let" y:term " ← " x:term " <]"   : term => `(prettyMonadEq $x
 @[app_unexpander prettyMonadEq]
 def unexpPrettyMonadEqofNat : Lean.PrettyPrinter.Unexpander | `($_ $x $y) => `([> let $y ← $x <]) | _ => throw ()
 
-example (x y z : Std.U32) (_ : [> let z ← (x + y) <]) : True := by simp
+example (x y z : Std.U32) (_ : [> let z ← x + y <]) : True := by simp
 
 def eq_imp_prettyMonadEq {α : Type u} {β : Type v} (x : Std.Result α) (y : β) : prettyMonadEq x y := by
   unfold prettyMonadEq
@@ -1149,23 +1149,23 @@ x y : UScalar ty
   -/
   #guard_msgs in
   example {ty} {x y : UScalar ty} :
-    (x + y) ⦃⇓ _ => True ⦄ := by
+    x + y ⦃ _ => True ⦄ := by
     progress keep _ as ⟨ z, h1 ⟩
 
   example {ty} {x y : UScalar ty} (h : x.val + y.val ≤ UScalar.max ty) :
-    (x + y) ⦃⇓ _ => True ⦄ := by
+    x + y ⦃ _ => True ⦄ := by
     progress as ⟨ z, h1 ⟩
 
   example {ty} {x y : UScalar ty} (h : x.val + y.val ≤ UScalar.max ty) :
-    (x + y) ⦃⇓ _ => True ⦄ := by
+    x + y ⦃ _ => True ⦄ := by
     let* ⟨ z, h1 ⟩ ← *
 
   -- Checking that we properly handle tuple decomposition in post-conditions
   def addToPair (x : Nat) := Result.ok (x + 1, x + 2)
-  theorem  addToPair_spec (x : Nat) : addToPair x ⦃⇓ (y, z) => y = x + 1 ∧ z = x + 2⦄ :=
+  theorem  addToPair_spec (x : Nat) : addToPair x ⦃ (y, z) => y = x + 1 ∧ z = x + 2⦄ :=
     by simp [addToPair]
 
-  theorem  addToPair_spec1 (x : Nat) : addToPair x ⦃⇓ x' => ∃ y z, x' = (y, z) ∧ y = x + 1 ∧ z = x + 2⦄ :=
+  theorem  addToPair_spec1 (x : Nat) : addToPair x ⦃ x' => ∃ y z, x' = (y, z) ∧ y = x + 1 ∧ z = x + 2⦄ :=
     by simp [addToPair]
 
   /--
@@ -1183,7 +1183,7 @@ _✝ : z1 = y + 2
   example (x : Nat) :
     (do
       let (y, _) ← addToPair x
-      addToPair y) ⦃⇓ (y, _) => y = x + 2 ⦄ := by
+      addToPair y) ⦃ (y, _) => y = x + 2 ⦄ := by
     progress with addToPair_spec as ⟨ y, z, h ⟩
     progress with addToPair_spec as ⟨ y1, z1, h1 ⟩
 
@@ -1202,7 +1202,7 @@ hz1 : z1 = y + 2
   example (x : Nat) :
     (do
       let (y, _) ← addToPair x
-      addToPair y) ⦃⇓ (y, _) => y = x + 2 ⦄ := by
+      addToPair y) ⦃ (y, _) => y = x + 2 ⦄ := by
     progress with addToPair_spec1 as ⟨ y, z, hy, hz ⟩
     progress with addToPair_spec1 as ⟨ y1, z1, hy1, hz1 ⟩
 
@@ -1214,7 +1214,7 @@ hz1 : z1 = y + 2
   -/
   #guard_msgs in
   example {ty} {x y : UScalar ty} (h : x.val + y.val ≤ UScalar.max ty) :
-    (x + y) ⦃⇓ _ => True ⦄ := by
+    x + y ⦃ _ => True ⦄ := by
     let* ⟨ z, h1 ⟩ ← *?
 
   /--
@@ -1232,7 +1232,7 @@ info: example
   #guard_msgs in
   set_option linter.unusedTactic false in
   example {ty} {x y : UScalar ty} (h : x.val + y.val ≤ UScalar.max ty) :
-    (x + y) ⦃⇓ z => z.val = x.val + y.val ⦄ := by
+    x + y ⦃ z => z.val = x.val + y.val ⦄ := by
     let* ⟨ z, h1 ⟩ ← UScalar.add_spec
     extract_goal0
     scalar_tac
@@ -1257,7 +1257,7 @@ info: example
   example {ty} {x y : UScalar ty} (h : 2 * x.val + y.val ≤ UScalar.max ty) :
     (do
       let z1 ← x + y
-      z1 + x) ⦃⇓ z => z.val = 2 * x.val + y.val ⦄ := by
+      z1 + x) ⦃ z => z.val = 2 * x.val + y.val ⦄ := by
     let* ⟨ z1, h1 ⟩ ← UScalar.add_spec
     let* ⟨ z2, h2 ⟩ ← UScalar.add_spec
     extract_goal0
@@ -1266,66 +1266,66 @@ info: example
   example {ty} {x y : UScalar ty} (h : 2 * x.val + y.val ≤ UScalar.max ty) :
     (do
       let z1 ← x + y
-      z1 + x) ⦃⇓ z => z.val = 2 * x.val + y.val ⦄ := by
+      z1 + x) ⦃ z => z.val = 2 * x.val + y.val ⦄ := by
     progress with UScalar.add_spec as ⟨ z1, h1 ⟩
     progress with UScalar.add_spec as ⟨ z2, h2 ⟩
     scalar_tac
 
   example {ty} {x y : UScalar ty}
     (hmax : x.val + y.val ≤ UScalar.max ty) :
-    (x + y) ⦃⇓ z => z.val = x.val + y.val ⦄ := by
+    x + y ⦃ z => z.val = x.val + y.val ⦄ := by
     progress keep _ as ⟨ z, h1 ⟩
     scalar_tac
 
   example {ty} {x y : IScalar ty}
     (hmin : IScalar.min ty ≤ x.val + y.val)
     (hmax : x.val + y.val ≤ IScalar.max ty) :
-    (x + y) ⦃⇓ z => z.val = x.val + y.val ⦄ := by
+    x + y ⦃ z => z.val = x.val + y.val ⦄ := by
     progress keep _ as ⟨ z, h1 ⟩
     scalar_tac
 
   example {ty} {x y : UScalar ty}
     (hmax : x.val + y.val ≤ UScalar.max ty) :
-    (x + y) ⦃⇓ z => z.val = x.val + y.val ⦄ := by
+    x + y ⦃ z => z.val = x.val + y.val ⦄ := by
     progress? keep _ as ⟨ z, h1 ⟩ says progress keep _ with UScalar.add_spec as ⟨ z, h1 ⟩
     scalar_tac
 
   example {ty} {x y : IScalar ty}
     (hmin : IScalar.min ty ≤ x.val + y.val)
     (hmax : x.val + y.val ≤ IScalar.max ty) :
-    (x + y) ⦃⇓ z => z.val = x.val + y.val ⦄ := by
+    x + y ⦃ z => z.val = x.val + y.val ⦄ := by
     progress? keep _ as ⟨ z, h1 ⟩ says progress keep _ with IScalar.add_spec as ⟨ z, h1 ⟩
     scalar_tac
 
   example {ty} {x y : UScalar ty}
     (hmax : x.val + y.val ≤ UScalar.max ty) :
-    (x + y) ⦃⇓ z => z.val = x.val + y.val ⦄ := by
+    x + y ⦃ z => z.val = x.val + y.val ⦄ := by
     progress keep h with UScalar.add_spec as ⟨ z ⟩
     scalar_tac
 
   example {ty} {x y : IScalar ty}
     (hmin : IScalar.min ty ≤ x.val + y.val)
     (hmax : x.val + y.val ≤ IScalar.max ty) :
-    (x + y) ⦃⇓ z => z.val = x.val + y.val ⦄ := by
+    x + y ⦃ z => z.val = x.val + y.val ⦄ := by
     progress keep h with IScalar.add_spec as ⟨ z ⟩
     scalar_tac
 
   example {x y : U32}
     (hmax : x.val + y.val ≤ U32.max) :
-    (x + y) ⦃⇓ z => z.val = x.val + y.val ⦄ := by
+    x + y ⦃ z => z.val = x.val + y.val ⦄ := by
     -- This spec theorem is suboptimal (compared to `U32.add_spec`), but it is good to check that it works
     progress with UScalar.add_spec as ⟨ z, h1 ⟩
     scalar_tac
 
   example {x y : U32}
     (hmax : x.val + y.val ≤ U32.max) :
-    (x + y) ⦃⇓ z => z.val = x.val + y.val ⦄ := by
+    x + y ⦃ z => z.val = x.val + y.val ⦄ := by
     progress with U32.add_spec as ⟨ z, h1 ⟩
     scalar_tac
 
   example {x y : U32}
     (hmax : x.val + y.val ≤ U32.max) :
-    (x + y) ⦃⇓ z => z.val = x.val + y.val ⦄ := by
+    x + y ⦃ z => z.val = x.val + y.val ⦄ := by
     progress keep _ as ⟨ z, h1 ⟩
     scalar_tac
 
@@ -1333,13 +1333,13 @@ info: example
      `α : Type u` where u is quantified, while here we use `α : Type 0` -/
   example {α : Type} (v: Vec α) (i: Usize) (x : α)
     (hbounds : i.val < v.length) :
-    v.update i x ⦃⇓ nv => nv.val = v.val.set i.val x ⦄ := by
+    v.update i x ⦃ nv => nv.val = v.val.set i.val x ⦄ := by
     progress
     simp [*]
 
   example {α : Type} (v: Vec α) (i: Usize) (x : α)
     (hbounds : i.val < v.length) :
-    v.update i x ⦃⇓ nv => nv.val = v.val.set i.val x ⦄ := by
+    v.update i x ⦃ nv => nv.val = v.val.set i.val x ⦄ := by
     progress? says progress with Vec.update_spec
     simp [*]
 
@@ -1350,7 +1350,7 @@ info: example
         (do
           let _ ← v.update i x
           .ok ())
-        .ok ()) ⦃⇓ _ => True ⦄
+        .ok ()) ⦃ _ => True ⦄
       := by
     progress
 
@@ -1358,20 +1358,20 @@ info: example
      pspec theorem actually solves it, and where the function is not a constant.
      We also test the case where the function under scrutinee is not a constant. -/
   example {x : U32}
-    (f : U32 → Std.Result Unit) (h : ∀ x, f x ⦃⇓ _ => True ⦄) :
-    f x ⦃⇓ _ => True ⦄ := by
+    (f : U32 → Std.Result Unit) (h : ∀ x, f x ⦃ _ => True ⦄) :
+    f x ⦃ _ => True ⦄ := by
     progress
 
   example {x : U32}
-    (f : U32 → Std.Result Unit) (h : ∀ x, f x ⦃⇓ _ => True ⦄) :
-    f x ⦃⇓ _ => True ⦄ := by
+    (f : U32 → Std.Result Unit) (h : ∀ x, f x ⦃ _ => True ⦄) :
+    f x ⦃ _ => True ⦄ := by
     progress? says progress with h
 
   /- The use of `right` introduces a meta-variable in the goal, that we
      need to instantiate (otherwise `progress` gets stuck) -/
   example {ty} {x y : UScalar ty}
     (hmax : x.val + y.val ≤ UScalar.max ty) :
-    False ∨ (x + y) ⦃⇓ z => z.val = x.val + y.val ⦄ := by
+    False ∨ x + y ⦃ z => z.val = x.val + y.val ⦄ := by
     right
     progress keep _ as ⟨ z, h1 ⟩
     scalar_tac
@@ -1379,7 +1379,7 @@ info: example
   example {ty} {x y : IScalar ty}
     (hmin : IScalar.min ty ≤ x.val + y.val)
     (hmax : x.val + y.val ≤ IScalar.max ty) :
-    False ∨ (x + y) ⦃⇓ z => z.val = x.val + y.val ⦄ := by
+    False ∨ x + y ⦃ z => z.val = x.val + y.val ⦄ := by
     right
     progress? keep _ as ⟨ z, h1 ⟩ says progress keep _ with IScalar.add_spec as ⟨ z, h1 ⟩
     scalar_tac
@@ -1389,18 +1389,18 @@ error: unsolved goals
 case a
 x y : U32
 f : U32 → U32 → Result U32
-hf : ∀ (x y : U32), ↑x < 10 → ↑y < 10 → f x y ⦃⇓ x => True ⦄
+hf : ∀ (x y : U32), ↑x < 10 → ↑y < 10 → f x y ⦃ x => True ⦄
 ⊢ ↑x < 10
 
 case a
 x y : U32
 f : U32 → U32 → Result U32
-hf : ∀ (x y : U32), ↑x < 10 → ↑y < 10 → f x y ⦃⇓ x => True ⦄
+hf : ∀ (x y : U32), ↑x < 10 → ↑y < 10 → f x y ⦃ x => True ⦄
 ⊢ ↑y < 10
   -/
   #guard_msgs in
-  example {x y} (f : U32 → U32 → Result U32) (hf : ∀ x y, x.val < 10 → y.val < 10 → f x y ⦃⇓ _ => True⦄) :
-    f x y ⦃⇓ _ => True⦄ := by
+  example {x y} (f : U32 → U32 → Result U32) (hf : ∀ x y, x.val < 10 → y.val < 10 → f x y ⦃ _ => True⦄) :
+    f x y ⦃ _ => True⦄ := by
     progress
 
   -- Testing with mutually recursive definitions
@@ -1431,7 +1431,7 @@ hf : ∀ (x y : U32), ↑x < 10 → ↑y < 10 → f x y ⦃⇓ x => True ⦄
     mutual
       @[local progress]
       theorem Tree.size_spec (t : Tree) :
-        t.size ⦃⇓ i => i ≥ 0 ⦄ := by
+        t.size ⦃ i => i ≥ 0 ⦄ := by
         cases h: t -- TODO: `cases t` doesn't work
         simp [Tree.size]
         progress
@@ -1439,7 +1439,7 @@ hf : ∀ (x y : U32), ↑x < 10 → ↑y < 10 → f x y ⦃⇓ x => True ⦄
 
       @[local progress]
       theorem Trees.size_spec (t : Trees) :
-        t.size ⦃⇓ i => i ≥ 0 ⦄ := by
+        t.size ⦃ i => i ≥ 0 ⦄ := by
         cases h: t <;> simp [Trees.size] -- TODO: `cases t` doesn't work
         progress
         progress? says progress with Trees.size_spec
@@ -1455,7 +1455,7 @@ hf : ∀ (x y : U32), ↑x < 10 → ↑y < 10 → f x y ⦃⇓ x => True ⦄
        the `local` attribute kind -/
     @[local progress] theorem add_spec' (x y : U32) (h : x.val + y.val ≤ U32.max) :
       let tot := x.val + y.val
-      (x + y) ⦃⇓ z => z.val = tot ⦄ := by
+      x + y ⦃ z => z.val = tot ⦄ := by
       simp
       progress with U32.add_spec
       scalar_tac
@@ -1465,7 +1465,7 @@ hf : ∀ (x y : U32), ↑x < 10 → ↑y < 10 → f x y ⦃⇓ x => True ⦄
       z + z
 
     example (x y : U32) (h : 2 * x.val + 2 * y.val ≤ U32.max) :
-      add1 x y ⦃⇓ _ => True ⦄ := by
+      add1 x y ⦃ _ => True ⦄ := by
       rw [add1]
       progress? as ⟨ z1, h ⟩ says progress with add_spec' as ⟨ z1, h ⟩
       progress? as ⟨ z2, h ⟩ says progress with add_spec' as ⟨ z2, h ⟩
@@ -1473,29 +1473,29 @@ hf : ∀ (x y : U32), ↑x < 10 → ↑y < 10 → f x y ⦃⇓ x => True ⦄
 
   /- Checking that `add_spec'` went out of scope -/
   example (x y : U32) (h : 2 * x.val + 2 * y.val ≤ U32.max) :
-    add1 x y ⦃⇓ _ => True ⦄ := by
+    add1 x y ⦃ _ => True ⦄ := by
     rw [add1]
     progress? as ⟨ z1, h ⟩ says progress with U32.add_spec as ⟨ z1, h ⟩
     progress? as ⟨ z2, h ⟩ says progress with U32.add_spec as ⟨ z2, h ⟩
 
   variable (P : ℕ → List α → Prop)
   variable (f : List α → Std.Result Bool)
-  variable (f_spec : ∀ l i, P i l → f l ⦃⇓ _ => True ⦄)
+  variable (f_spec : ∀ l i, P i l → f l ⦃ _ => True ⦄)
 
   example (l : List α) (h : P i l) :
-    f l ⦃⇓ _ => True ⦄ := by
+    f l ⦃ _ => True ⦄ := by
     progress? as ⟨ b ⟩ says progress with f_spec as ⟨ b ⟩
 
   /- Progress using a term -/
   example {x: U32}
     (f : U32 → Std.Result Unit)
-    (h : ∀ x, f x ⦃⇓ _ => True ⦄):
-      f x ⦃⇓ () => True ⦄ := by
-      progress? with (show ∀ x, f x ⦃⇓ _ => True ⦄ by exact h) says progress with(show ∀ x, f x ⦃⇓ _ => True ⦄ by exact h)
+    (h : ∀ x, f x ⦃ _ => True ⦄):
+      f x ⦃ () => True ⦄ := by
+      progress? with (show ∀ x, f x ⦃ _ => True ⦄ by exact h) says progress with(show ∀ x, f x ⦃ _ => True ⦄ by exact h)
 
   /- Progress using a term -/
   example (x y : U32) (h : 2 * x.val + 2 * y.val ≤ U32.max) :
-    add1 x y ⦃⇓ _ => True ⦄ := by
+    add1 x y ⦃ _ => True ⦄ := by
     rw [add1]
     have h1 := add_spec'
     progress with h1 as ⟨ z1, h ⟩
@@ -1506,14 +1506,14 @@ hf : ∀ (x y : U32), ↑x < 10 → ↑y < 10 → f x y ⦃⇓ x => True ⦄
   info: example
   (y : U32)
   (h1 : ↑y < 100) :
-  massert (y < 100#u32) ⦃⇓ x => True ⦄
+  massert (y < 100#u32) ⦃ x => True ⦄
   := by sorry
   -/
   #guard_msgs in
   example (x y : U32) (h0 : x.val < 100) (h1 : y.val < 100) :
     (do
       massert (x < 100#u32)
-      massert (y < 100#u32)) ⦃⇓ _ => True ⦄
+      massert (y < 100#u32)) ⦃ _ => True ⦄
     := by
     let* ⟨⟩ ← massert_spec
     extract_goal0
@@ -1532,7 +1532,7 @@ info: example
   example (c : U32) :
     (do
           let c1 ← c >>> 16#i32
-          ok c1) ⦃⇓ c' => c'.bv = c.bv >>> 16 ⦄
+          ok c1) ⦃ c' => c'.bv = c.bv >>> 16 ⦄
     := by
     progress as ⟨ c', _, hc' ⟩ -- we have: `hc' : c'.bv = c.bv >>> 16`
     extract_goal1
@@ -1545,10 +1545,10 @@ info: example
     | some x => ok x
 
   -- `Inhabited α` is not necessary: we add it for the purpose of testing
-  theorem get_spec [Inhabited α] (x : Option α) (h : x.isSome) : get x ⦃⇓ _ => True ⦄ := by
+  theorem get_spec [Inhabited α] (x : Option α) (h : x.isSome) : get x ⦃ _ => True ⦄ := by
     cases x <;> grind [get]
 
-  example [Inhabited α] (x : Option α) (h : x.isSome) : get x ⦃⇓ _ => True ⦄ := by
+  example [Inhabited α] (x : Option α) (h : x.isSome) : get x ⦃ _ => True ⦄ := by
     progress with get_spec
 
   namespace Ntt
@@ -1568,7 +1568,7 @@ info: example
       (_ : k.val = 2^(k.val.log2) ∧ k.val.log2 < 7)
       (_ : len.val = 128 / k.val)
       (hLenPos : 0 < len.val) :
-      nttLayer peSrc k len ⦃⇓ peSrc' =>
+      nttLayer peSrc k len ⦃ peSrc' =>
         toPoly peSrc' = Spec.nttLayer (toPoly peSrc) k.val len.val 0 hLenPos ∧
         wfArray peSrc' ⦄ := by
       simp [wfArray, nttLayer, toPoly, Spec.nttLayer]
@@ -1592,7 +1592,7 @@ info: example
     set_option maxHeartbeats 800000
     theorem ntt_spec (peSrc : Std.Array U16 256#usize)
       (hWf : wfArray peSrc) :
-      ntt peSrc ⦃⇓ peSrc1 => wfArray peSrc1 ⦄
+      ntt peSrc ⦃ peSrc1 => wfArray peSrc1 ⦄
       := by
       unfold ntt
       progress; fsimp [Nat.log2_def]
@@ -1613,7 +1613,7 @@ info: example
     set_option maxHeartbeats 800000
     theorem ntt_spec' (peSrc : Std.Array U16 256#usize)
       (hWf : wfArray peSrc) :
-      ntt peSrc ⦃⇓ peSrc1 => wfArray peSrc1 ⦄
+      ntt peSrc ⦃ peSrc1 => wfArray peSrc1 ⦄
       := by
       unfold ntt
       progress; fsimp [Nat.log2_def]

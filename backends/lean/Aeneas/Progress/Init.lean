@@ -487,7 +487,7 @@ namespace Test
 
   /--
 info: Aeneas.Progress.Test.pos_pair_is_pos.progress_spec :
-  ↑pos_pair ⦃⇓ z =>
+  ↑pos_pair ⦃ z =>
     ∃ x y,
       z = (x, y) ∧
         match (x, y) with
@@ -500,7 +500,7 @@ info: Aeneas.Progress.Test.pos_pair_is_pos.progress_spec :
 
   /--
 info: Aeneas.Progress.Test.pos_triple_is_pos.progress_spec :
-  ↑pos_triple ⦃⇓ z =>
+  ↑pos_triple ⦃ z =>
     ∃ y.0 y.1 y.2,
       z = (y.0, y.1, y.2) ∧
         match (y.0, y.1, y.2) with
@@ -514,7 +514,7 @@ info: Aeneas.Progress.Test.pos_triple_is_pos.progress_spec :
 
   /--
 info: Aeneas.Progress.Test.pos_triple_is_pos'.progress_spec :
-  ↑pos_triple ⦃⇓ z =>
+  ↑pos_triple ⦃ z =>
     ∃ z_1,
       z = z_1 ∧
         match z_1 with
@@ -527,7 +527,7 @@ info: Aeneas.Progress.Test.pos_triple_is_pos'.progress_spec :
 
   /--
 info: Aeneas.Progress.Test.overflowing_add_eq.progress_spec (x y : U8) :
-  ↑(overflowing_add x y) ⦃⇓ z => ∃ y.0 y.1, z = (y.0, y.1) ∧ if x.val + y.val > 255 then y.1 = true else y.1 = false ⦄
+  ↑(overflowing_add x y) ⦃ z => ∃ y.0 y.1, z = (y.0, y.1) ∧ if x.val + y.val > 255 then y.1 = true else y.1 = false ⦄
   -/
   #guard_msgs in
   #check overflowing_add_eq.progress_spec
@@ -685,7 +685,7 @@ structure ProgressPureSpecAttr where
    ```lean
    @[progress]
    theorem U32.wrapping_add_eq.progress_spec (x y : U32) :
-    ↑(wrapping_add x y) ⦃⇓z => z.bv = x.bv + y.bv⦄
+    ↑(wrapping_add x y) ⦃z => z.bv = x.bv + y.bv⦄
    ```
 
    Note that it is possible to control how the output variable is decomposed in the generated lemma
@@ -699,7 +699,7 @@ structure ProgressPureSpecAttr where
    ```lean
    @[progress]
    theorem pos_pair_is_pos.progress_spec :
-    ↑pos_pair ⦃ ⇓(x, y) => x ≥ 0 ∧ y ≥ 0 ⦄
+    ↑pos_pair ⦃ (x, y) => x ≥ 0 ∧ y ≥ 0 ⦄
    ```
 
    Similarly if we write:
@@ -711,7 +711,7 @@ structure ProgressPureSpecAttr where
    ```lean
    @[progress]
    theorem pos_pair_is_pos.progress_spec :
-    ↑pos_pair ⦃⇓z => z.fst ≥ 0 ∧ z.fst ≥ 0⦄
+    ↑pos_pair ⦃z => z.fst ≥ 0 ∧ z.fst ≥ 0⦄
    ```
 
    If we don't put an equality in the pattern, `progress_pure` will introduce one variable
@@ -749,7 +749,7 @@ generates the theorem:
 ```lean
 @[progress]
 theorem wrapping_add.progress_spec (x y : U32) :
-  (toResult (wrapping_add x y)) ⦃ ⇓z => ∃ b x, z = (b, x) ∧ (b, x) = wrapping_add x y ⦄
+  (toResult (wrapping_add x y)) ⦃ z => ∃ b x, z = (b, x) ∧ (b, x) = wrapping_add x y ⦄
 ```
 (note that the `z` appearing in the post-condition is eliminated when calling `progress`,
 leaving only `b` and `x` in the environment).
@@ -856,7 +856,7 @@ namespace Test
 
   /--
 info: Aeneas.Progress.Test.overflowing_add.progress_spec (x y : U8) :
-  ↑(overflowing_add x y) ⦃⇓ y_1 => y_1 = overflowing_add x y ⦄
+  ↑(overflowing_add x y) ⦃ y_1 => y_1 = overflowing_add x y ⦄
   -/
   #guard_msgs in
   #check overflowing_add.progress_spec
@@ -866,7 +866,7 @@ info: Aeneas.Progress.Test.overflowing_add.progress_spec (x y : U8) :
 
   /--
 info: Aeneas.Progress.Test.wrapping_add.progress_spec (x y : U8) :
-  ↑(wrapping_add x y) ⦃⇓ z => ∃ b z_1, z = (b, z_1) ∧ (b, z_1) = wrapping_add x y ⦄
+  ↑(wrapping_add x y) ⦃ z => ∃ b z_1, z = (b, z_1) ∧ (b, z_1) = wrapping_add x y ⦄
   -/
   #guard_msgs in
   #check wrapping_add.progress_spec

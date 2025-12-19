@@ -161,7 +161,7 @@ instance {ty} : Complement (IScalar ty) where
 
 theorem UScalar.ShiftRight_spec {ty0 ty1} (x : UScalar ty0) (y : UScalar ty1)
   (hy : y.val < ty0.numBits) :
-  (x >>> y) ⦃⇓ z =>
+  (x >>> y) ⦃ z =>
     z.val = x.val >>> y.val ∧
     z.bv = x.bv >>> y.val ⦄
   := by
@@ -170,12 +170,12 @@ theorem UScalar.ShiftRight_spec {ty0 ty1} (x : UScalar ty0) (y : UScalar ty1)
   simp only [HShiftRight.hShiftRight, BitVec.ushiftRight, bv_toNat, BitVec.toNat_ofNatLT, and_self]
 
 uscalar @[progress] theorem «%S».ShiftRight_spec {ty1} (x : «%S») (y : UScalar ty1) (hy : y.val < %BitWidth) :
-  (x >>> y) ⦃⇓ z => z.val = x.val >>> y.val ∧ z.bv = x.bv >>> y.val ⦄
+  (x >>> y) ⦃ z => z.val = x.val >>> y.val ∧ z.bv = x.bv >>> y.val ⦄
   := by apply UScalar.ShiftRight_spec; simp [*]
 
 theorem UScalar.ShiftRight_IScalar_spec {ty0 ty1} (x : UScalar ty0) (y : IScalar ty1)
   (hy0 : 0 ≤ y.val) (hy1 : y.val < ty0.numBits) :
-  (x >>> y) ⦃⇓ z => z.val = x.val >>> y.toNat ∧ z.bv = x.bv >>> y.toNat ⦄
+  (x >>> y) ⦃ z => z.val = x.val >>> y.toNat ∧ z.bv = x.bv >>> y.toNat ⦄
   := by
   have hy1 : y.toNat < ty0.numBits := by scalar_tac
   simp only [spec_ok, HShiftRight.hShiftRight, shiftRight_IScalar, shiftRight, hy1, reduceIte]
@@ -183,12 +183,12 @@ theorem UScalar.ShiftRight_IScalar_spec {ty0 ty1} (x : UScalar ty0) (y : IScalar
   simp only [IScalar.toNat, BitVec.toNat_ushiftRight, bv_toNat, Nat.shiftRight_eq, and_self]
 
 uscalar @[progress] theorem «%S».ShiftRight_IScalar_spec {ty1} (x : «%S») (y : IScalar ty1) (hy0 : 0 ≤ y.val) (hy : y.val < %BitWidth) :
-  (x >>> y) ⦃⇓ z => z.val = x.val >>> y.toNat ∧ z.bv = x.bv >>> y.toNat ⦄
+  (x >>> y) ⦃ z => z.val = x.val >>> y.toNat ∧ z.bv = x.bv >>> y.toNat ⦄
   := by apply UScalar.ShiftRight_IScalar_spec <;> simp [*]
 
 theorem UScalar.ShiftLeft_spec {ty0 ty1} (x : UScalar ty0) (y : UScalar ty1) (size : Nat)
   (hy : y.val < ty0.numBits) (hsize : size = UScalar.size ty0) :
-  (x <<< y) ⦃⇓ z =>
+  (x <<< y) ⦃ z =>
   z.val = (x.val <<< y.val) % size ∧
   z.bv = x.bv <<< y.val ⦄
   := by
@@ -197,12 +197,12 @@ theorem UScalar.ShiftLeft_spec {ty0 ty1} (x : UScalar ty0) (y : UScalar ty1) (si
   simp only [bv_toNat, BitVec.toNat_shiftLeft, ShiftLeft.shiftLeft, Nat.shiftLeft_eq', and_self]
 
 uscalar @[progress] theorem «%S».ShiftLeft_spec {ty1} (x : «%S») (y : UScalar ty1) (hy : y.val < %BitWidth) :
-  (x <<< y) ⦃⇓ z => z.val = (x.val <<< y.val) % «%S».size ∧ z.bv = x.bv <<< y.val ⦄
+  (x <<< y) ⦃ z => z.val = (x.val <<< y.val) % «%S».size ∧ z.bv = x.bv <<< y.val ⦄
   := by apply UScalar.ShiftLeft_spec <;> simp [*]
 
 theorem UScalar.ShiftLeft_IScalar_spec {ty0 ty1} (x : UScalar ty0) (y : IScalar ty1) (size : Nat)
   (hy0 : 0 ≤ y.val) (hy1 : y.val < ty0.numBits) (hsize : size = UScalar.size ty0) :
-  (x <<< y) ⦃⇓ z =>
+  (x <<< y) ⦃ z =>
   z.val = (x.val <<< y.toNat) % size ∧
   z.bv = x.bv <<< y.toNat ⦄
   := by
@@ -214,7 +214,7 @@ theorem UScalar.ShiftLeft_IScalar_spec {ty0 ty1} (x : UScalar ty0) (y : IScalar 
     Nat.shiftLeft_eq', and_self]
 
 uscalar @[progress] theorem «%S».ShiftLeft_IScalar_spec {ty1} (x : «%S») (y : IScalar ty1) (hy0 : 0 ≤ y.val) (hy : y.val < %BitWidth) :
-  (x <<< y) ⦃⇓ z => z.val = (x.val <<< y.toNat) % «%S».size ∧ z.bv = x.bv <<< y.toNat ⦄
+  (x <<< y) ⦃ z => z.val = (x.val <<< y.toNat) % «%S».size ∧ z.bv = x.bv <<< y.toNat ⦄
   := by apply UScalar.ShiftLeft_IScalar_spec <;> simp [*]
 
 /-!
@@ -223,25 +223,25 @@ uscalar @[progress] theorem «%S».ShiftLeft_IScalar_spec {ty1} (x : «%S») (y 
 
 @[progress]
 theorem UScalar.and_spec {ty} (x y : UScalar ty) :
-  toResult (x &&& y) ⦃⇓ z => z.val = (x &&& y).val ∧ z.bv = x.bv &&& y.bv ⦄ := by
+  toResult (x &&& y) ⦃ z => z.val = (x &&& y).val ∧ z.bv = x.bv &&& y.bv ⦄ := by
   simp [toResult]
   rfl
 
 @[progress]
 theorem UScalar.or_spec {ty} (x y : UScalar ty) :
-  toResult (x ||| y) ⦃⇓ z => z.val = (x ||| y).val ∧ z.bv = x.bv ||| y.bv ⦄ := by
+  toResult (x ||| y) ⦃ z => z.val = (x ||| y).val ∧ z.bv = x.bv ||| y.bv ⦄ := by
   simp [toResult]
   rfl
 
 @[progress]
 theorem IScalar.and_spec {ty} (x y : IScalar ty) :
-  toResult (x &&& y) ⦃⇓ z => z.val = (x &&& y).val ∧ z.bv = x.bv &&& y.bv ⦄ := by
+  toResult (x &&& y) ⦃ z => z.val = (x &&& y).val ∧ z.bv = x.bv &&& y.bv ⦄ := by
   simp [toResult]
   rfl
 
 @[progress]
 theorem IScalar.or_spec {ty} (x y : IScalar ty) :
-  toResult (x ||| y) ⦃⇓ z => z.val = (x ||| y).val ∧ z.bv = x.bv ||| y.bv ⦄ := by
+  toResult (x ||| y) ⦃ z => z.val = (x ||| y).val ∧ z.bv = x.bv ||| y.bv ⦄ := by
   simp [toResult]
   rfl
 

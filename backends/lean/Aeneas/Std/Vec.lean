@@ -108,7 +108,7 @@ def Vec.push {α : Type u} (v : Vec α) (x : α) : Result (Vec α)
 
 @[progress]
 theorem Vec.push_spec {α : Type u} (v : Vec α) (x : α) (h : v.val.length < Usize.max) :
-  v.push x ⦃⇓ v1 =>
+  v.push x ⦃ v1 =>
   v1.val = v.val ++ [x] ⦄ := by
   rw [push]; simp
   split <;> simp_all
@@ -124,7 +124,7 @@ def Vec.insert {α : Type u} (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
 @[progress]
 theorem Vec.insert_spec {α : Type u} (v: Vec α) (i: Usize) (x: α)
   (hbound : i.val < v.length) :
-  v.insert i x ⦃⇓ nv => nv.val = v.val.set i x ⦄ := by
+  v.insert i x ⦃ nv => nv.val = v.val.set i x ⦄ := by
   simp [insert, *]
 
 def Vec.index_usize {α : Type u} (v: Vec α) (i: Usize) : Result α :=
@@ -135,7 +135,7 @@ def Vec.index_usize {α : Type u} (v: Vec α) (i: Usize) : Result α :=
 @[progress]
 theorem Vec.index_usize_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize)
   (hbound : i.val < v.length) :
-  v.index_usize i ⦃⇓ x => x = v.val[i.val]! ⦄ := by
+  v.index_usize i ⦃ x => x = v.val[i.val]! ⦄ := by
   simp only [index_usize]
   simp at *
   simp [*]
@@ -149,7 +149,7 @@ def Vec.update {α : Type u} (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
 @[progress]
 theorem Vec.update_spec {α : Type u} (v: Vec α) (i: Usize) (x : α)
   (hbound : i.val < v.length) :
-  v.update i x ⦃⇓ nv => nv = v.set i x ⦄ := by
+  v.update i x ⦃ nv => nv = v.set i x ⦄ := by
   simp only [update, set]
   simp at *
   split <;> simp_all
@@ -169,7 +169,7 @@ def Vec.index_mut_usize {α : Type u} (v: Vec α) (i: Usize) :
 @[progress]
 theorem Vec.index_mut_usize_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize)
   (hbound : i.val < v.length) :
-  v.index_mut_usize i ⦃⇓ (x,y) => x = v.val[i.val]! ∧ y = v.set i⦄ := by
+  v.index_mut_usize i ⦃ (x,y) => x = v.val[i.val]! ∧ y = v.set i⦄ := by
   simp only [index_mut_usize]
   have ⟨ x, h ⟩ := progress_spec_exists (index_usize_spec v i hbound)
   simp [h]
@@ -228,7 +228,7 @@ def alloc.slice.Slice.to_vec
 @[progress]
 theorem alloc.slice.Slice.to_vec_spec {T : Type} (cloneInst : core.clone.Clone T) (s : Slice T)
   (h : ∀ x ∈ s.val, cloneInst.clone x = ok x) :
-  alloc.slice.Slice.to_vec cloneInst s ⦃⇓ s' => s = s'⦄ := by
+  alloc.slice.Slice.to_vec cloneInst s ⦃ s' => s = s'⦄ := by
   simp only [to_vec]
   exact (Slice.clone_spec h)
 
@@ -244,7 +244,7 @@ def alloc.vec.from_elem
 @[progress]
 theorem alloc.vec.from_elem_spec {T : Type} (cloneInst : core.clone.Clone T)
   (x : T) (n : Usize) (h : cloneInst.clone x = ok x) :
-  alloc.vec.from_elem cloneInst x n ⦃⇓ v =>
+  alloc.vec.from_elem cloneInst x n ⦃ v =>
   v.val = List.replicate n.val x ∧
   v.length = n.val ⦄ := by
   unfold from_elem
@@ -301,7 +301,7 @@ def alloc.vec.Vec.resize {T : Type} (cloneInst : core.clone.Clone T)
 theorem alloc.vec.Vec.resize_spec {T} (cloneInst : core.clone.Clone T)
   (v : alloc.vec.Vec T) (new_len : Usize) (value : T)
   (hClone : cloneInst.clone value = ok value) :
-  alloc.vec.Vec.resize cloneInst v new_len value ⦃⇓ nv =>
+  alloc.vec.Vec.resize cloneInst v new_len value ⦃ nv =>
     nv.val = v.val.resize new_len value ⦄ := by
   rw [resize]
   split
@@ -320,7 +320,7 @@ def alloc.vec.FromBoxSliceVec.from {T : Type} (v : alloc.vec.Vec T) : Result (Sl
 
 @[progress]
 theorem alloc.vec.FromBoxSliceVec.from_spec {T : Type} (v : alloc.vec.Vec T) :
-  alloc.vec.FromBoxSliceVec.from v ⦃⇓ s => s.length = v.length ∧ s.val = v.val⦄ := by
+  alloc.vec.FromBoxSliceVec.from v ⦃ s => s.length = v.length ∧ s.val = v.val⦄ := by
   simp [alloc.vec.FromBoxSliceVec.from]
 
 @[reducible, rust_trait_impl "core::convert::From<Box<[@T]>, alloc::vec::Vec<@T>>" (keepParams := [true, false])]

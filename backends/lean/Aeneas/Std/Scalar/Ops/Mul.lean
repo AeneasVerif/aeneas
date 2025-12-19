@@ -149,12 +149,12 @@ theorem IScalar.mul_spec {ty} {x y : IScalar ty}
   simp only [ok.injEq, _root_.exists_eq_left', h]
 
 uscalar @[progress] theorem «%S».mul_spec {x y : «%S»} (hmax : x.val * y.val ≤ «%S».max) :
-  (x * y) ⦃⇓ z => (↑z : Nat) = ↑x * ↑y ⦄ :=
+  (x * y) ⦃ z => (↑z : Nat) = ↑x * ↑y ⦄ :=
   progress_exists_spec (UScalar.mul_spec (by scalar_tac))
 
 iscalar @[progress] theorem «%S».mul_spec {x y : «%S»}
   (hmin : «%S».min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ «%S».max) :
-  (x * y) ⦃⇓ z => (↑z : Int) = ↑x * ↑y ⦄ :=
+  (x * y) ⦃ z => (↑z : Int) = ↑x * ↑y ⦄ :=
   progress_exists_spec (IScalar.mul_spec (by scalar_tac) (by scalar_tac))
 
 end Aeneas.Std

@@ -593,7 +593,7 @@ info: Try this:
 -/
 #guard_msgs in
 example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
-  add1 x y ⦃⇓ _ => True ⦄ := by
+  add1 x y ⦃ _ => True ⦄ := by
   unfold add1
   progress*?
 
@@ -609,7 +609,7 @@ info: Try this:
 #guard_msgs in
 example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
   let v := 2 * x.val + 2 * y.val + 4
-  add1 x y ⦃⇓ z => z.val = v ⦄ := by
+  add1 x y ⦃ z => z.val = v ⦄ := by
   unfold add1
   progress*?
 
@@ -634,7 +634,7 @@ info: Try this:
 -/
 #guard_msgs in
 example b (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
-      add2 b x y ⦃⇓ _ => True ⦄ := by
+      add2 b x y ⦃ _ => True ⦄ := by
   unfold add2
   progress*?
 
@@ -698,7 +698,7 @@ y_post : ↑y = ↑x + ↑y✝
 -/
 #guard_msgs in
 example b (x y : U32) :
-      add2 b x y ⦃⇓ _ => True ⦄ := by
+      add2 b x y ⦃ _ => True ⦄ := by
   unfold add2
   progress*?
 
@@ -728,7 +728,7 @@ res_post : ↑res = ↑x3 + 4
 -/
 #guard_msgs in
 example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
-      add1 x y ⦃⇓ _ => x.val < 32 ⦄ := by
+      add1 x y ⦃ _ => x.val < 32 ⦄ := by
   unfold add1
   progress*?
 
@@ -736,15 +736,15 @@ example (x y : U32) (h : x.val * y.val ≤ U32.max):
   (do
     let z0 ← x * y
     let z1 ← y * x
-    massert (z1 == z0)) ⦃⇓ _ => True ⦄ := by
+    massert (z1 == z0)) ⦃ _ => True ⦄ := by
     progress* by (ring_nf at *; simp [*] <;> scalar_tac)
 
 /-example (x : Option α) :
-  (match x with | none => .ok 0 | some _ => .ok 1) ⦃⇓ _ => True ⦄ := by
+  (match x with | none => .ok 0 | some _ => .ok 1) ⦃ _ => True ⦄ := by
   progress*-/
 
 example (x y : U32) :
-  (toResult (core.num.U32.overflowing_add x y)) ⦃⇓ (_, _) => True ⦄ := by
+  (toResult (core.num.U32.overflowing_add x y)) ⦃ (_, _) => True ⦄ := by
   progress*
 
 end Examples
