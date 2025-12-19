@@ -3,6 +3,194 @@ open Lean Meta Elab Tactic
 
 namespace Aeneas
 
+theorem imp_or {A B C : Prop} : (A → C) → (B → C) → (A ∨ B) → C := by grind
+
+example (l : List α) : True := by
+  have :=
+    @List.casesOn α (fun (l : List α) => (l = []) ∨ (∃ (hd : α) (tl : List α), l = hd :: tl)) l
+      (by simp only [true_or])
+      (by
+        simp only [
+          reduceCtorEq,
+          List.cons.injEq,
+          existsAndEq,
+          and_true,
+          or_true,
+          implies_true
+          ])
+  simp only at this
+  revert this
+  apply imp_or
+  · intro h
+    sorry
+  · intro h
+    have ⟨ hd, tl, h1 ⟩ := h
+    clear h
+    sorry
+
+def mkExists (var body : Expr) : MetaM Expr := do
+  mkAppM ``Exists #[← mkLambdaFVars #[var] body]
+
+def mkExistsSeq (vars : List Expr) (body : Expr) : MetaM Expr := do
+  match vars with
+  | [] => pure body
+  | v :: vars =>
+    let body ← mkExistsSeq vars body
+    mkExists v body
+
+def mkOrSeq (disjs : List Expr) : MetaM Expr := do
+  match disjs with
+  | [] => pure (mkConst ``False)
+  | [x] => pure x
+  | x :: y => pure (mkOr x (← mkOrSeq y))
+
+/-- Dependent split over a `casesOn` theorem.
+
+Ex.: given goal `α : Type, l : List α ⊢ P`, `dsplit l "h" [[], ["hd", "tl"]]` will introduce the following goals:
+```
+α : Type, l : List α, h : l = [] ⊢ P
+α : Type, l : List α, hd : α, tl : List α, h : l = hd :: tl ⊢ P
+```
+
+We return the fvars introduced for the variables appearing af
+-/
+def dsplit (e : Expr) (h : Name) (vars : List (List Name)) :
+  TacticM (List (Array FVarId × FVarId × MVarId)) :=
+  Tactic.focus do
+  -- Check that the expression is an inductive
+  let ety ← inferType e
+  ety.consumeMData.withApp fun ty tyParams => do
+  let .const tyName levels := ty
+    | throwError "Could not decompose the type"
+  -- Lookup the type declaration
+  let env ← getEnv
+  let some decl := env.findAsync? tyName
+    | throwError "Could not find declaration for: {tyName}"
+  let .inductInfo const := decl.constInfo.get
+    | throwError "Not an inductive"
+  trace[Utils] "Inductive"
+  -- Lookup the `casesOn` theorem
+  let casesOnName := tyName ++ `casesOn
+  let some th := env.findAsync? casesOnName
+    | throwError "Could not find theorem: {casesOnName}"
+  -- Decompose the theorem
+  -- the first level is for the output of `motive` (we choose `0` for `Prop`)
+  let th ← Term.mkConst casesOnName (.zero :: levels)
+  let thTy ← inferType th
+  --let thTy := th.sig.get.type.consumeMData
+  let (args, binderInfo, thTy) ← forallMetaTelescope thTy
+  trace[Utils] "args: {args}, thTy: {thTy}"
+  /- Find the first non implicit parameter: this is the scrutinee, and the
+     parameter just before is the motive -/
+  let mut i := 0
+  while i < args.size do
+    if binderInfo[i]! == .default then break
+    i := i + 1
+  if i ≥ args.size - 1 || i = 0 then throwError "Could not analyze the `casesOn` theorem"
+  let params := args.take (i - 1)
+  let motive := args[i - 1]!
+  let scrutinee := args[i]!
+  let cases := args.drop (i + 1)
+  trace[Utils] "params: {params}, motive: {motive}, scrutinee: {scrutinee}, cases: {cases}"
+  if tyParams.size ≠ params.size then throwError "Unexpected number of parameters: got: {params}, expected: {tyParams}"
+  -- Assign the parameters
+  for (p, mvar) in tyParams.zip params do
+    mvar.mvarId!.assign p
+  scrutinee.mvarId!.assign e
+  /- Create the motive.
+
+  Taking `List` as example, we want to create an expression of the shape:
+  `fun l => l = [] ∨ ∃ hd tl, l = hd :: tl`
+
+  Note that the cases are of the shape (taking `List` for example):
+  ```
+  ?nil: ?motive []
+  ?cons: (head : ?α) → (tail : List ?α) → ?motive (head :: tail)
+  ```
+  so we simply need to analyze them to create the various cases.
+  -/
+  -- First, introduce a free variable for the input of the motive
+  withLocalDecl `x .default ety fun x => do
+  -- Create the various cases
+  let disjs ← cases.mapM fun case => do
+    forallTelescope (← inferType case) fun vars body => do
+    body.consumeMData.withApp fun _ args => do
+    -- Create the equality (ex.: `l = hd :: tl`)
+    let (eq, eq') ←
+      if h: args.size ≠ 1 then throwError "Unexpected: args.size: {args.size}"
+      else pure (← mkAppM ``Eq #[x, args[0]], ← mkAppM ``Eq #[e, args[0]])
+    -- Add the existentials (ex.: `∃ hd tl, l = hd :: tl)`
+    pure (← mkExistsSeq vars.toList eq, ← mkExistsSeq vars.toList eq')
+  trace[Utils] "disjs: {disjs}"
+  let (disjs, thTyDisjs) := disjs.unzip
+  -- Create the disjunction and add the lambda
+  let disj ← mkOrSeq disjs.toList
+  let thTy ← mkOrSeq thTyDisjs.toList
+  let motiveExpr ← mkLambdaFVars #[x] disj
+  motive.mvarId!.assign motiveExpr
+  trace[Utils] "motive: {motive}"
+  -- Prove the cases - TODO: for now we call `simp`. We should make this more precise.
+  let (simpCtx, simprocs) ← Aeneas.Simp.mkSimpCtx false {} .simp {}
+  for case in cases do
+    trace[Utils] "Proving: {case}"
+    let (out, _) ← simpTarget case.mvarId! simpCtx simprocs
+    if out.isSome then throwError "Could not prove: {case}"
+  -- Put everything together
+  let th := mkAppN th args
+  trace[Utils] "th: {← inferType th}"
+  -- Introduce the theorem
+  Utils.addDeclTac h th thTy (asLet := false) fun th => do
+  trace[Utils] "th: {th}: {← inferType th}"
+  let goal ← getMainGoal
+  let target ← goal.getType
+  trace[Utils] "Main goal: {goal}"
+  let (_, goal) ← goal.revert #[th.fvarId!]
+  trace[Utils] "Goal after revert: {goal}"
+  goal.withContext do
+  -- Repeatedly apply `imp_or`
+  let rec applyImpOr (goal : MVarId) (hTy : Expr) (cases : List Expr) : TacticM (List MVarId) := do
+    match cases with
+    | [] => throwError "Unexpected"
+    | [_] => pure [goal]
+    | _ :: cases =>
+      trace[Utils] "hTy: {hTy}"
+      hTy.consumeMData.withApp fun or? args => do
+      trace[Utils] "or?: {or?}, args: {args}"
+      if args.size ≠ 2 then throwError "Unexpected"
+      let disj0 := args[0]!
+      let disj1 := args[1]!
+      let goal0 ← mkFreshExprSyntheticOpaqueMVar (← mkArrow disj0 target)
+      let goal1 ← mkFreshExprSyntheticOpaqueMVar (← mkArrow disj1 target)
+      goal.assign (← mkAppOptM ``imp_or #[disj0, disj1, target, goal0, goal1])
+      let goals ← applyImpOr goal1.mvarId! hTy cases
+      pure (goal0.mvarId! :: goals)
+  let goals ← applyImpOr goal thTy cases.toList
+  --We need to intro the equality and destruct the existentials -- first we need to resize the list of names (just in case)
+  let varsEnd := List.map (fun _ => []) (List.range' 0 (goals.length - vars.length))
+  let vars : List (List Name) := (vars.take goals.length) ++ varsEnd
+  let goals ← (goals.zip vars).mapM fun (goal, vars) => do
+    let (h, goal) ← goal.intro h
+    setGoals [goal]
+    goal.withContext do
+    Utils.splitAllExistsTac (.fvar h) vars fun fvars h _ => do
+    pure (fvars.map Expr.fvarId!, h.fvarId!, ← getMainGoal)
+  --
+  setGoals (goals.map fun (_, _, g) => g)
+  pure goals
+
+local elab "dsplit" x:term : tactic => do
+  let x ← Term.elabTerm x none
+  let _ ← dsplit x `h []
+
+example : @List.nil α = @List.nil α := by simp
+
+example (l : List α) : True := by
+  set_option trace.Utils true in
+  dsplit l <;> simp
+
+theorem bool_disj_imp (b : Bool) (P : Prop) : (b = true → P) → (b = false → P) → P := by
+  grind
+
 namespace Bifurcation
 
 /-- Expression on which a branch depends -/

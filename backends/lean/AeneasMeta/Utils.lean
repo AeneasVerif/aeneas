@@ -267,7 +267,7 @@ def addDeclTac {α} (name : Name) (val : Expr) (type : Expr) (asLet : Bool) (m :
     let newVal ← mkLetFVars #[nval] newMVar
     -- There are two cases:
     -- - asLet is true: newVal is `let $name := $val in $newMVar`
-    -- - asLet is false: ewVal is `λ $name => $newMVar`
+    -- - asLet is false: enwVal is `λ $name => $newMVar`
     --   We need to apply it to `val`
     let newVal := if asLet then newVal else mkAppN newVal #[val]
     -- Assign the main goal and update the current goal
@@ -698,11 +698,11 @@ def listTryPopHead (ls : List α) : Option α × List α :=
   | [] => (none, ls)
   | hd :: tl => (some hd, tl)
 
-/- Destruct all the existentials appearing in `h`, and introduce them as variables
-   in the context.
+/-- Destruct all the existentials appearing in `h`, and introduce them as variables
+  in the context.
 
-   If `ids` is not empty, we use it to name the introduced variables. We
-   transmit the stripped expression and the remaining ids to the continuation.
+  If `ids` is not empty, we use it to name the introduced variables. We
+  transmit the stripped expression and the remaining ids to the continuation.
  -/
 partial def splitAllExistsTac [Inhabited α] (h : Expr) (ids : List (Option Name))
   (k : Array Expr → Expr → List (Option Name) → TacticM α) : TacticM α := do
