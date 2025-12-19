@@ -189,7 +189,17 @@ def dsplitCasesOn (isMatcher : Bool) (e : Expr) (casesOnName : Name) (h : Name) 
     setGoals [goal]
     goal.withContext do
     Utils.splitAllExistsTac (.fvar h) vars fun fvars h _ => do
-    pure (fvars.map Expr.fvarId!, h.fvarId!, ← getMainGoal)
+    /- When the theorem is actually a matcher, it can happen that it introduces useless unit variables:
+       we try to get rid of those -/
+    if hSize : fvars.size = 1 then
+      let fvar := fvars[0]
+      if (← inferType fvar).isConstOf ``Unit then
+        let ngoal ← (← getMainGoal).tryClear fvar.fvarId!
+        pure (#[], h.fvarId!, ngoal)
+      else
+        pure (fvars.map Expr.fvarId!, h.fvarId!, ← getMainGoal)
+    else
+      pure (fvars.map Expr.fvarId!, h.fvarId!, ← getMainGoal)
   --
   setGoals (goals.map fun (_, _, g) => g)
   pure goals
@@ -245,6 +255,44 @@ example (x : Option α) : True := by
   have := @test.match_1 α (fun x => x = none ∨ ∃ v, x = some v) x (by simp) (by simp)
   set_option trace.Utils true in
   dsplitCasesOn test.match_1 x <;> simp
+
+/-- Given a goal of the shape `spec (match ... with ...) post`, perform a case split. -/
+def dsplitAtSpec (h : Name) : TacticM (List MVarId) := do
+  focus do withMainContext do
+  let tgt ← getMainTarget
+  tgt.consumeMData.withApp fun spec? args => do
+  if ¬ (spec?.isConstOf ``Std.WP.spec) ∨ args.size ≠ 3 then throwError "Not a valid spec goal"
+  let prog := args[1]!
+  -- Check that we have a matcher
+  let some ma ← Meta.matchMatcherApp? prog (alsoCasesOn := true)
+    | throwError "not a matcher: {prog}"
+  if ma.discrs.size ≠ 1 then throwError "Don't know what to do with > 1 scrutinees: discrs"
+  let matcherName := ma.matcherName
+  let scrut := ma.discrs[0]!
+  -- Compute the names to use by looking at the branches
+  let names ← ma.alts.toList.mapM fun alt => do
+    lambdaTelescope alt.consumeMData fun args _ => do
+    args.toList.mapM fun arg => do
+    pure (some (← arg.fvarId!.getDecl).userName)
+  -- Split
+  let goals ← dsplitCasesOn true scrut matcherName h names
+  -- Simplify the goal with the equality we just introduced
+  let goals ← goals.filterMapM fun (_, h, goal) => do
+    setGoals [goal]
+    match ← Simp.simpAt true {} {hypsToUse := #[h]} (.targets #[] true) with
+    | none => pure none
+    | some _ => pure (some (← getMainGoal))
+  --
+  pure goals
+
+local elab "dsplit_spec" h:ident : tactic => do
+  let goals ← dsplitAtSpec h.getId
+  setGoals goals
+
+example (x : Option α) :
+  Std.WP.spec (match x with | none => .ok 0 | some y => .ok 1) (fun _ => True) := by
+  dsplit_spec h
+  <;> simp
 
 theorem bool_disj_imp (b : Bool) (P : Prop) : (b = true → P) → (b = false → P) → P := by
   grind
