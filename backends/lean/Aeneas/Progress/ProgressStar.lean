@@ -75,13 +75,10 @@ def dsplit (e : Expr) (h : Name) (vars : List (List Name)) :
     | throwError "Could not find theorem: {casesOnName}"
   -- Decompose the theorem
   -- the first level is for the output of `motive` (we choose `0` for `Prop`)
-  let th ← Term.mkConst casesOnName (.zero :: levels)
+  let th ← Term.mkConst casesOnName
   let thTy ← inferType th
-  --let thTy := th.sig.get.type.consumeMData
   let (args, binderInfo, thTy) ← forallMetaTelescope thTy
   trace[Utils] "args: {args}, thTy: {thTy}"
-  -- Put everything together
-  let th ← mkAppOptM casesOnName (args.map some)
   /- Find the first non implicit parameter: this is the scrutinee, and the
      parameter just before is the motive -/
   let mut i := 0
@@ -97,8 +94,8 @@ def dsplit (e : Expr) (h : Name) (vars : List (List Name)) :
   if tyParams.size ≠ params.size then throwError "Unexpected number of parameters: got: {params}, expected: {tyParams}"
   -- Assign the parameters
   for (p, mvar) in tyParams.zip params do
-    mvar.mvarId!.assign p
-  scrutinee.mvarId!.assign e
+    let _ ← isDefEq (.mvar mvar.mvarId!) p
+  let _ ← isDefEq scrutinee e
   /- Create the motive.
 
   Taking `List` as example, we want to create an expression of the shape:
@@ -120,7 +117,9 @@ def dsplit (e : Expr) (h : Name) (vars : List (List Name)) :
     -- Create the equality (ex.: `l = hd :: tl`)
     let (eq, eq') ←
       if h: args.size ≠ 1 then throwError "Unexpected: args.size: {args.size}"
-      else pure (← mkAppM ``Eq #[x, args[0]], ← mkAppM ``Eq #[e, args[0]])
+      else
+        trace[Utils] "About to create the equality: {x} = {args[0]}"
+        pure (← mkAppM ``Eq #[x, args[0]], ← mkAppM ``Eq #[e, args[0]])
     -- Add the existentials (ex.: `∃ hd tl, l = hd :: tl)`
     pure (← mkExistsSeq vars.toList eq, ← mkExistsSeq vars.toList eq')
   trace[Utils] "disjs: {disjs}"
@@ -129,7 +128,7 @@ def dsplit (e : Expr) (h : Name) (vars : List (List Name)) :
   let disj ← mkOrSeq disjs.toList
   let thTy ← mkOrSeq thTyDisjs.toList
   let motiveExpr ← mkLambdaFVars #[x] disj
-  motive.mvarId!.assign motiveExpr
+  let _ ← isDefEq motive motiveExpr
   trace[Utils] "motive: {motive}"
   -- Prove the cases - TODO: for now we call `simp`. We should make this more precise.
   let (simpCtx, simprocs) ← Aeneas.Simp.mkSimpCtx false {} .simp {}
@@ -137,6 +136,8 @@ def dsplit (e : Expr) (h : Name) (vars : List (List Name)) :
     trace[Utils] "Proving: {case}"
     let (out, _) ← simpTarget case.mvarId! simpCtx simprocs
     if out.isSome then throwError "Could not prove: {case}"
+  -- Put everything together
+  let th ← mkAppOptM casesOnName (args.map some)
   trace[Utils] "th: {← inferType th}"
   -- Introduce the theorem
   Utils.addDeclTac h th thTy (asLet := false) fun th => do
