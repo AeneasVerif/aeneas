@@ -44,9 +44,18 @@ def mkOrSeq (disjs : List Expr) : MetaM Expr := do
   | [x] => pure x
   | x :: y => pure (mkOr x (← mkOrSeq y))
 
-/-- Dependent split over an inductive type.
+/-- Dependent split over a `casesOn` theorem.
 
-Ex.: given goal `α : Type, l : List α ⊢ P`, `dsplit l "h" [[], ["hd", "tl"]]` will introduce the following goals:
+Ex.: given goal `α : Type, l : List α ⊢ P` and theorem:
+```
+List.casesOn : {α : Type u} →
+  {motive : List α → Sort u_1} →
+    (t : List α) →
+    motive [] →
+    ((head : α) → (tail : List α) → motive (head :: tail)) →
+    motive t
+```
+`dsplit l "h" [[], ["hd", "tl"]]` will introduce the following goals:
 ```
 α : Type, l : List α, h : l = [] ⊢ P
 α : Type, l : List α, hd : α, tl : List α, h : l = hd :: tl ⊢ P
@@ -54,23 +63,16 @@ Ex.: given goal `α : Type, l : List α ⊢ P`, `dsplit l "h" [[], ["hd", "tl"]]
 
 We return the fvars introduced for the variables appearing af
 -/
-def dsplit (e : Expr) (h : Name) (vars : List (List Name)) :
+def dsplitCasesOn (isMatcher : Bool) (e : Expr) (casesOnName : Name) (h : Name) (vars : List (List (Option Name))) :
   TacticM (List (Array FVarId × FVarId × MVarId)) :=
   Tactic.focus do
   -- Check that the expression is an inductive
   let ety ← inferType e
   ety.consumeMData.withApp fun ty tyParams => do
-  let .const tyName levels := ty
+  let .const tyName _ := ty
     | throwError "Could not decompose the type"
-  -- Lookup the type declaration
-  let env ← getEnv
-  let some decl := env.findAsync? tyName
-    | throwError "Could not find declaration for: {tyName}"
-  let .inductInfo const := decl.constInfo.get
-    | throwError "Not an inductive"
-  trace[Utils] "Inductive"
   -- Lookup the `casesOn` theorem
-  let casesOnName := tyName ++ `casesOn
+  let env ← getEnv
   let some th := env.findAsync? casesOnName
     | throwError "Could not find theorem: {casesOnName}"
   -- Decompose the theorem
@@ -78,18 +80,31 @@ def dsplit (e : Expr) (h : Name) (vars : List (List Name)) :
   let th ← Term.mkConst casesOnName
   let thTy ← inferType th
   let (args, binderInfo, thTy) ← forallMetaTelescope thTy
-  trace[Utils] "args: {args}, thTy: {thTy}"
-  /- Find the first non implicit parameter: this is the scrutinee, and the
-     parameter just before is the motive -/
+  trace[Utils] "args: {Array.map (fun (arg, binder) => if binder == BinderInfo.default then m!"{arg}" else m!"#{arg}") (Array.zip args binderInfo)}, thTy: {thTy}"
+  /- Find the first non implicit parameter:
+     - if the theorem is an inductive casesOn theorem, then this is the scrutinee,
+        and the parameter just before is the motive
+     - if the theorem is a matcher, then this is the motive -/
   let mut i := 0
   while i < args.size do
     if binderInfo[i]! == .default then break
     i := i + 1
-  if i ≥ args.size - 1 || i = 0 then throwError "Could not analyze the `casesOn` theorem"
-  let params := args.take (i - 1)
-  let motive := args[i - 1]!
-  let scrutinee := args[i]!
-  let cases := args.drop (i + 1)
+  let (params, motive, scrutinee, cases) ← do
+    if not isMatcher then
+      if i ≥ args.size - 1 || i = 0 then throwError "Could not analyze the `casesOn` theorem"
+      let params := args.take (i - 1)
+      let motive := args[i - 1]!
+      let scrutinee := args[i]!
+      let cases := args.drop (i + 1)
+      pure (params, motive, scrutinee, cases)
+    else
+      if i + 1 ≥ args.size - 1 then throwError "Could not analyze the `casesOn` theorem"
+      let params := args.take i
+      let motive := args[i]!
+      let scrutinee := args[i + 1]!
+      let cases := args.drop (i + 2)
+      pure (params, motive, scrutinee, cases)
+      --if i ≥ args.size - 1 || i = 0 then throwError "Could not analyze the `casesOn` theorem"
   trace[Utils] "params: {params}, motive: {motive}, scrutinee: {scrutinee}, cases: {cases}"
   if tyParams.size ≠ params.size then throwError "Unexpected number of parameters: got: {params}, expected: {tyParams}"
   -- Assign the parameters
@@ -168,7 +183,7 @@ def dsplit (e : Expr) (h : Name) (vars : List (List Name)) :
   let goals ← applyImpOr goal thTy cases.toList
   --We need to intro the equality and destruct the existentials -- first we need to resize the list of names (just in case)
   let varsEnd := List.map (fun _ => []) (List.range' 0 (goals.length - vars.length))
-  let vars : List (List Name) := (vars.take goals.length) ++ varsEnd
+  let vars : List (List (Option Name)) := (vars.take goals.length) ++ varsEnd
   let goals ← (goals.zip vars).mapM fun (goal, vars) => do
     let (h, goal) ← goal.intro h
     setGoals [goal]
@@ -179,15 +194,57 @@ def dsplit (e : Expr) (h : Name) (vars : List (List Name)) :
   setGoals (goals.map fun (_, _, g) => g)
   pure goals
 
+/-- Dependent split over an inductive type.
+
+Ex.: given goal `α : Type, l : List α ⊢ P`, `dsplit l "h" [[], ["hd", "tl"]]` will introduce the following goals:
+```
+α : Type, l : List α, h : l = [] ⊢ P
+α : Type, l : List α, hd : α, tl : List α, h : l = hd :: tl ⊢ P
+```
+
+We return the fvars introduced for the variables appearing af
+-/
+def dsplit (e : Expr) (h : Name) (vars : List (List (Option Name))) :
+  TacticM (List (Array FVarId × FVarId × MVarId)) :=
+  Tactic.focus do
+  -- Check that the expression is an inductive
+  let ety ← inferType e
+  ety.consumeMData.withApp fun ty _ => do
+  let .const tyName _ := ty
+    | throwError "Could not decompose the type"
+  -- Lookup the type declaration
+  let env ← getEnv
+  let some decl := env.findAsync? tyName
+    | throwError "Could not find declaration for: {tyName}"
+  let .inductInfo _ := decl.constInfo.get
+    | throwError "Not an inductive"
+  trace[Utils] "Inductive"
+  -- Lookup the `casesOn` theorem
+  let casesOnName := tyName ++ `casesOn
+  dsplitCasesOn false e casesOnName h vars
+
 local elab "dsplit" x:term : tactic => do
   let x ← Term.elabTerm x none
   let _ ← dsplit x `h []
 
-example : @List.nil α = @List.nil α := by simp
+local elab "dsplitCasesOn" th:ident x:term : tactic => do
+  let some th ← Term.resolveId? th (withInfo := true)
+    | throwError m!"Could not find theorem: {th}"
+  th.withApp fun th _ => do
+  let .const thName _ := th
+    | throwError "Unexpected"
+  let x ← Term.elabTerm x none
+  let _ ← dsplitCasesOn true x thName `h []
 
 example (l : List α) : True := by
   set_option trace.Utils true in
   dsplit l <;> simp
+
+def test (x : Option α) : Nat := match x with | none => 0 | some _ => 1
+example (x : Option α) : True := by
+  have := @test.match_1 α (fun x => x = none ∨ ∃ v, x = some v) x (by simp) (by simp)
+  set_option trace.Utils true in
+  dsplitCasesOn test.match_1 x <;> simp
 
 theorem bool_disj_imp (b : Bool) (P : Prop) : (b = true → P) → (b = false → P) → P := by
   grind
