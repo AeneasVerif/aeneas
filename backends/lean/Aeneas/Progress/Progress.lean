@@ -200,6 +200,35 @@ def getFirstBind (goalTy : Expr) : MetaM (Bool × Expr) := do
   then pure (true, args[4])
   else pure (false, compTy)
 
+/-- Attempt to resolve typeclasses. -/
+def trySolveTypeclasses (mvarsIds : List MVarId) : TacticM (List MVarId) := do
+  withTraceNode `Progress (fun _ => pure m!"trySolveTypeclasses") do
+  mvarsIds.filterMapM fun (mvar : MVarId) => do
+    trace[Progress] "goal: {mvar}"
+    let ty ← instantiateMVars (← mvar.getType)
+    ty.withApp fun app _ => do
+    if let some (name, _) := app.const? then
+      trace[Progress] "Checking application: {name}"
+      if not (← isProp (← inferType ty)) then
+        /- We eagerly consider the application to be a typeclass
+           TODO: this might be dangerous -/
+        trace[Progress] "not a prop"
+        try
+          mvar.withContext do
+          let inst ← synthInstance ty
+          trace[Progress] "Solved the typeclass"
+          let _ ← isDefEq (.mvar mvar) inst
+          pure none
+        catch _ =>
+          trace[Progress] "Could not solve the typeclass"
+          pure mvar
+      else
+        trace[Progress] "Ignoring a prop"
+        pure mvar
+    else
+      trace[Progress] "Could not decompose application"
+      pure mvar
+
 /-- Attempt to match a given theorem with the monadic call in the goal,
     and introduce the instantiated theorem in the context if it succeeds.
 
@@ -272,20 +301,8 @@ def tryMatch (isLet : Bool) (th : Expr) :
   let mvarsIds ← mvarsIds.filterM (fun mvar => do pure (not (← mvar.isAssigned)))
 
   -- Attempt to resolve the typeclass instances
-  let mvarsIds ← mvarsIds.filterMapM fun mvar => do
-    let ty ← mvar.getType
-    ty.withApp fun app _ =>
-    if let some (name, _) := app.const? then
-      if isClass env name then
-        -- Attempt to resolve the typeclass
-        try
-          let inst ← synthInstance ty
-          mvar.assign inst
-          pure none
-        catch _ =>
-          pure mvar
-      else pure mvar
-    else pure mvar
+  let mvarsIds ← trySolveTypeclasses mvarsIds.toList
+  let mvarsIds := mvarsIds.toArray
 
   let (fvars, ngoal) ← ngoal.introN 2 [← mkFreshUserName `x, ← mkFreshUserName `h]
   setGoals [ngoal]
@@ -294,7 +311,6 @@ def tryMatch (isLet : Bool) (th : Expr) :
 
   let #[x, post] := fvars
     | throwError "Unreacheable. Introduced bad variables"
-
 
   let isCases := match isMatcherAppCore? env (← inferType (.fvar post)) with
     | .some cases => cases.numDiscrs == 1
@@ -515,6 +531,9 @@ def trySolvePreconditions (args : Args) (newPropGoals : List MVarId) : TacticM (
   /- First attempt to solve the preconditions in a *synchronous* manner by using the `singleAssumptionTac`.
      We do this to instantiate meta-variables -/
   allGoalsNoRecover (tryTac args.assumTac)
+  /- Attempt to resolve the typeclass instances again (we already tried once, but maybe we couldn't
+     because some meta-variables were not resolved) -/
+  setGoals (← trySolveTypeclasses (← getGoals))
   /- Retrieve the unsolved preconditions - make sure we recover them in the original order -/
   let goals ← newPropGoals.filterMapM (fun g => do if ← g.isAssigned then pure none else pure (some g))
   /- Then attempt to solve the remaining preconditions *asynchronously* -/
