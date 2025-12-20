@@ -3,6 +3,7 @@ import Aeneas
 
 open Aeneas.Std
 open Result
+open WP
 
 namespace Tutorial
 
@@ -107,8 +108,8 @@ theorem mul2_add1_spec
    -/
   (h : 2 * x.val + 1 ≤ U32.max)
   /- The postcondition -/
-  : ∃ y, mul2_add1 x = ok y ∧  -- The call succeeds
-  ↑ y = 2 * ↑x + (1 : Nat)   -- The output has the expected value
+  : mul2_add1 x ⦃ y => -- The call succeeds
+    ↑ y = 2 * ↑x + (1 : Nat) ⦄  -- The output has the expected value
   := by
   /- The proof -/
   -- Start by unfolding [mul2_add1] to reveal its body
@@ -154,9 +155,8 @@ theorem mul2_add1_spec
    attributes, meaning we don't need to tell [progress] to use them.
  -/
 @[progress] -- the [progress] attribute saves the theorem in a database, for [progress] to use it
-theorem mul2_add1_spec2 (x : U32) (h : 2 * x.val + 1 ≤ U32.max)
-  : ∃ y, mul2_add1 x = ok y ∧
-  ↑ y = 2 * ↑x + (1 : Int)
+theorem mul2_add1_spec2 (x : U32) (h : 2 * x.val + 1 ≤ U32.max) :
+  mul2_add1 x ⦃ y => ↑ y = 2 * ↑x + (1 : Int) ⦄
   := by
   unfold mul2_add1
   progress as ⟨ x1⟩ -- [progress] automatically lookups [U32.add_spec]
@@ -173,8 +173,8 @@ def use_mul2_add1 (x : U32) (y : U32) : Result U32 := do
 
 @[progress]
 theorem use_mul2_add1_spec (x : U32) (y : U32) (h : 2 * x.val + 1 + y.val ≤ U32.max) :
-  ∃ z, use_mul2_add1 x y = ok z ∧
-  ↑z = 2 * ↑x + (1 : Int) + ↑y := by
+  use_mul2_add1 x y ⦃ z => ↑z = 2 * ↑x + (1 : Int) + ↑y ⦄
+  := by
   unfold use_mul2_add1
   -- Here we use [progress] on [mul2_add1]
   progress as ⟨ x1 ⟩
@@ -266,9 +266,9 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
   -- Precondition: the index is in bounds
   (h : i.val < l.toList.length)
   -- Postcondition
-  : ∃ x, list_nth T l i = ok x ∧
-  -- [x] is the ith element of [l] after conversion to [List]
-  x = l.toList[i.val]
+  : list_nth T l i ⦃ x =>
+      -- [x] is the ith element of [l] after conversion to [List]
+      x = l.toList[i.val] ⦄
   := by
   -- Here we have to be careful when unfolding the body of [list_nth]: we could
   -- use the [simp] tactic, but it will sometimes loop on recursive definitions.
@@ -356,7 +356,7 @@ partial_fixpoint
 
 /- We can easily prove that [i32_id] behaves like the identity on positive inputs -/
 theorem i32_id_spec (x : I32) (h : 0 ≤ x.val) :
-  i32_id x = ok x := by
+  i32_id x ⦃ x' => x' = x ⦄ := by
   unfold i32_id
   if hx : x = 0#i32 then
     simp_all

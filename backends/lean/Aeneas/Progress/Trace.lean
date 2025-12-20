@@ -5,5 +5,6 @@ namespace Aeneas.Progress
 
 -- We can't define and use trace classes in the same file
 initialize registerTraceClass `Progress
+initialize registerTraceClass `ProgressElab
 
 end Aeneas.Progress

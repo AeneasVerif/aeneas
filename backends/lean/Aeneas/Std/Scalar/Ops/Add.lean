@@ -6,7 +6,7 @@ import Mathlib.Data.BitVec
 
 namespace Aeneas.Std
 
-open Result Error Arith ScalarElab
+open Result Error Arith ScalarElab WP
 
 /-!
 # Addition: Definitions
@@ -79,28 +79,28 @@ integers and bit-vectors.
 /-- Generic theorem - shouldn't be used much -/
 theorem UScalar.add_bv_spec {ty} {x y : UScalar ty}
   (hmax : ↑x + ↑y ≤ UScalar.max ty) :
-  ∃ z, x + y = ok z ∧ (↑z : Nat) = ↑x + ↑y ∧ z.bv = x.bv + y.bv := by
+  (x + y) ⦃ z => (↑z : Nat) = ↑x + ↑y ∧ z.bv = x.bv + y.bv ⦄ := by
   have h := @add_equiv ty x y
   split at h <;> simp_all [max]
   have : 0 < 2^ty.numBits := by simp
   omega
 
 /-- Generic theorem - shouldn't be used much -/
-theorem IScalar.add_bv_spec {ty} {x y : IScalar ty}
+theorem IScalar.add_bv_spec {ty}  {x y : IScalar ty}
   (hmin : IScalar.min ty ≤ ↑x + ↑y)
   (hmax : ↑x + ↑y ≤ IScalar.max ty) :
-  ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y ∧ z.bv = x.bv + y.bv := by
+  (x + y) ⦃ z => (↑z : Int) = ↑x + ↑y ∧ z.bv = x.bv + y.bv ⦄ := by
   have h := @add_equiv ty x y
   split at h <;> simp_all [min, max]
   omega
 
 uscalar theorem «%S».add_bv_spec {x y : «%S»} (hmax : x.val + y.val ≤ «%S».max) :
-  ∃ z, x + y = ok z ∧ (↑z : Nat) = ↑x + ↑y ∧ z.bv = x.bv + y.bv :=
+  (x + y) ⦃ z => (↑z : Nat) = ↑x + ↑y ∧ z.bv = x.bv + y.bv ⦄ :=
   UScalar.add_bv_spec (by scalar_tac)
 
 iscalar theorem «%S».add_bv_spec {x y : «%S»}
   (hmin : «%S».min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ «%S».max) :
-  ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y ∧ z.bv = x.bv + y.bv :=
+  (x + y) ⦃ z => (↑z : Int) = ↑x + ↑y ∧ z.bv = x.bv + y.bv ⦄ :=
   IScalar.add_bv_spec (by scalar_tac) (by scalar_tac)
 
 /-!
@@ -113,7 +113,7 @@ only integers. Those are the most common to use, so we mark them with the
 @[progress]
 theorem UScalar.add_spec {ty} {x y : UScalar ty}
   (hmax : ↑x + ↑y ≤ UScalar.max ty) :
-  ∃ z, x + y = ok z ∧ (↑z : Nat) = ↑x + ↑y := by
+  (x + y) ⦃ z => (↑z : Nat) = ↑x + ↑y ⦄ := by
   have h := @add_equiv ty x y
   split at h <;> simp_all [max]
   have : 0 < 2^ty.numBits := by simp
@@ -124,18 +124,18 @@ theorem UScalar.add_spec {ty} {x y : UScalar ty}
 theorem IScalar.add_spec {ty} {x y : IScalar ty}
   (hmin : IScalar.min ty ≤ ↑x + ↑y)
   (hmax : ↑x + ↑y ≤ IScalar.max ty) :
-  ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y := by
+  (x + y) ⦃ z => (↑z : Int) = ↑x + ↑y ⦄ := by
   have h := @add_equiv ty x y
   split at h <;> simp_all [min, max]
   omega
 
 uscalar @[progress] theorem «%S».add_spec {x y : «%S»} (hmax : x.val + y.val ≤ «%S».max) :
-  ∃ z, x + y = ok z ∧ (↑z : Nat) = ↑x + ↑y :=
+  (x + y) ⦃ z => (↑z : Nat) = ↑x + ↑y ⦄ :=
   UScalar.add_spec (by scalar_tac)
 
 iscalar @[progress] theorem «%S».add_spec {x y : «%S»}
   (hmin : «%S».min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ «%S».max) :
-  ∃ z, x + y = ok z ∧ (↑z : Int) = ↑x + ↑y :=
+  (x + y) ⦃ z => (↑z : Int) = ↑x + ↑y ⦄ :=
   IScalar.add_spec (by scalar_tac) (by scalar_tac)
 
 end Aeneas.Std

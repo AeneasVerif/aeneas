@@ -34,7 +34,7 @@ namespace Aeneas
 
 namespace Std
 
-open Result
+open Result WP
 
 def Array.allIdx (f : Usize → α → Bool) (ls : List α) (i : Nat := 0) : Bool :=
   match ls with
@@ -53,7 +53,7 @@ theorem Array.index_usize_const_spec {α} [Inhabited α]
   (hp : ∀ i x, p i x ↔ p' i x)
   (hPred : Std.Array.allIdx p a.val)
   (i : Usize) (h : i.val < n.val) (hn : n.val ≤ U32.max) :
-  ∃ v, Array.index_usize a i = ok v ∧ p' i v := by
+  Array.index_usize a i ⦃ v => p' i v ⦄ := by
   let rec aux (l : List α) (i : Nat) (hi : i + l.length = n)
     (hl : ∀ j, l[j]! = a[i + j]!)
     (h : Std.Array.allIdx p l i)
@@ -92,7 +92,7 @@ theorem Array.index_usize_const_spec {α} [Inhabited α]
   have hi := aux a.val 0 (by scalar_tac) (by fsimp) hPred i (by scalar_tac) (by scalar_tac)
   fsimp at hi
   progress as ⟨ x, hx ⟩
-  fsimp [hi, hx]
+  grind
 
 end Std
 
@@ -122,7 +122,7 @@ def parseProgressArraySpec
     -- Elaborate the full theorem
     elabCommand
       (← `(command| $vis:declModifiers theorem $thm_name:ident $i (_ : Aeneas.Std.UScalar.val $i < Aeneas.Std.Array.length $array) :
-            ∃ $x:ident, Aeneas.Std.Array.index_usize $array $i = Aeneas.Std.Result.ok $x ∧ $pred :=
+            Aeneas.Std.WP.spec (Aeneas.Std.Array.index_usize $array $i) (fun $x:ident => $pred) :=
             Aeneas.Std.Array.index_usize_const_spec (fun $i:ident $x:ident => $pred) (fun $i:ident $x:ident => $pred)
             $array (by simp) (by $tac) $i (by scalar_tac) (by scalar_tac)))
   | _ => throwUnsupportedSyntax
