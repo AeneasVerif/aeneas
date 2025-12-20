@@ -49,7 +49,7 @@ open CList
 /-- Theorem about `list_nth_mut1`: verbose version -/
 theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
-  list_nth_mut1 l i ⦃⇓ (x, back) =>
+  list_nth_mut1 l i ⦃ (x, back) =>
     x = l.toList[i.val]! ∧
     ∀ x', (back x').toList = l.toList.set i.val x' ⦄ := by
   unfold list_nth_mut1 list_nth_mut1_loop
@@ -98,7 +98,7 @@ theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
  -/
 theorem list_nth_mut1_spec' {T: Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
-  list_nth_mut1 l i ⦃⇓ (x, back) =>
+  list_nth_mut1 l i ⦃ (x, back) =>
     x = l.toList[i.val]! ∧
     ∀ x', (back x').toList = l.toList.set i.val x' ⦄ := by
   unfold list_nth_mut1 list_nth_mut1_loop
@@ -123,7 +123,7 @@ theorem list_nth_mut1_spec' {T: Type} [Inhabited T] (l : CList T) (i : U32)
 /- Even simpler: `progress*` can do most of the work -/
 theorem list_nth_mut1_spec'' {T: Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
-  list_nth_mut1 l i ⦃⇓ (x, back) =>
+  list_nth_mut1 l i ⦃ (x, back) =>
     x = l.toList[i.val]! ∧
     ∀ x', (back x').toList = l.toList.set i.val x' ⦄ := by
   unfold list_nth_mut1 list_nth_mut1_loop
@@ -133,7 +133,7 @@ theorem list_nth_mut1_spec'' {T: Type} [Inhabited T] (l : CList T) (i : U32)
 /-- Theorem about `list_tail_loop`: verbose version -/
 @[progress]
 theorem list_tail_loop_spec {T : Type} (l : CList T) :
-  list_tail_loop l ⦃⇓ back =>
+  list_tail_loop l ⦃ back =>
     ∀ tl', (back tl').toList = l.toList ++ tl'.toList ⦄ := by
   unfold list_tail_loop
   cases h: l
@@ -152,14 +152,14 @@ theorem list_tail_loop_spec {T : Type} (l : CList T) :
 /-- Theorem about `list_tail_loop: simple version -/
 @[progress]
 theorem list_tail_loop_spec' {T : Type} (l : CList T) :
-  list_tail_loop l ⦃⇓ back =>
+  list_tail_loop l ⦃ back =>
     ∀ tl', (back tl').toList = l.toList ++ tl'.toList ⦄ := by
   unfold list_tail_loop
   progress*
 
 @[progress]
 theorem list_tail_spec {T : Type} (l : CList T) :
-  list_tail l ⦃⇓ (tl, back) =>
+  list_tail l ⦃ (tl, back) =>
     tl = CNil ∧
     ∀ tl', (back tl').toList = l.toList ++ tl'.toList ⦄ := by
   unfold list_tail
@@ -168,7 +168,7 @@ theorem list_tail_spec {T : Type} (l : CList T) :
 /-- Theorem about `append_in_place` -/
 @[progress]
 theorem append_in_place_spec {T : Type} (l0 l1 : CList T) :
-  append_in_place l0 l1 ⦃⇓ l2 =>
+  append_in_place l0 l1 ⦃ l2 =>
     l2.toList = l0.toList ++ l1.toList ⦄ := by
   unfold append_in_place
   progress as ⟨ tl, back ⟩
@@ -176,7 +176,7 @@ theorem append_in_place_spec {T : Type} (l0 l1 : CList T) :
 
 @[progress]
 theorem reverse_loop_spec {T : Type} (l : CList T) (out : CList T) :
-  reverse_loop l out ⦃⇓ l' =>
+  reverse_loop l out ⦃ l' =>
     l'.toList = l.toList.reverse ++ out.toList ⦄ := by
   unfold reverse_loop
   cases h: l
@@ -186,7 +186,7 @@ theorem reverse_loop_spec {T : Type} (l : CList T) (out : CList T) :
   . simp
 
 theorem reverse_spec {T : Type} (l : CList T) :
-  reverse l ⦃⇓ l' =>
+  reverse l ⦃ l' =>
     l'.toList = l.toList.reverse ⦄ := by
   unfold reverse
   progress as ⟨ l', hl' ⟩
@@ -211,7 +211,7 @@ def toInt (l : List U32) : Int :=
 @[progress]
 theorem zero_loop_spec
   (x : alloc.vec.Vec U32) (i : Usize) (h : i.val ≤ x.length) :
-  zero_loop x i ⦃⇓ x' =>
+  zero_loop x i ⦃ x' =>
     x'.length = x.length ∧
     (∀ j, j < i.val → x'[j]! = x[j]!) ∧
     (∀ j, i.val ≤ j → j < x.length → x'[j]! = 0#u32) ⦄ := by
@@ -251,7 +251,7 @@ theorem all_nil_impl_toInt_eq_zero
 
 /-- The theorem about `zero` -/
 theorem zero_spec (x : alloc.vec.Vec U32) :
-  zero x ⦃⇓ x' =>
+  zero x ⦃ x' =>
     x'.length = x.length ∧
     toInt x' = 0 ⦄ := by
   unfold zero
@@ -321,7 +321,7 @@ theorem add_no_overflow_loop_spec
   (hLength : x.length = y.length)
   -- No overflow occurs when we add the individual thunks
   (hNoOverflow : ∀ (j : Nat), i.val ≤ j → j < x.length → x[j]!.val + y[j]!.val ≤ U32.max) :
-  add_no_overflow_loop x y i ⦃⇓ x' =>
+  add_no_overflow_loop x y i ⦃ x' =>
     x'.length = x.length ∧
     toInt x' = toInt x + 2 ^ (32 * i.val) * toInt (y.val.drop i.val) ⦄ := by
   unfold add_no_overflow_loop
@@ -361,7 +361,7 @@ decreasing_by scalar_decr_tac
 theorem add_no_overflow_spec (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
   (hLength : x.length = y.length)
   (hNoOverflow : ∀ (j : Nat), j < x.length → x[j]!.val + y[j]!.val ≤ U32.max) :
-  add_no_overflow x y ⦃⇓ x' =>
+  add_no_overflow x y ⦃ x' =>
     x'.length = y.length ∧
     toInt x' = toInt x + toInt y ⦄ := by
   unfold add_no_overflow
@@ -375,7 +375,7 @@ theorem add_with_carry_loop_spec
   (hLength : x.length = y.length)
   (hi : i.val ≤ x.length)
   (hCarryLe : c0.val ≤ 1) :
-  add_with_carry_loop x y c0 i ⦃⇓ (c1, x') =>
+  add_with_carry_loop x y c0 i ⦃ (c1, x') =>
     x'.length = x.length ∧
     c1.val ≤ 1 ∧
     toInt x' + c1.val * 2 ^ (32 * x'.length) =
@@ -445,7 +445,7 @@ decreasing_by scalar_decr_tac
 theorem add_with_carry_spec
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
   (hLength : x.length = y.length) :
-  add_with_carry x y ⦃⇓ (c, x') =>
+  add_with_carry x y ⦃ (c, x') =>
     x'.length = x.length ∧
     c.val ≤ 1 ∧
     toInt x' + c.val * 2 ^ (32 * x'.length) = toInt x + toInt y ⦄ := by

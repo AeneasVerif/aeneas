@@ -19,7 +19,7 @@ def mul2_add1 (x : U32) : Result U32 :=
 /-- Theorem about `mul2_add1`: with the `progress` tactic -/
 -- @[progress]
 theorem mul2_add1_spec (x : U32) (h : 2 * x.val + 1 ≤ U32.max)
-  : mul2_add1 x ⦃⇓ y => ↑y = 2 * ↑x + (1 : Int) ∧ ↑y = 2 * ↑x + (1 : Int) ⦄
+  : mul2_add1 x ⦃ y => ↑y = 2 * ↑x + (1 : Int) ∧ ↑y = 2 * ↑x + (1 : Int) ⦄
   := by
   unfold mul2_add1
   progress with U32.add_spec as ⟨ x1 ⟩
@@ -35,7 +35,7 @@ def mul2_add1_add (x : U32) (y : U32) : Result U32 :=
 
 /-- Theorem about `mul2_add1_add` -/
 theorem mul2_add1_add_spec (x : U32) (y : U32) (h : 2 * x.val + 1 + y.val ≤ U32.max) :
-  mul2_add1_add x y ⦃⇓ z => ↑z = 2 * ↑x + (1 : Int) + ↑y ⦄ := by
+  mul2_add1_add x y ⦃ z => ↑z = 2 * ↑x + (1 : Int) + ↑y ⦄ := by
   unfold mul2_add1_add
   progress with mul2_add1_spec as ⟨ x1 ⟩
   progress as ⟨ x2 ⟩
@@ -75,7 +75,7 @@ partial_fixpoint
 /-- Theorem about `list_nth` -/
 theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
-  list_nth l i ⦃⇓ x => x = l.toList[i.val]! ⦄
+  list_nth l i ⦃ x => x = l.toList[i.val]! ⦄
   := by
   unfold list_nth
   split
@@ -99,7 +99,7 @@ partial_fixpoint
 
 /-- Theorem about `i32_id` -/
 theorem i32_id_spec (n : I32) (h : 0 ≤ n.val) :
-  i32_id n ⦃⇓ n' => n' = n ⦄ := by
+  i32_id n ⦃ n' => n' = n ⦄ := by
   unfold i32_id
   split
   . simp [*]
@@ -142,7 +142,7 @@ mutual
 
 /-- The proof about `even` -/
 theorem even_spec (n : U32) :
-  even n ⦃⇓ b => b ↔ Even n.val ⦄ := by
+  even n ⦃ b => b ↔ Even n.val ⦄ := by
   unfold even
   split
   . simp [*]
@@ -154,7 +154,7 @@ decreasing_by scalar_decr_tac
 
 /-- The proof about `odd` -/
 theorem odd_spec (n : U32) :
-  odd n ⦃⇓ b => (b ↔ Odd n.val) ⦄ := by
+  odd n ⦃ b => (b ↔ Odd n.val) ⦄ := by
   unfold odd
   split
   . simp [*]
@@ -440,7 +440,7 @@ example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
  -/
 theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
-  list_nth_mut1 l i ⦃⇓ (x, back) =>
+  list_nth_mut1 l i ⦃ (x, back) =>
     x = l.toList[i.val]! ∧
     -- Specification of the backward function
     ∀ x', (back x').toList = l.toList.set i.val x' ⦄ := by
@@ -484,7 +484,7 @@ def append_in_place
 /-- Theorem about `list_tail`: exercise -/
 @[progress]
 theorem list_tail_spec {T : Type} (l : CList T) :
-  list_tail l ⦃⇓ (tl, back) =>
+  list_tail l ⦃ (tl, back) =>
     tl = CList.CNil ∧
     ∀ tl', (back tl').toList = l.toList ++ tl'.toList ⦄ := by
   unfold list_tail list_tail_loop
@@ -493,7 +493,7 @@ theorem list_tail_spec {T : Type} (l : CList T) :
 /-- Theorem about `append_in_place`: exercise -/
 @[progress]
 theorem append_in_place_spec {T : Type} (l0 l1 : CList T) :
-  append_in_place l0 l1 ⦃⇓ l2 => l2.toList = l0.toList ++ l1.toList ⦄ := by
+  append_in_place l0 l1 ⦃ l2 => l2.toList = l0.toList ++ l1.toList ⦄ := by
   unfold append_in_place
   sorry
 
@@ -508,7 +508,7 @@ partial_fixpoint
 
 @[progress]
 theorem reverse_loop_spec {T : Type} (l : CList T) (out : CList T) :
-  reverse_loop l out ⦃⇓ l' =>
+  reverse_loop l out ⦃ l' =>
     True -- Leaving the post-condition as an exercise
   ⦄
   := by
@@ -521,7 +521,7 @@ def reverse {T : Type} (l : CList T) : Result (CList T) :=
   reverse_loop l CList.CNil
 
 theorem reverse_spec {T : Type} (l : CList T) :
-  reverse l ⦃⇓ l' =>
+  reverse l ⦃ l' =>
     True -- Leaving the post-condition as an exercise
   ⦄
   := by
@@ -579,7 +579,7 @@ def toInt (l : List U32) : ℤ :=
 @[progress]
 theorem zero_loop_spec
   (x : alloc.vec.Vec U32) (i : Usize) (h : i.val ≤ x.length) :
-  zero_loop x i ⦃⇓ x' =>
+  zero_loop x i ⦃ x' =>
     x'.length = x.length ∧
     (∀ j, j < i.val → x'[j]! = x[j]!) ∧
     (∀ j, i.val ≤ j → j < x.length → x'[j]! = 0#u32) ⦄ := by
@@ -623,7 +623,7 @@ theorem all_nil_impl_toInt_eq_zero
 
 /-- The theorem about `zero` -/
 theorem zero_spec (x : alloc.vec.Vec U32) :
-  zero x ⦃⇓ x' =>
+  zero x ⦃ x' =>
     x'.length = x.length ∧
     toInt x' = 0 ⦄ := by
   unfold zero
@@ -694,7 +694,7 @@ theorem add_no_overflow_loop_spec
   (hLength : x.length = y.length)
   -- No overflow occurs when we add the individual thunks
   (hNoOverflow : ∀ (j : Nat), i.val ≤ j → j < x.length → x[j]!.val + y[j]!.val ≤ U32.max) :
-  add_no_overflow_loop x y i ⦃⇓ x' =>
+  add_no_overflow_loop x y i ⦃ x' =>
     x'.length = x.length ∧
     toInt x' = toInt x + 2 ^ (32 * i.val) * toInt (y.val.drop i.val) ⦄ := by
   unfold add_no_overflow_loop
@@ -713,7 +713,7 @@ def add_no_overflow
 theorem add_no_overflow_spec (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
   (hLength : x.length = y.length)
   (hNoOverflow : ∀ (j : Nat), j < x.length → x[j]!.val + y[j]!.val ≤ U32.max) :
-  add_no_overflow x y ⦃⇓ x' =>
+  add_no_overflow x y ⦃ x' =>
     x'.length = y.length ∧
     toInt x' = toInt x + toInt y ⦄ := by
   unfold add_no_overflow
@@ -757,7 +757,7 @@ theorem add_with_carry_loop_spec
   (hLength : x.length = y.length)
   (hi : i.val ≤ x.length)
   (hCarryLe : c0.val ≤ 1) :
-  add_with_carry_loop x y c0 i ⦃⇓ (c1, x') =>
+  add_with_carry_loop x y c0 i ⦃ (c1, x') =>
     x'.length = x.length ∧
     c1.val ≤ 1 ∧
     toInt x' + c1.val * 2 ^ (32 * x'.length) =
@@ -779,7 +779,7 @@ def add_with_carry
 theorem add_with_carry_spec
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
   (hLength : x.length = y.length) :
-  add_with_carry x y ⦃⇓ (c, x') =>
+  add_with_carry x y ⦃ (c, x') =>
     x'.length = x.length ∧
     c.val ≤ 1 ∧
     toInt x' + c.val * 2 ^ (32 * x'.length) = toInt x + toInt y ⦄ := by
