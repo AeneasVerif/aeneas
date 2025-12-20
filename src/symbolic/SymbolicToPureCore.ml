@@ -300,7 +300,7 @@ type bs_ctx = {
 let bs_ctx_to_fmt_env (ctx : bs_ctx) : Print.fmt_env =
   {
     crate = ctx.decls_ctx.crate;
-    generics = [ ctx.fun_decl.signature.generics ];
+    generics = [ ctx.fun_decl.generics ];
     locals = [];
   }
 

@@ -355,7 +355,7 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
       (fun (info : builtin_fun_info) ->
         SymbolicToPureTypes.translate_fun_sig trans_ctx (FBuiltin info.fun_id)
           info.name info.fun_sig
-          (List.map (fun _ -> None) info.fun_sig.inputs))
+          (List.map (fun _ -> None) info.fun_sig.item_binder_value.inputs))
       builtin_fun_infos
   in
 

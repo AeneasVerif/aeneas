@@ -28,7 +28,6 @@ let fresh_back_vars_for_current_fun (ctx : bs_ctx) : bs_ctx * fvar option list =
      for the backward functions. *)
   let back_var_names =
     let def_id = ctx.fun_decl.def_id in
-    let sg = ctx.fun_decl.signature in
     let regions_hierarchy =
       LlbcAstUtils.FunIdMap.find (FRegular def_id)
         ctx.fun_ctx.regions_hierarchies
@@ -38,7 +37,7 @@ let fresh_back_vars_for_current_fun (ctx : bs_ctx) : bs_ctx * fvar option list =
         let rg = RegionGroupId.nth regions_hierarchy gid in
         let region_names =
           List.map
-            (fun rid -> (T.RegionId.nth sg.generics.regions rid).name)
+            (fun rid -> (T.RegionId.nth ctx.fun_decl.generics.regions rid).name)
             rg.regions
         in
         let name =

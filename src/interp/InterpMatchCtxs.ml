@@ -324,6 +324,15 @@ let rec match_types (span : Meta.span) (ctx0 : eval_ctx) (ctx1 : eval_ctx)
       [%sanity_check] span (k0 = k1);
       let k = k0 in
       TRef (r, ty, k)
+  | TRawPtr (ty0, rk0), TRawPtr (ty1, rk1) ->
+      [%sanity_check] span (rk0 = rk1);
+      let ty = match_rec ty0 ty1 in
+      TRawPtr (ty, rk0)
+  | TDynTrait _, TDynTrait _ | TFnPtr _, TFnPtr _ | TFnDef _, TFnDef _ ->
+      [%craise] span "Not implemented yet"
+  | TPtrMetadata ty0, TPtrMetadata ty1 ->
+      let ty = match_rec ty0 ty1 in
+      TPtrMetadata ty
   | _ -> match_distinct_types ty0 ty1
 
 module MakeMatcher (M : PrimMatcher) : Matcher = struct
@@ -1737,7 +1746,12 @@ struct
     if ty0 <> ty1 then raise (Distinct "match_etys") else ty0
 
   let match_rtys (ctx0 : eval_ctx) (ctx1 : eval_ctx) ty0 ty1 =
-    let match_distinct_types _ _ = raise (Distinct "match_rtys") in
+    let match_distinct_types ty0 ty1 =
+      raise
+        (Distinct
+           ("match_rtys:\n- ty0: " ^ ty_to_string ctx0 ty0 ^ "\n- ty1: "
+          ^ ty_to_string ctx1 ty1))
+    in
     let match_regions r0 r1 =
       match (r0, r1) with
       | RStatic, RStatic -> r1
@@ -1819,6 +1833,7 @@ struct
       let sv_id =
         GetSetSid.match_e "match_symbolic_values: ids: " S.sid_map id0 id1
       in
+
       let sv_ty = match_rtys ctx0 ctx1 sv0.sv_ty sv1.sv_ty in
       let sv = { sv_id; sv_ty } in
       sv
@@ -1982,7 +1997,7 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
     ?(check_kind : bool = true) ?(check_can_end : bool = true)
     (fixed_ids : ids_sets) (lookup_shared_value_in_ctx0 : BorrowId.id -> tvalue)
     (lookup_shared_value_in_ctx1 : BorrowId.id -> tvalue) (ctx0 : eval_ctx)
-    (ctx1 : eval_ctx) : ids_maps option =
+    (ctx1 : eval_ctx) : ids_maps =
   [%ltrace
     "\n- fixed_ids:\n" ^ show_ids_sets fixed_ids ^ "\n\n- ctx0:\n"
     ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx0
@@ -2199,29 +2214,38 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
   (* Match the environments.
 
      Rem.: we don't match the ended regions (would it make any sense actually?) *)
-  try
-    (* Remove the frame delimiter (the first element of an environment is a frame delimiter) *)
-    let env0 = List.rev ctx0.env in
-    let env1 = List.rev ctx1.env in
-    let env0, env1 =
-      match (env0, env1) with
-      | EFrame :: env0, EFrame :: env1 -> (env0, env1)
-      | _ -> [%craise] span "Unreachable"
-    in
+  (* Remove the frame delimiter (the first element of an environment is a frame delimiter) *)
+  let env0 = List.rev ctx0.env in
+  let env1 = List.rev ctx1.env in
+  let env0, env1 =
+    match (env0, env1) with
+    | EFrame :: env0, EFrame :: env1 -> (env0, env1)
+    | _ -> [%craise] span "Unreachable"
+  in
 
-    match_envs env0 env1;
-    let maps =
-      {
-        aid_map = !aid_map;
-        blid_map = !blid_map;
-        borrow_id_map = !borrow_id_map;
-        loan_id_map = !loan_id_map;
-        rid_map = !rid_map;
-        sid_map = !sid_map;
-        sid_to_value_map = !sid_to_value_map;
-      }
-    in
-    Some maps
+  match_envs env0 env1;
+  let maps =
+    {
+      aid_map = !aid_map;
+      blid_map = !blid_map;
+      borrow_id_map = !borrow_id_map;
+      loan_id_map = !loan_id_map;
+      rid_map = !rid_map;
+      sid_map = !sid_map;
+      sid_to_value_map = !sid_to_value_map;
+    }
+  in
+  maps
+
+let try_match_ctxs (span : Meta.span) ~(check_equiv : bool)
+    ?(check_kind : bool = true) ?(check_can_end : bool = true)
+    (fixed_ids : ids_sets) (lookup_shared_value_in_ctx0 : BorrowId.id -> tvalue)
+    (lookup_shared_value_in_ctx1 : BorrowId.id -> tvalue) (ctx0 : eval_ctx)
+    (ctx1 : eval_ctx) : ids_maps option =
+  try
+    Some
+      (match_ctxs span ~check_equiv ~check_kind ~check_can_end fixed_ids
+         lookup_shared_value_in_ctx0 lookup_shared_value_in_ctx1 ctx0 ctx1)
   with
   | Distinct msg ->
       [%ltrace "distinct: " ^ msg];
@@ -2234,7 +2258,7 @@ let ctxs_are_equivalent (span : Meta.span) (fixed_ids : ids_sets)
     (ctx0 : eval_ctx) (ctx1 : eval_ctx) : bool =
   let lookup_shared_value _ = [%craise] span "Unreachable" in
   Option.is_some
-    (match_ctxs span ~check_equiv:true fixed_ids lookup_shared_value
+    (try_match_ctxs span ~check_equiv:true fixed_ids lookup_shared_value
        lookup_shared_value ctx0 ctx1)
 
 let prepare_match_ctx_with_target (config : config) (span : Meta.span)

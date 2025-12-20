@@ -541,3 +541,23 @@ fn reborrow_const() {
         let x = reborrow(&0);
     }
 }
+
+// This used to trigger a bug in `PrePasses.update_loops`
+fn decode(pe_dst: &mut [u8]) -> bool {
+    let mut cb_src_read: usize = 0;
+
+    let mut i = 0;
+    while i < 128 {
+        let dst_coeff = &mut pe_dst[i];
+        while *dst_coeff > 32 {}
+
+        if *dst_coeff > 32 {
+            return true;
+        }
+
+        *dst_coeff = 0;
+        i += 1;
+    }
+
+    false
+}

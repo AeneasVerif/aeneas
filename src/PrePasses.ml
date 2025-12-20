@@ -189,7 +189,7 @@ let update_array_default (crate : crate) : crate =
                   in
                   let generics =
                     {
-                      sg.generics with
+                      fdecl.generics with
                       const_generics =
                         [ { index = cg_id; name = "N"; ty = TUInt Usize } ];
                     }
@@ -197,12 +197,11 @@ let update_array_default (crate : crate) : crate =
                   let sg =
                     {
                       sg with
-                      generics;
                       output =
                         TAdt { id = TBuiltin TArray; generics = array_generics };
                     }
                   in
-                  let fdecl = { fdecl with signature = sg } in
+                  let fdecl = { fdecl with signature = sg; generics } in
                   Some fdecl
               | _ -> [%internal_error] fdecl.item_meta.span)
             else (* Filter *)
@@ -349,9 +348,14 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
           (after : statement list) : statement list * statement list =
         match st.kind with
         | Loop loop -> (
+            (* Recursively update the loop.
+
+               Note that doing this will raise an exception if we find a loop with
+               an early return. *)
             try ([ { st with kind = super#visit_Loop (depth + 1) loop } ], after)
             with Found ->
-              (* We found a return in the loop: attempt to replace it with a break.
+              (* An exception was raised: it means we found a return in the loop: attempt
+                 to replace it with a break.
 
                  There are two cases:
                  - either the loop does not contain any break, in which case we
@@ -377,13 +381,15 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
                   let visitor =
                     object
                       inherit [_] map_statement
+                      method! visit_Loop i loop = super#visit_Loop (i + 1) loop
 
-                      method! visit_Return _ =
+                      method! visit_Return i =
+                        [%sanity_check] span (i = 0);
                         (* Replace the return with a break *)
-                        Break 0
+                        Break i
                     end
                   in
-                  visitor#visit_block () b
+                  visitor#visit_block 0 b
                 in
                 let loop = block_replace loop in
                 let loop : statement = { st with kind = Loop loop } in
@@ -427,7 +433,31 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
                       after @ [ st ]
                   | _ -> [ st ]
                 in
-                let loop = map_statement replace loop in
+
+                let block_visitor =
+                  object (self)
+                    inherit [_] map_statement_base as super
+
+                    method! visit_Loop depth loop =
+                      super#visit_Loop (depth + 1) loop
+
+                    method! visit_block depth b =
+                      (* Only replace if the depth is 0 (it means we haven't dived
+                         into an inner loop) *)
+                      if depth = 0 then
+                        let update st =
+                          replace (self#visit_statement depth st)
+                        in
+                        {
+                          b with
+                          statements =
+                            List.flatten (List.map update b.statements);
+                        }
+                      else b
+                  end
+                in
+
+                let loop = block_visitor#visit_block 0 loop in
                 let loop : statement = { st with kind = Loop loop } in
                 let loop = super#visit_statement depth loop in
                 ([ loop; return ], []))
@@ -1144,6 +1174,9 @@ let apply_passes (crate : crate) : crate =
     ProgressBar.with_reporter num_decls "Applied prepasses: " (fun report ->
         FunDeclId.Map.map
           (fun f ->
+            [%ltrace
+              "Before applying the prepasses:\n"
+              ^ Print.Crate.crate_fun_decl_to_string crate f];
             let f : fun_decl =
               List.fold_left
                 (fun f (name, pass) -> apply_function_pass name pass f)

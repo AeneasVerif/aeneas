@@ -274,8 +274,8 @@ let get_builtin_function_return_type (span : Meta.span) (fid : builtin_fun_id)
   let sg = Builtin.get_builtin_fun_sig fid in
   (* Instantiate the return type  *)
   let generics = Subst.generic_args_erase_regions generics in
-  let subst = Subst.make_subst_from_generics sg.generics generics in
-  Subst.erase_regions_substitute_types subst sg.output
+  let subst = Subst.make_subst_from_generics sg.item_binder_params generics in
+  Subst.erase_regions_substitute_types subst sg.item_binder_value.output
 
 let move_return_value (config : config) (span : Meta.span)
     (pop_return_value : bool) (ctx : eval_ctx) :
@@ -659,11 +659,12 @@ let eval_non_builtin_function_call_symbolic_inst (span : Meta.span)
       in
       (* Lookup the declaration *)
       let def = ctx_lookup_fun_decl span ctx fid in
+      let signature = bound_fun_sig_of_decl def in
       [%ltrace
         "- call: " ^ call_to_string ctx call ^ "\n- call.generics:\n"
         ^ generic_args_to_string ctx func.generics
         ^ "\n- def.signature:\n"
-        ^ fun_sig_to_string ctx def.signature];
+        ^ fun_sig_to_string ctx signature];
       (* Instantiate *)
       let regions_hierarchy =
         [%silent_unwrap] span
@@ -671,7 +672,7 @@ let eval_non_builtin_function_call_symbolic_inst (span : Meta.span)
              ctx.fun_ctx.regions_hierarchies)
       in
       let inst_sg =
-        instantiate_fun_sig span ctx generics tr_self def.signature
+        instantiate_fun_sig span ctx generics tr_self signature
           regions_hierarchy
       in
       (func.kind, func.generics, def, inst_sg)
@@ -694,7 +695,9 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
  fun ctx ->
   (* Debugging *)
   [%ltrace
-    "\n**About to evaluate statement**: [\n"
+    "\n**About to evaluate statement** ("
+    ^ Errors.raw_span_to_string st.span
+    ^ "): [\n"
     ^ statement_to_string_with_tab ctx st
     ^ "\n]\n\n**Context**:\n"
     ^ eval_ctx_to_string ~span:(Some st.span) ctx
@@ -742,7 +745,14 @@ and eval_statement_list (config : config) span (stmts : statement list) :
       (ctx_resl, cc_comp cf_st1 cf_st2)
 
 and eval_block (config : config) (b : block) : stl_cm_fun =
-  eval_statement_list config b.span b.statements
+ fun ctx ->
+  [%ltrace
+    "About to evaluate block ("
+    ^ Errors.raw_span_to_string b.span
+    ^ "):\n"
+    ^ block_to_string_with_tab ctx b
+    ^ "\n"];
+  eval_statement_list config b.span b.statements ctx
 
 and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
  fun ctx ->
@@ -1312,9 +1322,7 @@ and eval_non_builtin_function_call_concrete (config : config) (span : Meta.span)
       (* TODO: we need to normalize the types if we want to correctly support traits *)
       [%cassert] body.span (generics.trait_refs = [])
         "Traits are not supported yet in concrete mode";
-      let subst =
-        Subst.make_subst_from_generics def.signature.generics generics
-      in
+      let subst = Subst.make_subst_from_generics def.generics generics in
       let locals, body_st = Subst.fun_body_substitute_in_body subst body in
 
       (* Evaluate the input operands *)
@@ -1599,7 +1607,7 @@ and eval_builtin_function_call_symbolic (config : config) (span : Meta.span)
 
     (* Evaluate the function call *)
     eval_function_call_symbolic_from_inst_sig config span (FunId (FBuiltin fid))
-      sg inst_sig func.generics args dest ctx
+      sg.item_binder_value inst_sig func.generics args dest ctx
   end
   else begin
     (* Sanity check: make sure the type parameters don't contain regions -
@@ -1625,7 +1633,7 @@ and eval_builtin_function_call_symbolic (config : config) (span : Meta.span)
 
     (* Evaluate the function call *)
     eval_function_call_symbolic_from_inst_sig config span (FunId (FBuiltin fid))
-      sg inst_sig func.generics args dest ctx
+      sg.item_binder_value inst_sig func.generics args dest ctx
   end
 
 (** Evaluate a statement seen as a function body *)

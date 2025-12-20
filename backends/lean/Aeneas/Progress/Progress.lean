@@ -63,6 +63,10 @@ attribute [progress_simps]
   exists_eq_left exists_eq_left' exists_eq_right exists_eq_right' exists_eq exists_eq' true_and and_true
   Std.WP.spec_ok
 
+attribute [progress_post_simps]
+  -- We often see expressions like `Int.ofNat 3`
+  Int.reduceToNat
+
 inductive TheoremOrLocal where
 | Theorem (thName : Name)
 | Local (asm : LocalDecl)
@@ -560,7 +564,7 @@ def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option MainGoal)
     -- Simplify the post-conditions
     let args : Simp.SimpArgs :=
       {simpThms := #[← progressPostSimpExt.getTheorems],
-        simprocs := #[← ScalarTac.scalarTacSimprocExt.getSimprocs]}
+       simprocs := #[← progressPostSimprocExt.getSimprocs] }
     let posts ← Simp.simpAt true { maxDischargeDepth := 0, failIfUnchanged := false }
           args (.targets mainGoal.posts false)
     match posts with
@@ -955,6 +959,7 @@ def evalProgress
   (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Array (Option Name))
   (byTac : Option Syntax.Tactic)
   : TacticM UsedTheorem := do
+  focus do
   let ⟨goals, usedTheorem⟩ ← evalProgressCore async keep keepPretty withArg ids byTac
   -- Wait for all the proof attempts to finish
   let mut sgs := #[]
@@ -1028,6 +1033,14 @@ The user can provide several optional arguments:
 - `by <tactic>`: use the given tactic to solve the preconditions.
 - `progress?`: displays the name of the theorem/assumption used.
 
+**`progress?`**: displays the name of the theorem used.
+
+**Alternative syntax:**
+The `progress` tactic also supports the following syntax:
+`let ⟨ id1, id2, ... ⟩ ← <withArg> by <tactic>`
+which is equivalent to:
+`progress with <withArg> as ⟨ id1, id2, ... ⟩ by <tactic>`
+
 **The `progress` attribute:**
 To make a theorem available for `progress`, the user can tag it with the
 `@[progress]` attribute. The theorem must have the following shape:
@@ -1064,8 +1077,7 @@ elab (name := progress) "progress" args:progressArgs : tactic => do
   let (keep?, withArg, ids, byTac) ← parseProgressArgs args
   evalProgress asyncOption keep? none withArg ids byTac *> return ()
 
-/-- The `progress?` tactic calls `progress` and displays additional information -
-see the documentation for the `progress` tactic itself. -/
+@[inherit_doc progress]
 elab tk:"progress?" args:progressArgs : tactic => do
   let (keep?, withArg, ids, byTac) ← parseProgressArgs args
   let stats ← evalProgress asyncOption keep? none withArg ids byTac
@@ -1077,12 +1089,7 @@ elab tk:"progress?" args:progressArgs : tactic => do
   let fmt ← PrettyPrinter.ppCategory ``Lean.Parser.Tactic.tacticSeq tac
   Meta.Tactic.TryThis.addSuggestion tk fmt.pretty (origSpan? := ← getRef)
 
-/-- This is alternative syntax for the `progress` tactic - see the documentation for `progress`.
-
-`let ⟨ id1, id2, ... ⟩ ← <withArg> by <tactic>`
-is equivalent to:
-`progress with <withArg> as ⟨ id1, id2, ... ⟩ by <tactic>`
--/
+@[inherit_doc progress]
 syntax (name := letProgress) "let" noWs "*" " ⟨ " binderIdent,* " ⟩" colGe
   " ← " colGe (term <|> "*" <|> "*?") ("by" tacticSeq)? : tactic
 
@@ -1488,6 +1495,24 @@ hf : ∀ (x y : U32), ↑x < 10 → ↑y < 10 → f x y ⦃ x => True ⦄
       rw [add1]
       progress? as ⟨ z1, h ⟩ says progress with add_spec' as ⟨ z1, h ⟩
       progress? as ⟨ z2, h ⟩ says progress with add_spec' as ⟨ z2, h ⟩
+
+    /--
+    error: unsolved goals
+case h
+x y x✝ : U32
+h✝ : ↑x✝ = ↑x + ↑y
+⊢ ↑x✝ + ↑x✝ ≤ U32.max
+
+case h
+x y : U32
+⊢ ↑x + ↑y ≤ U32.max
+    -/
+    #guard_msgs in
+    example (x y : U32) :
+      add1 x y ⦃ z => True ⦄ := by
+      unfold add1
+      progress
+      swap; progress
   end
 
   /- Checking that `add_spec'` went out of scope -/

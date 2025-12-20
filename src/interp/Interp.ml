@@ -121,11 +121,12 @@ let compute_contexts (crate : crate) : decls_ctx =
     We return a new context because we compute and add the type normalization
     map in the same step. *)
 let symbolic_instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
-    (sg : fun_sig) (regions_hierarchy : region_var_groups) (_kind : item_source)
-    : eval_ctx * inst_fun_sig =
+    (sg : bound_fun_sig) (regions_hierarchy : region_var_groups)
+    (_kind : item_source) : eval_ctx * inst_fun_sig =
   let tr_self = UnknownTrait "symbolic_instantiate_fun_sig" in
   let generics =
-    Substitute.generic_args_of_params_erase_regions (Some span) sg.generics
+    Substitute.generic_args_of_params_erase_regions (Some span)
+      sg.item_binder_params
   in
   let inst_sg =
     instantiate_fun_sig span ctx generics tr_self sg regions_hierarchy
@@ -177,15 +178,16 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx)
     List.map (fun (g : region_var_group) -> g.id) regions_hierarchy
   in
   let ctx =
-    initialize_eval_ctx (Some span) ctx region_groups sg.generics.types
-      sg.generics.const_generics marked_ids
+    initialize_eval_ctx (Some span) ctx region_groups fdef.generics.types
+      fdef.generics.const_generics marked_ids
   in
   (* Instantiate the signature. This updates the context because we compute
      at the same time the normalization map for the associated types.
   *)
   let ctx, inst_sg =
-    symbolic_instantiate_fun_sig span ctx fdef.signature regions_hierarchy
-      fdef.src
+    symbolic_instantiate_fun_sig span ctx
+      (bound_fun_sig_of_decl fdef)
+      regions_hierarchy fdef.src
   in
   (* Create fresh symbolic values for the inputs *)
   let input_svs =
@@ -268,8 +270,9 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
     FunIdMap.find (FRegular fdef.def_id) ctx.fun_ctx.regions_hierarchies
   in
   let _, ret_inst_sg =
-    symbolic_instantiate_fun_sig span ctx fdef.signature regions_hierarchy
-      fdef.src
+    symbolic_instantiate_fun_sig span ctx
+      (bound_fun_sig_of_decl fdef)
+      regions_hierarchy fdef.src
   in
   let ret_rty = ret_inst_sg.output in
 
@@ -486,7 +489,7 @@ module Test = struct
         fdef.item_meta.name];
 
     (* Sanity check - *)
-    [%sanity_check] span (fdef.signature.generics = empty_generic_params);
+    [%sanity_check] span (fdef.generics = empty_generic_params);
     [%sanity_check] span (body.locals.arg_count = 0);
 
     (* Create the evaluation context *)
@@ -521,7 +524,7 @@ module Test = struct
       (no parameters, no arguments) - TODO: move *)
   let fun_decl_is_transparent_unit (def : fun_decl) : bool =
     Option.is_some def.body
-    && def.signature.generics = empty_generic_params
+    && def.generics = empty_generic_params
     && def.signature.inputs = []
 
   (** Test all the unit functions in a list of function definitions *)

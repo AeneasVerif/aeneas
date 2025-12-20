@@ -402,7 +402,7 @@ def analyzeTarget : TacticM TargetKind := do
       pure .result
   catch _ => pure .unknown
 
-partial def evalProgressStar (cfg: Config) : TacticM Result :=
+partial def evalProgressStar (cfg: Config) (fuel : Option Nat) : TacticM Result :=
   withMainContext do focus do
   withTraceNode `Progress (fun _ => do pure m!"evalProgressStar") do
   -- Simplify the target
@@ -410,7 +410,7 @@ partial def evalProgressStar (cfg: Config) : TacticM Result :=
   -- Continue
   match mvarId with
   | some _ =>
-    let info' ← traverseProgram cfg
+    let info' ← traverseProgram cfg fuel
     let info := info ++ info'
     -- Wait for the asynchronous execution to finish
     withTraceNode `Progress (fun _ => do pure m!"filtering subgoals") do
@@ -457,10 +457,17 @@ where
     let goal ← do if r.isSome then pure (some (← getMainGoal)) else pure none
     pure (info, goal)
 
-  traverseProgram (cfg : Config): TacticM Info := do
+  traverseProgram (cfg : Config) (fuel : Option Nat) : TacticM Info := do
     withMainContext do
     withTraceNode `Progress (fun _ => do pure m!"traverseProgram") do
     traceGoalWithNode "current goal"
+    -- Check if there remains fuel
+    let fuel ←
+      match fuel with
+      | none => pure none
+      | some fuel =>
+        if fuel = 0 then return { script := .tacs #[], subgoals := #[(← getMainGoal, none)] }
+        else pure (some (fuel - 1))
     let targetKind ← analyzeTarget
     match targetKind with
     | .bind varName => do
@@ -473,7 +480,7 @@ where
         return info
       | some mainGoal =>
         setGoals [mainGoal]
-        let restInfo ← traverseProgram cfg
+        let restInfo ← traverseProgram cfg fuel
         return info ++ restInfo
     | .switch bfInfo => do
       let contsTaggedVals ←
@@ -487,7 +494,7 @@ where
       /- Continue exploring from the subgoals -/
       let branchInfos ← branchGoals.mapM fun mainGoal => do
         setGoals [mainGoal]
-        let restInfo ← traverseProgram cfg
+        let restInfo ← traverseProgram cfg fuel
         pure restInfo
       /- Put everything together -/
       mkStx branchInfos
@@ -693,16 +700,24 @@ where
     let binderIdents := names.map nameToBinderIdent
     Lean.mkNode ``Lean.Parser.Tactic.caseArg #[tag, mkNullNode (args := binderIdents)]
 
-syntax «progress*_args» := ("by" tacticSeq)?
-def parseArgs: TSyntax `Aeneas.ProgressStar.«progress*_args» → CoreM Config
-| `(«progress*_args»| $[by $preconditionTac:tacticSeq]?) => do
+syntax «progress*_args» := (num)? ("by" tacticSeq)?
+def parseArgs: TSyntax `Aeneas.ProgressStar.«progress*_args» → CoreM (Config × Option Nat)
+| `(«progress*_args»| $(fuel)? $[by $preconditionTac:tacticSeq]?) => do
   withTraceNode `Progress (fun _ => pure m!"parseArgs") do
-  match preconditionTac with
-  | none => return {preconditionTac := none}
-  | some preconditionTac => do
-    let preconditionTac : Syntax.Tactic := ⟨preconditionTac.raw⟩
-    trace[Progress] "preconditionTac: {preconditionTac}"
-    return {preconditionTac}
+  let fuel ← do match fuel with
+    | none => pure none
+    | some fuel =>
+      match fuel.raw.isNatLit? with
+      | some fuel => pure fuel
+      | none => throwUnsupportedSyntax
+  let preconditionTac ← do
+    match preconditionTac with
+    | none => pure {preconditionTac := none}
+    | some preconditionTac => do
+      let preconditionTac : Syntax.Tactic := ⟨preconditionTac.raw⟩
+      trace[Progress] "preconditionTac: {preconditionTac}"
+      pure {preconditionTac}
+  pure (preconditionTac, fuel)
 | _ => throwUnsupportedSyntax
 
 /-- The `progress*` tactic repeatedly applies `progress` and `split` on the goal.
@@ -715,11 +730,11 @@ syntax (name := progressStar) "progress" noWs ("*" <|> "*?") «progress*_args»:
 def evalProgressStarTac : Tactic := fun stx => do
   match stx with
   | `(tactic| progress* $args:«progress*_args») =>
-    let cfg ← parseArgs args
-    evalProgressStar cfg *> pure ()
+    let (cfg, fuel) ← parseArgs args
+    evalProgressStar cfg fuel *> pure ()
   | `(tactic| progress*? $args:«progress*_args») =>
-    let cfg ← parseArgs args
-    let info ← evalProgressStar cfg
+    let (cfg, fuel) ← parseArgs args
+    let info ← evalProgressStar cfg fuel
     let suggestion ← info.script.toSyntax
     let suggestion ← `(tacticSeq|$(suggestion)*)
     /- TODO: do not use the Aesop helper but our own (it mentions Aesop in the message)
@@ -764,6 +779,47 @@ example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
   progress*?
 
 /--
+error: unsolved goals
+x y : U32
+h : 2 * ↑x + 2 * ↑y + 4 ≤ U32.max
+x2 : U32
+_✝ : [> let x2 ← x + y <]
+x2_post : ↑x2 = ↑x + ↑y
+x3 : U32
+_ : [> let x3 ← x2 + x2 <]
+x3_post : ↑x3 = ↑x2 + ↑x2
+⊢ x3 + 4#u32 ⦃ z => True ⦄
+-/
+#guard_msgs in
+example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
+  add1 x y ⦃ z => True ⦄ := by
+  unfold add1
+  progress* 2
+
+/--
+info: Try this:
+
+  [apply]     let* ⟨ x2, x2_post ⟩ ← U32.add_spec
+    let* ⟨ x3, x3_post ⟩ ← U32.add_spec
+---
+error: unsolved goals
+x y : U32
+h : 2 * ↑x + 2 * ↑y + 4 ≤ U32.max
+x2 : U32
+_✝ : [> let x2 ← x + y <]
+x2_post : ↑x2 = ↑x + ↑y
+x3 : U32
+_ : [> let x3 ← x2 + x2 <]
+x3_post : ↑x3 = ↑x2 + ↑x2
+⊢ x3 + 4#u32 ⦃ z => True ⦄
+-/
+#guard_msgs in
+example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
+  add1 x y ⦃ z => True ⦄ := by
+  unfold add1
+  progress*? 2
+
+/--
 info: Try this:
 
   [apply]     simp only [progress_simps]
@@ -803,6 +859,34 @@ example b (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
       add2 b x y ⦃ _ => True ⦄ := by
   unfold add2
   progress*?
+
+/--
+info: Try this:
+
+  [apply]     spec_split
+    · let* ⟨ x2, x2_post ⟩ ← U32.add_spec
+      let* ⟨ x3, x3_post ⟩ ← U32.add_spec
+    · let* ⟨ y, y_post ⟩ ← U32.add_spec
+      let* ⟨ ⟩ ← U32.add_spec
+---
+error: unsolved goals
+b : Bool
+x y : U32
+h : 2 * ↑x + 2 * ↑y + 4 ≤ U32.max
+h✝ : b = true
+x2 : U32
+_✝ : [> let x2 ← x + y <]
+x2_post : ↑x2 = ↑x + ↑y
+x3 : U32
+_ : [> let x3 ← x2 + x2 <]
+x3_post : ↑x3 = ↑x2 + ↑x2
+⊢ x3 + 4#u32 ⦃ z => True ⦄
+-/
+#guard_msgs in
+example b (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
+  add2 b x y ⦃ z => True ⦄ := by
+  unfold add2
+  progress*? 3
 
 /--
 info: Try this:
