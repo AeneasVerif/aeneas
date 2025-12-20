@@ -60,7 +60,7 @@ theorem spec_mono {P₁:Post α} {m:Result α} {P₀:Post α} (h : spec m P₀):
   unfold spec theta wp_return
   cases m <;> grind
 
-theorem progress_spec_equiv_exists (m:Result α) (P:Post α) :
+theorem spec_equiv_exists (m:Result α) (P:Post α) :
   spec m P ↔ (∃ y, m = ok y ∧ P y) :=
   by
     cases m
@@ -68,13 +68,13 @@ theorem progress_spec_equiv_exists (m:Result α) (P:Post α) :
     · simp [spec, theta]
     · simp [spec, theta]
 
-theorem progress_spec_exists {m:Result α} {P:Post α} :
+theorem spec_imp_exists {m:Result α} {P:Post α} :
   spec m P → (∃ y, m = ok y ∧ P y) := by
-  exact (progress_spec_equiv_exists m P).1
+  exact (spec_equiv_exists m P).1
 
-theorem progress_exists_spec {m:Result α} {P:Post α} :
+theorem exists_imp_spec {m:Result α} {P:Post α} :
   (∃ y, m = ok y ∧ P y) → spec m P := by
-  exact (progress_spec_equiv_exists m P).2
+  exact (spec_equiv_exists m P).2
 
 /- We use a priority of 55 for the inner term, which is exactly the priority for `|||`.
 This way we can expressions like: `x + y ⦃ z => ... ⦄` without having to put parentheses around `x + y`. -/

@@ -40,7 +40,7 @@ theorem core.num.checked_rem_UScalar_bv_spec {ty} (x y : UScalar ty) :
     simp
     have hnz' : y.val ≠ 0 := by zify at *; simp_all
     have : x % y = x.rem y := by rfl
-    have ⟨_, hz⟩ := progress_spec_exists (UScalar.rem_bv_spec x hnz')
+    have ⟨_, hz⟩ := spec_imp_exists (UScalar.rem_bv_spec x hnz')
     simp [this, UScalar.rem, hnz] at hz
     simp [hz, hnz']
 
@@ -68,7 +68,7 @@ theorem core.num.checked_rem_IScalar_bv_spec {ty} (x y : IScalar ty) :
     simp
     have hnz' : y.val ≠ 0 := by zify at *; simp_all
     have : x % y = x.rem y := by rfl
-    have ⟨ _, hz ⟩ := progress_spec_exists (@IScalar.rem_bv_spec _ x y hnz')
+    have ⟨ _, hz ⟩ := spec_imp_exists (@IScalar.rem_bv_spec _ x y hnz')
     simp [this, IScalar.rem, hnz] at hz
     simp [*]
 

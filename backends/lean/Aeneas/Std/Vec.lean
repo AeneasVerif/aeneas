@@ -171,7 +171,7 @@ theorem Vec.index_mut_usize_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Us
   (hbound : i.val < v.length) :
   v.index_mut_usize i ⦃ (x,y) => x = v.val[i.val]! ∧ y = v.set i⦄ := by
   simp only [index_mut_usize]
-  have ⟨ x, h ⟩ := progress_spec_exists (index_usize_spec v i hbound)
+  have ⟨ x, h ⟩ := spec_imp_exists (index_usize_spec v i hbound)
   simp [h]
 
 @[rust_fun "alloc::vec::{core::ops::index::Index<alloc::vec::Vec<@T>, @I, @O>}::index"
@@ -248,7 +248,7 @@ theorem alloc.vec.from_elem_spec {T : Type} (cloneInst : core.clone.Clone T)
   v.val = List.replicate n.val x ∧
   v.length = n.val ⦄ := by
   unfold from_elem
-  have ⟨ l, h ⟩ := progress_spec_exists (@List.clone_spec _ cloneInst.clone (List.replicate n.val x) (by intros; simp_all))
+  have ⟨ l, h ⟩ := spec_imp_exists (@List.clone_spec _ cloneInst.clone (List.replicate n.val x) (by intros; simp_all))
   simp [h]
 
 @[rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::with_capacity" -canFail -lift]

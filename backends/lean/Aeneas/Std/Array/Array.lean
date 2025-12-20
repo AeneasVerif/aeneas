@@ -160,7 +160,7 @@ theorem Array.index_mut_usize_spec {α : Type u} {n : Usize} [Inhabited α] (v: 
   v.index_mut_usize i ⦃ (x, y) => y = set v i ∧
   x = v.val[i.val]! ⦄ := by
   simp only [index_mut_usize, Bind.bind, bind]
-  have ⟨ x, h ⟩ := progress_spec_exists (index_usize_spec v i hbound)
+  have ⟨ x, h ⟩ := spec_imp_exists (index_usize_spec v i hbound)
   simp [h]
 
 @[simp]
@@ -184,7 +184,7 @@ theorem Array.clone_length {α : Type u} {n : Usize} (clone : α → Result α) 
 theorem Array.clone_spec {α : Type u} {n : Usize} {clone : α → Result α} {s : Array α n} (h : ∀ x ∈ s.val, clone x = ok x) :
   Array.clone clone s ⦃ s' => s' = s ⦄ := by
   simp only [Array.clone]
-  have ⟨ l', h ⟩ := progress_spec_exists (List.clone_spec h)
+  have ⟨ l', h ⟩ := spec_imp_exists (List.clone_spec h)
   simp [h]
 
 @[rust_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone"]
@@ -197,7 +197,7 @@ theorem core.array.CloneArray.clone_spec {T : Type} {N : Usize} (cloneInst : cor
   (h : ∀ x ∈ a.val, cloneInst.clone x = ok x) :
   core.array.CloneArray.clone cloneInst a ⦃ a' => a = a' ⦄:= by
   unfold clone
-  have := progress_spec_exists (Array.clone_spec h)
+  have := spec_imp_exists (Array.clone_spec h)
   grind
 
 @[rust_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone_from"]
@@ -210,7 +210,7 @@ theorem core.array.CloneArray.clone_from_spec {T : Type} {N : Usize} (cloneInst 
   (self source : Array T N) (h : ∀ x ∈ source.val, cloneInst.clone x = ok x) :
   core.array.CloneArray.clone_from cloneInst self source ⦃ source' => source = source' ⦄ := by
   unfold clone_from
-  have := progress_spec_exists (Array.clone_spec h)
+  have := spec_imp_exists (Array.clone_spec h)
   grind
 
 @[reducible, rust_trait_impl "core::clone::Clone<[@T; @N]>"]

@@ -155,7 +155,7 @@ theorem Slice.index_mut_usize_spec {α : Type u} [Inhabited α] (v: Slice α) (i
   (hbound : i.val < v.length) :
   v.index_mut_usize i ⦃ p => p = (v.val[i.val]!, Slice.set v i) ⦄ := by
   simp only [index_mut_usize, Bind.bind, bind]
-  have ⟨ x, h ⟩ := progress_spec_exists (Slice.index_usize_spec v i hbound)
+  have ⟨ x, h ⟩ := spec_imp_exists (Slice.index_usize_spec v i hbound)
   simp [h]
 
 @[simp]
@@ -550,7 +550,7 @@ theorem Slice.clone_length {T : Type} {clone : T → Result T} {s s' : Slice T} 
 theorem Slice.clone_spec {T : Type} {clone : T → Result T} {s : Slice T} (h : ∀ x ∈ s.val, clone x = ok x) :
   Slice.clone clone s ⦃ s' => s = s' ⦄ := by
   simp only [Slice.clone]
-  have ⟨ _, h ⟩ := progress_spec_exists (List.clone_spec h)
+  have ⟨ _, h ⟩ := spec_imp_exists (List.clone_spec h)
   simp [h]
 
 @[rust_fun "core::slice::{[@T]}::split_at"]

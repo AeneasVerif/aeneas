@@ -417,11 +417,11 @@ theorem IScalar.div_spec {ty} {x y : IScalar ty}
 
 uscalar @[progress] theorem «%S».div_spec (x : «%S») {y : «%S»} (hnz : ↑y ≠ (0 : Nat)) :
   (x / y) ⦃ z => (↑z : Nat) = ↑x / ↑y ⦄ :=
-  progress_exists_spec (UScalar.div_spec x hnz)
+  exists_imp_spec (UScalar.div_spec x hnz)
 
 iscalar @[progress] theorem «%S».div_spec {x y : «%S»} (hnz : ↑y ≠ (0 : Int))
   (hNoOverflow : ¬ (x.val = «%S».min ∧ y.val = -1)) :
   (x / y) ⦃ z => (↑z : Int) = Int.tdiv ↑x ↑y ⦄ :=
-  progress_exists_spec (IScalar.div_spec hnz (by scalar_tac))
+  exists_imp_spec (IScalar.div_spec hnz (by scalar_tac))
 
 end Aeneas.Std
