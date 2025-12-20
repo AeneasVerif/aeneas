@@ -366,7 +366,8 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
   fsimp at hhm
   have _ : hash_mod.val < alloc.vec.Vec.length hm.slots := by
     scalar_tac
-  progress as ⟨ l, h_leq ⟩
+  progress with alloc.vec.Vec.index_mut_usize_spec as ⟨ l, index_mut, h_leq, hIndexMut ⟩
+  simp [hIndexMut]
   have h_slot :
     slot_s_inv_hash hm.slots.length (hash_mod_key key hm.slots.length) l.v := by
     fsimp [inv, slots_t_inv] at hinv
@@ -380,8 +381,8 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
   rw [if_update_eq] -- TODO: necessary because we don't have a join
   -- TODO: progress to ...
   have hipost :
-    ∃ i0, (if inserted = true then hm.num_entries + Usize.ofNat 1 else pure hm.num_entries) = ok i0 ∧
-    i0.val = if inserted then hm.num_entries.val + 1 else hm.num_entries.val
+    (if inserted = true then hm.num_entries + Usize.ofNat 1 else pure hm.num_entries) ⦃ i0 =>
+      i0.val = if inserted then hm.num_entries.val + 1 else hm.num_entries.val ⦄
     := by
     if inserted then
       fsimp [*]
@@ -724,7 +725,8 @@ theorem move_elements_loop_spec
   . -- Continue the proof
     have hIneq : i.val < slots.val.length := by scalar_tac
     fsimp [hi]
-    progress as ⟨ slot, hSlotEq ⟩
+    progress as ⟨ slot, index_mut, hSlotEq, hIndexMut ⟩
+    simp [hIndexMut]
     have hInvSlot : slot_t_inv slots.val.length i.val slot := by
       fsimp [slots_t_inv] at hSlotsInv
       fsimp [*]
@@ -780,7 +782,6 @@ theorem move_elements_loop_spec
       simp_all [Slots.al_v, List.length_flatten_set_as_int_eq]
       scalar_tac
 
-    simp
     have hLookupPreserve :
       (∀ key v, slots.lookup key = some v → ntable2.lookup key = some v) ∧
       (∀ key v, ntable.lookup key = some v → ntable2.lookup key = some v) := by
