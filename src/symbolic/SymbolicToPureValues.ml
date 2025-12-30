@@ -345,10 +345,8 @@ let gtranslate_adt_fields ~(project_borrows : bool)
           | [ Some (info, v) ] -> (ctx, Some ([ info ], v))
           | _ -> [%craise] span "Unreachable"
         end
-      | TBuiltin (TArray | TSlice | TStr) ->
+      | TBuiltin TStr ->
           (* This case is unreachable:
-             - for array and slice: in order to access one of their elements
-               we need to go through an index function
              - for strings: the [str] is not polymorphic.
           *)
           [%craise] span "Unreachable"

@@ -310,6 +310,10 @@ let rec match_types (span : Meta.span) (ctx0 : eval_ctx) (ctx1 : eval_ctx)
       in
       let generics = { regions; types; const_generics; trait_refs } in
       TAdt { id; generics }
+  | TArray (ty0, len0), TArray (ty1, len1) ->
+      [%sanity_check] span (len0 = len1);
+      TArray (match_rec ty0 ty1, len0)
+  | TSlice ty0, TSlice ty1 -> TSlice (match_rec ty0 ty1)
   | TVar vid0, TVar vid1 ->
       [%sanity_check] span (vid0 = vid1);
       let vid = vid0 in

@@ -42,6 +42,9 @@ module Values = struct
       (value_to_debug_string : unit -> string) (ty : ty)
       (variant_id : variant_id option) (fields : string list) : string =
     match ty with
+    | TArray _ ->
+        (* Happens when we aggregate values *)
+        "@Array[" ^ String.concat ", " fields ^ "]"
     | TAdt { id = TTuple; _ } ->
         (* Tuple *)
         "(" ^ String.concat ", " fields ^ ")"
@@ -71,9 +74,6 @@ module Values = struct
         (* Builtin type *)
         match (aty, fields) with
         | TBox, [ bv ] -> "@Box(" ^ bv ^ ")"
-        | TArray, _ ->
-            (* Happens when we aggregate values *)
-            "@Array[" ^ String.concat ", " fields ^ "]"
         | _ ->
             [%craise_opt_span] span
               ("Inconsistent value: " ^ value_to_debug_string ()))

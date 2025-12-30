@@ -79,11 +79,8 @@ module Sig = struct
     let ref_kind = if is_mut then RMut else RShared in
     mk_ref_ty r ty ref_kind
 
-  let mk_array_ty (ty : ty) (cg : const_generic) : ty =
-    TAdt { id = TBuiltin TArray; generics = mk_generic_args [] [ ty ] [ cg ] }
-
-  let mk_slice_ty (ty : ty) : ty =
-    TAdt { id = TBuiltin TSlice; generics = mk_generic_args [] [ ty ] [] }
+  let mk_array_ty (ty : ty) (cg : const_generic) : ty = TArray (ty, cg)
+  let mk_slice_ty (ty : ty) : ty = TSlice ty
 
   let mk_sig generics inputs output : bound_fun_sig =
     {

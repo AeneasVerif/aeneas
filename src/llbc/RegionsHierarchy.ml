@@ -139,9 +139,10 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
         | TTuple -> (* No clauses for tuples *) ()
         | TBuiltin aid -> (
             match aid with
-            | TBox | TArray | TSlice | TStr -> (* No clauses for those *) ()));
+            | TBox | TStr -> (* No clauses for those *) ()));
         (* Explore the generics *)
         explore_generics outer generics
+    | TArray _ | TSlice _ -> (* No clauses for those *) ()
     | TVar _ | TLiteral _ | TNever -> ()
     | TRef (r, ty, _) ->
         (* Add the constraints for r *)

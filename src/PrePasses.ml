@@ -77,18 +77,9 @@ let update_array_default (crate : crate) : crate =
        regions = [];
        types =
          [
-           TAdt
-             {
-               id = TBuiltin TArray;
-               generics =
-                 {
-                   regions = [];
-                   types = [ TVar (Free _) ];
-                   const_generics =
-                     [ (CgValue (VScalar (UnsignedScalar (Usize, nv))) as n) ];
-                   trait_refs = _;
-                 } as array_generics;
-             };
+           TArray
+             ( (TVar (Free _) as elem_ty),
+               (CgValue (VScalar (UnsignedScalar (Usize, nv))) as n) );
          ];
        const_generics = [];
        trait_refs = _;
@@ -110,15 +101,7 @@ let update_array_default (crate : crate) : crate =
               let generics =
                 {
                   impl.impl_trait.generics with
-                  types =
-                    [
-                      TAdt
-                        {
-                          id = TBuiltin TArray;
-                          generics =
-                            { array_generics with const_generics = [ cg ] };
-                        };
-                    ];
+                  types = [ TArray (elem_ty, cg) ];
                 }
               in
               let impl_trait = { impl.impl_trait with generics } in
@@ -173,20 +156,7 @@ let update_array_default (crate : crate) : crate =
               let sg = fdecl.signature in
               assert (sg.inputs = []);
               match sg.output with
-              | TAdt
-                  {
-                    id = TBuiltin TArray;
-                    generics =
-                      {
-                        regions = [];
-                        types = [ TVar (Free _) ];
-                        const_generics = [ _ ];
-                        trait_refs = _;
-                      } as array_generics;
-                  } ->
-                  let array_generics =
-                    { array_generics with const_generics = [ cg ] }
-                  in
+              | TArray ((TVar (Free _) as elem_ty), _) ->
                   let generics =
                     {
                       fdecl.generics with
@@ -194,13 +164,7 @@ let update_array_default (crate : crate) : crate =
                         [ { index = cg_id; name = "N"; ty = TUInt Usize } ];
                     }
                   in
-                  let sg =
-                    {
-                      sg with
-                      output =
-                        TAdt { id = TBuiltin TArray; generics = array_generics };
-                    }
-                  in
+                  let sg = { sg with output = TArray (elem_ty, cg) } in
                   let fdecl = { fdecl with signature = sg; generics } in
                   Some fdecl
               | _ -> [%internal_error] fdecl.item_meta.span)
