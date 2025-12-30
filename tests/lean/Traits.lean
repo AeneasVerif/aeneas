@@ -508,7 +508,7 @@ def test_get_trait
 structure Trait (Self : Type) where
   LEN : Usize
 
-/- [traits::{traits::Trait for @Array<T, N>}::LEN]
+/- [traits::{traits::Trait for [T; N]}::LEN]
    Source: 'tests/src/traits.rs', lines 317:4-317:25 -/
 @[global_simps]
 def TraitArray.LEN_body (T : Type) (N : Usize) : Result Usize := do ok N
@@ -516,7 +516,7 @@ def TraitArray.LEN_body (T : Type) (N : Usize) : Result Usize := do ok N
 def TraitArray.LEN (T : Type) (N : Usize) : Usize :=
   eval_global (TraitArray.LEN_body T N)
 
-/- Trait implementation: [traits::{traits::Trait for @Array<T, N>}]
+/- Trait implementation: [traits::{traits::Trait for [T; N]}]
    Source: 'tests/src/traits.rs', lines 316:0-318:1 -/
 @[reducible]
 def TraitArray (T : Type) (N : Usize) : Trait (Array T N) := {

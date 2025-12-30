@@ -586,7 +586,7 @@ let ctx_adt_get_instantiated_field_types (span : Meta.span) (ctx : eval_ctx)
           [%sanity_check] span (List.length generics.types = 1);
           [%sanity_check] span (generics.const_generics = []);
           generics.types
-      | TArray | TSlice | TStr ->
+      | TStr ->
           (* Those types don't have fields *)
           [%craise] span "Unreachable")
 

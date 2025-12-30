@@ -110,9 +110,17 @@ let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
               | _ ->
                   [%craise_opt_span] span
                     "Box/vec/option type with incorrect number of arguments")
-          | T.TArray -> TAdt (TBuiltin TArray, generics)
-          | T.TSlice -> TAdt (TBuiltin TSlice, generics)
           | T.TStr -> TAdt (TBuiltin TStr, generics)))
+  | T.TArray (ty, len) ->
+      let ty = translate span ty in
+      TAdt
+        ( TBuiltin TArray,
+          { types = [ ty ]; const_generics = [ len ]; trait_refs = [] } )
+  | T.TSlice ty ->
+      let ty = translate span ty in
+      TAdt
+        ( TBuiltin TSlice,
+          { types = [ ty ]; const_generics = []; trait_refs = [] } )
   | TVar var ->
       TVar var
       (* Note: the `de_bruijn_id`s are incorrect, see comment on `translate_region_binder` *)
@@ -262,8 +270,6 @@ let translate_type_id (span : Meta.span option) (id : T.type_id) : type_id =
   | TBuiltin aty ->
       let aty =
         match aty with
-        | T.TArray -> TArray
-        | T.TSlice -> TSlice
         | T.TStr -> TStr
         | T.TBox ->
             (* Boxes have to be eliminated: this type id shouldn't
@@ -288,7 +294,7 @@ let rec translate_fwd_ty (span : Meta.span option) (type_infos : type_infos)
       let t_generics = translate_fwd_generic_args span type_infos generics in
       (* Eliminate boxes and simplify tuples *)
       match id with
-      | TAdtId _ | TBuiltin (TArray | TSlice | TStr) ->
+      | TAdtId _ | TBuiltin TStr ->
           let id = translate_type_id span id in
           TAdt (id, t_generics)
       | TTuple ->
@@ -303,6 +309,16 @@ let rec translate_fwd_ty (span : Meta.span option) (type_infos : type_infos)
               [%craise_opt_span] span
                 "Unreachable: box/vec/option receives exactly one type \
                  parameter"))
+  | T.TArray (ty, len) ->
+      let ty = translate ty in
+      TAdt
+        ( TBuiltin TArray,
+          { types = [ ty ]; const_generics = [ len ]; trait_refs = [] } )
+  | T.TSlice ty ->
+      let ty = translate ty in
+      TAdt
+        ( TBuiltin TSlice,
+          { types = [ ty ]; const_generics = []; trait_refs = [] } )
   | TVar var -> TVar var
   | TNever -> TNever
   | TLiteral lty -> TLiteral lty
@@ -360,31 +376,22 @@ let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
   match ty with
   | T.TAdt { id; generics } -> (
       match id with
-      | TAdtId _ | TBuiltin (TArray | TSlice | TStr) ->
-          let type_id = translate_type_id span id in
-          if inside_mut then
-            (* We do not want to filter anything, so we translate the generics
-               as "forward" types *)
-            let generics =
-              translate_fwd_generic_args span type_infos generics
-            in
-            Some (TAdt (type_id, generics))
-          else if
-            (* If not inside a mutable reference: check if the type contains
+      | (TAdtId _ | TBuiltin TStr)
+        when not
+               (inside_mut
+               || TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
+                    keep_region ty) -> None
+      | TAdtId _ | TBuiltin TStr ->
+          (* If not inside a mutable reference: check if the type contains
                a mutable reference (through one of its generics, inside
                its definition, etc.).
                If yes, keep the whole type, and translate all the generics as
                "forward" types (the backward function will extract the proper
                information from the ADT value).
             *)
-            TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
-              keep_region ty
-          then
-            let generics =
-              translate_fwd_generic_args span type_infos generics
-            in
-            Some (TAdt (type_id, generics))
-          else None
+          let type_id = translate_type_id span id in
+          let generics = translate_fwd_generic_args span type_infos generics in
+          Some (TAdt (type_id, generics))
       | TBuiltin TBox -> (
           (* Eliminate the box *)
           match generics.types with
@@ -408,6 +415,21 @@ let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
                 (* Note that if there is exactly one type, [mk_simpl_tuple_ty]
                  * is the identity *)
                 Some (mk_simpl_tuple_ty tys_t)))
+  | (T.TArray _ | T.TSlice _)
+    when not
+           (inside_mut
+           || TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
+                keep_region ty) -> None (* Same check as the ADT case *)
+  | T.TArray (ty, len) ->
+      let ty = translate_fwd_ty span type_infos ty in
+      let generics =
+        { types = [ ty ]; const_generics = [ len ]; trait_refs = [] }
+      in
+      Some (TAdt (TBuiltin TArray, generics))
+  | T.TSlice ty ->
+      let ty = translate_fwd_ty span type_infos ty in
+      let generics = { types = [ ty ]; const_generics = []; trait_refs = [] } in
+      Some (TAdt (TBuiltin TSlice, generics))
   | TVar var -> wrap (TVar var)
   | TNever -> wrap TNever
   | TLiteral lty -> wrap (TLiteral lty)

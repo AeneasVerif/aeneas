@@ -492,13 +492,13 @@ let test_get_trait
     Source: 'tests/src/traits.rs', lines 312:0-314:1 *)
 noeq type trait_t (self : Type0) = { cLEN : usize; }
 
-(** [traits::{traits::Trait for @Array<T, N>}::LEN]
+(** [traits::{traits::Trait for [T; N]}::LEN]
     Source: 'tests/src/traits.rs', lines 317:4-317:25 *)
 let trait_array_len_body (t : Type0) (n : usize) : result usize = Ok n
 let trait_array_len (t : Type0) (n : usize) : usize =
   eval_global (trait_array_len_body t n)
 
-(** Trait implementation: [traits::{traits::Trait for @Array<T, N>}]
+(** Trait implementation: [traits::{traits::Trait for [T; N]}]
     Source: 'tests/src/traits.rs', lines 316:0-318:1 *)
 let traitArray (t : Type0) (n : usize) : trait_t (array t n) = {
   cLEN = trait_array_len t n;

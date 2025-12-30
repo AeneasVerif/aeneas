@@ -625,14 +625,14 @@ Record Trait_t (Self : Type) := mkTrait_t { Trait_tTrait_t_LEN : usize; }.
 Arguments mkTrait_t { _ }.
 Arguments Trait_tTrait_t_LEN { _ } _.
 
-(** [traits::{traits::Trait for @Array<T, N>}::LEN]
+(** [traits::{traits::Trait for [T; N]}::LEN]
     Source: 'tests/src/traits.rs', lines 317:4-317:25 *)
 Definition trait_array_len_body (T : Type) (N : usize) : result usize := Ok N.
 Definition trait_array_len (T : Type) (N : usize) : usize :=
   (trait_array_len_body T N)%global
 .
 
-(** Trait implementation: [traits::{traits::Trait for @Array<T, N>}]
+(** Trait implementation: [traits::{traits::Trait for [T; N]}]
     Source: 'tests/src/traits.rs', lines 316:0-318:1 *)
 Definition TraitArray (T : Type) (N : usize) : Trait_t (array T N) := {|
   Trait_tTrait_t_LEN := trait_array_len T N;
