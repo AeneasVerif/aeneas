@@ -72,7 +72,7 @@ theorem slspec_frame {m:Result α} :
   intro Hspec F
   sorry
 
-theorem slspec_mono
+theorem slspec_consequence
   {P₁:SLPre} {Q₁:SLPost α} {m:Result α}
   {P₀:SLPre} {Q₀:SLPost α} (h : slspec P₀ m Q₀) :
   (P₁ ⊢ P₀ ∗ F) →
@@ -91,7 +91,7 @@ theorem slspec_bind {F:sProp} {k:α -> Result β} {P:SLPre} {Qₖ:SLPost β} {m:
   cases m
   · rename_i x
     simp
-    apply slspec_mono (Hx x) --iprop((Qₘ x) ∗ F) Qₖ
+    apply slspec_consequence (Hx x) --iprop((Qₘ x) ∗ F) Qₖ
     · sorry
     · sorry
     · sorry
@@ -129,11 +129,11 @@ theorem spec_bind {k:α -> Result β} {Qₖ:Post β} {m:Result α} {Qₘ:Post α
   · simp
     apply Hm
 
-theorem spec_mono {Q₁:Post α} {m:Result α} {Q₀:Post α} (h : spec m Q₀):
+theorem spec_consequence {Q₁:Post α} {m:Result α} {Q₀:Post α} (h : spec m Q₀):
   (∀ x, Q₀ x → Q₁ x) → spec m Q₁ := by
   intros HMonPost
   unfold spec
-  apply slspec_mono h
+  apply slspec_consequence h
   rotate_right
   · apply iprop(⌜True⌝)
   · iintro %H
@@ -181,7 +181,7 @@ theorem spec_bind_lift {k:α -> Result β} {P:SLPre} {Qₖ:Post β} {m:Result α
   spec (Std.bind m k) Qₖ := by
   sorry
 
-theorem lift_spec_mono {P:SLPre} {Q₁:SLPost α} {m:Result α} {Q₀:Post α} (h : spec m Q₀):
+theorem lift_spec_consequence {P:SLPre} {Q₁:SLPost α} {m:Result α} {Q₀:Post α} (h : spec m Q₀):
   (∀ x, ⌜Q₀ x⌝ ⊢ Q₁ x) → slspec P m Q₁ := by sorry
 
 scoped syntax:lead (name := specSyntax) "(" term:lead ")" " ⦃" "⇓ " Lean.Parser.Term.funBinder " => " term " ⦄" : term
@@ -214,7 +214,7 @@ example (x : Nat) :
     apply spec_bind (add1_spec _)
     intro y h
     -- progress as ⟨ y1, z1⟩
-    apply spec_mono (add1_spec _)
+    apply spec_consequence (add1_spec _)
     intro y' h
     --
     grind
@@ -235,7 +235,7 @@ example (x : Nat) :
     rename_i tmp y z
     clear tmp
     -- progress as ⟨ y1, z1⟩
-    apply spec_mono
+    apply spec_consequence
     . apply add2_spec
     intro tmp h
     split at h
@@ -300,7 +300,7 @@ def incr_ptr.spec (p : RawPtr Nat) (x : Nat) :
   apply lift_spec_bind (add1_spec _)
   intro y
   -- progress
-  apply slspec_mono (write_ptr.spec _)
+  apply slspec_consequence (write_ptr.spec _)
   · -- TODO: iframe
     iintro ⟨ Hy, ⟨ Hp, Hx' ⟩ , _ ⟩ -- TODO: bug, one cannot use % on Hy and Hx here
     isplitl [Hp]
@@ -350,7 +350,7 @@ theorem incr_borrow.spec (x : Nat) :
     · iapply Hy -- TODO: need icombine to combine Hy and Hx
   simp
   -- progress
-  apply slspec_mono (end_mut_to_raw.spec _)
+  apply slspec_consequence (end_mut_to_raw.spec _)
   · --iframe
     iintro ⟨ Hp, Hy ⟩
     isplitl [Hp]
@@ -388,7 +388,7 @@ theorem read_ptr.spec' {α} {eod : EqOrDisj α} {xp yp : RawPtr α} :
   ⦃ isEqOrDisj xp yp eod ⦄ read_ptr xp ⦃⇓ x => ⌜x = eod.read⌝ ∗ isEqOrDisj xp yp eod ⦄
   := by
   simp [isEqOrDisj, EqOrDisj.read]
-  cases eod <;> simp <;> apply slspec_mono (read_ptr.spec)
+  cases eod <;> simp <;> apply slspec_consequence (read_ptr.spec)
   · -- iframe?
     iintro ⟨ Hx, Hyeq ⟩
     isplitl [Hx]
@@ -426,7 +426,7 @@ theorem read_ptr.spec' {α} {eod : EqOrDisj α} {xp yp : RawPtr α} :
 theorem write_ptr.spec' {α} {eod: EqOrDisj α} {xp yp : RawPtr α} {v:α} :
   ⦃ isEqOrDisj xp yp eod ⦄ write_ptr yp v ⦃⇓ isEqOrDisj xp yp (eod.write v) ⦄ := by
   simp [isEqOrDisj, EqOrDisj.write]
-  cases eod <;> simp_all <;> apply slspec_mono (write_ptr.spec _)
+  cases eod <;> simp_all <;> apply slspec_consequence (write_ptr.spec _)
   · iintro ⟨ Hx, Hy, Heq ⟩
     isplitl [Hy]
     · iapply Hy
