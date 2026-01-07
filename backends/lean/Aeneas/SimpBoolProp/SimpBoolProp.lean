@@ -27,7 +27,7 @@ attribute [simp_bool_prop_simps]
   Bool.true_eq_false Bool.false_eq_true
   Bool.or_eq_true Bool.and_eq_true
   decide_true decide_false Bool.and_self
-  and_self
+  and_self or_self
   iff_false iff_true
   forall_const
   exists_false
