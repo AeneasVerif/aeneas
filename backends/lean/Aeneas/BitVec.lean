@@ -122,21 +122,12 @@ attribute [simp, bvify_simps] BitVec.ofNat_mul
 
 theorem BitVec.ofNat_pow {n : ℕ} (x d : ℕ) : BitVec.ofNat n (x ^ d) = (BitVec.ofNat n x)^d := by
   revert x
-  induction d
-  . simp
-  . rename_i d hind
-    intro x
-    simp only [pow_add, pow_one, ofNat_mul, hind]
+  induction d <;> simp_all [pow_succ]
 
 @[simp]
 theorem BitVec.toNat_pow {w : ℕ} (x : BitVec w) (d : ℕ) :
   BitVec.toNat (x ^ d) = (x.toNat ^ d) % 2^w := by
-  revert x
-  induction d
-  . simp_all only [pow_zero, ofNat_eq_ofNat, toNat_ofNat, implies_true]
-  . rename_i d hind
-    intro x
-    simp only [pow_add, pow_one, toNat_mul, hind, Nat.mod_mul_mod]
+  induction d <;> simp_all [pow_succ]
 
 @[simp, simp_lists_simps]
 theorem BitVec.getElem!_eq_false {w : ℕ} (x : BitVec w) (i : ℕ) (hi : w ≤ i) :
