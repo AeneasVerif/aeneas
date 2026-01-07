@@ -70,6 +70,7 @@ attribute [simp_scalar_simps]
   Nat.mul_eq_zero
   add_tsub_cancel_right add_tsub_cancel_left
   not_lt not_le
+  Nat.mod_zero Nat.mod_one
 
 -- TODO: we want a general simproc to normalize arithmetic expressions like what ring does
 attribute [simp_scalar_simps]
@@ -86,6 +87,7 @@ attribute [simp_scalar_simps]
   Nat.add_mul_div_left Nat.add_mul_div_right
   Nat.mul_add_mod' Nat.mul_add_mod
   Nat.add_mul_mod_self_left Nat.add_mul_mod_self_right
+  Nat.mod_mod_of_dvd
 
 @[simp_scalar_simps]
 theorem Nat.div_div_eq_div_mul_true (m n k : ℕ) : (m / n / k = m / (n * k)) ↔ True := by
