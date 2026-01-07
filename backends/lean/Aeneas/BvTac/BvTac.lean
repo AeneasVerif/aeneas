@@ -98,6 +98,13 @@ and tricks.
 **Debugging**:
 Calling `bv_tac n` is (roughly) equivalent to: `bv_tac_preprocess n; bv_decide`,
 which is itself roughly equivalent to: `bvify n at *; simp_all only; bv_decide`.
+
+Note that it often happens that `bv_tac` fails because `bvify` could not
+lift some assumptions to the subset `bv_decide` can reason about. For this
+reason, it is often useful to inspect the goal after calling `bvify` (or `bv_tac_preprocess`).
+Typically problematic terms are applications of `BitVec.ofNat` to complex expressions
+(for instance, `bv_decide` can generally not reason about `BitVec.ofNat n (a + b)`, which we
+want to simplify to `BitVec.ofNat n a + BitVec.ofNat n b`).
 -/
 elab "bv_tac" config:Parser.Tactic.optConfig n:(colGt term)? : tactic =>
   withMainContext do

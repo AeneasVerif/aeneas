@@ -12,6 +12,7 @@ import Aeneas.SimpLists.SimpLists
 import Aeneas.Natify.Natify
 import Aeneas.ZModify.ZModify
 import Aeneas.List
+import Aeneas.SimpScalar
 
 open Lean
 
@@ -542,3 +543,75 @@ theorem BitVec.testBit_getElem!_toLEBytes {w:ℕ} (x : BitVec w) (i j : ℕ) (h 
   x.toLEBytes[i]!.testBit j = x[8 * i + j]! := by
   have := getElem!_toLEBytes x i j h
   simp_all only [List.getElem!_eq_getElem?_getD, getElem!_eq_testBit_toNat]
+
+theorem BitVec.or_mod_two_pow {n : Nat} (a b : BitVec n) (k : Nat) :
+  (a ||| b) % 2 ^ k = (a % 2 ^ k) ||| (b % 2 ^ k) := by
+  by_cases k < n <;> natify <;> simp
+  · have : 2 ^ k < 2 ^ n := by simp_scalar
+    cases k
+    · simp; simp_scalar; rfl
+    · rename_i k _
+      simp_scalar
+  · by_cases hn : n ≤ 1
+    · have : n = 0 ∨ n = 1 := by omega
+      cases this <;> simp [*, Nat.mod_one]
+      simp_scalar
+    · simp_scalar
+
+@[simp]
+theorem BitVec.or_mod_two_pow_iff_true {n : Nat} (a b : BitVec n) (k : Nat) :
+  ((a ||| b) % 2 ^ k = (a % 2 ^ k) ||| (b % 2 ^ k)) ↔ True := by
+  simp only [BitVec.or_mod_two_pow]
+
+@[simp]
+theorem BitVec.or_mod_two_pow_iff_true' {n : Nat} (a b : BitVec n) (k : Nat) :
+  ((a % 2 ^ k) ||| (b % 2 ^ k) = (a ||| b) % 2 ^ k) ↔ True := by
+  simp only [BitVec.or_mod_two_pow]
+
+theorem BitVec.and_mod_two_pow {n : Nat} (a b : BitVec n) (k : Nat) :
+  (a &&& b) % 2 ^ k = (a % 2 ^ k) &&& (b % 2 ^ k) := by
+  by_cases k < n <;> natify <;> simp
+  · have : 2 ^ k < 2 ^ n := by simp_scalar
+    cases k
+    · simp; simp_scalar; rfl
+    · rename_i k _
+      simp_scalar
+  · by_cases hn : n ≤ 1
+    · have : n = 0 ∨ n = 1 := by omega
+      cases this <;> simp [*, Nat.mod_one]
+      simp_scalar
+    · simp_scalar
+
+@[simp]
+theorem BitVec.and_mod_two_pow_iff_true {n : Nat} (a b : BitVec n) (k : Nat) :
+  ((a &&& b) % 2 ^ k = (a % 2 ^ k) &&& (b % 2 ^ k)) ↔ True := by
+  simp only [BitVec.and_mod_two_pow]
+
+@[simp]
+theorem BitVec.and_mod_two_pow_iff_true' {n : Nat} (a b : BitVec n) (k : Nat) :
+  ((a % 2 ^ k) &&& (b % 2 ^ k) = (a &&& b) % 2 ^ k) ↔ True := by
+  simp only [BitVec.and_mod_two_pow]
+
+theorem BitVec.xor_mod_two_pow {n : Nat} (a b : BitVec n) (k : Nat) :
+  (a ^^^ b) % 2 ^ k = (a % 2 ^ k) ^^^ (b % 2 ^ k) := by
+  by_cases k < n <;> natify <;> simp
+  · have : 2 ^ k < 2 ^ n := by simp_scalar
+    cases k
+    · simp; simp_scalar; rfl
+    · rename_i k _
+      simp_scalar
+  · by_cases hn : n ≤ 1
+    · have : n = 0 ∨ n = 1 := by omega
+      cases this <;> simp [*, Nat.mod_one]
+      simp_scalar
+    · simp_scalar
+
+@[simp]
+theorem BitVec.xor_mod_two_pow_iff_true {n : Nat} (a b : BitVec n) (k : Nat) :
+  ((a ^^^ b) % 2 ^ k = (a % 2 ^ k) ^^^ (b % 2 ^ k)) ↔ True := by
+  simp only [BitVec.xor_mod_two_pow]
+
+@[simp]
+theorem BitVec.xor_mod_two_pow_iff_true' {n : Nat} (a b : BitVec n) (k : Nat) :
+  ((a % 2 ^ k) ^^^ (b % 2 ^ k) = (a ^^^ b) % 2 ^ k) ↔ True := by
+  simp only [BitVec.xor_mod_two_pow]
