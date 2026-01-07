@@ -122,21 +122,12 @@ attribute [simp, bvify_simps] BitVec.ofNat_mul
 
 theorem BitVec.ofNat_pow {n : ℕ} (x d : ℕ) : BitVec.ofNat n (x ^ d) = (BitVec.ofNat n x)^d := by
   revert x
-  induction d
-  . simp
-  . rename_i d hind
-    intro x
-    simp only [pow_add, pow_one, ofNat_mul, hind]
+  induction d <;> simp_all [pow_succ]
 
 @[simp]
 theorem BitVec.toNat_pow {w : ℕ} (x : BitVec w) (d : ℕ) :
   BitVec.toNat (x ^ d) = (x.toNat ^ d) % 2^w := by
-  revert x
-  induction d
-  . simp_all only [pow_zero, ofNat_eq_ofNat, toNat_ofNat, implies_true]
-  . rename_i d hind
-    intro x
-    simp only [pow_add, pow_one, toNat_mul, hind, Nat.mod_mul_mod]
+  induction d <;> simp_all [pow_succ]
 
 @[simp, simp_lists_simps]
 theorem BitVec.getElem!_eq_false {w : ℕ} (x : BitVec w) (i : ℕ) (hi : w ≤ i) :
@@ -176,6 +167,11 @@ theorem Bool.toNat_ofNat_mod2 (x : ℕ) : (Bool.ofNat (x % 2)).toNat = x % 2 := 
   omega
 
 attribute [natify_simps] BitVec.toNat_twoPow
+
+@[simp]
+theorem BitVec.twoPow_eq_two_pow {w i} : BitVec.twoPow w i = 2#w ^ i := by
+  natify; simp only [toNat_pow, toNat_ofNat]
+  by_cases w ≤ 1 <;> cases i <;> simp_scalar
 
 theorem BitVec.getElem!_eq_testBit_toNat {w : ℕ} (x : BitVec w) (i : ℕ) :
   x[i]! = x.toNat.testBit i := by
