@@ -211,7 +211,22 @@ or by passing them as arguments to the tactic, e.g., `simp_scalar [my_lemma1, my
 Note that we try to be conservative when registering `simp_scalar_simps` lemmas in the standard library,
 to avoid applying unwanted simplifications. For this reason, it often happens that nested calls to `simp_scalar`
 and `simp` allow making progress on the goal.
-TODO: add an option `simp_scalar +simp` to use more lemmas
+TODO: add an option `simp_scalar +safe` so that `simp_scalar` uses more lemmas by default, but the set of
+lemmas can be restricted to only "safe" ones that only decrement the size of the expressions.
+
+# Marking lemmas with `simp_scalar_simps`
+
+When marking lemmas with `@[simp_scalar_simps]` it is better to group all the preconditions into a single one,
+to minimize the calls to the discharger (i.e., the incremental verions of `scalar_tac`). For instance:
+```lean
+-- We prefer this (one precondition):
+@[simp_scalar_simps]
+theorem Nat.lt_pow (a i : ℕ) (h : 1 < a ∧ 1 < i) : a < a ^ i := ...
+
+-- To this (two preconditions):
+@[simp_scalar_simps]
+theorem Nat.lt_pow (a i : ℕ) (h0 : 1 < a) (h1 : 1 < i) : a < a ^ i := ...
+```
 -/
 syntax (name := simp_scalar) "simp_scalar" Parser.Tactic.optConfig ("[" (term<|>"*"),* "]")? (location)? : tactic
 
