@@ -62,6 +62,31 @@ theorem Nat.or_mod_two_pow_iff_true (a b n : ℕ) :
   ((a ||| b) % 2 ^ n = a % 2 ^ n ||| b % 2 ^ n) ↔ True := by
   simp only [Nat.or_mod_two_pow]
 
+@[simp_scalar_simps]
+theorem Nat.or_mod_two_pow_iff_true' (a b n : ℕ) :
+  (a % 2 ^ n ||| b % 2 ^ n = (a ||| b) % 2 ^ n) ↔ True := by
+  simp only [Nat.or_mod_two_pow]
+
+@[simp_scalar_simps]
+theorem Nat.and_mod_two_pow_iff_true (a b n : ℕ) :
+  ((a &&& b) % 2 ^ n = a % 2 ^ n &&& b % 2 ^ n) ↔ True := by
+  simp only [Nat.and_mod_two_pow]
+
+@[simp_scalar_simps]
+theorem Nat.and_mod_two_pow_iff_true' (a b n : ℕ) :
+  (a % 2 ^ n &&& b % 2 ^ n = (a &&& b) % 2 ^ n) ↔ True := by
+  simp only [Nat.and_mod_two_pow]
+
+@[simp_scalar_simps]
+theorem Nat.xor_mod_two_pow_iff_true (a b n : ℕ) :
+  ((a ^^^ b) % 2 ^ n = a % 2 ^ n ^^^ b % 2 ^ n) ↔ True := by
+  simp only [Nat.xor_mod_two_pow]
+
+@[simp_scalar_simps]
+theorem Nat.xor_mod_two_pow_iff_true' (a b n : ℕ) :
+  (a % 2 ^ n ^^^ b % 2 ^ n = (a ^^^ b) % 2 ^ n) ↔ True := by
+  simp only [Nat.xor_mod_two_pow]
+
 /-!
 # isPowerOfTwo'
 
