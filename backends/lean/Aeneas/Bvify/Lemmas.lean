@@ -4,7 +4,7 @@ import Aeneas.SimpScalar
 @[bvify_simps]
 theorem BitVec.ofNat_mod_two_pow (n a k : Nat) :
   BitVec.ofNat n (a % 2^k) = (BitVec.ofNat n a) % (2^k) := by
-  natify; simp
+  natify; simp only [ofNat_eq_ofNat, toNat_pow, toNat_ofNat]
   by_cases n ≤ 1 <;> simp_scalar
   · cases k <;> cases n <;> simp_scalar
   · by_cases k < n <;> simp_scalar
@@ -12,7 +12,7 @@ theorem BitVec.ofNat_mod_two_pow (n a k : Nat) :
 @[bvify_simps]
 theorem BitVec.ofNat_two_pow (n k : Nat) :
   BitVec.ofNat n (2^k) = (2#n ^ k) := by
-  natify; simp
+  natify; simp only [toNat_pow, toNat_ofNat]
   by_cases n ≤ 1 <;> simp_scalar
   cases k <;> simp_scalar
 
