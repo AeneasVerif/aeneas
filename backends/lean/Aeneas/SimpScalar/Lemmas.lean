@@ -1,6 +1,32 @@
 import Aeneas.SimpScalar.SimpScalar
 import Aeneas.ReduceNat
 
+section
+
+  open Aeneas Utils Lean Meta
+
+  initialize registerTraceClass `ReduceLog2
+
+  -- TODO: the pattern `Nat.log2 (@OfNat.ofNat _ _ _)` doesn't work
+  simproc Nat.reduceLog2 (Nat.log2 _) := fun e => do
+    match e.consumeMData.getAppFnArgs with
+    | (``Nat.log2, #[value]) =>
+      trace[ReduceLog2] "- value: {value}"
+      -- Retrieve the value
+      let value ← if let some value := exprToNat? value then pure value else return .continue
+      -- Compute the log
+      let log := value.log2
+      trace[ReduceLog2] "- value.log2: {log}"
+      -- Create the new expression - the proof is by reflection
+      return .visit {expr := .lit (.natVal log)}
+    | _ => return .continue
+
+  example : (2^128).log2 = 128 := by simp
+
+  attribute [scalar_tac_simps, simp_scalar_simps] Nat.reduceLog2
+
+end
+
 @[simp_scalar_simps]
 theorem Nat.mod_mod_of_pow_le (a n m : Nat) (h : m ≤ n) :
   a % b^n % b^m = a % b^m := by
@@ -13,17 +39,6 @@ theorem Nat.mod_mod_of_pow_le' (a n m : Nat) (h : n ≤ m) :
 
 example (a n m : Nat) (h : n < m) : a % 2^n % 2^m = a % 2^n := by simp_scalar
 example (a n m : Nat) (h : n > m) : a % 2^n % 2^m = a % 2^m := by simp_scalar
-
-@[scalar_tac_simps]
-theorem Nat.log2_0 : Nat.log2 0 = 0 := by rfl
-
-@[scalar_tac_simps]
-theorem Nat.log2_1 : Nat.log2 1 = 0 := by rfl
-
-@[scalar_tac_simps]
-theorem Nat.log2_two_lt {n} (h : 2 ≤ n) : Nat.log2 n = Nat.log2 (n / 2) + 1 := by
-  rw [Nat.log2_def]
-  simp [h]
 
 example : Nat.log2 256 < 64 := by simp only [scalar_tac_simps]
 
@@ -115,51 +130,18 @@ be discharged by `simp`.
 -/
 
 /-- Computable variant of `isPowerOfTwo`. -/
-def Nat.isPowerOfTwo' (n : Nat) : Bool :=
-  if n = 0 then false
-  else if n = 1 then true
-  else if n % 2 = 0 then isPowerOfTwo' (n / 2)
-  else false
+@[scalar_tac_simps, simp_scalar_simps]
+def Nat.isPowerOfTwo' (n : Nat) : Bool := 2 ^ n.log2 = n
 
-@[scalar_tac_simps]
-def Nat.isPowerOfTwo'_zero : Nat.isPowerOfTwo' 0 = false := by
-  simp [Nat.isPowerOfTwo']
-
-@[scalar_tac_simps]
-def Nat.isPowerOfTwo'_one : Nat.isPowerOfTwo' 1 = true := by
-  simp [Nat.isPowerOfTwo']
-
-/-- Carefully control the recursive case of `Nat.isPowerOfTwo'` to avoid infinite unfoldings. -/
-@[scalar_tac_simps]
-def Nat.isPowerOfTwo'_div (h : n > 1 ∧ n % 2 = 0) :
-  Nat.isPowerOfTwo' n ↔ Nat.isPowerOfTwo' (n / 2) := by
-  grind [Nat.isPowerOfTwo']
-
-example : Nat.isPowerOfTwo' 65536 := by simp [scalar_tac_simps, simp_bool_prop_simps]
+example : Nat.isPowerOfTwo' 65536 := by simp [scalar_tac_simps]
+example : Nat.isPowerOfTwo' (2^256) := by simp [scalar_tac_simps]
 
 theorem Nat.isPowerOfTwo'_iff (n : Nat) :
   Nat.isPowerOfTwo' n ↔ Nat.isPowerOfTwo n := by
-  if h: n = 0 then
-    simp only [isPowerOfTwo', ↓reduceIte, Bool.false_eq_true, isPowerOfTwo,
-      Aeneas.ReduceNat.reduceNatEq, Nat.pow_eq_zero, OfNat.ofNat_ne_zero, ne_eq, false_and,
-      exists_const, h]
-  else if h: n = 1 then
-    simp only [h, isPowerOfTwo', one_ne_zero, ↓reduceIte, isPowerOfTwo,
-      Aeneas.ReduceNat.reduceNatEq, Nat.pow_eq_one, OfNat.ofNat_ne_one, false_or, exists_eq]
-  else if h: n % 2 = 0 then
-    unfold Nat.isPowerOfTwo'
-    have := Nat.isPowerOfTwo'_iff (n / 2)
-    have : (n / 2).isPowerOfTwo ↔ n.isPowerOfTwo := by
-      constructor <;> intro hp <;> unfold isPowerOfTwo at * <;> replace ⟨ k, hp ⟩ := hp
-      · exists k + 1
-        grind
-      · exists k - 1
-        simp only [hp]
-        cases k <;> grind
+  simp [Nat.isPowerOfTwo', Nat.isPowerOfTwo]
+  constructor
+  · grind
+  · intro h
+    have ⟨ k, h ⟩ := h
+    have := @Nat.log2_two_pow k
     grind
-  else
-    simp only [isPowerOfTwo', ↓reduceIte, Bool.false_eq_true, isPowerOfTwo, false_iff, not_exists, *]
-    intro k h
-    simp_all only [Nat.pow_eq_zero, OfNat.ofNat_ne_zero, ne_eq, false_and, not_false_eq_true,
-      Nat.pow_eq_one, OfNat.ofNat_ne_one, false_or, two_pow_mod_two_eq_zero, _root_.not_lt,
-      nonpos_iff_eq_zero]
