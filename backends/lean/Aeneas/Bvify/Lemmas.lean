@@ -2,28 +2,29 @@ import Aeneas.Bvify.Bvify
 import Aeneas.SimpScalar
 
 @[bvify_simps]
-theorem BitVec.ofNat_mod (n a k : Nat) (h : k < n) :
+theorem BitVec.ofNat_mod_two_pow (n a k : Nat) :
   BitVec.ofNat n (a % 2^k) = (BitVec.ofNat n a) % (2^k) := by
   natify; simp
-  have : 2 ^ k < 2 ^ n := by simp_scalar
-  simp_scalar
-  cases k
-  · simp [Nat.mod_one]
-    simp_scalar
-  · rename_i k
-    have : 2 < 2 ^ n := by simp_scalar
-    simp_scalar
+  by_cases n ≤ 1 <;> simp_scalar
+  · cases k <;> cases n <;> simp_scalar
+  · by_cases k < n <;> simp_scalar
 
+@[bvify_simps]
+theorem BitVec.ofNat_two_pow (n k : Nat) :
+  BitVec.ofNat n (2^k) = (2#n ^ k) := by
+  natify; simp
+  by_cases n ≤ 1 <;> simp_scalar
+  cases k <;> simp_scalar
 
 /-- Same as `BitVec.ofNat_mod'` but with a precondition expressed in terms of `isPowerOfTwo'`.
 
 TODO: how to make this trigger only on concrete values for `b` (e.g., `2`, `3`, `256`, etc.)? -/
 @[bvify_simps]
-theorem BitVec.ofNat_mod' (n a b : Nat) (h : b.isPowerOfTwo' ∧ b.log2 < n) :
+theorem BitVec.ofNat_mod_isPowerOfTwo' (n a b : Nat) (h : b.isPowerOfTwo' ∧ b.log2 < n) :
   BitVec.ofNat n (a % b) = (BitVec.ofNat n a) % b := by
   simp only [Nat.isPowerOfTwo'_iff] at h
   replace ⟨ ⟨ k, h ⟩, h' ⟩ := h
-  have := BitVec.ofNat_mod n a k (by simp only [h, Nat.log2_two_pow] at h'; omega)
+  have := BitVec.ofNat_mod_two_pow n a k
   simp only [ofNat_eq_ofNat, Nat.cast_pow, Nat.cast_ofNat, h, this]
 
 @[bvify_simps]

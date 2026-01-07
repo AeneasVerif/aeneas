@@ -168,6 +168,11 @@ theorem Bool.toNat_ofNat_mod2 (x : ℕ) : (Bool.ofNat (x % 2)).toNat = x % 2 := 
 
 attribute [natify_simps] BitVec.toNat_twoPow
 
+@[simp]
+theorem BitVec.twoPow_eq_two_pow {w i} : BitVec.twoPow w i = 2#w ^ i := by
+  natify; simp only [toNat_pow, toNat_ofNat]
+  by_cases w ≤ 1 <;> cases i <;> simp_scalar
+
 theorem BitVec.getElem!_eq_testBit_toNat {w : ℕ} (x : BitVec w) (i : ℕ) :
   x[i]! = x.toNat.testBit i := by
   by_cases i < w

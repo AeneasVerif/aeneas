@@ -87,6 +87,25 @@ theorem Nat.xor_mod_two_pow_iff_true' (a b n : ℕ) :
   (a % 2 ^ n ^^^ b % 2 ^ n = (a ^^^ b) % 2 ^ n) ↔ True := by
   simp only [Nat.xor_mod_two_pow]
 
+@[simp_scalar_simps]
+theorem Nat.mod_pow_eq_zero {a n : Nat} (h : n ≤ 1) : a % a^n = 0 := by
+  have : n = 0 ∨ n = 1 := by omega
+  cases this <;> simp only [pow_zero, pow_one, mod_one, mod_self, *]
+
+attribute [simp_scalar_simps] Nat.zero_mod pow_zero pow_one
+
+@[simp_scalar_simps]
+theorem Nat.one_lt_pow'' {a n : Nat} (h : 1 < a ∧ 1 ≤ n) : 1 < a^n := by
+  apply Nat.one_lt_pow <;> omega
+
+theorem Nat.one_mod_pow_eq_one {a n : Nat} (ha : 1 < a) (hn : 1 ≤ n) : 1 % a^n = 1 := by
+  have : 1 < a ^n := by simp_scalar
+  simp_scalar
+
+@[simp_scalar_simps]
+theorem Nat.one_mod_pow_eq_one' {a n : Nat} (h : 1 < a ∧ 1 ≤ n) : 1 % a^n = 1 := by
+  apply Nat.one_mod_pow_eq_one <;> omega
+
 /-!
 # isPowerOfTwo'
 
