@@ -12,9 +12,10 @@ open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 attribute [simp_bool_prop_simps]
   reduceIte
   true_implies false_implies implies_true imp_false
-  Bool.and_true Bool.true_and
-  Bool.false_or Bool.or_false
+  Bool.true_and Bool.and_true
+  Bool.false_and Bool.and_false
   Bool.true_or Bool.or_true
+  Bool.false_or Bool.or_false
   true_and and_true true_or or_true
   false_and and_false false_or or_false
   decide_eq_true_eq decide_eq_false_iff_not ne_eq
@@ -26,7 +27,8 @@ attribute [simp_bool_prop_simps]
   Bool.not_eq_eq_eq_not
   Bool.true_eq_false Bool.false_eq_true
   Bool.or_eq_true Bool.and_eq_true
-  decide_true decide_false Bool.and_self
+  Bool.and_self Bool.or_self
+  decide_true decide_false
   and_self or_self
   iff_false iff_true
   forall_const

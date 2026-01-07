@@ -16,9 +16,7 @@ theorem BitVec.ofNat_two_pow (n k : Nat) :
   by_cases n ≤ 1 <;> simp_scalar
   cases k <;> simp_scalar
 
-/-- Same as `BitVec.ofNat_mod'` but with a precondition expressed in terms of `isPowerOfTwo'`.
-
-TODO: how to make this trigger only on concrete values for `b` (e.g., `2`, `3`, `256`, etc.)? -/
+/-- Same as `BitVec.ofNat_mod'` but with a precondition expressed in terms of `isPowerOfTwo'`. -/
 @[bvify_simps]
 theorem BitVec.ofNat_mod_isPowerOfTwo' (n a b : Nat) (h : b.isPowerOfTwo' ∧ b.log2 < n) :
   BitVec.ofNat n (a % b) = (BitVec.ofNat n a) % b := by

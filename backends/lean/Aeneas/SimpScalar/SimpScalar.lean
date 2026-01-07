@@ -65,12 +65,14 @@ attribute [simp_scalar_simps]
   zero_add add_zero
   mul_one one_mul
   inf_of_le_left inf_of_le_right
-  Nat.pow_le_pow_right Nat.pow_le_pow_left
-  Nat.pow_lt_pow_right Nat.pow_lt_pow_left
   Nat.mul_eq_zero
   add_tsub_cancel_right add_tsub_cancel_left
   not_lt not_le
   Nat.mod_zero Nat.mod_one
+
+attribute [simp_scalar_simps↓]
+  Nat.pow_le_pow_right Nat.pow_le_pow_left
+  Nat.pow_lt_pow_right Nat.pow_lt_pow_left
 
 -- TODO: we want a general simproc to normalize arithmetic expressions like what ring does
 attribute [simp_scalar_simps]
@@ -81,13 +83,19 @@ attribute [simp_scalar_simps]
 
 -- TODO: general simproc for canceling mul then div/mod (all those lemmas are quite specific)
 attribute [simp_scalar_simps]
-  Nat.mul_div_cancel Nat.mul_div_cancel_left Nat.mul_div_mul_left Nat.mul_div_mul_right
+  Nat.mul_div_cancel Nat.mul_div_cancel_left
+  Nat.mul_div_mul_left Nat.mul_div_mul_right
   Nat.div_mul_cancel Nat.mul_div_cancel'
   Nat.mul_add_div Nat.mod_div_self
   Nat.add_mul_div_left Nat.add_mul_div_right
   Nat.mul_add_mod' Nat.mul_add_mod
   Nat.add_mul_mod_self_left Nat.add_mul_mod_self_right
+  Nat.add_sub_cancel' Nat.and_two_pow_sub_one_eq_mod
   Nat.mod_mod_of_dvd
+
+attribute [simp_scalar_simps]
+  Nat.add_le_add_iff_right Nat.add_le_add_iff_left
+  Nat.add_lt_add_iff_right Nat.add_lt_add_iff_left
 
 @[simp_scalar_simps]
 theorem Nat.div_div_eq_div_mul_true (m n k : ℕ) : (m / n / k = m / (n * k)) ↔ True := by
@@ -135,6 +143,12 @@ attribute [simp_scalar_simps]
   Nat.testBit_add_one
   Nat.div_eq_of_lt
   Nat.testBit_two_pow_add_eq
+
+theorem Nat.testBit_two_pow_sub_one_of_lt (n i : ℕ) (h : i < n) : (2 ^ n - 1).testBit i = true := by
+  grind [Nat.testBit_two_pow_sub_one]
+
+theorem Nat.testBit_two_pow_sub_one_of_ge (n i : ℕ) (h : n ≤ i) : (2 ^ n - 1).testBit i = false := by
+  grind [Nat.testBit_two_pow_sub_one]
 
 /- This one is very common so marking it as `simp` as well -/
 attribute [simp] Nat.testBit_two_pow_add_eq

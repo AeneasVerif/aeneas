@@ -36,6 +36,8 @@ attribute [simp_lists_simps]
 
 attribute [simp_lists_simps] List.map_map List.map_id_fun List.map_id_fun' id_eq
 attribute [simp_lists_simps] Fin.getElem!_fin
+attribute [simp_lists_simps] List.length_map List.length_flatMap
+attribute [simp_lists_simps] List.length_cons List.length_nil
 
 def simpListsTac (config : ScalarTac.CondSimpTacConfig)
   (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) : TacticM Unit := do
