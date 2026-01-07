@@ -65,12 +65,14 @@ attribute [simp_scalar_simps]
   zero_add add_zero
   mul_one one_mul
   inf_of_le_left inf_of_le_right
-  Nat.pow_le_pow_right Nat.pow_le_pow_left
-  Nat.pow_lt_pow_right Nat.pow_lt_pow_left
   Nat.mul_eq_zero
   add_tsub_cancel_right add_tsub_cancel_left
   not_lt not_le
   Nat.mod_zero Nat.mod_one
+
+attribute [simp_scalar_simps↓]
+  Nat.pow_le_pow_right Nat.pow_le_pow_left
+  Nat.pow_lt_pow_right Nat.pow_lt_pow_left
 
 -- TODO: we want a general simproc to normalize arithmetic expressions like what ring does
 attribute [simp_scalar_simps]
