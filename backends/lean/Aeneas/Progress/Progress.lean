@@ -1317,19 +1317,19 @@ info: example
       wfArray peSrc1
       := by
       unfold ntt
-      progress; fsimp [Nat.log2_def]
-      progress;
-      progress; fsimp [Nat.log2_def]
-      progress; fsimp [Nat.log2_def]
-      progress; fsimp [Nat.log2_def]
-      progress; fsimp [Nat.log2_def]
-      progress; fsimp [Nat.log2_def]
-      progress; fsimp [Nat.log2_def]
-      progress; fsimp [Nat.log2_def]
-      progress; fsimp [Nat.log2_def]
-      progress; fsimp [Nat.log2_def]
-      progress; fsimp [Nat.log2_def]
-      progress; fsimp [Nat.log2_def]
+      progress
+      progress
+      progress
+      progress
+      progress
+      progress
+      progress
+      progress
+      progress
+      progress
+      progress
+      progress
+      progress
       assumption
 
     set_option maxHeartbeats 800000
@@ -1339,19 +1339,19 @@ info: example
       wfArray peSrc1
       := by
       unfold ntt
-      progress; fsimp [Nat.log2_def]
+      progress
       progress;
-      progress; fsimp [Nat.log2_def]
-      progress; fsimp [Nat.log2_def]
-      progress; fsimp [Nat.log2_def]
-      progress; fsimp [Nat.log2_def]
-      progress; fsimp [Nat.log2_def]
-      progress; fsimp [Nat.log2_def]
-      progress; fsimp [Nat.log2_def]
-      progress; fsimp [Nat.log2_def]
-      progress; fsimp [Nat.log2_def]
-      progress; fsimp [Nat.log2_def]
-      progress; fsimp [Nat.log2_def]
+      progress
+      progress
+      progress
+      progress
+      progress
+      progress
+      progress
+      progress
+      progress
+      progress
+      progress
       assumption
 
   end Ntt
