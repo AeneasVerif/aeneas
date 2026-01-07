@@ -465,13 +465,12 @@ theorem BitVec.fromLEBytes_getElem! (v : List Byte) (j : ℕ) :
       simp only [getElem!_eq_testBit_toNat] at this
       simp only [this]
       simp_lists
-      simp only [Bool.and_false, Bool.false_or]
       by_cases hj': j < 8 * (v'.length + 1)
       . simp [hj']
         have h0 : (j - 8) / 8 = (j / 8) - 1 := by omega
         have h1 : (j - 8) % 8 = j % 8 := by omega
         simp only [h0, h1]
-      . simp_lists; simp only [Bool.and_false]
+      . simp_lists
 
 @[simp, simp_lists_simps]
 theorem BitVec.fromLEBytes_toLEBytes {w : ℕ} (h : w % 8 = 0) (b : BitVec w) :
