@@ -145,3 +145,30 @@ theorem Nat.isPowerOfTwo'_iff (n : Nat) :
     have ⟨ k, h ⟩ := h
     have := @Nat.log2_two_pow k
     grind
+
+/- This is often used with, e.g., `d = U32.size` -/
+@[simp_scalar_simps↓]
+theorem Nat.pow_two_mod_isPowerOfTwo'_eq_self (n : ℕ) (h : d.isPowerOfTwo' ∧ n < d.log2) : 2 ^ n % d = 2 ^ n := by
+  have ⟨ k, h ⟩ : ∃ k, d = 2 ^ k ∧ n < k := by grind [Nat.isPowerOfTwo']
+  simp_scalar [h]
+
+@[simp_scalar_simps↓]
+theorem Nat.pow_two_mod_isPowerOfTwo'_eq_zero (n : ℕ) (h : d.isPowerOfTwo' ∧ d.log2 ≤ n) : 2 ^ n % d = 0 := by
+  have ⟨ k, h ⟩ : ∃ k, d = 2 ^ k ∧ k ≤ n := by grind [Nat.isPowerOfTwo']
+  simp_scalar [h]
+
+@[simp_scalar_simps↓]
+theorem Nat.pow_two_lt_isPowerOfTwo' (n : ℕ) (h : d.isPowerOfTwo' ∧ n < d.log2) : 2 ^ n < d := by
+  have ⟨ k, h ⟩ : ∃ k, d = 2 ^ k ∧ n < k := by grind [Nat.isPowerOfTwo']
+  simp_scalar [h]
+
+@[simp_scalar_simps↓]
+theorem Nat.pow_two_lt_isPowerOfTwo'_iff_false (n : ℕ) (h : d.isPowerOfTwo' ∧ d.log2 ≤ n) : 2 ^ n < d ↔ False := by
+  have ⟨ k, h ⟩ : ∃ k, d = 2 ^ k ∧ k ≤ n := by grind [Nat.isPowerOfTwo']
+  simp_scalar [h]
+
+@[simp_scalar_simps↓]
+theorem Nat.mod_eq_self_iff (x y : ℕ) (hy : 0 < y) : (x % y = x ↔ x < y) := by
+  simp only [Nat.mod_eq_iff, and_true, Nat.right_eq_add, mul_eq_zero, exists_or_eq_right,
+    or_iff_right_iff_imp]
+  omega
