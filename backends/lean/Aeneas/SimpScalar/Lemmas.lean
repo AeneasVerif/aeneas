@@ -62,6 +62,14 @@ theorem Nat.or_mod_two_pow_iff_true (a b n : ℕ) :
   ((a ||| b) % 2 ^ n = a % 2 ^ n ||| b % 2 ^ n) ↔ True := by
   simp only [Nat.or_mod_two_pow]
 
+/-!
+# isPowerOfTwo'
+
+We need a computable variant of `isPowerOfTwo` so that we can use it as a precondition in
+some theorems (in particular, some `bvify_simps` theorems), so that such a precondition can
+be discharged by `simp`.
+-/
+
 /-- Computable variant of `isPowerOfTwo`. -/
 def Nat.isPowerOfTwo' (n : Nat) : Bool :=
   if n = 0 then false
@@ -84,7 +92,6 @@ def Nat.isPowerOfTwo'_div (h : n > 1 ∧ n % 2 = 0) :
   grind [Nat.isPowerOfTwo']
 
 example : Nat.isPowerOfTwo' 65536 := by simp [scalar_tac_simps, simp_bool_prop_simps]
-
 
 theorem Nat.isPowerOfTwo'_iff (n : Nat) :
   Nat.isPowerOfTwo' n ↔ Nat.isPowerOfTwo n := by
