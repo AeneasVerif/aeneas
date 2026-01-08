@@ -82,13 +82,13 @@ theorem spec_bind {k:α -> Result β} {Pₖ:Post β} {m:Result α} {Pₘ:Post α
   · simp
     apply Hm
 
-def imp {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) : Prop :=
+def imp_spec {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) : Prop :=
   ∀ x, P x → spec (k x) Q
 
-/-- This alternative to `spec_bind` controls the introduction of universal quantifiers with `imp`. -/
+/-- This alternative to `spec_bind` controls the introduction of universal quantifiers with `imp_spec`. -/
 theorem spec_bind' {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
   spec m Pₘ →
-  (imp Pₘ k Pₖ) →
+  (imp_spec Pₘ k Pₖ) →
   spec (Std.bind m k) Pₖ := by
   intro Hm Hk
   cases m
@@ -104,21 +104,21 @@ def curry {α β γ} (f : α × β → γ) (x : α) : β → γ := fun y => f (x
 
 /-- We use this lemma to decompose nested `predn` predicates into a sequence of universal quantifiers. -/
 @[simp]
-def imp_predn {α₀ α₁ β} (P : α₀ → α₁ → Prop) (k : α₀ × α₁ → Result β) (Q : β → Prop) :
-  imp (predn P) k Q ↔ ∀ x, imp (P x) (curry k x) Q := by
-  simp [imp, curry]
+def imp_spec_predn {α₀ α₁ β} (P : α₀ → α₁ → Prop) (k : α₀ × α₁ → Result β) (Q : β → Prop) :
+  imp_spec (predn P) k Q ↔ ∀ x, imp_spec (P x) (curry k x) Q := by
+  simp [imp_spec, curry]
 
-/-- We use this lemma to eliminate `imp` at the very end -/
-def imp_iff {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) :
-  imp P k Q ↔ ∀ x, P x → spec (k x) Q := by
-  simp [imp]
+/-- We use this lemma to eliminate `imp_spec` after we decomposed the nested `predn` -/
+def imp_spec_iff {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) :
+  imp_spec P k Q ↔ ∀ x, P x → spec (k x) Q := by
+  simp [imp_spec]
 
 /--
 error: unsolved goals
-⊢ ∀ (x : Nat), imp (fun y => 0 < x + y) (curry (fun x => ok (x.fst + x.snd)) x) fun z => 0 < z
+⊢ ∀ (x : Nat), imp_spec (fun y => 0 < x + y) (curry (fun x => ok (x.fst + x.snd)) x) fun z => 0 < z
 -/
 #guard_msgs in
-example : imp (predn fun x y => x + y > 0) (fun (x, y) => .ok (x + y)) (fun z => z > 0) := by
+example : imp_spec (predn fun x y => x + y > 0) (fun (x, y) => .ok (x + y)) (fun z => z > 0) := by
   simp
 
 theorem spec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : spec m P₀):
@@ -128,13 +128,28 @@ theorem spec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : sp
   unfold spec theta wp_return
   cases m <;> grind
 
+def imp {α} (P₀ P₁ : Post α) : Prop := ∀ x, P₀ x → P₁ x
+
+/-- We use this lemma to decompose nested `predn` predicates into a sequence of universal quantifiers. -/
+@[simp]
+def imp_predn {α₀ α₁} (P : α₀ → α₁ → Prop) (Q : α₀ × α₁ → Prop) :
+  imp (predn P) Q ↔ ∀ x, imp (P x) (curry Q x) := by
+  simp [imp, curry]
+
+/-- We use this lemma to eliminate `imp` after we decomposed the nested `predn` -/
+theorem imp_iff {α} (P₀ P₁ : Post α) : imp P₀ P₁ ↔ ∀ x, P₀ x → P₁ x := by simp [imp]
+
+/-- Alternative to `spec_mono`: we control the introduction of universal quantifiers by introducing `imp`. -/
+theorem spec_mono' {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : spec m P₀):
+  imp P₀ P₁ → spec m P₁ := by
+  intros HMonPost
+  revert h
+  unfold spec theta wp_return
+  cases m <;> grind [imp]
+
 theorem spec_equiv_exists (m:Result α) (P:Post α) :
-  spec m P ↔ (∃ y, m = ok y ∧ P y) :=
-  by
-    cases m
-    · simp [spec, theta, wp_return]
-    · simp [spec, theta]
-    · simp [spec, theta]
+  spec m P ↔ (∃ y, m = ok y ∧ P y) := by
+  cases m <;> simp [spec, theta, wp_return]
 
 theorem spec_imp_exists {m:Result α} {P:Post α} :
   spec m P → (∃ y, m = ok y ∧ P y) := by
@@ -265,6 +280,7 @@ def add1 (x : Nat) := Result.ok (x + 1)
 theorem  add1_spec (x : Nat) : add1 x ⦃ y => y = x + 1⦄ :=
   by simp [add1]
 
+/-- Example without `imp` -/
 example (x : Nat) :
   (do
     let y ← add1 x
@@ -278,10 +294,30 @@ example (x : Nat) :
     --
     grind
 
+/-- Example with `imp` -/
+example (x : Nat) :
+  (do
+    let y ← add1 x
+    add1 y) ⦃ y => y = x + 2 ⦄ := by
+    -- progress as ⟨ y, z ⟩
+    apply spec_bind' (add1_spec _)
+    simp -failIfUnchanged -- introduce the quantifiers
+    simp only [imp_spec_iff] -- eliminate `imp_spec`
+    intro y h
+    -- progress as ⟨ y1, z1⟩
+    apply spec_mono' (add1_spec _)
+    simp -failIfUnchanged -- introduce the quantifiers
+    simp only [imp_iff] -- eliminate `imp_spec`
+    intro y' h
+    --
+    grind
+
 def add2 (x : Nat) := Result.ok (x + 1, x + 2)
+
 theorem  add2_spec (x : Nat) : add2 x ⦃ (y, z) => y = x + 1 ∧ z = x + 2⦄ :=
   by simp [add2]
 
+/-- Example without `imp` -/
 example (x : Nat) :
   (do
     let (y, _) ← add2 x
@@ -300,6 +336,29 @@ example (x : Nat) :
     split at h
     rename_i tmp y1 z1
     clear tmp
+    --
+    grind
+
+theorem  add2_spec' (x : Nat) : add2 x ⦃ y z => y = x + 1 ∧ z = x + 2⦄ :=
+  by simp [add2]
+
+/-- Example with `imp` -/
+example (x : Nat) :
+  (do
+    let (y, _) ← add2 x
+    add2 y) ⦃ y _ => y = x + 2 ⦄ := by
+    -- progress as ⟨ y, z ⟩
+    apply spec_bind'
+    . apply add2_spec'
+    simp -failIfUnchanged -- introduce the quantifiers
+    simp only [imp_spec_iff, curry] -- eliminate `imp_spec` and `curry`
+    intro y z h0
+    -- progress as ⟨ y1, z1⟩
+    apply spec_mono'
+    . apply add2_spec'
+    simp -failIfUnchanged -- introduce the quantifiers
+    simp only [imp_iff, curry, predn] -- eliminate `imp`_spec` and `curry`
+    intros y z h
     --
     grind
 
