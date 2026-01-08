@@ -144,26 +144,107 @@ theorem exists_imp_spec {m:Result α} {P:Post α} :
   (∃ y, m = ok y ∧ P y) → spec m P := by
   exact (spec_equiv_exists m P).2
 
+/-!
+# Hoare triple notation and elaboration
+-/
+
 /- We use a priority of 55 for the inner term, which is exactly the priority for `|||`.
 This way we can expressions like: `x + y ⦃ z => ... ⦄` without having to put parentheses around `x + y`. -/
-scoped syntax:54 (name := specSyntax) term:55 " ⦃ " Lean.Parser.Term.funBinder " => " term " ⦄" : term
-scoped syntax:54 (name := specSyntaxPred) term:55 " ⦃ " term " ⦄" : term
+scoped syntax:54 term:55 " ⦃ " term+ " => " term " ⦄" : term
+scoped syntax:54 term:55 " ⦃ " term " ⦄" : term
 
+open Lean PrettyPrinter
+
+/-- Macro expansion for a single element -/
 macro_rules
-  | `($x ⦃ $r => $P⦄)  => `(Aeneas.Std.WP.spec $x (fun $r => $P))
-  | `($x ⦃ $P:term⦄)  => `(Aeneas.Std.WP.spec $x $P)
+  | `($e ⦃ $x => $p ⦄) => do `(spec $e fun $x => $p)
 
-@[app_unexpander spec]
-def unexpSpec : Lean.PrettyPrinter.Unexpander
-  | `($_ $e fun $v => $P) | `($_ $e (fun $v => $P)) => `($e ⦃ $v => $P ⦄)
-  | `($_ $e $P:term) => `($e ⦃ $P ⦄)
-  | _ => throw ()
+/-- Macro expansion for multiple elements -/
+macro_rules
+  | `($e ⦃ $x $xs:term* => $p ⦄) => do
+    let mut xs : List (TSyntax `term) := x :: xs.toList
+    let rec run (xs : List (TSyntax `term)) : MacroM (TSyntax `term) := do
+      match xs with
+      | [] => `($p)
+      | [x] => `(fun $x => $p)
+      | x :: xs =>
+        let xs ← run xs
+        `(Aeneas.Std.WP.predn fun $x => $xs)
+    let post ← run xs
+    `(Aeneas.Std.WP.spec $e $post)
+
+/-- Macro expansion for predicate with no arrow -/
+macro_rules
+  | `($e ⦃ $p ⦄) => do `(Aeneas.Std.WP.spec $e $p)
+
+/-!
+# Pretty-printing
+-/
+
+open Delaborator SubExpr
+
+/--
+Small helper to decompose nested `predn`s: we strip all the variables bound in a lambda inside the `predn`s.
+-/
+partial def telescopePredn (vars : Array SubExpr) (e : SubExpr) (k : Array SubExpr → SubExpr → Delab) : Delab :=
+  e.expr.consumeMData.withApp fun app args => do
+  if h: app.isConstOf ``predn ∧ args.size = 3 then
+    let pred := args[2]
+    Meta.lambdaTelescope pred.consumeMData fun args body => do
+    let pos := e.pos.push 1
+    if h: args.size = 1 ∧ body.isAppOf ``predn then
+      let vars := vars.push { expr := args[0], pos := pos.push 0 }
+      telescopePredn vars { expr := body, pos := pos.push 1} k
+    else
+      let mut vars := vars
+      let mut pos := e.pos
+      for arg in args do
+        vars := vars.push { expr := arg, pos := pos.push 0 }
+        pos := pos.push 1
+      k vars { expr := body, pos }
+  else do
+    Meta.lambdaTelescope e.expr.consumeMData fun args body => do
+    let mut vars := vars
+    let mut pos := e.pos
+    for arg in args do
+      vars := vars.push { expr := arg, pos := pos.push 0 }
+      pos := pos.push 1
+    k vars { expr := body, pos }
+
+def elabSubExpr (e : SubExpr) : Delab := withTheReader SubExpr (fun _ => e) delab
+
+@[scoped delab app.Aeneas.Std.WP.spec]
+def delabSpec : Delab := do
+  let e ← getExpr
+  let pos ← getPos
+  guard $ e.isAppOfArity' ``spec 3 -- only delab full applications this way
+  let args := e.getAppArgs
+  let monadExpr ← elabSubExpr { expr := args[1]!, pos := (pos.push 0).push 1 }
+  let post : SubExpr := { expr := args[2]!, pos := pos.push 1 }
+  telescopePredn #[] post fun vars post => do
+  let vars ← vars.mapM elabSubExpr
+  let post ← elabSubExpr post
+  if vars.size = 0 then
+    -- This is the case where the post-condition doesn't have a lambda
+    `($monadExpr ⦃ $post ⦄)
+  else
+    --
+    let var := vars[0]!
+    let vars := vars.drop 1
+    `($monadExpr ⦃ $var $vars* => $post ⦄)
+
+/-!
+# Tests
+-/
 
 example : ok 0 ⦃ r => r = 0 ⦄ := by simp
 example : spec (ok 0) fun _ => True := by simp
 example : ok 0 ⦃ _ => True ⦄ := by simp
 example : spec (ok (0, 1)) fun (x, y) => x = 0 ∧ y = 1 := by simp
 example : ok (0, 1) ⦃ (x, y) => x = 0 ∧ y = 1 ⦄ := by simp
+example : ok (0, 1) ⦃ x y => x = 0 ∧ y = 1 ⦄ := by simp
+example : ok (0, 1, 2) ⦃ x y z => x = 0 ∧ y = 1 ∧ z = 2 ⦄ := by simp
+example : ok (0, 1, true) ⦃ x y z => x = 0 ∧ y = 1 ∧ z ⦄ := by simp
 example : let P (x : Nat) := x = 0; ok 0 ⦃ P ⦄ := by simp
 
 section
