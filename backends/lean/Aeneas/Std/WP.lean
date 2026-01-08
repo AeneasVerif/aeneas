@@ -30,8 +30,37 @@ def p2wp (post:Post α) : Wp α :=
 def spec_general (x:Result α) (p:Post α) :=
   wp_ord (p2wp p) (theta x)
 
-def spec (x:Result α) (p:Post α) :=
+def spec {α} (x:Result α) (p:Post α) :=
   theta x p
+
+/-- Auxiliary helper that we use to decompose tuples in post-conditions.
+
+Example: `f 0 ⦃ x y z => ... ⦄` desugars to `spec (f 0) (predn fun x => predn fun y z => ...)`.
+
+**Remark:** an alternative would be to parameterize `predn` with a list of types, e.g.:
+```lean
+def prednTy (tys : List α) : Type :=
+  match tys with
+  | [] => Prop
+  | ty :: tys => ty → prednTy tys
+
+def prodTy (tys : List α) : Type :=
+  match tys with
+  | [] => ()
+  | [x] => x
+  | ty :: tys => (ty, prodTy tys)
+
+def predn {tys : List α} (p : prednTy tys) : prodTy tys → Prop
+```
+but there are two issues:
+- this kind of dependent types is hard to work with
+- it forces all the types to live in the same universe, which is especially cumbersome as we do not have
+  universe cumulativity
+-/
+def predn {α β} (p : α → β → Prop) : α × β → Prop :=
+  fun (x, y) => p x y
+
+@[simp] theorem predn_pair x y (p : α → β → Prop) : predn p (x, y) = p x y := by simp [predn]
 
 @[simp, grind =]
 theorem spec_ok (x : α) : spec (ok x) p ↔ p x := by simp [spec, theta, wp_return]
@@ -53,7 +82,46 @@ theorem spec_bind {k:α -> Result β} {Pₖ:Post β} {m:Result α} {Pₘ:Post α
   · simp
     apply Hm
 
-theorem spec_mono {P₁:Post α} {m:Result α} {P₀:Post α} (h : spec m P₀):
+def imp {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) : Prop :=
+  ∀ x, P x → spec (k x) Q
+
+/-- This alternative to `spec_bind` controls the introduction of universal quantifiers with `imp`. -/
+theorem spec_bind' {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
+  spec m Pₘ →
+  (imp Pₘ k Pₖ) →
+  spec (Std.bind m k) Pₖ := by
+  intro Hm Hk
+  cases m
+  · simp
+    apply Hk
+    apply Hm
+  · simp
+    apply Hm
+  · simp
+    apply Hm
+
+def curry {α β γ} (f : α × β → γ) (x : α) : β → γ := fun y => f (x, y)
+
+/-- We use this lemma to decompose nested `predn` predicates into a sequence of universal quantifiers. -/
+@[simp]
+def imp_predn {α₀ α₁ β} (P : α₀ → α₁ → Prop) (k : α₀ × α₁ → Result β) (Q : β → Prop) :
+  imp (predn P) k Q ↔ ∀ x, imp (P x) (curry k x) Q := by
+  simp [imp, curry]
+
+/-- We use this lemma to eliminate `imp` at the very end -/
+def imp_iff {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) :
+  imp P k Q ↔ ∀ x, P x → spec (k x) Q := by
+  simp [imp]
+
+/--
+error: unsolved goals
+⊢ ∀ (x : Nat), imp (fun y => 0 < x + y) (curry (fun x => ok (x.fst + x.snd)) x) fun z => 0 < z
+-/
+#guard_msgs in
+example : imp (predn fun x y => x + y > 0) (fun (x, y) => .ok (x + y)) (fun z => z > 0) := by
+  simp
+
+theorem spec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : spec m P₀):
   (∀ x, P₀ x → P₁ x) → spec m P₁ := by
   intros HMonPost
   revert h
