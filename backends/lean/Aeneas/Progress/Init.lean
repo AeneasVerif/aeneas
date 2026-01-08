@@ -327,9 +327,21 @@ end Test
 
     Note that the pattern is optional: if the user doesn't provide it, we completely decompose
 -/
-def liftThmType (thmTy : Expr) (pat : Option Syntax) (mkPat : Array Expr → Expr → MetaM Expr)
-  (mkPred : Expr → Expr → Expr → Array Expr → MetaM Expr)
-  : -- TODO: remove mkPat
+def liftThmType (thmTy : Expr) (pat : Option Syntax)
+  /- `mkPat` generates the pattern to use to guide the replacement.
+
+  For instance: `∃ x y, foo a = (x, y)`
+   -/
+  (mkPat : Array Expr → Expr → MetaM Expr)
+  /- `mkPred` receives:
+    - the type of the definition/theorem after stripping the quantifiers
+    - the pattern
+    - the new pattern (can be `(y₀, ..., yₙ)` for instance)
+    - the parameters of the definition
+
+    and should generate the: `P (y₀, ..., yₙ)`)
+   -/
+  (mkPred : Expr → Expr → Expr → Array Expr → MetaM Expr) :
   MetaM Expr := do
   withTraceNode `Progress (fun _ => pure m!"liftThmType") do
   /- Strip the quantifiers *before* elaborating the pattern -/
