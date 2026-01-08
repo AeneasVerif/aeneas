@@ -280,200 +280,155 @@ def reduceProdProjs (e : Expr) : MetaM Expr := do
       pure (.continue e)
   transform e (pre := pre)
 
-/-- Given a theorem of type `P x` and a pattern of the shape `∃ y₀ ... yₙ, x = (y₀, ..., yₙ)`,
-    introduce a lifted version of the theorem of the shape:
+open Std.WP
+
+theorem intro_predn (p : α × β → Prop) : p = predn (fun x y => p (x, y)) := by
+  unfold predn
+  simp only
+
+theorem lift_to_spec x (p0 p1 : α → Prop) (h0 : p0 x) (h1 : p0 = p1) : spec (Std.toResult x) p1 := by
+  grind [spec, Std.toResult]
+
+namespace Test
+
+  /-- Example which shows how to write the proof term explicitly -/
+  theorem test_pos_triple (pos_triple : Nat × Nat × Nat) (thm : (fun (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0) pos_triple) :
+    Std.toResult pos_triple ⦃ x y z => x > 0 ∧ y > 0 ∧ z > 0 ⦄ := by
+    --
+    have h := fun x => intro_predn (fun y => match (x, y) with | (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0)
+    --
+    have h' := intro_predn (fun (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0)
+    replace h := congrArg predn (funext h)
+    replace h := Eq.trans h' h
+    clear h'
+    --
+    replace h := lift_to_spec pos_triple (fun (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0)
+      (predn fun x => predn fun x_1 y => match (x, x_1, y) with | (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0)
+      thm h
+    exact h
+
+  /-- Example which uses tactics -/
+  theorem test_pos_triple' (pos_triple : Nat × Nat × Nat) (thm : (fun (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0) pos_triple) :
+    Std.toResult pos_triple ⦃ x y z => x > 0 ∧ y > 0 ∧ z > 0 ⦄ := by
+    simp -failIfUnchanged -iota only [_root_.Aeneas.Std.toResult, _root_.Aeneas.Std.WP.spec_ok, _root_.Aeneas.Std.WP.predn] at thm ⊢
+    exact thm
+
+end Test
+
+/-- Given a theorem type `P x` and a pattern of the shape `∃ y₀ ... yₙ, x = (y₀, ..., yₙ)`,
+    generate a theorem type of the shape:
     ```lean
-    spec (toResult x) (fun z => ∃ y₀ ... yₙ, z = (y₀, ..., yₙ) ∧ P (y₀, ..., yₙ))
+    spec (toResult x) (fun y₀ ... yₙ => P (y₀, ..., yₙ))
     ```
     that is, using syntactic sugar:
     ```lean
-    (toResult x) ⦃ fun z => ∃ y₀ ... yₙ, z = (y₀, ..., yₙ) ∧ P (y₀, ..., yₙ) ⦄
+    (toResult x) ⦃ fun y₀ ... yₙ => P (y₀, ..., yₙ) ⦄
     ```
 
-    The output of the function is the name of the new theorem.
-
-    Note that if the pattern is simply `x` (not an existentially quantified equality), this function
-    decomposes the type of `x` for as long as it finds a tuple, and introduces one variable per field
-    in the tuple.
-
-    For instance, given pattern `some_pair : Int × Int`, the following theorem:
-    ```
-    P some_pair.fst ∧ Q some_pair.snd
-    ```
-    gets lifted to:
-    ```
-    (toResult some_pair) ⦃ fun z => z = (x, y) ∧ P x ∧ Q y ⦄
-    ```
+    Note that the pattern is optional: if the user doesn't provide it, we completely decompose
 -/
-def liftToThm (stx : Syntax) (pat : Option Syntax) (n : Name)
-  (mkPat : Array Expr → Expr → MetaM Expr)
-  /- Receives:
-    - the type of the definition/theorem after stripping the quantifiers
-    - the pattern
-    - the new pattern (can be `(y₀, ..., yₙ)` for instance)
-    - the parameters of the definition
-
-    Should generate the `P (y₀, ..., yₙ)`)
-   -/
+def liftThmType (thmTy : Expr) (pat : Option Syntax) (mkPat : Array Expr → Expr → MetaM Expr)
   (mkPred : Expr → Expr → Expr → Array Expr → MetaM Expr)
-  /- Should generate a proof term of type `P x` -/
-  (mkPredProofTerm : Expr → Expr → Array Expr → MetaM Expr)
-  (suffix : String := "progress_spec") : MetaM Name := do
-  trace[Progress] "Name: {n}"
-  let env ← getEnv
-  let some decl := env.findAsync? n
-    | throwError "Could not find declaration {n}"
-  let sig := decl.sig.get
+  : -- TODO: remove mkPat
+  MetaM Expr := do
+  withTraceNode `Progress (fun _ => pure m!"liftThmType") do
   /- Strip the quantifiers *before* elaborating the pattern -/
-  forallTelescope sig.type.consumeMData fun fvars thm0 => do
+  forallTelescope thmTy.consumeMData fun fvars thmTy => do
   let pat ← do
     match pat with
-    | none => mkPat fvars thm0
+    | none => mkPat fvars thmTy
     | some pat => do
       pure ((← Elab.Term.elabTerm pat none |>.run).fst)
   trace[Progress] "Elaborated pattern: {pat}"
-  /- -/
-  existsTelescope pat.consumeMData fun _ eqMatch => do
-  existsTelescope pat.consumeMData fun _ eqExists => do
-  /- Destruct the equality. Note that there may not be a tuple, in which case
+  existsTelescope pat.consumeMData fun _ patEq => do
+  trace[Progress] "patEq: {patEq}"
+  /- Destruct the equality. Note that there may not be an equality, in which case
      we see the type as a tuple and introduce one variable per field of the tuple
      (and a single variable if it is actually not a tuple). -/
-  let tryDestEq basename (eq : Expr) (k : Expr → Expr → MetaM Name) : MetaM Name := do
+  let tryDestEq basename (eq : Expr) (k : Expr → Expr → MetaM Expr) : MetaM Expr := do
     match ← destEqOpt eq with
     | some (x, y) => k x y
     | none =>
       withFreshTupleFieldFVars (.str .anonymous basename) (← inferType pat) fun fvars => do
       k pat (← mkProdsVal fvars.toList)
-  /- We need to introduce two sets of variables:
-     - one for variables which will be introduced by the outer match
-     - another for variables which will be bound by the ∃ quantifiers -/
-  tryDestEq "x" eqMatch fun pat decompPatMatch => do
-  tryDestEq "y" eqExists fun _ decompPatExists => do
-  trace[Progress] "Decomposed patterns: pat: {pat}, decompPatMatch: {decompPatMatch}"
-  trace[Progress] "Decomposed equality: {pat}, {decompPatMatch}, {decompPatExists}"
-  /- The decomposed patterns should be tuple expressions: decompose them further into lists of variables -/
-  let fvarsMatch : Array Expr := ⟨ destProdsVal decompPatMatch ⟩
-  let fvarsExists : Array Expr := ⟨ destProdsVal decompPatExists ⟩
-  trace[Progress] "Fvars: {fvarsMatch}, {fvarsExists}"
-  /- Small helper that we use to substitute the pattern in the original theorem -/
-  let mkPred (npat : Expr) : MetaM Expr := mkPred thm0 pat npat fvars
-  /- Introduce the binder for the pure theorem - it will be bound outside of the ∃ but we need to use it
-    right now to generate an expression of type:
-    ```
-    pat = (x₁, ...) ∧
-    P (x₁, ...) -- HERE
-    ```
-  -/
-  let pureThmType ← mkPred decompPatMatch
-  let pureThmName ← mkFreshUserName (.str .anonymous "pureThm")
-  withLocalDeclD pureThmName pureThmType fun pureThm => do
-  /- Introduce the equality -/
-  let okDecompPat := decompPatMatch -- mkAppM ``Std.Result.ok #[decompPatMatch]
-  let eqExpr ← mkEqRefl okDecompPat
-  let thm ← mkAppM ``And.intro #[eqExpr, pureThm]
-  trace[Progress] "Theorem after introducing the lifted equality: {thm}\n  :\n{← inferType thm}"
-  /- Auxiliary helper which computes the type of the (intermediate) theorems when adding the existentials.
+  tryDestEq "x" patEq fun pat fvarsPat => do
+  trace[Progress] "Decomposed patterns: pat: {pat}, fvarsPat: {fvarsPat}"
+  /- The decomposed pattern should be tuple a expression: decompose it further into a list of variables -/
+  let patFVars : Array Expr := ⟨ destProdsVal fvarsPat ⟩
+  /- Substitute the pattern -/
+  let thmTy ← mkPred thmTy pat fvarsPat fvars
+  trace[Progress] "Theorem after substituting the pattern: {thmTy}"
+  /- Create the nested `predn` -/
+  let rec mkPredn (fvars : List Expr) : MetaM Expr := do
+    withTraceNode `Progress (fun _ => pure m!"mkPredn: fvars: {fvars}") do
+    match fvars with
+    | [] => throwError "Unexpected"
+    | [x] =>
+      trace[Progres] "Introducing a single lambda: x: {x}, thmTy: {thmTy}"
+      mkLambdaFVars #[x] thmTy
+    | x :: fvars => do
+      trace[Progres] "Introducing `predn`: x: {x}"
+      let thm ← mkPredn fvars
+      trace[Progres] "thm: {thm}"
+      mkAppM ``predn #[← mkLambdaFVars #[x] thm]
+  let thmTy ← mkPredn patFVars.toList
+  trace[Progress] "result of mkPredn: {thmTy}"
+  /- Add the `spec` -/
+  let toResultExpr ← mkAppM ``Std.toResult #[pat]
+  trace[Progress] "toResultExpr: {toResultExpr}"
+  let thmTy ← mkAppM ``spec #[toResultExpr, thmTy]
+  trace[Progress] "thmTy after introducing `spec`: {thmTy}"
+  /- Reintroduce the universal quantifiers -/
+  let thmTy ← mkForallFVars fvars thmTy
+  trace[Progress] "thmTy after introducing the quantifiers: {thmTy}"
+  pure thmTy
 
-    Given `pat`, `xl0` and `xl1`, generates:
-    ```
-    ∃ $xl1,
-    $pat = ($xl0 ++ $xl1) ∧
-    P ($xl0 ++ $xl1)
-    ```
-  -/
-  let mkThmType (pat : Expr) (xl0 : List Expr) (xl1 : List Expr) : MetaM Expr := do
-    trace[Progress] "mkThmType:\n- {pat}\n- {xl0}\n- {xl1}"
-    let npatExists ← mkProdsVal (xl0 ++ xl1)
-    /- Update the theorem statement to replace the pattern with the decomposed pattern -/
-    let thmType ← mkPred npatExists
-    trace[Progress] "mkThmType: without lifted equality: {thmType}"
-    let eqType ← mkEq pat npatExists
-    let thmType := mkAnd eqType thmType
-    trace[Progress] "mkThmType: after lifting equality: {thmType}"
-    /- Introduce the existentials, only for the suffix of the list of variables -/
-    let thmType ← List.foldrM (fun fvar thmType => do
-        let p ← mkLambdaFVars #[fvar] thmType
-        mkAppM ``Exists #[p]
-        ) thmType xl1
-    trace[Progress] "mkThmType: after adding the existentials: {thmType}"
-    pure thmType
-  /- Introduce the existentials -/
-  let rec introExists (xl0 xl1 : List (Expr × Expr)) : MetaM Expr := do
-    match xl1 with
-    | [] => pure thm
-    | fvarPair :: xl1 =>
-      let thm ← introExists (fvarPair :: xl0) xl1
-      let (fvarMatch, fvarExists) := fvarPair
-      let α ← inferType fvarMatch
-      let thmType ← mkThmType decompPatMatch (fvarExists :: (List.unzip xl0).fst).reverse (List.unzip xl1).snd
-      let p ← mkLambdaFVars #[fvarExists] thmType
-      let x := fvarMatch
-      let h := thm
-      trace[Progress] "introExists: about to insert existential:\n- α: {α}\n- p: {p}\n- x: {x}\n- h: {h}"
-      let thm ← mkAppOptM ``Exists.intro #[α, p, x, h]
-      trace[Progress] "introExists: resulting theorem:\n{thm}\n  :\n{← inferType thm}"
-      pure thm
-  let thm ←
-    withTraceNode `Progress (fun _ => pure m!"introExists") do
-    introExists [] (List.zip fvarsMatch.toList fvarsExists.toList)
-  trace[Progress] "Theorem after introducing the existentials: {thm} :\n{← inferType thm}"
-  /- Introduce the λ which binds the pure theorem -/
-  let thm ← mkLambdaFVars #[pureThm] thm
-  trace[Progress] "Theorem after introducing the lambda: {thm} :\n{← inferType thm}"
-  /- Introduce the matches -/
-  let thm ←
-    withTraceNode `Progress (fun _ => pure m!"mkProdsMatch") do
-    mkProdsMatch fvarsMatch.toList thm
-  trace[Progress] "Theorem after introducing the matches: {thm} :\n{← inferType thm}"
-  /- Apply to the scrutinee (which is the pattern provided by the user): `mkProdsMatch` generates
-    a lambda expression, where the bound value is the scrutinee we should match over. -/
-  let thm := mkApp thm pat
-  trace[Progress] "Theorem after introducing the scrutinee: {thm} :\n{← inferType thm}"
-  /- Apply to the pure theorem (the expression inside the match is a function which expects to receive this theorem). -/
-  let pureThm ← mkPredProofTerm thm0 pat fvars
-  trace[Progress] "pureThm: {← inferType pureThm}"
-  /- Remark: we could use `mkAppN`, but if we do so with incorrect arguments, we detect the type-checking
-    error only very late (typically when checking the term in the kernel), which is why we prefer using `mkAppOptM'`. -/
-  let thm ← mkAppOptM' thm #[pureThm]
-  trace[Progress] "Theorem after introducing the matches and the app: {thm} :\n{← inferType thm}"
-  -- Generate the predicate: we simply replace the pattern with a fresh variable
-  let patVarName ← mkFreshUserName `z
-  let patTy ← inferType pat
-  withLocalDeclD patVarName patTy fun patVar => do
-  let pred ← mkThmType patVar [] fvarsExists.toList
-  let pred ← mkLambdaFVars #[patVar] pred
-  trace[Progress] "Predicate: {pred}\n  :\n{← inferType pred}"
-  -- Lift to a Hoare triple
-  let specThm ← mkAppM ``spec_toResult #[pat, pred, thm]
-  trace[Progress] "Spec theorem before binding the parameters: {specThm}:\n{← inferType specThm}"
-  -- Bind the parameters
-  let thm ← mkLambdaFVars fvars specThm
-  let thmType ← inferType thm
-  trace[Progress] "Final theorem: {thm}\n  :\n{thmType}"
-  /- Save the auxiliary theorem -/
-  let name := Name.str decl.name suffix
+
+def liftThmReplaceInTy (thm0 pat npat : Expr) (_ : Array Expr) : MetaM Expr := do
+  let thm ← mapVisit (fun _ e => do if e == pat then pure npat else pure e) thm0
+  /- Reduce a bit the expression, but in a controlled manner, to make it cleaner -/
+  let thm ← normalizeLetBindings thm
+  reduceProdProjs thm
+
+def liftThm (stx : Syntax) (name : Name) (pat : Option (TSyntax `term))
+  (mkPat : Array Expr → Expr → MetaM Expr := fun _ _ => failure)
+  (mkPred := liftThmReplaceInTy)
+  (suffix : String := "progress_spec")
+  (tacticStx : Option (TSyntax `tactic) := none)
+  : MetaM Name := do
+  trace[Progress] "Name: {name}"
+  let env ← getEnv
+  let some decl := env.findAsync? name
+    | throwError "Could not find declaration {name}"
+  let sig := decl.sig.get
+  -- Generate the type of the theorem
+  let thmTy ← liftThmType sig.type pat mkPat mkPred
+  trace[Progress] "thmTy: {thmTy}"
+  -- Prove the theorem - we keep things simple by calling a tactic
+  let mvar ← mkFreshExprSyntheticOpaqueMVar thmTy
+  let tacticStx ← do
+    match tacticStx with
+    | none =>
+      `(tactic|
+        simp -failIfUnchanged -iota only
+          [_root_.Aeneas.Std.toResult, _root_.Aeneas.Std.WP.spec_ok, _root_.Aeneas.Std.WP.predn] <;>
+        exact $(mkIdent name))
+    | some stx => pure stx
+  let (goals, _) ← runTactic mvar.mvarId! tacticStx
+  if goals.length > 0 then throwError "Could not prove the theorem"
+  --
+  let name := Name.str name suffix
   let auxDecl : TheoremVal := {
     name
     levelParams := sig.levelParams
-    type := thmType
-    value := thm
+    type := thmTy
+    value := ← instantiateMVars mvar
   }
   addDecl (.thmDecl auxDecl)
   /- Save the range -/
   addDeclarationRangesFromSyntax name stx
-  /- -/
+  --
   pure name
-
-def liftThm (stx pat : Syntax) (n : Name) (suffix : String := "progress_spec") : MetaM Name := do
-  let mkPred (thm0 pat npat : Expr) (_ : Array Expr) : MetaM Expr := do
-    let thm ← mapVisit (fun _ e => do if e == pat then pure npat else pure e) thm0
-    /- Reduce a bit the expression, but in a controlled manner, to make it cleaner -/
-    let thm ← normalizeLetBindings thm
-    reduceProdProjs thm
-  let mkPredProofTerm (_thm0 _pat : Expr) (fvars : Array Expr) : MetaM Expr := do
-    mkAppOptM n (fvars.map some)
-    --pure (mkAppN (.const decl.name (List.map Level.param sig.levelParams)) fvars)
-  liftToThm stx pat n (fun _ _ => throwError "Unreachable") mkPred mkPredProofTerm suffix
 
 /-!
 # Command: `#progress_pure_lift_thm`
@@ -481,23 +436,20 @@ def liftThm (stx pat : Syntax) (n : Name) (suffix : String := "progress_spec") :
 We do not really use it - it is mostly for testing purposes.
 -/
 
-
-local elab "#progress_pure_lift_thm" id:ident pat:term : command => do
-  Lean.Elab.Command.runTermElabM (fun _ => do
+elab stx:"#progress_pure_lift_thm" id:ident pat:term : command => do
+  Lean.Elab.Command.runTermElabM fun _ => do
   let some cs ← Term.resolveId? id | throwError m!"Unknown id: {id}"
   let name := cs.constName!
-  let _ ← liftThm id pat name)
+  let _ ← liftThm stx name pat
 
 namespace Test
   #progress_pure_lift_thm pos_pair_is_pos (∃ x y, pos_pair = (x, y))
 
   /--
 info: Aeneas.Progress.Test.pos_pair_is_pos.progress_spec :
-  ↑pos_pair ⦃ z =>
-    ∃ x y,
-      z = (x, y) ∧
-        match (x, y) with
-        | (x, y) => x ≥ 0 ∧ y ≥ 0 ⦄
+  ↑pos_pair ⦃ x y =>
+    match (x, y) with
+    | (x, y) => x ≥ 0 ∧ y ≥ 0 ⦄
   -/
   #guard_msgs in
   #check pos_pair_is_pos.progress_spec
@@ -506,11 +458,9 @@ info: Aeneas.Progress.Test.pos_pair_is_pos.progress_spec :
 
   /--
 info: Aeneas.Progress.Test.pos_triple_is_pos.progress_spec :
-  ↑pos_triple ⦃ z =>
-    ∃ y.0 y.1 y.2,
-      z = (y.0, y.1, y.2) ∧
-        match (y.0, y.1, y.2) with
-        | (x, y, z) => x ≥ 0 ∧ y ≥ 0 ∧ z ≥ 0 ⦄
+  ↑pos_triple ⦃ x.0 x.1 x.2 =>
+    match (x.0, x.1, x.2) with
+    | (x, y, z) => x ≥ 0 ∧ y ≥ 0 ∧ z ≥ 0 ⦄
   -/
   #guard_msgs in
   #check pos_triple_is_pos.progress_spec
@@ -521,10 +471,8 @@ info: Aeneas.Progress.Test.pos_triple_is_pos.progress_spec :
   /--
 info: Aeneas.Progress.Test.pos_triple_is_pos'.progress_spec :
   ↑pos_triple ⦃ z =>
-    ∃ z_1,
-      z = z_1 ∧
-        match z_1 with
-        | (x, y, z) => x ≥ 0 ∧ y ≥ 0 ∧ z ≥ 0 ⦄
+    match z with
+    | (x, y, z) => x ≥ 0 ∧ y ≥ 0 ∧ z ≥ 0 ⦄
   -/
   #guard_msgs in
   #check pos_triple_is_pos'.progress_spec
@@ -533,7 +481,7 @@ info: Aeneas.Progress.Test.pos_triple_is_pos'.progress_spec :
 
   /--
 info: Aeneas.Progress.Test.overflowing_add_eq.progress_spec (x y : U8) :
-  ↑(overflowing_add x y) ⦃ z => ∃ y.0 y.1, z = (y.0, y.1) ∧ if x.val + y.val > 255 then y.1 = true else y.1 = false ⦄
+  ↑(overflowing_add x y) ⦃ x.0 x.1 => if x.val + y.val > 255 then x.1 = true else x.1 = false ⦄
   -/
   #guard_msgs in
   #check overflowing_add_eq.progress_spec
@@ -678,8 +626,7 @@ structure ProgressPureSpecAttr where
   attr : AttributeImpl
   deriving Inhabited
 
-/- Initialize the `progress_pure` attribute, which lifts lemmas about pure functions to
-   `progress` lemmas.
+/-- The `progress_pure` attribute lifts lemmas about pure functions to `progress` lemmas.
 
    For instance, if we annotate the following theorem with `progress_pure`:
    ```lean
@@ -691,7 +638,7 @@ structure ProgressPureSpecAttr where
    ```lean
    @[progress]
    theorem U32.wrapping_add_eq.progress_spec (x y : U32) :
-    ↑(wrapping_add x y) ⦃z => z.bv = x.bv + y.bv⦄
+    ↑(wrapping_add x y) ⦃ z => z.bv = x.bv + y.bv ⦄
    ```
 
    Note that it is possible to control how the output variable is decomposed in the generated lemma
@@ -705,7 +652,7 @@ structure ProgressPureSpecAttr where
    ```lean
    @[progress]
    theorem pos_pair_is_pos.progress_spec :
-    ↑pos_pair ⦃ (x, y) => x ≥ 0 ∧ y ≥ 0 ⦄
+    ↑pos_pair ⦃ x y => x ≥ 0 ∧ y ≥ 0 ⦄
    ```
 
    Similarly if we write:
@@ -717,7 +664,7 @@ structure ProgressPureSpecAttr where
    ```lean
    @[progress]
    theorem pos_pair_is_pos.progress_spec :
-    ↑pos_pair ⦃z => z.fst ≥ 0 ∧ z.fst ≥ 0⦄
+    ↑pos_pair ⦃ z => z.fst ≥ 0 ∧ z.fst ≥ 0 ⦄
    ```
 
    If we don't put an equality in the pattern, `progress_pure` will introduce one variable
@@ -735,7 +682,7 @@ initialize progressPureAttribute : ProgressPureSpecAttr ← do
         -- Elaborate the pattern
         let pat ← elabProgressPureAttribute stx
         -- Introduce the lifted theorem
-        let liftedThmName ← MetaM.run' (liftThm stx pat thName)
+        let liftedThmName ← MetaM.run' (liftThm stx thName pat)
         -- Save the lifted theorem to the `progress` database
         saveProgressSpecFromThm progressAttr.ext attrKind liftedThmName
   }
@@ -755,7 +702,7 @@ generates the theorem:
 ```lean
 @[progress]
 theorem wrapping_add.progress_spec (x y : U32) :
-  (toResult (wrapping_add x y)) ⦃ z => ∃ b x, z = (b, x) ∧ (b, x) = wrapping_add x y ⦄
+  (toResult (wrapping_add x y)) ⦃ b x => (b, x) = wrapping_add x y ⦄
 ```
 (note that the `z` appearing in the post-condition is eliminated when calling `progress`,
 leaving only `b` and `x` in the environment).
@@ -787,63 +734,28 @@ structure ProgressPureDefSpecAttr where
 theorem specLiftDef {α} (x : α) : Std.WP.spec (Std.toResult x) (fun y => y = x) := by
   simp only [Std.toResult, Std.WP.spec_ok]
 
-def mkProgressPureDefThm (stx : Syntax) (pat : Option Syntax) (n : Name)
+def mkProgressPureDefThm (stx : Syntax) (pat : Option (TSyntax `term)) (n : Name)
   (suffix : String := "progress_spec") : MetaM Name := do
-  /- There is a shortcut (leading to simpler theorems) if there is no pattern and the output type is not a tuple:
-     we do not introduce existentials; that is instead of generating a theorem of the shape:
-     ```lean
-     spec (toResult e) (fun x => ∃ y1 ... yn, x = (y1, ..., yn) ∧ (y1, ..., yn) = e)
-     ```
-     we generate:
-     ```lean
-     spec (toResult e) (fun x => x = e)
-     ```
-     -/
-  let env ← getEnv
-  let some decl := env.findAsync? n
-    | throwError "Could not find definition {n}"
-  let sig := decl.sig.get
-  let noExists ← do
-    match pat with
-    | some _ => pure false
-    | none => do
-      /- Strip the quantifiers -/
-      forallTelescope sig.type.consumeMData fun _ ty => do
-      pure (Option.isNone (← destEqOpt ty))
-  if noExists then
-    -- We simply use the theorem `specDef`
-    forallTelescope sig.type.consumeMData fun fvars _ => do
-    let e ← mkAppOptM n (fvars.map some)
-    let thm ← mkAppM ``specLiftDef #[e]
-    let thm ← mkLambdaFVars fvars thm
-    let thmTy ← inferType thm
-    /- Save the auxiliary theorem -/
-    let name := Name.str decl.name suffix
-    let auxDecl : TheoremVal := {
-      name
-      levelParams := sig.levelParams
-      type := thmTy
-      value := thm
-    }
-    addDecl (.thmDecl auxDecl)
-    /- Save the range -/
-    addDeclarationRangesFromSyntax name stx
-    /- -/
-    pure name
-  else
-    -- Regular case
-    let mkPat (fvars : Array Expr) (ty : Expr) : MetaM Expr := do
-      withLocalDeclD (← mkFreshUserName `x) ty fun v => do
-      let x ← mkAppOptM n (fvars.map some)
-      let eq ← mkEq x v
-      let eq ← mkLambdaFVars #[v] eq
-      mkAppM ``Exists #[eq]
-    let mkPred (_ _ npat : Expr) (fvars : Array Expr) : MetaM Expr := do
-      mkEq npat (← mkAppOptM n (fvars.map some))
-    let mkPredProofTerm (_ _ : Expr) (fvars : Array Expr) : MetaM Expr := do
-      let e ← mkAppOptM n (fvars.map some)
-      mkEqRefl e
-    liftToThm stx pat n mkPat mkPred mkPredProofTerm suffix
+  -- Regular case
+  let mkPat (fvars : Array Expr) (ty : Expr) : MetaM Expr := do
+    withTraceNode `Progress (fun _ => pure m!"mkPat") do
+    withLocalDeclD (← mkFreshUserName `x) ty fun v => do
+    let x ← mkAppOptM n (fvars.map some)
+    trace[Progress] "x: {x}"
+    let eq ← mkEq x v
+    trace[Progress] "eq: {eq}"
+    let eq ← mkLambdaFVars #[v] eq
+    let eq ← mkAppM ``Exists #[eq]
+    trace[Progress] "eq: {eq}"
+    pure eq
+  let mkPred (_ _ npat : Expr) (fvars : Array Expr) : MetaM Expr := do
+    withTraceNode `Progress (fun _ => pure m!"mkPred") do
+    mkEq npat (← mkAppOptM n (fvars.map some))
+  let tacticStx ←
+    `(tactic|
+        simp only
+          [_root_.Aeneas.Std.toResult, _root_.Aeneas.Std.WP.spec_ok, _root_.Aeneas.Std.WP.predn, _root_.implies_true])
+  liftThm stx n pat mkPat mkPred suffix (tacticStx := some tacticStx)
 
 local elab "#progress_pure_def" id:ident pat:(term)? : command => do
   Lean.Elab.Command.runTermElabM (fun _ => do
@@ -862,7 +774,7 @@ namespace Test
 
   /--
 info: Aeneas.Progress.Test.overflowing_add.progress_spec (x y : U8) :
-  ↑(overflowing_add x y) ⦃ y_1 => y_1 = overflowing_add x y ⦄
+  ↑(overflowing_add x y) ⦃ x✝ => x✝ = overflowing_add x y ⦄
   -/
   #guard_msgs in
   #check overflowing_add.progress_spec
@@ -871,8 +783,7 @@ info: Aeneas.Progress.Test.overflowing_add.progress_spec (x y : U8) :
   #progress_pure_def wrapping_add (wrapping_add x y = (b, z))
 
   /--
-info: Aeneas.Progress.Test.wrapping_add.progress_spec (x y : U8) :
-  ↑(wrapping_add x y) ⦃ z => ∃ b z_1, z = (b, z_1) ∧ (b, z_1) = wrapping_add x y ⦄
+info: Aeneas.Progress.Test.wrapping_add.progress_spec (x y : U8) : ↑(wrapping_add x y) ⦃ b z => (b, z) = wrapping_add x y ⦄
   -/
   #guard_msgs in
   #check wrapping_add.progress_spec
@@ -897,7 +808,7 @@ def elabProgressPureDefAttribute (stx : Syntax) : AttrM (Option (TSyntax `term))
       pure none
     | _ => throwError "Unsupported syntax"
 
-/- Initialize the `progress_pure_def` attribute, which automatically generates
+/- The `progress_pure_def` attribute, which automatically generates
    progress lemmas for pure definitions. -/
 initialize progressPureDefAttribute : ProgressPureDefSpecAttr ← do
   let attrImpl : AttributeImpl := {
