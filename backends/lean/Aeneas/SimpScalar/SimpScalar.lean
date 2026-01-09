@@ -74,6 +74,8 @@ attribute [simp_scalar_simps↓]
   Nat.pow_le_pow_right Nat.pow_le_pow_left
   Nat.pow_lt_pow_right Nat.pow_lt_pow_left
 
+attribute [simp_scalar_simps] Nat.div_le_self Nat.shiftRight_le
+
 -- TODO: we want a general simproc to normalize arithmetic expressions like what ring does
 attribute [simp_scalar_simps]
   Nat.add_sub_of_le

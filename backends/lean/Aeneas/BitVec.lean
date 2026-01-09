@@ -610,3 +610,23 @@ theorem BitVec.xor_mod_two_pow_iff_true {n : Nat} (a b : BitVec n) (k : Nat) :
 theorem BitVec.xor_mod_two_pow_iff_true' {n : Nat} (a b : BitVec n) (k : Nat) :
   ((a % 2 ^ k) ^^^ (b % 2 ^ k) = (a ^^^ b) % 2 ^ k) ↔ True := by
   simp only [BitVec.xor_mod_two_pow]
+
+@[simp, simp_lists_simps, simp_scalar_simps]
+theorem BitVec.ofNat_shiftRight_toNat {n m} (bv : BitVec n) (i : Nat) :
+  (BitVec.ofNat m (bv.toNat >>> i)) = BitVec.setWidth m (bv >>> i) := by
+  natify; simp
+
+@[simp, simp_lists_simps, simp_scalar_simps]
+theorem BitVec.cast_shiftRight_toNat {n m} (bv : BitVec n) (i : Nat) :
+  ((bv.toNat >>> i) : BitVec m) = BitVec.setWidth m (bv >>> i) := by
+  natify; simp
+
+@[simp, simp_lists_simps, simp_scalar_simps]
+theorem BitVec.ofNat_shiftLeft_toNat {n m} (bv : BitVec n) (i : Nat) (h : m ≤ n) :
+  (BitVec.ofNat m (bv.toNat <<< i)) = BitVec.setWidth m (bv <<< i) := by
+  natify; simp; simp_scalar
+
+@[simp, simp_lists_simps, simp_scalar_simps]
+theorem BitVec.cast_shiftLeft_toNat {n m} (bv : BitVec n) (i : Nat) (h : m ≤ n) :
+  ((bv.toNat <<< i) : BitVec m) = BitVec.setWidth m (bv <<< i) := by
+  natify; simp; simp_scalar
