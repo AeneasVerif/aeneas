@@ -6,7 +6,7 @@ import Mathlib.Data.BitVec
 
 namespace Aeneas.Std
 
-open Result Error Arith ScalarElab
+open Result Error Arith ScalarElab WP
 
 /-!
 # Division: Definitions
@@ -388,8 +388,8 @@ theorem IScalar.div_bv_spec {ty} {x y : IScalar ty}
     simp only [Int.tdiv_neg, Int.neg_tdiv, neg_neg]
 
 uscalar theorem «%S».div_bv_spec (x : «%S») {y : «%S»} (hnz : ↑y ≠ (0 : Nat)) :
-  ∃ z, x / y = ok z ∧ (↑z : Nat) = ↑x / ↑y ∧ z.bv = x.bv / y.bv :=
-  UScalar.div_bv_spec x hnz
+  x / y ⦃ z => (↑z : Nat) = ↑x / ↑y ∧ z.bv = x.bv / y.bv ⦄ :=
+  exists_imp_spec (UScalar.div_bv_spec x hnz)
 
 iscalar theorem «%S».div_bv_spec {x y : «%S»} (hnz : ↑y ≠ (0 : Int))
   (hNoOverflow : ¬ (x.val = «%S».min ∧ y.val = -1)) :
@@ -416,12 +416,12 @@ theorem IScalar.div_spec {ty} {x y : IScalar ty}
   simp [hz]
 
 uscalar @[progress] theorem «%S».div_spec (x : «%S») {y : «%S»} (hnz : ↑y ≠ (0 : Nat)) :
-  ∃ z, x / y = ok z ∧ (↑z : Nat) = ↑x / ↑y :=
-  UScalar.div_spec x hnz
+  (x / y) ⦃ z => (↑z : Nat) = ↑x / ↑y ⦄ :=
+  exists_imp_spec (UScalar.div_spec x hnz)
 
 iscalar @[progress] theorem «%S».div_spec {x y : «%S»} (hnz : ↑y ≠ (0 : Int))
   (hNoOverflow : ¬ (x.val = «%S».min ∧ y.val = -1)) :
-  ∃ z, x / y = ok z ∧ (↑z : Int) = Int.tdiv ↑x ↑y :=
-  IScalar.div_spec hnz (by scalar_tac)
+  (x / y) ⦃ z => (↑z : Int) = Int.tdiv ↑x ↑y ⦄ :=
+  exists_imp_spec (IScalar.div_spec hnz (by scalar_tac))
 
 end Aeneas.Std
