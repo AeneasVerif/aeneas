@@ -107,12 +107,12 @@ error: unsolved goals
 case h1
 b : Bool
 h : b = true
-⊢ Std.Result.ok 0 ⦃ x => True ⦄
+⊢ Std.Result.ok 0 ⦃ x✝ => True ⦄
 
 case h2
 b : Bool
 h : ¬b = true
-⊢ Std.Result.ok 1 ⦃ x => True ⦄
+⊢ Std.Result.ok 1 ⦃ x✝ => True ⦄
 -/
 #guard_msgs in
 example (b : Bool) : Std.WP.spec (if b then .ok 0 else .ok 1) (fun _ => True) := by
@@ -123,12 +123,12 @@ error: unsolved goals
 case h1
 b : Bool
 h : b = true
-⊢ Std.Result.ok 0 ⦃ x => True ⦄
+⊢ Std.Result.ok 0 ⦃ x✝ => True ⦄
 
 case h2
 b : Bool
 h : ¬b = true
-⊢ Std.Result.ok 1 ⦃ x => True ⦄
+⊢ Std.Result.ok 1 ⦃ x✝ => True ⦄
 -/
 #guard_msgs in
 example (b : Bool) : Std.WP.spec (if h: b then .ok 0 else .ok 1) (fun _ => True) := by
@@ -678,7 +678,7 @@ where
       return (infos, mkStx)
 
   tryProgress (cfg : Config) := do
-    try some <$> Progress.evalProgressCore cfg.async none (some (.str .anonymous "_")) none #[] cfg.preconditionTac
+    try some <$> Progress.evalProgressCore cfg.async (some (.str .anonymous "_")) none #[] cfg.preconditionTac
     catch _ => pure none
 
   makeIds (base: Name) (numElem numPost : Nat) (defaultId := "x"): Array (TSyntax ``Lean.binderIdent) :=
