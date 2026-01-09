@@ -56,6 +56,10 @@ def scalar_eqs := #[
   ``iscalar_isize_eq, ``iscalar_i8_eq, ``iscalar_i16_eq, ``iscalar_i32_eq, ``iscalar_i64_eq, ``iscalar_i128_eq
 ]
 
+/-- Note that `forall_const` is too general: it can eliminate unused outputs that we actually
+want to introduce in the context -/
+theorem forall_unit : (Unit → p) ↔ p := by simp
+
 attribute [progress_simps]
   bind_assoc Std.bind_tc_ok Std.bind_tc_fail Std.bind_tc_div
   /- Those are quite useful to simplify the goal further by eliminating existential quantifiers for instance. -/
@@ -347,7 +351,7 @@ def introOutputsAndPost (args : Args) (fExpr : Expr) :
               addSimpThms :=
                 #[``Std.WP.qimp_spec_predn, ``Std.WP.qimp_spec_unit,
                   ``Std.WP.qimp_predn, ``Std.WP.qimp_unit,
-                  ``forall_const] }
+                  ``forall_unit, ``true_imp_iff] }
             (.targets #[] true)
     | trace[Progress] "The main goal was solved!"; return none
   traceGoalWithNode "goal after decomposing the nested `predn`"
@@ -359,7 +363,7 @@ def introOutputsAndPost (args : Args) (fExpr : Expr) :
             { declsToUnfold := #[``Std.WP.curry, ``Std.WP.predn]
               addSimpThms :=
                 #[``Std.WP.qimp_spec_iff, ``Std.WP.qimp_iff,
-                  ``Std.WP.imp_and_iff, ``forall_const] }
+                  ``Std.WP.imp_and_iff, ``forall_unit, ``true_imp_iff] }
             (.targets #[] true)
     | trace[Progress] "The main goal was solved!"; return none
   traceGoalWithNode "goal after aliminating `qimp_spec` and `qimp` and decomposing the post-condition"
