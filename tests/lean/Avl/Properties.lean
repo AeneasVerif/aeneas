@@ -4,7 +4,7 @@ import Avl.OrderSpec
 
 namespace avl
 
-open Aeneas.Std Result WP
+open Aeneas Std Result
 
 -- TODO: move
 @[simp]
@@ -243,7 +243,7 @@ theorem Tree.find_loop_spec
   | some (.mk v left right height) =>
     fsimp only
     have hCmp := Ospec.infallible -- TODO
-    progress keep Hordering as ⟨ ordering ⟩; clear hCmp
+    progress as ⟨ ordering ⟩; clear hCmp
     have hInvLeft := Node.inv_left hInv
     have hInvRight := Node.inv_right hInv
     cases ordering <;> fsimp only
@@ -317,7 +317,7 @@ theorem Node.rotate_left_spec
         have hInv1 : y < x := by tauto
         have hInv2 := hInvX.right.right z
         fsimp at hInv2
-        apply lt_trans hInv1 hInv2
+        apply Std.lt_trans hInv1 hInv2
     . tauto
   -- Elements in the right subtree are < z
   have : ∀ y ∈ Subtree.v c, z < y := by
@@ -431,7 +431,7 @@ theorem Node.rotate_right_spec
       -- Using: z < x ∧ x < y
       have : z < x := by tauto
       have : x < y := by tauto
-      apply lt_trans <;> tauto
+      apply Std.lt_trans <;> tauto
   -- Elements in the left subtree are < z
   have : ∀ y ∈ Subtree.v a, y < z := by
     fsimp_all [invAux]
@@ -552,7 +552,7 @@ theorem Node.rotate_left_right_spec
       . fsimp_all
       . have : e < z := by tauto
         have : z < y := by tauto
-        apply lt_trans <;> tauto
+        apply Std.lt_trans <;> tauto
     . tauto
   have : ∀ (e : T), (e = x ∨ e ∈ Subtree.v b) ∨ e ∈ Subtree.v t1 → y < e := by
     intro e hIn; fsimp [invAux] at *
@@ -565,7 +565,7 @@ theorem Node.rotate_left_right_spec
         replace hInvX := hInvX.right.left y
         tauto
       have : x < e := by tauto
-      apply lt_trans <;> tauto
+      apply Std.lt_trans <;> tauto
   -- Auxiliary proofs for invAux for z
   have : ∀ e ∈ Subtree.v t0, e < z := by
     intro x hIn; fsimp [invAux] at *
@@ -679,7 +679,7 @@ theorem Node.rotate_right_left_spec
       . tauto
     . have : z < e := by tauto
       have : y < z := by tauto
-      apply lt_trans <;> tauto
+      apply Std.lt_trans <;> tauto
   have : ∀ (e : T), (e = x ∨ e ∈ Subtree.v t1) ∨ e ∈ Subtree.v b → e < y := by
     intro e hIn; fsimp [invAux] at *
     cases hIn
@@ -690,7 +690,7 @@ theorem Node.rotate_right_left_spec
           replace hInvX := hInvX.right.right y
           tauto
         have : e < x := by tauto
-        apply lt_trans <;> tauto
+        apply Std.lt_trans <;> tauto
     . tauto
   -- Auxiliary proofs for invAux for z
   have : ∀ e ∈ Subtree.v t0, z < e := by
@@ -771,7 +771,7 @@ theorem Node.insert_spec
   (node : Node T) (value : T)
   (hInv : Node.inv node) :
   Node.insert OrdInst node value
-  ⦃ (b, node') =>
+  ⦃ b node' =>
     Node.inv node' ∧
     Node.v node' = Node.v node ∪ {value} ∧
     (if b then node'.height = node.height + 1 else node'.height = node.height) ∧
@@ -798,7 +798,7 @@ theorem Tree.insert_in_opt_node_spec
   (tree : Option (Node T)) (value : T)
   (hInv : Subtree.inv tree) :
   Tree.insert_in_opt_node OrdInst tree value
-  ⦃ (b, tree') =>
+  ⦃ b tree' =>
     Subtree.inv tree' ∧
     Subtree.v tree' = Subtree.v tree ∪ {value} ∧
     (if b then Subtree.height tree' = Subtree.height tree + 1
@@ -825,7 +825,7 @@ theorem Node.insert_in_left_spec
   (hInv : Node.inv node)
   (hLt : value < node.value) :
   Node.insert_in_left OrdInst node value
-  ⦃ (b, node') =>
+  ⦃ b node' =>
     Node.inv node' ∧
     Node.v node' = Node.v node ∪ {value} ∧
     (if b then node'.height = node.height + 1 else node'.height = node.height) ∧
@@ -925,7 +925,7 @@ theorem Node.insert_in_right_spec
   (hInv : Node.inv node)
   (hGt : value > node.value) :
   Node.insert_in_right OrdInst node value
-  ⦃ (b, node') =>
+  ⦃ b node' =>
     Node.inv node' ∧
     Node.v node' = Node.v node ∪ {value} ∧
     (if b then node'.height = node.height + 1 else node'.height = node.height) ∧
@@ -1024,7 +1024,7 @@ theorem Tree.insert_spec {T : Type}
   (tree : Tree T) (value : T)
   (hInv : tree.inv) :
   Tree.insert OrdInst tree value
-  ⦃ (updt, tree') =>
+  ⦃ updt tree' =>
     tree'.inv ∧
     (if updt then tree'.height = tree.height + 1 else tree'.height = tree.height) ∧
     tree'.v = tree.v ∪ {value} ⦄ := by

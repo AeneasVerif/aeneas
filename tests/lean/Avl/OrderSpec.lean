@@ -1,5 +1,5 @@
 import Avl.Funs
-open Aeneas.Std Result WP
+open Aeneas Std Result
 
 namespace avl
 
@@ -82,11 +82,11 @@ instance: Coe (avl.Ordering) (_root_.Ordering) where
 theorem rustCmpEq [_root_.Ord T] [O: OrdSpec H]: H.cmp a b = .ok o <-> compare a b = o.toLeanOrdering := by
   apply Iff.intro
   . intro Hcmp
-    obtain ⟨ o', ⟨ Hcmp', Hcompare ⟩ ⟩ := spec_imp_exists (O.infallible a b)
+    obtain ⟨ o', ⟨ Hcmp', Hcompare ⟩ ⟩ := WP.spec_imp_exists (O.infallible a b)
     rw [Hcmp', ok.injEq] at Hcmp
     simp [Hcompare, Hcmp]
   . intro Hcompare
-    obtain ⟨ o', ⟨ Hcmp', Hcompare' ⟩ ⟩ := spec_imp_exists (O.infallible a b)
+    obtain ⟨ o', ⟨ Hcmp', Hcompare' ⟩ ⟩ := WP.spec_imp_exists (O.infallible a b)
     rw [Hcompare', avl.Ordering.toLeanOrdering.injEq] at Hcompare
     simp [Hcompare.symm, Hcmp']
 
@@ -104,7 +104,7 @@ theorem ltOfRustOrder
   intro Hcmp
   -- why the typeclass search doesn't work here?
   refine' (@compare_lt_iff_lt T LO).1 _
-  obtain ⟨ o, ⟨ Hcmp', Hcompare ⟩ ⟩ := spec_imp_exists (Spec.infallible a b)
+  obtain ⟨ o, ⟨ Hcmp', Hcompare ⟩ ⟩ := WP.spec_imp_exists (Spec.infallible a b)
   simp only [Hcmp', ok.injEq] at Hcmp
   simp [Hcompare, Hcmp, avl.Ordering.toLeanOrdering]
 
@@ -143,12 +143,12 @@ theorem compare_eq_gt_iff [LinOrd : LinearOrder T] (x y : T) :
   . rw [lt_iff_le_not_ge] at *; tauto
   . constructor
     . intro Hneq
-      apply lt_of_le_of_ne <;> tauto
+      apply Std.lt_of_le_of_ne <;> tauto
     . intro Hlt
       rw [eq_iff_le_not_lt]
       simp
       intro Hle
-      have := le_antisymm Hle
+      have := Std.le_antisymm Hle
       simp_all
 
 end avl

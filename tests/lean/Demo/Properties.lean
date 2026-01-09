@@ -1,7 +1,6 @@
 import Aeneas
 import Demo.Demo
-open Aeneas.Std
-open Result WP
+open Aeneas Std Result
 
 #setup_aeneas_simps
 
@@ -67,12 +66,12 @@ termination_by n.toNat
 decreasing_by simp_wf; scalar_tac
 
 theorem list_tail_spec {T : Type} [Inhabited T] (l : CList T) :
-  list_tail l ⦃ (tl, back) =>
+  list_tail l ⦃ tl back =>
     tl = CList.CNil ∧
     ∀ tl', let l' := back tl'; l'.toList = l.toList ++ tl'.toList ⦄ := by
   unfold list_tail
   match l with
-  | CNil => grind
+  | CNil => simp
   | CCons hd tl =>
     progress as ⟨ back ⟩
     grind
