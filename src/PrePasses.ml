@@ -269,12 +269,13 @@ let update_array_default (crate : crate) : crate =
           st0;
           return;
         } else if e1 {
+          st1;
           break;
         } else {
           continue;
         }
       }
-      st1;
+      st2;
       return;
 
         ~~>
@@ -285,7 +286,41 @@ let update_array_default (crate : crate) : crate =
           break;
         } else if e1 {
           st1;
+          st2;
           break;
+        } else {
+          continue;
+        }
+      }
+      return;
+    ]}
+
+    # Transformation 3:
+    {[
+      loop {
+        if e0 {
+          st0;
+          return;
+        } else if e1 {
+          st1;
+          break;
+        } else {
+          continue;
+        }
+      }
+      st2;
+      panic;
+
+        ~~>
+
+      loop {
+        if e0 {
+          st0;
+          break;
+        } else if e1 {
+          st1;
+          st2;
+          panic;
         } else {
           continue;
         }
@@ -321,12 +356,12 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
               (* An exception was raised: it means we found a return in the loop: attempt
                  to replace it with a break.
 
-                 There are two cases:
+                 There are 2 cases:
                  - either the loop does not contain any break, in which case we
                    can simply replace the return with a break, and move the return
                    after the loop (this is transformation 1 above)
-                 - or there is already a break in the loop: we can apply transformation
-                   2 if the statements after the loop end with a return.
+                 - or there is already a break in the loop: we can apply transformation 2
+                   (resp., 3) if the statements after the loop end with a return (resp., a panic)
               *)
               let block_has_no_breaks (b : block) : bool =
                 let visitor =
@@ -369,22 +404,23 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
                 in
                 ([ loop; return ], after)
               else
-                (* Transformation 2 *)
-                (* Check if the statements after the loop end with a return *)
+                (* Transformations 2 and 3 *)
+                (* Check if the statements after the loop end with a return or a panic.
+                   We output the statements with which to replace breaks.
+                *)
                 let rec decompose_after (after : statement list) :
-                    statement list * statement =
+                    statement list =
                   match after with
                   | [] ->
                       [%craise] span
                         "Early returns inside of loops are not supported yet"
                   | st :: after -> (
                       match st.kind with
-                      | Return -> ([], st)
-                      | _ ->
-                          let after, return = decompose_after after in
-                          (st :: after, return))
+                      | Return -> [ { st with kind = Break 0 } ]
+                      | Abort _ -> [ st ]
+                      | _ -> st :: decompose_after after)
                 in
-                let after, return = decompose_after after in
+                let after = decompose_after after in
                 let replace (st : statement) : statement list =
                   match st.kind with
                   | Return ->
@@ -394,7 +430,7 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
                       (* Move the statements [after] before the break *)
                       [%cassert] span (i = 0)
                         "Breaks to outer loops are not supported yet";
-                      after @ [ st ]
+                      after
                   | _ -> [ st ]
                 in
 
@@ -424,6 +460,8 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
                 let loop = block_visitor#visit_block 0 loop in
                 let loop : statement = { st with kind = Loop loop } in
                 let loop = super#visit_statement depth loop in
+                (* TODO: the span is not great *)
+                let return : statement = { st with kind = Return } in
                 ([ loop; return ], []))
         | _ -> ([ super#visit_statement depth st ], after)
 
