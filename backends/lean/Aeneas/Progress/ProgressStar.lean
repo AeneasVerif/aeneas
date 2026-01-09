@@ -383,8 +383,9 @@ def analyzeTarget : TacticM TargetKind := do
   try
     let goalTy ← (← getMainGoal).getType
     -- Dive into the `spec program post`
-    goalTy.withApp fun spec? args => do
+    goalTy.consumeMData.withApp fun spec? args => do
     if h: spec?.isConstOf ``Std.WP.spec ∧ args.size = 3 then
+      trace[Progress] "application of `spec` with arity 3"
       let program := args[1]
       -- Check if this is a bind
       let e ← Utils.normalizeLetBindings program
@@ -399,8 +400,11 @@ def analyzeTarget : TacticM TargetKind := do
       else
         pure .result
     else
+      trace[Progress] "not an application of `spec` with arity 3"
       pure .result
-  catch _ => pure .unknown
+  catch _ =>
+    trace[Progress] "exception caught"
+    pure .unknown
 
 partial def evalProgressStar (cfg: Config) (fuel : Option Nat) : TacticM Result :=
   withMainContext do focus do
