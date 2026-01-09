@@ -365,7 +365,7 @@ def partialPreprocess (config : Config) (simpArgs : Simp.SimpArgs) (state : Stat
   /- Simplify the goal -/
   if simpTarget then
     let some _ ← Simp.simpAt true {failIfUnchanged := false, maxDischargeDepth := 0}
-        { hypsToUse := hypsToUseForSimp ++ assumptions } (.targets #[] simpTarget)
+        { simpArgs with hypsToUse := hypsToUseForSimp ++ assumptions } (.targets #[] simpTarget)
         | trace[ScalarTac] "Goal proven by preprocessing!"; return none
 
   /- Call `simp` again, this time to inline the let-bindings (otherwise, omega doesn't always manage to deal with them) -/

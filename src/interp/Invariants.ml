@@ -449,6 +449,17 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
             (fun ((v, ty) : tvalue * ty) -> [%sanity_check] span (v.ty = ty))
             fields_with_types
       (* Builtin type case *)
+      | VAdt av, TArray (inner_ty, len) ->
+          [%sanity_check] span
+            (List.for_all (fun (v : tvalue) -> v.ty = inner_ty) av.fields);
+          (* The length is necessarily concrete *)
+          let len =
+            Scalars.get_val
+              (ValuesUtils.literal_as_scalar
+                 (TypesUtils.const_generic_as_literal len))
+          in
+          [%sanity_check] span (Z.of_int (List.length av.fields) = len)
+      | VAdt _, TSlice _ -> [%craise] span "Unexpected slice value"
       | VAdt av, TAdt { id = TBuiltin aty_id; generics } -> (
           [%sanity_check] span (av.variant_id = None);
           match
@@ -461,20 +472,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
           (* Box *)
           | TBox, [ inner_value ], [], [ inner_ty ], [] ->
               [%sanity_check] span (inner_value.ty = inner_ty)
-          | TArray, inner_values, _, [ inner_ty ], [ cg ] ->
-              (* *)
-              [%sanity_check] span
-                (List.for_all
-                   (fun (v : tvalue) -> v.ty = inner_ty)
-                   inner_values);
-              (* The length is necessarily concrete *)
-              let len =
-                Scalars.get_val
-                  (ValuesUtils.literal_as_scalar
-                     (TypesUtils.const_generic_as_literal cg))
-              in
-              [%sanity_check] span (Z.of_int (List.length inner_values) = len)
-          | (TSlice | TStr), _, _, _, _ -> [%craise] span "Unexpected"
+          | TStr, _, _, _, _ -> [%craise] span "Unexpected str value"
           | _ -> [%craise] span "Erroneous type")
       | VBottom, _ -> (* Nothing to check *) ()
       | VBorrow bc, TRef (_, ref_ty, rkind) -> (

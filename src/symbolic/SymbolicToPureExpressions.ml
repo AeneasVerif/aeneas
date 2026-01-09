@@ -1167,7 +1167,7 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value) (scrutinee : texpr)
         (mk_tpat_from_fvar None var)
         (mk_opt_mplace_texpr scrutinee_mplace scrutinee)
         branch
-  | TBuiltin (TArray | TSlice | TStr) ->
+  | TBuiltin TStr ->
       (* We can't expand those values: we can access the fields only
        * through the functions provided by the API (note that we don't
        * know how to expand values like vectors or arrays, because they have a variable number

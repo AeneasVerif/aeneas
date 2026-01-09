@@ -34,6 +34,7 @@ attribute [bvify_simps]
   Int.reduceNegSucc Int.reduceNeg Int.reduceToNat
   BitVec.reduceMul BitVec.reduceAdd BitVec.reduceSub BitVec.reduceMod BitVec.reduceDiv
   Nat.dvd_iff_mod_eq_zero
+  BitVec.ofNat_or BitVec.ofNat_and
 
 @[simp, simp_scalar_simps, bvify_simps] theorem U8.UScalar_bv (x : U8) : UScalar.bv x = x.bv := by simp
 @[simp, simp_scalar_simps, bvify_simps] theorem U16.UScalar_bv (x : U16) : UScalar.bv x = x.bv := by simp
@@ -144,10 +145,7 @@ theorem Nat.mod_le_imp_mod_le (a b c : Nat) (h : b ≠ 0 ∧ (a < c ∨ b ≤ c)
   . have := @Nat.mod_lt a b (by omega)
     omega
 
-attribute [bvify_simps] ge_iff_le gt_iff_lt decide_eq_true_eq BitVec.ofNat_add or_self or_true
-                        Bool.or_eq_true Bool.and_eq_true decide_eq_true_eq
-
-attribute [bvify_simps] BitVec.ofNat_add
+attribute [bvify_simps] ge_iff_le gt_iff_lt decide_eq_true_eq BitVec.ofNat_add
 
 theorem BitVec.iff_ofNat_eq (n a b : Nat) (ha : a < 2^n) (hb : b < 2^n) :
   a = b ↔ BitVec.ofNat n a = BitVec.ofNat n b := by

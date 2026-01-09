@@ -149,7 +149,7 @@ let ty_has_mut_borrow_for_region_in_pred (infos : TypesAnalysis.type_infos)
         (* Lookup the information for this ADT *)
         begin
           match tref.id with
-          | TTuple | TBuiltin (TBox | TArray | TSlice | TStr) -> ()
+          | TTuple | TBuiltin (TBox | TStr) -> ()
           | TAdtId adt_id ->
               let info = TypeDeclId.Map.find adt_id infos in
               RegionId.iteri
