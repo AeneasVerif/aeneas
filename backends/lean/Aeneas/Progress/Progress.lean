@@ -161,20 +161,12 @@ attribute [progress_post_simps]
 structure Args where
   /-- Asynchronously solve the preconditions? -/
   async : Bool
-  /-- Should we preserve the monadic equality in the context?
-
-     For instance, if making progress on: `let z ← x + y; ...`
-     We would introduce an assumption: `h : x + y = ok z`
-   -/
-  keep : Option Name
   /-- Same as `keep`, but use a special wrapper so that the equality gets pretty printed to:
      `[> let z ← x + y <]`
    -/
   keepPretty : Option Name
   /-- Identifiers to use when introducing fresh variables -/
   ids : Array (Option Name)
-  /-- Should we split the conjunctions in the post-condition? -/
-  splitPost : Bool
   /-- Tactic to use to prove preconditions while instantiating meta-variables by
      matching those preconditions with the assumptions in the context. -/
   assumTac : TacticM Unit
@@ -233,15 +225,12 @@ def trySolveTypeclasses (mvarsIds : List MVarId) : TacticM (List MVarId) := do
       trace[Progress] "Could not decompose application"
       pure mvar
 
-/-- Attempt to match a given theorem with the monadic call in the goal,
-    and introduce the instantiated theorem in the context if it succeeds.
-
-    If the instantiation succeeds, we return the introduced meta-variables as
-    well as the new assumption corresponding to the instantiated theorem (the
-    expression is an fvar). We raise an exception otherwise.
- -/
+/-- Attempt to match a given theorem with the monadic call in the target.
+The resulting target should be of the shape:
+`qimp_spec P k Q` (or `qimp P Q`)
+-/
 def tryMatch (isLet : Bool) (th : Expr) :
-  TacticM (Array MVarId × Array FVarId × Expr) := do
+  TacticM (Array MVarId) := do
   withTraceNode `Progress (fun _ => pure m!"tryMatch") do
   /- Apply the theorem
      We try to match the theorem with the goal
@@ -269,8 +258,8 @@ def tryMatch (isLet : Bool) (th : Expr) :
 
   let (specMonoBindName, varNum) :=
     if isLet
-    then (``Std.WP.spec_bind, 4)
-    else (``Std.WP.spec_mono, 2)
+    then (``Std.WP.spec_bind', 4)
+    else (``Std.WP.spec_mono', 2)
   let specMonoBind ← Term.mkConst specMonoBindName
   let specMonoBindTy ← inferType specMonoBind
   trace[Progress] "specMonoBind (isLet:{isLet}): {specMonoBind}: {← inferType specMonoBind}"
@@ -308,213 +297,133 @@ def tryMatch (isLet : Bool) (th : Expr) :
   let mvarsIds ← trySolveTypeclasses mvarsIds.toList
   let mvarsIds := mvarsIds.toArray
 
-  let (fvars, ngoal) ← ngoal.introN 2 [← mkFreshUserName `x, ← mkFreshUserName `h]
+  -- Update the goal and return
   setGoals [ngoal]
-  ngoal.withContext do
-  trace[Progress] "New goal after intro: {ngoal}"
 
-  let #[x, post] := fvars
-    | throwError "Unreacheable. Introduced bad variables"
-
-  let isCases := match isMatcherAppCore? env (← inferType (.fvar post)) with
-    | .some cases => cases.numDiscrs == 1
-    | _ => false
-  if isCases
-  then
-    match ← splitLocalDecl ngoal post with
-    | .some [(ngoal, nfvars)] => do
-      if nfvars.size < 2 then throwError "Unreachable. Bad number of fvars after splitting matcher"
-      let x := nfvars.getD 0 x
-      let ngoal ← ngoal.tryClear x
-      setGoals [ngoal]
-      let post := nfvars.getD (nfvars.size-1) post
-      let nfvars := nfvars.extract 1 (nfvars.size-1)
-      ngoal.withContext do
-      trace[Progress] "New fvars: {nfvars.map Expr.fvar} and {Expr.fvar post}"
-      trace[Progress] "New goal after splitting matcher: {ngoal}"
-      return (mvarsIds, nfvars, Expr.fvar post)
-    | _ => return (mvarsIds, #[x], Expr.fvar post)
-
-  else return (mvarsIds, #[x], Expr.fvar post)
+  --
+  pure mvarsIds
 
 /-- Small helper: introduce the pretty equality (e.g., `[> let z ← x + y <]`) -/
-def introPrettyEquality (args : Args) (fExpr : Expr) (toEliminate : Option FVarId) (outputFVars : Array Expr)
-  (existsFVars : Array Expr) (h : Expr) :
-  TacticM Expr := do
+def introPrettyEquality (args : Args) (fExpr : Expr) (outputFVars : Array Expr) :
+  TacticM Unit := do
   withTraceNode `Progress (fun _ => pure m!"introPrettyEquality") do
-  trace[Progress] "fExpr: {fExpr},\ntoEliminate: {Option.map Expr.fvar toEliminate},\noutputFVars: {outputFVars},\nexistsFVars: {existsFVars},\npost: {← inferType h}"
+  withMainContext do
+  trace[Progress] "fExpr: {fExpr},\noutputFVars: {outputFVars}"
   let some name := args.keepPretty
-    | return h
-  trace[Progress] "About to introduce the pretty equality"
-  --
-  let fExprOutputTy ← do
-    let ty ← inferType fExpr
-    ty.consumeMData.withApp fun _ args =>
-      if args.size = 0 then throwError "Unexpected"
-      else pure args[0]!
-
-  -- There are two cases depending on whether we eliminate the output var or not
-  let pat ← do
-    match toEliminate with
-    | none =>
-      /- Check if the output type is unit: if yes, then we use `()` for the output pattern,
-         otherwise we use the first output var -/
-      if fExprOutputTy == Lean.mkConst ``Unit then pure (Lean.mkConst ``Unit.unit)
-      else
-        if outputFVars.size = 0 then pure (Lean.mkConst ``Unit.unit)
-        else pure outputFVars[0]!
-    | some _ =>
-      -- We need to use the equality in the post-condition
-      let (eq, _) := optSplitConj (← inferType h)
-      let (_, rhs) ← destEq eq
-      pure rhs
-  trace[Progress] "Introducing the \"pretty\" let binding"
+    | return
+  -- Construct the tuple of outputs
+  let pat ← mkProdsVal outputFVars.toList
+  trace[Progress] "Constructed the pattern: {pat}"
+  -- Create the equality
   let e ← mkAppM ``eq_imp_prettyMonadEq #[fExpr, pat]
+  trace[Progress] "Created the equality expression: {e}"
+  -- Introduce it
   Utils.addDeclTac name e (← inferType e) (asLet := false) fun e => do
     trace[Progress] "Introduced the \"pretty\" let binding: {← inferType e}"
-  /- Revert the post-condition and re-intro it to make sure the post-condition appears *after*
-     the pretty equality -/
-  let (_, goal) ← (← getMainGoal).revert #[h.fvarId!]
-  let (h, goal) ← goal.intro (← mkFreshAnonPropUserName)
-  replaceMainGoal [goal]
-  pure (.fvar h)
 
-/-- Under the condition that `thAsm` is of the shape:
-   `∃ x1 ... xn, f args = ... ∧ ...`
+/-- After application of the progress theorem, the target should be of the shape:
+  `qimp_spec P k Q` (or `qimp P Q`)
 
-  introduce the existentially quantified variables and split the top-most
-  conjunction if there is one. We use the provided `ids` list to name the
-  introduced variables.
+  We transform it to a target of the shape:
+  `∀ x₀ ... xₙ, P₀ → ... → Pₘ → k ⦃ Q ⦄`
 
-  `toEliminate`: see `renameFVarsWithIds`. If `some` it means that the post-condition is of
-  the shape `∃ y1 ... yn, x = (y1, ..., yn) ∧ P (y1, ..., yn)` and we should eliminate
-  `x` as well as the equation `x = (y1, ..., yn)` from the context.
+  Then we introduce `x₀`, ..., `xₙ`, `P₀`, ..., `Pₘ` in the context, by using the names
+  provided by the user.
+
+  TODO: we use `simp` a lot, which uselessely explores the monadic term and the post-condition.
+  We might want to optimize this.
 -/
-def splitExistsEqAndPost (args : Args) (fExpr : Expr) (toEliminate : Option FVarId)
-  (outputFVars : Array Expr) (thAsm : Expr) :
+def introOutputsAndPost (args : Args) (fExpr : Expr) :
   TacticM (Option MainGoal) := do
-  withTraceNode `Progress (fun _ => pure m!"splitExistsEqAndPost") do
-  trace[Progress] "ids: {args.ids},\n post before introducing the existentials ({thAsm}): {← inferType thAsm}"
-  splitAllExistsTac thAsm args.ids.toList fun existsVars h ids => do
-  trace[Progress] "ids: {ids},\n post after introducing the existentials ({h}): {← inferType h}"
-  /- Introduce the pretty equality if the user requests it.
-      We take care of introducing it *before* splitting the post-conditions, so that those appear
-      after it. -/
-  let h ← introPrettyEquality args fExpr toEliminate outputFVars existsVars h
-  trace[Progress] "Introduced the pretty equality"
-
-  /- If the post-condition has the shape `∃ y1 ... yn, x = (y1, ..., yn) ∧ P (y1, ..., yn)`,
-   eliminate `x` as well as the equation `x = (y1, ..., yn)` from the context. Note that we
-   need to simplify the goal with the equation before eliminating it. We return `true` if
-   by doing so we actually proved the goal.
-
-   TODO: there is not point in having a continuation anymore
-  -/
-  let elimDecomposeEq (k : Option Expr → List (Option Name) → TacticM (Option MainGoal)) :
-    TacticM (Option MainGoal) := do
-    match toEliminate with
-    | none =>
-      trace[Progress] "No need to eliminate the output"
-      k (some h) ids
-    | some toEliminate =>
-      trace[Progress] "Eliminating the output"
-      /- Small helper to simplify the goal with the equality and some simp lemmas for the monads,
-         then eliminate the useless variables -/
-      let simpAndElim (hEq : Expr) (hPost : Option Expr) (ids : List (Option Name))
-        (k : Option Expr → List (Option Name) → TacticM (Option MainGoal)) :
-        TacticM (Option MainGoal) := do
-        withTraceNode `Progress (fun _ => pure m!"simpAndElim") do
-        let r ← withTraceNode `Progress (fun _ => pure m!"simpAt target") do
-          trace[Progress] "goal: {← getMainGoal}"
-          Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
-            {simpThms := #[← progressSimpExt.getTheorems], hypsToUse := #[hEq.fvarId!]} (.targets #[] true)
-        -- Check if we closed the goal
-        if r.isNone then trace[Progress] "The main goal was solved!"; return none
-        -- Clear the useless free variables
-        let goal ← (← getMainGoal).tryClearMany #[toEliminate, hEq.fvarId!]
-        replaceMainGoal [goal]
-        -- Continue
-        withMainContext do k hPost ids
-
-      -- Compose the continuation with the simp
-      let k hEq hPost ids : TacticM (Option MainGoal) := simpAndElim hEq hPost ids k
-
-      -- Decompose the post-condition to isolate the equality, if it is a conjunction
-      withMainContext do
-      let hTy ← inferType h
-      if ← isConj hTy then
-        trace[Progress] "Splitting the post-condition"
-        splitConjTac h none (fun hEq hPost => k hEq (some hPost) ids)
-      else
-        trace[Progress] "Not splitting the post-condition"
-        k h none ids
-  /- Simplify the target by using the equality and some monad simplifications,
-      then continue splitting the post-condition -/
-  -- TODO: this is dangerous if we want to use a local assumption to make progress.
-  -- We shouldn't simplify the goal with the equality, then simplify again.
-  elimDecomposeEq fun hPost ids => do
-  withMainContext do
-  trace[Progress] "post ({hPost}):\n{← liftM (Option.mapM inferType hPost)}"
-  traceGoalWithNode "goal after applying the eq and simplifying the binds"
-  -- TODO: remove this? (some types get unfolded too much: we "fold" them back)
-  withTraceNode `Progress (fun _ => pure m!"simpAt: folding back scalar types") do
-    Simp.dsimpAt true {implicitDefEqProofs := true, failIfUnchanged := false} {addSimpThms := scalar_eqs}
-      (.targets ((outputFVars ++ existsVars).map Expr.fvarId!) false)
+  withTraceNode `Progress (fun _ => pure m!"introOutputsAndPost") do
+  /- Some types get unfolded too much (e.g., `U32` sometimes gets unfolded to `U32): fold them back
+     TODO: remove this? () -/
+  withTraceNode `Progress (fun _ => pure m!"dsimpAt: folding back scalar types") do
+    Simp.dsimpAt true {implicitDefEqProofs := true, failIfUnchanged := false, iota := false}
+      {addSimpThms := scalar_eqs} (.targets #[] true)
   if (← getUnsolvedGoals).isEmpty then trace[Progress] "The main goal was solved!"; return none
   traceGoalWithNode "goal after folding back scalar types"
+
+  /- Decompose nested uses of `predn` to introduce a sequence of universal quantifiers.
+     Note that at the same time we simplify the (monadic) continuation by using
+     some monad simp theorems. -/
+  let some _ ← withTraceNode `Progress (fun _ => pure m!"simpAt: decomposing nested uses of `predn`") do
+    Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
+            { simpThms := #[← progressSimpExt.getTheorems],
+              addSimpThms :=
+                #[``Std.WP.qimp_spec_predn, ``Std.WP.qimp_spec_unit,
+                  ``Std.WP.qimp_predn, ``Std.WP.qimp_unit,
+                  ``forall_const] }
+            (.targets #[] true)
+    | trace[Progress] "The main goal was solved!"; return none
+  traceGoalWithNode "goal after decomposing the nested `predn`"
+
+  /- Eliminate `qimp_spec`/`qimp` to reveal `imp` and decompose the post-condition into a sequence
+     of implications -/
+  let some _ ← withTraceNode `Progress (fun _ => pure m!"simpAt: eliminating `qimp_spec` and `qimp`") do
+    Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
+            { declsToUnfold := #[``Std.WP.curry, ``Std.WP.predn]
+              addSimpThms :=
+                #[``Std.WP.qimp_spec_iff, ``Std.WP.qimp_iff,
+                  ``Std.WP.imp_and_iff, ``forall_const] }
+            (.targets #[] true)
+    | trace[Progress] "The main goal was solved!"; return none
+  traceGoalWithNode "goal after aliminating `qimp_spec` and `qimp` and decomposing the post-condition"
+
+  /- Eliminate `imp`
+
+  Some types get unfolded too much (e.g., `U32` sometimes gets unfolded to `U32) so we use this call
+  to `dsimp` to also fold them back. -/
+  withTraceNode `Progress (fun _ => pure m!"dsimpAt: folding back scalar types") do
+    Simp.dsimpAt true {implicitDefEqProofs := true, failIfUnchanged := false, iota := false}
+      { declsToUnfold := #[``Std.WP.imp], addSimpThms := scalar_eqs } (.targets #[] true)
+  if (← getUnsolvedGoals).isEmpty then trace[Progress] "The main goal was solved!"; return none
+  traceGoalWithNode "goal after aliminating `imp`"
+
+  /- Intro the output variables and the post-conditions.
+
+  We do this in two steps to intro first the output variables, then the pretty equality, and finally
+  the post-conditions.
+  -/
+  let goal ← getMainGoal
+  let (nOutputs, nPosts) ← do
+    let type ← goal.getType
+    let type ← instantiateMVars type
+    forallTelescope type.consumeMData fun fvars _ => do
+    let n := fvars.size
+    if n < args.ids.size then
+      logWarning m!"Too many ids provided ({args.ids}): expected ≤ {n} ids, got {args.ids.size}"
+    /- Split the fvars between the output variables and the post-conditions -/
+    let i? ← fvars.findIdxM? (fun e => do isProp (← inferType e))
+    match i? with
+    | none => pure (fvars.size, 0)
+    | some i => pure (i, fvars.size - i)
+  trace[Progress] "Number of output vars: {nOutputs}, number of posts: {nPosts}"
+  let mkFreshName (i : Nat) :=
+    if i < nOutputs then mkFreshUserName `x
+    else mkFreshAnonPropUserName
+  let ids ← args.ids.mapIdxM fun i o =>
+    match o with
+    | some n => pure n
+    | none => mkFreshName i
+  let ids' ← (Array.range (nOutputs + nPosts - ids.size)).mapIdxM fun i _ => mkFreshName (ids.size + i)
+  let ids := ids ++ ids'
+  trace[Progress] "ids: {ids}"
+  let (outputIds, postsIds) := ids.toList.splitAt nOutputs
+  -- Introduce the outputs
+  let (outputs, goal) ← goal.introN nOutputs outputIds
+  -- Introduce the pretty equality
+  setGoals [goal]
+  introPrettyEquality args fExpr (outputs.map Expr.fvar)
+  traceGoalWithNode "goal after introducing the pretty equality"
+
+  -- Introduce the postconditions
+  let goal ← getMainGoal
+  let (posts, goal) ← goal.introN nPosts postsIds
+  setGoals [goal]
+
   --
-  withMainContext do -- TODO: this one should be useless
-  withTraceNode `Progress (fun _ => pure m!"Unsolved goals") do trace[Progress] "Unsolved goals: {← getUnsolvedGoals}"
-  -- Continue splitting the post
-  match hPost with
-  | none =>
-    trace[Progress] "No post to split"
-    -- Sanity check
-    if ¬ ids.isEmpty then
-      logWarning m!"Too many ids provided ({ids}): there is no postcondition to split"
-    trace[Progress] "No post to split"
-    pure (some { goal := ← getMainGoal, outputs := outputFVars.map Expr.fvarId!, posts := #[]})
-  | some hPost => do
-    trace[Progress] "Post to split: {hPost}: {← inferType hPost}\nids: {ids}"
-    -- Small helper
-    let idToName (id : Option Name) : MetaM Name :=
-      match id with
-      | none => mkFreshAnonPropUserName
-      | some nid => pure nid
-    -- We need to rename the post (which is anonymous) with the first id available
-    let ids ←
-      match ids with
-      | [] => pure []
-      | id :: ids =>
-        let goal ← (← getMainGoal).rename hPost.fvarId! (← idToName id)
-        replaceMainGoal [goal]
-        pure (ids)
-    withMainContext do
-    let rec splitPostWithIds (prevId : Name) (hPosts : List FVarId) (hPost : Expr) (ids0 : List (Option Name)) :
-      TacticM (Array FVarId) := do
-      match ids0 with
-      | [] =>
-        trace[Progress] "No more ids"
-        /- We used all the user provided ids.
-            Split the remaining conjunctions by using fresh ids if the user
-            instructed to fully split the post-condition, otherwise stop -/
-        if args.splitPost then
-          splitFullConjTac true hPost (λ asms => do
-            pure (hPosts.reverse ++ (asms.map (fun x => x.fvarId!))).toArray)
-        else pure (hPost.fvarId! :: hPosts).reverse.toArray
-      | nid :: ids => do
-        trace[Progress] "Splitting post: {← inferType hPost}"
-        -- Split
-        let nid ← idToName nid
-        trace[Progress] "\n- prevId: {prevId}\n- nid: {nid}\n- remaining ids: {ids}"
-        if ← isConj (← inferType hPost) then
-          splitConjTac hPost (some (prevId, nid)) (λ nhAsm nhPost => splitPostWithIds nid (nhAsm.fvarId! :: hPosts) nhPost ids)
-        else
-        logWarning m!"Too many ids provided ({ids0}) not enough conjuncts to split in the postcondition"
-        pure (hPost.fvarId! :: hPosts).reverse.toArray
-    let curPostId := (← hPost.fvarId!.getDecl).userName
-    let posts ← splitPostWithIds curPostId [] hPost ids
-    pure (some ⟨ ← getMainGoal, outputFVars.map Expr.fvarId!, posts⟩)
+  pure (some ⟨ ← getMainGoal, outputs, posts⟩)
 
 /-- Attempt to solve the preconditions.
 
@@ -581,107 +490,11 @@ def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option MainGoal)
         pure (some ({mainGoal with goal := ← getMainGoal, posts} : MainGoal))
       else pure none
 
-/-- Attempt to decompose an array of fvars -/
-def decomposeTupleOfFVars (e : Expr) : Option (Array FVarId) := do
-  (destProdsVal e).toArray.mapM fun x =>
-    match x with | .fvar id => some id | _ => none
-
-/-- Small helper for `renameFVarsWithIds`.
-
-Check if the post-condition is of the shape:
-```lean
-fun z => ∃ x1 ... xn, z = (x1, ..., xn) ∧ P (x1, ..., xn)
-```
-in which case we eliminate `z`.
--/
-def checkIfEliminateFirstPostVar (fvars : Array FVarId) (thAsm : Expr) :
-  TacticM (Option FVarId × Array FVarId) := do
-  withTraceNode `Progress (fun _ => pure m!"checkIfEliminateFirstPostVar") do
-  let eliminate ← do
-    if h: fvars.size = 1 then
-      trace[Progress] "Single fvar"
-      let z := fvars[0]
-      -- Dive into the post-condition
-      forallTelescope (← inferType thAsm) fun forallVars asm => do
-      existsTelescope asm fun existsVars asm => do
-      -- Check if the first conjunct is an equality between `z` and a tuple (TODO: generalize)
-      let (firstConj, sndConj) := optSplitConj asm
-      match ← destEqOpt firstConj with
-      | none => pure false
-      | some (lhs, rhs) =>
-        trace[Progress] "First conjunct is an equality"
-        if lhs.isFVarOf z then
-          trace[Progress] "lhs is an fvar"
-          -- Check the righ-hand side: it should be a tuple containing only variables
-          match decomposeTupleOfFVars rhs with
-          | none => pure false
-          | some _ =>
-            trace[Progress] "rhs is a tuple of fvars"
-            /- The rhs is a tuple of variables: now check that `z` doesn't appear in the
-               second conjunct -/
-            let sndConjFVars : Std.HashSet _ ← do
-              match sndConj with
-              | none => pure (Std.HashSet.emptyWithCapacity 0)
-              | some conj => Utils.getFVarIds conj
-            pure (not (sndConjFVars.contains z))
-        else pure false
-    else pure false
-  if eliminate then pure (some fvars[0]!, fvars.drop 1) else pure (none, fvars)
-
-/-- Attempt to rename the free variables introduced in the context.
-
-Before doing this we also eliminate all the free variables which have type `Unit`.
-
-We check if the post-condition if of the shape:
-```lean
-fun z => ∃ x1 ... xn, z = (x1, ..., xn) ∧ P (x1, ..., xn)
-```
-If it is the case, we *do not* rename `z` and remember that we need to eliminate it later,
-after rewriting with the equality `z = (x1, ..., xn)`, by returning its fvar id.
--/
-def renameFVarsWithIds (fvars : Array FVarId) (ids : Array (Option Name)) (thAsm : Expr) :
-  TacticM (Option FVarId × Array FVarId × Array (Option Name)) := do
-  withTraceNode `Progress (fun _ => pure m!"renameFVarsWithIds") do
-  let goal ← getMainGoal
-  trace[Progress] "After getMainGoal"
-  goal.withContext do
-  /- First, attempt to eliminate all the free variables which have type `Unit` -/
-  let toEliminate ← fvars.filterM fun (fid : FVarId) => do
-    pure ((← fid.getType).isConstOf ``Unit)
-  trace[Progress] "Free variables to eliminate: {fvars.map Expr.fvar}"
-  let goal ← goal.tryClearMany toEliminate
-  goal.withContext do
-  -- Filter the eliminated fvars
-  let goalFVars := Std.HashSet.ofArray ((← goal.getDecl).lctx.getFVarIds)
-  let fvars := fvars.filter goalFVars.contains
-  trace[Progress] "Free variables after elimination: {fvars.map Expr.fvar}"
-
-  /- Check whether we're in the case where we need to eliminate the first variable that we will
-     refer to as `z` -/
-  let (eliminate, fvars) ← checkIfEliminateFirstPostVar fvars thAsm
-  trace[Progress] "eliminate: {eliminate.map Expr.fvar}"
-
-  /- Do the renaming -/
-  let mut goal := goal
-  let minSize := min fvars.size ids.size
-  for i in [0:minSize] do
-    match ids[i]! with
-    | none => pure ()
-    | some id => do
-      goal ← goal.rename fvars[i]! id
-  replaceMainGoal [goal]
-  trace[Progress] "Goal after renaming: {goal}"
-  pure (eliminate, fvars, ids.drop minSize)
-
 def progressWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
   TacticM Goals := do
   withTraceNode `Progress (fun _ => pure m!"progressWith") do
   -- Attempt to instantiate the theorem and introduce it in the context
-  let (newGoals, fvars, thAsm) ← tryMatch isLet th
-  -- Rename the introduced fvars according to `args.ids`
-  let (toEliminate, fvars, ids) ← renameFVarsWithIds fvars args.ids thAsm
-  trace[Progress] "toEliminate: {toEliminate.map Expr.fvar}"
-  let args := { args with ids }
+  let newGoals ← tryMatch isLet th
   --
   withMainContext do
   traceGoalWithNode "current goal"
@@ -701,7 +514,7 @@ def progressWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
   /- Process the main goal -/
   -- Destruct the existential quantifiers and split the conjunctions
   setGoals [mainGoal]
-  let mainGoal ← splitExistsEqAndPost args fExpr toEliminate (fvars.map Expr.fvar) thAsm
+  let mainGoal ← introOutputsAndPost args fExpr
   /- Simplify the post-conditions in the main goal - note that we waited until now
       because by solving the preconditions we may have instantiated meta-variables.
       We also simplify the goal again (to simplify let-bindings, etc.) -/
@@ -789,8 +602,8 @@ def progressAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
   let (goalIsLet, fExpr) ← do
     withTraceNode `Progress (fun _ => pure m!"Calling getFirstBind to deconstruct the target") do
     getFirstBind goalTy
-  -- If the user provided a theorem/assumption: use it.
-  -- Otherwise, lookup one.
+  /- If the user provided a theorem/assumption: use it.
+     Otherwise, lookup one. -/
   match withTh with
   | some th => do
     let goals ← progressWith args goalIsLet fExpr th
@@ -842,17 +655,12 @@ def progressAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
       trace[Progress] msg
       throwError msg
 
-syntax progressArgs := ("keep" binderIdent)? ("with" term)? ("as" " ⟨ " binderIdent,* " ⟩")? ("by" tacticSeq)?
+syntax progressArgs := ("with" term)? ("as" " ⟨ " binderIdent,* " ⟩")? ("by" tacticSeq)?
 
 def parseProgressArgs
-: TSyntax ``Aeneas.Progress.progressArgs -> TacticM (Option Name × Option Expr × Array (Option Name) × Option Syntax.Tactic)
-| args@`(progressArgs| $[keep $x]? $[with $pspec:term]? $[as ⟨ $ids,* ⟩]? $[by $byTac]? ) =>  withMainContext do
+: TSyntax ``Aeneas.Progress.progressArgs -> TacticM (Option Expr × Array (Option Name) × Option Syntax.Tactic)
+| args@`(progressArgs| $[with $pspec:term]? $[as ⟨ $ids,* ⟩]? $[by $byTac]? ) => withMainContext do
   trace[Progress] "Progress arguments: {args.raw}"
-  let keep?: Option Name ← Option.sequence <| x.map fun
-    | `(binderIdent| _) => mkFreshAnonPropUserName
-    | `(binderIdent| $name:ident) => pure name.getId
-    | _ => throwUnsupportedSyntax
-  trace[Progress] "Keep: {keep?}"
   let withTh?: Option Expr ← Option.sequence <| pspec.map fun
     /- We have to make a case disjunction, because if we treat identifiers like
        terms, then Lean will not succeed in infering their implicit parameters
@@ -880,10 +688,10 @@ def parseProgressArgs
   let byTac : Option Syntax.Tactic := match byTac with
     | none => none
     | some byTac => some ⟨byTac.raw⟩
-  return (keep?, withTh?, ids, byTac)
+  return (withTh?, ids, byTac)
 | _ => throwUnsupportedSyntax
 
-def evalProgressCore (async : Bool) (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Array (Option Name))
+def evalProgressCore (async : Bool) (keepPretty : Option Name) (withArg: Option Expr) (ids: Array (Option Name))
   (byTacStx : Option Syntax.Tactic)
   : TacticM Stats := do
   withTraceNode `Progress (fun _ => pure m!"evalProgress") do
@@ -892,7 +700,6 @@ def evalProgressCore (async : Bool) (keep keepPretty : Option Name) (withArg: Op
   let _ ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
       {simpThms := #[← progressSimpExt.getTheorems]} (.targets #[] true)
   withMainContext do
-  let splitPost := true
   /- Preprocessing step for `singleAssumptionTac` -/
   let singleAssumptionTacDtree ← singleAssumptionTacPreprocess
   /- For scalarTac we have a fast track: if the goal is not a linear
@@ -946,7 +753,7 @@ def evalProgressCore (async : Bool) (keep keepPretty : Option Name) (withArg: Op
     catch _ =>
       trace[Progress] "Precondition not solved"
   let args : Args := {
-    async, keep, keepPretty, ids, splitPost, assumTac := customAssumTac, solvePreconditionTac, byTacSyntax := byTacStx
+    async, keepPretty, ids, assumTac := customAssumTac, solvePreconditionTac, byTacSyntax := byTacStx
   }
   let (goals, usedTheorem) ← progressAsmsOrLookupTheorem args withArg
   trace[Progress] "Progress done"
@@ -956,11 +763,11 @@ def asyncOption : Bool := false
 
 def evalProgress
   (async : Bool)
-  (keep keepPretty : Option Name) (withArg: Option Expr) (ids: Array (Option Name))
+  (keepPretty : Option Name) (withArg: Option Expr) (ids: Array (Option Name))
   (byTac : Option Syntax.Tactic)
   : TacticM UsedTheorem := do
   focus do
-  let ⟨goals, usedTheorem⟩ ← evalProgressCore async keep keepPretty withArg ids byTac
+  let ⟨goals, usedTheorem⟩ ← evalProgressCore async keepPretty withArg ids byTac
   -- Wait for all the proof attempts to finish
   let mut sgs := #[]
   for (mvarId, proof) in goals.preconditions do
@@ -1019,9 +826,6 @@ track of the origin of `b`.
 
 **Options:**
 The user can provide several optional arguments:
-- `keep <name>`: if provided, the equality `f ... = .ok ...` is kept
-  in the context under the name `<name>` (e.g., `h : a + 1#u32 = ok b`).
-  Otherwise, it is cleared.
 - `with <thm>`: if provided, use the given theorem or local assumption
   to make progress. Otherwise, look for a suitable theorem/assumption.
   The user can provide either the name of a local assumption/theorem,
@@ -1074,17 +878,17 @@ which repeatedly calls `progress` until no further progress can be made. See the
 of `progress*` for more details.
 -/
 elab (name := progress) "progress" args:progressArgs : tactic => do
-  let (keep?, withArg, ids, byTac) ← parseProgressArgs args
-  evalProgress asyncOption keep? none withArg ids byTac *> return ()
+  let (withArg, ids, byTac) ← parseProgressArgs args
+  evalProgress asyncOption none withArg ids byTac *> return ()
 
 @[inherit_doc progress]
 elab tk:"progress?" args:progressArgs : tactic => do
-  let (keep?, withArg, ids, byTac) ← parseProgressArgs args
-  let stats ← evalProgress asyncOption keep? none withArg ids byTac
+  let (withArg, ids, byTac) ← parseProgressArgs args
+  let stats ← evalProgress asyncOption none withArg ids byTac
   let mut stxArgs := args.raw
-  if stxArgs[1].isNone then
+  if stxArgs[0].isNone then
     let withArg := mkNullNode #[mkAtom "with", ← stats.toSyntax]
-    stxArgs := stxArgs.setArg 1 withArg
+    stxArgs := stxArgs.setArg 0 withArg
   let tac := mkNode `Aeneas.Progress.progress #[mkAtom "progress", stxArgs]
   let fmt ← PrettyPrinter.ppCategory ``Lean.Parser.Tactic.tacticSeq tac
   Meta.Tactic.TryThis.addSuggestion tk fmt.pretty (origSpan? := ← getRef)
@@ -1138,7 +942,7 @@ def parseLetProgress
 elab tk:letProgress : tactic => do
   withMainContext do
   let (withArg, suggest, ids, byTac) ← parseLetProgress tk
-  let stats ← evalProgress asyncOption none (some (.str .anonymous "_")) withArg ids byTac
+  let stats ← evalProgress asyncOption (some (.str .anonymous "_")) withArg ids byTac
   let mut stxArgs := tk.raw
   if suggest then
     trace[Progress] "suggest is true"
@@ -1176,7 +980,7 @@ x y : UScalar ty
   #guard_msgs in
   example {ty} {x y : UScalar ty} :
     x + y ⦃ _ => True ⦄ := by
-    progress keep _ as ⟨ z, h1 ⟩
+    progress as ⟨ z, h1 ⟩
 
   example {ty} {x y : UScalar ty} (h : x.val + y.val ≤ UScalar.max ty) :
     x + y ⦃ _ => True ⦄ := by
@@ -1188,15 +992,12 @@ x y : UScalar ty
 
   -- Checking that we properly handle tuple decomposition in post-conditions
   def addToPair (x : Nat) := Result.ok (x + 1, x + 2)
-  theorem  addToPair_spec (x : Nat) : addToPair x ⦃ (y, z) => y = x + 1 ∧ z = x + 2⦄ :=
-    by simp [addToPair]
-
-  theorem  addToPair_spec1 (x : Nat) : addToPair x ⦃ x' => ∃ y z, x' = (y, z) ∧ y = x + 1 ∧ z = x + 2⦄ :=
+  theorem  addToPair_spec (x : Nat) : addToPair x ⦃ y z => y = x + 1 ∧ z = x + 2⦄ :=
     by simp [addToPair]
 
   /--
 error: unsolved goals
-case h_1
+case a
 x y z : ℕ
 h : y = x + 1
 _✝¹ : z = x + 2
@@ -1209,30 +1010,9 @@ _✝ : z1 = y + 2
   example (x : Nat) :
     (do
       let (y, _) ← addToPair x
-      addToPair y) ⦃ (y, _) => y = x + 2 ⦄ := by
+      addToPair y) ⦃ y _ => y = x + 2 ⦄ := by
     progress with addToPair_spec as ⟨ y, z, h ⟩
     progress with addToPair_spec as ⟨ y1, z1, h1 ⟩
-
-  /--
-error: unsolved goals
-case a
-x y z : ℕ
-hy : y = x + 1
-hz : z = x + 2
-y1 z1 : ℕ
-hy1 : y1 = y + 1
-hz1 : z1 = y + 2
-⊢ y1 = x + 2
-  -/
-  #guard_msgs in
-  example (x : Nat) :
-    (do
-      let (y, _) ← addToPair x
-      addToPair y) ⦃ (y, _) => y = x + 2 ⦄ := by
-    progress with addToPair_spec1 as ⟨ y, z, hy, hz ⟩
-    progress with addToPair_spec1 as ⟨ y1, z1, hy1, hz1 ⟩
-
-
 
   /--
   info: Try this:
@@ -1300,40 +1080,40 @@ info: example
   example {ty} {x y : UScalar ty}
     (hmax : x.val + y.val ≤ UScalar.max ty) :
     x + y ⦃ z => z.val = x.val + y.val ⦄ := by
-    progress keep _ as ⟨ z, h1 ⟩
+    progress as ⟨ z, h1 ⟩
     scalar_tac
 
   example {ty} {x y : IScalar ty}
     (hmin : IScalar.min ty ≤ x.val + y.val)
     (hmax : x.val + y.val ≤ IScalar.max ty) :
     x + y ⦃ z => z.val = x.val + y.val ⦄ := by
-    progress keep _ as ⟨ z, h1 ⟩
+    progress as ⟨ z, h1 ⟩
     scalar_tac
 
   example {ty} {x y : UScalar ty}
     (hmax : x.val + y.val ≤ UScalar.max ty) :
     x + y ⦃ z => z.val = x.val + y.val ⦄ := by
-    progress? keep _ as ⟨ z, h1 ⟩ says progress keep _ with UScalar.add_spec as ⟨ z, h1 ⟩
+    progress? as ⟨ z, h1 ⟩ says progress with UScalar.add_spec as ⟨ z, h1 ⟩
     scalar_tac
 
   example {ty} {x y : IScalar ty}
     (hmin : IScalar.min ty ≤ x.val + y.val)
     (hmax : x.val + y.val ≤ IScalar.max ty) :
     x + y ⦃ z => z.val = x.val + y.val ⦄ := by
-    progress? keep _ as ⟨ z, h1 ⟩ says progress keep _ with IScalar.add_spec as ⟨ z, h1 ⟩
+    progress? as ⟨ z, h1 ⟩ says progress with IScalar.add_spec as ⟨ z, h1 ⟩
     scalar_tac
 
   example {ty} {x y : UScalar ty}
     (hmax : x.val + y.val ≤ UScalar.max ty) :
     x + y ⦃ z => z.val = x.val + y.val ⦄ := by
-    progress keep h with UScalar.add_spec as ⟨ z ⟩
+    progress with UScalar.add_spec as ⟨ z ⟩
     scalar_tac
 
   example {ty} {x y : IScalar ty}
     (hmin : IScalar.min ty ≤ x.val + y.val)
     (hmax : x.val + y.val ≤ IScalar.max ty) :
     x + y ⦃ z => z.val = x.val + y.val ⦄ := by
-    progress keep h with IScalar.add_spec as ⟨ z ⟩
+    progress with IScalar.add_spec as ⟨ z ⟩
     scalar_tac
 
   example {x y : U32}
@@ -1352,7 +1132,7 @@ info: example
   example {x y : U32}
     (hmax : x.val + y.val ≤ U32.max) :
     x + y ⦃ z => z.val = x.val + y.val ⦄ := by
-    progress keep _ as ⟨ z, h1 ⟩
+    progress as ⟨ z, h1 ⟩
     scalar_tac
 
   /- Checking that universe instantiation works: the original spec uses
@@ -1399,7 +1179,7 @@ info: example
     (hmax : x.val + y.val ≤ UScalar.max ty) :
     False ∨ x + y ⦃ z => z.val = x.val + y.val ⦄ := by
     right
-    progress keep _ as ⟨ z, h1 ⟩
+    progress as ⟨ z, h1 ⟩
     scalar_tac
 
   example {ty} {x y : IScalar ty}
@@ -1407,7 +1187,7 @@ info: example
     (hmax : x.val + y.val ≤ IScalar.max ty) :
     False ∨ x + y ⦃ z => z.val = x.val + y.val ⦄ := by
     right
-    progress? keep _ as ⟨ z, h1 ⟩ says progress keep _ with IScalar.add_spec as ⟨ z, h1 ⟩
+    progress? as ⟨ z, h1 ⟩ says progress with IScalar.add_spec as ⟨ z, h1 ⟩
     scalar_tac
 
   /--
@@ -1415,13 +1195,13 @@ error: unsolved goals
 case a
 x y : U32
 f : U32 → U32 → Result U32
-hf : ∀ (x y : U32), ↑x < 10 → ↑y < 10 → f x y ⦃ x => True ⦄
+hf : ∀ (x y : U32), ↑x < 10 → ↑y < 10 → f x y ⦃ x✝ => True ⦄
 ⊢ ↑x < 10
 
 case a
 x y : U32
 f : U32 → U32 → Result U32
-hf : ∀ (x y : U32), ↑x < 10 → ↑y < 10 → f x y ⦃ x => True ⦄
+hf : ∀ (x y : U32), ↑x < 10 → ↑y < 10 → f x y ⦃ x✝ => True ⦄
 ⊢ ↑y < 10
   -/
   #guard_msgs in
@@ -1500,7 +1280,7 @@ hf : ∀ (x y : U32), ↑x < 10 → ↑y < 10 → f x y ⦃ x => True ⦄
     error: unsolved goals
 case h
 x y x✝ : U32
-h✝ : ↑x✝ = ↑x + ↑y
+_✝ : ↑x✝ = ↑x + ↑y
 ⊢ ↑x✝ + ↑x✝ ≤ U32.max
 
 case h
@@ -1522,11 +1302,11 @@ x y : U32
     progress? as ⟨ z1, h ⟩ says progress with U32.add_spec as ⟨ z1, h ⟩
     progress? as ⟨ z2, h ⟩ says progress with U32.add_spec as ⟨ z2, h ⟩
 
-  variable (P : ℕ → List α → Prop)
+  variable {α} (P : ℕ → List α → Prop)
   variable (f : List α → Std.Result Bool)
   variable (f_spec : ∀ l i, P i l → f l ⦃ _ => True ⦄)
 
-  example (l : List α) (h : P i l) :
+  example {i} (l : List α) (h : P i l) :
     f l ⦃ _ => True ⦄ := by
     progress? as ⟨ b ⟩ says progress with f_spec as ⟨ b ⟩
 
@@ -1550,7 +1330,7 @@ x y : U32
   info: example
   (y : U32)
   (h1 : ↑y < 100) :
-  massert (y < 100#u32) ⦃ x => True ⦄
+  massert (y < 100#u32) ⦃ x✝ => True ⦄
   := by sorry
   -/
   #guard_msgs in
