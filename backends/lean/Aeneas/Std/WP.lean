@@ -192,7 +192,7 @@ open Lean PrettyPrinter
 
 /-- Macro expansion for a single element -/
 macro_rules
-  | `($e ⦃ $x => $p ⦄) => do `(spec $e fun $x => $p)
+  | `($e ⦃ $x => $p ⦄) => do `(_root_.Aeneas.Std.WP.spec $e fun $x => $p)
 
 /-- Macro expansion for multiple elements -/
 macro_rules
@@ -204,13 +204,13 @@ macro_rules
       | [x] => `(fun $x => $p)
       | x :: xs =>
         let xs ← run xs
-        `(Aeneas.Std.WP.predn fun $x => $xs)
+        `(_root_.Aeneas.Std.WP.predn fun $x => $xs)
     let post ← run xs
     `(Aeneas.Std.WP.spec $e $post)
 
 /-- Macro expansion for predicate with no arrow -/
 macro_rules
-  | `($e ⦃ $p ⦄) => do `(Aeneas.Std.WP.spec $e $p)
+  | `($e ⦃ $p ⦄) => do `(_root_.Aeneas.Std.WP.spec $e $p)
 
 /-!
 # Pretty-printing
