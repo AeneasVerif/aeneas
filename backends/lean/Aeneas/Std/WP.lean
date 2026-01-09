@@ -168,6 +168,16 @@ theorem exists_imp_spec {m:Result α} {P:Post α} :
   (∃ y, m = ok y ∧ P y) → spec m P := by
   exact (spec_equiv_exists m P).2
 
+end Aeneas.Std.WP
+
+/-
+We want the notations to live in the namespace `Aeneas`, not `Aeneas.Std.WP`
+TODO: use https://github.com/leanprover/lean4/pull/11355
+-/
+namespace Aeneas
+
+open Std WP Result
+
 /-!
 # Hoare triple notation and elaboration
 -/
@@ -270,6 +280,10 @@ example : ok (0, 1) ⦃ x y => x = 0 ∧ y = 1 ⦄ := by simp
 example : ok (0, 1, 2) ⦃ x y z => x = 0 ∧ y = 1 ∧ z = 2 ⦄ := by simp
 example : ok (0, 1, true) ⦃ x y z => x = 0 ∧ y = 1 ∧ z ⦄ := by simp
 example : let P (x : Nat) := x = 0; ok 0 ⦃ P ⦄ := by simp
+
+end Aeneas
+
+namespace Aeneas.Std.WP
 
 section
   variable (U32 : Type) [HAdd U32 U32 (Result U32)]
