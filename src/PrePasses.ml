@@ -230,6 +230,8 @@ let update_array_default (crate : crate) : crate =
       in
       visitor#visit_crate None crate
 
+exception FoundStatement of statement
+
 (** Check that loops:
     - do not contain early returns
     - do not continue/break to outer loops
@@ -351,8 +353,8 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
 
                Note that doing this will raise an exception if we find a loop with
                an early return. *)
-            try ([ { st with kind = super#visit_Loop (depth + 1) loop } ], after)
-            with Found ->
+            try ([ { st with kind = self#visit_Loop (depth + 1) loop } ], after)
+            with FoundStatement return_st ->
               (* An exception was raised: it means we found a return in the loop: attempt
                  to replace it with a break.
 
@@ -460,10 +462,8 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
                 let loop = block_visitor#visit_block 0 loop in
                 let loop : statement = { st with kind = Loop loop } in
                 let loop = super#visit_statement depth loop in
-                (* TODO: the span is not great *)
-                let return : statement = { st with kind = Return } in
-                ([ loop; return ], []))
-        | _ -> ([ super#visit_statement depth st ], after)
+                ([ loop; return_st ], []))
+        | _ -> ([ self#visit_statement depth st ], after)
 
       method! visit_block depth (block : block) : block =
         let rec update (stl : statement list) : statement list =
@@ -483,11 +483,21 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
         [%cassert] span (i = 0) "Continue to outer loops are not supported yet";
         super#visit_Continue depth i
 
-      method! visit_Return depth =
-        [%cassert] span (depth <= 1)
-          "Returns inside of nested loops are not supported yet";
-        (* If we are inside a loop we need to get rid of the return *)
-        if depth = 1 then raise Found else super#visit_Return depth
+      method! visit_statement depth st =
+        match st.kind with
+        | Return ->
+            [%cassert] span (depth <= 1)
+              "Returns inside of nested loops are not supported yet";
+            (* If we are inside a loop we need to get rid of the return.
+
+               Note that raising an exception containing the full return
+               statement allows us to use its span when moving it after the loop. *)
+            if depth = 1 then raise (FoundStatement st) else st
+        | _ -> super#visit_statement depth st
+
+      method! visit_Return _ =
+        (* The Return case should have been caught by the [visit_statement] method *)
+        [%internal_error] span
     end
   in
 
