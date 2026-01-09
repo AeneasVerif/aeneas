@@ -169,7 +169,7 @@ def Vec.index_mut_usize {α : Type u} (v: Vec α) (i: Usize) :
 @[progress]
 theorem Vec.index_mut_usize_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize)
   (hbound : i.val < v.length) :
-  v.index_mut_usize i ⦃ (x,y) => x = v.val[i.val]! ∧ y = v.set i ⦄ := by
+  v.index_mut_usize i ⦃ x y => x = v.val[i.val]! ∧ y = v.set i ⦄ := by
   simp only [index_mut_usize]
   have ⟨ x, h ⟩ := spec_imp_exists (index_usize_spec v i hbound)
   simp [h]

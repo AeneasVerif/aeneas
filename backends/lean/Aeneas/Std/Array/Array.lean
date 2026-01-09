@@ -157,7 +157,7 @@ def Array.index_mut_usize {α : Type u} {n : Usize} (v: Array α n) (i: Usize) :
 @[progress]
 theorem Array.index_mut_usize_spec {α : Type u} {n : Usize} [Inhabited α] (v: Array α n) (i: Usize)
   (hbound : i.val < v.length) :
-  v.index_mut_usize i ⦃ (x, y) => y = set v i ∧
+  v.index_mut_usize i ⦃ x y => y = set v i ∧
   x = v.val[i.val]! ⦄ := by
   simp only [index_mut_usize, Bind.bind, bind]
   have ⟨ x, h ⟩ := spec_imp_exists (index_usize_spec v i hbound)
