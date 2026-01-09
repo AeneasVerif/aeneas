@@ -157,6 +157,16 @@ error: unsolved goals
 example : qimp_spec (predn fun x y => x + y > 0) (fun (x, y) => .ok (x + y)) (fun z => z > 0) := by
   simp
 
+@[simp]
+theorem qimp_exists {α β} (P₀ : β → Post α) (P₁ : Post α) :
+  qimp (fun x => ∃ y, P₀ y x) P₁ ↔ ∀ x, qimp (P₀ x) P₁ := by
+  simp only [qimp, forall_exists_index]; grind
+
+@[simp]
+theorem qimp_spec_exists {α β γ} (P : γ → α → Prop) (k : α → Result β) (Q : β → Prop) :
+  qimp_spec (fun x => ∃ y, P y x) k Q ↔ ∀ x, qimp_spec (P x) k Q := by
+  simp only [qimp_spec, forall_exists_index]; grind
+
 theorem spec_equiv_exists (m:Result α) (P:Post α) :
   spec m P ↔ (∃ y, m = ok y ∧ P y) := by
   cases m <;> simp [spec, theta, wp_return]

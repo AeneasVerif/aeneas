@@ -58,7 +58,7 @@ def scalar_eqs := #[
 
 /-- Note that `forall_const` is too general: it can eliminate unused outputs that we actually
 want to introduce in the context -/
-theorem forall_unit : (Unit → p) ↔ p := by simp
+theorem forall_unit {p : Prop} : (Unit → p) ↔ p := by simp
 
 attribute [progress_simps]
   bind_assoc Std.bind_tc_ok Std.bind_tc_fail Std.bind_tc_div
@@ -351,6 +351,7 @@ def introOutputsAndPost (args : Args) (fExpr : Expr) :
               addSimpThms :=
                 #[``Std.WP.qimp_spec_predn, ``Std.WP.qimp_spec_unit,
                   ``Std.WP.qimp_predn, ``Std.WP.qimp_unit,
+                  ``Std.WP.qimp_spec_exists, ``Std.WP.qimp_exists,
                   ``forall_unit, ``true_imp_iff] }
             (.targets #[] true)
     | trace[Progress] "The main goal was solved!"; return none
@@ -1379,6 +1380,27 @@ info: example
     progress as ⟨ z ⟩
     scalar_tac
 
+  /- Example with an existential -/
+  /--
+  error: unsolved goals
+case a
+α : Type ?u.255854
+P : ℕ → List α → Prop
+f✝ : List α → Result Bool
+f_spec : ∀ (l : List α) (i : ℕ), P i l → f✝ l ⦃ x✝ => True ⦄
+x : U32
+f : U32 → Result U32
+h : ∀ (x : U32), f x ⦃ y => ∃ z > 0, ↑y = ↑x + z ⦄
+y : ℕ
+z : U32
+_✝¹ : y > 0
+_✝ : ↑z = ↑x + y
+⊢ ↑z > ↑x
+  -/
+  #guard_msgs in
+  example (x : U32) (f : U32 → Result U32) (h : ∀ x, f x ⦃ y => ∃ z, z > 0 ∧ y.val = x.val + z ⦄) :
+    f x ⦃ y => y.val > x.val ⦄ := by
+    progress as ⟨ y, z ⟩
 
   /- Inhabited -/
   def get (x : Option α) : Result α :=
