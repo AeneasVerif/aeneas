@@ -1,5 +1,5 @@
 import Aeneas
-open Aeneas.Std Result WP
+open Aeneas Std Result
 
 set_option maxHeartbeats 1000000
 
@@ -440,7 +440,7 @@ example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
  -/
 theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
-  list_nth_mut1 l i ⦃ (x, back) =>
+  list_nth_mut1 l i ⦃ x back =>
     x = l.toList[i.val]! ∧
     -- Specification of the backward function
     ∀ x', (back x').toList = l.toList.set i.val x' ⦄ := by
@@ -484,7 +484,7 @@ def append_in_place
 /-- Theorem about `list_tail`: exercise -/
 @[progress]
 theorem list_tail_spec {T : Type} (l : CList T) :
-  list_tail l ⦃ (tl, back) =>
+  list_tail l ⦃ tl back =>
     tl = CList.CNil ∧
     ∀ tl', (back tl').toList = l.toList ++ tl'.toList ⦄ := by
   unfold list_tail list_tail_loop
@@ -757,7 +757,7 @@ theorem add_with_carry_loop_spec
   (hLength : x.length = y.length)
   (hi : i.val ≤ x.length)
   (hCarryLe : c0.val ≤ 1) :
-  add_with_carry_loop x y c0 i ⦃ (c1, x') =>
+  add_with_carry_loop x y c0 i ⦃ c1 x' =>
     x'.length = x.length ∧
     c1.val ≤ 1 ∧
     toInt x' + c1.val * 2 ^ (32 * x'.length) =
@@ -779,7 +779,7 @@ def add_with_carry
 theorem add_with_carry_spec
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
   (hLength : x.length = y.length) :
-  add_with_carry x y ⦃ (c, x') =>
+  add_with_carry x y ⦃ c x' =>
     x'.length = x.length ∧
     c.val ≤ 1 ∧
     toInt x' + c.val * 2 ^ (32 * x'.length) = toInt x + toInt y ⦄ := by

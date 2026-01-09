@@ -1,6 +1,6 @@
 import Hashmap.Funs
 
-open Aeneas.Std Result WP
+open Aeneas Std Result
 
 #setup_aeneas_simps
 
@@ -256,7 +256,7 @@ theorem insert_in_list_spec_aux {α : Type} (l : Nat) (key: Usize) (value: α) (
   (hinv : slot_s_inv_hash l (hash_mod_key key l) l0.v)
   (hdk : distinct_keys l0.v) :
   insert_in_list key value l0
-  ⦃ (b, l1) =>
+  ⦃ b l1 =>
     -- The boolean is true ↔ we inserted a new binding
     (b ↔ (l0.lookup key = none)) ∧
     -- We update the binding
@@ -311,7 +311,7 @@ theorem insert_in_list_spec {α : Type} (l : Nat) (key: Usize) (value: α) (l0: 
   (hinv : slot_s_inv_hash l (hash_mod_key key l) l0.v)
   (hdk : distinct_keys l0.v) :
   insert_in_list key value l0
-  ⦃ (b, l1) =>
+  ⦃ b l1 =>
     (b ↔ (l0.lookup key = none)) ∧
     -- We update the binding
     l1.lookup key = value ∧
@@ -710,7 +710,7 @@ theorem move_elements_loop_spec
   (hDisjoint1 : ∀ key v, ntable.lookup key = some v → slots.lookup key = none)
   (hLen : ntable.al_v.length + slots.al_v.length ≤ Usize.max)
   :
-  ntable.move_elements_loop slots i ⦃ (ntable1, slots1) =>
+  ntable.move_elements_loop slots i ⦃ ntable1 slots1 =>
     ntable1.inv ∧
     frame_slots_params ntable ntable1 ∧
     ntable1.al_v.length = ntable.al_v.length + slots.al_v.length ∧
@@ -836,7 +836,7 @@ theorem move_elements_spec
   (hTableLen : ntable.al_v.length = 0)
   (hSlotsLen : slots.al_v.length ≤ Usize.max)
   :
-  ntable.move_elements slots ⦃ (ntable1, _) =>
+  ntable.move_elements slots ⦃ ntable1 _ =>
     ntable1.inv ∧
     frame_slots_params ntable ntable1 ∧
     ntable1.al_v.length = ntable.al_v.length + slots.al_v.length ∧
@@ -969,7 +969,7 @@ theorem get_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) :
 theorem get_mut_in_list_spec {α} (key : Usize) (slot : AList α)
   {l i : Nat}
   (hInv : slot_t_inv l i slot) :
-  get_mut_in_list slot key ⦃ (opt_v, back) =>
+  get_mut_in_list slot key ⦃ opt_v back =>
     slot.lookup key = opt_v ∧
     -- Backward function
     -- case: none
@@ -1012,7 +1012,7 @@ theorem get_mut_in_list_spec {α} (key : Usize) (slot : AList α)
 
 @[progress]
 theorem get_mut_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) :
-  get_mut hm key ⦃ (opt_v, back) =>
+  get_mut hm key ⦃ opt_v back =>
     hm.lookup key = opt_v ∧
     -- Backward function
     -- case none:
@@ -1051,7 +1051,7 @@ theorem get_mut_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) :
 
 @[progress]
 theorem remove_from_list_spec {α} (key : Usize) (slot : AList α) {l i} (hInv : slot_t_inv l i slot) :
-  remove_from_list key slot ⦃ (v, slot') =>
+  remove_from_list key slot ⦃ v slot' =>
     slot.lookup key = v ∧
     slot'.lookup key = none ∧
     (∀ key', key' ≠ key → slot'.lookup key' = slot.lookup key') ∧
@@ -1091,7 +1091,7 @@ private theorem lookup_not_none_imp_len_s_pos (hm : HashMap α) (key : Usize)
 
 @[progress]
 theorem remove_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) :
-  remove hm key ⦃ (v, hm') =>
+  remove hm key ⦃ v hm' =>
     hm.lookup key = v ∧
     hm'.lookup key = none ∧
     (∀ key', key' ≠ key → hm'.lookup key' = hm.lookup key') ∧
