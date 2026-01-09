@@ -61,6 +61,7 @@ def predn {α β} (p : α → β → Prop) : α × β → Prop :=
   fun (x, y) => p x y
 
 @[simp] theorem predn_pair x y (p : α → β → Prop) : predn p (x, y) = p x y := by simp [predn]
+@[defeq] theorem predn_eq x (p : α → β → Prop) : predn p x = p x.fst x.snd := by simp [predn]
 
 @[simp, grind =]
 theorem spec_ok (x : α) : spec (ok x) p ↔ p x := by simp [spec, theta, wp_return]

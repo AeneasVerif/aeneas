@@ -62,6 +62,8 @@ attribute [progress_simps]
   and_assoc Std.Result.ok.injEq Prod.mk.injEq
   exists_eq_left exists_eq_left' exists_eq_right exists_eq_right' exists_eq exists_eq' true_and and_true
   Std.WP.spec_ok
+  -- This one gets only applied to full applications of `predn`, which are typically revealed after applying `spec_ok`
+  Std.WP.predn_eq
 
 attribute [progress_post_simps]
   -- We often see expressions like `Int.ofNat 3`
@@ -336,14 +338,6 @@ def introPrettyEquality (args : Args) (fExpr : Expr) (outputFVars : Array Expr) 
 def introOutputsAndPost (args : Args) (fExpr : Expr) :
   TacticM (Option MainGoal) := do
   withTraceNode `Progress (fun _ => pure m!"introOutputsAndPost") do
-  /- Some types get unfolded too much (e.g., `U32` sometimes gets unfolded to `U32): fold them back
-     TODO: remove this? () -/
-  withTraceNode `Progress (fun _ => pure m!"dsimpAt: folding back scalar types") do
-    Simp.dsimpAt true {implicitDefEqProofs := true, failIfUnchanged := false, iota := false}
-      {addSimpThms := scalar_eqs} (.targets #[] true)
-  if (← getUnsolvedGoals).isEmpty then trace[Progress] "The main goal was solved!"; return none
-  traceGoalWithNode "goal after folding back scalar types"
-
   /- Decompose nested uses of `predn` to introduce a sequence of universal quantifiers.
      Note that at the same time we simplify the (monadic) continuation by using
      some monad simp theorems. -/
@@ -374,11 +368,11 @@ def introOutputsAndPost (args : Args) (fExpr : Expr) :
 
   Some types get unfolded too much (e.g., `U32` sometimes gets unfolded to `U32) so we use this call
   to `dsimp` to also fold them back. -/
-  withTraceNode `Progress (fun _ => pure m!"dsimpAt: folding back scalar types") do
+  withTraceNode `Progress (fun _ => pure m!"dsimpAt: eliminating `imp` and folding back scalar types") do
     Simp.dsimpAt true {implicitDefEqProofs := true, failIfUnchanged := false, iota := false}
       { declsToUnfold := #[``Std.WP.imp], addSimpThms := scalar_eqs } (.targets #[] true)
   if (← getUnsolvedGoals).isEmpty then trace[Progress] "The main goal was solved!"; return none
-  traceGoalWithNode "goal after aliminating `imp`"
+  traceGoalWithNode "goal after aliminating `imp` and folding back the scalar types"
 
   /- Intro the output variables and the post-conditions.
 
@@ -410,10 +404,13 @@ def introOutputsAndPost (args : Args) (fExpr : Expr) :
   let ids := ids ++ ids'
   trace[Progress] "ids: {ids}"
   let (outputIds, postsIds) := ids.toList.splitAt nOutputs
+
   -- Introduce the outputs
   let (outputs, goal) ← goal.introN nOutputs outputIds
-  -- Introduce the pretty equality
   setGoals [goal]
+  traceGoalWithNode "goal after introducing the outputs"
+
+  -- Introduce the pretty equality
   introPrettyEquality args fExpr (outputs.map Expr.fvar)
   traceGoalWithNode "goal after introducing the pretty equality"
 
@@ -421,6 +418,7 @@ def introOutputsAndPost (args : Args) (fExpr : Expr) :
   let goal ← getMainGoal
   let (posts, goal) ← goal.introN nPosts postsIds
   setGoals [goal]
+  traceGoalWithNode "goal after introducing the post-conditions"
 
   --
   pure (some ⟨ ← getMainGoal, outputs, posts⟩)
@@ -463,13 +461,17 @@ def trySolvePreconditions (args : Args) (newPropGoals : List MVarId) : TacticM (
 
 /-- Post-process the main goal.
 
-  The main thing we do is simplify the post-conditions. -/
+The main thing we do is simplify the post-conditions.
+
+TODO: simplify or remove this function.
+-/
 def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option MainGoal) := do
   withTraceNode `Progress (fun _ => pure m!"postprocessMainGoal") do
   match mainGoal with
   | none => pure none
   | some mainGoal =>
     setGoals [mainGoal.goal]
+    traceGoalWithNode "current goal"
     -- Simplify the post-conditions
     let args : Simp.SimpArgs :=
       {simpThms := #[← progressPostSimpExt.getTheorems],
@@ -483,7 +485,11 @@ def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option MainGoal)
       trace[Progress] "Goal closed by simplifying the introduced post-conditions"
       pure none
     | some posts =>
-      -- Simplify the goal again
+      /- Simplify the goal again
+
+      Note that we want to simplify targets of the shape:
+      `ok ... ⦃ x₀ ... xₙ => ... ⦄`
+      -/
       let r ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
         {simpThms := #[← progressSimpExt.getTheorems], declsToUnfold := #[``pure]} (.targets #[] true)
       if r.isSome then
@@ -512,7 +518,7 @@ def progressWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
   -- Attempt to solve the goals which are propositions
   let newPropGoals ← trySolvePreconditions args newPropGoals
   /- Process the main goal -/
-  -- Destruct the existential quantifiers and split the conjunctions
+  -- Introduce the outputs and the post-conditions into the context
   setGoals [mainGoal]
   let mainGoal ← introOutputsAndPost args fExpr
   /- Simplify the post-conditions in the main goal - note that we waited until now
@@ -1361,6 +1367,14 @@ info: example
     progress as ⟨ c', _, hc' ⟩ -- we have: `hc' : c'.bv = c.bv >>> 16`
     extract_goal1
     fsimp [hc']
+
+  example (x y : U32) (h : x.val + y.val < U32.max) :
+    (do
+      let z ← x + y
+      ok (x, y, z)) ⦃ x y z => z.val = x.val + y.val ⦄ := by
+    progress as ⟨ z ⟩
+    scalar_tac
+
 
   /- Inhabited -/
   def get (x : Option α) : Result α :=
