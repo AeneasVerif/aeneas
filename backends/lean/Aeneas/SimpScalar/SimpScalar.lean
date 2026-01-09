@@ -128,7 +128,7 @@ theorem Nat.sub_mod_div_eq_div {m n : ℕ} : (m - m % n) / n = m / n := by
    which don't simplify in the context -/
 attribute [simp_scalar_simps] Nat.sub_eq_zero_of_le
 
-attribute [simp_scalar_simps]
+attribute [simp_scalar_simps↓]
   Nat.div_le_div_right Nat.mul_div_le Nat.div_mul_le_self
   Nat.pow_lt_pow_right Nat.mod_lt Nat.mod_le
 

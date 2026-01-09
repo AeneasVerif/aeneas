@@ -12,23 +12,23 @@ import AeneasMeta.Simp
 
 namespace Aeneas
 
-@[simp_scalar_simps]
+@[simp_scalar_simps↓]
 theorem Nat.le_mul_le (a0 a1 b0 b1 : Nat) (h : a0 ≤ a1 ∧ b0 ≤ b1) : a0 * b0 ≤ a1 * b1 := by
   have := @Nat.mul_le_mul_left b0 b1 a0 h.right
   have := @Nat.mul_le_mul_right a0 a1 b1 h.left
   omega
 
-@[simp_scalar_simps]
+@[simp_scalar_simps↓]
 theorem Nat.lt_mul_lt (a0 a1 b0 b1 : Nat) (h : a0 < a1 ∧ b0 < b1) : a0 * b0 < a1 * b1 := by
   apply Nat.mul_lt_mul_of_lt_of_lt <;> tauto
 
-@[simp_scalar_simps]
-theorem Nat.le_mul_lt (a0 a1 b0 b1 : Nat) (h0 : a0 ≤ a1 ∧ 0 < a1 ∧b0 < b1) : a0 * b0 < a1 * b1 := by
+@[simp_scalar_simps↓]
+theorem Nat.le_mul_lt (a0 a1 b0 b1 : Nat) (h0 : a0 ≤ a1 ∧ 0 < a1 ∧ b0 < b1) : a0 * b0 < a1 * b1 := by
   have := @Nat.mul_le_mul_right a0 a1 b0 (by tauto)
   have := @Nat.mul_lt_mul_left a1 b0 b1 (by tauto)
   omega
 
-@[simp_scalar_simps]
+@[simp_scalar_simps↓]
 theorem Nat.lt_mul_le (a0 a1 b0 b1 : Nat) (h0 : a0 < a1 ∧ b0 ≤ b1 ∧ 0 < b1) : a0 * b0 < a1 * b1 := by
   have := @Nat.mul_lt_mul_right b1 a0 a1 (by tauto)
   have := @Nat.mul_le_mul_left b0 b1 a0 (by tauto)

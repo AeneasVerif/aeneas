@@ -438,7 +438,7 @@ theorem BitVec.toLEBytes_getElem!_testBit (v : BitVec w) (i j : ℕ) (hj : j < 8
     simp_lists
 termination_by i
 
-@[simp, simp_lists_simps]
+@[simp]
 theorem BitVec.fromLEBytes_getElem! (v : List Byte) (j : ℕ) :
   (BitVec.fromLEBytes v)[j]! = v[j / 8]!.testBit (j % 8) := by
   unfold BitVec.fromLEBytes
@@ -477,7 +477,7 @@ theorem BitVec.fromLEBytes_toLEBytes {w : ℕ} (h : w % 8 = 0) (b : BitVec w) :
   BitVec.fromLEBytes b.toLEBytes = BitVec.cast (by simp only [toLEBytes_length, Nat.dvd_iff_mod_eq_zero, Nat.mul_div_cancel', h]) b := by
   simp only [eq_iff, fromLEBytes_getElem!, getElem!_cast]
   simp_lists
-  simp only [Nat.dvd_iff_mod_eq_zero, Nat.mul_div_cancel', h]
+  simp only [Nat.dvd_iff_mod_eq_zero, h, Nat.mul_div_cancel']
   simp only [Nat.div_add_mod, implies_true]
 
 @[simp]
