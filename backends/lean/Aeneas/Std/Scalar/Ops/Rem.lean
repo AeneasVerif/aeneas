@@ -74,7 +74,7 @@ Theorems with a specification which uses integers and bit-vectors
 
 /-- Generic theorem - shouldn't be used much -/
 theorem UScalar.rem_bv_spec {ty} (x : UScalar ty) {y : UScalar ty} (hzero : y.val ≠ 0) :
-  (x % y) ⦃ z => (↑z : Nat) = ↑x % ↑y ∧ z.bv = x.bv % y.bv ⦄ := by
+  x % y ⦃ z => (↑z : Nat) = ↑x % ↑y ∧ z.bv = x.bv % y.bv ⦄ := by
   conv => arg 1; simp [HMod.hMod]
   simp [hzero, rem]
   simp only [val]
@@ -82,7 +82,7 @@ theorem UScalar.rem_bv_spec {ty} (x : UScalar ty) {y : UScalar ty} (hzero : y.va
 
 /-- Generic theorem - shouldn't be used much -/
 theorem IScalar.rem_bv_spec {ty} (x : IScalar ty) {y : IScalar ty} (hzero : y.val ≠ 0) :
-  (x % y) ⦃ z => (↑z : Int) = Int.tmod ↑x ↑y ∧ z.bv = BitVec.srem x.bv y.bv ⦄ := by
+  x % y ⦃ z => (↑z : Int) = Int.tmod ↑x ↑y ∧ z.bv = BitVec.srem x.bv y.bv ⦄ := by
   conv => arg 1; simp [HMod.hMod]
   simp only [spec_ok, rem, bne_iff_ne, ne_eq, hzero, not_false_eq_true, ↓reduceIte]
   simp only [val]
@@ -90,11 +90,11 @@ theorem IScalar.rem_bv_spec {ty} (x : IScalar ty) {y : IScalar ty} (hzero : y.va
 
 
 uscalar theorem «%S».rem_bv_spec (x : «%S») {y : «%S»} (hnz : y.val ≠ 0) :
-  (x % y) ⦃ z => (↑z : Nat) = ↑x % ↑y ∧ z.bv = x.bv % y.bv ⦄ :=
+  x % y ⦃ z => (↑z : Nat) = ↑x % ↑y ∧ z.bv = x.bv % y.bv ⦄ :=
   UScalar.rem_bv_spec x hnz
 
 iscalar theorem «%S».rem_bv_spec (x : «%S») {y : «%S»} (hnz : y.val ≠ 0) :
-  (x % y) ⦃ z => (↑z : Int) = Int.tmod ↑x ↑y ∧ z.bv = BitVec.srem x.bv y.bv ⦄ :=
+  x % y ⦃ z => (↑z : Int) = Int.tmod ↑x ↑y ∧ z.bv = BitVec.srem x.bv y.bv ⦄ :=
   IScalar.rem_bv_spec x hnz
 
 /-!
@@ -103,7 +103,7 @@ Theorems with a specification which only uses integers
 
 /-- Generic theorem - shouldn't be used much -/
 theorem UScalar.rem_spec {ty} (x : UScalar ty) {y : UScalar ty} (hzero : y.val ≠ 0) :
-  (x % y) ⦃ z => (↑z : Nat) = ↑x % ↑y ⦄ := by
+  x % y ⦃ z => (↑z : Nat) = ↑x % ↑y ⦄ := by
   apply spec_mono
   · apply rem_bv_spec x hzero
   · intros x' h
@@ -111,18 +111,18 @@ theorem UScalar.rem_spec {ty} (x : UScalar ty) {y : UScalar ty} (hzero : y.val �
 
 /-- Generic theorem - shouldn't be used much -/
 theorem IScalar.rem_spec {ty} (x : IScalar ty) {y : IScalar ty} (hzero : y.val ≠ 0) :
-  (x % y) ⦃ z => (↑z : Int) = Int.tmod ↑x ↑y ⦄ := by
+  x % y ⦃ z => (↑z : Int) = Int.tmod ↑x ↑y ⦄ := by
   apply spec_mono
   · apply rem_bv_spec x hzero
   · intros x' h
     exact h.1
 
 uscalar @[progress] theorem «%S».rem_spec (x : «%S») {y : «%S»} (hnz : y.val ≠ 0) :
-  (x % y) ⦃ z => (↑z : Nat) = ↑x % ↑y ⦄ :=
+  x % y ⦃ z => (↑z : Nat) = ↑x % ↑y ⦄ :=
   UScalar.rem_spec x hnz
 
 iscalar @[progress] theorem «%S».rem_spec (x : «%S») {y : «%S»} (hnz : y.val ≠ 0) :
-  (x % y) ⦃ z => (↑z : Int) = Int.tmod ↑x ↑y ⦄ :=
+  x % y ⦃ z => (↑z : Int) = Int.tmod ↑x ↑y ⦄ :=
   IScalar.rem_spec x hnz
 
 end Aeneas.Std
