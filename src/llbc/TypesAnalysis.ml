@@ -466,11 +466,51 @@ let analyze_type_declaration_group (type_decls : type_decl TypeDeclId.Map.t)
   in
   analyze infos
 
+let ty_replace_body_regions_with_free_regions (ty : ty) : ty =
+  (* Find the maximum free region id *)
+  let max = ref (-1) in
+  let visitor =
+    object
+      inherit [_] iter_ty
+
+      method! visit_RVar _ r =
+        match r with
+        | Bound _ -> ()
+        | Free rid ->
+            let rid = RegionId.to_int rid in
+            max := if rid > !max then rid else !max
+    end
+  in
+  visitor#visit_ty () ty;
+  (* Create a generator *)
+  let _, fresh_fid =
+    RegionId.mk_stateful_generator_starting_at_id (RegionId.of_int (!max + 1))
+  in
+  (* Replace *)
+  let map = ref RegionId.Map.empty in
+  let visitor =
+    object
+      inherit [_] map_ty
+
+      method! visit_RBody _ rid =
+        match RegionId.Map.find_opt rid !map with
+        | None ->
+            let fid = fresh_fid () in
+            map := RegionId.Map.add rid fid !map;
+            RVar (Free rid)
+        | Some rid -> RVar (Free rid)
+    end
+  in
+  visitor#visit_ty () ty
+
 (** Analyze a type to check whether it contains borrows, etc., provided we have
     already analyzed the type definitions in the context. *)
 let analyze_ty (span : Meta.span option) (infos : type_infos) (ty : ty) :
     ty_info =
   [%ltrace "ty:\n" ^ show_ty ty];
+  (* Replace the body regions with fresh free regions - this makes the
+     implementation easier *)
+  let ty = ty_replace_body_regions_with_free_regions ty in
   (* We don't use [updated] but need to give it as parameter *)
   let updated = ref false in
   (* We don't need to compute whether the type contains 'static or not *)
