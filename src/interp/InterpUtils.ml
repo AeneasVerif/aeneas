@@ -824,16 +824,26 @@ let compute_regions_hierarchy_for_fun_call fresh_abs_id
     sg
   in
   (* Introduce the fresh regions *)
-  let region_map = ref RegionId.Map.empty in
+  let free_region_map = ref RegionId.Map.empty in
+  let body_region_map = ref RegionId.Map.empty in
   let fresh_regions = ref RegionId.Set.empty in
   let _, fresh_region_id = RegionId.fresh_stateful_generator () in
-  let get_region rid =
-    match RegionId.Map.find_opt rid !region_map with
+  let get_free_region rid =
+    match RegionId.Map.find_opt rid !free_region_map with
     | Some rid -> rid
     | None ->
         let nrid = fresh_region_id () in
         fresh_regions := RegionId.Set.add nrid !fresh_regions;
-        region_map := RegionId.Map.add rid nrid !region_map;
+        free_region_map := RegionId.Map.add rid nrid !free_region_map;
+        nrid
+  in
+  let get_body_region rid =
+    match RegionId.Map.find_opt rid !body_region_map with
+    | Some rid -> rid
+    | None ->
+        let nrid = fresh_region_id () in
+        fresh_regions := RegionId.Set.add nrid !fresh_regions;
+        body_region_map := RegionId.Map.add rid nrid !body_region_map;
         nrid
   in
   let visitor =
@@ -847,7 +857,7 @@ let compute_regions_hierarchy_for_fun_call fresh_abs_id
 
       method! visit_RVar _ var =
         match var with
-        | Free rid -> RVar (Free (get_region rid))
+        | Free rid -> RVar (Free (get_free_region rid))
         | Bound _ -> RVar var
 
       method! visit_RErased _ =
@@ -855,6 +865,8 @@ let compute_regions_hierarchy_for_fun_call fresh_abs_id
         let nrid = fresh_region_id () in
         fresh_regions := RegionId.Set.add nrid !fresh_regions;
         RVar (Free nrid)
+
+      method! visit_RBody _ rid = RVar (Free (get_body_region rid))
     end
   in
   (* We want to make sure that we numerotate the region parameters, even the erased
