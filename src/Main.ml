@@ -239,11 +239,36 @@ let () =
     (fun (level, name) ->
       match Collections.StringMap.find_opt name !loggers with
       | None ->
+          (* Find the loggers with the closest names *)
+          let distances =
+            List.map
+              (fun s -> (StringUtils.levenshtein_distance name s, s))
+              (Collections.StringMap.keys !loggers)
+          in
+          let min_dist =
+            let min = ref (fst (List.hd distances)) in
+            List.iter
+              (fun (d, _) -> if d < !min then min := d else ())
+              distances;
+            !min
+          in
+          let closest =
+            List.filter_map
+              (fun (d, s) ->
+                if d = min_dist then Some ("'" ^ s ^ "'") else None)
+              distances
+          in
           log#serror
             ("The logger '" ^ name
-           ^ "' does not exist. The existing loggers are: {"
+           ^ "' does not exist.\n\nThe existing loggers are: {"
             ^ String.concat ", " (Collections.StringMap.keys !loggers)
-            ^ "}");
+            ^ "}\n\n"
+            ^
+            match closest with
+            | [ s ] -> "Did you mean " ^ s ^ "?\n"
+            | _ ->
+                "The closest logger names we found are:\n"
+                ^ String.concat ", " closest ^ "\n");
           fail false
       | Some logger ->
           (* Check that we haven't activated the logger twice *)
