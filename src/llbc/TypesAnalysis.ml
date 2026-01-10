@@ -140,7 +140,6 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
   in
   let r_is_static (r : region) : bool = r = RStatic in
   let update_mut_regions_with_rid mut_regions rid =
-    let rid = RegionId.of_int (RegionId.to_int rid) in
     if RegionId.Set.mem rid mut_regions then ty_info.mut_regions
     else (
       updated := true;
