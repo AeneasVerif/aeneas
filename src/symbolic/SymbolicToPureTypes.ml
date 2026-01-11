@@ -798,8 +798,8 @@ let translate_fun_sig_to_decomposed (decls_ctx : C.decls_ctx)
   in
   (* Retrieve the list of parent backward functions *)
   let regions_hierarchy =
-    [%silent_unwrap] span
-      (FunIdMap.find_opt (FRegular fun_id) decls_ctx.fun_ctx.regions_hierarchies)
+    RegionsHierarchy.compute_regions_hierarchy_for_sig (Some span)
+      decls_ctx.crate sg
   in
 
   translate_fun_sig_with_regions_hierarchy_to_decomposed (Some span) decls_ctx
@@ -918,12 +918,10 @@ let translate_fun_sig_from_decomposed (dsg : Pure.decomposed_fun_sig) : fun_sig
   }
 
 let translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
-    (fun_name : string) (sg : A.bound_fun_sig)
-    (input_names : string option list) : Pure.fun_sig =
+    (sg : A.bound_fun_sig) (input_names : string option list) : Pure.fun_sig =
   (* Compute the regions hierarchy *)
   let regions_hierarchy =
-    RegionsHierarchy.compute_regions_hierarchy_for_sig None decls_ctx.crate
-      fun_name sg
+    RegionsHierarchy.compute_regions_hierarchy_for_sig None decls_ctx.crate sg
   in
   (* Compute the decomposed fun signature *)
   let sg =

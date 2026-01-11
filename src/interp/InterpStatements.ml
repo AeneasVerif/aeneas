@@ -667,10 +667,9 @@ let eval_non_builtin_function_call_symbolic_inst (span : Meta.span)
         ^ generic_args_to_string ctx generics
         ^ "\n- def.signature:\n"
         ^ fun_sig_to_string ctx signature];
-      let name = name_to_string ctx def.item_meta.name in
       (* Instantiate *)
       let inst_sg =
-        instantiate_fun_sig (Some span) ctx name generics tr_self signature
+        instantiate_fun_sig (Some span) ctx generics tr_self signature
       in
       (func.kind, func.generics, def, inst_sg)
 
@@ -1600,11 +1599,8 @@ and eval_builtin_function_call_symbolic (config : config) (span : Meta.span)
        ^ fn_ptr_to_string ctx func ^ ")"));
 
   (* There shouldn't be any reference to Self *)
-  let fun_name = Print.Types.builtin_fun_id_to_string fid in
   let tr_self = UnknownTrait __FUNCTION__ in
-  let inst_sig =
-    instantiate_fun_sig (Some span) ctx fun_name func.generics tr_self sg
-  in
+  let inst_sig = instantiate_fun_sig (Some span) ctx func.generics tr_self sg in
 
   (* Evaluate the function call *)
   eval_function_call_symbolic_from_inst_sig config span (FunId (FBuiltin fid))

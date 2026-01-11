@@ -109,10 +109,7 @@ let compute_contexts (crate : crate) : decls_ctx =
 
   let fun_decls = crate.fun_decls in
   let fun_infos = FunsAnalysis.analyze_module crate fun_decls in
-  let regions_hierarchies =
-    RegionsHierarchy.compute_regions_hierarchies crate
-  in
-  let fun_ctx = { fun_decls; fun_infos; regions_hierarchies } in
+  let fun_ctx = { fun_decls; fun_infos } in
 
   { crate; type_ctx; fun_ctx }
 
@@ -121,16 +118,13 @@ let compute_contexts (crate : crate) : decls_ctx =
     We return a new context because we compute and add the type normalization
     map in the same step. *)
 let symbolic_instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
-    (fun_name : string) (sg : bound_fun_sig) (_kind : item_source) :
-    eval_ctx * inst_fun_sig =
+    (sg : bound_fun_sig) (_kind : item_source) : eval_ctx * inst_fun_sig =
   let tr_self = UnknownTrait "symbolic_instantiate_fun_sig" in
   let generics =
     Substitute.generic_args_of_params_erase_regions (Some span)
       sg.item_binder_params
   in
-  let inst_sg =
-    instantiate_fun_sig (Some span) ctx fun_name generics tr_self sg
-  in
+  let inst_sg = instantiate_fun_sig (Some span) ctx generics tr_self sg in
   let region_groups =
     List.map (fun (g : region_var_group) -> g.id) inst_sg.regions_hierarchy
   in
@@ -181,13 +175,10 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx)
     initialize_eval_ctx (Some span) ctx [] fdef.generics.types
       fdef.generics.const_generics marked_ids
   in
-  let fun_name = name_to_string ctx fdef.item_meta.name in
   (* Instantiate the signature. This updates the context because we compute
      at the same time the list of region groups. *)
   let ctx, inst_sg =
-    symbolic_instantiate_fun_sig span ctx fun_name
-      (bound_fun_sig_of_decl fdef)
-      fdef.src
+    symbolic_instantiate_fun_sig span ctx (bound_fun_sig_of_decl fdef) fdef.src
   in
   (* Create fresh symbolic values for the inputs *)
   let input_svs =
@@ -266,11 +257,8 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
    * the return type. Note that it is important to re-generate
    * an instantiation of the signature, so that we use fresh
    * region ids for the return abstractions. *)
-  let fun_name = name_to_string ctx fdef.item_meta.name in
   let _, ret_inst_sg =
-    symbolic_instantiate_fun_sig span ctx fun_name
-      (bound_fun_sig_of_decl fdef)
-      fdef.src
+    symbolic_instantiate_fun_sig span ctx (bound_fun_sig_of_decl fdef) fdef.src
   in
   let ret_rty = ret_inst_sg.output in
 
@@ -395,7 +383,8 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
   in
 
   let regions_hierarchy =
-    FunIdMap.find (FRegular fdef.def_id) ctx.fun_ctx.regions_hierarchies
+    RegionsHierarchy.compute_regions_hierarchy_for_sig (Some span) ctx.crate
+      (bound_fun_sig_of_decl fdef)
   in
 
   (* Create the continuation to finish the evaluation *)

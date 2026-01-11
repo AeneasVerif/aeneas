@@ -747,7 +747,7 @@ let initialize_eval_ctx (span : Meta.span option) (ctx : decls_ctx)
     region ids. This is mostly used in preparation of function calls (when
     evaluating in symbolic mode). *)
 let instantiate_fun_sig (span : Meta.span option) (ctx : eval_ctx)
-    (fun_name : string) (generic_args : generic_args) (tr_self : trait_ref_kind)
+    (generic_args : generic_args) (tr_self : trait_ref_kind)
     (sg : bound_fun_sig) : inst_fun_sig =
   [%ldebug
     "- generics: "
@@ -890,8 +890,7 @@ let instantiate_fun_sig (span : Meta.span option) (ctx : eval_ctx)
       }
     in
     let regions_hierarchy =
-      RegionsHierarchy.compute_regions_hierarchy_for_sig span ctx.crate fun_name
-        sg
+      RegionsHierarchy.compute_regions_hierarchy_for_sig span ctx.crate sg
     in
     (generics.trait_type_constraints, regions_hierarchy)
   in

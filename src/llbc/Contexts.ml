@@ -2,7 +2,6 @@ open Types
 open Expressions
 open Values
 open LlbcAst
-open LlbcAstUtils
 open ValuesUtils
 include ContextsBase
 
@@ -39,7 +38,6 @@ type fun_ctx = {
   fun_decls : fun_decl FunDeclId.Map.t;
       (* Copy of the declarations in the crate *)
   fun_infos : FunsAnalysis.fun_info FunDeclId.Map.t;
-  regions_hierarchies : region_var_groups FunIdMap.t;
 }
 [@@deriving show]
 

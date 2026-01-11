@@ -131,7 +131,6 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
     {
       SymbolicToPureCore.llbc_fun_decls = trans_ctx.fun_ctx.fun_decls;
       fun_infos = trans_ctx.fun_ctx.fun_infos;
-      regions_hierarchies = trans_ctx.fun_ctx.regions_hierarchies;
     }
   in
 
@@ -354,7 +353,7 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
     BuiltinFunIdMap.map
       (fun (info : builtin_fun_info) ->
         SymbolicToPureTypes.translate_fun_sig trans_ctx (FBuiltin info.fun_id)
-          info.name info.fun_sig
+          info.fun_sig
           (List.map (fun _ -> None) info.fun_sig.item_binder_value.inputs))
       builtin_fun_infos
   in
