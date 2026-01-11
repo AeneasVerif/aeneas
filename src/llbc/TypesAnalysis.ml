@@ -631,7 +631,7 @@ let compute_outlive_proj_ty (span : Meta.span option)
                 (* Substitute in the constraints *)
                 let subst =
                   Charon.Substitute.make_subst_from_generics decl.generics
-                    adt.generics
+                    adt.generics Self
                 in
                 let params =
                   Charon.Substitute.predicates_substitute subst decl.generics

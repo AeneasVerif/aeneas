@@ -121,16 +121,20 @@ let compute_contexts (crate : crate) : decls_ctx =
     We return a new context because we compute and add the type normalization
     map in the same step. *)
 let symbolic_instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
-    (sg : bound_fun_sig) (regions_hierarchy : region_var_groups)
-    (_kind : item_source) : eval_ctx * inst_fun_sig =
+    (fun_name : string) (sg : bound_fun_sig) (_kind : item_source) :
+    eval_ctx * inst_fun_sig =
   let tr_self = UnknownTrait "symbolic_instantiate_fun_sig" in
   let generics =
     Substitute.generic_args_of_params_erase_regions (Some span)
       sg.item_binder_params
   in
   let inst_sg =
-    instantiate_fun_sig span ctx generics tr_self sg regions_hierarchy
+    instantiate_fun_sig (Some span) ctx fun_name generics tr_self sg
   in
+  let region_groups =
+    List.map (fun (g : region_var_group) -> g.id) inst_sg.regions_hierarchy
+  in
+  let ctx = { ctx with region_groups } in
   (* Return *)
   (ctx, inst_sg)
 
@@ -169,25 +173,21 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx)
        (sg.output :: sg.inputs))
     "Nested borrows are not supported yet";
 
-  (* Create the context *)
-  let regions_hierarchy =
-    [%silent_unwrap] fdef.item_meta.span
-      (FunIdMap.find_opt (FRegular fdef.def_id) ctx.fun_ctx.regions_hierarchies)
-  in
-  let region_groups =
-    List.map (fun (g : region_var_group) -> g.id) regions_hierarchy
-  in
+  (* Create the context.
+
+     We start with an empty list of region groups, then update the list of
+     region groups when analyzing the function signature. *)
   let ctx =
-    initialize_eval_ctx (Some span) ctx region_groups fdef.generics.types
+    initialize_eval_ctx (Some span) ctx [] fdef.generics.types
       fdef.generics.const_generics marked_ids
   in
+  let fun_name = name_to_string ctx fdef.item_meta.name in
   (* Instantiate the signature. This updates the context because we compute
-     at the same time the normalization map for the associated types.
-  *)
+     at the same time the list of region groups. *)
   let ctx, inst_sg =
-    symbolic_instantiate_fun_sig span ctx
+    symbolic_instantiate_fun_sig span ctx fun_name
       (bound_fun_sig_of_decl fdef)
-      regions_hierarchy fdef.src
+      fdef.src
   in
   (* Create fresh symbolic values for the inputs *)
   let input_svs =
@@ -266,13 +266,11 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
    * the return type. Note that it is important to re-generate
    * an instantiation of the signature, so that we use fresh
    * region ids for the return abstractions. *)
-  let regions_hierarchy =
-    FunIdMap.find (FRegular fdef.def_id) ctx.fun_ctx.regions_hierarchies
-  in
+  let fun_name = name_to_string ctx fdef.item_meta.name in
   let _, ret_inst_sg =
-    symbolic_instantiate_fun_sig span ctx
+    symbolic_instantiate_fun_sig span ctx fun_name
       (bound_fun_sig_of_decl fdef)
-      regions_hierarchy fdef.src
+      fdef.src
   in
   let ret_rty = ret_inst_sg.output in
 
@@ -280,7 +278,9 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
      will end - this will allow us to, first, mark the other return
      regions as non-endable, and, second, end those parent regions in
      proper order. *)
-  let parent_rgs = list_ancestor_region_groups regions_hierarchy back_id in
+  let parent_rgs =
+    list_ancestor_region_groups inst_sg.regions_hierarchy back_id
+  in
   let parent_input_abs_ids =
     RegionGroupId.mapi
       (fun rg_id rg ->

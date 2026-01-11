@@ -120,7 +120,9 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
             in
 
             (* Instantiate the predicates *)
-            let subst = Subst.make_subst_from_generics decl.generics generics in
+            let subst =
+              Subst.make_subst_from_generics decl.generics generics Self
+            in
             let predicates = Subst.predicates_substitute subst decl.generics in
             (* Note that because we also explore the generics below, we may
                explore several times the same type - this is ok *)
