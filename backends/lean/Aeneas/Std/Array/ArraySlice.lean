@@ -3,6 +3,7 @@ import Aeneas.Std.Array.Array
 import Aeneas.Std.Slice
 import Aeneas.Std.Range
 import Aeneas.List.List
+import Aeneas.Std.Core.Convert
 
 /-! Array definitions which mention slices -/
 
@@ -139,11 +140,18 @@ def core.array.equality.PartialEqArray.ne
   else .ok true
 
 @[rust_fun "core::array::{core::fmt::Debug<core::array::TryFromSliceError>}::fmt"]
-def core.array.DebugcorearrayTryFromSliceError.fmt
+def core.array.DebugTryFromSliceError.fmt
   (_ : core.array.TryFromSliceError) (fmt : core.fmt.Formatter) :
   Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=
   -- TODO: this model is simplistic
   .ok (.Ok (), fmt)
+
+@[reducible, rust_trait_impl
+  "core::fmt::Debug<core::array::TryFromSliceError>"]
+def core.fmt.DebugTryFromSliceError : core.fmt.Debug
+  core.array.TryFromSliceError := {
+  fmt := core.array.DebugTryFromSliceError.fmt
+}
 
 @[rust_fun "core::array::{core::convert::TryFrom<[@T; @N], &'0 [@T], core::array::TryFromSliceError>}::try_from"]
 def core.array.TryFromArrayCopySlice.try_from
@@ -163,6 +171,14 @@ def core.array.TryFromSharedArraySlice.try_from
   Result (core.result.Result (Array T N) core.array.TryFromSliceError) := do
   if h: s.len = N then .ok (.Ok ⟨s.val, by scalar_tac⟩)
   else .ok (.Err ())
+
+@[reducible, rust_trait_impl
+  "core::convert::TryFrom<&'a [@T; @N], &'a [@T], core::array::TryFromSliceError>"]
+def core.convert.TryFromSharedArraySliceTryFromSliceError (T : Type) (N : Usize) :
+  core.convert.TryFrom (Array T N) (Slice T)
+  core.array.TryFromSliceError := {
+  try_from := core.array.TryFromSharedArraySlice.try_from N
+}
 
 @[rust_fun "core::array::{core::convert::TryFrom<&'a mut [@T; @N], &'a mut [@T], core::array::TryFromSliceError>}::try_from"]
 def core.array.TryFromMutArraySlice.try_from
