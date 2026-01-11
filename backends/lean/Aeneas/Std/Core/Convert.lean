@@ -56,6 +56,13 @@ def core.convert.TryIntoFrom {T U Error : Type} (fromInst : core.convert.TryFrom
   try_into := core.convert.TryIntoFrom.try_into fromInst
 }
 
+@[reducible, rust_trait_impl "core::convert::TryInto<@T, @U, @E>"]
+def core.convert.TryInto.Blanket {T U E : Type}
+  (TryFromInst : core.convert.TryFrom U T E) :
+  core.convert.TryInto T U E := {
+  try_into := core.convert.TryInto.Blanket.try_into TryFromInst
+}
+
 @[rust_trait "core::convert::AsMut"]
 structure core.convert.AsMut (Self : Type) (T : Type) where
   as_mut : Self → Result (T × (T → Self))
