@@ -21,16 +21,17 @@ let translate_fn_ptr_kind (ctx : bs_ctx) (id : A.fn_ptr_kind) : fn_ptr_kind =
 
 (* Introduce variables for the backward functions.
 
-   We may filter the region group ids.
-*)
+   We may filter the region group ids. *)
 let fresh_back_vars_for_current_fun (ctx : bs_ctx) : bs_ctx * fvar option list =
   (* We lookup the LLBC definition in an attempt to derive pretty names
      for the backward functions. *)
   let back_var_names =
-    let def_id = ctx.fun_decl.def_id in
+    (* TODO: it's annoying that we have to recompute the regions hierarchy.
+       Charon should do it for us. *)
     let regions_hierarchy =
-      LlbcAstUtils.FunIdMap.find (FRegular def_id)
-        ctx.fun_ctx.regions_hierarchies
+      RegionsHierarchy.compute_regions_hierarchy_for_sig (Some ctx.span)
+        ctx.decls_ctx.crate
+        (LlbcAstUtils.bound_fun_sig_of_decl ctx.fun_decl)
     in
     List.map
       (fun (gid, _) ->

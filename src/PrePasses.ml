@@ -15,6 +15,55 @@ let statement_to_string (crate : crate) =
   let fmt_env = Print.Crate.crate_to_fmt_env crate in
   Print.Ast.statement_to_string fmt_env "" "  "
 
+(** Erase the useless body regions.
+
+    We erase the body regions which appear in:
+    - locals
+    - places
+
+    We only keep those used in function calls. *)
+let erase_body_regions (crate : crate) (f : fun_decl) : fun_decl =
+  let f0 = f in
+
+  let erase_visitor =
+    object
+      inherit [_] map_statement
+
+      method! visit_fn_operand _ x =
+        (* Do not erase the use of body regions inside function operands *)
+        x
+
+      method! visit_RBody _ _ = RErased
+    end
+  in
+
+  (* Map  *)
+  let body =
+    match f.body with
+    | Some body ->
+        let body =
+          {
+            body with
+            locals =
+              {
+                body.locals with
+                locals =
+                  List.map Contexts.local_erase_body_regions body.locals.locals;
+              };
+          }
+        in
+        Some { body with body = erase_visitor#visit_block 0 body.body }
+    | None -> None
+  in
+
+  let f : fun_decl = { f with body } in
+  [%ldebug
+    "Before/after [erase_body_regions]:\n"
+    ^ Print.Crate.crate_fun_decl_to_string crate f0
+    ^ "\n\n"
+    ^ Print.Crate.crate_fun_decl_to_string crate f];
+  f
+
 (** The Rust compiler generates a unique implementation of [Default] for arrays
     for every choice of length. For instance, if we write:
     {[
@@ -1151,6 +1200,7 @@ let apply_passes (crate : crate) : crate =
   (* Passes that apply to individual function bodies *)
   let function_passes =
     [
+      ("erase_body_regions", erase_body_regions);
       ("update_loop", update_loops);
       ("remove_useless_joins", remove_useless_joins);
       ( "remove_shallow_borrows_storage_live_dead",

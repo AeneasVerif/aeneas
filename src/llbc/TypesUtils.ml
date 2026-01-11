@@ -218,6 +218,19 @@ let ty_is_ety (ty : ty) : bool =
     true
   with Found -> false
 
+let ty_erase_body_regions ty =
+  let visitor =
+    object
+      inherit [_] map_ty
+
+      method! visit_region _ r =
+        match r with
+        | RStatic | RVar _ | RErased -> r
+        | RBody _ -> RErased
+    end
+  in
+  visitor#visit_ty () ty
+
 let generic_args_only_erased_regions (x : generic_args) : bool =
   try
     raise_if_not_erased_ty_visitor#visit_generic_args () x;
