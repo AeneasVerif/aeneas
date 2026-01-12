@@ -1247,7 +1247,9 @@ let names_map_init () : names_map_init =
     target language/prover. *)
 let initialize_names_maps () : names_maps =
   let init = names_map_init () in
-  let int_names = List.map int_name T.all_int_types in
+  let prefix = if backend () = Lean then "Std." else "" in
+  let mk_int_name s = prefix ^ int_name s in
+  let int_names = List.map mk_int_name T.all_int_types in
   let keywords =
     (* Remark: we don't put "str_name()" below because it clashes with
        "alloc::string::String", which we register elsewhere. *)

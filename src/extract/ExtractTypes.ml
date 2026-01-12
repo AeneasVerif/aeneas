@@ -264,8 +264,12 @@ let extract_literal_type (_ctx : extraction_ctx) (fmt : F.formatter)
   match ty with
   | TBool -> F.pp_print_string fmt (bool_name ())
   | TChar -> F.pp_print_string fmt (char_name ())
-  | TInt int_ty -> F.pp_print_string fmt (int_name (Signed int_ty))
-  | TUInt int_ty -> F.pp_print_string fmt (int_name (Unsigned int_ty))
+  | TInt int_ty ->
+      let prefix = if backend () = Lean then "Std." else "" in
+      F.pp_print_string fmt (prefix ^ int_name (Signed int_ty))
+  | TUInt int_ty ->
+      let prefix = if backend () = Lean then "Std." else "" in
+      F.pp_print_string fmt (prefix ^ int_name (Unsigned int_ty))
   | TFloat float_ty -> F.pp_print_string fmt (float_name float_ty)
 
 (** [inside] constrols whether we should add parentheses or not around type
