@@ -383,21 +383,62 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
                 ("Encountered an incorrectly typed constant: "
                 ^ constant_expr_to_string ctx cv
                 ^ " : " ^ ty_to_string ctx cv.ty))
-      | CTraitConst (trait_ref, const_name) ->
+      | CTraitConst (trait_ref, const_name) -> (
           let ctx0 = ctx in
-          (* Simply introduce a fresh symbolic value *)
+          (* Simply introduce a fresh symbolic value.
+
+             Remark: there is a special case if the value is a static reference:
+             in this case we directly introduce the expanded borrow.
+
+             TODO: add static lifetimes in region abstractions. *)
+
           let ty = cv.ty in
-          let v = mk_fresh_symbolic_tvalue span ctx ty in
-          (* Wrap the generated expression *)
-          let cf e =
-            SymbolicAst.IntroSymbolic
-              ( ctx0,
-                None,
-                value_as_symbolic span v.value,
-                SymbolicAst.VaTraitConstValue (trait_ref, const_name),
-                e )
-          in
-          (v, ctx, cf)
+          match ty with
+          | TRef (RStatic, ty_inner, ref_kind) ->
+              [%cassert] span (not !Config.use_static) "Unimplemented";
+              [%cassert] span (ref_kind = RShared)
+                "Mutable references for lifetime 'static are not supported";
+              let sval = mk_fresh_symbolic_tvalue span ctx ty_inner in
+              (* Create a shared loan containing the global, as well as a shared borrow *)
+              let bid = ctx.fresh_borrow_id () in
+              let sid = ctx.fresh_shared_borrow_id () in
+              let loan : tvalue =
+                { value = VLoan (VSharedLoan (bid, sval)); ty = sval.ty }
+              in
+              let borrow : tvalue =
+                {
+                  value = VBorrow (VSharedBorrow (bid, sid));
+                  ty = TRef (RErased, sval.ty, RShared);
+                }
+              in
+              (* We need to push the shared loan in a dummy variable.
+                 Generally speaking we should not be allowed to put loans in dummy variables,
+                 but in the case of static lifetimes it is ok. TODO: generalize. *)
+              let dummy_id = ctx.fresh_dummy_var_id () in
+              let ctx = ctx_push_dummy_var ctx dummy_id loan in
+
+              (* Wrap the generated expression *)
+              let cf e =
+                SymbolicAst.IntroSymbolic
+                  ( ctx0,
+                    None,
+                    value_as_symbolic span sval.value,
+                    SymbolicAst.VaTraitConstValue (trait_ref, const_name),
+                    e )
+              in
+              (borrow, ctx, cf)
+          | _ ->
+              let v = mk_fresh_symbolic_tvalue span ctx ty in
+              (* Wrap the generated expression *)
+              let cf e =
+                SymbolicAst.IntroSymbolic
+                  ( ctx0,
+                    None,
+                    value_as_symbolic span v.value,
+                    SymbolicAst.VaTraitConstValue (trait_ref, const_name),
+                    e )
+              in
+              (v, ctx, cf))
       | CVar var ->
           let vid = expect_free_var (Some span) var in
           let ctx0 = ctx in
