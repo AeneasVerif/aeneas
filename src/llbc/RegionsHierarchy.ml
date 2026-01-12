@@ -41,7 +41,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
     (sg : bound_fun_sig) : region_var_groups =
   (* Create the dependency graph.
 
-     An edge from 'short to 'long means that 'long outlives 'short (that is
+     An edge from 'long to 'short means that 'long outlives 'short (that is
      we have 'long : 'short,  using Rust notations).
   *)
   (* First initialize the regions map.
@@ -49,24 +49,24 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
      We add:
      - the region variables
      - the static region
-     - edges from the region variables to the static region
+     - edges from the static region to the region variables
 
      Note that we only consider the regions bound at the
      level of the signature (this excludes the regions locally bound inside
      the types, for instance at the level of an arrow type).
   *)
   let g : RegionSet.t RegionMap.t ref =
-    let s_set = RegionSet.singleton RStatic in
-    let m =
+    let rvars =
       List.map
-        (fun (r : region_param) -> (RVar (Free r.index), s_set))
+        (fun (r : region_param) -> RVar (Free r.index))
         sg.item_binder_params.regions
     in
-    let s = (RStatic, RegionSet.empty) in
-    ref (RegionMap.of_list (s :: m))
+    let s = (RStatic, RegionSet.of_list rvars) in
+    let rsets = List.map (fun r -> (r, RegionSet.empty)) rvars in
+    ref (RegionMap.of_list (s :: rsets))
   in
 
-  let add_edge ~(short : region) ~(long : region) =
+  let add_edge ~(long : region) ~(short : region) =
     (* Sanity checks *)
     [%sanity_check_opt_span] span (short <> RErased);
     [%sanity_check_opt_span] span (long <> RErased);
@@ -75,9 +75,9 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
     | RVar (Bound _), _ | _, RVar (Bound _) -> ()
     | _, _ ->
         let m = !g in
-        let s = RegionMap.find short !g in
-        let s = RegionSet.add long s in
-        g := RegionMap.add short s m
+        let s = RegionMap.find long !g in
+        let s = RegionSet.add short s in
+        g := RegionMap.add long s m
   in
 
   let add_edges_from_region_binder :
@@ -88,11 +88,12 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
   in
 
   let add_edge_from_region_constraint ((long, short) : region_outlives) =
-    add_edge ~short ~long
+    add_edge ~long ~short
   in
 
   let add_edges ~(long : region) ~(shorts : region list) =
-    List.iter (fun short -> add_edge ~short ~long) shorts
+    (* TODO: shouldn't have to use List.iter *)
+    List.iter (fun short -> add_edge ~long ~short) shorts
   in
 
   (* Explore the clauses - we only explore the "region outlives" clause,
