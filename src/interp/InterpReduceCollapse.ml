@@ -229,9 +229,8 @@ let ctx_with_info_merge_into_first_abs (span : Meta.span) (abs_kind : abs_kind)
   struct
     (* Update a map from marked borrows/loans or symbolic value projections
        to region abstractions by using the old map and the information computed
-       from the merged abstraction.
-    *)
-    let update_to_abs (key_to_string : M.key -> string)
+       from the merged abstraction. *)
+    let update_to_abs ~(to_abs_inj : bool) (key_to_string : M.key -> string)
         (abs_to : S.t AbsId.Map.t) (to_nabs : AbsId.Set.t M.t)
         (to_abs : AbsId.Set.t M.t) : AbsId.Set.t M.t =
       (* Remove the old bindings from borrow/loan ids to the two region
@@ -240,18 +239,35 @@ let ctx_with_info_merge_into_first_abs (span : Meta.span) (abs_kind : abs_kind)
       let abs0_elems = AbsId.Map.find abs_id0 abs_to in
       let abs1_elems = AbsId.Map.find abs_id1 abs_to in
       let abs01_elems = S.union abs0_elems abs1_elems in
-      let to_abs = M.filter (fun id _ -> not (S.mem id abs01_elems)) to_abs in
+      (* Remove the to_abs mapping if to_abs is injective *)
+      let to_abs =
+        if to_abs_inj then
+          M.filter (fun id _ -> not (S.mem id abs01_elems)) to_abs
+        else to_abs
+      in
       (* Add the new bindings from the borrows/loan ids that we find in the
          merged abstraction to this abstraction's id *)
       let merge (key : M.key) (abs0 : AbsId.Set.t) (abs1 : AbsId.Set.t) =
-        (* We shouldn't see the same key twice *)
-        [%craise] span
-          ("Unreachable:\n key: " ^ key_to_string key ^ "\n- abs0: "
-          ^ AbsId.Set.to_string None abs0
-          ^ "\n- abs1: "
-          ^ AbsId.Set.to_string None abs1)
+        (* We shouldn't see the same key twice if the [to_abs] map is injective *)
+        if to_abs_inj then
+          [%craise] span
+            ("Unreachable:\n key: " ^ key_to_string key ^ "\n- abs0: "
+            ^ AbsId.Set.to_string None abs0
+            ^ "\n- abs1: "
+            ^ AbsId.Set.to_string None abs1)
+        else Some (AbsId.Set.union abs0 abs1)
       in
-      M.union merge to_nabs to_abs
+      let to_abs = M.union merge to_nabs to_abs in
+      (* Filter to remove the old abstraction ids *)
+      M.filter_map
+        (fun _ s ->
+          let s =
+            AbsId.Set.filter
+              (fun (id : abs_id) -> id <> abs_id0 && id <> abs_id1)
+              s
+          in
+          if AbsId.Set.is_empty s then None else Some s)
+        to_abs
   end in
   let module UpdateMarkedBorrowId =
     UpdateToAbs (MarkedBorrowId.Map) (MarkedBorrowId.Set)
@@ -273,28 +289,29 @@ let ctx_with_info_merge_into_first_abs (span : Meta.span) (abs_kind : abs_kind)
     Print.Values.add_proj_marker pm s
   in
   let borrow_to_abs =
-    UpdateMarkedUniqueBorrowId.update_to_abs marked_unique_borrow_id_to_string
-      abs_to_borrows borrow_to_nabs borrow_to_abs
+    UpdateMarkedUniqueBorrowId.update_to_abs ~to_abs_inj:true
+      marked_unique_borrow_id_to_string abs_to_borrows borrow_to_nabs
+      borrow_to_abs
   in
   let non_unique_borrow_to_abs =
-    UpdateMarkedBorrowId.update_to_abs show_marked_borrow_id
+    UpdateMarkedBorrowId.update_to_abs ~to_abs_inj:false show_marked_borrow_id
       abs_to_non_unique_borrows non_unique_borrow_to_nabs
       non_unique_borrow_to_abs
   in
   let loan_to_abs =
-    UpdateMarkedLoanId.update_to_abs show_marked_borrow_id abs_to_loans
-      loan_to_nabs loan_to_abs
+    UpdateMarkedLoanId.update_to_abs ~to_abs_inj:true show_marked_borrow_id
+      abs_to_loans loan_to_nabs loan_to_abs
   in
   let module UpdateSymbProj =
     UpdateToAbs (MarkedNormSymbProj.Map) (MarkedNormSymbProj.Set)
   in
   let borrow_proj_to_abs =
-    UpdateSymbProj.update_to_abs show_marked_norm_symb_proj abs_to_borrow_projs
-      borrow_proj_to_nabs borrow_proj_to_abs
+    UpdateSymbProj.update_to_abs ~to_abs_inj:false show_marked_norm_symb_proj
+      abs_to_borrow_projs borrow_proj_to_nabs borrow_proj_to_abs
   in
   let loan_proj_to_abs =
-    UpdateSymbProj.update_to_abs show_marked_norm_symb_proj abs_to_loan_projs
-      loan_proj_to_nabs loan_proj_to_abs
+    UpdateSymbProj.update_to_abs ~to_abs_inj:false show_marked_norm_symb_proj
+      abs_to_loan_projs loan_proj_to_nabs loan_proj_to_abs
   in
 
   (* Update the maps from abstractions to marked borrows/loans or
