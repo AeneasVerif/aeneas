@@ -35,7 +35,7 @@ You need to install OCaml, together with some packages.
 We suggest you to follow those [instructions](https://ocaml.org/docs/install.html),
 and install OPAM on the way (same instructions).
 
-We are developing Aeneas by using **OCaml 5**. For instance, if you want to use OCaml 5.2.0:
+We are developing Aeneas by using **OCaml 5**. For instance, if you want to use OCaml 5.3.0:
 ```
 opam switch create 5.3.0
 ```
@@ -93,7 +93,7 @@ to display a detailed documentation.
 > import the `Aeneas` package from Aeneas. To use those files in Lean:
 >  1. Create a new Lean package using `lake new`.
 >  2. Overwrite the `lean-toolchain` with the one inside `./backends/lean`.
->  3. Add `aeneas` as a dependency in the `lakefile.lean`:  
+>  3. Add `aeneas` as a dependency in the `lakefile.lean`:
 >     ```lean
 >     require aeneas from "PATH_TO_AENEAS_REPO/backends/lean"
 >     ```
