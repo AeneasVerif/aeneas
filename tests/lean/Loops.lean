@@ -874,4 +874,30 @@ partial_fixpoint
 def decode (pe_dst : Slice U8) : Result (Bool × (Slice U8)) := do
   decode_loop0 pe_dst 0#usize
 
+/- [loops::as_radix_minimized]: loop 0:
+   Source: 'tests/src/loops.rs', lines 569:4-576:5 -/
+def as_radix_minimized_loop
+  (scalar : Array U64 4#usize) (i : Usize) : Result Unit := do
+  if i < 4#usize
+  then
+    let _ ←
+      if i = 0#usize
+      then let i1 ← Array.index_usize scalar i
+           i1 >>> 1#i32
+      else
+        let i1 ← Array.index_usize scalar i
+        let i2 ← i1 >>> 1#i32
+        let i3 ← i1 <<< 63#i32
+        ok (i2 ||| i3)
+    let i1 ← i + 1#usize
+    as_radix_minimized_loop scalar i1
+  else ok ()
+partial_fixpoint
+
+/- [loops::as_radix_minimized]:
+   Source: 'tests/src/loops.rs', lines 566:0-577:1 -/
+def as_radix_minimized : Result Unit := do
+  let scalar := Array.repeat 4#usize 0#u64
+  as_radix_minimized_loop scalar 0#usize
+
 end loops

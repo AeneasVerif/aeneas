@@ -58,6 +58,60 @@ type abs_borrows_loans_maps = {
 
 type tvalue_matcher = tvalue -> tvalue -> tvalue
 
+let abs_borrows_loans_maps_to_string (_ctx : eval_ctx)
+    (m : abs_borrows_loans_maps) : string =
+  let {
+    abs_ids;
+    abs_to_borrows;
+    abs_to_non_unique_borrows;
+    abs_to_loans;
+    borrow_to_abs;
+    non_unique_borrow_to_abs;
+    loan_to_abs;
+    abs_to_borrow_projs;
+    abs_to_loan_projs;
+    borrow_proj_to_abs;
+    loan_proj_to_abs;
+  } =
+    m
+  in
+  "{\n  abs_ids: "
+  ^ Print.list_to_string AbsId.to_string abs_ids
+  ^ ",\n  abs_to_borrows: "
+  ^ AbsId.Map.to_string None
+      (MarkedUniqueBorrowId.Set.to_string None)
+      abs_to_borrows
+  ^ ",\n  abs_to_non_unique_borrows: "
+  ^ AbsId.Map.to_string None
+      (MarkedBorrowId.Set.to_string None)
+      abs_to_non_unique_borrows
+  ^ ",\n  abs_to_loans: "
+  ^ AbsId.Map.to_string None (MarkedLoanId.Set.to_string None) abs_to_loans
+  ^ ",\n  borrow_to_abs: "
+  ^ MarkedUniqueBorrowId.Map.to_string None (AbsId.Set.to_string None)
+      borrow_to_abs
+  ^ ",\n  non_unique_borrow_to_abs: "
+  ^ MarkedBorrowId.Map.to_string None (AbsId.Set.to_string None)
+      non_unique_borrow_to_abs
+  ^ ",\n  loan_to_abs: "
+  ^ MarkedLoanId.Map.to_string None (AbsId.Set.to_string None) loan_to_abs
+  (* TOOD: improve printing of those: *)
+  ^ ",\n  abs_to_borrow_projs: "
+  ^ AbsId.Map.to_string None
+      (MarkedNormSymbProj.Set.to_string None)
+      abs_to_borrow_projs
+  ^ ",\n  abs_to_loan_projs: "
+  ^ AbsId.Map.to_string None
+      (MarkedNormSymbProj.Set.to_string None)
+      abs_to_loan_projs
+  ^ ",\n  borrow_proj_to_abs: "
+  ^ MarkedNormSymbProj.Map.to_string None (AbsId.Set.to_string None)
+      borrow_proj_to_abs
+  ^ ",\n  loan_proj_to_abs: "
+  ^ MarkedNormSymbProj.Map.to_string None (AbsId.Set.to_string None)
+      loan_proj_to_abs
+  ^ "\n}"
+
 (** See {!module:Aeneas.InterpLoopsMatchCtxs.MakeMatcher} and [Matcher].
 
     This module contains primitive match functions to instantiate the generic

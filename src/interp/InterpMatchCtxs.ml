@@ -1197,7 +1197,6 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       in
 
       let owned = RegionId.Set.singleton rid in
-      [%sanity_check] span (not S.with_abs_conts);
       let cont : abs_cont option =
         if S.with_abs_conts then
           Some { output = Some (mk_etuple []); input = Some (mk_etuple []) }
