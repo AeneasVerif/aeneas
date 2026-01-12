@@ -402,6 +402,22 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Discriminant.lean", line: 26 *)
     mk_fun "core::intrinsics::discriminant_value"
       "core.intrinsics.discriminant_value";
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 36 *)
+    mk_fun
+      "core::iter::range::{core::iter::range::Step<usize>}::backward_checked"
+      "core.iter.range.StepUsize.backward_checked";
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 30 *)
+    mk_fun
+      "core::iter::range::{core::iter::range::Step<usize>}::forward_checked"
+      "core.iter.range.StepUsize.forward_checked";
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 21 *)
+    mk_fun "core::iter::range::{core::iter::range::Step<usize>}::steps_between"
+      "core.iter.range.StepUsize.steps_between";
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 42 *)
+    mk_fun
+      "core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, \
+       @A>}::next"
+      "core.iter.range.IteratorcoreopsrangeRangeA.next";
     (* file: "Aeneas/Std/Core/Core.lean", line: 73 *)
     mk_fun "core::mem::replace" "core.mem.replace" ~can_fail:false ~lift:false;
     (* file: "Aeneas/Std/Core/Core.lean", line: 77 *)
@@ -643,7 +659,7 @@ let lean_builtin_trait_decls =
     (* file: "Aeneas/Std/Core/Hash.lean", line: 6 *)
     mk_trait_decl "core::hash::Hasher" "core.hash.Hasher"
       ~methods:[ ("finish", "finish"); ("write", "write") ];
-    (* file: "Aeneas/Std/Core/Iter.lean", line: 6 *)
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 10 *)
     mk_trait_decl "core::iter::range::Step" "core.iter.range.Step"
       ~parent_clauses:[ "cloneCloneInst"; "cmpPartialOrdInst" ]
       ~methods:
