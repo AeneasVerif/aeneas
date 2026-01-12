@@ -140,7 +140,6 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
   in
   let r_is_static (r : region) : bool = r = RStatic in
   let update_mut_regions_with_rid mut_regions rid =
-    let rid = RegionId.of_int (RegionId.to_int rid) in
     if RegionId.Set.mem rid mut_regions then ty_info.mut_regions
     else (
       updated := true;
@@ -152,6 +151,7 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
         mut_regions (* We can have bound vars because of arrows *)
     | RErased -> [%internal_error_opt_span] span
     | RVar (Free rid) -> update_mut_regions_with_rid mut_regions rid
+    | RBody _ -> [%craise_opt_span] span "unsupported: Body region"
   in
 
   (* Update a partial_type_info, while registering if we actually performed an update *)
@@ -281,8 +281,10 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
     | TRawPtr (rty, _) ->
         (* TODO: not sure what to do here *)
         analyze span expl_info ty_info rty
-    | TAdt { id = TTuple | TBuiltin (TBox | TSlice | TArray | TStr); generics }
-      ->
+    | TArray (ty, _) | TSlice ty ->
+        (* Nothing to update: just explore the type parameters *)
+        analyze span expl_info ty_info ty
+    | TAdt { id = TTuple | TBuiltin (TBox | TStr); generics } ->
         (* Nothing to update: just explore the type parameters *)
         List.fold_left
           (fun ty_info ty -> analyze span expl_info ty_info ty)
@@ -362,14 +364,15 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
               | RVar (Free rid) ->
                   if RegionId.Set.mem adt_rid adt_info.mut_regions then
                     update_mut_regions_with_rid mut_regions rid
-                  else mut_regions)
+                  else mut_regions
+              | RBody _ -> [%craise_opt_span] span "unsupported: Body region")
             ty_info.mut_regions
             (RegionId.mapi (fun adt_rid r -> (adt_rid, r)) generics.regions)
         in
         (* Return *)
         { ty_info with mut_regions }
     | TFnPtr fn_sig ->
-        let inputs, output = fn_sig.binder_value in
+        let { Types.inputs; output; _ } = fn_sig.binder_value in
         (* Just dive into the arrow *)
         let ty_info =
           List.fold_left
@@ -462,11 +465,51 @@ let analyze_type_declaration_group (type_decls : type_decl TypeDeclId.Map.t)
   in
   analyze infos
 
+let ty_replace_body_regions_with_free_regions (ty : ty) : ty =
+  (* Find the maximum free region id *)
+  let max = ref (-1) in
+  let visitor =
+    object
+      inherit [_] iter_ty
+
+      method! visit_RVar _ r =
+        match r with
+        | Bound _ -> ()
+        | Free rid ->
+            let rid = RegionId.to_int rid in
+            max := if rid > !max then rid else !max
+    end
+  in
+  visitor#visit_ty () ty;
+  (* Create a generator *)
+  let _, fresh_fid =
+    RegionId.mk_stateful_generator_starting_at_id (RegionId.of_int (!max + 1))
+  in
+  (* Replace *)
+  let map = ref RegionId.Map.empty in
+  let visitor =
+    object
+      inherit [_] map_ty
+
+      method! visit_RBody _ rid =
+        match RegionId.Map.find_opt rid !map with
+        | None ->
+            let fid = fresh_fid () in
+            map := RegionId.Map.add rid fid !map;
+            RVar (Free rid)
+        | Some rid -> RVar (Free rid)
+    end
+  in
+  visitor#visit_ty () ty
+
 (** Analyze a type to check whether it contains borrows, etc., provided we have
     already analyzed the type definitions in the context. *)
 let analyze_ty (span : Meta.span option) (infos : type_infos) (ty : ty) :
     ty_info =
   [%ltrace "ty:\n" ^ show_ty ty];
+  (* Replace the body regions with fresh free regions - this makes the
+     implementation easier *)
+  let ty = ty_replace_body_regions_with_free_regions ty in
   (* We don't use [updated] but need to give it as parameter *)
   let updated = ref false in
   (* We don't need to compute whether the type contains 'static or not *)
@@ -552,6 +595,7 @@ let compute_outlive_proj_ty (span : Meta.span option)
           | RVar (Free rid) -> RegionId.Set.mem rid regions
           | RVar (Bound _) -> [%craise_opt_span] span "Not handled yet"
           | RStatic -> false
+          | RBody _ -> [%craise_opt_span] span "unsupported: Body region"
         in
         if add then (
           add_region r;
@@ -587,7 +631,7 @@ let compute_outlive_proj_ty (span : Meta.span option)
                 (* Substitute in the constraints *)
                 let subst =
                   Charon.Substitute.make_subst_from_generics decl.generics
-                    adt.generics
+                    adt.generics Self
                 in
                 let params =
                   Charon.Substitute.predicates_substitute subst decl.generics
@@ -613,7 +657,8 @@ let compute_outlive_proj_ty (span : Meta.span option)
                       [%craise_opt_span] span
                         "Bound regions are not handled yet"
                   | RVar (Free _) -> add_outlives r0 [ r1 ]
-                  | RStatic | RErased -> [%internal_error_opt_span] span
+                  | RStatic | RErased | RBody _ ->
+                      [%internal_error_opt_span] span
                 in
 
                 let outlive_visitor =
@@ -646,8 +691,9 @@ let compute_outlive_proj_ty (span : Meta.span option)
             | TTuple -> super#visit_ty outer ty
             | TBuiltin builtin_ty -> (
                 match builtin_ty with
-                | TBox | TArray | TSlice | TStr -> super#visit_ty outer ty)
+                | TBox | TStr -> super#visit_ty outer ty)
           end
+        | TArray _ | TSlice _ -> super#visit_ty outer ty
         | TVar _ | TLiteral _ | TNever -> ()
         | TRef (r, ref_ty, _) ->
             self#visit_region outer r;

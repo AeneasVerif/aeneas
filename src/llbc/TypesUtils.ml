@@ -149,7 +149,7 @@ let ty_has_mut_borrow_for_region_in_pred (infos : TypesAnalysis.type_infos)
         (* Lookup the information for this ADT *)
         begin
           match tref.id with
-          | TTuple | TBuiltin (TBox | TArray | TSlice | TStr) -> ()
+          | TTuple | TBuiltin (TBox | TStr) -> ()
           | TAdtId adt_id ->
               let info = TypeDeclId.Map.find adt_id infos in
               RegionId.iteri
@@ -187,6 +187,7 @@ let raise_if_not_rty_visitor =
       match r with
       | RVar (Bound _) | RErased -> raise Found
       | RStatic | RVar (Free _) -> ()
+      | RBody _ -> [%craise_opt_span] None "unsupported: Body region"
   end
 
 (** Return [true] if the type is a region type (i.e., it doesn't contain erased
@@ -206,6 +207,7 @@ let raise_if_not_erased_ty_visitor =
       match r with
       | RStatic | RVar _ -> raise Found
       | RErased -> ()
+      | RBody _ -> [%craise_opt_span] None "unsupported: Body region"
   end
 
 (** Return [true] if the type is a region type (i.e., it doesn't contain erased
@@ -215,6 +217,19 @@ let ty_is_ety (ty : ty) : bool =
     raise_if_not_erased_ty_visitor#visit_ty () ty;
     true
   with Found -> false
+
+let ty_erase_body_regions ty =
+  let visitor =
+    object
+      inherit [_] map_ty
+
+      method! visit_region _ r =
+        match r with
+        | RStatic | RVar _ | RErased -> r
+        | RBody _ -> RErased
+    end
+  in
+  visitor#visit_ty () ty
 
 let generic_args_only_erased_regions (x : generic_args) : bool =
   try

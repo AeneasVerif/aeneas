@@ -79,17 +79,17 @@ module Sig = struct
     let ref_kind = if is_mut then RMut else RShared in
     mk_ref_ty r ty ref_kind
 
-  let mk_array_ty (ty : ty) (cg : const_generic) : ty =
-    TAdt { id = TBuiltin TArray; generics = mk_generic_args [] [ ty ] [ cg ] }
+  let mk_array_ty (ty : ty) (cg : const_generic) : ty = TArray (ty, cg)
+  let mk_slice_ty (ty : ty) : ty = TSlice ty
 
-  let mk_slice_ty (ty : ty) : ty =
-    TAdt { id = TBuiltin TSlice; generics = mk_generic_args [] [ ty ] [] }
-
-  let mk_sig generics inputs output : fun_sig =
-    { is_unsafe = false; generics; inputs; output }
+  let mk_sig generics inputs output : bound_fun_sig =
+    {
+      item_binder_params = generics;
+      item_binder_value = { inputs; output; is_unsafe = false };
+    }
 
   (** [fn<T>(T) -> Box<T>] *)
-  let box_new_sig : fun_sig =
+  let box_new_sig : bound_fun_sig =
     let generics =
       mk_generic_params [] [ type_param_0 ] []
       (* <T> *)
@@ -102,7 +102,7 @@ module Sig = struct
     mk_sig generics inputs output
 
   (** [fn<T>(Box<T>) -> ()] *)
-  let box_free_sig : fun_sig =
+  let box_free_sig : bound_fun_sig =
     let generics =
       mk_generic_params [] [ type_param_0 ] []
       (* <T> *)
@@ -128,7 +128,7 @@ module Sig = struct
       a mutable borrow. *)
   let mk_array_slice_borrow_sig (cgs : const_generic_param list)
       (input_ty : ty -> ty) (index_ty : ty option) (output_ty : ty -> ty)
-      (is_mut : bool) : fun_sig =
+      (is_mut : bool) : bound_fun_sig =
     let generics =
       mk_generic_params [ region_param_0 ] [ type_param_0 ] cgs (* <'a, T> *)
     in
@@ -146,7 +146,8 @@ module Sig = struct
     in
     mk_sig generics inputs output
 
-  let mk_array_slice_index_sig (is_array : bool) (is_mut : bool) : fun_sig =
+  let mk_array_slice_index_sig (is_array : bool) (is_mut : bool) : bound_fun_sig
+      =
     (* Array<T, N> *)
     let input_ty ty =
       if is_array then mk_array_ty ty cgvar_0 else mk_slice_ty ty
@@ -161,7 +162,7 @@ module Sig = struct
   let array_index_sig (is_mut : bool) = mk_array_slice_index_sig true is_mut
   let slice_index_sig (is_mut : bool) = mk_array_slice_index_sig false is_mut
 
-  let array_to_slice_sig (is_mut : bool) : fun_sig =
+  let array_to_slice_sig (is_mut : bool) : bound_fun_sig =
     (* Array<T, N> *)
     let input_ty ty = mk_array_ty ty cgvar_0 in
     (* Slice<T> *)
@@ -182,7 +183,7 @@ module Sig = struct
     mk_sig generics inputs output
 
   (** Helper: [fn<T>(&'a [T]) -> usize] *)
-  let slice_len_sig : fun_sig =
+  let slice_len_sig : bound_fun_sig =
     let generics =
       mk_generic_params [ region_param_0 ] [ type_param_0 ] [] (* <'a, T> *)
     in
@@ -196,11 +197,12 @@ module Sig = struct
     mk_sig generics inputs output
 end
 
-type raw_builtin_fun_info = builtin_fun_id * fun_sig * bool * bool list option
+type raw_builtin_fun_info =
+  builtin_fun_id * bound_fun_sig * bool * bool list option
 
 type builtin_fun_info = {
   fun_id : builtin_fun_id;
-  fun_sig : fun_sig;
+  fun_sig : bound_fun_sig;
   can_fail : bool;
   name : string;
   keep_types : bool list option;
@@ -278,7 +280,7 @@ let get_builtin_fun_info (id : builtin_fun_id) : builtin_fun_info =
       raise
         (Failure ("get_builtin_fun_info: not found: " ^ show_builtin_fun_id id))
 
-let get_builtin_fun_sig (id : builtin_fun_id) : fun_sig =
+let get_builtin_fun_sig (id : builtin_fun_id) : bound_fun_sig =
   (get_builtin_fun_info id).fun_sig
 
 let get_builtin_fun_name (id : builtin_fun_id) : string =

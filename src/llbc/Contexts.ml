@@ -2,7 +2,6 @@ open Types
 open Expressions
 open Values
 open LlbcAst
-open LlbcAstUtils
 open ValuesUtils
 include ContextsBase
 
@@ -39,7 +38,6 @@ type fun_ctx = {
   fun_decls : fun_decl FunDeclId.Map.t;
       (* Copy of the declarations in the crate *)
   fun_infos : FunsAnalysis.fun_info FunDeclId.Map.t;
-  regions_hierarchies : region_var_groups FunIdMap.t;
 }
 [@@deriving show]
 
@@ -200,6 +198,9 @@ let env_update_var_value (span : Meta.span) (env : env) (vid : LocalId.id)
 
 let var_to_binder (var : local) : real_var_binder =
   { index = var.index; name = var.name }
+
+let local_erase_body_regions (var : local) : local =
+  { var with local_ty = TypesUtils.ty_erase_body_regions var.local_ty }
 
 (** Update a variable's value in an evaluation context.
 
@@ -586,7 +587,7 @@ let ctx_adt_get_instantiated_field_types (span : Meta.span) (ctx : eval_ctx)
           [%sanity_check] span (List.length generics.types = 1);
           [%sanity_check] span (generics.const_generics = []);
           generics.types
-      | TArray | TSlice | TStr ->
+      | TStr ->
           (* Those types don't have fields *)
           [%craise] span "Unreachable")
 

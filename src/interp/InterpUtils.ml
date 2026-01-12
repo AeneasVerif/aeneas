@@ -70,6 +70,7 @@ let trait_impl_to_string ctx =
   Print.EvalCtx.trait_impl_to_string
     { ctx with type_vars = []; const_generic_vars = [] }
 
+let block_to_string_with_tab ctx = Print.EvalCtx.block_to_string ctx "  " "  "
 let statement_to_string ctx = Print.EvalCtx.statement_to_string ctx "" "  "
 
 let statement_to_string_with_tab ctx =
@@ -671,7 +672,7 @@ let compute_ctx_ids (ctx : eval_ctx) : ids_sets * ids_to_values =
 let empty_ids_set = fst (compute_ctxs_ids [])
 
 let initialize_eval_ctx (span : Meta.span option) (ctx : decls_ctx)
-    (region_groups : RegionGroupId.id list) (type_vars : type_param list)
+    (region_groups : region_group_id list) (type_vars : type_param list)
     (const_generic_vars : const_generic_param list) (marked_ids : marked_ids) :
     eval_ctx =
   let _, _, _, fresh_symbolic_value_id =
@@ -745,69 +746,15 @@ let initialize_eval_ctx (span : Meta.span option) (ctx : decls_ctx)
 (** Instantiate a function signature, introducing **fresh** abstraction ids and
     region ids. This is mostly used in preparation of function calls (when
     evaluating in symbolic mode). *)
-let instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
-    (generics : generic_args) (tr_self : trait_ref_kind) (sg : fun_sig)
-    (regions_hierarchy : region_var_groups) : inst_fun_sig =
+let instantiate_fun_sig (span : Meta.span option) (ctx : eval_ctx)
+    (generic_args : generic_args) (tr_self : trait_ref_kind)
+    (sg : bound_fun_sig) : inst_fun_sig =
   [%ldebug
     "- generics: "
-    ^ Print.EvalCtx.generic_args_to_string ctx generics
+    ^ Print.EvalCtx.generic_args_to_string ctx generic_args
     ^ "\n- tr_self: "
     ^ Print.EvalCtx.trait_ref_kind_to_string ctx tr_self
     ^ "\n- sg: " ^ fun_sig_to_string ctx sg];
-  (* Erase the regions in the generics we use for the instantiation *)
-  let generics = Substitute.generic_args_erase_regions generics in
-  let tr_self = Substitute.trait_ref_kind_erase_regions tr_self in
-  (* Generate fresh abstraction ids and create a substitution from region
-   * group ids to abstraction ids *)
-  let asubst_map : AbsId.id RegionGroupId.Map.t =
-    RegionGroupId.Map.of_list
-      (List.map (fun rg -> (rg.id, ctx.fresh_abs_id ())) regions_hierarchy)
-  in
-  let asubst (rg_id : RegionGroupId.id) : AbsId.id =
-    RegionGroupId.Map.find rg_id asubst_map
-  in
-  (* Generate fresh regions *)
-  let rsubst =
-    Substitute.fresh_regions_with_substs_from_vars sg.generics.regions
-      ctx.fresh_region_id
-  in
-  (* Generate the type substitution. *)
-  [%sanity_check] span (TypesUtils.trait_instance_id_no_regions tr_self);
-  let tsubst =
-    Substitute.make_type_subst_from_vars sg.generics.types generics.types
-  in
-  let cgsubst =
-    Substitute.make_const_generic_subst_from_vars sg.generics.const_generics
-      generics.const_generics
-  in
-  let tr_subst =
-    Substitute.make_trait_subst_from_clauses sg.generics.trait_clauses
-      generics.trait_refs
-  in
-  (* Substitute the signature *)
-  let inst_sig =
-    Substitute.substitute_signature asubst rsubst tsubst cgsubst tr_subst
-      tr_self sg regions_hierarchy
-  in
-  (* Return *)
-  inst_sig
-
-(** Compute the regions hierarchy of an instantiated function call - i.e., a
-    function call instantiated with type parameters which might contain borrows.
-    We do so by computing a "fake" function signature and by computing the
-    regions hierarchy for this signature. We return both the fake signature and
-    the regions hierarchy.
-
-    - [type_vars]: the type variables currently in the context
-    - [const_generic_vars]: the const generics currently in the context
-    - [generic_args]: the generic arguments given to the function
-    - [sg]: the original, uninstantiated signature (we need to retrieve, for
-      instance, the region outlives constraints) *)
-let compute_regions_hierarchy_for_fun_call fresh_abs_id
-    (span : Meta.span option) (crate : crate) (fun_name : string)
-    (type_vars : type_param list)
-    (const_generic_vars : const_generic_param list)
-    (generic_args : generic_args) (sg : fun_sig) : inst_fun_sig =
   (* We simply put everything into a "fake" signature, then call
      [compute_regions_hierarchy_for_sig].
 
@@ -815,18 +762,35 @@ let compute_regions_hierarchy_for_fun_call fresh_abs_id
      the erased regions. When doing so, in order to make sure there are
      no collisions, we also refresh the other regions. *)
   (* Decompose the signature *)
-  let { is_unsafe; generics; inputs; output } = sg in
+  let {
+    item_binder_params = generics;
+    item_binder_value = { is_unsafe; inputs; output };
+  } =
+    sg
+  in
   (* Introduce the fresh regions *)
-  let region_map = ref RegionId.Map.empty in
-  let fresh_regions = ref RegionId.Set.empty in
-  let _, fresh_region_id = RegionId.fresh_stateful_generator () in
-  let get_region rid =
-    match RegionId.Map.find_opt rid !region_map with
+  let free_region_map = ref RegionId.Map.empty in
+  let body_region_map = ref RegionId.Map.empty in
+  let fresh_regions = ref [] in
+  let fresh_region_id () =
+    let rid = ctx.fresh_region_id () in
+    fresh_regions := rid :: !fresh_regions;
+    rid
+  in
+  let get_free_region rid =
+    match RegionId.Map.find_opt rid !free_region_map with
     | Some rid -> rid
     | None ->
         let nrid = fresh_region_id () in
-        fresh_regions := RegionId.Set.add nrid !fresh_regions;
-        region_map := RegionId.Map.add rid nrid !region_map;
+        free_region_map := RegionId.Map.add rid nrid !free_region_map;
+        nrid
+  in
+  let get_body_region rid =
+    match RegionId.Map.find_opt rid !body_region_map with
+    | Some rid -> rid
+    | None ->
+        let nrid = fresh_region_id () in
+        body_region_map := RegionId.Map.add rid nrid !body_region_map;
         nrid
   in
   let visitor =
@@ -840,38 +804,25 @@ let compute_regions_hierarchy_for_fun_call fresh_abs_id
 
       method! visit_RVar _ var =
         match var with
-        | Free rid -> RVar (Free (get_region rid))
+        | Free rid -> RVar (Free (get_free_region rid))
         | Bound _ -> RVar var
 
       method! visit_RErased _ =
         (* Introduce a fresh region *)
         let nrid = fresh_region_id () in
-        fresh_regions := RegionId.Set.add nrid !fresh_regions;
         RVar (Free nrid)
+
+      method! visit_RBody _ rid = RVar (Free (get_body_region rid))
     end
   in
-  (* We want to make sure that we numerotate the region parameters, even the erased
-     ones, in order, before introducing fresh regions for the erased regions which
-     appear in the types parameters *)
-  let generic_regions =
-    List.map (visitor#visit_region ()) generic_args.regions
-  in
-  (* Explore the types to generate the fresh regions *)
-  let generic_types = List.map (visitor#visit_ty ()) generic_args.types in
+  let generic_args = visitor#visit_generic_args () generic_args in
+  let tr_self = visitor#visit_trait_ref_kind () tr_self in
+  let fresh_regions = List.rev !fresh_regions in
 
   (* Reconstruct the generics *)
   let subst =
-    let { regions = _; types = _; const_generics; trait_refs } = generic_args in
-    let generic_args =
-      {
-        regions = generic_regions;
-        types = generic_types;
-        const_generics;
-        trait_refs
-        (* Keeping the same trait refs: it shouldn't have an impact *);
-      }
-    in
-    Substitute.make_subst_from_generics sg.generics generic_args
+    Substitute.make_subst_from_generics sg.item_binder_params generic_args
+      tr_self
   in
 
   (* Substitute the inputs and outputs *)
@@ -893,7 +844,7 @@ let compute_regions_hierarchy_for_fun_call fresh_abs_id
       } =
         generics
       in
-      let fresh_regions = RegionId.Set.elements !fresh_regions in
+      let fresh_regions = fresh_regions in
       let fresh_region_vars : region_param list =
         List.map (fun index -> { Types.index; name = None }) fresh_regions
       in
@@ -919,10 +870,12 @@ let compute_regions_hierarchy_for_fun_call fresh_abs_id
              subst)
           types_outlive
       in
+      (* For the type variables and const generic variables we simply reuse the
+         ones present in the context *)
       {
         regions = fresh_region_vars;
-        types = type_vars;
-        const_generics = const_generic_vars;
+        types = ctx.type_vars;
+        const_generics = ctx.const_generic_vars;
         trait_clauses;
         regions_outlive;
         types_outlive;
@@ -930,9 +883,14 @@ let compute_regions_hierarchy_for_fun_call fresh_abs_id
       }
     in
 
-    let sg = { is_unsafe; generics; inputs; output } in
+    let sg =
+      {
+        item_binder_params = generics;
+        item_binder_value = { is_unsafe; inputs; output };
+      }
+    in
     let regions_hierarchy =
-      RegionsHierarchy.compute_regions_hierarchy_for_sig span crate fun_name sg
+      RegionsHierarchy.compute_regions_hierarchy_for_sig span ctx.crate sg
     in
     (generics.trait_type_constraints, regions_hierarchy)
   in
@@ -946,7 +904,7 @@ let compute_regions_hierarchy_for_fun_call fresh_abs_id
   *)
   let asubst_map : AbsId.id RegionGroupId.Map.t =
     RegionGroupId.Map.of_list
-      (List.map (fun rg -> (rg.id, fresh_abs_id ())) regions_hierarchy)
+      (List.map (fun rg -> (rg.id, ctx.fresh_abs_id ())) regions_hierarchy)
   in
   let asubst (rg_id : RegionGroupId.id) : AbsId.id =
     RegionGroupId.Map.find rg_id asubst_map

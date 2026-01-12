@@ -4,8 +4,8 @@ Source: 'tests/src/borrow-check-negative.rs', lines 25:12-25:14
 Source: 'tests/src/borrow-check-negative.rs', lines 28:0-34:1
 [[91mError[39m] Can not apply a projection to the ⊥ value
 Source: 'tests/src/borrow-check-negative.rs', lines 42:4-42:11
-[[91mError[39m] Internal error, please file an issue
-Source: 'tests/src/borrow-check-negative.rs', lines 49:12-49:35
+[[91mError[39m] Can not apply a projection to the ⊥ value
+Source: 'tests/src/borrow-check-negative.rs', lines 51:12-51:14
 [[91mError[39m] Can not apply a projection to the ⊥ value
 Source: 'tests/src/borrow-check-negative.rs', lines 65:12-65:17
 [[91mError[39m] Can not apply a projection to the ⊥ value

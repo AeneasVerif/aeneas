@@ -7,7 +7,7 @@ import Mathlib.Data.Int.Init
 
 namespace Aeneas.Std
 
-open Result Error Arith ScalarElab
+open Result Error Arith ScalarElab WP
 
 /-!
 # Multiplication: Definitions
@@ -63,10 +63,10 @@ theorem UScalar.mul_equiv {ty} (x y : UScalar ty) :
 /-- Generic theorem - shouldn't be used much -/
 theorem UScalar.mul_bv_spec {ty} {x y : UScalar ty}
   (hmax : ↑x * ↑y ≤ UScalar.max ty) :
-  ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv := by
+  x * y ⦃ z => (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv ⦄ := by
   have : x * y = mul x y := by rfl
   have := mul_equiv x y
-  split at this <;> simp_all only [ok.injEq, _root_.exists_eq_left', and_self]
+  split at this <;> simp_all [spec_ok, and_self, spec_fail]
   omega
 
 theorem IScalar.mul_equiv {ty} (x y : IScalar ty) :
@@ -115,18 +115,18 @@ theorem IScalar.mul_equiv {ty} (x y : IScalar ty) :
 theorem IScalar.mul_bv_spec {ty} {x y : IScalar ty}
   (hmin : IScalar.min ty ≤ ↑x * ↑y)
   (hmax : ↑x * ↑y ≤ IScalar.max ty) :
-  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y ∧ z.bv = x.bv * y.bv := by
+  x * y ⦃ z => (↑z : Int) = ↑x * ↑y ∧ z.bv = x.bv * y.bv ⦄ := by
   have : x * y = mul x y := by rfl
   have := mul_equiv x y
   split at this <;> simp_all
 
 uscalar theorem «%S».mul_bv_spec {x y : «%S»} (hmax : x.val * y.val ≤ «%S».max) :
-  ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
+  x * y ⦃ z => (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv ⦄ :=
   UScalar.mul_bv_spec (by scalar_tac)
 
 iscalar theorem «%S».mul_bv_spec {x y : «%S»}
   (hmin : «%S».min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ «%S».max) :
-  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y ∧ z.bv = x.bv * y.bv :=
+  x * y ⦃ z => (↑z : Int) = ↑x * ↑y ∧ z.bv = x.bv * y.bv ⦄ :=
   IScalar.mul_bv_spec (by scalar_tac) (by scalar_tac)
 
 /-!
@@ -136,25 +136,27 @@ Theorems with a specification which only use integers
 /-- Generic theorem - shouldn't be used much -/
 theorem UScalar.mul_spec {ty} {x y : UScalar ty}
   (hmax : ↑x * ↑y ≤ UScalar.max ty) :
-  ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y := by
-  have ⟨ z, h⟩ := mul_bv_spec hmax
-  simp [h]
+  x * y ⦃ z => (↑z : Nat) = ↑x * ↑y ⦄ := by
+  apply spec_mono
+  apply mul_bv_spec hmax
+  grind
 
 /-- Generic theorem - shouldn't be used much -/
 theorem IScalar.mul_spec {ty} {x y : IScalar ty}
   (hmin : IScalar.min ty ≤ ↑x * ↑y)
   (hmax : ↑x * ↑y ≤ IScalar.max ty) :
-  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y := by
-  have ⟨ z, h⟩ := @mul_bv_spec ty x y (by scalar_tac) (by scalar_tac)
-  simp only [ok.injEq, _root_.exists_eq_left', h]
+  x * y ⦃ z => (↑z : Int) = ↑x * ↑y ⦄ := by
+  apply spec_mono
+  apply @mul_bv_spec ty x y (by scalar_tac) (by scalar_tac)
+  grind
 
 uscalar @[progress] theorem «%S».mul_spec {x y : «%S»} (hmax : x.val * y.val ≤ «%S».max) :
-  ∃ z, x * y = ok z ∧ (↑z : Nat) = ↑x * ↑y :=
+  x * y ⦃ z => (↑z : Nat) = ↑x * ↑y ⦄ :=
   UScalar.mul_spec (by scalar_tac)
 
 iscalar @[progress] theorem «%S».mul_spec {x y : «%S»}
   (hmin : «%S».min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ «%S».max) :
-  ∃ z, x * y = ok z ∧ (↑z : Int) = ↑x * ↑y :=
+  (x * y) ⦃ z => (↑z : Int) = ↑x * ↑y ⦄ :=
   IScalar.mul_spec (by scalar_tac) (by scalar_tac)
 
 end Aeneas.Std

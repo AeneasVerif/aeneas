@@ -21,24 +21,24 @@ let translate_fn_ptr_kind (ctx : bs_ctx) (id : A.fn_ptr_kind) : fn_ptr_kind =
 
 (* Introduce variables for the backward functions.
 
-   We may filter the region group ids.
-*)
+   We may filter the region group ids. *)
 let fresh_back_vars_for_current_fun (ctx : bs_ctx) : bs_ctx * fvar option list =
   (* We lookup the LLBC definition in an attempt to derive pretty names
      for the backward functions. *)
   let back_var_names =
-    let def_id = ctx.fun_decl.def_id in
-    let sg = ctx.fun_decl.signature in
+    (* TODO: it's annoying that we have to recompute the regions hierarchy.
+       Charon should do it for us. *)
     let regions_hierarchy =
-      LlbcAstUtils.FunIdMap.find (FRegular def_id)
-        ctx.fun_ctx.regions_hierarchies
+      RegionsHierarchy.compute_regions_hierarchy_for_sig (Some ctx.span)
+        ctx.decls_ctx.crate
+        (LlbcAstUtils.bound_fun_sig_of_decl ctx.fun_decl)
     in
     List.map
       (fun (gid, _) ->
         let rg = RegionGroupId.nth regions_hierarchy gid in
         let region_names =
           List.map
-            (fun rid -> (T.RegionId.nth sg.generics.regions rid).name)
+            (fun rid -> (T.RegionId.nth ctx.fun_decl.generics.regions rid).name)
             rg.regions
         in
         let name =
@@ -1168,7 +1168,7 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value) (scrutinee : texpr)
         (mk_tpat_from_fvar None var)
         (mk_opt_mplace_texpr scrutinee_mplace scrutinee)
         branch
-  | TBuiltin (TArray | TSlice | TStr) ->
+  | TBuiltin TStr ->
       (* We can't expand those values: we can access the fields only
        * through the functions provided by the API (note that we don't
        * know how to expand values like vectors or arrays, because they have a variable number

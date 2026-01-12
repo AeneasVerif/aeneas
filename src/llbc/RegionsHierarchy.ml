@@ -29,21 +29,19 @@
 open Types
 open TypesUtils
 open LlbcAst
-open LlbcAstUtils
-open Builtin
 open SCC
-open Errors
 module Subst = Substitute
 
 (** The local logger *)
 let log = Logging.regions_hierarchy_log
 
+type regions_hierarchy = region_var_groups [@@deriving show]
+
 let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
-    (fun_name : string) (sg : fun_sig) : region_var_groups =
-  [%ltrace fun_name];
+    (sg : bound_fun_sig) : region_var_groups =
   (* Create the dependency graph.
 
-     An edge from 'short to 'long means that 'long outlives 'short (that is
+     An edge from 'long to 'short means that 'long outlives 'short (that is
      we have 'long : 'short,  using Rust notations).
   *)
   (* First initialize the regions map.
@@ -51,24 +49,24 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
      We add:
      - the region variables
      - the static region
-     - edges from the region variables to the static region
+     - edges from the static region to the region variables
 
      Note that we only consider the regions bound at the
      level of the signature (this excludes the regions locally bound inside
      the types, for instance at the level of an arrow type).
   *)
   let g : RegionSet.t RegionMap.t ref =
-    let s_set = RegionSet.singleton RStatic in
-    let m =
+    let rvars =
       List.map
-        (fun (r : region_param) -> (RVar (Free r.index), s_set))
-        sg.generics.regions
+        (fun (r : region_param) -> RVar (Free r.index))
+        sg.item_binder_params.regions
     in
-    let s = (RStatic, RegionSet.empty) in
-    ref (RegionMap.of_list (s :: m))
+    let s = (RStatic, RegionSet.of_list rvars) in
+    let rsets = List.map (fun r -> (r, RegionSet.empty)) rvars in
+    ref (RegionMap.of_list (s :: rsets))
   in
 
-  let add_edge ~(short : region) ~(long : region) =
+  let add_edge ~(long : region) ~(short : region) =
     (* Sanity checks *)
     [%sanity_check_opt_span] span (short <> RErased);
     [%sanity_check_opt_span] span (long <> RErased);
@@ -77,9 +75,9 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
     | RVar (Bound _), _ | _, RVar (Bound _) -> ()
     | _, _ ->
         let m = !g in
-        let s = RegionMap.find short !g in
-        let s = RegionSet.add long s in
-        g := RegionMap.add short s m
+        let s = RegionMap.find long !g in
+        let s = RegionSet.add short s in
+        g := RegionMap.add long s m
   in
 
   let add_edges_from_region_binder :
@@ -90,18 +88,19 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
   in
 
   let add_edge_from_region_constraint ((long, short) : region_outlives) =
-    add_edge ~short ~long
+    add_edge ~long ~short
   in
 
   let add_edges ~(long : region) ~(shorts : region list) =
-    List.iter (fun short -> add_edge ~short ~long) shorts
+    (* TODO: shouldn't have to use List.iter *)
+    List.iter (fun short -> add_edge ~long ~short) shorts
   in
 
   (* Explore the clauses - we only explore the "region outlives" clause,
      not the "type outlives" clauses *)
   List.iter
     (add_edges_from_region_binder add_edge_from_region_constraint)
-    sg.generics.regions_outlive;
+    sg.item_binder_params.regions_outlive;
 
   (* Explore the types in the signature to add the edges *)
   let rec explore_ty (outer : region list) (ty : ty) =
@@ -120,7 +119,9 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
             in
 
             (* Instantiate the predicates *)
-            let subst = Subst.make_subst_from_generics decl.generics generics in
+            let subst =
+              Subst.make_subst_from_generics decl.generics generics Self
+            in
             let predicates = Subst.predicates_substitute subst decl.generics in
             (* Note that because we also explore the generics below, we may
                explore several times the same type - this is ok *)
@@ -139,9 +140,10 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
         | TTuple -> (* No clauses for tuples *) ()
         | TBuiltin aid -> (
             match aid with
-            | TBox | TArray | TSlice | TStr -> (* No clauses for those *) ()));
+            | TBox | TStr -> (* No clauses for those *) ()));
         (* Explore the generics *)
         explore_generics outer generics
+    | TArray _ | TSlice _ -> (* No clauses for those *) ()
     | TVar _ | TLiteral _ | TNever -> ()
     | TRef (r, ty, _) ->
         (* Add the constraints for r *)
@@ -165,7 +167,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
           (binder.binder_regions = [])
           "We don't support arrow types with locally quantified regions";
         (* We can ignore the outer regions *)
-        let inputs, output = binder.binder_value in
+        let { Types.inputs; output; _ } = binder.binder_value in
         List.iter (explore_ty []) (output :: inputs)
     | TFnDef _ -> [%craise_opt_span] span "unsupported: FnDef"
     | TDynTrait _ ->
@@ -181,7 +183,8 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
 
   (* Substitute the regions in a type, then explore *)
   let explore_ty_subst ty = explore_ty [] ty in
-  List.iter explore_ty_subst (sg.output :: sg.inputs);
+  List.iter explore_ty_subst
+    (sg.item_binder_value.output :: sg.item_binder_value.inputs);
 
   (* Compute the ordered SCCs *)
   let module Scc = SCC.Make (RegionOrderedType) in
@@ -273,54 +276,3 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
       (* Put together *)
       Some { id; regions; parents })
     (SccId.Map.bindings sccs.sccs)
-
-(** Compute the region hierarchies for a set of function declarations.Aeneas
-
-    Remark: in case we do not abort on error, this function will ignore the
-    signatures which trigger errors. *)
-let compute_regions_hierarchies (crate : crate) : region_var_groups FunIdMap.t =
-  let open Print in
-  let env : fmt_env = Charon.PrintLlbcAst.Crate.crate_to_fmt_env crate in
-  let regular =
-    List.map
-      (fun ((fid, d) : FunDeclId.id * fun_decl) ->
-        ( FRegular fid,
-          ( Types.name_to_string env d.item_meta.name,
-            d.signature,
-            Some d.item_meta.span ) ))
-      (FunDeclId.Map.bindings crate.fun_decls)
-  in
-  let builtin =
-    List.map
-      (fun (info : builtin_fun_info) ->
-        (FBuiltin info.fun_id, (info.name, info.fun_sig, None)))
-      (BuiltinFunIdMap.values builtin_fun_infos)
-  in
-  FunIdMap.of_list
-    (List.filter_map
-       (fun (fid, (name, sg, span)) ->
-         try Some (fid, compute_regions_hierarchy_for_sig span crate name sg)
-         with CFailure error ->
-           let pattern =
-             (* The conversion from name to pattern may fail, hence the [try with] *)
-             try
-               match fid with
-               | FRegular fid -> (
-                   match FunDeclId.Map.find_opt fid crate.fun_decls with
-                   | None -> ""
-                   | Some decl ->
-                       "\nName pattern: '"
-                       ^ LlbcAstUtils.name_with_crate_to_pattern_string
-                           error.span crate decl.item_meta.name
-                       ^ "'")
-               | _ -> ""
-             with CFailure _ ->
-               " (Could not compute the name pattern due to an additional \
-                error)"
-           in
-           [%save_error_opt_span] error.span
-             ("Encountered an error when computing the region hierarchies for \
-               function '" ^ name ^ pattern ^ "\n\nInitial error:\n" ^ error.msg
-             );
-           None)
-       (regular @ builtin))

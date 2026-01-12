@@ -15,6 +15,55 @@ let statement_to_string (crate : crate) =
   let fmt_env = Print.Crate.crate_to_fmt_env crate in
   Print.Ast.statement_to_string fmt_env "" "  "
 
+(** Erase the useless body regions.
+
+    We erase the body regions which appear in:
+    - locals
+    - places
+
+    We only keep those used in function calls. *)
+let erase_body_regions (crate : crate) (f : fun_decl) : fun_decl =
+  let f0 = f in
+
+  let erase_visitor =
+    object
+      inherit [_] map_statement
+
+      method! visit_fn_operand _ x =
+        (* Do not erase the use of body regions inside function operands *)
+        x
+
+      method! visit_RBody _ _ = RErased
+    end
+  in
+
+  (* Map  *)
+  let body =
+    match f.body with
+    | Some body ->
+        let body =
+          {
+            body with
+            locals =
+              {
+                body.locals with
+                locals =
+                  List.map Contexts.local_erase_body_regions body.locals.locals;
+              };
+          }
+        in
+        Some { body with body = erase_visitor#visit_block 0 body.body }
+    | None -> None
+  in
+
+  let f : fun_decl = { f with body } in
+  [%ldebug
+    "Before/after [erase_body_regions]:\n"
+    ^ Print.Crate.crate_fun_decl_to_string crate f0
+    ^ "\n\n"
+    ^ Print.Crate.crate_fun_decl_to_string crate f];
+  f
+
 (** The Rust compiler generates a unique implementation of [Default] for arrays
     for every choice of length. For instance, if we write:
     {[
@@ -77,18 +126,9 @@ let update_array_default (crate : crate) : crate =
        regions = [];
        types =
          [
-           TAdt
-             {
-               id = TBuiltin TArray;
-               generics =
-                 {
-                   regions = [];
-                   types = [ TVar (Free _) ];
-                   const_generics =
-                     [ (CgValue (VScalar (UnsignedScalar (Usize, nv))) as n) ];
-                   trait_refs = _;
-                 } as array_generics;
-             };
+           TArray
+             ( (TVar (Free _) as elem_ty),
+               (CgValue (VScalar (UnsignedScalar (Usize, nv))) as n) );
          ];
        const_generics = [];
        trait_refs = _;
@@ -110,15 +150,7 @@ let update_array_default (crate : crate) : crate =
               let generics =
                 {
                   impl.impl_trait.generics with
-                  types =
-                    [
-                      TAdt
-                        {
-                          id = TBuiltin TArray;
-                          generics =
-                            { array_generics with const_generics = [ cg ] };
-                        };
-                    ];
+                  types = [ TArray (elem_ty, cg) ];
                 }
               in
               let impl_trait = { impl.impl_trait with generics } in
@@ -173,36 +205,16 @@ let update_array_default (crate : crate) : crate =
               let sg = fdecl.signature in
               assert (sg.inputs = []);
               match sg.output with
-              | TAdt
-                  {
-                    id = TBuiltin TArray;
-                    generics =
-                      {
-                        regions = [];
-                        types = [ TVar (Free _) ];
-                        const_generics = [ _ ];
-                        trait_refs = _;
-                      } as array_generics;
-                  } ->
-                  let array_generics =
-                    { array_generics with const_generics = [ cg ] }
-                  in
+              | TArray ((TVar (Free _) as elem_ty), _) ->
                   let generics =
                     {
-                      sg.generics with
+                      fdecl.generics with
                       const_generics =
                         [ { index = cg_id; name = "N"; ty = TUInt Usize } ];
                     }
                   in
-                  let sg =
-                    {
-                      sg with
-                      generics;
-                      output =
-                        TAdt { id = TBuiltin TArray; generics = array_generics };
-                    }
-                  in
-                  let fdecl = { fdecl with signature = sg } in
+                  let sg = { sg with output = TArray (elem_ty, cg) } in
+                  let fdecl = { fdecl with signature = sg; generics } in
                   Some fdecl
               | _ -> [%internal_error] fdecl.item_meta.span)
             else (* Filter *)
@@ -267,6 +279,8 @@ let update_array_default (crate : crate) : crate =
       in
       visitor#visit_crate None crate
 
+exception FoundStatement of statement
+
 (** Check that loops:
     - do not contain early returns
     - do not continue/break to outer loops
@@ -306,12 +320,13 @@ let update_array_default (crate : crate) : crate =
           st0;
           return;
         } else if e1 {
+          st1;
           break;
         } else {
           continue;
         }
       }
-      st1;
+      st2;
       return;
 
         ~~>
@@ -322,7 +337,41 @@ let update_array_default (crate : crate) : crate =
           break;
         } else if e1 {
           st1;
+          st2;
           break;
+        } else {
+          continue;
+        }
+      }
+      return;
+    ]}
+
+    # Transformation 3:
+    {[
+      loop {
+        if e0 {
+          st0;
+          return;
+        } else if e1 {
+          st1;
+          break;
+        } else {
+          continue;
+        }
+      }
+      st2;
+      panic;
+
+        ~~>
+
+      loop {
+        if e0 {
+          st0;
+          break;
+        } else if e1 {
+          st1;
+          st2;
+          panic;
         } else {
           continue;
         }
@@ -349,16 +398,21 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
           (after : statement list) : statement list * statement list =
         match st.kind with
         | Loop loop -> (
-            try ([ { st with kind = super#visit_Loop (depth + 1) loop } ], after)
-            with Found ->
-              (* We found a return in the loop: attempt to replace it with a break.
+            (* Recursively update the loop.
 
-                 There are two cases:
+               Note that doing this will raise an exception if we find a loop with
+               an early return. *)
+            try ([ { st with kind = self#visit_Loop (depth + 1) loop } ], after)
+            with FoundStatement return_st ->
+              (* An exception was raised: it means we found a return in the loop: attempt
+                 to replace it with a break.
+
+                 There are 2 cases:
                  - either the loop does not contain any break, in which case we
                    can simply replace the return with a break, and move the return
                    after the loop (this is transformation 1 above)
-                 - or there is already a break in the loop: we can apply transformation
-                   2 if the statements after the loop end with a return.
+                 - or there is already a break in the loop: we can apply transformation 2
+                   (resp., 3) if the statements after the loop end with a return (resp., a panic)
               *)
               let block_has_no_breaks (b : block) : bool =
                 let visitor =
@@ -377,13 +431,15 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
                   let visitor =
                     object
                       inherit [_] map_statement
+                      method! visit_Loop i loop = super#visit_Loop (i + 1) loop
 
-                      method! visit_Return _ =
+                      method! visit_Return i =
+                        [%sanity_check] span (i = 0);
                         (* Replace the return with a break *)
-                        Break 0
+                        Break i
                     end
                   in
-                  visitor#visit_block () b
+                  visitor#visit_block 0 b
                 in
                 let loop = block_replace loop in
                 let loop : statement = { st with kind = Loop loop } in
@@ -399,22 +455,23 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
                 in
                 ([ loop; return ], after)
               else
-                (* Transformation 2 *)
-                (* Check if the statements after the loop end with a return *)
+                (* Transformations 2 and 3 *)
+                (* Check if the statements after the loop end with a return or a panic.
+                   We output the statements with which to replace breaks.
+                *)
                 let rec decompose_after (after : statement list) :
-                    statement list * statement =
+                    statement list =
                   match after with
                   | [] ->
                       [%craise] span
                         "Early returns inside of loops are not supported yet"
                   | st :: after -> (
                       match st.kind with
-                      | Return -> ([], st)
-                      | _ ->
-                          let after, return = decompose_after after in
-                          (st :: after, return))
+                      | Return -> [ { st with kind = Break 0 } ]
+                      | Abort _ -> [ st ]
+                      | _ -> st :: decompose_after after)
                 in
-                let after, return = decompose_after after in
+                let after = decompose_after after in
                 let replace (st : statement) : statement list =
                   match st.kind with
                   | Return ->
@@ -424,14 +481,38 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
                       (* Move the statements [after] before the break *)
                       [%cassert] span (i = 0)
                         "Breaks to outer loops are not supported yet";
-                      after @ [ st ]
+                      after
                   | _ -> [ st ]
                 in
-                let loop = map_statement replace loop in
+
+                let block_visitor =
+                  object (self)
+                    inherit [_] map_statement_base as super
+
+                    method! visit_Loop depth loop =
+                      super#visit_Loop (depth + 1) loop
+
+                    method! visit_block depth b =
+                      (* Only replace if the depth is 0 (it means we haven't dived
+                         into an inner loop) *)
+                      if depth = 0 then
+                        let update st =
+                          replace (self#visit_statement depth st)
+                        in
+                        {
+                          b with
+                          statements =
+                            List.flatten (List.map update b.statements);
+                        }
+                      else b
+                  end
+                in
+
+                let loop = block_visitor#visit_block 0 loop in
                 let loop : statement = { st with kind = Loop loop } in
                 let loop = super#visit_statement depth loop in
-                ([ loop; return ], []))
-        | _ -> ([ super#visit_statement depth st ], after)
+                ([ loop; return_st ], []))
+        | _ -> ([ self#visit_statement depth st ], after)
 
       method! visit_block depth (block : block) : block =
         let rec update (stl : statement list) : statement list =
@@ -451,11 +532,21 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
         [%cassert] span (i = 0) "Continue to outer loops are not supported yet";
         super#visit_Continue depth i
 
-      method! visit_Return depth =
-        [%cassert] span (depth <= 1)
-          "Returns inside of nested loops are not supported yet";
-        (* If we are inside a loop we need to get rid of the return *)
-        if depth = 1 then raise Found else super#visit_Return depth
+      method! visit_statement depth st =
+        match st.kind with
+        | Return ->
+            [%cassert] span (depth <= 1)
+              "Returns inside of nested loops are not supported yet";
+            (* If we are inside a loop we need to get rid of the return.
+
+               Note that raising an exception containing the full return
+               statement allows us to use its span when moving it after the loop. *)
+            if depth = 1 then raise (FoundStatement st) else st
+        | _ -> super#visit_statement depth st
+
+      method! visit_Return _ =
+        (* The Return case should have been caught by the [visit_statement] method *)
+        [%internal_error] span
     end
   in
 
@@ -1109,6 +1200,7 @@ let apply_passes (crate : crate) : crate =
   (* Passes that apply to individual function bodies *)
   let function_passes =
     [
+      ("erase_body_regions", erase_body_regions);
       ("update_loop", update_loops);
       ("remove_useless_joins", remove_useless_joins);
       ( "remove_shallow_borrows_storage_live_dead",
@@ -1144,6 +1236,9 @@ let apply_passes (crate : crate) : crate =
     ProgressBar.with_reporter num_decls "Applied prepasses: " (fun report ->
         FunDeclId.Map.map
           (fun f ->
+            [%ltrace
+              "Before applying the prepasses:\n"
+              ^ Print.Crate.crate_fun_decl_to_string crate f];
             let f : fun_decl =
               List.fold_left
                 (fun f (name, pass) -> apply_function_pass name pass f)

@@ -110,9 +110,17 @@ let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
               | _ ->
                   [%craise_opt_span] span
                     "Box/vec/option type with incorrect number of arguments")
-          | T.TArray -> TAdt (TBuiltin TArray, generics)
-          | T.TSlice -> TAdt (TBuiltin TSlice, generics)
           | T.TStr -> TAdt (TBuiltin TStr, generics)))
+  | T.TArray (ty, len) ->
+      let ty = translate span ty in
+      TAdt
+        ( TBuiltin TArray,
+          { types = [ ty ]; const_generics = [ len ]; trait_refs = [] } )
+  | T.TSlice ty ->
+      let ty = translate span ty in
+      TAdt
+        ( TBuiltin TSlice,
+          { types = [ ty ]; const_generics = []; trait_refs = [] } )
   | TVar var ->
       TVar var
       (* Note: the `de_bruijn_id`s are incorrect, see comment on `translate_region_binder` *)
@@ -262,8 +270,6 @@ let translate_type_id (span : Meta.span option) (id : T.type_id) : type_id =
   | TBuiltin aty ->
       let aty =
         match aty with
-        | T.TArray -> TArray
-        | T.TSlice -> TSlice
         | T.TStr -> TStr
         | T.TBox ->
             (* Boxes have to be eliminated: this type id shouldn't
@@ -288,7 +294,7 @@ let rec translate_fwd_ty (span : Meta.span option) (type_infos : type_infos)
       let t_generics = translate_fwd_generic_args span type_infos generics in
       (* Eliminate boxes and simplify tuples *)
       match id with
-      | TAdtId _ | TBuiltin (TArray | TSlice | TStr) ->
+      | TAdtId _ | TBuiltin TStr ->
           let id = translate_type_id span id in
           TAdt (id, t_generics)
       | TTuple ->
@@ -303,6 +309,16 @@ let rec translate_fwd_ty (span : Meta.span option) (type_infos : type_infos)
               [%craise_opt_span] span
                 "Unreachable: box/vec/option receives exactly one type \
                  parameter"))
+  | T.TArray (ty, len) ->
+      let ty = translate ty in
+      TAdt
+        ( TBuiltin TArray,
+          { types = [ ty ]; const_generics = [ len ]; trait_refs = [] } )
+  | T.TSlice ty ->
+      let ty = translate ty in
+      TAdt
+        ( TBuiltin TSlice,
+          { types = [ ty ]; const_generics = []; trait_refs = [] } )
   | TVar var -> TVar var
   | TNever -> TNever
   | TLiteral lty -> TLiteral lty
@@ -360,31 +376,22 @@ let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
   match ty with
   | T.TAdt { id; generics } -> (
       match id with
-      | TAdtId _ | TBuiltin (TArray | TSlice | TStr) ->
-          let type_id = translate_type_id span id in
-          if inside_mut then
-            (* We do not want to filter anything, so we translate the generics
-               as "forward" types *)
-            let generics =
-              translate_fwd_generic_args span type_infos generics
-            in
-            Some (TAdt (type_id, generics))
-          else if
-            (* If not inside a mutable reference: check if the type contains
+      | (TAdtId _ | TBuiltin TStr)
+        when not
+               (inside_mut
+               || TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
+                    keep_region ty) -> None
+      | TAdtId _ | TBuiltin TStr ->
+          (* If not inside a mutable reference: check if the type contains
                a mutable reference (through one of its generics, inside
                its definition, etc.).
                If yes, keep the whole type, and translate all the generics as
                "forward" types (the backward function will extract the proper
                information from the ADT value).
             *)
-            TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
-              keep_region ty
-          then
-            let generics =
-              translate_fwd_generic_args span type_infos generics
-            in
-            Some (TAdt (type_id, generics))
-          else None
+          let type_id = translate_type_id span id in
+          let generics = translate_fwd_generic_args span type_infos generics in
+          Some (TAdt (type_id, generics))
       | TBuiltin TBox -> (
           (* Eliminate the box *)
           match generics.types with
@@ -408,6 +415,21 @@ let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
                 (* Note that if there is exactly one type, [mk_simpl_tuple_ty]
                  * is the identity *)
                 Some (mk_simpl_tuple_ty tys_t)))
+  | (T.TArray _ | T.TSlice _)
+    when not
+           (inside_mut
+           || TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
+                keep_region ty) -> None (* Same check as the ADT case *)
+  | T.TArray (ty, len) ->
+      let ty = translate_fwd_ty span type_infos ty in
+      let generics =
+        { types = [ ty ]; const_generics = [ len ]; trait_refs = [] }
+      in
+      Some (TAdt (TBuiltin TArray, generics))
+  | T.TSlice ty ->
+      let ty = translate_fwd_ty span type_infos ty in
+      let generics = { types = [ ty ]; const_generics = []; trait_refs = [] } in
+      Some (TAdt (TBuiltin TSlice, generics))
   | TVar var -> wrap (TVar var)
   | TNever -> wrap TNever
   | TLiteral lty -> wrap (TLiteral lty)
@@ -560,6 +582,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
           [%craise_opt_span] span
             ("Unexpected bound region: "
             ^ Charon.PrintTypes.region_db_var_to_pretty_string var)
+      | RBody _ -> [%craise_opt_span] None "unsupported: Body region"
       | RVar (Free rid) -> T.RegionId.Set.mem rid gr_regions
     in
     let inside_mut = false in
@@ -720,11 +743,12 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
 
 let translate_fun_sig_with_regions_hierarchy_to_decomposed (span : span option)
     (decls_ctx : C.decls_ctx) (fun_id : A.fn_ptr_kind)
-    (regions_hierarchy : T.region_var_groups) (sg : A.fun_sig)
+    (regions_hierarchy : T.region_var_groups) (sg : A.bound_fun_sig)
     (input_names : string option list) : decomposed_fun_sig =
   let inst_sg : LlbcAst.inst_fun_sig =
-    let ({ A.inputs; output; _ } : A.fun_sig) = sg in
-    [%sanity_check_opt_span] span (sg.generics.trait_type_constraints = []);
+    let ({ T.inputs; output; _ } : T.fun_sig) = sg.item_binder_value in
+    [%sanity_check_opt_span] span
+      (sg.item_binder_params.trait_type_constraints = []);
 
     let _, fresh_abs_id = V.AbsId.fresh_stateful_generator () in
     let region_gr_id_abs_id_list =
@@ -755,17 +779,17 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed (span : span option)
   in
 
   (* Generic parameters *)
-  let generics, preds = translate_generic_params span sg.generics in
+  let generics, preds = translate_generic_params span sg.item_binder_params in
 
   let fun_ty =
     translate_inst_fun_sig_to_decomposed_fun_type span decls_ctx fun_id inst_sg
       input_names
   in
-  { generics; llbc_generics = sg.generics; preds; fun_ty }
+  { generics; llbc_generics = sg.item_binder_params; preds; fun_ty }
 
 let translate_fun_sig_to_decomposed (decls_ctx : C.decls_ctx)
-    (fun_id : FunDeclId.id) (sg : A.fun_sig) (input_names : string option list)
-    : decomposed_fun_sig =
+    (fun_id : FunDeclId.id) (sg : A.bound_fun_sig)
+    (input_names : string option list) : decomposed_fun_sig =
   let span =
     ([%silent_unwrap_opt_span] None
        (FunDeclId.Map.find_opt fun_id decls_ctx.fun_ctx.fun_decls))
@@ -774,8 +798,8 @@ let translate_fun_sig_to_decomposed (decls_ctx : C.decls_ctx)
   in
   (* Retrieve the list of parent backward functions *)
   let regions_hierarchy =
-    [%silent_unwrap] span
-      (FunIdMap.find_opt (FRegular fun_id) decls_ctx.fun_ctx.regions_hierarchies)
+    RegionsHierarchy.compute_regions_hierarchy_for_sig (Some span)
+      decls_ctx.crate sg
   in
 
   translate_fun_sig_with_regions_hierarchy_to_decomposed (Some span) decls_ctx
@@ -792,7 +816,8 @@ let translate_fun_sig_from_decl_to_decomposed (decls_ctx : C.decls_ctx)
           (LlbcAstUtils.fun_body_get_input_vars body)
   in
   let sg =
-    translate_fun_sig_to_decomposed decls_ctx fdef.def_id fdef.signature
+    translate_fun_sig_to_decomposed decls_ctx fdef.def_id
+      (bound_fun_sig_of_decl fdef)
       input_names
   in
   [%ltrace
@@ -893,12 +918,10 @@ let translate_fun_sig_from_decomposed (dsg : Pure.decomposed_fun_sig) : fun_sig
   }
 
 let translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
-    (fun_name : string) (sg : A.fun_sig) (input_names : string option list) :
-    Pure.fun_sig =
+    (sg : A.bound_fun_sig) (input_names : string option list) : Pure.fun_sig =
   (* Compute the regions hierarchy *)
   let regions_hierarchy =
-    RegionsHierarchy.compute_regions_hierarchy_for_sig None decls_ctx.crate
-      fun_name sg
+    RegionsHierarchy.compute_regions_hierarchy_for_sig None decls_ctx.crate sg
   in
   (* Compute the decomposed fun signature *)
   let sg =

@@ -3,7 +3,7 @@ import Aeneas.Std.Scalar.Elab
 
 namespace Aeneas.Std
 
-open Result Error Arith ScalarElab
+open Result Error Arith ScalarElab WP
 
 /-!
 # Checked Remainder: Definitions
@@ -39,8 +39,8 @@ theorem core.num.checked_rem_UScalar_bv_spec {ty} (x y : UScalar ty) :
   . rename_i hnz
     simp
     have hnz' : y.val ≠ 0 := by zify at *; simp_all
-    have ⟨ z, hz ⟩ := UScalar.rem_bv_spec x hnz'
     have : x % y = x.rem y := by rfl
+    have ⟨_, hz⟩ := spec_imp_exists (UScalar.rem_bv_spec x hnz')
     simp [this, UScalar.rem, hnz] at hz
     simp [hz, hnz']
 
@@ -67,8 +67,8 @@ theorem core.num.checked_rem_IScalar_bv_spec {ty} (x y : IScalar ty) :
   . rename_i hnz
     simp
     have hnz' : y.val ≠ 0 := by zify at *; simp_all
-    have ⟨ z, hz ⟩ := @IScalar.rem_bv_spec _ x y hnz'
     have : x % y = x.rem y := by rfl
+    have ⟨ _, hz ⟩ := spec_imp_exists (@IScalar.rem_bv_spec _ x y hnz')
     simp [this, IScalar.rem, hnz] at hz
     simp [*]
 

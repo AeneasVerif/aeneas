@@ -1,4 +1,3 @@
-open LlbcAstUtils
 open Pure
 open PureUtils
 open FunsAnalysis
@@ -7,7 +6,6 @@ open PrintSymbolicAst
 module T = Types
 module V = Values
 module C = Contexts
-module A = LlbcAst
 module S = SymbolicAst
 
 let match_name_find_opt = TranslateCore.match_name_find_opt
@@ -45,7 +43,6 @@ type fun_sig_named_outputs = {
 type fun_ctx = {
   llbc_fun_decls : A.fun_decl A.FunDeclId.Map.t;
   fun_infos : fun_info A.FunDeclId.Map.t;
-  regions_hierarchies : T.region_var_groups FunIdMap.t;
 }
 [@@deriving show]
 
@@ -300,7 +297,7 @@ type bs_ctx = {
 let bs_ctx_to_fmt_env (ctx : bs_ctx) : Print.fmt_env =
   {
     crate = ctx.decls_ctx.crate;
-    generics = [ ctx.fun_decl.signature.generics ];
+    generics = [ ctx.fun_decl.generics ];
     locals = [];
   }
 

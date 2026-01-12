@@ -42,6 +42,9 @@ module Values = struct
       (value_to_debug_string : unit -> string) (ty : ty)
       (variant_id : variant_id option) (fields : string list) : string =
     match ty with
+    | TArray _ ->
+        (* Happens when we aggregate values *)
+        "@Array[" ^ String.concat ", " fields ^ "]"
     | TAdt { id = TTuple; _ } ->
         (* Tuple *)
         "(" ^ String.concat ", " fields ^ ")"
@@ -71,9 +74,6 @@ module Values = struct
         (* Builtin type *)
         match (aty, fields) with
         | TBox, [ bv ] -> "@Box(" ^ bv ^ ")"
-        | TArray, _ ->
-            (* Happens when we aggregate values *)
-            "@Array[" ^ String.concat ", " fields ^ "]"
         | _ ->
             [%craise_opt_span] span
               ("Inconsistent value: " ^ value_to_debug_string ()))
@@ -127,7 +127,7 @@ module Values = struct
       (abs : abstract_shared_borrow) : string =
     match abs with
     | AsbBorrow (bid, sid) ->
-        BorrowId.to_string bid ^ "(@" ^ SharedBorrowId.to_string sid ^ ")"
+        "@" ^ BorrowId.to_string bid ^ "(^" ^ SharedBorrowId.to_string sid ^ ")"
     | AsbProjReborrows proj ->
         "{" ^ symbolic_value_proj_to_string env proj.sv_id proj.proj_ty ^ "}"
 
@@ -1097,7 +1097,7 @@ module EvalCtx = struct
     let env = eval_ctx_to_fmt_env ctx in
     fun_decl_to_string env "" "  " f
 
-  let fun_sig_to_string (ctx : eval_ctx) (x : fun_sig) : string =
+  let fun_sig_to_string (ctx : eval_ctx) (x : bound_fun_sig) : string =
     let env = eval_ctx_to_fmt_env ctx in
     fun_sig_to_string env "" "  " x
 
@@ -1109,6 +1109,11 @@ module EvalCtx = struct
   let fn_ptr_kind_to_string (ctx : eval_ctx) (x : fn_ptr_kind) : string =
     let env = eval_ctx_to_fmt_env ctx in
     fn_ptr_kind_to_string env x
+
+  let block_to_string (ctx : eval_ctx) (indent : string) (indent_incr : string)
+      (e : block) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    block_to_string env indent indent_incr e
 
   let statement_to_string (ctx : eval_ctx) (indent : string)
       (indent_incr : string) (e : statement) : string =

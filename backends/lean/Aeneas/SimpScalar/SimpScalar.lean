@@ -65,11 +65,16 @@ attribute [simp_scalar_simps]
   zero_add add_zero
   mul_one one_mul
   inf_of_le_left inf_of_le_right
-  Nat.pow_le_pow_right Nat.pow_le_pow_left
-  Nat.pow_lt_pow_right Nat.pow_lt_pow_left
   Nat.mul_eq_zero
   add_tsub_cancel_right add_tsub_cancel_left
   not_lt not_le
+  Nat.mod_zero Nat.mod_one
+
+attribute [simp_scalar_simps↓]
+  Nat.pow_le_pow_right Nat.pow_le_pow_left
+  Nat.pow_lt_pow_right Nat.pow_lt_pow_left
+
+attribute [simp_scalar_simps] Nat.div_le_self Nat.shiftRight_le
 
 -- TODO: we want a general simproc to normalize arithmetic expressions like what ring does
 attribute [simp_scalar_simps]
@@ -80,12 +85,19 @@ attribute [simp_scalar_simps]
 
 -- TODO: general simproc for canceling mul then div/mod (all those lemmas are quite specific)
 attribute [simp_scalar_simps]
-  Nat.mul_div_cancel Nat.mul_div_cancel_left Nat.mul_div_mul_left Nat.mul_div_mul_right
+  Nat.mul_div_cancel Nat.mul_div_cancel_left
+  Nat.mul_div_mul_left Nat.mul_div_mul_right
   Nat.div_mul_cancel Nat.mul_div_cancel'
   Nat.mul_add_div Nat.mod_div_self
   Nat.add_mul_div_left Nat.add_mul_div_right
   Nat.mul_add_mod' Nat.mul_add_mod
   Nat.add_mul_mod_self_left Nat.add_mul_mod_self_right
+  Nat.add_sub_cancel' Nat.and_two_pow_sub_one_eq_mod
+  Nat.mod_mod_of_dvd
+
+attribute [simp_scalar_simps]
+  Nat.add_le_add_iff_right Nat.add_le_add_iff_left
+  Nat.add_lt_add_iff_right Nat.add_lt_add_iff_left
 
 @[simp_scalar_simps]
 theorem Nat.div_div_eq_div_mul_true (m n k : ℕ) : (m / n / k = m / (n * k)) ↔ True := by
@@ -116,7 +128,7 @@ theorem Nat.sub_mod_div_eq_div {m n : ℕ} : (m - m % n) / n = m / n := by
    which don't simplify in the context -/
 attribute [simp_scalar_simps] Nat.sub_eq_zero_of_le
 
-attribute [simp_scalar_simps]
+attribute [simp_scalar_simps↓]
   Nat.div_le_div_right Nat.mul_div_le Nat.div_mul_le_self
   Nat.pow_lt_pow_right Nat.mod_lt Nat.mod_le
 
@@ -133,6 +145,12 @@ attribute [simp_scalar_simps]
   Nat.testBit_add_one
   Nat.div_eq_of_lt
   Nat.testBit_two_pow_add_eq
+
+theorem Nat.testBit_two_pow_sub_one_of_lt (n i : ℕ) (h : i < n) : (2 ^ n - 1).testBit i = true := by
+  grind [Nat.testBit_two_pow_sub_one]
+
+theorem Nat.testBit_two_pow_sub_one_of_ge (n i : ℕ) (h : n ≤ i) : (2 ^ n - 1).testBit i = false := by
+  grind [Nat.testBit_two_pow_sub_one]
 
 /- This one is very common so marking it as `simp` as well -/
 attribute [simp] Nat.testBit_two_pow_add_eq
@@ -209,7 +227,22 @@ or by passing them as arguments to the tactic, e.g., `simp_scalar [my_lemma1, my
 Note that we try to be conservative when registering `simp_scalar_simps` lemmas in the standard library,
 to avoid applying unwanted simplifications. For this reason, it often happens that nested calls to `simp_scalar`
 and `simp` allow making progress on the goal.
-TODO: add an option `simp_scalar +simp` to use more lemmas
+TODO: add an option `simp_scalar +safe` so that `simp_scalar` uses more lemmas by default, but the set of
+lemmas can be restricted to only "safe" ones that only decrement the size of the expressions.
+
+# Marking lemmas with `simp_scalar_simps`
+
+When marking lemmas with `@[simp_scalar_simps]` it is better to group all the preconditions into a single one,
+to minimize the calls to the discharger (i.e., the incremental verions of `scalar_tac`). For instance:
+```lean
+-- We prefer this (one precondition):
+@[simp_scalar_simps]
+theorem Nat.lt_pow (a i : ℕ) (h : 1 < a ∧ 1 < i) : a < a ^ i := ...
+
+-- To this (two preconditions):
+@[simp_scalar_simps]
+theorem Nat.lt_pow (a i : ℕ) (h0 : 1 < a) (h1 : 1 < i) : a < a ^ i := ...
+```
 -/
 syntax (name := simp_scalar) "simp_scalar" Parser.Tactic.optConfig ("[" (term<|>"*"),* "]")? (location)? : tactic
 

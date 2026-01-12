@@ -90,7 +90,7 @@ let synthesize_symbolic_expansion (span : Meta.span) (sv : symbolic_value)
         match ls with
         | [ (Some see, exp) ] -> ExpandNoBranch (see, exp)
         | _ -> [%craise] span "Ill-formed borrow expansion")
-    | TVar _
+    | TVar _ | TArray _ | TSlice _
     | TLiteral TChar
     | TNever
     | TTraitType _

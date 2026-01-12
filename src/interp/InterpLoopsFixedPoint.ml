@@ -286,7 +286,7 @@ let compute_loop_break_context (config : config) (span : Meta.span)
   let break_ctxs = List.filter_map keep_break_ctx ctx_resl in
 
   [%ltrace
-    "about to join the contexts at the breaks:"
+    "about to join the contexts at the breaks:\n"
     ^ String.concat "\n\n"
         (List.map
            (fun ctx ->

@@ -7098,8 +7098,8 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
                 (* TODO: we shouldn't call `SymbolicToPure` here, there should
                    be a way to translate these signatures earlier. *)
                 SymbolicToPureTypes.translate_fun_sig trans_ctx
-                  (FRegular method_decl_id) method_name method_sig
-                  (List.map (fun _ -> None) method_sig.inputs)
+                  (FRegular method_decl_id) method_sig
+                  (List.map (fun _ -> None) method_sig.item_binder_value.inputs)
             | FunId (FBuiltin aid) ->
                 Builtin.BuiltinFunIdMap.find aid builtin_sigs
           in

@@ -12,6 +12,7 @@ import Aeneas.SimpLists.SimpLists
 import Aeneas.Natify.Natify
 import Aeneas.ZModify.ZModify
 import Aeneas.List
+import Aeneas.SimpScalar
 
 open Lean
 
@@ -121,21 +122,12 @@ attribute [simp, bvify_simps] BitVec.ofNat_mul
 
 theorem BitVec.ofNat_pow {n : ℕ} (x d : ℕ) : BitVec.ofNat n (x ^ d) = (BitVec.ofNat n x)^d := by
   revert x
-  induction d
-  . simp
-  . rename_i d hind
-    intro x
-    simp only [pow_add, pow_one, ofNat_mul, hind]
+  induction d <;> simp_all [pow_succ]
 
 @[simp]
 theorem BitVec.toNat_pow {w : ℕ} (x : BitVec w) (d : ℕ) :
   BitVec.toNat (x ^ d) = (x.toNat ^ d) % 2^w := by
-  revert x
-  induction d
-  . simp_all only [pow_zero, ofNat_eq_ofNat, toNat_ofNat, implies_true]
-  . rename_i d hind
-    intro x
-    simp only [pow_add, pow_one, toNat_mul, hind, Nat.mod_mul_mod]
+  induction d <;> simp_all [pow_succ]
 
 @[simp, simp_lists_simps]
 theorem BitVec.getElem!_eq_false {w : ℕ} (x : BitVec w) (i : ℕ) (hi : w ≤ i) :
@@ -175,6 +167,11 @@ theorem Bool.toNat_ofNat_mod2 (x : ℕ) : (Bool.ofNat (x % 2)).toNat = x % 2 := 
   omega
 
 attribute [natify_simps] BitVec.toNat_twoPow
+
+@[simp]
+theorem BitVec.twoPow_eq_two_pow {w i} : BitVec.twoPow w i = 2#w ^ i := by
+  natify; simp only [toNat_pow, toNat_ofNat]
+  by_cases w ≤ 1 <;> cases i <;> simp_scalar
 
 theorem BitVec.getElem!_eq_testBit_toNat {w : ℕ} (x : BitVec w) (i : ℕ) :
   x[i]! = x.toNat.testBit i := by
@@ -441,7 +438,7 @@ theorem BitVec.toLEBytes_getElem!_testBit (v : BitVec w) (i j : ℕ) (hj : j < 8
     simp_lists
 termination_by i
 
-@[simp, simp_lists_simps]
+@[simp]
 theorem BitVec.fromLEBytes_getElem! (v : List Byte) (j : ℕ) :
   (BitVec.fromLEBytes v)[j]! = v[j / 8]!.testBit (j % 8) := by
   unfold BitVec.fromLEBytes
@@ -468,20 +465,19 @@ theorem BitVec.fromLEBytes_getElem! (v : List Byte) (j : ℕ) :
       simp only [getElem!_eq_testBit_toNat] at this
       simp only [this]
       simp_lists
-      simp only [Bool.and_false, Bool.false_or]
       by_cases hj': j < 8 * (v'.length + 1)
       . simp [hj']
         have h0 : (j - 8) / 8 = (j / 8) - 1 := by omega
         have h1 : (j - 8) % 8 = j % 8 := by omega
         simp only [h0, h1]
-      . simp_lists; simp only [Bool.and_false]
+      . simp_lists
 
 @[simp, simp_lists_simps]
 theorem BitVec.fromLEBytes_toLEBytes {w : ℕ} (h : w % 8 = 0) (b : BitVec w) :
   BitVec.fromLEBytes b.toLEBytes = BitVec.cast (by simp only [toLEBytes_length, Nat.dvd_iff_mod_eq_zero, Nat.mul_div_cancel', h]) b := by
   simp only [eq_iff, fromLEBytes_getElem!, getElem!_cast]
   simp_lists
-  simp only [Nat.dvd_iff_mod_eq_zero, Nat.mul_div_cancel', h]
+  simp only [Nat.dvd_iff_mod_eq_zero, h, Nat.mul_div_cancel']
   simp only [Nat.div_add_mod, implies_true]
 
 @[simp]
@@ -542,3 +538,95 @@ theorem BitVec.testBit_getElem!_toLEBytes {w:ℕ} (x : BitVec w) (i j : ℕ) (h 
   x.toLEBytes[i]!.testBit j = x[8 * i + j]! := by
   have := getElem!_toLEBytes x i j h
   simp_all only [List.getElem!_eq_getElem?_getD, getElem!_eq_testBit_toNat]
+
+theorem BitVec.or_mod_two_pow {n : Nat} (a b : BitVec n) (k : Nat) :
+  (a ||| b) % 2 ^ k = (a % 2 ^ k) ||| (b % 2 ^ k) := by
+  by_cases k < n <;> natify <;> simp
+  · have : 2 ^ k < 2 ^ n := by simp_scalar
+    cases k
+    · simp; simp_scalar; rfl
+    · rename_i k _
+      simp_scalar
+  · by_cases hn : n ≤ 1
+    · have : n = 0 ∨ n = 1 := by omega
+      cases this <;> simp [*, Nat.mod_one]
+      simp_scalar
+    · simp_scalar
+
+@[simp]
+theorem BitVec.or_mod_two_pow_iff_true {n : Nat} (a b : BitVec n) (k : Nat) :
+  ((a ||| b) % 2 ^ k = (a % 2 ^ k) ||| (b % 2 ^ k)) ↔ True := by
+  simp only [BitVec.or_mod_two_pow]
+
+@[simp]
+theorem BitVec.or_mod_two_pow_iff_true' {n : Nat} (a b : BitVec n) (k : Nat) :
+  ((a % 2 ^ k) ||| (b % 2 ^ k) = (a ||| b) % 2 ^ k) ↔ True := by
+  simp only [BitVec.or_mod_two_pow]
+
+theorem BitVec.and_mod_two_pow {n : Nat} (a b : BitVec n) (k : Nat) :
+  (a &&& b) % 2 ^ k = (a % 2 ^ k) &&& (b % 2 ^ k) := by
+  by_cases k < n <;> natify <;> simp
+  · have : 2 ^ k < 2 ^ n := by simp_scalar
+    cases k
+    · simp; simp_scalar; rfl
+    · rename_i k _
+      simp_scalar
+  · by_cases hn : n ≤ 1
+    · have : n = 0 ∨ n = 1 := by omega
+      cases this <;> simp [*, Nat.mod_one]
+      simp_scalar
+    · simp_scalar
+
+@[simp]
+theorem BitVec.and_mod_two_pow_iff_true {n : Nat} (a b : BitVec n) (k : Nat) :
+  ((a &&& b) % 2 ^ k = (a % 2 ^ k) &&& (b % 2 ^ k)) ↔ True := by
+  simp only [BitVec.and_mod_two_pow]
+
+@[simp]
+theorem BitVec.and_mod_two_pow_iff_true' {n : Nat} (a b : BitVec n) (k : Nat) :
+  ((a % 2 ^ k) &&& (b % 2 ^ k) = (a &&& b) % 2 ^ k) ↔ True := by
+  simp only [BitVec.and_mod_two_pow]
+
+theorem BitVec.xor_mod_two_pow {n : Nat} (a b : BitVec n) (k : Nat) :
+  (a ^^^ b) % 2 ^ k = (a % 2 ^ k) ^^^ (b % 2 ^ k) := by
+  by_cases k < n <;> natify <;> simp
+  · have : 2 ^ k < 2 ^ n := by simp_scalar
+    cases k
+    · simp; simp_scalar; rfl
+    · rename_i k _
+      simp_scalar
+  · by_cases hn : n ≤ 1
+    · have : n = 0 ∨ n = 1 := by omega
+      cases this <;> simp [*, Nat.mod_one]
+      simp_scalar
+    · simp_scalar
+
+@[simp]
+theorem BitVec.xor_mod_two_pow_iff_true {n : Nat} (a b : BitVec n) (k : Nat) :
+  ((a ^^^ b) % 2 ^ k = (a % 2 ^ k) ^^^ (b % 2 ^ k)) ↔ True := by
+  simp only [BitVec.xor_mod_two_pow]
+
+@[simp]
+theorem BitVec.xor_mod_two_pow_iff_true' {n : Nat} (a b : BitVec n) (k : Nat) :
+  ((a % 2 ^ k) ^^^ (b % 2 ^ k) = (a ^^^ b) % 2 ^ k) ↔ True := by
+  simp only [BitVec.xor_mod_two_pow]
+
+@[simp, simp_lists_simps, simp_scalar_simps]
+theorem BitVec.ofNat_shiftRight_toNat {n m} (bv : BitVec n) (i : Nat) :
+  (BitVec.ofNat m (bv.toNat >>> i)) = BitVec.setWidth m (bv >>> i) := by
+  natify; simp
+
+@[simp, simp_lists_simps, simp_scalar_simps]
+theorem BitVec.cast_shiftRight_toNat {n m} (bv : BitVec n) (i : Nat) :
+  ((bv.toNat >>> i) : BitVec m) = BitVec.setWidth m (bv >>> i) := by
+  natify; simp
+
+@[simp, simp_lists_simps, simp_scalar_simps]
+theorem BitVec.ofNat_shiftLeft_toNat {n m} (bv : BitVec n) (i : Nat) (h : m ≤ n) :
+  (BitVec.ofNat m (bv.toNat <<< i)) = BitVec.setWidth m (bv <<< i) := by
+  natify; simp; simp_scalar
+
+@[simp, simp_lists_simps, simp_scalar_simps]
+theorem BitVec.cast_shiftLeft_toNat {n m} (bv : BitVec n) (i : Nat) (h : m ≤ n) :
+  ((bv.toNat <<< i) : BitVec m) = BitVec.setWidth m (bv <<< i) := by
+  natify; simp; simp_scalar

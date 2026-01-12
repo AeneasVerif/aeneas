@@ -267,7 +267,7 @@ def addDeclTac {α} (name : Name) (val : Expr) (type : Expr) (asLet : Bool) (m :
     let newVal ← mkLetFVars #[nval] newMVar
     -- There are two cases:
     -- - asLet is true: newVal is `let $name := $val in $newMVar`
-    -- - asLet is false: ewVal is `λ $name => $newMVar`
+    -- - asLet is false: enwVal is `λ $name => $newMVar`
     --   We need to apply it to `val`
     let newVal := if asLet then newVal else mkAppN newVal #[val]
     -- Assign the main goal and update the current goal
@@ -698,11 +698,11 @@ def listTryPopHead (ls : List α) : Option α × List α :=
   | [] => (none, ls)
   | hd :: tl => (some hd, tl)
 
-/- Destruct all the existentials appearing in `h`, and introduce them as variables
-   in the context.
+/-- Destruct all the existentials appearing in `h`, and introduce them as variables
+  in the context.
 
-   If `ids` is not empty, we use it to name the introduced variables. We
-   transmit the stripped expression and the remaining ids to the continuation.
+  If `ids` is not empty, we use it to name the introduced variables. We
+  transmit the stripped expression and the remaining ids to the continuation.
  -/
 partial def splitAllExistsTac [Inhabited α] (h : Expr) (ids : List (Option Name))
   (k : Array Expr → Expr → List (Option Name) → TacticM α) : TacticM α := do
@@ -987,6 +987,18 @@ def splitAny : TacticM (List MVarId) := do
       return mvarIds
   let some mvarIds ← splitTarget? mvarId | Meta.throwTacticEx `splitAny mvarId "Could not split"
   return mvarIds
+
+def splitLocalDecl (mvarId : MVarId) (fvarId : FVarId) : TacticM (Option (List (MVarId × Array FVarId))) := do
+  -- Get the local context of mvarId
+  let oldFvarIds := Std.HashSet.ofArray ((← mvarId.getDecl).lctx.getFVarIds)
+  match ← Lean.Meta.splitLocalDecl? mvarId fvarId with
+  | none => pure .none
+  | some mvarIds =>
+    -- Find the new fvar ids introduced in each goal
+    mvarIds.mapM fun (mvarId : MVarId) => do
+      let fvarIds := (← mvarId.getDecl).lctx.getFVarIds
+      let nfvarIds := fvarIds.filter fun id => ! oldFvarIds.contains id
+      pure (mvarId, nfvarIds)
 
 /-- Repeteadly split the disjunctions in the context, then apply a tactic when we can't split anymore -/
 partial def splitAll (endTac : TacticM Unit) : TacticM Unit := do

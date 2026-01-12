@@ -40,19 +40,19 @@ It works by following the same principle as `simp_scalar` - see the documentatio
 -/
 syntax (name := simp_ifs) "simp_ifs" Parser.Tactic.optConfig ("[" term,* "]")? (location)? : tactic
 
-@[simp_ifs_simps]
+@[simp_ifs_simps↓]
 theorem if_true {α} (b : Prop) [Decidable b] (x y : α) (hb : b) : (if b then x else y) = x := by
   simp only [hb, ↓reduceIte]
 
-@[simp_ifs_simps]
+@[simp_ifs_simps↓]
 theorem if_false {α} (b : Prop) [Decidable b] (x y : α) (hb : ¬ b) : (if b then x else y) = y := by
   simp only [hb, ↓reduceIte]
 
-@[simp_ifs_simps]
+@[simp_ifs_simps↓]
 theorem dite_true {α} (c : Prop) [Decidable c] (h : c) (t : c → α) (e : ¬c → α) :
   dite c t e = t h := by simp [h]
 
-@[simp_ifs_simps]
+@[simp_ifs_simps↓]
 theorem dite_fase {α} (c : Prop) [Decidable c] (h : ¬ c) (t : c → α) (e : ¬c → α) :
   dite c t e = e h := by simp [h]
 

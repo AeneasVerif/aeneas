@@ -731,7 +731,7 @@ let greedy_expand_symbolics_with_borrows (span : Meta.span) : cm_fun =
         | TAdt { id = TTuple | TBuiltin TBox; _ } | TRef (_, _, _) ->
             (* Ok *)
             expand_symbolic_value_no_branching span sv None ctx
-        | TAdt { id = TBuiltin (TArray | TSlice | TStr); _ } ->
+        | TArray _ | TSlice _ | TAdt { id = TBuiltin TStr; _ } ->
             (* We can't expand those *)
             [%craise] span
               "Attempted to greedily expand an ADT which can't be expanded "
