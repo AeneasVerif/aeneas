@@ -45,6 +45,7 @@ package «tests» {}
 @[default_target] lean_lib RenameAttribute
 @[default_target] lean_lib Scalars
 @[default_target] lean_lib Slices
+@[default_target] lean_lib Static
 @[default_target] lean_lib SwitchTest
 @[default_target] lean_lib Traits
 @[default_target] lean_lib Tutorial
