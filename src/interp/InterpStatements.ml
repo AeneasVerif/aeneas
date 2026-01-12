@@ -1445,11 +1445,16 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
   let args_with_rtypes = List.combine args inst_sg.inputs in
 
   (* Check the type of the input arguments *)
-  [%cassert] span
-    (List.for_all
-       (fun ((arg, rty) : tvalue * rty) -> arg.ty = Subst.erase_regions rty)
-       args_with_rtypes)
-    "The input arguments don't have the proper type";
+  List.iteri
+    (fun i ((arg, rty) : tvalue * rty) ->
+      if not (Subst.erase_regions arg.ty = Subst.erase_regions rty) then (
+        [%ltrace
+          "Argument " ^ string_of_int i
+          ^ " doesn't have the proper type:\n- arg: " ^ tvalue_to_string ctx arg
+          ^ "\n- arg.ty" ^ ty_to_string ctx arg.ty ^ "\n- target type: "
+          ^ ty_to_string ctx rty];
+        [%craise] span "The input arguments don't have the proper type"))
+    args_with_rtypes;
   (* Check that the input arguments don't contain symbolic values that can't
    * be fed to functions (i.e., symbolic values output from function return
    * values and which contain borrows of borrows can't be used as function
