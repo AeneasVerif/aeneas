@@ -7,6 +7,15 @@ open Config
 include ExtractBase
 module T = Types
 
+let extract_str (_span : Meta.span) (fmt : F.formatter) (s : string) : unit =
+  let chars = StringUtils.string_to_chars s in
+  (* Using the OCaml escape conventions for now.
+
+     TODO: does this really work? *)
+  let s = String.concat "" (List.map Char.escaped chars) in
+  let s = "\"" ^ s ^ "\"" in
+  F.pp_print_string fmt s
+
 (** Format a constant value.
 
     Inputs:
@@ -79,7 +88,8 @@ let extract_literal (span : Meta.span) (fmt : F.formatter) ~(is_pattern : bool)
           in
           F.pp_print_string fmt c;
           if inside then F.pp_print_string fmt ")")
-  | VChar _ | VFloat _ | VStr _ | VByteStr _ ->
+  | VStr s -> extract_str span fmt s
+  | VChar _ | VFloat _ | VByteStr _ ->
       [%admit_raise] span
         "Float, string, non-ASCII chars and byte string literals are \
          unsupported"
