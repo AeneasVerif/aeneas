@@ -14,16 +14,21 @@ let log = Logging.projectors_log
 let rec apply_proj_borrows_on_shared_borrow (span : Meta.span) (ctx : eval_ctx)
     (regions : RegionId.Set.t) (v : tvalue) (ty : ty) : abstract_shared_borrows
     =
+  [%ldebug
+    "- ty: " ^ ty_to_string ctx ty ^ "\n- v.ty: " ^ ty_to_string ctx v.ty];
   (* Sanity check - TODO: move those elsewhere (here we perform the check at every
    * recursive call which is a bit overkill...) *)
   let ety = Subst.erase_regions ty in
-  [%sanity_check] span (ty_is_rty ty && ety = v.ty);
+  [%sanity_check] span (ty_is_rty ty && ety = erase_regions v.ty);
   (* Project - if there are no regions from the abstraction in the type, return [_] *)
   if not (ty_has_regions_in_set regions ty) then []
   else
     match (v.value, ty) with
-    | VLiteral _, TLiteral _ -> []
+    | VLiteral _, TLiteral _ ->
+        [%ldebug "literals"];
+        []
     | VAdt adt, TAdt { id; generics } ->
+        [%ldebug "adts"];
         (* Retrieve the types of the fields *)
         let field_types =
           ctx_adt_get_instantiated_field_types span ctx id adt.variant_id
@@ -41,6 +46,7 @@ let rec apply_proj_borrows_on_shared_borrow (span : Meta.span) (ctx : eval_ctx)
         List.concat proj_fields
     | VBottom, _ -> [%craise] span "Unreachable"
     | VBorrow bc, TRef (r, ref_ty, kind) ->
+        [%ldebug "borrow"];
         (* Retrieve the bid of the borrow and the asb of the projected borrowed value *)
         let bid, asb =
           (* Not in the set: dive *)
@@ -80,6 +86,7 @@ let rec apply_proj_borrows_on_shared_borrow (span : Meta.span) (ctx : eval_ctx)
         asb
     | VLoan _, _ -> [%craise] span "Unreachable"
     | VSymbolic s, _ ->
+        [%ldebug "symbolic"];
         (* Check that the projection doesn't contain ended regions *)
         [%sanity_check] span
           (not
@@ -484,12 +491,14 @@ let apply_eproj_loans_on_symbolic_expansion (span : Meta.span)
 (** [ty] shouldn't have erased regions *)
 let apply_proj_borrows_on_input_value (span : Meta.span) (ctx : eval_ctx)
     (regions : RegionId.Set.t) (v : tvalue) (ty : rty) : tavalue =
+  [%ltrace "- v: " ^ tvalue_to_string ctx v ^ "\n- ty: " ^ ty_to_string ctx ty];
   [%sanity_check] span (ty_is_rty ty);
   let check_symbolic_no_ended = true in
   apply_proj_borrows span check_symbolic_no_ended ctx regions v ty
 
 let apply_eproj_borrows_on_input_value (span : Meta.span) (ctx : eval_ctx)
     (regions : RegionId.Set.t) (v : tvalue) (ty : rty) : tevalue =
+  [%ltrace "- v: " ^ tvalue_to_string ctx v ^ "\n- ty: " ^ ty_to_string ctx ty];
   [%sanity_check] span (ty_is_rty ty);
   let check_symbolic_no_ended = true in
   apply_eproj_borrows span check_symbolic_no_ended ctx regions v ty

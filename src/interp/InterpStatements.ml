@@ -1440,6 +1440,13 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
   (* Evaluate the input operands *)
   let args, ctx, cc = eval_operands config span args ctx in
 
+  [%ldebug
+    "- args:\n"
+    ^ Print.list_to_string ~sep:"\n"
+        (fun (v : tvalue) ->
+          "- " ^ tvalue_to_string ctx v ^ " : " ^ ty_to_string ctx v.ty)
+        args];
+
   (* Generate the abstractions and insert them in the context *)
   let abs_ids = List.map (fun rg -> rg.id) inst_sg.abs_regions_hierarchy in
   let args_with_rtypes = List.combine args inst_sg.inputs in
