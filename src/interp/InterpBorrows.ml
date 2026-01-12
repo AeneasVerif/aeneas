@@ -990,6 +990,9 @@ and end_shared_loan_aux (config : config) (span : Meta.span) ~(snapshots : bool)
       method! visit_ASharedBorrow _ pm bid sid =
         [%sanity_check] span (pm = PNone);
         if bid = l then raise (FoundSharedBorrowId (bid, sid)) else ()
+
+      method! visit_AsbBorrow _ bid sid =
+        if bid = l then raise (FoundSharedBorrowId (bid, sid)) else ()
     end
   in
   let rec run : cm_fun =
