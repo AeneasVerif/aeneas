@@ -643,6 +643,15 @@ let lean_builtin_trait_decls =
     (* file: "Aeneas/Std/Core/Hash.lean", line: 6 *)
     mk_trait_decl "core::hash::Hasher" "core.hash.Hasher"
       ~methods:[ ("finish", "finish"); ("write", "write") ];
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 6 *)
+    mk_trait_decl "core::iter::range::Step" "core.iter.range.Step"
+      ~parent_clauses:[ "cloneCloneInst"; "cmpPartialOrdInst" ]
+      ~methods:
+        [
+          ("steps_between", "steps_between");
+          ("forward_checked", "forward_checked");
+          ("backward_checked", "backward_checked");
+        ];
     (* file: "Aeneas/Std/Core/Core.lean", line: 59 *)
     mk_trait_decl "core::marker::Copy" "core.marker.Copy"
       ~parent_clauses:[ "cloneInst" ];
