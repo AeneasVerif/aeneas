@@ -67,4 +67,13 @@ def core.fmt.DebugUnit.fmt (_ : Unit) (fmt : core.fmt.Formatter) :
   -- TODO: this is a simplistic model
   .ok (.Ok (), fmt)
 
+@[rust_fun "core::result::{core::result::Result<@T, @E>}::expect"]
+def core.result.Result.expect {T : Type} {E : Type} (_DebugInst : core.fmt.Debug E)
+  (r : core.result.Result T E) (_ : Str) : Std.Result T :=
+  match r with
+  | .Ok x => .ok x
+  | .Err _ =>
+    /- TODO: this is a simplistic model -/
+    .fail .panic
+
 end Aeneas.Std

@@ -418,6 +418,9 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Core.lean", line: 95 *)
     mk_fun "core::option::{core::option::Option<@T>}::unwrap_or"
       "core.option.Option.unwrap_or" ~can_fail:false;
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 70 *)
+    mk_fun "core::result::{core::result::Result<@T, @E>}::expect"
+      "core.result.Result.expect";
     (* file: "Aeneas/Std/Core/Fmt.lean", line: 18 *)
     mk_fun "core::result::{core::result::Result<@T, @E>}::unwrap"
       "core.result.Result.unwrap";
