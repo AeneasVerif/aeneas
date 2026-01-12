@@ -127,7 +127,7 @@ module Values = struct
       (abs : abstract_shared_borrow) : string =
     match abs with
     | AsbBorrow (bid, sid) ->
-        BorrowId.to_string bid ^ "(@" ^ SharedBorrowId.to_string sid ^ ")"
+        "@" ^ BorrowId.to_string bid ^ "(^" ^ SharedBorrowId.to_string sid ^ ")"
     | AsbProjReborrows proj ->
         "{" ^ symbolic_value_proj_to_string env proj.sv_id proj.proj_ty ^ "}"
 
