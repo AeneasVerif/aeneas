@@ -240,9 +240,9 @@ let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
   (* Can't translate types with nested borrows for now *)
   [%cassert] span
     (not
-       (TypesUtils.type_decl_has_nested_borrows (Some span)
+       (TypesUtils.type_decl_has_nested_mut_borrows (Some span)
           ctx.type_ctx.type_infos def))
-    "ADTs containing borrows are not supported yet";
+    "ADTs containing nested mutable borrows are not supported yet";
   let generics, preds = translate_generic_params (Some span) def.generics in
   let explicit_info = compute_explicit_info generics [] in
   let kind = translate_type_decl_kind span def.T.kind in
