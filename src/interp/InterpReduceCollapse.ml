@@ -347,7 +347,7 @@ let repeat_iter_borrows_merge (span : Meta.span) (fixed_abs_ids : AbsId.Set.t)
     (policy : ctx_with_info -> 'a -> (abs_id * abs_id) option) (ctx : eval_ctx)
     : eval_ctx =
   (* Compute the information *)
-  let ctx =
+  let to_ctx_with_info (ctx : eval_ctx) : ctx_with_info =
     let is_fresh_abs_id (id : AbsId.id) : bool =
       not (AbsId.Set.mem id fixed_abs_ids)
     in
@@ -355,8 +355,10 @@ let repeat_iter_borrows_merge (span : Meta.span) (fixed_abs_ids : AbsId.Set.t)
     let info = compute_abs_borrows_loans_maps span explore ctx ctx.env in
     { ctx; info }
   in
+  let ctx = to_ctx_with_info ctx in
   (* Explore and merge *)
   let rec explore_merge (ctx : ctx_with_info) : eval_ctx =
+    let ctx0 = ctx in
     try
       iter ctx (fun x ->
           (* Check if we need to merge some abstractions *)
@@ -373,6 +375,67 @@ let repeat_iter_borrows_merge (span : Meta.span) (fixed_abs_ids : AbsId.Set.t)
         ctx_with_info_merge_into_first_abs span abs_kind ~can_end
           ~with_abs_conts merge_funs ctx abs_id0 abs_id1
       in
+      (* Sanity check: the information was properly updated *)
+      if !Config.sanity_checks then
+        (let info = ctx.info in
+         let info' = (to_ctx_with_info ctx.ctx).info in
+
+         let print_msg (field : string) =
+           [%ltrace
+             "Invalid incremental update of the context information: field '"
+             ^ field ^ "':" ^ "\n- incremental computation:\n"
+             ^ abs_borrows_loans_maps_to_string ctx.ctx info
+             ^ "\n\n- reference computation:\n"
+             ^ abs_borrows_loans_maps_to_string ctx.ctx info'
+             ^ "\n\n- initial context:\n"
+             ^ eval_ctx_to_string ctx0.ctx
+             ^ "\n\n- new context:\n" ^ eval_ctx_to_string ctx.ctx];
+           [%internal_error] span
+         in
+         let check (b : bool) (field : string) =
+           if not b then print_msg field
+         in
+         check (info.abs_ids = info'.abs_ids) "abs_ids";
+         check
+           (AbsId.Map.equal MarkedUniqueBorrowId.Set.equal info.abs_to_borrows
+              info'.abs_to_borrows)
+           "abs_to_borrows";
+         check
+           (AbsId.Map.equal MarkedBorrowId.Set.equal
+              info.abs_to_non_unique_borrows info'.abs_to_non_unique_borrows)
+           "abs_to_non_unique_borrows";
+         check
+           (AbsId.Map.equal MarkedLoanId.Set.equal info.abs_to_loans
+              info'.abs_to_loans)
+           "abs_to_loans";
+         check
+           (MarkedUniqueBorrowId.Map.equal AbsId.Set.equal info.borrow_to_abs
+              info'.borrow_to_abs)
+           "borrow_to_abs";
+         check
+           (MarkedBorrowId.Map.equal AbsId.Set.equal
+              info.non_unique_borrow_to_abs info'.non_unique_borrow_to_abs)
+           "non_unique_borrow_to_abs";
+         check
+           (MarkedLoanId.Map.equal AbsId.Set.equal info.loan_to_abs
+              info'.loan_to_abs)
+           "loan_to_abs";
+         check
+           (AbsId.Map.equal MarkedNormSymbProj.Set.equal
+              info.abs_to_borrow_projs info'.abs_to_borrow_projs)
+           "abs_to_borrow_projs";
+         check
+           (AbsId.Map.equal MarkedNormSymbProj.Set.equal info.abs_to_loan_projs
+              info'.abs_to_loan_projs)
+           "abs_to_loan_projs";
+         check
+           (MarkedNormSymbProj.Map.equal AbsId.Set.equal info.borrow_proj_to_abs
+              info'.borrow_proj_to_abs)
+           "borrow_proj_to_abs";
+         check
+           (MarkedNormSymbProj.Map.equal AbsId.Set.equal info.loan_proj_to_abs
+              info'.loan_proj_to_abs))
+          "loan_proj_to_abs";
       (* Remember the sequence of merges *)
       Option.iter
         (fun sequence -> sequence := (abs_id0, abs_id1, naid) :: !sequence)
