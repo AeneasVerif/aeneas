@@ -8,7 +8,7 @@ import Aeneas.Std.Scalar.Notations
 namespace Aeneas.Std
 
 @[rust_trait "core::iter::range::Step"
-  (parentClauses := ["cloneCloneInst", "cmpPartialOrdInst"])]
+  (parentClauses := ["cloneInst", "partialOrdInst"])]
 structure core.iter.range.Step (Self : Type) where
   cloneInst : core.clone.Clone Self
   partialOrdInst : core.cmp.PartialOrd Self Self

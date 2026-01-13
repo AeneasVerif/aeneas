@@ -673,10 +673,9 @@ let lean_builtin_trait_decls =
       ~consts:[ ("MAY_HAVE_SIDE_EFFECT", "MAY_HAVE_SIDE_EFFECT") ];
     (* file: "Aeneas/Std/Core/Iter.lean", line: 10 *)
     mk_trait_decl "core::iter::range::Step" "core.iter.range.Step"
+      ~parent_clauses:[ "cloneInst"; "partialOrdInst" ]
       ~methods:
         [
-          ("cloneInst", "cloneInst");
-          ("partialOrdInst", "partialOrdInst");
           ("steps_between", "steps_between");
           ("forward_checked", "forward_checked");
           ("backward_checked", "backward_checked");
