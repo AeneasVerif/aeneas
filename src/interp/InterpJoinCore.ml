@@ -743,7 +743,7 @@ let tavalue_add_marker (span : Meta.span) (ctx : eval_ctx) (pm : proj_marker)
 let tevalue_add_marker (span : Meta.span) (ctx : eval_ctx) (pm : proj_marker)
     (ev : tevalue) : tevalue =
   let obj =
-    object
+    object (self)
       inherit [_] map_tavalue as super
       method! visit_borrow_content _ _ = [%craise] span "Unexpected borrow"
       method! visit_loan_content _ _ = [%craise] span "Unexpected loan"
@@ -781,6 +781,8 @@ let tevalue_add_marker (span : Meta.span) (ctx : eval_ctx) (pm : proj_marker)
         | EMutBorrow (pm0, bid, av) ->
             [%sanity_check] span (pm0 = PNone);
             super#visit_eborrow_content env (EMutBorrow (pm, bid, av))
+        | EEndedIgnoredMutBorrow bc ->
+            EEndedIgnoredMutBorrow (self#visit_eended_ignored_mut_borrow env bc)
         | _ -> [%internal_error] span
     end
   in
