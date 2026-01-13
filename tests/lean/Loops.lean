@@ -299,7 +299,7 @@ def list_nth_shared_with_id
   list_nth_shared_with_id_loop i ls1
 
 /- [loops::list_nth_mut_pair]: loop 0:
-   Source: 'tests/src/loops.rs', lines 199:8-199:24 -/
+   Source: 'tests/src/loops.rs', lines 198:4-214:1 -/
 def list_nth_mut_pair_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T × (T → List T) × (T → List T))
@@ -332,7 +332,7 @@ def list_nth_mut_pair
   ok ((t, t1), back, back1)
 
 /- [loops::list_nth_shared_pair]: loop 0:
-   Source: 'tests/src/loops.rs', lines 223:8-223:24 -/
+   Source: 'tests/src/loops.rs', lines 222:4-238:1 -/
 def list_nth_shared_pair_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T)
