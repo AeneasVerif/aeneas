@@ -752,12 +752,29 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
     right_avalues := av :: !right_avalues
   in
 
-  let add_avalue (av : tavalue) : unit =
+  let rec add_avalue (av : tavalue) : unit =
     match av.value with
-    | ALoan _ ->
-        (* We simply add the value: we only merge loans coming from the *left*
-         (this one comes from the right) with borrows coming from the *right*. *)
-        push_right_avalue av
+    | ALoan lc -> (
+        match lc with
+        | AMutLoan _ | ASharedLoan _ ->
+            (* We simply add the value: we only merge loans coming from the *left*
+              (this one comes from the right) with borrows coming from the *right*. *)
+            push_right_avalue av
+        | AEndedMutLoan { child; given_back; given_back_meta = _ } ->
+            add_avalue child;
+            add_avalue given_back
+        | AEndedSharedLoan (sv, child) ->
+            (* For now, we treat the case where there are no loans/borrows in the shared
+             value, allowing us to eliminate it altogether. *)
+            [%cassert] span
+              (not (tvalue_has_loans_or_borrows (Some span) ctx sv))
+              "Unimplemented";
+            add_avalue child
+        | AIgnoredMutLoan _ -> [%craise] span "Unimplemented"
+        | AEndedIgnoredMutLoan { child; given_back; given_back_meta = _ } ->
+            add_avalue child;
+            add_avalue given_back
+        | AIgnoredSharedLoan child -> add_avalue child)
     | ABorrow bc ->
         (* We may need to merge it *)
         begin
@@ -790,11 +807,15 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
               in
               let keep = keep !left_avalues in
               if keep then push_right_avalue av else ()
+          | AEndedIgnoredMutBorrow { child; given_back; given_back_meta = _ } ->
+              add_avalue given_back;
+              add_avalue child
           | AIgnoredMutBorrow _
           | AEndedMutBorrow _
           | AEndedSharedBorrow
-          | AEndedIgnoredMutBorrow _
-          | AProjSharedBorrow _ -> [%craise] span "Unreachable"
+          | AProjSharedBorrow _ ->
+              [%ltrace "Unexpected avalue: " ^ tavalue_to_string ctx av];
+              [%craise] span "Unreachable"
         end
     | ASymbolic (pm, proj) -> begin
         match proj with
@@ -839,7 +860,9 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
               ("Internal error: please file an issue.\nUnexpected value: "
              ^ tavalue_to_string ctx av)
       end
-    | AAdt _ -> [%craise] span "Not implemented yet"
+    | AAdt { variant_id = _; fields } ->
+        (* Simply recurse *)
+        List.iter add_avalue fields
     | AIgnored _ -> (* Nothing to register *) ()
   in
   List.iter add_avalue (List.filter keep_avalue abs1.avalues);
@@ -1393,8 +1416,14 @@ let bind_outputs_from_output_input (span : Meta.span) (ctx : eval_ctx)
                 bound_inputs_outputs_add_borrow span bid pm fid output.ty !bound;
               (* *)
               pat
-          | EEndedMutBorrow _ | EIgnoredMutBorrow _ | EEndedIgnoredMutBorrow _
-            ->
+          | EEndedIgnoredMutBorrow { child; given_back; given_back_meta = _ } ->
+              (* For now we simply check that the child and given back values are ignored
+               (meaning they are shared borrows), in which case there are no outputs *)
+              if is_eignored child.value && is_eignored given_back.value then
+                { pat = PIgnored; ty = output.ty }
+              else [%craise] span "Unimplemented"
+          | EIgnoredMutBorrow _ -> [%craise] span "Unimplemented"
+          | EEndedMutBorrow _ ->
               (* We shouldn't get there. If we find an ended borrow in a region
                  abstraction it means the abstraction was ended and thus removed
                  from the context: we shouldn't be in the process of merging it...
@@ -1640,13 +1669,14 @@ let merge_abs_conts_aux (span : Meta.span) (ctx : eval_ctx) (abs0 : abs)
        A1 { MB l1, MB l2, ML l3 } ⟦ (MB l1, MB l2) = if b then (ML l3, 1) else (0, ML l3) ⟧
      ]}
 
-     We first bind all the values in the continuation in A1 like so:
+     We first bind all the output values of the continuation in A1 like so:
      {[
        let (v_l1, v_l2) = if b then (ML l3, 1) else (0, ML l3) in
      ]}
 
-     We then update the continuation in A0 to substitute the loans whose corresponding
-     borrows are outputs of the continuation of A1, and bind the outputs of A0 like so:
+     We then update the continuation in A0 to substitute the loans (they are inputs)
+     whose corresponding borrows are outputs of the continuation of A1, and bind the outputs
+     of A0. It gives:
      {[
        let v_l0 = v_l1 in
      ]}
@@ -1715,7 +1745,7 @@ let merge_abs_conts_aux (span : Meta.span) (ctx : eval_ctx) (abs0 : abs)
     ^ "\n- bound_inputs_outputs:\n"
     ^ bound_inputs_outputs_to_string ctx !bound];
 
-  (* Create the output for the composed continuation, and its corresponding input.
+  (* Create the outputs for the composed continuation, and its corresponding inputs.
 
      We simply list all the bound outputs which were not consumed (the free variables
      give us the inputs, and the borrow themselves give us the outputs) by following
