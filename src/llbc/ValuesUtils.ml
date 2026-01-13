@@ -307,6 +307,10 @@ let symbolic_value_has_borrows span (infos : TypesAnalysis.type_infos)
     (sv : symbolic_value) : bool =
   ty_has_borrows span infos sv.sv_ty
 
+let symbolic_value_has_mut_borrows _span (infos : TypesAnalysis.type_infos)
+    (sv : symbolic_value) : bool =
+  ty_has_mut_borrows infos sv.sv_ty
+
 (** Check if a value has borrows in **a general sense**.
 
     It checks if:
@@ -321,6 +325,23 @@ let value_has_borrows span (infos : TypesAnalysis.type_infos) (v : value) : bool
 
       method! visit_symbolic_value _ sv =
         if symbolic_value_has_borrows span infos sv then raise Found else ()
+    end
+  in
+  (* We use exceptions *)
+  try
+    obj#visit_value () v;
+    false
+  with Found -> true
+
+let value_has_mut_borrows span (infos : TypesAnalysis.type_infos) (v : value) :
+    bool =
+  let obj =
+    object
+      inherit [_] iter_tvalue
+      method! visit_VMutBorrow _env _ = raise Found
+
+      method! visit_symbolic_value _ sv =
+        if symbolic_value_has_mut_borrows span infos sv then raise Found else ()
     end
   in
   (* We use exceptions *)

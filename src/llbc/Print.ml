@@ -120,8 +120,8 @@ module Values = struct
     match lc with
     | VSharedLoan (lid, v) ->
         let lid = BorrowId.to_string lid in
-        "shared_loan@" ^ lid ^ "(" ^ tvalue_to_string ~span env v ^ ")"
-    | VMutLoan bid -> "ml@" ^ BorrowId.to_string bid
+        "SL@" ^ lid ^ "(" ^ tvalue_to_string ~span env v ^ ")"
+    | VMutLoan bid -> "ML@" ^ BorrowId.to_string bid
 
   let abstract_shared_borrow_to_string (env : fmt_env)
       (abs : abstract_shared_borrow) : string =
@@ -305,12 +305,12 @@ module Values = struct
       string =
     match bc with
     | AMutBorrow (pm, bid, av) ->
-        "@mb(" ^ BorrowId.to_string bid ^ ", "
+        "mut_borrow@" ^ BorrowId.to_string bid ^ "("
         ^ tavalue_to_string ~span ~with_ended env av
         ^ ")"
         |> add_proj_marker pm
     | ASharedBorrow (pm, bid, sid) ->
-        "sb@" ^ BorrowId.to_string bid ^ "(^"
+        "shared_borrow@" ^ BorrowId.to_string bid ^ "(^"
         ^ SharedBorrowId.to_string sid
         ^ ")"
         |> add_proj_marker pm

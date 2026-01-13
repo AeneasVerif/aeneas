@@ -1741,6 +1741,11 @@ end
 type norm_symb_proj = { sv_id : symbolic_value_id; norm_proj_ty : ty }
 [@@deriving show, ord]
 
+let norm_symb_proj_to_string (ctx : eval_ctx) (proj : norm_symb_proj) : string =
+  let sv_id = symbolic_value_id_to_pretty_string proj.sv_id in
+  let ty = ty_to_string ctx proj.norm_proj_ty in
+  "(" ^ sv_id ^ " : " ^ ty ^ ")"
+
 module NormSymbProjOrd = struct
   type t = norm_symb_proj
 
@@ -1750,24 +1755,88 @@ module NormSymbProjOrd = struct
   let show_t = show_norm_symb_proj
 end
 
-module NormSymbProjSet = Collections.MakeSet (NormSymbProjOrd)
-module NormSymbProjMap = Collections.MakeMap (NormSymbProjOrd)
+module NormSymbProjSet : sig
+  include Collections.Set with type elt = norm_symb_proj
+
+  val with_ctx_to_string : string option -> eval_ctx -> t -> string
+end = struct
+  include Collections.MakeSet (NormSymbProjOrd)
+
+  let with_ctx_to_string indent_opt ctx (s : t) =
+    let indent, break =
+      match indent_opt with
+      | Some indent -> (indent, "\n")
+      | None -> ("", " ")
+    in
+    let sep = "," ^ break in
+    let ls =
+      fold (fun v ls -> (indent ^ norm_symb_proj_to_string ctx v) :: ls) s []
+    in
+    match ls with
+    | [] -> "{}"
+    | _ -> "{" ^ break ^ String.concat sep (List.rev ls) ^ " }"
+end
+
+module NormSymbProjMap : sig
+  include Collections.Map with type key = norm_symb_proj
+
+  val with_ctx_to_string :
+    string option -> ('a -> string) -> eval_ctx -> 'a t -> string
+end = struct
+  include Collections.MakeMap (NormSymbProjOrd)
+
+  let with_ctx_to_string indent_opt a_to_string ctx m =
+    let indent, break =
+      match indent_opt with
+      | Some indent -> (indent, "\n")
+      | None -> ("", " ")
+    in
+    let sep = "," ^ break in
+    let ls =
+      fold
+        (fun key v ls ->
+          (indent ^ norm_symb_proj_to_string ctx key ^ " -> " ^ a_to_string v)
+          :: ls)
+        m []
+    in
+    match ls with
+    | [] -> "{}"
+    | _ -> "{" ^ break ^ String.concat sep (List.rev ls) ^ " }"
+end
 
 module NormSymbProj : sig
   type t
 
   val to_string : t -> string
+  val with_ctx_to_string : eval_ctx -> t -> string
 
-  module Set : Collections.Set with type elt = t
-  module Map : Collections.Map with type key = t
+  module Set : sig
+    include Collections.Set
+
+    val with_ctx_to_string : string option -> eval_ctx -> t -> string
+  end
+  with type elt = t
+
+  module Map : sig
+    include Collections.Map with type key = t
+
+    val with_ctx_to_string :
+      string option -> ('a -> string) -> eval_ctx -> 'a t -> string
+  end
 end
 with type t = norm_symb_proj = struct
   type t = norm_symb_proj
 
   let to_string = show_norm_symb_proj
+  let with_ctx_to_string = norm_symb_proj_to_string
 
-  module Set = NormSymbProjSet
-  module Map = NormSymbProjMap
+  module Set = struct
+    include NormSymbProjSet
+  end
+
+  module Map = struct
+    include NormSymbProjMap
+  end
 end
 
 let marked_norm_symb_proj_to_unmarked (m : marked_norm_symb_proj) :
@@ -1955,3 +2024,9 @@ let update_endable (ctx : eval_ctx) (abs_ids : abs_id list) ~(can_end : bool) :
     | _ -> e
   in
   { ctx with env = List.map update ctx.env }
+
+let normalize_symbolic_proj (regions : RegionId.Set.t) (proj : symbolic_proj) :
+    norm_symb_proj =
+  let { sv_id; proj_ty } : symbolic_proj = proj in
+  let norm_proj_ty = normalize_proj_ty regions proj_ty in
+  { sv_id; norm_proj_ty }

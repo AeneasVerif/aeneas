@@ -407,6 +407,10 @@ let symbolic_value_has_borrows span (ctx : eval_ctx) (sv : symbolic_value) :
 let value_has_borrows span (ctx : eval_ctx) (v : value) : bool =
   ValuesUtils.value_has_borrows span ctx.type_ctx.type_infos v
 
+(** See {!ValuesUtils.value_has_mut_borrows}. *)
+let value_has_mut_borrows span (ctx : eval_ctx) (v : value) : bool =
+  ValuesUtils.value_has_mut_borrows span ctx.type_ctx.type_infos v
+
 (** See {!ValuesUtils.value_has_borrows}. *)
 let tvalue_has_borrows span (ctx : eval_ctx) (v : tvalue) : bool =
   ValuesUtils.value_has_borrows span ctx.type_ctx.type_infos v.value

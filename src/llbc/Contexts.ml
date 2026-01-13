@@ -441,41 +441,41 @@ class ['self] map_frame_concrete =
 
 (** Visitor to iterate over the values in a context *)
 class ['self] iter_eval_ctx =
-  object (_self : 'self)
-    inherit [_] iter_env as super
+  object (self : 'self)
+    inherit [_] iter_env
 
     method visit_eval_ctx : 'acc -> eval_ctx -> unit =
-      fun acc ctx -> super#visit_env acc ctx.env
+      fun acc ctx -> self#visit_env acc ctx.env
   end
 
 (** The elements in an environment are in reverse order *)
 class ['self] iter_eval_ctx_regular_order =
-  object (_self : 'self)
-    inherit [_] iter_env as super
+  object (self : 'self)
+    inherit [_] iter_env
 
     method visit_eval_ctx : 'acc -> eval_ctx -> unit =
-      fun acc ctx -> super#visit_env acc (List.rev ctx.env)
+      fun acc ctx -> self#visit_env acc (List.rev ctx.env)
   end
 
 (** Visitor to map the values in a context *)
 class ['self] map_eval_ctx =
-  object (_self : 'self)
-    inherit [_] map_env as super
+  object (self : 'self)
+    inherit [_] map_env
 
     method visit_eval_ctx : 'acc -> eval_ctx -> eval_ctx =
       fun acc ctx ->
-        let env = super#visit_env acc ctx.env in
+        let env = self#visit_env acc ctx.env in
         { ctx with env }
   end
 
 (** The elements in an environment are in reverse order *)
 class ['self] map_eval_ctx_regular_order =
-  object (_self : 'self)
-    inherit [_] map_env as super
+  object (self : 'self)
+    inherit [_] map_env
 
     method visit_eval_ctx : 'acc -> eval_ctx -> eval_ctx =
       fun acc ctx ->
-        let env = List.rev (super#visit_env acc (List.rev ctx.env)) in
+        let env = List.rev (self#visit_env acc (List.rev ctx.env)) in
         { ctx with env }
   end
 
