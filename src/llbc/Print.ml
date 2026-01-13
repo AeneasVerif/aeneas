@@ -103,15 +103,15 @@ module Values = struct
       (bc : borrow_content) : string =
     match bc with
     | VSharedBorrow (bid, sid) ->
-        "shared_borrow@" ^ BorrowId.to_string bid ^ "(^"
+        "SB@" ^ BorrowId.to_string bid ^ "(^"
         ^ SharedBorrowId.to_string sid
         ^ ")"
     | VMutBorrow (bid, tv) ->
-        "mut_borrow@" ^ BorrowId.to_string bid ^ " ("
+        "MB@" ^ BorrowId.to_string bid ^ " ("
         ^ tvalue_to_string ~span env tv
         ^ ")"
     | VReservedMutBorrow (bid, sid) ->
-        "reserved_borrow@" ^ BorrowId.to_string bid ^ "(^"
+        "RB@" ^ BorrowId.to_string bid ^ "(^"
         ^ SharedBorrowId.to_string sid
         ^ ")"
 
@@ -311,12 +311,12 @@ module Values = struct
       string =
     match bc with
     | AMutBorrow (pm, bid, av) ->
-        "mut_borrow@" ^ BorrowId.to_string bid ^ "("
+        "MB@" ^ BorrowId.to_string bid ^ "("
         ^ tavalue_to_string ~span ~with_ended env av
         ^ ")"
         |> add_proj_marker pm
     | ASharedBorrow (pm, bid, sid) ->
-        "shared_borrow@" ^ BorrowId.to_string bid ^ "(^"
+        "SB@" ^ BorrowId.to_string bid ^ "(^"
         ^ SharedBorrowId.to_string sid
         ^ ")"
         |> add_proj_marker pm
