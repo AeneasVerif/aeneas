@@ -10,8 +10,8 @@ namespace Aeneas.Std
 @[rust_trait "core::iter::range::Step"
   (parentClauses := ["cloneCloneInst", "cmpPartialOrdInst"])]
 structure core.iter.range.Step (Self : Type) where
-  cloneCloneInst : core.clone.Clone Self
-  cmpPartialOrdInst : core.cmp.PartialOrd Self Self
+  cloneInst : core.clone.Clone Self
+  partialOrdInst : core.cmp.PartialOrd Self Self
   steps_between : Self → Self → Result (Usize × (Option Usize))
   forward_checked : Self → Usize → Result (Option Self)
   backward_checked : Self → Usize → Result (Option Self)
@@ -39,56 +39,49 @@ structure core.iter.traits.accum.Product (Self : Type) (A : Type) where
   product : forall {I : Type} (_ : core.iter.traits.iterator.Iterator I A), I → Result Self
 
 @[rust_trait "core::iter::traits::collect::IntoIterator"
-  (parentClauses := ["iteratorIteratorInst"])]
-structure core.iter.traits.collect.IntoIterator (Self : Type) (Self_Item :
-  Type) (Self_IntoIter : Type) where
-  iteratorIteratorInst : core.iter.traits.iterator.Iterator Self_IntoIter
-    Self_Item
-  into_iter : Self → Result Self_IntoIter
+  (parentClauses := ["iteratorInst"])]
+structure core.iter.traits.collect.IntoIterator (Self : Type) (Item :
+  Type) (IntoIter : Type) where
+  iteratorInst : core.iter.traits.iterator.Iterator IntoIter Item
+  into_iter : Self → Result IntoIter
 
 @[rust_trait "core::iter::traits::collect::FromIterator"]
 structure core.iter.traits.collect.FromIterator (Self : Type) (A : Type) where
-  from_iter : forall {T : Type} {Clause0_IntoIter : Type}
-    (_ : core.iter.traits.collect.IntoIterator T A Clause0_IntoIter), T → Result
-    Self
+  from_iter : forall {T : Type} {IntoIter : Type}
+    (_ : core.iter.traits.collect.IntoIterator T A IntoIter),
+    T → Result Self
 
 @[rust_fun
-  "core::iter::traits::collect::{core::iter::traits::collect::IntoIterator<@I, @Clause0_Item, @I>}::into_iter"]
+  "core::iter::traits::collect::{core::iter::traits::collect::IntoIterator<@I, @Item, @I>}::into_iter"]
 def core.iter.traits.collect.IntoIterator.Blanket.into_iter
-  {I : Type} {Clause0_Item : Type} (_ : core.iter.traits.iterator.Iterator I Clause0_Item) :
+  {I : Type} {Item : Type} (_ : core.iter.traits.iterator.Iterator I Item) :
   I → Result I :=
     λ x => ok x
 
 @[reducible, rust_trait_impl
-  "core::iter::traits::collect::IntoIterator<@I, @Clause0_Item, @I>"]
-def core.iter.traits.collect.IntoIterator.Blanket {I : Type} {Clause0_Item :
-  Type} (iteratorIteratorInst : core.iter.traits.iterator.Iterator I
-  Clause0_Item) : core.iter.traits.collect.IntoIterator I Clause0_Item I := {
-  iteratorIteratorInst := iteratorIteratorInst
-  into_iter := core.iter.traits.collect.IntoIterator.Blanket.into_iter
-    iteratorIteratorInst
+  "core::iter::traits::collect::IntoIterator<@I, @Item, @I>"]
+def core.iter.traits.collect.IntoIterator.Blanket {I : Type} {Item : Type}
+  (IteratorInst : core.iter.traits.iterator.Iterator I Item) :
+    core.iter.traits.collect.IntoIterator I Item I := {
+  iteratorInst := IteratorInst
+  into_iter := core.iter.traits.collect.IntoIterator.Blanket.into_iter IteratorInst
 }
 
 @[rust_trait "core::iter::traits::collect::Extend"]
 structure core.iter.traits.collect.Extend (Self : Type) (A : Type) where
-  extend : forall {T : Type} {Clause0_IntoIter : Type}
-    (_ : core.iter.traits.collect.IntoIterator T A Clause0_IntoIter), Self → T →
-    Result Self
+  extend : forall {T : Type} {IntoIter : Type}
+    (_ : core.iter.traits.collect.IntoIterator T A IntoIter), Self → T → Result Self
 
 @[rust_trait "core::iter::traits::double_ended::DoubleEndedIterator"
-  (parentClauses := ["iteratorIteratorInst"])]
-structure core.iter.traits.double_ended.DoubleEndedIterator (Self : Type)
-  (Self_Clause0_Item : Type) where
-  iteratorIteratorInst : core.iter.traits.iterator.Iterator Self
-    Self_Clause0_Item
-  next_back : Self → Result ((Option Self_Clause0_Item) × Self)
+  (parentClauses := ["iteratorInst"])]
+structure core.iter.traits.double_ended.DoubleEndedIterator (Self : Type) (Item : Type) where
+  iteratorInst : core.iter.traits.iterator.Iterator Self Item
+  next_back : Self → Result ((Option Item) × Self)
 
 @[rust_trait "core::iter::traits::exact_size::ExactSizeIterator"
-  (parentClauses := ["iteratorIteratorInst"])]
-structure core.iter.traits.exact_size.ExactSizeIterator (Self : Type)
-  (Self_Clause0_Item : Type) where
-  iteratorIteratorInst : core.iter.traits.iterator.Iterator Self
-    Self_Clause0_Item
+  (parentClauses := ["iteratorInst"])]
+structure core.iter.traits.exact_size.ExactSizeIterator (Self : Type) (Item : Type) where
+  iteratorInst : core.iter.traits.iterator.Iterator Self Item
 
 @[rust_fun
   "core::iter::range::{core::iter::range::Step<usize>}::steps_between"]
@@ -113,8 +106,8 @@ def core.iter.range.StepUsize.backward_checked
 
 @[reducible, rust_trait_impl "core::iter::range::Step<usize>"]
 def core.iter.range.StepUsize : core.iter.range.Step Usize := {
-  cloneCloneInst := core.clone.CloneUsize
-  cmpPartialOrdInst := core.cmp.PartialOrdUsize
+  cloneInst := core.clone.CloneUsize
+  partialOrdInst := core.cmp.PartialOrdUsize
   steps_between := core.iter.range.StepUsize.steps_between
   forward_checked := core.iter.range.StepUsize.forward_checked
   backward_checked := core.iter.range.StepUsize.backward_checked
@@ -122,13 +115,13 @@ def core.iter.range.StepUsize : core.iter.range.Step Usize := {
 
 @[rust_fun
   "core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>}::next"]
-def core.iter.range.IteratorcoreopsrangeRangeA.next
+def core.iter.range.IteratorRange.next
    {A : Type} (StepInst : core.iter.range.Step A) :
   core.ops.range.Range A → Result ((Option A) × (core.ops.range.Range A)) :=
   λ range => do
-    let cmp ← StepInst.cmpPartialOrdInst.lt range.start range.end_;
+    let cmp ← StepInst.partialOrdInst.lt range.start range.end_;
     if cmp then
-      let range' ← StepInst.cloneCloneInst.clone range.start;
+      let range' ← StepInst.cloneInst.clone range.start;
       let n ← StepInst.forward_checked range' 1#usize;
       match n with
       | none => fail .panic -- Step invariants not upheld
@@ -137,8 +130,8 @@ def core.iter.range.IteratorcoreopsrangeRangeA.next
 
 @[reducible, rust_trait_impl
   "core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>"]
-def core.iter.traits.iterator.IteratorRangeA {A : Type} (StepInst :
+def core.iter.traits.iterator.IteratorRange {A : Type} (StepInst :
   core.iter.range.Step A) : core.iter.traits.iterator.Iterator
   (core.ops.range.Range A) A := {
-  next := core.iter.range.IteratorcoreopsrangeRangeA.next StepInst
+  next := core.iter.range.IteratorRange.next StepInst
 }
