@@ -1770,7 +1770,7 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) ~(can_end : bool)
   *)
   let push_fail _ = [%craise] span "Unreachable" in
   (* Function to explore an avalue and destructure it *)
-  let rec list_avalues (allow_borrows : bool) (push : tavalue -> unit)
+  let rec list_avalues (allow_borrows : int) (push : tavalue -> unit)
       (av : tavalue) : unit =
     let ty = av.ty in
     match av.value with
@@ -1784,8 +1784,8 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) ~(can_end : bool)
         | ASharedLoan (pm, bids, sv, child_av) ->
             (* We don't support nested borrows for now *)
             [%cassert] span
-              (not (value_has_borrows (Some span) ctx sv.value))
-              "Nested borrows are not supported yet";
+              (not (value_has_mut_borrows (Some span) ctx sv.value))
+              "Mutable borrows inside shared borrows are not supported yet";
             (* Destructure the shared value *)
             let avl, sv =
               if destructure_shared_values then list_values sv else ([], sv)
@@ -1795,7 +1795,7 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) ~(can_end : bool)
             let value = ALoan (ASharedLoan (pm, bids, sv, ignored)) in
             push { value; ty };
             (* Explore the child *)
-            list_avalues false push_fail child_av;
+            list_avalues 0 push_fail child_av;
             (* Push the avalues introduced because we decomposed the inner loans -
                note that we pay attention to the order in which we introduce
                the avalues: we want to push them *after* the outer loan. If we
@@ -1805,7 +1805,7 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) ~(can_end : bool)
             List.iter push avl
         | AMutLoan (pm, bid, child_av) ->
             (* Explore the child *)
-            list_avalues false push_fail child_av;
+            list_avalues 0 push_fail child_av;
             (* Explore the whole loan *)
             let ignored = mk_aignored span child_av.ty None in
             let value = ALoan (AMutLoan (pm, bid, ignored)) in
@@ -1818,7 +1818,7 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) ~(can_end : bool)
               "Nested borrows are not supported yet";
             [%sanity_check] span (opt_bid = None);
             (* Simply explore the child *)
-            list_avalues false push_fail child_av
+            list_avalues 0 push_fail child_av
         | AEndedSharedLoan (sv, child_av) ->
             (* We don't support nested borrows for now *)
             [%cassert] span
@@ -1831,7 +1831,7 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) ~(can_end : bool)
               if destructure_shared_values then list_values sv else ([], sv)
             in
             (* Explore the child *)
-            list_avalues false push_fail child_av;
+            list_avalues 0 push_fail child_av;
             (* Push the avalues introduced because we decomposed the inner loans
                in the shared value - see the ASharedLoan case *)
             List.iter push avl
@@ -1846,15 +1846,15 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) ~(can_end : bool)
                  (ty_has_borrows (Some span) ctx.type_ctx.type_infos child_av.ty))
               "Nested borrows are not supported yet";
             (* Simply explore the child *)
-            list_avalues false push_fail child_av)
+            list_avalues 0 push_fail child_av)
     | ABorrow bc -> (
         (* Sanity check - rem.: may be redundant with [push_fail] *)
-        [%sanity_check] span allow_borrows;
+        [%sanity_check] span (allow_borrows > 0);
         (* Explore the borrow content *)
         match bc with
         | AMutBorrow (pm, bid, child_av) ->
             (* Explore the child *)
-            list_avalues false push_fail child_av;
+            list_avalues 0 push_fail child_av;
             (* Explore the borrow *)
             let ignored = mk_aignored span child_av.ty None in
             let value = ABorrow (AMutBorrow (pm, bid, ignored)) in
@@ -1867,22 +1867,20 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) ~(can_end : bool)
             [%cassert] span
               (not
                  (ty_has_borrows (Some span) ctx.type_ctx.type_infos child_av.ty))
-              "Nested borrows are not supported yet";
+              "Found a case of unsupported nested borrows";
             [%sanity_check] span (opt_bid = None);
             (* Just explore the child *)
-            list_avalues false push_fail child_av
+            list_avalues (allow_borrows - 1) push_fail child_av
         | AEndedIgnoredMutBorrow
-            { child = child_av; given_back = _; given_back_meta = _ } ->
-            (* We don't support nested borrows for now *)
-            [%cassert] span
-              (not
-                 (ty_has_borrows (Some span) ctx.type_ctx.type_infos child_av.ty))
-              "Nested borrows are not supported yet";
+            { child = child_av; given_back; given_back_meta = _ } ->
             (* Just explore the child *)
-            list_avalues false push_fail child_av
+            let allow_borrows = allow_borrows - 1 in
+            list_avalues allow_borrows push_avalue child_av;
+            list_avalues allow_borrows push_avalue given_back
         | AProjSharedBorrow asb ->
             (* We don't support nested borrows *)
-            [%cassert] span (asb = []) "Nested borrows are not supported yet";
+            [%cassert] span (asb = [])
+              "Found a case of unsupported nested borrows";
             (* Nothing specific to do *)
             ()
         | AEndedMutBorrow _ | AEndedSharedBorrow ->
@@ -1985,7 +1983,7 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) ~(can_end : bool)
   in
 
   (* Destructure the avalues *)
-  List.iter (list_avalues true push_avalue) abs0.avalues;
+  List.iter (list_avalues 2 push_avalue) abs0.avalues;
   let avalues = !avalues in
   (* Update *)
   { abs0 with avalues; kind = abs_kind; can_end }
