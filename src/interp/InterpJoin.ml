@@ -1144,6 +1144,21 @@ let match_ctx_with_target (config : config) (span : Meta.span)
     "- src_ctx: " ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: "
     ^ eval_ctx_to_string tgt_ctx];
 
+  (* End all the unnecessary borrows/loans.
+
+     Note that in theory it's better to call [prepare_loop_match_ctx_with_target]
+     *before* because it unlocks simplification possibilities for
+     [simplify_dummy_values_useless_abs], but in practice it is also good to
+     call [simplify_dummy_values_useless_abs config span tgt_ctx] before so
+     that it prevents [prepare_match_ctx_with_target] from doing matches that
+     are not supported yet. For this reason, we call simplify twice: before
+     and after the call to prepare.
+  *)
+  let tgt_ctx, cc = simplify_dummy_values_useless_abs config span tgt_ctx in
+  [%ltrace
+    "- tgt_ctx after simplify_dummy_values_useless_abs (i):\n"
+    ^ eval_ctx_to_string tgt_ctx];
+
   (* We first reorganize [tgt_ctx] so that we can match [src_ctx] with it (by
      ending loans for instance - remember that the [src_ctx] is the fixed point
      context, which results from joins during which we ended the loans which
@@ -1153,7 +1168,8 @@ let match_ctx_with_target (config : config) (span : Meta.span)
      values.
   *)
   let tgt_ctx, cc =
-    prepare_match_ctx_with_target config span fresh_abs_kind src_ctx tgt_ctx
+    comp cc
+      (prepare_match_ctx_with_target config span fresh_abs_kind src_ctx tgt_ctx)
   in
   [%ltrace
     "Finished preparing the match:" ^ "\n- src_ctx: "
@@ -1166,7 +1182,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
     comp cc (simplify_dummy_values_useless_abs config span tgt_ctx)
   in
   [%ltrace
-    "- tgt_ctx after simplify_dummy_values_useless_abs:\n"
+    "- tgt_ctx after simplify_dummy_values_useless_abs (ii):\n"
     ^ eval_ctx_to_string tgt_ctx];
 
   (* Removed the ended shared loans and destructure the shared loans.
