@@ -496,8 +496,8 @@ end
 module type MatchCheckEquivState = sig
   val span : Meta.span
 
-  (** [true] if we check equivalence between contexts, [false] if we match a
-      source context with a target context. *)
+  (** [true] if we check equivalence between contexts, [false] if we compute a
+      mapping from a source context to a target context. *)
   val check_equiv : bool
 
   val rid_map : RegionId.InjSubst.t ref
