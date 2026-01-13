@@ -123,6 +123,14 @@ let type_decl_has_nested_borrows (span : Meta.span option)
   let ty = TAdt { id = TAdtId type_decl.def_id; generics } in
   ty_has_nested_borrows span infos ty
 
+let type_decl_has_nested_mut_borrows (span : Meta.span option)
+    (infos : TypesAnalysis.type_infos) (type_decl : type_decl) : bool =
+  let generics =
+    Substitute.generic_args_of_params_erase_regions span type_decl.generics
+  in
+  let ty = TAdt { id = TAdtId type_decl.def_id; generics } in
+  ty_has_nested_mut_borrows span infos ty
+
 (** Retuns true if the type contains a borrow under a mutable borrow *)
 let ty_has_borrow_under_mut span (infos : TypesAnalysis.type_infos) (ty : ty) :
     bool =

@@ -94,7 +94,8 @@ let assign_to_place (config : config) (span : Meta.span) (rv : tvalue)
   [%ltrace
     "- rv: "
     ^ tvalue_to_string ~span:(Some span) ctx rv
-    ^ "\n- p: " ^ place_to_string ctx p ^ "\n- Initial context:\n"
+    ^ "\n- p: " ^ place_to_string ctx p ^ "\n- p.ty: " ^ ty_to_string ctx p.ty
+    ^ "\n- Initial context:\n"
     ^ eval_ctx_to_string ~span:(Some span) ctx];
   (* Push the rvalue to a dummy variable, for bookkeeping *)
   let rvalue_vid = ctx.fresh_dummy_var_id () in
@@ -758,8 +759,11 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
       if
         (* We handle global assignments separately as a specific case. *)
         ExpressionsUtils.rvalue_accesses_global rvalue
-      then eval_rvalue_global config st.span p rvalue ctx
-      else
+      then (
+        [%ltrace "The rvalue is a global access"];
+        eval_rvalue_global config st.span p rvalue ctx)
+      else (
+        [%ltrace "The rvalue is not a global access"];
         (* Evaluate the rvalue *)
         let res, ctx, cc = eval_rvalue_not_global config st.span rvalue ctx in
         (* Assign *)
@@ -811,7 +815,7 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
         in
         let cc = cc_comp cc cf_assign in
         (* Compose and apply *)
-        ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc)
+        ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc))
   | SetDiscriminant (p, variant_id) ->
       let (ctx, res), cc = set_discriminant config st.span p variant_id ctx in
       ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc)
@@ -869,8 +873,7 @@ and eval_global_ref (config : config) (span : Meta.span) (dest : place)
   | SymbolicMode ->
       (* Generate a fresh symbolic value. In the translation, this fresh symbolic value will be
        * defined as equal to the value of the global (see {!S.synthesize_global_eval}).
-       * We then create a reference to the global.
-       *)
+       * We then create a reference to the global. *)
       let sval = eval_global_as_fresh_symbolic_value span gref ctx in
       let typed_sval = mk_tvalue_from_symbolic_value sval in
       (* Create a shared loan containing the global, as well as a shared borrow *)
@@ -885,7 +888,10 @@ and eval_global_ref (config : config) (span : Meta.span) (dest : place)
           ty = TRef (RErased, sval.sv_ty, RShared);
         }
       in
-      (* We need to push the shared loan in a dummy variable *)
+      (* We need to push the shared loan in a dummy variable.
+         Generally speaking we should not be allowed to put loans in dummy variables,
+         but in the case of static lifetimes it is ok. TODO: generalize. *)
+      [%cassert] span (not !Config.use_static) "Unimplemented";
       let dummy_id = ctx.fresh_dummy_var_id () in
       let ctx = ctx_push_dummy_var ctx dummy_id loan in
       (* Assign the borrow to its destination *)
@@ -1434,16 +1440,28 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
   (* Evaluate the input operands *)
   let args, ctx, cc = eval_operands config span args ctx in
 
+  [%ldebug
+    "- args:\n"
+    ^ Print.list_to_string ~sep:"\n"
+        (fun (v : tvalue) ->
+          "- " ^ tvalue_to_string ctx v ^ " : " ^ ty_to_string ctx v.ty)
+        args];
+
   (* Generate the abstractions and insert them in the context *)
   let abs_ids = List.map (fun rg -> rg.id) inst_sg.abs_regions_hierarchy in
   let args_with_rtypes = List.combine args inst_sg.inputs in
 
   (* Check the type of the input arguments *)
-  [%cassert] span
-    (List.for_all
-       (fun ((arg, rty) : tvalue * rty) -> arg.ty = Subst.erase_regions rty)
-       args_with_rtypes)
-    "The input arguments don't have the proper type";
+  List.iteri
+    (fun i ((arg, rty) : tvalue * rty) ->
+      if not (Subst.erase_regions arg.ty = Subst.erase_regions rty) then (
+        [%ltrace
+          "Argument " ^ string_of_int i
+          ^ " doesn't have the proper type:\n- arg: " ^ tvalue_to_string ctx arg
+          ^ "\n- arg.ty" ^ ty_to_string ctx arg.ty ^ "\n- target type: "
+          ^ ty_to_string ctx rty];
+        [%craise] span "The input arguments don't have the proper type"))
+    args_with_rtypes;
   (* Check that the input arguments don't contain symbolic values that can't
    * be fed to functions (i.e., symbolic values output from function return
    * values and which contain borrows of borrows can't be used as function

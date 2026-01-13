@@ -445,3 +445,6 @@ let loops_to_recursive_functions = ref true
 
 (** Should we run the translation in parallel? *)
 let parallel = ref true
+
+(** Once we add proper support for static lifetimes, remove this *)
+let use_static = ref false
