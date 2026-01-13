@@ -513,7 +513,12 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
           check_symbolic_value_type sv.sv_id sv.sv_ty;
           let ty' = Substitute.erase_regions sv.sv_ty in
           [%sanity_check] span (ty' = ty)
-      | _ -> [%craise] span "Erroneous typing");
+      | VLiteral (VStr _), TAdt { id = TBuiltin TStr; _ } -> ()
+      | _ ->
+          [%ltrace
+            "Erroneous typing:\n- value: " ^ tvalue_to_string ctx tv
+            ^ "\n- type: " ^ ty_to_string ctx tv.ty];
+          [%craise] span "Erroneous typing");
       (* Continue exploring to inspect the subterms *)
       super#visit_tvalue info tv
 

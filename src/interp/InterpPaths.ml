@@ -244,11 +244,16 @@ let rec access_place (span : Meta.span) (access : projection_access)
       let v = ctx_lookup_var_value span ctx var_id in
       let backward (ctx, updated) =
         let ctx = ctx_update_var_value span ctx var_id updated in
+        (* TODO: we shouldn't have to erase the regions, but sometimes the
+           'static regions are missing from the destination place *)
+        let updated_ty = erase_regions updated.ty in
+        let v_ty = erase_regions v.ty in
         (* Type checking *)
-        if updated.ty <> v.ty then (
+        if updated_ty <> v.ty then (
           [%ltrace
-            "Not the same type:\n- nv.ty: " ^ show_ety updated.ty ^ "\n- v.ty: "
-            ^ show_ety v.ty];
+            "Not the same type:\n- nv.ty: "
+            ^ ty_to_string ctx updated_ty
+            ^ "\n- v.ty: " ^ ty_to_string ctx v_ty];
           [%craise] span
             "Assertion failed: new value doesn't have the same type as its \
              destination");
