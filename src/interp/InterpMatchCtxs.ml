@@ -1326,6 +1326,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       [%sanity_check] span
         ((not (symbolic_value_has_ended_regions ctx0.ended_regions sv0))
         && not (symbolic_value_has_ended_regions ctx1.ended_regions sv1));
+      [%ldebug "ty: " ^ ty_to_string ctx0 sv0.sv_ty];
       (* If the symbolic values contain regions, we need to introduce abstractions *)
       if ty_has_borrows (Some span) ctx0.type_ctx.type_infos sv0.sv_ty then (
         (* Let's say we join:
