@@ -728,7 +728,6 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
      for a parent backward function.
   *)
   let bid = Option.get ctx.bid in
-  [%sanity_check] ctx.span (rg_id = bid);
 
   (* First, introduce the given back variables. *)
   let ctx, given_back_variables =
@@ -750,6 +749,11 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
     ^ Print.list_to_string
         (fun e -> texpr_to_string ctx e ^ " : " ^ pure_ty_to_string ctx e.ty)
         consumed_values];
+  (* TODO: generalize this. The backward functions of the short-lived regions
+     will introduce the backward functions of the long-lived regions.
+   *)
+  [%sanity_check] ctx.span
+    ((given_back_variables = [] && consumed_values = []) || rg_id = bid);
 
   (* Prepare the let-bindings by introducing a match if necessary *)
   let given_back_variables =

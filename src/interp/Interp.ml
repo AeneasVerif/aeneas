@@ -157,15 +157,7 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx)
    * for each of the backward functions. We do it only because we can
    * do it, and because it gives a bit of sanity.
    *)
-  let sg = fdef.signature in
   let span = fdef.item_meta.span in
-  (* Sanity check: no nested borrows *)
-  [%cassert] span
-    (List.for_all
-       (fun ty ->
-         not (ty_has_nested_borrows (Some span) ctx.type_ctx.type_infos ty))
-       (sg.output :: sg.inputs))
-    "Nested borrows are not supported yet";
 
   (* Create the context.
 
@@ -278,8 +270,6 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
   let parent_input_abs_ids =
     List.filter_map (fun x -> x) parent_input_abs_ids
   in
-  (* TODO: need to be careful for loops *)
-  [%sanity_check] fdef.item_meta.span (parent_input_abs_ids = []);
 
   (* Insert the return value in the return abstractions (by applying
    * borrow projections) *)
@@ -306,10 +296,10 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
 
     (* Initialize and insert the abstractions in the context.
 
-         We take care of allowing to end only the regions which should end (note
-         that this is important for soundness: this is part of the borrow checking).
-         Also see the documentation of the [can_end] field of [abs] for more
-         information. *)
+       We take care of allowing to end only the regions which should end (note
+       that this is important for soundness: this is part of the borrow checking).
+       Also see the documentation of the [can_end] field of [abs] for more
+       information. *)
     let parent_and_current_rgs = RegionGroupId.Set.add back_id parent_rgs in
     let region_can_end rid = RegionGroupId.Set.mem rid parent_and_current_rgs in
     [%sanity_check] span (region_can_end back_id);
