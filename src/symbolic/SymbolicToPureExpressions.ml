@@ -872,8 +872,21 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
      This let-binding later gets inlined, during a micro-pass.
   *)
   (* First, retrieve the list of variables used for the inputs for the
-   * backward function *)
-  let inputs = T.RegionGroupId.Map.find rg_id ctx.backward_inputs in
+     backward function.
+
+     TODO: the inputs might be missing if we are translating an ancestor region.
+     For now we check that the inputs should be empty so that it works for nested
+     shared borrows (but the inputs won't be empty for nested mutable borrows) *)
+  let inputs =
+    match T.RegionGroupId.Map.find_opt rg_id ctx.backward_inputs with
+    | None ->
+        let back_sg = T.RegionGroupId.Map.find rg_id ctx.sg.fun_ty.back_sg in
+        [%cassert] ctx.span
+          (back_sg.inputs = [] && back_sg.outputs = [])
+          "Unimplemented";
+        []
+    | Some inputs -> inputs
+  in
   [%ltrace
     "Consumed inputs: " ^ Print.list_to_string (fvar_to_string ctx) inputs];
   (* Retrieve the values consumed upon ending the loans inside this
