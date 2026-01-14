@@ -989,9 +989,22 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
     | TraitImplGroup (NonRecGroup id) ->
         if config.extract_trait_impls && config.extract_transparent then
           export_trait_impl id
-    | TraitImplGroup (RecGroup _ids) ->
+    | TraitImplGroup (RecGroup ids) ->
+        (* Lookup the trait impls to print a nice error message *)
+        let to_string (id : trait_impl_id) : string =
+          match TraitImplId.Map.find_opt id ctx.trans_trait_impls with
+          | None -> "unknown trait impl"
+          | Some i ->
+              "'"
+              ^ name_to_string ctx.trans_ctx i.item_meta.name
+              ^ "', source: "
+              ^ Errors.raw_span_to_string i.item_meta.span
+        in
+        let impls = List.map to_string ids in
         [%craise_opt_span] None
-          "Mutually recursive trait implementations are not supported"
+          ("Mutually recursive trait implementations are not supported; found \
+            the following group of mutually recursive trait implementations:\n"
+         ^ String.concat "\n" impls)
     | MixedGroup _ ->
         [%craise_opt_span] None
           "Mixed-recursive declaration groups are not supported"
@@ -1429,7 +1442,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
            If the backend is Lean the module names depends on the path,
            so we generate names of the shape [Types.lean], [Funs.lean], etc.
            because those files should be placed in the proper sub-folder.
-           
+
            Otherwise, we prepend the crate name to generate, e.g.,
            [Foo_Types.fst], [Foo_Funs.fst], etc.
          *)
