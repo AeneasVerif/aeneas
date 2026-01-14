@@ -68,8 +68,12 @@ type borrow_loan_abs_ids = borrow_loan_abs_id list
 let borrow_loan_abs_id_to_string (id : borrow_loan_abs_id) : string =
   match id with
   | AbsId id -> "abs@" ^ AbsId.to_string id
-  | BorrowId id -> unique_borrow_id_to_string id
-  | LoanId id -> "l@" ^ BorrowId.to_string id
+  | BorrowId id -> (
+      match id with
+      | UMut id -> "MB@" ^ BorrowId.to_string id
+      | UShared (id, sid) ->
+          "SB@" ^ BorrowId.to_string id ^ "^" ^ SharedBorrowId.to_string sid)
+  | LoanId id -> "loan@" ^ BorrowId.to_string id
 
 let borrow_loan_abs_ids_chain_to_string (ids : borrow_loan_abs_ids) : string =
   let ids = List.rev ids in
@@ -449,13 +453,15 @@ let lookup_borrow_opt (span : Meta.span) (ek : exploration_kind)
             if UMut bid = l then raise (FoundGBorrowContent (Concrete bc))
             else if ek.enter_mut_borrows then super#visit_VMutBorrow env bid mv
             else ()
-        | VSharedBorrow (_, uid) ->
+        | VSharedBorrow (bid, uid) ->
             (* Check the borrow id *)
-            if UShared uid = l then raise (FoundGBorrowContent (Concrete bc))
+            if UShared (bid, uid) = l then
+              raise (FoundGBorrowContent (Concrete bc))
             else ()
-        | VReservedMutBorrow (_, uid) ->
+        | VReservedMutBorrow (bid, uid) ->
             (* Check the borrow id *)
-            if UShared uid = l then raise (FoundGBorrowContent (Concrete bc))
+            if UShared (bid, uid) = l then
+              raise (FoundGBorrowContent (Concrete bc))
             else ()
 
       method! visit_loan_content env lc =
@@ -477,7 +483,8 @@ let lookup_borrow_opt (span : Meta.span) (ek : exploration_kind)
         | ASharedBorrow (pm, bid, uid) ->
             (* Sanity check: projection markers can only appear when we're doing a join *)
             [%sanity_check] span (pm = PNone);
-            if UShared uid = l then raise (FoundGBorrowContent (Abstract bc))
+            if UShared (bid, uid) = l then
+              raise (FoundGBorrowContent (Abstract bc))
             else super#visit_ASharedBorrow env pm bid uid
         | AIgnoredMutBorrow (_, _)
         | AEndedMutBorrow _
@@ -486,7 +493,7 @@ let lookup_borrow_opt (span : Meta.span) (ek : exploration_kind)
         | AEndedSharedBorrow -> super#visit_aborrow_content env bc
         | AProjSharedBorrow asb -> (
             match l with
-            | UShared l ->
+            | UShared (_, l) ->
                 if borrow_in_asb l asb then
                   raise (FoundGBorrowContent (Abstract bc))
                 else ()
@@ -606,11 +613,11 @@ let update_borrow (span : Meta.span) (ek : exploration_kind)
             else VMutBorrow (bid, mv)
         | VSharedBorrow (bid, sid) ->
             (* Check the id *)
-            if UShared sid = l then update ()
+            if UShared (bid, sid) = l then update ()
             else super#visit_VSharedBorrow env bid sid
         | VReservedMutBorrow (bid, sid) ->
             (* Check the id *)
-            if UShared sid = l then update ()
+            if UShared (bid, sid) = l then update ()
             else super#visit_VReservedMutBorrow env bid sid
 
       method! visit_loan_content env lc =
@@ -674,7 +681,7 @@ let update_aborrow (span : Meta.span) (ek : exploration_kind)
         | ASharedBorrow (pm, bid, sid) ->
             (* Sanity check: projection markers can only appear when we're doing a join *)
             [%sanity_check] span (pm = PNone);
-            if UShared sid = l then update ()
+            if UShared (bid, sid) = l then update ()
             else ABorrow (super#visit_ASharedBorrow env pm bid sid)
         | AIgnoredMutBorrow _
         | AEndedMutBorrow _
@@ -682,7 +689,7 @@ let update_aborrow (span : Meta.span) (ek : exploration_kind)
         | AEndedIgnoredMutBorrow _ -> super#visit_ABorrow env bc
         | AProjSharedBorrow asb -> (
             match l with
-            | UShared l ->
+            | UShared (_, l) ->
                 if borrow_in_asb l asb then update ()
                 else ABorrow (super#visit_AProjSharedBorrow env asb)
             | UMut _ -> super#visit_ABorrow env bc)

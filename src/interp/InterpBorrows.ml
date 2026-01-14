@@ -104,9 +104,9 @@ let end_concrete_borrow_get_borrow_core (span : Meta.span)
 
       method! visit_VBorrow (outer : outer) bc =
         match bc with
-        | VSharedBorrow (_, l') | VReservedMutBorrow (_, l') ->
+        | VSharedBorrow (bid, l') | VReservedMutBorrow (bid, l') ->
             (* Check if this is the borrow we are looking for *)
-            if l = UShared l' then (
+            if l = UShared (bid, l') then (
               (* Check if there are outer borrows or if we are inside an abstraction *)
               raise_if_priority outer None;
               (* Register the update *)
@@ -176,10 +176,10 @@ let end_concrete_borrow_get_borrow_core (span : Meta.span)
               (* Update the outer borrows before diving into the child avalue *)
               let outer = update_outer_borrow outer (MutBorrow bid) in
               super#visit_ABorrow outer bc
-        | ASharedBorrow (pm, _, sid) ->
+        | ASharedBorrow (pm, bid, sid) ->
             [%sanity_check] span (pm = PNone);
             (* Check if this is the borrow we are looking for *)
-            if UShared sid = l then (
+            if UShared (bid, sid) = l then (
               (* Check there are outer borrows, or if we need to end the whole
                * abstraction *)
               raise_if_priority outer None;
@@ -199,7 +199,7 @@ let end_concrete_borrow_get_borrow_core (span : Meta.span)
         | AProjSharedBorrow asb -> (
             (* Check if the borrow we are looking for is in the asb *)
             match l with
-            | UShared l ->
+            | UShared (_, l) ->
                 if borrow_in_asb l asb then (
                   (* Check there are outer borrows, or if we need to end the whole
                    * abstraction *)
@@ -785,7 +785,7 @@ let give_back_concrete (span : Meta.span) (l : unique_borrow_id)
       give_back_value span l' tv ctx
   | Concrete (VSharedBorrow (bid, l') | VReservedMutBorrow (bid, l')) ->
       (* Sanity check *)
-      [%sanity_check] span (UShared l' = l);
+      [%sanity_check] span (UShared (bid, l') = l);
       (* Check that the borrow is somewhere - purely a sanity check *)
       [%sanity_check] span
         (Option.is_some (ctx_lookup_loan_opt span sanity_ek bid ctx));
@@ -1000,9 +1000,9 @@ and end_shared_loan_aux (config : config) (span : Meta.span) ~(snapshots : bool)
     try
       visitor#visit_eval_ctx () ctx;
       (ctx, fun x -> x)
-    with FoundSharedBorrowId (_, sid) ->
+    with FoundSharedBorrowId (bid, sid) ->
       let ctx, cc =
-        end_borrow_aux config span ~snapshots chain (UShared sid) ctx
+        end_borrow_aux config span ~snapshots chain (UShared (bid, sid)) ctx
       in
       comp cc (run ctx)
   in
@@ -1319,18 +1319,20 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
             (* Give the value back *)
             let sv = mk_tvalue_from_symbolic_value sv in
             give_back_value span bid sv ctx
-        | ASharedBorrow (pm, _, sid) ->
+        | ASharedBorrow (pm, bid, sid) ->
             [%sanity_check] span (pm = PNone);
             (* Replace the shared borrow to account for the fact it ended *)
             let ended_borrow = ABorrow AEndedSharedBorrow in
-            update_aborrow span ek_all (UShared sid) ended_borrow None ctx
+            update_aborrow span ek_all
+              (UShared (bid, sid))
+              ended_borrow None ctx
         | AProjSharedBorrow asb ->
             (* Retrieve the borrow ids *)
             let bids =
               List.filter_map
                 (fun asb ->
                   match asb with
-                  | AsbBorrow (_, sid) -> Some sid
+                  | AsbBorrow (bid, sid) -> Some (bid, sid)
                   | AsbProjReborrows _ -> None)
                 asb
             in
@@ -1373,10 +1375,11 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
         ^ borrow_content_to_string ~span:(Some span) ctx bc];
       let ctx =
         match bc with
-        | VSharedBorrow (_, sid) -> (
+        | VSharedBorrow (bid, sid) -> (
             (* Replace the shared borrow with bottom *)
             match
-              end_concrete_borrow_in_abs_get_borrow span abs_id (UShared sid)
+              end_concrete_borrow_in_abs_get_borrow span abs_id
+                (UShared (bid, sid))
                 ctx
             with
             | Error _ -> [%craise] span "Unreachable"
@@ -1682,12 +1685,15 @@ let replace_reserved_borrow_with_mut_borrow (span : Meta.span) (l : BorrowId.id)
   let ek =
     { enter_shared_loans = false; enter_mut_borrows = false; enter_abs = false }
   in
-  match lookup_borrow span ek (UShared bid) ctx with
+  match lookup_borrow span ek (UShared (l, bid)) ctx with
   | Concrete (VSharedBorrow _ | VMutBorrow (_, _)) ->
       [%craise] span "Expected a reserved mutable borrow"
   | Concrete (VReservedMutBorrow _) ->
       (* Update it *)
-      update_borrow span ek (UShared bid) (VMutBorrow (l, borrowed_value)) ctx
+      update_borrow span ek
+        (UShared (l, bid))
+        (VMutBorrow (l, borrowed_value))
+        ctx
   | Abstract _ ->
       (* This can't happen for sure *)
       [%craise] span
@@ -1733,7 +1739,7 @@ let rec promote_reserved_mut_borrow (config : config) (span : Meta.span)
               (fun bid' -> bid' <> rid)
               (lookup_shared_reserved_borrows l ctx)
           in
-          let bids = List.map (fun bid -> UShared bid) bids in
+          let bids = List.map (fun bid -> UShared (l, bid)) bids in
           let ctx, cc =
             end_borrows config span (UniqueBorrowIdSet.of_list bids) ctx
           in
@@ -2225,12 +2231,12 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
                 if end_borrows && simplify_borrows then
                   (* Check if we can end the borrow, do not enter inside if we can't *)
                   match bc with
-                  | VSharedBorrow (_, sid) | VReservedMutBorrow (_, sid) ->
+                  | VSharedBorrow (bid, sid) | VReservedMutBorrow (bid, sid) ->
                       (* We could directly end the borrow actually
                          (replace it with bottom). But it's also good to
                          raise an exception and call [end_borrow], as it
                          allows to make the implementation more consistent. *)
-                      raise (FoundBorrowId (UShared sid))
+                      raise (FoundBorrowId (UShared (bid, sid)))
                   | VMutBorrow (bid, v) ->
                       if
                         (not (concrete_loans_in_value v))

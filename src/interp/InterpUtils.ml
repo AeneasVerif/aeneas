@@ -450,15 +450,20 @@ let tvalue_has_mutable_loans (v : tvalue) : bool =
 (** The borrow id of shared borrows doesn't uniquely identify shared borrows:
     when we need to uniquely identify a borrow, we use the borrow id for mutable
     borrows, and the shared borrow id for shared borrow (once again, the shared
-    borrow id is just an implementation detail, it doesn't have any impact in
+    borrow id is just an implementation detail, it doesn't have any impact on
     the semantics). *)
-type unique_borrow_id = UMut of borrow_id | UShared of shared_borrow_id
+type unique_borrow_id =
+  | UMut of borrow_id
+  | UShared of (borrow_id * shared_borrow_id)
+      (** The borrow id is not necessary but we keep it for formatting purposes
+      *)
 [@@deriving show, ord]
 
 let unique_borrow_id_to_string (uid : unique_borrow_id) : string =
   match uid with
-  | UMut id -> "m@" ^ BorrowId.to_string id
-  | UShared id -> "s@" ^ SharedBorrowId.to_string id
+  | UMut id -> "MB@" ^ BorrowId.to_string id
+  | UShared (id, sid) ->
+      "SB@" ^ BorrowId.to_string id ^ "(^" ^ SharedBorrowId.to_string sid ^ ")"
 
 module UniqueBorrowIdOrderedType :
   Collections.OrderedType with type t = unique_borrow_id = struct
@@ -579,10 +584,11 @@ let compute_ids () =
     }
   in
   let get_ids_to_values () = { sids_to_values = !sids_to_values } in
-  let add_shared_borrow bid sid =
+  let add_shared_borrow bid (sid : shared_borrow_id) =
     blids := BorrowId.Set.add bid !blids;
     borrow_ids := BorrowId.Set.add bid !borrow_ids;
-    unique_borrow_ids := UniqueBorrowIdSet.add (UShared sid) !unique_borrow_ids;
+    unique_borrow_ids :=
+      UniqueBorrowIdSet.add (UShared (bid, sid)) !unique_borrow_ids;
     shared_borrow_ids := SharedBorrowId.Set.add sid !shared_borrow_ids;
     non_unique_shared_borrow_ids :=
       BorrowId.Set.add bid !non_unique_shared_borrow_ids
