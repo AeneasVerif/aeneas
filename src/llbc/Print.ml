@@ -261,12 +261,12 @@ module Values = struct
       =
     match lc with
     | AMutLoan (pm, bid, av) ->
-        "@mut_loan(" ^ BorrowId.to_string bid ^ ", "
+        "ML@" ^ BorrowId.to_string bid ^ "("
         ^ tavalue_to_string ~span ~with_ended env av
         ^ ")"
         |> add_proj_marker pm
     | ASharedLoan (pm, lid, v, av) ->
-        "shared_loan@" ^ BorrowId.to_string lid ^ "("
+        "SL@" ^ BorrowId.to_string lid ^ "("
         ^ tvalue_to_string ~span env v
         ^ ", "
         ^ tavalue_to_string ~span ~with_ended env av
