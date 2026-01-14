@@ -592,28 +592,20 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
   let gid_to_back_inputs = ref T.RegionGroupId.Map.empty in
   let rec translate_back_inputs_for_gid_aux (gid : T.RegionGroupId.id) : ty list
       =
-    (* For now we don't support nested mutable borrows, so we check that if
-       there are parent regions they don't consume anything *)
+    (* Go through the ancestor regions one by one and accumulate their inputs:
+       those become inputs of the current backward function. Note that the region
+       groups are indexed in an ordered way (meaning we can use the ids as ordered
+       by [Set.to_list]). *)
     let parents = list_ancestor_region_groups sg.regions_hierarchy gid in
-    T.RegionGroupId.Set.iter
-      (fun gid ->
-        let tys = translate_back_inputs_for_gid gid in
-        [%classert_opt_span] span (tys = [])
-          (lazy
-            (let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
-             "Nested borrows are not supported yet (found in the signature of: "
-             ^ Charon.PrintTypes.fn_ptr_kind_to_string ctx fun_id
-             ^ ")")))
-      parents;
-    (* For now, we don't allow nested borrows, so the additional inputs to the
-       backward function can only come from borrows that were returned like
-       in (for the backward function we introduce for 'a):
-       {[
-         fn f<'a>(...) -> &'a mut u32;
-       ]}
-       Upon ending the abstraction for 'a, we need to get back the borrow
-       the function returned.
-    *)
+    let parent_inputs =
+      List.map translate_back_inputs_for_gid
+        (T.RegionGroupId.Set.to_list parents)
+    in
+    let parent_inputs =
+      List.filter_map
+        (fun tys -> if tys = [] then None else Some (mk_simpl_tuple_ty tys))
+        parent_inputs
+    in
     let inputs =
       List.filter_map (translate_back_ty_for_gid gid) [ sg.output ]
     in
@@ -624,12 +616,16 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
       let inputs =
         Print.list_to_string (PrintPure.ty_to_string pctx false) inputs
       in
+      let parent_inputs =
+        Print.list_to_string (PrintPure.ty_to_string pctx false) parent_inputs
+      in
       "translate_back_inputs_for_gid:" ^ "\n- function:"
       ^ Charon.PrintTypes.fn_ptr_kind_to_string ctx fun_id
       ^ "\n- gid: "
       ^ RegionGroupId.to_string gid
-      ^ "\n- output: " ^ output ^ "\n- back inputs: " ^ inputs];
-    inputs
+      ^ "\n- output: " ^ output ^ "\n- back inputs (current region): " ^ inputs
+      ^ "\n- back inputs (parent regions): " ^ parent_inputs];
+    parent_inputs @ inputs
   and translate_back_inputs_for_gid (gid : T.RegionGroupId.id) : ty list =
     match T.RegionGroupId.Map.find_opt gid !gid_to_back_inputs with
     | Some tys -> tys
