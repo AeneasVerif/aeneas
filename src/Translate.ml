@@ -977,10 +977,10 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
               ^ Errors.raw_span_to_string d.item_meta.span
         in
         let decls = List.map to_string ids in
-        log#swarning
+        [%warn_opt_span] None
           ("Mutually recursive trait declarations are not supported; the \
             following group of mutually recursive traits is going to be \
-            extracted but their model will not type-check:\n"
+            extracted but their model will not type-check:\n\n"
          ^ String.concat "\n" decls);
         (* TODO: update to extract groups *)
         if config.extract_trait_decls && config.extract_transparent then

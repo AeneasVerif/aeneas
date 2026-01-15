@@ -203,13 +203,13 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
   in
   if types <> [] && builtin_info = None then
     (* Most associated types are removed by Charon's `--remove-associated-types`. *)
-    [%lwarning
-      "Found an associated type in a trait declaration; trait associated types \
-       are usually lifted to become parameters of the trait definition, but \
-       this can fail with mutually-recursive traits as well as GATs. Aeneas \
-       cannot handle such types today, and the generated code will likely be \
-       incorrect." ^ "\nTrait declaration: " ^ name ^ "\nSource: "
-      ^ Errors.span_to_string span];
+    [%warn] span
+      ("Found an associated type in a trait declaration; trait associated \
+        types are usually lifted to become parameters of the trait definition, \
+        but this can fail with mutually-recursive traits as well as GATs. \
+        Aeneas cannot handle such types today, and the generated code will \
+        likely be incorrect." ^ "\nTrait declaration: " ^ name ^ "\nSource: "
+     ^ Errors.span_to_string span);
   let types =
     List.map
       (fun (t : A.trait_assoc_ty T.binder) ->
