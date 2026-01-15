@@ -77,6 +77,7 @@ let () =
            "internal_error";
            "cassert_warn";
            "silent_unwrap";
+           "warn";
          ]
       @ [
           mk_check_rule "Errors" "unwrap_opt_span";

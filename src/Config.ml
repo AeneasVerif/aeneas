@@ -385,7 +385,7 @@ let type_check_pure_code = ref false
 let fail_hard = ref false
 
 (** Shall we emit errors instead of warnings? *)
-let warnings_as_errors = ref true
+let warnings_as_errors = ref false
 
 (** If true, add the type name as a prefix to the variant names. Ex.: In Rust:
     {[
