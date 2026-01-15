@@ -166,8 +166,7 @@ let synthesize_binary_op (span : Meta.span) (ctx : Contexts.eval_ctx)
   synthesize_function_call span (Binop binop) ctx None [] generics
     [ arg0; arg1 ] [ arg0_place; arg1_place ] dest dest_place e
 
-let synthesize_end_abstraction (ctx : Contexts.eval_ctx) (abs : abs) (e : expr)
-    : expr =
+let synthesize_end_abs (ctx : Contexts.eval_ctx) (abs : abs) (e : expr) : expr =
   EndAbs (ctx, abs, e)
 
 let synthesize_assignment (ctx : Contexts.eval_ctx) (lplace : mplace)

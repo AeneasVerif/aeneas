@@ -1548,8 +1548,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
           AbsId.Set.is_empty abs.parents
           (* Check if it contains non-ignored loans *)
           && Option.is_none
-               (InterpBorrowsCore.get_first_non_ignored_aloan_in_abstraction
-                  span abs))
+               (InterpBorrowsCore.get_first_non_ignored_aloan_in_abs span abs))
         !abs_ids
     in
     (* Check if there are abstractions to end *)
@@ -1558,9 +1557,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
       abs_ids := with_loans_abs;
       (* End the abstractions which can be ended *)
       let no_loans_abs = AbsId.Set.of_list no_loans_abs in
-      let ctx, cc =
-        InterpBorrows.end_abstractions config span no_loans_abs ctx
-      in
+      let ctx, cc = InterpBorrows.end_abss config span no_loans_abs ctx in
       (* Recursive call *)
       comp cc (end_abs_with_no_loans ctx))
     else (* No abstractions to end: continue *)

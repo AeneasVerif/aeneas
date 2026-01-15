@@ -337,7 +337,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
   (* Actually end them *)
   let ctx, cc =
     fold_left_apply_continuation
-      (fun id ctx -> end_abstraction config span id ctx)
+      (fun id ctx -> end_abs config span id ctx)
       target_abs_ids ctx
   in
   (* Generate the Return node *)

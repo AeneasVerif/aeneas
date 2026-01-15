@@ -23,12 +23,10 @@ val end_loan : config -> Meta.span -> ?snapshots:bool -> loan_id -> cm_fun
 val end_loans : config -> Meta.span -> ?snapshots:bool -> loan_id_set -> cm_fun
 
 (** End an abstraction while preserving the invariants. *)
-val end_abstraction :
-  config -> Meta.span -> ?snapshots:bool -> AbsId.id -> cm_fun
+val end_abs : config -> Meta.span -> ?snapshots:bool -> AbsId.id -> cm_fun
 
 (** End a set of abstractions while preserving the invariants. *)
-val end_abstractions :
-  config -> Meta.span -> ?snapshots:bool -> AbsId.Set.t -> cm_fun
+val end_abss : config -> Meta.span -> ?snapshots:bool -> AbsId.Set.t -> cm_fun
 
 (** End a borrow and return the resulting environment, ignoring synthesis *)
 val end_borrow_no_synth :
@@ -67,12 +65,12 @@ val try_end_loans_no_synth :
 
 (** End an abstraction and return the resulting environment, ignoring synthesis
 *)
-val end_abstraction_no_synth :
+val end_abs_no_synth :
   config -> Meta.span -> ?snapshots:bool -> AbsId.id -> eval_ctx -> eval_ctx
 
 (** End a set of abstractions and return the resulting environment, ignoring
     synthesis *)
-val end_abstractions_no_synth :
+val end_abss_no_synth :
   config -> Meta.span -> ?snapshots:bool -> AbsId.Set.t -> eval_ctx -> eval_ctx
 
 (** Promote a reserved mut borrow to a mut borrow, while preserving the

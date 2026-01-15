@@ -31,8 +31,8 @@ let log = Logging.borrows_log
     - [allowed_abs]: if not [None], allows to get a borrow in the given
       abstraction without ending the whole abstraction first. This parameter
       allows us to use {!end_borrow_aux} as an auxiliary function for
-      {!end_abstraction_aux} (we end all the borrows in the abstraction one by
-      one before removing the abstraction from the context). We use this to end
+      {!end_abs_aux} (we end all the borrows in the abstraction one by one
+      before removing the abstraction from the context). We use this to end
       shared borrows and mutable borrows inside of **shared values**; the other
       borrows are taken care of differently. *)
 let end_concrete_borrow_get_borrow_core (span : Meta.span)
@@ -832,10 +832,9 @@ let check_borrow_disappeared (span : Meta.span) (fun_name : string)
     borrow/abstraction first, etc.
 
     [chain]: contains the list of borrows/abstraction ids on which
-    {!end_borrow_aux} and {!end_abstraction_aux} were called, to remember the
-    chain of calls. This is useful for debugging purposes, and also for sanity
-    checks to detect cycles (which shouldn't happen if the environment is
-    well-formed).
+    {!end_borrow_aux} and {!end_abs_aux} were called, to remember the chain of
+    calls. This is useful for debugging purposes, and also for sanity checks to
+    detect cycles (which shouldn't happen if the environment is well-formed).
 
     Rk.: from now onwards, the functions are written in continuation passing
     style. The reason is that when ending borrows we may end abstractions, which
@@ -892,7 +891,7 @@ let rec end_borrow_aux (config : config) (span : Meta.span) ~(snapshots : bool)
       | OuterAbs abs_id ->
           (* The borrow is inside an abstraction: end the whole abstraction *)
           let ctx, end_abs =
-            end_abstraction_aux config span ~snapshots chain abs_id ctx
+            end_abs_aux config span ~snapshots chain abs_id ctx
           in
           (* Sanity check *)
           check ctx;
@@ -1073,13 +1072,12 @@ and end_shared_loan_aux (config : config) (span : Meta.span) ~(snapshots : bool)
   (* Return *)
   (ctx, cc)
 
-and end_abstraction_aux (config : config) (span : Meta.span) ~(snapshots : bool)
+and end_abs_aux (config : config) (span : Meta.span) ~(snapshots : bool)
     (chain : borrow_loan_abs_ids) (abs_id : AbsId.id) : cm_fun =
  fun ctx ->
   (* Check that we don't loop *)
   let chain =
-    add_borrow_loan_abs_id_to_chain span "end_abstraction_aux: " (AbsId abs_id)
-      chain
+    add_borrow_loan_abs_id_to_chain span "end_abs_aux: " (AbsId abs_id) chain
   in
   (* Remember the original context for printing purposes *)
   let ctx0 = ctx in
@@ -1105,9 +1103,7 @@ and end_abstraction_aux (config : config) (span : Meta.span) ~(snapshots : bool)
          ^ " as it is set as non-endable");
 
       (* End the parent abstractions first *)
-      let ctx, cc =
-        end_abstractions_aux config span ~snapshots chain abs.parents ctx
-      in
+      let ctx, cc = end_abss_aux config span ~snapshots chain abs.parents ctx in
       [%ltrace
         AbsId.to_string abs_id
         ^ "\n- context after parent abstractions ended:\n"
@@ -1115,7 +1111,7 @@ and end_abstraction_aux (config : config) (span : Meta.span) ~(snapshots : bool)
 
       (* End the loans inside the abstraction *)
       let ctx, cc =
-        comp cc (end_abstraction_loans config span ~snapshots chain abs_id ctx)
+        comp cc (end_abs_loans config span ~snapshots chain abs_id ctx)
       in
       [%ltrace
         AbsId.to_string abs_id ^ "\n- context after loans ended:\n"
@@ -1123,8 +1119,7 @@ and end_abstraction_aux (config : config) (span : Meta.span) ~(snapshots : bool)
 
       (* End the abstraction itself by redistributing the borrows it contains *)
       let ctx, cc =
-        comp cc
-          (end_abstraction_borrows config span ~snapshots chain abs_id ctx)
+        comp cc (end_abs_borrows config span ~snapshots chain abs_id ctx)
       in
 
       (* End the regions owned by the abstraction - note that we don't need to
@@ -1141,7 +1136,7 @@ and end_abstraction_aux (config : config) (span : Meta.span) ~(snapshots : bool)
          the abstraction itself.
          **Rk.**: this is where we synthesize the updated symbolic AST *)
       let ctx, cc =
-        comp cc (end_abstraction_remove_from_context config span abs_id ctx)
+        comp cc (end_abs_remove_from_context config span abs_id ctx)
       in
 
       (* Debugging *)
@@ -1163,21 +1158,19 @@ and end_abstraction_aux (config : config) (span : Meta.span) ~(snapshots : bool)
       (* Return *)
       (ctx, cc)
 
-and end_abstractions_aux (config : config) (span : Meta.span)
-    ~(snapshots : bool) (chain : borrow_loan_abs_ids) (abs_ids : AbsId.Set.t) :
-    cm_fun =
+and end_abss_aux (config : config) (span : Meta.span) ~(snapshots : bool)
+    (chain : borrow_loan_abs_ids) (abs_ids : AbsId.Set.t) : cm_fun =
  fun ctx ->
   (* This is not necessary, but we prefer to reorder the abstraction ids,
    * so that we actually end from the smallest id to the highest id - just
    * a matter of taste, and may make debugging easier *)
   let abs_ids = AbsId.Set.fold (fun id ids -> id :: ids) abs_ids [] in
   fold_left_apply_continuation
-    (fun id ctx -> end_abstraction_aux config span ~snapshots chain id ctx)
+    (fun id ctx -> end_abs_aux config span ~snapshots chain id ctx)
     abs_ids ctx
 
-and end_abstraction_loans (config : config) (span : Meta.span)
-    ~(snapshots : bool) (chain : borrow_loan_abs_ids) (abs_id : AbsId.id) :
-    cm_fun =
+and end_abs_loans (config : config) (span : Meta.span) ~(snapshots : bool)
+    (chain : borrow_loan_abs_ids) (abs_id : AbsId.id) : cm_fun =
  fun ctx ->
   [%ltrace
     "- abs_id: " ^ AbsId.to_string abs_id ^ "\n- ctx:\n"
@@ -1188,7 +1181,7 @@ and end_abstraction_loans (config : config) (span : Meta.span)
    *
    * We ignore the "ignored mut/shared loans": as we should have already ended
    * the parent abstractions, they necessarily come from children. *)
-  let opt_loan = get_first_non_ignored_aloan_in_abstraction span abs in
+  let opt_loan = get_first_non_ignored_aloan_in_abs span abs in
   match opt_loan with
   | None ->
       (* No loans: nothing to update *)
@@ -1197,7 +1190,7 @@ and end_abstraction_loans (config : config) (span : Meta.span)
       (* There are loans: end them, then recheck *)
       let ctx, cc = end_loan_aux config span ~snapshots chain bid ctx in
       (* Reexplore, looking for loans *)
-      comp cc (end_abstraction_loans config span ~snapshots chain abs_id ctx)
+      comp cc (end_abs_loans config span ~snapshots chain abs_id ctx)
   | Some (SymbolicValue proj) ->
       (* There is a proj_loans over a symbolic value: end the proj_borrows
          which intersect this proj_loans, then end the proj_loans itself *)
@@ -1206,11 +1199,10 @@ and end_abstraction_loans (config : config) (span : Meta.span)
           abs.regions.owned proj ctx
       in
       (* Reexplore, looking for loans *)
-      comp cc (end_abstraction_loans config span ~snapshots chain abs_id ctx)
+      comp cc (end_abs_loans config span ~snapshots chain abs_id ctx)
 
-and end_abstraction_borrows (config : config) (span : Meta.span)
-    ~(snapshots : bool) (chain : borrow_loan_abs_ids) (abs_id : AbsId.id) :
-    cm_fun =
+and end_abs_borrows (config : config) (span : Meta.span) ~(snapshots : bool)
+    (chain : borrow_loan_abs_ids) (abs_id : AbsId.id) : cm_fun =
  fun ctx ->
   [%ltrace "abs_id: " ^ AbsId.to_string abs_id];
   (* Note that the abstraction mustn't contain any loans *)
@@ -1352,7 +1344,7 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
         | AEndedSharedBorrow -> [%craise] span "Unexpected"
       in
       (* Reexplore *)
-      end_abstraction_borrows config span ~snapshots chain abs_id ctx
+      end_abs_borrows config span ~snapshots chain abs_id ctx
   (* There are symbolic borrows: end them, then re-explore *)
   | FoundAProjBorrows aproj ->
       [%ltrace
@@ -1367,7 +1359,7 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
           ctx
       in
       (* Reexplore *)
-      end_abstraction_borrows config span ~snapshots chain abs_id ctx
+      end_abs_borrows config span ~snapshots chain abs_id ctx
   (* There are concrete (i.e., not symbolic) borrows in shared values: end them, then reexplore *)
   | FoundBorrowContent bc ->
       [%ltrace
@@ -1397,16 +1389,16 @@ and end_abstraction_borrows (config : config) (span : Meta.span)
         | VReservedMutBorrow _ -> [%craise] span "Unreachable"
       in
       (* Reexplore *)
-      end_abstraction_borrows config span ~snapshots chain abs_id ctx
+      end_abs_borrows config span ~snapshots chain abs_id ctx
 
 (** Remove an abstraction from the context, as well as all its references *)
-and end_abstraction_remove_from_context (_config : config) (span : Meta.span)
+and end_abs_remove_from_context (_config : config) (span : Meta.span)
     (abs_id : AbsId.id) : cm_fun =
  fun ctx ->
   let ctx, abs = ctx_remove_abs span ctx abs_id in
   let abs = Option.get abs in
   (* Synthesize the symbolic AST *)
-  (ctx, SynthesizeSymbolic.synthesize_end_abstraction ctx abs)
+  (ctx, SynthesizeSymbolic.synthesize_end_abs ctx abs)
 
 (** End a proj_loan over a symbolic value by ending the proj_borrows which
     intersect this proj_loan.
@@ -1497,7 +1489,7 @@ and end_proj_loans_symbolic (config : config) (span : Meta.span)
             AbsId.Set.empty abs_ids
         in
         (* End the abstractions and continue *)
-        end_abstractions_aux config span ~snapshots chain abs_ids ctx
+        end_abss_aux config span ~snapshots chain abs_ids ctx
       in
       (* End the internal borrows projectors and the loans projector *)
       let ctx =
@@ -1552,9 +1544,7 @@ and end_proj_loans_symbolic (config : config) (span : Meta.span)
                  (ctx, fun e -> e) *)
       else
         (* The borrows proj comes from a different abstraction: end it. *)
-        let ctx, cc =
-          end_abstraction_aux config span ~snapshots chain abs_id' ctx
-        in
+        let ctx, cc = end_abs_aux config span ~snapshots chain abs_id' ctx in
         (* Retry ending the projector of loans *)
         let ctx, cc =
           comp cc
@@ -1586,11 +1576,11 @@ let try_end_loans config (span : Meta.span) ?(snapshots : bool = true) :
     loan_id_set -> cm_fun =
   try_end_loans_aux config ~snapshots span [] ~must_end:false
 
-let end_abstraction config span ?(snapshots = true) =
-  end_abstraction_aux config ~snapshots span []
+let end_abs config span ?(snapshots = true) =
+  end_abs_aux config ~snapshots span []
 
-let end_abstractions config span ?(snapshots = true) =
-  end_abstractions_aux config ~snapshots span []
+let end_abss config span ?(snapshots = true) =
+  end_abss_aux config ~snapshots span []
 
 let end_borrow_no_synth config span ?(snapshots = true) id ctx =
   fst (end_borrow config span ~snapshots id ctx)
@@ -1607,11 +1597,11 @@ let end_loans_no_synth config span ?(snapshots = true) ids ctx =
 let try_end_loans_no_synth config span ?(snapshots = true) ids ctx =
   fst (try_end_loans config span ~snapshots ids ctx)
 
-let end_abstraction_no_synth config span ?(snapshots = true) id ctx =
-  fst (end_abstraction config ~snapshots span id ctx)
+let end_abs_no_synth config span ?(snapshots = true) id ctx =
+  fst (end_abs config ~snapshots span id ctx)
 
-let end_abstractions_no_synth config span ?(snapshots = true) ids ctx =
-  fst (end_abstractions config ~snapshots span ids ctx)
+let end_abss_no_synth config span ?(snapshots = true) ids ctx =
+  fst (end_abss config ~snapshots span ids ctx)
 
 (** Helper function: see {!activate_reserved_mut_borrow}.
 
@@ -2326,7 +2316,7 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
         in
         let abs = visitor#visit_abs () abs in
         (* Check if it is possible to end the abstraction: if yes, raise an exception *)
-        let opt_loan = get_first_non_ignored_aloan_in_abstraction span abs in
+        let opt_loan = get_first_non_ignored_aloan_in_abs span abs in
         match opt_loan with
         | None ->
             (* No remaining loans: we can end the abstraction.
@@ -2360,7 +2350,7 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
     ({ ctx with env = explore_env ctx ctx.env }, fun e -> e)
   with
   | FoundAbsId abs_id ->
-      let ctx, cc = end_abstraction config span ~snapshots abs_id ctx in
+      let ctx, cc = end_abs config span ~snapshots abs_id ctx in
       comp cc (rec_call ctx)
   | FoundBorrowId bid ->
       let ctx, cc = end_borrow config span ~snapshots bid ctx in

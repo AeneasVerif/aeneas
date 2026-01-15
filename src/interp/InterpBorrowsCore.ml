@@ -1531,7 +1531,7 @@ let abs_has_non_ended_eloans (abs : abs) : bool =
     an abstraction, if there is.
 
     **Remark:** we don't take the *ignored* mut/shared loans into account. *)
-let get_first_non_ignored_aloan_in_abstraction (span : Meta.span) (abs : abs) :
+let get_first_non_ignored_aloan_in_abs (span : Meta.span) (abs : abs) :
     borrow_id_or_proj_symbolic_value option =
   (* Explore to find a loan *)
   let obj =
