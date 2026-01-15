@@ -1,0 +1,3 @@
+```lean
+{{#include factorial.lean}}
+```
