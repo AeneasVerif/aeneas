@@ -23,11 +23,11 @@ theorem mul2_add1_spec (x : U32) (h : 2 * x.val + 1 ≤ U32.max)
   ↑y = 2 * ↑x + (1 : Int)
   := by
   unfold mul2_add1
-  have ⟨ x1, hEq1, hPost1 ⟩ := @U32.add_spec x x (by scalar_tac)
+  have ⟨ x1, hEq1, hPost1 ⟩ := @U32.add_spec x x (by grind)
   simp [hEq1]
-  have ⟨ x2, hEq2, hPost2 ⟩ := @U32.add_spec x1 1#u32 (by scalar_tac)
+  have ⟨ x2, hEq2, hPost2 ⟩ := @U32.add_spec x1 1#u32 (by grind)
   simp [hEq2]
-  scalar_tac
+  grind
 
 /-- Theorem about `mul2_add1`: with the `progress` tactic -/
 -- @[progress]
@@ -38,7 +38,7 @@ theorem mul2_add1_spec' (x : U32) (h : 2 * x.val + 1 ≤ U32.max)
   unfold mul2_add1
   progress with U32.add_spec as ⟨ x1 ⟩
   progress as ⟨ x2 ⟩
-  scalar_tac
+  grind
 
 /- [tutorial::mul2_add1_add]:
    Source: 'src/lib.rs', lines 15:0-15:43 -/
@@ -54,7 +54,7 @@ theorem mul2_add1_add_spec (x : U32) (y : U32) (h : 2 * x.val + 1 + y.val ≤ U3
   unfold mul2_add1_add
   progress with mul2_add1_spec as ⟨ x1 ⟩
   progress as ⟨ x2 ⟩
-  scalar_tac
+  grind
 
 /- [tutorial::CList]
    Source: 'src/lib.rs', lines 32:0-32:17 -/
@@ -122,15 +122,10 @@ theorem i32_id_spec (n : I32) (h : 0 ≤ n.val) :
   . progress as ⟨ n1 ⟩
     progress
     progress as ⟨ n2 ⟩
-    scalar_tac
+    grind
 termination_by n.toNat
 decreasing_by
-  -- We always need to start termination proofs with this tactic (it massages the goal)
-  simp_wf
-  -- It is an arithmetic goal:
-  scalar_tac
-  -- Remark: as the pattern above is quite common (`simp_wf; scalar_tac`),
-  -- we introduced the tactic `scalar_decr_tac` (it does the same)
+  grind
 
 /- [tutorial::even]:
    Source: 'src/lib.rs', lines 87:0-87:28 -/
@@ -334,12 +329,12 @@ example α (p q : α → Prop) (h0 : ∀ x, p x) (h1 : ∀ x, p x → q x) : ∀
   have h3 := h1 x h2
   apply h3
 
-/- If the goal is an linear arithmetic goal, you can use `scalar_tac` to discharge it -/
+/- If the goal is an linear arithmetic goal, you can use `grind` to discharge it -/
 example (x y z : Int) (h0 : x + y ≤ 3) (h1 : 2 * z ≤ 4) : x + y + z ≤ 5
-  := by scalar_tac
+  := by grind
 
-/- Note that `scalar_tac` is aware of the bounds of the machine integers -/
-example (x : U32) : 0 ≤ x.val ∧ x.val ≤ 2 ^ 32 - 1 := by scalar_tac
+/- Note that `grind` is aware of the bounds of the machine integers -/
+example (x : U32) : 0 ≤ x.val ∧ x.val ≤ 2 ^ 32 - 1 := by grind
 
 /- Renaming: note that the variables which appear in grey are variables which you can't
    reference directly, either because Lean automatically introduced fresh names for them,
@@ -386,7 +381,7 @@ set_option pp.coercions true
 example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
   (hEq : i = 0#u32) :
   (hd :: tl.toList)[i.val]! = hd := by
-  have hi : i.val = 0 := by scalar_tac
+  have hi : i.val = 0 := by grind
   simp only [hi]
   --
   have hIndex := @List.getElem!_cons_zero _ hd _ tl.toList
@@ -396,8 +391,8 @@ example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
 example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
   (hEq : i ≠ 0#u32) :
   (hd :: tl.toList)[i.val]! = tl.toList[i.val - 1]! := by
-  -- Note that `scalar_tac` is aware of `Arith.Nat.not_eq`
-  have hIndex := List.getElem!_cons_nzero hd tl.toList i.val (by scalar_tac)
+  -- Note that `grind` is aware of `Arith.Nat.not_eq`
+  have hIndex := List.getElem!_cons_nzero hd tl.toList i.val (by grind)
   simp only [hIndex]
 
 /- Note that `List.index_zero_cons` and `List.index_cons_nzero` have been
