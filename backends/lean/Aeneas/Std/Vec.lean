@@ -234,8 +234,7 @@ theorem alloc.slice.Slice.to_vec_spec {T : Type} (cloneInst : core.clone.Clone T
 
 @[rust_fun "alloc::slice::{[@T]}::into_vec" -canFail -lift (keepParams := [true, false])]
 def alloc.slice.Slice.into_vec
-  {T : Type} (s: Slice T) : Result (alloc.vec.Vec T) := do
-  ok s
+  {T : Type} (s: Slice T) : (alloc.vec.Vec T) := s
 
 
 @[rust_type "alloc::vec::into_iter::IntoIter" (keepParams := [true, false])]
@@ -252,9 +251,8 @@ def alloc.vec.into_iter.IteratorIntoIter.next {T : Type} (it: alloc.vec.into_ite
 
 @[rust_fun
   "alloc::vec::{core::iter::traits::collect::IntoIterator<alloc::vec::Vec<@T>, @T, alloc::vec::into_iter::IntoIter<@T, @A>>}::into_iter"
-  -canFail -lift (keepParams := [true, false])]
-def alloc.vec.IntoIteratorVec.into_iter {T : Type} (v: alloc.vec.Vec T) :
-  Result (alloc.vec.into_iter.IntoIter T) := ok v
+  -canFail (keepParams := [true, false])]
+def alloc.vec.IntoIteratorVec.into_iter {T : Type} (v: alloc.vec.Vec T) : Result (alloc.vec.into_iter.IntoIter T) := ok v
 
 @[rust_fun "alloc::vec::from_elem"]
 def alloc.vec.from_elem
