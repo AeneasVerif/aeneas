@@ -232,8 +232,30 @@ theorem alloc.slice.Slice.to_vec_spec {T : Type} (cloneInst : core.clone.Clone T
   simp only [to_vec]
   exact (Slice.clone_spec h)
 
+@[rust_fun "alloc::slice::{[@T]}::into_vec" -canFail -lift (keepParams := [true, false])]
+def alloc.slice.Slice.into_vec
+  {T : Type} (s: Slice T) : Result (alloc.vec.Vec T) := do
+  ok s
 
-/- Source: '/rustc/library/alloc/src/vec/mod.rs', lines 3174:0-3174:55 -/
+
+@[rust_type "alloc::vec::into_iter::IntoIter" (keepParams := [true, false])]
+def alloc.vec.into_iter.IntoIter (T : Type) : Type := alloc.vec.Vec T
+
+@[rust_fun
+  "alloc::vec::into_iter::{core::iter::traits::iterator::Iterator<alloc::vec::into_iter::IntoIter<@T, @A>, @T>}::next"
+  -canFail (keepParams := [true, false])]
+def alloc.vec.into_iter.IteratorIntoIter.next {T : Type} (it: alloc.vec.into_iter.IntoIter T) :
+  Result ((Option T) × (alloc.vec.into_iter.IntoIter T)) :=
+  match it with
+  | ⟨ [], _ ⟩  => ok (none, it)
+  | ⟨ hd :: tl, _ ⟩ => ok (hd, ⟨ tl, by scalar_tac ⟩ )
+
+@[rust_fun
+  "alloc::vec::{core::iter::traits::collect::IntoIterator<alloc::vec::Vec<@T>, @T, alloc::vec::into_iter::IntoIter<@T, @A>>}::into_iter"
+  -canFail -lift (keepParams := [true, false])]
+def alloc.vec.IntoIteratorVec.into_iter {T : Type} (v: alloc.vec.Vec T) :
+  Result (alloc.vec.into_iter.IntoIter T) := ok v
+
 @[rust_fun "alloc::vec::from_elem"]
 def alloc.vec.from_elem
   {T : Type} (cloneInst : core.clone.Clone T)
@@ -313,6 +335,19 @@ theorem alloc.vec.Vec.set_getElem!_eq α [Inhabited α] (x : alloc.vec.Vec α) (
   x.set i x[i]! = x := by
   simp only [getElem!_Usize_eq]
   simp only [Vec, set_val_eq, Subtype.eq_iff, List.set_getElem!]
+
+@[rust_fun
+  "alloc::vec::{core::convert::From<alloc::vec::Vec<@T>, [@T; @N]>}::from" -canFail]
+def alloc.vec.FromVecArray.from
+  {T : Type} {N : Std.Usize} (a: Array T N) : Result (alloc.vec.Vec T) :=
+  ok ⟨ a.val, by scalar_tac ⟩
+
+@[reducible, rust_trait_impl
+  "core::convert::From<alloc::vec::Vec<@T>, [@T; @N]>"]
+def core.convert.FromVecArray (T : Type) (N : Std.Usize) : core.convert.From
+  (alloc.vec.Vec T) (Array T N) := {
+  from_ := alloc.vec.FromVecArray.from
+}
 
 /- Source: '/rustc/library/alloc/src/vec/mod.rs', lines 3967:4-3967:33 -/
 @[rust_fun "alloc::vec::{core::convert::From<Box<[@T]>, alloc::vec::Vec<@T>>}::from" (keepParams := [true,false])]

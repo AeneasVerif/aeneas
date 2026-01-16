@@ -4,6 +4,7 @@ import Aeneas.Std.Range
 import Aeneas.Std.Scalar.Core
 import Aeneas.Std.Scalar.CheckedOps
 import Aeneas.Std.Scalar.Notations
+import Aeneas.Std.Vec
 
 namespace Aeneas.Std
 
@@ -28,7 +29,6 @@ structure core.iter.adapters.zip.TrustedRandomAccessNoCoerce (Self : Type)
 structure core.iter.traits.iterator.Iterator (Self : Type) (Self_Item : Type)
   where
   next : Self → Result ((Option Self_Item) × Self)
-
 
 @[rust_trait "core::iter::traits::accum::Sum"]
 structure core.iter.traits.accum.Sum (Self : Type) (A : Type) where
@@ -134,4 +134,22 @@ def core.iter.traits.iterator.IteratorRange {A : Type} (StepInst :
   core.iter.range.Step A) : core.iter.traits.iterator.Iterator
   (core.ops.range.Range A) A := {
   next := core.iter.range.IteratorRange.next StepInst
+}
+
+@[reducible, rust_trait_impl
+  "core::iter::traits::iterator::Iterator<alloc::vec::into_iter::IntoIter<@T, @A>, @T>"
+  (keepParams := [true, false])]
+def core.iter.traits.iterator.IteratorIntoIter (T : Type) :
+  core.iter.traits.iterator.Iterator (alloc.vec.into_iter.IntoIter T) T := {
+  next := alloc.vec.into_iter.IteratorIntoIter.next
+}
+
+@[reducible, rust_trait_impl
+  "core::iter::traits::collect::IntoIterator<alloc::vec::Vec<@T>, @T, alloc::vec::into_iter::IntoIter<@T, @A>>"
+  (keepParams := [true, false])]
+def core.iter.traits.collect.IntoIteratorVec (T : Type) :
+  core.iter.traits.collect.IntoIterator (alloc.vec.Vec T) T
+  (alloc.vec.into_iter.IntoIter T) := {
+  iteratorInst := core.iter.traits.iterator.IteratorIntoIter T
+  into_iter := alloc.vec.IntoIteratorVec.into_iter
 }
