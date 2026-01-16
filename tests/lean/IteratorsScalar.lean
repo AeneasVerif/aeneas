@@ -9,22 +9,24 @@ set_option linter.unusedVariables false
 namespace iterators_scalar
 
 /- [iterators_scalar::iter]: loop 0:
-   Source: 'tests/src/iterators-scalar.rs', lines 4:4-4:20 -/
-def iter_loop (iter1 : core.ops.range.Range Std.Usize) : Result Unit := do
+   Source: 'tests/src/iterators-scalar.rs', lines 5:4-7:5 -/
+def iter_loop
+  (x : Std.I32) (iter1 : core.ops.range.Range Std.Usize) : Result Unit := do
   let (o, iter2) ←
     core.iter.range.IteratorRange.next core.iter.range.StepUsize iter1
   match o with
   | none => ok ()
-  | some _ => iter_loop iter2
+  | some _ => let x1 ← x + 1#i32
+              iter_loop x1 iter2
 partial_fixpoint
 
 /- [iterators_scalar::iter]:
-   Source: 'tests/src/iterators-scalar.rs', lines 3:0-5:1 -/
+   Source: 'tests/src/iterators-scalar.rs', lines 3:0-8:1 -/
 def iter (n : Std.Usize) : Result Unit := do
   let iter1 ←
     core.iter.traits.collect.IntoIterator.Blanket.into_iter
       (core.iter.traits.iterator.IteratorRange core.iter.range.StepUsize)
       { start := 0#usize, end_ := n }
-  iter_loop iter1
+  iter_loop 0#i32 iter1
 
 end iterators_scalar
