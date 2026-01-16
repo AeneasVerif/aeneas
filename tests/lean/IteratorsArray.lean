@@ -30,7 +30,9 @@ def iter_array : Result Unit := do
     (↑(alloc.vec.FromVecArray.from
       (Array.make 3#usize [ 1#u32, 2#u32, 3#u32 ])) : Result (alloc.vec.Vec
       Std.U32))
-  let iter := alloc.vec.IntoIteratorVec.into_iter v
+  let iter ←
+    (↑(alloc.vec.IntoIteratorVec.into_iter v) : Result
+      (alloc.vec.into_iter.IntoIter Std.U32))
   iter_array_loop 0#i32 iter
 
 end iterators_array
