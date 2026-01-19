@@ -1051,6 +1051,7 @@ let keywords () =
           "then";
           "theorem";
           "theory";
+          "to";
           "universe";
           "universes";
           "unless";
