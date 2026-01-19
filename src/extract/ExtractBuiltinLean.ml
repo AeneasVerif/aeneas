@@ -12,6 +12,9 @@ let lean_builtin_types =
            [ ("bytes", Some "bytes"); ("isValidUTF8", Some "isValidUTF8") ]);
     (* file: "Aeneas/Std/Vec.lean", line: 18 *)
     mk_type "alloc::vec::Vec" "alloc.vec.Vec";
+    (* file: "Aeneas/Std/VecIter.lean", line: 7 *)
+    mk_type "alloc::vec::into_iter::IntoIter" "alloc.vec.into_iter.IntoIter"
+      ~keep_params:(Some [ true; false ]);
     (* file: "Aeneas/Std/Core/Ptr.lean", line: 78 *)
     mk_type "core::alloc::layout::Layout" "core.alloc.layout.Layout"
       ~kind:(KStruct [ ("size", Some "size"); ("align", Some "align") ]);
@@ -187,6 +190,13 @@ let lean_builtin_funs =
     mk_fun "alloc::slice::{[@T]}::to_vec" "alloc.slice.Slice.to_vec";
     (* file: "Aeneas/Std/Vec.lean", line: 239 *)
     mk_fun "alloc::vec::from_elem" "alloc.vec.from_elem";
+    (* file: "Aeneas/Std/VecIter.lean", line: 10 *)
+    mk_fun
+      "alloc::vec::into_iter::{core::iter::traits::iterator::Iterator<alloc::vec::into_iter::IntoIter<@T, \
+       @A>, @T>}::next"
+      "alloc.vec.into_iter.IteratorIntoIter.next"
+      ~keep_params:(Some [ true; false ])
+      ~can_fail:false;
     (* file: "Aeneas/Std/Vec.lean", line: 383 *)
     mk_fun
       "alloc::vec::partial_eq::{core::cmp::PartialEq<alloc::vec::Vec<@T>, \
@@ -236,6 +246,13 @@ let lean_builtin_funs =
     mk_fun
       "alloc::vec::{core::convert::From<alloc::vec::Vec<@T>, [@T; @N]>}::from"
       "alloc.vec.FromVecArray.from" ~can_fail:false;
+    (* file: "Aeneas/Std/VecIter.lean", line: 19 *)
+    mk_fun
+      "alloc::vec::{core::iter::traits::collect::IntoIterator<alloc::vec::Vec<@T>, \
+       @T, alloc::vec::into_iter::IntoIter<@T, @A>>}::into_iter"
+      "alloc.vec.IntoIteratorVec.into_iter"
+      ~keep_params:(Some [ true; false ])
+      ~can_fail:false;
     (* file: "Aeneas/Std/Vec.lean", line: 270 *)
     mk_fun
       "alloc::vec::{core::ops::deref::Deref<alloc::vec::Vec<@T>, [@T]>}::deref"
@@ -867,6 +884,18 @@ let lean_builtin_trait_impls =
     (* file: "Aeneas/Std/Core/Iter.lean", line: 61 *)
     mk_trait_impl "core::iter::traits::collect::IntoIterator<@I, @Item, @I>"
       "core.iter.traits.collect.IntoIterator.Blanket";
+    (* file: "Aeneas/Std/VecIter.lean", line: 32 *)
+    mk_trait_impl
+      "core::iter::traits::collect::IntoIterator<alloc::vec::Vec<@T>, @T, \
+       alloc::vec::into_iter::IntoIter<@T, @A>>"
+      "core.iter.traits.collect.IntoIteratorVec"
+      ~keep_params:(Some [ true; false ]);
+    (* file: "Aeneas/Std/VecIter.lean", line: 24 *)
+    mk_trait_impl
+      "core::iter::traits::iterator::Iterator<alloc::vec::into_iter::IntoIter<@T, \
+       @A>, @T>"
+      "core.iter.traits.iterator.IteratorVecIntoIter"
+      ~keep_params:(Some [ true; false ]);
     (* file: "Aeneas/Std/Core/Iter.lean", line: 131 *)
     mk_trait_impl
       "core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>"
