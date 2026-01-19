@@ -4,6 +4,7 @@ import Aeneas.Std.Range
 import Aeneas.Std.Scalar.Core
 import Aeneas.Std.Scalar.CheckedOps
 import Aeneas.Std.Scalar.Notations
+import Aeneas.Std.Vec
 
 namespace Aeneas.Std
 
@@ -28,7 +29,6 @@ structure core.iter.adapters.zip.TrustedRandomAccessNoCoerce (Self : Type)
 structure core.iter.traits.iterator.Iterator (Self : Type) (Self_Item : Type)
   where
   next : Self → Result ((Option Self_Item) × Self)
-
 
 @[rust_trait "core::iter::traits::accum::Sum"]
 structure core.iter.traits.accum.Sum (Self : Type) (A : Type) where
