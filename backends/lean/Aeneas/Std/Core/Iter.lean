@@ -135,21 +135,3 @@ def core.iter.traits.iterator.IteratorRange {A : Type} (StepInst :
   (core.ops.range.Range A) A := {
   next := core.iter.range.IteratorRange.next StepInst
 }
-
-@[reducible, rust_trait_impl
-  "core::iter::traits::iterator::Iterator<alloc::vec::into_iter::IntoIter<@T, @A>, @T>"
-  (keepParams := [true, false])]
-def core.iter.traits.iterator.IteratorIntoIter (T : Type) :
-  core.iter.traits.iterator.Iterator (alloc.vec.into_iter.IntoIter T) T := {
-  next := alloc.vec.into_iter.IteratorIntoIter.next
-}
-
-@[reducible, rust_trait_impl
-  "core::iter::traits::collect::IntoIterator<alloc::vec::Vec<@T>, @T, alloc::vec::into_iter::IntoIter<@T, @A>>"
-  (keepParams := [true, false])]
-def core.iter.traits.collect.IntoIteratorVec (T : Type) :
-  core.iter.traits.collect.IntoIterator (alloc.vec.Vec T) T
-  (alloc.vec.into_iter.IntoIter T) := {
-  iteratorInst := core.iter.traits.iterator.IteratorIntoIter T
-  into_iter := alloc.vec.IntoIteratorVec.into_iter
-}
