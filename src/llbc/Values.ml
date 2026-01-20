@@ -291,6 +291,17 @@ IdGen ()
 
 type dummy_var_id = DummyVarId.id [@@deriving show, ord]
 
+(** A sub-abstraction level.
+
+    Sub-abstractions are used in the presence of nested borrows: the abstraction
+    itself is considered as having level 0 and sub-abstractions of higher-levels
+    can be ended without ending sub-abstractions of lower levels. *)
+type abs_level = int [@@deriving show, ord]
+
+module AbsLevelSet = Collections.IntSet
+
+type abs_level_set = AbsLevelSet.t [@@deriving show, ord]
+
 (** Ancestor for {!env} iter visitor *)
 class ['self] iter_env_base =
   object (self : 'self)
@@ -343,6 +354,7 @@ class ['self] iter_env_base =
     method visit_local_id : 'env -> local_id -> unit = fun _ _ -> ()
     method visit_dummy_var_id : 'env -> dummy_var_id -> unit = fun _ _ -> ()
     method visit_abs_kind : 'env -> abs_kind -> unit = fun _ _ -> ()
+    method visit_abs_level_set : 'env -> abs_level_set -> unit = fun _ _ -> ()
   end
 
 (** Ancestor for {!env} map visitor *)
@@ -403,6 +415,9 @@ class ['self] map_env_base =
       fun _ x -> x
 
     method visit_abs_kind : 'env -> abs_kind -> abs_kind = fun _ x -> x
+
+    method visit_abs_level_set : 'env -> abs_level_set -> abs_level_set =
+      fun _ x -> x
   end
 
 (** When giving shared borrows to functions (i.e., inserting shared borrows
@@ -1468,6 +1483,7 @@ and abs = {
       (** TODO: actually we also (only?) need to put the regions at the level of
           the values themselves, otherwise some projections are not precise
           enough when merging region abstractions. *)
+  ended_subabs : abs_level_set;  (** The ended sub-abstractions *)
   avalues : tavalue list;  (** The values in this abstraction *)
   cont : abs_cont option;
       (** The continuation representing the abstraction in the translation.

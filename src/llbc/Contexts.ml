@@ -60,6 +60,21 @@ end
 
 module TraitTypeRefMap = Collections.MakeMap (TraitTypeRefOrd)
 
+type abs_id_with_level = { abs_id : AbsId.id; level : abs_level }
+[@@deriving show, ord]
+
+(* TODO: correctly use the functors so as not to have a duplication below *)
+module AbsIdWithLevelOrd = struct
+  type t = abs_id_with_level
+
+  let compare = compare_abs_id_with_level
+  let to_string = show_abs_id_with_level
+  let pp_t = pp_abs_id_with_level
+  let show_t = show_abs_id_with_level
+end
+
+module AbsIdWithLevelSet = Collections.MakeSet (AbsIdWithLevelOrd)
+
 (** Evaluation context *)
 type eval_ctx = {
   crate : crate;

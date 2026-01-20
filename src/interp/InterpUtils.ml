@@ -282,6 +282,12 @@ exception FoundEBorrowContent of eborrow_content
 exception FoundAProjBorrows of aproj_borrows
 
 (** Utility exception *)
+exception FoundSymbolicProjBorrows of symbolic_proj
+
+(** Utility exception *)
+exception FoundSymbolicProjLoans of symbolic_proj
+
+(** Utility exception *)
 exception FoundAProjLoans of aproj_loans
 
 exception FoundAbsProj of abs_id * symbolic_value_id

@@ -276,6 +276,7 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
                   parents = AbsId.Set.empty;
                   original_parents = [];
                   regions = { owned };
+                  ended_subabs = AbsLevelSet.empty;
                   avalues = [ sv; updated_sv; copied_sv ];
                   cont = Some abs_cont;
                 }

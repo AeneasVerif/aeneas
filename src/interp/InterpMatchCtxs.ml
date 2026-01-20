@@ -743,6 +743,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           parents = AbsId.Set.empty;
           original_parents = [];
           regions = { owned = RegionId.Set.singleton rid };
+          ended_subabs = AbsLevelSet.empty;
           avalues = avl0 @ avl1 @ [ av ];
           cont;
         }
@@ -889,6 +890,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             parents = AbsId.Set.empty;
             original_parents = [];
             regions = { owned = RegionId.Set.singleton rid };
+            ended_subabs = AbsLevelSet.empty;
             avalues = av :: (avl0 @ avl1);
             cont;
           }
@@ -976,6 +978,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           parents = AbsId.Set.empty;
           original_parents = [];
           regions = { owned = RegionId.Set.singleton rid };
+          ended_subabs = AbsLevelSet.empty;
           avalues;
           cont;
         }
@@ -1143,6 +1146,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           parents = AbsId.Set.empty;
           original_parents = [];
           regions = { owned };
+          ended_subabs = AbsLevelSet.empty;
           avalues;
           cont;
         }
@@ -1212,6 +1216,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           parents = AbsId.Set.empty;
           original_parents = [];
           regions = { owned };
+          ended_subabs = AbsLevelSet.empty;
           avalues;
           cont;
         }
@@ -1288,6 +1293,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           parents = AbsId.Set.empty;
           original_parents = [];
           regions = { owned };
+          ended_subabs = AbsLevelSet.empty;
           avalues;
           cont;
         }
@@ -1416,6 +1422,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
                 parents = AbsId.Set.empty;
                 original_parents = [];
                 regions = { owned };
+                ended_subabs = AbsLevelSet.empty;
                 avalues;
                 cont;
               }
@@ -1535,6 +1542,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         parents = AbsId.Set.empty;
         original_parents = [];
         regions = { owned };
+        ended_subabs = AbsLevelSet.empty;
         avalues;
         cont;
       }
@@ -1633,6 +1641,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         parents = AbsId.Set.empty;
         original_parents = [];
         regions = { owned };
+        ended_subabs = AbsLevelSet.empty;
         avalues;
         cont;
       }
@@ -2125,6 +2134,7 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
       parents = parents0;
       original_parents = original_parents0;
       regions = { owned = regions0 };
+      ended_subabs = ended_subabs0;
       avalues = avalues0;
       (* We ignore the continuations *)
       cont = _;
@@ -2139,6 +2149,7 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
       parents = parents1;
       original_parents = original_parents1;
       regions = { owned = regions1 };
+      ended_subabs = ended_subabs1;
       avalues = avalues1;
       (* We ignore the continuations *)
       cont = _;
@@ -2154,6 +2165,11 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
     let _ = CEM.match_aids parents0 parents1 in
     let _ = CEM.match_aidl original_parents0 original_parents1 in
     let _ = CEM.match_rids regions0 regions1 in
+
+    if not (AbsLevelSet.equal ended_subabs0 ended_subabs1) then
+      raise
+        (Distinct
+           "Region abstractions with distinct sets of ended sub-abstractions");
 
     [%ldebug "match_abstractions: matching values"];
     let _ =

@@ -51,7 +51,7 @@ let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
       let call = call_to_string env indent call in
       let next = expr_to_string env indent indent_incr next in
       call ^ "\n" ^ next
-  | EndAbs (_, abs, next) ->
+  | EndAbs (_, abs, level, next) ->
       let indent1 = indent ^ indent_incr in
       let verbose = false in
       let abs =
@@ -59,7 +59,7 @@ let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
           abs
       in
       let next = expr_to_string env indent indent_incr next in
-      indent ^ "end\n" ^ abs ^ "\n" ^ next
+      indent ^ "end(level:" ^ string_of_int level ^ ")\n" ^ abs ^ "\n" ^ next
   | EvalGlobal (id, generics, sv, next) ->
       let sv = Values.symbolic_value_to_string env sv in
       let global = global_decl_ref_to_string env { id; generics } in

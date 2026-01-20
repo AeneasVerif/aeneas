@@ -75,6 +75,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
           parents = AbsId.Set.empty;
           original_parents = [];
           regions = { owned = RegionId.Set.singleton r_id };
+          ended_subabs = AbsLevelSet.empty;
           avalues;
           cont = Some { output = Some output; input = Some input };
         }
@@ -1893,6 +1894,11 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind)
   (* Merge the expressions used for the pure translation. *)
   let cont = merge_abs_conts span ctx ~with_abs_conts abs0 abs1 in
 
+  (* *)
+  [%cassert] span (AbsLevelSet.is_empty abs0.ended_subabs) "Unimplemented";
+  [%cassert] span (AbsLevelSet.is_empty abs1.ended_subabs) "Unimplemented";
+  let ended_subabs = AbsLevelSet.empty in
+
   (* Create the new abstraction *)
   let abs_id = ctx.fresh_abs_id () in
   let abs =
@@ -1902,6 +1908,7 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind)
       can_end;
       parents;
       original_parents;
+      ended_subabs;
       regions;
       avalues;
       cont;

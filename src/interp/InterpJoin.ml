@@ -140,6 +140,7 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
         can_end;
         parents = AbsId.Set.empty;
         original_parents = [];
+        ended_subabs = AbsLevelSet.empty;
         regions;
         avalues;
         cont;

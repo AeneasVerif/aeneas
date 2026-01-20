@@ -190,7 +190,8 @@ let rec translate_expr (e : S.expr) (ctx : bs_ctx) : texpr =
       translate_return ectx opt_v ctx
   | Panic -> translate_panic ctx
   | FunCall (call, e) -> translate_function_call call e ctx
-  | EndAbs (ectx, abs, e) -> translate_end_abs ectx abs e ctx
+  | EndAbs (ectx, abs, abs_level, e) ->
+      translate_end_abs ectx abs abs_level e ctx
   | EvalGlobal (gid, generics, sv, e) ->
       translate_global_eval gid generics sv e ctx
   | Assertion (ectx, v, e) -> translate_assertion ectx v e ctx
@@ -692,9 +693,10 @@ and translate_cast_unsize (call : S.call) (e : S.expr) (ty0 : T.ty) (ty1 : T.ty)
   let monadic = false in
   [%add_loc] mk_closed_checked_let ctx monadic dest cast_expr next_e
 
-and translate_end_abs (ectx : C.eval_ctx) (abs : V.abs) (e : S.expr)
-    (ctx : bs_ctx) : texpr =
+and translate_end_abs (ectx : C.eval_ctx) (abs : V.abs)
+    (abs_level : V.abs_level) (e : S.expr) (ctx : bs_ctx) : texpr =
   [%ltrace "abstraction kind: " ^ V.show_abs_kind abs.kind];
+  [%cassert] ctx.span (abs_level = 0) "Unimplemented";
   match abs.kind with
   | V.SynthInput rg_id ->
       translate_end_abstraction_synth_input ectx abs e ctx rg_id

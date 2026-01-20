@@ -516,6 +516,7 @@ let create_empty_abstractions_from_abs_region_groups
       parents;
       original_parents;
       regions;
+      ended_subabs = AbsLevelSet.empty;
       avalues = [];
       (* For now the continuation is empty: we will initialize it later, when
          actually inserting the avalues. TODO: this two-phase initialization is
@@ -1548,7 +1549,8 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
           AbsId.Set.is_empty abs.parents
           (* Check if it contains non-ignored loans *)
           && Option.is_none
-               (InterpBorrowsCore.get_first_non_ignored_aloan_in_abs span abs))
+               (InterpBorrowsCore.get_first_non_ignored_aloan_in_abs span abs 0
+                  (-1)))
         !abs_ids
     in
     (* Check if there are abstractions to end *)
@@ -1556,8 +1558,11 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
       (* Update the reference to the list of asbtraction ids, for the recursive calls *)
       abs_ids := with_loans_abs;
       (* End the abstractions which can be ended *)
-      let no_loans_abs = AbsId.Set.of_list no_loans_abs in
-      let ctx, cc = InterpBorrows.end_abss config span no_loans_abs ctx in
+      let no_loans_abs =
+        AbsIdWithLevelSet.of_list
+          (List.map (fun abs_id -> { abs_id; level = 0 }) no_loans_abs)
+      in
+      let ctx, cc = InterpBorrows.end_abs_set config span no_loans_abs ctx in
       (* Recursive call *)
       comp cc (end_abs_with_no_loans ctx))
     else (* No abstractions to end: continue *)

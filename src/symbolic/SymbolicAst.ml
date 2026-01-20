@@ -90,6 +90,7 @@ class ['self] iter_expr_base =
     method visit_call : 'env -> call -> unit = fun _ _ -> ()
     method visit_mplace : 'env -> mplace -> unit = fun _ _ -> ()
     method visit_emeta : 'env -> emeta -> unit = fun _ _ -> ()
+    method visit_abs_level : 'env -> abs_level -> unit = fun _ _ -> ()
 
     method visit_region_group_id_map :
         'a. ('env -> 'a -> unit) -> 'env -> 'a region_group_id_map -> unit =
@@ -140,12 +141,11 @@ type expr =
           to look up the shared values in the context). *)
   | Panic
   | FunCall of call * expr
-  | EndAbs of (Contexts.eval_ctx[@opaque]) * abs * expr
+  | EndAbs of (Contexts.eval_ctx[@opaque]) * abs * abs_level * expr
       (** The context is the evaluation context upon ending the abstraction,
           just after we removed the abstraction from the context.
 
-          The context is the evaluation context from after evaluating the
-          asserted value. It has the same purpose as for the {!Return} case. *)
+          The integer is the level of the sub-abstraction that we ended. *)
   | EvalGlobal of global_decl_id * generic_args * symbolic_value * expr
       (** Evaluate a global to a fresh symbolic value *)
   | Assertion of (Contexts.eval_ctx[@opaque]) * tvalue * expr
