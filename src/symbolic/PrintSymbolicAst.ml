@@ -74,7 +74,7 @@ let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
       let sv = Values.symbolic_value_to_string env sv in
       let v = value_aggregate_to_string env v in
       let next = expr_to_string env indent indent_incr next in
-      indent ^ "let " ^ sv ^ " = " ^ v ^ "in\n" ^ next
+      indent ^ "let " ^ sv ^ " = " ^ v ^ " in\n" ^ next
   | SubstituteAbsIds (aids, next) ->
       let aids = AbsId.Map.to_string None AbsId.to_string aids in
       let next = expr_to_string env indent indent_incr next in
@@ -166,7 +166,7 @@ and expansion_to_string (env : fmt_env) (indent : string) (indent_incr : string)
       let next = expr_to_string env indent indent_incr next in
       indent ^ "let "
       ^ Values.symbolic_expansion_to_string env ty se
-      ^ " = " ^ scrut ^ "in\n" ^ next
+      ^ " = " ^ scrut ^ " in\n" ^ next
   | ExpandAdt branches ->
       let branch_to_string
           ((variant_id, svl, branch) :
