@@ -145,12 +145,13 @@ let internal_error (file : string) (line : int) (span : Meta.span) =
 
 let warn_opt_span (file : string) (line : int) (span : Meta.span option)
     (msg : string) =
-  if !Config.warnings_as_errors then
-    craise_opt_span file line span
-      (msg ^ "\nYou can deactivate this error with the option -soft-warnings")
+  if !Config.warnings_as_errors then craise_opt_span file line span msg
   else
     let msg = format_error_message_with_file_line file line span msg in
     log#swarning (msg ^ "\n")
+
+let warn (file : string) (line : int) (span : Meta.span) (msg : string) =
+  warn_opt_span file line (Some span) msg
 
 let cassert_warn_opt_span (file : string) (line : int) (span : Meta.span option)
     (b : bool) (msg : string) =

@@ -1,5 +1,7 @@
 //@ [lean] known-failure
 //@ [!lean] skip
+//@ [lean] aeneas-args=-warnings-as-errors
+
 pub trait Trait1 {
     type T: Trait2;
 }

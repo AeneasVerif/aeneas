@@ -734,7 +734,7 @@ def TypeInfo.toExtract (info : TypeInfo) : MessageData :=
   let keepParams :=
     match info.keepParams with
     | none => m!""
-    | some keepParams => m!" ~keep_params:{listToString keepParams}"
+    | some keepParams => m!" ~keep_params:(Some {listToString keepParams})"
   let prefixVariantNames :=
     if info.prefixVariantNames then m!"" else m!" ~prefix_variant_names:false"
   let body :=

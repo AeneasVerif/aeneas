@@ -1,11 +1,7 @@
 [[92mInfo[39m ] Imported: tests/llbc/mutually_recursive_traits.llbc
-[[93mWarn[39m ] Aeneas__SymbolicToPure.translate_trait_decl, line 206:
-Found an associated type in a trait declaration; trait associated types are usually lifted to become parameters of the trait definition, but this can fail with mutually-recursive traits as well as GATs. Aeneas cannot handle such types today, and the generated code will likely be incorrect.
+[[91mError[39m] Found an associated type in a trait declaration; trait associated types are usually lifted to become parameters of the trait definition, but this can fail with mutually-recursive traits as well as GATs. Aeneas cannot handle such types today, and the generated code will likely be incorrect.
 Trait declaration: mutually_recursive_traits::Trait1
-Source: Source: 'tests/src/mutually-recursive-traits.rs', lines 3:0-5:1
-
-[[91mError[39m] Mutually recursive trait declarations are not supported; found the following group of mutually recursive traits:
-'mutually_recursive_traits::Trait1', source: 'tests/src/mutually-recursive-traits.rs', lines 3:0-5:1
-'mutually_recursive_traits::Trait2', source: 'tests/src/mutually-recursive-traits.rs', lines 7:0-7:27
-Compiler source: Translate.ml, line 980
+Source: Source: 'tests/src/mutually-recursive-traits.rs', lines 5:0-7:1
+Source: 'tests/src/mutually-recursive-traits.rs', lines 5:0-7:1
+Compiler source: symbolic/SymbolicToPure.ml, line 206
 
