@@ -537,7 +537,9 @@ module Values = struct
           tevalue_to_string ~span env aenv indent1 indent_incr bound
         in
         let aenv, pat = tepat_to_string ~span env aenv indent indent_incr pat in
-        let next = tevalue_to_string ~span env aenv indent indent_incr next in
+        let next =
+          tevalue_to_string ~span ~with_ended env aenv indent indent_incr next
+        in
         "let " ^ pat ^ " ="
         ^ RegionId.Set.to_string None regions
         ^ "\n" ^ indent1 ^ bound ^ "\n" ^ indent ^ "in\n" ^ indent ^ next
@@ -554,7 +556,8 @@ module Values = struct
     | EApp (f, args) ->
         let args =
           List.map
-            (tevalue_to_string ~span env aenv (indent ^ indent_incr) indent_incr)
+            (tevalue_to_string ~span ~with_ended env aenv (indent ^ indent_incr)
+               indent_incr)
             args
         in
         let f = abs_fun_to_string f in
@@ -562,7 +565,7 @@ module Values = struct
     | EAdt av ->
         let fields =
           List.map
-            (tevalue_to_string ~span env aenv indent indent_incr)
+            (tevalue_to_string ~span ~with_ended env aenv indent indent_incr)
             av.fields
         in
         adt_to_string span env
