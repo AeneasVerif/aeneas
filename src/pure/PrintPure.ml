@@ -713,14 +713,14 @@ let back_sg_info_to_string (env : fmt_env) (info : back_sg_info) : string =
   in
   "{ inputs = " ^ inputs_to_string inputs ^ "; outputs = ["
   ^ String.concat "," (List.map (ty_to_string env false) outputs)
-  ^ "; output_names = ["
+  ^ "]; output_names = ["
   ^ String.concat ","
       (List.map
          (function
            | None -> "_"
            | Some n -> n)
          output_names)
-  ^ "; effect_info = "
+  ^ "]; effect_info = "
   ^ show_fun_effect_info effect_info
   ^ "; filter = "
   ^ Print.bool_to_string filter
@@ -734,7 +734,7 @@ let decomposed_fun_type_to_string (env : fmt_env) (sg : decomposed_fun_type) :
   ^ ";\n  fwd_output = "
   ^ ty_to_string env false fwd_output
   ^ ";\n  back_sg = "
-  ^ RegionGroupId.Map.to_string None (back_sg_info_to_string env) back_sg
+  ^ RegionGroupId.Map.to_string (Some "  ") (back_sg_info_to_string env) back_sg
   ^ ";\n  fwd_info = " ^ show_fun_sig_info fwd_info ^ "\n}"
 
 let trait_type_constraint_to_string (env : fmt_env) (c : trait_type_constraint)
