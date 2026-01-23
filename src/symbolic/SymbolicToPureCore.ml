@@ -376,6 +376,11 @@ let fun_sig_to_string (ctx : bs_ctx) (sg : fun_sig) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
   PrintPure.fun_sig_to_string env sg
 
+let decomposed_fun_sig_to_string (ctx : bs_ctx) (sg : decomposed_fun_sig) :
+    string =
+  let env = bs_ctx_to_pure_fmt_env ctx in
+  PrintPure.decomposed_fun_sig_to_string env sg
+
 let fun_decl_to_string (ctx : bs_ctx) (def : Pure.fun_decl) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
   PrintPure.fun_decl_to_string env def
