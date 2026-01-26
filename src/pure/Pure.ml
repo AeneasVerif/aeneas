@@ -1430,10 +1430,10 @@ type fun_sig_info = {
 [@@deriving show]
 
 type back_sg_info = {
-  inputs : (string option * ty) list;
-      (** The additional inputs of the backward function *)
-  outputs : ty list;
-      (** The "decomposed" list of outputs.
+  inputs : (string option * ty) list list;
+      (** The inputs of the backward function, level by level. *)
+  outputs : (string option * ty) list list;
+      (** The "decomposed" list of outputs, level by level.
 
           The list contains all the types of all the given back values (there is
           at most one type per forward input argument).
@@ -1449,9 +1449,6 @@ type back_sg_info = {
           Non-decomposed ouputs (if the function can fail, but is not stateful):
           - [result T]
           - [[result (T * T)]] *)
-  output_names : string option list;
-      (** The optional names for the backward outputs. We derive those from the
-          names of the inputs of the original LLBC function. *)
   effect_info : fun_effect_info;
   filter : bool;  (** Should we filter this backward function? *)
 }

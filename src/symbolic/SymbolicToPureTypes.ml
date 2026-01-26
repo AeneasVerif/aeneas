@@ -362,109 +362,72 @@ let ctx_translate_fwd_generic_args (ctx : bs_ctx) (generics : T.generic_args) :
   let type_infos = ctx.type_ctx.type_infos in
   translate_fwd_generic_args (Some ctx.span) type_infos generics
 
-(** Translate the output type of a backward function, for some given region
-    group.
-
-    We return an option, because the translated type may be empty.
-
-    [inside_mut]: are we inside a mutable borrow? *)
-let translate_back_output_ty_aux (span : Meta.span option)
-    (decls_ctx : C.decls_ctx) (type_infos : type_infos)
-    (keep_region : T.region -> bool) (inside_mut_level : int) (ty : T.ty) :
-    ty option =
-  (* inside_mut_level: keeps track of the nesting level. We only count the
-     ancestor regions and the current regions (not the inner regions) *)
-  let rec translate (inside_mut_level : int) (inside_same_mut_level : int)
-      (ty : T.ty) : ty option =
-    [%cassert_opt_span] span (inside_mut_level <= 2) "Unimplemented";
+(** Compute the *number* of levels of sub-abstractions existing for a given
+    region type. *)
+let compute_back_ty_num_levels (span : Meta.span option)
+    (decls_ctx : C.decls_ctx) (get_region_group : T.region -> T.region_group_id)
+    (gid : T.region_group_id) (ty : T.ty) : int =
+  let type_infos = decls_ctx.type_ctx.type_infos in
+  let keep_region r = gid = get_region_group r in
+  let max_level = ref 0 in
+  let save_count (outer_regions : T.RegionGroupId.Set.t) =
+    let n = T.RegionGroupId.Set.cardinal outer_regions in
+    if !max_level < n then max_level := n
+  in
+  (* outer_regions: whenever we dive into a borrow for a given region group, we push
+     the region group to remember it - this allows us to track the nesting level. *)
+  let rec explore (outer_regions : T.RegionGroupId.Set.t) (ty : T.ty) : unit =
     [%ldebug
       let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
-      "Exploring: "
+      "Exploring (group id: "
+      ^ T.RegionGroupId.to_string gid
+      ^ "): "
       ^ Print.Types.ty_to_string ctx ty
-      ^ "\n- inside_mut_level: "
-      ^ string_of_int inside_mut_level
-      ^ "\n- inside_same_mut_level: "
-      ^ string_of_int inside_same_mut_level];
-    let keep_ty ty =
-      (inside_mut_level > 0 && inside_same_mut_level = 1)
-      || TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos keep_region
-           ty
-    in
-    let ignore_ty ty = not (keep_ty ty) in
-    (* A small helper for "leave" types *)
-    let wrap ty =
-      if inside_mut_level > 0 && inside_same_mut_level = 1 then Some ty
-      else None
-    in
+      ^ "\n- outer_regions: "
+      ^ T.RegionGroupId.Set.to_string None outer_regions];
     match ty with
     | T.TAdt { id; generics } -> (
         match id with
-        | (TAdtId _ | TBuiltin TStr) when ignore_ty ty -> None
-        | TAdtId _ | TBuiltin TStr ->
-            (* If not inside a mutable reference: check if the type contains
-               a mutable reference (through one of its generics, inside
-               its definition, etc.).
-               If yes, keep the whole type, and translate all the generics as
-               "forward" types (the backward function will extract the proper
-               information from the ADT value).
-          *)
-            let type_id = translate_type_id span id in
-            let generics =
-              translate_fwd_generic_args span type_infos generics
+        | TAdtId _ ->
+            (* Analyze the type *)
+            let info = TypesAnalysis.analyze_ty span type_infos ty in
+            (* TODO: we need to extend the type analysis to count the level
+               of nesting inside of ADTs with regions. For now we forbid using
+               nested mutable borrows inside of ADTs. *)
+            [%cassert_opt_span] span
+              (not info.contains_nested_mut)
+              "Unimplemented";
+            (* Check if the region appears somewhere *)
+            let outer_regions =
+              if
+                TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
+                  keep_region ty
+              then T.RegionGroupId.Set.add gid outer_regions
+              else outer_regions
             in
-            Some (TAdt (type_id, generics))
+            save_count outer_regions
+        | TBuiltin TStr -> save_count outer_regions
         | TBuiltin TBox -> (
             (* Eliminate the box *)
             match generics.types with
-            | [ bty ] -> translate inside_mut_level inside_same_mut_level bty
+            | [ bty ] -> explore outer_regions bty
             | _ ->
                 [%craise_opt_span] span
                   "Unreachable: boxes receive exactly one type parameter")
-        | TTuple -> (
-            if inside_same_mut_level > 0 then
-              (* We do not filter anything *)
-              let tys_t =
-                List.map (translate_fwd_ty span type_infos) generics.types
-              in
-              Some (mk_simpl_tuple_ty tys_t)
-            else
-              (* Tuples can contain borrows (which we eliminate) *)
-              let tys_t =
-                List.filter_map
-                  (translate inside_mut_level inside_same_mut_level)
-                  generics.types
-              in
-              match tys_t with
-              | [] -> None
-              | _ ->
-                  (* Note that if there is exactly one type, [mk_simpl_tuple_ty]
-                   * is the identity *)
-                  Some (mk_simpl_tuple_ty tys_t)))
-    | (T.TArray _ | T.TSlice _)
-      when ignore_ty ty (* Same check as the ADT case *) -> None
-    | T.TArray (ty, len) ->
-        let ty = translate_fwd_ty span type_infos ty in
-        let generics =
-          { types = [ ty ]; const_generics = [ len ]; trait_refs = [] }
-        in
-        Some (TAdt (TBuiltin TArray, generics))
-    | T.TSlice ty ->
-        let ty = translate_fwd_ty span type_infos ty in
-        let generics =
-          { types = [ ty ]; const_generics = []; trait_refs = [] }
-        in
-        Some (TAdt (TBuiltin TSlice, generics))
-    | TVar var -> wrap (TVar var)
-    | TNever -> wrap TNever
-    | TLiteral lty -> wrap (TLiteral lty)
+        | TTuple -> List.iter (explore outer_regions) generics.types)
+    | T.TArray (ty, _) | T.TSlice ty -> explore outer_regions ty
+    | TVar _ | TNever | TLiteral _ -> save_count outer_regions
     | TRef (r, rty, rkind) -> (
         match rkind with
         | RShared ->
-            (* Ignore shared references, unless we are below a mutable borrow *)
-            (* TODO: check regions like in the mutable case *)
-            if inside_same_mut_level = 1 then
-              translate inside_mut_level inside_same_mut_level rty
-            else None
+            (* Stop here *)
+            (* We just check there are no mutable references below the shared reference *)
+            [%cassert_opt_span] span
+              (not
+                 (TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
+                    keep_region rty))
+              "Unimplemented";
+            save_count outer_regions
         | RMut ->
             [%ldebug "RMut"];
             (* Dive in, remembering the fact that we are inside a mutable borrow.
@@ -480,40 +443,25 @@ let translate_back_output_ty_aux (span : Meta.span option)
               "- is_ancestor_region: "
               ^ string_of_bool is_ancestor_region
               ^ "\n- keep_region: " ^ string_of_bool keep];
-            if is_ancestor_region || keep then
-              (* If we were already inside a mutable reference for the same lifetime, it means
-                 the given back value is bottom (we are inside a nested borrow, and the inner
-                 borrow has the same lifetime as the outer borrow).
-
-                 TODO: check level of nesting for ancestor regions when we dive into
-                 borrows with the same lifetime. *)
-              if keep && inside_same_mut_level > 0 then None
-              else (
-                [%ldebug "inside_mut_level: " ^ string_of_int inside_mut_level];
-                [%cassert_opt_span] span
-                  (-1 <= inside_mut_level && inside_mut_level <= 1)
-                  "Unimplemented";
-                let inside_mut_level = inside_mut_level + 1 in
-                let inside_same_mut_level =
-                  if keep then inside_same_mut_level + 1
-                  else inside_same_mut_level
-                in
-                translate inside_mut_level inside_same_mut_level rty)
-            else if inside_same_mut_level = 1 then
-              translate inside_mut_level inside_same_mut_level rty
-            else None)
+            if keep then
+              (* Stop there, but save the region *)
+              save_count (T.RegionGroupId.Set.add gid outer_regions)
+            else if is_ancestor_region then
+              (* Continue, but save the region *)
+              let outer_regions =
+                T.RegionGroupId.Set.add (get_region_group r) outer_regions
+              in
+              explore outer_regions rty
+            else
+              (* We can stop there *)
+              save_count outer_regions)
     | TRawPtr _ ->
         (* TODO: not sure what to do here *)
-        None
-    | TTraitType (trait_ref, type_name) ->
+        save_count outer_regions
+    | TTraitType (trait_ref, _) ->
         [%sanity_check_opt_span] span
           (TypesUtils.trait_ref_kind_is_local_clause_or_builtin trait_ref.kind);
-        if inside_mut_level > 0 then
-          (* Translate the trait ref as a "forward" trait ref -
-           we do not want to filter any type *)
-          let trait_ref = translate_fwd_trait_ref span type_infos trait_ref in
-          Some (TTraitType (trait_ref, type_name))
-        else None
+        save_count outer_regions
     | TFnDef _ | TFnPtr _ ->
         [%craise_opt_span] span "Arrow types are not supported yet"
     | TDynTrait _ ->
@@ -522,34 +470,183 @@ let translate_back_output_ty_aux (span : Meta.span option)
     | TError _ ->
         [%craise_opt_span] span "Found type error in the output of charon"
   in
-  let inside_same_mut_level = 0 in
-  translate inside_mut_level inside_same_mut_level ty
+  explore T.RegionGroupId.Set.empty ty;
+  !max_level
+
+(** Auxiliary function to compute the type consumed or given back by a backward
+    function.
+
+    We leverage the fact that we can factor out the logic in one place (the
+    consumed type and the given back type derive from the nesting level in more
+    or less the same way). *)
+let translate_back_ty_aux (span : Meta.span option) (decls_ctx : C.decls_ctx)
+    (get_region_group : T.region -> T.region_group_id) (gid : T.region_group_id)
+    (level : int) (ty : T.ty) : ty option =
+  let type_infos = decls_ctx.type_ctx.type_infos in
+  let keep_region r = gid = get_region_group r in
+  let keep (outer_regions : T.RegionGroupId.Set.t) : bool =
+    T.RegionGroupId.Set.cardinal outer_regions > level
+  in
+  let stop (outer_regions : T.RegionGroupId.Set.t) (ty : T.ty) : ty option =
+    if keep outer_regions then Some (translate_fwd_ty span type_infos ty)
+    else None
+  in
+  let keep_adt (outer_regions : T.RegionGroupId.Set.t) (ty : T.ty) : bool =
+    (* Analyze the type *)
+    let info = TypesAnalysis.analyze_ty span type_infos ty in
+    (* TODO: we need to extend the type analysis to count the level
+         of nesting inside of ADTs with regions. For now we forbid using
+         nested mutable borrows inside of ADTs. *)
+    [%cassert_opt_span] span (not info.contains_nested_mut) "Unimplemented";
+    (* Check if the region appears somewhere *)
+    let outer_regions =
+      if
+        TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos keep_region
+          ty
+      then T.RegionGroupId.Set.add gid outer_regions
+      else outer_regions
+    in
+    (* *)
+    keep outer_regions
+  in
+  (* inside_mut_level: keeps track of the nesting level. We only count the
+     ancestor regions and the current regions (not the inner regions) *)
+  let rec explore (outer_regions : T.RegionGroupId.Set.t) (ty : T.ty) :
+      ty option =
+    [%ldebug
+      let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
+      "Exploring: "
+      ^ Print.Types.ty_to_string ctx ty
+      ^ "\n- outer_regions: "
+      ^ T.RegionGroupId.Set.to_string None outer_regions];
+    match ty with
+    | T.TAdt { id = TTuple; generics } -> (
+        (* Tuples can contain borrows (which we eliminate).
+
+         Note that no borrow gets eliminated if we are already inside a
+         mutable borrow, at the proper level. *)
+        let tys_t = List.filter_map (explore outer_regions) generics.types in
+        match tys_t with
+        | [] -> None
+        | _ ->
+            (* Note that if there is exactly one type, [mk_simpl_tuple_ty]
+             * is the identity *)
+            Some (mk_simpl_tuple_ty tys_t))
+    | T.TAdt { id; generics } when keep_adt outer_regions ty -> (
+        match id with
+        | TAdtId _ ->
+            (* The type should contain a mutable reference for the proper
+             level: translate it as a forward type *)
+            let type_id = translate_type_id span id in
+            let generics =
+              translate_fwd_generic_args span type_infos generics
+            in
+            Some (TAdt (type_id, generics))
+        | TBuiltin TStr -> stop outer_regions ty
+        | TBuiltin TBox -> (
+            (* Eliminate the box *)
+            match generics.types with
+            | [ bty ] -> explore outer_regions bty
+            | _ ->
+                [%craise_opt_span] span
+                  "Unreachable: boxes receive exactly one type parameter")
+        | TTuple -> [%internal_error_opt_span] span)
+    | T.TAdt _ -> None
+    | T.TArray _ | T.TSlice _ ->
+        if keep_adt outer_regions ty then
+          Some (translate_fwd_ty span type_infos ty)
+        else None
+    | TVar _ | TNever | TLiteral _ -> stop outer_regions ty
+    | TRef (r, rty, rkind) -> (
+        match rkind with
+        | RShared ->
+            (* Ignore shared references, unless we are below a mutable borrow *)
+            (* TODO: check regions like in the mutable case *)
+            stop outer_regions ty
+        | RMut ->
+            [%ldebug "RMut"];
+            (* Dive in, remembering the fact that we are inside a mutable borrow.
+
+               Note that we dive in if it is a region to keep, or if it is an ancestor
+               region (it is if it contains a type with a region to keep). *)
+            let is_ancestor_region =
+              TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
+                keep_region rty
+            in
+            let keep = keep_region r in
+            [%ldebug
+              "- is_ancestor_region: "
+              ^ string_of_bool is_ancestor_region
+              ^ "\n- keep_region: " ^ string_of_bool keep];
+            if is_ancestor_region then
+              (* Dive *)
+              let outer_regions =
+                T.RegionGroupId.Set.add (get_region_group r) outer_regions
+              in
+              explore outer_regions rty
+            else if keep then
+              (* We stop here *)
+              let outer_regions =
+                T.RegionGroupId.Set.add (get_region_group r) outer_regions
+              in
+              stop outer_regions rty
+            else None)
+    | TRawPtr _ ->
+        (* TODO: not sure what to do here *)
+        stop outer_regions ty
+    | TTraitType (trait_ref, _) ->
+        [%sanity_check_opt_span] span
+          (TypesUtils.trait_ref_kind_is_local_clause_or_builtin trait_ref.kind);
+        stop outer_regions ty
+    | TFnDef _ | TFnPtr _ ->
+        [%craise_opt_span] span "Arrow types are not supported yet"
+    | TDynTrait _ ->
+        [%craise_opt_span] span "Dynamic trait types are not supported yet"
+    | TPtrMetadata _ -> [%craise_opt_span] span "unsupported: PtrMetadata"
+    | TError _ ->
+        [%craise_opt_span] span "Found type error in the output of charon"
+  in
+  explore T.RegionGroupId.Set.empty ty
+
+(** Compute the number of levels required to translate a signature *)
+let compute_back_tys_num_levels (span : Meta.span option)
+    (decls_ctx : C.decls_ctx) (get_region_group : T.region -> T.region_group_id)
+    (gid : T.region_group_id) (inputs : T.ty list) (output : T.ty) : int =
+  let max x y = if x > y then x else y in
+  let max_inputs = ref 0 in
+  List.iter
+    (fun ty ->
+      let n =
+        compute_back_ty_num_levels span decls_ctx get_region_group gid ty
+      in
+      max_inputs := max n !max_inputs)
+    inputs;
+  let output =
+    compute_back_ty_num_levels span decls_ctx get_region_group gid output
+  in
+  max !max_inputs output
 
 let translate_back_output_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
-    (type_infos : type_infos) (keep_region : T.region -> bool)
-    ~(from_input : bool) (ty : T.ty) : ty option =
-  let inside_mut_level = if from_input then 0 else -1 in
-  translate_back_output_ty_aux span decls_ctx type_infos keep_region
-    inside_mut_level ty
+    (get_region_group : T.region -> T.region_group_id) (gid : T.region_group_id)
+    (level : int) ~(from_input : bool) (ty : T.ty) : ty option =
+  if (not from_input) && level = 0 then None
+  else translate_back_ty_aux span decls_ctx get_region_group gid level ty
 
 (** Simply calls [translate_back_ty] *)
-let ctx_translate_back_output_ty (ctx : bs_ctx) (keep_region : 'r -> bool)
-    ~(from_input : bool) (ty : T.ty) : ty option =
-  let type_infos = ctx.type_ctx.type_infos in
-  translate_back_output_ty (Some ctx.span) ctx.decls_ctx type_infos keep_region
-    ~from_input ty
+let ctx_translate_back_output_ty (ctx : bs_ctx)
+    (get_region_group : T.region -> T.region_group_id) (gid : T.region_group_id)
+    (level : int) ~(from_input : bool) (ty : T.ty) : ty option =
+  translate_back_output_ty (Some ctx.span) ctx.decls_ctx get_region_group gid
+    level ~from_input ty
 
 (** Translate the input type of a backward function, for a given region group.
 
-    We return an option, because the translated type may be empty.
-
-    [inside_mut]: are we inside a mutable borrow? *)
+    We return an option, because the translated type may be empty. *)
 let translate_back_input_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
-    (type_infos : type_infos) (keep_region : T.region -> bool)
-    ~(from_input : bool) (ty : T.ty) : ty option =
-  let inside_mut_level = if from_input then -1 else 0 in
-  translate_back_output_ty_aux span decls_ctx type_infos keep_region
-    inside_mut_level ty
+    (get_region_group : T.region -> T.region_group_id) (gid : T.region_group_id)
+    (level : int) ~(from_input : bool) (ty : T.ty) : ty option =
+  if from_input && level = 0 then None
+  else translate_back_ty_aux span decls_ctx get_region_group gid level ty
 
 let mk_type_check_ctx (ctx : bs_ctx) : PureTypeCheck.tc_ctx =
   let const_generics =
@@ -648,78 +745,107 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
   (* Compute the backward output, without the effect information *)
   let fwd_output = translate_fwd_ty span type_infos sg.output in
 
+  (* Compute the map from region id to region group id *)
+  let rg_to_gr_id =
+    T.RegionId.Map.of_list
+      (List.flatten
+         (List.map
+            (fun (gr : T.region_var_group) ->
+              List.map (fun rid -> (rid, gr.id)) gr.regions)
+            sg.regions_hierarchy))
+  in
+  let get_region_group (r : T.region) : T.RegionGroupId.id =
+    match r with
+    | T.RStatic -> [%craise_opt_span] span "Unimplemented: static region"
+    | RErased -> [%craise_opt_span] span "Unexpected erased region"
+    | RVar (Bound _ as var) ->
+        [%craise_opt_span] span
+          ("Unexpected bound region: "
+          ^ Charon.PrintTypes.region_db_var_to_pretty_string var)
+    | RBody _ -> [%craise_opt_span] None "unsupported: Body region"
+    | RVar (Free rid) -> (
+        match T.RegionId.Map.find_opt rid rg_to_gr_id with
+        | Some gr -> gr
+        | None -> [%internal_error_opt_span] span)
+  in
+
   (* Compute the type information for the backward function *)
   (* Small helper to translate types for backward functions.
-     - [input] controls whether we compute an input type or an output type.
+     - [to_input] controls whether we compute an input type or an output type.
      - [from_input] should be [true] if we compute from a type of an input argument,
        and [false] if we compute from the output type of the function. *)
-  let translate_back_input_or_output_ty_for_gid ~(input : bool)
-      ~(from_input : bool) (gid : T.RegionGroupId.id) (ty : T.ty) : ty option =
-    let rg = T.RegionGroupId.nth sg.regions_hierarchy gid in
-    (* Compute the set of regions belonging to this group *)
-    let gr_regions = T.RegionId.Set.of_list rg.regions in
-    let region_is_in_group (set : T.RegionId.Set.t) (r : T.region) : bool =
-      match r with
-      | T.RStatic -> [%craise_opt_span] span "Unimplemented: static region"
-      | RErased -> [%craise_opt_span] span "Unexpected erased region"
-      | RVar (Bound _ as var) ->
-          [%craise_opt_span] span
-            ("Unexpected bound region: "
-            ^ Charon.PrintTypes.region_db_var_to_pretty_string var)
-      | RBody _ -> [%craise_opt_span] None "unsupported: Body region"
-      | RVar (Free rid) -> T.RegionId.Set.mem rid set
+  let translate_back_inputs_or_outputs_for_gid ~(to_input : bool)
+      (gid : T.RegionGroupId.id) : (string option * ty) list list =
+    (* Translate the inputs level by level, starting with the highest level *)
+    let num_levels =
+      compute_back_tys_num_levels span decls_ctx get_region_group gid sg.inputs
+        sg.output
     in
-    let keep_region = region_is_in_group gr_regions in
-    if input then
-      translate_back_input_ty span decls_ctx type_infos keep_region ~from_input
-        ty
-    else
-      translate_back_output_ty span decls_ctx type_infos keep_region ~from_input
-        ty
+    let translate_ty ~from_input level =
+      if to_input then
+        translate_back_input_ty span decls_ctx get_region_group gid level
+          ~from_input
+      else
+        translate_back_output_ty span decls_ctx get_region_group gid level
+          ~from_input
+    in
+    let translate_level (level : int) : (string option * ty) list option =
+      (* Mutable borrows in input types can only lead to more inputs for the backward function.
+         The dual is true: mutable borrows in output types can only lead to more outputs for
+         the backward function. *)
+      let inputs =
+        if to_input || level = 0 then List.combine input_names sg.inputs else []
+      in
+      let outputs =
+        if (not to_input) || level = 0 then [ (None, sg.output, false) ] else []
+      in
+      let tys =
+        List.filter_map
+          (fun (name, ty, from_input) ->
+            let ty = translate_ty ~from_input level ty in
+            match ty with
+            | None -> None
+            | Some ty -> Some (name, ty))
+          (List.map (fun (name, ty) -> (name, ty, true)) inputs @ outputs)
+      in
+      match tys with
+      | [] -> None
+      | _ -> Some tys
+    in
+    let rec translate (current_level : int) : (string option * ty) list list =
+      if current_level < 0 then []
+      else
+        let inner = translate (current_level - 1) in
+        match translate_level current_level with
+        | None -> inner
+        | Some ty -> ty :: inner
+    in
+    translate (num_levels - 1)
   in
   (* Memoize the results *)
   let gid_to_back_inputs = ref T.RegionGroupId.Map.empty in
-  let rec translate_back_inputs_for_gid_aux (gid : T.RegionGroupId.id) : ty list
-      =
-    (* Go through the ancestor regions one by one and accumulate their inputs:
-       those become inputs of the current backward function. Note that the region
-       groups are indexed in an ordered way (meaning we can use the ids as ordered
-       by [Set.to_list]). *)
-    let parents = list_ancestor_region_groups sg.regions_hierarchy gid in
-    let parent_inputs =
-      List.map translate_back_inputs_for_gid
-        (T.RegionGroupId.Set.to_list parents)
-    in
-    let parent_inputs =
-      List.filter_map
-        (fun tys -> if tys = [] then None else Some (mk_simpl_tuple_ty tys))
-        parent_inputs
-    in
-    let inputs =
-      List.filter_map
-        (fun (ty, from_input) ->
-          translate_back_input_or_output_ty_for_gid ~input:true ~from_input gid
-            ty)
-        (List.map (fun ty -> (ty, true)) sg.inputs @ [ (sg.output, false) ])
-    in
+  let rec translate_back_inputs_for_gid_aux (gid : T.RegionGroupId.id) :
+      (string option * ty) list list =
+    let inputs = translate_back_inputs_or_outputs_for_gid ~to_input:true gid in
+
     [%ltrace
       let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
       let pctx = PrintPure.decls_ctx_to_fmt_env decls_ctx in
       let output = Print.Types.ty_to_string ctx sg.output in
       let inputs =
-        Print.list_to_string (PrintPure.ty_to_string pctx false) inputs
-      in
-      let parent_inputs =
-        Print.list_to_string (PrintPure.ty_to_string pctx false) parent_inputs
+        Print.list_to_string
+          (Print.list_to_string (fun (_, ty) ->
+               PrintPure.ty_to_string pctx false ty))
+          inputs
       in
       "translate_back_inputs_for_gid:" ^ "\n- function:"
       ^ Charon.PrintTypes.fn_ptr_kind_to_string ctx fun_id
       ^ "\n- gid: "
       ^ RegionGroupId.to_string gid
-      ^ "\n- output: " ^ output ^ "\n- back inputs (current region): " ^ inputs
-      ^ "\n- back inputs (parent regions): " ^ parent_inputs];
-    parent_inputs @ inputs
-  and translate_back_inputs_for_gid (gid : T.RegionGroupId.id) : ty list =
+      ^ "\n- output: " ^ output ^ "\n- back inputs: " ^ inputs];
+    inputs
+  and translate_back_inputs_for_gid (gid : T.RegionGroupId.id) :
+      (string option * ty) list list =
     match T.RegionGroupId.Map.find_opt gid !gid_to_back_inputs with
     | Some tys -> tys
     | None ->
@@ -729,34 +855,10 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
         tys
   in
   let compute_back_outputs_for_gid (gid : RegionGroupId.id) :
-      string option list * ty list =
-    (* The outputs are the borrows inside the regions of the abstractions
-       and which are present in the input values. For instance, see:
-       {[
-         fn f<'a>(x : &'a mut u32) -> ...;
-       ]}
-       Upon ending the abstraction for 'a, we give back the borrow which
-       was consumed through the [x] parameter.
-    *)
+      (string option * ty) list list =
     let outputs =
-      List.map
-        (fun (name, input_ty, from_input) ->
-          ( name,
-            translate_back_input_or_output_ty_for_gid ~input:false ~from_input
-              gid input_ty ))
-        (List.map
-           (fun (name, ty) -> (name, ty, true))
-           (List.combine input_names sg.inputs)
-        @ [ (None, sg.output, false) ])
+      translate_back_inputs_or_outputs_for_gid ~to_input:false gid
     in
-    (* Filter *)
-    let outputs =
-      List.filter (fun (_, opt_ty) -> Option.is_some opt_ty) outputs
-    in
-    let outputs =
-      List.map (fun (name, opt_ty) -> (name, Option.get opt_ty)) outputs
-    in
-    let names, outputs = List.split outputs in
     [%ltrace
       let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
       let pctx = PrintPure.decls_ctx_to_fmt_env decls_ctx in
@@ -764,14 +866,17 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
         Print.list_to_string (Print.Types.ty_to_string ctx) sg.inputs
       in
       let outputs =
-        Print.list_to_string (PrintPure.ty_to_string pctx false) outputs
+        Print.list_to_string
+          (Print.list_to_string (fun (_, ty) ->
+               PrintPure.ty_to_string pctx false ty))
+          outputs
       in
       "compute_back_outputs_for_gid:" ^ "\n- function:"
       ^ Charon.PrintTypes.fn_ptr_kind_to_string ctx fun_id
       ^ "\n- gid: "
       ^ RegionGroupId.to_string gid
       ^ "\n- inputs: " ^ inputs ^ "\n- back outputs: " ^ outputs];
-    (names, outputs)
+    outputs
   in
   let compute_back_info_for_group (rg : T.region_var_group) :
       RegionGroupId.id * back_sg_info =
@@ -780,7 +885,6 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
       compute_raw_fun_effect_info span fun_infos fun_id (Some gid)
     in
     let inputs = translate_back_inputs_for_gid gid in
-    let inputs = List.map (fun ty -> (Some "ret", ty)) inputs in
     (* We consider a backward function as stateful and potentially failing
        **only if it has inputs** (for the "potentially failing": if it has
        not inputs, we directly evaluate it in the body of the forward function).
@@ -806,13 +910,11 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
       let b = inputs <> [] in
       { back_effect_info with can_fail = back_effect_info.can_fail && b }
     in
-    let output_names, outputs = compute_back_outputs_for_gid gid in
+    let outputs = compute_back_outputs_for_gid gid in
     let filter =
       !Config.simplify_merged_fwd_backs && inputs = [] && outputs = []
     in
-    let info =
-      { inputs; outputs; output_names; effect_info = back_effect_info; filter }
-    in
+    let info = { inputs; outputs; effect_info = back_effect_info; filter } in
     (gid, info)
   in
   let back_sg =
@@ -941,8 +1043,16 @@ let compute_back_tys_with_info (dsg : Pure.decomposed_fun_type) :
     (fun (back_sg : back_sg_info) ->
       let effect_info = back_sg.effect_info in
       (* Compute the input/output types *)
-      let inputs = List.map snd back_sg.inputs in
-      let outputs = back_sg.outputs in
+      let inputs =
+        List.map
+          (fun tys -> mk_simpl_tuple_ty (List.map snd tys))
+          back_sg.inputs
+      in
+      let outputs =
+        List.map
+          (fun tys -> mk_simpl_tuple_ty (List.map snd tys))
+          back_sg.outputs
+      in
       (* Filter if necessary *)
       if !Config.simplify_merged_fwd_backs && inputs = [] && outputs = [] then
         None

@@ -701,26 +701,21 @@ let adt_pat_to_string ?(span : Meta.span option) (env : fmt_env)
   snd (adt_pat_to_string_aux span env variant_id fields ty)
 
 let back_sg_info_to_string (env : fmt_env) (info : back_sg_info) : string =
-  let { inputs; outputs; output_names; effect_info; filter } = info in
-  let input_to_string (n, ty) =
+  let { inputs; outputs; effect_info; filter } = info in
+  let ty_to_string (n, ty) =
     (match n with
     | None -> ""
     | Some n -> n ^ ":")
     ^ ty_to_string env false ty
   in
-  let inputs_to_string inputs =
-    "[" ^ String.concat "," (List.map input_to_string inputs) ^ "]"
+  let tys_to_string inputs =
+    "[" ^ String.concat "," (List.map ty_to_string inputs) ^ "]"
   in
-  "{ inputs = " ^ inputs_to_string inputs ^ "; outputs = ["
-  ^ String.concat "," (List.map (ty_to_string env false) outputs)
-  ^ "]; output_names = ["
-  ^ String.concat ","
-      (List.map
-         (function
-           | None -> "_"
-           | Some n -> n)
-         output_names)
-  ^ "]; effect_info = "
+  "{ inputs = "
+  ^ Print.list_to_string tys_to_string inputs
+  ^ "; outputs = "
+  ^ Print.list_to_string tys_to_string outputs
+  ^ "; effect_info = "
   ^ show_fun_effect_info effect_info
   ^ "; filter = "
   ^ Print.bool_to_string filter

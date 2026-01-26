@@ -696,20 +696,28 @@ and translate_cast_unsize (call : S.call) (e : S.expr) (ty0 : T.ty) (ty1 : T.ty)
 and translate_end_abs (ectx : C.eval_ctx) (abs : V.abs)
     (abs_level : V.abs_level) (e : S.expr) (ctx : bs_ctx) : texpr =
   [%ltrace "abstraction kind: " ^ V.show_abs_kind abs.kind];
-  [%cassert] ctx.span (abs_level = 0) "Unimplemented";
   match abs.kind with
   | V.SynthInput rg_id ->
-      translate_end_abstraction_synth_input ectx abs e ctx rg_id
+      translate_end_abstraction_synth_input ectx abs e ctx rg_id abs_level
   | V.FunCall (call_id, _) ->
+      [%cassert] ctx.span (abs_level = 0) "Unimplemented";
       translate_end_abstraction_fun_call ectx abs e call_id ctx
-  | V.SynthRet rg_id -> translate_end_abstraction_synth_ret ectx abs e ctx rg_id
-  | V.Loop _ | V.Join -> translate_end_abstraction_join_or_loop ectx abs e ctx
-  | V.WithCont -> translate_end_abstraction_with_cont ectx abs e ctx
+  | V.SynthRet rg_id ->
+      [%cassert] ctx.span (abs_level = 0) "Unimplemented";
+      translate_end_abstraction_synth_ret ectx abs e ctx rg_id
+  | V.Loop _ | V.Join ->
+      [%cassert] ctx.span (abs_level = 0) "Unimplemented";
+      translate_end_abstraction_join_or_loop ectx abs e ctx
+  | V.WithCont ->
+      [%cassert] ctx.span (abs_level = 0) "Unimplemented";
+      translate_end_abstraction_with_cont ectx abs e ctx
   | V.Identity | V.CopySymbolicValue ->
+      [%cassert] ctx.span (abs_level = 0) "Unimplemented";
       translate_end_abs_identity ectx abs e ctx
 
 and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
-    (e : S.expr) (ctx : bs_ctx) (rg_id : T.RegionGroupId.id) : texpr =
+    (e : S.expr) (ctx : bs_ctx) (rg_id : T.RegionGroupId.id)
+    (abs_level : V.abs_level) : texpr =
   [%ltrace
     "- function: "
     ^ name_to_string ctx ctx.fun_decl.item_meta.name
@@ -724,59 +732,82 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
      values: by listing those values, we get the values which are given
      back by one of the backward functions we are synthesizing.
 
-     Note that we don't support nested borrows for now: if we find
-     an ended synthesized input abstraction, it must be the one corresponding
-     to the backward function wer are synthesizing, it can't be the one
-     for a parent backward function.
-  *)
+     Note that in the case of nested borrows we might have to end synthesis
+     input abstractions when synthesizing a different backward function. *)
   let bid = Option.get ctx.bid in
 
-  (* First, introduce the given back variables. *)
-  let ctx, given_back_variables =
-    let back_sg = RegionGroupId.Map.find bid ctx.sg.fun_ty.back_sg in
-    let vars = List.combine back_sg.output_names back_sg.outputs in
-    let ctx, vars = fresh_vars vars ctx in
-    ({ ctx with backward_outputs = Some vars }, vars)
-  in
+  if rg_id = bid then (
+    [%cassert] ctx.span (abs_level = 0) "Unimplemented";
+    (* First, introduce the given back variables.
 
-  (* Get the list of values consumed by the abstraction upon ending *)
-  let consumed_values = abs_to_consumed ctx ectx abs in
+       For every consumed value we introduce a fresh variables and a let-binding:
+       {[
+         let x0 = v0 in
+         let x1 = v1 in
+         ...
+       ]}
+       We also update the context to store these fresh variables.
+       Upon reaching the [return], we simply output a tuple grouping those
+       variables:
+       {[
+         (x0, x1, ...)
+       ]}
+    *)
+    let ctx, given_back_variables =
+      let back_sg = RegionGroupId.Map.find rg_id ctx.sg.fun_ty.back_sg in
+      (* TODO: generalize *)
+      match back_sg.outputs with
+      | [] -> ({ ctx with backward_outputs = Some [] }, [])
+      | [ outputs ] ->
+          let ctx, vars = fresh_vars outputs ctx in
+          ({ ctx with backward_outputs = Some vars }, vars)
+      | _ -> [%craise] ctx.span "Unimplemented"
+    in
 
-  [%ltrace
-    "\n- given back variables types:\n"
-    ^ Print.list_to_string
-        (fun (v : fvar) -> pure_ty_to_string ctx v.ty)
-        given_back_variables
-    ^ "\n\n- consumed values:\n"
-    ^ Print.list_to_string
-        (fun e -> texpr_to_string ctx e ^ " : " ^ pure_ty_to_string ctx e.ty)
-        consumed_values];
-  (* TODO: generalize this. The backward functions of the short-lived regions
-     will introduce the backward functions of the long-lived regions.
-   *)
-  [%sanity_check] ctx.span
-    ((given_back_variables = [] && consumed_values = []) || rg_id = bid);
+    (* Get the list of values consumed by the abstraction upon ending *)
+    let consumed_values = abs_to_consumed ctx ectx abs in
 
-  (* Prepare the let-bindings by introducing a match if necessary *)
-  let given_back_variables =
-    List.map (mk_tpat_from_fvar None) given_back_variables
-  in
-  [%sanity_check] ctx.span
-    (List.length given_back_variables = List.length consumed_values);
-  let variables_values = List.combine given_back_variables consumed_values in
+    [%ltrace
+      "\n- given back variables types:\n"
+      ^ Print.list_to_string
+          (fun (v : fvar) -> pure_ty_to_string ctx v.ty)
+          given_back_variables
+      ^ "\n\n- consumed values:\n"
+      ^ Print.list_to_string
+          (fun e -> texpr_to_string ctx e ^ " : " ^ pure_ty_to_string ctx e.ty)
+          consumed_values];
+    (* TODO: generalize this. The backward functions of the short-lived regions
+     will introduce the backward functions of the long-lived regions. *)
+    [%sanity_check] ctx.span
+      ((given_back_variables = [] && consumed_values = []) || rg_id = bid);
 
-  (* Sanity check: the two lists match (same types) *)
-  (* TODO: normalize the types *)
-  if !Config.type_check_pure_code then
-    List.iter
-      (fun (var, v) ->
-        [%sanity_check] ctx.span ((var : tpat).ty = (v : texpr).ty))
-      variables_values;
-  (* Translate the next expression *)
-  let next_e = translate_expr e ctx in
-  (* Generate the assignemnts *)
-  let monadic = false in
-  mk_closed_checked_lets __FILE__ __LINE__ ctx monadic variables_values next_e
+    (* Prepare the let-bindings *)
+    let given_back_variables =
+      List.map (mk_tpat_from_fvar None) given_back_variables
+    in
+    [%sanity_check] ctx.span
+      (List.length given_back_variables = List.length consumed_values);
+    let variables_values = List.combine given_back_variables consumed_values in
+
+    (* Sanity check: the two lists match (same types) *)
+    (* TODO: normalize the types *)
+    if !Config.type_check_pure_code then
+      List.iter
+        (fun (var, v) ->
+          [%sanity_check] ctx.span ((var : tpat).ty = (v : texpr).ty))
+        variables_values;
+    (* Translate the next expression *)
+    let next_e = translate_expr e ctx in
+    (* Generate the assignemnts *)
+    let monadic = false in
+    mk_closed_checked_lets __FILE__ __LINE__ ctx monadic variables_values next_e)
+  else
+    (* Check that the region abstraction only consumes values but does not output any *)
+    let ctx, outputs = abs_to_given_back None abs ctx in
+    [%cassert] ctx.span (outputs = []) "Unimplemented";
+
+    (* No outputs: we can ignore it *)
+    translate_expr e ctx
 
 and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
     (e : S.expr) (call_id : V.fun_call_id) (ctx : bs_ctx) : texpr =
@@ -1269,17 +1300,22 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
           (ctx, fwd_e, fun e -> e)
       | Some bid ->
           (* We need to wrap the expression in a lambda, which introduces the
-           additional inputs of the backward function.
-          *)
+             additional inputs of the backward function. *)
           let ctx =
             (* We need to introduce fresh variables for the additional inputs,
                because they are locally introduced in a lambda. *)
             let back_sg = RegionGroupId.Map.find bid ctx.sg.fun_ty.back_sg in
-            let ctx, backward_inputs = fresh_vars back_sg.inputs ctx in
+            let ctx, backward_inputs =
+              (* TODO: generalize *)
+              match back_sg.inputs with
+              | [] -> (ctx, [])
+              | [ inputs ] -> fresh_vars inputs ctx
+              | _ -> [%craise] ctx.span "Unimplemented"
+            in
             (* Update the functions mk_return and mk_panic *)
             let effect_info = back_sg.effect_info in
             let mk_return ctx v =
-              assert (v = None);
+              [%sanity_check] ctx.span (v = None);
               let output =
                 (* Group the variables in which we stored the values we need to give back.
                    See the explanations for the [SynthInput] case in [translate_end_abstraction] *)
@@ -1299,9 +1335,15 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
                 mk_result_fail_texpr_with_error_id ctx.span error_failure_id
                   output_ty
               in
+              let outputs =
+                (RegionGroupId.Map.find bid ctx.sg.fun_ty.back_sg).outputs
+              in
               let output =
                 mk_simpl_tuple_ty
-                  (RegionGroupId.Map.find bid ctx.sg.fun_ty.back_sg).outputs
+                  (List.map
+                     (fun tys ->
+                       mk_simpl_tuple_ty (List.map (fun (_, ty) -> ty) tys))
+                     outputs)
               in
               mk_output output
             in
@@ -1317,6 +1359,8 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
           let e = T.RegionGroupId.Map.find bid back_e in
           let finish e =
             (* Wrap in lambdas if necessary *)
+            (* TODO: shouldn't need to lookup the backward inputs: they are
+               introduced above *)
             let inputs = RegionGroupId.Map.find bid ctx.backward_inputs in
             let places = List.map (fun _ -> None) inputs in
             mk_closed_lambdas_from_fvars ctx.span inputs places e
