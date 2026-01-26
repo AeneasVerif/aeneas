@@ -27,9 +27,9 @@ def test_incr : Result Unit := do
 def choose
   {T : Type} (b : Bool) (x : T) (y : T) : Result (T × (T → (T × T))) := do
   if b
-  then let back := fun ret => (ret, y)
+  then let back := fun x1 => (x1, y)
        ok (x, back)
-  else let back := fun ret => (x, ret)
+  else let back := fun y1 => (x, y1)
        ok (y, back)
 
 /- [paper::test_choose]:
@@ -59,13 +59,13 @@ def list_nth_mut
   match l with
   | List.Cons x tl =>
     if i = 0#u32
-    then let back := fun ret => List.Cons ret tl
+    then let back := fun t => List.Cons t tl
          ok (x, back)
     else
       let i1 ← i - 1#u32
       let (x1, list_nth_mut_back) ← list_nth_mut tl i1
-      let back := fun ret => let tl1 := list_nth_mut_back ret
-                             List.Cons x tl1
+      let back := fun t => let tl1 := list_nth_mut_back t
+                           List.Cons x tl1
       ok (x1, back)
   | List.Nil => fail panic
 partial_fixpoint

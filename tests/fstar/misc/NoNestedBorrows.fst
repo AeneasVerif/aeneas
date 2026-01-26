@@ -177,8 +177,8 @@ let _ = assert_norm (test_split_list = Ok ())
 let choose
   (#t : Type0) (b : bool) (x : t) (y : t) : result (t & (t -> (t & t))) =
   if b
-  then let back = fun ret -> (ret, y) in Ok (x, back)
-  else let back = fun ret -> (x, ret) in Ok (y, back)
+  then let back = fun x1 -> (x1, y) in Ok (x, back)
+  else let back = fun y1 -> (x, y1) in Ok (y, back)
 
 (** [no_nested_borrows::choose_test]:
     Source: 'tests/src/no_nested_borrows.rs', lines 198:0-207:1 *)
@@ -240,12 +240,11 @@ let rec list_nth_mut
   begin match l with
   | List_Cons x tl ->
     if i = 0
-    then let back = fun ret -> List_Cons ret tl in Ok (x, back)
+    then let back = fun x1 -> List_Cons x1 tl in Ok (x, back)
     else
       let* i1 = u32_sub i 1 in
       let* (x1, list_nth_mut_back) = list_nth_mut tl i1 in
-      let back = fun ret -> let tl1 = list_nth_mut_back ret in List_Cons x tl1
-      in
+      let back = fun x2 -> let tl1 = list_nth_mut_back x2 in List_Cons x tl1 in
       Ok (x1, back)
   | List_Nil -> Fail Failure
   end
@@ -313,7 +312,7 @@ let id_mut_pair1
   (#t1 : Type0) (#t2 : Type0) (x : t1) (y : t2) :
   result ((t1 & t2) & ((t1 & t2) -> (t1 & t2)))
   =
-  Ok ((x, y), (fun ret -> ret))
+  Ok ((x, y), (fun p -> p))
 
 (** [no_nested_borrows::id_mut_pair2]:
     Source: 'tests/src/no_nested_borrows.rs', lines 339:0-341:1 *)
@@ -321,7 +320,7 @@ let id_mut_pair2
   (#t1 : Type0) (#t2 : Type0) (p : (t1 & t2)) :
   result ((t1 & t2) & ((t1 & t2) -> (t1 & t2)))
   =
-  Ok (p, (fun ret -> ret))
+  Ok (p, (fun p1 -> p1))
 
 (** [no_nested_borrows::id_mut_pair3]:
     Source: 'tests/src/no_nested_borrows.rs', lines 343:0-345:1 *)
@@ -329,7 +328,7 @@ let id_mut_pair3
   (#t1 : Type0) (#t2 : Type0) (x : t1) (y : t2) :
   result ((t1 & t2) & (t1 -> t1) & (t2 -> t2))
   =
-  Ok ((x, y), (fun ret -> ret), (fun ret -> ret))
+  Ok ((x, y), (fun x1 -> x1), (fun y1 -> y1))
 
 (** [no_nested_borrows::id_mut_pair4]:
     Source: 'tests/src/no_nested_borrows.rs', lines 347:0-349:1 *)
@@ -337,7 +336,7 @@ let id_mut_pair4
   (#t1 : Type0) (#t2 : Type0) (p : (t1 & t2)) :
   result ((t1 & t2) & (t1 -> t1) & (t2 -> t2))
   =
-  Ok (p, (fun ret -> ret), (fun ret -> ret))
+  Ok (p, (fun p1 -> p1), (fun p1 -> p1))
 
 (** [no_nested_borrows::StructWithTuple]
     Source: 'tests/src/no_nested_borrows.rs', lines 354:0-356:1 *)
@@ -501,7 +500,7 @@ let borrow_mut_tuple
   (#t : Type0) (#u : Type0) (x : (t & u)) :
   result ((t & u) & ((t & u) -> (t & u)))
   =
-  Ok (x, (fun ret -> ret))
+  Ok (x, (fun x1 -> x1))
 
 (** [no_nested_borrows::ExpandSimpliy::Wrapper]
     Source: 'tests/src/no_nested_borrows.rs', lines 526:4-526:32 *)

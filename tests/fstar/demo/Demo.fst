@@ -20,8 +20,8 @@ assume val core_num_U32_wrapping_sub : u32 -> u32 -> result u32
 let choose
   (#t : Type0) (b : bool) (x : t) (y : t) : result (t & (t -> (t & t))) =
   if b
-  then let back = fun ret -> (ret, y) in Ok (x, back)
-  else let back = fun ret -> (x, ret) in Ok (y, back)
+  then let back = fun x1 -> (x1, y) in Ok (x, back)
+  else let back = fun y1 -> (x, y1) in Ok (y, back)
 
 (** [demo::mul2_add1]:
     Source: 'tests/src/demo.rs', lines 16:0-18:1 *)
@@ -94,12 +94,12 @@ let rec list_nth_mut
     begin match l with
     | CList_CCons x tl ->
       if i = 0
-      then let back = fun ret -> CList_CCons ret tl in Ok (x, back)
+      then let back = fun x1 -> CList_CCons x1 tl in Ok (x, back)
       else
         let* i1 = u32_sub i 1 in
         let* (x1, list_nth_mut_back) = list_nth_mut n1 tl i1 in
         let back =
-          fun ret -> let tl1 = list_nth_mut_back ret in CList_CCons x tl1
+          fun x2 -> let tl1 = list_nth_mut_back x2 in CList_CCons x tl1
         in
         Ok (x1, back)
     | CList_CNil -> Fail Failure
@@ -129,10 +129,9 @@ let rec list_tail
     begin match l with
     | CList_CCons x tl ->
       let* (c, list_tail_back) = list_tail n1 tl in
-      let back = fun ret -> let tl1 = list_tail_back ret in CList_CCons x tl1
-      in
+      let back = fun c1 -> let tl1 = list_tail_back c1 in CList_CCons x tl1 in
       Ok (c, back)
-    | CList_CNil -> Ok (CList_CNil, (fun ret -> ret))
+    | CList_CNil -> Ok (CList_CNil, (fun l1 -> l1))
     end
 
 (** Trait declaration: [demo::Counter]

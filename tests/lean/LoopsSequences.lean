@@ -20,7 +20,7 @@ def Key.t_mut
   (self : Key) :
   Result ((Array Std.U16 32#usize) × (Array Std.U16 32#usize → Key))
   := do
-  let back := fun ret => { self with t := ret }
+  let back := fun a => { self with t := a }
   ok (self.t, back)
 
 /- [loops_sequences::shake_init]:

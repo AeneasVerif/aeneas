@@ -27,8 +27,8 @@ Check (test_incr)%return.
 Definition choose
   {T : Type} (b : bool) (x : T) (y : T) : result (T * (T -> (T * T))) :=
   if b
-  then let back := fun (ret : T) => (ret, y) in Ok (x, back)
-  else let back := fun (ret : T) => (x, ret) in Ok (y, back)
+  then let back := fun (x1 : T) => (x1, y) in Ok (x, back)
+  else let back := fun (y1 : T) => (x, y1) in Ok (y, back)
 .
 
 (** [paper::test_choose]:
@@ -63,13 +63,13 @@ Fixpoint list_nth_mut
   match l with
   | List_Cons x tl =>
     if i s= 0%u32
-    then let back := fun (ret : T) => List_Cons ret tl in Ok (x, back)
+    then let back := fun (t : T) => List_Cons t tl in Ok (x, back)
     else (
       i1 <- u32_sub i 1%u32;
       p <- list_nth_mut tl i1;
       let (x1, list_nth_mut_back) := p in
       let back :=
-        fun (ret : T) => let tl1 := list_nth_mut_back ret in List_Cons x tl1
+        fun (t : T) => let tl1 := list_nth_mut_back t in List_Cons x tl1
       in
       Ok (x1, back))
   | List_Nil => Fail_ Failure
