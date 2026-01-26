@@ -703,8 +703,7 @@ and translate_end_abs (ectx : C.eval_ctx) (abs : V.abs)
       [%cassert] ctx.span (abs_level = 0) "Unimplemented";
       translate_end_abstraction_fun_call ectx abs e call_id ctx
   | V.SynthRet rg_id ->
-      [%cassert] ctx.span (abs_level = 0) "Unimplemented";
-      translate_end_abstraction_synth_ret ectx abs e ctx rg_id
+      translate_end_abstraction_synth_ret ectx abs e ctx rg_id abs_level
   | V.Loop _ | V.Join ->
       [%cassert] ctx.span (abs_level = 0) "Unimplemented";
       translate_end_abstraction_join_or_loop ectx abs e ctx
@@ -736,8 +735,7 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
      input abstractions when synthesizing a different backward function. *)
   let bid = Option.get ctx.bid in
 
-  if rg_id = bid then (
-    [%cassert] ctx.span (abs_level = 0) "Unimplemented";
+  if rg_id = bid && abs_level = 0 then (
     (* First, introduce the given back variables.
 
        For every consumed value we introduce a fresh variables and a let-binding:
@@ -755,13 +753,25 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
     *)
     let ctx, given_back_variables =
       let back_sg = RegionGroupId.Map.find rg_id ctx.sg.fun_ty.back_sg in
-      (* TODO: generalize *)
-      match back_sg.outputs with
-      | [] -> ({ ctx with backward_outputs = Some [] }, [])
-      | [ (level, outputs) ] ->
+      match
+        List.find_opt (fun (level, _) -> level = abs_level) back_sg.outputs
+      with
+      | None ->
+          (* Can happen if the abstraction has no output - but should be for level 0 *)
+          [%sanity_check] ctx.span (abs_level = 0);
+          ( {
+              ctx with
+              backward_outputs = AbsLevelMap.add 0 [] ctx.backward_outputs;
+            },
+            [] )
+      | Some (_, outputs) ->
           let ctx, vars = fresh_vars outputs ctx in
-          ({ ctx with backward_outputs = Some vars }, vars)
-      | _ -> [%craise] ctx.span "Unimplemented"
+          [%sanity_check] ctx.span
+            (not (AbsLevelMap.mem abs_level ctx.backward_outputs));
+          let backward_outputs =
+            AbsLevelMap.add abs_level vars ctx.backward_outputs
+          in
+          ({ ctx with backward_outputs }, vars)
     in
 
     (* Get the list of values consumed by the abstraction upon ending *)
@@ -801,6 +811,10 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
     (* Generate the assignemnts *)
     let monadic = false in
     mk_closed_checked_lets __FILE__ __LINE__ ctx monadic variables_values next_e)
+  else if rg_id = bid && abs_level > 0 then
+    (* The abstraction actually introduces values bound by a lambda, rather than
+       consuming values *)
+    [%craise] ctx.span "Unimplemented"
   else
     (* Check that the region abstraction only consumes values but does not output any *)
     let ctx, outputs = abs_to_given_back None abs ctx in
@@ -874,8 +888,10 @@ and translate_end_abs_identity (ectx : C.eval_ctx) (abs : V.abs) (e : S.expr)
   translate_expr e ctx
 
 and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
-    (e : S.expr) (ctx : bs_ctx) (rg_id : T.RegionGroupId.id) : texpr =
+    (e : S.expr) (ctx : bs_ctx) (rg_id : T.RegionGroupId.id)
+    (abs_level : abs_level) : texpr =
   [%ltrace "Translating ended synthesis abstraction: " ^ abs_to_string ctx abs];
+  [%cassert] ctx.span (abs_level = 0) "Unimplemented";
   (* If we end the abstraction which consumed the return value of the function
      we are synthesizing, we get back the borrows which were inside. Those borrows
      are actually input arguments of the backward function we are synthesizing.
@@ -918,7 +934,14 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
           (back_sg.inputs = [] && back_sg.outputs = [])
           "Unimplemented";
         []
-    | Some inputs -> inputs
+    | Some inputs -> (
+        (* There may be no inputs if the abstraction consumes nothing, but it should
+         be only for level 0 *)
+        match AbsLevelMap.find_opt abs_level inputs with
+        | Some inputs -> inputs
+        | None ->
+            [%sanity_check] ctx.span (abs_level = 0);
+            [])
   in
   [%ltrace
     "Consumed inputs: " ^ Print.list_to_string (fvar_to_string ctx) inputs];
@@ -1301,16 +1324,22 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
       | Some bid ->
           (* We need to wrap the expression in a lambda, which introduces the
              additional inputs of the backward function. *)
-          let ctx =
+          let ctx, backward_inputs =
             (* We need to introduce fresh variables for the additional inputs,
                because they are locally introduced in a lambda. *)
             let back_sg = RegionGroupId.Map.find bid ctx.sg.fun_ty.back_sg in
             let ctx, backward_inputs =
-              (* TODO: generalize *)
-              match back_sg.inputs with
-              | [] -> (ctx, [])
-              | [ (level, inputs) ] -> fresh_vars inputs ctx
-              | _ -> [%craise] ctx.span "Unimplemented"
+              let ctx = ref ctx in
+              let inputs =
+                List.map
+                  (fun (level, inputs) ->
+                    let ctx', inputs = fresh_vars inputs !ctx in
+                    ctx := ctx';
+                    (level, inputs))
+                  back_sg.inputs
+              in
+              let ctx = !ctx in
+              (ctx, inputs)
             in
             (* Update the functions mk_return and mk_panic *)
             let effect_info = back_sg.effect_info in
@@ -1319,11 +1348,20 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
               let output =
                 (* Group the variables in which we stored the values we need to give back.
                    See the explanations for the [SynthInput] case in [translate_end_abstraction] *)
-                let backward_outputs = Option.get ctx.backward_outputs in
-                let field_values =
-                  List.map mk_texpr_from_fvar backward_outputs
+                (* Note that we need to flatten the sub-abstraction levels - we put
+                   the outputs corresponding to the higher levels first *)
+                let backward_outputs =
+                  List.map snd
+                    (List.rev (AbsLevelMap.to_list ctx.backward_outputs))
                 in
-                mk_simpl_tuple_texpr ctx.span field_values
+                let outputs =
+                  List.map
+                    (fun tys ->
+                      mk_simpl_tuple_texpr ctx.span
+                        (List.map mk_texpr_from_fvar tys))
+                    backward_outputs
+                in
+                mk_simpl_tuple_texpr ctx.span outputs
               in
               (* Wrap in a result if the backward function can fail *)
               if effect_info.can_fail then mk_result_ok_texpr ctx.span output
@@ -1347,21 +1385,25 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
               in
               mk_output output
             in
-            {
-              ctx with
-              backward_inputs =
-                RegionGroupId.Map.add bid backward_inputs ctx.backward_inputs;
-              mk_return = Some mk_return;
-              mk_panic = Some mk_panic;
-            }
+            let ctx =
+              {
+                ctx with
+                backward_inputs =
+                  RegionGroupId.Map.add bid
+                    (AbsLevelMap.of_list backward_inputs)
+                    ctx.backward_inputs;
+                mk_return = Some mk_return;
+                mk_panic = Some mk_panic;
+              }
+            in
+            (ctx, backward_inputs)
           in
 
           let e = T.RegionGroupId.Map.find bid back_e in
           let finish e =
             (* Wrap in lambdas if necessary *)
-            (* TODO: shouldn't need to lookup the backward inputs: they are
-               introduced above *)
-            let inputs = RegionGroupId.Map.find bid ctx.backward_inputs in
+            (* TODO: we shouldn't flatten? *)
+            let inputs = List.flatten (List.map snd backward_inputs) in
             let places = List.map (fun _ -> None) inputs in
             mk_closed_lambdas_from_fvars ctx.span inputs places e
           in
