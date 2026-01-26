@@ -178,11 +178,22 @@ type proj_kind =
           sure *)
 
 let compute_tavalue_proj_kind span type_infos (abs_regions : T.RegionId.Set.t)
-    (av : V.tavalue) : proj_kind =
+    (abs_level : abs_level) (current_level : abs_level) (av : V.tavalue) :
+    proj_kind =
   let has_borrows = ref false in
   let has_mut_borrows = ref false in
   let has_loans = ref false in
   let has_mut_loans = ref false in
+
+  let set_has_loans level = if level = abs_level then has_loans := true in
+  let set_has_borrows level = if level = abs_level then has_borrows := true in
+  let set_has_mut_loans level =
+    if level = abs_level then has_mut_loans := true
+  in
+  let set_has_mut_borrows level =
+    if level = abs_level then has_mut_borrows := true
+  in
+
   let keep_region (r : T.region) =
     match r with
     | T.RVar (Free rid) -> T.RegionId.Set.mem rid abs_regions
@@ -190,14 +201,15 @@ let compute_tavalue_proj_kind span type_infos (abs_regions : T.RegionId.Set.t)
   in
   let visitor =
     object
-      inherit [_] V.iter_tavalue as super
+      inherit [_] InterpBorrowsCore.iter_tavalue_with_levels as super
+      method incr_level (level, ty) = (level + 1, ty)
 
-      method! visit_tavalue _ av =
+      method! visit_tavalue (level, _) av =
         (* Remember the type of the current value *)
-        super#visit_tavalue av.ty av
+        super#visit_tavalue (level, av.ty) av
 
-      method! visit_ALoan env lc =
-        has_loans := true;
+      method! visit_ALoan (level, ty) lc =
+        set_has_loans level;
         begin
           match lc with
           | ASharedLoan _
@@ -205,13 +217,13 @@ let compute_tavalue_proj_kind span type_infos (abs_regions : T.RegionId.Set.t)
           | AIgnoredMutLoan _
           | AEndedIgnoredMutLoan _
           | AIgnoredSharedLoan _ -> ()
-          | AMutLoan _ | AEndedMutLoan _ -> has_mut_loans := true
+          | AMutLoan _ | AEndedMutLoan _ -> set_has_mut_loans level
         end;
         (* Continue exploring as a sanity check: we want to make sure we don't find borrows *)
-        super#visit_ALoan env lc
+        super#visit_ALoan (level, ty) lc
 
-      method! visit_ABorrow env bc =
-        has_borrows := true;
+      method! visit_ABorrow (level, ty) bc =
+        set_has_borrows level;
         begin
           match bc with
           | ASharedBorrow _
@@ -219,56 +231,60 @@ let compute_tavalue_proj_kind span type_infos (abs_regions : T.RegionId.Set.t)
           | AIgnoredMutBorrow _
           | AEndedIgnoredMutBorrow _
           | AProjSharedBorrow _ -> ()
-          | AMutBorrow _ | AEndedMutBorrow _ -> has_mut_borrows := true
+          | AMutBorrow _ | AEndedMutBorrow _ -> set_has_mut_borrows level
         end;
         (* Continue exploring as a sanity check: we want to make sure we don't find loans *)
-        super#visit_ABorrow env bc
+        super#visit_ABorrow (level, ty) bc
 
-      method! visit_ASymbolic ty pm aproj =
+      method! visit_ASymbolic (level, ty) pm aproj =
         [%sanity_check] span (pm = PNone);
+        (* TODO: levels may be wrong here *)
+        (* We forbid nested mutable borrows for now *)
+        let info = TypesAnalysis.analyze_ty (Some span) type_infos ty in
+        [%cassert] span (not info.contains_nested_mut) "Unimplemented";
         match aproj with
         | V.AEndedProjLoans _ ->
-            has_loans := true;
+            set_has_loans level;
             (* We need to check wether the projected loans are mutable or not *)
             if
               TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
                 keep_region ty
-            then has_mut_loans := true;
+            then set_has_mut_loans level;
             (* Continue exploring (same reasons as above) *)
-            super#visit_ASymbolic ty pm aproj
+            super#visit_ASymbolic (level, ty) pm aproj
         | AProjLoans _ ->
-            has_loans := true;
+            set_has_loans level;
             (* We need to check wether the projected loans are mutable or not *)
             if
               TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
                 keep_region ty
-            then has_mut_loans := true;
+            then set_has_mut_loans level;
             (* Continue exploring (same reasons as above) *)
-            super#visit_ASymbolic ty pm aproj
+            super#visit_ASymbolic (level, ty) pm aproj
         | AEndedProjBorrows _ ->
-            has_borrows := true;
+            set_has_borrows level;
             (* We need to check wether the projected borrows are mutable or not *)
             if
               TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
                 keep_region ty
-            then has_mut_borrows := true;
+            then set_has_mut_borrows level;
             (* Continue exploring (same reasons as above) *)
-            super#visit_ASymbolic ty pm aproj
+            super#visit_ASymbolic (level, ty) pm aproj
         | AProjBorrows _ ->
-            has_borrows := true;
+            set_has_borrows level;
             (* We need to check wether the projected borrows are mutable or not *)
             if
               TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
                 keep_region ty
-            then has_mut_borrows := true;
+            then set_has_mut_borrows level;
             (* Continue exploring (same reasons as above) *)
-            super#visit_ASymbolic ty pm aproj
+            super#visit_ASymbolic (level, ty) pm aproj
         | AEmpty ->
             (* Continue exploring (same reasons as above) *)
-            super#visit_ASymbolic ty pm aproj
+            super#visit_ASymbolic (level, ty) pm aproj
     end
   in
-  visitor#visit_tavalue av.ty av;
+  visitor#visit_tavalue (current_level, av.ty) av;
   [%cassert] span ((not !has_borrows) || not !has_loans) "Unreachable";
   let to_borrow_kind b = if b then BMut else BShared in
   if !has_borrows then BorrowProj (to_borrow_kind !has_mut_borrows)
@@ -383,21 +399,23 @@ let gtranslate_adt_fields ~(project_borrows : bool)
                                   ^^
     ]} *)
 let rec tavalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
-    (ectx : C.eval_ctx) (abs_regions : T.RegionId.Set.t) (av : V.tavalue) :
-    texpr option =
+    (ectx : C.eval_ctx) (abs_regions : T.RegionId.Set.t) (abs_level : abs_level)
+    (current_level : abs_level) (av : V.tavalue) : texpr option =
   let value =
     match av.value with
     | AAdt adt_v ->
-        adt_avalue_to_consumed_aux ~filter ctx ectx abs_regions av adt_v
-    | ALoan lc -> aloan_content_to_consumed_aux ~filter ctx ectx abs_regions lc
-    | ABorrow _ ->
-        (* This value should have been generated by a loan projector: there
-           can't be aborrows unless there are nested borrows, which are not
-           supported yet. *)
-        [%craise] ctx.span "Unreachable"
+        adt_avalue_to_consumed_aux ~filter ctx ectx abs_regions abs_level
+          current_level av adt_v
+    | ALoan lc ->
+        aloan_content_to_consumed_aux ~filter ctx ectx abs_regions abs_level
+          current_level lc
+    | ABorrow bc ->
+        aborrow_content_to_consumed_aux ~filter ctx ectx abs_regions abs_level
+          current_level bc
     | ASymbolic (pm, aproj) ->
         [%sanity_check] ctx.span (pm = PNone);
-        aproj_to_consumed_aux ctx abs_regions aproj av.ty
+        aproj_to_consumed_aux ctx abs_regions abs_level current_level aproj
+          av.ty
     | AIgnored mv -> (
         if filter then None
         else
@@ -419,17 +437,22 @@ let rec tavalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
   value
 
 and adt_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
-    (ectx : C.eval_ctx) (abs_regions : T.RegionId.Set.t) (av : V.tavalue)
-    (adt_v : V.adt_avalue) : texpr option =
+    (ectx : C.eval_ctx) (abs_regions : T.RegionId.Set.t) (abs_level : abs_level)
+    (current_level : abs_level) (av : V.tavalue) (adt_v : V.adt_avalue) :
+    texpr option =
   let _, out =
     gtranslate_adt_fields ~project_borrows:false (tavalue_to_string ctx)
       (texpr_to_string ctx)
       (fun ~filter ctx v ->
         ( ctx,
-          match tavalue_to_consumed_aux ~filter ctx ectx abs_regions v with
+          match
+            tavalue_to_consumed_aux ~filter ctx ectx abs_regions abs_level
+              current_level v
+          with
           | None -> None
           | Some x -> Some ((), x) ))
-      (compute_tavalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions)
+      (compute_tavalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions
+         abs_level current_level)
       (fun fields ->
         let ty =
           translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos av.ty
@@ -441,65 +464,126 @@ and adt_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
   Option.map snd out
 
 and aloan_content_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
-    (ectx : C.eval_ctx) (_abs_regions : T.RegionId.Set.t) (lc : V.aloan_content)
-    : texpr option =
+    (ectx : C.eval_ctx) (abs_regions : T.RegionId.Set.t) (abs_level : abs_level)
+    (current_level : abs_level) (lc : V.aloan_content) : texpr option =
   match lc with
   | AMutLoan (_, _, _) | ASharedLoan (_, _, _, _) ->
       [%craise] ctx.span "Unreachable"
   | AEndedMutLoan { child; given_back; given_back_meta } ->
-      [%cassert] ctx.span (ValuesUtils.is_aignored child.value) "Unreachable";
-      [%cassert] ctx.span
-        (ValuesUtils.is_aignored given_back.value)
-        "Unreachable";
-      (* Return the meta-value *)
-      Some (tvalue_to_texpr ctx ectx given_back_meta)
+      if abs_level = current_level then (
+        [%cassert] ctx.span (ValuesUtils.is_aignored child.value) "Unreachable";
+        [%cassert] ctx.span
+          (ValuesUtils.is_aignored given_back.value)
+          "Unreachable";
+        (* Return the meta-value *)
+        Some (tvalue_to_texpr ctx ectx given_back_meta))
+      else
+        let child =
+          tavalue_to_consumed_aux ~filter ctx ectx abs_regions abs_level
+            current_level child
+        in
+        let given_back =
+          tavalue_to_consumed_aux ~filter ctx ectx abs_regions abs_level
+            (current_level + 1) given_back
+        in
+        [%cassert] ctx.span (child = None) "Unimplemented";
+        [%cassert] ctx.span (given_back = None) "Unimplemented";
+        None
   | AEndedSharedLoan (sv, child) ->
       [%cassert] ctx.span (ValuesUtils.is_aignored child.value) "Unreachable";
-      (* We don't diveinto shared loans: there is nothing to give back
+      (* We don't dive into shared loans: there is nothing to give back
          inside (note that there could be a mutable borrow in the shared
          value, pointing to a mutable loan in the child avalue, but this
          borrow is in practice immutable) *)
       if filter then None else Some (tvalue_to_texpr ctx ectx sv)
   | AIgnoredMutLoan (_, _) ->
-      (* There can be *inner* not ended mutable loans, but not outer ones *)
+      (* There can be *inner* non ended mutable loans, but not outer ones *)
       [%craise] ctx.span "Unreachable"
-  | AEndedIgnoredMutLoan _ ->
+  | AEndedIgnoredMutLoan { child; given_back; given_back_meta = _ } -> (
       (* This happens with nested borrows: we need to dive in *)
-      [%craise] ctx.span "Unimplemented"
+      let child =
+        tavalue_to_consumed_aux ~filter ctx ectx abs_regions abs_level
+          current_level child
+      in
+      let given_back =
+        tavalue_to_consumed_aux ~filter ctx ectx abs_regions abs_level
+          (current_level + 1) given_back
+      in
+      match (child, given_back) with
+      | Some v, None | None, Some v -> Some v
+      | None, None -> None
+      | _ ->
+          (* Is this unreachable? *)
+          [%craise] ctx.span "Unimplemented")
   | AIgnoredSharedLoan _ ->
-      (* This case only happens with nested borrows *)
+      (* This case happens with nested borrows *)
+      [%craise] ctx.span "Unimplemented"
+
+and aborrow_content_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
+    (ectx : C.eval_ctx) (abs_regions : T.RegionId.Set.t) (abs_level : abs_level)
+    (current_level : abs_level) (bc : V.aborrow_content) : texpr option =
+  match bc with
+  | V.AMutBorrow (_, _, child) | V.AIgnoredMutBorrow (_, child) ->
+      (* Can happen with nested borrows, when ending sub-abstractions *)
+      tavalue_to_consumed_aux ~filter ctx ectx abs_regions abs_level
+        current_level child
+  | V.ASharedBorrow _ -> None
+  | V.AEndedMutBorrow (_, _) ->
+      (* TODO? *)
+      None
+  | V.AEndedIgnoredMutBorrow { child; given_back; given_back_meta = _ } -> (
+      let child =
+        tavalue_to_consumed_aux ~filter ctx ectx abs_regions abs_level
+          current_level child
+      in
+      let given_back =
+        tavalue_to_consumed_aux ~filter ctx ectx abs_regions abs_level
+          (current_level + 1) given_back
+      in
+      match (child, given_back) with
+      | Some v, None | None, Some v -> Some v
+      | None, None -> None
+      | _ ->
+          (* TODO: unreachable? *)
+          [%craise] ctx.span "Unimplemented")
+  | V.AEndedSharedBorrow | V.AProjSharedBorrow _ ->
       [%craise] ctx.span "Unimplemented"
 
 and aproj_to_consumed_aux (ctx : bs_ctx) (_abs_regions : T.RegionId.Set.t)
-    (aproj : V.aproj) (ty : T.ty) : texpr option =
+    (abs_level : abs_level) (current_level : abs_level) (aproj : V.aproj)
+    (ty : T.ty) : texpr option =
   match aproj with
   | V.AEndedProjLoans { proj = msv; consumed = []; borrows = [] } ->
-      (* The symbolic value was left unchanged.
+      if abs_level = current_level then
+        (* The symbolic value was left unchanged.
 
          We're using the projection type as the type of the symbolic value -
          it doesn't really matter. *)
-      let msv : V.symbolic_value = { sv_id = msv; sv_ty = ty } in
-      Some (symbolic_value_to_texpr ctx msv)
+        let msv : V.symbolic_value = { sv_id = msv; sv_ty = ty } in
+        Some (symbolic_value_to_texpr ctx msv)
+      else None
   | V.AEndedProjLoans
       { proj = _; consumed = [ (mnv, child_aproj) ]; borrows = [] } ->
-      [%sanity_check] ctx.span (child_aproj = AEmpty);
-      (* TODO: check that the updated symbolic values covers all the cases
+      if abs_level = current_level then (
+        [%sanity_check] ctx.span (child_aproj = AEmpty);
+        (* TODO: check that the updated symbolic values covers all the cases
          (part of the symbolic value might have been updated, and the rest
          left unchanged) - it might happen with nested borrows (see the documentation
          of [AProjLoans]). For now we check that there are no nested borrows
          to make sure we have to update this part of the code once we add support
          for nested borrows.
       *)
-      [%sanity_check] ctx.span
-        (not
-           (TypesUtils.ty_has_nested_borrows (Some ctx.span)
-              ctx.type_ctx.type_infos ty));
-      (* The symbolic value was updated.
+        [%sanity_check] ctx.span
+          (not
+             (TypesUtils.ty_has_nested_borrows (Some ctx.span)
+                ctx.type_ctx.type_infos ty));
+        (* The symbolic value was updated.
 
          We're using the projection type as the type of the symbolic value -
          it doesn't really matter. *)
-      let mnv : V.symbolic_value = { sv_id = mnv.sv_id; sv_ty = ty } in
-      Some (symbolic_value_to_texpr ctx mnv)
+        let mnv : V.symbolic_value = { sv_id = mnv.sv_id; sv_ty = ty } in
+        Some (symbolic_value_to_texpr ctx mnv))
+      else None
   | V.AEndedProjLoans _ ->
       (* The symbolic value was updated, and the given back values come from several
          abstractions *)
@@ -511,18 +595,20 @@ and aproj_to_consumed_aux (ctx : bs_ctx) (_abs_regions : T.RegionId.Set.t)
   | AEmpty | AProjLoans _ | AProjBorrows _ -> [%craise] ctx.span "Unreachable"
 
 let tavalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
-    (abs_regions : T.RegionId.Set.t) (av : V.tavalue) : texpr option =
+    (abs_regions : T.RegionId.Set.t) (abs_level : abs_level) (av : V.tavalue) :
+    texpr option =
   (* Check if the value was generated from a loan projector: if yes, and if
      it contains mutable loans, then we generate a consumed value (because
      upon ending the borrow we consumed a value).
      Otherwise we ignore it. *)
   [%ltrace tavalue_to_string ~with_ended:true ctx av];
   match
-    compute_tavalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions av
+    compute_tavalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions
+      abs_level 0 av
   with
   | LoanProj BMut ->
       [%ltrace "the value contains mutable loan projectors"];
-      tavalue_to_consumed_aux ~filter:true ctx ectx abs_regions av
+      tavalue_to_consumed_aux ~filter:true ctx ectx abs_regions abs_level 0 av
   | LoanProj BShared | BorrowProj _ | UnknownProj ->
       (* If it is a borrow proj we ignore it. If it is an unknown projection,
          it means the value doesn't contain loans nor borrows, so nothing
@@ -534,11 +620,13 @@ let tavalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
 (** Convert the abstraction values in an abstraction to consumed values.
 
     See [tavalue_to_consumed_aux]. *)
-let abs_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs) :
-    texpr list =
+let abs_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
+    (abs_level : abs_level) : texpr list =
   [%ltrace abs_to_string ~with_ended:true ctx abs];
   let values =
-    List.filter_map (tavalue_to_consumed ctx ectx abs.regions.owned) abs.avalues
+    List.filter_map
+      (tavalue_to_consumed ctx ectx abs.regions.owned abs_level)
+      abs.avalues
   in
   [%ltrace
     "- abs: "
@@ -611,16 +699,20 @@ type borrow_or_symbolic_id =
       [bs_ctx.mut_borrow_to_consumed]).
     - the pattern *)
 let rec tavalue_to_given_back_aux ~(filter : bool)
-    (abs_regions : T.RegionId.Set.t) (mp : mplace option) (av : V.tavalue)
+    (abs_regions : T.RegionId.Set.t) (abs_level : abs_level)
+    (current_level : abs_level) (mp : mplace option) (av : V.tavalue)
     (ctx : bs_ctx) : bs_ctx * tpat option =
   let (ctx, value) : _ * tpat option =
     match av.value with
     | AAdt adt_v ->
-        adt_avalue_to_given_back_aux ~filter abs_regions av adt_v ctx
-    | ALoan _ ->
-        (* The avalue should have been generated by a borrow projector: this case is unreachable *)
-        [%craise] ctx.span "Unreachable"
-    | ABorrow bc -> aborrow_content_to_given_back_aux ~filter mp bc av.ty ctx
+        adt_avalue_to_given_back_aux ~filter abs_regions abs_level current_level
+          av adt_v ctx
+    | ALoan lc ->
+        aloan_content_to_given_back_aux ~filter abs_regions abs_level
+          current_level mp lc ctx
+    | ABorrow bc ->
+        aborrow_content_to_given_back_aux ~filter abs_regions abs_level
+          current_level mp bc av.ty ctx
     | ASymbolic (pm, aproj) ->
         [%sanity_check] ctx.span (pm = PNone);
         aproj_to_given_back_aux mp aproj av.ty ctx
@@ -642,17 +734,21 @@ let rec tavalue_to_given_back_aux ~(filter : bool)
   (ctx, value)
 
 and adt_avalue_to_given_back_aux ~(filter : bool)
-    (abs_regions : T.RegionId.Set.t) (av : V.tavalue) (adt_v : V.adt_avalue)
+    (abs_regions : T.RegionId.Set.t) (abs_level : abs_level)
+    (current_level : abs_level) (av : V.tavalue) (adt_v : V.adt_avalue)
     (ctx : bs_ctx) : bs_ctx * tpat option =
   let ctx, out =
     gtranslate_adt_fields ~project_borrows:true (tavalue_to_string ctx)
       (tpat_to_string ctx)
       (fun ~filter ctx v ->
-        let ctx, v = tavalue_to_given_back_aux ~filter abs_regions None v ctx in
+        let ctx, v =
+          tavalue_to_given_back_aux ~filter abs_regions abs_level 0 None v ctx
+        in
         match v with
         | None -> (ctx, None)
         | Some x -> (ctx, Some ((), x)))
-      (compute_tavalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions)
+      (compute_tavalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions
+         abs_level current_level)
       (fun fields ->
         let ty =
           translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos av.ty
@@ -662,35 +758,80 @@ and adt_avalue_to_given_back_aux ~(filter : bool)
   in
   (ctx, Option.map snd out)
 
-and aborrow_content_to_given_back_aux ~(filter : bool) (mp : mplace option)
-    (bc : V.aborrow_content) (ty : T.ty) (ctx : bs_ctx) : bs_ctx * tpat option =
-  match bc with
-  | V.AMutBorrow _ | ASharedBorrow _ | AIgnoredMutBorrow _ ->
-      (* All the borrows should have been ended upon ending the abstraction *)
-      [%craise] ctx.span "Unreachable"
-  | AEndedMutBorrow (msv, _) ->
-      (* Return the meta symbolic-value *)
-      let ctx, var = fresh_var_for_symbolic_value msv.given_back ctx in
-      let pat = mk_tpat_from_fvar mp var in
-      (* Lookup the default value and update the [var_id_to_default] map.
-         Note that the default value might be missing, for instance for
-         abstractions which were not introduced because of function calls but
-         rather because of loops.
-      *)
-      let ctx =
-        match V.BorrowId.Map.find_opt msv.bid ctx.mut_borrow_to_consumed with
-        | None -> ctx
-        | Some e ->
-            {
-              ctx with
-              var_id_to_default = FVarId.Map.add var.id e ctx.var_id_to_default;
-            }
+and aloan_content_to_given_back_aux ~(filter : bool)
+    (abs_regions : T.RegionId.Set.t) (abs_level : abs_level)
+    (current_level : abs_level) (mp : mplace option) (lc : V.aloan_content)
+    (ctx : bs_ctx) : bs_ctx * tpat option =
+  match lc with
+  | V.AMutLoan (_, _, child) | V.AIgnoredMutLoan (_, child) ->
+      (* Can happen with nested borrows *)
+      tavalue_to_given_back_aux ~filter abs_regions abs_level current_level mp
+        child ctx
+  | V.ASharedLoan _ -> (ctx, None)
+  | V.AEndedMutLoan { child; given_back; given_back_meta = _ }
+  | V.AEndedIgnoredMutLoan { child; given_back; given_back_meta = _ } -> (
+      let ctx, child =
+        tavalue_to_given_back_aux ~filter abs_regions abs_level current_level mp
+          child ctx
       in
-      (* *)
-      (ctx, Some pat)
-  | AEndedIgnoredMutBorrow _ ->
-      (* This happens with nested borrows: we need to dive in *)
-      [%craise] ctx.span "Unimplemented"
+      let ctx, given_back =
+        tavalue_to_given_back_aux ~filter abs_regions abs_level
+          (current_level + 1) mp given_back ctx
+      in
+      match (child, given_back) with
+      | Some v, None | None, Some v -> (ctx, Some v)
+      | None, None -> (ctx, None)
+      | _ -> [%craise] ctx.span "Unimplemented")
+  | V.AEndedSharedLoan _ -> (ctx, None)
+  | V.AIgnoredSharedLoan _ -> (ctx, None)
+
+and aborrow_content_to_given_back_aux ~(filter : bool)
+    (abs_regions : T.RegionId.Set.t) (abs_level : abs_level)
+    (current_level : abs_level) (mp : mplace option) (bc : V.aborrow_content)
+    (ty : T.ty) (ctx : bs_ctx) : bs_ctx * tpat option =
+  match bc with
+  | V.AMutBorrow (_, _, child) | V.AIgnoredMutBorrow (_, child) ->
+      tavalue_to_given_back_aux ~filter abs_regions abs_level current_level mp
+        child ctx
+  | ASharedBorrow _ -> (ctx, None)
+  | AEndedMutBorrow (msv, child) ->
+      if abs_level = current_level then
+        (* Return the meta symbolic-value *)
+        let ctx, var = fresh_var_for_symbolic_value msv.given_back ctx in
+        let pat = mk_tpat_from_fvar mp var in
+        (* Lookup the default value and update the [var_id_to_default] map.
+           Note that the default value might be missing, for instance for
+           abstractions which were not introduced because of function calls but
+           rather because of loops.
+        *)
+        let ctx =
+          match V.BorrowId.Map.find_opt msv.bid ctx.mut_borrow_to_consumed with
+          | None -> ctx
+          | Some e ->
+              {
+                ctx with
+                var_id_to_default =
+                  FVarId.Map.add var.id e ctx.var_id_to_default;
+              }
+        in
+        (* *)
+        (ctx, Some pat)
+      else
+        tavalue_to_given_back_aux ~filter abs_regions abs_level current_level mp
+          child ctx
+  | AEndedIgnoredMutBorrow { child; given_back; given_back_meta = _ } -> (
+      let ctx, child =
+        tavalue_to_given_back_aux ~filter abs_regions abs_level current_level mp
+          child ctx
+      in
+      let ctx, given_back =
+        tavalue_to_given_back_aux ~filter abs_regions abs_level
+          (current_level + 1) mp given_back ctx
+      in
+      match (child, given_back) with
+      | Some v, None | None, Some v -> (ctx, Some v)
+      | None, None -> (ctx, None)
+      | _ -> [%craise] ctx.span "Unimplemented")
   | AEndedSharedBorrow | AProjSharedBorrow _ ->
       if filter then (ctx, None)
       else
@@ -722,17 +863,19 @@ and aproj_to_given_back_aux (mp : mplace option) (aproj : V.aproj) (ty : T.ty)
       (ctx, Some pat)
   | AEmpty | AProjLoans _ | AProjBorrows _ -> [%craise] ctx.span "Unreachable"
 
-let tavalue_to_given_back (abs_regions : T.RegionId.Set.t) (mp : mplace option)
-    (v : V.tavalue) (ctx : bs_ctx) : bs_ctx * tpat option =
+let tavalue_to_given_back (abs_regions : T.RegionId.Set.t)
+    (abs_level : abs_level) (mp : mplace option) (v : V.tavalue) (ctx : bs_ctx)
+    : bs_ctx * tpat option =
   (* Check if the value was generated from a borrow projector: if yes, and if
      it contains mutable borrows we generate a given back pattern (because
      upon ending the borrow the abstraction gave back a value).
      Otherwise we ignore it. *)
   match
-    compute_tavalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions v
+    compute_tavalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions
+      abs_level 0 v
   with
   | BorrowProj BMut ->
-      tavalue_to_given_back_aux abs_regions mp ~filter:true v ctx
+      tavalue_to_given_back_aux abs_regions abs_level 0 mp ~filter:true v ctx
   | BorrowProj BShared | LoanProj _ | UnknownProj ->
       (* If it is a loan proj we ignore it. If it is an unknown projection,
          it means the value doesn't contain loans nor borrows, so nothing
@@ -743,7 +886,7 @@ let tavalue_to_given_back (abs_regions : T.RegionId.Set.t) (mp : mplace option)
 
     See [tavalue_to_given_back]. *)
 let abs_to_given_back (mpl : mplace option list option) (abs : V.abs)
-    (ctx : bs_ctx) : bs_ctx * tpat list =
+    (abs_level : abs_level) (ctx : bs_ctx) : bs_ctx * tpat list =
   let avalues =
     match mpl with
     | None -> List.map (fun av -> (None, av)) abs.avalues
@@ -751,7 +894,8 @@ let abs_to_given_back (mpl : mplace option list option) (abs : V.abs)
   in
   let ctx, values =
     List.fold_left_map
-      (fun ctx (mp, av) -> tavalue_to_given_back abs.regions.owned mp av ctx)
+      (fun ctx (mp, av) ->
+        tavalue_to_given_back abs.regions.owned abs_level mp av ctx)
       ctx avalues
   in
   let values = List.filter_map (fun x -> x) values in
@@ -763,9 +907,10 @@ let abs_to_given_back (mpl : mplace option list option) (abs : V.abs)
   (ctx, values)
 
 (** Simply calls [abs_to_given_back] *)
-let abs_to_given_back_no_mp (abs : V.abs) (ctx : bs_ctx) : bs_ctx * tpat list =
+let abs_to_given_back_no_mp (abs : V.abs) (abs_level : abs_level) (ctx : bs_ctx)
+    : bs_ctx * tpat list =
   let mpl = List.map (fun _ -> None) abs.avalues in
-  abs_to_given_back (Some mpl) abs ctx
+  abs_to_given_back (Some mpl) abs abs_level ctx
 
 (** Register the values consumed by a region abstraction through mutable
     borrows.

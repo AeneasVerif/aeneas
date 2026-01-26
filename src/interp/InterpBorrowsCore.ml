@@ -383,6 +383,11 @@ class virtual ['self] iter_abs_with_levels =
     inherit [_] iter_eval_ctx_with_abs_levels
   end
 
+class virtual ['self] iter_tavalue_with_levels =
+  object (_ : 'self)
+    inherit [_] iter_eval_ctx_with_abs_levels
+  end
+
 (** Helper function.
 
     This function allows to define in a generic way a comparison of **region

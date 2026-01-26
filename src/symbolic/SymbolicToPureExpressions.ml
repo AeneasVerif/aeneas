@@ -700,19 +700,14 @@ and translate_end_abs (ectx : C.eval_ctx) (abs : V.abs)
   | V.SynthInput rg_id ->
       translate_end_abstraction_synth_input ectx abs e ctx rg_id abs_level
   | V.FunCall (call_id, _) ->
-      [%cassert] ctx.span (abs_level = 0) "Unimplemented";
-      translate_end_abstraction_fun_call ectx abs e call_id ctx
+      translate_end_abstraction_fun_call ectx abs abs_level e call_id ctx
   | V.SynthRet rg_id ->
       translate_end_abstraction_synth_ret ectx abs e ctx rg_id abs_level
   | V.Loop _ | V.Join ->
-      [%cassert] ctx.span (abs_level = 0) "Unimplemented";
-      translate_end_abstraction_join_or_loop ectx abs e ctx
-  | V.WithCont ->
-      [%cassert] ctx.span (abs_level = 0) "Unimplemented";
-      translate_end_abstraction_with_cont ectx abs e ctx
+      translate_end_abstraction_join_or_loop ectx abs abs_level e ctx
+  | V.WithCont -> translate_end_abstraction_with_cont ectx abs abs_level e ctx
   | V.Identity | V.CopySymbolicValue ->
-      [%cassert] ctx.span (abs_level = 0) "Unimplemented";
-      translate_end_abs_identity ectx abs e ctx
+      translate_end_abs_identity ectx abs abs_level e ctx
 
 and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
     (e : S.expr) (ctx : bs_ctx) (rg_id : T.RegionGroupId.id)
@@ -724,7 +719,8 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
     ^ T.RegionGroupId.to_string rg_id
     ^ "\n- eval_ctx:\n"
     ^ eval_ctx_to_string ~span:(Some ctx.span) ectx
-    ^ "\n- abs:\n" ^ abs_to_string ctx abs];
+    ^ "\n- abs:\n" ^ abs_to_string ctx abs ^ "\n- abs_level: "
+    ^ string_of_int abs_level];
 
   (* When we end an input abstraction, this input abstraction gets back
      the borrows which it introduced in the context through the input
@@ -775,7 +771,7 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
     in
 
     (* Get the list of values consumed by the abstraction upon ending *)
-    let consumed_values = abs_to_consumed ctx ectx abs in
+    let consumed_values = abs_to_consumed ctx ectx abs abs_level in
 
     [%ltrace
       "\n- given back variables types:\n"
@@ -811,25 +807,61 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
     (* Generate the assignemnts *)
     let monadic = false in
     mk_closed_checked_lets __FILE__ __LINE__ ctx monadic variables_values next_e)
-  else if rg_id = bid && abs_level > 0 then
+  else if rg_id = bid && abs_level > 0 then (
+    [%ldebug "abs_level > 0 (" ^ string_of_int abs_level ^ ")"];
+
     (* The abstraction actually introduces values bound by a lambda, rather than
        consuming values *)
-    [%craise] ctx.span "Unimplemented"
+
+    (* Introduce fresh variables for the values output by the abstraction *)
+    let ctx, input_values = abs_to_given_back None abs abs_level ctx in
+
+    (* Lookup the values which are bound in the lambda defining the backward function *)
+    let bound_values =
+      [%unwrap_with_span] ctx.span
+        (RegionGroupId.Map.find_opt rg_id ctx.backward_inputs)
+        "Internal error: please file an issue"
+    in
+    let bound_values =
+      match AbsLevelMap.find_opt abs_level bound_values with
+      | None -> []
+      | Some values -> values
+    in
+
+    [%ldebug
+      "- input_values:\n"
+      ^ Print.list_to_string (tpat_to_string ctx) input_values
+      ^ "\n- bound_values:\n"
+      ^ Print.list_to_string (fvar_to_string ctx) bound_values];
+
+    (* Introduce the let bindings to link the fresh values we introduced above to the
+       ones bound in the lambda. *)
+    [%sanity_check] ctx.span
+      (List.length input_values = List.length bound_values);
+    let eqs =
+      List.combine input_values (List.map mk_texpr_from_fvar bound_values)
+    in
+    (* Translate the next expression *)
+    let next_e = translate_expr e ctx in
+    (* Generate the assignemnts *)
+    let monadic = false in
+    mk_closed_checked_lets __FILE__ __LINE__ ctx monadic eqs next_e)
   else
     (* Check that the region abstraction only consumes values but does not output any *)
-    let ctx, outputs = abs_to_given_back None abs ctx in
+    let ctx, outputs = abs_to_given_back None abs abs_level ctx in
     [%cassert] ctx.span (outputs = []) "Unimplemented";
 
     (* No outputs: we can ignore it *)
     translate_expr e ctx
 
 and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
-    (e : S.expr) (call_id : V.fun_call_id) (ctx : bs_ctx) : texpr =
+    (abs_level : abs_level) (e : S.expr) (call_id : V.fun_call_id)
+    (ctx : bs_ctx) : texpr =
   let call = V.FunCallId.Map.find call_id ctx.calls in
   let info = V.AbsId.Map.find_opt abs.abs_id ctx.abs_id_to_info in
   (* Retrieve the values consumed upon ending the loans inside this
    * abstraction: those give us the input values *)
-  let back_inputs = abs_to_consumed ctx ectx abs in
+  let back_inputs = abs_to_consumed ctx ectx abs abs_level in
   (* Retrieve the values given back by this function: those are the output
    * values. We rely on the fact that there are no nested borrows to use the
    * meta-place information from the input values given to the forward function
@@ -841,7 +873,7 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
          call.args_places)
       [ None ]
   in
-  let ctx, outputs = abs_to_given_back (Some output_mpl) abs ctx in
+  let ctx, outputs = abs_to_given_back (Some output_mpl) abs abs_level ctx in
   (* Group the output values together *)
   let output = mk_simpl_tuple_pat outputs in
   (* Translate the next expression *)
@@ -873,14 +905,16 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
       [%add_loc] mk_closed_checked_let ctx info.can_fail output call
         (next_e ctx)
 
-and translate_end_abs_identity (ectx : C.eval_ctx) (abs : V.abs) (e : S.expr)
-    (ctx : bs_ctx) : texpr =
+and translate_end_abs_identity (ectx : C.eval_ctx) (abs : V.abs)
+    (abs_level : abs_level) (e : S.expr) (ctx : bs_ctx) : texpr =
+  [%cassert] ctx.span (abs_level = 0) "Unimplemented";
+
   (* We simply check that the abstraction only contains shared borrows/loans,
      and translate the next expression *)
 
   (* We can do this simply by checking that it consumes and gives back nothing *)
-  let inputs = abs_to_consumed ctx ectx abs in
-  let ctx, outputs = abs_to_given_back None abs ctx in
+  let inputs = abs_to_consumed ctx ectx abs abs_level in
+  let ctx, outputs = abs_to_given_back None abs abs_level ctx in
   [%sanity_check] ctx.span (inputs = []);
   [%sanity_check] ctx.span (outputs = []);
 
@@ -947,13 +981,13 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
     "Consumed inputs: " ^ Print.list_to_string (fvar_to_string ctx) inputs];
   (* Retrieve the values consumed upon ending the loans inside this
    * abstraction: as there are no nested borrows, there should be none. *)
-  let consumed = abs_to_consumed ctx ectx abs in
+  let consumed = abs_to_consumed ctx ectx abs abs_level in
   [%cassert] ctx.span (consumed = []) "Nested borrows are not supported yet";
   (* Retrieve the values given back upon ending this abstraction - note that
      we don't provide meta-place information, because those assignments will
      be inlined anyway... *)
   [%ltrace "abs: " ^ abs_to_string ctx abs];
-  let ctx, given_back = abs_to_given_back_no_mp abs ctx in
+  let ctx, given_back = abs_to_given_back_no_mp abs abs_level ctx in
   [%ltrace
     "given back: " ^ Print.list_to_string (tpat_to_string ctx) given_back];
   (* Link the inputs to those given back values - note that this also
@@ -985,11 +1019,12 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
   mk_closed_checked_lets __FILE__ __LINE__ ctx monadic given_back_inputs next_e
 
 and translate_end_abstraction_join_or_loop (ectx : C.eval_ctx) (abs : V.abs)
-    (e : S.expr) (ctx : bs_ctx) : texpr =
+    (abs_level : abs_level) (e : S.expr) (ctx : bs_ctx) : texpr =
   let span = ctx.span in
+  [%cassert] span (abs_level = 0) "Unimplemented";
   (* Compute the input and output values *)
-  let back_inputs = abs_to_consumed ctx ectx abs in
-  let ctx, outputs = abs_to_given_back None abs ctx in
+  let back_inputs = abs_to_consumed ctx ectx abs abs_level in
+  let ctx, outputs = abs_to_given_back None abs abs_level ctx in
   let output = mk_simpl_tuple_pat outputs in
   (* Lookup the continuation to check if the abstraction is output by a join
      or a loop - note that it might not be there if the backward function was
@@ -1039,11 +1074,12 @@ and translate_end_abstraction_join_or_loop (ectx : C.eval_ctx) (abs : V.abs)
       [%add_loc] mk_closed_checked_let ctx can_fail output call next_e
 
 and translate_end_abstraction_with_cont (ectx : C.eval_ctx) (abs : V.abs)
-    (e : S.expr) (ctx : bs_ctx) : texpr =
+    (abs_level : abs_level) (e : S.expr) (ctx : bs_ctx) : texpr =
   [%ldebug "abs:\n" ^ abs_to_string ctx abs];
+  [%cassert] ctx.span (abs_level = 0) "Unimplemented";
   (* Translate the continuation *)
   let ctx, can_fail, output, abs_e =
-    translate_ended_abs_to_texpr ctx ectx abs
+    translate_ended_abs_to_texpr ctx ectx abs abs_level
   in
   [%ldebug
     "- output:\n" ^ tpat_to_string ctx output ^ "\n- abs_e:\n"
