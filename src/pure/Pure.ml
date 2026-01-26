@@ -1429,10 +1429,12 @@ type fun_sig_info = {
 }
 [@@deriving show]
 
+type abs_level = int [@@deriving show]
+
 type back_sg_info = {
-  inputs : (string option * ty) list list;
+  inputs : (abs_level * (string option * ty) list) list;
       (** The inputs of the backward function, level by level. *)
-  outputs : (string option * ty) list list;
+  outputs : (abs_level * (string option * ty) list) list;
       (** The "decomposed" list of outputs, level by level.
 
           The list contains all the types of all the given back values (there is

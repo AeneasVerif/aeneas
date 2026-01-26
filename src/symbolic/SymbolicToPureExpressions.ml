@@ -758,7 +758,7 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
       (* TODO: generalize *)
       match back_sg.outputs with
       | [] -> ({ ctx with backward_outputs = Some [] }, [])
-      | [ outputs ] ->
+      | [ (level, outputs) ] ->
           let ctx, vars = fresh_vars outputs ctx in
           ({ ctx with backward_outputs = Some vars }, vars)
       | _ -> [%craise] ctx.span "Unimplemented"
@@ -1309,7 +1309,7 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
               (* TODO: generalize *)
               match back_sg.inputs with
               | [] -> (ctx, [])
-              | [ inputs ] -> fresh_vars inputs ctx
+              | [ (level, inputs) ] -> fresh_vars inputs ctx
               | _ -> [%craise] ctx.span "Unimplemented"
             in
             (* Update the functions mk_return and mk_panic *)
@@ -1341,7 +1341,7 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
               let output =
                 mk_simpl_tuple_ty
                   (List.map
-                     (fun tys ->
+                     (fun (_, tys) ->
                        mk_simpl_tuple_ty (List.map (fun (_, ty) -> ty) tys))
                      outputs)
               in

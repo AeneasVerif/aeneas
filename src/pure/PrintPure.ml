@@ -708,8 +708,10 @@ let back_sg_info_to_string (env : fmt_env) (info : back_sg_info) : string =
     | Some n -> n ^ ":")
     ^ ty_to_string env false ty
   in
-  let tys_to_string inputs =
-    "[" ^ String.concat "," (List.map ty_to_string inputs) ^ "]"
+  let tys_to_string (level, inputs) =
+    string_of_int level ^ " -> ["
+    ^ String.concat "," (List.map ty_to_string inputs)
+    ^ "]"
   in
   "{ inputs = "
   ^ Print.list_to_string tys_to_string inputs

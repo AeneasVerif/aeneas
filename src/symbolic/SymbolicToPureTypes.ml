@@ -775,7 +775,8 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
      - [from_input] should be [true] if we compute from a type of an input argument,
        and [false] if we compute from the output type of the function. *)
   let translate_back_inputs_or_outputs_for_gid ~(to_input : bool)
-      (gid : T.RegionGroupId.id) : (string option * ty) list list =
+      (gid : T.RegionGroupId.id) : (abs_level * (string option * ty) list) list
+      =
     (* Translate the inputs level by level, starting with the highest level *)
     let num_levels =
       compute_back_tys_num_levels span decls_ctx get_region_group gid sg.inputs
@@ -789,7 +790,8 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
         translate_back_output_ty span decls_ctx get_region_group gid level
           ~from_input
     in
-    let translate_level (level : int) : (string option * ty) list option =
+    let translate_level (level : int) :
+        (abs_level * (string option * ty) list) option =
       (* Mutable borrows in input types can only lead to more inputs for the backward function.
          The dual is true: mutable borrows in output types can only lead to more outputs for
          the backward function. *)
@@ -810,9 +812,10 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
       in
       match tys with
       | [] -> None
-      | _ -> Some tys
+      | _ -> Some (level, tys)
     in
-    let rec translate (current_level : int) : (string option * ty) list list =
+    let rec translate (current_level : int) :
+        (abs_level * (string option * ty) list) list =
       if current_level < 0 then []
       else
         let inner = translate (current_level - 1) in
@@ -825,7 +828,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
   (* Memoize the results *)
   let gid_to_back_inputs = ref T.RegionGroupId.Map.empty in
   let rec translate_back_inputs_for_gid_aux (gid : T.RegionGroupId.id) :
-      (string option * ty) list list =
+      (abs_level * (string option * ty) list) list =
     let inputs = translate_back_inputs_or_outputs_for_gid ~to_input:true gid in
 
     [%ltrace
@@ -834,8 +837,11 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
       let output = Print.Types.ty_to_string ctx sg.output in
       let inputs =
         Print.list_to_string
-          (Print.list_to_string (fun (_, ty) ->
-               PrintPure.ty_to_string pctx false ty))
+          (fun (lvl, ty) ->
+            string_of_int lvl ^ " -> "
+            ^ Print.list_to_string
+                (fun (_, ty) -> PrintPure.ty_to_string pctx false ty)
+                ty)
           inputs
       in
       "translate_back_inputs_for_gid:" ^ "\n- function:"
@@ -845,7 +851,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
       ^ "\n- output: " ^ output ^ "\n- back inputs: " ^ inputs];
     inputs
   and translate_back_inputs_for_gid (gid : T.RegionGroupId.id) :
-      (string option * ty) list list =
+      (abs_level * (string option * ty) list) list =
     match T.RegionGroupId.Map.find_opt gid !gid_to_back_inputs with
     | Some tys -> tys
     | None ->
@@ -855,7 +861,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
         tys
   in
   let compute_back_outputs_for_gid (gid : RegionGroupId.id) :
-      (string option * ty) list list =
+      (abs_level * (string option * ty) list) list =
     let outputs =
       translate_back_inputs_or_outputs_for_gid ~to_input:false gid
     in
@@ -867,8 +873,11 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
       in
       let outputs =
         Print.list_to_string
-          (Print.list_to_string (fun (_, ty) ->
-               PrintPure.ty_to_string pctx false ty))
+          (fun (lvl, ty) ->
+            string_of_int lvl ^ " -> "
+            ^ Print.list_to_string
+                (fun (_, ty) -> PrintPure.ty_to_string pctx false ty)
+                ty)
           outputs
       in
       "compute_back_outputs_for_gid:" ^ "\n- function:"
@@ -1045,12 +1054,12 @@ let compute_back_tys_with_info (dsg : Pure.decomposed_fun_type) :
       (* Compute the input/output types *)
       let inputs =
         List.map
-          (fun tys -> mk_simpl_tuple_ty (List.map snd tys))
+          (fun (_, tys) -> mk_simpl_tuple_ty (List.map snd tys))
           back_sg.inputs
       in
       let outputs =
         List.map
-          (fun tys -> mk_simpl_tuple_ty (List.map snd tys))
+          (fun (_, tys) -> mk_simpl_tuple_ty (List.map snd tys))
           back_sg.outputs
       in
       (* Filter if necessary *)
