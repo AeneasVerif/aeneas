@@ -549,7 +549,7 @@ and aborrow_content_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
   | V.AEndedSharedBorrow | V.AProjSharedBorrow _ ->
       [%craise] ctx.span "Unimplemented"
 
-and aproj_to_consumed_aux (ctx : bs_ctx) (_abs_regions : T.RegionId.Set.t)
+and aproj_to_consumed_aux (ctx : bs_ctx) (abs_regions : T.RegionId.Set.t)
     (abs_level : abs_level) (current_level : abs_level) (aproj : V.aproj)
     (ty : T.ty) : texpr option =
   match aproj with
@@ -557,8 +557,8 @@ and aproj_to_consumed_aux (ctx : bs_ctx) (_abs_regions : T.RegionId.Set.t)
       if abs_level = current_level then
         (* The symbolic value was left unchanged.
 
-         We're using the projection type as the type of the symbolic value -
-         it doesn't really matter. *)
+           We're using the projection type as the type of the symbolic value -
+           it doesn't really matter. *)
         let msv : V.symbolic_value = { sv_id = msv; sv_ty = ty } in
         Some (symbolic_value_to_texpr ctx msv)
       else None
@@ -567,12 +567,12 @@ and aproj_to_consumed_aux (ctx : bs_ctx) (_abs_regions : T.RegionId.Set.t)
       if abs_level = current_level then (
         [%sanity_check] ctx.span (child_aproj = AEmpty);
         (* TODO: check that the updated symbolic values covers all the cases
-         (part of the symbolic value might have been updated, and the rest
-         left unchanged) - it might happen with nested borrows (see the documentation
-         of [AProjLoans]). For now we check that there are no nested borrows
-         to make sure we have to update this part of the code once we add support
-         for nested borrows.
-      *)
+           (part of the symbolic value might have been updated, and the rest
+           left unchanged) - it might happen with nested borrows (see the documentation
+           of [AProjLoans]). For now we check that there are no nested borrows
+           to make sure we have to update this part of the code once we add support
+           for nested borrows.
+        *)
         [%sanity_check] ctx.span
           (not
              (TypesUtils.ty_has_nested_borrows (Some ctx.span)
@@ -583,15 +583,18 @@ and aproj_to_consumed_aux (ctx : bs_ctx) (_abs_regions : T.RegionId.Set.t)
          it doesn't really matter. *)
         let mnv : V.symbolic_value = { sv_id = mnv.sv_id; sv_ty = ty } in
         Some (symbolic_value_to_texpr ctx mnv))
-      else None
+      else [%craise] ctx.span "Unimplemented"
   | V.AEndedProjLoans _ ->
       (* The symbolic value was updated, and the given back values come from several
          abstractions *)
       [%craise] ctx.span "Unimplemented"
-  | AEndedProjBorrows _ ->
-      (* The value should have been introduced by a loan projector, and should not
-         contain nested borrows, so we can't get there *)
-      [%craise] ctx.span "Unreachable"
+  | AEndedProjBorrows { mvalues = _; loans } -> (
+      (* Happens in the case of nested borrows *)
+      match loans with
+      | [] ->
+          (* No inner loans because of additional nested borrows *)
+          None
+      | _ -> [%craise] ctx.span "Unimplemented")
   | AEmpty | AProjLoans _ | AProjBorrows _ -> [%craise] ctx.span "Unreachable"
 
 let tavalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
@@ -622,7 +625,10 @@ let tavalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
     See [tavalue_to_consumed_aux]. *)
 let abs_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
     (abs_level : abs_level) : texpr list =
-  [%ltrace abs_to_string ~with_ended:true ctx abs];
+  [%ltrace
+    "- abs:\n"
+    ^ abs_to_string ~with_ended:true ctx abs
+    ^ "\n- abs_level: " ^ string_of_int abs_level];
   let values =
     List.filter_map
       (tavalue_to_consumed ctx ectx abs.regions.owned abs_level)
@@ -631,7 +637,7 @@ let abs_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
   [%ltrace
     "- abs: "
     ^ abs_to_string ~with_ended:true ctx abs
-    ^ "\n- values: "
+    ^ "\n- abs_level: " ^ string_of_int abs_level ^ "\n- values: "
     ^ Print.list_to_string (texpr_to_string ctx) values];
   values
 
@@ -715,7 +721,7 @@ let rec tavalue_to_given_back_aux ~(filter : bool)
           current_level mp bc av.ty ctx
     | ASymbolic (pm, aproj) ->
         [%sanity_check] ctx.span (pm = PNone);
-        aproj_to_given_back_aux mp aproj av.ty ctx
+        aproj_to_given_back_aux abs_level current_level mp aproj av.ty ctx
     | AIgnored _ ->
         (* If we do not filter, we have to create an ignored pattern *)
         if filter then (ctx, None)
@@ -838,10 +844,14 @@ and aborrow_content_to_given_back_aux ~(filter : bool)
         let ty = translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos ty in
         (ctx, Some (mk_ignored_pat ty))
 
-and aproj_to_given_back_aux (mp : mplace option) (aproj : V.aproj) (ty : T.ty)
-    (ctx : bs_ctx) : bs_ctx * tpat option =
+and aproj_to_given_back_aux (abs_level : abs_level) (current_level : abs_level)
+    (mp : mplace option) (aproj : V.aproj) (ty : T.ty) (ctx : bs_ctx) :
+    bs_ctx * tpat option =
   match aproj with
-  | V.AEndedProjLoans _ -> [%craise] ctx.span "Unreachable"
+  | V.AEndedProjLoans { proj = _; consumed; borrows } ->
+      [%cassert] ctx.span (consumed = []) "Unimplemented";
+      [%cassert] ctx.span (borrows = []) "Unimplemented";
+      (ctx, None)
   | AEndedProjBorrows { mvalues = mv; loans } ->
       [%cassert] ctx.span (loans = []) "Unreachable";
       (* Return the meta-value *)
@@ -887,6 +897,10 @@ let tavalue_to_given_back (abs_regions : T.RegionId.Set.t)
     See [tavalue_to_given_back]. *)
 let abs_to_given_back (mpl : mplace option list option) (abs : V.abs)
     (abs_level : abs_level) (ctx : bs_ctx) : bs_ctx * tpat list =
+  [%ltrace
+    "- abs:\n"
+    ^ abs_to_string ~with_ended:true ctx abs
+    ^ "\n- abs_level: " ^ string_of_int abs_level];
   let avalues =
     match mpl with
     | None -> List.map (fun av -> (None, av)) abs.avalues

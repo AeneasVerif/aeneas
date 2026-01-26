@@ -857,11 +857,42 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
 and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
     (abs_level : abs_level) (e : S.expr) (call_id : V.fun_call_id)
     (ctx : bs_ctx) : texpr =
+  [%ltrace
+    "abs (level: " ^ string_of_int abs_level ^ "):\n" ^ abs_to_string ctx abs];
   let call = V.FunCallId.Map.find call_id ctx.calls in
   let info = V.AbsId.Map.find_opt abs.abs_id ctx.abs_id_to_info in
   (* Retrieve the values consumed upon ending the loans inside this
-   * abstraction: those give us the input values *)
-  let back_inputs = abs_to_consumed ctx ectx abs abs_level in
+     abstraction: those give us the input values *)
+  let back_inputs =
+    (* For now we do not support sub-abstractions giving back values.
+       This means that the sub-abstraction at level 0 will consume all the
+       inputs for the stricter levels.
+       TODO: generalize.
+     *)
+    if abs_level > 0 then
+      (* For now we do not support sub-abstractions giving back values *)
+      abs_to_consumed ctx ectx abs abs_level
+    else
+      (* Consume all the values, level by level *)
+      let max_level = InterpBorrowsCore.get_max_sub_abs ~with_ended:true abs in
+      [%ldebug "max_level: " ^ string_of_int max_level];
+      (* Note that we always push the outputs at the beginning of the stack,
+         which means the outputs of the highest sub-abstractions will end up
+         being first *)
+      let inputs = ref [] in
+      for level = 0 to max_level do
+        match abs_to_consumed ctx ectx abs level with
+        | [] -> [%ldebug "no inputs at level " ^ string_of_int level]
+        | inputs' ->
+            [%ldebug
+              "inputs at level " ^ string_of_int level ^ ":\n"
+              ^ Print.list_to_string (texpr_to_string ctx) inputs'];
+            inputs := mk_simpl_tuple_texpr ctx.span inputs' :: !inputs
+      done;
+      [%ldebug "inputs:\n" ^ Print.list_to_string (texpr_to_string ctx) !inputs];
+      if max_level > 0 then raise (Failure "TODO");
+      !inputs
+  in
   (* Retrieve the values given back by this function: those are the output
    * values. We rely on the fact that there are no nested borrows to use the
    * meta-place information from the input values given to the forward function
@@ -874,18 +905,13 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
       [ None ]
   in
   let ctx, outputs = abs_to_given_back (Some output_mpl) abs abs_level ctx in
+  [%cassert] ctx.span (abs_level = 0 || outputs = []) "Unimplemented";
   (* Group the output values together *)
   let output = mk_simpl_tuple_pat outputs in
   (* Translate the next expression *)
   let next_e ctx = translate_expr e ctx in
   (* Put everything together *)
-  let inputs = back_inputs in
-  let args_mplaces = List.map (fun _ -> None) inputs in
-  let args =
-    List.map
-      (fun (arg, mp) -> mk_opt_mplace_texpr mp arg)
-      (List.combine inputs args_mplaces)
-  in
+  let args = List.map (mk_opt_mplace_texpr None) back_inputs in
   (* The backward function might have been filtered if it does nothing
      (consumes unit and returns unit). *)
   match info with

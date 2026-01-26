@@ -1915,7 +1915,7 @@ let get_first_non_ignored_aloan_in_abs (span : Meta.span) (abs : abs)
 (** Get the non-ended sub-abstraction with the highest level.
 
     Outputs -1 if no valid borrow/loan was found *)
-let get_max_sub_abs (abs : abs) : int =
+let get_max_sub_abs ?(with_ended = false) (abs : abs) : int =
   let max_level = ref (-1) in
   let save_level level = if level > !max_level then max_level := level in
   let visitor =
@@ -1930,7 +1930,7 @@ let get_max_sub_abs (abs : abs) : int =
         | AEndedSharedLoan _
         | AIgnoredMutLoan _
         | AEndedIgnoredMutLoan _
-        | AIgnoredSharedLoan _ -> ());
+        | AIgnoredSharedLoan _ -> if with_ended then save_level level);
         super#visit_aloan_content level lc
 
       method! visit_aborrow_content level bc =
@@ -1941,13 +1941,14 @@ let get_max_sub_abs (abs : abs) : int =
         | AEndedSharedBorrow
         | AEndedIgnoredMutBorrow _
         | AProjSharedBorrow (_ :: _) -> save_level level
-        | AProjSharedBorrow [] -> ());
+        | AProjSharedBorrow [] -> if with_ended then save_level level);
         super#visit_aborrow_content level bc
 
       method! visit_aproj level proj =
         (match proj with
         | AProjLoans _ | AProjBorrows _ -> save_level level
-        | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty -> ());
+        | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty ->
+            if with_ended then save_level level);
         super#visit_aproj level proj
 
       method! visit_loan_content level lc =
@@ -1960,6 +1961,13 @@ let get_max_sub_abs (abs : abs) : int =
         | VSharedBorrow _ | VMutBorrow _ | VReservedMutBorrow _ ->
             save_level level);
         super#visit_borrow_content level bc
+
+      method! visit_adt_avalue level a =
+        (* When analyzing the ended borrows, make sure we don't forget the ADTs
+           containing borrows which expanded to a variant which did not contain
+           any borrow. *)
+        if with_ended then save_level level;
+        super#visit_adt_avalue level a
     end
   in
   visitor#visit_abs 0 abs;

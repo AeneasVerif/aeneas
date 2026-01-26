@@ -181,7 +181,7 @@ module Values = struct
             let loans = List.map (aproj_to_string ~with_ended env) loans in
             ", loans=[" ^ String.concat "," loans ^ "]"
         in
-        "ended_aproj_borrows (" ^ meta ^ loans ^ "])"
+        "ended_aproj_borrows (" ^ meta ^ loans ^ ")"
     | AEmpty -> "_"
 
   and aproj_borrows_to_string ?(with_ended : bool = false) (env : fmt_env)
