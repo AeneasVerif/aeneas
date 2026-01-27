@@ -861,7 +861,7 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
               ("Internal error: please file an issue.\nUnexpected value: "
              ^ tavalue_to_string ctx av)
       end
-    | AAdt { variant_id = _; fields } ->
+    | AAdt { borrow_proj = _; variant_id = _; fields } ->
         (* Simply recurse *)
         List.iter add_avalue fields
     | AIgnored _ -> (* Nothing to register *) ()

@@ -586,6 +586,9 @@ and avalue =
           because of a join for instance). *)
 
 and adt_avalue = {
+  borrow_proj : bool;
+      (** Was this ADT inroduced because of a borrow projection or a loan
+          projection? *)
   variant_id : (VariantId.id option[@opaque]);
   fields : tavalue list;
 }

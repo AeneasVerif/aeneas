@@ -861,18 +861,29 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
     "abs (level: " ^ string_of_int abs_level ^ "):\n" ^ abs_to_string ctx abs];
   let call = V.FunCallId.Map.find call_id ctx.calls in
   let info = V.AbsId.Map.find_opt abs.abs_id ctx.abs_id_to_info in
-  (* Retrieve the values consumed upon ending the loans inside this
+  (* For now we do not support sub-abstractions giving back values.
+
+     This means we ignore ending fun call sub-abstractions for level > 0, and
+     the sub-abstraction at level 0 consumes everything.
+     TODO: generalize. We should keep track of the sub-abstractions of higher-level:
+     every time we end a sub-abstraction we add more inputs to the same backward function.
+   *)
+  if abs_level > 0 then (
+    (* Check that there are no outputs *)
+    let ctx, outputs = abs_to_given_back None abs abs_level ctx in
+    [%cassert] ctx.span (outputs = []) "Unimplemented";
+    (* Continue *)
+    translate_expr e ctx)
+  else
+    (* Retrieve the values consumed upon ending the loans inside this
      abstraction: those give us the input values *)
-  let back_inputs =
-    (* For now we do not support sub-abstractions giving back values.
-       This means that the sub-abstraction at level 0 will consume all the
-       inputs for the stricter levels.
-       TODO: generalize.
-     *)
-    if abs_level > 0 then
-      (* For now we do not support sub-abstractions giving back values *)
-      abs_to_consumed ctx ectx abs abs_level
-    else
+    let back_inputs =
+      (* For now we do not support sub-abstractions giving back values.
+         This means that the sub-abstraction at level 0 will consume all the
+         inputs for the stricter levels.
+         TODO: generalize.
+       *)
+      [%sanity_check] ctx.span (abs_level = 0);
       (* Consume all the values, level by level *)
       let max_level = InterpBorrowsCore.get_max_sub_abs ~with_ended:true abs in
       [%ldebug "max_level: " ^ string_of_int max_level];
@@ -890,46 +901,44 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
             inputs := mk_simpl_tuple_texpr ctx.span inputs' :: !inputs
       done;
       [%ldebug "inputs:\n" ^ Print.list_to_string (texpr_to_string ctx) !inputs];
-      if max_level > 0 then raise (Failure "TODO");
       !inputs
-  in
-  (* Retrieve the values given back by this function: those are the output
-   * values. We rely on the fact that there are no nested borrows to use the
-   * meta-place information from the input values given to the forward function
-   * (we need to add [None] for the return avalue) *)
-  let output_mpl =
-    List.append
-      (List.map
-         (translate_opt_mplace (Some call.span) ctx.type_ctx.type_infos)
-         call.args_places)
-      [ None ]
-  in
-  let ctx, outputs = abs_to_given_back (Some output_mpl) abs abs_level ctx in
-  [%cassert] ctx.span (abs_level = 0 || outputs = []) "Unimplemented";
-  (* Group the output values together *)
-  let output = mk_simpl_tuple_pat outputs in
-  (* Translate the next expression *)
-  let next_e ctx = translate_expr e ctx in
-  (* Put everything together *)
-  let args = List.map (mk_opt_mplace_texpr None) back_inputs in
-  (* The backward function might have been filtered if it does nothing
+    in
+    (* Retrieve the values given back by this function: those are the output
+     * values. We rely on the fact that there are no nested borrows to use the
+     * meta-place information from the input values given to the forward function
+     * (we need to add [None] for the return avalue) *)
+    let output_mpl =
+      List.append
+        (List.map
+           (translate_opt_mplace (Some call.span) ctx.type_ctx.type_infos)
+           call.args_places)
+        [ None ]
+    in
+    let ctx, outputs = abs_to_given_back (Some output_mpl) abs abs_level ctx in
+    (* Group the output values together *)
+    let output = mk_simpl_tuple_pat outputs in
+    (* Translate the next expression *)
+    let next_e ctx = translate_expr e ctx in
+    (* Put everything together *)
+    let args = List.map (mk_opt_mplace_texpr None) back_inputs in
+    (* The backward function might have been filtered if it does nothing
      (consumes unit and returns unit). *)
-  match info with
-  | None -> next_e ctx
-  | Some info ->
-      [%ltrace
-        let args = List.map (texpr_to_string ctx) args in
-        "func: "
-        ^ texpr_to_string ctx info.fvar
-        ^ "\nfunc type: "
-        ^ pure_ty_to_string ctx info.fvar.ty
-        ^ "\n\nargs:\n" ^ String.concat "\n" args];
-      let call = [%add_loc] mk_apps ctx.span info.fvar args in
-      (* Introduce a match if necessary *)
-      let ctx, (output, call) = decompose_let_match ctx output call in
-      (* Translate the next expression and construct the let *)
-      [%add_loc] mk_closed_checked_let ctx info.can_fail output call
-        (next_e ctx)
+    match info with
+    | None -> next_e ctx
+    | Some info ->
+        [%ltrace
+          let args = List.map (texpr_to_string ctx) args in
+          "func: "
+          ^ texpr_to_string ctx info.fvar
+          ^ "\nfunc type: "
+          ^ pure_ty_to_string ctx info.fvar.ty
+          ^ "\n\nargs:\n" ^ String.concat "\n" args];
+        let call = [%add_loc] mk_apps ctx.span info.fvar args in
+        (* Introduce a match if necessary *)
+        let ctx, (output, call) = decompose_let_match ctx output call in
+        (* Translate the next expression and construct the let *)
+        [%add_loc] mk_closed_checked_let ctx info.can_fail output call
+          (next_e ctx)
 
 and translate_end_abs_identity (ectx : C.eval_ctx) (abs : V.abs)
     (abs_level : abs_level) (e : S.expr) (ctx : bs_ctx) : texpr =

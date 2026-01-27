@@ -1055,11 +1055,11 @@ let destructure_shared_loans (span : Meta.span) (fixed_aids : AbsId.Set.t) :
       =
     let value, avl =
       match av.value with
-      | AAdt { variant_id; fields } ->
+      | AAdt { borrow_proj; variant_id; fields } ->
           let fields, avl =
             List.split (List.map (destructure_avalue abs) fields)
           in
-          (AAdt { variant_id; fields }, List.flatten avl)
+          (AAdt { borrow_proj; variant_id; fields }, List.flatten avl)
       | ALoan lc ->
           let lc, avl =
             match lc with

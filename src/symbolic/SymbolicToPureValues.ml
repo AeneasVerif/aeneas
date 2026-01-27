@@ -188,16 +188,23 @@ let compute_tavalue_proj_kind span type_infos (abs_regions : T.RegionId.Set.t)
   let set_has_loans level = if level = abs_level then has_loans := true in
   let set_has_borrows level = if level = abs_level then has_borrows := true in
   let set_has_mut_loans level =
-    if level = abs_level then has_mut_loans := true
+    if level = abs_level then (
+      has_loans := true;
+      has_mut_loans := true)
   in
   let set_has_mut_borrows level =
-    if level = abs_level then has_mut_borrows := true
+    if level = abs_level then (
+      has_borrows := true;
+      has_mut_borrows := true)
   in
 
   let keep_region (r : T.region) =
     match r with
     | T.RVar (Free rid) -> T.RegionId.Set.mem rid abs_regions
     | _ -> false
+  in
+  let ty_has_mut_region =
+    TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos keep_region
   in
   let visitor =
     object
@@ -207,6 +214,15 @@ let compute_tavalue_proj_kind span type_infos (abs_regions : T.RegionId.Set.t)
       method! visit_tavalue (level, _) av =
         (* Remember the type of the current value *)
         super#visit_tavalue (level, av.ty) av
+
+      method! visit_adt_avalue (level, ty) av =
+        if ty_has_mut_region ty then
+          if
+            (* TODO: problem with nested borrows *)
+            av.borrow_proj
+          then set_has_mut_borrows level
+          else set_has_mut_loans level;
+        super#visit_adt_avalue (level, ty) av
 
       method! visit_ALoan (level, ty) lc =
         set_has_loans level;
@@ -246,37 +262,25 @@ let compute_tavalue_proj_kind span type_infos (abs_regions : T.RegionId.Set.t)
         | V.AEndedProjLoans _ ->
             set_has_loans level;
             (* We need to check wether the projected loans are mutable or not *)
-            if
-              TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
-                keep_region ty
-            then set_has_mut_loans level;
+            if ty_has_mut_region ty then set_has_mut_loans level;
             (* Continue exploring (same reasons as above) *)
             super#visit_ASymbolic (level, ty) pm aproj
         | AProjLoans _ ->
             set_has_loans level;
             (* We need to check wether the projected loans are mutable or not *)
-            if
-              TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
-                keep_region ty
-            then set_has_mut_loans level;
+            if ty_has_mut_region ty then set_has_mut_loans level;
             (* Continue exploring (same reasons as above) *)
             super#visit_ASymbolic (level, ty) pm aproj
         | AEndedProjBorrows _ ->
             set_has_borrows level;
             (* We need to check wether the projected borrows are mutable or not *)
-            if
-              TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
-                keep_region ty
-            then set_has_mut_borrows level;
+            if ty_has_mut_region ty then set_has_mut_borrows level;
             (* Continue exploring (same reasons as above) *)
             super#visit_ASymbolic (level, ty) pm aproj
         | AProjBorrows _ ->
             set_has_borrows level;
             (* We need to check wether the projected borrows are mutable or not *)
-            if
-              TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
-                keep_region ty
-            then set_has_mut_borrows level;
+            if ty_has_mut_region ty then set_has_mut_borrows level;
             (* Continue exploring (same reasons as above) *)
             super#visit_ASymbolic (level, ty) pm aproj
         | AEmpty ->
@@ -307,10 +311,12 @@ let gtranslate_adt_fields ~(project_borrows : bool)
   let proj_kind = compute_proj_kind av in
   match proj_kind with
   | UnknownProj when filter ->
+      [%ldebug "UnknownProj && filter"];
       (* If we filter: ignore the value.
          Otherwise, translate everything (case below). *)
       (ctx, None)
   | UnknownProj | BorrowProj _ | LoanProj _ -> begin
+      [%ldebug "not (UnknownProj && filter)"];
       begin
         match proj_kind with
         | BorrowProj _ -> [%sanity_check] span project_borrows
@@ -604,7 +610,12 @@ let tavalue_to_consumed (ctx : bs_ctx) (ectx : C.eval_ctx)
      it contains mutable loans, then we generate a consumed value (because
      upon ending the borrow we consumed a value).
      Otherwise we ignore it. *)
-  [%ltrace tavalue_to_string ~with_ended:true ctx av];
+  [%ltrace
+    "Projecting abs_regions: "
+    ^ T.RegionId.Set.to_string None abs_regions
+    ^ ":\n"
+    ^ tavalue_to_string ~with_ended:true ctx av
+    ^ "\n<: " ^ ty_to_string ctx av.ty];
   match
     compute_tavalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions
       abs_level 0 av

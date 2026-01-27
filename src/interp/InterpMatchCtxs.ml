@@ -477,10 +477,14 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
     let ty = M.match_rtys ctx0 ctx1 v0.ty v1.ty in
     match (v0.value, v1.value) with
     | AAdt av0, AAdt av1 ->
-        if av0.variant_id = av1.variant_id then
+        if av0.variant_id = av1.variant_id && av0.borrow_proj = av1.borrow_proj
+        then
+          let borrow_proj = av0.borrow_proj in
           let fields = List.combine av0.fields av1.fields in
           let fields = List.map (fun (f0, f1) -> match_arec f0 f1) fields in
-          let value : avalue = AAdt { variant_id = av0.variant_id; fields } in
+          let value : avalue =
+            AAdt { borrow_proj; variant_id = av0.variant_id; fields }
+          in
           { value; ty }
         else (* Merge *)
           M.match_distinct_aadts match_rec ctx0 ctx1 v0.ty av0 v1.ty av1 ty

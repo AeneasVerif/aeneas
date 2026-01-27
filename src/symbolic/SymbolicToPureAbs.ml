@@ -875,7 +875,8 @@ let register_inputs (ctx : bs_ctx) (rids : T.RegionId.Set.t)
   in
   let rec register (av : V.tavalue) : unit =
     match av.value with
-    | V.AAdt { variant_id = _; fields } -> List.iter register fields
+    | V.AAdt { borrow_proj = _; variant_id = _; fields } ->
+        List.iter register fields
     | V.ALoan lc -> (
         match lc with
         | V.AMutLoan (pm, bid, child) ->
@@ -957,7 +958,8 @@ let register_outputs (ctx : bs_ctx) (bound_outputs : bound_borrows_loans)
   in
   let rec register (av : V.tavalue) : unit =
     match av.value with
-    | V.AAdt { variant_id = _; fields } -> List.iter register fields
+    | V.AAdt { borrow_proj = _; variant_id = _; fields } ->
+        List.iter register fields
     | V.ALoan lc -> (
         match lc with
         | V.AMutLoan (pm, _, child) | V.ASharedLoan (pm, _, _, child) ->
