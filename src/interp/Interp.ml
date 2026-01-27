@@ -406,6 +406,11 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
         in
         let ret_value = Option.get ret_value in
         let ctx_return = ctx in
+        [%ltrace
+          "after popping the frame:\n- returned value:\n"
+          ^ tvalue_to_string ctx_return ret_value
+          ^ "\n\n- ctx:\n"
+          ^ eval_ctx_to_string ctx_return];
 
         (* Forward translation: generate the Return node *)
         let fwd_e = cc_pop (SA.Return (ctx, Some ret_value)) in

@@ -507,7 +507,7 @@ module Values = struct
             let borrows = List.map (eproj_to_string ~with_ended env) borrows in
             ", borrows=[" ^ String.concat "," borrows ^ "]"
         in
-        "ended_aproj_loans (" ^ msv ^ consumed ^ borrows ^ ")"
+        "ended_eproj_loans (" ^ msv ^ consumed ^ borrows ^ ")"
     | EEndedProjBorrows { mvalues; loans } ->
         let meta =
           if with_ended then
@@ -524,7 +524,7 @@ module Values = struct
             let loans = List.map (eproj_to_string ~with_ended env) loans in
             ", loans=[" ^ String.concat "," loans ^ "]"
         in
-        "ended_aproj_borrows (" ^ meta ^ loans ^ "])"
+        "ended_eproj_borrows (" ^ meta ^ loans ^ "])"
     | EEmpty -> "_"
 
   let rec tevalue_to_string ?(span : Meta.span option = None)
