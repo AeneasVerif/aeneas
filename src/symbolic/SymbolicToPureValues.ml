@@ -860,8 +860,10 @@ and aproj_to_given_back_aux (abs_level : abs_level) (current_level : abs_level)
     bs_ctx * tpat option =
   match aproj with
   | V.AEndedProjLoans { proj = _; consumed; borrows } ->
-      [%cassert] ctx.span (consumed = []) "Unimplemented";
       [%cassert] ctx.span (borrows = []) "Unimplemented";
+      (match consumed with
+      | [] | [ _ ] -> ()
+      | _ -> [%craise] ctx.span "Unimplemented");
       (ctx, None)
   | AEndedProjBorrows { mvalues = mv; loans } ->
       [%cassert] ctx.span (loans = []) "Unreachable";
