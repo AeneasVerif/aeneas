@@ -555,7 +555,7 @@ and aborrow_content_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
   | V.AEndedSharedBorrow | V.AProjSharedBorrow _ ->
       [%craise] ctx.span "Unimplemented"
 
-and aproj_to_consumed_aux (ctx : bs_ctx) (abs_regions : T.RegionId.Set.t)
+and aproj_to_consumed_aux (ctx : bs_ctx) (_abs_regions : T.RegionId.Set.t)
     (abs_level : abs_level) (current_level : abs_level) (aproj : V.aproj)
     (ty : T.ty) : texpr option =
   match aproj with
@@ -855,9 +855,9 @@ and aborrow_content_to_given_back_aux ~(filter : bool)
         let ty = translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos ty in
         (ctx, Some (mk_ignored_pat ty))
 
-and aproj_to_given_back_aux (abs_level : abs_level) (current_level : abs_level)
-    (mp : mplace option) (aproj : V.aproj) (ty : T.ty) (ctx : bs_ctx) :
-    bs_ctx * tpat option =
+and aproj_to_given_back_aux (_abs_level : abs_level)
+    (_current_level : abs_level) (mp : mplace option) (aproj : V.aproj)
+    (ty : T.ty) (ctx : bs_ctx) : bs_ctx * tpat option =
   match aproj with
   | V.AEndedProjLoans { proj = _; consumed; borrows } ->
       [%cassert] ctx.span (borrows = []) "Unimplemented";
