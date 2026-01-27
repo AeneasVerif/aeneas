@@ -1008,9 +1008,7 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
     match T.RegionGroupId.Map.find_opt rg_id ctx.backward_inputs with
     | None ->
         let back_sg = T.RegionGroupId.Map.find rg_id ctx.sg.fun_ty.back_sg in
-        [%cassert] ctx.span
-          (back_sg.inputs = [] && back_sg.outputs = [])
-          "Unimplemented";
+        [%cassert] ctx.span (back_sg.inputs = []) "Unimplemented";
         []
     | Some inputs -> (
         (* There may be no inputs if the abstraction consumes nothing, but it should
