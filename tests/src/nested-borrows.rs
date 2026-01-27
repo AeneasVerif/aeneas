@@ -1,8 +1,51 @@
 //@ [!lean] skip
 //! This module contains functions with nested borrows in their signatures.
+#![feature(register_tool)]
+#![register_tool(aeneas)]
 
 trait Trait1 {
     fn f(x: &&u32);
+}
+
+fn inner_shared<'a, 'b>(x : &'a &'b u32) -> &'b u32 {
+    *x
+}
+
+#[aeneas::opaque]
+fn inner_mut<'a, 'b>(x : &'a mut &'b mut u32) -> &'a mut u32 {
+    *x
+}
+
+struct IterMut<'a, T> {
+    v : Option<&'a mut T>,
+}
+
+
+impl<'a, T> IterMut<'a, T> {
+    #[aeneas::opaque]
+    fn next(&mut self) -> Option<&'a mut T> {
+        /* We need to use `std::mem::replace` because otherwise the
+           code doesn't borrow-check. */
+        std::mem::replace(&mut self.v, None)
+    }
+}
+
+fn call_iter_mut_next<'a, T>(mut it : IterMut<'a, T>) {
+    match it.next() {
+        None => (),
+        Some (_) => (),
+    }
+}
+
+fn call_iter_mut_next_u32<'a, T>(mut it : IterMut<'a, u32>) {
+    match it.next() {
+        None => (),
+        Some (x) => *x += 1,
+    }
+}
+
+fn incr_inner<'a, 'b>(x : &'a mut &'b mut u32) {
+    **x += 1;
 }
 
 /*
