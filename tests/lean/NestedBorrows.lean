@@ -9,8 +9,105 @@ set_option linter.unusedVariables false
 namespace nested_borrows
 
 /- Trait declaration: [nested_borrows::Trait1]
-   Source: 'tests/src/nested-borrows.rs', lines 4:0-6:1 -/
+   Source: 'tests/src/nested-borrows.rs', lines 6:0-8:1 -/
 structure Trait1 (Self : Type) where
   f : Std.U32 → Result Unit
+
+/- [nested_borrows::inner_shared]:
+   Source: 'tests/src/nested-borrows.rs', lines 10:0-12:1 -/
+def inner_shared (x : Std.U32) : Result Std.U32 := do
+  ok x
+
+/- [nested_borrows::inner_mut]:
+   Source: 'tests/src/nested-borrows.rs', lines 14:0-16:1 -/
+def inner_mut
+  (x : Std.U32) :
+  Result (Std.U32 × (Std.U32 → Std.U32) × (Std.U32 → Std.U32))
+  := do
+  ok (x, fun x1 => x1, fun x1 => x1)
+
+/- [nested_borrows::call_inner_mut]:
+   Source: 'tests/src/nested-borrows.rs', lines 18:0-26:1 -/
+def call_inner_mut : Result Unit := do
+  let (_, inner_mut_back, inner_mut_back1) ← inner_mut 0#u32
+  let px := inner_mut_back 1#u32
+  massert (px = 1#u32)
+  let x := inner_mut_back1 2#u32
+  massert (x = 2#u32)
+
+/- [nested_borrows::inner_mut_swap]:
+   Source: 'tests/src/nested-borrows.rs', lines 28:0-32:1 -/
+def inner_mut_swap
+  (ppx : Std.U32) (py : Std.U32) :
+  Result (Std.U32 × (Std.U32 → Std.U32) × (Std.U32 → (Std.U32 ×
+    Std.U32)))
+  := do
+  let back'b := fun ppx1 => (10#u32, ppx1)
+  ok (py, fun ppx1 => ppx1, back'b)
+
+/- [nested_borrows::call_inner_mut_swap]:
+   Source: 'tests/src/nested-borrows.rs', lines 34:0-45:1 -/
+def call_inner_mut_swap : Result Unit := do
+  let (_, inner_mut_swap_back, inner_mut_swap_back1) ←
+    inner_mut_swap 0#u32 1#u32
+  let px := inner_mut_swap_back 2#u32
+  massert (px = 2#u32)
+  let (x, y) := inner_mut_swap_back1 3#u32
+  massert (x = 10#u32)
+  massert (y = 3#u32)
+
+/- [nested_borrows::IterMut]
+   Source: 'tests/src/nested-borrows.rs', lines 47:0-49:1 -/
+structure IterMut (T : Type) where
+  v : Option T
+
+/- [nested_borrows::replace_option_mut]:
+   Source: 'tests/src/nested-borrows.rs', lines 52:0-54:1 -/
+def replace_option_mut
+  {T : Type} (x : Option T) (v : Option T) :
+  Result ((Option T) × (Option T) × (Option T → Option T → ((Option T) ×
+    (Option T))))
+  := do
+  fail panic
+
+/- [nested_borrows::{nested_borrows::IterMut<'a, T>}::next]:
+   Source: 'tests/src/nested-borrows.rs', lines 57:4-61:5 -/
+def IterMut.next
+  {T : Type} (self : IterMut T) :
+  Result ((Option T) × (IterMut T) × (IterMut T → Option T → IterMut T))
+  := do
+  let (o, o1, replace_option_mut_back) ← replace_option_mut self.v none
+  let back'a :=
+    fun self1 o2 =>
+      let o3 :=
+        match replace_option_mut_back self1.v o2 with
+        | (o4, none) => o4
+        | _ => self.v
+      ({ v := o3 } : IterMut T)
+  ok (o, { v := o1 }, back'a)
+
+/- [nested_borrows::call_iter_mut_next]:
+   Source: 'tests/src/nested-borrows.rs', lines 64:0-69:1 -/
+def call_iter_mut_next {T : Type} (it : IterMut T) : Result (IterMut T) := do
+  let (o, im, next_back) ← IterMut.next it
+  match o with
+  | none => ok (next_back im none)
+  | some _ => ok (next_back im o)
+
+/- [nested_borrows::call_iter_mut_next_u32]:
+   Source: 'tests/src/nested-borrows.rs', lines 71:0-76:1 -/
+def call_iter_mut_next_u32
+  (T : Type) (it : IterMut Std.U32) : Result (IterMut Std.U32) := do
+  let (o, im, next_back) ← IterMut.next it
+  match o with
+  | none => ok (next_back im none)
+  | some x => let x1 ← x + 1#u32
+              ok (next_back im (some x1))
+
+/- [nested_borrows::incr_inner]:
+   Source: 'tests/src/nested-borrows.rs', lines 78:0-80:1 -/
+def incr_inner (x : Std.U32) : Result (Std.U32 × (Std.U32 → Std.U32)) := do
+  let x1 ← x + 1#u32
+  ok (x1, fun x2 => x2)
 
 end nested_borrows
