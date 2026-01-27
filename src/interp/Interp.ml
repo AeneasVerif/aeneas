@@ -201,7 +201,9 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx)
           input_svs
       in
       (* Note that we don't really care about the type of the input *)
-      let input = { value = EApp (EInputAbs rg_id, inputs); ty = mk_unit_ty } in
+      let input =
+        { value = EApp (EInputAbs rg_id, [ inputs ]); ty = mk_unit_ty }
+      in
       { output = None; input = Some input }
     in
     (avalues, Some cont)

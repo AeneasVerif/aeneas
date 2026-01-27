@@ -1106,7 +1106,9 @@ and evalue =
           markers). *)
   | EBVar of abs_bvar
   | EFVar of abs_fvar_id
-  | EApp of abs_fun * tevalue list
+  | EApp of abs_fun * tevalue list list
+      (** We need a list of list because of what happens when merging region
+          abstractions containing nested borrows *)
   | EAdt of adt_evalue
   | EBottom (* TODO: remove once we change the way internal borrows are ended *)
   | ELoan of eloan_content

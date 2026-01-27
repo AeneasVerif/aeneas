@@ -554,14 +554,19 @@ module Values = struct
     | EFVar fvid ->
         "(@" ^ AbsFVarId.to_string fvid ^ " : " ^ ty_to_string env v.ty ^ ")"
     | EApp (f, args) ->
-        let args =
+        let tevalues_to_string =
           List.map
             (tevalue_to_string ~span ~with_ended env aenv (indent ^ indent_incr)
                indent_incr)
+        in
+        let args =
+          List.map
+            (fun args ->
+              "(" ^ String.concat ", " (tevalues_to_string args) ^ ")")
             args
         in
         let f = abs_fun_to_string f in
-        f ^ "(" ^ String.concat ", " args ^ ")"
+        f ^ "[" ^ String.concat ", " args ^ "]"
     | EAdt av ->
         let fields =
           List.map

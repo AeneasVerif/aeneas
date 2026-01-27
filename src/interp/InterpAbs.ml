@@ -1323,7 +1323,7 @@ let bind_outputs_from_output_input (span : Meta.span) (ctx : eval_ctx)
         let right = update_input regions right in
         { input with value = EJoinMarkers (left, right) }
     | EApp (f, args) ->
-        let args = List.map (update_input regions) args in
+        let args = List.map (List.map (update_input regions)) args in
         { input with value = EApp (f, args) }
     | EFVar _ -> input
     | EBVar _ | EBottom ->
@@ -2490,7 +2490,7 @@ let add_abs_cont_to_abs span (ctx : eval_ctx) (abs : abs) (abs_fun : abs_fun) :
 
   (* Transform them into input/output expressions *)
   let output = mk_etuple (List.rev !borrows) in
-  let input = EApp (abs_fun, List.rev !loans) in
+  let input = EApp (abs_fun, [ List.rev !loans ]) in
   let input : tevalue = { value = input; ty = output.ty } in
 
   (* Put everything together *)

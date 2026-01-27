@@ -1508,7 +1508,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
         mk_eproj_loans_value_from_symbolic_value ctx.type_ctx.type_infos
           abs.regions.owned ret_spc ret_sv_ty
       in
-      let input = EApp (EFunCall abs.abs_id, [ input ]) in
+      let input = EApp (EFunCall abs.abs_id, [ [ input ] ]) in
       let input : tevalue = { value = input; ty = ret_sv_ty } in
       { output = Some output; input = Some input }
     in

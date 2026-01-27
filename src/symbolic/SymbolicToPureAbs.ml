@@ -662,20 +662,28 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) ?(to_consumed = false)
         (ctx, false, e)
     | V.EApp (f, args) ->
         [%ldebug "app"];
-        let ctx, args =
-          List.fold_left_map
-            (fun ctx arg ->
-              let ctx, can_fail, arg = to_texpr ~filter rids ctx arg in
-              [%sanity_check] span (not can_fail);
-              (ctx, arg))
-            ctx args
+        let update_args ctx args =
+          let ctx, args =
+            List.fold_left_map
+              (fun ctx arg ->
+                let ctx, can_fail, arg = to_texpr ~filter rids ctx arg in
+                [%sanity_check] span (not can_fail);
+                (ctx, arg))
+              ctx args
+          in
+          let args = List.filter_map (fun x -> x) args in
+          (ctx, args)
         in
-        let args = List.filter_map (fun x -> x) args in
+        let ctx, args =
+          List.fold_left_map (fun ctx args -> update_args ctx args) ctx args
+        in
         [%ldebug
           "- app:\n"
           ^ tevalue_to_string ctx input
           ^ "\n\n- args:\n"
-          ^ Print.list_to_string ~sep:"\n" (texpr_to_string ctx) args];
+          ^ Print.list_to_string ~sep:"\n"
+              (fun args -> Print.list_to_string (texpr_to_string ctx) args)
+              args];
         begin
           match f with
           | V.EOutputAbs _ | V.EInputAbs _ ->
@@ -688,11 +696,20 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) ?(to_consumed = false)
                 | None ->
                     (* No variable was introduced: it means the abstraction should
                        be ignored (it consumes unit and outputs unit). *)
-                    [%sanity_check] span (args = []);
+                    [%sanity_check] span (args = [ [] ]);
                     [%sanity_check] span
                       (V.AbsId.Set.mem abs_id ctx.ignored_abs_ids);
                     (None, false)
                 | Some { fvar; can_fail } ->
+                    (* The list of lists of arguments is only used in the presence
+                     of nested borrows with function applications *)
+                    let args =
+                      match (f, args) with
+                      | (V.ELoop _ | V.EJoin _), [ args ] -> args
+                      | V.EFunCall _, _ ->
+                          List.map (mk_simpl_tuple_texpr span) args
+                      | _ -> [%internal_error] span
+                    in
                     (Some ([%add_loc] mk_apps span fvar args), can_fail)
               in
               (ctx, can_fail, e)
