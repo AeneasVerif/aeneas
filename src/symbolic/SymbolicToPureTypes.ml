@@ -23,7 +23,11 @@ let rec translate_generic_args (span : Meta.span option)
   (* We ignore the regions: if they didn't cause trouble for the symbolic execution,
      then everything's fine *)
   let types = List.map translate_ty generics.types in
-  let const_generics = generics.const_generics in
+  let const_generics =
+    List.map
+      (fun (c : T.constant_expr) -> const_generic_of_constant_expr c.kind)
+      generics.const_generics
+  in
   let trait_refs =
     List.map (translate_trait_ref span translate_ty) generics.trait_refs
   in
@@ -113,6 +117,7 @@ let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
           | T.TStr -> TAdt (TBuiltin TStr, generics)))
   | T.TArray (ty, len) ->
       let ty = translate span ty in
+      let len = const_generic_of_constant_expr len.kind in
       TAdt
         ( TBuiltin TArray,
           { types = [ ty ]; const_generics = [ len ]; trait_refs = [] } )
@@ -183,6 +188,9 @@ let translate_generic_params (span : Meta.span option)
     _;
   } =
     generics
+  in
+  let const_generics =
+    List.map const_generic_param_charon_to_pure const_generics
   in
   let trait_clauses = List.map (translate_trait_clause span) trait_clauses in
   let trait_type_constraints =
@@ -310,6 +318,7 @@ let rec translate_fwd_ty (span : Meta.span option) (type_infos : type_infos)
                 "Unreachable: box/vec/option receives exactly one type \
                  parameter"))
   | T.TArray (ty, len) ->
+      let len = const_generic_of_constant_expr len.kind in
       let ty = translate ty in
       TAdt
         ( TBuiltin TArray,
@@ -421,6 +430,7 @@ let rec translate_back_ty (span : Meta.span option) (type_infos : type_infos)
            || TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
                 keep_region ty) -> None (* Same check as the ADT case *)
   | T.TArray (ty, len) ->
+      let len = const_generic_of_constant_expr len.kind in
       let ty = translate_fwd_ty span type_infos ty in
       let generics =
         { types = [ ty ]; const_generics = [ len ]; trait_refs = [] }
@@ -474,8 +484,8 @@ let mk_type_check_ctx (ctx : bs_ctx) : PureTypeCheck.tc_ctx =
   let const_generics =
     T.ConstGenericVarId.Map.of_list
       (List.map
-         (fun (cg : T.const_generic_param) ->
-           (cg.index, ctx_translate_fwd_ty ctx (T.TLiteral cg.ty)))
+         (fun (cg : const_generic_param) ->
+           (cg.index, ctx_translate_fwd_ty ctx (TLiteral cg.ty)))
          ctx.sg.generics.const_generics)
   in
   let fenv = ctx.fvars_tys in

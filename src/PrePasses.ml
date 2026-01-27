@@ -128,7 +128,8 @@ let update_array_default (crate : crate) : crate =
          [
            TArray
              ( (TVar (Free _) as elem_ty),
-               (CgValue (VScalar (UnsignedScalar (Usize, nv))) as n) );
+               ({ kind = CLiteral (VScalar (UnsignedScalar (Usize, nv))); _ } as
+                n) );
          ];
        const_generics = [];
        trait_refs = _;
@@ -146,7 +147,9 @@ let update_array_default (crate : crate) : crate =
           | None ->
               (* Update the implementation in place *)
               let cg_id = ConstGenericVarId.zero in
-              let cg = CgVar (Free cg_id) in
+              let cg : Types.constant_expr =
+                { kind = CVar (Free cg_id); ty = TypesUtils.mk_usize_ty }
+              in
               let generics =
                 {
                   impl.impl_trait.generics with
@@ -158,7 +161,9 @@ let update_array_default (crate : crate) : crate =
                 {
                   impl.generics with
                   const_generics =
-                    [ { index = cg_id; name = "N"; ty = TUInt Usize } ];
+                    [
+                      { index = cg_id; name = "N"; ty = TypesUtils.mk_usize_ty };
+                    ];
                 }
               in
               let impl = { impl with impl_trait; generics = params } in
@@ -201,7 +206,9 @@ let update_array_default (crate : crate) : crate =
             if id = merged_method then (
               (* Update the method *)
               let cg_id = ConstGenericVarId.zero in
-              let cg = CgVar (Free cg_id) in
+              let cg : Types.constant_expr =
+                { kind = CVar (Free cg_id); ty = TypesUtils.mk_usize_ty }
+              in
               let sg = fdecl.signature in
               assert (sg.inputs = []);
               match sg.output with
@@ -210,7 +217,13 @@ let update_array_default (crate : crate) : crate =
                     {
                       fdecl.generics with
                       const_generics =
-                        [ { index = cg_id; name = "N"; ty = TUInt Usize } ];
+                        [
+                          {
+                            index = cg_id;
+                            name = "N";
+                            ty = TypesUtils.mk_usize_ty;
+                          };
+                        ];
                     }
                   in
                   let sg = { sg with output = TArray (elem_ty, cg) } in
