@@ -11,9 +11,37 @@ fn inner_shared<'a, 'b>(x : &'a &'b u32) -> &'b u32 {
     *x
 }
 
-#[aeneas::opaque]
 fn inner_mut<'a, 'b>(x : &'a mut &'b mut u32) -> &'a mut u32 {
     *x
+}
+
+fn call_inner_mut() {
+    let mut x = 0;
+    let mut px = &mut x;
+    let py = inner_mut(&mut px);
+    *py = 1;
+    assert!(*px == 1);
+    *px = 2;
+    assert!(x == 2);
+}
+
+fn inner_mut_swap<'a, 'b>(ppx : &'a mut &'b mut u32, py : &'b mut u32) -> &'a mut u32 {
+    **ppx = 10;
+    *ppx = py;
+    *ppx
+}
+
+fn call_inner_mut_swap() {
+    let mut x = 0;
+    let mut px = &mut x;
+    let mut y = 1;
+    let mut py = &mut y;
+    let pz = inner_mut_swap(&mut px, py);
+    *pz = 2;
+    assert!(*px == 2); // px now points to y
+    *px = 3;
+    assert!(x == 10);
+    assert!(y == 3);
 }
 
 struct IterMut<'a, T> {
@@ -21,9 +49,8 @@ struct IterMut<'a, T> {
 }
 
 // TODO: fix in Charon
-#[aeneas::opaque]
 fn replace_option_mut<'a, 'b, T>(x : &'a mut Option<&'b mut T>, v : Option<&'b mut T>) -> Option<&'b mut T> {
-    std::mem::replace(x, v)
+    panic!() // std::mem::replace(x, v)
 }
 
 impl<'a, T> IterMut<'a, T> {
