@@ -20,13 +20,17 @@ struct IterMut<'a, T> {
     v : Option<&'a mut T>,
 }
 
+// TODO: fix in Charon
+#[aeneas::opaque]
+fn replace_option_mut<'a, 'b, T>(x : &'a mut Option<&'b mut T>, v : Option<&'b mut T>) -> Option<&'b mut T> {
+    std::mem::replace(x, v)
+}
 
 impl<'a, T> IterMut<'a, T> {
-    #[aeneas::opaque]
     fn next(&mut self) -> Option<&'a mut T> {
         /* We need to use `std::mem::replace` because otherwise the
            code doesn't borrow-check. */
-        std::mem::replace(&mut self.v, None)
+        replace_option_mut(&mut self.v, None)
     }
 }
 
