@@ -783,7 +783,7 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
           (fun e -> texpr_to_string ctx e ^ " : " ^ pure_ty_to_string ctx e.ty)
           consumed_values];
     (* TODO: generalize this. The backward functions of the short-lived regions
-     will introduce the backward functions of the long-lived regions. *)
+       will introduce the backward functions of the long-lived regions. *)
     [%sanity_check] ctx.span
       ((given_back_variables = [] && consumed_values = []) || rg_id = bid);
 
@@ -865,8 +865,17 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
 
      This means we ignore ending fun call sub-abstractions for level > 0, and
      the sub-abstraction at level 0 consumes everything.
+
      TODO: generalize. We should keep track of the sub-abstractions of higher-level:
      every time we end a sub-abstraction we add more inputs to the same backward function.
+     We would get something like this:
+     {[
+       let (y, back0) = f x in (* function call *)
+       ...
+       let back1 = back0 z in (* ending sub-abs at level 1 *)
+       let x' = back1 z' in   (* ending sub-abs at level 0 *)
+       ...
+     ]}
    *)
   if abs_level > 0 then (
     (* Check that there are no outputs *)
@@ -987,7 +996,7 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
        ...
      ]}
 
-     This let-binding later gets inlined, during a micro-pass.
+     This let-binding later gets inlined during a micro-pass.
   *)
   (* First, retrieve the list of variables used for the inputs for the
      backward function.
@@ -1005,7 +1014,7 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
         []
     | Some inputs -> (
         (* There may be no inputs if the abstraction consumes nothing, but it should
-         be only for level 0 *)
+           be only for level 0 *)
         match AbsLevelMap.find_opt abs_level inputs with
         | Some inputs -> inputs
         | None ->
