@@ -1004,61 +1004,69 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
      TODO: the inputs might be missing if we are translating an ancestor region.
      For now we check that the inputs should be empty so that it works for nested
      shared borrows (but the inputs won't be empty for nested mutable borrows) *)
-  let inputs =
-    match T.RegionGroupId.Map.find_opt rg_id ctx.backward_inputs with
-    | None ->
-        let back_sg = T.RegionGroupId.Map.find rg_id ctx.sg.fun_ty.back_sg in
-        [%cassert] ctx.span (back_sg.inputs = []) "Unimplemented";
-        []
-    | Some inputs -> (
-        (* There may be no inputs if the abstraction consumes nothing, but it should
+  [%sanity_check] ctx.span (Option.is_some ctx.bid);
+  let bid = Option.get ctx.bid in
+  (* Two cases depending on whether the region we're ending is an ancestor region
+     or not *)
+
+  if rg_id = bid then (
+    let inputs =
+      match T.RegionGroupId.Map.find_opt rg_id ctx.backward_inputs with
+      | None -> [%internal_error] ctx.span
+      | Some inputs -> (
+          (* There may be no inputs if the abstraction consumes nothing, but it should
            be only for level 0 *)
-        match AbsLevelMap.find_opt abs_level inputs with
-        | Some inputs -> inputs
-        | None ->
-            [%sanity_check] ctx.span (abs_level = 0);
-            [])
-  in
-  [%ltrace
-    "Consumed inputs: " ^ Print.list_to_string (fvar_to_string ctx) inputs];
-  (* Retrieve the values consumed upon ending the loans inside this
-   * abstraction: as there are no nested borrows, there should be none. *)
-  let consumed = abs_to_consumed ctx ectx abs abs_level in
-  [%cassert] ctx.span (consumed = []) "Nested borrows are not supported yet";
-  (* Retrieve the values given back upon ending this abstraction - note that
+          match AbsLevelMap.find_opt abs_level inputs with
+          | Some inputs -> inputs
+          | None ->
+              [%sanity_check] ctx.span (abs_level = 0);
+              [])
+    in
+    [%ltrace
+      "Consumed inputs: " ^ Print.list_to_string (fvar_to_string ctx) inputs];
+    (* Retrieve the values consumed upon ending the loans inside this
+     * abstraction: as there are no nested borrows, there should be none. *)
+    let consumed = abs_to_consumed ctx ectx abs abs_level in
+    [%cassert] ctx.span (consumed = []) "Nested borrows are not supported yet";
+    (* Retrieve the values given back upon ending this abstraction - note that
      we don't provide meta-place information, because those assignments will
      be inlined anyway... *)
-  [%ltrace "abs: " ^ abs_to_string ctx abs];
-  let ctx, given_back = abs_to_given_back_no_mp abs abs_level ctx in
-  [%ltrace
-    "given back: " ^ Print.list_to_string (tpat_to_string ctx) given_back];
-  (* Link the inputs to those given back values - note that this also
+    [%ltrace "abs: " ^ abs_to_string ctx abs];
+    let ctx, given_back = abs_to_given_back_no_mp abs abs_level ctx in
+    [%ltrace
+      "given back: " ^ Print.list_to_string (tpat_to_string ctx) given_back];
+    [%sanity_check] ctx.span (List.length given_back = List.length inputs);
+    (* Link the inputs to those given back values - note that this also
      checks we have the same number of values, of course *)
-  let given_back_inputs = List.combine given_back inputs in
-  (* Sanity check *)
-  List.iter
-    (fun ((given_back, input) : tpat * fvar) ->
-      [%ltrace
-        "- given_back ty: "
-        ^ pure_ty_to_string ctx given_back.ty
-        ^ "\n- sig input ty: "
-        ^ pure_ty_to_string ctx input.ty];
-      [%sanity_check] ctx.span (given_back.ty = input.ty))
-    given_back_inputs;
-  (* Prepare the let-bindings by introducing a match if necessary *)
-  let given_back_inputs =
-    List.map (fun (v, e) -> (v, mk_texpr_from_fvar e)) given_back_inputs
-  in
-  let ctx, given_back_inputs =
-    List.fold_left_map
-      (fun ctx (v, e) -> decompose_let_match ctx v e)
-      ctx given_back_inputs
-  in
-  (* Translate the next expression *)
-  let next_e = translate_expr e ctx in
-  (* Generate the assignments *)
-  let monadic = false in
-  mk_closed_checked_lets __FILE__ __LINE__ ctx monadic given_back_inputs next_e
+    let given_back_inputs = List.combine given_back inputs in
+    (* Sanity check *)
+    List.iter
+      (fun ((given_back, input) : tpat * fvar) ->
+        [%ltrace
+          "- given_back ty: "
+          ^ pure_ty_to_string ctx given_back.ty
+          ^ "\n- sig input ty: "
+          ^ pure_ty_to_string ctx input.ty];
+        [%sanity_check] ctx.span (given_back.ty = input.ty))
+      given_back_inputs;
+    (* Prepare the let-bindings by introducing a match if necessary *)
+    let given_back_inputs =
+      List.map (fun (v, e) -> (v, mk_texpr_from_fvar e)) given_back_inputs
+    in
+    let ctx, given_back_inputs =
+      List.fold_left_map
+        (fun ctx (v, e) -> decompose_let_match ctx v e)
+        ctx given_back_inputs
+    in
+    (* Translate the next expression *)
+    let next_e = translate_expr e ctx in
+    (* Generate the assignments *)
+    let monadic = false in
+    mk_closed_checked_lets __FILE__ __LINE__ ctx monadic given_back_inputs
+      next_e)
+  else
+    (* We just ignore *)
+    translate_expr e ctx
 
 and translate_end_abstraction_join_or_loop (ectx : C.eval_ctx) (abs : V.abs)
     (abs_level : abs_level) (e : S.expr) (ctx : bs_ctx) : texpr =
