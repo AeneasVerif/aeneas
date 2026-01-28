@@ -1594,8 +1594,7 @@ let project_output_at_level span (level : int) (v : tevalue) : tevalue =
     TODO: generalize to an arbitrary number of nestings and arbitrary relations
     input/output *)
 let abs_cont_restructure_input_output_levels (span : Meta.span) (ctx : eval_ctx)
-    (regions : RegionId.Set.t) (output : tevalue) (input : tevalue) :
-    tevalue * tevalue =
+    (output : tevalue) (input : tevalue) : tevalue * tevalue =
   (* Check if the input is a function call *)
   match input.value with
   | EApp (EFunCall abs_id, args) ->
@@ -1639,7 +1638,7 @@ let abs_cont_bind_outputs (span : Meta.span) (ctx : eval_ctx)
   match (cont.output, cont.input) with
   | Some output, Some input ->
       let output, input =
-        abs_cont_restructure_input_output_levels span ctx regions output input
+        abs_cont_restructure_input_output_levels span ctx output input
       in
       bind_outputs_from_output_input span ctx regions bound output input
   | _ -> [%craise] span "Unreachable"
