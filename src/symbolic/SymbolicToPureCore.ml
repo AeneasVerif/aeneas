@@ -126,6 +126,7 @@ module MetaSymbPlaceOrd :
 end
 
 module MetaSymbPlaceSet = Collections.MakeSet (MetaSymbPlaceOrd)
+module AbsLevelMap = Collections.IntMap
 
 (** Body synthesis context *)
 type bs_ctx = {
@@ -160,7 +161,7 @@ type bs_ctx = {
   forward_inputs : fvar list;
       (** The input parameters for the forward function corresponding to the
           translated Rust inputs (no fuel, no state). *)
-  backward_inputs : fvar list RegionGroupId.Map.t;
+  backward_inputs : fvar list AbsLevelMap.t RegionGroupId.Map.t;
       (** The additional input parameters for the backward functions coming from
           the borrows consumed upon ending the lifetime (as a consequence those
           don't include the backward state, if there is one).
@@ -168,8 +169,10 @@ type bs_ctx = {
           If we split the forward/backward functions: we initialize this map
           when initializing the bs_ctx, because those variables are quantified
           at the definition level. Otherwise, we initialize it upon diving into
-          the expressions which are specific to the backward functions. *)
-  backward_outputs : fvar list option;
+          the expressions which are specific to the backward functions.
+
+          Also, we split the inputs into different subabstraction levels. *)
+  backward_outputs : fvar list AbsLevelMap.t;
       (** The variables that the backward functions will output, corresponding
           to the borrows they give back (don't include the backward state).
 
@@ -194,7 +197,9 @@ type bs_ctx = {
           }
 
           The option is [None] before we detect the ended input abstraction, and
-          [Some] afterwards. *)
+          [Some] afterwards.
+
+          Also, we split the inputs into different subabstraction levels. *)
   calls : S.call V.FunCallId.Map.t;
       (** The function calls we encountered so far *)
   loop_ids_map : LoopId.id V.LoopId.Map.t;  (** Ids to use for the loops *)
@@ -375,6 +380,11 @@ let fun_id_to_string (ctx : bs_ctx) (id : A.fun_id) : string =
 let fun_sig_to_string (ctx : bs_ctx) (sg : fun_sig) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
   PrintPure.fun_sig_to_string env sg
+
+let decomposed_fun_sig_to_string (ctx : bs_ctx) (sg : decomposed_fun_sig) :
+    string =
+  let env = bs_ctx_to_pure_fmt_env ctx in
+  PrintPure.decomposed_fun_sig_to_string env sg
 
 let fun_decl_to_string (ctx : bs_ctx) (def : Pure.fun_decl) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in

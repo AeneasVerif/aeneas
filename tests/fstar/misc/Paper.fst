@@ -23,8 +23,8 @@ let _ = assert_norm (test_incr = Ok ())
 let choose
   (#t : Type0) (b : bool) (x : t) (y : t) : result (t & (t -> (t & t))) =
   if b
-  then let back = fun ret -> (ret, y) in Ok (x, back)
-  else let back = fun ret -> (x, ret) in Ok (y, back)
+  then let back = fun x1 -> (x1, y) in Ok (x, back)
+  else let back = fun y1 -> (x, y1) in Ok (y, back)
 
 (** [paper::test_choose]:
     Source: 'tests/src/paper.rs', lines 25:0-33:1 *)
@@ -53,12 +53,11 @@ let rec list_nth_mut
   begin match l with
   | List_Cons x tl ->
     if i = 0
-    then let back = fun ret -> List_Cons ret tl in Ok (x, back)
+    then let back = fun x1 -> List_Cons x1 tl in Ok (x, back)
     else
       let* i1 = u32_sub i 1 in
       let* (x1, list_nth_mut_back) = list_nth_mut tl i1 in
-      let back = fun ret -> let tl1 = list_nth_mut_back ret in List_Cons x tl1
-      in
+      let back = fun x2 -> let tl1 = list_nth_mut_back x2 in List_Cons x tl1 in
       Ok (x1, back)
   | List_Nil -> Fail Failure
   end

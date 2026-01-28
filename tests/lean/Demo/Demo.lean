@@ -13,9 +13,9 @@ namespace demo
 def choose
   {T : Type} (b : Bool) (x : T) (y : T) : Result (T × (T → (T × T))) := do
   if b
-  then let back := fun ret => (ret, y)
+  then let back := fun x1 => (x1, y)
        ok (x, back)
-  else let back := fun ret => (x, ret)
+  else let back := fun y1 => (x, y1)
        ok (y, back)
 
 /- [demo::mul2_add1]:
@@ -87,13 +87,13 @@ def list_nth_mut
   match l with
   | CList.CCons x tl =>
     if i = 0#u32
-    then let back := fun ret => CList.CCons ret tl
+    then let back := fun t => CList.CCons t tl
          ok (x, back)
     else
       let i1 ← i - 1#u32
       let (x1, list_nth_mut_back) ← list_nth_mut tl i1
-      let back := fun ret => let tl1 := list_nth_mut_back ret
-                             CList.CCons x tl1
+      let back := fun t => let tl1 := list_nth_mut_back t
+                           CList.CCons x tl1
       ok (x1, back)
   | CList.CNil => fail panic
 partial_fixpoint
@@ -115,10 +115,10 @@ def list_tail
   match l with
   | CList.CCons t tl =>
     let (c, list_tail_back) ← list_tail tl
-    let back := fun ret => let tl1 := list_tail_back ret
-                           CList.CCons t tl1
+    let back := fun c1 => let tl1 := list_tail_back c1
+                          CList.CCons t tl1
     ok (c, back)
-  | CList.CNil => ok (CList.CNil, fun ret => ret)
+  | CList.CNil => ok (CList.CNil, fun l1 => l1)
 partial_fixpoint
 
 /- Trait declaration: [demo::Counter]

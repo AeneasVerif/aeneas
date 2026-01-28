@@ -53,9 +53,12 @@ let eliminate_shared_loans (span : Meta.span) (ctx : eval_ctx) : eval_ctx =
   (* *)
   ctx
 
-(** Compute the set of shared loans without markers appearing in the context *)
-let get_non_marked_shared_loans (ctx : eval_ctx) : BorrowId.Set.t =
+(** Compute the set of shared loans and shared loan projectors without markers
+    appearing in the context *)
+let get_non_marked_shared_loans span (ctx : eval_ctx) :
+    BorrowId.Set.t * NormSymbProj.Set.t =
   let non_marked_loans = ref BorrowId.Set.empty in
+  let non_marked_projs = ref NormSymbProj.Set.empty in
   let collect_loans =
     object
       inherit [_] iter_eval_ctx as super
@@ -68,10 +71,38 @@ let get_non_marked_shared_loans (ctx : eval_ctx) : BorrowId.Set.t =
       method! visit_VSharedLoan env lid sv =
         non_marked_loans := BorrowId.Set.add lid !non_marked_loans;
         super#visit_VSharedLoan env lid sv
+
+      method! visit_ASymbolic env pm aproj =
+        match aproj with
+        | AProjLoans { proj; consumed; borrows } ->
+            (* For now we don't support those cases *)
+            [%sanity_check] span (consumed = []);
+            [%sanity_check] span (borrows = []);
+            if pm = PNone then
+              let pred (r : region) =
+                match r with
+                | RVar (Free rid) -> RegionId.Set.mem rid env
+                | _ -> false
+              in
+              if
+                not
+                  (ty_has_mut_borrow_for_region_in_pred ctx.type_ctx.type_infos
+                     pred proj.proj_ty)
+              then (
+                let proj = normalize_symbolic_proj env proj in
+                non_marked_projs := NormSymbProj.Set.add proj !non_marked_projs;
+                super#visit_ASymbolic env pm aproj)
+        | _ -> super#visit_ASymbolic env pm aproj
+
+      method! visit_abs _ abs = super#visit_abs abs.regions.owned abs
     end
   in
-  collect_loans#visit_eval_ctx () ctx;
-  !non_marked_loans
+  collect_loans#visit_eval_ctx RegionId.Set.empty ctx;
+  (!non_marked_loans, !non_marked_projs)
+
+type borrow_or_proj =
+  | Borrow of borrow_id
+  | Proj of RegionId.Set.t * symbolic_proj
 
 (** Attempts to eliminate remaining markers over shared borrows.
 
@@ -89,14 +120,24 @@ let get_non_marked_shared_loans (ctx : eval_ctx) : BorrowId.Set.t =
 
       x -> SL l v
       abs { SB l } // introduce SB l in the right environment and add it to the abstraction
-    ]} *)
+    ]}
 
+    Note that we do the same for symbolic values: if a symbolic projection only
+    projects shared borrows and there exists the corresponding loan projector,
+    then we eliminate the marker. *)
 let eliminate_shared_borrow_markers (span : Meta.span)
     (shared_borrows_seq :
-      (abs_id * int * proj_marker * borrow_id * ty) list ref option)
+      (abs_id * int * proj_marker * borrow_or_proj * ty) list ref option)
     (ctx : eval_ctx) : eval_ctx =
   (* Compute the set of loans without markers *)
-  let non_marked_loans = get_non_marked_shared_loans ctx in
+  let non_marked_loans, non_marked_loan_projs =
+    get_non_marked_shared_loans span ctx
+  in
+  [%ldebug
+    "- non_marked_loans: "
+    ^ BorrowId.Set.to_string None non_marked_loans
+    ^ "\n- non_marked_loan_projs: "
+    ^ NormSymbProj.Set.with_ctx_to_string None ctx non_marked_loan_projs];
 
   match shared_borrows_seq with
   | None ->
@@ -109,15 +150,32 @@ let eliminate_shared_borrow_markers (span : Meta.span)
               if BorrowId.Set.mem bid non_marked_loans then PNone else pm
             in
             super#visit_ASharedBorrow env pm bid sid
+
+          method! visit_ASymbolic regions pm aproj =
+            match aproj with
+            | AProjBorrows { proj; loans = [] } ->
+                let pm =
+                  let nproj = normalize_symbolic_proj regions proj in
+                  if
+                    pm <> PNone
+                    && NormSymbProj.Set.mem nproj non_marked_loan_projs
+                  then PNone
+                  else pm
+                in
+                super#visit_ASymbolic regions pm
+                  (AProjBorrows { proj; loans = [] })
+            | _ -> super#visit_ASymbolic regions pm aproj
+
+          method! visit_abs _ abs = super#visit_abs abs.regions.owned abs
         end
       in
-      update_borrows#visit_eval_ctx () ctx
+      update_borrows#visit_eval_ctx RegionId.Set.empty ctx
   | Some shared_borrows ->
       (* We need to register the borrows out of which we eliminate the markers.
          For now, we can't register the addition of shared borrows at arbitrary
          positions. TODO: generalize. *)
-      let update_avalue (offset : int ref) (aid : abs_id) (i : int)
-          (av : tavalue) : tavalue =
+      let update_avalue (regions : RegionId.Set.t) (offset : int ref)
+          (aid : abs_id) (i : int) (av : tavalue) : tavalue =
         match av.value with
         | ABorrow (ASharedBorrow (pm, bid, sid)) ->
             let pm =
@@ -131,26 +189,52 @@ let eliminate_shared_borrow_markers (span : Meta.span)
                 in
                 let _, ty, _ = ty_get_ref av.ty in
                 shared_borrows :=
-                  (aid, i + !offset, pm', bid, ty) :: !shared_borrows;
+                  (aid, i + !offset, pm', Borrow bid, ty) :: !shared_borrows;
                 offset := !offset + 1;
                 PNone)
               else pm
             in
             { av with value = ABorrow (ASharedBorrow (pm, bid, sid)) }
+        | ASymbolic (pm, AProjBorrows { proj; loans = [] }) ->
+            [%ldebug "Found symbolic borrow proj:\n" ^ tavalue_to_string ctx av];
+            let pm =
+              let nproj = normalize_symbolic_proj regions proj in
+              if pm <> PNone && NormSymbProj.Set.mem nproj non_marked_loan_projs
+              then (
+                (* Register the fact that we need to introduce a new shared borrow *)
+                let pm' =
+                  match pm with
+                  | PNone -> [%internal_error] span
+                  | PLeft -> PRight
+                  | PRight -> PLeft
+                in
+                let _, ty, _ = ty_get_ref av.ty in
+                shared_borrows :=
+                  (aid, i + !offset, pm', Proj (regions, proj), ty)
+                  :: !shared_borrows;
+                offset := !offset + 1;
+                PNone)
+              else pm
+            in
+            {
+              av with
+              value = ASymbolic (pm, AProjBorrows { proj; loans = [] });
+            }
         | _ -> av
       in
       let update_borrows =
         object
           inherit [_] map_eval_ctx
 
-          method! visit_abs _ abs =
+          method! visit_abs regions abs =
             {
               abs with
-              avalues = List.mapi (update_avalue (ref 0) abs.abs_id) abs.avalues;
+              avalues =
+                List.mapi (update_avalue regions (ref 0) abs.abs_id) abs.avalues;
             }
         end
       in
-      update_borrows#visit_eval_ctx () ctx
+      update_borrows#visit_eval_ctx RegionId.Set.empty ctx
 
 (** Utility.
 
@@ -971,7 +1055,7 @@ let eval_ctx_has_markers (ctx : eval_ctx) : bool =
 let collapse_ctx_aux config (span : Meta.span)
     (sequence : (abs_id * abs_id * abs_id) list ref option)
     (shared_borrows_seq :
-      (abs_id * int * proj_marker * borrow_id * ty) list ref option)
+      (abs_id * int * proj_marker * borrow_or_proj * ty) list ref option)
     (fresh_abs_kind : abs_kind) ~(with_abs_conts : bool)
     (merge_funs : merge_duplicates_funcs) (ctx0 : eval_ctx) : eval_ctx =
   [%ldebug "ctx0:\n" ^ eval_ctx_to_string ctx0];
@@ -1188,7 +1272,7 @@ let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
 let collapse_ctx config (span : Meta.span)
     ?(sequence : (abs_id * abs_id * abs_id) list ref option = None)
     ?(shared_borrows_seq :
-        (abs_id * int * proj_marker * borrow_id * ty) list ref option =
+        (abs_id * int * proj_marker * borrow_or_proj * ty) list ref option =
       None) (fresh_abs_kind : abs_kind) ~(with_abs_conts : bool)
     (ctx : eval_ctx) : eval_ctx =
   [%ldebug "Initial ctx:\n" ^ eval_ctx_to_string ctx];
@@ -1201,30 +1285,48 @@ let collapse_ctx config (span : Meta.span)
   with ValueMatchFailure _ -> [%internal_error] span
 
 let add_shared_borrows (span : Meta.span)
-    (shared_borrows_seq : (abs_id * int * proj_marker * borrow_id * ty) list)
-    (ctx : eval_ctx) : eval_ctx =
-  let loans = get_non_marked_shared_loans ctx in
-
+    (shared_borrows_seq :
+      (abs_id * int * proj_marker * borrow_or_proj * ty) list) (ctx : eval_ctx)
+    : eval_ctx =
+  let loans, loan_projs = get_non_marked_shared_loans span ctx in
   let ctx = ref ctx in
   let update
-      ((abs_id, i, pm, bid, ty) : abs_id * int * proj_marker * borrow_id * ty) :
-      unit =
-    [%sanity_check] span (BorrowId.Set.mem bid loans);
+      ((abs_id, i, pm, borrow_or_proj, ty) :
+        abs_id * int * proj_marker * borrow_or_proj * ty) : unit =
     let abs = ctx_lookup_abs !ctx abs_id in
     let rid = RegionId.Set.choose abs.regions.owned in
     let r : region = RVar (Free rid) in
     let rec update_avalues (i : int) (avl : tavalue list) : tavalue list =
-      if i = 0 then (
-        (* TODO: really annoying to have to insert a type here *)
-        [%sanity_check] span (ty_no_regions ty);
+      if i = 0 then
         let nv : tavalue =
-          {
-            value =
-              ABorrow (ASharedBorrow (pm, bid, !ctx.fresh_shared_borrow_id ()));
-            ty = mk_ref_ty r ty RShared;
-          }
+          match borrow_or_proj with
+          | Borrow bid ->
+              [%sanity_check] span (BorrowId.Set.mem bid loans);
+              (* TODO: having to insert a type here is really annoying *)
+              [%sanity_check] span (ty_no_regions ty);
+              {
+                value =
+                  ABorrow
+                    (ASharedBorrow (pm, bid, !ctx.fresh_shared_borrow_id ()));
+                ty = mk_ref_ty r ty RShared;
+              }
+          | Proj (regions', proj) ->
+              [%sanity_check] span
+                (let proj = normalize_symbolic_proj abs.regions.owned proj in
+                 NormSymbProj.Set.mem proj loan_projs);
+              (* Substitute the regions with the one we picked *)
+              let proj_ty =
+                Substitute.ty_subst_rids span
+                  (fun rid' ->
+                    if RegionId.Set.mem rid' regions' then rid else rid')
+                  proj.proj_ty
+              in
+              let proj = { proj with proj_ty } in
+              let value = ASymbolic (pm, AProjBorrows { proj; loans = [] }) in
+              let ty = proj.proj_ty in
+              { value; ty }
         in
-        nv :: avl)
+        nv :: avl
       else
         match avl with
         | [] -> [%internal_error] span
@@ -1241,7 +1343,8 @@ let add_shared_borrows (span : Meta.span)
 (** Collapse a context following a sequence *)
 let collapse_ctx_following_sequence (span : Meta.span)
     (sequence : (abs_id * abs_id * abs_id) list)
-    (shared_borrows_seq : (abs_id * int * proj_marker * borrow_id * ty) list)
+    (shared_borrows_seq :
+      (abs_id * int * proj_marker * borrow_or_proj * ty) list)
     (fresh_abs_kind : abs_kind) ~(with_abs_conts : bool) (ctx0 : eval_ctx) :
     eval_ctx =
   [%ltrace
@@ -1320,7 +1423,8 @@ let collapse_ctx_following_sequence (span : Meta.span)
 
 let collapse_ctx_no_markers_following_sequence (span : Meta.span)
     (sequence : (abs_id * abs_id * abs_id) list)
-    (shared_borrows_seq : (abs_id * int * proj_marker * borrow_id * ty) list)
+    (shared_borrows_seq :
+      (abs_id * int * proj_marker * borrow_or_proj * ty) list)
     (fresh_abs_kind : abs_kind) ~(with_abs_conts : bool) (ctx : eval_ctx) :
     eval_ctx =
   try

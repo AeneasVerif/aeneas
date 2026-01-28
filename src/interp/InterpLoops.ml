@@ -215,7 +215,8 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
             (* Pay attention to the fact that the elements are stored in reverse order *)
             let break_abs = List.rev (List.filter_map get_fresh_abs ctx.env) in
             let output_abs =
-              AbsId.Set.of_list (List.map (fun abs -> abs.abs_id) break_abs)
+              AbsId.Set.of_list
+                (List.map (fun (abs : abs) -> abs.abs_id) break_abs)
             in
             (* We need to update the abstractions appearing in the output context,
                to mark them as outputs of the loop (and forget their current
@@ -276,7 +277,7 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
               ^ eval_ctx_to_string ~span:(Some span) ctx
               ^ "\n\n-input_abs:\n"
               ^ AbsId.Map.to_string None
-                  (fun abs -> AbsId.to_string abs.abs_id)
+                  (fun (abs : abs) -> AbsId.to_string abs.abs_id)
                   input_abs
               ^ "\n\n-break_input_abs:\n"
               ^ Print.list_to_string AbsId.to_string break_input_abs];

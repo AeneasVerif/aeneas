@@ -182,7 +182,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
       forward_inputs = [];
       (* Initialized just below *)
       backward_inputs = RegionGroupId.Map.empty;
-      backward_outputs = None;
+      backward_outputs = Collections.IntMap.empty;
       (* Empty for now *)
       calls;
       loop_ids_map;

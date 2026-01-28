@@ -124,9 +124,17 @@ let tvalue_subst_ids (subst : id_subst) (v : tvalue) : tvalue =
   let vis = subst_ids_visitor subst in
   vis#visit_tvalue () v
 
+let ty_subst_ids (subst : id_subst) (x : ty) : ty =
+  let vis = subst_ids_visitor subst in
+  vis#visit_ty () x
+
 let tvalue_subst_rids (span : Meta.span) (r_subst : RegionId.id -> RegionId.id)
     (v : tvalue) : tvalue =
   tvalue_subst_ids { (no_abs_id_subst span) with r_subst } v
+
+let ty_subst_rids (span : Meta.span) (r_subst : RegionId.id -> RegionId.id)
+    (x : ty) : ty =
+  ty_subst_ids { (no_abs_id_subst span) with r_subst } x
 
 let abs_subst_ids (subst : id_subst) (x : abs) : abs =
   let vis = subst_ids_visitor subst in

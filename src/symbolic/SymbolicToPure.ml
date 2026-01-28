@@ -15,7 +15,9 @@ let translate_fun_decl_body (ctx : bs_ctx) (signature : fun_sig) (body : S.expr)
   [%ltrace
     name_to_string ctx def.item_meta.name
     ^ "\n- body:\n"
-    ^ bs_ctx_expr_to_string ctx body];
+    ^ bs_ctx_expr_to_string ctx body
+    ^ "\n\n- decomposed_fun_sig:\n"
+    ^ decomposed_fun_sig_to_string ctx ctx.sg];
 
   let effect_info = get_fun_effect_info ctx (FunId (FRegular def_id)) None in
   let mk_return (ctx : bs_ctx) v =

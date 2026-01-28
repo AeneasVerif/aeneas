@@ -24,13 +24,13 @@ def get_list_at_x
   match ls with
   | List.Cons hd tl =>
     if hd = x
-    then ok (ls, fun ret => ret)
+    then ok (ls, fun ls1 => ls1)
     else
       let (l, get_list_at_x_back) ← get_list_at_x tl x
-      let back := fun ret => let tl1 := get_list_at_x_back ret
-                             List.Cons hd tl1
+      let back := fun l1 => let tl1 := get_list_at_x_back l1
+                            List.Cons hd tl1
       ok (l, back)
-  | List.Nil => ok (List.Nil, fun ret => ret)
+  | List.Nil => ok (List.Nil, fun ls1 => ls1)
 partial_fixpoint
 
 end polonius_list

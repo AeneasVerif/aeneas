@@ -150,12 +150,12 @@ def list_nth_mut_loop
   match ls with
   | List.Cons x tl =>
     if i = 0#u32
-    then ok (x, fun ret => List.Cons ret tl)
+    then ok (x, fun t => List.Cons t tl)
     else
       let i1 ← i - 1#u32
       let (t, back) ← list_nth_mut_loop tl i1
-      let back1 := fun ret => let l := back ret
-                              List.Cons x l
+      let back1 := fun t1 => let l := back t1
+                             List.Cons x l
       ok (t, back1)
   | List.Nil => fail panic
 partial_fixpoint
@@ -214,8 +214,8 @@ def get_elem_mut
     alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice (List
       Std.Usize)) slots 0#usize
   let (i, back) ← get_elem_mut_loop x ls
-  let back1 := fun ret => let l := back ret
-                          index_mut_back l
+  let back1 := fun i1 => let l := back i1
+                         index_mut_back l
   ok (i, back1)
 
 /- [loops::get_elem_shared]: loop 0:
@@ -244,7 +244,7 @@ def get_elem_shared
    Source: 'tests/src/loops.rs', lines 154:0-156:1 -/
 def id_mut
   {T : Type} (ls : List T) : Result ((List T) × (List T → List T)) := do
-  ok (ls, fun ret => ret)
+  ok (ls, fun ls1 => ls1)
 
 /- [loops::id_shared]:
    Source: 'tests/src/loops.rs', lines 158:0-160:1 -/
@@ -274,8 +274,8 @@ def list_nth_mut_with_id
   {T : Type} (ls : List T) (i : Std.U32) : Result (T × (T → List T)) := do
   let (ls1, id_mut_back) ← id_mut ls
   let (t, back) ← list_nth_mut_with_id_loop i ls1
-  let back1 := fun ret => let l := back ret
-                          id_mut_back l
+  let back1 := fun t1 => let l := back t1
+                         id_mut_back l
   ok (t, back1)
 
 /- [loops::list_nth_shared_with_id]: loop 0:
@@ -390,8 +390,8 @@ def list_nth_mut_pair_merge
   := do
   let (t, t1, back, back1) ← list_nth_mut_pair_merge_loop ls0 ls1 i
   let back2 :=
-    fun ret =>
-      let (t2, t3) := ret
+    fun p =>
+      let (t2, t3) := p
       let ls01 := back t2
       let ls11 := back1 t3
       (ls01, ls11)

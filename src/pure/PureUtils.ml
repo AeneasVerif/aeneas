@@ -247,23 +247,6 @@ let constant_expr_of_const_generic : const_generic -> Types.constant_expr_kind =
   | CgVar v -> CVar v
   | CgValue l -> CLiteral l
 
-let const_generic_of_constant_expr : Types.constant_expr_kind -> const_generic =
-  function
-  | CGlobal { id; _ } -> CgGlobal id
-  | CVar v -> CgVar v
-  | CLiteral l -> CgValue l
-  | _ -> [%craise_opt_span] None "Unsupported constant expression kind"
-
-let const_generic_param_pure_to_charon (p : const_generic_param) :
-    Types.const_generic_param =
-  { index = p.index; name = p.name; ty = TLiteral p.ty }
-
-let const_generic_param_charon_to_pure (c : Types.const_generic_param) :
-    const_generic_param =
-  match c.ty with
-  | TLiteral ty -> { index = c.index; name = c.name; ty }
-  | _ -> [%craise_opt_span] None "Unsupported constant expression type"
-
 let fvar_get_id (v : fvar) : fvar_id = v.id
 
 let mk_tpat_from_literal (cv : literal) : tpat =
@@ -331,12 +314,15 @@ let make_type_subst (vars : type_param list) (tys : ty list) :
   let mp = TypeVarId.Map.of_list (List.combine var_ids tys) in
   fun id -> TypeVarId.Map.find id mp
 
+let make_const_generic_subst_from_var_ids (var_ids : ConstGenericVarId.id list)
+    (cgs : const_generic list) : ConstGenericVarId.id -> const_generic =
+  let map = ConstGenericVarId.Map.of_list (List.combine var_ids cgs) in
+  fun varid -> ConstGenericVarId.Map.find varid map
+
 let make_const_generic_subst (vars : const_generic_param list)
     (cgs : const_generic list) : ConstGenericVarId.id -> const_generic =
-  let vars = List.map const_generic_param_pure_to_charon vars in
-  let cgs = List.map constant_expr_of_const_generic cgs in
-  Substitute.make_const_generic_subst_from_vars vars cgs
-  |> Fun.compose const_generic_of_constant_expr
+  let vars = List.map (fun (v : const_generic_param) -> v.index) vars in
+  make_const_generic_subst_from_var_ids vars cgs
 
 let make_trait_subst (clauses : trait_param list) (refs : trait_ref list) :
     TraitClauseId.id -> trait_instance_id =

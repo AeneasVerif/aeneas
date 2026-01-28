@@ -75,6 +75,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
           parents = AbsId.Set.empty;
           original_parents = [];
           regions = { owned = RegionId.Set.singleton r_id };
+          ended_subabs = AbsLevelSet.empty;
           avalues;
           cont = Some { output = Some output; input = Some input };
         }
@@ -94,7 +95,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
         [%cassert] span (ty_no_regions v.ty)
           "Nested borrows are not supported yet";
         let avll, fields = List.split (List.map (to_inputs rid) fields) in
-        let value = EAdt { variant_id; fields } in
+        let value = EAdt { borrow_proj = false; variant_id; fields } in
         let value : tevalue = { value; ty = v.ty } in
         (List.flatten avll, value)
     | VBottom ->
@@ -154,8 +155,9 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             let ty = TRef (RVar (Free rid), ref_ty, kind) in
             let value = ABorrow (ASharedBorrow (PNone, bid, sid)) in
             let value : tavalue = { value; ty } in
-            let ev = Some (mk_etuple []) in
-            push_abs rid [ value ] ev ev
+            let ev_out = Some (mk_etuple ~borrow_proj:true []) in
+            let ev_in = Some (mk_etuple ~borrow_proj:false []) in
+            push_abs rid [ value ] ev_out ev_in
         | VMutBorrow (bid, bv) ->
             (* We don't support nested borrows for now *)
             [%cassert] span
@@ -189,7 +191,11 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
         let rids = RegionId.Set.singleton rid in
         let input : tevalue =
           let value =
-            ELet (rids, mk_epat_ignored input.ty, input, mk_etuple [])
+            ELet
+              ( rids,
+                mk_epat_ignored input.ty,
+                input,
+                mk_etuple ~borrow_proj:true [] )
           in
           { value; ty = mk_unit_ty }
         in
@@ -273,7 +279,10 @@ let convert_value_to_output_avalues (span : Meta.span) (ctx : eval_ctx)
           List.split (List.map2 to_output fields field_types)
         in
         ( List.flatten avalues,
-          { value = EAdt { variant_id; fields = outputs }; ty = proj_ty } )
+          {
+            value = EAdt { borrow_proj = true; variant_id; fields = outputs };
+            ty = proj_ty;
+          } )
     | VBorrow bc, TRef (rid, ref_ty, kind) ->
         [%cassert] span (ty_no_regions ref_ty)
           "Nested borrows are not supported yet";
@@ -285,7 +294,7 @@ let convert_value_to_output_avalues (span : Meta.span) (ctx : eval_ctx)
               let ty = TRef (RVar (Free rid), ref_ty, kind) in
               let value = ABorrow (ASharedBorrow (pm, bid, sid)) in
               let value : tavalue = { value; ty } in
-              let ev = mk_etuple [] in
+              let ev = mk_etuple ~borrow_proj:true [] in
               ([ value ], ev)
           | VMutBorrow (bid, bv) ->
               (* We don't support nested borrows for now *)
@@ -358,7 +367,10 @@ let convert_value_to_input_avalues (span : Meta.span) (ctx : eval_ctx)
     | VAdt { variant_id; fields } ->
         let avalues, outputs = List.split (List.map to_input fields) in
         ( List.flatten avalues,
-          { value = EAdt { variant_id; fields = outputs }; ty = v.ty } )
+          {
+            value = EAdt { borrow_proj = false; variant_id; fields = outputs };
+            ty = v.ty;
+          } )
     | VBorrow _ -> [%craise] span "Not implemented yet"
     | VLoan lc -> (
         match lc with
@@ -752,12 +764,29 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
     right_avalues := av :: !right_avalues
   in
 
-  let add_avalue (av : tavalue) : unit =
+  let rec add_avalue (av : tavalue) : unit =
     match av.value with
-    | ALoan _ ->
-        (* We simply add the value: we only merge loans coming from the *left*
-         (this one comes from the right) with borrows coming from the *right*. *)
-        push_right_avalue av
+    | ALoan lc -> (
+        match lc with
+        | AMutLoan _ | ASharedLoan _ ->
+            (* We simply add the value: we only merge loans coming from the *left*
+              (this one comes from the right) with borrows coming from the *right*. *)
+            push_right_avalue av
+        | AEndedMutLoan { child; given_back; given_back_meta = _ } ->
+            add_avalue child;
+            add_avalue given_back
+        | AEndedSharedLoan (sv, child) ->
+            (* For now, we treat the case where there are no loans/borrows in the shared
+             value, allowing us to eliminate it altogether. *)
+            [%cassert] span
+              (not (tvalue_has_loans_or_borrows (Some span) ctx sv))
+              "Unimplemented";
+            add_avalue child
+        | AIgnoredMutLoan _ -> [%craise] span "Unimplemented"
+        | AEndedIgnoredMutLoan { child; given_back; given_back_meta = _ } ->
+            add_avalue child;
+            add_avalue given_back
+        | AIgnoredSharedLoan child -> add_avalue child)
     | ABorrow bc ->
         (* We may need to merge it *)
         begin
@@ -790,11 +819,15 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
               in
               let keep = keep !left_avalues in
               if keep then push_right_avalue av else ()
+          | AEndedIgnoredMutBorrow { child; given_back; given_back_meta = _ } ->
+              add_avalue given_back;
+              add_avalue child
           | AIgnoredMutBorrow _
           | AEndedMutBorrow _
           | AEndedSharedBorrow
-          | AEndedIgnoredMutBorrow _
-          | AProjSharedBorrow _ -> [%craise] span "Unreachable"
+          | AProjSharedBorrow _ ->
+              [%ltrace "Unexpected avalue: " ^ tavalue_to_string ctx av];
+              [%craise] span "Unreachable"
         end
     | ASymbolic (pm, proj) -> begin
         match proj with
@@ -839,7 +872,9 @@ let merge_abstractions_merge_loan_borrow_pairs (span : Meta.span)
               ("Internal error: please file an issue.\nUnexpected value: "
              ^ tavalue_to_string ctx av)
       end
-    | AAdt _ -> [%craise] span "Not implemented yet"
+    | AAdt { borrow_proj = _; variant_id = _; fields } ->
+        (* Simply recurse *)
+        List.iter add_avalue fields
     | AIgnored _ -> (* Nothing to register *) ()
   in
   List.iter add_avalue (List.filter keep_avalue abs1.avalues);
@@ -1299,7 +1334,7 @@ let bind_outputs_from_output_input (span : Meta.span) (ctx : eval_ctx)
         let right = update_input regions right in
         { input with value = EJoinMarkers (left, right) }
     | EApp (f, args) ->
-        let args = List.map (update_input regions) args in
+        let args = List.map (List.map (update_input regions)) args in
         { input with value = EApp (f, args) }
     | EFVar _ -> input
     | EBVar _ | EBottom ->
@@ -1308,7 +1343,16 @@ let bind_outputs_from_output_input (span : Meta.span) (ctx : eval_ctx)
         [%craise] span "Unreachable"
     | EAdt adt ->
         let fields = List.map (update_input regions) adt.fields in
-        { value = EAdt { variant_id = adt.variant_id; fields }; ty = input.ty }
+        {
+          value =
+            EAdt
+              {
+                borrow_proj = adt.borrow_proj;
+                variant_id = adt.variant_id;
+                fields;
+              };
+          ty = input.ty;
+        }
     | ELoan loan ->
         (* Check if this loan was previously bound *)
         begin
@@ -1393,8 +1437,14 @@ let bind_outputs_from_output_input (span : Meta.span) (ctx : eval_ctx)
                 bound_inputs_outputs_add_borrow span bid pm fid output.ty !bound;
               (* *)
               pat
-          | EEndedMutBorrow _ | EIgnoredMutBorrow _ | EEndedIgnoredMutBorrow _
-            ->
+          | EEndedIgnoredMutBorrow { child; given_back; given_back_meta = _ } ->
+              (* For now we simply check that the child and given back values are ignored
+               (meaning they are shared borrows), in which case there are no outputs *)
+              if is_eignored child.value && is_eignored given_back.value then
+                { pat = PIgnored; ty = output.ty }
+              else [%craise] span "Unimplemented"
+          | EIgnoredMutBorrow _ -> [%craise] span "Unimplemented"
+          | EEndedMutBorrow _ ->
               (* We shouldn't get there. If we find an ended borrow in a region
                  abstraction it means the abstraction was ended and thus removed
                  from the context: we shouldn't be in the process of merging it...
@@ -1440,11 +1490,156 @@ let bind_outputs_from_output_input (span : Meta.span) (ctx : eval_ctx)
   let pat = bind_output regions output in
   (pat, input)
 
+let tevalue_get_max_level (v : tevalue) : int =
+  let max_level = ref (-1) in
+  let visitor =
+    InterpBorrowsCore.get_max_sub_abs_visitor ~with_evalues:true max_level
+  in
+  visitor#visit_tevalue 0 v;
+  !max_level
+
+let project_output_at_level span (level : int) (v : tevalue) : tevalue =
+  let rec project level (v : tevalue) : tevalue =
+    let stop (v : tevalue) =
+      if level = 0 then v else { v with value = EIgnored }
+    in
+    match v.value with
+    | ELet _ | EJoinMarkers _ | EBVar _ | EApp _ ->
+        [%craise] span "Unimplemented"
+    | EAdt { borrow_proj; variant_id; fields } ->
+        let fields = List.map (project level) fields in
+        { v with value = EAdt { borrow_proj; variant_id; fields } }
+    | ELoan lc -> (
+        match lc with
+        | EMutLoan (pm, lid, child) ->
+            let child = project level child in
+            if level = 0 then
+              { v with value = ELoan (EMutLoan (pm, lid, child)) }
+            else child
+        | EEndedMutLoan { child; given_back; given_back_meta = _ } ->
+            if level = 0 then project level child
+            else project (level - 1) given_back
+        | EIgnoredMutLoan _ -> [%craise] span "Unimplemented"
+        | EEndedIgnoredMutLoan { child; given_back; given_back_meta = _ } ->
+            if level = 0 then project level child
+            else project (level - 1) given_back)
+    | EBorrow bc -> (
+        match bc with
+        | EMutBorrow (pm, bid, child) ->
+            let child = project level child in
+            if level = 0 then
+              { v with value = EBorrow (EMutBorrow (pm, bid, child)) }
+            else child
+        | EIgnoredMutBorrow _ -> [%craise] span "Unimplemented"
+        | EEndedMutBorrow (mv, child) ->
+            let child = project level child in
+            if level = 0 then
+              { v with value = EBorrow (EEndedMutBorrow (mv, child)) }
+            else child
+        | EEndedIgnoredMutBorrow { child; given_back; given_back_meta = _ } ->
+            if level = 0 then project level child
+            else project (level - 1) given_back)
+    | ESymbolic (_pm, proj) -> (
+        match proj with
+        | EProjLoans { proj = _; consumed; borrows } ->
+            [%cassert] span (consumed = []) "Unimplemented";
+            [%cassert] span (borrows = []) "Unimplemented";
+            stop v
+        | EProjBorrows { proj = _; loans } ->
+            [%cassert] span (loans = []) "Unimplemented";
+            stop v
+        | EEndedProjLoans { proj = _; consumed; borrows } ->
+            [%cassert] span (consumed = []) "Unimplemented";
+            [%cassert] span (borrows = []) "Unimplemented";
+            stop v
+        | EEndedProjBorrows { mvalues = _; loans } ->
+            [%cassert] span (loans = []) "Unimplemented";
+            stop v
+        | EEmpty -> stop v)
+    | EFVar _ | EValue _ | EIgnored -> stop v
+    | EMutBorrowInput _ | EBottom -> [%craise] span "Unreachable"
+  in
+  project level v
+
+(** Small trick to handle nested borrows.
+
+    Considering the code below:
+    {[
+      struct IterMut<'a, T> {
+          v : Option<&'a mut T>,
+      }
+
+      impl<'a, T> IterMut<'a, T> {
+          fn next(&mut self) -> Option<&'a mut T>
+      }
+
+      fn iter_mut_loop<'a, T>(mut x : IterMut<'a, T>) {
+          while let Some(_) = x.next() {}
+      }
+    ]}
+
+    In the loop, after ending the outer lifetime we get an abstraction like this
+    for the inner lifetime:
+    {[
+      @ended_ignored_mut_borrow((s@2 <: IterMut<'1, T>); ⌊s@3 <: IterMut<'1, T>⌋) :=
+        FunCall(...)[(Some ⌊s@1 <: &'1 mut T⌋)]
+    ]}
+
+    We restructure it to:
+    {[
+      (s@2 <: IterMut<'1, T>) :=
+        FunCall(...)[(⌊s@3 <: IterMut<'1, T>⌋); (Some ⌊s@1 <: &'1 mut T⌋)]
+    ]}
+
+    TODO: generalize to an arbitrary number of nestings and arbitrary relations
+    input/output *)
+let abs_cont_restructure_input_output_levels (span : Meta.span) (ctx : eval_ctx)
+    (output : tevalue) (input : tevalue) : tevalue * tevalue =
+  (* Check if the input is a function call *)
+  match input.value with
+  | EApp (EFunCall abs_id, args) ->
+      (* Check the number of levels in the output: it should be <= 1 and we do
+       the modification only if it is exactly 1 *)
+      let max_level = tevalue_get_max_level output in
+      if max_level <= 0 then
+        (* Keep it as it is *)
+        (output, input)
+      else (
+        [%ltrace
+          "decomposing nested borrows:\n- output:\n"
+          ^ tevalue_to_string ctx output
+          ^ "\n- input:\n"
+          ^ tevalue_to_string ctx input];
+
+        (* Decompose *)
+        [%cassert] span (max_level = 1) "Unreachable";
+
+        let input1 = project_output_at_level span 1 output in
+        let output = project_output_at_level span 0 output in
+        [%ltrace
+          "- input1:\n"
+          ^ tevalue_to_string ctx input1
+          ^ "\n- input:\n"
+          ^ Print.list_to_string
+              (Print.list_to_string (tevalue_to_string ctx))
+              args
+          ^ "\n- output:\n"
+          ^ tevalue_to_string ctx output];
+
+        let input =
+          { input with value = EApp (EFunCall abs_id, [ input1 ] :: args) }
+        in
+        (output, input))
+  | _ -> (output, input)
+
 let abs_cont_bind_outputs (span : Meta.span) (ctx : eval_ctx)
     (regions : RegionId.Set.t) (bound : bound_inputs_outputs ref)
     (cont : abs_cont) : tepat * tevalue =
   match (cont.output, cont.input) with
   | Some output, Some input ->
+      let output, input =
+        abs_cont_restructure_input_output_levels span ctx output input
+      in
       bind_outputs_from_output_input span ctx regions bound output input
   | _ -> [%craise] span "Unreachable"
 
@@ -1548,8 +1743,8 @@ let merge_abs_conts_generate_output (span : Meta.span) (_ctx : eval_ctx)
       end
   in
   List.iter add_output_binding bindings;
-  let input = mk_etuple (List.rev !inputs) in
-  let output = mk_etuple (List.rev !outputs) in
+  let input = mk_etuple ~borrow_proj:false (List.rev !inputs) in
+  let output = mk_etuple ~borrow_proj:true (List.rev !outputs) in
   (output, input)
 
 (** Create the input binding all inputs of a composed continuation. *)
@@ -1617,7 +1812,7 @@ let merge_abs_conts_generate_input (span : Meta.span) (ctx : eval_ctx)
   in
   List.iter add_input_binding bindings;
   let pat = mk_epat_tuple (List.rev !pats) in
-  let input = mk_etuple (List.rev !inputs) in
+  let input = mk_etuple ~borrow_proj:false (List.rev !inputs) in
   (pat, input)
 
 (** Merge two abstraction continuations.
@@ -1640,13 +1835,14 @@ let merge_abs_conts_aux (span : Meta.span) (ctx : eval_ctx) (abs0 : abs)
        A1 { MB l1, MB l2, ML l3 } ⟦ (MB l1, MB l2) = if b then (ML l3, 1) else (0, ML l3) ⟧
      ]}
 
-     We first bind all the values in the continuation in A1 like so:
+     We first bind all the output values of the continuation in A1 like so:
      {[
        let (v_l1, v_l2) = if b then (ML l3, 1) else (0, ML l3) in
      ]}
 
-     We then update the continuation in A0 to substitute the loans whose corresponding
-     borrows are outputs of the continuation of A1, and bind the outputs of A0 like so:
+     We then update the continuation in A0 to substitute the loans (they are inputs)
+     whose corresponding borrows are outputs of the continuation of A1, and bind the outputs
+     of A0. It gives:
      {[
        let v_l0 = v_l1 in
      ]}
@@ -1715,7 +1911,7 @@ let merge_abs_conts_aux (span : Meta.span) (ctx : eval_ctx) (abs0 : abs)
     ^ "\n- bound_inputs_outputs:\n"
     ^ bound_inputs_outputs_to_string ctx !bound];
 
-  (* Create the output for the composed continuation, and its corresponding input.
+  (* Create the outputs for the composed continuation, and its corresponding inputs.
 
      We simply list all the bound outputs which were not consumed (the free variables
      give us the inputs, and the borrow themselves give us the outputs) by following
@@ -1780,6 +1976,15 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind)
     ^ abs_to_string span ctx abs1];
   (* Sanity check: we can't merge an abstraction with itself *)
   [%sanity_check] span (abs0.abs_id <> abs1.abs_id);
+
+  let abs0 =
+    destructure_abs span abs0.kind ~can_end:abs0.can_end
+      ~destructure_shared_values:true ctx abs0
+  in
+  let abs1 =
+    destructure_abs span abs1.kind ~can_end:abs1.can_end
+      ~destructure_shared_values:true ctx abs1
+  in
 
   (* Compute the ancestor regions, owned regions, etc.
      Note that one of the two abstractions might a parent of the other *)
@@ -1863,6 +2068,11 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind)
   (* Merge the expressions used for the pure translation. *)
   let cont = merge_abs_conts span ctx ~with_abs_conts abs0 abs1 in
 
+  (* *)
+  [%cassert] span (AbsLevelSet.is_empty abs0.ended_subabs) "Unimplemented";
+  [%cassert] span (AbsLevelSet.is_empty abs1.ended_subabs) "Unimplemented";
+  let ended_subabs = AbsLevelSet.empty in
+
   (* Create the new abstraction *)
   let abs_id = ctx.fresh_abs_id () in
   let abs =
@@ -1872,6 +2082,7 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind)
       can_end;
       parents;
       original_parents;
+      ended_subabs;
       regions;
       avalues;
       cont;
@@ -2452,8 +2663,8 @@ let add_abs_cont_to_abs span (ctx : eval_ctx) (abs : abs) (abs_fun : abs_fun) :
   List.iter get_borrow_loan abs.avalues;
 
   (* Transform them into input/output expressions *)
-  let output = mk_etuple (List.rev !borrows) in
-  let input = EApp (abs_fun, List.rev !loans) in
+  let output = mk_etuple ~borrow_proj:true (List.rev !borrows) in
+  let input = EApp (abs_fun, [ List.rev !loans ]) in
   let input : tevalue = { value = input; ty = output.ty } in
 
   (* Put everything together *)

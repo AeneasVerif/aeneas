@@ -312,17 +312,17 @@ def HashMap.get_mut_in_list_loop
     if ckey = key
     then
       ok (some cvalue,
-        fun ret =>
-          let t := match ret with
+        fun o =>
+          let t := match o with
                    | some t1 => t1
                    | _ => cvalue
           AList.Cons ckey t tl)
     else
       let (o, back) ← HashMap.get_mut_in_list_loop tl key
-      let back1 := fun ret => let a := back ret
-                              AList.Cons ckey cvalue a
+      let back1 := fun o1 => let a := back o1
+                             AList.Cons ckey cvalue a
       ok (o, back1)
-  | AList.Nil => ok (none, fun ret => AList.Nil)
+  | AList.Nil => ok (none, fun o => AList.Nil)
 partial_fixpoint
 
 /- [hashmap::{hashmap::HashMap<T>}::get_mut_in_list]:
@@ -348,8 +348,8 @@ def HashMap.get_mut
       self.slots hash_mod
   let (o, get_mut_in_list_back) ← HashMap.get_mut_in_list a key
   let back :=
-    fun ret =>
-      let a1 := get_mut_in_list_back ret
+    fun o1 =>
+      let a1 := get_mut_in_list_back o1
       let v := index_mut_back a1
       { self with slots := v }
   ok (o, back)

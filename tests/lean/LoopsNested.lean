@@ -192,7 +192,7 @@ def Key.atranspose_mut
   (self : Key) :
   Result ((Array Std.U16 32#usize) × (Array Std.U16 32#usize → Key))
   := do
-  let back := fun ret => { self with atranspose := ret }
+  let back := fun a => { self with atranspose := a }
   ok (self.atranspose, back)
 
 /- [loops_nested::shake_init]:

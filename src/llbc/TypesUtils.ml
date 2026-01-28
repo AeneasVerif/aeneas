@@ -56,12 +56,12 @@ let ty_has_nested_mut_borrows (span : Meta.span option)
   let info = TypesAnalysis.analyze_ty span infos ty in
   info.TypesAnalysis.contains_nested_mut
 
-(** Check that a type is supported.
+(** Check whether a type is supported.
 
-    For now, we support types which do not contain nested mutable borrows. *)
-let ty_is_supported (span : Meta.span option) (infos : TypesAnalysis.type_infos)
-    (ty : ty) : bool =
-  not (ty_has_nested_mut_borrows span infos ty)
+    TODO: implement the check. *)
+let ty_is_supported (_span : Meta.span option)
+    (_infos : TypesAnalysis.type_infos) (_ty : ty) : bool =
+  true
 
 (* Refresh the regions appearing inside a type, and introduce
    fresh regions for its erased regions *)
