@@ -2278,11 +2278,14 @@ let simplify_aggregates_visitor (ctx : ctx) (def : fun_decl) =
           ( false,
             {
               pat = PAdt { variant_id = None; fields };
-              ty = TAdt ((TAdtId _ as adt_id), generics);
+              ty = TAdt ((TAdtId decl_id as adt_id), generics);
             },
             ({ e = FVar _; ty = x_ty } as x),
             next )
-        when List.for_all is_pat_open fields ->
+        when List.for_all is_pat_open fields
+             && not
+                  (TypesUtils.type_decl_from_decl_id_is_tuple_struct
+                     ctx.trans_ctx.type_ctx.type_infos decl_id) ->
           let mk_proj (field_id : field_id) (field : tpat) : tpat * texpr =
             let f, _ = [%add_loc] as_pat_open span field in
             let qualif : texpr =

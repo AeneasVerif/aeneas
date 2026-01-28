@@ -543,11 +543,10 @@ def ExpandSimpliy.Wrapper (T : Type) := T × T
    Source: 'tests/src/no_nested_borrows.rs', lines 528:4-534:5 -/
 def ExpandSimpliy.check_expand_simplify_symb1
   (x : ExpandSimpliy.Wrapper Bool) : Result (ExpandSimpliy.Wrapper Bool) := do
-  let b := x.#0
-  let b1 := x.#1
+  let (b, _) := x
   if b
-  then ok (true, b1)
-  else ok (false, b1)
+  then ok x
+  else ok x
 
 /- [no_nested_borrows::ExpandSimpliy::Wrapper2]
    Source: 'tests/src/no_nested_borrows.rs', lines 536:4-539:5 -/
