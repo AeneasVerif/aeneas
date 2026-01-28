@@ -590,8 +590,8 @@ let tepat_to_tpat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
     monad?).
 
     [bound_inputs]: see the doc of [bound_inputs] *)
-let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) ?(to_consumed = false)
-    (rids : T.RegionId.Set.t) (bound_inputs : bound_borrows_loans)
+let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
+    (bound_inputs : bound_borrows_loans)
     (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref) (abs_level : abs_level)
     (input : V.tevalue) : bs_ctx * bool * texpr =
   [%ldebug
@@ -600,10 +600,6 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) ?(to_consumed = false)
     ^ "\n- input: "
     ^ tevalue_to_string ctx input];
   [%cassert] ctx.span (abs_level = 0) "Unimplemented";
-  (* TODO: the sanity checks based on [to_consumed] do not work anymore because
-     there can be ended loans in evalues independently of whether we translate
-     them to continuations or function calls *)
-  let _ = to_consumed in
   let span = ctx.span in
   let rec to_texpr_aux ~(filter : bool) (rids : T.RegionId.Set.t)
       (current_level : abs_level) (ctx : bs_ctx) (input : V.tevalue) :
@@ -750,8 +746,6 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) ?(to_consumed = false)
         [%ldebug "loan"];
         match lc with
         | V.EMutLoan (pm, lid, child) ->
-            (* TODO: see comment about [to_consumed] *)
-            [%sanity_check] span (true || not to_consumed);
             [%sanity_check] span (pm = PNone);
             [%sanity_check] span (ValuesUtils.is_eignored child.value);
             let e =
@@ -761,8 +755,6 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) ?(to_consumed = false)
             in
             (ctx, false, Some e)
         | V.EEndedMutLoan { child; given_back; given_back_meta } ->
-            (* TODO: see comment about [to_consumed] *)
-            [%sanity_check] span (true || to_consumed);
             [%sanity_check] ctx.span (ValuesUtils.is_eignored child.value);
             [%sanity_check] ctx.span (ValuesUtils.is_eignored given_back.value);
             (* Return the meta-value *)
@@ -776,8 +768,6 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) ?(to_consumed = false)
         [%sanity_check] span (pm = PNone);
         match proj with
         | V.EProjLoans { proj = { sv_id; proj_ty }; consumed; borrows } ->
-            (* TODO: see comment about [to_consumed] *)
-            [%sanity_check] span (true || not to_consumed);
             [%sanity_check] span (consumed = []);
             [%sanity_check] span (borrows = []);
             let norm_proj_ty =
@@ -798,8 +788,6 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) ?(to_consumed = false)
             (ctx, false, out)
         | V.EEndedProjLoans
             { proj = _; consumed = [ (mnv, child_aproj) ]; borrows = [] } ->
-            (* TODO: see comment about [to_consumed] *)
-            [%sanity_check] span (true || to_consumed);
             [%sanity_check] ctx.span (child_aproj = EEmpty);
             (* TODO: check that the updated symbolic values covers all the cases
                (part of the symbolic value might have been updated, and the rest
@@ -1242,7 +1230,7 @@ let ended_abs_cont_to_texpr_aux (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs)
   let fvar_to_texpr = ref V.AbsFVarId.Map.empty in
   let ctx, can_fail, input_e =
     einput_to_texpr ctx ectx abs.regions.owned empty_bound_borrows_loans
-      fvar_to_texpr ~to_consumed:true abs_level input
+      fvar_to_texpr abs_level input
   in
   [%sanity_check] span (not can_fail);
   let ctx, pat =
