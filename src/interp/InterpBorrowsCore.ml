@@ -1912,66 +1912,94 @@ let get_first_non_ignored_aloan_in_abs (span : Meta.span) (abs : abs)
       (* There are loan projections over symbolic values *)
       Some (SymbolicValue proj)
 
+let get_max_sub_abs_visitor ?(with_ended = false) ?(with_evalues = false)
+    (max_level : int ref) =
+  let save_level level = if level > !max_level then max_level := level in
+  object
+    inherit [_] iter_abs_with_levels as super
+    method incr_level level = level + 1
+
+    method! visit_aloan_content level lc =
+      (match lc with
+      | AMutLoan _ | ASharedLoan _ -> save_level level
+      | AEndedMutLoan _
+      | AEndedSharedLoan _
+      | AIgnoredMutLoan _
+      | AEndedIgnoredMutLoan _
+      | AIgnoredSharedLoan _ -> if with_ended then save_level level);
+      super#visit_aloan_content level lc
+
+    method! visit_aborrow_content level bc =
+      (match bc with
+      | AMutBorrow _ | ASharedBorrow _ -> save_level level
+      | AIgnoredMutBorrow _
+      | AEndedMutBorrow _
+      | AEndedSharedBorrow
+      | AEndedIgnoredMutBorrow _
+      | AProjSharedBorrow (_ :: _) -> save_level level
+      | AProjSharedBorrow [] -> if with_ended then save_level level);
+      super#visit_aborrow_content level bc
+
+    method! visit_aproj level proj =
+      (match proj with
+      | AProjLoans _ | AProjBorrows _ -> save_level level
+      | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty ->
+          (* TODO: ignore AEmpty? *)
+          if with_ended then save_level level);
+      super#visit_aproj level proj
+
+    method! visit_loan_content level lc =
+      (match lc with
+      | VSharedLoan _ | VMutLoan _ -> save_level level);
+      super#visit_loan_content level lc
+
+    method! visit_borrow_content level bc =
+      (match bc with
+      | VSharedBorrow _ | VMutBorrow _ | VReservedMutBorrow _ ->
+          save_level level);
+      super#visit_borrow_content level bc
+
+    method! visit_adt_avalue level a =
+      (* When analyzing the ended borrows, make sure we don't forget the ADTs
+           containing borrows which expanded to a variant which did not contain
+           any borrow. *)
+      if with_ended then save_level level;
+      super#visit_adt_avalue level a
+
+    method! visit_tevalue level e =
+      if with_evalues then super#visit_tevalue level e else ()
+
+    method! visit_eloan_content level lc =
+      (match lc with
+      | EMutLoan _ -> save_level level
+      | EEndedMutLoan _ | EIgnoredMutLoan _ | EEndedIgnoredMutLoan _ ->
+          if with_ended then save_level level);
+      super#visit_eloan_content level lc
+
+    method! visit_eborrow_content level bc =
+      (match bc with
+      | EMutBorrow _ -> save_level level
+      | EIgnoredMutBorrow _ | EEndedMutBorrow _ | EEndedIgnoredMutBorrow _ ->
+          if with_ended then save_level level);
+      super#visit_eborrow_content level bc
+
+    method! visit_eproj level proj =
+      (match proj with
+      | EProjLoans _ | EProjBorrows _ -> save_level level
+      | EEndedProjLoans _ | EEndedProjBorrows _ | EEmpty ->
+          (* TODO: ignore EEmpty? *)
+          if with_ended then save_level level);
+      super#visit_eproj level proj
+  end
+
 (** Get the non-ended sub-abstraction with the highest level.
 
     Outputs -1 if no valid borrow/loan was found *)
-let get_max_sub_abs ?(with_ended = false) (abs : abs) : int =
+let get_max_sub_abs ?(with_ended = false) ?(with_evalues = false) (abs : abs) :
+    int =
   let max_level = ref (-1) in
-  let save_level level = if level > !max_level then max_level := level in
-  let visitor =
-    object
-      inherit [_] iter_abs_with_levels as super
-      method incr_level level = level + 1
-
-      method! visit_aloan_content level lc =
-        (match lc with
-        | AMutLoan _ | ASharedLoan _ -> save_level level
-        | AEndedMutLoan _
-        | AEndedSharedLoan _
-        | AIgnoredMutLoan _
-        | AEndedIgnoredMutLoan _
-        | AIgnoredSharedLoan _ -> if with_ended then save_level level);
-        super#visit_aloan_content level lc
-
-      method! visit_aborrow_content level bc =
-        (match bc with
-        | AMutBorrow _ | ASharedBorrow _ -> save_level level
-        | AIgnoredMutBorrow _
-        | AEndedMutBorrow _
-        | AEndedSharedBorrow
-        | AEndedIgnoredMutBorrow _
-        | AProjSharedBorrow (_ :: _) -> save_level level
-        | AProjSharedBorrow [] -> if with_ended then save_level level);
-        super#visit_aborrow_content level bc
-
-      method! visit_aproj level proj =
-        (match proj with
-        | AProjLoans _ | AProjBorrows _ -> save_level level
-        | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty ->
-            if with_ended then save_level level);
-        super#visit_aproj level proj
-
-      method! visit_loan_content level lc =
-        (match lc with
-        | VSharedLoan _ | VMutLoan _ -> save_level level);
-        super#visit_loan_content level lc
-
-      method! visit_borrow_content level bc =
-        (match bc with
-        | VSharedBorrow _ | VMutBorrow _ | VReservedMutBorrow _ ->
-            save_level level);
-        super#visit_borrow_content level bc
-
-      method! visit_adt_avalue level a =
-        (* When analyzing the ended borrows, make sure we don't forget the ADTs
-           containing borrows which expanded to a variant which did not contain
-           any borrow. *)
-        if with_ended then save_level level;
-        super#visit_adt_avalue level a
-    end
-  in
+  let visitor = get_max_sub_abs_visitor ~with_ended ~with_evalues max_level in
   visitor#visit_abs 0 abs;
-
   !max_level
 
 let lookup_shared_value_opt (span : Meta.span) (env : env) (bid : BorrowId.id) :

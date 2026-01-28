@@ -333,9 +333,9 @@ module Values = struct
           "given_back= " ^ aended_mut_borrow_meta_to_string env mv
         else "" ^ tavalue_to_string ~span ~with_ended env child ^ ")"
     | AEndedIgnoredMutBorrow { child; given_back; given_back_meta = _ } ->
-        "@ended_ignored_mut_borrow{ "
+        "@ended_ignored_mut_borrow("
         ^ tavalue_to_string ~span ~with_ended env child
-        ^ "; "
+        ^ ", "
         ^ tavalue_to_string ~span ~with_ended env given_back
         ^ ")"
     | AEndedSharedBorrow -> "@ended_shared_borrow"
@@ -586,7 +586,7 @@ module Values = struct
     | ESymbolic (pm, proj) ->
         eproj_to_string ~with_ended env proj |> add_proj_marker pm
     | EValue (_, mv) -> "@mvalue(" ^ tvalue_to_string ~span env mv ^ ")"
-    | EIgnored -> "_ : " ^ ty_to_string env v.ty ^ ")"
+    | EIgnored -> "(_ : " ^ ty_to_string env v.ty ^ ")"
     | EMutBorrowInput x ->
         "@mut_input("
         ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr x

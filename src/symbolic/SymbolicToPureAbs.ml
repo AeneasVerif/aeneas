@@ -244,10 +244,14 @@ let compute_tevalue_proj_kind (span : Meta.span) (type_infos : type_infos)
   let set_has_loans level = if level = abs_level then has_loans := true in
   let set_has_borrows level = if level = abs_level then has_borrows := true in
   let set_has_mut_loans level =
-    if level = abs_level then has_mut_loans := true
+    if level = abs_level then (
+      has_loans := true;
+      has_mut_loans := true)
   in
   let set_has_mut_borrows level =
-    if level = abs_level then has_mut_borrows := true
+    if level = abs_level then (
+      has_borrows := true;
+      has_mut_borrows := true)
   in
 
   let keep_region (r : T.region) =
@@ -255,10 +259,14 @@ let compute_tevalue_proj_kind (span : Meta.span) (type_infos : type_infos)
     | T.RVar (Free rid) -> T.RegionId.Set.mem rid abs_regions
     | _ -> false
   in
+  let ty_has_mut_region =
+    TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos keep_region
+  in
   let visitor =
     object (self)
       inherit [_] InterpBorrowsCore.iter_tavalue_with_levels as super
       method incr_level (level, ty) = (level + 1, ty)
+      method! visit_ELet _ _ = [%internal_error] span
 
       method! visit_tevalue (level, _) ev =
         (* Remember the type of the current value *)
@@ -285,10 +293,7 @@ let compute_tevalue_proj_kind (span : Meta.span) (type_infos : type_infos)
         super#visit_EBorrow (level, ty) bc
 
       method! visit_EFVar (level, ty) _ =
-        if
-          TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos keep_region
-            ty
-        then (
+        if ty_has_mut_region ty then (
           (* It may seem counterintuitive, but we consider the free variables
              as a **loan** (because it binds an input loan). *)
           set_has_loans level;
@@ -300,27 +305,25 @@ let compute_tevalue_proj_kind (span : Meta.span) (type_infos : type_infos)
         | V.EEndedProjLoans _ ->
             set_has_loans level;
             (* We need to check wether the projected loans are mutable or not *)
-            if
-              TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
-                keep_region ty
-            then set_has_mut_loans level;
+            if ty_has_mut_region ty then set_has_mut_loans level;
             (* Continue exploring (same reasons as above) *)
             super#visit_ESymbolic (level, ty) pm eproj
         | EProjLoans _ ->
             set_has_loans level;
+            (* We need to check wether the projected loans are mutable or not *)
+            if ty_has_mut_region ty then set_has_mut_loans level;
             (* Continue exploring (same reasons as above) *)
             super#visit_ESymbolic (level, ty) pm eproj
         | EEndedProjBorrows _ ->
             set_has_borrows level;
             (* We need to check wether the projected borrows are mutable or not *)
-            if
-              TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
-                keep_region ty
-            then set_has_mut_borrows level;
+            if ty_has_mut_region ty then set_has_mut_borrows level;
             (* Continue exploring (same reasons as above) *)
             super#visit_ESymbolic (level, ty) pm eproj
         | EProjBorrows _ ->
             set_has_borrows level;
+            (* We need to check wether the projected loans are mutable or not *)
+            if ty_has_mut_region ty then set_has_mut_borrows level;
             (* Continue exploring (same reasons as above) *)
             super#visit_ESymbolic (level, ty) pm eproj
         | EEmpty ->
@@ -597,6 +600,10 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) ?(to_consumed = false)
     ^ "\n- input: "
     ^ tevalue_to_string ctx input];
   [%cassert] ctx.span (abs_level = 0) "Unimplemented";
+  (* TODO: the sanity checks based on [to_consumed] do not work anymore because
+     there can be ended loans in evalues independently of whether we translate
+     them to continuations or function calls *)
+  let _ = to_consumed in
   let span = ctx.span in
   let rec to_texpr_aux ~(filter : bool) (rids : T.RegionId.Set.t)
       (current_level : abs_level) (ctx : bs_ctx) (input : V.tevalue) :
@@ -743,7 +750,8 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) ?(to_consumed = false)
         [%ldebug "loan"];
         match lc with
         | V.EMutLoan (pm, lid, child) ->
-            [%sanity_check] span (not to_consumed);
+            (* TODO: see comment about [to_consumed] *)
+            [%sanity_check] span (true || not to_consumed);
             [%sanity_check] span (pm = PNone);
             [%sanity_check] span (ValuesUtils.is_eignored child.value);
             let e =
@@ -753,7 +761,8 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) ?(to_consumed = false)
             in
             (ctx, false, Some e)
         | V.EEndedMutLoan { child; given_back; given_back_meta } ->
-            [%sanity_check] span to_consumed;
+            (* TODO: see comment about [to_consumed] *)
+            [%sanity_check] span (true || to_consumed);
             [%sanity_check] ctx.span (ValuesUtils.is_eignored child.value);
             [%sanity_check] ctx.span (ValuesUtils.is_eignored given_back.value);
             (* Return the meta-value *)
@@ -767,7 +776,8 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) ?(to_consumed = false)
         [%sanity_check] span (pm = PNone);
         match proj with
         | V.EProjLoans { proj = { sv_id; proj_ty }; consumed; borrows } ->
-            [%sanity_check] span (not to_consumed);
+            (* TODO: see comment about [to_consumed] *)
+            [%sanity_check] span (true || not to_consumed);
             [%sanity_check] span (consumed = []);
             [%sanity_check] span (borrows = []);
             let norm_proj_ty =
@@ -788,7 +798,8 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) ?(to_consumed = false)
             (ctx, false, out)
         | V.EEndedProjLoans
             { proj = _; consumed = [ (mnv, child_aproj) ]; borrows = [] } ->
-            [%sanity_check] span to_consumed;
+            (* TODO: see comment about [to_consumed] *)
+            [%sanity_check] span (true || to_consumed);
             [%sanity_check] ctx.span (child_aproj = EEmpty);
             (* TODO: check that the updated symbolic values covers all the cases
                (part of the symbolic value might have been updated, and the rest

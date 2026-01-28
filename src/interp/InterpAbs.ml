@@ -1470,11 +1470,157 @@ let bind_outputs_from_output_input (span : Meta.span) (ctx : eval_ctx)
   let pat = bind_output regions output in
   (pat, input)
 
+let tevalue_get_max_level (v : tevalue) : int =
+  let max_level = ref (-1) in
+  let visitor =
+    InterpBorrowsCore.get_max_sub_abs_visitor ~with_evalues:true max_level
+  in
+  visitor#visit_tevalue 0 v;
+  !max_level
+
+let project_output_at_level span (level : int) (v : tevalue) : tevalue =
+  let rec project level (v : tevalue) : tevalue =
+    let stop (v : tevalue) =
+      if level = 0 then v else { v with value = EIgnored }
+    in
+    match v.value with
+    | ELet _ | EJoinMarkers _ | EBVar _ | EApp _ ->
+        [%craise] span "Unimplemented"
+    | EAdt { variant_id; fields } ->
+        let fields = List.map (project level) fields in
+        { v with value = EAdt { variant_id; fields } }
+    | ELoan lc -> (
+        match lc with
+        | EMutLoan (pm, lid, child) ->
+            let child = project level child in
+            if level = 0 then
+              { v with value = ELoan (EMutLoan (pm, lid, child)) }
+            else child
+        | EEndedMutLoan { child; given_back; given_back_meta = _ } ->
+            if level = 0 then project level child
+            else project (level - 1) given_back
+        | EIgnoredMutLoan _ -> [%craise] span "Unimplemented"
+        | EEndedIgnoredMutLoan { child; given_back; given_back_meta = _ } ->
+            if level = 0 then project level child
+            else project (level - 1) given_back)
+    | EBorrow bc -> (
+        match bc with
+        | EMutBorrow (pm, bid, child) ->
+            let child = project level child in
+            if level = 0 then
+              { v with value = EBorrow (EMutBorrow (pm, bid, child)) }
+            else child
+        | EIgnoredMutBorrow _ -> [%craise] span "Unimplemented"
+        | EEndedMutBorrow (mv, child) ->
+            let child = project level child in
+            if level = 0 then
+              { v with value = EBorrow (EEndedMutBorrow (mv, child)) }
+            else child
+        | EEndedIgnoredMutBorrow { child; given_back; given_back_meta = _ } ->
+            if level = 0 then project level child
+            else project (level - 1) given_back)
+    | ESymbolic (_pm, proj) -> (
+        match proj with
+        | EProjLoans { proj = _; consumed; borrows } ->
+            [%cassert] span (consumed = []) "Unimplemented";
+            [%cassert] span (borrows = []) "Unimplemented";
+            stop v
+        | EProjBorrows { proj = _; loans } ->
+            [%cassert] span (loans = []) "Unimplemented";
+            stop v
+        | EEndedProjLoans { proj = _; consumed; borrows } ->
+            [%cassert] span (consumed = []) "Unimplemented";
+            [%cassert] span (borrows = []) "Unimplemented";
+            stop v
+        | EEndedProjBorrows { mvalues = _; loans } ->
+            [%cassert] span (loans = []) "Unimplemented";
+            stop v
+        | EEmpty -> stop v)
+    | EFVar _ | EValue _ | EIgnored -> stop v
+    | EMutBorrowInput _ | EBottom -> [%craise] span "Unreachable"
+  in
+  project level v
+
+(** Small trick to handle nested borrows.
+
+    Considering the code below:
+    {[
+      struct IterMut<'a, T> {
+          v : Option<&'a mut T>,
+      }
+
+      impl<'a, T> IterMut<'a, T> {
+          fn next(&mut self) -> Option<&'a mut T>
+      }
+
+      fn iter_mut_loop<'a, T>(mut x : IterMut<'a, T>) {
+          while let Some(_) = x.next() {}
+      }
+    ]}
+
+    In the loop, after ending the outer lifetime we get an abstraction like this
+    for the inner lifetime:
+    {[
+      @ended_ignored_mut_borrow((s@2 <: IterMut<'1, T>); ⌊s@3 <: IterMut<'1, T>⌋) :=
+        FunCall(...)[(Some ⌊s@1 <: &'1 mut T⌋)]
+    ]}
+
+    We restructure it to:
+    {[
+      (s@2 <: IterMut<'1, T>) :=
+        FunCall(...)[(⌊s@3 <: IterMut<'1, T>⌋); (Some ⌊s@1 <: &'1 mut T⌋)]
+    ]}
+
+    TODO: generalize to an arbitrary number of nestings and arbitrary relations
+    input/output *)
+let abs_cont_restructure_input_output_levels (span : Meta.span) (ctx : eval_ctx)
+    (regions : RegionId.Set.t) (output : tevalue) (input : tevalue) :
+    tevalue * tevalue =
+  (* Check if the input is a function call *)
+  match input.value with
+  | EApp (EFunCall abs_id, args) ->
+      (* Check the number of levels in the output: it should be <= 1 and we do
+       the modification only if it is exactly 1 *)
+      let max_level = tevalue_get_max_level output in
+      if max_level <= 0 then
+        (* Keep it as it is *)
+        (output, input)
+      else (
+        [%ltrace
+          "decomposing nested borrows:\n- output:\n"
+          ^ tevalue_to_string ctx output
+          ^ "\n- input:\n"
+          ^ tevalue_to_string ctx input];
+
+        (* Decompose *)
+        [%cassert] span (max_level = 1) "Unreachable";
+
+        let input1 = project_output_at_level span 1 output in
+        let output = project_output_at_level span 0 output in
+        [%ltrace
+          "- input1:\n"
+          ^ tevalue_to_string ctx input1
+          ^ "\n- input:\n"
+          ^ Print.list_to_string
+              (Print.list_to_string (tevalue_to_string ctx))
+              args
+          ^ "\n- output:\n"
+          ^ tevalue_to_string ctx output];
+
+        let input =
+          { input with value = EApp (EFunCall abs_id, [ input1 ] :: args) }
+        in
+        (output, input))
+  | _ -> (output, input)
+
 let abs_cont_bind_outputs (span : Meta.span) (ctx : eval_ctx)
     (regions : RegionId.Set.t) (bound : bound_inputs_outputs ref)
     (cont : abs_cont) : tepat * tevalue =
   match (cont.output, cont.input) with
   | Some output, Some input ->
+      let output, input =
+        abs_cont_restructure_input_output_levels span ctx regions output input
+      in
       bind_outputs_from_output_input span ctx regions bound output input
   | _ -> [%craise] span "Unreachable"
 
@@ -1811,6 +1957,15 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind)
     ^ abs_to_string span ctx abs1];
   (* Sanity check: we can't merge an abstraction with itself *)
   [%sanity_check] span (abs0.abs_id <> abs1.abs_id);
+
+  let abs0 =
+    destructure_abs span abs0.kind ~can_end:abs0.can_end
+      ~destructure_shared_values:true ctx abs0
+  in
+  let abs1 =
+    destructure_abs span abs1.kind ~can_end:abs1.can_end
+      ~destructure_shared_values:true ctx abs1
+  in
 
   (* Compute the ancestor regions, owned regions, etc.
      Note that one of the two abstractions might a parent of the other *)

@@ -147,7 +147,7 @@ let rec tvalue_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (v : V.tvalue) :
   (* Return *)
   value
 
-type borrow_kind = BMut | BShared
+type borrow_kind = BMut | BShared [@@deriving show]
 
 (** An avalue/evalue is either produced from a borrow projector (if it is an
     input to a function) or from a loan projector (if it is an ouptput). This
@@ -176,6 +176,7 @@ type proj_kind =
   | UnknownProj
       (** No borrows, loans or projections inside the value so we can't know for
           sure *)
+[@@deriving show]
 
 let compute_tavalue_proj_kind span type_infos (abs_regions : T.RegionId.Set.t)
     (abs_level : abs_level) (current_level : abs_level) (av : V.tavalue) :
@@ -309,6 +310,10 @@ let gtranslate_adt_fields ~(project_borrows : bool)
   let adt_id, _ = TypesUtils.ty_as_adt av_ty in
   (* Check if the ADT contains borrows *)
   let proj_kind = compute_proj_kind av in
+  [%ldebug
+    "- filter: " ^ string_of_bool filter ^ "\n- av: " ^ input_to_string av
+    ^ "\n- av_ty: " ^ ty_to_string ctx av_ty ^ "\n- proj_kind: "
+    ^ show_proj_kind proj_kind];
   match proj_kind with
   | UnknownProj when filter ->
       [%ldebug "UnknownProj && filter"];
