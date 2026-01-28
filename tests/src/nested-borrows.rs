@@ -44,6 +44,10 @@ fn call_inner_mut_swap() {
     assert!(y == 3);
 }
 
+fn incr_inner<'a, 'b>(x : &'a mut &'b mut u32) {
+    **x += 1;
+}
+
 struct IterMut<'a, T> {
     v : Option<&'a mut T>,
 }
@@ -75,8 +79,8 @@ fn call_iter_mut_next_u32<'a, T>(mut it : IterMut<'a, u32>) {
     }
 }
 
-fn incr_inner<'a, 'b>(x : &'a mut &'b mut u32) {
-    **x += 1;
+fn iter_mut_loop<'a, T>(mut x : IterMut<'a, T>) {
+    while let Some(_) = x.next() {}
 }
 
 /*
