@@ -16,6 +16,19 @@ let translate_region_binder (translate_value : 'a -> 'b)
     (rb : 'a T.region_binder) : 'b =
   translate_value rb.binder_value
 
+let translate_constant_expr_kind (span : span option) :
+    Types.constant_expr_kind -> const_generic = function
+  | CGlobal { id; _ } -> CgGlobal id
+  | CVar v -> CgVar v
+  | CLiteral l -> CgValue l
+  | _ -> [%craise_opt_span] span "Unsupported constant expression kind"
+
+let translate_const_generic_param (span : span option)
+    (c : Types.const_generic_param) : const_generic_param =
+  match c.ty with
+  | TLiteral ty -> { index = c.index; name = c.name; ty }
+  | _ -> [%craise_opt_span] span "Unsupported constant expression type"
+
 (* Some generic translation functions (we need to translate different "flavours"
    of types: forward types, backward types, etc.) *)
 let rec translate_generic_args (span : Meta.span option)
@@ -25,7 +38,7 @@ let rec translate_generic_args (span : Meta.span option)
   let types = List.map translate_ty generics.types in
   let const_generics =
     List.map
-      (fun (c : T.constant_expr) -> const_generic_of_constant_expr c.kind)
+      (fun (c : T.constant_expr) -> translate_constant_expr_kind span c.kind)
       generics.const_generics
   in
   let trait_refs =
@@ -117,7 +130,7 @@ let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
           | T.TStr -> TAdt (TBuiltin TStr, generics)))
   | T.TArray (ty, len) ->
       let ty = translate span ty in
-      let len = const_generic_of_constant_expr len.kind in
+      let len = translate_constant_expr_kind span len.kind in
       TAdt
         ( TBuiltin TArray,
           { types = [ ty ]; const_generics = [ len ]; trait_refs = [] } )
@@ -190,7 +203,7 @@ let translate_generic_params (span : Meta.span option)
     generics
   in
   let const_generics =
-    List.map const_generic_param_charon_to_pure const_generics
+    List.map (translate_const_generic_param span) const_generics
   in
   let trait_clauses = List.map (translate_trait_clause span) trait_clauses in
   let trait_type_constraints =
@@ -319,7 +332,7 @@ let rec translate_fwd_ty (span : Meta.span option) (type_infos : type_infos)
                  parameter"))
   | T.TArray (ty, len) ->
       let ty = translate ty in
-      let len = const_generic_of_constant_expr len.kind in
+      let len = translate_constant_expr_kind span len.kind in
       TAdt
         ( TBuiltin TArray,
           { types = [ ty ]; const_generics = [ len ]; trait_refs = [] } )
