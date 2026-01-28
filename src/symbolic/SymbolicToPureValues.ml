@@ -769,7 +769,8 @@ and adt_avalue_to_given_back_aux ~(filter : bool)
       (tpat_to_string ctx)
       (fun ~filter ctx v ->
         let ctx, v =
-          tavalue_to_given_back_aux ~filter abs_regions abs_level 0 None v ctx
+          tavalue_to_given_back_aux ~filter abs_regions abs_level current_level
+            None v ctx
         in
         match v with
         | None -> (ctx, None)
