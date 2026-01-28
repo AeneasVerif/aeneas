@@ -229,7 +229,7 @@ module Values = struct
   let aended_mut_borrow_meta_to_string (env : fmt_env)
       (mv : aended_mut_borrow_meta) : string =
     let { bid; given_back } : aended_mut_borrow_meta = mv in
-    "{ bid = " ^ BorrowId.to_string bid ^ "; given_back = "
+    "{ bid = " ^ BorrowId.to_string bid ^ "; given_back_ = "
     ^ symbolic_value_to_string env given_back
     ^ " }"
 
@@ -275,12 +275,12 @@ module Values = struct
     | AEndedMutLoan ml ->
         let consumed =
           if with_ended then
-            "consumed = " ^ tvalue_to_string env ml.given_back_meta ^ ", "
+            "consumed = " ^ tvalue_to_string env ml.given_back_meta ^ "; "
           else ""
         in
-        "@ended_mut_loan{" ^ consumed
+        "@ended_mut_loan{" ^ consumed ^ "child: "
         ^ tavalue_to_string ~span ~with_ended env ml.child
-        ^ "; "
+        ^ "; given_back: "
         ^ tavalue_to_string ~span ~with_ended env ml.given_back
         ^ " }"
     | AEndedSharedLoan (v, av) ->
@@ -296,9 +296,9 @@ module Values = struct
         ^ tavalue_to_string ~span ~with_ended env av
         ^ ")"
     | AEndedIgnoredMutLoan ml ->
-        "@ended_ignored_mut_loan{ "
+        "@ended_ignored_mut_loan{ child: "
         ^ tavalue_to_string ~span ~with_ended env ml.child
-        ^ "; "
+        ^ "; given_back: "
         ^ tavalue_to_string ~span ~with_ended env ml.given_back
         ^ "}"
     | AIgnoredSharedLoan sl ->
@@ -330,7 +330,7 @@ module Values = struct
         "@ended_mut_borrow("
         ^
         if with_ended then
-          "given_back= " ^ aended_mut_borrow_meta_to_string env mv
+          "meta_given_back= " ^ aended_mut_borrow_meta_to_string env mv
         else "" ^ tavalue_to_string ~span ~with_ended env child ^ ")"
     | AEndedIgnoredMutBorrow { child; given_back; given_back_meta = _ } ->
         "@ended_ignored_mut_borrow("
@@ -605,13 +605,13 @@ module Values = struct
     | EEndedMutLoan ml ->
         let consumed =
           if with_ended then
-            "consumed = " ^ tvalue_to_string env ml.given_back_meta ^ ", "
+            "consumed = " ^ tvalue_to_string env ml.given_back_meta ^ "; "
           else ""
         in
-        "@ended_mut_loan{" ^ consumed
+        "@ended_mut_loan{ child: " ^ consumed
         ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr
             ml.child
-        ^ "; "
+        ^ "; given_back: "
         ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr
             ml.given_back
         ^ " }"
@@ -622,10 +622,10 @@ module Values = struct
         ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr av
         ^ ")"
     | EEndedIgnoredMutLoan ml ->
-        "@ended_ignored_mut_loan{ "
+        "@ended_ignored_mut_loan{ child: "
         ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr
             ml.child
-        ^ "; "
+        ^ "; given_back: "
         ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr
             ml.given_back
         ^ "}"

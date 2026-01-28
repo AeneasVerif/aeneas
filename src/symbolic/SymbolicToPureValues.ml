@@ -724,6 +724,11 @@ let rec tavalue_to_given_back_aux ~(filter : bool)
     (abs_regions : T.RegionId.Set.t) (abs_level : abs_level)
     (current_level : abs_level) (mp : mplace option) (av : V.tavalue)
     (ctx : bs_ctx) : bs_ctx * tpat option =
+  [%ldebug
+    "- current_level: "
+    ^ string_of_int current_level
+    ^ "\n- av: "
+    ^ tavalue_to_string ~with_ended:true ctx av];
   let (ctx, value) : _ * tpat option =
     match av.value with
     | AAdt adt_v ->
@@ -932,9 +937,9 @@ let abs_to_given_back (mpl : mplace option list option) (abs : V.abs)
   in
   let values = List.filter_map (fun x -> x) values in
   [%ltrace
-    "- abs: "
+    "After translation to given back patterns:\n- abs: "
     ^ abs_to_string ~with_ended:true ctx abs
-    ^ "\n- values: "
+    ^ "\n- patterns: "
     ^ Print.list_to_string (tpat_to_string ctx) values];
   (ctx, values)
 
