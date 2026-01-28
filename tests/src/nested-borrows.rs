@@ -7,11 +7,11 @@ trait Trait1 {
     fn f(x: &&u32);
 }
 
-fn inner_shared<'a, 'b>(x : &'a &'b u32) -> &'b u32 {
+fn inner_shared<'a, 'b>(x: &'a &'b u32) -> &'b u32 {
     *x
 }
 
-fn inner_mut<'a, 'b>(x : &'a mut &'b mut u32) -> &'a mut u32 {
+fn inner_mut<'a, 'b>(x: &'a mut &'b mut u32) -> &'a mut u32 {
     *x
 }
 
@@ -25,7 +25,7 @@ fn call_inner_mut() {
     assert!(x == 2);
 }
 
-fn inner_mut_swap<'a, 'b>(ppx : &'a mut &'b mut u32, py : &'b mut u32) -> &'a mut u32 {
+fn inner_mut_swap<'a, 'b>(ppx: &'a mut &'b mut u32, py: &'b mut u32) -> &'a mut u32 {
     **ppx = 10;
     *ppx = py;
     *ppx
@@ -44,46 +44,49 @@ fn call_inner_mut_swap() {
     assert!(y == 3);
 }
 
-fn incr_inner<'a, 'b>(x : &'a mut &'b mut u32) {
+fn incr_inner<'a, 'b>(x: &'a mut &'b mut u32) {
     **x += 1;
 }
 
 struct IterMut<'a, T> {
-    v : Option<&'a mut T>,
+    v: Option<&'a mut T>,
 }
 
 // TODO: fix in Charon
-fn replace_option_mut<'a, 'b, T>(x : &'a mut Option<&'b mut T>, v : Option<&'b mut T>) -> Option<&'b mut T> {
+fn replace_option_mut<'a, 'b, T>(
+    x: &'a mut Option<&'b mut T>,
+    v: Option<&'b mut T>,
+) -> Option<&'b mut T> {
     panic!() // std::mem::replace(x, v)
 }
 
 impl<'a, T> IterMut<'a, T> {
     fn next(&mut self) -> Option<&'a mut T> {
         /* We need to use `std::mem::replace` because otherwise the
-           code doesn't borrow-check. */
+        code doesn't borrow-check. */
         replace_option_mut(&mut self.v, None)
     }
 }
 
-fn call_iter_mut_next<'a, T>(mut it : IterMut<'a, T>) {
+fn call_iter_mut_next<'a, T>(mut it: IterMut<'a, T>) {
     match it.next() {
         None => (),
-        Some (_) => (),
+        Some(_) => (),
     }
 }
 
-fn call_iter_mut_next_u32<'a, T>(mut it : IterMut<'a, u32>) {
+fn call_iter_mut_next_u32<'a, T>(mut it: IterMut<'a, u32>) {
     match it.next() {
         None => (),
-        Some (x) => *x += 1,
+        Some(x) => *x += 1,
     }
 }
 
-fn iter_mut_loop<'a, T>(mut it : IterMut<'a, T>) {
+fn iter_mut_loop<'a, T>(mut it: IterMut<'a, T>) {
     while let Some(_) = it.next() {}
 }
 
-fn iter_mut_incr<'a, T>(mut it : IterMut<'a, u32>) {
+fn iter_mut_incr<'a, T>(mut it: IterMut<'a, u32>) {
     while let Some(x) = it.next() {
         *x += 1;
     }
@@ -107,7 +110,7 @@ impl<T> List<T> {
 }
 
 // TODO: fix in Charon
-fn take_option_mut<'a, 'b, T>(x : &'a mut Option<&'b mut T>) -> Option<&'b mut T> {
+fn take_option_mut<'a, 'b, T>(x: &'a mut Option<&'b mut T>) -> Option<&'b mut T> {
     panic!() // x.take()
 }
 
@@ -124,7 +127,7 @@ impl<'a, T> ListIterMut<'a, T> {
     }
 }
 
-fn incr_list(l : &mut List<u32>) {
+fn incr_list(l: &mut List<u32>) {
     let mut it = l.iter_mut();
     while let Some(x) = it.next() {
         *x += 1;
