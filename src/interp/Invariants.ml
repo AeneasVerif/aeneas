@@ -456,7 +456,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
           let len =
             Scalars.get_val
               (ValuesUtils.literal_as_scalar
-                 (TypesUtils.const_generic_as_literal len))
+                 (TypesUtils.constant_expr_as_literal len))
           in
           [%sanity_check] span (Z.of_int (List.length av.fields) = len)
       | VAdt _, TSlice _ -> [%craise] span "Unexpected slice value"

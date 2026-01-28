@@ -241,6 +241,29 @@ let compute_literal_type (cv : literal) : literal_type =
       [%craise_opt_span] None
         "Float, string and byte string literals are unsupported"
 
+let constant_expr_of_const_generic : const_generic -> Types.constant_expr_kind =
+  function
+  | CgGlobal id -> CGlobal { id; generics = TypesUtils.empty_generic_args }
+  | CgVar v -> CVar v
+  | CgValue l -> CLiteral l
+
+let const_generic_of_constant_expr : Types.constant_expr_kind -> const_generic =
+  function
+  | CGlobal { id; _ } -> CgGlobal id
+  | CVar v -> CgVar v
+  | CLiteral l -> CgValue l
+  | _ -> [%craise_opt_span] None "Unsupported constant expression kind"
+
+let const_generic_param_pure_to_charon (p : const_generic_param) :
+    Types.const_generic_param =
+  { index = p.index; name = p.name; ty = TLiteral p.ty }
+
+let const_generic_param_charon_to_pure (c : Types.const_generic_param) :
+    const_generic_param =
+  match c.ty with
+  | TLiteral ty -> { index = c.index; name = c.name; ty }
+  | _ -> [%craise_opt_span] None "Unsupported constant expression type"
+
 let fvar_get_id (v : fvar) : fvar_id = v.id
 
 let mk_tpat_from_literal (cv : literal) : tpat =
@@ -310,7 +333,10 @@ let make_type_subst (vars : type_param list) (tys : ty list) :
 
 let make_const_generic_subst (vars : const_generic_param list)
     (cgs : const_generic list) : ConstGenericVarId.id -> const_generic =
+  let vars = List.map const_generic_param_pure_to_charon vars in
+  let cgs = List.map constant_expr_of_const_generic cgs in
   Substitute.make_const_generic_subst_from_vars vars cgs
+  |> Fun.compose const_generic_of_constant_expr
 
 let make_trait_subst (clauses : trait_param list) (refs : trait_ref list) :
     TraitClauseId.id -> trait_instance_id =
@@ -2344,7 +2370,7 @@ let generic_args_of_params (generics : generic_params) : generic_args =
   in
   let const_generics =
     List.map
-      (fun (v : const_generic_param) -> T.CgVar (Free v.index))
+      (fun (v : const_generic_param) -> CgVar (Free v.index))
       generics.const_generics
   in
   let trait_refs =

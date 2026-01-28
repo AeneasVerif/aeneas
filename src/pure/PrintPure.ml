@@ -146,6 +146,8 @@ let type_db_var_to_string (env : fmt_env) (var : type_var_id de_bruijn_var) :
   | None -> Print.Types.type_db_var_to_pretty_string var
   | Some x -> Print.Types.type_param_to_string x
 
+let const_generic_param_to_string (v : const_generic_param) : string = v.name
+
 let const_generic_db_var_to_string (env : fmt_env)
     (var : const_generic_var_id de_bruijn_var) : string =
   let find (generics : generic_params) varid =
@@ -155,7 +157,7 @@ let const_generic_db_var_to_string (env : fmt_env)
   in
   match lookup_var_in_env env find var with
   | None -> Print.Types.const_generic_db_var_to_pretty_string var
-  | Some x -> Print.Types.const_generic_param_to_string x
+  | Some x -> const_generic_param_to_string x
 
 let bvar_to_pretty_string (v : bvar) : string =
   "^(" ^ string_of_int v.scope ^ "," ^ BVarId.to_string v.id ^ ")"
