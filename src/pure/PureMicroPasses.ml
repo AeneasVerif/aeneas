@@ -2112,7 +2112,10 @@ let simplify_let_then_ok ~(ignore_loops : bool) =
       type struct = { f0 : nat; f1 : nat; f2 : nat }
 
       Mkstruct x.f0 x.f1 x.f2 ~~> x
+    ]}
 
+    If [x] is not a tuple:
+    {[
       let ⟨ x0, ..., xn ⟩ := x ~>
       let x0 := x.f0 in
       ...
@@ -2275,7 +2278,7 @@ let simplify_aggregates_visitor (ctx : ctx) (def : fun_decl) =
           ( false,
             {
               pat = PAdt { variant_id = None; fields };
-              ty = TAdt (adt_id, generics);
+              ty = TAdt ((TAdtId _ as adt_id), generics);
             },
             ({ e = FVar _; ty = x_ty } as x),
             next )
