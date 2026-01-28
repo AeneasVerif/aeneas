@@ -284,7 +284,7 @@ def WithConstTy.LEN2_default_body (Self : Type) (LEN : Std.Usize)
 def WithConstTy.LEN2_default (Self : Type) (LEN : Std.Usize) : Std.Usize :=
   eval_global (WithConstTy.LEN2_default_body Self LEN)
 
-/- [traits::{traits::WithConstTy<u8, u64, (32usize : usize)> for bool}::LEN1]
+/- [traits::{traits::WithConstTy<u8, u64, 32usize> for bool}::LEN1]
    Source: 'tests/src/traits.rs', lines 177:4-177:27 -/
 @[global_simps]
 def WithConstTyBoolU8U6432.LEN1_body : Result Std.Usize := do ok 12#usize
@@ -292,13 +292,13 @@ def WithConstTyBoolU8U6432.LEN1_body : Result Std.Usize := do ok 12#usize
 def WithConstTyBoolU8U6432.LEN1 : Std.Usize :=
   eval_global WithConstTyBoolU8U6432.LEN1_body
 
-/- [traits::{traits::WithConstTy<u8, u64, (32usize : usize)> for bool}::f]:
+/- [traits::{traits::WithConstTy<u8, u64, 32usize> for bool}::f]:
    Source: 'tests/src/traits.rs', lines 182:4-182:42 -/
 def WithConstTyBoolU8U6432.f
   (i : Std.U64) (a : Array Std.U8 32#usize) : Result Std.U64 := do
   ok i
 
-/- Trait implementation: [traits::{traits::WithConstTy<u8, u64, (32usize : usize)> for bool}]
+/- Trait implementation: [traits::{traits::WithConstTy<u8, u64, 32usize> for bool}]
    Source: 'tests/src/traits.rs', lines 176:0-183:1 -/
 @[reducible]
 def WithConstTyBoolU8U6432 : WithConstTy Bool Std.U8 Std.U64 32#usize := {

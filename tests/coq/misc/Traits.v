@@ -331,21 +331,21 @@ Definition with_const_ty_len2_default (Self : Type) (LEN : usize) : usize :=
   (with_const_ty_len2_default_body Self LEN)%global
 .
 
-(** [traits::{traits::WithConstTy<u8, u64, (32usize : usize)> for bool}::LEN1]
+(** [traits::{traits::WithConstTy<u8, u64, 32usize> for bool}::LEN1]
     Source: 'tests/src/traits.rs', lines 177:4-177:27 *)
 Definition with_const_ty_bool_u8_u6432_len1_body : result usize := Ok 12%usize.
 Definition with_const_ty_bool_u8_u6432_len1 : usize :=
   with_const_ty_bool_u8_u6432_len1_body%global
 .
 
-(** [traits::{traits::WithConstTy<u8, u64, (32usize : usize)> for bool}::f]:
+(** [traits::{traits::WithConstTy<u8, u64, 32usize> for bool}::f]:
     Source: 'tests/src/traits.rs', lines 182:4-182:42 *)
 Definition withConstTyBoolU8U6432_f
   (i : u64) (a : array u8 32%usize) : result u64 :=
   Ok i
 .
 
-(** Trait implementation: [traits::{traits::WithConstTy<u8, u64, (32usize : usize)> for bool}]
+(** Trait implementation: [traits::{traits::WithConstTy<u8, u64, 32usize> for bool}]
     Source: 'tests/src/traits.rs', lines 176:0-183:1 *)
 Definition WithConstTyBoolU8U6432 : WithConstTy_t bool u8 u64 32%usize := {|
   WithConstTy_tWithConstTy_t_LEN1 := with_const_ty_bool_u8_u6432_len1;
