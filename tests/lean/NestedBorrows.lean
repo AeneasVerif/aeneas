@@ -111,21 +111,132 @@ def call_iter_mut_next_u32
               ok (next_back im (some x1))
 
 /- [nested_borrows::iter_mut_loop]: loop 0:
-   Source: 'tests/src/nested-borrows.rs', lines 83:4-83:35 -/
+   Source: 'tests/src/nested-borrows.rs', lines 83:4-83:36 -/
 def iter_mut_loop_loop
-  {T : Type} (back : IterMut T → Option T) (x : IterMut T) :
+  {T : Type} (back : IterMut T → Option T) (it : IterMut T) :
   Result (Option T)
   := do
-  let (o, x1, next_back) ← IterMut.next x
+  let (o, it1, next_back) ← IterMut.next it
   match o with
-  | none => ok (back (next_back x1 none))
-  | some _ => iter_mut_loop_loop (fun im => back (next_back im o)) x1
+  | none => ok (back (next_back it1 none))
+  | some _ => iter_mut_loop_loop (fun im => back (next_back im o)) it1
 partial_fixpoint
 
 /- [nested_borrows::iter_mut_loop]:
    Source: 'tests/src/nested-borrows.rs', lines 82:0-84:1 -/
-def iter_mut_loop {T : Type} (x : IterMut T) : Result (IterMut T) := do
-  let back ← iter_mut_loop_loop (fun im => im.v) x
+def iter_mut_loop {T : Type} (it : IterMut T) : Result (IterMut T) := do
+  let back ← iter_mut_loop_loop (fun im => im.v) it
   ok { v := back }
+
+/- [nested_borrows::iter_mut_incr]: loop 0:
+   Source: 'tests/src/nested-borrows.rs', lines 87:4-89:5 -/
+def iter_mut_incr_loop
+  (back : IterMut Std.U32 → Option Std.U32) (it : IterMut Std.U32) :
+  Result (Option Std.U32)
+  := do
+  let (o, it1, next_back) ← IterMut.next it
+  match o with
+  | none => ok (back (next_back it1 none))
+  | some x =>
+    let x1 ← x + 1#u32
+    iter_mut_incr_loop (fun im => back (next_back im (some x1))) it1
+partial_fixpoint
+
+/- [nested_borrows::iter_mut_incr]:
+   Source: 'tests/src/nested-borrows.rs', lines 86:0-90:1 -/
+def iter_mut_incr
+  (T : Type) (it : IterMut Std.U32) : Result (IterMut Std.U32) := do
+  let back ← iter_mut_incr_loop (fun im => im.v) it
+  ok { v := back }
+
+/- [nested_borrows::List]
+   Source: 'tests/src/nested-borrows.rs', lines 92:0-95:1 -/
+@[discriminant]
+inductive List (T : Type) where
+| Nil : List T
+| Cons : T → List T → List T
+
+/- [nested_borrows::ListIterMut]
+   Source: 'tests/src/nested-borrows.rs', lines 97:0-99:1 -/
+structure ListIterMut (T : Type) where
+  current : Option (List T)
+
+/- [nested_borrows::{nested_borrows::List<T>}::iter_mut]:
+   Source: 'tests/src/nested-borrows.rs', lines 102:4-106:5 -/
+def List.iter_mut
+  {T : Type} (self : List T) :
+  Result ((ListIterMut T) × (ListIterMut T → List T))
+  := do
+  let back :=
+    fun lim => match lim with
+               | ListIterMut.mk (some l) => l
+               | _ => self
+  ok ({ current := (some self) }, back)
+
+/- [nested_borrows::take_option_mut]:
+   Source: 'tests/src/nested-borrows.rs', lines 110:0-112:1 -/
+def take_option_mut
+  {T : Type} (x : Option T) :
+  Result ((Option T) × (Option T) × (Option T → Option T → Option T))
+  := do
+  fail panic
+
+/- [nested_borrows::{nested_borrows::ListIterMut<'a, T>}::next]:
+   Source: 'tests/src/nested-borrows.rs', lines 115:4-124:5 -/
+def ListIterMut.next
+  {T : Type} (self : ListIterMut T) :
+  Result ((Option T) × (ListIterMut T) × (ListIterMut T → Option T →
+    ListIterMut T))
+  := do
+  let (o, o1, take_option_mut_back) ← take_option_mut self.current
+  match o with
+  | none =>
+    let back'a :=
+      fun self1 o2 =>
+        let o3 := take_option_mut_back self1.current none
+        ({ current := o3 } : ListIterMut T)
+    ok (none, { current := o1 }, back'a)
+  | some l =>
+    match l with
+    | List.Nil =>
+      let back'a :=
+        fun self1 o2 =>
+          let o3 := take_option_mut_back self1.current o
+          ({ current := o3 } : ListIterMut T)
+      ok (none, { current := o1 }, back'a)
+    | List.Cons value next =>
+      let back'a :=
+        fun self1 o2 =>
+          let l1 := match self1.current with
+                    | some l2 => l2
+                    | _ => next
+          let t := match o2 with
+                   | some t1 => t1
+                   | _ => value
+          let o3 := take_option_mut_back o1 (some (List.Cons t l1))
+          ({ current := o3 } : ListIterMut T)
+      ok (some value, { current := (some next) }, back'a)
+
+/- [nested_borrows::incr_list]: loop 0:
+   Source: 'tests/src/nested-borrows.rs', lines 129:4-131:5 -/
+def incr_list_loop
+  (back : ListIterMut Std.U32 → Option (List Std.U32))
+  (it : ListIterMut Std.U32) :
+  Result (Option (List Std.U32))
+  := do
+  let (o, it1, next_back) ← ListIterMut.next it
+  match o with
+  | none => ok (back (next_back it1 none))
+  | some x =>
+    let x1 ← x + 1#u32
+    incr_list_loop (fun lim => back (next_back lim (some x1))) it1
+partial_fixpoint
+
+/- [nested_borrows::incr_list]:
+   Source: 'tests/src/nested-borrows.rs', lines 127:0-132:1 -/
+def incr_list (l : List Std.U32) : Result (List Std.U32) := do
+  let (it, iter_mut_back) ← List.iter_mut l
+  let back ← incr_list_loop (fun lim => lim.current) it
+  ok (iter_mut_back { current := back })
 
 end nested_borrows

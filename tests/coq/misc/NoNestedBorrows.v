@@ -576,7 +576,9 @@ Definition ExpandSimpliy_Wrapper_t (T : Type) : Type := T * T.
     Source: 'tests/src/no_nested_borrows.rs', lines 528:4-534:5 *)
 Definition expandSimpliy_check_expand_simplify_symb1
   (x : ExpandSimpliy_Wrapper_t bool) : result (ExpandSimpliy_Wrapper_t bool) :=
-  let (b, _) := x in if b then Ok x else Ok x
+  let b := x.(0) in
+  let b1 := x.(1) in
+  if b then Ok (true, b1) else Ok (false, b1)
 .
 
 (** [no_nested_borrows::ExpandSimpliy::Wrapper2]

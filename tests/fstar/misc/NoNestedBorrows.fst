@@ -510,7 +510,7 @@ type expandSimpliy_Wrapper_t (t : Type0) = t * t
     Source: 'tests/src/no_nested_borrows.rs', lines 528:4-534:5 *)
 let expandSimpliy_check_expand_simplify_symb1
   (x : expandSimpliy_Wrapper_t bool) : result (expandSimpliy_Wrapper_t bool) =
-  let (b, _) = x in if b then Ok x else Ok x
+  let b = x.0 in let b1 = x.1 in if b then Ok (true, b1) else Ok (false, b1)
 
 (** [no_nested_borrows::ExpandSimpliy::Wrapper2]
     Source: 'tests/src/no_nested_borrows.rs', lines 536:4-539:5 *)

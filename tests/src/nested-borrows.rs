@@ -79,8 +79,56 @@ fn call_iter_mut_next_u32<'a, T>(mut it : IterMut<'a, u32>) {
     }
 }
 
-fn iter_mut_loop<'a, T>(mut x : IterMut<'a, T>) {
-    while let Some(_) = x.next() {}
+fn iter_mut_loop<'a, T>(mut it : IterMut<'a, T>) {
+    while let Some(_) = it.next() {}
+}
+
+fn iter_mut_incr<'a, T>(mut it : IterMut<'a, u32>) {
+    while let Some(x) = it.next() {
+        *x += 1;
+    }
+}
+
+enum List<T> {
+    Nil,
+    Cons(T, Box<List<T>>),
+}
+
+struct ListIterMut<'a, T> {
+    current: Option<&'a mut List<T>>,
+}
+
+impl<T> List<T> {
+    pub fn iter_mut<'a>(&'a mut self) -> ListIterMut<'a, T> {
+        ListIterMut {
+            current: Some(self),
+        }
+    }
+}
+
+// TODO: fix in Charon
+fn take_option_mut<'a, 'b, T>(x : &'a mut Option<&'b mut T>) -> Option<&'b mut T> {
+    panic!() // x.take()
+}
+
+impl<'a, T> ListIterMut<'a, T> {
+    fn next(&mut self) -> Option<&'a mut T> {
+        // TODO: self.current.take()
+        match take_option_mut(&mut self.current) {
+            Some(&mut List::Cons(ref mut value, ref mut next)) => {
+                self.current = Some(next);
+                Some(value)
+            }
+            _ => None,
+        }
+    }
+}
+
+fn incr_list(l : &mut List<u32>) {
+    let mut it = l.iter_mut();
+    while let Some(x) = it.next() {
+        *x += 1;
+    }
 }
 
 /*
