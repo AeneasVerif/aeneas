@@ -6926,7 +6926,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
   (* The const generic holes are not really useful, but while we're at it we
      can keep track of them *)
   let cg_hole : const_generic =
-    T.CgVar (T.Free (ConstGenericVarId.of_int (-1)))
+    CgVar (T.Free (ConstGenericVarId.of_int (-1)))
   in
 
   (* Small helper to add a type annotation *)

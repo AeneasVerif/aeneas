@@ -34,7 +34,6 @@ class ['self] iter_tvalue_base =
     method visit_symbolic_value_id : 'env -> symbolic_value_id -> unit =
       fun _ _ -> ()
 
-    method visit_variant_id : 'env -> variant_id -> unit = fun _ _ -> ()
     method visit_borrow_id : 'env -> borrow_id -> unit = fun _ _ -> ()
 
     method visit_shared_borrow_id : 'env -> shared_borrow_id -> unit =
@@ -58,7 +57,6 @@ class ['self] map_tvalue_base =
         'env -> symbolic_value_id -> symbolic_value_id =
       fun _ x -> x
 
-    method visit_variant_id : 'env -> variant_id -> variant_id = fun _ x -> x
     method visit_borrow_id : 'env -> borrow_id -> borrow_id = fun _ id -> id
 
     method visit_shared_borrow_id : 'env -> shared_borrow_id -> shared_borrow_id

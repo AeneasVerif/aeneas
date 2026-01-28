@@ -1899,8 +1899,8 @@ and norm_proj_trait_refs_union (span : Meta.span) (tr1 : trait_ref)
   [%sanity_check] span (decl_ref1 = decl_ref2);
   tr1
 
-and norm_proj_const_generics_union (span : Meta.span) (cg1 : const_generic)
-    (cg2 : const_generic) : const_generic =
+and norm_proj_const_generics_union (span : Meta.span) (cg1 : constant_expr)
+    (cg2 : constant_expr) : constant_expr =
   [%sanity_check] span (cg1 = cg2);
   cg1
 

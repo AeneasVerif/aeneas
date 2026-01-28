@@ -624,7 +624,7 @@ let compute_outlive_proj_ty (span : Meta.span option)
                 in
                 List.iter (self#visit_region outer) regions;
                 List.iter (self#visit_ty outer) types;
-                List.iter (self#visit_const_generic outer) const_generics;
+                List.iter (self#visit_constant_expr outer) const_generics;
                 (* TODO: we need to handle those *)
                 [%sanity_check_opt_span] span (trait_refs = []);
 
