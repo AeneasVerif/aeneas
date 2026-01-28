@@ -732,9 +732,9 @@ let initialize_eval_ctx (span : Meta.span option) (ctx : decls_ctx)
     ConstGenericVarId.Map.of_list
       (List.map
          (fun (cg : const_generic_param) ->
-           let ty = TLiteral cg.ty in
            let cv =
-             mk_fresh_symbolic_tvalue_opt_span span fresh_symbolic_value_id ty
+             mk_fresh_symbolic_tvalue_opt_span span fresh_symbolic_value_id
+               cg.ty
            in
            (cg.index, cv))
          const_generic_vars)
