@@ -2112,8 +2112,15 @@ let simplify_let_then_ok ~(ignore_loops : bool) =
       type struct = { f0 : nat; f1 : nat; f2 : nat }
 
       Mkstruct x.f0 x.f1 x.f2 ~~> x
+
+      let ⟨ x0, ..., xn ⟩ := x ~>
+      let x0 := x.f0 in
+      ...
+      let xn := x.fn in
+      ...
     ]} *)
 let simplify_aggregates_visitor (ctx : ctx) (def : fun_decl) =
+  let span = def.item_meta.span in
   object
     inherit [_] map_expr as super
 
@@ -2264,6 +2271,28 @@ let simplify_aggregates_visitor (ctx : ctx) (def : fun_decl) =
               let e = { e with e = supd } in
               e)
             else e
+      | Let
+          ( false,
+            {
+              pat = PAdt { variant_id = None; fields };
+              ty = TAdt (adt_id, generics);
+            },
+            ({ e = FVar _; ty = x_ty } as x),
+            next )
+        when List.for_all is_pat_open fields ->
+          let mk_proj (field_id : field_id) (field : tpat) : tpat * texpr =
+            let f, _ = [%add_loc] as_pat_open span field in
+            let qualif : texpr =
+              {
+                e = Qualif { id = Proj { adt_id; field_id }; generics };
+                ty = mk_arrow x_ty f.ty;
+              }
+            in
+            let proj = [%add_loc] mk_app span qualif x in
+            (field, proj)
+          in
+          let lets = FieldId.mapi mk_proj fields in
+          mk_opened_lets false lets next
       | _ -> e
   end
 
