@@ -48,11 +48,11 @@ let value_as_symbolic (span : Meta.span) (v : value) : symbolic_value =
 let tvalue_as_symbolic (span : Meta.span) (v : tvalue) : symbolic_value =
   value_as_symbolic span v.value
 
-let mk_etuple (vl : tevalue list) : tevalue =
+let mk_etuple ~(borrow_proj : bool) (vl : tevalue list) : tevalue =
   let tys = List.map (fun (v : tevalue) -> v.ty) vl in
   let generics = mk_generic_args_from_types tys in
   {
-    value = EAdt { variant_id = None; fields = vl };
+    value = EAdt { borrow_proj; variant_id = None; fields = vl };
     ty = TAdt { id = TTuple; generics };
   }
 
@@ -61,10 +61,10 @@ let mk_epat_tuple (vl : tepat list) : tepat =
   let generics = mk_generic_args_from_types tys in
   { pat = PAdt (None, vl); ty = TAdt { id = TTuple; generics } }
 
-let mk_simpl_etuple (vl : tevalue list) : tevalue =
+let mk_simpl_etuple ~(borrow_proj : bool) (vl : tevalue list) : tevalue =
   match vl with
   | [ v ] -> v
-  | _ -> mk_etuple vl
+  | _ -> mk_etuple ~borrow_proj vl
 
 (** Peel boxes as long as the value is of the form [Box<T>] *)
 let rec unbox_tvalue (span : Meta.span) (v : tvalue) : tvalue =

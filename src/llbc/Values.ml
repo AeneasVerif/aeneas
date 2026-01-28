@@ -1152,6 +1152,9 @@ and epat =
 and tepat = { pat : epat; ty : ty  (** The type should have been normalized *) }
 
 and adt_evalue = {
+  borrow_proj : bool;
+      (** Was this ADT inroduced because of a borrow projection or a loan
+          projection? *)
   variant_id : (VariantId.id option[@opaque]);
   fields : tevalue list;
 }

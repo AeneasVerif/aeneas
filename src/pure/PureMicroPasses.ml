@@ -7269,8 +7269,15 @@ let add_type_annotations (trans_ctx : trans_ctx)
   in
   let add_annot (decl : fun_decl) =
     try
-      add_type_annotations_to_fun_decl trans_ctx trans_funs_map builtin_sigs
-        type_decls decl
+      let decl =
+        add_type_annotations_to_fun_decl trans_ctx trans_funs_map builtin_sigs
+          type_decls decl
+      in
+      [%ltrace
+        let fmt = trans_ctx_to_pure_fmt_env trans_ctx in
+        "After adding type annotations:\n\n"
+        ^ PrintPure.fun_decl_to_string fmt decl];
+      decl
     with Errors.CFailure error ->
       let name = name_to_string trans_ctx decl.item_meta.name in
       let name_pattern =

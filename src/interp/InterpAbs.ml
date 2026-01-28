@@ -95,7 +95,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
         [%cassert] span (ty_no_regions v.ty)
           "Nested borrows are not supported yet";
         let avll, fields = List.split (List.map (to_inputs rid) fields) in
-        let value = EAdt { variant_id; fields } in
+        let value = EAdt { borrow_proj = false; variant_id; fields } in
         let value : tevalue = { value; ty = v.ty } in
         (List.flatten avll, value)
     | VBottom ->
@@ -155,8 +155,9 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             let ty = TRef (RVar (Free rid), ref_ty, kind) in
             let value = ABorrow (ASharedBorrow (PNone, bid, sid)) in
             let value : tavalue = { value; ty } in
-            let ev = Some (mk_etuple []) in
-            push_abs rid [ value ] ev ev
+            let ev_out = Some (mk_etuple ~borrow_proj:true []) in
+            let ev_in = Some (mk_etuple ~borrow_proj:false []) in
+            push_abs rid [ value ] ev_out ev_in
         | VMutBorrow (bid, bv) ->
             (* We don't support nested borrows for now *)
             [%cassert] span
@@ -190,7 +191,11 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
         let rids = RegionId.Set.singleton rid in
         let input : tevalue =
           let value =
-            ELet (rids, mk_epat_ignored input.ty, input, mk_etuple [])
+            ELet
+              ( rids,
+                mk_epat_ignored input.ty,
+                input,
+                mk_etuple ~borrow_proj:true [] )
           in
           { value; ty = mk_unit_ty }
         in
@@ -274,7 +279,10 @@ let convert_value_to_output_avalues (span : Meta.span) (ctx : eval_ctx)
           List.split (List.map2 to_output fields field_types)
         in
         ( List.flatten avalues,
-          { value = EAdt { variant_id; fields = outputs }; ty = proj_ty } )
+          {
+            value = EAdt { borrow_proj = true; variant_id; fields = outputs };
+            ty = proj_ty;
+          } )
     | VBorrow bc, TRef (rid, ref_ty, kind) ->
         [%cassert] span (ty_no_regions ref_ty)
           "Nested borrows are not supported yet";
@@ -286,7 +294,7 @@ let convert_value_to_output_avalues (span : Meta.span) (ctx : eval_ctx)
               let ty = TRef (RVar (Free rid), ref_ty, kind) in
               let value = ABorrow (ASharedBorrow (pm, bid, sid)) in
               let value : tavalue = { value; ty } in
-              let ev = mk_etuple [] in
+              let ev = mk_etuple ~borrow_proj:true [] in
               ([ value ], ev)
           | VMutBorrow (bid, bv) ->
               (* We don't support nested borrows for now *)
@@ -359,7 +367,10 @@ let convert_value_to_input_avalues (span : Meta.span) (ctx : eval_ctx)
     | VAdt { variant_id; fields } ->
         let avalues, outputs = List.split (List.map to_input fields) in
         ( List.flatten avalues,
-          { value = EAdt { variant_id; fields = outputs }; ty = v.ty } )
+          {
+            value = EAdt { borrow_proj = false; variant_id; fields = outputs };
+            ty = v.ty;
+          } )
     | VBorrow _ -> [%craise] span "Not implemented yet"
     | VLoan lc -> (
         match lc with
@@ -1332,7 +1343,16 @@ let bind_outputs_from_output_input (span : Meta.span) (ctx : eval_ctx)
         [%craise] span "Unreachable"
     | EAdt adt ->
         let fields = List.map (update_input regions) adt.fields in
-        { value = EAdt { variant_id = adt.variant_id; fields }; ty = input.ty }
+        {
+          value =
+            EAdt
+              {
+                borrow_proj = adt.borrow_proj;
+                variant_id = adt.variant_id;
+                fields;
+              };
+          ty = input.ty;
+        }
     | ELoan loan ->
         (* Check if this loan was previously bound *)
         begin
@@ -1486,9 +1506,9 @@ let project_output_at_level span (level : int) (v : tevalue) : tevalue =
     match v.value with
     | ELet _ | EJoinMarkers _ | EBVar _ | EApp _ ->
         [%craise] span "Unimplemented"
-    | EAdt { variant_id; fields } ->
+    | EAdt { borrow_proj; variant_id; fields } ->
         let fields = List.map (project level) fields in
-        { v with value = EAdt { variant_id; fields } }
+        { v with value = EAdt { borrow_proj; variant_id; fields } }
     | ELoan lc -> (
         match lc with
         | EMutLoan (pm, lid, child) ->
@@ -1724,8 +1744,8 @@ let merge_abs_conts_generate_output (span : Meta.span) (_ctx : eval_ctx)
       end
   in
   List.iter add_output_binding bindings;
-  let input = mk_etuple (List.rev !inputs) in
-  let output = mk_etuple (List.rev !outputs) in
+  let input = mk_etuple ~borrow_proj:false (List.rev !inputs) in
+  let output = mk_etuple ~borrow_proj:true (List.rev !outputs) in
   (output, input)
 
 (** Create the input binding all inputs of a composed continuation. *)
@@ -1793,7 +1813,7 @@ let merge_abs_conts_generate_input (span : Meta.span) (ctx : eval_ctx)
   in
   List.iter add_input_binding bindings;
   let pat = mk_epat_tuple (List.rev !pats) in
-  let input = mk_etuple (List.rev !inputs) in
+  let input = mk_etuple ~borrow_proj:false (List.rev !inputs) in
   (pat, input)
 
 (** Merge two abstraction continuations.
@@ -2644,7 +2664,7 @@ let add_abs_cont_to_abs span (ctx : eval_ctx) (abs : abs) (abs_fun : abs_fun) :
   List.iter get_borrow_loan abs.avalues;
 
   (* Transform them into input/output expressions *)
-  let output = mk_etuple (List.rev !borrows) in
+  let output = mk_etuple ~borrow_proj:true (List.rev !borrows) in
   let input = EApp (abs_fun, [ List.rev !loans ]) in
   let input : tevalue = { value = input; ty = output.ty } in
 

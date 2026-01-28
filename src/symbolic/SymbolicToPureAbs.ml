@@ -272,6 +272,15 @@ let compute_tevalue_proj_kind (span : Meta.span) (type_infos : type_infos)
         (* Remember the type of the current value *)
         super#visit_tevalue (level, ev.ty) ev
 
+      method! visit_adt_evalue (level, ty) av =
+        if ty_has_mut_region ty then
+          if
+            (* TODO: problem with nested borrows *)
+            av.borrow_proj
+          then set_has_mut_borrows level
+          else set_has_mut_loans level;
+        super#visit_adt_evalue (level, ty) av
+
       method! visit_ELoan (level, ty) lc =
         set_has_loans level;
         begin
@@ -479,7 +488,7 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
                 in
                 (ctx, pat)
         end
-    | V.EAdt { variant_id; fields } -> begin
+    | V.EAdt { borrow_proj = _; variant_id; fields } -> begin
         let ctx, out =
           gtranslate_adt_fields ~project_borrows:true (tevalue_to_string ctx)
             (tpat_to_string ctx)
@@ -717,7 +726,7 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
               in
               (ctx, can_fail, e)
         end
-    | V.EAdt { variant_id; fields } -> begin
+    | V.EAdt { borrow_proj = _; variant_id; fields } -> begin
         [%ldebug "adt"];
         let ctx, out =
           gtranslate_adt_fields ~project_borrows:false (tevalue_to_string ctx)
@@ -1072,7 +1081,11 @@ let translate_abs_to_cont (ctx : bs_ctx) (ectx : C.eval_ctx) (abs : V.abs) :
   | Some cont -> (
       match (cont.output, cont.input) with
       | Some output, Some input ->
-          abs_cont_to_texpr_aux ctx ectx abs output input
+          let abs = abs_cont_to_texpr_aux ctx ectx abs output input in
+          [%ltrace
+            "translated abs:\n"
+            ^ Print.option_to_string (texpr_to_string ctx) abs];
+          abs
       | _ -> [%internal_error] ctx.span)
 
 let rec tevalue_to_given_back_aux ~(filter : bool)
@@ -1254,5 +1267,11 @@ let translate_ended_abs_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx)
   | Some cont -> (
       match (cont.output, cont.input) with
       | Some output, Some input ->
-          ended_abs_cont_to_texpr_aux ctx ectx abs abs_level output input
+          let ctx, can_fail, pat, expr =
+            ended_abs_cont_to_texpr_aux ctx ectx abs abs_level output input
+          in
+          [%ltrace
+            "translated abs:\n" ^ tpat_to_string ctx pat ^ " :=\n"
+            ^ texpr_to_string ctx expr];
+          (ctx, can_fail, pat, expr)
       | _ -> [%internal_error] ctx.span)

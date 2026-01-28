@@ -130,7 +130,11 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
     let regions : abs_regions = { owned = RegionId.Set.singleton nrid } in
     let cont : abs_cont option =
       if with_abs_conts then
-        Some { output = Some (mk_etuple []); input = Some (mk_etuple []) }
+        Some
+          {
+            output = Some (mk_etuple ~borrow_proj:true []);
+            input = Some (mk_etuple ~borrow_proj:false []);
+          }
       else None
     in
     let fresh_abs =

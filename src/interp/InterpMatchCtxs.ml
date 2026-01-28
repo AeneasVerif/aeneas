@@ -722,18 +722,20 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
               (* Create the let-binding *)
               let fvar = mk_fresh_abs_fvar ty_with_regions in
-              let pair = mk_etuple [ fvar; fvar ] in
+              let pair = mk_etuple ~borrow_proj:false [ fvar; fvar ] in
               let pat = mk_epat_from_fvar fvar in
               mk_let span regions pat input pair
             in
 
-            let output = mk_simpl_etuple [ output0; output1 ] in
+            let output =
+              mk_simpl_etuple ~borrow_proj:true [ output0; output1 ]
+            in
             Some { output = Some output; input = Some input }
           else
             Some
               {
-                output = Some (mk_simpl_etuple []);
-                input = Some (mk_simpl_etuple []);
+                output = Some (mk_simpl_etuple ~borrow_proj:true []);
+                input = Some (mk_simpl_etuple ~borrow_proj:false []);
               }
         else None
       in
@@ -967,8 +969,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* Create the abstraction expression *)
       let cont : abs_cont option =
         if S.with_abs_conts then
-          let output = Some (mk_etuple []) in
-          let input = Some (mk_etuple []) in
+          let output = Some (mk_etuple ~borrow_proj:true []) in
+          let input = Some (mk_etuple ~borrow_proj:false []) in
           Some { output; input }
         else None
       in
@@ -1122,7 +1124,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
             (* Create the let-binding *)
             let fvar = mk_fresh_abs_fvar borrow_ty in
-            let pair = mk_etuple [ fvar; fvar ] in
+            let pair = mk_etuple ~borrow_proj:false [ fvar; fvar ] in
             let pat = mk_epat_from_fvar fvar in
             mk_let span owned pat loan pair
           in
@@ -1135,7 +1137,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
               let value = EBorrow (EMutBorrow (pm, bid, mk_eignored bv_ty)) in
               { value; ty = borrow_ty }
             in
-            mk_etuple [ mk_output PLeft bid0 bv0; mk_output PRight bid1 bv1 ]
+            mk_etuple ~borrow_proj:true
+              [ mk_output PLeft bid0 bv0; mk_output PRight bid1 bv1 ]
           in
           Some { output = Some output; input = Some input }
         else None
@@ -1207,7 +1210,11 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let owned = RegionId.Set.singleton rid in
       let cont : abs_cont option =
         if S.with_abs_conts then
-          Some { output = Some (mk_etuple []); input = Some (mk_etuple []) }
+          Some
+            {
+              output = Some (mk_etuple ~borrow_proj:true []);
+              input = Some (mk_etuple ~borrow_proj:false []);
+            }
         else None
       in
 
@@ -1403,17 +1410,19 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
                     let loan = proj_svj in
                     (* Create the let-binding *)
                     let fvar = mk_fresh_abs_fvar proj_ty in
-                    let pair = mk_etuple [ fvar; fvar ] in
+                    let pair = mk_etuple ~borrow_proj:false [ fvar; fvar ] in
                     let pat = mk_epat_from_fvar fvar in
                     mk_let span owned pat loan pair
                   in
-                  let output : tevalue = mk_etuple [ proj_s0; proj_s1 ] in
+                  let output : tevalue =
+                    mk_etuple ~borrow_proj:true [ proj_s0; proj_s1 ]
+                  in
                   Some { output = Some output; input = Some input }
                 else
                   Some
                     {
-                      output = Some (mk_simpl_etuple []);
-                      input = Some (mk_simpl_etuple []);
+                      output = Some (mk_simpl_etuple ~borrow_proj:true []);
+                      input = Some (mk_simpl_etuple ~borrow_proj:false []);
                     }
               else None
             in
@@ -1533,7 +1542,11 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     let owned = RegionId.Set.singleton rid in
     let cont : abs_cont option =
       if S.with_abs_conts then
-        Some { output = Some (mk_etuple []); input = Some (mk_etuple []) }
+        Some
+          {
+            output = Some (mk_etuple ~borrow_proj:true []);
+            input = Some (mk_etuple ~borrow_proj:false []);
+          }
       else None
     in
 
