@@ -3,7 +3,8 @@ open Contexts
 open InterpJoinCore
 
 (** Prepare the shared loans in the abstractions by moving them to fresh
-    abstractions.
+    abstractions as well as the symbolic mutable borrows which point to symbolic
+    loans in frozen abstractions.
 
     We use this for instance to prepare an evaluation context before computing a
     fixed point.
@@ -48,11 +49,14 @@ open InterpJoinCore
     we only introduce a fresh abstraction for [l1].
 
     The boolean is [with_abs_conts]: if [true] we synthesize continuations
-    expressions for the fresh region abstractions we introduce. *)
-val prepare_ashared_loans :
+    expressions for the fresh region abstractions we introduce.
+
+    The same problem happens with symbolic values containing borrows, which is
+    why we also introduce reborrows for those. *)
+val reborrow_ashared_loans_symbolic_borrows :
   Meta.span -> loop_id option -> with_abs_conts:bool -> Cps.cm_fun
 
-val prepare_ashared_loans_no_synth :
+val reborrow_ashared_loans_symbolic_borrows_no_synth :
   Meta.span -> loop_id -> with_abs_conts:bool -> eval_ctx -> eval_ctx
 
 (** Compute the list of symbolic values which appear in the 2nd context and not
