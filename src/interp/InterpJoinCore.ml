@@ -770,6 +770,8 @@ let tevalue_add_marker (span : Meta.span) (ctx : eval_ctx) (pm : proj_marker)
         | EMutLoan (pm0, bid, av) ->
             [%sanity_check] span (pm0 = PNone);
             super#visit_eloan_content ty (EMutLoan (pm, bid, av))
+        | EEndedMutLoan { child = _; given_back = _; given_back_meta = _ } ->
+            super#visit_eloan_content ty lc
         | _ ->
             [%craise] span
               ("(Internal error: please file an issue (unexpected value: "
