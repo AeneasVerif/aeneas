@@ -477,10 +477,14 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
     let ty = M.match_rtys ctx0 ctx1 v0.ty v1.ty in
     match (v0.value, v1.value) with
     | AAdt av0, AAdt av1 ->
-        if av0.variant_id = av1.variant_id then
+        if av0.variant_id = av1.variant_id && av0.borrow_proj = av1.borrow_proj
+        then
+          let borrow_proj = av0.borrow_proj in
           let fields = List.combine av0.fields av1.fields in
           let fields = List.map (fun (f0, f1) -> match_arec f0 f1) fields in
-          let value : avalue = AAdt { variant_id = av0.variant_id; fields } in
+          let value : avalue =
+            AAdt { borrow_proj; variant_id = av0.variant_id; fields }
+          in
           { value; ty }
         else (* Merge *)
           M.match_distinct_aadts match_rec ctx0 ctx1 v0.ty av0 v1.ty av1 ty
@@ -718,18 +722,20 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
               (* Create the let-binding *)
               let fvar = mk_fresh_abs_fvar ty_with_regions in
-              let pair = mk_etuple [ fvar; fvar ] in
+              let pair = mk_etuple ~borrow_proj:false [ fvar; fvar ] in
               let pat = mk_epat_from_fvar fvar in
               mk_let span regions pat input pair
             in
 
-            let output = mk_simpl_etuple [ output0; output1 ] in
+            let output =
+              mk_simpl_etuple ~borrow_proj:true [ output0; output1 ]
+            in
             Some { output = Some output; input = Some input }
           else
             Some
               {
-                output = Some (mk_simpl_etuple []);
-                input = Some (mk_simpl_etuple []);
+                output = Some (mk_simpl_etuple ~borrow_proj:true []);
+                input = Some (mk_simpl_etuple ~borrow_proj:false []);
               }
         else None
       in
@@ -743,6 +749,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           parents = AbsId.Set.empty;
           original_parents = [];
           regions = { owned = RegionId.Set.singleton rid };
+          ended_subabs = AbsLevelSet.empty;
           avalues = avl0 @ avl1 @ [ av ];
           cont;
         }
@@ -889,6 +896,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             parents = AbsId.Set.empty;
             original_parents = [];
             regions = { owned = RegionId.Set.singleton rid };
+            ended_subabs = AbsLevelSet.empty;
             avalues = av :: (avl0 @ avl1);
             cont;
           }
@@ -961,8 +969,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (* Create the abstraction expression *)
       let cont : abs_cont option =
         if S.with_abs_conts then
-          let output = Some (mk_etuple []) in
-          let input = Some (mk_etuple []) in
+          let output = Some (mk_etuple ~borrow_proj:true []) in
+          let input = Some (mk_etuple ~borrow_proj:false []) in
           Some { output; input }
         else None
       in
@@ -976,6 +984,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           parents = AbsId.Set.empty;
           original_parents = [];
           regions = { owned = RegionId.Set.singleton rid };
+          ended_subabs = AbsLevelSet.empty;
           avalues;
           cont;
         }
@@ -1115,7 +1124,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
             (* Create the let-binding *)
             let fvar = mk_fresh_abs_fvar borrow_ty in
-            let pair = mk_etuple [ fvar; fvar ] in
+            let pair = mk_etuple ~borrow_proj:false [ fvar; fvar ] in
             let pat = mk_epat_from_fvar fvar in
             mk_let span owned pat loan pair
           in
@@ -1128,7 +1137,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
               let value = EBorrow (EMutBorrow (pm, bid, mk_eignored bv_ty)) in
               { value; ty = borrow_ty }
             in
-            mk_etuple [ mk_output PLeft bid0 bv0; mk_output PRight bid1 bv1 ]
+            mk_etuple ~borrow_proj:true
+              [ mk_output PLeft bid0 bv0; mk_output PRight bid1 bv1 ]
           in
           Some { output = Some output; input = Some input }
         else None
@@ -1143,6 +1153,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           parents = AbsId.Set.empty;
           original_parents = [];
           regions = { owned };
+          ended_subabs = AbsLevelSet.empty;
           avalues;
           cont;
         }
@@ -1199,7 +1210,11 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let owned = RegionId.Set.singleton rid in
       let cont : abs_cont option =
         if S.with_abs_conts then
-          Some { output = Some (mk_etuple []); input = Some (mk_etuple []) }
+          Some
+            {
+              output = Some (mk_etuple ~borrow_proj:true []);
+              input = Some (mk_etuple ~borrow_proj:false []);
+            }
         else None
       in
 
@@ -1212,6 +1227,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           parents = AbsId.Set.empty;
           original_parents = [];
           regions = { owned };
+          ended_subabs = AbsLevelSet.empty;
           avalues;
           cont;
         }
@@ -1288,6 +1304,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           parents = AbsId.Set.empty;
           original_parents = [];
           regions = { owned };
+          ended_subabs = AbsLevelSet.empty;
           avalues;
           cont;
         }
@@ -1326,6 +1343,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       [%sanity_check] span
         ((not (symbolic_value_has_ended_regions ctx0.ended_regions sv0))
         && not (symbolic_value_has_ended_regions ctx1.ended_regions sv1));
+      [%ldebug "ty: " ^ ty_to_string ctx0 sv0.sv_ty];
       (* If the symbolic values contain regions, we need to introduce abstractions *)
       if ty_has_borrows (Some span) ctx0.type_ctx.type_infos sv0.sv_ty then (
         (* Let's say we join:
@@ -1392,17 +1410,19 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
                     let loan = proj_svj in
                     (* Create the let-binding *)
                     let fvar = mk_fresh_abs_fvar proj_ty in
-                    let pair = mk_etuple [ fvar; fvar ] in
+                    let pair = mk_etuple ~borrow_proj:false [ fvar; fvar ] in
                     let pat = mk_epat_from_fvar fvar in
                     mk_let span owned pat loan pair
                   in
-                  let output : tevalue = mk_etuple [ proj_s0; proj_s1 ] in
+                  let output : tevalue =
+                    mk_etuple ~borrow_proj:true [ proj_s0; proj_s1 ]
+                  in
                   Some { output = Some output; input = Some input }
                 else
                   Some
                     {
-                      output = Some (mk_simpl_etuple []);
-                      input = Some (mk_simpl_etuple []);
+                      output = Some (mk_simpl_etuple ~borrow_proj:true []);
+                      input = Some (mk_simpl_etuple ~borrow_proj:false []);
                     }
               else None
             in
@@ -1415,6 +1435,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
                 parents = AbsId.Set.empty;
                 original_parents = [];
                 regions = { owned };
+                ended_subabs = AbsLevelSet.empty;
                 avalues;
                 cont;
               }
@@ -1521,7 +1542,11 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     let owned = RegionId.Set.singleton rid in
     let cont : abs_cont option =
       if S.with_abs_conts then
-        Some { output = Some (mk_etuple []); input = Some (mk_etuple []) }
+        Some
+          {
+            output = Some (mk_etuple ~borrow_proj:true []);
+            input = Some (mk_etuple ~borrow_proj:false []);
+          }
       else None
     in
 
@@ -1534,6 +1559,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         parents = AbsId.Set.empty;
         original_parents = [];
         regions = { owned };
+        ended_subabs = AbsLevelSet.empty;
         avalues;
         cont;
       }
@@ -1632,6 +1658,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         parents = AbsId.Set.empty;
         original_parents = [];
         regions = { owned };
+        ended_subabs = AbsLevelSet.empty;
         avalues;
         cont;
       }
@@ -1817,6 +1844,24 @@ struct
     let bid = match_loan_id bid0 bid1 in
     { value = VLoan (VMutLoan bid); ty }
 
+  let match_symbolic_value_ids (id0 : symbolic_value_id)
+      (id1 : symbolic_value_id) : symbolic_value_id =
+    if S.check_equiv then (
+      [%sanity_check] span
+        (not (SymbolicValueId.Map.mem id0 !S.sid_to_value_map));
+
+      (* Create the joined symbolic value *)
+      GetSetSid.match_e "ids: " S.sid_map id0 id1)
+    else (
+      (* Check: fixed values are fixed *)
+      [%sanity_check] span
+        (match SymbolicValueId.InjSubst.find_opt id0 !S.sid_map with
+        | None -> true
+        | Some id1' -> id1 = id1');
+
+      (* Create the joined symbolic value *)
+      GetSetSid.match_e "ids: " S.sid_map id0 id1)
+
   let match_symbolic_values (_ : tvalue_matcher) (ctx0 : eval_ctx)
       (ctx1 : eval_ctx) (sv0 : symbolic_value) (sv1 : symbolic_value) :
       symbolic_value =
@@ -1824,18 +1869,16 @@ struct
     let id1 = sv1.sv_id in
 
     [%ldebug
-      "sv0: "
-      ^ SymbolicValueId.to_string id0
-      ^ ", sv1: "
-      ^ SymbolicValueId.to_string id1];
+      "\n- sv0: "
+      ^ symbolic_value_to_string ctx0 sv0
+      ^ "\n- sv1: "
+      ^ symbolic_value_to_string ctx1 sv1];
 
     (* If we don't check for equivalence, we also update the map from sids
        to values *)
     if S.check_equiv then
       (* Create the joined symbolic value *)
-      let sv_id =
-        GetSetSid.match_e "match_symbolic_values: ids: " S.sid_map id0 id1
-      in
+      let sv_id = GetSetSid.match_e "ids: " S.sid_map id0 id1 in
 
       let sv_ty = match_rtys ctx0 ctx1 sv0.sv_ty sv1.sv_ty in
       let sv = { sv_id; sv_ty } in
@@ -1843,12 +1886,17 @@ struct
     else (
       (* Check: fixed values are fixed *)
       [%sanity_check] span
-        (id0 = id1 || not (SymbolicValueId.InjSubst.mem id0 !S.sid_map));
+        (id0 = id1
+        ||
+        match SymbolicValueId.InjSubst.find_opt id0 !S.sid_map with
+        | None -> true
+        | Some id1' -> id1 = id1');
+      [%ldebug
+        "Current mapping: "
+        ^ Print.option_to_string (tvalue_to_string ctx1)
+            (SymbolicValueId.Map.find_opt id0 !S.sid_to_value_map)];
 
-      (* Update the symbolic value mapping *)
       let sv1 = mk_tvalue_from_symbolic_value sv1 in
-
-      (* Update the symbolic value mapping *)
       S.sid_to_value_map :=
         SymbolicValueId.Map.add_strict_or_unchanged id0 sv1 !S.sid_to_value_map;
 
@@ -1948,24 +1996,31 @@ struct
     let value = ALoan (AMutLoan (PNone, id, av)) in
     { value; ty }
 
-  let match_aproj_borrows (match_values : tvalue_matcher) (ctx0 : eval_ctx)
+  let match_aproj_borrows (_match_values : tvalue_matcher) (ctx0 : eval_ctx)
       (ctx1 : eval_ctx) _ty0 pm0 (proj0 : aproj_borrows) _ty1 pm1
       (proj1 : aproj_borrows) ty proj_ty : tavalue =
+    [%ldebug
+      "- proj0: "
+      ^ aproj_borrows_to_string ctx0 proj0
+      ^ "\n- proj1: "
+      ^ aproj_borrows_to_string ctx1 proj1];
     [%sanity_check] span (pm0 = PNone && pm1 = PNone);
     let { proj = proj0; loans = loans0 } : aproj_borrows = proj0 in
     let { proj = proj1; loans = loans1 } : aproj_borrows = proj1 in
     [%sanity_check] span (loans0 = [] && loans1 = []);
-    (* We only want to match the ids of the symbolic values, but in order
-       to call [match_symbolic_values] we need to have types... *)
-    let sv0 = { sv_id = proj0.sv_id; sv_ty = proj0.proj_ty } in
-    let sv1 = { sv_id = proj1.sv_id; sv_ty = proj1.proj_ty } in
-    let sv = match_symbolic_values match_values ctx0 ctx1 sv0 sv1 in
-    let proj : symbolic_proj = { sv_id = sv.sv_id; proj_ty } in
+    (* Match the ids of the symbolic values *)
+    let sv_id = match_symbolic_value_ids proj0.sv_id proj1.sv_id in
+    let proj : symbolic_proj = { sv_id; proj_ty } in
     { value = ASymbolic (PNone, AProjBorrows { proj; loans = [] }); ty }
 
-  let match_aproj_loans (match_values : tvalue_matcher) (ctx0 : eval_ctx)
+  let match_aproj_loans (_match_values : tvalue_matcher) (ctx0 : eval_ctx)
       (ctx1 : eval_ctx) _ty0 pm0 (proj0 : aproj_loans) _ty1 pm1
       (proj1 : aproj_loans) ty proj_ty : tavalue =
+    [%ldebug
+      "- proj0: "
+      ^ aproj_loans_to_string ctx0 proj0
+      ^ "\n- proj1: "
+      ^ aproj_loans_to_string ctx1 proj1];
     [%sanity_check] span (pm0 = PNone && pm1 = PNone);
     let { proj = proj0; consumed = consumed0; borrows = borrows0 } : aproj_loans
         =
@@ -1977,12 +2032,9 @@ struct
     in
     [%sanity_check] span (consumed0 = [] && consumed1 = []);
     [%sanity_check] span (borrows0 = [] && borrows1 = []);
-    (* We only want to match the ids of the symbolic values, but in order
-       to call [match_symbolic_values] we need to have types... *)
-    let sv0 = { sv_id = proj0.sv_id; sv_ty = proj0.proj_ty } in
-    let sv1 = { sv_id = proj1.sv_id; sv_ty = proj1.proj_ty } in
-    let sv = match_symbolic_values match_values ctx0 ctx1 sv0 sv1 in
-    let proj : symbolic_proj = { sv_id = sv.sv_id; proj_ty } in
+    (* Match the ids of the symbolic values *)
+    let sv_id = match_symbolic_value_ids proj0.sv_id proj1.sv_id in
+    let proj : symbolic_proj = { sv_id; proj_ty } in
     let proj = AProjLoans { proj; consumed = []; borrows = [] } in
     { value = ASymbolic (PNone, proj); ty }
 
@@ -2099,6 +2151,7 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
       parents = parents0;
       original_parents = original_parents0;
       regions = { owned = regions0 };
+      ended_subabs = ended_subabs0;
       avalues = avalues0;
       (* We ignore the continuations *)
       cont = _;
@@ -2113,6 +2166,7 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
       parents = parents1;
       original_parents = original_parents1;
       regions = { owned = regions1 };
+      ended_subabs = ended_subabs1;
       avalues = avalues1;
       (* We ignore the continuations *)
       cont = _;
@@ -2128,6 +2182,11 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
     let _ = CEM.match_aids parents0 parents1 in
     let _ = CEM.match_aidl original_parents0 original_parents1 in
     let _ = CEM.match_rids regions0 regions1 in
+
+    if not (AbsLevelSet.equal ended_subabs0 ended_subabs1) then
+      raise
+        (Distinct
+           "Region abstractions with distinct sets of ended sub-abstractions");
 
     [%ldebug "match_abstractions: matching values"];
     let _ =

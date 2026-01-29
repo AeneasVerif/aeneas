@@ -308,14 +308,14 @@ let rec hashMap_get_mut_in_list_loop
     if ckey = key
     then
       Ok ((Some cvalue),
-        (fun ret ->
-          let x = begin match ret with | Some x1 -> x1 | _ -> cvalue end in
+        (fun o ->
+          let x = begin match o with | Some x1 -> x1 | _ -> cvalue end in
           AList_Cons ckey x tl))
     else
       let* (o, back) = hashMap_get_mut_in_list_loop tl key in
-      let back1 = fun ret -> let a = back ret in AList_Cons ckey cvalue a in
+      let back1 = fun o1 -> let a = back o1 in AList_Cons ckey cvalue a in
       Ok (o, back1)
-  | AList_Nil -> Ok (None, (fun ret -> AList_Nil))
+  | AList_Nil -> Ok (None, (fun o -> AList_Nil))
   end
 
 (** [hashmap::{hashmap::HashMap<T>}::get_mut_in_list]:
@@ -341,8 +341,8 @@ let hashMap_get_mut
   in
   let* (o, get_mut_in_list_back) = hashMap_get_mut_in_list a key in
   let back =
-    fun ret ->
-      let a1 = get_mut_in_list_back ret in
+    fun o1 ->
+      let a1 = get_mut_in_list_back o1 in
       let v = index_mut_back a1 in
       { self with slots = v }
   in

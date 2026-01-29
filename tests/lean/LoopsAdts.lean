@@ -45,18 +45,17 @@ def nth_mut_loop
     if i = 0#u32
     then
       ok (some x,
-        fun ret =>
-          let t := match ret with
-                   | some t1 => t1
-                   | _ => x
-          List.Cons t tl)
+        fun o => let t := match o with
+                          | some t1 => t1
+                          | _ => x
+                 List.Cons t tl)
     else
       let i1 ← i - 1#u32
       let (o, back) ← nth_mut_loop tl i1
-      let back1 := fun ret => let l := back ret
-                              List.Cons x l
+      let back1 := fun o1 => let l := back o1
+                             List.Cons x l
       ok (o, back1)
-  | List.Nil => ok (none, fun ret => List.Nil)
+  | List.Nil => ok (none, fun o => List.Nil)
 partial_fixpoint
 
 /- [loops_adts::nth_mut]:
@@ -75,7 +74,7 @@ def update_array_mut_borrow
   Result ((Array Std.U32 32#usize) × (Array Std.U32 32#usize → Array Std.U32
     32#usize))
   := do
-  ok (a, fun ret => ret)
+  ok (a, fun a1 => a1)
 
 /- [loops_adts::array_mut_borrow_loop1]: loop 0:
    Source: 'tests/src/loops-adts.rs', lines 37:4-39:5 -/

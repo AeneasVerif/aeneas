@@ -157,15 +157,7 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx)
    * for each of the backward functions. We do it only because we can
    * do it, and because it gives a bit of sanity.
    *)
-  let sg = fdef.signature in
   let span = fdef.item_meta.span in
-  (* Sanity check: no nested borrows *)
-  [%cassert] span
-    (List.for_all
-       (fun ty ->
-         not (ty_has_nested_borrows (Some span) ctx.type_ctx.type_infos ty))
-       (sg.output :: sg.inputs))
-    "Nested borrows are not supported yet";
 
   (* Create the context.
 
@@ -209,7 +201,9 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx)
           input_svs
       in
       (* Note that we don't really care about the type of the input *)
-      let input = { value = EApp (EInputAbs rg_id, inputs); ty = mk_unit_ty } in
+      let input =
+        { value = EApp (EInputAbs rg_id, [ inputs ]); ty = mk_unit_ty }
+      in
       { output = None; input = Some input }
     in
     (avalues, Some cont)
@@ -278,8 +272,6 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
   let parent_input_abs_ids =
     List.filter_map (fun x -> x) parent_input_abs_ids
   in
-  (* TODO: need to be careful for loops *)
-  [%sanity_check] fdef.item_meta.span (parent_input_abs_ids = []);
 
   (* Insert the return value in the return abstractions (by applying
    * borrow projections) *)
@@ -306,10 +298,10 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
 
     (* Initialize and insert the abstractions in the context.
 
-         We take care of allowing to end only the regions which should end (note
-         that this is important for soundness: this is part of the borrow checking).
-         Also see the documentation of the [can_end] field of [abs] for more
-         information. *)
+       We take care of allowing to end only the regions which should end (note
+       that this is important for soundness: this is part of the borrow checking).
+       Also see the documentation of the [can_end] field of [abs] for more
+       information. *)
     let parent_and_current_rgs = RegionGroupId.Set.add back_id parent_rgs in
     let region_can_end rid = RegionGroupId.Set.mem rid parent_and_current_rgs in
     [%sanity_check] span (region_can_end back_id);
@@ -347,7 +339,7 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
   (* Actually end them *)
   let ctx, cc =
     fold_left_apply_continuation
-      (fun id ctx -> end_abstraction config span id ctx)
+      (fun id ctx -> end_abs config span id 0 ctx)
       target_abs_ids ctx
   in
   (* Generate the Return node *)
@@ -416,6 +408,11 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
         in
         let ret_value = Option.get ret_value in
         let ctx_return = ctx in
+        [%ltrace
+          "after popping the frame:\n- returned value:\n"
+          ^ tvalue_to_string ctx_return ret_value
+          ^ "\n\n- ctx:\n"
+          ^ eval_ctx_to_string ctx_return];
 
         (* Forward translation: generate the Return node *)
         let fwd_e = cc_pop (SA.Return (ctx, Some ret_value)) in

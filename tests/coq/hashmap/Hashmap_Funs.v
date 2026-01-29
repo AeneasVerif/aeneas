@@ -426,17 +426,17 @@ Fixpoint hashMap_get_mut_in_list_loop
       if ckey s= key
       then
         Ok (Some cvalue,
-          fun (ret : option T) =>
-            let t := match ret with | Some t1 => t1 | _ => cvalue end in
+          fun (o : option T) =>
+            let t := match o with | Some t1 => t1 | _ => cvalue end in
             AList_Cons ckey t tl)
       else (
         p <- hashMap_get_mut_in_list_loop n1 tl key;
         let (o, back) := p in
         let back1 :=
-          fun (ret : option T) => let a := back ret in AList_Cons ckey cvalue a
+          fun (o1 : option T) => let a := back o1 in AList_Cons ckey cvalue a
         in
         Ok (o, back1))
-    | AList_Nil => Ok (None, fun (ret : option T) => AList_Nil)
+    | AList_Nil => Ok (None, fun (o : option T) => AList_Nil)
     end
   end
 .
@@ -466,8 +466,8 @@ Definition hashMap_get_mut
   p1 <- hashMap_get_mut_in_list n a key;
   let (o, get_mut_in_list_back) := p1 in
   let back :=
-    fun (ret : option T) =>
-      let a1 := get_mut_in_list_back ret in
+    fun (o1 : option T) =>
+      let a1 := get_mut_in_list_back o1 in
       let v := index_mut_back a1 in
       {|
         hashMap_num_entries := self.(hashMap_num_entries);

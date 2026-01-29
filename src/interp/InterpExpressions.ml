@@ -276,6 +276,7 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
                   parents = AbsId.Set.empty;
                   original_parents = [];
                   regions = { owned };
+                  ended_subabs = AbsLevelSet.empty;
                   avalues = [ sv; updated_sv; copied_sv ];
                   cont = Some abs_cont;
                 }
@@ -1049,7 +1050,7 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
                    values)
             ^ "]"));
         (* Sanity check: the number of values is consistent with the length *)
-        let len = get_val (literal_as_scalar (const_generic_as_literal cg)) in
+        let len = get_val (literal_as_scalar (constant_expr_as_literal cg)) in
         [%sanity_check] span (len = Z.of_int (List.length values));
         let ty = TArray (ety, cg) in
         (* In order to generate a better AST, we introduce a symbolic

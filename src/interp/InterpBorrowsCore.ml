@@ -33,12 +33,19 @@ type borrow_id_or_proj_symbolic_value =
   | SymbolicValue of symbolic_proj
 [@@deriving show]
 
+type unique_borrow_id_or_proj_symbolic_value =
+  | BorrowId of unique_borrow_id
+  | SymbolicValue of symbolic_proj
+[@@deriving show]
+
 exception FoundBorrowId of BorrowId.id
+exception FoundLoanId of BorrowId.id
+exception FoundUniqueBorrowId of unique_borrow_id
 
 type priority_borrow_or_abs =
   | OuterMutBorrow of borrow_id
   | OuterSharedLoan of borrow_id
-  | OuterAbs of AbsId.id
+  | OuterAbs of AbsId.id * int
   | InnerLoan of loan_id
 [@@deriving show]
 
@@ -61,15 +68,21 @@ type loan_or_borrow_content =
 type borrow_loan_abs_id =
   | BorrowId of unique_borrow_id
   | LoanId of loan_id
-  | AbsId of AbsId.id
+  | AbsId of AbsId.id * int
+      (** The integer represents the level (or sub-abstraction) that we end. *)
 
 type borrow_loan_abs_ids = borrow_loan_abs_id list
 
 let borrow_loan_abs_id_to_string (id : borrow_loan_abs_id) : string =
   match id with
-  | AbsId id -> "abs@" ^ AbsId.to_string id
-  | BorrowId id -> unique_borrow_id_to_string id
-  | LoanId id -> "l@" ^ BorrowId.to_string id
+  | AbsId (id, level) ->
+      "abs@" ^ AbsId.to_string id ^ "(level:" ^ string_of_int level ^ ")"
+  | BorrowId id -> (
+      match id with
+      | UMut id -> "MB@" ^ BorrowId.to_string id
+      | UShared (id, sid) ->
+          "SB@" ^ BorrowId.to_string id ^ "^" ^ SharedBorrowId.to_string sid)
+  | LoanId id -> "loan@" ^ BorrowId.to_string id
 
 let borrow_loan_abs_ids_chain_to_string (ids : borrow_loan_abs_ids) : string =
   let ids = List.rev ids in
@@ -86,6 +99,294 @@ let add_borrow_loan_abs_id_to_chain (span : Meta.span) (msg : string)
       (msg ^ "detected a loop in the chain of ids: "
       ^ borrow_loan_abs_ids_chain_to_string (id :: ids))
   else id :: ids
+
+(** We use this visitor to visit region abstractions.
+
+    The visitor factors out once and for all the logic to increment the
+    sub-abstraction indices/levels when diving into nested borrows. *)
+class virtual ['self] iter_eval_ctx_with_abs_levels =
+  object (self : 'self)
+    inherit [_] iter_eval_ctx as super
+    method virtual incr_level : 'a -> 'a
+
+    method! visit_aborrow_content state bc =
+      match bc with
+      | AMutBorrow (pm, bid, av) -> self#visit_AMutBorrow state pm bid av
+      | ASharedBorrow (pm, bid, sid) ->
+          self#visit_ASharedBorrow state pm bid sid
+      | AIgnoredMutBorrow (bid, child) ->
+          self#visit_AIgnoredMutBorrow state bid child
+      | AEndedSharedBorrow -> self#visit_AEndedSharedBorrow state
+      | AEndedMutBorrow (m, child) -> self#visit_AEndedMutBorrow state m child
+      | AEndedIgnoredMutBorrow bc -> self#visit_AEndedIgnoredMutBorrow state bc
+      | AProjSharedBorrow asbl -> self#visit_AProjSharedBorrow state asbl
+
+    method! visit_AMutBorrow state pm bid child =
+      super#visit_AMutBorrow state pm bid child
+
+    method! visit_ASharedBorrow state pm bid sid =
+      super#visit_ASharedBorrow state pm bid sid
+
+    method! visit_AIgnoredMutBorrow state bid child =
+      super#visit_AIgnoredMutBorrow state bid child
+
+    method! visit_AEndedSharedBorrow state =
+      super#visit_AEndedSharedBorrow state
+
+    method! visit_AEndedMutBorrow state meta child =
+      super#visit_AEndedMutBorrow state meta child
+
+    method! visit_aended_ignored_mut_borrow state
+        { child; given_back; given_back_meta } =
+      self#visit_tavalue state child;
+      self#visit_tavalue (self#incr_level state) given_back;
+      self#visit_msymbolic_value state given_back_meta
+
+    method! visit_abstract_shared_borrows state asbl =
+      (* TODO: properly track the states inside the abstract shared borrows *)
+      List.iter (self#visit_abstract_shared_borrow state) asbl
+
+    (** We may need to visit borrow contents because of shared values *)
+    method! visit_borrow_content state bc =
+      match bc with
+      | VSharedBorrow (bid, sid) -> self#visit_VSharedBorrow state bid sid
+      | VReservedMutBorrow (bid, sid) ->
+          self#visit_VReservedMutBorrow state bid sid
+      | VMutBorrow (bid, v) -> self#visit_VMutBorrow state bid v
+
+    method! visit_VSharedBorrow state bid sid =
+      super#visit_VSharedBorrow state bid sid
+
+    method! visit_VReservedMutBorrow state bid sid =
+      super#visit_VReservedMutBorrow state bid sid
+
+    method! visit_VMutBorrow state bid v = super#visit_VMutBorrow state bid v
+
+    method! visit_aloan_content state lc =
+      (* **WARNING**: we explicitly list all the cases here to make sure
+         we catch any modification performed to the definitions: we have to
+         be careful about not missing the overloading of any variant (method
+         [visit_AMutLoan], [visit_ASharedLoan], etc.). *)
+      match lc with
+      | AMutLoan (pm, lid, child) -> self#visit_AMutLoan state pm lid child
+      | ASharedLoan (pm, lid, sv, child) ->
+          self#visit_ASharedLoan state pm lid sv child
+      | AEndedSharedLoan (sv, child) ->
+          self#visit_AEndedSharedLoan state sv child
+      | AIgnoredMutLoan (lid, child) ->
+          self#visit_AIgnoredMutLoan state lid child
+      | AEndedMutLoan lc -> self#visit_AEndedMutLoan state lc
+      | AEndedIgnoredMutLoan lc -> self#visit_AEndedIgnoredMutLoan state lc
+      | AIgnoredSharedLoan child -> self#visit_AIgnoredSharedLoan state child
+
+    method! visit_AMutLoan state pm lid child =
+      super#visit_AMutLoan state pm lid child
+
+    method! visit_ASharedLoan state lc = super#visit_ASharedLoan state lc
+
+    method! visit_AEndedSharedLoan state sv child =
+      super#visit_AEndedSharedLoan state sv child
+
+    method! visit_AIgnoredMutLoan state lid child =
+      super#visit_AIgnoredMutLoan state lid child
+
+    method! visit_aended_mut_loan state { given_back; child; given_back_meta } =
+      self#visit_mvalue state given_back_meta;
+      (* We need to increase the state when diving into the loan *)
+      self#visit_tavalue (self#incr_level state) given_back;
+      self#visit_tavalue state child
+
+    method! visit_aended_ignored_mut_loan state
+        { given_back; child; given_back_meta } =
+      self#visit_mvalue state given_back_meta;
+      (* We need to increase the state when diving into the loan *)
+      self#visit_tavalue (self#incr_level state) given_back;
+      self#visit_tavalue state child
+
+    method! visit_AIgnoredSharedLoan state child =
+      super#visit_AIgnoredSharedLoan state child
+
+    (** We may need to visit loan contents because of shared values *)
+    method! visit_loan_content state lc =
+      match lc with
+      | VMutLoan lid -> self#visit_VMutLoan state lid
+      | VSharedLoan (bid, sid) -> self#visit_VSharedLoan state bid sid
+
+    method! visit_VMutLoan state lid = super#visit_VMutLoan state lid
+
+    method! visit_VSharedLoan state bid sid =
+      super#visit_VSharedLoan state bid sid
+
+    method! visit_aproj state proj =
+      match proj with
+      | AProjBorrows proj -> self#visit_AProjBorrows state proj
+      | AEndedProjBorrows proj -> self#visit_AEndedProjBorrows state proj
+      | AProjLoans proj -> self#visit_AProjLoans state proj
+      | AEndedProjLoans proj -> self#visit_AEndedProjLoans state proj
+      | AEmpty -> self#visit_AEmpty state
+
+    method! visit_aproj_borrows state { proj; loans } =
+      (* TODO: properly track the state for symbolic values *)
+      self#visit_symbolic_proj state proj;
+      List.iter
+        (fun (m, p) ->
+          self#visit_mconsumed_symb state m;
+          self#visit_aproj (self#incr_level state) p)
+        loans
+
+    method! visit_aended_proj_borrows state { mvalues; loans } =
+      (* TODO: properly track the state for symbolic values *)
+      self#visit_ended_proj_borrow_meta state mvalues;
+      List.iter
+        (fun (m, p) ->
+          self#visit_mconsumed_symb state m;
+          self#visit_aproj (self#incr_level state) p)
+        loans
+
+    method! visit_aproj_loans state { proj; consumed; borrows } =
+      (* TODO: properly track the state for symbolic values *)
+      self#visit_symbolic_proj state proj;
+      List.iter
+        (fun (m, p) ->
+          self#visit_mconsumed_symb state m;
+          self#visit_aproj (self#incr_level state) p)
+        consumed;
+      List.iter
+        (fun (m, p) ->
+          self#visit_mconsumed_symb state m;
+          self#visit_aproj (self#incr_level state) p)
+        borrows
+
+    method! visit_aended_proj_loans state { proj; consumed; borrows } =
+      (* TODO: properly track the state for symbolic values *)
+      self#visit_msymbolic_value_id state proj;
+      List.iter
+        (fun (m, p) ->
+          self#visit_mconsumed_symb state m;
+          self#visit_aproj (self#incr_level state) p)
+        consumed;
+      List.iter
+        (fun (m, p) ->
+          self#visit_mconsumed_symb state m;
+          self#visit_aproj (self#incr_level state) p)
+        borrows
+
+    method! visit_AEmpty state = super#visit_AEmpty state
+
+    method! visit_eborrow_content state bc =
+      match bc with
+      | EMutBorrow (pm, sid, child) -> self#visit_EMutBorrow state pm sid child
+      | EIgnoredMutBorrow (bid, child) ->
+          self#visit_EIgnoredMutBorrow state bid child
+      | EEndedMutBorrow (meta, child) ->
+          self#visit_EEndedMutBorrow state meta child
+      | EEndedIgnoredMutBorrow bc -> self#visit_EEndedIgnoredMutBorrow state bc
+
+    method! visit_EMutBorrow state pm sid child =
+      super#visit_EMutBorrow state pm sid child
+
+    method! visit_EIgnoredMutBorrow state bid child =
+      super#visit_EIgnoredMutBorrow state bid child
+
+    method! visit_EEndedMutBorrow state meta child =
+      super#visit_EEndedMutBorrow state meta child
+
+    method! visit_eended_ignored_mut_borrow state
+        { child; given_back; given_back_meta } =
+      self#visit_tevalue state child;
+      self#visit_tevalue (self#incr_level state) given_back;
+      self#visit_msymbolic_value state given_back_meta
+
+    method! visit_eloan_content state lc =
+      match lc with
+      | EMutLoan (pm, lid, child) -> self#visit_EMutLoan state pm lid child
+      | EEndedMutLoan lc -> self#visit_EEndedMutLoan state lc
+      | EIgnoredMutLoan (lid, child) ->
+          self#visit_EIgnoredMutLoan state lid child
+      | EEndedIgnoredMutLoan lc -> self#visit_EEndedIgnoredMutLoan state lc
+
+    method! visit_EMutLoan state pm lid child =
+      super#visit_EMutLoan state pm lid child
+
+    method! visit_eended_mut_loan state { child; given_back; given_back_meta } =
+      self#visit_tevalue state child;
+      self#visit_tevalue (self#incr_level state) given_back;
+      self#visit_mvalue state given_back_meta
+
+    method! visit_EIgnoredMutLoan state lid child =
+      super#visit_EIgnoredMutLoan state lid child
+
+    method! visit_eended_ignored_mut_loan state
+        { child; given_back; given_back_meta } =
+      self#visit_tevalue state child;
+      self#visit_tevalue (self#incr_level state) given_back;
+      self#visit_mvalue state given_back_meta
+
+    method! visit_eproj state proj =
+      match proj with
+      | EProjLoans proj -> self#visit_EProjLoans state proj
+      | EProjBorrows proj -> self#visit_EProjBorrows state proj
+      | EEndedProjLoans proj -> self#visit_EEndedProjLoans state proj
+      | EEndedProjBorrows proj -> self#visit_EEndedProjBorrows state proj
+      | EEmpty -> self#visit_EEmpty state
+
+    method! visit_eproj_loans state { proj; consumed; borrows } =
+      self#visit_esymbolic_proj state proj;
+      List.iter
+        (fun (m, p) ->
+          self#visit_mconsumed_symb state m;
+          self#visit_eproj (self#incr_level state) p)
+        consumed;
+      List.iter
+        (fun (m, p) ->
+          self#visit_mconsumed_symb state m;
+          self#visit_eproj (self#incr_level state) p)
+        borrows
+
+    method! visit_eproj_borrows state { proj; loans } =
+      self#visit_esymbolic_proj state proj;
+      List.iter
+        (fun (m, p) ->
+          self#visit_mconsumed_symb state m;
+          self#visit_eproj (self#incr_level state) p)
+        loans
+
+    method! visit_eended_proj_loans state { proj; consumed; borrows } =
+      self#visit_msymbolic_value_id state proj;
+      List.iter
+        (fun (m, p) ->
+          self#visit_mconsumed_symb state m;
+          self#visit_eproj (self#incr_level state) p)
+        consumed;
+      List.iter
+        (fun (m, p) ->
+          self#visit_mconsumed_symb state m;
+          self#visit_eproj (self#incr_level state) p)
+        borrows
+
+    method! visit_eended_proj_borrows state { mvalues; loans } =
+      self#visit_ended_proj_borrow_meta state mvalues;
+      List.iter
+        (fun (m, p) ->
+          self#visit_mconsumed_symb state m;
+          self#visit_eproj (self#incr_level state) p)
+        loans
+
+    method! visit_EEmpty _ = ()
+
+    method! visit_EMutBorrowInput state av =
+      super#visit_EMutBorrowInput state av
+  end
+
+class virtual ['self] iter_abs_with_levels =
+  object (_ : 'self)
+    inherit [_] iter_eval_ctx_with_abs_levels
+  end
+
+class virtual ['self] iter_tavalue_with_levels =
+  object (_ : 'self)
+    inherit [_] iter_eval_ctx_with_abs_levels
+  end
 
 (** Helper function.
 
@@ -449,13 +750,15 @@ let lookup_borrow_opt (span : Meta.span) (ek : exploration_kind)
             if UMut bid = l then raise (FoundGBorrowContent (Concrete bc))
             else if ek.enter_mut_borrows then super#visit_VMutBorrow env bid mv
             else ()
-        | VSharedBorrow (_, uid) ->
+        | VSharedBorrow (bid, uid) ->
             (* Check the borrow id *)
-            if UShared uid = l then raise (FoundGBorrowContent (Concrete bc))
+            if UShared (bid, uid) = l then
+              raise (FoundGBorrowContent (Concrete bc))
             else ()
-        | VReservedMutBorrow (_, uid) ->
+        | VReservedMutBorrow (bid, uid) ->
             (* Check the borrow id *)
-            if UShared uid = l then raise (FoundGBorrowContent (Concrete bc))
+            if UShared (bid, uid) = l then
+              raise (FoundGBorrowContent (Concrete bc))
             else ()
 
       method! visit_loan_content env lc =
@@ -477,7 +780,8 @@ let lookup_borrow_opt (span : Meta.span) (ek : exploration_kind)
         | ASharedBorrow (pm, bid, uid) ->
             (* Sanity check: projection markers can only appear when we're doing a join *)
             [%sanity_check] span (pm = PNone);
-            if UShared uid = l then raise (FoundGBorrowContent (Abstract bc))
+            if UShared (bid, uid) = l then
+              raise (FoundGBorrowContent (Abstract bc))
             else super#visit_ASharedBorrow env pm bid uid
         | AIgnoredMutBorrow (_, _)
         | AEndedMutBorrow _
@@ -486,7 +790,7 @@ let lookup_borrow_opt (span : Meta.span) (ek : exploration_kind)
         | AEndedSharedBorrow -> super#visit_aborrow_content env bc
         | AProjSharedBorrow asb -> (
             match l with
-            | UShared l ->
+            | UShared (_, l) ->
                 if borrow_in_asb l asb then
                   raise (FoundGBorrowContent (Abstract bc))
                 else ()
@@ -606,11 +910,11 @@ let update_borrow (span : Meta.span) (ek : exploration_kind)
             else VMutBorrow (bid, mv)
         | VSharedBorrow (bid, sid) ->
             (* Check the id *)
-            if UShared sid = l then update ()
+            if UShared (bid, sid) = l then update ()
             else super#visit_VSharedBorrow env bid sid
         | VReservedMutBorrow (bid, sid) ->
             (* Check the id *)
-            if UShared sid = l then update ()
+            if UShared (bid, sid) = l then update ()
             else super#visit_VReservedMutBorrow env bid sid
 
       method! visit_loan_content env lc =
@@ -674,7 +978,7 @@ let update_aborrow (span : Meta.span) (ek : exploration_kind)
         | ASharedBorrow (pm, bid, sid) ->
             (* Sanity check: projection markers can only appear when we're doing a join *)
             [%sanity_check] span (pm = PNone);
-            if UShared sid = l then update ()
+            if UShared (bid, sid) = l then update ()
             else ABorrow (super#visit_ASharedBorrow env pm bid sid)
         | AIgnoredMutBorrow _
         | AEndedMutBorrow _
@@ -682,7 +986,7 @@ let update_aborrow (span : Meta.span) (ek : exploration_kind)
         | AEndedIgnoredMutBorrow _ -> super#visit_ABorrow env bc
         | AProjSharedBorrow asb -> (
             match l with
-            | UShared l ->
+            | UShared (_, l) ->
                 if borrow_in_asb l asb then update ()
                 else ABorrow (super#visit_AProjSharedBorrow env asb)
             | UMut _ -> super#visit_ABorrow env bc)
@@ -713,6 +1017,7 @@ type mut_borrow_or_shared_loan_id =
 
 type outer = {
   abs_id : AbsId.id option;
+  level : int;
   borrow_loan : mut_borrow_or_shared_loan_id option;
 }
 
@@ -813,8 +1118,8 @@ let proj_borrows_intersects_proj_loans (span : Meta.span)
     The result contains the ids of the abstractions in which the projectors were
     found, as well as the projection types used in those abstractions. *)
 type looked_up_aproj_borrows =
-  | NonSharedProj of AbsId.id * rty
-  | SharedProjs of (AbsId.id * rty) list
+  | NonSharedProj of AbsId.id * rty * abs_level
+  | SharedProjs of (AbsId.id * rty * abs_level) list
 
 (** Lookup the aproj_borrows (including aproj_shared_borrows) over a symbolic
     value which intersect a given set of regions.
@@ -827,32 +1132,38 @@ let lookup_intersecting_aproj_borrows_opt (span : Meta.span)
     (lookup_shared : bool) (regions : RegionId.Set.t) (proj : symbolic_proj)
     (ctx : eval_ctx) : looked_up_aproj_borrows option =
   let found : looked_up_aproj_borrows option ref = ref None in
-  let set_non_shared ((id, ty) : AbsId.id * rty) : unit =
+  let set_non_shared ((id, ty, level) : AbsId.id * rty * abs_level) : unit =
     match !found with
-    | None -> found := Some (NonSharedProj (id, ty))
+    | None -> found := Some (NonSharedProj (id, ty, level))
     | Some _ -> [%craise] span "Unreachable"
   in
-  let add_shared (x : AbsId.id * rty) : unit =
+  let add_shared (x : AbsId.id * rty * abs_level) : unit =
     match !found with
     | None -> found := Some (SharedProjs [ x ])
     | Some (SharedProjs pl) -> found := Some (SharedProjs (x :: pl))
     | Some (NonSharedProj _) -> [%craise] span "Unreachable"
   in
-  let check_add_proj_borrows (is_shared : bool) (abs : abs)
+  let check_add_proj_borrows (is_shared : bool) (abs : abs) (level : abs_level)
       (proj' : symbolic_proj) =
     if
       proj_borrows_intersects_proj_loans span
         (abs.regions.owned, proj'.sv_id, proj'.proj_ty)
         (regions, proj.sv_id, proj.proj_ty)
     then
-      let x = (abs.abs_id, proj.proj_ty) in
+      let x = (abs.abs_id, proj.proj_ty, level) in
       if is_shared then add_shared x else set_non_shared x
     else ()
   in
-  let obj =
+  let visitor =
     object
-      inherit [_] iter_eval_ctx as super
-      method! visit_abs _ abs = super#visit_abs (Some abs) abs
+      inherit [_] iter_eval_ctx_with_abs_levels as super
+
+      method incr_level al =
+        match al with
+        | Some (abs, level) -> Some (abs, level + 1)
+        | None -> [%internal_error] span
+
+      method! visit_abs _ abs = super#visit_abs (Some (abs, 0)) abs
 
       method! visit_abstract_shared_borrow abs asb =
         (* Sanity check *)
@@ -861,26 +1172,26 @@ let lookup_intersecting_aproj_borrows_opt (span : Meta.span)
         | _ -> ());
         (* Explore *)
         if lookup_shared then
-          let abs = Option.get abs in
+          let abs, lvl = Option.get abs in
           match asb with
           | AsbBorrow _ -> ()
           | AsbProjReborrows proj' ->
               let is_shared = true in
-              check_add_proj_borrows is_shared abs proj'
+              check_add_proj_borrows is_shared abs lvl proj'
         else ()
 
       method! visit_aproj abs sproj =
-        (let abs = Option.get abs in
+        (let abs, lvl = Option.get abs in
          match sproj with
          | AProjLoans _ | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty -> ()
          | AProjBorrows { proj = proj'; _ } ->
              let is_shared = false in
-             check_add_proj_borrows is_shared abs proj');
+             check_add_proj_borrows is_shared abs lvl proj');
         super#visit_aproj abs sproj
     end
   in
   (* Visit *)
-  obj#visit_eval_ctx None ctx;
+  visitor#visit_eval_ctx None ctx;
   (* Return *)
   !found
 
@@ -895,13 +1206,13 @@ let lookup_intersecting_aproj_borrows_opt (span : Meta.span)
     this abstraction. *)
 let lookup_intersecting_aproj_borrows_not_shared_opt (span : Meta.span)
     (regions : RegionId.Set.t) (proj : symbolic_proj) (ctx : eval_ctx) :
-    (AbsId.id * rty) option =
+    (AbsId.id * rty * abs_level) option =
   let lookup_shared = false in
   match
     lookup_intersecting_aproj_borrows_opt span lookup_shared regions proj ctx
   with
   | None -> None
-  | Some (NonSharedProj (abs_id, rty)) -> Some (abs_id, rty)
+  | Some (NonSharedProj (abs_id, rty, level)) -> Some (abs_id, rty, level)
   | _ -> [%craise] span "Unexpected"
 
 (** Similar to {!lookup_intersecting_aproj_borrows_opt}, but updates the values.
@@ -1470,108 +1781,128 @@ let no_aproj_over_symbolic_in_context (span : Meta.span)
   try obj#visit_eval_ctx () ctx
   with Found -> [%craise] span "update_aproj_loans_to_ended: failed"
 
-let abs_has_non_ended_eborrows (abs : abs) : bool =
+let abs_has_non_ended_eborrows_or_eloans ~(borrows : bool) (abs : abs)
+    (min_level : int) : bool =
+  let opt_raise ~(is_borrow : bool) (level : int) =
+    if level >= min_level && is_borrow = borrows then raise Found
+  in
   let visitor =
-    object
+    object (self)
       inherit [_] iter_abs as super
 
-      method! visit_eborrow_content env bc =
-        (match bc with
-        | EMutBorrow _ -> raise Found
-        | EIgnoredMutBorrow _ | EEndedMutBorrow _ | EEndedIgnoredMutBorrow _ ->
-            ());
-        super#visit_eborrow_content env bc
+      method! visit_eborrow_content level bc =
+        match bc with
+        | EMutBorrow _ -> opt_raise ~is_borrow:true level
+        | EIgnoredMutBorrow _ | EEndedMutBorrow _ ->
+            super#visit_eborrow_content level bc
+        | EEndedIgnoredMutBorrow { child; given_back; given_back_meta = _ } ->
+            self#visit_tevalue level child;
+            self#visit_tevalue (level + 1) given_back
 
-      method! visit_eproj env sproj =
-        (match sproj with
-        | EProjBorrows _ -> raise Found
-        | EProjLoans _ | EEndedProjLoans _ | EEndedProjBorrows _ | EEmpty -> ());
-        super#visit_eproj env sproj
+      method! visit_eloan_content level lc =
+        match lc with
+        | EMutLoan (_, _, child) ->
+            opt_raise ~is_borrow:false level;
+            self#visit_tevalue level child
+        | EIgnoredMutLoan (_, child) -> self#visit_tevalue level child
+        | EEndedMutLoan { child; given_back; given_back_meta = _ }
+        | EEndedIgnoredMutLoan { child; given_back; given_back_meta = _ } ->
+            self#visit_tevalue level child;
+            self#visit_tevalue (level + 1) given_back
+
+      method! visit_eproj level sproj =
+        match sproj with
+        | EProjBorrows { proj = _; loans } ->
+            opt_raise ~is_borrow:true level;
+            List.iter (fun (_, x) -> self#visit_eproj level x) loans
+        | EProjLoans { proj = _; consumed; borrows } ->
+            opt_raise ~is_borrow:false level;
+            List.iter (fun (_, x) -> self#visit_eproj (level + 1) x) consumed;
+            List.iter (fun (_, x) -> self#visit_eproj (level + 1) x) borrows
+        | EEndedProjLoans { proj = _; consumed; borrows } ->
+            List.iter (fun (_, x) -> self#visit_eproj (level + 1) x) consumed;
+            List.iter (fun (_, x) -> self#visit_eproj (level + 1) x) borrows
+        | EEndedProjBorrows { mvalues = _; loans } ->
+            List.iter (fun (_, x) -> self#visit_eproj (level + 1) x) loans
+        | EEmpty -> ()
     end
   in
   try
-    visitor#visit_abs () abs;
+    visitor#visit_abs 0 abs;
     false
   with Found -> true
 
-let abs_has_non_ended_eloans (abs : abs) : bool =
-  let visitor =
-    object
-      inherit [_] iter_abs as super
+let abs_has_non_ended_eborrows (abs : abs) (min_level : int) : bool =
+  abs_has_non_ended_eborrows_or_eloans ~borrows:true abs min_level
 
-      method! visit_eloan_content env lc =
-        (match lc with
-        | EMutLoan _ -> raise Found
-        | EEndedMutLoan _ | EIgnoredMutLoan _ | EEndedIgnoredMutLoan _ -> ());
-        super#visit_eloan_content env lc
-
-      method! visit_eproj env sproj =
-        (match sproj with
-        | EProjLoans _ -> raise Found
-        | EProjBorrows _ | EEndedProjLoans _ | EEndedProjBorrows _ | EEmpty ->
-            ());
-        super#visit_eproj env sproj
-    end
-  in
-  try
-    visitor#visit_abs () abs;
-    false
-  with Found -> true
+let abs_has_non_ended_eloans (abs : abs) (min_level : int) : bool =
+  abs_has_non_ended_eborrows_or_eloans ~borrows:false abs min_level
 
 (** Helper function
 
     Return the loan (aloan, loan, proj_loans over a symbolic value) we find in
-    an abstraction, if there is.
+    an abstraction **for a given level**, if there is.
 
     **Remark:** we don't take the *ignored* mut/shared loans into account. *)
-let get_first_non_ignored_aloan_in_abstraction (span : Meta.span) (abs : abs) :
+let get_first_non_ignored_aloan_in_abs (span : Meta.span) (abs : abs)
+    (min_level : int) (max_level : int) :
     borrow_id_or_proj_symbolic_value option =
+  let level_ref = ref None in
+  let check_if_report (level : int) : bool =
+    let report = level >= min_level && (max_level < 0 || level <= max_level) in
+    if report then level_ref := Some level;
+    report
+  in
   (* Explore to find a loan *)
-  let obj =
+  let visitor =
     object
-      inherit [_] iter_abs as super
+      inherit [_] iter_abs_with_levels as super
+      method incr_level level = level + 1
 
-      method! visit_aloan_content env lc =
+      method! visit_aloan_content level lc =
         match lc with
-        | AMutLoan (pm, bid, _) ->
+        | AMutLoan (pm, bid, child) ->
             (* Sanity check: projection markers can only appear when we're doing a join *)
             [%sanity_check] span (pm = PNone);
-            raise (FoundBorrowId bid)
-        | ASharedLoan (pm, bid, _, _) ->
+            if check_if_report level then raise (FoundBorrowId bid)
+            else super#visit_AMutLoan level pm bid child
+        | ASharedLoan (pm, bid, sv, child) ->
             (* Sanity check: projection markers can only appear when we're doing a join *)
             [%sanity_check] span (pm = PNone);
-            raise (FoundBorrowId bid)
+            if check_if_report level then raise (FoundBorrowId bid)
+            else super#visit_ASharedLoan level pm bid sv child
         | AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
-        | AEndedSharedLoan (_, _) -> super#visit_aloan_content env lc
-        | AIgnoredMutLoan (_, _) ->
-            (* Ignore *)
-            super#visit_aloan_content env lc
+        | AEndedSharedLoan (_, _)
+        | AIgnoredMutLoan (_, _)
         | AEndedIgnoredMutLoan
             { given_back = _; child = _; given_back_meta = _ }
         | AIgnoredSharedLoan _ ->
             (* Ignore *)
-            super#visit_aloan_content env lc
+            super#visit_aloan_content level lc
 
       (** We may need to visit loan contents because of shared values *)
-      method! visit_loan_content _ lc =
+      method! visit_loan_content level lc =
         match lc with
         | VMutLoan _ ->
             (* The mut loan linked to the mutable borrow present in a shared
              * value in an abstraction should be in an AProjBorrows *)
             [%craise] span "Unreachable"
-        | VSharedLoan (bid, _) -> raise (FoundBorrowId bid)
+        | VSharedLoan (bid, sv) ->
+            if check_if_report level then raise (FoundBorrowId bid)
+            else super#visit_VSharedLoan level bid sv
 
-      method! visit_aproj env sproj =
+      method! visit_aproj level sproj =
         (match sproj with
         | AProjBorrows _ | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty ->
             ()
-        | AProjLoans proj -> raise (FoundAProjLoans proj));
-        super#visit_aproj env sproj
+        | AProjLoans proj ->
+            if check_if_report level then raise (FoundAProjLoans proj));
+        super#visit_aproj level sproj
     end
   in
   try
     (* Check if there are loans *)
-    obj#visit_abs () abs;
+    visitor#visit_abs 0 abs;
     (* No loans *)
     None
   with
@@ -1580,6 +1911,96 @@ let get_first_non_ignored_aloan_in_abstraction (span : Meta.span) (abs : abs) :
   | FoundAProjLoans { proj; _ } ->
       (* There are loan projections over symbolic values *)
       Some (SymbolicValue proj)
+
+let get_max_sub_abs_visitor ?(with_ended = false) ?(with_evalues = false)
+    (max_level : int ref) =
+  let save_level level = if level > !max_level then max_level := level in
+  object
+    inherit [_] iter_abs_with_levels as super
+    method incr_level level = level + 1
+
+    method! visit_aloan_content level lc =
+      (match lc with
+      | AMutLoan _ | ASharedLoan _ -> save_level level
+      | AEndedMutLoan _
+      | AEndedSharedLoan _
+      | AIgnoredMutLoan _
+      | AEndedIgnoredMutLoan _
+      | AIgnoredSharedLoan _ -> if with_ended then save_level level);
+      super#visit_aloan_content level lc
+
+    method! visit_aborrow_content level bc =
+      (match bc with
+      | AMutBorrow _ | ASharedBorrow _ -> save_level level
+      | AIgnoredMutBorrow _
+      | AEndedMutBorrow _
+      | AEndedSharedBorrow
+      | AEndedIgnoredMutBorrow _
+      | AProjSharedBorrow (_ :: _) -> save_level level
+      | AProjSharedBorrow [] -> if with_ended then save_level level);
+      super#visit_aborrow_content level bc
+
+    method! visit_aproj level proj =
+      (match proj with
+      | AProjLoans _ | AProjBorrows _ -> save_level level
+      | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty ->
+          (* TODO: ignore AEmpty? *)
+          if with_ended then save_level level);
+      super#visit_aproj level proj
+
+    method! visit_loan_content level lc =
+      (match lc with
+      | VSharedLoan _ | VMutLoan _ -> save_level level);
+      super#visit_loan_content level lc
+
+    method! visit_borrow_content level bc =
+      (match bc with
+      | VSharedBorrow _ | VMutBorrow _ | VReservedMutBorrow _ ->
+          save_level level);
+      super#visit_borrow_content level bc
+
+    method! visit_adt_avalue level a =
+      (* When analyzing the ended borrows, make sure we don't forget the ADTs
+           containing borrows which expanded to a variant which did not contain
+           any borrow. *)
+      if with_ended then save_level level;
+      super#visit_adt_avalue level a
+
+    method! visit_tevalue level e =
+      if with_evalues then super#visit_tevalue level e else ()
+
+    method! visit_eloan_content level lc =
+      (match lc with
+      | EMutLoan _ -> save_level level
+      | EEndedMutLoan _ | EIgnoredMutLoan _ | EEndedIgnoredMutLoan _ ->
+          if with_ended then save_level level);
+      super#visit_eloan_content level lc
+
+    method! visit_eborrow_content level bc =
+      (match bc with
+      | EMutBorrow _ -> save_level level
+      | EIgnoredMutBorrow _ | EEndedMutBorrow _ | EEndedIgnoredMutBorrow _ ->
+          if with_ended then save_level level);
+      super#visit_eborrow_content level bc
+
+    method! visit_eproj level proj =
+      (match proj with
+      | EProjLoans _ | EProjBorrows _ -> save_level level
+      | EEndedProjLoans _ | EEndedProjBorrows _ | EEmpty ->
+          (* TODO: ignore EEmpty? *)
+          if with_ended then save_level level);
+      super#visit_eproj level proj
+  end
+
+(** Get the non-ended sub-abstraction with the highest level.
+
+    Outputs -1 if no valid borrow/loan was found *)
+let get_max_sub_abs ?(with_ended = false) ?(with_evalues = false) (abs : abs) :
+    int =
+  let max_level = ref (-1) in
+  let visitor = get_max_sub_abs_visitor ~with_ended ~with_evalues max_level in
+  visitor#visit_abs 0 abs;
+  !max_level
 
 let lookup_shared_value_opt (span : Meta.span) (env : env) (bid : BorrowId.id) :
     tvalue option =
@@ -1741,6 +2162,11 @@ end
 type norm_symb_proj = { sv_id : symbolic_value_id; norm_proj_ty : ty }
 [@@deriving show, ord]
 
+let norm_symb_proj_to_string (ctx : eval_ctx) (proj : norm_symb_proj) : string =
+  let sv_id = symbolic_value_id_to_pretty_string proj.sv_id in
+  let ty = ty_to_string ctx proj.norm_proj_ty in
+  "(" ^ sv_id ^ " : " ^ ty ^ ")"
+
 module NormSymbProjOrd = struct
   type t = norm_symb_proj
 
@@ -1750,24 +2176,88 @@ module NormSymbProjOrd = struct
   let show_t = show_norm_symb_proj
 end
 
-module NormSymbProjSet = Collections.MakeSet (NormSymbProjOrd)
-module NormSymbProjMap = Collections.MakeMap (NormSymbProjOrd)
+module NormSymbProjSet : sig
+  include Collections.Set with type elt = norm_symb_proj
+
+  val with_ctx_to_string : string option -> eval_ctx -> t -> string
+end = struct
+  include Collections.MakeSet (NormSymbProjOrd)
+
+  let with_ctx_to_string indent_opt ctx (s : t) =
+    let indent, break =
+      match indent_opt with
+      | Some indent -> (indent, "\n")
+      | None -> ("", " ")
+    in
+    let sep = "," ^ break in
+    let ls =
+      fold (fun v ls -> (indent ^ norm_symb_proj_to_string ctx v) :: ls) s []
+    in
+    match ls with
+    | [] -> "{}"
+    | _ -> "{" ^ break ^ String.concat sep (List.rev ls) ^ " }"
+end
+
+module NormSymbProjMap : sig
+  include Collections.Map with type key = norm_symb_proj
+
+  val with_ctx_to_string :
+    string option -> ('a -> string) -> eval_ctx -> 'a t -> string
+end = struct
+  include Collections.MakeMap (NormSymbProjOrd)
+
+  let with_ctx_to_string indent_opt a_to_string ctx m =
+    let indent, break =
+      match indent_opt with
+      | Some indent -> (indent, "\n")
+      | None -> ("", " ")
+    in
+    let sep = "," ^ break in
+    let ls =
+      fold
+        (fun key v ls ->
+          (indent ^ norm_symb_proj_to_string ctx key ^ " -> " ^ a_to_string v)
+          :: ls)
+        m []
+    in
+    match ls with
+    | [] -> "{}"
+    | _ -> "{" ^ break ^ String.concat sep (List.rev ls) ^ " }"
+end
 
 module NormSymbProj : sig
   type t
 
   val to_string : t -> string
+  val with_ctx_to_string : eval_ctx -> t -> string
 
-  module Set : Collections.Set with type elt = t
-  module Map : Collections.Map with type key = t
+  module Set : sig
+    include Collections.Set
+
+    val with_ctx_to_string : string option -> eval_ctx -> t -> string
+  end
+  with type elt = t
+
+  module Map : sig
+    include Collections.Map with type key = t
+
+    val with_ctx_to_string :
+      string option -> ('a -> string) -> eval_ctx -> 'a t -> string
+  end
 end
 with type t = norm_symb_proj = struct
   type t = norm_symb_proj
 
   let to_string = show_norm_symb_proj
+  let with_ctx_to_string = norm_symb_proj_to_string
 
-  module Set = NormSymbProjSet
-  module Map = NormSymbProjMap
+  module Set = struct
+    include NormSymbProjSet
+  end
+
+  module Map = struct
+    include NormSymbProjMap
+  end
 end
 
 let marked_norm_symb_proj_to_unmarked (m : marked_norm_symb_proj) :
@@ -1899,8 +2389,8 @@ and norm_proj_trait_refs_union (span : Meta.span) (tr1 : trait_ref)
   [%sanity_check] span (decl_ref1 = decl_ref2);
   tr1
 
-and norm_proj_const_generics_union (span : Meta.span) (cg1 : const_generic)
-    (cg2 : const_generic) : const_generic =
+and norm_proj_const_generics_union (span : Meta.span) (cg1 : constant_expr)
+    (cg2 : constant_expr) : constant_expr =
   [%sanity_check] span (cg1 = cg2);
   cg1
 
@@ -1955,3 +2445,9 @@ let update_endable (ctx : eval_ctx) (abs_ids : abs_id list) ~(can_end : bool) :
     | _ -> e
   in
   { ctx with env = List.map update ctx.env }
+
+let normalize_symbolic_proj (regions : RegionId.Set.t) (proj : symbolic_proj) :
+    norm_symb_proj =
+  let { sv_id; proj_ty } : symbolic_proj = proj in
+  let norm_proj_ty = normalize_proj_ty regions proj_ty in
+  { sv_id; norm_proj_ty }

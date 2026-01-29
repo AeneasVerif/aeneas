@@ -241,6 +241,12 @@ let compute_literal_type (cv : literal) : literal_type =
       [%craise_opt_span] None
         "Float, string and byte string literals are unsupported"
 
+let constant_expr_of_const_generic : const_generic -> Types.constant_expr_kind =
+  function
+  | CgGlobal id -> CGlobal { id; generics = TypesUtils.empty_generic_args }
+  | CgVar v -> CVar v
+  | CgValue l -> CLiteral l
+
 let fvar_get_id (v : fvar) : fvar_id = v.id
 
 let mk_tpat_from_literal (cv : literal) : tpat =
@@ -308,9 +314,15 @@ let make_type_subst (vars : type_param list) (tys : ty list) :
   let mp = TypeVarId.Map.of_list (List.combine var_ids tys) in
   fun id -> TypeVarId.Map.find id mp
 
+let make_const_generic_subst_from_var_ids (var_ids : ConstGenericVarId.id list)
+    (cgs : const_generic list) : ConstGenericVarId.id -> const_generic =
+  let map = ConstGenericVarId.Map.of_list (List.combine var_ids cgs) in
+  fun varid -> ConstGenericVarId.Map.find varid map
+
 let make_const_generic_subst (vars : const_generic_param list)
     (cgs : const_generic list) : ConstGenericVarId.id -> const_generic =
-  Substitute.make_const_generic_subst_from_vars vars cgs
+  let vars = List.map (fun (v : const_generic_param) -> v.index) vars in
+  make_const_generic_subst_from_var_ids vars cgs
 
 let make_trait_subst (clauses : trait_param list) (refs : trait_ref list) :
     TraitClauseId.id -> trait_instance_id =
@@ -2344,7 +2356,7 @@ let generic_args_of_params (generics : generic_params) : generic_args =
   in
   let const_generics =
     List.map
-      (fun (v : const_generic_param) -> T.CgVar (Free v.index))
+      (fun (v : const_generic_param) -> CgVar (Free v.index))
       generics.const_generics
   in
   let trait_refs =

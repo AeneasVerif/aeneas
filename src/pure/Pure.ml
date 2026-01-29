@@ -35,8 +35,6 @@ module ConstGenericVarId = T.ConstGenericVarId
 type llbc_name = T.name [@@deriving show, ord]
 type integer_type = T.integer_type [@@deriving show, ord]
 type float_type = T.float_type [@@deriving show, ord]
-type const_generic_param = T.const_generic_param [@@deriving show, ord]
-type const_generic = T.const_generic [@@deriving show, ord]
 type const_generic_var_id = T.const_generic_var_id [@@deriving show, ord]
 type trait_decl_id = T.trait_decl_id [@@deriving show, ord]
 type trait_impl_id = T.trait_impl_id [@@deriving show, ord]
@@ -236,8 +234,11 @@ type type_var_id = TypeVarId.id [@@deriving show, ord]
 (** Ancestor for iter visitor for [ty] *)
 class ['self] iter_type_id_base =
   object (_self : 'self)
-    inherit [_] VisitorsRuntime.iter
-    method visit_type_decl_id : 'env -> type_decl_id -> unit = fun _ _ -> ()
+    inherit [_] T.iter_ty_base
+
+    method visit_const_generic_var_id : 'env -> const_generic_var_id -> unit =
+      fun _ _ -> ()
+
     method visit_builtin_ty : 'env -> builtin_ty -> unit = fun _ _ -> ()
     method visit_overflow_mode : 'env -> overflow_mode -> unit = fun _ _ -> ()
   end
@@ -245,9 +246,10 @@ class ['self] iter_type_id_base =
 (** Ancestor for map visitor for [ty] *)
 class ['self] map_type_id_base =
   object (_self : 'self)
-    inherit [_] VisitorsRuntime.map
+    inherit [_] T.map_ty_base
 
-    method visit_type_decl_id : 'env -> type_decl_id -> type_decl_id =
+    method visit_const_generic_var_id :
+        'env -> const_generic_var_id -> const_generic_var_id =
       fun _ x -> x
 
     method visit_builtin_ty : 'env -> builtin_ty -> builtin_ty = fun _ x -> x
@@ -259,11 +261,12 @@ class ['self] map_type_id_base =
 (** Ancestor for reduce visitor for [ty] *)
 class virtual ['self] reduce_type_id_base =
   object (self : 'self)
-    inherit [_] VisitorsRuntime.reduce
+    inherit [_] T.reduce_type_vars
 
-    method visit_type_decl_id : 'env -> type_decl_id -> 'a =
+    method visit_const_generic_var_id : 'env -> const_generic_var_id -> 'a =
       fun _ _ -> self#zero
 
+    method visit_span : 'env -> span -> 'a = fun _ _ -> self#zero
     method visit_builtin_ty : 'env -> builtin_ty -> 'a = fun _ _ -> self#zero
 
     method visit_overflow_mode : 'env -> overflow_mode -> 'a =
@@ -273,10 +276,13 @@ class virtual ['self] reduce_type_id_base =
 (** Ancestor for mapreduce visitor for [ty] *)
 class virtual ['self] mapreduce_type_id_base =
   object (self : 'self)
-    inherit [_] VisitorsRuntime.mapreduce
+    inherit [_] T.mapreduce_type_vars
 
-    method visit_type_decl_id : 'env -> type_decl_id -> type_decl_id * 'a =
+    method visit_const_generic_var_id :
+        'env -> const_generic_var_id -> const_generic_var_id * 'a =
       fun _ x -> (x, self#zero)
+
+    method visit_span : 'env -> span -> span * 'a = fun _ x -> (x, self#zero)
 
     method visit_builtin_ty : 'env -> builtin_ty -> builtin_ty * 'a =
       fun _ x -> (x, self#zero)
@@ -286,6 +292,19 @@ class virtual ['self] mapreduce_type_id_base =
   end
 
 type type_id = TAdtId of type_decl_id | TTuple | TBuiltin of builtin_ty
+
+and const_generic =
+  | CgGlobal of global_decl_id  (** A global constant *)
+  | CgVar of const_generic_var_id de_bruijn_var  (** A const generic variable *)
+  | CgValue of V.literal  (** A concrete value *)
+
+and const_generic_param = {
+  index : const_generic_var_id;
+      (** Index identifying the variable among other variables bound at the same
+          level. *)
+  name : string;  (** Const generic name *)
+  ty : T.literal_type;  (** Type of the const generic *)
+}
 [@@deriving
   show,
   ord,
@@ -334,28 +353,24 @@ type literal_type = T.literal_type [@@deriving show, ord]
 class ['self] iter_ty_base =
   object (_self : 'self)
     inherit [_] iter_type_id
-    inherit! [_] T.iter_const_generic
   end
 
 (** Ancestor for map visitor for [ty] *)
 class ['self] map_ty_base =
   object (_self : 'self)
     inherit [_] map_type_id
-    inherit! [_] T.map_const_generic
   end
 
 (** Ancestor for reduce visitor for [ty] *)
 class virtual ['self] reduce_ty_base =
   object (_self : 'self)
     inherit [_] reduce_type_id
-    inherit! [_] T.reduce_const_generic
   end
 
 (** Ancestor for mapreduce visitor for [ty] *)
 class virtual ['self] mapreduce_ty_base =
   object (_self : 'self)
     inherit [_] mapreduce_type_id
-    inherit! [_] T.mapreduce_const_generic
   end
 
 type ty =
@@ -496,12 +511,6 @@ class ['self] iter_type_decl_base =
         self#visit_type_var_id e var.index;
         self#visit_string e var.name
 
-    method visit_const_generic_param : 'env -> const_generic_param -> unit =
-      fun e var ->
-        self#visit_const_generic_var_id e var.index;
-        self#visit_string e var.name;
-        self#visit_literal_type e var.ty
-
     method visit_item_meta : 'env -> T.item_meta -> unit = fun _ _ -> ()
 
     method visit_builtin_type_info : 'env -> builtin_type_info -> unit =
@@ -521,15 +530,6 @@ class ['self] map_type_decl_base =
         {
           index = self#visit_type_var_id e var.index;
           name = self#visit_string e var.name;
-        }
-
-    method visit_const_generic_param :
-        'env -> const_generic_param -> const_generic_param =
-      fun e var ->
-        {
-          index = self#visit_const_generic_var_id e var.index;
-          name = self#visit_string e var.name;
-          ty = self#visit_literal_type e var.ty;
         }
 
     method visit_item_meta : 'env -> T.item_meta -> T.item_meta = fun _ x -> x
@@ -553,13 +553,6 @@ class virtual ['self] reduce_type_decl_base =
         let x1 = self#visit_string e var.name in
         self#plus x0 x1
 
-    method visit_const_generic_param : 'env -> const_generic_param -> 'a =
-      fun e var ->
-        let x0 = self#visit_const_generic_var_id e var.index in
-        let x1 = self#visit_string e var.name in
-        let x2 = self#visit_literal_type e var.ty in
-        self#plus (self#plus x0 x1) x2
-
     method visit_item_meta : 'env -> T.item_meta -> 'a = fun _ _ -> self#zero
 
     method visit_builtin_type_info : 'env -> builtin_type_info -> 'a =
@@ -579,14 +572,6 @@ class virtual ['self] mapreduce_type_decl_base =
         let index, x0 = self#visit_type_var_id e var.index in
         let name, x1 = self#visit_string e var.name in
         ({ index; name }, self#plus x0 x1)
-
-    method visit_const_generic_param :
-        'env -> const_generic_param -> const_generic_param * 'a =
-      fun e var ->
-        let index, x0 = self#visit_const_generic_var_id e var.index in
-        let name, x1 = self#visit_string e var.name in
-        let ty, x2 = self#visit_literal_type e var.ty in
-        ({ index; name; ty }, self#plus (self#plus x0 x1) x2)
 
     method visit_item_meta : 'env -> T.item_meta -> T.item_meta * 'a =
       fun _ x -> (x, self#zero)
@@ -1128,7 +1113,6 @@ class ['self] iter_expr_base =
   object (_self : 'self)
     inherit [_] iter_qualif
     inherit! [_] iter_type_id
-    method visit_span : 'env -> Meta.span -> unit = fun _ _ -> ()
     method visit_db_scope_id : 'env -> db_scope_id -> unit = fun _ _ -> ()
   end
 
@@ -1137,7 +1121,6 @@ class ['self] map_expr_base =
   object (_self : 'self)
     inherit [_] map_qualif
     inherit! [_] map_type_id
-    method visit_span : 'env -> Meta.span -> Meta.span = fun _ x -> x
     method visit_db_scope_id : 'env -> db_scope_id -> db_scope_id = fun _ x -> x
   end
 
@@ -1146,7 +1129,6 @@ class virtual ['self] reduce_expr_base =
   object (self : 'self)
     inherit [_] reduce_qualif
     inherit! [_] reduce_type_id
-    method visit_span : 'env -> Meta.span -> 'a = fun _ _ -> self#zero
     method visit_db_scope_id : 'env -> db_scope_id -> 'a = fun _ _ -> self#zero
   end
 
@@ -1155,9 +1137,6 @@ class virtual ['self] mapreduce_expr_base =
   object (self : 'self)
     inherit [_] mapreduce_qualif
     inherit! [_] mapreduce_type_id
-
-    method visit_span : 'env -> Meta.span -> Meta.span * 'a =
-      fun _ x -> (x, self#zero)
 
     method visit_db_scope_id : 'env -> db_scope_id -> db_scope_id * 'a =
       fun _ x -> (x, self#zero)
@@ -1429,11 +1408,13 @@ type fun_sig_info = {
 }
 [@@deriving show]
 
+type abs_level = int [@@deriving show]
+
 type back_sg_info = {
-  inputs : (string option * ty) list;
-      (** The additional inputs of the backward function *)
-  outputs : ty list;
-      (** The "decomposed" list of outputs.
+  inputs : (abs_level * (string option * ty) list) list;
+      (** The inputs of the backward function, level by level. *)
+  outputs : (abs_level * (string option * ty) list) list;
+      (** The "decomposed" list of outputs, level by level.
 
           The list contains all the types of all the given back values (there is
           at most one type per forward input argument).
@@ -1449,9 +1430,6 @@ type back_sg_info = {
           Non-decomposed ouputs (if the function can fail, but is not stateful):
           - [result T]
           - [[result (T * T)]] *)
-  output_names : string option list;
-      (** The optional names for the backward outputs. We derive those from the
-          names of the inputs of the original LLBC function. *)
   effect_info : fun_effect_info;
   filter : bool;  (** Should we filter this backward function? *)
 }

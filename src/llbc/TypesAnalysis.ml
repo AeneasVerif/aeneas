@@ -38,6 +38,7 @@ type 'p g_type_info = {
   is_tuple_struct : bool;
       (** If true, it means the type is a record that we should extract as a
           tuple. This field is only valid for type declarations. *)
+  has_regions : bool;
   mut_regions : RegionId.Set.t;
       (** The set of regions used in mutable borrows *)
   is_rec : bool;  (** This field is only meaningful for type definitions *)
@@ -81,24 +82,26 @@ let type_decl_is_tuple_struct (x : type_decl) : bool =
   | Struct fields -> List.for_all (fun f -> f.field_name = None) fields
   | _ -> false
 
-let initialize_g_type_info (is_tuple_struct : bool) (is_rec : bool)
-    (param_infos : 'p) : 'p g_type_info =
+let initialize_g_type_info (is_tuple_struct : bool) ~(is_rec : bool)
+    ~(has_regions : bool) (param_infos : 'p) : 'p g_type_info =
   {
     borrows_info = type_borrows_info_init;
     is_tuple_struct;
     param_infos;
     mut_regions = RegionId.Set.empty;
     is_rec;
+    has_regions;
   }
 
-let initialize_type_decl_info (is_rec : bool) (def : type_decl) : type_decl_info
-    =
+let initialize_type_decl_info ~(is_rec : bool) (def : type_decl) :
+    type_decl_info =
   let param_info = { under_borrow = false; under_mut_borrow = false } in
   let param_infos = List.map (fun _ -> param_info) def.generics.types in
   let is_tuple_struct =
     !Config.use_tuple_structs && (not is_rec) && type_decl_is_tuple_struct def
   in
-  initialize_g_type_info is_tuple_struct is_rec param_infos
+  let has_regions = List.length def.generics.regions > 0 in
+  initialize_g_type_info is_tuple_struct ~is_rec ~has_regions param_infos
 
 let type_decl_info_to_partial_type_info (info : type_decl_info) :
     partial_type_info =
@@ -108,6 +111,7 @@ let type_decl_info_to_partial_type_info (info : type_decl_info) :
     param_infos = Some info.param_infos;
     mut_regions = info.mut_regions;
     is_rec = info.is_rec;
+    has_regions = info.has_regions;
   }
 
 let partial_type_info_to_type_decl_info (info : partial_type_info) :
@@ -118,6 +122,7 @@ let partial_type_info_to_type_decl_info (info : partial_type_info) :
     param_infos = Option.get info.param_infos;
     mut_regions = info.mut_regions;
     is_rec = info.is_rec;
+    has_regions = info.has_regions;
   }
 
 let partial_type_info_to_ty_info (info : partial_type_info) : ty_info =
@@ -300,12 +305,14 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
         in
         (* Update the type info with the information from the adt *)
         let ty_info = update_ty_info ty_info None adt_info.borrows_info in
-        (* Check if 'static appears in the region parameters *)
+        (* Check if there are regions, and if 'static appears in the region parameters *)
         let found_static = List.exists r_is_static generics.regions in
         let borrows_info = ty_info.borrows_info in
         let borrows_info =
           {
             borrows_info with
+            contains_borrow =
+              borrows_info.contains_borrow || adt_info.has_regions;
             contains_static =
               check_update_bool borrows_info.contains_static found_static;
           }
@@ -450,7 +457,7 @@ let analyze_type_declaration_group (type_decls : type_decl TypeDeclId.Map.t)
     List.fold_left
       (fun infos (def : type_decl) ->
         TypeDeclId.Map.add def.def_id
-          (initialize_type_decl_info is_rec def)
+          (initialize_type_decl_info ~is_rec def)
           infos)
       infos decl_defs
   in
@@ -517,7 +524,9 @@ let analyze_ty (span : Meta.span option) (infos : type_infos) (ty : ty) :
   (* We don't use [updated] but need to give it as parameter *)
   let updated = ref false in
   (* We don't need to compute whether the type contains 'static or not *)
-  let ty_info = initialize_g_type_info false false None in
+  let ty_info =
+    initialize_g_type_info false ~is_rec:false ~has_regions:false None
+  in
   let ty_info = analyze_full_ty span updated infos ty_info ty in
   (* Convert the ty_info *)
   partial_type_info_to_ty_info ty_info
@@ -628,7 +637,7 @@ let compute_outlive_proj_ty (span : Meta.span option)
                 in
                 List.iter (self#visit_region outer) regions;
                 List.iter (self#visit_ty outer) types;
-                List.iter (self#visit_const_generic outer) const_generics;
+                List.iter (self#visit_constant_expr outer) const_generics;
                 (* TODO: we need to handle those *)
                 [%sanity_check_opt_span] span (trait_refs = []);
 

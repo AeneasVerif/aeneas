@@ -196,9 +196,9 @@ def test_split_list : Result Unit := do
 def choose
   {T : Type} (b : Bool) (x : T) (y : T) : Result (T × (T → (T × T))) := do
   if b
-  then let back := fun ret => (ret, y)
+  then let back := fun x1 => (x1, y)
        ok (x, back)
-  else let back := fun ret => (x, ret)
+  else let back := fun y1 => (x, y1)
        ok (y, back)
 
 /- [no_nested_borrows::choose_test]:
@@ -270,13 +270,13 @@ def list_nth_mut
   match l with
   | List.Cons x tl =>
     if i = 0#u32
-    then let back := fun ret => List.Cons ret tl
+    then let back := fun t => List.Cons t tl
          ok (x, back)
     else
       let i1 ← i - 1#u32
       let (x1, list_nth_mut_back) ← list_nth_mut tl i1
-      let back := fun ret => let tl1 := list_nth_mut_back ret
-                             List.Cons x tl1
+      let back := fun t => let tl1 := list_nth_mut_back t
+                           List.Cons x tl1
       ok (x1, back)
   | List.Nil => fail panic
 partial_fixpoint
@@ -333,7 +333,7 @@ def id_mut_pair1
   {T1 : Type} {T2 : Type} (x : T1) (y : T2) :
   Result ((T1 × T2) × ((T1 × T2) → (T1 × T2)))
   := do
-  ok ((x, y), fun ret => ret)
+  ok ((x, y), fun p => p)
 
 /- [no_nested_borrows::id_mut_pair2]:
    Source: 'tests/src/no_nested_borrows.rs', lines 339:0-341:1 -/
@@ -341,7 +341,7 @@ def id_mut_pair2
   {T1 : Type} {T2 : Type} (p : (T1 × T2)) :
   Result ((T1 × T2) × ((T1 × T2) → (T1 × T2)))
   := do
-  ok (p, fun ret => ret)
+  ok (p, fun p1 => p1)
 
 /- [no_nested_borrows::id_mut_pair3]:
    Source: 'tests/src/no_nested_borrows.rs', lines 343:0-345:1 -/
@@ -349,7 +349,7 @@ def id_mut_pair3
   {T1 : Type} {T2 : Type} (x : T1) (y : T2) :
   Result ((T1 × T2) × (T1 → T1) × (T2 → T2))
   := do
-  ok ((x, y), fun ret => ret, fun ret => ret)
+  ok ((x, y), fun x1 => x1, fun y1 => y1)
 
 /- [no_nested_borrows::id_mut_pair4]:
    Source: 'tests/src/no_nested_borrows.rs', lines 347:0-349:1 -/
@@ -357,7 +357,7 @@ def id_mut_pair4
   {T1 : Type} {T2 : Type} (p : (T1 × T2)) :
   Result ((T1 × T2) × (T1 → T1) × (T2 → T2))
   := do
-  ok (p, fun ret => ret, fun ret => ret)
+  ok (p, fun p1 => p1, fun p1 => p1)
 
 /- [no_nested_borrows::StructWithTuple]
    Source: 'tests/src/no_nested_borrows.rs', lines 354:0-356:1 -/
@@ -533,7 +533,7 @@ def borrow_mut_tuple
   {T : Type} {U : Type} (x : (T × U)) :
   Result ((T × U) × ((T × U) → (T × U)))
   := do
-  ok (x, fun ret => ret)
+  ok (x, fun x1 => x1)
 
 /- [no_nested_borrows::ExpandSimpliy::Wrapper]
    Source: 'tests/src/no_nested_borrows.rs', lines 526:4-526:32 -/

@@ -456,7 +456,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
           let len =
             Scalars.get_val
               (ValuesUtils.literal_as_scalar
-                 (TypesUtils.const_generic_as_literal len))
+                 (TypesUtils.constant_expr_as_literal len))
           in
           [%sanity_check] span (Z.of_int (List.length av.fields) = len)
       | VAdt _, TSlice _ -> [%craise] span "Unexpected slice value"
@@ -617,7 +617,17 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
               [%sanity_check] span (given_back.ty = ref_ty);
               [%sanity_check] span (child.ty = ref_ty)
           | AProjSharedBorrow _, RShared -> ()
-          | _ -> [%craise] span "Inconsistent context")
+          | AEndedMutBorrow (_meta, av), RMut ->
+              (* Check that the region is owned by the abstraction *)
+              [%sanity_check] span (region_is_owned abs region);
+              (* Check that the child value has the proper type *)
+              [%sanity_check] span (av.ty = ref_ty)
+          | _ ->
+              [%ltrace
+                "Inconsistent context:\n- abs:\n" ^ abs_to_string span ctx abs
+                ^ "\n\n- value:\n" ^ tavalue_to_string ctx atv ^ "\n\n- ty:\n"
+                ^ ty_to_string ctx atv.ty];
+              [%craise] span "Inconsistent context")
       | ALoan lc, aty -> (
           let abs = Option.get info in
           match lc with

@@ -123,7 +123,12 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
                   fty)
               fields_types
           in
-          AAdt { variant_id = adt.variant_id; fields = proj_fields }
+          AAdt
+            {
+              borrow_proj = true;
+              variant_id = adt.variant_id;
+              fields = proj_fields;
+            }
       | VBottom, _ -> [%craise] span "Unreachable"
       | VBorrow bc, TRef (r, ref_ty, kind) ->
           if
@@ -257,7 +262,12 @@ let rec apply_eproj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
                   fty)
               fields_types
           in
-          EAdt { variant_id = adt.variant_id; fields = proj_fields }
+          EAdt
+            {
+              borrow_proj = true;
+              variant_id = adt.variant_id;
+              fields = proj_fields;
+            }
       | VBottom, _ -> [%craise] span "Unreachable"
       | VBorrow bc, TRef (r, ref_ty, kind) ->
           if
@@ -397,7 +407,7 @@ let apply_proj_loans_on_symbolic_expansion (span : Meta.span)
             (mk_aproj_loans_value_from_symbolic_value regions)
             fields field_types
         in
-        (AAdt { variant_id; fields }, original_sv_ty)
+        (AAdt { borrow_proj = false; variant_id; fields }, original_sv_ty)
     | SeMutRef (bid, spc), TRef (r, ref_ty, RMut) ->
         (* Sanity check *)
         [%sanity_check] span (spc.sv_ty = ref_ty);
@@ -460,7 +470,7 @@ let apply_eproj_loans_on_symbolic_expansion (span : Meta.span)
             (mk_eproj_loans_value_from_symbolic_value type_infos regions)
             fields field_types
         in
-        (EAdt { variant_id; fields }, original_sv_ty)
+        (EAdt { borrow_proj = false; variant_id; fields }, original_sv_ty)
     | SeMutRef (bid, spc), TRef (r, ref_ty, RMut) ->
         (* Sanity check *)
         [%sanity_check] span (spc.sv_ty = ref_ty);

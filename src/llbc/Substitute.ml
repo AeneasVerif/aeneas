@@ -33,7 +33,7 @@ let fresh_regions_with_substs_from_vars (region_vars : region_param list)
     associated to that signature. *)
 let substitute_signature (asubst : RegionGroupId.id -> AbsId.id)
     (r_id_subst : RegionId.id -> RegionId.id) (ty_sb_subst : TypeVarId.id -> ty)
-    (cg_sb_subst : ConstGenericVarId.id -> const_generic)
+    (cg_sb_subst : ConstGenericVarId.id -> constant_expr_kind)
     (tr_sb_subst : TraitClauseId.id -> trait_ref_kind)
     (tr_sb_self : trait_ref_kind) (sg : bound_fun_sig)
     (regions_hierarchy : region_var_groups) : inst_fun_sig =
@@ -124,9 +124,17 @@ let tvalue_subst_ids (subst : id_subst) (v : tvalue) : tvalue =
   let vis = subst_ids_visitor subst in
   vis#visit_tvalue () v
 
+let ty_subst_ids (subst : id_subst) (x : ty) : ty =
+  let vis = subst_ids_visitor subst in
+  vis#visit_ty () x
+
 let tvalue_subst_rids (span : Meta.span) (r_subst : RegionId.id -> RegionId.id)
     (v : tvalue) : tvalue =
   tvalue_subst_ids { (no_abs_id_subst span) with r_subst } v
+
+let ty_subst_rids (span : Meta.span) (r_subst : RegionId.id -> RegionId.id)
+    (x : ty) : ty =
+  ty_subst_ids { (no_abs_id_subst span) with r_subst } x
 
 let abs_subst_ids (subst : id_subst) (x : abs) : abs =
   let vis = subst_ids_visitor subst in

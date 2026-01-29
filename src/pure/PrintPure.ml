@@ -146,6 +146,8 @@ let type_db_var_to_string (env : fmt_env) (var : type_var_id de_bruijn_var) :
   | None -> Print.Types.type_db_var_to_pretty_string var
   | Some x -> Print.Types.type_param_to_string x
 
+let const_generic_param_to_string (v : const_generic_param) : string = v.name
+
 let const_generic_db_var_to_string (env : fmt_env)
     (var : const_generic_var_id de_bruijn_var) : string =
   let find (generics : generic_params) varid =
@@ -155,7 +157,7 @@ let const_generic_db_var_to_string (env : fmt_env)
   in
   match lookup_var_in_env env find var with
   | None -> Print.Types.const_generic_db_var_to_pretty_string var
-  | Some x -> Print.Types.const_generic_param_to_string x
+  | Some x -> const_generic_param_to_string x
 
 let bvar_to_pretty_string (v : bvar) : string =
   "^(" ^ string_of_int v.scope ^ "," ^ BVarId.to_string v.id ^ ")"
@@ -701,25 +703,22 @@ let adt_pat_to_string ?(span : Meta.span option) (env : fmt_env)
   snd (adt_pat_to_string_aux span env variant_id fields ty)
 
 let back_sg_info_to_string (env : fmt_env) (info : back_sg_info) : string =
-  let { inputs; outputs; output_names; effect_info; filter } = info in
-  let input_to_string (n, ty) =
+  let { inputs; outputs; effect_info; filter } = info in
+  let ty_to_string (n, ty) =
     (match n with
     | None -> ""
     | Some n -> n ^ ":")
     ^ ty_to_string env false ty
   in
-  let inputs_to_string inputs =
-    "[" ^ String.concat "," (List.map input_to_string inputs) ^ "]"
+  let tys_to_string (level, inputs) =
+    string_of_int level ^ " -> ["
+    ^ String.concat "," (List.map ty_to_string inputs)
+    ^ "]"
   in
-  "{ inputs = " ^ inputs_to_string inputs ^ "; outputs = ["
-  ^ String.concat "," (List.map (ty_to_string env false) outputs)
-  ^ "; output_names = ["
-  ^ String.concat ","
-      (List.map
-         (function
-           | None -> "_"
-           | Some n -> n)
-         output_names)
+  "{ inputs = "
+  ^ Print.list_to_string tys_to_string inputs
+  ^ "; outputs = "
+  ^ Print.list_to_string tys_to_string outputs
   ^ "; effect_info = "
   ^ show_fun_effect_info effect_info
   ^ "; filter = "
@@ -734,7 +733,7 @@ let decomposed_fun_type_to_string (env : fmt_env) (sg : decomposed_fun_type) :
   ^ ";\n  fwd_output = "
   ^ ty_to_string env false fwd_output
   ^ ";\n  back_sg = "
-  ^ RegionGroupId.Map.to_string None (back_sg_info_to_string env) back_sg
+  ^ RegionGroupId.Map.to_string (Some "  ") (back_sg_info_to_string env) back_sg
   ^ ";\n  fwd_info = " ^ show_fun_sig_info fwd_info ^ "\n}"
 
 let trait_type_constraint_to_string (env : fmt_env) (c : trait_type_constraint)

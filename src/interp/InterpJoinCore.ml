@@ -496,8 +496,8 @@ end
 module type MatchCheckEquivState = sig
   val span : Meta.span
 
-  (** [true] if we check equivalence between contexts, [false] if we match a
-      source context with a target context. *)
+  (** [true] if we check equivalence between contexts, [false] if we compute a
+      mapping from a source context to a target context. *)
   val check_equiv : bool
 
   val rid_map : RegionId.InjSubst.t ref
@@ -743,7 +743,7 @@ let tavalue_add_marker (span : Meta.span) (ctx : eval_ctx) (pm : proj_marker)
 let tevalue_add_marker (span : Meta.span) (ctx : eval_ctx) (pm : proj_marker)
     (ev : tevalue) : tevalue =
   let obj =
-    object
+    object (self)
       inherit [_] map_tavalue as super
       method! visit_borrow_content _ _ = [%craise] span "Unexpected borrow"
       method! visit_loan_content _ _ = [%craise] span "Unexpected loan"
@@ -770,11 +770,11 @@ let tevalue_add_marker (span : Meta.span) (ctx : eval_ctx) (pm : proj_marker)
         | EMutLoan (pm0, bid, av) ->
             [%sanity_check] span (pm0 = PNone);
             super#visit_eloan_content ty (EMutLoan (pm, bid, av))
-        | EEndedMutLoan { child = _; given_back = _; given_back_meta = _ } ->
+        | EEndedMutLoan _ | EEndedIgnoredMutLoan _ ->
             super#visit_eloan_content ty lc
         | _ ->
             [%craise] span
-              ("(Internal error: please file an issue (unexpected value: "
+              ("Unimplemented (unexpected value: "
               ^ eloan_content_to_string ctx ty lc
               ^ ")")
 
@@ -783,6 +783,8 @@ let tevalue_add_marker (span : Meta.span) (ctx : eval_ctx) (pm : proj_marker)
         | EMutBorrow (pm0, bid, av) ->
             [%sanity_check] span (pm0 = PNone);
             super#visit_eborrow_content env (EMutBorrow (pm, bid, av))
+        | EEndedIgnoredMutBorrow bc ->
+            EEndedIgnoredMutBorrow (self#visit_eended_ignored_mut_borrow env bc)
         | _ -> [%internal_error] span
     end
   in

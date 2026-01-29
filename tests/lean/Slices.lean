@@ -40,7 +40,7 @@ def split_at_mut
   Result (((Slice T) × (Slice T)) × (((Slice T) × (Slice T)) → Slice T))
   := do
   let (p, split_at_mut_back) ← core.slice.Slice.split_at_mut x n
-  let back := fun ret => split_at_mut_back ret
+  let back := fun p1 => split_at_mut_back p1
   ok (p, back)
 
 /- [slices::swap]:

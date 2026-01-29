@@ -2112,8 +2112,18 @@ let simplify_let_then_ok ~(ignore_loops : bool) =
       type struct = { f0 : nat; f1 : nat; f2 : nat }
 
       Mkstruct x.f0 x.f1 x.f2 ~~> x
+    ]}
+
+    If [x] is not a tuple:
+    {[
+      let ⟨ x0, ..., xn ⟩ := x ~>
+      let x0 := x.f0 in
+      ...
+      let xn := x.fn in
+      ...
     ]} *)
 let simplify_aggregates_visitor (ctx : ctx) (def : fun_decl) =
+  let span = def.item_meta.span in
   object
     inherit [_] map_expr as super
 
@@ -2264,6 +2274,31 @@ let simplify_aggregates_visitor (ctx : ctx) (def : fun_decl) =
               let e = { e with e = supd } in
               e)
             else e
+      | Let
+          ( false,
+            {
+              pat = PAdt { variant_id = None; fields };
+              ty = TAdt ((TAdtId decl_id as adt_id), generics);
+            },
+            ({ e = FVar _; ty = x_ty } as x),
+            next )
+        when List.for_all is_pat_open fields
+             && not
+                  (TypesUtils.type_decl_from_decl_id_is_tuple_struct
+                     ctx.trans_ctx.type_ctx.type_infos decl_id) ->
+          let mk_proj (field_id : field_id) (field : tpat) : tpat * texpr =
+            let f, _ = [%add_loc] as_pat_open span field in
+            let qualif : texpr =
+              {
+                e = Qualif { id = Proj { adt_id; field_id }; generics };
+                ty = mk_arrow x_ty f.ty;
+              }
+            in
+            let proj = [%add_loc] mk_app span qualif x in
+            (field, proj)
+          in
+          let lets = FieldId.mapi mk_proj fields in
+          mk_opened_lets false lets next
       | _ -> e
   end
 
@@ -6926,7 +6961,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
   (* The const generic holes are not really useful, but while we're at it we
      can keep track of them *)
   let cg_hole : const_generic =
-    T.CgVar (T.Free (ConstGenericVarId.of_int (-1)))
+    CgVar (T.Free (ConstGenericVarId.of_int (-1)))
   in
 
   (* Small helper to add a type annotation *)
@@ -7269,8 +7304,15 @@ let add_type_annotations (trans_ctx : trans_ctx)
   in
   let add_annot (decl : fun_decl) =
     try
-      add_type_annotations_to_fun_decl trans_ctx trans_funs_map builtin_sigs
-        type_decls decl
+      let decl =
+        add_type_annotations_to_fun_decl trans_ctx trans_funs_map builtin_sigs
+          type_decls decl
+      in
+      [%ltrace
+        let fmt = trans_ctx_to_pure_fmt_env trans_ctx in
+        "After adding type annotations:\n\n"
+        ^ PrintPure.fun_decl_to_string fmt decl];
+      decl
     with Errors.CFailure error ->
       let name = name_to_string trans_ctx decl.item_meta.name in
       let name_pattern =
