@@ -917,8 +917,6 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
     (bkind : borrow_kind) (ctx : eval_ctx) :
     tvalue * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
   match bkind with
-  | BUniqueImmutable ->
-      [%craise] span "Unique immutable closure captures are not supported"
   | BShared | BTwoPhaseMut | BShallow ->
       (* **REMARK**: we initially treated shallow borrows like shared borrows.
          In practice this restricted the behaviour too much, so for now we
@@ -976,7 +974,9 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
       let rv : tvalue = { value = VBorrow bc; ty = rv_ty } in
       (* Return *)
       (rv, ctx, cc)
-  | BMut ->
+  | BMut | BUniqueImmutable ->
+      (* We treat unique immutable borrows or mutable borrows: the difference is not
+         that important in our case *)
       (* Access the value *)
       let access = Write in
       let greedy_expand = false in
