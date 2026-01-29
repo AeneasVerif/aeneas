@@ -134,6 +134,7 @@ let run_charon (env : runner_env) (case : Input.t) =
             "--crate-type=rlib";
             "--allow=unused";
             "--allow=non_snake_case";
+            "--edition=2021";
           ]
       in
       (* Run Charon on the rust file *)
