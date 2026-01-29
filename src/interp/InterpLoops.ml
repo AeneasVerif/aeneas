@@ -394,7 +394,7 @@ let eval_loop_symbolic (config : config) (span : span)
         [%craise] span
           "(Infinite) loops which do not contain breaks are not supported yet"
     | Single ->
-        [%ltrace "No break context"];
+        [%ltrace "Single break"];
         (None, None)
     | Multiple (break_ctx, break_abs) ->
         let break_input_abs_ids =

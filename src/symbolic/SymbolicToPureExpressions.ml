@@ -1234,6 +1234,16 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
           let branch = List.hd branches in
           let ty = branch.branch.ty in
           (* Sanity check *)
+          [%ldebug
+            "translated branches:\n"
+            ^ String.concat "\n\n"
+                (List.map
+                   (fun (b : match_branch) ->
+                     "- branch (ty: "
+                     ^ pure_ty_to_string ctx b.branch.ty
+                     ^ ":\n"
+                     ^ match_branch_to_string ctx b)
+                   branches)];
           [%sanity_check] ctx.span
             (List.for_all (fun br -> br.branch.ty = ty) branches);
           (* Return *)
@@ -1697,6 +1707,11 @@ and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
     let continue_ty = List.map (fun (e : texpr) -> e.ty) inputs in
     let continue_ty = mk_simpl_tuple_ty continue_ty in
     let break_ty = output.ty in
+    [%ldebug
+      "- continue_ty:\n"
+      ^ pure_ty_to_string ctx continue_ty
+      ^ "\n- break_ty: "
+      ^ pure_ty_to_string ctx break_ty];
     let mk_panic =
       mk_loop_result_fail_texpr_with_error_id ctx.span continue_ty break_ty
         error_failure_id
