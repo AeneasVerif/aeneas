@@ -1109,7 +1109,7 @@ let builtin_adts () : (builtin_ty * string) list =
         (TFuel, if backend () = HOL4 then "num" else "nat");
         (TArray, "array");
         (TSlice, "slice");
-        (TStr, "str");
+        (TStr, "string");
         (TRawPtr Mut, "mut_raw_ptr");
         (TRawPtr Const, "const_raw_ptr");
       ]
