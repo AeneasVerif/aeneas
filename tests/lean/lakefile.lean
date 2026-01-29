@@ -28,6 +28,7 @@ package «tests» {}
 @[default_target] lean_lib Issue270LoopList
 @[default_target] lean_lib Issue440TypeError
 @[default_target] lean_lib Joins
+@[default_target] lean_lib ListBorrows
 @[default_target] lean_lib Loops
 @[default_target] lean_lib LoopsAdts
 @[default_target] lean_lib LoopsIssues
