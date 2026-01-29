@@ -2674,3 +2674,10 @@ let binop_can_fail : binop -> bool = function
   | Shr (OWrap, _, _)
   | AddChecked _ | SubChecked _ | MulChecked _ | Cmp _ -> false
   | Div _ | Rem _ | Add _ | Sub _ | Mul _ | Shl _ | Shr _ -> true
+
+let mk_bool_not (b : texpr) : texpr =
+  let qualif =
+    Qualif { id = FunOrOp (Unop (Not None)); generics = empty_generic_args }
+  in
+  let neg = { e = qualif; ty = TArrow (TLiteral TBool, TLiteral TBool) } in
+  { e = App (neg, b); ty = TLiteral TBool }

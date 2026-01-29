@@ -174,8 +174,9 @@ let synthesize_assignment (ctx : Contexts.eval_ctx) (lplace : mplace)
     (rvalue : tvalue) (rplace : mplace option) (e : expr) : expr =
   Meta (Assignment (ctx, lplace, rvalue, rplace), e)
 
-let synthesize_assertion (ctx : Contexts.eval_ctx) (v : tvalue) (e : expr) =
-  Assertion (ctx, v, e)
+let synthesize_assertion (ctx : Contexts.eval_ctx) (expected : bool)
+    (v : tvalue) (e : expr) =
+  Assertion (ctx, expected, v, e)
 
 let save_snapshot (ctx : Contexts.eval_ctx) : expr -> expr =
   (* Note that we take care to generate the fresh meta id immediately, so
