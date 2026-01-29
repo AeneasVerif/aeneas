@@ -682,9 +682,6 @@ let greedy_expand_symbolics_with_borrows (span : Meta.span) : cm_fun =
             ctx.type_ctx.type_decls ctx.type_ctx.type_infos sv
         then raise (FoundSymbolicValue sv)
         else ()
-
-      (** Don't enter abstractions *)
-      method! visit_abs _ _ = ()
     end
   in
 

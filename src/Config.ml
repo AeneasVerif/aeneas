@@ -448,3 +448,6 @@ let parallel = ref true
 
 (** Once we add proper support for static lifetimes, remove this *)
 let use_static = ref false
+
+(** Display a progress bar *)
+let progress_bar = ref true

@@ -172,6 +172,9 @@ let () =
       ( "-sequential",
         Arg.Clear parallel,
         " Execute sequentially (no parallelism)" );
+      ( "-no-progress-bar",
+        Arg.Clear progress_bar,
+        " Do not display a progress bar" );
     ]
   in
 

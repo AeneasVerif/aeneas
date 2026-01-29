@@ -258,6 +258,7 @@ let symbolic_value_is_greedily_expandable (span : Meta.span option)
     (* Ignore arrays and slices, as we can't expand them *)
     match sv.sv_ty with
     | TArray _ | TSlice _ -> false
+    | TRef _ -> true
     | TAdt { id = TAdtId id; _ } ->
         (* Lookup the type of the ADT to check if we can expand it *)
         let def = TypeDeclId.Map.find id type_decls in

@@ -8,6 +8,16 @@ Import ListNotations.
 Local Open Scope Primitives_scope.
 Module NoNestedBorrows.
 
+(** [core::fmt::Arguments]
+    Source: '/rustc/library/core/src/fmt/mod.rs', lines 716:0-716:24
+    Name pattern: [core::fmt::Arguments] *)
+Axiom core_fmt_Arguments_t : Type.
+
+(** [core::fmt::{core::fmt::Arguments<'a>}::from_str]:
+    Source: '/rustc/library/core/src/fmt/mod.rs', lines 815:4-815:59
+    Name pattern: [core::fmt::{core::fmt::Arguments<'a>}::from_str] *)
+Axiom core_fmt_Arguments_from_str : str -> result core_fmt_Arguments_t.
+
 (** [no_nested_borrows::Pair]
     Source: 'tests/src/no_nested_borrows.rs', lines 6:0-9:1 *)
 Record Pair_t (T1 : Type) (T2 : Type) :=
@@ -144,17 +154,17 @@ Definition copy_int (x : i32) : result i32 :=
 (** [no_nested_borrows::test_unreachable]:
     Source: 'tests/src/no_nested_borrows.rs', lines 133:0-137:1 *)
 Definition test_unreachable (b : bool) : result unit :=
-  massert b.
+  massert (negb b).
 
 (** [no_nested_borrows::test_panic]:
     Source: 'tests/src/no_nested_borrows.rs', lines 140:0-144:1 *)
 Definition test_panic (b : bool) : result unit :=
-  massert b.
+  massert (negb b).
 
 (** [no_nested_borrows::test_panic_msg]:
     Source: 'tests/src/no_nested_borrows.rs', lines 148:0-152:1 *)
 Definition test_panic_msg (b : bool) : result unit :=
-  massert b.
+  massert (negb b).
 
 (** [no_nested_borrows::test_copy_int]:
     Source: 'tests/src/no_nested_borrows.rs', lines 155:0-160:1 *)

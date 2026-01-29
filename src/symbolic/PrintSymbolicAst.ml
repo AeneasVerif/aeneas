@@ -65,10 +65,11 @@ let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
       let global = global_decl_ref_to_string env { id; generics } in
       let next = expr_to_string env indent indent_incr next in
       indent ^ "let " ^ sv ^ " = " ^ global ^ " in\n" ^ next
-  | Assertion (_, b, next) ->
+  | Assertion (_, expected, b, next) ->
+      let neg = if expected then "" else "¬" in
       let b = Values.tvalue_to_string env b in
       let next = expr_to_string env indent indent_incr next in
-      indent ^ "assert " ^ b ^ ";\n" ^ next
+      indent ^ "assert " ^ neg ^ b ^ ";\n" ^ next
   | Expansion (_, sv, exp) -> expansion_to_string env indent indent_incr sv exp
   | IntroSymbolic (_, _, sv, v, next) ->
       let sv = Values.symbolic_value_to_string env sv in

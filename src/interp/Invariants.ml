@@ -622,6 +622,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
               [%sanity_check] span (region_is_owned abs region);
               (* Check that the child value has the proper type *)
               [%sanity_check] span (av.ty = ref_ty)
+          | AEndedSharedBorrow, RShared -> ()
           | _ ->
               [%ltrace
                 "Inconsistent context:\n- abs:\n" ^ abs_to_string span ctx abs
@@ -865,9 +866,9 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
   (* Check *)
   let check_info id info =
     [%ldebug
-      "checking info (sid: )"
+      "checking info (sid: "
       ^ SymbolicValueId.to_string id
-      ^ ":\n" ^ sv_info_to_string ctx info];
+      ^ "):\n" ^ sv_info_to_string ctx info];
     if info.aproj_borrows = [] && info.aproj_loans = [] then ()
     else (
       (* TODO: check that:
@@ -894,7 +895,7 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
         | loan_proj_union :: aproj_loans ->
             List.fold_left
               (fun loan_proj_union proj_ty ->
-                norm_proj_tys_union span loan_proj_union proj_ty)
+                norm_proj_tys_union span ctx loan_proj_union proj_ty)
               loan_proj_union aproj_loans
       in
 
@@ -911,7 +912,7 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
           let borrow_proj_union =
             List.fold_left
               (fun borrow_proj_union proj_ty ->
-                norm_proj_tys_union span borrow_proj_union proj_ty)
+                norm_proj_tys_union span ctx borrow_proj_union proj_ty)
               borrow_proj_union aproj_borrows
           in
           [%sanity_check] span

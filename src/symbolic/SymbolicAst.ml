@@ -148,11 +148,14 @@ type expr =
           The integer is the level of the sub-abstraction that we ended. *)
   | EvalGlobal of global_decl_id * generic_args * symbolic_value * expr
       (** Evaluate a global to a fresh symbolic value *)
-  | Assertion of (Contexts.eval_ctx[@opaque]) * tvalue * expr
+  | Assertion of (Contexts.eval_ctx[@opaque]) * bool * tvalue * expr
       (** An assertion.
 
           The context is the evaluation context from after evaluating the
-          asserted value. It has the same purpose as for the {!Return} case. *)
+          asserted value. It has the same purpose as for the {!Return} case.
+
+          The boolean is the expected value (the [tvalue] should evaluate to
+          this boolean for the assertion to succeed). *)
   | Expansion of mplace option * symbolic_value * expansion
       (** Expansion of a symbolic value.
 

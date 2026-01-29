@@ -224,6 +224,13 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx)
   let ctx = ctx_push_uninitialized_var span ctx ret_var in
   (* Push the input variables (initialized with symbolic values) *)
   let input_values = List.map mk_tvalue_from_symbolic_value input_svs in
+  [%ldebug
+    "input vars and values:\n"
+    ^ String.concat "\n"
+        (List.map
+           (fun ((var, value) : local * tvalue) ->
+             local_to_string ctx var ^ " -> " ^ tvalue_to_string ctx value)
+           (List.combine input_vars input_values))];
   let ctx = ctx_push_vars span ctx (List.combine input_vars input_values) in
   (* Push the remaining local variables (initialized with ⊥) *)
   let ctx = ctx_push_uninitialized_vars span ctx local_vars in
@@ -373,6 +380,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
   let ctx, input_svs, inst_sg =
     initialize_symbolic_context_for_fun ctx marked_ids fdef
   in
+  [%ltrace "initial context:\n" ^ eval_ctx_to_string ctx];
 
   let regions_hierarchy =
     RegionsHierarchy.compute_regions_hierarchy_for_sig (Some span) ctx.crate

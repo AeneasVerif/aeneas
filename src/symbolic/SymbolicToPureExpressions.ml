@@ -194,7 +194,8 @@ let rec translate_expr (e : S.expr) (ctx : bs_ctx) : texpr =
       translate_end_abs ectx abs abs_level e ctx
   | EvalGlobal (gid, generics, sv, e) ->
       translate_global_eval gid generics sv e ctx
-  | Assertion (ectx, v, e) -> translate_assertion ectx v e ctx
+  | Assertion (ectx, expected, v, e) ->
+      translate_assertion ectx expected v e ctx
   | Expansion (p, sv, exp) -> translate_expansion p sv exp ctx
   | IntroSymbolic (ectx, p, sv, v, e) ->
       translate_intro_symbolic ectx p sv v e ctx
@@ -1151,11 +1152,12 @@ and translate_global_eval (gid : A.GlobalDeclId.id) (generics : T.generic_args)
   let e = translate_expr e ctx in
   [%add_loc] mk_closed_checked_let ctx false (mk_tpat_from_fvar None var) gval e
 
-and translate_assertion (ectx : C.eval_ctx) (v : V.tvalue) (e : S.expr)
-    (ctx : bs_ctx) : texpr =
+and translate_assertion (ectx : C.eval_ctx) (expected : bool) (v : V.tvalue)
+    (e : S.expr) (ctx : bs_ctx) : texpr =
   let next_e = translate_expr e ctx in
   let monadic = true in
   let v = tvalue_to_texpr ctx ectx v in
+  let v = if expected then v else mk_bool_not v in
   let args = [ v ] in
   let func =
     { id = FunOrOp (Fun (Pure Assert)); generics = empty_generic_args }

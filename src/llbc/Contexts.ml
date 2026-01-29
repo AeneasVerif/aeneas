@@ -217,6 +217,9 @@ let var_to_binder (var : local) : real_var_binder =
 let local_erase_body_regions (var : local) : local =
   { var with local_ty = TypesUtils.ty_erase_body_regions var.local_ty }
 
+let local_erase_regions (var : local) : local =
+  { var with local_ty = TypesUtils.ty_erase_regions var.local_ty }
+
 (** Update a variable's value in an evaluation context.
 
     This is a helper function: it can break invariants and doesn't perform any

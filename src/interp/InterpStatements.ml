@@ -175,10 +175,10 @@ let eval_assertion (config : config) (span : Meta.span) (assertion : assertion)
          * (see below). *)
         let ctx =
           apply_symbolic_expansion_non_borrow span sv ctx
-            (SeLiteral (VBool true))
+            (SeLiteral (VBool assertion.expected))
         in
         (* Add the synthesized assertion *)
-        ((ctx, Unit), S.synthesize_assertion ctx v)
+        ((ctx, Unit), S.synthesize_assertion ctx assertion.expected v)
     | _ ->
         [%craise] span
           ("Expected a boolean, got: "

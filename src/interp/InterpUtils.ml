@@ -36,6 +36,7 @@ let tavalue_to_string = Print.EvalCtx.tavalue_to_string
 let tevalue_to_string = Print.EvalCtx.tevalue_to_string
 let tepat_to_string = Print.EvalCtx.tepat_to_string
 let place_to_string = Print.EvalCtx.place_to_string
+let local_to_string = Print.EvalCtx.local_to_string
 let operand_to_string = Print.EvalCtx.operand_to_string
 let fun_sig_to_string = Print.EvalCtx.fun_sig_to_string
 let inst_fun_sig_to_string = Print.EvalCtx.inst_fun_sig_to_string
