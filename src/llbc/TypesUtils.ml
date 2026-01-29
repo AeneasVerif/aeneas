@@ -64,8 +64,13 @@ let ty_is_supported (_span : Meta.span option)
   true
 
 (* Refresh the regions appearing inside a type, and introduce
-   fresh regions for its erased regions *)
+   fresh regions for its erased regions.
+
+   If [live_regions] is provided we only refresh the live regions (i.e., the
+   regions appearing in the set).
+*)
 let ty_refresh_regions (span : Meta.span option)
+    ?(region_is_live : (region_id -> bool) option = None)
     (fresh_region : unit -> region_id) (ty : ty) : region_id list * ty =
   let fresh_regions = ref [] in
   let fresh_region () =
@@ -73,14 +78,21 @@ let ty_refresh_regions (span : Meta.span option)
     fresh_regions := rid :: !fresh_regions;
     rid
   in
+  let region_is_live =
+    match region_is_live with
+    | None -> fun _ -> true
+    | Some region_is_live -> region_is_live
+  in
   let regions_map = ref RegionId.Map.empty in
   let get_region rid =
-    match RegionId.Map.find_opt rid !regions_map with
-    | Some id -> id
-    | None ->
-        let nid = fresh_region () in
-        regions_map := RegionId.Map.add rid nid !regions_map;
-        nid
+    if region_is_live rid then (
+      match RegionId.Map.find_opt rid !regions_map with
+      | Some id -> id
+      | None ->
+          let nid = fresh_region () in
+          regions_map := RegionId.Map.add rid nid !regions_map;
+          nid)
+    else rid
   in
   let visitor =
     object

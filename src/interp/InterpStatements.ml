@@ -916,7 +916,9 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
     and right branches). *)
 and eval_switch_prepare (_config : config) (span : Meta.span) (_switch : switch)
     : cm_fun =
- fun ctx -> InterpJoin.prepare_ashared_loans span None ~with_abs_conts:true ctx
+ fun ctx ->
+  InterpJoin.reborrow_ashared_loans_symbolic_borrows span None
+    ~with_abs_conts:true ctx
 
 and eval_switch_raw (config : config) (span : Meta.span) (switch : switch) :
     stl_cm_fun =

@@ -41,6 +41,7 @@ type 'p g_type_info = {
   has_regions : bool;
   mut_regions : RegionId.Set.t;
       (** The set of regions used in mutable borrows *)
+  is_rec : bool;  (** This field is only meaningful for type definitions *)
 }
 [@@deriving show]
 
@@ -81,25 +82,26 @@ let type_decl_is_tuple_struct (x : type_decl) : bool =
   | Struct fields -> List.for_all (fun f -> f.field_name = None) fields
   | _ -> false
 
-let initialize_g_type_info (is_tuple_struct : bool) (has_regions : bool)
-    (param_infos : 'p) : 'p g_type_info =
+let initialize_g_type_info (is_tuple_struct : bool) ~(is_rec : bool)
+    ~(has_regions : bool) (param_infos : 'p) : 'p g_type_info =
   {
     borrows_info = type_borrows_info_init;
     is_tuple_struct;
     param_infos;
     mut_regions = RegionId.Set.empty;
+    is_rec;
     has_regions;
   }
 
-let initialize_type_decl_info (is_rec : bool) (def : type_decl) : type_decl_info
-    =
+let initialize_type_decl_info ~(is_rec : bool) (def : type_decl) :
+    type_decl_info =
   let param_info = { under_borrow = false; under_mut_borrow = false } in
   let param_infos = List.map (fun _ -> param_info) def.generics.types in
   let is_tuple_struct =
     !Config.use_tuple_structs && (not is_rec) && type_decl_is_tuple_struct def
   in
   let has_regions = List.length def.generics.regions > 0 in
-  initialize_g_type_info is_tuple_struct has_regions param_infos
+  initialize_g_type_info is_tuple_struct ~is_rec ~has_regions param_infos
 
 let type_decl_info_to_partial_type_info (info : type_decl_info) :
     partial_type_info =
@@ -108,6 +110,7 @@ let type_decl_info_to_partial_type_info (info : type_decl_info) :
     is_tuple_struct = info.is_tuple_struct;
     param_infos = Some info.param_infos;
     mut_regions = info.mut_regions;
+    is_rec = info.is_rec;
     has_regions = info.has_regions;
   }
 
@@ -118,6 +121,7 @@ let partial_type_info_to_type_decl_info (info : partial_type_info) :
     is_tuple_struct = info.is_tuple_struct;
     param_infos = Option.get info.param_infos;
     mut_regions = info.mut_regions;
+    is_rec = info.is_rec;
     has_regions = info.has_regions;
   }
 
@@ -453,7 +457,7 @@ let analyze_type_declaration_group (type_decls : type_decl TypeDeclId.Map.t)
     List.fold_left
       (fun infos (def : type_decl) ->
         TypeDeclId.Map.add def.def_id
-          (initialize_type_decl_info is_rec def)
+          (initialize_type_decl_info ~is_rec def)
           infos)
       infos decl_defs
   in
@@ -520,7 +524,9 @@ let analyze_ty (span : Meta.span option) (infos : type_infos) (ty : ty) :
   (* We don't use [updated] but need to give it as parameter *)
   let updated = ref false in
   (* We don't need to compute whether the type contains 'static or not *)
-  let ty_info = initialize_g_type_info false false None in
+  let ty_info =
+    initialize_g_type_info false ~is_rec:false ~has_regions:false None
+  in
   let ty_info = analyze_full_ty span updated infos ty_info ty in
   (* Convert the ty_info *)
   partial_type_info_to_ty_info ty_info

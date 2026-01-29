@@ -721,13 +721,8 @@ let greedy_expand_symbolics_with_borrows (span : Meta.span) : cm_fun =
                     "Attempted to greedily expand an alias or opaque type"
               | Union _ -> [%craise] span "Unions are not supported"
             end;
-            (* Also, we need to check if the definition is recursive *)
-            if ctx_type_decl_is_rec ctx def_id then
-              [%craise] span
-                ("Attempted to greedily expand a recursive definition (option \
-                  [greedy_expand_symbolics_with_borrows] of [config]): "
-                ^ name_to_string ctx def.item_meta.name)
-            else expand_symbolic_value_no_branching span sv None ctx
+            (* *)
+            expand_symbolic_value_no_branching span sv None ctx
         | TAdt { id = TTuple | TBuiltin TBox; _ } | TRef (_, _, _) ->
             (* Ok *)
             expand_symbolic_value_no_branching span sv None ctx

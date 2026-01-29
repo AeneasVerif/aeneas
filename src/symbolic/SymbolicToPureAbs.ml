@@ -227,7 +227,10 @@ let abs_to_input_output_tys (ctx : bs_ctx) (abs : V.abs) : ty list * ty list =
     The result is [None] if the type is actually [unit].
 
     Remark: there shouldn't be any ended loans in this continuation. Also note
-    that we flatten the values. *)
+    that we flatten the values.
+
+    TODO: the result is incorrect if the loans have been partially ended (in
+    particular, inside ADTs). *)
 let abs_to_ty (ctx : bs_ctx) (abs : V.abs) : ty option =
   let inputs, outputs = abs_to_input_output_tys ctx abs in
   if inputs = [] && outputs = [] then None
@@ -790,8 +793,8 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
         | V.EEndedProjLoans { proj = msv; consumed = []; borrows = [] } ->
             (* The symbolic value was left unchanged.
 
-         We're using the projection type as the type of the symbolic value -
-         it doesn't really matter. *)
+               We're using the projection type as the type of the symbolic value -
+               it doesn't really matter. *)
             let msv : V.symbolic_value = { sv_id = msv; sv_ty = input.ty } in
             let out = Some (symbolic_value_to_texpr ctx msv) in
             (ctx, false, out)

@@ -1037,12 +1037,17 @@ and switch_to_string ?(span : Meta.span option = None) (env : fmt_env)
       "if " ^ scrut ^ "\n" ^ indent ^ "then\n" ^ indent1 ^ e_true ^ "\n"
       ^ indent ^ "else\n" ^ indent1 ^ e_false
   | Match branches ->
-      let branch_to_string (b : match_branch) : string =
-        let env, pat = tpat_to_string_aux span env b.pat in
-        indent ^ "| " ^ pat ^ " ->\n" ^ indent1 ^ e_to_string env b.branch
+      let branches =
+        List.map (match_branch_to_string ~span env indent indent_incr) branches
       in
-      let branches = List.map branch_to_string branches in
       "match " ^ scrut ^ " with\n" ^ String.concat "\n" branches
+
+and match_branch_to_string ?(span : Meta.span option = None) (env : fmt_env)
+    (indent : string) (indent_incr : string) (b : match_branch) : string =
+  let indent1 = indent ^ indent_incr in
+  let e_to_string env = texpr_to_string ~span env false indent1 indent_incr in
+  let env, pat = tpat_to_string_aux span env b.pat in
+  indent ^ "| " ^ pat ^ " ->\n" ^ indent1 ^ e_to_string env b.branch
 
 and struct_update_to_string ?(span : Meta.span option = None) (env : fmt_env)
     (indent : string) (indent_incr : string) (supd : struct_update) : string =

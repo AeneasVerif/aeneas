@@ -263,10 +263,15 @@ let symbolic_value_is_greedily_expandable (span : Meta.span option)
         let def = TypeDeclId.Map.find id type_decls in
         begin
           match def.kind with
-          | Struct _ | Enum ([] | [ _ ]) ->
-              (* Structure or enumeration with <= 1 variant *)
-              true
-          | Enum (_ :: _) | Alias _ | Opaque | TDeclError _ | Union _ ->
+          | Struct _ | Enum [] ->
+              (* Structure or enumeration with 0 variants *) true
+          | Enum [ _ ] -> (
+              (* Non-recursive enumeration with 1 variant *)
+              let info = TypeDeclId.Map.find_opt id type_infos in
+              match info with
+              | None -> [%internal_error_opt_span] span
+              | Some info -> not info.is_rec)
+          | Enum _ | Alias _ | Opaque | TDeclError _ | Union _ ->
               (* Enumeration with > 1 variants *)
               false
         end

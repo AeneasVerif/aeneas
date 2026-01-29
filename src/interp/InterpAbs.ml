@@ -2596,6 +2596,16 @@ let project_context (span : Meta.span) (fixed_aids : AbsId.Set.t)
 
 let add_abs_cont_to_abs span (ctx : eval_ctx) (abs : abs) (abs_fun : abs_fun) :
     abs =
+  [%ltrace "- abs:\n" ^ abs_to_string span ctx abs];
+  (* We need to destructure the abs, otherwise when translating the abs as a
+     continuation it is tricky to compute its type when some loans have been
+     ended but not others (in particular, it is tricky if we have an ADT
+     containing partially ended loans) *)
+  let abs =
+    destructure_abs span abs.kind ~can_end:abs.can_end
+      ~destructure_shared_values:true ctx abs
+  in
+  [%ldebug "- abs after destructure:\n" ^ abs_to_string span ctx abs];
   (* Retrieve the *mutable* borrows/loans from the abstraction values *)
   let borrows : tevalue list ref = ref [] in
   let loans : tevalue list ref = ref [] in

@@ -394,7 +394,7 @@ let eval_loop_symbolic (config : config) (span : span)
         [%craise] span
           "(Infinite) loops which do not contain breaks are not supported yet"
     | Single ->
-        [%ltrace "No break context"];
+        [%ltrace "Single break"];
         (None, None)
     | Multiple (break_ctx, break_abs) ->
         let break_input_abs_ids =
@@ -505,8 +505,8 @@ let eval_loop (config : config) (span : span) (eval_loop_body : stl_cm_fun) :
          (when joining environments, or checking that two environments are
          equivalent).
 
-         We thus call {!prepare_ashared_loans} once *before* diving into
-         the loop, to make sure the shared values are deconstructed.
+         We thus call {!reborrow_ashared_loans_symbolic_mutable_borrows} once
+         *before* diving into the loop, to make sure the shared values are deconstructed.
 
          Note that we will call this function again inside {!eval_loop_symbolic},
          to introduce fresh, non-fixed abstractions containing the shared values
@@ -518,7 +518,9 @@ let eval_loop (config : config) (span : span) (eval_loop_body : stl_cm_fun) :
          *non-fixed* abstractions.
       *)
       let ctx, cc =
-        comp cc (prepare_ashared_loans span None ~with_abs_conts:true ctx)
+        comp cc
+          (reborrow_ashared_loans_symbolic_borrows span None
+             ~with_abs_conts:true ctx)
       in
       let (ctx, res), cc =
         comp cc (eval_loop_symbolic config span eval_loop_body ctx)

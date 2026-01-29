@@ -14,7 +14,8 @@ open InterpMatchCtxs
 (** The local logger *)
 let log = Logging.join_log
 
-let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
+(** Auxiliary helper for [reborrow_ashared_loans_symbolic_mutable_borrows] *)
+let reborrow_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
     ~(with_abs_conts : bool) : cm_fun =
  fun ctx0 ->
   let ctx = ctx0 in
@@ -102,7 +103,7 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
     [%sanity_check] span (abs.original_parents = []);
 
     (* Introduce the new abstraction for the shared values *)
-    [%cassert] span (ty_no_regions sv.ty) "Nested borrows are not supported yet";
+    [%cassert] span (ty_no_regions sv.ty) "Unimplemented";
     let rty = sv.ty in
 
     (* Create the shared loan child *)
@@ -221,9 +222,207 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
   [%ldebug "resulting ctx:\n" ^ eval_ctx_to_string ctx];
   (ctx, cf)
 
-let prepare_ashared_loans_no_synth (span : Meta.span) (loop_id : LoopId.id)
-    ~(with_abs_conts : bool) (ctx : eval_ctx) : eval_ctx =
-  fst (prepare_ashared_loans span (Some loop_id) ~with_abs_conts ctx)
+(** Auxiliary helper for [reborrow_ashared_loans_symbolic_borrows] *)
+let reborrow_symbolic_borrows (span : Meta.span) (loop_id : LoopId.id option)
+    ~(with_abs_conts : bool) : cm_fun =
+ fun ctx0 ->
+  let ctx = ctx0 in
+  [%ldebug "ctx0:\n" ^ eval_ctx_to_string ctx];
+
+  (* Compute the set of symbolic loans which appear in the frozen abstractions
+     (we call them the "frozen loans"), so that we can filter the borrows that
+     we reborrow. *)
+  let absl =
+    List.filter_map
+      (function
+        | EBinding _ | EFrame -> None
+        | EAbs abs when not abs.can_end -> Some abs
+        | EAbs _ -> None)
+      ctx.env
+  in
+
+  (* *)
+  let frozen_loans = ref SymbolicValueId.Set.empty in
+  let visitor =
+    object
+      inherit [_] iter_abs as super
+      method! visit_tevalue _ _ = ()
+
+      method! visit_AProjLoans abs proj =
+        frozen_loans := SymbolicValueId.Set.add proj.proj.sv_id !frozen_loans;
+        super#visit_AProjLoans abs proj
+    end
+  in
+  List.iter (fun abs -> visitor#visit_abs abs abs) absl;
+
+  (* Introduce the reborrows *)
+  (* The fresh abstractions we introduce for the reborrows *)
+  let fresh_absl = ref [] in
+  (* The substitution from old symbolic values to fresh symbolic values *)
+  let sid_subst = ref [] in
+
+  (* Auxiliary function to create new abstractions for a symbolic borrow *)
+  let push_abs_for_symbolic_borrow (sv : symbolic_value) : value =
+    (* Create a fresh symbolic value *)
+    let nsid = ctx.fresh_symbolic_value_id () in
+
+    (* Refresh the regions appearing in the symbolic value *)
+    let region_is_live rid = not (RegionId.Set.mem rid ctx.ended_regions) in
+    let region_is_live = Some region_is_live in
+    let fresh_regions, ty =
+      ty_refresh_regions (Some span) ~region_is_live ctx.fresh_region_id
+        sv.sv_ty
+    in
+
+    (* Introduce the fresh regions *)
+    let push_abs (nrid : RegionId.id) =
+      let rty = ty in
+
+      (* Create the symbolic borrow *)
+      let borrow : tavalue =
+        let proj =
+          AProjBorrows
+            { proj = { sv_id = sv.sv_id; proj_ty = rty }; loans = [] }
+        in
+        let value = ASymbolic (PNone, proj) in
+        { value; ty = rty }
+      in
+
+      (* Create the symbolic loan *)
+      let loan : tavalue =
+        let value =
+          AProjLoans
+            {
+              proj = { sv_id = nsid; proj_ty = rty };
+              consumed = [];
+              borrows = [];
+            }
+        in
+        { value = ASymbolic (PNone, value); ty = rty }
+      in
+
+      (* Create the abstraction *)
+      let avalues = [ borrow; loan ] in
+      let kind : abs_kind =
+        match loop_id with
+        | Some loop_id -> Loop loop_id
+        | None -> WithCont
+      in
+      let can_end = true in
+      let regions : abs_regions = { owned = RegionId.Set.singleton nrid } in
+      let cont : abs_cont option =
+        if with_abs_conts then
+          (* Create the symbolic borrow. We introduce borrows/loans only if the
+             region projects *mutable* borrows/loans. *)
+          if
+            ty_has_mut_borrow_for_region_in_set ctx.type_ctx.type_infos
+              (RegionId.Set.singleton nrid)
+              rty
+          then
+            let borrow : tevalue =
+              let value =
+                EProjBorrows
+                  { proj = { sv_id = sv.sv_id; proj_ty = rty }; loans = [] }
+              in
+              { value = ESymbolic (PNone, value); ty = rty }
+            in
+
+            (* Create the symbolic loan *)
+            let value =
+              EProjLoans
+                {
+                  proj = { sv_id = nsid; proj_ty = rty };
+                  consumed = [];
+                  borrows = [];
+                }
+            in
+            let loan : tevalue =
+              { value = ESymbolic (PNone, value); ty = rty }
+            in
+            Some { output = Some borrow; input = Some loan }
+          else
+            Some
+              {
+                output = Some (mk_etuple ~borrow_proj:true []);
+                input = Some (mk_etuple ~borrow_proj:false []);
+              }
+        else None
+      in
+      let fresh_abs =
+        {
+          abs_id = ctx.fresh_abs_id ();
+          kind;
+          can_end;
+          parents = AbsId.Set.empty;
+          original_parents = [];
+          ended_subabs = AbsLevelSet.empty;
+          regions;
+          avalues;
+          cont;
+        }
+      in
+      fresh_absl := fresh_abs :: !fresh_absl
+    in
+
+    List.iter push_abs fresh_regions;
+
+    let nsv : symbolic_value = { sv_id = nsid; sv_ty = ty } in
+    sid_subst := (sv, nsv) :: !sid_subst;
+    VSymbolic nsv
+  in
+
+  (* Explore the mutable borrows in the environment, and introduce
+     fresh abstractions with reborrows.
+
+     We simply explore the context and call {!push_abs_for_symbolic_mut_borrow}
+     when necessary.
+  *)
+  let visitor =
+    object
+      inherit [_] map_eval_ctx_regular_order as super
+      method! visit_abs _ abs = (* Do not explore region abstractions *) abs
+
+      method! visit_VSymbolic env sv =
+        (* Check if the corresponding borrows appear in a frozen region abstraction *)
+        if SymbolicValueId.Set.mem sv.sv_id !frozen_loans then
+          (* Introduce a reborrow *)
+          push_abs_for_symbolic_borrow sv
+        else super#visit_VSymbolic env sv
+    end
+  in
+  let ctx = visitor#visit_eval_ctx () ctx in
+
+  (* Add the abstractions *)
+  let fresh_absl = List.map (fun abs -> EAbs abs) !fresh_absl in
+  let ctx = { ctx with env = List.append fresh_absl ctx.env } in
+
+  (* Synthesize *)
+  let cf e =
+    (* Add the let-bindings which introduce the fresh symbolic values *)
+    List.fold_left
+      (fun e (sv, nsv) ->
+        let sv = mk_tvalue_from_symbolic_value sv in
+        SymbolicAst.IntroSymbolic (ctx, None, nsv, VaSingleValue sv, e))
+      e !sid_subst
+  in
+  Invariants.check_invariants span ctx;
+  [%ldebug "resulting ctx:\n" ^ eval_ctx_to_string ctx];
+  (ctx, cf)
+
+let reborrow_ashared_loans_symbolic_borrows (span : Meta.span)
+    (loop_id : LoopId.id option) ~(with_abs_conts : bool) : cm_fun =
+ fun ctx0 ->
+  let ctx = ctx0 in
+  [%ldebug "ctx0:\n" ^ eval_ctx_to_string ctx];
+  let ctx, cc = reborrow_ashared_loans span loop_id ~with_abs_conts ctx in
+
+  comp cc (reborrow_symbolic_borrows span loop_id ~with_abs_conts ctx)
+
+let reborrow_ashared_loans_symbolic_borrows_no_synth (span : Meta.span)
+    (loop_id : LoopId.id) ~(with_abs_conts : bool) (ctx : eval_ctx) : eval_ctx =
+  fst
+    (reborrow_ashared_loans_symbolic_borrows span (Some loop_id) ~with_abs_conts
+       ctx)
 
 (* TODO: this could be drastically simplified. *)
 let compute_ctx_fresh_ordered_symbolic_values (span : Meta.span)
