@@ -469,7 +469,6 @@ let names_maps_add_function (id_to_string : id -> string)
 
 let bool_name () = if backend () = Lean then "Bool" else "bool"
 let char_name () = if backend () = Lean then "Char" else "char"
-let str_name () = if backend () = Lean then "String" else "string"
 
 (** Small helper to compute the name of an int type *)
 let int_name (int_ty : integer_type) : string =
@@ -1109,7 +1108,7 @@ let builtin_adts () : (builtin_ty * string) list =
         (TFuel, if backend () = HOL4 then "num" else "nat");
         (TArray, "array");
         (TSlice, "slice");
-        (TStr, "string");
+        (TStr, "str");
         (TRawPtr Mut, "mut_raw_ptr");
         (TRawPtr Const, "const_raw_ptr");
       ]
@@ -1252,8 +1251,6 @@ let initialize_names_maps () : names_maps =
   let mk_int_name s = prefix ^ int_name s in
   let int_names = List.map mk_int_name T.all_int_types in
   let keywords =
-    (* Remark: we don't put "str_name()" below because it clashes with
-       "alloc::string::String", which we register elsewhere. *)
     List.concat [ [ bool_name (); char_name () ]; int_names; init.keywords ]
   in
   let names_set = StringSet.empty in
