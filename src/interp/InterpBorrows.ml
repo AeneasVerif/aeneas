@@ -149,7 +149,11 @@ let end_concrete_borrow_get_borrow_core (span : Meta.span)
             [%sanity_check] span (pm = PNone);
             (* Explore the shared value - we need to update the outer borrows *)
             let souter = update_outer_borrow outer (SharedLoan bid) in
-            let v = self#visit_tvalue souter v in
+            (* Also note that we are diving into a shared **loan**: we can forget
+               about the region abstraction when diving into the shared value
+               (because we can end a loan without ending the region abstraction
+               itself) *)
+            let v = self#visit_tvalue { souter with abs_id = None } v in
             (* Explore the child avalue - we keep the same outer borrows *)
             let av = self#visit_tavalue outer av in
             (* Reconstruct *)
@@ -158,7 +162,18 @@ let end_concrete_borrow_get_borrow_core (span : Meta.span)
             let given_back = self#visit_tavalue (incr_level outer) given_back in
             let child = self#visit_tavalue outer child in
             ALoan (AEndedMutLoan { given_back; child; given_back_meta })
-        | AEndedSharedLoan _
+        | AEndedSharedLoan (sv, av) ->
+            (* We can end the borrows inside the shared value without ending
+             the abstraction itself *)
+            let sv =
+              self#visit_tvalue
+                { outer with abs_id = None; borrow_loan = None }
+                sv
+            in
+            (* Explore the child avalue - we keep the same outer borrows *)
+            let av = self#visit_tavalue outer av in
+            (* Reconstruct *)
+            ALoan (AEndedSharedLoan (sv, av))
         (* The loan has ended, so no need to update the outer borrows *)
         | AIgnoredMutLoan _ (* Nothing special to do *)
         (* Nothing special to do *)
@@ -1261,7 +1276,8 @@ and end_abs_loans (config : config) (span : Meta.span) ~(snapshots : bool)
 and end_abs_borrows (config : config) (span : Meta.span) ~(snapshots : bool)
     (chain : borrow_loan_abs_ids) (abs_id : AbsId.id) (level : int) : cm_fun =
  fun ctx ->
-  [%ltrace "abs_id: " ^ AbsId.to_string abs_id];
+  [%ltrace
+    "abs_id: " ^ AbsId.to_string abs_id ^ ", level: " ^ string_of_int level];
   (* Note that the abstraction mustn't contain any loans *)
   (* We end the borrows, starting with the *inner* ones. This is important
      when considering nested borrows which have the same lifetime.
@@ -1322,7 +1338,7 @@ and end_abs_borrows (config : config) (span : Meta.span) ~(snapshots : bool)
 
       (** We may need to end borrows in "regular" values, because of shared
           values *)
-      method! visit_borrow_content _ bc =
+      method! visit_borrow_content level bc =
         match bc with
         | VSharedBorrow _ | VMutBorrow (_, _) ->
             if check_level level then raise (FoundBorrowContent bc)

@@ -380,6 +380,7 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
   let ctx, input_svs, inst_sg =
     initialize_symbolic_context_for_fun ctx marked_ids fdef
   in
+  [%ltrace "initial context:\n" ^ eval_ctx_to_string ctx];
 
   let regions_hierarchy =
     RegionsHierarchy.compute_regions_hierarchy_for_sig (Some span) ctx.crate

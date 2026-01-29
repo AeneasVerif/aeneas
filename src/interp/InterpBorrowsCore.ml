@@ -1855,7 +1855,7 @@ let get_first_non_ignored_aloan_in_abs (span : Meta.span) (abs : abs)
   in
   (* Explore to find a loan *)
   let visitor =
-    object
+    object (self)
       inherit [_] iter_abs_with_levels as super
       method incr_level level = level + 1
 
@@ -1865,19 +1865,19 @@ let get_first_non_ignored_aloan_in_abs (span : Meta.span) (abs : abs)
             (* Sanity check: projection markers can only appear when we're doing a join *)
             [%sanity_check] span (pm = PNone);
             if check_if_report level then raise (FoundBorrowId bid)
-            else super#visit_AMutLoan level pm bid child
+            else self#visit_AMutLoan level pm bid child
         | ASharedLoan (pm, bid, sv, child) ->
             (* Sanity check: projection markers can only appear when we're doing a join *)
             [%sanity_check] span (pm = PNone);
             if check_if_report level then raise (FoundBorrowId bid)
-            else super#visit_ASharedLoan level pm bid sv child
+            else self#visit_ASharedLoan level pm bid sv child
         | AEndedMutLoan { given_back = _; child = _; given_back_meta = _ }
         | AEndedSharedLoan (_, _)
         | AIgnoredMutLoan (_, _)
         | AEndedIgnoredMutLoan
             { given_back = _; child = _; given_back_meta = _ }
         | AIgnoredSharedLoan _ ->
-            (* Ignore *)
+            (* Dive into the sub-values *)
             super#visit_aloan_content level lc
 
       (** We may need to visit loan contents because of shared values *)
@@ -1889,7 +1889,7 @@ let get_first_non_ignored_aloan_in_abs (span : Meta.span) (abs : abs)
             [%craise] span "Unreachable"
         | VSharedLoan (bid, sv) ->
             if check_if_report level then raise (FoundBorrowId bid)
-            else super#visit_VSharedLoan level bid sv
+            else self#visit_VSharedLoan level bid sv
 
       method! visit_aproj level sproj =
         (match sproj with
@@ -2286,7 +2286,8 @@ let normalize_proj_ty (regions : RegionId.Set.t) (ty : rty) : rty =
   visitor#visit_ty () ty
 
 (** Compute the union of two normalized projection types *)
-let rec norm_proj_tys_union (span : Meta.span) (ty1 : rty) (ty2 : rty) : rty =
+let rec norm_proj_tys_union (span : Meta.span) (ctx : eval_ctx) (ty1 : rty)
+    (ty2 : rty) : rty =
   match (ty1, ty2) with
   | TAdt tref1, TAdt tref2 ->
       [%sanity_check] span (tref1.id = tref2.id);
@@ -2294,7 +2295,7 @@ let rec norm_proj_tys_union (span : Meta.span) (ty1 : rty) (ty2 : rty) : rty =
         {
           id = tref1.id;
           generics =
-            norm_proj_generic_args_union span tref1.generics tref2.generics;
+            norm_proj_generic_args_union span ctx tref1.generics tref2.generics;
         }
   | TVar id1, TVar id2 ->
       [%sanity_check] span (id1 = id2);
@@ -2307,11 +2308,11 @@ let rec norm_proj_tys_union (span : Meta.span) (ty1 : rty) (ty2 : rty) : rty =
       [%sanity_check] span (rk1 = rk2);
       TRef
         ( norm_proj_regions_union span r1 r2,
-          norm_proj_tys_union span ty1 ty2,
+          norm_proj_tys_union span ctx ty1 ty2,
           rk1 )
   | TRawPtr (ty1, rk1), TRawPtr (ty2, rk2) ->
       [%sanity_check] span (rk1 = rk2);
-      TRawPtr (norm_proj_tys_union span ty1 ty2, rk1)
+      TRawPtr (norm_proj_tys_union span ctx ty1 ty2, rk1)
   | TTraitType (tr1, item1), TTraitType (tr2, item2) ->
       [%sanity_check] span (item1 = item2);
       TTraitType (norm_proj_trait_refs_union span tr1 tr2, item1)
@@ -2333,15 +2334,22 @@ let rec norm_proj_tys_union (span : Meta.span) (ty1 : rty) (ty2 : rty) : rty =
       let binder_value =
         {
           is_unsafe = false;
-          inputs = List.map2 (norm_proj_tys_union span) inputs1 inputs2;
-          output = norm_proj_tys_union span output1 output2;
+          inputs = List.map2 (norm_proj_tys_union span ctx) inputs1 inputs2;
+          output = norm_proj_tys_union span ctx output1 output2;
         }
       in
       TFnPtr { binder_regions = []; binder_value }
-  | _ -> [%internal_error] span
+  | TArray (ty0, len0), TArray (ty1, len1) ->
+      [%sanity_check] span (len0 = len1);
+      TArray (norm_proj_tys_union span ctx ty0 ty1, len0)
+  | TSlice ty0, TSlice ty1 -> TSlice (norm_proj_tys_union span ctx ty0 ty1)
+  | _ ->
+      [%ltrace
+        "- ty1: " ^ ty_to_string ctx ty1 ^ "\n- ty2: " ^ ty_to_string ctx ty2];
+      [%internal_error] span
 
-and norm_proj_generic_args_union span (generics1 : generic_args)
-    (generics2 : generic_args) : generic_args =
+and norm_proj_generic_args_union span (ctx : eval_ctx)
+    (generics1 : generic_args) (generics2 : generic_args) : generic_args =
   let {
     regions = regions1;
     types = types1;
@@ -2360,7 +2368,7 @@ and norm_proj_generic_args_union span (generics1 : generic_args)
   in
   {
     regions = List.map2 (norm_proj_regions_union span) regions1 regions2;
-    types = List.map2 (norm_proj_tys_union span) types1 types2;
+    types = List.map2 (norm_proj_tys_union span ctx) types1 types2;
     const_generics =
       List.map2
         (norm_proj_const_generics_union span)
