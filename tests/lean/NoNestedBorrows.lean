@@ -138,17 +138,17 @@ def copy_int (x : Std.I32) : Result Std.I32 := do
 /- [no_nested_borrows::test_unreachable]:
    Source: 'tests/src/no_nested_borrows.rs', lines 133:0-137:1 -/
 def test_unreachable (b : Bool) : Result Unit := do
-  massert b
+  massert (¬ b)
 
 /- [no_nested_borrows::test_panic]:
    Source: 'tests/src/no_nested_borrows.rs', lines 140:0-144:1 -/
 def test_panic (b : Bool) : Result Unit := do
-  massert b
+  massert (¬ b)
 
 /- [no_nested_borrows::test_panic_msg]:
    Source: 'tests/src/no_nested_borrows.rs', lines 148:0-152:1 -/
 def test_panic_msg (b : Bool) : Result Unit := do
-  massert b
+  massert (¬ b)
 
 /- [no_nested_borrows::test_copy_int]:
    Source: 'tests/src/no_nested_borrows.rs', lines 155:0-160:1 -/

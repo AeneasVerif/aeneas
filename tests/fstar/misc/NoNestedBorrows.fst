@@ -5,6 +5,16 @@ open Primitives
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
+(** [core::fmt::Arguments]
+    Source: '/rustc/library/core/src/fmt/mod.rs', lines 716:0-716:24
+    Name pattern: [core::fmt::Arguments] *)
+assume type core_fmt_Arguments_t : Type0
+
+(** [core::fmt::{core::fmt::Arguments<'a>}::from_str]:
+    Source: '/rustc/library/core/src/fmt/mod.rs', lines 815:4-815:59
+    Name pattern: [core::fmt::{core::fmt::Arguments<'a>}::from_str] *)
+assume val core_fmt_Arguments_from_str : str -> result core_fmt_Arguments_t
+
 (** [no_nested_borrows::Pair]
     Source: 'tests/src/no_nested_borrows.rs', lines 6:0-9:1 *)
 type pair_t (t1 : Type0) (t2 : Type0) = { x : t1; y : t2; }
@@ -121,17 +131,17 @@ let copy_int (x : i32) : result i32 =
 (** [no_nested_borrows::test_unreachable]:
     Source: 'tests/src/no_nested_borrows.rs', lines 133:0-137:1 *)
 let test_unreachable (b : bool) : result unit =
-  massert b
+  massert (not b)
 
 (** [no_nested_borrows::test_panic]:
     Source: 'tests/src/no_nested_borrows.rs', lines 140:0-144:1 *)
 let test_panic (b : bool) : result unit =
-  massert b
+  massert (not b)
 
 (** [no_nested_borrows::test_panic_msg]:
     Source: 'tests/src/no_nested_borrows.rs', lines 148:0-152:1 *)
 let test_panic_msg (b : bool) : result unit =
-  massert b
+  if b then Fail Failure else Ok ()
 
 (** [no_nested_borrows::test_copy_int]:
     Source: 'tests/src/no_nested_borrows.rs', lines 155:0-160:1 *)
