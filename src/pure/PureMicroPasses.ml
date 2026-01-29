@@ -687,6 +687,15 @@ let remove_meta (ctx : ctx) (def : fun_decl) : fun_decl =
     ]} *)
 let intro_massert_visitor (_ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
+  let mk_massert scrut =
+    let massert =
+      Qualif { id = FunOrOp (Fun (Pure Assert)); generics = empty_generic_args }
+    in
+    let massert =
+      { e = massert; ty = mk_arrow mk_bool_ty (mk_result_ty mk_unit_ty) }
+    in
+    [%add_loc] mk_app span massert scrut
+  in
   object
     inherit [_] map_expr as super
 
@@ -695,25 +704,20 @@ let intro_massert_visitor (_ctx : ctx) (def : fun_decl) =
       | If (e_true, e_false) ->
           if is_fail_panic e_false.e then begin
             (* Introduce a call to [massert] *)
-            let massert =
-              Qualif
-                {
-                  id = FunOrOp (Fun (Pure Assert));
-                  generics = empty_generic_args;
-                }
-            in
-            let massert =
-              {
-                e = massert;
-                ty = mk_arrow mk_bool_ty (mk_result_ty mk_unit_ty);
-              }
-            in
-            let massert = [%add_loc] mk_app span massert scrut in
+            let massert = mk_massert scrut in
             (* Introduce the let-binding *)
             let monadic = true in
             let pat = mk_ignored_pat mk_unit_ty in
             super#visit_Let env monadic pat massert e_true
           end
+          else if is_fail_panic e_true.e then
+            (* Introduce a call to [massert] (we need to negate the scrutinee) *)
+            let scrut = mk_bool_not scrut in
+            let massert = mk_massert scrut in
+            (* Introduce the let-binding *)
+            let monadic = true in
+            let pat = mk_ignored_pat mk_unit_ty in
+            super#visit_Let env monadic pat massert e_false
           else super#visit_Switch env scrut switch
       | _ -> super#visit_Switch env scrut switch
   end
