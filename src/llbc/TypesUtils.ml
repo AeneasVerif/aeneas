@@ -251,6 +251,15 @@ let ty_erase_body_regions ty =
   in
   visitor#visit_ty () ty
 
+let ty_erase_regions ty =
+  let visitor =
+    object
+      inherit [_] map_ty
+      method! visit_region _ _ = RErased
+    end
+  in
+  visitor#visit_ty () ty
+
 let generic_args_only_erased_regions (x : generic_args) : bool =
   try
     raise_if_not_erased_ty_visitor#visit_generic_args () x;

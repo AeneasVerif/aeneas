@@ -1139,6 +1139,9 @@ module EvalCtx = struct
     let env = eval_ctx_to_fmt_env ctx in
     block_to_string env indent indent_incr e
 
+  let local_to_string (ctx : eval_ctx) (x : local) : string =
+    local_to_string x ^ " : " ^ ty_to_string ctx x.local_ty
+
   let statement_to_string (ctx : eval_ctx) (indent : string)
       (indent_incr : string) (e : statement) : string =
     let env = eval_ctx_to_fmt_env ctx in

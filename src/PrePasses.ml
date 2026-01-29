@@ -34,6 +34,7 @@ let erase_body_regions (crate : crate) (f : fun_decl) : fun_decl =
         x
 
       method! visit_RBody _ _ = RErased
+      method! visit_RVar _ _ = RErased
     end
   in
 
@@ -48,7 +49,7 @@ let erase_body_regions (crate : crate) (f : fun_decl) : fun_decl =
               {
                 body.locals with
                 locals =
-                  List.map Contexts.local_erase_body_regions body.locals.locals;
+                  List.map Contexts.local_erase_regions body.locals.locals;
               };
           }
         in
