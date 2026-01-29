@@ -411,17 +411,20 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Scalar/Fmt.lean", line: 6 *)
     mk_fun "core::fmt::num::{core::fmt::LowerHex<u16>}::fmt"
       "core.fmt.num.LowerHexU16.fmt";
-    (* file: "Aeneas/Std/Core/Fmt.lean", line: 52 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 31 *)
+    mk_fun "core::fmt::{core::fmt::Arguments<'a>}::from_str"
+      "core.fmt.Arguments.from_str";
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 55 *)
     mk_fun "core::fmt::{core::fmt::Debug<&'0 @T>}::fmt"
       "core.fmt.DebugShared.fmt";
-    (* file: "Aeneas/Std/Core/Fmt.lean", line: 64 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 67 *)
     mk_fun "core::fmt::{core::fmt::Debug<()>}::fmt" "core.fmt.DebugUnit.fmt";
-    (* file: "Aeneas/Std/Core/Fmt.lean", line: 58 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 61 *)
     mk_fun "core::fmt::{core::fmt::Debug<bool>}::fmt" "core.fmt.DebugBool.fmt";
-    (* file: "Aeneas/Std/Core/Fmt.lean", line: 45 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 48 *)
     mk_fun "core::fmt::{core::fmt::Formatter<'a>}::write_fmt"
       "core.fmt.Formatter.write_fmt";
-    (* file: "Aeneas/Std/Core/Fmt.lean", line: 39 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 42 *)
     mk_fun "core::fmt::{core::fmt::Formatter<'a>}::write_str"
       "core.fmt.Formatter.write_str";
     (* file: "Aeneas/Std/Core/Discriminant.lean", line: 26 *)
@@ -464,7 +467,7 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Core.lean", line: 95 *)
     mk_fun "core::option::{core::option::Option<@T>}::unwrap_or"
       "core.option.Option.unwrap_or" ~can_fail:false;
-    (* file: "Aeneas/Std/Core/Fmt.lean", line: 70 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 73 *)
     mk_fun "core::result::{core::result::Result<@T, @E>}::expect"
       "core.result.Result.expect";
     (* file: "Aeneas/Std/Core/Fmt.lean", line: 18 *)
@@ -680,10 +683,10 @@ let lean_builtin_trait_decls =
     (* file: "Aeneas/Std/Core/Fmt.lean", line: 13 *)
     mk_trait_decl "core::fmt::Debug" "core.fmt.Debug"
       ~methods:[ ("fmt", "fmt") ];
-    (* file: "Aeneas/Std/Core/Fmt.lean", line: 31 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 34 *)
     mk_trait_decl "core::fmt::Display" "core.fmt.Display"
       ~methods:[ ("fmt", "fmt") ];
-    (* file: "Aeneas/Std/Core/Fmt.lean", line: 35 *)
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 38 *)
     mk_trait_decl "core::fmt::LowerHex" "core.fmt.LowerHex"
       ~methods:[ ("fmt", "fmt") ];
     (* file: "Aeneas/Std/Core/Hash.lean", line: 11 *)

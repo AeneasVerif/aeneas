@@ -28,6 +28,9 @@ def core.fmt.Arguments : Type := Unit
 @[rust_type "core::fmt::rt::Argument"]
 def core.fmt.rt.Argument : Type := Unit
 
+@[rust_fun "core::fmt::{core::fmt::Arguments<'a>}::from_str"]
+def core.fmt.Arguments.from_str : Str → Result core.fmt.Arguments := fun _ => Result.ok ()
+
 @[rust_trait "core::fmt::Display"]
 structure core.fmt.Display (Self : Type) where
   fmt : Self → core.fmt.Formatter → Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter)
