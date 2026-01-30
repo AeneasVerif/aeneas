@@ -102,7 +102,7 @@ def Slice.index_usize {α : Type u} (v: Slice α) (i: Usize) : Result α :=
   | some x => ok x
 
 theorem Slice.eq_iff {α} (s0 s1 : Slice α) : s0 = s1 ↔ s0.val = s1.val := by
-  simp only [Slice, Subtype.eq_iff]
+  simp only [Slice, Subtype.ext_iff]
 
 /- In the theorems below: we don't always need the `∃ ..`, but we use one
    so that `progress` introduces an opaque variable and an equality. This
@@ -161,7 +161,7 @@ theorem Slice.index_mut_usize_spec {α : Type u} [Inhabited α] (v: Slice α) (i
 @[simp]
 theorem Slice.update_index_eq α [Inhabited α] (x : Slice α) (i : Usize) :
   x.set i (x.val[i.val]!) = x := by
-  simp only [Slice, Subtype.eq_iff, set_val_eq, List.set_getElem!]
+  simp only [Slice, Subtype.ext_iff, set_val_eq, List.set_getElem!]
 
 def Slice.subslice {α : Type u} (s : Slice α) (r : Range Usize) : Result (Slice α) :=
   -- TODO: not completely sure here
