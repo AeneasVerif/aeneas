@@ -3,5 +3,5 @@
 Trait declaration: mutually_recursive_traits::Trait1
 Source: Source: 'tests/src/mutually-recursive-traits.rs', lines 5:0-7:1
 Source: 'tests/src/mutually-recursive-traits.rs', lines 5:0-7:1
-Compiler source: symbolic/SymbolicToPure.ml, line 208
+Compiler source: symbolic/SymbolicToPure.ml, line 209
 
