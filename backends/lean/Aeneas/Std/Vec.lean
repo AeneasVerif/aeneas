@@ -110,9 +110,7 @@ def Vec.push {α : Type u} (v : Vec α) (x : α) : Result (Vec α)
 theorem Vec.push_spec {α : Type u} (v : Vec α) (x : α) (h : v.val.length < Usize.max) :
   v.push x ⦃ v1 =>
   v1.val = v.val ++ [x] ⦄ := by
-  rw [push]; simp
-  split <;> simp_all
-  scalar_tac
+  unfold push; grind
 
 @[rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::insert" (keepParams := [true, false])]
 def Vec.insert {α : Type u} (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
@@ -314,7 +312,7 @@ theorem alloc.vec.Vec.resize_spec {T} (cloneInst : core.clone.Clone T)
 theorem alloc.vec.Vec.set_getElem!_eq α [Inhabited α] (x : alloc.vec.Vec α) (i : Usize) :
   x.set i x[i]! = x := by
   simp only [getElem!_Usize_eq]
-  simp only [Vec, set_val_eq, Subtype.eq_iff, List.set_getElem!]
+  simp only [Vec, set_val_eq, Subtype.ext_iff, List.set_getElem!]
 
 @[rust_fun
   "alloc::vec::{core::convert::From<alloc::vec::Vec<@T>, [@T; @N]>}::from" -canFail]

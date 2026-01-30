@@ -65,7 +65,7 @@ partial def elabString (ty : String) (str : String) : String :=
       match str with
       | [] => []
       | c :: str => c :: replace str
-  (replace str.toList).asString
+  String.ofList (replace str.toList)
 
 def elabSpecialName (ty : String) (n : Name) : CommandElabM Name := do
   trace[ScalarElabSubst] "elabSpecialName: {n}"

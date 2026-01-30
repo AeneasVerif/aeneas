@@ -54,8 +54,8 @@ def mkDiscrTreeExtension [Inhabited α] [BEq α] (name : Name := by exact decl_n
   IO (DiscrTreeExtension α) :=
   registerSimplePersistentEnvExtension {
     name          := name,
-    addImportedFn := fun a => a.foldl (fun s a => a.foldl (fun s (k, v) => s.insertCore k v) s) DiscrTree.empty,
-    addEntryFn    := fun s n => s.insertCore n.1 n.2 ,
+    addImportedFn := fun a => a.foldl (fun s a => a.foldl (fun s (k, v) => s.insertKeyValue k v) s) DiscrTree.empty,
+    addEntryFn    := fun s n => s.insertKeyValue n.1 n.2 ,
   }
 
 end Extensions

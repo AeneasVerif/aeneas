@@ -750,7 +750,7 @@ theorem move_elements_loop_spec
 
     progress as ⟨ i' ⟩
     have : i' ≤ alloc.vec.Vec.len (alloc.vec.Vec.set slots i Nil) := by
-      fsimp_all [alloc.vec.Vec.len]; scalar_tac
+      simp_all [alloc.vec.Vec.len]
     have : slots_t_inv (alloc.vec.Vec.set slots i Nil) := by
       fsimp [slots_t_inv] at *
       intro j h0

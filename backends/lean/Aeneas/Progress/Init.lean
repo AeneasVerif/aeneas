@@ -121,7 +121,7 @@ def Extension := SimpleScopedEnvExtension (DiscrTreeKey × Name) Rules
 deriving Inhabited
 
 def Rules.insert (r : Rules) (kv : Array DiscrTree.Key × Name) : Rules :=
-  { rules := r.rules.insertCore kv.fst kv.snd,
+  { rules := r.rules.insertKeyValue kv.fst kv.snd,
     deactivated := r.deactivated.erase kv.snd }
 
 def Rules.erase (r : Rules) (k : Name) : Rules :=
