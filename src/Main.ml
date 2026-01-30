@@ -175,6 +175,10 @@ let () =
       ( "-no-progress-bar",
         Arg.Clear progress_bar,
         " Do not display a progress bar" );
+      ( "-max-error-spans",
+        Arg.Int (fun x -> max_error_spans := x),
+        " Maximum number of local uses of an external definition which \
+         triggered an error that we print (if < 0 we print them all)" );
     ]
   in
 

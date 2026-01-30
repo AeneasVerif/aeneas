@@ -41,8 +41,35 @@ type fun_ctx = {
 }
 [@@deriving show]
 
-type decls_ctx = { crate : crate; type_ctx : type_ctx; fun_ctx : fun_ctx }
+type decls_ctx = {
+  crate : crate;
+  graph_of_uses : Deps.graph_of_uses;
+  type_ctx : type_ctx;
+  fun_ctx : fun_ctx;
+}
 [@@deriving show]
+
+let compute_local_uses_error_message (ctx : decls_ctx) (id : item_id) : string =
+  if not (LlbcAstUtils.AnyDeclIdSet.mem id ctx.graph_of_uses.locals) then
+    let uses = Deps.compute_local_uses ctx.graph_of_uses [ id ] in
+    let uses = Deps.ItemInfoSet.to_list uses in
+    if uses = [] then ""
+    else
+      let n = !Config.max_error_spans in
+      let has_extra = n > 0 && List.length uses > n in
+      let uses = if has_extra then Collections.List.prefix n uses else uses in
+      "\n\nThis definition is (transitively) used at the following locations:\n"
+      ^ String.concat "\n"
+          (List.map
+             (fun (info : Deps.item_info) -> Errors.span_to_string info.span)
+             uses)
+      ^
+      if has_extra then
+        "\n\
+         … (omitted - change the number of displayed spans with \
+         -max-error-spans)"
+      else "" ^ "\n"
+  else ""
 
 (** A reference to a trait associated type *)
 type trait_type_ref = { trait_ref : trait_ref; type_name : string }
