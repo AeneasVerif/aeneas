@@ -1105,8 +1105,8 @@ let collapse_ctx_aux config (span : Meta.span)
   ctx
 
 let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
-    (fresh_abs_kind : abs_kind) (with_abs_conts : bool) (ctx : eval_ctx) :
-    merge_duplicates_funcs =
+    (fresh_abs_kind : abs_kind) ~(recoverable : bool) ~(with_abs_conts : bool)
+    (ctx : eval_ctx) : merge_duplicates_funcs =
   (* Rem.: the merge functions raise exceptions (that we catch). *)
   let module S : MatchJoinState = struct
     let span = span
@@ -1114,6 +1114,7 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
     let nabs = ref []
     let with_abs_conts = with_abs_conts
     let symbolic_to_value = ref SymbolicValueId.Map.empty
+    let recover = recoverable
   end in
   let module JM = MakeJoinMatcher (S) in
   let module M = MakeMatcher (JM) in
@@ -1261,10 +1262,11 @@ let mk_collapse_ctx_merge_duplicate_funs (span : Meta.span)
   }
 
 let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
-    ~(can_end : bool) ~(with_abs_conts : bool) (ctx : eval_ctx)
-    (aid0 : AbsId.id) (aid1 : AbsId.id) : eval_ctx * AbsId.id =
+    ~(can_end : bool) ~(recoverable : bool) ~(with_abs_conts : bool)
+    (ctx : eval_ctx) (aid0 : AbsId.id) (aid1 : AbsId.id) : eval_ctx * AbsId.id =
   let merge_funs =
-    mk_collapse_ctx_merge_duplicate_funs span abs_kind with_abs_conts ctx
+    mk_collapse_ctx_merge_duplicate_funs span abs_kind ~recoverable
+      ~with_abs_conts ctx
   in
   InterpAbs.merge_into_first_abstraction span abs_kind ~can_end ~with_abs_conts
     (Some merge_funs) ctx aid0 aid1
@@ -1273,11 +1275,12 @@ let collapse_ctx config (span : Meta.span)
     ?(sequence : (abs_id * abs_id * abs_id) list ref option = None)
     ?(shared_borrows_seq :
         (abs_id * int * proj_marker * borrow_or_proj * ty) list ref option =
-      None) (fresh_abs_kind : abs_kind) ~(with_abs_conts : bool)
-    (ctx : eval_ctx) : eval_ctx =
+      None) (fresh_abs_kind : abs_kind) ~(recoverable : bool)
+    ~(with_abs_conts : bool) (ctx : eval_ctx) : eval_ctx =
   [%ldebug "Initial ctx:\n" ^ eval_ctx_to_string ctx];
   let merge_funs =
-    mk_collapse_ctx_merge_duplicate_funs span fresh_abs_kind with_abs_conts ctx
+    mk_collapse_ctx_merge_duplicate_funs span fresh_abs_kind ~recoverable
+      ~with_abs_conts ctx
   in
   try
     collapse_ctx_aux config span ~with_abs_conts sequence shared_borrows_seq

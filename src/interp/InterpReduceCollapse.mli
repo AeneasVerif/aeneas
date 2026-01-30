@@ -18,6 +18,7 @@ val merge_into_first_abstraction :
   Meta.span ->
   abs_kind ->
   can_end:bool ->
+  recoverable:bool ->
   with_abs_conts:bool ->
   eval_ctx ->
   abs_id ->
@@ -92,6 +93,7 @@ val collapse_ctx :
   ?shared_borrows_seq:
     (abs_id * int * proj_marker * borrow_or_proj * ty) list ref option ->
   abs_kind ->
+  recoverable:bool ->
   with_abs_conts:bool ->
   eval_ctx ->
   eval_ctx

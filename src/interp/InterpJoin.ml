@@ -602,8 +602,8 @@ let refresh_non_fixed_abs_ids (_span : Meta.span) (fixed_aids : AbsId.Set.t)
   (ctx, !fresh_map)
 
 let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
-    ~(with_abs_conts : bool) (ctx0 : eval_ctx) (ctx1 : eval_ctx) : ctx_or_update
-    =
+    ~(recoverable : bool) ~(with_abs_conts : bool) (ctx0 : eval_ctx)
+    (ctx1 : eval_ctx) : ctx_or_update =
   (* Debug *)
   [%ltrace
     "- ctx0:\n"
@@ -676,6 +676,7 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
     let nabs = nabs
     let with_abs_conts = with_abs_conts
     let symbolic_to_value = symbolic_to_value
+    let recover = recoverable
   end in
   let module JM = MakeJoinMatcher (S) in
   let module M = MakeMatcher (JM) in
@@ -917,7 +918,8 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
 
 let join_ctxs_list (config : config) (span : Meta.span)
     (fresh_abs_kind : abs_kind) ?(preprocess_first_ctx : bool = true)
-    ~(with_abs_conts : bool) (ctxl : eval_ctx list) : eval_ctx list * eval_ctx =
+    ~(recoverable : bool) ~(with_abs_conts : bool) (ctxl : eval_ctx list) :
+    eval_ctx list * eval_ctx =
   (* The list of contexts should be non empty *)
   let ctx0, ctxl =
     match ctxl with
@@ -947,7 +949,9 @@ let join_ctxs_list (config : config) (span : Meta.span)
   *)
   let joined_ctx = ref ctx0 in
   let rec join_one_aux (ctx : eval_ctx) : eval_ctx =
-    match join_ctxs span fresh_abs_kind ~with_abs_conts !joined_ctx ctx with
+    match
+      join_ctxs span fresh_abs_kind ~recoverable ~with_abs_conts !joined_ctx ctx
+    with
     | Ok (nctx, _) ->
         joined_ctx := nctx;
         ctx
@@ -986,7 +990,8 @@ let join_ctxs_list (config : config) (span : Meta.span)
 
     (* Collapse to eliminate the markers *)
     joined_ctx :=
-      collapse_ctx config span fresh_abs_kind ~with_abs_conts !joined_ctx;
+      collapse_ctx config span fresh_abs_kind ~recoverable ~with_abs_conts
+        !joined_ctx;
     [%ltrace
       "join_one: after join-collapse:\n"
       ^ eval_ctx_to_string ~span:(Some span) !joined_ctx];
@@ -1065,7 +1070,7 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
 
   let ctxl', joined_ctx =
     join_ctxs_list config span (Loop loop_id) ~preprocess_first_ctx:false
-      ~with_abs_conts:false (ctx0 :: ctxl)
+      ~recoverable:false ~with_abs_conts:false (ctx0 :: ctxl)
   in
   [%sanity_check] span (List.length ctxl' = List.length ctxl + 1);
   ((List.hd ctxl', List.tl ctxl'), joined_ctx)
@@ -1129,7 +1134,10 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
           we update the context and retry.
        *)
       let rec join_one_aux (ctx : eval_ctx) =
-        match join_ctxs span fresh_abs_kind ~with_abs_conts !joined_ctx ctx with
+        match
+          join_ctxs span fresh_abs_kind ~recoverable:false ~with_abs_conts
+            !joined_ctx ctx
+        with
         | Ok (nctx, _) ->
             joined_ctx := nctx;
             ctx
@@ -1162,7 +1170,8 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
 
         (* Collapse to eliminate the markers *)
         joined_ctx :=
-          collapse_ctx config span fresh_abs_kind ~with_abs_conts !joined_ctx;
+          collapse_ctx config span fresh_abs_kind ~recoverable:false
+            ~with_abs_conts !joined_ctx;
         [%ltrace
           "join_one: after join-collapse:\n"
           ^ eval_ctx_to_string ~span:(Some span) !joined_ctx];
@@ -1335,8 +1344,8 @@ let destructure_shared_loans (span : Meta.span) (fixed_aids : AbsId.Set.t) :
 let match_ctx_with_target (config : config) (span : Meta.span)
     (fresh_abs_kind : abs_kind) (fixed_aids : AbsId.Set.t)
     (fixed_dids : DummyVarId.Set.t) (input_abs : AbsId.id list)
-    (input_svalues : SymbolicValueId.id list) (src_ctx : eval_ctx)
-    (tgt_ctx : eval_ctx) :
+    (input_svalues : SymbolicValueId.id list) ~(recoverable : bool)
+    (src_ctx : eval_ctx) (tgt_ctx : eval_ctx) :
     (eval_ctx * eval_ctx * tvalue SymbolicValueId.Map.t * abs AbsId.Map.t)
     * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Debug *)
@@ -1369,7 +1378,8 @@ let match_ctx_with_target (config : config) (span : Meta.span)
   *)
   let tgt_ctx, cc =
     comp cc
-      (prepare_match_ctx_with_target config span fresh_abs_kind src_ctx tgt_ctx)
+      (prepare_match_ctx_with_target config span fresh_abs_kind ~recoverable
+         src_ctx tgt_ctx)
   in
   [%ltrace
     "Finished preparing the match:" ^ "\n- src_ctx: "
@@ -1405,7 +1415,8 @@ let match_ctx_with_target (config : config) (span : Meta.span)
   (* Join the source context with the target context *)
   let joined_ctx, join_info =
     match
-      join_ctxs span fresh_abs_kind ~with_abs_conts:true src_ctx tgt_ctx
+      join_ctxs span fresh_abs_kind ~recoverable ~with_abs_conts:true src_ctx
+        tgt_ctx
     with
     | Ok x -> x
     | Error _ -> [%craise] span "Could not join the contexts"
@@ -1446,8 +1457,8 @@ let match_ctx_with_target (config : config) (span : Meta.span)
   let add_borrows_seq = ref [] in
   let joined_ctx_not_projected =
     collapse_ctx config span ~sequence:(Some merge_seq)
-      ~shared_borrows_seq:(Some add_borrows_seq) ~with_abs_conts:true
-      fresh_abs_kind joined_ctx
+      ~shared_borrows_seq:(Some add_borrows_seq) ~recoverable
+      ~with_abs_conts:true fresh_abs_kind joined_ctx
   in
   let merge_seq = List.rev !merge_seq in
   (* Update the sequence of shared borrows to introduce: we only want to add
@@ -1652,4 +1663,4 @@ let loop_match_break_ctx_with_target (config : config) (span : Meta.span)
     ^ eval_ctx_to_string tgt_ctx];
 
   match_ctx_with_target config span WithCont fixed_aids fixed_dids fp_input_abs
-    fp_input_svalues src_ctx tgt_ctx
+    fp_input_svalues ~recoverable:false src_ctx tgt_ctx

@@ -141,6 +141,7 @@ val compute_ctx_fresh_ordered_symbolic_values :
 val join_ctxs :
   Meta.span ->
   abs_kind ->
+  recoverable:bool ->
   with_abs_conts:bool ->
   eval_ctx ->
   eval_ctx ->
@@ -165,6 +166,7 @@ val join_ctxs_list :
   Meta.span ->
   abs_kind ->
   ?preprocess_first_ctx:bool ->
+  recoverable:bool ->
   with_abs_conts:bool ->
   eval_ctx list ->
   eval_ctx list * eval_ctx
@@ -351,6 +353,7 @@ val match_ctx_with_target :
   DummyVarId.Set.t ->
   abs_id list ->
   symbolic_value_id list ->
+  recoverable:bool ->
   eval_ctx ->
   eval_ctx ->
   (eval_ctx * eval_ctx * tvalue SymbolicValueId.Map.t * abs AbsId.Map.t)

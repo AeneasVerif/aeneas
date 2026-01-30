@@ -398,7 +398,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
         match (lc0, lc1) with
         | VSharedLoan (id0, sv0), VSharedLoan (id1, sv1) ->
             let sv = match_rec sv0 sv1 in
-            [%cassert] M.span
+            [%cassert_recover] M.recover M.span
               (not (value_has_borrows sv.value))
               "The join of nested borrows is not supported yet";
             M.match_shared_loans match_rec ctx0 ctx1 ty id0 id1 sv
@@ -566,6 +566,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
   (** Small utility *)
   let span = S.span
 
+  let recover = S.recover
   let push_abs (abs : abs) : unit = S.nabs := abs :: !S.nabs
   let push_absl (absl : abs list) : unit = List.iter push_abs absl
 
@@ -954,6 +955,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let sv1 = ctx_lookup_shared_value span ctx1 bid1 in
       let sv = match_rec sv0 sv1 in
 
+      [%sanity_check_recover] S.recover span (ty_is_rty bv_ty);
       let loan = ASharedLoan (PNone, bid2, sv, mk_aignored span bv_ty None) in
       (* Note that an aloan has a borrow type *)
       let loan : tavalue = { value = ALoan loan; ty = borrow_ty } in
@@ -1019,7 +1021,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let mk_aborrow (pm : proj_marker) (bid : borrow_id) (bv : tvalue) :
           tavalue =
         let bv_ty = bv.ty in
-        [%cassert] span (ty_no_regions bv_ty)
+        [%cassert_recover] S.recover span (ty_no_regions bv_ty)
           "Nested borrows are not supported yet";
         let value =
           ABorrow (AMutBorrow (pm, bid, mk_aignored span bv_ty None))
@@ -1424,15 +1426,15 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (ctx0 : eval_ctx) (_ctx1 : eval_ctx) ~(loan_is_left : bool) (ty : ety)
       (lid : loan_id) (shared_value : tvalue) (other : tvalue) : tvalue =
     (* Sanity checks *)
-    [%cassert] span
+    [%cassert_recover] S.recover span
       (not (ety_has_nested_borrows (Some span) ctx0.type_ctx.type_infos ty))
-      "Nested borrows are not supported yet.";
-    [%cassert] span
+      "Unimplemented";
+    [%cassert_recover] S.recover span
       (not
          (ValuesUtils.value_has_loans_or_borrows (Some span)
             ctx0.type_ctx.type_infos shared_value.value))
       "Unimplemented";
-    [%cassert] span
+    [%cassert_recover] S.recover span
       (not
          (ValuesUtils.value_has_loans_or_borrows (Some span)
             ctx0.type_ctx.type_infos other.value))
@@ -1616,6 +1618,7 @@ end
 module MakeCheckEquivMatcher (S : MatchCheckEquivState) : CheckEquivMatcher =
 struct
   let span = S.span
+  let recover = S.recover
 
   module MkGetSetM (Id : Identifiers.Id) = struct
     module Inj = Id.InjSubst
@@ -1979,7 +1982,8 @@ end
 
 let match_ctxs (span : Meta.span) ~(check_equiv : bool)
     ?(check_kind : bool = true) ?(check_can_end : bool = true)
-    (fixed_ids : ids_sets) (lookup_shared_value_in_ctx0 : BorrowId.id -> tvalue)
+    ~(recoverable : bool) (fixed_ids : ids_sets)
+    (lookup_shared_value_in_ctx0 : BorrowId.id -> tvalue)
     (lookup_shared_value_in_ctx1 : BorrowId.id -> tvalue) (ctx0 : eval_ctx)
     (ctx1 : eval_ctx) : ids_maps =
   [%ltrace
@@ -2029,6 +2033,7 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
 
   let module S : MatchCheckEquivState = struct
     let span = span
+    let recover = recoverable
     let check_equiv = check_equiv
     let rid_map = rid_map
     let blid_map = blid_map
@@ -2235,14 +2240,18 @@ let try_match_ctxs (span : Meta.span) ~(check_equiv : bool)
     (ctx1 : eval_ctx) : ids_maps option =
   try
     Some
-      (match_ctxs span ~check_equiv ~check_kind ~check_can_end fixed_ids
-         lookup_shared_value_in_ctx0 lookup_shared_value_in_ctx1 ctx0 ctx1)
+      (match_ctxs span ~check_equiv ~check_kind ~check_can_end ~recoverable:true
+         fixed_ids lookup_shared_value_in_ctx0 lookup_shared_value_in_ctx1 ctx0
+         ctx1)
   with
   | Distinct msg ->
       [%ltrace "distinct: " ^ msg];
       None
   | ValueMatchFailure k ->
       [%ltrace "distinct: ValueMatchFailure" ^ show_updt_env_kind k];
+      None
+  | Errors.RFailure ->
+      [%ltrace "unexpected failure"];
       None
 
 let ctxs_are_equivalent (span : Meta.span) (fixed_ids : ids_sets)
@@ -2253,7 +2262,8 @@ let ctxs_are_equivalent (span : Meta.span) (fixed_ids : ids_sets)
        lookup_shared_value ctx0 ctx1)
 
 let prepare_match_ctx_with_target (config : config) (span : Meta.span)
-    (fresh_abs_kind : abs_kind) (src_ctx : eval_ctx) : cm_fun =
+    ~(recoverable : bool) (fresh_abs_kind : abs_kind) (src_ctx : eval_ctx) :
+    cm_fun =
  fun tgt_ctx ->
   (* Debug *)
   [%ldebug
@@ -2302,6 +2312,7 @@ let prepare_match_ctx_with_target (config : config) (span : Meta.span)
       *)
       let with_abs_conts = false
       let symbolic_to_value = ref SymbolicValueId.Map.empty
+      let recover = recoverable
     end in
     let module JM = MakeJoinMatcher (S) in
     let module M = MakeMatcher (JM) in

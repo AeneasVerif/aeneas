@@ -966,7 +966,12 @@ and eval_switch_raw (config : config) (span : Meta.span) (switch : switch) :
               | [ e_true; e_false ] -> cf_bool (e_true, e_false)
               | _ -> [%internal_error] span
             in
-            if join then eval_switch_with_join config span cc ctx0 ctx_resl
+            if join then
+              try eval_switch_with_join config span cc ctx0 ctx_resl
+              with Errors.RFailure ->
+                (* If the join threw a recoverable error we do not join
+                   and simply duplicate the code *)
+                (ctx_resl, cc)
             else (ctx_resl, cc)
         | _ -> [%craise] span "Inconsistent state"
       in
@@ -1033,7 +1038,11 @@ and eval_switch_raw (config : config) (span : Meta.span) (switch : switch) :
             let cf = cc_comp cc cf in
             if join then
               (* Join the contexts *)
-              eval_switch_with_join config span cf ctx0 resl
+              try eval_switch_with_join config span cf ctx0 resl
+              with Errors.RFailure ->
+                (* If the join threw a recoverable error we do not join
+                   and simply duplicate the code *)
+                (resl, cf)
             else
               (* Do not join the contexts: compose the continuations and continue *)
               (resl, cf)
@@ -1091,7 +1100,11 @@ and eval_switch_raw (config : config) (span : Meta.span) (switch : switch) :
             let ctx_resl, cf = comp_seqs __FILE__ __LINE__ span resl in
             let cc = cc_comp cf_expand cf in
             if join then (* Join the contexts *)
-              eval_switch_with_join config span cc ctx0 ctx_resl
+              try eval_switch_with_join config span cc ctx0 ctx_resl
+              with Errors.RFailure ->
+                (* If the join threw a recoverable error we do not join
+                   and simply duplicate the code *)
+                (ctx_resl, cc)
             else
               (* Compose the continuations *)
               (ctx_resl, cc)
@@ -1157,9 +1170,12 @@ and eval_switch_with_join (config : config) (span : Meta.span)
         (fun (ctx, res) -> if res = Unit then Some ctx else None)
         ctx_resl
     in
+    (* Note that we make the join *recoverable*: if the join fails (because
+       it requires supporting some unsupported case) it is possible to recover
+       from it, in which case we simply duplicate the code after the switch *)
     let _, joined_ctx =
-      InterpJoin.join_ctxs_list config span ~with_abs_conts:true Join
-        ctx_to_join
+      InterpJoin.join_ctxs_list config span ~recoverable:!Config.recover_joins
+        ~with_abs_conts:true Join ctx_to_join
     in
     [%ldebug "Joined ctx:\n" ^ eval_ctx_to_string joined_ctx];
     let ctx0_aids = env_get_abs_ids ctx0.env in
@@ -1206,12 +1222,16 @@ and eval_switch_with_join (config : config) (span : Meta.span)
 
     (* Match every context resulting from evaluating a branch (there should be
        one if no explicit panic was encountered, or 0 it we encountered a panic)
-       with the joined context. *)
+       with the joined context.
+
+       Note that we make the match (and the whole join) recoverable.
+    *)
     let match_ctx (ctx : eval_ctx) : SA.expr =
       (* Match the contexts with the joined context to determine the output of the branch *)
       let (_, ctx, output_values, output_abs), cf =
         InterpJoin.match_ctx_with_target config span WithCont fixed_aids
-          fixed_dids output_abs_ids output_svalue_ids joined_ctx ctx
+          fixed_dids output_abs_ids output_svalue_ids
+          ~recoverable:!Config.recover_joins joined_ctx ctx
       in
 
       let reorder_output_abs (map : abs AbsId.Map.t) (absl : abs_id list) :
