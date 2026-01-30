@@ -126,3 +126,6 @@ let scc_log = create_logger "SCC"
 
 (** Logger for pure/ReorderDecls *)
 let reorder_decls_log = create_logger "ReorderDecls"
+
+(** Logger for Deps *)
+let deps_log = create_logger "Deps"

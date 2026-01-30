@@ -257,7 +257,8 @@ let translate_function_to_pure (trans_ctx : trans_ctx) (marked_ids : marked_ids)
       ("Could not translate the function '" ^ name
      ^ " because of previous error.\nName pattern: '" ^ name_pattern ^ "'"
      ^ "\nDefinition span: "
-      ^ Errors.raw_span_to_string fdef.item_meta.span);
+      ^ Errors.raw_span_to_string fdef.item_meta.span
+      ^ compute_local_uses_error_message trans_ctx (IdFun fdef.def_id));
     None
 
 type translated_crate = {
@@ -312,7 +313,9 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
                 ("Could not translate the global declaration '" ^ name
                ^ " because of previous error\nName pattern: '" ^ name_pattern
                ^ "'" ^ "\nDefinition span: "
-                ^ Errors.raw_span_to_string global.item_meta.span);
+                ^ Errors.raw_span_to_string global.item_meta.span
+                ^ compute_local_uses_error_message trans_ctx
+                    (IdGlobal global.def_id));
               None)
           (GlobalDeclId.Map.values crate.global_decls))
   in
@@ -343,7 +346,9 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
                ("Could not translate the function signature of '" ^ name
               ^ " because of previous error\nName pattern: '" ^ name_pattern
               ^ "'" ^ "\nDefinition span: "
-               ^ Errors.raw_span_to_string fdef.item_meta.span);
+               ^ Errors.raw_span_to_string fdef.item_meta.span
+               ^ compute_local_uses_error_message trans_ctx (IdFun fdef.def_id)
+               );
              None)
          (FunDeclId.Map.values crate.fun_decls))
   in
@@ -403,7 +408,9 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
                 ("Could not translate the trait declaration '" ^ name
                ^ " because of previous error\nName pattern: '" ^ name_pattern
                ^ "'" ^ "\nDefinition span: "
-                ^ Errors.raw_span_to_string d.item_meta.span);
+                ^ Errors.raw_span_to_string d.item_meta.span
+                ^ compute_local_uses_error_message trans_ctx
+                    (IdTraitDecl d.def_id));
               None)
           (TraitDeclId.Map.values trans_ctx.crate.trait_decls))
   in
@@ -433,7 +440,9 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
                 ("Could not translate the trait instance '" ^ name
                ^ " because of previous error\nName pattern: '" ^ name_pattern
                ^ "'" ^ "\nDefinition span: "
-                ^ Errors.raw_span_to_string d.item_meta.span);
+                ^ Errors.raw_span_to_string d.item_meta.span
+                ^ compute_local_uses_error_message trans_ctx
+                    (IdTraitImpl d.def_id));
               None)
           (TraitImplId.Map.values trans_ctx.crate.trait_impls))
   in
@@ -1277,7 +1286,8 @@ let extract_translated_crate (filename : string) (dest_dir : string)
             ("Could not generate names for the type declaration '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
            ^ "\nDefinition span: "
-            ^ Errors.raw_span_to_string def.item_meta.span);
+            ^ Errors.raw_span_to_string def.item_meta.span
+            ^ compute_local_uses_error_message trans_ctx (IdType def.def_id));
           ctx)
       ctx
       (Pure.TypeDeclId.Map.values trans_types)
@@ -1314,7 +1324,9 @@ let extract_translated_crate (filename : string) (dest_dir : string)
             ("Could not generate names for the function declaration '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
            ^ "\nDefinition span: "
-            ^ Errors.raw_span_to_string trans.f.item_meta.span);
+            ^ Errors.raw_span_to_string trans.f.item_meta.span
+            ^ compute_local_uses_error_message trans_ctx (IdFun trans.f.def_id)
+            );
           ctx)
       ctx
       (FunDeclId.Map.values trans_funs)
@@ -1338,7 +1350,8 @@ let extract_translated_crate (filename : string) (dest_dir : string)
             ("Could not generate names for the global declaration '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
            ^ "\nDefinition span: "
-            ^ Errors.raw_span_to_string def.item_meta.span);
+            ^ Errors.raw_span_to_string def.item_meta.span
+            ^ compute_local_uses_error_message trans_ctx (IdGlobal def.def_id));
           ctx)
       ctx trans_globals
   in
@@ -1361,7 +1374,9 @@ let extract_translated_crate (filename : string) (dest_dir : string)
             ("Could not generate names for the trait declaration '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
            ^ "\nDefinition span: "
-            ^ Errors.raw_span_to_string def.item_meta.span);
+            ^ Errors.raw_span_to_string def.item_meta.span
+            ^ compute_local_uses_error_message trans_ctx
+                (IdTraitDecl def.def_id));
           ctx)
       ctx trans_trait_decls
   in
@@ -1384,7 +1399,9 @@ let extract_translated_crate (filename : string) (dest_dir : string)
             ("Could not generate names for the trait implementation '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
            ^ "\nDefinition span: "
-            ^ Errors.raw_span_to_string def.item_meta.span);
+            ^ Errors.raw_span_to_string def.item_meta.span
+            ^ compute_local_uses_error_message trans_ctx
+                (IdTraitImpl def.def_id));
           ctx)
       ctx trans_trait_impls
   in

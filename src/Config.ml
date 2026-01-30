@@ -451,3 +451,8 @@ let use_static = ref false
 
 (** Display a progress bar *)
 let progress_bar = ref true
+
+(** For debugging: when we error on an external definition, we display the list
+    spans where it is transitively used in the local crate. This is the maximum
+    number of spans we print (a negative number means we print all of them) *)
+let max_error_spans = ref 5

@@ -53,6 +53,7 @@ let analyze_type_declarations (crate : crate)
     TypeDeclId.Map.empty decls
 
 let compute_contexts (crate : crate) : decls_ctx =
+  let crate_graph = Deps.compute_graph_of_uses crate in
   let type_decls_list, _, _, _, _, _ = split_declarations crate.declarations in
   let fmt_env : Print.fmt_env =
     Charon.PrintLlbcAst.Crate.crate_to_fmt_env crate
@@ -80,21 +81,26 @@ let compute_contexts (crate : crate) : decls_ctx =
      let group_to_msg (i : int) (g : mixed_declaration_group) : string =
        let ids = g_declaration_group_to_list g in
        let decls = List.map item_id_to_string ids in
-       let local_requires =
-         LlbcAstUtils.find_local_transitive_dep crate (AnyDeclIdSet.of_list ids)
+       (* If the definitions are external, add information about where they
+          are (transitively) used in the local crate *)
+       let local_uses = Deps.compute_local_uses crate_graph ids in
+       let local_uses =
+         List.map
+           (fun (info : Deps.item_info) ->
+             item_id_to_string info.id ^ ": " ^ span_to_string info.span)
+           (Deps.ItemInfoSet.to_list local_uses)
        in
-       let local_requires = List.map span_to_string local_requires in
-       let local_requires =
-         if local_requires <> [] then
+       let local_uses =
+         if local_uses <> [] then
            "\n\n\
             The declarations in this group are (transitively) used at the \
             following location(s):\n"
-           ^ String.concat "\n" local_requires
+           ^ String.concat "\n" local_uses
          else ""
        in
        "# Group "
        ^ string_of_int (i + 1)
-       ^ ":\n" ^ String.concat "\n" decls ^ local_requires
+       ^ ":\n" ^ String.concat "\n" decls ^ local_uses ^ "\n"
      in
      let msgs = List.mapi group_to_msg mixed_groups in
      let msgs = String.concat "\n\n" msgs in
@@ -111,7 +117,7 @@ let compute_contexts (crate : crate) : decls_ctx =
   let fun_infos = FunsAnalysis.analyze_module crate fun_decls in
   let fun_ctx = { fun_decls; fun_infos } in
 
-  { crate; type_ctx; fun_ctx }
+  { crate; graph_of_uses = crate_graph; type_ctx; fun_ctx }
 
 (** Instantiate a function signature for a symbolic execution.
 
@@ -364,21 +370,21 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
     If [synthesize] is [true]: we synthesize the symbolic AST that is used for
     the translation. Otherwise, we do not (the symbolic execution then simply
     borrow-checks the function). *)
-let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
+let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
     (marked_ids : marked_ids) (fdef : fun_decl) :
     symbolic_value list * SA.expr option =
   (* Debug *)
   let span = fdef.item_meta.span in
   let name_to_string () =
     Print.Types.name_to_string
-      (Print.Contexts.decls_ctx_to_fmt_env ctx)
+      (Print.Contexts.decls_ctx_to_fmt_env decls_ctx)
       fdef.item_meta.name
   in
   [%ltrace name_to_string ()];
 
   (* Create the evaluation context *)
   let ctx, input_svs, inst_sg =
-    initialize_symbolic_context_for_fun ctx marked_ids fdef
+    initialize_symbolic_context_for_fun decls_ctx marked_ids fdef
   in
   [%ltrace "initial context:\n" ^ eval_ctx_to_string ctx];
 
@@ -461,6 +467,21 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
       (* Finish synthesizing *)
       if synthesize then Some (cc el) else None
     with CFailure error ->
+      let name = name_to_string () in
+      let name_pattern =
+        try
+          TranslateCore.name_to_pattern_string (Some fdef.item_meta.span)
+            decls_ctx fdef.item_meta.name
+        with CFailure _ ->
+          "(could not compute the name pattern due to a different error)"
+      in
+      let action = if synthesize then "translate" else "borrow-check" in
+      [%save_error_opt_span] error.span
+        ("Could not " ^ action ^ " the body of the function '" ^ name
+       ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
+       ^ "\nDefinition span: "
+        ^ Errors.raw_span_to_string fdef.item_meta.span
+        ^ compute_local_uses_error_message decls_ctx (IdFun fdef.def_id));
       if synthesize then Some (Error (error.span, error.msg)) else None
   in
   (* Return *)

@@ -144,7 +144,8 @@ let translate_type_decls (ctx : Contexts.decls_ctx) : type_decl list =
         in
         [%save_error_opt_span] error.span
           ("Could not translate type decl '" ^ name
-         ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'");
+         ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
+          ^ Contexts.compute_local_uses_error_message ctx (IdType d.def_id));
         None)
     (TypeDeclId.Map.values ctx.type_ctx.type_decls)
 
