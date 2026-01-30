@@ -2,6 +2,7 @@
 
 // TODO: #[derive(Debug)]
 
+#[derive(Debug)]
 enum ScalarEnum {
     Variant0 = 2,
     Variant1 = 4,
