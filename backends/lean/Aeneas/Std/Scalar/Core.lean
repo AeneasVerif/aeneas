@@ -733,7 +733,7 @@ theorem IScalar.eq_equiv_bv_eq {ty : IScalarTy} (x y : IScalar ty) :
 
 theorem IScalar.ofIntCore_bv {ty : IScalarTy} (x : Int) h :
   (@IScalar.ofIntCore ty x h).bv = BitVec.ofInt _ x := by
-  simp only [ofIntCore, BitVec.ofInt, Int.ofNat_eq_coe, Nat.cast_pow, Nat.cast_ofNat]
+  simp only [ofIntCore, BitVec.ofInt, Int.ofNat_eq_natCast, Nat.cast_pow, Nat.cast_ofNat]
   congr
 
 @[simp, simp_scalar_simps, bvify_simps] theorem I8.ofInt_bv (x : Int) h : (I8.ofInt x h).bv = BitVec.ofInt _ x := by apply IScalar.ofIntCore_bv

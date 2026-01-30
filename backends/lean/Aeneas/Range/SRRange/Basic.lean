@@ -53,7 +53,7 @@ universe u v
   have := range.step_pos
   loop range.sizeBound init range.start (by simp)
 
-instance : ForIn' m SRRange Nat inferInstance where
+instance {m} [Monad m] : ForIn' m SRRange Nat inferInstance where
   forIn' := SRRange.forIn'
 
 -- No separate `ForIn` instance is required because it can be derived from `ForIn'`.

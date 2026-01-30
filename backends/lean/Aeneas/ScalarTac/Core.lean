@@ -10,7 +10,7 @@ open Lean Elab Term Meta
 -- TODO: move?
 theorem ne_zero_is_lt_or_gt {x : Int} (hne : x ≠ 0) : x < 0 ∨ x > 0 := by
   cases h: x <;>
-  simp_all only [Int.ofNat_eq_coe, Int.natCast_eq_zero, Int.natCast_pos,
+  simp_all only [Int.ofNat_eq_natCast, Int.natCast_eq_zero, Int.natCast_pos,
     ne_eq, Int.negSucc_ne_zero, not_false_eq_true, Int.negSucc_lt_zero,
     gt_iff_lt, Int.negSucc_not_pos, or_false]
   rename_i n;

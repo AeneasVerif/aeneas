@@ -122,33 +122,18 @@ theorem gtOfRustOrder
 @[simp]
 theorem compare_eq_lt_iff [LinOrd : LinearOrder T] (x y : T) :
   compare x y = Ordering.lt ↔ x < y := by
-  simp_all [LinOrd.compare_eq_compareOfLessAndEq, compareOfLessAndEq]
-  split <;> simp_all
+  grind [LinOrd.compare_eq_compareOfLessAndEq, compareOfLessAndEq]
 
 -- TODO: move to standard library
 @[simp]
 theorem compare_eq_equal_iff [LinOrd : LinearOrder T] (x y : T) :
   compare x y = Ordering.eq ↔ x = y := by
-  simp_all [LinOrd.compare_eq_compareOfLessAndEq, compareOfLessAndEq]
-  split <;> simp_all
-  rw [eq_iff_le_not_lt]
-  tauto
+  grind [LinOrd.compare_eq_compareOfLessAndEq, compareOfLessAndEq]
 
 -- TODO: move to standard library
 @[simp]
 theorem compare_eq_gt_iff [LinOrd : LinearOrder T] (x y : T) :
   compare x y = Ordering.gt ↔ y < x := by
-  simp_all [LinOrd.compare_eq_compareOfLessAndEq, compareOfLessAndEq]
-  split <;> simp_all
-  . rw [lt_iff_le_not_ge] at *; tauto
-  . constructor
-    . intro Hneq
-      apply Std.lt_of_le_of_ne <;> tauto
-    . intro Hlt
-      rw [eq_iff_le_not_lt]
-      simp
-      intro Hle
-      have := Std.le_antisymm Hle
-      simp_all
+  grind [LinOrd.compare_eq_compareOfLessAndEq, compareOfLessAndEq]
 
 end avl

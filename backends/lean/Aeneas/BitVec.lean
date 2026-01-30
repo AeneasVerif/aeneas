@@ -161,7 +161,7 @@ theorem BitVec.getElem!_eq_getElem {w : ℕ} (x : BitVec w) (i : ℕ) (hi : i < 
 @[simp, simp_lists_simps]
 theorem Bool.toNat_ofNat_mod2 (x : ℕ) : (Bool.ofNat (x % 2)).toNat = x % 2 := by
   have := @Nat.mod_lt x 2 (by simp only [zero_lt_two])
-  cases h: x % 2 <;> simp only [ofNat, ne_eq, Nat.add_eq_zero, one_ne_zero, _root_.and_false,
+  cases h: x % 2 <;> simp only [ofNat, ne_eq, Nat.add_eq_zero_iff, one_ne_zero, _root_.and_false,
     not_false_eq_true, _root_.decide_true, toNat_true, right_eq_add,
     not_true_eq_false, _root_.decide_false, toNat_false]
   omega
@@ -277,7 +277,7 @@ theorem BitVec.getElem!_mod_pow2_eq {w} (x : BitVec w) (i j : ℕ) (h : j < i) :
   . -- TODO: scalar_tac +nonLin
     by_cases hw: w = 1
     . simp_all only [one_ne_zero, not_false_eq_true, pow_one, Nat.mod_self]
-      cases i <;> simp_all only [ne_eq, Nat.add_eq_zero, one_ne_zero, and_false, not_false_eq_true,
+      cases i <;> simp_all only [ne_eq, Nat.add_eq_zero_iff, one_ne_zero, and_false, not_false_eq_true,
         zero_pow, Nat.zero_mod, Nat.mod_zero, not_lt_zero']
     . have : 2 < 2^w := by
         have : 2^1 < 2^w := by apply Nat.pow_lt_pow_of_lt <;> omega
@@ -306,7 +306,7 @@ theorem BitVec.getElem!_mod_pow2_false {w} (x : BitVec w) (i j : ℕ) (h : i ≤
   . have hw : w = 0 ∨ w = 1 := by omega
     cases hw <;> simp_all only [pow_zero, Nat.lt_one_iff, zero_le, Nat.zero_mod,
                                 Nat.zero_testBit, pow_one, le_refl, Nat.mod_self]
-    cases i <;> simp_all only [ne_eq, Nat.add_eq_zero, one_ne_zero, and_false, not_false_eq_true,
+    cases i <;> simp_all only [ne_eq, Nat.add_eq_zero_iff, one_ne_zero, and_false, not_false_eq_true,
                                zero_pow, Nat.zero_mod, Nat.mod_zero, zero_le, pow_zero, Nat.mod_succ,
                                Nat.mod_one, Nat.zero_testBit]
     apply Nat.testBit_eq_false_of_lt

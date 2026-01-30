@@ -167,7 +167,7 @@ theorem Array.index_mut_usize_spec {α : Type u} {n : Usize} [Inhabited α] (v: 
 theorem Array.set_getElem!_eq α n [Inhabited α] (x : Array α n) (i : Usize) :
   x.set i (x.val[i.val]!) = x := by
   have := @List.set_getElem_self _ x.val i.val
-  simp only [Array, Subtype.eq_iff, set_val_eq, List.set_getElem!]
+  simp only [Array, Subtype.ext_iff, set_val_eq, List.set_getElem!]
 
 /-- Small helper (this function doesn't model a specific Rust function) -/
 def Array.clone {α : Type u} {n : Usize} (clone : α → Result α) (s : Array α n) : Result (Array α n) := do

@@ -27,13 +27,11 @@ instance : OrdSpecLinearOrderEq OrdI32 where
     simp [LinearOrder.compare_eq_compareOfLessAndEq, compareOfLessAndEq]
     rw [compare, Ord.opposite]
     simp [LinearOrder.compare_eq_compareOfLessAndEq, compareOfLessAndEq]
-    split_ifs with hab hba hba' hab' hba'' _ hba₃ _ <;> (try simp_all) <;> try omega
-    simp at *
+    grind [IScalar.neq_to_neq_val]
   equivalence := fun a b => by
     unfold Ord.cmp
     unfold OrdI32
     unfold OrdI32.cmp
-    simp only []
-    split_ifs <;> simp [Result.ok.injEq, IsEmpty.forall_iff]; tauto; try assumption
+    grind [IScalar.neq_to_neq_val]
 
 end avl
