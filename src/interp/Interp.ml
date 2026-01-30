@@ -370,21 +370,21 @@ let evaluate_function_symbolic_synthesize_backward_from_return (config : config)
     If [synthesize] is [true]: we synthesize the symbolic AST that is used for
     the translation. Otherwise, we do not (the symbolic execution then simply
     borrow-checks the function). *)
-let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
+let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
     (marked_ids : marked_ids) (fdef : fun_decl) :
     symbolic_value list * SA.expr option =
   (* Debug *)
   let span = fdef.item_meta.span in
   let name_to_string () =
     Print.Types.name_to_string
-      (Print.Contexts.decls_ctx_to_fmt_env ctx)
+      (Print.Contexts.decls_ctx_to_fmt_env decls_ctx)
       fdef.item_meta.name
   in
   [%ltrace name_to_string ()];
 
   (* Create the evaluation context *)
   let ctx, input_svs, inst_sg =
-    initialize_symbolic_context_for_fun ctx marked_ids fdef
+    initialize_symbolic_context_for_fun decls_ctx marked_ids fdef
   in
   [%ltrace "initial context:\n" ^ eval_ctx_to_string ctx];
 
@@ -467,6 +467,21 @@ let evaluate_function_symbolic (synthesize : bool) (ctx : decls_ctx)
       (* Finish synthesizing *)
       if synthesize then Some (cc el) else None
     with CFailure error ->
+      let name = name_to_string () in
+      let name_pattern =
+        try
+          TranslateCore.name_to_pattern_string (Some fdef.item_meta.span)
+            decls_ctx fdef.item_meta.name
+        with CFailure _ ->
+          "(could not compute the name pattern due to a different error)"
+      in
+      let action = if synthesize then "translate" else "borrow-check" in
+      [%save_error_opt_span] error.span
+        ("Could not " ^ action ^ " the body of the function '" ^ name
+       ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
+       ^ "\nDefinition span: "
+        ^ Errors.raw_span_to_string fdef.item_meta.span
+        ^ compute_local_uses_error_message decls_ctx (IdFun fdef.def_id));
       if synthesize then Some (Error (error.span, error.msg)) else None
   in
   (* Return *)
