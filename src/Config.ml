@@ -456,3 +456,8 @@ let progress_bar = ref true
     spans where it is transitively used in the local crate. This is the maximum
     number of spans we print (a negative number means we print all of them) *)
 let max_error_spans = ref 5
+
+(** If the join after a match/switch/etc. fails we make it recoverable: instead
+    of raising an error we do not join the contexts and duplicate the code after
+    the match/switch/etc. *)
+let recover_joins = ref true

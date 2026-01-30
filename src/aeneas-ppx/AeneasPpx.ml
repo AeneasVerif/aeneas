@@ -83,6 +83,11 @@ let () =
           mk_check_rule "Errors" "unwrap_opt_span";
           mk_check_rule "Errors" "unwrap_with_span";
           mk_check_rule "Errors" "try_unwrap";
+          mk_check_rule "Errors" "craise_recover_opt_span";
+          mk_check_rule "Errors" "craise_recover";
+          mk_check_rule "Errors" "cassert_recover_opt_span";
+          mk_check_rule "Errors" "cassert_recover";
+          mk_check_rule "Errors" "sanity_check_recover";
         ]
       (* The rules for the helpers in `ExtractErrors.ml` *)
       @ mk_check_rules "ExtractErrors"

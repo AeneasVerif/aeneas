@@ -58,6 +58,9 @@ type cfailure = {
 
 exception CFailure of cfailure
 
+(** Recoverable failure *)
+exception RFailure
+
 let error_list : (string * int * Meta.span option * string) list ref = ref []
 
 (** Save an error and print it at the same time.
@@ -130,8 +133,28 @@ let cassert (file : string) (line : int) (span : Meta.span) (b : bool)
     (msg : string) =
   cassert_opt_span file line (Some span) b msg
 
+let craise_recover_opt_span (file : string) (line : int) (recover : bool)
+    (span : Meta.span option) (msg : string) =
+  if recover then raise RFailure else craise_opt_span file line span msg
+
+let craise_recover (file : string) (line : int) (recover : bool)
+    (span : Meta.span) (msg : string) =
+  craise_recover_opt_span file line recover (Some span) msg
+
+let cassert_recover_opt_span (file : string) (line : int) (recover : bool)
+    (span : Meta.span option) (b : bool) (msg : string) =
+  if not b then craise_recover_opt_span file line recover span msg
+
+let cassert_recover (file : string) (line : int) (recover : bool)
+    (span : Meta.span) (b : bool) (msg : string) =
+  cassert_recover_opt_span file line recover (Some span) b msg
+
 let sanity_check (file : string) (line : int) span b =
   cassert file line span b "Internal error, please file an issue"
+
+let sanity_check_recover (file : string) (line : int) recover span b =
+  cassert_recover file line recover span b
+    "Internal error, please file an issue"
 
 let sanity_check_opt_span (file : string) (line : int) span b =
   cassert_opt_span file line span b "Internal error, please file an issue"

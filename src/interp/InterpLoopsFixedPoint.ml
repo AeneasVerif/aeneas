@@ -137,8 +137,8 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
        the user will see a full call stack, which eases deboguing. *)
     if i = 1 && !Config.fail_hard then
       let _ =
-        match_ctxs span ~check_equiv:true !fixed_ids lookup_shared_value
-          lookup_shared_value ctx1 ctx2
+        match_ctxs span ~check_equiv:true ~recoverable:false !fixed_ids
+          lookup_shared_value lookup_shared_value ctx1 ctx2
       in
       true
     else

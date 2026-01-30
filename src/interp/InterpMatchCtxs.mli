@@ -104,12 +104,16 @@ val try_match_ctxs :
 
 (** See [try_match_ctxs]: [try_match_ctxs] calls [match_ctxs], the latter
     raising exceptions of type [Distinct] and [ValueMatchFailure], and the
-    former catching those exceptions. *)
+    former catching those exceptions.
+
+    [recoverable]: if we encounter an error should we fail hard or make it
+    recoverable? *)
 val match_ctxs :
   Meta.span ->
   check_equiv:bool ->
   ?check_kind:bool ->
   ?check_can_end:bool ->
+  recoverable:bool ->
   ids_sets ->
   (loan_id -> tvalue) ->
   (loan_id -> tvalue) ->
@@ -164,9 +168,10 @@ val ctxs_are_equivalent : Meta.span -> ids_sets -> eval_ctx -> eval_ctx -> bool
     **Parameters**:
     - [config]
     - [span]
+    - [recoverable]: if [true] make some errors recoverable
     - [fresh_abs_kind]: the abs kind to use for the freshly introduced
       abstractions
     - [fixed_ids]
     - [src_ctx] *)
 val prepare_match_ctx_with_target :
-  config -> Meta.span -> abs_kind -> eval_ctx -> cm_fun
+  config -> Meta.span -> recoverable:bool -> abs_kind -> eval_ctx -> cm_fun

@@ -122,6 +122,10 @@ let abs_borrows_loans_maps_to_string (_ctx : eval_ctx)
     the ended regions. *)
 module type PrimMatcher = sig
   val span : Meta.span
+
+  (** Should we fail hard or make errors recoverable? *)
+  val recover : bool
+
   val match_etys : eval_ctx -> eval_ctx -> ety -> ety -> ety
   val match_rtys : eval_ctx -> eval_ctx -> rty -> rty -> rty
 
@@ -496,6 +500,9 @@ end
 module type MatchCheckEquivState = sig
   val span : Meta.span
 
+  (** Should we fail hard or make errors recoverable? *)
+  val recover : bool
+
   (** [true] if we check equivalence between contexts, [false] if we compute a
       mapping from a source context to a target context. *)
   val check_equiv : bool
@@ -604,6 +611,10 @@ module type MatchJoinState = sig
       right environment and whose join led to the introduction of the symbolic
       value *)
   val symbolic_to_value : (tvalue * tvalue) SymbolicValueId.Map.t ref
+
+  (** If [true] we throw a special kind of exception when encountering *some*
+      errors to make them recoverable (and we do not save errors). *)
+  val recover : bool
 end
 
 (** Split an environment between some old abstractions and dummy values and the
