@@ -379,12 +379,6 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
               VSharedBorrow (bid, sid)
           | VMutBorrow (bid0, bv0), VMutBorrow (bid1, bv1) ->
               let bv = match_rec bv0 bv1 in
-
-              [%cassert] M.span
-                (not
-                   (ValuesUtils.value_has_borrows (Some span)
-                      ctx0.type_ctx.type_infos bv.value))
-                "The join of nested borrows is not supported yet";
               let bid, bv =
                 M.match_mut_borrows match_rec ctx0 ctx1 ty bid0 bv0 bid1 bv1 bv
               in
@@ -1003,72 +997,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (bv1 : tvalue) (bv : tvalue) : borrow_id * tvalue =
     (* We distinguish two cases, depending on whether the borrow ids are the same
        or not. *)
-    if bid0 = bid1 then (
-      (* TODO: this is deprecated.
-
-         If the merged value is not the same as the original value, we introduce
-         an abstraction:
-
-         {[
-           { MB bid0, ML bid' }  // where bid' fresh
-         ]}
-
-         and we use bid' for the borrow id that we return.
-
-         We do this because we want to make sure that, whenever a mutably
-         borrowed value is modified in a loop iteration, then there is
-         a fresh abstraction between this borrowed value and the fixed
-         abstractions (this is tantamount to introducing a reborrow).
-
-         Example:
-         ========
-         {[
-           fn clear(v: &mut Vec<u32>) {
-               let mut i = 0;
-               while i < v.len() {
-                   v[i] = 0;
-                   i += 1;
-               }
-           }
-         ]}
-
-         When entering the loop, we have the following environment:
-         {[
-           abs'0 { ML l0 } // input abstraction
-           v -> MB l0 s0
-           i -> 0
-         ]}
-
-         At every iteration, we update the symbolic value of the vector [v]
-         (i.e., [s0]).
-
-         For now, because the translation of the loop is responsible of the
-         execution of the end of the function (up to the [return]), we want
-         the loop to reborrow the vector [v]: this way, the forward loop
-         function returns nothing (it returns what [clear] returns, that is
-         to say [unit]) while the backward loop function gives back a new value
-         for [v] (i.e., a new symbolic value which will replace [s0]).
-
-         By introducing the fresh region abstraction wet get:
-         {[
-           abs'0 { ML l0 } // input abstraction
-           abs'1 { MB l0, ML l1 } // fresh abstraction
-           v -> MB l1 s1
-           i -> 0
-         ]}
-
-
-         In the future, we will also compute joins at the *loop exits*: when we
-         do so, we won't introduce reborrows like above: the forward loop function
-         will update [v], while the backward loop function will return nothing.
-      *)
-      [%cassert] span
-        (not
-           (ValuesUtils.value_has_borrows (Some span) ctx0.type_ctx.type_infos
-              bv.value))
-        "Nested borrows are not supported yet";
-
-      (bid0, bv))
+    if bid0 = bid1 then (bid0, bv)
     else
       (* We replace bid0 and bid1 with a fresh borrow id (bid2), and introduce
          an abstraction which links all of them. This time we have to introduce

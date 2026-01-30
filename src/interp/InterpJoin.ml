@@ -98,10 +98,6 @@ let reborrow_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
       mk_value_with_fresh_sids_no_shared_loans abs.regions.owned nrid sv
     in
 
-    (* Rem.: the below sanity checks are not really necessary *)
-    [%sanity_check] span (AbsId.Set.is_empty abs.parents);
-    [%sanity_check] span (abs.original_parents = []);
-
     (* Introduce the new abstraction for the shared values *)
     [%cassert] span (ty_no_regions sv.ty) "Unimplemented";
     let rty = sv.ty in
