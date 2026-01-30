@@ -212,7 +212,9 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
         but this can fail with mutually-recursive traits as well as GATs. \
         Aeneas cannot handle such types today, and the generated code will \
         likely be incorrect." ^ "\nTrait declaration: " ^ name ^ "\nSource: "
-     ^ Errors.span_to_string span);
+     ^ Errors.span_to_string span
+      ^ Contexts.compute_local_uses_error_message ctx
+          (IdTraitDecl trait_decl.def_id));
   let types =
     List.map
       (fun (t : A.trait_assoc_ty T.binder) ->
