@@ -132,19 +132,6 @@ mutual def Node.insert_in_left
   else ok (false, Node.mk node.value o node.right node.balance_factor)
 partial_fixpoint
 
-/- [avl::{avl::Tree<T>}::insert_in_opt_node]:
-   Source: 'src/avl.rs', lines 341:4-354:5 -/
-def Tree.insert_in_opt_node
-  {T : Type} (OrdInst : Ord T) (node : Option (Node T)) (value : T) :
-  Result (Bool × (Option (Node T)))
-  := do
-  match node with
-  | none => ok (true, some (Node.mk value none none 0#i8))
-  | some node1 =>
-    let (b, node2) ← Node.insert OrdInst node1 value
-    ok (b, some node2)
-partial_fixpoint
-
 /- [avl::{avl::Node<T>}::insert_in_right]:
    Source: 'src/avl.rs', lines 269:4-304:5 -/
 def Node.insert_in_right
@@ -183,6 +170,19 @@ def Node.insert
   | Ordering.Less => Node.insert_in_left OrdInst node value
   | Ordering.Equal => ok (false, node)
   | Ordering.Greater => Node.insert_in_right OrdInst node value
+partial_fixpoint
+
+/- [avl::{avl::Tree<T>}::insert_in_opt_node]:
+   Source: 'src/avl.rs', lines 341:4-354:5 -/
+def Tree.insert_in_opt_node
+  {T : Type} (OrdInst : Ord T) (node : Option (Node T)) (value : T) :
+  Result (Bool × (Option (Node T)))
+  := do
+  match node with
+  | none => ok (true, some (Node.mk value none none 0#i8))
+  | some node1 =>
+    let (b, node2) ← Node.insert OrdInst node1 value
+    ok (b, some node2)
 partial_fixpoint
 
 end

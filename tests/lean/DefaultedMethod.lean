@@ -25,15 +25,15 @@ def Trait.provided_method.default
 @[reducible]
 def NoOverride := Unit
 
-/- [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}::provided_method]:
-   Source: 'tests/src/defaulted_method.rs', lines 11:4-13:5 -/
-def TraitNoOverride.provided_method (self : NoOverride) : Result Std.U32 := do
-  ok 73#u32
-
 /- [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}::required_method]:
    Source: 'tests/src/defaulted_method.rs', lines 14:4-16:5 -/
 def TraitNoOverride.required_method (self : NoOverride) : Result Std.U32 := do
   ok 12#u32
+
+/- [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}::provided_method]:
+   Source: 'tests/src/defaulted_method.rs', lines 11:4-13:5 -/
+def TraitNoOverride.provided_method (self : NoOverride) : Result Std.U32 := do
+  ok 73#u32
 
 /- Trait implementation: [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}]
    Source: 'tests/src/defaulted_method.rs', lines 10:0-17:1 -/
