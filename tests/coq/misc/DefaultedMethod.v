@@ -123,18 +123,18 @@ Definition trait_provided_method_default
     Source: 'tests/src/defaulted_method.rs', lines 9:0-9:18 *)
 Definition NoOverride_t : Type := unit.
 
-(** [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}::provided_method]:
-    Source: 'tests/src/defaulted_method.rs', lines 11:4-13:5 *)
-Definition traitNoOverride_provided_method
-  (self : NoOverride_t) : result u32 :=
-  Ok 73%u32
-.
-
 (** [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}::required_method]:
     Source: 'tests/src/defaulted_method.rs', lines 14:4-16:5 *)
 Definition traitNoOverride_required_method
   (self : NoOverride_t) : result u32 :=
   Ok 12%u32
+.
+
+(** [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}::provided_method]:
+    Source: 'tests/src/defaulted_method.rs', lines 11:4-13:5 *)
+Definition traitNoOverride_provided_method
+  (self : NoOverride_t) : result u32 :=
+  Ok 73%u32
 .
 
 (** Trait implementation: [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}]

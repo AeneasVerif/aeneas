@@ -89,15 +89,15 @@ let trait_provided_method_default
     Source: 'tests/src/defaulted_method.rs', lines 9:0-9:18 *)
 type noOverride_t = unit
 
-(** [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}::provided_method]:
-    Source: 'tests/src/defaulted_method.rs', lines 11:4-13:5 *)
-let traitNoOverride_provided_method (self : noOverride_t) : result u32 =
-  Ok 73
-
 (** [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}::required_method]:
     Source: 'tests/src/defaulted_method.rs', lines 14:4-16:5 *)
 let traitNoOverride_required_method (self : noOverride_t) : result u32 =
   Ok 12
+
+(** [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}::provided_method]:
+    Source: 'tests/src/defaulted_method.rs', lines 11:4-13:5 *)
+let traitNoOverride_provided_method (self : noOverride_t) : result u32 =
+  Ok 73
 
 (** Trait implementation: [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}]
     Source: 'tests/src/defaulted_method.rs', lines 10:0-17:1 *)
