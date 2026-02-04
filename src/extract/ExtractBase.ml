@@ -583,6 +583,11 @@ let name_to_string (ctx : extraction_ctx) =
 let ty_to_string (ctx : extraction_ctx) =
   PrintPure.ty_to_string (extraction_ctx_to_fmt_env ctx) false
 
+let type_param_to_string = Print.Types.type_param_to_string
+
+let trait_clause_to_string (ctx : extraction_ctx) =
+  PrintPure.trait_clause_to_string (extraction_ctx_to_fmt_env ctx)
+
 let trait_ref_to_string (ctx : extraction_ctx) =
   PrintPure.trait_ref_to_string (extraction_ctx_to_fmt_env ctx) false
 
@@ -591,6 +596,9 @@ let llbc_generic_params_to_strings (ctx : extraction_ctx) =
 
 let llbc_generic_args_to_strings (ctx : extraction_ctx) =
   Print.Types.generic_args_to_strings (extraction_ctx_to_llbc_fmt_env ctx)
+
+let dyn_predicate_to_string (ctx : extraction_ctx) =
+  PrintPure.dyn_predicate_to_string (extraction_ctx_to_fmt_env ctx)
 
 let trait_decl_id_to_string (ctx : extraction_ctx) =
   PrintPure.trait_decl_id_to_string (extraction_ctx_to_fmt_env ctx)
@@ -852,6 +860,9 @@ let named_binop_name (binop : binop) : string =
   | Shr (_, ty, _) -> add_int_name ty ^ "shr"
   | _ -> raise (Failure "Unreachable")
 
+let dyn_constructor () = "Dyn.mk" (* TODO: backends other than Lean *)
+let dyn_ty = "Dyn"
+
 (** A list of keywords/identifiers used by the backend and with which we want to
     check collision.
 
@@ -1061,6 +1072,7 @@ let keywords () =
           "variables";
           "where";
           "with";
+          dyn_constructor ();
         ]
     | HOL4 ->
         [
@@ -1928,7 +1940,8 @@ let ctx_compute_var_basename (span : Meta.span) (ctx : extraction_ctx)
           | TFloat _ -> "fl")
       | TArrow _ -> "f"
       | TTraitType (_, name) -> name_from_type_ident name
-      | TNever | TError -> "x")
+      | TNever | TError -> "x"
+      | TDynTrait _ -> "dyn")
 
 (** Generates a type variable basename. *)
 let ctx_compute_type_var_basename (_ctx : extraction_ctx) (basename : string) :

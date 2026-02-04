@@ -348,29 +348,67 @@ and const_generic_param = {
     }]
 
 type literal_type = T.literal_type [@@deriving show, ord]
+type type_param = T.type_param [@@deriving show, ord]
 
 (** Ancestor for iter visitor for [ty] *)
 class ['self] iter_ty_base =
-  object (_self : 'self)
+  object (self : 'self)
     inherit [_] iter_type_id
+
+    method visit_type_param : 'env -> type_param -> unit =
+      fun e var ->
+        self#visit_type_var_id e var.index;
+        self#visit_string e var.name
+
+    method visit_trait_item_name : 'env -> trait_item_name -> unit =
+      fun _ _ -> ()
   end
 
 (** Ancestor for map visitor for [ty] *)
 class ['self] map_ty_base =
-  object (_self : 'self)
+  object (self : 'self)
     inherit [_] map_type_id
+
+    method visit_type_param : 'env -> type_param -> type_param =
+      fun e var ->
+        {
+          index = self#visit_type_var_id e var.index;
+          name = self#visit_string e var.name;
+        }
+
+    method visit_trait_item_name : 'env -> trait_item_name -> trait_item_name =
+      fun _ x -> x
   end
 
 (** Ancestor for reduce visitor for [ty] *)
 class virtual ['self] reduce_ty_base =
-  object (_self : 'self)
+  object (self : 'self)
     inherit [_] reduce_type_id
+
+    method visit_type_param : 'env -> type_param -> 'a =
+      fun e var ->
+        let x0 = self#visit_type_var_id e var.index in
+        let x1 = self#visit_string e var.name in
+        self#plus x0 x1
+
+    method visit_trait_item_name : 'env -> trait_item_name -> 'a =
+      fun _ _ -> self#zero
   end
 
 (** Ancestor for mapreduce visitor for [ty] *)
 class virtual ['self] mapreduce_ty_base =
-  object (_self : 'self)
+  object (self : 'self)
     inherit [_] mapreduce_type_id
+
+    method visit_type_param : 'env -> type_param -> type_param * 'a =
+      fun e var ->
+        let index, x0 = self#visit_type_var_id e var.index in
+        let name, x1 = self#visit_string e var.name in
+        ({ index; name }, self#plus x0 x1)
+
+    method visit_trait_item_name :
+        'env -> trait_item_name -> trait_item_name * 'a =
+      fun _ x -> (x, self#zero)
   end
 
 type ty =
@@ -388,7 +426,10 @@ type ty =
   | TTraitType of trait_ref * string
       (** The string is for the name of the associated type *)
   | TNever
+  | TDynTrait of dyn_predicate
   | TError
+
+and dyn_predicate = { params : generic_params }
 
 and trait_ref = {
   trait_id : trait_instance_id;
@@ -415,6 +456,26 @@ and generic_args = {
   const_generics : const_generic list;
   trait_refs : trait_ref list;
 }
+
+and trait_param = {
+  clause_id : trait_clause_id;
+  trait_id : trait_decl_id;
+  generics : generic_args;
+}
+
+and generic_params = {
+  types : type_param list;
+  const_generics : const_generic_param list;
+  trait_clauses : trait_param list;
+}
+
+and trait_type_constraint = {
+  trait_ref : trait_ref;
+  type_name : trait_item_name;
+  ty : ty;
+}
+
+and predicates = { trait_type_constraints : trait_type_constraint list }
 
 (** See the documentation of [E.binop] *)
 and binop =
@@ -499,46 +560,24 @@ and trait_instance_id =
       polymorphic = false;
     }]
 
-type type_param = T.type_param [@@deriving show, ord]
-
 (** Ancestor for iter visitor for [type_decl] *)
 class ['self] iter_type_decl_base =
-  object (self : 'self)
+  object (_self : 'self)
     inherit [_] iter_ty
-
-    method visit_type_param : 'env -> type_param -> unit =
-      fun e var ->
-        self#visit_type_var_id e var.index;
-        self#visit_string e var.name
-
     method visit_item_meta : 'env -> T.item_meta -> unit = fun _ _ -> ()
 
     method visit_builtin_type_info : 'env -> builtin_type_info -> unit =
-      fun _ _ -> ()
-
-    method visit_trait_item_name : 'env -> trait_item_name -> unit =
       fun _ _ -> ()
   end
 
 (** Ancestor for map visitor for [type_decl] *)
 class ['self] map_type_decl_base =
-  object (self : 'self)
+  object (_self : 'self)
     inherit [_] map_ty
-
-    method visit_type_param : 'env -> type_param -> type_param =
-      fun e var ->
-        {
-          index = self#visit_type_var_id e var.index;
-          name = self#visit_string e var.name;
-        }
-
     method visit_item_meta : 'env -> T.item_meta -> T.item_meta = fun _ x -> x
 
     method visit_builtin_type_info :
         'env -> builtin_type_info -> builtin_type_info =
-      fun _ x -> x
-
-    method visit_trait_item_name : 'env -> trait_item_name -> trait_item_name =
       fun _ x -> x
   end
 
@@ -546,19 +585,9 @@ class ['self] map_type_decl_base =
 class virtual ['self] reduce_type_decl_base =
   object (self : 'self)
     inherit [_] reduce_ty
-
-    method visit_type_param : 'env -> type_param -> 'a =
-      fun e var ->
-        let x0 = self#visit_type_var_id e var.index in
-        let x1 = self#visit_string e var.name in
-        self#plus x0 x1
-
     method visit_item_meta : 'env -> T.item_meta -> 'a = fun _ _ -> self#zero
 
     method visit_builtin_type_info : 'env -> builtin_type_info -> 'a =
-      fun _ _ -> self#zero
-
-    method visit_trait_item_name : 'env -> trait_item_name -> 'a =
       fun _ _ -> self#zero
   end
 
@@ -567,21 +596,11 @@ class virtual ['self] mapreduce_type_decl_base =
   object (self : 'self)
     inherit [_] mapreduce_ty
 
-    method visit_type_param : 'env -> type_param -> type_param * 'a =
-      fun e var ->
-        let index, x0 = self#visit_type_var_id e var.index in
-        let name, x1 = self#visit_string e var.name in
-        ({ index; name }, self#plus x0 x1)
-
     method visit_item_meta : 'env -> T.item_meta -> T.item_meta * 'a =
       fun _ x -> (x, self#zero)
 
     method visit_builtin_type_info :
         'env -> builtin_type_info -> builtin_type_info * 'a =
-      fun _ x -> (x, self#zero)
-
-    method visit_trait_item_name :
-        'env -> trait_item_name -> trait_item_name * 'a =
       fun _ x -> (x, self#zero)
   end
 
@@ -599,26 +618,6 @@ and variant = {
 }
 
 and type_decl_kind = Struct of field list | Enum of variant list | Opaque
-
-and trait_param = {
-  clause_id : trait_clause_id;
-  trait_id : trait_decl_id;
-  generics : generic_args;
-}
-
-and generic_params = {
-  types : type_param list;
-  const_generics : const_generic_param list;
-  trait_clauses : trait_param list;
-}
-
-and trait_type_constraint = {
-  trait_ref : trait_ref;
-  type_name : trait_item_name;
-  ty : ty;
-}
-
-and predicates = { trait_type_constraints : trait_type_constraint list }
 [@@deriving
   show,
   ord,
@@ -1063,6 +1062,7 @@ and qualif_id =
   | AdtCons of adt_cons_id  (** A function or ADT constructor identifier *)
   | Proj of projection  (** Field projector *)
   | TraitConst of trait_ref * string  (** A trait associated constant *)
+  | MkDynTrait of trait_ref  (** Dyn trait constructor *)
 
 (** An instantiated qualifier.
 

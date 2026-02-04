@@ -1395,6 +1395,17 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
           { e = Qualif qualif; ty = mk_arrow adt_ty var.ty }
         in
         [%add_loc] mk_app ctx.span qualif (symbolic_value_to_texpr ctx adt_sv)
+    | VaDynTrait (v, trait_ref) ->
+        let v = tvalue_to_texpr ctx ectx v in
+        let dyn_ty = var.ty in
+        let type_infos = ctx.type_ctx.type_infos in
+        let trait_ref =
+          translate_fwd_trait_ref (Some ctx.span) type_infos trait_ref
+        in
+        let qualif_id = MkDynTrait trait_ref in
+        let qualif = { id = qualif_id; generics = empty_generic_args } in
+        let qualif : texpr = { e = Qualif qualif; ty = mk_arrow v.ty dyn_ty } in
+        [%add_loc] mk_app ctx.span qualif v
   in
 
   (* Make the let-binding *)

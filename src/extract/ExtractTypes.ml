@@ -465,6 +465,32 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
             F.pp_print_string fmt ("." ^ add_brackets type_name))
   | TNever -> F.pp_print_string fmt "Never"
   | TError -> extract_ty_errors fmt
+  | TDynTrait params -> (
+      [%ltrace "dyn trait:\n" ^ dyn_predicate_to_string ctx params];
+      match params.params with
+      | { types = [ self ]; const_generics = []; trait_clauses = [ clause ] } ->
+          [%ltrace
+            "- self: " ^ type_param_to_string self ^ "\n- clause: "
+            ^ trait_clause_to_string ctx clause];
+          if inside then F.pp_print_string fmt "(";
+          F.pp_print_string fmt dyn_ty;
+          F.pp_print_space fmt ();
+          (* We need to generate something of the shape: [fun dyn => Trait dyn ...] *)
+          (* TODO: properly handle bound type variables *)
+          let basename = self.name in
+          let varname = basename_to_unique ctx basename in
+          (* TODO: the use of indices here is a hack *)
+          let ctx = ctx_add span (TypeVarId (Method, self.index)) varname ctx in
+          F.pp_print_string fmt "(fun";
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt varname;
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt "=>";
+          F.pp_print_space fmt ();
+          extract_trait_clause_type span ctx fmt TypeDeclId.Set.empty clause;
+          F.pp_print_string fmt ")";
+          if inside then F.pp_print_string fmt ")"
+      | _ -> [%craise] span "Unsupported use of dyn traits")
 
 and extract_trait_ref (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) ~(inside : bool)
@@ -653,6 +679,15 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
   | UnknownTrait _ ->
       (* This is an error case *)
       [%admit_raise] span "Unexpected" fmt
+
+and extract_trait_clause_type (span : Meta.span) (ctx : extraction_ctx)
+    (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t)
+    (clause : trait_param) : unit =
+  let trait_name = ctx_get_trait_decl span clause.trait_id ctx in
+  F.pp_print_string fmt trait_name;
+  (* let span = (TraitDeclId.Map.find clause.trait_id ctx.trans_trait_decls).span in
+   *)
+  extract_generic_args span ctx fmt no_params_tys clause.generics
 
 (** Compute the names for all the top-level identifiers used in a type
     definition (type name, variant names, field names, etc. but not type
@@ -1177,15 +1212,6 @@ let extract_attributes (span : Meta.span) (ctx : extraction_ctx)
       F.pp_close_box fmt ();
       F.pp_print_space fmt ()))
   else ()
-
-let extract_trait_clause_type (span : Meta.span) (ctx : extraction_ctx)
-    (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t)
-    (clause : trait_param) : unit =
-  let trait_name = ctx_get_trait_decl span clause.trait_id ctx in
-  F.pp_print_string fmt trait_name;
-  (* let span = (TraitDeclId.Map.find clause.trait_id ctx.trans_trait_decls).span in
-   *)
-  extract_generic_args span ctx fmt no_params_tys clause.generics
 
 (** Insert a space, if necessary *)
 let insert_req_space (fmt : F.formatter) (space : bool ref) : unit =

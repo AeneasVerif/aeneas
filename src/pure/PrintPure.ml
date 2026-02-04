@@ -298,6 +298,22 @@ let rec ty_to_string (env : fmt_env) (inside : bool) (ty : ty) : string =
       if inside then "(" ^ s ^ ")" else s
   | TNever -> "@Never"
   | TError -> "@Error"
+  | TDynTrait dyn_predicate ->
+      "dyn " ^ dyn_predicate_to_string env dyn_predicate
+
+and dyn_predicate_to_string (env : fmt_env) (pred : dyn_predicate) =
+  let generics = pred.params in
+  let env = { env with generics = generics :: env.generics } in
+  let tys = List.map type_var_to_string generics.types in
+  let cgs = List.map const_generic_var_to_string generics.const_generics in
+  let trait_clauses =
+    List.map (trait_clause_to_string env) generics.trait_clauses
+  in
+  "dyn ("
+  ^ String.concat ", " (tys @ cgs)
+  ^ " | "
+  ^ String.concat " + " trait_clauses
+  ^ ")"
 
 and generic_args_to_strings (env : fmt_env) (inside : bool)
     (generics : generic_args) : string list =
@@ -346,7 +362,7 @@ and trait_instance_id_to_string (env : fmt_env) (id : trait_instance_id) :
   | BuiltinOrAuto data -> builtin_impl_data_to_string data
   | UnknownTrait msg -> "UNKNOWN(" ^ msg ^ ")"
 
-let trait_clause_to_string (env : fmt_env) (clause : trait_param) : string =
+and trait_clause_to_string (env : fmt_env) (clause : trait_param) : string =
   let trait_id = trait_decl_id_to_string env clause.trait_id in
   let generics = generic_args_to_strings env true clause.generics in
   let generics =
@@ -978,7 +994,9 @@ and app_to_string ?(span : Meta.span option = None) (env : fmt_env)
         | TraitConst (trait_ref, const_name) ->
             let trait_ref = trait_ref_to_string env true trait_ref in
             let qualif = trait_ref ^ "." ^ const_name in
-            (qualif, [], false))
+            (qualif, [], false)
+        | MkDynTrait trait_ref ->
+            ("@toDyn " ^ trait_ref_to_string env true trait_ref, [], false))
     | _ ->
         (* "Regular" expression case *)
         let inside = args <> [] || (args = [] && inside) in

@@ -2,6 +2,75 @@ open Types
 open Utils
 include Charon.TypesUtils
 
+(** Return the set of regions in an type - TODO: add static?
+
+    This function should be used on non-erased and non-bound regions. For
+    sanity, we raise exceptions if this is not the case. *)
+let ty_regions (ty : ty) : RegionId.Set.t =
+  let s = ref RegionId.Set.empty in
+  let add_region (r : region) =
+    match r with
+    | RStatic -> () (* TODO: static? *)
+    | RErased | RBody _ ->
+        raise
+          (Failure "ty_regions shouldn't be called on erased or body regions")
+    | RVar (Bound _) ->
+        raise (Failure "region_in_set shouldn't be called on bound regions")
+    | RVar (Free id) -> s := RegionId.Set.add id !s
+  in
+  let obj =
+    object
+      inherit [_] iter_ty as super
+      method! visit_region _env r = add_region r
+
+      method! visit_TDynTrait env tr =
+        (* Ignore the dyn traits by default *)
+        if Config.type_analysis_ignore_dyn then ()
+        else super#visit_TDynTrait env tr
+    end
+  in
+  (* Explore the type *)
+  obj#visit_ty () ty;
+  (* Return the set of accumulated regions *)
+  !s
+
+(* TODO: merge with ty_has_regions_in_set *)
+let ty_regions_intersect (ty : ty) (regions : RegionId.Set.t) : bool =
+  let ty_regions = ty_regions ty in
+  not (RegionId.Set.disjoint ty_regions regions)
+
+(** Check if a {!type:Charon.Types.ty} contains regions from a given set *)
+let ty_has_regions_in_pred (pred : region -> bool) (ty : ty) : bool =
+  let obj =
+    object
+      inherit [_] iter_ty
+      method! visit_region _ r = if pred r then raise Found
+    end
+  in
+  try
+    obj#visit_ty () ty;
+    false
+  with Found -> true
+
+(** Check if a {!type:Charon.Types.ty} contains regions from a given set *)
+let ty_has_regions_in_set (rset : RegionId.Set.t) (ty : ty) : bool =
+  ty_has_regions_in_pred (fun r -> region_in_set r rset) ty
+
+(** Check if a type has free (i.e., non erased) regions.
+
+    This is useful in particular when using normalized projection types (types
+    where all the regions of interest are free regions, and the other regions
+    are erased, that we use for instance to project the borrows belonging to a
+    symbolic value into different region abstractions): the projection over a
+    symbolic value intersects a region abstraction if its projection type has
+    some free regions (or in other words, if not all the regions appearing in
+    the type are erased). *)
+let ty_has_free_regions (ty : ty) : bool =
+  ty_has_regions_in_pred region_is_free ty
+
+let ty_has_erased_regions (ty : ty) : bool =
+  ty_has_regions_in_pred region_is_erased ty
+
 let expect_free_var = Substitute.expect_free_var
 
 (** Retuns true if the type contains borrows.
@@ -201,13 +270,18 @@ let ty_has_mut_borrows (infos : TypesAnalysis.type_infos) (ty : ty) : bool =
 (** Small helper *)
 let raise_if_not_rty_visitor =
   object
-    inherit [_] iter_ty
+    inherit [_] iter_ty as super
 
     method! visit_region _ r =
       match r with
       | RVar (Bound _) | RErased -> raise Found
       | RStatic | RVar (Free _) -> ()
       | RBody _ -> [%craise_opt_span] None "unsupported: Body region"
+
+    method! visit_TDynTrait env tr =
+      (* Ignore dyn traits by default *)
+      if Config.type_analysis_ignore_dyn then ()
+      else super#visit_TDynTrait env tr
   end
 
 (** Return [true] if the type is a region type (i.e., it doesn't contain erased

@@ -712,7 +712,24 @@ and extract_App (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
           let add_brackets (s : string) =
             if backend () = Coq then "(" ^ s ^ ")" else s
           in
-          F.pp_print_string fmt ("." ^ add_brackets name))
+          F.pp_print_string fmt ("." ^ add_brackets name)
+      | MkDynTrait trait_ref ->
+          (* Open parentheses *)
+          if inside then F.pp_print_string fmt "(";
+          F.pp_print_string fmt (dyn_constructor ());
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt "_";
+          F.pp_print_space fmt ();
+          extract_trait_ref span ctx fmt TypeDeclId.Set.empty ~inside:true
+            trait_ref;
+          (* Print the arguments *)
+          List.iter
+            (fun ve ->
+              F.pp_print_space fmt ();
+              extract_texpr span ctx fmt ~inside:true ~inside_do ve)
+            args;
+          (* Close parentheses *)
+          if inside then F.pp_print_string fmt ")")
   | _ ->
       (* "Regular" expression *)
       (* Open parentheses *)

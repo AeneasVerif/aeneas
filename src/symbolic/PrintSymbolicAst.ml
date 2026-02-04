@@ -35,6 +35,10 @@ let value_aggregate_to_string (env : fmt_env) (v : value_aggregate) : string =
       trait_ref_to_string env trait_ref ^ "." ^ item
   | VaDiscriminant sv ->
       "@discriminant(" ^ Values.symbolic_value_to_string env sv ^ ")"
+  | VaDynTrait (v, tr) ->
+      "@castToDyn("
+      ^ Values.tvalue_to_string env v
+      ^ ", " ^ trait_ref_to_string env tr ^ ")"
 
 let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
     (e : expr) : string =

@@ -747,38 +747,79 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
     * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Evaluate the operand *)
   let v, ctx, cc = eval_operand config span op ctx in
-  (* Generate a fresh symbolic value to store the result *)
-  let res_sv_id = ctx.fresh_symbolic_value_id () in
-  let res_sv_ty =
-    match (unop, v.ty) with
-    | Not, (TLiteral TBool as lty) -> lty
-    | Not, (TLiteral (TInt _) as lty) -> lty
-    | Not, (TLiteral (TUInt _) as lty) -> lty
-    | Neg OPanic, (TLiteral (TInt _) as lty) -> lty
-    | Neg OPanic, (TLiteral (TUInt _) as lty) -> lty
-    | Cast (CastScalar (_, tgt_ty)), _ -> TLiteral tgt_ty
-    | Cast (CastUnsize (ty0, ty1, _)), _ ->
-        (* If the following function succeeds, then it means the cast is well-formed
+  (* There is a special case for casts which convert [Box<...>] to [Box<dyn ...>] *)
+  match unop with
+  | Cast (CastUnsize (ty0, ty1, MetaVTable (trait_ref, _))) ->
+      (* Casting a type to a dyn trait *)
+      [%ltrace
+        "dyn trait cast:" ^ "\n- ty0: " ^ ty_to_string ctx ty0 ^ "\n- ty1: "
+        ^ ty_to_string ctx ty1 ^ "\n- trait_ref: "
+        ^ trait_ref_to_string ctx trait_ref];
+
+      [%cassert] span
+        (not (tvalue_has_borrows (Some span) ctx v))
+        "Unimplemented use of dynamic traits";
+
+      let sv = mk_fresh_symbolic_value span ctx ty1 in
+      let cf e =
+        SA.IntroSymbolic
+          ( ctx,
+            mk_opt_place_from_op span op ctx,
+            sv,
+            VaDynTrait (v, trait_ref),
+            e )
+      in
+      let res = Ok (mk_tvalue_from_symbolic_value sv) in
+      (res, ctx, cc_comp cc cf)
+  | Cast (CastUnsize (ty0, ty1, MetaVTableUpcast fields)) ->
+      [%ltrace
+        "dyn trait upcast:" ^ "\n- ty0: " ^ ty_to_string ctx ty0 ^ "\n- ty1: "
+        ^ ty_to_string ctx ty1 ^ "\n- fields: "
+        ^ Print.list_to_string FieldId.to_string fields];
+      [%cassert] span (fields = [])
+        "Unsized cast between dynamic traits: unimplemented case";
+      [%cassert] span (ty1 = ty0)
+        "Unsized cast between dynamic traits: unimplemented case";
+      [%cassert] span
+        (not (tvalue_has_borrows (Some span) ctx v))
+        "Unsized cast between dynamic traits: unimplemented case";
+
+      (* Nothing to do: the cast is the identity *)
+      (Ok v, ctx, cc)
+  | _ ->
+      (* Regular case *)
+      (* Generate a fresh symbolic value to store the result *)
+      let res_sv_id = ctx.fresh_symbolic_value_id () in
+      let res_sv_ty =
+        match (unop, v.ty) with
+        | Not, (TLiteral TBool as lty) -> lty
+        | Not, (TLiteral (TInt _) as lty) -> lty
+        | Not, (TLiteral (TUInt _) as lty) -> lty
+        | Neg OPanic, (TLiteral (TInt _) as lty) -> lty
+        | Neg OPanic, (TLiteral (TUInt _) as lty) -> lty
+        | Cast (CastScalar (_, tgt_ty)), _ -> TLiteral tgt_ty
+        | Cast (CastUnsize (ty0, ty1, _)), _ ->
+            (* If the following function succeeds, then it means the cast is well-formed
            (otherwise it throws an exception) *)
-        let _ = cast_unsize_to_modified_fields span ctx ty0 ty1 in
-        ty1
-    | Cast (CastRawPtr (_, tgt_ty)), _ -> tgt_ty
-    | _ ->
-        [%craise] span
-          ("Invalid input for unop: " ^ unop_to_string ctx unop ^ " on "
-         ^ ty_to_string ctx v.ty)
-  in
-  let res_sv = { sv_id = res_sv_id; sv_ty = res_sv_ty } in
-  (* Compute the result *)
-  let res = Ok (mk_tvalue_from_symbolic_value res_sv) in
-  (* Synthesize the symbolic AST *)
-  let cc =
-    cc_comp cc
-      (synthesize_unary_op span ctx unop v
-         (mk_opt_place_from_op span op ctx)
-         res_sv None)
-  in
-  (res, ctx, cc)
+            let _ = cast_unsize_to_modified_fields span ctx ty0 ty1 in
+            ty1
+        | Cast (CastRawPtr (_, tgt_ty)), _ -> tgt_ty
+        | _ ->
+            [%craise] span
+              ("Invalid input for unop: " ^ unop_to_string ctx unop ^ " on "
+             ^ ty_to_string ctx v.ty)
+      in
+      let res_sv = { sv_id = res_sv_id; sv_ty = res_sv_ty } in
+      (* Compute the result *)
+      let res = Ok (mk_tvalue_from_symbolic_value res_sv) in
+      (* Synthesize the symbolic AST *)
+      let cc =
+        cc_comp cc
+          (synthesize_unary_op span ctx unop v
+             (mk_opt_place_from_op span op ctx)
+             res_sv None)
+      in
+      (res, ctx, cc)
 
 let eval_unary_op (config : config) (span : Meta.span) (unop : unop)
     (op : operand) (ctx : eval_ctx) :
