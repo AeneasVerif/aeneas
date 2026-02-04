@@ -1395,7 +1395,41 @@ let remove_vtables (crate : crate) : crate =
                         | _ -> raise (Failure "Unreachable"))
                       ids
                   in
-                  Some (TraitDeclGroup (RecGroup ids))
+                  (* If the resulting group is a singleton, check whether
+                     it is recursive *)
+                  match ids with
+                  | [ id ] ->
+                      let is_rec =
+                        match TraitDeclId.Map.find_opt id crate.trait_decls with
+                        | None ->
+                            (* don't know so by default we consider it to be recursive *)
+                            true
+                        | Some d ->
+                            (* We count the number of occurrences of the id of the trait
+                             decl itself - if it's > 1 then it means it is recursive
+                             (there is one occurrence for the [def_id] field) *)
+                            let found = ref 0 in
+                            let visitor =
+                              object (self)
+                                inherit [_] iter_trait_decl
+
+                                method! visit_trait_ref_contents _
+                                    { kind; trait_decl_ref = _ } =
+                                  (* We ignore the [trait_decl_ref] which refer
+                                     to the trait declaration itself if this is
+                                     an occurrence of [Self] *)
+                                  self#visit_trait_ref_kind () kind
+
+                                method! visit_trait_decl_id _ id' =
+                                  if id' = id then found := !found + 1
+                              end
+                            in
+                            visitor#visit_trait_decl () { d with vtable = None };
+                            !found > 1
+                      in
+                      if is_rec then Some (TraitDeclGroup (RecGroup [ id ]))
+                      else Some (TraitDeclGroup (NonRecGroup id))
+                  | _ -> Some (TraitDeclGroup (RecGroup ids))
                 else Some (MixedGroup (RecGroup ids))
             | _ -> Some (MixedGroup g))
         | _ -> Some g)
