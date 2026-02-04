@@ -1208,6 +1208,104 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
   in
   { f with body }
 
+(** We do not support static regions yet.
+
+    In order to support some printing functions, for now we update their
+    signature to replace ['static] with a region variable. This should be fine
+    as a temporary measure as we can pretend these functions copy the input
+    string they receive (the static references are references to strings).
+
+    TODO: remove once https://github.com/AeneasVerif/aeneas/issues/727 is fixed
+*)
+let replace_static (crate : crate) : crate =
+  (* We update the uses of: [core::fmt::{core::fmt::Arguments<'a>}::from_str] *)
+  let pat =
+    NameMatcher.parse_pattern "core::fmt::{core::fmt::Arguments<'a>}::from_str"
+  in
+
+  (* Find the function [core::fmt::{core::fmt::Arguments<'a>}::from_str]:
+     - we want to update its signature to replace 'static with a lifetime variable
+     - we want to update its uses
+  *)
+  let names_set = NameMatcher.NameMatcherMap.of_list [ (pat, ()) ] in
+  let match_ctx = Charon.NameMatcher.ctx_from_crate crate in
+  let in_set (d : fun_decl) : bool =
+    let config = ExtractName.default_config in
+    NameMatcher.NameMatcherMap.mem match_ctx config d.item_meta.name names_set
+  in
+  let decl_opt = ref None in
+  let in_set (_ : FunDeclId.id) (d : fun_decl) =
+    if in_set d then (
+      decl_opt := Some d;
+      true)
+    else false
+  in
+
+  if not (FunDeclId.Map.exists in_set crate.fun_decls) then crate
+  else (* The function [from_str] is used in the crate *)
+    let d = Option.get !decl_opt in
+
+    (* Update the signature *)
+    let generics =
+      {
+        d.generics with
+        regions =
+          d.generics.regions
+          @ [ { index = RegionId.of_int 1; name = Some "'b" } ];
+      }
+    in
+    let signature =
+      let visitor =
+        object
+          inherit [_] map_ty
+          method! visit_RStatic _ = RVar (Free (RegionId.of_int 1))
+        end
+      in
+      visitor#visit_fun_sig () d.signature
+    in
+
+    let d = { d with generics; signature } in
+    [%ltrace
+      "Updated declaration:\n" ^ Print.Crate.crate_fun_decl_to_string crate d];
+    let crate =
+      { crate with fun_decls = FunDeclId.Map.add d.def_id d crate.fun_decls }
+    in
+
+    (* Update the uses of this definition *)
+    let update (f : fun_decl) : fun_decl =
+      match f.body with
+      | None -> f
+      | Some body ->
+          let visitor =
+            object
+              inherit [_] map_statement
+
+              method! visit_Call _ call =
+                match call.func with
+                | FnOpRegular { kind = FunId (FRegular id) as kind; generics }
+                  when id = d.def_id ->
+                    let func =
+                      FnOpRegular
+                        {
+                          kind;
+                          generics =
+                            {
+                              generics with
+                              regions = generics.regions @ [ RErased ];
+                            };
+                        }
+                    in
+                    Call { call with func }
+                | _ -> Call call
+            end
+          in
+
+          let body = { body with body = visitor#visit_block () body.body } in
+          { f with body = Some body }
+    in
+    let fun_decls = FunDeclId.Map.map update crate.fun_decls in
+    { crate with fun_decls }
+
 let apply_passes (crate : crate) : crate =
   (* Passes that apply to the whole crate *)
   let crate = update_array_default crate in
@@ -1264,5 +1362,6 @@ let apply_passes (crate : crate) : crate =
   in
   let crate = { crate with fun_decls } in
   let crate = filter_type_aliases crate in
+  let crate = replace_static crate in
   [%ltrace "After pre-passes:\n" ^ Print.Crate.crate_to_string crate ^ "\n"];
   crate
