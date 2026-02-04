@@ -1311,27 +1311,6 @@ let replace_static (crate : crate) : crate =
     presence of those declarations leads to mutually recursive groups of traits
     and types. This micro-pass filters these definitions. *)
 let remove_vtables (crate : crate) : crate =
-  (* Compute the set of types declarations which are introduced to type vtables for dyn traits *)
-  let vtable_types = ref TypeDeclId.Set.empty in
-  let trait_decls =
-    TraitDeclId.Map.map
-      (fun (d : trait_decl) ->
-        (* Register the type of the vtable *)
-        (match d.vtable with
-        | Some { id = TAdtId id; _ } ->
-            vtable_types := TypeDeclId.Set.add id !vtable_types
-        | _ -> ());
-        (* Remove it from the trait decl *)
-        { d with vtable = None })
-      crate.trait_decls
-  in
-  let vtable_types = !vtable_types in
-  [%ltrace
-    "vtable_types: "
-    ^ Print.list_to_string
-        (Print.Crate.crate_type_decl_id_to_string crate)
-        (TypeDeclId.Set.to_list vtable_types)];
-
   let src_is_vtable (src : item_source) : bool =
     match src with
     | VTableInstanceItem _ | VTableTyItem _ | VTableMethodShimItem -> true
@@ -1383,11 +1362,16 @@ let remove_vtables (crate : crate) : crate =
             *)
             match g with
             | RecGroup ids ->
+                let keep (id : type_decl_id) : bool =
+                  match TypeDeclId.Map.find_opt id crate.type_decls with
+                  | None -> true
+                  | Some d -> not (src_is_vtable d.src)
+                in
                 let ids =
                   List.filter
                     (fun (id : item_id) ->
                       match id with
-                      | IdType id -> not (TypeDeclId.Set.mem id vtable_types)
+                      | IdType id -> keep id
                       | _ -> true)
                     ids
                 in
@@ -1421,7 +1405,7 @@ let remove_vtables (crate : crate) : crate =
   (* *)
   let type_decls =
     TypeDeclId.Map.filter
-      (fun id _ -> not (TypeDeclId.Set.mem id vtable_types))
+      (fun _ (d : type_decl) -> not (src_is_vtable d.src))
       crate.type_decls
   in
 
@@ -1435,6 +1419,14 @@ let remove_vtables (crate : crate) : crate =
     FunDeclId.Map.filter
       (fun _ (d : fun_decl) -> not (src_is_vtable d.src))
       crate.fun_decls
+  in
+
+  let trait_decls =
+    TraitDeclId.Map.map
+      (fun (d : trait_decl) ->
+        (* Remove the vtable *)
+        { d with vtable = None })
+      crate.trait_decls
   in
 
   { crate with declarations; type_decls; global_decls; fun_decls; trait_decls }
