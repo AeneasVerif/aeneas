@@ -1354,6 +1354,19 @@ let remove_vtables (crate : crate) : crate =
                 if ids <> [] then Some (FunGroup (RecGroup ids)) else None
             | NonRecGroup id ->
                 if keep id then Some (FunGroup (NonRecGroup id)) else None)
+        | TypeGroup g -> (
+            (* Filter the vtables *)
+            let keep (id : type_decl_id) : bool =
+              match TypeDeclId.Map.find_opt id crate.type_decls with
+              | None -> true
+              | Some d -> not (src_is_vtable d.src)
+            in
+            match g with
+            | RecGroup ids ->
+                let ids = List.filter keep ids in
+                if ids <> [] then Some (TypeGroup (RecGroup ids)) else None
+            | NonRecGroup id ->
+                if keep id then Some (TypeGroup (NonRecGroup id)) else None)
         | MixedGroup g -> (
             (* If the group is a mutually recursive group, filter the vtable types
                and check if the resulting group is only made of trait declarations.
