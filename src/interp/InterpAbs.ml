@@ -929,6 +929,11 @@ let merge_abstractions_merge_markers (span : Meta.span)
 
   let try_merge_aloan_contents (ty0 : rty) (lc0 : aloan_content) (ty1 : rty)
       (lc1 : aloan_content) : tavalue option =
+    [%ldebug
+      "- lc0: "
+      ^ aloan_content_to_string ctx lc0
+      ^ "\n- lc1: "
+      ^ aloan_content_to_string ctx lc1];
     match (lc0, lc1) with
     | AMutLoan (pm0, id0, child0), AMutLoan (pm1, id1, child1) when id0 = id1 ->
         [%sanity_check] span (complementary_markers pm0 pm1);
@@ -2130,12 +2135,18 @@ let merge_into_first_abstraction (span : Meta.span) (abs_kind : abs_kind)
     ~(can_end : bool) ~(with_abs_conts : bool)
     (merge_funs : merge_duplicates_funcs option) (ctx : eval_ctx)
     (abs_id0 : AbsId.id) (abs_id1 : AbsId.id) : eval_ctx * AbsId.id =
-  (* Small sanity check *)
-  [%sanity_check] span (abs_id0 <> abs_id1);
-
   (* Lookup the abstractions *)
   let abs0 = ctx_lookup_abs ctx abs_id0 in
   let abs1 = ctx_lookup_abs ctx abs_id1 in
+
+  [%ltrace
+    "- abs0:\n"
+    ^ abs_to_string span ctx abs0
+    ^ "\n\n- abs1:\n"
+    ^ abs_to_string span ctx abs1];
+
+  (* Small sanity check *)
+  [%sanity_check] span (abs_id0 <> abs_id1);
 
   (* Merge them *)
   let nabs =

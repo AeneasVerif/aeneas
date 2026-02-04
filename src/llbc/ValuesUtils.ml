@@ -438,6 +438,23 @@ let value_has_mutable_loans (v : value) : bool =
     false
   with Found -> true
 
+(** Check if a value contains shared loans.
+
+    Note that loans are necessarily concrete (there can't be loans hidden inside
+    symbolic values). *)
+let value_has_shared_loans (v : value) : bool =
+  let obj =
+    object
+      inherit [_] iter_tvalue
+      method! visit_VSharedLoan _ _ = raise Found
+    end
+  in
+  (* We use exceptions *)
+  try
+    obj#visit_value () v;
+    false
+  with Found -> true
+
 (** Check if a value has loans or borrows in **a general sense**.
 
     It checks if:

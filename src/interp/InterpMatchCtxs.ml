@@ -589,41 +589,6 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     add_symbolic_value sv_id left right;
     sv
 
-  let rec refresh_fresh_symbolic_values_in_joined_value (ctx : eval_ctx)
-      (v : tvalue) : tvalue =
-    let refresh = refresh_fresh_symbolic_values_in_joined_value ctx in
-    let value =
-      match v.value with
-      | VLiteral _ -> v.value
-      | VBottom -> [%craise] span "Unexpected"
-      | VAdt { variant_id; fields } ->
-          let fields = List.map refresh fields in
-          VAdt { variant_id; fields }
-      | VBorrow bc -> (
-          match bc with
-          | VSharedBorrow _ | VReservedMutBorrow _ -> v.value
-          | VMutBorrow (bid, v) -> VBorrow (VMutBorrow (bid, refresh v)))
-      | VLoan lc -> (
-          match lc with
-          | VSharedLoan (lid, sv) -> VLoan (VSharedLoan (lid, refresh sv))
-          | VMutLoan _ -> v.value)
-      | VSymbolic sv -> (
-          [%cassert] span
-            (not (ty_has_borrows (Some span) ctx.type_ctx.type_infos sv.sv_ty))
-            "Not implemented";
-          (* Refresh the symbolic value.
-
-             Look up the symbolic value to check if it was introduced by a join. *)
-          match SymbolicValueId.Map.find_opt sv.sv_id !S.symbolic_to_value with
-          | None ->
-              (* The symbolic value is not fresh: let's just copy it *)
-              (add_fresh_symbolic_value ctx sv.sv_ty v v).value
-          | Some (lv, rv) ->
-              (* Introduce a fresh symbolic value which derives from the same values *)
-              (add_fresh_symbolic_value ctx sv.sv_ty lv rv).value)
-    in
-    { v with value }
-
   let match_etys _ _ ty0 ty1 =
     [%sanity_check] span (ty0 = ty1);
     ty0
@@ -901,7 +866,59 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         let value = VLoan (VMutLoan lid) in
         let ty = v0.ty in
         { value; ty })
-      else [%craise] span "Not implemented yet")
+      else (
+        [%ltrace
+          "- v0:\n" ^ tvalue_to_string ctx0 v0 ^ "\n\n- v1:\n"
+          ^ tvalue_to_string ctx1 v1];
+        (* Case where there are only shared loans *)
+        if
+          (tvalue_has_shared_loans v0 || tvalue_has_shared_loans v1)
+          && (not (tvalue_has_mutable_loans v0))
+          && (not (tvalue_has_mutable_loans v1))
+          && (not (tvalue_has_borrows (Some span) ctx0 v0))
+          && not (tvalue_has_borrows (Some span) ctx1 v1)
+        then (
+          (* We put everything in the same region *)
+          let ref_ty = mk_ref_ty (RVar (Free rid)) ty RShared in
+          let av : tavalue =
+            let value =
+              ABorrow
+                (ASharedBorrow (PNone, lid, ctx0.fresh_shared_borrow_id ()))
+            in
+            { value; ty = ref_ty }
+          in
+          let output : tevalue = mk_etuple ~borrow_proj:true [] in
+          let input : tevalue = mk_etuple ~borrow_proj:false [] in
+
+          (* Create the abstraction expression *)
+          let cont : abs_cont option =
+            if S.with_abs_conts then
+              Some { output = Some output; input = Some input }
+            else None
+          in
+
+          let abs =
+            {
+              abs_id = ctx0.fresh_abs_id ();
+              kind = S.fresh_abs_kind;
+              can_end = true;
+              parents = AbsId.Set.empty;
+              original_parents = [];
+              regions = { owned = RegionId.Set.singleton rid };
+              ended_subabs = AbsLevelSet.empty;
+              avalues = av :: (avl0 @ avl1);
+              cont;
+            }
+          in
+          push_abs abs;
+          [%ltrace "abs:\n" ^ abs_to_string span ctx0 abs];
+
+          let ty = v0.ty in
+          [%sanity_check] span (ty_no_regions ty);
+          let sv = mk_fresh_symbolic_tvalue span ctx0 ty in
+          let value = VLoan (VSharedLoan (lid, sv)) in
+          { value; ty })
+        else [%craise] span "Not implemented yet"))
     else no_loans_no_bottoms_to_symbolic_value_with_borrows ctx0 ctx1 v0 v1
 
   let match_distinct_adts (_ : tvalue_matcher) (ctx0 : eval_ctx)
@@ -1097,6 +1114,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
   let match_shared_loans (_ : tvalue_matcher) (ctx0 : eval_ctx)
       (_ctx1 : eval_ctx) (ty : ety) (id0 : loan_id) (id1 : loan_id)
       (sv : tvalue) : tvalue =
+    [%ldebug
+      "- id0: " ^ BorrowId.to_string id0 ^ "\n- id1: " ^ BorrowId.to_string id1
+      ^ "\n- sv: " ^ tvalue_to_string ctx0 sv];
     (* Remark: if we dive inside data-structures (by using a shared borrow) the shared
        values might themselves contain shared loans, which need to be matched. For this
        reason, we destructure the shared values (see {!destructure_abs}).  *)
@@ -1106,6 +1126,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       [%cassert] span
         (not (ety_has_nested_borrows (Some span) ctx0.type_ctx.type_infos ty))
         "Nested borrows are not supported yet.";
+      [%cassert] span
+        (not (tvalue_has_borrows (Some span) ctx0 sv))
+        "Unimplemented";
 
       (* We need to introduce a fresh shared loan. *)
       let rid = ctx0.fresh_region_id () in
@@ -1125,9 +1148,9 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
       let mk_loan_av (pm : proj_marker) (lid : loan_id) : tavalue =
         let ty = borrow_ty in
-        (* TODO: we could probably do something more general which doesn't
-           require duplicating the symbolic value *)
-        let sv' = refresh_fresh_symbolic_values_in_joined_value ctx0 sv in
+        (* Note that we allow the shared value to contain loans!
+           For this reason we introduce fresh symbolic values. *)
+        let sv' = add_fresh_symbolic_value ctx0 sv.ty sv sv in
         let value =
           ALoan (ASharedLoan (pm, lid, sv', mk_aignored span bv_ty None))
         in
@@ -1436,8 +1459,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       "Unimplemented";
     [%cassert_recover] S.recover span
       (not
-         (ValuesUtils.value_has_loans_or_borrows (Some span)
-            ctx0.type_ctx.type_infos other.value))
+         (ValuesUtils.value_has_borrows (Some span) ctx0.type_ctx.type_infos
+            other.value))
       "Unimplemented";
 
     (* Join the inner value *)
