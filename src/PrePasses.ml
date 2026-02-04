@@ -1306,6 +1306,139 @@ let replace_static (crate : crate) : crate =
     let fun_decls = FunDeclId.Map.map update crate.fun_decls in
     { crate with fun_decls }
 
+(** Charon introduces vtables for the traits which support dyn. We do not want
+    to translate the corresponding type and global declarations. Moreover, the
+    presence of those declarations leads to mutually recursive groups of traits
+    and types. This micro-pass filters these definitions. *)
+let remove_vtables (crate : crate) : crate =
+  (* Compute the set of types declarations which are introduced to type vtables for dyn traits *)
+  let vtable_types = ref TypeDeclId.Set.empty in
+  let trait_decls =
+    TraitDeclId.Map.map
+      (fun (d : trait_decl) ->
+        (* Register the type of the vtable *)
+        (match d.vtable with
+        | Some { id = TAdtId id; _ } ->
+            vtable_types := TypeDeclId.Set.add id !vtable_types
+        | _ -> ());
+        (* Remove it from the trait decl *)
+        { d with vtable = None })
+      crate.trait_decls
+  in
+  let vtable_types = !vtable_types in
+  [%ltrace
+    "vtable_types: "
+    ^ Print.list_to_string
+        (Print.Crate.crate_type_decl_id_to_string crate)
+        (TypeDeclId.Set.to_list vtable_types)];
+
+  let src_is_vtable (src : item_source) : bool =
+    match src with
+    | VTableInstanceItem _ | VTableTyItem _ | VTableMethodShimItem -> true
+    | _ -> false
+  in
+
+  (* Filter the groups.
+
+     We detect mixed groups which combine trait declarations and their corresponding
+     vtable types, and remove the vtable types (and convert the group to a homogeneous
+     group if possible). We also filter the globals (and the functions corresponding
+     to their implementation) introduced for the vtables.
+  *)
+  let declarations =
+    List.filter_map
+      (fun (g : declaration_group) ->
+        match g with
+        | GlobalGroup g -> (
+            (* Filter the vtables *)
+            let keep (id : global_decl_id) : bool =
+              match GlobalDeclId.Map.find_opt id crate.global_decls with
+              | None -> true
+              | Some d -> not (src_is_vtable d.src)
+            in
+            match g with
+            | RecGroup ids ->
+                let ids = List.filter keep ids in
+                if ids <> [] then Some (GlobalGroup (RecGroup ids)) else None
+            | NonRecGroup id ->
+                if keep id then Some (GlobalGroup (NonRecGroup id)) else None)
+        | FunGroup g -> (
+            (* Filter the vtables *)
+            let keep (id : fun_decl_id) : bool =
+              match FunDeclId.Map.find_opt id crate.fun_decls with
+              | None -> true
+              | Some d -> not (src_is_vtable d.src)
+            in
+            match g with
+            | RecGroup ids ->
+                let ids = List.filter keep ids in
+                if ids <> [] then Some (FunGroup (RecGroup ids)) else None
+            | NonRecGroup id ->
+                if keep id then Some (FunGroup (NonRecGroup id)) else None)
+        | MixedGroup g -> (
+            (* If the group is a mutually recursive group, filter the vtable types
+               and check if the resulting group is only made of trait declarations.
+
+               TODO: we should check whether the resulting group is recursive or not.
+            *)
+            match g with
+            | RecGroup ids ->
+                let ids =
+                  List.filter
+                    (fun (id : item_id) ->
+                      match id with
+                      | IdType id -> not (TypeDeclId.Set.mem id vtable_types)
+                      | _ -> true)
+                    ids
+                in
+                (* Note that the resulting group shouldn't be empty, but we can
+                   still support this case *)
+                if ids = [] then None
+                else if
+                  List.for_all
+                    (fun (id : item_id) ->
+                      match id with
+                      | IdTraitDecl _ -> true
+                      | _ -> false)
+                    ids
+                then
+                  (* There only remains trait ids *)
+                  let ids =
+                    List.map
+                      (fun (id : item_id) ->
+                        match id with
+                        | IdTraitDecl id -> id
+                        | _ -> raise (Failure "Unreachable"))
+                      ids
+                  in
+                  Some (TraitDeclGroup (RecGroup ids))
+                else Some (MixedGroup (RecGroup ids))
+            | _ -> Some (MixedGroup g))
+        | _ -> Some g)
+      crate.declarations
+  in
+
+  (* *)
+  let type_decls =
+    TypeDeclId.Map.filter
+      (fun id _ -> not (TypeDeclId.Set.mem id vtable_types))
+      crate.type_decls
+  in
+
+  let global_decls =
+    GlobalDeclId.Map.filter
+      (fun _ (d : global_decl) -> not (src_is_vtable d.src))
+      crate.global_decls
+  in
+
+  let fun_decls =
+    FunDeclId.Map.filter
+      (fun _ (d : fun_decl) -> not (src_is_vtable d.src))
+      crate.fun_decls
+  in
+
+  { crate with declarations; type_decls; global_decls; fun_decls; trait_decls }
+
 let apply_passes (crate : crate) : crate =
   (* Passes that apply to the whole crate *)
   let crate = update_array_default crate in
@@ -1363,5 +1496,6 @@ let apply_passes (crate : crate) : crate =
   let crate = { crate with fun_decls } in
   let crate = filter_type_aliases crate in
   let crate = replace_static crate in
+  let crate = remove_vtables crate in
   [%ltrace "After pre-passes:\n" ^ Print.Crate.crate_to_string crate ^ "\n"];
   crate
