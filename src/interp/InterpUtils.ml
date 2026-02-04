@@ -454,6 +454,14 @@ let value_has_mutable_loans (v : value) : bool =
 let tvalue_has_mutable_loans (v : tvalue) : bool =
   ValuesUtils.value_has_mutable_loans v.value
 
+(** See {!ValuesUtils.value_has_shared_loans}. *)
+let value_has_shared_loans (v : value) : bool =
+  ValuesUtils.value_has_shared_loans v
+
+(** See {!ValuesUtils.value_has_shared_loans}. *)
+let tvalue_has_shared_loans (v : tvalue) : bool =
+  ValuesUtils.value_has_shared_loans v.value
+
 (** The borrow id of shared borrows doesn't uniquely identify shared borrows:
     when we need to uniquely identify a borrow, we use the borrow id for mutable
     borrows, and the shared borrow id for shared borrow (once again, the shared

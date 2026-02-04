@@ -46,7 +46,7 @@ let borrows_infos_to_string (indent : string)
     (infos : borrow_info BorrowId.Map.t) : string =
   BorrowId.Map.to_string (Some indent) show_borrow_info infos
 
-type borrow_kind = BMut | BShared | BReserved
+type borrow_kind = BMut | BShared | BReserved [@@deriving show]
 
 (** Check that:
     - loans and borrows are correctly related
@@ -190,7 +190,13 @@ let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
     (* Check that the borrow kind is consistent *)
     (match (info.loan_kind, kind) with
     | RShared, (BShared | BReserved) | RMut, BMut -> ()
-    | _ -> [%craise] span "Invariant not satisfied");
+    | _ ->
+        [%ltrace
+          "- kind: " ^ show_borrow_kind kind ^ "\n- info.loan_kind: "
+          ^ show_ref_kind info.loan_kind
+          ^ "\n- bid: " ^ BorrowId.to_string bid ^ "\n- sid : "
+          ^ Print.option_to_string SharedBorrowId.to_string sid];
+        [%craise] span "Invariant not satisfied");
     (* Check that shared borrow ids are unique *)
     (match sid with
     | None -> ()
