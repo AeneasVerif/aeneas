@@ -1481,7 +1481,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
         [%ltrace
           "Argument " ^ string_of_int i
           ^ " doesn't have the proper type:\n- arg: " ^ tvalue_to_string ctx arg
-          ^ "\n- arg.ty" ^ ty_to_string ctx arg.ty ^ "\n- target type: "
+          ^ "\n- arg.ty: " ^ ty_to_string ctx arg.ty ^ "\n- target type: "
           ^ ty_to_string ctx rty];
         [%craise] span "The input arguments don't have the proper type"))
     args_with_rtypes;

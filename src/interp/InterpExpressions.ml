@@ -379,9 +379,44 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
               (v, ctx, fun e -> e)
           | TLiteral lit_ty ->
               (literal_to_tvalue span lit_ty lit ctx, ctx, fun e -> e)
+          | TRef (RErased, (TAdt { id = TBuiltin TStr; _ } as str_ty), RShared)
+            ->
+              (* Reference to a string *)
+              (* Generate a fresh symbolic value for the string. In the translation,
+                 this fresh symbolic value will be defined as equal to the value of
+                 the string.
+
+                 We then create a reference to the string. *)
+              let sv = mk_fresh_symbolic_value span ctx str_ty in
+              let sval = mk_tvalue_from_symbolic_value sv in
+              (* Create a shared loan containing the string, as well as a shared borrow *)
+              let bid = ctx.fresh_borrow_id () in
+              let sid = ctx.fresh_shared_borrow_id () in
+              let loan : tvalue =
+                { value = VLoan (VSharedLoan (bid, sval)); ty = sval.ty }
+              in
+              let borrow : tvalue =
+                {
+                  value = VBorrow (VSharedBorrow (bid, sid));
+                  ty = TRef (RErased, sval.ty, RShared);
+                }
+              in
+              (* We need to push the shared loan in a dummy variable.
+                 Generally speaking we should not be allowed to put loans in dummy variables,
+                 but in the case of static lifetimes it is ok. TODO: generalize. *)
+              [%cassert] span (not !Config.use_static) "Unimplemented";
+              let dummy_id = ctx.fresh_dummy_var_id () in
+              let ctx = ctx_push_dummy_var ctx dummy_id loan in
+              (* Create the symbolic expression *)
+              let cf e =
+                let v : tvalue = { value = VLiteral lit; ty = str_ty } in
+                SA.IntroSymbolic (ctx, None, sv, VaSingleValue v, e)
+              in
+              (* *)
+              (borrow, ctx, cf)
           | _ ->
               [%craise] span
-                ("Encountered an incorrectly typed constant: "
+                ("Encountered an unsupported constant: "
                 ^ constant_expr_to_string ctx cv
                 ^ " : " ^ ty_to_string ctx cv.ty))
       | CTraitConst (trait_ref, const_name) -> (

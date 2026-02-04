@@ -9,7 +9,10 @@ let lean_builtin_types =
     mk_type "alloc::string::String" "String"
       ~kind:
         (KStruct
-           [ ("bytes", Some "bytes"); ("isValidUTF8", Some "isValidUTF8") ]);
+           [
+             ("toByteArray", Some "toByteArray");
+             ("isValidUTF8", Some "isValidUTF8");
+           ]);
     (* file: "Aeneas/Std/Vec.lean", line: 18 *)
     mk_type "alloc::vec::Vec" "alloc.vec.Vec";
     (* file: "Aeneas/Std/VecIter.lean", line: 7 *)
@@ -182,13 +185,13 @@ let lean_builtin_funs =
       "alloc.boxed.Box.deref_mut"
       ~keep_params:(Some [ true; false ])
       ~can_fail:false;
-    (* file: "Aeneas/Std/Vec.lean", line: 235 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 233 *)
     mk_fun "alloc::slice::{[@T]}::into_vec" "alloc.slice.Slice.into_vec"
       ~keep_params:(Some [ true; false ])
       ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Vec.lean", line: 223 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 221 *)
     mk_fun "alloc::slice::{[@T]}::to_vec" "alloc.slice.Slice.to_vec";
-    (* file: "Aeneas/Std/Vec.lean", line: 239 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 237 *)
     mk_fun "alloc::vec::from_elem" "alloc.vec.from_elem";
     (* file: "Aeneas/Std/VecIter.lean", line: 10 *)
     mk_fun
@@ -197,23 +200,23 @@ let lean_builtin_funs =
       "alloc.vec.into_iter.IteratorIntoIter.next"
       ~keep_params:(Some [ true; false ])
       ~can_fail:false;
-    (* file: "Aeneas/Std/Vec.lean", line: 383 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 381 *)
     mk_fun
       "alloc::vec::partial_eq::{core::cmp::PartialEq<alloc::vec::Vec<@T>, \
        alloc::vec::Vec<@U>>}::eq"
       "alloc.vec.partial_eq.PartialEqVec.eq"
       ~keep_params:(Some [ true; true; false; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 393 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 391 *)
     mk_fun
       "alloc::vec::partial_eq::{core::cmp::PartialEq<alloc::vec::Vec<@T>, \
        alloc::vec::Vec<@U>>}::ne"
       "alloc.vec.partial_eq.PartialEqVec.ne"
       ~keep_params:(Some [ true; true; false; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 259 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 257 *)
     mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::extend_from_slice"
       "alloc.vec.Vec.extend_from_slice"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 117 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 115 *)
     mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::insert" "alloc.vec.Vec.insert"
       ~keep_params:(Some [ true; false ]);
     (* file: "Aeneas/Std/Vec.lean", line: 50 *)
@@ -226,23 +229,23 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Vec.lean", line: 100 *)
     mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::push" "alloc.vec.Vec.push"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 293 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 291 *)
     mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::resize" "alloc.vec.Vec.resize"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 256 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 254 *)
     mk_fun "alloc::vec::{alloc::vec::Vec<@T>}::with_capacity"
       "alloc.vec.Vec.with_capacity" ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Vec.lean", line: 370 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 368 *)
     mk_fun "alloc::vec::{core::clone::Clone<alloc::vec::Vec<@T>>}::clone"
       "alloc.vec.CloneVec.clone"
       ~keep_params:(Some [ true; false ])
       ~keep_trait_clauses:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 333 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 331 *)
     mk_fun
       "alloc::vec::{core::convert::From<Box<[@T]>, alloc::vec::Vec<@T>>}::from"
       "alloc.vec.FromBoxSliceVec.from"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 319 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 317 *)
     mk_fun
       "alloc::vec::{core::convert::From<alloc::vec::Vec<@T>, [@T; @N]>}::from"
       "alloc.vec.FromVecArray.from" ~can_fail:false;
@@ -253,26 +256,26 @@ let lean_builtin_funs =
       "alloc.vec.IntoIteratorVec.into_iter"
       ~keep_params:(Some [ true; false ])
       ~can_fail:false;
-    (* file: "Aeneas/Std/Vec.lean", line: 270 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 268 *)
     mk_fun
       "alloc::vec::{core::ops::deref::Deref<alloc::vec::Vec<@T>, [@T]>}::deref"
       "alloc.vec.Vec.deref"
       ~keep_params:(Some [ true; false ])
       ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Vec.lean", line: 280 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 278 *)
     mk_fun
       "alloc::vec::{core::ops::deref::DerefMut<alloc::vec::Vec<@T>, \
        [@T]>}::deref_mut"
       "alloc.vec.Vec.deref_mut"
       ~keep_params:(Some [ true; false ])
       ~can_fail:false;
-    (* file: "Aeneas/Std/Vec.lean", line: 177 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 175 *)
     mk_fun
       "alloc::vec::{core::ops::index::Index<alloc::vec::Vec<@T>, @I, \
        @O>}::index"
       "alloc.vec.Vec.index"
       ~keep_params:(Some [ true; true; false; true ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 183 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 181 *)
     mk_fun
       "alloc::vec::{core::ops::index::IndexMut<alloc::vec::Vec<@T>, @I, \
        @O>}::index_mut"
@@ -623,6 +626,8 @@ let lean_builtin_funs =
     mk_fun "core::slice::{[@T]}::split_at_mut" "core.slice.Slice.split_at_mut";
     (* file: "Aeneas/Std/Slice.lean", line: 585 *)
     mk_fun "core::slice::{[@T]}::swap" "core.slice.Slice.swap";
+    (* file: "Aeneas/Std/Std/Io.lean", line: 5 *)
+    mk_fun "std::io::stdio::_print" "std.io.stdio._print";
   ]
 
 let lean_builtin_trait_decls =
@@ -827,7 +832,7 @@ let lean_builtin_trait_impls =
     (* file: "Aeneas/Std/Core/Core.lean", line: 33 *)
     mk_trait_impl "core::clone::Clone<alloc::alloc::Global>"
       "core.core.clone.CloneGlobal";
-    (* file: "Aeneas/Std/Vec.lean", line: 376 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 374 *)
     mk_trait_impl "core::clone::Clone<alloc::vec::Vec<@T>>"
       "core.clone.CloneallocvecVec"
       ~keep_params:(Some [ true; false ])
@@ -843,7 +848,7 @@ let lean_builtin_trait_impls =
     mk_trait_impl "core::cmp::PartialEq<Box<@T>, Box<@T>>"
       "core.cmp.PartialEqBox"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 404 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 402 *)
     mk_trait_impl
       "core::cmp::PartialEq<alloc::vec::Vec<@T>, alloc::vec::Vec<@U>>"
       "core.cmp.PartialEqVec"
@@ -854,11 +859,11 @@ let lean_builtin_trait_impls =
     mk_trait_impl "core::convert::AsMut<Box<@T>, @T>" "core.convert.AsMutBox";
     (* file: "Aeneas/Std/Core/Convert.lean", line: 29 *)
     mk_trait_impl "core::convert::From<@Self, @Self>" "core.convert.FromSame";
-    (* file: "Aeneas/Std/Vec.lean", line: 341 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 339 *)
     mk_trait_impl "core::convert::From<Box<[@T]>, alloc::vec::Vec<@T>>"
       "core.convert.FromBoxSliceVec"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 325 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 323 *)
     mk_trait_impl "core::convert::From<alloc::vec::Vec<@T>, [@T; @N]>"
       "core.convert.FromVecArray";
     (* file: "Aeneas/Std/Core/Convert.lean", line: 20 *)
@@ -908,14 +913,14 @@ let lean_builtin_trait_impls =
     (* file: "Aeneas/Std/Core/Ops.lean", line: 29 *)
     mk_trait_impl "core::ops::deref::Deref<Box<@T>, @T>"
       "core.ops.deref.DerefBoxInst";
-    (* file: "Aeneas/Std/Vec.lean", line: 275 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 273 *)
     mk_trait_impl "core::ops::deref::Deref<alloc::vec::Vec<@T>, [@T]>"
       "core.ops.deref.DerefVec"
       ~keep_params:(Some [ true; false ]);
     (* file: "Aeneas/Std/Core/Ops.lean", line: 36 *)
     mk_trait_impl "core::ops::deref::DerefMut<Box<@T>, @T>"
       "core.ops.deref.DerefMutBoxInst";
-    (* file: "Aeneas/Std/Vec.lean", line: 286 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 284 *)
     mk_trait_impl "core::ops::deref::DerefMut<alloc::vec::Vec<@T>, [@T]>"
       "core.ops.deref.DerefMutVec"
       ~keep_params:(Some [ true; false ]);
@@ -925,7 +930,7 @@ let lean_builtin_trait_impls =
     (* file: "Aeneas/Std/Slice.lean", line: 386 *)
     mk_trait_impl "core::ops::index::Index<[@T], @I, @O>"
       "core.ops.index.IndexSlice";
-    (* file: "Aeneas/Std/Vec.lean", line: 191 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 189 *)
     mk_trait_impl "core::ops::index::Index<alloc::vec::Vec<@T>, @T, @O>"
       "alloc.vec.Vec.Index"
       ~keep_params:(Some [ true; true; false; true ]);
@@ -935,7 +940,7 @@ let lean_builtin_trait_impls =
     (* file: "Aeneas/Std/Slice.lean", line: 393 *)
     mk_trait_impl "core::ops::index::IndexMut<[@T], @I, @O>"
       "core.ops.index.IndexMutSlice";
-    (* file: "Aeneas/Std/Vec.lean", line: 199 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 197 *)
     mk_trait_impl "core::ops::index::IndexMut<alloc::vec::Vec<@T>, @T, @O>"
       "alloc.vec.Vec.IndexMut"
       ~keep_params:(Some [ true; true; false; true ]);

@@ -6,6 +6,7 @@ import Aeneas.Std.PrimitivesLemmas
 import Aeneas.Std.RawPtr
 import Aeneas.Std.Scalar
 import Aeneas.Std.Slice
+import Aeneas.Std.Std
 import Aeneas.Std.Vec
 import Aeneas.Std.VecIter
 import Aeneas.Tuples
