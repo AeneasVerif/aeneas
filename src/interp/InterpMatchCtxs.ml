@@ -1704,6 +1704,8 @@ struct
 
     let match_el (msg : string) (m : Inj.t ref) (kl0 : Id.id list)
         (kl1 : Id.id list) : Id.id list =
+      if List.length kl0 != List.length kl1 then
+        raise (Distinct "Not the same number of elements");
       List.map (fun (k0, k1) -> match_e msg m k0 k1) (List.combine kl0 kl1)
 
     (** Figuring out mappings between sets of ids is hard in all generality...
