@@ -309,7 +309,7 @@ and dyn_predicate_to_string (env : fmt_env) (pred : dyn_predicate) =
   let trait_clauses =
     List.map (trait_clause_to_string env) generics.trait_clauses
   in
-  "dyn ("
+  "("
   ^ String.concat ", " (tys @ cgs)
   ^ " | "
   ^ String.concat " + " trait_clauses
