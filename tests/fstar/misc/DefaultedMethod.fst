@@ -5,68 +5,6 @@ open Primitives
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
-(** Trait declaration: [core::cmp::PartialEq]
-    Source: '/rustc/library/core/src/cmp.rs', lines 251:0-251:65
-    Name pattern: [core::cmp::PartialEq] *)
-noeq type core_cmp_PartialEq_t (self : Type0) (rhs : Type0) = {
-  eq : self -> rhs -> result bool;
-}
-
-(** Trait declaration: [core::cmp::Eq]
-    Source: '/rustc/library/core/src/cmp.rs', lines 338:0-338:58
-    Name pattern: [core::cmp::Eq] *)
-noeq type core_cmp_Eq_t (self : Type0) = {
-  partialEqInst : core_cmp_PartialEq_t self self;
-}
-
-(** [core::cmp::Ordering]
-    Source: '/rustc/library/core/src/cmp.rs', lines 392:0-392:17
-    Name pattern: [core::cmp::Ordering] *)
-type core_cmp_Ordering_t =
-| Core_cmp_Ordering_Less : core_cmp_Ordering_t
-| Core_cmp_Ordering_Equal : core_cmp_Ordering_t
-| Core_cmp_Ordering_Greater : core_cmp_Ordering_t
-
-(** Trait declaration: [core::cmp::PartialOrd]
-    Source: '/rustc/library/core/src/cmp.rs', lines 1354:0-1355:41
-    Name pattern: [core::cmp::PartialOrd] *)
-noeq type core_cmp_PartialOrd_t (self : Type0) (rhs : Type0) = {
-  partialEqInst : core_cmp_PartialEq_t self rhs;
-  partial_cmp : self -> rhs -> result (option core_cmp_Ordering_t);
-}
-
-(** Trait declaration: [core::cmp::Ord]
-    Source: '/rustc/library/core/src/cmp.rs', lines 969:0-969:73
-    Name pattern: [core::cmp::Ord] *)
-noeq type core_cmp_Ord_t (self : Type0) = {
-  eqInst : core_cmp_Eq_t self;
-  partialOrdInst : core_cmp_PartialOrd_t self self;
-  cmp : self -> self -> result core_cmp_Ordering_t;
-  min : self -> self -> result self;
-}
-
-(** [core::cmp::Ord::min]:
-    Source: '/rustc/library/core/src/cmp.rs', lines 1060:4-1062:39
-    Name pattern: [core::cmp::Ord::min] *)
-assume val core_cmp_Ord_min_default
-  (#self : Type0) (ordInst : core_cmp_Ord_t self) : self -> self -> result self
-
-(** [core::cmp::impls::{core::cmp::PartialEq<i32> for i32}::eq]:
-    Source: '/rustc/library/core/src/cmp.rs', lines 1865:16-1865:50
-    Name pattern: [core::cmp::impls::{core::cmp::PartialEq<i32, i32>}::eq] *)
-assume val core_cmp_impls_PartialEqI32I32_eq : i32 -> i32 -> result bool
-
-(** [core::cmp::impls::{core::cmp::PartialOrd<i32> for i32}::partial_cmp]:
-    Source: '/rustc/library/core/src/cmp.rs', lines 1986:16-1986:71
-    Name pattern: [core::cmp::impls::{core::cmp::PartialOrd<i32, i32>}::partial_cmp] *)
-assume val core_cmp_impls_PartialOrdI32I32_partial_cmp
-  : i32 -> i32 -> result (option core_cmp_Ordering_t)
-
-(** [core::cmp::impls::{core::cmp::Ord for i32}::cmp]:
-    Source: '/rustc/library/core/src/cmp.rs', lines 1997:16-1997:55
-    Name pattern: [core::cmp::impls::{core::cmp::Ord<i32>}::cmp] *)
-assume val core_cmp_impls_OrdI32_cmp : i32 -> i32 -> result core_cmp_Ordering_t
-
 (** [core::cmp::impls::{core::cmp::Ord for i32}::min]:
     Source: '/rustc/library/core/src/cmp.rs', lines 1995:12-1995:33
     Name pattern: [core::cmp::impls::{core::cmp::Ord<i32>}::min] *)
