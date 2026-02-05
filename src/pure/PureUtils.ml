@@ -279,7 +279,11 @@ class ['self] subst_visitor =
     inherit [_] map_expr
 
     method! visit_TVar subst var =
-      subst.ty_subst (Substitute.expect_free_var None var)
+      (* There can be bound vars because of dyn traits - TODO: handle bound
+         vars properly *)
+      match var with
+      | Bound _ -> TVar var
+      | Free id -> subst.ty_subst id
 
     method! visit_CgVar subst var =
       subst.cg_subst (Substitute.expect_free_var None var)
