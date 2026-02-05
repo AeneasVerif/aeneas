@@ -58,12 +58,13 @@ let compute_contexts (crate : crate) : decls_ctx =
   let fmt_env : Print.fmt_env =
     Charon.PrintLlbcAst.Crate.crate_to_fmt_env crate
   in
+
   (* Split the declaration groups between the declaration kinds (types, functions, etc.) *)
   let type_decls_groups, _, _, _, _, mixed_groups =
     split_declarations_to_group_maps crate.declarations
   in
   (* Check if there are mixed groups: if there are, we report an error
-     and ignore those *)
+     and ignore those. *)
   (if mixed_groups <> [] then
      (* We detected mixed groups: print a nice error message *)
      let item_id_to_string (id : item_id) : string =

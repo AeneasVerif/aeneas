@@ -1306,6 +1306,178 @@ let replace_static (crate : crate) : crate =
     let fun_decls = FunDeclId.Map.map update crate.fun_decls in
     { crate with fun_decls }
 
+(** Charon introduces vtables for the traits which support dyn. We do not want
+    to translate the corresponding type and global declarations. Moreover, the
+    presence of those declarations leads to mutually recursive groups of traits
+    and types. This micro-pass filters these definitions. *)
+let remove_vtables (crate : crate) : crate =
+  let src_is_vtable (src : item_source) : bool =
+    match src with
+    | VTableInstanceItem _ | VTableTyItem _ | VTableMethodShimItem -> true
+    | _ -> false
+  in
+
+  (* Filter the groups.
+
+     We detect mixed groups which combine trait declarations and their corresponding
+     vtable types, and remove the vtable types (and convert the group to a homogeneous
+     group if possible). We also filter the globals (and the functions corresponding
+     to their implementation) introduced for the vtables.
+  *)
+  let declarations =
+    List.filter_map
+      (fun (g : declaration_group) ->
+        match g with
+        | GlobalGroup g -> (
+            (* Filter the vtables *)
+            let keep (id : global_decl_id) : bool =
+              match GlobalDeclId.Map.find_opt id crate.global_decls with
+              | None -> true
+              | Some d -> not (src_is_vtable d.src)
+            in
+            match g with
+            | RecGroup ids ->
+                let ids = List.filter keep ids in
+                if ids <> [] then Some (GlobalGroup (RecGroup ids)) else None
+            | NonRecGroup id ->
+                if keep id then Some (GlobalGroup (NonRecGroup id)) else None)
+        | FunGroup g -> (
+            (* Filter the vtables *)
+            let keep (id : fun_decl_id) : bool =
+              match FunDeclId.Map.find_opt id crate.fun_decls with
+              | None -> true
+              | Some d -> not (src_is_vtable d.src)
+            in
+            match g with
+            | RecGroup ids ->
+                let ids = List.filter keep ids in
+                if ids <> [] then Some (FunGroup (RecGroup ids)) else None
+            | NonRecGroup id ->
+                if keep id then Some (FunGroup (NonRecGroup id)) else None)
+        | TypeGroup g -> (
+            (* Filter the vtables *)
+            let keep (id : type_decl_id) : bool =
+              match TypeDeclId.Map.find_opt id crate.type_decls with
+              | None -> true
+              | Some d -> not (src_is_vtable d.src)
+            in
+            match g with
+            | RecGroup ids ->
+                let ids = List.filter keep ids in
+                if ids <> [] then Some (TypeGroup (RecGroup ids)) else None
+            | NonRecGroup id ->
+                if keep id then Some (TypeGroup (NonRecGroup id)) else None)
+        | MixedGroup g -> (
+            (* If the group is a mutually recursive group, filter the vtable types
+               and check if the resulting group is only made of trait declarations.
+
+               TODO: we should check whether the resulting group is recursive or not.
+            *)
+            match g with
+            | RecGroup ids ->
+                let keep (id : type_decl_id) : bool =
+                  match TypeDeclId.Map.find_opt id crate.type_decls with
+                  | None -> true
+                  | Some d -> not (src_is_vtable d.src)
+                in
+                let ids =
+                  List.filter
+                    (fun (id : item_id) ->
+                      match id with
+                      | IdType id -> keep id
+                      | _ -> true)
+                    ids
+                in
+                (* Note that the resulting group shouldn't be empty, but we can
+                   still support this case *)
+                if ids = [] then None
+                else if
+                  List.for_all
+                    (fun (id : item_id) ->
+                      match id with
+                      | IdTraitDecl _ -> true
+                      | _ -> false)
+                    ids
+                then
+                  (* There only remains trait ids *)
+                  let ids =
+                    List.map
+                      (fun (id : item_id) ->
+                        match id with
+                        | IdTraitDecl id -> id
+                        | _ -> raise (Failure "Unreachable"))
+                      ids
+                  in
+                  (* If the resulting group is a singleton, check whether
+                     it is recursive *)
+                  match ids with
+                  | [ id ] ->
+                      let is_rec =
+                        match TraitDeclId.Map.find_opt id crate.trait_decls with
+                        | None ->
+                            (* don't know so by default we consider it to be recursive *)
+                            true
+                        | Some d ->
+                            (* We count the number of occurrences of the id of the trait
+                             decl itself - if it's > 1 then it means it is recursive
+                             (there is one occurrence for the [def_id] field) *)
+                            let found = ref 0 in
+                            let visitor =
+                              object (self)
+                                inherit [_] iter_trait_decl
+
+                                method! visit_trait_ref_contents _
+                                    { kind; trait_decl_ref = _ } =
+                                  (* We ignore the [trait_decl_ref] which refer
+                                     to the trait declaration itself if this is
+                                     an occurrence of [Self] *)
+                                  self#visit_trait_ref_kind () kind
+
+                                method! visit_trait_decl_id _ id' =
+                                  if id' = id then found := !found + 1
+                              end
+                            in
+                            visitor#visit_trait_decl () { d with vtable = None };
+                            !found > 1
+                      in
+                      if is_rec then Some (TraitDeclGroup (RecGroup [ id ]))
+                      else Some (TraitDeclGroup (NonRecGroup id))
+                  | _ -> Some (TraitDeclGroup (RecGroup ids))
+                else Some (MixedGroup (RecGroup ids))
+            | _ -> Some (MixedGroup g))
+        | _ -> Some g)
+      crate.declarations
+  in
+
+  (* *)
+  let type_decls =
+    TypeDeclId.Map.filter
+      (fun _ (d : type_decl) -> not (src_is_vtable d.src))
+      crate.type_decls
+  in
+
+  let global_decls =
+    GlobalDeclId.Map.filter
+      (fun _ (d : global_decl) -> not (src_is_vtable d.src))
+      crate.global_decls
+  in
+
+  let fun_decls =
+    FunDeclId.Map.filter
+      (fun _ (d : fun_decl) -> not (src_is_vtable d.src))
+      crate.fun_decls
+  in
+
+  let trait_decls =
+    TraitDeclId.Map.map
+      (fun (d : trait_decl) ->
+        (* Remove the vtable *)
+        { d with vtable = None })
+      crate.trait_decls
+  in
+
+  { crate with declarations; type_decls; global_decls; fun_decls; trait_decls }
+
 let apply_passes (crate : crate) : crate =
   (* Passes that apply to the whole crate *)
   let crate = update_array_default crate in
@@ -1363,5 +1535,6 @@ let apply_passes (crate : crate) : crate =
   let crate = { crate with fun_decls } in
   let crate = filter_type_aliases crate in
   let crate = replace_static crate in
+  let crate = remove_vtables crate in
   [%ltrace "After pre-passes:\n" ^ Print.Crate.crate_to_string crate ^ "\n"];
   crate

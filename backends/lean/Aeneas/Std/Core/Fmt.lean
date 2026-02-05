@@ -79,4 +79,45 @@ def core.result.Result.expect {T : Type} {E : Type} (_DebugInst : core.fmt.Debug
     /- TODO: this is a simplistic model -/
     .fail .panic
 
+@[rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field1_finish", simp]
+def core.fmt.Formatter.debug_struct_field1_finish
+  (fmt : core.fmt.Formatter) (_ : Str) (_ : Str) (_ : Dyn (fun _dyn => core.fmt.Debug _dyn)) :
+  Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=
+  -- TODO: more precise model
+  .ok (.Ok (), fmt)
+
+@[rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field4_finish", simp]
+def core.fmt.Formatter.debug_struct_field4_finish :
+  core.fmt.Formatter → Str → Str → Dyn (fun _dyn => core.fmt.Debug _dyn)
+    → Str → Dyn (fun _dyn => core.fmt.Debug _dyn) → Str →
+    Dyn (fun _dyn => core.fmt.Debug _dyn) → Str → Dyn (fun _dyn => core.fmt.Debug _dyn)
+    → Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=
+  -- TODO: more precise model
+  fun fmt _ _ _ _ _ _ _ _ _ =>
+  .ok (.Ok (), fmt)
+
+@[rust_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_tuple_field1_finish"]
+def core.fmt.Formatter.debug_tuple_field1_finish :
+  core.fmt.Formatter → Str → Dyn (fun _dyn => core.fmt.Debug _dyn) →
+    Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=
+  -- TODO: more precise model
+  fun fmt _ _ =>
+  .ok (.Ok (), fmt)
+
+@[reducible, rust_trait_impl "core::fmt::Debug<&'0 @T>"]
+def core.fmt.DebugShared {T : Type} (DebugInst : core.fmt.Debug T) :
+  core.fmt.Debug T := {
+  fmt := core.fmt.DebugShared.fmt DebugInst
+}
+
+@[reducible, rust_trait_impl "core::fmt::Debug<()>"]
+def core.fmt.DebugUnit : core.fmt.Debug Unit := {
+  fmt := core.fmt.DebugUnit.fmt
+}
+
+@[reducible, rust_trait_impl "core::fmt::Debug<bool>"]
+def core.fmt.DebugBool : core.fmt.Debug Bool := {
+  fmt := core.fmt.DebugBool.fmt
+}
+
 end Aeneas.Std

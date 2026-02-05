@@ -313,6 +313,10 @@ and value_aggregate =
           interpreter, we introduce a fresh symbolic value. *)
   | VaTraitConstValue of trait_ref * string  (** A trait constant value *)
   | VaDiscriminant of symbolic_value  (** A discriminant read *)
+  | VaDynTrait of tvalue * trait_ref
+      (** A dynamic trait. This gets inserted when we convert a box of an
+          element of a known type to a box of an element of type [dyn] through
+          an unsized cast: we need the trait reference to perform the cast. *)
 [@@deriving
   show,
   visitors

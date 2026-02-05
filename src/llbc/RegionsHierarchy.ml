@@ -171,7 +171,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
         List.iter (explore_ty []) (output :: inputs)
     | TFnDef _ -> [%craise_opt_span] span "unsupported: FnDef"
     | TDynTrait _ ->
-        [%craise_opt_span] span "Dynamic trait types are not supported yet"
+        [%cassert_opt_span] span Config.type_analysis_ignore_dyn "Unimplemented"
     | TPtrMetadata _ -> [%craise_opt_span] span "unsupported: PtrMetadata"
     | TError _ ->
         [%craise_opt_span] span "Found type error in the output of charon"

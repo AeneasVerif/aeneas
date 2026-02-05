@@ -409,6 +409,23 @@ def core.cmp.PartialEqVec {T : Type} {U : Type}
   ne := alloc.vec.partial_eq.PartialEqVec.ne PartialEqInst
 }
 
+@[rust_fun "alloc::vec::{core::fmt::Debug<alloc::vec::Vec<@T>>}::fmt"
+  (keepParams := [true, false])]
+def alloc.vec.DebugVec.fmt
+  {T : Type} (_DebugInst : core.fmt.Debug T) :
+  alloc.vec.Vec T → core.fmt.Formatter →
+  Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=
+  -- TODO: more precise model
+  -- We should call the fmt function on the elements of the vector
+  fun _ fmt => .ok (.Ok (), fmt)
+
+@[reducible,
+  rust_trait_impl "core::fmt::Debug<alloc::vec::Vec<@T>>" (keepParams := [true, false])]
+def core.fmt.DebugVec {T : Type} (DebugInst : core.fmt.Debug
+  T) : core.fmt.Debug (alloc.vec.Vec T) := {
+  fmt := alloc.vec.DebugVec.fmt DebugInst
+}
+
 namespace Tests
   example
     (α : Type)

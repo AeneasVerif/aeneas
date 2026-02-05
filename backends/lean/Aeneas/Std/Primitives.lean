@@ -244,6 +244,18 @@ def Option.ofResult {a : Type u} (x : Result a) :
   | ok x => some x
   | _ => none
 
+/-!
+# Dyn
+-/
+
+structure Dyn (Trait : Type → Type) where
+  /-- The type Self -/
+  self : Type
+  /-- The trait instance -/
+  inst : Trait self
+  /-- The value itself -/
+  value : self
+
 end Std
 
 end Aeneas

@@ -249,6 +249,10 @@ let lean_builtin_funs =
     mk_fun
       "alloc::vec::{core::convert::From<alloc::vec::Vec<@T>, [@T; @N]>}::from"
       "alloc.vec.FromVecArray.from" ~can_fail:false;
+    (* file: "Aeneas/Std/Vec.lean", line: 412 *)
+    mk_fun "alloc::vec::{core::fmt::Debug<alloc::vec::Vec<@T>>}::fmt"
+      "alloc.vec.DebugVec.fmt"
+      ~keep_params:(Some [ true; false ]);
     (* file: "Aeneas/Std/VecIter.lean", line: 19 *)
     mk_fun
       "alloc::vec::{core::iter::traits::collect::IntoIterator<alloc::vec::Vec<@T>, \
@@ -393,6 +397,24 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Default.lean", line: 9 *)
     mk_fun "core::default::{core::default::Default<bool>}::default"
       "core.default.DefaultBool.default";
+    (* file: "Aeneas/Std/Scalar/Fmt.lean", line: 102 *)
+    mk_fun "core::fmt::num::{core::fmt::Debug<i128>}::fmt"
+      "core.fmt.num.DebugI128.fmt";
+    (* file: "Aeneas/Std/Scalar/Fmt.lean", line: 84 *)
+    mk_fun "core::fmt::num::{core::fmt::Debug<i16>}::fmt"
+      "core.fmt.num.DebugI16.fmt";
+    (* file: "Aeneas/Std/Scalar/Fmt.lean", line: 90 *)
+    mk_fun "core::fmt::num::{core::fmt::Debug<i32>}::fmt"
+      "core.fmt.num.DebugI32.fmt";
+    (* file: "Aeneas/Std/Scalar/Fmt.lean", line: 96 *)
+    mk_fun "core::fmt::num::{core::fmt::Debug<i64>}::fmt"
+      "core.fmt.num.DebugI64.fmt";
+    (* file: "Aeneas/Std/Scalar/Fmt.lean", line: 78 *)
+    mk_fun "core::fmt::num::{core::fmt::Debug<i8>}::fmt"
+      "core.fmt.num.DebugI8.fmt";
+    (* file: "Aeneas/Std/Scalar/Fmt.lean", line: 108 *)
+    mk_fun "core::fmt::num::{core::fmt::Debug<isize>}::fmt"
+      "core.fmt.num.DebugIsize.fmt";
     (* file: "Aeneas/Std/Scalar/Fmt.lean", line: 36 *)
     mk_fun "core::fmt::num::{core::fmt::Debug<u128>}::fmt"
       "core.fmt.num.DebugU128.fmt";
@@ -424,6 +446,15 @@ let lean_builtin_funs =
     mk_fun "core::fmt::{core::fmt::Debug<()>}::fmt" "core.fmt.DebugUnit.fmt";
     (* file: "Aeneas/Std/Core/Fmt.lean", line: 61 *)
     mk_fun "core::fmt::{core::fmt::Debug<bool>}::fmt" "core.fmt.DebugBool.fmt";
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 82 *)
+    mk_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field1_finish"
+      "core.fmt.Formatter.debug_struct_field1_finish";
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 89 *)
+    mk_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field4_finish"
+      "core.fmt.Formatter.debug_struct_field4_finish";
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 99 *)
+    mk_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_tuple_field1_finish"
+      "core.fmt.Formatter.debug_tuple_field1_finish";
     (* file: "Aeneas/Std/Core/Fmt.lean", line: 48 *)
     mk_fun "core::fmt::{core::fmt::Formatter<'a>}::write_fmt"
       "core.fmt.Formatter.write_fmt";
@@ -884,9 +915,42 @@ let lean_builtin_trait_impls =
       "core.default.DefaultArrayEmpty";
     (* file: "Aeneas/Std/Array/Array.lean", line: 257 *)
     mk_trait_impl "core::default::Default<[@T; @N]>" "core.default.DefaultArray";
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 107 *)
+    mk_trait_impl "core::fmt::Debug<&'0 @T>" "core.fmt.DebugShared";
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 113 *)
+    mk_trait_impl "core::fmt::Debug<()>" "core.fmt.DebugUnit";
+    (* file: "Aeneas/Std/Vec.lean", line: 423 *)
+    mk_trait_impl "core::fmt::Debug<alloc::vec::Vec<@T>>" "core.fmt.DebugVec"
+      ~keep_params:(Some [ true; false ]);
+    (* file: "Aeneas/Std/Core/Fmt.lean", line: 118 *)
+    mk_trait_impl "core::fmt::Debug<bool>" "core.fmt.DebugBool";
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 149 *)
     mk_trait_impl "core::fmt::Debug<core::array::TryFromSliceError>"
       "core.fmt.DebugTryFromSliceError";
+    (* file: "Aeneas/Std/Scalar/Fmt.lean", line: 134 *)
+    mk_trait_impl "core::fmt::Debug<i128>" "core.fmt.DebugI128";
+    (* file: "Aeneas/Std/Scalar/Fmt.lean", line: 119 *)
+    mk_trait_impl "core::fmt::Debug<i16>" "core.fmt.DebugI16";
+    (* file: "Aeneas/Std/Scalar/Fmt.lean", line: 124 *)
+    mk_trait_impl "core::fmt::Debug<i32>" "core.fmt.DebugI32";
+    (* file: "Aeneas/Std/Scalar/Fmt.lean", line: 129 *)
+    mk_trait_impl "core::fmt::Debug<i64>" "core.fmt.DebugI64";
+    (* file: "Aeneas/Std/Scalar/Fmt.lean", line: 114 *)
+    mk_trait_impl "core::fmt::Debug<i8>" "core.fmt.DebugI8";
+    (* file: "Aeneas/Std/Scalar/Fmt.lean", line: 139 *)
+    mk_trait_impl "core::fmt::Debug<isize>" "core.fmt.DebugIsize";
+    (* file: "Aeneas/Std/Scalar/Fmt.lean", line: 68 *)
+    mk_trait_impl "core::fmt::Debug<u128>" "core.fmt.DebugU128";
+    (* file: "Aeneas/Std/Scalar/Fmt.lean", line: 53 *)
+    mk_trait_impl "core::fmt::Debug<u16>" "core.fmt.DebugU16";
+    (* file: "Aeneas/Std/Scalar/Fmt.lean", line: 58 *)
+    mk_trait_impl "core::fmt::Debug<u32>" "core.fmt.DebugU32";
+    (* file: "Aeneas/Std/Scalar/Fmt.lean", line: 63 *)
+    mk_trait_impl "core::fmt::Debug<u64>" "core.fmt.DebugU64";
+    (* file: "Aeneas/Std/Scalar/Fmt.lean", line: 48 *)
+    mk_trait_impl "core::fmt::Debug<u8>" "core.fmt.DebugU8";
+    (* file: "Aeneas/Std/Scalar/Fmt.lean", line: 73 *)
+    mk_trait_impl "core::fmt::Debug<usize>" "core.fmt.DebugUsize";
     (* file: "Aeneas/Std/Core/Iter.lean", line: 107 *)
     mk_trait_impl "core::iter::range::Step<usize>" "core.iter.range.StepUsize";
     (* file: "Aeneas/Std/Core/Iter.lean", line: 61 *)

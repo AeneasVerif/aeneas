@@ -359,8 +359,11 @@ let rec translate_fwd_ty (span : Meta.span option) (type_infos : type_infos)
       TTraitType (trait_ref, type_name)
   | TFnDef _ | TFnPtr _ ->
       [%craise_opt_span] span "Arrow types are not supported yet"
-  | TDynTrait _ ->
-      [%craise_opt_span] span "Dynamic trait types are not supported yet"
+  | TDynTrait { binder } ->
+      let params, _predicates =
+        translate_generic_params span binder.binder_params
+      in
+      TDynTrait { params }
   | TPtrMetadata _ -> [%craise_opt_span] span "unsupported: PtrMetadata"
   | TError _ ->
       [%craise_opt_span] span "Found type error in the output of charon"

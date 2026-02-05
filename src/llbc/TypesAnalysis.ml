@@ -451,7 +451,15 @@ let analyze_type_declaration_group (type_decls : type_decl TypeDeclId.Map.t)
     | RecGroup ids -> (true, ids)
   in
   (* Retrieve the type definitions *)
-  let decl_defs = List.map (fun id -> TypeDeclId.Map.find id type_decls) ids in
+  let decl_defs =
+    List.map
+      (fun id ->
+        [%unwrap_opt_span] None
+          (TypeDeclId.Map.find_opt id type_decls)
+          ("Internal error: please report an issue. Missing type declaration \
+            of id: " ^ TypeDeclId.to_string id))
+      ids
+  in
   (* Initialize the type information for the current definitions *)
   let infos =
     List.fold_left

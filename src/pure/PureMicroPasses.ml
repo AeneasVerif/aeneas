@@ -7248,6 +7248,10 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
                     (hole, args_tys, false)
                   else (hole, mk_holes (), false)
             end
+          | MkDynTrait _ ->
+              (* The type is statically known because of the trait ref *)
+              [%sanity_check] span (List.length known_args_tys = 1);
+              (known_f_ty, known_args_tys, false)
           | Proj _ | TraitConst _ ->
               (* Being conservative here *)
               (hole, mk_holes (), false)
@@ -7308,6 +7312,10 @@ let add_type_annotations (trans_ctx : trans_ctx)
   in
   let add_annot (decl : fun_decl) =
     try
+      [%ltrace
+        let fmt = trans_ctx_to_pure_fmt_env trans_ctx in
+        "About to add type annotations to:\n\n"
+        ^ PrintPure.fun_decl_to_string fmt decl];
       let decl =
         add_type_annotations_to_fun_decl trans_ctx trans_funs_map builtin_sigs
           type_decls decl

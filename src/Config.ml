@@ -461,3 +461,11 @@ let max_error_spans = ref 5
     of raising an error we do not join the contexts and duplicate the code after
     the match/switch/etc. *)
 let recover_joins = ref true
+
+(** When analyzing types, for instance to check whether they use erased regions
+    or not, we ignore dynamic traits.
+
+    This may cause issues in the future once we want to be more general: for
+    this reason we guard all checks with [type_analysis_ignore_dyn] so that it
+    is easy to activate them. *)
+let type_analysis_ignore_dyn = true
