@@ -1,8 +1,11 @@
 //@ [!lean] skip
 
-// TODO: #[derive(Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum CopyEnumOneVariant {
+    Variant(bool),
+}
 
-#[derive(Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum ScalarEnum {
     Variant0 = 2,
     Variant1 = 4,
@@ -10,7 +13,7 @@ enum ScalarEnum {
     Variant3 = 16,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum CopyEnum<T> {
     Variant0,
     Variant1(bool),
@@ -18,7 +21,7 @@ enum CopyEnum<T> {
     Variant3(T),
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 enum Enum<T> {
     Variant0,
     Variant1(bool),
@@ -27,6 +30,7 @@ enum Enum<T> {
     Variant4(Vec<T>),
 }
 
+// TODO: add Debug
 #[derive(Clone, PartialEq, Eq)]
 enum List<T> {
     Nil,
@@ -34,7 +38,7 @@ enum List<T> {
     // TODO: Vec<...>
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 struct CopyStruct<T> {
     f0: (),
     f1: bool,
@@ -42,7 +46,7 @@ struct CopyStruct<T> {
     f3: T,
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 struct Struct<T> {
     f: Vec<T>,
 }
