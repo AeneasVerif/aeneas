@@ -2114,6 +2114,32 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
     ref SymbolicValueId.Map.empty
   in
 
+  let save_maps () =
+    ( !rid_map,
+      !blid_map,
+      !borrow_id_map,
+      !loan_id_map,
+      !aid_map,
+      !sid_map,
+      !sid_to_value_map )
+  in
+  let restore_maps
+      ( rid_map0,
+        blid_map0,
+        borrow_id_map0,
+        loan_id_map0,
+        aid_map0,
+        sid_map0,
+        sid_to_value_map0 ) =
+    rid_map := rid_map0;
+    blid_map := blid_map0;
+    borrow_id_map := borrow_id_map0;
+    loan_id_map := loan_id_map0;
+    aid_map := aid_map0;
+    sid_map := sid_map0;
+    sid_to_value_map := sid_to_value_map0
+  in
+
   let module S : MatchCheckEquivState = struct
     let span = span
     let recover = recoverable
@@ -2248,10 +2274,77 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
           (Distinct ("Missing abs in right environment: " ^ AbsId.to_string id)))
       id
   in
-  let pop_first_abs =
-    env_pop_first_abs (fun _ ->
-        raise (Distinct "Missing abs in right environment"))
+
+  (* Pop the first abs matching [abs0].
+     We repeatedly attempt to match, saving the state before matching and
+     restoring it if it failed. *)
+  let pop_first_matching_abs abs0 env =
+    env_pop_binding
+      (fun _ ->
+        raise (Distinct "Could not find a matching abs in right environment"))
+      (fun e ->
+        match e with
+        | EAbs abs1 ->
+            (* Save the maps to make sure we can backtrack *)
+            let maps = save_maps () in
+            (* Attempt matching *)
+            begin
+              try
+                match_abstractions abs0 abs1;
+                Some abs1
+              with Distinct _ ->
+                (* Restore the state and continue exploring *)
+                restore_maps maps;
+                None
+            end
+        | _ -> None)
+      env
   in
+
+  (* We reorder [env0] to have the variables, fixed abstractions and fixed
+     dummy variables, then:
+     - the dummy variables
+     - the non-fixed abstractions
+
+     We then repeatedly pop the first element from the environment and match it
+     with an element from [env1]. For the fixed elements and the variabels it is
+     easy: we simply lookup the corresponding element in [env1]:
+     - for the fixed abstractions and variables the values should be the same
+     - for the variables, the values should be equivalent
+
+     Then, we attempt to match the abstractions. We attempt to allow the abstractions
+     to be in an arbitrary order, so match every abstraction [abs0] from the left
+     environment with every abstraction from the right environment, stopping when
+     a match is successful (and saving the state before any match, while restoring
+     it if a match failed). Note that in full generality we may need to backtrack:
+     for now we don't.
+  *)
+  let ctx0 =
+    let fixed, non_fixed =
+      List.partition
+        (fun (e : env_elem) ->
+          match e with
+          | EBinding (BVar _, _) -> true
+          | EBinding (BDummy id, _) -> DummyVarId.Set.mem id fixed_ids.dids
+          | EAbs abs -> AbsId.Set.mem abs.abs_id fixed_ids.aids
+          | EFrame -> true)
+        ctx0.env
+    in
+    let abs, dummys =
+      List.partition
+        (fun (e : env_elem) ->
+          match e with
+          | EAbs _ -> true
+          | _ -> false)
+        non_fixed
+    in
+    { ctx0 with env = abs @ dummys @ fixed }
+  in
+  [%ltrace
+    "\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
+    ^ "\n\n- ctx0 after reordering the elements:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx0
+    ^ "\n"];
 
   (* Rem.: this function raises exceptions of type [Distinct] *)
   let rec match_envs (env0 : env) (env1 : env) : unit =
@@ -2310,7 +2403,7 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
           match_envs env0' env1')
         else (
           [%ldebug "match_envs: matching abs: not fixed abs"];
-          let abs1, env1' = pop_first_abs env1 in
+          let abs1, env1' = pop_first_matching_abs abs0 env1 in
           (* Match the values *)
           match_abstractions abs0 abs1;
           (* Continue *)
