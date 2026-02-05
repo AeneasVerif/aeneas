@@ -37,6 +37,38 @@ structure core.iter.traits.iterator.Iterator (Self : Type) (Self_Item : Type)
   next : Self → Result ((Option Self_Item) × Self)
   step_by : Self → Usize → Result (core.iter.adapters.step_by.StepBy Self)
 
+@[rust_fun "core::iter::traits::iterator::Iterator::step_by"]
+def core.iter.traits.iterator.Iterator.step_by.default
+  {Self : Type} (self: Self) (step_by : Std.Usize) :
+  Result (core.iter.adapters.step_by.StepBy Self) := .ok ⟨ self, step_by ⟩
+
+@[rust_fun
+  "core::iter::adapters::step_by::{core::iter::traits::iterator::Iterator<core::iter::adapters::step_by::StepBy<@I>, @Clause0_Item>}::next"]
+def core.iter.adapters.step_by.IteratorStepBy.next
+  {I : Type} {Item : Type}
+  (IteratorInst : core.iter.traits.iterator.Iterator I Item) :
+  core.iter.adapters.step_by.StepBy I →
+  Result ((Option Item) × (core.iter.adapters.step_by.StepBy I)) :=
+  sorry -- TODO
+
+@[rust_fun
+  "core::iter::adapters::step_by::{core::iter::traits::iterator::Iterator<core::iter::adapters::step_by::StepBy<@I>, @Clause0_Item>}::step_by"]
+def core.iter.adapters.step_by.IteratorStepBy.step_by
+  {I : Type} {Item : Type}
+  (IteratorInst : core.iter.traits.iterator.Iterator I Item) :
+  core.iter.adapters.step_by.StepBy I → Std.Usize →
+  Result (core.iter.adapters.step_by.StepBy (core.iter.adapters.step_by.StepBy I)) := by
+  sorry -- TODO
+
+@[reducible, rust_trait_impl
+  "core::iter::traits::iterator::Iterator<core::iter::adapters::step_by::StepBy<@I>, @Clause0_Item>"]
+def core.iter.traits.iterator.IteratorStepBy {I : Type} {Item : Type}
+  (IteratorInst : core.iter.traits.iterator.Iterator I Item) :
+  core.iter.traits.iterator.Iterator (core.iter.adapters.step_by.StepBy I) Item := {
+  next := core.iter.adapters.step_by.IteratorStepBy.next IteratorInst
+  step_by := core.iter.adapters.step_by.IteratorStepBy.step_by IteratorInst
+}
+
 @[rust_trait "core::iter::traits::accum::Sum"]
 structure core.iter.traits.accum.Sum (Self : Type) (A : Type) where
   sum : forall {I : Type} (_ : core.iter.traits.iterator.Iterator I A), I → Result Self
