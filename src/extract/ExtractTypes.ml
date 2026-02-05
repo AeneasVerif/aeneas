@@ -730,22 +730,24 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
     else
       match def.kind with
       | Struct fields ->
+          let compute_info_from_llbc () =
+            let field_names =
+              FieldId.mapi
+                (fun fid (field : field) ->
+                  ( fid,
+                    ctx_compute_field_name def field.field_attr_info ctx
+                      def.item_meta.name fid field.field_name ))
+                fields
+            in
+            let cons_name =
+              ctx_compute_struct_constructor def ctx def.item_meta.name
+            in
+            (field_names, cons_name)
+          in
           (* Compute the names *)
           let field_names, cons_name =
             match def.builtin_info with
-            | None | Some { body_info = None; _ } ->
-                let field_names =
-                  FieldId.mapi
-                    (fun fid (field : field) ->
-                      ( fid,
-                        ctx_compute_field_name def field.field_attr_info ctx
-                          def.item_meta.name fid field.field_name ))
-                    fields
-                in
-                let cons_name =
-                  ctx_compute_struct_constructor def ctx def.item_meta.name
-                in
-                (field_names, cons_name)
+            | None | Some { body_info = None; _ } -> compute_info_from_llbc ()
             | Some { body_info = Some (Struct (cons_name, field_names)); _ } ->
                 let field_names =
                   FieldId.mapi
@@ -760,11 +762,15 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                 in
                 (field_names, cons_name)
             | Some info ->
-                [%craise] def.item_meta.span
+                [%warn] def.item_meta.span
                   ("Invalid builtin information for type "
                   ^ name_to_string ctx def.item_meta.name
                   ^ ": expected builtin information about a structure, got:\n"
-                  ^ show_builtin_type_info info)
+                  ^ show_builtin_type_info info
+                  ^ ". The " ^ Config.backend_name ()
+                  ^ " model defined in the standard library seems to be wrong."
+                  );
+                compute_info_from_llbc ()
           in
           (* Add the fields *)
           let ctx =

@@ -2785,7 +2785,8 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
                   ("When retrieving the builtin information for trait decl '"
                  ^ trait_decl.name
                  ^ "', could not find the information for item '" ^ item_name
-                 ^ "'");
+                 ^ "'. The model defined in the " ^ Config.backend_name ()
+                 ^ " library seems to be missing the corresponding field.");
                 (* Use the LLBC definition to compute the name *)
                 compute_item_name item_name fun_binder.binder_value.fun_id
             | Some info ->

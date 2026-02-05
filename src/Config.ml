@@ -3,7 +3,7 @@
 (** {1 Backend choice} *)
 
 (** The choice of backend *)
-type backend = FStar | Coq | Lean | HOL4
+type backend = FStar | Coq | Lean | HOL4 [@@deriving show]
 
 let backend_names = [ "fstar"; "coq"; "rocq"; "lean"; "hol4" ]
 
@@ -59,6 +59,9 @@ let borrow_check = ref false
 
 (** Get the target backend *)
 let backend () : backend = Option.get !opt_backend
+
+let backend_to_string = show_backend
+let backend_name () : string = backend_to_string (backend ())
 
 let if_backend (f : unit -> 'a) (default : 'a) : 'a =
   match !opt_backend with
