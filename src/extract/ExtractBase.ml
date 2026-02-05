@@ -1570,9 +1570,9 @@ let ctx_compute_fun_name_no_suffix (meta : T.item_meta) (ctx : extraction_ctx)
         (* This is a trait impl method: check if the impl is a blanket impl *)
         let trait_impl =
           [%silent_unwrap] meta.span
-            (TraitImplId.Map.find_opt impl_id ctx.trans_trait_impls)
+            (TraitImplId.Map.find_opt impl_id ctx.crate.trait_impls)
         in
-        let args = trait_impl.llbc_impl_trait.generics in
+        let args = trait_impl.impl_trait.generics in
         begin
           match args.types with
           | TVar _ :: _ -> true

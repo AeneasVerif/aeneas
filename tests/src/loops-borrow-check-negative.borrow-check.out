@@ -5,4 +5,4 @@ Compiler source: interp/InterpBorrows.ml, line 1136
 Name pattern: 'loops_borrow_check_negative::loop_a_b'
 Definition span: 'tests/src/loops-borrow-check-negative.rs', lines 20:0-30:1
 Source: 'tests/src/loops-borrow-check-negative.rs', lines 20:0-30:1
-Compiler source: interp/Interp.ml, line 480
+Compiler source: interp/Interp.ml, line 551

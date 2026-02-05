@@ -74,6 +74,8 @@ let compute_graph_of_uses (m : crate) : graph_of_uses =
       method! visit_global_decl_id info id = add_edge (IdGlobal id) info
       method! visit_trait_decl_id info id = add_edge (IdTraitDecl id) info
       method! visit_trait_impl_id info id = add_edge (IdTraitImpl id) info
+      method! visit_item_meta _ _ = ()
+      method! visit_item_source _ _ = ()
     end
   in
   visitor#visit_crate None m;

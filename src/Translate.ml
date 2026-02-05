@@ -317,7 +317,7 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
                 ^ compute_local_uses_error_message trans_ctx
                     (IdGlobal global.def_id));
               None)
-          (GlobalDeclId.Map.values crate.global_decls))
+          (GlobalDeclId.Map.values trans_ctx.global_decls_to_extract))
   in
 
   (* Compute the decomposed fun sigs for the whole crate *)
@@ -350,7 +350,7 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
                ^ compute_local_uses_error_message trans_ctx (IdFun fdef.def_id)
                );
              None)
-         (FunDeclId.Map.values crate.fun_decls))
+         (FunDeclId.Map.values trans_ctx.fun_ctx.to_extract))
   in
 
   (* Translate the signatures of the builtin functions *)
@@ -380,7 +380,7 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
             in
             report 1;
             f)
-          (FunDeclId.Map.values crate.fun_decls))
+          (FunDeclId.Map.values trans_ctx.fun_ctx.to_extract))
   in
 
   (* Translate the trait declarations *)
@@ -412,7 +412,7 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
                 ^ compute_local_uses_error_message trans_ctx
                     (IdTraitDecl d.def_id));
               None)
-          (TraitDeclId.Map.values trans_ctx.crate.trait_decls))
+          (TraitDeclId.Map.values trans_ctx.trait_decls_to_extract))
   in
 
   (* Translate the trait implementations *)
@@ -444,7 +444,7 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
                 ^ compute_local_uses_error_message trans_ctx
                     (IdTraitImpl d.def_id));
               None)
-          (TraitImplId.Map.values trans_ctx.crate.trait_impls))
+          (TraitImplId.Map.values trans_ctx.trait_impls_to_extract))
   in
 
   (* Apply the micro-passes *)
