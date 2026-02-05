@@ -25,10 +25,17 @@ structure core.iter.adapters.zip.TrustedRandomAccessNoCoerce (Self : Type)
   where
   MAY_HAVE_SIDE_EFFECT : Bool
 
+@[rust_type "core::iter::adapters::step_by::StepBy"]
+structure core.iter.adapters.step_by.StepBy (I : Type) where
+  iter : I
+  /- This is not exactly the way the implementation is defined in the standard library, but this is a good model -/
+  step_by : Usize
+
 @[rust_trait "core::iter::traits::iterator::Iterator"]
 structure core.iter.traits.iterator.Iterator (Self : Type) (Self_Item : Type)
   where
   next : Self → Result ((Option Self_Item) × Self)
+  step_by : Self → Usize → Result (core.iter.adapters.step_by.StepBy Self)
 
 @[rust_trait "core::iter::traits::accum::Sum"]
 structure core.iter.traits.accum.Sum (Self : Type) (A : Type) where
@@ -128,10 +135,18 @@ def core.iter.range.IteratorRange.next
       | some n => ok ⟨ some n, {range with start := n} ⟩
     else ok ⟨ none, range ⟩
 
+@[rust_fun
+  "core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>}::step_by"]
+def core.iter.range.IteratorRange.step_by
+   {A : Type} (_StepInst : core.iter.range.Step A) :
+  core.ops.range.Range A → Usize → Result (adapters.step_by.StepBy (ops.range.Range A)) :=
+  λ range step_by => .ok ⟨ range, step_by ⟩
+
 @[reducible, rust_trait_impl
   "core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>"]
-def core.iter.traits.iterator.IteratorRange {A : Type} (StepInst :
-  core.iter.range.Step A) : core.iter.traits.iterator.Iterator
+def core.iter.traits.iterator.IteratorRange {A : Type}
+  (StepInst : core.iter.range.Step A) : core.iter.traits.iterator.Iterator
   (core.ops.range.Range A) A := {
   next := core.iter.range.IteratorRange.next StepInst
+  step_by := core.iter.range.IteratorRange.step_by StepInst
 }

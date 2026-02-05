@@ -17,6 +17,13 @@ def alloc.vec.into_iter.IteratorIntoIter.next {T : Type} (it: alloc.vec.into_ite
   | ⟨ hd :: tl, _ ⟩ => ok (hd, ⟨ tl, by scalar_tac ⟩ )
 
 @[rust_fun
+  "alloc::vec::into_iter::{core::iter::traits::iterator::Iterator<alloc::vec::into_iter::IntoIter<@T, @A>, @T>}::step_by"
+  -canFail (keepParams := [true, false])]
+def alloc.vec.into_iter.IteratorIntoIter.step_by {T : Type} (it: alloc.vec.into_iter.IntoIter T) (steps : Usize) :
+  Result (core.iter.adapters.step_by.StepBy (alloc.vec.into_iter.IntoIter T)) :=
+  .ok ⟨ it, steps ⟩
+
+@[rust_fun
   "alloc::vec::{core::iter::traits::collect::IntoIterator<alloc::vec::Vec<@T>, @T, alloc::vec::into_iter::IntoIter<@T, @A>>}::into_iter"
   -canFail (keepParams := [true, false])]
 def alloc.vec.IntoIteratorVec.into_iter {T : Type} (v: alloc.vec.Vec T) : Result (alloc.vec.into_iter.IntoIter T) := ok v
@@ -27,6 +34,7 @@ def alloc.vec.IntoIteratorVec.into_iter {T : Type} (v: alloc.vec.Vec T) : Result
 def core.iter.traits.iterator.IteratorVecIntoIter (T : Type) :
   core.iter.traits.iterator.Iterator (alloc.vec.into_iter.IntoIter T) T := {
   next := alloc.vec.into_iter.IteratorIntoIter.next
+  step_by := alloc.vec.into_iter.IteratorIntoIter.step_by
 }
 
 @[reducible, rust_trait_impl
