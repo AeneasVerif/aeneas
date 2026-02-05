@@ -29,15 +29,29 @@ let mk_config (mode : interpreter_mode) : config = { mode }
 type type_ctx = {
   type_decls_groups : type_declaration_group TypeDeclId.Map.t;
   type_decls : type_decl TypeDeclId.Map.t;
-      (* Copy of the declarations in the crate *)
+      (** Copy of the declarations in the crate *)
   type_infos : TypesAnalysis.type_infos;
+  to_extract : type_decl TypeDeclId.Map.t;
+      (** The type declarations that should be extracted.
+
+          Charon filters the useless declarations but preserves some of them for
+          printing purposes: [type_decls] contains *all* the declarations needed
+          to properly print the crate, while [to_extract] only contains the ones
+          that should be extracted. *)
 }
 [@@deriving show]
 
 type fun_ctx = {
   fun_decls : fun_decl FunDeclId.Map.t;
-      (* Copy of the declarations in the crate *)
+      (** Copy of the declarations in the crate *)
   fun_infos : FunsAnalysis.fun_info FunDeclId.Map.t;
+  to_extract : fun_decl FunDeclId.Map.t;
+      (** The fun declarations that should be extracted.
+
+          Charon filters the useless declarations but preserves some of them for
+          printing purposes: [fun_decls] contains *all* the declarations needed
+          to properly print the crate, while [to_extract] only contains the ones
+          that should be extracted. *)
 }
 [@@deriving show]
 
@@ -46,6 +60,16 @@ type decls_ctx = {
   graph_of_uses : Deps.graph_of_uses;
   type_ctx : type_ctx;
   fun_ctx : fun_ctx;
+  global_decls_to_extract : global_decl GlobalDeclId.Map.t;
+      (** The global declarations that should be extracted.
+
+          Charon filters the useless declarations but preserves some of them for
+          printing purposes: this field only contains the ones that should be
+          extracted. *)
+  trait_decls_to_extract : trait_decl TraitDeclId.Map.t;
+      (** Similar to [global_decls_to_extract] *)
+  trait_impls_to_extract : trait_impl TraitImplId.Map.t;
+      (** Similar to [global_decls_to_extract] *)
 }
 [@@deriving show]
 

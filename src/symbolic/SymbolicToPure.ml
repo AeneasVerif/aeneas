@@ -147,7 +147,7 @@ let translate_type_decls (ctx : Contexts.decls_ctx) : type_decl list =
          ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
           ^ Contexts.compute_local_uses_error_message ctx (IdType d.def_id));
         None)
-    (TypeDeclId.Map.values ctx.type_ctx.type_decls)
+    (TypeDeclId.Map.values ctx.type_ctx.to_extract)
 
 let translate_binder (span : span option) (translate_inside : 'a -> 'b)
     (x : 'a T.binder) : 'b binder =

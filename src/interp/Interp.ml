@@ -110,15 +110,86 @@ let compute_contexts (crate : crate) : decls_ctx =
          type mutually recursive with a function, or a function mutually \
          recursive with a trait implementation):\n\n" ^ msgs));
 
+  (* Compute the set of ids which appear in the declaration groups: only those
+     should be extracted.
+
+     Note that Charon includes extra definitions in the crate as they needed for
+     pretty printing. The set of declarations to extract is given by the [declarations]
+     field.
+  *)
+  let type_decl_ids = ref TypeDeclId.Set.empty in
+  let fun_decl_ids = ref FunDeclId.Set.empty in
+  let global_decl_ids = ref GlobalDeclId.Set.empty in
+  let trait_decl_ids = ref TraitDeclId.Set.empty in
+  let trait_impl_ids = ref TraitImplId.Set.empty in
+
+  let visitor =
+    object
+      inherit [_] iter_crate
+
+      method! visit_type_decl_id _ id =
+        TypeDeclId.Set.add_in_place id type_decl_ids
+
+      method! visit_fun_decl_id _ id =
+        FunDeclId.Set.add_in_place id fun_decl_ids
+
+      method! visit_global_decl_id _ id =
+        GlobalDeclId.Set.add_in_place id global_decl_ids
+
+      method! visit_trait_decl_id _ id =
+        TraitDeclId.Set.add_in_place id trait_decl_ids
+
+      method! visit_trait_impl_id _ id =
+        TraitImplId.Set.add_in_place id trait_impl_ids
+    end
+  in
+  List.iter (visitor#visit_declaration_group ()) crate.declarations;
+
   let type_decls = crate.type_decls in
+  let to_extract =
+    TypeDeclId.Map.filter
+      (fun id _ -> TypeDeclId.Set.mem id !type_decl_ids)
+      type_decls
+  in
   let type_infos = analyze_type_declarations crate type_decls type_decls_list in
-  let type_ctx = { type_decls_groups; type_decls; type_infos } in
+  let type_ctx = { type_decls_groups; type_decls; type_infos; to_extract } in
 
   let fun_decls = crate.fun_decls in
+  let to_extract =
+    FunDeclId.Map.filter
+      (fun id _ -> FunDeclId.Set.mem id !fun_decl_ids)
+      fun_decls
+  in
   let fun_infos = FunsAnalysis.analyze_module crate fun_decls in
-  let fun_ctx = { fun_decls; fun_infos } in
+  let fun_ctx = { fun_decls; fun_infos; to_extract } in
 
-  { crate; graph_of_uses = crate_graph; type_ctx; fun_ctx }
+  let global_decls_to_extract =
+    GlobalDeclId.Map.filter
+      (fun id _ -> GlobalDeclId.Set.mem id !global_decl_ids)
+      crate.global_decls
+  in
+
+  let trait_decls_to_extract =
+    TraitDeclId.Map.filter
+      (fun id _ -> TraitDeclId.Set.mem id !trait_decl_ids)
+      crate.trait_decls
+  in
+
+  let trait_impls_to_extract =
+    TraitImplId.Map.filter
+      (fun id _ -> TraitImplId.Set.mem id !trait_impl_ids)
+      crate.trait_impls
+  in
+
+  {
+    crate;
+    graph_of_uses = crate_graph;
+    type_ctx;
+    fun_ctx;
+    global_decls_to_extract;
+    trait_decls_to_extract;
+    trait_impls_to_extract;
+  }
 
 (** Instantiate a function signature for a symbolic execution.
 
