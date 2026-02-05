@@ -977,6 +977,11 @@ module EvalCtx = struct
     let env = eval_ctx_to_fmt_env ctx in
     name_to_string env n
 
+  let real_var_binder_to_string (ctx : eval_ctx) (n : real_var_binder) : string
+      =
+    let env = eval_ctx_to_fmt_env ctx in
+    real_var_binder_to_string env n
+
   let ty_to_string (ctx : eval_ctx) (t : ty) : string =
     let env = eval_ctx_to_fmt_env ctx in
     ty_to_string env t

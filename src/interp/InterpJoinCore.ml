@@ -419,6 +419,27 @@ module type PrimMatcher = sig
     tavalue ->
     tavalue
 
+  val match_aignored_mut_borrow :
+    tvalue_matcher ->
+    eval_ctx ->
+    eval_ctx ->
+    rty * borrow_id option * tavalue ->
+    rty * borrow_id option * tavalue ->
+    ty ->
+    tavalue ->
+    tavalue
+
+  val match_aended_ignored_mut_borrow :
+    tvalue_matcher ->
+    eval_ctx ->
+    eval_ctx ->
+    rty * aended_ignored_mut_borrow ->
+    rty * aended_ignored_mut_borrow ->
+    ty ->
+    tavalue ->
+    tavalue ->
+    tavalue
+
   (** Parameters:
       - [match_values]
       - [ctx0]

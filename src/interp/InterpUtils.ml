@@ -16,6 +16,7 @@ let log = Logging.interp_log
 
 let eval_ctx_to_string = Print.Contexts.eval_ctx_to_string
 let name_to_string = Print.EvalCtx.name_to_string
+let real_var_binder_to_string = Print.EvalCtx.real_var_binder_to_string
 let symbolic_value_to_string = Print.EvalCtx.symbolic_value_to_string
 
 let symbolic_value_id_to_pretty_string =

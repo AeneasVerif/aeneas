@@ -680,49 +680,9 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
   end in
   let module JM = MakeJoinMatcher (S) in
   let module M = MakeMatcher (JM) in
-  (* Small helper: lookup a binding satisfying some predicate and remove it
-     from the enviromnent *)
-  let rec pop_binding : 'a. (env_elem -> 'a option) -> env -> 'a * env =
-   fun f env ->
-    match env with
-    | [] -> [%internal_error] span
-    | b :: env' -> (
-        match f b with
-        | None ->
-            let out, env' = pop_binding f env' in
-            (out, b :: env')
-        | Some out -> (out, env'))
-  in
-
-  (* Remove a variable from an environment and return the corresponding value *)
-  let pop_var (v : real_var_binder) (env : env) : tvalue * env =
-    pop_binding
-      (fun e ->
-        match e with
-        | EBinding (BVar v', value) when v' = v -> Some value
-        | _ -> None)
-      env
-  in
-
-  (* Remove a dummy variable from an environment and return the corresponding value *)
-  let pop_dummy (v : dummy_var_id) (env : env) : tvalue * env =
-    pop_binding
-      (fun e ->
-        match e with
-        | EBinding (BDummy v', value) when v' = v -> Some value
-        | _ -> None)
-      env
-  in
-
-  (* Remove an abs from an environment *)
-  let pop_abs (abs_id : abs_id) (env : env) : abs * env =
-    pop_binding
-      (fun e ->
-        match e with
-        | EAbs abs when abs.abs_id = abs_id -> Some abs
-        | _ -> None)
-      env
-  in
+  let pop_var = env_pop_var (fun _ -> [%internal_error] span) in
+  let pop_dummy = env_pop_dummy (fun _ -> [%internal_error] span) in
+  let pop_abs = env_pop_abs (fun _ -> [%internal_error] span) in
 
   (* Rem.: this function raises exceptions.
 

@@ -497,9 +497,20 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
             [%ltrace "mut borrows: matched children values"];
             M.match_amut_borrows match_rec ctx0 ctx1 v0.ty pm0 bid0 av0 v1.ty
               pm1 bid1 av1 ty av
-        | AIgnoredMutBorrow _, AIgnoredMutBorrow _ ->
-            (* The abstractions are destructured: we shouldn't get there *)
-            [%craise] M.span "Unexpected"
+        | AIgnoredMutBorrow (bid0, child0), AIgnoredMutBorrow (bid1, child1) ->
+            let child = match_arec child0 child1 in
+            M.match_aignored_mut_borrow match_rec ctx0 ctx1
+              (v0.ty, bid0, child0) (v1.ty, bid1, child1) ty child
+        | ( AEndedIgnoredMutBorrow
+              ({ child = child0; given_back = given_back0; given_back_meta = _ }
+               as bc0),
+            AEndedIgnoredMutBorrow
+              ({ child = child1; given_back = given_back1; given_back_meta = _ }
+               as bc1) ) ->
+            let child = match_arec child0 child1 in
+            let given_back = match_arec given_back0 given_back1 in
+            M.match_aended_ignored_mut_borrow match_rec ctx0 ctx1 (v0.ty, bc0)
+              (v1.ty, bc1) ty child given_back
         | AProjSharedBorrow asb0, AProjSharedBorrow asb1 -> (
             match (asb0, asb1) with
             | [], [] ->
@@ -514,10 +525,6 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
                just be because the environments don't match) so we may want
                to call a specific function (which could raise the proper
                exception).
-               Rem.: we shouldn't get to the ended borrow cases, because
-               an abstraction should never contain ended borrows unless
-               we are *currently* ending it, in which case we need
-               to completely end it before continuing.
             *)
             [%craise] M.span "Unexpected")
     | ALoan lc0, ALoan lc1 -> (
@@ -1625,6 +1632,31 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
   (* As explained in comments: we don't use the join matcher to join avalues,
      only concrete values *)
 
+  let match_aignored_mut_borrow (_match_rec : tvalue_matcher) (_ctx0 : eval_ctx)
+      (_ctx1 : eval_ctx)
+      ((_ty0, bid0, _child0) : rty * borrow_id option * tavalue)
+      ((_ty1, bid1, _child1) : rty * borrow_id option * tavalue) (ty : ty)
+      (child : tavalue) : tavalue =
+    (* For now we only support the case where the borrows are the same *)
+    [%cassert] span (bid0 = bid1) "Unimplemented";
+    { value = ABorrow (AIgnoredMutBorrow (bid0, child)); ty }
+
+  let match_aended_ignored_mut_borrow (_match_rec : tvalue_matcher)
+      (_ctx0 : eval_ctx) (_ctx1 : eval_ctx)
+      ((_ty0, bc0) : rty * aended_ignored_mut_borrow)
+      ((_ty1, bc1) : rty * aended_ignored_mut_borrow) (ty : ty)
+      (child : tavalue) (given_back : tavalue) : tavalue =
+    (* For now we only support the case where we have the same values on
+       the left and on the right *)
+    [%cassert] span (bc0.given_back_meta = bc1.given_back_meta) "Unimplemented";
+    {
+      value =
+        ABorrow
+          (AEndedIgnoredMutBorrow
+             { child; given_back; given_back_meta = bc0.given_back_meta });
+      ty;
+    }
+
   let match_distinct_aadts _ _ _ _ _ _ _ = [%craise] span "Unreachable"
   let match_ashared_borrows _ _ _ _ _ _ = [%craise] span "Unreachable"
   let match_amut_borrows _ _ _ _ _ _ _ _ _ _ = [%craise] span "Unreachable"
@@ -1950,6 +1982,32 @@ struct
     let id = match_loan_id id0 id1 in
     let value = ALoan (AMutLoan (PNone, id, av)) in
     { value; ty }
+
+  let match_aignored_mut_borrow (_match_rec : tvalue_matcher) (_ctx0 : eval_ctx)
+      (_ctx1 : eval_ctx)
+      ((_ty0, bid0, _child0) : rty * borrow_id option * tavalue)
+      ((_ty1, bid1, _child1) : rty * borrow_id option * tavalue) (ty : ty)
+      (child : tavalue) : tavalue =
+    let bid =
+      match (bid0, bid1) with
+      | None, None -> None
+      | Some bid0, Some bid1 -> Some (match_borrow_id bid0 bid1)
+      | _ -> raise (Distinct "match_aignored_mut_borrow: bids")
+    in
+    { value = ABorrow (AIgnoredMutBorrow (bid, child)); ty }
+
+  let match_aended_ignored_mut_borrow (_match_rec : tvalue_matcher)
+      (_ctx0 : eval_ctx) (_ctx1 : eval_ctx)
+      ((_ty0, bc0) : rty * aended_ignored_mut_borrow)
+      ((_ty1, _bc1) : rty * aended_ignored_mut_borrow) (ty : ty)
+      (child : tavalue) (given_back : tavalue) : tavalue =
+    (* We take the meta information from the left - it doesn't really matter *)
+    let given_back_meta = bc0.given_back_meta in
+    {
+      value =
+        ABorrow (AEndedIgnoredMutBorrow { child; given_back; given_back_meta });
+      ty;
+    }
 
   let match_aproj_borrows (_match_values : tvalue_matcher) (ctx0 : eval_ctx)
       (ctx1 : eval_ctx) _ty0 pm0 (proj0 : aproj_borrows) _ty1 pm1
