@@ -8,28 +8,29 @@ set_option linter.unusedVariables false
 
 namespace iterators
 
-/- [iterators::test_iter]: loop 0:
-   Source: 'tests/src/iterators.rs', lines 4:4-4:28 -/
-def test_iter_loop (iter : core.ops.range.Range Std.Usize) : Result Unit := do
+/- [iterators::test_iter_range]: loop 0:
+   Source: 'tests/src/iterators.rs', lines 5:4-5:28 -/
+def test_iter_range_loop
+  (iter : core.ops.range.Range Std.Usize) : Result Unit := do
   let (o, iter1) ←
     core.iter.range.IteratorRange.next core.iter.range.StepUsize iter
   match o with
   | none => ok ()
-  | some _ => test_iter_loop iter1
+  | some _ => test_iter_range_loop iter1
 partial_fixpoint
 
-/- [iterators::test_iter]:
-   Source: 'tests/src/iterators.rs', lines 3:0-5:1 -/
-def test_iter : Result Unit := do
+/- [iterators::test_iter_range]:
+   Source: 'tests/src/iterators.rs', lines 4:0-6:1 -/
+def test_iter_range : Result Unit := do
   let iter ←
     core.iter.traits.collect.IntoIterator.Blanket.into_iter
       (core.iter.traits.iterator.IteratorRange core.iter.range.StepUsize)
       { start := 0#usize, end_ := 32#usize }
-  test_iter_loop iter
+  test_iter_range_loop iter
 
-/- [iterators::test_step_by]: loop 0:
-   Source: 'tests/src/iterators.rs', lines 16:4-16:33 -/
-def test_step_by_loop
+/- [iterators::test_iter_range_step_by]: loop 0:
+   Source: 'tests/src/iterators.rs', lines 9:4-9:33 -/
+def test_iter_range_step_by_loop
   (iter : core.iter.adapters.step_by.StepBy (core.ops.range.Range Std.Usize)) :
   Result Unit
   := do
@@ -38,12 +39,12 @@ def test_step_by_loop
       (core.iter.traits.iterator.IteratorRange core.iter.range.StepUsize) iter
   match o with
   | none => ok ()
-  | some _ => test_step_by_loop iter1
+  | some _ => test_iter_range_step_by_loop iter1
 partial_fixpoint
 
-/- [iterators::test_step_by]:
-   Source: 'tests/src/iterators.rs', lines 15:0-17:1 -/
-def test_step_by (n : Std.Usize) : Result Unit := do
+/- [iterators::test_iter_range_step_by]:
+   Source: 'tests/src/iterators.rs', lines 8:0-10:1 -/
+def test_iter_range_step_by (n : Std.Usize) : Result Unit := do
   let sb ←
     core.iter.range.IteratorRange.step_by core.iter.range.StepUsize
       { start := 0#usize, end_ := n } 2#usize
@@ -51,6 +52,6 @@ def test_step_by (n : Std.Usize) : Result Unit := do
     core.iter.traits.collect.IntoIterator.Blanket.into_iter
       (core.iter.traits.iterator.IteratorStepBy
       (core.iter.traits.iterator.IteratorRange core.iter.range.StepUsize)) sb
-  test_step_by_loop iter
+  test_iter_range_step_by_loop iter
 
 end iterators
