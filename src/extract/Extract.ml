@@ -216,8 +216,8 @@ let extract_adt_g_value (span : Meta.span)
              let ⟨ field0, ..., fieldn ⟩ := ...
            ]}
          *)
-        match Config.backend () with
-        | Lean ->
+        match (is_single_pat, Config.backend ()) with
+        | true, Lean ->
             F.pp_print_string fmt "⟨";
             let first = ref true in
             let ctx =
