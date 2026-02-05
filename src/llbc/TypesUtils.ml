@@ -343,8 +343,13 @@ let generic_args_only_erased_regions (x : generic_args) : bool =
 (** Small helper *)
 let raise_if_region_ty_visitor =
   object
-    inherit [_] iter_ty
+    inherit [_] iter_ty as super
     method! visit_region _ _ = raise Found
+
+    method! visit_TDynTrait env tr =
+      (* Ignore the dyn traits by default *)
+      if Config.type_analysis_ignore_dyn then ()
+      else super#visit_TDynTrait env tr
   end
 
 (** Return [true] if the type doesn't contain regions (including erased regions)

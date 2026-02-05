@@ -747,31 +747,177 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
     * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Evaluate the operand *)
   let v, ctx, cc = eval_operand config span op ctx in
-  (* There is a special case for casts which convert [Box<...>] to [Box<dyn ...>] *)
+  (* There is a special case for casts which convert dyn traits (for instance:
+     [Box<...>] to [Box<dyn ...>]) *)
   match unop with
-  | Cast (CastUnsize (ty0, ty1, MetaVTable (trait_ref, _))) ->
+  | Cast (CastUnsize (ty0, ty1, MetaVTable (trait_ref, _))) -> (
       (* Casting a type to a dyn trait *)
       [%ltrace
         "dyn trait cast:" ^ "\n- ty0: " ^ ty_to_string ctx ty0 ^ "\n- ty1: "
         ^ ty_to_string ctx ty1 ^ "\n- trait_ref: "
         ^ trait_ref_to_string ctx trait_ref];
 
-      [%cassert] span
-        (not (tvalue_has_borrows (Some span) ctx v))
-        "Unimplemented use of dynamic traits";
+      (* We support the following cases:
+         - Box<...> to Box<dyn (...)>
+         - &... to &dyn (...)
 
-      let sv = mk_fresh_symbolic_value span ctx ty1 in
-      let cf e =
-        SA.IntroSymbolic
-          ( ctx,
-            mk_opt_place_from_op span op ctx,
-            sv,
-            VaDynTrait (v, trait_ref),
-            e )
-      in
-      let res = Ok (mk_tvalue_from_symbolic_value sv) in
-      (res, ctx, cc_comp cc cf)
+         We have to treat the shared borrow case separately from the box case.
+      *)
+      match (ty1, v.value) with
+      | TAdt { id = TBuiltin TBox; _ }, _ ->
+          [%cassert] span
+            (not (tvalue_has_borrows (Some span) ctx v))
+            "Unimplemented use of dynamic traits";
+          let sv = mk_fresh_symbolic_value span ctx ty1 in
+          let cf e =
+            SA.IntroSymbolic
+              ( ctx,
+                mk_opt_place_from_op span op ctx,
+                sv,
+                VaDynTrait (v, trait_ref),
+                e )
+          in
+          let res = Ok (mk_tvalue_from_symbolic_value sv) in
+          (res, ctx, cc_comp cc cf)
+      | TRef (_, dyn_ty, RShared), _ ->
+          (* This case is annoying because there happens practical cases where
+             the inner value is itself a borrow. For instance:
+             {[
+               y = unsize<&'_ (&'_ bool), &'_ (dyn ...)>(move x);
+             ]}
+
+             We do the following, which is conservative (borrow-checking is correct,
+             though maybe a bit too constrained):
+             - we collect all the *shared borrows* [bids] (and check there are no mutable
+               borrows) transitively reachable from the inner value.
+             - we generate a fresh shared borrow [bid']
+             - we output [bid'] and link it to the other borrows through a region
+               abstraction [abs { SB bid0, ..., SB bidn, SL bid' s }] where [s]
+               is a fresh symbolic value of type [dyn (...)]. This way, if we want
+               to end any of the borrows we need to invalidate the dyn object.
+               Of course, this works only if **we can't clone the dyn object**.
+
+             TODO: I don't understand how rustc borrow-checks this kind of cases.
+          *)
+          (* [dyn_ty] being the inner destination type it should be a dyn type -
+           in particular, it shouldn't contain regions *)
+          [%sanity_check] span (not (ty_has_regions dyn_ty));
+          let dyn_sv = mk_fresh_symbolic_value span ctx dyn_ty in
+          let dyn_v = mk_tvalue_from_symbolic_value dyn_sv in
+
+          (* Collect the shared borrows *)
+          let sborrows = ref [] in
+          let collector =
+            object (self)
+              inherit [_] iter_tvalue as super
+              method! visit_tvalue _ v = super#visit_tvalue v.ty v
+
+              method! visit_VSymbolic ty _ =
+                [%cassert] span (ty_no_regions ty) "Unimplemented"
+
+              method! visit_VSharedBorrow ty bid _ =
+                let inner_ty =
+                  match ty with
+                  | TRef (_, ty, _) -> ty
+                  | _ -> [%internal_error] span
+                in
+                sborrows := (bid, inner_ty) :: !sborrows;
+                (* Lookup the loan and recurse *)
+                let sv =
+                  InterpBorrowsCore.ctx_lookup_shared_value span ctx bid
+                in
+                self#visit_tvalue sv.ty sv
+            end
+          in
+          collector#visit_tvalue v.ty v;
+
+          (* Create the region abstraction *)
+          let rid = ctx.fresh_region_id () in
+          let abs_id = ctx.fresh_abs_id () in
+
+          (* It's a bit annoying: we have to replace all the regions in the types *)
+          let replace_regions ty =
+            let visitor =
+              object
+                inherit [_] map_ty
+                method! visit_RErased _ = RVar (Free rid)
+
+                method! visit_TDynTrait _ pred =
+                  (* Don't dive into the dyn trait type *)
+                  [%sanity_check] span Config.type_analysis_ignore_dyn;
+                  TDynTrait pred
+              end
+            in
+            visitor#visit_ty () ty
+          in
+
+          let borrows =
+            List.map
+              (fun (bid, ty) ->
+                ({
+                   value =
+                     ABorrow
+                       (ASharedBorrow (PNone, bid, ctx.fresh_shared_borrow_id ()));
+                   ty = TRef (RVar (Free rid), replace_regions ty, RShared);
+                 }
+                  : tavalue))
+              !sborrows
+          in
+          let lid = ctx.fresh_borrow_id () in
+          let loan : tavalue =
+            {
+              value =
+                ALoan
+                  (ASharedLoan (PNone, lid, dyn_v, mk_aignored span dyn_ty None));
+              ty = TRef (RVar (Free rid), dyn_ty, RShared);
+            }
+          in
+          let abs =
+            {
+              abs_id;
+              kind = CopySymbolicValue;
+              can_end = true;
+              parents = AbsId.Set.empty;
+              original_parents = [];
+              regions = { owned = RegionId.Set.singleton rid };
+              ended_subabs = AbsLevelSet.empty;
+              avalues = borrows @ [ loan ];
+              cont =
+                Some
+                  {
+                    output = Some (mk_etuple ~borrow_proj:true []);
+                    input = Some (mk_etuple ~borrow_proj:false []);
+                  };
+            }
+          in
+          let ctx = { ctx with env = EAbs abs :: ctx.env } in
+
+          (* Create the output value *)
+          let output : tvalue =
+            {
+              value =
+                VBorrow (VSharedBorrow (lid, ctx.fresh_shared_borrow_id ()));
+              ty = TRef (RErased, dyn_ty, RShared);
+            }
+          in
+          [%ltrace
+            "- input: " ^ tvalue_to_string ctx v ^ "\n- new abs:\n"
+            ^ abs_to_string span ctx abs ^ "\n- output: "
+            ^ tvalue_to_string ctx output];
+
+          (* Put everything together *)
+          let cf e =
+            SA.IntroSymbolic
+              ( ctx,
+                mk_opt_place_from_op span op ctx,
+                dyn_sv,
+                VaDynTrait (v, trait_ref),
+                e )
+          in
+          (Ok output, ctx, cc_comp cc cf)
+      | _ -> [%craise] span "Unsupported cast to a dynamic trait")
   | Cast (CastUnsize (ty0, ty1, MetaVTableUpcast fields)) ->
+      (* Casting a dyn trait to a dyn trait *)
       [%ltrace
         "dyn trait upcast:" ^ "\n- ty0: " ^ ty_to_string ctx ty0 ^ "\n- ty1: "
         ^ ty_to_string ctx ty1 ^ "\n- fields: "
