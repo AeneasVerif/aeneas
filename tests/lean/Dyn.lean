@@ -9,41 +9,41 @@ set_option linter.unusedVariables false
 namespace dyn
 
 /- Trait declaration: [dyn::Trait]
-   Source: 'tests/src/dyn.rs', lines 3:0-3:37 -/
+   Source: 'tests/src/dyn.rs', lines 3:0-5:1 -/
 structure Trait (Self : Type) where
   get : Self → Result Std.U32
 
 /- [dyn::{dyn::Trait for u32}::get]:
-   Source: 'tests/src/dyn.rs', lines 6:4-8:5 -/
+   Source: 'tests/src/dyn.rs', lines 8:4-10:5 -/
 def TraitU32.get (self : Std.U32) : Result Std.U32 := do
   ok self
 
 /- Trait implementation: [dyn::{dyn::Trait for u32}]
-   Source: 'tests/src/dyn.rs', lines 5:0-9:1 -/
+   Source: 'tests/src/dyn.rs', lines 7:0-11:1 -/
 @[reducible]
 def TraitU32 : Trait Std.U32 := {
   get := TraitU32.get
 }
 
 /- [dyn::{dyn::Trait for bool}::get]:
-   Source: 'tests/src/dyn.rs', lines 12:4-14:5 -/
+   Source: 'tests/src/dyn.rs', lines 14:4-16:5 -/
 def TraitBool.get (self : Bool) : Result Std.U32 := do
   ok (UScalar.cast_fromBool .U32 self)
 
 /- Trait implementation: [dyn::{dyn::Trait for bool}]
-   Source: 'tests/src/dyn.rs', lines 11:0-15:1 -/
+   Source: 'tests/src/dyn.rs', lines 13:0-17:1 -/
 @[reducible]
 def TraitBool : Trait Bool := {
   get := TraitBool.get
 }
 
 /- [dyn::bool_to_trait]:
-   Source: 'tests/src/dyn.rs', lines 17:0-19:1 -/
+   Source: 'tests/src/dyn.rs', lines 19:0-21:1 -/
 def bool_to_trait (b : Bool) : Result Bool := do
   ok b
 
 /- [dyn::mk_trait]:
-   Source: 'tests/src/dyn.rs', lines 21:0-28:1 -/
+   Source: 'tests/src/dyn.rs', lines 23:0-29:1 -/
 def mk_trait (b : Bool) : Result (Dyn (fun _dyn => Trait _dyn)) := do
   if b
   then ok (Dyn.mk _ TraitBool true)
@@ -55,7 +55,7 @@ structure Into (Self : Type) (T : Type) where
   into : Self → Result T
 
 /- [dyn::mk_into]:
-   Source: 'tests/src/dyn.rs', lines 36:0-43:1 -/
+   Source: 'tests/src/dyn.rs', lines 36:0-46:1 -/
 def mk_into
   (U : Type) {V : Type} {T : Type} {W : Type} (IntoInst : Into T V) (IntoInst1
   : Into W V) (b : Bool) (x : T) (y : W) :
