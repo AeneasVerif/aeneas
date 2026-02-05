@@ -164,11 +164,11 @@ let extract_adt_g_value (span : Meta.span)
         (generics.const_generics = [] && generics.trait_refs = [])
         "Only fully applied tuple constructors are currently supported";
       extract_as_tuple ()
-  | TAdt (adt_id, _) ->
-      (* "Regular" ADT *)
-      (* We may still extract the ADT as a tuple, if none of the fields are
-         named *)
+  | TAdt (adt_id, _) -> (
       if
+        (* "Regular" ADT *)
+        (* We may still extract the ADT as a tuple, if none of the fields are
+         named *)
         PureUtils.type_decl_from_type_id_is_tuple_struct
           ctx.trans_ctx.type_ctx.type_infos adt_id
       then
@@ -206,26 +206,49 @@ let extract_adt_g_value (span : Meta.span)
         ctx)
       else
         (* We print something of the form: [Cons field0 ... fieldn].
-         * We could update the code to print something of the form:
-         * [{ field0=...; ...; fieldn=...; }] in case of structures.
+           We could update the code to print something of the form:
+           [{ field0=...; ...; fieldn=...; }] in case of structures.
+
+           Also, Lean seems not to support the notation [let Cons field0 ... fieldn := ...]
+           (it seems to be a bug - TODO: report) so for this backend we generate something
+           of the shape:
+           {[
+             let ⟨ field0, ..., fieldn ⟩ := ...
+           ]}
          *)
-        let cons =
-          match variant_id with
-          | Some vid -> ctx_get_variant span adt_id vid ctx
-          | None -> ctx_get_struct span adt_id ctx
-        in
-        let use_parentheses = inside && field_values <> [] in
-        if use_parentheses then F.pp_print_string fmt "(";
-        F.pp_print_string fmt cons;
-        let ctx =
-          Collections.List.fold_left
-            (fun ctx v ->
-              F.pp_print_space fmt ();
-              extract_value ctx true v)
-            ctx field_values
-        in
-        if use_parentheses then F.pp_print_string fmt ")";
-        ctx
+        match Config.backend () with
+        | Lean ->
+            F.pp_print_string fmt "⟨";
+            let first = ref true in
+            let ctx =
+              Collections.List.fold_left
+                (fun ctx v ->
+                  if !first then first := false else F.pp_print_string fmt ",";
+                  F.pp_print_space fmt ();
+                  extract_value ctx true v)
+                ctx field_values
+            in
+            F.pp_print_space fmt ();
+            F.pp_print_string fmt "⟩";
+            ctx
+        | _ ->
+            let cons =
+              match variant_id with
+              | Some vid -> ctx_get_variant span adt_id vid ctx
+              | None -> ctx_get_struct span adt_id ctx
+            in
+            let use_parentheses = inside && field_values <> [] in
+            if use_parentheses then F.pp_print_string fmt "(";
+            F.pp_print_string fmt cons;
+            let ctx =
+              Collections.List.fold_left
+                (fun ctx v ->
+                  F.pp_print_space fmt ();
+                  extract_value ctx true v)
+                ctx field_values
+            in
+            if use_parentheses then F.pp_print_string fmt ")";
+            ctx)
   | _ ->
       [%admit_raise] span "Inconsistently typed value" fmt;
       ctx
