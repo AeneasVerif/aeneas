@@ -2217,6 +2217,40 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
     ()
   in
 
+  let pop_var var =
+    env_pop_var
+      (fun _ ->
+        raise
+          (Distinct
+             ("Missing var in right environment: "
+             ^ real_var_binder_to_string ctx1 var)))
+      var
+  in
+  let pop_dummy id =
+    env_pop_dummy
+      (fun _ ->
+        raise
+          (Distinct
+             ("Missing dummy var in right environment: "
+            ^ DummyVarId.to_string id)))
+      id
+  in
+  let pop_first_dummy =
+    env_pop_first_dummy (fun _ ->
+        raise (Distinct "Missing dummy var in right environment"))
+  in
+  let pop_abs id =
+    env_pop_abs
+      (fun _ ->
+        raise
+          (Distinct ("Missing abs in right environment: " ^ AbsId.to_string id)))
+      id
+  in
+  let pop_first_abs =
+    env_pop_first_abs (fun _ ->
+        raise (Distinct "Missing abs in right environment"))
+  in
+
   (* Rem.: this function raises exceptions of type [Distinct] *)
   let rec match_envs (env0 : env) (env1 : env) : unit =
     [%ldebug
@@ -2236,37 +2270,35 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
       ^ eval_ctx_to_string ~span:(Some span) ~filter:false
           { ctx1 with env = List.rev env1 }
       ^ "\n\n"];
-
-    match (env0, env1) with
-    | EBinding (BDummy b0, v0) :: env0', EBinding (BDummy b1, v1) :: env1' ->
-        (* Sanity check: if the dummy value is an old value, the bindings must
-           be the same and their values equal (and the borrows/loans/symbolic *)
-        if DummyVarId.Set.mem b0 fixed_ids.dids then (
-          (* Fixed values: the values must be equal *)
-          [%sanity_check] span (b0 = b1);
-          [%sanity_check] span (v0 = v1);
-          (* The ids present in the left value must be fixed *)
-          let ids, _ = compute_tvalue_ids v0 in
-          [%sanity_check] span ((not S.check_equiv) || ids_are_fixed ids));
-        (* We still match the values - allows to compute mappings (which
+    match env0 with
+    | EBinding (BDummy b0, v0) :: env0' ->
+        (* Check whether the dummy value is fixed or not *)
+        let v1, env1' =
+          if DummyVarId.Set.mem b0 fixed_ids.dids then (
+            let v1, env1' = pop_dummy b0 env1 in
+            (* Fixed values: the values must be equal *)
+            [%sanity_check] span (v0 = v1);
+            (* The ids present in the left value must be fixed *)
+            let ids, _ = compute_tvalue_ids v0 in
+            [%sanity_check] span ((not S.check_equiv) || ids_are_fixed ids);
+            (v1, env1'))
+          else pop_first_dummy env1
+        in
+        (* Match the values - allows to compute mappings (which
            are the identity actually) *)
         let _ = M.match_tvalues ctx0 ctx1 v0 v1 in
         match_envs env0' env1'
-    | EBinding (BVar b0, v0) :: env0', EBinding (BVar b1, v1) :: env1' ->
-        [%sanity_check] span (b0 = b1);
+    | EBinding (BVar b0, v0) :: env0' ->
+        let v1, env1' = pop_var b0 env1 in
         (* Match the values *)
         let _ = M.match_tvalues ctx0 ctx1 v0 v1 in
         (* Continue *)
         match_envs env0' env1'
-    | EAbs abs0 :: env0', EAbs abs1 :: env1' ->
-        [%ldebug
-          "match_envs: matching abs:\n- abs0: "
-          ^ abs_to_string span ctx0 abs0
-          ^ "\n- abs1: "
-          ^ abs_to_string span ctx1 abs1];
+    | EAbs abs0 :: env0' ->
         (* Same as for the dummy values: there are two cases *)
         if AbsId.Set.mem abs0.abs_id fixed_ids.aids then (
           [%ldebug "match_envs: matching abs: fixed abs"];
+          let abs1, env1' = pop_abs abs0.abs_id env1 in
           (* Still in the prefix: the abstractions must be the same *)
           [%sanity_check] span (abs0 = abs1);
           (* Their ids must be fixed *)
@@ -2276,16 +2308,22 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
           match_envs env0' env1')
         else (
           [%ldebug "match_envs: matching abs: not fixed abs"];
+          let abs1, env1' = pop_first_abs env1 in
           (* Match the values *)
           match_abstractions abs0 abs1;
           (* Continue *)
           match_envs env0' env1')
-    | [], [] ->
-        (* Done *)
-        ()
-    | _ ->
-        (* The elements don't match *)
-        raise (Distinct "match_ctxs: match_envs: env elements don't match")
+    | [] ->
+        (* Done: just check that the right environment is empty *)
+        if env1 = [] then ()
+        else
+          raise
+            (Distinct
+               "The right environment has more elements than the left \
+                environment")
+    | EFrame :: _ ->
+        (* This is unexpected *)
+        [%internal_error] span
   in
 
   (* Match the environments.
