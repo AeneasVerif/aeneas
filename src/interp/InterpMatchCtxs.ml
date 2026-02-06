@@ -283,18 +283,22 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
 (** Match two types during a join.
 
     TODO: probably don't need to take [match_regions] as input anymore. *)
-let rec match_types (span : Meta.span) (ctx0 : eval_ctx) (ctx1 : eval_ctx)
-    (match_distinct_types : ty -> ty -> ty)
+let rec match_types (span : Meta.span) ~(recover : bool) (ctx0 : eval_ctx)
+    (ctx1 : eval_ctx) (match_distinct_types : ty -> ty -> ty)
     (match_regions : region -> region -> region) (ty0 : ty) (ty1 : ty) : ty =
   let match_rec =
-    match_types span ctx0 ctx1 match_distinct_types match_regions
+    match_types span ~recover ctx0 ctx1 match_distinct_types match_regions
   in
   match (ty0, ty1) with
   | ( TAdt { id = id0; generics = generics0 },
       TAdt { id = id1; generics = generics1 } ) ->
-      [%sanity_check] span (id0 = id1);
-      [%sanity_check] span (generics0.const_generics = generics1.const_generics);
-      [%sanity_check] span (generics0.trait_refs = generics1.trait_refs);
+      [%cassert_recover] recover span (id0 = id1) "Not the same ADT ids";
+      [%cassert_recover] recover span
+        (generics0.const_generics = generics1.const_generics)
+        "Not the same const generics";
+      [%cassert_recover] recover span
+        (generics0.trait_refs = generics1.trait_refs)
+        "Not the same trait refs";
       let id = id0 in
       let const_generics = generics1.const_generics in
       let trait_refs = generics1.trait_refs in
@@ -311,25 +315,28 @@ let rec match_types (span : Meta.span) (ctx0 : eval_ctx) (ctx1 : eval_ctx)
       let generics = { regions; types; const_generics; trait_refs } in
       TAdt { id; generics }
   | TArray (ty0, len0), TArray (ty1, len1) ->
-      [%sanity_check] span (len0 = len1);
+      [%cassert_recover] recover span (len0 = len1)
+        "Arrays with different lengths";
       TArray (match_rec ty0 ty1, len0)
   | TSlice ty0, TSlice ty1 -> TSlice (match_rec ty0 ty1)
   | TVar vid0, TVar vid1 ->
-      [%sanity_check] span (vid0 = vid1);
+      [%cassert_recover] recover span (vid0 = vid1)
+        "Not the same type variables";
       let vid = vid0 in
       TVar vid
   | TLiteral lty0, TLiteral lty1 ->
-      [%sanity_check] span (lty0 = lty1);
+      [%cassert_recover] recover span (lty0 = lty1) "Not the same literal types";
       ty0
   | TNever, TNever -> ty0
   | TRef (r0, ty0, k0), TRef (r1, ty1, k1) ->
       let r = match_regions r0 r1 in
       let ty = match_rec ty0 ty1 in
-      [%sanity_check] span (k0 = k1);
+      [%cassert_recover] recover span (k0 = k1) "Not the same reference kind";
       let k = k0 in
       TRef (r, ty, k)
   | TRawPtr (ty0, rk0), TRawPtr (ty1, rk1) ->
-      [%sanity_check] span (rk0 = rk1);
+      [%cassert_recover] recover span (rk0 = rk1)
+        "Not the same raw pointer types";
       let ty = match_rec ty0 ty1 in
       TRawPtr (ty, rk0)
   | TDynTrait _, TDynTrait _ | TFnPtr _, TFnPtr _ | TFnDef _, TFnDef _ ->
@@ -597,13 +604,13 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     sv
 
   let match_etys _ _ ty0 ty1 =
-    [%sanity_check] span (ty0 = ty1);
+    [%sanity_check_recover] S.recover span (ty0 = ty1);
     ty0
 
   let match_rtys _ _ ty0 ty1 =
     (* The types must be equal - in effect, this forbids to match symbolic
        values containing borrows *)
-    [%sanity_check] span (ty0 = ty1);
+    [%sanity_check_recover] S.recover span (ty0 = ty1);
     ty0
 
   let match_distinct_literals (_ : tvalue_matcher) (ctx0 : eval_ctx)
@@ -821,7 +828,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let avl1, input1 =
         convert_value_to_input_avalues span ctx1 PRight v1 rid
       in
-      [%cassert] span (ty_no_regions v0.ty) "Not implemented yet";
+      [%cassert_recover] S.recover span (ty_no_regions v0.ty)
+        "Not implemented yet";
       let _, ty = ty_refresh_regions (Some span) (fun _ -> rid) v0.ty in
 
       let lid = ctx0.fresh_borrow_id () in
@@ -928,7 +936,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
   let match_distinct_adts (_ : tvalue_matcher) (ctx0 : eval_ctx)
       (ctx1 : eval_ctx) (ty : ety) (ty0 : ty) (adt0 : adt_value) (ty1 : ty)
       (adt1 : adt_value) : tvalue =
-    [%cassert] span
+    [%cassert_recover] S.recover span
       (not (ety_has_nested_borrows (Some span) ctx0.type_ctx.type_infos ty))
       "Nested borrows are not supported yet.";
 
@@ -1083,7 +1091,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             let mk_output (pm : proj_marker) (bid : borrow_id) (bv : tvalue) :
                 tevalue =
               let bv_ty = bv.ty in
-              [%cassert] span (ty_no_regions bv_ty)
+              [%cassert_recover] S.recover span (ty_no_regions bv_ty)
                 "Nested borrows are not supported yet";
               let value = EBorrow (EMutBorrow (pm, bid, mk_eignored bv_ty)) in
               { value; ty = borrow_ty }
@@ -1125,10 +1133,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     if id0 = id1 then { value = VLoan (VSharedLoan (id0, sv)); ty }
     else begin
       (* Sanity checks *)
-      [%cassert] span
+      [%cassert_recover] S.recover span
         (not (ety_has_nested_borrows (Some span) ctx0.type_ctx.type_infos ty))
         "Nested borrows are not supported yet.";
-      [%cassert] span
+      [%cassert_recover] S.recover span
         (not (tvalue_has_borrows (Some span) ctx0 sv))
         "Unimplemented";
 
@@ -1198,7 +1206,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     if id0 = id1 then { value = VLoan (VMutLoan id0); ty }
     else begin
       (* Sanity checks *)
-      [%cassert] span
+      [%cassert_recover] S.recover span
         (not (ety_has_nested_borrows (Some span) ctx0.type_ctx.type_infos ty))
         "Nested borrows are not supported yet.";
 
@@ -1294,9 +1302,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
          and fail (for now) if part of a symbolic value contains a bottom.
          A more general approach would be to introduce a symbolic value
          with some ended regions. *)
-      [%sanity_check] span
+      [%cassert_recover] S.recover span
         ((not (symbolic_value_has_ended_regions ctx0.ended_regions sv0))
-        && not (symbolic_value_has_ended_regions ctx1.ended_regions sv1));
+        && not (symbolic_value_has_ended_regions ctx1.ended_regions sv1))
+        "Unimplemented";
       [%ldebug "ty: " ^ ty_to_string ctx0 sv0.sv_ty];
       (* If the symbolic values contain regions, we need to introduce abstractions *)
       if ty_has_borrows (Some span) ctx0.type_ctx.type_infos sv0.sv_ty then (
@@ -1525,10 +1534,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (ctx1 : eval_ctx) ~(loan_is_left : bool) (ty : ety) (lid : loan_id)
       (other : tvalue) : tvalue =
     (* Sanity checks *)
-    [%cassert] span
+    [%cassert_recover] S.recover span
       (not (ety_has_nested_borrows (Some span) ctx0.type_ctx.type_infos ty))
       "Nested borrows are not supported yet.";
-    [%cassert] span
+    [%cassert_recover] S.recover span
       (not (tvalue_has_borrows (Some span) ctx0 other))
       "Not implemented";
 
@@ -1769,7 +1778,8 @@ struct
           RVar (Free rid)
       | _ -> raise (Distinct "match_rtys")
     in
-    match_types span ctx0 ctx1 match_distinct_types match_regions ty0 ty1
+    match_types span ~recover ctx0 ctx1 match_distinct_types match_regions ty0
+      ty1
 
   let match_distinct_literals (_ : tvalue_matcher) (ctx0 : eval_ctx)
       (_ : eval_ctx) (ty : ety) (_ : literal) (_ : literal) : tvalue =
