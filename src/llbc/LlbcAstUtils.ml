@@ -148,3 +148,31 @@ let block_has_break_continue_return (st : block) : bool =
     visitor#visit_block () st;
     false
   with Utils.Found -> true
+
+(** Compute the size of a function body - we count the number of statements and
+    blocks *)
+let compute_body_size (f : fun_body) : int =
+  let size = ref 0 in
+  let incr () = size := !size + 1 in
+  let visitor =
+    object
+      inherit [_] iter_statement as super
+
+      method! visit_statement env st =
+        incr ();
+        super#visit_statement env st
+
+      method! visit_block env st =
+        incr ();
+        super#visit_block env st
+    end
+  in
+  visitor#visit_block () f.body;
+  !size
+
+(** Compute the size of a function - we count the number of statements and
+    blocks *)
+let compute_fun_decl_size (f : fun_decl) : int =
+  match f.body with
+  | None -> 0
+  | Some body -> compute_body_size body

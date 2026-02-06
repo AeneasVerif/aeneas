@@ -7424,15 +7424,27 @@ let apply_passes_to_pure_fun_translations (crate : LlbcAst.crate)
     trans
   in
   let transl =
-    let num_decls = List.length transl in
-    ProgressBar.with_parallel_reporter num_decls
-      "Post-processed translated functions: " (fun report ->
-        Parallel.parallel_map
-          (fun x ->
-            let x = apply x in
-            report 1;
-            x)
-          transl)
+    (* Partition the opaque and transparent functions *)
+    let opaque, transparent =
+      List.partition
+        (fun (f : pure_fun_translation_no_loops) -> Option.is_none f.body)
+        transl
+    in
+
+    let process (kind : string) (transl : pure_fun_translation_no_loops list) =
+      let num_decls = List.length transl in
+      ProgressBar.with_parallel_reporter num_decls
+        ("Post-processed translated " ^ kind ^ " functions: ")
+        (fun report ->
+          Parallel.parallel_map
+            (fun x ->
+              let x = apply x in
+              report 1;
+              x)
+            transl)
+    in
+
+    process "opaque" opaque @ process "transparent" transparent
   in
 
   (* Add the type annotations - we add those only now because we need

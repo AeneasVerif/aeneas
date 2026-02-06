@@ -363,24 +363,55 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
       builtin_fun_infos
   in
 
-  (* Translate all the *transparent* functions.
+  (* Translate all the functions.
 
      Remark: [translate_function_to_pure] catches errors of type [CFailure]
      to allow the compilation to make progress.
+
+     We do it in two steps: the opaque functions first, then the transparent functions.
   *)
   let pure_translations =
-    let num_decls = FunDeclId.Map.cardinal crate.fun_decls in
-    ProgressBar.with_parallel_reporter num_decls "Translated functions: "
-      (fun report ->
-        parallel_filter_map
-          (fun x ->
-            let f =
-              translate_function_to_pure trans_ctx marked_ids type_decls_map
-                fun_dsigs x
-            in
-            report 1;
-            f)
-          (FunDeclId.Map.values trans_ctx.fun_ctx.to_extract))
+    let funs = FunDeclId.Map.values trans_ctx.fun_ctx.to_extract in
+    (* Split between opaque and transparent *)
+    let opaque, transparent =
+      List.partition (fun (d : fun_decl) -> Option.is_none d.body) funs
+    in
+
+    (* Reorder the transparent functions to have the biggest first:
+       because the execution is parallel, we want to start processing the bigger
+       functions as early as possible.
+
+       TODO: this doesn't seem to have much effect.
+    *)
+    let transparent =
+      let funs =
+        List.map
+          (fun f -> (f, LlbcAstUtils.compute_fun_decl_size f))
+          transparent
+      in
+      List.map fst (List.sort (fun (_, n) (_, n') -> n' - n) funs)
+    in
+
+    (* Small helper *)
+    let process (kind : string) (funs : fun_decl list) =
+      let num_decls = List.length funs in
+      ProgressBar.with_parallel_reporter num_decls
+        ("Translated " ^ kind ^ " functions: ")
+        (fun report ->
+          parallel_filter_map
+            (fun x ->
+              let f =
+                translate_function_to_pure trans_ctx marked_ids type_decls_map
+                  fun_dsigs x
+              in
+              report 1;
+              f)
+            funs)
+    in
+
+    let opaque = process "opaque" opaque in
+    let transparent = process "transparent" transparent in
+    opaque @ transparent
   in
 
   (* Translate the trait declarations *)
