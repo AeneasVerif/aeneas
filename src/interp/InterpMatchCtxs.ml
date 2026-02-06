@@ -2176,6 +2176,24 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
   end in
   let module CEM = MakeCheckEquivMatcher (S) in
   let module M = MakeMatcher (CEM) in
+  (* When matching abstractions we allow backtracking, so we need an alternative
+     version of the matchers where [recover] is true *)
+  let module RecoverS : MatchCheckEquivState = struct
+    let span = span
+    let recover = true
+    let check_equiv = check_equiv
+    let rid_map = rid_map
+    let blid_map = blid_map
+    let borrow_id_map = borrow_id_map
+    let loan_id_map = loan_id_map
+    let sid_map = sid_map
+    let sid_to_value_map = sid_to_value_map
+    let aid_map = aid_map
+    let lookup_shared_value_in_ctx0 = lookup_shared_value_in_ctx0
+    let lookup_shared_value_in_ctx1 = lookup_shared_value_in_ctx1
+  end in
+  let module RecoverCEM = MakeCheckEquivMatcher (RecoverS) in
+  let module RecoverM = MakeMatcher (RecoverCEM) in
   (* Match the environments - we assume that they have the same structure
      (and fail if they don't) *)
 
@@ -2205,8 +2223,9 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
     && SymbolicValueId.Set.subset sids fixed_ids.sids
   in
 
-  (* Rem.: this function raises exceptions of type [Distinct] *)
-  let match_abstractions (abs0 : abs) (abs1 : abs) : unit =
+  (* Rem.: this function raises exceptions of type [Distinct] or [RFailure]
+     (in the latter case: if [recover] is true) *)
+  let match_abstractions ~(recover : bool) (abs0 : abs) (abs1 : abs) : unit =
     let {
       abs_id = abs_id0;
       kind = kind0;
@@ -2235,27 +2254,40 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
       abs1
     in
 
-    let _ = CEM.match_aid abs_id0 abs_id1 in
+    let match_aid = if recover then RecoverCEM.match_aid else CEM.match_aid in
+    let match_aids =
+      if recover then RecoverCEM.match_aids else CEM.match_aids
+    in
+    let match_rids =
+      if recover then RecoverCEM.match_rids else CEM.match_rids
+    in
+    let match_tavalues =
+      if recover then RecoverM.match_tavalues else M.match_tavalues
+    in
+
+    let raise_distinct msg =
+      if recover then raise Errors.RFailure else raise (Distinct msg)
+    in
+
+    let _ = match_aid abs_id0 abs_id1 in
     if check_kind && kind0 <> kind1 then
-      raise (Distinct "match_abstractions: kind");
+      raise_distinct "match_abstractions: kind";
     if check_can_end && can_end0 <> can_end1 then
-      raise (Distinct "match_abstractions: can_end");
-    let _ = CEM.match_aids parents0 parents1 in
-    let _ = CEM.match_rids regions0 regions1 in
+      raise_distinct "match_abstractions: can_end";
+    let _ = match_aids parents0 parents1 in
+    let _ = match_rids regions0 regions1 in
 
     if not (AbsLevelSet.equal ended_subabs0 ended_subabs1) then
-      raise
-        (Distinct
-           "Region abstractions with distinct sets of ended sub-abstractions");
+      raise_distinct
+        "Region abstractions with distinct sets of ended sub-abstractions";
 
     [%ldebug "match_abstractions: matching values"];
     let _ =
       if List.length avalues0 <> List.length avalues1 then
-        raise
-          (Distinct "Region abstractions with not the same number of values")
+        raise_distinct "Region abstractions with not the same number of values"
       else
         List.map
-          (fun (v0, v1) -> M.match_tavalues ctx0 ctx1 v0 v1)
+          (fun (v0, v1) -> match_tavalues ctx0 ctx1 v0 v1)
           (List.combine avalues0 avalues1)
     in
     [%ldebug "match_abstractions: values matched OK"];
@@ -2296,7 +2328,11 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
      We repeatedly attempt to match, saving the state before matching and
      restoring it if it failed. *)
   let pop_first_matching_abs abs0 env =
-    [%ltrace "Trying to match abs:\n" ^ abs_to_string span ctx0 abs0];
+    [%ltrace
+      "Trying to match abs:\n"
+      ^ abs_to_string span ctx0 abs0
+      ^ "\n\nIn environment:\n"
+      ^ eval_ctx_to_string { ctx1 with env = List.rev env }];
     env_pop_binding
       (fun _ ->
         raise (Distinct "Could not find a matching abs in right environment"))
@@ -2308,10 +2344,10 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
             (* Attempt matching *)
             begin
               try
-                match_abstractions abs0 abs1;
+                match_abstractions ~recover:true abs0 abs1;
                 [%ltrace "Found matching abs:\n" ^ abs_to_string span ctx1 abs1];
                 Some abs1
-              with Distinct _ ->
+              with Distinct _ | Errors.RFailure ->
                 (* Restore the state and continue exploring *)
                 restore_maps maps;
                 None
