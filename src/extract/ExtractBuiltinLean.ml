@@ -6,13 +6,7 @@ let lean_builtin_types =
     (* file: "Aeneas/Std/Alloc.lean", line: 16 *)
     mk_type "alloc::alloc::Global" "Global" ~kind:(KEnum [ ("Mk", Some "mk") ]);
     (* file: "Aeneas/Std/Alloc.lean", line: 11 *)
-    mk_type "alloc::string::String" "String"
-      ~kind:
-        (KStruct
-           [
-             ("toByteArray", Some "toByteArray");
-             ("isValidUTF8", Some "isValidUTF8");
-           ]);
+    mk_type "alloc::string::String" "String";
     (* file: "Aeneas/Std/Vec.lean", line: 18 *)
     mk_type "alloc::vec::Vec" "alloc.vec.Vec";
     (* file: "Aeneas/Std/VecIter.lean", line: 7 *)
@@ -41,8 +35,7 @@ let lean_builtin_types =
     mk_type "core::fmt::rt::Argument" "core.fmt.rt.Argument";
     (* file: "Aeneas/Std/Core/Iter.lean", line: 28 *)
     mk_type "core::iter::adapters::step_by::StepBy"
-      "core.iter.adapters.step_by.StepBy"
-      ~kind:(KStruct [ ("iter", Some "iter"); ("step_by", Some "step_by") ]);
+      "core.iter.adapters.step_by.StepBy";
     (* file: "Aeneas/Std/Core/Ops.lean", line: 65 *)
     mk_type "core::ops::control_flow::ControlFlow"
       "core.ops.control_flow.ControlFlow"

@@ -25,7 +25,7 @@ structure core.iter.adapters.zip.TrustedRandomAccessNoCoerce (Self : Type)
   where
   MAY_HAVE_SIDE_EFFECT : Bool
 
-@[rust_type "core::iter::adapters::step_by::StepBy"]
+@[rust_type "core::iter::adapters::step_by::StepBy" (body := .opaque)]
 structure core.iter.adapters.step_by.StepBy (I : Type) where
   iter : I
   /- This is not exactly the way the implementation is defined in the standard library, but this is a good model -/

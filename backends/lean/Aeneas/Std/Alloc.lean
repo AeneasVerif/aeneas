@@ -8,7 +8,7 @@ namespace Std
 
 open Result
 
-attribute [rust_type "alloc::string::String"] String
+attribute [rust_type "alloc::string::String" (body := .opaque)] String
 
 /-- The type of the global allocator - note it shouldn't appear in the generated code because
     we systematically filter it when providing information about the definitions supported by the standard
