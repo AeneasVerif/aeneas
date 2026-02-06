@@ -4,7 +4,6 @@ import Aeneas.Std.Range
 import Aeneas.Std.Scalar.Core
 import Aeneas.Std.Scalar.CheckedOps
 import Aeneas.Std.Scalar.Notations
-import Aeneas.Std.Vec
 
 namespace Aeneas.Std
 
