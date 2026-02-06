@@ -98,7 +98,7 @@ def slice_iter_while_loop0
   (b : Bool) (s : Slice Std.U16) (it : core.slice.iter.Iter Std.U16) :
   Result Unit
   := do
-  let (o, it1) ← core.slice.iter.IteratorIterSharedAT.next it
+  let (o, it1) ← core.slice.iter.IteratorSliceIter.next it
   match o with
   | none => ok ()
   | some _ => slice_iter_while_loop1 b
@@ -189,5 +189,45 @@ def slice_iter_mut_while_early_return_two_bools
   let back ← slice_iter_mut_while_early_return_two_bools_loop0 b0 b1 it
   let s2 := iter_mut_back back
   ok (to_slice_mut_back s2)
+
+/- [iterators::slice_chunks_exact_iter]: loop 1:
+   Source: 'tests/src/iterators.rs', lines 50:8-50:30 -/
+def slice_chunks_exact_iter_loop1
+  (iter : core.slice.iter.Iter Std.U128) : Result Unit := do
+  let (o, iter1) ← core.slice.iter.IteratorSliceIter.next iter
+  match o with
+  | none => ok ()
+  | some _ => slice_chunks_exact_iter_loop1 iter1
+partial_fixpoint
+
+/- [iterators::slice_chunks_exact_iter]: loop 0:
+   Source: 'tests/src/iterators.rs', lines 49:4-51:5 -/
+def slice_chunks_exact_iter_loop0
+  (key : Array Std.U128 128#usize) (data : Slice Std.U8)
+  (iter : core.slice.iter.ChunksExact Std.U8) :
+  Result Unit
+  := do
+  let (o, iter1) ← core.slice.iter.IteratorChunksExact.next iter
+  match o with
+  | none => ok ()
+  | some _ =>
+    let s ← (↑(Array.to_slice key) : Result (Slice Std.U128))
+    let i ← core.slice.Slice.iter s
+    let iter2 ←
+      core.iter.traits.collect.IntoIterator.Blanket.into_iter
+        (core.iter.traits.iterator.IteratorSliceIter Std.U128) i
+    slice_chunks_exact_iter_loop1 iter2
+    slice_chunks_exact_iter_loop0 key data iter1
+partial_fixpoint
+
+/- [iterators::slice_chunks_exact_iter]:
+   Source: 'tests/src/iterators.rs', lines 48:0-52:1 -/
+def slice_chunks_exact_iter
+  (key : Array Std.U128 128#usize) (data : Slice Std.U8) : Result Unit := do
+  let ce ← core.slice.Slice.chunks_exact data 16#usize
+  let iter ←
+    core.iter.traits.collect.IntoIterator.Blanket.into_iter
+      (core.iter.traits.iterator.IteratorChunksExact Std.U8) ce
+  slice_chunks_exact_iter_loop0 key data iter
 
 end iterators

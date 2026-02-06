@@ -45,6 +45,12 @@ fn slice_iter_mut_while_early_return_two_bools(s: &mut [u16; 256], b0: bool, b1:
     }
 }
 
+fn slice_chunks_exact_iter(key: &[u128; 128], data: &[u8]) {
+    for _ in data.chunks_exact(16) {
+        for _ in key.iter() {}
+    }
+}
+
 /*
 fn array_into_iter<const N : usize>(s : &[u8; N]) {
     for _ in s {}
