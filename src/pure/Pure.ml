@@ -163,6 +163,11 @@ type builtin_type_info = {
 
           For instance, `Vec` type takes a type parameter for the allocator,
           which we want to ignore. *)
+  mut_regions : int list;
+      (** The regions which are used for mutable borrows.
+
+          The integer represents the position of the region in the list of
+          parameters, not its id. *)
   body_info : builtin_type_body_info option;
 }
 [@@deriving show, ord]

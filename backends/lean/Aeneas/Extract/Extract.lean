@@ -66,6 +66,9 @@ structure TypeInfo where
     directly, rather than `Option.some`).
     -/
   prefixVariantNames : Bool := true
+
+  -- The list of regions which are used for mutable borrows
+  mutRegions : Array Nat := #[]
   body : TypeBody := .unknown
 deriving Repr, Inhabited
 
@@ -749,6 +752,9 @@ def TypeInfo.toExtract (info : TypeInfo) : MessageData :=
     match info.keepParams with
     | none => m!""
     | some keepParams => m!" ~keep_params:(Some {listToString keepParams})"
+  let mutRegions :=
+    if info.mutRegions.size = 0 then m!""
+    else m!" ~mut_regions:({listToString info.mutRegions.toList})"
   let prefixVariantNames :=
     if info.prefixVariantNames then m!"" else m!" ~prefix_variant_names:false"
   let body :=
@@ -758,7 +764,7 @@ def TypeInfo.toExtract (info : TypeInfo) : MessageData :=
       m!" ~kind:(KEnum {listToString (variants.map (fun ⟨ x, y, _ ⟩ => (addQuotes x, "Some " ++ addQuotes (toString y))))})"
     | .struct fields =>
       m!" ~kind:(KStruct {listToString (fields.map (fun ⟨ x, y ⟩ => (addQuotes x, "Some " ++ addQuotes (toString y))))})"
-  m!"{extract}{keepParams}{prefixVariantNames}{body}"
+  m!"{extract}{keepParams}{mutRegions}{prefixVariantNames}{body}"
 
 def ConstInfo.toExtract (info : ConstInfo) : MessageData :=
   let extract := info.extract.getD "ERROR_MISSING_FIELD"

@@ -658,7 +658,7 @@ structure core.slice.iter.Iter (T : Type) where
   slice : Slice T
   i : Nat
 
-@[rust_type "core::slice::iter::IterMut"]
+@[rust_type "core::slice::iter::IterMut" (mutRegions := #[0])]
 structure core.slice.iter.IterMut (T : Type) where
   /- We need to remember the slice and an index inside the slice (this is necessary)
      for double ended iterators) -/

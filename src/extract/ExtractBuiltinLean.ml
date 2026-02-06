@@ -144,6 +144,7 @@ let lean_builtin_types =
       ~kind:(KStruct [ ("slice", Some "slice"); ("i", Some "i") ]);
     (* file: "Aeneas/Std/Slice.lean", line: 661 *)
     mk_type "core::slice::iter::IterMut" "core.slice.iter.IterMut"
+      ~mut_regions:[ 0 ]
       ~kind:(KStruct [ ("slice", Some "slice"); ("i", Some "i") ]);
     (* file: "Aeneas/Std/Core/Atomic.lean", line: 6 *)
     mk_type "core::sync::atomic::AtomicBool" "core.sync.atomic.AtomicBool";

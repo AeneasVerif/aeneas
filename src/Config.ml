@@ -57,8 +57,17 @@ let set_subdir (s : string) : unit = subdir := Some s
     CI arguments. *)
 let borrow_check = ref false
 
-(** Get the target backend *)
-let backend () : backend = Option.get !opt_backend
+(** Get the target backend
+
+    If there is no backend (we are borrow-checking) we default to Lean - it
+    happens when looking up the builtin information: we use Lean as it has the
+    most complete library.
+
+    TODO: turn borrow-checking into a backend. *)
+let backend () : backend =
+  match !opt_backend with
+  | None -> Lean
+  | Some b -> b
 
 let backend_to_string = show_backend
 let backend_name () : string = backend_to_string (backend ())
