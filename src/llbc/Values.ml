@@ -1483,9 +1483,6 @@ and abs = {
           the return region for 'b (if it is the case, it means the function
           doesn't borrow check). *)
   parents : abs_id_set;  (** The parent abstractions *)
-  original_parents : abs_id list;
-      (** The original list of parents, ordered. This is used for synthesis.
-          TODO: remove? *)
   regions : abs_regions;
       (** TODO: actually we also (only?) need to put the regions at the level of
           the values themselves, otherwise some projections are not precise

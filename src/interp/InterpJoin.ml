@@ -140,7 +140,6 @@ let reborrow_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
         kind;
         can_end;
         parents = AbsId.Set.empty;
-        original_parents = [];
         ended_subabs = AbsLevelSet.empty;
         regions;
         avalues;
@@ -350,7 +349,6 @@ let reborrow_symbolic_borrows (span : Meta.span) (loop_id : LoopId.id option)
           kind;
           can_end;
           parents = AbsId.Set.empty;
-          original_parents = [];
           ended_subabs = AbsLevelSet.empty;
           regions;
           avalues;
@@ -740,7 +738,11 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
           ^ abs_to_string span ctx1 abs1
           ^ "\n"];
 
-        (* The abstractions in the prefix must be the same *)
+        (* Fixed abstractions should be equal.
+
+           Note that the presence of the field [abs.original_parents] would sometimes
+           make this test fail because some abstraction ids would be refreshed by
+           [refresh_non_fixed_abs_ids]. *)
         [%sanity_check] span (abs0 = abs1);
         (* Continue *)
         abs :: join_prefixes env0' env1'

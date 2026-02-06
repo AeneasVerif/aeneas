@@ -714,7 +714,6 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           kind = S.fresh_abs_kind;
           can_end = true;
           parents = AbsId.Set.empty;
-          original_parents = [];
           regions = { owned = RegionId.Set.singleton rid };
           ended_subabs = AbsLevelSet.empty;
           avalues = avl0 @ avl1 @ [ av ];
@@ -861,7 +860,6 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             kind = S.fresh_abs_kind;
             can_end = true;
             parents = AbsId.Set.empty;
-            original_parents = [];
             regions = { owned = RegionId.Set.singleton rid };
             ended_subabs = AbsLevelSet.empty;
             avalues = av :: (avl0 @ avl1);
@@ -910,7 +908,6 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
               kind = S.fresh_abs_kind;
               can_end = true;
               parents = AbsId.Set.empty;
-              original_parents = [];
               regions = { owned = RegionId.Set.singleton rid };
               ended_subabs = AbsLevelSet.empty;
               avalues = av :: (avl0 @ avl1);
@@ -1002,7 +999,6 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           kind = S.fresh_abs_kind;
           can_end = true;
           parents = AbsId.Set.empty;
-          original_parents = [];
           regions = { owned = RegionId.Set.singleton rid };
           ended_subabs = AbsLevelSet.empty;
           avalues;
@@ -1106,7 +1102,6 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           kind = S.fresh_abs_kind;
           can_end = true;
           parents = AbsId.Set.empty;
-          original_parents = [];
           regions = { owned };
           ended_subabs = AbsLevelSet.empty;
           avalues;
@@ -1186,7 +1181,6 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           kind = S.fresh_abs_kind;
           can_end = true;
           parents = AbsId.Set.empty;
-          original_parents = [];
           regions = { owned };
           ended_subabs = AbsLevelSet.empty;
           avalues;
@@ -1263,7 +1257,6 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           kind = S.fresh_abs_kind;
           can_end = true;
           parents = AbsId.Set.empty;
-          original_parents = [];
           regions = { owned };
           ended_subabs = AbsLevelSet.empty;
           avalues;
@@ -1394,7 +1387,6 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
                 kind = S.fresh_abs_kind;
                 can_end = true;
                 parents = AbsId.Set.empty;
-                original_parents = [];
                 regions = { owned };
                 ended_subabs = AbsLevelSet.empty;
                 avalues;
@@ -1518,7 +1510,6 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         kind = S.fresh_abs_kind;
         can_end = true;
         parents = AbsId.Set.empty;
-        original_parents = [];
         regions = { owned };
         ended_subabs = AbsLevelSet.empty;
         avalues;
@@ -1617,7 +1608,6 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         kind = S.fresh_abs_kind;
         can_end = true;
         parents = AbsId.Set.empty;
-        original_parents = [];
         regions = { owned };
         ended_subabs = AbsLevelSet.empty;
         avalues;
@@ -2192,7 +2182,6 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
       kind = kind0;
       can_end = can_end0;
       parents = parents0;
-      original_parents = original_parents0;
       regions = { owned = regions0 };
       ended_subabs = ended_subabs0;
       avalues = avalues0;
@@ -2207,7 +2196,6 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
       kind = kind1;
       can_end = can_end1;
       parents = parents1;
-      original_parents = original_parents1;
       regions = { owned = regions1 };
       ended_subabs = ended_subabs1;
       avalues = avalues1;
@@ -2223,7 +2211,6 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
     if check_can_end && can_end0 <> can_end1 then
       raise (Distinct "match_abstractions: can_end");
     let _ = CEM.match_aids parents0 parents1 in
-    let _ = CEM.match_aidl original_parents0 original_parents1 in
     let _ = CEM.match_rids regions0 regions1 in
 
     if not (AbsLevelSet.equal ended_subabs0 ended_subabs1) then

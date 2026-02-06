@@ -274,7 +274,6 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
                   kind = CopySymbolicValue;
                   can_end = true;
                   parents = AbsId.Set.empty;
-                  original_parents = [];
                   regions = { owned };
                   ended_subabs = AbsLevelSet.empty;
                   avalues = [ sv; updated_sv; copied_sv ];
@@ -878,7 +877,6 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
               kind = CopySymbolicValue;
               can_end = true;
               parents = AbsId.Set.empty;
-              original_parents = [];
               regions = { owned = RegionId.Set.singleton rid };
               ended_subabs = AbsLevelSet.empty;
               avalues = borrows @ [ loan ];

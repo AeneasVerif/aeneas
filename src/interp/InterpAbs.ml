@@ -73,7 +73,6 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
           kind = abs_kind;
           can_end;
           parents = AbsId.Set.empty;
-          original_parents = [];
           regions = { owned = RegionId.Set.singleton r_id };
           ended_subabs = AbsLevelSet.empty;
           avalues;
@@ -1998,7 +1997,6 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind)
       (AbsId.Set.union abs0.parents abs1.parents)
       (AbsId.Set.of_list [ abs0.abs_id; abs1.abs_id ])
   in
-  let original_parents = AbsId.Set.elements parents in
   let regions =
     let owned = RegionId.Set.union abs0.regions.owned abs1.regions.owned in
     { owned }
@@ -2086,7 +2084,6 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind)
       kind = abs_kind;
       can_end;
       parents;
-      original_parents;
       ended_subabs;
       regions;
       avalues;
