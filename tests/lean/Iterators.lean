@@ -8,29 +8,28 @@ set_option linter.unusedVariables false
 
 namespace iterators
 
-/- [iterators::test_iter_range]: loop 0:
+/- [iterators::iter_range]: loop 0:
    Source: 'tests/src/iterators.rs', lines 5:4-5:28 -/
-def test_iter_range_loop
-  (iter : core.ops.range.Range Std.Usize) : Result Unit := do
+def iter_range_loop (iter : core.ops.range.Range Std.Usize) : Result Unit := do
   let (o, iter1) ←
     core.iter.range.IteratorRange.next core.iter.range.StepUsize iter
   match o with
   | none => ok ()
-  | some _ => test_iter_range_loop iter1
+  | some _ => iter_range_loop iter1
 partial_fixpoint
 
-/- [iterators::test_iter_range]:
+/- [iterators::iter_range]:
    Source: 'tests/src/iterators.rs', lines 4:0-6:1 -/
-def test_iter_range : Result Unit := do
+def iter_range : Result Unit := do
   let iter ←
     core.iter.traits.collect.IntoIterator.Blanket.into_iter
       (core.iter.traits.iterator.IteratorRange core.iter.range.StepUsize)
       { start := 0#usize, end_ := 32#usize }
-  test_iter_range_loop iter
+  iter_range_loop iter
 
-/- [iterators::test_iter_range_step_by]: loop 0:
+/- [iterators::iter_range_step_by]: loop 0:
    Source: 'tests/src/iterators.rs', lines 9:4-9:33 -/
-def test_iter_range_step_by_loop
+def iter_range_step_by_loop
   (iter : core.iter.adapters.step_by.StepBy (core.ops.range.Range Std.Usize)) :
   Result Unit
   := do
@@ -39,12 +38,12 @@ def test_iter_range_step_by_loop
       (core.iter.traits.iterator.IteratorRange core.iter.range.StepUsize) iter
   match o with
   | none => ok ()
-  | some _ => test_iter_range_step_by_loop iter1
+  | some _ => iter_range_step_by_loop iter1
 partial_fixpoint
 
-/- [iterators::test_iter_range_step_by]:
+/- [iterators::iter_range_step_by]:
    Source: 'tests/src/iterators.rs', lines 8:0-10:1 -/
-def test_iter_range_step_by (n : Std.Usize) : Result Unit := do
+def iter_range_step_by (n : Std.Usize) : Result Unit := do
   let sb ←
     core.iter.range.IteratorRange.step_by core.iter.range.StepUsize
       { start := 0#usize, end_ := n } 2#usize
@@ -52,6 +51,64 @@ def test_iter_range_step_by (n : Std.Usize) : Result Unit := do
     core.iter.traits.collect.IntoIterator.Blanket.into_iter
       (core.iter.traits.iterator.IteratorStepBy
       (core.iter.traits.iterator.IteratorRange core.iter.range.StepUsize)) sb
-  test_iter_range_step_by_loop iter
+  iter_range_step_by_loop iter
+
+/- [iterators::slice_iter_mut_while]: loop 1:
+   Source: 'tests/src/iterators.rs', lines 15:8-15:18 -/
+def slice_iter_mut_while_loop1 (b : Bool) : Result Unit := do
+  if b
+  then slice_iter_mut_while_loop1 true
+  else ok ()
+partial_fixpoint
+
+/- [iterators::slice_iter_mut_while]: loop 0:
+   Source: 'tests/src/iterators.rs', lines 14:4-16:5 -/
+def slice_iter_mut_while_loop0
+  (b : Bool) (it : core.slice.iter.IterMut Std.U16) :
+  Result (core.slice.iter.IterMut Std.U16)
+  := do
+  let (o, it1, next_back) ← core.slice.iter.IteratorIterMut.next it
+  match o with
+  | none => ok (next_back it1 none)
+  | some _ =>
+    slice_iter_mut_while_loop1 b
+    let back ← slice_iter_mut_while_loop0 false it1
+    ok (next_back back o)
+partial_fixpoint
+
+/- [iterators::slice_iter_mut_while]:
+   Source: 'tests/src/iterators.rs', lines 12:0-17:1 -/
+def slice_iter_mut_while
+  (b : Bool) (s : Slice Std.U16) : Result (Slice Std.U16) := do
+  let (it, iter_mut_back) ← core.slice.Slice.iter_mut s
+  let back ← slice_iter_mut_while_loop0 b it
+  ok (iter_mut_back back)
+
+/- [iterators::slice_iter_while]: loop 1:
+   Source: 'tests/src/iterators.rs', lines 22:8-22:18 -/
+def slice_iter_while_loop1 (b : Bool) : Result Unit := do
+  if b
+  then slice_iter_while_loop1 true
+  else ok ()
+partial_fixpoint
+
+/- [iterators::slice_iter_while]: loop 0:
+   Source: 'tests/src/iterators.rs', lines 21:4-23:5 -/
+def slice_iter_while_loop0
+  (b : Bool) (s : Slice Std.U16) (it : core.slice.iter.Iter Std.U16) :
+  Result Unit
+  := do
+  let (o, it1) ← core.slice.iter.IteratorIterSharedAT.next it
+  match o with
+  | none => ok ()
+  | some _ => slice_iter_while_loop1 b
+              slice_iter_while_loop0 false s it1
+partial_fixpoint
+
+/- [iterators::slice_iter_while]:
+   Source: 'tests/src/iterators.rs', lines 19:0-24:1 -/
+def slice_iter_while (b : Bool) (s : Slice Std.U16) : Result Unit := do
+  let it ← core.slice.Slice.iter s
+  slice_iter_while_loop0 b s it
 
 end iterators
