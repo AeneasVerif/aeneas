@@ -459,11 +459,12 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
 
   and match_tavalues (ctx0 : eval_ctx) (ctx1 : eval_ctx) (v0 : tavalue)
       (v1 : tavalue) : tavalue =
-    [%ltrace
+    [%ldebug
       "- value0: "
       ^ tavalue_to_string ~span:(Some M.span) ctx0 v0
-      ^ "\n- value1: "
-      ^ tavalue_to_string ~span:(Some M.span) ctx1 v1];
+      ^ "\n- ty0: " ^ ty_to_string ctx0 v0.ty ^ "\n- value1: "
+      ^ tavalue_to_string ~span:(Some M.span) ctx1 v1
+      ^ "\n- ty1: " ^ ty_to_string ctx1 v1.ty];
 
     (* Using ValuesUtils.value_has_borrows on purpose here: we want
        to make explicit the fact that, though we have to pick
@@ -491,17 +492,17 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
           M.match_distinct_aadts match_rec ctx0 ctx1 v0.ty av0 v1.ty av1 ty
     | AIgnored _, AIgnored _ -> mk_aignored M.span ty None
     | ABorrow bc0, ABorrow bc1 -> (
-        [%ltrace "borrows"];
+        [%ldebug "borrows"];
         match (bc0, bc1) with
         | ASharedBorrow (pm0, bid0, sid0), ASharedBorrow (pm1, bid1, sid1) ->
-            [%ltrace "shared borrows"];
+            [%ldebug "shared borrows"];
             M.match_ashared_borrows match_rec ctx0 ctx1 v0.ty pm0 bid0 sid0
               v1.ty pm1 bid1 sid1 ty
         | AMutBorrow (pm0, bid0, av0), AMutBorrow (pm1, bid1, av1) ->
-            [%ltrace "mut borrows"];
-            [%ltrace "mut borrows: matching children values"];
+            [%ldebug "mut borrows"];
+            [%ldebug "mut borrows: matching children values"];
             let av = match_arec av0 av1 in
-            [%ltrace "mut borrows: matched children values"];
+            [%ldebug "mut borrows: matched children values"];
             M.match_amut_borrows match_rec ctx0 ctx1 v0.ty pm0 bid0 av0 v1.ty
               pm1 bid1 av1 ty av
         | AIgnoredMutBorrow (bid0, child0), AIgnoredMutBorrow (bid1, child1) ->
@@ -535,22 +536,22 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
             *)
             [%craise] M.span "Unexpected")
     | ALoan lc0, ALoan lc1 -> (
-        [%ltrace "loans"];
+        [%ldebug "loans"];
         (* TODO: maybe we should enforce that the ids are always exactly the same -
            without matching *)
         match (lc0, lc1) with
         | ASharedLoan (pm0, id0, sv0, av0), ASharedLoan (pm1, id1, sv1, av1) ->
-            [%ltrace "shared loans"];
+            [%ldebug "shared loans"];
             let sv = match_rec sv0 sv1 in
             let av = match_arec av0 av1 in
             [%sanity_check] M.span (not (value_has_borrows sv.value));
             M.match_ashared_loans match_rec ctx0 ctx1 v0.ty pm0 id0 sv0 av0
               v1.ty pm1 id1 sv1 av1 ty sv av
         | AMutLoan (pm0, id0, av0), AMutLoan (pm1, id1, av1) ->
-            [%ltrace "mut loans"];
-            [%ltrace "mut loans: matching children values"];
+            [%ldebug "mut loans"];
+            [%ldebug "mut loans: matching children values"];
             let av = match_arec av0 av1 in
-            [%ltrace "mut loans: matched children values"];
+            [%ldebug "mut loans: matched children values"];
             M.match_amut_loans match_rec ctx0 ctx1 v0.ty pm0 id0 av0 v1.ty pm1
               id1 av1 ty av
         | AIgnoredMutLoan _, AIgnoredMutLoan _
@@ -880,7 +881,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         let ty = v0.ty in
         { value; ty })
       else (
-        [%ltrace
+        [%ldebug
           "- v0:\n" ^ tvalue_to_string ctx0 v0 ^ "\n\n- v1:\n"
           ^ tvalue_to_string ctx1 v1];
         (* Case where there are only shared loans *)
@@ -2276,6 +2277,7 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
      We repeatedly attempt to match, saving the state before matching and
      restoring it if it failed. *)
   let pop_first_matching_abs abs0 env =
+    [%ltrace "Trying to match abs:\n" ^ abs_to_string span ctx0 abs0];
     env_pop_binding
       (fun _ ->
         raise (Distinct "Could not find a matching abs in right environment"))
@@ -2288,6 +2290,7 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
             begin
               try
                 match_abstractions abs0 abs1;
+                [%ltrace "Found matching abs:\n" ^ abs_to_string span ctx1 abs1];
                 Some abs1
               with Distinct _ ->
                 (* Restore the state and continue exploring *)
