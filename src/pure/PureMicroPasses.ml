@@ -7444,7 +7444,9 @@ let apply_passes_to_pure_fun_translations (crate : LlbcAst.crate)
             transl)
     in
 
-    process "opaque" opaque @ process "transparent" transparent
+    let opaque = process "opaque" opaque in
+    let transparent = process "transparent" transparent in
+    opaque @ transparent
   in
 
   (* Add the type annotations - we add those only now because we need
