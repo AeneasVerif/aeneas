@@ -34,6 +34,17 @@ fn slice_iter_mut_while_early_return(s: &mut [u16; 256], b: bool) {
     }
 }
 
+fn slice_iter_mut_while_early_return_two_bools(s: &mut [u16; 256], b0: bool, b1: bool) {
+    let mut it = s.iter_mut();
+    while let Some(_) = it.next() {
+        while b0 {}
+
+        if b1 {
+            return;
+        }
+    }
+}
+
 /*
 fn array_into_iter<const N : usize>(s : &[u8; N]) {
     for _ in s {}

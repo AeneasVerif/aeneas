@@ -2232,6 +2232,9 @@ let eliminate_ended_shared_loans (span : Meta.span) (ctx : eval_ctx) : eval_ctx
       | ALoan (AEndedSharedLoan (sv, child))
         when (not (value_has_loans_or_borrows (Some span) ctx sv.value))
              && is_aignored child.value -> false
+      | ASymbolic (_, AEndedProjLoans { proj = _; consumed; borrows })
+        when List.for_all (fun (_, proj) -> proj = AEmpty) (consumed @ borrows)
+        -> false
       | _ -> true
     in
     let avalues = List.filter keep abs.avalues in

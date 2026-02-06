@@ -236,6 +236,39 @@ let eliminate_shared_borrow_markers (span : Meta.span)
       in
       update_borrows#visit_eval_ctx RegionId.Set.empty ctx
 
+(** Eliminate the markers of ended loans/borrows
+
+    TODO: the projection markers should be placed in aproj/eproj rather than
+    ASymbolic/ESymbolic *)
+let eliminate_ended_markers (_span : Meta.span) (ctx : eval_ctx) : eval_ctx =
+  (* We also remove the markers from the ended loans/borrows in the evalues *)
+  let update_abs (abs : abs) : abs =
+    let visitor =
+      object
+        inherit [_] map_abs as super
+
+        method! visit_ESymbolic env pm proj =
+          match proj with
+          | EEndedProjLoans { proj = _; consumed; borrows }
+            when List.for_all
+                   (fun (_, proj) -> proj = EEmpty)
+                   (consumed @ borrows) -> super#visit_ESymbolic env PNone proj
+          | EEndedProjBorrows { mvalues = _; loans }
+            when List.for_all (fun (_, proj) -> proj = EEmpty) loans ->
+              super#visit_ESymbolic env PNone proj
+          | _ -> super#visit_ESymbolic env pm proj
+      end
+    in
+    let cont = Option.map (visitor#visit_abs_cont ()) abs.cont in
+
+    (* *)
+    { abs with cont }
+  in
+  let ctx = ctx_map_abs update_abs ctx in
+
+  (* *)
+  ctx
+
 (** Utility.
 
     An environment augmented with information about its
@@ -1093,6 +1126,11 @@ let collapse_ctx_aux config (span : Meta.span)
   let ctx = eliminate_shared_loans span ctx in
   [%ldebug
     "ctx after reduce, collapse and eliminate_shared_loans:\n"
+    ^ eval_ctx_to_string ctx];
+
+  let ctx = eliminate_ended_markers span ctx in
+  [%ldebug
+    "ctx after reduce, collapse and eliminate_ended_markers:\n"
     ^ eval_ctx_to_string ctx];
 
   (* Sanity check: there are no markers remaining *)

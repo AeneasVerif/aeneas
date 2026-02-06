@@ -148,4 +148,46 @@ def slice_iter_mut_while_early_return
   let s2 := iter_mut_back back
   ok (to_slice_mut_back s2)
 
+/- [iterators::slice_iter_mut_while_early_return_two_bools]: loop 1:
+   Source: 'tests/src/iterators.rs', lines 40:8-40:19 -/
+def slice_iter_mut_while_early_return_two_bools_loop1
+  (b0 : Bool) : Result Unit := do
+  if b0
+  then slice_iter_mut_while_early_return_two_bools_loop1 true
+  else ok ()
+partial_fixpoint
+
+/- [iterators::slice_iter_mut_while_early_return_two_bools]: loop 0:
+   Source: 'tests/src/iterators.rs', lines 39:4-46:1 -/
+def slice_iter_mut_while_early_return_two_bools_loop0
+  (b0 : Bool) (b1 : Bool) (it : core.slice.iter.IterMut Std.U16) :
+  Result (core.slice.iter.IterMut Std.U16)
+  := do
+  let (o, it1, next_back) ← core.slice.iter.IteratorIterMut.next it
+  match o with
+  | none => ok (next_back it1 none)
+  | some _ =>
+    slice_iter_mut_while_early_return_two_bools_loop1 b0
+    if b1
+    then ok (next_back it1 o)
+    else
+      let back ←
+        slice_iter_mut_while_early_return_two_bools_loop0 false false it1
+      ok (next_back back o)
+partial_fixpoint
+
+/- [iterators::slice_iter_mut_while_early_return_two_bools]:
+   Source: 'tests/src/iterators.rs', lines 37:0-46:1 -/
+def slice_iter_mut_while_early_return_two_bools
+  (s : Array Std.U16 256#usize) (b0 : Bool) (b1 : Bool) :
+  Result (Array Std.U16 256#usize)
+  := do
+  let (s1, to_slice_mut_back) ←
+    (↑(Array.to_slice_mut s) : Result ((Slice Std.U16) × (Slice Std.U16 →
+      Array Std.U16 256#usize)))
+  let (it, iter_mut_back) ← core.slice.Slice.iter_mut s1
+  let back ← slice_iter_mut_while_early_return_two_bools_loop0 b0 b1 it
+  let s2 := iter_mut_back back
+  ok (to_slice_mut_back s2)
+
 end iterators
