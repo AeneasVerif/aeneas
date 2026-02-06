@@ -32,7 +32,7 @@ inductive TypeBody where
 | struct (fieldNames : List Field)
 /-- For every variant, a map for the field names -/
 | enum (variants : List Variant)
-| opaque
+| unknown
 deriving Repr, Inhabited
 
 instance : ToMessageData TypeBody where
@@ -40,7 +40,7 @@ instance : ToMessageData TypeBody where
     match x with
     | .struct fields => m!"Struct ({fields})"
     | .enum variants => m!"Enum ({variants})"
-    | .opaque => m!"Opaque"
+    | .unknown => m!"Unknown"
 
 structure TypeInfo where
   /-- The name to use for extraction -/
@@ -382,7 +382,7 @@ def processType (declName : Name) (_pat : String) (info : TypeInfo) : AttrM Type
       let variants ← do
         match info.body with
         | .enum variants => pure variants
-        | .opaque => pure []
+        | .unknown => pure []
         | .struct _ => throwError "The user-provided information is for a structure while the type is an inductive"
       /- Go through the variants and retrieve their names.
          We first need to use the user provided information to compute a map from Lean name to user information. -/
@@ -415,7 +415,7 @@ def processType (declName : Name) (_pat : String) (info : TypeInfo) : AttrM Type
       let fields ← do
         match info.body with
         | .struct fields => pure fields
-        | .opaque => pure []
+        | .unknown => pure []
         | .enum _ => throwError "The user-provided information is for a variant while the type is a structure"
       /- Compute the map from Lean field name to user information while doing the sanity checks -/
       let mut providedFields := Std.HashMap.emptyWithCapacity
