@@ -69,7 +69,13 @@ let backend () : backend =
   | None -> Lean
   | Some b -> b
 
-let backend_to_string = show_backend
+let backend_to_string (b : backend) =
+  match b with
+  | FStar -> "F*"
+  | Coq -> "Rocq"
+  | Lean -> "Lean"
+  | HOL4 -> "HOL4"
+
 let backend_name () : string = backend_to_string (backend ())
 
 let if_backend (f : unit -> 'a) (default : 'a) : 'a =
