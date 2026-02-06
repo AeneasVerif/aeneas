@@ -83,12 +83,13 @@ let type_decl_is_tuple_struct (x : type_decl) : bool =
   | _ -> false
 
 let initialize_g_type_info (is_tuple_struct : bool) ~(is_rec : bool)
-    ~(has_regions : bool) (param_infos : 'p) : 'p g_type_info =
+    ~(has_regions : bool) ~(mut_regions : RegionId.Set.t) (param_infos : 'p) :
+    'p g_type_info =
   {
     borrows_info = type_borrows_info_init;
     is_tuple_struct;
     param_infos;
-    mut_regions = RegionId.Set.empty;
+    mut_regions;
     is_rec;
     has_regions;
   }
@@ -101,7 +102,19 @@ let initialize_type_decl_info ~(is_rec : bool) (def : type_decl) :
     !Config.use_tuple_structs && (not is_rec) && type_decl_is_tuple_struct def
   in
   let has_regions = List.length def.generics.regions > 0 in
-  initialize_g_type_info is_tuple_struct ~is_rec ~has_regions param_infos
+  (* We initialize the mutable regions differently depending on whether the
+     type is opaque or not *)
+  let mut_regions =
+    match def.kind with
+    | Opaque ->
+        if Config.opaque_types_have_mut_regions_by_default then
+          RegionId.Set.of_list
+            (List.map (fun (r : region_param) -> r.index) def.generics.regions)
+        else RegionId.Set.empty
+    | _ -> RegionId.Set.empty
+  in
+  initialize_g_type_info is_tuple_struct ~is_rec ~has_regions ~mut_regions
+    param_infos
 
 let type_decl_info_to_partial_type_info (info : type_decl_info) :
     partial_type_info =
@@ -533,7 +546,8 @@ let analyze_ty (span : Meta.span option) (infos : type_infos) (ty : ty) :
   let updated = ref false in
   (* We don't need to compute whether the type contains 'static or not *)
   let ty_info =
-    initialize_g_type_info false ~is_rec:false ~has_regions:false None
+    initialize_g_type_info false ~is_rec:false ~has_regions:false
+      ~mut_regions:RegionId.Set.empty None
   in
   let ty_info = analyze_full_ty span updated infos ty_info ty in
   (* Convert the ty_info *)

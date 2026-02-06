@@ -472,3 +472,7 @@ let recover_joins = ref true
     this reason we guard all checks with [type_analysis_ignore_dyn] so that it
     is easy to activate them. *)
 let type_analysis_ignore_dyn = true
+
+(** When analyzing an opaque type about which we have no information, should we
+    consider its regions as being used for mutable references or not? *)
+let opaque_types_have_mut_regions_by_default = false
