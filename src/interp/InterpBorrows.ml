@@ -2493,6 +2493,8 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
         let opt_loan = get_first_non_ignored_aloan_in_abs span abs 0 (-1) in
         match opt_loan with
         | None ->
+            [%ldebug
+              "No non-ignored aloans in abs:\n" ^ abs_to_string span ctx abs];
             (* No remaining loans: we can end the abstraction.
 
                However, we need to make sure that ending this abstraction will not
@@ -2506,6 +2508,9 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
               raise (FoundAbsId abs.abs_id)
             else EAbs abs :: explore_env ctx env
         | Some _ ->
+            [%ldebug
+              "There are non-ignored aloans in abs:\n"
+              ^ abs_to_string span ctx abs];
             (* There are remaining loans: we can't end the abstraction *)
             (* Check if we can end some loan projectors (because there doesn't
                remain corresponding borrow projectors in the context) *)
