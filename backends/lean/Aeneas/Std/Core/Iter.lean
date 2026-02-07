@@ -35,6 +35,7 @@ structure core.iter.traits.iterator.Iterator (Self : Type) (Self_Item : Type)
   where
   next : Self → Result ((Option Self_Item) × Self)
   step_by : Self → Usize → Result (core.iter.adapters.step_by.StepBy Self)
+  -- TODO: collect
 
 @[rust_fun "core::iter::traits::iterator::Iterator::step_by"]
 def core.iter.traits.iterator.Iterator.step_by.default
@@ -88,6 +89,13 @@ structure core.iter.traits.collect.FromIterator (Self : Type) (A : Type) where
   from_iter : forall {T : Type} {IntoIter : Type}
     (_ : core.iter.traits.collect.IntoIterator T A IntoIter),
     T → Result Self
+
+@[rust_fun "core::iter::traits::iterator::Iterator::collect"]
+def core.iter.traits.iterator.Iterator.collect.default
+  {Self : Type} {B : Type} {Item : Type} (IteratorInst :
+  core.iter.traits.iterator.Iterator Self Item)
+  (collectFromIteratorInst : core.iter.traits.collect.FromIterator B Item) :
+  Self → Result B := sorry
 
 @[rust_fun
   "core::iter::traits::collect::{core::iter::traits::collect::IntoIterator<@I, @Item, @I>}::into_iter"]

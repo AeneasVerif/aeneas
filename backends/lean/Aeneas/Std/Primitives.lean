@@ -224,8 +224,6 @@ end Test
 # Misc
 -/
 
-abbrev Str := String
-
 /-- The Never type in Rust -/
 inductive Never where
 
