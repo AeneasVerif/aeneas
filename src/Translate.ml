@@ -253,7 +253,7 @@ let translate_function_to_pure (trans_ctx : trans_ctx) (marked_ids : marked_ids)
       with CFailure _ ->
         "(could not compute the name pattern due to a different error)"
     in
-    [%save_error_opt_span] error.span
+    [%warn_opt_span] error.span
       ("Could not translate the function '" ^ name
      ^ " because of previous error.\nName pattern: '" ^ name_pattern ^ "'"
      ^ "\nDefinition span: "
@@ -309,7 +309,7 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
                   "(could not compute the name pattern due to a different \
                    error)"
               in
-              [%save_error_opt_span] error.span
+              [%warn_opt_span] error.span
                 ("Could not translate the global declaration '" ^ name
                ^ " because of previous error\nName pattern: '" ^ name_pattern
                ^ "'" ^ "\nDefinition span: "
@@ -342,7 +342,7 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
                with CFailure _ ->
                  "(could not compute the name pattern due to a different error)"
              in
-             [%save_error_opt_span] error.span
+             [%warn_opt_span] error.span
                ("Could not translate the function signature of '" ^ name
               ^ " because of previous error\nName pattern: '" ^ name_pattern
               ^ "'" ^ "\nDefinition span: "
@@ -435,7 +435,7 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
                   "(could not compute the name pattern due to a different \
                    error)"
               in
-              [%save_error_opt_span] error.span
+              [%warn_opt_span] error.span
                 ("Could not translate the trait declaration '" ^ name
                ^ " because of previous error\nName pattern: '" ^ name_pattern
                ^ "'" ^ "\nDefinition span: "
@@ -467,7 +467,7 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
                   "(could not compute the name pattern due to a different \
                    error)"
               in
-              [%save_error_opt_span] error.span
+              [%warn_opt_span] error.span
                 ("Could not translate the trait instance '" ^ name
                ^ " because of previous error\nName pattern: '" ^ name_pattern
                ^ "'" ^ "\nDefinition span: "
@@ -1313,7 +1313,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
             with CFailure _ ->
               "(could not compute the name pattern due to a different error)"
           in
-          [%save_error_opt_span] error.span
+          [%warn_opt_span] error.span
             ("Could not generate names for the type declaration '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
            ^ "\nDefinition span: "
@@ -1351,7 +1351,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
             with CFailure _ ->
               "(could not compute the name pattern due to a different error)"
           in
-          [%save_error_opt_span] error.span
+          [%warn_opt_span] error.span
             ("Could not generate names for the function declaration '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
            ^ "\nDefinition span: "
@@ -1377,7 +1377,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
             with CFailure _ ->
               "(could not compute the name pattern due to a different error)"
           in
-          [%save_error_opt_span] error.span
+          [%warn_opt_span] error.span
             ("Could not generate names for the global declaration '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
            ^ "\nDefinition span: "
@@ -1401,7 +1401,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
             with CFailure _ ->
               "(could not compute the name pattern due to a different error)"
           in
-          [%save_error_opt_span] error.span
+          [%warn_opt_span] error.span
             ("Could not generate names for the trait declaration '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
            ^ "\nDefinition span: "
@@ -1426,7 +1426,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
             with CFailure _ ->
               "(could not compute the name pattern due to a different error)"
           in
-          [%save_error_opt_span] error.span
+          [%warn_opt_span] error.span
             ("Could not generate names for the trait implementation '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
            ^ "\nDefinition span: "
@@ -1550,10 +1550,9 @@ let extract_translated_crate (filename : string) (dest_dir : string)
             close_out tgt;
             log#linfo (lazy ("Copied:    " ^ tgt_filename))
         with Sys_error _ ->
-          log#error
-            "Could not copy the primitives file: %s.\n\
-             You will have to copy it/set up the project by hand."
-            primitives_src)
+          [%warn_opt_span] None
+            ("Could not copy the primitives file: " ^ primitives_src
+           ^ ".\nYou will have to copy it/set up the project by hand."))
   in
 
   (* Extract the file(s) *)

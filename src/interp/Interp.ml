@@ -547,8 +547,8 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
           "(could not compute the name pattern due to a different error)"
       in
       let action = if synthesize then "translate" else "borrow-check" in
-      [%save_error_opt_span] error.span
-        ("Could not " ^ action ^ " the body of the function '" ^ name
+      [%warn_opt_span] error.span
+        ("Could not " ^ action ^ " the body of function '" ^ name
        ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
        ^ "\nDefinition span: "
         ^ Errors.raw_span_to_string fdef.item_meta.span
