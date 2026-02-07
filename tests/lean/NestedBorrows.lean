@@ -239,4 +239,47 @@ def incr_list (l : List Std.U32) : Result (List Std.U32) := do
   let back ← incr_list_loop (fun lim => lim.current) it
   ok (iter_mut_back { current := back })
 
+/- [nested_borrows::next1]:
+   Source: 'tests/src/nested-borrows.rs', lines 137:0-139:1 -/
+def next1
+  {T : Type} (it : List T) :
+  Result ((Option T) × (List T) × (List T → Option T → List T))
+  := do
+  fail panic
+
+/- [nested_borrows::iter_list_while]: loop 1:
+   Source: 'tests/src/nested-borrows.rs', lines 143:8-143:18 -/
+def iter_list_while_loop1 (b : Bool) : Result Unit := do
+  if b
+  then iter_list_while_loop1 true
+  else ok ()
+partial_fixpoint
+
+/- [nested_borrows::iter_list_while]: loop 0:
+   Source: 'tests/src/nested-borrows.rs', lines 142:4-144:5 -/
+def iter_list_while_loop0
+  {T : Type} (b : Bool) (l : List T) :
+  Result ((List T) × (List T → List T))
+  := do
+  let (o, l1, next1_back) ← next1 l
+  match o with
+  | none => ok (l1, fun l2 => next1_back l2 none)
+  | some t =>
+    iter_list_while_loop1 b
+    let back := fun t1 l2 => next1_back l2 (some t1)
+    let (l2, back1) ← iter_list_while_loop0 false l1
+    let back2 := fun l3 => let l4 := back1 l3
+                           back t l4
+    ok (l2, back2)
+partial_fixpoint
+
+/- [nested_borrows::iter_list_while]:
+   Source: 'tests/src/nested-borrows.rs', lines 141:0-145:1 -/
+@[reducible]
+def iter_list_while
+  {T : Type} (b : Bool) (l : List T) :
+  Result ((List T) × (List T → List T))
+  := do
+  iter_list_while_loop0 b l
+
 end nested_borrows

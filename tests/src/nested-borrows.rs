@@ -134,6 +134,16 @@ fn incr_list(l: &mut List<u32>) {
     }
 }
 
+fn next1<'a, 'b, T>(it: &'a mut &'b mut List<T>) -> Option<&'b mut T> {
+    panic!()
+}
+
+fn iter_list_while<T>(b: bool, l: &mut &mut List<T>) {
+    while let Some(_) = next1(l) {
+        while b {}
+    }
+}
+
 /*
 pub fn id_mut_mut<'a, 'b, T>(x: &'a mut &'b mut T) -> &'a mut &'b mut T {
     x
