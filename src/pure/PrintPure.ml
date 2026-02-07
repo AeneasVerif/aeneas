@@ -1128,7 +1128,9 @@ and struct_update_to_string ?(span : Meta.span option = None) (env : fmt_env)
             texpr_to_string ~span env false indent2 indent_incr fe)
           supd.updates
       in
-      "[ " ^ String.concat ", " fields ^ " ]"
+      "[ " ^ String.concat ", " fields ^ " ]#"
+      ^ string_of_int (List.length fields)
+      ^ "usize"
   | _ -> [%craise_opt_span] span "Unexpected"
 
 and loop_to_string ?(span : Meta.span option = None) (env : fmt_env)
