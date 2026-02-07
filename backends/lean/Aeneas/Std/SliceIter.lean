@@ -1,5 +1,6 @@
 /- Arrays/Slices -/
 import Aeneas.Std.Slice
+import Aeneas.Std.Core.Iter
 
 namespace Aeneas.Std
 

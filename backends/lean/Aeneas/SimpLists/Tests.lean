@@ -1,6 +1,8 @@
 import Aeneas.SimpLists.SimpLists
 import Aeneas.List.List
+import Aeneas.Std.Array
 import Aeneas.Std.Slice
+import Aeneas.Std
 
 open Aeneas Std
 

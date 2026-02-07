@@ -1,4 +1,6 @@
 import Aeneas.Std.String
+import Aeneas.Std.Core.Iter
+import Aeneas.Std.SliceIter
 
 namespace Aeneas.Std
 
@@ -6,9 +8,6 @@ namespace Aeneas.Std
 structure core.str.iter.Chars where
   iter : core.slice.iter.Iter U8
 
-/- [core::str::iter::{core::iter::traits::iterator::Iterator<char> for core::str::iter::Chars<'a>}::collect]:
-   Source: '/rustc/library/core/src/str/iter.rs', lines 35:0-35:31
-   Name pattern: [core::str::iter::{core::iter::traits::iterator::Iterator<core::str::iter::Chars<'a>, char>}::collect] -/
 @[rust_fun
   "core::str::iter::{core::iter::traits::iterator::Iterator<core::str::iter::Chars<'a>, char>}::collect"]
 def core.str.iter.IteratorChars.collect
