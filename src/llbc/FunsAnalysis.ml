@@ -66,7 +66,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
 
     (* We have some specialized knowledge of some library functions; we don't
        have any more custom treatment than this, and these functions can be modeled
-       suitably in Primitives.fst, rather than special-casing for them all the
+       suitably in the backend libraries, rather than special-casing for them all the
        way. *)
     let get_builtin_info (f : fun_decl) : ExtractBuiltin.effect_info option =
       let open ExtractBuiltin in

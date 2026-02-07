@@ -303,6 +303,7 @@ let () =
   let marked_region_ids = ref Types.RegionId.Set.empty in
   let marked_fvar_ids = ref Pure.FVarId.Set.empty in
   let marked_meta_ids = ref Values.MetaId.Set.empty in
+  let symbolic_expr_ids = ref SymbolicAst.SymbolicExprId.Set.empty in
   List.iter
     (fun id ->
       let i = if String.length id >= 2 && String.get id 1 = '@' then 2 else 1 in
@@ -338,6 +339,11 @@ let () =
           | 'm' ->
               marked_meta_ids :=
                 Values.MetaId.Set.add (Values.MetaId.of_int i) !marked_meta_ids
+          | 'e' ->
+              symbolic_expr_ids :=
+                SymbolicAst.SymbolicExprId.Set.add
+                  (SymbolicAst.SymbolicExprId.of_int i)
+                  !symbolic_expr_ids
           | _ ->
               log#serror
                 ("Invalid identifier provided to option: '" ^ id
@@ -357,6 +363,7 @@ let () =
       abs_fvar_ids = Values.AbsFVarId.Set.empty;
       loop_ids = Values.LoopId.Set.empty;
       meta_ids = !marked_meta_ids;
+      symbolic_expr_ids = !symbolic_expr_ids;
     }
   in
 

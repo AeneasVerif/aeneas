@@ -126,6 +126,14 @@ let reset_global_counters () =
   dummy_var_id_counter := DummyVarId.generator_zero
     *)
 
+(** We use symbolic expression ids to uniquely identify symbolic expressions.
+
+    This is particularly useful in combination with `-mark-ids` *)
+module SymbolicExprId =
+Identifiers.IdGen ()
+
+type symbolic_expr_id = SymbolicExprId.id [@@deriving show, eq, ord]
+
 type marked_ids = {
   symbolic_value_ids : SymbolicValueId.Set.t;
   fun_call_ids : FunCallId.Set.t;
@@ -138,6 +146,7 @@ type marked_ids = {
   pure_fvar_ids : Pure.FVarId.Set.t;
   loop_ids : LoopId.Set.t;
   meta_ids : MetaId.Set.t;
+  symbolic_expr_ids : SymbolicExprId.Set.t;
 }
 
 let empty_marked_ids : marked_ids =
@@ -153,4 +162,5 @@ let empty_marked_ids : marked_ids =
     pure_fvar_ids = Pure.FVarId.Set.empty;
     loop_ids = LoopId.Set.empty;
     meta_ids = MetaId.Set.empty;
+    symbolic_expr_ids = SymbolicExprId.Set.empty;
   }

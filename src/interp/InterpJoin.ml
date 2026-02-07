@@ -140,7 +140,6 @@ let reborrow_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
         kind;
         can_end;
         parents = AbsId.Set.empty;
-        original_parents = [];
         ended_subabs = AbsLevelSet.empty;
         regions;
         avalues;
@@ -350,7 +349,6 @@ let reborrow_symbolic_borrows (span : Meta.span) (loop_id : LoopId.id option)
           kind;
           can_end;
           parents = AbsId.Set.empty;
-          original_parents = [];
           ended_subabs = AbsLevelSet.empty;
           regions;
           avalues;
@@ -603,7 +601,7 @@ let refresh_non_fixed_abs_ids (_span : Meta.span) (fixed_aids : AbsId.Set.t)
 
 let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
     ~(recoverable : bool) ~(with_abs_conts : bool) (ctx0 : eval_ctx)
-    (ctx1 : eval_ctx) : ctx_or_update =
+    (ctx1 : eval_ctx) : join_info_or_update =
   (* Debug *)
   [%ltrace
     "- ctx0:\n"
@@ -634,10 +632,10 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
 
      TODO: make the join more general.
   *)
-  let ctx1, refreshed_aids = refresh_non_fixed_abs_ids span abs_ids ctx1 in
+  let ctx0, _ = refresh_non_fixed_abs_ids span abs_ids ctx0 in
   [%ltrace
-    "After refreshing the non-fixed abstraction ids of ctx1:\n"
-    ^ eval_ctx_to_string ~span:(Some span) ~filter:true ctx1];
+    "After refreshing the non-fixed abstraction ids of ctx0:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ~filter:true ctx0];
 
   let partition (env : env) : env * env =
     List.partition
@@ -680,49 +678,9 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
   end in
   let module JM = MakeJoinMatcher (S) in
   let module M = MakeMatcher (JM) in
-  (* Small helper: lookup a binding satisfying some predicate and remove it
-     from the enviromnent *)
-  let rec pop_binding : 'a. (env_elem -> 'a option) -> env -> 'a * env =
-   fun f env ->
-    match env with
-    | [] -> [%internal_error] span
-    | b :: env' -> (
-        match f b with
-        | None ->
-            let out, env' = pop_binding f env' in
-            (out, b :: env')
-        | Some out -> (out, env'))
-  in
-
-  (* Remove a variable from an environment and return the corresponding value *)
-  let pop_var (v : real_var_binder) (env : env) : tvalue * env =
-    pop_binding
-      (fun e ->
-        match e with
-        | EBinding (BVar v', value) when v' = v -> Some value
-        | _ -> None)
-      env
-  in
-
-  (* Remove a dummy variable from an environment and return the corresponding value *)
-  let pop_dummy (v : dummy_var_id) (env : env) : tvalue * env =
-    pop_binding
-      (fun e ->
-        match e with
-        | EBinding (BDummy v', value) when v' = v -> Some value
-        | _ -> None)
-      env
-  in
-
-  (* Remove an abs from an environment *)
-  let pop_abs (abs_id : abs_id) (env : env) : abs * env =
-    pop_binding
-      (fun e ->
-        match e with
-        | EAbs abs when abs.abs_id = abs_id -> Some abs
-        | _ -> None)
-      env
-  in
+  let pop_var = env_pop_var (fun _ -> [%internal_error] span) in
+  let pop_dummy = env_pop_dummy (fun _ -> [%internal_error] span) in
+  let pop_abs = env_pop_abs (fun _ -> [%internal_error] span) in
 
   (* Rem.: this function raises exceptions.
 
@@ -780,8 +738,17 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
           ^ abs_to_string span ctx1 abs1
           ^ "\n"];
 
-        (* The abstractions in the prefix must be the same *)
-        [%sanity_check] span (abs0 = abs1);
+        (* Fixed abstractions should be equal.
+
+           Note that the presence of the field [abs.original_parents] used to make
+           this test fail when some abstraction ids was refreshed by
+           [refresh_non_fixed_abs_ids] (we since remove the field).
+
+           Note that we ignore the continuation expressions: when computing fixed
+           points we might remove/add continuations while the presence/absence
+           shouldn't have an impact on the way we match/unify contexts. *)
+        [%sanity_check] span
+          ({ abs0 with cont = None } = { abs1 with cont = None });
         (* Continue *)
         abs :: join_prefixes env0' env1'
     | [] ->
@@ -906,14 +873,14 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
         ended_regions;
       }
     in
-    let join_info : ctx_join_info =
-      { symbolic_to_value = !symbolic_to_value; refreshed_aids }
+    let join_info : join_info =
+      { joined_ctx = ctx; symbolic_to_value = !symbolic_to_value }
     in
 
     (* Sanity check *)
     if !Config.sanity_checks then Invariants.check_unique_abs_ids span ctx;
 
-    Ok (ctx, join_info)
+    Ok join_info
   with ValueMatchFailure e -> Error e
 
 let join_ctxs_list (config : config) (span : Meta.span)
@@ -952,7 +919,7 @@ let join_ctxs_list (config : config) (span : Meta.span)
     match
       join_ctxs span fresh_abs_kind ~recoverable ~with_abs_conts !joined_ctx ctx
     with
-    | Ok (nctx, _) ->
+    | Ok { joined_ctx = nctx; _ } ->
         joined_ctx := nctx;
         ctx
     | Error err ->
@@ -1138,7 +1105,7 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
           join_ctxs span fresh_abs_kind ~recoverable:false ~with_abs_conts
             !joined_ctx ctx
         with
-        | Ok (nctx, _) ->
+        | Ok { joined_ctx = nctx; _ } ->
             joined_ctx := nctx;
             ctx
         | Error err ->
@@ -1413,7 +1380,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
   [%ltrace "- tgt_ctx after reduce_ctx:\n" ^ eval_ctx_to_string tgt_ctx];
 
   (* Join the source context with the target context *)
-  let joined_ctx, join_info =
+  let join_info =
     match
       join_ctxs span fresh_abs_kind ~recoverable ~with_abs_conts:true src_ctx
         tgt_ctx
@@ -1421,6 +1388,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
     | Ok x -> x
     | Error _ -> [%craise] span "Could not join the contexts"
   in
+  let joined_ctx = join_info.joined_ctx in
   [%ltrace
     "Result of the join:\n- joined_ctx:\n"
     ^ eval_ctx_to_string joined_ctx
@@ -1428,17 +1396,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
     ^ SymbolicValueId.Map.to_string (Some "  ")
         (Print.pair_to_string (tvalue_to_string src_ctx)
            (tvalue_to_string src_ctx))
-        join_info.symbolic_to_value
-    ^ "\n- join_info.refreshed_aids: "
-    ^ AbsId.Map.to_string None AbsId.to_string join_info.refreshed_aids];
-
-  (* The id of some region abstractions might have been refreshed in the target
-     context: we need to register this because otherwise the translation will
-     fail. *)
-  let cc =
-    if AbsId.Map.is_empty join_info.refreshed_aids then cc
-    else cc_comp cc (fun e -> SubstituteAbsIds (join_info.refreshed_aids, e))
-  in
+        join_info.symbolic_to_value];
 
   (* We need to collapse the context.
 

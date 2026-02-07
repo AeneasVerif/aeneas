@@ -24,12 +24,11 @@ let log = Logging.interp_log
     Rem.: this definition is in Interp.ml and not in TypesAnalysis.ml because
     otherwise we have cyclic dependencies. *)
 let analyze_type_declarations (crate : crate)
-    (type_decls : type_decl TypeDeclId.Map.t)
     (decls : type_declaration_group list) : TypesAnalysis.type_infos =
   let open TypesAnalysis in
   List.fold_left
     (fun infos decl ->
-      try analyze_type_declaration_group type_decls infos decl
+      try analyze_type_declaration_group None crate infos decl
       with CFailure error ->
         let fmt_env : Print.fmt_env =
           Charon.PrintLlbcAst.Crate.crate_to_fmt_env crate
@@ -151,7 +150,7 @@ let compute_contexts (crate : crate) : decls_ctx =
       (fun id _ -> TypeDeclId.Set.mem id !type_decl_ids)
       type_decls
   in
-  let type_infos = analyze_type_declarations crate type_decls type_decls_list in
+  let type_infos = analyze_type_declarations crate type_decls_list in
   let type_ctx = { type_decls_groups; type_decls; type_infos; to_extract } in
 
   let fun_decls = crate.fun_decls in

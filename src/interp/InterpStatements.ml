@@ -491,7 +491,6 @@ let create_empty_abstractions_from_abs_region_groups
   (* Auxiliary function to create one abstraction *)
   let create_abs (rg_id : RegionGroupId.id) (rg : abs_region_group) : abs =
     let abs_id = rg.id in
-    let original_parents = rg.parents in
     let parents =
       List.fold_left
         (fun s pid -> AbsId.Set.add pid s)
@@ -514,7 +513,6 @@ let create_empty_abstractions_from_abs_region_groups
       kind = kind rg_id;
       can_end;
       parents;
-      original_parents;
       regions;
       ended_subabs = AbsLevelSet.empty;
       avalues = [];

@@ -199,7 +199,8 @@ let rec translate_expr (e : S.expr) (ctx : bs_ctx) : texpr =
   | Expansion (p, sv, exp) -> translate_expansion p sv exp ctx
   | IntroSymbolic (ectx, p, sv, v, e) ->
       translate_intro_symbolic ectx p sv v e ctx
-  | SubstituteAbsIds (aids, e) -> translate_substitute_abs_ids ctx aids e
+  | SubstituteAbsIds (eid, aids, e) ->
+      translate_substitute_abs_ids ctx eid aids e
   | Meta (meta, e) -> translate_emeta meta e ctx
   | ForwardEnd (return_value, ectx, e, back_e) ->
       (* Translate the end of a function (this is introduced when we reach a [return] statement). *)
@@ -1604,6 +1605,8 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
   [%add_loc] mk_closed_checked_let ctx fwd_effect_info.can_fail pat fwd_e e
 
 and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
+  [%ldebug symbolic_loop_to_string ctx0 loop];
+
   let ctx = ctx0 in
   let loop_id = V.LoopId.Map.find loop.loop_id ctx.loop_ids_map in
 
@@ -1629,7 +1632,7 @@ and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
   let bind_inputs (ctx : bs_ctx) (absl : V.abs list)
       (values : V.symbolic_value list) : bs_ctx * tpat list * tpat list =
     let ctx, absl =
-      (* Compute the type of the break abstractions *)
+      (* Compute the type of the input abstractions *)
       let abs_tys = List.map (abs_to_ty ctx) absl in
       let abs_tys, ignored =
         List.partition_map
@@ -1914,8 +1917,9 @@ and translate_join (ctx : bs_ctx) (ectx : C.eval_ctx)
   let output = mk_simpl_tuple_texpr ctx.span outputs in
   mk_result_ok_texpr ctx.span output
 
-and translate_substitute_abs_ids (ctx : bs_ctx) (aids : V.abs_id V.AbsId.Map.t)
-    (e : S.expr) : texpr =
+and translate_substitute_abs_ids (ctx : bs_ctx) (eid : S.symbolic_expr_id)
+    (aids : V.abs_id V.AbsId.Map.t) (e : S.expr) : texpr =
+  [%ldebug "symbolic expression id: " ^ S.SymbolicExprId.to_string eid];
   (* We need to update the information we have in the various maps of the context *)
   let { abs_id_to_info; ignored_abs_ids; _ } = ctx in
   let update (aid : V.AbsId.id) : V.AbsId.id =

@@ -236,6 +236,39 @@ let eliminate_shared_borrow_markers (span : Meta.span)
       in
       update_borrows#visit_eval_ctx RegionId.Set.empty ctx
 
+(** Eliminate the markers of ended loans/borrows
+
+    TODO: the projection markers should be placed in aproj/eproj rather than
+    ASymbolic/ESymbolic *)
+let eliminate_ended_markers (_span : Meta.span) (ctx : eval_ctx) : eval_ctx =
+  (* We also remove the markers from the ended loans/borrows in the evalues *)
+  let update_abs (abs : abs) : abs =
+    let visitor =
+      object
+        inherit [_] map_abs as super
+
+        method! visit_ESymbolic env pm proj =
+          match proj with
+          | EEndedProjLoans { proj = _; consumed; borrows }
+            when List.for_all
+                   (fun (_, proj) -> proj = EEmpty)
+                   (consumed @ borrows) -> super#visit_ESymbolic env PNone proj
+          | EEndedProjBorrows { mvalues = _; loans }
+            when List.for_all (fun (_, proj) -> proj = EEmpty) loans ->
+              super#visit_ESymbolic env PNone proj
+          | _ -> super#visit_ESymbolic env pm proj
+      end
+    in
+    let cont = Option.map (visitor#visit_abs_cont ()) abs.cont in
+
+    (* *)
+    { abs with cont }
+  in
+  let ctx = ctx_map_abs update_abs ctx in
+
+  (* *)
+  ctx
+
 (** Utility.
 
     An environment augmented with information about its
@@ -1095,6 +1128,11 @@ let collapse_ctx_aux config (span : Meta.span)
     "ctx after reduce, collapse and eliminate_shared_loans:\n"
     ^ eval_ctx_to_string ctx];
 
+  let ctx = eliminate_ended_markers span ctx in
+  [%ldebug
+    "ctx after reduce, collapse and eliminate_ended_markers:\n"
+    ^ eval_ctx_to_string ctx];
+
   (* Sanity check: there are no markers remaining *)
   [%sanity_check] span (not (eval_ctx_has_markers ctx));
 
@@ -1391,16 +1429,20 @@ let collapse_ctx_following_sequence (span : Meta.span)
           nabs_map := AbsId.Map.add nabs nabs' !nabs_map
       | None, Some abs | Some abs, None ->
           (* We don't have to merge anything, meaning the abstraction resulting
-           from the merge is exactly the abstraction we found (what happened is
-           that we're in the situation where we had to merge an abstraction
-           from one side with another abstracction from the other side). *)
+             from the merge is exactly the abstraction we found (what happened is
+             that we're in the situation where we had to merge an abstraction
+             from one side with another abstracction from the other side). *)
           [%ldebug
             "Registering: " ^ AbsId.to_string nabs ^ " --> "
             ^ AbsId.to_string abs.abs_id];
           nabs_map := AbsId.Map.add nabs abs.abs_id !nabs_map
       | None, None ->
-          (* The abs, after substitution of its id, should be in one of the two environments *)
-          [%internal_error] span)
+          (* The two abs come from the unprojected environment: we don't have to
+             merge anything *)
+          [%ldebug
+            "Could not find left abstraction " ^ AbsId.to_string abs0
+            ^ " and right abstraction " ^ AbsId.to_string abs1
+            ^ " in context:\n" ^ eval_ctx_to_string !ctx])
     sequence;
   let ctx = !ctx in
   [%ldebug "ctx after applying the merge sequence:\n" ^ eval_ctx_to_string ctx];

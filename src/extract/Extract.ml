@@ -2733,45 +2733,43 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
     (builtin_info : Pure.builtin_trait_decl_info option) : extraction_ctx =
   [%ltrace trait_decl.name];
   let methods = trait_decl.methods in
+  (* Small helper *)
+  let compute_item_name (item_name : string) (id : fun_decl_id) :
+      string * FunDeclId.id option * string =
+    [%ldebug "(" ^ trait_decl.name ^ "): compute_item_name: " ^ item_name];
+    let trans : pure_fun_translation =
+      match FunDeclId.Map.find_opt id ctx.trans_funs with
+      | Some decl -> decl
+      | None ->
+          [%craise] trait_decl.item_meta.span
+            ("Unexpected error: could not find the declaration for method '"
+           ^ item_name ^ "' for trait declaration '"
+            ^ name_to_string ctx trait_decl.item_meta.name
+            ^ "'")
+    in
+
+    let f = trans.f in
+    (* We do something special to reuse the [ctx_compute_fun_decl]
+             function. TODO: make it cleaner. *)
+    let llbc_name : Types.name =
+      [ Types.PeIdent (item_name, Disambiguator.zero) ]
+    in
+    let f = { f with item_meta = { f.item_meta with name = llbc_name } } in
+    [%ldebug
+      "compute_item_name: llbc_name=" ^ name_to_string ctx f.item_meta.name];
+    let name = ctx_compute_fun_name f true ctx in
+    (* Add a prefix if necessary *)
+    let name =
+      if !record_fields_short_names then name
+      else ctx_compute_trait_decl_name ctx trait_decl ^ "_" ^ name
+    in
+    (item_name, None, name)
+  in
   (* Compute the names *)
   let method_names =
     match builtin_info with
     | None ->
         (* Not a builtin function *)
-        let compute_item_name (item_name : string) (id : fun_decl_id) :
-            string * FunDeclId.id option * string =
-          [%ldebug "(" ^ trait_decl.name ^ "): compute_item_name: " ^ item_name];
-          let trans : pure_fun_translation =
-            match FunDeclId.Map.find_opt id ctx.trans_funs with
-            | Some decl -> decl
-            | None ->
-                [%craise] trait_decl.item_meta.span
-                  ("Unexpected error: could not find the declaration for \
-                    method '" ^ item_name ^ "' for trait declaration '"
-                  ^ name_to_string ctx trait_decl.item_meta.name
-                  ^ "'")
-          in
-
-          let f = trans.f in
-          (* We do something special to reuse the [ctx_compute_fun_decl]
-             function. TODO: make it cleaner. *)
-          let llbc_name : Types.name =
-            [ Types.PeIdent (item_name, Disambiguator.zero) ]
-          in
-          let f =
-            { f with item_meta = { f.item_meta with name = llbc_name } }
-          in
-          [%ldebug
-            "compute_item_name: llbc_name="
-            ^ name_to_string ctx f.item_meta.name];
-          let name = ctx_compute_fun_name f true ctx in
-          (* Add a prefix if necessary *)
-          let name =
-            if !record_fields_short_names then name
-            else ctx_compute_trait_decl_name ctx trait_decl ^ "_" ^ name
-          in
-          (item_name, None, name)
-        in
         List.map
           (fun (name, bound_fn) ->
             compute_item_name name bound_fn.binder_value.fun_id)
@@ -2783,11 +2781,14 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
           (fun (item_name, fun_binder) ->
             match StringMap.find_opt item_name funs_map with
             | None ->
-                [%craise] trait_decl.item_meta.span
+                [%warn] trait_decl.item_meta.span
                   ("When retrieving the builtin information for trait decl '"
                  ^ trait_decl.name
                  ^ "', could not find the information for item '" ^ item_name
-                 ^ "'")
+                 ^ "'. The model defined in the " ^ Config.backend_name ()
+                 ^ " library seems to be missing the corresponding field.");
+                (* Use the LLBC definition to compute the name *)
+                compute_item_name item_name fun_binder.binder_value.fun_id
             | Some info ->
                 let fun_name = info.extract_name in
                 let default_id =

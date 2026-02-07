@@ -73,7 +73,6 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
           kind = abs_kind;
           can_end;
           parents = AbsId.Set.empty;
-          original_parents = [];
           regions = { owned = RegionId.Set.singleton r_id };
           ended_subabs = AbsLevelSet.empty;
           avalues;
@@ -1443,8 +1442,11 @@ let bind_outputs_from_output_input (span : Meta.span) (ctx : eval_ctx)
               (* *)
               pat
           | EEndedIgnoredMutBorrow { child; given_back; given_back_meta = _ } ->
-              (* For now we simply check that the child and given back values are ignored
-               (meaning they are shared borrows), in which case there are no outputs *)
+              (* For now we simply check that:
+               - the child and the given back values are ignored
+                 (meaning they are shared borrows), in which case there are no outputs
+               - or the loans in the given_back value are ended (meaning we don't
+                 need to introduce additional inputs and just need to bind the output) *)
               if is_eignored child.value && is_eignored given_back.value then
                 { pat = PIgnored; ty = output.ty }
               else [%craise] span "Unimplemented"
@@ -1498,7 +1500,17 @@ let bind_outputs_from_output_input (span : Meta.span) (ctx : eval_ctx)
 let tevalue_get_max_level (v : tevalue) : int =
   let max_level = ref (-1) in
   let visitor =
-    InterpBorrowsCore.get_max_sub_abs_visitor ~with_evalues:true max_level
+    (* We count the ended loans: we want to decompose if we see something like this
+       (the loan in the given back sub-value was ended):
+       {[
+         @ended_ignored_mut_borrow{
+           child: (s@37 <: core::slice::iter::IterMut<'23, u16>);
+           given_back: ended_eproj_loans) :=
+         FunCall(abs_id@43)[...]
+       ]}
+     *)
+    InterpBorrowsCore.get_max_sub_abs_visitor ~with_evalues:true
+      ~with_ended:true max_level
   in
   visitor#visit_tevalue 0 v;
   !max_level
@@ -1606,9 +1618,12 @@ let abs_cont_restructure_input_output_levels (span : Meta.span) (ctx : eval_ctx)
       (* Check the number of levels in the output: it should be <= 1 and we do
        the modification only if it is exactly 1 *)
       let max_level = tevalue_get_max_level output in
-      if max_level <= 0 then
+      if max_level <= 0 then (
+        [%ltrace
+          "not decomposing nested borrows: max level is "
+          ^ string_of_int max_level];
         (* Keep it as it is *)
-        (output, input)
+        (output, input))
       else (
         [%ltrace
           "decomposing nested borrows:\n- output:\n"
@@ -1635,7 +1650,10 @@ let abs_cont_restructure_input_output_levels (span : Meta.span) (ctx : eval_ctx)
           { input with value = EApp (EFunCall abs_id, [ input1 ] :: args) }
         in
         (output, input))
-  | _ -> (output, input)
+  | _ ->
+      [%ltrace
+        "not decomposing nested borrows: the input is not a function call"];
+      (output, input)
 
 let abs_cont_bind_outputs (span : Meta.span) (ctx : eval_ctx)
     (regions : RegionId.Set.t) (bound : bound_inputs_outputs ref)
@@ -1998,7 +2016,6 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind)
       (AbsId.Set.union abs0.parents abs1.parents)
       (AbsId.Set.of_list [ abs0.abs_id; abs1.abs_id ])
   in
-  let original_parents = AbsId.Set.elements parents in
   let regions =
     let owned = RegionId.Set.union abs0.regions.owned abs1.regions.owned in
     { owned }
@@ -2086,7 +2103,6 @@ let merge_abstractions (span : Meta.span) (abs_kind : abs_kind)
       kind = abs_kind;
       can_end;
       parents;
-      original_parents;
       ended_subabs;
       regions;
       avalues;

@@ -283,18 +283,22 @@ let compute_abs_borrows_loans_maps (span : Meta.span) (explore : abs -> bool)
 (** Match two types during a join.
 
     TODO: probably don't need to take [match_regions] as input anymore. *)
-let rec match_types (span : Meta.span) (ctx0 : eval_ctx) (ctx1 : eval_ctx)
-    (match_distinct_types : ty -> ty -> ty)
+let rec match_types (span : Meta.span) ~(recover : bool) (ctx0 : eval_ctx)
+    (ctx1 : eval_ctx) (match_distinct_types : ty -> ty -> ty)
     (match_regions : region -> region -> region) (ty0 : ty) (ty1 : ty) : ty =
   let match_rec =
-    match_types span ctx0 ctx1 match_distinct_types match_regions
+    match_types span ~recover ctx0 ctx1 match_distinct_types match_regions
   in
   match (ty0, ty1) with
   | ( TAdt { id = id0; generics = generics0 },
       TAdt { id = id1; generics = generics1 } ) ->
-      [%sanity_check] span (id0 = id1);
-      [%sanity_check] span (generics0.const_generics = generics1.const_generics);
-      [%sanity_check] span (generics0.trait_refs = generics1.trait_refs);
+      [%cassert_recover] recover span (id0 = id1) "Not the same ADT ids";
+      [%cassert_recover] recover span
+        (generics0.const_generics = generics1.const_generics)
+        "Not the same const generics";
+      [%cassert_recover] recover span
+        (generics0.trait_refs = generics1.trait_refs)
+        "Not the same trait refs";
       let id = id0 in
       let const_generics = generics1.const_generics in
       let trait_refs = generics1.trait_refs in
@@ -311,29 +315,32 @@ let rec match_types (span : Meta.span) (ctx0 : eval_ctx) (ctx1 : eval_ctx)
       let generics = { regions; types; const_generics; trait_refs } in
       TAdt { id; generics }
   | TArray (ty0, len0), TArray (ty1, len1) ->
-      [%sanity_check] span (len0 = len1);
+      [%cassert_recover] recover span (len0 = len1)
+        "Arrays with different lengths";
       TArray (match_rec ty0 ty1, len0)
   | TSlice ty0, TSlice ty1 -> TSlice (match_rec ty0 ty1)
   | TVar vid0, TVar vid1 ->
-      [%sanity_check] span (vid0 = vid1);
+      [%cassert_recover] recover span (vid0 = vid1)
+        "Not the same type variables";
       let vid = vid0 in
       TVar vid
   | TLiteral lty0, TLiteral lty1 ->
-      [%sanity_check] span (lty0 = lty1);
+      [%cassert_recover] recover span (lty0 = lty1) "Not the same literal types";
       ty0
   | TNever, TNever -> ty0
   | TRef (r0, ty0, k0), TRef (r1, ty1, k1) ->
       let r = match_regions r0 r1 in
       let ty = match_rec ty0 ty1 in
-      [%sanity_check] span (k0 = k1);
+      [%cassert_recover] recover span (k0 = k1) "Not the same reference kind";
       let k = k0 in
       TRef (r, ty, k)
   | TRawPtr (ty0, rk0), TRawPtr (ty1, rk1) ->
-      [%sanity_check] span (rk0 = rk1);
+      [%cassert_recover] recover span (rk0 = rk1)
+        "Not the same raw pointer types";
       let ty = match_rec ty0 ty1 in
       TRawPtr (ty, rk0)
   | TDynTrait _, TDynTrait _ | TFnPtr _, TFnPtr _ | TFnDef _, TFnDef _ ->
-      [%craise] span "Not implemented yet"
+      [%craise_recover] recover span "Not implemented yet"
   | TPtrMetadata ty0, TPtrMetadata ty1 ->
       let ty = match_rec ty0 ty1 in
       TPtrMetadata ty
@@ -406,14 +413,14 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
             M.match_mut_loans match_rec ctx0 ctx1 ty id0 id1
         | VSharedLoan _, VMutLoan _ | VMutLoan _, VSharedLoan _ ->
             (* TODO: *)
-            [%craise] M.span "Unimplemented"
+            [%craise_recover] M.recover M.span "Unimplemented"
       end
     | VSymbolic sv0, VSymbolic sv1 ->
-        [%cassert] M.span
+        [%cassert_recover] M.recover M.span
           (not
              (ety_has_nested_borrows (Some span) ctx0.type_ctx.type_infos v0.ty))
           "Nested borrows are not supported yet.";
-        [%cassert] M.span
+        [%cassert_recover] M.recover M.span
           (not
              (ety_has_nested_borrows (Some span) ctx1.type_ctx.type_infos v1.ty))
           "Nested borrows are not supported yet.";
@@ -448,15 +455,16 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
           ^ tvalue_to_string ~span:(Some M.span) ctx0 v0
           ^ "\n- value1: "
           ^ tvalue_to_string ~span:(Some M.span) ctx1 v1];
-        [%internal_error] M.span
+        [%craise_recover] M.recover M.span "Unexpected"
 
   and match_tavalues (ctx0 : eval_ctx) (ctx1 : eval_ctx) (v0 : tavalue)
       (v1 : tavalue) : tavalue =
-    [%ltrace
+    [%ldebug
       "- value0: "
       ^ tavalue_to_string ~span:(Some M.span) ctx0 v0
-      ^ "\n- value1: "
-      ^ tavalue_to_string ~span:(Some M.span) ctx1 v1];
+      ^ "\n- ty0: " ^ ty_to_string ctx0 v0.ty ^ "\n- value1: "
+      ^ tavalue_to_string ~span:(Some M.span) ctx1 v1
+      ^ "\n- ty1: " ^ ty_to_string ctx1 v1.ty];
 
     (* Using ValuesUtils.value_has_borrows on purpose here: we want
        to make explicit the fact that, though we have to pick
@@ -471,6 +479,7 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
     let ty = M.match_rtys ctx0 ctx1 v0.ty v1.ty in
     match (v0.value, v1.value) with
     | AAdt av0, AAdt av1 ->
+        [%ldebug "Matching ADTs"];
         if av0.variant_id = av1.variant_id && av0.borrow_proj = av1.borrow_proj
         then
           let borrow_proj = av0.borrow_proj in
@@ -484,22 +493,33 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
           M.match_distinct_aadts match_rec ctx0 ctx1 v0.ty av0 v1.ty av1 ty
     | AIgnored _, AIgnored _ -> mk_aignored M.span ty None
     | ABorrow bc0, ABorrow bc1 -> (
-        [%ltrace "borrows"];
+        [%ldebug "borrows"];
         match (bc0, bc1) with
         | ASharedBorrow (pm0, bid0, sid0), ASharedBorrow (pm1, bid1, sid1) ->
-            [%ltrace "shared borrows"];
+            [%ldebug "shared borrows"];
             M.match_ashared_borrows match_rec ctx0 ctx1 v0.ty pm0 bid0 sid0
               v1.ty pm1 bid1 sid1 ty
         | AMutBorrow (pm0, bid0, av0), AMutBorrow (pm1, bid1, av1) ->
-            [%ltrace "mut borrows"];
-            [%ltrace "mut borrows: matching children values"];
+            [%ldebug "mut borrows"];
+            [%ldebug "mut borrows: matching children values"];
             let av = match_arec av0 av1 in
-            [%ltrace "mut borrows: matched children values"];
+            [%ldebug "mut borrows: matched children values"];
             M.match_amut_borrows match_rec ctx0 ctx1 v0.ty pm0 bid0 av0 v1.ty
               pm1 bid1 av1 ty av
-        | AIgnoredMutBorrow _, AIgnoredMutBorrow _ ->
-            (* The abstractions are destructured: we shouldn't get there *)
-            [%craise] M.span "Unexpected"
+        | AIgnoredMutBorrow (bid0, child0), AIgnoredMutBorrow (bid1, child1) ->
+            let child = match_arec child0 child1 in
+            M.match_aignored_mut_borrow match_rec ctx0 ctx1
+              (v0.ty, bid0, child0) (v1.ty, bid1, child1) ty child
+        | ( AEndedIgnoredMutBorrow
+              ({ child = child0; given_back = given_back0; given_back_meta = _ }
+               as bc0),
+            AEndedIgnoredMutBorrow
+              ({ child = child1; given_back = given_back1; given_back_meta = _ }
+               as bc1) ) ->
+            let child = match_arec child0 child1 in
+            let given_back = match_arec given_back0 given_back1 in
+            M.match_aended_ignored_mut_borrow match_rec ctx0 ctx1 (v0.ty, bc0)
+              (v1.ty, bc1) ty child given_back
         | AProjSharedBorrow asb0, AProjSharedBorrow asb1 -> (
             match (asb0, asb1) with
             | [], [] ->
@@ -508,44 +528,42 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
                 v0
             | _ ->
                 (* We should get there only if there are nested borrows *)
-                [%craise] M.span "Unexpected")
+                [%craise_recover] M.recover M.span "Unexpected")
         | _ ->
             (* TODO: getting there is not necessarily inconsistent (it may
                just be because the environments don't match) so we may want
                to call a specific function (which could raise the proper
                exception).
-               Rem.: we shouldn't get to the ended borrow cases, because
-               an abstraction should never contain ended borrows unless
-               we are *currently* ending it, in which case we need
-               to completely end it before continuing.
             *)
-            [%craise] M.span "Unexpected")
+            [%craise_recover] M.recover M.span "Unexpected")
     | ALoan lc0, ALoan lc1 -> (
-        [%ltrace "loans"];
+        [%ldebug "loans"];
         (* TODO: maybe we should enforce that the ids are always exactly the same -
            without matching *)
         match (lc0, lc1) with
         | ASharedLoan (pm0, id0, sv0, av0), ASharedLoan (pm1, id1, sv1, av1) ->
-            [%ltrace "shared loans"];
+            [%ldebug "shared loans"];
             let sv = match_rec sv0 sv1 in
             let av = match_arec av0 av1 in
-            [%sanity_check] M.span (not (value_has_borrows sv.value));
+            [%sanity_check_recover] M.recover M.span
+              (not (value_has_borrows sv.value));
             M.match_ashared_loans match_rec ctx0 ctx1 v0.ty pm0 id0 sv0 av0
               v1.ty pm1 id1 sv1 av1 ty sv av
         | AMutLoan (pm0, id0, av0), AMutLoan (pm1, id1, av1) ->
-            [%ltrace "mut loans"];
-            [%ltrace "mut loans: matching children values"];
+            [%ldebug "mut loans"];
+            [%ldebug "mut loans: matching children values"];
             let av = match_arec av0 av1 in
-            [%ltrace "mut loans: matched children values"];
+            [%ldebug "mut loans: matched children values"];
             M.match_amut_loans match_rec ctx0 ctx1 v0.ty pm0 id0 av0 v1.ty pm1
               id1 av1 ty av
         | AIgnoredMutLoan _, AIgnoredMutLoan _
         | AIgnoredSharedLoan _, AIgnoredSharedLoan _ ->
             (* Those should have been filtered when destructuring the abstractions -
                they are necessary only when there are nested borrows *)
-            [%craise] M.span "Unreachable"
-        | _ -> [%craise] M.span "Unreachable")
+            [%craise_recover] M.recover M.span "Unreachable"
+        | _ -> [%craise_recover] M.recover M.span "Unreachable")
     | ASymbolic (pm0, proj0), ASymbolic (pm1, proj1) -> begin
+        [%ldebug "Matching symbolic avalues"];
         match (proj0, proj1) with
         | ( AProjBorrows ({ proj = proj0; _ } as pborrows0),
             AProjBorrows ({ proj = proj1; _ } as pborrows1) ) ->
@@ -557,9 +575,11 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
             let proj_ty = M.match_rtys ctx0 ctx1 proj0.proj_ty proj1.proj_ty in
             M.match_aproj_loans match_rec ctx0 ctx1 v0.ty pm0 ploans0 v1.ty pm1
               ploans1 ty proj_ty
-        | _ -> [%craise] M.span "Unreachable"
+        | _ -> [%craise_recover] M.recover M.span "Unreachable"
       end
-    | _ -> M.match_avalues match_rec ctx0 ctx1 v0 v1
+    | _ ->
+        [%ldebug "default case"];
+        M.match_avalues match_rec ctx0 ctx1 v0 v1
 end
 
 module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
@@ -590,13 +610,13 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     sv
 
   let match_etys _ _ ty0 ty1 =
-    [%sanity_check] span (ty0 = ty1);
+    [%sanity_check_recover] S.recover span (ty0 = ty1);
     ty0
 
   let match_rtys _ _ ty0 ty1 =
     (* The types must be equal - in effect, this forbids to match symbolic
        values containing borrows *)
-    [%sanity_check] span (ty0 = ty1);
+    [%sanity_check_recover] S.recover span (ty0 = ty1);
     ty0
 
   let match_distinct_literals (_ : tvalue_matcher) (ctx0 : eval_ctx)
@@ -608,10 +628,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
   (* Helper *)
   let no_loans_no_bottoms_to_symbolic_value_with_borrows (ctx0 : eval_ctx)
       (ctx1 : eval_ctx) (v0 : tvalue) (v1 : tvalue) : tvalue =
-    [%sanity_check] span (not (tvalue_has_loans v0));
-    [%sanity_check] span (not (tvalue_has_bottom ctx0 v0));
-    [%sanity_check] span (not (tvalue_has_loans v1));
-    [%sanity_check] span (not (tvalue_has_bottom ctx1 v1));
+    [%sanity_check_recover] S.recover span (not (tvalue_has_loans v0));
+    [%sanity_check_recover] S.recover span (not (tvalue_has_bottom ctx0 v0));
+    [%sanity_check_recover] S.recover span (not (tvalue_has_loans v1));
+    [%sanity_check_recover] S.recover span (not (tvalue_has_bottom ctx1 v1));
 
     (* Introduce a fresh region id for each erased region appearing in the type.
 
@@ -707,7 +727,6 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           kind = S.fresh_abs_kind;
           can_end = true;
           parents = AbsId.Set.empty;
-          original_parents = [];
           regions = { owned = RegionId.Set.singleton rid };
           ended_subabs = AbsLevelSet.empty;
           avalues = avl0 @ avl1 @ [ av ];
@@ -815,7 +834,8 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       let avl1, input1 =
         convert_value_to_input_avalues span ctx1 PRight v1 rid
       in
-      [%cassert] span (ty_no_regions v0.ty) "Not implemented yet";
+      [%cassert_recover] S.recover span (ty_no_regions v0.ty)
+        "Not implemented yet";
       let _, ty = ty_refresh_regions (Some span) (fun _ -> rid) v0.ty in
 
       let lid = ctx0.fresh_borrow_id () in
@@ -854,7 +874,6 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             kind = S.fresh_abs_kind;
             can_end = true;
             parents = AbsId.Set.empty;
-            original_parents = [];
             regions = { owned = RegionId.Set.singleton rid };
             ended_subabs = AbsLevelSet.empty;
             avalues = av :: (avl0 @ avl1);
@@ -867,7 +886,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         let ty = v0.ty in
         { value; ty })
       else (
-        [%ltrace
+        [%ldebug
           "- v0:\n" ^ tvalue_to_string ctx0 v0 ^ "\n\n- v1:\n"
           ^ tvalue_to_string ctx1 v1];
         (* Case where there are only shared loans *)
@@ -903,7 +922,6 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
               kind = S.fresh_abs_kind;
               can_end = true;
               parents = AbsId.Set.empty;
-              original_parents = [];
               regions = { owned = RegionId.Set.singleton rid };
               ended_subabs = AbsLevelSet.empty;
               avalues = av :: (avl0 @ avl1);
@@ -914,17 +932,17 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           [%ltrace "abs:\n" ^ abs_to_string span ctx0 abs];
 
           let ty = v0.ty in
-          [%sanity_check] span (ty_no_regions ty);
+          [%sanity_check_recover] S.recover span (ty_no_regions ty);
           let sv = mk_fresh_symbolic_tvalue span ctx0 ty in
           let value = VLoan (VSharedLoan (lid, sv)) in
           { value; ty })
-        else [%craise] span "Not implemented yet"))
+        else [%craise_recover] S.recover span "Not implemented yet"))
     else no_loans_no_bottoms_to_symbolic_value_with_borrows ctx0 ctx1 v0 v1
 
   let match_distinct_adts (_ : tvalue_matcher) (ctx0 : eval_ctx)
       (ctx1 : eval_ctx) (ty : ety) (ty0 : ty) (adt0 : adt_value) (ty1 : ty)
       (adt1 : adt_value) : tvalue =
-    [%cassert] span
+    [%cassert_recover] S.recover span
       (not (ety_has_nested_borrows (Some span) ctx0.type_ctx.type_infos ty))
       "Nested borrows are not supported yet.";
 
@@ -995,7 +1013,6 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           kind = S.fresh_abs_kind;
           can_end = true;
           parents = AbsId.Set.empty;
-          original_parents = [];
           regions = { owned = RegionId.Set.singleton rid };
           ended_subabs = AbsLevelSet.empty;
           avalues;
@@ -1080,7 +1097,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             let mk_output (pm : proj_marker) (bid : borrow_id) (bv : tvalue) :
                 tevalue =
               let bv_ty = bv.ty in
-              [%cassert] span (ty_no_regions bv_ty)
+              [%cassert_recover] S.recover span (ty_no_regions bv_ty)
                 "Nested borrows are not supported yet";
               let value = EBorrow (EMutBorrow (pm, bid, mk_eignored bv_ty)) in
               { value; ty = borrow_ty }
@@ -1099,7 +1116,6 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           kind = S.fresh_abs_kind;
           can_end = true;
           parents = AbsId.Set.empty;
-          original_parents = [];
           regions = { owned };
           ended_subabs = AbsLevelSet.empty;
           avalues;
@@ -1123,10 +1139,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     if id0 = id1 then { value = VLoan (VSharedLoan (id0, sv)); ty }
     else begin
       (* Sanity checks *)
-      [%cassert] span
+      [%cassert_recover] S.recover span
         (not (ety_has_nested_borrows (Some span) ctx0.type_ctx.type_infos ty))
         "Nested borrows are not supported yet.";
-      [%cassert] span
+      [%cassert_recover] S.recover span
         (not (tvalue_has_borrows (Some span) ctx0 sv))
         "Unimplemented";
 
@@ -1179,7 +1195,6 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           kind = S.fresh_abs_kind;
           can_end = true;
           parents = AbsId.Set.empty;
-          original_parents = [];
           regions = { owned };
           ended_subabs = AbsLevelSet.empty;
           avalues;
@@ -1197,7 +1212,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     if id0 = id1 then { value = VLoan (VMutLoan id0); ty }
     else begin
       (* Sanity checks *)
-      [%cassert] span
+      [%cassert_recover] S.recover span
         (not (ety_has_nested_borrows (Some span) ctx0.type_ctx.type_infos ty))
         "Nested borrows are not supported yet.";
 
@@ -1256,7 +1271,6 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           kind = S.fresh_abs_kind;
           can_end = true;
           parents = AbsId.Set.empty;
-          original_parents = [];
           regions = { owned };
           ended_subabs = AbsLevelSet.empty;
           avalues;
@@ -1276,7 +1290,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     let id1 = sv1.sv_id in
     if id0 = id1 then (
       (* Sanity check *)
-      [%sanity_check] span (sv0 = sv1);
+      [%sanity_check_recover] S.recover span (sv0 = sv1);
       (* We keep the same id, but we need to register the mapping *)
       add_symbolic_value id0
         (mk_tvalue_from_symbolic_value sv0)
@@ -1286,7 +1300,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     else (
       (* The caller should have checked that the symbolic values don't contain
          nested borrows, but we can check more *)
-      [%sanity_check] span
+      [%sanity_check_recover] S.recover span
         (not
            (ety_has_nested_borrows (Some span) ctx0.type_ctx.type_infos
               sv0.sv_ty));
@@ -1294,9 +1308,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
          and fail (for now) if part of a symbolic value contains a bottom.
          A more general approach would be to introduce a symbolic value
          with some ended regions. *)
-      [%sanity_check] span
+      [%cassert_recover] S.recover span
         ((not (symbolic_value_has_ended_regions ctx0.ended_regions sv0))
-        && not (symbolic_value_has_ended_regions ctx1.ended_regions sv1));
+        && not (symbolic_value_has_ended_regions ctx1.ended_regions sv1))
+        "Unimplemented";
       [%ldebug "ty: " ^ ty_to_string ctx0 sv0.sv_ty];
       (* If the symbolic values contain regions, we need to introduce abstractions *)
       if ty_has_borrows (Some span) ctx0.type_ctx.type_infos sv0.sv_ty then (
@@ -1387,7 +1402,6 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
                 kind = S.fresh_abs_kind;
                 can_end = true;
                 parents = AbsId.Set.empty;
-                original_parents = [];
                 regions = { owned };
                 ended_subabs = AbsLevelSet.empty;
                 avalues;
@@ -1511,7 +1525,6 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         kind = S.fresh_abs_kind;
         can_end = true;
         parents = AbsId.Set.empty;
-        original_parents = [];
         regions = { owned };
         ended_subabs = AbsLevelSet.empty;
         avalues;
@@ -1527,10 +1540,10 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
       (ctx1 : eval_ctx) ~(loan_is_left : bool) (ty : ety) (lid : loan_id)
       (other : tvalue) : tvalue =
     (* Sanity checks *)
-    [%cassert] span
+    [%cassert_recover] S.recover span
       (not (ety_has_nested_borrows (Some span) ctx0.type_ctx.type_infos ty))
       "Nested borrows are not supported yet.";
-    [%cassert] span
+    [%cassert_recover] S.recover span
       (not (tvalue_has_borrows (Some span) ctx0 other))
       "Not implemented";
 
@@ -1610,7 +1623,6 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
         kind = S.fresh_abs_kind;
         can_end = true;
         parents = AbsId.Set.empty;
-        original_parents = [];
         regions = { owned };
         ended_subabs = AbsLevelSet.empty;
         avalues;
@@ -1625,17 +1637,55 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
   (* As explained in comments: we don't use the join matcher to join avalues,
      only concrete values *)
 
-  let match_distinct_aadts _ _ _ _ _ _ _ = [%craise] span "Unreachable"
-  let match_ashared_borrows _ _ _ _ _ _ = [%craise] span "Unreachable"
-  let match_amut_borrows _ _ _ _ _ _ _ _ _ _ = [%craise] span "Unreachable"
+  let match_aignored_mut_borrow (_match_rec : tvalue_matcher) (_ctx0 : eval_ctx)
+      (_ctx1 : eval_ctx)
+      ((_ty0, bid0, _child0) : rty * borrow_id option * tavalue)
+      ((_ty1, bid1, _child1) : rty * borrow_id option * tavalue) (ty : ty)
+      (child : tavalue) : tavalue =
+    (* For now we only support the case where the borrows are the same *)
+    [%cassert_recover] S.recover span (bid0 = bid1) "Unimplemented";
+    { value = ABorrow (AIgnoredMutBorrow (bid0, child)); ty }
+
+  let match_aended_ignored_mut_borrow (_match_rec : tvalue_matcher)
+      (_ctx0 : eval_ctx) (_ctx1 : eval_ctx)
+      ((_ty0, bc0) : rty * aended_ignored_mut_borrow)
+      ((_ty1, bc1) : rty * aended_ignored_mut_borrow) (ty : ty)
+      (child : tavalue) (given_back : tavalue) : tavalue =
+    (* For now we only support the case where we have the same values on
+       the left and on the right *)
+    [%cassert_recover] S.recover span
+      (bc0.given_back_meta = bc1.given_back_meta)
+      "Unimplemented";
+    {
+      value =
+        ABorrow
+          (AEndedIgnoredMutBorrow
+             { child; given_back; given_back_meta = bc0.given_back_meta });
+      ty;
+    }
+
+  let match_distinct_aadts _ _ _ _ _ _ _ =
+    [%craise_recover] S.recover span "Unreachable"
+
+  let match_ashared_borrows _ _ _ _ _ _ =
+    [%craise_recover] S.recover span "Unreachable"
+
+  let match_amut_borrows _ _ _ _ _ _ _ _ _ _ =
+    [%craise_recover] S.recover span "Unreachable"
 
   let match_ashared_loans _ _ _ _ _ _ _ _ _ _ _ _ _ =
-    [%craise] span "Unreachable"
+    [%craise_recover] S.recover span "Unreachable"
 
-  let match_amut_loans _ _ _ _ _ _ _ _ _ _ = [%craise] span "Unreachable"
-  let match_aproj_borrows _ _ _ _ _ _ _ _ _ _ = [%craise] span "Unreachable"
-  let match_aproj_loans _ _ _ _ _ _ _ _ _ _ = [%craise] span "Unreachable"
-  let match_avalues _ _ _ _ = [%craise] span "Unreachable"
+  let match_amut_loans _ _ _ _ _ _ _ _ _ _ =
+    [%craise_recover] S.recover span "Unreachable"
+
+  let match_aproj_borrows _ _ _ _ _ _ _ _ _ _ =
+    [%craise_recover] S.recover span "Unreachable"
+
+  let match_aproj_loans _ _ _ _ _ _ _ _ _ _ =
+    [%craise_recover] S.recover span "Unreachable"
+
+  let match_avalues _ _ _ _ = [%craise_recover] S.recover span "Unreachable"
 end
 
 module MakeCheckEquivMatcher (S : MatchCheckEquivState) : CheckEquivMatcher =
@@ -1672,6 +1722,8 @@ struct
 
     let match_el (msg : string) (m : Inj.t ref) (kl0 : Id.id list)
         (kl1 : Id.id list) : Id.id list =
+      if List.length kl0 != List.length kl1 then
+        raise (Distinct "Not the same number of elements");
       List.map (fun (k0, k1) -> match_e msg m k0 k1) (List.combine kl0 kl1)
 
     (** Figuring out mappings between sets of ids is hard in all generality...
@@ -1745,7 +1797,8 @@ struct
           RVar (Free rid)
       | _ -> raise (Distinct "match_rtys")
     in
-    match_types span ctx0 ctx1 match_distinct_types match_regions ty0 ty1
+    match_types span ~recover ctx0 ctx1 match_distinct_types match_regions ty0
+      ty1
 
   let match_distinct_literals (_ : tvalue_matcher) (ctx0 : eval_ctx)
       (_ : eval_ctx) (ty : ety) (_ : literal) (_ : literal) : tvalue =
@@ -1802,14 +1855,14 @@ struct
   let match_symbolic_value_ids (id0 : symbolic_value_id)
       (id1 : symbolic_value_id) : symbolic_value_id =
     if S.check_equiv then (
-      [%sanity_check] span
+      [%sanity_check_recover] S.recover span
         (not (SymbolicValueId.Map.mem id0 !S.sid_to_value_map));
 
       (* Create the joined symbolic value *)
       GetSetSid.match_e "ids: " S.sid_map id0 id1)
     else (
       (* Check: fixed values are fixed *)
-      [%sanity_check] span
+      [%sanity_check_recover] S.recover span
         (match SymbolicValueId.InjSubst.find_opt id0 !S.sid_map with
         | None -> true
         | Some id1' -> id1 = id1');
@@ -1840,7 +1893,7 @@ struct
       sv
     else (
       (* Check: fixed values are fixed *)
-      [%sanity_check] span
+      [%sanity_check_recover] S.recover span
         (id0 = id1
         ||
         match SymbolicValueId.InjSubst.find_opt id0 !S.sid_map with
@@ -1864,10 +1917,11 @@ struct
       (v : tvalue) : tvalue =
     if S.check_equiv then raise (Distinct "match_symbolic_with_other")
     else (
-      [%sanity_check] span symbolic_is_left;
+      [%sanity_check_recover] S.recover span symbolic_is_left;
       let id = sv.sv_id in
       (* Check: fixed values are fixed *)
-      [%sanity_check] span (not (SymbolicValueId.InjSubst.mem id !S.sid_map));
+      [%sanity_check_recover] S.recover span
+        (not (SymbolicValueId.InjSubst.mem id !S.sid_map));
       (* Update the binding for the target symbolic value *)
       S.sid_to_value_map :=
         SymbolicValueId.Map.add_strict_or_unchanged id v !S.sid_to_value_map;
@@ -1912,7 +1966,7 @@ struct
       (_ : eval_ctx) _ty0 pm0 bid0 _sid0 _ty1 pm1 bid1 _sid1 ty : tavalue =
     (* We are checking whether that two environments are equivalent:
        there shouldn't be any projection markers *)
-    [%sanity_check] span (pm0 = PNone && pm1 = PNone);
+    [%sanity_check_recover] S.recover span (pm0 = PNone && pm1 = PNone);
     let bid = match_borrow_id bid0 bid1 in
     (* It's always safer to refresh shared borrow ids *)
     let sid = ctx0.fresh_shared_borrow_id () in
@@ -1923,7 +1977,7 @@ struct
       pm0 bid0 _av0 _ty1 pm1 bid1 _av1 ty av : tavalue =
     (* We are checking whether that two environments are equivalent:
        there shouldn't be any projection markers *)
-    [%sanity_check] span (pm0 = PNone && pm1 = PNone);
+    [%sanity_check_recover] S.recover span (pm0 = PNone && pm1 = PNone);
     let bid = match_borrow_id bid0 bid1 in
     let value = ABorrow (AMutBorrow (PNone, bid, av)) in
     { value; ty }
@@ -1932,7 +1986,7 @@ struct
       _ty0 pm0 id0 _v0 _av0 _ty1 pm1 id1 _v1 _av1 ty v av : tavalue =
     (* We are checking whether that two environments are equivalent:
        there shouldn't be any projection markers *)
-    [%sanity_check] span (pm0 = PNone && pm1 = PNone);
+    [%sanity_check_recover] S.recover span (pm0 = PNone && pm1 = PNone);
     let bid = match_loan_id id0 id1 in
     let value = ALoan (ASharedLoan (PNone, bid, v, av)) in
     { value; ty }
@@ -1941,7 +1995,7 @@ struct
       _ty0 pm0 id0 _av0 _ty1 pm1 id1 _av1 ty av : tavalue =
     (* We are checking whether that two environments are equivalent:
        there shouldn't be any projection markers *)
-    [%sanity_check] span (pm0 = PNone && pm1 = PNone);
+    [%sanity_check_recover] S.recover span (pm0 = PNone && pm1 = PNone);
     [%ldebug
       "- id0: " ^ BorrowId.to_string id0 ^ "\n- id1: " ^ BorrowId.to_string id1
       ^ "\n- ty: " ^ ty_to_string ctx0 ty ^ "\n- av: "
@@ -1951,6 +2005,32 @@ struct
     let value = ALoan (AMutLoan (PNone, id, av)) in
     { value; ty }
 
+  let match_aignored_mut_borrow (_match_rec : tvalue_matcher) (_ctx0 : eval_ctx)
+      (_ctx1 : eval_ctx)
+      ((_ty0, bid0, _child0) : rty * borrow_id option * tavalue)
+      ((_ty1, bid1, _child1) : rty * borrow_id option * tavalue) (ty : ty)
+      (child : tavalue) : tavalue =
+    let bid =
+      match (bid0, bid1) with
+      | None, None -> None
+      | Some bid0, Some bid1 -> Some (match_borrow_id bid0 bid1)
+      | _ -> raise (Distinct "match_aignored_mut_borrow: bids")
+    in
+    { value = ABorrow (AIgnoredMutBorrow (bid, child)); ty }
+
+  let match_aended_ignored_mut_borrow (_match_rec : tvalue_matcher)
+      (_ctx0 : eval_ctx) (_ctx1 : eval_ctx)
+      ((_ty0, bc0) : rty * aended_ignored_mut_borrow)
+      ((_ty1, _bc1) : rty * aended_ignored_mut_borrow) (ty : ty)
+      (child : tavalue) (given_back : tavalue) : tavalue =
+    (* We take the meta information from the left - it doesn't really matter *)
+    let given_back_meta = bc0.given_back_meta in
+    {
+      value =
+        ABorrow (AEndedIgnoredMutBorrow { child; given_back; given_back_meta });
+      ty;
+    }
+
   let match_aproj_borrows (_match_values : tvalue_matcher) (ctx0 : eval_ctx)
       (ctx1 : eval_ctx) _ty0 pm0 (proj0 : aproj_borrows) _ty1 pm1
       (proj1 : aproj_borrows) ty proj_ty : tavalue =
@@ -1959,10 +2039,10 @@ struct
       ^ aproj_borrows_to_string ctx0 proj0
       ^ "\n- proj1: "
       ^ aproj_borrows_to_string ctx1 proj1];
-    [%sanity_check] span (pm0 = PNone && pm1 = PNone);
+    [%sanity_check_recover] S.recover span (pm0 = PNone && pm1 = PNone);
     let { proj = proj0; loans = loans0 } : aproj_borrows = proj0 in
     let { proj = proj1; loans = loans1 } : aproj_borrows = proj1 in
-    [%sanity_check] span (loans0 = [] && loans1 = []);
+    [%sanity_check_recover] S.recover span (loans0 = [] && loans1 = []);
     (* Match the ids of the symbolic values *)
     let sv_id = match_symbolic_value_ids proj0.sv_id proj1.sv_id in
     let proj : symbolic_proj = { sv_id; proj_ty } in
@@ -1976,7 +2056,7 @@ struct
       ^ aproj_loans_to_string ctx0 proj0
       ^ "\n- proj1: "
       ^ aproj_loans_to_string ctx1 proj1];
-    [%sanity_check] span (pm0 = PNone && pm1 = PNone);
+    [%sanity_check_recover] S.recover span (pm0 = PNone && pm1 = PNone);
     let { proj = proj0; consumed = consumed0; borrows = borrows0 } : aproj_loans
         =
       proj0
@@ -1985,8 +2065,8 @@ struct
         =
       proj1
     in
-    [%sanity_check] span (consumed0 = [] && consumed1 = []);
-    [%sanity_check] span (borrows0 = [] && borrows1 = []);
+    [%sanity_check_recover] S.recover span (consumed0 = [] && consumed1 = []);
+    [%sanity_check_recover] S.recover span (borrows0 = [] && borrows1 = []);
     (* Match the ids of the symbolic values *)
     let sv_id = match_symbolic_value_ids proj0.sv_id proj1.sv_id in
     let proj : symbolic_proj = { sv_id; proj_ty } in
@@ -2054,6 +2134,32 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
     ref SymbolicValueId.Map.empty
   in
 
+  let save_maps () =
+    ( !rid_map,
+      !blid_map,
+      !borrow_id_map,
+      !loan_id_map,
+      !aid_map,
+      !sid_map,
+      !sid_to_value_map )
+  in
+  let restore_maps
+      ( rid_map0,
+        blid_map0,
+        borrow_id_map0,
+        loan_id_map0,
+        aid_map0,
+        sid_map0,
+        sid_to_value_map0 ) =
+    rid_map := rid_map0;
+    blid_map := blid_map0;
+    borrow_id_map := borrow_id_map0;
+    loan_id_map := loan_id_map0;
+    aid_map := aid_map0;
+    sid_map := sid_map0;
+    sid_to_value_map := sid_to_value_map0
+  in
+
   let module S : MatchCheckEquivState = struct
     let span = span
     let recover = recoverable
@@ -2070,6 +2176,24 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
   end in
   let module CEM = MakeCheckEquivMatcher (S) in
   let module M = MakeMatcher (CEM) in
+  (* When matching abstractions we allow backtracking, so we need an alternative
+     version of the matchers where [recover] is true *)
+  let module RecoverS : MatchCheckEquivState = struct
+    let span = span
+    let recover = true
+    let check_equiv = check_equiv
+    let rid_map = rid_map
+    let blid_map = blid_map
+    let borrow_id_map = borrow_id_map
+    let loan_id_map = loan_id_map
+    let sid_map = sid_map
+    let sid_to_value_map = sid_to_value_map
+    let aid_map = aid_map
+    let lookup_shared_value_in_ctx0 = lookup_shared_value_in_ctx0
+    let lookup_shared_value_in_ctx1 = lookup_shared_value_in_ctx1
+  end in
+  let module RecoverCEM = MakeCheckEquivMatcher (RecoverS) in
+  let module RecoverM = MakeMatcher (RecoverCEM) in
   (* Match the environments - we assume that they have the same structure
      (and fail if they don't) *)
 
@@ -2099,14 +2223,14 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
     && SymbolicValueId.Set.subset sids fixed_ids.sids
   in
 
-  (* Rem.: this function raises exceptions of type [Distinct] *)
-  let match_abstractions (abs0 : abs) (abs1 : abs) : unit =
+  (* Rem.: this function raises exceptions of type [Distinct] or [RFailure]
+     (in the latter case: if [recover] is true) *)
+  let match_abstractions ~(recover : bool) (abs0 : abs) (abs1 : abs) : unit =
     let {
       abs_id = abs_id0;
       kind = kind0;
       can_end = can_end0;
       parents = parents0;
-      original_parents = original_parents0;
       regions = { owned = regions0 };
       ended_subabs = ended_subabs0;
       avalues = avalues0;
@@ -2121,7 +2245,6 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
       kind = kind1;
       can_end = can_end1;
       parents = parents1;
-      original_parents = original_parents1;
       regions = { owned = regions1 };
       ended_subabs = ended_subabs1;
       avalues = avalues1;
@@ -2131,33 +2254,152 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
       abs1
     in
 
-    let _ = CEM.match_aid abs_id0 abs_id1 in
+    let match_aid = if recover then RecoverCEM.match_aid else CEM.match_aid in
+    let match_aids =
+      if recover then RecoverCEM.match_aids else CEM.match_aids
+    in
+    let match_rids =
+      if recover then RecoverCEM.match_rids else CEM.match_rids
+    in
+    let match_tavalues =
+      if recover then RecoverM.match_tavalues else M.match_tavalues
+    in
+
+    let raise_distinct msg =
+      if recover then raise Errors.RFailure else raise (Distinct msg)
+    in
+
+    let _ = match_aid abs_id0 abs_id1 in
     if check_kind && kind0 <> kind1 then
-      raise (Distinct "match_abstractions: kind");
+      raise_distinct "match_abstractions: kind";
     if check_can_end && can_end0 <> can_end1 then
-      raise (Distinct "match_abstractions: can_end");
-    let _ = CEM.match_aids parents0 parents1 in
-    let _ = CEM.match_aidl original_parents0 original_parents1 in
-    let _ = CEM.match_rids regions0 regions1 in
+      raise_distinct "match_abstractions: can_end";
+    let _ = match_aids parents0 parents1 in
+    let _ = match_rids regions0 regions1 in
 
     if not (AbsLevelSet.equal ended_subabs0 ended_subabs1) then
-      raise
-        (Distinct
-           "Region abstractions with distinct sets of ended sub-abstractions");
+      raise_distinct
+        "Region abstractions with distinct sets of ended sub-abstractions";
 
     [%ldebug "match_abstractions: matching values"];
     let _ =
       if List.length avalues0 <> List.length avalues1 then
-        raise
-          (Distinct "Region abstractions with not the same number of values")
+        raise_distinct "Region abstractions with not the same number of values"
       else
         List.map
-          (fun (v0, v1) -> M.match_tavalues ctx0 ctx1 v0 v1)
+          (fun (v0, v1) -> match_tavalues ctx0 ctx1 v0 v1)
           (List.combine avalues0 avalues1)
     in
     [%ldebug "match_abstractions: values matched OK"];
     ()
   in
+
+  let pop_var var =
+    env_pop_var
+      (fun _ ->
+        raise
+          (Distinct
+             ("Missing var in right environment: "
+             ^ real_var_binder_to_string ctx1 var)))
+      var
+  in
+  let pop_dummy id =
+    env_pop_dummy
+      (fun _ ->
+        raise
+          (Distinct
+             ("Missing dummy var in right environment: "
+            ^ DummyVarId.to_string id)))
+      id
+  in
+  let pop_first_dummy =
+    env_pop_first_dummy (fun _ ->
+        raise (Distinct "Missing dummy var in right environment"))
+  in
+  let pop_abs id =
+    env_pop_abs
+      (fun _ ->
+        raise
+          (Distinct ("Missing abs in right environment: " ^ AbsId.to_string id)))
+      id
+  in
+
+  (* Pop the first abs matching [abs0].
+     We repeatedly attempt to match, saving the state before matching and
+     restoring it if it failed. *)
+  let pop_first_matching_abs abs0 env =
+    [%ltrace
+      "Trying to match abs:\n"
+      ^ abs_to_string span ctx0 abs0
+      ^ "\n\nIn environment:\n"
+      ^ eval_ctx_to_string { ctx1 with env = List.rev env }];
+    env_pop_binding
+      (fun _ ->
+        raise (Distinct "Could not find a matching abs in right environment"))
+      (fun e ->
+        match e with
+        | EAbs abs1 ->
+            (* Save the maps to make sure we can backtrack *)
+            let maps = save_maps () in
+            (* Attempt matching *)
+            begin
+              try
+                match_abstractions ~recover:true abs0 abs1;
+                [%ltrace "Found matching abs:\n" ^ abs_to_string span ctx1 abs1];
+                Some abs1
+              with Distinct _ | Errors.RFailure ->
+                (* Restore the state and continue exploring *)
+                restore_maps maps;
+                None
+            end
+        | _ -> None)
+      env
+  in
+
+  (* We reorder [env0] to have the variables, fixed abstractions and fixed
+     dummy variables, then:
+     - the dummy variables
+     - the non-fixed abstractions
+
+     We then repeatedly pop the first element from the environment and match it
+     with an element from [env1]. For the fixed elements and the variabels it is
+     easy: we simply lookup the corresponding element in [env1]:
+     - for the fixed abstractions and variables the values should be the same
+     - for the variables, the values should be equivalent
+
+     Then, we attempt to match the abstractions. We attempt to allow the abstractions
+     to be in an arbitrary order, so match every abstraction [abs0] from the left
+     environment with every abstraction from the right environment, stopping when
+     a match is successful (and saving the state before any match, while restoring
+     it if a match failed). Note that in full generality we may need to backtrack:
+     for now we don't.
+  *)
+  let ctx0 =
+    let fixed, non_fixed =
+      List.partition
+        (fun (e : env_elem) ->
+          match e with
+          | EBinding (BVar _, _) -> true
+          | EBinding (BDummy id, _) -> DummyVarId.Set.mem id fixed_ids.dids
+          | EAbs abs -> AbsId.Set.mem abs.abs_id fixed_ids.aids
+          | EFrame -> true)
+        ctx0.env
+    in
+    let abs, dummys =
+      List.partition
+        (fun (e : env_elem) ->
+          match e with
+          | EAbs _ -> true
+          | _ -> false)
+        non_fixed
+    in
+    { ctx0 with env = abs @ dummys @ fixed }
+  in
+  [%ltrace
+    "\n- fixed_ids:\n" ^ show_ids_sets fixed_ids
+    ^ "\n\n- ctx0 after reordering the elements:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx0
+    ^ "\n"];
 
   (* Rem.: this function raises exceptions of type [Distinct] *)
   let rec match_envs (env0 : env) (env1 : env) : unit =
@@ -2178,56 +2420,61 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
       ^ eval_ctx_to_string ~span:(Some span) ~filter:false
           { ctx1 with env = List.rev env1 }
       ^ "\n\n"];
-
-    match (env0, env1) with
-    | EBinding (BDummy b0, v0) :: env0', EBinding (BDummy b1, v1) :: env1' ->
-        (* Sanity check: if the dummy value is an old value, the bindings must
-           be the same and their values equal (and the borrows/loans/symbolic *)
-        if DummyVarId.Set.mem b0 fixed_ids.dids then (
-          (* Fixed values: the values must be equal *)
-          [%sanity_check] span (b0 = b1);
-          [%sanity_check] span (v0 = v1);
-          (* The ids present in the left value must be fixed *)
-          let ids, _ = compute_tvalue_ids v0 in
-          [%sanity_check] span ((not S.check_equiv) || ids_are_fixed ids));
-        (* We still match the values - allows to compute mappings (which
+    match env0 with
+    | EBinding (BDummy b0, v0) :: env0' ->
+        (* Check whether the dummy value is fixed or not *)
+        let v1, env1' =
+          if DummyVarId.Set.mem b0 fixed_ids.dids then (
+            let v1, env1' = pop_dummy b0 env1 in
+            (* Fixed values: the values must be equal *)
+            [%sanity_check_recover] S.recover span (v0 = v1);
+            (* The ids present in the left value must be fixed *)
+            let ids, _ = compute_tvalue_ids v0 in
+            [%sanity_check_recover] S.recover span
+              ((not S.check_equiv) || ids_are_fixed ids);
+            (v1, env1'))
+          else pop_first_dummy env1
+        in
+        (* Match the values - allows to compute mappings (which
            are the identity actually) *)
         let _ = M.match_tvalues ctx0 ctx1 v0 v1 in
         match_envs env0' env1'
-    | EBinding (BVar b0, v0) :: env0', EBinding (BVar b1, v1) :: env1' ->
-        [%sanity_check] span (b0 = b1);
+    | EBinding (BVar b0, v0) :: env0' ->
+        let v1, env1' = pop_var b0 env1 in
         (* Match the values *)
         let _ = M.match_tvalues ctx0 ctx1 v0 v1 in
         (* Continue *)
         match_envs env0' env1'
-    | EAbs abs0 :: env0', EAbs abs1 :: env1' ->
-        [%ldebug
-          "match_envs: matching abs:\n- abs0: "
-          ^ abs_to_string span ctx0 abs0
-          ^ "\n- abs1: "
-          ^ abs_to_string span ctx1 abs1];
+    | EAbs abs0 :: env0' ->
         (* Same as for the dummy values: there are two cases *)
         if AbsId.Set.mem abs0.abs_id fixed_ids.aids then (
           [%ldebug "match_envs: matching abs: fixed abs"];
+          let abs1, env1' = pop_abs abs0.abs_id env1 in
           (* Still in the prefix: the abstractions must be the same *)
-          [%sanity_check] span (abs0 = abs1);
+          [%sanity_check_recover] S.recover span (abs0 = abs1);
           (* Their ids must be fixed *)
           let ids, _ = compute_abs_ids abs0 in
-          [%sanity_check] span ((not S.check_equiv) || ids_are_fixed ids);
+          [%sanity_check_recover] S.recover span
+            ((not S.check_equiv) || ids_are_fixed ids);
           (* Continue *)
           match_envs env0' env1')
         else (
           [%ldebug "match_envs: matching abs: not fixed abs"];
-          (* Match the values *)
-          match_abstractions abs0 abs1;
+          let _abs1, env1' = pop_first_matching_abs abs0 env1 in
+          (* No need to match the abstractions: we already did during the lookup *)
           (* Continue *)
           match_envs env0' env1')
-    | [], [] ->
-        (* Done *)
-        ()
-    | _ ->
-        (* The elements don't match *)
-        raise (Distinct "match_ctxs: match_envs: env elements don't match")
+    | [] ->
+        (* Done: just check that the right environment is empty *)
+        if env1 = [] then ()
+        else
+          raise
+            (Distinct
+               "The right environment has more elements than the left \
+                environment")
+    | EFrame :: _ ->
+        (* This is unexpected *)
+        [%internal_error] span
   in
 
   (* Match the environments.
@@ -2360,17 +2607,18 @@ let prepare_match_ctx_with_target (config : config) (span : Meta.span)
       in
       let filt_src_env = List.filter keep filt_src_env in
       let filt_tgt_env = List.filter keep filt_tgt_env in
-      [%sanity_check] span (List.length filt_src_env = List.length filt_tgt_env);
+      [%sanity_check_recover] S.recover span
+        (List.length filt_src_env = List.length filt_tgt_env);
       let _ =
         List.iter
           (fun (var0, var1) ->
             match (var0, var1) with
             | EBinding (BDummy b0, v0), EBinding (BDummy b1, v1) ->
-                [%sanity_check] span (b0 = b1);
+                [%sanity_check_recover] S.recover span (b0 = b1);
                 let _ = M.match_tvalues src_ctx tgt_ctx v0 v1 in
                 ()
             | EBinding (BVar b0, v0), EBinding (BVar b1, v1) ->
-                [%sanity_check] span (b0 = b1);
+                [%sanity_check_recover] S.recover span (b0 = b1);
                 let _ = M.match_tvalues src_ctx tgt_ctx v0 v1 in
                 ()
             | _ -> [%craise] span "Unexpected")

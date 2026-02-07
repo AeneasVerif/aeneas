@@ -4,7 +4,6 @@ import Aeneas.Std.Range
 import Aeneas.Std.Scalar.Core
 import Aeneas.Std.Scalar.CheckedOps
 import Aeneas.Std.Scalar.Notations
-import Aeneas.Std.Vec
 
 namespace Aeneas.Std
 
@@ -25,10 +24,50 @@ structure core.iter.adapters.zip.TrustedRandomAccessNoCoerce (Self : Type)
   where
   MAY_HAVE_SIDE_EFFECT : Bool
 
+@[rust_type "core::iter::adapters::step_by::StepBy" (body := .opaque)]
+structure core.iter.adapters.step_by.StepBy (I : Type) where
+  iter : I
+  /- This is not exactly the way the implementation is defined in the standard library, but this is a good model -/
+  step_by : Usize
+
 @[rust_trait "core::iter::traits::iterator::Iterator"]
 structure core.iter.traits.iterator.Iterator (Self : Type) (Self_Item : Type)
   where
   next : Self → Result ((Option Self_Item) × Self)
+  step_by : Self → Usize → Result (core.iter.adapters.step_by.StepBy Self)
+  -- TODO: collect
+
+@[rust_fun "core::iter::traits::iterator::Iterator::step_by"]
+def core.iter.traits.iterator.Iterator.step_by.default
+  {Self : Type} (self: Self) (step_by : Std.Usize) :
+  Result (core.iter.adapters.step_by.StepBy Self) := .ok ⟨ self, step_by ⟩
+
+@[rust_fun
+  "core::iter::adapters::step_by::{core::iter::traits::iterator::Iterator<core::iter::adapters::step_by::StepBy<@I>, @Clause0_Item>}::next"]
+def core.iter.adapters.step_by.IteratorStepBy.next
+  {I : Type} {Item : Type}
+  (IteratorInst : core.iter.traits.iterator.Iterator I Item) :
+  core.iter.adapters.step_by.StepBy I →
+  Result ((Option Item) × (core.iter.adapters.step_by.StepBy I)) :=
+  sorry -- TODO
+
+@[rust_fun
+  "core::iter::adapters::step_by::{core::iter::traits::iterator::Iterator<core::iter::adapters::step_by::StepBy<@I>, @Clause0_Item>}::step_by"]
+def core.iter.adapters.step_by.IteratorStepBy.step_by
+  {I : Type} {Item : Type}
+  (IteratorInst : core.iter.traits.iterator.Iterator I Item) :
+  core.iter.adapters.step_by.StepBy I → Std.Usize →
+  Result (core.iter.adapters.step_by.StepBy (core.iter.adapters.step_by.StepBy I)) := by
+  sorry -- TODO
+
+@[reducible, rust_trait_impl
+  "core::iter::traits::iterator::Iterator<core::iter::adapters::step_by::StepBy<@I>, @Clause0_Item>"]
+def core.iter.traits.iterator.IteratorStepBy {I : Type} {Item : Type}
+  (IteratorInst : core.iter.traits.iterator.Iterator I Item) :
+  core.iter.traits.iterator.Iterator (core.iter.adapters.step_by.StepBy I) Item := {
+  next := core.iter.adapters.step_by.IteratorStepBy.next IteratorInst
+  step_by := core.iter.adapters.step_by.IteratorStepBy.step_by IteratorInst
+}
 
 @[rust_trait "core::iter::traits::accum::Sum"]
 structure core.iter.traits.accum.Sum (Self : Type) (A : Type) where
@@ -50,6 +89,13 @@ structure core.iter.traits.collect.FromIterator (Self : Type) (A : Type) where
   from_iter : forall {T : Type} {IntoIter : Type}
     (_ : core.iter.traits.collect.IntoIterator T A IntoIter),
     T → Result Self
+
+@[rust_fun "core::iter::traits::iterator::Iterator::collect"]
+def core.iter.traits.iterator.Iterator.collect.default
+  {Self : Type} {B : Type} {Item : Type} (IteratorInst :
+  core.iter.traits.iterator.Iterator Self Item)
+  (collectFromIteratorInst : core.iter.traits.collect.FromIterator B Item) :
+  Self → Result B := sorry
 
 @[rust_fun
   "core::iter::traits::collect::{core::iter::traits::collect::IntoIterator<@I, @Item, @I>}::into_iter"]
@@ -128,10 +174,18 @@ def core.iter.range.IteratorRange.next
       | some n => ok ⟨ some n, {range with start := n} ⟩
     else ok ⟨ none, range ⟩
 
+@[rust_fun
+  "core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>}::step_by"]
+def core.iter.range.IteratorRange.step_by
+   {A : Type} (_StepInst : core.iter.range.Step A) :
+  core.ops.range.Range A → Usize → Result (adapters.step_by.StepBy (ops.range.Range A)) :=
+  λ range step_by => .ok ⟨ range, step_by ⟩
+
 @[reducible, rust_trait_impl
   "core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>"]
-def core.iter.traits.iterator.IteratorRange {A : Type} (StepInst :
-  core.iter.range.Step A) : core.iter.traits.iterator.Iterator
+def core.iter.traits.iterator.IteratorRange {A : Type}
+  (StepInst : core.iter.range.Step A) : core.iter.traits.iterator.Iterator
   (core.ops.range.Range A) A := {
   next := core.iter.range.IteratorRange.next StepInst
+  step_by := core.iter.range.IteratorRange.step_by StepInst
 }

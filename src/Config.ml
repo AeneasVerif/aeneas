@@ -3,7 +3,7 @@
 (** {1 Backend choice} *)
 
 (** The choice of backend *)
-type backend = FStar | Coq | Lean | HOL4
+type backend = FStar | Coq | Lean | HOL4 [@@deriving show]
 
 let backend_names = [ "fstar"; "coq"; "rocq"; "lean"; "hol4" ]
 
@@ -57,8 +57,26 @@ let set_subdir (s : string) : unit = subdir := Some s
     CI arguments. *)
 let borrow_check = ref false
 
-(** Get the target backend *)
-let backend () : backend = Option.get !opt_backend
+(** Get the target backend
+
+    If there is no backend (we are borrow-checking) we default to Lean - it
+    happens when looking up the builtin information: we use Lean as it has the
+    most complete library.
+
+    TODO: turn borrow-checking into a backend. *)
+let backend () : backend =
+  match !opt_backend with
+  | None -> Lean
+  | Some b -> b
+
+let backend_to_string (b : backend) =
+  match b with
+  | FStar -> "F*"
+  | Coq -> "Rocq"
+  | Lean -> "Lean"
+  | HOL4 -> "HOL4"
+
+let backend_name () : string = backend_to_string (backend ())
 
 let if_backend (f : unit -> 'a) (default : 'a) : 'a =
   match !opt_backend with
@@ -469,3 +487,7 @@ let recover_joins = ref true
     this reason we guard all checks with [type_analysis_ignore_dyn] so that it
     is easy to activate them. *)
 let type_analysis_ignore_dyn = true
+
+(** When analyzing an opaque type about which we have no information, should we
+    consider its regions as being used for mutable references or not? *)
+let opaque_types_have_mut_regions_by_default = false

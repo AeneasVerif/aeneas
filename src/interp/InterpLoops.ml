@@ -98,17 +98,20 @@ let eval_loop_symbolic_apply_loop (config : config) (span : span)
   in
 
   (* Actually match *)
+  let fixed_aids = InterpJoinCore.compute_fixed_abs_ids init_ctx fp_ctx in
+  let fixed_dids = ctx_get_dummy_var_ids init_ctx in
   [%ltrace
-    "about to compute the id correspondance between the fixed-point ctx and \
-     the original ctx:\n\
-     - src ctx (fixed-point ctx)\n" ^ eval_ctx_to_string fp_ctx
+    "about to match the fixed-point ctx and the original ctx:"
+    ^ "\n- fixed_aids: "
+    ^ AbsId.Set.to_string None fixed_aids
+    ^ "\n- fixed_did: "
+    ^ DummyVarId.Set.to_string None fixed_dids
+    ^ "\n- src ctx (fixed-point ctx)\n" ^ eval_ctx_to_string fp_ctx
     ^ "\n\n-tgt ctx (original context):\n" ^ eval_ctx_to_string ctx];
 
   (* Compute the end expression, that is the expresion corresponding to the
      end of the function where we call the loop (for now, when calling a loop
      we never get out) *)
-  let fixed_aids = InterpJoinCore.compute_fixed_abs_ids init_ctx fp_ctx in
-  let fixed_dids = ctx_get_dummy_var_ids init_ctx in
   let (ctx, tgt_ctx, input_values, input_abs), cc =
     comp cf_prepare
       (match_ctx_with_target config span WithCont fixed_aids fixed_dids
@@ -166,6 +169,15 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
         [%craise] span "Unexpected return"
     | Panic -> SA.Panic
     | Break i -> (
+        [%ltrace
+          "about to match the fixed-point context with the context at a break:"
+          ^ "\n- fixed_aids: "
+          ^ AbsId.Set.to_string None fixed_aids
+          ^ "\n- src ctx (fixed-point ctx):\n"
+          ^ eval_ctx_to_string ~span:(Some span) fp_ctx
+          ^ "\n\n-tgt ctx (ctx at break):\n"
+          ^ eval_ctx_to_string ~span:(Some span) ctx];
+
         (* We don't support nested loops for now *)
         [%cassert] span (i = 0) "Nested loops are not supported yet";
 

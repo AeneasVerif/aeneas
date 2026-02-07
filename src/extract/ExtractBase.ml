@@ -1062,6 +1062,7 @@ let keywords () =
           "theorem";
           "theory";
           "to";
+          "toStr";
           "universe";
           "universes";
           "unless";

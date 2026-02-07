@@ -16,6 +16,7 @@ let log = Logging.interp_log
 
 let eval_ctx_to_string = Print.Contexts.eval_ctx_to_string
 let name_to_string = Print.EvalCtx.name_to_string
+let real_var_binder_to_string = Print.EvalCtx.real_var_binder_to_string
 let symbolic_value_to_string = Print.EvalCtx.symbolic_value_to_string
 
 let symbolic_value_id_to_pretty_string =
@@ -737,6 +738,11 @@ let initialize_eval_ctx (span : Meta.span option) (ctx : decls_ctx)
     MetaId.fresh_stateful_generator_with_marked marked_ids.meta_ids
   in
 
+  let _, _, _, fresh_symbolic_expr_id =
+    SymbolicExprId.fresh_stateful_generator_with_marked
+      marked_ids.symbolic_expr_ids
+  in
+
   let const_generic_vars_map =
     ConstGenericVarId.Map.of_list
       (List.map
@@ -768,6 +774,7 @@ let initialize_eval_ctx (span : Meta.span option) (ctx : decls_ctx)
     fresh_abs_fvar_id;
     fresh_loop_id;
     fresh_meta_id;
+    fresh_symbolic_expr_id;
   }
 
 (** Instantiate a function signature, introducing **fresh** abstraction ids and

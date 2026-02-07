@@ -377,6 +377,10 @@ let match_branch_to_string (ctx : bs_ctx) (e : match_branch) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
   PrintPure.match_branch_to_string ~span:(Some ctx.span) env "" "  " e
 
+let symbolic_loop_to_string (ctx : bs_ctx) (e : SymbolicAst.loop) : string =
+  let env = bs_ctx_to_fmt_env ctx in
+  PrintSymbolicAst.loop_to_string env "" "  " e
+
 let fun_id_to_string (ctx : bs_ctx) (id : A.fun_id) : string =
   let env = bs_ctx_to_fmt_env ctx in
   Print.Types.fun_id_to_string env id

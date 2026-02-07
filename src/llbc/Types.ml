@@ -1,6 +1,6 @@
 include Charon.Types
 
-type region_id_set = RegionId.Set.t [@@deriving show, ord]
+type region_id_set = RegionId.Set.t [@@deriving show, eq, ord]
 
 (** A normalized projection type.
 
@@ -10,4 +10,4 @@ type region_id_set = RegionId.Set.t [@@deriving show, ord]
 
     Note that using this type (rather than, e.g., [ty]) only has an informative
     purpose. *)
-type norm_proj_ty = ty [@@deriving show, ord]
+type norm_proj_ty = ty [@@deriving show, eq, ord]

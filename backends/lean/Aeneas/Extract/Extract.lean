@@ -32,14 +32,23 @@ inductive TypeBody where
 | struct (fieldNames : List Field)
 /-- For every variant, a map for the field names -/
 | enum (variants : List Variant)
+/-- Let Aeneas analyze the Lean definition to infer the information -/
+| unknown
+/-- The definition should be treated as opaque -/
 | opaque
 deriving Repr, Inhabited
+
+def TypeBody.isOpaque? (x : TypeBody) : Bool :=
+  match x with
+  | .opaque => true
+  | _ => false
 
 instance : ToMessageData TypeBody where
   toMessageData x :=
     match x with
     | .struct fields => m!"Struct ({fields})"
     | .enum variants => m!"Enum ({variants})"
+    | .unknown => m!"Unknown"
     | .opaque => m!"Opaque"
 
 structure TypeInfo where
@@ -57,7 +66,10 @@ structure TypeInfo where
     directly, rather than `Option.some`).
     -/
   prefixVariantNames : Bool := true
-  body : TypeBody := .opaque
+
+  -- The list of regions which are used for mutable borrows
+  mutRegions : Array Nat := #[]
+  body : TypeBody := .unknown
 deriving Repr, Inhabited
 
 instance : ToMessageData TypeInfo where
@@ -367,6 +379,9 @@ def processType (declName : Name) (_pat : String) (info : TypeInfo) : AttrM Type
       pure (← (removeNamePrefix declName)).toString
   let info : TypeInfo := { info with extract := extractName }
 
+  -- Check if we should treat this definition as opaque
+  if info.body.isOpaque? then return info
+
   -- Analyze the body
   let some decl := env.findAsync? declName
       | throwError "Could not find theorem {declName}"
@@ -382,8 +397,9 @@ def processType (declName : Name) (_pat : String) (info : TypeInfo) : AttrM Type
       let variants ← do
         match info.body with
         | .enum variants => pure variants
-        | .opaque => pure []
+        | .unknown => pure []
         | .struct _ => throwError "The user-provided information is for a structure while the type is an inductive"
+        | .opaque => throwError "Internal error: unreachable case"
       /- Go through the variants and retrieve their names.
          We first need to use the user provided information to compute a map from Lean name to user information. -/
       let mut providedVariants := Std.HashMap.emptyWithCapacity
@@ -415,8 +431,9 @@ def processType (declName : Name) (_pat : String) (info : TypeInfo) : AttrM Type
       let fields ← do
         match info.body with
         | .struct fields => pure fields
-        | .opaque => pure []
+        | .unknown => pure []
         | .enum _ => throwError "The user-provided information is for a variant while the type is a structure"
+        | .opaque => throwError "Internal error: unreachable case"
       /- Compute the map from Lean field name to user information while doing the sanity checks -/
       let mut providedFields := Std.HashMap.emptyWithCapacity
       let mut rustFields := Std.HashSet.emptyWithCapacity
@@ -735,16 +752,19 @@ def TypeInfo.toExtract (info : TypeInfo) : MessageData :=
     match info.keepParams with
     | none => m!""
     | some keepParams => m!" ~keep_params:(Some {listToString keepParams})"
+  let mutRegions :=
+    if info.mutRegions.size = 0 then m!""
+    else m!" ~mut_regions:({listToString info.mutRegions.toList})"
   let prefixVariantNames :=
     if info.prefixVariantNames then m!"" else m!" ~prefix_variant_names:false"
   let body :=
     match info.body with
-    | .opaque => m!""
+    | .unknown | .opaque => m!""
     | .enum variants =>
       m!" ~kind:(KEnum {listToString (variants.map (fun ⟨ x, y, _ ⟩ => (addQuotes x, "Some " ++ addQuotes (toString y))))})"
     | .struct fields =>
       m!" ~kind:(KStruct {listToString (fields.map (fun ⟨ x, y ⟩ => (addQuotes x, "Some " ++ addQuotes (toString y))))})"
-  m!"{extract}{keepParams}{prefixVariantNames}{body}"
+  m!"{extract}{keepParams}{mutRegions}{prefixVariantNames}{body}"
 
 def ConstInfo.toExtract (info : ConstInfo) : MessageData :=
   let extract := info.extract.getD "ERROR_MISSING_FIELD"

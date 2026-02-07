@@ -83,25 +83,80 @@ let type_decl_is_tuple_struct (x : type_decl) : bool =
   | _ -> false
 
 let initialize_g_type_info (is_tuple_struct : bool) ~(is_rec : bool)
-    ~(has_regions : bool) (param_infos : 'p) : 'p g_type_info =
+    ~(has_regions : bool) ~(mut_regions : RegionId.Set.t) (param_infos : 'p) :
+    'p g_type_info =
   {
     borrows_info = type_borrows_info_init;
     is_tuple_struct;
     param_infos;
-    mut_regions = RegionId.Set.empty;
+    mut_regions;
     is_rec;
     has_regions;
   }
 
-let initialize_type_decl_info ~(is_rec : bool) (def : type_decl) :
-    type_decl_info =
+let initialize_type_decl_info (span : Meta.span option) (crate : crate)
+    ~(is_rec : bool) (def : type_decl) : type_decl_info =
   let param_info = { under_borrow = false; under_mut_borrow = false } in
   let param_infos = List.map (fun _ -> param_info) def.generics.types in
   let is_tuple_struct =
     !Config.use_tuple_structs && (not is_rec) && type_decl_is_tuple_struct def
   in
   let has_regions = List.length def.generics.regions > 0 in
-  initialize_g_type_info is_tuple_struct ~is_rec ~has_regions param_infos
+  let name_matcher_ctx : LlbcAst.block Charon.NameMatcher.ctx =
+    Charon.NameMatcher.ctx_from_crate crate
+  in
+  (* We have some specialized knowledge of some library types; we don't
+     have any more custom treatment than this, and these types can be modeled
+     suitably in the backend libraries, rather than special-casing for them all the
+     way. *)
+  let get_builtin_info () : Pure.builtin_type_info option =
+    let open ExtractBuiltin in
+    NameMatcherMap.find_opt name_matcher_ctx def.item_meta.name
+      (builtin_types_map ())
+  in
+  let name_to_string () =
+    Charon.PrintLlbcAst.Crate.crate_name_to_string crate def.item_meta.name
+  in
+
+  (* We initialize the mutable regions differently depending on whether the
+     type is opaque or not *)
+  let mut_regions =
+    match def.kind with
+    | Opaque -> (
+        (* Try to lookup the builtin information, if there is *)
+        match get_builtin_info () with
+        | Some info ->
+            (* *)
+            let len = List.length def.generics.regions in
+            if List.for_all (fun i -> i < len) info.mut_regions then
+              RegionId.Set.of_list
+                (List.map
+                   (fun i ->
+                     (Collections.List.nth def.generics.regions i).index)
+                   info.mut_regions)
+            else (
+              [%warn_opt_span] span
+                ("Found invalid builtin information for a type declaration: \
+                  the indices used for the mutable regions are out of bounds.\n\
+                  Type: " ^ name_to_string ());
+              RegionId.Set.empty)
+        | None ->
+            (* Print a warning *)
+            [%warn_opt_span] span
+              ("Found an unknown type declaration with region parameters: as \
+                we can not know whether the regions are used in mutable \
+                borrows or not the extracted code may be incorrect.\n\
+                Type: " ^ name_to_string ());
+            if Config.opaque_types_have_mut_regions_by_default then
+              RegionId.Set.of_list
+                (List.map
+                   (fun (r : region_param) -> r.index)
+                   def.generics.regions)
+            else RegionId.Set.empty)
+    | _ -> RegionId.Set.empty
+  in
+  initialize_g_type_info is_tuple_struct ~is_rec ~has_regions ~mut_regions
+    param_infos
 
 let type_decl_info_to_partial_type_info (info : type_decl_info) :
     partial_type_info =
@@ -442,7 +497,7 @@ let analyze_type_decl (updated : bool ref) (infos : type_infos)
     (* Return *)
     infos
 
-let analyze_type_declaration_group (type_decls : type_decl TypeDeclId.Map.t)
+let analyze_type_declaration_group (span : Meta.span option) (crate : crate)
     (infos : type_infos) (decl : type_declaration_group) : type_infos =
   (* Collect the identifiers used in the declaration group *)
   let is_rec, ids =
@@ -455,7 +510,7 @@ let analyze_type_declaration_group (type_decls : type_decl TypeDeclId.Map.t)
     List.map
       (fun id ->
         [%unwrap_opt_span] None
-          (TypeDeclId.Map.find_opt id type_decls)
+          (TypeDeclId.Map.find_opt id crate.type_decls)
           ("Internal error: please report an issue. Missing type declaration \
             of id: " ^ TypeDeclId.to_string id))
       ids
@@ -465,7 +520,7 @@ let analyze_type_declaration_group (type_decls : type_decl TypeDeclId.Map.t)
     List.fold_left
       (fun infos (def : type_decl) ->
         TypeDeclId.Map.add def.def_id
-          (initialize_type_decl_info ~is_rec def)
+          (initialize_type_decl_info ~is_rec span crate def)
           infos)
       infos decl_defs
   in
@@ -533,7 +588,8 @@ let analyze_ty (span : Meta.span option) (infos : type_infos) (ty : ty) :
   let updated = ref false in
   (* We don't need to compute whether the type contains 'static or not *)
   let ty_info =
-    initialize_g_type_info false ~is_rec:false ~has_regions:false None
+    initialize_g_type_info false ~is_rec:false ~has_regions:false
+      ~mut_regions:RegionId.Set.empty None
   in
   let ty_info = analyze_full_ty span updated infos ty_info ty in
   (* Convert the ty_info *)

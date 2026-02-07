@@ -22,7 +22,7 @@ def slice_to_array1 (s : Slice Std.U8) : Result (Array Std.U8 32#usize) := do
   let r ←
     core.convert.TryInto.Blanket.try_into
       (core.convert.TryFromSharedArraySliceTryFromSliceError Std.U8 32#usize) s
-  core.result.Result.expect core.fmt.DebugTryFromSliceError r
-    "Expected a slice of length 32"
+  core.result.Result.expect core.fmt.DebugTryFromSliceError r (toStr
+    "Expected a slice of length 32")
 
 end into

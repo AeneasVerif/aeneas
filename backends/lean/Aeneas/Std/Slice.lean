@@ -4,6 +4,7 @@ import Aeneas.Std.Array.Core
 import Aeneas.Std.Range
 import Aeneas.Std.Core.Ops
 import Aeneas.Std.RawPtr
+import Aeneas.Std.Core.Iter
 import Aeneas.SimpScalar.SimpScalar
 
 namespace Aeneas.Std
@@ -78,8 +79,11 @@ theorem Slice.getElem!_Nat_eq {α : Type u} [Inhabited α] (v : Slice α) (i : N
 @[simp, scalar_tac_simps, simp_lists_hyps_simps] abbrev Slice.get? {α : Type u} (v : Slice α) (i : Nat) : Option α := getElem? v i
 @[simp, scalar_tac_simps, simp_lists_hyps_simps] abbrev Slice.get! {α : Type u} [Inhabited α] (v : Slice α) (i : Nat) : α := getElem! v i
 
+def Slice.setAtNat {α : Type u} (v: Slice α) (i: Nat) (x: α) : Slice α :=
+  ⟨ v.val.set i x, by have := v.property; simp [*] ⟩
+
 def Slice.set {α : Type u} (v: Slice α) (i: Usize) (x: α) : Slice α :=
-  ⟨ v.val.set i.val x, by have := v.property; simp [*] ⟩
+  Slice.setAtNat v i.val x
 
 def Slice.set_opt {α : Type u} (v: Slice α) (i: Usize) (x: Option α) : Slice α :=
   ⟨ v.val.set_opt i.val x, by have := v.property; simp [*] ⟩
@@ -120,7 +124,7 @@ theorem Slice.index_usize_spec {α : Type u} [Inhabited α] (v: Slice α) (i: Us
 @[simp, scalar_tac_simps, simp_lists_hyps_simps]
 theorem Slice.set_val_eq {α : Type u} (v: Slice α) (i: Usize) (x: α) :
   (v.set i x) = v.val.set i.val x := by
-  simp [set]
+  simp [set, setAtNat]
 
 @[simp, scalar_tac_simps, simp_lists_hyps_simps]
 theorem Slice.set_opt_val_eq {α : Type u} (v: Slice α) (i: Usize) (x: Option α) :
@@ -141,7 +145,7 @@ def Slice.update {α : Type u} (v: Slice α) (i: Usize) (x: α) : Result (Slice 
 theorem Slice.update_spec {α : Type u} (v: Slice α) (i: Usize) (x : α)
   (hbound : i.val < v.length) :
   v.update i x ⦃ nv => nv = v.set i x ⦄ := by
-  simp only [update, set]
+  simp only [update, set, setAtNat]
   simp at *
   simp [*]
 
@@ -658,12 +662,12 @@ structure core.slice.iter.Iter (T : Type) where
   slice : Slice T
   i : Nat
 
-@[rust_type "core::slice::iter::IterMut"]
+@[rust_type "core::slice::iter::IterMut" (mutRegions := #[0]) (body := .opaque)]
 structure core.slice.iter.IterMut (T : Type) where
   /- We need to remember the slice and an index inside the slice (this is necessary)
      for double ended iterators) -/
   slice : Slice T
-  i : Nat
+  i : Nat := 0
 
 @[rust_fun "core::slice::{[@T]}::iter"]
 def core.slice.Slice.iter {T : Type} (s : Slice T) : Result (core.slice.iter.Iter T) :=
@@ -673,5 +677,88 @@ def core.slice.Slice.iter {T : Type} (s : Slice T) : Result (core.slice.iter.Ite
 def core.slice.Slice.contains {T : Type} (partialEqInst : core.cmp.PartialEq T T)
   (s : Slice T) (x : T) : Result Bool :=
   List.anyM (partialEqInst.eq x) s.val
+
+@[rust_fun
+  "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::IterMut<'a, @T>, &'a mut @T>}::next"]
+def core.slice.iter.IteratorIterMut.next
+  {T : Type}
+  (it : core.slice.iter.IterMut T) :
+  Result ((Option T) × (core.slice.iter.IterMut T) ×
+          (core.slice.iter.IterMut T → Option T → core.slice.iter.IterMut T)) :=
+  if h: it.i < it.slice.len then
+    let x := it.slice[it.i]
+    let i := it.i
+    let it := { it with i := i + 1 }
+    let back it' x :=
+      match x with
+      | none => it'
+      | some x => { it' with slice := it'.slice.setAtNat i x }
+    ok (some x, it, back)
+  else ok (none, it, fun it _ => it)
+
+@[rust_fun "core::slice::{[@T]}::iter_mut"]
+def core.slice.Slice.iter_mut {T : Type} (slice : Slice T) :
+  Result ((core.slice.iter.IterMut T) × (core.slice.iter.IterMut T → Slice T)) :=
+  ok ({slice}, fun it => it.slice)
+
+@[rust_fun
+  "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::next"]
+def core.slice.iter.IteratorSliceIter.next
+  {T : Type} (it : core.slice.iter.Iter T) : Result ((Option T) × (core.slice.iter.Iter T)) :=
+  if h : it.i < it.slice.len then
+    let x := it.slice[it.i]
+    let it := { it with i := it.i + 1}
+    ok (some x, it)
+  else ok (none, it)
+
+@[rust_fun
+  "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::step_by"]
+def core.slice.iter.IteratorSliceIter.step_by {T} (slice : core.slice.iter.Iter T) (steps : Usize) :
+  Result (core.iter.adapters.step_by.StepBy (core.slice.iter.Iter T)) :=
+  ok (⟨ slice, steps ⟩)
+
+@[reducible, rust_trait_impl
+  "core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>"]
+def core.iter.traits.iterator.IteratorSliceIter (T : Type) :
+  core.iter.traits.iterator.Iterator (core.slice.iter.Iter T) T := {
+  next := core.slice.iter.IteratorSliceIter.next
+  step_by := core.slice.iter.IteratorSliceIter.step_by
+}
+
+@[rust_type "core::slice::iter::ChunksExact" (body := .opaque)]
+structure core.slice.iter.ChunksExact (T : Type) where
+  chunks : List (Slice T)
+
+@[rust_fun
+  "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::ChunksExact<'a, @T>, &'a [@T]>}::next"]
+def core.slice.iter.IteratorChunksExact.next
+  {T : Type} (self : core.slice.iter.ChunksExact T) :
+  Result ((Option (Slice T)) × (core.slice.iter.ChunksExact T)) :=
+  match self.chunks with
+  | [] => ok (none, self)
+  | chunk :: chunks => ok (some chunk, { chunks })
+
+@[rust_fun
+  "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::ChunksExact<'a, @T>, &'a [@T]>}::step_by"]
+def core.slice.iter.IteratorChunksExact.step_by
+  {T : Type} (self : slice.iter.ChunksExact T) (steps : Usize) :
+  Result (core.iter.adapters.step_by.StepBy (slice.iter.ChunksExact T)) :=
+  ok (⟨ self, steps ⟩)
+
+@[reducible, rust_trait_impl
+  "core::iter::traits::iterator::Iterator<core::slice::iter::ChunksExact<'a, @T>, &'a [@T]>"]
+def core.iter.traits.iterator.IteratorChunksExact (T : Type) :
+  core.iter.traits.iterator.Iterator (core.slice.iter.ChunksExact T) (Slice T)
+  := {
+  next := core.slice.iter.IteratorChunksExact.next
+  step_by := core.slice.iter.IteratorChunksExact.step_by
+}
+
+@[rust_fun "core::slice::{[@T]}::chunks_exact"]
+def core.slice.Slice.chunks_exact {T : Type} (s : Slice T) (chunk_size : Std.Usize) :
+  Result (core.slice.iter.ChunksExact T) :=
+  if chunk_size.val > 0 && s.len % chunk_size.val = 0 then
+    ok ⟨ List.map (fun s => ⟨ s, by sorry ⟩) (s.val.toChunks chunk_size.val) ⟩
+  else fail .panic
 
 end Aeneas.Std

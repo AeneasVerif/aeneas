@@ -1,4 +1,5 @@
 import Aeneas.Std.Core.Iter
+import Aeneas.Std.Vec
 
 namespace Aeneas.Std
 
@@ -17,6 +18,13 @@ def alloc.vec.into_iter.IteratorIntoIter.next {T : Type} (it: alloc.vec.into_ite
   | ⟨ hd :: tl, _ ⟩ => ok (hd, ⟨ tl, by scalar_tac ⟩ )
 
 @[rust_fun
+  "alloc::vec::into_iter::{core::iter::traits::iterator::Iterator<alloc::vec::into_iter::IntoIter<@T, @A>, @T>}::step_by"
+  -canFail (keepParams := [true, false])]
+def alloc.vec.into_iter.IteratorIntoIter.step_by {T : Type} (it: alloc.vec.into_iter.IntoIter T) (steps : Usize) :
+  Result (core.iter.adapters.step_by.StepBy (alloc.vec.into_iter.IntoIter T)) :=
+  .ok ⟨ it, steps ⟩
+
+@[rust_fun
   "alloc::vec::{core::iter::traits::collect::IntoIterator<alloc::vec::Vec<@T>, @T, alloc::vec::into_iter::IntoIter<@T, @A>>}::into_iter"
   -canFail (keepParams := [true, false])]
 def alloc.vec.IntoIteratorVec.into_iter {T : Type} (v: alloc.vec.Vec T) : Result (alloc.vec.into_iter.IntoIter T) := ok v
@@ -27,6 +35,7 @@ def alloc.vec.IntoIteratorVec.into_iter {T : Type} (v: alloc.vec.Vec T) : Result
 def core.iter.traits.iterator.IteratorVecIntoIter (T : Type) :
   core.iter.traits.iterator.Iterator (alloc.vec.into_iter.IntoIter T) T := {
   next := alloc.vec.into_iter.IteratorIntoIter.next
+  step_by := alloc.vec.into_iter.IteratorIntoIter.step_by
 }
 
 @[reducible, rust_trait_impl
@@ -37,6 +46,25 @@ def core.iter.traits.collect.IntoIteratorVec (T : Type) :
   (alloc.vec.into_iter.IntoIter T) := {
   iteratorInst := core.iter.traits.iterator.IteratorVecIntoIter T
   into_iter := alloc.vec.IntoIteratorVec.into_iter
+}
+
+@[rust_fun
+  "alloc::vec::{core::iter::traits::collect::FromIterator<alloc::vec::Vec<@T>, @T>}::from_iter"]
+def alloc.vec.FromIteratorVec.from_iter
+  {T : Type} {I : Type} {IntoIter : Type}
+  (IntoIteratorInst : core.iter.traits.collect.IntoIterator I T IntoIter) :
+  I → Result (alloc.vec.Vec T) := sorry
+
+/- Trait implementation: [alloc::vec::{core::iter::traits::collect::FromIterator<T> for alloc::vec::Vec<T>}]
+   Source: '/rustc/library/alloc/src/vec/mod.rs', lines 3714:0-3714:34
+   Name pattern: [core::iter::traits::collect::FromIterator<alloc::vec::Vec<@T>, @T>] -/
+@[reducible, rust_trait_impl
+  "core::iter::traits::collect::FromIterator<alloc::vec::Vec<@T>, @T>"]
+def core.iter.traits.collect.FromIteratorVec (T : Type) :
+  core.iter.traits.collect.FromIterator (alloc.vec.Vec T) T := {
+  from_iter := fun {I : Type} {IntoIter : Type}
+    (IntoIteratorInst : core.iter.traits.collect.IntoIterator I T IntoIter) =>
+    alloc.vec.FromIteratorVec.from_iter IntoIteratorInst
 }
 
 end Aeneas.Std

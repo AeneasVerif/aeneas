@@ -153,6 +153,7 @@ type eval_ctx = {
   fresh_abs_fvar_id : unit -> abs_fvar_id;
   fresh_loop_id : unit -> loop_id;
   fresh_meta_id : unit -> meta_id;
+  fresh_symbolic_expr_id : unit -> symbolic_expr_id;
 }
 [@@deriving show]
 
@@ -709,3 +710,67 @@ let ctx_get_frozen_abs_set (ctx : eval_ctx) : AbsId.Set.t =
     (List.filter_map
        (fun abs -> if abs.can_end then None else Some abs.abs_id)
        (AbsId.Map.values abs))
+
+(** Small helper: lookup a binding satisfying some predicate and remove it from
+    the enviromnent *)
+let rec env_pop_binding (default : unit -> 'a * env) (f : env_elem -> 'a option)
+    (env : env) : 'a * env =
+  match env with
+  | [] -> default ()
+  | b :: env' -> (
+      match f b with
+      | None ->
+          let out, env' = env_pop_binding default f env' in
+          (out, b :: env')
+      | Some out -> (out, env'))
+
+(** Remove a variable from an environment and return the corresponding value *)
+let env_pop_var (default : unit -> tvalue * env) (v : real_var_binder)
+    (env : env) : tvalue * env =
+  env_pop_binding default
+    (fun e ->
+      match e with
+      | EBinding (BVar v', value) when v' = v -> Some value
+      | _ -> None)
+    env
+
+(** Remove a dummy variable from an environment and return the corresponding
+    value *)
+let env_pop_dummy (default : unit -> tvalue * env) (v : dummy_var_id)
+    (env : env) : tvalue * env =
+  env_pop_binding default
+    (fun e ->
+      match e with
+      | EBinding (BDummy v', value) when v' = v -> Some value
+      | _ -> None)
+    env
+
+(** Remove the first dummy variable from an environment and return the
+    corresponding value *)
+let env_pop_first_dummy (default : unit -> tvalue * env) (env : env) :
+    tvalue * env =
+  env_pop_binding default
+    (fun e ->
+      match e with
+      | EBinding (BDummy _, value) -> Some value
+      | _ -> None)
+    env
+
+(** Remove an abs from an environment *)
+let env_pop_abs (default : unit -> abs * env) (abs_id : abs_id) (env : env) :
+    abs * env =
+  env_pop_binding default
+    (fun e ->
+      match e with
+      | EAbs abs when abs.abs_id = abs_id -> Some abs
+      | _ -> None)
+    env
+
+(** Remove the first abs from an environment *)
+let env_pop_first_abs (default : unit -> abs * env) (env : env) : abs * env =
+  env_pop_binding default
+    (fun e ->
+      match e with
+      | EAbs abs -> Some abs
+      | _ -> None)
+    env

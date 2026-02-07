@@ -146,8 +146,9 @@ let name_with_generics_to_simple_name (ctx : 'stt ctx)
     | None -> name
     | Some prefix ->
         let prefix =
-          name_with_generics_to_pattern ctx c TypesUtils.empty_generic_params
-            prefix TypesUtils.empty_generic_args
+          name_with_generics_to_pattern ctx c
+            Charon.TypesUtils.empty_generic_params prefix
+            Charon.TypesUtils.empty_generic_args
         in
         let _, _, name = pattern_common_prefix { equiv = true } prefix name in
         name

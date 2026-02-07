@@ -22,15 +22,14 @@ exception ValueMatchFailure of updt_env_kind
 exception Distinct of string
 
 (** Information about the way contexts were joined *)
-type ctx_join_info = {
+type join_info = {
+  joined_ctx : eval_ctx;  (** The result of the join *)
   symbolic_to_value : (tvalue * tvalue) SymbolicValueId.Map.t;
       (** Map from fresh symbolic value to the values coming from the left and
           right contexts *)
-  refreshed_aids : abs_id AbsId.Map.t;
-      (** The refreshed abstraction ids in the right environment *)
 }
 
-type ctx_or_update = (eval_ctx * ctx_join_info, updt_env_kind) result
+type join_info_or_update = (join_info, updt_env_kind) result
 
 (** A small utility.
 
@@ -416,6 +415,27 @@ module type PrimMatcher = sig
     borrow_id ->
     tavalue ->
     rty ->
+    tavalue ->
+    tavalue
+
+  val match_aignored_mut_borrow :
+    tvalue_matcher ->
+    eval_ctx ->
+    eval_ctx ->
+    rty * borrow_id option * tavalue ->
+    rty * borrow_id option * tavalue ->
+    ty ->
+    tavalue ->
+    tavalue
+
+  val match_aended_ignored_mut_borrow :
+    tvalue_matcher ->
+    eval_ctx ->
+    eval_ctx ->
+    rty * aended_ignored_mut_borrow ->
+    rty * aended_ignored_mut_borrow ->
+    ty ->
+    tavalue ->
     tavalue ->
     tavalue
 
@@ -828,5 +848,8 @@ let compute_fixed_abs_ids (ctx0 : eval_ctx) (ctx1 : eval_ctx) : AbsId.Set.t =
     (fun aid ->
       let a0 = AbsId.Map.find aid abs0 in
       let a1 = AbsId.Map.find aid abs1 in
-      a0 = a1)
+      (* We ignore the continuation expressions: when computing fixed points we
+         might remove/add continuations while the presence/absence shouldn't
+         have an impact on the way we match/unify contexts. *)
+      { a0 with cont = None } = { a1 with cont = None })
     abs_ids

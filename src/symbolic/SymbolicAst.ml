@@ -7,6 +7,9 @@ open Types
 open Expressions
 open Values
 open LlbcAst
+module SymbolicExprId = Contexts.SymbolicExprId
+
+type symbolic_expr_id = Contexts.symbolic_expr_id [@@deriving show, eq, ord]
 
 (** "Meta"-place: a place stored as span-data.
 
@@ -122,6 +125,9 @@ class ['self] iter_expr_base =
     method visit_symbolic_value_id_set : 'env -> symbolic_value_id_set -> unit =
       fun env s -> SymbolicValueId.Set.iter (self#visit_symbolic_value_id env) s
 
+    method visit_symbolic_expr_id : 'env -> symbolic_expr_id -> unit =
+      fun _ _ -> ()
+
     method visit_symbolic_expansion : 'env -> symbolic_expansion -> unit =
       fun _ _ -> ()
   end
@@ -180,12 +186,15 @@ type expr =
 
           The context is the evaluation context from before introducing the new
           value. It has the same purpose as for the {!Return} case. *)
-  | SubstituteAbsIds of abs_id abs_id_map * expr
+  | SubstituteAbsIds of symbolic_expr_id * abs_id abs_id_map * expr
       (** We sometimes need to substitute abstraction ids to refresh them (in
           particular when doing joins), which can be a problem especially as
           some abstraction expressions refer to the abstractions through their
           ids. In order to make the translation work, we need to save those
-          substitutions. *)
+          substitutions.
+
+          TODO: we actually don't do this anymore because it led to issues.
+          Remove? *)
   | ForwardEnd of
       ((Contexts.eval_ctx[@opaque]) * tvalue) option
       * (Contexts.eval_ctx[@opaque])
