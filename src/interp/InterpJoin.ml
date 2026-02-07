@@ -1399,7 +1399,9 @@ let match_ctx_with_target (config : config) (span : Meta.span)
      fail. *)
   let cc =
     if AbsId.Map.is_empty join_info.refreshed_aids then cc
-    else cc_comp cc (fun e -> SubstituteAbsIds (join_info.refreshed_aids, e))
+    else
+      let eid = tgt_ctx.fresh_symbolic_expr_id () in
+      cc_comp cc (fun e -> SubstituteAbsIds (eid, join_info.refreshed_aids, e))
   in
 
   (* We need to collapse the context.

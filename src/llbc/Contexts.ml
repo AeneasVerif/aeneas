@@ -153,6 +153,7 @@ type eval_ctx = {
   fresh_abs_fvar_id : unit -> abs_fvar_id;
   fresh_loop_id : unit -> loop_id;
   fresh_meta_id : unit -> meta_id;
+  fresh_symbolic_expr_id : unit -> symbolic_expr_id;
 }
 [@@deriving show]
 
