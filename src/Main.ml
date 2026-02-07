@@ -183,6 +183,9 @@ let () =
         Arg.Clear recover_joins,
         " Report an error whenever joining contexts fails rather than \
          duplicating the code after the branching statement" );
+      ( "-no-log-colors",
+        Arg.Clear log_with_colors,
+        " Do not use colors when formatting log messages" );
     ]
   in
 

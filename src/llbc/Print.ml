@@ -13,6 +13,32 @@ open Contexts
 module Types = Charon.PrintTypes
 module Expressions = Charon.PrintExpressions
 
+(** Helper to make a function which colorizes text *)
+let mk_colorize ((r, g, b) : int * int * int) : string -> string =
+  (* ANSI escape sequence for 24-bit RGB foreground color *)
+  let color_start = Printf.sprintf "\027[38;2;%d;%d;%dm" r g b in
+  (* ANSI escape sequence to reset formatting *)
+  let color_end = "\027[0m" in
+  fun text ->
+    if !Config.log_with_colors then color_start ^ text ^ color_end else text
+
+let type_color = (0, 255, 255)
+let abs_cont_color = type_color
+let borrow_color = (255, 0, 0)
+let loan_color = (255, 109, 35)
+let borrow_proj_color = (255, 0, 255)
+let loan_proj_color = (184, 0, 255)
+let var_color = (0, 250, 0)
+let abs_color = var_color
+let add_type_color = mk_colorize type_color
+let add_var_color = mk_colorize var_color
+let add_borrow_color = mk_colorize borrow_color
+let add_loan_color = mk_colorize loan_color
+let add_borrow_proj_color = mk_colorize borrow_proj_color
+let add_loan_proj_color = mk_colorize loan_proj_color
+let add_abs_color = mk_colorize abs_color
+let add_abs_cont_color = mk_colorize abs_cont_color
+
 let list_to_string ?(sep = "; ") (to_string : 'a -> string) (ls : 'a list) :
     string =
   "[" ^ String.concat sep (List.map to_string ls) ^ "]"
@@ -31,12 +57,15 @@ module Values = struct
     "s@" ^ SymbolicValueId.to_string id
 
   let symbolic_value_to_string (env : fmt_env) (sv : symbolic_value) : string =
-    symbolic_value_id_to_pretty_string sv.sv_id
-    ^ " : " ^ ty_to_string env sv.sv_ty
+    (symbolic_value_id_to_pretty_string sv.sv_id |> add_borrow_proj_color)
+    ^ " : "
+    ^ (ty_to_string env sv.sv_ty |> add_type_color)
 
   let symbolic_value_proj_to_string (env : fmt_env) (sv_id : symbolic_value_id)
       (rty : ty) : string =
-    symbolic_value_id_to_pretty_string sv_id ^ " <: " ^ ty_to_string env rty
+    symbolic_value_id_to_pretty_string sv_id
+    ^ " <: "
+    ^ (ty_to_string env rty |> add_type_color)
 
   let adt_to_string (span : Meta.span option) (env : fmt_env)
       (value_to_debug_string : unit -> string) (ty : ty)
@@ -103,25 +132,28 @@ module Values = struct
       (bc : borrow_content) : string =
     match bc with
     | VSharedBorrow (bid, sid) ->
-        "SB@" ^ BorrowId.to_string bid ^ "(^"
-        ^ SharedBorrowId.to_string sid
-        ^ ")"
+        add_borrow_color
+          ("SB@" ^ BorrowId.to_string bid ^ "(^"
+          ^ SharedBorrowId.to_string sid
+          ^ ")")
     | VMutBorrow (bid, tv) ->
-        "MB@" ^ BorrowId.to_string bid ^ " ("
+        add_borrow_color ("MB@" ^ BorrowId.to_string bid)
+        ^ " ("
         ^ tvalue_to_string ~span env tv
         ^ ")"
     | VReservedMutBorrow (bid, sid) ->
-        "RB@" ^ BorrowId.to_string bid ^ "(^"
-        ^ SharedBorrowId.to_string sid
-        ^ ")"
+        add_borrow_color
+          ("RB@" ^ BorrowId.to_string bid ^ "(^"
+          ^ SharedBorrowId.to_string sid
+          ^ ")")
 
   and loan_content_to_string ?(span : Meta.span option = None) (env : fmt_env)
       (lc : loan_content) : string =
     match lc with
     | VSharedLoan (lid, v) ->
         let lid = BorrowId.to_string lid in
-        "SL@" ^ lid ^ "(" ^ tvalue_to_string ~span env v ^ ")"
-    | VMutLoan bid -> "ML@" ^ BorrowId.to_string bid
+        add_loan_color ("SL@" ^ lid) ^ "(" ^ tvalue_to_string ~span env v ^ ")"
+    | VMutLoan bid -> add_loan_color ("ML@" ^ BorrowId.to_string bid)
 
   let abstract_shared_borrow_to_string (env : fmt_env)
       (abs : abstract_shared_borrow) : string =
@@ -133,9 +165,10 @@ module Values = struct
 
   let abstract_shared_borrows_to_string (env : fmt_env)
       (abs : abstract_shared_borrows) : string =
-    "{"
-    ^ String.concat "," (List.map (abstract_shared_borrow_to_string env) abs)
-    ^ "}"
+    add_borrow_color
+      ("{"
+      ^ String.concat "," (List.map (abstract_shared_borrow_to_string env) abs)
+      ^ "}")
 
   let rec aproj_to_string ?(with_ended : bool = false) (env : fmt_env)
       (pv : aproj) : string =
@@ -195,7 +228,8 @@ module Values = struct
         ", loans=[" ^ String.concat "," loans ^ "]"
     in
     "("
-    ^ symbolic_value_proj_to_string env proj.sv_id proj.proj_ty
+    ^ (symbolic_value_proj_to_string env proj.sv_id proj.proj_ty
+      |> add_borrow_proj_color)
     ^ loans ^ ")"
 
   and aproj_loans_to_string ?(with_ended : bool = false) (env : fmt_env)
@@ -216,7 +250,8 @@ module Values = struct
         ", borrows=[" ^ String.concat "," borrows ^ "]"
     in
     "⌊"
-    ^ symbolic_value_proj_to_string env proj.sv_id proj.proj_ty
+    ^ (symbolic_value_proj_to_string env proj.sv_id proj.proj_ty
+      |> add_loan_proj_color)
     ^ consumed ^ borrows ^ "⌋"
 
   (** Wrap a value inside its marker, if there is one *)
@@ -261,12 +296,14 @@ module Values = struct
       =
     match lc with
     | AMutLoan (pm, bid, av) ->
-        "ML@" ^ BorrowId.to_string bid ^ "("
+        add_loan_color ("ML@" ^ BorrowId.to_string bid)
+        ^ "("
         ^ tavalue_to_string ~span ~with_ended env av
         ^ ")"
         |> add_proj_marker pm
     | ASharedLoan (pm, lid, v, av) ->
-        "SL@" ^ BorrowId.to_string lid ^ "("
+        add_loan_color ("SL@" ^ BorrowId.to_string lid)
+        ^ "("
         ^ tvalue_to_string ~span env v
         ^ ", "
         ^ tavalue_to_string ~span ~with_ended env av
@@ -311,7 +348,8 @@ module Values = struct
       string =
     match bc with
     | AMutBorrow (pm, bid, av) ->
-        "MB@" ^ BorrowId.to_string bid ^ "("
+        add_borrow_color ("MB@" ^ BorrowId.to_string bid)
+        ^ "("
         ^ tavalue_to_string ~span ~with_ended env av
         ^ ")"
         |> add_proj_marker pm
@@ -319,10 +357,10 @@ module Values = struct
         "SB@" ^ BorrowId.to_string bid ^ "(^"
         ^ SharedBorrowId.to_string sid
         ^ ")"
-        |> add_proj_marker pm
+        |> add_borrow_color |> add_proj_marker pm
     | AIgnoredMutBorrow (opt_bid, av) ->
         "@ignored_mut_borrow("
-        ^ option_to_string BorrowId.to_string opt_bid
+        ^ (option_to_string BorrowId.to_string opt_bid |> add_borrow_color)
         ^ ", "
         ^ tavalue_to_string ~span ~with_ended env av
         ^ ")"
@@ -750,7 +788,10 @@ module Values = struct
               indent_incr cont
           ^ "⟧"
     in
-    indent ^ "abs@" ^ AbsId.to_string abs.abs_id ^ "{" ^ kind ^ "parents="
+    let cont = add_abs_cont_color cont in
+    indent
+    ^ ("abs@" ^ AbsId.to_string abs.abs_id |> add_abs_color)
+    ^ "{" ^ kind ^ "parents="
     ^ AbsId.Set.to_string None abs.parents
     ^ ",regions="
     ^ RegionId.Set.to_string None abs.regions.owned
@@ -814,8 +855,15 @@ module Contexts = struct
     match ev with
     | EBinding (var, tv) ->
         let bv = var_binder_to_string env var in
+        let bv =
+          match var with
+          | BVar _ -> add_var_color bv
+          | _ -> bv
+        in
         let ty =
-          if with_var_types then " : " ^ ty_to_string env tv.ty else ""
+          if with_var_types then
+            " : " ^ ty_to_string env tv.ty |> add_type_color
+          else ""
         in
         indent ^ bv ^ ty ^ " -> " ^ tvalue_to_string ~span env tv ^ " ;"
     | EAbs abs -> abs_to_string ~span env verbose indent indent_incr abs
