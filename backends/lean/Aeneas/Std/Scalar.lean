@@ -13,6 +13,7 @@ import Aeneas.Std.Scalar.Misc
 import Aeneas.Std.Scalar.Notations
 import Aeneas.Std.Scalar.Ops
 import Aeneas.Std.Scalar.OverflowingOps
+import Aeneas.Std.Scalar.Pow
 import Aeneas.Std.Scalar.Rotate
 import Aeneas.Std.Scalar.SaturatingOps
 import Aeneas.Std.Scalar.WrappingOps
