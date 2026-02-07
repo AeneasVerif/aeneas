@@ -263,6 +263,67 @@ let end_concrete_borrow_get_borrow_core (span : Meta.span)
     Ok (ctx, !replaced_bc)
   with FoundPriority outers -> Error outers
 
+(** We want to end a symbolic projection: look for *concrete* occurrences of the
+    symbolic value and check whether they are inside borrows/loans that need to
+    be ended first. *)
+let end_proj_loan_get_concrete_priority (_span : Meta.span)
+    (sid : symbolic_value_id) (ctx : eval_ctx) :
+    mut_borrow_or_shared_loan_id option =
+  let found_outer : mut_borrow_or_shared_loan_id option ref = ref None in
+  (* Raise an exception if there is an outer borrow/loan *)
+  let raise_if_outer (outer : mut_borrow_or_shared_loan_id option) =
+    match outer with
+    | None -> ()
+    | Some outer ->
+        found_outer := Some outer;
+        raise Found
+  in
+
+  let update_outer (opt_outer : mut_borrow_or_shared_loan_id option)
+      (outer : mut_borrow_or_shared_loan_id) =
+    match opt_outer with
+    | None -> Some outer
+    | Some outer -> Some outer
+  in
+
+  (* The environment in the visitor is used to keep track of the first
+     outer shared loan or mutable borrow we dived into (because we need to
+     end it before ending the target borrow). *)
+  let visitor =
+    object (self)
+      inherit [_] iter_eval_ctx
+
+      method! visit_VSymbolic outer sv =
+        if sv.sv_id = sid then raise_if_outer outer
+
+      (** We reimplement {!visit_Loan} because we may have to update the outer
+          borrows *)
+      method! visit_VLoan (outer : mut_borrow_or_shared_loan_id option) lc =
+        match lc with
+        | VMutLoan _ -> ()
+        | VSharedLoan (bid, v) ->
+            let outer = update_outer outer (SharedLoan bid) in
+            self#visit_tvalue outer v
+
+      method! visit_VBorrow (outer : mut_borrow_or_shared_loan_id option) bc =
+        match bc with
+        | VSharedBorrow _ | VReservedMutBorrow _ -> ()
+        | VMutBorrow (bid, bv) ->
+            let outer = update_outer outer (MutBorrow bid) in
+            self#visit_tvalue outer bv
+
+      (** There can be concrete values in shared loans *)
+      method! visit_ASharedLoan outer _pm bid v child =
+        self#visit_tvalue (update_outer outer (SharedLoan bid)) v;
+        self#visit_tavalue outer child
+    end
+  in
+  (* Catch the exceptions - raised if there are outer borrows/loans *)
+  try
+    visitor#visit_eval_ctx None ctx;
+    None
+  with Found -> Some (Option.get !found_outer)
+
 (** See [end_borrow_get_borrow] *)
 let end_concrete_borrow_get_borrow (span : Meta.span) (l : unique_borrow_id)
     (ctx : eval_ctx) :
@@ -1530,17 +1591,36 @@ and end_proj_loans_symbolic (config : config) (span : Meta.span)
   match
     lookup_intersecting_aproj_borrows_opt span explore_shared regions proj ctx
   with
-  | None ->
+  | None -> (
       (* We couldn't find any in the context: it means that the symbolic value
          is in the concrete environment (or that we dropped it, in which case
-         it is completely absent). We thus simply need to replace the loans
-         projector with an ended projector.
+         it is completely absent).
+
+         We need to check whether the value appears inside a borrow, in which
+         case we need to end it first.
       *)
-      let ctx = update_aproj_loans_to_ended span abs_id proj.sv_id ctx in
-      (* Sanity check *)
-      check ctx;
-      (* Continue *)
-      (ctx, fun e -> e)
+      match end_proj_loan_get_concrete_priority span proj.sv_id ctx with
+      | None ->
+          (* No outer borrows/loans found: we can end the loan projector *)
+          let ctx = update_aproj_loans_to_ended span abs_id proj.sv_id ctx in
+          (* Sanity check *)
+          check ctx;
+          (* Continue *)
+          (ctx, fun e -> e)
+      | Some outer ->
+          (* End the outer borrow/loan first *)
+          let ctx, cc =
+            let bid =
+              match outer with
+              | SharedLoan l -> l
+              | MutBorrow l -> l
+            in
+            end_loan_aux config span ~snapshots chain bid ctx
+          in
+          (* Retry ending the loan projector *)
+          comp cc
+            (end_proj_loans_symbolic config span ~snapshots chain abs_id level
+               regions proj ctx))
   | Some (SharedProjs projs) ->
       (* We found projectors over shared values - split between the projectors
          which belong to the current abstraction and the others.
