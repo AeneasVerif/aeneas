@@ -1429,16 +1429,20 @@ let collapse_ctx_following_sequence (span : Meta.span)
           nabs_map := AbsId.Map.add nabs nabs' !nabs_map
       | None, Some abs | Some abs, None ->
           (* We don't have to merge anything, meaning the abstraction resulting
-           from the merge is exactly the abstraction we found (what happened is
-           that we're in the situation where we had to merge an abstraction
-           from one side with another abstracction from the other side). *)
+             from the merge is exactly the abstraction we found (what happened is
+             that we're in the situation where we had to merge an abstraction
+             from one side with another abstracction from the other side). *)
           [%ldebug
             "Registering: " ^ AbsId.to_string nabs ^ " --> "
             ^ AbsId.to_string abs.abs_id];
           nabs_map := AbsId.Map.add nabs abs.abs_id !nabs_map
       | None, None ->
-          (* The abs, after substitution of its id, should be in one of the two environments *)
-          [%internal_error] span)
+          (* The two abs come from the unprojected environment: we don't have to
+             merge anything *)
+          [%ldebug
+            "Could not find left abstraction " ^ AbsId.to_string abs0
+            ^ " and right abstraction " ^ AbsId.to_string abs1
+            ^ " in context:\n" ^ eval_ctx_to_string !ctx])
     sequence;
   let ctx = !ctx in
   [%ldebug "ctx after applying the merge sequence:\n" ^ eval_ctx_to_string ctx];
