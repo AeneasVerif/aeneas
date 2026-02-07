@@ -5,6 +5,7 @@ import Aeneas.Std.Scalar.CloneCopy
 import Aeneas.Std.Scalar.Core
 import Aeneas.Std.Scalar.CoreConvertNum
 import Aeneas.Std.Scalar.Default
+import Aeneas.Std.Scalar.Display
 import Aeneas.Std.Scalar.EqOrd
 import Aeneas.Std.Scalar.Fmt
 import Aeneas.Std.Scalar.LeadingZeros

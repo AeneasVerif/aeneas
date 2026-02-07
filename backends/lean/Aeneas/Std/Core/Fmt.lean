@@ -134,4 +134,11 @@ def core.fmt.DebugBool : core.fmt.Debug Bool := {
   fmt := core.fmt.DebugBool.fmt
 }
 
+@[rust_fun "core::fmt::rt::{core::fmt::rt::Argument<'0>}::new_display"]
+def core.fmt.rt.Argument.new_display
+  {T : Type} (_DisplayInst : core.fmt.Display T) :
+  T → Result core.fmt.rt.Argument :=
+  -- TODO: we should at least call the `fmt` method somewhere
+  fun _ => Result.ok ()
+
 end Aeneas.Std
