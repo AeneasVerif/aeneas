@@ -2,8 +2,11 @@ import Aeneas.Std.Core.Cmp
 import Aeneas.Std.Primitives
 import Aeneas.Std.Range
 import Aeneas.Std.Scalar.Core
-import Aeneas.Std.Scalar.CheckedOps
 import Aeneas.Std.Scalar.Notations
+import Aeneas.Std.Scalar.CloneCopy
+import Aeneas.Std.Scalar.EqOrd
+import Aeneas.Std.Scalar.CheckedOps
+import Aeneas.Std.Core.Core
 
 namespace Aeneas.Std
 

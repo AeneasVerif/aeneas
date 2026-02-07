@@ -253,7 +253,7 @@ let translate_function_to_pure (trans_ctx : trans_ctx) (marked_ids : marked_ids)
       with CFailure _ ->
         "(could not compute the name pattern due to a different error)"
     in
-    [%save_error_opt_span] error.span
+    [%warn_opt_span] error.span
       ("Could not translate the function '" ^ name
      ^ " because of previous error.\nName pattern: '" ^ name_pattern ^ "'"
      ^ "\nDefinition span: "
@@ -309,7 +309,7 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
                   "(could not compute the name pattern due to a different \
                    error)"
               in
-              [%save_error_opt_span] error.span
+              [%warn_opt_span] error.span
                 ("Could not translate the global declaration '" ^ name
                ^ " because of previous error\nName pattern: '" ^ name_pattern
                ^ "'" ^ "\nDefinition span: "
@@ -342,7 +342,7 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
                with CFailure _ ->
                  "(could not compute the name pattern due to a different error)"
              in
-             [%save_error_opt_span] error.span
+             [%warn_opt_span] error.span
                ("Could not translate the function signature of '" ^ name
               ^ " because of previous error\nName pattern: '" ^ name_pattern
               ^ "'" ^ "\nDefinition span: "
@@ -435,7 +435,7 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
                   "(could not compute the name pattern due to a different \
                    error)"
               in
-              [%save_error_opt_span] error.span
+              [%warn_opt_span] error.span
                 ("Could not translate the trait declaration '" ^ name
                ^ " because of previous error\nName pattern: '" ^ name_pattern
                ^ "'" ^ "\nDefinition span: "
@@ -467,7 +467,7 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
                   "(could not compute the name pattern due to a different \
                    error)"
               in
-              [%save_error_opt_span] error.span
+              [%warn_opt_span] error.span
                 ("Could not translate the trait instance '" ^ name
                ^ " because of previous error\nName pattern: '" ^ name_pattern
                ^ "'" ^ "\nDefinition span: "
@@ -896,6 +896,16 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
         (fun trans -> Extract.extract_unit_test_if_unit_fun ctx fmt trans.f)
         pure_ls
 
+let trait_decl_is_builtin (ctx : gen_ctx) (id : Pure.trait_decl_id) : bool =
+  let trait_decl =
+    [%silent_unwrap_opt_span] None
+      (TraitDeclId.Map.find_opt id ctx.trans_trait_decls)
+  in
+  let open ExtractBuiltin in
+  Option.is_some
+    (match_name_find_opt ctx.trans_ctx trait_decl.item_meta.name
+       (builtin_trait_decls_map ()))
+
 (** Export a trait declaration. *)
 let export_trait_decl (fmt : Format.formatter) (_config : gen_config)
     (ctx : gen_ctx) (trait_decl_id : Pure.trait_decl_id) (extract_decl : bool)
@@ -905,12 +915,7 @@ let export_trait_decl (fmt : Format.formatter) (_config : gen_config)
       (TraitDeclId.Map.find_opt trait_decl_id ctx.trans_trait_decls)
   in
   (* Check if the trait declaration is builtin, in which case we ignore it *)
-  let open ExtractBuiltin in
-  if
-    match_name_find_opt ctx.trans_ctx trait_decl.item_meta.name
-      (builtin_trait_decls_map ())
-    = None
-  then (
+  if not (trait_decl_is_builtin ctx trait_decl_id) then (
     let ctx = { ctx with trait_decl_id = Some trait_decl.def_id } in
     if extract_decl then Extract.extract_trait_decl ctx fmt trait_decl;
     if extract_extra_info then
@@ -1017,18 +1022,19 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
               ^ Errors.raw_span_to_string d.item_meta.span
         in
         let decls = List.map to_string ids in
-        [%warn_opt_span] None
-          ("Mutually recursive trait declarations are not supported; the \
-            following group of mutually recursive traits is going to be \
-            extracted but their model will not type-check:\n\n"
-         ^ String.concat "\n" decls);
-        (* TODO: update to extract groups *)
-        if config.extract_trait_decls && config.extract_transparent then
-          List.iter
-            (fun id ->
-              export_trait_decl_group id;
-              export_trait_decl_group_extra_info id)
-            ids
+        if not (List.for_all (trait_decl_is_builtin ctx) ids) then (
+          [%warn_opt_span] None
+            ("Mutually recursive trait declarations are not supported; the \
+              following group of mutually recursive traits is going to be \
+              extracted but their model will not type-check:\n\n"
+           ^ String.concat "\n" decls);
+          (* TODO: update to extract groups *)
+          if config.extract_trait_decls && config.extract_transparent then
+            List.iter
+              (fun id ->
+                export_trait_decl_group id;
+                export_trait_decl_group_extra_info id)
+              ids)
     | TraitDeclGroup (NonRecGroup id) ->
         (* TODO: update to extract groups *)
         if config.extract_trait_decls && config.extract_transparent then (
@@ -1313,7 +1319,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
             with CFailure _ ->
               "(could not compute the name pattern due to a different error)"
           in
-          [%save_error_opt_span] error.span
+          [%warn_opt_span] error.span
             ("Could not generate names for the type declaration '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
            ^ "\nDefinition span: "
@@ -1351,7 +1357,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
             with CFailure _ ->
               "(could not compute the name pattern due to a different error)"
           in
-          [%save_error_opt_span] error.span
+          [%warn_opt_span] error.span
             ("Could not generate names for the function declaration '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
            ^ "\nDefinition span: "
@@ -1377,7 +1383,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
             with CFailure _ ->
               "(could not compute the name pattern due to a different error)"
           in
-          [%save_error_opt_span] error.span
+          [%warn_opt_span] error.span
             ("Could not generate names for the global declaration '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
            ^ "\nDefinition span: "
@@ -1401,7 +1407,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
             with CFailure _ ->
               "(could not compute the name pattern due to a different error)"
           in
-          [%save_error_opt_span] error.span
+          [%warn_opt_span] error.span
             ("Could not generate names for the trait declaration '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
            ^ "\nDefinition span: "
@@ -1426,7 +1432,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
             with CFailure _ ->
               "(could not compute the name pattern due to a different error)"
           in
-          [%save_error_opt_span] error.span
+          [%warn_opt_span] error.span
             ("Could not generate names for the trait implementation '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
            ^ "\nDefinition span: "
@@ -1550,10 +1556,9 @@ let extract_translated_crate (filename : string) (dest_dir : string)
             close_out tgt;
             log#linfo (lazy ("Copied:    " ^ tgt_filename))
         with Sys_error _ ->
-          log#error
-            "Could not copy the primitives file: %s.\n\
-             You will have to copy it/set up the project by hand."
-            primitives_src)
+          [%warn_opt_span] None
+            ("Could not copy the primitives file: " ^ primitives_src
+           ^ ".\nYou will have to copy it/set up the project by hand."))
   in
 
   (* Extract the file(s) *)

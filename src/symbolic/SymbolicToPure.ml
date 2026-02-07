@@ -142,7 +142,7 @@ let translate_type_decls (ctx : Contexts.decls_ctx) : type_decl list =
           with CFailure _ ->
             "(could not compute the name pattern due to a different error)"
         in
-        [%save_error_opt_span] error.span
+        [%warn_opt_span] error.span
           ("Could not translate type decl '" ^ name
          ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
           ^ Contexts.compute_local_uses_error_message ctx (IdType d.def_id));

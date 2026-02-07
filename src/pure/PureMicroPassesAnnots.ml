@@ -297,6 +297,8 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
           | AdtCons adt_cons_id -> begin
               (* We extract the type of the arguments from the known type *)
               match ty with
+              | TAdt (TBuiltin (TArray | TSlice), _) ->
+                  (hole, mk_holes (), false)
               | TAdt (adt_id, generics)
               (* TODO: there are type-checking errors that we need to take into account (otherwise
                  [get_adt_field_types] sometimes crashes) *)
@@ -420,9 +422,12 @@ let add_type_annotations (trans_ctx : trans_ctx)
         with Errors.CFailure _ ->
           "(could not compute the name pattern due to a different error)"
       in
-      [%save_error_opt_span] error.span
+      [%warn_opt_span] error.span
         ("Could not add type annotations to the fun declaration '" ^ name
-       ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'");
+       ^ " because of previous error\nName pattern: '" ^ name_pattern
+       ^ "'.\n\
+         \ We will generate code without annotations but it may not type-check."
+        );
       (* Keep the unchanged decl *)
       decl
   in
