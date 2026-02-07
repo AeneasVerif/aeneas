@@ -7,14 +7,22 @@ open Config
 include ExtractBase
 module T = Types
 
-let extract_str (_span : Meta.span) (fmt : F.formatter) (s : string) : unit =
+let extract_str (_span : Meta.span) (fmt : F.formatter) ~(inside : bool)
+    (s : string) : unit =
   let chars = StringUtils.string_to_chars s in
   (* Using the OCaml escape conventions for now.
 
      TODO: does this really work? *)
   let s = String.concat "" (List.map Char.escaped chars) in
   let s = "\"" ^ s ^ "\"" in
-  F.pp_print_string fmt s
+
+  (* We need to convert the string to a str (the conversion inserts a static check
+     that the string is not too long) *)
+  if inside then F.pp_print_string fmt "(";
+  F.pp_print_string fmt "toStr";
+  F.pp_print_space fmt ();
+  F.pp_print_string fmt s;
+  if inside then F.pp_print_string fmt ")"
 
 (** Format a constant value.
 
@@ -88,7 +96,7 @@ let extract_literal (span : Meta.span) (fmt : F.formatter) ~(is_pattern : bool)
           in
           F.pp_print_string fmt c;
           if inside then F.pp_print_string fmt ")")
-  | VStr s -> extract_str span fmt s
+  | VStr s -> extract_str span ~inside fmt s
   | VChar _ | VFloat _ | VByteStr _ ->
       [%admit_raise] span
         "Float, string, non-ASCII chars and byte string literals are \

@@ -1,4 +1,3 @@
-//@ [lean] known-failure
 //@ [!lean] skip
 //@ no-check-output
 fn main() {
