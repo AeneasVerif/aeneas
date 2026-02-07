@@ -107,10 +107,14 @@ def Slice.index_usize {α : Type u} (v: Slice α) (i: Usize) : Result α :=
 theorem Slice.eq_iff {α} (s0 s1 : Slice α) : s0 = s1 ↔ s0.val = s1.val := by
   simp only [Slice, Subtype.ext_iff]
 
-/- In the theorems below: we don't always need the `∃ ..`, but we use one
-   so that `progress` introduces an opaque variable and an equality. This
-   helps control the context.
- -/
+@[rust_fun "core::slice::{[@T]}::is_empty", simp]
+def core.slice.Slice.is_empty {T : Type} (s : Slice T) : Result Bool := ok (s.length = 0)
+
+@[progress]
+theorem core.slice.Slice.is_empty_spec {T : Type} (s : Slice T) :
+  core.slice.Slice.is_empty s ⦃ b => b = (s.length = 0) ⦄ := by
+  simp only [is_empty, Slice.length, List.length_eq_zero_iff, eq_iff_iff, spec_ok,
+    decide_eq_true_eq]
 
 @[progress]
 theorem Slice.index_usize_spec {α : Type u} [Inhabited α] (v: Slice α) (i: Usize)
@@ -234,6 +238,14 @@ def core.slice.Slice.get
   {T I Output : Type} (inst : core.slice.index.SliceIndex I (Slice T) Output)
   (s : Slice T) (i : I) : Result (Option Output) :=
   inst.get i s
+
+@[rust_fun "core::slice::{[@T]}::get_unchecked"]
+def core.slice.Slice.get_unchecked
+  {T : Type} {I : Type} {Output : Type}
+  (SliceIndexInst : core.slice.index.SliceIndex I (Slice T) Output)
+  (s : Slice T) (i : I) : Result Output :=
+  -- TODO: we should actually use the `SliceIndexInst.get_unchecked` method
+  sorry
 
 @[rust_fun "core::slice::{[@T]}::get_mut"]
 def core.slice.Slice.get_mut
@@ -447,6 +459,13 @@ def core.slice.index.SliceIndexUsizeSlice (T : Type) :
   index := core.slice.index.Usize.index
   index_mut := core.slice.index.Usize.index_mut
 }
+
+@[progress]
+theorem core.slice.Slice.get_unchecked_SliceIndexUsizeSlice_spec {T s i} [Inhabited T]
+  (h : i.val < s.length) :
+  core.slice.Slice.get_unchecked  (core.slice.index.SliceIndexUsizeSlice T) s i
+  ⦃ x => x = s[i] ⦄ := by
+  sorry
 
 @[rust_fun "core::slice::{[@T]}::copy_from_slice"]
 def core.slice.Slice.copy_from_slice {T : Type} (_ : core.marker.Copy T)

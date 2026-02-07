@@ -5,6 +5,7 @@ import Aeneas.Std.Scalar.CloneCopy
 import Aeneas.Std.Scalar.Core
 import Aeneas.Std.Scalar.CoreConvertNum
 import Aeneas.Std.Scalar.Default
+import Aeneas.Std.Scalar.Display
 import Aeneas.Std.Scalar.EqOrd
 import Aeneas.Std.Scalar.Fmt
 import Aeneas.Std.Scalar.LeadingZeros
@@ -12,6 +13,7 @@ import Aeneas.Std.Scalar.Misc
 import Aeneas.Std.Scalar.Notations
 import Aeneas.Std.Scalar.Ops
 import Aeneas.Std.Scalar.OverflowingOps
+import Aeneas.Std.Scalar.Pow
 import Aeneas.Std.Scalar.Rotate
 import Aeneas.Std.Scalar.SaturatingOps
 import Aeneas.Std.Scalar.WrappingOps

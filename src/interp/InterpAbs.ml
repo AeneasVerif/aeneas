@@ -1443,12 +1443,16 @@ let bind_outputs_from_output_input (span : Meta.span) (ctx : eval_ctx)
               pat
           | EEndedIgnoredMutBorrow { child; given_back; given_back_meta = _ } ->
               (* For now we simply check that:
-               - the child and the given back values are ignored
-                 (meaning they are shared borrows), in which case there are no outputs
-               - or the loans in the given_back value are ended (meaning we don't
-                 need to introduce additional inputs and just need to bind the output) *)
+                 - the child and the given back values are ignored
+                 - or the given back value consumes nothing
+
+                 TODO: make more precise
+              *)
               if is_eignored child.value && is_eignored given_back.value then
                 { pat = PIgnored; ty = output.ty }
+              else if
+                not (ty_has_mut_borrows ctx.type_ctx.type_infos given_back.ty)
+              then bind_output regions child
               else [%craise] span "Unimplemented"
           | EIgnoredMutBorrow _ -> [%craise] span "Unimplemented"
           | EEndedMutBorrow _ ->
@@ -1610,7 +1614,7 @@ let project_output_at_level span (level : int) (v : tevalue) : tevalue =
 
     TODO: generalize to an arbitrary number of nestings and arbitrary relations
     input/output *)
-let abs_cont_restructure_input_output_levels (span : Meta.span) (ctx : eval_ctx)
+let abs_cont_destructure_input_output_levels (span : Meta.span) (ctx : eval_ctx)
     (output : tevalue) (input : tevalue) : tevalue * tevalue =
   (* Check if the input is a function call *)
   match input.value with
@@ -1661,7 +1665,7 @@ let abs_cont_bind_outputs (span : Meta.span) (ctx : eval_ctx)
   match (cont.output, cont.input) with
   | Some output, Some input ->
       let output, input =
-        abs_cont_restructure_input_output_levels span ctx output input
+        abs_cont_destructure_input_output_levels span ctx output input
       in
       bind_outputs_from_output_input span ctx regions bound output input
   | _ -> [%craise] span "Unreachable"

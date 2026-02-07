@@ -1961,8 +1961,8 @@ let get_max_sub_abs_visitor ?(with_ended = false) ?(with_evalues = false)
 
     method! visit_adt_avalue level a =
       (* When analyzing the ended borrows, make sure we don't forget the ADTs
-           containing borrows which expanded to a variant which did not contain
-           any borrow. *)
+         containing borrows which expanded to a variant which did not contain
+         any borrow. *)
       if with_ended then save_level level;
       super#visit_adt_avalue level a
 

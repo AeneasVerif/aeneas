@@ -282,4 +282,27 @@ def iter_list_while
   := do
   iter_list_while_loop0 b l
 
+/- [nested_borrows::BitReader]
+   Source: 'tests/src/nested-borrows.rs', lines 148:0-151:1 -/
+structure BitReader where
+  data : Slice Std.U8
+  bit_buf : Std.U64
+
+/- [nested_borrows::{nested_borrows::BitReader<'a>}::refill]:
+   Source: 'tests/src/nested-borrows.rs', lines 161:4-161:27 -/
+def BitReader.refill (self : BitReader) : Result BitReader := do
+  ok self
+
+/- [nested_borrows::{nested_borrows::BitReader<'a>}::peek]:
+   Source: 'tests/src/nested-borrows.rs', lines 154:4-159:5 -/
+def BitReader.peek
+  (self : BitReader) (b : Bool) : Result (Std.U64 × BitReader) := do
+  let (s, i) ←
+    if b
+    then let self1 ← BitReader.refill self
+         ok (self1.data, self1.bit_buf)
+    else ok (self.data, self.bit_buf)
+  let i1 ← (↑(i &&& 1#u64) : Result Std.U64)
+  ok (i1, { data := s, bit_buf := i })
+
 end nested_borrows
