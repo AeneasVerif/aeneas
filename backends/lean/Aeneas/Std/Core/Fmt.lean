@@ -1,5 +1,6 @@
 import Aeneas.Std.Core.Core
 import Aeneas.Std.Core.Result
+import Aeneas.Std.Array.Array
 
 namespace Aeneas.Std
 
@@ -22,6 +23,7 @@ def core.result.Result.unwrap {T E : Type}
   | .Ok x => .ok x
   | .Err _ => .fail .panic
 
+-- TODO: this is a simplistic model
 @[rust_type "core::fmt::Arguments"]
 def core.fmt.Arguments : Type := Unit
 
@@ -30,6 +32,18 @@ def core.fmt.rt.Argument : Type := Unit
 
 @[rust_fun "core::fmt::{core::fmt::Arguments<'a>}::from_str"]
 def core.fmt.Arguments.from_str : Str → Result core.fmt.Arguments := fun _ => Result.ok ()
+
+@[rust_fun "core::fmt::{core::fmt::Arguments<'a>}::new"]
+def core.fmt.Arguments.new {N : Std.Usize} {M : Std.Usize}
+  (_ : Std.Array Std.U8 N) (_ : Std.Array core.fmt.rt.Argument M) : Result core.fmt.Arguments :=
+  -- TODO
+  Result.ok ()
+
+@[rust_fun "core::fmt::rt::{core::fmt::rt::Argument<'0>}::new_debug"]
+def core.fmt.rt.Argument.new_debug
+  {T : Type} (_DebugInst : core.fmt.Debug T) (_ : T) : Result core.fmt.rt.Argument :=
+  -- TODO
+  Result.ok ()
 
 @[rust_trait "core::fmt::Display"]
 structure core.fmt.Display (Self : Type) where

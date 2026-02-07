@@ -3,7 +3,7 @@ import Lean
 import Lean.Meta.Tactic.Simp
 import Init.Data.List.Basic
 import Mathlib.Tactic.Linarith
-import Aeneas.Std.Scalar
+import Aeneas.Std.Scalar.Core
 import Aeneas.ScalarTac
 import Aeneas.Progress.Init
 
