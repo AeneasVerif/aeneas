@@ -8,7 +8,7 @@ Source: 'tests/src/borrow-check-negative.rs', lines 25:12-25:14
 Compiler source: interp/Interp.ml, line 550
 [[91mError[39m] Can't end abstraction 8 as it is set as non-endable
 Source: 'tests/src/borrow-check-negative.rs', lines 28:0-34:1
-Compiler source: interp/InterpBorrows.ml, line 1136
+Compiler source: interp/InterpBorrows.ml, line 1197
 [[91mError[39m] Could not borrow-check the body of the function 'borrow_check_negative::choose_wrong because of previous error
 Name pattern: 'borrow_check_negative::choose_wrong'
 Definition span: 'tests/src/borrow-check-negative.rs', lines 28:0-34:1
