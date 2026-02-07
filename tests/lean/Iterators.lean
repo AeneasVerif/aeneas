@@ -230,4 +230,47 @@ def slice_chunks_exact_iter
       (core.iter.traits.iterator.IteratorChunksExact Std.U8) ce
   slice_chunks_exact_iter_loop0 key data iter
 
+/- [iterators::Key]
+   Source: 'tests/src/iterators.rs', lines 54:0-54:24 -/
+@[reducible]
+def Key := Array Std.U128 128#usize
+
+/- [iterators::key_iter_slice_iter]: loop 1:
+   Source: 'tests/src/iterators.rs', lines 58:8-58:32 -/
+def key_iter_slice_iter_loop1
+  (iter : core.slice.iter.Iter Std.U128) : Result Unit := do
+  let (o, iter1) ← core.slice.iter.IteratorSliceIter.next iter
+  match o with
+  | none => ok ()
+  | some _ => key_iter_slice_iter_loop1 iter1
+partial_fixpoint
+
+/- [iterators::key_iter_slice_iter]: loop 0:
+   Source: 'tests/src/iterators.rs', lines 57:4-59:5 -/
+def key_iter_slice_iter_loop0
+  (key : Key) (data : Slice Std.U8) (iter : core.slice.iter.Iter Std.U8) :
+  Result Unit
+  := do
+  let (o, iter1) ← core.slice.iter.IteratorSliceIter.next iter
+  match o with
+  | none => ok ()
+  | some _ =>
+    let s ← (↑(Array.to_slice key) : Result (Slice Std.U128))
+    let i ← core.slice.Slice.iter s
+    let iter2 ←
+      core.iter.traits.collect.IntoIterator.Blanket.into_iter
+        (core.iter.traits.iterator.IteratorSliceIter Std.U128) i
+    key_iter_slice_iter_loop1 iter2
+    key_iter_slice_iter_loop0 key data iter1
+partial_fixpoint
+
+/- [iterators::key_iter_slice_iter]:
+   Source: 'tests/src/iterators.rs', lines 56:0-60:1 -/
+def key_iter_slice_iter (key : Key) (data : Slice Std.U8) : Result Unit := do
+  let i ← core.slice.Slice.iter data
+  let iter ←
+    core.iter.traits.collect.IntoIterator.Blanket.into_iter
+      (core.iter.traits.iterator.IteratorSliceIter Std.U8) i
+  key_iter_slice_iter_loop0 key data iter
+
 end iterators

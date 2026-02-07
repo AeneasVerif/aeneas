@@ -51,6 +51,14 @@ fn slice_chunks_exact_iter(key: &[u128; 128], data: &[u8]) {
     }
 }
 
+struct Key([u128; 128]);
+
+fn key_iter_slice_iter(key: &Key, data: &[u8]) {
+    for _ in data.iter() {
+        for _ in key.0.iter() {}
+    }
+}
+
 /*
 fn array_into_iter<const N : usize>(s : &[u8; N]) {
     for _ in s {}
