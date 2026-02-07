@@ -1,6 +1,5 @@
 open Pure
 open PureUtils
-open TranslateCore
 open PureMicroPassesBase
 
 (** A node in the constraints graph *)
