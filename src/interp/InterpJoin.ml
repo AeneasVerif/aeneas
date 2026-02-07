@@ -740,10 +740,15 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
 
         (* Fixed abstractions should be equal.
 
-           Note that the presence of the field [abs.original_parents] would sometimes
-           make this test fail because some abstraction ids would be refreshed by
-           [refresh_non_fixed_abs_ids]. *)
-        [%sanity_check] span (abs0 = abs1);
+           Note that the presence of the field [abs.original_parents] used to make
+           this test fail when some abstraction ids was refreshed by
+           [refresh_non_fixed_abs_ids] (we since remove the field).
+
+           Note that we ignore the continuation expressions: when computing fixed
+           points we might remove/add continuations while the presence/absence
+           shouldn't have an impact on the way we match/unify contexts. *)
+        [%sanity_check] span
+          ({ abs0 with cont = None } = { abs1 with cont = None });
         (* Continue *)
         abs :: join_prefixes env0' env1'
     | [] ->

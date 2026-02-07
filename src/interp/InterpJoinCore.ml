@@ -848,5 +848,8 @@ let compute_fixed_abs_ids (ctx0 : eval_ctx) (ctx1 : eval_ctx) : AbsId.Set.t =
     (fun aid ->
       let a0 = AbsId.Map.find aid abs0 in
       let a1 = AbsId.Map.find aid abs1 in
-      a0 = a1)
+      (* We ignore the continuation expressions: when computing fixed points we
+         might remove/add continuations while the presence/absence shouldn't
+         have an impact on the way we match/unify contexts. *)
+      { a0 with cont = None } = { a1 with cont = None })
     abs_ids
