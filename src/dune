@@ -82,9 +82,14 @@
   PrintPure
   PrintSymbolicAst
   ProgressBar
-  PureMicroPasses
   Pure
   PureErrors
+  PureMicroPasses
+  PureMicroPassesAnnots
+  PureMicroPassesBase
+  PureMicroPassesGeneral
+  PureMicroPassesLoops
+  PureMicroPassesPrettyNames
   PureTypeCheck
   PureUtils
   RegionsHierarchy
