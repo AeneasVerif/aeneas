@@ -8,10 +8,10 @@ set_option linter.unusedVariables false
 
 namespace string_chars
 
-/- [string_chars::main]:
+/- [string_chars::collect]:
    Source: 'tests/src/string-chars.rs', lines 3:0-6:1 -/
-def main : Result Unit := do
-  let c ← core.str.Str.chars "hello"
+def collect : Result Unit := do
+  let c ← core.str.Str.chars (toStr "hello")
   let _ ←
     core.str.iter.IteratorChars.collect
       (core.iter.traits.collect.FromIteratorVec Char) c

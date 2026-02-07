@@ -1,6 +1,6 @@
 //@ [!lean] skip
-//@ no-check-output
-fn main() {
+
+fn collect() {
     let s = "hello";
     let _chs: Vec<char> = s.chars().collect();
 }
