@@ -191,7 +191,10 @@ type expr =
           particular when doing joins), which can be a problem especially as
           some abstraction expressions refer to the abstractions through their
           ids. In order to make the translation work, we need to save those
-          substitutions. *)
+          substitutions.
+
+          TODO: we actually don't do this anymore because it led to issues.
+          Remove? *)
   | ForwardEnd of
       ((Contexts.eval_ctx[@opaque]) * tvalue) option
       * (Contexts.eval_ctx[@opaque])

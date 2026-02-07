@@ -215,8 +215,11 @@ and loop_to_string (env : fmt_env) (indent : string) (indent_incr : string)
       (fun (v : symbolic_value) -> SymbolicValueId.to_string v.sv_id)
       loop.input_svalues
   ^ "\n" ^ indent1 ^ "input_abs= "
-  ^ Print.list_to_string ~sep:", "
-      (fun (a : abs) -> AbsId.to_string a.abs_id)
+  ^ Print.list_to_string ~sep:",\n"
+      (fun abs ->
+        "\n"
+        ^ Print.EvalCtx.abs_to_string ~span:None ~with_ended:false loop.ctx
+            indent2 indent_incr abs)
       loop.input_abs
   ^ "\n" ^ indent1 ^ "break_svalues= "
   ^ Print.list_to_string ~sep:", "

@@ -601,7 +601,7 @@ let refresh_non_fixed_abs_ids (_span : Meta.span) (fixed_aids : AbsId.Set.t)
 
 let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
     ~(recoverable : bool) ~(with_abs_conts : bool) (ctx0 : eval_ctx)
-    (ctx1 : eval_ctx) : ctx_or_update =
+    (ctx1 : eval_ctx) : join_info_or_update =
   (* Debug *)
   [%ltrace
     "- ctx0:\n"
@@ -632,10 +632,10 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
 
      TODO: make the join more general.
   *)
-  let ctx1, refreshed_aids = refresh_non_fixed_abs_ids span abs_ids ctx1 in
+  let ctx0, _ = refresh_non_fixed_abs_ids span abs_ids ctx0 in
   [%ltrace
-    "After refreshing the non-fixed abstraction ids of ctx1:\n"
-    ^ eval_ctx_to_string ~span:(Some span) ~filter:true ctx1];
+    "After refreshing the non-fixed abstraction ids of ctx0:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ~filter:true ctx0];
 
   let partition (env : env) : env * env =
     List.partition
@@ -868,14 +868,14 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
         ended_regions;
       }
     in
-    let join_info : ctx_join_info =
-      { symbolic_to_value = !symbolic_to_value; refreshed_aids }
+    let join_info : join_info =
+      { joined_ctx = ctx; symbolic_to_value = !symbolic_to_value }
     in
 
     (* Sanity check *)
     if !Config.sanity_checks then Invariants.check_unique_abs_ids span ctx;
 
-    Ok (ctx, join_info)
+    Ok join_info
   with ValueMatchFailure e -> Error e
 
 let join_ctxs_list (config : config) (span : Meta.span)
@@ -914,7 +914,7 @@ let join_ctxs_list (config : config) (span : Meta.span)
     match
       join_ctxs span fresh_abs_kind ~recoverable ~with_abs_conts !joined_ctx ctx
     with
-    | Ok (nctx, _) ->
+    | Ok { joined_ctx = nctx; _ } ->
         joined_ctx := nctx;
         ctx
     | Error err ->
@@ -1100,7 +1100,7 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
           join_ctxs span fresh_abs_kind ~recoverable:false ~with_abs_conts
             !joined_ctx ctx
         with
-        | Ok (nctx, _) ->
+        | Ok { joined_ctx = nctx; _ } ->
             joined_ctx := nctx;
             ctx
         | Error err ->
@@ -1375,7 +1375,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
   [%ltrace "- tgt_ctx after reduce_ctx:\n" ^ eval_ctx_to_string tgt_ctx];
 
   (* Join the source context with the target context *)
-  let joined_ctx, join_info =
+  let join_info =
     match
       join_ctxs span fresh_abs_kind ~recoverable ~with_abs_conts:true src_ctx
         tgt_ctx
@@ -1383,6 +1383,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
     | Ok x -> x
     | Error _ -> [%craise] span "Could not join the contexts"
   in
+  let joined_ctx = join_info.joined_ctx in
   [%ltrace
     "Result of the join:\n- joined_ctx:\n"
     ^ eval_ctx_to_string joined_ctx
@@ -1390,19 +1391,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
     ^ SymbolicValueId.Map.to_string (Some "  ")
         (Print.pair_to_string (tvalue_to_string src_ctx)
            (tvalue_to_string src_ctx))
-        join_info.symbolic_to_value
-    ^ "\n- join_info.refreshed_aids: "
-    ^ AbsId.Map.to_string None AbsId.to_string join_info.refreshed_aids];
-
-  (* The id of some region abstractions might have been refreshed in the target
-     context: we need to register this because otherwise the translation will
-     fail. *)
-  let cc =
-    if AbsId.Map.is_empty join_info.refreshed_aids then cc
-    else
-      let eid = tgt_ctx.fresh_symbolic_expr_id () in
-      cc_comp cc (fun e -> SubstituteAbsIds (eid, join_info.refreshed_aids, e))
-  in
+        join_info.symbolic_to_value];
 
   (* We need to collapse the context.
 
