@@ -144,6 +144,23 @@ fn iter_list_while<T>(b: bool, l: &mut &mut List<T>) {
     }
 }
 
+// Adapted from [jxl-rs](https://github.com/libjxl/jxl-rs)
+pub struct BitReader<'a> {
+    data: &'a [u8],
+    bit_buf: u64,
+}
+
+impl<'a> BitReader<'a> {
+    pub fn peek(&mut self, b: bool) -> u64 {
+        if b {
+            self.refill();
+        }
+        self.bit_buf & 1
+    }
+
+    fn refill(&mut self) {}
+}
+
 /*
 pub fn id_mut_mut<'a, 'b, T>(x: &'a mut &'b mut T) -> &'a mut &'b mut T {
     x
