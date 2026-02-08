@@ -47,7 +47,7 @@ def test_choose : Result Unit := do
 
 /- [paper::List]
    Source: 'tests/src/paper.rs', lines 37:0-40:1 -/
-@[discriminant]
+@[discriminant isize]
 inductive List (T : Type) where
 | Cons : T → List T → List T
 | Nil : List T

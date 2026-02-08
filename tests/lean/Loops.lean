@@ -122,7 +122,7 @@ def clear (v : alloc.vec.Vec Std.U32) : Result (alloc.vec.Vec Std.U32) := do
 
 /- [loops::List]
    Source: 'tests/src/loops.rs', lines 80:0-83:1 -/
-@[discriminant]
+@[discriminant isize]
 inductive List (T : Type) where
 | Cons : T → List T → List T
 | Nil : List T
@@ -820,7 +820,7 @@ def iter_local_shared_borrow : Result Unit := do
 
 /- [loops::AList]
    Source: 'tests/src/loops.rs', lines 506:0-509:1 -/
-@[discriminant]
+@[discriminant isize]
 inductive AList (T : Type) where
 | Cons : Std.Usize → T → AList T → AList T
 | Nil : AList T

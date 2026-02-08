@@ -10,7 +10,7 @@ namespace hashmap
 
 /- [hashmap::AList]
    Source: 'tests/src/hashmap.rs', lines 28:0-31:1 -/
-@[discriminant]
+@[discriminant isize]
 inductive AList (T : Type) where
 | Cons : Std.Usize → T → AList T → AList T
 | Nil : AList T

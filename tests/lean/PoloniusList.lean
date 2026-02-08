@@ -10,7 +10,7 @@ namespace polonius_list
 
 /- [polonius_list::List]
    Source: 'tests/src/polonius_list.rs', lines 6:0-9:1 -/
-@[discriminant]
+@[discriminant isize]
 inductive List (T : Type) where
 | Cons : T → List T → List T
 | Nil : List T

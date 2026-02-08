@@ -10,7 +10,7 @@ namespace loops_adts
 
 /- [loops_adts::List]
    Source: 'tests/src/loops-adts.rs', lines 3:0-6:1 -/
-@[discriminant]
+@[discriminant isize]
 inductive List (T : Type) where
 | Cons : T → List T → List T
 | Nil : List T

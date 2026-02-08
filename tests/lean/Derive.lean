@@ -10,7 +10,7 @@ namespace derive
 
 /- [derive::CopyEnumOneVariant]
    Source: 'tests/src/derive.rs', lines 4:0-6:1 -/
-@[discriminant]
+@[discriminant isize]
 inductive CopyEnumOneVariant where
 | Variant : Bool → CopyEnumOneVariant
 
@@ -93,7 +93,7 @@ def core.fmt.DebugCopyEnumOneVariant : core.fmt.Debug CopyEnumOneVariant := {
 
 /- [derive::ScalarEnum]
    Source: 'tests/src/derive.rs', lines 9:0-14:1 -/
-@[discriminant [2,4,8,16]]
+@[discriminant isize [2,4,8,16]]
 inductive ScalarEnum where
 | Variant0 : ScalarEnum
 | Variant1 : ScalarEnum
@@ -177,7 +177,7 @@ def core.fmt.DebugScalarEnum : core.fmt.Debug ScalarEnum := {
 
 /- [derive::CopyEnum]
    Source: 'tests/src/derive.rs', lines 17:0-22:1 -/
-@[discriminant]
+@[discriminant isize]
 inductive CopyEnum (T : Type) where
 | Variant0 : CopyEnum T
 | Variant1 : Bool → CopyEnum T
@@ -319,7 +319,7 @@ def core.fmt.DebugCopyEnum {T : Type} (corefmtDebugInst : core.fmt.Debug T) :
 
 /- [derive::Enum]
    Source: 'tests/src/derive.rs', lines 25:0-31:1 -/
-@[discriminant]
+@[discriminant isize]
 inductive Enum (T : Type) where
 | Variant0 : Enum T
 | Variant1 : Bool → Enum T
@@ -473,7 +473,7 @@ def core.fmt.DebugEnum {T : Type} (corefmtDebugInst : core.fmt.Debug T) :
 
 /- [derive::List]
    Source: 'tests/src/derive.rs', lines 35:0-39:1 -/
-@[discriminant]
+@[discriminant isize]
 inductive List (T : Type) where
 | Nil : List T
 | Cons : T → List T → List T
