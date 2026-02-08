@@ -226,12 +226,16 @@ let translate_variant (span : Meta.span) (v : T.variant) : variant =
   let variant_name = v.variant_name in
   let fields = translate_fields span v.fields in
   let variant_attr_info = v.attr_info in
-  let discriminant =
+  let discriminant, ty =
     match v.discriminant with
-    | VScalar (SignedScalar (_, v)) -> Z.to_int v
-    | _ -> [%internal_error] span
+    | VScalar (SignedScalar (ty, v)) -> (Z.to_int v, V.TInt ty)
+    | VScalar (UnsignedScalar (ty, v)) -> (Z.to_int v, V.TUInt ty)
+    | _ ->
+        [%craise] span
+          "Internal error, please report an issue: found an enumeration \
+           variant with an unexpected type"
   in
-  { variant_name; fields; variant_attr_info; discriminant }
+  { variant_name; fields; variant_attr_info; discriminant; ty }
 
 let translate_variants (span : Meta.span) (vl : T.variant list) : variant list =
   List.map (translate_variant span) vl

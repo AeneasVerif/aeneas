@@ -620,6 +620,7 @@ and variant = {
   fields : field list;
   variant_attr_info : (attr_info[@opaque]);
   discriminant : int;
+  ty : literal_type;
 }
 
 and type_decl_kind = Struct of field list | Enum of variant list | Opaque

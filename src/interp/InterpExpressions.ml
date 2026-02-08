@@ -1363,11 +1363,6 @@ let eval_discriminant (config : config) (span : Meta.span) (p : place)
     | VScalar (UnsignedScalar (ty, _)) -> TLiteral (TUInt ty)
     | _ -> [%internal_error] span
   in
-  (* It should actually always be an [isize] - this is not important for the
-     symbolic execution, but is for the translation, because in the Lean model
-     we use a typeclass which is only generic in the enumeration, not in the
-     output type (which we expect to always be [isize]) *)
-  [%sanity_check] span (discr_ty = TLiteral (TInt Isize));
 
   (* Case disjunction: is the value concrete or symbolic?
      If we have a concrete variant, we can compute the discriminant directly.
