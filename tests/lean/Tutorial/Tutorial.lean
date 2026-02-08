@@ -45,7 +45,7 @@ def use_incr : Result Unit := do
 
 /- [tutorial::CList]
    Source: 'src/lib.rs', lines 30:0-33:1 -/
-@[discriminant]
+@[discriminant isize]
 inductive CList (T : Type) where
 | CCons : T → CList T → CList T
 | CNil : CList T

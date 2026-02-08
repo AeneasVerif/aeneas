@@ -1361,8 +1361,9 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
 let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
     (type_decl_group : TypeDeclId.Set.t) (kind : decl_kind) (def : type_decl)
     (extract_body : bool) : unit =
+  let span = def.item_meta.span in
   (* Sanity check *)
-  [%sanity_check] def.item_meta.span (extract_body || backend () <> HOL4);
+  [%sanity_check] span (extract_body || backend () <> HOL4);
   let is_tuple_struct =
     TypesUtils.type_decl_from_decl_id_is_tuple_struct
       ctx.trans_ctx.type_ctx.type_infos def.def_id
@@ -1393,12 +1394,12 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   let is_opaque_coq = backend () = Coq && is_opaque in
   let use_forall = is_opaque_coq && def.generics <> empty_generic_params in
   (* Retrieve the definition name *)
-  let def_name = ctx_get_local_type def.item_meta.span def.def_id ctx in
+  let def_name = ctx_get_local_type span def.def_id ctx in
   (* Add the type and const generic params - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx_body, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params def.item_meta.span def.item_meta.name Item
-      def.llbc_generics def.generics ctx
+    ctx_add_generic_params span def.item_meta.name Item def.llbc_generics
+      def.generics ctx
   in
   (* Add a break before *)
   if backend () <> HOL4 || not (decl_is_first_from_group kind) then
@@ -1411,7 +1412,7 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
    in
    extract_comment_with_span ctx fmt
      [ "[" ^ name_to_string ctx def.item_meta.name ^ "]" ]
-     name def.item_meta.span;
+     name span;
    F.pp_print_break fmt 0 0;
    (* Extract the attributes.
 
@@ -1425,17 +1426,46 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
    (* The attribute to automatically generate the [read_discriminant] function *)
    let discr_attr =
      match def.kind with
+     | Enum [] ->
+         (* Empty enum: no discriminant *)
+         []
      | Enum variants ->
+         let discr_ty =
+           [%sanity_check] span (variants <> []);
+           let variant0 = List.hd variants in
+           variant0.ty
+         in
+
+         let discr_ty =
+           match discr_ty with
+           | TInt ty -> (
+               match ty with
+               | Values.Isize -> "isize"
+               | Values.I8 -> "i8"
+               | Values.I16 -> "i16"
+               | Values.I32 -> "i32"
+               | Values.I64 -> "i64"
+               | Values.I128 -> "i128")
+           | TUInt ty -> (
+               match ty with
+               | Values.Usize -> "usize"
+               | Values.U8 -> "u8"
+               | Values.U16 -> "u16"
+               | Values.U32 -> "u32"
+               | Values.U64 -> "u64"
+               | Values.U128 -> "u128")
+           | _ -> [%internal_error] span
+         in
          (* Check if the discriminant values are exactly 0, 1, etc. or if the user
             provided custom values. *)
          if
            List.for_all
              (fun b -> b)
              (List.mapi (fun i (v : variant) -> v.discriminant = i) variants)
-         then [ "discriminant" ]
+         then [ "discriminant " ^ discr_ty ]
          else
            [
-             "discriminant " ^ "["
+             "discriminant " ^ discr_ty ^ " ["
              ^ String.concat ","
                  (List.map
                     (fun (v : variant) -> string_of_int v.discriminant)
@@ -1445,8 +1475,8 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
      | _ -> []
    in
    let attributes = reducible_attr @ discr_attr in
-   extract_attributes def.item_meta.span ctx fmt def.item_meta.name None
-     attributes "rust_type" []
+   extract_attributes span ctx fmt def.item_meta.name None attributes
+     "rust_type" []
      ~is_external:(not def.item_meta.is_local));
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line. Note however that in the case of Lean line breaks are important
@@ -1458,20 +1488,19 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open a box for "type TYPE_NAME (TYPE_PARAMS CONST_GEN_PARAMS) =" *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* > "type TYPE_NAME" *)
-  let qualif = type_decl_kind_to_qualif def.item_meta.span kind type_kind in
+  let qualif = type_decl_kind_to_qualif span kind type_kind in
   (match qualif with
   | Some qualif -> F.pp_print_string fmt (qualif ^ " " ^ def_name)
   | None -> F.pp_print_string fmt def_name);
   (* HOL4 doesn't support const generics, and type definitions in HOL4 don't
      support trait clauses *)
-  [%cassert] def.item_meta.span
+  [%cassert] span
     ((cg_params = [] && trait_clauses = []) || backend () <> HOL4)
     "Constant generics and type definitions with trait clauses are not \
      supported yet when generating code for HOL4";
   (* Print the generic parameters *)
-  extract_generic_params def.item_meta.span ctx_body fmt type_decl_group Item
-    ~use_forall def.generics (Some def.explicit_info) type_params cg_params
-    trait_clauses;
+  extract_generic_params span ctx_body fmt type_decl_group Item ~use_forall
+    def.generics (Some def.explicit_info) type_params cg_params trait_clauses;
   (* Print the "=" if we extract the body*)
   if extract_body then (
     F.pp_print_space fmt ();
@@ -1495,22 +1524,21 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
       F.pp_print_space fmt ();
       F.pp_print_string fmt ":");
     F.pp_print_space fmt ();
-    F.pp_print_string fmt (type_keyword def.item_meta.span));
+    F.pp_print_string fmt (type_keyword span));
   (* Close the box for "type TYPE_NAME (TYPE_PARAMS) =" *)
   F.pp_close_box fmt ();
   (if extract_body then
      match def.kind with
      | Struct fields ->
          if is_tuple_struct then
-           extract_type_decl_tuple_struct_body def.item_meta.span ctx_body fmt
-             fields
+           extract_type_decl_tuple_struct_body span ctx_body fmt fields
          else
            extract_type_decl_struct_body ctx_body fmt type_decl_group kind def
              type_params cg_params fields
      | Enum variants ->
          extract_type_decl_enum_body ctx_body fmt type_decl_group def def_name
            type_params cg_params variants
-     | Opaque -> [%craise] def.item_meta.span "Unreachable");
+     | Opaque -> [%craise] span "Unreachable");
   (* Add the definition end delimiter *)
   if backend () = HOL4 && decl_is_not_last_from_group kind then (
     F.pp_print_space fmt ();

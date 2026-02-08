@@ -17,7 +17,7 @@ inductive LCell where
 
 /- [list_borrows::List]
    Source: 'tests/src/list-borrows.rs', lines 8:0-11:1 -/
-@[discriminant]
+@[discriminant isize]
 inductive List where
 | Nil : List
 | Cons : LCell → List

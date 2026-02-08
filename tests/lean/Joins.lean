@@ -53,7 +53,7 @@ def opt_add_switch_2 (a : Std.U32) (x : Std.U32) : Result Std.U32 := do
 
 /- [joins::Enum]
    Source: 'tests/src/joins.rs', lines 37:0-41:1 -/
-@[discriminant]
+@[discriminant isize]
 inductive Enum where
 | V0 : Enum
 | V1 : Enum

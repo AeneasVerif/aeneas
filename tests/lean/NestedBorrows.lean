@@ -151,7 +151,7 @@ def iter_mut_incr
 
 /- [nested_borrows::List]
    Source: 'tests/src/nested-borrows.rs', lines 95:0-98:1 -/
-@[discriminant]
+@[discriminant isize]
 inductive List (T : Type) where
 | Nil : List T
 | Cons : T → List T → List T

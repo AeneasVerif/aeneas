@@ -10,7 +10,7 @@ namespace arrays
 
 /- [arrays::AB]
    Source: 'tests/src/arrays.rs', lines 7:0-10:1 -/
-@[discriminant]
+@[discriminant isize]
 inductive AB where
 | A : AB
 | B : AB
