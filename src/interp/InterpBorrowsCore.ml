@@ -1390,8 +1390,13 @@ let remove_intersecting_aproj_borrows_shared (span : Meta.span)
   let update_shared = Some (fun ~owned:_ ~outlive:_ _ _ -> []) in
   let update_mut ~owned:_ ~outlive:_ _ = [%craise] span "Unexpected" in
   let update_emut ~owned:_ ~outlive:_ _ = [%craise] span "Unexpected" in
-  (* Update *)
-  update_intersecting_aproj_borrows span ~fail_if_unchanged:true ~include_owned
+  (* Update
+
+     We set [fail_if_unchanged] to false because if the borrow projectors we're
+     looking for may be in the concrete environment, in which case we will leave
+     it unchanged.
+  *)
+  update_intersecting_aproj_borrows span ~fail_if_unchanged:false ~include_owned
     ~include_outlive ~update_shared ~update_mut ~update_emut regions proj ctx
 
 (** Updates the proj_loans intersecting some projection.
