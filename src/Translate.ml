@@ -384,12 +384,14 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
        TODO: this doesn't seem to have much effect.
     *)
     let transparent =
-      let funs =
-        List.map
-          (fun f -> (f, LlbcAstUtils.compute_fun_decl_size f))
-          transparent
-      in
-      List.map fst (List.sort (fun (_, n) (_, n') -> n' - n) funs)
+      if !Config.parallel then
+        let funs =
+          List.map
+            (fun f -> (f, LlbcAstUtils.compute_fun_decl_size f))
+            transparent
+        in
+        List.map fst (List.sort (fun (_, n) (_, n') -> n' - n) funs)
+      else transparent
     in
 
     (* Small helper *)
