@@ -95,7 +95,14 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
     (fun_dsigs : Pure.decomposed_fun_sig FunDeclId.Map.t) (fdef : fun_decl) :
     pure_fun_translation_no_loops =
   (* Debug *)
-  [%ltrace name_to_string trans_ctx fdef.item_meta.name];
+  [%ltrace
+    name_to_string trans_ctx fdef.item_meta.name
+    ^ ":\n"
+    ^ fun_sig_to_string trans_ctx
+        {
+          item_binder_params = fdef.generics;
+          item_binder_value = fdef.signature;
+        }];
 
   (* Compute the symbolic ASTs, if the function is transparent *)
   let symbolic_trans =
