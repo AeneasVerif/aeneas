@@ -500,3 +500,21 @@ let log_with_colors = ref true
     index of the item: this allows easily identifying a borrow and its
     corresponding loan) *)
 let log_rotating_colors = ref true
+
+(** Should we borrow check globals?
+
+    The issue is that when translating a global which uses a 'static reference,
+    the LLBC provided by Charon for the body of the global (which initializes
+    the constant) is too simplified and essentially looks like this:
+    {[
+      fn initialize() -> &'static u32 {
+        let x = 0;
+        &x // reference to local variable!
+      }
+    ]}
+
+    In order to translate these globals we deactivate the invalidation of local
+    variables upon return in these initialization functions. This means that we
+    do not borrow-check these initialization functions, but the generated pure
+    model should still be fine. *)
+let borrow_check_globals = ref false

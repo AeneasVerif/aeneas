@@ -293,8 +293,8 @@ let move_return_value (config : config) (span : Meta.span)
     (Some v, ctx, cc)
   else (None, ctx, fun e -> e)
 
-let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
-    (ctx : eval_ctx) :
+let pop_frame (config : config) (span : Meta.span) ~(pop_locals : bool)
+    ~(pop_return_value : bool) (ctx : eval_ctx) :
     tvalue option * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Debug *)
   [%ltrace eval_ctx_to_string ~span:(Some span) ctx];
@@ -320,14 +320,16 @@ let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
 
   (* Drop the outer *loans* we find in the local variables *)
   let ctx, cc =
-    (* Drop the loans *)
-    let locals = List.rev locals in
-    fold_left_apply_continuation
-      (fun lid ctx ->
-        drop_outer_loans_at_lplace config span
-          (mk_place_from_var_id ctx span lid)
-          ctx)
-      locals ctx
+    if pop_locals then
+      (* Drop the loans *)
+      let locals = List.rev locals in
+      fold_left_apply_continuation
+        (fun lid ctx ->
+          drop_outer_loans_at_lplace config span
+            (mk_place_from_var_id ctx span lid)
+            ctx)
+        locals ctx
+    else (ctx, fun e -> e)
   in
   (* Debug *)
   [%ltrace
@@ -366,7 +368,9 @@ let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
 let pop_frame_assign (config : config) (span : Meta.span) (dest : place) :
     cm_fun =
  fun ctx ->
-  let v, ctx, cc = pop_frame config span true ctx in
+  let v, ctx, cc =
+    pop_frame config span ~pop_locals:true ~pop_return_value:true ctx
+  in
   comp cc (assign_to_place config span (Option.get v) dest ctx)
 
 (** Auxiliary function - see {!eval_builtin_function_call} *)

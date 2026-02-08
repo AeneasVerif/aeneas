@@ -186,6 +186,11 @@ let () =
       ( "-no-log-colors",
         Arg.Clear log_with_colors,
         " Do not use colors when formatting log messages" );
+      ( "-borrow-check-globals",
+        Arg.Set borrow_check_globals,
+        " Borrow-check globals - an over-simplification in the LLBC provided \
+         by Charon for the global initialization functions currently prevents \
+         us from borrow-checking globals which contain static references" );
     ]
   in
 
