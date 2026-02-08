@@ -35,6 +35,7 @@ let erase_body_regions (crate : crate) (f : fun_decl) : fun_decl =
 
       method! visit_RBody _ _ = RErased
       method! visit_RVar _ _ = RErased
+      method! visit_RStatic _ = RErased
     end
   in
 
