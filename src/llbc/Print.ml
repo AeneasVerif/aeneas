@@ -55,6 +55,8 @@ let value_to_rgb (t : float) : int * int * int =
   (r, g, b)
 
 let num_colors = 19 (* choosing a prime number on purpose *)
+let borrow_factor = 13 (* prime with [num_color] *)
+let symb_id_factor = 17 (* prime with [num_color] *)
 
 let rotating_colors =
   let rec enumerate n = if n = 0 then [ 0 ] else n :: enumerate (n - 1) in
@@ -63,6 +65,10 @@ let rotating_colors =
     List.map (fun x -> float_of_int x /. float_of_int num_colors) l
   in
   Array.of_list (List.map value_to_rgb floats)
+
+let get_color (i : int) : int * int * int =
+  let i = i mod num_colors in
+  Array.get rotating_colors i
 
 let type_color = (0, 255, 255)
 let abs_cont_color = type_color
@@ -83,24 +89,22 @@ let add_var_color s =
 
 let add_borrow_color id =
   if !Config.log_rotating_colors then
-    mk_colorize (Array.get rotating_colors (BorrowId.to_int id mod num_colors))
+    mk_colorize (get_color (BorrowId.to_int id * borrow_factor))
   else mk_colorize borrow_color
 
 let add_loan_color id =
   if !Config.log_rotating_colors then
-    mk_colorize (Array.get rotating_colors (BorrowId.to_int id mod num_colors))
+    mk_colorize (get_color (BorrowId.to_int id * borrow_factor))
   else mk_colorize loan_color
 
 let add_borrow_proj_color id =
   if !Config.log_rotating_colors then
-    mk_colorize
-      (Array.get rotating_colors (SymbolicValueId.to_int id mod num_colors))
+    mk_colorize (get_color (SymbolicValueId.to_int id * symb_id_factor))
   else mk_colorize borrow_proj_color
 
 let add_loan_proj_color id =
   if !Config.log_rotating_colors then
-    mk_colorize
-      (Array.get rotating_colors (SymbolicValueId.to_int id mod num_colors))
+    mk_colorize (get_color (SymbolicValueId.to_int id * symb_id_factor))
   else mk_colorize loan_proj_color
 
 let add_abs_color s =
