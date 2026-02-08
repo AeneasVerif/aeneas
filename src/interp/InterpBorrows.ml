@@ -1923,6 +1923,7 @@ let rec promote_reserved_mut_borrow (config : config) (span : Meta.span)
 
 let destructure_abs (span : Meta.span) (abs_kind : abs_kind) ~(can_end : bool)
     ~(destructure_shared_values : bool) (ctx : eval_ctx) (abs0 : abs) : abs =
+  [%ltrace "- abs:\n" ^ abs_to_string span ctx abs0];
   (* Accumulator to store the destructured values *)
   let avalues = ref [] in
   (* Utility function to store a value in the accumulator *)
@@ -2094,7 +2095,19 @@ let destructure_abs (span : Meta.span) (abs_kind : abs_kind) ~(can_end : bool)
         let avl = List.concat avll in
         let adt = { adt with fields } in
         (avl, { v with value = VAdt adt })
-    | VBottom -> [%craise] span "Unreachable"
+    | VBottom ->
+        (* This case *can* happen.
+
+           When joining two contexts, in the case one context moved a value
+           while the other borrowed it we do the following (:
+           {
+             x -> ⊥  U  x -> ML l ~> x -> SL l' ⊥, abs { SB l', ︙ML l︙ }
+           }
+           this way we make sure that writing to x requires ending the borrow l
+           before, while ending the loan in x only gives us access to bottom
+           meaning we can't read x any more (but we can write to x).
+        *)
+        ([], v)
     | VBorrow _ ->
         (* We don't support nested borrows for now *)
         [%craise] span "Unreachable"
