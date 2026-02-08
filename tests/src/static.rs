@@ -35,3 +35,8 @@ fn read<S: WithSlice>(_: S, i: usize) -> u16 {
     }
     s
 }*/
+
+fn use_static() {
+    const PREFIX: &[u8; 1] = &[0];
+    let _ = PREFIX;
+}
