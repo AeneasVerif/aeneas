@@ -369,8 +369,10 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
   (* Evaluate *)
   match op with
   | Constant cv -> begin
+      [%ldebug "constant of type: " ^ ty_to_string ctx cv.ty];
       match cv.kind with
       | CLiteral lit -> (
+          [%ldebug "literal constant"];
           (* FIXME: the str type is not in [literal_type] *)
           match cv.ty with
           | TAdt { id = TBuiltin TStr; _ } ->
@@ -419,6 +421,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
                 ^ constant_expr_to_string ctx cv
                 ^ " : " ^ ty_to_string ctx cv.ty))
       | CTraitConst (trait_ref, const_name) -> (
+          [%ldebug "trait constant"];
           let ctx0 = ctx in
           (* Simply introduce a fresh symbolic value.
 
@@ -428,8 +431,10 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
              TODO: add static lifetimes in region abstractions. *)
 
           let ty = cv.ty in
+          (* TODO: the lifetime should be 'static but we erase it in PrePasses *)
           match ty with
-          | TRef (RStatic, ty_inner, ref_kind) ->
+          | TRef ((RStatic | RErased), ty_inner, ref_kind) ->
+              [%ldebug "static ref"];
               [%cassert] span (not !Config.use_static) "Unimplemented";
               [%cassert] span (ref_kind = RShared)
                 "Mutable references for lifetime 'static are not supported";
@@ -463,6 +468,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
               in
               (borrow, ctx, cf)
           | _ ->
+              [%ldebug "not a static ref"];
               let v = mk_fresh_symbolic_tvalue span ctx ty in
               (* Wrap the generated expression *)
               let cf e =
