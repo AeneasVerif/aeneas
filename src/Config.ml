@@ -518,3 +518,6 @@ let log_rotating_colors = ref true
     do not borrow-check these initialization functions, but the generated pure
     model should still be fine. *)
 let borrow_check_globals = ref false
+
+(** *)
+let print_error_diagnostics = ref false

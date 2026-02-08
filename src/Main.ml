@@ -191,6 +191,9 @@ let () =
         " Borrow-check globals - an over-simplification in the LLBC provided \
          by Charon for the global initialization functions currently prevents \
          us from borrow-checking globals which contain static references" );
+      ( "-print-error-diagnostics",
+        Arg.Set print_error_diagnostics,
+        " Print additional diagnostics about the kind of errors encountered" );
     ]
   in
 
@@ -670,6 +673,26 @@ let () =
             "The crate contains extracted external, unknown definitions: we \
              advise using the option -split-files to allow manually providing \
              these definitions in separate files.");
+
+      (* Print error diagnostics *)
+      (if !print_error_diagnostics && !Errors.error_list <> [] then
+         let
+         (* Sort the unique errors by decreasing number of occurrences *)
+         open
+           Errors in
+         log#linfo
+           (lazy
+             (let unique_errors = FileLineMap.to_list !unique_errors in
+              let unique_errors =
+                List.sort (fun (_, n) (_, n') -> n' - n) unique_errors
+              in
+              "Unique errors by decreasing number of occurrences:\n"
+              ^ String.concat "\n"
+                  (List.map
+                     (fun ((file, line), num) ->
+                       "file: " ^ file ^ ", line: " ^ string_of_int line
+                       ^ ", occurrences: " ^ string_of_int num)
+                     unique_errors))));
 
       (* Print total elapsed time *)
       log#linfo

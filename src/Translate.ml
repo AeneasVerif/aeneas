@@ -1209,7 +1209,9 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
       (lazy
         ("Generated the partial file (because of "
         ^ string_of_int (List.length !Errors.error_list)
-        ^ " errors): " ^ fi.filename))
+        ^ " errors, including "
+        ^ string_of_int (Errors.FileLineMap.cardinal !Errors.unique_errors)
+        ^ " unique errors): " ^ fi.filename))
   else log#linfo (lazy ("Generated: " ^ fi.filename));
 
   (* Flush and close the file *)
