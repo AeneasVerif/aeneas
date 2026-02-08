@@ -1631,11 +1631,11 @@ and eval_builtin_function_call_symbolic (config : config) (span : Meta.span)
   else
     [%classert] span
       (List.for_all
-         (fun ty -> not (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty))
+         (fun ty -> not (ty_has_mut_borrows ctx.type_ctx.type_infos ty))
          func.generics.types)
       (lazy
         ("Instantiating the type parameters of a function with types \
-          containing borrows is not allowed for now ("
+          containing mutable borrows is currently not allowed ("
        ^ fn_ptr_to_string ctx func ^ ")"));
 
   (* There shouldn't be any reference to Self *)
