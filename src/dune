@@ -79,6 +79,7 @@
   Parallel
   PrePasses
   Print
+  PrintBase
   PrintPure
   PrintSymbolicAst
   ProgressBar
