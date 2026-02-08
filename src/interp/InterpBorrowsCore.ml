@@ -1166,10 +1166,6 @@ let lookup_intersecting_aproj_borrows_opt (span : Meta.span)
       method! visit_abs _ abs = super#visit_abs (Some (abs, 0)) abs
 
       method! visit_abstract_shared_borrow abs asb =
-        (* Sanity check *)
-        (match !found with
-        | Some (NonSharedProj _) -> [%craise] span "Unreachable"
-        | _ -> ());
         (* Explore *)
         if lookup_shared then
           let abs, lvl = Option.get abs in
