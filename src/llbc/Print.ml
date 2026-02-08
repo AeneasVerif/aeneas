@@ -22,6 +22,48 @@ let mk_colorize ((r, g, b) : int * int * int) : string -> string =
   fun text ->
     if !Config.log_with_colors then color_start ^ text ^ color_end else text
 
+let value_to_rgb (t : float) : int * int * int =
+  (* Clamp t to [0, 1] *)
+  let fmax (x : float) (y : float) = if x > y then x else y in
+  let fmin (x : float) (y : float) = if x > y then y else x in
+  let t = fmax 0.0 (fmin 1.0 t) in
+
+  (* Scale t to [0, 3) to identify which segment we're in *)
+  let scaled = t *. 3.0 in
+  let segment = int_of_float scaled in
+  let local_t = scaled -. float_of_int segment in
+
+  (* Interpolate within the segment *)
+  let r, g, b =
+    match segment with
+    | 0 ->
+        (* red to green *)
+        ( int_of_float (255.0 *. (1.0 -. local_t)),
+          int_of_float (255.0 *. local_t),
+          0 )
+    | 1 ->
+        (* green to blue *)
+        ( 0,
+          int_of_float (255.0 *. (1.0 -. local_t)),
+          int_of_float (255.0 *. local_t) )
+    | _ ->
+        (* blue to red (segment 2 or edge case for t=1.0) *)
+        ( int_of_float (255.0 *. local_t),
+          0,
+          int_of_float (255.0 *. (1.0 -. local_t)) )
+  in
+  (r, g, b)
+
+let num_colors = 19 (* choosing a prime number on purpose *)
+
+let rotating_colors =
+  let rec enumerate n = if n = 0 then [ 0 ] else n :: enumerate (n - 1) in
+  let l = enumerate (num_colors - 1) in
+  let floats =
+    List.map (fun x -> float_of_int x /. float_of_int num_colors) l
+  in
+  Array.of_list (List.map value_to_rgb floats)
+
 let type_color = (0, 255, 255)
 let abs_cont_color = type_color
 let borrow_color = (255, 0, 0)
@@ -30,14 +72,44 @@ let borrow_proj_color = (255, 0, 255)
 let loan_proj_color = (184, 0, 255)
 let var_color = (0, 250, 0)
 let abs_color = var_color
-let add_type_color = mk_colorize type_color
-let add_var_color = mk_colorize var_color
-let add_borrow_color = mk_colorize borrow_color
-let add_loan_color = mk_colorize loan_color
-let add_borrow_proj_color = mk_colorize borrow_proj_color
-let add_loan_proj_color = mk_colorize loan_proj_color
-let add_abs_color = mk_colorize abs_color
-let add_abs_cont_color = mk_colorize abs_cont_color
+
+let add_type_color s =
+  if !Config.log_rotating_colors then mk_colorize (200, 200, 200) s
+  else mk_colorize type_color s
+
+let add_var_color s =
+  if !Config.log_rotating_colors then mk_colorize (56, 193, 49) s
+  else mk_colorize var_color s
+
+let add_borrow_color id =
+  if !Config.log_rotating_colors then
+    mk_colorize (Array.get rotating_colors (BorrowId.to_int id mod num_colors))
+  else mk_colorize borrow_color
+
+let add_loan_color id =
+  if !Config.log_rotating_colors then
+    mk_colorize (Array.get rotating_colors (BorrowId.to_int id mod num_colors))
+  else mk_colorize loan_color
+
+let add_borrow_proj_color id =
+  if !Config.log_rotating_colors then
+    mk_colorize
+      (Array.get rotating_colors (SymbolicValueId.to_int id mod num_colors))
+  else mk_colorize borrow_proj_color
+
+let add_loan_proj_color id =
+  if !Config.log_rotating_colors then
+    mk_colorize
+      (Array.get rotating_colors (SymbolicValueId.to_int id mod num_colors))
+  else mk_colorize loan_proj_color
+
+let add_abs_color s =
+  if !Config.log_rotating_colors then mk_colorize (0, 97, 170) s
+  else mk_colorize abs_color s
+
+let add_abs_cont_color s =
+  if !Config.log_rotating_colors then mk_colorize (65, 174, 204) s
+  else mk_colorize abs_cont_color s
 
 let list_to_string ?(sep = "; ") (to_string : 'a -> string) (ls : 'a list) :
     string =
@@ -57,7 +129,8 @@ module Values = struct
     "s@" ^ SymbolicValueId.to_string id
 
   let symbolic_value_to_string (env : fmt_env) (sv : symbolic_value) : string =
-    (symbolic_value_id_to_pretty_string sv.sv_id |> add_borrow_proj_color)
+    (symbolic_value_id_to_pretty_string sv.sv_id
+    |> add_borrow_proj_color sv.sv_id)
     ^ " : "
     ^ (ty_to_string env sv.sv_ty |> add_type_color)
 
@@ -132,17 +205,17 @@ module Values = struct
       (bc : borrow_content) : string =
     match bc with
     | VSharedBorrow (bid, sid) ->
-        add_borrow_color
+        add_borrow_color bid
           ("SB@" ^ BorrowId.to_string bid ^ "(^"
           ^ SharedBorrowId.to_string sid
           ^ ")")
     | VMutBorrow (bid, tv) ->
-        add_borrow_color ("MB@" ^ BorrowId.to_string bid)
+        add_borrow_color bid ("MB@" ^ BorrowId.to_string bid)
         ^ " ("
         ^ tvalue_to_string ~span env tv
         ^ ")"
     | VReservedMutBorrow (bid, sid) ->
-        add_borrow_color
+        add_borrow_color bid
           ("RB@" ^ BorrowId.to_string bid ^ "(^"
           ^ SharedBorrowId.to_string sid
           ^ ")")
@@ -151,24 +224,27 @@ module Values = struct
       (lc : loan_content) : string =
     match lc with
     | VSharedLoan (lid, v) ->
-        let lid = BorrowId.to_string lid in
-        add_loan_color ("SL@" ^ lid) ^ "(" ^ tvalue_to_string ~span env v ^ ")"
-    | VMutLoan bid -> add_loan_color ("ML@" ^ BorrowId.to_string bid)
+        add_loan_color lid ("SL@" ^ BorrowId.to_string lid)
+        ^ "("
+        ^ tvalue_to_string ~span env v
+        ^ ")"
+    | VMutLoan bid -> add_loan_color bid ("ML@" ^ BorrowId.to_string bid)
 
   let abstract_shared_borrow_to_string (env : fmt_env)
       (abs : abstract_shared_borrow) : string =
     match abs with
     | AsbBorrow (bid, sid) ->
         "@" ^ BorrowId.to_string bid ^ "(^" ^ SharedBorrowId.to_string sid ^ ")"
+        |> add_borrow_color bid
     | AsbProjReborrows proj ->
         "{" ^ symbolic_value_proj_to_string env proj.sv_id proj.proj_ty ^ "}"
+        |> add_borrow_proj_color proj.sv_id
 
   let abstract_shared_borrows_to_string (env : fmt_env)
       (abs : abstract_shared_borrows) : string =
-    add_borrow_color
-      ("{"
-      ^ String.concat "," (List.map (abstract_shared_borrow_to_string env) abs)
-      ^ "}")
+    "{"
+    ^ String.concat "," (List.map (abstract_shared_borrow_to_string env) abs)
+    ^ "}"
 
   let rec aproj_to_string ?(with_ended : bool = false) (env : fmt_env)
       (pv : aproj) : string =
@@ -229,7 +305,7 @@ module Values = struct
     in
     "("
     ^ (symbolic_value_proj_to_string env proj.sv_id proj.proj_ty
-      |> add_borrow_proj_color)
+      |> add_borrow_proj_color proj.sv_id)
     ^ loans ^ ")"
 
   and aproj_loans_to_string ?(with_ended : bool = false) (env : fmt_env)
@@ -251,7 +327,7 @@ module Values = struct
     in
     "⌊"
     ^ (symbolic_value_proj_to_string env proj.sv_id proj.proj_ty
-      |> add_loan_proj_color)
+      |> add_loan_proj_color proj.sv_id)
     ^ consumed ^ borrows ^ "⌋"
 
   (** Wrap a value inside its marker, if there is one *)
@@ -296,13 +372,13 @@ module Values = struct
       =
     match lc with
     | AMutLoan (pm, bid, av) ->
-        add_loan_color ("ML@" ^ BorrowId.to_string bid)
+        add_loan_color bid ("ML@" ^ BorrowId.to_string bid)
         ^ "("
         ^ tavalue_to_string ~span ~with_ended env av
         ^ ")"
         |> add_proj_marker pm
     | ASharedLoan (pm, lid, v, av) ->
-        add_loan_color ("SL@" ^ BorrowId.to_string lid)
+        add_loan_color lid ("SL@" ^ BorrowId.to_string lid)
         ^ "("
         ^ tvalue_to_string ~span env v
         ^ ", "
@@ -348,7 +424,7 @@ module Values = struct
       string =
     match bc with
     | AMutBorrow (pm, bid, av) ->
-        add_borrow_color ("MB@" ^ BorrowId.to_string bid)
+        add_borrow_color bid ("MB@" ^ BorrowId.to_string bid)
         ^ "("
         ^ tavalue_to_string ~span ~with_ended env av
         ^ ")"
@@ -357,10 +433,15 @@ module Values = struct
         "SB@" ^ BorrowId.to_string bid ^ "(^"
         ^ SharedBorrowId.to_string sid
         ^ ")"
-        |> add_borrow_color |> add_proj_marker pm
+        |> add_borrow_color bid |> add_proj_marker pm
     | AIgnoredMutBorrow (opt_bid, av) ->
+        let add_color s =
+          match opt_bid with
+          | Some bid -> add_borrow_color bid s
+          | None -> s
+        in
         "@ignored_mut_borrow("
-        ^ (option_to_string BorrowId.to_string opt_bid |> add_borrow_color)
+        ^ (option_to_string BorrowId.to_string opt_bid |> add_color)
         ^ ", "
         ^ tavalue_to_string ~span ~with_ended env av
         ^ ")"

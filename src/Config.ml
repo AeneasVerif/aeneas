@@ -494,3 +494,9 @@ let opaque_types_have_mut_regions_by_default = false
 
 (** Should we use colors when logging? *)
 let log_with_colors = ref true
+
+(** Should we use rotating colors when loggin (i.e., rather than using a color
+    per category of item, such as borrows, loans, etc. use a color based on the
+    index of the item: this allows easily identifying a borrow and its
+    corresponding loan) *)
+let log_rotating_colors = ref true
