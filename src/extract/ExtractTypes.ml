@@ -1426,6 +1426,9 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
    (* The attribute to automatically generate the [read_discriminant] function *)
    let discr_attr =
      match def.kind with
+     | Enum [] ->
+         (* Empty enum: no discriminant *)
+         []
      | Enum variants ->
          let discr_ty =
            [%sanity_check] span (variants <> []);
