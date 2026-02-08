@@ -312,10 +312,10 @@ let ctx_push_vars (span : Meta.span) (ctx : eval_ctx)
 
   List.iter
     (fun (var, (value : tvalue)) ->
-      if not (TypesUtils.ty_is_ety var.local_ty && var.local_ty = value.ty) then
+      if not (TypesUtils.ty_is_ety var.local_ty && var.local_ty = value.ty) then (
         [%ltrace var_value_to_string (var, value)];
-      [%craise] span
-        "The pushed variables and their values do not have the same type")
+        [%craise] span
+          "The pushed variables and their values do not have the same type"))
     vars;
   let vars =
     List.map
