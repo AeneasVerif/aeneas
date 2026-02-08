@@ -330,6 +330,9 @@ module Values = struct
       |> add_loan_proj_color proj.sv_id)
     ^ consumed ^ borrows ^ "⌋"
 
+  let symbolic_proj_to_string env (proj : symbolic_proj) : string =
+    symbolic_value_proj_to_string env proj.sv_id proj.proj_ty
+
   (** Wrap a value inside its marker, if there is one *)
   let add_proj_marker (pm : proj_marker) (s : string) : string =
     match pm with

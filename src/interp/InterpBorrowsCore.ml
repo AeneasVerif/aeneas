@@ -1380,6 +1380,12 @@ let update_intersecting_aproj_borrows (span : Meta.span)
 let remove_intersecting_aproj_borrows_shared (span : Meta.span)
     ~(include_owned : bool) ~(include_outlive : bool) (regions : RegionId.Set.t)
     (proj : symbolic_proj) (ctx : eval_ctx) : eval_ctx =
+  [%ltrace
+    "- regions: "
+    ^ RegionId.Set.to_string None regions
+    ^ "\n- proj: "
+    ^ symbolic_proj_to_string ctx proj
+    ^ "\n- ctx:\n" ^ eval_ctx_to_string ctx];
   (* Small helpers *)
   let update_shared = Some (fun ~owned:_ ~outlive:_ _ _ -> []) in
   let update_mut ~owned:_ ~outlive:_ _ = [%craise] span "Unexpected" in

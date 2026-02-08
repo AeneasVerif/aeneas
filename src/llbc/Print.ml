@@ -187,6 +187,10 @@ module EvalCtx = struct
     let env = eval_ctx_to_fmt_env ctx in
     aproj_loans_to_string ~with_ended env x
 
+  let symbolic_proj_to_string ctx (proj : symbolic_proj) : string =
+    let env = eval_ctx_to_fmt_env ctx in
+    symbolic_proj_to_string env proj
+
   let aloan_content_to_string ?(span : Meta.span option = None) (ctx : eval_ctx)
       (lc : aloan_content) : string =
     let env = eval_ctx_to_fmt_env ctx in
