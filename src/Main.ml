@@ -451,6 +451,15 @@ let () =
               fail true))
   in
 
+  (* If running in parallel mode there can be racing conditions on the memoized
+     elements. Precompute them so that it doesn't happen. *)
+  let _ = ExtractBuiltin.builtin_globals_map () in
+  let _ = ExtractBuiltin.builtin_types_map () in
+  let _ = ExtractBuiltin.builtin_trait_decls_map () in
+  let _ = ExtractBuiltin.builtin_trait_impls_map () in
+  let _ = ExtractBuiltin.builtin_funs_map () in
+  let _ = ExtractBuiltin.builtin_fun_effects_map () in
+
   (* Retrieve and check the filename *)
   let filename =
     match !filenames with
