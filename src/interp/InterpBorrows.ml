@@ -1080,6 +1080,10 @@ and end_shared_loan_aux (config : config) (span : Meta.span) ~(snapshots : bool)
       method! visit_VSharedBorrow _ bid sid =
         if bid = l then raise (FoundSharedBorrowId (bid, sid)) else ()
 
+      method! visit_VReservedMutBorrow _ bid sid =
+        (* We raise the same exception as for shared borrows: it doesn't matter *)
+        if bid = l then raise (FoundSharedBorrowId (bid, sid)) else ()
+
       method! visit_ASharedBorrow _ pm bid sid =
         [%sanity_check] span (pm = PNone);
         if bid = l then raise (FoundSharedBorrowId (bid, sid)) else ()
@@ -1094,6 +1098,8 @@ and end_shared_loan_aux (config : config) (span : Meta.span) ~(snapshots : bool)
       visitor#visit_eval_ctx () ctx;
       (ctx, fun x -> x)
     with FoundSharedBorrowId (bid, sid) ->
+      (* Note that this includes the case of reserved borrows, that we treat
+         like shared borrows *)
       let ctx, cc =
         end_borrow_aux config span ~snapshots chain (UShared (bid, sid)) ctx
       in

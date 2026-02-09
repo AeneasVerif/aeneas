@@ -472,8 +472,9 @@ let tvalue_has_shared_loans (v : tvalue) : bool =
 type unique_borrow_id =
   | UMut of borrow_id
   | UShared of (borrow_id * shared_borrow_id)
-      (** The borrow id is not necessary but we keep it for formatting purposes
-      *)
+      (** The borrow id is not necessary but we keep it for formatting purposes.
+          Note that we use UShared both for shared borrows and **reserved**
+          borrows. *)
 [@@deriving show, ord]
 
 let unique_borrow_id_to_string (uid : unique_borrow_id) : string =
