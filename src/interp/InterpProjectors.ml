@@ -92,7 +92,13 @@ let rec apply_proj_borrows_on_shared_borrow (span : Meta.span) (ctx : eval_ctx)
           (not
              (projections_intersect span ctx.ended_regions s.sv_ty regions ty));
         [ AsbProjReborrows { sv_id = s.sv_id; proj_ty = ty } ]
-    | _ -> [%craise] span "Unreachable"
+    | VAdt adt, TArray (ty, _) ->
+        List.flatten
+          (List.map
+             (fun v ->
+               apply_proj_borrows_on_shared_borrow span ctx regions v ty)
+             adt.fields)
+    | _ -> [%craise] span ("Unexpected value: " ^ tvalue_to_string ctx v)
 
 let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
     (ctx : eval_ctx) (regions : RegionId.Set.t) (v : tvalue) (ty : rty) :
