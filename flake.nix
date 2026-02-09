@@ -109,6 +109,7 @@
             export AENEAS_EXE=${aeneas}/bin/aeneas
             export CHARON_EXE=${aeneas}/bin/charon
             export TEST_RUNNER_EXE=${test_runner}/bin/test_runner
+            export AENEAS_OPTIONS="-sequential"
 
             # Copy the tests
             cp -r tests tests-copy
