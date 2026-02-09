@@ -488,8 +488,13 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
         *)
         (* Whatever the scenario, we need to pop the frame and retrieve the returned value *)
         let ret_value, ctx, cc_pop =
-          let pop_return_value = true in
-          pop_frame config span pop_return_value ctx
+          (* Do not pop the locals if this is a global and [borrow_check_globals]
+           is false *)
+          let pop_locals =
+            if !Config.borrow_check_globals then true
+            else not (Option.is_some fdef.is_global_initializer)
+          in
+          pop_frame config span ~pop_locals ~pop_return_value:true ctx
         in
         let ret_value = Option.get ret_value in
         let ctx_return = ctx in
@@ -592,8 +597,7 @@ module Test = struct
       match res with
       | Return ->
           (* Ok: drop the local variables and finish *)
-          let pop_return_value = true in
-          pop_frame config span pop_return_value ctx
+          pop_frame config span ~pop_locals:true ~pop_return_value:true ctx
       | _ ->
           [%craise] span
             ("Unit test failed (concrete execution) on: "

@@ -3,6 +3,8 @@ open Expressions
 open Values
 open LlbcAst
 open ValuesUtils
+open Charon.PrintTypes
+open PrintBase.Values
 include ContextsBase
 
 module OrderedBinder : Collections.OrderedType with type t = var_binder = struct
@@ -298,19 +300,23 @@ let ctx_push_var (span : Meta.span) (ctx : eval_ctx) (var : local) (v : tvalue)
     is important). *)
 let ctx_push_vars (span : Meta.span) (ctx : eval_ctx)
     (vars : (local * tvalue) list) : eval_ctx =
-  [%ltrace
-    String.concat "\n"
-      (List.map
-         (fun (var, value) ->
-           (* We can unfortunately not use Print because it depends on Contexts... *)
-           show_var var ^ " -> " ^ show_tvalue value)
-         vars)];
-  [%cassert] span
-    (List.for_all
-       (fun (var, (value : tvalue)) ->
-         TypesUtils.ty_is_ety var.local_ty && var.local_ty = value.ty)
-       vars)
-    "The pushed variables and their values do not have the same type";
+  let fmt = Charon.PrintLlbcAst.Crate.crate_to_fmt_env ctx.crate in
+  let var_value_to_string (var, value) =
+    "("
+    ^ Charon.PrintExpressions.local_to_string var
+    ^ " : "
+    ^ ty_to_string fmt var.local_ty
+    ^ ")" ^ " -> " ^ tvalue_to_string fmt value
+  in
+  [%ltrace String.concat "\n" (List.map var_value_to_string vars)];
+
+  List.iter
+    (fun (var, (value : tvalue)) ->
+      if not (TypesUtils.ty_is_ety var.local_ty && var.local_ty = value.ty) then (
+        [%ltrace var_value_to_string (var, value)];
+        [%craise] span
+          "The pushed variables and their values do not have the same type"))
+    vars;
   let vars =
     List.map
       (fun (var, value) -> EBinding (BVar (var_to_binder var), value))

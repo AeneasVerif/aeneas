@@ -95,7 +95,14 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
     (fun_dsigs : Pure.decomposed_fun_sig FunDeclId.Map.t) (fdef : fun_decl) :
     pure_fun_translation_no_loops =
   (* Debug *)
-  [%ltrace name_to_string trans_ctx fdef.item_meta.name];
+  [%ltrace
+    name_to_string trans_ctx fdef.item_meta.name
+    ^ ":\n"
+    ^ fun_sig_to_string trans_ctx
+        {
+          item_binder_params = fdef.generics;
+          item_binder_value = fdef.signature;
+        }];
 
   (* Compute the symbolic ASTs, if the function is transparent *)
   let symbolic_trans =
@@ -384,12 +391,14 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
        TODO: this doesn't seem to have much effect.
     *)
     let transparent =
-      let funs =
-        List.map
-          (fun f -> (f, LlbcAstUtils.compute_fun_decl_size f))
-          transparent
-      in
-      List.map fst (List.sort (fun (_, n) (_, n') -> n' - n) funs)
+      if !Config.parallel then
+        let funs =
+          List.map
+            (fun f -> (f, LlbcAstUtils.compute_fun_decl_size f))
+            transparent
+        in
+        List.map fst (List.sort (fun (_, n) (_, n') -> n' - n) funs)
+      else transparent
     in
 
     (* Small helper *)
@@ -1200,7 +1209,9 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
       (lazy
         ("Generated the partial file (because of "
         ^ string_of_int (List.length !Errors.error_list)
-        ^ " errors): " ^ fi.filename))
+        ^ " errors, including "
+        ^ string_of_int (Errors.FileLineMap.cardinal !Errors.unique_errors)
+        ^ " unique errors): " ^ fi.filename))
   else log#linfo (lazy ("Generated: " ^ fi.filename));
 
   (* Flush and close the file *)

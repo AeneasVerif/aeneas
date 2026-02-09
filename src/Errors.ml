@@ -61,7 +61,23 @@ exception CFailure of cfailure
 (** Recoverable failure *)
 exception RFailure
 
+type unique_error = string * int [@@deriving show, eq, ord]
+
+module FileLineOrderedType :
+  Collections.OrderedType with type t = unique_error = struct
+  type t = unique_error
+
+  let compare = compare_unique_error
+  let to_string = show_unique_error
+  let pp_t = pp_unique_error
+  let show_t = show_unique_error
+end
+
+module FileLineSet = Collections.MakeSet (FileLineOrderedType)
+module FileLineMap = Collections.MakeMap (FileLineOrderedType)
+
 let error_list : (string * int * Meta.span option * string) list ref = ref []
+let unique_errors = ref FileLineMap.empty
 
 (** Save an error and print it at the same time.
 
@@ -70,7 +86,13 @@ let error_list : (string * int * Meta.span option * string) list ref = ref []
 let push_error (file : string) (line : int) (span : Meta.span option)
     (msg : string) =
   Mutex.protect error_mutex (fun _ ->
-      error_list := (file, line, span, msg) :: !error_list);
+      error_list := (file, line, span, msg) :: !error_list;
+      unique_errors :=
+        FileLineMap.update (file, line)
+          (function
+            | None -> Some 1
+            | Some n -> Some (n + 1))
+          !unique_errors);
   if !Config.print_error_emitters then
     log#serror (format_error_message_with_file_line file line span msg)
   else log#serror (format_error_message span msg)

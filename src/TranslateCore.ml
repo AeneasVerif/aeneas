@@ -20,6 +20,9 @@ let trans_ctx_to_pure_fmt_env (ctx : trans_ctx) : PrintPure.fmt_env =
 let name_to_string (ctx : trans_ctx) =
   Print.Types.name_to_string (trans_ctx_to_fmt_env ctx)
 
+let fun_sig_to_string (ctx : trans_ctx) =
+  Charon.PrintLlbcAst.Ast.fun_sig_to_string (trans_ctx_to_fmt_env ctx) "" "  "
+
 let name_to_simple_name (ctx : trans_ctx) (n : Types.name) : string list =
   let mctx = Charon.NameMatcher.ctx_from_crate ctx.crate in
   name_to_simple_name mctx n

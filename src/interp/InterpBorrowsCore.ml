@@ -399,11 +399,11 @@ class virtual ['self] iter_tavalue_with_levels =
     [combine]: how to combine booleans [compare_regions]: how to compare regions
 
     TODO: is there a way of deriving such a comparison? TODO: rename *)
-let rec compare_rtys (span : Meta.span) (default : bool)
+let rec compare_rtys (span : Meta.span) (ctx : eval_ctx) (default : bool)
     (combine : bool -> bool -> bool)
     (compare_regions : region -> region -> bool) (ty1 : rty) (ty2 : rty) : bool
     =
-  let compare = compare_rtys span default combine compare_regions in
+  let compare = compare_rtys span ctx default combine compare_regions in
   (* Sanity check - TODO: don't do this at every recursive call *)
   [%sanity_check] span (ty_is_rty ty1 && ty_is_rty ty2);
   (* Normalize the associated types *)
@@ -472,11 +472,15 @@ let rec compare_rtys (span : Meta.span) (default : bool)
          get trait types, we can consider them as variables *)
       [%sanity_check] span (ty1 = ty2);
       default
+  | TDynTrait _, TDynTrait _ ->
+      (* TODO: this is wrong, we need to compare the regions inside TDyn *)
+      [%cassert] span (not Config.use_dyn_regions) "Unimplemented";
+      default
   | _ ->
-      [%ltrace
-        "unexpected inputs:" ^ "\n- ty1: " ^ show_ty ty1 ^ "\n- ty2: "
-        ^ show_ty ty2];
-      [%internal_error] span
+      [%craise] span
+        ("Internal error, please report an issue.\n\nUnexpected inputs:"
+       ^ "\n- ty1: " ^ ty_to_string ctx ty1 ^ "\n- ty2: " ^ ty_to_string ctx ty2
+        )
 
 (** Check if two different projections intersect.
 
@@ -485,29 +489,30 @@ let rec compare_rtys (span : Meta.span) (default : bool)
     intersect the regions over which we project in the new abstraction. Note
     that the two abstractions have different views (in terms of regions) of the
     symbolic value (hence the two region types). *)
-let projections_intersect (span : Meta.span) ?(allow_erased = false)
-    (rset1 : RegionId.Set.t) (ty1 : rty) (rset2 : RegionId.Set.t) (ty2 : rty) :
-    bool =
+let projections_intersect (span : Meta.span) (ctx : eval_ctx)
+    ?(allow_erased = false) (rset1 : RegionId.Set.t) (ty1 : rty)
+    (rset2 : RegionId.Set.t) (ty2 : rty) : bool =
   let default = false in
   let combine b1 b2 = b1 || b2 in
   let compare_regions r1 r2 =
     region_in_set ~allow_erased r1 rset1 && region_in_set ~allow_erased r2 rset2
   in
-  compare_rtys span default combine compare_regions ty1 ty2
+  compare_rtys span ctx default combine compare_regions ty1 ty2
 
 (** Check if the first projection contains the second projection. We use this
     function when checking invariants.
 
     The regions in the types shouldn't be erased (this function will raise an
     exception otherwise). *)
-let projection_contains (span : Meta.span) (rset1 : RegionId.Set.t) (ty1 : rty)
-    (rset2 : RegionId.Set.t) (ty2 : rty) : bool =
+let projection_contains (span : Meta.span) (ctx : eval_ctx)
+    (rset1 : RegionId.Set.t) (ty1 : rty) (rset2 : RegionId.Set.t) (ty2 : rty) :
+    bool =
   let default = true in
   let combine b1 b2 = b1 && b2 in
   let compare_regions r1 r2 =
     region_in_set r1 rset1 || not (region_in_set r2 rset2)
   in
-  compare_rtys span default combine compare_regions ty1 ty2
+  compare_rtys span ctx default combine compare_regions ty1 ty2
 
 (** Lookup a loan content.
 
@@ -1095,13 +1100,13 @@ let get_first_outer_loan_or_borrow_in_value (with_borrows : bool) (v : tvalue) :
   | FoundLoanContent lc -> Some (LoanContent lc)
   | FoundBorrowContent bc -> Some (BorrowContent bc)
 
-let proj_borrows_intersects_proj_loans (span : Meta.span)
+let proj_borrows_intersects_proj_loans (span : Meta.span) (ctx : eval_ctx)
     (proj_borrows : RegionId.Set.t * symbolic_value_id * rty)
     (proj_loans : RegionId.Set.t * symbolic_value_id * rty) : bool =
   let b_regions, b_sv_id, b_ty = proj_borrows in
   let l_regions, l_sv_id, l_ty = proj_loans in
   if b_sv_id = l_sv_id then
-    projections_intersect span l_regions l_ty b_regions b_ty
+    projections_intersect span ctx l_regions l_ty b_regions b_ty
   else false
 
 (** Result of looking up aproj_borrows which intersect a given aproj_loans in
@@ -1146,7 +1151,7 @@ let lookup_intersecting_aproj_borrows_opt (span : Meta.span)
   let check_add_proj_borrows (is_shared : bool) (abs : abs) (level : abs_level)
       (proj' : symbolic_proj) =
     if
-      proj_borrows_intersects_proj_loans span
+      proj_borrows_intersects_proj_loans span ctx
         (abs.regions.owned, proj'.sv_id, proj'.proj_ty)
         (regions, proj.sv_id, proj.proj_ty)
     then
@@ -1166,10 +1171,6 @@ let lookup_intersecting_aproj_borrows_opt (span : Meta.span)
       method! visit_abs _ abs = super#visit_abs (Some (abs, 0)) abs
 
       method! visit_abstract_shared_borrow abs asb =
-        (* Sanity check *)
-        (match !found with
-        | Some (NonSharedProj _) -> [%craise] span "Unreachable"
-        | _ -> ());
         (* Explore *)
         if lookup_shared then
           let abs, lvl = Option.get abs in
@@ -1258,8 +1259,8 @@ let update_intersecting_aproj_borrows (span : Meta.span)
       (proj'_ty : ty) : bool * bool =
     if proj.sv_id = proj'_sv_id then (
       let intersects_owned =
-        projections_intersect span proj_regions proj.proj_ty abs.regions.owned
-          proj'_ty
+        projections_intersect span ctx proj_regions proj.proj_ty
+          abs.regions.owned proj'_ty
       in
 
       (* Sanity check: if the projectors use the same symbolic id then:
@@ -1292,7 +1293,7 @@ let update_intersecting_aproj_borrows (span : Meta.span)
             ctx.type_ctx.type_decls proj_regions proj.proj_ty
         in
         let intersect_outlive =
-          projections_intersect span outlive_regions proj.proj_ty
+          projections_intersect span ctx outlive_regions proj.proj_ty
             abs.regions.owned proj'_ty
         in
         [%sanity_check] span (intersects_owned || intersect_outlive);
@@ -1380,12 +1381,23 @@ let update_intersecting_aproj_borrows (span : Meta.span)
 let remove_intersecting_aproj_borrows_shared (span : Meta.span)
     ~(include_owned : bool) ~(include_outlive : bool) (regions : RegionId.Set.t)
     (proj : symbolic_proj) (ctx : eval_ctx) : eval_ctx =
+  [%ltrace
+    "- regions: "
+    ^ RegionId.Set.to_string None regions
+    ^ "\n- proj: "
+    ^ symbolic_proj_to_string ctx proj
+    ^ "\n- ctx:\n" ^ eval_ctx_to_string ctx];
   (* Small helpers *)
   let update_shared = Some (fun ~owned:_ ~outlive:_ _ _ -> []) in
   let update_mut ~owned:_ ~outlive:_ _ = [%craise] span "Unexpected" in
   let update_emut ~owned:_ ~outlive:_ _ = [%craise] span "Unexpected" in
-  (* Update *)
-  update_intersecting_aproj_borrows span ~fail_if_unchanged:true ~include_owned
+  (* Update
+
+     We set [fail_if_unchanged] to false because if the borrow projectors we're
+     looking for may be in the concrete environment, in which case we will leave
+     it unchanged.
+  *)
+  update_intersecting_aproj_borrows span ~fail_if_unchanged:false ~include_owned
     ~include_outlive ~update_shared ~update_mut ~update_emut regions proj ctx
 
 (** Updates the proj_loans intersecting some projection.
@@ -1457,7 +1469,7 @@ let update_intersecting_aproj_loans (span : Meta.span)
           ctx.type_ctx.type_decls proj_regions proj.proj_ty
       in
       let outlive =
-        projections_intersect span outlive_regions proj.proj_ty
+        projections_intersect span ctx outlive_regions proj.proj_ty
           abs.regions.owned aproj_ty
       in
       [%ldebug
@@ -1488,7 +1500,7 @@ let update_intersecting_aproj_loans (span : Meta.span)
             let abs = Option.get abs in
             if proj.sv_id = aproj_loans.proj.sv_id then (
               let owned =
-                projections_intersect span proj_regions proj.proj_ty
+                projections_intersect span ctx proj_regions proj.proj_ty
                   abs.regions.owned aproj_loans.proj.proj_ty
               in
 
@@ -1508,7 +1520,7 @@ let update_intersecting_aproj_loans (span : Meta.span)
             let abs = Option.get abs in
             if proj.sv_id = aproj_loans.proj.sv_id then (
               let owned =
-                projections_intersect span proj_regions proj.proj_ty
+                projections_intersect span ctx proj_regions proj.proj_ty
                   abs.regions.owned aproj_loans.proj.proj_ty
               in
 
@@ -1779,7 +1791,12 @@ let no_aproj_over_symbolic_in_context (span : Meta.span)
   in
   (* Apply *)
   try obj#visit_eval_ctx () ctx
-  with Found -> [%craise] span "update_aproj_loans_to_ended: failed"
+  with Found ->
+    [%ltrace
+      "update_aproj_loan_to_ended failed:\n- sv_id: "
+      ^ SymbolicValueId.to_string sv_id
+      ^ "\n- ctx:\n" ^ eval_ctx_to_string ctx];
+    [%craise] span "update_aproj_loans_to_ended: failed"
 
 let abs_has_non_ended_eborrows_or_eloans ~(borrows : bool) (abs : abs)
     (min_level : int) : bool =
@@ -2402,14 +2419,14 @@ and norm_proj_const_generics_union (span : Meta.span) (cg1 : constant_expr)
   [%sanity_check] span (cg1 = cg2);
   cg1
 
-let norm_proj_ty_contains span (ty1 : rty) (ty2 : rty) : bool =
+let norm_proj_ty_contains span ctx (ty1 : rty) (ty2 : rty) : bool =
   let set = RegionId.Set.singleton RegionId.zero in
-  projection_contains span set ty1 set ty2
+  projection_contains span ctx set ty1 set ty2
 
-let norm_proj_tys_intersect span (ty1 : norm_proj_ty) (ty2 : norm_proj_ty) :
+let norm_proj_tys_intersect span ctx (ty1 : norm_proj_ty) (ty2 : norm_proj_ty) :
     bool =
   let rset = RegionId.Set.singleton RegionId.zero in
-  projections_intersect ~allow_erased:true span rset ty1 rset ty2
+  projections_intersect ~allow_erased:true span ctx rset ty1 rset ty2
 
 (** Refresh the live region ids appearing in a type, and return the new type
     with the map from old regions to fresh regions. *)

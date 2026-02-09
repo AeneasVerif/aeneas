@@ -136,7 +136,7 @@ The following limitations will be lifted by the ongoing work on separation logic
 - **concurrency**
 
 Feel free to contact the team or join the Zulip if you need some specific features or if
-you're interested iun contributing.
+you're interested in contributing.
 
 ## Backend Support
 

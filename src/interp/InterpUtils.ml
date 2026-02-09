@@ -30,6 +30,7 @@ let aproj_borrows_to_string = Print.EvalCtx.aproj_borrows_to_string
 let aproj_loans_to_string = Print.EvalCtx.aproj_loans_to_string
 let aloan_content_to_string = Print.EvalCtx.aloan_content_to_string
 let eloan_content_to_string = Print.EvalCtx.eloan_content_to_string
+let symbolic_proj_to_string = Print.EvalCtx.symbolic_proj_to_string
 let aproj_to_string = Print.EvalCtx.aproj_to_string
 let eproj_to_string = Print.EvalCtx.eproj_to_string
 let tvalue_to_string = Print.EvalCtx.tvalue_to_string
@@ -471,8 +472,9 @@ let tvalue_has_shared_loans (v : tvalue) : bool =
 type unique_borrow_id =
   | UMut of borrow_id
   | UShared of (borrow_id * shared_borrow_id)
-      (** The borrow id is not necessary but we keep it for formatting purposes
-      *)
+      (** The borrow id is not necessary but we keep it for formatting purposes.
+          Note that we use UShared both for shared borrows and **reserved**
+          borrows. *)
 [@@deriving show, ord]
 
 let unique_borrow_id_to_string (uid : unique_borrow_id) : string =

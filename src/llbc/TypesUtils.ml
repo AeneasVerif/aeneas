@@ -43,8 +43,13 @@ let ty_regions_intersect (ty : ty) (regions : RegionId.Set.t) : bool =
 let ty_has_regions_in_pred (pred : region -> bool) (ty : ty) : bool =
   let obj =
     object
-      inherit [_] iter_ty
+      inherit [_] iter_ty as super
       method! visit_region _ r = if pred r then raise Found
+
+      method! visit_TDynTrait env tr =
+        (* Ignore the dyn traits by default *)
+        if Config.type_analysis_ignore_dyn then ()
+        else super#visit_TDynTrait env tr
     end
   in
   try

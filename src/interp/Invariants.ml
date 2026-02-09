@@ -922,7 +922,7 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
               borrow_proj_union aproj_borrows
           in
           [%sanity_check] span
-            (norm_proj_ty_contains span loan_proj_union borrow_proj_union))
+            (norm_proj_ty_contains span ctx loan_proj_union borrow_proj_union))
   in
 
   M.iter check_info !infos

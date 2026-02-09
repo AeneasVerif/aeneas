@@ -293,8 +293,8 @@ let move_return_value (config : config) (span : Meta.span)
     (Some v, ctx, cc)
   else (None, ctx, fun e -> e)
 
-let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
-    (ctx : eval_ctx) :
+let pop_frame (config : config) (span : Meta.span) ~(pop_locals : bool)
+    ~(pop_return_value : bool) (ctx : eval_ctx) :
     tvalue option * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Debug *)
   [%ltrace eval_ctx_to_string ~span:(Some span) ctx];
@@ -320,14 +320,16 @@ let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
 
   (* Drop the outer *loans* we find in the local variables *)
   let ctx, cc =
-    (* Drop the loans *)
-    let locals = List.rev locals in
-    fold_left_apply_continuation
-      (fun lid ctx ->
-        drop_outer_loans_at_lplace config span
-          (mk_place_from_var_id ctx span lid)
-          ctx)
-      locals ctx
+    if pop_locals then
+      (* Drop the loans *)
+      let locals = List.rev locals in
+      fold_left_apply_continuation
+        (fun lid ctx ->
+          drop_outer_loans_at_lplace config span
+            (mk_place_from_var_id ctx span lid)
+            ctx)
+        locals ctx
+    else (ctx, fun e -> e)
   in
   (* Debug *)
   [%ltrace
@@ -366,7 +368,9 @@ let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
 let pop_frame_assign (config : config) (span : Meta.span) (dest : place) :
     cm_fun =
  fun ctx ->
-  let v, ctx, cc = pop_frame config span true ctx in
+  let v, ctx, cc =
+    pop_frame config span ~pop_locals:true ~pop_return_value:true ctx
+  in
   comp cc (assign_to_place config span (Option.get v) dest ctx)
 
 (** Auxiliary function - see {!eval_builtin_function_call} *)
@@ -673,18 +677,71 @@ let eval_non_builtin_function_call_symbolic_inst (span : Meta.span)
       in
       (func.kind, func.generics, def, inst_sg)
 
+(** Helper to evaluate global references for lifetime static.
+
+    Given a value [v], generate a fresh borrow id [bid], push [_ -> SL bid v] to
+    the context and output [SB bid]. *)
+let push_value_to_dummy_shared_loan span (ctx : eval_ctx) (v : tvalue) :
+    eval_ctx * tvalue =
+  let bid = ctx.fresh_borrow_id () in
+  let sid = ctx.fresh_shared_borrow_id () in
+  let loan : tvalue = { value = VLoan (VSharedLoan (bid, v)); ty = v.ty } in
+  let borrow : tvalue =
+    {
+      value = VBorrow (VSharedBorrow (bid, sid));
+      ty = TRef (RErased, v.ty, RShared);
+    }
+  in
+  (* We need to push the shared loan in a dummy variable.
+     Generally speaking we should not be allowed to put loans in dummy variables,
+     but in the case of static lifetimes it is ok. TODO: generalize. *)
+  [%cassert] span (not !Config.use_static) "Unimplemented";
+  let dummy_id = ctx.fresh_dummy_var_id () in
+  let ctx = ctx_push_dummy_var ctx dummy_id loan in
+  (ctx, borrow)
+
 (** Helper: introduce a fresh symbolic value for a global *)
 let eval_global_as_fresh_symbolic_value (span : Meta.span)
-    (gref : global_decl_ref) (ctx : eval_ctx) : symbolic_value =
+    (gref : global_decl_ref) (ctx : eval_ctx) :
+    eval_ctx * tvalue * (SA.expr -> SA.expr) =
   let generics = gref.generics in
   let global = ctx_lookup_global_decl span ctx gref.id in
-  [%cassert] span (ty_no_regions global.ty)
-    "Const globals should not contain regions";
-  (* Instantiate the type  *)
-  let generics = Subst.generic_args_erase_regions generics in
-  let subst = Subst.make_subst_from_generics global.generics generics Self in
-  let ty = Subst.erase_regions_substitute_types subst global.ty in
-  mk_fresh_symbolic_value span ctx ty
+  (* The global might itself be a (static) reference - TODO: generalize *)
+  match global.ty with
+  | TRef (RStatic, _, RShared) ->
+      (* Instantiate the type  *)
+      let generics = Subst.generic_args_erase_regions generics in
+      let subst =
+        Subst.make_subst_from_generics global.generics generics Self
+      in
+      let ty = Subst.erase_regions_substitute_types subst global.ty in
+      (* Decompose *)
+      let inner_ty =
+        match ty with
+        | TRef (RStatic, ty, RShared) -> ty
+        | _ -> [%internal_error] span
+      in
+      [%cassert] span (ty_no_regions inner_ty) "Unimplemented";
+      (* We do like in [eval_global_ref]: we introduce a borrow whose corresponding
+         loan is in a dummy value, allowing the borrow to live as long as needed.
+         TODO: introduce proper support for 'static
+      *)
+      let sval = mk_fresh_symbolic_value span ctx inner_ty in
+      let v = mk_tvalue_from_symbolic_value sval in
+      let ctx, borrow = push_value_to_dummy_shared_loan span ctx v in
+      let cc = S.synthesize_global_eval gref sval in
+      (ctx, borrow, cc)
+  | _ ->
+      [%cassert] span (ty_no_regions global.ty) "Unimplemented";
+      (* Instantiate the type  *)
+      let generics = Subst.generic_args_erase_regions generics in
+      let subst =
+        Subst.make_subst_from_generics global.generics generics Self
+      in
+      let ty = Subst.erase_regions_substitute_types subst global.ty in
+      let sval = mk_fresh_symbolic_value span ctx ty in
+      let cc = S.synthesize_global_eval gref sval in
+      (ctx, mk_tvalue_from_symbolic_value sval, cc)
 
 (** Evaluate a statement. *)
 let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
@@ -873,31 +930,12 @@ and eval_global_ref (config : config) (span : Meta.span) (dest : place)
       (* Generate a fresh symbolic value. In the translation, this fresh symbolic value will be
        * defined as equal to the value of the global (see {!S.synthesize_global_eval}).
        * We then create a reference to the global. *)
-      let sval = eval_global_as_fresh_symbolic_value span gref ctx in
-      let typed_sval = mk_tvalue_from_symbolic_value sval in
+      let ctx, sval, cf = eval_global_as_fresh_symbolic_value span gref ctx in
       (* Create a shared loan containing the global, as well as a shared borrow *)
-      let bid = ctx.fresh_borrow_id () in
-      let sid = ctx.fresh_shared_borrow_id () in
-      let loan : tvalue =
-        { value = VLoan (VSharedLoan (bid, typed_sval)); ty = sval.sv_ty }
-      in
-      let borrow : tvalue =
-        {
-          value = VBorrow (VSharedBorrow (bid, sid));
-          ty = TRef (RErased, sval.sv_ty, RShared);
-        }
-      in
-      (* We need to push the shared loan in a dummy variable.
-         Generally speaking we should not be allowed to put loans in dummy variables,
-         but in the case of static lifetimes it is ok. TODO: generalize. *)
-      [%cassert] span (not !Config.use_static) "Unimplemented";
-      let dummy_id = ctx.fresh_dummy_var_id () in
-      let ctx = ctx_push_dummy_var ctx dummy_id loan in
+      let ctx, borrow = push_value_to_dummy_shared_loan span ctx sval in
       (* Assign the borrow to its destination *)
       let ctx, cc = assign_to_place config span borrow dest ctx in
-      ( [ (ctx, Unit) ],
-        cc_singleton __FILE__ __LINE__ span
-          (cc_comp (S.synthesize_global_eval gref sval) cc) )
+      ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ span (cc_comp cf cc))
 
 (** Evaluate a switch *)
 and eval_switch (config : config) (span : Meta.span) (switch : switch) :
@@ -1631,11 +1669,11 @@ and eval_builtin_function_call_symbolic (config : config) (span : Meta.span)
   else
     [%classert] span
       (List.for_all
-         (fun ty -> not (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty))
+         (fun ty -> not (ty_has_mut_borrows ctx.type_ctx.type_infos ty))
          func.generics.types)
       (lazy
         ("Instantiating the type parameters of a function with types \
-          containing borrows is not allowed for now ("
+          containing mutable borrows is currently not allowed ("
        ^ fn_ptr_to_string ctx func ^ ")"));
 
   (* There shouldn't be any reference to Self *)
