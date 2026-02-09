@@ -139,25 +139,22 @@ def generateReadDiscriminant (declName : Name) (ty : ScalarTy) (discrValues : Op
   let cmds ← liftTermElabM (generateReadDiscriminantCmds declName ty discrValues)
   cmds.forM elabCommand
 
-syntax (name := typeToken) ("u8" <|> "u16" <|> "u32" <|> "u64" <|> "u128" <|> "usize" <|>
-                            "i8" <|> "i16" <|> "i32" <|> "i64" <|> "i128" <|> "isize") : term
-
-syntax (name := readDiscriminant) "discriminant" typeToken ("["num,*"]")? : attr
+syntax (name := readDiscriminant) "discriminant" ident ("["num,*"]")? : attr
 
 def elabTypeToken (stx : Syntax) : AttrM ScalarTy :=
-  match stx with
-  | .node _ `token.u8 _ => pure ScalarTy.U8
-  | .node _ `token.u16 _ => pure ScalarTy.U16
-  | .node _ `token.u32 _ => pure ScalarTy.U32
-  | .node _ `token.u64 _ => pure ScalarTy.U64
-  | .node _ `token.u128 _ => pure ScalarTy.U128
-  | .node _ `token.usize _ => pure ScalarTy.Usize
-  | .node _ `token.i8 _ => pure ScalarTy.I8
-  | .node _ `token.i16 _ => pure ScalarTy.I16
-  | .node _ `token.i32 _ => pure ScalarTy.I32
-  | .node _ `token.i64 _ => pure ScalarTy.I64
-  | .node _ `token.i128 _ => pure ScalarTy.I128
-  | .node _ `token.isize _ => pure ScalarTy.Isize
+  match stx.getId with
+  | `u8 => pure ScalarTy.U8
+  | `u16 => pure ScalarTy.U16
+  | `u32 => pure ScalarTy.U32
+  | `u64 => pure ScalarTy.U64
+  | `u128 => pure ScalarTy.U128
+  | `usize => pure ScalarTy.Usize
+  | `i8 => pure ScalarTy.I8
+  | `i16 => pure ScalarTy.I16
+  | `i32 => pure ScalarTy.I32
+  | `i64 => pure ScalarTy.I64
+  | `i128 => pure ScalarTy.I128
+  | `isize => pure ScalarTy.Isize
   | _ => throwUnsupportedSyntax
 
 def elabReadDiscriminantAttribute (stx : Syntax) : AttrM (ScalarTy × Option (List Nat)) :=
