@@ -90,7 +90,8 @@ let rec apply_proj_borrows_on_shared_borrow (span : Meta.span) (ctx : eval_ctx)
         (* Check that the projection doesn't contain ended regions *)
         [%sanity_check] span
           (not
-             (projections_intersect span ctx.ended_regions s.sv_ty regions ty));
+             (projections_intersect span ctx ctx.ended_regions s.sv_ty regions
+                ty));
         [ AsbProjReborrows { sv_id = s.sv_id; proj_ty = ty } ]
     | VAdt adt, TArray (ty, _) ->
         List.flatten
@@ -226,7 +227,7 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
               ^ RegionId.Set.to_string None rset2
               ^ "\n"];
             [%sanity_check] span
-              (not (projections_intersect span rset1 ty1 rset2 ty2)));
+              (not (projections_intersect span ctx rset1 ty1 rset2 ty2)));
           ASymbolic
             ( PNone,
               AProjBorrows
@@ -340,7 +341,7 @@ let rec apply_eproj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
               ^ RegionId.Set.to_string None rset2
               ^ "\n"];
             [%sanity_check] span
-              (not (projections_intersect span rset1 ty1 rset2 ty2)));
+              (not (projections_intersect span ctx rset1 ty1 rset2 ty2)));
           (* Only introduce a projection if the value contains mutable
              borrows which intersect the current regions *)
           let type_infos = ctx.type_ctx.type_infos in

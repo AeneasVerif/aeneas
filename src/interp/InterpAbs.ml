@@ -955,14 +955,14 @@ let merge_abstractions_merge_markers (span : Meta.span)
     match (proj0, proj1) with
     | AProjBorrows proj0, AProjBorrows proj1
       when proj0.proj.sv_id = proj1.proj.sv_id
-           && projections_intersect span owned_regions proj0.proj.proj_ty
+           && projections_intersect span ctx owned_regions proj0.proj.proj_ty
                 owned_regions proj1.proj.proj_ty ->
         [%sanity_check] span (complementary_markers pm0 pm1);
         (* Merge *)
         Some (merge_funs.merge_aborrow_projs ty0 pm0 proj0 ty1 pm1 proj1)
     | AProjLoans proj0, AProjLoans proj1
       when proj0.proj.sv_id = proj1.proj.sv_id
-           && projections_intersect span owned_regions proj0.proj.proj_ty
+           && projections_intersect span ctx owned_regions proj0.proj.proj_ty
                 owned_regions proj1.proj.proj_ty ->
         [%sanity_check] span (complementary_markers pm0 pm1);
         (* Merge *)
@@ -1225,7 +1225,7 @@ let bound_inputs_outputs_add_symbolic (sid : SymbolicValueId.id)
   { out with symbolic; all_bindings = Right sid :: out.all_bindings }
 
 let bound_inputs_outputs_update_input_symbolic (span : Meta.span)
-    (sid : SymbolicValueId.id) (pm : proj_marker) (ty : ty)
+    (ctx : eval_ctx) (sid : SymbolicValueId.id) (pm : proj_marker) (ty : ty)
     (proj_ty : norm_proj_ty) (out : bound_inputs_outputs) :
     bound_inputs_outputs * tevalue =
   match SymbolicValueId.Map.find_opt sid out.symbolic with
@@ -1264,7 +1264,7 @@ let bound_inputs_outputs_update_input_symbolic (span : Meta.span)
         List.partition
           (fun (pm', proj_ty', _, _) ->
             proj_markers_intersect pm pm'
-            && norm_proj_tys_intersect span proj_ty proj_ty')
+            && norm_proj_tys_intersect span ctx proj_ty proj_ty')
           bound
       in
       let bound, value =
@@ -1390,8 +1390,8 @@ let bind_outputs_from_output_input (span : Meta.span) (ctx : eval_ctx)
             let ty = proj.proj_ty in
             let norm_proj_ty = normalize_proj_ty regions ty in
             let bound', e =
-              bound_inputs_outputs_update_input_symbolic span proj.sv_id pm ty
-                norm_proj_ty !bound
+              bound_inputs_outputs_update_input_symbolic span ctx proj.sv_id pm
+                ty norm_proj_ty !bound
             in
             bound := bound';
             e

@@ -1584,8 +1584,6 @@ and end_proj_loans_symbolic (config : config) (span : Meta.span)
     ^ "\n- projection type: "
     ^ ty_to_string ctx proj.proj_ty
     ^ "\n- ctx:\n" ^ eval_ctx_to_string ctx];
-  (* Small helpers for sanity checks *)
-  let check ctx = no_aproj_over_symbolic_in_context span proj.sv_id ctx in
   (* Find the first proj_borrows which intersects the proj_loans *)
   let explore_shared = true in
   match
@@ -1603,8 +1601,6 @@ and end_proj_loans_symbolic (config : config) (span : Meta.span)
       | None ->
           (* No outer borrows/loans found: we can end the loan projector *)
           let ctx = update_aproj_loans_to_ended span abs_id proj.sv_id ctx in
-          (* Sanity check *)
-          check ctx;
           (* Continue *)
           (ctx, fun e -> e)
       | Some outer ->
@@ -1622,109 +1618,33 @@ and end_proj_loans_symbolic (config : config) (span : Meta.span)
             (end_proj_loans_symbolic config span ~snapshots chain abs_id level
                regions proj ctx))
   | Some (SharedProjs projs) ->
-      (* We found projectors over shared values - split between the projectors
-         which belong to the current abstraction and the others.
-         The context looks like this:
-         {[
-           abs'0 {
-             // The loan was initially like this:
-             // [shared_loan lids (s <: ...) [s]]
-             // but if we get there it means it was already ended:
-             ended_shared_loan (s <: ...) [s]
-             proj_shared_borrows [...; (s <: ...); ...]
-             proj_shared_borrows [...; (s <: ...); ...]
-             ...
-           }
-
-           abs'1 [
-             proj_shared_borrows [...; (s <: ...); ...]
-             ...
-           }
-
-           ...
-
-           // No [s] outside of abstractions
-
-         ]}
-      *)
-      let _owned_projs, external_projs =
-        List.partition (fun (abs_id', _, _) -> abs_id' = abs_id) projs
-      in
-      (* End the external borrow projectors (end their abstractions) *)
+      (* We found projectors over shared values: end the abstractions containing
+         them at the proper level.  *)
       let ctx, cc =
         let abs_ids =
-          List.map (fun (abs_id, _, level) -> { abs_id; level }) external_projs
+          List.map (fun (abs_id, _, level) -> { abs_id; level }) projs
         in
         let abs_ids = AbsIdWithLevelSet.of_list abs_ids in
         (* End the abstractions and continue *)
         end_abs_set_aux config span ~snapshots chain abs_ids ctx
       in
-      (* End the internal borrows projectors and the loans projector *)
-      let ctx =
-        (* All the proj_borrows are owned: simply erase them *)
-        let ctx =
-          remove_intersecting_aproj_borrows_shared span ~include_owned:true
-            ~include_outlive:false regions proj ctx
-        in
-        (* End the loan itself *)
-        update_aproj_loans_to_ended span abs_id proj.sv_id ctx
-      in
-      (* Sanity check *)
-      check ctx;
+      (* End the loan itself *)
+      let ctx = update_aproj_loans_to_ended span abs_id proj.sv_id ctx in
       (ctx, cc)
   | Some (NonSharedProj (abs_id', _proj_ty, level')) ->
-      (* We found one projector of borrows in an abstraction: if it comes
-         from this abstraction, we can end it directly, otherwise we need
-         to end the abstraction where it came from first *)
-      if abs_id' = abs_id && level = level' then
-        (* TODO: what is below is wrong *)
-        raise (Failure "Unimplemented")
-        (* (* Note that it happens when a function returns a [&mut ...] which gets
-              expanded to [mut_borrow l s], and we end the borrow [l] (so [s] gets
-              reinjected in the parent abstraction without having been modified).
-
-              The context looks like this:
-              {[
-                abs'0 {
-                  [s <: ...]
-                  (s <: ...)
-                }
-
-                // Note that [s] can't appear in other abstractions or in the
-                // regular environment (because we forbid the duplication of
-                // symbolic values which contain borrows).
-              ]}
-           *)
-           (* End the projector of borrows - TODO: not completely sure what to
-            * replace it with... Maybe we should introduce an ABottomProj? *)
-           let ctx = update_aproj_borrows span abs_id sv AEmpty ctx in
-           (* Sanity check: no other occurrence of an intersecting projector of borrows *)
-           [%sanity_check] span
-             (Option.is_none
-                (lookup_intersecting_aproj_borrows_opt span explore_shared regions
-                   sv proj_ty ctx))
-             ;
-           (* End the projector of loans *)
-           let ctx = update_aproj_loans_to_ended span abs_id sv ctx in
-           (* Sanity check *)
-           check ctx;
-           (* Continue *)
-                 (ctx, fun e -> e) *)
-      else
-        (* The borrows proj comes from a different abstraction: end it. *)
-        let ctx, cc =
-          end_abs_aux config span ~snapshots chain abs_id' level' ctx
-        in
-        (* Retry ending the projector of loans *)
-        let ctx, cc =
-          comp cc
-            (end_proj_loans_symbolic config span ~snapshots chain abs_id level
-               regions proj ctx)
-        in
-        (* Sanity check *)
-        check ctx;
-        (* Return *)
-        (ctx, cc)
+      (* We found one projector of borrows in an abstraction: end the abstraction
+         at the corresponding level. *)
+      let ctx, cc =
+        end_abs_aux config span ~snapshots chain abs_id' level' ctx
+      in
+      (* Retry ending the projector of loans *)
+      let ctx, cc =
+        comp cc
+          (end_proj_loans_symbolic config span ~snapshots chain abs_id level
+             regions proj ctx)
+      in
+      (* Return *)
+      (ctx, cc)
 
 let end_borrow config (span : Meta.span) ?(snapshots : bool = true) :
     unique_borrow_id -> cm_fun =
@@ -2264,7 +2184,7 @@ let abs_mut_borrows_loans_in_fixed span (ctx : eval_ctx)
       method! visit_AProjLoans env proj' =
         if
           proj.sv_id = proj'.proj.sv_id
-          && projections_intersect span abs.regions.owned proj.proj_ty
+          && projections_intersect span ctx abs.regions.owned proj.proj_ty
                (Option.get env).regions.owned proj'.proj.proj_ty
         then raise Found
         else super#visit_AProjLoans env proj'
