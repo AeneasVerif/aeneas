@@ -780,13 +780,23 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                   );
                 compute_info_from_llbc ()
           in
-          (* Add the fields *)
+          (* Add the fields.
+
+             We do something special: if the field name is a keyword and the
+             backend is Lean, we use the
+          *)
+          let mk_field_name (name : string) =
+            match backend () with
+            | Lean -> "«" ^ name ^ "»"
+            | _ -> name
+          in
+
           let ctx =
             List.fold_left
               (fun ctx (fid, name) ->
                 ctx_add def.item_meta.span
                   (FieldId (TAdtId def.def_id, fid))
-                  name ctx)
+                  (mk_field_name name) ctx)
               ctx field_names
           in
           (* Add the constructor name *)
