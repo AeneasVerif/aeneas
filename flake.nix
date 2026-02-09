@@ -105,6 +105,8 @@
               && !pkgs.lib.hasSuffix ".llbc" path);
           };
           buildInputs = [ charon.packages.${system}.rustToolchain ];
+          # Note that we're using the -sequential flag to prevent race conditions
+          # TODO: remove once we solve the race condition in Aeneas
           buildPhase = ''
             export AENEAS_EXE=${aeneas}/bin/aeneas
             export CHARON_EXE=${aeneas}/bin/charon
