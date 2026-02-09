@@ -1031,6 +1031,7 @@ let keywords () =
           "match";
           "mut";
           "mutual";
+          "name";
           "namespace";
           "noncomputable";
           "notation";
