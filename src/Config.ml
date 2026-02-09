@@ -488,12 +488,17 @@ let recover_joins = ref true
     is easy to activate them. *)
 let type_analysis_ignore_dyn = true
 
+(** We currently incorrectly use the region inside the dyn trait: once we update
+    the use, remove this boolean: this will reveal important places that need to
+    be updated. *)
+let use_dyn_regions = false
+
 (** When analyzing an opaque type about which we have no information, should we
     consider its regions as being used for mutable references or not? *)
 let opaque_types_have_mut_regions_by_default = false
 
 (** Should we use colors when logging? *)
-let log_with_colors = ref true
+let log_with_colors = ref false
 
 (** Should we use rotating colors when loggin (i.e., rather than using a color
     per category of item, such as borrows, loans, etc. use a color based on the
