@@ -362,42 +362,49 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
                  opaque module. The opaque *types* are builtin. *)
               F.pp_print_string fmt (ctx_get_type (Some span) type_id ctx);
               (* We might need to:
-                 - lookup the information about the implicit/explicit parameters
-                   (note that builtin types don't have implicit parameters)
                  - filter the type arguments, if the type is builtin (for instance,
                    we filter the global allocator type argument for `Vec`).
+                 - lookup the information about the implicit/explicit parameters
+                   (note that builtin types don't have implicit parameters)
               *)
               let generics, explicit =
                 match type_id with
-                | TAdtId id -> (
-                    match
-                      TypeDeclId.Map.find_opt id ctx.types_filter_type_args_map
-                    with
-                    | None -> (generics, None)
-                    | Some filter ->
-                        let filter_types : 'a. 'a list -> 'a list =
-                         fun l ->
-                          let l = List.combine filter l in
-                          List.filter_map
-                            (fun (b, ty) -> if b then Some ty else None)
-                            l
-                        in
-                        let types = filter_types generics.types in
-                        let generics = { generics with types } in
-                        let explicit =
-                          match TypeDeclId.Map.find_opt id ctx.trans_types with
-                          | None ->
-                              (* The decl might be missing if there were some errors *)
-                              None
-                          | Some d ->
-                              Some
-                                {
-                                  d.explicit_info with
-                                  explicit_types =
-                                    filter_types d.explicit_info.explicit_types;
-                                }
-                        in
-                        (generics, explicit))
+                | TAdtId id ->
+                    (* Start by filtering the types *)
+                    let generics, filter_types =
+                      match
+                        TypeDeclId.Map.find_opt id
+                          ctx.types_filter_type_args_map
+                      with
+                      | None -> (generics, None)
+                      | Some filter ->
+                          let filter_types : 'a. 'a list -> 'a list =
+                           fun l ->
+                            let l = List.combine filter l in
+                            List.filter_map
+                              (fun (b, ty) -> if b then Some ty else None)
+                              l
+                          in
+                          let types = filter_types generics.types in
+                          ({ generics with types }, Some filter_types)
+                    in
+                    let explicit =
+                      match TypeDeclId.Map.find_opt id ctx.trans_types with
+                      | None ->
+                          (* The decl might be missing if there were some errors *)
+                          None
+                      | Some d ->
+                          let explicit_types =
+                            let explicit_types =
+                              d.explicit_info.explicit_types
+                            in
+                            match filter_types with
+                            | None -> explicit_types
+                            | Some filter_types -> filter_types explicit_types
+                          in
+                          Some { d.explicit_info with explicit_types }
+                    in
+                    (generics, explicit)
                 | _ ->
                     (* All the parameters of builtin types are explicit *)
                     (generics, None)
