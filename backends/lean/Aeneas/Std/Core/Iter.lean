@@ -168,7 +168,7 @@ def core.iter.range.IteratorRange.next
    {A : Type} (StepInst : core.iter.range.Step A) :
   core.ops.range.Range A → Result ((Option A) × (core.ops.range.Range A)) :=
   λ range => do
-    let cmp ← StepInst.partialOrdInst.lt range.start range.end_;
+    let cmp ← StepInst.partialOrdInst.lt range.start range.end;
     if cmp then
       let range' ← StepInst.cloneInst.clone range.start;
       let n ← StepInst.forward_checked range' 1#usize;
