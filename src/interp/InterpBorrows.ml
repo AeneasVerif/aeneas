@@ -2224,10 +2224,8 @@ let abs_mut_borrows_loans_in_fixed span (ctx : eval_ctx)
         | AIgnoredMutBorrow _
         | AEndedMutBorrow _
         | AEndedSharedBorrow
-        | AEndedIgnoredMutBorrow _ -> ()
-        | AProjSharedBorrow _ ->
-            (* Unimplemented for now *)
-            [%internal_error] span
+        | AEndedIgnoredMutBorrow _
+        | AProjSharedBorrow _ -> ()
 
       method! visit_aproj env proj =
         super#visit_aproj env proj;
