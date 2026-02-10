@@ -234,6 +234,12 @@ theorem UScalar.or_spec {ty} (x y : UScalar ty) :
   rfl
 
 @[progress]
+theorem UScalar.xor_spec {ty} (x y : UScalar ty) :
+  toResult (x ^^^ y) ⦃ z => z.val = (x ^^^ y).val ∧ z.bv = x.bv ^^^ y.bv ⦄ := by
+  simp [toResult]
+  rfl
+
+@[progress]
 theorem IScalar.and_spec {ty} (x y : IScalar ty) :
   toResult (x &&& y) ⦃ z => z.val = (x &&& y).val ∧ z.bv = x.bv &&& y.bv ⦄ := by
   simp [toResult]
@@ -245,12 +251,21 @@ theorem IScalar.or_spec {ty} (x y : IScalar ty) :
   simp [toResult]
   rfl
 
+@[progress]
+theorem IScalar.xor_spec {ty} (x y : IScalar ty) :
+  toResult (x ^^^ y) ⦃ z => z.val = (x ^^^ y).val ∧ z.bv = x.bv ^^^ y.bv ⦄ := by
+  simp [toResult]
+  rfl
+
 @[simp, bvify_simps] theorem UScalar.bv_and {ty} (x y : UScalar ty) : (x &&& y).bv = x.bv &&& y.bv := by rfl
 @[simp, bvify_simps] theorem UScalar.bv_or {ty} (x y : UScalar ty) : (x ||| y).bv = x.bv ||| y.bv := by rfl
+@[simp, bvify_simps] theorem UScalar.bv_xor {ty} (x y : UScalar ty) : (x ^^^ y).bv = x.bv ^^^ y.bv := by rfl
 @[simp, bvify_simps] theorem IScalar.bv_and {ty} (x y : IScalar ty) : (x &&& y).bv = x.bv &&& y.bv := by rfl
 @[simp, bvify_simps] theorem IScalar.bv_or {ty} (x y : IScalar ty) : (x ||| y).bv = x.bv ||| y.bv := by rfl
+@[simp, bvify_simps] theorem IScalar.bv_xor {ty} (x y : IScalar ty) : (x ^^^ y).bv = x.bv ^^^ y.bv := by rfl
 
 @[simp, scalar_tac_simps] theorem UScalar.val_and {ty} (x y : UScalar ty) : (x &&& y).val = x.val &&& y.val := by rfl
 @[simp, scalar_tac_simps] theorem UScalar.val_or {ty} (x y : UScalar ty) : (x ||| y).val = x.val ||| y.val := by rfl
+@[simp, scalar_tac_simps] theorem UScalar.val_xor {ty} (x y : UScalar ty) : (x ^^^ y).val = x.val ^^^ y.val := by rfl
 
 end Aeneas.Std
