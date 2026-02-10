@@ -461,8 +461,28 @@ let match_patterns_with_trait_decl_refs = true
 (** Decompose loops to recursive functions *)
 let loops_to_recursive_functions = ref true
 
-(** Should we run the translation in parallel? *)
-let parallel = ref true
+(** Should we run the translation in parallel?
+
+    We deactivate it by default because:
+    - There is a race condition happening in SCC.ml when computing the function
+      signatures.
+    - We do not gain much at this stage, meaning the parallelism is not used
+      correctly.
+
+    Some remarks:
+    - we should not allocate one task per function to translate: this is
+      expensive
+    - we should allocate the domain when starting the program, and tear them
+      down when exiting
+    - the way functions are ordered before being translated is wrong:
+    - the function which computes the size of the function should count the the
+      loops differently (the body of a loop is executed twice to compute a fixed
+      point: the result is exponential)
+    - the way the parellelism is executed implies that the first domain will
+      translate all the biggest functions! We should rather have a queue of
+      tasks (or an index of the next function to translate that we would
+      atomically increment) *)
+let parallel = ref false
 
 (** Once we add proper support for static lifetimes, remove this *)
 let use_static = ref false
