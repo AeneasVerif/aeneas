@@ -44,3 +44,9 @@ fn mk_into<U, V, T: Into<V> + 'static, W: Into<V> + 'static>(
         Box::new(y)
     }
 }
+
+trait Trivial {}
+
+fn dyn_closure(_: impl Trivial) {
+    let f = |x: u32| -> u32 { x };
+}
