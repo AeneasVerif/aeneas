@@ -294,17 +294,54 @@ def leanNameToRust (n0 : Name) : AttrM String := do
     | _ => throwError "Ill-formed name: `{n0}`"
   toRust n0
 
+/-- Does a name need escaping with `« ... »`?
+
+We do it the naive way by formatting the name and checking whether it is equal to the name directly
+converted to a string.
+-/
+def needsEscape (n : Name) : AttrM Bool := do
+  let s := toMessageData (mkIdent n)
+  let s := Format.pretty (← s.format (some {env := (← getEnv), opts := (← getOptions), mctx := {}, lctx := {}}))
+  let n := n.toString
+  pure (n ≠ s)
+
+/--
+info: true
+-/
+#guard_msgs in
+#eval needsEscape `let
+
+/--
+info: true
+-/
+#guard_msgs in
+#eval needsEscape `if
+
+/--
+info: false
+-/
+#guard_msgs in
+#eval needsEscape `bool
+
+/--
+info: false
+-/
+#guard_msgs in
+#eval needsEscape `Bool
+
+def maybeEscape (n : Name) : AttrM String := do
+  if (← needsEscape n) then pure s!"«{n}»" else pure n.toString
+
 def fieldNameToString (n : Name) : AttrM String := do
   match n with
-  | .str .anonymous field =>
-    pure field
+  | .str .anonymous _ => maybeEscape n
   | _ => throwError "Ill-formed field name: `{n}`"
 
 def variantNameToString (declName n : Name) : AttrM String := do
   match n with
   | .str pre variant =>
     if pre ≠ declName then throwError "Ill-formed variant name: `{n}`"
-    pure variant
+    maybeEscape (.str .anonymous variant)
   | _ => throwError "Ill-formed field name: `{n}`"
 
 /-!
@@ -365,6 +402,11 @@ def elabTypeNameInfo (stx : Syntax) : AttrM (String × TypeInfo) :=
       pure (pat, info)
     | _ => Lean.Elab.throwUnsupportedSyntax
 
+def needsFrenchQuotes (s : String) : Bool :=
+  -- Convert to Name and back with escape=false to see if it needs escaping
+  let name := s.toName
+  name.toString (escape := false) != s
+
 /-- This helper completes the information available in the information provided by the user by
     looking at the definition itself. -/
 def processType (declName : Name) (_pat : String) (info : TypeInfo) : AttrM TypeInfo := do
@@ -412,7 +454,7 @@ def processType (declName : Name) (_pat : String) (info : TypeInfo) : AttrM Type
         if rustVariants.contains x.rust then
           throwError "The Rust variant name `{x.rust}` is used twice"
         if ¬ leanVariants.contains x.extract then
-          throwError "The user provides a mapping for a variant which is not present in the Lean definition: {x.extract}"
+          throwError "The user provided a mapping for a variant which is not present in the Lean definition: {x.extract}"
         providedVariants := providedVariants.insert x.extract x
         rustVariants := rustVariants.insert x.rust
       /- Now we go through the Lean variants and use the user provided information if there is, and automatically
@@ -444,7 +486,7 @@ def processType (declName : Name) (_pat : String) (info : TypeInfo) : AttrM Type
         if rustFields.contains x.rust then
           throwError "The Rust variant name `{x.rust}` is used twice"
         if ¬ leanFields.contains x.extract then
-          throwError "The user provides a mapping for a variant which is not present in the Lean definition: {x.extract}"
+          throwError "The user provided a mapping for a field which is not present in the Lean definition: {x.extract}"
         providedFields := providedFields.insert x.extract x
         rustFields := rustFields.insert x.rust
       /- Go through the fields and either use the user provided information (if there is) or compute the Rust names
