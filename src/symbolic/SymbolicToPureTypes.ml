@@ -269,7 +269,12 @@ let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
           ctx.type_ctx.type_infos def))
     "ADTs containing nested mutable borrows are not supported yet";
   let generics, preds = translate_generic_params (Some span) def.generics in
+  [%ldebug
+    let ctx = PrintPure.decls_ctx_to_fmt_env ctx in
+    "translated generic_params:\n"
+    ^ PrintPure.generic_params_to_string ctx generics];
   let explicit_info = compute_explicit_info generics [] in
+  [%ldebug "explicit info:\n" ^ show_explicit_info explicit_info];
   let kind = translate_type_decl_kind span def.T.kind in
   let item_meta = def.item_meta in
   (* Lookup the builtin information, if there is *)

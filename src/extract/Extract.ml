@@ -1673,6 +1673,9 @@ let extract_fun_parameters (space : bool ref) (ctx : extraction_ctx)
   (* Close the box for the generics *)
   F.pp_close_box fmt ();
   (* The input parameters - note that doing this adds bindings to the context *)
+  [%ldebug
+    "Extracting the input parameters of: "
+    ^ name_to_string ctx def.item_meta.name];
   let ctx_body =
     match def.body with
     | None -> ctx

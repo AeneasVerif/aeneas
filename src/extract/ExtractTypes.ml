@@ -318,14 +318,17 @@ let extract_ty_errors (fmt : F.formatter) : unit =
 
 let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
     (no_params_tys : TypeDeclId.Set.t) ~(inside : bool) (ty : ty) : unit =
+  [%ldebug "ty: " ^ ty_to_string ctx ty];
   let extract_rec = extract_ty span ctx fmt no_params_tys in
   match ty with
   | TAdt (type_id, generics) -> (
+      [%ldebug "ADT case"];
       let has_params = generics <> empty_generic_args in
       match type_id with
       | TTuple ->
+          [%ldebug "Tuple case"];
           (* This is a bit annoying, but in F*/Coq/HOL4 [()] is not the unit type:
-           * we have to write [unit]... *)
+             we have to write [unit]... *)
           if generics.types = [] then F.pp_print_string fmt (unit_name ())
           else (
             F.pp_print_string fmt "(";
@@ -344,6 +347,7 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
               (extract_rec ~inside:true) generics.types;
             F.pp_print_string fmt ")")
       | TAdtId _ | TBuiltin _ -> (
+          [%ldebug "Custom ADT or Builtin case"];
           (* HOL4 behaves differently. Where in Coq/FStar/Lean we would write:
               `tree a b`
 
