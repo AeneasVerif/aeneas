@@ -13,7 +13,7 @@ namespace range
 def use_range (s : Slice Bool) : Result Unit := do
   let _ ←
     core.slice.index.Slice.index (core.slice.index.SliceIndexRangeUsizeSlice
-      Bool) s { start := 0#usize, end_ := 1#usize }
+      Bool) s { start := 0#usize, «end» := 1#usize }
   ok ()
 
 /- [range::use_range_to]:
@@ -21,7 +21,7 @@ def use_range (s : Slice Bool) : Result Unit := do
 def use_range_to (s : Slice Bool) : Result Unit := do
   let _ ←
     core.slice.index.Slice.index (core.slice.index.SliceIndexRangeToUsizeSlice
-      Bool) s { end_ := 1#usize }
+      Bool) s { «end» := 1#usize }
   ok ()
 
 end range
