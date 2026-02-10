@@ -346,7 +346,7 @@ type names_maps = {
           refers to "u32" (for instance in its type). *)
 }
 
-let names_maps_is_keyword (x : string) (nm : names_maps) : bool =
+let names_maps_is_keyword (nm : names_maps) (x : string) : bool =
   match StringMap.find_opt x nm.strict_names_map.name_to_id with
   | Some (KeywordId, _) -> true
   | _ -> false

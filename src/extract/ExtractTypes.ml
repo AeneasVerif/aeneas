@@ -787,7 +787,8 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
           *)
           let mk_field_name (name : string) =
             match backend () with
-            | Lean -> "«" ^ name ^ "»"
+            | Lean when names_maps_is_keyword ctx.names_maps name ->
+                "«" ^ name ^ "»"
             | _ -> name
           in
 
