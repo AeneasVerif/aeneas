@@ -42,13 +42,13 @@ let lean_builtin_types =
       ~kind:(KEnum [ ("Continue", Some "Continue"); ("Break", Some "Break") ]);
     (* file: "Aeneas/Std/Range.lean", line: 14 *)
     mk_type "core::ops::range::Range" "core.ops.range.Range"
-      ~kind:(KStruct [ ("start", Some "start"); ("end", Some "end_") ]);
+      ~kind:(KStruct [ ("start", Some "start"); ("end", Some "«end»") ]);
     (* file: "Aeneas/Std/Core/Core.lean", line: 113 *)
     mk_type "core::ops::range::RangeFrom" "core.ops.range.RangeFrom"
       ~kind:(KStruct [ ("start", Some "start") ]);
     (* file: "Aeneas/Std/Range.lean", line: 20 *)
     mk_type "core::ops::range::RangeTo" "core.ops.range.RangeTo"
-      ~kind:(KStruct [ ("end", Some "end_") ]);
+      ~kind:(KStruct [ ("end", Some "«end»") ]);
     (* file: "Aeneas/Std/Core/Core.lean", line: 12 *)
     mk_type "core::option::Option" "Option" ~prefix_variant_names:false
       ~kind:(KEnum [ ("None", Some "none"); ("Some", Some "some") ]);

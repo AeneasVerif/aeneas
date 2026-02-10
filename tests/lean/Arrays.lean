@@ -96,7 +96,7 @@ def slice_subslice_shared_
   Result (Slice Std.U32)
   := do
   core.slice.index.Slice.index (core.slice.index.SliceIndexRangeUsizeSlice
-    Std.U32) x { start := y, end_ := z }
+    Std.U32) x { start := y, «end» := z }
 
 /- [arrays::slice_subslice_mut_]:
    Source: 'tests/src/arrays.rs', lines 72:0-74:1 -/
@@ -105,7 +105,7 @@ def slice_subslice_mut_
   Result ((Slice Std.U32) × (Slice Std.U32 → Slice Std.U32))
   := do
   core.slice.index.Slice.index_mut (core.slice.index.SliceIndexRangeUsizeSlice
-    Std.U32) x { start := y, end_ := z }
+    Std.U32) x { start := y, «end» := z }
 
 /- [arrays::array_to_slice_shared_]:
    Source: 'tests/src/arrays.rs', lines 76:0-78:1 -/
@@ -129,7 +129,7 @@ def array_subslice_shared_
   := do
   core.array.Array.index (core.ops.index.IndexSlice
     (core.slice.index.SliceIndexRangeUsizeSlice Std.U32)) x
-    { start := y, end_ := z }
+    { start := y, «end» := z }
 
 /- [arrays::array_subslice_mut_]:
    Source: 'tests/src/arrays.rs', lines 88:0-90:1 -/
@@ -139,7 +139,7 @@ def array_subslice_mut_
   := do
   core.array.Array.index_mut (core.ops.index.IndexMutSlice
     (core.slice.index.SliceIndexRangeUsizeSlice Std.U32)) x
-    { start := y, end_ := z }
+    { start := y, «end» := z }
 
 /- [arrays::index_slice_0]:
    Source: 'tests/src/arrays.rs', lines 92:0-94:1 -/
@@ -348,7 +348,7 @@ def range_all : Result Unit := do
   let (s, _) ←
     core.array.Array.index_mut (core.ops.index.IndexMutSlice
       (core.slice.index.SliceIndexRangeUsizeSlice Std.U32)) x
-      { start := 1#usize, end_ := 3#usize }
+      { start := 1#usize, «end» := 3#usize }
   let _ ← update_mut_slice s
   ok ()
 
@@ -450,7 +450,7 @@ def f4
   := do
   core.array.Array.index (core.ops.index.IndexSlice
     (core.slice.index.SliceIndexRangeUsizeSlice Std.U32)) x
-    { start := y, end_ := z }
+    { start := y, «end» := z }
 
 /- [arrays::f3]:
    Source: 'tests/src/arrays.rs', lines 305:0-310:1 -/

@@ -294,17 +294,54 @@ def leanNameToRust (n0 : Name) : AttrM String := do
     | _ => throwError "Ill-formed name: `{n0}`"
   toRust n0
 
-def fieldNameToString (n : Name) : AttrM String := do
+/-- Does a name need escaping with `« ... »`?
+
+We do it the naive way by formatting the name and checking whether it is equal to the name directly
+converted to a string.
+-/
+def needsEscape (n : Name) : AttrM Bool := do
+  let s := toMessageData (mkIdent n)
+  let s := Format.pretty (← s.format (some {env := (← getEnv), opts := (← getOptions), mctx := {}, lctx := {}}))
+  let n := n.toString
+  pure (n ≠ s)
+
+/--
+info: true
+-/
+#guard_msgs in
+#eval needsEscape `let
+
+/--
+info: true
+-/
+#guard_msgs in
+#eval needsEscape `if
+
+/--
+info: false
+-/
+#guard_msgs in
+#eval needsEscape `bool
+
+/--
+info: false
+-/
+#guard_msgs in
+#eval needsEscape `Bool
+
+def maybeEscape (n : Name) : AttrM String := do
+  if (← needsEscape n) then pure s!"«{n}»" else pure n.toString
+
+def fieldNameToString (toLean : Bool) (n : Name) : AttrM String := do
   match n with
-  | .str .anonymous field =>
-    pure field
+  | .str .anonymous _ => if toLean then maybeEscape n else pure n.toString
   | _ => throwError "Ill-formed field name: `{n}`"
 
-def variantNameToString (declName n : Name) : AttrM String := do
+def variantNameToString (declName : Name) (toLean : Bool) (n : Name) : AttrM String := do
   match n with
   | .str pre variant =>
     if pre ≠ declName then throwError "Ill-formed variant name: `{n}`"
-    pure variant
+    if toLean then maybeEscape (.str .anonymous variant) else pure variant.capitalize
   | _ => throwError "Ill-formed field name: `{n}`"
 
 /-!
@@ -365,6 +402,54 @@ def elabTypeNameInfo (stx : Syntax) : AttrM (String × TypeInfo) :=
       pure (pat, info)
     | _ => Lean.Elab.throwUnsupportedSyntax
 
+def needsFrenchQuotes (s : String) : Bool :=
+  -- Convert to Name and back with escape=false to see if it needs escaping
+  let name := s.toName
+  name.toString (escape := false) != s
+
+structure ElemInfo where
+  rust : String
+  extract : String
+
+/-- Small helper: given a list of variant or field names and user-provided information, compute the
+mapping from rust name to Lean name.
+
+We also check that there is no name collision in the Rust and Lean names, and that the user-provided
+information is consistent with the Lean definition (i.e., that the user does not provide information
+for a field/variant which is not present in the Lean definition).
+-/
+def checkComputeFieldVariantNames
+  (elemKind : String) (elemNameToString : (toLean : Bool) → Name →AttrM String)
+  (providedInfo : List ElemInfo) (adtInfo : List Name) :
+  AttrM (List ElemInfo) := do
+  /- Compute the mapping from the Lean names to the full information.
+  We remove information from the mapping whenever we use it to check that all the user-provided information was useful.
+  -/
+  let mut providedInfo := Std.HashMap.ofList (providedInfo.map (fun x => (x.extract, x)))
+  let mut mapping : Array ElemInfo := #[]
+  let mut leanNames := Std.HashSet.emptyWithCapacity
+  let mut rustNames := Std.HashSet.emptyWithCapacity
+  for elemName in adtInfo do
+    let rustName ← elemNameToString false elemName
+    let leanName ← elemNameToString true elemName
+    let info ←
+      match providedInfo.get? leanName with
+      | some info =>
+        providedInfo := providedInfo.erase leanName
+        pure info
+      | none => pure { rust := rustName, extract := leanName }
+    if leanNames.contains info.extract then
+      throwError "The Lean {elemKind} name `{info.extract}` is used twice"
+    if rustNames.contains info.rust then
+      throwError "The Rust {elemKind} name `{info.rust}` is used twice"
+    mapping := mapping.push info
+    leanNames := leanNames.insert info.extract
+    rustNames := rustNames.insert info.rust
+  if providedInfo.size > 0 then
+    let extraInfo := providedInfo.toList.map (fun (_, info) => (info.rust, info.extract))
+    throwError "The following user-provided information is not useful as it doesn't correspond to any {elemKind} in the Lean definition: {extraInfo}"
+  pure mapping.toList
+
 /-- This helper completes the information available in the information provided by the user by
     looking at the definition itself. -/
 def processType (declName : Name) (_pat : String) (info : TypeInfo) : AttrM TypeInfo := do
@@ -400,28 +485,10 @@ def processType (declName : Name) (_pat : String) (info : TypeInfo) : AttrM Type
         | .unknown => pure []
         | .struct _ => throwError "The user-provided information is for a structure while the type is an inductive"
         | .opaque => throwError "Internal error: unreachable case"
-      /- Go through the variants and retrieve their names.
-         We first need to use the user provided information to compute a map from Lean name to user information. -/
-      let mut providedVariants := Std.HashMap.emptyWithCapacity
-      let mut rustVariants := Std.HashSet.emptyWithCapacity
-      let leanVariants := Std.HashSet.ofList (← const.ctors.mapM (variantNameToString declName))
-      /- We want to check the user-provided information before using it, for instance to detect name collisions -/
-      for x in variants do
-        if providedVariants.contains x.extract then
-          throwError "A variant has been defined twice: `{x.extract}`"
-        if rustVariants.contains x.rust then
-          throwError "The Rust variant name `{x.rust}` is used twice"
-        if ¬ leanVariants.contains x.extract then
-          throwError "The user provides a mapping for a variant which is not present in the Lean definition: {x.extract}"
-        providedVariants := providedVariants.insert x.extract x
-        rustVariants := rustVariants.insert x.rust
-      /- Now we go through the Lean variants and use the user provided information if there is, and automatically
-         compute the Rust name otherwise -/
-      let variants : List Variant ← List.mapM (fun ctorName => do
-        let ctorName ← variantNameToString declName ctorName
-        match providedVariants.get? ctorName with
-        | some info => pure info
-        | none => pure { rust := ctorName.capitalize, extract := ctorName }) const.ctors
+      /- Compute the map from Lean field name to user information -/
+      let variants := variants.map fun x => { rust := x.rust, extract := x.extract }
+      let variants ← checkComputeFieldVariantNames "variant" (variantNameToString declName) variants const.ctors
+      let variants := variants.map fun x => { rust := x.rust, extract := x.extract }
       trace[Extract] "variants: {variants}"
       pure { info with body := .enum variants }
     | some structInfo =>
@@ -434,26 +501,10 @@ def processType (declName : Name) (_pat : String) (info : TypeInfo) : AttrM Type
         | .unknown => pure []
         | .enum _ => throwError "The user-provided information is for a variant while the type is a structure"
         | .opaque => throwError "Internal error: unreachable case"
-      /- Compute the map from Lean field name to user information while doing the sanity checks -/
-      let mut providedFields := Std.HashMap.emptyWithCapacity
-      let mut rustFields := Std.HashSet.emptyWithCapacity
-      let leanFields := Std.HashSet.ofList (← structInfo.fieldNames.toList.mapM fieldNameToString)
-      for x in fields do
-        if providedFields.contains x.extract then
-          throwError "A variant has been defined twice: `{x.extract}`"
-        if rustFields.contains x.rust then
-          throwError "The Rust variant name `{x.rust}` is used twice"
-        if ¬ leanFields.contains x.extract then
-          throwError "The user provides a mapping for a variant which is not present in the Lean definition: {x.extract}"
-        providedFields := providedFields.insert x.extract x
-        rustFields := rustFields.insert x.rust
-      /- Go through the fields and either use the user provided information (if there is) or compute the Rust names
-         automatically. -/
-      let fields : List Field ← List.mapM (fun fieldName => do
-        let fieldName ← fieldNameToString fieldName
-        match providedFields.get? fieldName with
-        | some info => pure info
-        | none => pure { rust := fieldName, extract := fieldName }) structInfo.fieldNames.toList
+      /- Compute the map from Lean field name to user information -/
+      let fields := fields.map fun x => { rust := x.rust, extract := x.extract }
+      let fields ← checkComputeFieldVariantNames "field" fieldNameToString fields structInfo.fieldNames.toList
+      let fields := fields.map fun x => { rust := x.rust, extract := x.extract }
       trace[Extract] "fields: {fields}"
       pure { info with body := .struct fields }
   | .axiomInfo _ =>
@@ -557,18 +608,19 @@ def processTraitDecl (declName : Name) (_pat : String) (info : TraitDecl) : Attr
     let mut consts := #[]
     let mut types := #[]
     let mut methods := #[]
-    let fields ← structInfo.fieldNames.toList.mapM fieldNameToString
+    let fields := structInfo.fieldNames.toList
     for field in fields do
-      if let some info := userParentClauses.get? field then
+      let rustField ← fieldNameToString false field
+      if let some info := userParentClauses.get? rustField then
         parentClauses := parentClauses.push info
-      else if let some info := userConsts.get? field then
+      else if let some info := userConsts.get? rustField then
         consts := consts.push info
-      else if let some info := userTypes.get? field then
+      else if let some info := userTypes.get? rustField then
         types := types.push info
-      else if let some info := userMethods.get? field then
+      else if let some info := userMethods.get? rustField then
         methods := methods.push info
       else
-        methods := methods.push ⟨ field, field ⟩
+        methods := methods.push ⟨ rustField, ← fieldNameToString true field ⟩
     pure { info with parentClauses := parentClauses.toList,
                      constsInfo := consts.toList,
                      typesInfo := types.toList,

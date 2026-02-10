@@ -24,7 +24,7 @@ def iter_range : Result Unit := do
   let iter ←
     core.iter.traits.collect.IntoIterator.Blanket.into_iter
       (core.iter.traits.iterator.IteratorRange core.iter.range.StepUsize)
-      { start := 0#usize, end_ := 32#usize }
+      { start := 0#usize, «end» := 32#usize }
   iter_range_loop iter
 
 /- [iterators::iter_range_step_by]: loop 0:
@@ -46,7 +46,7 @@ partial_fixpoint
 def iter_range_step_by (n : Std.Usize) : Result Unit := do
   let sb ←
     core.iter.range.IteratorRange.step_by core.iter.range.StepUsize
-      { start := 0#usize, end_ := n } 2#usize
+      { start := 0#usize, «end» := n } 2#usize
   let iter ←
     core.iter.traits.collect.IntoIterator.Blanket.into_iter
       (core.iter.traits.iterator.IteratorStepBy

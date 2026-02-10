@@ -26,7 +26,7 @@ def iter (n : Std.Usize) : Result Unit := do
   let iter1 ←
     core.iter.traits.collect.IntoIterator.Blanket.into_iter
       (core.iter.traits.iterator.IteratorRange core.iter.range.StepUsize)
-      { start := 0#usize, end_ := n }
+      { start := 0#usize, «end» := n }
   iter_loop 0#i32 iter1
 
 end iterators_scalar

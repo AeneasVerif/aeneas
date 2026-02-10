@@ -705,6 +705,7 @@ and extract_trait_clause_type (span : Meta.span) (ctx : extraction_ctx)
     of recursive definitions. *)
 let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
     extraction_ctx =
+  let span = def.item_meta.span in
   (* Register the filtering information, if the type has builtin information *)
   let ctx =
     match def.builtin_info with
@@ -722,9 +723,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
     | None -> ctx_compute_type_decl_name ctx def
     | Some info -> info.extract_name
   in
-  let ctx =
-    ctx_add def.item_meta.span (TypeId (TAdtId def.def_id)) def_name ctx
-  in
+  let ctx = ctx_add span (TypeId (TAdtId def.def_id)) def_name ctx in
   (* Compute and register:
    * - the variant names, if this is an enumeration
    * - the field names, if this is a structure
@@ -752,6 +751,15 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
             in
             (field_names, cons_name)
           in
+          (* Small helper to convert a Rust field name to a Lean field name.
+             We do something special: if the field name is a keyword and the
+             backend is Lean, we escape the name with French quotes. *)
+          let mk_field_name (name : string) =
+            match backend () with
+            | Lean when names_maps_is_keyword ctx.names_maps name ->
+                "«" ^ name ^ "»"
+            | _ -> name
+          in
           (* Compute the names *)
           let field_names, cons_name =
             match def.builtin_info with
@@ -762,15 +770,27 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                     (fun fid (field : field) ->
                       let rust_name = Option.get field.field_name in
                       let name =
-                        snd
-                          (List.find (fun (n, _) -> n = rust_name) field_names)
+                        match
+                          List.find_opt
+                            (fun (n, _) -> n = rust_name)
+                            field_names
+                        with
+                        | Some (_, n) -> n
+                        | None ->
+                            [%warn] span
+                              ("Could not find field '" ^ rust_name
+                             ^ "' in the builtin information for '"
+                              ^ name_to_string ctx def.item_meta.name
+                              ^ "'; the " ^ backend_name ()
+                              ^ " model is probably incorrect.");
+                            mk_field_name rust_name
                       in
                       (fid, name))
                     fields
                 in
                 (field_names, cons_name)
             | Some info ->
-                [%warn] def.item_meta.span
+                [%warn] span
                   ("Invalid builtin information for type "
                   ^ name_to_string ctx def.item_meta.name
                   ^ ": expected builtin information about a structure, got:\n"
@@ -780,18 +800,17 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                   );
                 compute_info_from_llbc ()
           in
-          (* Add the fields *)
+          (* Add the fields. *)
           let ctx =
             List.fold_left
               (fun ctx (fid, name) ->
-                ctx_add def.item_meta.span
+                ctx_add span
                   (FieldId (TAdtId def.def_id, fid))
-                  name ctx)
+                  (mk_field_name name) ctx)
               ctx field_names
           in
           (* Add the constructor name *)
-          ctx_add def.item_meta.span (StructId (TAdtId def.def_id)) cons_name
-            ctx
+          ctx_add span (StructId (TAdtId def.def_id)) cons_name ctx
       | Enum variants ->
           let variant_names =
             match def.builtin_info with
@@ -822,7 +841,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                     (variant_id, StringMap.find variant.variant_name variant_map))
                   variants
             | Some info ->
-                [%craise] def.item_meta.span
+                [%craise] span
                   ("Invalid builtin information for type "
                   ^ name_to_string ctx def.item_meta.name
                   ^ ": expected builtin information about an enumeration, got:\n"
@@ -830,9 +849,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
           in
           List.fold_left
             (fun ctx (vid, vname) ->
-              ctx_add def.item_meta.span
-                (VariantId (TAdtId def.def_id, vid))
-                vname ctx)
+              ctx_add span (VariantId (TAdtId def.def_id, vid)) vname ctx)
             ctx variant_names
       | Opaque ->
           (* Nothing to do *)

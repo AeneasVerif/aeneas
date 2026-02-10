@@ -172,40 +172,40 @@ theorem Slice.update_index_eq α [Inhabited α] (x : Slice α) (i : Usize) :
 
 def Slice.subslice {α : Type u} (s : Slice α) (r : Range Usize) : Result (Slice α) :=
   -- TODO: not completely sure here
-  if r.start.val < r.end_.val ∧ r.end_.val ≤ s.length then
-    ok ⟨ s.val.slice r.start.val r.end_.val,
+  if r.start.val < r.end.val ∧ r.end.val ≤ s.length then
+    ok ⟨ s.val.slice r.start.val r.end.val,
           by
-            have := s.val.slice_length_le r.start.val r.end_.val
+            have := s.val.slice_length_le r.start.val r.end.val
             scalar_tac ⟩
   else
     fail panic
 
 @[progress]
 theorem Slice.subslice_spec {α : Type u} [Inhabited α] (s : Slice α) (r : Range Usize)
-  (h0 : r.start.val < r.end_.val) (h1 : r.end_.val ≤ s.val.length) :
-  subslice s r ⦃ ns => ns.val = s.slice r.start.val r.end_.val ∧
-  (∀ i, i + r.start.val < r.end_.val → ns[i]! = s[r.start.val + i]!) ⦄
+  (h0 : r.start.val < r.end.val) (h1 : r.end.val ≤ s.val.length) :
+  subslice s r ⦃ ns => ns.val = s.slice r.start.val r.end.val ∧
+  (∀ i, i + r.start.val < r.end.val → ns[i]! = s[r.start.val + i]!) ⦄
   := by
   simp_all only [subslice, length, and_self, ite_true, slice, spec_ok, true_and]
   intro i _
-  have := List.getElem!_slice r.start.val r.end_.val i s.val (by scalar_tac)
+  have := List.getElem!_slice r.start.val r.end.val i s.val (by scalar_tac)
   simp only [List.getElem!_eq_getElem?_getD, getElem!_Nat_eq] at *
   apply this
 
 def Slice.update_subslice {α : Type u} (s : Slice α) (r : Range Usize) (ss : Slice α) : Result (Slice α) :=
   -- TODO: not completely sure here
-  if h: r.start.val < r.end_.val ∧ r.end_.val ≤ s.length ∧ ss.val.length = r.end_.val - r.start.val then
+  if h: r.start.val < r.end.val ∧ r.end.val ≤ s.length ∧ ss.val.length = r.end.val - r.start.val then
     ok ⟨ s.val.setSlice! r.start.val ss.val, by scalar_tac ⟩
   else
     fail panic
 
 @[progress]
 theorem Slice.update_subslice_spec {α : Type u} [Inhabited α] (a : Slice α) (r : Range Usize) (ss : Slice α)
-  (_ : r.start.val < r.end_.val) (_ : r.end_.val ≤ a.length) (_ : ss.length = r.end_.val - r.start.val) :
+  (_ : r.start.val < r.end.val) (_ : r.end.val ≤ a.length) (_ : ss.length = r.end.val - r.start.val) :
   update_subslice a r ss ⦃ na =>
     (∀ i, i < r.start.val → na[i]! = a[i]!) ∧
-    (∀ i, r.start.val ≤ i → i < r.end_.val → na[i]! = ss[i - r.start.val]!) ∧
-    (∀ i, r.end_.val ≤ i → i < a.length → na[i]! = a[i]!) ⦄ := by
+    (∀ i, r.start.val ≤ i → i < r.end.val → na[i]! = ss[i - r.start.val]!) ∧
+    (∀ i, r.end.val ≤ i → i < a.length → na[i]! = a[i]!) ⦄ := by
   simp only [update_subslice, length, and_self, ↓reduceDIte, getElem!_Nat_eq,
     spec_ok, *]
   simp_lists
@@ -256,20 +256,20 @@ def core.slice.Slice.get_mut
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, [@T], [@T]>}::get"]
 def core.slice.index.SliceIndexRangeUsizeSlice.get {T : Type} (r : Range Usize) (s : Slice T) :
   Result (Option (Slice T)) :=
-  if r.start ≤ r.end_ ∧ r.end_ ≤ s.length then
-    ok (some ⟨ s.val.slice r.start r.end_, by scalar_tac⟩)
+  if r.start ≤ r.end ∧ r.end ≤ s.length then
+    ok (some ⟨ s.val.slice r.start r.end, by scalar_tac⟩)
   else ok none
 
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, [@T], [@T]>}::get_mut"]
 def core.slice.index.SliceIndexRangeUsizeSlice.get_mut
   {T : Type} (r : Range Usize) (s : Slice T) : Result (Option (Slice T) × (Option (Slice T) → Slice T)) :=
-  if r.start ≤ r.end_ ∧ r.end_ ≤ s.length then
-    ok (some ⟨ s.val.slice r.start r.end_, by scalar_tac⟩,
+  if r.start ≤ r.end ∧ r.end ≤ s.length then
+    ok (some ⟨ s.val.slice r.start r.end, by scalar_tac⟩,
         fun s' =>
         match s' with
         | none => s
         | some s' =>
-          if h: s'.length = r.end_ - r.start then
+          if h: s'.length = r.end - r.start then
             ⟨ List.setSlice! s.val r.start s'.val, by scalar_tac ⟩
           else s )
   else ok (none, fun _ => s)
@@ -288,17 +288,17 @@ def core.slice.index.SliceIndexRangeUsizeSlice.get_unchecked_mut {T : Type} :
 
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, [@T], [@T]>}::index"]
 def core.slice.index.SliceIndexRangeUsizeSlice.index {T : Type} (r : Range Usize) (s : Slice T) : Result (Slice T) :=
-  if r.start ≤ r.end_ ∧ r.end_ ≤ s.length then
-    ok (⟨ s.val.slice r.start r.end_, by scalar_tac⟩)
+  if r.start ≤ r.end ∧ r.end ≤ s.length then
+    ok (⟨ s.val.slice r.start r.end, by scalar_tac⟩)
   else fail .panic
 
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::Range<usize>, [@T], [@T]>}::index_mut"]
 def core.slice.index.SliceIndexRangeUsizeSlice.index_mut {T : Type} (r : Range Usize) (s : Slice T) :
   Result (Slice T × (Slice T → Slice T)) :=
-  if r.start ≤ r.end_ ∧ r.end_ ≤ s.length then
-    ok (⟨ s.val.slice r.start r.end_, by scalar_tac⟩,
+  if r.start ≤ r.end ∧ r.end ≤ s.length then
+    ok (⟨ s.val.slice r.start r.end, by scalar_tac⟩,
         fun s' =>
-        if h: s'.length = r.end_ - r.start then
+        if h: s'.length = r.end - r.start then
           ⟨ List.setSlice! s.val r.start s', by scalar_tac ⟩
         else s )
   else fail .panic
@@ -334,22 +334,22 @@ def core.slice.index.private_slice_index.SealedRangeToUsize :
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::get"]
 def core.slice.index.SliceIndexRangeToUsizeSlice.get
   {T : Type} (r : core.ops.range.RangeTo Usize) (s : Slice T) : Result (Option (Slice T)) :=
-  if r.end_ ≤ s.length then
-    ok (some ⟨ s.val.slice r.end_ s.length, by scalar_tac⟩)
+  if r.end ≤ s.length then
+    ok (some ⟨ s.val.slice r.end s.length, by scalar_tac⟩)
   else ok none
 
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::get_mut"]
 def core.slice.index.SliceIndexRangeToUsizeSlice.get_mut
   {T : Type} (r : core.ops.range.RangeTo Usize) (s : Slice T) :
   Result ((Option (Slice T)) × (Option (Slice T) → Slice T)) :=
-  if r.end_ ≤ s.length then
-    ok (some ⟨ s.val.slice r.end_ s.length, by scalar_tac⟩,
+  if r.end ≤ s.length then
+    ok (some ⟨ s.val.slice r.end s.length, by scalar_tac⟩,
         fun s' =>
         match s' with
         | none => s
         | some s' =>
-          if h: s'.length = s.length - r.end_ then
-            ⟨ List.setSlice! s.val r.end_ s'.val, by scalar_tac ⟩
+          if h: s'.length = s.length - r.end then
+            ⟨ List.setSlice! s.val r.end s'.val, by scalar_tac ⟩
           else s )
   else ok (none, fun _ => s)
 
@@ -369,19 +369,19 @@ def core.slice.index.SliceIndexRangeToUsizeSlice.get_unchecked_mut
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::index"]
 def core.slice.index.SliceIndexRangeToUsizeSlice.index
   {T : Type} (r : core.ops.range.RangeTo Usize) (s : Slice T) : Result (Slice T) :=
-  if r.end_ ≤ s.length then
-    ok (⟨ s.val.slice r.end_ s.length, by scalar_tac⟩)
+  if r.end ≤ s.length then
+    ok (⟨ s.val.slice r.end s.length, by scalar_tac⟩)
   else fail .panic
 
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::index_mut"]
 def core.slice.index.SliceIndexRangeToUsizeSlice.index_mut
   {T : Type} (r : core.ops.range.RangeTo Usize) (s : Slice T) :
   Result ((Slice T) × (Slice T → Slice T)) :=
-  if r.end_ ≤ s.length then
-    ok (⟨ s.val.slice r.end_ s.length, by scalar_tac⟩,
+  if r.end ≤ s.length then
+    ok (⟨ s.val.slice r.end s.length, by scalar_tac⟩,
         fun s' =>
-        if h: s'.length = s.length - r.end_ then
-          ⟨ List.setSlice! s.val r.end_ s', by scalar_tac ⟩
+        if h: s'.length = s.length - r.end then
+          ⟨ List.setSlice! s.val r.end s', by scalar_tac ⟩
         else s )
   else fail .panic
 
@@ -646,10 +646,10 @@ theorem Slice.setSlice!_val (s : Slice α) (i : ℕ) (s' : List α) :
 
 @[progress]
 theorem core.slice.index.SliceIndexRangeUsizeSlice.index_mut.progress_spec (r : core.ops.range.Range Usize) (s : Slice α)
-  (h0 : r.start ≤ r.end_) (h1 : r.end_ ≤ s.length) :
+  (h0 : r.start ≤ r.end) (h1 : r.end ≤ s.length) :
   core.slice.index.SliceIndexRangeUsizeSlice.index_mut r s ⦃ (s1, index_mut_back) =>
-  s1.val = s.val.slice r.start r.end_ ∧
-  s1.length = r.end_ - r.start ∧
+  s1.val = s.val.slice r.start r.end ∧
+  s1.length = r.end - r.start ∧
   ∀ s2, s2.length = s1.length → index_mut_back s2 = s.setSlice! r.start.val s2 ⦄ := by
   simp only [index_mut, UScalar.le_equiv, Slice.length, dite_eq_ite]
   split

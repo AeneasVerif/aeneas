@@ -162,12 +162,10 @@ and id =
   | TraitItemId of TraitDeclId.id * string
       (** A trait associated item which is not a method *)
   | TraitParentClauseId of TraitDeclId.id * TraitClauseId.id
-  | UnknownId
+  | KeywordId
       (** Used for stored various strings like keywords, definitions which
           should always be in context, etc. and which can't be linked to one of
-          the above.
-
-          TODO: rename to "keyword" *)
+          the above. *)
 [@@deriving show, ord]
 
 module IdOrderedType = struct
@@ -226,7 +224,7 @@ let report_name_collision (id_to_string : id -> string)
   let id2 = "\n- " ^ id_to_string id2 ^ span_to_string span2 in
   let err =
     "Name clash detected: the following identifiers are bound to the same name \
-     \"" ^ name ^ "\":" ^ id1 ^ id2
+     \"" ^ name ^ "\" (the generated code will be incorrect):" ^ id1 ^ id2
     ^ "\n\n\
        You may want to rename some of your definitions, or report an issue.\n\
        Note that you can change the name used in the generated code by using \
@@ -348,11 +346,16 @@ type names_maps = {
           refers to "u32" (for instance in its type). *)
 }
 
+let names_maps_is_keyword (nm : names_maps) (x : string) : bool =
+  match StringMap.find_opt x nm.strict_names_map.name_to_id with
+  | Some (KeywordId, _) -> true
+  | _ -> false
+
 (** Return [true] if we are strict on collisions for this id (i.e., we forbid
     collisions even with the ids in the unsafe names map) *)
 let strict_collisions (id : id) : bool =
   match id with
-  | UnknownId | TypeId _ -> true
+  | KeywordId | TypeId _ -> true
   | _ -> false
 
 (** We might not check for collisions for some specific ids (ex.: field names)
@@ -662,7 +665,7 @@ let id_to_string (span : Meta.span option) (id : id) (ctx : extraction_ctx) :
       let type_name = type_id_to_string ctx id in
       let field_name = adt_field_to_string span ctx id field_id in
       "type name: " ^ type_name ^ ", field name: " ^ field_name
-  | UnknownId -> "keyword"
+  | KeywordId -> "keyword"
   | FVarId id -> "var_id: " ^ FVarId.to_string id
   | TraitDeclId id -> "trait_decl_id: " ^ TraitDeclId.to_string id
   | TraitImplId id -> "trait_impl_id: " ^ TraitImplId.to_string id
@@ -1028,6 +1031,7 @@ let keywords () =
           "match";
           "mut";
           "mutual";
+          "name";
           "namespace";
           "noncomputable";
           "notation";
@@ -1268,7 +1272,7 @@ let initialize_names_maps () : names_maps =
   in
   let names_set = StringSet.empty in
   let name_to_id = StringMap.empty in
-  (* We fist initialize [id_to_name] as empty, because the id of a keyword is [UnknownId].
+  (* We fist initialize [id_to_name] as empty, because the id of a keyword is [KeywordId].
    * Also note that we don't need this mapping for keywords: we insert keywords only
    * to check collisions. *)
   let id_to_name = IdMap.empty in
@@ -1286,7 +1290,7 @@ let initialize_names_maps () : names_maps =
         (* There is duplication in the keywords so we don't check the collisions
            while registering them (what is important is that there are no collisions
            between keywords and user-defined identifiers) *)
-        names_map_add_unchecked (UnknownId, None) name nm)
+        names_map_add_unchecked (KeywordId, None) name nm)
       strict_names_map keywords
   in
   let nm = { names_map; unsafe_names_map; strict_names_map } in
