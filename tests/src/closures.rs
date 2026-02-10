@@ -17,3 +17,9 @@ fn call_fn_mut(a: &mut [u8], i: usize) {
     write(i)
 }
 */
+
+// TODO: https://github.com/AeneasVerif/charon/issues/989
+fn call_fn_parameters<T: Clone>(x: &T) {
+    let y = x.clone();
+    let consume = |x: T| {};
+}

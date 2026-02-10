@@ -124,4 +124,81 @@ def core.ops.function.FnclosureTupleUsizeU8 : core.ops.function.Fn
   call := call_fn_shared.FnclosureTupleUsizeU8.call
 }
 
+/- [closures::call_fn_parameters::closure]
+   Source: 'tests/src/closures.rs', lines 24:18-24:27 -/
+@[reducible]
+def call_fn_parameters.closure {T : Type} (corecloneCloneInst :
+  core.clone.Clone T) :=
+Unit
+
+/- [closures::call_fn_parameters]:
+   Source: 'tests/src/closures.rs', lines 22:0-25:1 -/
+def call_fn_parameters
+  {T : Type} (corecloneCloneInst : core.clone.Clone T) (x : T) :
+  Result Unit
+  := do
+  let _ ← corecloneCloneInst.clone x
+  ok ()
+
+/- [closures::call_fn_parameters::{core::ops::function::Fn<(T), ()> for closures::call_fn_parameters::closure<T>[TraitClause@0]}::call]:
+   Source: 'tests/src/closures.rs', lines 24:18-24:27 -/
+def call_fn_parameters.FnclosureTupleTTuple.call
+  {T : Type} (corecloneCloneInst : core.clone.Clone T)
+  (c : call_fn_parameters.closure T corecloneCloneInst) (tupled_args : T) :
+  Result Unit
+  := do
+  ok ()
+
+/- [closures::call_fn_parameters::{core::ops::function::FnMut<(T), ()> for closures::call_fn_parameters::closure<T>[TraitClause@0]}::call_mut]:
+   Source: 'tests/src/closures.rs', lines 24:18-24:27 -/
+def call_fn_parameters.FnMutclosureTupleTTuple.call_mut
+  {T : Type} (corecloneCloneInst : core.clone.Clone T)
+  (state : call_fn_parameters.closure T corecloneCloneInst) (args : T) :
+  Result (call_fn_parameters.closure T corecloneCloneInst)
+  := do
+  call_fn_parameters.FnclosureTupleTTuple.call corecloneCloneInst state args
+  ok state
+
+/- [closures::call_fn_parameters::{core::ops::function::FnOnce<(T), ()> for closures::call_fn_parameters::closure<T>[TraitClause@0]}::call_once]:
+   Source: 'tests/src/closures.rs', lines 24:18-24:27 -/
+def call_fn_parameters.FnOnceclosureTupleTTuple.call_once
+  {T : Type} (corecloneCloneInst : core.clone.Clone T)
+  (c : call_fn_parameters.closure T corecloneCloneInst) (t : T) :
+  Result Unit
+  := do
+  let _ ←
+    call_fn_parameters.FnMutclosureTupleTTuple.call_mut corecloneCloneInst c t
+  ok ()
+
+/- Trait implementation: [closures::call_fn_parameters::{core::ops::function::FnOnce<(T), ()> for closures::call_fn_parameters::closure<T>[TraitClause@0]}]
+   Source: 'tests/src/closures.rs', lines 24:18-24:27 -/
+@[reducible]
+def core.ops.function.FnOnceclosureTupleTTuple {T : Type} (corecloneCloneInst :
+  core.clone.Clone T) : core.ops.function.FnOnce (call_fn_parameters.closure T
+  corecloneCloneInst) T Unit := {
+  call_once := call_fn_parameters.FnOnceclosureTupleTTuple.call_once
+    corecloneCloneInst
+}
+
+/- Trait implementation: [closures::call_fn_parameters::{core::ops::function::FnMut<(T), ()> for closures::call_fn_parameters::closure<T>[TraitClause@0]}]
+   Source: 'tests/src/closures.rs', lines 24:18-24:27 -/
+@[reducible]
+def core.ops.function.FnMutclosureTupleTTuple {T : Type} (corecloneCloneInst :
+  core.clone.Clone T) : core.ops.function.FnMut (call_fn_parameters.closure T
+  corecloneCloneInst) T Unit := {
+  FnOnceInst := core.ops.function.FnOnceclosureTupleTTuple corecloneCloneInst
+  call_mut := call_fn_parameters.FnMutclosureTupleTTuple.call_mut
+    corecloneCloneInst
+}
+
+/- Trait implementation: [closures::call_fn_parameters::{core::ops::function::Fn<(T), ()> for closures::call_fn_parameters::closure<T>[TraitClause@0]}]
+   Source: 'tests/src/closures.rs', lines 24:18-24:27 -/
+@[reducible]
+def core.ops.function.FnclosureTupleTTuple {T : Type} (corecloneCloneInst :
+  core.clone.Clone T) : core.ops.function.Fn (call_fn_parameters.closure T
+  corecloneCloneInst) T Unit := {
+  FnMutInst := core.ops.function.FnMutclosureTupleTTuple corecloneCloneInst
+  call := call_fn_parameters.FnclosureTupleTTuple.call corecloneCloneInst
+}
+
 end closures
