@@ -1781,7 +1781,7 @@ let ctx_compute_trait_impl_name_raw (ctx : extraction_ctx)
             [%ldebug "trait_name: " ^ trait_name];
 
             (* Put together *)
-            let name = self_name ^ "_" ^ trait_name in
+            let name = flatten_name [ self_name; "Insts"; trait_name ] in
             [%ldebug "Final name: " ^ name];
             name)
   | Some name -> name
