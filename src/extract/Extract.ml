@@ -2758,7 +2758,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
 
     let f = trans.f in
     (* We do something special to reuse the [ctx_compute_fun_decl]
-             function. TODO: make it cleaner. *)
+       function. TODO: make it cleaner. *)
     let llbc_name : Types.name =
       [ Types.PeIdent (item_name, Disambiguator.zero) ]
     in

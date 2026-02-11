@@ -5,6 +5,7 @@ require aeneas from "../../backends/lean"
 
 package «tests» {}
 
+@[default_target] lean_lib Adt
 @[default_target] lean_lib AdtBorrows
 @[default_target] lean_lib Arrays
 @[default_target] lean_lib ArraysDefs

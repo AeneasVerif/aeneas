@@ -347,6 +347,26 @@ type names_maps = {
           dependently typed language, we might have an issue if the field of a
           record has, say, the name "u32", and another field of the same record
           refers to "u32" (for instance in its type). *)
+  adt_projectors : StringSet.t;
+      (** For Lean, we store the set of fully qualifed field projectors to check
+          if some names are shared between methods and fields. If this happens,
+          we add an "impl" prefix to the method name.
+
+          TODO: find a better, modular approach.
+
+          Example:
+          {[
+            struct Struct { len : usize }
+
+            impl Struct {
+                // This will be named Struct.impl.len in Lean to prevent collision
+                // with the field projector Struct.len
+                fn len(&self) -> usize { self.len }
+
+                // This will be named Struct.f as there is no collision
+                fn f() {}
+            }
+          ]} *)
 }
 
 let names_maps_is_keyword (nm : names_maps) (x : string) : bool =
@@ -1296,7 +1316,14 @@ let initialize_names_maps () : names_maps =
         names_map_add_unchecked (KeywordId, None) name nm)
       strict_names_map keywords
   in
-  let nm = { names_map; unsafe_names_map; strict_names_map } in
+  let nm =
+    {
+      names_map;
+      unsafe_names_map;
+      strict_names_map;
+      adt_projectors = StringSet.empty;
+    }
+  in
   (* Then we add:
    * - the builtin types
    * - the builtin struct constructors
@@ -1571,7 +1598,11 @@ let ctx_compute_struct_constructor (def : type_decl) (ctx : extraction_ctx)
   let tname = ctx_compute_type_name def.item_meta ctx basename in
   ExtractBuiltin.mk_struct_constructor tname
 
-let ctx_compute_fun_name_no_suffix (meta : T.item_meta) (ctx : extraction_ctx)
+(** Small helper to convert a function name to a name used at extraction.
+
+    In practice we need to preprocess the name *before* giving it to this
+    function. *)
+let ctx_fun_name_to_extract_string (meta : T.item_meta) (ctx : extraction_ctx)
     (fname : llbc_name) : string =
   (* Check if the function is a method implementation for a blanket impl.
      If it is the case, add a path element to avoid name collisions *)
@@ -1637,16 +1668,19 @@ let default_fun_suffix (num_loops : int) (loop_id : LoopId.id option) : string =
 
 (** Compute the name of a regular (non-builtin) function.
 
+    In practice we need to preprocess the name *before* giving it to this
+    function.
+
     Inputs:
     - function basename (TODO: shouldn't appear for builtin functions?...)
     - number of loops in the function (useful to check if we need to use indices
       to derive unique names for the loops for instance - if there is exactly
       one loop, we don't need to use indices)
     - loop id (if pertinent) TODO: use the fun id for the builtin functions. *)
-let ctx_compute_fun_name (meta : T.item_meta) (ctx : extraction_ctx)
+let ctx_compute_fun_name_base (meta : T.item_meta) (ctx : extraction_ctx)
     (fname : llbc_name) (num_loops : int) (loop_id : LoopId.id option) : string
     =
-  let fname = ctx_compute_fun_name_no_suffix meta ctx fname in
+  let fname = ctx_fun_name_to_extract_string meta ctx fname in
   (* Compute the suffix *)
   let suffix = default_fun_suffix num_loops loop_id in
   (* Concatenate *)
@@ -1919,61 +1953,6 @@ let ctx_compute_trait_type_clause_name (ctx : extraction_ctx)
   ^ "_clause_"
   ^ TraitClauseId.to_string clause.clause_id
 
-(** Generates the name of the termination measure used to prove/reason about
-    termination. The generated code uses this clause where needed, but its body
-    must be defined by the user.
-
-    F* and Lean only.
-
-    Inputs:
-    - function id: this is especially useful to identify whether the function is
-      an builtin function or a local function
-    - function basename
-    - the number of loops in the parent function. This is used for the same
-      purpose as in [llbc_name].
-    - loop identifier, if this is for a loop *)
-let ctx_compute_termination_measure_name (meta : T.item_meta)
-    (ctx : extraction_ctx) (_fid : A.FunDeclId.id) (fname : llbc_name)
-    (num_loops : int) (loop_id : LoopId.id option) : string =
-  let fname = ctx_compute_fun_name_no_suffix meta ctx fname in
-  let lp_suffix = default_fun_loop_suffix num_loops loop_id in
-  (* Compute the suffix *)
-  let suffix =
-    match Config.backend () with
-    | FStar -> "_decreases"
-    | Lean -> "_terminates"
-    | Coq | HOL4 -> [%craise] meta.span "Unexpected"
-  in
-  (* Concatenate *)
-  fname ^ lp_suffix ^ suffix
-
-(** Generates the name of the proof used to prove/reason about termination. The
-    generated code uses this clause where needed, but its body must be defined
-    by the user.
-
-    Lean only.
-
-    Inputs:
-    - function id: this is especially useful to identify whether the function is
-      an builtin function or a local function
-    - function basename
-    - the number of loops in the parent function. This is used for the same
-      purpose as in [llbc_name].
-    - loop identifier, if this is for a loop *)
-let ctx_compute_decreases_proof_name (meta : T.item_meta) (ctx : extraction_ctx)
-    (_fid : A.FunDeclId.id) (fname : llbc_name) (num_loops : int)
-    (loop_id : LoopId.id option) : string =
-  let fname = ctx_compute_fun_name_no_suffix meta ctx fname in
-  let lp_suffix = default_fun_loop_suffix num_loops loop_id in
-  (* Compute the suffix *)
-  let suffix =
-    match Config.backend () with
-    | Lean -> "_decreases"
-    | FStar | Coq | HOL4 -> [%craise] meta.span "Unexpected"
-  in
-  (* Concatenate *)
-  fname ^ lp_suffix ^ suffix
-
 (** Generates a variable basename.
 
     Inputs:
@@ -2223,27 +2202,19 @@ let ctx_add_generic_params (span : Meta.span) (current_def_name : Types.name)
   in
   (ctx, tys, cgs, tcs)
 
-let ctx_add_decreases_proof (def : fun_decl) (ctx : extraction_ctx) :
-    extraction_ctx =
-  let name = opt_rename_llbc_name def.item_meta.attr_info def.item_meta.name in
-  let name =
-    ctx_compute_decreases_proof_name def.item_meta ctx def.def_id name
-      def.num_loops def.loop_id
+let ctx_add_adt_projector_names (decl_name : string) (field_names : string list)
+    (ctx : extraction_ctx) : extraction_ctx =
+  let names_maps = ctx.names_maps in
+  let names_maps =
+    {
+      names_maps with
+      adt_projectors =
+        StringSet.add_list
+          (List.map (fun f -> decl_name ^ "." ^ f) field_names)
+          names_maps.adt_projectors;
+    }
   in
-  ctx_add def.item_meta.span
-    (DecreasesProofId (FRegular def.def_id, def.loop_id))
-    name ctx
-
-let ctx_add_termination_measure (def : fun_decl) (ctx : extraction_ctx) :
-    extraction_ctx =
-  let name = opt_rename_llbc_name def.item_meta.attr_info def.item_meta.name in
-  let name =
-    ctx_compute_termination_measure_name def.item_meta ctx def.def_id name
-      def.num_loops def.loop_id
-  in
-  ctx_add def.item_meta.span
-    (TerminationMeasureId (FRegular def.def_id, def.loop_id))
-    name ctx
+  { ctx with names_maps }
 
 let ctx_add_global_decl_and_body (def : global_decl) (ctx : extraction_ctx) :
     extraction_ctx =
@@ -2280,9 +2251,12 @@ let ctx_add_global_decl_and_body (def : global_decl) (ctx : extraction_ctx) :
 
 (** - [is_trait_decl_field]: [true] if we are computing the name of a field in a
       trait declaration, [false] if we are computing the name of a function
-      declaration. *)
-let ctx_compute_fun_name (def : fun_decl) (is_trait_decl_field : bool)
+      declaration.
+
+    TODO: remove this input. *)
+let ctx_compute_fun_name_no_suffix (def : fun_decl) (is_trait_decl_field : bool)
     (ctx : extraction_ctx) : string =
+  let span = def.item_meta.span in
   (* Rename the function, if the user added a [rename] attribute.
 
      We have to do something peculiar for the implementation of trait
@@ -2358,7 +2332,105 @@ let ctx_compute_fun_name (def : fun_decl) (is_trait_decl_field : bool)
       [%ldebug
         "llbc_name after adding 'default' suffix (for default methods): "
         ^ name_to_string ctx llbc_name];
-      ctx_compute_fun_name def.item_meta ctx llbc_name def.num_loops def.loop_id
+
+      (* If the option is on, always put the method in the [impl] subnamespace
+         to prevent collision with field projectors. *)
+      if !Config.method_names_in_impl_namespace then
+        let llbc_name =
+          match List.rev llbc_name with
+          | e :: (PeImpl _ :: _ as name) ->
+              List.rev (e :: PeIdent ("impl", Disambiguator.of_int 0) :: name)
+          | _ -> llbc_name
+        in
+        ctx_fun_name_to_extract_string def.item_meta ctx llbc_name
+      else
+        (* Generate a name and check if it collides with a field projector *)
+        let name = ctx_fun_name_to_extract_string def.item_meta ctx llbc_name in
+        if StringSet.mem name ctx.names_maps.adt_projectors then
+          (* Add an name elem "impl" just before the last *)
+          let llbc_name =
+            match List.rev llbc_name with
+            | e :: name ->
+                List.rev (e :: PeIdent ("impl", Disambiguator.of_int 0) :: name)
+            | _ -> [%internal_error] span
+          in
+          ctx_fun_name_to_extract_string def.item_meta ctx llbc_name
+        else name
+
+let ctx_compute_fun_name (def : fun_decl) (is_trait_decl_field : bool)
+    (ctx : extraction_ctx) : string =
+  let fname = ctx_compute_fun_name_no_suffix def is_trait_decl_field ctx in
+  (* Compute the suffix *)
+  let suffix = default_fun_suffix def.num_loops def.loop_id in
+  (* Concatenate *)
+  fname ^ suffix
+
+(** Generates the name of the termination measure used to prove/reason about
+    termination. The generated code uses this clause where needed, but its body
+    must be defined by the user.
+
+    F* and Lean only.
+
+    Inputs:
+    - function id: this is especially useful to identify whether the function is
+      an builtin function or a local function
+    - function basename
+    - the number of loops in the parent function. This is used for the same
+      purpose as in [llbc_name].
+    - loop identifier, if this is for a loop *)
+let ctx_compute_termination_measure_name (decl : fun_decl)
+    (ctx : extraction_ctx) : string =
+  let fname = ctx_compute_fun_name_no_suffix decl false ctx in
+  let lp_suffix = default_fun_loop_suffix decl.num_loops decl.loop_id in
+  (* Compute the suffix *)
+  let suffix =
+    match Config.backend () with
+    | FStar -> "_decreases"
+    | Lean -> "_terminates"
+    | Coq | HOL4 -> [%craise] decl.item_meta.span "Unexpected"
+  in
+  (* Concatenate *)
+  fname ^ lp_suffix ^ suffix
+
+(** Generates the name of the proof used to prove/reason about termination. The
+    generated code uses this clause where needed, but its body must be defined
+    by the user.
+
+    Lean only.
+
+    Inputs:
+    - function id: this is especially useful to identify whether the function is
+      an builtin function or a local function
+    - function basename
+    - the number of loops in the parent function. This is used for the same
+      purpose as in [llbc_name].
+    - loop identifier, if this is for a loop *)
+let ctx_compute_decreases_proof_name (decl : fun_decl) (ctx : extraction_ctx) :
+    string =
+  let fname = ctx_compute_fun_name_no_suffix decl false ctx in
+  let lp_suffix = default_fun_loop_suffix decl.num_loops decl.loop_id in
+  (* Compute the suffix *)
+  let suffix =
+    match Config.backend () with
+    | Lean -> "_decreases"
+    | FStar | Coq | HOL4 -> [%craise] decl.item_meta.span "Unexpected"
+  in
+  (* Concatenate *)
+  fname ^ lp_suffix ^ suffix
+
+let ctx_add_decreases_proof (def : fun_decl) (ctx : extraction_ctx) :
+    extraction_ctx =
+  let name = ctx_compute_decreases_proof_name def ctx in
+  ctx_add def.item_meta.span
+    (DecreasesProofId (FRegular def.def_id, def.loop_id))
+    name ctx
+
+let ctx_add_termination_measure (def : fun_decl) (ctx : extraction_ctx) :
+    extraction_ctx =
+  let name = ctx_compute_termination_measure_name def ctx in
+  ctx_add def.item_meta.span
+    (TerminationMeasureId (FRegular def.def_id, def.loop_id))
+    name ctx
 
 (* TODO: move to Extract *)
 let ctx_add_fun_decl (def : fun_decl) (ctx : extraction_ctx) : extraction_ctx =
