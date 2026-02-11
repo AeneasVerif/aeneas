@@ -23,4 +23,15 @@ def Struct.impl.len (self : Struct) : Result Std.Usize := do
 def Struct.f : Result Unit := do
   ok ()
 
+/- [adt::BigStructName]
+   Source: 'tests/src/adt.rs', lines 14:0-14:23 -/
+@[reducible]
+def BigStructName := Unit
+
+/- [adt::BigStruct]
+   Source: 'tests/src/adt.rs', lines 17:0-24:2 -/
+def BigStruct :=
+  BigStructName × BigStructName × BigStructName × BigStructName ×
+  BigStructName × BigStructName
+
 end adt
