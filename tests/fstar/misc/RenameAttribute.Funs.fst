@@ -14,26 +14,25 @@ let boolTrait_retTest_default (#self : Type0) (self1 : self) : result bool =
 
 (** [rename_attribute::{rename_attribute::BoolTrait for bool}::get_bool]:
     Source: 'tests/src/rename_attribute.rs', lines 23:4-25:5 *)
-let boolTraitBool_getTest (self : bool) : result bool =
+let boolImpl_getTest (self : bool) : result bool =
   Ok self
 
 (** [rename_attribute::{rename_attribute::BoolTrait for bool}::ret_true]:
     Source: 'tests/src/rename_attribute.rs', lines 22:0-26:1 *)
-let boolTraitBool_retTest (self : bool) : result bool =
+let boolImpl_retTest (self : bool) : result bool =
   Ok true
 
 (** Trait implementation: [rename_attribute::{rename_attribute::BoolTrait for bool}]
     Source: 'tests/src/rename_attribute.rs', lines 22:0-26:1 *)
 let boolImpl : boolTest_t bool = {
-  getTest = boolTraitBool_getTest;
-  retTest = boolTraitBool_retTest;
+  getTest = boolImpl_getTest;
+  retTest = boolImpl_retTest;
 }
 
 (** [rename_attribute::test_bool_trait]:
     Source: 'tests/src/rename_attribute.rs', lines 29:0-31:1 *)
 let boolFn (t : Type0) (x : bool) : result bool =
-  let* b = boolTraitBool_getTest x in
-  if b then boolTraitBool_retTest x else Ok false
+  let* b = boolImpl_getTest x in if b then boolImpl_retTest x else Ok false
 
 (** [rename_attribute::C]
     Source: 'tests/src/rename_attribute.rs', lines 51:0-51:28 *)
