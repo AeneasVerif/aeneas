@@ -1005,7 +1005,11 @@ let extract_type_decl_tuple_struct_body (span : Meta.span)
   if fields = [] then (
     F.pp_print_space fmt ();
     F.pp_print_string fmt (unit_name ()))
-  else
+  else (
+    (* Open additional boxes *)
+    F.pp_print_break fmt 1 2;
+    F.pp_open_hovbox fmt 0;
+    (* *)
     let sep =
       match backend () with
       | Coq | FStar | HOL4 -> "*"
@@ -1014,11 +1018,13 @@ let extract_type_decl_tuple_struct_body (span : Meta.span)
     Collections.List.iter_link
       (fun () ->
         F.pp_print_space fmt ();
-        F.pp_print_string fmt sep)
+        F.pp_print_string fmt sep;
+        F.pp_print_space fmt ())
       (fun (f : field) ->
-        F.pp_print_space fmt ();
         extract_ty span ctx fmt TypeDeclId.Set.empty ~inside:false f.field_ty)
-      fields
+      fields;
+    (* Close the boxes *)
+    F.pp_close_box fmt ())
 
 let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
     (type_decl_group : TypeDeclId.Set.t) (kind : decl_kind) (def : type_decl)
