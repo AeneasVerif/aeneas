@@ -1948,24 +1948,9 @@ let ctx_compute_var_basename (span : Meta.span) (ctx : extraction_ctx)
       | TNever | TError -> "x"
       | TDynTrait _ -> "dyn")
 
-let basename_is_valid (n : string) : bool =
-  let is_valid_char c =
-    (c >= 'a' && c <= 'z')
-    || (c >= 'A' && c <= 'Z')
-    || (c >= '0' && c <= '9')
-    || c = '_'
-  in
-  String.for_all is_valid_char n
-
 (** Generates a type variable basename. *)
 let ctx_compute_type_var_basename (_ctx : extraction_ctx) (basename : string) :
     string =
-  (* The basename introduced by Charon for impl types (see
-     https://github.com/AeneasVerif/charon/issues/1013) is an invalid
-     name: we detect this case here and use a valid name instead.
-     As it only happens for inputs of type `impl Trait` we use `impl` as a basename.
-  *)
-  let basename = if basename_is_valid basename then basename else "impl" in
   (* Rust type variables are snake-case and start with a capital letter *)
   match backend () with
   | FStar ->

@@ -1479,6 +1479,53 @@ let remove_vtables (crate : crate) : crate =
 
   { crate with declarations; type_decls; global_decls; fun_decls; trait_decls }
 
+let name_is_valid (n : string) : bool =
+  let is_valid_char c =
+    (c >= 'a' && c <= 'z')
+    || (c >= 'A' && c <= 'Z')
+    || (c >= '0' && c <= '9')
+    || c = '_'
+  in
+  String.for_all is_valid_char n
+
+(** The basename introduced by Charon for impl types (see
+    https://github.com/AeneasVerif/charon/issues/1013) is an invalid name: we
+    detect this case here and use a valid name instead. As it only happens for
+    inputs of type `impl Trait` we use `Impl` as a basename. *)
+let rename_type_vars (crate : crate) : crate =
+  let visitor =
+    object
+      inherit [_] map_crate as super
+
+      method! visit_generic_params env generics =
+        (* Explore the types and rename them *)
+        let num_renames =
+          List.length
+            (List.filter
+               (fun (p : type_param) -> not (name_is_valid p.name))
+               generics.types)
+        in
+        let rename =
+          if num_renames > 1 then (
+            let index = ref 0 in
+            fun () ->
+              let i = !index in
+              index := !index + 1;
+              "Impl" ^ string_of_int i)
+          else fun () -> "Impl"
+        in
+        let types =
+          List.map
+            (fun (p : type_param) ->
+              let name = if name_is_valid p.name then p.name else rename () in
+              { p with name })
+            generics.types
+        in
+        super#visit_generic_params env { generics with types }
+    end
+  in
+  visitor#visit_crate () crate
+
 let apply_passes (crate : crate) : crate =
   (* Passes that apply to the whole crate *)
   let crate = update_array_default crate in
@@ -1537,5 +1584,6 @@ let apply_passes (crate : crate) : crate =
   let crate = filter_type_aliases crate in
   let crate = replace_static crate in
   let crate = remove_vtables crate in
+  let crate = rename_type_vars crate in
   [%ltrace "After pre-passes:\n" ^ Print.Crate.crate_to_string crate ^ "\n"];
   crate
