@@ -26,6 +26,7 @@ package «tests» {}
 @[default_target] lean_lib Discriminant
 @[default_target] lean_lib Dyn
 @[default_target] lean_lib DynamicSize
+@[default_target] lean_lib FromTo
 @[default_target] lean_lib Hashmap
 @[default_target] lean_lib Into
 @[default_target] lean_lib Iterators
