@@ -1571,7 +1571,11 @@ let ctx_compute_struct_constructor (def : type_decl) (ctx : extraction_ctx)
   let tname = ctx_compute_type_name def.item_meta ctx basename in
   ExtractBuiltin.mk_struct_constructor tname
 
-let ctx_compute_fun_name_no_suffix (meta : T.item_meta) (ctx : extraction_ctx)
+(** Small helper to convert a function name to a name used at extraction.
+
+    In practice we need to preprocess the name *before* giving it to this
+    function. *)
+let ctx_fun_name_to_extract_string (meta : T.item_meta) (ctx : extraction_ctx)
     (fname : llbc_name) : string =
   (* Check if the function is a method implementation for a blanket impl.
      If it is the case, add a path element to avoid name collisions *)
@@ -1637,16 +1641,19 @@ let default_fun_suffix (num_loops : int) (loop_id : LoopId.id option) : string =
 
 (** Compute the name of a regular (non-builtin) function.
 
+    In practice we need to preprocess the name *before* giving it to this
+    function.
+
     Inputs:
     - function basename (TODO: shouldn't appear for builtin functions?...)
     - number of loops in the function (useful to check if we need to use indices
       to derive unique names for the loops for instance - if there is exactly
       one loop, we don't need to use indices)
     - loop id (if pertinent) TODO: use the fun id for the builtin functions. *)
-let ctx_compute_fun_name (meta : T.item_meta) (ctx : extraction_ctx)
+let ctx_compute_fun_name_base (meta : T.item_meta) (ctx : extraction_ctx)
     (fname : llbc_name) (num_loops : int) (loop_id : LoopId.id option) : string
     =
-  let fname = ctx_compute_fun_name_no_suffix meta ctx fname in
+  let fname = ctx_fun_name_to_extract_string meta ctx fname in
   (* Compute the suffix *)
   let suffix = default_fun_suffix num_loops loop_id in
   (* Concatenate *)
@@ -1935,7 +1942,9 @@ let ctx_compute_trait_type_clause_name (ctx : extraction_ctx)
 let ctx_compute_termination_measure_name (meta : T.item_meta)
     (ctx : extraction_ctx) (_fid : A.FunDeclId.id) (fname : llbc_name)
     (num_loops : int) (loop_id : LoopId.id option) : string =
-  let fname = ctx_compute_fun_name_no_suffix meta ctx fname in
+  (* TODO: this is wrong. We should preprocess the name in the same fashion
+     as in [ctx_compute_fun_name] *)
+  let fname = ctx_fun_name_to_extract_string meta ctx fname in
   let lp_suffix = default_fun_loop_suffix num_loops loop_id in
   (* Compute the suffix *)
   let suffix =
@@ -1963,7 +1972,9 @@ let ctx_compute_termination_measure_name (meta : T.item_meta)
 let ctx_compute_decreases_proof_name (meta : T.item_meta) (ctx : extraction_ctx)
     (_fid : A.FunDeclId.id) (fname : llbc_name) (num_loops : int)
     (loop_id : LoopId.id option) : string =
-  let fname = ctx_compute_fun_name_no_suffix meta ctx fname in
+  (* TODO: this is wrong. We should preprocess the name in the same fashion
+     as in [ctx_compute_fun_name] *)
+  let fname = ctx_fun_name_to_extract_string meta ctx fname in
   let lp_suffix = default_fun_loop_suffix num_loops loop_id in
   (* Compute the suffix *)
   let suffix =
@@ -2358,7 +2369,8 @@ let ctx_compute_fun_name (def : fun_decl) (is_trait_decl_field : bool)
       [%ldebug
         "llbc_name after adding 'default' suffix (for default methods): "
         ^ name_to_string ctx llbc_name];
-      ctx_compute_fun_name def.item_meta ctx llbc_name def.num_loops def.loop_id
+      ctx_compute_fun_name_base def.item_meta ctx llbc_name def.num_loops
+        def.loop_id
 
 (* TODO: move to Extract *)
 let ctx_add_fun_decl (def : fun_decl) (ctx : extraction_ctx) : extraction_ctx =
