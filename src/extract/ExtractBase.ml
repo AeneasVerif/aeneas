@@ -347,6 +347,26 @@ type names_maps = {
           dependently typed language, we might have an issue if the field of a
           record has, say, the name "u32", and another field of the same record
           refers to "u32" (for instance in its type). *)
+  adt_projectors : StringSet.t;
+      (** For Lean, we store the set of fully qualifed field projectors to check
+          if some names are shared between methods and fields. If this happens,
+          we add an "impl" prefix to the method name.
+
+          TODO: find a better, modular approach.
+
+          Example:
+          {[
+            struct Struct { len : usize }
+
+            impl Struct {
+                // This will be named Struct.impl.len in Lean to prevent collision
+                // with the field projector Struct.len
+                fn len(&self) -> usize { self.len }
+
+                // This will be named Struct.f as there is no collision
+                fn f() {}
+            }
+          ]} *)
 }
 
 let names_maps_is_keyword (nm : names_maps) (x : string) : bool =
@@ -1296,7 +1316,14 @@ let initialize_names_maps () : names_maps =
         names_map_add_unchecked (KeywordId, None) name nm)
       strict_names_map keywords
   in
-  let nm = { names_map; unsafe_names_map; strict_names_map } in
+  let nm =
+    {
+      names_map;
+      unsafe_names_map;
+      strict_names_map;
+      adt_projectors = StringSet.empty;
+    }
+  in
   (* Then we add:
    * - the builtin types
    * - the builtin struct constructors
@@ -2175,6 +2202,20 @@ let ctx_add_generic_params (span : Meta.span) (current_def_name : Types.name)
   in
   (ctx, tys, cgs, tcs)
 
+let ctx_add_adt_projector_names (decl_name : string) (field_names : string list)
+    (ctx : extraction_ctx) : extraction_ctx =
+  let names_maps = ctx.names_maps in
+  let names_maps =
+    {
+      names_maps with
+      adt_projectors =
+        StringSet.add_list
+          (List.map (fun f -> decl_name ^ "." ^ f) field_names)
+          names_maps.adt_projectors;
+    }
+  in
+  { ctx with names_maps }
+
 let ctx_add_global_decl_and_body (def : global_decl) (ctx : extraction_ctx) :
     extraction_ctx =
   (* TODO: update once the body id can be an option *)
@@ -2215,6 +2256,7 @@ let ctx_add_global_decl_and_body (def : global_decl) (ctx : extraction_ctx) :
     TODO: remove this input. *)
 let ctx_compute_fun_name_no_suffix (def : fun_decl) (is_trait_decl_field : bool)
     (ctx : extraction_ctx) : string =
+  let span = def.item_meta.span in
   (* Rename the function, if the user added a [rename] attribute.
 
      We have to do something peculiar for the implementation of trait
@@ -2290,7 +2332,18 @@ let ctx_compute_fun_name_no_suffix (def : fun_decl) (is_trait_decl_field : bool)
       [%ldebug
         "llbc_name after adding 'default' suffix (for default methods): "
         ^ name_to_string ctx llbc_name];
-      ctx_fun_name_to_extract_string def.item_meta ctx llbc_name
+      (* Generate a name and check if it collides with a field projector *)
+      let name = ctx_fun_name_to_extract_string def.item_meta ctx llbc_name in
+      if StringSet.mem name ctx.names_maps.adt_projectors then
+        (* Add an name elem "impl" just before the last *)
+        let llbc_name =
+          match List.rev llbc_name with
+          | e :: name ->
+              List.rev (e :: PeIdent ("impl", Disambiguator.of_int 0) :: name)
+          | _ -> [%internal_error] span
+        in
+        ctx_fun_name_to_extract_string def.item_meta ctx llbc_name
+      else name
 
 let ctx_compute_fun_name (def : fun_decl) (is_trait_decl_field : bool)
     (ctx : extraction_ctx) : string =

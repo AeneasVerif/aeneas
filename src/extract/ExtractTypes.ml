@@ -820,6 +820,15 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                   (mk_field_name name) ctx)
               ctx field_names
           in
+          (* In the case of Lean, also add the fully qualified projector names
+             (see the comment in [names_maps.adt_fields] *)
+          let ctx =
+            match backend () with
+            | Lean ->
+                ctx_add_adt_projector_names def_name (List.map snd field_names)
+                  ctx
+            | _ -> ctx
+          in
           (* Add the constructor name *)
           ctx_add span (StructId (TAdtId def.def_id)) cons_name ctx
       | Enum variants ->

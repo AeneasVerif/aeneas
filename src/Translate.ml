@@ -1313,9 +1313,20 @@ let extract_translated_crate (filename : string) (dest_dir : string)
   in
 
   (* Register unique names for all the top-level types, globals, functions...
-   * Note that the order in which we generate the names doesn't matter:
-   * we just need to generate a mapping from identifier to name, and make
-   * sure there are no name clashes. *)
+
+     Note that the order in which we generate the names **matter**: we detect
+     name classes between ADT methods and ADT fields, and rename the methods
+     appropriately.
+
+     For instance, the field and method [len] might clash in the below code:
+     {[
+       struct Struct { len : usize }
+
+       impl Struct { fn len(&self) -> usize { self.len } }
+     ]}
+
+     For this reason, we need to generate names for the types *before* generating
+     names for the functions (which include the method definitions). *)
   let ctx =
     List.fold_left
       (fun ctx def ->
