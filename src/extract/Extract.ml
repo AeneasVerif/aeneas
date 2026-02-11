@@ -2809,7 +2809,17 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
   (* Register the names *)
   List.fold_left
     (fun ctx (item_name, default_id, fun_name) ->
-      (* Register the method name *)
+      (* Register the method name.
+
+          Similarly as with structure fields, in the case of Lean check
+          whether we collide with keywords. If it is the case, add french quotes.
+       *)
+      let fun_name =
+        match backend () with
+        | Lean when names_maps_is_keyword ctx.names_maps fun_name ->
+            "«" ^ fun_name ^ "»"
+        | _ -> fun_name
+      in
       let ctx =
         ctx_add trait_decl.item_meta.span
           (TraitMethodId (trait_decl.def_id, item_name))
