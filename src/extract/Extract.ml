@@ -791,7 +791,7 @@ and extract_array_or_slice (span : Meta.span) (ctx : extraction_ctx)
   (if args = [] then (
      let cs =
        match backend () with
-       | Lean -> "Array.empty"
+       | Lean -> "Std.Array.empty"
        | _ -> "Array_empty"
      in
      F.pp_print_string fmt cs;

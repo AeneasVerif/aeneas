@@ -853,7 +853,7 @@ let unop_name (unop : unop) : string =
       | _ -> int_name int_ty ^ "_neg")
   | ArrayToSlice -> (
       match backend () with
-      | Lean -> "Array.to_slice"
+      | Lean -> "Std.Array.to_slice"
       | _ -> "array_to_slice")
   | Cast _ ->
       (* We never directly use the unop name in this case *)
@@ -1010,7 +1010,6 @@ let keywords () =
           "attribute";
           "axiom";
           "axioms";
-          "Array.empty";
           "begin";
           "break";
           "by";
@@ -1083,6 +1082,7 @@ let keywords () =
           "section";
           "set_option";
           "simp";
+          "Std.Array.empty";
           "structure";
           "syntax";
           "termination_by";

@@ -155,7 +155,7 @@ def index_array_0 {T : Type} (s : Array T 32#usize) : Result T := do
    Source: 'tests/src/arrays.rs', lines 100:0-102:1 -/
 def index_empty_array : Result Unit := do
   let s ←
-    (↑(Array.to_slice (Array.empty Std.U32)) : Result (Slice Std.U32))
+    (↑(Array.to_slice (Std.Array.empty Std.U32)) : Result (Slice Std.U32))
   let _ ← index_slice_0 s
   ok ()
 
