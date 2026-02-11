@@ -2343,11 +2343,11 @@ let ctx_compute_fun_name (def : fun_decl) (is_trait_decl_field : bool)
       in
       [%ldebug "llbc_name after renaming: " ^ name_to_string ctx llbc_name];
       (* When a trait method has a default implementation, this becomes a [fun_decl]
-     that we may want to extract. By default, its name is [Trait::method], which
-     for lean creates a name clash with the method name as a field in the trait
-     struct. We therefore rename these function items to avoid the name clash by
-     adding the "default" suffix.
-  *)
+         that we may want to extract. By default, its name is [Trait::method], which
+         for lean creates a name clash with the method name as a field in the trait
+         struct. We therefore rename these function items to avoid the name clash by
+         adding the "default" suffix.
+      *)
       let llbc_name =
         if is_trait_decl_field then llbc_name
         else
