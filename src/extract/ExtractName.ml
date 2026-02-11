@@ -5,8 +5,11 @@ open Charon.NameMatcher
 let log = Logging.extract_log
 let match_with_trait_decl_refs = Config.match_patterns_with_trait_decl_refs
 
-let default_config : match_config =
+let default_match_config : match_config =
   { map_vars_to_vars = true; match_with_trait_decl_refs }
+
+let default_to_pat_config : to_pat_config =
+  { tgt = TkName; use_trait_decl_refs = match_with_trait_decl_refs }
 
 let all_int_names =
   [
@@ -32,7 +35,7 @@ module NameMatcherMap = struct
 
   type 'a t = 'a NMM.t
 
-  let config = default_config
+  let config = default_match_config
   let empty = NMM.empty
 
   let find_opt (ctx : 'stt ctx) (name : Types.name) (m : 'a t) : 'a option =
@@ -51,13 +54,7 @@ module NameMatcherMap = struct
   let to_string = NMM.to_string
 end
 
-(** Helper to convert name patterns to names for extraction.
-
-    For impl blocks, we simply use the name of the type (without its arguments)
-    if all the arguments are variables. *)
-let pattern_to_extract_name (_span : Meta.span option) (name : pattern) :
-    string list =
-  let c = { tgt = TkName } in
+let pattern_to_extract_name_visitor =
   let all_vars =
     let check (g : generic_arg) : bool =
       match g with
@@ -82,42 +79,57 @@ let pattern_to_extract_name (_span : Meta.span option) (name : pattern) :
         [ PIdent (StringUtils.capitalize_first_letter id, 0, []) ]
     | _ -> shorten id
   in
-  let visitor =
-    object
-      inherit [_] map_pattern as super
 
-      method! visit_PIdent _ s d g =
-        if all_vars g then super#visit_PIdent () s d []
-        else super#visit_PIdent () s d g
+  object
+    inherit [_] map_pattern as super
 
-      method! visit_EComp _ id =
-        (* Simplify if this is [Option] *)
-        super#visit_EComp () (simplify_name id)
+    method! visit_PIdent _ s d g =
+      if all_vars g then super#visit_PIdent () s d []
+      else super#visit_PIdent () s d g
 
-      method! visit_PImpl _ ty =
-        match ty with
-        | EComp id ->
-            (* Only keep the last ident *)
-            let id = Collections.List.last id in
-            super#visit_PImpl () (EComp [ id ])
-        | _ -> super#visit_PImpl () ty
+    method! visit_EComp _ id =
+      (* Simplify if this is [Option] *)
+      super#visit_EComp () (simplify_name id)
 
-      method! visit_EPrimAdt _ adt g =
-        if all_vars g then
-          match adt with
-          | TTuple ->
-              let l = List.length g in
-              if l = 2 then EComp [ PIdent ("Pair", 0, []) ]
-              else super#visit_EPrimAdt () adt g
-          | TArray -> EComp [ PIdent ("Array", 0, []) ]
-          | TSlice -> EComp [ PIdent ("Slice", 0, []) ]
-        else if adt = TTuple && List.length g = 2 then
-          super#visit_EComp () [ PIdent ("Pair", 0, g) ]
-        else super#visit_EPrimAdt () adt g
-    end
-  in
+    method! visit_PImpl _ ty =
+      match ty with
+      | EComp id ->
+          (* Only keep the last ident *)
+          let id = Collections.List.last id in
+          super#visit_PImpl () (EComp [ id ])
+      | _ -> super#visit_PImpl () ty
+
+    method! visit_EPrimAdt _ adt g =
+      if all_vars g then
+        match adt with
+        | TTuple ->
+            let l = List.length g in
+            if l = 2 then EComp [ PIdent ("Pair", 0, []) ]
+            else super#visit_EPrimAdt () adt g
+        | TArray -> EComp [ PIdent ("Array", 0, []) ]
+        | TSlice -> EComp [ PIdent ("Slice", 0, []) ]
+      else if adt = TTuple && List.length g = 2 then
+        super#visit_EComp () [ PIdent ("Pair", 0, g) ]
+      else super#visit_EPrimAdt () adt g
+  end
+
+(** Helper to convert name patterns to names for extraction.
+
+    For impl blocks, we simply use the name of the type (without its arguments)
+    if all the arguments are variables. *)
+let pattern_to_extract_name (_span : Meta.span option) (name : pattern) :
+    string list =
+  let c = { tgt = TkName } in
+  let visitor = pattern_to_extract_name_visitor in
   let name = visitor#visit_pattern () name in
   List.map (pattern_elem_to_string c) name
+
+let name_matcher_expr_to_extract_name (_span : Meta.span option) (name : expr) :
+    string =
+  let c = { tgt = TkName } in
+  let visitor = pattern_to_extract_name_visitor in
+  let name = visitor#visit_expr () name in
+  expr_to_string c name
 
 let pattern_to_type_extract_name = pattern_to_extract_name None
 let pattern_to_fun_extract_name = pattern_to_extract_name None
@@ -127,9 +139,7 @@ let pattern_to_trait_impl_extract_name = pattern_to_extract_name None
    names we derive from the patterns (for the builtin definitions) are
    consistent with the extraction names we derive from the Rust names *)
 let name_to_simple_name (ctx : 'stt ctx) (n : Types.name) : string list =
-  let c : to_pat_config =
-    { tgt = TkName; use_trait_decl_refs = match_with_trait_decl_refs }
-  in
+  let c = default_to_pat_config in
   pattern_to_extract_name None (name_to_pattern ctx c n)
 
 (** If the [prefix] is Some, we attempt to remove the common prefix between
@@ -137,9 +147,7 @@ let name_to_simple_name (ctx : 'stt ctx) (n : Types.name) : string list =
 let name_with_generics_to_simple_name (ctx : 'stt ctx)
     ?(prefix : Types.name option = None) (name : Types.name)
     (p : Types.generic_params) (g : Types.generic_args) : string list =
-  let c : to_pat_config =
-    { tgt = TkName; use_trait_decl_refs = match_with_trait_decl_refs }
-  in
+  let c = default_to_pat_config in
   let name = name_with_generics_to_pattern ctx c p name g in
   let name =
     match prefix with

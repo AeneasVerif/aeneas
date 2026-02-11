@@ -2044,7 +2044,7 @@ let simplify_trait_calls_visitor (ctx : ctx) (def : fun_decl) =
   let names_map = NameMatcher.NameMatcherMap.of_list pats in
   let match_ctx = Charon.NameMatcher.ctx_from_crate ctx.crate in
   let get_method (d : fun_decl) : string option =
-    let config = ExtractName.default_config in
+    let config = ExtractName.default_match_config in
     NameMatcher.NameMatcherMap.find_opt match_ctx config d.item_meta.name
       names_map
   in

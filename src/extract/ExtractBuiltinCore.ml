@@ -30,6 +30,9 @@ let flatten_name (name : string list) : string =
   | FStar | Coq | HOL4 -> String.concat "_" name
   | Lean -> String.concat "." name
 
+let flatten_name_no_sep (name : string list) : string =
+  String.concat "" (List.map StringUtils.capitalize_first_letter name)
+
 (** Utility for Lean-only definitions **)
 let mk_lean_only (funs : 'a list) : 'a list =
   match backend () with

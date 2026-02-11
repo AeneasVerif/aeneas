@@ -1013,7 +1013,7 @@ let simplify_panics (crate : crate) (f : fun_decl) : fun_decl =
   let names_map = NameMatcher.NameMatcherMap.of_list pats in
   let match_ctx = Charon.NameMatcher.ctx_from_crate crate in
   let is_from_str (d : fun_decl) =
-    let config = ExtractName.default_config in
+    let config = ExtractName.default_match_config in
     NameMatcher.NameMatcherMap.mem match_ctx config d.item_meta.name names_map
   in
 
@@ -1231,7 +1231,7 @@ let replace_static (crate : crate) : crate =
   let names_set = NameMatcher.NameMatcherMap.of_list [ (pat, ()) ] in
   let match_ctx = Charon.NameMatcher.ctx_from_crate crate in
   let in_set (d : fun_decl) : bool =
-    let config = ExtractName.default_config in
+    let config = ExtractName.default_match_config in
     NameMatcher.NameMatcherMap.mem match_ctx config d.item_meta.name names_set
   in
   let decl_opt = ref None in
