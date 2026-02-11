@@ -2332,18 +2332,30 @@ let ctx_compute_fun_name_no_suffix (def : fun_decl) (is_trait_decl_field : bool)
       [%ldebug
         "llbc_name after adding 'default' suffix (for default methods): "
         ^ name_to_string ctx llbc_name];
-      (* Generate a name and check if it collides with a field projector *)
-      let name = ctx_fun_name_to_extract_string def.item_meta ctx llbc_name in
-      if StringSet.mem name ctx.names_maps.adt_projectors then
-        (* Add an name elem "impl" just before the last *)
+
+      (* If the option is on, always put the method in the [impl] subnamespace
+         to prevent collision with field projectors. *)
+      if !Config.method_names_in_impl_namespace then
         let llbc_name =
           match List.rev llbc_name with
-          | e :: name ->
+          | e :: (PeImpl _ :: _ as name) ->
               List.rev (e :: PeIdent ("impl", Disambiguator.of_int 0) :: name)
-          | _ -> [%internal_error] span
+          | _ -> llbc_name
         in
         ctx_fun_name_to_extract_string def.item_meta ctx llbc_name
-      else name
+      else
+        (* Generate a name and check if it collides with a field projector *)
+        let name = ctx_fun_name_to_extract_string def.item_meta ctx llbc_name in
+        if StringSet.mem name ctx.names_maps.adt_projectors then
+          (* Add an name elem "impl" just before the last *)
+          let llbc_name =
+            match List.rev llbc_name with
+            | e :: name ->
+                List.rev (e :: PeIdent ("impl", Disambiguator.of_int 0) :: name)
+            | _ -> [%internal_error] span
+          in
+          ctx_fun_name_to_extract_string def.item_meta ctx llbc_name
+        else name
 
 let ctx_compute_fun_name (def : fun_decl) (is_trait_decl_field : bool)
     (ctx : extraction_ctx) : string =
