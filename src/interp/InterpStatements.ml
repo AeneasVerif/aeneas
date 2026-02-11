@@ -878,7 +878,7 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
   | Deinit p ->
       let ctx, cc = drop_value config st.span p ctx in
       ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ st.span cc)
-  | Assert assertion ->
+  | Assert (assertion, _on_failure) ->
       let (ctx, res), cc = eval_assertion config st.span assertion ctx in
       ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc)
   | Call call -> eval_function_call config st.span call ctx

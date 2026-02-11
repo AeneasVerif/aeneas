@@ -1143,9 +1143,9 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
             | CopyNonOverlapping { src; dst; count } ->
                 let src = visitor#visit_operand mk_unit_ty src in
                 CopyNonOverlapping { src; dst; count }
-            | Assert { cond; expected; on_failure } ->
+            | Assert ({ cond; expected; check_kind }, on_failure) ->
                 let cond = visitor#visit_operand mk_unit_ty cond in
-                Assert { cond; expected; on_failure }
+                Assert ({ cond; expected; check_kind }, on_failure)
             | Call { func; args; dest } ->
                 let func = visitor#visit_fn_operand mk_unit_ty func in
                 let args = List.map (visitor#visit_operand mk_unit_ty) args in
