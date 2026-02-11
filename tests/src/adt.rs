@@ -10,3 +10,15 @@ impl Struct {
     }
     fn f() {}
 }
+
+struct BigStructName();
+
+// Checking formatting of the generated code
+struct BigStruct(
+    BigStructName,
+    BigStructName,
+    BigStructName,
+    BigStructName,
+    BigStructName,
+    BigStructName,
+);
