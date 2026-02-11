@@ -3201,7 +3201,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
         extract_trait_decl_item ctx fmt item_name ty)
       decl.parent_clauses;
 
-    (* The required methods *)
+    (* The methods *)
     List.iter
       (fun (name, fn) -> extract_trait_decl_method_items ctx fmt decl name fn)
       decl.methods;
@@ -3319,14 +3319,18 @@ let extract_trait_impl_method_items_aux (ctx : extraction_ctx)
        (trait impl + method generics) *)
     let method_generics = fn.binder_generics in
     let method_llbc_generics = fn.binder_llbc_generics in
+    let method_explicit_info = fn.binder_explicit_info in
     let ctx, method_tys, method_cgs, method_tcs =
       ctx_add_generic_params span trans.f.item_meta.name Method
         method_llbc_generics method_generics ctx
     in
-    let use_forall = method_generics <> empty_generic_params in
-    extract_generic_params span ctx fmt TypeDeclId.Set.empty ~use_forall Method
-      method_generics None method_tys method_cgs method_tcs;
-    if use_forall then F.pp_print_string fmt ",";
+    let use_fun = method_generics <> empty_generic_params in
+    extract_generic_params span ctx fmt TypeDeclId.Set.empty ~use_fun Method
+      method_generics (Some method_explicit_info) method_tys method_cgs
+      method_tcs;
+    if use_fun then (
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt "=>");
 
     (* Extract the function call *)
     F.pp_print_space fmt ();

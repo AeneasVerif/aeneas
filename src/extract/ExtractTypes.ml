@@ -1273,7 +1273,7 @@ let insert_req_space (fmt : F.formatter) (space : bool ref) : unit =
 *)
 let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) ?(use_forall = false)
-    ?(use_forall_use_sep = true) ?(use_arrows = false)
+    ?(use_fun = false) ?(use_forall_use_sep = true) ?(use_arrows = false)
     ?(as_implicits : bool = false) ?(space : bool ref option = None)
     (origin : generic_origin) (generics : generic_params)
     (explicit : explicit_info option) (type_params : string list)
@@ -1308,6 +1308,9 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
         F.pp_print_string fmt ":");
       insert_req_space ();
       F.pp_print_string fmt "forall");
+    if use_fun then (
+      insert_req_space ();
+      F.pp_print_string fmt "fun");
     (* Small helper - we may need to split the parameters *)
     let print_generics (type_params : (explicit * string) list)
         (const_generics : (explicit * const_generic_param) list)
