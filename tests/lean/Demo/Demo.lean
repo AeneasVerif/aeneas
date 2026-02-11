@@ -128,7 +128,7 @@ structure Counter (Self : Type) where
 
 /- [demo::{demo::Counter for usize}::incr]:
    Source: 'tests/src/demo.rs', lines 105:4-109:5 -/
-def CounterUsize.incr
+def Usize.Insts.DemoCounter.incr
   (self : Std.Usize) : Result (Std.Usize × Std.Usize) := do
   let self1 ← self + 1#usize
   ok (self, self1)
@@ -136,8 +136,8 @@ def CounterUsize.incr
 /- Trait implementation: [demo::{demo::Counter for usize}]
    Source: 'tests/src/demo.rs', lines 104:0-110:1 -/
 @[reducible]
-def CounterUsize : Counter Std.Usize := {
-  incr := CounterUsize.incr
+def Usize.Insts.DemoCounter : Counter Std.Usize := {
+  incr := Usize.Insts.DemoCounter.incr
 }
 
 /- [demo::use_counter]:

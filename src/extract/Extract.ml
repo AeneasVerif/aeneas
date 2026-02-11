@@ -68,9 +68,6 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
             ctx
       | None ->
           (* Not builtin *)
-          (* If this is a trait method implementation, we prefix the name with the
-             name of the trait implementation. We need to do so because there
-             can be clashes otherwise. *)
           (* Register the decrease clauses, if necessary *)
           let register_decreases ctx def =
             if has_decreases_clause def then
@@ -2871,8 +2868,6 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
     (trait_impl : trait_impl) : extraction_ctx =
   [%ldebug
     "trait_impl.impl_trait" ^ trait_decl_ref_to_string ctx trait_impl.impl_trait];
-  let decl_id = trait_impl.impl_trait.trait_decl_id in
-  let trait_decl = TraitDeclId.Map.find decl_id ctx.trans_trait_decls in
   (* Register some builtin information (if necessary) *)
   let ctx, builtin_info =
     match trait_impl.builtin_info with
@@ -2908,7 +2903,7 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
   (* Compute the name *)
   let name =
     match builtin_info with
-    | None -> ctx_compute_trait_impl_name ctx trait_decl trait_impl
+    | None -> ctx_compute_trait_impl_name ctx trait_impl
     | Some info -> info.extract_name
   in
   ctx_add trait_impl.item_meta.span (TraitImplId trait_impl.def_id) name ctx
@@ -3301,8 +3296,10 @@ let extract_trait_impl_method_items_aux (ctx : extraction_ctx)
   let method_decl_id = fn.binder_value.fun_id in
   (* Lookup the definition *)
   let trans =
-    [%silent_unwrap_opt_span] None
+    [%unwrap_with_span] span
       (A.FunDeclId.Map.find_opt method_decl_id ctx.trans_funs)
+      "Could not lookup the translated function, probably because of an error \
+       which happened before"
   in
   (* Extract the items *)
   let fun_name = ctx_get_trait_method span trait_decl_id item_name ctx in

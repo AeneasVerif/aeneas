@@ -26,3 +26,14 @@ fn call_fn_parameters<T: Clone>(x: &T) {
     let consume = |x: T| {};
 }
 */
+
+fn call_closure<F: Fn() -> u32>(f: F) -> u32 {
+    f()
+}
+fn call_closure1() -> u32 {
+    call_closure(|| 0)
+}
+fn call_closure2() -> u32 {
+    call_closure(|| 0);
+    call_closure(|| 0)
+}

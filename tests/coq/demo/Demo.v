@@ -170,14 +170,15 @@ Arguments Counter_t_incr { _ } _.
 
 (** [demo::{demo::Counter for usize}::incr]:
     Source: 'tests/src/demo.rs', lines 105:4-109:5 *)
-Definition counterUsize_incr (self : usize) : result (usize * usize) :=
+Definition Usize_Insts_DemoCounter_incr
+  (self : usize) : result (usize * usize) :=
   self1 <- usize_add self 1%usize; Ok (self, self1)
 .
 
 (** Trait implementation: [demo::{demo::Counter for usize}]
     Source: 'tests/src/demo.rs', lines 104:0-110:1 *)
-Definition CounterUsize : Counter_t usize := {|
-  Counter_t_incr := counterUsize_incr;
+Definition Usize_Insts_DemoCounter : Counter_t usize := {|
+  Counter_t_incr := Usize_Insts_DemoCounter_incr;
 |}.
 
 (** [demo::use_counter]:

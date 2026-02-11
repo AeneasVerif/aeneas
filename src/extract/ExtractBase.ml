@@ -202,13 +202,16 @@ let empty_names_map : names_map =
     names_set = StringSet.empty;
   }
 
+(** Small helper to update an LLBC name by using a rename attribute *)
+let rename_llbc_name (rename : string) (llbc_name : llbc_name) : llbc_name =
+  let name_prefix = List.tl (List.rev llbc_name) in
+  List.rev (T.PeIdent (rename, Disambiguator.zero) :: name_prefix)
+
 (** Small helper to update an LLBC name if the rename attribute has been set *)
-let rename_llbc_name (attr_info : Meta.attr_info) (llbc_name : llbc_name) :
+let opt_rename_llbc_name (attr_info : Meta.attr_info) (llbc_name : llbc_name) :
     llbc_name =
   match attr_info.rename with
-  | Some rename ->
-      let name_prefix = List.tl (List.rev llbc_name) in
-      List.rev (T.PeIdent (rename, Disambiguator.zero) :: name_prefix)
+  | Some rename -> rename_llbc_name rename llbc_name
   | None -> llbc_name
 
 (** Small helper to report name collision *)
@@ -1462,11 +1465,15 @@ let ctx_prepare_name (meta : T.item_meta) (ctx : extraction_ctx)
         ("Unexpected name shape: "
         ^ TranslateCore.name_to_string ctx.trans_ctx name)
 
+let opt_ctx_prepare_name (meta : T.item_meta) (ctx : extraction_ctx)
+    (name : llbc_name) : llbc_name =
+  if meta.is_local then ctx_prepare_name meta ctx name else name
+
 (** Helper *)
 let ctx_compute_simple_name (meta : T.item_meta) (ctx : extraction_ctx)
     (name : llbc_name) : string list =
   (* Rmk.: initially we only filtered the disambiguators equal to 0 *)
-  let name = if meta.is_local then ctx_prepare_name meta ctx name else name in
+  let name = opt_ctx_prepare_name meta ctx name in
   name_to_simple_name ctx.trans_ctx name
 
 (** Helper *)
@@ -1475,7 +1482,7 @@ let ctx_compute_simple_type_name = ctx_compute_simple_name
 (** Helper *)
 let ctx_compute_type_name_no_suffix (ctx : extraction_ctx)
     (item_meta : Types.item_meta) (name : llbc_name) : string =
-  let name = rename_llbc_name item_meta.attr_info name in
+  let name = opt_rename_llbc_name item_meta.attr_info name in
   flatten_name (ctx_compute_simple_type_name item_meta ctx name)
 
 (** Provided a basename, compute a type name.
@@ -1514,7 +1521,7 @@ let ctx_compute_field_name (def : type_decl) (field_meta : Meta.attr_info)
   let field_name_s = Option.value field_meta.rename ~default:field_name_s in
   (* Prefix the name with the name of the type, if necessary (some backends don't
      support field name collisions) *)
-  let def_name = rename_llbc_name def.item_meta.attr_info def_name in
+  let def_name = opt_rename_llbc_name def.item_meta.attr_info def_name in
   let name =
     if !Config.record_fields_short_names then
       if field_name = None then (* TODO: this is a bit ugly *)
@@ -1648,50 +1655,148 @@ let ctx_compute_fun_name (meta : T.item_meta) (ctx : extraction_ctx)
 let ctx_compute_trait_decl_name (ctx : extraction_ctx) (trait_decl : trait_decl)
     : string =
   let llbc_name =
-    rename_llbc_name trait_decl.item_meta.attr_info trait_decl.item_meta.name
+    opt_rename_llbc_name trait_decl.item_meta.attr_info
+      trait_decl.item_meta.name
   in
   ctx_compute_type_name trait_decl.item_meta ctx llbc_name
 
-let ctx_compute_trait_impl_name (ctx : extraction_ctx) (trait_decl : trait_decl)
-    (trait_impl : trait_impl) : string =
+let ctx_compute_trait_impl_name_raw (ctx : extraction_ctx)
+    (trait_impl_id : trait_impl_id) : string =
+  let trait_impl =
+    [%unwrap_opt_span] None
+      (TraitImplId.Map.find_opt trait_impl_id ctx.crate.trait_impls)
+      "Missing trait impl, probably because of an error which happened before"
+  in
+  [%ldebug "trait_impl: " ^ name_to_string ctx trait_impl.item_meta.name];
+  let span = trait_impl.item_meta.span in
+  let trait_decl =
+    [%unwrap_with_span] span
+      (TraitDeclId.Map.find_opt trait_impl.impl_trait.id ctx.crate.trait_decls)
+      "Missing trait declaration, probably because of an error which happened \
+       before"
+  in
   (* We derive the trait impl name from the implemented trait.
+
      For instance, if this implementation is an instance of `trait::Trait`
-     for `<foo::Foo, u32>`, we generate the name: "trait.TraitFooFooU32Inst".
-     Importantly, it is to be noted that the name is independent of the place
+     for `<foo::Foo, u32>` (i.e., `impl trait::Trait<u32> for foo::Foo` in the
+     source code) we generate the name: "foo.FooTraitU32".
+
+     Importantly, we make sure the generated name is independent of the place
      where the instance has been defined (it is indepedent of the file, etc.).
 
      Note that if the user provided a [rename] attribute, we simply use that.
   *)
-  let name =
-    match trait_impl.item_meta.attr_info.rename with
-    | None ->
-        let name =
-          let params = trait_impl.llbc_generics in
-          let args = trait_impl.llbc_impl_trait.generics in
-          let name =
-            ctx_prepare_name trait_impl.item_meta ctx trait_decl.item_meta.name
-          in
-          let name = rename_llbc_name trait_impl.item_meta.attr_info name in
+  match trait_impl.item_meta.attr_info.rename with
+  | None -> (
+      let params = trait_impl.generics in
+      let args = trait_impl.impl_trait.generics in
+      let name =
+        ctx_prepare_name trait_impl.item_meta ctx trait_decl.item_meta.name
+      in
+      (* Check if the impl is a blanket impl and add a suffix to avoid name
+             clashes if it is the case *)
+      let is_blanket =
+        match args.types with
+        | TVar _ :: _ -> true
+        | _ -> false
+      in
+      let add_blanket_suffix n = if is_blanket then n @ [ "Blanket" ] else n in
+      (* Check if the user provided a rename attribute: if it is the case we
+             simply use it *)
+      match trait_impl.item_meta.attr_info.rename with
+      | Some rename ->
+          let name = rename_llbc_name rename name in
           let name =
             trait_name_with_generics_to_simple_name ctx.trans_ctx name params
               args
           in
-          (* We detect blanket impls and add a "blanket" suffix to avoid name
-             clashes. *)
-          let name =
-            match args.types with
-            | TVar _ :: _ -> name @ [ "Blanket" ]
-            | _ -> name
-          in
-          name
-        in
-        flatten_name name
-    | Some name -> name
-  in
+          let name = add_blanket_suffix name in
+          flatten_name name
+      | _ ->
+          (* No renaming.
+
+               Check if it is a blanket impl, in which case we use the trait name. *)
+          if is_blanket then
+            let params = trait_impl.generics in
+            let args = trait_impl.impl_trait.generics in
+            let name =
+              ctx_prepare_name trait_impl.item_meta ctx
+                trait_decl.item_meta.name
+            in
+            let name =
+              opt_rename_llbc_name trait_impl.item_meta.attr_info name
+            in
+            trait_name_with_generics_to_simple_name ctx.trans_ctx name params
+              args
+            |> add_blanket_suffix |> flatten_name
+          else
+            (* Retrieve the self type *)
+            let self, args =
+              match args.types with
+              | self :: types -> (self, { args with types })
+              | _ ->
+                  (* A trait reference has at least one type parameter, for Self *)
+                  [%internal_error] span
+            in
+            [%ldebug
+              let fmt = Print.Crate.crate_to_fmt_env ctx.crate in
+              "- self type:\n"
+              ^ Print.ty_to_string fmt self
+              ^ "\n- args without self type:\n"
+              ^ Print.generic_args_to_string fmt args];
+            (* Generate the name for the self type *)
+            let nm_ctx = Charon.NameMatcher.ctx_from_crate ctx.crate in
+            let self_name =
+              match self with
+              | TAdt { id = TAdtId id; generics } -> (
+                  (* Lookup the ADT *)
+                  match TypeDeclId.Map.find_opt id ctx.crate.type_decls with
+                  | None ->
+                      [%save_error] span
+                        "Missing type declaration, probably because of an \
+                         error which happened before";
+                      "__UNKNOWN__" ^ TypeDeclId.to_string id
+                  | Some decl ->
+                      let name =
+                        opt_ctx_prepare_name decl.item_meta ctx
+                          decl.item_meta.name
+                      in
+                      name_with_generics_to_simple_name ctx.trans_ctx name
+                        params generics
+                      |> flatten_name)
+              | _ ->
+                  let name =
+                    NameMatcher.ty_to_pattern nm_ctx
+                      ExtractName.default_to_pat_config trait_impl.generics self
+                  in
+                  name_matcher_expr_to_simple_name (Some span) name
+            in
+
+            (* Generate the name for the trait *)
+            let trait_name =
+              name_with_generics_to_simple_name ctx.trans_ctx
+                trait_decl.item_meta.name params args
+              |> flatten_name_no_sep
+            in
+            [%ldebug "trait_name: " ^ trait_name];
+
+            (* Put together *)
+            let name = flatten_name [ self_name; "Insts"; trait_name ] in
+            [%ldebug "Final name: " ^ name];
+            name)
+  | Some name -> name
+
+let ctx_compute_trait_impl_name_aux (ctx : extraction_ctx)
+    (trait_impl_id : trait_impl_id) : string =
+  let name = ctx_compute_trait_impl_name_raw ctx trait_impl_id in
   (* Additional modifications to make sure we comply with the backends restrictions *)
   match backend () with
   | FStar -> StringUtils.lowercase_first_letter name
   | Coq | HOL4 | Lean -> name
+
+let ctx_compute_trait_impl_name (ctx : extraction_ctx) (trait_impl : trait_impl)
+    : string =
+  ctx_compute_trait_impl_name_aux ctx trait_impl.def_id
 
 let ctx_compute_trait_decl_constructor (ctx : extraction_ctx)
     (trait_decl : trait_decl) : string =
@@ -2120,7 +2225,7 @@ let ctx_add_generic_params (span : Meta.span) (current_def_name : Types.name)
 
 let ctx_add_decreases_proof (def : fun_decl) (ctx : extraction_ctx) :
     extraction_ctx =
-  let name = rename_llbc_name def.item_meta.attr_info def.item_meta.name in
+  let name = opt_rename_llbc_name def.item_meta.attr_info def.item_meta.name in
   let name =
     ctx_compute_decreases_proof_name def.item_meta ctx def.def_id name
       def.num_loops def.loop_id
@@ -2131,7 +2236,7 @@ let ctx_add_decreases_proof (def : fun_decl) (ctx : extraction_ctx) :
 
 let ctx_add_termination_measure (def : fun_decl) (ctx : extraction_ctx) :
     extraction_ctx =
-  let name = rename_llbc_name def.item_meta.attr_info def.item_meta.name in
+  let name = opt_rename_llbc_name def.item_meta.attr_info def.item_meta.name in
   let name =
     ctx_compute_termination_measure_name def.item_meta ctx def.def_id name
       def.num_loops def.loop_id
@@ -2154,7 +2259,9 @@ let ctx_add_global_decl_and_body (def : global_decl) (ctx : extraction_ctx) :
       ctx_add def.item_meta.span decl info.global_name ctx
   | None ->
       (* Not the case: "standard" registration *)
-      let name = rename_llbc_name def.item_meta.attr_info def.item_meta.name in
+      let name =
+        opt_rename_llbc_name def.item_meta.attr_info def.item_meta.name
+      in
       let name = ctx_compute_global_name def.item_meta ctx name in
 
       let body = FunId (FromLlbc (FunId (FRegular def.body_id), None)) in
@@ -2179,23 +2286,28 @@ let ctx_compute_fun_name (def : fun_decl) (is_trait_decl_field : bool)
   (* Rename the function, if the user added a [rename] attribute.
 
      We have to do something peculiar for the implementation of trait
-     methods, by looking up the meta information of the method *declaration*
-     because this is where the attribute is.
+     methods:
+     - we look up the meta information of the method *declaration*
+       because this is where the attribute is.
+     - we prefix the method name with the trait impl name, which is computed
+       in a specific manner
 
      Note that if the user also added an attribute for the *implementation*,
      we keep this one.
   *)
-  let item_meta =
-    match def.src with
-    | TraitImplItem (_, trait_decl_ref, item_name, _) -> (
+  match def.src with
+  | TraitImplItem (trait_impl_ref, trait_decl_ref, item_name, _) ->
+      let item_meta =
         if Option.is_some def.item_meta.attr_info.rename then def.item_meta
         else
-          (* Lookup the declaration. TODO: the trait item impl info
+          (* Lookup the trait declaration. TODO: the trait item impl info
              should directly give us the id of the method declaration. *)
           match
             TraitDeclId.Map.find_opt trait_decl_ref.id ctx.trans_trait_decls
           with
-          | None -> def.item_meta
+          | None ->
+              (* This shouldn't happen: we use the fun decl meta info as a default value *)
+              def.item_meta
           | Some trait_decl -> (
               match
                 List.find_opt
@@ -2209,29 +2321,44 @@ let ctx_compute_fun_name (def : fun_decl) (is_trait_decl_field : bool)
                        (fun (def : A.fun_decl) -> def.item_meta)
                        (FunDeclId.Map.find_opt bound_fn.binder_value.fun_id
                           ctx.trans_ctx.fun_ctx.fun_decls))
-                    ~default:def.item_meta))
-    | _ -> def.item_meta
-  in
-  let llbc_name = rename_llbc_name item_meta.attr_info def.item_meta.name in
-  [%ldebug "llbc_name after renaming: " ^ name_to_string ctx llbc_name];
-  (* When a trait method has a default implementation, this becomes a [fun_decl]
-     that we may want to extract. By default, its name is [Trait::method], which
-     for lean creates a name clash with the method name as a field in the trait
-     struct. We therefore rename these function items to avoid the name clash by
-     adding the "default" suffix.
-  *)
-  let llbc_name =
-    if is_trait_decl_field then llbc_name
-    else
-      match def.src with
-      | TraitDeclItem (_, _, true) ->
-          llbc_name @ [ PeIdent ("default", Disambiguator.zero) ]
-      | _ -> llbc_name
-  in
-  [%ldebug
-    "llbc_name after adding 'default' suffix (for default methods): "
-    ^ name_to_string ctx llbc_name];
-  ctx_compute_fun_name def.item_meta ctx llbc_name def.num_loops def.loop_id
+                    ~default:def.item_meta)
+      in
+      let rename = item_meta.attr_info.rename in
+      let item_name =
+        match rename with
+        | Some name -> name
+        | None -> item_name
+      in
+
+      (* Use the trait impl name *)
+      let trait_impl_name =
+        ctx_compute_trait_impl_name_aux ctx trait_impl_ref.id
+      in
+      flatten_name [ trait_impl_name; item_name ]
+  | _ ->
+      let item_meta = def.item_meta in
+      let llbc_name =
+        opt_rename_llbc_name item_meta.attr_info def.item_meta.name
+      in
+      [%ldebug "llbc_name after renaming: " ^ name_to_string ctx llbc_name];
+      (* When a trait method has a default implementation, this becomes a [fun_decl]
+         that we may want to extract. By default, its name is [Trait::method], which
+         for lean creates a name clash with the method name as a field in the trait
+         struct. We therefore rename these function items to avoid the name clash by
+         adding the "default" suffix.
+      *)
+      let llbc_name =
+        if is_trait_decl_field then llbc_name
+        else
+          match def.src with
+          | TraitDeclItem (_, _, true) ->
+              llbc_name @ [ PeIdent ("default", Disambiguator.zero) ]
+          | _ -> llbc_name
+      in
+      [%ldebug
+        "llbc_name after adding 'default' suffix (for default methods): "
+        ^ name_to_string ctx llbc_name];
+      ctx_compute_fun_name def.item_meta ctx llbc_name def.num_loops def.loop_id
 
 (* TODO: move to Extract *)
 let ctx_add_fun_decl (def : fun_decl) (ctx : extraction_ctx) : extraction_ctx =
