@@ -571,3 +571,6 @@ let print_error_diagnostics = ref false
     If the following option is on, we introduce the [impl] name elemnt in *all*
     method names. *)
 let method_names_in_impl_namespace = ref false
+
+(** *)
+let all_computable = ref false

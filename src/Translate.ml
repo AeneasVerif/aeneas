@@ -542,7 +542,20 @@ let crate_has_opaque_non_builtin_decls (ctx : gen_ctx) (filter_builtin : bool) :
     bool * bool =
   let types, funs =
     LlbcAstUtils.crate_get_opaque_non_builtin_decls ctx.crate filter_builtin
+      ctx.trans_ctx.type_ctx.to_extract ctx.trans_ctx.fun_ctx.to_extract
   in
+  [%ldebug
+    "- opaque types:\n"
+    ^ String.concat "\n\n"
+        (List.map
+           (fun (d : type_decl) ->
+             name_to_string ctx.trans_ctx d.item_meta.name)
+           types)
+    ^ "\n\n- opaque funs:\n"
+    ^ String.concat "\n\n"
+        (List.map
+           (fun (d : fun_decl) -> name_to_string ctx.trans_ctx d.item_meta.name)
+           funs)];
   (types <> [], funs <> [])
 
 (** Export a type declaration.
@@ -1079,6 +1092,9 @@ type extract_file_info = {
   custom_msg : string;
   custom_imports : string list;
   custom_includes : string list;
+  noncomputable : bool;
+      (** If [true] we insert a [noncomputable section] instruction at the top
+          of the file *)
 }
 
 let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
@@ -1166,6 +1182,13 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
       Printf.fprintf out "set_option linter.hashCommand false\n";
       (* Definitions often contain unused variables: deactivate the corresponding linter *)
       Printf.fprintf out "set_option linter.unusedVariables false\n";
+      (* Declare the definitions as being noncomputable if needs be *)
+      if fi.noncomputable then
+        Printf.fprintf out
+          "\n\
+           /- You can remove the following line by using the CLI option \
+           `-all-computable`: -/\n\
+           noncomputable section\n";
       (* If we are inside the namespace: declare it *)
       if fi.in_namespace then Printf.fprintf out "\nnamespace %s\n" fi.namespace;
       (* We might need to open the namespace *)
@@ -1611,6 +1634,13 @@ let extract_translated_crate (filename : string) (dest_dir : string)
     | HOL4 -> "Script.sml"
   in
 
+  (* Check if there are opaque types and functions (we need this to know whether
+     we need to generate interface files, etc.) *)
+  let has_opaque_types, has_opaque_funs =
+    crate_has_opaque_non_builtin_decls ctx true
+  in
+  let has_opaque = has_opaque_types || has_opaque_funs in
+
   (* Extract one or several files, depending on the configuration *)
   (if !Config.split_files then (
      let base_gen_config =
@@ -1627,12 +1657,6 @@ let extract_translated_crate (filename : string) (dest_dir : string)
          interface = false;
          test_trans_unit_functions = false;
        }
-     in
-
-     (* Check if there are opaque types and functions - in which case we need
-      * to split *)
-     let has_opaque_types, has_opaque_funs =
-       crate_has_opaque_non_builtin_decls ctx true
      in
 
      (*
@@ -1686,6 +1710,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
              custom_msg;
              custom_imports = [];
              custom_includes = [];
+             noncomputable = false;
            }
          in
          extract_file opaque_config ctx file_info;
@@ -1725,6 +1750,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
          custom_msg = ": type definitions";
          custom_imports = [];
          custom_includes = opaque_types_module;
+         noncomputable = false;
        }
      in
      extract_file types_config ctx file_info;
@@ -1752,6 +1778,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
             custom_msg = ": templates for the decreases clauses";
             custom_imports = [ types_module ];
             custom_includes = [];
+            noncomputable = false;
           }
         in
         extract_file template_clauses_config ctx file_info);
@@ -1806,6 +1833,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
              custom_msg;
              custom_imports = [];
              custom_includes = [ types_module ];
+             noncomputable = false;
            }
          in
          extract_file opaque_config ctx file_info;
@@ -1847,6 +1875,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
          custom_imports = [];
          custom_includes =
            [ types_module ] @ opaque_funs_module @ clauses_module;
+         noncomputable = has_opaque;
        }
      in
      extract_file fun_config ctx file_info)
@@ -1879,6 +1908,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
          custom_msg = "";
          custom_imports = [];
          custom_includes = [];
+         noncomputable = has_opaque;
        }
      in
      extract_file gen_config ctx file_info);

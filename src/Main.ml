@@ -198,6 +198,11 @@ let () =
          collisions with field projectors. Example: the `len` method in `impl \
          Struct { fn len(&self) -> usize { ... } }` would be named \
          `Struct.impl.len`." );
+      ( "-all-computable",
+        Arg.Set all_computable,
+        " For Lean: do not insert `noncomputable section` at the top of the \
+         extracted files if there are external definitions not covered by the \
+         standard library." );
     ]
   in
 
