@@ -681,18 +681,18 @@ let rec extract_texpr (span : Meta.span) (ctx : extraction_ctx)
   | Const cv -> extract_literal span fmt ~is_pattern ~inside cv
   | App _ ->
       let app, args = destruct_apps e in
-      extract_App span ctx fmt ~inside ~inside_do app args
+      extract_App span ctx fmt ~inside ~inside_do app args e.ty
   | Lambda _ ->
       let xl, e = raw_destruct_lambdas e in
       extract_Lambda (span : Meta.span) ctx fmt ~inside xl e
   | Qualif _ ->
       (* We use the app case *)
-      extract_App span ctx fmt ~inside ~inside_do e []
+      extract_App span ctx fmt ~inside ~inside_do e [] e.ty
   | Let (_, _, _, _) -> extract_lets span ctx fmt ~inside ~inside_do e
   | Switch (scrut, body) ->
       extract_Switch span ctx fmt ~inside ~inside_do scrut body
   | Meta (m, e) -> extract_meta span ctx fmt ~inside ~inside_do m e
-  | StructUpdate supd -> extract_StructUpdate span ctx fmt ~inside supd
+  | StructUpdate supd -> extract_StructUpdate span ctx fmt ~inside supd e.ty
   | Loop _ ->
       (* The loop nodes should have been eliminated in {!PureMicroPasses} *)
       [%admit_raise] span "Unreachable" fmt
@@ -702,31 +702,33 @@ let rec extract_texpr (span : Meta.span) (ctx : extraction_ctx)
  * to handle top-level qualifiers, so it seemed more natural to merge the
  * two cases) *)
 and extract_App (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
-    ~(inside : bool) ~(inside_do : bool) (app : texpr) (args : texpr list) :
-    unit =
+    ~(inside : bool) ~(inside_do : bool) (app : texpr) (args : texpr list)
+    (out_ty : ty) : unit =
   (* We don't do the same thing if the app is a top-level identifier (function,
    * ADT constructor...) or a "regular" expression *)
   match app.e with
   | Qualif qualif -> (
       (* Top-level qualifier *)
-      match qualif.id with
-      | FunOrOp fun_id ->
+      match (qualif.id, out_ty) with
+      | FunOrOp fun_id, _ ->
           extract_function_call span ctx fmt ~inside ~inside_do fun_id
             qualif.generics args
-      | Global global_id ->
+      | Global global_id, _ ->
           assert (args = []);
           extract_global span ctx fmt ~inside global_id qualif.generics
-      | AdtCons { adt_id = TBuiltin TArray; _ } ->
-          extract_array_or_slice span ctx fmt ~inside ~is_array:true args
-      | AdtCons { adt_id = TBuiltin TSlice; _ } ->
-          extract_array_or_slice span ctx fmt ~inside ~is_array:false args
-      | AdtCons adt_cons_id ->
+      | ( AdtCons { adt_id = TBuiltin TArray; _ },
+          TAdt (TBuiltin TArray, { types = [ ty ]; _ }) ) ->
+          extract_array_or_slice span ctx fmt ~inside ~is_array:true ty args
+      | ( AdtCons { adt_id = TBuiltin TSlice; _ },
+          TAdt (TBuiltin TArray, { types = [ ty ]; _ }) ) ->
+          extract_array_or_slice span ctx fmt ~inside ~is_array:false ty args
+      | AdtCons adt_cons_id, _ ->
           extract_adt_cons span ctx fmt ~inside ~inside_do adt_cons_id
             qualif.generics args
-      | Proj proj ->
+      | Proj proj, _ ->
           extract_field_projector span ctx fmt ~inside ~inside_do app proj
-            qualif.generics args
-      | TraitConst (trait_ref, const_name) ->
+            qualif.generics args out_ty
+      | TraitConst (trait_ref, const_name), _ ->
           extract_trait_ref span ctx fmt TypeDeclId.Set.empty ~inside:true
             trait_ref;
           let name =
@@ -737,7 +739,7 @@ and extract_App (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
             if backend () = Coq then "(" ^ s ^ ")" else s
           in
           F.pp_print_string fmt ("." ^ add_brackets name)
-      | MkDynTrait trait_ref ->
+      | MkDynTrait trait_ref, _ ->
           (* Open parentheses *)
           if inside then F.pp_print_string fmt "(";
           F.pp_print_string fmt (dyn_constructor ());
@@ -771,8 +773,8 @@ and extract_App (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
       if inside then F.pp_print_string fmt ")"
 
 and extract_array_or_slice (span : Meta.span) (ctx : extraction_ctx)
-    (fmt : F.formatter) ~(inside : bool) ~(is_array : bool) (args : texpr list)
-    : unit =
+    (fmt : F.formatter) ~(inside : bool) ~(is_array : bool) (args_ty : ty)
+    (args : texpr list) : unit =
   [%cassert] span is_array "Unimplemented";
   (* Open the boxes *)
   F.pp_open_hvbox fmt ctx.indent_incr;
@@ -780,38 +782,54 @@ and extract_array_or_slice (span : Meta.span) (ctx : extraction_ctx)
   if need_paren then F.pp_print_string fmt "(";
   (* Open the box for `Array.replicate T N [` *)
   F.pp_open_hovbox fmt ctx.indent_incr;
-  (* Print the array constructor.
+
+  (* In case the array is empty we use a special [Array.empty] construct -
+     the reason is that otherwise it is not possible to infer the type of the
+     array.Aeneas
+     TODO: doing this *here* is a bit of a hack.
+  *)
+  (if args = [] then (
+     let cs =
+       match backend () with
+       | Lean -> "Array.empty"
+       | _ -> "Array_empty"
+     in
+     F.pp_print_string fmt cs;
+     F.pp_print_space fmt ();
+     extract_ty span ctx fmt TypeDeclId.Set.empty ~inside:true args_ty)
+   else
+     (* Print the array constructor.
 
      Note that we don't need to print the type parameter, which
      is implicit. *)
-  let cs = ctx_get_struct span (TBuiltin TArray) ctx in
-  F.pp_print_string fmt cs;
-  (* Print the parameters *)
-  F.pp_print_space fmt ();
-  extract_const_generic span ctx fmt ~inside:true
-    (CgValue (VScalar (UnsignedScalar (Usize, Z.of_int (List.length args)))));
-  F.pp_print_space fmt ();
-  F.pp_print_string fmt "[";
-  (* Close the box for `Array.mk T N [` *)
-  F.pp_close_box fmt ();
-  (* Print the values *)
-  let delimiter =
-    match backend () with
-    | Lean -> ","
-    | Coq | FStar | HOL4 -> ";"
-  in
-  F.pp_print_space fmt ();
-  F.pp_open_hovbox fmt 0;
-  Collections.List.iter_link
-    (fun () ->
-      F.pp_print_string fmt delimiter;
-      F.pp_print_space fmt ())
-    (extract_texpr span ctx fmt ~inside:false ~inside_do:false)
-    args;
-  (* Close the boxes *)
-  F.pp_close_box fmt ();
-  if args <> [] then F.pp_print_space fmt ();
-  F.pp_print_string fmt "]";
+     let cs = ctx_get_struct span (TBuiltin TArray) ctx in
+     F.pp_print_string fmt cs;
+     (* Print the parameters *)
+     F.pp_print_space fmt ();
+     extract_const_generic span ctx fmt ~inside:true
+       (CgValue (VScalar (UnsignedScalar (Usize, Z.of_int (List.length args)))));
+     F.pp_print_space fmt ();
+     F.pp_print_string fmt "[";
+     (* Close the box for `Array.mk T N [` *)
+     F.pp_close_box fmt ();
+     (* Print the values *)
+     let delimiter =
+       match backend () with
+       | Lean -> ","
+       | Coq | FStar | HOL4 -> ";"
+     in
+     F.pp_print_space fmt ();
+     F.pp_open_hovbox fmt 0;
+     Collections.List.iter_link
+       (fun () ->
+         F.pp_print_string fmt delimiter;
+         F.pp_print_space fmt ())
+       (extract_texpr span ctx fmt ~inside:false ~inside_do:false)
+       args;
+     (* Close the boxes *)
+     F.pp_close_box fmt ();
+     if args <> [] then F.pp_print_space fmt ();
+     F.pp_print_string fmt "]");
   if need_paren then F.pp_print_string fmt ")";
   F.pp_close_box fmt ()
 
@@ -1039,7 +1057,7 @@ and extract_adt_cons (span : Meta.span) (ctx : extraction_ctx)
 and extract_field_projector (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) ~(inside : bool) ~(inside_do : bool)
     (original_app : texpr) (proj : projection) (_generics : generic_args)
-    (args : texpr list) : unit =
+    (args : texpr list) (out_ty : ty) : unit =
   (* We isolate the first argument (if there is), in order to pretty print the
    * projection ([x.field] instead of [MkAdt?.field x] *)
   match args with
@@ -1136,7 +1154,7 @@ and extract_field_projector (span : Meta.span) (ctx : extraction_ctx)
        * isolated *)
       extract_App span ctx fmt ~inside ~inside_do
         ([%add_loc] mk_app span original_app arg)
-        args
+        args out_ty
   | [] ->
       (* No argument: shouldn't happen *)
       [%admit_raise] span "Unreachable" fmt
@@ -1504,7 +1522,8 @@ and extract_meta (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
   | _ -> extract_texpr span ctx fmt ~inside ~inside_do e
 
 and extract_StructUpdate (span : Meta.span) (ctx : extraction_ctx)
-    (fmt : F.formatter) ~(inside : bool) (supd : struct_update) : unit =
+    (fmt : F.formatter) ~(inside : bool) (supd : struct_update) (ty : ty) : unit
+    =
   (* We can't update a subset of the fields in Coq (i.e., we can do
      [{| x:= 3; y := 4 |}], but there is no syntax for [{| s with x := 3 |}]) *)
   [%sanity_check] span (backend () <> Coq || supd.init = None);
@@ -1626,7 +1645,12 @@ and extract_StructUpdate (span : Meta.span) (ctx : extraction_ctx)
         print_bracket false orb;
         F.pp_close_box fmt ()
     | TBuiltin TArray ->
-        extract_array_or_slice span ctx fmt ~inside ~is_array:true
+        let ty =
+          match ty with
+          | TAdt (TBuiltin TArray, { types = [ ty ]; _ }) -> ty
+          | _ -> [%internal_error] span
+        in
+        extract_array_or_slice span ctx fmt ~inside ~is_array:true ty
           (List.map snd supd.updates)
     | _ -> [%admit_raise] span "Unreachable" fmt
 

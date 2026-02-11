@@ -1010,6 +1010,7 @@ let keywords () =
           "attribute";
           "axiom";
           "axioms";
+          "Array.empty";
           "begin";
           "break";
           "by";
