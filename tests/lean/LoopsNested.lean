@@ -97,18 +97,15 @@ def update_array : Result Unit := do
 
 /- [loops_nested::FACTORS]
    Source: 'tests/src/loops-nested.rs', lines 45:0-48:2 -/
-@[global_simps]
-def FACTORS_body : Result (Array Std.U16 32#usize) := do
-  ok
-    (Array.make 32#usize [
-      2285#u16, 2571#u16, 2970#u16, 1812#u16, 1493#u16, 1422#u16, 287#u16,
-      202#u16, 3158#u16, 622#u16, 1577#u16, 182#u16, 962#u16, 2127#u16,
-      1855#u16, 1468#u16, 573#u16, 2004#u16, 264#u16, 383#u16, 2500#u16,
-      1458#u16, 1727#u16, 3199#u16, 2648#u16, 1017#u16, 732#u16, 608#u16,
-      1787#u16, 411#u16, 3124#u16, 1758#u16
-      ])
 @[global_simps, irreducible]
-def FACTORS : Array Std.U16 32#usize := eval_global FACTORS_body
+def FACTORS : Array Std.U16 32#usize :=
+  Array.make 32#usize [
+    2285#u16, 2571#u16, 2970#u16, 1812#u16, 1493#u16, 1422#u16, 287#u16,
+    202#u16, 3158#u16, 622#u16, 1577#u16, 182#u16, 962#u16, 2127#u16, 1855#u16,
+    1468#u16, 573#u16, 2004#u16, 264#u16, 383#u16, 2500#u16, 1458#u16,
+    1727#u16, 3199#u16, 2648#u16, 1017#u16, 732#u16, 608#u16, 1787#u16,
+    411#u16, 3124#u16, 1758#u16
+    ]
 
 /- [loops_nested::mod_add]:
    Source: 'tests/src/loops-nested.rs', lines 50:0-52:1 -/

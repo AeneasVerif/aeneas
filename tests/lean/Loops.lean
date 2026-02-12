@@ -760,12 +760,9 @@ def issue400_2
 
 /- [loops::copy_carray::CARRAY]
    Source: 'tests/src/loops.rs', lines 471:4-471:36 -/
-@[global_simps]
-def copy_carray.CARRAY_body : Result (Array Std.U32 2#usize) := do
-  ok (Array.make 2#usize [ 0#u32, 1#u32 ])
 @[global_simps, irreducible]
 def copy_carray.CARRAY : Array Std.U32 2#usize :=
-  eval_global copy_carray.CARRAY_body
+  Array.make 2#usize [ 0#u32, 1#u32 ]
 
 /- [loops::copy_carray]: loop 0:
    Source: 'tests/src/loops.rs', lines 473:4-476:5 -/

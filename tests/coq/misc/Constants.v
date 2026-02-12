@@ -10,18 +10,15 @@ Module Constants.
 
 (** [constants::X0]
     Source: 'tests/src/constants.rs', lines 7:0-7:22 *)
-Definition x0_body : result u32 := Ok 0%u32.
-Definition x0 : u32 := x0_body%global.
+Definition x0 : u32 := 0%u32.
 
 (** [constants::X1]
     Source: 'tests/src/constants.rs', lines 9:0-9:29 *)
-Definition x1_body : result u32 := Ok core_num_U32_MAX.
-Definition x1 : u32 := x1_body%global.
+Definition x1 : u32 := core_num_U32_MAX.
 
 (** [constants::X2]
     Source: 'tests/src/constants.rs', lines 12:0-15:2 *)
-Definition x2_body : result u32 := Ok 3%u32.
-Definition x2 : u32 := x2_body%global.
+Definition x2 : u32 := 3%u32.
 
 (** [constants::incr]:
     Source: 'tests/src/constants.rs', lines 19:0-21:1 *)
@@ -68,15 +65,11 @@ Definition p1 : Pair_t u32 u32 := p1_body%global.
 
 (** [constants::P2]
     Source: 'tests/src/constants.rs', lines 35:0-35:34 *)
-Definition p2_body : result (u32 * u32) := Ok (0%u32, 1%u32).
-Definition p2 : (u32 * u32) := p2_body%global.
+Definition p2 : (u32 * u32) := (0%u32, 1%u32).
 
 (** [constants::P3]
     Source: 'tests/src/constants.rs', lines 36:0-36:51 *)
-Definition p3_body : result (Pair_t u32 u32) :=
-  Ok {| pair_x := 0%u32; pair_y := 1%u32 |}
-.
-Definition p3 : Pair_t u32 u32 := p3_body%global.
+Definition p3 : Pair_t u32 u32 := {| pair_x := 0%u32; pair_y := 1%u32 |}.
 
 (** [constants::Wrap]
     Source: 'tests/src/constants.rs', lines 51:0-53:1 *)
@@ -108,8 +101,7 @@ Definition yval : i32 := yval_body%global.
 
 (** [constants::get_z1::Z1]
     Source: 'tests/src/constants.rs', lines 64:4-64:22 *)
-Definition get_z1_z1_body : result i32 := Ok 3%i32.
-Definition get_z1_z1 : i32 := get_z1_z1_body%global.
+Definition get_z1_z1 : i32 := 3%i32.
 
 (** [constants::get_z1]:
     Source: 'tests/src/constants.rs', lines 63:0-66:1 *)
@@ -123,13 +115,11 @@ Definition add (a : i32) (b : i32) : result i32 :=
 
 (** [constants::Q1]
     Source: 'tests/src/constants.rs', lines 76:0-76:22 *)
-Definition q1_body : result i32 := Ok 5%i32.
-Definition q1 : i32 := q1_body%global.
+Definition q1 : i32 := 5%i32.
 
 (** [constants::Q2]
     Source: 'tests/src/constants.rs', lines 77:0-77:23 *)
-Definition q2_body : result i32 := Ok q1.
-Definition q2 : i32 := q2_body%global.
+Definition q2 : i32 := q1.
 
 (** [constants::Q3]
     Source: 'tests/src/constants.rs', lines 78:0-78:31 *)
@@ -143,8 +133,7 @@ Definition get_z2 : result i32 :=
 
 (** [constants::S1]
     Source: 'tests/src/constants.rs', lines 82:0-82:23 *)
-Definition s1_body : result u32 := Ok 6%u32.
-Definition s1 : u32 := s1_body%global.
+Definition s1 : u32 := 6%u32.
 
 (** [constants::S2]
     Source: 'tests/src/constants.rs', lines 83:0-83:30 *)
@@ -153,8 +142,7 @@ Definition s2 : u32 := s2_body%global.
 
 (** [constants::S3]
     Source: 'tests/src/constants.rs', lines 84:0-84:35 *)
-Definition s3_body : result (Pair_t u32 u32) := Ok p3.
-Definition s3 : Pair_t u32 u32 := s3_body%global.
+Definition s3 : Pair_t u32 u32 := p3.
 
 (** [constants::S4]
     Source: 'tests/src/constants.rs', lines 85:0-85:47 *)
@@ -170,8 +158,7 @@ Arguments v_x { _ } { _ }.
 
 (** [constants::{constants::V<T, N>}::LEN]
     Source: 'tests/src/constants.rs', lines 93:4-93:29 *)
-Definition v_len_body (T : Type) (N : usize) : result usize := Ok N.
-Definition v_len (T : Type) (N : usize) : usize := (v_len_body T N)%global.
+Definition v_len (T : Type) (N : usize) : usize := N.
 
 (** [constants::use_v]:
     Source: 'tests/src/constants.rs', lines 96:0-98:1 *)

@@ -23,12 +23,8 @@ def read
 
 /- [static::use_static::PREFIX]
    Source: 'tests/src/static.rs', lines 40:4-40:34 -/
-@[global_simps]
-def use_static.PREFIX_body : Result (Array Std.U8 1#usize) := do
-  ok (Array.make 1#usize [ 0#u8 ])
 @[global_simps, irreducible]
-def use_static.PREFIX : Array Std.U8 1#usize :=
-  eval_global use_static.PREFIX_body
+def use_static.PREFIX : Array Std.U8 1#usize := Array.make 1#usize [ 0#u8 ]
 
 /- [static::use_static]:
    Source: 'tests/src/static.rs', lines 39:0-42:1 -/

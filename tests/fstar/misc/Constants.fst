@@ -7,18 +7,15 @@ open Primitives
 
 (** [constants::X0]
     Source: 'tests/src/constants.rs', lines 7:0-7:22 *)
-let x0_body : result u32 = Ok 0
-let x0 : u32 = eval_global x0_body
+let x0 : u32 = 0
 
 (** [constants::X1]
     Source: 'tests/src/constants.rs', lines 9:0-9:29 *)
-let x1_body : result u32 = Ok core_num_U32_MAX
-let x1 : u32 = eval_global x1_body
+let x1 : u32 = core_num_U32_MAX
 
 (** [constants::X2]
     Source: 'tests/src/constants.rs', lines 12:0-15:2 *)
-let x2_body : result u32 = Ok 3
-let x2 : u32 = eval_global x2_body
+let x2 : u32 = 3
 
 (** [constants::incr]:
     Source: 'tests/src/constants.rs', lines 19:0-21:1 *)
@@ -56,13 +53,11 @@ let p1 : pair_t u32 u32 = eval_global p1_body
 
 (** [constants::P2]
     Source: 'tests/src/constants.rs', lines 35:0-35:34 *)
-let p2_body : result (u32 & u32) = Ok (0, 1)
-let p2 : (u32 & u32) = eval_global p2_body
+let p2 : (u32 & u32) = (0, 1)
 
 (** [constants::P3]
     Source: 'tests/src/constants.rs', lines 36:0-36:51 *)
-let p3_body : result (pair_t u32 u32) = Ok { x = 0; y = 1 }
-let p3 : pair_t u32 u32 = eval_global p3_body
+let p3 : pair_t u32 u32 = { x = 0; y = 1 }
 
 (** [constants::Wrap]
     Source: 'tests/src/constants.rs', lines 51:0-53:1 *)
@@ -90,8 +85,7 @@ let yval : i32 = eval_global yval_body
 
 (** [constants::get_z1::Z1]
     Source: 'tests/src/constants.rs', lines 64:4-64:22 *)
-let get_z1_z1_body : result i32 = Ok 3
-let get_z1_z1 : i32 = eval_global get_z1_z1_body
+let get_z1_z1 : i32 = 3
 
 (** [constants::get_z1]:
     Source: 'tests/src/constants.rs', lines 63:0-66:1 *)
@@ -105,13 +99,11 @@ let add (a : i32) (b : i32) : result i32 =
 
 (** [constants::Q1]
     Source: 'tests/src/constants.rs', lines 76:0-76:22 *)
-let q1_body : result i32 = Ok 5
-let q1 : i32 = eval_global q1_body
+let q1 : i32 = 5
 
 (** [constants::Q2]
     Source: 'tests/src/constants.rs', lines 77:0-77:23 *)
-let q2_body : result i32 = Ok q1
-let q2 : i32 = eval_global q2_body
+let q2 : i32 = q1
 
 (** [constants::Q3]
     Source: 'tests/src/constants.rs', lines 78:0-78:31 *)
@@ -125,8 +117,7 @@ let get_z2 : result i32 =
 
 (** [constants::S1]
     Source: 'tests/src/constants.rs', lines 82:0-82:23 *)
-let s1_body : result u32 = Ok 6
-let s1 : u32 = eval_global s1_body
+let s1 : u32 = 6
 
 (** [constants::S2]
     Source: 'tests/src/constants.rs', lines 83:0-83:30 *)
@@ -135,8 +126,7 @@ let s2 : u32 = eval_global s2_body
 
 (** [constants::S3]
     Source: 'tests/src/constants.rs', lines 84:0-84:35 *)
-let s3_body : result (pair_t u32 u32) = Ok p3
-let s3 : pair_t u32 u32 = eval_global s3_body
+let s3 : pair_t u32 u32 = p3
 
 (** [constants::S4]
     Source: 'tests/src/constants.rs', lines 85:0-85:47 *)
@@ -149,8 +139,7 @@ type v_t (t : Type0) (n : usize) = { x : array t n; }
 
 (** [constants::{constants::V<T, N>}::LEN]
     Source: 'tests/src/constants.rs', lines 93:4-93:29 *)
-let v_len_body (t : Type0) (n : usize) : result usize = Ok n
-let v_len (t : Type0) (n : usize) : usize = eval_global (v_len_body t n)
+let v_len (t : Type0) (n : usize) : usize = n
 
 (** [constants::use_v]:
     Source: 'tests/src/constants.rs', lines 96:0-98:1 *)
