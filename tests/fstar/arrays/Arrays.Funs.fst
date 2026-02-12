@@ -403,8 +403,7 @@ let f3 : result u32 =
 
 (** [arrays::SZ]
     Source: 'tests/src/arrays.rs', lines 316:0-316:25 *)
-let sz_body : result usize = Ok 32
-let sz : usize = eval_global sz_body
+let sz : usize = 32
 
 (** [arrays::f5]:
     Source: 'tests/src/arrays.rs', lines 319:0-321:1 *)
@@ -503,11 +502,9 @@ let add_acc
 
 (** [arrays::ARRAY1]
     Source: 'tests/src/arrays.rs', lines 374:0-374:32 *)
-let array1_body : result (array u32 2) = Ok (mk_array 2 [ 0; 1 ])
-let array1 : array u32 2 = eval_global array1_body
+let array1 : array u32 2 = mk_array 2 [ 0; 1 ]
 
 (** [arrays::L]
     Source: 'tests/src/arrays.rs', lines 378:0-378:33 *)
-let l_body : result scalar_t = Ok (mk_array 2 [ 0; 1 ])
-let l : scalar_t = eval_global l_body
+let l : scalar_t = (mk_array 2 [ 0; 1 ])
 

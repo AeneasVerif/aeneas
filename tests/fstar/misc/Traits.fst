@@ -268,11 +268,7 @@ noeq type withConstTy_t (self : Type0) (self_v : Type0) (self_w : Type0) (len :
 
 (** [traits::WithConstTy::LEN2]
     Source: 'tests/src/traits.rs', lines 166:4-166:27 *)
-let with_const_ty_len2_default_body (self : Type0) (len : usize)
-  : result usize =
-  Ok 32
-let with_const_ty_len2_default (self : Type0) (len : usize) : usize =
-  eval_global (with_const_ty_len2_default_body self len)
+let with_const_ty_len2_default (self : Type0) (len : usize) : usize = 32
 
 (** [traits::{traits::WithConstTy<u8, u64, 32usize> for bool}::f]:
     Source: 'tests/src/traits.rs', lines 182:4-182:42 *)
@@ -282,9 +278,7 @@ let bool_Insts_TraitsWithConstTyU8U6432_f
 
 (** [traits::{traits::WithConstTy<u8, u64, 32usize> for bool}::LEN1]
     Source: 'tests/src/traits.rs', lines 177:4-177:27 *)
-let with_const_ty_bool_u8_u6432_len1_body : result usize = Ok 12
-let with_const_ty_bool_u8_u6432_len1 : usize =
-  eval_global with_const_ty_bool_u8_u6432_len1_body
+let with_const_ty_bool_u8_u6432_len1 : usize = 12
 
 (** Trait implementation: [traits::{traits::WithConstTy<u8, u64, 32usize> for bool}]
     Source: 'tests/src/traits.rs', lines 176:0-183:1 *)
@@ -505,9 +499,7 @@ noeq type trait_t (self : Type0) = { cLEN : usize; }
 
 (** [traits::{traits::Trait for [T; N]}::LEN]
     Source: 'tests/src/traits.rs', lines 317:4-317:25 *)
-let trait_array_len_body (t : Type0) (n : usize) : result usize = Ok n
-let trait_array_len (t : Type0) (n : usize) : usize =
-  eval_global (trait_array_len_body t n)
+let trait_array_len (t : Type0) (n : usize) : usize = n
 
 (** Trait implementation: [traits::{traits::Trait for [T; N]}]
     Source: 'tests/src/traits.rs', lines 316:0-318:1 *)
@@ -517,11 +509,7 @@ let array_Insts_TraitsTrait (t : Type0) (n : usize) : trait_t (array t n) = {
 
 (** [traits::{traits::Trait for traits::Wrapper<T>}::LEN]
     Source: 'tests/src/traits.rs', lines 321:4-321:25 *)
-let trait_wrapper_len_body (#t : Type0) (traitInst : trait_t t)
-  : result usize =
-  Ok 0
-let trait_wrapper_len (#t : Type0) (traitInst : trait_t t) : usize =
-  eval_global (trait_wrapper_len_body traitInst)
+let trait_wrapper_len (#t : Type0) (traitInst : trait_t t) : usize = 0
 
 (** Trait implementation: [traits::{traits::Trait for traits::Wrapper<T>}]
     Source: 'tests/src/traits.rs', lines 320:0-322:1 *)
@@ -541,12 +529,9 @@ type foo_t (t : Type0) (u : Type0) = { x : t; y : u; }
 
 (** [traits::{traits::Foo<T, U>}::FOO]
     Source: 'tests/src/traits.rs', lines 334:4-334:43 *)
-let foo_foo_body (#t : Type0) (u : Type0) (traitInst : trait_t t)
-  : result (core_result_Result_t t i32) =
-  Ok (Core_result_Result_Err 0)
 let foo_foo (#t : Type0) (u : Type0) (traitInst : trait_t t)
   : core_result_Result_t t i32 =
-  eval_global (foo_foo_body u traitInst)
+  Core_result_Result_Err 0
 
 (** [traits::use_foo1]:
     Source: 'tests/src/traits.rs', lines 337:0-339:1 *)
