@@ -146,7 +146,7 @@ type bs_ctx = {
   (* TODO: there are a lot of duplications with the various decls ctx *)
   span : Meta.span;  (** The span information about the current declaration *)
   decls_ctx : C.decls_ctx;
-  type_ctx : type_ctx;
+  type_ctx : type_ctx;  (** TODO: remove: this is already in decls_ctx *)
   fun_ctx : fun_ctx;
   fun_sigs : fun_sigs FunDeclId.Map.t;
   fun_decl : A.fun_decl;

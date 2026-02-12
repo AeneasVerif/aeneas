@@ -51,7 +51,7 @@ and adt_avalue_to_consumed_ty_aux ~(filter : bool) (ctx : bs_ctx)
           | Some x -> Some ((), x) ))
       (compute_tavalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions
          abs_level current_level)
-      (fun _ -> translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos av.ty)
+      (fun _ -> translate_fwd_ty (Some ctx.span) ctx.decls_ctx av.ty)
       mk_simpl_tuple_ty ~filter ctx av av.ty adt_v.fields
   in
   Option.map snd out
@@ -128,7 +128,7 @@ let rec tavalue_to_given_back_ty_aux ~(filter : bool) (ctx : bs_ctx)
       aproj_to_given_back_ty_aux aproj av.ty ctx
   | AIgnored _ ->
       if filter then None
-      else Some (translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos av.ty)
+      else Some (translate_fwd_ty (Some ctx.span) ctx.decls_ctx av.ty)
 
 and adt_avalue_to_given_back_ty_aux ~(filter : bool)
     (abs_regions : T.RegionId.Set.t) (abs_level : abs_level)
@@ -147,7 +147,7 @@ and adt_avalue_to_given_back_ty_aux ~(filter : bool)
           | Some x -> Some ((), x) ))
       (compute_tavalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions
          abs_level current_level)
-      (fun _ -> translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos av.ty)
+      (fun _ -> translate_fwd_ty (Some ctx.span) ctx.decls_ctx av.ty)
       mk_simpl_tuple_ty ~filter ctx av av.ty adt_v.fields
   in
   Option.map snd out
@@ -155,11 +155,10 @@ and adt_avalue_to_given_back_ty_aux ~(filter : bool)
 and aborrow_content_to_given_back_ty_aux ~(filter : bool)
     (bc : V.aborrow_content) (ty : T.ty) (ctx : bs_ctx) : ty option =
   match bc with
-  | V.AMutBorrow _ ->
-      Some (translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos ty)
+  | V.AMutBorrow _ -> Some (translate_fwd_ty (Some ctx.span) ctx.decls_ctx ty)
   | ASharedBorrow _ ->
       if filter then None
-      else Some (translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos ty)
+      else Some (translate_fwd_ty (Some ctx.span) ctx.decls_ctx ty)
   | AIgnoredMutBorrow _ ->
       (* Can happen in case of nested borrows, ignoring for now *)
       [%craise] ctx.span "Unimplemented"
@@ -173,7 +172,7 @@ and aproj_to_given_back_ty_aux (aproj : V.aproj) (ty : T.ty) (ctx : bs_ctx) :
   match aproj with
   | V.AProjBorrows { proj = _; loans } ->
       [%sanity_check] ctx.span (loans = []);
-      Some (translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos ty)
+      Some (translate_fwd_ty (Some ctx.span) ctx.decls_ctx ty)
   | V.AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty | AProjLoans _ ->
       [%craise] ctx.span "Unreachable"
 
@@ -505,8 +504,7 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
                abs_level current_level)
             (fun fields ->
               let ty =
-                translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos
-                  output.ty
+                translate_fwd_ty (Some ctx.span) ctx.decls_ctx output.ty
               in
               mk_adt_pat ty variant_id fields)
             mk_simpl_tuple_pat ~filter ctx output output.ty fields
@@ -569,9 +567,7 @@ let tepat_to_tpat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
               (ctx, Option.map (fun x -> ((), x)) pat))
             compute_proj_kind
             (fun fields ->
-              let ty =
-                translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos pat.ty
-              in
+              let ty = translate_fwd_ty (Some ctx.span) ctx.decls_ctx pat.ty in
               mk_adt_pat ty variant_id fields)
             mk_simpl_tuple_pat ~filter ctx pat pat.ty fields
         in
@@ -741,8 +737,7 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
                abs_level current_level)
             (fun fields ->
               let ty =
-                translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos
-                  input.ty
+                translate_fwd_ty (Some ctx.span) ctx.decls_ctx input.ty
               in
               mk_adt_texpr span ty variant_id fields)
             (mk_simpl_tuple_texpr span)
@@ -1113,9 +1108,7 @@ let rec tevalue_to_given_back_aux ~(filter : bool)
         (* If we do not filter, we have to create an ignored pattern *)
         if filter then (ctx, None)
         else
-          let ty =
-            translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos ev.ty
-          in
+          let ty = translate_fwd_ty (Some ctx.span) ctx.decls_ctx ev.ty in
           (ctx, Some (mk_ignored_pat ty))
     | EBottom -> (ctx, None)
     | ELet _
@@ -1152,9 +1145,7 @@ and adt_evalue_to_given_back_aux ~(filter : bool)
       (compute_tevalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions
          abs_level current_level)
       (fun fields ->
-        let ty =
-          translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos av.ty
-        in
+        let ty = translate_fwd_ty (Some ctx.span) ctx.decls_ctx av.ty in
         mk_adt_pat ty adt_v.variant_id fields)
       mk_simpl_tuple_pat ~filter ctx av av.ty adt_v.fields
   in

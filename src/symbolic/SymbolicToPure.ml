@@ -187,8 +187,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
   in
   let span = item_meta.span in
   let opt_span = Some span in
-  let type_infos = ctx.type_ctx.type_infos in
-  let translate_ty = translate_fwd_ty opt_span type_infos in
+  let translate_ty = translate_fwd_ty opt_span ctx in
   let name =
     Print.Types.name_to_string
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
@@ -274,8 +273,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
     trait_impl
   in
   let span = Some item_meta.span in
-  let type_infos = ctx.type_ctx.type_infos in
-  let translate_ty = translate_fwd_ty span type_infos in
+  let translate_ty = translate_fwd_ty span ctx in
   let impl_trait =
     (translate_trait_decl_ref span translate_ty) llbc_impl_trait
   in
@@ -354,9 +352,7 @@ let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
     translate_generic_params (Some decl.item_meta.span) llbc_generics
   in
   let explicit_info = compute_explicit_info generics [] in
-  let ty =
-    translate_fwd_ty (Some decl.item_meta.span) ctx.type_ctx.type_infos ty
-  in
+  let ty = translate_fwd_ty (Some decl.item_meta.span) ctx ty in
   let builtin_info =
     match_name_find_opt ctx item_meta.name
       (ExtractBuiltin.builtin_globals_map ())

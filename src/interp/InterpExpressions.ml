@@ -526,7 +526,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
           let sv = mk_fresh_symbolic_tvalue span ctx cv.ty in
           let cf e =
             SymbolicAst.IntroSymbolic
-              (ctx, None, tvalue_as_symbolic span sv, SymbolicAst.VaFnPtr ptr, e)
+              (ctx, None, tvalue_as_symbolic span sv, SymbolicAst.VaFnDef ptr, e)
           in
           (sv, ctx, cf)
       | CRawMemory _ ->

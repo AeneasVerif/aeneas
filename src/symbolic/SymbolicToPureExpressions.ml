@@ -13,9 +13,8 @@ let translate_fn_ptr_kind (ctx : bs_ctx) (id : A.fn_ptr_kind) : fn_ptr_kind =
   match id with
   | FunId fun_id -> FunId fun_id
   | TraitMethod (trait_ref, method_name, fun_decl_id) ->
-      let type_infos = ctx.type_ctx.type_infos in
       let trait_ref =
-        translate_fwd_trait_ref (Some ctx.span) type_infos trait_ref
+        translate_fwd_trait_ref (Some ctx.span) ctx.decls_ctx trait_ref
       in
       TraitMethod (trait_ref, method_name, fun_decl_id)
 
@@ -257,7 +256,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
     let args = List.map (tvalue_to_texpr ctx call.ctx) call.args in
     let args_mplaces =
       List.map
-        (translate_opt_mplace (Some call.span) ctx.type_ctx.type_infos)
+        (translate_opt_mplace (Some call.span) ctx.decls_ctx)
         call.args_places
     in
     List.map
@@ -265,8 +264,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
       (List.combine args args_mplaces)
   in
   let dest_mplace =
-    translate_opt_mplace (Some call.span) ctx.type_ctx.type_infos
-      call.dest_place
+    translate_opt_mplace (Some call.span) ctx.decls_ctx call.dest_place
   in
   (* Retrieve the function id, and register the function call in the context
      if necessary. *)
@@ -617,8 +615,7 @@ and translate_cast_unsize (call : S.call) (e : S.expr) (ty0 : T.ty) (ty1 : T.ty)
 
   (* Process the arguments and the destination *)
   let dest_mplace =
-    translate_opt_mplace (Some call.span) ctx.type_ctx.type_infos
-      call.dest_place
+    translate_opt_mplace (Some call.span) ctx.decls_ctx call.dest_place
   in
   let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
   let dest = mk_tpat_from_fvar dest_mplace dest in
@@ -629,7 +626,7 @@ and translate_cast_unsize (call : S.call) (e : S.expr) (ty0 : T.ty) (ty1 : T.ty)
   in
   let arg = tvalue_to_texpr ctx call.ctx arg in
   let arg_mp =
-    translate_opt_mplace (Some call.span) ctx.type_ctx.type_infos
+    translate_opt_mplace (Some call.span) ctx.decls_ctx
       (List.hd call.args_places)
   in
   let arg = mk_opt_mplace_texpr arg_mp arg in
@@ -921,7 +918,7 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
     let output_mpl =
       List.append
         (List.map
-           (translate_opt_mplace (Some call.span) ctx.type_ctx.type_infos)
+           (translate_opt_mplace (Some call.span) ctx.decls_ctx)
            call.args_places)
         [ None ]
     in
@@ -1175,9 +1172,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
   [%ldebug "expansion:\n" ^ bs_ctx_expansion_to_string ctx sv exp];
   (* Translate the scrutinee *)
   let scrutinee = symbolic_value_to_texpr ctx sv in
-  let scrutinee_mplace =
-    translate_opt_mplace (Some ctx.span) ctx.type_ctx.type_infos p
-  in
+  let scrutinee_mplace = translate_opt_mplace (Some ctx.span) ctx.decls_ctx p in
   (* Translate the branches *)
   match exp with
   | ExpandNoBranch (sexp, e) -> (
@@ -1351,7 +1346,7 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
     (sv : V.symbolic_value) (v : S.value_aggregate) (e : S.expr) (ctx : bs_ctx)
     : texpr =
   [%ltrace "- value aggregate: " ^ S.show_value_aggregate v];
-  let mplace = translate_opt_mplace (Some ctx.span) ctx.type_ctx.type_infos p in
+  let mplace = translate_opt_mplace (Some ctx.span) ctx.decls_ctx p in
 
   (* Introduce a fresh variable for the symbolic value. *)
   let ctx, var = fresh_var_for_symbolic_value sv ctx in
@@ -1378,9 +1373,8 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
         { e = StructUpdate su; ty = var.ty }
     | VaCgValue cg_id -> { e = CVar cg_id; ty = var.ty }
     | VaTraitConstValue (trait_ref, const_name) ->
-        let type_infos = ctx.type_ctx.type_infos in
         let trait_ref =
-          translate_fwd_trait_ref (Some ctx.span) type_infos trait_ref
+          translate_fwd_trait_ref (Some ctx.span) ctx.decls_ctx trait_ref
         in
         let qualif_id = TraitConst (trait_ref, const_name) in
         let qualif = { id = qualif_id; generics = empty_generic_args } in
@@ -1399,9 +1393,8 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
     | VaDynTrait (v, trait_ref) ->
         let v = tvalue_to_texpr ctx ectx v in
         let dyn_ty = var.ty in
-        let type_infos = ctx.type_ctx.type_infos in
         let trait_ref =
-          translate_fwd_trait_ref (Some ctx.span) type_infos trait_ref
+          translate_fwd_trait_ref (Some ctx.span) ctx.decls_ctx trait_ref
         in
         let qualif_id = MkDynTrait trait_ref in
         let qualif = { id = qualif_id; generics = empty_generic_args } in
@@ -1988,10 +1981,9 @@ and translate_emeta (meta : S.emeta) (e : S.expr) (ctx : bs_ctx) : texpr =
   let ctx, meta =
     match meta with
     | S.Assignment (ectx, lp, rv, rp) ->
-        let type_infos = ctx.type_ctx.type_infos in
-        let lp = translate_mplace (Some ctx.span) type_infos lp in
+        let lp = translate_mplace (Some ctx.span) ctx.decls_ctx lp in
         let rv = tvalue_to_texpr ctx ectx rv in
-        let rp = translate_opt_mplace (Some ctx.span) type_infos rp in
+        let rp = translate_opt_mplace (Some ctx.span) ctx.decls_ctx rp in
         (ctx, Some (Assignment (lp, rv, rp)))
     | S.Snapshot (mid, ectx) ->
         [%ldebug

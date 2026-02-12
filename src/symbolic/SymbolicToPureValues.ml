@@ -465,9 +465,7 @@ and adt_avalue_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
       (compute_tavalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions
          abs_level current_level)
       (fun fields ->
-        let ty =
-          translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos av.ty
-        in
+        let ty = translate_fwd_ty (Some ctx.span) ctx.decls_ctx av.ty in
         mk_adt_texpr ctx.span ty adt_v.variant_id fields)
       (mk_simpl_tuple_texpr ctx.span)
       ~filter ctx av av.ty adt_v.fields
@@ -747,9 +745,7 @@ let rec tavalue_to_given_back_aux ~(filter : bool)
         (* If we do not filter, we have to create an ignored pattern *)
         if filter then (ctx, None)
         else
-          let ty =
-            translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos av.ty
-          in
+          let ty = translate_fwd_ty (Some ctx.span) ctx.decls_ctx av.ty in
           (ctx, Some (mk_ignored_pat ty))
   in
   (* Sanity checks - Rk.: we do this at every recursive call, which is a bit
@@ -778,9 +774,7 @@ and adt_avalue_to_given_back_aux ~(filter : bool)
       (compute_tavalue_proj_kind ctx.span ctx.type_ctx.type_infos abs_regions
          abs_level current_level)
       (fun fields ->
-        let ty =
-          translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos av.ty
-        in
+        let ty = translate_fwd_ty (Some ctx.span) ctx.decls_ctx av.ty in
         mk_adt_pat ty adt_v.variant_id fields)
       mk_simpl_tuple_pat ~filter ctx av av.ty adt_v.fields
   in
@@ -863,7 +857,7 @@ and aborrow_content_to_given_back_aux ~(filter : bool)
   | AEndedSharedBorrow | AProjSharedBorrow _ ->
       if filter then (ctx, None)
       else
-        let ty = translate_fwd_ty (Some ctx.span) ctx.type_ctx.type_infos ty in
+        let ty = translate_fwd_ty (Some ctx.span) ctx.decls_ctx ty in
         (ctx, Some (mk_ignored_pat ty))
 
 and aproj_to_given_back_aux (_abs_level : abs_level)
