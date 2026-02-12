@@ -780,56 +780,56 @@ and extract_array_or_slice (span : Meta.span) (ctx : extraction_ctx)
   F.pp_open_hvbox fmt ctx.indent_incr;
   let need_paren = inside in
   if need_paren then F.pp_print_string fmt "(";
-  (* Open the box for `Array.replicate T N [` *)
-  F.pp_open_hovbox fmt ctx.indent_incr;
 
   (* In case the array is empty we use a special [Array.empty] construct -
      the reason is that otherwise it is not possible to infer the type of the
      array.Aeneas
      TODO: doing this *here* is a bit of a hack.
   *)
-  (if args = [] then (
-     let cs =
-       match backend () with
-       | Lean -> "Std.Array.empty"
-       | _ -> "Array_empty"
-     in
-     F.pp_print_string fmt cs;
-     F.pp_print_space fmt ();
-     extract_ty span ctx fmt TypeDeclId.Set.empty ~inside:true args_ty)
-   else
-     (* Print the array constructor.
+  if args = [] then (
+    let cs =
+      match backend () with
+      | Lean -> "Std.Array.empty"
+      | _ -> "Array_empty"
+    in
+    F.pp_print_string fmt cs;
+    F.pp_print_space fmt ();
+    extract_ty span ctx fmt TypeDeclId.Set.empty ~inside:true args_ty)
+  else (
+    (* Print the array constructor.
 
      Note that we don't need to print the type parameter, which
      is implicit. *)
-     let cs = ctx_get_struct span (TBuiltin TArray) ctx in
-     F.pp_print_string fmt cs;
-     (* Print the parameters *)
-     F.pp_print_space fmt ();
-     extract_const_generic span ctx fmt ~inside:true
-       (CgValue (VScalar (UnsignedScalar (Usize, Z.of_int (List.length args)))));
-     F.pp_print_space fmt ();
-     F.pp_print_string fmt "[";
-     (* Close the box for `Array.mk T N [` *)
-     F.pp_close_box fmt ();
-     (* Print the values *)
-     let delimiter =
-       match backend () with
-       | Lean -> ","
-       | Coq | FStar | HOL4 -> ";"
-     in
-     F.pp_print_space fmt ();
-     F.pp_open_hovbox fmt 0;
-     Collections.List.iter_link
-       (fun () ->
-         F.pp_print_string fmt delimiter;
-         F.pp_print_space fmt ())
-       (extract_texpr span ctx fmt ~inside:false ~inside_do:false)
-       args;
-     (* Close the boxes *)
-     F.pp_close_box fmt ();
-     if args <> [] then F.pp_print_space fmt ();
-     F.pp_print_string fmt "]");
+    (* Open the box for `Array.replicate T N [` *)
+    F.pp_open_hovbox fmt ctx.indent_incr;
+    let cs = ctx_get_struct span (TBuiltin TArray) ctx in
+    F.pp_print_string fmt cs;
+    (* Print the parameters *)
+    F.pp_print_space fmt ();
+    extract_const_generic span ctx fmt ~inside:true
+      (CgValue (VScalar (UnsignedScalar (Usize, Z.of_int (List.length args)))));
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt "[";
+    (* Close the box for `Array.mk T N [` *)
+    F.pp_close_box fmt ();
+    (* Print the values *)
+    let delimiter =
+      match backend () with
+      | Lean -> ","
+      | Coq | FStar | HOL4 -> ";"
+    in
+    F.pp_print_space fmt ();
+    F.pp_open_hovbox fmt 0;
+    Collections.List.iter_link
+      (fun () ->
+        F.pp_print_string fmt delimiter;
+        F.pp_print_space fmt ())
+      (extract_texpr span ctx fmt ~inside:false ~inside_do:false)
+      args;
+    (* Close the boxes *)
+    F.pp_close_box fmt ();
+    if args <> [] then F.pp_print_space fmt ();
+    F.pp_print_string fmt "]");
   if need_paren then F.pp_print_string fmt ")";
   F.pp_close_box fmt ()
 
@@ -1500,7 +1500,7 @@ and extract_Switch (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
 
       (* End the match *)
       match backend () with
-      | Lean -> (*We rely on indentation in Lean *) ()
+      | Lean -> (* We rely on indentation in Lean *) ()
       | FStar | Coq ->
           F.pp_print_space fmt ();
           F.pp_print_string fmt "end"
