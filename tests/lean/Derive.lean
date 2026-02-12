@@ -760,4 +760,111 @@ def Struct.Insts.CoreFmtDebug {T : Type} (corefmtDebugInst : core.fmt.Debug T)
   fmt := Struct.Insts.CoreFmtDebug.fmt corefmtDebugInst
 }
 
+/- [derive::Struct6Fields]
+   Source: 'tests/src/derive.rs', lines 55:0-62:1 -/
+structure Struct6Fields where
+  a : Std.U32
+  b : Std.U32
+  c : Std.U32
+  d : Std.U32
+  e : Std.U32
+  f : Std.U32
+
+/- [derive::{core::clone::Clone for derive::Struct6Fields}::clone]:
+   Source: 'tests/src/derive.rs', lines 54:9-54:14 -/
+def Struct6Fields.Insts.CoreCloneClone.clone
+  (self : Struct6Fields) : Result Struct6Fields := do
+  let i ← (↑(core.clone.impls.CloneU32.clone self.a) : Result Std.U32)
+  let i1 ← (↑(core.clone.impls.CloneU32.clone self.b) : Result Std.U32)
+  let i2 ← (↑(core.clone.impls.CloneU32.clone self.c) : Result Std.U32)
+  let i3 ← (↑(core.clone.impls.CloneU32.clone self.d) : Result Std.U32)
+  let i4 ← (↑(core.clone.impls.CloneU32.clone self.e) : Result Std.U32)
+  let i5 ← (↑(core.clone.impls.CloneU32.clone self.f) : Result Std.U32)
+  ok { a := i, b := i1, c := i2, d := i3, e := i4, f := i5 }
+
+/- Trait implementation: [derive::{core::clone::Clone for derive::Struct6Fields}]
+   Source: 'tests/src/derive.rs', lines 54:9-54:14 -/
+@[reducible]
+def Struct6Fields.Insts.CoreCloneClone : core.clone.Clone Struct6Fields := {
+  clone := Struct6Fields.Insts.CoreCloneClone.clone
+}
+
+/- Trait implementation: [derive::{core::marker::StructuralPartialEq for derive::Struct6Fields}]
+   Source: 'tests/src/derive.rs', lines 54:16-54:25 -/
+@[reducible]
+def Struct6Fields.Insts.CoreMarkerStructuralPartialEq :
+  core.marker.StructuralPartialEq Struct6Fields := {
+}
+
+/- [derive::{core::cmp::PartialEq<derive::Struct6Fields> for derive::Struct6Fields}::eq]:
+   Source: 'tests/src/derive.rs', lines 54:16-54:25 -/
+def Struct6Fields.Insts.CoreCmpPartialEqStruct6Fields.eq
+  (self : Struct6Fields) (other : Struct6Fields) : Result Bool := do
+  if self.a = other.a
+  then
+    if self.b = other.b
+    then
+      if self.c = other.c
+      then
+        if self.d = other.d
+        then if self.e = other.e
+             then ok (self.f = other.f)
+             else ok false
+        else ok false
+      else ok false
+    else ok false
+  else ok false
+
+/- Trait implementation: [derive::{core::cmp::PartialEq<derive::Struct6Fields> for derive::Struct6Fields}]
+   Source: 'tests/src/derive.rs', lines 54:16-54:25 -/
+@[reducible]
+def Struct6Fields.Insts.CoreCmpPartialEqStruct6Fields : core.cmp.PartialEq
+  Struct6Fields Struct6Fields := {
+  eq := Struct6Fields.Insts.CoreCmpPartialEqStruct6Fields.eq
+}
+
+/- [derive::{core::cmp::Eq for derive::Struct6Fields}::assert_receiver_is_total_eq]:
+   Source: 'tests/src/derive.rs', lines 54:27-54:29 -/
+def Struct6Fields.Insts.CoreCmpEq.assert_receiver_is_total_eq
+  (self : Struct6Fields) : Result Unit := do
+  ok ()
+
+/- Trait implementation: [derive::{core::cmp::Eq for derive::Struct6Fields}]
+   Source: 'tests/src/derive.rs', lines 54:27-54:29 -/
+@[reducible]
+def Struct6Fields.Insts.CoreCmpEq : core.cmp.Eq Struct6Fields := {
+  partialEqInst := Struct6Fields.Insts.CoreCmpPartialEqStruct6Fields
+  assert_receiver_is_total_eq :=
+    Struct6Fields.Insts.CoreCmpEq.assert_receiver_is_total_eq
+}
+
+/- [derive::{core::fmt::Debug for derive::Struct6Fields}::fmt]:
+   Source: 'tests/src/derive.rs', lines 54:31-54:36 -/
+def Struct6Fields.Insts.CoreFmtDebug.fmt
+  (self : Struct6Fields) (f : core.fmt.Formatter) :
+  Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter)
+  := do
+  let dyn := Dyn.mk _ core.fmt.DebugU32 self.a
+  let dyn1 := Dyn.mk _ core.fmt.DebugU32 self.b
+  let dyn2 := Dyn.mk _ core.fmt.DebugU32 self.c
+  let dyn3 := Dyn.mk _ core.fmt.DebugU32 self.d
+  let dyn4 := Dyn.mk _ core.fmt.DebugU32 self.e
+  let dyn5 := Dyn.mk _ (core.fmt.DebugShared core.fmt.DebugU32) self.f
+  let values :=
+    Array.to_slice (Array.make 6#usize [ dyn, dyn1, dyn2, dyn3, dyn4, dyn5 ])
+  let s ←
+    (↑(Array.to_slice
+      (Array.make 6#usize [
+        toStr "a", toStr "b", toStr "c", toStr "d", toStr "e", toStr "f"
+        ])) : Result (Slice Str))
+  core.fmt.Formatter.debug_struct_fields_finish f (toStr "Struct6Fields") s
+    values
+
+/- Trait implementation: [derive::{core::fmt::Debug for derive::Struct6Fields}]
+   Source: 'tests/src/derive.rs', lines 54:31-54:36 -/
+@[reducible]
+def Struct6Fields.Insts.CoreFmtDebug : core.fmt.Debug Struct6Fields := {
+  fmt := Struct6Fields.Insts.CoreFmtDebug.fmt
+}
+
 end derive
