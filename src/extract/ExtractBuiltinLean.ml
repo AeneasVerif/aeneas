@@ -311,10 +311,10 @@ let lean_builtin_funs =
       "core.array.Array.as_mut_slice";
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 207 *)
     mk_fun "core::array::{[@T; @N]}::as_slice" "core.array.Array.as_slice";
-    (* file: "Aeneas/Std/Array/Array.lean", line: 190 *)
+    (* file: "Aeneas/Std/Array/Array.lean", line: 192 *)
     mk_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone"
       "core.array.CloneArray.clone";
-    (* file: "Aeneas/Std/Array/Array.lean", line: 203 *)
+    (* file: "Aeneas/Std/Array/Array.lean", line: 205 *)
     mk_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone_from"
       "core.array.CloneArray.clone_from";
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 169 *)
@@ -332,10 +332,10 @@ let lean_builtin_funs =
       "core::array::{core::convert::TryFrom<[@T; @N], &'0 [@T], \
        core::array::TryFromSliceError>}::try_from"
       "core.array.TryFromArrayCopySlice.try_from";
-    (* file: "Aeneas/Std/Array/Array.lean", line: 263 *)
+    (* file: "Aeneas/Std/Array/Array.lean", line: 265 *)
     mk_fun "core::array::{core::default::Default<[@T; 0]>}::default"
       "core.default.DefaultArrayEmpty.default";
-    (* file: "Aeneas/Std/Array/Array.lean", line: 247 *)
+    (* file: "Aeneas/Std/Array/Array.lean", line: 249 *)
     mk_fun "core::array::{core::default::Default<[@T; @N]>}::default"
       "core.default.DefaultArray.default";
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 200 *)
@@ -509,6 +509,9 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Fmt.lean", line: 103 *)
     mk_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_field4_finish"
       "core.fmt.Formatter.debug_struct_field4_finish";
+    (* file: "Aeneas/Std/Core/FmtWithSlice.lean", line: 7 *)
+    mk_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_struct_fields_finish"
+      "core.fmt.Formatter.debug_struct_fields_finish";
     (* file: "Aeneas/Std/Core/Fmt.lean", line: 113 *)
     mk_fun "core::fmt::{core::fmt::Formatter<'a>}::debug_tuple_field1_finish"
       "core.fmt.Formatter.debug_tuple_field1_finish";
@@ -979,7 +982,7 @@ let lean_builtin_trait_impls =
     mk_trait_impl "core::clone::Clone<Box<@T>>" "core.core.clone.CloneBox"
       ~keep_params:(Some [ true; false ])
       ~keep_trait_clauses:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Array/Array.lean", line: 216 *)
+    (* file: "Aeneas/Std/Array/Array.lean", line: 218 *)
     mk_trait_impl "core::clone::Clone<[@T; @N]>" "core.clone.CloneArray";
     (* file: "Aeneas/Std/Core/Core.lean", line: 33 *)
     mk_trait_impl "core::clone::Clone<alloc::alloc::Global>"
@@ -1031,10 +1034,10 @@ let lean_builtin_trait_impls =
     (* file: "Aeneas/Std/Core/Convert.lean", line: 53 *)
     mk_trait_impl "core::convert::{core::convert::TryInto<@T, @U>}"
       "core.convert.TryIntoFrom";
-    (* file: "Aeneas/Std/Array/Array.lean", line: 268 *)
+    (* file: "Aeneas/Std/Array/Array.lean", line: 270 *)
     mk_trait_impl "core::default::Default<[@T; 0]>"
       "core.default.DefaultArrayEmpty";
-    (* file: "Aeneas/Std/Array/Array.lean", line: 257 *)
+    (* file: "Aeneas/Std/Array/Array.lean", line: 259 *)
     mk_trait_impl "core::default::Default<[@T; @N]>" "core.default.DefaultArray";
     (* file: "Aeneas/Std/Core/Fmt.lean", line: 121 *)
     mk_trait_impl "core::fmt::Debug<&'0 @T>" "core.fmt.DebugShared";
