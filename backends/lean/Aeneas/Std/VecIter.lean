@@ -55,9 +55,6 @@ def alloc.vec.FromIteratorVec.from_iter
   (IntoIteratorInst : core.iter.traits.collect.IntoIterator I T IntoIter) :
   I → Result (alloc.vec.Vec T) := sorry
 
-/- Trait implementation: [alloc::vec::{core::iter::traits::collect::FromIterator<T> for alloc::vec::Vec<T>}]
-   Source: '/rustc/library/alloc/src/vec/mod.rs', lines 3714:0-3714:34
-   Name pattern: [core::iter::traits::collect::FromIterator<alloc::vec::Vec<@T>, @T>] -/
 @[reducible, rust_trait_impl
   "core::iter::traits::collect::FromIterator<alloc::vec::Vec<@T>, @T>"]
 def core.iter.traits.collect.FromIteratorVec (T : Type) :
@@ -66,5 +63,15 @@ def core.iter.traits.collect.FromIteratorVec (T : Type) :
     (IntoIteratorInst : core.iter.traits.collect.IntoIterator I T IntoIter) =>
     alloc.vec.FromIteratorVec.from_iter IntoIteratorInst
 }
+
+@[rust_fun
+  "alloc::vec::into_iter::{core::iter::traits::iterator::Iterator<alloc::vec::into_iter::IntoIter<@T, @A>, @T>}::map"]
+def alloc.vec.into_iter.IntoIter.Insts.CoreIterTraitsIteratorIterator.map
+  {T : Type} {A : Type} {F : Type}
+  (FnMutInst : core.ops.function.FnMut F T A) :
+  alloc.vec.into_iter.IntoIter T → F →
+  Result (core.iter.adapters.map.Map (alloc.vec.into_iter.IntoIter T) F) :=
+  sorry
+
 
 end Aeneas.Std

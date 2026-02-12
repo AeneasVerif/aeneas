@@ -30,10 +30,28 @@ fn call_fn_parameters<T: Clone>(x: &T) {
 fn call_closure<F: Fn() -> u32>(f: F) -> u32 {
     f()
 }
+
 fn call_closure1() -> u32 {
     call_closure(|| 0)
 }
+
 fn call_closure2() -> u32 {
     call_closure(|| 0);
     call_closure(|| 0)
 }
+
+fn u8_id(x: u8) -> u8 {
+    x
+}
+
+fn map_fn_pointer(x: Vec<u8>) {
+    let _ = x.into_iter().map(u8_id);
+}
+
+/*fn u8_shared_id(x: &u8) -> u8 {
+    *x
+}
+
+fn map_fn_pointer_shared(x: &[u8]) {
+    let _ = x.iter().map(u8_shared_id);
+}*/
