@@ -1013,6 +1013,9 @@ let keywords () =
           "begin";
           "break";
           "by";
+          "BuiltinFn";
+          "BuiltinFnMut";
+          "BuiltinFnOnce";
           "calc";
           "catch";
           "class";

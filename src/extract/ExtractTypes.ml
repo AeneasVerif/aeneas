@@ -681,19 +681,38 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
         ~inside:true trait_ref inst_id;
       F.pp_print_string fmt (add_brackets name)
   | BuiltinOrAuto data ->
-      let name =
+      let generics = trait_ref.decl_generics in
+      (* For BuiltinFn* traits: the first type is the type of the function,
+         which we actually don't want to keep as the generics also contain the
+         types of the inputs and outputs.
+
+         TODO: actually the type may be wrong if there are several inputs, because
+         the function type uses one arrow per input while the builtin trait expects
+         the inputs to be grouped inside a tuple (curried vs uncurried). We need
+         to detect this case and insert a cast. Or we can insert a cast which does
+         the hard work automatically in Lean.
+       *)
+      let builtin_fn_update_generics (generics : generic_args) : generic_args =
+        match generics.types with
+        | [ _; input; output ] -> { generics with types = [ input; output ] }
+        | _ -> [%internal_error] span
+      in
+      let name, generics =
         match data with
-        | BuiltinClone -> "BuiltinClone"
-        | BuiltinCopy -> "BuiltinCopy"
+        | BuiltinClone -> ("BuiltinClone", generics)
+        | BuiltinCopy -> ("BuiltinCopy", generics)
         | BuiltinDiscriminantKind ->
             [%lwarning
               "Extracted an unexpected builtin clause of kind `Discriminant`: \
                this will not type-check"];
-            "BuiltinDiscriminantKind"
+            ("BuiltinDiscriminantKind", generics)
+        | BuiltinFn -> ("BuiltinFn", builtin_fn_update_generics generics)
+        | BuiltinFnMut -> ("BuiltinFnMut", builtin_fn_update_generics generics)
+        | BuiltinFnOnce -> ("BuiltinFnOnce", builtin_fn_update_generics generics)
       in
       if inside then F.pp_print_string fmt "(";
       F.pp_print_string fmt name;
-      extract_generic_args span ctx fmt no_params_tys trait_ref.decl_generics;
+      extract_generic_args span ctx fmt no_params_tys generics;
       if inside then F.pp_print_string fmt ")"
   | UnknownTrait _ ->
       (* This is an error case *)

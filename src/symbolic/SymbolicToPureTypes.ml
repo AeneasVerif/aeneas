@@ -86,6 +86,9 @@ and translate_trait_ref_kind (span : Meta.span option)
         | BuiltinClone -> BuiltinClone
         | BuiltinCopy -> BuiltinCopy
         | BuiltinDiscriminantKind -> BuiltinDiscriminantKind
+        | BuiltinFn -> BuiltinFn
+        | BuiltinFnMut -> BuiltinFnMut
+        | BuiltinFnOnce -> BuiltinFnOnce
         | _ ->
             [%craise_opt_span] span
               ("Unhandled `BuiltinOrAuto` for trait "

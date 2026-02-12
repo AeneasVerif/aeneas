@@ -192,3 +192,8 @@ def core.iter.traits.iterator.IteratorRange {A : Type}
   next := core.iter.range.IteratorRange.next StepInst
   step_by := core.iter.range.IteratorRange.step_by StepInst
 }
+
+@[rust_type "core::iter::adapters::map::Map"]
+structure core.iter.adapters.map.Map (I : Type u) (F : Type v) where
+  iter : I
+  f : F

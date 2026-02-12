@@ -514,6 +514,9 @@ and builtin_impl_data =
           Note that in practice, we should never use this function or this
           builtin trait impl (though they happen to appear in the crates
           serialized by Charon). *)
+  | BuiltinFn
+  | BuiltinFnMut
+  | BuiltinFnOnce
 
 and trait_instance_id =
   | Self
