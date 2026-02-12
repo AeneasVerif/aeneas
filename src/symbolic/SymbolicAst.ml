@@ -326,6 +326,7 @@ and value_aggregate =
       (** A dynamic trait. This gets inserted when we convert a box of an
           element of a known type to a box of an element of type [dyn] through
           an unsized cast: we need the trait reference to perform the cast. *)
+  | VaFnDef of fn_ptr  (** Function pointer of a top-level definition *)
 [@@deriving
   show,
   visitors

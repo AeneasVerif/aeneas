@@ -522,9 +522,13 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
                 e )
           in
           (cv, ctx, cc_comp cc cf)
-      | CFnDef _ ->
-          [%craise] span
-            "Function definitions cannot be refered to from a constant values"
+      | CFnDef ptr ->
+          let sv = mk_fresh_symbolic_tvalue span ctx cv.ty in
+          let cf e =
+            SymbolicAst.IntroSymbolic
+              (ctx, None, tvalue_as_symbolic span sv, SymbolicAst.VaFnPtr ptr, e)
+          in
+          (sv, ctx, cf)
       | CRawMemory _ ->
           [%craise] span "Raw memory cannot be interpreted by the interpreter"
       | COpaque reason ->

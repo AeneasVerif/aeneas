@@ -92,7 +92,7 @@ let check_fun_decl_vars_are_well_bound (trans_ctx : trans_ctx)
 let translate_function_to_pure_aux (trans_ctx : trans_ctx)
     (marked_ids : marked_ids)
     (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t)
-    (fun_dsigs : Pure.decomposed_fun_sig FunDeclId.Map.t) (fdef : fun_decl) :
+    (fun_sigs : SymbolicToPureCore.fun_sigs FunDeclId.Map.t) (fdef : fun_decl) :
     pure_fun_translation_no_loops =
   (* Debug *)
   [%ltrace
@@ -177,7 +177,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
       decls_ctx = trans_ctx;
       bid = None;
       sg;
-      fun_dsigs;
+      fun_sigs;
       (* Will need to be updated for the backward functions *)
       sv_to_var;
       fresh_fvar_id;
@@ -245,12 +245,12 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
 
 let translate_function_to_pure (trans_ctx : trans_ctx) (marked_ids : marked_ids)
     (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t)
-    (fun_dsigs : Pure.decomposed_fun_sig FunDeclId.Map.t) (fdef : fun_decl) :
+    (fun_sigs : SymbolicToPureCore.fun_sigs FunDeclId.Map.t) (fdef : fun_decl) :
     pure_fun_translation_no_loops option =
   try
     Some
       (translate_function_to_pure_aux trans_ctx marked_ids pure_type_decls
-         fun_dsigs fdef)
+         fun_sigs fdef)
   with CFailure error ->
     let name = name_to_string trans_ctx fdef.item_meta.name in
     let name_pattern =
@@ -327,8 +327,8 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
           (GlobalDeclId.Map.values trans_ctx.global_decls_to_extract))
   in
 
-  (* Compute the decomposed fun sigs for the whole crate *)
-  let fun_dsigs =
+  (* Compute the fun sigs for the whole crate *)
+  let fun_sigs =
     FunDeclId.Map.of_list
       (List.filter_map
          (fun (fdef : LlbcAst.fun_decl) ->
@@ -336,10 +336,15 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
              [%ltrace
                "Translating the signature of: "
                ^ name_to_string trans_ctx fdef.item_meta.name];
-             Some
-               ( fdef.def_id,
-                 SymbolicToPureTypes.translate_fun_sig_from_decl_to_decomposed
-                   trans_ctx fdef )
+             let open SymbolicToPureCore in
+             let open SymbolicToPureTypes in
+             let dsg =
+               translate_fun_sig_from_decl_to_decomposed trans_ctx fdef
+             in
+             let sg = translate_fun_sig_from_decomposed dsg in
+             let ty = PureUtils.mk_arrows sg.inputs sg.output in
+             let sg : fun_sigs = { dsg; sg; ty } in
+             Some (fdef.def_id, sg)
            with CFailure error ->
              let name = name_to_string trans_ctx fdef.item_meta.name in
              let name_pattern =
@@ -411,7 +416,7 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
             (fun x ->
               let f =
                 translate_function_to_pure trans_ctx marked_ids type_decls_map
-                  fun_dsigs x
+                  fun_sigs x
               in
               report 1;
               f)

@@ -128,6 +128,19 @@ end
 module MetaSymbPlaceSet = Collections.MakeSet (MetaSymbPlaceOrd)
 module AbsLevelMap = Collections.IntMap
 
+type fun_sigs = {
+  dsg : decomposed_fun_sig;
+  sg : fun_sig;
+  ty : ty;
+      (** This is the (arrow) type of the function. Note that one shouldn't
+          directly use it: the generics need to be substituted before.
+
+          Finally, one shouldn't instantiate it with types translated from types
+          containing mutable borrows, as doing this might require introducing
+          backward functions. *)
+}
+[@@deriving show]
+
 (** Body synthesis context *)
 type bs_ctx = {
   (* TODO: there are a lot of duplications with the various decls ctx *)
@@ -135,7 +148,7 @@ type bs_ctx = {
   decls_ctx : C.decls_ctx;
   type_ctx : type_ctx;
   fun_ctx : fun_ctx;
-  fun_dsigs : decomposed_fun_sig FunDeclId.Map.t;
+  fun_sigs : fun_sigs FunDeclId.Map.t;
   fun_decl : A.fun_decl;
   bid : RegionGroupId.id option;
       (** TODO: rename

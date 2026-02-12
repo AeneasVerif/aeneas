@@ -1407,6 +1407,35 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
         let qualif = { id = qualif_id; generics = empty_generic_args } in
         let qualif : texpr = { e = Qualif qualif; ty = mk_arrow v.ty dyn_ty } in
         [%add_loc] mk_app ctx.span qualif v
+    | VaFnDef { kind; generics } ->
+        let id = translate_fn_ptr_kind ctx kind in
+        let generics = ctx_translate_fwd_generic_args ctx generics in
+        let func = Fun (FromLlbc (id, None)) in
+        let qualif = Qualif { id = FunOrOp func; generics } in
+        let ty =
+          match kind with
+          | T.FunId (FBuiltin _) -> [%craise] ctx.span "Unimplemented"
+          | T.FunId (FRegular fid) ->
+              let sg =
+                [%unwrap_with_span] ctx.span
+                  (FunDeclId.Map.find_opt fid ctx.fun_sigs)
+                  "Internal error, please file an issue"
+              in
+              (* Check that the function lives in the expected effect - otherwise we
+                 have to lift it *)
+              [%cassert] ctx.span sg.sg.fwd_info.effect_info.can_fail
+                "Unimplemented";
+              [%cassert] ctx.span
+                (RegionGroupId.Map.for_all
+                   (fun _ (e : fun_effect_info) -> not e.can_fail)
+                   sg.sg.back_effect_info)
+                "Unimplemented";
+              (* Substitute *)
+              let subst = make_subst_from_generics sg.sg.generics generics in
+              ty_substitute subst sg.ty
+          | T.TraitMethod _ -> [%craise] ctx.span "Unimplemented"
+        in
+        { e = qualif; ty }
   in
 
   (* Make the let-binding *)

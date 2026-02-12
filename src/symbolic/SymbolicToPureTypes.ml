@@ -366,8 +366,8 @@ let rec translate_fwd_ty (span : Meta.span option) (type_infos : type_infos)
   | TTraitType (trait_ref, type_name) ->
       let trait_ref = translate_fwd_trait_ref span type_infos trait_ref in
       TTraitType (trait_ref, type_name)
-  | TFnDef _ | TFnPtr _ ->
-      [%craise_opt_span] span "Arrow types are not supported yet"
+  | TFnDef _ -> [%craise_opt_span] span "Arrow types are not supported yet"
+  | TFnPtr _ -> [%craise_opt_span] span "Arrow types are not supported yet"
   | TDynTrait { binder } ->
       let params, _predicates =
         translate_generic_params span binder.binder_params
@@ -1184,12 +1184,12 @@ let get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fn_ptr_kind)
     (gid : T.RegionGroupId.id option) : fun_effect_info =
   match fun_id with
   | TraitMethod (_, _, fid) | FunId (FRegular fid) ->
-      let dsg = A.FunDeclId.Map.find fid ctx.fun_dsigs in
+      let sg = A.FunDeclId.Map.find fid ctx.fun_sigs in
+      let sg = sg.dsg in
       let info =
         match gid with
-        | None -> dsg.fun_ty.fwd_info.effect_info
-        | Some gid ->
-            (RegionGroupId.Map.find gid dsg.fun_ty.back_sg).effect_info
+        | None -> sg.fun_ty.fwd_info.effect_info
+        | Some gid -> (RegionGroupId.Map.find gid sg.fun_ty.back_sg).effect_info
       in
       { info with is_rec = info.is_rec && gid = None }
   | FunId (FBuiltin _) ->
