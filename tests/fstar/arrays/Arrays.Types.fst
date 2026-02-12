@@ -10,6 +10,6 @@ open Primitives
 type aB_t = | AB_A : aB_t | AB_B : aB_t
 
 (** [arrays::Scalar]
-    Source: 'tests/src/arrays.rs', lines 381:0-381:24 *)
+    Source: 'tests/src/arrays.rs', lines 377:0-377:24 *)
 type scalar_t = array u32 2
 

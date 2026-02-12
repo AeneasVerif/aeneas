@@ -97,10 +97,6 @@ pub fn index_array_0<T>(s: &[T; 32]) -> &T {
     &s[0]
 }
 
-pub fn index_empty_array() {
-    let _ = index_slice_0::<u32>(&[]);
-}
-
 /*
 // Unsupported by Aeneas for now
 pub fn index_index_slice<'a, T>(s: &'a [&[T]], i: usize, j: usize) -> &'a T {
