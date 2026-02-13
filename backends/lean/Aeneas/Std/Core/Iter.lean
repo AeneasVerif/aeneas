@@ -174,7 +174,7 @@ def core.iter.range.IteratorRange.next
       let n ← StepInst.forward_checked range' 1#usize;
       match n with
       | none => fail .panic -- Step invariants not upheld
-      | some n => ok ⟨ some n, {range with start := n} ⟩
+      | some n => ok ⟨ some range', {range with start := n} ⟩
     else ok ⟨ none, range ⟩
 
 @[rust_fun
