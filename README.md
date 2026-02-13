@@ -125,14 +125,9 @@ one by one:
   are not supported yet (e.g., `'a : loop { loop { break 'a; } } `). This is a
   technical limitation, not a fundamental issue, that we plan to address in the
   near future and that we can prioritize depending on our users' needs.
-- **no nested borrows in function signatures**: ongoing work, coming very soon, starting
-  with nested shared borrows.
-- **no functions pointers/closures**: ongoing work. We currently have support for traits
-  and will have support for function pointers and closures soon.
 
 The following limitations will be lifted by the ongoing work on separation logic:
 - **unsafe code**
-- **interior mutability**
 - **concurrency**
 
 Feel free to contact the team or join the Zulip if you need some specific features or if
