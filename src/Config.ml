@@ -546,3 +546,31 @@ let borrow_check_globals = ref false
 
 (** *)
 let print_error_diagnostics = ref false
+
+(** There can be collisions between method names and projector names.
+
+    For instance:
+
+    {[
+      struct Struct { len : usize }
+
+      impl Struct {
+          // If we name this Struct.len in Lean there will be a name collision
+          // with the projector function for field len
+          fn len(&self) -> usize { self.len }
+      }
+    ]}
+    By default, we detect such collisions and change the method name accordingly
+    (in the case above, the method [len] would be named [Struct.impl.len] in
+    Lean instead of [Struct.impl.len]).
+
+    One issue is that it makes the name generation non-modular and introduces
+    inconsistencies between method names, depending on whether there exists a
+    field with the same name or not.
+
+    If the following option is on, we introduce the [impl] name elemnt in *all*
+    method names. *)
+let method_names_in_impl_namespace = ref false
+
+(** *)
+let all_computable = ref false

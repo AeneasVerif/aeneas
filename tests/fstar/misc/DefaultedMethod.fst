@@ -8,7 +8,7 @@ open Primitives
 (** [core::cmp::impls::{core::cmp::Ord for i32}::min]:
     Source: '/rustc/library/core/src/cmp.rs', lines 1995:12-1995:33
     Name pattern: [core::cmp::impls::{core::cmp::Ord<i32>}::min] *)
-assume val core_cmp_impls_OrdI32_min : i32 -> i32 -> result i32
+assume val i32_Insts_CoreCmpOrd_min : i32 -> i32 -> result i32
 
 (** Trait declaration: [defaulted_method::Trait]
     Source: 'tests/src/defaulted_method.rs', lines 2:0-7:1 *)
@@ -29,19 +29,21 @@ type noOverride_t = unit
 
 (** [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}::required_method]:
     Source: 'tests/src/defaulted_method.rs', lines 14:4-16:5 *)
-let traitNoOverride_required_method (self : noOverride_t) : result u32 =
+let noOverride_Insts_Defaulted_methodTrait_required_method
+  (self : noOverride_t) : result u32 =
   Ok 12
 
 (** [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}::provided_method]:
     Source: 'tests/src/defaulted_method.rs', lines 11:4-13:5 *)
-let traitNoOverride_provided_method (self : noOverride_t) : result u32 =
+let noOverride_Insts_Defaulted_methodTrait_provided_method
+  (self : noOverride_t) : result u32 =
   Ok 73
 
 (** Trait implementation: [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}]
     Source: 'tests/src/defaulted_method.rs', lines 10:0-17:1 *)
-let traitNoOverride : trait_t noOverride_t = {
-  provided_method = traitNoOverride_provided_method;
-  required_method = traitNoOverride_required_method;
+let noOverride_Insts_Defaulted_methodTrait : trait_t noOverride_t = {
+  provided_method = noOverride_Insts_Defaulted_methodTrait_provided_method;
+  required_method = noOverride_Insts_Defaulted_methodTrait_required_method;
 }
 
 (** [defaulted_method::YesOverride]
@@ -50,26 +52,28 @@ type yesOverride_t = unit
 
 (** [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}::required_method]:
     Source: 'tests/src/defaulted_method.rs', lines 21:4-23:5 *)
-let traitYesOverride_required_method (self : yesOverride_t) : result u32 =
+let yesOverride_Insts_Defaulted_methodTrait_required_method
+  (self : yesOverride_t) : result u32 =
   Ok 42
 
 (** [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}::provided_method]:
     Source: 'tests/src/defaulted_method.rs', lines 20:0-24:1 *)
-let traitYesOverride_provided_method (self : yesOverride_t) : result u32 =
-  traitYesOverride_required_method self
+let yesOverride_Insts_Defaulted_methodTrait_provided_method
+  (self : yesOverride_t) : result u32 =
+  yesOverride_Insts_Defaulted_methodTrait_required_method self
 
 (** Trait implementation: [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}]
     Source: 'tests/src/defaulted_method.rs', lines 20:0-24:1 *)
-let traitYesOverride : trait_t yesOverride_t = {
-  provided_method = traitYesOverride_provided_method;
-  required_method = traitYesOverride_required_method;
+let yesOverride_Insts_Defaulted_methodTrait : trait_t yesOverride_t = {
+  provided_method = yesOverride_Insts_Defaulted_methodTrait_provided_method;
+  required_method = yesOverride_Insts_Defaulted_methodTrait_required_method;
 }
 
 (** [defaulted_method::main]:
     Source: 'tests/src/defaulted_method.rs', lines 26:0-33:1 *)
 let main : result unit =
-  let* _ = traitNoOverride_provided_method () in
-  let* _ = traitYesOverride_provided_method () in
-  let* n = core_cmp_impls_OrdI32_min 10 1 in
+  let* _ = noOverride_Insts_Defaulted_methodTrait_provided_method () in
+  let* _ = yesOverride_Insts_Defaulted_methodTrait_provided_method () in
+  let* n = i32_Insts_CoreCmpOrd_min 10 1 in
   if n = 1 then Ok () else Fail Failure
 

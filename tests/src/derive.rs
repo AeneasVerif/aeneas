@@ -50,3 +50,13 @@ struct CopyStruct<T> {
 struct Struct<T> {
     f: Vec<T>,
 }
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Struct6Fields {
+    a: u32,
+    b: u32,
+    c: u32,
+    d: u32,
+    e: u32,
+    f: u32,
+}

@@ -12,7 +12,7 @@ namespace dynamic_size
    Source: 'tests/src/dynamic_size.rs', lines 3:0-5:1 -/
 def alloc_slice (N : Std.Usize) : Result (Slice Std.U8) := do
   let a := Array.repeat N 0#u8
-  ok (Array.to_slice a)
+  ok (Std.Array.to_slice a)
 
 /- [dynamic_size::Wrapper]
    Source: 'tests/src/dynamic_size.rs', lines 7:0-9:1 -/
@@ -23,6 +23,6 @@ structure Wrapper (T : Type) where
    Source: 'tests/src/dynamic_size.rs', lines 11:0-13:1 -/
 def alloc_wrapper (N : Std.Usize) : Result (Wrapper (Slice Std.U8)) := do
   let a := Array.repeat N 0#u8
-  ok { data := (Array.to_slice a) }
+  ok { data := (Std.Array.to_slice a) }
 
 end dynamic_size

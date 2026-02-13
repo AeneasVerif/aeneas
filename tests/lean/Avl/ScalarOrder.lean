@@ -16,9 +16,9 @@ instance {ty} : LinearOrder (UScalar ty) where
   le_total := fun a b => by scalar_tac
   toDecidableLE := UScalarDecidableLE
 
-instance : OrdSpecLinearOrderEq OrdI32 where
+instance : OrdSpecLinearOrderEq I32.Insts.AvlOrd where
   infallible := fun a b => by
-    unfold Ord.cmp OrdI32 OrdI32.cmp
+    unfold Ord.cmp I32.Insts.AvlOrd I32.Insts.AvlOrd.cmp
     simp only
     split <;> simp
     . scalar_tac
@@ -30,8 +30,8 @@ instance : OrdSpecLinearOrderEq OrdI32 where
     grind [IScalar.neq_to_neq_val]
   equivalence := fun a b => by
     unfold Ord.cmp
-    unfold OrdI32
-    unfold OrdI32.cmp
+    unfold I32.Insts.AvlOrd
+    unfold I32.Insts.AvlOrd.cmp
     grind [IScalar.neq_to_neq_val]
 
 end avl

@@ -68,9 +68,6 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
             ctx
       | None ->
           (* Not builtin *)
-          (* If this is a trait method implementation, we prefix the name with the
-             name of the trait implementation. We need to do so because there
-             can be clashes otherwise. *)
           (* Register the decrease clauses, if necessary *)
           let register_decreases ctx def =
             if has_decreases_clause def then
@@ -684,18 +681,18 @@ let rec extract_texpr (span : Meta.span) (ctx : extraction_ctx)
   | Const cv -> extract_literal span fmt ~is_pattern ~inside cv
   | App _ ->
       let app, args = destruct_apps e in
-      extract_App span ctx fmt ~inside ~inside_do app args
+      extract_App span ctx fmt ~inside ~inside_do app args e.ty
   | Lambda _ ->
       let xl, e = raw_destruct_lambdas e in
       extract_Lambda (span : Meta.span) ctx fmt ~inside xl e
   | Qualif _ ->
       (* We use the app case *)
-      extract_App span ctx fmt ~inside ~inside_do e []
+      extract_App span ctx fmt ~inside ~inside_do e [] e.ty
   | Let (_, _, _, _) -> extract_lets span ctx fmt ~inside ~inside_do e
   | Switch (scrut, body) ->
       extract_Switch span ctx fmt ~inside ~inside_do scrut body
   | Meta (m, e) -> extract_meta span ctx fmt ~inside ~inside_do m e
-  | StructUpdate supd -> extract_StructUpdate span ctx fmt ~inside supd
+  | StructUpdate supd -> extract_StructUpdate span ctx fmt ~inside supd e.ty
   | Loop _ ->
       (* The loop nodes should have been eliminated in {!PureMicroPasses} *)
       [%admit_raise] span "Unreachable" fmt
@@ -705,31 +702,33 @@ let rec extract_texpr (span : Meta.span) (ctx : extraction_ctx)
  * to handle top-level qualifiers, so it seemed more natural to merge the
  * two cases) *)
 and extract_App (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
-    ~(inside : bool) ~(inside_do : bool) (app : texpr) (args : texpr list) :
-    unit =
+    ~(inside : bool) ~(inside_do : bool) (app : texpr) (args : texpr list)
+    (out_ty : ty) : unit =
   (* We don't do the same thing if the app is a top-level identifier (function,
    * ADT constructor...) or a "regular" expression *)
   match app.e with
   | Qualif qualif -> (
       (* Top-level qualifier *)
-      match qualif.id with
-      | FunOrOp fun_id ->
+      match (qualif.id, out_ty) with
+      | FunOrOp fun_id, _ ->
           extract_function_call span ctx fmt ~inside ~inside_do fun_id
             qualif.generics args
-      | Global global_id ->
+      | Global global_id, _ ->
           assert (args = []);
           extract_global span ctx fmt ~inside global_id qualif.generics
-      | AdtCons { adt_id = TBuiltin TArray; _ } ->
-          extract_array_or_slice span ctx fmt ~inside ~is_array:true args
-      | AdtCons { adt_id = TBuiltin TSlice; _ } ->
-          extract_array_or_slice span ctx fmt ~inside ~is_array:false args
-      | AdtCons adt_cons_id ->
+      | ( AdtCons { adt_id = TBuiltin TArray; _ },
+          TAdt (TBuiltin TArray, { types = [ ty ]; _ }) ) ->
+          extract_array_or_slice span ctx fmt ~inside ~is_array:true ty args
+      | ( AdtCons { adt_id = TBuiltin TSlice; _ },
+          TAdt (TBuiltin TArray, { types = [ ty ]; _ }) ) ->
+          extract_array_or_slice span ctx fmt ~inside ~is_array:false ty args
+      | AdtCons adt_cons_id, _ ->
           extract_adt_cons span ctx fmt ~inside ~inside_do adt_cons_id
             qualif.generics args
-      | Proj proj ->
+      | Proj proj, _ ->
           extract_field_projector span ctx fmt ~inside ~inside_do app proj
-            qualif.generics args
-      | TraitConst (trait_ref, const_name) ->
+            qualif.generics args out_ty
+      | TraitConst (trait_ref, const_name), _ ->
           extract_trait_ref span ctx fmt TypeDeclId.Set.empty ~inside:true
             trait_ref;
           let name =
@@ -740,7 +739,7 @@ and extract_App (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
             if backend () = Coq then "(" ^ s ^ ")" else s
           in
           F.pp_print_string fmt ("." ^ add_brackets name)
-      | MkDynTrait trait_ref ->
+      | MkDynTrait trait_ref, _ ->
           (* Open parentheses *)
           if inside then F.pp_print_string fmt "(";
           F.pp_print_string fmt (dyn_constructor ());
@@ -774,47 +773,63 @@ and extract_App (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
       if inside then F.pp_print_string fmt ")"
 
 and extract_array_or_slice (span : Meta.span) (ctx : extraction_ctx)
-    (fmt : F.formatter) ~(inside : bool) ~(is_array : bool) (args : texpr list)
-    : unit =
+    (fmt : F.formatter) ~(inside : bool) ~(is_array : bool) (args_ty : ty)
+    (args : texpr list) : unit =
   [%cassert] span is_array "Unimplemented";
   (* Open the boxes *)
   F.pp_open_hvbox fmt ctx.indent_incr;
   let need_paren = inside in
   if need_paren then F.pp_print_string fmt "(";
-  (* Open the box for `Array.replicate T N [` *)
-  F.pp_open_hovbox fmt ctx.indent_incr;
-  (* Print the array constructor.
+
+  (* In case the array is empty we use a special [Array.empty] construct -
+     the reason is that otherwise it is not possible to infer the type of the
+     array.Aeneas
+     TODO: doing this *here* is a bit of a hack.
+  *)
+  if args = [] then (
+    let cs =
+      match backend () with
+      | Lean -> "Std.Array.empty"
+      | _ -> "Array_empty"
+    in
+    F.pp_print_string fmt cs;
+    F.pp_print_space fmt ();
+    extract_ty span ctx fmt TypeDeclId.Set.empty ~inside:true args_ty)
+  else (
+    (* Print the array constructor.
 
      Note that we don't need to print the type parameter, which
      is implicit. *)
-  let cs = ctx_get_struct span (TBuiltin TArray) ctx in
-  F.pp_print_string fmt cs;
-  (* Print the parameters *)
-  F.pp_print_space fmt ();
-  extract_const_generic span ctx fmt ~inside:true
-    (CgValue (VScalar (UnsignedScalar (Usize, Z.of_int (List.length args)))));
-  F.pp_print_space fmt ();
-  F.pp_print_string fmt "[";
-  (* Close the box for `Array.mk T N [` *)
-  F.pp_close_box fmt ();
-  (* Print the values *)
-  let delimiter =
-    match backend () with
-    | Lean -> ","
-    | Coq | FStar | HOL4 -> ";"
-  in
-  F.pp_print_space fmt ();
-  F.pp_open_hovbox fmt 0;
-  Collections.List.iter_link
-    (fun () ->
-      F.pp_print_string fmt delimiter;
-      F.pp_print_space fmt ())
-    (extract_texpr span ctx fmt ~inside:false ~inside_do:false)
-    args;
-  (* Close the boxes *)
-  F.pp_close_box fmt ();
-  if args <> [] then F.pp_print_space fmt ();
-  F.pp_print_string fmt "]";
+    (* Open the box for `Array.replicate T N [` *)
+    F.pp_open_hovbox fmt ctx.indent_incr;
+    let cs = ctx_get_struct span (TBuiltin TArray) ctx in
+    F.pp_print_string fmt cs;
+    (* Print the parameters *)
+    F.pp_print_space fmt ();
+    extract_const_generic span ctx fmt ~inside:true
+      (CgValue (VScalar (UnsignedScalar (Usize, Z.of_int (List.length args)))));
+    F.pp_print_space fmt ();
+    F.pp_print_string fmt "[";
+    (* Close the box for `Array.mk T N [` *)
+    F.pp_close_box fmt ();
+    (* Print the values *)
+    let delimiter =
+      match backend () with
+      | Lean -> ","
+      | Coq | FStar | HOL4 -> ";"
+    in
+    F.pp_print_space fmt ();
+    F.pp_open_hovbox fmt 0;
+    Collections.List.iter_link
+      (fun () ->
+        F.pp_print_string fmt delimiter;
+        F.pp_print_space fmt ())
+      (extract_texpr span ctx fmt ~inside:false ~inside_do:false)
+      args;
+    (* Close the boxes *)
+    F.pp_close_box fmt ();
+    if args <> [] then F.pp_print_space fmt ();
+    F.pp_print_string fmt "]");
   if need_paren then F.pp_print_string fmt ")";
   F.pp_close_box fmt ()
 
@@ -1042,7 +1057,7 @@ and extract_adt_cons (span : Meta.span) (ctx : extraction_ctx)
 and extract_field_projector (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) ~(inside : bool) ~(inside_do : bool)
     (original_app : texpr) (proj : projection) (_generics : generic_args)
-    (args : texpr list) : unit =
+    (args : texpr list) (out_ty : ty) : unit =
   (* We isolate the first argument (if there is), in order to pretty print the
    * projection ([x.field] instead of [MkAdt?.field x] *)
   match args with
@@ -1139,7 +1154,7 @@ and extract_field_projector (span : Meta.span) (ctx : extraction_ctx)
        * isolated *)
       extract_App span ctx fmt ~inside ~inside_do
         ([%add_loc] mk_app span original_app arg)
-        args
+        args out_ty
   | [] ->
       (* No argument: shouldn't happen *)
       [%admit_raise] span "Unreachable" fmt
@@ -1485,7 +1500,7 @@ and extract_Switch (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
 
       (* End the match *)
       match backend () with
-      | Lean -> (*We rely on indentation in Lean *) ()
+      | Lean -> (* We rely on indentation in Lean *) ()
       | FStar | Coq ->
           F.pp_print_space fmt ();
           F.pp_print_string fmt "end"
@@ -1507,7 +1522,8 @@ and extract_meta (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
   | _ -> extract_texpr span ctx fmt ~inside ~inside_do e
 
 and extract_StructUpdate (span : Meta.span) (ctx : extraction_ctx)
-    (fmt : F.formatter) ~(inside : bool) (supd : struct_update) : unit =
+    (fmt : F.formatter) ~(inside : bool) (supd : struct_update) (ty : ty) : unit
+    =
   (* We can't update a subset of the fields in Coq (i.e., we can do
      [{| x:= 3; y := 4 |}], but there is no syntax for [{| s with x := 3 |}]) *)
   [%sanity_check] span (backend () <> Coq || supd.init = None);
@@ -1629,7 +1645,12 @@ and extract_StructUpdate (span : Meta.span) (ctx : extraction_ctx)
         print_bracket false orb;
         F.pp_close_box fmt ()
     | TBuiltin TArray ->
-        extract_array_or_slice span ctx fmt ~inside ~is_array:true
+        let ty =
+          match ty with
+          | TAdt (TBuiltin TArray, { types = [ ty ]; _ }) -> ty
+          | _ -> [%internal_error] span
+        in
+        extract_array_or_slice span ctx fmt ~inside ~is_array:true ty
           (List.map snd supd.updates)
     | _ -> [%admit_raise] span "Unreachable" fmt
 
@@ -2545,73 +2566,114 @@ let extract_global_decl_aux (ctx : extraction_ctx) (fmt : F.formatter)
           ~with_do:false decl_name global.generics global.explicit_info
           type_params cg_params trait_clauses decl_ty None;
         F.pp_print_space fmt ())
-  | Some body ->
-      (* There is a body *)
-      (* Generate: [let x_body : result u32 = Return 3] *)
-      extract_global_decl_body_gen span ctx fmt global SingleNonRec
-        ~irreducible:false ~with_do:true body_name global.generics
-        global.explicit_info type_params cg_params trait_clauses body_ty
-        (Some
-           (fun fmt ->
-             extract_texpr span ctx fmt ~inside:false ~inside_do:true body.body));
-      F.pp_print_break fmt 0 0;
-      (* Generate: [let x_c : u32 = eval_global x_body] *)
-      extract_global_decl_body_gen span ctx fmt global SingleNonRec
-        ~irreducible:(backend () = Lean)
-        ~with_do:false decl_name global.generics global.explicit_info
-        type_params cg_params trait_clauses decl_ty
-        (Some
-           (fun fmt ->
-             let all_params =
-               (* Filter *)
-               let filter : 'a. explicit list -> 'a list -> 'a list =
-                fun el l ->
-                 List.filter_map
-                   (fun (b, x) -> if b = Explicit then Some x else None)
-                   (List.combine el l)
-               in
-               let type_params =
-                 filter global.explicit_info.explicit_types type_params
-               in
-               let cg_params =
-                 filter global.explicit_info.explicit_const_generics cg_params
-               in
-               List.concat [ type_params; cg_params; trait_clauses ]
-             in
-             let extract_params () =
-               List.iter
-                 (fun p ->
-                   F.pp_print_space fmt ();
-                   F.pp_print_string fmt p)
-                 all_params
-             in
-             let use_brackets = all_params <> [] in
-             (* Extract the name *)
-             let before, after =
-               match backend () with
-               | FStar | Lean ->
-                   ( (fun () ->
-                       F.pp_print_string fmt "eval_global";
-                       F.pp_print_space fmt ()),
-                     fun () -> () )
-               | Coq ->
-                   ((fun () -> ()), fun () -> F.pp_print_string fmt "%global")
-               | HOL4 ->
-                   ( (fun () ->
-                       F.pp_print_string fmt "get_return_value";
-                       F.pp_print_space fmt ()),
-                     fun () -> () )
-             in
-             before ();
-             if use_brackets then F.pp_print_string fmt "(";
-             F.pp_print_string fmt body_name;
-             (* Extract the generic params *)
-             extract_params ();
-             if use_brackets then F.pp_print_string fmt ")";
-             (* *)
-             after ()));
-      (* Add a break to insert lines between declarations *)
-      F.pp_print_break fmt 0 0
+  | Some body -> (
+      (* There is a body. There are two sub-cases:
+         - if the body is exactly [Ok v] then we directly generate [let x : u32 := v]
+         - otherwise we generate two definitions, one for the initialization function
+           and another for the global itself
+      *)
+      let pure_value =
+        match body.body.e with
+        | App
+            ( {
+                e =
+                  Qualif
+                    {
+                      id =
+                        AdtCons
+                          {
+                            adt_id = TBuiltin TResult;
+                            variant_id = Some variant_id;
+                          };
+                      _;
+                    };
+                _;
+              },
+              v )
+          when variant_id = result_ok_id -> Some v
+        | _ -> None
+      in
+      match pure_value with
+      | Some pure_value ->
+          extract_global_decl_body_gen span ctx fmt global SingleNonRec
+            ~irreducible:(backend () = Lean)
+            ~with_do:false decl_name global.generics global.explicit_info
+            type_params cg_params trait_clauses decl_ty
+            (Some
+               (fun fmt ->
+                 extract_texpr span ctx fmt ~inside:false ~inside_do:true
+                   pure_value));
+          (* Add a break to insert lines between declarations *)
+          F.pp_print_break fmt 0 0
+      | None ->
+          (* Generate: [let x_body : result u32 = Return 3] *)
+          extract_global_decl_body_gen span ctx fmt global SingleNonRec
+            ~irreducible:false ~with_do:true body_name global.generics
+            global.explicit_info type_params cg_params trait_clauses body_ty
+            (Some
+               (fun fmt ->
+                 extract_texpr span ctx fmt ~inside:false ~inside_do:true
+                   body.body));
+          F.pp_print_break fmt 0 0;
+          (* Generate: [let x_c : u32 = eval_global x_body] *)
+          extract_global_decl_body_gen span ctx fmt global SingleNonRec
+            ~irreducible:(backend () = Lean)
+            ~with_do:false decl_name global.generics global.explicit_info
+            type_params cg_params trait_clauses decl_ty
+            (Some
+               (fun fmt ->
+                 let all_params =
+                   (* Filter *)
+                   let filter : 'a. explicit list -> 'a list -> 'a list =
+                    fun el l ->
+                     List.filter_map
+                       (fun (b, x) -> if b = Explicit then Some x else None)
+                       (List.combine el l)
+                   in
+                   let type_params =
+                     filter global.explicit_info.explicit_types type_params
+                   in
+                   let cg_params =
+                     filter global.explicit_info.explicit_const_generics
+                       cg_params
+                   in
+                   List.concat [ type_params; cg_params; trait_clauses ]
+                 in
+                 let extract_params () =
+                   List.iter
+                     (fun p ->
+                       F.pp_print_space fmt ();
+                       F.pp_print_string fmt p)
+                     all_params
+                 in
+                 let use_brackets = all_params <> [] in
+                 (* Extract the name *)
+                 let before, after =
+                   match backend () with
+                   | FStar | Lean ->
+                       ( (fun () ->
+                           F.pp_print_string fmt "eval_global";
+                           F.pp_print_space fmt ()),
+                         fun () -> () )
+                   | Coq ->
+                       ( (fun () -> ()),
+                         fun () -> F.pp_print_string fmt "%global" )
+                   | HOL4 ->
+                       ( (fun () ->
+                           F.pp_print_string fmt "get_return_value";
+                           F.pp_print_space fmt ()),
+                         fun () -> () )
+                 in
+                 before ();
+                 if use_brackets then F.pp_print_string fmt "(";
+                 F.pp_print_string fmt body_name;
+                 (* Extract the generic params *)
+                 extract_params ();
+                 if use_brackets then F.pp_print_string fmt ")";
+                 (* *)
+                 after ()));
+          (* Add a break to insert lines between declarations *)
+          F.pp_print_break fmt 0 0)
 
 let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (global : global_decl option) (body : fun_decl) (interface : bool) : unit =
@@ -2761,7 +2823,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
 
     let f = trans.f in
     (* We do something special to reuse the [ctx_compute_fun_decl]
-             function. TODO: make it cleaner. *)
+       function. TODO: make it cleaner. *)
     let llbc_name : Types.name =
       [ Types.PeIdent (item_name, Disambiguator.zero) ]
     in
@@ -2812,7 +2874,17 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
   (* Register the names *)
   List.fold_left
     (fun ctx (item_name, default_id, fun_name) ->
-      (* Register the method name *)
+      (* Register the method name.
+
+          Similarly as with structure fields, in the case of Lean check
+          whether we collide with keywords. If it is the case, add french quotes.
+       *)
+      let fun_name =
+        match backend () with
+        | Lean when names_maps_is_keyword ctx.names_maps fun_name ->
+            "«" ^ fun_name ^ "»"
+        | _ -> fun_name
+      in
       let ctx =
         ctx_add trait_decl.item_meta.span
           (TraitMethodId (trait_decl.def_id, item_name))
@@ -2871,8 +2943,6 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
     (trait_impl : trait_impl) : extraction_ctx =
   [%ldebug
     "trait_impl.impl_trait" ^ trait_decl_ref_to_string ctx trait_impl.impl_trait];
-  let decl_id = trait_impl.impl_trait.trait_decl_id in
-  let trait_decl = TraitDeclId.Map.find decl_id ctx.trans_trait_decls in
   (* Register some builtin information (if necessary) *)
   let ctx, builtin_info =
     match trait_impl.builtin_info with
@@ -2908,7 +2978,7 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
   (* Compute the name *)
   let name =
     match builtin_info with
-    | None -> ctx_compute_trait_impl_name ctx trait_decl trait_impl
+    | None -> ctx_compute_trait_impl_name ctx trait_impl
     | Some info -> info.extract_name
   in
   ctx_add trait_impl.item_meta.span (TraitImplId trait_impl.def_id) name ctx
@@ -3196,7 +3266,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
         extract_trait_decl_item ctx fmt item_name ty)
       decl.parent_clauses;
 
-    (* The required methods *)
+    (* The methods *)
     List.iter
       (fun (name, fn) -> extract_trait_decl_method_items ctx fmt decl name fn)
       decl.methods;
@@ -3301,8 +3371,10 @@ let extract_trait_impl_method_items_aux (ctx : extraction_ctx)
   let method_decl_id = fn.binder_value.fun_id in
   (* Lookup the definition *)
   let trans =
-    [%silent_unwrap_opt_span] None
+    [%unwrap_with_span] span
       (A.FunDeclId.Map.find_opt method_decl_id ctx.trans_funs)
+      "Could not lookup the translated function, probably because of an error \
+       which happened before"
   in
   (* Extract the items *)
   let fun_name = ctx_get_trait_method span trait_decl_id item_name ctx in
@@ -3312,14 +3384,18 @@ let extract_trait_impl_method_items_aux (ctx : extraction_ctx)
        (trait impl + method generics) *)
     let method_generics = fn.binder_generics in
     let method_llbc_generics = fn.binder_llbc_generics in
+    let method_explicit_info = fn.binder_explicit_info in
     let ctx, method_tys, method_cgs, method_tcs =
       ctx_add_generic_params span trans.f.item_meta.name Method
         method_llbc_generics method_generics ctx
     in
-    let use_forall = method_generics <> empty_generic_params in
-    extract_generic_params span ctx fmt TypeDeclId.Set.empty ~use_forall Method
-      method_generics None method_tys method_cgs method_tcs;
-    if use_forall then F.pp_print_string fmt ",";
+    let use_fun = method_generics <> empty_generic_params in
+    extract_generic_params span ctx fmt TypeDeclId.Set.empty ~use_fun Method
+      method_generics (Some method_explicit_info) method_tys method_cgs
+      method_tcs;
+    if use_fun then (
+      F.pp_print_space fmt ();
+      F.pp_print_string fmt "=>");
 
     (* Extract the function call *)
     F.pp_print_space fmt ();

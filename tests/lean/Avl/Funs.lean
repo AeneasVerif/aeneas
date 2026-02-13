@@ -11,7 +11,8 @@ namespace avl
 
 /- [avl::{avl::Ord for i32}::cmp]:
    Source: 'src/avl.rs', lines 7:4-15:5 -/
-def OrdI32.cmp (self : Std.I32) (other : Std.I32) : Result Ordering := do
+def I32.Insts.AvlOrd.cmp
+  (self : Std.I32) (other : Std.I32) : Result Ordering := do
   if self < other
   then ok Ordering.Less
   else if self = other
@@ -21,8 +22,8 @@ def OrdI32.cmp (self : Std.I32) (other : Std.I32) : Result Ordering := do
 /- Trait implementation: [avl::{avl::Ord for i32}]
    Source: 'src/avl.rs', lines 6:0-16:1 -/
 @[reducible]
-def OrdI32 : Ord Std.I32 := {
-  cmp := OrdI32.cmp
+def I32.Insts.AvlOrd : Ord Std.I32 := {
+  cmp := I32.Insts.AvlOrd.cmp
 }
 
 /- [avl::{avl::Node<T>}::rotate_left]:

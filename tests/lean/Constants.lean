@@ -10,18 +10,15 @@ namespace constants
 
 /- [constants::X0]
    Source: 'tests/src/constants.rs', lines 7:0-7:22 -/
-@[global_simps] def X0_body : Result Std.U32 := do ok 0#u32
-@[global_simps, irreducible] def X0 : Std.U32 := eval_global X0_body
+@[global_simps, irreducible] def X0 : Std.U32 := 0#u32
 
 /- [constants::X1]
    Source: 'tests/src/constants.rs', lines 9:0-9:29 -/
-@[global_simps] def X1_body : Result Std.U32 := do ok core.num.U32.MAX
-@[global_simps, irreducible] def X1 : Std.U32 := eval_global X1_body
+@[global_simps, irreducible] def X1 : Std.U32 := core.num.U32.MAX
 
 /- [constants::X2]
    Source: 'tests/src/constants.rs', lines 12:0-15:2 -/
-@[global_simps] def X2_body : Result Std.U32 := do ok 3#u32
-@[global_simps, irreducible] def X2 : Std.U32 := eval_global X2_body
+@[global_simps, irreducible] def X2 : Std.U32 := 3#u32
 
 /- [constants::incr]:
    Source: 'tests/src/constants.rs', lines 19:0-21:1 -/
@@ -65,17 +62,12 @@ def P1 : Pair Std.U32 Std.U32 := eval_global P1_body
 
 /- [constants::P2]
    Source: 'tests/src/constants.rs', lines 35:0-35:34 -/
-@[global_simps]
-def P2_body : Result (Std.U32 × Std.U32) := do ok (0#u32, 1#u32)
-@[global_simps, irreducible]
-def P2 : (Std.U32 × Std.U32) := eval_global P2_body
+@[global_simps, irreducible] def P2 : (Std.U32 × Std.U32) := (0#u32, 1#u32)
 
 /- [constants::P3]
    Source: 'tests/src/constants.rs', lines 36:0-36:51 -/
-@[global_simps]
-def P3_body : Result (Pair Std.U32 Std.U32) := do ok { x := 0#u32, y := 1#u32 }
 @[global_simps, irreducible]
-def P3 : Pair Std.U32 Std.U32 := eval_global P3_body
+def P3 : Pair Std.U32 Std.U32 := { x := 0#u32, y := 1#u32 }
 
 /- [constants::Wrap]
    Source: 'tests/src/constants.rs', lines 51:0-53:1 -/
@@ -104,9 +96,7 @@ def unwrap_y : Result Std.I32 := do
 
 /- [constants::get_z1::Z1]
    Source: 'tests/src/constants.rs', lines 64:4-64:22 -/
-@[global_simps] def get_z1.Z1_body : Result Std.I32 := do ok 3#i32
-@[global_simps, irreducible]
-def get_z1.Z1 : Std.I32 := eval_global get_z1.Z1_body
+@[global_simps, irreducible] def get_z1.Z1 : Std.I32 := 3#i32
 
 /- [constants::get_z1]:
    Source: 'tests/src/constants.rs', lines 63:0-66:1 -/
@@ -120,13 +110,11 @@ def add (a : Std.I32) (b : Std.I32) : Result Std.I32 := do
 
 /- [constants::Q1]
    Source: 'tests/src/constants.rs', lines 76:0-76:22 -/
-@[global_simps] def Q1_body : Result Std.I32 := do ok 5#i32
-@[global_simps, irreducible] def Q1 : Std.I32 := eval_global Q1_body
+@[global_simps, irreducible] def Q1 : Std.I32 := 5#i32
 
 /- [constants::Q2]
    Source: 'tests/src/constants.rs', lines 77:0-77:23 -/
-@[global_simps] def Q2_body : Result Std.I32 := do ok Q1
-@[global_simps, irreducible] def Q2 : Std.I32 := eval_global Q2_body
+@[global_simps, irreducible] def Q2 : Std.I32 := Q1
 
 /- [constants::Q3]
    Source: 'tests/src/constants.rs', lines 78:0-78:31 -/
@@ -142,8 +130,7 @@ def get_z2 : Result Std.I32 := do
 
 /- [constants::S1]
    Source: 'tests/src/constants.rs', lines 82:0-82:23 -/
-@[global_simps] def S1_body : Result Std.U32 := do ok 6#u32
-@[global_simps, irreducible] def S1 : Std.U32 := eval_global S1_body
+@[global_simps, irreducible] def S1 : Std.U32 := 6#u32
 
 /- [constants::S2]
    Source: 'tests/src/constants.rs', lines 83:0-83:30 -/
@@ -152,9 +139,7 @@ def get_z2 : Result Std.I32 := do
 
 /- [constants::S3]
    Source: 'tests/src/constants.rs', lines 84:0-84:35 -/
-@[global_simps] def S3_body : Result (Pair Std.U32 Std.U32) := do ok P3
-@[global_simps, irreducible]
-def S3 : Pair Std.U32 Std.U32 := eval_global S3_body
+@[global_simps, irreducible] def S3 : Pair Std.U32 Std.U32 := P3
 
 /- [constants::S4]
    Source: 'tests/src/constants.rs', lines 85:0-85:47 -/
@@ -170,11 +155,8 @@ structure V (T : Type) (N : Std.Usize) where
 
 /- [constants::{constants::V<T, N>}::LEN]
    Source: 'tests/src/constants.rs', lines 93:4-93:29 -/
-@[global_simps]
-def V.LEN_body (T : Type) (N : Std.Usize) : Result Std.Usize := do ok N
 @[global_simps, irreducible]
-def V.LEN (T : Type) (N : Std.Usize) : Std.Usize :=
-  eval_global (V.LEN_body T N)
+def V.LEN (T : Type) (N : Std.Usize) : Std.Usize := N
 
 /- [constants::use_v]:
    Source: 'tests/src/constants.rs', lines 96:0-98:1 -/

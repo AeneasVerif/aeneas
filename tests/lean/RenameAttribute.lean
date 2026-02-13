@@ -21,28 +21,28 @@ def BoolTrait.retTest.default {Self : Type} (self : Self) : Result Bool := do
 
 /- [rename_attribute::{rename_attribute::BoolTrait for bool}::get_bool]:
    Source: 'tests/src/rename_attribute.rs', lines 23:4-25:5 -/
-def BoolTraitBool.getTest (self : Bool) : Result Bool := do
+def BoolImpl.getTest (self : Bool) : Result Bool := do
   ok self
 
 /- [rename_attribute::{rename_attribute::BoolTrait for bool}::ret_true]:
    Source: 'tests/src/rename_attribute.rs', lines 22:0-26:1 -/
-def BoolTraitBool.retTest (self : Bool) : Result Bool := do
+def BoolImpl.retTest (self : Bool) : Result Bool := do
   ok true
 
 /- Trait implementation: [rename_attribute::{rename_attribute::BoolTrait for bool}]
    Source: 'tests/src/rename_attribute.rs', lines 22:0-26:1 -/
 @[reducible]
 def BoolImpl : BoolTest Bool := {
-  getTest := BoolTraitBool.getTest
-  retTest := BoolTraitBool.retTest
+  getTest := BoolImpl.getTest
+  retTest := BoolImpl.retTest
 }
 
 /- [rename_attribute::test_bool_trait]:
    Source: 'tests/src/rename_attribute.rs', lines 29:0-31:1 -/
 def BoolFn (T : Type) (x : Bool) : Result Bool := do
-  let b ← BoolTraitBool.getTest x
+  let b ← BoolImpl.getTest x
   if b
-  then BoolTraitBool.retTest x
+  then BoolImpl.retTest x
   else ok false
 
 /- [rename_attribute::SimpleEnum]

@@ -31,8 +31,9 @@ let lookup_fun_sig (fun_id : fun_id) (fun_decls : fun_decl FunDeclId.Map.t) :
 
     Remark: the list of functions also contains the list of opaque global
     bodies. *)
-let crate_get_opaque_non_builtin_decls (k : crate) (filter_builtin : bool) :
-    type_decl list * fun_decl list =
+let crate_get_opaque_non_builtin_decls (k : crate) (filter_builtin : bool)
+    (type_decls : type_decl TypeDeclId.Map.t)
+    (fun_decls : fun_decl FunDeclId.Map.t) : type_decl list * fun_decl list =
   let open ExtractBuiltin in
   let ctx = Charon.NameMatcher.ctx_from_crate k in
   let is_opaque_fun (d : fun_decl) : bool =
@@ -54,14 +55,16 @@ let crate_get_opaque_non_builtin_decls (k : crate) (filter_builtin : bool) :
        || not (NameMatcherMap.mem ctx d.item_meta.name (builtin_types_map ())))
   in
   (* Note that by checking the function bodies we also the globals *)
-  ( List.filter is_opaque_type (TypeDeclId.Map.values k.type_decls),
-    List.filter is_opaque_fun (FunDeclId.Map.values k.fun_decls) )
+  ( List.filter is_opaque_type (TypeDeclId.Map.values type_decls),
+    List.filter is_opaque_fun (FunDeclId.Map.values fun_decls) )
 
 (** Return true if the crate contains opaque declarations, ignoring the builtin
     definitions. *)
-let crate_has_opaque_non_builtin_decls (k : crate) (filter_builtin : bool) :
-    bool =
-  crate_get_opaque_non_builtin_decls k filter_builtin <> ([], [])
+let crate_has_opaque_non_builtin_decls (k : crate) (filter_builtin : bool)
+    (type_decls : type_decl TypeDeclId.Map.t)
+    (fun_decls : fun_decl FunDeclId.Map.t) : bool =
+  crate_get_opaque_non_builtin_decls k filter_builtin type_decls fun_decls
+  <> ([], [])
 
 let name_to_pattern (span : Meta.span option) (ctx : 'a Charon.NameMatcher.ctx)
     (c : Charon.NameMatcher.to_pat_config) (n : name) =

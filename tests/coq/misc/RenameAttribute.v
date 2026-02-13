@@ -28,25 +28,25 @@ Definition boolTrait_retTest_default
 
 (** [rename_attribute::{rename_attribute::BoolTrait for bool}::get_bool]:
     Source: 'tests/src/rename_attribute.rs', lines 23:4-25:5 *)
-Definition boolTraitBool_getTest (self : bool) : result bool :=
+Definition BoolImpl_getTest (self : bool) : result bool :=
   Ok self.
 
 (** [rename_attribute::{rename_attribute::BoolTrait for bool}::ret_true]:
     Source: 'tests/src/rename_attribute.rs', lines 22:0-26:1 *)
-Definition boolTraitBool_retTest (self : bool) : result bool :=
+Definition BoolImpl_retTest (self : bool) : result bool :=
   Ok true.
 
 (** Trait implementation: [rename_attribute::{rename_attribute::BoolTrait for bool}]
     Source: 'tests/src/rename_attribute.rs', lines 22:0-26:1 *)
 Definition BoolImpl : BoolTest_t bool := {|
-  BoolTest_t_getTest := boolTraitBool_getTest;
-  BoolTest_t_retTest := boolTraitBool_retTest;
+  BoolTest_t_getTest := BoolImpl_getTest;
+  BoolTest_t_retTest := BoolImpl_retTest;
 |}.
 
 (** [rename_attribute::test_bool_trait]:
     Source: 'tests/src/rename_attribute.rs', lines 29:0-31:1 *)
 Definition boolFn (T : Type) (x : bool) : result bool :=
-  b <- boolTraitBool_getTest x; if b then boolTraitBool_retTest x else Ok false
+  b <- BoolImpl_getTest x; if b then BoolImpl_retTest x else Ok false
 .
 
 (** [rename_attribute::SimpleEnum]

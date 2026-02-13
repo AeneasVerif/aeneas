@@ -681,19 +681,38 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
         ~inside:true trait_ref inst_id;
       F.pp_print_string fmt (add_brackets name)
   | BuiltinOrAuto data ->
-      let name =
+      let generics = trait_ref.decl_generics in
+      (* For BuiltinFn* traits: the first type is the type of the function,
+         which we actually don't want to keep as the generics also contain the
+         types of the inputs and outputs.
+
+         TODO: actually the type may be wrong if there are several inputs, because
+         the function type uses one arrow per input while the builtin trait expects
+         the inputs to be grouped inside a tuple (curried vs uncurried). We need
+         to detect this case and insert a cast. Or we can insert a cast which does
+         the hard work automatically in Lean.
+       *)
+      let builtin_fn_update_generics (generics : generic_args) : generic_args =
+        match generics.types with
+        | [ _; input; output ] -> { generics with types = [ input; output ] }
+        | _ -> [%internal_error] span
+      in
+      let name, generics =
         match data with
-        | BuiltinClone -> "BuiltinClone"
-        | BuiltinCopy -> "BuiltinCopy"
+        | BuiltinClone -> ("BuiltinClone", generics)
+        | BuiltinCopy -> ("BuiltinCopy", generics)
         | BuiltinDiscriminantKind ->
             [%lwarning
               "Extracted an unexpected builtin clause of kind `Discriminant`: \
                this will not type-check"];
-            "BuiltinDiscriminantKind"
+            ("BuiltinDiscriminantKind", generics)
+        | BuiltinFn -> ("BuiltinFn", builtin_fn_update_generics generics)
+        | BuiltinFnMut -> ("BuiltinFnMut", builtin_fn_update_generics generics)
+        | BuiltinFnOnce -> ("BuiltinFnOnce", builtin_fn_update_generics generics)
       in
       if inside then F.pp_print_string fmt "(";
       F.pp_print_string fmt name;
-      extract_generic_args span ctx fmt no_params_tys trait_ref.decl_generics;
+      extract_generic_args span ctx fmt no_params_tys generics;
       if inside then F.pp_print_string fmt ")"
   | UnknownTrait _ ->
       (* This is an error case *)
@@ -819,6 +838,15 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                   (FieldId (TAdtId def.def_id, fid))
                   (mk_field_name name) ctx)
               ctx field_names
+          in
+          (* In the case of Lean, also add the fully qualified projector names
+             (see the comment in [names_maps.adt_fields] *)
+          let ctx =
+            match backend () with
+            | Lean ->
+                ctx_add_adt_projector_names def_name (List.map snd field_names)
+                  ctx
+            | _ -> ctx
           in
           (* Add the constructor name *)
           ctx_add span (StructId (TAdtId def.def_id)) cons_name ctx
@@ -996,7 +1024,11 @@ let extract_type_decl_tuple_struct_body (span : Meta.span)
   if fields = [] then (
     F.pp_print_space fmt ();
     F.pp_print_string fmt (unit_name ()))
-  else
+  else (
+    (* Open additional boxes *)
+    F.pp_print_break fmt 1 2;
+    F.pp_open_hovbox fmt 0;
+    (* *)
     let sep =
       match backend () with
       | Coq | FStar | HOL4 -> "*"
@@ -1005,11 +1037,13 @@ let extract_type_decl_tuple_struct_body (span : Meta.span)
     Collections.List.iter_link
       (fun () ->
         F.pp_print_space fmt ();
-        F.pp_print_string fmt sep)
+        F.pp_print_string fmt sep;
+        F.pp_print_space fmt ())
       (fun (f : field) ->
-        F.pp_print_space fmt ();
         extract_ty span ctx fmt TypeDeclId.Set.empty ~inside:false f.field_ty)
-      fields
+      fields;
+    (* Close the boxes *)
+    F.pp_close_box fmt ())
 
 let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
     (type_decl_group : TypeDeclId.Set.t) (kind : decl_kind) (def : type_decl)
@@ -1264,7 +1298,7 @@ let insert_req_space (fmt : F.formatter) (space : bool ref) : unit =
 *)
 let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) ?(use_forall = false)
-    ?(use_forall_use_sep = true) ?(use_arrows = false)
+    ?(use_fun = false) ?(use_forall_use_sep = true) ?(use_arrows = false)
     ?(as_implicits : bool = false) ?(space : bool ref option = None)
     (origin : generic_origin) (generics : generic_params)
     (explicit : explicit_info option) (type_params : string list)
@@ -1299,6 +1333,9 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
         F.pp_print_string fmt ":");
       insert_req_space ();
       F.pp_print_string fmt "forall");
+    if use_fun then (
+      insert_req_space ();
+      F.pp_print_string fmt "fun");
     (* Small helper - we may need to split the parameters *)
     let print_generics (type_params : (explicit * string) list)
         (const_generics : (explicit * const_generic_param) list)

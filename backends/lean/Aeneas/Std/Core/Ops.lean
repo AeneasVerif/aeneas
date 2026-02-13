@@ -45,21 +45,39 @@ structure core.ops.bit.BitAnd (Self : Type) (Rhs : Type) (Self_Output : Type) wh
   bitand : Self → Rhs → Result Self_Output
 
 @[rust_trait "core::ops::function::FnOnce"]
-structure core.ops.function.FnOnce (Self : Type) (Args : Type) (Output : Type) where
+structure core.ops.function.FnOnce (Self : Type u) (Args : Type v) (Output : Type w) where
   call_once : Self → Args → Result Output
 
 @[rust_trait "core::ops::function::FnMut" (parentClauses := ["FnOnceInst"])]
-structure core.ops.function.FnMut (Self : Type) (Args : Type) (Output : Type) where
+structure core.ops.function.FnMut (Self : Type u) (Args : Type v) (Output : Type w) where
   FnOnceInst : core.ops.function.FnOnce Self Args Output
   call_mut : Self → Args → Result (Output × Self)
 
 @[rust_trait "core::ops::function::Fn" (parentClauses := ["FnMutInst"])]
-structure core.ops.function.Fn (Self : Type) (Args : Type) (Output : Type) where
+structure core.ops.function.Fn (Self : Type u) (Args : Type v) (Output : Type w) where
   FnMutInst : core.ops.function.FnMut Self Args Output
   call : Self → Args → Result Output
 
+def BuiltinFnOnce (Inputs : Type u) (Outputs : Type v) : core.ops.function.FnOnce (Inputs → Result Outputs) Inputs Outputs := {
+  call_once f x := f x
+}
+
+def BuiltinFnMut (Inputs : Type u) (Outputs : Type v) : core.ops.function.FnMut (Inputs → Result Outputs) Inputs Outputs := {
+  FnOnceInst := BuiltinFnOnce Inputs Outputs
+  call_mut f x :=
+    match f x with
+    | ok y => ok (y, f)
+    | fail e => fail e
+    | div => div
+}
+
+def BuiltinFn (Inputs : Type u) (Outputs : Type v) : core.ops.function.Fn (Inputs → Result Outputs) Inputs Outputs := {
+  FnMutInst := BuiltinFnMut Inputs Outputs
+  call f x := f x
+}
+
 @[rust_trait "core::ops::try_trait::FromResidual"]
-structure core.ops.try_trait.FromResidual (Self : Type) (R : Type) where
+structure core.ops.try_trait.FromResidual (Self : Type u) (R : Type v) where
   from_residual : R → Result Self
 
 @[rust_type "core::ops::control_flow::ControlFlow"]

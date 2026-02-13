@@ -466,8 +466,7 @@ def f3 : Result Std.U32 := do
 
 /- [arrays::SZ]
    Source: 'tests/src/arrays.rs', lines 316:0-316:25 -/
-@[global_simps] def SZ_body : Result Std.Usize := do ok 32#usize
-@[global_simps, irreducible] def SZ : Std.Usize := eval_global SZ_body
+@[global_simps, irreducible] def SZ : Std.Usize := 32#usize
 
 /- [arrays::f5]:
    Source: 'tests/src/arrays.rs', lines 319:0-321:1 -/
@@ -576,11 +575,8 @@ def add_acc
 
 /- [arrays::ARRAY1]
    Source: 'tests/src/arrays.rs', lines 374:0-374:32 -/
-@[global_simps]
-def ARRAY1_body : Result (Array Std.U32 2#usize) := do
-  ok (Array.make 2#usize [ 0#u32, 1#u32 ])
 @[global_simps, irreducible]
-def ARRAY1 : Array Std.U32 2#usize := eval_global ARRAY1_body
+def ARRAY1 : Array Std.U32 2#usize := Array.make 2#usize [ 0#u32, 1#u32 ]
 
 /- [arrays::Scalar]
    Source: 'tests/src/arrays.rs', lines 377:0-377:24 -/
@@ -589,8 +585,7 @@ def Scalar := Array Std.U32 2#usize
 
 /- [arrays::L]
    Source: 'tests/src/arrays.rs', lines 378:0-378:33 -/
-@[global_simps]
-def L_body : Result Scalar := do ok (Array.make 2#usize [ 0#u32, 1#u32 ])
-@[global_simps, irreducible] def L : Scalar := eval_global L_body
+@[global_simps, irreducible]
+def L : Scalar := Array.make 2#usize [ 0#u32, 1#u32 ]
 
 end arrays

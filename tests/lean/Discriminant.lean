@@ -22,13 +22,13 @@ inductive AlertLevel where
 /- Trait implementation: [discriminant::{core::marker::StructuralPartialEq for discriminant::AlertLevel}]
    Source: 'tests/src/discriminant.rs', lines 6:9-6:18 -/
 @[reducible]
-def core.marker.StructuralPartialEqAlertLevel : core.marker.StructuralPartialEq
-  AlertLevel := {
+def AlertLevel.Insts.CoreMarkerStructuralPartialEq :
+  core.marker.StructuralPartialEq AlertLevel := {
 }
 
 /- [discriminant::{core::cmp::PartialEq<discriminant::AlertLevel> for discriminant::AlertLevel}::eq]:
    Source: 'tests/src/discriminant.rs', lines 6:9-6:18 -/
-def PartialEqAlertLevelAlertLevel.eq
+def AlertLevel.Insts.CoreCmpPartialEqAlertLevel.eq
   (self : AlertLevel) (other : AlertLevel) : Result Bool := do
   let self1 := read_discriminant self
   let other1 := read_discriminant other
@@ -37,9 +37,9 @@ def PartialEqAlertLevelAlertLevel.eq
 /- Trait implementation: [discriminant::{core::cmp::PartialEq<discriminant::AlertLevel> for discriminant::AlertLevel}]
    Source: 'tests/src/discriminant.rs', lines 6:9-6:18 -/
 @[reducible]
-def core.cmp.PartialEqAlertLevelAlertLevel : core.cmp.PartialEq AlertLevel
+def AlertLevel.Insts.CoreCmpPartialEqAlertLevel : core.cmp.PartialEq AlertLevel
   AlertLevel := {
-  eq := PartialEqAlertLevelAlertLevel.eq
+  eq := AlertLevel.Insts.CoreCmpPartialEqAlertLevel.eq
 }
 
 /- [discriminant::AlertLevelU8]
@@ -52,13 +52,13 @@ inductive AlertLevelU8 where
 /- Trait implementation: [discriminant::{core::marker::StructuralPartialEq for discriminant::AlertLevelU8}]
    Source: 'tests/src/discriminant.rs', lines 12:9-12:18 -/
 @[reducible]
-def core.marker.StructuralPartialEqAlertLevelU8 :
+def AlertLevelU8.Insts.CoreMarkerStructuralPartialEq :
   core.marker.StructuralPartialEq AlertLevelU8 := {
 }
 
 /- [discriminant::{core::cmp::PartialEq<discriminant::AlertLevelU8> for discriminant::AlertLevelU8}::eq]:
    Source: 'tests/src/discriminant.rs', lines 12:9-12:18 -/
-def PartialEqAlertLevelU8AlertLevelU8.eq
+def AlertLevelU8.Insts.CoreCmpPartialEqAlertLevelU8.eq
   (self : AlertLevelU8) (other : AlertLevelU8) : Result Bool := do
   let self1 := read_discriminant self
   let other1 := read_discriminant other
@@ -67,9 +67,9 @@ def PartialEqAlertLevelU8AlertLevelU8.eq
 /- Trait implementation: [discriminant::{core::cmp::PartialEq<discriminant::AlertLevelU8> for discriminant::AlertLevelU8}]
    Source: 'tests/src/discriminant.rs', lines 12:9-12:18 -/
 @[reducible]
-def core.cmp.PartialEqAlertLevelU8AlertLevelU8 : core.cmp.PartialEq
+def AlertLevelU8.Insts.CoreCmpPartialEqAlertLevelU8 : core.cmp.PartialEq
   AlertLevelU8 AlertLevelU8 := {
-  eq := PartialEqAlertLevelU8AlertLevelU8.eq
+  eq := AlertLevelU8.Insts.CoreCmpPartialEqAlertLevelU8.eq
 }
 
 end discriminant

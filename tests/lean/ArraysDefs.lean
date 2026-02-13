@@ -17,4 +17,17 @@ def clone_array
   := do
   core.array.CloneArray.clone corecloneCloneInst x
 
+/- [arrays_defs::index_slice_0]:
+   Source: 'tests/src/arrays_defs.rs', lines 7:0-9:1 -/
+def index_slice_0 {T : Type} (s : Slice T) : Result T := do
+  Slice.index_usize s 0#usize
+
+/- [arrays_defs::index_empty_array]:
+   Source: 'tests/src/arrays_defs.rs', lines 11:0-13:1 -/
+def index_empty_array : Result Unit := do
+  let s ←
+    (↑(Array.to_slice (Std.Array.empty Std.U32)) : Result (Slice Std.U32))
+  let _ ← index_slice_0 s
+  ok ()
+
 end arrays_defs

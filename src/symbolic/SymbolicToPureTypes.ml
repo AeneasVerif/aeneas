@@ -86,6 +86,9 @@ and translate_trait_ref_kind (span : Meta.span option)
         | BuiltinClone -> BuiltinClone
         | BuiltinCopy -> BuiltinCopy
         | BuiltinDiscriminantKind -> BuiltinDiscriminantKind
+        | BuiltinFn -> BuiltinFn
+        | BuiltinFnMut -> BuiltinFnMut
+        | BuiltinFnOnce -> BuiltinFnOnce
         | _ ->
             [%craise_opt_span] span
               ("Unhandled `BuiltinOrAuto` for trait "
@@ -316,12 +319,12 @@ let translate_type_id (span : Meta.span option) (id : T.type_id) : type_id =
     (both cases happen, actually).
 
     TODO: factor out the various translation functions. *)
-let rec translate_fwd_ty (span : Meta.span option) (type_infos : type_infos)
+let rec translate_fwd_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
     (ty : T.ty) : ty =
-  let translate = translate_fwd_ty span type_infos in
+  let translate = translate_fwd_ty span decls_ctx in
   match ty with
   | T.TAdt { id; generics } -> (
-      let t_generics = translate_fwd_generic_args span type_infos generics in
+      let t_generics = translate_fwd_generic_args span decls_ctx generics in
       (* Eliminate boxes and simplify tuples *)
       match id with
       | TAdtId _ | TBuiltin TStr ->
@@ -364,10 +367,37 @@ let rec translate_fwd_ty (span : Meta.span option) (type_infos : type_infos)
       let generics = { types = [ ty ]; const_generics = []; trait_refs = [] } in
       TAdt (TBuiltin (TRawPtr mut), generics)
   | TTraitType (trait_ref, type_name) ->
-      let trait_ref = translate_fwd_trait_ref span type_infos trait_ref in
+      let trait_ref = translate_fwd_trait_ref span decls_ctx trait_ref in
       TTraitType (trait_ref, type_name)
-  | TFnDef _ | TFnPtr _ ->
-      [%craise_opt_span] span "Arrow types are not supported yet"
+  | TFnDef { binder_regions; binder_value = { kind; generics } } -> (
+      [%cassert_opt_span] span (binder_regions = []) "Unimplemented";
+      let generics = translate_fwd_generic_args span decls_ctx generics in
+      match kind with
+      | T.FunId (FBuiltin _) -> [%craise_opt_span] span "Unimplemented"
+      | T.FunId (FRegular fid) ->
+          let fdecl =
+            [%unwrap_opt_span] span
+              (FunDeclId.Map.find_opt fid decls_ctx.fun_ctx.fun_decls)
+              "Could not lookup a function declaration"
+          in
+          let dsg = translate_fun_sig_from_decl_to_decomposed decls_ctx fdecl in
+          let sg = translate_fun_sig_from_decomposed dsg in
+          (* Check that the function lives in the expected effect - otherwise we
+                 have to lift it *)
+          [%cassert_opt_span] span sg.fwd_info.effect_info.can_fail
+            "Unimplemented";
+          [%cassert_opt_span] span
+            (RegionGroupId.Map.for_all
+               (fun _ (e : fun_effect_info) -> not e.can_fail)
+               sg.back_effect_info)
+            "Unimplemented";
+          (* Substitute *)
+          let subst = make_subst_from_generics sg.generics generics in
+          let inputs = List.map (ty_substitute subst) sg.inputs in
+          let output = ty_substitute subst sg.output in
+          mk_arrows inputs output
+      | T.TraitMethod _ -> [%craise_opt_span] span "Unimplemented")
+  | TFnPtr _ -> [%craise_opt_span] span "Arrow types are not supported yet"
   | TDynTrait { binder } ->
       let params, _predicates =
         translate_generic_params span binder.binder_params
@@ -378,27 +408,16 @@ let rec translate_fwd_ty (span : Meta.span option) (type_infos : type_infos)
       [%craise_opt_span] span "Found type error in the output of charon"
 
 and translate_fwd_generic_args (span : Meta.span option)
-    (type_infos : type_infos) (generics : T.generic_args) : generic_args =
-  translate_generic_args span (translate_fwd_ty span type_infos) generics
+    (decls_ctx : C.decls_ctx) (generics : T.generic_args) : generic_args =
+  translate_generic_args span (translate_fwd_ty span decls_ctx) generics
 
-and translate_fwd_trait_ref (span : Meta.span option) (type_infos : type_infos)
+and translate_fwd_trait_ref (span : Meta.span option) (decls_ctx : C.decls_ctx)
     (tr : T.trait_ref) : trait_ref =
-  translate_trait_ref span (translate_fwd_ty span type_infos) tr
-
-(** Simply calls [translate_fwd_ty] *)
-let ctx_translate_fwd_ty (ctx : bs_ctx) (ty : T.ty) : ty =
-  let type_infos = ctx.type_ctx.type_infos in
-  translate_fwd_ty (Some ctx.span) type_infos ty
-
-(** Simply calls [translate_fwd_generic_args] *)
-let ctx_translate_fwd_generic_args (ctx : bs_ctx) (generics : T.generic_args) :
-    generic_args =
-  let type_infos = ctx.type_ctx.type_infos in
-  translate_fwd_generic_args (Some ctx.span) type_infos generics
+  translate_trait_ref span (translate_fwd_ty span decls_ctx) tr
 
 (** Compute the *number* of levels of sub-abstractions existing for a given
     region type. *)
-let compute_back_ty_num_levels (span : Meta.span option)
+and compute_back_ty_num_levels (span : Meta.span option)
     (decls_ctx : C.decls_ctx) (get_region_group : T.region -> T.region_group_id)
     (gid : T.region_group_id) (ty : T.ty) : int =
   let type_infos = decls_ctx.type_ctx.type_infos in
@@ -513,7 +532,7 @@ let compute_back_ty_num_levels (span : Meta.span option)
     We leverage the fact that we can factor out the logic in one place (the
     consumed type and the given back type derive from the nesting level in more
     or less the same way). *)
-let translate_back_ty_aux (span : Meta.span option) (decls_ctx : C.decls_ctx)
+and translate_back_ty_aux (span : Meta.span option) (decls_ctx : C.decls_ctx)
     (get_region_group : T.region -> T.region_group_id) (gid : T.region_group_id)
     (level : int) (ty : T.ty) : ty option =
   let type_infos = decls_ctx.type_ctx.type_infos in
@@ -522,7 +541,7 @@ let translate_back_ty_aux (span : Meta.span option) (decls_ctx : C.decls_ctx)
     T.RegionGroupId.Set.cardinal outer_regions > level
   in
   let stop (outer_regions : T.RegionGroupId.Set.t) (ty : T.ty) : ty option =
-    if keep outer_regions then Some (translate_fwd_ty span type_infos ty)
+    if keep outer_regions then Some (translate_fwd_ty span decls_ctx ty)
     else None
   in
   let keep_adt (outer_regions : T.RegionGroupId.Set.t) (ty : T.ty) : bool =
@@ -572,9 +591,7 @@ let translate_back_ty_aux (span : Meta.span option) (decls_ctx : C.decls_ctx)
             (* The type should contain a mutable reference for the proper
              level: translate it as a forward type *)
             let type_id = translate_type_id span id in
-            let generics =
-              translate_fwd_generic_args span type_infos generics
-            in
+            let generics = translate_fwd_generic_args span decls_ctx generics in
             Some (TAdt (type_id, generics))
         | TBuiltin TStr -> stop outer_regions ty
         | TBuiltin TBox -> (
@@ -588,7 +605,7 @@ let translate_back_ty_aux (span : Meta.span option) (decls_ctx : C.decls_ctx)
     | T.TAdt _ -> None
     | T.TArray _ | T.TSlice _ ->
         if keep_adt outer_regions ty then
-          Some (translate_fwd_ty span type_infos ty)
+          Some (translate_fwd_ty span decls_ctx ty)
         else None
     | TVar _ | TNever | TLiteral _ -> stop outer_regions ty
     | TRef (r, rty, rkind) -> (
@@ -643,7 +660,7 @@ let translate_back_ty_aux (span : Meta.span option) (decls_ctx : C.decls_ctx)
   explore T.RegionGroupId.Set.empty ty
 
 (** Compute the number of levels required to translate a signature *)
-let compute_back_tys_num_levels (span : Meta.span option)
+and compute_back_tys_num_levels (span : Meta.span option)
     (decls_ctx : C.decls_ctx) (get_region_group : T.region -> T.region_group_id)
     (gid : T.region_group_id) (inputs : T.ty list) (output : T.ty) : int =
   let max x y = if x > y then x else y in
@@ -660,63 +677,23 @@ let compute_back_tys_num_levels (span : Meta.span option)
   in
   max !max_inputs output
 
-let translate_back_output_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
+and translate_back_output_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
     (get_region_group : T.region -> T.region_group_id) (gid : T.region_group_id)
     (level : int) ~(from_input : bool) (ty : T.ty) : ty option =
   if (not from_input) && level = 0 then None
   else translate_back_ty_aux span decls_ctx get_region_group gid level ty
 
-(** Simply calls [translate_back_ty] *)
-let ctx_translate_back_output_ty (ctx : bs_ctx)
-    (get_region_group : T.region -> T.region_group_id) (gid : T.region_group_id)
-    (level : int) ~(from_input : bool) (ty : T.ty) : ty option =
-  translate_back_output_ty (Some ctx.span) ctx.decls_ctx get_region_group gid
-    level ~from_input ty
-
 (** Translate the input type of a backward function, for a given region group.
 
     We return an option, because the translated type may be empty. *)
-let translate_back_input_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
+and translate_back_input_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
     (get_region_group : T.region -> T.region_group_id) (gid : T.region_group_id)
     (level : int) ~(from_input : bool) (ty : T.ty) : ty option =
   if from_input && level = 0 then None
   else translate_back_ty_aux span decls_ctx get_region_group gid level ty
 
-let mk_type_check_ctx (ctx : bs_ctx) : PureTypeCheck.tc_ctx =
-  let const_generics =
-    T.ConstGenericVarId.Map.of_list
-      (List.map
-         (fun (cg : const_generic_param) ->
-           (cg.index, ctx_translate_fwd_ty ctx (TLiteral cg.ty)))
-         ctx.sg.generics.const_generics)
-  in
-  let fenv = ctx.fvars_tys in
-  let benv = [] in
-  {
-    PureTypeCheck.type_decls = ctx.type_ctx.type_decls;
-    global_decls = ctx.decls_ctx.crate.global_decls;
-    const_generics;
-    decls_ctx = ctx.decls_ctx;
-    fenv;
-    benv;
-    pbenv = None;
-    bvar_counter = BVarId.zero;
-  }
-
-let type_check_pat (ctx : bs_ctx) (v : tpat) : unit =
-  let span = ctx.span in
-  let ctx = mk_type_check_ctx ctx in
-  let _ = PureTypeCheck.check_tpat span ctx v in
-  ()
-
-let type_check_texpr (ctx : bs_ctx) (e : texpr) : unit =
-  if !Config.type_check_pure_code then
-    let span = ctx.span in
-    let ctx = mk_type_check_ctx ctx in
-    PureTypeCheck.check_texpr span ctx e
-
 (** Small utility. *)
-let compute_raw_fun_effect_info (span : Meta.span option)
+and compute_raw_fun_effect_info (span : Meta.span option)
     (fun_infos : fun_info A.FunDeclId.Map.t) (fun_id : A.fn_ptr_kind)
     (gid : T.RegionGroupId.id option) : fun_effect_info =
   match fun_id with
@@ -752,7 +729,7 @@ let compute_raw_fun_effect_info (span : Meta.span option)
 
     - [generic_args]: the generic arguments with which the uninstantiated
       signature was instantiated, leading to the current [sg] *)
-let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
+and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
     (decls_ctx : C.decls_ctx) (fun_id : A.fn_ptr_kind) (sg : A.inst_fun_sig)
     (input_names : string option list) : decomposed_fun_type =
   [%ltrace
@@ -763,7 +740,6 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
     ^ Print.Values.inst_fun_sig_to_string ctx sg];
 
   let fun_infos = decls_ctx.fun_ctx.fun_infos in
-  let type_infos = decls_ctx.type_ctx.type_infos in
 
   (* We need an evaluation context to normalize the types (to normalize the
      associated types, etc. - for instance it may happen that the types
@@ -775,9 +751,9 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
     compute_raw_fun_effect_info span fun_infos fun_id None
   in
   (* Compute the forward inputs *)
-  let fwd_inputs = List.map (translate_fwd_ty span type_infos) sg.inputs in
+  let fwd_inputs = List.map (translate_fwd_ty span decls_ctx) sg.inputs in
   (* Compute the backward output, without the effect information *)
-  let fwd_output = translate_fwd_ty span type_infos sg.output in
+  let fwd_output = translate_fwd_ty span decls_ctx sg.output in
 
   (* Compute the map from region id to region group id *)
   let rg_to_gr_id =
@@ -981,7 +957,7 @@ let translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
   (* Return *)
   { fwd_inputs; fwd_output; back_sg; fwd_info }
 
-let translate_fun_sig_with_regions_hierarchy_to_decomposed (span : span option)
+and translate_fun_sig_with_regions_hierarchy_to_decomposed (span : span option)
     (decls_ctx : C.decls_ctx) (fun_id : A.fn_ptr_kind)
     (regions_hierarchy : T.region_var_groups) (sg : A.bound_fun_sig)
     (input_names : string option list) : decomposed_fun_sig =
@@ -1027,7 +1003,7 @@ let translate_fun_sig_with_regions_hierarchy_to_decomposed (span : span option)
   in
   { generics; llbc_generics = sg.item_binder_params; preds; fun_ty }
 
-let translate_fun_sig_to_decomposed (decls_ctx : C.decls_ctx)
+and translate_fun_sig_to_decomposed (decls_ctx : C.decls_ctx)
     (fun_id : FunDeclId.id) (sg : A.bound_fun_sig)
     (input_names : string option list) : decomposed_fun_sig =
   let span =
@@ -1045,7 +1021,7 @@ let translate_fun_sig_to_decomposed (decls_ctx : C.decls_ctx)
   translate_fun_sig_with_regions_hierarchy_to_decomposed (Some span) decls_ctx
     (FunId (FRegular fun_id)) regions_hierarchy sg input_names
 
-let translate_fun_sig_from_decl_to_decomposed (decls_ctx : C.decls_ctx)
+and translate_fun_sig_from_decl_to_decomposed (decls_ctx : C.decls_ctx)
     (fdef : LlbcAst.fun_decl) : decomposed_fun_sig =
   let input_names =
     match fdef.body with
@@ -1069,18 +1045,18 @@ let translate_fun_sig_from_decl_to_decomposed (decls_ctx : C.decls_ctx)
         sg];
   sg
 
-let mk_output_ty_from_effect_info (effect_info : fun_effect_info) (ty : ty) : ty
+and mk_output_ty_from_effect_info (effect_info : fun_effect_info) (ty : ty) : ty
     =
   if effect_info.can_fail then mk_result_ty ty else ty
 
-let mk_back_output_ty_from_effect_info (effect_info : fun_effect_info)
+and mk_back_output_ty_from_effect_info (effect_info : fun_effect_info)
     (inputs : ty list) (ty : ty) : ty =
   if effect_info.can_fail && inputs <> [] then mk_result_ty ty else ty
 
 (** Compute the arrow types for all the backward functions.
 
     If a backward function has no inputs/outputs we filter it. *)
-let compute_back_tys_with_info (dsg : Pure.decomposed_fun_type) :
+and compute_back_tys_with_info (dsg : Pure.decomposed_fun_type) :
     (back_sg_info * ty) option list =
   List.map
     (fun (back_sg : back_sg_info) ->
@@ -1108,13 +1084,13 @@ let compute_back_tys_with_info (dsg : Pure.decomposed_fun_type) :
         Some (back_sg, ty))
     (RegionGroupId.Map.values dsg.back_sg)
 
-let compute_back_tys (dsg : Pure.decomposed_fun_type) : ty option list =
+and compute_back_tys (dsg : Pure.decomposed_fun_type) : ty option list =
   List.map (Option.map snd) (compute_back_tys_with_info dsg)
 
 (** Compute the output type of a function, from a decomposed signature (the
     output type contains the type of the value returned by the forward function
     as well as the types of the returned backward functions). *)
-let compute_output_ty_from_decomposed (dsg : Pure.decomposed_fun_type) : ty =
+and compute_output_ty_from_decomposed (dsg : Pure.decomposed_fun_type) : ty =
   (* Compute the arrow types for all the backward functions *)
   let back_tys = List.filter_map (fun x -> x) (compute_back_tys dsg) in
   (* Group the forward output and the types of the backward functions *)
@@ -1130,7 +1106,7 @@ let compute_output_ty_from_decomposed (dsg : Pure.decomposed_fun_type) : ty =
   in
   mk_output_ty_from_effect_info effect_info output
 
-let translate_fun_sig_from_decomposed (dsg : Pure.decomposed_fun_sig) : fun_sig
+and translate_fun_sig_from_decomposed (dsg : Pure.decomposed_fun_sig) : fun_sig
     =
   let generics = dsg.generics in
   let llbc_generics = dsg.llbc_generics in
@@ -1165,7 +1141,7 @@ let translate_fun_sig_from_decomposed (dsg : Pure.decomposed_fun_sig) : fun_sig
     back_effect_info;
   }
 
-let translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
+and translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
     (sg : A.bound_fun_sig) (input_names : string option list) : Pure.fun_sig =
   (* Compute the regions hierarchy *)
   let regions_hierarchy =
@@ -1180,18 +1156,67 @@ let translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
   translate_fun_sig_from_decomposed sg
 
 (** TODO: not very clean. *)
-let get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fn_ptr_kind)
+and get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fn_ptr_kind)
     (gid : T.RegionGroupId.id option) : fun_effect_info =
   match fun_id with
   | TraitMethod (_, _, fid) | FunId (FRegular fid) ->
-      let dsg = A.FunDeclId.Map.find fid ctx.fun_dsigs in
+      let sg = A.FunDeclId.Map.find fid ctx.fun_sigs in
+      let sg = sg.dsg in
       let info =
         match gid with
-        | None -> dsg.fun_ty.fwd_info.effect_info
-        | Some gid ->
-            (RegionGroupId.Map.find gid dsg.fun_ty.back_sg).effect_info
+        | None -> sg.fun_ty.fwd_info.effect_info
+        | Some gid -> (RegionGroupId.Map.find gid sg.fun_ty.back_sg).effect_info
       in
       { info with is_rec = info.is_rec && gid = None }
   | FunId (FBuiltin _) ->
       compute_raw_fun_effect_info (Some ctx.span) ctx.fun_ctx.fun_infos fun_id
         gid
+
+(** Simply calls [translate_fwd_ty] *)
+let ctx_translate_fwd_ty (ctx : bs_ctx) (ty : T.ty) : ty =
+  translate_fwd_ty (Some ctx.span) ctx.decls_ctx ty
+
+(** Simply calls [translate_fwd_generic_args] *)
+let ctx_translate_fwd_generic_args (ctx : bs_ctx) (generics : T.generic_args) :
+    generic_args =
+  translate_fwd_generic_args (Some ctx.span) ctx.decls_ctx generics
+
+(** Simply calls [translate_back_ty] *)
+let ctx_translate_back_output_ty (ctx : bs_ctx)
+    (get_region_group : T.region -> T.region_group_id) (gid : T.region_group_id)
+    (level : int) ~(from_input : bool) (ty : T.ty) : ty option =
+  translate_back_output_ty (Some ctx.span) ctx.decls_ctx get_region_group gid
+    level ~from_input ty
+
+let mk_type_check_ctx (ctx : bs_ctx) : PureTypeCheck.tc_ctx =
+  let const_generics =
+    T.ConstGenericVarId.Map.of_list
+      (List.map
+         (fun (cg : const_generic_param) ->
+           (cg.index, ctx_translate_fwd_ty ctx (TLiteral cg.ty)))
+         ctx.sg.generics.const_generics)
+  in
+  let fenv = ctx.fvars_tys in
+  let benv = [] in
+  {
+    PureTypeCheck.type_decls = ctx.type_ctx.type_decls;
+    global_decls = ctx.decls_ctx.crate.global_decls;
+    const_generics;
+    decls_ctx = ctx.decls_ctx;
+    fenv;
+    benv;
+    pbenv = None;
+    bvar_counter = BVarId.zero;
+  }
+
+let type_check_pat (ctx : bs_ctx) (v : tpat) : unit =
+  let span = ctx.span in
+  let ctx = mk_type_check_ctx ctx in
+  let _ = PureTypeCheck.check_tpat span ctx v in
+  ()
+
+let type_check_texpr (ctx : bs_ctx) (e : texpr) : unit =
+  if !Config.type_check_pure_code then
+    let span = ctx.span in
+    let ctx = mk_type_check_ctx ctx in
+    PureTypeCheck.check_texpr span ctx e

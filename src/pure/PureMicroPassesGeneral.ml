@@ -2044,7 +2044,7 @@ let simplify_trait_calls_visitor (ctx : ctx) (def : fun_decl) =
   let names_map = NameMatcher.NameMatcherMap.of_list pats in
   let match_ctx = Charon.NameMatcher.ctx_from_crate ctx.crate in
   let get_method (d : fun_decl) : string option =
-    let config = ExtractName.default_config in
+    let config = ExtractName.default_match_config in
     NameMatcher.NameMatcherMap.find_opt match_ctx config d.item_meta.name
       names_map
   in
@@ -2615,7 +2615,17 @@ let lift_pure_function_calls_visitor (ctx : ctx) (def : fun_decl) =
 
   let try_lift_expr (super_visit_e : texpr -> texpr) (visit_e : texpr -> texpr)
       (app : texpr) : bool * texpr =
-    (* Check if the function should be lifted *)
+    (* Check if the function should be lifted.
+
+       Also, there is a hack: sometimes we don't want to lift because of
+       universe issues (the problem is that if we have [bind x f], then [x]
+       and the output of [f] must have a type which lives in the same universe).
+       For now, this mostly happens when using dyn traits (because of, e.g.,
+       [Debug] instances) as the Lean model introduces a universe bump, so we do
+       not lift the expression if the type of the let binding contains a dyn trait.
+
+       TODO: generalize
+     *)
     let f, args = destruct_apps app in
     let f = super_visit_e f in
     let args = List.map visit_e args in
@@ -2627,6 +2637,19 @@ let lift_pure_function_calls_visitor (ctx : ctx) (def : fun_decl) =
       | Qualif { id = FunOrOp (Fun fun_id); _ } -> lift_fun ctx fun_id
       | _ -> false
     in
+    let no_dyn =
+      let visitor =
+        object
+          inherit [_] iter_expr
+          method! visit_TDynTrait _ _ = raise Utils.Found
+        end
+      in
+      try
+        visitor#visit_ty () app.ty;
+        true
+      with Utils.Found -> false
+    in
+    let lift = lift && no_dyn in
     let app = [%add_loc] mk_apps span f args in
     if lift then (true, mk_to_result_texpr span app) else (false, app)
   in
@@ -2637,7 +2660,7 @@ let lift_pure_function_calls_visitor (ctx : ctx) (def : fun_decl) =
 
     method! visit_texpr env e0 =
       (* Check if this is an expression of the shape: [ok (f ...)] where
-           `f` has been identified as a function which should be lifted. *)
+         `f` has been identified as a function which should be lifted. *)
       match destruct_apps e0 with
       | ( ({ e = Qualif { id = FunOrOp (Fun (Pure ToResult)); _ }; _ } as
            to_result_expr),
@@ -2650,7 +2673,7 @@ let lift_pure_function_calls_visitor (ctx : ctx) (def : fun_decl) =
           if lifted then app else [%add_loc] mk_app span to_result_expr app
       | { e = Let (monadic, pat, bound, next); ty }, [] ->
           let next = self#visit_texpr env next in
-          (* Attempt to lift only if the let-expression is not already monadic *)
+          (* Attempt to lift only if the let-expression is not already monadic. *)
           let lifted, bound =
             if monadic then (true, self#visit_texpr env bound)
             else

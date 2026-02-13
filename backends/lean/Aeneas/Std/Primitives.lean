@@ -246,9 +246,9 @@ def Option.ofResult {a : Type u} (x : Result a) :
 # Dyn
 -/
 
-structure Dyn (Trait : Type → Type) where
+structure Dyn (Trait : Type u → Type v) where
   /-- The type Self -/
-  self : Type
+  self : Type u
   /-- The trait instance -/
   inst : Trait self
   /-- The value itself -/

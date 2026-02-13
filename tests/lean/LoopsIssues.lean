@@ -20,11 +20,8 @@ def read (a : Array Std.U8 4#usize) : Result Unit := do
 
 /- [loops_issues::CARRAY]
    Source: 'tests/src/loops-issues.rs', lines 10:0-10:38 -/
-@[global_simps]
-def CARRAY_body : Result (Array Std.U16 4#usize) := do
-  ok (Array.repeat 4#usize 0#u16)
 @[global_simps, irreducible]
-def CARRAY : Array Std.U16 4#usize := eval_global CARRAY_body
+def CARRAY : Array Std.U16 4#usize := Array.repeat 4#usize 0#u16
 
 /- [loops_issues::loop_access_array]: loop 0:
    Source: 'tests/src/loops-issues.rs', lines 15:4-18:5 -/
@@ -79,9 +76,7 @@ def loop_array_len_write (b0 : Bool) (b1 : Bool) : Result Unit := do
 
 /- [loops_issues::MAX_NROWS]
    Source: 'tests/src/loops-issues.rs', lines 43:0-43:27 -/
-@[global_simps] def MAX_NROWS_body : Result Std.Usize := do ok 4#usize
-@[global_simps, irreducible]
-def MAX_NROWS : Std.Usize := eval_global MAX_NROWS_body
+@[global_simps, irreducible] def MAX_NROWS : Std.Usize := 4#usize
 
 /- [loops_issues::read_global_loop]: loop 0:
    Source: 'tests/src/loops-issues.rs', lines 48:4-48:14 -/

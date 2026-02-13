@@ -12,7 +12,7 @@ def core.fmt.Error := Unit
 axiom core.fmt.Formatter : Type
 
 @[rust_trait "core::fmt::Debug"]
-structure core.fmt.Debug (T : Type) where
+structure core.fmt.Debug (T : Type u) where
   fmt : T → core.fmt.Formatter → Result (core.result.Result Unit core.fmt.Error × core.fmt.Formatter)
 
 -- TODO: move?

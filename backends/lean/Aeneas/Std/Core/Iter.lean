@@ -174,7 +174,7 @@ def core.iter.range.IteratorRange.next
       let n ← StepInst.forward_checked range' 1#usize;
       match n with
       | none => fail .panic -- Step invariants not upheld
-      | some n => ok ⟨ some n, {range with start := n} ⟩
+      | some n => ok ⟨ some range', {range with start := n} ⟩
     else ok ⟨ none, range ⟩
 
 @[rust_fun
@@ -192,3 +192,8 @@ def core.iter.traits.iterator.IteratorRange {A : Type}
   next := core.iter.range.IteratorRange.next StepInst
   step_by := core.iter.range.IteratorRange.step_by StepInst
 }
+
+@[rust_type "core::iter::adapters::map::Map"]
+structure core.iter.adapters.map.Map (I : Type u) (F : Type v) where
+  iter : I
+  f : F

@@ -140,12 +140,14 @@ noeq type counter_t (self : Type0) = { incr : self -> result (usize & self); }
 
 (** [demo::{demo::Counter for usize}::incr]:
     Source: 'tests/src/demo.rs', lines 105:4-109:5 *)
-let counterUsize_incr (self : usize) : result (usize & usize) =
+let usize_Insts_DemoCounter_incr (self : usize) : result (usize & usize) =
   let* self1 = usize_add self 1 in Ok (self, self1)
 
 (** Trait implementation: [demo::{demo::Counter for usize}]
     Source: 'tests/src/demo.rs', lines 104:0-110:1 *)
-let counterUsize : counter_t usize = { incr = counterUsize_incr; }
+let usize_Insts_DemoCounter : counter_t usize = {
+  incr = usize_Insts_DemoCounter_incr;
+}
 
 (** [demo::use_counter]:
     Source: 'tests/src/demo.rs', lines 112:0-114:1 *)

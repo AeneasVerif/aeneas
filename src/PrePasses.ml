@@ -1013,7 +1013,7 @@ let simplify_panics (crate : crate) (f : fun_decl) : fun_decl =
   let names_map = NameMatcher.NameMatcherMap.of_list pats in
   let match_ctx = Charon.NameMatcher.ctx_from_crate crate in
   let is_from_str (d : fun_decl) =
-    let config = ExtractName.default_config in
+    let config = ExtractName.default_match_config in
     NameMatcher.NameMatcherMap.mem match_ctx config d.item_meta.name names_map
   in
 
@@ -1143,9 +1143,9 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
             | CopyNonOverlapping { src; dst; count } ->
                 let src = visitor#visit_operand mk_unit_ty src in
                 CopyNonOverlapping { src; dst; count }
-            | Assert { cond; expected; on_failure } ->
+            | Assert ({ cond; expected; check_kind }, on_failure) ->
                 let cond = visitor#visit_operand mk_unit_ty cond in
-                Assert { cond; expected; on_failure }
+                Assert ({ cond; expected; check_kind }, on_failure)
             | Call { func; args; dest } ->
                 let func = visitor#visit_fn_operand mk_unit_ty func in
                 let args = List.map (visitor#visit_operand mk_unit_ty) args in
@@ -1231,7 +1231,7 @@ let replace_static (crate : crate) : crate =
   let names_set = NameMatcher.NameMatcherMap.of_list [ (pat, ()) ] in
   let match_ctx = Charon.NameMatcher.ctx_from_crate crate in
   let in_set (d : fun_decl) : bool =
-    let config = ExtractName.default_config in
+    let config = ExtractName.default_match_config in
     NameMatcher.NameMatcherMap.mem match_ctx config d.item_meta.name names_set
   in
   let decl_opt = ref None in
