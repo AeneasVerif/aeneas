@@ -335,7 +335,7 @@ def core.slice.index.private_slice_index.SealedRangeToUsize :
 def core.slice.index.SliceIndexRangeToUsizeSlice.get
   {T : Type} (r : core.ops.range.RangeTo Usize) (s : Slice T) : Result (Option (Slice T)) :=
   if r.end ≤ s.length then
-    ok (some ⟨ s.val.slice r.end s.length, by scalar_tac⟩)
+    ok (some ⟨ s.val.slice 0 r.end, by scalar_tac⟩)
   else ok none
 
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::get_mut"]
@@ -343,34 +343,34 @@ def core.slice.index.SliceIndexRangeToUsizeSlice.get_mut
   {T : Type} (r : core.ops.range.RangeTo Usize) (s : Slice T) :
   Result ((Option (Slice T)) × (Option (Slice T) → Slice T)) :=
   if r.end ≤ s.length then
-    ok (some ⟨ s.val.slice r.end s.length, by scalar_tac⟩,
+    ok (some ⟨ s.val.slice 0 r.end, by scalar_tac⟩,
         fun s' =>
         match s' with
         | none => s
         | some s' =>
-          if h: s'.length = s.length - r.end then
-            ⟨ List.setSlice! s.val r.end s'.val, by scalar_tac ⟩
+          if h: s'.length = r.end then
+            ⟨ List.setSlice! s.val 0 s'.val, by scalar_tac ⟩
           else s )
   else ok (none, fun _ => s)
 
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::get_unchecked"]
 def core.slice.index.SliceIndexRangeToUsizeSlice.get_unchecked
   {T : Type} (_ : core.ops.range.RangeTo Usize) (_ : ConstRawPtr (Slice T)) : Result (ConstRawPtr (Slice T)) :=
-  -- Don't know what the model should be - for now we always fail
+  -- TODO: update once we make the model of computation more stateful (for now we just fail)
   fail .undef
 
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::get_unchecked_mut"]
 def core.slice.index.SliceIndexRangeToUsizeSlice.get_unchecked_mut
   {T : Type} (_ : core.ops.range.RangeTo Usize) (_ : MutRawPtr (Slice T)) :
   Result (MutRawPtr (Slice T)) :=
-  -- Don't know what the model should be - for now we always fail
+  -- TODO: update once we make the model of computation more stateful (for now we just fail)
   fail .undef
 
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::index"]
 def core.slice.index.SliceIndexRangeToUsizeSlice.index
   {T : Type} (r : core.ops.range.RangeTo Usize) (s : Slice T) : Result (Slice T) :=
   if r.end ≤ s.length then
-    ok (⟨ s.val.slice r.end s.length, by scalar_tac⟩)
+    ok (⟨ s.val.slice 0 r.end, by scalar_tac⟩)
   else fail .panic
 
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeTo<usize>, [@T], [@T]>}::index_mut"]
@@ -378,10 +378,10 @@ def core.slice.index.SliceIndexRangeToUsizeSlice.index_mut
   {T : Type} (r : core.ops.range.RangeTo Usize) (s : Slice T) :
   Result ((Slice T) × (Slice T → Slice T)) :=
   if r.end ≤ s.length then
-    ok (⟨ s.val.slice r.end s.length, by scalar_tac⟩,
+    ok (⟨ s.val.slice 0 r.end, by scalar_tac⟩,
         fun s' =>
-        if h: s'.length = s.length - r.end then
-          ⟨ List.setSlice! s.val r.end s', by scalar_tac ⟩
+        if h: s'.length = r.end then
+          ⟨ List.setSlice! s.val 0 s'.val, by scalar_tac ⟩
         else s )
   else fail .panic
 
