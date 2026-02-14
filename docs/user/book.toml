@@ -4,3 +4,15 @@ language = "en"
 multilingual = false
 src = "src"
 title = "Aeneas user documentation"
+
+[output.html]
+mathjax-support = true
+additional-css = ["alectryon.css", "pygments.css"]
+additional-js = ["alectryon.js"]
+
+[output.html.fold]
+enable = true
+level = 0
+
+[output.html.playground.boring-prefixes]
+lean = "# "
