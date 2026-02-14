@@ -29,7 +29,7 @@ def loop_access_array_loop
   (k : Std.Usize) (start : Std.Usize) : Result Unit := do
   if start < 4#usize
   then
-    massert (k < 4#usize)
+    let _ ← Array.index_usize CARRAY k
     let start1 ← start + 1#usize
     loop_access_array_loop k start1
   else ok ()
