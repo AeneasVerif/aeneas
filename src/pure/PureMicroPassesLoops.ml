@@ -1,7 +1,6 @@
 open Pure
 open PureUtils
 open PureMicroPassesBase
-open PureMicroPassesGeneral
 
 (** Helper for [decompose_loops]: update the occurrences of continue and break
 *)
