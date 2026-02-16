@@ -308,8 +308,9 @@ let apply_passes_to_pure_fun_translations (crate : LlbcAst.crate)
     let f, loops = decompose_loops ctx f in
 
     (* Filter the constant inputs *)
-    let simplify =
-      filter_loop_useless_inputs_outputs ~filter_constant_inputs:true ctx
+    let simplify f =
+      [%ltrace "About to apply: 'filter_loop_useless_inputs_outputs (pass 2)'"];
+      filter_loop_useless_inputs_outputs ~filter_constant_inputs:true ctx f
     in
     let f = simplify f in
     let loops = List.map simplify loops in
@@ -318,7 +319,10 @@ let apply_passes_to_pure_fun_translations (crate : LlbcAst.crate)
        expressions of the shape:
        [let (x, y) = e in ok (x, y)]
        We need to resimplify those. *)
-    let simplify = simplify_let_then_ok ~ignore_loops:false ctx in
+    let simplify f =
+      [%ltrace "About to apply: 'simplify_let_then_ok (final pass)'"];
+      simplify_let_then_ok ~ignore_loops:false ctx f
+    in
     let f = simplify f in
     let loops = List.map simplify loops in
 

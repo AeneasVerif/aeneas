@@ -603,12 +603,12 @@ let inline_useless_var_assignments_visitor ~(inline_named : bool)
         substitution map while doing so *)
     method! visit_Let (env : inline_env) monadic lv re e =
       (* In order to filter, we need to check first that:
-           - the let-binding is not monadic
-           - the left-value is a variable
+         - the let-binding is not monadic
+         - the left-value is a variable
 
-           We also inline if the binding decomposes a structure that is to be
-           extracted as a tuple, and the right value is a variable.
-        *)
+         We also inline if the binding decomposes a structure that is to be
+         extracted as a tuple, and the right value is a variable.
+      *)
       match (monadic, lv.pat) with
       | false, POpen (lv_var, _) ->
           (* We can filter if: 1. *)

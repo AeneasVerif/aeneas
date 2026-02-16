@@ -1138,7 +1138,7 @@ and loop_to_string ?(span : Meta.span option = None) (env : fmt_env)
   let indent1 = indent ^ indent_incr in
   let indent2 = indent1 ^ indent_incr in
   let {
-    loop_id = _;
+    loop_id;
     span = _;
     output_tys = _;
     num_output_values = _;
@@ -1148,7 +1148,7 @@ and loop_to_string ?(span : Meta.span option = None) (env : fmt_env)
   } =
     loop
   in
-  "loop (\n" ^ indent1
+  "loop@" ^ LoopId.to_string loop_id ^ " (\n" ^ indent1
   ^ loop_body_to_string ~span env indent2 indent_incr loop_body
   ^ "\n" ^ indent1 ^ ")"
   ^ String.concat ""
