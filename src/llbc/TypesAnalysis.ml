@@ -141,12 +141,14 @@ let initialize_type_decl_info (span : Meta.span option) (crate : crate)
                   Type: " ^ name_to_string ());
               RegionId.Set.empty)
         | None ->
-            (* Print a warning *)
-            [%warn_opt_span] span
-              ("Found an unknown type declaration with region parameters: as \
-                we can not know whether the regions are used in mutable \
-                borrows or not the extracted code may be incorrect.\n\
-                Type: " ^ name_to_string ());
+            (* No builtin information: print a warning if the type contains region
+               parameters *)
+            if def.generics.regions <> [] then
+              [%warn_opt_span] span
+                ("Found an unknown type declaration with region parameters: as \
+                  we can not know whether the regions are used in mutable \
+                  borrows or not the extracted code may be incorrect.\n\
+                  Type: " ^ name_to_string ());
             if Config.opaque_types_have_mut_regions_by_default then
               RegionId.Set.of_list
                 (List.map
