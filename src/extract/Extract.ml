@@ -614,7 +614,7 @@ let extract_binop (span : Meta.span) (ctx : extraction_ctx)
         | BitOr _ -> "|||"
         | BitAnd _ -> "&&&"
         | _ ->
-            admit_string __FILE__ __LINE__ span
+            [%add_loc] admit_string span
               ("Unimplemented binary operation: " ^ binop_to_string ctx binop)
       in
       let binop =
@@ -625,6 +625,27 @@ let extract_binop (span : Meta.span) (ctx : extraction_ctx)
       extract_expr ~inside:true arg0;
       F.pp_print_space fmt ();
       F.pp_print_string fmt binop;
+      F.pp_print_space fmt ();
+      extract_expr ~inside:true arg1
+  | Lean, (Add (OWrap, _) | Sub (OWrap, _) | Mul (OWrap, _) | Div (OWrap, _)) ->
+      let binop =
+        match binop with
+        | Add _ -> "add"
+        | Sub _ -> "sub"
+        | Mul _ -> "mul"
+        | Div _ -> "div"
+        | _ ->
+            [%add_loc] admit_string span "Internal error: please file an issue"
+      in
+      let ty = ty_as_integer span arg0.ty in
+      let binop =
+        "Std."
+        ^ StringUtils.capitalize_first_letter (int_name ty)
+        ^ ".wrapping_" ^ binop
+      in
+      F.pp_print_string fmt binop;
+      F.pp_print_space fmt ();
+      extract_expr ~inside:true arg0;
       F.pp_print_space fmt ();
       extract_expr ~inside:true arg1
   | _ ->

@@ -18,6 +18,7 @@ package «tests» {}
 @[default_target] lean_lib Builtin
 @[default_target] lean_lib Closures
 @[default_target] lean_lib Constants
+@[default_target] lean_lib ConstantsLean
 @[default_target] lean_lib Default
 @[default_target] lean_lib DefaultedMethod
 @[default_target] lean_lib Derive
