@@ -1,7 +1,6 @@
 open Pure
 open PureUtils
 open PureMicroPassesBase
-open PureMicroPassesGeneral
 
 (** Helper for [decompose_loops]: update the occurrences of continue and break
 *)
@@ -102,8 +101,10 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
 
   let fvars, body = open_all_fun_body ctx span body in
 
-  (* Count the number of loops *)
+  (* Count the number of loops and compute the relative position of each loop *)
   let loops = ref LoopId.Set.empty in
+  let loop_pos = ref [ 0 ] in
+  let loop_id_to_pos = ref LoopId.Map.empty in
   let expr_visitor =
     object
       inherit [_] iter_expr as super
@@ -111,7 +112,15 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
       method! visit_Loop env loop =
         [%sanity_check] span (not (LoopId.Set.mem loop.loop_id !loops));
         loops := LoopId.Set.add loop.loop_id !loops;
-        super#visit_Loop env loop
+        loop_id_to_pos :=
+          LoopId.Map.add loop.loop_id (List.rev !loop_pos) !loop_id_to_pos;
+        (* Push a position index *)
+        loop_pos := 0 :: !loop_pos;
+        super#visit_Loop env loop;
+        (* Pop the last position index and increment the current position *)
+        match !loop_pos with
+        | _ :: current :: prefix -> loop_pos := (current + 1) :: prefix
+        | _ -> [%internal_error] span
     end
   in
   expr_visitor#visit_texpr () body.body;
@@ -307,6 +316,12 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
 
     [%sanity_check] def.item_meta.span (def.builtin_info = None);
 
+    let loop_pos =
+      [%unwrap_with_span] span
+        (LoopId.Map.find_opt loop.loop_id !loop_id_to_pos)
+        "Internal error: please file an issue"
+    in
+
     let loop_def : fun_decl =
       {
         def_id = def.def_id;
@@ -316,6 +331,7 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
         backend_attributes = def.backend_attributes;
         num_loops;
         loop_id = Some loop.loop_id;
+        loop_pos;
         name = def.name;
         signature = loop_sig;
         is_global_decl_body = def.is_global_decl_body;
@@ -983,9 +999,25 @@ let compute_loop_input_output_rel (span : Meta.span) (ctx : ctx) (loop : loop) :
 
   let body = loop.loop_body in
   let inputs = List.map (fun _ -> ref []) body.inputs in
+  let input_fvars =
+    List.map
+      (fun (p : tpat) ->
+        match p.pat with
+        | POpen (fv, _) -> Some fv
+        | PIgnored -> None
+        | _ -> [%internal_error] span)
+      body.inputs
+  in
   let outputs = List.map (fun _ -> ref []) loop.output_tys in
   let used_fvars = ref FVarId.Set.empty in
   let inputs_fvars = tpats_get_fvars body.inputs in
+
+  let marked_as_used_visitor =
+    object
+      inherit [_] iter_expr
+      method! visit_fvar_id _ fid = used_fvars := FVarId.Set.add fid !used_fvars
+    end
+  in
 
   let visitor =
     object (self)
@@ -1043,9 +1075,17 @@ let compute_loop_input_output_rel (span : Meta.span) (ctx : ctx) (loop : loop) :
                       [%sanity_check] span
                         (List.length inputs = List.length args);
                       (* Update the input map *)
-                      List.iter
-                        (fun (l, arg) -> l := arg :: !l)
-                        (List.combine inputs args))
+                      Collections.List.iter
+                        (fun ((l, input, arg) : _ * fvar option * _) ->
+                          (* Register the output *)
+                          l := arg :: !l;
+                          (* Also check whether the output is exactly the input:
+                             if it is not the case, we mark the variables which appear
+                             in the output as used. *)
+                          match (input, arg.e) with
+                          | Some fvar, FVar fid when fid = fvar.id -> ()
+                          | _ -> marked_as_used_visitor#visit_texpr () arg)
+                        (Collections.List.combine3 inputs input_fvars args))
                 else (
                   [%sanity_check] span (variant_id = loop_result_fail_id);
                   (* Also visit the arguments: we want to register the used variables *)
@@ -1066,42 +1106,6 @@ let compute_loop_input_output_rel (span : Meta.span) (ctx : ctx) (loop : loop) :
     ^ Print.list_to_string (Print.list_to_string (texpr_to_string ctx)) inputs
     ^ "\n- outputs: "
     ^ Print.list_to_string (Print.list_to_string (texpr_to_string ctx)) outputs];
-
-  (* We took care to not explore the outputs when registering the used variables,
-     but it is actually too restrictice, because some inputs might be used in
-     backward functions.
-
-     For instance:
-     loop (fun x y ->
-       if b then
-         ...
-         let y' = ... y in // we mark y as marked because of this
-         ...
-         continue (x, y')
-       else
-         ...
-         break (fun tl -> Cons (x, tl)) // we want to mark x as used because of this
-
-     For this reason we explore the outputs. If we find an expression which is
-     stricly more complex than simply a variable, we register the variables it
-     contains as used.
-  *)
-  let visitor =
-    object
-      inherit [_] iter_expr
-      method! visit_fvar_id _ fid = used_fvars := FVarId.Set.add fid !used_fvars
-    end
-  in
-  let rec explore (e : texpr) =
-    match e.e with
-    | FVar _ | BVar _ | CVar _ | Const _ | EError _ -> ()
-    | App _ | Lambda _ | Qualif _ | Let _ | Switch _ | StructUpdate _ ->
-        visitor#visit_texpr () e
-    | Loop _ -> [%internal_error] span
-    | Meta (_, inner) -> explore inner
-  in
-  List.iter (List.iter explore) inputs;
-  List.iter (List.iter explore) outputs;
 
   (* Filter the used variables to only preserve the inputs *)
   let used_fvars =
@@ -1193,7 +1197,7 @@ let decompose_loop_outputs (ctx : ctx) (def : fun_decl) =
     of the loop (we do the latter only if [filter_constant_inputs] is [true] or
     if the input is actually not used within the loop body - we have this option
     because we want to filter those inputs *after* introducing auxiliary
-    functions, if there are).
+    functions, if there are) or are not used outside of the recursive calls.
 
     For instance:
     {[
@@ -1668,19 +1672,33 @@ let filter_loop_useless_inputs_outputs (ctx : ctx)
       ^ String.concat "\n" (List.map (tpat_to_string ctx) filt_output_vars)
       ^ "\n- updt_outputs:\n"
       ^ String.concat "\n" (List.map (texpr_to_string ctx) updt_outputs)];
-    let next =
-      mk_closed_lets span false
-        (List.combine filt_output_vars updt_outputs)
-        next
-    in
 
-    (* Inline the useless vars in the expression after the loop body *)
-    let next =
-      (inline_useless_var_assignments_visitor ~inline_named:true
-         ~inline_const:true ~inline_pure:false ~inline_identity:true ctx def)
-        #visit_texpr
-        empty_inline_env next
+    (* We split the outputs in two:
+       - the outputs which are variables, that we directly inline
+       - the others, for which we introduce let-bindings
+    *)
+    let lets = List.combine filt_output_vars updt_outputs in
+    let to_inline, to_let = List.partition (fun (_, e) -> is_fvar e) lets in
+    let to_inline =
+      FVarId.Map.of_list
+        (List.map
+           (fun (p, e) -> ((fst ([%add_loc] as_pat_open span p)).id, e))
+           to_inline)
     in
+    let next =
+      let visitor =
+        object
+          inherit [_] map_expr
+
+          method! visit_FVar _ fid =
+            match FVarId.Map.find_opt fid to_inline with
+            | None -> FVar fid
+            | Some e -> e.e
+        end
+      in
+      visitor#visit_texpr () next
+    in
+    let next = mk_closed_lets span false to_let next in
 
     (* *)
     let pat =

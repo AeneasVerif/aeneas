@@ -1655,20 +1655,24 @@ let ctx_compute_global_name (meta : T.item_meta) (ctx : extraction_ctx)
 
 (** Helper function: generate a suffix for a function name, i.e., generates a
     suffix like "_loop", "loop1", etc. to append to a function name. *)
-let default_fun_loop_suffix (num_loops : int) (loop_id : LoopId.id option) :
-    string =
+let default_fun_loop_suffix (num_loops : int) (loop_id : LoopId.id option)
+    (loop_pos : int list) : string =
   match loop_id with
   | None -> ""
-  | Some loop_id ->
+  | Some _ ->
       (* If this is for a loop, generally speaking, we append the loop index.
          If this function admits only one loop, we omit it. *)
-      if num_loops = 1 then "_loop" else "_loop" ^ LoopId.to_string loop_id
+      if num_loops = 1 then "_loop"
+      else
+        String.concat ""
+          (List.map (fun id -> "_loop" ^ string_of_int id) loop_pos)
 
 (** A helper function: generates a function suffix. TODO: move all those
     helpers. *)
-let default_fun_suffix (num_loops : int) (loop_id : LoopId.id option) : string =
+let default_fun_suffix (num_loops : int) (loop_id : LoopId.id option)
+    (loop_pos : int list) : string =
   (* We only generate a suffix for the functions we generate from the loops *)
-  default_fun_loop_suffix num_loops loop_id
+  default_fun_loop_suffix num_loops loop_id loop_pos
 
 (** Compute the name of a regular (non-builtin) function.
 
@@ -1682,11 +1686,11 @@ let default_fun_suffix (num_loops : int) (loop_id : LoopId.id option) : string =
       one loop, we don't need to use indices)
     - loop id (if pertinent) TODO: use the fun id for the builtin functions. *)
 let ctx_compute_fun_name_base (meta : T.item_meta) (ctx : extraction_ctx)
-    (fname : llbc_name) (num_loops : int) (loop_id : LoopId.id option) : string
-    =
+    (fname : llbc_name) (num_loops : int) (loop_id : LoopId.id option)
+    (loop_pos : int list) : string =
   let fname = ctx_fun_name_to_extract_string meta ctx fname in
   (* Compute the suffix *)
-  let suffix = default_fun_suffix num_loops loop_id in
+  let suffix = default_fun_suffix num_loops loop_id loop_pos in
   (* Concatenate *)
   fname ^ suffix
 
@@ -2365,7 +2369,7 @@ let ctx_compute_fun_name (def : fun_decl) (is_trait_decl_field : bool)
     (ctx : extraction_ctx) : string =
   let fname = ctx_compute_fun_name_no_suffix def is_trait_decl_field ctx in
   (* Compute the suffix *)
-  let suffix = default_fun_suffix def.num_loops def.loop_id in
+  let suffix = default_fun_suffix def.num_loops def.loop_id def.loop_pos in
   (* Concatenate *)
   fname ^ suffix
 
@@ -2385,7 +2389,9 @@ let ctx_compute_fun_name (def : fun_decl) (is_trait_decl_field : bool)
 let ctx_compute_termination_measure_name (decl : fun_decl)
     (ctx : extraction_ctx) : string =
   let fname = ctx_compute_fun_name_no_suffix decl false ctx in
-  let lp_suffix = default_fun_loop_suffix decl.num_loops decl.loop_id in
+  let lp_suffix =
+    default_fun_loop_suffix decl.num_loops decl.loop_id decl.loop_pos
+  in
   (* Compute the suffix *)
   let suffix =
     match Config.backend () with
@@ -2412,7 +2418,9 @@ let ctx_compute_termination_measure_name (decl : fun_decl)
 let ctx_compute_decreases_proof_name (decl : fun_decl) (ctx : extraction_ctx) :
     string =
   let fname = ctx_compute_fun_name_no_suffix decl false ctx in
-  let lp_suffix = default_fun_loop_suffix decl.num_loops decl.loop_id in
+  let lp_suffix =
+    default_fun_loop_suffix decl.num_loops decl.loop_id decl.loop_pos
+  in
   (* Compute the suffix *)
   let suffix =
     match Config.backend () with

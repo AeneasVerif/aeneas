@@ -869,9 +869,9 @@ partial_fixpoint
 
 /- [loops::decode]: loop 1:
    Source: 'tests/src/loops.rs', lines 552:8-552:32 -/
-def decode_loop1 (dst_coeff : Std.U8) : Result Unit := do
+def decode_loop0_loop0 (dst_coeff : Std.U8) : Result Unit := do
   if dst_coeff > 32#u8
-  then decode_loop1 dst_coeff
+  then decode_loop0_loop0 dst_coeff
   else ok ()
 partial_fixpoint
 
@@ -884,7 +884,7 @@ def decode_loop0
   if i < 128#usize
   then
     let (dst_coeff, index_mut_back) ← Slice.index_mut_usize pe_dst i
-    decode_loop1 dst_coeff
+    decode_loop0_loop0 dst_coeff
     if dst_coeff > 32#u8
     then let s := index_mut_back dst_coeff
          ok (true, s)

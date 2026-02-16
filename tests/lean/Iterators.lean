@@ -55,9 +55,9 @@ def iter_range_step_by (n : Std.Usize) : Result Unit := do
 
 /- [iterators::slice_iter_mut_while]: loop 1:
    Source: 'tests/src/iterators.rs', lines 15:8-15:18 -/
-def slice_iter_mut_while_loop1 (b : Bool) : Result Unit := do
+def slice_iter_mut_while_loop0_loop0 (b : Bool) : Result Unit := do
   if b
-  then slice_iter_mut_while_loop1 true
+  then slice_iter_mut_while_loop0_loop0 true
   else ok ()
 partial_fixpoint
 
@@ -71,7 +71,7 @@ def slice_iter_mut_while_loop0
   match o with
   | none => ok (next_back it1 none)
   | some _ =>
-    slice_iter_mut_while_loop1 b
+    slice_iter_mut_while_loop0_loop0 b
     let back ← slice_iter_mut_while_loop0 false it1
     ok (next_back back o)
 partial_fixpoint
@@ -86,36 +86,35 @@ def slice_iter_mut_while
 
 /- [iterators::slice_iter_while]: loop 1:
    Source: 'tests/src/iterators.rs', lines 22:8-22:18 -/
-def slice_iter_while_loop1 (b : Bool) : Result Unit := do
+def slice_iter_while_loop0_loop0 (b : Bool) : Result Unit := do
   if b
-  then slice_iter_while_loop1 true
+  then slice_iter_while_loop0_loop0 true
   else ok ()
 partial_fixpoint
 
 /- [iterators::slice_iter_while]: loop 0:
    Source: 'tests/src/iterators.rs', lines 21:4-23:5 -/
 def slice_iter_while_loop0
-  (b : Bool) (s : Slice Std.U16) (it : core.slice.iter.Iter Std.U16) :
-  Result Unit
-  := do
+  (b : Bool) (it : core.slice.iter.Iter Std.U16) : Result Unit := do
   let (o, it1) ← core.slice.iter.IteratorSliceIter.next it
   match o with
   | none => ok ()
-  | some _ => slice_iter_while_loop1 b
-              slice_iter_while_loop0 false s it1
+  | some _ => slice_iter_while_loop0_loop0 b
+              slice_iter_while_loop0 false it1
 partial_fixpoint
 
 /- [iterators::slice_iter_while]:
    Source: 'tests/src/iterators.rs', lines 19:0-24:1 -/
 def slice_iter_while (b : Bool) (s : Slice Std.U16) : Result Unit := do
   let it ← core.slice.Slice.iter s
-  slice_iter_while_loop0 b s it
+  slice_iter_while_loop0 b it
 
 /- [iterators::slice_iter_mut_while_early_return]: loop 1:
    Source: 'tests/src/iterators.rs', lines 29:8-29:18 -/
-def slice_iter_mut_while_early_return_loop1 (b : Bool) : Result Unit := do
+def slice_iter_mut_while_early_return_loop0_loop0
+  (b : Bool) : Result Unit := do
   if b
-  then slice_iter_mut_while_early_return_loop1 true
+  then slice_iter_mut_while_early_return_loop0_loop0 true
   else ok ()
 partial_fixpoint
 
@@ -129,7 +128,7 @@ def slice_iter_mut_while_early_return_loop0
   match o with
   | none => ok (next_back it1 none)
   | some _ =>
-    slice_iter_mut_while_early_return_loop1 b
+    slice_iter_mut_while_early_return_loop0_loop0 b
     let back ← slice_iter_mut_while_early_return_loop0 false it1
     ok (next_back back o)
 partial_fixpoint
@@ -150,10 +149,10 @@ def slice_iter_mut_while_early_return
 
 /- [iterators::slice_iter_mut_while_early_return_two_bools]: loop 1:
    Source: 'tests/src/iterators.rs', lines 40:8-40:19 -/
-def slice_iter_mut_while_early_return_two_bools_loop1
+def slice_iter_mut_while_early_return_two_bools_loop0_loop0
   (b0 : Bool) : Result Unit := do
   if b0
-  then slice_iter_mut_while_early_return_two_bools_loop1 true
+  then slice_iter_mut_while_early_return_two_bools_loop0_loop0 true
   else ok ()
 partial_fixpoint
 
@@ -167,7 +166,7 @@ def slice_iter_mut_while_early_return_two_bools_loop0
   match o with
   | none => ok (next_back it1 none)
   | some _ =>
-    slice_iter_mut_while_early_return_two_bools_loop1 b0
+    slice_iter_mut_while_early_return_two_bools_loop0_loop0 b0
     if b1
     then ok (next_back it1 o)
     else
@@ -192,19 +191,19 @@ def slice_iter_mut_while_early_return_two_bools
 
 /- [iterators::slice_chunks_exact_iter]: loop 1:
    Source: 'tests/src/iterators.rs', lines 50:8-50:30 -/
-def slice_chunks_exact_iter_loop1
+def slice_chunks_exact_iter_loop0_loop0
   (iter : core.slice.iter.Iter Std.U128) : Result Unit := do
   let (o, iter1) ← core.slice.iter.IteratorSliceIter.next iter
   match o with
   | none => ok ()
-  | some _ => slice_chunks_exact_iter_loop1 iter1
+  | some _ => slice_chunks_exact_iter_loop0_loop0 iter1
 partial_fixpoint
 
 /- [iterators::slice_chunks_exact_iter]: loop 0:
    Source: 'tests/src/iterators.rs', lines 49:4-51:5 -/
 def slice_chunks_exact_iter_loop0
-  (key : Array Std.U128 128#usize) (data : Slice Std.U8)
-  (iter : core.slice.iter.ChunksExact Std.U8) :
+  (key : Array Std.U128 128#usize) (iter : core.slice.iter.ChunksExact Std.U8)
+  :
   Result Unit
   := do
   let (o, iter1) ← core.slice.iter.IteratorChunksExact.next iter
@@ -216,8 +215,8 @@ def slice_chunks_exact_iter_loop0
     let iter2 ←
       core.iter.traits.collect.IntoIterator.Blanket.into_iter
         (core.iter.traits.iterator.IteratorSliceIter Std.U128) i
-    slice_chunks_exact_iter_loop1 iter2
-    slice_chunks_exact_iter_loop0 key data iter1
+    slice_chunks_exact_iter_loop0_loop0 iter2
+    slice_chunks_exact_iter_loop0 key iter1
 partial_fixpoint
 
 /- [iterators::slice_chunks_exact_iter]:
@@ -228,7 +227,7 @@ def slice_chunks_exact_iter
   let iter ←
     core.iter.traits.collect.IntoIterator.Blanket.into_iter
       (core.iter.traits.iterator.IteratorChunksExact Std.U8) ce
-  slice_chunks_exact_iter_loop0 key data iter
+  slice_chunks_exact_iter_loop0 key iter
 
 /- [iterators::Key]
    Source: 'tests/src/iterators.rs', lines 54:0-54:24 -/
@@ -237,20 +236,18 @@ def Key := Array Std.U128 128#usize
 
 /- [iterators::key_iter_slice_iter]: loop 1:
    Source: 'tests/src/iterators.rs', lines 58:8-58:32 -/
-def key_iter_slice_iter_loop1
+def key_iter_slice_iter_loop0_loop0
   (iter : core.slice.iter.Iter Std.U128) : Result Unit := do
   let (o, iter1) ← core.slice.iter.IteratorSliceIter.next iter
   match o with
   | none => ok ()
-  | some _ => key_iter_slice_iter_loop1 iter1
+  | some _ => key_iter_slice_iter_loop0_loop0 iter1
 partial_fixpoint
 
 /- [iterators::key_iter_slice_iter]: loop 0:
    Source: 'tests/src/iterators.rs', lines 57:4-59:5 -/
 def key_iter_slice_iter_loop0
-  (key : Key) (data : Slice Std.U8) (iter : core.slice.iter.Iter Std.U8) :
-  Result Unit
-  := do
+  (key : Key) (iter : core.slice.iter.Iter Std.U8) : Result Unit := do
   let (o, iter1) ← core.slice.iter.IteratorSliceIter.next iter
   match o with
   | none => ok ()
@@ -260,8 +257,8 @@ def key_iter_slice_iter_loop0
     let iter2 ←
       core.iter.traits.collect.IntoIterator.Blanket.into_iter
         (core.iter.traits.iterator.IteratorSliceIter Std.U128) i
-    key_iter_slice_iter_loop1 iter2
-    key_iter_slice_iter_loop0 key data iter1
+    key_iter_slice_iter_loop0_loop0 iter2
+    key_iter_slice_iter_loop0 key iter1
 partial_fixpoint
 
 /- [iterators::key_iter_slice_iter]:
@@ -271,6 +268,6 @@ def key_iter_slice_iter (key : Key) (data : Slice Std.U8) : Result Unit := do
   let iter ←
     core.iter.traits.collect.IntoIterator.Blanket.into_iter
       (core.iter.traits.iterator.IteratorSliceIter Std.U8) i
-  key_iter_slice_iter_loop0 key data iter
+  key_iter_slice_iter_loop0 key iter
 
 end iterators
