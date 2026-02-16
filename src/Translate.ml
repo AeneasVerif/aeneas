@@ -1880,7 +1880,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
          custom_imports = [];
          custom_includes =
            [ types_module ] @ opaque_funs_module @ clauses_module;
-         noncomputable = has_opaque;
+         noncomputable = has_opaque && not !Config.all_computable;
        }
      in
      extract_file fun_config ctx file_info)
@@ -1913,7 +1913,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
          custom_msg = "";
          custom_imports = [];
          custom_includes = [];
-         noncomputable = has_opaque;
+         noncomputable = has_opaque && not !Config.all_computable;
        }
      in
      extract_file gen_config ctx file_info);
