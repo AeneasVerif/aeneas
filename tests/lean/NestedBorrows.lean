@@ -249,9 +249,9 @@ def next1
 
 /- [nested_borrows::iter_list_while]: loop 1:
    Source: 'tests/src/nested-borrows.rs', lines 143:8-143:18 -/
-def iter_list_while_loop1 (b : Bool) : Result Unit := do
+def iter_list_while_loop0_loop0 (b : Bool) : Result Unit := do
   if b
-  then iter_list_while_loop1 true
+  then iter_list_while_loop0_loop0 true
   else ok ()
 partial_fixpoint
 
@@ -265,7 +265,7 @@ def iter_list_while_loop0
   match o with
   | none => ok (l1, fun l2 => next1_back l2 none)
   | some t =>
-    iter_list_while_loop1 b
+    iter_list_while_loop0_loop0 b
     let back := fun t1 l2 => next1_back l2 (some t1)
     let (l2, back1) ← iter_list_while_loop0 false l1
     let back2 := fun l3 => let l4 := back1 l3
