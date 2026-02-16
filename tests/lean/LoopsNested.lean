@@ -282,7 +282,7 @@ def generate_matrix_loop0
   (key : Key) (state_base : Array Std.U8 8#usize)
   (state_work : Array Std.U8 8#usize) (coordinates : Array Std.U8 2#usize)
   (i : Std.U8) :
-  Result (Key × (Array Std.U8 8#usize) × (Array Std.U8 8#usize))
+  Result (Key × (Array Std.U8 8#usize))
   := do
   if i < 4#u8
   then
@@ -291,7 +291,7 @@ def generate_matrix_loop0
       generate_matrix_loop1 key state_base state_work a i 0#u8
     let i1 ← i + 1#u8
     generate_matrix_loop0 key1 state_base state_work1 coordinates1 i1
-  else ok (key, state_base, state_work)
+  else ok (key, state_work)
 partial_fixpoint
 
 /- [loops_nested::generate_matrix]:
@@ -305,6 +305,71 @@ def generate_matrix
   let state_base1 ← shake_init state_base
   let s ← (↑(Array.to_slice key.seed) : Result (Slice Std.U8))
   let state_base2 ← shake_append state_base1 s
-  generate_matrix_loop0 key state_base2 state_work coordinates 0#u8
+  let (key1, state_work1) ←
+    generate_matrix_loop0 key state_base2 state_work coordinates 0#u8
+  ok (key1, state_base2, state_work1)
+
+/- [loops_nested::mul_add_as_plus_e]: loop 1:
+   Source: 'tests/src/loops-nested.rs', lines 143:8-145:9 -/
+def mul_add_as_plus_e_loop1
+  (a_row_temp : alloc.vec.Vec Std.U8) (j : Std.Usize)
+  (iter1 : core.ops.range.Range Std.Usize) :
+  Result (alloc.vec.Vec Std.U8)
+  := do
+  let (o, iter2) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepUsize iter1
+  match o with
+  | none => ok a_row_temp
+  | some _ =>
+    let (_, index_mut_back) ←
+      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice Std.U8)
+        a_row_temp j
+    let a_row_temp1 := index_mut_back 0#u8
+    mul_add_as_plus_e_loop1 a_row_temp1 j iter2
+partial_fixpoint
+
+/- [loops_nested::mul_add_as_plus_e]: loop 0:
+   Source: 'tests/src/loops-nested.rs', lines 142:4-146:5 -/
+def mul_add_as_plus_e_loop0
+  (a_row_temp : alloc.vec.Vec Std.U8)
+  (iter1 : core.iter.adapters.step_by.StepBy (core.ops.range.Range Std.Usize))
+  :
+  Result Unit
+  := do
+  let (o, iter2) ←
+    core.iter.adapters.step_by.IteratorStepBy.next
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepUsize) iter1
+  match o with
+  | none => ok ()
+  | some j =>
+    let iter3 ←
+      core.iter.traits.collect.IntoIterator.Blanket.into_iter
+        (core.iter.traits.iterator.IteratorRange core.iter.range.StepUsize)
+        { start := 0#usize, «end» := 4#usize }
+    let a_row_temp1 ← mul_add_as_plus_e_loop1 a_row_temp j iter3
+    mul_add_as_plus_e_loop0 a_row_temp1 iter2
+partial_fixpoint
+
+/- [loops_nested::mul_add_as_plus_e]:
+   Source: 'tests/src/loops-nested.rs', lines 137:0-147:1 -/
+def mul_add_as_plus_e
+  (N : Std.Usize) (out : Slice Std.U16) (s : Slice Std.U16)
+  (seed_a : Array Std.U8 16#usize) :
+  Result (Slice Std.U16)
+  := do
+  let i ← 4#usize * N
+  let i1 ← i * 2#usize
+  let a_row_temp ← alloc.vec.from_elem core.clone.CloneU8 0#u8 i1
+  let i2 ← i * 2#usize
+  let _ ← alloc.vec.from_elem core.clone.CloneU8 0#u8 i2
+  let sb ←
+    core.iter.range.IteratorRange.step_by core.iter.range.StepUsize
+      { start := 0#usize, «end» := N } 8#usize
+  let iter1 ←
+    core.iter.traits.collect.IntoIterator.Blanket.into_iter
+      (core.iter.traits.iterator.IteratorStepBy
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepUsize)) sb
+  mul_add_as_plus_e_loop0 a_row_temp iter1
+  ok out
 
 end loops_nested
