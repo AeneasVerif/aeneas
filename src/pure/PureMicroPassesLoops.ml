@@ -101,8 +101,10 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
 
   let fvars, body = open_all_fun_body ctx span body in
 
-  (* Count the number of loops *)
+  (* Count the number of loops and compute the relative position of each loop *)
   let loops = ref LoopId.Set.empty in
+  let loop_pos = ref [ 0 ] in
+  let loop_id_to_pos = ref LoopId.Map.empty in
   let expr_visitor =
     object
       inherit [_] iter_expr as super
@@ -110,7 +112,15 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
       method! visit_Loop env loop =
         [%sanity_check] span (not (LoopId.Set.mem loop.loop_id !loops));
         loops := LoopId.Set.add loop.loop_id !loops;
-        super#visit_Loop env loop
+        loop_id_to_pos :=
+          LoopId.Map.add loop.loop_id (List.rev !loop_pos) !loop_id_to_pos;
+        (* Push a position index *)
+        loop_pos := 0 :: !loop_pos;
+        super#visit_Loop env loop;
+        (* Pop the last position index and increment the current position *)
+        match !loop_pos with
+        | _ :: current :: prefix -> loop_pos := (current + 1) :: prefix
+        | _ -> [%internal_error] span
     end
   in
   expr_visitor#visit_texpr () body.body;
@@ -306,6 +316,12 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
 
     [%sanity_check] def.item_meta.span (def.builtin_info = None);
 
+    let loop_pos =
+      [%unwrap_with_span] span
+        (LoopId.Map.find_opt loop.loop_id !loop_id_to_pos)
+        "Internal error: please file an issue"
+    in
+
     let loop_def : fun_decl =
       {
         def_id = def.def_id;
@@ -315,6 +331,7 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
         backend_attributes = def.backend_attributes;
         num_loops;
         loop_id = Some loop.loop_id;
+        loop_pos;
         name = def.name;
         signature = loop_sig;
         is_global_decl_body = def.is_global_decl_body;

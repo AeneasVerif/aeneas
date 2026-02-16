@@ -1627,6 +1627,23 @@ type fun_decl = {
           branching) *)
   loop_id : LoopId.id option;
       (** [Some] if this definition was generated for a loop *)
+  loop_pos : int list;
+      (** The position of this loop (empty if this is not a loop)
+
+          We use this to generate the names when extracting the definition:
+          {[
+            fn f() {
+              loop { // position [0]
+                loop {} // position [0; 0]
+                loop {} // position [0; 1]
+                loop {} // position [0; 2]
+              }
+              loop {} // position [1]
+            }
+          ]}
+
+          We used to name the loop functions with the loop id, but it's clearer
+          to use the position. *)
   name : string;
       (** We use the name only for printing purposes (for debugging): the name
           used at extraction time will be derived from the llbc_name. *)

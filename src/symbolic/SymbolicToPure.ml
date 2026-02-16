@@ -117,6 +117,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expr option) : fun_decl =
       backend_attributes;
       num_loops;
       loop_id;
+      loop_pos = [];
       name;
       signature;
       is_global_decl_body = Option.is_some def.is_global_initializer;
