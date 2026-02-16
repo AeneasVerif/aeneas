@@ -134,10 +134,10 @@ fn generate_matrix(key: &mut Key, state_base: &mut HashState, state_work: &mut H
 }
 
 /// Adapted from FrodoKEM
-fn mul_add_as_plus_e<const N : usize>(out: &mut [u16], s: &[u16], seed_a: &[u8; 16]) {
+fn mul_add_as_plus_e<const N: usize>(out: &mut [u16], s: &[u16], seed_a: &[u8; 16]) {
     let rows_at_once = 4;
     let mut a_row_temp = vec![0u8; rows_at_once * N * 2];
-    let mut a_row      = vec![0u8; rows_at_once * N * 2];
+    let mut a_row = vec![0u8; rows_at_once * N * 2];
 
     for j in (0..N).step_by(8) {
         for r in 0..rows_at_once {
