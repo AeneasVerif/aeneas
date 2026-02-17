@@ -969,11 +969,9 @@ def as_radix_minimized_loop
         do
         let _ ←
           if i1 = 0#usize
-          then do
-               let i2 ← Array.index_usize scalar i1
+          then let i2 ← Array.index_usize scalar i1
                i2 >>> 1#i32
           else
-            do
             let i2 ← Array.index_usize scalar i1
             let i3 ← i2 >>> 1#i32
             let i4 ← i2 <<< 63#i32
