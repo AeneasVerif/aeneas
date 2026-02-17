@@ -343,6 +343,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
           | Proj _ | TraitConst _ ->
               (* Being conservative here *)
               (hole, mk_holes (), false)
+          | LoopOp -> (hole, mk_holes (), false)
         end
       | FVar _ ->
           (* We consider that the full type of the function should be known,

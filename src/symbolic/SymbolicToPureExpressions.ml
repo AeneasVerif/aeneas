@@ -1787,6 +1787,7 @@ and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
       inputs = input_abs @ input_values;
       num_input_conts = List.length input_abs;
       loop_body;
+      to_rec = false;
     }
   in
   [%sanity_check] loop.span

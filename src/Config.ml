@@ -458,8 +458,8 @@ let extract_external_name_patterns = ref true
 (** *)
 let match_patterns_with_trait_decl_refs = true
 
-(** Decompose loops to recursive functions *)
-let loops_to_recursive_functions = ref true
+(** Always decompose loops to recursive functions *)
+let loops_to_recursive_functions = ref false
 
 (** Should we run the translation in parallel?
 

@@ -1139,6 +1139,7 @@ let builtin_adts () : (builtin_ty * string) list =
   | Lean ->
       [
         (TResult, "Result");
+        (TLoopResult, "LoopResult");
         (TFuel, "Nat");
         (TArray, "Array");
         (TSlice, "Slice");
@@ -1149,6 +1150,7 @@ let builtin_adts () : (builtin_ty * string) list =
   | Coq | FStar | HOL4 ->
       [
         (TResult, "result");
+        (TLoopResult, "loop_result");
         (TFuel, if backend () = HOL4 then "num" else "nat");
         (TArray, "array");
         (TSlice, "slice");
@@ -1170,6 +1172,8 @@ let builtin_variants () : (builtin_ty * VariantId.id * string) list =
       [
         (TResult, result_ok_id, "Ok");
         (TResult, result_fail_id, "Fail");
+        (TLoopResult, loop_result_continue_id, "Cont");
+        (TLoopResult, loop_result_break_id, "Done");
         (TError, error_failure_id, "Failure");
         (TError, error_out_of_fuel_id, "OutOfFuel");
         (* No Fuel::Zero on purpose *)
@@ -1179,6 +1183,8 @@ let builtin_variants () : (builtin_ty * VariantId.id * string) list =
       [
         (TResult, result_ok_id, "Ok");
         (TResult, result_fail_id, "Fail_");
+        (TLoopResult, loop_result_continue_id, "Cont");
+        (TLoopResult, loop_result_break_id, "Done");
         (TError, error_failure_id, "Failure");
         (TError, error_out_of_fuel_id, "OutOfFuel");
         (TFuel, fuel_zero_id, "O");
@@ -1189,6 +1195,8 @@ let builtin_variants () : (builtin_ty * VariantId.id * string) list =
         (TResult, result_ok_id, "ok");
         (TResult, result_fail_id, "fail");
         (TError, error_failure_id, "panic");
+        (TLoopResult, loop_result_continue_id, "cont");
+        (TLoopResult, loop_result_break_id, "done");
         (* No Fuel::Zero on purpose *)
         (* No Fuel::Succ on purpose *)
       ]
@@ -1196,6 +1204,8 @@ let builtin_variants () : (builtin_ty * VariantId.id * string) list =
       [
         (TResult, result_ok_id, "Ok");
         (TResult, result_fail_id, "Fail");
+        (TLoopResult, loop_result_continue_id, "Cont");
+        (TLoopResult, loop_result_break_id, "Done");
         (TError, error_failure_id, "Failure");
         (* No Fuel::Zero on purpose *)
         (* No Fuel::Succ on purpose *)

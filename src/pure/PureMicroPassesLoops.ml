@@ -2,9 +2,9 @@ open Pure
 open PureUtils
 open PureMicroPassesBase
 
-(** Helper for [decompose_loops]: update the occurrences of continue and break
-*)
-let update_continue_breaks (ctx : ctx) (def : fun_decl) (loop_func : texpr)
+(** Helper for [decompose_loops]: for the case when we convert a loop to a
+    recursive function, update the occurrences of continue and break. *)
+let update_rec_continue_breaks (ctx : ctx) (def : fun_decl) (loop_func : texpr)
     (constant_inputs : texpr list) (e : texpr) : texpr =
   let span = def.item_meta.span in
 
@@ -46,6 +46,84 @@ let update_continue_breaks (ctx : ctx) (def : fun_decl) (loop_func : texpr)
                 let args = constant_inputs @ args in
                 [%add_loc] mk_apps span loop_func args
             | None -> e))
+    | Lambda (pat, body) ->
+        let body = update body in
+        mk_opened_lambda span pat body
+    | Let (monadic, pat, bound, next) ->
+        let bound = update bound in
+        let next = update next in
+        mk_opened_let monadic pat bound next
+    | Switch (scrut, body) ->
+        let scrut = update scrut in
+        let body, ty =
+          match body with
+          | If (e0, e1) ->
+              let e0 = update e0 in
+              let e1 = update e1 in
+              (If (e0, e1), e0.ty)
+          | Match branches ->
+              let branches =
+                List.map
+                  (fun ({ pat; branch } : match_branch) ->
+                    { pat; branch = update branch })
+                  branches
+              in
+              let ty =
+                match branches with
+                | [] -> [%internal_error] span
+                | { branch = b; _ } :: _ -> b.ty
+              in
+              (Match branches, ty)
+        in
+        { e = Switch (scrut, body); ty }
+    | Loop _ -> [%internal_error] span
+    | StructUpdate { struct_id; init; updates } ->
+        let init = Option.map update init in
+        let updates = List.map (fun (fid, e) -> (fid, update e)) updates in
+        { e with e = StructUpdate { struct_id; init; updates } }
+    | Meta (m, e) -> mk_emeta m (update e)
+    | EError _ ->
+        let ty =
+          match try_unwrap_loop_result e.ty with
+          | None -> e.ty
+          | Some (_, break) -> mk_result_ty break
+        in
+        { e with ty }
+  in
+  update e
+
+(** Helper for [decompose_loops]: for the case when we convert a loop to a call
+    to a fixed point operator, update the occurrences of continue and break, in
+    particular to wrap them into [Result]. *)
+let update_non_rec_continue_breaks (ctx : ctx) (def : fun_decl) (input_ty : ty)
+    (output_ty : ty) (e : texpr) : texpr =
+  let span = def.item_meta.span in
+
+  let rec update (e : texpr) : texpr =
+    [%ldebug "e:\n" ^ texpr_to_string ctx e];
+    match e.e with
+    | FVar _ | BVar _ | CVar _ | Const _ -> e
+    | App _ | Qualif _ -> (
+        (* Check if this is a continue, break, or a recLoopCall *)
+        match
+          opt_destruct_loop_result_decompose_outputs ctx span ~intro_let:true e
+        with
+        | Some ({ variant_id; args; break_ty; _ }, rebind) ->
+            if variant_id = loop_result_continue_id then (
+              [%ldebug "continue expression: introducing an ok expression"];
+              let arg = mk_simpl_tuple_texpr span args in
+              rebind
+                (mk_result_ok_texpr span (mk_continue_texpr span arg output_ty)))
+            else if variant_id = loop_result_break_id then (
+              [%ldebug "break expression: introducing an ok expression"];
+              let arg = mk_simpl_tuple_texpr span args in
+              rebind
+                (mk_result_ok_texpr span (mk_break_texpr span input_ty arg)))
+            else if variant_id = loop_result_fail_id then
+              let arg = mk_simpl_tuple_texpr span args in
+              rebind (mk_result_fail_texpr span arg break_ty)
+            else [%internal_error] span
+        | _ -> e)
     | Lambda (pat, body) ->
         let body = update body in
         mk_opened_lambda span pat body
@@ -225,11 +303,48 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
       compute_loop_fun_expr loop generics_filter constant_input_tys
     in
 
-    (* Update the loop body to introduce recursive calls *)
+    (* Update the loop body to:
+       - either introduce recursive calls
+       - or introduce a call to the loop fixed point operator
+    *)
     let body =
-      update_continue_breaks ctx def loop_func
-        (List.map mk_texpr_from_fvar constant_inputs)
-        loop_body.loop_body
+      if !Config.loops_to_recursive_functions || loop.to_rec then
+        update_rec_continue_breaks ctx def loop_func
+          (List.map mk_texpr_from_fvar constant_inputs)
+          loop_body.loop_body
+      else
+        let input_ty =
+          mk_simpl_tuple_ty
+            (List.map (fun (pat : tpat) -> pat.ty) loop_body.inputs)
+        in
+        let body =
+          update_non_rec_continue_breaks ctx def input_ty output_ty
+            loop_body.loop_body
+        in
+        let input_pats = mk_simpl_tuple_pat loop_body.inputs in
+        let body = mk_closed_lambda span input_pats body in
+        let loop_op : texpr =
+          let qualif =
+            {
+              id = LoopOp;
+              generics = mk_generic_args_from_types [ input_ty; output_ty ];
+            }
+          in
+          {
+            e = Qualif qualif;
+            ty = mk_arrows [ body.ty; input_pats.ty ] (mk_result_ty output_ty);
+          }
+        in
+        let inputs =
+          List.map
+            (fun (pat : tpat) ->
+              match pat.pat with
+              | POpen (fvar, _) -> ({ e = FVar fvar.id; ty = pat.ty } : texpr)
+              | _ -> [%internal_error] span)
+            loop_body.inputs
+        in
+        [%add_loc] mk_apps span loop_op
+          [ body; mk_simpl_tuple_texpr span inputs ]
     in
 
     (* Update the inputs and close the loop body *)
@@ -2786,6 +2901,7 @@ let loops_to_recursive (ctx : ctx) (def : fun_decl) =
                     Collections.List.drop loop.num_input_conts loop.inputs;
                   num_input_conts = 0;
                   loop_body = body;
+                  to_rec = true;
                 }
               in
 

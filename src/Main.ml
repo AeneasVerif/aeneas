@@ -203,6 +203,9 @@ let () =
         " For Lean: do not insert `noncomputable section` at the top of the \
          extracted files if there are external definitions not covered by the \
          standard library." );
+      ( "-loops-to-rec",
+        Arg.Set loops_to_recursive_functions,
+        " Always extract loops to recursive functions." );
     ]
   in
 
