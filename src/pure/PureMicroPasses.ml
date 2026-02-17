@@ -292,28 +292,54 @@ let apply_passes_to_pure_fun_translations (crate : LlbcAst.crate)
       (List.map (fun (d : trait_impl) -> (d.def_id, d)) trait_impls)
   in
 
-  let mk_ctx () : ctx =
-    let _, fresh_fvar_id = FVarId.fresh_stateful_generator () in
+  let fvar_id_generator, fresh_fvar_id = FVarId.fresh_stateful_generator () in
+  let refresh_fvar_id_generator () =
+    fvar_id_generator := FVarId.generator_zero
+  in
+  let ctx =
     { crate; trans_ctx; type_decls; trait_impls; fun_decls; fresh_fvar_id }
   in
 
   (* Apply the micro-passes *)
   let apply (f : fun_decl) : pure_fun_translation =
-    let ctx = mk_ctx () in
-
     (* Apply the micro-passes *)
     let f = apply_passes_to_def ctx f in
 
     (* Decompose the loops *)
+    [%ltrace "About to apply: 'decompose_loops':\n" ^ fun_decl_to_string ctx f];
+    refresh_fvar_id_generator ();
     let f, loops = decompose_loops ctx f in
+    [%ltrace
+      "After applying: 'decompose_loops':\n"
+      ^ String.concat "\n\n" (List.map (fun_decl_to_string ctx) (f :: loops))];
 
-    (* Filter the constant inputs *)
+    (* Filter the constant *inputs¨ in the loops to simplify the calls to the loop
+       fixed-point operators *)
     let simplify f =
-      [%ltrace "About to apply: 'filter_loop_useless_inputs_outputs (pass 2)'"];
-      filter_loop_useless_inputs_outputs ~filter_constant_inputs:true ctx f
+      [%ltrace
+        "About to apply: 'filter_loop_useless_inputs':\n"
+        ^ fun_decl_to_string ctx f];
+      refresh_fvar_id_generator ();
+      let f = filter_loop_useless_inputs ctx f in
+      [%ltrace
+        "After applying 'filter_loop_useless_inputs':\n"
+        ^ fun_decl_to_string ctx f];
+      f
     in
     let f = simplify f in
     let loops = List.map simplify loops in
+
+    (* Convert the loop nodes to calls to the loop fixed-point operator *)
+    let update f =
+      [%ltrace "About to apply: 'loops_to_fixed_points'"];
+      refresh_fvar_id_generator ();
+      let f = loops_to_fixed_points ctx f in
+      [%ltrace
+        "After applying 'loops_to_fixed_points':\n" ^ fun_decl_to_string ctx f];
+      f
+    in
+    let f = update f in
+    let loops = List.map update loops in
 
     (* Decomposing the loops and filtering the inputs might have introduced
        expressions of the shape:
@@ -321,7 +347,12 @@ let apply_passes_to_pure_fun_translations (crate : LlbcAst.crate)
        We need to resimplify those. *)
     let simplify f =
       [%ltrace "About to apply: 'simplify_let_then_ok (final pass)'"];
-      simplify_let_then_ok ~ignore_loops:false ctx f
+      refresh_fvar_id_generator ();
+      let f = simplify_let_then_ok ~ignore_loops:false ctx f in
+      [%ltrace
+        "After applying 'simplify_let_then_ok (final pass)':\n"
+        ^ fun_decl_to_string ctx f];
+      f
     in
     let f = simplify f in
     let loops = List.map simplify loops in
@@ -338,6 +369,7 @@ let apply_passes_to_pure_fun_translations (crate : LlbcAst.crate)
        We do this last, because some other passes need to manipulate the
        functions *wihout* fuel and state (otherwise it messes up the
        parameter manipulations). *)
+    refresh_fvar_id_generator ();
     let trans = if !Config.use_fuel then add_fuel ctx trans else trans in
 
     trans
@@ -377,4 +409,5 @@ let apply_passes_to_pure_fun_translations (crate : LlbcAst.crate)
   let transl = add_type_annotations trans_ctx transl builtin_sigs type_decls in
 
   (* Update the "reducible" attribute *)
-  compute_reducible (mk_ctx ()) transl
+  refresh_fvar_id_generator ();
+  compute_reducible ctx transl

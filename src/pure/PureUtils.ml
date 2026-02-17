@@ -2201,6 +2201,7 @@ let open_close_all_fun_body fresh_fvar_id (span : Meta.span)
     [%sanity_check] span (not (texpr_has_bvars fbody.body));
   let fbody = f fbody in
   if !Config.sanity_checks then
+    (* TODO: this one is maybe a bit too restrictive without being really useful *)
     [%sanity_check] span (not (texpr_has_bvars fbody.body));
   let fbody = close_all_fun_body span fbody in
   if !Config.sanity_checks then
@@ -2398,7 +2399,7 @@ type decomposed_loop_result = {
     The returned continuation allows reconstructing the decomposition, in case
     we introduced a let-binding. *)
 let opt_destruct_loop_result_decompose_outputs fresh_fvar_id span
-    ~(intro_let : bool) (e : texpr) :
+    ~(intro_let : bool) ~(opened_vars : bool) (e : texpr) :
     (decomposed_loop_result * (texpr -> texpr)) option =
   let f, args = destruct_apps e in
   match f.e with
@@ -2451,7 +2452,10 @@ let opt_destruct_loop_result_decompose_outputs fresh_fvar_id span
                   in
                   let fields = List.map mk_texpr_from_fvar fvars in
                   let tuple = mk_simpl_tuple_texpr span fields in
-                  let mk_bind e' = mk_closed_let span false pat e e' in
+                  let mk_bind e' =
+                    if opened_vars then mk_opened_let false pat e e'
+                    else mk_closed_let span false pat e e'
+                  in
                   (fields, tuple, mk_bind)
                 else
                   let fields =
