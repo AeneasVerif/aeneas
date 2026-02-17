@@ -710,12 +710,15 @@ def issue270.box_get_borrow {T : Type} (x : T) : Result T := do
    Source: 'tests/src/loops.rs', lines 426:8-429:9 -/
 def issue270_loop
   (t : List (List Std.U8)) (last : List Std.U8) : Result (List Std.U8) := do
-  match t with
-  | List.Cons ht tt =>
-    let t1 ← issue270.box_get_borrow tt
-    issue270_loop t1 ht
-  | List.Nil => ok last
-partial_fixpoint
+  loop
+    (fun (t1, last1) =>
+      match t1 with
+      | List.Cons ht tt =>
+        do
+        let t2 ← issue270.box_get_borrow tt
+        ok (cont (t2, ht))
+      | List.Nil => ok (done last1))
+    (t, last)
 
 /- [loops::issue270]:
    Source: 'tests/src/loops.rs', lines 419:0-434:1 -/
