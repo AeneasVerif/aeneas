@@ -574,3 +574,6 @@ let method_names_in_impl_namespace = ref false
 
 (** *)
 let all_computable = ref false
+
+(** Do not attempt to extract loops to recursive functions *)
+let no_recursive_loops = ref false

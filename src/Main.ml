@@ -206,6 +206,9 @@ let () =
       ( "-loops-to-rec",
         Arg.Set loops_to_recursive_functions,
         " Always extract loops to recursive functions." );
+      ( "-loops-no-rec",
+        Arg.Set no_recursive_loops,
+        " Never attempt to extract loops to recursive functions." );
     ]
   in
 
@@ -419,6 +422,9 @@ let () =
     check_not !use_fuel "Options -borrow-check and -use-fuel are not compatible";
     check_not !split_files
       "Options -borrow-check and -split-files are not compatible");
+  check_arg_not
+    !loops_to_recursive_functions
+    "-loops-to-rec" !no_recursive_loops "-loops-no-rec";
 
   (* Check that the user specified a backend *)
   let _ =

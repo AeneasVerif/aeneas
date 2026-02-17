@@ -958,13 +958,15 @@ let compute_loop_input_output_rel (span : Meta.span) (ctx : ctx) (loop : loop) :
         | If _ -> super#visit_Switch env scrut switch
         | Match branches -> (
             (* If the scrutinee is a variable derived from the input (either equal
-             or smaller than an input) register that all the variables introduced
-             here are smaller *)
+               or smaller than an input) register that all the variables introduced
+               here are smaller *)
             match scrut.e with
             | FVar scrut_id -> (
                 match is_smaller_than_or_equal_to_input scrut_id with
                 | None -> super#visit_Switch env scrut switch
                 | Some i ->
+                    (* Explore the scrutinee to register all the free variables there as used *)
+                    self#visit_texpr env scrut;
                     (* Explore the branches *)
                     let visitor =
                       object
@@ -2254,6 +2256,161 @@ let reorder_loop_outputs (ctx : ctx) (def : fun_decl) =
   in
   { def with body }
 
+(** Return [true] if the input/output relation implies that the loop has a
+    termination measure.
+
+    We explore all the recursive inputs (the inputs at the [continue]s). If
+    there is an index i such that the input at index i decreases for all
+    occurrences of [continue], we have a termination measure. *)
+let loop_rel_has_termination_measure (rel : loop_rel) : bool =
+  let input_decreases (index : int) (input : texpr) : bool =
+    (* We consider two cases:
+       - the input is a free variable, in which case it needs to be smaller
+         than the original input at the same position
+       - the input is a structure projection, in which case the structure
+         must be a free variable, which should be smaller than the input at
+         the same position
+    *)
+    let smaller (fid : FVarId.id) =
+      match FVarId.Map.find_opt fid rel.smaller_than_input with
+      | None -> false
+      | Some index' ->
+          (* We need to be smaller than the input at the same position *)
+          index = index'
+    in
+    match input.e with
+    | FVar fid | App ({ e = Qualif { id = Proj _; _ }; _ }, { e = FVar fid; _ })
+      -> smaller fid
+    | _ -> false
+  in
+  List.exists
+    (fun x -> x)
+    (List.mapi (fun i -> List.for_all (input_decreases i)) rel.inputs)
+
+(** Given a loop input/output relation, does the loop satisfy the criteria to be
+    turned into a recursive function?
+
+    The criteria are:
+    - all input continuations are the identity
+    - all the output continuations, and the input continuations given to the
+      recursive calls, are exactly calls to an input continuation
+    - there is a structural termination measure
+
+    Remark: we used to require that there is at least one input continuation,
+    but replaced this with the need for termination measure (the latter case is
+    more natural, and it is to be noted that there are cases where we have a
+    termination measure but no input continuation, and cases where we have an
+    input continuation but no termination measure). *)
+let loop_satisfies_recursive_criteria_aux (ctx : ctx) (def : fun_decl)
+    (loop : loop) (rel : loop_rel) : bool =
+  let span = def.item_meta.span in
+  let input_conts = Collections.List.prefix loop.num_input_conts loop.inputs in
+  let body = loop.loop_body in
+  (* Helper: is a continuation exactly the identity? *)
+  let is_identity (x : texpr) : bool =
+    let _, pats, body = open_lambdas ctx span x in
+    match (pats, body.e) with
+    | [ { pat = POpen (fv, _); _ } ], FVar fid -> fv.id = fid
+    | _ -> false
+  in
+  let all_inputs_are_id = List.for_all is_identity input_conts in
+
+  (* Helper: is a continuation exactly a call to an input backward function? *)
+  let input_conts_fvids =
+    tpats_get_fvars (Collections.List.prefix loop.num_input_conts body.inputs)
+  in
+  let input_conts_fvids_to_index =
+    FVarId.Map.of_list
+      (List.filter_map
+         (fun x -> x)
+         (List.mapi
+            (fun i (p : tpat) ->
+              match p.pat with
+              | PIgnored -> None
+              | POpen (fvar, _) -> Some (fvar.id, i)
+              | _ ->
+                  [%craise] span ("Unexpected pattern: " ^ tpat_to_string ctx p))
+            (Collections.List.prefix loop.num_input_conts body.inputs)))
+  in
+  [%ldebug
+    "input_conts_fvids: "
+    ^ FVarId.Set.to_string None input_conts_fvids
+    ^ "\n- input_conts_fvids_to_index: "
+    ^ FVarId.Map.to_string None string_of_int input_conts_fvids_to_index
+    ^ "\n- num_input_conts: "
+    ^ string_of_int loop.num_input_conts
+    ^ "\n- num_output_values: "
+    ^ string_of_int loop.num_output_values];
+  let is_call_to_input (i : int) (x : texpr) : bool =
+    [%ldebug "- index: " ^ string_of_int i ^ "\n- x:\n" ^ texpr_to_string ctx x];
+    let _pats, body = raw_destruct_lambdas x in
+    let _, body = raw_destruct_lets body in
+    let f, _args = destruct_apps body in
+    (* TODO: we also need to check that the input backward functions
+       are not used elsewhere. We do this after the fact, through
+       a sanity check (we check that after we performed the transformation,
+       no use of the input backward functions remains), but it would be
+       better to do it before) *)
+    match f.e with
+    | FVar fid ->
+        FVarId.Set.mem fid input_conts_fvids
+        (* Also check that the order is correct - TODO: the first check
+           is subsumed by the second one *)
+        && FVarId.Map.find_opt fid input_conts_fvids_to_index = Some i
+    | _ -> false
+  in
+  let { inputs; outputs; _ } : loop_rel = rel in
+  [%ldebug "loop_rel:\n" ^ loop_rel_to_string ctx rel];
+  let input_conts = Collections.List.prefix loop.num_input_conts inputs in
+  let output_conts = Collections.List.drop loop.num_output_values outputs in
+  [%ldebug
+    "- input_conts:"
+    ^ Print.list_to_string ~sep:"\n"
+        (Print.list_to_string (texpr_to_string ctx))
+        input_conts
+    ^ "\n- output_conts:"
+    ^ Print.list_to_string ~sep:"\n"
+        (Print.list_to_string (texpr_to_string ctx))
+        output_conts];
+  let inputs_are_calls_to_inputs =
+    List.mapi (fun i -> List.map (is_call_to_input i)) input_conts
+  in
+  let outputs_are_calls_to_inputs =
+    List.mapi (fun i -> List.map (is_call_to_input i)) output_conts
+  in
+
+  (* Check whether we can find a termination measure *)
+  let has_termination_measure = loop_rel_has_termination_measure rel in
+
+  [%ldebug
+    "- has_termination_measure: "
+    ^ string_of_bool has_termination_measure
+    ^ "\n- all_inputs_are_id: "
+    ^ string_of_bool all_inputs_are_id
+    ^ "\n- inputs_are_calls_to_inputs: "
+    ^ Print.list_to_string ~sep:"\n"
+        (Print.list_to_string string_of_bool)
+        inputs_are_calls_to_inputs
+    ^ "\n- outputs_are_calls_to_inputs: "
+    ^ Print.list_to_string ~sep:"\n"
+        (Print.list_to_string string_of_bool)
+        outputs_are_calls_to_inputs];
+
+  raise (Failure "TODO");
+
+  (* *)
+  let for_all = List.for_all (List.for_all (fun x -> x)) in
+  has_termination_measure && all_inputs_are_id
+  && for_all inputs_are_calls_to_inputs
+  && for_all outputs_are_calls_to_inputs
+  && List.length input_conts = List.length output_conts
+  && not !Config.no_recursive_loops
+
+let loop_satisfies_recursive_criteria (ctx : ctx) (def : fun_decl) (loop : loop)
+    (rel : loop_rel) : bool =
+  if !Config.no_recursive_loops then false
+  else loop_satisfies_recursive_criteria_aux ctx def loop rel
+
 (** Helper for [loops_to_recursive]: actually update the continue/breaks in a
     loop body to introduce the (fake) recursive call (we use the [RecLoopCall]
     special function, as we introduce the recursive function for the loop only
@@ -2460,8 +2617,10 @@ let loops_to_recursive_update_loop_body (ctx : ctx) (def : fun_decl)
 (** Attempts to transform loops to recursive functions which receive no backward
     functions as inputs and only *output* backward functions.
 
-    We can do so if the output backward functions perform a terminal call to the
-    input backward functions, and the input backward functions are the identiy.
+    We *can* do so if the output backward functions perform a terminal call to
+    the input backward functions, and the input backward functions are the
+    identiy.
+
     For instance:
     {[
       let list_nth_mut {T : Type} (ls : List T) (i : U32) : T × (T → List T) :=
@@ -2498,7 +2657,12 @@ let loops_to_recursive_update_loop_body (ctx : ctx) (def : fun_decl)
 
     Note that we do not introduce recursive definitions for the loops *yet*: we
     first use the [RecLoopCall] function, and introduce the auxiliary
-    definitions in [decompose_loops]. *)
+    definitions in [decompose_loops].
+
+    Moreover, we do so *only* if we can find a structural termination measure
+    for the loop (i.e., we dive deeper into a recursive data structure whenever
+    we reach a continue). If this happens, it means it is natural to translate
+    the loop to a recursive function. Otherwise it is not. *)
 let loops_to_recursive (ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
 
@@ -2517,241 +2681,135 @@ let loops_to_recursive (ctx : ctx) (def : fun_decl) =
         (* A loop should always be bound by a let *)
         [%internal_error] span
     | Meta (m, e) -> mk_emeta m (update e)
-    | Let (monadic, pat, bound, next) -> (
-        let _, pat, next = open_binder ctx span pat next in
+    | Let (monadic, pat, bound, next) -> update_let monadic pat bound next
+    | Switch (scrut, switch) -> update_switch scrut switch
+  and update_switch (scrut : texpr) (switch : switch_body) : texpr =
+    (* No need to update the scrutinee *)
+    let switch =
+      match switch with
+      | If (e0, e1) -> If (update e0, update e1)
+      | Match bl ->
+          Match
+            (List.map
+               (fun ({ pat; branch } : match_branch) ->
+                 let _, pat, branch = open_binder ctx span pat branch in
+                 let branch = update branch in
+                 let pat, branch = close_binder span pat branch in
+                 { pat; branch })
+               bl)
+    in
+    [%add_loc] mk_switch span scrut switch
+  and update_let (monadic : bool) (pat : tpat) (bound : texpr) (next : texpr) :
+      texpr =
+    let _, pat, next = open_binder ctx span pat next in
 
-        (* Check if the bound expression is a loop *)
-        match bound.e with
-        | Loop loop ->
-            let _, body = open_loop_body ctx span loop.loop_body in
-            [%ldebug "body:\n" ^ loop_body_to_string ctx body];
+    (* Check if the bound expression is a loop *)
+    match bound.e with
+    | Loop loop -> update_let_loop monadic pat bound loop next
+    | _ ->
+        (* No need to update the bound expression *)
+        let next = update next in
+        mk_closed_let span monadic pat bound next
+  and update_let_loop (monadic : bool) (pat : tpat) (bound : texpr)
+      (loop : loop) (next : texpr) : texpr =
+    let _, body = open_loop_body ctx span loop.loop_body in
+    [%ldebug "body:\n" ^ loop_body_to_string ctx body];
 
-            (* Explore the loop body: we want to simplify the inner loops *)
-            let body = { body with loop_body = update body.loop_body } in
+    (* Explore the loop body: we want to simplify the inner loops *)
+    let body = { body with loop_body = update body.loop_body } in
+    let loop = { loop with loop_body = body } in
 
-            (* Analyze the body *)
-            let rel =
-              compute_loop_input_output_rel span ctx
-                { loop with loop_body = body }
+    (* Analyze the body to check whether we should turn the loop to a recursive function *)
+    let rel = compute_loop_input_output_rel span ctx loop in
+    let loop_to_rec = loop_satisfies_recursive_criteria ctx def loop rel in
+
+    if loop_to_rec then (
+      (* Transform the loop to introduce recursive calls and simplify
+         the backward functions *)
+      let break_ty = mk_simpl_tuple_ty loop.output_tys in
+      (* TODO: names for the outputs *)
+      let break_outputs =
+        List.mapi
+          (fun i ty ->
+            let id = ctx.fresh_fvar_id () in
+            let basename =
+              if i < loop.num_output_values then None else Some "back"
             in
+            ({ id; basename; ty } : fvar))
+          loop.output_tys
+      in
+      let inputs = Collections.List.drop loop.num_input_conts loop.inputs in
+      let continue_ty =
+        mk_simpl_tuple_ty (List.map (fun (e : texpr) -> e.ty) inputs)
+      in
+      let output_conts_inputs =
+        List.map
+          (fun el ->
+            match el with
+            | e :: _ ->
+                (* The function may have been simplified: if it is the case,
+                   we need to reintroduce lambdas *)
+                if is_fvar e then
+                  (* TODO: this will not work once we add support for
+                     function pointers and closures. *)
+                  let tys, _ = destruct_arrows e.ty in
+                  List.map (mk_fresh_fvar ctx) tys
+                else
+                  (* Open the lambdas *)
+                  let _, pats, _ = open_lambdas ctx span e in
+                  List.map (fun x -> fst ([%add_loc] as_pat_open span x)) pats
+            | _ -> [%internal_error] span)
+          (Collections.List.drop loop.num_output_values rel.outputs)
+      in
 
-            (* We transform the structure of the loop if:
-               - there is at least an input continuation
-               - all input continuations are the identity
-               - all the output continuations, and the input continuations given
-                 to the recursive calls, are exactly calls to an input continuation
-            *)
-            let input_conts =
-              Collections.List.prefix loop.num_input_conts loop.inputs
-            in
-            (* Helper: is a continuation exactly the identity? *)
-            let is_identity (x : texpr) : bool =
-              let _, pats, body = open_lambdas ctx span x in
-              match (pats, body.e) with
-              | [ { pat = POpen (fv, _); _ } ], FVar fid -> fv.id = fid
-              | _ -> false
-            in
-            let all_inputs_are_id = List.for_all is_identity input_conts in
+      [%ldebug
+        "output_conts_inputs:\n"
+        ^ String.concat ",\n"
+            (List.map
+               (Print.list_to_string (fvar_to_string ctx))
+               output_conts_inputs)];
 
-            (* Helper: is a continuation exactly a call to an input backward function? *)
-            let input_conts_fvids =
-              tpats_get_fvars
-                (Collections.List.prefix loop.num_input_conts body.inputs)
-            in
-            let input_conts_fvids_to_index =
-              FVarId.Map.of_list
-                (List.filter_map
-                   (fun x -> x)
-                   (List.mapi
-                      (fun i (p : tpat) ->
-                        match p.pat with
-                        | PIgnored -> None
-                        | POpen (fvar, _) -> Some (fvar.id, i)
-                        | _ -> [%internal_error] span)
-                      (Collections.List.prefix loop.num_input_conts body.inputs)))
-            in
-            [%ldebug
-              "input_conts_fvids: "
-              ^ FVarId.Set.to_string None input_conts_fvids
-              ^ "\n- input_conts_fvids_to_index: "
-              ^ FVarId.Map.to_string None string_of_int
-                  input_conts_fvids_to_index
-              ^ "\n- num_input_conts: "
-              ^ string_of_int loop.num_input_conts
-              ^ "\n- num_output_values: "
-              ^ string_of_int loop.num_output_values];
-            let is_call_to_input (i : int) (x : texpr) : bool =
-              [%ldebug
-                "- index: " ^ string_of_int i ^ "\n- x:\n"
-                ^ texpr_to_string ctx x];
-              let _pats, body = raw_destruct_lambdas x in
-              let _, body = raw_destruct_lets body in
-              let f, _args = destruct_apps body in
-              (* TODO: we also need to check that the input backward functions
-                 are not used elsewhere. We do this after the fact, through
-                 a sanity check (we check that after we performed the transformation,
-                 no use of the input backward functions remains), but it would be
-                 better to do it before) *)
-              match f.e with
-              | FVar fid ->
-                  FVarId.Set.mem fid input_conts_fvids
-                  (* Also check that the order is correct - TODO: the first check
-                     is subsumed by the second one *)
-                  && FVarId.Map.find_opt fid input_conts_fvids_to_index = Some i
-              | _ -> false
-            in
-            let { inputs; outputs; _ } : loop_rel = rel in
-            [%ldebug "loop_rel:\n" ^ loop_rel_to_string ctx rel];
-            let input_conts =
-              Collections.List.prefix loop.num_input_conts inputs
-            in
-            let output_conts =
-              Collections.List.drop loop.num_output_values outputs
-            in
-            [%ldebug
-              "- input_conts:"
-              ^ Print.list_to_string ~sep:"\n"
-                  (Print.list_to_string (texpr_to_string ctx))
-                  input_conts
-              ^ "\n- output_conts:"
-              ^ Print.list_to_string ~sep:"\n"
-                  (Print.list_to_string (texpr_to_string ctx))
-                  output_conts];
-            let inputs_are_calls_to_inputs =
-              List.mapi (fun i -> List.map (is_call_to_input i)) input_conts
-            in
-            let outputs_are_calls_to_inputs =
-              List.mapi (fun i -> List.map (is_call_to_input i)) output_conts
-            in
+      let input_conts_fvids =
+        tpats_get_fvars
+          (Collections.List.prefix loop.num_input_conts body.inputs)
+      in
 
-            [%ldebug
-              "- all_inputs_are_id: "
-              ^ string_of_bool all_inputs_are_id
-              ^ "\n- inputs_are_calls_to_inputs: "
-              ^ Print.list_to_string ~sep:"\n"
-                  (Print.list_to_string string_of_bool)
-                  inputs_are_calls_to_inputs
-              ^ "\n- outputs_are_calls_to_inputs: "
-              ^ Print.list_to_string ~sep:"\n"
-                  (Print.list_to_string string_of_bool)
-                  outputs_are_calls_to_inputs];
+      let body =
+        loops_to_recursive_update_loop_body ctx def input_conts_fvids
+          loop.num_input_conts loop.num_output_values output_conts_inputs
+          break_outputs continue_ty break_ty body
+      in
 
-            let for_all = List.for_all (List.for_all (fun x -> x)) in
-            if
-              input_conts <> [] && all_inputs_are_id
-              && for_all inputs_are_calls_to_inputs
-              && for_all outputs_are_calls_to_inputs
-              && List.length input_conts = List.length output_conts
-            then (
-              (* Transform the loop to introduce recursive calls and simplify
-                 the backward functions *)
-              let break_ty = mk_simpl_tuple_ty loop.output_tys in
-              (* TODO: names for the outputs *)
-              let break_outputs =
-                List.mapi
-                  (fun i ty ->
-                    let id = ctx.fresh_fvar_id () in
-                    let basename =
-                      if i < loop.num_output_values then None else Some "back"
-                    in
-                    ({ id; basename; ty } : fvar))
-                  loop.output_tys
-              in
-              let inputs =
-                Collections.List.drop loop.num_input_conts loop.inputs
-              in
-              let continue_ty =
-                mk_simpl_tuple_ty (List.map (fun (e : texpr) -> e.ty) inputs)
-              in
-              let output_conts_inputs =
-                List.map
-                  (fun el ->
-                    match el with
-                    | e :: _ ->
-                        (* The function may have been simplified: if it is the case,
-                           we need to reintroduce lambdas *)
-                        if is_fvar e then
-                          (* TODO: this will not work once we add support for
-                             function pointers and closures. *)
-                          let tys, _ = destruct_arrows e.ty in
-                          List.map (mk_fresh_fvar ctx) tys
-                        else
-                          (* Open the lambdas *)
-                          let _, pats, _ = open_lambdas ctx span e in
-                          List.map
-                            (fun x -> fst ([%add_loc] as_pat_open span x))
-                            pats
-                    | _ -> [%internal_error] span)
-                  (Collections.List.drop loop.num_output_values rel.outputs)
-              in
+      (* Check that the body doesn't contain uses of the input continuations anymore *)
+      [%sanity_check] span
+        (let fvars = texpr_get_fvars body.loop_body in
+         FVarId.Set.disjoint input_conts_fvids fvars);
 
-              [%ldebug
-                "output_conts_inputs:\n"
-                ^ String.concat ",\n"
-                    (List.map
-                       (Print.list_to_string (fvar_to_string ctx))
-                       output_conts_inputs)];
+      let loop =
+        {
+          loop with
+          output_tys = loop.output_tys;
+          num_output_values = loop.num_output_values;
+          inputs = Collections.List.drop loop.num_input_conts loop.inputs;
+          num_input_conts = 0;
+          loop_body = body;
+          to_rec = true;
+        }
+      in
 
-              let body =
-                update_loop_body input_conts_fvids loop.num_input_conts
-                  loop.num_output_values output_conts_inputs break_outputs
-                  continue_ty break_ty body
-              in
+      let loop : texpr =
+        { e = Loop loop; ty = mk_result_ty (mk_simpl_tuple_ty loop.output_tys) }
+      in
 
-              (* Check that the body doesn't contain uses of the input continuations anymore *)
-              [%sanity_check] span
-                (let fvars = texpr_get_fvars body.loop_body in
-                 FVarId.Set.disjoint input_conts_fvids fvars);
+      [%ldebug "loop:\n" ^ texpr_to_string ctx loop];
 
-              let loop =
-                {
-                  loop with
-                  output_tys = loop.output_tys;
-                  num_output_values = loop.num_output_values;
-                  inputs =
-                    Collections.List.drop loop.num_input_conts loop.inputs;
-                  num_input_conts = 0;
-                  loop_body = body;
-                  to_rec = true;
-                }
-              in
-
-              let loop : texpr =
-                {
-                  e = Loop loop;
-                  ty = mk_result_ty (mk_simpl_tuple_ty loop.output_tys);
-                }
-              in
-
-              [%ldebug "loop:\n" ^ texpr_to_string ctx loop];
-
-              (* Bind the loop *)
-              mk_closed_let span monadic pat loop next)
-            else
-              (* Do not apply any transformation *)
-              let loop = { loop with loop_body = close_loop_body span body } in
-              let bound = { bound with e = Loop loop } in
-              mk_closed_let span monadic pat bound next
-        | _ ->
-            (* No need to update the bound expression *)
-            let next = update next in
-            mk_closed_let span monadic pat bound next)
-    | Switch (scrut, switch) ->
-        (* No need to update the scrutinee *)
-        let switch =
-          match switch with
-          | If (e0, e1) -> If (update e0, update e1)
-          | Match bl ->
-              Match
-                (List.map
-                   (fun ({ pat; branch } : match_branch) ->
-                     let _, pat, branch = open_binder ctx span pat branch in
-                     let branch = update branch in
-                     let pat, branch = close_binder span pat branch in
-                     { pat; branch })
-                   bl)
-        in
-        [%add_loc] mk_switch span scrut switch
+      (* Bind the loop *)
+      mk_closed_let span monadic pat loop next)
+    else
+      (* Do not apply any transformation *)
+      let loop = { loop with loop_body = close_loop_body span body } in
+      let bound = { bound with e = Loop loop } in
+      mk_closed_let span monadic pat bound next
   in
   let body =
     Option.map
