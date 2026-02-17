@@ -1390,7 +1390,9 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open a box for the next expression *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* Print the next expression *)
-  extract_texpr span ctx fmt ~inside:false ~inside_do:wrap_in_do_od next_e;
+  extract_texpr span ctx fmt ~inside:false
+    ~inside_do:(wrap_in_do_od || inside_do)
+    next_e;
   (* Close the box for the next expression *)
   F.pp_close_box fmt ();
 
