@@ -2308,7 +2308,7 @@ let loop_satisfies_recursive_criteria_aux (ctx : ctx) (def : fun_decl)
   let body = loop.loop_body in
   (* Helper: is a continuation exactly the identity? *)
   let is_identity (x : texpr) : bool =
-    let _, pats, body = open_lambdas ctx span x in
+    let pats, body = raw_destruct_lambdas x in
     match (pats, body.e) with
     | [ { pat = POpen (fv, _); _ } ], FVar fid -> fv.id = fid
     | _ -> false
@@ -2396,8 +2396,6 @@ let loop_satisfies_recursive_criteria_aux (ctx : ctx) (def : fun_decl)
         (Print.list_to_string string_of_bool)
         outputs_are_calls_to_inputs];
 
-  raise (Failure "TODO");
-
   (* *)
   let for_all = List.for_all (List.for_all (fun x -> x)) in
   has_termination_measure && all_inputs_are_id
@@ -2432,9 +2430,8 @@ let loops_to_recursive_update_loop_body (ctx : ctx) (def : fun_decl)
         update_app_or_qualif e
     | Let (monadic, pat, bound, next) ->
         (* No need to update the bound expression *)
-        let _, pat, next = open_binder ctx span pat next in
         let next = update next in
-        mk_closed_let span monadic pat bound next
+        mk_opened_let monadic pat bound next
     | Switch (scrut, switch) ->
         (* No need to update the scrutinee *)
         let switch =
@@ -2444,9 +2441,7 @@ let loops_to_recursive_update_loop_body (ctx : ctx) (def : fun_decl)
               let branches =
                 List.map
                   (fun ({ pat; branch } : match_branch) ->
-                    let _, pat, branch = open_binder ctx span pat branch in
                     let branch = update branch in
-                    let pat, branch = close_binder span pat branch in
                     { pat; branch })
                   branches
               in
@@ -2458,7 +2453,7 @@ let loops_to_recursive_update_loop_body (ctx : ctx) (def : fun_decl)
     (* This might be a break or a continue *)
     match
       opt_destruct_loop_result_decompose_outputs ctx span ~intro_let:true
-        ~opened_vars:false e
+        ~opened_vars:true e
     with
     | None -> e
     | Some ({ variant_id; args = outputs; _ }, rebind) ->
@@ -2484,16 +2479,16 @@ let loops_to_recursive_update_loop_body (ctx : ctx) (def : fun_decl)
             let arg = mk_texpr_from_fvar fv in
             let pat = mk_tpat_from_fvar None fv in
             let app = [%add_loc] mk_app span e arg in
-            mk_closed_lambda span pat app
+            mk_opened_lambda span pat app
           else e
         in
-        let _, lam_pats, body = open_lambdas ctx span e in
-        let lets, body = open_lets ctx span body in
+        let lam_pats, body = raw_destruct_lambdas e in
+        let lets, body = raw_destruct_lets body in
         let _, args = destruct_apps body in
         match args with
         | [ arg ] ->
-            mk_closed_lambdas span lam_pats
-              (mk_closed_heterogeneous_lets span lets arg)
+            mk_opened_lambdas span lam_pats
+              (mk_opened_heterogeneous_lets lets arg)
         | _ -> [%internal_error] span
       in
       let values, backl = Collections.List.split_at outputs num_output_values in
@@ -2533,21 +2528,21 @@ let loops_to_recursive_update_loop_body (ctx : ctx) (def : fun_decl)
           "- input: " ^ texpr_to_string ctx input ^ "\n- back: "
           ^ fvar_to_string ctx back ^ "\n- back_inputs: "
           ^ Print.list_to_string (fvar_to_string ctx) back_inputs];
-        let _, lam_pats, body = open_lambdas ctx span input in
-        let let_pats, body = open_lets ctx span body in
+        let lam_pats, body = raw_destruct_lambdas input in
+        let let_pats, body = raw_destruct_lets body in
         let f, args = destruct_apps body in
         match (f.e, lam_pats, args) with
         | FVar _, [ pat ], [ arg ] ->
             let back_inputs_el = List.map mk_texpr_from_fvar back_inputs in
             let back = mk_texpr_from_fvar back in
-            let e = mk_closed_heterogeneous_lets span let_pats arg in
+            let e = mk_opened_heterogeneous_lets let_pats arg in
             let e =
-              mk_closed_let span false pat
+              mk_opened_let false pat
                 ([%add_loc] mk_apps span back back_inputs_el)
                 e
             in
             let back_inputs = List.map (mk_tpat_from_fvar None) back_inputs in
-            mk_closed_lambdas span back_inputs e
+            mk_opened_lambdas span back_inputs e
         | _ -> [%internal_error] span
       in
 
@@ -2588,12 +2583,12 @@ let loops_to_recursive_update_loop_body (ctx : ctx) (def : fun_decl)
       in
       let output = rebind (mk_break_texpr span continue_ty outputs) in
       let e =
-        mk_closed_lets span false
+        mk_opened_lets false
           (List.combine (List.map (mk_tpat_from_fvar None) backl) updated_backl)
           output
       in
       let e =
-        mk_closed_let span true
+        mk_opened_let true
           (mk_simpl_tuple_pat (List.map (mk_tpat_from_fvar None) break_outputs))
           call e
       in
@@ -2606,7 +2601,6 @@ let loops_to_recursive_update_loop_body (ctx : ctx) (def : fun_decl)
 
   let inputs = Collections.List.drop num_input_conts body.inputs in
   let body = { inputs; loop_body = update body.loop_body } in
-  let body = close_loop_body span body in
   (* Check that all the input continuations disappeared from the loop body *)
   let fids = texpr_get_fvars body.loop_body in
   [%sanity_check] span
@@ -2663,163 +2657,120 @@ let loops_to_recursive_update_loop_body (ctx : ctx) (def : fun_decl)
     for the loop (i.e., we dive deeper into a recursive data structure whenever
     we reach a continue). If this happens, it means it is natural to translate
     the loop to a recursive function. Otherwise it is not. *)
-let loops_to_recursive (ctx : ctx) (def : fun_decl) =
+let loops_to_recursive_visitor (ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
+  object (self)
+    inherit [_] map_expr as super
 
-  let rec update (e : texpr) : texpr =
-    match e.e with
-    | FVar _
-    | BVar _
-    | CVar _
-    | Const _
-    | Lambda _
-    | App _
-    | Qualif _
-    | StructUpdate _
-    | EError _ -> e
-    | Loop _ ->
-        (* A loop should always be bound by a let *)
-        [%internal_error] span
-    | Meta (m, e) -> mk_emeta m (update e)
-    | Let (monadic, pat, bound, next) -> update_let monadic pat bound next
-    | Switch (scrut, switch) -> update_switch scrut switch
-  and update_switch (scrut : texpr) (switch : switch_body) : texpr =
-    (* No need to update the scrutinee *)
-    let switch =
-      match switch with
-      | If (e0, e1) -> If (update e0, update e1)
-      | Match bl ->
-          Match
-            (List.map
-               (fun ({ pat; branch } : match_branch) ->
-                 let _, pat, branch = open_binder ctx span pat branch in
-                 let branch = update branch in
-                 let pat, branch = close_binder span pat branch in
-                 { pat; branch })
-               bl)
-    in
-    [%add_loc] mk_switch span scrut switch
-  and update_let (monadic : bool) (pat : tpat) (bound : texpr) (next : texpr) :
-      texpr =
-    let _, pat, next = open_binder ctx span pat next in
+    method! visit_Loop _ _ =
+      (* A loop should always be bound by a let *)
+      [%internal_error] span
 
-    (* Check if the bound expression is a loop *)
-    match bound.e with
-    | Loop loop -> update_let_loop monadic pat bound loop next
-    | _ ->
-        (* No need to update the bound expression *)
-        let next = update next in
-        mk_closed_let span monadic pat bound next
-  and update_let_loop (monadic : bool) (pat : tpat) (bound : texpr)
-      (loop : loop) (next : texpr) : texpr =
-    let _, body = open_loop_body ctx span loop.loop_body in
-    [%ldebug "body:\n" ^ loop_body_to_string ctx body];
+    method! visit_Let env monadic pat bound next =
+      match bound.e with
+      | Loop loop -> (self#update_let_loop monadic pat bound loop next).e
+      | _ -> super#visit_Let env monadic pat bound next
 
-    (* Explore the loop body: we want to simplify the inner loops *)
-    let body = { body with loop_body = update body.loop_body } in
-    let loop = { loop with loop_body = body } in
+    method update_let_loop (monadic : bool) (pat : tpat) (bound : texpr)
+        (loop : loop) (next : texpr) : texpr =
+      [%ldebug "loop:\n" ^ loop_to_string ctx loop];
+      (* Explore the loop body: we want to simplify the inner loops *)
+      let loop = self#visit_loop () loop in
 
-    (* Analyze the body to check whether we should turn the loop to a recursive function *)
-    let rel = compute_loop_input_output_rel span ctx loop in
-    let loop_to_rec = loop_satisfies_recursive_criteria ctx def loop rel in
+      (* Analyze the body to check whether we should turn the loop to a recursive function *)
+      let rel = compute_loop_input_output_rel span ctx loop in
+      let loop_to_rec = loop_satisfies_recursive_criteria ctx def loop rel in
 
-    if loop_to_rec then (
-      (* Transform the loop to introduce recursive calls and simplify
+      if loop_to_rec then (
+        (* Transform the loop to introduce recursive calls and simplify
          the backward functions *)
-      let break_ty = mk_simpl_tuple_ty loop.output_tys in
-      (* TODO: names for the outputs *)
-      let break_outputs =
-        List.mapi
-          (fun i ty ->
-            let id = ctx.fresh_fvar_id () in
-            let basename =
-              if i < loop.num_output_values then None else Some "back"
-            in
-            ({ id; basename; ty } : fvar))
-          loop.output_tys
-      in
-      let inputs = Collections.List.drop loop.num_input_conts loop.inputs in
-      let continue_ty =
-        mk_simpl_tuple_ty (List.map (fun (e : texpr) -> e.ty) inputs)
-      in
-      let output_conts_inputs =
-        List.map
-          (fun el ->
-            match el with
-            | e :: _ ->
-                (* The function may have been simplified: if it is the case,
-                   we need to reintroduce lambdas *)
-                if is_fvar e then
-                  (* TODO: this will not work once we add support for
+        let break_ty = mk_simpl_tuple_ty loop.output_tys in
+        (* TODO: names for the outputs *)
+        let break_outputs =
+          List.mapi
+            (fun i ty ->
+              let id = ctx.fresh_fvar_id () in
+              let basename =
+                if i < loop.num_output_values then None else Some "back"
+              in
+              ({ id; basename; ty } : fvar))
+            loop.output_tys
+        in
+        let inputs = Collections.List.drop loop.num_input_conts loop.inputs in
+        let continue_ty =
+          mk_simpl_tuple_ty (List.map (fun (e : texpr) -> e.ty) inputs)
+        in
+        let output_conts_inputs =
+          List.map
+            (fun el ->
+              match el with
+              | e :: _ ->
+                  (* The function may have been simplified: if it is the case,
+                      we need to reintroduce lambdas *)
+                  if is_fvar e then
+                    (* TODO: this will not work once we add support for
                      function pointers and closures. *)
-                  let tys, _ = destruct_arrows e.ty in
-                  List.map (mk_fresh_fvar ctx) tys
-                else
-                  (* Open the lambdas *)
-                  let _, pats, _ = open_lambdas ctx span e in
-                  List.map (fun x -> fst ([%add_loc] as_pat_open span x)) pats
-            | _ -> [%internal_error] span)
-          (Collections.List.drop loop.num_output_values rel.outputs)
-      in
+                    let tys, _ = destruct_arrows e.ty in
+                    List.map (mk_fresh_fvar ctx) tys
+                  else
+                    (* Destruct the lambdas *)
+                    let pats, _ = raw_destruct_lambdas e in
+                    List.map (fun x -> fst ([%add_loc] as_pat_open span x)) pats
+              | _ -> [%internal_error] span)
+            (Collections.List.drop loop.num_output_values rel.outputs)
+        in
 
-      [%ldebug
-        "output_conts_inputs:\n"
-        ^ String.concat ",\n"
-            (List.map
-               (Print.list_to_string (fvar_to_string ctx))
-               output_conts_inputs)];
+        [%ldebug
+          "output_conts_inputs:\n"
+          ^ String.concat ",\n"
+              (List.map
+                 (Print.list_to_string (fvar_to_string ctx))
+                 output_conts_inputs)];
 
-      let input_conts_fvids =
-        tpats_get_fvars
-          (Collections.List.prefix loop.num_input_conts body.inputs)
-      in
+        let input_conts_fvids =
+          tpats_get_fvars
+            (Collections.List.prefix loop.num_input_conts loop.loop_body.inputs)
+        in
 
-      let body =
-        loops_to_recursive_update_loop_body ctx def input_conts_fvids
-          loop.num_input_conts loop.num_output_values output_conts_inputs
-          break_outputs continue_ty break_ty body
-      in
+        let body =
+          loops_to_recursive_update_loop_body ctx def input_conts_fvids
+            loop.num_input_conts loop.num_output_values output_conts_inputs
+            break_outputs continue_ty break_ty loop.loop_body
+        in
 
-      (* Check that the body doesn't contain uses of the input continuations anymore *)
-      [%sanity_check] span
-        (let fvars = texpr_get_fvars body.loop_body in
-         FVarId.Set.disjoint input_conts_fvids fvars);
+        (* Check that the body doesn't contain uses of the input continuations anymore *)
+        [%sanity_check] span
+          (let fvars = texpr_get_fvars body.loop_body in
+           FVarId.Set.disjoint input_conts_fvids fvars);
 
-      let loop =
-        {
-          loop with
-          output_tys = loop.output_tys;
-          num_output_values = loop.num_output_values;
-          inputs = Collections.List.drop loop.num_input_conts loop.inputs;
-          num_input_conts = 0;
-          loop_body = body;
-          to_rec = true;
-        }
-      in
+        let loop =
+          {
+            loop with
+            output_tys = loop.output_tys;
+            num_output_values = loop.num_output_values;
+            inputs = Collections.List.drop loop.num_input_conts loop.inputs;
+            num_input_conts = 0;
+            loop_body = body;
+            to_rec = true;
+          }
+        in
 
-      let loop : texpr =
-        { e = Loop loop; ty = mk_result_ty (mk_simpl_tuple_ty loop.output_tys) }
-      in
+        let loop : texpr =
+          {
+            e = Loop loop;
+            ty = mk_result_ty (mk_simpl_tuple_ty loop.output_tys);
+          }
+        in
 
-      [%ldebug "loop:\n" ^ texpr_to_string ctx loop];
+        [%ldebug "loop:\n" ^ texpr_to_string ctx loop];
 
-      (* Bind the loop *)
-      mk_closed_let span monadic pat loop next)
-    else
-      (* Do not apply any transformation *)
-      let loop = { loop with loop_body = close_loop_body span body } in
-      let bound = { bound with e = Loop loop } in
-      mk_closed_let span monadic pat bound next
-  in
-  let body =
-    Option.map
-      (fun body ->
-        let _, body = open_fun_body ctx span body in
-        let body = { body with body = update body.body } in
-        close_fun_body span body)
-      def.body
-  in
-  { def with body }
+        (* Bind the loop *)
+        mk_opened_let monadic pat loop next)
+      else (* Do not apply any transformation *)
+        mk_opened_let monadic pat { bound with e = Loop loop } next
+  end
+
+let loops_to_recursive = lift_expr_map_visitor loops_to_recursive_visitor
 
 (** Retrieve the loop definitions from the function definition.
 

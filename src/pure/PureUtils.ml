@@ -1750,6 +1750,12 @@ let mk_opened_lets (monadic : bool) (lets : (tpat * texpr) list)
     (fun (pat, value) (e : texpr) -> mk_opened_let monadic pat value e)
     lets next_e
 
+let mk_opened_heterogeneous_lets (lets : (bool * tpat * texpr) list)
+    (next_e : texpr) : texpr =
+  List.fold_right
+    (fun (monadic, pat, value) (e : texpr) -> mk_opened_let monadic pat value e)
+    lets next_e
+
 (** This helper does not close the binder *)
 let mk_opened_checked_let file line span (monadic : bool) (lv : tpat)
     (re : texpr) (next_e : texpr) : texpr =
