@@ -449,7 +449,7 @@ def loop.spec {α : Type u} {β : Type v}
   [wf : WellFoundedRelation α]
   (inv : α → Prop)
   (post : β → Prop)
-  (body : α → Result (LoopResult α β)) (x : α)
+  (body : α → Result (ControlFlow α β)) (x : α)
   (hBody :
     ∀ x, body x ⦃ r =>
       match r with
