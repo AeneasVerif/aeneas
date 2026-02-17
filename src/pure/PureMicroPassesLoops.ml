@@ -2254,6 +2254,209 @@ let reorder_loop_outputs (ctx : ctx) (def : fun_decl) =
   in
   { def with body }
 
+(** Helper for [loops_to_recursive]: actually update the continue/breaks in a
+    loop body to introduce the (fake) recursive call (we use the [RecLoopCall]
+    special function, as we introduce the recursive function for the loop only
+    in a later pass). *)
+let loops_to_recursive_update_loop_body (ctx : ctx) (def : fun_decl)
+    (input_conts_fids : FVarId.Set.t) (num_input_conts : int)
+    (num_output_values : int) (output_conts_inputs : fvar list list)
+    (break_outputs : fvar list) (continue_ty : ty) (break_ty : ty)
+    (body : loop_body) : loop_body =
+  let span = def.item_meta.span in
+  let rec update (e : texpr) : texpr =
+    match e.e with
+    | FVar _ | BVar _ | CVar _ | Const _ | Lambda _ | StructUpdate _ | Loop _ ->
+        (* Shouldn't happen *)
+        [%internal_error] span
+    | EError _ -> e
+    | App _ | Qualif _ ->
+        (* This might be a break or a continue *)
+        update_app_or_qualif e
+    | Let (monadic, pat, bound, next) ->
+        (* No need to update the bound expression *)
+        let _, pat, next = open_binder ctx span pat next in
+        let next = update next in
+        mk_closed_let span monadic pat bound next
+    | Switch (scrut, switch) ->
+        (* No need to update the scrutinee *)
+        let switch =
+          match switch with
+          | If (e0, e1) -> If (update e0, update e1)
+          | Match branches ->
+              let branches =
+                List.map
+                  (fun ({ pat; branch } : match_branch) ->
+                    let _, pat, branch = open_binder ctx span pat branch in
+                    let branch = update branch in
+                    let pat, branch = close_binder span pat branch in
+                    { pat; branch })
+                  branches
+              in
+              Match branches
+        in
+        [%add_loc] mk_switch span scrut switch
+    | Meta (m, e) -> mk_emeta m (update e)
+  and update_app_or_qualif (e : texpr) : texpr =
+    (* This might be a break or a continue *)
+    match
+      opt_destruct_loop_result_decompose_outputs ctx span ~intro_let:true
+        ~opened_vars:false e
+    with
+    | None -> e
+    | Some ({ variant_id; args = outputs; _ }, rebind) ->
+        update_loop_break_continue variant_id outputs rebind
+  and update_loop_break_continue (variant_id : variant_id)
+      (outputs : texpr list) (rebind : texpr -> texpr) : texpr =
+    if variant_id = loop_result_break_id then
+      (* Update the backward functions.
+
+           We simply remove the call to the input backward function. *)
+      let update_back (e : texpr) =
+        [%ldebug "- e:\n" ^ texpr_to_string ctx e];
+        (* It can happen that we directly call the backward function,
+             which is thus not a lambda. If this happens, we update it
+             so that it matches the more general case.
+
+             TODO: this will not work once we add support for
+             function pointers and closures. *)
+        let e =
+          if is_fvar e then
+            let arg_ty, _ = destruct_arrow span e.ty in
+            let fv = mk_fresh_fvar ctx arg_ty in
+            let arg = mk_texpr_from_fvar fv in
+            let pat = mk_tpat_from_fvar None fv in
+            let app = [%add_loc] mk_app span e arg in
+            mk_closed_lambda span pat app
+          else e
+        in
+        let _, lam_pats, body = open_lambdas ctx span e in
+        let lets, body = open_lets ctx span body in
+        let _, args = destruct_apps body in
+        match args with
+        | [ arg ] ->
+            mk_closed_lambdas span lam_pats
+              (mk_closed_heterogeneous_lets span lets arg)
+        | _ -> [%internal_error] span
+      in
+      let values, backl = Collections.List.split_at outputs num_output_values in
+      let backl = List.map update_back backl in
+      let outputs = mk_simpl_tuple_texpr span (values @ backl) in
+      rebind (mk_break_texpr span continue_ty outputs)
+    else if variant_id = loop_result_continue_id then (
+      (* Remove the continuations *)
+      let input_backl, input_values =
+        Collections.List.split_at outputs num_input_conts
+      in
+      let inputs = mk_simpl_tuple_texpr span input_values in
+      (* Replace the [continue] with a call to RecLoopCall *)
+      let call = [%add_loc] mk_rec_loop_call_texpr span inputs break_ty in
+      (* Bind the outputs *)
+      let output_values, output_backl =
+        Collections.List.split_at break_outputs num_output_values
+      in
+
+      [%ldebug
+        let el_to_string el =
+          String.concat "\n" (List.map (texpr_to_string ctx) el)
+        in
+        let fv_to_string el =
+          String.concat "\n" (List.map (fvar_to_string ctx) el)
+        in
+        "- input_values:\n" ^ el_to_string input_values ^ "\n- input_backl:\n"
+        ^ el_to_string input_backl ^ "\n- output_values:\n"
+        ^ fv_to_string output_values ^ "\n- output_backl:\n"
+        ^ fv_to_string output_backl];
+
+      (* Introduce the backward functions *)
+      [%sanity_check] span (List.length input_backl = List.length output_backl);
+      let update_back (input : texpr) (back : fvar) (back_inputs : fvar list) :
+          texpr =
+        [%ldebug
+          "- input: " ^ texpr_to_string ctx input ^ "\n- back: "
+          ^ fvar_to_string ctx back ^ "\n- back_inputs: "
+          ^ Print.list_to_string (fvar_to_string ctx) back_inputs];
+        let _, lam_pats, body = open_lambdas ctx span input in
+        let let_pats, body = open_lets ctx span body in
+        let f, args = destruct_apps body in
+        match (f.e, lam_pats, args) with
+        | FVar _, [ pat ], [ arg ] ->
+            let back_inputs_el = List.map mk_texpr_from_fvar back_inputs in
+            let back = mk_texpr_from_fvar back in
+            let e = mk_closed_heterogeneous_lets span let_pats arg in
+            let e =
+              mk_closed_let span false pat
+                ([%add_loc] mk_apps span back back_inputs_el)
+                e
+            in
+            let back_inputs = List.map (mk_tpat_from_fvar None) back_inputs in
+            mk_closed_lambdas span back_inputs e
+        | _ -> [%internal_error] span
+      in
+
+      [%ldebug
+        let el_to_string el =
+          String.concat "\n" (List.map (texpr_to_string ctx) el)
+        in
+        let fv_to_string el =
+          String.concat "\n" (List.map (fvar_to_string ctx) el)
+        in
+        "- input_backl (length: "
+        ^ string_of_int (List.length input_backl)
+        ^ "):\n" ^ el_to_string input_backl ^ "\n- output_backl (length: "
+        ^ string_of_int (List.length output_backl)
+        ^ "):\n" ^ fv_to_string output_backl
+        ^ "\n- output_conts_inputs (length: "
+        ^ string_of_int (List.length output_conts_inputs)
+        ^ "):\n"
+        ^ Print.list_to_string
+            (Print.list_to_string (fvar_to_string ctx))
+            output_conts_inputs];
+
+      let updated_backl =
+        Collections.List.map3 update_back input_backl output_backl
+          output_conts_inputs
+      in
+      let backl =
+        List.map
+          (fun (e : texpr) ->
+            let id = ctx.fresh_fvar_id () in
+            let fv : fvar = { id; ty = e.ty; basename = Some "back" } in
+            fv)
+          updated_backl
+      in
+      let outputs =
+        mk_simpl_tuple_texpr span
+          (List.map mk_texpr_from_fvar (output_values @ backl))
+      in
+      let output = rebind (mk_break_texpr span continue_ty outputs) in
+      let e =
+        mk_closed_lets span false
+          (List.combine (List.map (mk_tpat_from_fvar None) backl) updated_backl)
+          output
+      in
+      let e =
+        mk_closed_let span true
+          (mk_simpl_tuple_pat (List.map (mk_tpat_from_fvar None) break_outputs))
+          call e
+      in
+      e)
+    else (
+      [%sanity_check] span (variant_id = loop_result_fail_id);
+      let arg = mk_simpl_tuple_texpr span outputs in
+      mk_loop_result_fail_texpr span continue_ty break_ty arg)
+  in
+
+  let inputs = Collections.List.drop num_input_conts body.inputs in
+  let body = { inputs; loop_body = update body.loop_body } in
+  let body = close_loop_body span body in
+  (* Check that all the input continuations disappeared from the loop body *)
+  let fids = texpr_get_fvars body.loop_body in
+  [%sanity_check] span
+    (FVarId.Set.is_empty (FVarId.Set.inter fids input_conts_fids));
+  (* *)
+  body
+
 (** Attempts to transform loops to recursive functions which receive no backward
     functions as inputs and only *output* backward functions.
 
@@ -2298,223 +2501,6 @@ let reorder_loop_outputs (ctx : ctx) (def : fun_decl) =
     definitions in [decompose_loops]. *)
 let loops_to_recursive (ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
-
-  (* Helper to update the continue/breaks in a loop body. *)
-  let update_loop_body (input_conts_fids : FVarId.Set.t) (num_input_conts : int)
-      (num_output_values : int) (output_conts_inputs : fvar list list)
-      (break_outputs : fvar list) (continue_ty : ty) (break_ty : ty)
-      (body : loop_body) : loop_body =
-    let rec update (e : texpr) : texpr =
-      match e.e with
-      | FVar _ | BVar _ | CVar _ | Const _ | Lambda _ | StructUpdate _ | Loop _
-        ->
-          (* Shouldn't happen *)
-          [%internal_error] span
-      | EError _ -> e
-      | App _ | Qualif _ ->
-          (* This might be a break or a continue *)
-          begin
-            match
-              opt_destruct_loop_result_decompose_outputs ctx span
-                ~intro_let:true ~opened_vars:false e
-            with
-            | None -> e
-            | Some ({ variant_id; args = outputs; _ }, rebind) ->
-                if variant_id = loop_result_break_id then
-                  (* Update the backward functions.
-
-                     We simply remove the call to the input backward function.
-                  *)
-                  let update_back (e : texpr) =
-                    [%ldebug "- e:\n" ^ texpr_to_string ctx e];
-                    (* It can happen that we directly call the backward function,
-                       which is thus not a lambda. If this happens, we update it
-                       so that it matches the more general case.
-
-                       TODO: this will not work once we add support for
-                       function pointers and closures.
-                    *)
-                    let e =
-                      if is_fvar e then
-                        let arg_ty, _ = destruct_arrow span e.ty in
-                        let fv = mk_fresh_fvar ctx arg_ty in
-                        let arg = mk_texpr_from_fvar fv in
-                        let pat = mk_tpat_from_fvar None fv in
-                        let app = [%add_loc] mk_app span e arg in
-                        mk_closed_lambda span pat app
-                      else e
-                    in
-                    let _, lam_pats, body = open_lambdas ctx span e in
-                    let lets, body = open_lets ctx span body in
-                    let _, args = destruct_apps body in
-                    match args with
-                    | [ arg ] ->
-                        mk_closed_lambdas span lam_pats
-                          (mk_closed_heterogeneous_lets span lets arg)
-                    | _ -> [%internal_error] span
-                  in
-                  let values, backl =
-                    Collections.List.split_at outputs num_output_values
-                  in
-                  let backl = List.map update_back backl in
-                  let outputs = mk_simpl_tuple_texpr span (values @ backl) in
-                  rebind (mk_break_texpr span continue_ty outputs)
-                else if variant_id = loop_result_continue_id then (
-                  (* Remove the continuations *)
-                  let input_backl, input_values =
-                    Collections.List.split_at outputs num_input_conts
-                  in
-                  let inputs = mk_simpl_tuple_texpr span input_values in
-                  (* Replace the [continue] with a call to RecLoopCall *)
-                  let call =
-                    [%add_loc] mk_rec_loop_call_texpr span inputs break_ty
-                  in
-                  (* Bind the outputs *)
-                  let output_values, output_backl =
-                    Collections.List.split_at break_outputs num_output_values
-                  in
-
-                  [%ldebug
-                    let el_to_string el =
-                      String.concat "\n" (List.map (texpr_to_string ctx) el)
-                    in
-                    let fv_to_string el =
-                      String.concat "\n" (List.map (fvar_to_string ctx) el)
-                    in
-                    "- input_values:\n" ^ el_to_string input_values
-                    ^ "\n- input_backl:\n" ^ el_to_string input_backl
-                    ^ "\n- output_values:\n" ^ fv_to_string output_values
-                    ^ "\n- output_backl:\n" ^ fv_to_string output_backl];
-
-                  (* Introduce the backward functions *)
-                  [%sanity_check] span
-                    (List.length input_backl = List.length output_backl);
-                  let update_back (input : texpr) (back : fvar)
-                      (back_inputs : fvar list) : texpr =
-                    [%ldebug
-                      "- input: " ^ texpr_to_string ctx input ^ "\n- back: "
-                      ^ fvar_to_string ctx back ^ "\n- back_inputs: "
-                      ^ Print.list_to_string (fvar_to_string ctx) back_inputs];
-                    let _, lam_pats, body = open_lambdas ctx span input in
-                    let let_pats, body = open_lets ctx span body in
-                    let f, args = destruct_apps body in
-                    match (f.e, lam_pats, args) with
-                    | FVar _, [ pat ], [ arg ] ->
-                        let back_inputs_el =
-                          List.map mk_texpr_from_fvar back_inputs
-                        in
-                        let back = mk_texpr_from_fvar back in
-                        let e =
-                          mk_closed_heterogeneous_lets span let_pats arg
-                        in
-                        let e =
-                          mk_closed_let span false pat
-                            ([%add_loc] mk_apps span back back_inputs_el)
-                            e
-                        in
-                        let back_inputs =
-                          List.map (mk_tpat_from_fvar None) back_inputs
-                        in
-                        mk_closed_lambdas span back_inputs e
-                    | _ -> [%internal_error] span
-                  in
-
-                  [%ldebug
-                    let el_to_string el =
-                      String.concat "\n" (List.map (texpr_to_string ctx) el)
-                    in
-                    let fv_to_string el =
-                      String.concat "\n" (List.map (fvar_to_string ctx) el)
-                    in
-                    "- input_backl (length: "
-                    ^ string_of_int (List.length input_backl)
-                    ^ "):\n" ^ el_to_string input_backl
-                    ^ "\n- output_backl (length: "
-                    ^ string_of_int (List.length output_backl)
-                    ^ "):\n" ^ fv_to_string output_backl
-                    ^ "\n- output_conts_inputs (length: "
-                    ^ string_of_int (List.length output_conts_inputs)
-                    ^ "):\n"
-                    ^ Print.list_to_string
-                        (Print.list_to_string (fvar_to_string ctx))
-                        output_conts_inputs];
-
-                  let updated_backl =
-                    Collections.List.map3 update_back input_backl output_backl
-                      output_conts_inputs
-                  in
-                  let backl =
-                    List.map
-                      (fun (e : texpr) ->
-                        let id = ctx.fresh_fvar_id () in
-                        let fv : fvar =
-                          { id; ty = e.ty; basename = Some "back" }
-                        in
-                        fv)
-                      updated_backl
-                  in
-                  let outputs =
-                    mk_simpl_tuple_texpr span
-                      (List.map mk_texpr_from_fvar (output_values @ backl))
-                  in
-                  let output =
-                    rebind (mk_break_texpr span continue_ty outputs)
-                  in
-                  let e =
-                    mk_closed_lets span false
-                      (List.combine
-                         (List.map (mk_tpat_from_fvar None) backl)
-                         updated_backl)
-                      output
-                  in
-                  let e =
-                    mk_closed_let span true
-                      (mk_simpl_tuple_pat
-                         (List.map (mk_tpat_from_fvar None) break_outputs))
-                      call e
-                  in
-                  e)
-                else (
-                  [%sanity_check] span (variant_id = loop_result_fail_id);
-                  let arg = mk_simpl_tuple_texpr span outputs in
-                  mk_loop_result_fail_texpr span continue_ty break_ty arg)
-          end
-      | Let (monadic, pat, bound, next) ->
-          (* No need to update the bound expression *)
-          let _, pat, next = open_binder ctx span pat next in
-          let next = update next in
-          mk_closed_let span monadic pat bound next
-      | Switch (scrut, switch) ->
-          (* No need to update the scrutinee *)
-          let switch =
-            match switch with
-            | If (e0, e1) -> If (update e0, update e1)
-            | Match branches ->
-                let branches =
-                  List.map
-                    (fun ({ pat; branch } : match_branch) ->
-                      let _, pat, branch = open_binder ctx span pat branch in
-                      let branch = update branch in
-                      let pat, branch = close_binder span pat branch in
-                      { pat; branch })
-                    branches
-                in
-                Match branches
-          in
-          [%add_loc] mk_switch span scrut switch
-      | Meta (m, e) -> mk_emeta m (update e)
-    in
-
-    let inputs = Collections.List.drop num_input_conts body.inputs in
-    let body = { inputs; loop_body = update body.loop_body } in
-    let body = close_loop_body span body in
-    (* Check that all the input continuations disappeared from the loop body *)
-    let fids = texpr_get_fvars body.loop_body in
-    [%sanity_check] span
-      (FVarId.Set.is_empty (FVarId.Set.inter fids input_conts_fids));
-    (* *)
-    body
-  in
 
   let rec update (e : texpr) : texpr =
     match e.e with
