@@ -2964,9 +2964,7 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
     let ignore_output = fwd_info.ignore_output in
 
     (* Generate the loop definition *)
-    let loop_fwd_effect_info =
-      { fwd_effect_info with is_rec = !Config.loops_to_recursive_functions }
-    in
+    let loop_fwd_effect_info = { fwd_effect_info with is_rec = to_rec } in
 
     let loop_fwd_sig_info : fun_sig_info =
       { effect_info = loop_fwd_effect_info; ignore_output }
