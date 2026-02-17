@@ -224,17 +224,17 @@ end Test
 # Loops
 -/
 
-inductive LoopResult (α : Type u) (β : Type v) where
+inductive ControlFlow (α : Type u) (β : Type v) where
   | cont (v : α) -- continue
   | done (v : β) -- break
 deriving Repr, BEq
 
-def loop {α : Type u} {β : Type v} (body : α → Result (LoopResult α β)) (x : α) : Result β := do
+def loop {α : Type u} {β : Type v} (body : α → Result (ControlFlow α β)) (x : α) : Result β := do
   match body x with
   | ok r =>
     match r with
-    | LoopResult.cont x => loop body x
-    | LoopResult.done x => ok x
+    | ControlFlow.cont x => loop body x
+    | ControlFlow.done x => ok x
   | fail e => fail e
   | div => div
 partial_fixpoint

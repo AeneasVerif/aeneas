@@ -75,11 +75,7 @@ type fvar_id = FVarId.id [@@deriving show, ord]
 type builtin_ty =
   | TResult
   | TSum  (** sum type with two variants: left and right *)
-  | TLoopResult
-      (** A continue or a break.
-
-          We introduce this provisionally: we eliminate it during a micro-pass
-      *)
+  | TLoopResult  (** A continue or a break. TODO: rename to TControlFlow *)
   | TError
   | TFuel
   | TArray

@@ -1139,7 +1139,7 @@ let builtin_adts () : (builtin_ty * string) list =
   | Lean ->
       [
         (TResult, "Result");
-        (TLoopResult, "LoopResult");
+        (TLoopResult, "ControlFlow");
         (TFuel, "Nat");
         (TArray, "Array");
         (TSlice, "Slice");
@@ -1150,7 +1150,7 @@ let builtin_adts () : (builtin_ty * string) list =
   | Coq | FStar | HOL4 ->
       [
         (TResult, "result");
-        (TLoopResult, "loop_result");
+        (TLoopResult, "control_flow");
         (TFuel, if backend () = HOL4 then "num" else "nat");
         (TArray, "array");
         (TSlice, "slice");
