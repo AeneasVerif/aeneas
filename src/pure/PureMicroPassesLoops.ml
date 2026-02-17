@@ -772,16 +772,35 @@ type loop_rel = {
   used_fvars : FVarId.Set.t;
       (** The set of fvars which are actually used by the loop (not simply
           transmitted to the continues *)
+  smaller_than_input : int FVarId.Map.t;
+      (** The set of variables that are structurally smaller than an input
+          variable. We use this to compute whether the loop is structurally
+          terminating because it "dives" into a recursive data-structure: this
+          is one of the criteria we use to decide whether we should extract it
+          to a recursive function or not.
+
+          This is a map from a variable id to the index (that is, the position)
+          of the input the variable is smaller than. *)
+  equal_to_input : int FVarId.Map.t;
+      (** The set of variables that are equal to an input.
+
+          This is a map for the same reasons as [smaller_than_input]. *)
 }
 
 let loop_rel_to_string (ctx : ctx) (rel : loop_rel) : string =
-  let { inputs; outputs; used_fvars } = rel in
+  let { inputs; outputs; used_fvars; smaller_than_input; equal_to_input } =
+    rel
+  in
   "{\n  inputs = "
   ^ Print.list_to_string (Print.list_to_string (texpr_to_string ctx)) inputs
   ^ ";\n  outputs = "
   ^ Print.list_to_string (Print.list_to_string (texpr_to_string ctx)) outputs
   ^ ";\n  used_fvars = "
   ^ FVarId.Set.to_string None used_fvars
+  ^ ";\n  smaller_than_input = "
+  ^ FVarId.Map.to_string None string_of_int smaller_than_input
+  ^ ";\n  equal_to_input = "
+  ^ FVarId.Map.to_string None string_of_int equal_to_input
   ^ "\n}"
 
 (** Analyze a loop body to compute the relationship between its input and its
@@ -808,6 +827,43 @@ let compute_loop_input_output_rel (span : Meta.span) (ctx : ctx) (loop : loop) :
   let used_fvars = ref FVarId.Set.empty in
   let inputs_fvars = tpats_get_fvars body.inputs in
 
+  (* The variables which are an input or equal (because of a let-binding) to an input.
+     This is a map from the variable id to the index (i.e., position) of the input
+     to which the variable is equal to. *)
+  let equal_to_input =
+    ref
+      (FVarId.Map.of_list
+         (List.mapi
+            (fun i (x : fvar) -> (x.id, i))
+            (List.filter_map (fun x -> x) input_fvars)))
+  in
+  (* The variables which are stricly smaller than an input.
+     This is a map for the same reason as [input_or_eq]. *)
+  let smaller_than_input = ref FVarId.Map.empty in
+
+  let is_smaller_than_or_equal_to_input (fid : FVarId.id) : int option =
+    match FVarId.Map.find_opt fid !equal_to_input with
+    | Some i -> Some i
+    | None -> FVarId.Map.find_opt fid !smaller_than_input
+  in
+
+  (* Register than [tgt] is equal to [src] *)
+  let register_equal (tgt : fvar) (src : FVarId.id) : unit =
+    (* Equality *)
+    Option.iter
+      (fun input_id ->
+        equal_to_input := FVarId.Map.add tgt.id input_id !equal_to_input)
+      (FVarId.Map.find_opt src !equal_to_input);
+    (* Smaller than *)
+    Option.iter
+      (fun input_id ->
+        smaller_than_input := FVarId.Map.add tgt.id input_id !smaller_than_input)
+      (FVarId.Map.find_opt src !smaller_than_input)
+  in
+  let register_smaller (fid : FVarId.id) (input_id : int) : unit =
+    smaller_than_input := FVarId.Map.add fid input_id !smaller_than_input
+  in
+
   let marked_as_used_visitor =
     object
       inherit [_] iter_expr
@@ -819,75 +875,112 @@ let compute_loop_input_output_rel (span : Meta.span) (ctx : ctx) (loop : loop) :
     object (self)
       inherit [_] iter_expr as super
 
-      method! visit_texpr env e =
-        match e.e with
-        | Loop loop ->
-            (* We do not visit the inner loops *)
-            List.iter (self#visit_texpr env) loop.inputs
-        | App _ -> begin
+      method! visit_Loop env loop =
+        (* We do not visit the inner loops *)
+        List.iter (self#visit_texpr env) loop.inputs
+
+      method visit_app_texpr env (e : texpr) =
+        [%ldebug
+          "- e.ty: " ^ ty_to_string ctx e.ty ^ "\n- e:\n"
+          ^ texpr_to_string ctx e];
+        match
+          opt_destruct_loop_result_decompose_outputs ctx span ~intro_let:false
+            ~opened_vars:true e
+        with
+        | None ->
+            (* We need to visit the sub-expressions *)
+            super#visit_texpr env e
+        | Some ({ variant_id; args; _ }, _) ->
             [%ldebug
-              "- e.ty: " ^ ty_to_string ctx e.ty ^ "\n- e:\n"
-              ^ texpr_to_string ctx e];
-            match
-              opt_destruct_loop_result_decompose_outputs ctx span
-                ~intro_let:false ~opened_vars:true e
-            with
-            | None ->
-                (* We need to visit the sub-expressions *)
-                super#visit_texpr env e
-            | Some ({ variant_id; args; _ }, _) ->
-                [%ldebug
-                  "- outputs:\n"
-                  ^ Print.list_to_string ~sep:"\n"
-                      (fun el -> Print.list_to_string (texpr_to_string ctx) !el)
-                      outputs
-                  ^ "\n\n- args:\n"
-                  ^ Print.list_to_string ~sep:"\n" (texpr_to_string ctx) args];
+              "- outputs:\n"
+              ^ Print.list_to_string ~sep:"\n"
+                  (fun el -> Print.list_to_string (texpr_to_string ctx) !el)
+                  outputs
+              ^ "\n\n- args:\n"
+              ^ Print.list_to_string ~sep:"\n" (texpr_to_string ctx) args];
 
-                if variant_id = loop_result_break_id then (
-                  [%sanity_check] span (List.length outputs = List.length args);
-                  (* Update the output map *)
-                  List.iter
-                    (fun (l, arg) -> l := arg :: !l)
-                    (List.combine outputs args);
-                  (* Also visit the arguments: we want to register the used variables *)
-                  List.iter (self#visit_texpr env) args)
-                else if variant_id = loop_result_continue_id then (
-                  [%ldebug
-                    "- inputs:\n"
-                    ^ Print.list_to_string ~sep:"\n"
-                        (fun el ->
-                          Print.list_to_string (texpr_to_string ctx) !el)
-                        inputs
-                    ^ "\n\n- args:\n"
-                    ^ Print.list_to_string ~sep:"\n" (texpr_to_string ctx) args];
+            if variant_id = loop_result_break_id then (
+              [%sanity_check] span (List.length outputs = List.length args);
+              (* Update the output map *)
+              List.iter
+                (fun (l, arg) -> l := arg :: !l)
+                (List.combine outputs args);
+              (* Also visit the arguments: we want to register the used variables *)
+              List.iter (self#visit_texpr env) args)
+            else if variant_id = loop_result_continue_id then (
+              [%ldebug
+                "- inputs:\n"
+                ^ Print.list_to_string ~sep:"\n"
+                    (fun el -> Print.list_to_string (texpr_to_string ctx) !el)
+                    inputs
+                ^ "\n\n- args:\n"
+                ^ Print.list_to_string ~sep:"\n" (texpr_to_string ctx) args];
 
-                  (* There is a special case if the loop has a single input of type
+              (* There is a special case if the loop has a single input of type
                      unit *)
-                  match loop.inputs with
-                  | [ input ] when input.ty = mk_unit_ty ->
-                      List.iter (fun l -> l := mk_unit_texpr :: !l) inputs
-                  | _ ->
-                      [%sanity_check] span
-                        (List.length inputs = List.length args);
-                      (* Update the input map *)
-                      Collections.List.iter
-                        (fun ((l, input, arg) : _ * fvar option * _) ->
-                          (* Register the output *)
-                          l := arg :: !l;
-                          (* Also check whether the output is exactly the input:
+              match loop.inputs with
+              | [ input ] when input.ty = mk_unit_ty ->
+                  List.iter (fun l -> l := mk_unit_texpr :: !l) inputs
+              | _ ->
+                  [%sanity_check] span (List.length inputs = List.length args);
+                  (* Update the input map *)
+                  Collections.List.iter
+                    (fun ((l, input, arg) : _ * fvar option * _) ->
+                      (* Register the output *)
+                      l := arg :: !l;
+                      (* Also check whether the output is exactly the input:
                              if it is not the case, we mark the variables which appear
                              in the output as used. *)
-                          match (input, arg.e) with
-                          | Some fvar, FVar fid when fid = fvar.id -> ()
-                          | _ -> marked_as_used_visitor#visit_texpr () arg)
-                        (Collections.List.combine3 inputs input_fvars args))
-                else (
-                  [%sanity_check] span (variant_id = loop_result_fail_id);
-                  (* Also visit the arguments: we want to register the used variables *)
-                  List.iter (self#visit_texpr env) args)
-          end
+                      match (input, arg.e) with
+                      | Some fvar, FVar fid when fid = fvar.id -> ()
+                      | _ -> marked_as_used_visitor#visit_texpr () arg)
+                    (Collections.List.combine3 inputs input_fvars args))
+            else (
+              [%sanity_check] span (variant_id = loop_result_fail_id);
+              (* Also visit the arguments: we want to register the used variables *)
+              List.iter (self#visit_texpr env) args)
+
+      (* We match on the expr to simplify handling of the app case *)
+      method! visit_texpr env e =
+        match e.e with
+        | App _ -> self#visit_app_texpr env e
         | _ -> super#visit_texpr env e
+
+      method! visit_Let env monadic pat bound next =
+        (* Register the equality *)
+        (match (pat.pat, bound.e) with
+        | POpen (tgt, _), FVar src_id -> register_equal tgt src_id
+        | _ -> ());
+        super#visit_Let env monadic pat bound next
+
+      method! visit_Switch env scrut switch =
+        match switch with
+        | If _ -> super#visit_Switch env scrut switch
+        | Match branches -> (
+            (* If the scrutinee is a variable derived from the input (either equal
+             or smaller than an input) register that all the variables introduced
+             here are smaller *)
+            match scrut.e with
+            | FVar scrut_id -> (
+                match is_smaller_than_or_equal_to_input scrut_id with
+                | None -> super#visit_Switch env scrut switch
+                | Some i ->
+                    (* Explore the branches *)
+                    let visitor =
+                      object
+                        inherit [_] iter_expr
+                        method! visit_fvar_id _ fid = register_smaller fid i
+                      end
+                    in
+                    List.iter
+                      (fun ({ pat; branch } : match_branch) ->
+                        (* Register all the fvar ids appearing in the branch pattern
+                           as being smaller than the input *)
+                        visitor#visit_tpat () pat;
+                        (* Explore the branch expressions themselves *)
+                        self#visit_texpr env branch)
+                      branches)
+            | _ -> super#visit_Switch env scrut switch)
 
       method! visit_fvar_id _ fid = used_fvars := FVarId.Set.add fid !used_fvars
     end
@@ -909,7 +1002,13 @@ let compute_loop_input_output_rel (span : Meta.span) (ctx : ctx) (loop : loop) :
   in
 
   (* *)
-  { inputs; outputs; used_fvars }
+  {
+    inputs;
+    outputs;
+    used_fvars;
+    equal_to_input = !equal_to_input;
+    smaller_than_input = !smaller_than_input;
+  }
 
 (** Small helper: decompose a pattern if it is a variable or an ignored pattern
     of type tuple. Returns an optional substitution (if the pattern was a
