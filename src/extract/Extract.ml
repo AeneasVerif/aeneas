@@ -1360,6 +1360,8 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
     (* Return *)
     ctx
   in
+  (* Open parentheses *)
+  if inside then F.pp_print_string fmt "(";
   (* Open a box for the whole expression.
 
      In the case of Lean, we use a vbox so that line breaks are inserted
@@ -1404,7 +1406,9 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
   (* Close parentheses *)
   if inside && backend () <> Lean then F.pp_print_string fmt ")";
   (* Close the box for the whole expression *)
-  F.pp_close_box fmt ()
+  F.pp_close_box fmt ();
+  (* Close parentheses *)
+  if inside then F.pp_print_string fmt ")"
 
 and extract_Switch (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
     ~(inside : bool) ~(inside_do : bool) (scrut : texpr) (body : switch_body) :
