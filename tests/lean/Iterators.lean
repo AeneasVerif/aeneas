@@ -81,8 +81,8 @@ def slice_iter_mut_while_loop0
       do
       let (o, it2, next_back) ← core.slice.iter.IteratorIterMut.next it1
       match o with
-      | none => ok (done let im := next_back it2 none
-                         back1 im)
+      | none => ok (done (let im := next_back it2 none
+                          back1 im))
       | some _ =>
         slice_iter_mut_while_loop0_loop0 b1
         ok (cont (fun im => let im1 := next_back im o
@@ -148,8 +148,8 @@ def slice_iter_mut_while_early_return_loop0
       do
       let (o, it2, next_back) ← core.slice.iter.IteratorIterMut.next it1
       match o with
-      | none => ok (done let im := next_back it2 none
-                         back1 im)
+      | none => ok (done (let im := next_back it2 none
+                          back1 im))
       | some _ =>
         slice_iter_mut_while_early_return_loop0_loop0 b1
         ok (cont (fun im => let im1 := next_back im o
@@ -192,13 +192,13 @@ def slice_iter_mut_while_early_return_two_bools_loop0
       do
       let (o, it2, next_back) ← core.slice.iter.IteratorIterMut.next it1
       match o with
-      | none => ok (done let im := next_back it2 none
-                         back1 im)
+      | none => ok (done (let im := next_back it2 none
+                          back1 im))
       | some _ =>
         slice_iter_mut_while_early_return_two_bools_loop0_loop0 b01
         if b11
-        then ok (done let im := next_back it2 o
-                      back1 im)
+        then ok (done (let im := next_back it2 o
+                       back1 im))
         else
           ok (cont (fun im => let im1 := next_back im o
                               back1 im1, false, false, it2)))
