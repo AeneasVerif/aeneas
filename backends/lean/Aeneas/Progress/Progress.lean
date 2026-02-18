@@ -1387,7 +1387,7 @@ info: example
   /--
   error: unsolved goals
 case a
-α : Type ?u.255089
+α : Type ?u.255154
 P : ℕ → List α → Prop
 f✝ : List α → Result Bool
 f_spec : ∀ (l : List α) (i : ℕ), P i l → f✝ l ⦃ x✝ => True ⦄
