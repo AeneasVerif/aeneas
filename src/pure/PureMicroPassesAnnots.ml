@@ -343,6 +343,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
           | Proj _ | TraitConst _ ->
               (* Being conservative here *)
               (hole, mk_holes (), false)
+          | LoopOp -> (hole, mk_holes (), false)
         end
       | FVar _ ->
           (* We consider that the full type of the function should be known,
@@ -355,7 +356,9 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
           (hole, mk_holes (), false)
     in
     (* The application may be partial *)
-    let args_tys = Collections.List.prefix (List.length args) args_tys in
+    let num_args = List.length args in
+    [%sanity_check] span (num_args <= List.length args_tys);
+    let args_tys = Collections.List.prefix num_args args_tys in
     let args =
       List.map (fun (ty, arg) -> visit ty arg) (List.combine args_tys args)
     in

@@ -1025,7 +1025,8 @@ and app_to_string ?(span : Meta.span option = None) (env : fmt_env)
               let qualif = trait_ref ^ "." ^ const_name in
               (qualif, [], false)
           | MkDynTrait trait_ref ->
-              ("@toDyn " ^ trait_ref_to_string env true trait_ref, [], false))
+              ("@toDyn " ^ trait_ref_to_string env true trait_ref, [], false)
+          | LoopOp -> ("@loopOp", [], false))
       | _ ->
           (* "Regular" expression case *)
           let inside = args <> [] || (args = [] && inside) in
@@ -1145,6 +1146,7 @@ and loop_to_string ?(span : Meta.span option = None) (env : fmt_env)
     inputs;
     num_input_conts = _;
     loop_body;
+    to_rec = _;
   } =
     loop
   in

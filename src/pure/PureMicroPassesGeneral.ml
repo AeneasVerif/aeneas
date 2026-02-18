@@ -1001,6 +1001,7 @@ let filter_useless (ctx : ctx) (def : fun_decl) : fun_decl =
               inputs;
               num_input_conts = _;
               loop_body;
+              to_rec = _;
             } =
               loop
             in

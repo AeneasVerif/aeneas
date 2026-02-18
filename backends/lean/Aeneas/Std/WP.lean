@@ -69,6 +69,9 @@ theorem spec_ok (x : α) : spec (ok x) p ↔ p x := by simp [spec, theta, wp_ret
 @[simp, grind =]
 theorem spec_fail (e : Error) : spec (fail e) p ↔ False := by simp [spec, theta]
 
+@[simp, grind =]
+theorem spec_div : spec div p ↔ False := by simp [spec, theta]
+
 theorem spec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : spec m P₀):
   (∀ x, P₀ x → P₁ x) → spec m P₁ := by
   intros HMonPost
@@ -432,6 +435,32 @@ example :
 end Aeneas.Std.WP
 
 namespace Aeneas.Std.WP
+
+/-!
+# Loops
+-/
+
+/-- General spec for loops with a termination measure.
+
+It is meant to derive lemmas to reason about loops: in most situations, one shouldn't
+have to use it directly when verifying programs.
+-/
+def loop.spec {α : Type u} {β : Type v}
+  [wf : WellFoundedRelation α]
+  (inv : α → Prop)
+  (post : β → Prop)
+  (body : α → Result (ControlFlow α β)) (x : α)
+  (hBody :
+    ∀ x, body x ⦃ r =>
+      match r with
+      | .done y => post y
+      | .cont x' => inv x' ∧ wf.rel x' x ⦄) :
+  loop body x ⦃ post ⦄ := by
+  revert x
+  apply @wf.wf.fix α (fun x => loop body x ⦃ post ⦄)
+  intros x IH
+  unfold loop
+  grind
 
 /-!
 # mvcgen

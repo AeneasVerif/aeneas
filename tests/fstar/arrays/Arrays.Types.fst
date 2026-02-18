@@ -6,10 +6,10 @@ open Primitives
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [arrays::AB]
-    Source: 'tests/src/arrays.rs', lines 7:0-10:1 *)
+    Source: 'tests/src/arrays.rs', lines 8:0-11:1 *)
 type aB_t = | AB_A : aB_t | AB_B : aB_t
 
 (** [arrays::Scalar]
-    Source: 'tests/src/arrays.rs', lines 377:0-377:24 *)
+    Source: 'tests/src/arrays.rs', lines 378:0-378:24 *)
 type scalar_t = array u32 2
 

@@ -776,7 +776,26 @@ and extract_App (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
               extract_texpr span ctx fmt ~inside:true ~inside_do ve)
             args;
           (* Close parentheses *)
-          if inside then F.pp_print_string fmt ")")
+          if inside then F.pp_print_string fmt ")"
+      | LoopOp, _ ->
+          (* Open a box *)
+          F.pp_open_vbox fmt 2;
+          (* Open parentheses *)
+          if inside then F.pp_print_string fmt "(";
+          (* The loop operator *)
+          F.pp_print_string fmt "loop";
+          (* The arguments *)
+          List.iter
+            (fun ve ->
+              F.pp_print_space fmt ();
+              F.pp_open_hovbox fmt 2;
+              extract_texpr span ctx fmt ~inside:true ~inside_do:false ve;
+              F.pp_close_box fmt ())
+            args;
+          (* Close parentheses *)
+          if inside then F.pp_print_string fmt ")";
+          (* Close the box *)
+          F.pp_close_box fmt ())
   | _ ->
       (* "Regular" expression *)
       (* Open parentheses *)
@@ -1328,7 +1347,7 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
         in
         (* Print the bound expression *)
         F.pp_open_hovbox fmt ctx.indent_incr;
-        extract_texpr span ctx fmt ~inside:false ~inside_do:true re;
+        extract_texpr span ctx fmt ~inside:false ~inside_do:monadic re;
         F.pp_close_box fmt ();
         (ctx, end_let)
     in
@@ -1341,6 +1360,8 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
     (* Return *)
     ctx
   in
+  (* Open parentheses *)
+  if inside then F.pp_print_string fmt "(";
   (* Open a box for the whole expression.
 
      In the case of Lean, we use a vbox so that line breaks are inserted
@@ -1371,7 +1392,9 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open a box for the next expression *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* Print the next expression *)
-  extract_texpr span ctx fmt ~inside:false ~inside_do:true next_e;
+  extract_texpr span ctx fmt ~inside:false
+    ~inside_do:(wrap_in_do_od || inside_do)
+    next_e;
   (* Close the box for the next expression *)
   F.pp_close_box fmt ();
 
@@ -1383,7 +1406,9 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
   (* Close parentheses *)
   if inside && backend () <> Lean then F.pp_print_string fmt ")";
   (* Close the box for the whole expression *)
-  F.pp_close_box fmt ()
+  F.pp_close_box fmt ();
+  (* Close parentheses *)
+  if inside then F.pp_print_string fmt ")"
 
 and extract_Switch (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
     ~(inside : bool) ~(inside_do : bool) (scrut : texpr) (body : switch_body) :

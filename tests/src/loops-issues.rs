@@ -70,3 +70,18 @@ fn test(b0: bool, b1: bool) {
         let _ = read(&buf);
     }
 }
+
+struct WrapperU32 {
+    pub x: u32,
+}
+
+fn consume_u32(eta: u32) {}
+
+/// This comes from an issue found in SymCrust and minimized
+fn loop_consume_u32(params: &WrapperU32) {
+    let x = params.x;
+
+    for i in 0..32 {
+        consume_u32(x);
+    }
+}
