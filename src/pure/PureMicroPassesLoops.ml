@@ -2972,7 +2972,7 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
 
     (* Note that the loop body already binds the "constant" inputs: we don't
        need to add them anymore *)
-    let input_tys = List.map (fun (v : tpat) -> v.ty) loop_body.inputs in
+    let input_tys = List.map (fun (v : tpat) -> v.ty) fun_body.inputs in
     let output = output_ty in
 
     let llbc_generics : T.generic_params =
@@ -3049,6 +3049,8 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
         body = Some fun_body;
       }
     in
+    [%sanity_check] span
+      (List.length loop_def.signature.inputs = List.length fun_body.inputs);
 
     (loop_def, constant_inputs, loop_func)
   in
