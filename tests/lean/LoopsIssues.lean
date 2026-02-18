@@ -6,7 +6,45 @@ set_option linter.dupNamespace false
 set_option linter.hashCommand false
 set_option linter.unusedVariables false
 
+/- You can remove the following line by using the CLI option `-all-computable`: -/
+noncomputable section
+
 namespace loops_issues
+
+/- [core::iter::range::{core::iter::range::Step for i32}::backward_checked]:
+   Source: '/rustc/library/core/src/iter/range.rs', lines 333:16-333:74
+   Name pattern: [core::iter::range::{core::iter::range::Step<i32>}::backward_checked] -/
+@[rust_fun
+  "core::iter::range::{core::iter::range::Step<i32>}::backward_checked"]
+axiom I32.Insts.CoreIterRangeStep.backward_checked
+  : Std.I32 → Std.Usize → Result (Option Std.I32)
+
+/- [core::iter::range::{core::iter::range::Step for i32}::forward_checked]:
+   Source: '/rustc/library/core/src/iter/range.rs', lines 312:16-312:73
+   Name pattern: [core::iter::range::{core::iter::range::Step<i32>}::forward_checked] -/
+@[rust_fun
+  "core::iter::range::{core::iter::range::Step<i32>}::forward_checked"]
+axiom I32.Insts.CoreIterRangeStep.forward_checked
+  : Std.I32 → Std.Usize → Result (Option Std.I32)
+
+/- [core::iter::range::{core::iter::range::Step for i32}::steps_between]:
+   Source: '/rustc/library/core/src/iter/range.rs', lines 297:16-297:84
+   Name pattern: [core::iter::range::{core::iter::range::Step<i32>}::steps_between] -/
+@[rust_fun "core::iter::range::{core::iter::range::Step<i32>}::steps_between"]
+axiom I32.Insts.CoreIterRangeStep.steps_between
+  : Std.I32 → Std.I32 → Result (Std.Usize × (Option Std.Usize))
+
+/- Trait implementation: [core::iter::range::{core::iter::range::Step for i32}]
+   Source: '/rustc/library/core/src/iter/range.rs', lines 292:12-292:37
+   Name pattern: [core::iter::range::Step<i32>] -/
+@[reducible, rust_trait_impl "core::iter::range::Step<i32>"]
+def I32.Insts.CoreIterRangeStep : core.iter.range.Step Std.I32 := {
+  cloneInst := core.clone.CloneI32
+  partialOrdInst := core.cmp.PartialOrdI32
+  steps_between := I32.Insts.CoreIterRangeStep.steps_between
+  forward_checked := I32.Insts.CoreIterRangeStep.forward_checked
+  backward_checked := I32.Insts.CoreIterRangeStep.backward_checked
+}
 
 /- [loops_issues::write]:
    Source: 'tests/src/loops-issues.rs', lines 5:0-5:28 -/
@@ -146,5 +184,41 @@ def test_loop
 def test (b0 : Bool) (b1 : Bool) : Result Unit := do
   let buf := Array.repeat 4#usize 0#u8
   test_loop b0 b1 buf
+
+/- [loops_issues::WrapperU32]
+   Source: 'tests/src/loops-issues.rs', lines 74:0-76:1 -/
+structure WrapperU32 where
+  x : Std.U32
+
+/- [loops_issues::consume_u32]:
+   Source: 'tests/src/loops-issues.rs', lines 78:0-78:27 -/
+def consume_u32 (eta : Std.U32) : Result Unit := do
+  ok ()
+
+/- [loops_issues::loop_consume_u32]: loop 0:
+   Source: 'tests/src/loops-issues.rs', lines 84:4-86:5 -/
+def loop_consume_u32_loop
+  (params : WrapperU32) (iter : core.ops.range.Range Std.I32) :
+  Result Unit
+  := do
+  loop
+    (fun iter1 =>
+      do
+      let (o, iter2) ←
+        core.iter.range.IteratorRange.next I32.Insts.CoreIterRangeStep iter1
+      match o with
+      | none => ok (done ())
+      | some _ => consume_u32 params.x
+                  ok (cont iter2))
+    iter
+
+/- [loops_issues::loop_consume_u32]:
+   Source: 'tests/src/loops-issues.rs', lines 81:0-87:1 -/
+def loop_consume_u32 (params : WrapperU32) : Result Unit := do
+  let iter ←
+    core.iter.traits.collect.IntoIterator.Blanket.into_iter
+      (core.iter.traits.iterator.IteratorRange I32.Insts.CoreIterRangeStep)
+      { start := 0#i32, «end» := 32#i32 }
+  loop_consume_u32_loop params iter
 
 end loops_issues
