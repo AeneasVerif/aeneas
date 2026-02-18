@@ -257,7 +257,9 @@ def tryMatch (isLet : Bool) (th : Expr) :
   trace[Progress] "Uninstantiated theorem: {th}: {← inferType th}"
 
   -- `thTy` should be of the shape `spec program post`: we need to retrieve `program`
-  let thArgs := thTy.consumeMData.withApp (fun _ args => args)
+  let (thHead, thArgs) := thTy.consumeMData.withApp (fun f args => (f, args))
+  if !thHead.isConst || thHead.constName! != ``Std.WP.spec then
+    throwError "Not spec: head is {thHead}"
   let (program, P) ← (if h: thArgs.size = 3
                    then pure (thArgs[1], thArgs[2])
                    else throwError "Not spec?")
@@ -1384,7 +1386,7 @@ info: example
   /--
   error: unsolved goals
 case a
-α : Type ?u.252970
+α : Type ?u.255089
 P : ℕ → List α → Prop
 f✝ : List α → Result Bool
 f_spec : ∀ (l : List α) (i : ℕ), P i l → f✝ l ⦃ x✝ => True ⦄
