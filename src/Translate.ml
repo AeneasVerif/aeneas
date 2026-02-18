@@ -933,6 +933,26 @@ let trait_decl_is_builtin (ctx : gen_ctx) (id : Pure.trait_decl_id) : bool =
     (match_name_find_opt ctx.trans_ctx trait_decl.item_meta.name
        (builtin_trait_decls_map ()))
 
+let trait_impl_is_builtin (ctx : gen_ctx) (id : Pure.trait_impl_id) : bool =
+  let trait_impl =
+    [%silent_unwrap_opt_span] None
+      (TraitImplId.Map.find_opt id ctx.trans_trait_impls)
+  in
+  let trait_decl =
+    Pure.TraitDeclId.Map.find trait_impl.impl_trait.trait_decl_id
+      ctx.trans_trait_decls
+  in
+  let builtin_info =
+    let open ExtractBuiltin in
+    let trait_impl =
+      TraitImplId.Map.find trait_impl.def_id ctx.crate.trait_impls
+    in
+    match_name_with_generics_find_opt ctx.trans_ctx trait_decl.item_meta.name
+      trait_impl.impl_trait.generics
+      (builtin_trait_impls_map ())
+  in
+  Option.is_some builtin_info
+
 (** Export a trait declaration. *)
 let export_trait_decl (fmt : Format.formatter) (_config : gen_config)
     (ctx : gen_ctx) (trait_decl_id : Pure.trait_decl_id) (extract_decl : bool)
@@ -957,23 +977,8 @@ let export_trait_impl (fmt : Format.formatter) (_config : gen_config)
     [%silent_unwrap_opt_span] None
       (TraitImplId.Map.find_opt trait_impl_id ctx.trans_trait_impls)
   in
-  let trait_decl =
-    Pure.TraitDeclId.Map.find trait_impl.impl_trait.trait_decl_id
-      ctx.trans_trait_decls
-  in
-  (* Check if the trait implementation is builtin *)
-  let builtin_info =
-    let open ExtractBuiltin in
-    let trait_impl =
-      TraitImplId.Map.find trait_impl.def_id ctx.crate.trait_impls
-    in
-    match_name_with_generics_find_opt ctx.trans_ctx trait_decl.item_meta.name
-      trait_impl.impl_trait.generics
-      (builtin_trait_impls_map ())
-  in
-  match builtin_info with
-  | None -> Extract.extract_trait_impl ctx fmt trait_impl
-  | Some _ -> ()
+  if not (trait_impl_is_builtin ctx trait_impl_id) then
+    Extract.extract_trait_impl ctx fmt trait_impl
 
 (** A generic utility to generate the extracted definitions: as we may want to
     split the definitions between different files (or not), we can control what
@@ -1036,27 +1041,39 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
     | GlobalGroup (RecGroup _ids) ->
         [%craise_opt_span] None "Mutually recursive globals are not supported"
     | TraitDeclGroup (RecGroup ids) ->
-        (* Lookup the trait decls to print a nice error message *)
-        let to_string (id : trait_decl_id) : string =
-          match TraitDeclId.Map.find_opt id ctx.trans_trait_decls with
-          | None ->
-              "unknown trait (lookup failed, probably because of a previous \
-               error"
-          | Some d ->
-              "'"
-              ^ name_to_string ctx.trans_ctx d.item_meta.name
-              ^ "', source: "
-              ^ Errors.raw_span_to_string d.item_meta.span
+        (* Only print the warning if we actually extract the group *)
+        let extract =
+          config.extract_trait_decls && config.extract_transparent
         in
-        let decls = List.map to_string ids in
-        if not (List.for_all (trait_decl_is_builtin ctx) ids) then (
-          [%warn_opt_span] None
-            ("Mutually recursive trait declarations are not supported; the \
-              following group of mutually recursive traits is going to be \
-              extracted but their model will not type-check:\n\n"
-           ^ String.concat "\n" decls);
-          (* TODO: update to extract groups *)
-          if config.extract_trait_decls && config.extract_transparent then
+        if extract then
+          (* Lookup the trait decls to print a nice error message *)
+          let to_string (id : trait_decl_id) : string =
+            match TraitDeclId.Map.find_opt id ctx.trans_trait_decls with
+            | None ->
+                "unknown trait (lookup failed, probably because of a previous \
+                 error"
+            | Some d ->
+                "'"
+                ^ name_to_string ctx.trans_ctx d.item_meta.name
+                ^ "', source: "
+                ^ Errors.raw_span_to_string d.item_meta.span
+          in
+          let decls = List.map to_string ids in
+          if not (List.for_all (trait_decl_is_builtin ctx) ids) then (
+            if List.length decls = 1 then
+              [%warn_opt_span] None
+                ("Recursive trait declarations are not supported; the \
+                  following recursive trait is going to be extracted but its \
+                  model will not type-check:\n" ^ String.concat "\n" decls)
+            else
+              [%warn_opt_span] None
+                ("Mutually recursive trait declarations are not supported; the \
+                  following group of mutually recursive traits is going to be \
+                  extracted but their model will not type-check:\n"
+               ^ String.concat "\n" decls);
+            (* We still extract something so that the user can look at it and
+             eventually fix it *)
+            (* TODO: update to extract groups *)
             List.iter
               (fun id ->
                 export_trait_decl_group id;
@@ -1070,9 +1087,41 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
     | TraitImplGroup (NonRecGroup id) ->
         if config.extract_trait_impls && config.extract_transparent then
           export_trait_impl id
-    | TraitImplGroup (RecGroup _ids) ->
-        [%craise_opt_span] None
-          "Mutually recursive trait implementations are not supported"
+    | TraitImplGroup (RecGroup ids) ->
+        (* Only print the warning if we extract the impl group *)
+        let extract =
+          config.extract_trait_impls && config.extract_transparent
+        in
+        if extract then
+          (* Lookup the trait impls to print a nice error message *)
+          let to_string (id : trait_impl_id) : string =
+            match TraitImplId.Map.find_opt id ctx.trans_trait_impls with
+            | None ->
+                "unknown trait (lookup failed, probably because of a previous \
+                 error"
+            | Some d ->
+                "'"
+                ^ name_to_string ctx.trans_ctx d.item_meta.name
+                ^ "', source: "
+                ^ Errors.raw_span_to_string d.item_meta.span
+          in
+          let decls = List.map to_string ids in
+          if not (List.for_all (trait_impl_is_builtin ctx) ids) then (
+            if List.length decls = 1 then
+              [%warn_opt_span] None
+                ("Recursive trait implementations are not supported; the \
+                  following recursive impl is going to be extracted but its \
+                  model will not type-check:\n" ^ String.concat "\n" decls)
+            else
+              [%warn_opt_span] None
+                ("Mutually recursive trait implementations are not supported; \
+                  the following group of mutually recursive impls is going to \
+                  be extracted but their model will not type-check:\n"
+               ^ String.concat "\n" decls);
+            (* We still extract something so that the user can look at it and
+             eventually fix it *)
+            (* TODO: update to extract groups *)
+            List.iter (fun id -> export_trait_impl id) ids)
     | MixedGroup _ ->
         [%craise_opt_span] None
           "Mixed-recursive declaration groups are not supported"
