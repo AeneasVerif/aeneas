@@ -7,37 +7,37 @@ open Arrays.Types
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [arrays::sum]: decreases clause
-    Source: 'tests/src/arrays.rs', lines 275:4-278:5 *)
+    Source: 'tests/src/arrays.rs', lines 276:4-279:5 *)
 unfold
 let sum_loop_decreases (s : slice u32) (sum1 : u32) (i : usize) : nat =
   admit ()
 
 (** [arrays::sum2]: decreases clause
-    Source: 'tests/src/arrays.rs', lines 286:4-289:5 *)
+    Source: 'tests/src/arrays.rs', lines 287:4-290:5 *)
 unfold
 let sum2_loop_decreases (s : slice u32) (s2 : slice u32) (sum1 : u32)
   (i : usize) : nat =
   admit ()
 
 (** [arrays::zero_slice]: decreases clause
-    Source: 'tests/src/arrays.rs', lines 336:4-339:5 *)
+    Source: 'tests/src/arrays.rs', lines 337:4-340:5 *)
 unfold
 let zero_slice_loop_decreases (a : slice u8) (i : usize) (len : usize) : nat =
   admit ()
 
 (** [arrays::iter_mut_slice]: decreases clause
-    Source: 'tests/src/arrays.rs', lines 345:4-347:5 *)
+    Source: 'tests/src/arrays.rs', lines 346:4-348:5 *)
 unfold
 let iter_mut_slice_loop_decreases (len : usize) (i : usize) : nat = admit ()
 
 (** [arrays::sum_mut_slice]: decreases clause
-    Source: 'tests/src/arrays.rs', lines 353:4-356:5 *)
+    Source: 'tests/src/arrays.rs', lines 354:4-357:5 *)
 unfold
 let sum_mut_slice_loop_decreases (a : slice u32) (i : usize) (s : u32) : nat =
   admit ()
 
 (** [arrays::add_acc]: decreases clause
-    Source: 'tests/src/arrays.rs', lines 362:4-371:5 *)
+    Source: 'tests/src/arrays.rs', lines 363:4-372:5 *)
 unfold
 let add_acc_loop_decreases (pa_src : array u32 256) (pe_dst : array u32 256)
   (i : usize) : nat =

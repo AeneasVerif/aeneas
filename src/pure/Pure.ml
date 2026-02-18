@@ -75,11 +75,7 @@ type fvar_id = FVarId.id [@@deriving show, ord]
 type builtin_ty =
   | TResult
   | TSum  (** sum type with two variants: left and right *)
-  | TLoopResult
-      (** A continue or a break.
-
-          We introduce this provisionally: we eliminate it during a micro-pass
-      *)
+  | TLoopResult  (** A continue or a break. TODO: rename to TControlFlow *)
   | TError
   | TFuel
   | TArray
@@ -1072,6 +1068,7 @@ and qualif_id =
   | Proj of projection  (** Field projector *)
   | TraitConst of trait_ref * string  (** A trait associated constant *)
   | MkDynTrait of trait_ref  (** Dyn trait constructor *)
+  | LoopOp  (** Loop fixed-point operator *)
 
 (** An instantiated qualifier.
 
@@ -1243,6 +1240,10 @@ and loop = {
           *continuations* come first (while for the outputs the *values* come
           first). *)
   loop_body : loop_body;
+  to_rec : bool;
+      (** Should we extract this loop to a recursive function? This boolean is
+          initially [false] and might be set to [true] inside the micro-passes.
+      *)
 }
 
 (** A loop body.
