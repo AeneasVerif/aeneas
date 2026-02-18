@@ -259,10 +259,11 @@ def tryMatch (isLet : Bool) (th : Expr) :
   -- `thTy` should be of the shape `spec program post`: we need to retrieve `program`
   let (thHead, thArgs) := thTy.consumeMData.withApp (fun f args => (f, args))
   if !thHead.isConst || thHead.constName! != ``Std.WP.spec then
-    throwError "Not spec: head is {thHead}"
-  let (program, P) ← (if h: thArgs.size = 3
-                   then pure (thArgs[1], thArgs[2])
-                   else throwError "Not spec?")
+    throwError "Not a spec theorem"
+  let (program, P) ←
+    if h: thArgs.size = 3
+    then pure (thArgs[1], thArgs[2])
+    else throwError "Not a spec theorem"
 
   let (specMonoBindName, varNum) :=
     if isLet
