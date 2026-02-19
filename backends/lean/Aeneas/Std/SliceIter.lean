@@ -71,12 +71,26 @@ def core.slice.iter.IteratorSliceIter.step_by {T} (slice : core.slice.iter.Iter 
   Result (core.iter.adapters.step_by.StepBy (core.slice.iter.Iter T)) :=
   ok (⟨ slice, steps ⟩)
 
+@[rust_fun
+  "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::enumerate"]
+def core.slice.iter.IteratorSliceIter.enumerate {T} (slice : core.slice.iter.Iter T) :
+  Result (core.iter.adapters.enumerate.Enumerate (core.slice.iter.Iter T)) :=
+  sorry
+
+@[rust_fun
+  "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::take"]
+def core.slice.iter.IteratorSliceIter.take {T} (slice : core.slice.iter.Iter T) (n : Usize) :
+  Result (core.iter.adapters.take.Take (core.slice.iter.Iter T)) :=
+  ok ⟨ slice, n ⟩
+
 @[reducible, rust_trait_impl
   "core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>"]
 def core.iter.traits.iterator.IteratorSliceIter (T : Type) :
   core.iter.traits.iterator.Iterator (core.slice.iter.Iter T) T := {
   next := core.slice.iter.IteratorSliceIter.next
   step_by := core.slice.iter.IteratorSliceIter.step_by
+  enumerate := core.slice.iter.IteratorSliceIter.enumerate
+  take := core.slice.iter.IteratorSliceIter.take
 }
 
 @[rust_type "core::slice::iter::ChunksExact" (body := .opaque)]
@@ -99,6 +113,18 @@ def core.slice.iter.IteratorChunksExact.step_by
   Result (core.iter.adapters.step_by.StepBy (slice.iter.ChunksExact T)) :=
   ok (⟨ self, steps ⟩)
 
+@[rust_fun
+  "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::ChunksExact<'a, @T>, &'a [@T]>}::enumerate"]
+def core.slice.iter.IteratorChunksExact.enumerate {T : Type} (self : core.slice.iter.ChunksExact T) :
+  Result (core.iter.adapters.enumerate.Enumerate (core.slice.iter.ChunksExact T)) :=
+  sorry
+
+@[rust_fun
+  "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::ChunksExact<'a, @T>, &'a [@T]>}::take"]
+def core.slice.iter.IteratorChunksExact.take {T : Type} (self : core.slice.iter.ChunksExact T) (n : Usize) :
+  Result (core.iter.adapters.take.Take (core.slice.iter.ChunksExact T)) :=
+  ok ⟨ self, n ⟩
+
 @[reducible, rust_trait_impl
   "core::iter::traits::iterator::Iterator<core::slice::iter::ChunksExact<'a, @T>, &'a [@T]>"]
 def core.iter.traits.iterator.IteratorChunksExact (T : Type) :
@@ -106,6 +132,8 @@ def core.iter.traits.iterator.IteratorChunksExact (T : Type) :
   := {
   next := core.slice.iter.IteratorChunksExact.next
   step_by := core.slice.iter.IteratorChunksExact.step_by
+  enumerate := core.slice.iter.IteratorChunksExact.enumerate
+  take := core.slice.iter.IteratorChunksExact.take
 }
 
 @[rust_fun "core::slice::{[@T]}::chunks_exact"]
