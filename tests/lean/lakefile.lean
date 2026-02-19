@@ -31,6 +31,7 @@ package «tests» {}
 @[default_target] lean_lib Hashmap
 @[default_target] lean_lib Into
 @[default_target] lean_lib Iterators
+@[default_target] lean_lib IteratorsArray
 @[default_target] lean_lib Issue134LoopSharedBorrows
 @[default_target] lean_lib Issue194RecursiveStructProjector
 @[default_target] lean_lib Issue270LoopList
