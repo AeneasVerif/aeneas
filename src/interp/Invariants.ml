@@ -46,7 +46,7 @@ let borrows_infos_to_string (indent : string)
     (infos : borrow_info BorrowId.Map.t) : string =
   BorrowId.Map.to_string (Some indent) show_borrow_info infos
 
-type borrow_kind = BMut | BShared | BReserved
+type borrow_kind = BMut | BShared | BReserved [@@deriving show]
 
 (** Check that:
     - loans and borrows are correctly related
@@ -190,7 +190,13 @@ let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
     (* Check that the borrow kind is consistent *)
     (match (info.loan_kind, kind) with
     | RShared, (BShared | BReserved) | RMut, BMut -> ()
-    | _ -> [%craise] span "Invariant not satisfied");
+    | _ ->
+        [%ltrace
+          "- kind: " ^ show_borrow_kind kind ^ "\n- info.loan_kind: "
+          ^ show_ref_kind info.loan_kind
+          ^ "\n- bid: " ^ BorrowId.to_string bid ^ "\n- sid : "
+          ^ Print.option_to_string SharedBorrowId.to_string sid];
+        [%craise] span "Invariant not satisfied");
     (* Check that shared borrow ids are unique *)
     (match sid with
     | None -> ()
@@ -449,6 +455,17 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
             (fun ((v, ty) : tvalue * ty) -> [%sanity_check] span (v.ty = ty))
             fields_with_types
       (* Builtin type case *)
+      | VAdt av, TArray (inner_ty, len) ->
+          [%sanity_check] span
+            (List.for_all (fun (v : tvalue) -> v.ty = inner_ty) av.fields);
+          (* The length is necessarily concrete *)
+          let len =
+            Scalars.get_val
+              (ValuesUtils.literal_as_scalar
+                 (TypesUtils.constant_expr_as_literal len))
+          in
+          [%sanity_check] span (Z.of_int (List.length av.fields) = len)
+      | VAdt _, TSlice _ -> [%craise] span "Unexpected slice value"
       | VAdt av, TAdt { id = TBuiltin aty_id; generics } -> (
           [%sanity_check] span (av.variant_id = None);
           match
@@ -461,20 +478,7 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
           (* Box *)
           | TBox, [ inner_value ], [], [ inner_ty ], [] ->
               [%sanity_check] span (inner_value.ty = inner_ty)
-          | TArray, inner_values, _, [ inner_ty ], [ cg ] ->
-              (* *)
-              [%sanity_check] span
-                (List.for_all
-                   (fun (v : tvalue) -> v.ty = inner_ty)
-                   inner_values);
-              (* The length is necessarily concrete *)
-              let len =
-                Scalars.get_val
-                  (ValuesUtils.literal_as_scalar
-                     (TypesUtils.const_generic_as_literal cg))
-              in
-              [%sanity_check] span (Z.of_int (List.length inner_values) = len)
-          | (TSlice | TStr), _, _, _, _ -> [%craise] span "Unexpected"
+          | TStr, _, _, _, _ -> [%craise] span "Unexpected str value"
           | _ -> [%craise] span "Erroneous type")
       | VBottom, _ -> (* Nothing to check *) ()
       | VBorrow bc, TRef (_, ref_ty, rkind) -> (
@@ -515,7 +519,12 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
           check_symbolic_value_type sv.sv_id sv.sv_ty;
           let ty' = Substitute.erase_regions sv.sv_ty in
           [%sanity_check] span (ty' = ty)
-      | _ -> [%craise] span "Erroneous typing");
+      | VLiteral (VStr _), TAdt { id = TBuiltin TStr; _ } -> ()
+      | _ ->
+          [%ltrace
+            "Erroneous typing:\n- value: " ^ tvalue_to_string ctx tv
+            ^ "\n- type: " ^ ty_to_string ctx tv.ty];
+          [%craise] span "Erroneous typing");
       (* Continue exploring to inspect the subterms *)
       super#visit_tvalue info tv
 
@@ -614,7 +623,18 @@ let check_typing_invariant_visitor span ctx (lookups : bool) =
               [%sanity_check] span (given_back.ty = ref_ty);
               [%sanity_check] span (child.ty = ref_ty)
           | AProjSharedBorrow _, RShared -> ()
-          | _ -> [%craise] span "Inconsistent context")
+          | AEndedMutBorrow (_meta, av), RMut ->
+              (* Check that the region is owned by the abstraction *)
+              [%sanity_check] span (region_is_owned abs region);
+              (* Check that the child value has the proper type *)
+              [%sanity_check] span (av.ty = ref_ty)
+          | AEndedSharedBorrow, RShared -> ()
+          | _ ->
+              [%ltrace
+                "Inconsistent context:\n- abs:\n" ^ abs_to_string span ctx abs
+                ^ "\n\n- value:\n" ^ tavalue_to_string ctx atv ^ "\n\n- ty:\n"
+                ^ ty_to_string ctx atv.ty];
+              [%craise] span "Inconsistent context")
       | ALoan lc, aty -> (
           let abs = Option.get info in
           match lc with
@@ -852,9 +872,9 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
   (* Check *)
   let check_info id info =
     [%ldebug
-      "checking info (sid: )"
+      "checking info (sid: "
       ^ SymbolicValueId.to_string id
-      ^ ":\n" ^ sv_info_to_string ctx info];
+      ^ "):\n" ^ sv_info_to_string ctx info];
     if info.aproj_borrows = [] && info.aproj_loans = [] then ()
     else (
       (* TODO: check that:
@@ -881,7 +901,7 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
         | loan_proj_union :: aproj_loans ->
             List.fold_left
               (fun loan_proj_union proj_ty ->
-                norm_proj_tys_union span loan_proj_union proj_ty)
+                norm_proj_tys_union span ctx loan_proj_union proj_ty)
               loan_proj_union aproj_loans
       in
 
@@ -898,11 +918,11 @@ let check_symbolic_values (span : Meta.span) (ctx : eval_ctx) : unit =
           let borrow_proj_union =
             List.fold_left
               (fun borrow_proj_union proj_ty ->
-                norm_proj_tys_union span borrow_proj_union proj_ty)
+                norm_proj_tys_union span ctx borrow_proj_union proj_ty)
               borrow_proj_union aproj_borrows
           in
           [%sanity_check] span
-            (norm_proj_ty_contains span loan_proj_union borrow_proj_union))
+            (norm_proj_ty_contains span ctx loan_proj_union borrow_proj_union))
   in
 
   M.iter check_info !infos

@@ -241,6 +241,12 @@ let compute_literal_type (cv : literal) : literal_type =
       [%craise_opt_span] None
         "Float, string and byte string literals are unsupported"
 
+let constant_expr_of_const_generic : const_generic -> Types.constant_expr_kind =
+  function
+  | CgGlobal id -> CGlobal { id; generics = TypesUtils.empty_generic_args }
+  | CgVar v -> CVar v
+  | CgValue l -> CLiteral l
+
 let fvar_get_id (v : fvar) : fvar_id = v.id
 
 let mk_tpat_from_literal (cv : literal) : tpat =
@@ -273,7 +279,11 @@ class ['self] subst_visitor =
     inherit [_] map_expr
 
     method! visit_TVar subst var =
-      subst.ty_subst (Substitute.expect_free_var None var)
+      (* There can be bound vars because of dyn traits - TODO: handle bound
+         vars properly *)
+      match var with
+      | Bound _ -> TVar var
+      | Free id -> subst.ty_subst id
 
     method! visit_CgVar subst var =
       subst.cg_subst (Substitute.expect_free_var None var)
@@ -308,9 +318,15 @@ let make_type_subst (vars : type_param list) (tys : ty list) :
   let mp = TypeVarId.Map.of_list (List.combine var_ids tys) in
   fun id -> TypeVarId.Map.find id mp
 
+let make_const_generic_subst_from_var_ids (var_ids : ConstGenericVarId.id list)
+    (cgs : const_generic list) : ConstGenericVarId.id -> const_generic =
+  let map = ConstGenericVarId.Map.of_list (List.combine var_ids cgs) in
+  fun varid -> ConstGenericVarId.Map.find varid map
+
 let make_const_generic_subst (vars : const_generic_param list)
     (cgs : const_generic list) : ConstGenericVarId.id -> const_generic =
-  Substitute.make_const_generic_subst_from_vars vars cgs
+  let vars = List.map (fun (v : const_generic_param) -> v.index) vars in
+  make_const_generic_subst_from_var_ids vars cgs
 
 let make_trait_subst (clauses : trait_param list) (refs : trait_ref list) :
     TraitClauseId.id -> trait_instance_id =
@@ -1734,6 +1750,12 @@ let mk_opened_lets (monadic : bool) (lets : (tpat * texpr) list)
     (fun (pat, value) (e : texpr) -> mk_opened_let monadic pat value e)
     lets next_e
 
+let mk_opened_heterogeneous_lets (lets : (bool * tpat * texpr) list)
+    (next_e : texpr) : texpr =
+  List.fold_right
+    (fun (monadic, pat, value) (e : texpr) -> mk_opened_let monadic pat value e)
+    lets next_e
+
 (** This helper does not close the binder *)
 let mk_opened_checked_let file line span (monadic : bool) (lv : tpat)
     (re : texpr) (next_e : texpr) : texpr =
@@ -2185,6 +2207,7 @@ let open_close_all_fun_body fresh_fvar_id (span : Meta.span)
     [%sanity_check] span (not (texpr_has_bvars fbody.body));
   let fbody = f fbody in
   if !Config.sanity_checks then
+    (* TODO: this one is maybe a bit too restrictive without being really useful *)
     [%sanity_check] span (not (texpr_has_bvars fbody.body));
   let fbody = close_all_fun_body span fbody in
   if !Config.sanity_checks then
@@ -2344,7 +2367,7 @@ let generic_args_of_params (generics : generic_params) : generic_args =
   in
   let const_generics =
     List.map
-      (fun (v : const_generic_param) -> T.CgVar (Free v.index))
+      (fun (v : const_generic_param) -> CgVar (Free v.index))
       generics.const_generics
   in
   let trait_refs =
@@ -2382,7 +2405,7 @@ type decomposed_loop_result = {
     The returned continuation allows reconstructing the decomposition, in case
     we introduced a let-binding. *)
 let opt_destruct_loop_result_decompose_outputs fresh_fvar_id span
-    ~(intro_let : bool) (e : texpr) :
+    ~(intro_let : bool) ~(opened_vars : bool) (e : texpr) :
     (decomposed_loop_result * (texpr -> texpr)) option =
   let f, args = destruct_apps e in
   match f.e with
@@ -2435,7 +2458,10 @@ let opt_destruct_loop_result_decompose_outputs fresh_fvar_id span
                   in
                   let fields = List.map mk_texpr_from_fvar fvars in
                   let tuple = mk_simpl_tuple_texpr span fields in
-                  let mk_bind e' = mk_closed_let span false pat e e' in
+                  let mk_bind e' =
+                    if opened_vars then mk_opened_let false pat e e'
+                    else mk_closed_let span false pat e e'
+                  in
                   (fields, tuple, mk_bind)
                 else
                   let fields =
@@ -2662,3 +2688,10 @@ let binop_can_fail : binop -> bool = function
   | Shr (OWrap, _, _)
   | AddChecked _ | SubChecked _ | MulChecked _ | Cmp _ -> false
   | Div _ | Rem _ | Add _ | Sub _ | Mul _ | Shl _ | Shr _ -> true
+
+let mk_bool_not (b : texpr) : texpr =
+  let qualif =
+    Qualif { id = FunOrOp (Unop (Not None)); generics = empty_generic_args }
+  in
+  let neg = { e = qualif; ty = TArrow (TLiteral TBool, TLiteral TBool) } in
+  { e = App (neg, b); ty = TLiteral TBool }

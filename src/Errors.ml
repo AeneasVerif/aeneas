@@ -58,7 +58,26 @@ type cfailure = {
 
 exception CFailure of cfailure
 
+(** Recoverable failure *)
+exception RFailure
+
+type unique_error = string * int [@@deriving show, eq, ord]
+
+module FileLineOrderedType :
+  Collections.OrderedType with type t = unique_error = struct
+  type t = unique_error
+
+  let compare = compare_unique_error
+  let to_string = show_unique_error
+  let pp_t = pp_unique_error
+  let show_t = show_unique_error
+end
+
+module FileLineSet = Collections.MakeSet (FileLineOrderedType)
+module FileLineMap = Collections.MakeMap (FileLineOrderedType)
+
 let error_list : (string * int * Meta.span option * string) list ref = ref []
+let unique_errors = ref FileLineMap.empty
 
 (** Save an error and print it at the same time.
 
@@ -67,7 +86,13 @@ let error_list : (string * int * Meta.span option * string) list ref = ref []
 let push_error (file : string) (line : int) (span : Meta.span option)
     (msg : string) =
   Mutex.protect error_mutex (fun _ ->
-      error_list := (file, line, span, msg) :: !error_list);
+      error_list := (file, line, span, msg) :: !error_list;
+      unique_errors :=
+        FileLineMap.update (file, line)
+          (function
+            | None -> Some 1
+            | Some n -> Some (n + 1))
+          !unique_errors);
   if !Config.print_error_emitters then
     log#serror (format_error_message_with_file_line file line span msg)
   else log#serror (format_error_message span msg)
@@ -130,8 +155,28 @@ let cassert (file : string) (line : int) (span : Meta.span) (b : bool)
     (msg : string) =
   cassert_opt_span file line (Some span) b msg
 
+let craise_recover_opt_span (file : string) (line : int) (recover : bool)
+    (span : Meta.span option) (msg : string) =
+  if recover then raise RFailure else craise_opt_span file line span msg
+
+let craise_recover (file : string) (line : int) (recover : bool)
+    (span : Meta.span) (msg : string) =
+  craise_recover_opt_span file line recover (Some span) msg
+
+let cassert_recover_opt_span (file : string) (line : int) (recover : bool)
+    (span : Meta.span option) (b : bool) (msg : string) =
+  if not b then craise_recover_opt_span file line recover span msg
+
+let cassert_recover (file : string) (line : int) (recover : bool)
+    (span : Meta.span) (b : bool) (msg : string) =
+  cassert_recover_opt_span file line recover (Some span) b msg
+
 let sanity_check (file : string) (line : int) span b =
   cassert file line span b "Internal error, please file an issue"
+
+let sanity_check_recover (file : string) (line : int) recover span b =
+  cassert_recover file line recover span b
+    "Internal error, please file an issue"
 
 let sanity_check_opt_span (file : string) (line : int) span b =
   cassert_opt_span file line span b "Internal error, please file an issue"
@@ -145,12 +190,13 @@ let internal_error (file : string) (line : int) (span : Meta.span) =
 
 let warn_opt_span (file : string) (line : int) (span : Meta.span option)
     (msg : string) =
-  if !Config.warnings_as_errors then
-    craise_opt_span file line span
-      (msg ^ "\nYou can deactivate this error with the option -soft-warnings")
+  if !Config.warnings_as_errors then craise_opt_span file line span msg
   else
     let msg = format_error_message_with_file_line file line span msg in
     log#swarning (msg ^ "\n")
+
+let warn (file : string) (line : int) (span : Meta.span) (msg : string) =
+  warn_opt_span file line (Some span) msg
 
 let cassert_warn_opt_span (file : string) (line : int) (span : Meta.span option)
     (b : bool) (msg : string) =

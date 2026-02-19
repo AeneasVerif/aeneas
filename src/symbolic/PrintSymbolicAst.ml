@@ -35,6 +35,11 @@ let value_aggregate_to_string (env : fmt_env) (v : value_aggregate) : string =
       trait_ref_to_string env trait_ref ^ "." ^ item
   | VaDiscriminant sv ->
       "@discriminant(" ^ Values.symbolic_value_to_string env sv ^ ")"
+  | VaDynTrait (v, tr) ->
+      "@castToDyn("
+      ^ Values.tvalue_to_string env v
+      ^ ", " ^ trait_ref_to_string env tr ^ ")"
+  | VaFnDef fn_ptr -> "@fn_def(" ^ fn_ptr_to_string env fn_ptr ^ ")"
 
 let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
     (e : expr) : string =
@@ -51,7 +56,7 @@ let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
       let call = call_to_string env indent call in
       let next = expr_to_string env indent indent_incr next in
       call ^ "\n" ^ next
-  | EndAbs (_, abs, next) ->
+  | EndAbs (_, abs, level, next) ->
       let indent1 = indent ^ indent_incr in
       let verbose = false in
       let abs =
@@ -59,26 +64,29 @@ let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
           abs
       in
       let next = expr_to_string env indent indent_incr next in
-      indent ^ "end\n" ^ abs ^ "\n" ^ next
+      indent ^ "end(level:" ^ string_of_int level ^ ")\n" ^ abs ^ "\n" ^ next
   | EvalGlobal (id, generics, sv, next) ->
       let sv = Values.symbolic_value_to_string env sv in
       let global = global_decl_ref_to_string env { id; generics } in
       let next = expr_to_string env indent indent_incr next in
       indent ^ "let " ^ sv ^ " = " ^ global ^ " in\n" ^ next
-  | Assertion (_, b, next) ->
+  | Assertion (_, expected, b, next) ->
+      let neg = if expected then "" else "¬" in
       let b = Values.tvalue_to_string env b in
       let next = expr_to_string env indent indent_incr next in
-      indent ^ "assert " ^ b ^ ";\n" ^ next
+      indent ^ "assert " ^ neg ^ b ^ ";\n" ^ next
   | Expansion (_, sv, exp) -> expansion_to_string env indent indent_incr sv exp
   | IntroSymbolic (_, _, sv, v, next) ->
       let sv = Values.symbolic_value_to_string env sv in
       let v = value_aggregate_to_string env v in
       let next = expr_to_string env indent indent_incr next in
-      indent ^ "let " ^ sv ^ " = " ^ v ^ "in\n" ^ next
-  | SubstituteAbsIds (aids, next) ->
+      indent ^ "let " ^ sv ^ " = " ^ v ^ " in\n" ^ next
+  | SubstituteAbsIds (eid, aids, next) ->
       let aids = AbsId.Map.to_string None AbsId.to_string aids in
       let next = expr_to_string env indent indent_incr next in
-      indent ^ "subst " ^ aids ^ " in\n" ^ next
+      indent ^ "subst@"
+      ^ SymbolicExprId.to_string eid
+      ^ " " ^ aids ^ " in\n" ^ next
   | ForwardEnd (ret, _, fwd_end, backs) ->
       let indent1 = indent ^ indent_incr in
       let indent2 = indent1 ^ indent_incr in
@@ -166,7 +174,7 @@ and expansion_to_string (env : fmt_env) (indent : string) (indent_incr : string)
       let next = expr_to_string env indent indent_incr next in
       indent ^ "let "
       ^ Values.symbolic_expansion_to_string env ty se
-      ^ " = " ^ scrut ^ "in\n" ^ next
+      ^ " = " ^ scrut ^ " in\n" ^ next
   | ExpandAdt branches ->
       let branch_to_string
           ((variant_id, svl, branch) :
@@ -208,8 +216,11 @@ and loop_to_string (env : fmt_env) (indent : string) (indent_incr : string)
       (fun (v : symbolic_value) -> SymbolicValueId.to_string v.sv_id)
       loop.input_svalues
   ^ "\n" ^ indent1 ^ "input_abs= "
-  ^ Print.list_to_string ~sep:", "
-      (fun (a : abs) -> AbsId.to_string a.abs_id)
+  ^ Print.list_to_string ~sep:",\n"
+      (fun abs ->
+        "\n"
+        ^ Print.EvalCtx.abs_to_string ~span:None ~with_ended:false loop.ctx
+            indent2 indent_incr abs)
       loop.input_abs
   ^ "\n" ^ indent1 ^ "break_svalues= "
   ^ Print.list_to_string ~sep:", "

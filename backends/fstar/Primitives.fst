@@ -51,6 +51,7 @@ let eval_global (#a : Type0) (x : result a{Ok? (normalize_term x)}) : a = Ok?.v 
 (*** Misc *)
 type char = FStar.Char.char
 type string = string
+type str = string
 
 let is_zero (n: nat) : bool = n = 0
 let decrease (n: nat{n > 0}) : nat = n - 1

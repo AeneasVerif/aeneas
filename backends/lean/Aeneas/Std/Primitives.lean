@@ -221,10 +221,27 @@ namespace Test
 end Test
 
 /-!
-# Misc
+# Loops
 -/
 
-abbrev Str := String
+inductive ControlFlow (α : Type u) (β : Type v) where
+  | cont (v : α) -- continue
+  | done (v : β) -- break
+deriving Repr, BEq
+
+def loop {α : Type u} {β : Type v} (body : α → Result (ControlFlow α β)) (x : α) : Result β := do
+  match body x with
+  | ok r =>
+    match r with
+    | ControlFlow.cont x => loop body x
+    | ControlFlow.done x => ok x
+  | fail e => fail e
+  | div => div
+partial_fixpoint
+
+/-!
+# Misc
+-/
 
 /-- The Never type in Rust -/
 inductive Never where
@@ -243,6 +260,18 @@ def Option.ofResult {a : Type u} (x : Result a) :
   match x with
   | ok x => some x
   | _ => none
+
+/-!
+# Dyn
+-/
+
+structure Dyn (Trait : Type u → Type v) where
+  /-- The type Self -/
+  self : Type u
+  /-- The trait instance -/
+  inst : Trait self
+  /-- The value itself -/
+  value : self
 
 end Std
 

@@ -49,7 +49,7 @@ let builtin_globals_map = mk_memoized mk_builtin_globals_map
     type parameter for the allocator to use, which we want to filter. *)
 let builtin_types () : Pure.builtin_type_info list =
   (let mk_type (rust_name : string) ?(custom_name : string option = None)
-       ?(keep_params : bool list option = None)
+       ?(keep_params : bool list option = None) ?(mut_regions : int list = [])
        ?(kind : type_variant_kind = KOpaque) () : Pure.builtin_type_info =
      let rust_name = parse_pattern rust_name in
      let extract_name =
@@ -102,7 +102,7 @@ let builtin_types () : Pure.builtin_type_info list =
            in
            Some (Enum variants)
      in
-     { rust_name; extract_name; keep_params; body_info }
+     { rust_name; extract_name; keep_params; mut_regions; body_info }
    in
    []
    @ mk_not_lean
@@ -132,6 +132,7 @@ let builtin_types () : Pure.builtin_type_info list =
              | Lean -> "Option"
              | Coq | FStar | HOL4 -> "option");
            keep_params = None;
+           mut_regions = [];
            body_info =
              Some
                (Enum

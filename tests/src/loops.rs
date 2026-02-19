@@ -561,3 +561,17 @@ fn decode(pe_dst: &mut [u8]) -> bool {
 
     false
 }
+
+// Issue reported on Zulip
+fn as_radix_minimized() {
+    let mut scalar = [0u64; 4];
+    let mut i = 0;
+    while i < 4 {
+        let _: u64 = if i == 0 {
+            scalar[i] >> 1
+        } else {
+            scalar[i] >> 1 | (scalar[i] << 63)
+        };
+        i += 1;
+    }
+}

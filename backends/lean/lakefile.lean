@@ -3,7 +3,7 @@ open Lake DSL
 
 -- Important: mathlib imports std4 and quote4: we mustn't add a `require std4` line
 require mathlib from git
-  "https://github.com/leanprover-community/mathlib4.git" @ "v4.27.0-rc1"
+  "https://github.com/leanprover-community/mathlib4.git" @ "v4.28.0-rc1"
 
 package «aeneas» {}
 

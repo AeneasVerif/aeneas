@@ -41,7 +41,7 @@ module Sig = struct
   let tvar_id_0 = TypeVarId.of_int 0
   let tvar_0 : ty = TVar (Free tvar_id_0)
   let cgvar_id_0 = ConstGenericVarId.of_int 0
-  let cgvar_0 : const_generic = CgVar (Free cgvar_id_0)
+  let cgvar_0 : constant_expr_kind = CVar (Free cgvar_id_0)
 
   (** Region 'a of id 0 *)
   let region_param_0 : region_param = { index = rvar_id_0; name = Some "'a" }
@@ -57,7 +57,7 @@ module Sig = struct
 
   (** Const generic parameter [const N : usize] of id 0 *)
   let cg_param_0 : const_generic_param =
-    { index = cgvar_id_0; name = "N"; ty = TUInt Usize }
+    { index = cgvar_id_0; name = "N"; ty = TLiteral (TUInt Usize) }
 
   let empty_const_generic_params : const_generic_param list = []
 
@@ -79,11 +79,8 @@ module Sig = struct
     let ref_kind = if is_mut then RMut else RShared in
     mk_ref_ty r ty ref_kind
 
-  let mk_array_ty (ty : ty) (cg : const_generic) : ty =
-    TAdt { id = TBuiltin TArray; generics = mk_generic_args [] [ ty ] [ cg ] }
-
-  let mk_slice_ty (ty : ty) : ty =
-    TAdt { id = TBuiltin TSlice; generics = mk_generic_args [] [ ty ] [] }
+  let mk_array_ty (ty : ty) (cg : constant_expr) : ty = TArray (ty, cg)
+  let mk_slice_ty (ty : ty) : ty = TSlice ty
 
   let mk_sig generics inputs output : bound_fun_sig =
     {
@@ -151,12 +148,13 @@ module Sig = struct
 
   let mk_array_slice_index_sig (is_array : bool) (is_mut : bool) : bound_fun_sig
       =
-    (* Array<T, N> *)
-    let input_ty ty =
-      if is_array then mk_array_ty ty cgvar_0 else mk_slice_ty ty
-    in
     (* usize *)
     let index_ty = usize_ty in
+    (* Array<T, N> *)
+    let input_ty ty =
+      if is_array then mk_array_ty ty { kind = cgvar_0; ty = index_ty }
+      else mk_slice_ty ty
+    in
     (* T *)
     let output_ty ty = ty in
     let cgs = if is_array then [ cg_param_0 ] else [] in
@@ -167,7 +165,7 @@ module Sig = struct
 
   let array_to_slice_sig (is_mut : bool) : bound_fun_sig =
     (* Array<T, N> *)
-    let input_ty ty = mk_array_ty ty cgvar_0 in
+    let input_ty ty = mk_array_ty ty { kind = cgvar_0; ty = usize_ty } in
     (* Slice<T> *)
     let output_ty ty = mk_slice_ty ty in
     let cgs = [ cg_param_0 ] in
@@ -181,7 +179,7 @@ module Sig = struct
     let inputs = [ tvar_0 (* T *) ] in
     let output =
       (* [T; N] *)
-      mk_array_ty tvar_0 cgvar_0
+      mk_array_ty tvar_0 { kind = cgvar_0; ty = usize_ty }
     in
     mk_sig generics inputs output
 

@@ -14,26 +14,27 @@ let hash_key (k : usize) : result usize =
 
 (** [hashmap::{core::clone::Clone for hashmap::Fraction}::clone]:
     Source: 'tests/src/hashmap.rs', lines 43:9-43:14 *)
-let cloneFraction_clone (self : fraction_t) : result fraction_t =
+let fraction_Insts_CoreCloneClone_clone
+  (self : fraction_t) : result fraction_t =
   Ok self
 
 (** [hashmap::{core::clone::Clone for hashmap::Fraction}::clone_from]:
     Source: 'tests/src/hashmap.rs', lines 43:9-43:14 *)
-let cloneFraction_clone_from
+let fraction_Insts_CoreCloneClone_clone_from
   (self : fraction_t) (source : fraction_t) : result fraction_t =
-  cloneFraction_clone source
+  fraction_Insts_CoreCloneClone_clone source
 
 (** Trait implementation: [hashmap::{core::clone::Clone for hashmap::Fraction}]
     Source: 'tests/src/hashmap.rs', lines 43:9-43:14 *)
-let core_clone_CloneFraction : core_clone_Clone fraction_t = {
-  clone = cloneFraction_clone;
-  clone_from = cloneFraction_clone_from;
+let fraction_Insts_CoreCloneClone : core_clone_Clone fraction_t = {
+  clone = fraction_Insts_CoreCloneClone_clone;
+  clone_from = fraction_Insts_CoreCloneClone_clone_from;
 }
 
 (** Trait implementation: [hashmap::{core::marker::Copy for hashmap::Fraction}]
     Source: 'tests/src/hashmap.rs', lines 43:16-43:20 *)
-let core_marker_CopyFraction : core_marker_Copy fraction_t = {
-  cloneInst = core_clone_CloneFraction;
+let fraction_Insts_CoreMarkerCopy : core_marker_Copy fraction_t = {
+  cloneInst = fraction_Insts_CoreCloneClone;
 }
 
 (** [hashmap::{hashmap::HashMap<T>}::allocate_slots]: loop 0:
@@ -308,14 +309,14 @@ let rec hashMap_get_mut_in_list_loop
     if ckey = key
     then
       Ok ((Some cvalue),
-        (fun ret ->
-          let x = begin match ret with | Some x1 -> x1 | _ -> cvalue end in
+        (fun o ->
+          let x = begin match o with | Some x1 -> x1 | _ -> cvalue end in
           AList_Cons ckey x tl))
     else
       let* (o, back) = hashMap_get_mut_in_list_loop tl key in
-      let back1 = fun ret -> let a = back ret in AList_Cons ckey cvalue a in
+      let back1 = fun o1 -> let a = back o1 in AList_Cons ckey cvalue a in
       Ok (o, back1)
-  | AList_Nil -> Ok (None, (fun ret -> AList_Nil))
+  | AList_Nil -> Ok (None, (fun o -> AList_Nil))
   end
 
 (** [hashmap::{hashmap::HashMap<T>}::get_mut_in_list]:
@@ -341,8 +342,8 @@ let hashMap_get_mut
   in
   let* (o, get_mut_in_list_back) = hashMap_get_mut_in_list a key in
   let back =
-    fun ret ->
-      let a1 = get_mut_in_list_back ret in
+    fun o1 ->
+      let a1 = get_mut_in_list_back o1 in
       let v = index_mut_back a1 in
       { self with slots = v }
   in

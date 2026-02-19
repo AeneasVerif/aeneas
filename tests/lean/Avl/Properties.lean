@@ -4,10 +4,7 @@ import Avl.OrderSpec
 
 namespace avl
 
-open Aeneas.Std Result
-
--- This rewriting lemma is problematic below
-attribute [-simp] Bool.exists_bool
+open Aeneas Std Result
 
 -- TODO: move
 @[simp]
@@ -75,7 +72,7 @@ def Node.forall (p: Node T -> Prop) (node : Node T) : Prop :=
   p node ∧
   Subtree.forall p node.left ∧ Subtree.forall p node.right
 termination_by Node.size node
-decreasing_by all_goals (simp_wf; fsimp [Node.left, Node.right]; split; fsimp <;> scalar_tac)
+decreasing_by all_goals (simp [Node.left, Node.right]; split; simp <;> scalar_tac)
 end
 
 @[simp]
@@ -239,37 +236,36 @@ theorem Tree.find_loop_spec
   {T : Type} (OrdInst : Ord T)
   [DecidableEq T] [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
   (value : T) (t : Subtree T) (hInv : Subtree.inv t) :
-  ∃ b, Tree.find_loop OrdInst value t = ok b ∧
-  (b ↔ value ∈ Subtree.v t) := by
+  Tree.find_loop OrdInst value t ⦃ b => b ↔ value ∈ Subtree.v t ⦄ := by
   unfold find_loop
   match t with
   | none => simp
   | some (.mk v left right height) =>
     fsimp only
     have hCmp := Ospec.infallible -- TODO
-    progress keep Hordering as ⟨ ordering ⟩; clear hCmp
+    progress as ⟨ ordering ⟩; clear hCmp
     have hInvLeft := Node.inv_left hInv
     have hInvRight := Node.inv_right hInv
     cases ordering <;> fsimp only
     . /- node.value < value -/
       progress
       have hNotIn := Node.lt_imp_not_in_left _ hInv
-      fsimp_all
-      intro; fsimp_all
+      simp_all
+      intro; simp_all
     . /- node.value = value -/
       fsimp_all
     . /- node.value > value -/
       progress
       have hNotIn := Node.lt_imp_not_in_right _ hInv
-      fsimp_all
-      intro; fsimp_all
+      simp_all
+      intro; simp_all
 
 theorem Tree.find_spec
   {T : Type} (OrdInst : Ord T)
   [DecidableEq T] [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
   (t : Tree T) (value : T) (hInv : t.inv) :
-  ∃ b, Tree.find OrdInst t value = ok b ∧
-  (b ↔ value ∈ t.v) := by
+  Tree.find OrdInst t value ⦃ b => b ↔ value ∈ t.v ⦄
+  := by
   rw [find]
   progress
   fsimp [Tree.v]; assumption
@@ -291,16 +287,17 @@ theorem Node.rotate_left_spec
   -- Z has a positive balance factor
   (hBfZ : 0 ≤ bf_z.val)
   :
-  ∃ ntree, rotate_left ⟨ x, a, none, bf_x ⟩ ⟨ z, b, c, bf_z ⟩ = ok ntree ∧
-  let tree : Node T := ⟨ x, a, some ⟨ z, b, c, bf_z ⟩, bf_x ⟩
-  -- We reestablished the invariant
-  Node.inv ntree ∧
-  -- The tree contains the nodes we expect
-  Node.v ntree = Node.v tree ∧
-  -- The height is the same as before. The original height is 2 + height b, and by
-  -- inserting an element (which produced subtree c) we got a new height of
-  -- 3 + height b; after the rotation we get back to 2 + height b.
-  Node.height ntree = 2 + Subtree.height b
+  rotate_left ⟨ x, a, none, bf_x ⟩ ⟨ z, b, c, bf_z ⟩
+  ⦃ ntree =>
+    let tree : Node T := ⟨ x, a, some ⟨ z, b, c, bf_z ⟩, bf_x ⟩
+    -- We reestablished the invariant
+    Node.inv ntree ∧
+    -- The tree contains the nodes we expect
+    Node.v ntree = Node.v tree ∧
+    -- The height is the same as before. The original height is 2 + height b, and by
+    -- inserting an element (which produced subtree c) we got a new height of
+    -- 3 + height b; after the rotation we get back to 2 + height b.
+    Node.height ntree = 2 + Subtree.height b ⦄
   := by
   rw [rotate_left]
   fsimp [core.mem.replace]
@@ -320,7 +317,7 @@ theorem Node.rotate_left_spec
         have hInv1 : y < x := by tauto
         have hInv2 := hInvX.right.right z
         fsimp at hInv2
-        apply lt_trans hInv1 hInv2
+        apply Std.lt_trans hInv1 hInv2
     . tauto
   -- Elements in the right subtree are < z
   have : ∀ y ∈ Subtree.v c, z < y := by
@@ -405,16 +402,17 @@ theorem Node.rotate_right_spec
   -- Z has a positive balance factor
   (hBfZ : bf_z.val ≤ 0)
   :
-  ∃ ntree, rotate_right ⟨ x, none, c, bf_x ⟩ ⟨ z, a, b, bf_z ⟩ = ok ntree ∧
-  let tree : Node T := ⟨ x, some ⟨ z, a, b, bf_z ⟩, c, bf_x ⟩
-  -- We reestablished the invariant
-  Node.inv ntree ∧
-  -- The tree contains the nodes we expect
-  Node.v ntree = Node.v tree ∧
-  -- The height is the same as before. The original height is 2 + height b, and by
-  -- inserting an element (which produced subtree c) we got a new height of
-  -- 3 + height b; after the rotation we get back to 2 + height b.
-  Node.height ntree = 2 + Subtree.height b
+  rotate_right ⟨ x, none, c, bf_x ⟩ ⟨ z, a, b, bf_z ⟩
+  ⦃ ntree =>
+    let tree : Node T := ⟨ x, some ⟨ z, a, b, bf_z ⟩, c, bf_x ⟩
+    -- We reestablished the invariant
+    Node.inv ntree ∧
+    -- The tree contains the nodes we expect
+    Node.v ntree = Node.v tree ∧
+    -- The height is the same as before. The original height is 2 + height b, and by
+    -- inserting an element (which produced subtree c) we got a new height of
+    -- 3 + height b; after the rotation we get back to 2 + height b.
+    Node.height ntree = 2 + Subtree.height b ⦄
   := by
   rw [rotate_right]
   fsimp [core.mem.replace]
@@ -433,7 +431,7 @@ theorem Node.rotate_right_spec
       -- Using: z < x ∧ x < y
       have : z < x := by tauto
       have : x < y := by tauto
-      apply lt_trans <;> tauto
+      apply Std.lt_trans <;> tauto
   -- Elements in the left subtree are < z
   have : ∀ y ∈ Subtree.v a, y < z := by
     fsimp_all [invAux]
@@ -521,15 +519,15 @@ theorem Node.rotate_left_right_spec
   let y_tree := ⟨ y, a, b, bf_y ⟩
   let z_tree := ⟨ z, t0, some y_tree, bf_z ⟩
   let tree : Node T := ⟨ x, some z_tree, t1, bf_x ⟩
-  ∃ ntree, rotate_left_right x_tree z_tree = ok ntree ∧
-  -- We reestablished the invariant
-  Node.inv ntree ∧
-  -- The tree contains the nodes we expect
-  Node.v ntree = Node.v tree ∧
-  -- The height is the same as before. The original height is 2 + height a, and by
-  -- inserting an element (which produced subtree c) we got a new height of
-  -- 3 + height b; after the rotation we get back to 2 + height b.
-  Node.height ntree = 2 + Subtree.height t0
+  rotate_left_right x_tree z_tree ⦃ ntree =>
+    -- We reestablished the invariant
+    Node.inv ntree ∧
+    -- The tree contains the nodes we expect
+    Node.v ntree = Node.v tree ∧
+    -- The height is the same as before. The original height is 2 + height a, and by
+    -- inserting an element (which produced subtree c) we got a new height of
+    -- 3 + height b; after the rotation we get back to 2 + height b.
+    Node.height ntree = 2 + Subtree.height t0 ⦄
   := by
   intro x_tree y_tree z_tree tree
   fsimp [rotate_left_right] -- TODO: this inlines the local decls
@@ -554,7 +552,7 @@ theorem Node.rotate_left_right_spec
       . fsimp_all
       . have : e < z := by tauto
         have : z < y := by tauto
-        apply lt_trans <;> tauto
+        apply Std.lt_trans <;> tauto
     . tauto
   have : ∀ (e : T), (e = x ∨ e ∈ Subtree.v b) ∨ e ∈ Subtree.v t1 → y < e := by
     intro e hIn; fsimp [invAux] at *
@@ -567,7 +565,7 @@ theorem Node.rotate_left_right_spec
         replace hInvX := hInvX.right.left y
         tauto
       have : x < e := by tauto
-      apply lt_trans <;> tauto
+      apply Std.lt_trans <;> tauto
   -- Auxiliary proofs for invAux for z
   have : ∀ e ∈ Subtree.v t0, e < z := by
     intro x hIn; fsimp [invAux] at *
@@ -646,15 +644,16 @@ theorem Node.rotate_right_left_spec
   let y_tree := ⟨ y, b, a, bf_y ⟩
   let z_tree := ⟨ z, some y_tree, t0, bf_z ⟩
   let tree : Node T := ⟨ x, t1, some z_tree, bf_x ⟩
-  ∃ ntree, rotate_right_left x_tree z_tree = ok ntree ∧
-  -- We reestablished the invariant
-  Node.inv ntree ∧
-  -- The tree contains the nodes we expect
-  Node.v ntree = Node.v tree ∧
-  -- The height is the same as before. The original height is 2 + height b, and by
-  -- inserting an element (which produced subtree c) we got a new height of
-  -- 3 + height b; after the rotation we get back to 2 + height b.
-  Node.height ntree = 2 + Subtree.height t1
+  rotate_right_left x_tree z_tree
+  ⦃ ntree =>
+    -- We reestablished the invariant
+    Node.inv ntree ∧
+    -- The tree contains the nodes we expect
+    Node.v ntree = Node.v tree ∧
+    -- The height is the same as before. The original height is 2 + height b, and by
+    -- inserting an element (which produced subtree c) we got a new height of
+    -- 3 + height b; after the rotation we get back to 2 + height b.
+    Node.height ntree = 2 + Subtree.height t1 ⦄
   := by
   intro x_tree y_tree z_tree tree
   fsimp [rotate_right_left] -- TODO: this inlines the local decls
@@ -680,7 +679,7 @@ theorem Node.rotate_right_left_spec
       . tauto
     . have : z < e := by tauto
       have : y < z := by tauto
-      apply lt_trans <;> tauto
+      apply Std.lt_trans <;> tauto
   have : ∀ (e : T), (e = x ∨ e ∈ Subtree.v t1) ∨ e ∈ Subtree.v b → e < y := by
     intro e hIn; fsimp [invAux] at *
     cases hIn
@@ -691,7 +690,7 @@ theorem Node.rotate_right_left_spec
           replace hInvX := hInvX.right.right y
           tauto
         have : e < x := by tauto
-        apply lt_trans <;> tauto
+        apply Std.lt_trans <;> tauto
     . tauto
   -- Auxiliary proofs for invAux for z
   have : ∀ e ∈ Subtree.v t0, z < e := by
@@ -771,12 +770,13 @@ theorem Node.insert_spec
   {T : Type} (OrdInst : Ord T) [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
   (node : Node T) (value : T)
   (hInv : Node.inv node) :
-  ∃ b node', Node.insert OrdInst node value = ok (b, node') ∧
-  Node.inv node' ∧
-  Node.v node' = Node.v node ∪ {value} ∧
-  (if b then node'.height = node.height + 1 else node'.height = node.height) ∧
-  -- This is important for some of the proofs
-  (b → node'.balanceFactor ≠ 0) := by
+  Node.insert OrdInst node value
+  ⦃ b node' =>
+    Node.inv node' ∧
+    Node.v node' = Node.v node ∪ {value} ∧
+    (if b then node'.height = node.height + 1 else node'.height = node.height) ∧
+    -- This is important for some of the proofs
+    (b → node'.balanceFactor ≠ 0)  ⦄ := by
   unfold Node.insert
   have hCmp := Ospec.infallible -- TODO
   progress as ⟨ ordering ⟩
@@ -797,12 +797,13 @@ theorem Tree.insert_in_opt_node_spec
   {T : Type} (OrdInst : Ord T) [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
   (tree : Option (Node T)) (value : T)
   (hInv : Subtree.inv tree) :
-  ∃ b tree', Tree.insert_in_opt_node OrdInst tree value = ok (b, tree') ∧
-  Subtree.inv tree' ∧
-  Subtree.v tree' = Subtree.v tree ∪ {value} ∧
-  (if b then Subtree.height tree' = Subtree.height tree + 1
-   else Subtree.height tree' = Subtree.height tree) ∧
-  (b → Subtree.height tree > 0 → Subtree.balanceFactor tree' ≠ 0) := by
+  Tree.insert_in_opt_node OrdInst tree value
+  ⦃ b tree' =>
+    Subtree.inv tree' ∧
+    Subtree.v tree' = Subtree.v tree ∪ {value} ∧
+    (if b then Subtree.height tree' = Subtree.height tree + 1
+    else Subtree.height tree' = Subtree.height tree) ∧
+    (b → Subtree.height tree > 0 → Subtree.balanceFactor tree' ≠ 0) ⦄ := by
   unfold Tree.insert_in_opt_node
   cases hNode : tree <;> fsimp [hNode]
   . -- tree = none
@@ -823,11 +824,12 @@ theorem Node.insert_in_left_spec
   (node : Node T) (value : T)
   (hInv : Node.inv node)
   (hLt : value < node.value) :
-  ∃ b node', Node.insert_in_left OrdInst node value = ok (b, node') ∧
-  Node.inv node' ∧
-  Node.v node' = Node.v node ∪ {value} ∧
-  (if b then node'.height = node.height + 1 else node'.height = node.height) ∧
-  (b → node'.balanceFactor ≠ 0) := by
+  Node.insert_in_left OrdInst node value
+  ⦃ b node' =>
+    Node.inv node' ∧
+    Node.v node' = Node.v node ∪ {value} ∧
+    (if b then node'.height = node.height + 1 else node'.height = node.height) ∧
+    (b → node'.balanceFactor ≠ 0) ⦄ := by
   unfold Node.insert_in_left
   have hInvLeft : Subtree.inv node.left := by cases node; fsimp_all
   progress as ⟨ updt, left_opt' ⟩
@@ -921,11 +923,12 @@ theorem Node.insert_in_right_spec
   (node : Node T) (value : T)
   (hInv : Node.inv node)
   (hGt : value > node.value) :
-  ∃ b node', Node.insert_in_right OrdInst node value = ok (b, node') ∧
-  Node.inv node' ∧
-  Node.v node' = Node.v node ∪ {value} ∧
-  (if b then node'.height = node.height + 1 else node'.height = node.height) ∧
-  (b → node'.balanceFactor ≠ 0) := by
+  Node.insert_in_right OrdInst node value
+  ⦃ b node' =>
+    Node.inv node' ∧
+    Node.v node' = Node.v node ∪ {value} ∧
+    (if b then node'.height = node.height + 1 else node'.height = node.height) ∧
+    (b → node'.balanceFactor ≠ 0) ⦄ := by
   unfold Node.insert_in_right
   have hInvLeft : Subtree.inv node.right := by cases node; fsimp_all
   progress as ⟨ updt, right_opt' ⟩
@@ -1018,17 +1021,18 @@ theorem Tree.insert_spec {T : Type}
   (OrdInst : Ord T) [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
   (tree : Tree T) (value : T)
   (hInv : tree.inv) :
-  ∃ updt tree', Tree.insert OrdInst tree value = ok (updt, tree') ∧
-  tree'.inv ∧
-  (if updt then tree'.height = tree.height + 1 else tree'.height = tree.height) ∧
-  tree'.v = tree.v ∪ {value} := by
+  Tree.insert OrdInst tree value
+  ⦃ updt tree' =>
+    tree'.inv ∧
+    (if updt then tree'.height = tree.height + 1 else tree'.height = tree.height) ∧
+    tree'.v = tree.v ∪ {value} ⦄ := by
   unfold Tree.insert
   progress as ⟨ updt, tree' ⟩
   fsimp [*]
 
 @[progress]
 theorem Tree.new_spec {T : Type} (OrdInst : Ord T) :
-  ∃ t, Tree.new OrdInst = ok t ∧ t.v = ∅ ∧ t.height = 0 := by
+  Tree.new OrdInst ⦃ t => t.v = ∅ ∧ t.height = 0 ⦄ := by
   fsimp [new, Tree.v, Tree.height]
 
 end avl

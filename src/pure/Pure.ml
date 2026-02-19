@@ -35,8 +35,6 @@ module ConstGenericVarId = T.ConstGenericVarId
 type llbc_name = T.name [@@deriving show, ord]
 type integer_type = T.integer_type [@@deriving show, ord]
 type float_type = T.float_type [@@deriving show, ord]
-type const_generic_param = T.const_generic_param [@@deriving show, ord]
-type const_generic = T.const_generic [@@deriving show, ord]
 type const_generic_var_id = T.const_generic_var_id [@@deriving show, ord]
 type trait_decl_id = T.trait_decl_id [@@deriving show, ord]
 type trait_impl_id = T.trait_impl_id [@@deriving show, ord]
@@ -77,11 +75,7 @@ type fvar_id = FVarId.id [@@deriving show, ord]
 type builtin_ty =
   | TResult
   | TSum  (** sum type with two variants: left and right *)
-  | TLoopResult
-      (** A continue or a break.
-
-          We introduce this provisionally: we eliminate it during a micro-pass
-      *)
+  | TLoopResult  (** A continue or a break. TODO: rename to TControlFlow *)
   | TError
   | TFuel
   | TArray
@@ -165,6 +159,11 @@ type builtin_type_info = {
 
           For instance, `Vec` type takes a type parameter for the allocator,
           which we want to ignore. *)
+  mut_regions : int list;
+      (** The regions which are used for mutable borrows.
+
+          The integer represents the position of the region in the list of
+          parameters, not its id. *)
   body_info : builtin_type_body_info option;
 }
 [@@deriving show, ord]
@@ -236,8 +235,11 @@ type type_var_id = TypeVarId.id [@@deriving show, ord]
 (** Ancestor for iter visitor for [ty] *)
 class ['self] iter_type_id_base =
   object (_self : 'self)
-    inherit [_] VisitorsRuntime.iter
-    method visit_type_decl_id : 'env -> type_decl_id -> unit = fun _ _ -> ()
+    inherit [_] T.iter_ty_base
+
+    method visit_const_generic_var_id : 'env -> const_generic_var_id -> unit =
+      fun _ _ -> ()
+
     method visit_builtin_ty : 'env -> builtin_ty -> unit = fun _ _ -> ()
     method visit_overflow_mode : 'env -> overflow_mode -> unit = fun _ _ -> ()
   end
@@ -245,9 +247,10 @@ class ['self] iter_type_id_base =
 (** Ancestor for map visitor for [ty] *)
 class ['self] map_type_id_base =
   object (_self : 'self)
-    inherit [_] VisitorsRuntime.map
+    inherit [_] T.map_ty_base
 
-    method visit_type_decl_id : 'env -> type_decl_id -> type_decl_id =
+    method visit_const_generic_var_id :
+        'env -> const_generic_var_id -> const_generic_var_id =
       fun _ x -> x
 
     method visit_builtin_ty : 'env -> builtin_ty -> builtin_ty = fun _ x -> x
@@ -259,11 +262,12 @@ class ['self] map_type_id_base =
 (** Ancestor for reduce visitor for [ty] *)
 class virtual ['self] reduce_type_id_base =
   object (self : 'self)
-    inherit [_] VisitorsRuntime.reduce
+    inherit [_] T.reduce_type_vars
 
-    method visit_type_decl_id : 'env -> type_decl_id -> 'a =
+    method visit_const_generic_var_id : 'env -> const_generic_var_id -> 'a =
       fun _ _ -> self#zero
 
+    method visit_span : 'env -> span -> 'a = fun _ _ -> self#zero
     method visit_builtin_ty : 'env -> builtin_ty -> 'a = fun _ _ -> self#zero
 
     method visit_overflow_mode : 'env -> overflow_mode -> 'a =
@@ -273,10 +277,13 @@ class virtual ['self] reduce_type_id_base =
 (** Ancestor for mapreduce visitor for [ty] *)
 class virtual ['self] mapreduce_type_id_base =
   object (self : 'self)
-    inherit [_] VisitorsRuntime.mapreduce
+    inherit [_] T.mapreduce_type_vars
 
-    method visit_type_decl_id : 'env -> type_decl_id -> type_decl_id * 'a =
+    method visit_const_generic_var_id :
+        'env -> const_generic_var_id -> const_generic_var_id * 'a =
       fun _ x -> (x, self#zero)
+
+    method visit_span : 'env -> span -> span * 'a = fun _ x -> (x, self#zero)
 
     method visit_builtin_ty : 'env -> builtin_ty -> builtin_ty * 'a =
       fun _ x -> (x, self#zero)
@@ -286,6 +293,19 @@ class virtual ['self] mapreduce_type_id_base =
   end
 
 type type_id = TAdtId of type_decl_id | TTuple | TBuiltin of builtin_ty
+
+and const_generic =
+  | CgGlobal of global_decl_id  (** A global constant *)
+  | CgVar of const_generic_var_id de_bruijn_var  (** A const generic variable *)
+  | CgValue of V.literal  (** A concrete value *)
+
+and const_generic_param = {
+  index : const_generic_var_id;
+      (** Index identifying the variable among other variables bound at the same
+          level. *)
+  name : string;  (** Const generic name *)
+  ty : T.literal_type;  (** Type of the const generic *)
+}
 [@@deriving
   show,
   ord,
@@ -329,33 +349,67 @@ type type_id = TAdtId of type_decl_id | TTuple | TBuiltin of builtin_ty
     }]
 
 type literal_type = T.literal_type [@@deriving show, ord]
+type type_param = T.type_param [@@deriving show, ord]
 
 (** Ancestor for iter visitor for [ty] *)
 class ['self] iter_ty_base =
-  object (_self : 'self)
+  object (self : 'self)
     inherit [_] iter_type_id
-    inherit! [_] T.iter_const_generic
+
+    method visit_type_param : 'env -> type_param -> unit =
+      fun e var ->
+        self#visit_type_var_id e var.index;
+        self#visit_string e var.name
+
+    method visit_trait_item_name : 'env -> trait_item_name -> unit =
+      fun _ _ -> ()
   end
 
 (** Ancestor for map visitor for [ty] *)
 class ['self] map_ty_base =
-  object (_self : 'self)
+  object (self : 'self)
     inherit [_] map_type_id
-    inherit! [_] T.map_const_generic
+
+    method visit_type_param : 'env -> type_param -> type_param =
+      fun e var ->
+        {
+          index = self#visit_type_var_id e var.index;
+          name = self#visit_string e var.name;
+        }
+
+    method visit_trait_item_name : 'env -> trait_item_name -> trait_item_name =
+      fun _ x -> x
   end
 
 (** Ancestor for reduce visitor for [ty] *)
 class virtual ['self] reduce_ty_base =
-  object (_self : 'self)
+  object (self : 'self)
     inherit [_] reduce_type_id
-    inherit! [_] T.reduce_const_generic
+
+    method visit_type_param : 'env -> type_param -> 'a =
+      fun e var ->
+        let x0 = self#visit_type_var_id e var.index in
+        let x1 = self#visit_string e var.name in
+        self#plus x0 x1
+
+    method visit_trait_item_name : 'env -> trait_item_name -> 'a =
+      fun _ _ -> self#zero
   end
 
 (** Ancestor for mapreduce visitor for [ty] *)
 class virtual ['self] mapreduce_ty_base =
-  object (_self : 'self)
+  object (self : 'self)
     inherit [_] mapreduce_type_id
-    inherit! [_] T.mapreduce_const_generic
+
+    method visit_type_param : 'env -> type_param -> type_param * 'a =
+      fun e var ->
+        let index, x0 = self#visit_type_var_id e var.index in
+        let name, x1 = self#visit_string e var.name in
+        ({ index; name }, self#plus x0 x1)
+
+    method visit_trait_item_name :
+        'env -> trait_item_name -> trait_item_name * 'a =
+      fun _ x -> (x, self#zero)
   end
 
 type ty =
@@ -373,7 +427,10 @@ type ty =
   | TTraitType of trait_ref * string
       (** The string is for the name of the associated type *)
   | TNever
+  | TDynTrait of dyn_predicate
   | TError
+
+and dyn_predicate = { params : generic_params }
 
 and trait_ref = {
   trait_id : trait_instance_id;
@@ -400,6 +457,26 @@ and generic_args = {
   const_generics : const_generic list;
   trait_refs : trait_ref list;
 }
+
+and trait_param = {
+  clause_id : trait_clause_id;
+  trait_id : trait_decl_id;
+  generics : generic_args;
+}
+
+and generic_params = {
+  types : type_param list;
+  const_generics : const_generic_param list;
+  trait_clauses : trait_param list;
+}
+
+and trait_type_constraint = {
+  trait_ref : trait_ref;
+  type_name : trait_item_name;
+  ty : ty;
+}
+
+and predicates = { trait_type_constraints : trait_type_constraint list }
 
 (** See the documentation of [E.binop] *)
 and binop =
@@ -433,6 +510,9 @@ and builtin_impl_data =
           Note that in practice, we should never use this function or this
           builtin trait impl (though they happen to appear in the crates
           serialized by Charon). *)
+  | BuiltinFn
+  | BuiltinFnMut
+  | BuiltinFnOnce
 
 and trait_instance_id =
   | Self
@@ -484,61 +564,24 @@ and trait_instance_id =
       polymorphic = false;
     }]
 
-type type_param = T.type_param [@@deriving show, ord]
-
 (** Ancestor for iter visitor for [type_decl] *)
 class ['self] iter_type_decl_base =
-  object (self : 'self)
+  object (_self : 'self)
     inherit [_] iter_ty
-
-    method visit_type_param : 'env -> type_param -> unit =
-      fun e var ->
-        self#visit_type_var_id e var.index;
-        self#visit_string e var.name
-
-    method visit_const_generic_param : 'env -> const_generic_param -> unit =
-      fun e var ->
-        self#visit_const_generic_var_id e var.index;
-        self#visit_string e var.name;
-        self#visit_literal_type e var.ty
-
     method visit_item_meta : 'env -> T.item_meta -> unit = fun _ _ -> ()
 
     method visit_builtin_type_info : 'env -> builtin_type_info -> unit =
-      fun _ _ -> ()
-
-    method visit_trait_item_name : 'env -> trait_item_name -> unit =
       fun _ _ -> ()
   end
 
 (** Ancestor for map visitor for [type_decl] *)
 class ['self] map_type_decl_base =
-  object (self : 'self)
+  object (_self : 'self)
     inherit [_] map_ty
-
-    method visit_type_param : 'env -> type_param -> type_param =
-      fun e var ->
-        {
-          index = self#visit_type_var_id e var.index;
-          name = self#visit_string e var.name;
-        }
-
-    method visit_const_generic_param :
-        'env -> const_generic_param -> const_generic_param =
-      fun e var ->
-        {
-          index = self#visit_const_generic_var_id e var.index;
-          name = self#visit_string e var.name;
-          ty = self#visit_literal_type e var.ty;
-        }
-
     method visit_item_meta : 'env -> T.item_meta -> T.item_meta = fun _ x -> x
 
     method visit_builtin_type_info :
         'env -> builtin_type_info -> builtin_type_info =
-      fun _ x -> x
-
-    method visit_trait_item_name : 'env -> trait_item_name -> trait_item_name =
       fun _ x -> x
   end
 
@@ -546,26 +589,9 @@ class ['self] map_type_decl_base =
 class virtual ['self] reduce_type_decl_base =
   object (self : 'self)
     inherit [_] reduce_ty
-
-    method visit_type_param : 'env -> type_param -> 'a =
-      fun e var ->
-        let x0 = self#visit_type_var_id e var.index in
-        let x1 = self#visit_string e var.name in
-        self#plus x0 x1
-
-    method visit_const_generic_param : 'env -> const_generic_param -> 'a =
-      fun e var ->
-        let x0 = self#visit_const_generic_var_id e var.index in
-        let x1 = self#visit_string e var.name in
-        let x2 = self#visit_literal_type e var.ty in
-        self#plus (self#plus x0 x1) x2
-
     method visit_item_meta : 'env -> T.item_meta -> 'a = fun _ _ -> self#zero
 
     method visit_builtin_type_info : 'env -> builtin_type_info -> 'a =
-      fun _ _ -> self#zero
-
-    method visit_trait_item_name : 'env -> trait_item_name -> 'a =
       fun _ _ -> self#zero
   end
 
@@ -574,29 +600,11 @@ class virtual ['self] mapreduce_type_decl_base =
   object (self : 'self)
     inherit [_] mapreduce_ty
 
-    method visit_type_param : 'env -> type_param -> type_param * 'a =
-      fun e var ->
-        let index, x0 = self#visit_type_var_id e var.index in
-        let name, x1 = self#visit_string e var.name in
-        ({ index; name }, self#plus x0 x1)
-
-    method visit_const_generic_param :
-        'env -> const_generic_param -> const_generic_param * 'a =
-      fun e var ->
-        let index, x0 = self#visit_const_generic_var_id e var.index in
-        let name, x1 = self#visit_string e var.name in
-        let ty, x2 = self#visit_literal_type e var.ty in
-        ({ index; name; ty }, self#plus (self#plus x0 x1) x2)
-
     method visit_item_meta : 'env -> T.item_meta -> T.item_meta * 'a =
       fun _ x -> (x, self#zero)
 
     method visit_builtin_type_info :
         'env -> builtin_type_info -> builtin_type_info * 'a =
-      fun _ x -> (x, self#zero)
-
-    method visit_trait_item_name :
-        'env -> trait_item_name -> trait_item_name * 'a =
       fun _ x -> (x, self#zero)
   end
 
@@ -611,29 +619,10 @@ and variant = {
   fields : field list;
   variant_attr_info : (attr_info[@opaque]);
   discriminant : int;
+  ty : literal_type;
 }
 
 and type_decl_kind = Struct of field list | Enum of variant list | Opaque
-
-and trait_param = {
-  clause_id : trait_clause_id;
-  trait_id : trait_decl_id;
-  generics : generic_args;
-}
-
-and generic_params = {
-  types : type_param list;
-  const_generics : const_generic_param list;
-  trait_clauses : trait_param list;
-}
-
-and trait_type_constraint = {
-  trait_ref : trait_ref;
-  type_name : trait_item_name;
-  ty : ty;
-}
-
-and predicates = { trait_type_constraints : trait_type_constraint list }
 [@@deriving
   show,
   ord,
@@ -1078,6 +1067,8 @@ and qualif_id =
   | AdtCons of adt_cons_id  (** A function or ADT constructor identifier *)
   | Proj of projection  (** Field projector *)
   | TraitConst of trait_ref * string  (** A trait associated constant *)
+  | MkDynTrait of trait_ref  (** Dyn trait constructor *)
+  | LoopOp  (** Loop fixed-point operator *)
 
 (** An instantiated qualifier.
 
@@ -1128,7 +1119,6 @@ class ['self] iter_expr_base =
   object (_self : 'self)
     inherit [_] iter_qualif
     inherit! [_] iter_type_id
-    method visit_span : 'env -> Meta.span -> unit = fun _ _ -> ()
     method visit_db_scope_id : 'env -> db_scope_id -> unit = fun _ _ -> ()
   end
 
@@ -1137,7 +1127,6 @@ class ['self] map_expr_base =
   object (_self : 'self)
     inherit [_] map_qualif
     inherit! [_] map_type_id
-    method visit_span : 'env -> Meta.span -> Meta.span = fun _ x -> x
     method visit_db_scope_id : 'env -> db_scope_id -> db_scope_id = fun _ x -> x
   end
 
@@ -1146,7 +1135,6 @@ class virtual ['self] reduce_expr_base =
   object (self : 'self)
     inherit [_] reduce_qualif
     inherit! [_] reduce_type_id
-    method visit_span : 'env -> Meta.span -> 'a = fun _ _ -> self#zero
     method visit_db_scope_id : 'env -> db_scope_id -> 'a = fun _ _ -> self#zero
   end
 
@@ -1155,9 +1143,6 @@ class virtual ['self] mapreduce_expr_base =
   object (self : 'self)
     inherit [_] mapreduce_qualif
     inherit! [_] mapreduce_type_id
-
-    method visit_span : 'env -> Meta.span -> Meta.span * 'a =
-      fun _ x -> (x, self#zero)
 
     method visit_db_scope_id : 'env -> db_scope_id -> db_scope_id * 'a =
       fun _ x -> (x, self#zero)
@@ -1255,6 +1240,10 @@ and loop = {
           *continuations* come first (while for the outputs the *values* come
           first). *)
   loop_body : loop_body;
+  to_rec : bool;
+      (** Should we extract this loop to a recursive function? This boolean is
+          initially [false] and might be set to [true] inside the micro-passes.
+      *)
 }
 
 (** A loop body.
@@ -1429,11 +1418,13 @@ type fun_sig_info = {
 }
 [@@deriving show]
 
+type abs_level = int [@@deriving show]
+
 type back_sg_info = {
-  inputs : (string option * ty) list;
-      (** The additional inputs of the backward function *)
-  outputs : ty list;
-      (** The "decomposed" list of outputs.
+  inputs : (abs_level * (string option * ty) list) list;
+      (** The inputs of the backward function, level by level. *)
+  outputs : (abs_level * (string option * ty) list) list;
+      (** The "decomposed" list of outputs, level by level.
 
           The list contains all the types of all the given back values (there is
           at most one type per forward input argument).
@@ -1449,9 +1440,6 @@ type back_sg_info = {
           Non-decomposed ouputs (if the function can fail, but is not stateful):
           - [result T]
           - [[result (T * T)]] *)
-  output_names : string option list;
-      (** The optional names for the backward outputs. We derive those from the
-          names of the inputs of the original LLBC function. *)
   effect_info : fun_effect_info;
   filter : bool;  (** Should we filter this backward function? *)
 }
@@ -1640,6 +1628,23 @@ type fun_decl = {
           branching) *)
   loop_id : LoopId.id option;
       (** [Some] if this definition was generated for a loop *)
+  loop_pos : int list;
+      (** The position of this loop (empty if this is not a loop)
+
+          We use this to generate the names when extracting the definition:
+          {[
+            fn f() {
+              loop { // position [0]
+                loop {} // position [0; 0]
+                loop {} // position [0; 1]
+                loop {} // position [0; 2]
+              }
+              loop {} // position [1]
+            }
+          ]}
+
+          We used to name the loop functions with the loop id, but it's clearer
+          to use the position. *)
   name : string;
       (** We use the name only for printing purposes (for debugging): the name
           used at extraction time will be derived from the llbc_name. *)

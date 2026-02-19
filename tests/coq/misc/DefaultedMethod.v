@@ -8,98 +8,10 @@ Import ListNotations.
 Local Open Scope Primitives_scope.
 Module DefaultedMethod.
 
-(** Trait declaration: [core::cmp::PartialEq]
-    Source: '/rustc/library/core/src/cmp.rs', lines 251:0-251:65
-    Name pattern: [core::cmp::PartialEq] *)
-Record core_cmp_PartialEq_t (Self : Type) (Rhs : Type)
-  := mkcore_cmp_PartialEq_t {
-  core_cmp_PartialEq_t_eq : Self -> Rhs -> result bool;
-}.
-
-Arguments mkcore_cmp_PartialEq_t { _ } { _ }.
-Arguments core_cmp_PartialEq_t_eq { _ } { _ } _.
-
-(** Trait declaration: [core::cmp::Eq]
-    Source: '/rustc/library/core/src/cmp.rs', lines 338:0-338:58
-    Name pattern: [core::cmp::Eq] *)
-Record core_cmp_Eq_t (Self : Type) := mkcore_cmp_Eq_t {
-  core_cmp_Eq_tcore_cmp_Eq_t_PartialEqInst : core_cmp_PartialEq_t Self Self;
-}.
-
-Arguments mkcore_cmp_Eq_t { _ }.
-Arguments core_cmp_Eq_tcore_cmp_Eq_t_PartialEqInst { _ } _.
-
-(** [core::cmp::Ordering]
-    Source: '/rustc/library/core/src/cmp.rs', lines 392:0-392:17
-    Name pattern: [core::cmp::Ordering] *)
-Inductive core_cmp_Ordering_t :=
-| Core_cmp_Ordering_Less : core_cmp_Ordering_t
-| Core_cmp_Ordering_Equal : core_cmp_Ordering_t
-| Core_cmp_Ordering_Greater : core_cmp_Ordering_t
-.
-
-(** Trait declaration: [core::cmp::PartialOrd]
-    Source: '/rustc/library/core/src/cmp.rs', lines 1354:0-1355:41
-    Name pattern: [core::cmp::PartialOrd] *)
-Record core_cmp_PartialOrd_t (Self : Type) (Rhs : Type)
-  := mkcore_cmp_PartialOrd_t {
-  core_cmp_PartialOrd_tcore_cmp_PartialOrd_t_PartialEqInst :
-    core_cmp_PartialEq_t Self Rhs;
-  core_cmp_PartialOrd_t_partial_cmp : Self -> Rhs -> result (option
-    core_cmp_Ordering_t);
-}.
-
-Arguments mkcore_cmp_PartialOrd_t { _ } { _ }.
-Arguments core_cmp_PartialOrd_tcore_cmp_PartialOrd_t_PartialEqInst { _ } { _ }
-  _.
-Arguments core_cmp_PartialOrd_t_partial_cmp { _ } { _ } _.
-
-(** Trait declaration: [core::cmp::Ord]
-    Source: '/rustc/library/core/src/cmp.rs', lines 969:0-969:73
-    Name pattern: [core::cmp::Ord] *)
-Record core_cmp_Ord_t (Self : Type) := mkcore_cmp_Ord_t {
-  core_cmp_Ord_tcore_cmp_Ord_t_EqInst : core_cmp_Eq_t Self;
-  core_cmp_Ord_tcore_cmp_Ord_t_PartialOrdInst : core_cmp_PartialOrd_t Self
-    Self;
-  core_cmp_Ord_t_cmp : Self -> Self -> result core_cmp_Ordering_t;
-  core_cmp_Ord_t_min : Self -> Self -> result Self;
-}.
-
-Arguments mkcore_cmp_Ord_t { _ }.
-Arguments core_cmp_Ord_tcore_cmp_Ord_t_EqInst { _ } _.
-Arguments core_cmp_Ord_tcore_cmp_Ord_t_PartialOrdInst { _ } _.
-Arguments core_cmp_Ord_t_cmp { _ } _.
-Arguments core_cmp_Ord_t_min { _ } _.
-
-(** [core::cmp::Ord::min]:
-    Source: '/rustc/library/core/src/cmp.rs', lines 1060:4-1062:39
-    Name pattern: [core::cmp::Ord::min] *)
-Axiom core_cmp_Ord_min_default :
-  forall{Self : Type} (ordInst : core_cmp_Ord_t Self),
-        Self -> Self -> result Self
-.
-
-(** [core::cmp::impls::{core::cmp::PartialEq<i32> for i32}::eq]:
-    Source: '/rustc/library/core/src/cmp.rs', lines 1865:16-1865:50
-    Name pattern: [core::cmp::impls::{core::cmp::PartialEq<i32, i32>}::eq] *)
-Axiom core_cmp_impls_PartialEqI32I32_eq : i32 -> i32 -> result bool.
-
-(** [core::cmp::impls::{core::cmp::PartialOrd<i32> for i32}::partial_cmp]:
-    Source: '/rustc/library/core/src/cmp.rs', lines 1986:16-1986:71
-    Name pattern: [core::cmp::impls::{core::cmp::PartialOrd<i32, i32>}::partial_cmp] *)
-Axiom core_cmp_impls_PartialOrdI32I32_partial_cmp
-  : i32 -> i32 -> result (option core_cmp_Ordering_t)
-.
-
-(** [core::cmp::impls::{core::cmp::Ord for i32}::cmp]:
-    Source: '/rustc/library/core/src/cmp.rs', lines 1997:16-1997:55
-    Name pattern: [core::cmp::impls::{core::cmp::Ord<i32>}::cmp] *)
-Axiom core_cmp_impls_OrdI32_cmp : i32 -> i32 -> result core_cmp_Ordering_t.
-
 (** [core::cmp::impls::{core::cmp::Ord for i32}::min]:
     Source: '/rustc/library/core/src/cmp.rs', lines 1995:12-1995:33
     Name pattern: [core::cmp::impls::{core::cmp::Ord<i32>}::min] *)
-Axiom core_cmp_impls_OrdI32_min : i32 -> i32 -> result i32.
+Axiom I32_Insts_CoreCmpOrd_min : i32 -> i32 -> result i32.
 
 (** Trait declaration: [defaulted_method::Trait]
     Source: 'tests/src/defaulted_method.rs', lines 2:0-7:1 *)
@@ -123,25 +35,27 @@ Definition trait_provided_method_default
     Source: 'tests/src/defaulted_method.rs', lines 9:0-9:18 *)
 Definition NoOverride_t : Type := unit.
 
-(** [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}::provided_method]:
-    Source: 'tests/src/defaulted_method.rs', lines 11:4-13:5 *)
-Definition traitNoOverride_provided_method
-  (self : NoOverride_t) : result u32 :=
-  Ok 73%u32
-.
-
 (** [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}::required_method]:
     Source: 'tests/src/defaulted_method.rs', lines 14:4-16:5 *)
-Definition traitNoOverride_required_method
+Definition NoOverride_Insts_Defaulted_methodTrait_required_method
   (self : NoOverride_t) : result u32 :=
   Ok 12%u32
 .
 
+(** [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}::provided_method]:
+    Source: 'tests/src/defaulted_method.rs', lines 11:4-13:5 *)
+Definition NoOverride_Insts_Defaulted_methodTrait_provided_method
+  (self : NoOverride_t) : result u32 :=
+  Ok 73%u32
+.
+
 (** Trait implementation: [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}]
     Source: 'tests/src/defaulted_method.rs', lines 10:0-17:1 *)
-Definition TraitNoOverride : Trait_t NoOverride_t := {|
-  Trait_t_provided_method := traitNoOverride_provided_method;
-  Trait_t_required_method := traitNoOverride_required_method;
+Definition NoOverride_Insts_Defaulted_methodTrait : Trait_t NoOverride_t := {|
+  Trait_t_provided_method :=
+    NoOverride_Insts_Defaulted_methodTrait_provided_method;
+  Trait_t_required_method :=
+    NoOverride_Insts_Defaulted_methodTrait_required_method;
 |}.
 
 (** [defaulted_method::YesOverride]
@@ -150,31 +64,34 @@ Definition YesOverride_t : Type := unit.
 
 (** [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}::required_method]:
     Source: 'tests/src/defaulted_method.rs', lines 21:4-23:5 *)
-Definition traitYesOverride_required_method
+Definition YesOverride_Insts_Defaulted_methodTrait_required_method
   (self : YesOverride_t) : result u32 :=
   Ok 42%u32
 .
 
 (** [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}::provided_method]:
     Source: 'tests/src/defaulted_method.rs', lines 20:0-24:1 *)
-Definition traitYesOverride_provided_method
+Definition YesOverride_Insts_Defaulted_methodTrait_provided_method
   (self : YesOverride_t) : result u32 :=
-  traitYesOverride_required_method self
+  YesOverride_Insts_Defaulted_methodTrait_required_method self
 .
 
 (** Trait implementation: [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}]
     Source: 'tests/src/defaulted_method.rs', lines 20:0-24:1 *)
-Definition TraitYesOverride : Trait_t YesOverride_t := {|
-  Trait_t_provided_method := traitYesOverride_provided_method;
-  Trait_t_required_method := traitYesOverride_required_method;
+Definition YesOverride_Insts_Defaulted_methodTrait : Trait_t YesOverride_t
+  := {|
+  Trait_t_provided_method :=
+    YesOverride_Insts_Defaulted_methodTrait_provided_method;
+  Trait_t_required_method :=
+    YesOverride_Insts_Defaulted_methodTrait_required_method;
 |}.
 
 (** [defaulted_method::main]:
     Source: 'tests/src/defaulted_method.rs', lines 26:0-33:1 *)
 Definition main : result unit :=
-  _ <- traitNoOverride_provided_method tt;
-  _ <- traitYesOverride_provided_method tt;
-  n <- core_cmp_impls_OrdI32_min 10%i32 1%i32;
+  _ <- NoOverride_Insts_Defaulted_methodTrait_provided_method tt;
+  _ <- YesOverride_Insts_Defaulted_methodTrait_provided_method tt;
+  n <- I32_Insts_CoreCmpOrd_min 10%i32 1%i32;
   massert (n s= 1%i32)
 .
 

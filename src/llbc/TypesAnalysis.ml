@@ -38,8 +38,10 @@ type 'p g_type_info = {
   is_tuple_struct : bool;
       (** If true, it means the type is a record that we should extract as a
           tuple. This field is only valid for type declarations. *)
+  has_regions : bool;
   mut_regions : RegionId.Set.t;
       (** The set of regions used in mutable borrows *)
+  is_rec : bool;  (** This field is only meaningful for type definitions *)
 }
 [@@deriving show]
 
@@ -80,23 +82,83 @@ let type_decl_is_tuple_struct (x : type_decl) : bool =
   | Struct fields -> List.for_all (fun f -> f.field_name = None) fields
   | _ -> false
 
-let initialize_g_type_info (is_tuple_struct : bool) (param_infos : 'p) :
+let initialize_g_type_info (is_tuple_struct : bool) ~(is_rec : bool)
+    ~(has_regions : bool) ~(mut_regions : RegionId.Set.t) (param_infos : 'p) :
     'p g_type_info =
   {
     borrows_info = type_borrows_info_init;
     is_tuple_struct;
     param_infos;
-    mut_regions = RegionId.Set.empty;
+    mut_regions;
+    is_rec;
+    has_regions;
   }
 
-let initialize_type_decl_info (is_rec : bool) (def : type_decl) : type_decl_info
-    =
+let initialize_type_decl_info (span : Meta.span option) (crate : crate)
+    ~(is_rec : bool) (def : type_decl) : type_decl_info =
   let param_info = { under_borrow = false; under_mut_borrow = false } in
   let param_infos = List.map (fun _ -> param_info) def.generics.types in
   let is_tuple_struct =
     !Config.use_tuple_structs && (not is_rec) && type_decl_is_tuple_struct def
   in
-  initialize_g_type_info is_tuple_struct param_infos
+  let has_regions = List.length def.generics.regions > 0 in
+  let name_matcher_ctx : LlbcAst.block Charon.NameMatcher.ctx =
+    Charon.NameMatcher.ctx_from_crate crate
+  in
+  (* We have some specialized knowledge of some library types; we don't
+     have any more custom treatment than this, and these types can be modeled
+     suitably in the backend libraries, rather than special-casing for them all the
+     way. *)
+  let get_builtin_info () : Pure.builtin_type_info option =
+    let open ExtractBuiltin in
+    NameMatcherMap.find_opt name_matcher_ctx def.item_meta.name
+      (builtin_types_map ())
+  in
+  let name_to_string () =
+    Charon.PrintLlbcAst.Crate.crate_name_to_string crate def.item_meta.name
+  in
+
+  (* We initialize the mutable regions differently depending on whether the
+     type is opaque or not *)
+  let mut_regions =
+    match def.kind with
+    | Opaque -> (
+        (* Try to lookup the builtin information, if there is *)
+        match get_builtin_info () with
+        | Some info ->
+            (* *)
+            let len = List.length def.generics.regions in
+            if List.for_all (fun i -> i < len) info.mut_regions then
+              RegionId.Set.of_list
+                (List.map
+                   (fun i ->
+                     (Collections.List.nth def.generics.regions i).index)
+                   info.mut_regions)
+            else (
+              [%warn_opt_span] span
+                ("Found invalid builtin information for a type declaration: \
+                  the indices used for the mutable regions are out of bounds.\n\
+                  Type: " ^ name_to_string ());
+              RegionId.Set.empty)
+        | None ->
+            (* No builtin information: print a warning if the type contains region
+               parameters *)
+            if def.generics.regions <> [] then
+              [%warn_opt_span] span
+                ("Found an unknown type declaration with region parameters: as \
+                  we can not know whether the regions are used in mutable \
+                  borrows or not the extracted code may be incorrect.\n\
+                  Type: " ^ name_to_string ());
+            if Config.opaque_types_have_mut_regions_by_default then
+              RegionId.Set.of_list
+                (List.map
+                   (fun (r : region_param) -> r.index)
+                   def.generics.regions)
+            else RegionId.Set.empty)
+    | _ -> RegionId.Set.empty
+  in
+  initialize_g_type_info is_tuple_struct ~is_rec ~has_regions ~mut_regions
+    param_infos
 
 let type_decl_info_to_partial_type_info (info : type_decl_info) :
     partial_type_info =
@@ -105,6 +167,8 @@ let type_decl_info_to_partial_type_info (info : type_decl_info) :
     is_tuple_struct = info.is_tuple_struct;
     param_infos = Some info.param_infos;
     mut_regions = info.mut_regions;
+    is_rec = info.is_rec;
+    has_regions = info.has_regions;
   }
 
 let partial_type_info_to_type_decl_info (info : partial_type_info) :
@@ -114,6 +178,8 @@ let partial_type_info_to_type_decl_info (info : partial_type_info) :
     is_tuple_struct = info.is_tuple_struct;
     param_infos = Option.get info.param_infos;
     mut_regions = info.mut_regions;
+    is_rec = info.is_rec;
+    has_regions = info.has_regions;
   }
 
 let partial_type_info_to_ty_info (info : partial_type_info) : ty_info =
@@ -140,7 +206,6 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
   in
   let r_is_static (r : region) : bool = r = RStatic in
   let update_mut_regions_with_rid mut_regions rid =
-    let rid = RegionId.of_int (RegionId.to_int rid) in
     if RegionId.Set.mem rid mut_regions then ty_info.mut_regions
     else (
       updated := true;
@@ -282,8 +347,10 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
     | TRawPtr (rty, _) ->
         (* TODO: not sure what to do here *)
         analyze span expl_info ty_info rty
-    | TAdt { id = TTuple | TBuiltin (TBox | TSlice | TArray | TStr); generics }
-      ->
+    | TArray (ty, _) | TSlice ty ->
+        (* Nothing to update: just explore the type parameters *)
+        analyze span expl_info ty_info ty
+    | TAdt { id = TTuple | TBuiltin (TBox | TStr); generics } ->
         (* Nothing to update: just explore the type parameters *)
         List.fold_left
           (fun ty_info ty -> analyze span expl_info ty_info ty)
@@ -295,12 +362,14 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
         in
         (* Update the type info with the information from the adt *)
         let ty_info = update_ty_info ty_info None adt_info.borrows_info in
-        (* Check if 'static appears in the region parameters *)
+        (* Check if there are regions, and if 'static appears in the region parameters *)
         let found_static = List.exists r_is_static generics.regions in
         let borrows_info = ty_info.borrows_info in
         let borrows_info =
           {
             borrows_info with
+            contains_borrow =
+              borrows_info.contains_borrow || adt_info.has_regions;
             contains_static =
               check_update_bool borrows_info.contains_static found_static;
           }
@@ -379,7 +448,28 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
             ty_info inputs
         in
         analyze span expl_info ty_info output
-    | TFnDef _ -> [%craise_opt_span] span "unsupported: FnDef"
+    | TFnDef { binder_regions; binder_value = { kind = _; generics } } ->
+        (* For now we check that there are no regions anywhere.
+
+           TODO: the best would be to open all binders and then do a sanity
+           check (probably that no region bound at the level of the signature
+           is outlived by a locally bound region).
+         *)
+        [%cassert_opt_span] span (binder_regions = []) "Unimplemented";
+        let visitor =
+          object
+            inherit [_] iter_ty
+            method! visit_region _ _ = raise Utils.Found
+          end
+        in
+        let has_regions =
+          try
+            visitor#visit_generic_args () generics;
+            false
+          with Utils.Found -> true
+        in
+        [%cassert_opt_span] span (not has_regions) "Unimplemented";
+        ty_info
     | TPtrMetadata _ -> [%craise_opt_span] span "unsupported: PtrMetadata"
     | TError _ ->
         [%craise_opt_span] span "Found type error in the output of charon"
@@ -430,7 +520,7 @@ let analyze_type_decl (updated : bool ref) (infos : type_infos)
     (* Return *)
     infos
 
-let analyze_type_declaration_group (type_decls : type_decl TypeDeclId.Map.t)
+let analyze_type_declaration_group (span : Meta.span option) (crate : crate)
     (infos : type_infos) (decl : type_declaration_group) : type_infos =
   (* Collect the identifiers used in the declaration group *)
   let is_rec, ids =
@@ -439,13 +529,21 @@ let analyze_type_declaration_group (type_decls : type_decl TypeDeclId.Map.t)
     | RecGroup ids -> (true, ids)
   in
   (* Retrieve the type definitions *)
-  let decl_defs = List.map (fun id -> TypeDeclId.Map.find id type_decls) ids in
+  let decl_defs =
+    List.map
+      (fun id ->
+        [%unwrap_opt_span] None
+          (TypeDeclId.Map.find_opt id crate.type_decls)
+          ("Internal error: please report an issue. Missing type declaration \
+            of id: " ^ TypeDeclId.to_string id))
+      ids
+  in
   (* Initialize the type information for the current definitions *)
   let infos =
     List.fold_left
       (fun infos (def : type_decl) ->
         TypeDeclId.Map.add def.def_id
-          (initialize_type_decl_info is_rec def)
+          (initialize_type_decl_info ~is_rec span crate def)
           infos)
       infos decl_defs
   in
@@ -464,15 +562,58 @@ let analyze_type_declaration_group (type_decls : type_decl TypeDeclId.Map.t)
   in
   analyze infos
 
+let ty_replace_body_regions_with_free_regions (ty : ty) : ty =
+  (* Find the maximum free region id *)
+  let max = ref (-1) in
+  let visitor =
+    object
+      inherit [_] iter_ty
+
+      method! visit_RVar _ r =
+        match r with
+        | Bound _ -> ()
+        | Free rid ->
+            let rid = RegionId.to_int rid in
+            max := if rid > !max then rid else !max
+    end
+  in
+  visitor#visit_ty () ty;
+  (* Create a generator *)
+  let _, fresh_fid =
+    RegionId.mk_stateful_generator_starting_at_id (RegionId.of_int (!max + 1))
+  in
+  (* Replace *)
+  let map = ref RegionId.Map.empty in
+  let visitor =
+    object
+      inherit [_] map_ty
+
+      method! visit_RBody _ rid =
+        match RegionId.Map.find_opt rid !map with
+        | None ->
+            let fid = fresh_fid () in
+            map := RegionId.Map.add rid fid !map;
+            RVar (Free rid)
+        | Some rid -> RVar (Free rid)
+    end
+  in
+  visitor#visit_ty () ty
+
 (** Analyze a type to check whether it contains borrows, etc., provided we have
     already analyzed the type definitions in the context. *)
 let analyze_ty (span : Meta.span option) (infos : type_infos) (ty : ty) :
     ty_info =
   [%ltrace "ty:\n" ^ show_ty ty];
+  (* Replace the body regions with fresh free regions - this makes the
+     implementation easier *)
+  let ty = ty_replace_body_regions_with_free_regions ty in
   (* We don't use [updated] but need to give it as parameter *)
   let updated = ref false in
   (* We don't need to compute whether the type contains 'static or not *)
-  let ty_info = initialize_g_type_info false None in
+  let ty_info =
+    initialize_g_type_info false ~is_rec:false ~has_regions:false
+      ~mut_regions:RegionId.Set.empty None
+  in
   let ty_info = analyze_full_ty span updated infos ty_info ty in
   (* Convert the ty_info *)
   partial_type_info_to_ty_info ty_info
@@ -583,14 +724,14 @@ let compute_outlive_proj_ty (span : Meta.span option)
                 in
                 List.iter (self#visit_region outer) regions;
                 List.iter (self#visit_ty outer) types;
-                List.iter (self#visit_const_generic outer) const_generics;
+                List.iter (self#visit_constant_expr outer) const_generics;
                 (* TODO: we need to handle those *)
                 [%sanity_check_opt_span] span (trait_refs = []);
 
                 (* Substitute in the constraints *)
                 let subst =
                   Charon.Substitute.make_subst_from_generics decl.generics
-                    adt.generics
+                    adt.generics Self
                 in
                 let params =
                   Charon.Substitute.predicates_substitute subst decl.generics
@@ -650,8 +791,9 @@ let compute_outlive_proj_ty (span : Meta.span option)
             | TTuple -> super#visit_ty outer ty
             | TBuiltin builtin_ty -> (
                 match builtin_ty with
-                | TBox | TArray | TSlice | TStr -> super#visit_ty outer ty)
+                | TBox | TStr -> super#visit_ty outer ty)
           end
+        | TArray _ | TSlice _ -> super#visit_ty outer ty
         | TVar _ | TLiteral _ | TNever -> ()
         | TRef (r, ref_ty, _) ->
             self#visit_region outer r;

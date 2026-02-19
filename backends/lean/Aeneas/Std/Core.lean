@@ -6,7 +6,9 @@ import Aeneas.Std.Core.Default
 import Aeneas.Std.Core.Discriminant
 import Aeneas.Std.Core.Error
 import Aeneas.Std.Core.Fmt
+import Aeneas.Std.Core.FmtWithSlice
 import Aeneas.Std.Core.Hash
+import Aeneas.Std.Core.Iter
 import Aeneas.Std.Core.Marker
 import Aeneas.Std.Core.Ops
 import Aeneas.Std.Core.Panic

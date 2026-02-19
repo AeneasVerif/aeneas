@@ -1,8 +1,164 @@
 //@ [!lean] skip
 //! This module contains functions with nested borrows in their signatures.
+#![feature(register_tool)]
+#![register_tool(aeneas)]
 
 trait Trait1 {
     fn f(x: &&u32);
+}
+
+fn inner_shared<'a, 'b>(x: &'a &'b u32) -> &'b u32 {
+    *x
+}
+
+fn inner_mut<'a, 'b>(x: &'a mut &'b mut u32) -> &'a mut u32 {
+    *x
+}
+
+fn call_inner_mut() {
+    let mut x = 0;
+    let mut px = &mut x;
+    let py = inner_mut(&mut px);
+    *py = 1;
+    assert!(*px == 1);
+    *px = 2;
+    assert!(x == 2);
+}
+
+fn inner_mut_swap<'a, 'b>(ppx: &'a mut &'b mut u32, py: &'b mut u32) -> &'a mut u32 {
+    **ppx = 10;
+    *ppx = py;
+    *ppx
+}
+
+fn call_inner_mut_swap() {
+    let mut x = 0;
+    let mut px = &mut x;
+    let mut y = 1;
+    let mut py = &mut y;
+    let pz = inner_mut_swap(&mut px, py);
+    *pz = 2;
+    assert!(*px == 2); // px now points to y
+    *px = 3;
+    assert!(x == 10);
+    assert!(y == 3);
+}
+
+fn incr_inner<'a, 'b>(x: &'a mut &'b mut u32) {
+    **x += 1;
+}
+
+struct IterMut<'a, T> {
+    v: Option<&'a mut T>,
+}
+
+// TODO: fix in Charon
+fn replace_option_mut<'a, 'b, T>(
+    x: &'a mut Option<&'b mut T>,
+    v: Option<&'b mut T>,
+) -> Option<&'b mut T> {
+    panic!() // std::mem::replace(x, v)
+}
+
+impl<'a, T> IterMut<'a, T> {
+    fn next(&mut self) -> Option<&'a mut T> {
+        /* We need to use `std::mem::replace` because otherwise the
+        code doesn't borrow-check. */
+        replace_option_mut(&mut self.v, None)
+    }
+}
+
+fn call_iter_mut_next<'a, T>(mut it: IterMut<'a, T>) {
+    match it.next() {
+        None => (),
+        Some(_) => (),
+    }
+}
+
+fn call_iter_mut_next_u32<'a, T>(mut it: IterMut<'a, u32>) {
+    match it.next() {
+        None => (),
+        Some(x) => *x += 1,
+    }
+}
+
+fn iter_mut_loop<'a, T>(mut it: IterMut<'a, T>) {
+    while let Some(_) = it.next() {}
+}
+
+fn iter_mut_incr<'a, T>(mut it: IterMut<'a, u32>) {
+    while let Some(x) = it.next() {
+        *x += 1;
+    }
+}
+
+enum List<T> {
+    Nil,
+    Cons(T, Box<List<T>>),
+}
+
+struct ListIterMut<'a, T> {
+    current: Option<&'a mut List<T>>,
+}
+
+impl<T> List<T> {
+    pub fn iter_mut<'a>(&'a mut self) -> ListIterMut<'a, T> {
+        ListIterMut {
+            current: Some(self),
+        }
+    }
+}
+
+// TODO: fix in Charon
+fn take_option_mut<'a, 'b, T>(x: &'a mut Option<&'b mut T>) -> Option<&'b mut T> {
+    panic!() // x.take()
+}
+
+impl<'a, T> ListIterMut<'a, T> {
+    fn next(&mut self) -> Option<&'a mut T> {
+        // TODO: self.current.take()
+        match take_option_mut(&mut self.current) {
+            Some(&mut List::Cons(ref mut value, ref mut next)) => {
+                self.current = Some(next);
+                Some(value)
+            }
+            _ => None,
+        }
+    }
+}
+
+fn incr_list(l: &mut List<u32>) {
+    let mut it = l.iter_mut();
+    while let Some(x) = it.next() {
+        *x += 1;
+    }
+}
+
+fn next1<'a, 'b, T>(it: &'a mut &'b mut List<T>) -> Option<&'b mut T> {
+    panic!()
+}
+
+fn iter_list_while<T>(b: bool, l: &mut &mut List<T>) {
+    while let Some(_) = next1(l) {
+        while b {}
+    }
+}
+
+// Adapted from [jxl-rs](https://github.com/libjxl/jxl-rs)
+pub struct BitReader<'a> {
+    data: &'a [u8],
+    bit_buf: u64,
+}
+
+impl<'a> BitReader<'a> {
+    pub fn peek(&mut self, b: bool) -> u64 {
+        if b {
+            self.refill();
+        }
+        self.bit_buf & 1
+    }
+
+    fn refill(&mut self) {}
 }
 
 /*

@@ -35,7 +35,7 @@ You need to install OCaml, together with some packages.
 We suggest you to follow those [instructions](https://ocaml.org/docs/install.html),
 and install OPAM on the way (same instructions).
 
-We are developing Aeneas by using **OCaml 5**. For instance, if you want to use OCaml 5.2.0:
+We are developing Aeneas by using **OCaml 5**. For instance, if you want to use OCaml 5.3.0:
 ```
 opam switch create 5.3.0
 ```
@@ -43,7 +43,7 @@ opam switch create 5.3.0
 You can then install the dependencies with the following command:
 ```
 opam install ppx_deriving visitors easy_logging zarith yojson core_unix odoc \
-  ocamlgraph menhir ocamlformat unionFind zarith progress domainslib
+  ocamlgraph menhir ocamlformat.0.27.0 unionFind zarith progress domainslib
 ```
 
 Moreover, Aeneas uses the [Charon](https://github.com/AeneasVerif/charon) project and library.
@@ -93,7 +93,7 @@ to display a detailed documentation.
 > import the `Aeneas` package from Aeneas. To use those files in Lean:
 >  1. Create a new Lean package using `lake new`.
 >  2. Overwrite the `lean-toolchain` with the one inside `./backends/lean`.
->  3. Add `aeneas` as a dependency in the `lakefile.lean`:  
+>  3. Add `aeneas` as a dependency in the `lakefile.lean`:
 >     ```lean
 >     require aeneas from "PATH_TO_AENEAS_REPO/backends/lean"
 >     ```
@@ -125,18 +125,13 @@ one by one:
   are not supported yet (e.g., `'a : loop { loop { break 'a; } } `). This is a
   technical limitation, not a fundamental issue, that we plan to address in the
   near future and that we can prioritize depending on our users' needs.
-- **no nested borrows in function signatures**: ongoing work, coming very soon, starting
-  with nested shared borrows.
-- **no functions pointers/closures**: ongoing work. We currently have support for traits
-  and will have support for function pointers and closures soon.
 
 The following limitations will be lifted by the ongoing work on separation logic:
 - **unsafe code**
-- **interior mutability**
 - **concurrency**
 
 Feel free to contact the team or join the Zulip if you need some specific features or if
-you're interested iun contributing.
+you're interested in contributing.
 
 ## Backend Support
 

@@ -27,16 +27,16 @@ Fixpoint get_list_at_x
   match ls with
   | List_Cons hd tl =>
     if hd s= x
-    then Ok (ls, fun (ret : List_t u32) => ret)
+    then Ok (ls, fun (ls1 : List_t u32) => ls1)
     else (
       p <- get_list_at_x tl x;
       let (l, get_list_at_x_back) := p in
       let back :=
-        fun (ret : List_t u32) =>
-          let tl1 := get_list_at_x_back ret in List_Cons hd tl1
+        fun (l1 : List_t u32) =>
+          let tl1 := get_list_at_x_back l1 in List_Cons hd tl1
       in
       Ok (l, back))
-  | List_Nil => Ok (List_Nil, fun (ret : List_t u32) => ret)
+  | List_Nil => Ok (List_Nil, fun (ls1 : List_t u32) => ls1)
   end
 .
 

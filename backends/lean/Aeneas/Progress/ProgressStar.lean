@@ -1,7 +1,163 @@
 import Aeneas.Progress.Progress
+import AeneasMeta.Split
 open Lean Meta Elab Tactic
 
 namespace Aeneas
+
+/-- Given a goal of the shape `spec (match ... with ...) post`, perform a case split
+and introduce an equality. -/
+def esplitMatchAtSpec (h : Name) (names : Option (List (List (Option Name)))) :
+  TacticM (List (Array FVarId × FVarId × MVarId)) := do
+  withTraceNode `Utils (fun _ => do pure m!"esplitMatchAtSpec") do
+  focus do withMainContext do
+  let tgt ← getMainTarget
+  tgt.consumeMData.withApp fun spec? args => do
+  if ¬ (spec?.isConstOf ``Std.WP.spec) ∨ args.size ≠ 3 then throwError "Not a valid spec goal"
+  let prog := args[1]!
+  -- Check that we have a matcher
+  let some ma ← Meta.matchMatcherApp? prog (alsoCasesOn := true)
+    | throwError "not a matcher: {prog}"
+  if ma.discrs.size ≠ 1 then throwError "Don't know what to do with > 1 scrutinees: discrs"
+  let matcherName := ma.matcherName
+  let scrut := ma.discrs[0]!
+  -- Compute the names to use by looking at the branches
+  let names ← do
+    match names with
+    | none =>
+      ma.alts.toList.mapM fun alt => do
+      lambdaTelescope alt.consumeMData fun args _ => do
+      args.toList.mapM fun arg => do
+      pure (some (← arg.fvarId!.getDecl).userName)
+    | some names => pure names
+  -- Split
+  let goals ← Split.esplitCasesOn true scrut matcherName h names
+  trace[Utils] "after esplitCasesOn:\n{goals.map fun (_, _, g) => g}"
+  -- Simplify the goal with the equality we just introduced
+  let goals ← goals.filterMapM fun (vars, h, goal) => do
+    goal.withContext do
+    setGoals [goal]
+    trace[Goal] "About to simplify the goal (with h: {← h.getType}):\n{goal}"
+    match ← Simp.simpAt true {} {hypsToUse := #[h]} (.targets #[] true) with
+    | none => pure none
+    | some _ => pure (some (vars, h, ← getMainGoal))
+  --
+  pure goals
+
+def esplitMatchAtSpecTac (h : Name) (names : Option (List (List (Option Name)))) :
+  TacticM (List (MVarId)) := do
+  (← esplitMatchAtSpec h names).mapM fun (_, _, g) => pure g
+
+elab "spec_split": tactic => do setGoals (← esplitMatchAtSpecTac (← mkFreshUserName `h) (some []))
+elab "spec_split" "as" h:ident : tactic => do setGoals (← esplitMatchAtSpecTac h.getId (some []))
+
+example {α} (x : Option α) :
+  Std.WP.spec (match x with | none => .ok 0 | some _ => .ok 1) (fun _ => True) := by
+  spec_split <;> simp
+
+theorem dite_true: (dite True t e) = t (by simp) := by simp
+theorem dite_false : (dite False t e) = e (by simp) := by simp
+
+/-- Split an `if then else` in a spec predicate:
+`⊢ spec (if ... then ... else ...) post`
+-/
+def esplitIteAtSpec (h : Name) : TacticM (List (FVarId × MVarId)) := do
+  focus do withMainContext do
+  let tgt ← getMainTarget
+  tgt.consumeMData.withApp fun spec? args => do
+  if ¬ (spec?.isConstOf ``Std.WP.spec) ∨ args.size ≠ 3 then throwError "Not a valid spec goal"
+  let prog := args[1]!
+  -- Check that we have an if then else
+  prog.withApp fun ite? args => do
+  trace[Utils] "ite?: {ite?}, args: {args}"
+  if ¬ ite?.isConstOf ``ite ∧ ¬ ite?.isConstOf ``dite then throwError "Not an if then else"
+  if args.size ≠ 5 then throwError "Incorrect number of arguments"
+  -- `if then else` expressions receive a decidable `Prop` as input
+  let prop := args[1]!
+  let decInst := args[2]!
+  let thm ← mkAppOptM ``Decidable.byCases #[prop, tgt, decInst]
+  let thmTy ← inferType thm
+  -- Apply the theorem
+  let (goals, _, _) ← forallMetaTelescope thmTy
+  let thm := mkAppN thm goals
+  let goal ← getMainGoal
+  goal.assign thm
+  let goals := goals.toList.map Expr.mvarId!
+  -- Introduce the equality and simplify
+  let goals ← goals.filterMapM fun goal => do
+    let (h, goal) ← goal.intro h
+    setGoals [goal]
+    let args : Simp.SimpArgs := {
+      hypsToUse := #[h],
+      addSimpThms := #[``Bool.false_eq_true, ``ite_false, ``ite_true, ``dite_true, ``dite_false] }
+    match ← Simp.simpAt true {} args (.targets #[] true) with
+    | none => pure none
+    | some _ => pure (some (h, ← getMainGoal))
+  --
+  setGoals (goals.map Prod.snd)
+  pure goals
+
+def esplitIteAtSpecTac (h : Name) : TacticM (List MVarId) := do
+  pure ((← esplitIteAtSpec h).map Prod.snd)
+
+elab "spec_split_if": tactic => do setGoals (← esplitIteAtSpecTac (← mkFreshUserName `h))
+elab "spec_split_if" "as" h:ident : tactic => do setGoals (← esplitIteAtSpecTac h.getId)
+
+/--
+error: unsolved goals
+case h1
+b : Bool
+h : b = true
+⊢ Std.Result.ok 0 ⦃ x✝ => True ⦄
+
+case h2
+b : Bool
+h : ¬b = true
+⊢ Std.Result.ok 1 ⦃ x✝ => True ⦄
+-/
+#guard_msgs in
+example (b : Bool) : Std.WP.spec (if b then .ok 0 else .ok 1) (fun _ => True) := by
+  spec_split_if as h
+
+/--
+error: unsolved goals
+case h1
+b : Bool
+h : b = true
+⊢ Std.Result.ok 0 ⦃ x✝ => True ⦄
+
+case h2
+b : Bool
+h : ¬b = true
+⊢ Std.Result.ok 1 ⦃ x✝ => True ⦄
+-/
+#guard_msgs in
+example (b : Bool) : Std.WP.spec (if h: b then .ok 0 else .ok 1) (fun _ => True) := by
+  spec_split_if as h
+
+/-- Given a goal of the shape `spec (match ... with ...) post` or `spec (if ... then ... else ...)`,
+perform a case split. -/
+def esplitAtSpec (h : Name) (names : Option (List (List (Option Name)))) : TacticM (List (Array FVarId × FVarId × MVarId)) := do
+  withTraceNode `Utils (fun _ => do pure m!"esplitAtSpec") do
+  focus do withMainContext do
+  let tgt ← getMainTarget
+  tgt.consumeMData.withApp fun spec? args => do
+  if ¬ (spec?.isConstOf ``Std.WP.spec) ∨ args.size ≠ 3 then throwError "Not a valid spec goal"
+  let prog := args[1]!
+  -- Check whether we have a matcher
+  let ma ← Meta.matchMatcherApp? prog (alsoCasesOn := true)
+  if ma.isSome
+  then
+    trace[Utils] "splitting a match"
+    esplitMatchAtSpec h names
+  else
+    trace[Utils] "splitting an if then else"
+    pure ((← esplitIteAtSpec h).map fun (h, g) => (#[], h, g))
+
+def esplitAtSpecTac (h : Name) : TacticM (List MVarId) := do
+  pure ((← esplitAtSpec h (some [])).map fun (_, _, g) => g)
+
+elab "spec_split": tactic => do setGoals (← esplitAtSpecTac (← mkFreshUserName `h))
+elab "spec_split" "as" h:ident : tactic => do setGoals (← esplitAtSpecTac h.getId)
 
 namespace Bifurcation
 
@@ -63,6 +219,9 @@ structure Info where
   /-- The name of the function which implements the matcher -/
   matcher: Name
 
+  /-- The scrutinee -/
+  scrut : Expr
+
   /-- The motive of the bifurcation -/
   motive: Expr
 
@@ -102,19 +261,23 @@ def Info.ofExpr(e: Expr): MetaM (Option Info) := do
       uLevels,
       params  := #[prop]
       motive,
+      scrut := dec,
     }
   else if let some ma ← Meta.matchMatcherApp? e (alsoCasesOn := true) then
-    return some {
-      kind := .matcher ma.matcherName
-      discrs := ma.discrs.zip ma.discrInfos
-        |>.map fun (toExpr, discrInfo) => {toExpr, name? := discrInfo.hName?}
-      branches := ma.alts.zip ma.altNumParams
-        |>.map fun (toExpr, numArgs) => {toExpr, numArgs}
-      matcher := ma.matcherName,
-      motive := ma.motive,
-      uLevels := ma.matcherLevels.toList,
-      params := ma.params
-    }
+    if h: ma.discrs.size = 1 then
+      return some {
+        kind := .matcher ma.matcherName
+        discrs := ma.discrs.zip ma.discrInfos
+          |>.map fun (toExpr, discrInfo) => {toExpr, name? := discrInfo.hName?}
+        branches := ma.alts.zip ma.altNumParams
+          |>.map fun (toExpr, numArgs) => {toExpr, numArgs}
+        matcher := ma.matcherName,
+        motive := ma.motive,
+        uLevels := ma.matcherLevels.toList,
+        params := ma.params,
+        scrut := ma.discrs[0]
+      }
+    else return none
   else return none
 
 def Info.toExpr(info: Info): Expr :=
@@ -136,7 +299,8 @@ structure Config where
   preconditionTac: Option Syntax.Tactic := none
   /-- Should we use the special syntax `let* ⟨ ...⟩ ← ...` or the more standard syntax `progress with ... as ⟨ ... ⟩`? -/
   prettyPrintedProgress : Bool := true
-  useCase' : Bool := false
+  useCase : Bool := false
+  useRename : Bool := true
 
 inductive TaskOrDone α where
 | task (x : Task α)
@@ -149,8 +313,13 @@ def TaskOrDone.get (x : TaskOrDone α) : α :=
 
 def TaskOrDone.mk (x : α) : TaskOrDone α := .done x
 
+inductive BranchArg where
+| case (stx : TSyntax `Lean.Parser.Tactic.caseArg)
+| rename (names : Array Name)
+| empty
+
 inductive Script where
-| split (splitStx : Syntax.Tactic) (branches : Array (Option (TSyntax `Lean.Parser.Tactic.caseArg) × Script))
+| split (splitStx : Syntax.Tactic) (branches : Array (BranchArg × Script))
 | tacs (tacs : Array (TaskOrDone (Option Syntax.Tactic)))
 | seq (s0 s1 : Script)
 
@@ -169,6 +338,11 @@ instance: Append Info where
     subgoals := inf1.subgoals ++ inf2.subgoals,
   }
 
+def nameToBinderIdent (n : Name) : TSyntax `Lean.binderIdent :=
+  if n.isInternalDetail
+  then mkNode ``Lean.binderIdent #[mkHole mkNullNode]
+  else mkNode ``Lean.binderIdent #[mkIdent n]
+
 /-- Convert the script into syntax.
     This is a blocking operation: it waits for all the sub-components of the script to be generated.
 -/
@@ -178,8 +352,16 @@ partial def Script.toSyntax (script : Script) : MetaM (Array Syntax.Tactic) := d
     let branches ← branches.mapM fun (caseArgs, branch) => do
       let branch ← branch.toSyntax
       match caseArgs with
-      | some caseArgs => `(tactic| case' $caseArgs => $branch*)
-      | none => `(tactic|. $branch*)
+      | .case caseArgs => `(tactic| case $caseArgs => $branch*) -- Remark: we can also use `case'`
+      | .rename names =>
+        let branch ← do
+          if names.all Name.isInternalDetail then pure branch
+          else
+            let names := names.map nameToBinderIdent
+            let rename ← `(tactic|rename_i $(names)*)
+            pure (#[rename] ++ branch)
+        `(tactic| · $branch*) -- Remark: we can also use `case'`
+      | .empty => `(tactic|· $branch*)
     pure (#[splitStx] ++ branches)
   | .tacs tactics => pure (tactics.filterMap TaskOrDone.get)
   | .seq s0 s1 =>
@@ -199,19 +381,30 @@ inductive TargetKind where
 def analyzeTarget : TacticM TargetKind := do
   withTraceNode `Progress (fun _ => do pure m!"analyzeTarget") do
   try
-    Progress.monadTelescope (← getMainTarget) fun _xs _zs program _res _post => do
-    let e ← Utils.normalizeLetBindings program
-    if let .const ``Bind.bind .. := e.getAppFn then
-      let #[_m, _self, _α, _β, _value, cont] := e.getAppArgs
-        | throwError "Expected bind to have 4 arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
-      Utils.lambdaOne cont fun x _ => do
-        let name ← x.fvarId!.getUserName
-        pure (.bind name)
-    else if let .some bfInfo ← Bifurcation.Info.ofExpr e then
-      pure (.switch bfInfo)
+    let goalTy ← (← getMainGoal).getType
+    -- Dive into the `spec program post`
+    goalTy.consumeMData.withApp fun spec? args => do
+    if h: spec?.isConstOf ``Std.WP.spec ∧ args.size = 3 then
+      trace[Progress] "application of `spec` with arity 3"
+      let program := args[1]
+      -- Check if this is a bind
+      let e ← Utils.normalizeLetBindings program
+      if let .const ``Bind.bind .. := e.getAppFn then
+        let #[_m, _self, _α, _β, _value, cont] := e.getAppArgs
+          | throwError "Expected bind to have 4 arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
+        Utils.lambdaOne cont fun x _ => do
+          let name ← x.fvarId!.getUserName
+          pure (.bind name)
+      else if let .some bfInfo ← Bifurcation.Info.ofExpr e then
+        pure (.switch bfInfo)
+      else
+        pure .result
     else
+      trace[Progress] "not an application of `spec` with arity 3"
       pure .result
-  catch _ => pure .unknown
+  catch _ =>
+    trace[Progress] "exception caught"
+    pure .unknown
 
 partial def evalProgressStar (cfg: Config) (fuel : Option Nat) : TacticM Result :=
   withMainContext do focus do
@@ -299,7 +492,8 @@ where
           Utils.lambdaTelescopeN br.toExpr br.numArgs fun xs _ => do
             let names ← xs.mapM (·.fvarId!.getUserName)
             return names
-      let (branchGoals, mkStx) ← onBif cfg bfInfo contsTaggedVals
+      trace[Progress] "Match over scrutinee: {bfInfo.scrut}"
+      let (branchGoals, mkStx) ← onMatch cfg bfInfo contsTaggedVals
       withTraceNode `Progress (fun _ => do pure m!"exploring branches") do
       /- Continue exploring from the subgoals -/
       let branchInfos ← branchGoals.mapM fun mainGoal => do
@@ -394,8 +588,8 @@ where
         withTraceNode `Progress (fun _ => pure m!"New main goal:") do
         trace[Progress] "{goal.goal}"
       withTraceNode `Progress (fun _ => pure m!"all preconditions") do trace[Progress] "All preconditions:\n{preconditions.map Prod.fst}"
-      /- Update the main goal, if necessary -/
-      let ids ← getIdsFromUsedTheorem varName.eraseMacroScopes usedTheorem
+      /- Update the main goal by renaming the fresh variables, if necessary -/
+      let ids := match mainGoal with | none => #[] | some goal => makeIds varName.eraseMacroScopes goal.outputs.size goal.posts.size
       trace[Progress] "ids from used theorem: {ids}"
       let mainGoal ← do mainGoal.mapM fun mainGoal => do
         if ¬ ids.isEmpty then
@@ -435,37 +629,42 @@ where
     else
       onFinish (← getMainGoal)
 
-  onBif (cfg : Config) (bfInfo : Bifurcation.Info) (toBeProcessed : Array (Array Name)): TacticM (List MVarId × (List Info → TacticM Info)) := do
-    withTraceNode `Progress (fun _ => pure m!"onBif") do
-    trace[Progress] "onBif: encountered {bfInfo.kind}"
+  onMatch (cfg : Config) (bfInfo : Bifurcation.Info) (toBeProcessed : Array (Array Name)): TacticM (List MVarId × (List Info → TacticM Info)) := do
+    withTraceNode `Progress (fun _ => pure m!"onMatch") do
+    trace[Progress] "onMatch: encountered {bfInfo.kind}"
     if (←getGoals).isEmpty then
-      trace[Progress] "onBif: no goals to be solved!"
+      trace[Progress] "onMatch: no goals to be solved!"
       -- Tactic.focus fails if there are no goals to be solved.
       return ({}, fun infos => assert! (infos.length == 0); pure {})
     Tactic.focus do
-      let splitStx ← `(tactic| split)
-      evalSplit splitStx
+      let h ← mkFreshUserName `h
+      let splitStx ← `(tactic| spec_split)
+      let subgoals ← esplitAtSpec h none
       --
-      let subgoals ← getUnsolvedGoals
-      trace[Progress] "onBif: Bifurcation generated {subgoals.length} subgoals"
+      trace[Progress] "onMatch: Bifurcation generated {subgoals.length} subgoals"
       unless subgoals.length == toBeProcessed.size do
-        throwError "onBif: Expected {toBeProcessed.size} cases, found {subgoals.length}"
+        throwError "onMatch: Expected {toBeProcessed.size} cases, found {subgoals.length}"
 
-      let infos_mkBranchesStx ← (subgoals.zip toBeProcessed.toList).mapM fun (sg, names) => do
+      let infos_mkBranchesStx ← subgoals.mapM fun (vars, h, sg) => do
         setGoals [sg]
-        -- TODO: rename the variables
-        let mkStx (branchScript : Script) : TacticM (Option (TSyntax `Lean.Parser.Tactic.caseArg) × Script) := do
-          let caseArgs ←
-            if cfg.useCase' then
-              pure (some (makeCaseArgs (← sg.getTag) names))
-            else pure none
+        sg.withContext do
+        let names ← vars.mapM fun v => v.getUserName
+        let h ← h.getUserName
+        let names := names ++ [h]
+        let mkStx (branchScript : Script) : TacticM (BranchArg × Script) := do
+          let caseArgs : BranchArg ← do
+            if cfg.useRename then
+              pure (BranchArg.rename names)
+            else if cfg.useCase then
+              pure (BranchArg.case (makeCaseArgs (← sg.getTag) names))
+            else pure .empty
           pure (caseArgs, branchScript)
         pure (sg,  mkStx)
       let (infos, mkBranchesStx) := infos_mkBranchesStx.unzip
 
       let mkStx (infos : List Info) : TacticM Info := do
         unless infos.length == mkBranchesStx.length do
-          throwError "onBif: Expected {mkBranchesStx.length} infos, found {infos.length}"
+          throwError "onMatch: Expected {mkBranchesStx.length} infos, found {infos.length}"
         let infos := infos.zip mkBranchesStx
         let infos ← do infos.mapM fun (info, mkBranchStx) => do
           let stx ← mkBranchStx info.script
@@ -478,19 +677,8 @@ where
       return (infos, mkStx)
 
   tryProgress (cfg : Config) := do
-    try some <$> Progress.evalProgressCore cfg.async none (some (.str .anonymous "_")) none #[] cfg.preconditionTac
+    try some <$> Progress.evalProgressCore cfg.async (some (.str .anonymous "_")) none #[] cfg.preconditionTac
     catch _ => pure none
-
-  getIdsFromUsedTheorem name usedTheorem: TacticM (Array _) := do
-    withTraceNode `Progress (fun _ => do pure m!"getIdsFromUsedTheorem") do
-    let some thm ← usedTheorem.getType
-      | throwError "Could not infer proposition of {usedTheorem}"
-    let (numElem, numPost) ← Progress.monadTelescope thm
-      fun _xs zs _program _res postconds => do
-        let numPost := Utils.numOfConjuncts <$> postconds |>.getD 0
-        trace[Progress] "Number of conjuncts for `{←liftM (Option.traverse ppExpr postconds)}` is {numPost}"
-        pure (zs.size, numPost)
-    return makeIds (base := name) numElem numPost
 
   makeIds (base: Name) (numElem numPost : Nat) (defaultId := "x"): Array (TSyntax ``Lean.binderIdent) :=
     let (root, base?) := match base with
@@ -508,9 +696,7 @@ where
 
   makeCaseArgs tag names :=
     let tag := Lean.mkNode ``Lean.binderIdent #[mkIdent tag]
-    let binderIdents := names.map fun n => if n.isInternalDetail
-      then mkNode ``Lean.binderIdent #[mkHole mkNullNode]
-      else mkNode ``Lean.binderIdent #[mkIdent n]
+    let binderIdents := names.map nameToBinderIdent
     Lean.mkNode ``Lean.Parser.Tactic.caseArg #[tag, mkNullNode (args := binderIdents)]
 
 syntax «progress*_args» := (num)? ("by" tacticSeq)?
@@ -561,6 +747,8 @@ end ProgressStar
 
 section Examples
 
+open Std.WP
+
 /--
 info: Try this:
 
@@ -581,11 +769,11 @@ info: Try this:
 
   [apply]     let* ⟨ x2, x2_post ⟩ ← U32.add_spec
     let* ⟨ x3, x3_post ⟩ ← U32.add_spec
-    let* ⟨ res, res_post ⟩ ← U32.add_spec
+    let* ⟨ ⟩ ← U32.add_spec
 -/
 #guard_msgs in
 example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
-  ∃ z, add1 x y = ok z := by
+  add1 x y ⦃ _ => True ⦄ := by
   unfold add1
   progress*?
 
@@ -599,11 +787,11 @@ x2_post : ↑x2 = ↑x + ↑y
 x3 : U32
 _ : [> let x3 ← x2 + x2 <]
 x3_post : ↑x3 = ↑x2 + ↑x2
-⊢ ∃ z, x3 + 4#u32 = ok z
+⊢ x3 + 4#u32 ⦃ z => True ⦄
 -/
 #guard_msgs in
 example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
-  ∃ z, add1 x y = ok z := by
+  add1 x y ⦃ z => True ⦄ := by
   unfold add1
   progress* 2
 
@@ -622,11 +810,11 @@ x2_post : ↑x2 = ↑x + ↑y
 x3 : U32
 _ : [> let x3 ← x2 + x2 <]
 x3_post : ↑x3 = ↑x2 + ↑x2
-⊢ ∃ z, x3 + 4#u32 = ok z
+⊢ x3 + 4#u32 ⦃ z => True ⦄
 -/
 #guard_msgs in
 example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
-  ∃ z, add1 x y = ok z := by
+  add1 x y ⦃ z => True ⦄ := by
   unfold add1
   progress*? 2
 
@@ -642,7 +830,7 @@ info: Try this:
 #guard_msgs in
 example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
   let v := 2 * x.val + 2 * y.val + 4
-  ∃ z, add1 x y = ok z ∧ z.val = v:= by
+  add1 x y ⦃ z => z.val = v ⦄ := by
   unfold add1
   progress*?
 
@@ -658,27 +846,27 @@ def add2 (b : Bool) (x0 x1 : U32) : Std.Result U32 := do
 /--
 info: Try this:
 
-  [apply]     split
-    . let* ⟨ x2, x2_post ⟩ ← U32.add_spec
+  [apply]     spec_split
+    · let* ⟨ x2, x2_post ⟩ ← U32.add_spec
       let* ⟨ x3, x3_post ⟩ ← U32.add_spec
-      let* ⟨ res, res_post ⟩ ← U32.add_spec
-    . let* ⟨ y, y_post ⟩ ← U32.add_spec
-      let* ⟨ res, res_post ⟩ ← U32.add_spec
+      let* ⟨ ⟩ ← U32.add_spec
+    · let* ⟨ y, y_post ⟩ ← U32.add_spec
+      let* ⟨ ⟩ ← U32.add_spec
 -/
 #guard_msgs in
 example b (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
-      ∃ z, add2 b x y = ok z := by
+      add2 b x y ⦃ _ => True ⦄ := by
   unfold add2
   progress*?
 
 /--
 info: Try this:
 
-  [apply]     split
-    . let* ⟨ x2, x2_post ⟩ ← U32.add_spec
+  [apply]     spec_split
+    · let* ⟨ x2, x2_post ⟩ ← U32.add_spec
       let* ⟨ x3, x3_post ⟩ ← U32.add_spec
-    . let* ⟨ y, y_post ⟩ ← U32.add_spec
-      let* ⟨ res, res_post ⟩ ← U32.add_spec
+    · let* ⟨ y, y_post ⟩ ← U32.add_spec
+      let* ⟨ ⟩ ← U32.add_spec
 ---
 error: unsolved goals
 b : Bool
@@ -691,31 +879,31 @@ x2_post : ↑x2 = ↑x + ↑y
 x3 : U32
 _ : [> let x3 ← x2 + x2 <]
 x3_post : ↑x3 = ↑x2 + ↑x2
-⊢ ∃ z, x3 + 4#u32 = ok z
+⊢ x3 + 4#u32 ⦃ z => True ⦄
 -/
 #guard_msgs in
 example b (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
-      ∃ z, add2 b x y = ok z := by
+  add2 b x y ⦃ z => True ⦄ := by
   unfold add2
   progress*? 3
 
 /--
 info: Try this:
 
-  [apply]     split
-    . let* ⟨ x2, x2_post ⟩ ← U32.add_spec
+  [apply]     spec_split
+    · let* ⟨ x2, x2_post ⟩ ← U32.add_spec
       · sorry
       let* ⟨ x3, x3_post ⟩ ← U32.add_spec
       · sorry
-      let* ⟨ res, res_post ⟩ ← U32.add_spec
+      let* ⟨ ⟩ ← U32.add_spec
       · sorry
-    . let* ⟨ y, y_post ⟩ ← U32.add_spec
+    · let* ⟨ y, y_post ⟩ ← U32.add_spec
       · sorry
-      let* ⟨ res, res_post ⟩ ← U32.add_spec
+      let* ⟨ ⟩ ← U32.add_spec
       · sorry
 ---
 error: unsolved goals
-case isTrue.hmax
+case hmax
 b : Bool
 x y : U32
 h✝ : b = true
@@ -742,7 +930,7 @@ _ : [> let x3 ← x2 + x2 <]
 x3_post : ↑x3 = ↑x2 + ↑x2
 ⊢ ↑x3 + ↑4#u32 ≤ U32.max
 
-case isFalse.hmax
+case hmax
 b : Bool
 x y : U32
 h✝ : ¬b = true
@@ -759,16 +947,98 @@ y_post : ↑y = ↑x + ↑y✝
 -/
 #guard_msgs in
 example b (x y : U32) :
-      ∃ z, add2 b x y = ok z := by
+      add2 b x y ⦃ _ => True ⦄ := by
   unfold add2
+  progress*?
+
+/- Checking that if we can't prove the final goal, we do introduce names for the outputs of the last
+   monadic call -/
+/--
+info: Try this:
+
+  [apply]     let* ⟨ x2, x2_post ⟩ ← U32.add_spec
+    let* ⟨ x3, x3_post ⟩ ← U32.add_spec
+    let* ⟨ res, res_post ⟩ ← U32.add_spec
+    sorry
+---
+error: unsolved goals
+x y : U32
+h : 2 * ↑x + 2 * ↑y + 4 ≤ U32.max
+x2 : U32
+_✝¹ : [> let x2 ← x + y <]
+x2_post : ↑x2 = ↑x + ↑y
+x3 : U32
+_✝ : [> let x3 ← x2 + x2 <]
+x3_post : ↑x3 = ↑x2 + ↑x2
+res : U32
+_ : [> let res ← x3 + 4#u32 <]
+res_post : ↑res = ↑x3 + 4
+⊢ ↑x < 32
+-/
+#guard_msgs in
+example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
+      add1 x y ⦃ _ => x.val < 32 ⦄ := by
+  unfold add1
   progress*?
 
 example (x y : U32) (h : x.val * y.val ≤ U32.max):
   (do
     let z0 ← x * y
     let z1 ← y * x
-    massert (z1 == z0)) = ok () := by
+    massert (z1 == z0)) ⦃ _ => True ⦄ := by
     progress*
+
+/--
+info: Try this:
+
+  [apply]     spec_split
+    · simp only [progress_simps]
+    · rename_i x _
+      simp only [progress_simps]
+-/
+#guard_msgs in
+example (x : Option Nat) :
+  (match x with | none => .ok 0 | some x => .ok x) ⦃ _ => True ⦄ := by
+  progress*?
+
+/--
+info: Try this:
+
+  [apply]     spec_split
+    · simp only [progress_simps]
+    · simp only [progress_simps]
+-/
+#guard_msgs in
+example (x : Option α) :
+  (match x with | none => .ok 0 | some _ => .ok 1) ⦃ _ => True ⦄ := by
+  progress*?
+
+/--
+info: Try this:
+
+  [apply]     spec_split
+    · simp only [progress_simps]
+    · simp only [progress_simps]
+    · rename_i a b _ _
+      simp only [progress_simps]
+-/
+#guard_msgs in
+example (l : List Nat) :
+  (match l with
+   | [] | [_] => .ok 0
+   | a :: b :: _ => .ok (a + b)) ⦃ _ => True ⦄ := by
+  progress*?
+
+/--
+info: Try this:
+
+  [apply]     simp only [progress_simps]
+    let* ⟨ ⟩ ← core.num.U32.overflowing_add_eq.progress_spec
+-/
+#guard_msgs in
+example (x y : U32) :
+  (toResult (core.num.U32.overflowing_add x y)) ⦃ (_, _) => True ⦄ := by
+  progress*?
 
 end Examples
 

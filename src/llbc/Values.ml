@@ -15,16 +15,16 @@ module FunCallId = IdGen ()
 module LoopId = IdGen ()
 module MetaId = IdGen ()
 
-type symbolic_value_id = SymbolicValueId.id [@@deriving show, ord]
-type symbolic_value_id_set = SymbolicValueId.Set.t [@@deriving show, ord]
-type loop_id = LoopId.id [@@deriving show, ord]
-type meta_id = MetaId.id [@@deriving show, ord]
-type fun_call_id = FunCallId.id [@@deriving show, ord]
-type borrow_id = BorrowId.id [@@deriving show, ord]
-type borrow_id_set = BorrowId.Set.t [@@deriving show, ord]
-type shared_borrow_id = SharedBorrowId.id [@@deriving show, ord]
-type loan_id = BorrowId.id [@@deriving show, ord]
-type loan_id_set = BorrowId.Set.t [@@deriving show, ord]
+type symbolic_value_id = SymbolicValueId.id [@@deriving show, eq, ord]
+type symbolic_value_id_set = SymbolicValueId.Set.t [@@deriving show, eq, ord]
+type loop_id = LoopId.id [@@deriving show, eq, ord]
+type meta_id = MetaId.id [@@deriving show, eq, ord]
+type fun_call_id = FunCallId.id [@@deriving show, eq, ord]
+type borrow_id = BorrowId.id [@@deriving show, eq, ord]
+type borrow_id_set = BorrowId.Set.t [@@deriving show, eq, ord]
+type shared_borrow_id = SharedBorrowId.id [@@deriving show, eq, ord]
+type loan_id = BorrowId.id [@@deriving show, eq, ord]
+type loan_id_set = BorrowId.Set.t [@@deriving show, eq, ord]
 
 (** Ancestor for {!tvalue} iter visitor *)
 class ['self] iter_tvalue_base =
@@ -34,7 +34,6 @@ class ['self] iter_tvalue_base =
     method visit_symbolic_value_id : 'env -> symbolic_value_id -> unit =
       fun _ _ -> ()
 
-    method visit_variant_id : 'env -> variant_id -> unit = fun _ _ -> ()
     method visit_borrow_id : 'env -> borrow_id -> unit = fun _ _ -> ()
 
     method visit_shared_borrow_id : 'env -> shared_borrow_id -> unit =
@@ -58,7 +57,6 @@ class ['self] map_tvalue_base =
         'env -> symbolic_value_id -> symbolic_value_id =
       fun _ x -> x
 
-    method visit_variant_id : 'env -> variant_id -> variant_id = fun _ x -> x
     method visit_borrow_id : 'env -> borrow_id -> borrow_id = fun _ id -> id
 
     method visit_shared_borrow_id : 'env -> shared_borrow_id -> shared_borrow_id
@@ -150,6 +148,7 @@ and loan_content = VSharedLoan of loan_id * tvalue | VMutLoan of loan_id
 and tvalue = { value : value; ty : ty }
 [@@deriving
   show,
+  eq,
   ord,
   visitors
     {
@@ -176,7 +175,7 @@ and tvalue = { value : value; ty : ty }
 
     TODO: we may want to create wrappers, to prevent accidently mixing meta
     values and regular values. *)
-type mvalue = tvalue [@@deriving show, ord]
+type mvalue = tvalue [@@deriving show, eq, ord]
 
 (** "Meta"-symbolic value.
 
@@ -184,44 +183,44 @@ type mvalue = tvalue [@@deriving show, ord]
 
     TODO: we may want to create wrappers, to prevent mixing meta values and
     regular values. *)
-type msymbolic_value = symbolic_value [@@deriving show, ord]
+type msymbolic_value = symbolic_value [@@deriving show, eq, ord]
 
-type msymbolic_value_id = symbolic_value_id [@@deriving show, ord]
+type msymbolic_value_id = symbolic_value_id [@@deriving show, eq, ord]
 
 (** "Meta" symbolic value consumed upon ending a loan *)
 type mconsumed_symb = { sv_id : symbolic_value_id; proj_ty : ty }
-[@@deriving show, ord]
+[@@deriving show, eq, ord]
 
 (** "Meta" symbolic value given back upon ending a borrow *)
 type mgiven_back_symb = { sv_id : symbolic_value_id; proj_ty : ty }
-[@@deriving show, ord]
+[@@deriving show, eq, ord]
 
-type abs_id = AbsId.id [@@deriving show, ord]
-type abs_id_set = AbsId.Set.t [@@deriving show, ord]
+type abs_id = AbsId.id [@@deriving show, eq, ord]
+type abs_id_set = AbsId.Set.t [@@deriving show, eq, ord]
 
 (** Projection markers: those are used in the joins. For additional explanations
     see: https://arxiv.org/pdf/2404.02680#section.5 *)
-type proj_marker = PNone | PLeft | PRight [@@deriving show, ord]
+type proj_marker = PNone | PLeft | PRight [@@deriving show, eq, ord]
 
 type ended_proj_borrow_meta = {
   consumed : msymbolic_value_id;
   given_back : msymbolic_value;
 }
-[@@deriving show, ord]
+[@@deriving show, eq, ord]
 
 type aended_mut_borrow_meta = {
   bid : borrow_id;
   given_back : msymbolic_value;
       (** The value given back upon ending the borrow *)
 }
-[@@deriving show, ord]
+[@@deriving show, eq, ord]
 
 type eended_mut_borrow_meta = {
   bid : borrow_id;
   given_back : msymbolic_value;
       (** The value given back upon ending the borrow *)
 }
-[@@deriving show, ord]
+[@@deriving show, eq, ord]
 
 (** The kind of an abstraction, which keeps track of its origin *)
 type abs_kind =
@@ -264,16 +263,16 @@ type abs_kind =
   | Join
       (** The abstraction was introduced after joining contexts, typically after
           an [if then else] or a [match] *)
-[@@deriving show, ord]
+[@@deriving show, eq, ord]
 
 module AbsBVarId = IdGen ()
 module AbsFVarId = IdGen ()
 
 (** A DeBruijn index identifying a group of bound variables *)
-type abs_db_scope_id = int [@@deriving show, ord]
+type abs_db_scope_id = int [@@deriving show, eq, ord]
 
-type abs_bvar_id = AbsBVarId.id [@@deriving show, ord]
-type abs_fvar_id = AbsFVarId.id [@@deriving show, ord]
+type abs_bvar_id = AbsBVarId.id [@@deriving show, eq, ord]
+type abs_fvar_id = AbsFVarId.id [@@deriving show, eq, ord]
 
 let ( abs_fvar_id_counter,
       marked_abs_fvar_ids,
@@ -289,7 +288,18 @@ let ( abs_fvar_id_counter,
 module DummyVarId =
 IdGen ()
 
-type dummy_var_id = DummyVarId.id [@@deriving show, ord]
+type dummy_var_id = DummyVarId.id [@@deriving show, eq, ord]
+
+(** A sub-abstraction level.
+
+    Sub-abstractions are used in the presence of nested borrows: the abstraction
+    itself is considered as having level 0 and sub-abstractions of higher-levels
+    can be ended without ending sub-abstractions of lower levels. *)
+type abs_level = int [@@deriving show, eq, ord]
+
+module AbsLevelSet = Collections.IntSet
+
+type abs_level_set = AbsLevelSet.t [@@deriving show, eq, ord]
 
 (** Ancestor for {!env} iter visitor *)
 class ['self] iter_env_base =
@@ -343,6 +353,7 @@ class ['self] iter_env_base =
     method visit_local_id : 'env -> local_id -> unit = fun _ _ -> ()
     method visit_dummy_var_id : 'env -> dummy_var_id -> unit = fun _ _ -> ()
     method visit_abs_kind : 'env -> abs_kind -> unit = fun _ _ -> ()
+    method visit_abs_level_set : 'env -> abs_level_set -> unit = fun _ _ -> ()
   end
 
 (** Ancestor for {!env} map visitor *)
@@ -403,6 +414,9 @@ class ['self] map_env_base =
       fun _ x -> x
 
     method visit_abs_kind : 'env -> abs_kind -> abs_kind = fun _ x -> x
+
+    method visit_abs_level_set : 'env -> abs_level_set -> abs_level_set =
+      fun _ x -> x
   end
 
 (** When giving shared borrows to functions (i.e., inserting shared borrows
@@ -571,6 +585,9 @@ and avalue =
           because of a join for instance). *)
 
 and adt_avalue = {
+  borrow_proj : bool;
+      (** Was this ADT inroduced because of a borrow projection or a loan
+          projection? *)
   variant_id : (VariantId.id option[@opaque]);
   fields : tavalue list;
 }
@@ -1088,7 +1105,9 @@ and evalue =
           markers). *)
   | EBVar of abs_bvar
   | EFVar of abs_fvar_id
-  | EApp of abs_fun * tevalue list
+  | EApp of abs_fun * tevalue list list
+      (** We need a list of list because of what happens when merging region
+          abstractions containing nested borrows *)
   | EAdt of adt_evalue
   | EBottom (* TODO: remove once we change the way internal borrows are ended *)
   | ELoan of eloan_content
@@ -1132,6 +1151,9 @@ and epat =
 and tepat = { pat : epat; ty : ty  (** The type should have been normalized *) }
 
 and adt_evalue = {
+  borrow_proj : bool;
+      (** Was this ADT inroduced because of a borrow projection or a loan
+          projection? *)
   variant_id : (VariantId.id option[@opaque]);
   fields : tevalue list;
 }
@@ -1461,13 +1483,11 @@ and abs = {
           the return region for 'b (if it is the case, it means the function
           doesn't borrow check). *)
   parents : abs_id_set;  (** The parent abstractions *)
-  original_parents : abs_id list;
-      (** The original list of parents, ordered. This is used for synthesis.
-          TODO: remove? *)
   regions : abs_regions;
       (** TODO: actually we also (only?) need to put the regions at the level of
           the values themselves, otherwise some projections are not precise
           enough when merging region abstractions. *)
+  ended_subabs : abs_level_set;  (** The ended sub-abstractions *)
   avalues : tavalue list;  (** The values in this abstraction *)
   cont : abs_cont option;
       (** The continuation representing the abstraction in the translation.
@@ -1503,6 +1523,7 @@ and env = env_elem list
 [@@deriving
   show,
   ord,
+  eq,
   visitors
     {
       name = "iter_env";

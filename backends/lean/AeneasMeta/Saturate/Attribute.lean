@@ -123,7 +123,7 @@ private def Rules.insert (s : Rules) (kv : Key × Rule) : Rules :=
   let ⟨ k, v ⟩ := kv
   let nameToRules := nameToRules.insert v.thName v
   -- Update the discrimination tree
-  let rules := rules.insertCore k.discrTreeKey v
+  let rules := rules.insertKeyValue k.discrTreeKey v
   --
   { nameToRules, deactivatedRules, rules }
 

@@ -22,15 +22,14 @@ exception ValueMatchFailure of updt_env_kind
 exception Distinct of string
 
 (** Information about the way contexts were joined *)
-type ctx_join_info = {
+type join_info = {
+  joined_ctx : eval_ctx;  (** The result of the join *)
   symbolic_to_value : (tvalue * tvalue) SymbolicValueId.Map.t;
       (** Map from fresh symbolic value to the values coming from the left and
           right contexts *)
-  refreshed_aids : abs_id AbsId.Map.t;
-      (** The refreshed abstraction ids in the right environment *)
 }
 
-type ctx_or_update = (eval_ctx * ctx_join_info, updt_env_kind) result
+type join_info_or_update = (join_info, updt_env_kind) result
 
 (** A small utility.
 
@@ -58,6 +57,60 @@ type abs_borrows_loans_maps = {
 
 type tvalue_matcher = tvalue -> tvalue -> tvalue
 
+let abs_borrows_loans_maps_to_string (_ctx : eval_ctx)
+    (m : abs_borrows_loans_maps) : string =
+  let {
+    abs_ids;
+    abs_to_borrows;
+    abs_to_non_unique_borrows;
+    abs_to_loans;
+    borrow_to_abs;
+    non_unique_borrow_to_abs;
+    loan_to_abs;
+    abs_to_borrow_projs;
+    abs_to_loan_projs;
+    borrow_proj_to_abs;
+    loan_proj_to_abs;
+  } =
+    m
+  in
+  "{\n  abs_ids: "
+  ^ Print.list_to_string AbsId.to_string abs_ids
+  ^ ",\n  abs_to_borrows: "
+  ^ AbsId.Map.to_string None
+      (MarkedUniqueBorrowId.Set.to_string None)
+      abs_to_borrows
+  ^ ",\n  abs_to_non_unique_borrows: "
+  ^ AbsId.Map.to_string None
+      (MarkedBorrowId.Set.to_string None)
+      abs_to_non_unique_borrows
+  ^ ",\n  abs_to_loans: "
+  ^ AbsId.Map.to_string None (MarkedLoanId.Set.to_string None) abs_to_loans
+  ^ ",\n  borrow_to_abs: "
+  ^ MarkedUniqueBorrowId.Map.to_string None (AbsId.Set.to_string None)
+      borrow_to_abs
+  ^ ",\n  non_unique_borrow_to_abs: "
+  ^ MarkedBorrowId.Map.to_string None (AbsId.Set.to_string None)
+      non_unique_borrow_to_abs
+  ^ ",\n  loan_to_abs: "
+  ^ MarkedLoanId.Map.to_string None (AbsId.Set.to_string None) loan_to_abs
+  (* TOOD: improve printing of those: *)
+  ^ ",\n  abs_to_borrow_projs: "
+  ^ AbsId.Map.to_string None
+      (MarkedNormSymbProj.Set.to_string None)
+      abs_to_borrow_projs
+  ^ ",\n  abs_to_loan_projs: "
+  ^ AbsId.Map.to_string None
+      (MarkedNormSymbProj.Set.to_string None)
+      abs_to_loan_projs
+  ^ ",\n  borrow_proj_to_abs: "
+  ^ MarkedNormSymbProj.Map.to_string None (AbsId.Set.to_string None)
+      borrow_proj_to_abs
+  ^ ",\n  loan_proj_to_abs: "
+  ^ MarkedNormSymbProj.Map.to_string None (AbsId.Set.to_string None)
+      loan_proj_to_abs
+  ^ "\n}"
+
 (** See {!module:Aeneas.InterpLoopsMatchCtxs.MakeMatcher} and [Matcher].
 
     This module contains primitive match functions to instantiate the generic
@@ -68,6 +121,10 @@ type tvalue_matcher = tvalue -> tvalue -> tvalue
     the ended regions. *)
 module type PrimMatcher = sig
   val span : Meta.span
+
+  (** Should we fail hard or make errors recoverable? *)
+  val recover : bool
+
   val match_etys : eval_ctx -> eval_ctx -> ety -> ety -> ety
   val match_rtys : eval_ctx -> eval_ctx -> rty -> rty -> rty
 
@@ -361,6 +418,27 @@ module type PrimMatcher = sig
     tavalue ->
     tavalue
 
+  val match_aignored_mut_borrow :
+    tvalue_matcher ->
+    eval_ctx ->
+    eval_ctx ->
+    rty * borrow_id option * tavalue ->
+    rty * borrow_id option * tavalue ->
+    ty ->
+    tavalue ->
+    tavalue
+
+  val match_aended_ignored_mut_borrow :
+    tvalue_matcher ->
+    eval_ctx ->
+    eval_ctx ->
+    rty * aended_ignored_mut_borrow ->
+    rty * aended_ignored_mut_borrow ->
+    ty ->
+    tavalue ->
+    tavalue ->
+    tavalue
+
   (** Parameters:
       - [match_values]
       - [ctx0]
@@ -442,8 +520,11 @@ end
 module type MatchCheckEquivState = sig
   val span : Meta.span
 
-  (** [true] if we check equivalence between contexts, [false] if we match a
-      source context with a target context. *)
+  (** Should we fail hard or make errors recoverable? *)
+  val recover : bool
+
+  (** [true] if we check equivalence between contexts, [false] if we compute a
+      mapping from a source context to a target context. *)
   val check_equiv : bool
 
   val rid_map : RegionId.InjSubst.t ref
@@ -550,6 +631,10 @@ module type MatchJoinState = sig
       right environment and whose join led to the introduction of the symbolic
       value *)
   val symbolic_to_value : (tvalue * tvalue) SymbolicValueId.Map.t ref
+
+  (** If [true] we throw a special kind of exception when encountering *some*
+      errors to make them recoverable (and we do not save errors). *)
+  val recover : bool
 end
 
 (** Split an environment between some old abstractions and dummy values and the
@@ -689,7 +774,7 @@ let tavalue_add_marker (span : Meta.span) (ctx : eval_ctx) (pm : proj_marker)
 let tevalue_add_marker (span : Meta.span) (ctx : eval_ctx) (pm : proj_marker)
     (ev : tevalue) : tevalue =
   let obj =
-    object
+    object (self)
       inherit [_] map_tavalue as super
       method! visit_borrow_content _ _ = [%craise] span "Unexpected borrow"
       method! visit_loan_content _ _ = [%craise] span "Unexpected loan"
@@ -716,9 +801,11 @@ let tevalue_add_marker (span : Meta.span) (ctx : eval_ctx) (pm : proj_marker)
         | EMutLoan (pm0, bid, av) ->
             [%sanity_check] span (pm0 = PNone);
             super#visit_eloan_content ty (EMutLoan (pm, bid, av))
+        | EEndedMutLoan _ | EEndedIgnoredMutLoan _ ->
+            super#visit_eloan_content ty lc
         | _ ->
             [%craise] span
-              ("(Internal error: please file an issue (unexpected value: "
+              ("Unimplemented (unexpected value: "
               ^ eloan_content_to_string ctx ty lc
               ^ ")")
 
@@ -727,6 +814,8 @@ let tevalue_add_marker (span : Meta.span) (ctx : eval_ctx) (pm : proj_marker)
         | EMutBorrow (pm0, bid, av) ->
             [%sanity_check] span (pm0 = PNone);
             super#visit_eborrow_content env (EMutBorrow (pm, bid, av))
+        | EEndedIgnoredMutBorrow bc ->
+            EEndedIgnoredMutBorrow (self#visit_eended_ignored_mut_borrow env bc)
         | _ -> [%internal_error] span
     end
   in
@@ -759,5 +848,8 @@ let compute_fixed_abs_ids (ctx0 : eval_ctx) (ctx1 : eval_ctx) : AbsId.Set.t =
     (fun aid ->
       let a0 = AbsId.Map.find aid abs0 in
       let a1 = AbsId.Map.find aid abs1 in
-      a0 = a1)
+      (* We ignore the continuation expressions: when computing fixed points we
+         might remove/add continuations while the presence/absence shouldn't
+         have an impact on the way we match/unify contexts. *)
+      { a0 with cont = None } = { a1 with cont = None })
     abs_ids

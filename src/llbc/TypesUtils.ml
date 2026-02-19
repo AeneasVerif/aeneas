@@ -2,6 +2,80 @@ open Types
 open Utils
 include Charon.TypesUtils
 
+(** Return the set of regions in an type - TODO: add static?
+
+    This function should be used on non-erased and non-bound regions. For
+    sanity, we raise exceptions if this is not the case. *)
+let ty_regions (ty : ty) : RegionId.Set.t =
+  let s = ref RegionId.Set.empty in
+  let add_region (r : region) =
+    match r with
+    | RStatic -> () (* TODO: static? *)
+    | RErased | RBody _ ->
+        raise
+          (Failure "ty_regions shouldn't be called on erased or body regions")
+    | RVar (Bound _) ->
+        raise (Failure "region_in_set shouldn't be called on bound regions")
+    | RVar (Free id) -> s := RegionId.Set.add id !s
+  in
+  let obj =
+    object
+      inherit [_] iter_ty as super
+      method! visit_region _env r = add_region r
+
+      method! visit_TDynTrait env tr =
+        (* Ignore the dyn traits by default *)
+        if Config.type_analysis_ignore_dyn then ()
+        else super#visit_TDynTrait env tr
+    end
+  in
+  (* Explore the type *)
+  obj#visit_ty () ty;
+  (* Return the set of accumulated regions *)
+  !s
+
+(* TODO: merge with ty_has_regions_in_set *)
+let ty_regions_intersect (ty : ty) (regions : RegionId.Set.t) : bool =
+  let ty_regions = ty_regions ty in
+  not (RegionId.Set.disjoint ty_regions regions)
+
+(** Check if a {!type:Charon.Types.ty} contains regions from a given set *)
+let ty_has_regions_in_pred (pred : region -> bool) (ty : ty) : bool =
+  let obj =
+    object
+      inherit [_] iter_ty as super
+      method! visit_region _ r = if pred r then raise Found
+
+      method! visit_TDynTrait env tr =
+        (* Ignore the dyn traits by default *)
+        if Config.type_analysis_ignore_dyn then ()
+        else super#visit_TDynTrait env tr
+    end
+  in
+  try
+    obj#visit_ty () ty;
+    false
+  with Found -> true
+
+(** Check if a {!type:Charon.Types.ty} contains regions from a given set *)
+let ty_has_regions_in_set (rset : RegionId.Set.t) (ty : ty) : bool =
+  ty_has_regions_in_pred (fun r -> region_in_set r rset) ty
+
+(** Check if a type has free (i.e., non erased) regions.
+
+    This is useful in particular when using normalized projection types (types
+    where all the regions of interest are free regions, and the other regions
+    are erased, that we use for instance to project the borrows belonging to a
+    symbolic value into different region abstractions): the projection over a
+    symbolic value intersects a region abstraction if its projection type has
+    some free regions (or in other words, if not all the regions appearing in
+    the type are erased). *)
+let ty_has_free_regions (ty : ty) : bool =
+  ty_has_regions_in_pred region_is_free ty
+
+let ty_has_erased_regions (ty : ty) : bool =
+  ty_has_regions_in_pred region_is_erased ty
+
 let expect_free_var = Substitute.expect_free_var
 
 (** Retuns true if the type contains borrows.
@@ -56,16 +130,21 @@ let ty_has_nested_mut_borrows (span : Meta.span option)
   let info = TypesAnalysis.analyze_ty span infos ty in
   info.TypesAnalysis.contains_nested_mut
 
-(** Check that a type is supported.
+(** Check whether a type is supported.
 
-    For now, we support types which do not contain nested mutable borrows. *)
-let ty_is_supported (span : Meta.span option) (infos : TypesAnalysis.type_infos)
-    (ty : ty) : bool =
-  not (ty_has_nested_mut_borrows span infos ty)
+    TODO: implement the check. *)
+let ty_is_supported (_span : Meta.span option)
+    (_infos : TypesAnalysis.type_infos) (_ty : ty) : bool =
+  true
 
 (* Refresh the regions appearing inside a type, and introduce
-   fresh regions for its erased regions *)
+   fresh regions for its erased regions.
+
+   If [live_regions] is provided we only refresh the live regions (i.e., the
+   regions appearing in the set).
+*)
 let ty_refresh_regions (span : Meta.span option)
+    ?(region_is_live : (region_id -> bool) option = None)
     (fresh_region : unit -> region_id) (ty : ty) : region_id list * ty =
   let fresh_regions = ref [] in
   let fresh_region () =
@@ -73,14 +152,21 @@ let ty_refresh_regions (span : Meta.span option)
     fresh_regions := rid :: !fresh_regions;
     rid
   in
+  let region_is_live =
+    match region_is_live with
+    | None -> fun _ -> true
+    | Some region_is_live -> region_is_live
+  in
   let regions_map = ref RegionId.Map.empty in
   let get_region rid =
-    match RegionId.Map.find_opt rid !regions_map with
-    | Some id -> id
-    | None ->
-        let nid = fresh_region () in
-        regions_map := RegionId.Map.add rid nid !regions_map;
-        nid
+    if region_is_live rid then (
+      match RegionId.Map.find_opt rid !regions_map with
+      | Some id -> id
+      | None ->
+          let nid = fresh_region () in
+          regions_map := RegionId.Map.add rid nid !regions_map;
+          nid)
+    else rid
   in
   let visitor =
     object
@@ -123,6 +209,14 @@ let type_decl_has_nested_borrows (span : Meta.span option)
   let ty = TAdt { id = TAdtId type_decl.def_id; generics } in
   ty_has_nested_borrows span infos ty
 
+let type_decl_has_nested_mut_borrows (span : Meta.span option)
+    (infos : TypesAnalysis.type_infos) (type_decl : type_decl) : bool =
+  let generics =
+    Substitute.generic_args_of_params_erase_regions span type_decl.generics
+  in
+  let ty = TAdt { id = TAdtId type_decl.def_id; generics } in
+  ty_has_nested_mut_borrows span infos ty
+
 (** Retuns true if the type contains a borrow under a mutable borrow *)
 let ty_has_borrow_under_mut span (infos : TypesAnalysis.type_infos) (ty : ty) :
     bool =
@@ -149,7 +243,7 @@ let ty_has_mut_borrow_for_region_in_pred (infos : TypesAnalysis.type_infos)
         (* Lookup the information for this ADT *)
         begin
           match tref.id with
-          | TTuple | TBuiltin (TBox | TArray | TSlice | TStr) -> ()
+          | TTuple | TBuiltin (TBox | TStr) -> ()
           | TAdtId adt_id ->
               let info = TypeDeclId.Map.find adt_id infos in
               RegionId.iteri
@@ -181,13 +275,18 @@ let ty_has_mut_borrows (infos : TypesAnalysis.type_infos) (ty : ty) : bool =
 (** Small helper *)
 let raise_if_not_rty_visitor =
   object
-    inherit [_] iter_ty
+    inherit [_] iter_ty as super
 
     method! visit_region _ r =
       match r with
       | RVar (Bound _) | RErased -> raise Found
       | RStatic | RVar (Free _) -> ()
       | RBody _ -> [%craise_opt_span] None "unsupported: Body region"
+
+    method! visit_TDynTrait env tr =
+      (* Ignore dyn traits by default *)
+      if Config.type_analysis_ignore_dyn then ()
+      else super#visit_TDynTrait env tr
   end
 
 (** Return [true] if the type is a region type (i.e., it doesn't contain erased
@@ -218,6 +317,28 @@ let ty_is_ety (ty : ty) : bool =
     true
   with Found -> false
 
+let ty_erase_body_regions ty =
+  let visitor =
+    object
+      inherit [_] map_ty
+
+      method! visit_region _ r =
+        match r with
+        | RStatic | RVar _ | RErased -> r
+        | RBody _ -> RErased
+    end
+  in
+  visitor#visit_ty () ty
+
+let ty_erase_regions ty =
+  let visitor =
+    object
+      inherit [_] map_ty
+      method! visit_region _ _ = RErased
+    end
+  in
+  visitor#visit_ty () ty
+
 let generic_args_only_erased_regions (x : generic_args) : bool =
   try
     raise_if_not_erased_ty_visitor#visit_generic_args () x;
@@ -227,8 +348,13 @@ let generic_args_only_erased_regions (x : generic_args) : bool =
 (** Small helper *)
 let raise_if_region_ty_visitor =
   object
-    inherit [_] iter_ty
+    inherit [_] iter_ty as super
     method! visit_region _ _ = raise Found
+
+    method! visit_TDynTrait env tr =
+      (* Ignore the dyn traits by default *)
+      if Config.type_analysis_ignore_dyn then ()
+      else super#visit_TDynTrait env tr
   end
 
 (** Return [true] if the type doesn't contain regions (including erased regions)

@@ -16,6 +16,7 @@ let log = Logging.interp_log
 
 let eval_ctx_to_string = Print.Contexts.eval_ctx_to_string
 let name_to_string = Print.EvalCtx.name_to_string
+let real_var_binder_to_string = Print.EvalCtx.real_var_binder_to_string
 let symbolic_value_to_string = Print.EvalCtx.symbolic_value_to_string
 
 let symbolic_value_id_to_pretty_string =
@@ -25,8 +26,11 @@ let borrow_content_to_string = Print.EvalCtx.borrow_content_to_string
 let loan_content_to_string = Print.EvalCtx.loan_content_to_string
 let aborrow_content_to_string = Print.EvalCtx.aborrow_content_to_string
 let eborrow_content_to_string = Print.EvalCtx.eborrow_content_to_string
+let aproj_borrows_to_string = Print.EvalCtx.aproj_borrows_to_string
+let aproj_loans_to_string = Print.EvalCtx.aproj_loans_to_string
 let aloan_content_to_string = Print.EvalCtx.aloan_content_to_string
 let eloan_content_to_string = Print.EvalCtx.eloan_content_to_string
+let symbolic_proj_to_string = Print.EvalCtx.symbolic_proj_to_string
 let aproj_to_string = Print.EvalCtx.aproj_to_string
 let eproj_to_string = Print.EvalCtx.eproj_to_string
 let tvalue_to_string = Print.EvalCtx.tvalue_to_string
@@ -34,6 +38,7 @@ let tavalue_to_string = Print.EvalCtx.tavalue_to_string
 let tevalue_to_string = Print.EvalCtx.tevalue_to_string
 let tepat_to_string = Print.EvalCtx.tepat_to_string
 let place_to_string = Print.EvalCtx.place_to_string
+let local_to_string = Print.EvalCtx.local_to_string
 let operand_to_string = Print.EvalCtx.operand_to_string
 let fun_sig_to_string = Print.EvalCtx.fun_sig_to_string
 let inst_fun_sig_to_string = Print.EvalCtx.inst_fun_sig_to_string
@@ -280,6 +285,12 @@ exception FoundEBorrowContent of eborrow_content
 exception FoundAProjBorrows of aproj_borrows
 
 (** Utility exception *)
+exception FoundSymbolicProjBorrows of symbolic_proj
+
+(** Utility exception *)
+exception FoundSymbolicProjLoans of symbolic_proj
+
+(** Utility exception *)
 exception FoundAProjLoans of aproj_loans
 
 exception FoundAbsProj of abs_id * symbolic_value_id
@@ -407,6 +418,10 @@ let symbolic_value_has_borrows span (ctx : eval_ctx) (sv : symbolic_value) :
 let value_has_borrows span (ctx : eval_ctx) (v : value) : bool =
   ValuesUtils.value_has_borrows span ctx.type_ctx.type_infos v
 
+(** See {!ValuesUtils.value_has_mut_borrows}. *)
+let value_has_mut_borrows span (ctx : eval_ctx) (v : value) : bool =
+  ValuesUtils.value_has_mut_borrows span ctx.type_ctx.type_infos v
+
 (** See {!ValuesUtils.value_has_borrows}. *)
 let tvalue_has_borrows span (ctx : eval_ctx) (v : tvalue) : bool =
   ValuesUtils.value_has_borrows span ctx.type_ctx.type_infos v.value
@@ -441,18 +456,32 @@ let value_has_mutable_loans (v : value) : bool =
 let tvalue_has_mutable_loans (v : tvalue) : bool =
   ValuesUtils.value_has_mutable_loans v.value
 
+(** See {!ValuesUtils.value_has_shared_loans}. *)
+let value_has_shared_loans (v : value) : bool =
+  ValuesUtils.value_has_shared_loans v
+
+(** See {!ValuesUtils.value_has_shared_loans}. *)
+let tvalue_has_shared_loans (v : tvalue) : bool =
+  ValuesUtils.value_has_shared_loans v.value
+
 (** The borrow id of shared borrows doesn't uniquely identify shared borrows:
     when we need to uniquely identify a borrow, we use the borrow id for mutable
     borrows, and the shared borrow id for shared borrow (once again, the shared
-    borrow id is just an implementation detail, it doesn't have any impact in
+    borrow id is just an implementation detail, it doesn't have any impact on
     the semantics). *)
-type unique_borrow_id = UMut of borrow_id | UShared of shared_borrow_id
+type unique_borrow_id =
+  | UMut of borrow_id
+  | UShared of (borrow_id * shared_borrow_id)
+      (** The borrow id is not necessary but we keep it for formatting purposes.
+          Note that we use UShared both for shared borrows and **reserved**
+          borrows. *)
 [@@deriving show, ord]
 
 let unique_borrow_id_to_string (uid : unique_borrow_id) : string =
   match uid with
-  | UMut id -> "m@" ^ BorrowId.to_string id
-  | UShared id -> "s@" ^ SharedBorrowId.to_string id
+  | UMut id -> "MB@" ^ BorrowId.to_string id
+  | UShared (id, sid) ->
+      "SB@" ^ BorrowId.to_string id ^ "(^" ^ SharedBorrowId.to_string sid ^ ")"
 
 module UniqueBorrowIdOrderedType :
   Collections.OrderedType with type t = unique_borrow_id = struct
@@ -573,10 +602,11 @@ let compute_ids () =
     }
   in
   let get_ids_to_values () = { sids_to_values = !sids_to_values } in
-  let add_shared_borrow bid sid =
+  let add_shared_borrow bid (sid : shared_borrow_id) =
     blids := BorrowId.Set.add bid !blids;
     borrow_ids := BorrowId.Set.add bid !borrow_ids;
-    unique_borrow_ids := UniqueBorrowIdSet.add (UShared sid) !unique_borrow_ids;
+    unique_borrow_ids :=
+      UniqueBorrowIdSet.add (UShared (bid, sid)) !unique_borrow_ids;
     shared_borrow_ids := SharedBorrowId.Set.add sid !shared_borrow_ids;
     non_unique_shared_borrow_ids :=
       BorrowId.Set.add bid !non_unique_shared_borrow_ids
@@ -672,7 +702,7 @@ let compute_ctx_ids (ctx : eval_ctx) : ids_sets * ids_to_values =
 let empty_ids_set = fst (compute_ctxs_ids [])
 
 let initialize_eval_ctx (span : Meta.span option) (ctx : decls_ctx)
-    (region_groups : RegionGroupId.id list) (type_vars : type_param list)
+    (region_groups : region_group_id list) (type_vars : type_param list)
     (const_generic_vars : const_generic_param list) (marked_ids : marked_ids) :
     eval_ctx =
   let _, _, _, fresh_symbolic_value_id =
@@ -710,13 +740,18 @@ let initialize_eval_ctx (span : Meta.span option) (ctx : decls_ctx)
     MetaId.fresh_stateful_generator_with_marked marked_ids.meta_ids
   in
 
+  let _, _, _, fresh_symbolic_expr_id =
+    SymbolicExprId.fresh_stateful_generator_with_marked
+      marked_ids.symbolic_expr_ids
+  in
+
   let const_generic_vars_map =
     ConstGenericVarId.Map.of_list
       (List.map
          (fun (cg : const_generic_param) ->
-           let ty = TLiteral cg.ty in
            let cv =
-             mk_fresh_symbolic_tvalue_opt_span span fresh_symbolic_value_id ty
+             mk_fresh_symbolic_tvalue_opt_span span fresh_symbolic_value_id
+               cg.ty
            in
            (cg.index, cv))
          const_generic_vars)
@@ -741,75 +776,21 @@ let initialize_eval_ctx (span : Meta.span option) (ctx : decls_ctx)
     fresh_abs_fvar_id;
     fresh_loop_id;
     fresh_meta_id;
+    fresh_symbolic_expr_id;
   }
 
 (** Instantiate a function signature, introducing **fresh** abstraction ids and
     region ids. This is mostly used in preparation of function calls (when
     evaluating in symbolic mode). *)
-let instantiate_fun_sig (span : Meta.span) (ctx : eval_ctx)
-    (generics : generic_args) (tr_self : trait_ref_kind) (sg : bound_fun_sig)
-    (regions_hierarchy : region_var_groups) : inst_fun_sig =
+let instantiate_fun_sig (span : Meta.span option) (ctx : eval_ctx)
+    (generic_args : generic_args) (tr_self : trait_ref_kind)
+    (sg : bound_fun_sig) : inst_fun_sig =
   [%ldebug
     "- generics: "
-    ^ Print.EvalCtx.generic_args_to_string ctx generics
+    ^ Print.EvalCtx.generic_args_to_string ctx generic_args
     ^ "\n- tr_self: "
     ^ Print.EvalCtx.trait_ref_kind_to_string ctx tr_self
     ^ "\n- sg: " ^ fun_sig_to_string ctx sg];
-  (* Erase the regions in the generics we use for the instantiation *)
-  let generics = Substitute.generic_args_erase_regions generics in
-  let tr_self = Substitute.trait_ref_kind_erase_regions tr_self in
-  (* Generate fresh abstraction ids and create a substitution from region
-   * group ids to abstraction ids *)
-  let asubst_map : AbsId.id RegionGroupId.Map.t =
-    RegionGroupId.Map.of_list
-      (List.map (fun rg -> (rg.id, ctx.fresh_abs_id ())) regions_hierarchy)
-  in
-  let asubst (rg_id : RegionGroupId.id) : AbsId.id =
-    RegionGroupId.Map.find rg_id asubst_map
-  in
-  (* Generate fresh regions *)
-  let rsubst =
-    Substitute.fresh_regions_with_substs_from_vars sg.item_binder_params.regions
-      ctx.fresh_region_id
-  in
-  (* Generate the type substitution. *)
-  [%sanity_check] span (TypesUtils.trait_instance_id_no_regions tr_self);
-  let tsubst =
-    Substitute.make_type_subst_from_vars sg.item_binder_params.types
-      generics.types
-  in
-  let cgsubst =
-    Substitute.make_const_generic_subst_from_vars
-      sg.item_binder_params.const_generics generics.const_generics
-  in
-  let tr_subst =
-    Substitute.make_trait_subst_from_clauses sg.item_binder_params.trait_clauses
-      generics.trait_refs
-  in
-  (* Substitute the signature *)
-  let inst_sig =
-    Substitute.substitute_signature asubst rsubst tsubst cgsubst tr_subst
-      tr_self sg regions_hierarchy
-  in
-  (* Return *)
-  inst_sig
-
-(** Compute the regions hierarchy of an instantiated function call - i.e., a
-    function call instantiated with type parameters which might contain borrows.
-    We do so by computing a "fake" function signature and by computing the
-    regions hierarchy for this signature. We return both the fake signature and
-    the regions hierarchy.
-
-    - [type_vars]: the type variables currently in the context
-    - [const_generic_vars]: the const generics currently in the context
-    - [generic_args]: the generic arguments given to the function
-    - [sg]: the original, uninstantiated signature (we need to retrieve, for
-      instance, the region outlives constraints) *)
-let compute_regions_hierarchy_for_fun_call fresh_abs_id
-    (span : Meta.span option) (crate : crate) (fun_name : string)
-    (type_vars : type_param list)
-    (const_generic_vars : const_generic_param list)
-    (generic_args : generic_args) (sg : bound_fun_sig) : inst_fun_sig =
   (* We simply put everything into a "fake" signature, then call
      [compute_regions_hierarchy_for_sig].
 
@@ -824,16 +805,28 @@ let compute_regions_hierarchy_for_fun_call fresh_abs_id
     sg
   in
   (* Introduce the fresh regions *)
-  let region_map = ref RegionId.Map.empty in
-  let fresh_regions = ref RegionId.Set.empty in
-  let _, fresh_region_id = RegionId.fresh_stateful_generator () in
-  let get_region rid =
-    match RegionId.Map.find_opt rid !region_map with
+  let free_region_map = ref RegionId.Map.empty in
+  let body_region_map = ref RegionId.Map.empty in
+  let fresh_regions = ref [] in
+  let fresh_region_id () =
+    let rid = ctx.fresh_region_id () in
+    fresh_regions := rid :: !fresh_regions;
+    rid
+  in
+  let get_free_region rid =
+    match RegionId.Map.find_opt rid !free_region_map with
     | Some rid -> rid
     | None ->
         let nrid = fresh_region_id () in
-        fresh_regions := RegionId.Set.add nrid !fresh_regions;
-        region_map := RegionId.Map.add rid nrid !region_map;
+        free_region_map := RegionId.Map.add rid nrid !free_region_map;
+        nrid
+  in
+  let get_body_region rid =
+    match RegionId.Map.find_opt rid !body_region_map with
+    | Some rid -> rid
+    | None ->
+        let nrid = fresh_region_id () in
+        body_region_map := RegionId.Map.add rid nrid !body_region_map;
         nrid
   in
   let visitor =
@@ -847,38 +840,25 @@ let compute_regions_hierarchy_for_fun_call fresh_abs_id
 
       method! visit_RVar _ var =
         match var with
-        | Free rid -> RVar (Free (get_region rid))
+        | Free rid -> RVar (Free (get_free_region rid))
         | Bound _ -> RVar var
 
       method! visit_RErased _ =
         (* Introduce a fresh region *)
         let nrid = fresh_region_id () in
-        fresh_regions := RegionId.Set.add nrid !fresh_regions;
         RVar (Free nrid)
+
+      method! visit_RBody _ rid = RVar (Free (get_body_region rid))
     end
   in
-  (* We want to make sure that we numerotate the region parameters, even the erased
-     ones, in order, before introducing fresh regions for the erased regions which
-     appear in the types parameters *)
-  let generic_regions =
-    List.map (visitor#visit_region ()) generic_args.regions
-  in
-  (* Explore the types to generate the fresh regions *)
-  let generic_types = List.map (visitor#visit_ty ()) generic_args.types in
+  let generic_args = visitor#visit_generic_args () generic_args in
+  let tr_self = visitor#visit_trait_ref_kind () tr_self in
+  let fresh_regions = List.rev !fresh_regions in
 
   (* Reconstruct the generics *)
   let subst =
-    let { regions = _; types = _; const_generics; trait_refs } = generic_args in
-    let generic_args =
-      {
-        regions = generic_regions;
-        types = generic_types;
-        const_generics;
-        trait_refs
-        (* Keeping the same trait refs: it shouldn't have an impact *);
-      }
-    in
     Substitute.make_subst_from_generics sg.item_binder_params generic_args
+      tr_self
   in
 
   (* Substitute the inputs and outputs *)
@@ -900,7 +880,7 @@ let compute_regions_hierarchy_for_fun_call fresh_abs_id
       } =
         generics
       in
-      let fresh_regions = RegionId.Set.elements !fresh_regions in
+      let fresh_regions = fresh_regions in
       let fresh_region_vars : region_param list =
         List.map (fun index -> { Types.index; name = None }) fresh_regions
       in
@@ -926,10 +906,12 @@ let compute_regions_hierarchy_for_fun_call fresh_abs_id
              subst)
           types_outlive
       in
+      (* For the type variables and const generic variables we simply reuse the
+         ones present in the context *)
       {
         regions = fresh_region_vars;
-        types = type_vars;
-        const_generics = const_generic_vars;
+        types = ctx.type_vars;
+        const_generics = ctx.const_generic_vars;
         trait_clauses;
         regions_outlive;
         types_outlive;
@@ -944,7 +926,7 @@ let compute_regions_hierarchy_for_fun_call fresh_abs_id
       }
     in
     let regions_hierarchy =
-      RegionsHierarchy.compute_regions_hierarchy_for_sig span crate fun_name sg
+      RegionsHierarchy.compute_regions_hierarchy_for_sig span ctx.crate sg
     in
     (generics.trait_type_constraints, regions_hierarchy)
   in
@@ -958,7 +940,7 @@ let compute_regions_hierarchy_for_fun_call fresh_abs_id
   *)
   let asubst_map : AbsId.id RegionGroupId.Map.t =
     RegionGroupId.Map.of_list
-      (List.map (fun rg -> (rg.id, fresh_abs_id ())) regions_hierarchy)
+      (List.map (fun rg -> (rg.id, ctx.fresh_abs_id ())) regions_hierarchy)
   in
   let asubst (rg_id : RegionGroupId.id) : AbsId.id =
     RegionGroupId.Map.find rg_id asubst_map

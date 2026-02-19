@@ -1,6 +1,7 @@
 //@ [fstar] aeneas-args=-decreases-clauses -split-files
 //@ [coq] aeneas-args=-use-fuel
 //@ [coq,fstar] subdir=misc
+//@ [coq,fstar] aeneas-args=-loops-to-rec
 #![feature(register_tool)]
 #![register_tool(charon)]
 #![register_tool(aeneas)]

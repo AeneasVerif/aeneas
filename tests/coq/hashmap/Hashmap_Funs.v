@@ -17,28 +17,29 @@ Definition hash_key (k : usize) : result usize :=
 
 (** [hashmap::{core::clone::Clone for hashmap::Fraction}::clone]:
     Source: 'tests/src/hashmap.rs', lines 43:9-43:14 *)
-Definition cloneFraction_clone (self : Fraction_t) : result Fraction_t :=
+Definition Fraction_Insts_CoreCloneClone_clone
+  (self : Fraction_t) : result Fraction_t :=
   Ok self
 .
 
 (** [hashmap::{core::clone::Clone for hashmap::Fraction}::clone_from]:
     Source: 'tests/src/hashmap.rs', lines 43:9-43:14 *)
-Definition cloneFraction_clone_from
+Definition Fraction_Insts_CoreCloneClone_clone_from
   (self : Fraction_t) (source : Fraction_t) : result Fraction_t :=
-  cloneFraction_clone source
+  Fraction_Insts_CoreCloneClone_clone source
 .
 
 (** Trait implementation: [hashmap::{core::clone::Clone for hashmap::Fraction}]
     Source: 'tests/src/hashmap.rs', lines 43:9-43:14 *)
-Definition core_clone_CloneFraction : core_clone_Clone Fraction_t := {|
-  core_clone_Clone_clone := cloneFraction_clone;
-  core_clone_Clone_clone_from := cloneFraction_clone_from;
+Definition Fraction_Insts_CoreCloneClone : core_clone_Clone Fraction_t := {|
+  core_clone_Clone_clone := Fraction_Insts_CoreCloneClone_clone;
+  core_clone_Clone_clone_from := Fraction_Insts_CoreCloneClone_clone_from;
 |}.
 
 (** Trait implementation: [hashmap::{core::marker::Copy for hashmap::Fraction}]
     Source: 'tests/src/hashmap.rs', lines 43:16-43:20 *)
-Definition core_marker_CopyFraction : core_marker_Copy Fraction_t := {|
-  cloneInst := core_clone_CloneFraction;
+Definition Fraction_Insts_CoreMarkerCopy : core_marker_Copy Fraction_t := {|
+  cloneInst := Fraction_Insts_CoreCloneClone;
 |}.
 
 (** [hashmap::{hashmap::HashMap<T>}::allocate_slots]: loop 0:
@@ -426,17 +427,17 @@ Fixpoint hashMap_get_mut_in_list_loop
       if ckey s= key
       then
         Ok (Some cvalue,
-          fun (ret : option T) =>
-            let t := match ret with | Some t1 => t1 | _ => cvalue end in
+          fun (o : option T) =>
+            let t := match o with | Some t1 => t1 | _ => cvalue end in
             AList_Cons ckey t tl)
       else (
         p <- hashMap_get_mut_in_list_loop n1 tl key;
         let (o, back) := p in
         let back1 :=
-          fun (ret : option T) => let a := back ret in AList_Cons ckey cvalue a
+          fun (o1 : option T) => let a := back o1 in AList_Cons ckey cvalue a
         in
         Ok (o, back1))
-    | AList_Nil => Ok (None, fun (ret : option T) => AList_Nil)
+    | AList_Nil => Ok (None, fun (o : option T) => AList_Nil)
     end
   end
 .
@@ -466,8 +467,8 @@ Definition hashMap_get_mut
   p1 <- hashMap_get_mut_in_list n a key;
   let (o, get_mut_in_list_back) := p1 in
   let back :=
-    fun (ret : option T) =>
-      let a1 := get_mut_in_list_back ret in
+    fun (o1 : option T) =>
+      let a1 := get_mut_in_list_back o1 in
       let v := index_mut_back a1 in
       {|
         hashMap_num_entries := self.(hashMap_num_entries);

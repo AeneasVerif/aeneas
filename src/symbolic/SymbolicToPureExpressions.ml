@@ -13,24 +13,24 @@ let translate_fn_ptr_kind (ctx : bs_ctx) (id : A.fn_ptr_kind) : fn_ptr_kind =
   match id with
   | FunId fun_id -> FunId fun_id
   | TraitMethod (trait_ref, method_name, fun_decl_id) ->
-      let type_infos = ctx.type_ctx.type_infos in
       let trait_ref =
-        translate_fwd_trait_ref (Some ctx.span) type_infos trait_ref
+        translate_fwd_trait_ref (Some ctx.span) ctx.decls_ctx trait_ref
       in
       TraitMethod (trait_ref, method_name, fun_decl_id)
 
 (* Introduce variables for the backward functions.
 
-   We may filter the region group ids.
-*)
+   We may filter the region group ids. *)
 let fresh_back_vars_for_current_fun (ctx : bs_ctx) : bs_ctx * fvar option list =
   (* We lookup the LLBC definition in an attempt to derive pretty names
      for the backward functions. *)
   let back_var_names =
-    let def_id = ctx.fun_decl.def_id in
+    (* TODO: it's annoying that we have to recompute the regions hierarchy.
+       Charon should do it for us. *)
     let regions_hierarchy =
-      LlbcAstUtils.FunIdMap.find (FRegular def_id)
-        ctx.fun_ctx.regions_hierarchies
+      RegionsHierarchy.compute_regions_hierarchy_for_sig (Some ctx.span)
+        ctx.decls_ctx.crate
+        (LlbcAstUtils.bound_fun_sig_of_decl ctx.fun_decl)
     in
     List.map
       (fun (gid, _) ->
@@ -189,14 +189,17 @@ let rec translate_expr (e : S.expr) (ctx : bs_ctx) : texpr =
       translate_return ectx opt_v ctx
   | Panic -> translate_panic ctx
   | FunCall (call, e) -> translate_function_call call e ctx
-  | EndAbs (ectx, abs, e) -> translate_end_abs ectx abs e ctx
+  | EndAbs (ectx, abs, abs_level, e) ->
+      translate_end_abs ectx abs abs_level e ctx
   | EvalGlobal (gid, generics, sv, e) ->
       translate_global_eval gid generics sv e ctx
-  | Assertion (ectx, v, e) -> translate_assertion ectx v e ctx
+  | Assertion (ectx, expected, v, e) ->
+      translate_assertion ectx expected v e ctx
   | Expansion (p, sv, exp) -> translate_expansion p sv exp ctx
   | IntroSymbolic (ectx, p, sv, v, e) ->
       translate_intro_symbolic ectx p sv v e ctx
-  | SubstituteAbsIds (aids, e) -> translate_substitute_abs_ids ctx aids e
+  | SubstituteAbsIds (eid, aids, e) ->
+      translate_substitute_abs_ids ctx eid aids e
   | Meta (meta, e) -> translate_emeta meta e ctx
   | ForwardEnd (return_value, ectx, e, back_e) ->
       (* Translate the end of a function (this is introduced when we reach a [return] statement). *)
@@ -253,7 +256,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
     let args = List.map (tvalue_to_texpr ctx call.ctx) call.args in
     let args_mplaces =
       List.map
-        (translate_opt_mplace (Some call.span) ctx.type_ctx.type_infos)
+        (translate_opt_mplace (Some call.span) ctx.decls_ctx)
         call.args_places
     in
     List.map
@@ -261,8 +264,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
       (List.combine args args_mplaces)
   in
   let dest_mplace =
-    translate_opt_mplace (Some call.span) ctx.type_ctx.type_infos
-      call.dest_place
+    translate_opt_mplace (Some call.span) ctx.decls_ctx call.dest_place
   in
   (* Retrieve the function id, and register the function call in the context
      if necessary. *)
@@ -613,8 +615,7 @@ and translate_cast_unsize (call : S.call) (e : S.expr) (ty0 : T.ty) (ty1 : T.ty)
 
   (* Process the arguments and the destination *)
   let dest_mplace =
-    translate_opt_mplace (Some call.span) ctx.type_ctx.type_infos
-      call.dest_place
+    translate_opt_mplace (Some call.span) ctx.decls_ctx call.dest_place
   in
   let ctx, dest = fresh_var_for_symbolic_value call.dest ctx in
   let dest = mk_tpat_from_fvar dest_mplace dest in
@@ -625,7 +626,7 @@ and translate_cast_unsize (call : S.call) (e : S.expr) (ty0 : T.ty) (ty1 : T.ty)
   in
   let arg = tvalue_to_texpr ctx call.ctx arg in
   let arg_mp =
-    translate_opt_mplace (Some call.span) ctx.type_ctx.type_infos
+    translate_opt_mplace (Some call.span) ctx.decls_ctx
       (List.hd call.args_places)
   in
   let arg = mk_opt_mplace_texpr arg_mp arg in
@@ -691,22 +692,25 @@ and translate_cast_unsize (call : S.call) (e : S.expr) (ty0 : T.ty) (ty1 : T.ty)
   let monadic = false in
   [%add_loc] mk_closed_checked_let ctx monadic dest cast_expr next_e
 
-and translate_end_abs (ectx : C.eval_ctx) (abs : V.abs) (e : S.expr)
-    (ctx : bs_ctx) : texpr =
+and translate_end_abs (ectx : C.eval_ctx) (abs : V.abs)
+    (abs_level : V.abs_level) (e : S.expr) (ctx : bs_ctx) : texpr =
   [%ltrace "abstraction kind: " ^ V.show_abs_kind abs.kind];
   match abs.kind with
   | V.SynthInput rg_id ->
-      translate_end_abstraction_synth_input ectx abs e ctx rg_id
+      translate_end_abstraction_synth_input ectx abs e ctx rg_id abs_level
   | V.FunCall (call_id, _) ->
-      translate_end_abstraction_fun_call ectx abs e call_id ctx
-  | V.SynthRet rg_id -> translate_end_abstraction_synth_ret ectx abs e ctx rg_id
-  | V.Loop _ | V.Join -> translate_end_abstraction_join_or_loop ectx abs e ctx
-  | V.WithCont -> translate_end_abstraction_with_cont ectx abs e ctx
+      translate_end_abstraction_fun_call ectx abs abs_level e call_id ctx
+  | V.SynthRet rg_id ->
+      translate_end_abstraction_synth_ret ectx abs e ctx rg_id abs_level
+  | V.Loop _ | V.Join ->
+      translate_end_abstraction_join_or_loop ectx abs abs_level e ctx
+  | V.WithCont -> translate_end_abstraction_with_cont ectx abs abs_level e ctx
   | V.Identity | V.CopySymbolicValue ->
-      translate_end_abs_identity ectx abs e ctx
+      translate_end_abs_identity ectx abs abs_level e ctx
 
 and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
-    (e : S.expr) (ctx : bs_ctx) (rg_id : T.RegionGroupId.id) : texpr =
+    (e : S.expr) (ctx : bs_ctx) (rg_id : T.RegionGroupId.id)
+    (abs_level : V.abs_level) : texpr =
   [%ltrace
     "- function: "
     ^ name_to_string ctx ctx.fun_decl.item_meta.name
@@ -714,121 +718,246 @@ and translate_end_abstraction_synth_input (ectx : C.eval_ctx) (abs : V.abs)
     ^ T.RegionGroupId.to_string rg_id
     ^ "\n- eval_ctx:\n"
     ^ eval_ctx_to_string ~span:(Some ctx.span) ectx
-    ^ "\n- abs:\n" ^ abs_to_string ctx abs];
+    ^ "\n- abs:\n" ^ abs_to_string ctx abs ^ "\n- abs_level: "
+    ^ string_of_int abs_level];
 
   (* When we end an input abstraction, this input abstraction gets back
      the borrows which it introduced in the context through the input
      values: by listing those values, we get the values which are given
      back by one of the backward functions we are synthesizing.
 
-     Note that we don't support nested borrows for now: if we find
-     an ended synthesized input abstraction, it must be the one corresponding
-     to the backward function wer are synthesizing, it can't be the one
-     for a parent backward function.
-  *)
+     Note that in the case of nested borrows we might have to end synthesis
+     input abstractions when synthesizing a different backward function. *)
   let bid = Option.get ctx.bid in
-  [%sanity_check] ctx.span (rg_id = bid);
 
-  (* First, introduce the given back variables. *)
-  let ctx, given_back_variables =
-    let back_sg = RegionGroupId.Map.find bid ctx.sg.fun_ty.back_sg in
-    let vars = List.combine back_sg.output_names back_sg.outputs in
-    let ctx, vars = fresh_vars vars ctx in
-    ({ ctx with backward_outputs = Some vars }, vars)
-  in
+  if rg_id = bid && abs_level = 0 then (
+    (* First, introduce the given back variables.
 
-  (* Get the list of values consumed by the abstraction upon ending *)
-  let consumed_values = abs_to_consumed ctx ectx abs in
+       For every consumed value we introduce a fresh variables and a let-binding:
+       {[
+         let x0 = v0 in
+         let x1 = v1 in
+         ...
+       ]}
+       We also update the context to store these fresh variables.
+       Upon reaching the [return], we simply output a tuple grouping those
+       variables:
+       {[
+         (x0, x1, ...)
+       ]}
+    *)
+    let ctx, given_back_variables =
+      let back_sg = RegionGroupId.Map.find rg_id ctx.sg.fun_ty.back_sg in
+      match
+        List.find_opt (fun (level, _) -> level = abs_level) back_sg.outputs
+      with
+      | None ->
+          (* Can happen if the abstraction has no output - but should be for level 0 *)
+          [%sanity_check] ctx.span (abs_level = 0);
+          ( {
+              ctx with
+              backward_outputs = AbsLevelMap.add 0 [] ctx.backward_outputs;
+            },
+            [] )
+      | Some (_, outputs) ->
+          let ctx, vars = fresh_vars outputs ctx in
+          [%sanity_check] ctx.span
+            (not (AbsLevelMap.mem abs_level ctx.backward_outputs));
+          let backward_outputs =
+            AbsLevelMap.add abs_level vars ctx.backward_outputs
+          in
+          ({ ctx with backward_outputs }, vars)
+    in
 
-  [%ltrace
-    "\n- given back variables types:\n"
-    ^ Print.list_to_string
-        (fun (v : fvar) -> pure_ty_to_string ctx v.ty)
-        given_back_variables
-    ^ "\n\n- consumed values:\n"
-    ^ Print.list_to_string
-        (fun e -> texpr_to_string ctx e ^ " : " ^ pure_ty_to_string ctx e.ty)
-        consumed_values];
+    (* Get the list of values consumed by the abstraction upon ending *)
+    let consumed_values = abs_to_consumed ctx ectx abs abs_level in
 
-  (* Prepare the let-bindings by introducing a match if necessary *)
-  let given_back_variables =
-    List.map (mk_tpat_from_fvar None) given_back_variables
-  in
-  [%sanity_check] ctx.span
-    (List.length given_back_variables = List.length consumed_values);
-  let variables_values = List.combine given_back_variables consumed_values in
+    [%ltrace
+      "\n- given back variables types:\n"
+      ^ Print.list_to_string
+          (fun (v : fvar) -> pure_ty_to_string ctx v.ty)
+          given_back_variables
+      ^ "\n\n- consumed values:\n"
+      ^ Print.list_to_string
+          (fun e -> texpr_to_string ctx e ^ " : " ^ pure_ty_to_string ctx e.ty)
+          consumed_values];
+    (* TODO: generalize this. The backward functions of the short-lived regions
+       will introduce the backward functions of the long-lived regions. *)
+    [%sanity_check] ctx.span
+      ((given_back_variables = [] && consumed_values = []) || rg_id = bid);
 
-  (* Sanity check: the two lists match (same types) *)
-  (* TODO: normalize the types *)
-  if !Config.type_check_pure_code then
-    List.iter
-      (fun (var, v) ->
-        [%sanity_check] ctx.span ((var : tpat).ty = (v : texpr).ty))
-      variables_values;
-  (* Translate the next expression *)
-  let next_e = translate_expr e ctx in
-  (* Generate the assignemnts *)
-  let monadic = false in
-  mk_closed_checked_lets __FILE__ __LINE__ ctx monadic variables_values next_e
+    (* Prepare the let-bindings *)
+    let given_back_variables =
+      List.map (mk_tpat_from_fvar None) given_back_variables
+    in
+    [%sanity_check] ctx.span
+      (List.length given_back_variables = List.length consumed_values);
+    let variables_values = List.combine given_back_variables consumed_values in
+
+    (* Sanity check: the two lists match (same types) *)
+    (* TODO: normalize the types *)
+    if !Config.type_check_pure_code then
+      List.iter
+        (fun (var, v) ->
+          [%sanity_check] ctx.span ((var : tpat).ty = (v : texpr).ty))
+        variables_values;
+    (* Translate the next expression *)
+    let next_e = translate_expr e ctx in
+    (* Generate the assignemnts *)
+    let monadic = false in
+    mk_closed_checked_lets __FILE__ __LINE__ ctx monadic variables_values next_e)
+  else if rg_id = bid && abs_level > 0 then (
+    [%ldebug "abs_level > 0 (" ^ string_of_int abs_level ^ ")"];
+
+    (* The abstraction actually introduces values bound by a lambda, rather than
+       consuming values *)
+
+    (* Introduce fresh variables for the values output by the abstraction *)
+    let ctx, input_values = abs_to_given_back None abs abs_level ctx in
+
+    (* Lookup the values which are bound in the lambda defining the backward function *)
+    let bound_values =
+      [%unwrap_with_span] ctx.span
+        (RegionGroupId.Map.find_opt rg_id ctx.backward_inputs)
+        "Internal error: please file an issue"
+    in
+    let bound_values =
+      match AbsLevelMap.find_opt abs_level bound_values with
+      | None -> []
+      | Some values -> values
+    in
+
+    [%ldebug
+      "- input_values:\n"
+      ^ Print.list_to_string (tpat_to_string ctx) input_values
+      ^ "\n- bound_values:\n"
+      ^ Print.list_to_string (fvar_to_string ctx) bound_values];
+
+    (* Introduce the let bindings to link the fresh values we introduced above to the
+       ones bound in the lambda. *)
+    [%sanity_check] ctx.span
+      (List.length input_values = List.length bound_values);
+    let eqs =
+      List.combine input_values (List.map mk_texpr_from_fvar bound_values)
+    in
+    (* Translate the next expression *)
+    let next_e = translate_expr e ctx in
+    (* Generate the assignemnts *)
+    let monadic = false in
+    mk_closed_checked_lets __FILE__ __LINE__ ctx monadic eqs next_e)
+  else
+    (* Check that the region abstraction only consumes values but does not output any *)
+    let ctx, outputs = abs_to_given_back None abs abs_level ctx in
+    [%cassert] ctx.span (outputs = []) "Unimplemented";
+
+    (* No outputs: we can ignore it *)
+    translate_expr e ctx
 
 and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
-    (e : S.expr) (call_id : V.fun_call_id) (ctx : bs_ctx) : texpr =
+    (abs_level : abs_level) (e : S.expr) (call_id : V.fun_call_id)
+    (ctx : bs_ctx) : texpr =
+  [%ltrace
+    "abs (level: " ^ string_of_int abs_level ^ "):\n" ^ abs_to_string ctx abs];
   let call = V.FunCallId.Map.find call_id ctx.calls in
   let info = V.AbsId.Map.find_opt abs.abs_id ctx.abs_id_to_info in
-  (* Retrieve the values consumed upon ending the loans inside this
-   * abstraction: those give us the input values *)
-  let back_inputs = abs_to_consumed ctx ectx abs in
-  (* Retrieve the values given back by this function: those are the output
-   * values. We rely on the fact that there are no nested borrows to use the
-   * meta-place information from the input values given to the forward function
-   * (we need to add [None] for the return avalue) *)
-  let output_mpl =
-    List.append
-      (List.map
-         (translate_opt_mplace (Some call.span) ctx.type_ctx.type_infos)
-         call.args_places)
-      [ None ]
-  in
-  let ctx, outputs = abs_to_given_back (Some output_mpl) abs ctx in
-  (* Group the output values together *)
-  let output = mk_simpl_tuple_pat outputs in
-  (* Translate the next expression *)
-  let next_e ctx = translate_expr e ctx in
-  (* Put everything together *)
-  let inputs = back_inputs in
-  let args_mplaces = List.map (fun _ -> None) inputs in
-  let args =
-    List.map
-      (fun (arg, mp) -> mk_opt_mplace_texpr mp arg)
-      (List.combine inputs args_mplaces)
-  in
-  (* The backward function might have been filtered if it does nothing
-     (consumes unit and returns unit). *)
-  match info with
-  | None -> next_e ctx
-  | Some info ->
-      [%ltrace
-        let args = List.map (texpr_to_string ctx) args in
-        "func: "
-        ^ texpr_to_string ctx info.fvar
-        ^ "\nfunc type: "
-        ^ pure_ty_to_string ctx info.fvar.ty
-        ^ "\n\nargs:\n" ^ String.concat "\n" args];
-      let call = [%add_loc] mk_apps ctx.span info.fvar args in
-      (* Introduce a match if necessary *)
-      let ctx, (output, call) = decompose_let_match ctx output call in
-      (* Translate the next expression and construct the let *)
-      [%add_loc] mk_closed_checked_let ctx info.can_fail output call
-        (next_e ctx)
+  (* For now we do not support sub-abstractions giving back values.
 
-and translate_end_abs_identity (ectx : C.eval_ctx) (abs : V.abs) (e : S.expr)
-    (ctx : bs_ctx) : texpr =
+     This means we ignore ending fun call sub-abstractions for level > 0, and
+     the sub-abstraction at level 0 consumes everything.
+
+     TODO: generalize. We should keep track of the sub-abstractions of higher-level:
+     every time we end a sub-abstraction we add more inputs to the same backward function.
+     We would get something like this:
+     {[
+       let (y, back0) = f x in (* function call *)
+       ...
+       let back1 = back0 z in (* ending sub-abs at level 1 *)
+       let x' = back1 z' in   (* ending sub-abs at level 0 *)
+       ...
+     ]}
+   *)
+  if abs_level > 0 then (
+    (* Check that there are no outputs *)
+    let ctx, outputs = abs_to_given_back None abs abs_level ctx in
+    [%cassert] ctx.span (outputs = []) "Unimplemented";
+    (* Continue *)
+    translate_expr e ctx)
+  else
+    (* Retrieve the values consumed upon ending the loans inside this
+     abstraction: those give us the input values *)
+    let back_inputs =
+      (* For now we do not support sub-abstractions giving back values.
+         This means that the sub-abstraction at level 0 will consume all the
+         inputs for the stricter levels.
+         TODO: generalize.
+       *)
+      [%sanity_check] ctx.span (abs_level = 0);
+      (* Consume all the values, level by level *)
+      let max_level = InterpBorrowsCore.get_max_sub_abs ~with_ended:true abs in
+      [%ldebug "max_level: " ^ string_of_int max_level];
+      (* Note that we always push the outputs at the beginning of the stack,
+         which means the outputs of the highest sub-abstractions will end up
+         being first *)
+      let inputs = ref [] in
+      for level = 0 to max_level do
+        match abs_to_consumed ctx ectx abs level with
+        | [] -> [%ldebug "no inputs at level " ^ string_of_int level]
+        | inputs' ->
+            [%ldebug
+              "inputs at level " ^ string_of_int level ^ ":\n"
+              ^ Print.list_to_string (texpr_to_string ctx) inputs'];
+            inputs := mk_simpl_tuple_texpr ctx.span inputs' :: !inputs
+      done;
+      [%ldebug "inputs:\n" ^ Print.list_to_string (texpr_to_string ctx) !inputs];
+      !inputs
+    in
+    (* Retrieve the values given back by this function: those are the output
+     * values. We rely on the fact that there are no nested borrows to use the
+     * meta-place information from the input values given to the forward function
+     * (we need to add [None] for the return avalue) *)
+    let output_mpl =
+      List.append
+        (List.map
+           (translate_opt_mplace (Some call.span) ctx.decls_ctx)
+           call.args_places)
+        [ None ]
+    in
+    let ctx, outputs = abs_to_given_back (Some output_mpl) abs abs_level ctx in
+    (* Group the output values together *)
+    let output = mk_simpl_tuple_pat outputs in
+    (* Translate the next expression *)
+    let next_e ctx = translate_expr e ctx in
+    (* Put everything together *)
+    let args = List.map (mk_opt_mplace_texpr None) back_inputs in
+    (* The backward function might have been filtered if it does nothing
+     (consumes unit and returns unit). *)
+    match info with
+    | None -> next_e ctx
+    | Some info ->
+        [%ltrace
+          let args = List.map (texpr_to_string ctx) args in
+          "func: "
+          ^ texpr_to_string ctx info.fvar
+          ^ "\nfunc type: "
+          ^ pure_ty_to_string ctx info.fvar.ty
+          ^ "\n\nargs:\n" ^ String.concat "\n" args];
+        let call = [%add_loc] mk_apps ctx.span info.fvar args in
+        (* Introduce a match if necessary *)
+        let ctx, (output, call) = decompose_let_match ctx output call in
+        (* Translate the next expression and construct the let *)
+        [%add_loc] mk_closed_checked_let ctx info.can_fail output call
+          (next_e ctx)
+
+and translate_end_abs_identity (ectx : C.eval_ctx) (abs : V.abs)
+    (abs_level : abs_level) (e : S.expr) (ctx : bs_ctx) : texpr =
+  [%cassert] ctx.span (abs_level = 0) "Unimplemented";
+
   (* We simply check that the abstraction only contains shared borrows/loans,
      and translate the next expression *)
 
   (* We can do this simply by checking that it consumes and gives back nothing *)
-  let inputs = abs_to_consumed ctx ectx abs in
-  let ctx, outputs = abs_to_given_back None abs ctx in
+  let inputs = abs_to_consumed ctx ectx abs abs_level in
+  let ctx, outputs = abs_to_given_back None abs abs_level ctx in
   [%sanity_check] ctx.span (inputs = []);
   [%sanity_check] ctx.span (outputs = []);
 
@@ -836,8 +965,10 @@ and translate_end_abs_identity (ectx : C.eval_ctx) (abs : V.abs) (e : S.expr)
   translate_expr e ctx
 
 and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
-    (e : S.expr) (ctx : bs_ctx) (rg_id : T.RegionGroupId.id) : texpr =
+    (e : S.expr) (ctx : bs_ctx) (rg_id : T.RegionGroupId.id)
+    (abs_level : abs_level) : texpr =
   [%ltrace "Translating ended synthesis abstraction: " ^ abs_to_string ctx abs];
+  [%cassert] ctx.span (abs_level = 0) "Unimplemented";
   (* If we end the abstraction which consumed the return value of the function
      we are synthesizing, we get back the borrows which were inside. Those borrows
      are actually input arguments of the backward function we are synthesizing.
@@ -864,58 +995,85 @@ and translate_end_abstraction_synth_ret (ectx : C.eval_ctx) (abs : V.abs)
        ...
      ]}
 
-     This let-binding later gets inlined, during a micro-pass.
+     This let-binding later gets inlined during a micro-pass.
   *)
   (* First, retrieve the list of variables used for the inputs for the
-   * backward function *)
-  let inputs = T.RegionGroupId.Map.find rg_id ctx.backward_inputs in
-  [%ltrace
-    "Consumed inputs: " ^ Print.list_to_string (fvar_to_string ctx) inputs];
-  (* Retrieve the values consumed upon ending the loans inside this
-   * abstraction: as there are no nested borrows, there should be none. *)
-  let consumed = abs_to_consumed ctx ectx abs in
-  [%cassert] ctx.span (consumed = []) "Nested borrows are not supported yet";
-  (* Retrieve the values given back upon ending this abstraction - note that
+     backward function.
+
+     TODO: the inputs might be missing if we are translating an ancestor region.
+     For now we check that the inputs should be empty so that it works for nested
+     shared borrows (but the inputs won't be empty for nested mutable borrows) *)
+  [%sanity_check] ctx.span (Option.is_some ctx.bid);
+  let bid = Option.get ctx.bid in
+  (* Two cases depending on whether the region we're ending is an ancestor region
+     or not *)
+
+  if rg_id = bid then (
+    let inputs =
+      match T.RegionGroupId.Map.find_opt rg_id ctx.backward_inputs with
+      | None -> [%internal_error] ctx.span
+      | Some inputs -> (
+          (* There may be no inputs if the abstraction consumes nothing, but it should
+           be only for level 0 *)
+          match AbsLevelMap.find_opt abs_level inputs with
+          | Some inputs -> inputs
+          | None ->
+              [%sanity_check] ctx.span (abs_level = 0);
+              [])
+    in
+    [%ltrace
+      "Consumed inputs: " ^ Print.list_to_string (fvar_to_string ctx) inputs];
+    (* Retrieve the values consumed upon ending the loans inside this
+     * abstraction: as there are no nested borrows, there should be none. *)
+    let consumed = abs_to_consumed ctx ectx abs abs_level in
+    [%cassert] ctx.span (consumed = []) "Nested borrows are not supported yet";
+    (* Retrieve the values given back upon ending this abstraction - note that
      we don't provide meta-place information, because those assignments will
      be inlined anyway... *)
-  [%ltrace "abs: " ^ abs_to_string ctx abs];
-  let ctx, given_back = abs_to_given_back_no_mp abs ctx in
-  [%ltrace
-    "given back: " ^ Print.list_to_string (tpat_to_string ctx) given_back];
-  (* Link the inputs to those given back values - note that this also
+    [%ltrace "abs: " ^ abs_to_string ctx abs];
+    let ctx, given_back = abs_to_given_back_no_mp abs abs_level ctx in
+    [%ltrace
+      "given back: " ^ Print.list_to_string (tpat_to_string ctx) given_back];
+    [%sanity_check] ctx.span (List.length given_back = List.length inputs);
+    (* Link the inputs to those given back values - note that this also
      checks we have the same number of values, of course *)
-  let given_back_inputs = List.combine given_back inputs in
-  (* Sanity check *)
-  List.iter
-    (fun ((given_back, input) : tpat * fvar) ->
-      [%ltrace
-        "- given_back ty: "
-        ^ pure_ty_to_string ctx given_back.ty
-        ^ "\n- sig input ty: "
-        ^ pure_ty_to_string ctx input.ty];
-      [%sanity_check] ctx.span (given_back.ty = input.ty))
-    given_back_inputs;
-  (* Prepare the let-bindings by introducing a match if necessary *)
-  let given_back_inputs =
-    List.map (fun (v, e) -> (v, mk_texpr_from_fvar e)) given_back_inputs
-  in
-  let ctx, given_back_inputs =
-    List.fold_left_map
-      (fun ctx (v, e) -> decompose_let_match ctx v e)
-      ctx given_back_inputs
-  in
-  (* Translate the next expression *)
-  let next_e = translate_expr e ctx in
-  (* Generate the assignments *)
-  let monadic = false in
-  mk_closed_checked_lets __FILE__ __LINE__ ctx monadic given_back_inputs next_e
+    let given_back_inputs = List.combine given_back inputs in
+    (* Sanity check *)
+    List.iter
+      (fun ((given_back, input) : tpat * fvar) ->
+        [%ltrace
+          "- given_back ty: "
+          ^ pure_ty_to_string ctx given_back.ty
+          ^ "\n- sig input ty: "
+          ^ pure_ty_to_string ctx input.ty];
+        [%sanity_check] ctx.span (given_back.ty = input.ty))
+      given_back_inputs;
+    (* Prepare the let-bindings by introducing a match if necessary *)
+    let given_back_inputs =
+      List.map (fun (v, e) -> (v, mk_texpr_from_fvar e)) given_back_inputs
+    in
+    let ctx, given_back_inputs =
+      List.fold_left_map
+        (fun ctx (v, e) -> decompose_let_match ctx v e)
+        ctx given_back_inputs
+    in
+    (* Translate the next expression *)
+    let next_e = translate_expr e ctx in
+    (* Generate the assignments *)
+    let monadic = false in
+    mk_closed_checked_lets __FILE__ __LINE__ ctx monadic given_back_inputs
+      next_e)
+  else
+    (* We just ignore *)
+    translate_expr e ctx
 
 and translate_end_abstraction_join_or_loop (ectx : C.eval_ctx) (abs : V.abs)
-    (e : S.expr) (ctx : bs_ctx) : texpr =
+    (abs_level : abs_level) (e : S.expr) (ctx : bs_ctx) : texpr =
   let span = ctx.span in
+  [%cassert] span (abs_level = 0) "Unimplemented";
   (* Compute the input and output values *)
-  let back_inputs = abs_to_consumed ctx ectx abs in
-  let ctx, outputs = abs_to_given_back None abs ctx in
+  let back_inputs = abs_to_consumed ctx ectx abs abs_level in
+  let ctx, outputs = abs_to_given_back None abs abs_level ctx in
   let output = mk_simpl_tuple_pat outputs in
   (* Lookup the continuation to check if the abstraction is output by a join
      or a loop - note that it might not be there if the backward function was
@@ -965,11 +1123,12 @@ and translate_end_abstraction_join_or_loop (ectx : C.eval_ctx) (abs : V.abs)
       [%add_loc] mk_closed_checked_let ctx can_fail output call next_e
 
 and translate_end_abstraction_with_cont (ectx : C.eval_ctx) (abs : V.abs)
-    (e : S.expr) (ctx : bs_ctx) : texpr =
+    (abs_level : abs_level) (e : S.expr) (ctx : bs_ctx) : texpr =
   [%ldebug "abs:\n" ^ abs_to_string ctx abs];
+  [%cassert] ctx.span (abs_level = 0) "Unimplemented";
   (* Translate the continuation *)
   let ctx, can_fail, output, abs_e =
-    translate_ended_abs_to_texpr ctx ectx abs
+    translate_ended_abs_to_texpr ctx ectx abs abs_level
   in
   [%ldebug
     "- output:\n" ^ tpat_to_string ctx output ^ "\n- abs_e:\n"
@@ -991,11 +1150,12 @@ and translate_global_eval (gid : A.GlobalDeclId.id) (generics : T.generic_args)
   let e = translate_expr e ctx in
   [%add_loc] mk_closed_checked_let ctx false (mk_tpat_from_fvar None var) gval e
 
-and translate_assertion (ectx : C.eval_ctx) (v : V.tvalue) (e : S.expr)
-    (ctx : bs_ctx) : texpr =
+and translate_assertion (ectx : C.eval_ctx) (expected : bool) (v : V.tvalue)
+    (e : S.expr) (ctx : bs_ctx) : texpr =
   let next_e = translate_expr e ctx in
   let monadic = true in
   let v = tvalue_to_texpr ctx ectx v in
+  let v = if expected then v else mk_bool_not v in
   let args = [ v ] in
   let func =
     { id = FunOrOp (Fun (Pure Assert)); generics = empty_generic_args }
@@ -1012,9 +1172,7 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
   [%ldebug "expansion:\n" ^ bs_ctx_expansion_to_string ctx sv exp];
   (* Translate the scrutinee *)
   let scrutinee = symbolic_value_to_texpr ctx sv in
-  let scrutinee_mplace =
-    translate_opt_mplace (Some ctx.span) ctx.type_ctx.type_infos p
-  in
+  let scrutinee_mplace = translate_opt_mplace (Some ctx.span) ctx.decls_ctx p in
   (* Translate the branches *)
   match exp with
   | ExpandNoBranch (sexp, e) -> (
@@ -1074,6 +1232,16 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
           let branch = List.hd branches in
           let ty = branch.branch.ty in
           (* Sanity check *)
+          [%ldebug
+            "translated branches:\n"
+            ^ String.concat "\n\n"
+                (List.map
+                   (fun (b : match_branch) ->
+                     "- branch (ty: "
+                     ^ pure_ty_to_string ctx b.branch.ty
+                     ^ ":\n"
+                     ^ match_branch_to_string ctx b)
+                   branches)];
           [%sanity_check] ctx.span
             (List.for_all (fun br -> br.branch.ty = ty) branches);
           (* Return *)
@@ -1167,7 +1335,7 @@ and translate_ExpandAdt_one_branch (sv : V.symbolic_value) (scrutinee : texpr)
         (mk_tpat_from_fvar None var)
         (mk_opt_mplace_texpr scrutinee_mplace scrutinee)
         branch
-  | TBuiltin (TArray | TSlice | TStr) ->
+  | TBuiltin TStr ->
       (* We can't expand those values: we can access the fields only
        * through the functions provided by the API (note that we don't
        * know how to expand values like vectors or arrays, because they have a variable number
@@ -1178,7 +1346,7 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
     (sv : V.symbolic_value) (v : S.value_aggregate) (e : S.expr) (ctx : bs_ctx)
     : texpr =
   [%ltrace "- value aggregate: " ^ S.show_value_aggregate v];
-  let mplace = translate_opt_mplace (Some ctx.span) ctx.type_ctx.type_infos p in
+  let mplace = translate_opt_mplace (Some ctx.span) ctx.decls_ctx p in
 
   (* Introduce a fresh variable for the symbolic value. *)
   let ctx, var = fresh_var_for_symbolic_value sv ctx in
@@ -1205,9 +1373,8 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
         { e = StructUpdate su; ty = var.ty }
     | VaCgValue cg_id -> { e = CVar cg_id; ty = var.ty }
     | VaTraitConstValue (trait_ref, const_name) ->
-        let type_infos = ctx.type_ctx.type_infos in
         let trait_ref =
-          translate_fwd_trait_ref (Some ctx.span) type_infos trait_ref
+          translate_fwd_trait_ref (Some ctx.span) ctx.decls_ctx trait_ref
         in
         let qualif_id = TraitConst (trait_ref, const_name) in
         let qualif = { id = qualif_id; generics = empty_generic_args } in
@@ -1223,6 +1390,45 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
           { e = Qualif qualif; ty = mk_arrow adt_ty var.ty }
         in
         [%add_loc] mk_app ctx.span qualif (symbolic_value_to_texpr ctx adt_sv)
+    | VaDynTrait (v, trait_ref) ->
+        let v = tvalue_to_texpr ctx ectx v in
+        let dyn_ty = var.ty in
+        let trait_ref =
+          translate_fwd_trait_ref (Some ctx.span) ctx.decls_ctx trait_ref
+        in
+        let qualif_id = MkDynTrait trait_ref in
+        let qualif = { id = qualif_id; generics = empty_generic_args } in
+        let qualif : texpr = { e = Qualif qualif; ty = mk_arrow v.ty dyn_ty } in
+        [%add_loc] mk_app ctx.span qualif v
+    | VaFnDef { kind; generics } ->
+        let id = translate_fn_ptr_kind ctx kind in
+        let generics = ctx_translate_fwd_generic_args ctx generics in
+        let func = Fun (FromLlbc (id, None)) in
+        let qualif = Qualif { id = FunOrOp func; generics } in
+        let ty =
+          match kind with
+          | T.FunId (FBuiltin _) -> [%craise] ctx.span "Unimplemented"
+          | T.FunId (FRegular fid) ->
+              let sg =
+                [%unwrap_with_span] ctx.span
+                  (FunDeclId.Map.find_opt fid ctx.fun_sigs)
+                  "Internal error, please file an issue"
+              in
+              (* Check that the function lives in the expected effect - otherwise we
+                 have to lift it *)
+              [%cassert] ctx.span sg.sg.fwd_info.effect_info.can_fail
+                "Unimplemented";
+              [%cassert] ctx.span
+                (RegionGroupId.Map.for_all
+                   (fun _ (e : fun_effect_info) -> not e.can_fail)
+                   sg.sg.back_effect_info)
+                "Unimplemented";
+              (* Substitute *)
+              let subst = make_subst_from_generics sg.sg.generics generics in
+              ty_substitute subst sg.ty
+          | T.TraitMethod _ -> [%craise] ctx.span "Unimplemented"
+        in
+        { e = qualif; ty }
   in
 
   (* Make the let-binding *)
@@ -1249,25 +1455,45 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
           (ctx, fwd_e, fun e -> e)
       | Some bid ->
           (* We need to wrap the expression in a lambda, which introduces the
-           additional inputs of the backward function.
-          *)
-          let ctx =
+             additional inputs of the backward function. *)
+          let ctx, backward_inputs =
             (* We need to introduce fresh variables for the additional inputs,
                because they are locally introduced in a lambda. *)
             let back_sg = RegionGroupId.Map.find bid ctx.sg.fun_ty.back_sg in
-            let ctx, backward_inputs = fresh_vars back_sg.inputs ctx in
+            let ctx, backward_inputs =
+              let ctx = ref ctx in
+              let inputs =
+                List.map
+                  (fun (level, inputs) ->
+                    let ctx', inputs = fresh_vars inputs !ctx in
+                    ctx := ctx';
+                    (level, inputs))
+                  back_sg.inputs
+              in
+              let ctx = !ctx in
+              (ctx, inputs)
+            in
             (* Update the functions mk_return and mk_panic *)
             let effect_info = back_sg.effect_info in
             let mk_return ctx v =
-              assert (v = None);
+              [%sanity_check] ctx.span (v = None);
               let output =
                 (* Group the variables in which we stored the values we need to give back.
                    See the explanations for the [SynthInput] case in [translate_end_abstraction] *)
-                let backward_outputs = Option.get ctx.backward_outputs in
-                let field_values =
-                  List.map mk_texpr_from_fvar backward_outputs
+                (* Note that we need to flatten the sub-abstraction levels - we put
+                   the outputs corresponding to the higher levels first *)
+                let backward_outputs =
+                  List.map snd
+                    (List.rev (AbsLevelMap.to_list ctx.backward_outputs))
                 in
-                mk_simpl_tuple_texpr ctx.span field_values
+                let outputs =
+                  List.map
+                    (fun tys ->
+                      mk_simpl_tuple_texpr ctx.span
+                        (List.map mk_texpr_from_fvar tys))
+                    backward_outputs
+                in
+                mk_simpl_tuple_texpr ctx.span outputs
               in
               (* Wrap in a result if the backward function can fail *)
               if effect_info.can_fail then mk_result_ok_texpr ctx.span output
@@ -1279,25 +1505,37 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
                 mk_result_fail_texpr_with_error_id ctx.span error_failure_id
                   output_ty
               in
+              let outputs =
+                (RegionGroupId.Map.find bid ctx.sg.fun_ty.back_sg).outputs
+              in
               let output =
                 mk_simpl_tuple_ty
-                  (RegionGroupId.Map.find bid ctx.sg.fun_ty.back_sg).outputs
+                  (List.map
+                     (fun (_, tys) ->
+                       mk_simpl_tuple_ty (List.map (fun (_, ty) -> ty) tys))
+                     outputs)
               in
               mk_output output
             in
-            {
-              ctx with
-              backward_inputs =
-                RegionGroupId.Map.add bid backward_inputs ctx.backward_inputs;
-              mk_return = Some mk_return;
-              mk_panic = Some mk_panic;
-            }
+            let ctx =
+              {
+                ctx with
+                backward_inputs =
+                  RegionGroupId.Map.add bid
+                    (AbsLevelMap.of_list backward_inputs)
+                    ctx.backward_inputs;
+                mk_return = Some mk_return;
+                mk_panic = Some mk_panic;
+              }
+            in
+            (ctx, backward_inputs)
           in
 
           let e = T.RegionGroupId.Map.find bid back_e in
           let finish e =
             (* Wrap in lambdas if necessary *)
-            let inputs = RegionGroupId.Map.find bid ctx.backward_inputs in
+            (* TODO: we shouldn't flatten? *)
+            let inputs = List.flatten (List.map snd backward_inputs) in
             let places = List.map (fun _ -> None) inputs in
             mk_closed_lambdas_from_fvars ctx.span inputs places e
           in
@@ -1389,6 +1627,8 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
   [%add_loc] mk_closed_checked_let ctx fwd_effect_info.can_fail pat fwd_e e
 
 and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
+  [%ldebug symbolic_loop_to_string ctx0 loop];
+
   let ctx = ctx0 in
   let loop_id = V.LoopId.Map.find loop.loop_id ctx.loop_ids_map in
 
@@ -1414,7 +1654,7 @@ and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
   let bind_inputs (ctx : bs_ctx) (absl : V.abs list)
       (values : V.symbolic_value list) : bs_ctx * tpat list * tpat list =
     let ctx, absl =
-      (* Compute the type of the break abstractions *)
+      (* Compute the type of the input abstractions *)
       let abs_tys = List.map (abs_to_ty ctx) absl in
       let abs_tys, ignored =
         List.partition_map
@@ -1505,6 +1745,11 @@ and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
     let continue_ty = List.map (fun (e : texpr) -> e.ty) inputs in
     let continue_ty = mk_simpl_tuple_ty continue_ty in
     let break_ty = output.ty in
+    [%ldebug
+      "- continue_ty:\n"
+      ^ pure_ty_to_string ctx continue_ty
+      ^ "\n- break_ty: "
+      ^ pure_ty_to_string ctx break_ty];
     let mk_panic =
       mk_loop_result_fail_texpr_with_error_id ctx.span continue_ty break_ty
         error_failure_id
@@ -1542,6 +1787,7 @@ and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
       inputs = input_abs @ input_values;
       num_input_conts = List.length input_abs;
       loop_body;
+      to_rec = false;
     }
   in
   [%sanity_check] loop.span
@@ -1694,8 +1940,9 @@ and translate_join (ctx : bs_ctx) (ectx : C.eval_ctx)
   let output = mk_simpl_tuple_texpr ctx.span outputs in
   mk_result_ok_texpr ctx.span output
 
-and translate_substitute_abs_ids (ctx : bs_ctx) (aids : V.abs_id V.AbsId.Map.t)
-    (e : S.expr) : texpr =
+and translate_substitute_abs_ids (ctx : bs_ctx) (eid : S.symbolic_expr_id)
+    (aids : V.abs_id V.AbsId.Map.t) (e : S.expr) : texpr =
+  [%ldebug "symbolic expression id: " ^ S.SymbolicExprId.to_string eid];
   (* We need to update the information we have in the various maps of the context *)
   let { abs_id_to_info; ignored_abs_ids; _ } = ctx in
   let update (aid : V.AbsId.id) : V.AbsId.id =
@@ -1735,10 +1982,9 @@ and translate_emeta (meta : S.emeta) (e : S.expr) (ctx : bs_ctx) : texpr =
   let ctx, meta =
     match meta with
     | S.Assignment (ectx, lp, rv, rp) ->
-        let type_infos = ctx.type_ctx.type_infos in
-        let lp = translate_mplace (Some ctx.span) type_infos lp in
+        let lp = translate_mplace (Some ctx.span) ctx.decls_ctx lp in
         let rv = tvalue_to_texpr ctx ectx rv in
-        let rp = translate_opt_mplace (Some ctx.span) type_infos rp in
+        let rp = translate_opt_mplace (Some ctx.span) ctx.decls_ctx rp in
         (ctx, Some (Assignment (lp, rv, rp)))
     | S.Snapshot (mid, ectx) ->
         [%ldebug

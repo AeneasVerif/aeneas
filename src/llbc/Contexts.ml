@@ -2,8 +2,9 @@ open Types
 open Expressions
 open Values
 open LlbcAst
-open LlbcAstUtils
 open ValuesUtils
+open Charon.PrintTypes
+open PrintBase.Values
 include ContextsBase
 
 module OrderedBinder : Collections.OrderedType with type t = var_binder = struct
@@ -30,21 +31,71 @@ let mk_config (mode : interpreter_mode) : config = { mode }
 type type_ctx = {
   type_decls_groups : type_declaration_group TypeDeclId.Map.t;
   type_decls : type_decl TypeDeclId.Map.t;
-      (* Copy of the declarations in the crate *)
+      (** Copy of the declarations in the crate *)
   type_infos : TypesAnalysis.type_infos;
+  to_extract : type_decl TypeDeclId.Map.t;
+      (** The type declarations that should be extracted.
+
+          Charon filters the useless declarations but preserves some of them for
+          printing purposes: [type_decls] contains *all* the declarations needed
+          to properly print the crate, while [to_extract] only contains the ones
+          that should be extracted. *)
 }
 [@@deriving show]
 
 type fun_ctx = {
   fun_decls : fun_decl FunDeclId.Map.t;
-      (* Copy of the declarations in the crate *)
+      (** Copy of the declarations in the crate *)
   fun_infos : FunsAnalysis.fun_info FunDeclId.Map.t;
-  regions_hierarchies : region_var_groups FunIdMap.t;
+  to_extract : fun_decl FunDeclId.Map.t;
+      (** The fun declarations that should be extracted.
+
+          Charon filters the useless declarations but preserves some of them for
+          printing purposes: [fun_decls] contains *all* the declarations needed
+          to properly print the crate, while [to_extract] only contains the ones
+          that should be extracted. *)
 }
 [@@deriving show]
 
-type decls_ctx = { crate : crate; type_ctx : type_ctx; fun_ctx : fun_ctx }
+type decls_ctx = {
+  crate : crate;
+  graph_of_uses : Deps.graph_of_uses;
+  type_ctx : type_ctx;
+  fun_ctx : fun_ctx;
+  global_decls_to_extract : global_decl GlobalDeclId.Map.t;
+      (** The global declarations that should be extracted.
+
+          Charon filters the useless declarations but preserves some of them for
+          printing purposes: this field only contains the ones that should be
+          extracted. *)
+  trait_decls_to_extract : trait_decl TraitDeclId.Map.t;
+      (** Similar to [global_decls_to_extract] *)
+  trait_impls_to_extract : trait_impl TraitImplId.Map.t;
+      (** Similar to [global_decls_to_extract] *)
+}
 [@@deriving show]
+
+let compute_local_uses_error_message (ctx : decls_ctx) (id : item_id) : string =
+  if not (LlbcAstUtils.AnyDeclIdSet.mem id ctx.graph_of_uses.locals) then
+    let uses = Deps.compute_local_uses ctx.graph_of_uses [ id ] in
+    let uses = Deps.ItemInfoSet.to_list uses in
+    if uses = [] then ""
+    else
+      let n = !Config.max_error_spans in
+      let has_extra = n > 0 && List.length uses > n in
+      let uses = if has_extra then Collections.List.prefix n uses else uses in
+      "\n\nThis definition is (transitively) used at the following locations:\n"
+      ^ String.concat "\n"
+          (List.map
+             (fun (info : Deps.item_info) -> Errors.span_to_string info.span)
+             uses)
+      ^
+      if has_extra then
+        "\n\
+         … (omitted - change the number of displayed spans with \
+         -max-error-spans)"
+      else "" ^ "\n"
+  else ""
 
 (** A reference to a trait associated type *)
 type trait_type_ref = { trait_ref : trait_ref; type_name : string }
@@ -61,6 +112,21 @@ module TraitTypeRefOrd = struct
 end
 
 module TraitTypeRefMap = Collections.MakeMap (TraitTypeRefOrd)
+
+type abs_id_with_level = { abs_id : AbsId.id; level : abs_level }
+[@@deriving show, ord]
+
+(* TODO: correctly use the functors so as not to have a duplication below *)
+module AbsIdWithLevelOrd = struct
+  type t = abs_id_with_level
+
+  let compare = compare_abs_id_with_level
+  let to_string = show_abs_id_with_level
+  let pp_t = pp_abs_id_with_level
+  let show_t = show_abs_id_with_level
+end
+
+module AbsIdWithLevelSet = Collections.MakeSet (AbsIdWithLevelOrd)
 
 (** Evaluation context *)
 type eval_ctx = {
@@ -89,6 +155,7 @@ type eval_ctx = {
   fresh_abs_fvar_id : unit -> abs_fvar_id;
   fresh_loop_id : unit -> loop_id;
   fresh_meta_id : unit -> meta_id;
+  fresh_symbolic_expr_id : unit -> symbolic_expr_id;
 }
 [@@deriving show]
 
@@ -201,6 +268,12 @@ let env_update_var_value (span : Meta.span) (env : env) (vid : LocalId.id)
 let var_to_binder (var : local) : real_var_binder =
   { index = var.index; name = var.name }
 
+let local_erase_body_regions (var : local) : local =
+  { var with local_ty = TypesUtils.ty_erase_body_regions var.local_ty }
+
+let local_erase_regions (var : local) : local =
+  { var with local_ty = TypesUtils.ty_erase_regions var.local_ty }
+
 (** Update a variable's value in an evaluation context.
 
     This is a helper function: it can break invariants and doesn't perform any
@@ -227,19 +300,23 @@ let ctx_push_var (span : Meta.span) (ctx : eval_ctx) (var : local) (v : tvalue)
     is important). *)
 let ctx_push_vars (span : Meta.span) (ctx : eval_ctx)
     (vars : (local * tvalue) list) : eval_ctx =
-  [%ltrace
-    String.concat "\n"
-      (List.map
-         (fun (var, value) ->
-           (* We can unfortunately not use Print because it depends on Contexts... *)
-           show_var var ^ " -> " ^ show_tvalue value)
-         vars)];
-  [%cassert] span
-    (List.for_all
-       (fun (var, (value : tvalue)) ->
-         TypesUtils.ty_is_ety var.local_ty && var.local_ty = value.ty)
-       vars)
-    "The pushed variables and their values do not have the same type";
+  let fmt = Charon.PrintLlbcAst.Crate.crate_to_fmt_env ctx.crate in
+  let var_value_to_string (var, value) =
+    "("
+    ^ Charon.PrintExpressions.local_to_string var
+    ^ " : "
+    ^ ty_to_string fmt var.local_ty
+    ^ ")" ^ " -> " ^ tvalue_to_string fmt value
+  in
+  [%ltrace String.concat "\n" (List.map var_value_to_string vars)];
+
+  List.iter
+    (fun (var, (value : tvalue)) ->
+      if not (TypesUtils.ty_is_ety var.local_ty && var.local_ty = value.ty) then (
+        [%ltrace var_value_to_string (var, value)];
+        [%craise] span
+          "The pushed variables and their values do not have the same type"))
+    vars;
   let vars =
     List.map
       (fun (var, value) -> EBinding (BVar (var_to_binder var), value))
@@ -440,41 +517,41 @@ class ['self] map_frame_concrete =
 
 (** Visitor to iterate over the values in a context *)
 class ['self] iter_eval_ctx =
-  object (_self : 'self)
-    inherit [_] iter_env as super
+  object (self : 'self)
+    inherit [_] iter_env
 
     method visit_eval_ctx : 'acc -> eval_ctx -> unit =
-      fun acc ctx -> super#visit_env acc ctx.env
+      fun acc ctx -> self#visit_env acc ctx.env
   end
 
 (** The elements in an environment are in reverse order *)
 class ['self] iter_eval_ctx_regular_order =
-  object (_self : 'self)
-    inherit [_] iter_env as super
+  object (self : 'self)
+    inherit [_] iter_env
 
     method visit_eval_ctx : 'acc -> eval_ctx -> unit =
-      fun acc ctx -> super#visit_env acc (List.rev ctx.env)
+      fun acc ctx -> self#visit_env acc (List.rev ctx.env)
   end
 
 (** Visitor to map the values in a context *)
 class ['self] map_eval_ctx =
-  object (_self : 'self)
-    inherit [_] map_env as super
+  object (self : 'self)
+    inherit [_] map_env
 
     method visit_eval_ctx : 'acc -> eval_ctx -> eval_ctx =
       fun acc ctx ->
-        let env = super#visit_env acc ctx.env in
+        let env = self#visit_env acc ctx.env in
         { ctx with env }
   end
 
 (** The elements in an environment are in reverse order *)
 class ['self] map_eval_ctx_regular_order =
-  object (_self : 'self)
-    inherit [_] map_env as super
+  object (self : 'self)
+    inherit [_] map_env
 
     method visit_eval_ctx : 'acc -> eval_ctx -> eval_ctx =
       fun acc ctx ->
-        let env = List.rev (super#visit_env acc (List.rev ctx.env)) in
+        let env = List.rev (self#visit_env acc (List.rev ctx.env)) in
         { ctx with env }
   end
 
@@ -550,7 +627,6 @@ let ctx_type_get_instantiated_field_types (span : Meta.span) (ctx : eval_ctx)
     (def_id : TypeDeclId.id) (opt_variant_id : VariantId.id option)
     (generics : generic_args) : ty list =
   let def = ctx_lookup_type_decl span ctx def_id in
-  [%sanity_check] span (def.generics.trait_clauses = []);
   Substitute.type_decl_get_instantiated_field_types def opt_variant_id generics
 
 (** Same as [ctx_type_get_instantiated_field_types] but also erases the regions
@@ -586,7 +662,7 @@ let ctx_adt_get_instantiated_field_types (span : Meta.span) (ctx : eval_ctx)
           [%sanity_check] span (List.length generics.types = 1);
           [%sanity_check] span (generics.const_generics = []);
           generics.types
-      | TArray | TSlice | TStr ->
+      | TStr ->
           (* Those types don't have fields *)
           [%craise] span "Unreachable")
 
@@ -639,3 +715,67 @@ let ctx_get_frozen_abs_set (ctx : eval_ctx) : AbsId.Set.t =
     (List.filter_map
        (fun abs -> if abs.can_end then None else Some abs.abs_id)
        (AbsId.Map.values abs))
+
+(** Small helper: lookup a binding satisfying some predicate and remove it from
+    the enviromnent *)
+let rec env_pop_binding (default : unit -> 'a * env) (f : env_elem -> 'a option)
+    (env : env) : 'a * env =
+  match env with
+  | [] -> default ()
+  | b :: env' -> (
+      match f b with
+      | None ->
+          let out, env' = env_pop_binding default f env' in
+          (out, b :: env')
+      | Some out -> (out, env'))
+
+(** Remove a variable from an environment and return the corresponding value *)
+let env_pop_var (default : unit -> tvalue * env) (v : real_var_binder)
+    (env : env) : tvalue * env =
+  env_pop_binding default
+    (fun e ->
+      match e with
+      | EBinding (BVar v', value) when v' = v -> Some value
+      | _ -> None)
+    env
+
+(** Remove a dummy variable from an environment and return the corresponding
+    value *)
+let env_pop_dummy (default : unit -> tvalue * env) (v : dummy_var_id)
+    (env : env) : tvalue * env =
+  env_pop_binding default
+    (fun e ->
+      match e with
+      | EBinding (BDummy v', value) when v' = v -> Some value
+      | _ -> None)
+    env
+
+(** Remove the first dummy variable from an environment and return the
+    corresponding value *)
+let env_pop_first_dummy (default : unit -> tvalue * env) (env : env) :
+    tvalue * env =
+  env_pop_binding default
+    (fun e ->
+      match e with
+      | EBinding (BDummy _, value) -> Some value
+      | _ -> None)
+    env
+
+(** Remove an abs from an environment *)
+let env_pop_abs (default : unit -> abs * env) (abs_id : abs_id) (env : env) :
+    abs * env =
+  env_pop_binding default
+    (fun e ->
+      match e with
+      | EAbs abs when abs.abs_id = abs_id -> Some abs
+      | _ -> None)
+    env
+
+(** Remove the first abs from an environment *)
+let env_pop_first_abs (default : unit -> abs * env) (env : env) : abs * env =
+  env_pop_binding default
+    (fun e ->
+      match e with
+      | EAbs abs -> Some abs
+      | _ -> None)
+    env

@@ -3,7 +3,8 @@ open Contexts
 open InterpJoinCore
 
 (** Prepare the shared loans in the abstractions by moving them to fresh
-    abstractions.
+    abstractions as well as the symbolic mutable borrows which point to symbolic
+    loans in frozen abstractions.
 
     We use this for instance to prepare an evaluation context before computing a
     fixed point.
@@ -48,11 +49,14 @@ open InterpJoinCore
     we only introduce a fresh abstraction for [l1].
 
     The boolean is [with_abs_conts]: if [true] we synthesize continuations
-    expressions for the fresh region abstractions we introduce. *)
-val prepare_ashared_loans :
+    expressions for the fresh region abstractions we introduce.
+
+    The same problem happens with symbolic values containing borrows, which is
+    why we also introduce reborrows for those. *)
+val reborrow_ashared_loans_symbolic_borrows :
   Meta.span -> loop_id option -> with_abs_conts:bool -> Cps.cm_fun
 
-val prepare_ashared_loans_no_synth :
+val reborrow_ashared_loans_symbolic_borrows_no_synth :
   Meta.span -> loop_id -> with_abs_conts:bool -> eval_ctx -> eval_ctx
 
 (** Compute the list of symbolic values which appear in the 2nd context and not
@@ -74,59 +78,24 @@ val compute_ctx_fresh_ordered_symbolic_values :
     progressively compute a fixed point, or when joining the control-flow after
     a branching statement ([if then else], etc.).
 
-    We make the hypothesis (and check it) that the environments have the same
-    prefixes (same variable ids, same abstractions, etc.). The prefix of
-    variable and abstraction ids is given by the [fixed_ids] identifier sets. We
-    check that those prefixes are the same (the dummy variables are the same,
-    the abstractions are the same), match the values mapped to by the variables
-    which are not dummy, then group the additional dummy variables/abstractions
-    together. In a sense, the [fixed_ids] define a frame (in a separation logic
-    sense).
+    **Warning**: in order to make the join, we refresh the ids of the non-fixed
+    abstractions (the abstractions which are not equal in both contexts) in
+    [ctx0]. This means that:
+    - either you should not use the resulting context for synthesis (because
+      some abstractions will come "out of nowhere"): you should use it to
+      compute fixed-points or loop break contexts to guide the synthesis (for
+      instance, compute a fixed-point then match the context at the entry of the
+      loop with the fixed-point context to compute what is consumed by the loop)
+    - or you should project the context to the right to eliminate the refreshed
+      abstractions ([match_ctx_with_target] does this)
 
-    TODO: update the explanations below. The new formalism uses a notion of
-    markers, a reduce operation (to get rid of markers) and a collapse operation
-    (to simplify the context - equivalent of the widening operation in
-    abstraction interpretation).
-
-    Note that when joining the values mapped to by the non-dummy variables, we
-    may introduce duplicated borrows. Also, we don't match the abstractions
-    which are not in the prefix, and this can also lead to borrow duplications.
-    For this reason, the environment needs to be collapsed afterwards to get rid
-    of those duplicated loans/borrows.
-
-    For instance, if we have:
-    {[
-      fixed = { abs0 }
-
-      env0 = {
-        abs0 { ML l0 }
-        l -> MB l0 s0
-      }
-
-      env1 = {
-        abs0 { ML l0 }
-        l -> MB l1 s1
-        abs1 { MB l0, ML l1 }
-      }
-    ]}
-
-    We get:
-    {[
-      join env0 env1 = {
-        abs0 { ML l0 } (* abs0 is fixed: we simply check it is equal in env0 and env1 *)
-        l -> MB l2 s2
-        abs1 { MB l0, ML l1 } (* abs1 is new: we keep it unchanged *)
-        abs2 { MB l0, MB l1, ML l2 } (* Introduced when joining on the "l" variable *)
-      }
-    ]}
-
-    Rem.: in practice, this join works because we take care of pushing new
-    values and abstractions *at the end* of the environments, meaning the
-    environment prefixes keep the same structure.
-
-    Rem.: assuming that the environment has some structure poses *no soundness
-    issue*. It can only make the join fail if the environments actually don't
-    have this structure: this is a *completeness issue*.
+    Remark: we used to refresh the abstractions in the right context and
+    introduce [SymbolicAst.expr.SubstitudeAbsIds] in the symbolic AST but this
+    led to issue. In particular, we had to refresh the abs ids of the input
+    context when matching it with the loop fixed-point context, to compute how
+    the loop is "called". The problem is that the body of the loop and the
+    expression after the loop relied on the abstractions *before* the freshening
+    operation, leading to dangling abstraction identifiers.
 
     Parameters:
     - [span]
@@ -137,10 +106,11 @@ val compute_ctx_fresh_ordered_symbolic_values :
 val join_ctxs :
   Meta.span ->
   abs_kind ->
+  recoverable:bool ->
   with_abs_conts:bool ->
   eval_ctx ->
   eval_ctx ->
-  ctx_or_update
+  join_info_or_update
 
 (** Join a list of contexts, which must be non empty.
 
@@ -150,6 +120,10 @@ val join_ctxs :
     This function is mostly built on top of {!join_ctxs}. Note that as the goal
     is to compute a fixed point we do not introduce continuations in the fresh
     region abstractions.
+
+    This function is a helper to compute loop fixed points and loop break
+    contexts. It should not be used for synthesis which is why **it doesn't
+    output any continuation to build a symbolic AST**.
 
     Parameters:
     - [config]
@@ -161,13 +135,15 @@ val join_ctxs_list :
   Meta.span ->
   abs_kind ->
   ?preprocess_first_ctx:bool ->
+  recoverable:bool ->
   with_abs_conts:bool ->
   eval_ctx list ->
   eval_ctx list * eval_ctx
 
 (** Join the context at the entry of the loop with the contexts upon reentry
-    (upon reaching the [Continue] statement - the goal is to compute a fixed
-    point for the loop entry).
+    (upon reaching the [Continue] statement. The goal is to compute a fixed
+    point for the loop entry, which is why **we do not output any continuation
+    to build a symbolic AST**.
 
     As we may have to end loans in the environments before doing the join, we
     return those updated environments, and the joined environment.
@@ -347,11 +323,17 @@ val match_ctx_with_target :
   DummyVarId.Set.t ->
   abs_id list ->
   symbolic_value_id list ->
+  recoverable:bool ->
   eval_ctx ->
   eval_ctx ->
   (eval_ctx * eval_ctx * tvalue SymbolicValueId.Map.t * abs AbsId.Map.t)
   * (SymbolicAst.expr -> SymbolicAst.expr)
 
+(** Join all the contexts found at a break to compute a loop exit context.
+
+    We use this when computing a fixed-point: this function should not be used
+    to synthesize code: **it does not output a continuation** to synthesize the
+    symbolic AST. *)
 val loop_join_break_ctxs :
   config ->
   Meta.span ->

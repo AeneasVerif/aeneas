@@ -130,9 +130,9 @@ let () =
       ( "-abort-on-error",
         Arg.Set fail_hard,
         " Abort on the first encountered error" );
-      ( "-soft-warnings",
-        Arg.Clear warnings_as_errors,
-        " Do not treat warnings as errors" );
+      ( "-warnings-as-errors",
+        Arg.Set warnings_as_errors,
+        " Treat warnings as errors" );
       ( "-tuple-nested-proj",
         Arg.Set use_nested_tuple_projectors,
         " Use nested projectors for tuples (e.g., (0, 1, 2).snd.fst instead of \
@@ -169,9 +169,46 @@ let () =
          2 with '-mark-ids s1,s2', or '-mark-ids s@1, s@2. The supported \
          prefixes are: 's' (symbolic value id), 'b' (borrow id), 'a' \
          (abstraction id), 'r' (region id), 'f' (pure free variable id)." );
-      ( "-sequential",
-        Arg.Clear parallel,
-        " Execute sequentially (no parallelism)" );
+      ("-parallel", Arg.Set parallel, " Execute in parallel");
+      ( "-no-progress-bar",
+        Arg.Clear progress_bar,
+        " Do not display a progress bar" );
+      ( "-max-error-spans",
+        Arg.Int (fun x -> max_error_spans := x),
+        " Maximum number of local uses of an external definition which \
+         triggered an error that we print (if < 0 we print them all)" );
+      ( "-strict-joins",
+        Arg.Clear recover_joins,
+        " Report an error whenever joining contexts fails rather than \
+         duplicating the code after the branching statement" );
+      ( "-color",
+        Arg.Set log_with_colors,
+        " Use colors when printing log messages" );
+      ( "-borrow-check-globals",
+        Arg.Set borrow_check_globals,
+        " Borrow-check globals - an over-simplification in the LLBC provided \
+         by Charon for the global initialization functions currently prevents \
+         us from borrow-checking globals which contain static references" );
+      ( "-print-error-diagnostics",
+        Arg.Set print_error_diagnostics,
+        " Print additional diagnostics about the kind of errors encountered" );
+      ( "-impl-namespace",
+        Arg.Set method_names_in_impl_namespace,
+        " For Lean: always prefix method names with \"impl\" to avoid \
+         collisions with field projectors. Example: the `len` method in `impl \
+         Struct { fn len(&self) -> usize { ... } }` would be named \
+         `Struct.impl.len`." );
+      ( "-all-computable",
+        Arg.Set all_computable,
+        " For Lean: do not insert `noncomputable section` at the top of the \
+         extracted files if there are external definitions not covered by the \
+         standard library." );
+      ( "-loops-to-rec",
+        Arg.Set loops_to_recursive_functions,
+        " Always extract loops to recursive functions." );
+      ( "-loops-no-rec",
+        Arg.Set no_recursive_loops,
+        " Never attempt to extract loops to recursive functions." );
     ]
   in
 
@@ -239,11 +276,36 @@ let () =
     (fun (level, name) ->
       match Collections.StringMap.find_opt name !loggers with
       | None ->
+          (* Find the loggers with the closest names *)
+          let distances =
+            List.map
+              (fun s -> (StringUtils.levenshtein_distance name s, s))
+              (Collections.StringMap.keys !loggers)
+          in
+          let min_dist =
+            let min = ref (fst (List.hd distances)) in
+            List.iter
+              (fun (d, _) -> if d < !min then min := d else ())
+              distances;
+            !min
+          in
+          let closest =
+            List.filter_map
+              (fun (d, s) ->
+                if d = min_dist then Some ("'" ^ s ^ "'") else None)
+              distances
+          in
           log#serror
             ("The logger '" ^ name
-           ^ "' does not exist. The existing loggers are: {"
+           ^ "' does not exist.\n\nThe existing loggers are: {"
             ^ String.concat ", " (Collections.StringMap.keys !loggers)
-            ^ "}");
+            ^ "}\n\n"
+            ^
+            match closest with
+            | [ s ] -> "Did you mean " ^ s ^ "?\n"
+            | _ ->
+                "The closest logger names we found are:\n"
+                ^ String.concat ", " closest ^ "\n");
           fail false
       | Some logger ->
           (* Check that we haven't activated the logger twice *)
@@ -267,6 +329,7 @@ let () =
   let marked_region_ids = ref Types.RegionId.Set.empty in
   let marked_fvar_ids = ref Pure.FVarId.Set.empty in
   let marked_meta_ids = ref Values.MetaId.Set.empty in
+  let symbolic_expr_ids = ref SymbolicAst.SymbolicExprId.Set.empty in
   List.iter
     (fun id ->
       let i = if String.length id >= 2 && String.get id 1 = '@' then 2 else 1 in
@@ -302,6 +365,11 @@ let () =
           | 'm' ->
               marked_meta_ids :=
                 Values.MetaId.Set.add (Values.MetaId.of_int i) !marked_meta_ids
+          | 'e' ->
+              symbolic_expr_ids :=
+                SymbolicAst.SymbolicExprId.Set.add
+                  (SymbolicAst.SymbolicExprId.of_int i)
+                  !symbolic_expr_ids
           | _ ->
               log#serror
                 ("Invalid identifier provided to option: '" ^ id
@@ -321,6 +389,7 @@ let () =
       abs_fvar_ids = Values.AbsFVarId.Set.empty;
       loop_ids = Values.LoopId.Set.empty;
       meta_ids = !marked_meta_ids;
+      symbolic_expr_ids = !symbolic_expr_ids;
     }
   in
 
@@ -353,6 +422,9 @@ let () =
     check_not !use_fuel "Options -borrow-check and -use-fuel are not compatible";
     check_not !split_files
       "Options -borrow-check and -split-files are not compatible");
+  check_arg_not
+    !loops_to_recursive_functions
+    "-loops-to-rec" !no_recursive_loops "-loops-no-rec";
 
   (* Check that the user specified a backend *)
   let _ =
@@ -396,6 +468,15 @@ let () =
               log#error "The HOL4 backend doesn't support the -use-fuel option";
               fail true))
   in
+
+  (* If running in parallel mode there can be racing conditions on the memoized
+     elements. Precompute them so that it doesn't happen. *)
+  let _ = ExtractBuiltin.builtin_globals_map () in
+  let _ = ExtractBuiltin.builtin_types_map () in
+  let _ = ExtractBuiltin.builtin_trait_decls_map () in
+  let _ = ExtractBuiltin.builtin_trait_impls_map () in
+  let _ = ExtractBuiltin.builtin_funs_map () in
+  let _ = ExtractBuiltin.builtin_fun_effects_map () in
 
   (* Retrieve and check the filename *)
   let filename =
@@ -619,6 +700,26 @@ let () =
             "The crate contains extracted external, unknown definitions: we \
              advise using the option -split-files to allow manually providing \
              these definitions in separate files.");
+
+      (* Print error diagnostics *)
+      (if !print_error_diagnostics && !Errors.error_list <> [] then
+         let
+         (* Sort the unique errors by decreasing number of occurrences *)
+         open
+           Errors in
+         log#linfo
+           (lazy
+             (let unique_errors = FileLineMap.to_list !unique_errors in
+              let unique_errors =
+                List.sort (fun (_, n) (_, n') -> n' - n) unique_errors
+              in
+              "Unique errors by decreasing number of occurrences:\n"
+              ^ String.concat "\n"
+                  (List.map
+                     (fun ((file, line), num) ->
+                       "file: " ^ file ^ ", line: " ^ string_of_int line
+                       ^ ", occurrences: " ^ string_of_int num)
+                     unique_errors))));
 
       (* Print total elapsed time *)
       log#linfo

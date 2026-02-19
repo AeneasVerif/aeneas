@@ -94,7 +94,8 @@ let assign_to_place (config : config) (span : Meta.span) (rv : tvalue)
   [%ltrace
     "- rv: "
     ^ tvalue_to_string ~span:(Some span) ctx rv
-    ^ "\n- p: " ^ place_to_string ctx p ^ "\n- Initial context:\n"
+    ^ "\n- p: " ^ place_to_string ctx p ^ "\n- p.ty: " ^ ty_to_string ctx p.ty
+    ^ "\n- Initial context:\n"
     ^ eval_ctx_to_string ~span:(Some span) ctx];
   (* Push the rvalue to a dummy variable, for bookkeeping *)
   let rvalue_vid = ctx.fresh_dummy_var_id () in
@@ -174,10 +175,10 @@ let eval_assertion (config : config) (span : Meta.span) (assertion : assertion)
          * (see below). *)
         let ctx =
           apply_symbolic_expansion_non_borrow span sv ctx
-            (SeLiteral (VBool true))
+            (SeLiteral (VBool assertion.expected))
         in
         (* Add the synthesized assertion *)
-        ((ctx, Unit), S.synthesize_assertion ctx v)
+        ((ctx, Unit), S.synthesize_assertion ctx assertion.expected v)
     | _ ->
         [%craise] span
           ("Expected a boolean, got: "
@@ -274,7 +275,9 @@ let get_builtin_function_return_type (span : Meta.span) (fid : builtin_fun_id)
   let sg = Builtin.get_builtin_fun_sig fid in
   (* Instantiate the return type  *)
   let generics = Subst.generic_args_erase_regions generics in
-  let subst = Subst.make_subst_from_generics sg.item_binder_params generics in
+  let subst =
+    Subst.make_subst_from_generics sg.item_binder_params generics Self
+  in
   Subst.erase_regions_substitute_types subst sg.item_binder_value.output
 
 let move_return_value (config : config) (span : Meta.span)
@@ -290,8 +293,8 @@ let move_return_value (config : config) (span : Meta.span)
     (Some v, ctx, cc)
   else (None, ctx, fun e -> e)
 
-let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
-    (ctx : eval_ctx) :
+let pop_frame (config : config) (span : Meta.span) ~(pop_locals : bool)
+    ~(pop_return_value : bool) (ctx : eval_ctx) :
     tvalue option * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Debug *)
   [%ltrace eval_ctx_to_string ~span:(Some span) ctx];
@@ -317,14 +320,16 @@ let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
 
   (* Drop the outer *loans* we find in the local variables *)
   let ctx, cc =
-    (* Drop the loans *)
-    let locals = List.rev locals in
-    fold_left_apply_continuation
-      (fun lid ctx ->
-        drop_outer_loans_at_lplace config span
-          (mk_place_from_var_id ctx span lid)
-          ctx)
-      locals ctx
+    if pop_locals then
+      (* Drop the loans *)
+      let locals = List.rev locals in
+      fold_left_apply_continuation
+        (fun lid ctx ->
+          drop_outer_loans_at_lplace config span
+            (mk_place_from_var_id ctx span lid)
+            ctx)
+        locals ctx
+    else (ctx, fun e -> e)
   in
   (* Debug *)
   [%ltrace
@@ -363,7 +368,9 @@ let pop_frame (config : config) (span : Meta.span) (pop_return_value : bool)
 let pop_frame_assign (config : config) (span : Meta.span) (dest : place) :
     cm_fun =
  fun ctx ->
-  let v, ctx, cc = pop_frame config span true ctx in
+  let v, ctx, cc =
+    pop_frame config span ~pop_locals:true ~pop_return_value:true ctx
+  in
   comp cc (assign_to_place config span (Option.get v) dest ctx)
 
 (** Auxiliary function - see {!eval_builtin_function_call} *)
@@ -488,7 +495,6 @@ let create_empty_abstractions_from_abs_region_groups
   (* Auxiliary function to create one abstraction *)
   let create_abs (rg_id : RegionGroupId.id) (rg : abs_region_group) : abs =
     let abs_id = rg.id in
-    let original_parents = rg.parents in
     let parents =
       List.fold_left
         (fun s pid -> AbsId.Set.add pid s)
@@ -511,8 +517,8 @@ let create_empty_abstractions_from_abs_region_groups
       kind = kind rg_id;
       can_end;
       parents;
-      original_parents;
       regions;
+      ended_subabs = AbsLevelSet.empty;
       avalues = [];
       (* For now the continuation is empty: we will initialize it later, when
          actually inserting the avalues. TODO: this two-phase initialization is
@@ -662,33 +668,80 @@ let eval_non_builtin_function_call_symbolic_inst (span : Meta.span)
       let signature = bound_fun_sig_of_decl def in
       [%ltrace
         "- call: " ^ call_to_string ctx call ^ "\n- call.generics:\n"
-        ^ generic_args_to_string ctx func.generics
+        ^ generic_args_to_string ctx generics
         ^ "\n- def.signature:\n"
         ^ fun_sig_to_string ctx signature];
       (* Instantiate *)
-      let regions_hierarchy =
-        [%silent_unwrap] span
-          (LlbcAstUtils.FunIdMap.find_opt (FRegular fid)
-             ctx.fun_ctx.regions_hierarchies)
-      in
       let inst_sg =
-        instantiate_fun_sig span ctx generics tr_self signature
-          regions_hierarchy
+        instantiate_fun_sig (Some span) ctx generics tr_self signature
       in
       (func.kind, func.generics, def, inst_sg)
 
+(** Helper to evaluate global references for lifetime static.
+
+    Given a value [v], generate a fresh borrow id [bid], push [_ -> SL bid v] to
+    the context and output [SB bid]. *)
+let push_value_to_dummy_shared_loan span (ctx : eval_ctx) (v : tvalue) :
+    eval_ctx * tvalue =
+  let bid = ctx.fresh_borrow_id () in
+  let sid = ctx.fresh_shared_borrow_id () in
+  let loan : tvalue = { value = VLoan (VSharedLoan (bid, v)); ty = v.ty } in
+  let borrow : tvalue =
+    {
+      value = VBorrow (VSharedBorrow (bid, sid));
+      ty = TRef (RErased, v.ty, RShared);
+    }
+  in
+  (* We need to push the shared loan in a dummy variable.
+     Generally speaking we should not be allowed to put loans in dummy variables,
+     but in the case of static lifetimes it is ok. TODO: generalize. *)
+  [%cassert] span (not !Config.use_static) "Unimplemented";
+  let dummy_id = ctx.fresh_dummy_var_id () in
+  let ctx = ctx_push_dummy_var ctx dummy_id loan in
+  (ctx, borrow)
+
 (** Helper: introduce a fresh symbolic value for a global *)
 let eval_global_as_fresh_symbolic_value (span : Meta.span)
-    (gref : global_decl_ref) (ctx : eval_ctx) : symbolic_value =
+    (gref : global_decl_ref) (ctx : eval_ctx) :
+    eval_ctx * tvalue * (SA.expr -> SA.expr) =
   let generics = gref.generics in
   let global = ctx_lookup_global_decl span ctx gref.id in
-  [%cassert] span (ty_no_regions global.ty)
-    "Const globals should not contain regions";
-  (* Instantiate the type  *)
-  let generics = Subst.generic_args_erase_regions generics in
-  let subst = Subst.make_subst_from_generics global.generics generics in
-  let ty = Subst.erase_regions_substitute_types subst global.ty in
-  mk_fresh_symbolic_value span ctx ty
+  (* The global might itself be a (static) reference - TODO: generalize *)
+  match global.ty with
+  | TRef (RStatic, _, RShared) ->
+      (* Instantiate the type  *)
+      let generics = Subst.generic_args_erase_regions generics in
+      let subst =
+        Subst.make_subst_from_generics global.generics generics Self
+      in
+      let ty = Subst.erase_regions_substitute_types subst global.ty in
+      (* Decompose *)
+      let inner_ty =
+        match ty with
+        | TRef (RStatic, ty, RShared) -> ty
+        | _ -> [%internal_error] span
+      in
+      [%cassert] span (ty_no_regions inner_ty) "Unimplemented";
+      (* We do like in [eval_global_ref]: we introduce a borrow whose corresponding
+         loan is in a dummy value, allowing the borrow to live as long as needed.
+         TODO: introduce proper support for 'static
+      *)
+      let sval = mk_fresh_symbolic_value span ctx inner_ty in
+      let v = mk_tvalue_from_symbolic_value sval in
+      let ctx, borrow = push_value_to_dummy_shared_loan span ctx v in
+      let cc = S.synthesize_global_eval gref sval in
+      (ctx, borrow, cc)
+  | _ ->
+      [%cassert] span (ty_no_regions global.ty) "Unimplemented";
+      (* Instantiate the type  *)
+      let generics = Subst.generic_args_erase_regions generics in
+      let subst =
+        Subst.make_subst_from_generics global.generics generics Self
+      in
+      let ty = Subst.erase_regions_substitute_types subst global.ty in
+      let sval = mk_fresh_symbolic_value span ctx ty in
+      let cc = S.synthesize_global_eval gref sval in
+      (ctx, mk_tvalue_from_symbolic_value sval, cc)
 
 (** Evaluate a statement. *)
 let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
@@ -762,8 +815,11 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
       if
         (* We handle global assignments separately as a specific case. *)
         ExpressionsUtils.rvalue_accesses_global rvalue
-      then eval_rvalue_global config st.span p rvalue ctx
-      else
+      then (
+        [%ltrace "The rvalue is a global access"];
+        eval_rvalue_global config st.span p rvalue ctx)
+      else (
+        [%ltrace "The rvalue is not a global access"];
         (* Evaluate the rvalue *)
         let res, ctx, cc = eval_rvalue_not_global config st.span rvalue ctx in
         (* Assign *)
@@ -815,14 +871,14 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
         in
         let cc = cc_comp cc cf_assign in
         (* Compose and apply *)
-        ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc)
+        ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc))
   | SetDiscriminant (p, variant_id) ->
       let (ctx, res), cc = set_discriminant config st.span p variant_id ctx in
       ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc)
   | Deinit p ->
       let ctx, cc = drop_value config st.span p ctx in
       ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ st.span cc)
-  | Assert assertion ->
+  | Assert (assertion, _on_failure) ->
       let (ctx, res), cc = eval_assertion config st.span assertion ctx in
       ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc)
   | Call call -> eval_function_call config st.span call ctx
@@ -873,30 +929,13 @@ and eval_global_ref (config : config) (span : Meta.span) (dest : place)
   | SymbolicMode ->
       (* Generate a fresh symbolic value. In the translation, this fresh symbolic value will be
        * defined as equal to the value of the global (see {!S.synthesize_global_eval}).
-       * We then create a reference to the global.
-       *)
-      let sval = eval_global_as_fresh_symbolic_value span gref ctx in
-      let typed_sval = mk_tvalue_from_symbolic_value sval in
+       * We then create a reference to the global. *)
+      let ctx, sval, cf = eval_global_as_fresh_symbolic_value span gref ctx in
       (* Create a shared loan containing the global, as well as a shared borrow *)
-      let bid = ctx.fresh_borrow_id () in
-      let sid = ctx.fresh_shared_borrow_id () in
-      let loan : tvalue =
-        { value = VLoan (VSharedLoan (bid, typed_sval)); ty = sval.sv_ty }
-      in
-      let borrow : tvalue =
-        {
-          value = VBorrow (VSharedBorrow (bid, sid));
-          ty = TRef (RErased, sval.sv_ty, RShared);
-        }
-      in
-      (* We need to push the shared loan in a dummy variable *)
-      let dummy_id = ctx.fresh_dummy_var_id () in
-      let ctx = ctx_push_dummy_var ctx dummy_id loan in
+      let ctx, borrow = push_value_to_dummy_shared_loan span ctx sval in
       (* Assign the borrow to its destination *)
       let ctx, cc = assign_to_place config span borrow dest ctx in
-      ( [ (ctx, Unit) ],
-        cc_singleton __FILE__ __LINE__ span
-          (cc_comp (S.synthesize_global_eval gref sval) cc) )
+      ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ span (cc_comp cf cc))
 
 (** Evaluate a switch *)
 and eval_switch (config : config) (span : Meta.span) (switch : switch) :
@@ -913,7 +952,9 @@ and eval_switch (config : config) (span : Meta.span) (switch : switch) :
     and right branches). *)
 and eval_switch_prepare (_config : config) (span : Meta.span) (_switch : switch)
     : cm_fun =
- fun ctx -> InterpJoin.prepare_ashared_loans span None ~with_abs_conts:true ctx
+ fun ctx ->
+  InterpJoin.reborrow_ashared_loans_symbolic_borrows span None
+    ~with_abs_conts:true ctx
 
 and eval_switch_raw (config : config) (span : Meta.span) (switch : switch) :
     stl_cm_fun =
@@ -961,7 +1002,12 @@ and eval_switch_raw (config : config) (span : Meta.span) (switch : switch) :
               | [ e_true; e_false ] -> cf_bool (e_true, e_false)
               | _ -> [%internal_error] span
             in
-            if join then eval_switch_with_join config span cc ctx0 ctx_resl
+            if join then
+              try eval_switch_with_join config span cc ctx0 ctx_resl
+              with Errors.RFailure ->
+                (* If the join threw a recoverable error we do not join
+                   and simply duplicate the code *)
+                (ctx_resl, cc)
             else (ctx_resl, cc)
         | _ -> [%craise] span "Inconsistent state"
       in
@@ -1028,7 +1074,11 @@ and eval_switch_raw (config : config) (span : Meta.span) (switch : switch) :
             let cf = cc_comp cc cf in
             if join then
               (* Join the contexts *)
-              eval_switch_with_join config span cf ctx0 resl
+              try eval_switch_with_join config span cf ctx0 resl
+              with Errors.RFailure ->
+                (* If the join threw a recoverable error we do not join
+                   and simply duplicate the code *)
+                (resl, cf)
             else
               (* Do not join the contexts: compose the continuations and continue *)
               (resl, cf)
@@ -1086,7 +1136,11 @@ and eval_switch_raw (config : config) (span : Meta.span) (switch : switch) :
             let ctx_resl, cf = comp_seqs __FILE__ __LINE__ span resl in
             let cc = cc_comp cf_expand cf in
             if join then (* Join the contexts *)
-              eval_switch_with_join config span cc ctx0 ctx_resl
+              try eval_switch_with_join config span cc ctx0 ctx_resl
+              with Errors.RFailure ->
+                (* If the join threw a recoverable error we do not join
+                   and simply duplicate the code *)
+                (ctx_resl, cc)
             else
               (* Compose the continuations *)
               (ctx_resl, cc)
@@ -1152,9 +1206,12 @@ and eval_switch_with_join (config : config) (span : Meta.span)
         (fun (ctx, res) -> if res = Unit then Some ctx else None)
         ctx_resl
     in
+    (* Note that we make the join *recoverable*: if the join fails (because
+       it requires supporting some unsupported case) it is possible to recover
+       from it, in which case we simply duplicate the code after the switch *)
     let _, joined_ctx =
-      InterpJoin.join_ctxs_list config span ~with_abs_conts:true Join
-        ctx_to_join
+      InterpJoin.join_ctxs_list config span ~recoverable:!Config.recover_joins
+        ~with_abs_conts:true Join ctx_to_join
     in
     [%ldebug "Joined ctx:\n" ^ eval_ctx_to_string joined_ctx];
     let ctx0_aids = env_get_abs_ids ctx0.env in
@@ -1201,12 +1258,16 @@ and eval_switch_with_join (config : config) (span : Meta.span)
 
     (* Match every context resulting from evaluating a branch (there should be
        one if no explicit panic was encountered, or 0 it we encountered a panic)
-       with the joined context. *)
+       with the joined context.
+
+       Note that we make the match (and the whole join) recoverable.
+    *)
     let match_ctx (ctx : eval_ctx) : SA.expr =
       (* Match the contexts with the joined context to determine the output of the branch *)
       let (_, ctx, output_values, output_abs), cf =
         InterpJoin.match_ctx_with_target config span WithCont fixed_aids
-          fixed_dids output_abs_ids output_svalue_ids joined_ctx ctx
+          fixed_dids output_abs_ids output_svalue_ids
+          ~recoverable:!Config.recover_joins joined_ctx ctx
       in
 
       let reorder_output_abs (map : abs AbsId.Map.t) (absl : abs_id list) :
@@ -1322,7 +1383,7 @@ and eval_non_builtin_function_call_concrete (config : config) (span : Meta.span)
       (* TODO: we need to normalize the types if we want to correctly support traits *)
       [%cassert] body.span (generics.trait_refs = [])
         "Traits are not supported yet in concrete mode";
-      let subst = Subst.make_subst_from_generics def.generics generics in
+      let subst = Subst.make_subst_from_generics def.generics generics Self in
       let locals, body_st = Subst.fun_body_substitute_in_body subst body in
 
       (* Evaluate the input operands *)
@@ -1438,16 +1499,28 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
   (* Evaluate the input operands *)
   let args, ctx, cc = eval_operands config span args ctx in
 
+  [%ldebug
+    "- args:\n"
+    ^ Print.list_to_string ~sep:"\n"
+        (fun (v : tvalue) ->
+          "- " ^ tvalue_to_string ctx v ^ " : " ^ ty_to_string ctx v.ty)
+        args];
+
   (* Generate the abstractions and insert them in the context *)
   let abs_ids = List.map (fun rg -> rg.id) inst_sg.abs_regions_hierarchy in
   let args_with_rtypes = List.combine args inst_sg.inputs in
 
   (* Check the type of the input arguments *)
-  [%cassert] span
-    (List.for_all
-       (fun ((arg, rty) : tvalue * rty) -> arg.ty = Subst.erase_regions rty)
-       args_with_rtypes)
-    "The input arguments don't have the proper type";
+  List.iteri
+    (fun i ((arg, rty) : tvalue * rty) ->
+      if not (Subst.erase_regions arg.ty = Subst.erase_regions rty) then (
+        [%ltrace
+          "Argument " ^ string_of_int i
+          ^ " doesn't have the proper type:\n- arg: " ^ tvalue_to_string ctx arg
+          ^ "\n- arg.ty: " ^ ty_to_string ctx arg.ty ^ "\n- target type: "
+          ^ ty_to_string ctx rty];
+        [%craise] span "The input arguments don't have the proper type"))
+    args_with_rtypes;
   (* Check that the input arguments don't contain symbolic values that can't
    * be fed to functions (i.e., symbolic values output from function return
    * values and which contain borrows of borrows can't be used as function
@@ -1488,12 +1561,12 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
               arg_rty)
           args_with_rtypes
       in
-      let output = mk_simpl_etuple outputs in
+      let output = mk_simpl_etuple ~borrow_proj:true outputs in
       let input =
         mk_eproj_loans_value_from_symbolic_value ctx.type_ctx.type_infos
           abs.regions.owned ret_spc ret_sv_ty
       in
-      let input = EApp (EFunCall abs.abs_id, [ input ]) in
+      let input = EApp (EFunCall abs.abs_id, [ [ input ] ]) in
       let input : tevalue = { value = input; ty = ret_sv_ty } in
       { output = Some output; input = Some input }
     in
@@ -1534,8 +1607,8 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
           AbsId.Set.is_empty abs.parents
           (* Check if it contains non-ignored loans *)
           && Option.is_none
-               (InterpBorrowsCore.get_first_non_ignored_aloan_in_abstraction
-                  span abs))
+               (InterpBorrowsCore.get_first_non_ignored_aloan_in_abs span abs 0
+                  (-1)))
         !abs_ids
     in
     (* Check if there are abstractions to end *)
@@ -1543,10 +1616,11 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
       (* Update the reference to the list of asbtraction ids, for the recursive calls *)
       abs_ids := with_loans_abs;
       (* End the abstractions which can be ended *)
-      let no_loans_abs = AbsId.Set.of_list no_loans_abs in
-      let ctx, cc =
-        InterpBorrows.end_abstractions config span no_loans_abs ctx
+      let no_loans_abs =
+        AbsIdWithLevelSet.of_list
+          (List.map (fun abs_id -> { abs_id; level = 0 }) no_loans_abs)
       in
+      let ctx, cc = InterpBorrows.end_abs_set config span no_loans_abs ctx in
       (* Recursive call *)
       comp cc (end_abs_with_no_loans ctx))
     else (* No abstractions to end: continue *)
@@ -1579,12 +1653,10 @@ and eval_builtin_function_call_symbolic (config : config) (span : Meta.span)
      by the signature of the function: we thus simply generate correctly
      instantiated signatures, and delegate the work to an auxiliary function *)
   let sg = Builtin.get_builtin_fun_sig fid in
-  if fid = BoxNew then begin
-    (* Special case: Box::new: we allow instantiating the type parameters with
-       types containing borrows.
-
-       TODO: this is a hack.
-    *)
+  (* Sanity check: make sure the type parameters don't contain regions -
+       this is a current limitation of our synthesis, *except if the function
+       is [Box::new] (TODO: the case [Box::new] is a hack) *)
+  if fid = BoxNew then
     (* Sanity check: check that we are not using nested borrows *)
     [%classert] span
       (List.for_all
@@ -1593,48 +1665,24 @@ and eval_builtin_function_call_symbolic (config : config) (span : Meta.span)
          func.generics.types)
       (lazy
         ("Instantiating [Box::new] with nested borrows is not allowed for now ("
-       ^ fn_ptr_to_string ctx func ^ ")"));
-
-    (* As we allow instantiating type parameters with types containing regions,
-       we have to recompute the regions hierarchy. *)
-    let fun_name = Print.Types.builtin_fun_id_to_string fid in
-    let inst_sig =
-      compute_regions_hierarchy_for_fun_call ctx.fresh_abs_id (Some span)
-        ctx.crate fun_name ctx.type_vars ctx.const_generic_vars func.generics sg
-    in
-    [%ltrace
-      "special case:" ^ "\n- inst_sig:" ^ inst_fun_sig_to_string ctx inst_sig];
-
-    (* Evaluate the function call *)
-    eval_function_call_symbolic_from_inst_sig config span (FunId (FBuiltin fid))
-      sg.item_binder_value inst_sig func.generics args dest ctx
-  end
-  else begin
-    (* Sanity check: make sure the type parameters don't contain regions -
-       this is a current limitation of our synthesis.
-    *)
+       ^ fn_ptr_to_string ctx func ^ ")"))
+  else
     [%classert] span
       (List.for_all
-         (fun ty -> not (ty_has_borrows (Some span) ctx.type_ctx.type_infos ty))
+         (fun ty -> not (ty_has_mut_borrows ctx.type_ctx.type_infos ty))
          func.generics.types)
       (lazy
         ("Instantiating the type parameters of a function with types \
-          containing borrows is not allowed for now ("
+          containing mutable borrows is currently not allowed ("
        ^ fn_ptr_to_string ctx func ^ ")"));
-    let regions_hierarchy =
-      LlbcAstUtils.FunIdMap.find (FBuiltin fid) ctx.fun_ctx.regions_hierarchies
-    in
 
-    (* There shouldn't be any reference to Self *)
-    let tr_self = UnknownTrait __FUNCTION__ in
-    let inst_sig =
-      instantiate_fun_sig span ctx func.generics tr_self sg regions_hierarchy
-    in
+  (* There shouldn't be any reference to Self *)
+  let tr_self = UnknownTrait __FUNCTION__ in
+  let inst_sig = instantiate_fun_sig (Some span) ctx func.generics tr_self sg in
 
-    (* Evaluate the function call *)
-    eval_function_call_symbolic_from_inst_sig config span (FunId (FBuiltin fid))
-      sg.item_binder_value inst_sig func.generics args dest ctx
-  end
+  (* Evaluate the function call *)
+  eval_function_call_symbolic_from_inst_sig config span (FunId (FBuiltin fid))
+    sg.item_binder_value inst_sig func.generics args dest ctx
 
 (** Evaluate a statement seen as a function body *)
 and eval_function_body (config : config) (body : block) : stl_cm_fun =

@@ -1,2 +1,3 @@
 [!lean] skip
 [lean] aeneas-args=-dest tests/lean/Tutorial
+[lean] aeneas-args=-loops-to-rec

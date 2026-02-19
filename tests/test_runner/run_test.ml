@@ -85,7 +85,10 @@ let run_aeneas (env : runner_env) (case : Input.t) (backend : Backend.t) =
     | KnownFailure when backend = Backend.BorrowCheck -> []
     | _ -> [ "-abort-on-error" ]
   in
-  let args = List.concat [ args; aeneas_options; abort_on_error ] in
+  let args =
+    List.concat [ args; aeneas_options; abort_on_error ]
+    @ [ "-print-error-emitters"; "-no-progress-bar"; "-checks" ]
+  in
   let cmd = Command.make args in
   (* Remove leftover files if they're not needed anymore *)
   if
@@ -134,6 +137,7 @@ let run_charon (env : runner_env) (case : Input.t) =
             "--crate-type=rlib";
             "--allow=unused";
             "--allow=non_snake_case";
+            "--edition=2021";
           ]
       in
       (* Run Charon on the rust file *)

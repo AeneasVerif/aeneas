@@ -164,17 +164,7 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
       | TAdt { id = TAdtId _; _ } as ty ->
           [%sanity_check] span (allow_adt_copy || ty_is_copyable ty)
       | TAdt { id = TTuple; _ } -> () (* Ok *)
-      | TAdt
-          {
-            id = TBuiltin (TSlice | TArray);
-            generics =
-              {
-                regions = [];
-                types = [ ty ];
-                const_generics = [];
-                trait_refs = [];
-              };
-          } ->
+      | TArray (ty, _) | TSlice ty ->
           [%cassert] span (ty_is_copyable ty)
             "The type is not primitively copyable"
       | _ -> [%craise] span "Unreachable");
@@ -284,8 +274,8 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
                   kind = CopySymbolicValue;
                   can_end = true;
                   parents = AbsId.Set.empty;
-                  original_parents = [];
                   regions = { owned };
+                  ended_subabs = AbsLevelSet.empty;
                   avalues = [ sv; updated_sv; copied_sv ];
                   cont = Some abs_cont;
                 }
@@ -379,8 +369,10 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
   (* Evaluate *)
   match op with
   | Constant cv -> begin
+      [%ldebug "constant of type: " ^ ty_to_string ctx cv.ty];
       match cv.kind with
       | CLiteral lit -> (
+          [%ldebug "literal constant"];
           (* FIXME: the str type is not in [literal_type] *)
           match cv.ty with
           | TAdt { id = TBuiltin TStr; _ } ->
@@ -388,26 +380,106 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
               (v, ctx, fun e -> e)
           | TLiteral lit_ty ->
               (literal_to_tvalue span lit_ty lit ctx, ctx, fun e -> e)
+          | TRef (RErased, (TAdt { id = TBuiltin TStr; _ } as str_ty), RShared)
+            ->
+              (* Reference to a string *)
+              (* Generate a fresh symbolic value for the string. In the translation,
+                 this fresh symbolic value will be defined as equal to the value of
+                 the string.
+
+                 We then create a reference to the string. *)
+              let sv = mk_fresh_symbolic_value span ctx str_ty in
+              let sval = mk_tvalue_from_symbolic_value sv in
+              (* Create a shared loan containing the string, as well as a shared borrow *)
+              let bid = ctx.fresh_borrow_id () in
+              let sid = ctx.fresh_shared_borrow_id () in
+              let loan : tvalue =
+                { value = VLoan (VSharedLoan (bid, sval)); ty = sval.ty }
+              in
+              let borrow : tvalue =
+                {
+                  value = VBorrow (VSharedBorrow (bid, sid));
+                  ty = TRef (RErased, sval.ty, RShared);
+                }
+              in
+              (* We need to push the shared loan in a dummy variable.
+                 Generally speaking we should not be allowed to put loans in dummy variables,
+                 but in the case of static lifetimes it is ok. TODO: generalize. *)
+              [%cassert] span (not !Config.use_static) "Unimplemented";
+              let dummy_id = ctx.fresh_dummy_var_id () in
+              let ctx = ctx_push_dummy_var ctx dummy_id loan in
+              (* Create the symbolic expression *)
+              let cf e =
+                let v : tvalue = { value = VLiteral lit; ty = str_ty } in
+                SA.IntroSymbolic (ctx, None, sv, VaSingleValue v, e)
+              in
+              (* *)
+              (borrow, ctx, cf)
           | _ ->
               [%craise] span
-                ("Encountered an incorrectly typed constant: "
+                ("Encountered an unsupported constant: "
                 ^ constant_expr_to_string ctx cv
                 ^ " : " ^ ty_to_string ctx cv.ty))
-      | CTraitConst (trait_ref, const_name) ->
+      | CTraitConst (trait_ref, const_name) -> (
+          [%ldebug "trait constant"];
           let ctx0 = ctx in
-          (* Simply introduce a fresh symbolic value *)
+          (* Simply introduce a fresh symbolic value.
+
+             Remark: there is a special case if the value is a static reference:
+             in this case we directly introduce the expanded borrow.
+
+             TODO: add static lifetimes in region abstractions. *)
+
           let ty = cv.ty in
-          let v = mk_fresh_symbolic_tvalue span ctx ty in
-          (* Wrap the generated expression *)
-          let cf e =
-            SymbolicAst.IntroSymbolic
-              ( ctx0,
-                None,
-                value_as_symbolic span v.value,
-                SymbolicAst.VaTraitConstValue (trait_ref, const_name),
-                e )
-          in
-          (v, ctx, cf)
+          (* TODO: the lifetime should be 'static but we erase it in PrePasses *)
+          match ty with
+          | TRef ((RStatic | RErased), ty_inner, ref_kind) ->
+              [%ldebug "static ref"];
+              [%cassert] span (not !Config.use_static) "Unimplemented";
+              [%cassert] span (ref_kind = RShared)
+                "Mutable references for lifetime 'static are not supported";
+              let sval = mk_fresh_symbolic_tvalue span ctx ty_inner in
+              (* Create a shared loan containing the global, as well as a shared borrow *)
+              let bid = ctx.fresh_borrow_id () in
+              let sid = ctx.fresh_shared_borrow_id () in
+              let loan : tvalue =
+                { value = VLoan (VSharedLoan (bid, sval)); ty = sval.ty }
+              in
+              let borrow : tvalue =
+                {
+                  value = VBorrow (VSharedBorrow (bid, sid));
+                  ty = TRef (RErased, sval.ty, RShared);
+                }
+              in
+              (* We need to push the shared loan in a dummy variable.
+                 Generally speaking we should not be allowed to put loans in dummy variables,
+                 but in the case of static lifetimes it is ok. TODO: generalize. *)
+              let dummy_id = ctx.fresh_dummy_var_id () in
+              let ctx = ctx_push_dummy_var ctx dummy_id loan in
+
+              (* Wrap the generated expression *)
+              let cf e =
+                SymbolicAst.IntroSymbolic
+                  ( ctx0,
+                    None,
+                    value_as_symbolic span sval.value,
+                    SymbolicAst.VaTraitConstValue (trait_ref, const_name),
+                    e )
+              in
+              (borrow, ctx, cf)
+          | _ ->
+              [%ldebug "not a static ref"];
+              let v = mk_fresh_symbolic_tvalue span ctx ty in
+              (* Wrap the generated expression *)
+              let cf e =
+                SymbolicAst.IntroSymbolic
+                  ( ctx0,
+                    None,
+                    value_as_symbolic span v.value,
+                    SymbolicAst.VaTraitConstValue (trait_ref, const_name),
+                    e )
+              in
+              (v, ctx, cf))
       | CVar var ->
           let vid = expect_free_var (Some span) var in
           let ctx0 = ctx in
@@ -450,9 +522,13 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
                 e )
           in
           (cv, ctx, cc_comp cc cf)
-      | CFnDef _ ->
-          [%craise] span
-            "Function definitions cannot be refered to from a constant values"
+      | CFnDef ptr ->
+          let sv = mk_fresh_symbolic_tvalue span ctx cv.ty in
+          let cf e =
+            SymbolicAst.IntroSymbolic
+              (ctx, None, tvalue_as_symbolic span sv, SymbolicAst.VaFnDef ptr, e)
+          in
+          (sv, ctx, cf)
       | CRawMemory _ ->
           [%craise] span "Raw memory cannot be interpreted by the interpreter"
       | COpaque reason ->
@@ -680,38 +756,224 @@ let eval_unary_op_symbolic (config : config) (span : Meta.span) (unop : unop)
     * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Evaluate the operand *)
   let v, ctx, cc = eval_operand config span op ctx in
-  (* Generate a fresh symbolic value to store the result *)
-  let res_sv_id = ctx.fresh_symbolic_value_id () in
-  let res_sv_ty =
-    match (unop, v.ty) with
-    | Not, (TLiteral TBool as lty) -> lty
-    | Not, (TLiteral (TInt _) as lty) -> lty
-    | Not, (TLiteral (TUInt _) as lty) -> lty
-    | Neg OPanic, (TLiteral (TInt _) as lty) -> lty
-    | Neg OPanic, (TLiteral (TUInt _) as lty) -> lty
-    | Cast (CastScalar (_, tgt_ty)), _ -> TLiteral tgt_ty
-    | Cast (CastUnsize (ty0, ty1, _)), _ ->
-        (* If the following function succeeds, then it means the cast is well-formed
+  (* There is a special case for casts which convert dyn traits (for instance:
+     [Box<...>] to [Box<dyn ...>]) *)
+  match unop with
+  | Cast (CastUnsize (ty0, ty1, MetaVTable (trait_ref, _))) -> (
+      (* Casting a type to a dyn trait *)
+      [%ltrace
+        "dyn trait cast:" ^ "\n- ty0: " ^ ty_to_string ctx ty0 ^ "\n- ty1: "
+        ^ ty_to_string ctx ty1 ^ "\n- trait_ref: "
+        ^ trait_ref_to_string ctx trait_ref];
+
+      (* We support the following cases:
+         - Box<...> to Box<dyn (...)>
+         - &... to &dyn (...)
+
+         We have to treat the shared borrow case separately from the box case.
+      *)
+      match (ty1, v.value) with
+      | TAdt { id = TBuiltin TBox; _ }, _ ->
+          [%cassert] span
+            (not (tvalue_has_borrows (Some span) ctx v))
+            "Unimplemented use of dynamic traits";
+          let sv = mk_fresh_symbolic_value span ctx ty1 in
+          let cf e =
+            SA.IntroSymbolic
+              ( ctx,
+                mk_opt_place_from_op span op ctx,
+                sv,
+                VaDynTrait (v, trait_ref),
+                e )
+          in
+          let res = Ok (mk_tvalue_from_symbolic_value sv) in
+          (res, ctx, cc_comp cc cf)
+      | TRef (_, dyn_ty, RShared), _ ->
+          (* This case is annoying because there happens practical cases where
+             the inner value is itself a borrow. For instance:
+             {[
+               y = unsize<&'_ (&'_ bool), &'_ (dyn ...)>(move x);
+             ]}
+
+             We do the following, which is conservative (borrow-checking is correct,
+             though maybe a bit too constrained):
+             - we collect all the *shared borrows* [bids] (and check there are no mutable
+               borrows) transitively reachable from the inner value.
+             - we generate a fresh shared borrow [bid']
+             - we output [bid'] and link it to the other borrows through a region
+               abstraction [abs { SB bid0, ..., SB bidn, SL bid' s }] where [s]
+               is a fresh symbolic value of type [dyn (...)]. This way, if we want
+               to end any of the borrows we need to invalidate the dyn object.
+               Of course, this works only if **we can't clone the dyn object**.
+
+             TODO: I don't understand how rustc borrow-checks this kind of cases.
+          *)
+          (* [dyn_ty] being the inner destination type it should be a dyn type -
+           in particular, it shouldn't contain regions *)
+          [%sanity_check] span (not (ty_has_regions dyn_ty));
+          let dyn_sv = mk_fresh_symbolic_value span ctx dyn_ty in
+          let dyn_v = mk_tvalue_from_symbolic_value dyn_sv in
+
+          (* Collect the shared borrows *)
+          let sborrows = ref [] in
+          let collector =
+            object (self)
+              inherit [_] iter_tvalue as super
+              method! visit_tvalue _ v = super#visit_tvalue v.ty v
+
+              method! visit_VSymbolic ty _ =
+                [%cassert] span (ty_no_regions ty) "Unimplemented"
+
+              method! visit_VSharedBorrow ty bid _ =
+                let inner_ty =
+                  match ty with
+                  | TRef (_, ty, _) -> ty
+                  | _ -> [%internal_error] span
+                in
+                sborrows := (bid, inner_ty) :: !sborrows;
+                (* Lookup the loan and recurse *)
+                let sv =
+                  InterpBorrowsCore.ctx_lookup_shared_value span ctx bid
+                in
+                self#visit_tvalue sv.ty sv
+            end
+          in
+          collector#visit_tvalue v.ty v;
+
+          (* Create the region abstraction *)
+          let rid = ctx.fresh_region_id () in
+          let abs_id = ctx.fresh_abs_id () in
+
+          (* It's a bit annoying: we have to replace all the regions in the types *)
+          let replace_regions ty =
+            let visitor =
+              object
+                inherit [_] map_ty
+                method! visit_RErased _ = RVar (Free rid)
+
+                method! visit_TDynTrait _ pred =
+                  (* Don't dive into the dyn trait type *)
+                  [%sanity_check] span Config.type_analysis_ignore_dyn;
+                  TDynTrait pred
+              end
+            in
+            visitor#visit_ty () ty
+          in
+
+          let borrows =
+            List.map
+              (fun (bid, ty) ->
+                ({
+                   value =
+                     ABorrow
+                       (ASharedBorrow (PNone, bid, ctx.fresh_shared_borrow_id ()));
+                   ty = TRef (RVar (Free rid), replace_regions ty, RShared);
+                 }
+                  : tavalue))
+              !sborrows
+          in
+          let lid = ctx.fresh_borrow_id () in
+          let loan : tavalue =
+            {
+              value =
+                ALoan
+                  (ASharedLoan (PNone, lid, dyn_v, mk_aignored span dyn_ty None));
+              ty = TRef (RVar (Free rid), dyn_ty, RShared);
+            }
+          in
+          let abs =
+            {
+              abs_id;
+              kind = CopySymbolicValue;
+              can_end = true;
+              parents = AbsId.Set.empty;
+              regions = { owned = RegionId.Set.singleton rid };
+              ended_subabs = AbsLevelSet.empty;
+              avalues = borrows @ [ loan ];
+              cont =
+                Some
+                  {
+                    output = Some (mk_etuple ~borrow_proj:true []);
+                    input = Some (mk_etuple ~borrow_proj:false []);
+                  };
+            }
+          in
+          let ctx = { ctx with env = EAbs abs :: ctx.env } in
+
+          (* Create the output value *)
+          let output : tvalue =
+            {
+              value =
+                VBorrow (VSharedBorrow (lid, ctx.fresh_shared_borrow_id ()));
+              ty = TRef (RErased, dyn_ty, RShared);
+            }
+          in
+          [%ltrace
+            "- input: " ^ tvalue_to_string ctx v ^ "\n- new abs:\n"
+            ^ abs_to_string span ctx abs ^ "\n- output: "
+            ^ tvalue_to_string ctx output];
+
+          (* Put everything together *)
+          let cf e =
+            SA.IntroSymbolic
+              ( ctx,
+                mk_opt_place_from_op span op ctx,
+                dyn_sv,
+                VaDynTrait (v, trait_ref),
+                e )
+          in
+          (Ok output, ctx, cc_comp cc cf)
+      | _ -> [%craise] span "Unsupported cast to a dynamic trait")
+  | Cast (CastUnsize (ty0, ty1, MetaVTableUpcast fields)) ->
+      (* Casting a dyn trait to a dyn trait *)
+      [%ltrace
+        "dyn trait upcast:" ^ "\n- ty0: " ^ ty_to_string ctx ty0 ^ "\n- ty1: "
+        ^ ty_to_string ctx ty1 ^ "\n- fields: "
+        ^ Print.list_to_string FieldId.to_string fields];
+      [%cassert] span (fields = [])
+        "Unsized cast between dynamic traits: unimplemented case";
+      [%cassert] span (ty1 = ty0)
+        "Unsized cast between dynamic traits: unimplemented case";
+      [%cassert] span
+        (not (tvalue_has_borrows (Some span) ctx v))
+        "Unsized cast between dynamic traits: unimplemented case";
+
+      (* Nothing to do: the cast is the identity *)
+      (Ok v, ctx, cc)
+  | _ ->
+      (* Regular case *)
+      (* Generate a fresh symbolic value to store the result *)
+      let res_sv_id = ctx.fresh_symbolic_value_id () in
+      let res_sv_ty =
+        match (unop, v.ty) with
+        | Not, (TLiteral TBool as lty) -> lty
+        | Not, (TLiteral (TInt _) as lty) -> lty
+        | Not, (TLiteral (TUInt _) as lty) -> lty
+        | Neg OPanic, (TLiteral (TInt _) as lty) -> lty
+        | Neg OPanic, (TLiteral (TUInt _) as lty) -> lty
+        | Cast (CastScalar (_, tgt_ty)), _ -> TLiteral tgt_ty
+        | Cast (CastUnsize (ty0, ty1, _)), _ ->
+            (* If the following function succeeds, then it means the cast is well-formed
            (otherwise it throws an exception) *)
-        let _ = cast_unsize_to_modified_fields span ctx ty0 ty1 in
-        ty1
-    | Cast (CastRawPtr (_, tgt_ty)), _ -> tgt_ty
-    | _ ->
-        [%craise] span
-          ("Invalid input for unop: " ^ unop_to_string ctx unop ^ " on "
-         ^ ty_to_string ctx v.ty)
-  in
-  let res_sv = { sv_id = res_sv_id; sv_ty = res_sv_ty } in
-  (* Compute the result *)
-  let res = Ok (mk_tvalue_from_symbolic_value res_sv) in
-  (* Synthesize the symbolic AST *)
-  let cc =
-    cc_comp cc
-      (synthesize_unary_op span ctx unop v
-         (mk_opt_place_from_op span op ctx)
-         res_sv None)
-  in
-  (res, ctx, cc)
+            let _ = cast_unsize_to_modified_fields span ctx ty0 ty1 in
+            ty1
+        | Cast (CastRawPtr (_, tgt_ty)), _ -> tgt_ty
+        | _ ->
+            [%craise] span
+              ("Invalid input for unop: " ^ unop_to_string ctx unop ^ " on "
+             ^ ty_to_string ctx v.ty)
+      in
+      let res_sv = { sv_id = res_sv_id; sv_ty = res_sv_ty } in
+      (* Compute the result *)
+      let res = Ok (mk_tvalue_from_symbolic_value res_sv) in
+      (* Synthesize the symbolic AST *)
+      let cc =
+        cc_comp cc
+          (synthesize_unary_op span ctx unop v
+             (mk_opt_place_from_op span op ctx)
+             res_sv None)
+      in
+      (res, ctx, cc)
 
 let eval_unary_op (config : config) (span : Meta.span) (unop : unop)
     (op : operand) (ctx : eval_ctx) :
@@ -885,8 +1147,6 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
     (bkind : borrow_kind) (ctx : eval_ctx) :
     tvalue * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr) =
   match bkind with
-  | BUniqueImmutable ->
-      [%craise] span "Unique immutable closure captures are not supported"
   | BShared | BTwoPhaseMut | BShallow ->
       (* **REMARK**: we initially treated shallow borrows like shared borrows.
          In practice this restricted the behaviour too much, so for now we
@@ -944,7 +1204,9 @@ let eval_rvalue_ref (config : config) (span : Meta.span) (p : place)
       let rv : tvalue = { value = VBorrow bc; ty = rv_ty } in
       (* Return *)
       (rv, ctx, cc)
-  | BMut ->
+  | BMut | BUniqueImmutable ->
+      (* We treat unique immutable borrows or mutable borrows: the difference is not
+         that important in our case *)
       (* Access the value *)
       let access = Write in
       let greedy_expand = false in
@@ -1018,10 +1280,9 @@ let eval_rvalue_aggregate (config : config) (span : Meta.span)
                    values)
             ^ "]"));
         (* Sanity check: the number of values is consistent with the length *)
-        let len = get_val (literal_as_scalar (const_generic_as_literal cg)) in
+        let len = get_val (literal_as_scalar (constant_expr_as_literal cg)) in
         [%sanity_check] span (len = Z.of_int (List.length values));
-        let generics = TypesUtils.mk_generic_args [] [ ety ] [ cg ] [] in
-        let ty = TAdt { id = TBuiltin TArray; generics } in
+        let ty = TArray (ety, cg) in
         (* In order to generate a better AST, we introduce a symbolic
            value equal to the array. The reason is that otherwise, the
            array we introduce here might be duplicated in the generated
@@ -1112,11 +1373,6 @@ let eval_discriminant (config : config) (span : Meta.span) (p : place)
     | VScalar (UnsignedScalar (ty, _)) -> TLiteral (TUInt ty)
     | _ -> [%internal_error] span
   in
-  (* It should actually always be an [isize] - this is not important for the
-     symbolic execution, but is for the translation, because in the Lean model
-     we use a typeclass which is only generic in the enumeration, not in the
-     output type (which we expect to always be [isize]) *)
-  [%sanity_check] span (discr_ty = TLiteral (TInt Isize));
 
   (* Case disjunction: is the value concrete or symbolic?
      If we have a concrete variant, we can compute the discriminant directly.

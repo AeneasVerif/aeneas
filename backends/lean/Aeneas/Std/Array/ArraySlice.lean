@@ -3,12 +3,14 @@ import Aeneas.Std.Array.Array
 import Aeneas.Std.Slice
 import Aeneas.Std.Range
 import Aeneas.List.List
+import Aeneas.Std.Core.Convert
+import Aeneas.Std.Core.Cmp
 
 /-! Array definitions which mention slices -/
 
 namespace Aeneas.Std
 
-open Result Error core.ops.range
+open Result Error core.ops.range WP
 
 attribute [-simp] List.getElem!_eq_getElem?_getD
 
@@ -35,30 +37,30 @@ def Array.to_slice_mut {α : Type u} {n : Usize} (a : Array α n) :
 
 def Array.subslice {α : Type u} {n : Usize} (a : Array α n) (r : Range Usize) : Result (Slice α) :=
   -- TODO: not completely sure here
-  if r.start.val < r.end_.val ∧ r.end_.val ≤ a.val.length then
-    ok ⟨ a.val.slice r.start.val r.end_.val,
+  if r.start.val < r.end.val ∧ r.end.val ≤ a.val.length then
+    ok ⟨ a.val.slice r.start.val r.end.val,
           by
-            have := a.val.slice_length_le r.start.val r.end_.val
+            have := a.val.slice_length_le r.start.val r.end.val
             scalar_tac ⟩
   else
     fail panic
 
 @[progress]
 theorem Array.subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array α n) (r : Range Usize)
-  (h0 : r.start.val < r.end_.val) (h1 : r.end_.val ≤ a.val.length) :
-  ∃ s, subslice a r = ok s ∧
-  s.val = a.val.slice r.start.val r.end_.val ∧
-  (∀ i, i + r.start.val < r.end_.val → s.val[i]! = a.val[r.start.val + i]!)
+  (h0 : r.start.val < r.end.val) (h1 : r.end.val ≤ a.val.length) :
+  subslice a r ⦃ s =>
+  s.val = a.val.slice r.start.val r.end.val ∧
+  (∀ i, i + r.start.val < r.end.val → s.val[i]! = a.val[r.start.val + i]!) ⦄
   := by
-  simp only [subslice, true_and, h0, h1, ↓reduceIte, ok.injEq, exists_eq_left', true_and]
+  simp only [subslice, true_and, h0, h1, ↓reduceIte, spec_ok, true_and]
   intro i _
-  have := List.getElem!_slice r.start.val r.end_.val i a.val (by scalar_tac)
+  have := List.getElem!_slice r.start.val r.end.val i a.val (by scalar_tac)
   simp only [this]
 
 
 def Array.update_subslice {α : Type u} {n : Usize} (a : Array α n) (r : Range Usize) (s : Slice α) : Result (Array α n) :=
   -- TODO: not completely sure here
-  if h: r.start.val < r.end_.val ∧ r.end_.val ≤ a.length ∧ s.val.length = r.end_.val - r.start.val then
+  if h: r.start.val < r.end.val ∧ r.end.val ≤ a.length ∧ s.val.length = r.end.val - r.start.val then
     ok ⟨ a.val.setSlice! r.start s.val, by scalar_tac ⟩
   else
     fail panic
@@ -70,14 +72,15 @@ def Array.update_subslice {α : Type u} {n : Usize} (a : Array α n) (r : Range 
 -- (the user will never write those symbols directly).
 @[progress]
 theorem Array.update_subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array α n) (r : Range Usize) (s : Slice α)
-  (_ : r.start.val < r.end_.val) (_ : r.end_.val ≤ a.length) (_ : s.length = r.end_.val - r.start.val) :
-  ∃ na, update_subslice a r s = ok na ∧
+  (_ : r.start.val < r.end.val) (_ : r.end.val ≤ a.length) (_ : s.length = r.end.val - r.start.val) :
+  update_subslice a r s ⦃ na =>
   (∀ i, i < r.start.val → na[i]! = a[i]!) ∧
-  (∀ i, r.start.val ≤ i → i < r.end_.val → na[i]! = s[i - r.start.val]!) ∧
-  (∀ i, r.end_.val ≤ i → i < n.val → na[i]! = a[i]!) := by
+  (∀ i, r.start.val ≤ i → i < r.end.val → na[i]! = s[i - r.start.val]!) ∧
+  (∀ i, r.end.val ≤ i → i < n.val → na[i]! = a[i]!) ⦄ := by
   simp [update_subslice]
-  split <;> simp only [reduceCtorEq, false_and, exists_false, ok.injEq, exists_eq_left']
-  . simp_lists
+  split
+  . simp [spec_ok]
+    simp_lists
   . scalar_tac
 
 @[rust_fun "core::array::{core::ops::index::Index<[@T; @N], @I, @O>}::index"]
@@ -140,11 +143,18 @@ def core.array.equality.PartialEqArray.ne
   else .ok true
 
 @[rust_fun "core::array::{core::fmt::Debug<core::array::TryFromSliceError>}::fmt"]
-def core.array.DebugcorearrayTryFromSliceError.fmt
+def core.array.DebugTryFromSliceError.fmt
   (_ : core.array.TryFromSliceError) (fmt : core.fmt.Formatter) :
   Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=
   -- TODO: this model is simplistic
   .ok (.Ok (), fmt)
+
+@[reducible, rust_trait_impl
+  "core::fmt::Debug<core::array::TryFromSliceError>"]
+def core.fmt.DebugTryFromSliceError : core.fmt.Debug
+  core.array.TryFromSliceError := {
+  fmt := core.array.DebugTryFromSliceError.fmt
+}
 
 @[rust_fun "core::array::{core::convert::TryFrom<[@T; @N], &'0 [@T], core::array::TryFromSliceError>}::try_from"]
 def core.array.TryFromArrayCopySlice.try_from
@@ -164,6 +174,14 @@ def core.array.TryFromSharedArraySlice.try_from
   Result (core.result.Result (Array T N) core.array.TryFromSliceError) := do
   if h: s.len = N then .ok (.Ok ⟨s.val, by scalar_tac⟩)
   else .ok (.Err ())
+
+@[reducible, rust_trait_impl
+  "core::convert::TryFrom<&'a [@T; @N], &'a [@T], core::array::TryFromSliceError>"]
+def core.convert.TryFromSharedArraySliceTryFromSliceError (T : Type) (N : Usize) :
+  core.convert.TryFrom (Array T N) (Slice T)
+  core.array.TryFromSliceError := {
+  try_from := core.array.TryFromSharedArraySlice.try_from N
+}
 
 @[rust_fun "core::array::{core::convert::TryFrom<&'a mut [@T; @N], &'a mut [@T], core::array::TryFromSliceError>}::try_from"]
 def core.array.TryFromMutArraySlice.try_from

@@ -7,6 +7,9 @@ open Types
 open Expressions
 open Values
 open LlbcAst
+module SymbolicExprId = Contexts.SymbolicExprId
+
+type symbolic_expr_id = Contexts.symbolic_expr_id [@@deriving show, eq, ord]
 
 (** "Meta"-place: a place stored as span-data.
 
@@ -90,6 +93,7 @@ class ['self] iter_expr_base =
     method visit_call : 'env -> call -> unit = fun _ _ -> ()
     method visit_mplace : 'env -> mplace -> unit = fun _ _ -> ()
     method visit_emeta : 'env -> emeta -> unit = fun _ _ -> ()
+    method visit_abs_level : 'env -> abs_level -> unit = fun _ _ -> ()
 
     method visit_region_group_id_map :
         'a. ('env -> 'a -> unit) -> 'env -> 'a region_group_id_map -> unit =
@@ -121,6 +125,9 @@ class ['self] iter_expr_base =
     method visit_symbolic_value_id_set : 'env -> symbolic_value_id_set -> unit =
       fun env s -> SymbolicValueId.Set.iter (self#visit_symbolic_value_id env) s
 
+    method visit_symbolic_expr_id : 'env -> symbolic_expr_id -> unit =
+      fun _ _ -> ()
+
     method visit_symbolic_expansion : 'env -> symbolic_expansion -> unit =
       fun _ _ -> ()
   end
@@ -140,19 +147,21 @@ type expr =
           to look up the shared values in the context). *)
   | Panic
   | FunCall of call * expr
-  | EndAbs of (Contexts.eval_ctx[@opaque]) * abs * expr
+  | EndAbs of (Contexts.eval_ctx[@opaque]) * abs * abs_level * expr
       (** The context is the evaluation context upon ending the abstraction,
           just after we removed the abstraction from the context.
 
-          The context is the evaluation context from after evaluating the
-          asserted value. It has the same purpose as for the {!Return} case. *)
+          The integer is the level of the sub-abstraction that we ended. *)
   | EvalGlobal of global_decl_id * generic_args * symbolic_value * expr
       (** Evaluate a global to a fresh symbolic value *)
-  | Assertion of (Contexts.eval_ctx[@opaque]) * tvalue * expr
+  | Assertion of (Contexts.eval_ctx[@opaque]) * bool * tvalue * expr
       (** An assertion.
 
           The context is the evaluation context from after evaluating the
-          asserted value. It has the same purpose as for the {!Return} case. *)
+          asserted value. It has the same purpose as for the {!Return} case.
+
+          The boolean is the expected value (the [tvalue] should evaluate to
+          this boolean for the assertion to succeed). *)
   | Expansion of mplace option * symbolic_value * expansion
       (** Expansion of a symbolic value.
 
@@ -177,12 +186,15 @@ type expr =
 
           The context is the evaluation context from before introducing the new
           value. It has the same purpose as for the {!Return} case. *)
-  | SubstituteAbsIds of abs_id abs_id_map * expr
+  | SubstituteAbsIds of symbolic_expr_id * abs_id abs_id_map * expr
       (** We sometimes need to substitute abstraction ids to refresh them (in
           particular when doing joins), which can be a problem especially as
           some abstraction expressions refer to the abstractions through their
           ids. In order to make the translation work, we need to save those
-          substitutions. *)
+          substitutions.
+
+          TODO: we actually don't do this anymore because it led to issues.
+          Remove? *)
   | ForwardEnd of
       ((Contexts.eval_ctx[@opaque]) * tvalue) option
       * (Contexts.eval_ctx[@opaque])
@@ -310,6 +322,11 @@ and value_aggregate =
           interpreter, we introduce a fresh symbolic value. *)
   | VaTraitConstValue of trait_ref * string  (** A trait constant value *)
   | VaDiscriminant of symbolic_value  (** A discriminant read *)
+  | VaDynTrait of tvalue * trait_ref
+      (** A dynamic trait. This gets inserted when we convert a box of an
+          element of a known type to a box of an element of type [dyn] through
+          an unsized cast: we need the trait reference to perform the cast. *)
+  | VaFnDef of fn_ptr  (** Function pointer of a top-level definition *)
 [@@deriving
   show,
   visitors

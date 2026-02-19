@@ -15,7 +15,9 @@ let translate_fun_decl_body (ctx : bs_ctx) (signature : fun_sig) (body : S.expr)
   [%ltrace
     name_to_string ctx def.item_meta.name
     ^ "\n- body:\n"
-    ^ bs_ctx_expr_to_string ctx body];
+    ^ bs_ctx_expr_to_string ctx body
+    ^ "\n\n- decomposed_fun_sig:\n"
+    ^ decomposed_fun_sig_to_string ctx ctx.sg];
 
   let effect_info = get_fun_effect_info ctx (FunId (FRegular def_id)) None in
   let mk_return (ctx : bs_ctx) v =
@@ -115,6 +117,7 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expr option) : fun_decl =
       backend_attributes;
       num_loops;
       loop_id;
+      loop_pos = [];
       name;
       signature;
       is_global_decl_body = Option.is_some def.is_global_initializer;
@@ -140,11 +143,12 @@ let translate_type_decls (ctx : Contexts.decls_ctx) : type_decl list =
           with CFailure _ ->
             "(could not compute the name pattern due to a different error)"
         in
-        [%save_error_opt_span] error.span
+        [%warn_opt_span] error.span
           ("Could not translate type decl '" ^ name
-         ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'");
+         ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
+          ^ Contexts.compute_local_uses_error_message ctx (IdType d.def_id));
         None)
-    (TypeDeclId.Map.values ctx.type_ctx.type_decls)
+    (TypeDeclId.Map.values ctx.type_ctx.to_extract)
 
 let translate_binder (span : span option) (translate_inside : 'a -> 'b)
     (x : 'a T.binder) : 'b binder =
@@ -184,8 +188,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
   in
   let span = item_meta.span in
   let opt_span = Some span in
-  let type_infos = ctx.type_ctx.type_infos in
-  let translate_ty = translate_fwd_ty opt_span type_infos in
+  let translate_ty = translate_fwd_ty opt_span ctx in
   let name =
     Print.Types.name_to_string
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
@@ -203,13 +206,15 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
   in
   if types <> [] && builtin_info = None then
     (* Most associated types are removed by Charon's `--remove-associated-types`. *)
-    [%lwarning
-      "Found an associated type in a trait declaration; trait associated types \
-       are usually lifted to become parameters of the trait definition, but \
-       this can fail with mutually-recursive traits as well as GATs. Aeneas \
-       cannot handle such types today, and the generated code will likely be \
-       incorrect." ^ "\nTrait declaration: " ^ name ^ "\nSource: "
-      ^ Errors.span_to_string span];
+    [%warn] span
+      ("Found an associated type in a trait declaration; trait associated \
+        types are usually lifted to become parameters of the trait definition, \
+        but this can fail with mutually-recursive traits as well as GATs. \
+        Aeneas cannot handle such types today, and the generated code will \
+        likely be incorrect." ^ "\nTrait declaration: " ^ name ^ "\nSource: "
+     ^ Errors.span_to_string span
+      ^ Contexts.compute_local_uses_error_message ctx
+          (IdTraitDecl trait_decl.def_id));
   let types =
     List.map
       (fun (t : A.trait_assoc_ty T.binder) ->
@@ -269,8 +274,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
     trait_impl
   in
   let span = Some item_meta.span in
-  let type_infos = ctx.type_ctx.type_infos in
-  let translate_ty = translate_fwd_ty span type_infos in
+  let translate_ty = translate_fwd_ty span ctx in
   let impl_trait =
     (translate_trait_decl_ref span translate_ty) llbc_impl_trait
   in
@@ -349,9 +353,7 @@ let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
     translate_generic_params (Some decl.item_meta.span) llbc_generics
   in
   let explicit_info = compute_explicit_info generics [] in
-  let ty =
-    translate_fwd_ty (Some decl.item_meta.span) ctx.type_ctx.type_infos ty
-  in
+  let ty = translate_fwd_ty (Some decl.item_meta.span) ctx ty in
   let builtin_info =
     match_name_find_opt ctx item_meta.name
       (ExtractBuiltin.builtin_globals_map ())

@@ -92,10 +92,17 @@ let check_fun_decl_vars_are_well_bound (trans_ctx : trans_ctx)
 let translate_function_to_pure_aux (trans_ctx : trans_ctx)
     (marked_ids : marked_ids)
     (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t)
-    (fun_dsigs : Pure.decomposed_fun_sig FunDeclId.Map.t) (fdef : fun_decl) :
+    (fun_sigs : SymbolicToPureCore.fun_sigs FunDeclId.Map.t) (fdef : fun_decl) :
     pure_fun_translation_no_loops =
   (* Debug *)
-  [%ltrace name_to_string trans_ctx fdef.item_meta.name];
+  [%ltrace
+    name_to_string trans_ctx fdef.item_meta.name
+    ^ ":\n"
+    ^ fun_sig_to_string trans_ctx
+        {
+          item_binder_params = fdef.generics;
+          item_binder_value = fdef.signature;
+        }];
 
   (* Compute the symbolic ASTs, if the function is transparent *)
   let symbolic_trans =
@@ -131,7 +138,6 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
     {
       SymbolicToPureCore.llbc_fun_decls = trans_ctx.fun_ctx.fun_decls;
       fun_infos = trans_ctx.fun_ctx.fun_infos;
-      regions_hierarchies = trans_ctx.fun_ctx.regions_hierarchies;
     }
   in
 
@@ -171,7 +177,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
       decls_ctx = trans_ctx;
       bid = None;
       sg;
-      fun_dsigs;
+      fun_sigs;
       (* Will need to be updated for the backward functions *)
       sv_to_var;
       fresh_fvar_id;
@@ -183,7 +189,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
       forward_inputs = [];
       (* Initialized just below *)
       backward_inputs = RegionGroupId.Map.empty;
-      backward_outputs = None;
+      backward_outputs = Collections.IntMap.empty;
       (* Empty for now *)
       calls;
       loop_ids_map;
@@ -239,12 +245,12 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
 
 let translate_function_to_pure (trans_ctx : trans_ctx) (marked_ids : marked_ids)
     (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t)
-    (fun_dsigs : Pure.decomposed_fun_sig FunDeclId.Map.t) (fdef : fun_decl) :
+    (fun_sigs : SymbolicToPureCore.fun_sigs FunDeclId.Map.t) (fdef : fun_decl) :
     pure_fun_translation_no_loops option =
   try
     Some
       (translate_function_to_pure_aux trans_ctx marked_ids pure_type_decls
-         fun_dsigs fdef)
+         fun_sigs fdef)
   with CFailure error ->
     let name = name_to_string trans_ctx fdef.item_meta.name in
     let name_pattern =
@@ -254,11 +260,12 @@ let translate_function_to_pure (trans_ctx : trans_ctx) (marked_ids : marked_ids)
       with CFailure _ ->
         "(could not compute the name pattern due to a different error)"
     in
-    [%save_error_opt_span] error.span
+    [%warn_opt_span] error.span
       ("Could not translate the function '" ^ name
      ^ " because of previous error.\nName pattern: '" ^ name_pattern ^ "'"
      ^ "\nDefinition span: "
-      ^ Errors.raw_span_to_string fdef.item_meta.span);
+      ^ Errors.raw_span_to_string fdef.item_meta.span
+      ^ compute_local_uses_error_message trans_ctx (IdFun fdef.def_id));
     None
 
 type translated_crate = {
@@ -309,17 +316,19 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
                   "(could not compute the name pattern due to a different \
                    error)"
               in
-              [%save_error_opt_span] error.span
+              [%warn_opt_span] error.span
                 ("Could not translate the global declaration '" ^ name
                ^ " because of previous error\nName pattern: '" ^ name_pattern
                ^ "'" ^ "\nDefinition span: "
-                ^ Errors.raw_span_to_string global.item_meta.span);
+                ^ Errors.raw_span_to_string global.item_meta.span
+                ^ compute_local_uses_error_message trans_ctx
+                    (IdGlobal global.def_id));
               None)
-          (GlobalDeclId.Map.values crate.global_decls))
+          (GlobalDeclId.Map.values trans_ctx.global_decls_to_extract))
   in
 
-  (* Compute the decomposed fun sigs for the whole crate *)
-  let fun_dsigs =
+  (* Compute the fun sigs for the whole crate *)
+  let fun_sigs =
     FunDeclId.Map.of_list
       (List.filter_map
          (fun (fdef : LlbcAst.fun_decl) ->
@@ -327,10 +336,15 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
              [%ltrace
                "Translating the signature of: "
                ^ name_to_string trans_ctx fdef.item_meta.name];
-             Some
-               ( fdef.def_id,
-                 SymbolicToPureTypes.translate_fun_sig_from_decl_to_decomposed
-                   trans_ctx fdef )
+             let open SymbolicToPureCore in
+             let open SymbolicToPureTypes in
+             let dsg =
+               translate_fun_sig_from_decl_to_decomposed trans_ctx fdef
+             in
+             let sg = translate_fun_sig_from_decomposed dsg in
+             let ty = PureUtils.mk_arrows sg.inputs sg.output in
+             let sg : fun_sigs = { dsg; sg; ty } in
+             Some (fdef.def_id, sg)
            with CFailure error ->
              let name = name_to_string trans_ctx fdef.item_meta.name in
              let name_pattern =
@@ -340,13 +354,15 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
                with CFailure _ ->
                  "(could not compute the name pattern due to a different error)"
              in
-             [%save_error_opt_span] error.span
+             [%warn_opt_span] error.span
                ("Could not translate the function signature of '" ^ name
               ^ " because of previous error\nName pattern: '" ^ name_pattern
               ^ "'" ^ "\nDefinition span: "
-               ^ Errors.raw_span_to_string fdef.item_meta.span);
+               ^ Errors.raw_span_to_string fdef.item_meta.span
+               ^ compute_local_uses_error_message trans_ctx (IdFun fdef.def_id)
+               );
              None)
-         (FunDeclId.Map.values crate.fun_decls))
+         (FunDeclId.Map.values trans_ctx.fun_ctx.to_extract))
   in
 
   (* Translate the signatures of the builtin functions *)
@@ -354,29 +370,62 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
     BuiltinFunIdMap.map
       (fun (info : builtin_fun_info) ->
         SymbolicToPureTypes.translate_fun_sig trans_ctx (FBuiltin info.fun_id)
-          info.name info.fun_sig
+          info.fun_sig
           (List.map (fun _ -> None) info.fun_sig.item_binder_value.inputs))
       builtin_fun_infos
   in
 
-  (* Translate all the *transparent* functions.
+  (* Translate all the functions.
 
      Remark: [translate_function_to_pure] catches errors of type [CFailure]
      to allow the compilation to make progress.
+
+     We do it in two steps: the opaque functions first, then the transparent functions.
   *)
   let pure_translations =
-    let num_decls = FunDeclId.Map.cardinal crate.fun_decls in
-    ProgressBar.with_parallel_reporter num_decls "Translated functions: "
-      (fun report ->
-        parallel_filter_map
-          (fun x ->
-            let f =
-              translate_function_to_pure trans_ctx marked_ids type_decls_map
-                fun_dsigs x
-            in
-            report 1;
-            f)
-          (FunDeclId.Map.values crate.fun_decls))
+    let funs = FunDeclId.Map.values trans_ctx.fun_ctx.to_extract in
+    (* Split between opaque and transparent *)
+    let opaque, transparent =
+      List.partition (fun (d : fun_decl) -> Option.is_none d.body) funs
+    in
+
+    (* Reorder the transparent functions to have the biggest first:
+       because the execution is parallel, we want to start processing the bigger
+       functions as early as possible.
+
+       TODO: this doesn't seem to have much effect.
+    *)
+    let transparent =
+      if !Config.parallel then
+        let funs =
+          List.map
+            (fun f -> (f, LlbcAstUtils.compute_fun_decl_size f))
+            transparent
+        in
+        List.map fst (List.sort (fun (_, n) (_, n') -> n' - n) funs)
+      else transparent
+    in
+
+    (* Small helper *)
+    let process (kind : string) (funs : fun_decl list) =
+      let num_decls = List.length funs in
+      ProgressBar.with_parallel_reporter num_decls
+        ("Translated " ^ kind ^ " functions: ")
+        (fun report ->
+          parallel_filter_map
+            (fun x ->
+              let f =
+                translate_function_to_pure trans_ctx marked_ids type_decls_map
+                  fun_sigs x
+              in
+              report 1;
+              f)
+            funs)
+    in
+
+    let opaque = process "opaque" opaque in
+    let transparent = process "transparent" transparent in
+    opaque @ transparent
   in
 
   (* Translate the trait declarations *)
@@ -400,13 +449,15 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
                   "(could not compute the name pattern due to a different \
                    error)"
               in
-              [%save_error_opt_span] error.span
+              [%warn_opt_span] error.span
                 ("Could not translate the trait declaration '" ^ name
                ^ " because of previous error\nName pattern: '" ^ name_pattern
                ^ "'" ^ "\nDefinition span: "
-                ^ Errors.raw_span_to_string d.item_meta.span);
+                ^ Errors.raw_span_to_string d.item_meta.span
+                ^ compute_local_uses_error_message trans_ctx
+                    (IdTraitDecl d.def_id));
               None)
-          (TraitDeclId.Map.values trans_ctx.crate.trait_decls))
+          (TraitDeclId.Map.values trans_ctx.trait_decls_to_extract))
   in
 
   (* Translate the trait implementations *)
@@ -430,13 +481,15 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
                   "(could not compute the name pattern due to a different \
                    error)"
               in
-              [%save_error_opt_span] error.span
+              [%warn_opt_span] error.span
                 ("Could not translate the trait instance '" ^ name
                ^ " because of previous error\nName pattern: '" ^ name_pattern
                ^ "'" ^ "\nDefinition span: "
-                ^ Errors.raw_span_to_string d.item_meta.span);
+                ^ Errors.raw_span_to_string d.item_meta.span
+                ^ compute_local_uses_error_message trans_ctx
+                    (IdTraitImpl d.def_id));
               None)
-          (TraitImplId.Map.values trans_ctx.crate.trait_impls))
+          (TraitImplId.Map.values trans_ctx.trait_impls_to_extract))
   in
 
   (* Apply the micro-passes *)
@@ -494,7 +547,20 @@ let crate_has_opaque_non_builtin_decls (ctx : gen_ctx) (filter_builtin : bool) :
     bool * bool =
   let types, funs =
     LlbcAstUtils.crate_get_opaque_non_builtin_decls ctx.crate filter_builtin
+      ctx.trans_ctx.type_ctx.to_extract ctx.trans_ctx.fun_ctx.to_extract
   in
+  [%ldebug
+    "- opaque types:\n"
+    ^ String.concat "\n\n"
+        (List.map
+           (fun (d : type_decl) ->
+             name_to_string ctx.trans_ctx d.item_meta.name)
+           types)
+    ^ "\n\n- opaque funs:\n"
+    ^ String.concat "\n\n"
+        (List.map
+           (fun (d : fun_decl) -> name_to_string ctx.trans_ctx d.item_meta.name)
+           funs)];
   (types <> [], funs <> [])
 
 (** Export a type declaration.
@@ -857,6 +923,36 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
         (fun trans -> Extract.extract_unit_test_if_unit_fun ctx fmt trans.f)
         pure_ls
 
+let trait_decl_is_builtin (ctx : gen_ctx) (id : Pure.trait_decl_id) : bool =
+  let trait_decl =
+    [%silent_unwrap_opt_span] None
+      (TraitDeclId.Map.find_opt id ctx.trans_trait_decls)
+  in
+  let open ExtractBuiltin in
+  Option.is_some
+    (match_name_find_opt ctx.trans_ctx trait_decl.item_meta.name
+       (builtin_trait_decls_map ()))
+
+let trait_impl_is_builtin (ctx : gen_ctx) (id : Pure.trait_impl_id) : bool =
+  let trait_impl =
+    [%silent_unwrap_opt_span] None
+      (TraitImplId.Map.find_opt id ctx.trans_trait_impls)
+  in
+  let trait_decl =
+    Pure.TraitDeclId.Map.find trait_impl.impl_trait.trait_decl_id
+      ctx.trans_trait_decls
+  in
+  let builtin_info =
+    let open ExtractBuiltin in
+    let trait_impl =
+      TraitImplId.Map.find trait_impl.def_id ctx.crate.trait_impls
+    in
+    match_name_with_generics_find_opt ctx.trans_ctx trait_decl.item_meta.name
+      trait_impl.impl_trait.generics
+      (builtin_trait_impls_map ())
+  in
+  Option.is_some builtin_info
+
 (** Export a trait declaration. *)
 let export_trait_decl (fmt : Format.formatter) (_config : gen_config)
     (ctx : gen_ctx) (trait_decl_id : Pure.trait_decl_id) (extract_decl : bool)
@@ -866,12 +962,7 @@ let export_trait_decl (fmt : Format.formatter) (_config : gen_config)
       (TraitDeclId.Map.find_opt trait_decl_id ctx.trans_trait_decls)
   in
   (* Check if the trait declaration is builtin, in which case we ignore it *)
-  let open ExtractBuiltin in
-  if
-    match_name_find_opt ctx.trans_ctx trait_decl.item_meta.name
-      (builtin_trait_decls_map ())
-    = None
-  then (
+  if not (trait_decl_is_builtin ctx trait_decl_id) then (
     let ctx = { ctx with trait_decl_id = Some trait_decl.def_id } in
     if extract_decl then Extract.extract_trait_decl ctx fmt trait_decl;
     if extract_extra_info then
@@ -886,23 +977,8 @@ let export_trait_impl (fmt : Format.formatter) (_config : gen_config)
     [%silent_unwrap_opt_span] None
       (TraitImplId.Map.find_opt trait_impl_id ctx.trans_trait_impls)
   in
-  let trait_decl =
-    Pure.TraitDeclId.Map.find trait_impl.impl_trait.trait_decl_id
-      ctx.trans_trait_decls
-  in
-  (* Check if the trait implementation is builtin *)
-  let builtin_info =
-    let open ExtractBuiltin in
-    let trait_impl =
-      TraitImplId.Map.find trait_impl.def_id ctx.crate.trait_impls
-    in
-    match_name_with_generics_find_opt ctx.trans_ctx trait_decl.item_meta.name
-      trait_impl.impl_trait.generics
-      (builtin_trait_impls_map ())
-  in
-  match builtin_info with
-  | None -> Extract.extract_trait_impl ctx fmt trait_impl
-  | Some _ -> ()
+  if not (trait_impl_is_builtin ctx trait_impl_id) then
+    Extract.extract_trait_impl ctx fmt trait_impl
 
 (** A generic utility to generate the extracted definitions: as we may want to
     split the definitions between different files (or not), we can control what
@@ -965,23 +1041,44 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
     | GlobalGroup (RecGroup _ids) ->
         [%craise_opt_span] None "Mutually recursive globals are not supported"
     | TraitDeclGroup (RecGroup ids) ->
-        (* Lookup the trait decls to print a nice error message *)
-        let to_string (id : trait_decl_id) : string =
-          match TraitDeclId.Map.find_opt id ctx.trans_trait_decls with
-          | None ->
-              "unknown trait (lookup failed, probably because of a previous \
-               error"
-          | Some d ->
-              "'"
-              ^ name_to_string ctx.trans_ctx d.item_meta.name
-              ^ "', source: "
-              ^ Errors.raw_span_to_string d.item_meta.span
+        (* Only print the warning if we actually extract the group *)
+        let extract =
+          config.extract_trait_decls && config.extract_transparent
         in
-        let decls = List.map to_string ids in
-        [%craise_opt_span] None
-          ("Mutually recursive trait declarations are not supported; found the \
-            following group of mutually recursive traits:\n"
-         ^ String.concat "\n" decls)
+        if extract then
+          (* Lookup the trait decls to print a nice error message *)
+          let to_string (id : trait_decl_id) : string =
+            match TraitDeclId.Map.find_opt id ctx.trans_trait_decls with
+            | None ->
+                "unknown trait (lookup failed, probably because of a previous \
+                 error"
+            | Some d ->
+                "'"
+                ^ name_to_string ctx.trans_ctx d.item_meta.name
+                ^ "', source: "
+                ^ Errors.raw_span_to_string d.item_meta.span
+          in
+          let decls = List.map to_string ids in
+          if not (List.for_all (trait_decl_is_builtin ctx) ids) then (
+            if List.length decls = 1 then
+              [%warn_opt_span] None
+                ("Recursive trait declarations are not supported; the \
+                  following recursive trait is going to be extracted but its \
+                  model will not type-check:\n" ^ String.concat "\n" decls)
+            else
+              [%warn_opt_span] None
+                ("Mutually recursive trait declarations are not supported; the \
+                  following group of mutually recursive traits is going to be \
+                  extracted but their model will not type-check:\n"
+               ^ String.concat "\n" decls);
+            (* We still extract something so that the user can look at it and
+             eventually fix it *)
+            (* TODO: update to extract groups *)
+            List.iter
+              (fun id ->
+                export_trait_decl_group id;
+                export_trait_decl_group_extra_info id)
+              ids)
     | TraitDeclGroup (NonRecGroup id) ->
         (* TODO: update to extract groups *)
         if config.extract_trait_decls && config.extract_transparent then (
@@ -990,9 +1087,41 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
     | TraitImplGroup (NonRecGroup id) ->
         if config.extract_trait_impls && config.extract_transparent then
           export_trait_impl id
-    | TraitImplGroup (RecGroup _ids) ->
-        [%craise_opt_span] None
-          "Mutually recursive trait implementations are not supported"
+    | TraitImplGroup (RecGroup ids) ->
+        (* Only print the warning if we extract the impl group *)
+        let extract =
+          config.extract_trait_impls && config.extract_transparent
+        in
+        if extract then
+          (* Lookup the trait impls to print a nice error message *)
+          let to_string (id : trait_impl_id) : string =
+            match TraitImplId.Map.find_opt id ctx.trans_trait_impls with
+            | None ->
+                "unknown trait (lookup failed, probably because of a previous \
+                 error"
+            | Some d ->
+                "'"
+                ^ name_to_string ctx.trans_ctx d.item_meta.name
+                ^ "', source: "
+                ^ Errors.raw_span_to_string d.item_meta.span
+          in
+          let decls = List.map to_string ids in
+          if not (List.for_all (trait_impl_is_builtin ctx) ids) then (
+            if List.length decls = 1 then
+              [%warn_opt_span] None
+                ("Recursive trait implementations are not supported; the \
+                  following recursive impl is going to be extracted but its \
+                  model will not type-check:\n" ^ String.concat "\n" decls)
+            else
+              [%warn_opt_span] None
+                ("Mutually recursive trait implementations are not supported; \
+                  the following group of mutually recursive impls is going to \
+                  be extracted but their model will not type-check:\n"
+               ^ String.concat "\n" decls);
+            (* We still extract something so that the user can look at it and
+             eventually fix it *)
+            (* TODO: update to extract groups *)
+            List.iter (fun id -> export_trait_impl id) ids)
     | MixedGroup _ ->
         [%craise_opt_span] None
           "Mixed-recursive declaration groups are not supported"
@@ -1017,6 +1146,9 @@ type extract_file_info = {
   custom_msg : string;
   custom_imports : string list;
   custom_includes : string list;
+  noncomputable : bool;
+      (** If [true] we insert a [noncomputable section] instruction at the top
+          of the file *)
 }
 
 let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
@@ -1094,7 +1226,7 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
       (* Add the custom includes *)
       List.iter (fun m -> Printf.fprintf out "import %s\n" m) fi.custom_includes;
       (* Always open the Primitives namespace *)
-      Printf.fprintf out "open Aeneas.Std Result Error\n";
+      Printf.fprintf out "open Aeneas Aeneas.Std Result ControlFlow Error\n";
       (* It happens that we generate duplicated namespaces, like `betree.betree`.
          We deactivate the linter for this, because otherwise it leads to too much
          noise. *)
@@ -1104,6 +1236,13 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
       Printf.fprintf out "set_option linter.hashCommand false\n";
       (* Definitions often contain unused variables: deactivate the corresponding linter *)
       Printf.fprintf out "set_option linter.unusedVariables false\n";
+      (* Declare the definitions as being noncomputable if needs be *)
+      if fi.noncomputable then
+        Printf.fprintf out
+          "\n\
+           /- You can remove the following line by using the CLI option \
+           `-all-computable`: -/\n\
+           noncomputable section\n";
       (* If we are inside the namespace: declare it *)
       if fi.in_namespace then Printf.fprintf out "\nnamespace %s\n" fi.namespace;
       (* We might need to open the namespace *)
@@ -1147,7 +1286,9 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
       (lazy
         ("Generated the partial file (because of "
         ^ string_of_int (List.length !Errors.error_list)
-        ^ " errors): " ^ fi.filename))
+        ^ " errors, including "
+        ^ string_of_int (Errors.FileLineMap.cardinal !Errors.unique_errors)
+        ^ " unique errors): " ^ fi.filename))
   else log#linfo (lazy ("Generated: " ^ fi.filename));
 
   (* Flush and close the file *)
@@ -1249,9 +1390,20 @@ let extract_translated_crate (filename : string) (dest_dir : string)
   in
 
   (* Register unique names for all the top-level types, globals, functions...
-   * Note that the order in which we generate the names doesn't matter:
-   * we just need to generate a mapping from identifier to name, and make
-   * sure there are no name clashes. *)
+
+     Note that the order in which we generate the names **matter**: we detect
+     name classes between ADT methods and ADT fields, and rename the methods
+     appropriately.
+
+     For instance, the field and method [len] might clash in the below code:
+     {[
+       struct Struct { len : usize }
+
+       impl Struct { fn len(&self) -> usize { self.len } }
+     ]}
+
+     For this reason, we need to generate names for the types *before* generating
+     names for the functions (which include the method definitions). *)
   let ctx =
     List.fold_left
       (fun ctx def ->
@@ -1266,11 +1418,12 @@ let extract_translated_crate (filename : string) (dest_dir : string)
             with CFailure _ ->
               "(could not compute the name pattern due to a different error)"
           in
-          [%save_error_opt_span] error.span
+          [%warn_opt_span] error.span
             ("Could not generate names for the type declaration '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
            ^ "\nDefinition span: "
-            ^ Errors.raw_span_to_string def.item_meta.span);
+            ^ Errors.raw_span_to_string def.item_meta.span
+            ^ compute_local_uses_error_message trans_ctx (IdType def.def_id));
           ctx)
       ctx
       (Pure.TypeDeclId.Map.values trans_types)
@@ -1303,11 +1456,13 @@ let extract_translated_crate (filename : string) (dest_dir : string)
             with CFailure _ ->
               "(could not compute the name pattern due to a different error)"
           in
-          [%save_error_opt_span] error.span
+          [%warn_opt_span] error.span
             ("Could not generate names for the function declaration '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
            ^ "\nDefinition span: "
-            ^ Errors.raw_span_to_string trans.f.item_meta.span);
+            ^ Errors.raw_span_to_string trans.f.item_meta.span
+            ^ compute_local_uses_error_message trans_ctx (IdFun trans.f.def_id)
+            );
           ctx)
       ctx
       (FunDeclId.Map.values trans_funs)
@@ -1327,11 +1482,12 @@ let extract_translated_crate (filename : string) (dest_dir : string)
             with CFailure _ ->
               "(could not compute the name pattern due to a different error)"
           in
-          [%save_error_opt_span] error.span
+          [%warn_opt_span] error.span
             ("Could not generate names for the global declaration '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
            ^ "\nDefinition span: "
-            ^ Errors.raw_span_to_string def.item_meta.span);
+            ^ Errors.raw_span_to_string def.item_meta.span
+            ^ compute_local_uses_error_message trans_ctx (IdGlobal def.def_id));
           ctx)
       ctx trans_globals
   in
@@ -1350,11 +1506,13 @@ let extract_translated_crate (filename : string) (dest_dir : string)
             with CFailure _ ->
               "(could not compute the name pattern due to a different error)"
           in
-          [%save_error_opt_span] error.span
+          [%warn_opt_span] error.span
             ("Could not generate names for the trait declaration '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
            ^ "\nDefinition span: "
-            ^ Errors.raw_span_to_string def.item_meta.span);
+            ^ Errors.raw_span_to_string def.item_meta.span
+            ^ compute_local_uses_error_message trans_ctx
+                (IdTraitDecl def.def_id));
           ctx)
       ctx trans_trait_decls
   in
@@ -1373,11 +1531,13 @@ let extract_translated_crate (filename : string) (dest_dir : string)
             with CFailure _ ->
               "(could not compute the name pattern due to a different error)"
           in
-          [%save_error_opt_span] error.span
+          [%warn_opt_span] error.span
             ("Could not generate names for the trait implementation '" ^ name
            ^ " because of previous error\nName pattern: '" ^ name_pattern ^ "'"
            ^ "\nDefinition span: "
-            ^ Errors.raw_span_to_string def.item_meta.span);
+            ^ Errors.raw_span_to_string def.item_meta.span
+            ^ compute_local_uses_error_message trans_ctx
+                (IdTraitImpl def.def_id));
           ctx)
       ctx trans_trait_impls
   in
@@ -1495,10 +1655,9 @@ let extract_translated_crate (filename : string) (dest_dir : string)
             close_out tgt;
             log#linfo (lazy ("Copied:    " ^ tgt_filename))
         with Sys_error _ ->
-          log#error
-            "Could not copy the primitives file: %s.\n\
-             You will have to copy it/set up the project by hand."
-            primitives_src)
+          [%warn_opt_span] None
+            ("Could not copy the primitives file: " ^ primitives_src
+           ^ ".\nYou will have to copy it/set up the project by hand."))
   in
 
   (* Extract the file(s) *)
@@ -1529,6 +1688,13 @@ let extract_translated_crate (filename : string) (dest_dir : string)
     | HOL4 -> "Script.sml"
   in
 
+  (* Check if there are opaque types and functions (we need this to know whether
+     we need to generate interface files, etc.) *)
+  let has_opaque_types, has_opaque_funs =
+    crate_has_opaque_non_builtin_decls ctx true
+  in
+  let has_opaque = has_opaque_types || has_opaque_funs in
+
   (* Extract one or several files, depending on the configuration *)
   (if !Config.split_files then (
      let base_gen_config =
@@ -1545,12 +1711,6 @@ let extract_translated_crate (filename : string) (dest_dir : string)
          interface = false;
          test_trans_unit_functions = false;
        }
-     in
-
-     (* Check if there are opaque types and functions - in which case we need
-      * to split *)
-     let has_opaque_types, has_opaque_funs =
-       crate_has_opaque_non_builtin_decls ctx true
      in
 
      (*
@@ -1604,6 +1764,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
              custom_msg;
              custom_imports = [];
              custom_includes = [];
+             noncomputable = false;
            }
          in
          extract_file opaque_config ctx file_info;
@@ -1643,6 +1804,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
          custom_msg = ": type definitions";
          custom_imports = [];
          custom_includes = opaque_types_module;
+         noncomputable = false;
        }
      in
      extract_file types_config ctx file_info;
@@ -1670,6 +1832,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
             custom_msg = ": templates for the decreases clauses";
             custom_imports = [ types_module ];
             custom_includes = [];
+            noncomputable = false;
           }
         in
         extract_file template_clauses_config ctx file_info);
@@ -1724,6 +1887,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
              custom_msg;
              custom_imports = [];
              custom_includes = [ types_module ];
+             noncomputable = false;
            }
          in
          extract_file opaque_config ctx file_info;
@@ -1765,6 +1929,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
          custom_imports = [];
          custom_includes =
            [ types_module ] @ opaque_funs_module @ clauses_module;
+         noncomputable = has_opaque && not !Config.all_computable;
        }
      in
      extract_file fun_config ctx file_info)
@@ -1797,6 +1962,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
          custom_msg = "";
          custom_imports = [];
          custom_includes = [];
+         noncomputable = has_opaque && not !Config.all_computable;
        }
      in
      extract_file gen_config ctx file_info);

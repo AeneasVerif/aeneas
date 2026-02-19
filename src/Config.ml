@@ -3,7 +3,7 @@
 (** {1 Backend choice} *)
 
 (** The choice of backend *)
-type backend = FStar | Coq | Lean | HOL4
+type backend = FStar | Coq | Lean | HOL4 [@@deriving show]
 
 let backend_names = [ "fstar"; "coq"; "rocq"; "lean"; "hol4" ]
 
@@ -57,8 +57,26 @@ let set_subdir (s : string) : unit = subdir := Some s
     CI arguments. *)
 let borrow_check = ref false
 
-(** Get the target backend *)
-let backend () : backend = Option.get !opt_backend
+(** Get the target backend
+
+    If there is no backend (we are borrow-checking) we default to Lean - it
+    happens when looking up the builtin information: we use Lean as it has the
+    most complete library.
+
+    TODO: turn borrow-checking into a backend. *)
+let backend () : backend =
+  match !opt_backend with
+  | None -> Lean
+  | Some b -> b
+
+let backend_to_string (b : backend) =
+  match b with
+  | FStar -> "F*"
+  | Coq -> "Rocq"
+  | Lean -> "Lean"
+  | HOL4 -> "HOL4"
+
+let backend_name () : string = backend_to_string (backend ())
 
 let if_backend (f : unit -> 'a) (default : 'a) : 'a =
   match !opt_backend with
@@ -385,7 +403,7 @@ let type_check_pure_code = ref false
 let fail_hard = ref false
 
 (** Shall we emit errors instead of warnings? *)
-let warnings_as_errors = ref true
+let warnings_as_errors = ref false
 
 (** If true, add the type name as a prefix to the variant names. Ex.: In Rust:
     {[
@@ -440,8 +458,122 @@ let extract_external_name_patterns = ref true
 (** *)
 let match_patterns_with_trait_decl_refs = true
 
-(** Decompose loops to recursive functions *)
-let loops_to_recursive_functions = ref true
+(** Always decompose loops to recursive functions *)
+let loops_to_recursive_functions = ref false
 
-(** Should we run the translation in parallel? *)
-let parallel = ref true
+(** Should we run the translation in parallel?
+
+    We deactivate it by default because:
+    - There is a race condition happening in SCC.ml when computing the function
+      signatures.
+    - We do not gain much at this stage, meaning the parallelism is not used
+      correctly.
+
+    Some remarks:
+    - we should not allocate one task per function to translate: this is
+      expensive
+    - we should allocate the domain when starting the program, and tear them
+      down when exiting
+    - the way functions are ordered before being translated is wrong:
+    - the function which computes the size of the function should count the the
+      loops differently (the body of a loop is executed twice to compute a fixed
+      point: the result is exponential)
+    - the way the parellelism is executed implies that the first domain will
+      translate all the biggest functions! We should rather have a queue of
+      tasks (or an index of the next function to translate that we would
+      atomically increment) *)
+let parallel = ref false
+
+(** Once we add proper support for static lifetimes, remove this *)
+let use_static = ref false
+
+(** Display a progress bar *)
+let progress_bar = ref true
+
+(** For debugging: when we error on an external definition, we display the list
+    spans where it is transitively used in the local crate. This is the maximum
+    number of spans we print (a negative number means we print all of them) *)
+let max_error_spans = ref 5
+
+(** If the join after a match/switch/etc. fails we make it recoverable: instead
+    of raising an error we do not join the contexts and duplicate the code after
+    the match/switch/etc. *)
+let recover_joins = ref true
+
+(** When analyzing types, for instance to check whether they use erased regions
+    or not, we ignore dynamic traits.
+
+    This may cause issues in the future once we want to be more general: for
+    this reason we guard all checks with [type_analysis_ignore_dyn] so that it
+    is easy to activate them. *)
+let type_analysis_ignore_dyn = true
+
+(** We currently incorrectly use the region inside the dyn trait: once we update
+    the use, remove this boolean: this will reveal important places that need to
+    be updated. *)
+let use_dyn_regions = false
+
+(** When analyzing an opaque type about which we have no information, should we
+    consider its regions as being used for mutable references or not? *)
+let opaque_types_have_mut_regions_by_default = false
+
+(** Should we use colors when logging? *)
+let log_with_colors = ref false
+
+(** Should we use rotating colors when loggin (i.e., rather than using a color
+    per category of item, such as borrows, loans, etc. use a color based on the
+    index of the item: this allows easily identifying a borrow and its
+    corresponding loan) *)
+let log_rotating_colors = ref true
+
+(** Should we borrow check globals?
+
+    The issue is that when translating a global which uses a 'static reference,
+    the LLBC provided by Charon for the body of the global (which initializes
+    the constant) is too simplified and essentially looks like this:
+    {[
+      fn initialize() -> &'static u32 {
+        let x = 0;
+        &x // reference to local variable!
+      }
+    ]}
+
+    In order to translate these globals we deactivate the invalidation of local
+    variables upon return in these initialization functions. This means that we
+    do not borrow-check these initialization functions, but the generated pure
+    model should still be fine. *)
+let borrow_check_globals = ref false
+
+(** *)
+let print_error_diagnostics = ref false
+
+(** There can be collisions between method names and projector names.
+
+    For instance:
+
+    {[
+      struct Struct { len : usize }
+
+      impl Struct {
+          // If we name this Struct.len in Lean there will be a name collision
+          // with the projector function for field len
+          fn len(&self) -> usize { self.len }
+      }
+    ]}
+    By default, we detect such collisions and change the method name accordingly
+    (in the case above, the method [len] would be named [Struct.impl.len] in
+    Lean instead of [Struct.impl.len]).
+
+    One issue is that it makes the name generation non-modular and introduces
+    inconsistencies between method names, depending on whether there exists a
+    field with the same name or not.
+
+    If the following option is on, we introduce the [impl] name elemnt in *all*
+    method names. *)
+let method_names_in_impl_namespace = ref false
+
+(** *)
+let all_computable = ref false
+
+(** Do not attempt to extract loops to recursive functions *)
+let no_recursive_loops = ref false

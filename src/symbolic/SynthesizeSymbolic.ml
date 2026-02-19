@@ -90,7 +90,7 @@ let synthesize_symbolic_expansion (span : Meta.span) (sv : symbolic_value)
         match ls with
         | [ (Some see, exp) ] -> ExpandNoBranch (see, exp)
         | _ -> [%craise] span "Ill-formed borrow expansion")
-    | TVar _
+    | TVar _ | TArray _ | TSlice _
     | TLiteral TChar
     | TNever
     | TTraitType _
@@ -166,16 +166,17 @@ let synthesize_binary_op (span : Meta.span) (ctx : Contexts.eval_ctx)
   synthesize_function_call span (Binop binop) ctx None [] generics
     [ arg0; arg1 ] [ arg0_place; arg1_place ] dest dest_place e
 
-let synthesize_end_abstraction (ctx : Contexts.eval_ctx) (abs : abs) (e : expr)
-    : expr =
-  EndAbs (ctx, abs, e)
+let synthesize_end_abs (ctx : Contexts.eval_ctx) (abs : abs) (level : int)
+    (e : expr) : expr =
+  EndAbs (ctx, abs, level, e)
 
 let synthesize_assignment (ctx : Contexts.eval_ctx) (lplace : mplace)
     (rvalue : tvalue) (rplace : mplace option) (e : expr) : expr =
   Meta (Assignment (ctx, lplace, rvalue, rplace), e)
 
-let synthesize_assertion (ctx : Contexts.eval_ctx) (v : tvalue) (e : expr) =
-  Assertion (ctx, v, e)
+let synthesize_assertion (ctx : Contexts.eval_ctx) (expected : bool)
+    (v : tvalue) (e : expr) =
+  Assertion (ctx, expected, v, e)
 
 let save_snapshot (ctx : Contexts.eval_ctx) : expr -> expr =
   (* Note that we take care to generate the fresh meta id immediately, so

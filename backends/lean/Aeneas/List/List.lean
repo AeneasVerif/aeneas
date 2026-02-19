@@ -251,7 +251,12 @@ theorem getElem?_set_neq
   intro
   simp_all
 
-@[simp, simp_lists_simps, grind =]
+/-- Using `↓` to eagerly simplify combinations of `set` and `getElem!` in expressions like:
+`(((l.set i0 x0) ...).set in xn)[j]!`
+
+Otherwise we might lose a lot of time reordering the `set` expressions.
+-/
+@[simp↓, simp_lists_simps↓, grind =]
 theorem getElem!_set_ne
   {α : Type u} [Inhabited α] (l: List α) (i: Nat) (j: Nat) (x: α)
   (h : Nat.not_eq i j) : getElem! (l.set i x) j = getElem! l j
@@ -266,7 +271,12 @@ theorem getElem!_set
   := by
   simp [*]
 
-@[simp_lists_simps, grind =]
+/-- Using `↓` to eagerly simplify combinations of `set` and `getElem!` in expressions like:
+`(((l.set i0 x0) ...).set in xn)[j]!`
+
+Otherwise we might lose a lot of time reordering the `set` expressions.
+-/
+@[simp_lists_simps↓, grind =]
 theorem getElem!_set'
   {α : Type u} [Inhabited α] (l: List α) (i i': Nat) (x: α)
   (h : i' < l.length ∧ i = i') : getElem! (l.set i x) i' = x

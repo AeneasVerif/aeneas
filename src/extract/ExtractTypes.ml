@@ -7,6 +7,23 @@ open Config
 include ExtractBase
 module T = Types
 
+let extract_str (_span : Meta.span) (fmt : F.formatter) ~(inside : bool)
+    (s : string) : unit =
+  let chars = StringUtils.string_to_chars s in
+  (* Using the OCaml escape conventions for now.
+
+     TODO: does this really work? *)
+  let s = String.concat "" (List.map Char.escaped chars) in
+  let s = "\"" ^ s ^ "\"" in
+
+  (* We need to convert the string to a str (the conversion inserts a static check
+     that the string is not too long) *)
+  if inside then F.pp_print_string fmt "(";
+  F.pp_print_string fmt "toStr";
+  F.pp_print_space fmt ();
+  F.pp_print_string fmt s;
+  if inside then F.pp_print_string fmt ")"
+
 (** Format a constant value.
 
     Inputs:
@@ -79,7 +96,8 @@ let extract_literal (span : Meta.span) (fmt : F.formatter) ~(is_pattern : bool)
           in
           F.pp_print_string fmt c;
           if inside then F.pp_print_string fmt ")")
-  | VChar _ | VFloat _ | VStr _ | VByteStr _ ->
+  | VStr s -> extract_str span ~inside fmt s
+  | VChar _ | VFloat _ | VByteStr _ ->
       [%admit_raise] span
         "Float, string, non-ASCII chars and byte string literals are \
          unsupported"
@@ -264,8 +282,12 @@ let extract_literal_type (_ctx : extraction_ctx) (fmt : F.formatter)
   match ty with
   | TBool -> F.pp_print_string fmt (bool_name ())
   | TChar -> F.pp_print_string fmt (char_name ())
-  | TInt int_ty -> F.pp_print_string fmt (int_name (Signed int_ty))
-  | TUInt int_ty -> F.pp_print_string fmt (int_name (Unsigned int_ty))
+  | TInt int_ty ->
+      let prefix = if backend () = Lean then "Std." else "" in
+      F.pp_print_string fmt (prefix ^ int_name (Signed int_ty))
+  | TUInt int_ty ->
+      let prefix = if backend () = Lean then "Std." else "" in
+      F.pp_print_string fmt (prefix ^ int_name (Unsigned int_ty))
   | TFloat float_ty -> F.pp_print_string fmt (float_name float_ty)
 
 (** [inside] constrols whether we should add parentheses or not around type
@@ -296,14 +318,17 @@ let extract_ty_errors (fmt : F.formatter) : unit =
 
 let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
     (no_params_tys : TypeDeclId.Set.t) ~(inside : bool) (ty : ty) : unit =
+  [%ldebug "ty: " ^ ty_to_string ctx ty];
   let extract_rec = extract_ty span ctx fmt no_params_tys in
   match ty with
   | TAdt (type_id, generics) -> (
+      [%ldebug "ADT case"];
       let has_params = generics <> empty_generic_args in
       match type_id with
       | TTuple ->
+          [%ldebug "Tuple case"];
           (* This is a bit annoying, but in F*/Coq/HOL4 [()] is not the unit type:
-           * we have to write [unit]... *)
+             we have to write [unit]... *)
           if generics.types = [] then F.pp_print_string fmt (unit_name ())
           else (
             F.pp_print_string fmt "(";
@@ -322,6 +347,7 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
               (extract_rec ~inside:true) generics.types;
             F.pp_print_string fmt ")")
       | TAdtId _ | TBuiltin _ -> (
+          [%ldebug "Custom ADT or Builtin case"];
           (* HOL4 behaves differently. Where in Coq/FStar/Lean we would write:
               `tree a b`
 
@@ -336,42 +362,49 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
                  opaque module. The opaque *types* are builtin. *)
               F.pp_print_string fmt (ctx_get_type (Some span) type_id ctx);
               (* We might need to:
-                 - lookup the information about the implicit/explicit parameters
-                   (note that builtin types don't have implicit parameters)
                  - filter the type arguments, if the type is builtin (for instance,
                    we filter the global allocator type argument for `Vec`).
+                 - lookup the information about the implicit/explicit parameters
+                   (note that builtin types don't have implicit parameters)
               *)
               let generics, explicit =
                 match type_id with
-                | TAdtId id -> (
-                    match
-                      TypeDeclId.Map.find_opt id ctx.types_filter_type_args_map
-                    with
-                    | None -> (generics, None)
-                    | Some filter ->
-                        let filter_types : 'a. 'a list -> 'a list =
-                         fun l ->
-                          let l = List.combine filter l in
-                          List.filter_map
-                            (fun (b, ty) -> if b then Some ty else None)
-                            l
-                        in
-                        let types = filter_types generics.types in
-                        let generics = { generics with types } in
-                        let explicit =
-                          match TypeDeclId.Map.find_opt id ctx.trans_types with
-                          | None ->
-                              (* The decl might be missing if there were some errors *)
-                              None
-                          | Some d ->
-                              Some
-                                {
-                                  d.explicit_info with
-                                  explicit_types =
-                                    filter_types d.explicit_info.explicit_types;
-                                }
-                        in
-                        (generics, explicit))
+                | TAdtId id ->
+                    (* Start by filtering the types *)
+                    let generics, filter_types =
+                      match
+                        TypeDeclId.Map.find_opt id
+                          ctx.types_filter_type_args_map
+                      with
+                      | None -> (generics, None)
+                      | Some filter ->
+                          let filter_types : 'a. 'a list -> 'a list =
+                           fun l ->
+                            let l = List.combine filter l in
+                            List.filter_map
+                              (fun (b, ty) -> if b then Some ty else None)
+                              l
+                          in
+                          let types = filter_types generics.types in
+                          ({ generics with types }, Some filter_types)
+                    in
+                    let explicit =
+                      match TypeDeclId.Map.find_opt id ctx.trans_types with
+                      | None ->
+                          (* The decl might be missing if there were some errors *)
+                          None
+                      | Some d ->
+                          let explicit_types =
+                            let explicit_types =
+                              d.explicit_info.explicit_types
+                            in
+                            match filter_types with
+                            | None -> explicit_types
+                            | Some filter_types -> filter_types explicit_types
+                          in
+                          Some { d.explicit_info with explicit_types }
+                    in
+                    (generics, explicit)
                 | _ ->
                     (* All the parameters of builtin types are explicit *)
                     (generics, None)
@@ -451,6 +484,32 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
             F.pp_print_string fmt ("." ^ add_brackets type_name))
   | TNever -> F.pp_print_string fmt "Never"
   | TError -> extract_ty_errors fmt
+  | TDynTrait params -> (
+      [%ltrace "dyn trait:\n" ^ dyn_predicate_to_string ctx params];
+      match params.params with
+      | { types = [ self ]; const_generics = []; trait_clauses = [ clause ] } ->
+          [%ltrace
+            "- self: " ^ type_param_to_string self ^ "\n- clause: "
+            ^ trait_clause_to_string ctx clause];
+          if inside then F.pp_print_string fmt "(";
+          F.pp_print_string fmt dyn_ty;
+          F.pp_print_space fmt ();
+          (* We need to generate something of the shape: [fun dyn => Trait dyn ...] *)
+          (* TODO: properly handle bound type variables *)
+          let basename = self.name in
+          let varname = basename_to_unique ctx basename in
+          (* TODO: the use of indices here is a hack *)
+          let ctx = ctx_add span (TypeVarId (Method, self.index)) varname ctx in
+          F.pp_print_string fmt "(fun";
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt varname;
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt "=>";
+          F.pp_print_space fmt ();
+          extract_trait_clause_type span ctx fmt TypeDeclId.Set.empty clause;
+          F.pp_print_string fmt ")";
+          if inside then F.pp_print_string fmt ")"
+      | _ -> [%craise] span "Unsupported use of dyn traits")
 
 and extract_trait_ref (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) ~(inside : bool)
@@ -622,23 +681,51 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
         ~inside:true trait_ref inst_id;
       F.pp_print_string fmt (add_brackets name)
   | BuiltinOrAuto data ->
-      let name =
+      let generics = trait_ref.decl_generics in
+      (* For BuiltinFn* traits: the first type is the type of the function,
+         which we actually don't want to keep as the generics also contain the
+         types of the inputs and outputs.
+
+         TODO: actually the type may be wrong if there are several inputs, because
+         the function type uses one arrow per input while the builtin trait expects
+         the inputs to be grouped inside a tuple (curried vs uncurried). We need
+         to detect this case and insert a cast. Or we can insert a cast which does
+         the hard work automatically in Lean.
+       *)
+      let builtin_fn_update_generics (generics : generic_args) : generic_args =
+        match generics.types with
+        | [ _; input; output ] -> { generics with types = [ input; output ] }
+        | _ -> [%internal_error] span
+      in
+      let name, generics =
         match data with
-        | BuiltinClone -> "BuiltinClone"
-        | BuiltinCopy -> "BuiltinCopy"
+        | BuiltinClone -> ("BuiltinClone", generics)
+        | BuiltinCopy -> ("BuiltinCopy", generics)
         | BuiltinDiscriminantKind ->
             [%lwarning
               "Extracted an unexpected builtin clause of kind `Discriminant`: \
                this will not type-check"];
-            "BuiltinDiscriminantKind"
+            ("BuiltinDiscriminantKind", generics)
+        | BuiltinFn -> ("BuiltinFn", builtin_fn_update_generics generics)
+        | BuiltinFnMut -> ("BuiltinFnMut", builtin_fn_update_generics generics)
+        | BuiltinFnOnce -> ("BuiltinFnOnce", builtin_fn_update_generics generics)
       in
       if inside then F.pp_print_string fmt "(";
       F.pp_print_string fmt name;
-      extract_generic_args span ctx fmt no_params_tys trait_ref.decl_generics;
+      extract_generic_args span ctx fmt no_params_tys generics;
       if inside then F.pp_print_string fmt ")"
   | UnknownTrait _ ->
       (* This is an error case *)
       [%admit_raise] span "Unexpected" fmt
+
+and extract_trait_clause_type (span : Meta.span) (ctx : extraction_ctx)
+    (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t)
+    (clause : trait_param) : unit =
+  let trait_name = ctx_get_trait_decl span clause.trait_id ctx in
+  F.pp_print_string fmt trait_name;
+  (* let span = (TraitDeclId.Map.find clause.trait_id ctx.trans_trait_decls).span in
+   *)
+  extract_generic_args span ctx fmt no_params_tys clause.generics
 
 (** Compute the names for all the top-level identifiers used in a type
     definition (type name, variant names, field names, etc. but not type
@@ -648,6 +735,7 @@ and extract_trait_instance_id (span : Meta.span) (ctx : extraction_ctx)
     of recursive definitions. *)
 let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
     extraction_ctx =
+  let span = def.item_meta.span in
   (* Register the filtering information, if the type has builtin information *)
   let ctx =
     match def.builtin_info with
@@ -665,9 +753,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
     | None -> ctx_compute_type_decl_name ctx def
     | Some info -> info.extract_name
   in
-  let ctx =
-    ctx_add def.item_meta.span (TypeId (TAdtId def.def_id)) def_name ctx
-  in
+  let ctx = ctx_add span (TypeId (TAdtId def.def_id)) def_name ctx in
   (* Compute and register:
    * - the variant names, if this is an enumeration
    * - the field names, if this is a structure
@@ -681,54 +767,89 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
     else
       match def.kind with
       | Struct fields ->
+          let compute_info_from_llbc () =
+            let field_names =
+              FieldId.mapi
+                (fun fid (field : field) ->
+                  ( fid,
+                    ctx_compute_field_name def field.field_attr_info ctx
+                      def.item_meta.name fid field.field_name ))
+                fields
+            in
+            let cons_name =
+              ctx_compute_struct_constructor def ctx def.item_meta.name
+            in
+            (field_names, cons_name)
+          in
+          (* Small helper to convert a Rust field name to a Lean field name.
+             We do something special: if the field name is a keyword and the
+             backend is Lean, we escape the name with French quotes. *)
+          let mk_field_name (name : string) =
+            match backend () with
+            | Lean when names_maps_is_keyword ctx.names_maps name ->
+                "«" ^ name ^ "»"
+            | _ -> name
+          in
           (* Compute the names *)
           let field_names, cons_name =
             match def.builtin_info with
-            | None | Some { body_info = None; _ } ->
-                let field_names =
-                  FieldId.mapi
-                    (fun fid (field : field) ->
-                      ( fid,
-                        ctx_compute_field_name def field.field_attr_info ctx
-                          def.item_meta.name fid field.field_name ))
-                    fields
-                in
-                let cons_name =
-                  ctx_compute_struct_constructor def ctx def.item_meta.name
-                in
-                (field_names, cons_name)
+            | None | Some { body_info = None; _ } -> compute_info_from_llbc ()
             | Some { body_info = Some (Struct (cons_name, field_names)); _ } ->
                 let field_names =
                   FieldId.mapi
                     (fun fid (field : field) ->
                       let rust_name = Option.get field.field_name in
                       let name =
-                        snd
-                          (List.find (fun (n, _) -> n = rust_name) field_names)
+                        match
+                          List.find_opt
+                            (fun (n, _) -> n = rust_name)
+                            field_names
+                        with
+                        | Some (_, n) -> n
+                        | None ->
+                            [%warn] span
+                              ("Could not find field '" ^ rust_name
+                             ^ "' in the builtin information for '"
+                              ^ name_to_string ctx def.item_meta.name
+                              ^ "'; the " ^ backend_name ()
+                              ^ " model is probably incorrect.");
+                            mk_field_name rust_name
                       in
                       (fid, name))
                     fields
                 in
                 (field_names, cons_name)
             | Some info ->
-                [%craise] def.item_meta.span
+                [%warn] span
                   ("Invalid builtin information for type "
                   ^ name_to_string ctx def.item_meta.name
                   ^ ": expected builtin information about a structure, got:\n"
-                  ^ show_builtin_type_info info)
+                  ^ show_builtin_type_info info
+                  ^ ". The " ^ Config.backend_name ()
+                  ^ " model defined in the standard library seems to be wrong."
+                  );
+                compute_info_from_llbc ()
           in
-          (* Add the fields *)
+          (* Add the fields. *)
           let ctx =
             List.fold_left
               (fun ctx (fid, name) ->
-                ctx_add def.item_meta.span
+                ctx_add span
                   (FieldId (TAdtId def.def_id, fid))
-                  name ctx)
+                  (mk_field_name name) ctx)
               ctx field_names
           in
+          (* In the case of Lean, also add the fully qualified projector names
+             (see the comment in [names_maps.adt_fields] *)
+          let ctx =
+            match backend () with
+            | Lean ->
+                ctx_add_adt_projector_names def_name (List.map snd field_names)
+                  ctx
+            | _ -> ctx
+          in
           (* Add the constructor name *)
-          ctx_add def.item_meta.span (StructId (TAdtId def.def_id)) cons_name
-            ctx
+          ctx_add span (StructId (TAdtId def.def_id)) cons_name ctx
       | Enum variants ->
           let variant_names =
             match def.builtin_info with
@@ -759,7 +880,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
                     (variant_id, StringMap.find variant.variant_name variant_map))
                   variants
             | Some info ->
-                [%craise] def.item_meta.span
+                [%craise] span
                   ("Invalid builtin information for type "
                   ^ name_to_string ctx def.item_meta.name
                   ^ ": expected builtin information about an enumeration, got:\n"
@@ -767,9 +888,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
           in
           List.fold_left
             (fun ctx (vid, vname) ->
-              ctx_add def.item_meta.span
-                (VariantId (TAdtId def.def_id, vid))
-                vname ctx)
+              ctx_add span (VariantId (TAdtId def.def_id, vid)) vname ctx)
             ctx variant_names
       | Opaque ->
           (* Nothing to do *)
@@ -905,7 +1024,11 @@ let extract_type_decl_tuple_struct_body (span : Meta.span)
   if fields = [] then (
     F.pp_print_space fmt ();
     F.pp_print_string fmt (unit_name ()))
-  else
+  else (
+    (* Open additional boxes *)
+    F.pp_print_break fmt 1 2;
+    F.pp_open_hovbox fmt 0;
+    (* *)
     let sep =
       match backend () with
       | Coq | FStar | HOL4 -> "*"
@@ -914,11 +1037,13 @@ let extract_type_decl_tuple_struct_body (span : Meta.span)
     Collections.List.iter_link
       (fun () ->
         F.pp_print_space fmt ();
-        F.pp_print_string fmt sep)
+        F.pp_print_string fmt sep;
+        F.pp_print_space fmt ())
       (fun (f : field) ->
-        F.pp_print_space fmt ();
         extract_ty span ctx fmt TypeDeclId.Set.empty ~inside:false f.field_ty)
-      fields
+      fields;
+    (* Close the boxes *)
+    F.pp_close_box fmt ())
 
 let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
     (type_decl_group : TypeDeclId.Set.t) (kind : decl_kind) (def : type_decl)
@@ -1164,15 +1289,6 @@ let extract_attributes (span : Meta.span) (ctx : extraction_ctx)
       F.pp_print_space fmt ()))
   else ()
 
-let extract_trait_clause_type (span : Meta.span) (ctx : extraction_ctx)
-    (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t)
-    (clause : trait_param) : unit =
-  let trait_name = ctx_get_trait_decl span clause.trait_id ctx in
-  F.pp_print_string fmt trait_name;
-  (* let span = (TraitDeclId.Map.find clause.trait_id ctx.trans_trait_decls).span in
-   *)
-  extract_generic_args span ctx fmt no_params_tys clause.generics
-
 (** Insert a space, if necessary *)
 let insert_req_space (fmt : F.formatter) (space : bool ref) : unit =
   if !space then space := false else F.pp_print_space fmt ()
@@ -1182,7 +1298,7 @@ let insert_req_space (fmt : F.formatter) (space : bool ref) : unit =
 *)
 let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (no_params_tys : TypeDeclId.Set.t) ?(use_forall = false)
-    ?(use_forall_use_sep = true) ?(use_arrows = false)
+    ?(use_fun = false) ?(use_forall_use_sep = true) ?(use_arrows = false)
     ?(as_implicits : bool = false) ?(space : bool ref option = None)
     (origin : generic_origin) (generics : generic_params)
     (explicit : explicit_info option) (type_params : string list)
@@ -1217,6 +1333,9 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
         F.pp_print_string fmt ":");
       insert_req_space ();
       F.pp_print_string fmt "forall");
+    if use_fun then (
+      insert_req_space ();
+      F.pp_print_string fmt "fun");
     (* Small helper - we may need to split the parameters *)
     let print_generics (type_params : (explicit * string) list)
         (const_generics : (explicit * const_generic_param) list)
@@ -1307,8 +1426,9 @@ let extract_generic_params (span : Meta.span) (ctx : extraction_ctx)
 let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
     (type_decl_group : TypeDeclId.Set.t) (kind : decl_kind) (def : type_decl)
     (extract_body : bool) : unit =
+  let span = def.item_meta.span in
   (* Sanity check *)
-  [%sanity_check] def.item_meta.span (extract_body || backend () <> HOL4);
+  [%sanity_check] span (extract_body || backend () <> HOL4);
   let is_tuple_struct =
     TypesUtils.type_decl_from_decl_id_is_tuple_struct
       ctx.trans_ctx.type_ctx.type_infos def.def_id
@@ -1339,12 +1459,12 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   let is_opaque_coq = backend () = Coq && is_opaque in
   let use_forall = is_opaque_coq && def.generics <> empty_generic_params in
   (* Retrieve the definition name *)
-  let def_name = ctx_get_local_type def.item_meta.span def.def_id ctx in
+  let def_name = ctx_get_local_type span def.def_id ctx in
   (* Add the type and const generic params - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx_body, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params def.item_meta.span def.item_meta.name Item
-      def.llbc_generics def.generics ctx
+    ctx_add_generic_params span def.item_meta.name Item def.llbc_generics
+      def.generics ctx
   in
   (* Add a break before *)
   if backend () <> HOL4 || not (decl_is_first_from_group kind) then
@@ -1357,7 +1477,7 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
    in
    extract_comment_with_span ctx fmt
      [ "[" ^ name_to_string ctx def.item_meta.name ^ "]" ]
-     name def.item_meta.span;
+     name span;
    F.pp_print_break fmt 0 0;
    (* Extract the attributes.
 
@@ -1371,17 +1491,46 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
    (* The attribute to automatically generate the [read_discriminant] function *)
    let discr_attr =
      match def.kind with
+     | Enum [] ->
+         (* Empty enum: no discriminant *)
+         []
      | Enum variants ->
+         let discr_ty =
+           [%sanity_check] span (variants <> []);
+           let variant0 = List.hd variants in
+           variant0.ty
+         in
+
+         let discr_ty =
+           match discr_ty with
+           | TInt ty -> (
+               match ty with
+               | Values.Isize -> "isize"
+               | Values.I8 -> "i8"
+               | Values.I16 -> "i16"
+               | Values.I32 -> "i32"
+               | Values.I64 -> "i64"
+               | Values.I128 -> "i128")
+           | TUInt ty -> (
+               match ty with
+               | Values.Usize -> "usize"
+               | Values.U8 -> "u8"
+               | Values.U16 -> "u16"
+               | Values.U32 -> "u32"
+               | Values.U64 -> "u64"
+               | Values.U128 -> "u128")
+           | _ -> [%internal_error] span
+         in
          (* Check if the discriminant values are exactly 0, 1, etc. or if the user
             provided custom values. *)
          if
            List.for_all
              (fun b -> b)
              (List.mapi (fun i (v : variant) -> v.discriminant = i) variants)
-         then [ "discriminant" ]
+         then [ "discriminant " ^ discr_ty ]
          else
            [
-             "discriminant " ^ "["
+             "discriminant " ^ discr_ty ^ " ["
              ^ String.concat ","
                  (List.map
                     (fun (v : variant) -> string_of_int v.discriminant)
@@ -1391,8 +1540,8 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
      | _ -> []
    in
    let attributes = reducible_attr @ discr_attr in
-   extract_attributes def.item_meta.span ctx fmt def.item_meta.name None
-     attributes "rust_type" []
+   extract_attributes span ctx fmt def.item_meta.name None attributes
+     "rust_type" []
      ~is_external:(not def.item_meta.is_local));
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line. Note however that in the case of Lean line breaks are important
@@ -1404,20 +1553,19 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   (* Open a box for "type TYPE_NAME (TYPE_PARAMS CONST_GEN_PARAMS) =" *)
   F.pp_open_hovbox fmt ctx.indent_incr;
   (* > "type TYPE_NAME" *)
-  let qualif = type_decl_kind_to_qualif def.item_meta.span kind type_kind in
+  let qualif = type_decl_kind_to_qualif span kind type_kind in
   (match qualif with
   | Some qualif -> F.pp_print_string fmt (qualif ^ " " ^ def_name)
   | None -> F.pp_print_string fmt def_name);
   (* HOL4 doesn't support const generics, and type definitions in HOL4 don't
      support trait clauses *)
-  [%cassert] def.item_meta.span
+  [%cassert] span
     ((cg_params = [] && trait_clauses = []) || backend () <> HOL4)
     "Constant generics and type definitions with trait clauses are not \
      supported yet when generating code for HOL4";
   (* Print the generic parameters *)
-  extract_generic_params def.item_meta.span ctx_body fmt type_decl_group Item
-    ~use_forall def.generics (Some def.explicit_info) type_params cg_params
-    trait_clauses;
+  extract_generic_params span ctx_body fmt type_decl_group Item ~use_forall
+    def.generics (Some def.explicit_info) type_params cg_params trait_clauses;
   (* Print the "=" if we extract the body*)
   if extract_body then (
     F.pp_print_space fmt ();
@@ -1441,22 +1589,21 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
       F.pp_print_space fmt ();
       F.pp_print_string fmt ":");
     F.pp_print_space fmt ();
-    F.pp_print_string fmt (type_keyword def.item_meta.span));
+    F.pp_print_string fmt (type_keyword span));
   (* Close the box for "type TYPE_NAME (TYPE_PARAMS) =" *)
   F.pp_close_box fmt ();
   (if extract_body then
      match def.kind with
      | Struct fields ->
          if is_tuple_struct then
-           extract_type_decl_tuple_struct_body def.item_meta.span ctx_body fmt
-             fields
+           extract_type_decl_tuple_struct_body span ctx_body fmt fields
          else
            extract_type_decl_struct_body ctx_body fmt type_decl_group kind def
              type_params cg_params fields
      | Enum variants ->
          extract_type_decl_enum_body ctx_body fmt type_decl_group def def_name
            type_params cg_params variants
-     | Opaque -> [%craise] def.item_meta.span "Unreachable");
+     | Opaque -> [%craise] span "Unreachable");
   (* Add the definition end delimiter *)
   if backend () = HOL4 && decl_is_not_last_from_group kind then (
     F.pp_print_space fmt ();

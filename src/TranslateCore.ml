@@ -20,9 +20,21 @@ let trans_ctx_to_pure_fmt_env (ctx : trans_ctx) : PrintPure.fmt_env =
 let name_to_string (ctx : trans_ctx) =
   Print.Types.name_to_string (trans_ctx_to_fmt_env ctx)
 
+let fun_sig_to_string (ctx : trans_ctx) =
+  Charon.PrintLlbcAst.Ast.fun_sig_to_string (trans_ctx_to_fmt_env ctx) "" "  "
+
 let name_to_simple_name (ctx : trans_ctx) (n : Types.name) : string list =
   let mctx = Charon.NameMatcher.ctx_from_crate ctx.crate in
   name_to_simple_name mctx n
+
+let name_with_generics_to_simple_name (ctx : trans_ctx)
+    ?(prefix : Types.name option = None) (name : Types.name)
+    (p : Types.generic_params) (g : Types.generic_args) : string list =
+  let mctx = Charon.NameMatcher.ctx_from_crate ctx.crate in
+  name_with_generics_to_simple_name mctx ~prefix name p g
+
+let name_matcher_expr_to_simple_name span (n : NameMatcher.expr) : string =
+  name_matcher_expr_to_extract_name span n
 
 let match_name_find_opt (ctx : trans_ctx) (name : Types.name)
     (m : 'a NameMatcher.NameMatcherMap.t) : 'a option =
@@ -38,8 +50,7 @@ let match_name_with_generics_find_opt (ctx : trans_ctx) (name : Types.name)
 let trait_name_with_generics_to_simple_name (ctx : trans_ctx)
     ?(prefix : Types.name option = None) (n : Types.name)
     (p : Types.generic_params) (g : Types.generic_args) : string list =
-  let mctx = Charon.NameMatcher.ctx_from_crate ctx.crate in
-  name_with_generics_to_simple_name mctx ~prefix n p g
+  name_with_generics_to_simple_name ctx ~prefix n p g
 
 let name_to_pattern_string (span : Meta.span option) (ctx : trans_ctx)
     (n : Types.name) : string =

@@ -18,7 +18,8 @@ open Cps
 val pop_frame :
   config ->
   Meta.span ->
-  bool ->
+  pop_locals:bool ->
+  pop_return_value:bool ->
   eval_ctx ->
   tvalue option * eval_ctx * (SymbolicAst.expr -> SymbolicAst.expr)
 

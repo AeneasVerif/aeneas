@@ -2,7 +2,7 @@
 -- [avl]: function definitions
 import Aeneas
 import Avl.Types
-open Aeneas.Std Result Error
+open Aeneas Aeneas.Std Result ControlFlow Error
 set_option linter.dupNamespace false
 set_option linter.hashCommand false
 set_option linter.unusedVariables false
@@ -11,7 +11,8 @@ namespace avl
 
 /- [avl::{avl::Ord for i32}::cmp]:
    Source: 'src/avl.rs', lines 7:4-15:5 -/
-def OrdI32.cmp (self : I32) (other : I32) : Result Ordering := do
+def I32.Insts.AvlOrd.cmp
+  (self : Std.I32) (other : Std.I32) : Result Ordering := do
   if self < other
   then ok Ordering.Less
   else if self = other
@@ -21,8 +22,8 @@ def OrdI32.cmp (self : I32) (other : I32) : Result Ordering := do
 /- Trait implementation: [avl::{avl::Ord for i32}]
    Source: 'src/avl.rs', lines 6:0-16:1 -/
 @[reducible]
-def OrdI32 : Ord I32 := {
-  cmp := OrdI32.cmp
+def I32.Insts.AvlOrd : Ord Std.I32 := {
+  cmp := I32.Insts.AvlOrd.cmp
 }
 
 /- [avl::{avl::Node<T>}::rotate_left]:
@@ -132,19 +133,6 @@ mutual def Node.insert_in_left
   else ok (false, Node.mk node.value o node.right node.balance_factor)
 partial_fixpoint
 
-/- [avl::{avl::Tree<T>}::insert_in_opt_node]:
-   Source: 'src/avl.rs', lines 341:4-354:5 -/
-def Tree.insert_in_opt_node
-  {T : Type} (OrdInst : Ord T) (node : Option (Node T)) (value : T) :
-  Result (Bool × (Option (Node T)))
-  := do
-  match node with
-  | none => ok (true, some (Node.mk value none none 0#i8))
-  | some node1 =>
-    let (b, node2) ← Node.insert OrdInst node1 value
-    ok (b, some node2)
-partial_fixpoint
-
 /- [avl::{avl::Node<T>}::insert_in_right]:
    Source: 'src/avl.rs', lines 269:4-304:5 -/
 def Node.insert_in_right
@@ -183,6 +171,19 @@ def Node.insert
   | Ordering.Less => Node.insert_in_left OrdInst node value
   | Ordering.Equal => ok (false, node)
   | Ordering.Greater => Node.insert_in_right OrdInst node value
+partial_fixpoint
+
+/- [avl::{avl::Tree<T>}::insert_in_opt_node]:
+   Source: 'src/avl.rs', lines 341:4-354:5 -/
+def Tree.insert_in_opt_node
+  {T : Type} (OrdInst : Ord T) (node : Option (Node T)) (value : T) :
+  Result (Bool × (Option (Node T)))
+  := do
+  match node with
+  | none => ok (true, some (Node.mk value none none 0#i8))
+  | some node1 =>
+    let (b, node2) ← Node.insert OrdInst node1 value
+    ok (b, some node2)
 partial_fixpoint
 
 end

@@ -23,8 +23,8 @@ Axiom core_num_U32_wrapping_sub : u32 -> u32 -> result u32.
 Definition choose
   {T : Type} (b : bool) (x : T) (y : T) : result (T * (T -> (T * T))) :=
   if b
-  then let back := fun (ret : T) => (ret, y) in Ok (x, back)
-  else let back := fun (ret : T) => (x, ret) in Ok (y, back)
+  then let back := fun (x1 : T) => (x1, y) in Ok (x, back)
+  else let back := fun (y1 : T) => (x, y1) in Ok (y, back)
 .
 
 (** [demo::mul2_add1]:
@@ -110,14 +110,13 @@ Fixpoint list_nth_mut
     match l with
     | CList_CCons x tl =>
       if i s= 0%u32
-      then let back := fun (ret : T) => CList_CCons ret tl in Ok (x, back)
+      then let back := fun (t : T) => CList_CCons t tl in Ok (x, back)
       else (
         i1 <- u32_sub i 1%u32;
         p <- list_nth_mut n1 tl i1;
         let (x1, list_nth_mut_back) := p in
         let back :=
-          fun (ret : T) =>
-            let tl1 := list_nth_mut_back ret in CList_CCons x tl1
+          fun (t : T) => let tl1 := list_nth_mut_back t in CList_CCons x tl1
         in
         Ok (x1, back))
     | CList_CNil => Fail_ Failure
@@ -151,11 +150,11 @@ Fixpoint list_tail
       p <- list_tail n1 tl;
       let (c, list_tail_back) := p in
       let back :=
-        fun (ret : CList_t T) =>
-          let tl1 := list_tail_back ret in CList_CCons t tl1
+        fun (c1 : CList_t T) =>
+          let tl1 := list_tail_back c1 in CList_CCons t tl1
       in
       Ok (c, back)
-    | CList_CNil => Ok (CList_CNil, fun (ret : CList_t T) => ret)
+    | CList_CNil => Ok (CList_CNil, fun (l1 : CList_t T) => l1)
     end
   end
 .
@@ -171,14 +170,15 @@ Arguments Counter_t_incr { _ } _.
 
 (** [demo::{demo::Counter for usize}::incr]:
     Source: 'tests/src/demo.rs', lines 105:4-109:5 *)
-Definition counterUsize_incr (self : usize) : result (usize * usize) :=
+Definition Usize_Insts_DemoCounter_incr
+  (self : usize) : result (usize * usize) :=
   self1 <- usize_add self 1%usize; Ok (self, self1)
 .
 
 (** Trait implementation: [demo::{demo::Counter for usize}]
     Source: 'tests/src/demo.rs', lines 104:0-110:1 *)
-Definition CounterUsize : Counter_t usize := {|
-  Counter_t_incr := counterUsize_incr;
+Definition Usize_Insts_DemoCounter : Counter_t usize := {|
+  Counter_t_incr := Usize_Insts_DemoCounter_incr;
 |}.
 
 (** [demo::use_counter]:

@@ -1,0 +1,57 @@
+//@ [!lean] skip
+
+fn call_fn_no_state(i: u32) -> u32 {
+    let incr = |i: u32| -> u32 { i + 1 };
+    incr(i)
+}
+
+fn call_fn_shared(a: &[u8], i: usize) -> u8 {
+    let read = |i: usize| -> u8 { a[i] };
+    read(i)
+}
+
+// TODO: monomorphisation in Charon
+/*
+fn call_fn_mut(a: &mut [u8], i: usize) {
+    let mut write = |i: usize| { a[i] = 0 };
+    write(i)
+}
+*/
+
+// TODO: typing issue when defining the impl
+/*
+// TODO: https://github.com/AeneasVerif/charon/issues/989
+fn call_fn_parameters<T: Clone>(x: &T) {
+    let y = x.clone();
+    let consume = |x: T| {};
+}
+*/
+
+fn call_closure<F: Fn() -> u32>(f: F) -> u32 {
+    f()
+}
+
+fn call_closure1() -> u32 {
+    call_closure(|| 0)
+}
+
+fn call_closure2() -> u32 {
+    call_closure(|| 0);
+    call_closure(|| 0)
+}
+
+fn u8_id(x: u8) -> u8 {
+    x
+}
+
+fn map_fn_pointer(x: Vec<u8>) {
+    let _ = x.into_iter().map(u8_id);
+}
+
+/*fn u8_shared_id(x: &u8) -> u8 {
+    *x
+}
+
+fn map_fn_pointer_shared(x: &[u8]) {
+    let _ = x.iter().map(u8_shared_id);
+}*/

@@ -200,6 +200,7 @@ let rec check_texpr (span : Meta.span) (ctx : tc_ctx) (e : texpr) : unit =
       | FunOrOp _ -> () (* TODO *)
       | Global _ -> () (* TODO *)
       | TraitConst _ -> () (* TODO *)
+      | LoopOp -> () (* TODO *)
       | Proj { adt_id = proj_adt_id; field_id } ->
           (* Note we can only project fields of structures (not enumerations) *)
           (* Deconstruct the projector type *)
@@ -227,7 +228,8 @@ let rec check_texpr (span : Meta.span) (ctx : tc_ctx) (e : texpr) : unit =
           | TAdt (type_id, generics) ->
               [%pure_type_check] span (type_id = id.adt_id);
               [%pure_type_check] span (generics = qualif.generics)
-          | _ -> [%craise] span "Unreachable"))
+          | _ -> [%craise] span "Unreachable")
+      | MkDynTrait _ -> (* TODO *) ())
   | Let (monadic, pat, re, e_next) ->
       [%ldebug "Let: e:\n" ^ texpr_to_string ctx e];
       let expected_pat_ty =

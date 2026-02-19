@@ -49,16 +49,16 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
      they are immutable, but in practice we can introduce more shared loans, or
      expand symbolic values).
 
-     For more details, see the comments for {!prepare_ashared_loans}
+     For more details, see the comments for {!reborrow_ashared_loans_symbolic_mutable_borrows}
   *)
   let ctx =
-    InterpJoin.prepare_ashared_loans_no_synth span loop_id ~with_abs_conts:false
-      ctx0
+    InterpJoin.reborrow_ashared_loans_symbolic_borrows_no_synth span loop_id
+      ~with_abs_conts:false ctx0
   in
 
   (* Debug *)
   [%ltrace
-    "after prepare_ashared_loans:" ^ "\n\n- ctx0:\n"
+    "after reborrow_ashared_loans_symbolic_mutable_borrows:" ^ "\n\n- ctx0:\n"
     ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx0
     ^ "\n\n- ctx1:\n"
     ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx
@@ -113,7 +113,7 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
 
   (* Join the contexts at the loop entry - ctx1 is the current joined
      context (the context at the loop entry, after we called
-     {!prepare_ashared_loans}, if this is the first iteration) *)
+     {!reborrow_ashared_loans_symbolic_mutable_borrows}, if this is the first iteration) *)
   let join_ctxs (ctx1 : eval_ctx) (ctxs : eval_ctx list) : eval_ctx =
     [%ltrace "join_ctxs"];
     (* Join the context with the context at the loop entry *)
@@ -137,8 +137,8 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
        the user will see a full call stack, which eases deboguing. *)
     if i = 1 && !Config.fail_hard then
       let _ =
-        match_ctxs span ~check_equiv:true !fixed_ids lookup_shared_value
-          lookup_shared_value ctx1 ctx2
+        match_ctxs span ~check_equiv:true ~recoverable:false !fixed_ids
+          lookup_shared_value lookup_shared_value ctx1 ctx2
       in
       true
     else

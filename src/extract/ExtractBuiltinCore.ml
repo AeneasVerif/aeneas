@@ -30,6 +30,9 @@ let flatten_name (name : string list) : string =
   | FStar | Coq | HOL4 -> String.concat "_" name
   | Lean -> String.concat "." name
 
+let flatten_name_no_sep (name : string list) : string =
+  String.concat "" (List.map StringUtils.capitalize_first_letter name)
+
 (** Utility for Lean-only definitions **)
 let mk_lean_only (funs : 'a list) : 'a list =
   match backend () with
@@ -101,8 +104,9 @@ let mk_fun ?(keep_params : bool list option = None)
   (rust_name, f)
 
 let mk_type ?(keep_params : bool list option = None)
-    ?(kind : type_variant_kind = KOpaque) ?(prefix_variant_names : bool = true)
-    (rust_name : string) (extract_name : string) : Pure.builtin_type_info =
+    ?(kind : type_variant_kind = KOpaque) ?(mut_regions : int list = [])
+    ?(prefix_variant_names : bool = true) (rust_name : string)
+    (extract_name : string) : Pure.builtin_type_info =
   let pattern = parse_pattern rust_name in
   let body_info : Pure.builtin_type_body_info option =
     match kind with
@@ -145,7 +149,7 @@ let mk_type ?(keep_params : bool list option = None)
         in
         Some (Enum variants)
   in
-  { rust_name = pattern; extract_name; keep_params; body_info }
+  { rust_name = pattern; extract_name; keep_params; mut_regions; body_info }
 
 let mk_trait_decl ?(parent_clauses : string list = [])
     ?(consts : (string * string) list = [])

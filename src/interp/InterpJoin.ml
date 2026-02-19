@@ -14,7 +14,8 @@ open InterpMatchCtxs
 (** The local logger *)
 let log = Logging.join_log
 
-let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
+(** Auxiliary helper for [reborrow_ashared_loans_symbolic_mutable_borrows] *)
+let reborrow_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
     ~(with_abs_conts : bool) : cm_fun =
  fun ctx0 ->
   let ctx = ctx0 in
@@ -97,12 +98,8 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
       mk_value_with_fresh_sids_no_shared_loans abs.regions.owned nrid sv
     in
 
-    (* Rem.: the below sanity checks are not really necessary *)
-    [%sanity_check] span (AbsId.Set.is_empty abs.parents);
-    [%sanity_check] span (abs.original_parents = []);
-
     (* Introduce the new abstraction for the shared values *)
-    [%cassert] span (ty_no_regions sv.ty) "Nested borrows are not supported yet";
+    [%cassert] span (ty_no_regions sv.ty) "Unimplemented";
     let rty = sv.ty in
 
     (* Create the shared loan child *)
@@ -130,7 +127,11 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
     let regions : abs_regions = { owned = RegionId.Set.singleton nrid } in
     let cont : abs_cont option =
       if with_abs_conts then
-        Some { output = Some (mk_etuple []); input = Some (mk_etuple []) }
+        Some
+          {
+            output = Some (mk_etuple ~borrow_proj:true []);
+            input = Some (mk_etuple ~borrow_proj:false []);
+          }
       else None
     in
     let fresh_abs =
@@ -139,7 +140,7 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
         kind;
         can_end;
         parents = AbsId.Set.empty;
-        original_parents = [];
+        ended_subabs = AbsLevelSet.empty;
         regions;
         avalues;
         cont;
@@ -216,9 +217,206 @@ let prepare_ashared_loans (span : Meta.span) (loop_id : LoopId.id option)
   [%ldebug "resulting ctx:\n" ^ eval_ctx_to_string ctx];
   (ctx, cf)
 
-let prepare_ashared_loans_no_synth (span : Meta.span) (loop_id : LoopId.id)
-    ~(with_abs_conts : bool) (ctx : eval_ctx) : eval_ctx =
-  fst (prepare_ashared_loans span (Some loop_id) ~with_abs_conts ctx)
+(** Auxiliary helper for [reborrow_ashared_loans_symbolic_borrows] *)
+let reborrow_symbolic_borrows (span : Meta.span) (loop_id : LoopId.id option)
+    ~(with_abs_conts : bool) : cm_fun =
+ fun ctx0 ->
+  let ctx = ctx0 in
+  [%ldebug "ctx0:\n" ^ eval_ctx_to_string ctx];
+
+  (* Compute the set of symbolic loans which appear in the frozen abstractions
+     (we call them the "frozen loans"), so that we can filter the borrows that
+     we reborrow. *)
+  let absl =
+    List.filter_map
+      (function
+        | EBinding _ | EFrame -> None
+        | EAbs abs when not abs.can_end -> Some abs
+        | EAbs _ -> None)
+      ctx.env
+  in
+
+  (* *)
+  let frozen_loans = ref SymbolicValueId.Set.empty in
+  let visitor =
+    object
+      inherit [_] iter_abs as super
+      method! visit_tevalue _ _ = ()
+
+      method! visit_AProjLoans abs proj =
+        frozen_loans := SymbolicValueId.Set.add proj.proj.sv_id !frozen_loans;
+        super#visit_AProjLoans abs proj
+    end
+  in
+  List.iter (fun abs -> visitor#visit_abs abs abs) absl;
+
+  (* Introduce the reborrows *)
+  (* The fresh abstractions we introduce for the reborrows *)
+  let fresh_absl = ref [] in
+  (* The substitution from old symbolic values to fresh symbolic values *)
+  let sid_subst = ref [] in
+
+  (* Auxiliary function to create new abstractions for a symbolic borrow *)
+  let push_abs_for_symbolic_borrow (sv : symbolic_value) : value =
+    (* Create a fresh symbolic value *)
+    let nsid = ctx.fresh_symbolic_value_id () in
+
+    (* Refresh the regions appearing in the symbolic value *)
+    let region_is_live rid = not (RegionId.Set.mem rid ctx.ended_regions) in
+    let region_is_live = Some region_is_live in
+    let fresh_regions, ty =
+      ty_refresh_regions (Some span) ~region_is_live ctx.fresh_region_id
+        sv.sv_ty
+    in
+
+    (* Introduce the fresh regions *)
+    let push_abs (nrid : RegionId.id) =
+      let rty = ty in
+
+      (* Create the symbolic borrow *)
+      let borrow : tavalue =
+        let proj =
+          AProjBorrows
+            { proj = { sv_id = sv.sv_id; proj_ty = rty }; loans = [] }
+        in
+        let value = ASymbolic (PNone, proj) in
+        { value; ty = rty }
+      in
+
+      (* Create the symbolic loan *)
+      let loan : tavalue =
+        let value =
+          AProjLoans
+            {
+              proj = { sv_id = nsid; proj_ty = rty };
+              consumed = [];
+              borrows = [];
+            }
+        in
+        { value = ASymbolic (PNone, value); ty = rty }
+      in
+
+      (* Create the abstraction *)
+      let avalues = [ borrow; loan ] in
+      let kind : abs_kind =
+        match loop_id with
+        | Some loop_id -> Loop loop_id
+        | None -> WithCont
+      in
+      let can_end = true in
+      let regions : abs_regions = { owned = RegionId.Set.singleton nrid } in
+      let cont : abs_cont option =
+        if with_abs_conts then
+          (* Create the symbolic borrow. We introduce borrows/loans only if the
+             region projects *mutable* borrows/loans. *)
+          if
+            ty_has_mut_borrow_for_region_in_set ctx.type_ctx.type_infos
+              (RegionId.Set.singleton nrid)
+              rty
+          then
+            let borrow : tevalue =
+              let value =
+                EProjBorrows
+                  { proj = { sv_id = sv.sv_id; proj_ty = rty }; loans = [] }
+              in
+              { value = ESymbolic (PNone, value); ty = rty }
+            in
+
+            (* Create the symbolic loan *)
+            let value =
+              EProjLoans
+                {
+                  proj = { sv_id = nsid; proj_ty = rty };
+                  consumed = [];
+                  borrows = [];
+                }
+            in
+            let loan : tevalue =
+              { value = ESymbolic (PNone, value); ty = rty }
+            in
+            Some { output = Some borrow; input = Some loan }
+          else
+            Some
+              {
+                output = Some (mk_etuple ~borrow_proj:true []);
+                input = Some (mk_etuple ~borrow_proj:false []);
+              }
+        else None
+      in
+      let fresh_abs =
+        {
+          abs_id = ctx.fresh_abs_id ();
+          kind;
+          can_end;
+          parents = AbsId.Set.empty;
+          ended_subabs = AbsLevelSet.empty;
+          regions;
+          avalues;
+          cont;
+        }
+      in
+      fresh_absl := fresh_abs :: !fresh_absl
+    in
+
+    List.iter push_abs fresh_regions;
+
+    let nsv : symbolic_value = { sv_id = nsid; sv_ty = ty } in
+    sid_subst := (sv, nsv) :: !sid_subst;
+    VSymbolic nsv
+  in
+
+  (* Explore the mutable borrows in the environment, and introduce
+     fresh abstractions with reborrows.
+
+     We simply explore the context and call {!push_abs_for_symbolic_mut_borrow}
+     when necessary.
+  *)
+  let visitor =
+    object
+      inherit [_] map_eval_ctx_regular_order as super
+      method! visit_abs _ abs = (* Do not explore region abstractions *) abs
+
+      method! visit_VSymbolic env sv =
+        (* Check if the corresponding borrows appear in a frozen region abstraction *)
+        if SymbolicValueId.Set.mem sv.sv_id !frozen_loans then
+          (* Introduce a reborrow *)
+          push_abs_for_symbolic_borrow sv
+        else super#visit_VSymbolic env sv
+    end
+  in
+  let ctx = visitor#visit_eval_ctx () ctx in
+
+  (* Add the abstractions *)
+  let fresh_absl = List.map (fun abs -> EAbs abs) !fresh_absl in
+  let ctx = { ctx with env = List.append fresh_absl ctx.env } in
+
+  (* Synthesize *)
+  let cf e =
+    (* Add the let-bindings which introduce the fresh symbolic values *)
+    List.fold_left
+      (fun e (sv, nsv) ->
+        let sv = mk_tvalue_from_symbolic_value sv in
+        SymbolicAst.IntroSymbolic (ctx, None, nsv, VaSingleValue sv, e))
+      e !sid_subst
+  in
+  Invariants.check_invariants span ctx;
+  [%ldebug "resulting ctx:\n" ^ eval_ctx_to_string ctx];
+  (ctx, cf)
+
+let reborrow_ashared_loans_symbolic_borrows (span : Meta.span)
+    (loop_id : LoopId.id option) ~(with_abs_conts : bool) : cm_fun =
+ fun ctx0 ->
+  let ctx = ctx0 in
+  [%ldebug "ctx0:\n" ^ eval_ctx_to_string ctx];
+  let ctx, cc = reborrow_ashared_loans span loop_id ~with_abs_conts ctx in
+
+  comp cc (reborrow_symbolic_borrows span loop_id ~with_abs_conts ctx)
+
+let reborrow_ashared_loans_symbolic_borrows_no_synth (span : Meta.span)
+    (loop_id : LoopId.id) ~(with_abs_conts : bool) (ctx : eval_ctx) : eval_ctx =
+  fst
+    (reborrow_ashared_loans_symbolic_borrows span (Some loop_id) ~with_abs_conts
+       ctx)
 
 (* TODO: this could be drastically simplified. *)
 let compute_ctx_fresh_ordered_symbolic_values (span : Meta.span)
@@ -402,8 +600,8 @@ let refresh_non_fixed_abs_ids (_span : Meta.span) (fixed_aids : AbsId.Set.t)
   (ctx, !fresh_map)
 
 let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
-    ~(with_abs_conts : bool) (ctx0 : eval_ctx) (ctx1 : eval_ctx) : ctx_or_update
-    =
+    ~(recoverable : bool) ~(with_abs_conts : bool) (ctx0 : eval_ctx)
+    (ctx1 : eval_ctx) : join_info_or_update =
   (* Debug *)
   [%ltrace
     "- ctx0:\n"
@@ -434,10 +632,10 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
 
      TODO: make the join more general.
   *)
-  let ctx1, refreshed_aids = refresh_non_fixed_abs_ids span abs_ids ctx1 in
+  let ctx0, _ = refresh_non_fixed_abs_ids span abs_ids ctx0 in
   [%ltrace
-    "After refreshing the non-fixed abstraction ids of ctx1:\n"
-    ^ eval_ctx_to_string ~span:(Some span) ~filter:true ctx1];
+    "After refreshing the non-fixed abstraction ids of ctx0:\n"
+    ^ eval_ctx_to_string ~span:(Some span) ~filter:true ctx0];
 
   let partition (env : env) : env * env =
     List.partition
@@ -476,52 +674,13 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
     let nabs = nabs
     let with_abs_conts = with_abs_conts
     let symbolic_to_value = symbolic_to_value
+    let recover = recoverable
   end in
   let module JM = MakeJoinMatcher (S) in
   let module M = MakeMatcher (JM) in
-  (* Small helper: lookup a binding satisfying some predicate and remove it
-     from the enviromnent *)
-  let rec pop_binding : 'a. (env_elem -> 'a option) -> env -> 'a * env =
-   fun f env ->
-    match env with
-    | [] -> [%internal_error] span
-    | b :: env' -> (
-        match f b with
-        | None ->
-            let out, env' = pop_binding f env' in
-            (out, b :: env')
-        | Some out -> (out, env'))
-  in
-
-  (* Remove a variable from an environment and return the corresponding value *)
-  let pop_var (v : real_var_binder) (env : env) : tvalue * env =
-    pop_binding
-      (fun e ->
-        match e with
-        | EBinding (BVar v', value) when v' = v -> Some value
-        | _ -> None)
-      env
-  in
-
-  (* Remove a dummy variable from an environment and return the corresponding value *)
-  let pop_dummy (v : dummy_var_id) (env : env) : tvalue * env =
-    pop_binding
-      (fun e ->
-        match e with
-        | EBinding (BDummy v', value) when v' = v -> Some value
-        | _ -> None)
-      env
-  in
-
-  (* Remove an abs from an environment *)
-  let pop_abs (abs_id : abs_id) (env : env) : abs * env =
-    pop_binding
-      (fun e ->
-        match e with
-        | EAbs abs when abs.abs_id = abs_id -> Some abs
-        | _ -> None)
-      env
-  in
+  let pop_var = env_pop_var (fun _ -> [%internal_error] span) in
+  let pop_dummy = env_pop_dummy (fun _ -> [%internal_error] span) in
+  let pop_abs = env_pop_abs (fun _ -> [%internal_error] span) in
 
   (* Rem.: this function raises exceptions.
 
@@ -579,8 +738,17 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
           ^ abs_to_string span ctx1 abs1
           ^ "\n"];
 
-        (* The abstractions in the prefix must be the same *)
-        [%sanity_check] span (abs0 = abs1);
+        (* Fixed abstractions should be equal.
+
+           Note that the presence of the field [abs.original_parents] used to make
+           this test fail when some abstraction ids was refreshed by
+           [refresh_non_fixed_abs_ids] (we since remove the field).
+
+           Note that we ignore the continuation expressions: when computing fixed
+           points we might remove/add continuations while the presence/absence
+           shouldn't have an impact on the way we match/unify contexts. *)
+        [%sanity_check] span
+          ({ abs0 with cont = None } = { abs1 with cont = None });
         (* Continue *)
         abs :: join_prefixes env0' env1'
     | [] ->
@@ -705,19 +873,20 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
         ended_regions;
       }
     in
-    let join_info : ctx_join_info =
-      { symbolic_to_value = !symbolic_to_value; refreshed_aids }
+    let join_info : join_info =
+      { joined_ctx = ctx; symbolic_to_value = !symbolic_to_value }
     in
 
     (* Sanity check *)
     if !Config.sanity_checks then Invariants.check_unique_abs_ids span ctx;
 
-    Ok (ctx, join_info)
+    Ok join_info
   with ValueMatchFailure e -> Error e
 
 let join_ctxs_list (config : config) (span : Meta.span)
     (fresh_abs_kind : abs_kind) ?(preprocess_first_ctx : bool = true)
-    ~(with_abs_conts : bool) (ctxl : eval_ctx list) : eval_ctx list * eval_ctx =
+    ~(recoverable : bool) ~(with_abs_conts : bool) (ctxl : eval_ctx list) :
+    eval_ctx list * eval_ctx =
   (* The list of contexts should be non empty *)
   let ctx0, ctxl =
     match ctxl with
@@ -747,8 +916,10 @@ let join_ctxs_list (config : config) (span : Meta.span)
   *)
   let joined_ctx = ref ctx0 in
   let rec join_one_aux (ctx : eval_ctx) : eval_ctx =
-    match join_ctxs span fresh_abs_kind ~with_abs_conts !joined_ctx ctx with
-    | Ok (nctx, _) ->
+    match
+      join_ctxs span fresh_abs_kind ~recoverable ~with_abs_conts !joined_ctx ctx
+    with
+    | Ok { joined_ctx = nctx; _ } ->
         joined_ctx := nctx;
         ctx
     | Error err ->
@@ -786,7 +957,8 @@ let join_ctxs_list (config : config) (span : Meta.span)
 
     (* Collapse to eliminate the markers *)
     joined_ctx :=
-      collapse_ctx config span fresh_abs_kind ~with_abs_conts !joined_ctx;
+      collapse_ctx config span fresh_abs_kind ~recoverable ~with_abs_conts
+        !joined_ctx;
     [%ltrace
       "join_one: after join-collapse:\n"
       ^ eval_ctx_to_string ~span:(Some span) !joined_ctx];
@@ -865,7 +1037,7 @@ let loop_join_origin_with_continue_ctxs (config : config) (span : Meta.span)
 
   let ctxl', joined_ctx =
     join_ctxs_list config span (Loop loop_id) ~preprocess_first_ctx:false
-      ~with_abs_conts:false (ctx0 :: ctxl)
+      ~recoverable:false ~with_abs_conts:false (ctx0 :: ctxl)
   in
   [%sanity_check] span (List.length ctxl' = List.length ctxl + 1);
   ((List.hd ctxl', List.tl ctxl'), joined_ctx)
@@ -929,8 +1101,11 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
           we update the context and retry.
        *)
       let rec join_one_aux (ctx : eval_ctx) =
-        match join_ctxs span fresh_abs_kind ~with_abs_conts !joined_ctx ctx with
-        | Ok (nctx, _) ->
+        match
+          join_ctxs span fresh_abs_kind ~recoverable:false ~with_abs_conts
+            !joined_ctx ctx
+        with
+        | Ok { joined_ctx = nctx; _ } ->
             joined_ctx := nctx;
             ctx
         | Error err ->
@@ -962,7 +1137,8 @@ let loop_join_break_ctxs (config : config) (span : Meta.span)
 
         (* Collapse to eliminate the markers *)
         joined_ctx :=
-          collapse_ctx config span fresh_abs_kind ~with_abs_conts !joined_ctx;
+          collapse_ctx config span fresh_abs_kind ~recoverable:false
+            ~with_abs_conts !joined_ctx;
         [%ltrace
           "join_one: after join-collapse:\n"
           ^ eval_ctx_to_string ~span:(Some span) !joined_ctx];
@@ -1054,11 +1230,11 @@ let destructure_shared_loans (span : Meta.span) (fixed_aids : AbsId.Set.t) :
       =
     let value, avl =
       match av.value with
-      | AAdt { variant_id; fields } ->
+      | AAdt { borrow_proj; variant_id; fields } ->
           let fields, avl =
             List.split (List.map (destructure_avalue abs) fields)
           in
-          (AAdt { variant_id; fields }, List.flatten avl)
+          (AAdt { borrow_proj; variant_id; fields }, List.flatten avl)
       | ALoan lc ->
           let lc, avl =
             match lc with
@@ -1135,13 +1311,28 @@ let destructure_shared_loans (span : Meta.span) (fixed_aids : AbsId.Set.t) :
 let match_ctx_with_target (config : config) (span : Meta.span)
     (fresh_abs_kind : abs_kind) (fixed_aids : AbsId.Set.t)
     (fixed_dids : DummyVarId.Set.t) (input_abs : AbsId.id list)
-    (input_svalues : SymbolicValueId.id list) (src_ctx : eval_ctx)
-    (tgt_ctx : eval_ctx) :
+    (input_svalues : SymbolicValueId.id list) ~(recoverable : bool)
+    (src_ctx : eval_ctx) (tgt_ctx : eval_ctx) :
     (eval_ctx * eval_ctx * tvalue SymbolicValueId.Map.t * abs AbsId.Map.t)
     * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Debug *)
   [%ltrace
     "- src_ctx: " ^ eval_ctx_to_string src_ctx ^ "\n- tgt_ctx: "
+    ^ eval_ctx_to_string tgt_ctx];
+
+  (* End all the unnecessary borrows/loans.
+
+     Note that in theory it's better to call [prepare_loop_match_ctx_with_target]
+     *before* because it unlocks simplification possibilities for
+     [simplify_dummy_values_useless_abs], but in practice it is also good to
+     call [simplify_dummy_values_useless_abs config span tgt_ctx] before so
+     that it prevents [prepare_match_ctx_with_target] from doing matches that
+     are not supported yet. For this reason, we call simplify twice: before
+     and after the call to prepare.
+  *)
+  let tgt_ctx, cc = simplify_dummy_values_useless_abs config span tgt_ctx in
+  [%ltrace
+    "- tgt_ctx after simplify_dummy_values_useless_abs (i):\n"
     ^ eval_ctx_to_string tgt_ctx];
 
   (* We first reorganize [tgt_ctx] so that we can match [src_ctx] with it (by
@@ -1153,7 +1344,9 @@ let match_ctx_with_target (config : config) (span : Meta.span)
      values.
   *)
   let tgt_ctx, cc =
-    prepare_match_ctx_with_target config span fresh_abs_kind src_ctx tgt_ctx
+    comp cc
+      (prepare_match_ctx_with_target config span fresh_abs_kind ~recoverable
+         src_ctx tgt_ctx)
   in
   [%ltrace
     "Finished preparing the match:" ^ "\n- src_ctx: "
@@ -1166,7 +1359,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
     comp cc (simplify_dummy_values_useless_abs config span tgt_ctx)
   in
   [%ltrace
-    "- tgt_ctx after simplify_dummy_values_useless_abs:\n"
+    "- tgt_ctx after simplify_dummy_values_useless_abs (ii):\n"
     ^ eval_ctx_to_string tgt_ctx];
 
   (* Removed the ended shared loans and destructure the shared loans.
@@ -1187,13 +1380,15 @@ let match_ctx_with_target (config : config) (span : Meta.span)
   [%ltrace "- tgt_ctx after reduce_ctx:\n" ^ eval_ctx_to_string tgt_ctx];
 
   (* Join the source context with the target context *)
-  let joined_ctx, join_info =
+  let join_info =
     match
-      join_ctxs span fresh_abs_kind ~with_abs_conts:true src_ctx tgt_ctx
+      join_ctxs span fresh_abs_kind ~recoverable ~with_abs_conts:true src_ctx
+        tgt_ctx
     with
     | Ok x -> x
     | Error _ -> [%craise] span "Could not join the contexts"
   in
+  let joined_ctx = join_info.joined_ctx in
   [%ltrace
     "Result of the join:\n- joined_ctx:\n"
     ^ eval_ctx_to_string joined_ctx
@@ -1201,17 +1396,7 @@ let match_ctx_with_target (config : config) (span : Meta.span)
     ^ SymbolicValueId.Map.to_string (Some "  ")
         (Print.pair_to_string (tvalue_to_string src_ctx)
            (tvalue_to_string src_ctx))
-        join_info.symbolic_to_value
-    ^ "\n- join_info.refreshed_aids: "
-    ^ AbsId.Map.to_string None AbsId.to_string join_info.refreshed_aids];
-
-  (* The id of some region abstractions might have been refreshed in the target
-     context: we need to register this because otherwise the translation will
-     fail. *)
-  let cc =
-    if AbsId.Map.is_empty join_info.refreshed_aids then cc
-    else cc_comp cc (fun e -> SubstituteAbsIds (join_info.refreshed_aids, e))
-  in
+        join_info.symbolic_to_value];
 
   (* We need to collapse the context.
 
@@ -1230,8 +1415,8 @@ let match_ctx_with_target (config : config) (span : Meta.span)
   let add_borrows_seq = ref [] in
   let joined_ctx_not_projected =
     collapse_ctx config span ~sequence:(Some merge_seq)
-      ~shared_borrows_seq:(Some add_borrows_seq) ~with_abs_conts:true
-      fresh_abs_kind joined_ctx
+      ~shared_borrows_seq:(Some add_borrows_seq) ~recoverable
+      ~with_abs_conts:true fresh_abs_kind joined_ctx
   in
   let merge_seq = List.rev !merge_seq in
   (* Update the sequence of shared borrows to introduce: we only want to add
@@ -1436,4 +1621,4 @@ let loop_match_break_ctx_with_target (config : config) (span : Meta.span)
     ^ eval_ctx_to_string tgt_ctx];
 
   match_ctx_with_target config span WithCont fixed_aids fixed_dids fp_input_abs
-    fp_input_svalues src_ctx tgt_ctx
+    fp_input_svalues ~recoverable:false src_ctx tgt_ctx

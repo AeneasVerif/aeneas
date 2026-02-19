@@ -158,7 +158,6 @@ theorem eq_foldWhile {α} (max step : Nat) (hStep : 0 < step) (f f_body : α →
   . unfold foldWhile
     simp only [↓reduceIte, heq, hi]
 termination_by max - i
-decreasing_by omega
 
 theorem foldWhile_shift_start {α : Type u} (max step : Nat) (hStep : 0 < step) (f : α → Nat → α) (start : Nat) (init : α) :
   foldWhile max step hStep f start init = foldWhile (max - start) step hStep (fun x i => f x (i + start)) 0 init := by
@@ -180,7 +179,6 @@ theorem foldWhile_shift_start {α : Type u} (max step : Nat) (hStep : 0 < step) 
       simp only [h2, not_false_eq_true, foldWhile_id]
   . simp [h0]
 termination_by max - step - start
-decreasing_by all_goals omega
 
 theorem foldWhile_forall_eq_imp_eq {α : Type u} (max step : Nat) (hStep : 0 < step)
   (f0 f1 : α → Nat → α) (start : Nat) (init : α)
@@ -192,7 +190,6 @@ theorem foldWhile_forall_eq_imp_eq {α : Type u} (max step : Nat) (hStep : 0 < s
   intro x i h0 h1
   apply h <;> omega
 termination_by max - start
-decreasing_by omega
 
 end SRRange
 

@@ -11,7 +11,7 @@ namespace Aeneas
 
 namespace Std
 
-open Result Error
+open Result Error WP
 
 namespace alloc.vec
 
@@ -110,11 +110,9 @@ def Vec.push {α : Type u} (v : Vec α) (x : α) : Result (Vec α)
 
 @[progress]
 theorem Vec.push_spec {α : Type u} (v : Vec α) (x : α) (h : v.val.length < Usize.max) :
-  ∃ v1, v.push x = ok v1 ∧
-  v1.val = v.val ++ [x] := by
-  rw [push]; simp
-  split <;> simp_all
-  scalar_tac
+  v.push x ⦃ v1 =>
+  v1.val = v.val ++ [x] ⦄ := by
+  unfold push; grind
 
 @[rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::insert" (keepParams := [true, false])]
 def Vec.insert {α : Type u} (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
@@ -126,7 +124,7 @@ def Vec.insert {α : Type u} (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
 @[progress]
 theorem Vec.insert_spec {α : Type u} (v: Vec α) (i: Usize) (x: α)
   (hbound : i.val < v.length) :
-  ∃ nv, v.insert i x = ok nv ∧ nv.val = v.val.set i x := by
+  v.insert i x ⦃ nv => nv.val = v.val.set i x ⦄ := by
   simp [insert, *]
 
 def Vec.index_usize {α : Type u} (v: Vec α) (i: Usize) : Result α :=
@@ -137,7 +135,7 @@ def Vec.index_usize {α : Type u} (v: Vec α) (i: Usize) : Result α :=
 @[progress]
 theorem Vec.index_usize_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize)
   (hbound : i.val < v.length) :
-  ∃ x, v.index_usize i = ok x ∧ x = v.val[i.val]! := by
+  v.index_usize i ⦃ x => x = v.val[i.val]! ⦄ := by
   simp only [index_usize]
   simp at *
   simp [*]
@@ -151,9 +149,7 @@ def Vec.update {α : Type u} (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
 @[progress]
 theorem Vec.update_spec {α : Type u} (v: Vec α) (i: Usize) (x : α)
   (hbound : i.val < v.length) :
-  ∃ nv, v.update i x = ok nv ∧
-  nv = v.set i x
-  := by
+  v.update i x ⦃ nv => nv = v.set i x ⦄ := by
   simp only [update, set]
   simp at *
   split <;> simp_all
@@ -173,11 +169,9 @@ def Vec.index_mut_usize {α : Type u} (v: Vec α) (i: Usize) :
 @[progress]
 theorem Vec.index_mut_usize_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize)
   (hbound : i.val < v.length) :
-  ∃ x, v.index_mut_usize i = ok (x, v.set i) ∧
-  x = v.val[i.val]!
-  := by
+  v.index_mut_usize i ⦃ x y => x = v.val[i.val]! ∧ y = v.set i ⦄ := by
   simp only [index_mut_usize]
-  have ⟨ x, h ⟩ := index_usize_spec v i hbound
+  have ⟨ x, h ⟩ := spec_imp_exists (index_usize_spec v i hbound)
   simp [h]
 
 @[rust_fun "alloc::vec::{core::ops::index::Index<alloc::vec::Vec<@T>, @I, @O>}::index"
@@ -234,11 +228,14 @@ def alloc.slice.Slice.to_vec
 @[progress]
 theorem alloc.slice.Slice.to_vec_spec {T : Type} (cloneInst : core.clone.Clone T) (s : Slice T)
   (h : ∀ x ∈ s.val, cloneInst.clone x = ok x) :
-  alloc.slice.Slice.to_vec cloneInst s = ok s := by
+  alloc.slice.Slice.to_vec cloneInst s ⦃ s' => s = s'⦄ := by
   simp only [to_vec]
-  rw [Slice.clone_spec h]
+  exact (Slice.clone_spec h)
 
-/- Source: '/rustc/library/alloc/src/vec/mod.rs', lines 3174:0-3174:55 -/
+@[rust_fun "alloc::slice::{[@T]}::into_vec" -canFail -lift (keepParams := [true, false])]
+def alloc.slice.Slice.into_vec
+  {T : Type} (s: Slice T) : (alloc.vec.Vec T) := s
+
 @[rust_fun "alloc::vec::from_elem"]
 def alloc.vec.from_elem
   {T : Type} (cloneInst : core.clone.Clone T)
@@ -249,11 +246,11 @@ def alloc.vec.from_elem
 @[progress]
 theorem alloc.vec.from_elem_spec {T : Type} (cloneInst : core.clone.Clone T)
   (x : T) (n : Usize) (h : cloneInst.clone x = ok x) :
-  ∃ v, alloc.vec.from_elem cloneInst x n = ok v ∧
+  alloc.vec.from_elem cloneInst x n ⦃ v =>
   v.val = List.replicate n.val x ∧
-  v.length = n.val := by
+  v.length = n.val ⦄ := by
   unfold from_elem
-  have ⟨ l, h ⟩ := @List.clone_spec _ cloneInst.clone (List.replicate n.val x) (by intros; simp_all)
+  have ⟨ l, h ⟩ := spec_imp_exists (@List.clone_spec _ cloneInst.clone (List.replicate n.val x) (by intros; simp_all))
   simp [h]
 
 @[rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::with_capacity" -canFail -lift]
@@ -306,8 +303,8 @@ def alloc.vec.Vec.resize {T : Type} (cloneInst : core.clone.Clone T)
 theorem alloc.vec.Vec.resize_spec {T} (cloneInst : core.clone.Clone T)
   (v : alloc.vec.Vec T) (new_len : Usize) (value : T)
   (hClone : cloneInst.clone value = ok value) :
-  ∃ nv, alloc.vec.Vec.resize cloneInst v new_len value = ok nv ∧
-    nv.val = v.val.resize new_len value := by
+  alloc.vec.Vec.resize cloneInst v new_len value ⦃ nv =>
+    nv.val = v.val.resize new_len value ⦄ := by
   rw [resize]
   split
   . simp
@@ -319,13 +316,26 @@ theorem alloc.vec.Vec.set_getElem!_eq α [Inhabited α] (x : alloc.vec.Vec α) (
   simp only [getElem!_Usize_eq]
   simp only [Vec, set_val_eq, Subtype.ext_iff, List.set_getElem!]
 
+@[rust_fun
+  "alloc::vec::{core::convert::From<alloc::vec::Vec<@T>, [@T; @N]>}::from" -canFail]
+def alloc.vec.FromVecArray.from
+  {T : Type} {N : Std.Usize} (a: Array T N) : Result (alloc.vec.Vec T) :=
+  ok ⟨ a.val, by scalar_tac ⟩
+
+@[reducible, rust_trait_impl
+  "core::convert::From<alloc::vec::Vec<@T>, [@T; @N]>"]
+def core.convert.FromVecArray (T : Type) (N : Std.Usize) : core.convert.From
+  (alloc.vec.Vec T) (Array T N) := {
+  from_ := alloc.vec.FromVecArray.from
+}
+
 /- Source: '/rustc/library/alloc/src/vec/mod.rs', lines 3967:4-3967:33 -/
 @[rust_fun "alloc::vec::{core::convert::From<Box<[@T]>, alloc::vec::Vec<@T>>}::from" (keepParams := [true,false])]
 def alloc.vec.FromBoxSliceVec.from {T : Type} (v : alloc.vec.Vec T) : Result (Slice T) := ok v
 
 @[progress]
 theorem alloc.vec.FromBoxSliceVec.from_spec {T : Type} (v : alloc.vec.Vec T) :
-  ∃ s, alloc.vec.FromBoxSliceVec.from v = ok s ∧ s.length = v.length ∧ s.val = v.val := by
+  alloc.vec.FromBoxSliceVec.from v ⦃ s => s.length = v.length ∧ s.val = v.val⦄ := by
   simp [alloc.vec.FromBoxSliceVec.from]
 
 @[reducible, rust_trait_impl "core::convert::From<Box<[@T]>, alloc::vec::Vec<@T>>" (keepParams := [true, false])]
@@ -399,6 +409,23 @@ def core.cmp.PartialEqVec {T : Type} {U : Type}
   core.cmp.PartialEq (alloc.vec.Vec T) (alloc.vec.Vec U) := {
   eq := alloc.vec.partial_eq.PartialEqVec.eq PartialEqInst
   ne := alloc.vec.partial_eq.PartialEqVec.ne PartialEqInst
+}
+
+@[rust_fun "alloc::vec::{core::fmt::Debug<alloc::vec::Vec<@T>>}::fmt"
+  (keepParams := [true, false])]
+def alloc.vec.DebugVec.fmt
+  {T : Type} (_DebugInst : core.fmt.Debug T) :
+  alloc.vec.Vec T → core.fmt.Formatter →
+  Result ((core.result.Result Unit core.fmt.Error) × core.fmt.Formatter) :=
+  -- TODO: more precise model
+  -- We should call the fmt function on the elements of the vector
+  fun _ fmt => .ok (.Ok (), fmt)
+
+@[reducible,
+  rust_trait_impl "core::fmt::Debug<alloc::vec::Vec<@T>>" (keepParams := [true, false])]
+def core.fmt.DebugVec {T : Type} (DebugInst : core.fmt.Debug
+  T) : core.fmt.Debug (alloc.vec.Vec T) := {
+  fmt := alloc.vec.DebugVec.fmt DebugInst
 }
 
 namespace Tests

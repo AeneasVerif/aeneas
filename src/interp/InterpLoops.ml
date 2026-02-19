@@ -93,25 +93,29 @@ let eval_loop_symbolic_apply_loop (config : config) (span : span)
   (* Preemptively end borrows/move values by matching the current
      context with the target context *)
   let ctx, cf_prepare =
-    prepare_match_ctx_with_target config span (Loop loop_id) fp_ctx ctx
+    prepare_match_ctx_with_target config span (Loop loop_id) ~recoverable:false
+      fp_ctx ctx
   in
 
   (* Actually match *)
+  let fixed_aids = InterpJoinCore.compute_fixed_abs_ids init_ctx fp_ctx in
+  let fixed_dids = ctx_get_dummy_var_ids init_ctx in
   [%ltrace
-    "about to compute the id correspondance between the fixed-point ctx and \
-     the original ctx:\n\
-     - src ctx (fixed-point ctx)\n" ^ eval_ctx_to_string fp_ctx
+    "about to match the fixed-point ctx and the original ctx:"
+    ^ "\n- fixed_aids: "
+    ^ AbsId.Set.to_string None fixed_aids
+    ^ "\n- fixed_did: "
+    ^ DummyVarId.Set.to_string None fixed_dids
+    ^ "\n- src ctx (fixed-point ctx)\n" ^ eval_ctx_to_string fp_ctx
     ^ "\n\n-tgt ctx (original context):\n" ^ eval_ctx_to_string ctx];
 
   (* Compute the end expression, that is the expresion corresponding to the
      end of the function where we call the loop (for now, when calling a loop
      we never get out) *)
-  let fixed_aids = InterpJoinCore.compute_fixed_abs_ids init_ctx fp_ctx in
-  let fixed_dids = ctx_get_dummy_var_ids init_ctx in
   let (ctx, tgt_ctx, input_values, input_abs), cc =
     comp cf_prepare
       (match_ctx_with_target config span WithCont fixed_aids fixed_dids
-         fp_input_abs fp_input_svalues fp_ctx ctx)
+         fp_input_abs fp_input_svalues ~recoverable:false fp_ctx ctx)
   in
 
   [%ltrace "Resulting context:\n- ctx" ^ eval_ctx_to_string ctx];
@@ -165,6 +169,15 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
         [%craise] span "Unexpected return"
     | Panic -> SA.Panic
     | Break i -> (
+        [%ltrace
+          "about to match the fixed-point context with the context at a break:"
+          ^ "\n- fixed_aids: "
+          ^ AbsId.Set.to_string None fixed_aids
+          ^ "\n- src ctx (fixed-point ctx):\n"
+          ^ eval_ctx_to_string ~span:(Some span) fp_ctx
+          ^ "\n\n-tgt ctx (ctx at break):\n"
+          ^ eval_ctx_to_string ~span:(Some span) ctx];
+
         (* We don't support nested loops for now *)
         [%cassert] span (i = 0) "Nested loops are not supported yet";
 
@@ -215,7 +228,8 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
             (* Pay attention to the fact that the elements are stored in reverse order *)
             let break_abs = List.rev (List.filter_map get_fresh_abs ctx.env) in
             let output_abs =
-              AbsId.Set.of_list (List.map (fun abs -> abs.abs_id) break_abs)
+              AbsId.Set.of_list
+                (List.map (fun (abs : abs) -> abs.abs_id) break_abs)
             in
             (* We need to update the abstractions appearing in the output context,
                to mark them as outputs of the loop (and forget their current
@@ -276,7 +290,7 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
               ^ eval_ctx_to_string ~span:(Some span) ctx
               ^ "\n\n-input_abs:\n"
               ^ AbsId.Map.to_string None
-                  (fun abs -> AbsId.to_string abs.abs_id)
+                  (fun (abs : abs) -> AbsId.to_string abs.abs_id)
                   input_abs
               ^ "\n\n-break_input_abs:\n"
               ^ Print.list_to_string AbsId.to_string break_input_abs];
@@ -301,7 +315,7 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
 
         let (_ctx, tgt_ctx, input_values, input_abs), cc =
           match_ctx_with_target config span WithCont fixed_aids fixed_dids
-            fp_input_abs fp_input_svalues fp_ctx ctx
+            fp_input_abs fp_input_svalues fp_ctx ~recoverable:false ctx
         in
         let input_values = reorder_input_values input_values fp_input_svalues in
         let input_abs = reorder_input_abs input_abs fp_input_abs in
@@ -393,7 +407,7 @@ let eval_loop_symbolic (config : config) (span : span)
         [%craise] span
           "(Infinite) loops which do not contain breaks are not supported yet"
     | Single ->
-        [%ltrace "No break context"];
+        [%ltrace "Single break"];
         (None, None)
     | Multiple (break_ctx, break_abs) ->
         let break_input_abs_ids =
@@ -504,8 +518,8 @@ let eval_loop (config : config) (span : span) (eval_loop_body : stl_cm_fun) :
          (when joining environments, or checking that two environments are
          equivalent).
 
-         We thus call {!prepare_ashared_loans} once *before* diving into
-         the loop, to make sure the shared values are deconstructed.
+         We thus call {!reborrow_ashared_loans_symbolic_mutable_borrows} once
+         *before* diving into the loop, to make sure the shared values are deconstructed.
 
          Note that we will call this function again inside {!eval_loop_symbolic},
          to introduce fresh, non-fixed abstractions containing the shared values
@@ -517,7 +531,9 @@ let eval_loop (config : config) (span : span) (eval_loop_body : stl_cm_fun) :
          *non-fixed* abstractions.
       *)
       let ctx, cc =
-        comp cc (prepare_ashared_loans span None ~with_abs_conts:true ctx)
+        comp cc
+          (reborrow_ashared_loans_symbolic_borrows span None
+             ~with_abs_conts:true ctx)
       in
       let (ctx, res), cc =
         comp cc (eval_loop_symbolic config span eval_loop_body ctx)
