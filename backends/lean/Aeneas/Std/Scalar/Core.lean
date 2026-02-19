@@ -662,7 +662,7 @@ abbrev I32.ofInt   := @IScalar.ofInt .I32
 abbrev I64.ofInt   := @IScalar.ofInt .I64
 abbrev I128.ofInt  := @IScalar.ofInt .I128
 
-@[simp, scalar_tac_simps, simp_scalar_simps, bvify_simps, grind! .]
+@[simp, scalar_tac_simps, simp_scalar_simps, bvify_simps, grind =]
 theorem UScalar.ofNat_val_eq {ty : UScalarTy} (h : x < 2^ty.numBits) :
   (UScalar.ofNatCore x h).val = x := by
   simp [UScalar.ofNatCore, UScalar.val]
@@ -728,12 +728,19 @@ theorem UScalar.eq_equiv_bv_eq {ty : UScalarTy} (x y : UScalar ty) :
   x = y ↔ x.bv = y.bv := by
   cases x; cases y; simp
 
-@[bvify_simps, grind =_] theorem U8.eq_equiv_bv_eq (x y : U8) : x = y ↔ x.bv = y.bv := by apply UScalar.eq_equiv_bv_eq
-@[bvify_simps, grind =_] theorem U16.eq_equiv_bv_eq (x y : U16) : x = y ↔ x.bv = y.bv := by apply UScalar.eq_equiv_bv_eq
-@[bvify_simps, grind =_] theorem U32.eq_equiv_bv_eq (x y : U32) : x = y ↔ x.bv = y.bv := by apply UScalar.eq_equiv_bv_eq
-@[bvify_simps, grind =_] theorem U64.eq_equiv_bv_eq (x y : U64) : x = y ↔ x.bv = y.bv := by apply UScalar.eq_equiv_bv_eq
-@[bvify_simps, grind =_] theorem U128.eq_equiv_bv_eq (x y : U128) : x = y ↔ x.bv = y.bv := by apply UScalar.eq_equiv_bv_eq
-@[bvify_simps, grind =_] theorem Usize.eq_equiv_bv_eq (x y : Usize) : x = y ↔ x.bv = y.bv := by apply UScalar.eq_equiv_bv_eq
+@[bvify_simps] theorem U8.eq_equiv_bv_eq (x y : U8) : x = y ↔ x.bv = y.bv := by apply UScalar.eq_equiv_bv_eq
+@[bvify_simps] theorem U16.eq_equiv_bv_eq (x y : U16) : x = y ↔ x.bv = y.bv := by apply UScalar.eq_equiv_bv_eq
+@[bvify_simps] theorem U32.eq_equiv_bv_eq (x y : U32) : x = y ↔ x.bv = y.bv := by apply UScalar.eq_equiv_bv_eq
+@[bvify_simps] theorem U64.eq_equiv_bv_eq (x y : U64) : x = y ↔ x.bv = y.bv := by apply UScalar.eq_equiv_bv_eq
+@[bvify_simps] theorem U128.eq_equiv_bv_eq (x y : U128) : x = y ↔ x.bv = y.bv := by apply UScalar.eq_equiv_bv_eq
+@[bvify_simps] theorem Usize.eq_equiv_bv_eq (x y : Usize) : x = y ↔ x.bv = y.bv := by apply UScalar.eq_equiv_bv_eq
+
+@[ext, grind ext] theorem U8.bv_eq_imp_eq (x y : U8) : x.bv = y.bv → x = y := by simp [UScalar.eq_equiv_bv_eq]
+@[ext, grind ext] theorem U16.bv_eq_imp_eq (x y : U16) : x.bv = y.bv → x = y := by simp [UScalar.eq_equiv_bv_eq]
+@[ext, grind ext] theorem U32.bv_eq_imp_eq (x y : U32) : x.bv = y.bv → x = y := by simp [UScalar.eq_equiv_bv_eq]
+@[ext, grind ext] theorem U64.bv_eq_imp_eq (x y : U64) : x.bv = y.bv → x = y := by simp [UScalar.eq_equiv_bv_eq]
+@[ext, grind ext] theorem U128.bv_eq_imp_eq (x y : U128) : x.bv = y.bv → x = y := by simp [UScalar.eq_equiv_bv_eq]
+@[ext, grind ext] theorem Usize.bv_eq_imp_eq (x y : Usize) : x.bv = y.bv → x = y := by simp [UScalar.eq_equiv_bv_eq]
 
 theorem UScalar.ofNatCore_bv {ty : UScalarTy} (x : Nat) h :
   (@UScalar.ofNatCore ty x h).bv = BitVec.ofNat _ x := by
@@ -750,12 +757,19 @@ theorem IScalar.eq_equiv_bv_eq {ty : IScalarTy} (x y : IScalar ty) :
   x = y ↔ x.bv = y.bv := by
   cases x; cases y; simp
 
-@[bvify_simps, grind =_] theorem I8.eq_equiv_bv_eq (x y : I8) : x = y ↔ x.bv = y.bv := by apply IScalar.eq_equiv_bv_eq
-@[bvify_simps, grind =_] theorem I16.eq_equiv_bv_eq (x y : I16) : x = y ↔ x.bv = y.bv := by apply IScalar.eq_equiv_bv_eq
-@[bvify_simps, grind =_] theorem I32.eq_equiv_bv_eq (x y : I32) : x = y ↔ x.bv = y.bv := by apply IScalar.eq_equiv_bv_eq
-@[bvify_simps, grind =_] theorem I64.eq_equiv_bv_eq (x y : I64) : x = y ↔ x.bv = y.bv := by apply IScalar.eq_equiv_bv_eq
-@[bvify_simps, grind =_] theorem I128.eq_equiv_bv_eq (x y : I128) : x = y ↔ x.bv = y.bv := by apply IScalar.eq_equiv_bv_eq
-@[bvify_simps, grind =_] theorem Isize.eq_equiv_bv_eq (x y : Isize) : x = y ↔ x.bv = y.bv := by apply IScalar.eq_equiv_bv_eq
+@[bvify_simps] theorem I8.eq_equiv_bv_eq (x y : I8) : x = y ↔ x.bv = y.bv := by apply IScalar.eq_equiv_bv_eq
+@[bvify_simps] theorem I16.eq_equiv_bv_eq (x y : I16) : x = y ↔ x.bv = y.bv := by apply IScalar.eq_equiv_bv_eq
+@[bvify_simps] theorem I32.eq_equiv_bv_eq (x y : I32) : x = y ↔ x.bv = y.bv := by apply IScalar.eq_equiv_bv_eq
+@[bvify_simps] theorem I64.eq_equiv_bv_eq (x y : I64) : x = y ↔ x.bv = y.bv := by apply IScalar.eq_equiv_bv_eq
+@[bvify_simps] theorem I128.eq_equiv_bv_eq (x y : I128) : x = y ↔ x.bv = y.bv := by apply IScalar.eq_equiv_bv_eq
+@[bvify_simps] theorem Isize.eq_equiv_bv_eq (x y : Isize) : x = y ↔ x.bv = y.bv := by apply IScalar.eq_equiv_bv_eq
+
+@[ext, grind ext] theorem I8.bv_eq_imp_eq (x y : I8) : x.bv = y.bv → x = y := by simp[IScalar.eq_equiv_bv_eq]
+@[ext, grind ext] theorem I16.bv_eq_imp_eq (x y : I16) : x.bv = y.bv → x = y := by simp[IScalar.eq_equiv_bv_eq]
+@[ext, grind ext] theorem I32.bv_eq_imp_eq (x y : I32) : x.bv = y.bv → x = y := by simp[IScalar.eq_equiv_bv_eq]
+@[ext, grind ext] theorem I64.bv_eq_imp_eq (x y : I64) : x.bv = y.bv → x = y := by simp[IScalar.eq_equiv_bv_eq]
+@[ext, grind ext] theorem I128.bv_eq_imp_eq (x y : I128) : x.bv = y.bv → x = y := by simp[IScalar.eq_equiv_bv_eq]
+@[ext, grind ext] theorem Isize.bv_eq_imp_eq (x y : Isize) : x.bv = y.bv → x = y := by simp[IScalar.eq_equiv_bv_eq]
 
 theorem IScalar.ofIntCore_bv {ty : IScalarTy} (x : Int) h :
   (@IScalar.ofIntCore ty x h).bv = BitVec.ofInt _ x := by
@@ -832,41 +846,49 @@ instance {ty} : LE (IScalar ty) where le a b := LE.le a.val b.val
 
 /- Not marking this one with @[simp] on purpose: if we have `x = y` somewhere in the context,
    we may want to use it to substitute `y` with `x` somewhere. -/
-@[scalar_tac_simps, grind =_] theorem UScalar.eq_equiv {ty : UScalarTy} (x y : UScalar ty) :
+@[scalar_tac_simps] theorem UScalar.eq_equiv {ty : UScalarTy} (x y : UScalar ty) :
   x = y ↔ (↑x : Nat) = ↑y := by
   cases x; cases y; simp_all [UScalar.val, BitVec.toNat_eq]
+
+@[ext, grind ext] theorem UScalar.val_eq_imp {ty : UScalarTy} (x y : UScalar ty) :
+  (↑x : Nat) = ↑y → x = y := by
+  simp [eq_equiv]
 
 theorem UScalar.eq_imp {ty : UScalarTy} (x y : UScalar ty) :
   (↑x : Nat) = ↑y → x = y := (eq_equiv x y).mpr
 
-@[simp, scalar_tac_simps, grind =] theorem UScalar.lt_equiv {ty : UScalarTy} (x y : UScalar ty) :
+@[simp, scalar_tac_simps] theorem UScalar.lt_equiv {ty : UScalarTy} (x y : UScalar ty) :
   x < y ↔ (↑x : Nat) < ↑y := by
   rw [LT.lt, instLTUScalar]
 
 @[simp] theorem UScalar.lt_imp {ty : UScalarTy} (x y : UScalar ty) :
   (↑x : Nat) < (↑y) → x < y := (lt_equiv x y).mpr
 
-@[simp, scalar_tac_simps, grind =] theorem UScalar.le_equiv {ty : UScalarTy} (x y : UScalar ty) :
+@[simp, scalar_tac_simps] theorem UScalar.le_equiv {ty : UScalarTy} (x y : UScalar ty) :
   x ≤ y ↔ (↑x : Nat) ≤ ↑y := by
   rw [LE.le, instLEUScalar]
 
 @[simp] theorem UScalar.le_imp {ty : UScalarTy} (x y : UScalar ty) :
   (↑x : Nat) ≤ ↑y → x ≤ y := (le_equiv x y).mpr
 
-@[scalar_tac_simps, grind =_] theorem IScalar.eq_equiv {ty : IScalarTy} (x y : IScalar ty) :
+@[scalar_tac_simps] theorem IScalar.eq_equiv {ty : IScalarTy} (x y : IScalar ty) :
   x = y ↔ (↑x : Int) = ↑y := by
   cases x; cases y; simp_all [IScalar.val]
   constructor <;> intro <;>
   first | simp [*] | apply BitVec.eq_of_toInt_eq; simp [*]
 
+@[ext, grind ext] theorem IScalar.val_eq_imp {ty : IScalarTy} (x y : IScalar ty) :
+  (↑x : Int) = ↑y → x = y := by
+  simp [eq_equiv]
+
 theorem IScalar.eq_imp {ty : IScalarTy} (x y : IScalar ty) :
   (↑x : Int) = ↑y → x = y := (eq_equiv x y).mpr
 
-@[simp, scalar_tac_simps, grind =] theorem IScalar.lt_equiv {ty : IScalarTy} (x y : IScalar ty) :
+@[simp, scalar_tac_simps] theorem IScalar.lt_equiv {ty : IScalarTy} (x y : IScalar ty) :
   x < y ↔ (↑x : Int) < ↑y := by
   rw [LT.lt, instLTIScalar]
 
-@[simp, scalar_tac_simps, grind .] theorem IScalar.lt_imp {ty : IScalarTy} (x y : IScalar ty) :
+@[simp, scalar_tac_simps] theorem IScalar.lt_imp {ty : IScalarTy} (x y : IScalar ty) :
   (↑x : Int) < (↑y) → x < y := (lt_equiv x y).mpr
 
 @[simp] theorem IScalar.le_equiv {ty : IScalarTy} (x y : IScalar ty) :
@@ -910,10 +932,14 @@ instance (ty : IScalarTy) : DecidableEq (IScalar ty) :=
     | isTrue h  => isTrue (IScalar.eq_of_val_eq h)
     | isFalse h => isFalse (IScalar.ne_of_val_ne h)
 
-@[simp, scalar_tac_simps, grind =_] theorem UScalar.neq_to_neq_val {ty} : ∀ {i j : UScalar ty}, (¬ i = j) ↔ ¬ i.val = j.val := by
+@[simp, scalar_tac_simps]
+theorem UScalar.neq_to_neq_val {ty} :
+  ∀ {i j : UScalar ty}, (¬ i = j) ↔ ¬ i.val = j.val := by
   simp [eq_equiv]
 
-@[simp, scalar_tac_simps, grind =_] theorem IScalar.neq_to_neq_val {ty} : ∀ {i j : IScalar ty}, (¬ i = j) ↔ ¬ i.val = j.val := by
+@[simp, scalar_tac_simps]
+theorem IScalar.neq_to_neq_val {ty} :
+  ∀ {i j : IScalar ty}, (¬ i = j) ↔ ¬ i.val = j.val := by
   simp [eq_equiv]
 
 @[simp]
