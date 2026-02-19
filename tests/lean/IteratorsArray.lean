@@ -17,9 +17,7 @@ def iter_array_loop
   loop
     (fun (x1, iter1) =>
       do
-      let (o, iter2) ←
-        (↑(alloc.vec.into_iter.IteratorIntoIter.next iter1) : Result ((Option
-          Std.U32) × (alloc.vec.into_iter.IntoIter Std.U32)))
+      let (o, iter2) ← alloc.vec.into_iter.IteratorIntoIter.next iter1
       match o with
       | none => ok (done ())
       | some _ => let x2 ← x1 + 1#i32
@@ -33,9 +31,7 @@ def iter_array : Result Unit := do
     (↑(alloc.vec.FromVecArray.from
       (Array.make 3#usize [ 1#u32, 2#u32, 3#u32 ])) : Result (alloc.vec.Vec
       Std.U32))
-  let iter ←
-    (↑(alloc.vec.IntoIteratorVec.into_iter v) : Result
-      (alloc.vec.into_iter.IntoIter Std.U32))
+  let iter ← alloc.vec.IntoIteratorVec.into_iter v
   iter_array_loop 0#i32 iter
 
 end iterators_array
