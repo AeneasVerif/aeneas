@@ -253,7 +253,7 @@ def CopyEnum.Insts.CoreCmpPartialEqCopyEnum.eq
       | CopyEnum.Variant0 => ok true
       | CopyEnum.Variant1 _ => ok true
       | CopyEnum.Variant2 __arg1_0 =>
-        core.cmp.impls.PartialEqU32.eq __self_0 __arg1_0
+        lift (core.cmp.impls.PartialEqU32.eq __self_0 __arg1_0)
       | CopyEnum.Variant3 _ => ok true
     | CopyEnum.Variant3 __self_0 =>
       match other with
@@ -392,7 +392,7 @@ def Enum.Insts.CoreCmpPartialEqEnum.eq
       | Enum.Variant0 => ok true
       | Enum.Variant1 _ => ok true
       | Enum.Variant2 __arg1_0 =>
-        core.cmp.impls.PartialEqU32.eq __self_0 __arg1_0
+        lift (core.cmp.impls.PartialEqU32.eq __self_0 __arg1_0)
       | Enum.Variant3 _ => ok true
       | Enum.Variant4 _ => ok true
     | Enum.Variant3 __self_0 =>

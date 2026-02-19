@@ -85,13 +85,4 @@ def u32_default : Result Std.U32 := do
 def i32_default : Result Std.I32 := do
   ok (core.default.DefaultI32.default)
 
-/- [scalars::match_usize]:
-   Source: 'tests/src/scalars.rs', lines 63:0-68:1 -/
-def match_usize (x : Std.Usize) : Result Bool := do
-  match x with
-  | 0#uscalar => ok true
-  | 1#uscalar => ok true
-  | 2#uscalar => ok true
-  | _ => ok false
-
 end scalars
