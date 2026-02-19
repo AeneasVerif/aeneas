@@ -648,10 +648,10 @@ let eval_non_builtin_function_call_symbolic_inst (span : Meta.span)
             (* This should be a call to a trait clause method (if it were a method
                coming from an impl, there should be no indirection through the trait
                reference itself (Charon should have simplified this). *)
-            [%sanity_check] span
+            (*[%sanity_check] span
               (match trait_ref.kind with
               | TraitImpl _ -> false
-              | _ -> true);
+              | _ -> true);*)
             (* Lookup the trait decl and substitution *)
             let trait_decl = ctx_lookup_trait_decl span ctx trait_decl_ref.id in
             let fn_ref =

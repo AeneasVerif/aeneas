@@ -427,7 +427,10 @@ let extract_cast_kind_gen (span : Meta.span)
     (extract_expr : inside:bool -> texpr -> unit) (fmt : F.formatter)
     ~(inside : bool) (kind : cast_kind) (arg : texpr) : unit =
   let integer_type_to_string (ty : integer_type) : string =
-    if backend () = Lean then "." ^ int_name ty
+    if backend () = Lean then
+      match ty with
+      | Unsigned _ -> "Std.UScalarTy." ^ int_name ty
+      | Signed _ -> "Std.IScalarTy." ^ int_name ty
     else
       StringUtils.capitalize_first_letter (PrintPure.integer_type_to_string ty)
   in
