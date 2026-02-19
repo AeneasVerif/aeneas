@@ -209,6 +209,10 @@ let () =
       ( "-loops-no-rec",
         Arg.Set no_recursive_loops,
         " Never attempt to extract loops to recursive functions." );
+      ( "-max-heartbeats",
+        Arg.Int (fun x -> max_heart_beats := x),
+        "For Lean: set the value of the `set_option maxHeartBeats ...` command \
+         at the top of the generated files" );
     ]
   in
 
