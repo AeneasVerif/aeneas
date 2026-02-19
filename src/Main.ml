@@ -70,6 +70,8 @@ let () =
   (* Print the imported llbc *)
   let print_llbc = ref false in
 
+  let set_max_heartbeats = ref false in
+
   let spec_ls =
     [
       ( "-print-error-emitters",
@@ -210,7 +212,10 @@ let () =
         Arg.Set no_recursive_loops,
         " Never attempt to extract loops to recursive functions." );
       ( "-max-heartbeats",
-        Arg.Int (fun x -> max_heart_beats := x),
+        Arg.Int
+          (fun x ->
+            set_max_heartbeats := true;
+            max_heartbeats := x),
         "For Lean: set the value of the `set_option maxHeartBeats ...` command \
          at the top of the generated files" );
     ]
@@ -413,6 +418,10 @@ let () =
   if !lean_gen_lakefile && not (backend () = Lean) then
     fail_with_error
       "The -lean-default-lakefile option is valid only for the Lean backend";
+  if !set_max_heartbeats && not (backend () = Lean) then
+    fail_with_error
+      "The -max-heartbeats option is valid only for the Lean backend";
+
   if !borrow_check then (
     check (!dest_dir = "") "Options -borrow-check and -dest are not compatible";
     check_not !split_files

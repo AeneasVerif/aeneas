@@ -1241,7 +1241,7 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
         "\n\
          /- You can set the `maxHeartbeats` value with the `-max-heartbeats` \
          CLI option -/\n";
-      Printf.fprintf out "set_option maxHeartbeats %d\n" !Config.max_heart_beats;
+      Printf.fprintf out "set_option maxHeartbeats %d\n" !Config.max_heartbeats;
       (* Declare the definitions as being noncomputable if needs be *)
       if fi.noncomputable then
         Printf.fprintf out

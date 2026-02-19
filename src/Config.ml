@@ -580,4 +580,4 @@ let no_recursive_loops = ref false
 
 (** This is for Lean: the value we should initialize `maxHeartBeats` to at the
     top of the generated files *)
-let max_heart_beats = ref 1000000
+let max_heartbeats = ref 1000000
