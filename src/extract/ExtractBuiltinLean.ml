@@ -1127,14 +1127,16 @@ let lean_builtin_trait_impls =
     mk_trait_impl "core::marker::Copy<bool>" "core.core.marker.CopyBool";
     (* file: "Aeneas/Std/Core/Ops.lean", line: 29 *)
     mk_trait_impl "core::ops::deref::Deref<Box<@T>, @T>"
-      "core.ops.deref.DerefBoxInst";
+      "core.ops.deref.DerefBoxInst"
+      ~keep_params:(Some [ true; false ]);
     (* file: "Aeneas/Std/Vec.lean", line: 273 *)
     mk_trait_impl "core::ops::deref::Deref<alloc::vec::Vec<@T>, [@T]>"
       "core.ops.deref.DerefVec"
       ~keep_params:(Some [ true; false ]);
     (* file: "Aeneas/Std/Core/Ops.lean", line: 36 *)
     mk_trait_impl "core::ops::deref::DerefMut<Box<@T>, @T>"
-      "core.ops.deref.DerefMutBoxInst";
+      "core.ops.deref.DerefMutBoxInst"
+      ~keep_params:(Some [ true; false ]);
     (* file: "Aeneas/Std/Vec.lean", line: 284 *)
     mk_trait_impl "core::ops::deref::DerefMut<alloc::vec::Vec<@T>, [@T]>"
       "core.ops.deref.DerefMutVec"
