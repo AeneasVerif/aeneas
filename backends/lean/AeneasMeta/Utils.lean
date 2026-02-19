@@ -265,10 +265,10 @@ def addDeclTac {α} (name : Name) (val : Expr) (type : Expr) (asLet : Bool) (m :
     let mvarId ← getMainGoal
     let newMVar ← mkFreshExprSyntheticOpaqueMVar (← mvarId.getType)
     let newVal ← mkLetFVars #[nval] newMVar
-    -- There are two cases:
-    -- - asLet is true: newVal is `let $name := $val in $newMVar`
-    -- - asLet is false: ewVal is `λ $name => $newMVar`
-    --   We need to apply it to `val`
+    /- There are two cases:
+     - asLet is true: newVal is `let $name := $val in $newMVar`
+     - asLet is false: ewVal is `λ $name => $newMVar`
+       We need to apply it to `val` -/
     let newVal := if asLet then newVal else mkAppN newVal #[val]
     -- Assign the main goal and update the current goal
     mvarId.assign newVal
