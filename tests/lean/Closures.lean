@@ -328,9 +328,7 @@ def u8_id (x : Std.U8) : Result Std.U8 := do
 /- [closures::map_fn_pointer]:
    Source: 'tests/src/closures.rs', lines 47:0-49:1 -/
 def map_fn_pointer (x : alloc.vec.Vec Std.U8) : Result Unit := do
-  let ii ←
-    (↑(alloc.vec.IntoIteratorVec.into_iter x) : Result
-      (alloc.vec.into_iter.IntoIter Std.U8))
+  let ii ← alloc.vec.IntoIteratorVec.into_iter x
   let _ ←
     alloc.vec.into_iter.IntoIter.Insts.CoreIterTraitsIteratorIterator.map
       (BuiltinFnMut Std.U8 Std.U8) ii (u8_id)

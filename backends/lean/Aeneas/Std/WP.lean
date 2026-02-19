@@ -451,13 +451,14 @@ def loop.spec {α : Type u} {β : Type v}
   (post : β → Prop)
   (body : α → Result (ControlFlow α β)) (x : α)
   (hBody :
-    ∀ x, body x ⦃ r =>
+    ∀ x, inv x → body x ⦃ r =>
       match r with
       | .done y => post y
-      | .cont x' => inv x' ∧ wf.rel x' x ⦄) :
+      | .cont x' => inv x' ∧ wf.rel x' x ⦄)
+  (hInv : inv x) :
   loop body x ⦃ post ⦄ := by
   revert x
-  apply @wf.wf.fix α (fun x => loop body x ⦃ post ⦄)
+  apply @wf.wf.fix α (fun x => inv x → loop body x ⦃ post ⦄)
   intros x IH
   unfold loop
   grind
