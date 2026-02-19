@@ -28,8 +28,7 @@ def iter_array_loop
    Source: 'tests/src/iterators-array.rs', lines 3:0-9:1 -/
 def iter_array : Result Unit := do
   let v ←
-    lift (alloc.vec.FromVecArray.from
-      (Array.make 3#usize [ 1#u32, 2#u32, 3#u32 ]))
+    alloc.vec.FromVecArray.from (Array.make 3#usize [ 1#u32, 2#u32, 3#u32 ])
   let iter ← alloc.vec.IntoIteratorVec.into_iter v
   iter_array_loop 0#i32 iter
 

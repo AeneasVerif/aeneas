@@ -315,7 +315,7 @@ theorem alloc.vec.Vec.set_getElem!_eq α [Inhabited α] (x : alloc.vec.Vec α) (
   simp only [Vec, set_val_eq, Subtype.ext_iff, List.set_getElem!]
 
 @[rust_fun
-  "alloc::vec::{core::convert::From<alloc::vec::Vec<@T>, [@T; @N]>}::from" -canFail]
+  "alloc::vec::{core::convert::From<alloc::vec::Vec<@T>, [@T; @N]>}::from"]
 def alloc.vec.FromVecArray.from
   {T : Type} {N : Std.Usize} (a: Array T N) : Result (alloc.vec.Vec T) :=
   ok ⟨ a.val, by scalar_tac ⟩

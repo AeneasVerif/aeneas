@@ -284,7 +284,7 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Vec.lean", line: 317 *)
     mk_fun
       "alloc::vec::{core::convert::From<alloc::vec::Vec<@T>, [@T; @N]>}::from"
-      "alloc.vec.FromVecArray.from" ~can_fail:false;
+      "alloc.vec.FromVecArray.from";
     (* file: "Aeneas/Std/Vec.lean", line: 412 *)
     mk_fun "alloc::vec::{core::fmt::Debug<alloc::vec::Vec<@T>>}::fmt"
       "alloc.vec.DebugVec.fmt"
