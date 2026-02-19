@@ -25,8 +25,7 @@ def index_slice_0 {T : Type} (s : Slice T) : Result T := do
 /- [arrays_defs::index_empty_array]:
    Source: 'tests/src/arrays_defs.rs', lines 11:0-13:1 -/
 def index_empty_array : Result Unit := do
-  let s ←
-    (↑(Array.to_slice (Std.Array.empty Std.U32)) : Result (Slice Std.U32))
+  let s ← lift (Array.to_slice (Std.Array.empty Std.U32))
   let _ ← index_slice_0 s
   ok ()
 

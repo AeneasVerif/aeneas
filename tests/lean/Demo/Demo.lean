@@ -154,9 +154,9 @@ def mod_add (a : Std.U32) (b : Std.U32) : Result Std.U32 := do
   massert (a < 3329#u32)
   massert (b < 3329#u32)
   let sum ← a + b
-  let res ← (↑(core.num.U32.wrapping_sub sum 3329#u32) : Result Std.U32)
+  let res ← lift (core.num.U32.wrapping_sub sum 3329#u32)
   let mask ← res >>> 16#i32
-  let q ← (↑(3329#u32 &&& mask) : Result Std.U32)
+  let q ← lift (3329#u32 &&& mask)
   ok (core.num.U32.wrapping_add res q)
 
 end demo

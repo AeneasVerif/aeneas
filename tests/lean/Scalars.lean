@@ -51,8 +51,8 @@ def i32_use_shift_left (x : Std.I32) : Result Std.I32 := do
 /- [scalars::add_and]:
    Source: 'tests/src/scalars.rs', lines 35:0-37:1 -/
 def add_and (a : Std.U32) (b : Std.U32) : Result Std.U32 := do
-  let i ← (↑(b &&& a) : Result Std.U32)
-  let i1 ← (↑(b &&& a) : Result Std.U32)
+  let i ← lift (b &&& a)
+  let i1 ← lift (b &&& a)
   i + i1
 
 /- [scalars::u32_use_rotate_right]:
@@ -84,5 +84,14 @@ def u32_default : Result Std.U32 := do
    Source: 'tests/src/scalars.rs', lines 59:0-61:1 -/
 def i32_default : Result Std.I32 := do
   ok (core.default.DefaultI32.default)
+
+/- [scalars::match_usize]:
+   Source: 'tests/src/scalars.rs', lines 63:0-68:1 -/
+def match_usize (x : Std.Usize) : Result Bool := do
+  match x with
+  | 0#uscalar => ok true
+  | 1#uscalar => ok true
+  | 2#uscalar => ok true
+  | _ => ok false
 
 end scalars

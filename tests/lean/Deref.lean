@@ -21,11 +21,9 @@ def use_deref_mut_box {T : Type} (x : T) : Result (T × (T → T)) := do
 /- [deref::test_deref_box]:
    Source: 'tests/src/deref.rs', lines 14:0-22:1 -/
 def test_deref_box : Result Unit := do
-  let (_, deref_mut_back) ←
-    (↑(alloc.boxed.Box.deref_mut 0#i32) : Result (Std.I32 × (Std.I32 →
-      Std.I32)))
+  let (_, deref_mut_back) ← lift (alloc.boxed.Box.deref_mut 0#i32)
   let b := deref_mut_back 1#i32
-  let x ← (↑(alloc.boxed.Box.deref b) : Result Std.I32)
+  let x ← lift (alloc.boxed.Box.deref b)
   massert (x = 1#i32)
 
 /- [deref::use_deref_vec]:

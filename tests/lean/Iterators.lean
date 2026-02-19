@@ -162,9 +162,7 @@ def slice_iter_mut_while_early_return
   (s : Array Std.U16 256#usize) (b : Bool) :
   Result (Array Std.U16 256#usize)
   := do
-  let (s1, to_slice_mut_back) ←
-    (↑(Array.to_slice_mut s) : Result ((Slice Std.U16) × (Slice Std.U16 →
-      Array Std.U16 256#usize)))
+  let (s1, to_slice_mut_back) ← lift (Array.to_slice_mut s)
   let (it, iter_mut_back) ← core.slice.Slice.iter_mut s1
   let back ← slice_iter_mut_while_early_return_loop0 (fun im => im) b it
   let s2 := iter_mut_back back
@@ -210,9 +208,7 @@ def slice_iter_mut_while_early_return_two_bools
   (s : Array Std.U16 256#usize) (b0 : Bool) (b1 : Bool) :
   Result (Array Std.U16 256#usize)
   := do
-  let (s1, to_slice_mut_back) ←
-    (↑(Array.to_slice_mut s) : Result ((Slice Std.U16) × (Slice Std.U16 →
-      Array Std.U16 256#usize)))
+  let (s1, to_slice_mut_back) ← lift (Array.to_slice_mut s)
   let (it, iter_mut_back) ← core.slice.Slice.iter_mut s1
   let back ←
     slice_iter_mut_while_early_return_two_bools_loop0 (fun im => im) b0 b1 it
@@ -246,7 +242,7 @@ def slice_chunks_exact_iter_loop0
       match o with
       | none => ok (done ())
       | some _ =>
-        let s ← (↑(Array.to_slice key) : Result (Slice Std.U128))
+        let s ← lift (Array.to_slice key)
         let i ← core.slice.Slice.iter s
         let iter3 ←
           core.iter.traits.collect.IntoIterator.Blanket.into_iter
@@ -294,7 +290,7 @@ def key_iter_slice_iter_loop0
       match o with
       | none => ok (done ())
       | some _ =>
-        let s ← (↑(Array.to_slice key1) : Result (Slice Std.U128))
+        let s ← lift (Array.to_slice key1)
         let i ← core.slice.Slice.iter s
         let iter3 ←
           core.iter.traits.collect.IntoIterator.Blanket.into_iter

@@ -75,7 +75,7 @@ def YesOverride.Insts.Defaulted_methodTrait : Trait YesOverride := {
 def main : Result Unit := do
   let _ ← NoOverride.Insts.Defaulted_methodTrait.provided_method ()
   let _ ← YesOverride.Insts.Defaulted_methodTrait.provided_method ()
-  let n ← (↑(core.cmp.impls.OrdI32.min 10#i32 1#i32) : Result Std.I32)
+  let n ← lift (core.cmp.impls.OrdI32.min 10#i32 1#i32)
   massert (n = 1#i32)
 
 end defaulted_method

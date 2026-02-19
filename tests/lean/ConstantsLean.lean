@@ -19,8 +19,7 @@ structure Params (Self : Type) where
 def use_params
   {P : Type} (ParamsInst : Params P) (n : Std.Usize) : Result Unit := do
   let _ ← ParamsInst.N * ParamsInst.M
-  let right_val ←
-    (↑(Std.Usize.wrapping_mul ParamsInst.N ParamsInst.M) : Result Std.Usize)
+  let right_val ← lift (Std.Usize.wrapping_mul ParamsInst.N ParamsInst.M)
   if n = right_val
   then ok ()
   else fail panic

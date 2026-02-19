@@ -196,10 +196,10 @@ def CopyEnum.Insts.CoreCloneClone.clone
   match self with
   | CopyEnum.Variant0 => ok CopyEnum.Variant0
   | CopyEnum.Variant1 __self_0 =>
-    let b ← (↑(core.clone.impls.CloneBool.clone __self_0) : Result Bool)
+    let b ← lift (core.clone.impls.CloneBool.clone __self_0)
     ok (CopyEnum.Variant1 b)
   | CopyEnum.Variant2 __self_0 =>
-    let i ← (↑(core.clone.impls.CloneU32.clone __self_0) : Result Std.U32)
+    let i ← lift (core.clone.impls.CloneU32.clone __self_0)
     ok (CopyEnum.Variant2 i)
   | CopyEnum.Variant3 __self_0 =>
     let t ← corecloneCloneInst.clone __self_0
@@ -339,10 +339,10 @@ def Enum.Insts.CoreCloneClone.clone
   match self with
   | Enum.Variant0 => ok Enum.Variant0
   | Enum.Variant1 __self_0 =>
-    let b ← (↑(core.clone.impls.CloneBool.clone __self_0) : Result Bool)
+    let b ← lift (core.clone.impls.CloneBool.clone __self_0)
     ok (Enum.Variant1 b)
   | Enum.Variant2 __self_0 =>
-    let i ← (↑(core.clone.impls.CloneU32.clone __self_0) : Result Std.U32)
+    let i ← lift (core.clone.impls.CloneU32.clone __self_0)
     ok (Enum.Variant2 i)
   | Enum.Variant3 __self_0 =>
     let t ← corecloneCloneInst.clone __self_0
@@ -579,8 +579,8 @@ def CopyStruct.Insts.CoreCloneClone.clone
   Result (CopyStruct T)
   := do
   (BuiltinClone Unit).clone ()
-  let b ← (↑(core.clone.impls.CloneBool.clone self.f1) : Result Bool)
-  let i ← (↑(core.clone.impls.CloneU32.clone self.f2) : Result Std.U32)
+  let b ← lift (core.clone.impls.CloneBool.clone self.f1)
+  let i ← lift (core.clone.impls.CloneU32.clone self.f2)
   let t ← corecloneCloneInst.clone self.f3
   ok { f0 := (), f1 := b, f2 := i, f3 := t }
 
@@ -774,12 +774,12 @@ structure Struct6Fields where
    Source: 'tests/src/derive.rs', lines 54:9-54:14 -/
 def Struct6Fields.Insts.CoreCloneClone.clone
   (self : Struct6Fields) : Result Struct6Fields := do
-  let i ← (↑(core.clone.impls.CloneU32.clone self.a) : Result Std.U32)
-  let i1 ← (↑(core.clone.impls.CloneU32.clone self.b) : Result Std.U32)
-  let i2 ← (↑(core.clone.impls.CloneU32.clone self.c) : Result Std.U32)
-  let i3 ← (↑(core.clone.impls.CloneU32.clone self.d) : Result Std.U32)
-  let i4 ← (↑(core.clone.impls.CloneU32.clone self.e) : Result Std.U32)
-  let i5 ← (↑(core.clone.impls.CloneU32.clone self.f) : Result Std.U32)
+  let i ← lift (core.clone.impls.CloneU32.clone self.a)
+  let i1 ← lift (core.clone.impls.CloneU32.clone self.b)
+  let i2 ← lift (core.clone.impls.CloneU32.clone self.c)
+  let i3 ← lift (core.clone.impls.CloneU32.clone self.d)
+  let i4 ← lift (core.clone.impls.CloneU32.clone self.e)
+  let i5 ← lift (core.clone.impls.CloneU32.clone self.f)
   ok { a := i, b := i1, c := i2, d := i3, e := i4, f := i5 }
 
 /- Trait implementation: [derive::{core::clone::Clone for derive::Struct6Fields}]
@@ -853,10 +853,10 @@ def Struct6Fields.Insts.CoreFmtDebug.fmt
   let values :=
     Array.to_slice (Array.make 6#usize [ dyn, dyn1, dyn2, dyn3, dyn4, dyn5 ])
   let s ←
-    (↑(Array.to_slice
+    lift (Array.to_slice
       (Array.make 6#usize [
         toStr "a", toStr "b", toStr "c", toStr "d", toStr "e", toStr "f"
-        ])) : Result (Slice Str))
+        ]))
   core.fmt.Formatter.debug_struct_fields_finish f (toStr "Struct6Fields") s
     values
 
