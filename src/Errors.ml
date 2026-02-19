@@ -243,3 +243,9 @@ let opt_raise_opt_span (file : string) (line : int) (span : Meta.span option)
 let opt_raise (file : string) (line : int) (span : Meta.span) (msg : string) :
     unit =
   opt_raise_opt_span file line (Some span) msg
+
+let option_get (file : string) (line : int) (span : Meta.span) (x : 'a option) :
+    'a =
+  match x with
+  | None -> internal_error file line span
+  | Some x -> x

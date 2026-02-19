@@ -390,7 +390,9 @@ let gtranslate_adt_fields ~(project_borrows : bool)
               (ctx, Some (info, mk_tuple fields))
           else
             (* If we do not filter the fields, all the values should be [Some ...] *)
-            let infos, fields = List.split (List.map Option.get info_fields) in
+            let infos, fields =
+              List.split (List.map ([%option_get] span) info_fields)
+            in
             (ctx, Some (infos, mk_tuple fields))
     end
 
