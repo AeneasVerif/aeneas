@@ -66,6 +66,60 @@ let erase_body_regions (crate : crate) (f : fun_decl) : fun_decl =
     ^ Print.Crate.crate_fun_decl_to_string crate f];
   f
 
+(** Replace the occurrences of [core::intrinsics::unreachable] with
+    [Abort UndefinedBehavior]. This helps with the analyzes and the symbolic
+    evaluation (in particular, we stop the evaluation when encountering an
+    [Abort] - this can help us avoid merging control-flow after a match for
+    instance *)
+let remove_unreachable (crate : crate) (f : fun_decl) : fun_decl =
+  let impl_pat = NameMatcher.parse_pattern "core::intrinsics::unreachable" in
+  let mctx = NameMatcher.ctx_from_crate crate in
+  let match_name =
+    NameMatcher.match_name mctx
+      {
+        map_vars_to_vars = true;
+        match_with_trait_decl_refs = Config.match_patterns_with_trait_decl_refs;
+      }
+  in
+
+  let is_unreachable (st : statement) : bool =
+    match st.kind with
+    | Call call -> (
+        match call.func with
+        | FnOpRegular { kind; _ } -> (
+            match kind with
+            | FunId (FRegular fid) ->
+                let fun_decl =
+                  [%silent_unwrap_opt_span] (Some st.span)
+                    (FunDeclId.Map.find_opt fid crate.fun_decls)
+                in
+                match_name impl_pat fun_decl.item_meta.name
+            | _ -> false)
+        | FnOpDynamic _ -> false)
+    | _ -> false
+  in
+  let rec update (stl : statement list) : statement list =
+    match stl with
+    | [] -> []
+    | st :: stl ->
+        if is_unreachable st then [ { st with kind = Abort UndefinedBehavior } ]
+        else st :: update stl
+  in
+  let visitor =
+    object
+      inherit [_] map_statement_base as super
+
+      method! visit_block env b =
+        let b = { b with statements = update b.statements } in
+        super#visit_block env b
+    end
+  in
+  match f.body with
+  | None -> f
+  | Some body ->
+      let body = { body with body = visitor#visit_block () body.body } in
+      { f with body = Some body }
+
 (** The Rust compiler generates a unique implementation of [Default] for arrays
     for every choice of length. For instance, if we write:
     {[
@@ -1533,6 +1587,7 @@ let apply_passes (crate : crate) : crate =
   let function_passes =
     [
       ("erase_body_regions", erase_body_regions);
+      ("remove_unreachable", remove_unreachable);
       ("update_loop", update_loops);
       ("remove_useless_joins", remove_useless_joins);
       ( "remove_shallow_borrows_storage_live_dead",

@@ -967,7 +967,7 @@ elab tk:letProgress : tactic => do
     Meta.Tactic.TryThis.addSuggestion tk stxArgs' (origSpan? := ← getRef)
 
 namespace Test
-  open Std Result WP
+  open Std Result
 
   -- Show the traces:
   -- set_option trace.Progress true
@@ -1315,6 +1315,10 @@ x y : U32
     rw [add1]
     progress? as ⟨ z1, h ⟩ says progress with U32.add_spec as ⟨ z1, h ⟩
     progress? as ⟨ z2, h ⟩ says progress with U32.add_spec as ⟨ z2, h ⟩
+end Test
+
+namespace Test
+  open Std Result
 
   variable {α} (P : ℕ → List α → Prop)
   variable (f : List α → Std.Result Bool)
@@ -1330,6 +1334,10 @@ x y : U32
     (h : ∀ x, f x ⦃ _ => True ⦄):
       f x ⦃ () => True ⦄ := by
       progress? with (show ∀ x, f x ⦃ _ => True ⦄ by exact h) says progress with(show ∀ x, f x ⦃ _ => True ⦄ by exact h)
+end Test
+
+namespace Test
+  open Std Result
 
   /- Progress using a term -/
   example (x y : U32) (h : 2 * x.val + 2 * y.val ≤ U32.max) :
@@ -1357,6 +1365,7 @@ x y : U32
     extract_goal0
     let* ⟨⟩ ← massert_spec
 
+  set_option linter.unusedTactic false in
   /--
 info: example
   (c : U32)
@@ -1387,10 +1396,6 @@ info: example
   /--
   error: unsolved goals
 case a
-α : Type ?u.255154
-P : ℕ → List α → Prop
-f✝ : List α → Result Bool
-f_spec : ∀ (l : List α) (i : ℕ), P i l → f✝ l ⦃ x✝ => True ⦄
 x : U32
 f : U32 → Result U32
 h : ∀ (x : U32), f x ⦃ y => ∃ z > 0, ↑y = ↑x + z ⦄

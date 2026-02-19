@@ -211,20 +211,20 @@ namespace Test
     x ≥ 0 ∧ y ≥ 0 := by simp [pos_pair]
 
   theorem lifted_is_pos :
-    ∃ x y, toResult pos_pair = ok (x, y) ∧
+    ∃ x y, lift pos_pair = ok (x, y) ∧
     x ≥ 0 ∧ y ≥ 0 :=
   (match pos_pair with
   | (x, y) =>
     fun (h : match (x, y) with | (x, y) => x ≥ 0 ∧ y ≥ 0) =>
     Exists.intro x (Exists.intro y (And.intro (Eq.refl (ok (x, y))) h))
   : ∀ (_ : match pos_pair with | (x, y) => x ≥ 0 ∧ y ≥ 0),
-    ∃ x y, toResult pos_pair = ok (x, y) ∧
+    ∃ x y, lift pos_pair = ok (x, y) ∧
     x ≥ 0 ∧ y ≥ 0) pos_pair_is_pos
 
   /- Same as `lifted_is_pos` but making the implicit parameters of the `Exists.intro` explicit:
      this is the important part. -/
   theorem lifted_is_pos' :
-    ∃ x y, toResult pos_pair = ok (x, y) ∧
+    ∃ x y, lift pos_pair = ok (x, y) ∧
     x ≥ 0 ∧ y ≥ 0 :=
   (match pos_pair with
   | (x, y) =>
@@ -233,7 +233,7 @@ namespace Test
       x (@Exists.intro Int (fun y_1 => ok (x, y) = ok (x, y_1) ∧ x ≥ 0 ∧ y_1 ≥ 0)
         y (@And.intro (ok (x, y) = ok (x, y)) _ (Eq.refl (ok (x, y))) h))
   : ∀ (_ : match pos_pair with | (x, y) => x ≥ 0 ∧ y ≥ 0),
-    ∃ x y, toResult pos_pair = ok (x, y) ∧
+    ∃ x y, lift pos_pair = ok (x, y) ∧
     x ≥ 0 ∧ y ≥ 0) pos_pair_is_pos
 
   def pos_triple : Int × Int × Int := (0, 1, 2)
@@ -256,9 +256,9 @@ namespace Test
 
 end Test
 
-theorem spec_toResult {α : Type} (x : α) (P : α → Prop) (h : P x) :
-  Std.WP.spec (Std.toResult x) P := by
-  simp [Std.toResult]
+theorem spec_lift {α : Type} (x : α) (P : α → Prop) (h : P x) :
+  Std.WP.spec (Std.lift x) P := by
+  simp [Std.lift]
   apply h
 
 def reduceProdProjs (e : Expr) : MetaM Expr := do
@@ -286,14 +286,14 @@ theorem intro_predn (p : α × β → Prop) : p = predn (fun x y => p (x, y)) :=
   unfold predn
   simp only
 
-theorem lift_to_spec x (p0 p1 : α → Prop) (h0 : p0 x) (h1 : p0 = p1) : spec (Std.toResult x) p1 := by
-  grind [spec, Std.toResult]
+theorem lift_to_spec x (p0 p1 : α → Prop) (h0 : p0 x) (h1 : p0 = p1) : spec (Std.lift x) p1 := by
+  grind [spec, Std.lift]
 
 namespace Test
 
   /-- Example which shows how to write the proof term explicitly -/
   theorem test_pos_triple (pos_triple : Nat × Nat × Nat) (thm : (fun (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0) pos_triple) :
-    Std.toResult pos_triple ⦃ x y z => x > 0 ∧ y > 0 ∧ z > 0 ⦄ := by
+    Std.lift pos_triple ⦃ x y z => x > 0 ∧ y > 0 ∧ z > 0 ⦄ := by
     --
     have h := fun x => intro_predn (fun y => match (x, y) with | (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0)
     --
@@ -309,8 +309,8 @@ namespace Test
 
   /-- Example which uses tactics -/
   theorem test_pos_triple' (pos_triple : Nat × Nat × Nat) (thm : (fun (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0) pos_triple) :
-    Std.toResult pos_triple ⦃ x y z => x > 0 ∧ y > 0 ∧ z > 0 ⦄ := by
-    simp -failIfUnchanged -iota only [_root_.Aeneas.Std.toResult, _root_.Aeneas.Std.WP.spec_ok, _root_.Aeneas.Std.WP.predn] at thm ⊢
+    Std.lift pos_triple ⦃ x y z => x > 0 ∧ y > 0 ∧ z > 0 ⦄ := by
+    simp -failIfUnchanged -iota only [_root_.Aeneas.Std.lift, _root_.Aeneas.Std.WP.spec_ok, _root_.Aeneas.Std.WP.predn] at thm ⊢
     exact thm
 
 end Test
@@ -318,11 +318,11 @@ end Test
 /-- Given a theorem type `P x` and a pattern of the shape `∃ y₀ ... yₙ, x = (y₀, ..., yₙ)`,
     generate a theorem type of the shape:
     ```lean
-    spec (toResult x) (fun y₀ ... yₙ => P (y₀, ..., yₙ))
+    spec (lift x) (fun y₀ ... yₙ => P (y₀, ..., yₙ))
     ```
     that is, using syntactic sugar:
     ```lean
-    (toResult x) ⦃ fun y₀ ... yₙ => P (y₀, ..., yₙ) ⦄
+    (lift x) ⦃ fun y₀ ... yₙ => P (y₀, ..., yₙ) ⦄
     ```
 
     Note that the pattern is optional: if the user doesn't provide it, we completely decompose
@@ -386,9 +386,9 @@ def liftThmType (thmTy : Expr) (pat : Option Syntax)
   let thmTy ← mkPredn patFVars.toList
   trace[Progress] "result of mkPredn: {thmTy}"
   /- Add the `spec` -/
-  let toResultExpr ← mkAppM ``Std.toResult #[pat]
-  trace[Progress] "toResultExpr: {toResultExpr}"
-  let thmTy ← mkAppM ``spec #[toResultExpr, thmTy]
+  let liftExpr ← mkAppM ``Std.lift #[pat]
+  trace[Progress] "liftExpr: {liftExpr}"
+  let thmTy ← mkAppM ``spec #[liftExpr, thmTy]
   trace[Progress] "thmTy after introducing `spec`: {thmTy}"
   /- Reintroduce the universal quantifiers -/
   let thmTy ← mkForallFVars fvars thmTy
@@ -423,7 +423,7 @@ def liftThm (stx : Syntax) (name : Name) (pat : Option (TSyntax `term))
     | none =>
       `(tactic|
         simp -failIfUnchanged -iota only
-          [_root_.Aeneas.Std.toResult, _root_.Aeneas.Std.WP.spec_ok, _root_.Aeneas.Std.WP.predn] <;>
+          [_root_.Aeneas.Std.lift, _root_.Aeneas.Std.WP.spec_ok, _root_.Aeneas.Std.WP.predn] <;>
         exact $(mkIdent name))
     | some stx => pure stx
   let (goals, _) ← runTactic mvar.mvarId! tacticStx
@@ -459,7 +459,7 @@ namespace Test
 
   /--
 info: Aeneas.Progress.Test.pos_pair_is_pos.progress_spec :
-  ↑pos_pair ⦃ x y =>
+  Std.lift pos_pair ⦃ x y =>
     match (x, y) with
     | (x, y) => x ≥ 0 ∧ y ≥ 0 ⦄
   -/
@@ -470,7 +470,7 @@ info: Aeneas.Progress.Test.pos_pair_is_pos.progress_spec :
 
   /--
 info: Aeneas.Progress.Test.pos_triple_is_pos.progress_spec :
-  ↑pos_triple ⦃ x.0 x.1 x.2 =>
+  Std.lift pos_triple ⦃ x.0 x.1 x.2 =>
     match (x.0, x.1, x.2) with
     | (x, y, z) => x ≥ 0 ∧ y ≥ 0 ∧ z ≥ 0 ⦄
   -/
@@ -482,7 +482,7 @@ info: Aeneas.Progress.Test.pos_triple_is_pos.progress_spec :
 
   /--
 info: Aeneas.Progress.Test.pos_triple_is_pos'.progress_spec :
-  ↑pos_triple ⦃ z =>
+  Std.lift pos_triple ⦃ z =>
     match z with
     | (x, y, z) => x ≥ 0 ∧ y ≥ 0 ∧ z ≥ 0 ⦄
   -/
@@ -493,7 +493,7 @@ info: Aeneas.Progress.Test.pos_triple_is_pos'.progress_spec :
 
   /--
 info: Aeneas.Progress.Test.overflowing_add_eq.progress_spec (x y : U8) :
-  ↑(overflowing_add x y) ⦃ x.0 x.1 => if x.val + y.val > 255 then x.1 = true else x.1 = false ⦄
+  Std.lift (overflowing_add x y) ⦃ x.0 x.1 => if x.val + y.val > 255 then x.1 = true else x.1 = false ⦄
   -/
   #guard_msgs in
   #check overflowing_add_eq.progress_spec
@@ -714,7 +714,7 @@ generates the theorem:
 ```lean
 @[progress]
 theorem wrapping_add.progress_spec (x y : U32) :
-  (toResult (wrapping_add x y)) ⦃ b x => (b, x) = wrapping_add x y ⦄
+  (lift (wrapping_add x y)) ⦃ b x => (b, x) = wrapping_add x y ⦄
 ```
 (note that the `z` appearing in the post-condition is eliminated when calling `progress`,
 leaving only `b` and `x` in the environment).
@@ -743,8 +743,8 @@ structure ProgressPureDefSpecAttr where
   attr : AttributeImpl
   deriving Inhabited
 
-theorem specLiftDef {α} (x : α) : Std.WP.spec (Std.toResult x) (fun y => y = x) := by
-  simp only [Std.toResult, Std.WP.spec_ok]
+theorem specLiftDef {α} (x : α) : Std.WP.spec (Std.lift x) (fun y => y = x) := by
+  simp only [Std.lift, Std.WP.spec_ok]
 
 def mkProgressPureDefThm (stx : Syntax) (pat : Option (TSyntax `term)) (n : Name)
   (suffix : String := "progress_spec") : MetaM Name := do
@@ -766,7 +766,7 @@ def mkProgressPureDefThm (stx : Syntax) (pat : Option (TSyntax `term)) (n : Name
   let tacticStx ←
     `(tactic|
         simp only
-          [_root_.Aeneas.Std.toResult, _root_.Aeneas.Std.WP.spec_ok, _root_.Aeneas.Std.WP.predn, _root_.implies_true])
+          [_root_.Aeneas.Std.lift, _root_.Aeneas.Std.WP.spec_ok, _root_.Aeneas.Std.WP.predn, _root_.implies_true])
   liftThm stx n pat mkPat mkPred suffix (tacticStx := some tacticStx)
 
 local elab "#progress_pure_def" id:ident pat:(term)? : command => do
@@ -786,7 +786,7 @@ namespace Test
 
   /--
 info: Aeneas.Progress.Test.overflowing_add.progress_spec (x y : U8) :
-  ↑(overflowing_add x y) ⦃ x✝ => x✝ = overflowing_add x y ⦄
+  Std.lift (overflowing_add x y) ⦃ x✝ => x✝ = overflowing_add x y ⦄
   -/
   #guard_msgs in
   #check overflowing_add.progress_spec
@@ -795,7 +795,8 @@ info: Aeneas.Progress.Test.overflowing_add.progress_spec (x y : U8) :
   #progress_pure_def wrapping_add (wrapping_add x y = (b, z))
 
   /--
-info: Aeneas.Progress.Test.wrapping_add.progress_spec (x y : U8) : ↑(wrapping_add x y) ⦃ b z => (b, z) = wrapping_add x y ⦄
+info: Aeneas.Progress.Test.wrapping_add.progress_spec (x y : U8) :
+  Std.lift (wrapping_add x y) ⦃ b z => (b, z) = wrapping_add x y ⦄
   -/
   #guard_msgs in
   #check wrapping_add.progress_spec

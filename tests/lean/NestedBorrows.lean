@@ -314,7 +314,7 @@ def BitReader.peek
     then let self1 ← BitReader.refill self
          ok (self1.data, self1.bit_buf)
     else ok (self.data, self.bit_buf)
-  let i1 ← (↑(i &&& 1#u64) : Result Std.U64)
+  let i1 ← lift (i &&& 1#u64)
   ok (i1, { data := s, bit_buf := i })
 
 end nested_borrows

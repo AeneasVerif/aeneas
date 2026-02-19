@@ -87,7 +87,7 @@ let run_aeneas (env : runner_env) (case : Input.t) (backend : Backend.t) =
   in
   let args =
     List.concat [ args; aeneas_options; abort_on_error ]
-    @ [ "-print-error-emitters"; "-no-progress-bar"; "-checks" ]
+    @ [ "-print-error-emitters"; "-no-progress-bar"; "-checks"; "-color" ]
   in
   let cmd = Command.make args in
   (* Remove leftover files if they're not needed anymore *)

@@ -184,41 +184,23 @@ end Order
 -/
 
 /-- We use this to lift pure function calls to monadic calls.
-    We don't mark this as reducible so that let-bindings don't get simplified away.
+    We don't mark this as reducible so that **let-bindings don't get simplified away**.
 
     In the generated code if regularly happens that we want to lift pure function calls so
     that `progress` can reason about them. For instance, `U32.wrapping_add` has type `U32 → U32 → U32`,
     but we provide a `progress` theorem with an informative post-condition, and which matches the pattern
-    `toResult (wrapping_add x y)`. This theorem can only be looked up and appliced if the code is of the
+    `lift (wrapping_add x y)`. This theorem can only be looked up and appliced if the code is of the
     following shape:
     ```
     let z ← U32.wrapping_add x y
     ...
     ```
+
+    The downside is that using `lift` forces users to write `progress` theorems for pure expressions
+    which appear inside a `lift`. As only a specific set of functions from the standard library are
+    purified (i.e., don't live in `Result`), this should not be a big issue in practice.
   -/
-def toResult {α : Type u} (x : α) : Result α := Result.ok x
-
-instance {α : Type u} : Coe α (Result α) where
-  coe := toResult
-
-attribute [coe] toResult
-
-namespace Test
-  /- Testing that our coercion from `α` to `Result α` works. -/
-  example : Result Int := do
-    let x0 ← ↑(0 : Int)
-    let x1 ← ↑(x0 + 1 : Int)
-    x1
-
-  /- Testing that our coercion from `α` to `Result α` doesn't break other coercions. -/
-  example (n : Nat) (i : Int) (_ : n < i) : True := by simp
-
-  example : Result (BitVec 32) := do
-    let x : BitVec 32 ← ↑(0#32)
-    let y ← ↑(1#32)
-    let z ← ↑(x + y)
-    ok  z
-end Test
+def lift {α : Type u} (x : α) : Result α := Result.ok x
 
 /-!
 # Loops

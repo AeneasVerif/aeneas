@@ -2027,7 +2027,10 @@ let eliminate_box_functions =
     deriving [Clone] for recursive types which use box. This is a hack: we need
     a general solution (the same issue happens if you use other datatypes like [Vec]
     - we introduce a workaround for a few types like [Box] or [&T] because those uses
-    are really common and we consider them as builtin). *)
+    are really common and we consider them as builtin).
+
+    TODO: move this to the prepasses
+*)
 let simplify_trait_calls_visitor (ctx : ctx) (def : fun_decl) =
   (* Create a map from pattern to method *)
   let pats =
@@ -2088,14 +2091,10 @@ let simplify_trait_calls_visitor (ctx : ctx) (def : fun_decl) =
                           in
 
                           (* Create a call to the method *)
+                          let fun_id = method_decl.binder_value.fun_id in
                           let qualif =
                             FunOrOp
-                              (Fun
-                                 (FromLlbc
-                                    ( FunId
-                                        (FRegular
-                                           method_decl.binder_value.fun_id),
-                                      None )))
+                              (Fun (FromLlbc (FunId (FRegular fun_id), None)))
                           in
                           (* TODO: should we handle the binder? *)
                           let qualif : qualif =
@@ -2108,6 +2107,19 @@ let simplify_trait_calls_visitor (ctx : ctx) (def : fun_decl) =
                             { e = Qualif qualif; ty = mk_arrows arg_tys ret_ty }
                           in
                           let e = [%add_loc] mk_apps span qualif args in
+                          (* Should we introduce a [toResult] because the method is actually pure? *)
+                          let monadic =
+                            let fun_decl =
+                              [%unwrap_with_span] span
+                                (FunDeclId.Map.find_opt fun_id ctx.fun_decls)
+                                "Could not lookup a fun declaration, probably \
+                                 because of a previous error"
+                            in
+                            fun_decl.signature.fwd_info.effect_info.can_fail
+                          in
+                          let e =
+                            if not monadic then mk_to_result_texpr span e else e
+                          in
                           (* Re-explore *)
                           self#visit_texpr env e
                       | _ ->

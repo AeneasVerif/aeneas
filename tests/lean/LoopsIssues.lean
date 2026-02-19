@@ -147,7 +147,7 @@ def mut_loop_len_loop
       if b1
       then
         do
-        let s ← (↑(Array.to_slice buf) : Result (Slice Std.U8))
+        let s ← lift (Array.to_slice buf)
         let i := Slice.len s
         if 0#usize <= i
         then ok (cont true)

@@ -74,16 +74,15 @@ def key_expand_loop0
       if i1 < 32#i32
       then
         do
-        let i2 ← (↑(IScalar.hcast Std.UScalarTy.U8 i1) : Result Std.U8)
+        let i2 ← lift (IScalar.hcast Std.UScalarTy.U8 i1)
         let sample_buffer2 ← Array.update sample_buffer1 0#usize i2
         let state_work2 ← shake_state_copy state_base state_work1
-        let s ← (↑(Array.to_slice sample_buffer2) : Result (Slice Std.U8))
+        let s ← lift (Array.to_slice sample_buffer2)
         let state_work3 ← shake_append state_work2 s
         let (s1, to_slice_mut_back) ←
-          (↑(Array.to_slice_mut sample_buffer2) : Result ((Slice Std.U8) ×
-            (Slice Std.U8 → Array Std.U8 1#usize)))
+          lift (Array.to_slice_mut sample_buffer2)
         let s2 ← shake_extract state_work3 s1
-        let s3 ← (↑(Array.to_slice state_work3) : Result (Slice Std.U8))
+        let s3 ← lift (Array.to_slice state_work3)
         let (a, t_mut_back) ← Key.t_mut key1
         let a1 ← sample_cbd s3 a
         let i3 ← i1 + 1#i32
@@ -106,16 +105,15 @@ def key_expand_loop1
       if i1 < 32#i32
       then
         do
-        let i2 ← (↑(IScalar.hcast Std.UScalarTy.U8 i1) : Result Std.U8)
+        let i2 ← lift (IScalar.hcast Std.UScalarTy.U8 i1)
         let sample_buffer2 ← Array.update sample_buffer1 0#usize i2
         let state_work2 ← shake_state_copy state_base state_work1
-        let s ← (↑(Array.to_slice sample_buffer2) : Result (Slice Std.U8))
+        let s ← lift (Array.to_slice sample_buffer2)
         let state_work3 ← shake_append state_work2 s
         let (s1, to_slice_mut_back) ←
-          (↑(Array.to_slice_mut sample_buffer2) : Result ((Slice Std.U8) ×
-            (Slice Std.U8 → Array Std.U8 1#usize)))
+          lift (Array.to_slice_mut sample_buffer2)
         let s2 ← shake_extract state_work3 s1
-        let s3 ← (↑(Array.to_slice state_work3) : Result (Slice Std.U8))
+        let s3 ← lift (Array.to_slice state_work3)
         let (a, t_mut_back) ← Key.t_mut key1
         let a1 ← sample_cbd s3 a
         let i3 ← i1 + 1#i32
@@ -133,7 +131,7 @@ def key_expand
   Result (Key × (Array Std.U8 8#usize) × (Array Std.U8 8#usize))
   := do
   let state_base1 ← shake_init state_base
-  let s ← (↑(Array.to_slice key.seed) : Result (Slice Std.U8))
+  let s ← lift (Array.to_slice key.seed)
   let state_base2 ← shake_append state_base1 s
   let (key1, state_work1, sample_buffer) ←
     key_expand_loop0 key state_base2 state_work (Array.make 1#usize [ 0#u8 ])

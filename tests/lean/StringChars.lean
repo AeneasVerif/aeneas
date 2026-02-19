@@ -20,9 +20,7 @@ def collect : Result Unit := do
 /- [string_chars::print_vec]:
    Source: 'tests/src/string-chars.rs', lines 8:0-11:1 -/
 def print_vec : Result Unit := do
-  let s ←
-    (↑(Array.to_slice (Array.make 3#usize [ 1#i32, 3#i32, 2#i32 ])) : Result
-      (Slice Std.I32))
+  let s ← lift (Array.to_slice (Array.make 3#usize [ 1#i32, 3#i32, 2#i32 ]))
   let v ← alloc.slice.Slice.to_vec core.clone.CloneI32 s
   let a ←
     core.fmt.rt.Argument.new_debug (core.fmt.DebugVec core.fmt.DebugI32) v
