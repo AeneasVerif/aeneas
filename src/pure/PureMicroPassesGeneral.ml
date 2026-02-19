@@ -2027,7 +2027,10 @@ let eliminate_box_functions =
     deriving [Clone] for recursive types which use box. This is a hack: we need
     a general solution (the same issue happens if you use other datatypes like [Vec]
     - we introduce a workaround for a few types like [Box] or [&T] because those uses
-    are really common and we consider them as builtin). *)
+    are really common and we consider them as builtin).
+
+    TODO: move this to the prepasses
+*)
 let simplify_trait_calls_visitor (ctx : ctx) (def : fun_decl) =
   (* Create a map from pattern to method *)
   let pats =
