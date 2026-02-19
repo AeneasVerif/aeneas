@@ -184,7 +184,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
               match known_args_tys with
               | [ ty ] ->
                   if ty = hole && Config.backend () = Lean then
-                    (hole, mk_holes (), true)
+                    (hole, mk_holes (), false)
                   else (known_f_ty, known_args_tys, false)
               | _ -> (known_f_ty, known_args_tys, false)
             end

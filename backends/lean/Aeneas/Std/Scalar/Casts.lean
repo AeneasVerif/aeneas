@@ -107,8 +107,8 @@ def IScalar.cast_fromBool (ty : IScalarTy) (x : Bool) : IScalar ty :=
 /-- This theorem allows us not to use bit-vectors when reasoning about casts, if there are no overflows -/
 theorem UScalar.cast_inBounds_spec {src_ty : UScalarTy}
   (tgt_ty : UScalarTy) (x : UScalar src_ty) (h : x.val ≤ UScalar.max tgt_ty) :
-  toResult (UScalar.cast tgt_ty x) ⦃ y => y.val = x.val ⦄ := by
-  simp only [toResult, cast, BitVec.truncate_eq_setWidth, WP.spec_ok, UScalar.val]
+  lift (UScalar.cast tgt_ty x) ⦃ y => y.val = x.val ⦄ := by
+  simp only [lift, cast, BitVec.truncate_eq_setWidth, WP.spec_ok, UScalar.val]
   simp only [max, BitVec.toNat_setWidth, bv_toNat] at *
   have : 0 < 2^tgt_ty.numBits := by simp
   apply Nat.mod_eq_of_lt; omega
@@ -117,8 +117,8 @@ theorem UScalar.cast_inBounds_spec {src_ty : UScalarTy}
 def UScalar.hcast_inBounds_spec {src_ty : UScalarTy}
   (tgt_ty : IScalarTy) (x : UScalar src_ty)
   (h : x.val ≤ IScalar.max tgt_ty) :
-  toResult (UScalar.hcast tgt_ty x) ⦃ y => y.val = x.val ⦄ := by
-  simp only [toResult, hcast, BitVec.truncate_eq_setWidth, WP.spec_ok]
+  lift (UScalar.hcast tgt_ty x) ⦃ y => y.val = x.val ⦄ := by
+  simp only [lift, hcast, BitVec.truncate_eq_setWidth, WP.spec_ok]
   simp only [IScalar.val, UScalar.val]
   simp only [IScalar.max, BitVec.toInt_setWidth, bv_toNat] at *
   apply Int.bmod_pow2_eq_of_inBounds'
@@ -130,9 +130,9 @@ def UScalar.hcast_inBounds_spec {src_ty : UScalarTy}
 /-- This theorem allows us not to use bit-vectors when reasoning about casts, if there are no overflows -/
 def IScalar.cast_inBounds_spec {src_ty : IScalarTy}
   (tgt_ty : IScalarTy) (x : IScalar src_ty) (h : IScalar.min tgt_ty ≤ x.val ∧ x.val ≤ IScalar.max tgt_ty) :
-  toResult (IScalar.cast tgt_ty x) ⦃ y => y.val = x.val ⦄
+  lift (IScalar.cast tgt_ty x) ⦃ y => y.val = x.val ⦄
   := by
-  simp only [toResult, cast, BitVec.signExtend, bv_toInt_eq, WP.spec_ok]
+  simp only [lift, cast, BitVec.signExtend, bv_toInt_eq, WP.spec_ok]
   simp only [IScalar.val]
   simp only [min, max, bv_toInt_eq, BitVec.toInt_ofInt] at *
   apply Int.bmod_pow2_eq_of_inBounds'
@@ -143,8 +143,8 @@ def IScalar.cast_inBounds_spec {src_ty : IScalarTy}
 /-- This theorem allows us not to use bit-vectors when reasoning about casts, if there are no overflows -/
 def IScalar.hcast_inBounds_spec {src_ty : IScalarTy}
   (tgt_ty : UScalarTy) (x : IScalar src_ty) (h : 0 ≤ x.val ∧ x.val ≤ UScalar.max tgt_ty) :
-  toResult (IScalar.hcast tgt_ty x) ⦃ y => y.val = x.val ⦄ := by
-  simp only [toResult, hcast, BitVec.signExtend, bv_toInt_eq, WP.spec_ok]
+  lift (IScalar.hcast tgt_ty x) ⦃ y => y.val = x.val ⦄ := by
+  simp only [lift, hcast, BitVec.signExtend, bv_toInt_eq, WP.spec_ok]
   simp only [IScalar.val, UScalar.val]
   simp only [UScalar.max, Nat.ofNat_pos, pow_pos, Nat.cast_pred, Nat.cast_pow, Nat.cast_ofNat,
     bv_toInt_eq, BitVec.toNat_ofInt, Int.ofNat_toNat] at *

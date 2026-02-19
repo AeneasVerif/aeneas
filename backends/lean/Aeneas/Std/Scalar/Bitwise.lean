@@ -223,38 +223,38 @@ uscalar @[progress] theorem «%S».ShiftLeft_IScalar_spec {ty1} (x : «%S») (y 
 
 @[progress]
 theorem UScalar.and_spec {ty} (x y : UScalar ty) :
-  toResult (x &&& y) ⦃ z => z.val = (x &&& y).val ∧ z.bv = x.bv &&& y.bv ⦄ := by
-  simp [toResult]
+  lift (x &&& y) ⦃ z => z.val = (x &&& y).val ∧ z.bv = x.bv &&& y.bv ⦄ := by
+  simp [lift]
   rfl
 
 @[progress]
 theorem UScalar.or_spec {ty} (x y : UScalar ty) :
-  toResult (x ||| y) ⦃ z => z.val = (x ||| y).val ∧ z.bv = x.bv ||| y.bv ⦄ := by
-  simp [toResult]
+  lift (x ||| y) ⦃ z => z.val = (x ||| y).val ∧ z.bv = x.bv ||| y.bv ⦄ := by
+  simp [lift]
   rfl
 
 @[progress]
 theorem UScalar.xor_spec {ty} (x y : UScalar ty) :
-  toResult (x ^^^ y) ⦃ z => z.val = (x ^^^ y).val ∧ z.bv = x.bv ^^^ y.bv ⦄ := by
-  simp [toResult]
+  lift (x ^^^ y) ⦃ z => z.val = (x ^^^ y).val ∧ z.bv = x.bv ^^^ y.bv ⦄ := by
+  simp [lift]
   rfl
 
 @[progress]
 theorem IScalar.and_spec {ty} (x y : IScalar ty) :
-  toResult (x &&& y) ⦃ z => z.val = (x &&& y).val ∧ z.bv = x.bv &&& y.bv ⦄ := by
-  simp [toResult]
+  lift (x &&& y) ⦃ z => z.val = (x &&& y).val ∧ z.bv = x.bv &&& y.bv ⦄ := by
+  simp [lift]
   rfl
 
 @[progress]
 theorem IScalar.or_spec {ty} (x y : IScalar ty) :
-  toResult (x ||| y) ⦃ z => z.val = (x ||| y).val ∧ z.bv = x.bv ||| y.bv ⦄ := by
-  simp [toResult]
+  lift (x ||| y) ⦃ z => z.val = (x ||| y).val ∧ z.bv = x.bv ||| y.bv ⦄ := by
+  simp [lift]
   rfl
 
 @[progress]
 theorem IScalar.xor_spec {ty} (x y : IScalar ty) :
-  toResult (x ^^^ y) ⦃ z => z.val = (x ^^^ y).val ∧ z.bv = x.bv ^^^ y.bv ⦄ := by
-  simp [toResult]
+  lift (x ^^^ y) ⦃ z => z.val = (x ^^^ y).val ∧ z.bv = x.bv ^^^ y.bv ⦄ := by
+  simp [lift]
   rfl
 
 @[simp, bvify_simps] theorem UScalar.bv_and {ty} (x y : UScalar ty) : (x &&& y).bv = x.bv &&& y.bv := by rfl
