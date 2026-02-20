@@ -102,6 +102,11 @@ let extract_literal (span : Meta.span) (fmt : F.formatter) ~(is_pattern : bool)
         "Float, string, non-ASCII chars and byte string literals are \
          unsupported"
         fmt
+  | VPureNat n -> F.pp_print_string fmt (Z.to_string n)
+  | VPureInt n ->
+      let s = Z.to_string n in
+      let s = if Z.sign n < 0 && inside then "(" ^ s ^ ")" else s in
+      F.pp_print_string fmt s
 
 let is_single_opaque_fun_decl_group (dg : Pure.fun_decl list) : bool =
   match dg with
@@ -289,6 +294,8 @@ let extract_literal_type (_ctx : extraction_ctx) (fmt : F.formatter)
       let prefix = if backend () = Lean then "Std." else "" in
       F.pp_print_string fmt (prefix ^ int_name (Unsigned int_ty))
   | TFloat float_ty -> F.pp_print_string fmt (float_name float_ty)
+  | TPureNat -> F.pp_print_string fmt "ℕ"
+  | TPureInt -> F.pp_print_string fmt "ℤ"
 
 (** [inside] constrols whether we should add parentheses or not around type
     applications (if [true] we add parentheses).

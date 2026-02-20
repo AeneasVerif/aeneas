@@ -231,27 +231,6 @@ let dest_arrow_ty (span : Meta.span) (ty : ty) : ty * ty =
   | Some (arg_ty, ret_ty) -> (arg_ty, ret_ty)
   | None -> [%craise] span "Not an arrow type"
 
-let compute_literal_type (cv : literal) : literal_type =
-  match cv with
-  | VScalar (SignedScalar (ty, _)) -> TInt ty
-  | VScalar (UnsignedScalar (ty, _)) -> TUInt ty
-  | VBool _ -> TBool
-  | VChar _ -> TChar
-  | VFloat _ | VStr _ | VByteStr _ ->
-      [%craise_opt_span] None
-        "Float, string and byte string literals are unsupported"
-
-let fvar_get_id (v : fvar) : fvar_id = v.id
-
-let mk_tpat_from_literal (cv : literal) : tpat =
-  let ty = TLiteral (compute_literal_type cv) in
-  { pat = PConstant cv; ty }
-
-let mk_tag (msg : string) (next_e : texpr) : texpr =
-  let e = Meta (Tag msg, next_e) in
-  let ty = next_e.ty in
-  { e; ty }
-
 let empty_generic_params : generic_params =
   { types = []; const_generics = []; trait_clauses = [] }
 
@@ -260,6 +239,29 @@ let empty_generic_args : generic_args =
 
 let mk_generic_args_from_types (types : ty list) : generic_args =
   { types; const_generics = []; trait_refs = [] }
+
+let compute_literal_type (cv : literal) : ty =
+  match cv with
+  | VScalar (SignedScalar (ty, _)) -> TLiteral (TInt ty)
+  | VScalar (UnsignedScalar (ty, _)) -> TLiteral (TUInt ty)
+  | VBool _ -> TLiteral TBool
+  | VChar _ -> TLiteral TChar
+  | VFloat { float_ty; _ } -> TLiteral (TFloat float_ty)
+  | VStr _ -> TAdt (TBuiltin TStr, empty_generic_args)
+  | VPureNat _ -> TLiteral TPureNat
+  | VPureInt _ -> TLiteral TPureInt
+  | VByteStr _ -> [%craise_opt_span] None "Byte string literals are unsupported"
+
+let fvar_get_id (v : fvar) : fvar_id = v.id
+
+let mk_tpat_from_literal (cv : literal) : tpat =
+  let ty = compute_literal_type cv in
+  { pat = PConstant cv; ty }
+
+let mk_tag (msg : string) (next_e : texpr) : texpr =
+  let e = Meta (Tag msg, next_e) in
+  let ty = next_e.ty in
+  { e; ty }
 
 type subst = {
   ty_subst : TypeVarId.id -> ty;

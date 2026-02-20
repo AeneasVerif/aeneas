@@ -80,7 +80,7 @@ type builtin_ty =
   | TSum  (** sum type with two variants: left and right *)
   | TLoopResult  (** A continue or a break. TODO: rename to TControlFlow *)
   | TError
-  | TFuel
+  | TFuel  (** TODO: move this to Literal? *)
   | TArray
   | TSlice
   | TStr
@@ -236,12 +236,8 @@ type int_ty = V.int_ty [@@deriving show, ord]
 type u_int_ty = V.u_int_ty [@@deriving show, ord]
 type float_value = V.float_value [@@deriving show, ord]
 type scalar_value = V.scalar_value [@@deriving show, ord]
-type char_value = Uchar.t [@@deriving ord]
-
-let show_char_value (c : Uchar.t) : string = Charon.Uchar.to_string c
-
-let pp_char_value (fmt : Format.formatter) (c : Uchar.t) : unit =
-  Charon.Uchar.pp fmt c
+type char_value = Charon.Uchar.t [@@deriving show, ord]
+type big_int = Charon.BigInt.big_int [@@deriving show, ord]
 
 (** Ancestor for iter visitor for [ty] *)
 class ['self] iter_ty_base =
@@ -261,6 +257,7 @@ class ['self] iter_ty_base =
     method visit_float_value : 'env -> float_value -> unit = fun _ _ -> ()
     method visit_scalar_value : 'env -> scalar_value -> unit = fun _ _ -> ()
     method visit_char_value : 'env -> char_value -> unit = fun _ _ -> ()
+    method visit_big_int : 'env -> big_int -> unit = fun _ _ -> ()
 
     method visit_trait_item_name : 'env -> trait_item_name -> unit =
       fun _ _ -> ()
@@ -314,6 +311,7 @@ class ['self] map_ty_base =
       fun _ x -> x
 
     method visit_char_value : 'env -> char_value -> char_value = fun _ x -> x
+    method visit_big_int : 'env -> big_int -> big_int = fun _ x -> x
 
     method visit_trait_item_name : 'env -> trait_item_name -> trait_item_name =
       fun _ x -> x
@@ -380,6 +378,7 @@ class virtual ['self] reduce_ty_base =
       fun _ _ -> self#zero
 
     method visit_char_value : 'env -> char_value -> 'a = fun _ _ -> self#zero
+    method visit_big_int : 'env -> big_int -> 'a = fun _ _ -> self#zero
     method visit_type_var_id : 'env -> type_var_id -> 'a = fun _ _ -> self#zero
 
     method visit_type_decl_id : 'env -> type_decl_id -> 'a =
@@ -453,6 +452,9 @@ class virtual ['self] mapreduce_ty_base =
       fun _ x -> (x, self#zero)
 
     method visit_char_value : 'env -> char_value -> char_value * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_big_int : 'env -> big_int -> big_int * 'a =
       fun _ x -> (x, self#zero)
 
     method visit_type_var_id : 'env -> type_var_id -> type_var_id * 'a =
@@ -630,6 +632,8 @@ and literal_type =
   | TFloat of float_type
   | TBool
   | TChar
+  | TPureNat  (** Natural number *)
+  | TPureInt  (** Mathematical (unbounded) integer *)
 
 and literal =
   | VScalar of scalar_value
@@ -638,6 +642,8 @@ and literal =
   | VChar of char_value
   | VByteStr of int list
   | VStr of string
+  | VPureNat of big_int
+  | VPureInt of big_int
 
 and type_param = { index : type_var_id; name : string }
 [@@deriving

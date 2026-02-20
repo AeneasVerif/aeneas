@@ -543,6 +543,14 @@ let scalar_name (ty : literal_type) : string =
       match backend () with
       | FStar | Coq | HOL4 -> "char"
       | Lean -> "Char")
+  | TPureNat -> (
+      match backend () with
+      | FStar | Coq | HOL4 -> "nat"
+      | Lean -> "Nat")
+  | TPureInt -> (
+      match backend () with
+      | FStar | Coq | HOL4 -> "int"
+      | Lean -> "Int")
 
 (** Extraction context.
 
@@ -2044,7 +2052,9 @@ let ctx_compute_var_basename (span : Meta.span) (ctx : extraction_ctx)
           | TBool -> "b"
           | TChar -> "c"
           | TInt _ | TUInt _ -> "i"
-          | TFloat _ -> "fl")
+          | TFloat _ -> "fl"
+          | TPureNat -> "n"
+          | TPureInt -> "i")
       | TArrow _ -> "f"
       | TTraitType (_, name) -> name_from_type_ident name
       | TNever | TError -> "x"

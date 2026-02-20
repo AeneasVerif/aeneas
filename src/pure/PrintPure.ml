@@ -245,6 +245,8 @@ let literal_type_to_string (ty : literal_type) : string =
   | TFloat fty -> float_type_to_string fty
   | TBool -> "bool"
   | TChar -> "char"
+  | TPureNat -> "ℕ"
+  | TPureInt -> "ℤ"
 
 let type_var_to_string (v : type_param) = "(" ^ v.name ^ ": Type)"
 
@@ -263,6 +265,8 @@ let literal_to_string (lit : literal) : string =
   | VChar c -> Charon.Uchar.to_string c
   | VStr s -> "\"" ^ s ^ "\""
   | VByteStr bs -> "[" ^ String.concat ", " (List.map string_of_int bs) ^ "]"
+  | VPureNat x -> Z.to_string x ^ "#ℕ"
+  | VPureInt x -> Z.to_string x ^ "#ℤ"
 
 let builtin_ty_to_string (aty : builtin_ty) : string =
   match aty with
