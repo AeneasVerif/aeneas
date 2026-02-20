@@ -23,6 +23,14 @@ def core.result.Result.unwrap {T E : Type}
   | .Ok x => .ok x
   | .Err _ => .fail .panic
 
+-- TODO: add pattern once we support partial monomorphization
+def core.result.Result.unwrap.mut {T E : Type}
+  (_ : core.fmt.Debug E) (e : core.result.Result T E) : Std.Result (T × (T → core.result.Result T E)) :=
+  match e with
+  | .Ok x => .ok (x, fun x => .Ok x)
+  | .Err _ => .fail .panic
+
+
 -- TODO: this is a simplistic model
 @[rust_type "core::fmt::Arguments"]
 def core.fmt.Arguments : Type := Unit

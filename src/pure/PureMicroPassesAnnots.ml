@@ -193,6 +193,7 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
           | Fail | Assert | FuelDecrease | FuelEqZero ->
               (f.ty, mk_known (), false)
           | UpdateAtIndex _ -> (known_f_ty, known_args_tys, false)
+          | ResultUnwrapMut -> (hole, mk_holes (), false)
         end
       | FromLlbc (fid, lp_id) -> begin
           (* Lookup the signature *)

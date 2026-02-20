@@ -1283,6 +1283,7 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (UpdateAtIndex Slice, "Slice.update");
         (UpdateAtIndex Array, "Array.update");
         (ToResult, "lift");
+        (ResultUnwrapMut, "core.result.Result.unwrap.mut");
       ]
   | HOL4 ->
       (* We don't provide [FuelDecrease] and [FuelEqZero] on purpose *)

@@ -127,6 +127,10 @@ type pure_builtin_fun_id =
           We use this when using `ok ...` would result in let-bindings getting
           simplified away (in a backend like Lean). *)
   | Discriminant  (** Discriminant read *)
+  | ResultUnwrapMut
+      (** Temporary fix: the
+          [core::result::{core::result::Result<@T, @E>}::unwrap] instantiated
+          with mutable borrows - TODO: remove *)
 [@@deriving show, ord]
 
 (* Builtin declarations coming from external libraries.
