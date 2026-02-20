@@ -1702,7 +1702,9 @@ let simplify_trait_calls (crate : crate) : crate =
                       let kind = FunId (FRegular method_ref.binder_value.id) in
                       let func = FnOpRegular { kind; generics } in
                       Call { call with func }
-                  | _ -> raise (Failure "TODO"))
+                  | _ ->
+                      (* TODO: *)
+                      super_visit ())
               | _ -> [%internal_error] span)
             else super_visit ()
         | _ -> super_visit ())
