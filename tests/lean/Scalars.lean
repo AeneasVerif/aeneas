@@ -88,4 +88,22 @@ def u32_default : Result Std.U32 := do
 def i32_default : Result Std.I32 := do
   ok (core.default.DefaultI32.default)
 
+/- [scalars::match_usize]:
+   Source: 'tests/src/scalars.rs', lines 63:0-68:1 -/
+def match_usize (x : Std.Usize) : Result Bool := do
+  match x.val with
+  | 0 => ok true
+  | 1 => ok true
+  | 2 => ok true
+  | _ => ok false
+
+/- [scalars::match_isize]:
+   Source: 'tests/src/scalars.rs', lines 70:0-75:1 -/
+def match_isize (x : Std.Isize) : Result Std.Isize := do
+  match x.val with
+  | 0 => ok 0#isize
+  | -1 => ok 0#isize
+  | 2 => ok 0#isize
+  | _ => x + 1#isize
+
 end scalars
