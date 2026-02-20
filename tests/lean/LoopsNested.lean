@@ -387,11 +387,9 @@ def mul_add_as_plus_e_loop0
       match o with
       | none => ok (done ())
       | some j =>
-        let iter4 ←
-          core.iter.traits.collect.IntoIterator.Blanket.into_iter
-            (core.iter.traits.iterator.IteratorRange core.iter.range.StepUsize)
+        let a_row_temp2 ←
+          mul_add_as_plus_e_loop0_loop0 a_row_temp1 j
             { start := 0#usize, «end» := 4#usize }
-        let a_row_temp2 ← mul_add_as_plus_e_loop0_loop0 a_row_temp1 j iter4
         ok (cont (a_row_temp2, iter3)))
     (a_row_temp, iter1)
 
@@ -407,13 +405,9 @@ def mul_add_as_plus_e
   let a_row_temp ← alloc.vec.from_elem core.clone.CloneU8 0#u8 i1
   let i2 ← i * 2#usize
   let _ ← alloc.vec.from_elem core.clone.CloneU8 0#u8 i2
-  let sb ←
+  let iter1 ←
     core.iter.range.IteratorRange.step_by core.iter.range.StepUsize
       { start := 0#usize, «end» := N } 8#usize
-  let iter1 ←
-    core.iter.traits.collect.IntoIterator.Blanket.into_iter
-      (core.iter.traits.iterator.IteratorStepBy
-      (core.iter.traits.iterator.IteratorRange core.iter.range.StepUsize)) sb
   mul_add_as_plus_e_loop0 a_row_temp iter1
   ok out
 

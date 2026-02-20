@@ -26,12 +26,9 @@ def iter_range_loop (iter : core.ops.range.Range Std.Usize) : Result Unit := do
 
 /- [iterators::iter_range]:
    Source: 'tests/src/iterators.rs', lines 4:0-6:1 -/
+@[reducible]
 def iter_range : Result Unit := do
-  let iter ←
-    core.iter.traits.collect.IntoIterator.Blanket.into_iter
-      (core.iter.traits.iterator.IteratorRange core.iter.range.StepUsize)
-      { start := 0#usize, «end» := 32#usize }
-  iter_range_loop iter
+  iter_range_loop { start := 0#usize, «end» := 32#usize }
 
 /- [iterators::iter_range_step_by]: loop 0:
    Source: 'tests/src/iterators.rs', lines 9:4-9:33 -/
@@ -54,13 +51,9 @@ def iter_range_step_by_loop
 /- [iterators::iter_range_step_by]:
    Source: 'tests/src/iterators.rs', lines 8:0-10:1 -/
 def iter_range_step_by (n : Std.Usize) : Result Unit := do
-  let sb ←
+  let iter ←
     core.iter.range.IteratorRange.step_by core.iter.range.StepUsize
       { start := 0#usize, «end» := n } 2#usize
-  let iter ←
-    core.iter.traits.collect.IntoIterator.Blanket.into_iter
-      (core.iter.traits.iterator.IteratorStepBy
-      (core.iter.traits.iterator.IteratorRange core.iter.range.StepUsize)) sb
   iter_range_step_by_loop iter
 
 /- [iterators::slice_iter_mut_while]: loop 1:
@@ -246,10 +239,7 @@ def slice_chunks_exact_iter_loop0
       | none => ok (done ())
       | some _ =>
         let s ← lift (Array.to_slice key)
-        let i ← core.slice.Slice.iter s
-        let iter3 ←
-          core.iter.traits.collect.IntoIterator.Blanket.into_iter
-            (core.iter.traits.iterator.IteratorSliceIter Std.U128) i
+        let iter3 ← core.slice.Slice.iter s
         slice_chunks_exact_iter_loop0_loop0 iter3
         ok (cont iter2))
     iter
@@ -258,10 +248,7 @@ def slice_chunks_exact_iter_loop0
    Source: 'tests/src/iterators.rs', lines 48:0-52:1 -/
 def slice_chunks_exact_iter
   (key : Array Std.U128 128#usize) (data : Slice Std.U8) : Result Unit := do
-  let ce ← core.slice.Slice.chunks_exact data 16#usize
-  let iter ←
-    core.iter.traits.collect.IntoIterator.Blanket.into_iter
-      (core.iter.traits.iterator.IteratorChunksExact Std.U8) ce
+  let iter ← core.slice.Slice.chunks_exact data 16#usize
   slice_chunks_exact_iter_loop0 key iter
 
 /- [iterators::Key]
@@ -294,10 +281,7 @@ def key_iter_slice_iter_loop0
       | none => ok (done ())
       | some _ =>
         let s ← lift (Array.to_slice key1)
-        let i ← core.slice.Slice.iter s
-        let iter3 ←
-          core.iter.traits.collect.IntoIterator.Blanket.into_iter
-            (core.iter.traits.iterator.IteratorSliceIter Std.U128) i
+        let iter3 ← core.slice.Slice.iter s
         key_iter_slice_iter_loop0_loop0 iter3
         ok (cont (key1, iter2)))
     (key, iter)
@@ -305,10 +289,7 @@ def key_iter_slice_iter_loop0
 /- [iterators::key_iter_slice_iter]:
    Source: 'tests/src/iterators.rs', lines 56:0-60:1 -/
 def key_iter_slice_iter (key : Key) (data : Slice Std.U8) : Result Unit := do
-  let i ← core.slice.Slice.iter data
-  let iter ←
-    core.iter.traits.collect.IntoIterator.Blanket.into_iter
-      (core.iter.traits.iterator.IteratorSliceIter Std.U8) i
+  let iter ← core.slice.Slice.iter data
   key_iter_slice_iter_loop0 key iter
 
 end iterators
