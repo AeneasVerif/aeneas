@@ -1188,6 +1188,9 @@ and qualif_id =
   | Global of global_decl_id
   | AdtCons of adt_cons_id  (** A function or ADT constructor identifier *)
   | Proj of projection  (** Field projector *)
+  | ScalarValProj of integer_type
+      (** Projector to the mathematical integer value of a scalar type (e.g.,
+          [UScalar.val : UScalar ty -> Nat]) *)
   | TraitConst of trait_ref * string  (** A trait associated constant *)
   | MkDynTrait of trait_ref  (** Dyn trait constructor *)
   | LoopOp  (** Loop fixed-point operator *)

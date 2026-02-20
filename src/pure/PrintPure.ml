@@ -1045,6 +1045,8 @@ and app_to_string ?(span : Meta.span option = None) (env : fmt_env)
               ( ConstStrings.constructor_prefix ^ adt_s ^ "?." ^ field_s,
                 [],
                 false )
+          | ScalarValProj (Signed _) -> ("IScalar.val", [], false)
+          | ScalarValProj (Unsigned _) -> ("UScalar.val", [], false)
           | TraitConst (trait_ref, const_name) ->
               let trait_ref = trait_ref_to_string env true trait_ref in
               let qualif = trait_ref ^ "." ^ const_name in

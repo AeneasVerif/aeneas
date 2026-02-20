@@ -33,8 +33,13 @@ let compute_body_fun_deps (e : texpr) : FunIdSet.t =
       method! visit_qualif _ id =
         match id.id with
         | FunOrOp (Unop _ | Binop _)
-        | Global _ | AdtCons _ | Proj _ | TraitConst _ | MkDynTrait _ | LoopOp
-          -> ()
+        | Global _
+        | AdtCons _
+        | Proj _
+        | ScalarValProj _
+        | TraitConst _
+        | MkDynTrait _
+        | LoopOp -> ()
         | FunOrOp (Fun fid) -> (
             match fid with
             | Pure _ -> ()
