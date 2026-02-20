@@ -3212,3 +3212,77 @@ let let_to_match (ctx : ctx) (def : fun_decl) =
       def.body
   in
   { def with body }
+
+(** The syntax to match over [isize] and [usize] values doesn't work in Lean,
+    because the bitwidth is unknown. In order to make it work, we update these
+    matches so that they match over the inner mathematical value.
+
+    For instance:
+    {[
+      match x with
+      | 0#usize => ...
+      | 1#usize => ...
+      | _ => ...
+    ]}
+
+    becomes:
+    {[
+      match x.val with
+      | 0 => ...
+      | 1 => ...
+          | _ => ...
+    ]} *)
+let update_match_over_isize_usize_visitor (_ctx : ctx) (f : fun_decl) =
+  let span = f.item_meta.span in
+  object
+    inherit [_] map_expr as super
+
+    method! visit_Switch env scrut switch =
+      match switch with
+      | If _ -> super#visit_Switch env scrut switch
+      | Match branches -> (
+          let int_ty : (integer_type * ty) option =
+            match scrut.ty with
+            | TLiteral (TInt Isize) -> Some (Signed Isize, TLiteral TPureInt)
+            | TLiteral (TUInt Usize) -> Some (Unsigned Usize, TLiteral TPureNat)
+            | _ -> None
+          in
+          match int_ty with
+          | None -> super#visit_Switch env scrut switch
+          | Some (int_ty, pure_ty) ->
+              (* Update the scrutinee *)
+              let proj =
+                {
+                  e =
+                    Qualif
+                      {
+                        id = ScalarValProj int_ty;
+                        generics = empty_generic_args;
+                      };
+                  ty = mk_arrow scrut.ty pure_ty;
+                }
+              in
+              let scrut = [%add_loc] mk_app span proj scrut in
+              (* Update the branches *)
+              let branches =
+                List.map
+                  (fun ({ pat; branch } : match_branch) ->
+                    let pat =
+                      match pat.pat with
+                      | PIgnored -> { pat = PIgnored; ty = pure_ty }
+                      | PConstant (VScalar (UnsignedScalar (_, v))) ->
+                          { pat = PConstant (VPureNat v); ty = pure_ty }
+                      | PConstant (VScalar (SignedScalar (_, v))) ->
+                          { pat = PConstant (VPureInt v); ty = pure_ty }
+                      | _ ->
+                          (* Shouldn't happen*)
+                          [%internal_error] span
+                    in
+                    { pat; branch })
+                  branches
+              in
+              super#visit_Switch env scrut (Match branches))
+  end
+
+let update_match_over_isize_usize =
+  lift_expr_map_visitor update_match_over_isize_usize_visitor
