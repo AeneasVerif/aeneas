@@ -289,13 +289,13 @@ def add_with_carry_loop
   then
     let i2 ←
       alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice Std.U32) x i
-    let i3 ← lift (UScalar.cast Std.UScalarTy.U32 c0)
+    let i3 ← lift (UScalar.cast .U32 c0)
     let (sum, c1) ← lift (core.num.U32.overflowing_add i2 i3)
     let i4 ←
       alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice Std.U32) y i
     let (sum1, c2) ← lift (core.num.U32.overflowing_add sum i4)
-    let i5 ← lift (UScalar.cast_fromBool Std.UScalarTy.U8 c1)
-    let i6 ← lift (UScalar.cast_fromBool Std.UScalarTy.U8 c2)
+    let i5 ← lift (UScalar.cast_fromBool .U8 c1)
+    let i6 ← lift (UScalar.cast_fromBool .U8 c2)
     let c01 ← i5 + i6
     let (_, index_mut_back) ←
       alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice Std.U32) x
@@ -343,11 +343,11 @@ def add_loop
     let yi ← get_or_zero y i
     let i1 ←
       alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice Std.U32) x i
-    let i2 ← lift (UScalar.cast Std.UScalarTy.U32 c0)
+    let i2 ← lift (UScalar.cast .U32 c0)
     let (sum, c1) ← lift (core.num.U32.overflowing_add i1 i2)
     let (sum1, c2) ← lift (core.num.U32.overflowing_add sum yi)
-    let i3 ← lift (UScalar.cast_fromBool Std.UScalarTy.U8 c1)
-    let i4 ← lift (UScalar.cast_fromBool Std.UScalarTy.U8 c2)
+    let i3 ← lift (UScalar.cast_fromBool .U8 c1)
+    let i4 ← lift (UScalar.cast_fromBool .U8 c2)
     let c01 ← i3 + i4
     let (_, index_mut_back) ←
       alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice Std.U32) x
@@ -370,9 +370,8 @@ def add
   let x1 ← alloc.vec.Vec.resize core.clone.CloneU32 x max1 0#u32
   let (x2, c0) ← add_loop x1 y max1 0#u8 0#usize
   if c0 != 0#u8
-  then
-    let i2 ← lift (UScalar.cast Std.UScalarTy.U32 c0)
-    alloc.vec.Vec.push x2 i2
+  then let i2 ← lift (UScalar.cast .U32 c0)
+       alloc.vec.Vec.push x2 i2
   else ok x2
 
 end tutorial

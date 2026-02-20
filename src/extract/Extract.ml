@@ -426,16 +426,17 @@ let extract_cast_kind_hol4 (span : Meta.span)
 let extract_cast_kind_gen (span : Meta.span)
     (extract_expr : inside:bool -> texpr -> unit) (fmt : F.formatter)
     ~(inside : bool) (kind : cast_kind) (arg : texpr) : unit =
-  let integer_type_to_string (ty : integer_type) : string =
-    if backend () = Lean then
-      match ty with
-      | Unsigned _ -> "Std.UScalarTy." ^ int_name ty
-      | Signed _ -> "Std.IScalarTy." ^ int_name ty
-    else
-      StringUtils.capitalize_first_letter (PrintPure.integer_type_to_string ty)
-  in
   match kind with
   | CastLit (src, tgt) ->
+      let integer_type_to_string (ty : integer_type) : string =
+        if backend () = Lean then
+          match ty with
+          | Unsigned _ -> "." ^ int_name ty
+          | Signed _ -> "." ^ int_name ty
+        else
+          StringUtils.capitalize_first_letter
+            (PrintPure.integer_type_to_string ty)
+      in
       if inside then F.pp_print_string fmt "(";
       (* Rem.: the source type is an implicit parameter *)
       (* Different cases depending on the conversion *)
@@ -518,6 +519,15 @@ let extract_cast_kind_gen (span : Meta.span)
         | TUInt ty -> Unsigned ty
         | _ ->
             [%craise] span "Can only generate code for casts between integers"
+      in
+      let integer_type_to_string (ty : integer_type) : string =
+        if backend () = Lean then
+          match ty with
+          | Unsigned _ -> "Std." ^ int_name ty
+          | Signed _ -> "Std." ^ int_name ty
+        else
+          StringUtils.capitalize_first_letter
+            (PrintPure.integer_type_to_string ty)
       in
       let tgt = integer_type_to_string tgt_ty in
       F.pp_print_space fmt ();

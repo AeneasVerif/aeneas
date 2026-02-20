@@ -31,7 +31,7 @@ def U32.Insts.DynTrait : Trait Std.U32 := {
 /- [dyn::{dyn::Trait for bool}::get]:
    Source: 'tests/src/dyn.rs', lines 14:4-16:5 -/
 def Bool.Insts.DynTrait.get (self : Bool) : Result Std.U32 := do
-  ok (UScalar.cast_fromBool Std.UScalarTy.U32 self)
+  ok (UScalar.cast_fromBool .U32 self)
 
 /- Trait implementation: [dyn::{dyn::Trait for bool}]
    Source: 'tests/src/dyn.rs', lines 13:0-17:1 -/
