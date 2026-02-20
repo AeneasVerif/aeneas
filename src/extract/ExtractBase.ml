@@ -609,7 +609,7 @@ let name_to_string (ctx : extraction_ctx) =
 let ty_to_string (ctx : extraction_ctx) =
   PrintPure.ty_to_string (extraction_ctx_to_fmt_env ctx) false
 
-let type_param_to_string = Print.Types.type_param_to_string
+let type_param_to_string = PrintPure.type_param_to_string
 
 let trait_clause_to_string (ctx : extraction_ctx) =
   PrintPure.trait_clause_to_string (extraction_ctx_to_fmt_env ctx)

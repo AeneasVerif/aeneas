@@ -447,6 +447,8 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
         let kind, can_fail =
           match kind with
           | CastScalar (src_ty, tgt_ty) ->
+              let src_ty = translate_literal_type src_ty in
+              let tgt_ty = translate_literal_type tgt_ty in
               (CastLit (src_ty, tgt_ty), not (Config.backend () = Lean))
           | CastRawPtr (src_ty, tgt_ty) ->
               (* We only support casts between pointers to literal types for now *)
@@ -468,6 +470,8 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               in
               let src_ty, src_mut = get_ty src_ty in
               let tgt_ty, tgt_mut = get_ty tgt_ty in
+              let src_ty = translate_literal_type src_ty in
+              let tgt_ty = translate_literal_type tgt_ty in
               (CastRawPtr ((src_ty, src_mut), (tgt_ty, tgt_mut)), true)
           | CastFnPtr _ -> [%craise] ctx.span "TODO: function casts"
           | CastUnsize _ ->
@@ -1276,7 +1280,9 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
       in
       let branches = List.map translate_branch branches in
       let otherwise = translate_expr otherwise ctx in
-      let pat_ty = TLiteral (TypesUtils.integer_as_literal int_ty) in
+      let pat_ty =
+        TLiteral (translate_literal_type (TypesUtils.integer_as_literal int_ty))
+      in
       let otherwise_pat : tpat = { pat = PIgnored; ty = pat_ty } in
       let otherwise : match_branch =
         { pat = otherwise_pat; branch = otherwise }

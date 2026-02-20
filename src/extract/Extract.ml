@@ -441,13 +441,9 @@ let extract_cast_kind_gen (span : Meta.span)
       (* Different cases depending on the conversion *)
       (let cast_str, src, tgt =
          match (src, tgt) with
-         | _, _
-           when ValuesUtils.literal_type_is_integer src
-                && ValuesUtils.literal_type_is_integer tgt ->
-             let src, tgt =
-               ( TypesUtils.literal_as_integer src,
-                 TypesUtils.literal_as_integer tgt )
-             in
+         | _, _ when literal_type_is_integer src && literal_type_is_integer tgt
+           ->
+             let src, tgt = (literal_as_integer src, literal_as_integer tgt) in
              let cast_str =
                match backend () with
                | Coq | FStar -> "scalar_cast"
@@ -467,7 +463,7 @@ let extract_cast_kind_gen (span : Meta.span)
              let tgt = integer_type_to_string tgt in
              (cast_str, src, Some tgt)
          | TBool, TInt _ | TBool, TUInt _ ->
-             let tgt = TypesUtils.literal_as_integer tgt in
+             let tgt = literal_as_integer tgt in
              let cast_str =
                match backend () with
                | Coq | FStar -> "scalar_cast_bool"

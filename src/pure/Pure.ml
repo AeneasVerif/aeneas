@@ -41,6 +41,7 @@ type trait_impl_id = T.trait_impl_id [@@deriving show, ord]
 type trait_clause_id = T.trait_clause_id [@@deriving show, ord]
 type trait_item_name = T.trait_item_name [@@deriving show, ord]
 type global_decl_id = T.global_decl_id [@@deriving show, ord]
+type type_decl_id = TypeDeclId.id [@@deriving show, ord]
 type fun_decl_id = A.fun_decl_id [@@deriving show, ord]
 type loop_id = LoopId.id [@@deriving show, ord]
 type region_group_id = T.region_group_id [@@deriving show, ord]
@@ -53,6 +54,8 @@ type ref_kind = Types.ref_kind [@@deriving show, ord]
 type 'a de_bruijn_var = 'a Types.de_bruijn_var [@@deriving show, ord]
 type llbc_fun_id = A.fun_id [@@deriving show, ord]
 type overflow_mode = E.overflow_mode [@@deriving show, ord]
+type de_bruijn_id = T.de_bruijn_id [@@deriving show, ord]
+type type_var_id = TypeVarId.id [@@deriving show, ord]
 
 (** A DeBruijn index identifying a group of bound variables *)
 type db_scope_id = int [@@deriving show, ord]
@@ -229,40 +232,129 @@ let error_out_of_fuel_id = VariantId.of_int 1
 let fuel_zero_id = VariantId.of_int 0
 let fuel_succ_id = VariantId.of_int 1
 
-type type_decl_id = TypeDeclId.id [@@deriving show, ord]
-type type_var_id = TypeVarId.id [@@deriving show, ord]
+type int_ty = V.int_ty [@@deriving show, ord]
+type u_int_ty = V.u_int_ty [@@deriving show, ord]
+type float_value = V.float_value [@@deriving show, ord]
+type scalar_value = V.scalar_value [@@deriving show, ord]
+type char_value = Uchar.t [@@deriving ord]
+
+let show_char_value (c : Uchar.t) : string = Charon.Uchar.to_string c
+
+let pp_char_value (fmt : Format.formatter) (c : Uchar.t) : unit =
+  Charon.Uchar.pp fmt c
 
 (** Ancestor for iter visitor for [ty] *)
-class ['self] iter_type_id_base =
-  object (_self : 'self)
-    inherit [_] T.iter_ty_base
+class ['self] iter_ty_base =
+  object (self : 'self)
+    inherit [_] VisitorsRuntime.iter
 
     method visit_const_generic_var_id : 'env -> const_generic_var_id -> unit =
       fun _ _ -> ()
 
+    method visit_span : 'env -> span -> unit = fun _ _ -> ()
     method visit_builtin_ty : 'env -> builtin_ty -> unit = fun _ _ -> ()
     method visit_overflow_mode : 'env -> overflow_mode -> unit = fun _ _ -> ()
+    method visit_integer_type : 'env -> integer_type -> unit = fun _ _ -> ()
+    method visit_int_ty : 'env -> int_ty -> unit = fun _ _ -> ()
+    method visit_u_int_ty : 'env -> u_int_ty -> unit = fun _ _ -> ()
+    method visit_float_type : 'env -> float_type -> unit = fun _ _ -> ()
+    method visit_float_value : 'env -> float_value -> unit = fun _ _ -> ()
+    method visit_scalar_value : 'env -> scalar_value -> unit = fun _ _ -> ()
+    method visit_char_value : 'env -> char_value -> unit = fun _ _ -> ()
+
+    method visit_trait_item_name : 'env -> trait_item_name -> unit =
+      fun _ _ -> ()
+
+    method visit_type_var_id : 'env -> type_var_id -> unit = fun _ _ -> ()
+    method visit_type_decl_id : 'env -> type_decl_id -> unit = fun _ _ -> ()
+    method visit_fun_decl_id : 'env -> fun_decl_id -> unit = fun _ _ -> ()
+    method visit_trait_decl_id : 'env -> trait_decl_id -> unit = fun _ _ -> ()
+    method visit_trait_impl_id : 'env -> trait_impl_id -> unit = fun _ _ -> ()
+
+    method visit_trait_clause_id : 'env -> trait_clause_id -> unit =
+      fun _ _ -> ()
+
+    method visit_global_decl_id : 'env -> global_decl_id -> unit = fun _ _ -> ()
+    method visit_de_bruijn_id : 'env -> de_bruijn_id -> unit = fun _ _ -> ()
+
+    method visit_de_bruijn_var :
+        'a. ('env -> 'a -> unit) -> 'env -> 'a de_bruijn_var -> unit =
+      fun f env v ->
+        match v with
+        | Bound (id, x) ->
+            self#visit_de_bruijn_id env id;
+            f env x
+        | Free x -> f env x
   end
 
 (** Ancestor for map visitor for [ty] *)
-class ['self] map_type_id_base =
-  object (_self : 'self)
-    inherit [_] T.map_ty_base
+class ['self] map_ty_base =
+  object (self : 'self)
+    inherit [_] VisitorsRuntime.map
 
     method visit_const_generic_var_id :
         'env -> const_generic_var_id -> const_generic_var_id =
       fun _ x -> x
 
+    method visit_span : 'env -> span -> span = fun _ x -> x
     method visit_builtin_ty : 'env -> builtin_ty -> builtin_ty = fun _ x -> x
 
     method visit_overflow_mode : 'env -> overflow_mode -> overflow_mode =
       fun _ x -> x
+
+    method visit_integer_type : 'env -> integer_type -> integer_type =
+      fun _ x -> x
+
+    method visit_int_ty : 'env -> int_ty -> int_ty = fun _ x -> x
+    method visit_u_int_ty : 'env -> u_int_ty -> u_int_ty = fun _ x -> x
+    method visit_float_type : 'env -> float_type -> float_type = fun _ x -> x
+    method visit_float_value : 'env -> float_value -> float_value = fun _ x -> x
+
+    method visit_scalar_value : 'env -> scalar_value -> scalar_value =
+      fun _ x -> x
+
+    method visit_char_value : 'env -> char_value -> char_value = fun _ x -> x
+
+    method visit_trait_item_name : 'env -> trait_item_name -> trait_item_name =
+      fun _ x -> x
+
+    method visit_type_var_id : 'env -> type_var_id -> type_var_id = fun _ x -> x
+
+    method visit_type_decl_id : 'env -> type_decl_id -> type_decl_id =
+      fun _ x -> x
+
+    method visit_fun_decl_id : 'env -> fun_decl_id -> fun_decl_id = fun _ x -> x
+
+    method visit_trait_decl_id : 'env -> trait_decl_id -> trait_decl_id =
+      fun _ x -> x
+
+    method visit_trait_impl_id : 'env -> trait_impl_id -> trait_impl_id =
+      fun _ x -> x
+
+    method visit_trait_clause_id : 'env -> trait_clause_id -> trait_clause_id =
+      fun _ x -> x
+
+    method visit_global_decl_id : 'env -> global_decl_id -> global_decl_id =
+      fun _ x -> x
+
+    method visit_de_bruijn_id : 'env -> de_bruijn_id -> de_bruijn_id =
+      fun _ x -> x
+
+    method visit_de_bruijn_var :
+        'a. ('env -> 'a -> 'a) -> 'env -> 'a de_bruijn_var -> 'a de_bruijn_var =
+      fun f env v ->
+        match v with
+        | Bound (id, x) ->
+            let id = self#visit_de_bruijn_id env id in
+            let x = f env x in
+            Bound (id, x)
+        | Free x -> Free (f env x)
   end
 
 (** Ancestor for reduce visitor for [ty] *)
-class virtual ['self] reduce_type_id_base =
+class virtual ['self] reduce_ty_base =
   object (self : 'self)
-    inherit [_] T.reduce_type_vars
+    inherit [_] VisitorsRuntime.reduce
 
     method visit_const_generic_var_id : 'env -> const_generic_var_id -> 'a =
       fun _ _ -> self#zero
@@ -272,12 +364,59 @@ class virtual ['self] reduce_type_id_base =
 
     method visit_overflow_mode : 'env -> overflow_mode -> 'a =
       fun _ _ -> self#zero
+
+    method visit_trait_item_name : 'env -> trait_item_name -> 'a =
+      fun _ _ -> self#zero
+
+    method visit_integer_type : 'env -> integer_type -> 'a =
+      fun _ _ -> self#zero
+
+    method visit_int_ty : 'env -> int_ty -> 'a = fun _ _ -> self#zero
+    method visit_u_int_ty : 'env -> u_int_ty -> 'a = fun _ _ -> self#zero
+    method visit_float_type : 'env -> float_type -> 'a = fun _ _ -> self#zero
+    method visit_float_value : 'env -> float_value -> 'a = fun _ _ -> self#zero
+
+    method visit_scalar_value : 'env -> scalar_value -> 'a =
+      fun _ _ -> self#zero
+
+    method visit_char_value : 'env -> char_value -> 'a = fun _ _ -> self#zero
+    method visit_type_var_id : 'env -> type_var_id -> 'a = fun _ _ -> self#zero
+
+    method visit_type_decl_id : 'env -> type_decl_id -> 'a =
+      fun _ _ -> self#zero
+
+    method visit_fun_decl_id : 'env -> fun_decl_id -> 'a = fun _ _ -> self#zero
+
+    method visit_trait_decl_id : 'env -> trait_decl_id -> 'a =
+      fun _ _ -> self#zero
+
+    method visit_trait_impl_id : 'env -> trait_impl_id -> 'a =
+      fun _ _ -> self#zero
+
+    method visit_trait_clause_id : 'env -> trait_clause_id -> 'a =
+      fun _ _ -> self#zero
+
+    method visit_global_decl_id : 'env -> global_decl_id -> 'a =
+      fun _ _ -> self#zero
+
+    method visit_de_bruijn_id : 'env -> de_bruijn_id -> 'a =
+      fun _ _ -> self#zero
+
+    method visit_de_bruijn_var :
+        'b. ('env -> 'b -> 'a) -> 'env -> 'b de_bruijn_var -> 'a =
+      fun f env v ->
+        match v with
+        | Bound (id, x) ->
+            let a0 = self#visit_de_bruijn_id env id in
+            let a1 = f env x in
+            self#plus a0 a1
+        | Free x -> f env x
   end
 
 (** Ancestor for mapreduce visitor for [ty] *)
-class virtual ['self] mapreduce_type_id_base =
+class virtual ['self] mapreduce_ty_base =
   object (self : 'self)
-    inherit [_] T.mapreduce_type_vars
+    inherit [_] VisitorsRuntime.mapreduce
 
     method visit_const_generic_var_id :
         'env -> const_generic_var_id -> const_generic_var_id * 'a =
@@ -290,126 +429,73 @@ class virtual ['self] mapreduce_type_id_base =
 
     method visit_overflow_mode : 'env -> overflow_mode -> overflow_mode * 'a =
       fun _ x -> (x, self#zero)
-  end
-
-type type_id = TAdtId of type_decl_id | TTuple | TBuiltin of builtin_ty
-
-and const_generic =
-  | CgGlobal of global_decl_id  (** A global constant *)
-  | CgVar of const_generic_var_id de_bruijn_var  (** A const generic variable *)
-  | CgValue of V.literal  (** A concrete value *)
-
-and const_generic_param = {
-  index : const_generic_var_id;
-      (** Index identifying the variable among other variables bound at the same
-          level. *)
-  name : string;  (** Const generic name *)
-  ty : T.literal_type;  (** Type of the const generic *)
-}
-[@@deriving
-  show,
-  ord,
-  visitors
-    {
-      name = "iter_type_id";
-      variety = "iter";
-      ancestors = [ "iter_type_id_base" ];
-      monomorphic = [ "env" ];
-      nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
-      concrete = true;
-      polymorphic = false;
-    },
-  visitors
-    {
-      name = "map_type_id";
-      variety = "map";
-      ancestors = [ "map_type_id_base" ];
-      monomorphic = [ "env" ];
-      nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
-      concrete = true;
-      polymorphic = false;
-    },
-  visitors
-    {
-      name = "reduce_type_id";
-      variety = "reduce";
-      ancestors = [ "reduce_type_id_base" ];
-      monomorphic = [ "env" ];
-      nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
-      polymorphic = false;
-    },
-  visitors
-    {
-      name = "mapreduce_type_id";
-      variety = "mapreduce";
-      ancestors = [ "mapreduce_type_id_base" ];
-      monomorphic = [ "env" ];
-      nude = true (* Don't inherit {!VisitorsRuntime.iter} *);
-      polymorphic = false;
-    }]
-
-type literal_type = T.literal_type [@@deriving show, ord]
-type type_param = T.type_param [@@deriving show, ord]
-
-(** Ancestor for iter visitor for [ty] *)
-class ['self] iter_ty_base =
-  object (self : 'self)
-    inherit [_] iter_type_id
-
-    method visit_type_param : 'env -> type_param -> unit =
-      fun e var ->
-        self#visit_type_var_id e var.index;
-        self#visit_string e var.name
-
-    method visit_trait_item_name : 'env -> trait_item_name -> unit =
-      fun _ _ -> ()
-  end
-
-(** Ancestor for map visitor for [ty] *)
-class ['self] map_ty_base =
-  object (self : 'self)
-    inherit [_] map_type_id
-
-    method visit_type_param : 'env -> type_param -> type_param =
-      fun e var ->
-        {
-          index = self#visit_type_var_id e var.index;
-          name = self#visit_string e var.name;
-        }
-
-    method visit_trait_item_name : 'env -> trait_item_name -> trait_item_name =
-      fun _ x -> x
-  end
-
-(** Ancestor for reduce visitor for [ty] *)
-class virtual ['self] reduce_ty_base =
-  object (self : 'self)
-    inherit [_] reduce_type_id
-
-    method visit_type_param : 'env -> type_param -> 'a =
-      fun e var ->
-        let x0 = self#visit_type_var_id e var.index in
-        let x1 = self#visit_string e var.name in
-        self#plus x0 x1
-
-    method visit_trait_item_name : 'env -> trait_item_name -> 'a =
-      fun _ _ -> self#zero
-  end
-
-(** Ancestor for mapreduce visitor for [ty] *)
-class virtual ['self] mapreduce_ty_base =
-  object (self : 'self)
-    inherit [_] mapreduce_type_id
-
-    method visit_type_param : 'env -> type_param -> type_param * 'a =
-      fun e var ->
-        let index, x0 = self#visit_type_var_id e var.index in
-        let name, x1 = self#visit_string e var.name in
-        ({ index; name }, self#plus x0 x1)
 
     method visit_trait_item_name :
         'env -> trait_item_name -> trait_item_name * 'a =
       fun _ x -> (x, self#zero)
+
+    method visit_integer_type : 'env -> integer_type -> integer_type * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_int_ty : 'env -> int_ty -> int_ty * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_u_int_ty : 'env -> u_int_ty -> u_int_ty * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_float_type : 'env -> float_type -> float_type * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_float_value : 'env -> float_value -> float_value * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_scalar_value : 'env -> scalar_value -> scalar_value * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_char_value : 'env -> char_value -> char_value * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_type_var_id : 'env -> type_var_id -> type_var_id * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_type_decl_id : 'env -> type_decl_id -> type_decl_id * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_fun_decl_id : 'env -> fun_decl_id -> fun_decl_id * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_trait_decl_id : 'env -> trait_decl_id -> trait_decl_id * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_trait_impl_id : 'env -> trait_impl_id -> trait_impl_id * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_trait_clause_id :
+        'env -> trait_clause_id -> trait_clause_id * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_global_decl_id : 'env -> global_decl_id -> global_decl_id * 'a
+        =
+      fun _ x -> (x, self#zero)
+
+    method visit_de_bruijn_id : 'env -> de_bruijn_id -> de_bruijn_id * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_de_bruijn_var :
+        'b.
+        ('env -> 'b -> 'b * 'a) ->
+        'env ->
+        'b de_bruijn_var ->
+        'b de_bruijn_var * 'a =
+      fun f env v ->
+        match v with
+        | Bound (id, x) ->
+            let id, a0 = self#visit_de_bruijn_id env id in
+            let x, a1 = f env x in
+            (Bound (id, x), self#plus a0 a1)
+        | Free x ->
+            let x, a = f env x in
+            (Free x, a)
   end
 
 type ty =
@@ -522,6 +608,38 @@ and trait_instance_id =
   | ParentClause of trait_instance_id * trait_decl_id * trait_clause_id
   | BuiltinOrAuto of builtin_impl_data
   | UnknownTrait of string
+
+and type_id = TAdtId of type_decl_id | TTuple | TBuiltin of builtin_ty
+
+and const_generic =
+  | CgGlobal of global_decl_id  (** A global constant *)
+  | CgVar of const_generic_var_id de_bruijn_var  (** A const generic variable *)
+  | CgValue of literal  (** A concrete value *)
+
+and const_generic_param = {
+  index : const_generic_var_id;
+      (** Index identifying the variable among other variables bound at the same
+          level. *)
+  name : string;  (** Const generic name *)
+  ty : literal_type;  (** Type of the const generic *)
+}
+
+and literal_type =
+  | TInt of int_ty
+  | TUInt of u_int_ty
+  | TFloat of float_type
+  | TBool
+  | TChar
+
+and literal =
+  | VScalar of scalar_value
+  | VFloat of float_value
+  | VBool of bool
+  | VChar of char_value
+  | VByteStr of int list
+  | VStr of string
+
+and type_param = { index : type_var_id; name : string }
 [@@deriving
   show,
   ord,
@@ -738,8 +856,6 @@ and type_decl = {
       polymorphic = false;
     }]
 
-type scalar_value = V.scalar_value [@@deriving show, ord]
-type literal = V.literal [@@deriving show, ord]
 type field_proj_kind = E.field_proj_kind [@@deriving show, ord]
 type field_id = FieldId.id [@@deriving show, ord]
 
@@ -1118,7 +1234,7 @@ and qualif = { id : qualif_id; generics : generic_args }
 class ['self] iter_expr_base =
   object (_self : 'self)
     inherit [_] iter_qualif
-    inherit! [_] iter_type_id
+    inherit! [_] iter_ty
     method visit_db_scope_id : 'env -> db_scope_id -> unit = fun _ _ -> ()
   end
 
@@ -1126,7 +1242,7 @@ class ['self] iter_expr_base =
 class ['self] map_expr_base =
   object (_self : 'self)
     inherit [_] map_qualif
-    inherit! [_] map_type_id
+    inherit! [_] map_ty
     method visit_db_scope_id : 'env -> db_scope_id -> db_scope_id = fun _ x -> x
   end
 
@@ -1134,7 +1250,7 @@ class ['self] map_expr_base =
 class virtual ['self] reduce_expr_base =
   object (self : 'self)
     inherit [_] reduce_qualif
-    inherit! [_] reduce_type_id
+    inherit! [_] reduce_ty
     method visit_db_scope_id : 'env -> db_scope_id -> 'a = fun _ _ -> self#zero
   end
 
@@ -1142,7 +1258,7 @@ class virtual ['self] reduce_expr_base =
 class virtual ['self] mapreduce_expr_base =
   object (self : 'self)
     inherit [_] mapreduce_qualif
-    inherit! [_] mapreduce_type_id
+    inherit! [_] mapreduce_ty
 
     method visit_db_scope_id : 'env -> db_scope_id -> db_scope_id * 'a =
       fun _ x -> (x, self#zero)

@@ -241,12 +241,6 @@ let compute_literal_type (cv : literal) : literal_type =
       [%craise_opt_span] None
         "Float, string and byte string literals are unsupported"
 
-let constant_expr_of_const_generic : const_generic -> Types.constant_expr_kind =
-  function
-  | CgGlobal id -> CGlobal { id; generics = TypesUtils.empty_generic_args }
-  | CgVar v -> CVar v
-  | CgValue l -> CLiteral l
-
 let fvar_get_id (v : fvar) : fvar_id = v.id
 
 let mk_tpat_from_literal (cv : literal) : tpat =
@@ -944,10 +938,22 @@ let ty_as_integer (span : Meta.span) (t : ty) : T.integer_type =
   | TLiteral (TUInt int_ty) -> Unsigned int_ty
   | _ -> [%craise] span "Unreachable"
 
-let ty_as_literal (span : Meta.span) (t : ty) : T.literal_type =
+let ty_as_literal (span : Meta.span) (t : ty) : literal_type =
   match t with
   | TLiteral ty -> ty
   | _ -> [%craise] span "Unreachable"
+
+let literal_type_is_integer (t : literal_type) : bool =
+  match t with
+  | TInt _ -> true
+  | TUInt _ -> true
+  | _ -> false
+
+let literal_as_integer (literal : literal_type) : integer_type =
+  match literal with
+  | TInt ty -> Signed ty
+  | TUInt ty -> Unsigned ty
+  | _ -> raise (Failure "Unreachable")
 
 let mk_result_ty (ty : ty) : ty =
   TAdt (TBuiltin TResult, mk_generic_args_from_types [ ty ])

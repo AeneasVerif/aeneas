@@ -90,7 +90,9 @@ let rec tvalue_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (v : V.tvalue) :
   (* Translate the value *)
   let value =
     match v.value with
-    | VLiteral cv -> { e = Const cv; ty }
+    | VLiteral cv ->
+        let cv = translate_literal cv in
+        { e = Const cv; ty }
     | VAdt av -> (
         let variant_id = av.variant_id in
         let fields = List.map translate av.fields in
