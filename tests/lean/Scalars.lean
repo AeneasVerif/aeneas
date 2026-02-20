@@ -106,4 +106,24 @@ def match_isize (x : Std.Isize) : Result Std.Isize := do
   | 2 => ok 0#isize
   | _ => x + 1#isize
 
+/- [scalars::u32_as_u16]:
+   Source: 'tests/src/scalars.rs', lines 77:0-79:1 -/
+def u32_as_u16 (x : Std.U32) : Result Std.U16 := do
+  ok (UScalar.cast .U16 x)
+
+/- [scalars::u16_as_u32]:
+   Source: 'tests/src/scalars.rs', lines 81:0-83:1 -/
+def u16_as_u32 (x : Std.U16) : Result Std.U32 := do
+  ok (UScalar.cast .U32 x)
+
+/- [scalars::u32_as_i16]:
+   Source: 'tests/src/scalars.rs', lines 85:0-87:1 -/
+def u32_as_i16 (x : Std.U32) : Result Std.I16 := do
+  ok (UScalar.hcast .I16 x)
+
+/- [scalars::i16_as_u32]:
+   Source: 'tests/src/scalars.rs', lines 89:0-91:1 -/
+def i16_as_u32 (x : Std.I16) : Result Std.U32 := do
+  ok (IScalar.hcast .U32 x)
+
 end scalars

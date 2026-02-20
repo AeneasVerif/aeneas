@@ -58,12 +58,12 @@ inductive Sum (T1 : Type) (T2 : Type) where
 /- [no_nested_borrows::cast_u32_to_i32]:
    Source: 'tests/src/no_nested_borrows.rs', lines 48:0-50:1 -/
 def cast_u32_to_i32 (x : Std.U32) : Result Std.I32 := do
-  ok (UScalar.hcast Std.IScalarTy.I32 x)
+  ok (UScalar.hcast .I32 x)
 
 /- [no_nested_borrows::cast_bool_to_i32]:
    Source: 'tests/src/no_nested_borrows.rs', lines 52:0-54:1 -/
 def cast_bool_to_i32 (x : Bool) : Result Std.I32 := do
-  ok (IScalar.cast_fromBool Std.IScalarTy.I32 x)
+  ok (IScalar.cast_fromBool .I32 x)
 
 /- [no_nested_borrows::cast_bool_to_bool]:
    Source: 'tests/src/no_nested_borrows.rs', lines 57:0-59:1 -/

@@ -77,7 +77,7 @@ def key_expand_loop0
       if i1 < 32#i32
       then
         do
-        let i2 ← lift (IScalar.hcast Std.UScalarTy.U8 i1)
+        let i2 ← lift (IScalar.hcast .U8 i1)
         let sample_buffer2 ← Array.update sample_buffer1 0#usize i2
         let state_work2 ← shake_state_copy state_base state_work1
         let s ← lift (Array.to_slice sample_buffer2)
@@ -108,7 +108,7 @@ def key_expand_loop1
       if i1 < 32#i32
       then
         do
-        let i2 ← lift (IScalar.hcast Std.UScalarTy.U8 i1)
+        let i2 ← lift (IScalar.hcast .U8 i1)
         let sample_buffer2 ← Array.update sample_buffer1 0#usize i2
         let state_work2 ← shake_state_copy state_base state_work1
         let s ← lift (Array.to_slice sample_buffer2)

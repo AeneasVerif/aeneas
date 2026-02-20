@@ -144,10 +144,10 @@ def ntt_layer_loop0_loop0
     let c1_factor ← c1 * factor
     let c11 ← mod_sub c0 c1_factor
     let c01 ← mod_add c0 c1_factor
-    let i4 ← lift (UScalar.cast Std.UScalarTy.U16 c01)
+    let i4 ← lift (UScalar.cast .U16 c01)
     let a1 ← Array.update a i i4
     let i5 ← i + len
-    let i6 ← lift (UScalar.cast Std.UScalarTy.U16 c11)
+    let i6 ← lift (UScalar.cast .U16 c11)
     let a2 ← Array.update a1 i5 i6
     let j1 ← j + 1#usize
     ntt_layer_loop0_loop0 a2 len start factor j1
@@ -271,7 +271,7 @@ def generate_matrix_loop0_loop0
     let (a_transpose, atranspose_mut_back) ← Key.atranspose_mut key
     let i1 ← i * 4#u8
     let i2 ← i1 + j
-    let i3 ← lift (UScalar.cast Std.UScalarTy.Usize i2)
+    let i3 ← lift (UScalar.cast .Usize i2)
     let (i4, index_mut_back) ← Array.index_mut_usize a_transpose i3
     let (state_work3, i5) ← sample_ntt state_work2 i4
     let j1 ← j + 1#u8

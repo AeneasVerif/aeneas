@@ -73,3 +73,19 @@ fn match_isize(x: isize) -> isize {
         y => y + 1,
     }
 }
+
+fn u32_as_u16(x: u32) -> u16 {
+    x as u16
+}
+
+fn u16_as_u32(x: u16) -> u32 {
+    x as u32
+}
+
+fn u32_as_i16(x: u32) -> i16 {
+    x as i16
+}
+
+fn i16_as_u32(x: i16) -> u32 {
+    x as u32
+}
