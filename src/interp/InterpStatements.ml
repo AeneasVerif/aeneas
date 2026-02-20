@@ -276,7 +276,8 @@ let get_builtin_function_return_type (span : Meta.span) (fid : builtin_fun_id)
   (* Instantiate the return type  *)
   let generics = Subst.generic_args_erase_regions generics in
   let subst =
-    Subst.make_subst_from_generics sg.item_binder_params generics Self
+    [%add_loc] Subst.make_subst_from_generics (Some span) sg.item_binder_params
+      generics Self
   in
   Subst.erase_regions_substitute_types subst sg.item_binder_value.output
 
@@ -712,7 +713,8 @@ let eval_global_as_fresh_symbolic_value (span : Meta.span)
       (* Instantiate the type  *)
       let generics = Subst.generic_args_erase_regions generics in
       let subst =
-        Subst.make_subst_from_generics global.generics generics Self
+        [%add_loc] Subst.make_subst_from_generics (Some span) global.generics
+          generics Self
       in
       let ty = Subst.erase_regions_substitute_types subst global.ty in
       (* Decompose *)
@@ -736,7 +738,8 @@ let eval_global_as_fresh_symbolic_value (span : Meta.span)
       (* Instantiate the type  *)
       let generics = Subst.generic_args_erase_regions generics in
       let subst =
-        Subst.make_subst_from_generics global.generics generics Self
+        [%add_loc] Subst.make_subst_from_generics (Some span) global.generics
+          generics Self
       in
       let ty = Subst.erase_regions_substitute_types subst global.ty in
       let sval = mk_fresh_symbolic_value span ctx ty in
@@ -1383,7 +1386,10 @@ and eval_non_builtin_function_call_concrete (config : config) (span : Meta.span)
       (* TODO: we need to normalize the types if we want to correctly support traits *)
       [%cassert] body.span (generics.trait_refs = [])
         "Traits are not supported yet in concrete mode";
-      let subst = Subst.make_subst_from_generics def.generics generics Self in
+      let subst =
+        [%add_loc] Subst.make_subst_from_generics (Some span) def.generics
+          generics Self
+      in
       let locals, body_st = Subst.fun_body_substitute_in_body subst body in
 
       (* Evaluate the input operands *)
