@@ -206,6 +206,8 @@ let passes :
     ( Some (fun _ -> !Config.lift_pure_function_calls),
       "lift_pure_function_calls",
       lift_pure_function_calls );
+    (* Update the matches over [isize] and [usize] *)
+    (None, "update_match_over_isize_usize", update_match_over_isize_usize);
   ]
 
 (** Apply all the micro-passes to a function. *)

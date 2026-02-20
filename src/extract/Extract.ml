@@ -441,13 +441,9 @@ let extract_cast_kind_gen (span : Meta.span)
       (* Different cases depending on the conversion *)
       (let cast_str, src, tgt =
          match (src, tgt) with
-         | _, _
-           when ValuesUtils.literal_type_is_integer src
-                && ValuesUtils.literal_type_is_integer tgt ->
-             let src, tgt =
-               ( TypesUtils.literal_as_integer src,
-                 TypesUtils.literal_as_integer tgt )
-             in
+         | _, _ when literal_type_is_integer src && literal_type_is_integer tgt
+           ->
+             let src, tgt = (literal_as_integer src, literal_as_integer tgt) in
              let cast_str =
                match backend () with
                | Coq | FStar -> "scalar_cast"
@@ -467,7 +463,7 @@ let extract_cast_kind_gen (span : Meta.span)
              let tgt = integer_type_to_string tgt in
              (cast_str, src, Some tgt)
          | TBool, TInt _ | TBool, TUInt _ ->
-             let tgt = TypesUtils.literal_as_integer tgt in
+             let tgt = literal_as_integer tgt in
              let cast_str =
                match backend () with
                | Coq | FStar -> "scalar_cast_bool"
@@ -752,6 +748,8 @@ and extract_App (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
       | Proj proj, _ ->
           extract_field_projector span ctx fmt ~inside ~inside_do app proj
             qualif.generics args out_ty
+      | ScalarValProj ty, _ ->
+          extract_scalar_val_projector span ctx fmt ~inside ty args
       | TraitConst (trait_ref, const_name), _ ->
           extract_trait_ref span ctx fmt TypeDeclId.Set.empty ~inside:true
             trait_ref;
@@ -1193,6 +1191,17 @@ and extract_field_projector (span : Meta.span) (ctx : extraction_ctx)
   | [] ->
       (* No argument: shouldn't happen *)
       [%admit_raise] span "Unreachable" fmt
+
+and extract_scalar_val_projector (span : Meta.span) (ctx : extraction_ctx)
+    (fmt : F.formatter) ~(inside : bool) (_ : integer_type) (args : texpr list)
+    : unit =
+  match args with
+  | [ arg ] ->
+      if inside then F.pp_print_string fmt "(";
+      extract_texpr span ctx fmt ~inside:true ~inside_do:false arg;
+      F.pp_print_string fmt ".val";
+      if inside then F.pp_print_string fmt ")"
+  | _ -> [%internal_error] span
 
 and extract_Lambda (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
     ~(inside : bool) (xl : tpat list) (e : texpr) : unit =

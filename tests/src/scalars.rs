@@ -59,3 +59,17 @@ fn u32_default() -> u32 {
 fn i32_default() -> i32 {
     Default::default()
 }
+
+fn match_usize(x: usize) -> bool {
+    match x {
+        0 | 1 | 2 => true,
+        x => false,
+    }
+}
+
+fn match_isize(x: isize) -> isize {
+    match x {
+        0 | -1 | 2 => 0,
+        y => y + 1,
+    }
+}
