@@ -137,9 +137,9 @@ theorem mul2_add1_spec
   /- We can call [progress] a second time for the second addition -/
   progress with U32.add_spec as ⟨ x2 ⟩
   /- We are now left with the remaining goal. We do this by calling
-     [scalar_tac], a tactic to solve arithmetic problems:
+     [grind], an automated decision procedure
    -/
-  scalar_tac
+  grind
 
 /- The proof above works, but it can actually be simplified a bit. In particular,
    it is a bit tedious to specify that [progress] should use [U32.add_spec], while
@@ -159,7 +159,7 @@ theorem mul2_add1_spec2 (x : U32) (h : 2 * x.val + 1 ≤ U32.max) :
   unfold mul2_add1
   progress as ⟨ x1⟩ -- [progress] automatically lookups [U32.add_spec]
   progress as ⟨ x2 ⟩ -- same
-  scalar_tac
+  grind
 
 /- Because we marked [mul2_add1_spec2] theorem with [progress], [progress] can
    now automatically look it up. For instance, below:
@@ -177,7 +177,7 @@ theorem use_mul2_add1_spec (x : U32) (y : U32) (h : 2 * x.val + 1 + y.val ≤ U3
   -- Here we use [progress] on [mul2_add1]
   progress as ⟨ x1 ⟩
   progress as ⟨ z ⟩
-  scalar_tac
+  grind
 
 
 /-#===========================================================================#
@@ -241,7 +241,7 @@ partial_fixpoint
    Note that because we use the suffix "CList.", we can use the notation [l.toList]
    if [l] has type [CList ...].
  -/
-@[simp, simp_lists_simps, scalar_tac_simps]
+@[simp, simp_lists_simps, scalar_tac_simps, grind]
 def CList.toList {α : Type} (x : CList α) : List α :=
   match x with
   | CNil => []
@@ -311,7 +311,7 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
       -- by giving it [*] as argument, we tell [simp] to use all the assumptions
       -- to perform rewritings. In particular, it will use [i.val ≠ 0] to
       -- apply [List.index_nzero_cons].
-      have : i.val ≠ 0 := by scalar_tac -- Remark: [simp at hi] also works
+      have : i.val ≠ 0 := by grind -- Remark: [simp at hi] also works
       simp_lists [*]
 
 /-#===========================================================================#
@@ -367,7 +367,7 @@ theorem i32_id_spec (x : I32) (h : 0 ≤ x.val) :
     -- x2 + 1
     progress as ⟨ x2 ⟩
     -- Postcondition
-    scalar_tac
+    grind
 -- Below: we have to prove that the recursive call performed in the proof terminates.
 -- Otherwise, we could prove any result we want by simply writing a theorem which
 -- uses itself in the proof.
@@ -380,7 +380,7 @@ decreasing_by
   -- We first need to "massage" the goal (in practice, all the proofs of [decreasing_by]
   -- should start with a call to [simp_wf]).
   simp_wf
-  -- This is just a linear arithmetic goal so we conclude with [scalar_tac]
-  scalar_tac
+  -- This is just a linear arithmetic goal so we conclude with [grind]
+  grind
 
 end Tutorial

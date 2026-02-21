@@ -115,7 +115,7 @@ def core.ops.index.IndexMutArray {T I Output : Type} {N : Usize}
 @[reducible, rust_type "core::array::TryFromSliceError"]
 def core.array.TryFromSliceError := Unit
 
-@[simp, simp_lists_simps]
+@[simp, simp_lists_simps, grind =, agrind =]
 theorem Array.val_to_slice {α} {n} (a : Array α n) : a.to_slice.val = a.val := by
   simp only [Array.to_slice]
 
@@ -123,6 +123,9 @@ theorem Array.val_to_slice {α} {n} (a : Array α n) : a.to_slice.val = a.val :=
 theorem Array.length_to_slice (a : Array α n) :
   a.to_slice.length = n := by
   simp only [Slice.length, Array.to_slice, List.Vector.length_val]
+
+grind_pattern Array.length_to_slice => a.to_slice
+grind_pattern [agrind] Array.length_to_slice => a.to_slice
 
 @[rust_fun "core::array::equality::{core::cmp::PartialEq<[@T; @N], [@U; @N]>}::eq"]
 def core.array.equality.PartialEqArray.eq

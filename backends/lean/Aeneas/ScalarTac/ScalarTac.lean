@@ -474,6 +474,7 @@ def scalarTacAux (config : Config) : TacticM Unit := do
       error
 
 def scalarTac (config : Config) : TacticM Unit := do
+  Tactic.focus do
   if config.auxTheorem then
     let g ← getMainGoal
     g.withContext do

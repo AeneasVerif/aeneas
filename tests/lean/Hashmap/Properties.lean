@@ -8,7 +8,7 @@ namespace hashmap
 
 namespace AList
 
-@[simp, scalar_tac_simps, grind]
+@[simp, scalar_tac_simps, grind, agrind]
 def v {α : Type} (ls: AList α) : List (Usize × α) :=
   match ls with
   | Nil => []
@@ -18,7 +18,7 @@ def v {α : Type} (ls: AList α) : List (Usize × α) :=
 abbrev lookup {α : Type} (ls: AList α) (key: Usize) : Option α :=
   ls.v.lookup key
 
-@[simp, scalar_tac_simps, grind]
+@[simp, scalar_tac_simps, grind, agrind]
 abbrev length {α : Type} (ls : AList α) : Nat := ls.v.length
 
 end AList
@@ -98,7 +98,7 @@ abbrev Slots.al_v (s : Slots α) := (s.val.map AList.v).flatten
 def lookup (hm : HashMap α) (k : Usize) : Option α :=
   slots_s_lookup hm.slots.val k
 
-@[simp, scalar_tac_simps, grind]
+@[simp, scalar_tac_simps, grind, agrind]
 abbrev len_s (hm : HashMap α) : Nat := hm.al_v.length
 
 instance : Membership Usize (HashMap α) where
@@ -142,7 +142,7 @@ attribute [-simp] List.length_flatten List.flatten_eq_nil_iff List.lookup_eq_non
 attribute [local simp] List.lookup
 
 /- Adding some theorems for `scalar_tac` -/
-@[local scalar_tac h]
+@[local scalar_tac h, grind →, agrind →]
 theorem inv_imp_eqs_ineqs {hm : HashMap α} (h : hm.inv) :
   0 < hm.slots.length ∧ hm.num_entries.val = hm.al_v.length := by
   simp_all [inv]
@@ -247,10 +247,7 @@ theorem new_with_capacity_spec
 theorem new_spec (α : Type) :
   new α ⦃ hm => hm.inv ∧ hm.len_s = 0 ∧ ∀ k, hm.lookup k = none ⦄ := by
   unfold new
-  progress as ⟨ hm ⟩
-  fsimp_all
-
-example (key : Usize) : key == key := by fsimp [beq_iff_eq]
+  progress*
 
 theorem insert_in_list_spec_aux {α : Type} (l : Nat) (key: Usize) (value: α) (l0: AList α)
   (hinv : slot_s_inv_hash l (hash_mod_key key l) l0.v)
@@ -304,7 +301,7 @@ theorem insert_in_list_spec_aux {α : Type} (l : Nat) (key: Usize) (value: α) (
         UScalar.neq_to_neq_val, and_true, AList.lookup, ne_eq, length, true_and, not_false_eq_true,
         and_self, List.lookup, implies_true, List.length_cons,
         Nat.add_right_cancel_iff, List.allP_cons]
-      split <;> fsimp_all
+      grind
 
 @[progress]
 theorem insert_in_list_spec {α : Type} (l : Nat) (key: Usize) (value: α) (l0: AList α)
@@ -772,12 +769,6 @@ theorem move_elements_loop_spec
         simp_all [Slots.lookup]
 
     progress as ⟨ ntable2, slots2, _, _, _, hLookup2Rev, hLookup21, hLookup22, hIndexNil ⟩
-    . intro j h0
-      if h : j = i.val then
-        simp_all
-      else
-        have := hEmpty j (by scalar_tac)
-        fsimp_all
     . have : i.val < (List.map AList.v slots.val).length := by simp; scalar_tac
       simp_all [Slots.al_v, List.length_flatten_set_as_int_eq]
       scalar_tac

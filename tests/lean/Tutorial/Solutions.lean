@@ -41,7 +41,7 @@ example (a b c d : Prop) (h0 : a → b → c) (h1 : c → d → e)
 
 open CList
 
-@[simp, grind =] def CList.toList {α : Type} (x : CList α) : List α :=
+@[simp, grind, agrind] def CList.toList {α : Type} (x : CList α) : List α :=
   match x with
   | CNil => []
   | CCons hd tl => hd :: tl.toList
@@ -127,7 +127,10 @@ theorem list_nth_mut1_spec'' {T: Type} [Inhabited T] (l : CList T) (i : U32)
     x = l.toList[i.val]! ∧
     ∀ x', (back x').toList = l.toList.set i.val x' ⦄ := by
   unfold list_nth_mut1 list_nth_mut1_loop
-  progress* <;> try grind
+  /- `progress*` repeatedly applies `progress`, while doing a case disjunction whenever it
+      encounters a branching. Note that one can automatically generate the corresponding
+      proof script by using `progress*?`. -/
+  progress*
   simp_all
 
 /-- Theorem about `list_tail_loop`: verbose version -/
@@ -171,10 +174,9 @@ theorem append_in_place_spec {T : Type} (l0 l1 : CList T) :
   append_in_place l0 l1 ⦃ l2 =>
     l2.toList = l0.toList ++ l1.toList ⦄ := by
   unfold append_in_place
-  progress as ⟨ tl, back ⟩
-  grind
+  progress*
 
-@[progress]
+-- Verbose version
 theorem reverse_loop_spec {T : Type} (l : CList T) (out : CList T) :
   reverse_loop l out ⦃ l' =>
     l'.toList = l.toList.reverse ++ out.toList ⦄ := by
@@ -185,13 +187,19 @@ theorem reverse_loop_spec {T : Type} (l : CList T) (out : CList T) :
     simp [hl1]
   . simp
 
+-- Simple version
+@[progress]
+theorem reverse_loop_spec' {T : Type} (l : CList T) (out : CList T) :
+  reverse_loop l out ⦃ l' =>
+    l'.toList = l.toList.reverse ++ out.toList ⦄ := by
+  unfold reverse_loop
+  progress*
+
 theorem reverse_spec {T : Type} (l : CList T) :
   reverse l ⦃ l' =>
     l'.toList = l.toList.reverse ⦄ := by
   unfold reverse
-  progress as ⟨ l', hl' ⟩
-  simp at hl'
-  simp [hl']
+  progress*
 
 /-
   # BIG NUMBERS
@@ -222,14 +230,16 @@ theorem zero_loop_spec
     progress as ⟨ i1 ⟩
     progress as ⟨ x1, _, hSame, hZero ⟩
     simp_all
+    simp at hSame hZero -- TODO: why doesn't `simp_all` simplify these two hypotheses?
     split_conjs
-    . intro j h0
+    · scalar_tac
+    · intro j h0
       replace hSame := hSame j (by scalar_tac)
       simp_all
-    . intro j h0 h1
+    · intro j h0 h1
       dcases j = i.val <;> try simp [*]
-      have := hZero j (by scalar_tac)
-      simp_all
+      · have := hZero j (by scalar_tac)
+        simp_all
   . simp; scalar_tac
 termination_by x.length - i.val
 decreasing_by scalar_decr_tac
@@ -330,29 +340,9 @@ theorem add_no_overflow_loop_spec
   . progress as ⟨ yv ⟩
     progress as ⟨ xv ⟩
     progress as ⟨ sum ⟩
-    . -- This precondition is not proven automatically
-      have := hNoOverflow i.val (by scalar_tac) (by scalar_tac)
-      scalar_tac
     progress as ⟨ i' ⟩
     progress as ⟨ x1 ⟩
-    . -- This precondition is not proven automatically
-      intro j h0 h1
-      simp_all
-      -- Simplifying (x.update ...).index:
-      have := List.getElem!_set_ne x.val i.val j sum (by scalar_tac)
-      simp [*]
-      apply hNoOverflow j (by scalar_tac) (by scalar_tac)
-    -- Postcondition
-    /- Note that you don't have to manually call the lemmas `toInt_update`
-        and `toInt_drop` below if you first do:
-        ```
-        have : i.val < x.length := by scalar_tac
-        ```
-        (simp_all will automatically apply the lemmas and prove the
-        the precondition sby using the context)
-      -/
-    simp_all
-    scalar_eq_nf
+    all_goals simp_all <;> grind
   . simp_all
 termination_by x.length - i.val
 decreasing_by scalar_decr_tac
@@ -365,7 +355,7 @@ theorem add_no_overflow_spec (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
     x'.length = y.length ∧
     toInt x' = toInt x + toInt y ⦄ := by
   unfold add_no_overflow
-  progress as ⟨ x' ⟩ <;>
+  progress as ⟨ x' ⟩
   simp_all
 
 /-- The proof about `add_with_carry_loop`: detailed version -/
@@ -385,13 +375,14 @@ theorem add_with_carry_loop_spec
   split
   . progress as ⟨ xi ⟩
     progress as ⟨ c0u ⟩
-    have : c0u.val = c0.val := by scalar_tac
     progress as ⟨ s1, c1, hConv1 ⟩
     progress as ⟨ yi ⟩
     progress as ⟨ s2, c2, hConv2 ⟩
     progress as ⟨ c1u, hc1u ⟩
     progress as ⟨ c2u, hc2u ⟩
     progress as ⟨ c3, hc3 ⟩
+    · -- The call to `agrind` in `progress` doesn't perform case splits on the `if then else` by default
+      agrind
     progress as ⟨ fst, index_back, _, hIndexBack ⟩
     progress as ⟨ i1 ⟩
     have : c3.val ≤ 1 := by
@@ -404,9 +395,9 @@ theorem add_with_carry_loop_spec
       scalar_tac +split
     progress as ⟨ c4, x1, _, _, hc4 ⟩
     -- Proving the post-condition
-    split_conjs
     . simp [*]
-    . simp [*]
+    . simp only [*]
+      agrind
     . simp [hc4, hIndexBack]
       have hxUpdate := toInt_update x.val i.val s2 (by scalar_tac)
       simp [hxUpdate]; clear hxUpdate
@@ -417,26 +408,19 @@ theorem add_with_carry_loop_spec
       -- The best way is to do a case disjunction and treat each sub-case separately
       split at hConv1 <;>
       split at hConv2
-      . have hConv1' : (s1.val : Int) = xi.val + c0u.val - U32.size := by scalar_tac
-        have hConv2' : (s2.val : Int) = s1.val + yi.val - U32.size := by scalar_tac
-        simp [hConv2', hConv1']
-        /- `U32.size_eq` is a lemma which allows to simplify `U32.size`.
-           But you can also simply do `simp [U32.size]`, which simplifies
-           `U32.size` to `2^U32.numBits`, then simplify `U32.numBits`. -/
+      . have hConv1' : (s1.val : Int) = xi.val + c0u.val - U32.size := by agrind
+        have hConv2' : (s2.val : Int) = s1.val + yi.val - U32.size := by agrind
+        agrind
+      . have hConv1' : (s1.val : Int) = xi.val + c0u.val - U32.size := by agrind
         simp [*, U32.size_eq]
-        scalar_eq_nf
-      . have hConv1' : (s1.val : Int) = xi.val + c0u.val - U32.size := by scalar_tac
-        simp [hConv2, hConv1']
-        simp [*, U32.size_eq]
-        scalar_eq_nf
+        grind
       . have hConv2' : (s2.val : Int) = s1.val + yi.val - U32.size := by scalar_tac
-        simp [hConv2', hConv1]
         simp [*, U32.size_eq]
-        scalar_eq_nf
+        grind
       . simp [*]
         scalar_eq_nf
   . simp_all
-    scalar_tac
+    agrind
 termination_by x.length - i.val
 decreasing_by scalar_decr_tac
 

@@ -72,7 +72,7 @@ def Node.forall (p: Node T -> Prop) (node : Node T) : Prop :=
   p node ∧
   Subtree.forall p node.left ∧ Subtree.forall p node.right
 termination_by Node.size node
-decreasing_by all_goals (simp_wf; fsimp [Node.left, Node.right]; split; fsimp <;> scalar_tac)
+decreasing_by all_goals (simp [Node.left, Node.right]; split; simp <;> scalar_tac)
 end
 
 @[simp]
@@ -854,9 +854,9 @@ theorem Node.insert_in_left_spec
           progress as ⟨ tree', hInv', hTree'Set, hTree'Height ⟩
           -- TODO: syntax for preconditions
           . fsimp_all
-          . fsimp_all
           . fsimp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]
             scalar_tac
+          . fsimp_all [Node.balanceFactor]
           . fsimp [*]
             split_conjs
             . -- set reasoning
@@ -881,7 +881,6 @@ theorem Node.insert_in_left_spec
             progress as ⟨ tree', hInv', hTree'Set, hTree'Height ⟩
             -- TODO: syntax for preconditions
             . fsimp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac
-            . fsimp_all
             . fsimp_all
             . fsimp_all [Node.invAux, Node.balanceFactor]; scalar_tac
             . -- End of the proof
@@ -956,8 +955,8 @@ theorem Node.insert_in_right_spec
           progress as ⟨ tree', hInv', hTree'Set, hTree'Height ⟩
           -- TODO: syntax for preconditions
           . fsimp_all
-          . fsimp_all
           . fsimp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac
+          . fsimp_all [Node.balanceFactor]
           . -- End of the proof
             fsimp [*]
             split_conjs
@@ -983,7 +982,6 @@ theorem Node.insert_in_right_spec
             progress as ⟨ tree', hInv', hTree'Set, hTree'Height ⟩
             -- TODO: syntax for preconditions
             . fsimp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac
-            . fsimp_all
             . fsimp_all
             . fsimp_all [Node.invAux, Node.balanceFactor]; scalar_tac
             . -- End of the proof

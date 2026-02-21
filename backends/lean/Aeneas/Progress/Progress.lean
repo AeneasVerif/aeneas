@@ -4,6 +4,7 @@ import Aeneas.Progress.Init
 import Aeneas.Std
 import Aeneas.FSimp
 import AeneasMeta.Async
+import Aeneas.Grind.Init
 
 namespace Aeneas
 
@@ -162,7 +163,7 @@ structure Stats extends Goals where
   usedTheorem : UsedTheorem
 
 attribute [progress_post_simps]
-  Std.IScalar.toNat Std.UScalar.ofNat_val_eq Std.IScalar.ofInt_val_eq
+  Std.IScalar.toNat Std.UScalar.ofNatCore_val_eq Std.IScalar.ofInt_val_eq
 
 structure Args where
   /-- Asynchronously solve the preconditions? -/
@@ -705,6 +706,31 @@ def parseProgressArgs
   return (withTh?, ids, byTac)
 | _ => throwUnsupportedSyntax
 
+/-- Use `agrind` after preprocessing goal the goal, in particular to simplify arithmetic expressions. -/
+def evalAGrindWithPreprocess : TacticM Unit := do
+  withTraceNode `Progress (fun _ => do pure m!"evalAGrindWithPreprocess") do
+  traceGoalWithNode "before preprocessing"
+  let simpArgs : Simp.SimpArgs ← ScalarTac.getSimpArgs
+  let config : Simp.Config := {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1}
+  match ← ScalarTac.simpAsmsTarget true config simpArgs with
+  | none =>
+    trace[Progress] "Goal solved by preprocessing!"
+  | some _ =>
+    traceGoalWithNode "after preprocessing"
+    /- We reduce the search space but increase the number of instances (we need this when the
+       context is big).
+
+       TODO: an issue is that `omega` used to split all disjunctions.
+       TODO: make those options of `progress`
+       TODO: fine tune the parameters
+     -/
+    let config : Grind.Config := { splits := 4, splitMatch := false, splitIte := false, funext := false, gen := 4, instances := 1000 }
+    let params ← Aeneas.Grind.mkParams config #[Aeneas.Grind.agrindExt.getState (← Lean.getEnv)] (withGroundSimprocs := true)
+    let mvarId ← Lean.Elab.Tactic.getMainGoal
+    try
+      Aeneas.Grind.agrindEval config params mvarId
+    catch e => trace[Progress] "Grind failed:\n{e.toMessageData}"
+
 def evalProgressCore (async : Bool) (keepPretty : Option Name) (withArg: Option Expr) (ids: Array (Option Name))
   (byTacStx : Option Syntax.Tactic)
   : TacticM Stats := do
@@ -716,6 +742,8 @@ def evalProgressCore (async : Bool) (keepPretty : Option Name) (withArg: Option 
   withMainContext do
   /- Preprocessing step for `singleAssumptionTac` -/
   let singleAssumptionTacDtree ← singleAssumptionTacPreprocess
+  /- Grind tactic -/
+  let grindTac : TacticM Unit := evalAGrindWithPreprocess
   /- For scalarTac we have a fast track: if the goal is not a linear
      arithmetic goal, we skip (note that otherwise, scalarTac would try
      to prove a contradiction) -/
@@ -736,8 +764,6 @@ def evalProgressCore (async : Bool) (keepPretty : Option Name) (withArg: Option 
     let r ← Simp.simpAt false { maxDischargeDepth := 1 } simpArgs (.targets #[] true)
     -- Raise an error if the goal is not proved
     if r.isSome then throwError "Goal not proved"
-  /- We use our custom assumption tactic, which instantiates meta-variables only if there is a single
-     assumption matching the goal. -/
   let customAssumTac : TacticM Unit := do
     withTraceNode `Progress (fun _ => pure m!"Attempting to solve with `singleAssumptionTac`") do
     singleAssumptionTacCore singleAssumptionTacDtree
@@ -762,7 +788,11 @@ def evalProgressCore (async : Bool) (keepPretty : Option Name) (withArg: Option 
     withTraceNode `Progress (fun _ => pure m!"Trying to solve a precondition") do
     trace[Progress] "Precondition: {← getMainGoal}"
     try
-      firstTacSolve ([simpTac, scalarTac] ++ byTac)
+      let useGrind := true -- TODO: turn this into a config
+      if useGrind then
+        firstTacSolve (grindTac :: byTac)
+      else
+        firstTacSolve ([simpTac, scalarTac] ++ byTac)
       trace[Progress] "Precondition solved!"
     catch _ =>
       trace[Progress] "Precondition not solved"
@@ -864,9 +894,8 @@ To make a theorem available for `progress`, the user can tag it with the
 `@[progress]` attribute. The theorem must have the following shape:
 ```lean
 theorem thm_name (arg1 : ty1) ... (argn : tyn)
-  (h_pre1 : precondition_1) ... (h_prem : precondition_m) :
-  ∃ (res1 : res_ty1) ... (resk : res_tyk),
-    f arg1 ... argn = ok res1 ∧ postcondition_1 ∧ ... ∧ postcondition_k
+    (h_pre1 : precondition_1) ... (h_prem : precondition_m) :
+  f arg1 ... argn = ⦃ res1 ... resk => postcondition_1 ∧ ... ∧ postcondition_k ⦄
 ```
 where `f` is a monadic function with type `Result ...`.
 
@@ -878,9 +907,8 @@ below, `map` is a ghost variable as it does not appear in the arguments of `hash
 theorem hashmap_insert_spec {k v : Type} [BEq k] [Hashable k]
   (hmap : HashMap k v) (key : k) (val : v) (map : k → Option v)
   (hInv : HashMap.inv hmap map) :
-  ∃ (newMap : HashMap k v),
-    HashMap.insert hmap key val = ok newMap ∧
-    ...
+    HashMap.insert hmap key val ⦃ (newMap : HashMap k v) =>
+    ... ⦄
 ```
 When encoutering ghost variables, `progress` will try to instantiate them by looking
 for local assumptions which match the theorem assumptions, using heuristics to find
@@ -1461,7 +1489,6 @@ _✝ : ↑z = ↑x + y
       let x ← nttLayer x 64#usize 2#usize
       ok x
 
-    set_option maxHeartbeats 800000
     theorem ntt_spec (peSrc : Std.Array U16 256#usize)
       (hWf : wfArray peSrc) :
       ntt peSrc ⦃ peSrc1 => wfArray peSrc1 ⦄
@@ -1482,7 +1509,6 @@ _✝ : ↑z = ↑x + y
       progress
       assumption
 
-    set_option maxHeartbeats 800000
     theorem ntt_spec' (peSrc : Std.Array U16 256#usize)
       (hWf : wfArray peSrc) :
       ntt peSrc ⦃ peSrc1 => wfArray peSrc1 ⦄

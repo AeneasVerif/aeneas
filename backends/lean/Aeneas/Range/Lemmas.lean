@@ -1,3 +1,8 @@
+import Aeneas.Grind.Init
+import Aeneas.ScalarTac.Init
+
+-- TODO: add a namepsace
+
 /- This pattern is often introduced when desugaring for loops -/
 @[simp]
 theorem List.foldl_Prod_to_MProd_fst_eq {α β : Type u} {γ : Type v} (f : α → β → γ → α × β)
@@ -18,7 +23,7 @@ theorem List.foldl_Prod_to_MProd_snd_eq {α β : Type u} {γ : Type v} (f : α �
   induction l <;>
   simp_all only [foldl_nil, implies_true, foldl_cons, implies_true]
 
-@[simp]
+@[simp, scalar_tac_simps, grind =, agrind =]
 theorem mem_range'_step_one (x start len : Nat) :
   x ∈ List.range' start len ↔ (start ≤ x ∧ x < start + len) := by
   simp only [List.mem_range', Nat.one_mul]
@@ -28,7 +33,7 @@ theorem mem_range'_step_one (x start len : Nat) :
   . exists x - start
     omega
 
-@[simp]
+@[simp, scalar_tac_simps, grind =, agrind =]
 theorem mem_std_range_step_one (x n0 n1 : Nat) :
   x ∈ [n0:n1] ↔ (n0 ≤ x ∧ x < n1) := by
   simp only [Membership.mem, Nat.mod_one, and_true]

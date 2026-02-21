@@ -359,12 +359,6 @@ set_option pp.coercions true
    Small preparation for theorem `list_nth_mut1`.
  -/
 
-/- The notation `l[i]!` stands for `getElem! l`, and is the `i`th element of list `l`.
-
-   We deactivate the simp lemma below as it replaces terms of the shape `l[i]!` with more
-   complicated terms: in the present case it is more annoying than anything. -/
-attribute [-simp] List.getElem!_eq_getElem?_getD
-
 /- Reasoning about `List.index`.
 
    You can use the following two lemmas.

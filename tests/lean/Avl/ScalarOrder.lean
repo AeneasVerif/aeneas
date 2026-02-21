@@ -27,7 +27,7 @@ instance : OrdSpecLinearOrderEq I32.Insts.AvlOrd where
     simp [LinearOrder.compare_eq_compareOfLessAndEq, compareOfLessAndEq]
     rw [compare, Ord.opposite]
     simp [LinearOrder.compare_eq_compareOfLessAndEq, compareOfLessAndEq]
-    grind [IScalar.neq_to_neq_val]
+    grind
   equivalence := fun a b => by
     unfold Ord.cmp
     unfold I32.Insts.AvlOrd
