@@ -533,10 +533,10 @@ where
       trace[Progress] "done"
       pure res
     | some mvarId =>
-      let (info', mvarId) ← onFinish mvarId
+      let (info', mvarId) ← onFinish cfg mvarId
       pure (res.fst ++ info', mvarId)
 
-  onFinish (mvarId : MVarId) : TacticM (Info × Option MVarId) := do
+  onFinish (cfg : Config) (mvarId : MVarId) : TacticM (Info × Option MVarId) := do
     withTraceNode `Progress (fun _ => pure m!"onFinish") do
     setGoals [mvarId]
     traceGoalWithNode "goal"
@@ -571,11 +571,16 @@ where
             trace[Progress] "goal solved"
             tacStx.resolve stx
           | none => tryFinish tacl
-      let proof ← Async.asyncRunTactic (tryFinish
-        -- TODO: don't manage to control the config of `grind`
-        [("grind", ← `(tactic|grind), grindTac)])
-      let proof := proof.result?.map (fun x => match x with | none | some none => none | some (some x) => some x)
-      let info' : Info ← pure { script := .tacs #[.task tacStx.result?], subgoals := #[(mvarId, some (TaskOrDone.task proof))] }
+      let info' ← do
+        if cfg.async then
+          let proof ← Async.asyncRunTactic (tryFinish [("grind", ← `(tactic| agrind), grindTac)])
+          let proof := proof.result?.map (fun x => match x with | none | some none => none | some (some x) => some x)
+          let info' : Info ← pure { script := .tacs #[.task tacStx.result?], subgoals := #[(mvarId, some (TaskOrDone.task proof))] }
+          pure info'
+        else
+          tryFinish [("grind", ← `(tactic| agrind), grindTac)]
+          let info' : Info ← pure { script := .tacs #[.task tacStx.result?], subgoals := #[(mvarId, none)] }
+          pure info'
       pure (info ++ info', none)
 
   onBind (cfg : Config) (varName : Name) : TacticM (Info × Option MVarId) := do
@@ -627,7 +632,7 @@ where
         }
       pure (info, mainGoal)
     else
-      onFinish (← getMainGoal)
+      onFinish cfg (← getMainGoal)
 
   onMatch (cfg : Config) (bfInfo : Bifurcation.Info) (toBeProcessed : Array (Array Name)): TacticM (List MVarId × (List Info → TacticM Info)) := do
     withTraceNode `Progress (fun _ => pure m!"onMatch") do
@@ -825,7 +830,7 @@ info: Try this:
     let* ⟨ x2, x2_post ⟩ ← U32.add_spec
     let* ⟨ x3, x3_post ⟩ ← U32.add_spec
     let* ⟨ res, res_post ⟩ ← U32.add_spec
-    grind
+    agrind
 -/
 #guard_msgs in
 example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
