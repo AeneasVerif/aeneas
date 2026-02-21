@@ -677,7 +677,7 @@ let remove_useless_joins (crate : crate) (f : fun_decl) : fun_decl =
           ^ Print.list_to_string ~sep:"\n" (statement_to_string crate) ls];
         let can_inline, ls = update_statements to_inline ls in
         match st.kind with
-        | Nop | StorageLive _ | StorageDead _ | Deinit _ | Drop _ ->
+        | Nop | StorageLive _ | StorageDead _ | PlaceMention _ | Drop _ ->
             (can_inline, st :: ls)
         | Abort _ | Return | Break _ | Continue _ -> (true, [ st ])
         | Switch switch ->
@@ -828,36 +828,6 @@ let remove_shallow_borrows_storage_live_dead (crate : crate) (f : fun_decl) :
     ^ "\n\n"
     ^ Print.Crate.crate_fun_decl_to_string crate f];
   f
-
-(** `StorageDead`, `Deinit` and `Drop` have the same semantics as far as Aeneas
-    is concerned: they store bottom in the place. This maps all three to
-    `Deinit` to simplify later work. Note: `Drop` actually also calls code to
-    deallocate the value; we decide to ignore this for now. *)
-let unify_drops (_ : crate) (f : fun_decl) : fun_decl =
-  let lookup_local (locals : locals) (var_id : local_id) : local =
-    List.nth locals.locals (LocalId.to_int var_id)
-  in
-
-  let unify_visitor =
-    object
-      inherit [_] map_statement
-      method! visit_Drop _ p _ _ = Deinit p
-
-      method! visit_StorageDead locals var_id =
-        let ty = (lookup_local locals var_id).local_ty in
-        let p = { kind = PlaceLocal var_id; ty } in
-        Deinit p
-    end
-  in
-
-  let body =
-    match f.body with
-    | None -> None
-    | Some body ->
-        let new_body = unify_visitor#visit_block body.locals body.body in
-        Some { body with body = new_body }
-  in
-  { f with body }
 
 (* Remove the type aliases from the type declarations and declaration groups *)
 let filter_type_aliases (crate : crate) : crate =
@@ -1227,7 +1197,7 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
             | SetDiscriminant _
             | StorageLive _
             | StorageDead _
-            | Deinit _
+            | PlaceMention _
             | Drop _
             | Abort _
             | Return
@@ -1825,7 +1795,6 @@ let apply_passes (crate : crate) : crate =
       ( "remove_shallow_borrows_storage_live_dead",
         remove_shallow_borrows_storage_live_dead );
       ("decompose_str_borrows", decompose_str_borrows);
-      ("unify_drops", unify_drops);
       ("simplify_panics", simplify_panics);
       ("decompose_global_accesses", decompose_global_accesses);
       ("refresh_statement_ids", refresh_statement_ids);

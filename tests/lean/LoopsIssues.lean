@@ -73,7 +73,7 @@ def loop_access_array_loop
       if start1 < 4#usize
       then
         do
-        massert (k < 4#usize)
+        let _ ← Array.index_usize CARRAY k
         let start2 ← start1 + 1#usize
         ok (cont start2)
       else ok (done ()))

@@ -878,7 +878,15 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
   | SetDiscriminant (p, variant_id) ->
       let (ctx, res), cc = set_discriminant config st.span p variant_id ctx in
       ([ (ctx, res) ], cc_singleton __FILE__ __LINE__ st.span cc)
-  | Deinit p ->
+  | PlaceMention _ ->
+      (* A place mention just needs to check the place projections are valid; for
+         now we treat this as a no-op *)
+      ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ st.span (fun e -> e))
+  | Drop (p, _, _) ->
+      let ctx, cc = drop_value config st.span p ctx in
+      ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ st.span cc)
+  | StorageDead local ->
+      let p = mk_place_from_var_id ctx st.span local in
       let ctx, cc = drop_value config st.span p ctx in
       ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ st.span cc)
   | Assert (assertion, _on_failure) ->
@@ -902,8 +910,6 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
       let eval_loop_body = eval_block config loop_body in
       InterpLoops.eval_loop config st.span eval_loop_body ctx
   | Switch switch -> eval_switch config st.span switch ctx
-  | Drop _ | StorageDead _ ->
-      [%craise] st.span "StorageDead/Drop should have been removed in a prepass"
   | Error s -> [%craise] st.span s
 
 and eval_rvalue_global (config : config) (span : Meta.span) (dest : place)
