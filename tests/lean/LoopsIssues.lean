@@ -217,11 +217,8 @@ def loop_consume_u32_loop
 
 /- [loops_issues::loop_consume_u32]:
    Source: 'tests/src/loops-issues.rs', lines 81:0-87:1 -/
+@[reducible]
 def loop_consume_u32 (params : WrapperU32) : Result Unit := do
-  let iter ←
-    core.iter.traits.collect.IntoIterator.Blanket.into_iter
-      (core.iter.traits.iterator.IteratorRange I32.Insts.CoreIterRangeStep)
-      { start := 0#i32, «end» := 32#i32 }
-  loop_consume_u32_loop params iter
+  loop_consume_u32_loop params { start := 0#i32, «end» := 32#i32 }
 
 end loops_issues

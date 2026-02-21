@@ -15,6 +15,26 @@ let statement_to_string (crate : crate) =
   let fmt_env = Print.Crate.crate_to_fmt_env crate in
   Print.Ast.statement_to_string fmt_env "" "  "
 
+let call_to_string (crate : crate) =
+  let fmt_env = Print.Crate.crate_to_fmt_env crate in
+  Print.Ast.call_to_string fmt_env "  "
+
+let fun_decl_ref_to_string (crate : crate) =
+  let fmt_env = Print.Crate.crate_to_fmt_env crate in
+  Print.fun_decl_ref_to_string fmt_env
+
+let generic_args_to_string (crate : crate) (generics : generic_args) =
+  let fmt_env = Print.Crate.crate_to_fmt_env crate in
+  let generics, traits = Print.Types.generic_args_to_strings fmt_env generics in
+  "<" ^ String.concat ", " (generics @ traits) ^ ">"
+
+let generic_params_to_string (crate : crate) (generics : generic_params) =
+  let fmt_env = Print.Crate.crate_to_fmt_env crate in
+  let generics, traits =
+    Print.Types.generic_params_to_strings fmt_env generics
+  in
+  "<" ^ String.concat ", " (generics @ traits) ^ ">"
+
 (** Erase the useless body regions.
 
     We erase the body regions which appear in:
@@ -1580,6 +1600,218 @@ let rename_type_vars (crate : crate) : crate =
   in
   visitor#visit_crate () crate
 
+(** Simplify calls to:
+    - the blanket [IntoIterator::into_iter] implementation (we replace it with
+      an assignment)
+    - the blanket [TryInto::try_into] implementation (we replace it with a call
+      to the [try_from] method of the required [TryFrom] clause)
+
+    TODO: remove once we have partial monomorphization *)
+let simplify_trait_calls (crate : crate) : crate =
+  (* Create a map from pattern to method *)
+  (* Blanket definition for [into_iter] *)
+  let into_iter_pat =
+    NameMatcher.parse_pattern
+      "core::iter::traits::collect::{core::iter::traits::collect::IntoIterator<@I, \
+       @Item, @I>}::into_iter"
+  in
+  (* Blanket definition for [try_into] *)
+  let try_into_pat =
+    NameMatcher.parse_pattern
+      "core::convert::{core::convert::TryInto<@T, @U, @Error>}::try_into"
+  in
+  let mctx = NameMatcher.ctx_from_crate crate in
+  let match_pattern =
+    NameMatcher.match_name mctx
+      {
+        map_vars_to_vars = true;
+        match_with_trait_decl_refs = Config.match_patterns_with_trait_decl_refs;
+      }
+  in
+  let is_blanket_into_iter = match_pattern into_iter_pat in
+  let is_blanket_try_into = match_pattern try_into_pat in
+
+  let try_replace_call (super_visit : unit -> statement_kind) (span : Meta.span)
+      (call : call) : statement_kind =
+    match call.func with
+    | FnOpRegular { kind = FunId (FRegular fid); generics } -> (
+        match FunDeclId.Map.find_opt fid crate.fun_decls with
+        | Some d
+          when List.length generics.trait_refs > 0 && List.length call.args > 0
+          ->
+            if is_blanket_into_iter d.item_meta.name then (
+              (* Replace the call by an assignment *)
+              [%sanity_check] span (List.length call.args = 1);
+              let arg = Use (List.hd call.args) in
+              Assign (call.dest, arg))
+            else if is_blanket_try_into d.item_meta.name then (
+              [%ldebug
+                "- call: " ^ call_to_string crate call ^ "\n- generics: "
+                ^ generic_args_to_string crate generics];
+              (* There should be a single trait ref implementing [TryFrom] *)
+              match generics.trait_refs with
+              | [ trait_ref ] -> (
+                  (* There are two cases depending on whether this is an impl or not *)
+                  match trait_ref.kind with
+                  | TraitImpl { id = impl_id; generics = impl_generics } ->
+                      (* Lookup the impl to retrieve the method id *)
+                      let impl =
+                        [%unwrap_with_span] span
+                          (TraitImplId.Map.find_opt impl_id crate.trait_impls)
+                          "Internal error"
+                      in
+                      let method_ref =
+                        snd
+                          ([%unwrap_with_span] span
+                             (List.find_opt
+                                (fun (name, _) -> name = "try_from")
+                                impl.methods)
+                             "Internal error")
+                      in
+
+                      [%sanity_check] span
+                        (method_ref.binder_params = empty_generic_params);
+
+                      [%ldebug
+                        "- call: " ^ call_to_string crate call
+                        ^ "\n- generics: "
+                        ^ generic_args_to_string crate generics
+                        ^ "\n- impl.generic_params: "
+                        ^ generic_params_to_string crate impl.generics
+                        ^ "\n- impl_generics: "
+                        ^ generic_args_to_string crate impl_generics
+                        ^ "\n- method_ref.binder_params: "
+                        ^ generic_params_to_string crate
+                            method_ref.binder_params
+                        ^ "\n- method_ref.binder_value: "
+                        ^ fun_decl_ref_to_string crate method_ref.binder_value
+                        ^ "\n "];
+
+                      (* Instantiate *)
+                      let subst =
+                        [%add_loc] Substitute.make_subst_from_generics
+                          (Some span) impl.generics impl_generics
+                          (UnknownTrait "UNREACHABLE")
+                      in
+                      let generics =
+                        Substitute.generic_args_substitute subst
+                          method_ref.binder_value.generics
+                      in
+
+                      (* *)
+                      let kind = FunId (FRegular method_ref.binder_value.id) in
+                      let func = FnOpRegular { kind; generics } in
+                      Call { call with func }
+                  | _ ->
+                      (* TODO: *)
+                      super_visit ())
+              | _ -> [%internal_error] span)
+            else super_visit ()
+        | _ -> super_visit ())
+    | _ -> super_visit ()
+  in
+
+  (* The map visitor to simplify the calls *)
+  let visitor =
+    object
+      inherit [_] map_crate as super
+
+      (* Keep track of the last span *)
+      method! visit_statement _ st = super#visit_statement (Some st.span) st
+
+      method! visit_Call span call =
+        try_replace_call
+          (fun _ -> super#visit_Call span call)
+          (Option.get span) call
+    end
+  in
+  let crate = visitor#visit_crate None crate in
+
+  (* Re-compute the set of used trait impls and fun declarations: by simplifying
+     the calls we may have filtered some annoying ones
+
+     Remark: the way we explore the crate is slightly approximative below.
+     We should improve it.
+  *)
+  let used_impls = ref TraitImplId.Set.empty in
+  let impls_to_explore = ref [] in
+  let used_funs = ref FunDeclId.Set.empty in
+
+  (* First explore the transparent functions *)
+  let visitor =
+    object
+      inherit [_] iter_statement
+
+      method! visit_trait_impl_id _ id =
+        if not (TraitImplId.Set.mem id !used_impls) then (
+          used_impls := TraitImplId.Set.add id !used_impls;
+          impls_to_explore := id :: !impls_to_explore)
+
+      method! visit_fun_decl_id _ id =
+        used_funs := FunDeclId.Set.add id !used_funs
+    end
+  in
+  FunDeclId.Map.iter
+    (fun _ (f : fun_decl) ->
+      if f.item_meta.is_local then visitor#visit_fun_decl_id () f.def_id;
+      match f.body with
+      | None -> ()
+      | Some body -> visitor#visit_block () body.body)
+    crate.fun_decls;
+
+  GlobalDeclId.Map.iter
+    (fun _ (d : global_decl) -> visitor#visit_fun_decl_id () d.init)
+    crate.global_decls;
+
+  TraitDeclId.Map.iter
+    (fun _ (d : trait_decl) ->
+      List.iter
+        (fun (d : trait_method binder) ->
+          visitor#visit_fun_decl_id () d.binder_value.item.id)
+        d.methods)
+    crate.trait_decls;
+
+  (* Add the local trait impls *)
+  TraitImplId.Map.iter
+    (fun _ (d : trait_impl) ->
+      if d.item_meta.is_local then visitor#visit_trait_impl_id () d.def_id)
+    crate.trait_impls;
+
+  (* Explore the impls *)
+  while !impls_to_explore <> [] do
+    let id = List.hd !impls_to_explore in
+    impls_to_explore := List.tl !impls_to_explore;
+    match TraitImplId.Map.find_opt id crate.trait_impls with
+    | None -> ()
+    | Some impl ->
+        List.iter (visitor#visit_trait_ref ()) impl.implied_trait_refs;
+        List.iter
+          (fun ((_, x) : _ * fun_decl_ref binder) ->
+            visitor#visit_fun_decl_id () x.binder_value.id)
+          impl.methods
+  done;
+
+  (* Filter the declaration groups we want to extract *)
+  let keep_group (gr : declaration_group) : bool =
+    match gr with
+    | TraitImplGroup (NonRecGroup id) ->
+        if TraitImplId.Set.mem id !used_impls then true else false
+    | TraitImplGroup (RecGroup ids) ->
+        if List.exists (fun id -> TraitImplId.Set.mem id !used_impls) ids then
+          true
+        else false
+    | FunGroup (NonRecGroup id) ->
+        if FunDeclId.Set.mem id !used_funs then true else false
+    | FunGroup (RecGroup ids) ->
+        if List.exists (fun id -> FunDeclId.Set.mem id !used_funs) ids then true
+        else false
+    | _ -> true
+  in
+  let declarations = List.filter keep_group crate.declarations in
+
+  (* *)
+  { crate with declarations }
+
 let apply_passes (crate : crate) : crate =
   (* Passes that apply to the whole crate *)
   let crate = update_array_default crate in
@@ -1640,5 +1872,6 @@ let apply_passes (crate : crate) : crate =
   let crate = replace_static crate in
   let crate = remove_vtables crate in
   let crate = rename_type_vars crate in
+  let crate = simplify_trait_calls crate in
   [%ltrace "After pre-passes:\n" ^ Print.Crate.crate_to_string crate ^ "\n"];
   crate

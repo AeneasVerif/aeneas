@@ -857,8 +857,8 @@ let instantiate_fun_sig (span : Meta.span option) (ctx : eval_ctx)
 
   (* Reconstruct the generics *)
   let subst =
-    Substitute.make_subst_from_generics sg.item_binder_params generic_args
-      tr_self
+    [%add_loc] Substitute.make_subst_from_generics span sg.item_binder_params
+      generic_args tr_self
   in
 
   (* Substitute the inputs and outputs *)

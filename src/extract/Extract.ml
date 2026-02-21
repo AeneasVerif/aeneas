@@ -1030,6 +1030,12 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
             Some { explicit_types = [ Implicit ]; explicit_const_generics = [] }
         | Pure ToResult ->
             Some { explicit_types = [ Implicit ]; explicit_const_generics = [] }
+        | Pure ResultUnwrapMut ->
+            Some
+              {
+                explicit_types = [ Implicit; Implicit ];
+                explicit_const_generics = [];
+              }
         | Pure _ -> None
       in
       (* Filter the generics.

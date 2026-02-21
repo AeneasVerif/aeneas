@@ -138,7 +138,8 @@ def core.iter.traits.iterator.Iterator.collect.default
   Self → Result B := sorry
 
 @[rust_fun
-  "core::iter::traits::collect::{core::iter::traits::collect::IntoIterator<@I, @Item, @I>}::into_iter"]
+  "core::iter::traits::collect::{core::iter::traits::collect::IntoIterator<@I, @Item, @I>}::into_iter",
+  simp]
 def core.iter.traits.collect.IntoIterator.Blanket.into_iter
   {I : Type} {Item : Type} (_ : core.iter.traits.iterator.Iterator I Item) :
   I → Result I :=

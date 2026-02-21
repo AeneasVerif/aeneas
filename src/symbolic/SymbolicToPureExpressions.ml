@@ -564,7 +564,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
 
      We simply replace the function call with a tuple: (call to [Box::new], backward functions).
 
-     TODO: make this general.
+     TODO: remove once we have partial monomorphisation.
   *)
   let ctx, call_e =
     match call.call_id with
@@ -592,6 +592,55 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
         in
         (ctx, call_e)
     | _ -> (ctx, call_e)
+  in
+  (* This is a **hack** for [core::result::{core::result::Result<@T, @E>}::unwrap]:
+     introduce a call to a special [Result.unwrap.mut] if we call the function with mutable
+     borrows.
+
+     TODO: remove once we have partial monomorphisation.
+  *)
+  let call_e =
+    match call.call_id with
+    | S.Fun (FunId (FRegular fid), _)
+      when List.exists
+             (TypesUtils.ty_has_mut_borrows ctx.type_ctx.type_infos)
+             call.generics.types -> (
+        match FunDeclId.Map.find_opt fid ctx.decls_ctx.fun_ctx.fun_decls with
+        | None -> call_e
+        | Some fun_decl ->
+            (* Check if the function is [core::result::{core::result::Result<@T, @E>}::unwrap] *)
+            let unwrap_pat =
+              NameMatcher.parse_pattern
+                "core::result::{core::result::Result<@T, @E>}::unwrap"
+            in
+            let mctx = NameMatcher.ctx_from_crate ctx.decls_ctx.crate in
+            let match_name =
+              NameMatcher.match_name mctx
+                {
+                  map_vars_to_vars = true;
+                  match_with_trait_decl_refs =
+                    Config.match_patterns_with_trait_decl_refs;
+                }
+            in
+            if match_name unwrap_pat fun_decl.item_meta.name then
+              (* Update the call *)
+              let app, args = destruct_apps call_e in
+              match app.e with
+              | Qualif { id = _; generics } ->
+                  [%add_loc] mk_apps ctx.span
+                    {
+                      e =
+                        Qualif
+                          {
+                            id = FunOrOp (Fun (Pure ResultUnwrapMut));
+                            generics;
+                          };
+                      ty = app.ty;
+                    }
+                    args
+              | _ -> [%internal_error] ctx.span
+            else call_e)
+    | _ -> call_e
   in
   [%ldebug "call_e: " ^ texpr_to_string ctx call_e];
   [%ldebug

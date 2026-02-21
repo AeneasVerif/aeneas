@@ -35,7 +35,7 @@ def core.convert.FromSame (T : Type) : core.convert.From T T := {
 structure core.convert.TryFrom (Self T Error : Type) where
   try_from : T → Result (core.result.Result Self Error)
 
-@[rust_fun "core::convert::{core::convert::TryInto<@T, @U, @Clause0_Error>}::try_into"]
+@[rust_fun "core::convert::{core::convert::TryInto<@T, @U, @Error>}::try_into"]
 def core.convert.TryInto.Blanket.try_into
   {T : Type} {U : Type} {Error : Type} (TryFromInst : core.convert.TryFrom U T Error) (x : T) :
   Result (core.result.Result U Error) :=
