@@ -628,4 +628,20 @@ theorem getElem!_ofFn {n : ℕ} {α : Type u} [Inhabited α] (f : Fin n → α) 
   simp only [getElem!_eq_getElem?_getD, length_ofFn, getElem?_eq_getElem, List.getElem_ofFn,
     Option.getD_some, hi]
 
+attribute [scalar_tac_simps, agrind =]
+  List.set_cons_zero List.set_cons_succ List.length_cons List.length_nil List.reverse_cons
+  List.append_nil List.nil_append List.reverse_nil
+
+attribute [agrind _ = _] List.cons_append
+
+grind_pattern [agrind] List.append_assoc => («as» ++ bs) ++ cs where
+  «as» =/= []; bs =/= []; cs =/= []
+
+grind_pattern [agrind] List.append_assoc => «as» ++ (bs ++ cs) where
+  «as» =/= []; bs =/= []; cs =/= []
+
+attribute [scalar_tac_simps, agrind =]
+  List.length_nil List.length_cons List.length_set List.foldl_nil List.foldl_cons
+
+
 end List
