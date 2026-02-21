@@ -1771,6 +1771,12 @@ let simplify_trait_calls (crate : crate) : crate =
         d.methods)
     crate.trait_decls;
 
+  (* Add the local trait impls *)
+  TraitImplId.Map.iter
+    (fun _ (d : trait_impl) ->
+      if d.item_meta.is_local then visitor#visit_trait_impl_id () d.def_id)
+    crate.trait_impls;
+
   (* Explore the impls *)
   while !impls_to_explore <> [] do
     let id = List.hd !impls_to_explore in
