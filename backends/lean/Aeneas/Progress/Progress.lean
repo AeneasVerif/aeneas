@@ -725,7 +725,7 @@ def evalAGrindWithPreprocess : TacticM Unit := do
        TODO: fine tune the parameters
      -/
     let config : Grind.Config := { splits := 4, splitMatch := false, splitIte := false, funext := false, gen := 4, instances := 1000 }
-    let params ← Aeneas.Grind.mkParams config #[Aeneas.Grind.agrindExt.getState (← Lean.getEnv)]
+    let params ← Aeneas.Grind.mkParams config #[Aeneas.Grind.agrindExt.getState (← Lean.getEnv)] (withGroundSimprocs := true)
     let mvarId ← Lean.Elab.Tactic.getMainGoal
     try
       Aeneas.Grind.agrindEval config params mvarId

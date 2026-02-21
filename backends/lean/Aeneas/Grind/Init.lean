@@ -33,7 +33,7 @@ def getSimpContext (config : Lean.Grind.Config) : MetaM Simp.Context := do
 /-- Adapted from `Lean.Meta.Grind.mkParams` -/
 def mkParams (config : Lean.Grind.Config)
   (extensions : Lean.Meta.Grind.ExtensionStateArray)
-  (withGroundSimprocs := false) :
+  (withGroundSimprocs : Bool) :
   MetaM Lean.Meta.Grind.Params := do
   let norm ← getSimpContext config
   /- `Lean.Meta.Grind.getSimprocs` retrieves the `seval` simp procedures which are used to simplify ground
@@ -57,7 +57,7 @@ def agrindEval (config : Lean.Grind.Config) (params : Grind.Params) (mvarId : Le
       if result.hasFailed then
         throwError "`agrind` failed\n{← result.toMessageData}"
 
-private def agrindCore (config : Lean.Grind.Config) (isOnly : Bool)
+private def agrindCore (config : Lean.Grind.Config) (isOnly : Bool) (withGroundSimprocs : Bool)
     (ps : Array (Lean.TSyntax `Lean.Parser.Tactic.grindParam)) :
     Lean.Elab.Tactic.TacticM Unit := do
   let mvarId ← Lean.Elab.Tactic.getMainGoal
@@ -65,7 +65,7 @@ private def agrindCore (config : Lean.Grind.Config) (isOnly : Bool)
     let baseParams ← if isOnly then
         Lean.Meta.Grind.mkOnlyParams config
       else
-        mkParams config #[agrindExt.getState (← Lean.getEnv)]
+        mkParams config #[agrindExt.getState (← Lean.getEnv)] withGroundSimprocs
     let fullParams ← Lean.Elab.Tactic.elabGrindParams baseParams ps
                         (lax := config.lax) («only» := isOnly)
     agrindEval config fullParams mvarId
@@ -77,9 +77,9 @@ open Lean.Parser.Tactic in
 elab_rules : tactic
   | `(tactic| agrind $config:optConfig only $[ [$params:grindParam,*] ]?) => do
     let ps := if let some ps := params then ps.getElems else #[]
-    agrindCore (← Lean.Elab.Tactic.elabGrindConfig config) true ps
+    agrindCore (← Lean.Elab.Tactic.elabGrindConfig config) (isOnly := true) (withGroundSimprocs := true) ps
   | `(tactic| agrind $config:optConfig $[ [$params:grindParam,*] ]?) => do
     let ps := if let some ps := params then ps.getElems else #[]
-    agrindCore (← Lean.Elab.Tactic.elabGrindConfig config) false ps
+    agrindCore (← Lean.Elab.Tactic.elabGrindConfig config) (isOnly := false) (withGroundSimprocs := true) ps
 
 end Aeneas.Grind
