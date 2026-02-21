@@ -20,20 +20,18 @@ theorem m_spec (x y : U64) :
   unfold m
   progress*
 
+set_option maxHeartbeats 1000000 in
+set_option exponentiation.threshold 500 in
 @[progress]
 theorem mul_internal_spec (a b : Array U64 5#usize)
     (ha : ∀ i < 5, a[i]!.val < 2 ^ 62) (hb : ∀ i < 5, b[i]!.val < 2 ^ 62) :
     mul_internal a b ⦃ result =>
       Scalar52.wideAsNat result = Scalar52.asNat a * Scalar52.asNat b ⦄ := by
   unfold mul_internal
-  have := ha 0 (by simp); have := ha 1 (by simp); have := ha 2 (by simp); have := ha 3 (by simp); have := ha 4 (by simp);
-  have := hb 0 (by simp); have := hb 1 (by simp); have := hb 2 (by simp); have := hb 3 (by simp); have := hb 4 (by simp)
   simp [Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index]
   progress*
   -- Post-condition
   simp [*, Scalar52.wideAsNat, Scalar52.asNat, Finset.sum_range_succ]
-  simp at *
-  set_option exponentiation.threshold 500 in
   ring_nf
 
 end curve25519
