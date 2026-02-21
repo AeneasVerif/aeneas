@@ -63,7 +63,12 @@ theorem Usize.cMax_bound : UScalar.cMax .Usize ≤ Usize.max ∧ Usize.max + 1 =
   have := System.Platform.numBits_eq; cases this <;> simp [*]
 
 grind_pattern Usize.cMax_bound => Usize.max
-grind_pattern [agrind] Usize.cMax_bound => Usize.max
+
+/- Small variant which requires less work to `grind` -/
+theorem Usize.cMax_bound_concrete : 4294967295 ≤ Usize.max ∧ Usize.max + 1 = 2^System.Platform.numBits := by grind
+grind_pattern [agrind] Usize.cMax_bound_concrete => Usize.max
+
+example : 2^32 - 1 ≤ Usize.max := by agrind
 
 @[scalar_tac Usize.size]
 theorem Usize.size_scalarTac_eq : Usize.size = Usize.max + 1 ∧ Usize.size = 2^System.Platform.numBits := by
@@ -93,7 +98,10 @@ theorem Isize.cMin_bound : Isize.min ≤ IScalar.cMin .Isize ∧ Isize.min = - 2
   have := System.Platform.numBits_eq; cases this <;> simp [*]
 
 grind_pattern Isize.cMin_bound => Isize.min
-grind_pattern [agrind] Isize.cMin_bound => Isize.min
+
+/- Small variant which requires less work to `grind` -/
+theorem Isize.cMin_bound_concrete : Isize.min ≤ -2147483648 ∧ Isize.min = - 2^(System.Platform.numBits - 1) := by grind
+grind_pattern [agrind] Isize.cMin_bound_concrete => Isize.min
 
 abbrev Isize.minAbbrevPow :Int := -2^(System.Platform.numBits-1)
 @[scalar_tac Isize.minAbbrevPow]
@@ -115,7 +123,10 @@ theorem Isize.cMax_bound : IScalar.cMax .Isize ≤ Isize.max ∧ Isize.max + 1 =
   have := System.Platform.numBits_eq; cases this <;> simp [*]
 
 grind_pattern Isize.cMax_bound => Isize.max
-grind_pattern [agrind] Isize.cMax_bound => Isize.max
+
+/- Small variant which requires less work to `grind` -/
+theorem Isize.cMax_bound_concrete : 2147483647  ≤ Isize.max ∧ Isize.max + 1 = 2^(System.Platform.numBits - 1) := by grind
+grind_pattern [agrind] Isize.cMax_bound_concrete => Isize.max
 
 @[scalar_tac Usize.size]
 theorem Isize.size_scalarTac_eq : Isize.size = 2^System.Platform.numBits := by
@@ -532,7 +543,7 @@ grind_pattern [agrind] mod_lt => x % y
 
 /- Remark: we're omitting a similar theorem for `IScalar` because the theorem is a bit cumbersome
    to use (it has to be expressed in terms of `x.bv.toNat`). -/
-@[scalar_tac_simps, grind =, agrind =]
+@[simp, scalar_tac_simps, grind =, agrind =]
 theorem UScalar.sizeOf {ty} (x : UScalar ty) : sizeOf x = x.val + 3 := by
   cases x; simp only [UScalar.mk.sizeOf_spec, BitVec.sizeOf, Fin.sizeOf, BitVec.val_toFin]
   unfold UScalar.val
