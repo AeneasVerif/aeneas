@@ -426,25 +426,25 @@ let extract_cast_kind_hol4 (span : Meta.span)
 let extract_cast_kind_gen (span : Meta.span)
     (extract_expr : inside:bool -> texpr -> unit) (fmt : F.formatter)
     ~(inside : bool) (kind : cast_kind) (arg : texpr) : unit =
-  let integer_type_to_string (ty : integer_type) : string =
-    if backend () = Lean then "." ^ int_name ty
-    else
-      StringUtils.capitalize_first_letter (PrintPure.integer_type_to_string ty)
-  in
   match kind with
   | CastLit (src, tgt) ->
+      let integer_type_to_string (ty : integer_type) : string =
+        if backend () = Lean then
+          match ty with
+          | Unsigned _ -> "." ^ int_name ty
+          | Signed _ -> "." ^ int_name ty
+        else
+          StringUtils.capitalize_first_letter
+            (PrintPure.integer_type_to_string ty)
+      in
       if inside then F.pp_print_string fmt "(";
       (* Rem.: the source type is an implicit parameter *)
       (* Different cases depending on the conversion *)
       (let cast_str, src, tgt =
          match (src, tgt) with
-         | _, _
-           when ValuesUtils.literal_type_is_integer src
-                && ValuesUtils.literal_type_is_integer tgt ->
-             let src, tgt =
-               ( TypesUtils.literal_as_integer src,
-                 TypesUtils.literal_as_integer tgt )
-             in
+         | _, _ when literal_type_is_integer src && literal_type_is_integer tgt
+           ->
+             let src, tgt = (literal_as_integer src, literal_as_integer tgt) in
              let cast_str =
                match backend () with
                | Coq | FStar -> "scalar_cast"
@@ -464,7 +464,7 @@ let extract_cast_kind_gen (span : Meta.span)
              let tgt = integer_type_to_string tgt in
              (cast_str, src, Some tgt)
          | TBool, TInt _ | TBool, TUInt _ ->
-             let tgt = TypesUtils.literal_as_integer tgt in
+             let tgt = literal_as_integer tgt in
              let cast_str =
                match backend () with
                | Coq | FStar -> "scalar_cast_bool"
@@ -519,6 +519,15 @@ let extract_cast_kind_gen (span : Meta.span)
         | TUInt ty -> Unsigned ty
         | _ ->
             [%craise] span "Can only generate code for casts between integers"
+      in
+      let integer_type_to_string (ty : integer_type) : string =
+        if backend () = Lean then
+          match ty with
+          | Unsigned _ -> "Std." ^ int_name ty
+          | Signed _ -> "Std." ^ int_name ty
+        else
+          StringUtils.capitalize_first_letter
+            (PrintPure.integer_type_to_string ty)
       in
       let tgt = integer_type_to_string tgt_ty in
       F.pp_print_space fmt ();
@@ -749,6 +758,8 @@ and extract_App (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
       | Proj proj, _ ->
           extract_field_projector span ctx fmt ~inside ~inside_do app proj
             qualif.generics args out_ty
+      | ScalarValProj ty, _ ->
+          extract_scalar_val_projector span ctx fmt ~inside ty args
       | TraitConst (trait_ref, const_name), _ ->
           extract_trait_ref span ctx fmt TypeDeclId.Set.empty ~inside:true
             trait_ref;
@@ -1019,14 +1030,13 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
             Some { explicit_types = [ Implicit ]; explicit_const_generics = [] }
         | Pure ToResult ->
             Some { explicit_types = [ Implicit ]; explicit_const_generics = [] }
+        | Pure ResultUnwrapMut ->
+            Some
+              {
+                explicit_types = [ Implicit; Implicit ];
+                explicit_const_generics = [];
+              }
         | Pure _ -> None
-      in
-      (* Special case for [ToResult]: we don't want to print a space between the
-         coercion symbol and the expression - TODO: this is a bit ad-hoc *)
-      let print_first_space =
-        match fun_id with
-        | Pure ToResult -> false
-        | _ -> true
       in
       (* Filter the generics.
 
@@ -1054,10 +1064,9 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
             "/- ERROR: ill-formed builtin: invalid number of filtering \
              arguments -/");
       (* Print the arguments *)
-      let print_space = ref print_first_space in
       List.iter
         (fun ve ->
-          if !print_space then F.pp_print_space fmt () else print_space := true;
+          F.pp_print_space fmt ();
           extract_texpr span ctx fmt ~inside:true ~inside_do ve)
         args;
       (* Close the box for the function call *)
@@ -1198,6 +1207,17 @@ and extract_field_projector (span : Meta.span) (ctx : extraction_ctx)
   | [] ->
       (* No argument: shouldn't happen *)
       [%admit_raise] span "Unreachable" fmt
+
+and extract_scalar_val_projector (span : Meta.span) (ctx : extraction_ctx)
+    (fmt : F.formatter) ~(inside : bool) (_ : integer_type) (args : texpr list)
+    : unit =
+  match args with
+  | [ arg ] ->
+      if inside then F.pp_print_string fmt "(";
+      extract_texpr span ctx fmt ~inside:true ~inside_do:false arg;
+      F.pp_print_string fmt ".val";
+      if inside then F.pp_print_string fmt ")"
+  | _ -> [%internal_error] span
 
 and extract_Lambda (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
     ~(inside : bool) (xl : tpat list) (e : texpr) : unit =
@@ -2424,7 +2444,8 @@ let extract_global_decl_body_gen (span : Meta.span) (ctx : extraction_ctx)
   (* For lean: add the irreducible attribute *)
   [%sanity_check] span (backend () = Lean || not irreducible);
   let attributes =
-    if backend () = Lean then
+    if is_opaque then []
+    else if backend () = Lean then
       if irreducible then [ "global_simps"; "irreducible" ]
       else [ "global_simps" ]
     else []

@@ -6,6 +6,9 @@ set_option linter.dupNamespace false
 set_option linter.hashCommand false
 set_option linter.unusedVariables false
 
+/- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
+set_option maxHeartbeats 1000000
+
 namespace loops_nested_rec
 
 /- [loops_nested_rec::iter]: loop 1:
@@ -141,10 +144,10 @@ def ntt_layer_loop0_loop0
     let c1_factor ← c1 * factor
     let c11 ← mod_sub c0 c1_factor
     let c01 ← mod_add c0 c1_factor
-    let i4 ← (↑(UScalar.cast .U16 c01) : Result Std.U16)
+    let i4 ← lift (UScalar.cast .U16 c01)
     let a1 ← Array.update a i i4
     let i5 ← i + len
-    let i6 ← (↑(UScalar.cast .U16 c11) : Result Std.U16)
+    let i6 ← lift (UScalar.cast .U16 c11)
     let a2 ← Array.update a1 i5 i6
     let j1 ← j + 1#usize
     ntt_layer_loop0_loop0 a2 len start factor j1
@@ -263,12 +266,12 @@ def generate_matrix_loop0_loop0
   then
     let coordinates1 ← Array.update coordinates 0#usize j
     let state_work1 ← shake_state_copy state_base state_work
-    let s ← (↑(Array.to_slice coordinates1) : Result (Slice Std.U8))
+    let s ← lift (Array.to_slice coordinates1)
     let state_work2 ← shake_append state_work1 s
     let (a_transpose, atranspose_mut_back) ← Key.atranspose_mut key
     let i1 ← i * 4#u8
     let i2 ← i1 + j
-    let i3 ← (↑(UScalar.cast .Usize i2) : Result Std.Usize)
+    let i3 ← lift (UScalar.cast .Usize i2)
     let (i4, index_mut_back) ← Array.index_mut_usize a_transpose i3
     let (state_work3, i5) ← sample_ntt state_work2 i4
     let j1 ← j + 1#u8
@@ -305,7 +308,7 @@ def generate_matrix
   := do
   let coordinates := Array.repeat 2#usize 0#u8
   let state_base1 ← shake_init state_base
-  let s ← (↑(Array.to_slice key.seed) : Result (Slice Std.U8))
+  let s ← lift (Array.to_slice key.seed)
   let state_base2 ← shake_append state_base1 s
   let (key1, state_work1) ←
     generate_matrix_loop0 key state_base2 state_work coordinates 0#u8
@@ -344,11 +347,9 @@ def mul_add_as_plus_e_loop0
   match o with
   | none => ok ()
   | some j =>
-    let iter3 ←
-      core.iter.traits.collect.IntoIterator.Blanket.into_iter
-        (core.iter.traits.iterator.IteratorRange core.iter.range.StepUsize)
+    let a_row_temp1 ←
+      mul_add_as_plus_e_loop0_loop0 a_row_temp j
         { start := 0#usize, «end» := 4#usize }
-    let a_row_temp1 ← mul_add_as_plus_e_loop0_loop0 a_row_temp j iter3
     mul_add_as_plus_e_loop0 a_row_temp1 iter2
 partial_fixpoint
 
@@ -364,13 +365,9 @@ def mul_add_as_plus_e
   let a_row_temp ← alloc.vec.from_elem core.clone.CloneU8 0#u8 i1
   let i2 ← i * 2#usize
   let _ ← alloc.vec.from_elem core.clone.CloneU8 0#u8 i2
-  let sb ←
+  let iter1 ←
     core.iter.range.IteratorRange.step_by core.iter.range.StepUsize
       { start := 0#usize, «end» := N } 8#usize
-  let iter1 ←
-    core.iter.traits.collect.IntoIterator.Blanket.into_iter
-      (core.iter.traits.iterator.IteratorStepBy
-      (core.iter.traits.iterator.IteratorRange core.iter.range.StepUsize)) sb
   mul_add_as_plus_e_loop0 a_row_temp iter1
   ok out
 

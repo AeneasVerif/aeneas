@@ -201,6 +201,7 @@ let rec check_texpr (span : Meta.span) (ctx : tc_ctx) (e : texpr) : unit =
       | Global _ -> () (* TODO *)
       | TraitConst _ -> () (* TODO *)
       | LoopOp -> () (* TODO *)
+      | ScalarValProj _ -> () (* TODO *)
       | Proj { adt_id = proj_adt_id; field_id } ->
           (* Note we can only project fields of structures (not enumerations) *)
           (* Deconstruct the projector type *)

@@ -154,7 +154,7 @@ theorem mul2_add1_spec
  -/
 @[progress] -- the [progress] attribute saves the theorem in a database, for [progress] to use it
 theorem mul2_add1_spec2 (x : U32) (h : 2 * x.val + 1 ≤ U32.max) :
-  mul2_add1 x ⦃ y => ↑ y = 2 * ↑x + (1 : Int) ⦄
+  mul2_add1 x ⦃ y => ↑y = 2 * ↑x + (1 : Int) ⦄
   := by
   unfold mul2_add1
   progress as ⟨ x1⟩ -- [progress] automatically lookups [U32.add_spec]

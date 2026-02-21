@@ -6,6 +6,9 @@ set_option linter.dupNamespace false
 set_option linter.hashCommand false
 set_option linter.unusedVariables false
 
+/- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
+set_option maxHeartbeats 1000000
+
 namespace scalars
 
 /- [scalars::u32_use_wrapping_add]:
@@ -51,8 +54,8 @@ def i32_use_shift_left (x : Std.I32) : Result Std.I32 := do
 /- [scalars::add_and]:
    Source: 'tests/src/scalars.rs', lines 35:0-37:1 -/
 def add_and (a : Std.U32) (b : Std.U32) : Result Std.U32 := do
-  let i ← (↑(b &&& a) : Result Std.U32)
-  let i1 ← (↑(b &&& a) : Result Std.U32)
+  let i ← lift (b &&& a)
+  let i1 ← lift (b &&& a)
   i + i1
 
 /- [scalars::u32_use_rotate_right]:
@@ -84,5 +87,43 @@ def u32_default : Result Std.U32 := do
    Source: 'tests/src/scalars.rs', lines 59:0-61:1 -/
 def i32_default : Result Std.I32 := do
   ok (core.default.DefaultI32.default)
+
+/- [scalars::match_usize]:
+   Source: 'tests/src/scalars.rs', lines 63:0-68:1 -/
+def match_usize (x : Std.Usize) : Result Bool := do
+  match x.val with
+  | 0 => ok true
+  | 1 => ok true
+  | 2 => ok true
+  | _ => ok false
+
+/- [scalars::match_isize]:
+   Source: 'tests/src/scalars.rs', lines 70:0-75:1 -/
+def match_isize (x : Std.Isize) : Result Std.Isize := do
+  match x.val with
+  | 0 => ok 0#isize
+  | -1 => ok 0#isize
+  | 2 => ok 0#isize
+  | _ => x + 1#isize
+
+/- [scalars::u32_as_u16]:
+   Source: 'tests/src/scalars.rs', lines 77:0-79:1 -/
+def u32_as_u16 (x : Std.U32) : Result Std.U16 := do
+  ok (UScalar.cast .U16 x)
+
+/- [scalars::u16_as_u32]:
+   Source: 'tests/src/scalars.rs', lines 81:0-83:1 -/
+def u16_as_u32 (x : Std.U16) : Result Std.U32 := do
+  ok (UScalar.cast .U32 x)
+
+/- [scalars::u32_as_i16]:
+   Source: 'tests/src/scalars.rs', lines 85:0-87:1 -/
+def u32_as_i16 (x : Std.U32) : Result Std.I16 := do
+  ok (UScalar.hcast .I16 x)
+
+/- [scalars::i16_as_u32]:
+   Source: 'tests/src/scalars.rs', lines 89:0-91:1 -/
+def i16_as_u32 (x : Std.I16) : Result Std.U32 := do
+  ok (IScalar.hcast .U32 x)
 
 end scalars

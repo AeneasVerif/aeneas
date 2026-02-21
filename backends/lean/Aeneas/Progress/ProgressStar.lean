@@ -1037,7 +1037,7 @@ info: Try this:
 -/
 #guard_msgs in
 example (x y : U32) :
-  (toResult (core.num.U32.overflowing_add x y)) ⦃ (_, _) => True ⦄ := by
+  (lift (core.num.U32.overflowing_add x y)) ⦃ (_, _) => True ⦄ := by
   progress*?
 
 end Examples

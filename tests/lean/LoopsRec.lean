@@ -6,6 +6,9 @@ set_option linter.dupNamespace false
 set_option linter.hashCommand false
 set_option linter.unusedVariables false
 
+/- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
+set_option maxHeartbeats 1000000
+
 namespace loops_rec
 
 /- [loops_rec::iter]: loop 0:

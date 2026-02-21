@@ -543,6 +543,14 @@ let scalar_name (ty : literal_type) : string =
       match backend () with
       | FStar | Coq | HOL4 -> "char"
       | Lean -> "Char")
+  | TPureNat -> (
+      match backend () with
+      | FStar | Coq | HOL4 -> "nat"
+      | Lean -> "Nat")
+  | TPureInt -> (
+      match backend () with
+      | FStar | Coq | HOL4 -> "int"
+      | Lean -> "Int")
 
 (** Extraction context.
 
@@ -609,7 +617,7 @@ let name_to_string (ctx : extraction_ctx) =
 let ty_to_string (ctx : extraction_ctx) =
   PrintPure.ty_to_string (extraction_ctx_to_fmt_env ctx) false
 
-let type_param_to_string = Print.Types.type_param_to_string
+let type_param_to_string = PrintPure.type_param_to_string
 
 let trait_clause_to_string (ctx : extraction_ctx) =
   PrintPure.trait_clause_to_string (extraction_ctx_to_fmt_env ctx)
@@ -1274,7 +1282,8 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (Discriminant, "read_discriminant");
         (UpdateAtIndex Slice, "Slice.update");
         (UpdateAtIndex Array, "Array.update");
-        (ToResult, "↑");
+        (ToResult, "lift");
+        (ResultUnwrapMut, "core.result.Result.unwrap.mut");
       ]
   | HOL4 ->
       (* We don't provide [FuelDecrease] and [FuelEqZero] on purpose *)
@@ -2044,7 +2053,9 @@ let ctx_compute_var_basename (span : Meta.span) (ctx : extraction_ctx)
           | TBool -> "b"
           | TChar -> "c"
           | TInt _ | TUInt _ -> "i"
-          | TFloat _ -> "fl")
+          | TFloat _ -> "fl"
+          | TPureNat -> "n"
+          | TPureInt -> "i")
       | TArrow _ -> "f"
       | TTraitType (_, name) -> name_from_type_ident name
       | TNever | TError -> "x"

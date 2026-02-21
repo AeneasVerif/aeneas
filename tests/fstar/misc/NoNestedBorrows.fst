@@ -10,11 +10,6 @@ open Primitives
     Name pattern: [core::fmt::Arguments] *)
 assume type core_fmt_Arguments_t : Type0
 
-(** [core::fmt::{core::fmt::Arguments<'a>}::from_str]:
-    Source: '/rustc/library/core/src/fmt/mod.rs', lines 815:4-815:59
-    Name pattern: [core::fmt::{core::fmt::Arguments<'a>}::from_str] *)
-assume val core_fmt_Arguments_from_str : str -> result core_fmt_Arguments_t
-
 (** [no_nested_borrows::Pair]
     Source: 'tests/src/no_nested_borrows.rs', lines 6:0-9:1 *)
 type pair_t (t1 : Type0) (t2 : Type0) = { x : t1; y : t2; }

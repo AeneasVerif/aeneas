@@ -90,7 +90,9 @@ let rec tvalue_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (v : V.tvalue) :
   (* Translate the value *)
   let value =
     match v.value with
-    | VLiteral cv -> { e = Const cv; ty }
+    | VLiteral cv ->
+        let cv = translate_literal cv in
+        { e = Const cv; ty }
     | VAdt av -> (
         let variant_id = av.variant_id in
         let fields = List.map translate av.fields in
@@ -390,7 +392,9 @@ let gtranslate_adt_fields ~(project_borrows : bool)
               (ctx, Some (info, mk_tuple fields))
           else
             (* If we do not filter the fields, all the values should be [Some ...] *)
-            let infos, fields = List.split (List.map Option.get info_fields) in
+            let infos, fields =
+              List.split (List.map ([%option_get] span) info_fields)
+            in
             (ctx, Some (infos, mk_tuple fields))
     end
 

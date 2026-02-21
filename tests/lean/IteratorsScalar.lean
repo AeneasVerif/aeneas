@@ -6,6 +6,9 @@ set_option linter.dupNamespace false
 set_option linter.hashCommand false
 set_option linter.unusedVariables false
 
+/- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
+set_option maxHeartbeats 1000000
+
 namespace iterators_scalar
 
 /- [iterators_scalar::iter]: loop 0:
@@ -25,11 +28,8 @@ def iter_loop
 
 /- [iterators_scalar::iter]:
    Source: 'tests/src/iterators-scalar.rs', lines 3:0-8:1 -/
+@[reducible]
 def iter (n : Std.Usize) : Result Unit := do
-  let iter1 ←
-    core.iter.traits.collect.IntoIterator.Blanket.into_iter
-      (core.iter.traits.iterator.IteratorRange core.iter.range.StepUsize)
-      { start := 0#usize, «end» := n }
-  iter_loop 0#i32 iter1
+  iter_loop 0#i32 { start := 0#usize, «end» := n }
 
 end iterators_scalar

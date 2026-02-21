@@ -6,6 +6,9 @@ set_option linter.dupNamespace false
 set_option linter.hashCommand false
 set_option linter.unusedVariables false
 
+/- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
+set_option maxHeartbeats 1000000
+
 namespace issue_194_recursive_struct_projector
 
 /- [issue_194_recursive_struct_projector::AVLNode]

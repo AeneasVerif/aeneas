@@ -23,6 +23,12 @@ let fresh_regions_with_substs (region_vars : RegionId.id list)
   in
   fun id -> RegionId.Map.find id rid_map
 
+let make_subst_from_generics file line span (params : generic_params)
+    (args : generic_args) (tr_self : trait_ref_kind) : subst =
+  try subst_free_vars (make_sb_subst_from_generics params args tr_self)
+  with Invalid_argument _ when not !Config.fail_hard ->
+    Errors.internal_error_opt_span file line span
+
 let fresh_regions_with_substs_from_vars (region_vars : region_param list)
     (fresh_region_id : unit -> region_id) : RegionId.id -> RegionId.id =
   fresh_regions_with_substs

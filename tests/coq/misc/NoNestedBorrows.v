@@ -13,11 +13,6 @@ Module NoNestedBorrows.
     Name pattern: [core::fmt::Arguments] *)
 Axiom core_fmt_Arguments_t : Type.
 
-(** [core::fmt::{core::fmt::Arguments<'a>}::from_str]:
-    Source: '/rustc/library/core/src/fmt/mod.rs', lines 815:4-815:59
-    Name pattern: [core::fmt::{core::fmt::Arguments<'a>}::from_str] *)
-Axiom core_fmt_Arguments_from_str : str -> result core_fmt_Arguments_t.
-
 (** [no_nested_borrows::Pair]
     Source: 'tests/src/no_nested_borrows.rs', lines 6:0-9:1 *)
 Record Pair_t (T1 : Type) (T2 : Type) :=

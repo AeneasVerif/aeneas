@@ -8,7 +8,7 @@ open Result
 @[rust_trait "core::cmp::PartialEq"]
 structure core.cmp.PartialEq (Self : Type) (Rhs : Type) where
   eq : Self → Rhs → Result Bool
-  ne : Self → Rhs → Result Bool := fun self other => do not (← eq self other)
+  ne : Self → Rhs → Result Bool := fun self other => do ok (not (← eq self other))
 
 @[rust_trait "core::cmp::Eq" (parentClauses := ["partialEqInst"])]
 structure core.cmp.Eq (Self : Type) where

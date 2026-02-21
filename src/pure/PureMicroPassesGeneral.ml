@@ -2027,7 +2027,10 @@ let eliminate_box_functions =
     deriving [Clone] for recursive types which use box. This is a hack: we need
     a general solution (the same issue happens if you use other datatypes like [Vec]
     - we introduce a workaround for a few types like [Box] or [&T] because those uses
-    are really common and we consider them as builtin). *)
+    are really common and we consider them as builtin).
+
+    TODO: move this to the prepasses
+*)
 let simplify_trait_calls_visitor (ctx : ctx) (def : fun_decl) =
   (* Create a map from pattern to method *)
   let pats =
@@ -2088,14 +2091,10 @@ let simplify_trait_calls_visitor (ctx : ctx) (def : fun_decl) =
                           in
 
                           (* Create a call to the method *)
+                          let fun_id = method_decl.binder_value.fun_id in
                           let qualif =
                             FunOrOp
-                              (Fun
-                                 (FromLlbc
-                                    ( FunId
-                                        (FRegular
-                                           method_decl.binder_value.fun_id),
-                                      None )))
+                              (Fun (FromLlbc (FunId (FRegular fun_id), None)))
                           in
                           (* TODO: should we handle the binder? *)
                           let qualif : qualif =
@@ -2108,6 +2107,19 @@ let simplify_trait_calls_visitor (ctx : ctx) (def : fun_decl) =
                             { e = Qualif qualif; ty = mk_arrows arg_tys ret_ty }
                           in
                           let e = [%add_loc] mk_apps span qualif args in
+                          (* Should we introduce a [toResult] because the method is actually pure? *)
+                          let monadic =
+                            let fun_decl =
+                              [%unwrap_with_span] span
+                                (FunDeclId.Map.find_opt fun_id ctx.fun_decls)
+                                "Could not lookup a fun declaration, probably \
+                                 because of a previous error"
+                            in
+                            fun_decl.signature.fwd_info.effect_info.can_fail
+                          in
+                          let e =
+                            if not monadic then mk_to_result_texpr span e else e
+                          in
                           (* Re-explore *)
                           self#visit_texpr env e
                       | _ ->
@@ -3200,3 +3212,77 @@ let let_to_match (ctx : ctx) (def : fun_decl) =
       def.body
   in
   { def with body }
+
+(** The syntax to match over [isize] and [usize] values doesn't work in Lean,
+    because the bitwidth is unknown. In order to make it work, we update these
+    matches so that they match over the inner mathematical value.
+
+    For instance:
+    {[
+      match x with
+      | 0#usize => ...
+      | 1#usize => ...
+      | _ => ...
+    ]}
+
+    becomes:
+    {[
+      match x.val with
+      | 0 => ...
+      | 1 => ...
+          | _ => ...
+    ]} *)
+let update_match_over_isize_usize_visitor (_ctx : ctx) (f : fun_decl) =
+  let span = f.item_meta.span in
+  object
+    inherit [_] map_expr as super
+
+    method! visit_Switch env scrut switch =
+      match switch with
+      | If _ -> super#visit_Switch env scrut switch
+      | Match branches -> (
+          let int_ty : (integer_type * ty) option =
+            match scrut.ty with
+            | TLiteral (TInt Isize) -> Some (Signed Isize, TLiteral TPureInt)
+            | TLiteral (TUInt Usize) -> Some (Unsigned Usize, TLiteral TPureNat)
+            | _ -> None
+          in
+          match int_ty with
+          | None -> super#visit_Switch env scrut switch
+          | Some (int_ty, pure_ty) ->
+              (* Update the scrutinee *)
+              let proj =
+                {
+                  e =
+                    Qualif
+                      {
+                        id = ScalarValProj int_ty;
+                        generics = empty_generic_args;
+                      };
+                  ty = mk_arrow scrut.ty pure_ty;
+                }
+              in
+              let scrut = [%add_loc] mk_app span proj scrut in
+              (* Update the branches *)
+              let branches =
+                List.map
+                  (fun ({ pat; branch } : match_branch) ->
+                    let pat =
+                      match pat.pat with
+                      | PIgnored -> { pat = PIgnored; ty = pure_ty }
+                      | PConstant (VScalar (UnsignedScalar (_, v))) ->
+                          { pat = PConstant (VPureNat v); ty = pure_ty }
+                      | PConstant (VScalar (SignedScalar (_, v))) ->
+                          { pat = PConstant (VPureInt v); ty = pure_ty }
+                      | _ ->
+                          (* Shouldn't happen*)
+                          [%internal_error] span
+                    in
+                    { pat; branch })
+                  branches
+              in
+              super#visit_Switch env scrut (Match branches))
+  end
+
+let update_match_over_isize_usize =
+  lift_expr_map_visitor update_match_over_isize_usize_visitor

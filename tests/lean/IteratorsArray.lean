@@ -6,6 +6,9 @@ set_option linter.dupNamespace false
 set_option linter.hashCommand false
 set_option linter.unusedVariables false
 
+/- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
+set_option maxHeartbeats 1000000
+
 namespace iterators_array
 
 /- [iterators_array::iter_array]: loop 0:
@@ -17,9 +20,7 @@ def iter_array_loop
   loop
     (fun (x1, iter1) =>
       do
-      let (o, iter2) ←
-        (↑(alloc.vec.into_iter.IteratorIntoIter.next iter1) : Result ((Option
-          Std.U32) × (alloc.vec.into_iter.IntoIter Std.U32)))
+      let (o, iter2) ← alloc.vec.into_iter.IteratorIntoIter.next iter1
       match o with
       | none => ok (done ())
       | some _ => let x2 ← x1 + 1#i32
@@ -30,12 +31,8 @@ def iter_array_loop
    Source: 'tests/src/iterators-array.rs', lines 3:0-9:1 -/
 def iter_array : Result Unit := do
   let v ←
-    (↑(alloc.vec.FromVecArray.from
-      (Array.make 3#usize [ 1#u32, 2#u32, 3#u32 ])) : Result (alloc.vec.Vec
-      Std.U32))
-  let iter ←
-    (↑(alloc.vec.IntoIteratorVec.into_iter v) : Result
-      (alloc.vec.into_iter.IntoIter Std.U32))
+    alloc.vec.FromVecArray.from (Array.make 3#usize [ 1#u32, 2#u32, 3#u32 ])
+  let iter ← alloc.vec.IntoIteratorVec.into_iter v
   iter_array_loop 0#i32 iter
 
 end iterators_array

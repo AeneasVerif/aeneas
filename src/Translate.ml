@@ -1236,6 +1236,12 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
       Printf.fprintf out "set_option linter.hashCommand false\n";
       (* Definitions often contain unused variables: deactivate the corresponding linter *)
       Printf.fprintf out "set_option linter.unusedVariables false\n";
+      (* Max heart beats *)
+      Printf.fprintf out
+        "\n\
+         /- You can set the `maxHeartbeats` value with the `-max-heartbeats` \
+         CLI option -/\n";
+      Printf.fprintf out "set_option maxHeartbeats %d\n" !Config.max_heartbeats;
       (* Declare the definitions as being noncomputable if needs be *)
       if fi.noncomputable then
         Printf.fprintf out

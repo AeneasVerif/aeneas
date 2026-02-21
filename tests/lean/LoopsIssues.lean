@@ -6,6 +6,9 @@ set_option linter.dupNamespace false
 set_option linter.hashCommand false
 set_option linter.unusedVariables false
 
+/- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
+set_option maxHeartbeats 1000000
+
 /- You can remove the following line by using the CLI option `-all-computable`: -/
 noncomputable section
 
@@ -147,7 +150,7 @@ def mut_loop_len_loop
       if b1
       then
         do
-        let s ← (↑(Array.to_slice buf) : Result (Slice Std.U8))
+        let s ← lift (Array.to_slice buf)
         let i := Slice.len s
         if 0#usize <= i
         then ok (cont true)
@@ -214,11 +217,8 @@ def loop_consume_u32_loop
 
 /- [loops_issues::loop_consume_u32]:
    Source: 'tests/src/loops-issues.rs', lines 81:0-87:1 -/
+@[reducible]
 def loop_consume_u32 (params : WrapperU32) : Result Unit := do
-  let iter ←
-    core.iter.traits.collect.IntoIterator.Blanket.into_iter
-      (core.iter.traits.iterator.IteratorRange I32.Insts.CoreIterRangeStep)
-      { start := 0#i32, «end» := 32#i32 }
-  loop_consume_u32_loop params iter
+  loop_consume_u32_loop params { start := 0#i32, «end» := 32#i32 }
 
 end loops_issues

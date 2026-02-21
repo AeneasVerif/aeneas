@@ -438,32 +438,6 @@ end Aeneas.Std.WP
 namespace Aeneas.Std.WP
 
 /-!
-# Loops
--/
-
-/-- General spec for loops with a termination measure.
-
-It is meant to derive lemmas to reason about loops: in most situations, one shouldn't
-have to use it directly when verifying programs.
--/
-def loop.spec {α : Type u} {β : Type v}
-  [wf : WellFoundedRelation α]
-  (inv : α → Prop)
-  (post : β → Prop)
-  (body : α → Result (ControlFlow α β)) (x : α)
-  (hBody :
-    ∀ x, body x ⦃ r =>
-      match r with
-      | .done y => post y
-      | .cont x' => inv x' ∧ wf.rel x' x ⦄) :
-  loop body x ⦃ post ⦄ := by
-  revert x
-  apply @wf.wf.fix α (fun x => loop body x ⦃ post ⦄)
-  intros x IH
-  unfold loop
-  grind
-
-/-!
 # mvcgen
 -/
 
@@ -505,3 +479,36 @@ theorem Result.of_wp {α} {x : Result α} (P : Result α → Prop) :
   split at hspec <;> simp_all
 
 end Aeneas.Std.WP
+
+namespace Aeneas.Std
+
+/-!
+# Loops
+-/
+
+/-- General spec for loops with a termination measure.
+
+It is meant to derive lemmas to reason about loops: in most situations, one shouldn't
+have to use it directly when verifying programs.
+-/
+theorem loop.spec {α : Type u} {β : Type v} {γ : Type w}
+  (measure : α → γ)
+  [wf : WellFoundedRelation γ]
+  (inv : α → Prop)
+  (post : β → Prop)
+  (body : α → Result (ControlFlow α β)) (x : α)
+  (hBody :
+    ∀ x, inv x → body x ⦃ r =>
+      match r with
+      | .done y => post y
+      | .cont x' => inv x' ∧ wf.rel (measure x') (measure x) ⦄)
+  (hInv : inv x) :
+  loop body x ⦃ post ⦄ := by
+  suffices ∀ x' x, measure x = x' → inv x → loop body x ⦃ post ⦄
+    by apply this <;> first | rfl | assumption
+  apply @wf.wf.fix γ (fun x' =>
+    ∀ x, measure x = x' →
+    inv x → loop body x ⦃ post ⦄)
+  grind [loop]
+
+end Aeneas.Std

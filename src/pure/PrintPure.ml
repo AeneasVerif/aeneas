@@ -136,6 +136,8 @@ let lookup_var_in_env (env : fmt_env)
         | Some r -> Some r
       end
 
+let type_param_to_string (tv : type_param) : string = tv.name
+
 let type_db_var_to_string (env : fmt_env) (var : type_var_id de_bruijn_var) :
     string =
   (* Note that the types are not necessarily ordered following their indices *)
@@ -144,7 +146,7 @@ let type_db_var_to_string (env : fmt_env) (var : type_var_id de_bruijn_var) :
   in
   match lookup_var_in_env env find var with
   | None -> Print.Types.type_db_var_to_pretty_string var
-  | Some x -> Print.Types.type_param_to_string x
+  | Some x -> type_param_to_string x
 
 let const_generic_param_to_string (v : const_generic_param) : string = v.name
 
@@ -233,7 +235,19 @@ let adt_field_names (env : fmt_env) =
   Print.Types.adt_field_names (fmt_env_to_llbc_fmt_env env)
 
 let option_to_string = Print.option_to_string
-let literal_type_to_string = Print.Values.literal_type_to_string
+let integer_type_to_string = Print.Values.integer_type_to_string
+let float_type_to_string = Print.Values.float_type_to_string
+
+let literal_type_to_string (ty : literal_type) : string =
+  match ty with
+  | TInt ity -> integer_type_to_string (Signed ity)
+  | TUInt uty -> integer_type_to_string (Unsigned uty)
+  | TFloat fty -> float_type_to_string fty
+  | TBool -> "bool"
+  | TChar -> "char"
+  | TPureNat -> "ℕ"
+  | TPureInt -> "ℤ"
+
 let type_var_to_string (v : type_param) = "(" ^ v.name ^ ": Type)"
 
 let const_generic_var_to_string (v : const_generic_param) =
@@ -241,7 +255,18 @@ let const_generic_var_to_string (v : const_generic_param) =
 
 let integer_type_to_string = Print.Values.integer_type_to_string
 let scalar_value_to_string = Print.Values.scalar_value_to_string
-let literal_to_string = Print.Values.literal_to_string
+let float_value_to_string = Print.Values.float_value_to_string
+
+let literal_to_string (lit : literal) : string =
+  match lit with
+  | VScalar sv -> scalar_value_to_string sv
+  | VFloat fv -> float_value_to_string fv
+  | VBool b -> Bool.to_string b
+  | VChar c -> Charon.Uchar.to_string c
+  | VStr s -> "\"" ^ s ^ "\""
+  | VByteStr bs -> "[" ^ String.concat ", " (List.map string_of_int bs) ^ "]"
+  | VPureNat x -> Z.to_string x ^ "#ℕ"
+  | VPureInt x -> Z.to_string x ^ "#ℤ"
 
 let builtin_ty_to_string (aty : builtin_ty) : string =
   match aty with
@@ -828,6 +853,7 @@ let pure_builtin_fun_id_to_string (fid : pure_builtin_fun_id) : string =
       | Slice -> "@sliceUpdate"
     end
   | Discriminant -> "@discriminant"
+  | ResultUnwrapMut -> "@resultUnwrapMut"
 
 let regular_fun_id_to_string (env : fmt_env) (fun_id : fun_id) : string =
   match fun_id with
@@ -1020,6 +1046,8 @@ and app_to_string ?(span : Meta.span option = None) (env : fmt_env)
               ( ConstStrings.constructor_prefix ^ adt_s ^ "?." ^ field_s,
                 [],
                 false )
+          | ScalarValProj (Signed _) -> ("IScalar.val", [], false)
+          | ScalarValProj (Unsigned _) -> ("UScalar.val", [], false)
           | TraitConst (trait_ref, const_name) ->
               let trait_ref = trait_ref_to_string env true trait_ref in
               let qualif = trait_ref ^ "." ^ const_name in

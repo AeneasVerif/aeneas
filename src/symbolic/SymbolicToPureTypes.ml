@@ -16,17 +16,35 @@ let translate_region_binder (translate_value : 'a -> 'b)
     (rb : 'a T.region_binder) : 'b =
   translate_value rb.binder_value
 
+let translate_literal (l : V.literal) : literal =
+  match l with
+  | V.VScalar x -> VScalar x
+  | V.VFloat x -> VFloat x
+  | V.VBool x -> VBool x
+  | V.VChar x -> VChar x
+  | V.VByteStr x -> VByteStr x
+  | V.VStr x -> VStr x
+
 let translate_constant_expr_kind (span : span option) :
     Types.constant_expr_kind -> const_generic = function
   | CGlobal { id; _ } -> CgGlobal id
   | CVar v -> CgVar v
-  | CLiteral l -> CgValue l
+  | CLiteral l -> CgValue (translate_literal l)
   | _ -> [%craise_opt_span] span "Unsupported constant expression kind"
+
+let translate_literal_type (ty : V.literal_type) : literal_type =
+  match ty with
+  | V.TInt x -> TInt x
+  | V.TUInt x -> TUInt x
+  | V.TFloat x -> TFloat x
+  | V.TBool -> TBool
+  | V.TChar -> TChar
 
 let translate_const_generic_param (span : span option)
     (c : Types.const_generic_param) : const_generic_param =
   match c.ty with
-  | TLiteral ty -> { index = c.index; name = c.name; ty }
+  | TLiteral ty ->
+      { index = c.index; name = c.name; ty = translate_literal_type ty }
   | _ -> [%craise_opt_span] span "Unsupported constant expression type"
 
 (* Some generic translation functions (we need to translate different "flavours"
@@ -145,7 +163,7 @@ let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
   | TVar var ->
       TVar var
       (* Note: the `de_bruijn_id`s are incorrect, see comment on `translate_region_binder` *)
-  | TLiteral ty -> TLiteral ty
+  | TLiteral ty -> TLiteral (translate_literal_type ty)
   | TNever -> TNever
   | TRef (_, rty, _) -> translate span rty
   | TRawPtr (ty, rkind) ->
@@ -193,6 +211,10 @@ let translate_strait_type_constraint (span : Meta.span option)
   let ty = translate_sty span ty in
   { trait_ref; type_name; ty }
 
+let translate_type_param (p : T.type_param) : type_param =
+  let { index; name } : T.type_param = p in
+  { index; name }
+
 let translate_generic_params (span : Meta.span option)
     (generics : T.generic_params) : generic_params * predicates =
   let {
@@ -205,6 +227,7 @@ let translate_generic_params (span : Meta.span option)
   } =
     generics
   in
+  let types = List.map translate_type_param types in
   let const_generics =
     List.map (translate_const_generic_param span) const_generics
   in
@@ -231,8 +254,8 @@ let translate_variant (span : Meta.span) (v : T.variant) : variant =
   let variant_attr_info = v.attr_info in
   let discriminant, ty =
     match v.discriminant with
-    | VScalar (SignedScalar (ty, v)) -> (Z.to_int v, V.TInt ty)
-    | VScalar (UnsignedScalar (ty, v)) -> (Z.to_int v, V.TUInt ty)
+    | VScalar (SignedScalar (ty, v)) -> (Z.to_int v, TInt ty)
+    | VScalar (UnsignedScalar (ty, v)) -> (Z.to_int v, TUInt ty)
     | _ ->
         [%craise] span
           "Internal error, please report an issue: found an enumeration \
@@ -355,7 +378,7 @@ let rec translate_fwd_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
           { types = [ ty ]; const_generics = []; trait_refs = [] } )
   | TVar var -> TVar var
   | TNever -> TNever
-  | TLiteral lty -> TLiteral lty
+  | TLiteral lty -> TLiteral (translate_literal_type lty)
   | TRef (_, rty, _) -> translate rty
   | TRawPtr (ty, rkind) ->
       let mut =
@@ -1192,8 +1215,7 @@ let mk_type_check_ctx (ctx : bs_ctx) : PureTypeCheck.tc_ctx =
   let const_generics =
     T.ConstGenericVarId.Map.of_list
       (List.map
-         (fun (cg : const_generic_param) ->
-           (cg.index, ctx_translate_fwd_ty ctx (TLiteral cg.ty)))
+         (fun (cg : const_generic_param) -> (cg.index, TLiteral cg.ty))
          ctx.sg.generics.const_generics)
   in
   let fenv = ctx.fvars_tys in
