@@ -866,9 +866,8 @@ To make a theorem available for `progress`, the user can tag it with the
 `@[progress]` attribute. The theorem must have the following shape:
 ```lean
 theorem thm_name (arg1 : ty1) ... (argn : tyn)
-  (h_pre1 : precondition_1) ... (h_prem : precondition_m) :
-  ∃ (res1 : res_ty1) ... (resk : res_tyk),
-    f arg1 ... argn = ok res1 ∧ postcondition_1 ∧ ... ∧ postcondition_k
+    (h_pre1 : precondition_1) ... (h_prem : precondition_m) :
+  f arg1 ... argn = ⦃ res1 ... resk => postcondition_1 ∧ ... ∧ postcondition_k ⦄
 ```
 where `f` is a monadic function with type `Result ...`.
 
@@ -880,9 +879,8 @@ below, `map` is a ghost variable as it does not appear in the arguments of `hash
 theorem hashmap_insert_spec {k v : Type} [BEq k] [Hashable k]
   (hmap : HashMap k v) (key : k) (val : v) (map : k → Option v)
   (hInv : HashMap.inv hmap map) :
-  ∃ (newMap : HashMap k v),
-    HashMap.insert hmap key val = ok newMap ∧
-    ...
+    HashMap.insert hmap key val ⦃ (newMap : HashMap k v) =>
+    ... ⦄
 ```
 When encoutering ghost variables, `progress` will try to instantiate them by looking
 for local assumptions which match the theorem assumptions, using heuristics to find
