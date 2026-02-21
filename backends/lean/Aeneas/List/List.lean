@@ -642,6 +642,6 @@ grind_pattern [agrind] List.append_assoc => «as» ++ (bs ++ cs) where
 
 attribute [scalar_tac_simps, agrind =]
   List.length_nil List.length_cons List.length_set List.foldl_nil List.foldl_cons
-
+  List.length_map List.size_toArray List.map_toArray
 
 end List
