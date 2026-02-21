@@ -6,6 +6,9 @@ set_option linter.dupNamespace false
 set_option linter.hashCommand false
 set_option linter.unusedVariables false
 
+/- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
+set_option maxHeartbeats 1000000
+
 namespace curve25519
 
 /- [curve25519::Scalar52]
@@ -30,8 +33,8 @@ def Scalar52.Insts.CoreOpsIndexIndexUsizeU64 : core.ops.index.Index Scalar52
 /- [curve25519::m]:
    Source: 'tests/src/curve25519.rs', lines 16:0-18:1 -/
 def m (x : Std.U64) (y : Std.U64) : Result Std.U128 := do
-  let i ← (↑(UScalar.cast .U128 x) : Result Std.U128)
-  let i1 ← (↑(UScalar.cast .U128 y) : Result Std.U128)
+  let i ← lift (UScalar.cast .U128 x)
+  let i1 ← lift (UScalar.cast .U128 y)
   i * i1
 
 /- [curve25519::mul_internal]:
