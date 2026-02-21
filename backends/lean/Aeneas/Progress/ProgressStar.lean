@@ -548,7 +548,7 @@ where
       /- Attempt to finish with a tactic -/
       -- TODO: don't use syntax
       -- TODO: use global options
-      let grindTac : TacticM Unit := Progress.evalGrindWithPreprocess
+      let grindTac : TacticM Unit := Progress.evalAGrindWithPreprocess
       -- TODO: add the tactic given by the user
       let tacStx : IO.Promise Syntax.Tactic ← IO.Promise.new
       let rec tryFinish (tacl : List (String × Syntax.Tactic × TacticM Unit)) : TacticM Unit := do
