@@ -1711,7 +1711,7 @@ let simplify_trait_calls (crate : crate) : crate =
     | _ -> super_visit ()
   in
 
-  (* The map visitor *)
+  (* The map visitor to simplify the calls *)
   let visitor =
     object
       inherit [_] map_crate as super
@@ -1725,7 +1725,86 @@ let simplify_trait_calls (crate : crate) : crate =
           (Option.get span) call
     end
   in
-  visitor#visit_crate None crate
+  let crate = visitor#visit_crate None crate in
+
+  (* Re-compute the set of used trait impls and fun declarations: by simplifying
+     the calls we may have filtered some annoying ones
+
+     Remark: the way we explore the crate is slightly approximative below.
+     We should improve it.
+  *)
+  let used_impls = ref TraitImplId.Set.empty in
+  let impls_to_explore = ref [] in
+  let used_funs = ref FunDeclId.Set.empty in
+
+  (* First explore the transparent functions *)
+  let visitor =
+    object
+      inherit [_] iter_statement
+
+      method! visit_trait_impl_id _ id =
+        if not (TraitImplId.Set.mem id !used_impls) then (
+          used_impls := TraitImplId.Set.add id !used_impls;
+          impls_to_explore := id :: !impls_to_explore)
+
+      method! visit_fun_decl_id _ id =
+        used_funs := FunDeclId.Set.add id !used_funs
+    end
+  in
+  FunDeclId.Map.iter
+    (fun _ (f : fun_decl) ->
+      if f.item_meta.is_local then visitor#visit_fun_decl_id () f.def_id;
+      match f.body with
+      | None -> ()
+      | Some body -> visitor#visit_block () body.body)
+    crate.fun_decls;
+
+  GlobalDeclId.Map.iter
+    (fun _ (d : global_decl) -> visitor#visit_fun_decl_id () d.init)
+    crate.global_decls;
+
+  TraitDeclId.Map.iter
+    (fun _ (d : trait_decl) ->
+      List.iter
+        (fun (d : trait_method binder) ->
+          visitor#visit_fun_decl_id () d.binder_value.item.id)
+        d.methods)
+    crate.trait_decls;
+
+  (* Explore the impls *)
+  while !impls_to_explore <> [] do
+    let id = List.hd !impls_to_explore in
+    impls_to_explore := List.tl !impls_to_explore;
+    match TraitImplId.Map.find_opt id crate.trait_impls with
+    | None -> ()
+    | Some impl ->
+        List.iter (visitor#visit_trait_ref ()) impl.implied_trait_refs;
+        List.iter
+          (fun ((_, x) : _ * fun_decl_ref binder) ->
+            visitor#visit_fun_decl_id () x.binder_value.id)
+          impl.methods
+  done;
+
+  (* Filter the declaration groups we want to extract *)
+  let keep_group (gr : declaration_group) : bool =
+    match gr with
+    | TraitImplGroup (NonRecGroup id) ->
+        if TraitImplId.Set.mem id !used_impls then true else false
+    | TraitImplGroup (RecGroup ids) ->
+        if List.exists (fun id -> TraitImplId.Set.mem id !used_impls) ids then
+          true
+        else false
+    | FunGroup (NonRecGroup id) ->
+        if FunDeclId.Set.mem id !used_funs then true else false
+    | FunGroup (RecGroup ids) ->
+        if List.exists (fun id -> FunDeclId.Set.mem id !used_funs) ids then true
+        else false
+    | _ -> true
+  in
+  let declarations = List.filter keep_group crate.declarations in
+
+  (* *)
+  { crate with declarations }
 
 let apply_passes (crate : crate) : crate =
   (* Passes that apply to the whole crate *)
