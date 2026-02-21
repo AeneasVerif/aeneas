@@ -666,33 +666,33 @@ abbrev I64.ofInt   := @IScalar.ofInt .I64
 abbrev I128.ofInt  := @IScalar.ofInt .I128
 
 @[simp, scalar_tac_simps, simp_scalar_simps, bvify_simps, grind =, agrind =]
-theorem UScalar.ofNat_val_eq {ty : UScalarTy} (h : x < 2^ty.numBits) :
+theorem UScalar.ofNatCore_val_eq {ty : UScalarTy} (h : x < 2^ty.numBits) :
   (UScalar.ofNatCore x h).val = x := by
   simp [UScalar.ofNatCore, UScalar.val]
 
 @[simp, scalar_tac_simps, grind =, agrind =]
-theorem U8.ofNat_val_eq (h : x < 2^UScalarTy.U8.numBits) : (U8.ofNatCore x h).val = x := by
-  apply UScalar.ofNat_val_eq h
+theorem U8.ofNatCore_val_eq (h : x < 2^UScalarTy.U8.numBits) : (U8.ofNatCore x h).val = x := by
+  apply UScalar.ofNatCore_val_eq h
 
 @[simp, scalar_tac_simps, grind =, agrind =]
-theorem U16.ofNat_val_eq (h : x < 2^UScalarTy.U16.numBits) : (U16.ofNatCore x h).val = x := by
-  apply UScalar.ofNat_val_eq h
+theorem U16.ofNatCore_val_eq (h : x < 2^UScalarTy.U16.numBits) : (U16.ofNatCore x h).val = x := by
+  apply UScalar.ofNatCore_val_eq h
 
 @[simp, scalar_tac_simps, grind =, agrind =]
-theorem U32.ofNat_val_eq (h : x < 2^UScalarTy.U32.numBits) : (U32.ofNatCore x h).val = x := by
-  apply UScalar.ofNat_val_eq h
+theorem U32.ofNatCore_val_eq (h : x < 2^UScalarTy.U32.numBits) : (U32.ofNatCore x h).val = x := by
+  apply UScalar.ofNatCore_val_eq h
 
 @[simp, scalar_tac_simps, grind =, agrind =]
-theorem U64.ofNat_val_eq (h : x < 2^UScalarTy.U64.numBits) : (U64.ofNatCore x h).val = x := by
-  apply UScalar.ofNat_val_eq h
+theorem U64.ofNatCore_val_eq (h : x < 2^UScalarTy.U64.numBits) : (U64.ofNatCore x h).val = x := by
+  apply UScalar.ofNatCore_val_eq h
 
 @[simp, scalar_tac_simps, grind =, agrind =]
-theorem U128.ofNat_val_eq (h : x < 2^UScalarTy.U128.numBits) : (U128.ofNatCore x h).val = x := by
-  apply UScalar.ofNat_val_eq h
+theorem U128.ofNatCore_val_eq (h : x < 2^UScalarTy.U128.numBits) : (U128.ofNatCore x h).val = x := by
+  apply UScalar.ofNatCore_val_eq h
 
 @[simp, scalar_tac_simps, grind =, agrind =]
-theorem Usize.ofNat_val_eq (h : x < 2^UScalarTy.Usize.numBits) : (Usize.ofNatCore x h).val = x := by
-  apply UScalar.ofNat_val_eq h
+theorem Usize.ofNatCore_val_eq (h : x < 2^UScalarTy.Usize.numBits) : (Usize.ofNatCore x h).val = x := by
+  apply UScalar.ofNatCore_val_eq h
 
 @[simp, scalar_tac_simps, simp_scalar_simps, bvify_simps, grind! ., agrind! .]
 theorem IScalar.ofInt_val_eq {ty : IScalarTy} (h : - 2^(ty.numBits - 1) ≤ x ∧ x < 2^(ty.numBits - 1)) :
@@ -1093,7 +1093,7 @@ abbrev Isize.bv (x : Isize) : BitVec System.Platform.numBits := IScalar.bv x
 @[bvify_simps] theorem U128.le_max (x: U128) : x.val ≤ 340282366920938463463374607431768211455 := by have := x.hBounds; simp at this; omega
 
 @[simp, scalar_tac_simps, grind =, agrind =]
-theorem UScalar.ofNat_val (x : UScalar ty) (hInBounds : x.val ≤ UScalar.cMax ty) :
+theorem UScalar.ofNat_self_val (x : UScalar ty) (hInBounds : x.val ≤ UScalar.cMax ty) :
   UScalar.ofNat x hInBounds = x := by scalar_tac
 
 @[simp, scalar_tac_simps, grind =, agrind =]
