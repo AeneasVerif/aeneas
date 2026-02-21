@@ -749,12 +749,12 @@ theorem UScalar.ofNatCore_bv {ty : UScalarTy} (x : Nat) h :
   (@UScalar.ofNatCore ty x h).bv = BitVec.ofNat _ x := by
   simp only [ofNatCore, BitVec.ofNat, Fin.Internal.ofNat, Nat.mod_eq_of_lt h]
 
-@[simp, simp_scalar_simps, bvify_simps, grind =, agrind =] theorem U8.ofNat_bv (x : Nat) h : (U8.ofNat x h).bv = BitVec.ofNat _ x := by apply UScalar.ofNatCore_bv
-@[simp, simp_scalar_simps, bvify_simps, grind =, agrind =] theorem U16.ofNat_bv (x : Nat) h : (U16.ofNat x h).bv = BitVec.ofNat _ x := by apply UScalar.ofNatCore_bv
-@[simp, simp_scalar_simps, bvify_simps, grind =, agrind =] theorem U32.ofNat_bv (x : Nat) h : (U32.ofNat x h).bv = BitVec.ofNat _ x := by apply UScalar.ofNatCore_bv
-@[simp, simp_scalar_simps, bvify_simps, grind =, agrind =] theorem U64.ofNat_bv (x : Nat) h : (U64.ofNat x h).bv = BitVec.ofNat _ x := by apply UScalar.ofNatCore_bv
-@[simp, simp_scalar_simps, bvify_simps, grind =, agrind =] theorem U128.ofNat_bv (x : Nat) h : (U128.ofNat x h).bv = BitVec.ofNat _ x := by apply UScalar.ofNatCore_bv
-@[simp, simp_scalar_simps, bvify_simps, grind =, agrind =] theorem Usize.ofNat_bv (x : Nat) h : (Usize.ofNat x h).bv = BitVec.ofNat _ x := by apply UScalar.ofNatCore_bv
+@[simp, scalar_tac_simps, simp_scalar_simps, bvify_simps, grind =, agrind =] theorem U8.ofNat_bv (x : Nat) h : (U8.ofNat x h).bv = BitVec.ofNat _ x := by apply UScalar.ofNatCore_bv
+@[simp, scalar_tac_simps, simp_scalar_simps, bvify_simps, grind =, agrind =] theorem U16.ofNat_bv (x : Nat) h : (U16.ofNat x h).bv = BitVec.ofNat _ x := by apply UScalar.ofNatCore_bv
+@[simp, scalar_tac_simps, simp_scalar_simps, bvify_simps, grind =, agrind =] theorem U32.ofNat_bv (x : Nat) h : (U32.ofNat x h).bv = BitVec.ofNat _ x := by apply UScalar.ofNatCore_bv
+@[simp, scalar_tac_simps, simp_scalar_simps, bvify_simps, grind =, agrind =] theorem U64.ofNat_bv (x : Nat) h : (U64.ofNat x h).bv = BitVec.ofNat _ x := by apply UScalar.ofNatCore_bv
+@[simp, scalar_tac_simps, simp_scalar_simps, bvify_simps, grind =, agrind =] theorem U128.ofNat_bv (x : Nat) h : (U128.ofNat x h).bv = BitVec.ofNat _ x := by apply UScalar.ofNatCore_bv
+@[simp, scalar_tac_simps, simp_scalar_simps, bvify_simps, grind =, agrind =] theorem Usize.ofNat_bv (x : Nat) h : (Usize.ofNat x h).bv = BitVec.ofNat _ x := by apply UScalar.ofNatCore_bv
 
 theorem IScalar.eq_equiv_bv_eq {ty : IScalarTy} (x y : IScalar ty) :
   x = y ↔ x.bv = y.bv := by
@@ -779,12 +779,12 @@ theorem IScalar.ofIntCore_bv {ty : IScalarTy} (x : Int) h :
   simp only [ofIntCore, BitVec.ofInt, Int.ofNat_eq_natCast, Nat.cast_pow, Nat.cast_ofNat]
   congr
 
-@[simp, simp_scalar_simps, bvify_simps, grind =, agrind =] theorem I8.ofInt_bv (x : Int) h : (I8.ofInt x h).bv = BitVec.ofInt _ x := by apply IScalar.ofIntCore_bv
-@[simp, simp_scalar_simps, bvify_simps, grind =, agrind =] theorem I16.ofInt_bv (x : Int) h : (I16.ofInt x h).bv = BitVec.ofInt _ x := by apply IScalar.ofIntCore_bv
-@[simp, simp_scalar_simps, bvify_simps, grind =, agrind =] theorem I32.ofInt_bv (x : Int) h : (I32.ofInt x h).bv = BitVec.ofInt _ x := by apply IScalar.ofIntCore_bv
-@[simp, simp_scalar_simps, bvify_simps, grind =, agrind =] theorem I64.ofInt_bv (x : Int) h : (I64.ofInt x h).bv = BitVec.ofInt _ x := by apply IScalar.ofIntCore_bv
-@[simp, simp_scalar_simps, bvify_simps, grind =, agrind =] theorem I128.ofInt_bv (x : Int) h : (I128.ofInt x h).bv = BitVec.ofInt _ x := by apply IScalar.ofIntCore_bv
-@[simp, simp_scalar_simps, bvify_simps, grind =, agrind =] theorem Isize.ofInt_bv (x : Int) h : (Isize.ofInt x h).bv = BitVec.ofInt _ x := by apply IScalar.ofIntCore_bv
+@[simp, scalar_tac_simps, simp_scalar_simps, bvify_simps, grind =, agrind =] theorem I8.ofInt_bv (x : Int) h : (I8.ofInt x h).bv = BitVec.ofInt _ x := by apply IScalar.ofIntCore_bv
+@[simp, scalar_tac_simps, simp_scalar_simps, bvify_simps, grind =, agrind =] theorem I16.ofInt_bv (x : Int) h : (I16.ofInt x h).bv = BitVec.ofInt _ x := by apply IScalar.ofIntCore_bv
+@[simp, scalar_tac_simps, simp_scalar_simps, bvify_simps, grind =, agrind =] theorem I32.ofInt_bv (x : Int) h : (I32.ofInt x h).bv = BitVec.ofInt _ x := by apply IScalar.ofIntCore_bv
+@[simp, scalar_tac_simps, simp_scalar_simps, bvify_simps, grind =, agrind =] theorem I64.ofInt_bv (x : Int) h : (I64.ofInt x h).bv = BitVec.ofInt _ x := by apply IScalar.ofIntCore_bv
+@[simp, scalar_tac_simps, simp_scalar_simps, bvify_simps, grind =, agrind =] theorem I128.ofInt_bv (x : Int) h : (I128.ofInt x h).bv = BitVec.ofInt _ x := by apply IScalar.ofIntCore_bv
+@[simp, scalar_tac_simps, simp_scalar_simps, bvify_simps, grind =, agrind =] theorem Isize.ofInt_bv (x : Int) h : (Isize.ofInt x h).bv = BitVec.ofInt _ x := by apply IScalar.ofIntCore_bv
 
 instance (ty : UScalarTy) : Inhabited (UScalar ty) := by
   constructor; cases ty <;> apply (UScalar.ofNat 0 (by simp))
@@ -792,11 +792,11 @@ instance (ty : UScalarTy) : Inhabited (UScalar ty) := by
 instance (ty : IScalarTy) : Inhabited (IScalar ty) := by
   constructor; cases ty <;> apply (IScalar.ofInt 0 (by simp [IScalar.cMin, IScalar.cMax, IScalar.rMin, IScalar.rMax]; simp_bounds))
 
-@[simp, simp_scalar_simps, grind =, agrind =]
+@[simp, scalar_tac_simps, simp_scalar_simps, grind =, agrind =]
 theorem UScalar.default_val {ty} : (default : UScalar ty).val = 0 := by
   simp only [default]; cases ty <;> simp
 
-@[simp, simp_scalar_simps, grind =, agrind =]
+@[simp, scalar_tac_simps, simp_scalar_simps, grind =, agrind =]
 theorem UScalar.default_bv {ty} : (default : UScalar ty).bv = 0 := by
   simp only [default]; cases ty <;> simp
 
@@ -1167,46 +1167,46 @@ attribute [zify_simps] U8.bv_toNat U16.bv_toNat U32.bv_toNat
 @[simp, progress_post_simps] theorem IScalar.size_IScalarTyI128 : IScalar.size .I128 = I128.size := by simp_bounds
 @[simp, progress_post_simps] theorem IScalar.size_IScalarTyIsize : IScalar.size .Isize = Isize.size := by simp_bounds
 
-@[simp, simp_lists_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_lists_simps, simp_scalar_simps]
 theorem UScalar.bv_mk {ty} : (@UScalar.bv ty) ∘ UScalar.mk = id := by rfl
 
-@[simp, simp_lists_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_lists_simps, simp_scalar_simps]
 theorem U8.bv_UScalar_mk : U8.bv ∘ UScalar.mk = id := by rfl
 
-@[simp, simp_lists_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_lists_simps, simp_scalar_simps]
 theorem U16.bv_UScalar_mk : U16.bv ∘ UScalar.mk = id := by rfl
 
-@[simp, simp_lists_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_lists_simps, simp_scalar_simps]
 theorem U32.bv_UScalar_mk : U32.bv ∘ UScalar.mk = id := by rfl
 
-@[simp, simp_lists_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_lists_simps, simp_scalar_simps]
 theorem U64.bv_UScalar_mk : U64.bv ∘ UScalar.mk = id := by rfl
 
-@[simp, simp_lists_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_lists_simps, simp_scalar_simps]
 theorem U128.bv_UScalar_mk : U128.bv ∘ UScalar.mk = id := by rfl
 
-@[simp, simp_lists_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_lists_simps, simp_scalar_simps]
 theorem Usize.bv_UScalar_mk : Usize.bv ∘ UScalar.mk = id := by rfl
 
-@[simp, simp_lists_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_lists_simps, simp_scalar_simps]
 theorem IScalar.bv_mk {ty} : (@UScalar.bv ty) ∘ UScalar.mk = id := by rfl
 
-@[simp, simp_lists_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_lists_simps, simp_scalar_simps]
 theorem I8.bv_IScalar_mk : I8.bv ∘ IScalar.mk = id := by rfl
 
-@[simp, simp_lists_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_lists_simps, simp_scalar_simps]
 theorem I16.bv_IScalar_mk : I16.bv ∘ IScalar.mk = id := by rfl
 
-@[simp, simp_lists_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_lists_simps, simp_scalar_simps]
 theorem I32.bv_IScalar_mk : I32.bv ∘ IScalar.mk = id := by rfl
 
-@[simp, simp_lists_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_lists_simps, simp_scalar_simps]
 theorem I64.bv_IScalar_mk : I64.bv ∘ IScalar.mk = id := by rfl
 
-@[simp, simp_lists_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_lists_simps, simp_scalar_simps]
 theorem I128.bv_IScalar_mk : I128.bv ∘ IScalar.mk = id := by rfl
 
-@[simp, simp_lists_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_lists_simps, simp_scalar_simps]
 theorem Isize.bv_IScalar_mk : Isize.bv ∘ IScalar.mk = id := by rfl
 
 end Std
