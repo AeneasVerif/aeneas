@@ -708,11 +708,15 @@ def parseProgressArgs
 
 /-- Use `agrind` after preprocessing goal the goal, in particular to simplify arithmetic expressions. -/
 def evalAGrindWithPreprocess : TacticM Unit := do
+  withTraceNode `Progress (fun _ => do pure m!"evalAGrindWithPreprocess") do
+  traceGoalWithNode "before preprocessing"
   let simpArgs : Simp.SimpArgs ← ScalarTac.getSimpArgs
   let config : Simp.Config := {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1}
   match ← ScalarTac.simpAsmsTarget true config simpArgs with
-  | none => pure ()
+  | none =>
+    trace[Progress] "Goal solved by preprocessing!"
   | some _ =>
+    traceGoalWithNode "after preprocessing"
     /- We reduce the search space but increase the number of instances (we need this when the
        context is big).
 
@@ -722,7 +726,6 @@ def evalAGrindWithPreprocess : TacticM Unit := do
      -/
     let config : Grind.Config := { splits := 4, splitMatch := false, splitIte := false, funext := false, gen := 4, instances := 1000 }
     let params ← Aeneas.Grind.mkParams config #[Aeneas.Grind.agrindExt.getState (← Lean.getEnv)]
-    withTraceNode `Progress (fun _ => do pure m!"Attempting to solve with `grind`:\n{← getMainGoal}") do
     let mvarId ← Lean.Elab.Tactic.getMainGoal
     try
       Aeneas.Grind.agrindEval config params mvarId
@@ -739,6 +742,7 @@ def evalProgressCore (async : Bool) (keepPretty : Option Name) (withArg: Option 
   withMainContext do
   /- Preprocessing step for `singleAssumptionTac` -/
   let singleAssumptionTacDtree ← singleAssumptionTacPreprocess
+  /- Grind tactic -/
   let grindTac : TacticM Unit := evalAGrindWithPreprocess
   /- For scalarTac we have a fast track: if the goal is not a linear
      arithmetic goal, we skip (note that otherwise, scalarTac would try
