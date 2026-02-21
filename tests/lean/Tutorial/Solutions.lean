@@ -41,7 +41,7 @@ example (a b c d : Prop) (h0 : a → b → c) (h1 : c → d → e)
 
 open CList
 
-@[simp, grind] def CList.toList {α : Type} (x : CList α) : List α :=
+@[simp, grind, agrind] def CList.toList {α : Type} (x : CList α) : List α :=
   match x with
   | CNil => []
   | CCons hd tl => hd :: tl.toList
@@ -127,6 +127,9 @@ theorem list_nth_mut1_spec'' {T: Type} [Inhabited T] (l : CList T) (i : U32)
     x = l.toList[i.val]! ∧
     ∀ x', (back x').toList = l.toList.set i.val x' ⦄ := by
   unfold list_nth_mut1 list_nth_mut1_loop
+  /- `progress*` repeatedly applies `progress`, while doing a case disjunction whenever it
+      encounters a branching. Note that one can automatically generate the corresponding
+      proof script by using `progress*?`. -/
   progress*
   simp_all
 
@@ -155,9 +158,6 @@ theorem list_tail_loop_spec' {T : Type} (l : CList T) :
   list_tail_loop l ⦃ back =>
     ∀ tl', (back tl').toList = l.toList ++ tl'.toList ⦄ := by
   unfold list_tail_loop
-  /- `progress*` repeatedly applies `progress`, while doing a case disjunction whenever it
-      encounters a branching. Note that one can automatically generate the corresponding
-      proof script by using `progress*?`. -/
   progress*
 
 @[progress]
@@ -199,9 +199,7 @@ theorem reverse_spec {T : Type} (l : CList T) :
   reverse l ⦃ l' =>
     l'.toList = l.toList.reverse ⦄ := by
   unfold reverse
-  progress as ⟨ l', hl' ⟩
-  simp at hl'
-  simp [hl']
+  progress*
 
 /-
   # BIG NUMBERS
@@ -377,13 +375,14 @@ theorem add_with_carry_loop_spec
   split
   . progress as ⟨ xi ⟩
     progress as ⟨ c0u ⟩
-    have : c0u.val = c0.val := by scalar_tac
     progress as ⟨ s1, c1, hConv1 ⟩
     progress as ⟨ yi ⟩
     progress as ⟨ s2, c2, hConv2 ⟩
     progress as ⟨ c1u, hc1u ⟩
     progress as ⟨ c2u, hc2u ⟩
     progress as ⟨ c3, hc3 ⟩
+    · -- The call to `agrind` in `progress` doesn't perform case splits on the `if then else` by default
+      agrind
     progress as ⟨ fst, index_back, _, hIndexBack ⟩
     progress as ⟨ i1 ⟩
     have : c3.val ≤ 1 := by
@@ -397,8 +396,8 @@ theorem add_with_carry_loop_spec
     progress as ⟨ c4, x1, _, _, hc4 ⟩
     -- Proving the post-condition
     . simp [*]
-    . simp [*]
-      grind
+    . simp only [*]
+      agrind
     . simp [hc4, hIndexBack]
       have hxUpdate := toInt_update x.val i.val s2 (by scalar_tac)
       simp [hxUpdate]; clear hxUpdate
@@ -409,26 +408,19 @@ theorem add_with_carry_loop_spec
       -- The best way is to do a case disjunction and treat each sub-case separately
       split at hConv1 <;>
       split at hConv2
-      . have hConv1' : (s1.val : Int) = xi.val + c0u.val - U32.size := by scalar_tac
-        have hConv2' : (s2.val : Int) = s1.val + yi.val - U32.size := by scalar_tac
-        simp [hConv2', hConv1']
-        /- `U32.size_eq` is a lemma which allows to simplify `U32.size`.
-           But you can also simply do `simp [U32.size]`, which simplifies
-           `U32.size` to `2^U32.numBits`, then simplify `U32.numBits`. -/
+      . have hConv1' : (s1.val : Int) = xi.val + c0u.val - U32.size := by agrind
+        have hConv2' : (s2.val : Int) = s1.val + yi.val - U32.size := by agrind
+        agrind
+      . have hConv1' : (s1.val : Int) = xi.val + c0u.val - U32.size := by agrind
         simp [*, U32.size_eq]
-        scalar_eq_nf
-      . have hConv1' : (s1.val : Int) = xi.val + c0u.val - U32.size := by scalar_tac
-        simp [hConv2, hConv1']
-        simp [*, U32.size_eq]
-        scalar_eq_nf
+        grind
       . have hConv2' : (s2.val : Int) = s1.val + yi.val - U32.size := by scalar_tac
-        simp [hConv2', hConv1]
         simp [*, U32.size_eq]
-        scalar_eq_nf
+        grind
       . simp [*]
         scalar_eq_nf
   . simp_all
-    scalar_tac
+    agrind
 termination_by x.length - i.val
 decreasing_by scalar_decr_tac
 

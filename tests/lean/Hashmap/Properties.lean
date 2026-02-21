@@ -8,7 +8,7 @@ namespace hashmap
 
 namespace AList
 
-@[simp, scalar_tac_simps, grind]
+@[simp, scalar_tac_simps, grind, agrind]
 def v {α : Type} (ls: AList α) : List (Usize × α) :=
   match ls with
   | Nil => []
@@ -18,7 +18,7 @@ def v {α : Type} (ls: AList α) : List (Usize × α) :=
 abbrev lookup {α : Type} (ls: AList α) (key: Usize) : Option α :=
   ls.v.lookup key
 
-@[simp, scalar_tac_simps, grind]
+@[simp, scalar_tac_simps, grind, agrind]
 abbrev length {α : Type} (ls : AList α) : Nat := ls.v.length
 
 end AList
@@ -98,7 +98,7 @@ abbrev Slots.al_v (s : Slots α) := (s.val.map AList.v).flatten
 def lookup (hm : HashMap α) (k : Usize) : Option α :=
   slots_s_lookup hm.slots.val k
 
-@[simp, scalar_tac_simps, grind]
+@[simp, scalar_tac_simps, grind, agrind]
 abbrev len_s (hm : HashMap α) : Nat := hm.al_v.length
 
 instance : Membership Usize (HashMap α) where
@@ -142,7 +142,7 @@ attribute [-simp] List.length_flatten List.flatten_eq_nil_iff List.lookup_eq_non
 attribute [local simp] List.lookup
 
 /- Adding some theorems for `scalar_tac` -/
-@[local scalar_tac h, grind →]
+@[local scalar_tac h, grind →, agrind →]
 theorem inv_imp_eqs_ineqs {hm : HashMap α} (h : hm.inv) :
   0 < hm.slots.length ∧ hm.num_entries.val = hm.al_v.length := by
   simp_all [inv]
