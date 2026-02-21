@@ -550,6 +550,11 @@ theorem UScalar.sizeOf {ty} (x : UScalar ty) : sizeOf x = x.val + 3 := by
   simp only
   omega
 
+/-!
+# Nat.testBit
+-/
+attribute [scalar_tac_simps, agrind =] Nat.zero_testBit
+
 end ScalarTac
 
 end Aeneas
