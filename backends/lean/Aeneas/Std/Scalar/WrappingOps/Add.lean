@@ -31,11 +31,11 @@ def core.num.«%S».wrapping_add : «%S» → «%S» → «%S»  := @IScalar.wra
   (wrapping_add x y).bv = x.bv + y.bv := by
   simp only [wrapping_add]
 
-uscalar @[simp, bvify_simps, grind =] theorem «%S».wrapping_add_bv_eq (x y : «%S») :
+uscalar @[simp, bvify_simps, grind =, agrind =] theorem «%S».wrapping_add_bv_eq (x y : «%S») :
   («%S».wrapping_add x y).bv = x.bv + y.bv := by
   simp [«%S».wrapping_add]
 
-uscalar @[simp, bvify_simps, grind =] theorem core.num.«%S».wrapping_add_bv_eq (x y : «%S») :
+uscalar @[simp, bvify_simps, grind =, agrind =] theorem core.num.«%S».wrapping_add_bv_eq (x y : «%S») :
   (core.num.«%S».wrapping_add x y).bv = x.bv + y.bv := by
   simp [core.num.«%S».wrapping_add]
 
@@ -43,11 +43,11 @@ uscalar @[simp, bvify_simps, grind =] theorem core.num.«%S».wrapping_add_bv_eq
   (wrapping_add x y).bv = x.bv + y.bv := by
   simp only [wrapping_add]
 
-iscalar @[simp, bvify_simps, grind =] theorem «%S».wrapping_add_bv_eq (x y : «%S») :
+iscalar @[simp, bvify_simps, grind =, agrind =] theorem «%S».wrapping_add_bv_eq (x y : «%S») :
   («%S».wrapping_add x y).bv = x.bv + y.bv := by
   simp [«%S».wrapping_add]
 
-iscalar @[simp, bvify_simps, grind =] theorem core.num.«%S».wrapping_add_bv_eq (x y : «%S») :
+iscalar @[simp, bvify_simps, grind =, agrind =] theorem core.num.«%S».wrapping_add_bv_eq (x y : «%S») :
   (core.num.«%S».wrapping_add x y).bv = x.bv + y.bv := by
   simp [core.num.«%S».wrapping_add]
 
@@ -58,11 +58,11 @@ iscalar @[simp, bvify_simps, grind =] theorem core.num.«%S».wrapping_add_bv_eq
   have : 2 ^ ty.numBits - 1 + 1 = 2^ty.numBits := by omega
   simp only [BitVec.toNat_add, bv_toNat]
 
-uscalar @[simp, grind =] theorem «%S».wrapping_add_val_eq (x y : «%S») :
+uscalar @[simp, grind =, agrind =] theorem «%S».wrapping_add_val_eq (x y : «%S») :
   («%S».wrapping_add x y).val = (x.val + y.val) % (UScalar.size .«%S») :=
   UScalar.wrapping_add_val_eq x y
 
-uscalar @[simp, grind =] theorem core.num.«%S».wrapping_add_val_eq (x y : «%S») :
+uscalar @[simp, grind =, agrind =] theorem core.num.«%S».wrapping_add_val_eq (x y : «%S») :
   (core.num.«%S».wrapping_add x y).val = (x.val + y.val) % (UScalar.size .«%S») :=
   UScalar.wrapping_add_val_eq x y
 
@@ -71,11 +71,11 @@ uscalar @[simp, grind =] theorem core.num.«%S».wrapping_add_val_eq (x y : «%S
   simp only [wrapping_add, val, ]
   simp only [BitVec.toInt_add, bv_toInt_eq]
 
-iscalar @[simp, grind =] theorem «%S».wrapping_add_val_eq (x y : «%S») :
+iscalar @[simp, grind =, agrind =] theorem «%S».wrapping_add_val_eq (x y : «%S») :
   («%S».wrapping_add x y).val = Int.bmod (x.val + y.val) (2^ %BitWidth) :=
   IScalar.wrapping_add_val_eq x y
 
-iscalar @[simp, grind =] theorem core.num.«%S».wrapping_add_val_eq (x y : «%S») :
+iscalar @[simp, grind =, agrind =] theorem core.num.«%S».wrapping_add_val_eq (x y : «%S») :
   (core.num.«%S».wrapping_add x y).val = Int.bmod (x.val + y.val) (2^ %BitWidth) :=
   IScalar.wrapping_add_val_eq x y
 

@@ -31,11 +31,11 @@ def core.num.«%S».wrapping_sub : «%S» → «%S» → «%S»  := @IScalar.wra
   (wrapping_sub x y).bv = x.bv - y.bv := by
   simp only [wrapping_sub]
 
-uscalar @[simp, bvify_simps, grind =] theorem «%S».wrapping_sub_bv_eq (x y : «%S») :
+uscalar @[simp, bvify_simps, grind =, agrind =] theorem «%S».wrapping_sub_bv_eq (x y : «%S») :
   («%S».wrapping_sub x y).bv = x.bv - y.bv := by
   simp [«%S».wrapping_sub]
 
-uscalar @[simp, bvify_simps, grind =] theorem core.num.«%S».wrapping_sub_bv_eq (x y : «%S») :
+uscalar @[simp, bvify_simps, grind =, agrind =] theorem core.num.«%S».wrapping_sub_bv_eq (x y : «%S») :
   (core.num.«%S».wrapping_sub x y).bv = x.bv - y.bv := by
   simp [core.num.«%S».wrapping_sub]
 
@@ -43,11 +43,11 @@ uscalar @[simp, bvify_simps, grind =] theorem core.num.«%S».wrapping_sub_bv_eq
   (wrapping_sub x y).bv = x.bv - y.bv := by
   simp only [wrapping_sub]
 
-iscalar @[simp, bvify_simps, grind =] theorem «%S».wrapping_sub_bv_eq (x y : «%S») :
+iscalar @[simp, bvify_simps, grind =, agrind =] theorem «%S».wrapping_sub_bv_eq (x y : «%S») :
   («%S».wrapping_sub x y).bv = x.bv - y.bv := by
   simp [«%S».wrapping_sub]
 
-iscalar @[simp, bvify_simps, grind =] theorem core.num.«%S».wrapping_sub_bv_eq (x y : «%S») :
+iscalar @[simp, bvify_simps, grind =, agrind =] theorem core.num.«%S».wrapping_sub_bv_eq (x y : «%S») :
   (core.num.«%S».wrapping_sub x y).bv = x.bv - y.bv := by
   simp [core.num.«%S».wrapping_sub]
 
@@ -59,11 +59,11 @@ iscalar @[simp, bvify_simps, grind =] theorem core.num.«%S».wrapping_sub_bv_eq
   simp only [BitVec.toNat_sub, bv_toNat]
   ring_nf
 
-uscalar @[simp, grind =] theorem «%S».wrapping_sub_val_eq (x y : «%S») :
+uscalar @[simp, grind =, agrind =] theorem «%S».wrapping_sub_val_eq (x y : «%S») :
   («%S».wrapping_sub x y).val = (x.val + (UScalar.size .«%S» - y.val)) % UScalar.size .«%S» :=
   UScalar.wrapping_sub_val_eq x y
 
-uscalar @[simp, grind =] theorem core.num.«%S».wrapping_sub_val_eq (x y : «%S») :
+uscalar @[simp, grind =, agrind =] theorem core.num.«%S».wrapping_sub_val_eq (x y : «%S») :
   (core.num.«%S».wrapping_sub x y).val = (x.val + (UScalar.size .«%S» - y.val)) % UScalar.size .«%S» :=
   UScalar.wrapping_sub_val_eq x y
 
@@ -72,11 +72,11 @@ uscalar @[simp, grind =] theorem core.num.«%S».wrapping_sub_val_eq (x y : «%S
   simp only [wrapping_sub, val]
   simp only [BitVec.toInt_sub, bv_toInt_eq]
 
-iscalar @[simp, grind =] theorem «%S».wrapping_sub_val_eq (x y : «%S») :
+iscalar @[simp, grind =, agrind =] theorem «%S».wrapping_sub_val_eq (x y : «%S») :
   («%S».wrapping_sub x y).val = Int.bmod (x.val - y.val) (2^ %BitWidth) :=
   IScalar.wrapping_sub_val_eq x y
 
-iscalar @[simp, grind =] theorem core.num.«%S».wrapping_sub_val_eq (x y : «%S») :
+iscalar @[simp, grind =, agrind =] theorem core.num.«%S».wrapping_sub_val_eq (x y : «%S») :
   (core.num.«%S».wrapping_sub x y).val = Int.bmod (x.val - y.val) (2^ %BitWidth) :=
   IScalar.wrapping_sub_val_eq x y
 
