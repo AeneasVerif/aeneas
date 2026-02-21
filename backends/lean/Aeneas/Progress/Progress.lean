@@ -4,7 +4,7 @@ import Aeneas.Progress.Init
 import Aeneas.Std
 import Aeneas.FSimp
 import AeneasMeta.Async
-import AeneasMeta.Grind
+import Aeneas.Grind.Init
 
 namespace Aeneas
 
@@ -706,12 +706,8 @@ def parseProgressArgs
   return (withTh?, ids, byTac)
 | _ => throwUnsupportedSyntax
 
-/-- Use `grind` after preprocessing goal the goal, in particular to simplify arithmetic expressions.
-
-  TODO: remove the preprocessing once the fix to the following PR gets into a release candidate:
-  https://github.com/leanprover/lean4/issues/11498
--/
-def evalGrindWithPreprocess : TacticM Unit := do
+/-- Use `agrind` after preprocessing goal the goal, in particular to simplify arithmetic expressions. -/
+def evalAGrindWithPreprocess : TacticM Unit := do
   let simpArgs : Simp.SimpArgs ← ScalarTac.getSimpArgs
   let config : Simp.Config := {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1}
   match ← ScalarTac.simpAsmsTarget true config simpArgs with
@@ -724,7 +720,13 @@ def evalGrindWithPreprocess : TacticM Unit := do
        TODO: make those options of `progress`
        TODO: fine tune the parameters
      -/
-    Aeneas.Grind.evalGrind { splits := 4, gen := 4, instances := 3000 }
+    let config : Grind.Config := { splits := 4, splitMatch := false, splitIte := false, funext := false, gen := 4, instances := 1000 }
+    let params ← Aeneas.Grind.mkParams config #[Aeneas.Grind.agrindExt.getState (← Lean.getEnv)]
+    withTraceNode `Progress (fun _ => do pure m!"Attempting to solve with `grind`:\n{← getMainGoal}") do
+    let mvarId ← Lean.Elab.Tactic.getMainGoal
+    try
+      Aeneas.Grind.agrindEval config params mvarId
+    catch e => trace[Progress] "Grind failed:\n{e.toMessageData}"
 
 def evalProgressCore (async : Bool) (keepPretty : Option Name) (withArg: Option Expr) (ids: Array (Option Name))
   (byTacStx : Option Syntax.Tactic)
@@ -737,9 +739,27 @@ def evalProgressCore (async : Bool) (keepPretty : Option Name) (withArg: Option 
   withMainContext do
   /- Preprocessing step for `singleAssumptionTac` -/
   let singleAssumptionTacDtree ← singleAssumptionTacPreprocess
-  let grindTac : TacticM Unit := do
-    withTraceNode `Progress (fun _ => do pure m!"Attempting to solve with `grind`:\n{← getMainGoal}") do
-    evalGrindWithPreprocess
+  let grindTac : TacticM Unit := evalAGrindWithPreprocess
+  /- For scalarTac we have a fast track: if the goal is not a linear
+     arithmetic goal, we skip (note that otherwise, scalarTac would try
+     to prove a contradiction) -/
+  let scalarTac : TacticM Unit := do
+    withTraceNode `Progress (fun _ => pure m!"Attempting to solve with `scalarTac`") do
+    if ← ScalarTac.goalIsLinearInt then
+      /- Also: we don't try to split the goal if it is a conjunction
+         (it shouldn't be), but we split the disjunctions. -/
+      ScalarTac.scalarTac { split := false, auxTheorem := false }
+    else
+      throwError "Not a linear arithmetic goal"
+  let simpLemmas ← Aeneas.ScalarTac.scalarTacSimpExt.getTheorems
+  let localAsms ← pure ((← (← getLCtx).getAssumptions).map LocalDecl.fvarId)
+  let simpArgs : Simp.SimpArgs := {simpThms := #[simpLemmas], hypsToUse := localAsms.toArray}
+  let simpTac : TacticM Unit := do
+    withTraceNode `Progress (fun _ => pure m!"Attempting to solve with `simp [*]`") do
+    -- Simplify the goal
+    let r ← Simp.simpAt false { maxDischargeDepth := 1 } simpArgs (.targets #[] true)
+    -- Raise an error if the goal is not proved
+    if r.isSome then throwError "Goal not proved"
   let customAssumTac : TacticM Unit := do
     withTraceNode `Progress (fun _ => pure m!"Attempting to solve with `singleAssumptionTac`") do
     singleAssumptionTacCore singleAssumptionTacDtree
@@ -764,7 +784,11 @@ def evalProgressCore (async : Bool) (keepPretty : Option Name) (withArg: Option 
     withTraceNode `Progress (fun _ => pure m!"Trying to solve a precondition") do
     trace[Progress] "Precondition: {← getMainGoal}"
     try
-      firstTacSolve (grindTac :: byTac)
+      let useGrind := true -- TODO: turn this into a config
+      if useGrind then
+        firstTacSolve (grindTac :: byTac)
+      else
+        firstTacSolve ([simpTac, scalarTac] ++ byTac)
       trace[Progress] "Precondition solved!"
     catch _ =>
       trace[Progress] "Precondition not solved"
@@ -1355,7 +1379,6 @@ x y : U32
     := by
     let* ⟨⟩ ← massert_spec
     extract_goal0
-    simp only [UScalar.lt_equiv, UScalar.ofNat_val_eq]
     let* ⟨⟩ ← massert_spec
 
   /--
@@ -1457,7 +1480,6 @@ _✝ : ↑z = ↑x + y
       let x ← nttLayer x 64#usize 2#usize
       ok x
 
-    set_option maxHeartbeats 800000
     theorem ntt_spec (peSrc : Std.Array U16 256#usize)
       (hWf : wfArray peSrc) :
       ntt peSrc ⦃ peSrc1 => wfArray peSrc1 ⦄
@@ -1478,7 +1500,6 @@ _✝ : ↑z = ↑x + y
       progress
       assumption
 
-    set_option maxHeartbeats 800000
     theorem ntt_spec' (peSrc : Std.Array U16 256#usize)
       (hWf : wfArray peSrc) :
       ntt peSrc ⦃ peSrc1 => wfArray peSrc1 ⦄
