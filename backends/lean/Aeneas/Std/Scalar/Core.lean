@@ -860,14 +860,14 @@ instance {ty} : LE (IScalar ty) where le a b := LE.le a.val b.val
 theorem UScalar.eq_imp {ty : UScalarTy} (x y : UScalar ty) :
   (↑x : Nat) = ↑y → x = y := (eq_equiv x y).mpr
 
-@[simp, scalar_tac_simps] theorem UScalar.lt_equiv {ty : UScalarTy} (x y : UScalar ty) :
+@[simp, scalar_tac_simps, grind =, agrind =] theorem UScalar.lt_equiv {ty : UScalarTy} (x y : UScalar ty) :
   x < y ↔ (↑x : Nat) < ↑y := by
   rw [LT.lt, instLTUScalar]
 
 @[simp] theorem UScalar.lt_imp {ty : UScalarTy} (x y : UScalar ty) :
   (↑x : Nat) < (↑y) → x < y := (lt_equiv x y).mpr
 
-@[simp, scalar_tac_simps] theorem UScalar.le_equiv {ty : UScalarTy} (x y : UScalar ty) :
+@[simp, scalar_tac_simps, grind =, agrind =] theorem UScalar.le_equiv {ty : UScalarTy} (x y : UScalar ty) :
   x ≤ y ↔ (↑x : Nat) ≤ ↑y := by
   rw [LE.le, instLEUScalar]
 
@@ -887,14 +887,14 @@ theorem UScalar.eq_imp {ty : UScalarTy} (x y : UScalar ty) :
 theorem IScalar.eq_imp {ty : IScalarTy} (x y : IScalar ty) :
   (↑x : Int) = ↑y → x = y := (eq_equiv x y).mpr
 
-@[simp, scalar_tac_simps] theorem IScalar.lt_equiv {ty : IScalarTy} (x y : IScalar ty) :
+@[simp, scalar_tac_simps, grind =, agrind =] theorem IScalar.lt_equiv {ty : IScalarTy} (x y : IScalar ty) :
   x < y ↔ (↑x : Int) < ↑y := by
   rw [LT.lt, instLTIScalar]
 
 @[simp, scalar_tac_simps] theorem IScalar.lt_imp {ty : IScalarTy} (x y : IScalar ty) :
   (↑x : Int) < (↑y) → x < y := (lt_equiv x y).mpr
 
-@[simp] theorem IScalar.le_equiv {ty : IScalarTy} (x y : IScalar ty) :
+@[simp, scalar_tac_simps, grind =, agrind =] theorem IScalar.le_equiv {ty : IScalarTy} (x y : IScalar ty) :
   x ≤ y ↔ (↑x : Int) ≤ ↑y := by simp [LE.le]
 
 @[simp] theorem IScalar.le_imp {ty : IScalarTy} (x y : IScalar ty) :
