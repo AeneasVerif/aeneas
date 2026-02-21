@@ -163,7 +163,7 @@ structure Stats extends Goals where
   usedTheorem : UsedTheorem
 
 attribute [progress_post_simps]
-  Std.IScalar.toNat Std.UScalar.ofNat_val_eq Std.IScalar.ofInt_val_eq
+  Std.IScalar.toNat Std.UScalar.ofNatCore_val_eq Std.IScalar.ofInt_val_eq
 
 structure Args where
   /-- Asynchronously solve the preconditions? -/
