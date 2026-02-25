@@ -1199,9 +1199,10 @@ and translate_global_eval (gid : A.GlobalDeclId.id) (generics : T.generic_args)
   let global_expr = { id = Global gid; generics } in
   (* We use translate_fwd_ty to translate the global type *)
   let ty = ctx_translate_fwd_ty ctx decl.ty in
+  let ty = mk_result_ty ty in
   let gval = { e = Qualif global_expr; ty } in
   let e = translate_expr e ctx in
-  [%add_loc] mk_closed_checked_let ctx false (mk_tpat_from_fvar None var) gval e
+  [%add_loc] mk_closed_checked_let ctx true (mk_tpat_from_fvar None var) gval e
 
 and translate_assertion (ectx : C.eval_ctx) (expected : bool) (v : V.tvalue)
     (e : S.expr) (ctx : bs_ctx) : texpr =
@@ -1413,9 +1414,9 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
      is a "regular" let-binding, an array aggregate, a const generic or
      a trait associated constant.
   *)
-  let v =
+  let v, monadic =
     match v with
-    | VaSingleValue v -> tvalue_to_texpr ctx ectx v
+    | VaSingleValue v -> (tvalue_to_texpr ctx ectx v, false)
     | VaArray values ->
         (* We use a struct update to encode the array aggregate, in order
            to preserve the structure and allow generating code of the shape
@@ -1425,15 +1426,16 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
         let su : struct_update =
           { struct_id = TBuiltin TArray; init = None; updates = values }
         in
-        { e = StructUpdate su; ty = var.ty }
-    | VaCgValue cg_id -> { e = CVar cg_id; ty = var.ty }
+        ({ e = StructUpdate su; ty = var.ty }, false)
+    | VaCgValue cg_id -> ({ e = CVar cg_id; ty = var.ty }, false)
     | VaTraitConstValue (trait_ref, const_name) ->
         let trait_ref =
           translate_fwd_trait_ref (Some ctx.span) ctx.decls_ctx trait_ref
         in
         let qualif_id = TraitConst (trait_ref, const_name) in
         let qualif = { id = qualif_id; generics = empty_generic_args } in
-        { e = Qualif qualif; ty = var.ty }
+        let ty = mk_result_ty var.ty in
+        ({ e = Qualif qualif; ty }, true)
     | VaDiscriminant adt_sv ->
         (* Discriminant read *)
         let adt_ty = ctx_translate_fwd_ty ctx adt_sv.sv_ty in
@@ -1444,7 +1446,10 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
         let qualif : texpr =
           { e = Qualif qualif; ty = mk_arrow adt_ty var.ty }
         in
-        [%add_loc] mk_app ctx.span qualif (symbolic_value_to_texpr ctx adt_sv)
+        let e =
+          [%add_loc] mk_app ctx.span qualif (symbolic_value_to_texpr ctx adt_sv)
+        in
+        (e, false)
     | VaDynTrait (v, trait_ref) ->
         let v = tvalue_to_texpr ctx ectx v in
         let dyn_ty = var.ty in
@@ -1454,7 +1459,8 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
         let qualif_id = MkDynTrait trait_ref in
         let qualif = { id = qualif_id; generics = empty_generic_args } in
         let qualif : texpr = { e = Qualif qualif; ty = mk_arrow v.ty dyn_ty } in
-        [%add_loc] mk_app ctx.span qualif v
+        let e = [%add_loc] mk_app ctx.span qualif v in
+        (e, false)
     | VaFnDef { kind; generics } ->
         let id = translate_fn_ptr_kind ctx kind in
         let generics = ctx_translate_fwd_generic_args ctx generics in
@@ -1483,11 +1489,10 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
               ty_substitute subst sg.ty
           | T.TraitMethod _ -> [%craise] ctx.span "Unimplemented"
         in
-        { e = qualif; ty }
+        ({ e = qualif; ty }, false)
   in
 
   (* Make the let-binding *)
-  let monadic = false in
   let var = mk_tpat_from_fvar mplace var in
   [%add_loc] mk_closed_checked_let ctx monadic var v next_e
 
