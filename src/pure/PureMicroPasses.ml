@@ -210,29 +210,40 @@ let passes :
     (None, "update_match_over_isize_usize", update_match_over_isize_usize);
   ]
 
-(** Apply all the micro-passes to a function. *)
-let apply_passes_to_def (ctx : ctx) (def : fun_decl) : fun_decl =
-  List.fold_left
-    (fun def (option, pass_name, pass) ->
-      let apply =
-        match option with
-        | None -> true
-        | Some option -> option ()
-      in
+(** Apply all the micro-passes to a function.
 
-      if apply then (
-        [%ltrace "About to apply: '" ^ pass_name ^ "'"];
-        let def' = pass ctx def in
-        let updated = string_of_bool (def' <> def) in
-        [%ltrace
-          "After applying '" ^ pass_name ^ "'" ^ "(updated:" ^ updated
-          ^ "):\n\n"
-          ^ fun_decl_to_string ctx def'];
-        def')
-      else (
-        [%ltrace "Ignoring " ^ pass_name ^ " due to the configuration\n"];
-        def))
-    def passes
+    When [!Config.diagnose_detailed] is on, also returns per-pass timings. *)
+let apply_passes_to_def (ctx : ctx) (def : fun_decl) :
+    fun_decl * (string * float) list =
+  let collect = !Config.diagnose_detailed in
+  let timings = ref [] in
+  let result =
+    List.fold_left
+      (fun def (option, pass_name, pass) ->
+        let apply =
+          match option with
+          | None -> true
+          | Some option -> option ()
+        in
+
+        if apply then (
+          [%ltrace "About to apply: '" ^ pass_name ^ "'"];
+          let start = if collect then Unix.gettimeofday () else 0.0 in
+          let def' = pass ctx def in
+          if collect then
+            timings := (pass_name, Unix.gettimeofday () -. start) :: !timings;
+          let updated = string_of_bool (def' <> def) in
+          [%ltrace
+            "After applying '" ^ pass_name ^ "'" ^ "(updated:" ^ updated
+            ^ "):\n\n"
+            ^ fun_decl_to_string ctx def'];
+          def')
+        else (
+          [%ltrace "Ignoring " ^ pass_name ^ " due to the configuration\n"];
+          def))
+      def passes
+  in
+  (result, List.rev !timings)
 
 (** Update the [reducible] attribute.
 
@@ -307,25 +318,52 @@ let apply_passes_to_pure_fun_translations (crate : LlbcAst.crate)
     (ctx, refresh_fvar_id_generator)
   in
 
+  (* Diagnostic data collection for -diagnose-micro-passes / -diagnose-detailed.
+     Each entry: (name, total_time, size, rank, detailed_timings). *)
+  let diagnose_data :
+      (string * float * int * int * (string * float) list) list ref =
+    ref []
+  in
+  let diagnose_mutex = Mutex.create () in
+
   (* Apply the micro-passes *)
-  let apply (f : fun_decl) : pure_fun_translation =
+  let apply (rank : int) (f : fun_decl) : pure_fun_translation =
+    let overall_start =
+      if !Config.diagnose_micro_passes then Unix.gettimeofday () else 0.0
+    in
+    let collect_detailed = !Config.diagnose_detailed in
+    let fun_name = f.name in
+    let fun_size =
+      if !Config.diagnose_micro_passes then
+        match LlbcAst.FunDeclId.Map.find_opt f.def_id crate.fun_decls with
+        | Some d -> LlbcAstUtils.compute_fun_decl_size d
+        | None -> 0
+      else 0
+    in
+    let post_timings = ref [] in
+
     (* Each parallel task gets its own fresh variable id generator to avoid
        race conditions on the shared mutable counter *)
     let ctx, refresh_fvar_id_generator = create_ctx () in
 
     (* Apply the micro-passes *)
-    let f = apply_passes_to_def ctx f in
+    let f, pass_timings = apply_passes_to_def ctx f in
 
     (* Decompose the loops *)
     [%ltrace "About to apply: 'decompose_loops':\n" ^ fun_decl_to_string ctx f];
     refresh_fvar_id_generator ();
+    let t0 = if collect_detailed then Unix.gettimeofday () else 0.0 in
     let f, loops = decompose_loops ctx f in
+    if collect_detailed then
+      post_timings :=
+        ("decompose_loops", Unix.gettimeofday () -. t0) :: !post_timings;
     [%ltrace
       "After applying: 'decompose_loops':\n"
       ^ String.concat "\n\n" (List.map (fun_decl_to_string ctx) (f :: loops))];
 
     (* Filter the constant *inputs¨ in the loops to simplify the calls to the loop
        fixed-point operators *)
+    let t0 = if collect_detailed then Unix.gettimeofday () else 0.0 in
     let simplify f =
       [%ltrace
         "About to apply: 'filter_loop_useless_inputs':\n"
@@ -339,8 +377,13 @@ let apply_passes_to_pure_fun_translations (crate : LlbcAst.crate)
     in
     let f = simplify f in
     let loops = List.map simplify loops in
+    if collect_detailed then
+      post_timings :=
+        ("filter_loop_useless_inputs", Unix.gettimeofday () -. t0)
+        :: !post_timings;
 
     (* Convert the loop nodes to calls to the loop fixed-point operator *)
+    let t0 = if collect_detailed then Unix.gettimeofday () else 0.0 in
     let update f =
       [%ltrace "About to apply: 'loops_to_fixed_points'"];
       refresh_fvar_id_generator ();
@@ -351,11 +394,15 @@ let apply_passes_to_pure_fun_translations (crate : LlbcAst.crate)
     in
     let f = update f in
     let loops = List.map update loops in
+    if collect_detailed then
+      post_timings :=
+        ("loops_to_fixed_points", Unix.gettimeofday () -. t0) :: !post_timings;
 
     (* Decomposing the loops and filtering the inputs might have introduced
        expressions of the shape:
        [let (x, y) = e in ok (x, y)]
        We need to resimplify those. *)
+    let t0 = if collect_detailed then Unix.gettimeofday () else 0.0 in
     let simplify f =
       [%ltrace "About to apply: 'simplify_let_then_ok (final pass)'"];
       refresh_fvar_id_generator ();
@@ -367,6 +414,10 @@ let apply_passes_to_pure_fun_translations (crate : LlbcAst.crate)
     in
     let f = simplify f in
     let loops = List.map simplify loops in
+    if collect_detailed then
+      post_timings :=
+        ("simplify_let_then_ok (final pass)", Unix.gettimeofday () -. t0)
+        :: !post_timings;
 
     [%ltrace
       let funs = f :: loops in
@@ -380,8 +431,21 @@ let apply_passes_to_pure_fun_translations (crate : LlbcAst.crate)
        We do this last, because some other passes need to manipulate the
        functions *wihout* fuel and state (otherwise it messes up the
        parameter manipulations). *)
+    let t0 = if collect_detailed then Unix.gettimeofday () else 0.0 in
     refresh_fvar_id_generator ();
     let trans = if !Config.use_fuel then add_fuel ctx trans else trans in
+    if collect_detailed then
+      post_timings := ("add_fuel", Unix.gettimeofday () -. t0) :: !post_timings;
+
+    (* Collect diagnostic data *)
+    if !Config.diagnose_micro_passes then begin
+      let elapsed = Unix.gettimeofday () -. overall_start in
+      let all_timings = pass_timings @ List.rev !post_timings in
+      Mutex.lock diagnose_mutex;
+      diagnose_data :=
+        (fun_name, elapsed, fun_size, rank, all_timings) :: !diagnose_data;
+      Mutex.unlock diagnose_mutex
+    end;
 
     trans
   in
@@ -393,23 +457,54 @@ let apply_passes_to_pure_fun_translations (crate : LlbcAst.crate)
         transl
     in
 
-    let process (kind : string) (transl : pure_fun_translation_no_loops list) =
+    (* Assign size-based ranks (rank 1 = biggest):
+       transparent functions are already sorted by decreasing size *)
+    let n_transparent = List.length transparent in
+    let transparent_ranked = List.mapi (fun i f -> (i + 1, f)) transparent in
+    let opaque_ranked =
+      List.mapi (fun i f -> (n_transparent + i + 1, f)) opaque
+    in
+
+    let process (kind : string)
+        (transl : (int * pure_fun_translation_no_loops) list) =
       let num_decls = List.length transl in
       ProgressBar.with_parallel_reporter num_decls
         ("Post-processed translated " ^ kind ^ " functions: ")
         (fun report ->
           Parallel.parallel_map
-            (fun x ->
-              let x = apply x in
+            (fun (rank, x) ->
+              let x = apply rank x in
               report 1;
               x)
             transl)
     in
 
-    let opaque = process "opaque" opaque in
-    let transparent = process "transparent" transparent in
+    let opaque = process "opaque" opaque_ranked in
+    let transparent = process "transparent" transparent_ranked in
     opaque @ transparent
   in
+
+  (* Print -diagnose-micro-passes / -diagnose-detailed results *)
+  if !Config.diagnose_micro_passes then begin
+    let sorted =
+      List.sort
+        (fun (_, t1, _, _, _) (_, t2, _, _, _) -> Float.compare t2 t1)
+        !diagnose_data
+    in
+    let limit = !Config.diagnose_limit in
+    let to_print =
+      if limit >= 0 then Collections.List.prefix limit sorted else sorted
+    in
+    Printf.printf "\n=== Micro-passes time per function ===\n";
+    List.iter
+      (fun (name, time, size, rank, detailed) ->
+        Printf.printf "  %s: %.4fs (size: %d, rank: %d)\n" name time size rank;
+        if !Config.diagnose_detailed && detailed <> [] then
+          List.iter
+            (fun (pass_name, t) -> Printf.printf "    %s: %.4fs\n" pass_name t)
+            detailed)
+      to_print
+  end;
 
   (* Add the type annotations - we add those only now because we need
      to use the final types of the functions (in particular, we introduce

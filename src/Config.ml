@@ -521,6 +521,26 @@ let log_with_colors = ref false
     corresponding loan) *)
 let log_rotating_colors = ref true
 
+(** {Diagnostics} *)
+
+(** If activated, measure the time it takes to translate every function (through
+    [Translate.translate_function_to_pure]) and print the results sorted from
+    longest to shortest, together with the function size. *)
+let diagnose_translation = ref false
+
+(** If activated, measure the time it takes to apply the micro-passes on every
+    function, and print them from the longest to the shortest, together with the
+    function size. *)
+let diagnose_micro_passes = ref false
+
+(** If activated in combination with -diagnose-micro-passes, compute
+    per-function, per -micro-pass time measurements. *)
+let diagnose_detailed = ref false
+
+(** Upper bound on the number of lines printed for the diagnose options. If
+    positive, print at most this many lines. If negative, print everything. *)
+let diagnose_limit = ref (-1)
+
 (** Should we borrow check globals?
 
     The issue is that when translating a global which uses a 'static reference,
