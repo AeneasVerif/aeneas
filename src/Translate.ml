@@ -407,6 +407,8 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
     in
 
     (* Small helper *)
+    let diagnose_transl_data : (string * float * int) list ref = ref [] in
+    let diagnose_transl_mutex = Mutex.create () in
     let process (kind : string) (funs : fun_decl list) =
       let num_decls = List.length funs in
       ProgressBar.with_parallel_reporter num_decls
@@ -414,10 +416,23 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
         (fun report ->
           parallel_filter_map
             (fun x ->
+              let start =
+                if !Config.diagnose_translation then Unix.gettimeofday ()
+                else 0.0
+              in
               let f =
                 translate_function_to_pure trans_ctx marked_ids type_decls_map
                   fun_sigs x
               in
+              if !Config.diagnose_translation then begin
+                let elapsed = Unix.gettimeofday () -. start in
+                let fname = name_to_string trans_ctx x.item_meta.name in
+                let size = LlbcAstUtils.compute_fun_decl_size x in
+                Mutex.lock diagnose_transl_mutex;
+                diagnose_transl_data :=
+                  (fname, elapsed, size) :: !diagnose_transl_data;
+                Mutex.unlock diagnose_transl_mutex
+              end;
               report 1;
               f)
             funs)
@@ -425,6 +440,25 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
 
     let opaque = process "opaque" opaque in
     let transparent = process "transparent" transparent in
+
+    (* Print -diagnose-translation results *)
+    if !Config.diagnose_translation then begin
+      let sorted =
+        List.sort
+          (fun (_, t1, _) (_, t2, _) -> Float.compare t2 t1)
+          !diagnose_transl_data
+      in
+      let limit = !Config.diagnose_limit in
+      let to_print =
+        if limit >= 0 then Collections.List.prefix limit sorted else sorted
+      in
+      Printf.printf "\n=== Translation time per function ===\n";
+      List.iter
+        (fun (name, time, size) ->
+          Printf.printf "  %s: %.4fs (size: %d)\n" name time size)
+        to_print
+    end;
+
     opaque @ transparent
   in
 
