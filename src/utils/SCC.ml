@@ -187,48 +187,56 @@ module Make (Id : OrderedType) = struct
     (* Convert the ids to vertices (i.e., injectively map ids to integers,
        and create vertices labeled with those integers).
 
-       Rem.: [Graph.create] is *imperative*: it generates a new vertex every
-       time it is called (!!). For this reason, we first add all the vertices
-       we need, then add the edges.
+       We use [Imperative.Digraph.Concrete] rather than [Pack.Digraph] because
+       the latter uses [AbstractLabeled] vertices backed by a global mutable
+       counter ([cpt_vertex] in ocamlgraph's [blocks.ml]). This global counter
+       is not thread-safe and causes race conditions when [SCC.compute] is
+       called concurrently from multiple domains.
+       [Concrete] vertices are compared by value (here, integers), so no global
+       state is involved.
     *)
     let open Graph in
     let module IntMap = MakeMap (OrderedInt) in
-    let module Graph = Pack.Digraph in
-    let id_to_vertex : Graph.V.t M.t =
+    let module Int_comparable = struct
+      type t = int
+      let compare = compare
+      let hash x = x
+      let equal = Int.equal
+    end in
+    let module G = Imperative.Digraph.Concrete (Int_comparable) in
+    let id_to_vertex : int M.t =
       let cnt = ref 0 in
       M.of_list
         (List.map
            (fun id ->
              let lbl = !cnt in
              cnt := !cnt + 1;
-             (* We create a vertex *)
-             let v = Graph.V.create lbl in
-             (id, v))
+             (id, lbl))
            idl)
     in
     let vertex_to_id : Id.t IntMap.t =
       IntMap.of_list
         (List.map
-           (fun (fid, v) -> (Graph.V.label v, fid))
+           (fun (fid, v) -> (v, fid))
            (M.bindings id_to_vertex))
     in
 
     let to_v id = M.find id id_to_vertex in
-    let to_id v = IntMap.find (Graph.V.label v) vertex_to_id in
+    let to_id v = IntMap.find v vertex_to_id in
 
-    let g = Graph.create () in
+    let g = G.create () in
 
     (* Add the edges, first from the vertices to themselves, then between
        vertices. *)
     List.iter
       (fun (id, deps) ->
         let v = to_v id in
-        Graph.add_edge g v v;
-        S.iter (fun dep_id -> Graph.add_edge g v (to_v dep_id)) deps)
+        G.add_edge g v v;
+        S.iter (fun dep_id -> G.add_edge g v (to_v dep_id)) deps)
       m;
 
     (* Compute the SCCs *)
-    let module Comp = Components.Make (Graph) in
+    let module Comp = Components.Make (G) in
     let sccs = Comp.scc_list g in
 
     (* Convert the vertices to ids *)
@@ -245,9 +253,9 @@ module Make (Id : OrderedType) = struct
         "sanity check:" ^ "\n- ids    : " ^ S.show ids ^ "\n- scc_ids: "
         ^ S.show scc_ids];
 
-      (* This test randomly fails when the execution is not sequantial.
-         TODO: what is going on? *)
-      assert (!Config.parallel || S.equal scc_ids ids)
+      (* This test was randomly failing when using Pack.Digraph in parallel due
+         to its global mutable counter. Using Concrete graph fixed the issue. *)
+      assert (S.equal scc_ids ids)
     in
 
     (* Reorder *)
