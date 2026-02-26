@@ -406,16 +406,27 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
       else transparent
     in
 
-    (* Small helper *)
-    let diagnose_transl_data : (string * float * int) list ref = ref [] in
+    (* Assign size-based ranks (rank 1 = biggest):
+       transparent functions are already sorted by decreasing size *)
+    let n_transparent = List.length transparent in
+    let transparent_ranked =
+      List.mapi (fun i f -> (i + 1, f)) transparent
+    in
+    let opaque_ranked =
+      List.mapi (fun i f -> (n_transparent + i + 1, f)) opaque
+    in
+
+    let diagnose_transl_data : (string * float * int * int) list ref = ref [] in
     let diagnose_transl_mutex = Mutex.create () in
-    let process (kind : string) (funs : fun_decl list) =
+
+    (* Process a function *)
+    let process (kind : string) (funs : (int * fun_decl) list) =
       let num_decls = List.length funs in
       ProgressBar.with_parallel_reporter num_decls
         ("Translated " ^ kind ^ " functions: ")
         (fun report ->
           parallel_filter_map
-            (fun x ->
+            (fun (rank, x) ->
               let start =
                 if !Config.diagnose_translation then Unix.gettimeofday ()
                 else 0.0
@@ -430,7 +441,7 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
                 let size = LlbcAstUtils.compute_fun_decl_size x in
                 Mutex.lock diagnose_transl_mutex;
                 diagnose_transl_data :=
-                  (fname, elapsed, size) :: !diagnose_transl_data;
+                  (fname, elapsed, size, rank) :: !diagnose_transl_data;
                 Mutex.unlock diagnose_transl_mutex
               end;
               report 1;
@@ -438,14 +449,14 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
             funs)
     in
 
-    let opaque = process "opaque" opaque in
-    let transparent = process "transparent" transparent in
+    let opaque = process "opaque" opaque_ranked in
+    let transparent = process "transparent" transparent_ranked in
 
     (* Print -diagnose-translation results *)
     if !Config.diagnose_translation then begin
       let sorted =
         List.sort
-          (fun (_, t1, _) (_, t2, _) -> Float.compare t2 t1)
+          (fun (_, t1, _, _) (_, t2, _, _) -> Float.compare t2 t1)
           !diagnose_transl_data
       in
       let limit = !Config.diagnose_limit in
@@ -454,8 +465,9 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
       in
       Printf.printf "\n=== Translation time per function ===\n";
       List.iter
-        (fun (name, time, size) ->
-          Printf.printf "  %s: %.4fs (size: %d)\n" name time size)
+        (fun (name, time, size, rank) ->
+          Printf.printf "  %s: %.4fs (size: %d, rank: %d)\n" name time size
+            rank)
         to_print
     end;
 

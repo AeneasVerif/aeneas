@@ -319,14 +319,15 @@ let apply_passes_to_pure_fun_translations (crate : LlbcAst.crate)
   in
 
   (* Diagnostic data collection for -diagnose-micro-passes / -diagnose-detailed.
-     Each entry: (name, total_time, size, detailed_timings). *)
-  let diagnose_data : (string * float * int * (string * float) list) list ref =
+     Each entry: (name, total_time, size, rank, detailed_timings). *)
+  let diagnose_data :
+      (string * float * int * int * (string * float) list) list ref =
     ref []
   in
   let diagnose_mutex = Mutex.create () in
 
   (* Apply the micro-passes *)
-  let apply (f : fun_decl) : pure_fun_translation =
+  let apply (rank : int) (f : fun_decl) : pure_fun_translation =
     let overall_start =
       if !Config.diagnose_micro_passes then Unix.gettimeofday () else 0.0
     in
@@ -442,7 +443,7 @@ let apply_passes_to_pure_fun_translations (crate : LlbcAst.crate)
       let all_timings = pass_timings @ List.rev !post_timings in
       Mutex.lock diagnose_mutex;
       diagnose_data :=
-        (fun_name, elapsed, fun_size, all_timings) :: !diagnose_data;
+        (fun_name, elapsed, fun_size, rank, all_timings) :: !diagnose_data;
       Mutex.unlock diagnose_mutex
     end;
 
@@ -456,21 +457,32 @@ let apply_passes_to_pure_fun_translations (crate : LlbcAst.crate)
         transl
     in
 
-    let process (kind : string) (transl : pure_fun_translation_no_loops list) =
+    (* Assign size-based ranks (rank 1 = biggest):
+       transparent functions are already sorted by decreasing size *)
+    let n_transparent = List.length transparent in
+    let transparent_ranked =
+      List.mapi (fun i f -> (i + 1, f)) transparent
+    in
+    let opaque_ranked =
+      List.mapi (fun i f -> (n_transparent + i + 1, f)) opaque
+    in
+
+    let process (kind : string)
+        (transl : (int * pure_fun_translation_no_loops) list) =
       let num_decls = List.length transl in
       ProgressBar.with_parallel_reporter num_decls
         ("Post-processed translated " ^ kind ^ " functions: ")
         (fun report ->
           Parallel.parallel_map
-            (fun x ->
-              let x = apply x in
+            (fun (rank, x) ->
+              let x = apply rank x in
               report 1;
               x)
             transl)
     in
 
-    let opaque = process "opaque" opaque in
-    let transparent = process "transparent" transparent in
+    let opaque = process "opaque" opaque_ranked in
+    let transparent = process "transparent" transparent_ranked in
     opaque @ transparent
   in
 
@@ -478,7 +490,7 @@ let apply_passes_to_pure_fun_translations (crate : LlbcAst.crate)
   if !Config.diagnose_micro_passes then begin
     let sorted =
       List.sort
-        (fun (_, t1, _, _) (_, t2, _, _) -> Float.compare t2 t1)
+        (fun (_, t1, _, _, _) (_, t2, _, _, _) -> Float.compare t2 t1)
         !diagnose_data
     in
     let limit = !Config.diagnose_limit in
@@ -487,8 +499,8 @@ let apply_passes_to_pure_fun_translations (crate : LlbcAst.crate)
     in
     Printf.printf "\n=== Micro-passes time per function ===\n";
     List.iter
-      (fun (name, time, size, detailed) ->
-        Printf.printf "  %s: %.4fs (size: %d)\n" name time size;
+      (fun (name, time, size, rank, detailed) ->
+        Printf.printf "  %s: %.4fs (size: %d, rank: %d)\n" name time size rank;
         if !Config.diagnose_detailed && detailed <> [] then
           List.iter
             (fun (pass_name, t) -> Printf.printf "    %s: %.4fs\n" pass_name t)
