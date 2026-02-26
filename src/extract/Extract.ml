@@ -2605,17 +2605,7 @@ let extract_global_decl_aux (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_print_space fmt ();
 
   let decl_name = ctx_get_global span global.def_id ctx in
-  let body_name =
-    ctx_get_function span
-      (FromLlbc (Pure.FunId (FRegular global.body_id), None))
-      ctx
-  in
-  let decl_ty, body_ty =
-    let ty = body.signature.output in
-    if body.signature.fwd_info.effect_info.can_fail then
-      (unwrap_result_ty span ty, ty)
-    else (ty, mk_result_ty ty)
-  in
+  let output_ty = body.signature.output in
   (* Add the type parameters *)
   let ctx, type_params, cg_params, trait_clauses =
     ctx_add_generic_params span global.item_meta.name Item global.llbc_generics
@@ -2627,120 +2617,29 @@ let extract_global_decl_aux (ctx : extraction_ctx) (fmt : F.formatter)
       let kind = if interface then Declared else Builtin in
       if backend () = HOL4 then
         extract_global_decl_hol4_opaque span ctx fmt decl_name global.generics
-          decl_ty
+          output_ty
       else (
         extract_global_decl_body_gen span ctx fmt global kind ~irreducible:false
           ~with_do:false decl_name global.generics global.explicit_info
-          type_params cg_params trait_clauses decl_ty None;
+          type_params cg_params trait_clauses output_ty None;
         F.pp_print_space fmt ())
-  | Some body -> (
-      (* There is a body. There are two sub-cases:
-         - if the body is exactly [Ok v] then we directly generate [let x : u32 := v]
-         - otherwise we generate two definitions, one for the initialization function
-           and another for the global itself
-      *)
-      let pure_value =
+  | Some body ->
+      (* There is a body *)
+      let with_do =
         match body.body.e with
-        | App
-            ( {
-                e =
-                  Qualif
-                    {
-                      id =
-                        AdtCons
-                          {
-                            adt_id = TBuiltin TResult;
-                            variant_id = Some variant_id;
-                          };
-                      _;
-                    };
-                _;
-              },
-              v )
-          when variant_id = result_ok_id -> Some v
-        | _ -> None
+        | Let (true, _, _, _) -> true
+        | _ -> false
       in
-      match pure_value with
-      | Some pure_value ->
-          extract_global_decl_body_gen span ctx fmt global SingleNonRec
-            ~irreducible:(backend () = Lean)
-            ~with_do:false decl_name global.generics global.explicit_info
-            type_params cg_params trait_clauses decl_ty
-            (Some
-               (fun fmt ->
-                 extract_texpr span ctx fmt ~inside:false ~inside_do:true
-                   pure_value));
-          (* Add a break to insert lines between declarations *)
-          F.pp_print_break fmt 0 0
-      | None ->
-          (* Generate: [let x_body : result u32 = Return 3] *)
-          extract_global_decl_body_gen span ctx fmt global SingleNonRec
-            ~irreducible:false ~with_do:true body_name global.generics
-            global.explicit_info type_params cg_params trait_clauses body_ty
-            (Some
-               (fun fmt ->
-                 extract_texpr span ctx fmt ~inside:false ~inside_do:true
-                   body.body));
-          F.pp_print_break fmt 0 0;
-          (* Generate: [let x_c : u32 = eval_global x_body] *)
-          extract_global_decl_body_gen span ctx fmt global SingleNonRec
-            ~irreducible:(backend () = Lean)
-            ~with_do:false decl_name global.generics global.explicit_info
-            type_params cg_params trait_clauses decl_ty
-            (Some
-               (fun fmt ->
-                 let all_params =
-                   (* Filter *)
-                   let filter : 'a. explicit list -> 'a list -> 'a list =
-                    fun el l ->
-                     List.filter_map
-                       (fun (b, x) -> if b = Explicit then Some x else None)
-                       (List.combine el l)
-                   in
-                   let type_params =
-                     filter global.explicit_info.explicit_types type_params
-                   in
-                   let cg_params =
-                     filter global.explicit_info.explicit_const_generics
-                       cg_params
-                   in
-                   List.concat [ type_params; cg_params; trait_clauses ]
-                 in
-                 let extract_params () =
-                   List.iter
-                     (fun p ->
-                       F.pp_print_space fmt ();
-                       F.pp_print_string fmt p)
-                     all_params
-                 in
-                 let use_brackets = all_params <> [] in
-                 (* Extract the name *)
-                 let before, after =
-                   match backend () with
-                   | FStar | Lean ->
-                       ( (fun () ->
-                           F.pp_print_string fmt "eval_global";
-                           F.pp_print_space fmt ()),
-                         fun () -> () )
-                   | Coq ->
-                       ( (fun () -> ()),
-                         fun () -> F.pp_print_string fmt "%global" )
-                   | HOL4 ->
-                       ( (fun () ->
-                           F.pp_print_string fmt "get_return_value";
-                           F.pp_print_space fmt ()),
-                         fun () -> () )
-                 in
-                 before ();
-                 if use_brackets then F.pp_print_string fmt "(";
-                 F.pp_print_string fmt body_name;
-                 (* Extract the generic params *)
-                 extract_params ();
-                 if use_brackets then F.pp_print_string fmt ")";
-                 (* *)
-                 after ()));
-          (* Add a break to insert lines between declarations *)
-          F.pp_print_break fmt 0 0)
+      extract_global_decl_body_gen span ctx fmt global SingleNonRec
+        ~irreducible:(backend () = Lean)
+        ~with_do decl_name global.generics global.explicit_info type_params
+        cg_params trait_clauses output_ty
+        (Some
+           (fun fmt ->
+             extract_texpr span ctx fmt ~inside:false ~inside_do:with_do
+               body.body));
+      (* Add a break to insert lines between declarations *)
+      F.pp_print_break fmt 0 0
 
 let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (global : global_decl option) (body : fun_decl) (interface : bool) : unit =

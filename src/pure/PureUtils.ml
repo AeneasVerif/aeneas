@@ -1048,6 +1048,24 @@ let mk_result_ok_pat (v : tpat) : tpat =
   let pat = PAdt { variant_id = Some result_ok_id; fields = [ v ] } in
   { pat; ty }
 
+let texpr_as_ok (e : texpr) : texpr option =
+  match e.e with
+  | App
+      ( {
+          e =
+            Qualif
+              {
+                id =
+                  AdtCons
+                    { adt_id = TBuiltin TResult; variant_id = Some variant_id };
+                _;
+              };
+          _;
+        },
+        v )
+    when variant_id = result_ok_id -> Some v
+  | _ -> None
+
 let mk_sum_ty (left : ty) (right : ty) : ty =
   TAdt (TBuiltin TSum, mk_generic_args_from_types [ left; right ])
 

@@ -224,7 +224,7 @@ and translate_panic (ctx : bs_ctx) : texpr = Option.get ctx.mk_panic
     in [translate_forward_end]. *)
 and translate_return (ectx : C.eval_ctx) (opt_v : V.tvalue option)
     (ctx : bs_ctx) : texpr =
-  [%ldebug "e: return " ^ Print.option_to_string (tvalue_to_string ctx) opt_v];
+  [%ldebug "e: " ^ Print.option_to_string (tvalue_to_string ctx) opt_v];
   let opt_v = Option.map (tvalue_to_texpr ctx ectx) opt_v in
   (Option.get ctx.mk_return) ctx opt_v
 
@@ -1194,15 +1194,22 @@ and translate_end_abstraction_with_cont (ectx : C.eval_ctx) (abs : V.abs)
 and translate_global_eval (gid : A.GlobalDeclId.id) (generics : T.generic_args)
     (sval : V.symbolic_value) (e : S.expr) (ctx : bs_ctx) : texpr =
   let ctx, var = fresh_var_for_symbolic_value sval ctx in
-  let decl = A.GlobalDeclId.Map.find gid ctx.decls_ctx.crate.global_decls in
+  (* Lookup the declaration to get the type and check whether the global can fail or not *)
+  let decl =
+    [%unwrap_with_span] ctx.span
+      (GlobalDeclId.Map.find_opt gid ctx.trans_global_decls)
+      "Internal error"
+  in
+  [%ldebug "decl.can_fail: " ^ string_of_bool decl.can_fail];
   let generics = ctx_translate_fwd_generic_args ctx generics in
   let global_expr = { id = Global gid; generics } in
   (* We use translate_fwd_ty to translate the global type *)
-  let ty = ctx_translate_fwd_ty ctx decl.ty in
-  let ty = mk_result_ty ty in
+  let ty = decl.ty in
   let gval = { e = Qualif global_expr; ty } in
   let e = translate_expr e ctx in
-  [%add_loc] mk_closed_checked_let ctx true (mk_tpat_from_fvar None var) gval e
+  [%add_loc] mk_closed_checked_let ctx decl.can_fail
+    (mk_tpat_from_fvar None var)
+    gval e
 
 and translate_assertion (ectx : C.eval_ctx) (expected : bool) (v : V.tvalue)
     (e : S.expr) (ctx : bs_ctx) : texpr =
@@ -1617,6 +1624,10 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
   let fwd_effect_info = ctx.sg.fun_ty.fwd_info.effect_info in
   let ctx, pure_fwd_var = fresh_var None ctx.sg.fun_ty.fwd_output ctx in
   let fwd_e = translate_one_end ctx None in
+  [%ldebug
+    "- fwd_effect_info: "
+    ^ show_fun_effect_info fwd_effect_info
+    ^ "\n- fwd_e: " ^ texpr_to_string ctx fwd_e];
 
   (* If we reached a loop: if we are *inside* a loop, we need to ignore the
        backward functions which are not associated to region abstractions.
@@ -1654,16 +1665,18 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
   in
   let vars = List.map mk_texpr_from_fvar vars in
   let ret = mk_simpl_tuple_texpr ctx.span vars in
-  let ret = mk_result_ok_texpr ctx.span ret in
+  let ret =
+    [%unwrap_with_span] ctx.span ctx.mk_return "Internal error" ctx (Some ret)
+  in
 
   (* Introduce all the let-bindings *)
 
   (* Combine:
-       - the backward variables
-       - whether we should evaluate the expression for the backward function
-         (i.e., should we use a monadic let-binding or not - we do if the
-         backward functions don't have inputs and can fail)
-       - the expressions for the backward functions
+     - the backward variables
+     - whether we should evaluate the expression for the backward function
+       (i.e., should we use a monadic let-binding or not - we do if the
+       backward functions don't have inputs and can fail)
+     - the expressions for the backward functions
     *)
   let back_vars_els =
     List.filter_map
@@ -1681,6 +1694,7 @@ and translate_forward_end (return_value : (C.eval_ctx * V.tvalue) option)
           back_e e)
       back_vars_els ret
   in
+  [%ldebug "next:\n" ^ texpr_to_string ctx e];
 
   (* Bind the expression for the forward output *)
   let pat = mk_tpat_from_fvar None pure_fwd_var in

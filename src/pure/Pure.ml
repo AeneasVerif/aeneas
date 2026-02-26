@@ -175,7 +175,12 @@ type builtin_type_info = {
 }
 [@@deriving show, ord]
 
-type builtin_global_info = { global_name : string } [@@deriving show]
+type builtin_global_info = {
+  rust_name : string;
+  extract_name : string;
+  can_fail : bool;
+}
+[@@deriving show]
 
 type builtin_fun_info = {
   keep_params : bool list option;
@@ -1798,6 +1803,10 @@ type global_decl = {
       (** Information about which inputs parameters are explicit/implicit *)
   preds : predicates;
   ty : ty;
+      (** The type of the global, including the effect (i.e., potentially
+          wrapped inside [Result]) *)
+  output_ty : ty;  (** The pure type of the global (without [Result]) *)
+  can_fail : bool;  (** [true] if the global can fail *)
   src : item_source;
   body_id : FunDeclId.id;
 }

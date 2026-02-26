@@ -107,6 +107,15 @@ type generic_origin = Item | Method [@@deriving show, ord]
 (** We use identifiers to look for name clashes *)
 and id =
   | GlobalId of A.GlobalDeclId.id
+  | GlobalPureValueId of A.GlobalDeclId.id
+      (** When global bodies are pure (i.e., of the shape [ok v]) we introduce
+          an intermediate definition for the pure value.
+
+          Example:
+          {[
+            def CONST.val := 32#u32
+            def CONST : Result u32 := ok CONST.val
+          ]} *)
   | FunId of fun_id
   | TerminationMeasureId of (A.fun_id * LoopId.id option)
       (** The definition which provides the decreases/termination measure. We
@@ -669,6 +678,8 @@ let id_to_string (span : Meta.span option) (id : id) (ctx : extraction_ctx) :
   in
   match id with
   | GlobalId gid -> global_decl_id_to_string ctx gid
+  | GlobalPureValueId gid ->
+      "@pureGlobalValue(" ^ global_decl_id_to_string ctx gid ^ ")"
   | FunId fid -> fun_id_to_string ctx fid
   | DecreasesProofId (fid, lid) ->
       let fun_name = llbc_fun_id_to_string ctx fid in
@@ -2256,7 +2267,7 @@ let ctx_add_global_decl_and_body (def : global_decl) (ctx : extraction_ctx) :
   match def.builtin_info with
   | Some info ->
       (* Yes: register the custom binding *)
-      ctx_add def.item_meta.span decl info.global_name ctx
+      ctx_add def.item_meta.span decl info.extract_name ctx
   | None ->
       (* Not the case: "standard" registration *)
       let name =
@@ -2264,19 +2275,18 @@ let ctx_add_global_decl_and_body (def : global_decl) (ctx : extraction_ctx) :
       in
       let name = ctx_compute_global_name def.item_meta ctx name in
 
-      let body = FunId (FromLlbc (FunId (FRegular def.body_id), None)) in
       (* If this is a provided constant (i.e., the default value for a constant
          in a trait declaration) we add a suffix. Otherwise there is a clash
          between the name for the default constant and the name for the field
          in the trait declaration *)
+      let is_lean = backend () = Lean in
       let suffix =
         match def.src with
-        | TraitDeclItem (_, _, true) -> "_default"
+        | TraitDeclItem (_, _, true) ->
+            if is_lean then ".default" else "_default"
         | _ -> ""
       in
-      let ctx = ctx_add def.item_meta.span decl (name ^ suffix) ctx in
-      let ctx = ctx_add def.item_meta.span body (name ^ suffix ^ "_body") ctx in
-      ctx
+      ctx_add def.item_meta.span decl (name ^ suffix) ctx
 
 (** - [is_trait_decl_field]: [true] if we are computing the name of a field in a
       trait declaration, [false] if we are computing the name of a function

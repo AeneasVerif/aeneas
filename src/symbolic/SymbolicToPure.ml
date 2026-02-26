@@ -353,11 +353,20 @@ let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
     translate_generic_params (Some decl.item_meta.span) llbc_generics
   in
   let explicit_info = compute_explicit_info generics [] in
-  let ty = translate_fwd_ty (Some decl.item_meta.span) ctx ty in
+  let output_ty = translate_fwd_ty (Some decl.item_meta.span) ctx ty in
   let builtin_info =
     match_name_find_opt ctx item_meta.name
       (ExtractBuiltin.builtin_globals_map ())
   in
+  let can_fail =
+    match builtin_info with
+    | Some info -> info.can_fail
+    | None -> (
+        match FunDeclId.Map.find_opt body_id ctx.fun_ctx.fun_infos with
+        | None -> (* Don't know: true by default *) true
+        | Some info -> info.can_fail)
+  in
+  let ty = if can_fail then mk_result_ty output_ty else output_ty in
   {
     span = item_meta.span;
     def_id;
@@ -369,6 +378,8 @@ let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
     explicit_info;
     preds;
     ty;
+    output_ty;
+    can_fail;
     src;
     body_id;
   }

@@ -92,6 +92,7 @@ let check_fun_decl_vars_are_well_bound (trans_ctx : trans_ctx)
 let translate_function_to_pure_aux (trans_ctx : trans_ctx)
     (marked_ids : marked_ids)
     (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t)
+    (pure_global_decls : Pure.global_decl GlobalDeclId.Map.t)
     (fun_sigs : SymbolicToPureCore.fun_sigs FunDeclId.Map.t) (fdef : fun_decl) :
     pure_fun_translation_no_loops =
   (* Debug *)
@@ -175,6 +176,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
     {
       SymbolicToPureCore.span = fdef.item_meta.span;
       decls_ctx = trans_ctx;
+      trans_global_decls = pure_global_decls;
       bid = None;
       sg;
       fun_sigs;
@@ -245,12 +247,13 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
 
 let translate_function_to_pure (trans_ctx : trans_ctx) (marked_ids : marked_ids)
     (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t)
+    (pure_global_decls : Pure.global_decl Pure.GlobalDeclId.Map.t)
     (fun_sigs : SymbolicToPureCore.fun_sigs FunDeclId.Map.t) (fdef : fun_decl) :
     pure_fun_translation_no_loops option =
   try
     Some
       (translate_function_to_pure_aux trans_ctx marked_ids pure_type_decls
-         fun_sigs fdef)
+         pure_global_decls fun_sigs fdef)
   with CFailure error ->
     let name = name_to_string trans_ctx fdef.item_meta.name in
     let name_pattern =
@@ -295,7 +298,8 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
       (List.map (fun (def : Pure.type_decl) -> (def.def_id, def)) type_decls)
   in
 
-  (* Translate the globals (remark: their bodies are translated at the same time
+  (* Translate the globals (remark: this does not translate their *bodies* (i.e.:
+     their initialization functions), that are translated later, at the same time
      as the "regular" functions) *)
   let global_decls =
     let num_decls = GlobalDeclId.Map.cardinal crate.global_decls in
@@ -325,6 +329,10 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
                     (IdGlobal global.def_id));
               None)
           (GlobalDeclId.Map.values trans_ctx.global_decls_to_extract))
+  in
+  let global_decls_map =
+    GlobalDeclId.Map.of_list
+      (List.map (fun (d : Pure.global_decl) -> (d.def_id, d)) global_decls)
   in
 
   (* Compute the fun sigs for the whole crate *)
@@ -416,7 +424,7 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
             (fun x ->
               let f =
                 translate_function_to_pure trans_ctx marked_ids type_decls_map
-                  fun_sigs x
+                  global_decls_map fun_sigs x
               in
               report 1;
               f)
