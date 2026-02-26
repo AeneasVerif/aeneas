@@ -1632,12 +1632,12 @@ let ctx_compute_struct_constructor (def : type_decl) (ctx : extraction_ctx)
   let tname = ctx_compute_type_name def.item_meta ctx basename in
   ExtractBuiltin.mk_struct_constructor tname
 
-(** Small helper to convert a function name to a name used at extraction.
+(** Small helper to convert a function/const name to a name used at extraction.
 
     In practice we need to preprocess the name *before* giving it to this
     function. *)
-let ctx_fun_name_to_extract_string (meta : T.item_meta) (ctx : extraction_ctx)
-    (fname : llbc_name) : string =
+let ctx_fun_global_name_to_extract_string (meta : T.item_meta)
+    (ctx : extraction_ctx) (fname : llbc_name) : string =
   (* Check if the function is a method implementation for a blanket impl.
      If it is the case, add a path element to avoid name collisions *)
   let rec is_blanket_method (name : llbc_name) : bool =
@@ -1672,16 +1672,6 @@ let ctx_fun_name_to_extract_string (meta : T.item_meta) (ctx : extraction_ctx)
   match backend () with
   | FStar | Coq | HOL4 -> StringUtils.lowercase_first_letter fname
   | Lean -> fname
-
-(** Provided a basename, compute the name of a global declaration. *)
-let ctx_compute_global_name (meta : T.item_meta) (ctx : extraction_ctx)
-    (name : llbc_name) : string =
-  let name = ctx_compute_simple_name meta ctx name in
-  match Config.backend () with
-  | Coq | FStar | HOL4 ->
-      let parts = List.map to_snake_case name in
-      String.concat "_" parts
-  | Lean -> flatten_name name
 
 (** Helper function: generate a suffix for a function name, i.e., generates a
     suffix like "_loop", "loop1", etc. to append to a function name. *)
@@ -1718,7 +1708,7 @@ let default_fun_suffix (num_loops : int) (loop_id : LoopId.id option)
 let ctx_compute_fun_name_base (meta : T.item_meta) (ctx : extraction_ctx)
     (fname : llbc_name) (num_loops : int) (loop_id : LoopId.id option)
     (loop_pos : int list) : string =
-  let fname = ctx_fun_name_to_extract_string meta ctx fname in
+  let fname = ctx_fun_global_name_to_extract_string meta ctx fname in
   (* Compute the suffix *)
   let suffix = default_fun_suffix num_loops loop_id loop_pos in
   (* Concatenate *)
@@ -2256,62 +2246,37 @@ let ctx_add_adt_projector_names (decl_name : string) (field_names : string list)
   in
   { ctx with names_maps }
 
-let ctx_add_global_decl_and_body (def : global_decl) (ctx : extraction_ctx) :
-    extraction_ctx =
-  (* TODO: update once the body id can be an option *)
-  let decl = GlobalId def.def_id in
+(** This helper factors out the logic to generate global decls and function
+    names. The subtlety comes from trait implementations: if the declaration
+    comes from a trait implementation, we want to prefix the name with the name
+    of the trait impl, which is not the name of the impl block (as we do for
+    declarations that live in regular impl blocks).
 
-  (* Check if the global corresponds to an builtin global that we should map
-     to a custom definition in our standard library (for instance, happens
-     with "core::num::usize::MAX") *)
-  match def.builtin_info with
-  | Some info ->
-      (* Yes: register the custom binding *)
-      ctx_add def.item_meta.span decl info.extract_name ctx
-  | None ->
-      (* Not the case: "standard" registration *)
-      let name =
-        opt_rename_llbc_name def.item_meta.attr_info def.item_meta.name
-      in
-      let name = ctx_compute_global_name def.item_meta ctx name in
-
-      (* If this is a provided constant (i.e., the default value for a constant
-         in a trait declaration) we add a suffix. Otherwise there is a clash
-         between the name for the default constant and the name for the field
-         in the trait declaration *)
-      let is_lean = backend () = Lean in
-      let suffix =
-        match def.src with
-        | TraitDeclItem (_, _, true) ->
-            if is_lean then ".default" else "_default"
-        | _ -> ""
-      in
-      ctx_add def.item_meta.span decl (name ^ suffix) ctx
-
-(** - [is_trait_decl_field]: [true] if we are computing the name of a field in a
+    - [is_trait_decl_field]: [true] if we are computing the name of a field in a
       trait declaration, [false] if we are computing the name of a function
       declaration.
-
-    TODO: remove this input. *)
-let ctx_compute_fun_name_no_suffix (def : fun_decl) (is_trait_decl_field : bool)
+    - [is_fun]: [true] if we're computing the name of a function, [false] if
+      we're computing the name of a const. *)
+let ctx_compute_fun_global_name_no_suffix (item_meta : T.item_meta)
+    (src : item_source) ~(is_trait_decl_field : bool) ~(is_fun : bool)
     (ctx : extraction_ctx) : string =
-  let span = def.item_meta.span in
-  (* Rename the function, if the user added a [rename] attribute.
+  let span = item_meta.span in
+  (* Rename the declaration if the user added a [rename] attribute.
 
      We have to do something peculiar for the implementation of trait
-     methods:
-     - we look up the meta information of the method *declaration*
+     methods/const:
+     - we look up the meta information of the method/const *declaration*
        because this is where the attribute is.
-     - we prefix the method name with the trait impl name, which is computed
+     - we prefix the method/const name with the trait impl name, which is computed
        in a specific manner
 
      Note that if the user also added an attribute for the *implementation*,
      we keep this one.
   *)
-  match def.src with
+  match src with
   | TraitImplItem (trait_impl_ref, trait_decl_ref, item_name, _) ->
       let item_meta =
-        if Option.is_some def.item_meta.attr_info.rename then def.item_meta
+        if Option.is_some item_meta.attr_info.rename then item_meta
         else
           (* Lookup the trait declaration. TODO: the trait item impl info
              should directly give us the id of the method declaration. *)
@@ -2319,22 +2284,35 @@ let ctx_compute_fun_name_no_suffix (def : fun_decl) (is_trait_decl_field : bool)
             TraitDeclId.Map.find_opt trait_decl_ref.id ctx.trans_trait_decls
           with
           | None ->
-              (* This shouldn't happen: we use the fun decl meta info as a default value *)
-              def.item_meta
+              (* This shouldn't happen - we use the decl meta info as a default value *)
+              item_meta
           | Some trait_decl -> (
-              match
-                List.find_opt
-                  (fun (name, _) -> name = item_name)
-                  trait_decl.methods
-              with
-              | None -> def.item_meta
-              | Some (_, bound_fn) ->
-                  Option.value
-                    (Option.map
-                       (fun (def : A.fun_decl) -> def.item_meta)
-                       (FunDeclId.Map.find_opt bound_fn.binder_value.fun_id
-                          ctx.trans_ctx.fun_ctx.fun_decls))
-                    ~default:def.item_meta)
+              if is_fun then
+                (* Lookup the method in the trait items *)
+                match
+                  List.find_opt
+                    (fun (name, _) -> name = item_name)
+                    trait_decl.methods
+                with
+                | None -> item_meta
+                | Some (_, bound_fn) ->
+                    Option.value
+                      (Option.map
+                         (fun (def : A.fun_decl) -> def.item_meta)
+                         (FunDeclId.Map.find_opt bound_fn.binder_value.fun_id
+                            ctx.trans_ctx.fun_ctx.fun_decls))
+                      ~default:item_meta
+              else
+                (* Lookup the const in the trait items *)
+                match
+                  List.find_opt
+                    (fun (name, _) -> name = item_name)
+                    trait_decl.consts
+                with
+                | None -> item_meta
+                | Some _ ->
+                    (* TODO: missing item meta information *)
+                    item_meta)
       in
       let rename = item_meta.attr_info.rename in
       let item_name =
@@ -2349,21 +2327,21 @@ let ctx_compute_fun_name_no_suffix (def : fun_decl) (is_trait_decl_field : bool)
       in
       flatten_name [ trait_impl_name; item_name ]
   | _ ->
-      let item_meta = def.item_meta in
-      let llbc_name =
-        opt_rename_llbc_name item_meta.attr_info def.item_meta.name
-      in
+      let llbc_name = opt_rename_llbc_name item_meta.attr_info item_meta.name in
       [%ldebug "llbc_name after renaming: " ^ name_to_string ctx llbc_name];
-      (* When a trait method has a default implementation, this becomes a [fun_decl]
+      (* When a trait method/const has a default implementation, this becomes a [fun_decl]
          that we may want to extract. By default, its name is [Trait::method], which
          for lean creates a name clash with the method name as a field in the trait
          struct. We therefore rename these function items to avoid the name clash by
          adding the "default" suffix.
       *)
       let llbc_name =
+        (* A default implementation is a declaration that does not defin a trait decl field
+           (remember that we use opaque fun declarations for the method of trait declarations)
+           and yet belongs to a trait *decl* block. *)
         if is_trait_decl_field then llbc_name
         else
-          match def.src with
+          match src with
           | TraitDeclItem (_, _, true) ->
               llbc_name @ [ PeIdent ("default", Disambiguator.zero) ]
           | _ -> llbc_name
@@ -2381,10 +2359,12 @@ let ctx_compute_fun_name_no_suffix (def : fun_decl) (is_trait_decl_field : bool)
               List.rev (e :: PeIdent ("impl", Disambiguator.of_int 0) :: name)
           | _ -> llbc_name
         in
-        ctx_fun_name_to_extract_string def.item_meta ctx llbc_name
+        ctx_fun_global_name_to_extract_string item_meta ctx llbc_name
       else
-        (* Generate a name and check if it collides with a field projector *)
-        let name = ctx_fun_name_to_extract_string def.item_meta ctx llbc_name in
+        (* Generate a name and check whether it collides with a field projector *)
+        let name =
+          ctx_fun_global_name_to_extract_string item_meta ctx llbc_name
+        in
         if StringSet.mem name ctx.names_maps.adt_projectors then
           (* Add an name elem "impl" just before the last *)
           let llbc_name =
@@ -2393,12 +2373,23 @@ let ctx_compute_fun_name_no_suffix (def : fun_decl) (is_trait_decl_field : bool)
                 List.rev (e :: PeIdent ("impl", Disambiguator.of_int 0) :: name)
             | _ -> [%internal_error] span
           in
-          ctx_fun_name_to_extract_string def.item_meta ctx llbc_name
+          ctx_fun_global_name_to_extract_string item_meta ctx llbc_name
         else name
+
+let ctx_add_global_decl_and_body (def : global_decl) (ctx : extraction_ctx) :
+    extraction_ctx =
+  let name =
+    ctx_compute_fun_global_name_no_suffix def.item_meta def.src ctx
+      ~is_trait_decl_field:false ~is_fun:false
+  in
+  ctx_add def.item_meta.span (GlobalId def.def_id) name ctx
 
 let ctx_compute_fun_name (def : fun_decl) (is_trait_decl_field : bool)
     (ctx : extraction_ctx) : string =
-  let fname = ctx_compute_fun_name_no_suffix def is_trait_decl_field ctx in
+  let fname =
+    ctx_compute_fun_global_name_no_suffix def.item_meta def.src
+      ~is_trait_decl_field ~is_fun:true ctx
+  in
   (* Compute the suffix *)
   let suffix = default_fun_suffix def.num_loops def.loop_id def.loop_pos in
   (* Concatenate *)
@@ -2419,7 +2410,10 @@ let ctx_compute_fun_name (def : fun_decl) (is_trait_decl_field : bool)
     - loop identifier, if this is for a loop *)
 let ctx_compute_termination_measure_name (decl : fun_decl)
     (ctx : extraction_ctx) : string =
-  let fname = ctx_compute_fun_name_no_suffix decl false ctx in
+  let fname =
+    ctx_compute_fun_global_name_no_suffix decl.item_meta decl.src
+      ~is_trait_decl_field:false ~is_fun:true ctx
+  in
   let lp_suffix =
     default_fun_loop_suffix decl.num_loops decl.loop_id decl.loop_pos
   in
@@ -2448,7 +2442,10 @@ let ctx_compute_termination_measure_name (decl : fun_decl)
     - loop identifier, if this is for a loop *)
 let ctx_compute_decreases_proof_name (decl : fun_decl) (ctx : extraction_ctx) :
     string =
-  let fname = ctx_compute_fun_name_no_suffix decl false ctx in
+  let fname =
+    ctx_compute_fun_global_name_no_suffix decl.item_meta decl.src
+      ~is_trait_decl_field:false ~is_fun:true ctx
+  in
   let lp_suffix =
     default_fun_loop_suffix decl.num_loops decl.loop_id decl.loop_pos
   in
