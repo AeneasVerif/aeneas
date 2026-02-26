@@ -88,7 +88,7 @@ let parallel_filter_map_chunks f ls =
     problem where chunking gives all the biggest tasks to the first worker). *)
 let parallel_map_pool_aux (f : 'a -> 'b) (ls : 'a list) : 'b list =
   (* Only run in parallel if the option is activated *)
-  if !Config.parallel then (
+  if !Config.parallel then
     let f = run_with_backtrace f in
     let module T = Domainslib.Task in
     let pool = Pool.get () in
@@ -96,7 +96,7 @@ let parallel_map_pool_aux (f : 'a -> 'b) (ls : 'a list) : 'b list =
     let run (x : 'a) () = f x in
     let tasks = List.map (fun x -> T.async pool (run x)) ls in
     (* Wait *)
-    T.run pool (fun _ -> List.map (T.await pool) tasks))
+    T.run pool (fun _ -> List.map (T.await pool) tasks)
   else List.map f ls
 
 let parallel_map_pool f ls = catch_reraise (parallel_map_pool_aux f) ls
@@ -108,7 +108,7 @@ let parallel_map_pool f ls = catch_reraise (parallel_map_pool_aux f) ls
 let parallel_filter_map_pool_aux (f : 'a -> 'b option) (ls : 'a list) : 'b list
     =
   (* Only run in parallel if the option is activated *)
-  if !Config.parallel then (
+  if !Config.parallel then
     let f = run_with_backtrace f in
     let module T = Domainslib.Task in
     let pool = Pool.get () in
@@ -116,7 +116,7 @@ let parallel_filter_map_pool_aux (f : 'a -> 'b option) (ls : 'a list) : 'b list
     let run (x : 'a) () = f x in
     let tasks = List.map (fun x -> T.async pool (run x)) ls in
     (* Wait *)
-    T.run pool (fun _ -> List.filter_map (T.await pool) tasks))
+    T.run pool (fun _ -> List.filter_map (T.await pool) tasks)
   else List.filter_map f ls
 
 let parallel_filter_map_pool f ls =

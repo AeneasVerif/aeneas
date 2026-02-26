@@ -199,6 +199,7 @@ module Make (Id : OrderedType) = struct
     let module IntMap = MakeMap (OrderedInt) in
     let module Int_comparable = struct
       type t = int
+
       let compare = compare
       let hash x = x
       let equal = Int.equal
@@ -216,9 +217,7 @@ module Make (Id : OrderedType) = struct
     in
     let vertex_to_id : Id.t IntMap.t =
       IntMap.of_list
-        (List.map
-           (fun (fid, v) -> (v, fid))
-           (M.bindings id_to_vertex))
+        (List.map (fun (fid, v) -> (v, fid)) (M.bindings id_to_vertex))
     in
 
     let to_v id = M.find id id_to_vertex in
