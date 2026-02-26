@@ -294,16 +294,25 @@ let apply_passes_to_pure_fun_translations (crate : LlbcAst.crate)
       (List.map (fun (d : trait_impl) -> (d.def_id, d)) trait_impls)
   in
 
-  let fvar_id_generator, fresh_fvar_id = FVarId.fresh_stateful_generator () in
-  let refresh_fvar_id_generator () =
-    fvar_id_generator := FVarId.generator_zero
-  in
-  let ctx =
-    { crate; trans_ctx; type_decls; trait_impls; fun_decls; fresh_fvar_id }
+  (* Create a context, with an fvar id generator (we need to make them domain
+     local to avoid races) *)
+  let create_ctx () : ctx * (unit -> unit) =
+    let fvar_id_generator, fresh_fvar_id = FVarId.fresh_stateful_generator () in
+    let refresh_fvar_id_generator () =
+      fvar_id_generator := FVarId.generator_zero
+    in
+    let ctx =
+      { crate; trans_ctx; type_decls; trait_impls; fun_decls; fresh_fvar_id }
+    in
+    (ctx, refresh_fvar_id_generator)
   in
 
   (* Apply the micro-passes *)
   let apply (f : fun_decl) : pure_fun_translation =
+    (* Each parallel task gets its own fresh variable id generator to avoid
+       race conditions on the shared mutable counter *)
+    let ctx, refresh_fvar_id_generator = create_ctx () in
+
     (* Apply the micro-passes *)
     let f = apply_passes_to_def ctx f in
 
@@ -411,5 +420,5 @@ let apply_passes_to_pure_fun_translations (crate : LlbcAst.crate)
   let transl = add_type_annotations trans_ctx transl builtin_sigs type_decls in
 
   (* Update the "reducible" attribute *)
-  refresh_fvar_id_generator ();
+  let ctx, _ = create_ctx () in
   compute_reducible ctx transl
