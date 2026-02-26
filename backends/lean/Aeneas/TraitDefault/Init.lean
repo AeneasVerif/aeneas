@@ -37,7 +37,9 @@ partial def unfoldTraitDefaults (e : Expr) : MetaM Expr := do
     let fn := e.getAppFn
     if let .const name _ := fn then
       if traitDefaultAttr.hasTag env name then
-        if let some e' ← unfoldDefinition? e then
+        /- We use `TransparencyMode.all` to allow unfolding even the irreducible definitions
+           (we mark some default impls as irreducible when generating the code) -/
+        if let some e' ← withTransparency .all <| unfoldDefinition? e then
           return .visit e'.headBeta
     return .continue)
 
