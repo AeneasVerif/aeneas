@@ -171,7 +171,7 @@ let () =
          2 with '-mark-ids s1,s2', or '-mark-ids s@1, s@2. The supported \
          prefixes are: 's' (symbolic value id), 'b' (borrow id), 'a' \
          (abstraction id), 'r' (region id), 'f' (pure free variable id)." );
-      ("-parallel", Arg.Set parallel, " Execute in parallel");
+      ("-sequential", Arg.Clear parallel, " Execute sequentially");
       ( "-no-progress-bar",
         Arg.Clear progress_bar,
         " Do not display a progress bar" );
