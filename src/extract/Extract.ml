@@ -3197,6 +3197,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
         let ty () =
           let inside = false in
           F.pp_print_space fmt ();
+          let ty = mk_result_ty ty in
           extract_ty decl.item_meta.span ctx fmt TypeDeclId.Set.empty ~inside ty
         in
         extract_trait_decl_item ctx fmt item_name ty)
@@ -3385,8 +3386,9 @@ let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
 let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     (impl : trait_impl) : unit =
   [%ltrace name_to_string ctx impl.item_meta.name];
+  let span = impl.item_meta.span in
   (* Retrieve the impl name *)
-  let impl_name = ctx_get_trait_impl impl.item_meta.span impl.def_id ctx in
+  let impl_name = ctx_get_trait_impl span impl.def_id ctx in
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
@@ -3420,12 +3422,12 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
          ^ "]";
        ]
        (* TODO: why option option for the generics? Looks like a bug in OCaml!? *)
-       name ?generics:(Some generics) impl.item_meta.span);
+       name ?generics:(Some generics) span);
     F.pp_print_break fmt 0 0;
     (* Extract the attributes *)
     let attributes = if backend () = Lean then [ "reducible" ] else [] in
-    extract_attributes impl.item_meta.span ctx fmt name (Some generics)
-      attributes "rust_trait_impl" []
+    extract_attributes span ctx fmt name (Some generics) attributes
+      "rust_trait_impl" []
       ~is_external:(not impl.item_meta.is_local)
   end;
 
@@ -3456,18 +3458,18 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Add the type and const generic params - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params impl.item_meta.span impl.item_meta.name Item
-      impl.llbc_generics impl.generics ctx
+    ctx_add_generic_params span impl.item_meta.name Item impl.llbc_generics
+      impl.generics ctx
   in
-  extract_generic_params impl.item_meta.span ctx fmt TypeDeclId.Set.empty Item
-    impl.generics (Some impl.explicit_info) type_params cg_params trait_clauses;
+  extract_generic_params span ctx fmt TypeDeclId.Set.empty Item impl.generics
+    (Some impl.explicit_info) type_params cg_params trait_clauses;
 
   (* Print the type *)
   F.pp_print_space fmt ();
   F.pp_print_string fmt ":";
   F.pp_print_space fmt ();
-  extract_trait_decl_ref impl.item_meta.span ctx fmt TypeDeclId.Set.empty
-    ~inside:false impl.impl_trait;
+  extract_trait_decl_ref span ctx fmt TypeDeclId.Set.empty ~inside:false
+    impl.impl_trait;
 
   let is_empty = trait_impl_is_empty impl in
 
@@ -3479,8 +3481,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   else if is_empty && backend () = Coq then (
     (* Coq is not very good at infering constructors *)
     let cons =
-      ctx_get_trait_constructor impl.item_meta.span
-        impl.impl_trait.trait_decl_id ctx
+      ctx_get_trait_constructor span impl.impl_trait.trait_decl_id ctx
     in
     F.pp_print_string fmt (":= " ^ cons ^ ".");
     (* Outer box *)
@@ -3502,9 +3503,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     (* The constants *)
     List.iter
       (fun (name, gref) ->
-        let item_name =
-          ctx_get_trait_const impl.item_meta.span trait_decl_id name ctx
-        in
+        let item_name = ctx_get_trait_const span trait_decl_id name ctx in
         (* Lookup the information about the explicit/implicit parameters *)
         let explicit =
           match GlobalDeclId.Map.find_opt gref.global_id ctx.trans_globals with
@@ -3513,14 +3512,35 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
           | Some d -> Some d.explicit_info
         in
         let print_params () =
-          extract_generic_args impl.item_meta.span ctx fmt TypeDeclId.Set.empty
-            ~explicit gref.global_generics
+          extract_generic_args span ctx fmt TypeDeclId.Set.empty ~explicit
+            gref.global_generics
+        in
+        let global_decl =
+          [%unwrap_with_span] span
+            (GlobalDeclId.Map.find_opt gref.global_id ctx.trans_globals)
+            "Internal error"
+        in
+        let needs_brackets =
+          (not global_decl.can_fail)
+          &&
+          match explicit with
+          | Some explicit -> PureUtils.explicit_info_has_explicit explicit
+          | None -> gref.global_generics <> empty_generic_args
         in
         let ty () =
           F.pp_print_space fmt ();
-          F.pp_print_string fmt
-            (ctx_get_global impl.item_meta.span gref.global_id ctx);
-          print_params ()
+          if not global_decl.can_fail then (
+            let ok =
+              match backend () with
+              | Lean -> "ok"
+              | _ -> "Ok"
+            in
+            F.pp_print_string fmt ok;
+            F.pp_print_space fmt ());
+          if needs_brackets then F.pp_print_string fmt "(";
+          F.pp_print_string fmt (ctx_get_global span gref.global_id ctx);
+          print_params ();
+          if needs_brackets then F.pp_print_string fmt ")"
         in
 
         extract_trait_impl_item ctx fmt item_name ty)
@@ -3530,13 +3550,10 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     List.iter
       (fun (name, ty) ->
         (* Extract the type *)
-        let item_name =
-          ctx_get_trait_type impl.item_meta.span trait_decl_id name ctx
-        in
+        let item_name = ctx_get_trait_type span trait_decl_id name ctx in
         let ty () =
           F.pp_print_space fmt ();
-          extract_ty impl.item_meta.span ctx fmt TypeDeclId.Set.empty
-            ~inside:false ty
+          extract_ty span ctx fmt TypeDeclId.Set.empty ~inside:false ty
         in
         extract_trait_impl_item ctx fmt item_name ty)
       impl.types;
@@ -3545,13 +3562,12 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     List.iter
       (fun (clause, trait_ref) ->
         let item_name =
-          ctx_get_trait_parent_clause impl.item_meta.span trait_decl_id
-            clause.T.clause_id ctx
+          ctx_get_trait_parent_clause span trait_decl_id clause.T.clause_id ctx
         in
         let ty () =
           F.pp_print_space fmt ();
-          extract_trait_ref impl.item_meta.span ctx fmt TypeDeclId.Set.empty
-            ~inside:false trait_ref
+          extract_trait_ref span ctx fmt TypeDeclId.Set.empty ~inside:false
+            trait_ref
         in
         extract_trait_impl_item ctx fmt item_name ty)
       (List.combine trait_decl.implied_clauses impl.parent_trait_refs);

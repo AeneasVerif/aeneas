@@ -1702,6 +1702,10 @@ let compute_explicit_info (generics : Pure.generic_params) (input_tys : ty list)
     explicit_const_generics = List.map make_explicit_cg generics.const_generics;
   }
 
+let explicit_info_has_explicit (info : explicit_info) : bool =
+  let { explicit_types; explicit_const_generics } = info in
+  List.exists (fun e -> e = Explicit) (explicit_types @ explicit_const_generics)
+
 (** Compute which input parameters can be infered if only the explicit types and
     the trait refs are provided.
 
