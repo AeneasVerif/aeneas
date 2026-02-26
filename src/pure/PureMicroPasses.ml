@@ -460,9 +460,7 @@ let apply_passes_to_pure_fun_translations (crate : LlbcAst.crate)
     (* Assign size-based ranks (rank 1 = biggest):
        transparent functions are already sorted by decreasing size *)
     let n_transparent = List.length transparent in
-    let transparent_ranked =
-      List.mapi (fun i f -> (i + 1, f)) transparent
-    in
+    let transparent_ranked = List.mapi (fun i f -> (i + 1, f)) transparent in
     let opaque_ranked =
       List.mapi (fun i f -> (n_transparent + i + 1, f)) opaque
     in
