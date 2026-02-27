@@ -14,17 +14,96 @@ namespace constants_lean
 /- Trait declaration: [constants_lean::Params]
    Source: 'tests/src/constants-lean.rs', lines 3:0-6:1 -/
 structure Params (Self : Type) where
-  N : Std.Usize
-  M : Std.Usize
+  N : Result Std.Usize
+  M : Result Std.Usize
 
 /- [constants_lean::use_params]:
    Source: 'tests/src/constants-lean.rs', lines 8:0-10:1 -/
 def use_params
   {P : Type} (ParamsInst : Params P) (n : Std.Usize) : Result Unit := do
-  let _ ← ParamsInst.N * ParamsInst.M
-  let right_val ← lift (Std.Usize.wrapping_mul ParamsInst.N ParamsInst.M)
+  let i ← ParamsInst.N
+  let i1 ← ParamsInst.M
+  let _ ← i * i1
+  let right_val ← lift (Std.Usize.wrapping_mul i i1)
   if n = right_val
   then ok ()
   else fail panic
+
+/- [constants_lean::N]
+   Source: 'tests/src/constants-lean.rs', lines 12:0-12:20 -/
+@[global_simps, irreducible] def N : Std.Usize := 3#usize
+
+/- [constants_lean::M]
+   Source: 'tests/src/constants-lean.rs', lines 13:0-13:20 -/
+@[global_simps, irreducible] def M : Std.Usize := 4#usize
+
+/- [constants_lean::NM]
+   Source: 'tests/src/constants-lean.rs', lines 14:0-14:25 -/
+@[global_simps, irreducible] def NM : Result Std.Usize := N * M
+
+/- [constants_lean::Wrapper]
+   Source: 'tests/src/constants-lean.rs', lines 16:0-16:67 -/
+def Wrapper (N1 : Std.Usize) (M1 : Std.Usize) :=
+  Array Std.U8 N1 × Array Std.U8 N1
+
+/- [constants_lean::{constants_lean::Wrapper<N, M>}::NM]
+   Source: 'tests/src/constants-lean.rs', lines 19:4-19:29 -/
+@[global_simps, irreducible]
+def Wrapper.NM (N1 : Std.Usize) (M1 : Std.Usize) : Result Std.Usize := N1 * M1
+
+/- Trait declaration: [constants_lean::Trait]
+   Source: 'tests/src/constants-lean.rs', lines 22:0-24:1 -/
+structure Trait (Self : Type) where
+  NM : Result Std.Usize
+
+/- [constants_lean::{constants_lean::Trait for constants_lean::Wrapper<N, M>}::NM]
+   Source: 'tests/src/constants-lean.rs', lines 27:4-27:29 -/
+@[global_simps, irreducible]
+def Wrapper.Insts.Constants_leanTrait.NM (N1 : Std.Usize) (M1 : Std.Usize)
+  : Result Std.Usize :=
+  N1 * M1
+
+/- Trait implementation: [constants_lean::{constants_lean::Trait for constants_lean::Wrapper<N, M>}]
+   Source: 'tests/src/constants-lean.rs', lines 26:0-28:1 -/
+@[reducible]
+def Wrapper.Insts.Constants_leanTrait (N1 : Std.Usize) (M1 : Std.Usize) : Trait
+  (Wrapper N1 M1) := {
+  NM := Wrapper.Insts.Constants_leanTrait.NM N1 M1
+}
+
+/- Trait declaration: [constants_lean::Trait1]
+   Source: 'tests/src/constants-lean.rs', lines 30:0-34:1 -/
+structure Trait1 (Self : Type) where
+  N : Result Std.Usize
+  M : Result Std.Usize
+  NM : Result Std.Usize
+
+/- [constants_lean::Trait1::NM]
+   Source: 'tests/src/constants-lean.rs', lines 33:4-33:41 -/
+@[global_simps, irreducible]
+def Trait1.NM.default {Self : Type} (Trait1Inst : Trait1 Self)
+  : Result Std.Usize := do
+  let i ← Trait1Inst.N
+  let i1 ← Trait1Inst.M
+  i * i1
+
+/- [constants_lean::{constants_lean::Trait1 for bool}::M]
+   Source: 'tests/src/constants-lean.rs', lines 38:4-38:24 -/
+@[global_simps, irreducible]
+def Bool.Insts.Constants_leanTrait1.M : Std.Usize := 1#usize
+
+/- [constants_lean::{constants_lean::Trait1 for bool}::N]
+   Source: 'tests/src/constants-lean.rs', lines 37:4-37:24 -/
+@[global_simps, irreducible]
+def Bool.Insts.Constants_leanTrait1.N : Std.Usize := 0#usize
+
+/- Trait implementation: [constants_lean::{constants_lean::Trait1 for bool}]
+   Source: 'tests/src/constants-lean.rs', lines 36:0-39:1 -/
+@[reducible]
+def Bool.Insts.Constants_leanTrait1 : Trait1 Bool := {
+  N := ok Bool.Insts.Constants_leanTrait1.N
+  M := ok Bool.Insts.Constants_leanTrait1.M
+  NM := Trait1.NM.default Bool.Insts.Constants_leanTrait1
+}
 
 end constants_lean
