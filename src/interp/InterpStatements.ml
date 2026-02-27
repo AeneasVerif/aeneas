@@ -883,8 +883,11 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
          now we treat this as a no-op *)
       ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ st.span (fun e -> e))
   | Drop (p, _, _) ->
-      let ctx, cc = drop_value config st.span p ctx in
-      ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ st.span cc)
+      if !Config.drop_as_no_op then
+        ([ (ctx, Unit) ], cf_singleton __FILE__ __LINE__ st.span)
+      else
+        let ctx, cc = drop_value config st.span p ctx in
+        ([ (ctx, Unit) ], cc_singleton __FILE__ __LINE__ st.span cc)
   | StorageDead local ->
       let p = mk_place_from_var_id ctx st.span local in
       let ctx, cc = drop_value config st.span p ctx in

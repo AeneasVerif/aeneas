@@ -1032,11 +1032,11 @@ let filter_useless (ctx : ctx) (def : fun_decl) : fun_decl =
   let expr_visitor =
     object (self)
       inherit [_] mapreduce_expr as super
-      method zero _ = FVarId.Set.empty
-      method plus s0 s1 _ = FVarId.Set.union (s0 ()) (s1 ())
+      method zero : FVarId.Set.t = FVarId.Set.empty
+      method plus s0 s1 = FVarId.Set.union s0 s1
 
       (** Whenever we visit a variable, we need to register the used variable *)
-      method! visit_FVar _ vid = (FVar vid, fun _ -> FVarId.Set.singleton vid)
+      method! visit_FVar _ vid = (FVar vid, FVarId.Set.singleton vid)
 
       method! visit_expr env e =
         match e with
@@ -1054,21 +1054,26 @@ let filter_useless (ctx : ctx) (def : fun_decl) : fun_decl =
                   (* Compute the set of values used inside the branch *)
                   let branch, used = self#visit_texpr env br.branch in
                   (* Simplify the pattern *)
-                  let pat, _ = filter_tpat (used ()) br.pat in
-                  { pat; branch }
+                  let pat, _ = filter_tpat used br.pat in
+                  ({ pat; branch }, used)
                 in
-                super#visit_expr env
-                  (Switch (scrut, Match (List.map simplify_branch branches))))
+                let branches, usedl =
+                  List.split (List.map simplify_branch branches)
+                in
+                let used0 = List.fold_left FVarId.Set.union self#zero usedl in
+                (* Simplify the scrutinee *)
+                let scrut, used1 = self#visit_texpr () scrut in
+                let used = FVarId.Set.union used0 used1 in
+                (Switch (scrut, Match branches), used))
         | Let (monadic, lv, re, e) ->
             (* Compute the set of values used in the next expression *)
             let e, used = self#visit_texpr env e in
-            let used = used () in
             (* Filter the left values *)
             let lv, all_dummies = filter_tpat used lv in
             (* Small utility - called if we can't filter the let-binding *)
             let dont_filter () =
               let re, used_re = self#visit_texpr env re in
-              let used = FVarId.Set.union used (used_re ()) in
+              let used = FVarId.Set.union used used_re in
               (* Simplify the left pattern if it only contains ignored variables *)
               let lv =
                 if all_dummies then
@@ -1082,17 +1087,20 @@ let filter_useless (ctx : ctx) (def : fun_decl) : fun_decl =
               let lv, re, updated = simplify_let_tuple span ctx monadic lv re in
 
               (* We may need to revisited the bound expression if we modified it:
-                 some values may now be unused. *)
+                 some values may now be unused
+
+                 TODO: try to avoid that, this is bad for complexity.
+              *)
               let re = if updated then fst (self#visit_texpr env re) else re in
 
               (* Put everything together *)
-              (Let (monadic, lv, re, e), fun _ -> used)
+              (Let (monadic, lv, re, e), used)
             in
             (* Potentially filter the let-binding *)
             if all_dummies then
               if not monadic then
                 (* Not a monadic let-binding: simple case *)
-                (e.e, fun _ -> used)
+                (e.e, used)
               else (* Monadic let-binding: can't filter *)
                 dont_filter ()
             else (* There are used variables: don't filter *)
@@ -1136,7 +1144,6 @@ let filter_useless (ctx : ctx) (def : fun_decl) : fun_decl =
          inputs are replaced by '_' we can't give it to the function used in the
          decreases clause).
          For now we deactivate the filtering. *)
-      let used_vars = used_vars () in
       let inputs =
         if false then
           List.map (fun lv -> fst (filter_tpat used_vars lv)) body.inputs

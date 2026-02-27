@@ -171,7 +171,7 @@ let () =
          2 with '-mark-ids s1,s2', or '-mark-ids s@1, s@2. The supported \
          prefixes are: 's' (symbolic value id), 'b' (borrow id), 'a' \
          (abstraction id), 'r' (region id), 'f' (pure free variable id)." );
-      ("-parallel", Arg.Set parallel, " Execute in parallel");
+      ("-sequential", Arg.Clear parallel, " Execute sequentially");
       ( "-no-progress-bar",
         Arg.Clear progress_bar,
         " Do not display a progress bar" );
@@ -218,6 +218,27 @@ let () =
             max_heartbeats := x),
         "For Lean: set the value of the `set_option maxHeartBeats ...` command \
          at the top of the generated files" );
+      ( "-eval-drops",
+        Arg.Clear drop_as_no_op,
+        "Evaluate the drops. By default we do not borrow-check them by \
+         treating them as no-ops." );
+      ( "-diagnose-translation",
+        Arg.Set diagnose_translation,
+        " Measure the time it takes to translate every function and print the \
+         results sorted from longest to shortest" );
+      ( "-diagnose-micro-passes",
+        Arg.Set diagnose_micro_passes,
+        " Measure the time it takes to apply the micro-passes on every \
+         function and print them from longest to shortest" );
+      ( "-diagnose-detailed",
+        Arg.Set diagnose_detailed,
+        " In combination with -diagnose-micro-passes, compute per-function, \
+         per -micro-pass time measurements" );
+      ( "-diagnose-limit",
+        Arg.Int (fun x -> diagnose_limit := x),
+        " Upper bound on the number of lines printed for the -diagnose \
+         options. If positive, print at most this many lines. If negative, \
+         print everything" );
     ]
   in
 
@@ -421,6 +442,9 @@ let () =
   if !set_max_heartbeats && not (backend () = Lean) then
     fail_with_error
       "The -max-heartbeats option is valid only for the Lean backend";
+
+  check_arg_implies !diagnose_detailed "-diagnose-detailed"
+    !diagnose_micro_passes "-diagnose-micro-passes";
 
   if !borrow_check then (
     check (!dest_dir = "") "Options -borrow-check and -dest are not compatible";

@@ -463,26 +463,21 @@ let loops_to_recursive_functions = ref false
 
 (** Should we run the translation in parallel?
 
-    We deactivate it by default because:
-    - There is a race condition happening in SCC.ml when computing the function
-      signatures.
-    - We do not gain much at this stage, meaning the parallelism is not used
-      correctly.
+    Note: the race condition on Pack.Digraph's global vertex counter in SCC.ml
+    has been fixed by switching to Imperative.Digraph.Concrete, and the pool is
+    now persistent (created once and reused).
 
-    Some remarks:
-    - we should not allocate one task per function to translate: this is
-      expensive
-    - we should allocate the domain when starting the program, and tear them
-      down when exiting
-    - the way functions are ordered before being translated is wrong:
+    Note: the way functions are ordered before being translated is wrong:
     - the function which computes the size of the function should count the the
       loops differently (the body of a loop is executed twice to compute a fixed
       point: the result is exponential)
     - the way the parellelism is executed implies that the first domain will
       translate all the biggest functions! We should rather have a queue of
       tasks (or an index of the next function to translate that we would
-      atomically increment) *)
-let parallel = ref false
+      atomically increment)
+    - it is probably worth reordering the functions also before running the
+      micro-passes *)
+let parallel = ref true
 
 (** Once we add proper support for static lifetimes, remove this *)
 let use_static = ref false
@@ -525,6 +520,26 @@ let log_with_colors = ref false
     index of the item: this allows easily identifying a borrow and its
     corresponding loan) *)
 let log_rotating_colors = ref true
+
+(** {Diagnostics} *)
+
+(** If activated, measure the time it takes to translate every function (through
+    [Translate.translate_function_to_pure]) and print the results sorted from
+    longest to shortest, together with the function size. *)
+let diagnose_translation = ref false
+
+(** If activated, measure the time it takes to apply the micro-passes on every
+    function, and print them from the longest to the shortest, together with the
+    function size. *)
+let diagnose_micro_passes = ref false
+
+(** If activated in combination with -diagnose-micro-passes, compute
+    per-function, per -micro-pass time measurements. *)
+let diagnose_detailed = ref false
+
+(** Upper bound on the number of lines printed for the diagnose options. If
+    positive, print at most this many lines. If negative, print everything. *)
+let diagnose_limit = ref (-1)
 
 (** Should we borrow check globals?
 
@@ -581,3 +596,7 @@ let no_recursive_loops = ref false
 (** This is for Lean: the value we should initialize `maxHeartBeats` to at the
     top of the generated files *)
 let max_heartbeats = ref 1000000
+
+(** If [false], evaluate [drop(p)] as [p := bottom]. Otherwise, evaluate it as a
+    no-op (which means that we do not borrow-check the drops). *)
+let drop_as_no_op = ref true
