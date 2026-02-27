@@ -5,8 +5,8 @@ trait Params {
     const M: usize;
 }
 
-fn use_params<P: Params>(n: usize) {
-    debug_assert_eq!(n, P::N * P::M);
+fn use_params<P: Params>(n: usize) -> bool {
+    &n == &(P::N * P::M)
 }
 
 const N : usize = 3;

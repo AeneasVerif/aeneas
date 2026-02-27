@@ -20,14 +20,11 @@ structure Params (Self : Type) where
 /- [constants_lean::use_params]:
    Source: 'tests/src/constants-lean.rs', lines 8:0-10:1 -/
 def use_params
-  {P : Type} (ParamsInst : Params P) (n : Std.Usize) : Result Unit := do
+  {P : Type} (ParamsInst : Params P) (n : Std.Usize) : Result Bool := do
   let i ← ParamsInst.N
   let i1 ← ParamsInst.M
-  let _ ← i * i1
-  let right_val ← lift (Std.Usize.wrapping_mul i i1)
-  if n = right_val
-  then ok ()
-  else fail panic
+  let i2 ← i * i1
+  lift (core.cmp.impls.PartialEqUsize.eq n i2)
 
 /- [constants_lean::N]
    Source: 'tests/src/constants-lean.rs', lines 12:0-12:20 -/
