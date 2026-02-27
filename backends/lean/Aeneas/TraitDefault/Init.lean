@@ -16,7 +16,9 @@ open Lean.Parser.Term Lean.Parser.Command
 
 initialize traitDefaultAttr : TagAttribute ←
   registerTagAttribute `trait_default
-    "Marks a function as a trait default value that can be unfolded by `impl_def`"
+    "Marks a function as a trait default value that can be unfolded by `impl_def`. \
+     We use this when generating models for trait impls, that otherwise would sometimes \
+     lead to non structurally terminating recursive definitions."
 
 /-! ## Trace class -/
 
