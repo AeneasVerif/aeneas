@@ -181,6 +181,10 @@ let passes :
     ( None,
       "simplify_let_then_ok (pass 2)",
       simplify_let_then_ok ~ignore_loops:false );
+    (* *)
+    ( None,
+      "simplify_binop_panic_then_wrapping",
+      simplify_binop_panic_then_wrapping );
     (* Simplify the array/slice manipulations by introducing calls to [array_update]
        [slice_update] *)
     (None, "simplify_array_slice_update", simplify_array_slice_update);

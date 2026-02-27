@@ -293,6 +293,111 @@ let simplify_lambdas_visitor (ctx : ctx) (def : fun_decl) =
 
 let simplify_lambdas = lift_expr_map_visitor simplify_lambdas_visitor
 
+(** Because of constant promotions, it happens that we get the following kind of
+    code:
+
+    {[
+      let _ ← a * b
+      let c ← lift (Std.Usize.wrapping_mul a b)
+      ...
+    ]}
+
+    We simplify it to:
+    {[
+      let c ← a * b
+      ...
+    ]}
+
+    Note that at the stage when the pass is called, the lifts are not introduced
+    yet (meaning the second let-binding should be pure). *)
+let simplify_binop_panic_then_wrapping_visitor (_ctx : ctx) (_def : fun_decl) =
+  let binop_is_panicking (binop : binop) =
+    match binop with
+    | Add (OPanic, _) ->
+        Some
+          (fun b ->
+            match b with
+            | Add (OWrap, _) -> true
+            | _ -> false)
+    | Sub (OPanic, _) ->
+        Some
+          (fun b ->
+            match b with
+            | Sub (OWrap, _) -> true
+            | _ -> false)
+    | Mul (OPanic, _) ->
+        Some
+          (fun b ->
+            match b with
+            | Mul (OWrap, _) -> true
+            | _ -> false)
+    | Div (OPanic, _) ->
+        Some
+          (fun b ->
+            match b with
+            | Div (OWrap, _) -> true
+            | _ -> false)
+    | Rem (OPanic, _) ->
+        Some
+          (fun b ->
+            match b with
+            | Rem (OWrap, _) -> true
+            | _ -> false)
+    | _ -> None
+  in
+  object
+    inherit [_] map_expr as super
+
+    method! visit_Let env monadic pat bound next =
+      if monadic then
+        match (pat.pat, bound.e) with
+        | ( PIgnored,
+            App
+              ( {
+                  e =
+                    App
+                      ( { e = Qualif { id = FunOrOp (Binop binop); _ }; _ },
+                        { e = FVar x; _ } );
+                  _;
+                },
+                { e = FVar y; _ } ) ) -> (
+            match binop_is_panicking binop with
+            | None -> super#visit_Let env monadic pat bound next
+            | Some binop_is_wrapping -> (
+                match next.e with
+                | Let
+                    ( false,
+                      pat',
+                      {
+                        e =
+                          App
+                            ( {
+                                e =
+                                  App
+                                    ( {
+                                        e =
+                                          Qualif
+                                            { id = FunOrOp (Binop binop'); _ };
+                                        _;
+                                      },
+                                      { e = FVar x'; _ } );
+                                _;
+                              },
+                              { e = FVar y'; _ } );
+                        _;
+                      },
+                      next' )
+                  when binop_is_wrapping binop' && x' = x && y' = y ->
+                    (* Merge the two lets *)
+                    super#visit_Let env true pat' bound next'
+                | _ -> super#visit_Let env monadic pat bound next))
+        | _ -> super#visit_Let env monadic pat bound next
+      else super#visit_Let env monadic pat bound next
+  end
+
+let simplify_binop_panic_then_wrapping =
+  lift_expr_map_visitor simplify_binop_panic_then_wrapping_visitor
+
 (** Simplify the let-bindings by performing the following rewritings:
 
     Move inner let-bindings outside. This is especially useful to simplify the
