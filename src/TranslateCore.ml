@@ -7,7 +7,11 @@ open ExtractName
 let log = Logging.translate_log
 
 type trans_ctx = decls_ctx [@@deriving show]
-type fun_and_loops = { f : Pure.fun_decl; loops : Pure.fun_decl list }
+type fun_and_loops = {
+  f : Pure.fun_decl;
+  loops : Pure.fun_decl list;
+  bodies : Pure.fun_decl list;
+}
 type pure_fun_translation_no_loops = Pure.fun_decl
 type pure_fun_translation = fun_and_loops
 

@@ -365,7 +365,7 @@ let apply_passes_to_pure_fun_translations (crate : LlbcAst.crate)
       "After applying: 'decompose_loops':\n"
       ^ String.concat "\n\n" (List.map (fun_decl_to_string ctx) (f :: loops))];
 
-    (* Filter the constant *inputs¨ in the loops to simplify the calls to the loop
+    (* Filter the constant *inputs in the loops to simplify the calls to the loop
        fixed-point operators *)
     let t0 = if collect_detailed then Unix.gettimeofday () else 0.0 in
     let simplify f =
@@ -386,6 +386,19 @@ let apply_passes_to_pure_fun_translations (crate : LlbcAst.crate)
         ("filter_loop_useless_inputs", Unix.gettimeofday () -. t0)
         :: !post_timings;
 
+    (* Decompose the loop bodies: extract the loop body continuations into
+       separate auxiliary functions *)
+    let t0 = if collect_detailed then Unix.gettimeofday () else 0.0 in
+    refresh_fvar_id_generator ();
+    let loops, bodies = decompose_loop_bodies ctx loops in
+    if collect_detailed then
+      post_timings :=
+        ("decompose_loop_bodies", Unix.gettimeofday () -. t0) :: !post_timings;
+    [%ltrace
+      "After applying: 'decompose_loop_bodies':\n"
+      ^ String.concat "\n\n"
+          (List.map (fun_decl_to_string ctx) ((f :: loops) @ bodies))];
+
     (* Convert the loop nodes to calls to the loop fixed-point operator *)
     let t0 = if collect_detailed then Unix.gettimeofday () else 0.0 in
     let update f =
@@ -398,6 +411,7 @@ let apply_passes_to_pure_fun_translations (crate : LlbcAst.crate)
     in
     let f = update f in
     let loops = List.map update loops in
+    let bodies = List.map update bodies in
     if collect_detailed then
       post_timings :=
         ("loops_to_fixed_points", Unix.gettimeofday () -. t0) :: !post_timings;
@@ -418,17 +432,18 @@ let apply_passes_to_pure_fun_translations (crate : LlbcAst.crate)
     in
     let f = simplify f in
     let loops = List.map simplify loops in
+    let bodies = List.map simplify bodies in
     if collect_detailed then
       post_timings :=
         ("simplify_let_then_ok (final pass)", Unix.gettimeofday () -. t0)
         :: !post_timings;
 
     [%ltrace
-      let funs = f :: loops in
+      let funs = (f :: loops) @ bodies in
       "After decomposing loops:\n\n"
       ^ String.concat "\n\n" (List.map (fun_decl_to_string ctx) funs)];
 
-    let trans : pure_fun_translation = { f; loops } in
+    let trans : pure_fun_translation = { f; loops; bodies } in
 
     (* Introduce the fuel and the state, if necessary.
 

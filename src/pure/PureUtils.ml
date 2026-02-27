@@ -68,6 +68,10 @@ end
 module FunLoopIdMap = Collections.MakeMap (FunLoopIdOrderedType)
 module FunLoopIdSet = Collections.MakeSet (FunLoopIdOrderedType)
 
+(** Build the [(loop_id * bool) option] value from [fun_decl] fields *)
+let loop_info_of_decl (def : fun_decl) : (loop_id * bool) option =
+  Option.map (fun lid -> (lid, def.loop_body)) def.loop_id
+
 module ExprOrderedType = struct
   type t = expr
 

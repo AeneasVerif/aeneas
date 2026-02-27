@@ -63,7 +63,7 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
             | _ -> ctx
           in
           let f = def.f in
-          let fun_id = (Pure.FunId (FRegular f.def_id), f.loop_id) in
+          let fun_id = (Pure.FunId (FRegular f.def_id), PureUtils.loop_info_of_decl f) in
           ctx_add f.item_meta.span (FunId (FromLlbc fun_id)) info.extract_name
             ctx
       | None ->
@@ -82,7 +82,7 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
           in
           (* We have to register the function itself, and the loops it
              may contain (which are extracted as functions) *)
-          let funs = def.f :: def.loops in
+          let funs = def.f :: def.loops @ def.bodies in
           (* Register the decrease clauses *)
           let ctx = List.fold_left register_decreases ctx funs in
           (* Register the name of the function and the loops *)
@@ -995,7 +995,10 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
             let trans_fun =
               match lp_id with
               | None -> trans_fun.f
-              | Some lp_id -> Pure.LoopId.nth trans_fun.loops lp_id
+              | Some (lp_id, true) ->
+                  Pure.LoopId.nth trans_fun.bodies lp_id
+              | Some (lp_id, false) ->
+                  Pure.LoopId.nth trans_fun.loops lp_id
             in
             let explicit = trans_fun.signature.explicit_info in
             (* If it is a trait method, we need to remove the prefix
@@ -2057,7 +2060,7 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
   [%sanity_check] def.item_meta.span (not def.is_global_decl_body);
   (* Retrieve the function name *)
   let def_name =
-    ctx_get_local_function def.item_meta.span def.def_id def.loop_id ctx
+    ctx_get_local_function def.item_meta.span def.def_id def.loop_id ~is_body:def.loop_body ctx
   in
   [%ltrace "Extracting function: " ^ def_name];
   (* Open the binders - it is easier to only manipulate variables which have unique ids *)
@@ -2346,7 +2349,7 @@ let extract_fun_decl_hol4_opaque (ctx : extraction_ctx) (fmt : F.formatter)
     (def : fun_decl) : unit =
   (* Retrieve the definition name *)
   let def_name =
-    ctx_get_local_function def.item_meta.span def.def_id def.loop_id ctx
+    ctx_get_local_function def.item_meta.span def.def_id def.loop_id ~is_body:def.loop_body ctx
   in
   (* Open the binders - it is easier to only manipulate variables which have unique ids *)
   let _, fresh_fvar_id = FVarId.fresh_stateful_generator () in
@@ -3643,7 +3646,7 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_space fmt ();
         F.pp_print_string fmt "(";
         let fun_name =
-          ctx_get_local_function def.item_meta.span def.def_id def.loop_id ctx
+          ctx_get_local_function def.item_meta.span def.def_id def.loop_id ~is_body:def.loop_body ctx
         in
         F.pp_print_string fmt fun_name;
         if sg.inputs <> [] then (
@@ -3661,7 +3664,7 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_space fmt ();
         F.pp_print_string fmt "(";
         let fun_name =
-          ctx_get_local_function def.item_meta.span def.def_id def.loop_id ctx
+          ctx_get_local_function def.item_meta.span def.def_id def.loop_id ~is_body:def.loop_body ctx
         in
         F.pp_print_string fmt fun_name;
         if sg.inputs <> [] then (
@@ -3674,7 +3677,7 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_space fmt ();
         F.pp_print_string fmt "(";
         let fun_name =
-          ctx_get_local_function def.item_meta.span def.def_id def.loop_id ctx
+          ctx_get_local_function def.item_meta.span def.def_id def.loop_id ~is_body:def.loop_body ctx
         in
         F.pp_print_string fmt fun_name;
         if sg.inputs <> [] then (
@@ -3691,7 +3694,7 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
         F.pp_print_string fmt "val _ = assert_ok (";
         F.pp_print_string fmt "“";
         let fun_name =
-          ctx_get_local_function def.item_meta.span def.def_id def.loop_id ctx
+          ctx_get_local_function def.item_meta.span def.def_id def.loop_id ~is_body:def.loop_body ctx
         in
         F.pp_print_string fmt fun_name;
         if sg.inputs <> [] then (

@@ -207,7 +207,10 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
                 let trans_fun =
                   match lp_id with
                   | None -> trans_fun.f
-                  | Some lp_id -> Pure.LoopId.nth trans_fun.loops lp_id
+                  | Some (lp_id, true) ->
+                      Pure.LoopId.nth trans_fun.bodies lp_id
+                  | Some (lp_id, false) ->
+                      Pure.LoopId.nth trans_fun.loops lp_id
                 in
                 [%ldebug "function name: " ^ trans_fun.name];
                 trans_fun.signature
@@ -439,5 +442,6 @@ let add_type_annotations (trans_ctx : trans_ctx)
     (fun (fl : pure_fun_translation) ->
       let f = add_annot fl.f in
       let loops = List.map add_annot fl.loops in
-      { f; loops })
+      let bodies = List.map add_annot fl.bodies in
+      { f; loops; bodies })
     trans_funs

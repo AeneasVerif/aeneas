@@ -753,8 +753,9 @@ let ctx_get_function (span : Meta.span) (id : fun_id) (ctx : extraction_ctx) :
   ctx_get (Some span) (FunId id) ctx
 
 let ctx_get_local_function (span : Meta.span) (id : A.FunDeclId.id)
-    (lp : LoopId.id option) (ctx : extraction_ctx) : string =
-  ctx_get_function span (FromLlbc (FunId (FRegular id), lp)) ctx
+    (lp : LoopId.id option) ?(is_body = false) (ctx : extraction_ctx) : string =
+  let lp_info = Option.map (fun lid -> (lid, is_body)) lp in
+  ctx_get_function span (FromLlbc (FunId (FRegular id), lp_info)) ctx
 
 let ctx_get_type (span : Meta.span option) (id : type_id) (ctx : extraction_ctx)
     : string =
@@ -2392,8 +2393,14 @@ let ctx_compute_fun_name (def : fun_decl) (is_trait_decl_field : bool)
   in
   (* Compute the suffix *)
   let suffix = default_fun_suffix def.num_loops def.loop_id def.loop_pos in
+  (* Add body suffix if this is a loop body function *)
+  let body_suffix =
+    if def.loop_body then
+      match backend () with Lean -> ".body" | _ -> "_body"
+    else ""
+  in
   (* Concatenate *)
-  fname ^ suffix
+  fname ^ suffix ^ body_suffix
 
 (** Generates the name of the termination measure used to prove/reason about
     termination. The generated code uses this clause where needed, but its body
@@ -2480,7 +2487,7 @@ let ctx_add_fun_decl (def : fun_decl) (ctx : extraction_ctx) : extraction_ctx =
   let def_id = def.def_id in
   (* Add the function name *)
   let def_name = ctx_compute_fun_name def false ctx in
-  let fun_id = (Pure.FunId (FRegular def_id), def.loop_id) in
+  let fun_id = (Pure.FunId (FRegular def_id), PureUtils.loop_info_of_decl def) in
   ctx_add def.item_meta.span (FunId (FromLlbc fun_id)) def_name ctx
 
 let ctx_compute_type_decl_name (ctx : extraction_ctx) (def : type_decl) : string

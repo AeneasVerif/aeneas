@@ -5,7 +5,7 @@ open Pure
 (** The local logger *)
 let log = Logging.reorder_decls_log
 
-type fun_id = { def_id : FunDeclId.id; lp_id : LoopId.id option }
+type fun_id = { def_id : FunDeclId.id; lp_id : (LoopId.id * bool) option }
 [@@deriving show, ord]
 
 module FunIdOrderedType : OrderedType with type t = fun_id = struct
@@ -69,7 +69,7 @@ let group_reorder_fun_decls (decls : fun_decl list) :
     (bool * fun_decl list) list =
   let module IntMap = MakeMap (OrderedInt) in
   let get_fun_id (decl : fun_decl) : fun_id =
-    { def_id = decl.def_id; lp_id = decl.loop_id }
+    { def_id = decl.def_id; lp_id = PureUtils.loop_info_of_decl decl }
   in
   (* Compute the list/set of identifiers *)
   let idl = List.map get_fun_id decls in

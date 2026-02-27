@@ -2839,7 +2839,9 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
         {
           id =
             FunOrOp
-              (Fun (FromLlbc (FunId (FRegular def.def_id), Some loop.loop_id)));
+              (Fun
+                 (FromLlbc
+                    (FunId (FRegular def.def_id), Some (loop.loop_id, false))));
           generics;
         }
     in
@@ -3042,6 +3044,7 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
         backend_attributes = def.backend_attributes;
         num_loops;
         loop_id = Some loop.loop_id;
+        loop_body = false;
         loop_pos;
         name = def.name;
         signature = loop_sig;
@@ -3254,3 +3257,275 @@ let filter_loop_useless_inputs_visitor (ctx : ctx) (def : fun_decl) =
 
 let filter_loop_useless_inputs =
   lift_expr_map_visitor filter_loop_useless_inputs_visitor
+
+(** Helper for [decompose_loop_body]: actually introduce a function declaration
+    for a loop *)
+let decompose_loop_body_aux (ctx : ctx) (def : fun_decl) (body : fun_body)
+    (fvars : fvar FVarId.Map.t) (loop : loop) : fun_decl * fun_decl option =
+  let span = def.item_meta.span in
+
+  let ({ output_tys; loop_body; _ } : loop) = loop in
+  let output_ty = mk_simpl_tuple_ty output_tys in
+
+  (* Compute the free variables in the loop body expression that are not
+     bound by the loop body inputs (these are "constant" inputs from the
+     outer scope). *)
+  let constant_inputs =
+    let used_in_body = texpr_get_fvars loop_body.loop_body in
+    let bound_in_body = loop_body_get_bound_fvars loop_body in
+    List.filter_map
+      (fun fid ->
+        if FVarId.Set.mem fid bound_in_body then None
+        else FVarId.Map.find_opt fid fvars)
+      (FVarId.Set.elements used_in_body)
+  in
+
+  (* Build the body function's inputs: constant inputs then loop body inputs *)
+  let body_fun_inputs =
+    List.map (mk_tpat_from_fvar None) constant_inputs @ loop_body.inputs
+  in
+
+  (* Convert Continue/Break in the body to proper LoopResult constructors.
+     This is needed because the body function is standalone and will be
+     processed by the type annotation pass independently. *)
+  let input_ty =
+    mk_simpl_tuple_ty (List.map (fun (pat : tpat) -> pat.ty) loop_body.inputs)
+  in
+  let body_expr =
+    update_non_rec_continue_breaks ctx def input_ty output_ty
+      loop_body.loop_body
+  in
+
+  let body_fun_body : fun_body =
+    { inputs = body_fun_inputs; body = body_expr }
+  in
+  let body_fun_body = close_all_fun_body span body_fun_body in
+
+  (* Compute the generic params used in the body *)
+  let generics, generics_filter =
+    filter_generic_params_used_in_texpr def.signature.generics
+      loop_body.loop_body
+  in
+
+  (* Build the signature for the body function.
+     It inherits the effect of the parent loop but is not recursive. *)
+  let fwd_info = def.signature.fwd_info in
+  let fwd_effect_info = fwd_info.effect_info in
+  let body_effect_info = { fwd_effect_info with is_rec = false } in
+  let body_sig_info : fun_sig_info =
+    { effect_info = body_effect_info; ignore_output = fwd_info.ignore_output }
+  in
+
+  let input_tys = List.map (fun (v : tpat) -> v.ty) body_fun_body.inputs in
+  let explicit_info = compute_explicit_info generics input_tys in
+  let known_from_trait_refs = compute_known_info explicit_info generics in
+  let llbc_generics : T.generic_params =
+    let { types; const_generics; trait_clauses; trait_type_constraints; _ } :
+        T.generic_params =
+      def.signature.llbc_generics
+    in
+    let types =
+      List.filter_map
+        (fun (b, x) -> if b then Some x else None)
+        (List.combine generics_filter.types types)
+    in
+    let const_generics =
+      List.filter_map
+        (fun (b, x) -> if b then Some x else None)
+        (List.combine generics_filter.const_generics const_generics)
+    in
+    let trait_clauses =
+      List.filter_map
+        (fun (b, x) -> if b then Some x else None)
+        (List.combine generics_filter.trait_clauses trait_clauses)
+    in
+    (* The type constraints should have been lifted and should thus be empty *)
+    [%sanity_check] span (trait_type_constraints = []);
+    {
+      types;
+      const_generics;
+      trait_clauses;
+      (* Ignoring the regions - we don't use them for naming *)
+      regions = [];
+      regions_outlive = [];
+      types_outlive = [];
+      trait_type_constraints = [];
+    }
+  in
+  (* The body function's output type is
+     [Result (LoopResult (input_ty, output_ty))] after
+     [update_non_rec_continue_breaks] has processed the [Continue/Break]
+     expressions. *)
+  let body_output_ty = mk_result_ty (mk_loop_result_ty input_ty output_ty) in
+  let body_sig : fun_sig =
+    {
+      generics;
+      explicit_info;
+      known_from_trait_refs;
+      llbc_generics;
+      preds = { trait_type_constraints = [] };
+      inputs = input_tys;
+      output = body_output_ty;
+      fwd_info = body_sig_info;
+      back_effect_info = def.signature.back_effect_info;
+    }
+  in
+
+  (* Build the body function declaration *)
+  let body_decl : fun_decl =
+    {
+      def_id = def.def_id;
+      item_meta = def.item_meta;
+      builtin_info = def.builtin_info;
+      src = def.src;
+      backend_attributes = def.backend_attributes;
+      num_loops = def.num_loops;
+      loop_id = def.loop_id;
+      loop_body = true;
+      loop_pos = def.loop_pos;
+      name = def.name;
+      signature = body_sig;
+      is_global_decl_body = def.is_global_decl_body;
+      body = Some body_fun_body;
+    }
+  in
+
+  (* Now build a call expression to the body function.
+     The call takes the constant inputs and the loop body inputs as
+     arguments. *)
+  let generic_args =
+    let generic_args = generic_args_of_params def.signature.generics in
+    let { types; const_generics; trait_refs } : generic_args = generic_args in
+    let types =
+      List.filter_map
+        (fun (b, x) -> if b then Some x else None)
+        (List.combine generics_filter.types types)
+    in
+    let const_generics =
+      List.filter_map
+        (fun (b, x) -> if b then Some x else None)
+        (List.combine generics_filter.const_generics const_generics)
+    in
+    let trait_refs =
+      List.filter_map
+        (fun (b, x) -> if b then Some x else None)
+        (List.combine generics_filter.trait_clauses trait_refs)
+    in
+    ({ types; const_generics; trait_refs } : generic_args)
+  in
+  let body_input_tys = input_tys in
+  let body_func_ty = mk_arrows body_input_tys body_output_ty in
+  let body_func : texpr =
+    {
+      e =
+        Qualif
+          {
+            id =
+              FunOrOp
+                (Fun
+                   (FromLlbc
+                      ( FunId (FRegular def.def_id),
+                        Some (Option.get def.loop_id, true (* is_body *)) )));
+            generics = generic_args;
+          };
+      ty = body_func_ty;
+    }
+  in
+
+  (* Build the call: body_func (constant_inputs, loop_body.inputs) *)
+  let constant_args = List.map mk_texpr_from_fvar constant_inputs in
+  let bound_args =
+    List.map
+      (fun (pat : tpat) ->
+        match pat.pat with
+        | POpen (fvar, _) -> { e = FVar fvar.id; ty = pat.ty }
+        | _ -> [%internal_error] span)
+      loop_body.inputs
+  in
+  let call_args = constant_args @ bound_args in
+  let call_expr = [%add_loc] mk_apps span body_func call_args in
+
+  (* Replace the loop body with the call *)
+  let new_loop_body = { loop_body with loop_body = call_expr } in
+  let replace_visitor =
+    object
+      inherit [_] map_expr
+      method! visit_Loop _ loop = Loop { loop with loop_body = new_loop_body }
+    end
+  in
+  let new_body_expr = replace_visitor#visit_texpr () body.body in
+  let new_body = close_all_fun_body span { body with body = new_body_expr } in
+  let def = { def with body = Some new_body } in
+  (def, Some body_decl)
+
+(** Decompose a loop body into a separate auxiliary function.
+
+    This extracts the continuation function of the loop (i.e., the anonymous
+    function to which the loop fixed-point operator is applied) into a separate,
+    named function declaration.
+
+    The inputs of the auxiliary function are the concatenation of:
+    - the free variables that appear in the loop body but are not explicitly
+      bound in the anonymous function on which the [loop] operator is applied
+      (they are not explicitly bound because these inputs remain constant)
+    - the inputs that are explicitly bound by the anonymous function
+
+    We return: (updated loop decl, body decl option). If the loop uses recursive
+    calls (no Loop node), we return None. *)
+let decompose_loop_body (ctx : ctx) (def : fun_decl) :
+    fun_decl * fun_decl option =
+  let span = def.item_meta.span in
+  match def.body with
+  | None -> (def, None)
+  | Some body -> (
+      (* Open the function body to work with free variables *)
+      let fvars, body = open_all_fun_body ctx span body in
+
+      (* Check if the body contains a Loop node *)
+      let has_loop =
+        let found = ref false in
+        let visitor =
+          object
+            inherit [_] iter_expr
+            method! visit_Loop _ _ = found := true
+          end
+        in
+        visitor#visit_texpr () body.body;
+        !found
+      in
+
+      if not has_loop then
+        (* No loop node (likely recursive): close back and return unchanged *)
+        let body = close_all_fun_body span body in
+        ({ def with body = Some body }, None)
+      else
+        (* Extract the loop body from the Loop node *)
+        let loop_node = ref None in
+        let extract_visitor =
+          object
+            inherit [_] map_expr
+
+            method! visit_Loop _ loop =
+              (* We only expect one Loop node at the top level of a loop function *)
+              [%sanity_check] span (Option.is_none !loop_node);
+              loop_node := Some loop;
+              Loop loop
+          end
+        in
+        let _ = extract_visitor#visit_texpr () body.body in
+        match !loop_node with
+        | None -> [%internal_error] span
+        | Some loop -> decompose_loop_body_aux ctx def body fvars loop)
+
+(** Decompose loop bodies: for each loop function, extract the loop body
+    continuation into a separate named auxiliary function.
+
+    Returns: (updated fun decl list, body decl list) *)
+let decompose_loop_bodies (ctx : ctx) (loops : fun_decl list) :
+    fun_decl list * fun_decl list =
+  let loops_and_bodies =
+    List.map (fun loop_def -> decompose_loop_body ctx loop_def) loops
+  in
+  let loops = List.map fst loops_and_bodies in
+  let bodies = List.filter_map snd loops_and_bodies in
+  (loops, bodies)
