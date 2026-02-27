@@ -6,6 +6,7 @@ import Aeneas.BvTac
 import Aeneas.Discriminant
 import Aeneas.Extract
 import Aeneas.FCongr
+import Aeneas.GrindSimpTac
 import Aeneas.Fin
 import Aeneas.FSimp
 import Aeneas.Int
