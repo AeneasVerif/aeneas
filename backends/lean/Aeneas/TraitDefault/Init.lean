@@ -264,11 +264,8 @@ def resolveStructFields (value : Expr) (selfFvarId : FVarId) (type : Expr) : Met
       unresolved := unresolved.push i
 
   -- Fixed-point iteration
-  let mut iterCount := 0
-  let maxIters := numFields + 1
   let mut progress := true
-  while progress && iterCount < maxIters do
-    iterCount := iterCount + 1
+  while progress do
     progress := false
     let mut stillUnresolved : Array Nat := #[]
     for i in unresolved do
