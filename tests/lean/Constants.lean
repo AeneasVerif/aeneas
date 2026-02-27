@@ -30,8 +30,7 @@ def incr (n : Std.U32) : Result Std.U32 := do
 
 /- [constants::X3]
    Source: 'tests/src/constants.rs', lines 17:0-17:29 -/
-@[global_simps] def X3_body : Result Std.U32 := do incr 32#u32
-@[global_simps, irreducible] def X3 : Std.U32 := eval_global X3_body
+@[global_simps, irreducible] def X3 : Result Std.U32 := incr 32#u32
 
 /- [constants::mk_pair0]:
    Source: 'tests/src/constants.rs', lines 25:0-27:1 -/
@@ -51,17 +50,13 @@ def mk_pair1 (x : Std.U32) (y : Std.U32) : Result (Pair Std.U32 Std.U32) := do
 
 /- [constants::P0]
    Source: 'tests/src/constants.rs', lines 33:0-33:42 -/
-@[global_simps]
-def P0_body : Result (Std.U32 × Std.U32) := do mk_pair0 0#u32 1#u32
 @[global_simps, irreducible]
-def P0 : (Std.U32 × Std.U32) := eval_global P0_body
+def P0 : Result (Std.U32 × Std.U32) := mk_pair0 0#u32 1#u32
 
 /- [constants::P1]
    Source: 'tests/src/constants.rs', lines 34:0-34:46 -/
-@[global_simps]
-def P1_body : Result (Pair Std.U32 Std.U32) := do mk_pair1 0#u32 1#u32
 @[global_simps, irreducible]
-def P1 : Pair Std.U32 Std.U32 := eval_global P1_body
+def P1 : Result (Pair Std.U32 Std.U32) := mk_pair1 0#u32 1#u32
 
 /- [constants::P2]
    Source: 'tests/src/constants.rs', lines 35:0-35:34 -/
@@ -84,18 +79,17 @@ def Wrap.new {T : Type} (value : T) : Result (Wrap T) := do
 
 /- [constants::Y]
    Source: 'tests/src/constants.rs', lines 43:0-43:38 -/
-@[global_simps] def Y_body : Result (Wrap Std.I32) := do Wrap.new 2#i32
-@[global_simps, irreducible] def Y : Wrap Std.I32 := eval_global Y_body
+@[global_simps, irreducible] def Y : Result (Wrap Std.I32) := Wrap.new 2#i32
 
 /- [constants::unwrap_y]:
    Source: 'tests/src/constants.rs', lines 45:0-47:1 -/
 def unwrap_y : Result Std.I32 := do
-  ok Y.value
+  let w ← Y
+  ok w.value
 
 /- [constants::YVAL]
    Source: 'tests/src/constants.rs', lines 49:0-49:33 -/
-@[global_simps] def YVAL_body : Result Std.I32 := do unwrap_y
-@[global_simps, irreducible] def YVAL : Std.I32 := eval_global YVAL_body
+@[global_simps, irreducible] def YVAL : Result Std.I32 := unwrap_y
 
 /- [constants::get_z1::Z1]
    Source: 'tests/src/constants.rs', lines 64:4-64:22 -/
@@ -121,15 +115,15 @@ def add (a : Std.I32) (b : Std.I32) : Result Std.I32 := do
 
 /- [constants::Q3]
    Source: 'tests/src/constants.rs', lines 78:0-78:31 -/
-@[global_simps] def Q3_body : Result Std.I32 := do add Q2 3#i32
-@[global_simps, irreducible] def Q3 : Std.I32 := eval_global Q3_body
+@[global_simps, irreducible] def Q3 : Result Std.I32 := add Q2 3#i32
 
 /- [constants::get_z2]:
    Source: 'tests/src/constants.rs', lines 72:0-74:1 -/
 def get_z2 : Result Std.I32 := do
   let i ← get_z1
-  let i1 ← add i Q3
-  add Q1 i1
+  let i1 ← Q3
+  let i2 ← add i i1
+  add Q1 i2
 
 /- [constants::S1]
    Source: 'tests/src/constants.rs', lines 82:0-82:23 -/
@@ -137,8 +131,7 @@ def get_z2 : Result Std.I32 := do
 
 /- [constants::S2]
    Source: 'tests/src/constants.rs', lines 83:0-83:30 -/
-@[global_simps] def S2_body : Result Std.U32 := do incr S1
-@[global_simps, irreducible] def S2 : Std.U32 := eval_global S2_body
+@[global_simps, irreducible] def S2 : Result Std.U32 := incr S1
 
 /- [constants::S3]
    Source: 'tests/src/constants.rs', lines 84:0-84:35 -/
@@ -146,10 +139,8 @@ def get_z2 : Result Std.I32 := do
 
 /- [constants::S4]
    Source: 'tests/src/constants.rs', lines 85:0-85:47 -/
-@[global_simps]
-def S4_body : Result (Pair Std.U32 Std.U32) := do mk_pair1 7#u32 8#u32
 @[global_simps, irreducible]
-def S4 : Pair Std.U32 Std.U32 := eval_global S4_body
+def S4 : Result (Pair Std.U32 Std.U32) := mk_pair1 7#u32 8#u32
 
 /- [constants::V]
    Source: 'tests/src/constants.rs', lines 88:0-90:1 -/

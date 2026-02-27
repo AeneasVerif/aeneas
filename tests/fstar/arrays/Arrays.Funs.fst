@@ -403,7 +403,7 @@ let f3 : result u32 =
 
 (** [arrays::SZ]
     Source: 'tests/src/arrays.rs', lines 317:0-317:25 *)
-let sz : usize = 32
+let sZ : usize = 32
 
 (** [arrays::f5]:
     Source: 'tests/src/arrays.rs', lines 320:0-322:1 *)
@@ -502,7 +502,7 @@ let add_acc
 
 (** [arrays::ARRAY1]
     Source: 'tests/src/arrays.rs', lines 375:0-375:32 *)
-let array1 : array u32 2 = mk_array 2 [ 0; 1 ]
+let aRRAY1 : array u32 2 = mk_array 2 [ 0; 1 ]
 
 (** [arrays::L]
     Source: 'tests/src/arrays.rs', lines 379:0-379:33 *)

@@ -3535,7 +3535,9 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
           (not global_decl.can_fail)
           &&
           match explicit with
-          | Some explicit -> PureUtils.explicit_info_has_explicit explicit
+          | Some explicit ->
+              PureUtils.explicit_info_has_explicit explicit
+              || gref.global_generics.trait_refs <> []
           | None -> gref.global_generics <> empty_generic_args
         in
         let ty () =

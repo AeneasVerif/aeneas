@@ -14,7 +14,7 @@ namespace static
 /- Trait declaration: [static::WithSlice]
    Source: 'tests/src/static.rs', lines 3:0-5:1 -/
 structure WithSlice (Self : Type) where
-  SLICE : Slice Std.U16
+  SLICE : Result (Slice Std.U16)
 
 /- [static::read]:
    Source: 'tests/src/static.rs', lines 27:0-29:1 -/
@@ -22,7 +22,8 @@ def read
   {S : Type} (WithSliceInst : WithSlice S) (t : S) (i : Std.Usize) :
   Result Std.U16
   := do
-  Slice.index_usize WithSliceInst.SLICE i
+  let s ← WithSliceInst.SLICE
+  Slice.index_usize s i
 
 /- [static::use_static::PREFIX]
    Source: 'tests/src/static.rs', lines 40:4-40:34 -/
