@@ -63,15 +63,13 @@ Record StructTest_t := mkStructTest_t { structTest_FieldTest : u32; }.
 
 (** [rename_attribute::C]
     Source: 'tests/src/rename_attribute.rs', lines 52:0-52:28 *)
-Definition const_test_body : result u32 :=
+Definition const_Test : result u32 :=
   i <- u32_add 100%u32 10%u32; u32_add i 1%u32
 .
-Definition const_test : u32 := const_test_body%global.
 
 (** [rename_attribute::CA]
     Source: 'tests/src/rename_attribute.rs', lines 55:0-55:23 *)
-Definition const_aeneas11_body : result u32 := u32_add 10%u32 1%u32.
-Definition const_aeneas11 : u32 := const_aeneas11_body%global.
+Definition const_Aeneas11 : result u32 := u32_add 10%u32 1%u32.
 
 (** [rename_attribute::factorial]:
     Source: 'tests/src/rename_attribute.rs', lines 58:0-64:1 *)

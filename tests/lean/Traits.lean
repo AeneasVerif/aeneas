@@ -277,15 +277,15 @@ def BoolWrapper.Insts.TraitsToType {T : Type} (ToTypeBoolTInst : ToType Bool T)
    Source: 'tests/src/traits.rs', lines 163:0-174:1 -/
 structure WithConstTy (Self : Type) (Self_V : Type) (Self_W : Type) (LEN :
   Std.Usize) where
-  LEN1 : Std.Usize
-  LEN2 : Std.Usize
+  LEN1 : Result Std.Usize
+  LEN2 : Result Std.Usize
   ToU64Inst : ToU64 Self_W
   f : Self_W → Array Std.U8 LEN → Result Self_W
 
 /- [traits::WithConstTy::LEN2]
    Source: 'tests/src/traits.rs', lines 166:4-166:27 -/
-@[global_simps, irreducible]
-def WithConstTy.LEN2_default (Self : Type) (LEN : Std.Usize) : Std.Usize :=
+@[global_simps, irreducible, trait_default]
+def WithConstTy.LEN2.default (Self : Type) (LEN : Std.Usize) : Std.Usize :=
   32#usize
 
 /- [traits::{traits::WithConstTy<u8, u64, 32usize> for bool}::f]:
@@ -297,15 +297,15 @@ def Bool.Insts.TraitsWithConstTyU8U6432.f
 /- [traits::{traits::WithConstTy<u8, u64, 32usize> for bool}::LEN1]
    Source: 'tests/src/traits.rs', lines 177:4-177:27 -/
 @[global_simps, irreducible]
-def WithConstTyBoolU8U6432.LEN1 : Std.Usize := 12#usize
+def Bool.Insts.TraitsWithConstTyU8U6432.LEN1 : Std.Usize := 12#usize
 
 /- Trait implementation: [traits::{traits::WithConstTy<u8, u64, 32usize> for bool}]
    Source: 'tests/src/traits.rs', lines 176:0-183:1 -/
 @[reducible]
 def Bool.Insts.TraitsWithConstTyU8U6432 : WithConstTy Bool Std.U8 Std.U64
   32#usize := {
-  LEN1 := WithConstTyBoolU8U6432.LEN1
-  LEN2 := WithConstTy.LEN2_default Bool 32#usize
+  LEN1 := ok Bool.Insts.TraitsWithConstTyU8U6432.LEN1
+  LEN2 := ok (WithConstTy.LEN2.default Bool 32#usize)
   ToU64Inst := U64.Insts.TraitsToU64
   f := Bool.Insts.TraitsWithConstTyU8U6432.f
 }
@@ -317,7 +317,7 @@ def use_with_const_ty1
   (WithConstTyInst : WithConstTy H Clause0_V Clause0_W LEN) :
   Result Std.Usize
   := do
-  ok WithConstTyInst.LEN1
+  WithConstTyInst.LEN1
 
 /- [traits::use_with_const_ty2]:
    Source: 'tests/src/traits.rs', lines 189:0-189:76 -/
@@ -513,37 +513,39 @@ def test_get_trait
 /- Trait declaration: [traits::Trait]
    Source: 'tests/src/traits.rs', lines 312:0-314:1 -/
 structure Trait (Self : Type) where
-  LEN : Std.Usize
+  LEN : Result Std.Usize
 
 /- [traits::{traits::Trait for [T; N]}::LEN]
    Source: 'tests/src/traits.rs', lines 317:4-317:25 -/
 @[global_simps, irreducible]
-def TraitArray.LEN (T : Type) (N : Std.Usize) : Std.Usize := N
+def Array.Insts.TraitsTrait.LEN (T : Type) (N : Std.Usize) : Std.Usize := N
 
 /- Trait implementation: [traits::{traits::Trait for [T; N]}]
    Source: 'tests/src/traits.rs', lines 316:0-318:1 -/
 @[reducible]
 def Array.Insts.TraitsTrait (T : Type) (N : Std.Usize) : Trait (Array T N) := {
-  LEN := TraitArray.LEN T N
+  LEN := ok (Array.Insts.TraitsTrait.LEN T N)
 }
 
 /- [traits::{traits::Trait for traits::Wrapper<T>}::LEN]
    Source: 'tests/src/traits.rs', lines 321:4-321:25 -/
 @[global_simps, irreducible]
-def TraitWrapper.LEN {T : Type} (TraitInst : Trait T) : Std.Usize := 0#usize
+def Wrapper.Insts.TraitsTrait.LEN {T : Type} (TraitInst : Trait T)
+  : Std.Usize :=
+  0#usize
 
 /- Trait implementation: [traits::{traits::Trait for traits::Wrapper<T>}]
    Source: 'tests/src/traits.rs', lines 320:0-322:1 -/
 @[reducible]
 def Wrapper.Insts.TraitsTrait {T : Type} (TraitInst : Trait T) : Trait (Wrapper
   T) := {
-  LEN := TraitWrapper.LEN TraitInst
+  LEN := ok (Wrapper.Insts.TraitsTrait.LEN TraitInst)
 }
 
 /- [traits::use_wrapper_len]:
    Source: 'tests/src/traits.rs', lines 324:0-326:1 -/
 def use_wrapper_len {T : Type} (TraitInst : Trait T) : Result Std.Usize := do
-  ok (TraitWrapper.LEN TraitInst)
+  ok (Wrapper.Insts.TraitsTrait.LEN TraitInst)
 
 /- [traits::Foo]
    Source: 'tests/src/traits.rs', lines 328:0-331:1 -/

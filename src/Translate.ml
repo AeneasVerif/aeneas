@@ -92,6 +92,7 @@ let check_fun_decl_vars_are_well_bound (trans_ctx : trans_ctx)
 let translate_function_to_pure_aux (trans_ctx : trans_ctx)
     (marked_ids : marked_ids)
     (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t)
+    (pure_global_decls : Pure.global_decl GlobalDeclId.Map.t)
     (fun_sigs : SymbolicToPureCore.fun_sigs FunDeclId.Map.t) (fdef : fun_decl) :
     pure_fun_translation_no_loops =
   (* Debug *)
@@ -175,6 +176,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
     {
       SymbolicToPureCore.span = fdef.item_meta.span;
       decls_ctx = trans_ctx;
+      trans_global_decls = pure_global_decls;
       bid = None;
       sg;
       fun_sigs;
@@ -245,12 +247,13 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
 
 let translate_function_to_pure (trans_ctx : trans_ctx) (marked_ids : marked_ids)
     (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t)
+    (pure_global_decls : Pure.global_decl Pure.GlobalDeclId.Map.t)
     (fun_sigs : SymbolicToPureCore.fun_sigs FunDeclId.Map.t) (fdef : fun_decl) :
     pure_fun_translation_no_loops option =
   try
     Some
       (translate_function_to_pure_aux trans_ctx marked_ids pure_type_decls
-         fun_sigs fdef)
+         pure_global_decls fun_sigs fdef)
   with CFailure error ->
     let name = name_to_string trans_ctx fdef.item_meta.name in
     let name_pattern =
@@ -295,7 +298,8 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
       (List.map (fun (def : Pure.type_decl) -> (def.def_id, def)) type_decls)
   in
 
-  (* Translate the globals (remark: their bodies are translated at the same time
+  (* Translate the globals (remark: this does not translate their *bodies* (i.e.:
+     their initialization functions), that are translated later, at the same time
      as the "regular" functions) *)
   let global_decls =
     let num_decls = GlobalDeclId.Map.cardinal crate.global_decls in
@@ -325,6 +329,10 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
                     (IdGlobal global.def_id));
               None)
           (GlobalDeclId.Map.values trans_ctx.global_decls_to_extract))
+  in
+  let global_decls_map =
+    GlobalDeclId.Map.of_list
+      (List.map (fun (d : Pure.global_decl) -> (d.def_id, d)) global_decls)
   in
 
   (* Compute the fun sigs for the whole crate *)
@@ -431,7 +439,7 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
               in
               let f =
                 translate_function_to_pure trans_ctx marked_ids type_decls_map
-                  fun_sigs x
+                  global_decls_map fun_sigs x
               in
               if !Config.diagnose_translation then begin
                 let elapsed = Unix.gettimeofday () -. start in
@@ -1014,14 +1022,15 @@ let export_trait_decl (fmt : Format.formatter) (_config : gen_config)
 
 (** Export a trait implementation. *)
 let export_trait_impl (fmt : Format.formatter) (_config : gen_config)
-    (ctx : gen_ctx) (trait_impl_id : Pure.trait_impl_id) : unit =
+    (ctx : gen_ctx) ~(is_rec : bool) (trait_impl_id : Pure.trait_impl_id) : unit
+    =
   (* Lookup the definition *)
   let trait_impl =
     [%silent_unwrap_opt_span] None
       (TraitImplId.Map.find_opt trait_impl_id ctx.trans_trait_impls)
   in
   if not (trait_impl_is_builtin ctx trait_impl_id) then
-    Extract.extract_trait_impl ctx fmt trait_impl
+    Extract.extract_trait_impl ctx fmt ~is_rec trait_impl
 
 (** A generic utility to generate the extracted definitions: as we may want to
     split the definitions between different files (or not), we can control what
@@ -1042,7 +1051,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
   let export_trait_decl_group_extra_info id =
     export_trait_decl fmt config ctx id false true
   in
-  let export_trait_impl = export_trait_impl fmt config ctx in
+  let export_trait_impl ~is_rec = export_trait_impl fmt config ctx ~is_rec in
 
   let export_decl_group (dg : declaration_group) : unit =
     match dg with
@@ -1129,7 +1138,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
           export_trait_decl_group_extra_info id)
     | TraitImplGroup (NonRecGroup id) ->
         if config.extract_trait_impls && config.extract_transparent then
-          export_trait_impl id
+          export_trait_impl ~is_rec:false id
     | TraitImplGroup (RecGroup ids) ->
         (* Only print the warning if we extract the impl group *)
         let extract =
@@ -1150,11 +1159,15 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
           in
           let decls = List.map to_string ids in
           if not (List.for_all (trait_impl_is_builtin ctx) ids) then (
+            (* We actually have a special elaboration in Lean that allows us
+               to support recursive trait impls *)
             if List.length decls = 1 then
-              [%warn_opt_span] None
-                ("Recursive trait implementations are not supported; the \
-                  following recursive impl is going to be extracted but its \
-                  model will not type-check:\n" ^ String.concat "\n" decls)
+              if Config.backend () = Lean then ()
+              else
+                [%warn_opt_span] None
+                  ("Recursive trait implementations are not supported; the \
+                    following recursive impl is going to be extracted but its \
+                    model will not type-check:\n" ^ String.concat "\n" decls)
             else
               [%warn_opt_span] None
                 ("Mutually recursive trait implementations are not supported; \
@@ -1162,9 +1175,13 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
                   be extracted but their model will not type-check:\n"
                ^ String.concat "\n" decls);
             (* We still extract something so that the user can look at it and
-             eventually fix it *)
+               eventually fix it *)
             (* TODO: update to extract groups *)
-            List.iter (fun id -> export_trait_impl id) ids)
+            (* We mark the definition as recursive only if the group is a
+               singleton and we extract for Lean: Lean's special elaboration
+               doesn't work for mutually recursive impls. *)
+            let is_rec = List.length decls = 1 && Config.backend () = Lean in
+            List.iter (fun id -> export_trait_impl ~is_rec id) ids)
     | MixedGroup _ ->
         [%craise_opt_span] None
           "Mixed-recursive declaration groups are not supported"

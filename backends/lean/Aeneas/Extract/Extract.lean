@@ -78,6 +78,7 @@ instance : ToMessageData TypeInfo where
 
 structure ConstInfo where
   extract : Option String := none
+  canFail : Bool := false
 deriving Repr, Inhabited
 
 instance : ToMessageData ConstInfo where
@@ -916,7 +917,7 @@ def write (env : Environment) (printLn : String → IO Unit) : IO Unit := do
   printLn "let lean_builtin_consts = ["
   for (pat, span, info) in infos do
     printSpan span
-    let msg ← m!"  mk_trait_impl \"{pat}\" {info.toExtract};".toString
+    let msg ← m!"  mk_global \"{pat}\" {info.toExtract} ~can_fail:{info.canFail};".toString
     printLn msg
   printLn "]"
   printLn ""
