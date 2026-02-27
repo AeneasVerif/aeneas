@@ -27,24 +27,24 @@ def use_params
   lift (core.cmp.impls.PartialEqUsize.eq n i2)
 
 /- [constants_lean::N]
-   Source: 'tests/src/constants-lean.rs', lines 12:0-12:20 -/
+   Source: 'tests/src/constants-lean.rs', lines 12:0-12:19 -/
 @[global_simps, irreducible] def N : Std.Usize := 3#usize
 
 /- [constants_lean::M]
-   Source: 'tests/src/constants-lean.rs', lines 13:0-13:20 -/
+   Source: 'tests/src/constants-lean.rs', lines 13:0-13:19 -/
 @[global_simps, irreducible] def M : Std.Usize := 4#usize
 
 /- [constants_lean::NM]
-   Source: 'tests/src/constants-lean.rs', lines 14:0-14:25 -/
+   Source: 'tests/src/constants-lean.rs', lines 14:0-14:24 -/
 @[global_simps, irreducible] def NM : Result Std.Usize := N * M
 
 /- [constants_lean::Wrapper]
-   Source: 'tests/src/constants-lean.rs', lines 16:0-16:67 -/
+   Source: 'tests/src/constants-lean.rs', lines 16:0-16:65 -/
 def Wrapper (N1 : Std.Usize) (M1 : Std.Usize) :=
   Array Std.U8 N1 × Array Std.U8 N1
 
 /- [constants_lean::{constants_lean::Wrapper<N, M>}::NM]
-   Source: 'tests/src/constants-lean.rs', lines 19:4-19:29 -/
+   Source: 'tests/src/constants-lean.rs', lines 19:4-19:28 -/
 @[global_simps, irreducible]
 def Wrapper.NM (N1 : Std.Usize) (M1 : Std.Usize) : Result Std.Usize := N1 * M1
 
@@ -54,7 +54,7 @@ structure Trait (Self : Type) where
   NM : Result Std.Usize
 
 /- [constants_lean::{constants_lean::Trait for constants_lean::Wrapper<N, M>}::NM]
-   Source: 'tests/src/constants-lean.rs', lines 27:4-27:29 -/
+   Source: 'tests/src/constants-lean.rs', lines 27:4-27:28 -/
 @[global_simps, irreducible]
 def Wrapper.Insts.Constants_leanTrait.NM (N1 : Std.Usize) (M1 : Std.Usize)
   : Result Std.Usize :=
@@ -76,7 +76,7 @@ structure Trait1 (Self : Type) where
   NM : Result Std.Usize
 
 /- [constants_lean::Trait1::NM]
-   Source: 'tests/src/constants-lean.rs', lines 33:4-33:41 -/
+   Source: 'tests/src/constants-lean.rs', lines 33:4-33:40 -/
 @[global_simps, irreducible, trait_default]
 def Trait1.NM.default {Self : Type} (Trait1Inst : Trait1 Self)
   : Result Std.Usize := do
@@ -85,12 +85,12 @@ def Trait1.NM.default {Self : Type} (Trait1Inst : Trait1 Self)
   i * i1
 
 /- [constants_lean::{constants_lean::Trait1 for bool}::M]
-   Source: 'tests/src/constants-lean.rs', lines 38:4-38:24 -/
+   Source: 'tests/src/constants-lean.rs', lines 38:4-38:23 -/
 @[global_simps, irreducible]
 def Bool.Insts.Constants_leanTrait1.M : Std.Usize := 1#usize
 
 /- [constants_lean::{constants_lean::Trait1 for bool}::N]
-   Source: 'tests/src/constants-lean.rs', lines 37:4-37:24 -/
+   Source: 'tests/src/constants-lean.rs', lines 37:4-37:23 -/
 @[global_simps, irreducible]
 def Bool.Insts.Constants_leanTrait1.N : Std.Usize := 0#usize
 
