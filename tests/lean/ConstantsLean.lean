@@ -80,7 +80,7 @@ structure Trait1 (Self : Type) where
 
 /- [constants_lean::Trait1::NM]
    Source: 'tests/src/constants-lean.rs', lines 33:4-33:41 -/
-@[global_simps, irreducible]
+@[global_simps, irreducible, trait_default]
 def Trait1.NM.default {Self : Type} (Trait1Inst : Trait1 Self)
   : Result Std.Usize := do
   let i ← Trait1Inst.N
@@ -100,7 +100,7 @@ def Bool.Insts.Constants_leanTrait1.N : Std.Usize := 0#usize
 /- Trait implementation: [constants_lean::{constants_lean::Trait1 for bool}]
    Source: 'tests/src/constants-lean.rs', lines 36:0-39:1 -/
 @[reducible]
-def Bool.Insts.Constants_leanTrait1 : Trait1 Bool := {
+impl_def Bool.Insts.Constants_leanTrait1 : Trait1 Bool := {
   N := ok Bool.Insts.Constants_leanTrait1.N
   M := ok Bool.Insts.Constants_leanTrait1.M
   NM := Trait1.NM.default Bool.Insts.Constants_leanTrait1

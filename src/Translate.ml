@@ -979,14 +979,15 @@ let export_trait_decl (fmt : Format.formatter) (_config : gen_config)
 
 (** Export a trait implementation. *)
 let export_trait_impl (fmt : Format.formatter) (_config : gen_config)
-    (ctx : gen_ctx) (trait_impl_id : Pure.trait_impl_id) : unit =
+    (ctx : gen_ctx) ~(is_rec : bool) (trait_impl_id : Pure.trait_impl_id) : unit
+    =
   (* Lookup the definition *)
   let trait_impl =
     [%silent_unwrap_opt_span] None
       (TraitImplId.Map.find_opt trait_impl_id ctx.trans_trait_impls)
   in
   if not (trait_impl_is_builtin ctx trait_impl_id) then
-    Extract.extract_trait_impl ctx fmt trait_impl
+    Extract.extract_trait_impl ctx fmt ~is_rec trait_impl
 
 (** A generic utility to generate the extracted definitions: as we may want to
     split the definitions between different files (or not), we can control what
@@ -1007,7 +1008,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
   let export_trait_decl_group_extra_info id =
     export_trait_decl fmt config ctx id false true
   in
-  let export_trait_impl = export_trait_impl fmt config ctx in
+  let export_trait_impl ~is_rec = export_trait_impl fmt config ctx ~is_rec in
 
   let export_decl_group (dg : declaration_group) : unit =
     match dg with
@@ -1094,7 +1095,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
           export_trait_decl_group_extra_info id)
     | TraitImplGroup (NonRecGroup id) ->
         if config.extract_trait_impls && config.extract_transparent then
-          export_trait_impl id
+          export_trait_impl ~is_rec:false id
     | TraitImplGroup (RecGroup ids) ->
         (* Only print the warning if we extract the impl group *)
         let extract =
@@ -1115,11 +1116,15 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
           in
           let decls = List.map to_string ids in
           if not (List.for_all (trait_impl_is_builtin ctx) ids) then (
+            (* We actually have a special elaboration in Lean that allows us
+               to support recursive trait impls *)
             if List.length decls = 1 then
-              [%warn_opt_span] None
-                ("Recursive trait implementations are not supported; the \
-                  following recursive impl is going to be extracted but its \
-                  model will not type-check:\n" ^ String.concat "\n" decls)
+              if Config.backend () = Lean then ()
+              else
+                [%warn_opt_span] None
+                  ("Recursive trait implementations are not supported; the \
+                    following recursive impl is going to be extracted but its \
+                    model will not type-check:\n" ^ String.concat "\n" decls)
             else
               [%warn_opt_span] None
                 ("Mutually recursive trait implementations are not supported; \
@@ -1127,9 +1132,13 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
                   be extracted but their model will not type-check:\n"
                ^ String.concat "\n" decls);
             (* We still extract something so that the user can look at it and
-             eventually fix it *)
+               eventually fix it *)
             (* TODO: update to extract groups *)
-            List.iter (fun id -> export_trait_impl id) ids)
+            (* We mark the definition as recursive only if the group is a
+               singleton and we extract for Lean: Lean's special elaboration
+               doesn't work for mutually recursive impls. *)
+            let is_rec = List.length decls = 1 && Config.backend () = Lean in
+            List.iter (fun id -> export_trait_impl ~is_rec id) ids)
     | MixedGroup _ ->
         [%craise_opt_span] None
           "Mixed-recursive declaration groups are not supported"

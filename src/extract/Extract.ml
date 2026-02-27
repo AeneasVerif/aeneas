@@ -2450,6 +2450,12 @@ let extract_global_decl_body_gen (span : Meta.span) (ctx : extraction_ctx)
       else [ "global_simps" ]
     else []
   in
+  let trait_default =
+    match decl.src with
+    | TraitDeclItem (_, _, true) -> [ "trait_default" ]
+    | _ -> []
+  in
+  let attributes = attributes @ trait_default in
   extract_attributes span ctx fmt decl.item_meta.name None attributes
     "rust_const" []
     ~is_external:(not decl.item_meta.is_local);
@@ -3384,7 +3390,7 @@ let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
 
 (** Extract a trait implementation *)
 let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
-    (impl : trait_impl) : unit =
+    ~(is_rec : bool) (impl : trait_impl) : unit =
   [%ltrace name_to_string ctx impl.item_meta.name];
   let span = impl.item_meta.span in
   (* Retrieve the impl name *)
@@ -3447,11 +3453,16 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   (* `let (....) : Trait ... =` *)
   (* Open the box for the name + generics *)
   F.pp_open_hovbox fmt ctx.indent_incr;
-  (match fun_decl_kind_to_qualif SingleNonRec with
-  | Some qualif ->
-      F.pp_print_string fmt qualif;
-      F.pp_print_space fmt ()
-  | None -> ());
+  (* Lean only: we have a special elaboration if the impl is recursive *)
+  (if is_rec then (
+     F.pp_print_string fmt "impl_def";
+     F.pp_print_space fmt ())
+   else
+     match fun_decl_kind_to_qualif SingleNonRec with
+     | Some qualif ->
+         F.pp_print_string fmt qualif;
+         F.pp_print_space fmt ()
+     | None -> ());
   F.pp_print_string fmt impl_name;
 
   (* Print the generics *)
