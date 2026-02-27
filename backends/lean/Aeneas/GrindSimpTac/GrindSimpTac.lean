@@ -36,8 +36,12 @@ open Utils
     can reuse the pre-built e-graph instead of re-canonicalizing all hypotheses.
 
     We use `revert := false` (regardless of the grind config) so hypotheses
-    stay in the local context and are processed by `processHypotheses`. -/
-private def buildBaseGoalState (mvarId : MVarId) :
+    stay in the local context and are processed by `processHypotheses`.
+
+    When `saturationRounds > 0`, we also run e-matching on the base e-graph
+    to pre-saturate it with derived facts. This amortizes e-matching cost
+    across all discharge calls. -/
+private def buildBaseGoalState (mvarId : MVarId) (saturationRounds : Nat := 1) :
     Lean.Meta.Grind.GrindM Lean.Meta.Grind.GoalState := do
   mvarId.withContext do
   -- Create a temporary mvar (same lctx, dummy target) to avoid modifying the main goal
@@ -50,7 +54,21 @@ private def buildBaseGoalState (mvarId : MVarId) :
   let goal ← Lean.Meta.Grind.mkGoalCore tmpMvarId
   -- Internalize all hypotheses into the e-graph (this is where canonicalization happens)
   let goal ← Lean.Meta.Grind.processHypotheses goal
+  -- Optionally pre-saturate the e-graph with e-matching.
+  -- Each round finds new pattern matches from hypothesis terms and adds derived facts.
+  let goal ← saturateEmatch goal saturationRounds
   return goal.toGoalState
+where
+  saturateEmatch (goal : Lean.Meta.Grind.Goal) : Nat → Lean.Meta.Grind.GrindM Lean.Meta.Grind.Goal
+    | 0 => return goal
+    | n + 1 => do
+      if goal.inconsistent then return goal
+      let (progress, goal) ← Lean.Meta.Grind.GoalM.run goal Lean.Meta.Grind.ematch
+      if !progress then return goal
+      -- Process the new facts derived by e-matching
+      let goal ← Lean.Meta.Grind.GoalM.run' goal Lean.Meta.Grind.processNewFacts
+      if goal.inconsistent then return goal
+      saturateEmatch goal n
 
 /-- Discharge using a pre-built base GoalState.
     The base state has all hypotheses already canonicalized and internalized in
@@ -79,10 +97,11 @@ private def grindDischargeWithBase (baseState : Lean.Meta.Grind.GoalState)
     Pre-builds a base GoalState with all hypotheses, then each discharge call
     reuses it via `controlAt MetaM` to bridge GrindM→SimpM. -/
 private def grindSimpCoreM (simpConfig : Simp.Config) (args : GrindSimpArgs)
-    (mvarId : MVarId) (fvarIdsToSimp : Array FVarId) (simplifyTarget : Bool) :
+    (mvarId : MVarId) (fvarIdsToSimp : Array FVarId) (simplifyTarget : Bool)
+    (baseSaturationRounds : Nat) :
     Lean.Meta.Grind.GrindM (Option (Array FVarId × MVarId) × Simp.Stats) := do
   -- Pre-build base GoalState with all hypotheses canonicalized and in the e-graph
-  let baseGoalState ← buildBaseGoalState mvarId
+  let baseGoalState ← buildBaseGoalState mvarId baseSaturationRounds
   controlAt MetaM fun runInMetaM => do
     mvarId.withContext do
     let discharge : Simp.Discharge := fun e => do
@@ -103,14 +122,14 @@ private def grindSimpCoreM (simpConfig : Simp.Config) (args : GrindSimpArgs)
 /-- Run the GrindM simp core at a given location, translating the result back to TacticM. -/
 private def runGrindSimpAt (params : Lean.Meta.Grind.Params)
     (simpConfig : Simp.Config) (args : GrindSimpArgs)
-    (loc : Utils.Location) : TacticM Unit := do
+    (loc : Utils.Location) (baseSaturationRounds : Nat) : TacticM Unit := do
   withMainContext do
   let mvarId ← getMainGoal
   let (fvarIdsToSimp, simplifyTarget) ← match loc with
     | .targets hyps target => pure (hyps, target)
     | .wildcard => do pure (← mvarId.getNondepPropHyps, true)
   let (result?, _stats) ← Lean.Meta.Grind.GrindM.run
-    (grindSimpCoreM simpConfig args mvarId fvarIdsToSimp simplifyTarget) params
+    (grindSimpCoreM simpConfig args mvarId fvarIdsToSimp simplifyTarget baseSaturationRounds) params
   match result? with
   | none => replaceMainGoal []
   | some (_fvars, mvarId') => replaceMainGoal [mvarId']
@@ -139,14 +158,15 @@ def grindSimpTac
     (simpConfig : Simp.Config)
     (args : GrindSimpArgs)
     (loc : Utils.Location)
-    (preprocessSimpArgs : Option Simp.SimpArgs := none) : TacticM Unit := do
+    (preprocessSimpArgs : Option Simp.SimpArgs := none)
+    (baseSaturationRounds : Nat := 1) : TacticM Unit := do
   Elab.Tactic.focus do
   withMainContext do
   -- Build grind parameters
   let params ← Aeneas.Grind.mkParams grindConfig extensions withGroundSimprocs
   -- Optionally preprocess: duplicate assumptions, simplify them, then clear after
   match preprocessSimpArgs with
-  | none => runGrindSimpAt params simpConfig args loc
+  | none => runGrindSimpAt params simpConfig args loc baseSaturationRounds
   | some ppArgs => do
     -- Step 1: duplicate all prop assumptions
     let (_oldFvars, newFvars) ← Utils.duplicateAssumptions
@@ -184,7 +204,7 @@ def grindSimpTac
       pure hyps.toArray
     let args := { args with hypsToUse, letDeclsToUnfold }
     -- Step 4: run the main simp with grind discharger
-    runGrindSimpAt params simpConfig args loc
+    runGrindSimpAt params simpConfig args loc baseSaturationRounds
     -- Step 5: clear the duplicated assumptions
     if (← getUnsolvedGoals) != [] then
       setGoals [← (← getMainGoal).tryClearMany newFvars]
