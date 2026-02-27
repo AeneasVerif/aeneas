@@ -8,6 +8,13 @@ The core logic (discharge + simp) lives in `GrindM` for efficiency: the grind
 context (methods, congruence theorem cache, hash-consing state) is set up once
 and shared across all discharge calls from simp.
 
+**Performance optimization — pre-built base GoalState:**
+Before calling `simp`, we build a "base" GoalState with all hypotheses already
+canonicalized and internalized in the e-graph (`buildBaseGoalState`). Each
+discharge call then reuses this pre-built state instead of re-canonicalizing
+all hypotheses from scratch. The `solve` function only needs to process the
+discharge target (via `byContra` + `intro` of `¬target`), not all hypotheses.
+
 When `preprocessSimpArgs` is provided, the tactic:
 1. Duplicates all prop assumptions
 2. Simplifies them with the given simp args (no discharger)
@@ -24,45 +31,64 @@ namespace Aeneas.GrindSimpTac
 open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 open Utils
 
-/-- Initialize a grind goal from an MVarId.
-    Replicates the logic of the private `Lean.Meta.Grind.initCore`. -/
-private def initGrindGoal (mvarId : MVarId) : Lean.Meta.Grind.GrindM Lean.Meta.Grind.Goal := do
-  let config ← Lean.Meta.Grind.getConfig
-  let mvarId ← if config.clean || !config.revert then pure mvarId else mvarId.markAccessible
-  let mvarId ← if config.revert then mvarId.revertAll else pure mvarId
-  let mvarId ← mvarId.unfoldReducible
-  let mvarId ← mvarId.betaReduce
-  appendTagSuffix mvarId `grind
-  let goal ← Lean.Meta.Grind.mkGoalCore mvarId
-  if config.revert then
-    return goal
-  else
-    Lean.Meta.Grind.processHypotheses goal
+/-- Build a base GoalState with all hypotheses canonicalized and internalized
+    in the e-graph. This is called once before `simp`, so each discharge call
+    can reuse the pre-built e-graph instead of re-canonicalizing all hypotheses.
 
-/-- Core discharge function in GrindM.
-    Tries to prove the goal at `mvarId` using grind within the current
-    GrindM context (sharing congruence theorem cache, hash-consing state, etc.). -/
-private def grindDischarge (mvarId : MVarId) : Lean.Meta.Grind.GrindM Bool := do
-  let config ← Lean.Meta.Grind.getConfig
+    We use `revert := false` (regardless of the grind config) so hypotheses
+    stay in the local context and are processed by `processHypotheses`. -/
+private def buildBaseGoalState (mvarId : MVarId) :
+    Lean.Meta.Grind.GrindM Lean.Meta.Grind.GoalState := do
+  mvarId.withContext do
+  -- Create a temporary mvar (same lctx, dummy target) to avoid modifying the main goal
+  let tmpMvar ← mkFreshExprSyntheticOpaqueMVar (mkConst ``True) `grind_base
+  let tmpMvarId := tmpMvar.mvarId!
+  -- Don't revert — we want hypotheses in the lctx for processHypotheses
+  let tmpMvarId ← tmpMvarId.unfoldReducible
+  let tmpMvarId ← tmpMvarId.betaReduce
+  appendTagSuffix tmpMvarId `grind_base
+  let goal ← Lean.Meta.Grind.mkGoalCore tmpMvarId
+  -- Internalize all hypotheses into the e-graph (this is where canonicalization happens)
+  let goal ← Lean.Meta.Grind.processHypotheses goal
+  return goal.toGoalState
+
+/-- Discharge using a pre-built base GoalState.
+    The base state has all hypotheses already canonicalized and internalized in
+    the e-graph. For each discharge call, we construct a Goal from this base
+    state + the discharge mvar, so only the target needs canonicalization.
+
+    The `solve` function handles the target via:
+    - `byContra?` converts `⊢ P` to `⊢ ¬P → False`
+    - `intro` introduces `h : ¬P` and adds it to the pre-built e-graph
+    - The search loop checks for inconsistency (True = False) -/
+private def grindDischargeWithBase (baseState : Lean.Meta.Grind.GoalState)
+    (mvarId : MVarId) : Lean.Meta.Grind.GrindM Bool := do
+  -- Use revert := false since hypotheses are already processed in baseState
+  let config := { (← Lean.Meta.Grind.getConfig) with revert := false }
   Lean.Meta.Grind.withProtectedMCtx config mvarId fun mvarId' =>
     Lean.Meta.Grind.withGTransparency do
-      let goal ← initGrindGoal mvarId'
+      -- Construct Goal from base state + discharge mvar.
+      -- The e-graph already has all hypotheses. nextDeclIdx is past all existing
+      -- hypotheses, so solve's intros will only process the target.
+      let goal : Lean.Meta.Grind.Goal := { toGoalState := baseState, mvarId := mvarId' }
       let failure? ← Lean.Meta.Grind.solve goal
       return failure?.isNone
 
 /-- Core simp+grind logic in GrindM.
     Runs `simp` on the given goal with grind as the discharger.
-    Uses `controlAt MetaM` to bridge: the discharge closure (called from SimpM)
-    calls back into the current GrindM context via the captured runner. -/
+    Pre-builds a base GoalState with all hypotheses, then each discharge call
+    reuses it via `controlAt MetaM` to bridge GrindM→SimpM. -/
 private def grindSimpCoreM (simpConfig : Simp.Config) (args : GrindSimpArgs)
     (mvarId : MVarId) (fvarIdsToSimp : Array FVarId) (simplifyTarget : Bool) :
-    Lean.Meta.Grind.GrindM (Option (Array FVarId × MVarId) × Simp.Stats) :=
+    Lean.Meta.Grind.GrindM (Option (Array FVarId × MVarId) × Simp.Stats) := do
+  -- Pre-build base GoalState with all hypotheses canonicalized and in the e-graph
+  let baseGoalState ← buildBaseGoalState mvarId
   controlAt MetaM fun runInMetaM => do
     mvarId.withContext do
     let discharge : Simp.Discharge := fun e => do
       let mvar ← mkFreshExprSyntheticOpaqueMVar e `grind.discharger
       try
-        let ok ← runInMetaM (grindDischarge mvar.mvarId!)
+        let ok ← runInMetaM (grindDischargeWithBase baseGoalState mvar.mvarId!)
         if !ok then return none
         let proof ← instantiateMVars mvar
         if proof.hasExprMVar then return none
