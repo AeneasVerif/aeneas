@@ -933,7 +933,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
           let ty = v0.ty in
           [%sanity_check_recover] S.recover span (ty_no_regions ty);
-          let sv = mk_fresh_symbolic_tvalue span ctx0 ty in
+          let sv = add_fresh_symbolic_value ctx0 ty v0 v1 in
           let value = VLoan (VSharedLoan (lid, sv)) in
           { value; ty })
         else [%craise_recover] S.recover span "Not implemented yet"))
