@@ -220,16 +220,18 @@ private def solveMinimal (goal : Lean.Meta.Grind.Goal)
     the e-graph. For each discharge call, we construct a Goal from this base
     state + the discharge mvar, so only the target needs canonicalization.
 
-    Uses `solveMinimal` instead of the full `solve` to avoid e-matching,
-    case splits, and tactic checking overhead. -/
+    When `useMinimalSolver` is true, uses `solveMinimal` (only linarith + lia,
+    no case splits, no tactic checking) instead of the full `solve`. -/
 private def grindDischargeWithBase (baseState : Lean.Meta.Grind.GoalState)
-    (mvarId : MVarId) (useEmatch : Bool) (useMbtc : Bool) : Lean.Meta.Grind.GrindM Bool := do
+    (mvarId : MVarId) (useMinimalSolver : Bool) : Lean.Meta.Grind.GrindM Bool := do
   withTraceNode `GrindSimpTac (fun _ => pure m!"grindDischargeWithBase") do
   let config := { (← Lean.Meta.Grind.getConfig) with revert := false }
   Lean.Meta.Grind.withProtectedMCtx config mvarId fun mvarId' =>
     Lean.Meta.Grind.withGTransparency do
       let goal : Lean.Meta.Grind.Goal := { toGoalState := baseState, mvarId := mvarId' }
-      let failure? ← solveMinimal goal useEmatch useMbtc
+      let failure? ←
+        if useMinimalSolver then solveMinimal goal
+        else Lean.Meta.Grind.solve goal
       return failure?.isNone
 
 /-- Core simp+grind logic in GrindM.
@@ -244,7 +246,7 @@ private def grindSimpCoreM (simpConfig : Simp.Config) (args : GrindSimpArgs)
     (mvarId : MVarId) (fvarIdsToSimp : Array FVarId) (simplifyTarget : Bool)
     (baseSaturationRounds : Nat)
     (ppSimpThms : Array SimpTheorems) (ppSimprocs : Simp.SimprocsArray)
-    (preprocess : Bool) (useEmatch : Bool) (useMbtc : Bool) :
+    (preprocess : Bool) (useMinimalSolver : Bool) :
     Lean.Meta.Grind.GrindM (Option (Array FVarId × MVarId) × Simp.Stats) := do
   withTraceNode `GrindSimpTac (fun _ => pure m!"grindSimpCoreM") do
   -- Optionally preprocess: incrementally simplify hypotheses + target
@@ -275,7 +277,7 @@ private def grindSimpCoreM (simpConfig : Simp.Config) (args : GrindSimpArgs)
     let discharge : Simp.Discharge := fun e => do
       let mvar ← mkFreshExprSyntheticOpaqueMVar e `grind.discharger
       try
-        let ok ← runInMetaM (grindDischargeWithBase baseGoalState mvar.mvarId! useEmatch useMbtc)
+        let ok ← runInMetaM (grindDischargeWithBase baseGoalState mvar.mvarId! useMinimalSolver)
         if !ok then return none
         let proof ← instantiateMVars mvar
         if proof.hasExprMVar then return none
@@ -293,7 +295,7 @@ private def runGrindSimpAt (params : Lean.Meta.Grind.Params)
     (simpConfig : Simp.Config) (args : GrindSimpArgs)
     (loc : Utils.Location) (baseSaturationRounds : Nat)
     (ppSimpThms : Array SimpTheorems) (ppSimprocs : Simp.SimprocsArray)
-    (preprocess : Bool) (useEmatch : Bool) (useMbtc : Bool) : TacticM Unit := do
+    (preprocess : Bool) (useMinimalSolver : Bool) : TacticM Unit := do
   withMainContext do
   let mvarId ← getMainGoal
   let (fvarIdsToSimp, simplifyTarget) ← match loc with
@@ -301,7 +303,7 @@ private def runGrindSimpAt (params : Lean.Meta.Grind.Params)
     | .wildcard => do pure (← mvarId.getNondepPropHyps, true)
   let (result?, _stats) ← Lean.Meta.Grind.GrindM.run
     (grindSimpCoreM simpConfig args mvarId fvarIdsToSimp simplifyTarget baseSaturationRounds
-      ppSimpThms ppSimprocs preprocess useEmatch useMbtc) params
+      ppSimpThms ppSimprocs preprocess useMinimalSolver) params
   match result? with
   | none => replaceMainGoal []
   | some (_fvars, mvarId') => replaceMainGoal [mvarId']
@@ -321,8 +323,7 @@ private def runGrindSimpAt (params : Lean.Meta.Grind.Params)
     - `preprocessSimpArgs`: if provided, hypotheses are incrementally simplified
       (replacing the old simp_all approach). Safe equalities are used to cross-simplify.
     - `baseSaturationRounds`: number of e-matching rounds on the base GoalState (default 1)
-    - `useEmatch`: enable e-matching during discharge (default false)
-    - `useMbtc`: enable model-based theory combination (default false)
+    - `useMinimalSolver`: use minimal solver (linarith + lia only) instead of full grind solve (default false)
 -/
 def grindSimpTac
     (grindConfig : Lean.Grind.Config)
@@ -333,8 +334,7 @@ def grindSimpTac
     (loc : Utils.Location)
     (preprocessSimpArgs : Option Simp.SimpArgs := none)
     (baseSaturationRounds : Nat := 1)
-    (useEmatch : Bool := false)
-    (useMbtc : Bool := false) : TacticM Unit := do
+    (useMinimalSolver : Bool := false) : TacticM Unit := do
   Elab.Tactic.focus do
   withTraceNode `GrindSimpTac (fun _ => pure m!"grindSimpTac") do
   withMainContext do
@@ -347,9 +347,9 @@ def grindSimpTac
   match preprocessSimpArgs with
   | none =>
     runGrindSimpAt params simpConfig args loc baseSaturationRounds ppSimpThms ppSimprocs
-      (preprocess := false) (useEmatch := useEmatch) (useMbtc := useMbtc)
+      (preprocess := false) (useMinimalSolver := useMinimalSolver)
   | some _ppArgs =>
     runGrindSimpAt params simpConfig args loc baseSaturationRounds ppSimpThms ppSimprocs
-      (preprocess := true) (useEmatch := useEmatch) (useMbtc := useMbtc)
+      (preprocess := true) (useMinimalSolver := useMinimalSolver)
 
 end Aeneas.GrindSimpTac
