@@ -53,9 +53,12 @@ private def isSafeEquality (type : Expr) : Bool :=
 
     Pre-scanning ensures safe equalities from later hypotheses are available
     for earlier ones (e.g., `hi : ↑i = 2 * i0` simplifies `hc1` even though
-    `hc1` was declared before `hi`). -/
+    `hc1` was declared before `hi`).
+
+    Returns the updated mvarId and the final `SimpTheorems` containing all
+    safe equalities (for reuse by `preprocessTarget`). -/
 private def simplifyHypsIncremental (mvarId : MVarId) (ppSimpThms : Array SimpTheorems)
-    (ppSimprocs : Simp.SimprocsArray) : Lean.Meta.Grind.GrindM MVarId := do
+    (ppSimprocs : Simp.SimprocsArray) : Lean.Meta.Grind.GrindM (MVarId × SimpTheorems) := do
   mvarId.withContext do
   -- Collect prop hypothesis FVarIds in declaration order (oldest first)
   let lctx := (← mvarId.getDecl).lctx
@@ -107,23 +110,17 @@ private def simplifyHypsIncremental (mvarId : MVarId) (ppSimpThms : Array SimpTh
     ctx := ctx'
     mvarId := mvarId'
     if !continue_ then break
-  return mvarId
+  -- Return the safe equality SimpTheorems (entry 0 of the array)
+  return (mvarId, ctx.simpTheorems[0]!)
 
-/-- Preprocess the goal target with the preprocessing simpset + safe equalities
-    from the context. This is done as a separate light simp call (no discharger)
-    so the main simp pass's simpset stays lean. -/
-private def preprocessTarget (mvarId : MVarId) (ppSimpThms : Array SimpTheorems)
-    (ppSimprocs : Simp.SimprocsArray) : Lean.Meta.Grind.GrindM MVarId := do
+/-- Preprocess the goal target with the preprocessing simpset + safe equalities.
+    The `safeThms` are reused from `simplifyHypsIncremental` to avoid recomputation.
+    This is done as a separate light simp call (no discharger) so the main simp
+    pass's simpset stays lean. -/
+private def preprocessTarget (mvarId : MVarId) (safeThms : SimpTheorems)
+    (ppSimpThms : Array SimpTheorems) (ppSimprocs : Simp.SimprocsArray) :
+    Lean.Meta.Grind.GrindM MVarId := do
   mvarId.withContext do
-  -- Collect safe equalities from the context
-  let lctx := (← mvarId.getDecl).lctx
-  let mut safeThms : SimpTheorems := {}
-  for decl in lctx do
-    if decl.isImplementationDetail then continue
-    if !(← isProp decl.type) then continue
-    let type ← instantiateMVars decl.type
-    if isSafeEquality type then
-      safeThms ← safeThms.add (.fvar decl.fvarId) #[] (mkFVar decl.fvarId)
   let ppConfig : Simp.Config := { failIfUnchanged := false, maxDischargeDepth := 0 }
   let congrTheorems ← getSimpCongrTheorems
   let ctx ← Simp.mkContext ppConfig (simpTheorems := #[safeThms] ++ ppSimpThms) congrTheorems
@@ -154,7 +151,8 @@ private def buildBaseGoalState (mvarId : MVarId) (saturationRounds : Nat := 1)
   -- Incrementally simplify hypotheses before canonicalization
   let tmpMvarId ←
     if ppSimpThms.isEmpty then pure tmpMvarId
-    else simplifyHypsIncremental tmpMvarId ppSimpThms ppSimprocs
+    else do let (tmpMvarId, _) ← simplifyHypsIncremental tmpMvarId ppSimpThms ppSimprocs
+            pure tmpMvarId
   -- Don't revert — we want hypotheses in the lctx for processHypotheses
   let tmpMvarId ← tmpMvarId.unfoldReducible
   let tmpMvarId ← tmpMvarId.betaReduce
@@ -218,8 +216,8 @@ private def grindSimpCoreM (simpConfig : Simp.Config) (args : GrindSimpArgs)
   let (mvarId, fvarIdsToSimp, args) ←
     if !preprocess then pure (mvarId, fvarIdsToSimp, args)
     else do
-      let mvarId ← simplifyHypsIncremental mvarId ppSimpThms ppSimprocs
-      let mvarId ← preprocessTarget mvarId ppSimpThms ppSimprocs
+      let (mvarId, safeThms) ← simplifyHypsIncremental mvarId ppSimpThms ppSimprocs
+      let mvarId ← preprocessTarget mvarId safeThms ppSimpThms ppSimprocs
       -- Re-collect hypotheses: safe equalities go into hypsToUse but are
       -- excluded from fvarIdsToSimp to avoid self-application
       let (hypsToUse, fvarIdsToSimp) ← mvarId.withContext do
