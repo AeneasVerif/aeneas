@@ -168,6 +168,17 @@ private def buildBaseGoalState (mvarId : MVarId) (saturationRounds : Nat := 1)
   -- Optionally pre-saturate the e-graph with e-matching.
   -- Each round finds new pattern matches from hypothesis terms and adds derived facts.
   let goal ← saturateEmatch goal saturationRounds
+  -- Pre-derive arithmetic facts: drain pending facts, then run solver checks.
+  -- This lets the linear arithmetic solver pre-compute its assignment (satisfying
+  -- model for the current constraints). When the base state is cloned for each
+  -- discharge call, this cached assignment avoids redundant search work.
+  let goal ←
+    match (← (Lean.Meta.Grind.Action.assertAll).run goal) with
+    | .closed _ => pure goal
+    | .stuck gs => do
+      let goal := gs[0]? |>.getD goal
+      let (_, goal) ← Lean.Meta.Grind.GoalM.run goal (discard Lean.Meta.Grind.Solvers.check)
+      pure goal
   return goal.toGoalState
 where
   saturateEmatch (goal : Lean.Meta.Grind.Goal) : Nat → Lean.Meta.Grind.GrindM Lean.Meta.Grind.Goal
