@@ -33,6 +33,8 @@ namespace Aeneas.GrindSimpTac
 open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 open Utils
 
+initialize registerTraceClass `GrindSimpTac
+
 /-- Check if a type is a "safe" equality usable as a simp rewrite rule.
     Returns true iff the type is exactly `@Eq α lhs rhs` where `lhs` does not
     appear as a subexpression of `rhs` (to avoid rewriting loops). -/
@@ -59,6 +61,7 @@ private def isSafeEquality (type : Expr) : Bool :=
     safe equalities (for reuse by `preprocessTarget`). -/
 private def simplifyHypsIncremental (mvarId : MVarId) (ppSimpThms : Array SimpTheorems)
     (ppSimprocs : Simp.SimprocsArray) : Lean.Meta.Grind.GrindM (MVarId × SimpTheorems) := do
+  withTraceNode `GrindSimpTac (fun _ => pure m!"simplifyHypsIncremental") do
   mvarId.withContext do
   -- Collect prop hypothesis FVarIds in declaration order (oldest first)
   let lctx := (← mvarId.getDecl).lctx
@@ -120,6 +123,7 @@ private def simplifyHypsIncremental (mvarId : MVarId) (ppSimpThms : Array SimpTh
 private def preprocessTarget (mvarId : MVarId) (safeThms : SimpTheorems)
     (ppSimpThms : Array SimpTheorems) (ppSimprocs : Simp.SimprocsArray) :
     Lean.Meta.Grind.GrindM MVarId := do
+  withTraceNode `GrindSimpTac (fun _ => pure m!"preprocessTarget") do
   mvarId.withContext do
   let ppConfig : Simp.Config := { failIfUnchanged := false, maxDischargeDepth := 0 }
   let congrTheorems ← getSimpCongrTheorems
@@ -144,6 +148,7 @@ private def preprocessTarget (mvarId : MVarId) (safeThms : SimpTheorems)
 private def buildBaseGoalState (mvarId : MVarId) (saturationRounds : Nat := 1)
     (ppSimpThms : Array SimpTheorems := #[]) (ppSimprocs : Simp.SimprocsArray := #[]) :
     Lean.Meta.Grind.GrindM Lean.Meta.Grind.GoalState := do
+  withTraceNode `GrindSimpTac (fun _ => pure m!"buildBaseGoalState") do
   mvarId.withContext do
   -- Create a temporary mvar (same lctx, dummy target) to avoid modifying the main goal
   let tmpMvar ← mkFreshExprSyntheticOpaqueMVar (mkConst ``True) `grind_base
@@ -176,26 +181,44 @@ where
       if goal.inconsistent then return goal
       saturateEmatch goal n
 
+/-- Minimal discharger: introduces the target into the pre-built e-graph, asserts
+    propagated facts, then loops only the linear arithmetic solvers (linarith + lia).
+    No case splits, no tactic checking, no AC/CommRing solvers.
+    Optionally includes e-matching (`useEmatch`) and model-based theory combination (`useMbtc`). -/
+private def solveMinimal (goal : Lean.Meta.Grind.Goal)
+    (useEmatch : Bool := false) (useMbtc : Bool := false)
+    (maxIterations : Nat := 1000) : Lean.Meta.Grind.GrindM (Option Lean.Meta.Grind.Goal) := do
+  let arith := Lean.Meta.Grind.Action.linarith.andAlso Lean.Meta.Grind.Action.lia
+  let instantiate := Lean.Meta.Grind.Action.instantiate
+  let mbtc := Lean.Meta.Grind.Action.mbtc
+  let step : Lean.Meta.Grind.Action :=
+    match useEmatch, useMbtc with
+    | false, false => arith
+    | true, false => arith <|> instantiate
+    | false, true => arith <|> mbtc
+    | true, true => arith <|> instantiate <|> mbtc
+  let action := Lean.Meta.Grind.Action.intros 0 >> Lean.Meta.Grind.Action.assertAll >> step.loop maxIterations
+  match (← action.run goal) with
+  | .closed _ => return none
+  | .stuck gs =>
+    let goal :: _ := gs | return some goal
+    return goal
+
 /-- Discharge using a pre-built base GoalState.
     The base state has all hypotheses already canonicalized and internalized in
     the e-graph. For each discharge call, we construct a Goal from this base
     state + the discharge mvar, so only the target needs canonicalization.
 
-    The `solve` function handles the target via:
-    - `byContra?` converts `⊢ P` to `⊢ ¬P → False`
-    - `intro` introduces `h : ¬P` and adds it to the pre-built e-graph
-    - The search loop checks for inconsistency (True = False) -/
+    Uses `solveMinimal` instead of the full `solve` to avoid e-matching,
+    case splits, and tactic checking overhead. -/
 private def grindDischargeWithBase (baseState : Lean.Meta.Grind.GoalState)
-    (mvarId : MVarId) : Lean.Meta.Grind.GrindM Bool := do
-  -- Use revert := false since hypotheses are already processed in baseState
+    (mvarId : MVarId) (useEmatch : Bool) (useMbtc : Bool) : Lean.Meta.Grind.GrindM Bool := do
+  withTraceNode `GrindSimpTac (fun _ => pure m!"grindDischargeWithBase") do
   let config := { (← Lean.Meta.Grind.getConfig) with revert := false }
   Lean.Meta.Grind.withProtectedMCtx config mvarId fun mvarId' =>
     Lean.Meta.Grind.withGTransparency do
-      -- Construct Goal from base state + discharge mvar.
-      -- The e-graph already has all hypotheses. nextDeclIdx is past all existing
-      -- hypotheses, so solve's intros will only process the target.
       let goal : Lean.Meta.Grind.Goal := { toGoalState := baseState, mvarId := mvarId' }
-      let failure? ← Lean.Meta.Grind.solve goal
+      let failure? ← solveMinimal goal useEmatch useMbtc
       return failure?.isNone
 
 /-- Core simp+grind logic in GrindM.
@@ -210,8 +233,9 @@ private def grindSimpCoreM (simpConfig : Simp.Config) (args : GrindSimpArgs)
     (mvarId : MVarId) (fvarIdsToSimp : Array FVarId) (simplifyTarget : Bool)
     (baseSaturationRounds : Nat)
     (ppSimpThms : Array SimpTheorems) (ppSimprocs : Simp.SimprocsArray)
-    (preprocess : Bool) :
+    (preprocess : Bool) (useEmatch : Bool) (useMbtc : Bool) :
     Lean.Meta.Grind.GrindM (Option (Array FVarId × MVarId) × Simp.Stats) := do
+  withTraceNode `GrindSimpTac (fun _ => pure m!"grindSimpCoreM") do
   -- Optionally preprocess: incrementally simplify hypotheses + target
   let (mvarId, fvarIdsToSimp, args) ←
     if !preprocess then pure (mvarId, fvarIdsToSimp, args)
@@ -240,7 +264,7 @@ private def grindSimpCoreM (simpConfig : Simp.Config) (args : GrindSimpArgs)
     let discharge : Simp.Discharge := fun e => do
       let mvar ← mkFreshExprSyntheticOpaqueMVar e `grind.discharger
       try
-        let ok ← runInMetaM (grindDischargeWithBase baseGoalState mvar.mvarId!)
+        let ok ← runInMetaM (grindDischargeWithBase baseGoalState mvar.mvarId! useEmatch useMbtc)
         if !ok then return none
         let proof ← instantiateMVars mvar
         if proof.hasExprMVar then return none
@@ -249,15 +273,16 @@ private def grindSimpCoreM (simpConfig : Simp.Config) (args : GrindSimpArgs)
         return none
     let simpArgs := args.toSimpArgs
     let (ctx, simprocs) ← Simp.mkSimpCtx true simpConfig .simp simpArgs
-    Lean.Meta.simpGoal mvarId ctx (simprocs := simprocs) (simplifyTarget := simplifyTarget)
-      (discharge? := some discharge) (fvarIdsToSimp := fvarIdsToSimp)
+    withTraceNode `GrindSimpTac (fun _ => pure m!"simpGoal (with grind discharge)") do
+      Lean.Meta.simpGoal mvarId ctx (simprocs := simprocs) (simplifyTarget := simplifyTarget)
+        (discharge? := some discharge) (fvarIdsToSimp := fvarIdsToSimp)
 
 /-- Run the GrindM simp core at a given location, translating the result back to TacticM. -/
 private def runGrindSimpAt (params : Lean.Meta.Grind.Params)
     (simpConfig : Simp.Config) (args : GrindSimpArgs)
     (loc : Utils.Location) (baseSaturationRounds : Nat)
     (ppSimpThms : Array SimpTheorems) (ppSimprocs : Simp.SimprocsArray)
-    (preprocess : Bool) : TacticM Unit := do
+    (preprocess : Bool) (useEmatch : Bool) (useMbtc : Bool) : TacticM Unit := do
   withMainContext do
   let mvarId ← getMainGoal
   let (fvarIdsToSimp, simplifyTarget) ← match loc with
@@ -265,7 +290,7 @@ private def runGrindSimpAt (params : Lean.Meta.Grind.Params)
     | .wildcard => do pure (← mvarId.getNondepPropHyps, true)
   let (result?, _stats) ← Lean.Meta.Grind.GrindM.run
     (grindSimpCoreM simpConfig args mvarId fvarIdsToSimp simplifyTarget baseSaturationRounds
-      ppSimpThms ppSimprocs preprocess) params
+      ppSimpThms ppSimprocs preprocess useEmatch useMbtc) params
   match result? with
   | none => replaceMainGoal []
   | some (_fvars, mvarId') => replaceMainGoal [mvarId']
@@ -285,6 +310,8 @@ private def runGrindSimpAt (params : Lean.Meta.Grind.Params)
     - `preprocessSimpArgs`: if provided, hypotheses are incrementally simplified
       (replacing the old simp_all approach). Safe equalities are used to cross-simplify.
     - `baseSaturationRounds`: number of e-matching rounds on the base GoalState (default 1)
+    - `useEmatch`: enable e-matching during discharge (default false)
+    - `useMbtc`: enable model-based theory combination (default false)
 -/
 def grindSimpTac
     (grindConfig : Lean.Grind.Config)
@@ -294,8 +321,11 @@ def grindSimpTac
     (args : GrindSimpArgs)
     (loc : Utils.Location)
     (preprocessSimpArgs : Option Simp.SimpArgs := none)
-    (baseSaturationRounds : Nat := 1) : TacticM Unit := do
+    (baseSaturationRounds : Nat := 1)
+    (useEmatch : Bool := false)
+    (useMbtc : Bool := false) : TacticM Unit := do
   Elab.Tactic.focus do
+  withTraceNode `GrindSimpTac (fun _ => pure m!"grindSimpTac") do
   withMainContext do
   -- Build grind parameters
   let params ← Aeneas.Grind.mkParams grindConfig extensions withGroundSimprocs
@@ -306,9 +336,9 @@ def grindSimpTac
   match preprocessSimpArgs with
   | none =>
     runGrindSimpAt params simpConfig args loc baseSaturationRounds ppSimpThms ppSimprocs
-      (preprocess := false)
+      (preprocess := false) (useEmatch := useEmatch) (useMbtc := useMbtc)
   | some _ppArgs =>
     runGrindSimpAt params simpConfig args loc baseSaturationRounds ppSimpThms ppSimprocs
-      (preprocess := true)
+      (preprocess := true) (useEmatch := useEmatch) (useMbtc := useMbtc)
 
 end Aeneas.GrindSimpTac
