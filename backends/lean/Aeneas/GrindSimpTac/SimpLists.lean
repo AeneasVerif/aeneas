@@ -27,7 +27,7 @@ def gsimpListsTac (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) 
     hypsToUse := args.hypsToUse,
   }
   let grindConfig : Lean.Grind.Config := {
-    splits := 4, ematch := 5, splitMatch := false, splitIte := false,
+    splits := 4, ematch := 1, splitMatch := false, splitIte := false,
     splitIndPred := false, funext := false, gen := 2, instances := 1000,
     canonHeartbeats := 1000
   }
@@ -41,6 +41,7 @@ def gsimpListsTac (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) 
       simprocs := #[← ScalarTac.scalarTacSimprocExt.getSimprocs,
                      ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs]
     })
+    (baseSaturationRounds := 2)
 
 syntax (name := gsimp_lists) "gsimp_lists" ("[" (term<|>"*"),* "]")? (location)? : tactic
 

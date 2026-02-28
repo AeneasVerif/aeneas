@@ -41,6 +41,7 @@ def gsimpScalarTac (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location)
       simprocs := #[← ScalarTac.scalarTacSimprocExt.getSimprocs,
                      ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs]
     })
+    (baseSaturationRounds := 2)
 
 syntax (name := gsimp_scalar) "gsimp_scalar" ("[" (term<|>"*"),* "]")? (location)? : tactic
 

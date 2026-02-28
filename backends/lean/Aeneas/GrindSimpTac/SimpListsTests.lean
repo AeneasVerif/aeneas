@@ -57,7 +57,7 @@ example
 /- This test comes from SymCrypt.
    It requires the `simp_all` preprocessing step in `grindSimpTac` to cross-simplify
    hypotheses before the main `simp (discharger := grind)` pass. -/
-set_option maxHeartbeats 400000 in
+set_option maxHeartbeats 200000 in
 example
     (f : Std.Array U16 256#usize)
     (g : Std.Array U16 256#usize)

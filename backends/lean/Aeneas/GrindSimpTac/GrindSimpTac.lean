@@ -15,12 +15,14 @@ discharge call then reuses this pre-built state instead of re-canonicalizing
 all hypotheses from scratch. The `solve` function only needs to process the
 discharge target (via `byContra` + `intro` of `¬target`), not all hypotheses.
 
-When `preprocessSimpArgs` is provided, the tactic:
-1. Duplicates all prop assumptions
-2. Simplifies them with the given simp args (no discharger)
-3. Runs `simp_all` with the same simp args to cross-simplify hypotheses
-4. Runs `simp (discharger := grind [grindset]) [simpset] at loc`
-5. Clears the duplicated assumptions to restore a clean state
+**Preprocessing — incremental hypothesis simplification:**
+When `preprocessSimpArgs` is provided, hypotheses are simplified incrementally
+as part of the canonicalization in `buildBaseGoalState`. For each hypothesis
+(from oldest to newest), we simplify it using the preprocessing simpset plus
+any safe equalities (`a = b` where `a ∉ b`) from earlier hypotheses.
+The `SimpTheorems` discrimination tree is built incrementally (not rebuilt
+from scratch for each hypothesis). This replaces the previous `simp_all`-based
+preprocessing which was expensive.
 
 When `preprocessSimpArgs` is `none`, this is just:
   `simp (discharger := grind [grindset]) [simpset] at loc`
@@ -31,6 +33,105 @@ namespace Aeneas.GrindSimpTac
 open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 open Utils
 
+/-- Check if a type is a "safe" equality usable as a simp rewrite rule.
+    Returns true iff the type is exactly `@Eq α lhs rhs` where `lhs` does not
+    appear as a subexpression of `rhs` (to avoid rewriting loops). -/
+private def isSafeEquality (type : Expr) : Bool :=
+  if let some (_, lhs, rhs) := type.eq? then
+    !(rhs.find? (· == lhs)).isSome
+  else
+    false
+
+/-- Incrementally simplify hypotheses of an mvar.
+    Pre-scans all hypotheses to collect initial safe equalities, then does
+    a forward pass simplifying each hypothesis with the full set.
+
+    For each hypothesis `hi` (from oldest to newest):
+    1. Simplify using current simp context (base simpset + all safe equalities
+       except `hi` itself)
+    2. If `hi` changed (new FVarId), update the SimpTheorems entry
+
+    Pre-scanning ensures safe equalities from later hypotheses are available
+    for earlier ones (e.g., `hi : ↑i = 2 * i0` simplifies `hc1` even though
+    `hc1` was declared before `hi`). -/
+private def simplifyHypsIncremental (mvarId : MVarId) (ppSimpThms : Array SimpTheorems)
+    (ppSimprocs : Simp.SimprocsArray) : MetaM MVarId := do
+  mvarId.withContext do
+  -- Collect prop hypothesis FVarIds in declaration order (oldest first)
+  let lctx := (← mvarId.getDecl).lctx
+  let propHyps ← lctx.foldlM (init := #[]) fun acc decl => do
+    if !decl.isImplementationDetail then
+      if ← isProp decl.type then
+        return acc.push decl.fvarId
+    return acc
+  -- Pre-scan: collect initial safe equalities from all hypotheses into entry 0.
+  let mut initialSimpThms : SimpTheorems := {}
+  for fvarId in propHyps do
+    let type ← instantiateMVars (← fvarId.getType)
+    if isSafeEquality type then
+      initialSimpThms ← initialSimpThms.add (.fvar fvarId) #[] (mkFVar fvarId)
+  -- Build the initial simp context: [initialSimpThms] ++ ppSimpThms
+  let ppConfig : Simp.Config := { failIfUnchanged := false, maxDischargeDepth := 0 }
+  let congrTheorems ← getSimpCongrTheorems
+  let mut ctx ← Simp.mkContext ppConfig (simpTheorems := #[initialSimpThms] ++ ppSimpThms) congrTheorems
+  let mut mvarId := mvarId
+  for fvarId in propHyps do
+    let ok ← mvarId.withContext do
+      let lctx ← getLCtx
+      unless lctx.contains fvarId do return (true, ctx, mvarId)
+      -- Erase the hypothesis itself from simp theorems to avoid self-loops
+      let localCtx := ctx.setSimpTheorems (ctx.simpTheorems.eraseTheorem (.fvar fvarId))
+      let (result?, _stats) ← Lean.Meta.simpLocalDecl mvarId fvarId localCtx ppSimprocs
+        (mayCloseGoal := false)
+      match result? with
+      | none =>
+        return (false, ctx, mvarId)
+      | some (newFvarId, newMvarId) =>
+        if newFvarId != fvarId then
+          -- FVarId changed: the old origin (.fvar fvarId) is in the erased set,
+          -- but the new origin (.fvar newFvarId) is NOT, so addTheorem works.
+          let ctx ← newMvarId.withContext do
+            let type ← instantiateMVars (← newFvarId.getType)
+            let simpTheorems := ctx.simpTheorems.eraseTheorem (.fvar fvarId)
+            if isSafeEquality type then
+              let simpTheorems ← simpTheorems.addTheorem (.fvar newFvarId) (mkFVar newFvarId)
+                (config := ctx.indexConfig)
+              return ctx.setSimpTheorems simpTheorems
+            else
+              return ctx.setSimpTheorems simpTheorems
+          return (true, ctx, newMvarId)
+        else
+          -- FVarId unchanged: keep existing SimpTheorems entry from pre-scan (no erase needed)
+          return (true, ctx, mvarId)
+    let (continue_, ctx', mvarId') := ok
+    ctx := ctx'
+    mvarId := mvarId'
+    if !continue_ then break
+  return mvarId
+
+/-- Preprocess the goal target with the preprocessing simpset + safe equalities
+    from the context. This is done as a separate light simp call (no discharger)
+    so the main simp pass's simpset stays lean. -/
+private def preprocessTarget (mvarId : MVarId) (ppSimpThms : Array SimpTheorems)
+    (ppSimprocs : Simp.SimprocsArray) : MetaM MVarId := do
+  mvarId.withContext do
+  -- Collect safe equalities from the context
+  let lctx := (← mvarId.getDecl).lctx
+  let mut safeThms : SimpTheorems := {}
+  for decl in lctx do
+    if decl.isImplementationDetail then continue
+    if !(← isProp decl.type) then continue
+    let type ← instantiateMVars decl.type
+    if isSafeEquality type then
+      safeThms ← safeThms.add (.fvar decl.fvarId) #[] (mkFVar decl.fvarId)
+  let ppConfig : Simp.Config := { failIfUnchanged := false, maxDischargeDepth := 0 }
+  let congrTheorems ← getSimpCongrTheorems
+  let ctx ← Simp.mkContext ppConfig (simpTheorems := #[safeThms] ++ ppSimpThms) congrTheorems
+  let (result?, _stats) ← Lean.Meta.simpTarget mvarId ctx ppSimprocs
+  match result? with
+  | none => return mvarId  -- goal closed or unchanged
+  | some mvarId' => return mvarId'
+
 /-- Build a base GoalState with all hypotheses canonicalized and internalized
     in the e-graph. This is called once before `simp`, so each discharge call
     can reuse the pre-built e-graph instead of re-canonicalizing all hypotheses.
@@ -38,15 +139,22 @@ open Utils
     We use `revert := false` (regardless of the grind config) so hypotheses
     stay in the local context and are processed by `processHypotheses`.
 
+    When `ppSimpThms`/`ppSimprocs` are provided, hypotheses are incrementally
+    simplified before internalization (replacing the previous `simp_all` approach).
+
     When `saturationRounds > 0`, we also run e-matching on the base e-graph
-    to pre-saturate it with derived facts. This amortizes e-matching cost
-    across all discharge calls. -/
-private def buildBaseGoalState (mvarId : MVarId) (saturationRounds : Nat := 1) :
+    to pre-saturate it with derived facts. -/
+private def buildBaseGoalState (mvarId : MVarId) (saturationRounds : Nat := 1)
+    (ppSimpThms : Array SimpTheorems := #[]) (ppSimprocs : Simp.SimprocsArray := #[]) :
     Lean.Meta.Grind.GrindM Lean.Meta.Grind.GoalState := do
   mvarId.withContext do
   -- Create a temporary mvar (same lctx, dummy target) to avoid modifying the main goal
   let tmpMvar ← mkFreshExprSyntheticOpaqueMVar (mkConst ``True) `grind_base
   let tmpMvarId := tmpMvar.mvarId!
+  -- Incrementally simplify hypotheses before canonicalization
+  let tmpMvarId ←
+    if ppSimpThms.isEmpty then pure tmpMvarId
+    else simplifyHypsIncremental tmpMvarId ppSimpThms ppSimprocs
   -- Don't revert — we want hypotheses in the lctx for processHypotheses
   let tmpMvarId ← tmpMvarId.unfoldReducible
   let tmpMvarId ← tmpMvarId.betaReduce
@@ -98,10 +206,11 @@ private def grindDischargeWithBase (baseState : Lean.Meta.Grind.GoalState)
     reuses it via `controlAt MetaM` to bridge GrindM→SimpM. -/
 private def grindSimpCoreM (simpConfig : Simp.Config) (args : GrindSimpArgs)
     (mvarId : MVarId) (fvarIdsToSimp : Array FVarId) (simplifyTarget : Bool)
-    (baseSaturationRounds : Nat) :
+    (baseSaturationRounds : Nat)
+    (ppSimpThms : Array SimpTheorems) (ppSimprocs : Simp.SimprocsArray) :
     Lean.Meta.Grind.GrindM (Option (Array FVarId × MVarId) × Simp.Stats) := do
   -- Pre-build base GoalState with all hypotheses canonicalized and in the e-graph
-  let baseGoalState ← buildBaseGoalState mvarId baseSaturationRounds
+  let baseGoalState ← buildBaseGoalState mvarId baseSaturationRounds ppSimpThms ppSimprocs
   controlAt MetaM fun runInMetaM => do
     mvarId.withContext do
     let discharge : Simp.Discharge := fun e => do
@@ -122,14 +231,16 @@ private def grindSimpCoreM (simpConfig : Simp.Config) (args : GrindSimpArgs)
 /-- Run the GrindM simp core at a given location, translating the result back to TacticM. -/
 private def runGrindSimpAt (params : Lean.Meta.Grind.Params)
     (simpConfig : Simp.Config) (args : GrindSimpArgs)
-    (loc : Utils.Location) (baseSaturationRounds : Nat) : TacticM Unit := do
+    (loc : Utils.Location) (baseSaturationRounds : Nat)
+    (ppSimpThms : Array SimpTheorems) (ppSimprocs : Simp.SimprocsArray) : TacticM Unit := do
   withMainContext do
   let mvarId ← getMainGoal
   let (fvarIdsToSimp, simplifyTarget) ← match loc with
     | .targets hyps target => pure (hyps, target)
     | .wildcard => do pure (← mvarId.getNondepPropHyps, true)
   let (result?, _stats) ← Lean.Meta.Grind.GrindM.run
-    (grindSimpCoreM simpConfig args mvarId fvarIdsToSimp simplifyTarget baseSaturationRounds) params
+    (grindSimpCoreM simpConfig args mvarId fvarIdsToSimp simplifyTarget baseSaturationRounds
+      ppSimpThms ppSimprocs) params
   match result? with
   | none => replaceMainGoal []
   | some (_fvars, mvarId') => replaceMainGoal [mvarId']
@@ -141,15 +252,14 @@ private def runGrindSimpAt (params : Lean.Meta.Grind.Params)
       is set up once and shared across all discharge calls
     - The discharge function calls back into GrindM via `controlAt MetaM`
 
-    The preprocessing and goal management remain in `TacticM`.
-
     Parameters:
     - `grindConfig`, `withGroundSimprocs`, `extensions`: configure the grind discharger
     - `simpConfig`: simp configuration
     - `args`: simp lemmas / simprocs / definitions to unfold
     - `loc`: where to simplify (target, hypotheses, or everywhere)
-    - `preprocessSimpArgs`: if provided, duplicate assumptions and run simp + simp_all
-      with these args before the main simp+grind pass
+    - `preprocessSimpArgs`: if provided, hypotheses are incrementally simplified
+      (replacing the old simp_all approach). Safe equalities are used to cross-simplify.
+    - `baseSaturationRounds`: number of e-matching rounds on the base GoalState (default 1)
 -/
 def grindSimpTac
     (grindConfig : Lean.Grind.Config)
@@ -164,49 +274,43 @@ def grindSimpTac
   withMainContext do
   -- Build grind parameters
   let params ← Aeneas.Grind.mkParams grindConfig extensions withGroundSimprocs
-  -- Optionally preprocess: duplicate assumptions, simplify them, then clear after
+  -- Extract preprocessing simp theorems/simprocs (empty if no preprocessing)
+  let (ppSimpThms, ppSimprocs) ← match preprocessSimpArgs with
+    | none => pure (#[], #[])
+    | some ppArgs => pure (ppArgs.simpThms, ppArgs.simprocs)
   match preprocessSimpArgs with
-  | none => runGrindSimpAt params simpConfig args loc baseSaturationRounds
-  | some ppArgs => do
-    -- Step 1: duplicate all prop assumptions
-    let (_oldFvars, newFvars) ← Utils.duplicateAssumptions
+  | none =>
+    runGrindSimpAt params simpConfig args loc baseSaturationRounds ppSimpThms ppSimprocs
+  | some _ppArgs => do
+    -- Preprocessing: incrementally simplify all prop hypotheses
+    -- using safe equalities from earlier hypotheses + the preprocessing simpset.
+    -- This replaces the previous simp + simp_all approach.
+    let mvarId ← getMainGoal
+    let mvarId ← simplifyHypsIncremental mvarId ppSimpThms ppSimprocs
+    -- Also preprocess the TARGET with ppSimpThms + safe equalities (the incremental
+    -- simp only processes hypotheses). We do this as a separate light simp call
+    -- to avoid bloating the main simp pass's simpset.
+    let mvarId ← preprocessTarget mvarId ppSimpThms ppSimprocs
+    replaceMainGoal [mvarId]
     withMainContext do
-    -- Step 2: simplify the duplicated assumptions (no discharger)
-    let ppConfig : Simp.Config := { failIfUnchanged := false, maxDischargeDepth := 0 }
-    let newFvars ← do
-      match ← Simp.simpAt true ppConfig ppArgs (.targets newFvars false) with
-      | none => return -- goal proved during preprocessing
-      | some fvars => pure fvars
-    withMainContext do
-    -- Save user names of let-decl FVarIds and duplicate FVarIds before simp_all
-    let letNames ← args.letDeclsToUnfold.mapM (·.getUserName)
-    let newFvarNames ← newFvars.mapM (·.getUserName)
-    -- Step 3: simp_all to cross-simplify hypotheses with each other
-    let ppAllConfig : Simp.Config := { failIfUnchanged := false, maxDischargeDepth := 0 }
-    Simp.simpAll ppAllConfig true ppArgs
-    if (← getUnsolvedGoals) == [] then return
-    withMainContext do
-    -- Re-resolve FVarIds after simp_all (it may have replaced them)
-    let resolveNames (names : Array Name) : TacticM (Array FVarId) :=
-      names.filterMapM fun name => do
-        match (← getLCtx).findFromUserName? name with
-        | some decl => pure (some decl.fvarId)
-        | none => pure none
-    let letDeclsToUnfold ← resolveNames letNames
-    let newFvars ← resolveNames newFvarNames
-    -- After simp_all, use all current prop hypotheses (equivalent to [*])
-    -- since the original FVarIds are stale and the cross-simplified context
-    -- may have new useful facts
-    let hypsToUse ← do
-      let decls ← (← getLCtx).getDecls
-      let hyps ← decls.filterMapM fun d => do
-        if ← isProp d.type then pure (some d.fvarId) else pure none
-      pure hyps.toArray
-    let args := { args with hypsToUse, letDeclsToUnfold }
-    -- Step 4: run the main simp with grind discharger
-    runGrindSimpAt params simpConfig args loc baseSaturationRounds
-    -- Step 5: clear the duplicated assumptions
-    if (← getUnsolvedGoals) != [] then
-      setGoals [← (← getMainGoal).tryClearMany newFvars]
+    -- After incremental simp, collect all prop hypotheses.
+    -- Safe equalities go into `hypsToUse` (as rewrite rules in the simpset)
+    -- but are EXCLUDED from `fvarIdsToSimp` to avoid self-application
+    -- (e.g., `hi : ↑i = 2 * i0` would rewrite itself to `True`).
+    let lctx ← getLCtx
+    let mut hypsToUse : Array FVarId := #[]
+    let mut fvarIdsToSimp : Array FVarId := #[]
+    for decl in lctx do
+      if decl.isImplementationDetail then continue
+      if !(← isProp decl.type) then continue
+      hypsToUse := hypsToUse.push decl.fvarId
+      let type ← instantiateMVars decl.type
+      if !isSafeEquality type then
+        fvarIdsToSimp := fvarIdsToSimp.push decl.fvarId
+    let args := { args with hypsToUse }
+    -- Use explicit targets to control which hypotheses are simplified
+    let loc := Utils.Location.targets fvarIdsToSimp true
+    -- Run the main simp with grind discharger
+    runGrindSimpAt params simpConfig args loc baseSaturationRounds ppSimpThms ppSimprocs
 
 end Aeneas.GrindSimpTac
