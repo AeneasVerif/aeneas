@@ -753,7 +753,7 @@ syntax (name := rustConst) "rust_const" str Parser.Tactic.optConfig : attr
 def elabConstNameInfo (stx : Syntax) : AttrM (String × ConstInfo) :=
   withRef stx do
     match stx with
-    | `(attr| rust_trait_impl $pat $config) => do
+    | `(attr| rust_const $pat $config) => do
       let pat := pat.getString
       if pat = "" then throwError "Not a valid name pattern: {pat}"
       let info ← liftCommandElabM (elabRustConstInfo config)
