@@ -1,4 +1,5 @@
 import Aeneas.GrindSimpTac.Init
+import Aeneas.GrindSimpTac.MonoGrindState
 import Aeneas.Grind.Init
 
 /-!
@@ -35,89 +36,8 @@ open Utils
 
 initialize registerTraceClass `GrindSimpTac
 
-/-- Check if a type is a "safe" equality usable as a simp rewrite rule.
-    Returns true iff the type is exactly `@Eq α lhs rhs` where `lhs` does not
-    appear as a subexpression of `rhs` (to avoid rewriting loops). -/
-private def isSafeEquality (type : Expr) : Bool :=
-  if let some (_, lhs, rhs) := type.eq? then
-    !(rhs.find? (· == lhs)).isSome
-  else
-    false
-
-/-- Incrementally simplify hypotheses of an mvar.
-    Pre-scans all hypotheses to collect initial safe equalities, then does
-    a forward pass simplifying each hypothesis with the full set.
-
-    For each hypothesis `hi` (from oldest to newest):
-    1. Simplify using current simp context (base simpset + all safe equalities
-       except `hi` itself)
-    2. If `hi` changed (new FVarId), update the SimpTheorems entry
-
-    Pre-scanning ensures safe equalities from later hypotheses are available
-    for earlier ones (e.g., `hi : ↑i = 2 * i0` simplifies `hc1` even though
-    `hc1` was declared before `hi`).
-
-    Returns the updated mvarId and the final `SimpTheorems` containing all
-    safe equalities (for reuse by `preprocessTarget`). -/
-private def simplifyHypsIncremental (mvarId : MVarId) (ppSimpThms : Array SimpTheorems)
-    (ppSimprocs : Simp.SimprocsArray) : Lean.Meta.Grind.GrindM (MVarId × SimpTheorems) := do
-  withTraceNode `GrindSimpTac (fun _ => pure m!"simplifyHypsIncremental") do
-  mvarId.withContext do
-  -- Collect prop hypothesis FVarIds in declaration order (oldest first)
-  let lctx := (← mvarId.getDecl).lctx
-  let propHyps ← lctx.foldlM (init := #[]) fun acc decl => do
-    if !decl.isImplementationDetail then
-      if ← isProp decl.type then
-        return acc.push decl.fvarId
-    return acc
-  -- Pre-scan: collect initial safe equalities from all hypotheses into entry 0.
-  let mut initialSimpThms : SimpTheorems := {}
-  for fvarId in propHyps do
-    let type ← instantiateMVars (← fvarId.getType)
-    if isSafeEquality type then
-      initialSimpThms ← initialSimpThms.add (.fvar fvarId) #[] (mkFVar fvarId)
-  -- Build the initial simp context: [initialSimpThms] ++ ppSimpThms
-  let ppConfig : Simp.Config := { failIfUnchanged := false, maxDischargeDepth := 0 }
-  let congrTheorems ← getSimpCongrTheorems
-  let mut ctx ← Simp.mkContext ppConfig (simpTheorems := #[initialSimpThms] ++ ppSimpThms) congrTheorems
-  let mut mvarId := mvarId
-  for fvarId in propHyps do
-    let ok ← mvarId.withContext do
-      let lctx ← getLCtx
-      unless lctx.contains fvarId do return (true, ctx, mvarId)
-      -- Erase the hypothesis itself from simp theorems to avoid self-loops
-      let localCtx := ctx.setSimpTheorems (ctx.simpTheorems.eraseTheorem (.fvar fvarId))
-      let (result?, _stats) ← Lean.Meta.simpLocalDecl mvarId fvarId localCtx ppSimprocs
-        (mayCloseGoal := false)
-      match result? with
-      | none =>
-        return (false, ctx, mvarId)
-      | some (newFvarId, newMvarId) =>
-        if newFvarId != fvarId then
-          -- FVarId changed: the old origin (.fvar fvarId) is in the erased set,
-          -- but the new origin (.fvar newFvarId) is NOT, so addTheorem works.
-          let ctx ← newMvarId.withContext do
-            let type ← instantiateMVars (← newFvarId.getType)
-            let simpTheorems := ctx.simpTheorems.eraseTheorem (.fvar fvarId)
-            if isSafeEquality type then
-              let simpTheorems ← simpTheorems.addTheorem (.fvar newFvarId) (mkFVar newFvarId)
-                (config := ctx.indexConfig)
-              return ctx.setSimpTheorems simpTheorems
-            else
-              return ctx.setSimpTheorems simpTheorems
-          return (true, ctx, newMvarId)
-        else
-          -- FVarId unchanged: keep existing SimpTheorems entry from pre-scan (no erase needed)
-          return (true, ctx, mvarId)
-    let (continue_, ctx', mvarId') := ok
-    ctx := ctx'
-    mvarId := mvarId'
-    if !continue_ then break
-  -- Return the safe equality SimpTheorems (entry 0 of the array)
-  return (mvarId, ctx.simpTheorems[0]!)
-
 /-- Preprocess the goal target with the preprocessing simpset + safe equalities.
-    The `safeThms` are reused from `simplifyHypsIncremental` to avoid recomputation.
+    The `safeThms` are reused from `MonoGrindState.localSimps` to avoid recomputation.
     This is done as a separate light simp call (no discharger) so the main simp
     pass's simpset stays lean. -/
 private def preprocessTarget (mvarId : MVarId) (safeThms : SimpTheorems)
@@ -132,65 +52,6 @@ private def preprocessTarget (mvarId : MVarId) (safeThms : SimpTheorems)
   match result? with
   | none => return mvarId  -- goal closed or unchanged
   | some mvarId' => return mvarId'
-
-/-- Build a base GoalState with all hypotheses canonicalized and internalized
-    in the e-graph. This is called once before `simp`, so each discharge call
-    can reuse the pre-built e-graph instead of re-canonicalizing all hypotheses.
-
-    We use `revert := false` (regardless of the grind config) so hypotheses
-    stay in the local context and are processed by `processHypotheses`.
-
-    When `ppSimpThms`/`ppSimprocs` are provided, hypotheses are incrementally
-    simplified before internalization (replacing the previous `simp_all` approach).
-
-    When `saturationRounds > 0`, we also run e-matching on the base e-graph
-    to pre-saturate it with derived facts. -/
-private def buildBaseGoalState (mvarId : MVarId) (saturationRounds : Nat := 1)
-    (ppSimpThms : Array SimpTheorems := #[]) (ppSimprocs : Simp.SimprocsArray := #[]) :
-    Lean.Meta.Grind.GrindM Lean.Meta.Grind.GoalState := do
-  withTraceNode `GrindSimpTac (fun _ => pure m!"buildBaseGoalState") do
-  mvarId.withContext do
-  -- Create a temporary mvar (same lctx, dummy target) to avoid modifying the main goal
-  let tmpMvar ← mkFreshExprSyntheticOpaqueMVar (mkConst ``True) `grind_base
-  let tmpMvarId := tmpMvar.mvarId!
-  -- Incrementally simplify hypotheses before canonicalization
-  let tmpMvarId ←
-    if ppSimpThms.isEmpty then pure tmpMvarId
-    else do let (tmpMvarId, _) ← simplifyHypsIncremental tmpMvarId ppSimpThms ppSimprocs
-            pure tmpMvarId
-  -- Don't revert — we want hypotheses in the lctx for processHypotheses
-  let tmpMvarId ← tmpMvarId.unfoldReducible
-  let tmpMvarId ← tmpMvarId.betaReduce
-  appendTagSuffix tmpMvarId `grind_base
-  let goal ← Lean.Meta.Grind.mkGoalCore tmpMvarId
-  -- Internalize all hypotheses into the e-graph (this is where canonicalization happens)
-  let goal ← Lean.Meta.Grind.processHypotheses goal
-  -- Optionally pre-saturate the e-graph with e-matching.
-  -- Each round finds new pattern matches from hypothesis terms and adds derived facts.
-  let goal ← saturateEmatch goal saturationRounds
-  -- Pre-derive arithmetic facts: drain pending facts, then run solver checks.
-  -- This lets the linear arithmetic solver pre-compute its assignment (satisfying
-  -- model for the current constraints). When the base state is cloned for each
-  -- discharge call, this cached assignment avoids redundant search work.
-  let goal ←
-    match (← (Lean.Meta.Grind.Action.assertAll).run goal) with
-    | .closed _ => pure goal
-    | .stuck gs => do
-      let goal := gs[0]? |>.getD goal
-      let (_, goal) ← Lean.Meta.Grind.GoalM.run goal (discard Lean.Meta.Grind.Solvers.check)
-      pure goal
-  return goal.toGoalState
-where
-  saturateEmatch (goal : Lean.Meta.Grind.Goal) : Nat → Lean.Meta.Grind.GrindM Lean.Meta.Grind.Goal
-    | 0 => return goal
-    | n + 1 => do
-      if goal.inconsistent then return goal
-      let (progress, goal) ← Lean.Meta.Grind.GoalM.run goal Lean.Meta.Grind.ematch
-      if !progress then return goal
-      -- Process the new facts derived by e-matching
-      let goal ← Lean.Meta.Grind.GoalM.run' goal Lean.Meta.Grind.processNewFacts
-      if goal.inconsistent then return goal
-      saturateEmatch goal n
 
 /-- Minimal discharger: introduces the target into the pre-built e-graph, asserts
     propagated facts, then loops only the linear arithmetic solvers (linarith + lia).
@@ -236,12 +97,15 @@ private def grindDischargeWithBase (baseState : Lean.Meta.Grind.GoalState)
 
 /-- Core simp+grind logic in GrindM.
     Runs `simp` on the given goal with grind as the discharger.
-    Pre-builds a base GoalState with all hypotheses, then each discharge call
-    reuses it via `controlAt MetaM` to bridge GrindM→SimpM.
 
-    When `preprocess` is true, hypotheses are incrementally simplified and the
-    target is preprocessed before the main simp pass. Safe equalities are
-    excluded from `fvarIdsToSimp` to avoid self-application. -/
+    Uses `MonoGrindState` to unify hypothesis preprocessing and grind state
+    building into a single pass. Each hypothesis is simplified (if `preprocess`),
+    then added to the grind e-graph. After all hypotheses are processed,
+    e-matching saturation and arithmetic pre-derivation run once.
+
+    When `preprocess` is true, the target is also preprocessed with the safe
+    equalities, and safe equalities are excluded from `fvarIdsToSimp` to avoid
+    self-application. -/
 private def grindSimpCoreM (simpConfig : Simp.Config) (args : GrindSimpArgs)
     (mvarId : MVarId) (fvarIdsToSimp : Array FVarId) (simplifyTarget : Bool)
     (baseSaturationRounds : Nat)
@@ -249,12 +113,14 @@ private def grindSimpCoreM (simpConfig : Simp.Config) (args : GrindSimpArgs)
     (preprocess : Bool) (useMinimalSolver : Bool) :
     Lean.Meta.Grind.GrindM (Option (Array FVarId × MVarId) × Simp.Stats) := do
   withTraceNode `GrindSimpTac (fun _ => pure m!"grindSimpCoreM") do
-  -- Optionally preprocess: incrementally simplify hypotheses + target
+  -- Optionally preprocess hypotheses and target on the main goal first
   let (mvarId, fvarIdsToSimp, args) ←
     if !preprocess then pure (mvarId, fvarIdsToSimp, args)
     else do
-      let (mvarId, safeThms) ← simplifyHypsIncremental mvarId ppSimpThms ppSimprocs
-      let mvarId ← preprocessTarget mvarId safeThms ppSimpThms ppSimprocs
+      -- Simplify main goal hypotheses using safe equalities + preprocessing simpset
+      let (mvarId, localSimps) ← simplifyHypsWithSafeEqs mvarId ppSimpThms ppSimprocs
+      -- Simplify the target
+      let mvarId ← preprocessTarget mvarId localSimps ppSimpThms ppSimprocs
       -- Re-collect hypotheses: safe equalities go into hypsToUse but are
       -- excluded from fvarIdsToSimp to avoid self-application
       let (hypsToUse, fvarIdsToSimp) ← mvarId.withContext do
@@ -270,8 +136,11 @@ private def grindSimpCoreM (simpConfig : Simp.Config) (args : GrindSimpArgs)
             fvarIdsToSimp := fvarIdsToSimp.push decl.fvarId
         pure (hypsToUse, fvarIdsToSimp)
       pure (mvarId, fvarIdsToSimp, { args with hypsToUse })
-  -- Pre-build base GoalState with all hypotheses canonicalized and in the e-graph
-  let baseGoalState ← buildBaseGoalState mvarId baseSaturationRounds ppSimpThms ppSimprocs
+  -- Build MonoGrindState from (possibly preprocessed) main goal
+  let monoState ← MonoGrindState.initializeFromMVar mvarId ppSimpThms ppSimprocs
+  let monoState ← monoState.deriveFacts baseSaturationRounds
+  -- Use the pre-built GoalState for discharge
+  let baseGoalState := monoState.goal.toGoalState
   controlAt MetaM fun runInMetaM => do
     mvarId.withContext do
     let discharge : Simp.Discharge := fun e => do
@@ -341,15 +210,12 @@ def grindSimpTac
   -- Build grind parameters
   let params ← Aeneas.Grind.mkParams grindConfig extensions withGroundSimprocs
   -- Extract preprocessing simp theorems/simprocs (empty if no preprocessing)
-  let (ppSimpThms, ppSimprocs) ← match preprocessSimpArgs with
-    | none => pure (#[], #[])
-    | some ppArgs => pure (ppArgs.simpThms, ppArgs.simprocs)
   match preprocessSimpArgs with
   | none =>
-    runGrindSimpAt params simpConfig args loc baseSaturationRounds ppSimpThms ppSimprocs
+    runGrindSimpAt params simpConfig args loc baseSaturationRounds #[] #[]
       (preprocess := false) (useMinimalSolver := useMinimalSolver)
-  | some _ppArgs =>
-    runGrindSimpAt params simpConfig args loc baseSaturationRounds ppSimpThms ppSimprocs
+  | some ppArgs =>
+    runGrindSimpAt params simpConfig args loc baseSaturationRounds ppArgs.simpThms ppArgs.simprocs
       (preprocess := true) (useMinimalSolver := useMinimalSolver)
 
 end Aeneas.GrindSimpTac
