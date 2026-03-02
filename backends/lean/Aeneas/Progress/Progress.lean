@@ -124,7 +124,20 @@ structure MainGoal where
   goal : MVarId
   /-- The variables "output" by the monadic function call and introduced in the context -/
   outputs : Array FVarId
-  /-- The post-conditions introduced in the context -/
+  /-- The post-conditions introduced in the context.
+
+  TODO: remove this and generalize the handling of output variables and post-conditions.
+  For instance, the user may interleave propositions and output variables by writing post-conditions
+  ike this:
+  ```
+  ∃ (h : x < n), -- post-condition
+  ∃ (y : ...),   -- output variable whose type depends on h
+  ...            -- rest of the post-condition
+  ```
+  Generally speaking it shouldn't be a problem, put aside the fact that we will need to decide where
+  to insert the "pretty equality". In most situations, it should be fine to insert it before the first
+  output proposition.
+  -/
   posts : Array FVarId
 
 /-- Information about a variable introduced by `progress` (output or post-condition). -/
