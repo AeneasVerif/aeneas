@@ -14,49 +14,31 @@ Built on top of `grindSimpTac`.
 namespace Aeneas.GrindSimpTac.SimpLists
 
 open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
-open Aeneas.GrindSimpTac (GrindSimpArgs grindSimpTac)
+open Aeneas.GrindSimpTac
 
-def gsimpListsTac (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) : TacticM Unit := do
-  let simpArgs : GrindSimpArgs := {
-    simpThms := #[← SimpLists.simpListsSimpExt.getTheorems,
-                   ← SimpBoolProp.simpBoolPropSimpExt.getTheorems],
-    simprocs := #[← SimpLists.simpListsSimprocExt.getSimprocs,
-                   ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs],
-    declsToUnfold := args.declsToUnfold,
-    addSimpThms := args.addSimpThms,
-    hypsToUse := args.hypsToUse,
-  }
-  let grindConfig : Lean.Grind.Config := {
-    splits := 4, ematch := 1, splitMatch := false, splitIte := false,
-    splitIndPred := false, funext := false, gen := 2, instances := 1000,
-    canonHeartbeats := 1000
-  }
-  let extensions := #[Grind.agrindExt.getState (← getEnv)]
-  grindSimpTac grindConfig (withGroundSimprocs := true) extensions
-    { maxDischargeDepth := 2, failIfUnchanged := false, contextual := true }
-    simpArgs loc
-    (preprocessSimpThms := #[← ScalarTac.scalarTacSimpExt.getTheorems,
-                              ← SimpBoolProp.simpBoolPropSimpExt.getTheorems])
-    (preprocessSimprocs := #[← ScalarTac.scalarTacSimprocExt.getSimprocs,
-                              ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs])
-    (preprocessHypsToUseSimpThms := #[← SimpLists.simpListsHypsSimpExt.getTheorems,
-                                       ← SimpBoolProp.simpBoolPropSimpExt.getTheorems])
-    (preprocessHypsToUseSimprocs := #[← SimpLists.simpListsHypsSimprocExt.getSimprocs,
-                                       ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs])
-    (genPreprocess := some 2)
+syntax (name := gsimp_lists) "gsimp_lists" "only"? simpArgs (location)? : tactic
+syntax (name := gsimp_lists?) "gsimp_lists?" "only"? simpArgs (location)? : tactic
 
-syntax (name := gsimp_lists) "gsimp_lists" ("[" (term<|>"*"),* "]")? (location)? : tactic
-
-elab stx:gsimp_lists : tactic =>
+private def gsimpListsElab (qmark : Bool)
+  (onlyTk : Option Syntax)
+  (simpArgsStx : Option (TSyntax ``simpArgs))
+  (loc : Option (TSyntax `Lean.Parser.Tactic.location))
+  (stx : stx)
+  : TacticM Unit := do
   withMainContext do
-  let (args, loc) ← do
-    match stx with
-    | `(tactic| gsimp_lists $[[$args,*]]? $[$loc:location]?) => do
-      let args := args.map (·.getElems) |>.getD #[]
-      let args ← ScalarTac.condSimpParseArgs "gsimp_lists" args
-      let loc ← Utils.parseOptLocation loc
-      pure (args, loc)
-    | _ => Lean.Elab.throwUnsupportedSyntax
-  gsimpListsTac args loc
+  let loc ← Utils.parseOptLocation loc
+  let «only» := onlyTk.isSome
+  let simpThms ← SimpLists.simpListsSimpExt.getTheorems
+  let simprocs ← SimpLists.simpListsSimprocExt.getSimprocs
+  let hypsSimpThms ← SimpLists.simpListsHypsSimpExt.getTheorems
+  let hypsSimprocs ← SimpLists.simpListsHypsSimprocExt.getSimprocs
+  standardGrindSimpTac loc «only» (simpThms, simprocs)
+    (hypsSimpThms, hypsSimprocs) simpArgsStx
+
+elab_rules : tactic
+  | `(tactic| gsimp_lists $[only%$onlyTk]? $args $[$loc:location]?) => do
+    gsimpListsElab false onlyTk args loc (← getRef)
+  | `(tactic| gsimp_lists? $[only%$onlyTk]? $args $[$loc:location]?) => do
+    gsimpListsElab true onlyTk args loc (← getRef)
 
 end Aeneas.GrindSimpTac.SimpLists

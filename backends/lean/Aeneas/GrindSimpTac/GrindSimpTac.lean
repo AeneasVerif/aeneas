@@ -1,6 +1,6 @@
-import Aeneas.GrindSimpTac.Init
 import Aeneas.GrindSimpTac.MonoGrindState
 import Aeneas.Grind.Init
+import Aeneas.ScalarTac.CondSimpTac -- TODO: simplify this import
 
 /-!
 # `grindSimpTac`: simp with grind as a discharger
@@ -26,6 +26,58 @@ open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 open Utils
 
 initialize registerTraceClass `GrindSimpTac
+
+/-- Arguments for `grindSimpTac`. Mirrors `ScalarTac.CondSimpArgs` but is kept
+    separate so the two modules can evolve independently. -/
+structure GrindSimpArgs where
+  simpThms : Array SimpTheorems := #[]
+  simprocs : Simp.SimprocsArray := #[]
+  declsToUnfold : Array Name := #[]
+  letDeclsToUnfold : Array FVarId := #[]
+  addSimpThms : Array Name := #[]
+  addSimprocs : Array Name := #[]
+  hypsToUse : Array FVarId := #[]
+
+def GrindSimpArgs.toSimpArgs (args : GrindSimpArgs) : Simp.SimpArgs := {
+    simpThms := args.simpThms,
+    simprocs := args.simprocs,
+    declsToUnfold := args.declsToUnfold,
+    letDeclsToUnfold := args.letDeclsToUnfold,
+    addSimpThms := args.addSimpThms,
+    addSimprocs := args.addSimprocs,
+    hypsToUse := args.hypsToUse }
+
+
+/- /-- Format a suggestion string from the used simp theorems.
+    Produces something like `tacPrefix only [thm1, thm2, ↓thm3] locSuffix`.
+
+    This is adapted from `Lean.Elab.Tactic.mkSimpOnly`. -/
+private def formatSuggestion (tacPrefix : String) (locSuffix : String)
+    (usedSimps : Simp.UsedSimps) : MetaM Syntax := do
+  let env ← getEnv
+  let lctx ← getLCtx
+  let mut args : Array String := #[]
+  for thm in usedSimps.toArray do
+    match thm with
+    | .decl declName post inv =>
+      if env.contains declName && !Lean.Meta.Match.isMatchEqnTheorem env declName then
+        let name ← Lean.unresolveNameGlobalAvoidingLocals declName
+        let s := match post, inv with
+          | true,  true  => s!"← {name}"
+          | true,  false => s!"{name}"
+          | false, true  => s!"↓ ← {name}"
+          | false, false => s!"↓ {name}"
+        args := args.push s
+    | .fvar fvarId =>
+      if let some ldecl := lctx.find? fvarId then
+        if !ldecl.userName.isInaccessibleUserName && !ldecl.userName.hasMacroScopes then
+          args := args.push s!"{ldecl.userName}"
+    | .stx _ _ | .other _ => pure ()
+  let argStr := ", ".intercalate args.toList
+  let loc := if locSuffix.isEmpty then "" else s!" {locSuffix}"
+  return s!"{tacPrefix} only [{argStr}]{loc}"
+-/
+
 
 /-- Minimal discharger: introduces the target into the pre-built e-graph, asserts
     propagated facts, then loops only the linear arithmetic solvers (linarith + lia).
@@ -111,6 +163,8 @@ private def preprocessHypsToUse (mvarId : MVarId) (args : GrindSimpArgs)
   let (newIds, mvarId) ← mvarId.assertHypotheses toAssert
   return (mvarId, { args with hypsToUse := args.hypsToUse ++ newIds }, newIds)
 
+syntax simpArgs := (" [" withoutPosition((simpStar <|> simpErase <|> simpLemma),*,?) "]")?
+
 /-- Core simp+grind logic in GrindM.
     Runs `simp` on the given goal with grind as the discharger.
 
@@ -123,16 +177,13 @@ private def preprocessHypsToUse (mvarId : MVarId) (args : GrindSimpArgs)
     When `ppHypsToUseSimpThms` is non-empty, `args.hypsToUse` are duplicated,
     the duplicates are simplified with that simpset, and the simplified copies
     are used for the main simp pass (then cleared afterwards). -/
-private def grindSimpCoreM (simpConfig : Simp.Config) (args : GrindSimpArgs)
+private def grindSimpCoreM
     (mvarId : MVarId) (fvarIdsToSimp : Array FVarId) (simplifyTarget : Bool)
     (ppSimpThms : Array SimpTheorems) (ppSimprocs : Simp.SimprocsArray)
-    (ppHypsToUseSimpThms : Array SimpTheorems) (ppHypsToUseSimprocs : Simp.SimprocsArray)
-    (genPreprocess : Option Nat) (useMinimalSolver : Bool) :
+    (genPreprocess : Option Nat) (useMinimalSolver : Bool)
+    (ctx : Simp.Context) (simprocs : Simp.SimprocsArray) :
     Lean.Meta.Grind.GrindM (Option (Array FVarId × MVarId) × Simp.Stats) := do
   withTraceNode `GrindSimpTac (fun _ => pure m!"grindSimpCoreM") do
-  -- Preprocess hypsToUse
-  let (mvarId, args, newHypIds) ←
-    preprocessHypsToUse mvarId args ppHypsToUseSimpThms ppHypsToUseSimprocs
   -- Build MonoGrindState from the main goal
   let monoState ← MonoGrindState.initializeFromMVar mvarId ppSimpThms ppSimprocs
   let monoState ← monoState.deriveFacts (genPreprocess := genPreprocess)
@@ -154,39 +205,9 @@ private def grindSimpCoreM (simpConfig : Simp.Config) (args : GrindSimpArgs)
         return some proof
       catch _ =>
         return none
-    let simpArgs := args.toSimpArgs
-    let (ctx, simprocs) ← Simp.mkSimpCtx true simpConfig .simp simpArgs
-    let result ← withTraceNode `GrindSimpTac (fun _ => pure m!"simpGoal (with grind discharge)") do
+    withTraceNode `GrindSimpTac (fun _ => pure m!"simpGoal (with grind discharge)") do
       Lean.Meta.simpGoal mvarId ctx (simprocs := simprocs) (simplifyTarget := simplifyTarget)
         (discharge? := some discharge) (fvarIdsToSimp := fvarIdsToSimp)
-    -- Clear the preprocessed hypsToUse copies from the context
-    let result ← match result with
-    | (some (fvars, mvarId'), stats) =>
-      if newHypIds.isEmpty then return (some (fvars, mvarId'), stats)
-      let mvarId' ← mvarId'.tryClearMany newHypIds
-      return (some (fvars, mvarId'), stats)
-    | other => pure other
-    return result
-
-/-- Run the GrindM simp core at a given location, translating the result back to TacticM. -/
-private def runGrindSimpAt (params : Lean.Meta.Grind.Params)
-    (simpConfig : Simp.Config) (args : GrindSimpArgs)
-    (loc : Utils.Location)
-    (ppSimpThms : Array SimpTheorems) (ppSimprocs : Simp.SimprocsArray)
-    (ppHypsToUseSimpThms : Array SimpTheorems) (ppHypsToUseSimprocs : Simp.SimprocsArray)
-    (genPreprocess : Option Nat) (useMinimalSolver : Bool) : TacticM Unit := do
-  withMainContext do
-  let mvarId ← getMainGoal
-  let (fvarIdsToSimp, simplifyTarget) ← match loc with
-    | .targets hyps target => pure (hyps, target)
-    | .wildcard => do pure (← mvarId.getNondepPropHyps, true)
-  let (result?, _stats) ← Lean.Meta.Grind.GrindM.run
-    (grindSimpCoreM simpConfig args mvarId fvarIdsToSimp simplifyTarget
-      ppSimpThms ppSimprocs ppHypsToUseSimpThms ppHypsToUseSimprocs
-      genPreprocess useMinimalSolver) params
-  match result? with
-  | none => replaceMainGoal []
-  | some (_fvars, mvarId') => replaceMainGoal [mvarId']
 
 /-- Main tactic: simp with grind as a discharger.
 
@@ -208,6 +229,10 @@ private def runGrindSimpAt (params : Lean.Meta.Grind.Params)
       during the preprocessing `deriveFacts` phase. The normal `config.gen` is used
       when discharging proof obligations.
     - `useMinimalSolver`: use minimal solver (linarith + lia only) instead of full grind solve (default false)
+    - `suggestion`: when `true`, it means we should generate a `simp_... only [...]` suggestion: we
+      output the corresponding simp args.
+
+    If `suggesttion
 -/
 def grindSimpTac
     (grindConfig : Lean.Grind.Config)
@@ -221,14 +246,105 @@ def grindSimpTac
     (preprocessHypsToUseSimpThms : Array SimpTheorems := #[])
     (preprocessHypsToUseSimprocs : Simp.SimprocsArray := #[])
     (genPreprocess : Option Nat := none)
-    (useMinimalSolver : Bool := false) : TacticM Unit := do
+    (useMinimalSolver : Bool := false)
+    (simpArgsStx : Option (TSyntax ``simpArgs) := none)
+    : TacticM (Option (Array FVarId) × Simp.Stats) := do
   Elab.Tactic.focus do
   withTraceNode `GrindSimpTac (fun _ => pure m!"grindSimpTac") do
   withMainContext do
-  -- Build grind parameters
+  /- Preprocess hypsToUse -/
+  let mvarId ← getMainGoal
+  let (mvarId, args, newHypIds) ←
+    preprocessHypsToUse mvarId args preprocessHypsToUseSimpThms preprocessHypsToUseSimprocs
+  setGoals [mvarId]
+  /- Initialize the simp context and elaborate the syntax (we have to do this here
+    because `elabSimpArgs` lives in `TacticM`, not `MetaM`) -/
+  let (ctx, simprocs) ← Simp.mkSimpCtx true simpConfig .simp args.toSimpArgs
+  let (ctx, simprocs) ← do
+      match simpArgsStx with
+      | none => pure (ctx, simprocs)
+      | some stx => do
+        let { ctx, simprocs, simpArgs := _ } ←
+          -- This is annoying: `elabSimpArgs` lives in `TacticM`, meaning we
+          Lean.Elab.Tactic.elabSimpArgs stx.raw.getArgs[0]! ctx simprocs (eraseLocal := true) .simp
+        pure (ctx, simprocs)
+  -- Build the grind parameters
   let params ← Aeneas.Grind.mkParams grindConfig extensions withGroundSimprocs
-  runGrindSimpAt params simpConfig args loc preprocessSimpThms preprocessSimprocs
-    preprocessHypsToUseSimpThms preprocessHypsToUseSimprocs genPreprocess
-    (useMinimalSolver := useMinimalSolver)
+  --
+  let (fvarIdsToSimp, simplifyTarget) ← match loc with
+    | .targets hyps target => pure (hyps, target)
+    | .wildcard => do pure (← mvarId.getNondepPropHyps, true)
+  -- Run `simp` with `grind` as a discharger
+  let (result?, stats) ← Lean.Meta.Grind.GrindM.run
+    (grindSimpCoreM mvarId fvarIdsToSimp simplifyTarget
+      preprocessSimpThms preprocessSimprocs
+      genPreprocess useMinimalSolver
+      ctx simprocs) params
+  -- Replace the goal and clear the duplicated `hypsToUse`
+  let fvars ←
+    match result? with
+    | none => replaceMainGoal []; pure none
+    | some (fvars, mvarId) =>
+      let mvarId ← mvarId.tryClearMany newHypIds
+      replaceMainGoal [mvarId]
+      pure (some fvars)
+  --
+  pure (fvars, stats)
+
+/-- "Standard" way of calling `grindSimpTac` -/
+def standardGrindSimpTac (loc : Utils.Location)
+    («only» : Bool := false)
+    (simps : SimpTheorems × Simprocs)
+    (hypsSimps : SimpTheorems × Simprocs)
+    (simpArgsStx : Option (TSyntax ``simpArgs))
+    : TacticM Unit := do
+  let (simpThms, simprocs) := simps
+  let (hypsSimpThms, hypsSimprocs) := hypsSimps
+  let simpThms ← if «only» then pure #[] else
+    pure #[simpThms, ← SimpBoolProp.simpBoolPropSimpExt.getTheorems]
+  let simprocs ← if «only» then pure #[] else
+    pure #[simprocs, ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs]
+  let simpArgs : GrindSimpArgs := {
+    simpThms, simprocs,
+  }
+  let grindConfig : Lean.Grind.Config := {
+    splits := 4, ematch := 1, splitMatch := false, splitIte := false,
+    splitIndPred := false, funext := false, gen := 2, instances := 1000,
+    canonHeartbeats := 1000
+  }
+  let extensions := #[Grind.agrindExt.getState (← getEnv)]
+  let _ ←
+    grindSimpTac grindConfig (withGroundSimprocs := true) extensions
+      { maxDischargeDepth := 2, failIfUnchanged := false, contextual := true }
+      simpArgs loc
+      (preprocessSimpThms := #[← ScalarTac.scalarTacSimpExt.getTheorems,
+                                ← SimpBoolProp.simpBoolPropSimpExt.getTheorems])
+      (preprocessSimprocs := #[← ScalarTac.scalarTacSimprocExt.getSimprocs,
+                                ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs])
+      (preprocessHypsToUseSimpThms := #[hypsSimpThms,
+                                        ← SimpBoolProp.simpBoolPropSimpExt.getTheorems])
+      (preprocessHypsToUseSimprocs := #[hypsSimprocs,
+                                        ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs])
+      (genPreprocess := some 2)
+      (simpArgsStx := simpArgsStx)
+  pure ()
+
+syntax "test_elab" simpArgs : tactic
+
+elab_rules : tactic
+  | `(tactic| test_elab $simpArgs) => do
+    let (ctx, simprocs) ← Simp.mkSimpCtx true {} .simp {}
+    let stx ← Lean.Elab.Tactic.elabSimpArgs simpArgs.raw.getArgs[0]! ctx simprocs (eraseLocal := true) .simp
+    println! "{stx.simpArgs.map Prod.fst}"
+    pure ()
+
+example : True := by
+  test_elab [Nat, Int]
+  sorry
+
+example : True := by
+  test_elab [*]
+  sorry
+
 
 end Aeneas.GrindSimpTac

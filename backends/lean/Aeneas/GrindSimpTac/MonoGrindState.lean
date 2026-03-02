@@ -1,4 +1,3 @@
-import Aeneas.GrindSimpTac.Init
 import Aeneas.Grind.Init
 
 /-!
