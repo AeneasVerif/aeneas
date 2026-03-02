@@ -611,7 +611,7 @@ where
   onBind (cfg : Config) (names : Array (Option Name)) : TacticM (Info × Option MVarId) := do
     withTraceNode `Progress (fun _ => pure m!"onBind ({names})") do
     let postsBasename := names[0]?.join
-    if let some {usedTheorem, unassignedVars, preconditions, mainGoal, outputVars } ← tryProgress cfg names postsBasename then
+    if let some {usedTheorem, unassignedVars, preconditions, mainGoal } ← tryProgress cfg names postsBasename then
       withTraceNode `Progress (fun _ => pure m!"progress succeeded") do
       match mainGoal with
       | none => trace[Progress] "Main goal solved"
@@ -620,10 +620,14 @@ where
         trace[Progress] "{goal.goal}"
       withTraceNode `Progress (fun _ => pure m!"all preconditions") do trace[Progress] "All preconditions:\n{preconditions.map Prod.fst}"
       /- Compute ids for the tactic script from the introduced variables -/
-      let ids : Array (TSyntax ``Lean.binderIdent) := outputVars.map fun o =>
-        match o.name? with
-        | some n => mkNode ``Lean.binderIdent #[mkIdent n]
-        | none => mkNode ``Lean.binderIdent #[mkIdent `_]
+      let ids : Array (TSyntax ``Lean.binderIdent) :=
+        match mainGoal with
+        | none => #[]
+        | some mainGoal =>
+          mainGoal.outputs.map fun o =>
+            match o.name? with
+            | some n => mkNode ``Lean.binderIdent #[mkIdent n]
+            | none => mkNode ``Lean.binderIdent #[mkIdent `_]
       trace[Progress] "ids from introduced vars: {ids}"
       let mainGoal := mainGoal.map fun mainGoal => mainGoal.goal
       /- Generate the tactic scripts for the preconditions -/
@@ -819,7 +823,7 @@ info: Try this:
 
   [apply]     let* ⟨ x2, x2_post ⟩ ← U32.add_spec
     let* ⟨ x3, x3_post ⟩ ← U32.add_spec
-    let* ⟨ _, _ ⟩ ← U32.add_spec
+    let* ⟨ ⟩ ← U32.add_spec
 -/
 #guard_msgs in
 example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
@@ -832,7 +836,7 @@ info: Try this:
 
   [apply]     let* ⟨ x2, x2_post ⟩ ← [ +scalarTac -grind ] U32.add_spec
     let* ⟨ x3, x3_post ⟩ ← [ +scalarTac -grind ] U32.add_spec
-    let* ⟨ _, _ ⟩ ← [ +scalarTac -grind ] U32.add_spec
+    let* ⟨ ⟩ ← [ +scalarTac -grind ] U32.add_spec
 -/
 #guard_msgs in
 example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
@@ -912,9 +916,9 @@ info: Try this:
   [apply]     spec_split
     · let* ⟨ x2, x2_post ⟩ ← U32.add_spec
       let* ⟨ x3, x3_post ⟩ ← U32.add_spec
-      let* ⟨ _, _ ⟩ ← U32.add_spec
+      let* ⟨ ⟩ ← U32.add_spec
     · let* ⟨ y, y_post ⟩ ← U32.add_spec
-      let* ⟨ _, _ ⟩ ← U32.add_spec
+      let* ⟨ ⟩ ← U32.add_spec
 -/
 #guard_msgs in
 example b (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
@@ -929,7 +933,7 @@ info: Try this:
     · let* ⟨ x2, x2_post ⟩ ← U32.add_spec
       let* ⟨ x3, x3_post ⟩ ← U32.add_spec
     · let* ⟨ y, y_post ⟩ ← U32.add_spec
-      let* ⟨ z, z_post ⟩ ← U32.add_spec
+      let* ⟨ ⟩ ← U32.add_spec
 ---
 error: unsolved goals
 b : Bool
@@ -958,11 +962,11 @@ info: Try this:
       · sorry
       let* ⟨ x3, x3_post ⟩ ← U32.add_spec
       · sorry
-      let* ⟨ _, _ ⟩ ← U32.add_spec
+      let* ⟨ ⟩ ← U32.add_spec
       · sorry
     · let* ⟨ y, y_post ⟩ ← U32.add_spec
       · sorry
-      let* ⟨ _, _ ⟩ ← U32.add_spec
+      let* ⟨ ⟩ ← U32.add_spec
       · sorry
 ---
 error: unsolved goals
@@ -1096,7 +1100,7 @@ example (l : List Nat) :
 info: Try this:
 
   [apply]     simp only [progress_simps]
-    let* ⟨ _, _, _ ⟩ ← core.num.U32.overflowing_add_eq.progress_spec
+    let* ⟨ ⟩ ← core.num.U32.overflowing_add_eq.progress_spec
 -/
 #guard_msgs in
 example (x y : U32) :

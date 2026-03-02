@@ -120,26 +120,6 @@ def getType: UsedTheorem -> MetaM (Option Expr)
 
 end UsedTheorem
 
-structure MainGoal where
-  goal : MVarId
-  /-- The variables "output" by the monadic function call and introduced in the context -/
-  outputs : Array FVarId
-  /-- The post-conditions introduced in the context.
-
-  TODO: remove this and generalize the handling of output variables and post-conditions.
-  For instance, the user may interleave propositions and output variables by writing post-conditions
-  ike this:
-  ```
-  ∃ (h : x < n), -- post-condition
-  ∃ (y : ...),   -- output variable whose type depends on h
-  ...            -- rest of the post-condition
-  ```
-  Generally speaking it shouldn't be a problem, put aside the fact that we will need to decide where
-  to insert the "pretty equality". In most situations, it should be fine to insert it before the first
-  output proposition.
-  -/
-  posts : Array FVarId
-
 /-- Information about a variable introduced by `progress` (output or post-condition). -/
 structure Output where
   /-- The variable introduced in the context -/
@@ -148,6 +128,12 @@ structure Output where
   name? : Option Name
   /-- Whether this variable is a proposition (post-condition) -/
   isProp : Bool
+
+structure MainGoal where
+  goal : MVarId
+  /-- The variables introduced in the context after applying the progress theorem (this includes variables "output"
+      by the monadic function call as well as post-conditions). -/
+  outputs : Array Output
 
 inductive OptTask α where
 | task (t : Task α)
@@ -179,8 +165,6 @@ structure Goals where
   preconditions : Array (MVarId × OptTask (Option Expr))
   /-- The main goal, if it was not proven -/
   mainGoal : Option MainGoal
-  /-- Information about the variables introduced by `progress` (outputs and post-conditions) -/
-  outputVars : Array Output := #[]
 deriving Inhabited
 
 structure Stats extends Goals where
@@ -446,9 +430,9 @@ def introPrettyEquality (args : Args) (fExpr : Expr) (outputFVars : Array Expr) 
   TODO: we use `simp` a lot, which uselessely explores the monadic term and the post-condition.
   We might want to optimize this.
 -/
-def introOutputsAndPost (args : Args) (fExpr : Expr) :
-  TacticM (Option MainGoal × Array Output) := do
-  withTraceNode `Progress (fun _ => pure m!"introOutputsAndPost") do
+def introOutputs (args : Args) (fExpr : Expr) :
+  TacticM (Option MainGoal) := do
+  withTraceNode `Progress (fun _ => pure m!"introOutputs") do
   /- Decompose nested uses of `predn` to introduce a sequence of universal quantifiers.
      Note that at the same time we simplify the (monadic) continuation by using
      some monad simp theorems. -/
@@ -461,7 +445,7 @@ def introOutputsAndPost (args : Args) (fExpr : Expr) :
                   ``Std.WP.qimp_spec_exists, ``Std.WP.qimp_exists,
                   ``forall_unit, ``true_imp_iff] }
             (.targets #[] true)
-    | trace[Progress] "The main goal was solved!"; return (none, #[])
+    | trace[Progress] "The main goal was solved!"; return none
   traceGoalWithNode "goal after decomposing the nested `predn`"
 
   /- Eliminate `qimp_spec`/`qimp` to reveal `imp` and decompose the post-condition into a sequence
@@ -473,7 +457,7 @@ def introOutputsAndPost (args : Args) (fExpr : Expr) :
                 #[``Std.WP.qimp_spec_iff, ``Std.WP.qimp_iff,
                   ``Std.WP.imp_and_iff, ``forall_unit, ``true_imp_iff] }
             (.targets #[] true)
-    | trace[Progress] "The main goal was solved!"; return (none, #[])
+    | trace[Progress] "The main goal was solved!"; return none
   traceGoalWithNode "goal after aliminating `qimp_spec` and `qimp` and decomposing the post-condition"
 
   /- Eliminate `imp`
@@ -483,55 +467,77 @@ def introOutputsAndPost (args : Args) (fExpr : Expr) :
   withTraceNode `Progress (fun _ => pure m!"dsimpAt: eliminating `imp` and folding back scalar types") do
     Simp.dsimpAt true {implicitDefEqProofs := true, failIfUnchanged := false, iota := false}
       { declsToUnfold := #[``Std.WP.imp], addSimpThms := scalar_eqs } (.targets #[] true)
-  if (← getUnsolvedGoals).isEmpty then trace[Progress] "The main goal was solved!"; return (none, #[])
+  if (← getUnsolvedGoals).isEmpty then trace[Progress] "The main goal was solved!"; return none
   traceGoalWithNode "goal after aliminating `imp` and folding back the scalar types"
 
-  /- Intro the output variables and the post-conditions.
+  /- Introduce the outputs.
 
-  We do this in two steps to intro first the output variables, then the pretty equality, and finally
-  the post-conditions.
+  We do this in two steps because we need to figure out where to introduce the "pretty equality" (the term
+  of shape `[> let (xi) ← f yi <]`). We introduce it just before the first proposition: in practice, it generally
+  works well.
   -/
   let goal ← getMainGoal
-  let (nOutputs, nPosts) ← do
+  /- For every universally quantified variable, check whether it is a `Prop` or not -/
+  let outputIsProp ← do
     let type ← goal.getType
     let type ← instantiateMVars type
     forallTelescope type.consumeMData fun fvars _ => do
-    let n := fvars.size
-    if n < args.ids.size then
-      logWarning m!"Too many ids provided ({args.ids}): expected ≤ {n} ids, got {args.ids.size}"
-    /- Split the fvars between the output variables and the post-conditions -/
-    let i? ← fvars.findIdxM? (fun e => do isProp (← inferType e))
+    fvars.mapM fun e => do isProp (← inferType e)
+
+  -- Warning if the user provided too many ids
+  let nFVars := outputIsProp.size
+  if nFVars < args.ids.size then
+    logWarning m!"Too many ids provided ({args.ids}): expected ≤ {nFVars} ids, got {args.ids.size}"
+
+  /- Split the fvars between the output variables and the post-conditions -/
+  let (prefixLength, postFixLength) :=
+    let i? := outputIsProp.findIdx? (fun isProp => isProp)
     match i? with
-    | none => pure (fvars.size, 0)
-    | some i => pure (i, fvars.size - i)
-  trace[Progress] "Number of output vars: {nOutputs}, number of posts: {nPosts}"
-  let mkFreshName (i : Nat) :=
-    if i < nOutputs then
-      -- Generate a name for an output var
-      mkFreshUserName `x
+    | none => (nFVars, 0)
+    | some i => (i, nFVars - i)
+  trace[Progress] "Prefix length: {prefixLength}, post-fix length: {postFixLength}"
+
+  -- Small helper to compute the name to use when introducing the fvar in the context
+  let totalNumProps := (outputIsProp.filter (fun b => b)).size
+  let mkFreshAnon isProp :=
+    if isProp then mkFreshAnonPropUserName else mkFreshUserName `x
+  let mkFreshName (nPropsBefore : Nat) (i : Nat) (isProp : Bool) : TacticM Name := do
+    trace[Progress] "i: {i}, isProp: {isProp}"
+    -- Use the user-provided name if possible
+    if h : i < args.ids.size then
+      match args.ids[i] with
+      | none => mkFreshAnon isProp
+      | some n => pure n
     else
-      -- Generate a name for a post-condition
-      match args.postsBasename with
-      | none => mkFreshAnonPropUserName
-      | some baseName =>
-        let (root, baseStr) := match baseName with
-          | .str root s => (root, s ++ "_post")
-          | _ => (.anonymous, "_post")
-        let postIdx := i - nOutputs
-        pure (match nPosts with
-          | 1 => Name.str root s!"{baseStr}"
-          | _ => Name.str root s!"{baseStr}{postIdx+1}")
-  let ids ← args.ids.mapIdxM fun i o =>
-    match o with
-    | some n => pure n
-    | none => mkFreshName i
-  let ids' ← (Array.range (nOutputs + nPosts - ids.size)).mapIdxM fun i _ => mkFreshName (ids.size + i)
-  let ids := ids ++ ids'
+      -- Otherwise, it depends on whether the var is a prop or not
+      if ¬ isProp then
+        -- Generate a name for an output var
+        mkFreshUserName `x
+      else
+        -- Generate a name for a post-condition
+        match args.postsBasename with
+        | none => mkFreshAnonPropUserName
+        | some baseName =>
+          let (root, baseStr) := match baseName with
+            | .str root s => (root, s ++ "_post")
+            | _ => (.anonymous, "_post")
+          let postIdx :=
+            if totalNumProps = 1 then ""
+            else s!"{nPropsBefore + 1}"
+          pure (Name.str root s!"{baseStr}{postIdx}")
+  let mut ids := #[]
+  let mut nPropsBefore := 0
+  for h : i in [0:outputIsProp.size] do
+    let isProp := outputIsProp[i]
+    let name ← mkFreshName nPropsBefore i isProp
+    if isProp then nPropsBefore := nPropsBefore + 1
+    ids := ids.push name
+
   trace[Progress] "ids: {ids}"
-  let (outputIds, postsIds) := ids.toList.splitAt nOutputs
+  let (outputIds, postsIds) := ids.toList.splitAt prefixLength
 
   -- Introduce the outputs
-  let (outputs, goal) ← goal.introN nOutputs outputIds
+  let (outputs, goal) ← goal.introN prefixLength outputIds
   setGoals [goal]
   traceGoalWithNode "goal after introducing the outputs"
 
@@ -539,9 +545,9 @@ def introOutputsAndPost (args : Args) (fExpr : Expr) :
   introPrettyEquality args fExpr (outputs.map Expr.fvar)
   traceGoalWithNode "goal after introducing the pretty equality"
 
-  -- Introduce the postconditions
+  -- Introduce the remaining outputs
   let goal ← getMainGoal
-  let (posts, goal) ← goal.introN nPosts postsIds
+  let (posts, goal) ← goal.introN postFixLength postsIds
   setGoals [goal]
   traceGoalWithNode "goal after introducing the post-conditions"
 
@@ -553,10 +559,10 @@ def introOutputsAndPost (args : Args) (fExpr : Expr) :
   let outputInfos := outputs.mapIdx fun i fv =>
     { fvarId := fv, name? := mkName? (outputIds.getD i `_), isProp := false : Output }
   let postInfos := posts.mapIdx fun i fv =>
-    { fvarId := fv, name? := mkName? (postsIds.getD i `_), isProp := true : Output }
+    { fvarId := fv, name? := mkName? (postsIds.getD i `_), isProp := outputIsProp[prefixLength + i]! : Output }
   let introducedVars := outputInfos ++ postInfos
 
-  pure (some ⟨ ← getMainGoal, outputs, posts⟩, introducedVars)
+  pure (some ⟨ ← getMainGoal, introducedVars ⟩)
 
 /-- Attempt to solve the preconditions.
 
@@ -612,8 +618,10 @@ def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option MainGoal)
     let args : Simp.SimpArgs :=
       {simpThms := #[← progressPostSimpExt.getTheorems],
        simprocs := #[← progressPostSimprocExt.getSimprocs] }
-    let posts ← Simp.simpAt true { maxDischargeDepth := 0, failIfUnchanged := false }
-          args (.targets mainGoal.posts false)
+    -- Simplify
+    let posts ←
+      Simp.simpAt true { maxDischargeDepth := 0, failIfUnchanged := false }
+        args (.targets (mainGoal.outputs.map Output.fvarId) false)
     match posts with
     | none =>
       -- We actually closed the goal: we shouldn't get there
@@ -621,6 +629,14 @@ def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option MainGoal)
       trace[Progress] "Goal closed by simplifying the introduced post-conditions"
       pure none
     | some posts =>
+      trace[Progress] "Goal not closed"
+      withMainContext do
+      let outputs ← posts.mapM fun fvid => do
+        let name ← fvid.getUserName
+        let name? := if name.hasMacroScopes then none else some name
+        let isProp ← isProp (← fvid.getType)
+        pure ({ fvarId := fvid, name?, isProp } : Output)
+
       /- Simplify the goal again
 
       Note that we want to simplify targets of the shape:
@@ -629,7 +645,7 @@ def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option MainGoal)
       let r ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
         {simpThms := #[← progressSimpExt.getTheorems], declsToUnfold := #[``pure]} (.targets #[] true)
       if r.isSome then
-        pure (some ({mainGoal with goal := ← getMainGoal, posts} : MainGoal))
+        pure (some ({goal := ← getMainGoal, outputs} : MainGoal))
       else pure none
 
 def progressWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
@@ -654,9 +670,9 @@ def progressWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
   -- Attempt to solve the goals which are propositions
   let newPropGoals ← trySolvePreconditions args newPropGoals
   /- Process the main goal -/
-  -- Introduce the outputs and the post-conditions into the context
+  -- Introduce the outputs, including the post-conditions, into the context
   setGoals [mainGoal]
-  let (mainGoal, outputVars) ← introOutputsAndPost args fExpr
+  let mainGoal ← introOutputs args fExpr
   /- Simplify the post-conditions in the main goal - note that we waited until now
       because by solving the preconditions we may have instantiated meta-variables.
       We also simplify the goal again (to simplify let-bindings, etc.) -/
@@ -667,7 +683,7 @@ def progressWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
       trace[Progress] "{mainGoal.goal}"
   /- Put everything together -/
   let newNonPropGoals ← newNonPropGoals.filterM fun mvar => not <$> mvar.isAssigned
-  pure ({ unassignedVars := newNonPropGoals.toArray, preconditions := newPropGoals.toArray, mainGoal, outputVars })
+  pure ({ unassignedVars := newNonPropGoals.toArray, preconditions := newPropGoals.toArray, mainGoal })
 
 /-- Small utility: if `args` is not empty, return the name of the app in the first
     arg, if it is a const. -/
