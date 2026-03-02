@@ -2,6 +2,8 @@ import Aeneas.GrindSimpTac.Init
 import Aeneas.GrindSimpTac.MonoGrindState
 import Aeneas.GrindSimpTac.GrindSimpTac
 import Aeneas.GrindSimpTac.SimpScalar
-import Aeneas.GrindSimpTac.Tests
+import Aeneas.GrindSimpTac.SimpScalarTests
 import Aeneas.GrindSimpTac.SimpLists
 import Aeneas.GrindSimpTac.SimpListsTests
+import Aeneas.GrindSimpTac.Bvify
+import Aeneas.GrindSimpTac.BvifyTests
