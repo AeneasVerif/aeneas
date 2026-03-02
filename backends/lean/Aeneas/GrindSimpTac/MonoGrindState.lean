@@ -105,6 +105,31 @@ def MonoGrindState.initializeFromMVar (mvarId : MVarId)
   let goal ← Lean.Meta.Grind.GoalM.run' state.goal Lean.Meta.Grind.setNextDeclToEnd
   return { state with goal }
 
+/-- Add fresh local declarations (not yet in `processedFVars`) to the grind state.
+
+    Scans the local context of `mvarId` from newest to oldest, stopping at the
+    first already-processed FVarId. Then adds the collected fresh declarations
+    in oldest-first order (to respect dependencies). -/
+def MonoGrindState.addFreshLocalDecls (state : MonoGrindState) (mvarId : MVarId)
+    (preprocessCtx : Simp.Context) (preprocessSimprocs : Simp.SimprocsArray) :
+    Lean.Meta.Grind.GrindM MonoGrindState := do
+  mvarId.withContext do
+  let lctx ← getLCtx
+  -- Scan newest-first, collecting fresh FVarIds until we hit a processed one
+  let freshDecls ← lctx.foldrM (init := (true, #[])) fun decl (scanning, acc) => do
+    if !scanning then return (false, acc)
+    if state.processedFVars.contains decl.fvarId then return (false, acc)
+    return (true, acc.push decl.fvarId)
+  -- freshDecls.2 is in newest-first order; reverse to get oldest-first
+  let freshFvarIds := freshDecls.2.reverse
+  -- Add each fresh declaration to the grind state
+  let mut state := state
+  for fvarId in freshFvarIds do
+    state ← state.addLocalDecl fvarId preprocessCtx preprocessSimprocs
+  -- Mark all decls as processed
+  let goal ← Lean.Meta.Grind.GoalM.run' state.goal Lean.Meta.Grind.setNextDeclToEnd
+  return { state with goal }
+
 /-- Run e-matching saturation and arithmetic pre-derivation on the grind state.
 
     Uses grind's `Action` machinery to interleave e-matching and arithmetic

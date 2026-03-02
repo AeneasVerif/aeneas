@@ -50,20 +50,28 @@ private def solveMinimal (goal : Lean.Meta.Grind.Goal)
     let goal :: _ := gs | return some goal
     return goal
 
-/-- Discharge using a pre-built base GoalState.
+/-- Discharge using a pre-built MonoGrindState.
     The base state has all hypotheses already canonicalized and internalized in
     the e-graph. For each discharge call, we construct a Goal from this base
     state + the discharge mvar, so only the target needs canonicalization.
 
+    When `contextual` simp is enabled, the discharge mvar may have fresh local
+    declarations (introduced when simp dives into quantifiers). These are
+    internalized via `addFreshLocalDecls` before solving.
+
     When `useMinimalSolver` is true, uses `solveMinimal` (only linarith + lia,
     no case splits, no tactic checking) instead of the full `solve`. -/
-private def grindDischargeWithBase (baseState : Lean.Meta.Grind.GoalState)
+private def grindDischargeWithBase (baseState : MonoGrindState)
+    (preprocessCtx : Simp.Context) (preprocessSimprocs : Simp.SimprocsArray)
     (mvarId : MVarId) (useMinimalSolver : Bool) : Lean.Meta.Grind.GrindM Bool := do
   withTraceNode `GrindSimpTac (fun _ => pure m!"grindDischargeWithBase") do
   let config := { (← Lean.Meta.Grind.getConfig) with revert := false }
   Lean.Meta.Grind.withProtectedMCtx config mvarId fun mvarId' =>
     Lean.Meta.Grind.withGTransparency do
-      let goal : Lean.Meta.Grind.Goal := { toGoalState := baseState, mvarId := mvarId' }
+      -- Internalize fresh local declarations (from contextual simp)
+      let state ← baseState.addFreshLocalDecls mvarId' preprocessCtx preprocessSimprocs
+      -- Solve
+      let goal : Lean.Meta.Grind.Goal := { toGoalState := state.goal.toGoalState, mvarId := mvarId' }
       let failure? ←
         if useMinimalSolver then solveMinimal goal
         else Lean.Meta.Grind.solve goal
@@ -128,14 +136,16 @@ private def grindSimpCoreM (simpConfig : Simp.Config) (args : GrindSimpArgs)
   -- Build MonoGrindState from the main goal
   let monoState ← MonoGrindState.initializeFromMVar mvarId ppSimpThms ppSimprocs
   let monoState ← monoState.deriveFacts (genPreprocess := genPreprocess)
-  -- Use the pre-built GoalState for discharge
-  let baseGoalState := monoState.goal.toGoalState
+  -- Build preprocessing context for fresh local decls during discharge
+  let congrTheorems ← getSimpCongrTheorems
+  let ppConfig : Simp.Config := { failIfUnchanged := false, maxDischargeDepth := 0 }
+  let preprocessCtx ← Simp.mkContext ppConfig (simpTheorems := ppSimpThms) congrTheorems
   controlAt MetaM fun runInMetaM => do
     mvarId.withContext do
     let discharge : Simp.Discharge := fun e => do
       let mvar ← mkFreshExprSyntheticOpaqueMVar e `grind.discharger
       try
-        let ok ← runInMetaM (grindDischargeWithBase baseGoalState mvar.mvarId! useMinimalSolver)
+        let ok ← runInMetaM (grindDischargeWithBase monoState preprocessCtx ppSimprocs mvar.mvarId! useMinimalSolver)
         if !ok then return none
         let proof ← instantiateMVars mvar
         if proof.hasExprMVar then return none
