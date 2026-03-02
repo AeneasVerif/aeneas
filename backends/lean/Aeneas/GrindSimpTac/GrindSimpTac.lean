@@ -69,6 +69,40 @@ private def grindDischargeWithBase (baseState : Lean.Meta.Grind.GoalState)
         else Lean.Meta.Grind.solve goal
       return failure?.isNone
 
+/-- Preprocess `hypsToUse`: for each prop hypothesis, simplify its type with the
+    given simpset. Only introduce a new hypothesis (with `.pp` suffix) when the
+    type actually changes. Returns the updated mvarId, updated args (with both
+    original and preprocessed hyps in `hypsToUse`), and the FVarIds of the newly
+    introduced hypotheses (for cleanup after simp). -/
+private def preprocessHypsToUse (mvarId : MVarId) (args : GrindSimpArgs)
+    (ppHypsToUseSimpThms : Array SimpTheorems) (ppHypsToUseSimprocs : Simp.SimprocsArray) :
+    MetaM (MVarId × GrindSimpArgs × Array FVarId) := do
+  if ppHypsToUseSimpThms.isEmpty || args.hypsToUse.isEmpty then
+    return (mvarId, args, #[])
+  let ppConfig : Simp.Config := { failIfUnchanged := false, maxDischargeDepth := 0 }
+  let congrTheorems ← getSimpCongrTheorems
+  let ctx ← Simp.mkContext ppConfig (simpTheorems := ppHypsToUseSimpThms) congrTheorems
+  let toAssert ← mvarId.withContext do
+    let mut toAssert : Array Hypothesis := #[]
+    for fvarId in args.hypsToUse do
+      let ldecl ← fvarId.getDecl
+      if ldecl.isImplementationDetail then continue
+      if !(← isProp ldecl.type) then continue
+      let type ← instantiateMVars ldecl.type
+      let (simpResult, _) ← Lean.Meta.simp type ctx ppHypsToUseSimprocs
+      let simplifiedType ← instantiateMVars simpResult.expr
+      -- Only introduce a new hyp if the type actually changed
+      if simplifiedType != type then
+        let proof ← match simpResult.proof? with
+          | some p => pure (mkApp4 (mkConst ``Eq.mp [0]) type simplifiedType p ldecl.toExpr)
+          | none => pure ldecl.toExpr
+        toAssert := toAssert.push { userName := ldecl.userName ++ `pp, type := simplifiedType, value := proof }
+    pure toAssert
+  if toAssert.isEmpty then
+    return (mvarId, args, #[])
+  let (newIds, mvarId) ← mvarId.assertHypotheses toAssert
+  return (mvarId, { args with hypsToUse := args.hypsToUse ++ newIds }, newIds)
+
 /-- Core simp+grind logic in GrindM.
     Runs `simp` on the given goal with grind as the discharger.
 
@@ -89,35 +123,9 @@ private def grindSimpCoreM (simpConfig : Simp.Config) (args : GrindSimpArgs)
     (useMinimalSolver : Bool) :
     Lean.Meta.Grind.GrindM (Option (Array FVarId × MVarId) × Simp.Stats) := do
   withTraceNode `GrindSimpTac (fun _ => pure m!"grindSimpCoreM") do
-  -- Duplicate and preprocess hypsToUse if a preprocessing simpset is provided
-  let (mvarId, args, hypsToUseDups) ←
-    if ppHypsToUseSimpThms.isEmpty || args.hypsToUse.isEmpty then
-      pure (mvarId, args, #[])
-    else do
-      -- Duplicate the hypsToUse hypotheses
-      let toAssert ← mvarId.withContext do
-        args.hypsToUse.filterMapM fun fvarId => do
-          let ldecl ← fvarId.getDecl
-          if ldecl.isImplementationDetail then return none
-          return some { userName := ldecl.userName ++ `dup, type := ldecl.type, value := ldecl.toExpr :
-            Hypothesis }
-      let (dupFvarIds, mvarId) ← mvarId.assertHypotheses toAssert
-      -- Simplify the duplicates with the preprocessHypsToUse simpset
-      let ppConfig : Simp.Config := { failIfUnchanged := false, maxDischargeDepth := 0 }
-      let congrTheorems ← getSimpCongrTheorems
-      let ctx ← Simp.mkContext ppConfig (simpTheorems := ppHypsToUseSimpThms) congrTheorems
-      let mut mvarId := mvarId
-      let mut finalDupIds : Array FVarId := #[]
-      for dupId in dupFvarIds do
-        let (result?, _) ← Lean.Meta.simpLocalDecl mvarId dupId ctx ppHypsToUseSimprocs
-          (mayCloseGoal := false)
-        match result? with
-        | none => finalDupIds := finalDupIds.push dupId
-        | some (newId, newMvarId) =>
-          mvarId := newMvarId
-          finalDupIds := finalDupIds.push newId
-      -- Use the preprocessed duplicates instead of the originals
-      pure (mvarId, { args with hypsToUse := finalDupIds }, finalDupIds)
+  -- Preprocess hypsToUse
+  let (mvarId, args, newHypIds) ←
+    preprocessHypsToUse mvarId args ppHypsToUseSimpThms ppHypsToUseSimprocs
   -- Build MonoGrindState from the main goal
   let monoState ← MonoGrindState.initializeFromMVar mvarId ppSimpThms ppSimprocs
   let monoState ← monoState.deriveFacts baseSaturationRounds
@@ -140,18 +148,11 @@ private def grindSimpCoreM (simpConfig : Simp.Config) (args : GrindSimpArgs)
     let result ← withTraceNode `GrindSimpTac (fun _ => pure m!"simpGoal (with grind discharge)") do
       Lean.Meta.simpGoal mvarId ctx (simprocs := simprocs) (simplifyTarget := simplifyTarget)
         (discharge? := some discharge) (fvarIdsToSimp := fvarIdsToSimp)
-    -- Clear the duplicated hypsToUse from the context
+    -- Clear the preprocessed hypsToUse copies from the context
     let result ← match result with
     | (some (fvars, mvarId'), stats) =>
-      if hypsToUseDups.isEmpty then return (some (fvars, mvarId'), stats)
-      let mut mvarId' := mvarId'
-      for dupId in hypsToUseDups do
-        mvarId' ← mvarId'.withContext do
-          let lctx ← getLCtx
-          if lctx.contains dupId then
-            try mvarId'.clear dupId
-            catch _ => pure mvarId'
-          else pure mvarId'
+      if newHypIds.isEmpty then return (some (fvars, mvarId'), stats)
+      let mvarId' ← mvarId'.tryClearMany newHypIds
       return (some (fvars, mvarId'), stats)
     | other => pure other
     return result
