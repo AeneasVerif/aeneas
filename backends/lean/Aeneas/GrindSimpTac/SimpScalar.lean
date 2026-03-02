@@ -31,7 +31,7 @@ def gsimpScalarTac (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location)
     splitIndPred := false, funext := false, gen := 2, instances := 1000,
     canonHeartbeats := 1000
   }
-  let extensions := #[← Lean.Meta.Grind.getDefaultExtensionState, Grind.agrindExt.getState (← getEnv)]
+  let extensions := #[Grind.agrindExt.getState (← getEnv)]
   grindSimpTac grindConfig (withGroundSimprocs := true) extensions
     { maxDischargeDepth := 2, failIfUnchanged := false, contextual := true }
     simpArgs loc
