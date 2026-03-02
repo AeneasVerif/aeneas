@@ -19,15 +19,6 @@ namespace Aeneas.GrindSimpTac
 
 open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 
-/-- Check if a type is a "safe" equality usable as a simp rewrite rule.
-    Returns true iff the type is exactly `@Eq α lhs rhs` where `lhs` does not
-    appear as a subexpression of `rhs` (to avoid rewriting loops). -/
-def isSafeEquality (type : Expr) : Bool :=
-  if let some (_, lhs, rhs) := type.eq? then
-    !(rhs.find? (· == lhs)).isSome
-  else
-    false
-
 /-- Grind e-graph state built from local declarations. -/
 structure MonoGrindState where
   /-- The grind Goal containing the e-graph with internalized hypotheses. -/
