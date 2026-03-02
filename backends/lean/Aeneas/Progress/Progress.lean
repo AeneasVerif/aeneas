@@ -178,6 +178,9 @@ structure Args where
   keepPretty : Option Name
   /-- Identifiers to use when introducing fresh variables -/
   ids : Array (Option Name)
+  /-- Base name for post-conditions (e.g., `z` gives `z_post`). Used when the user
+      doesn't provide explicit names via `as ⟨...⟩`. -/
+  postsBasename : Option Name := none
   /-- Tactic to use to prove preconditions while instantiating meta-variables by
      matching these preconditions with the assumptions in the context. -/
   assumTac : Option (TacticM Unit)
@@ -206,6 +209,31 @@ def getFirstBind (goalTy : Expr) : MetaM (Bool × Expr) := do
   if h: bind?.isConstOf ``bind ∧ args.size = 6
   then pure (true, args[4])
   else pure (false, compTy)
+
+/-- Extract the variable name from the let-binding in the current goal.
+    Returns `none` if the goal if we can't extract the name (the goal is not
+    a bind for instance) or if the name is compiler-generated. -/
+def getBindVarName : TacticM (Option Name) := do
+  try
+    withMainContext do
+    let goalTy ← (← getMainGoal).getType
+    let goalTy ← instantiateMVars goalTy
+    forallTelescope goalTy fun _ goalTy => do
+    let (spec?, args) := goalTy.consumeMData.withApp (fun f args => (f, args))
+    if h : spec?.isConstOf ``Std.WP.spec ∧ args.size = 3 then
+      let e := args[1]
+      let bargs := e.getAppArgs
+      let fn := e.getAppFn
+      if h2 : (fn.isConstOf ``Bind.bind ∨ fn.isConstOf ``bind) ∧ bargs.size = 6 then
+        let cont := bargs[5]
+        lambdaOne cont fun x _ => do
+          let rawName ← x.fvarId!.getUserName
+          -- Skip compiler-generated names (e.g., `__discr` from pattern matching)
+          if rawName.hasMacroScopes then return none
+          else pure (some rawName)
+      else return none
+    else return none
+  catch _ => pure none
 
 /-- Attempt to resolve typeclasses. -/
 def trySolveTypeclasses (mvarsIds : List MVarId) : TacticM (List MVarId) := do
@@ -407,8 +435,21 @@ def introOutputsAndPost (args : Args) (fExpr : Expr) :
     | some i => pure (i, fvars.size - i)
   trace[Progress] "Number of output vars: {nOutputs}, number of posts: {nPosts}"
   let mkFreshName (i : Nat) :=
-    if i < nOutputs then mkFreshUserName `x
-    else mkFreshAnonPropUserName
+    if i < nOutputs then
+      -- Generate a name for an output var
+      mkFreshUserName `x
+    else
+      -- Generate a name for a post-condition
+      match args.postsBasename with
+      | none => mkFreshAnonPropUserName
+      | some baseName =>
+        let (root, baseStr) := match baseName with
+          | .str root s => (root, s ++ "_post")
+          | _ => (.anonymous, "_post")
+        let postIdx := i - nOutputs
+        pure (match nPosts with
+          | 1 => Name.str root s!"{baseStr}"
+          | _ => Name.str root s!"{baseStr}{postIdx+1}")
   let ids ← args.ids.mapIdxM fun i o =>
     match o with
     | some n => pure n
@@ -681,7 +722,7 @@ def progressAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
 syntax progressArgs := Parser.Tactic.optConfig ("with" term)? ("as" " ⟨ " binderIdent,* " ⟩")? ("by" tacticSeq)?
 
 def parseProgressArgs
-: TSyntax ``Aeneas.Progress.progressArgs → TacticM (Config × Option Expr × Array (Option Name) × Option Syntax.Tactic)
+: TSyntax ``Aeneas.Progress.progressArgs → TacticM (Config × Option Expr × Array (Option Name) × Option Name × Option Syntax.Tactic)
 | args@`(progressArgs| $config $[with $pspec:term]? $[as ⟨ $ids,* ⟩]? $[by $byTac]? ) => withMainContext do
   withTraceNode `Progress (fun _ => do pure m!"progressArgs") do
   trace[Progress] "Progress arguments: {args.raw}"
@@ -706,15 +747,22 @@ def parseProgressArgs
       trace[Progress] "With arg (term): {term}"
       Tactic.elabTerm term none
   if let .some pspec := withTh? then trace[Progress] "With arg: elaborated expression {pspec}"
+  let userGaveIds := ids.isSome
   let ids := ids.getD ∅
     |>.getElems.map fun
       | `(binderIdent| $name:ident) => some name.getId
       | _ => none
+  -- If the user didn't provide names via `as ⟨...⟩`, extract them from the let-binding
+  let (ids, postsBasename) ← if !userGaveIds then do
+      match ← getBindVarName with
+      | some name => pure (#[some name], some name)
+      | none => pure (ids, none)
+    else pure (ids, none)
   trace[Progress] "User-provided ids: {ids}"
   let byTac : Option Syntax.Tactic := match byTac with
     | none => none
     | some byTac => some ⟨byTac.raw⟩
-  return (config, withTh?, ids, byTac)
+  return (config, withTh?, ids, postsBasename, byTac)
 | _ => throwUnsupportedSyntax
 
 /-- Use `agrind` after preprocessing goal the goal, in particular to simplify arithmetic expressions. -/
@@ -742,7 +790,7 @@ def evalAGrindWithPreprocess (withGroundSimprocs : Bool) (config : Grind.Config)
     catch e => trace[Progress] "Grind failed:\n{e.toMessageData}"
 
 def evalProgressCore (config : Config) (keepPretty : Option Name) (withArg: Option Expr) (ids: Array (Option Name))
-  (byTacStx : Option Syntax.Tactic)
+  (postsBasename : Option Name := none) (byTacStx : Option Syntax.Tactic)
   : TacticM Stats := do
   withTraceNode `Progress (fun _ => pure m!"evalProgress") do
   /- Simplify the goal -- TODO: this might close it: we need to check that and abort if necessary,
@@ -830,7 +878,7 @@ def evalProgressCore (config : Config) (keepPretty : Option Name) (withArg: Opti
   let args : Args := {
     async := config.async,
     inferGhostVars := config.inferGhostVars,
-    keepPretty, ids, assumTac := customAssumTac,
+    keepPretty, ids, postsBasename, assumTac := customAssumTac,
     solvePreconditionTac, byTacSyntax := byTacStx
   }
   let (goals, usedTheorem) ← progressAsmsOrLookupTheorem args withArg
@@ -839,10 +887,10 @@ def evalProgressCore (config : Config) (keepPretty : Option Name) (withArg: Opti
 
 def evalProgress
   (config : Config) (keepPretty : Option Name) (withArg: Option Expr) (ids: Array (Option Name))
-  (byTac : Option Syntax.Tactic)
+  (postsBasename : Option Name := none) (byTac : Option Syntax.Tactic)
   : TacticM UsedTheorem := do
   focus do
-  let ⟨goals, usedTheorem⟩ ← evalProgressCore config keepPretty withArg ids byTac
+  let ⟨goals, usedTheorem⟩ ← evalProgressCore config keepPretty withArg ids postsBasename byTac
   -- Wait for all the proof attempts to finish
   let mut sgs := #[]
   for (mvarId, proof) in goals.preconditions do
@@ -954,13 +1002,13 @@ which repeatedly calls `progress` until no further progress can be made. See the
 of `progress*` for more details.
 -/
 elab (name := progress) "progress" args:progressArgs : tactic => do
-  let (config, withArg, ids, byTac) ← parseProgressArgs args
-  evalProgress config none withArg ids byTac *> return ()
+  let (config, withArg, ids, postsBasename, byTac) ← parseProgressArgs args
+  evalProgress config none withArg ids postsBasename byTac *> return ()
 
 @[inherit_doc progress]
 elab tk:"progress?" args:progressArgs : tactic => do
-  let (config, withArg, ids, byTac) ← parseProgressArgs args
-  let stats ← evalProgress config none withArg ids byTac
+  let (config, withArg, ids, postsBasename, byTac) ← parseProgressArgs args
+  let stats ← evalProgress config none withArg ids postsBasename byTac
   let mut stxArgs := args.raw
   -- Update the syntax to add the `with thm`
   if stxArgs[1].isNone then
@@ -978,7 +1026,7 @@ syntax (name := letProgress) "let" noWs "*" " ⟨ " binderIdent,* " ⟩" colGe
 
 def parseLetProgress
 : TSyntax ``Aeneas.Progress.letProgress ->
-  TacticM (Config × Option Expr × Bool × Array (Option Name) × Option Syntax.Tactic)
+  TacticM (Config × Option Expr × Bool × Array (Option Name) × Option Name × Option Syntax.Tactic)
 | args@`(tactic| let* ⟨ $ids,* ⟩ ← $[[$config]]? $pspec $[by $byTac]?) =>  withMainContext do
   trace[Progress] "Progress arguments: {args.raw}"
   let ((withThm, suggest) : (Option Expr × Bool)) ← do
@@ -1008,22 +1056,27 @@ def parseLetProgress
       else
         trace[Progress] "With arg (term): {term}"
         pure (some (← Tactic.elabTerm term none), false)
+  let numIds := ids.getElems.size
   let ids := ids.getElems.map fun
       | `(binderIdent| $name:ident) => some name.getId
       | _ => none
+  -- If the user provides exactly one id, we use it as the post-condition basename
+  let postsBasename :=
+    if h: ids.size = 1 then ids[0]
+    else none
   let config ← match config with | some cfg => pure cfg | none => `(Lean.Parser.Tactic.optConfig|)
   let config ← elabPartialConfig config
   let byTac : Option Syntax.Tactic := match byTac with
     | none => none
     | some byTac => some ⟨byTac.raw⟩
   trace[Progress] "User-provided ids: {ids}"
-  return (config, withThm, suggest, ids, byTac)
+  return (config, withThm, suggest, ids, postsBasename, byTac)
 | _ => throwUnsupportedSyntax
 
 elab tk:letProgress : tactic => do
   withMainContext do
-  let (config, withArg, suggest, ids, byTac) ← parseLetProgress tk
-  let stats ← evalProgress config (some (.str .anonymous "_")) withArg ids byTac
+  let (config, withArg, suggest, ids, postsBasename, byTac) ← parseLetProgress tk
+  let stats ← evalProgress config (some (.str .anonymous "_")) withArg ids postsBasename byTac
   let mut stxArgs := tk.raw
   if suggest then
     trace[Progress] "suggest is true"
@@ -1360,9 +1413,9 @@ hf : ∀ (x y : U32), ↑x < 10 → ↑y < 10 → f x y ⦃ x✝ => True ⦄
     /--
     error: unsolved goals
 case h
-x y x✝ : U32
-_✝ : ↑x✝ = ↑x + ↑y
-⊢ ↑x✝ + ↑x✝ ≤ U32.max
+x y z : U32
+z_post : ↑z = ↑x + ↑y
+⊢ ↑z + ↑z ≤ U32.max
 
 case h
 x y : U32

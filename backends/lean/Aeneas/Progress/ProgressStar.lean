@@ -608,7 +608,10 @@ where
 
   onBind (cfg : Config) (varName : Name) : TacticM (Info × Option MVarId) := do
     withTraceNode `Progress (fun _ => pure m!"onBind ({varName})") do
-    if let some {usedTheorem, unassignedVars, preconditions, mainGoal } ← tryProgress cfg then
+    -- Only use the binding name for naming if it's a real user name (not compiler-generated)
+    let useBindingName := !varName.hasMacroScopes
+    let (ids, postsBasename) := if useBindingName then (#[some varName], some varName) else (#[], none)
+    if let some {usedTheorem, unassignedVars, preconditions, mainGoal } ← tryProgress cfg ids postsBasename then
       withTraceNode `Progress (fun _ => pure m!"progress succeeded") do
       match mainGoal with
       | none => trace[Progress] "Main goal solved"
@@ -616,13 +619,10 @@ where
         withTraceNode `Progress (fun _ => pure m!"New main goal:") do
         trace[Progress] "{goal.goal}"
       withTraceNode `Progress (fun _ => pure m!"all preconditions") do trace[Progress] "All preconditions:\n{preconditions.map Prod.fst}"
-      /- Update the main goal by renaming the fresh variables, if necessary -/
-      let ids := match mainGoal with | none => #[] | some goal => makeIds varName.eraseMacroScopes goal.outputs.size goal.posts.size
+      /- Compute ids for the tactic script -/
+      let ids : Array (TSyntax ``Lean.binderIdent) := match mainGoal with | none => #[] | some goal => makeIds varName.eraseMacroScopes goal.outputs.size goal.posts.size
       trace[Progress] "ids from used theorem: {ids}"
-      let mainGoal ← do mainGoal.mapM fun mainGoal => do
-        if ¬ ids.isEmpty then
-          renameInaccessibles mainGoal.goal ids -- NOTE: Taken from renameI tactic
-        else pure mainGoal.goal
+      let mainGoal := mainGoal.map fun mainGoal => mainGoal.goal
       /- Generate the tactic scripts for the preconditions -/
       let currTac ←
         if cfg.prettyPrintedProgress then
@@ -720,8 +720,8 @@ where
 
       return (infos, mkStx)
 
-  tryProgress (cfg : Config) := do
-    try some <$> Progress.evalProgressCore cfg.progressConfig (some (.str .anonymous "_")) none #[] cfg.preconditionTac
+  tryProgress (cfg : Config) (ids : Array (Option Name) := #[]) (postsBasename : Option Name := none) := do
+    try some <$> Progress.evalProgressCore cfg.progressConfig (some (.str .anonymous "_")) none ids postsBasename cfg.preconditionTac
     catch _ => pure none
 
   makeIds (base: Name) (numElem numPost : Nat) (defaultId := "x"): Array (TSyntax ``Lean.binderIdent) :=
@@ -1128,6 +1128,25 @@ example {α : Type}
     let () ← f x
     pure ()
     ) ⦃ _ => True ⦄ := by
+    progress*
+
+/--
+error: unsolved goals
+f : Result (Bool × Bool)
+f_spec : f ⦃ x✝ x✝¹ => True ⦄
+x✝¹ x✝ : Bool
+_ : [> let(x✝¹, x✝) ← f <]
+_✝ : True
+⊢ False
+-/
+#guard_msgs in
+example
+  (f : Result (Bool × Bool))
+  (f_spec : f ⦃ _ _ => True ⦄) :
+  (do
+    let (x, _) ← f
+    pure x
+    ) ⦃ _ => False ⦄ := by
     progress*
 
 end Examples
