@@ -116,17 +116,54 @@ def Array.set {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) : Arr
 def Array.set_opt {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: Option α) : Array α n :=
   ⟨ v.val.set_opt i.val x, by have := v.property; simp [*] ⟩
 
-@[simp, scalar_tac_simps, simp_lists_hyps_simps, grind =, agrind =]
+@[simp, scalar_tac_simps, simp_lists_hyps_simps, simp_lists_simps, grind =, agrind =]
 theorem Array.set_val_eq {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) :
   (v.set i x).val = v.val.set i.val x := by
   simp [set]
 
-@[simp, scalar_tac_simps, simp_lists_hyps_simps, grind =, agrind =]
+@[simp, scalar_tac_simps, simp_lists_hyps_simps, simp_lists_simps, grind =, agrind =]
 theorem Array.set_opt_val_eq {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: Option α) :
   (v.set_opt i x).val = v.val.set_opt i.val x := by
   simp [set_opt]
 
-@[scalar_tac_simps, grind =, agrind =]
+
+/-- Using `↓` to eagerly simplify combinations of `set` and `getElem!` in expressions like:
+`(((l.set i0 x0) ...).set in xn)[j]!`
+
+Otherwise we might lose a lot of time reordering the `set` expressions.
+-/
+@[simp↓, simp_lists_simps↓]
+theorem Array.getElem!_Usize_set_ne
+  {α : Type u} {N : Usize} [Inhabited α] (a: Array α N) (i j : Usize) (x: α)
+  (h : i.val ≠ j.val) : (a.set i x)[j]! = a[j]!
+  := by
+  grind
+
+@[simp↓, simp_lists_simps↓]
+theorem Array.getElem!_Usize_set_eq
+  {α : Type u} {N : Usize} [Inhabited α] (a: Array α N) (i i' : Usize) (x: α)
+  (h : i = i' ∧ i'.val < a.length) : getElem! (a.set i x) i' = x
+  := by
+  grind
+
+/-- Using `↓` to eagerly simplify combinations of `set` and `getElem!` in expressions like:
+`(((l.set i0 x0) ...).set in xn)[j]!`
+
+Otherwise we might lose a lot of time reordering the `set` expressions.
+-/
+@[simp↓, simp_lists_simps↓]
+theorem Array.getElem!_Nat_set_ne
+  {α : Type u} {N : Usize} [Inhabited α] (a: Array α N) (i : Usize) (j : Nat) (x: α)
+  (h : i.val ≠ j) : (a.set i x)[j]! = a[j]!
+  := by grind
+
+@[simp↓, simp_lists_simps↓]
+theorem Array.getElem!_Nat_set_eq
+  {α : Type u} {N : Usize} [Inhabited α] (a: Array α N) (i : Usize) (i' : Nat) (x: α)
+  (h : i.val = i' ∧ i' < a.length) : getElem! (a.set i x) i' = x
+  := by grind
+
+@[scalar_tac_simps, simp_lists_simps, grind =, agrind =]
 theorem Array.set_length {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) :
   (v.set i x).length = v.length := by simp
 
