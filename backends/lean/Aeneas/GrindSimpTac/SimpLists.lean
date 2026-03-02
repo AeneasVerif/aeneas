@@ -43,7 +43,7 @@ def gsimpListsTac (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) 
                                        ← SimpBoolProp.simpBoolPropSimpExt.getTheorems])
     (preprocessHypsToUseSimprocs := #[← SimpLists.simpListsHypsSimprocExt.getSimprocs,
                                        ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs])
-    (baseSaturationRounds := 2)
+    (genPreprocess := some 2)
 
 syntax (name := gsimp_lists) "gsimp_lists" ("[" (term<|>"*"),* "]")? (location)? : tactic
 

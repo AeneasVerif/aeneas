@@ -107,27 +107,30 @@ def MonoGrindState.initializeFromMVar (mvarId : MVarId)
 
 /-- Run e-matching saturation and arithmetic pre-derivation on the grind state.
 
-    1. E-matching saturation (configurable number of rounds)
-    2. `assertAll` to drain pending facts
-    3. `Solvers.check` to pre-compute arithmetic solver state -/
-def MonoGrindState.deriveFacts (state : MonoGrindState) (saturationRounds : Nat := 1) :
+    Uses grind's `Action` machinery to interleave e-matching and arithmetic
+    solvers, mirroring how `solve` works (but without splits or mbtc):
+    1. `assertAll` drains pending facts from the queue
+    2. Arithmetic solvers (linarith + lia) check for new derivations
+    3. `instantiate` runs e-matching and queues new facts via `assertAll`
+    These three steps repeat up to `maxIterations` times.
+
+    When `genPreprocess` is provided, temporarily overrides `config.gen`
+    (maximum e-matching generation) for the preprocessing phase. -/
+def MonoGrindState.deriveFacts (state : MonoGrindState)
+    (genPreprocess : Option Nat := none) (maxIterations : Nat := 10000) :
     Lean.Meta.Grind.GrindM MonoGrindState := do
-  let mut goal := state.goal
-  -- E-matching saturation
-  for _ in List.range saturationRounds do
-    if goal.inconsistent then break
-    let (progress, goal') ← Lean.Meta.Grind.GoalM.run goal Lean.Meta.Grind.ematch
-    goal := goal'
-    if !progress then break
-    goal ← Lean.Meta.Grind.GoalM.run' goal Lean.Meta.Grind.processNewFacts
-  -- Drain pending facts + pre-derive arithmetic
-  goal ←
-    match (← (Lean.Meta.Grind.Action.assertAll).run goal) with
-    | .closed _ => pure goal
-    | .stuck gs => do
-      let g := gs[0]? |>.getD goal
-      let (_, g) ← Lean.Meta.Grind.GoalM.run g (discard Lean.Meta.Grind.Solvers.check)
-      pure g
+  let solvers := Lean.Meta.Grind.Action.linarith.andAlso Lean.Meta.Grind.Action.lia
+  let step := solvers <|> Lean.Meta.Grind.Action.instantiate
+  let action := Lean.Meta.Grind.Action.assertAll >> step.loop maxIterations
+  let run := do
+    match (← action.run state.goal) with
+    | .closed _ => pure state.goal
+    | .stuck gs => pure (gs[0]? |>.getD state.goal)
+  let goal ← match genPreprocess with
+    | none => run
+    | some gen =>
+      withTheReader Lean.Meta.Grind.Context
+        (fun ctx => { ctx with config := { ctx.config with gen } }) run
   return { state with goal }
 
 end Aeneas.GrindSimpTac

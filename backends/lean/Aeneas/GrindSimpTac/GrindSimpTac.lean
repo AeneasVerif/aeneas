@@ -117,10 +117,9 @@ private def preprocessHypsToUse (mvarId : MVarId) (args : GrindSimpArgs)
     are used for the main simp pass (then cleared afterwards). -/
 private def grindSimpCoreM (simpConfig : Simp.Config) (args : GrindSimpArgs)
     (mvarId : MVarId) (fvarIdsToSimp : Array FVarId) (simplifyTarget : Bool)
-    (baseSaturationRounds : Nat)
     (ppSimpThms : Array SimpTheorems) (ppSimprocs : Simp.SimprocsArray)
     (ppHypsToUseSimpThms : Array SimpTheorems) (ppHypsToUseSimprocs : Simp.SimprocsArray)
-    (useMinimalSolver : Bool) :
+    (genPreprocess : Option Nat) (useMinimalSolver : Bool) :
     Lean.Meta.Grind.GrindM (Option (Array FVarId × MVarId) × Simp.Stats) := do
   withTraceNode `GrindSimpTac (fun _ => pure m!"grindSimpCoreM") do
   -- Preprocess hypsToUse
@@ -128,7 +127,7 @@ private def grindSimpCoreM (simpConfig : Simp.Config) (args : GrindSimpArgs)
     preprocessHypsToUse mvarId args ppHypsToUseSimpThms ppHypsToUseSimprocs
   -- Build MonoGrindState from the main goal
   let monoState ← MonoGrindState.initializeFromMVar mvarId ppSimpThms ppSimprocs
-  let monoState ← monoState.deriveFacts baseSaturationRounds
+  let monoState ← monoState.deriveFacts (genPreprocess := genPreprocess)
   -- Use the pre-built GoalState for discharge
   let baseGoalState := monoState.goal.toGoalState
   controlAt MetaM fun runInMetaM => do
@@ -160,18 +159,19 @@ private def grindSimpCoreM (simpConfig : Simp.Config) (args : GrindSimpArgs)
 /-- Run the GrindM simp core at a given location, translating the result back to TacticM. -/
 private def runGrindSimpAt (params : Lean.Meta.Grind.Params)
     (simpConfig : Simp.Config) (args : GrindSimpArgs)
-    (loc : Utils.Location) (baseSaturationRounds : Nat)
+    (loc : Utils.Location)
     (ppSimpThms : Array SimpTheorems) (ppSimprocs : Simp.SimprocsArray)
     (ppHypsToUseSimpThms : Array SimpTheorems) (ppHypsToUseSimprocs : Simp.SimprocsArray)
-    (useMinimalSolver : Bool) : TacticM Unit := do
+    (genPreprocess : Option Nat) (useMinimalSolver : Bool) : TacticM Unit := do
   withMainContext do
   let mvarId ← getMainGoal
   let (fvarIdsToSimp, simplifyTarget) ← match loc with
     | .targets hyps target => pure (hyps, target)
     | .wildcard => do pure (← mvarId.getNondepPropHyps, true)
   let (result?, _stats) ← Lean.Meta.Grind.GrindM.run
-    (grindSimpCoreM simpConfig args mvarId fvarIdsToSimp simplifyTarget baseSaturationRounds
-      ppSimpThms ppSimprocs ppHypsToUseSimpThms ppHypsToUseSimprocs useMinimalSolver) params
+    (grindSimpCoreM simpConfig args mvarId fvarIdsToSimp simplifyTarget
+      ppSimpThms ppSimprocs ppHypsToUseSimpThms ppHypsToUseSimprocs
+      genPreprocess useMinimalSolver) params
   match result? with
   | none => replaceMainGoal []
   | some (_fvars, mvarId') => replaceMainGoal [mvarId']
@@ -191,8 +191,10 @@ private def runGrindSimpAt (params : Lean.Meta.Grind.Params)
     - `preprocessSimpThms`/`preprocessSimprocs`: simpset used to simplify hypotheses
       before adding them to the grind e-graph
     - `preprocessHypsToUseSimpThms`/`preprocessHypsToUseSimprocs`: simpset used to
-      simplify duplicated `hypsToUse` before the main simp pass
-    - `baseSaturationRounds`: number of e-matching rounds on the base GoalState (default 1)
+      preprocess `hypsToUse` before the main simp pass
+    - `genPreprocess`: if provided, overrides `config.gen` (max e-matching generation)
+      during the preprocessing `deriveFacts` phase. The normal `config.gen` is used
+      when discharging proof obligations.
     - `useMinimalSolver`: use minimal solver (linarith + lia only) instead of full grind solve (default false)
 -/
 def grindSimpTac
@@ -206,14 +208,15 @@ def grindSimpTac
     (preprocessSimprocs : Simp.SimprocsArray := #[])
     (preprocessHypsToUseSimpThms : Array SimpTheorems := #[])
     (preprocessHypsToUseSimprocs : Simp.SimprocsArray := #[])
-    (baseSaturationRounds : Nat := 1)
+    (genPreprocess : Option Nat := none)
     (useMinimalSolver : Bool := false) : TacticM Unit := do
   Elab.Tactic.focus do
   withTraceNode `GrindSimpTac (fun _ => pure m!"grindSimpTac") do
   withMainContext do
   -- Build grind parameters
   let params ← Aeneas.Grind.mkParams grindConfig extensions withGroundSimprocs
-  runGrindSimpAt params simpConfig args loc baseSaturationRounds preprocessSimpThms preprocessSimprocs
-    preprocessHypsToUseSimpThms preprocessHypsToUseSimprocs (useMinimalSolver := useMinimalSolver)
+  runGrindSimpAt params simpConfig args loc preprocessSimpThms preprocessSimprocs
+    preprocessHypsToUseSimpThms preprocessHypsToUseSimprocs genPreprocess
+    (useMinimalSolver := useMinimalSolver)
 
 end Aeneas.GrindSimpTac
