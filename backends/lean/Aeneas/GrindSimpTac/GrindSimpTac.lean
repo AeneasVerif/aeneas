@@ -137,6 +137,8 @@ private def grindSimpCoreM (simpConfig : Simp.Config) (args : GrindSimpArgs)
   let monoState ← MonoGrindState.initializeFromMVar mvarId ppSimpThms ppSimprocs
   let monoState ← monoState.deriveFacts (genPreprocess := genPreprocess)
   -- Build preprocessing context for fresh local decls during discharge
+  /- We keep the default simp congruence lemmas: they should be generally useful, and at this stage we
+     do not expect them to pollute the context. -/
   let congrTheorems ← getSimpCongrTheorems
   let ppConfig : Simp.Config := { failIfUnchanged := false, maxDischargeDepth := 0 }
   let preprocessCtx ← Simp.mkContext ppConfig (simpTheorems := ppSimpThms) congrTheorems
