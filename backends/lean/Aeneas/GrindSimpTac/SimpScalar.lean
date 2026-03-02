@@ -35,12 +35,14 @@ def gsimpScalarTac (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location)
   grindSimpTac grindConfig (withGroundSimprocs := true) extensions
     { maxDischargeDepth := 2, failIfUnchanged := false, contextual := true }
     simpArgs loc
-    (preprocessSimpArgs := some {
-      simpThms := #[← ScalarTac.scalarTacSimpExt.getTheorems,
-                     ← SimpBoolProp.simpBoolPropSimpExt.getTheorems],
-      simprocs := #[← ScalarTac.scalarTacSimprocExt.getSimprocs,
-                     ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs]
-    })
+    (preprocessSimpThms := #[← ScalarTac.scalarTacSimpExt.getTheorems,
+                              ← SimpBoolProp.simpBoolPropSimpExt.getTheorems])
+    (preprocessSimprocs := #[← ScalarTac.scalarTacSimprocExt.getSimprocs,
+                              ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs])
+    (preprocessHypsToUseSimpThms := #[← SimpScalar.simpScalarHypsSimpExt.getTheorems,
+                                       ← SimpBoolProp.simpBoolPropSimpExt.getTheorems])
+    (preprocessHypsToUseSimprocs := #[← SimpScalar.simpScalarHypsSimprocExt.getSimprocs,
+                                       ← SimpBoolProp.simpBoolPropSimprocExt.getSimprocs])
     (baseSaturationRounds := 2)
 
 syntax (name := gsimp_scalar) "gsimp_scalar" ("[" (term<|>"*"),* "]")? (location)? : tactic
