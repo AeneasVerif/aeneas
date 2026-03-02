@@ -15,6 +15,7 @@ structure CondSimpPartialArgs where
   declsToUnfold : Array Name := #[]
   letDeclsToUnfold : Array FVarId := #[]
   addSimpThms : Array Name := #[]
+  addSimprocs : Array Name := #[]
   hypsToUse : Array FVarId := #[]
 
 def condSimpParseArgs (tacName : String) (args : TSyntaxArray [`term, `token.«*»]) :
@@ -24,6 +25,7 @@ def condSimpParseArgs (tacName : String) (args : TSyntaxArray [`term, `token.«*
   let mut declsToUnfold := #[]
   let mut letDeclsToUnfold := #[]
   let mut addSimpThms := #[]
+  let mut addSimprocs := #[]
   let mut hypsToUse := #[]
   for arg in args do
     /- We have to make a case disjunction, because if we treat identifiers like
@@ -42,17 +44,22 @@ def condSimpParseArgs (tacName : String) (args : TSyntaxArray [`term, `token.«*
         trace[ScalarTac] "arg (theorem): {stx.raw}"
         let some e ← Lean.Elab.Term.resolveId? stx (withInfo := true)
           | throwError m!"Could not find theorem: {arg}"
+        -- Check if it is a constant
         if let .const name _ := e then
-          -- Lookup the declaration to check whether it is a definition or a theorem
-          match (← getEnv).find? name with
-          | none => throwError m!"Could not find declaration: {name}"
-          | some d =>
-            match d with
-            | .thmInfo _ | .axiomInfo _ =>
-              addSimpThms := addSimpThms.push name
-            | .defnInfo _ =>
-              declsToUnfold := declsToUnfold.push name
-            | _ => throwError m!"{name} is not a theorem, an axiom or a definition"
+          -- Check if it's a registered simproc
+          if (← Lean.Meta.Simp.isSimproc name) then
+            addSimprocs := addSimprocs.push name
+          else
+            -- Lookup the declaration to check whether it is a definition or a theorem
+            match (← getEnv).find? name with
+            | none => throwError m!"Could not find declaration: {name}"
+            | some d =>
+              match d with
+              | .thmInfo _ | .axiomInfo _ =>
+                addSimpThms := addSimpThms.push name
+              | .defnInfo _ =>
+                declsToUnfold := declsToUnfold.push name
+              | _ => throwError m!"{name} is not a theorem, an axiom or a definition"
         else throwError m!"Unexpected: {arg}"
     | term => do
       trace[ScalarTac] "term kind: {term.raw.getKind}"
@@ -67,7 +74,7 @@ def condSimpParseArgs (tacName : String) (args : TSyntaxArray [`term, `token.«*
         -- TODO: we need to make that work
         trace[ScalarTac] "arg (term): {term}"
         throwError m!"Unimplemented: arbitrary terms are not supported yet as arguments to `{tacName}` (received: {arg})"
-  pure { declsToUnfold, letDeclsToUnfold, addSimpThms, hypsToUse }
+  pure { declsToUnfold, letDeclsToUnfold, addSimpThms, addSimprocs, hypsToUse }
 
 structure CondSimpArgs where
   simpThms : Array SimpTheorems := #[]
