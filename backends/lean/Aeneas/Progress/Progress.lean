@@ -127,6 +127,15 @@ structure MainGoal where
   /-- The post-conditions introduced in the context -/
   posts : Array FVarId
 
+/-- Information about a variable introduced by `progress` (output or post-condition). -/
+structure Output where
+  /-- The variable introduced in the context -/
+  fvarId : FVarId
+  /-- The name used for this variable, or `none` if it was given an anonymous/underscore name -/
+  name? : Option Name
+  /-- Whether this variable is a proposition (post-condition) -/
+  isProp : Bool
+
 inductive OptTask α where
 | task (t : Task α)
 | none
@@ -157,6 +166,8 @@ structure Goals where
   preconditions : Array (MVarId × OptTask (Option Expr))
   /-- The main goal, if it was not proven -/
   mainGoal : Option MainGoal
+  /-- Information about the variables introduced by `progress` (outputs and post-conditions) -/
+  outputVars : Array Output := #[]
 deriving Inhabited
 
 structure Stats extends Goals where
@@ -234,6 +245,53 @@ def getBindVarName : TacticM (Option Name) := do
       else return none
     else return none
   catch _ => pure none
+
+/-- Extract names from a post-condition expression by recursively decomposing lambdas and `WP.curry`.
+    Returns `some name` for user-provided names and `none` for anonymous/compiler-generated ones.
+
+    For instance, given: `e ⦃ x _ y z => ... ⦄`, this function outputs: `[some x, none, some y, some z]`.
+-/
+partial def getPostNames (e : Expr) : MetaM (Array (Option Name)) := do
+  let e := e.consumeMData
+  if e.isLambda then
+    lambdaTelescope e fun vars body => do
+      let vars ← vars.filterMapM fun x => do
+        let ty ← x.fvarId!.getType
+        -- Filter `Unit`/`PUnit` types (no meaningful output)
+        if ty.isConstOf ``Unit || ty.isConstOf ``PUnit then return none
+        let name ← x.fvarId!.getUserName
+        if name.hasMacroScopes then pure (some none) else pure (some (some name))
+      let rest ← getPostNames body
+      pure (vars ++ rest)
+  else if e.isAppOf ``Std.WP.curry then
+    -- WP.curry {α β γ} (f : α × β → γ) : α → β → γ
+    let args := e.getAppArgs
+    if h: args.size = 4 then
+      getPostNames args[3]
+    else pure #[]
+  else pure #[]
+
+/-- Extract the names used in the post-condition of the current goal.
+    The goal should have the shape `spec program post`. -/
+def getPostNamesFromGoal : TacticM (Array (Option Name)) := do
+  try
+    let goalTy ← (← getMainGoal).getType
+    let goalTy ← instantiateMVars goalTy
+    goalTy.consumeMData.withApp fun spec? args => do
+    if spec?.isConstOf ``Std.WP.spec ∧ args.size = 3 then
+      getPostNames args[2]!
+    else pure #[]
+  catch _ => pure #[]
+
+/-- Extract variable names from the current goal for naming `progress` outputs.
+    If the goal is a bind (`let x ← ...`), extracts the binding name.
+    Otherwise, extracts names from the post-condition. -/
+def getVarNamesFromGoal : TacticM (Array (Option Name) × Option Name) := do
+  match ← getBindVarName with
+  | some name => pure (#[some name], some name)
+  | none =>
+    let names ← getPostNamesFromGoal
+    pure (names, names[0]?.join)
 
 /-- Attempt to resolve typeclasses. -/
 def trySolveTypeclasses (mvarsIds : List MVarId) : TacticM (List MVarId) := do
@@ -376,7 +434,7 @@ def introPrettyEquality (args : Args) (fExpr : Expr) (outputFVars : Array Expr) 
   We might want to optimize this.
 -/
 def introOutputsAndPost (args : Args) (fExpr : Expr) :
-  TacticM (Option MainGoal) := do
+  TacticM (Option MainGoal × Array Output) := do
   withTraceNode `Progress (fun _ => pure m!"introOutputsAndPost") do
   /- Decompose nested uses of `predn` to introduce a sequence of universal quantifiers.
      Note that at the same time we simplify the (monadic) continuation by using
@@ -390,7 +448,7 @@ def introOutputsAndPost (args : Args) (fExpr : Expr) :
                   ``Std.WP.qimp_spec_exists, ``Std.WP.qimp_exists,
                   ``forall_unit, ``true_imp_iff] }
             (.targets #[] true)
-    | trace[Progress] "The main goal was solved!"; return none
+    | trace[Progress] "The main goal was solved!"; return (none, #[])
   traceGoalWithNode "goal after decomposing the nested `predn`"
 
   /- Eliminate `qimp_spec`/`qimp` to reveal `imp` and decompose the post-condition into a sequence
@@ -402,7 +460,7 @@ def introOutputsAndPost (args : Args) (fExpr : Expr) :
                 #[``Std.WP.qimp_spec_iff, ``Std.WP.qimp_iff,
                   ``Std.WP.imp_and_iff, ``forall_unit, ``true_imp_iff] }
             (.targets #[] true)
-    | trace[Progress] "The main goal was solved!"; return none
+    | trace[Progress] "The main goal was solved!"; return (none, #[])
   traceGoalWithNode "goal after aliminating `qimp_spec` and `qimp` and decomposing the post-condition"
 
   /- Eliminate `imp`
@@ -412,7 +470,7 @@ def introOutputsAndPost (args : Args) (fExpr : Expr) :
   withTraceNode `Progress (fun _ => pure m!"dsimpAt: eliminating `imp` and folding back scalar types") do
     Simp.dsimpAt true {implicitDefEqProofs := true, failIfUnchanged := false, iota := false}
       { declsToUnfold := #[``Std.WP.imp], addSimpThms := scalar_eqs } (.targets #[] true)
-  if (← getUnsolvedGoals).isEmpty then trace[Progress] "The main goal was solved!"; return none
+  if (← getUnsolvedGoals).isEmpty then trace[Progress] "The main goal was solved!"; return (none, #[])
   traceGoalWithNode "goal after aliminating `imp` and folding back the scalar types"
 
   /- Intro the output variables and the post-conditions.
@@ -474,8 +532,18 @@ def introOutputsAndPost (args : Args) (fExpr : Expr) :
   setGoals [goal]
   traceGoalWithNode "goal after introducing the post-conditions"
 
-  --
-  pure (some ⟨ ← getMainGoal, outputs, posts⟩)
+  -- Build the Output information
+  let mkName? (n : Name) : Option Name :=
+    match n with
+    | .str _ s => if s == "_" then none else some n
+    | _ => none
+  let outputInfos := outputs.mapIdx fun i fv =>
+    { fvarId := fv, name? := mkName? (outputIds.getD i `_), isProp := false : Output }
+  let postInfos := posts.mapIdx fun i fv =>
+    { fvarId := fv, name? := mkName? (postsIds.getD i `_), isProp := true : Output }
+  let introducedVars := outputInfos ++ postInfos
+
+  pure (some ⟨ ← getMainGoal, outputs, posts⟩, introducedVars)
 
 /-- Attempt to solve the preconditions.
 
@@ -575,7 +643,7 @@ def progressWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
   /- Process the main goal -/
   -- Introduce the outputs and the post-conditions into the context
   setGoals [mainGoal]
-  let mainGoal ← introOutputsAndPost args fExpr
+  let (mainGoal, outputVars) ← introOutputsAndPost args fExpr
   /- Simplify the post-conditions in the main goal - note that we waited until now
       because by solving the preconditions we may have instantiated meta-variables.
       We also simplify the goal again (to simplify let-bindings, etc.) -/
@@ -586,7 +654,7 @@ def progressWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
       trace[Progress] "{mainGoal.goal}"
   /- Put everything together -/
   let newNonPropGoals ← newNonPropGoals.filterM fun mvar => not <$> mvar.isAssigned
-  pure ({ unassignedVars := newNonPropGoals.toArray, preconditions := newPropGoals.toArray, mainGoal })
+  pure ({ unassignedVars := newNonPropGoals.toArray, preconditions := newPropGoals.toArray, mainGoal, outputVars })
 
 /-- Small utility: if `args` is not empty, return the name of the app in the first
     arg, if it is a const. -/
@@ -752,11 +820,9 @@ def parseProgressArgs
     |>.getElems.map fun
       | `(binderIdent| $name:ident) => some name.getId
       | _ => none
-  -- If the user didn't provide names via `as ⟨...⟩`, extract them from the let-binding
+  -- If the user didn't provide names via `as ⟨...⟩`, extract them from the goal
   let (ids, postsBasename) ← if !userGaveIds then do
-      match ← getBindVarName with
-      | some name => pure (#[some name], some name)
-      | none => pure (ids, none)
+      getVarNamesFromGoal
     else pure (ids, none)
   trace[Progress] "User-provided ids: {ids}"
   let byTac : Option Syntax.Tactic := match byTac with
@@ -1535,6 +1601,22 @@ _✝ : ↑z = ↑x + y
     match x with
     | none => fail .panic
     | some x => ok x
+
+  -- Test that we properly extract the names from the post-conditions
+  /--
+  error: unsolved goals
+case hmax
+x y : U32
+⊢ ↑x + ↑y ≤ U32.max
+
+case a
+x y z : U32
+z_post : ↑z = ↑x + ↑y
+⊢ ↑z = ↑x + ↑y
+  -/
+  #guard_msgs in
+  example (x y : U32) : x + y ⦃ z => z.val = x.val + y.val ⦄  := by
+    progress
 
   -- `Inhabited α` is not necessary: we add it for the purpose of testing
   theorem get_spec [Inhabited α] (x : Option α) (h : x.isSome) : get x ⦃ _ => True ⦄ := by

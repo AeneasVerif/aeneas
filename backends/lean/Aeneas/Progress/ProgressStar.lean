@@ -481,7 +481,8 @@ where
     let targetKind ← analyzeTarget
     match targetKind with
     | .bind varName => do
-      let (info, mainGoal) ← onBind cfg varName
+      let names := if varName.hasMacroScopes then #[] else #[some varName]
+      let (info, mainGoal) ← onBind cfg names
       /- Continue, if necessary -/
       match mainGoal with
       | none =>
@@ -543,7 +544,8 @@ where
 
        We known in advance the result of processing `return res`, which is to do nothing.
        This allows us to prevent code duplication with the `onBind` function. -/
-    let res ← onBind cfg (.str .anonymous "res")
+    let names ← Progress.getPostNamesFromGoal
+    let res ← onBind cfg names
     match res.snd with
     | none =>
       trace[Progress] "done"
@@ -606,12 +608,10 @@ where
           pure info'
       pure (info ++ info', none)
 
-  onBind (cfg : Config) (varName : Name) : TacticM (Info × Option MVarId) := do
-    withTraceNode `Progress (fun _ => pure m!"onBind ({varName})") do
-    -- Only use the binding name for naming if it's a real user name (not compiler-generated)
-    let useBindingName := !varName.hasMacroScopes
-    let (ids, postsBasename) := if useBindingName then (#[some varName], some varName) else (#[], none)
-    if let some {usedTheorem, unassignedVars, preconditions, mainGoal } ← tryProgress cfg ids postsBasename then
+  onBind (cfg : Config) (names : Array (Option Name)) : TacticM (Info × Option MVarId) := do
+    withTraceNode `Progress (fun _ => pure m!"onBind ({names})") do
+    let postsBasename := names[0]?.join
+    if let some {usedTheorem, unassignedVars, preconditions, mainGoal, outputVars } ← tryProgress cfg names postsBasename then
       withTraceNode `Progress (fun _ => pure m!"progress succeeded") do
       match mainGoal with
       | none => trace[Progress] "Main goal solved"
@@ -619,9 +619,12 @@ where
         withTraceNode `Progress (fun _ => pure m!"New main goal:") do
         trace[Progress] "{goal.goal}"
       withTraceNode `Progress (fun _ => pure m!"all preconditions") do trace[Progress] "All preconditions:\n{preconditions.map Prod.fst}"
-      /- Compute ids for the tactic script -/
-      let ids : Array (TSyntax ``Lean.binderIdent) := match mainGoal with | none => #[] | some goal => makeIds varName.eraseMacroScopes goal.outputs.size goal.posts.size
-      trace[Progress] "ids from used theorem: {ids}"
+      /- Compute ids for the tactic script from the introduced variables -/
+      let ids : Array (TSyntax ``Lean.binderIdent) := outputVars.map fun o =>
+        match o.name? with
+        | some n => mkNode ``Lean.binderIdent #[mkIdent n]
+        | none => mkNode ``Lean.binderIdent #[mkIdent `_]
+      trace[Progress] "ids from introduced vars: {ids}"
       let mainGoal := mainGoal.map fun mainGoal => mainGoal.goal
       /- Generate the tactic scripts for the preconditions -/
       let currTac ←
@@ -816,7 +819,7 @@ info: Try this:
 
   [apply]     let* ⟨ x2, x2_post ⟩ ← U32.add_spec
     let* ⟨ x3, x3_post ⟩ ← U32.add_spec
-    let* ⟨ ⟩ ← U32.add_spec
+    let* ⟨ _, _ ⟩ ← U32.add_spec
 -/
 #guard_msgs in
 example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
@@ -829,7 +832,7 @@ info: Try this:
 
   [apply]     let* ⟨ x2, x2_post ⟩ ← [ +scalarTac -grind ] U32.add_spec
     let* ⟨ x3, x3_post ⟩ ← [ +scalarTac -grind ] U32.add_spec
-    let* ⟨ ⟩ ← [ +scalarTac -grind ] U32.add_spec
+    let* ⟨ _, _ ⟩ ← [ +scalarTac -grind ] U32.add_spec
 -/
 #guard_msgs in
 example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
@@ -884,7 +887,7 @@ info: Try this:
   [apply]     simp only [progress_simps]
     let* ⟨ x2, x2_post ⟩ ← U32.add_spec
     let* ⟨ x3, x3_post ⟩ ← U32.add_spec
-    let* ⟨ res, res_post ⟩ ← U32.add_spec
+    let* ⟨ z, z_post ⟩ ← U32.add_spec
     agrind
 -/
 #guard_msgs in
@@ -909,9 +912,9 @@ info: Try this:
   [apply]     spec_split
     · let* ⟨ x2, x2_post ⟩ ← U32.add_spec
       let* ⟨ x3, x3_post ⟩ ← U32.add_spec
-      let* ⟨ ⟩ ← U32.add_spec
+      let* ⟨ _, _ ⟩ ← U32.add_spec
     · let* ⟨ y, y_post ⟩ ← U32.add_spec
-      let* ⟨ ⟩ ← U32.add_spec
+      let* ⟨ _, _ ⟩ ← U32.add_spec
 -/
 #guard_msgs in
 example b (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
@@ -926,7 +929,7 @@ info: Try this:
     · let* ⟨ x2, x2_post ⟩ ← U32.add_spec
       let* ⟨ x3, x3_post ⟩ ← U32.add_spec
     · let* ⟨ y, y_post ⟩ ← U32.add_spec
-      let* ⟨ ⟩ ← U32.add_spec
+      let* ⟨ z, z_post ⟩ ← U32.add_spec
 ---
 error: unsolved goals
 b : Bool
@@ -955,11 +958,11 @@ info: Try this:
       · sorry
       let* ⟨ x3, x3_post ⟩ ← U32.add_spec
       · sorry
-      let* ⟨ ⟩ ← U32.add_spec
+      let* ⟨ _, _ ⟩ ← U32.add_spec
       · sorry
     · let* ⟨ y, y_post ⟩ ← U32.add_spec
       · sorry
-      let* ⟨ ⟩ ← U32.add_spec
+      let* ⟨ _, _ ⟩ ← U32.add_spec
       · sorry
 ---
 error: unsolved goals
@@ -1018,21 +1021,21 @@ info: Try this:
 
   [apply]     let* ⟨ x2, x2_post ⟩ ← U32.add_spec
     let* ⟨ x3, x3_post ⟩ ← U32.add_spec
-    let* ⟨ res, res_post ⟩ ← U32.add_spec
+    let* ⟨ _, _ ⟩ ← U32.add_spec
     sorry
 ---
 error: unsolved goals
 x y : U32
 h : 2 * ↑x + 2 * ↑y + 4 ≤ U32.max
 x2 : U32
-_✝¹ : [> let x2 ← x + y <]
+_✝² : [> let x2 ← x + y <]
 x2_post : ↑x2 = ↑x + ↑y
 x3 : U32
-_✝ : [> let x3 ← x2 + x2 <]
+_✝¹ : [> let x3 ← x2 + x2 <]
 x3_post : ↑x3 = ↑x2 + ↑x2
-res : U32
-_ : [> let res ← x3 + 4#u32 <]
-res_post : ↑res = ↑x3 + 4
+x✝ : U32
+_ : [> let x✝ ← x3 + 4#u32 <]
+_✝ : ↑x✝ = ↑x3 + 4
 ⊢ ↑x < 32
 -/
 #guard_msgs in
@@ -1093,12 +1096,26 @@ example (l : List Nat) :
 info: Try this:
 
   [apply]     simp only [progress_simps]
-    let* ⟨ ⟩ ← core.num.U32.overflowing_add_eq.progress_spec
+    let* ⟨ _, _, _ ⟩ ← core.num.U32.overflowing_add_eq.progress_spec
 -/
 #guard_msgs in
 example (x y : U32) :
   (lift (core.num.U32.overflowing_add x y)) ⦃ (_, _) => True ⦄ := by
   progress*?
+
+/--
+error: unsolved goals
+x y x✝¹ : U32
+x✝ : Bool
+_ : [> let(x✝¹, x✝) ← lift (core.num.U32.overflowing_add x y) <]
+_✝ : if ↑x + ↑y > UScalar.max UScalarTy.U32 then ↑x✝¹ + U32.size = ↑x + ↑y ∧ x✝ = true else ↑x✝¹ = ↑x + ↑y ∧ x✝ = false
+⊢ False
+-/
+#guard_msgs in
+example (x y : U32) :
+  (lift (core.num.U32.overflowing_add x y)) ⦃ (_, _) => False ⦄ := by
+  simp only [progress_simps]
+  progress*
 
 /--
 error: unsolved goals
