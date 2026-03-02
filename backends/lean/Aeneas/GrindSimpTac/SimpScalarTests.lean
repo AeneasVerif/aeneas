@@ -1,4 +1,5 @@
 import Aeneas.GrindSimpTac.SimpScalar
+import Aeneas.ScalarTac.Lemmas
 
 /-!
 # Tests for `gsimp_scalar`

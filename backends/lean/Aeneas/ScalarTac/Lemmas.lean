@@ -289,6 +289,7 @@ attribute [scalar_tac_simps, simp_lists_hyps_simps, simp_scalar_hyps_simps] Int.
 
 -- TODO: commit to Mathlib
 attribute [scalar_tac_simps, grind =, agrind =] Nat.shiftLeft_eq Int.shiftLeft_eq
+attribute [agrind =] min_def max_def
 
 @[scalar_tac_simps] theorem Nat.max_eq_Max_max (x y : Nat) : Nat.max x y = x ⊔ y := by simp
 @[scalar_tac_simps] theorem Nat.min_eq_Min_min (x y : Nat) : Nat.min x y = x ⊓ y := by simp
@@ -336,6 +337,60 @@ private theorem mul_c (x : Nat) : x * c ≤ 100 * x := by simp [c]; omega
 example (x : Nat) : x * c ≤ 100 * x := by scalar_tac_preprocess
 
 end
+
+/-!
+# Division and shifts
+-/
+
+attribute [grind =, agrind =] Nat.shiftLeft_eq
+
+-- TODO: mark as non-linear?
+/- Lemma to reason about division for grind - taking inspiration on omega -/
+theorem Nat.div_equation (m n : Nat) (h : n ≠ 0) :
+  n * (m / n) ≤ m ∧ m < n * (m / n) + n := by
+  have := @Nat.div_eq_iff n m (m / n) (by omega)
+  grind
+
+grind_pattern [grind] Nat.div_equation => m >>> n where
+  is_strict_value n
+  is_ground n
+
+grind_pattern [agrind] Nat.div_equation => m >>> n where
+  is_strict_value n
+  is_ground n
+
+-- TODO: mark as non-linear?
+/- Lemma to reason about shift for grind - taking inspiration on omega -/
+theorem Nat.shiftRight_equation (m n : Nat) :
+  2^n * (m >>> n) ≤ m ∧ m < 2^n * (m >>> n) + 2^n := by
+  have := @Nat.div_eq_iff (2^n) m (m / 2^n) (by simp)
+  simp only [true_iff, Nat.shiftRight_eq_div_pow] at *
+  grind
+
+grind_pattern [grind] Nat.shiftRight_equation => m >>> n where
+  is_strict_value n
+  is_ground n
+
+grind_pattern [agrind] Nat.shiftRight_equation => m >>> n where
+  is_strict_value n
+  is_ground n
+
+/- When `n` is not a concrete value, we can nonetheless introduce an inequation -/
+grind_pattern [grind] Nat.div_le_self => n / k where
+  not_value n
+
+/- When `n` is not a concrete value, we can nonetheless introduce an inequation -/
+grind_pattern [agrind] Nat.div_le_self => n / k where
+  not_value n
+
+/- When `n` is not a concrete value, we can nonetheless introduce an inequation -/
+grind_pattern [grind] Nat.shiftRight_le => m >>> n where
+  not_value n
+
+/- When `n` is not a concrete value, we can nonetheless introduce an inequation -/
+grind_pattern [agrind] Nat.shiftRight_le => m >>> n where
+  not_value n
+
 
 /-!
 # ZMod
