@@ -128,13 +128,38 @@ example
   gbvify 16 at *
   bv_decide
 
-grind_pattern [agrind] Nat.shiftRight_le => m >>> n
-  where
-    not_value n
+attribute [agrind =] Nat.shiftLeft_eq
 
-grind_pattern [agrind] Nat.shiftRight_eq_div_pow => m >>> n where
+-- TODO: mark as non-linear?
+/- Lemma to reason about division for grind - taking inspiration on omega -/
+theorem Nat.div_equation (m n : Nat) (h : n ≠ 0) :
+  n * (m / n) ≤ m ∧ m < n * (m / n) + n := by
+  have := @Nat.div_eq_iff n m (m / n) (by omega)
+  grind
+
+grind_pattern [agrind] Nat.div_equation => m >>> n where
   is_strict_value n
   is_ground n
+
+-- TODO: mark as non-linear?
+/- Lemma to reason about shift for grind - taking inspiration on omega -/
+theorem Nat.shiftRight_equation (m n : Nat) :
+  2^n * (m >>> n) ≤ m ∧ m < 2^n * (m >>> n) + 2^n := by
+  have := @Nat.div_eq_iff (2^n) m (m / 2^n) (by simp)
+  simp only [true_iff, shiftRight_eq_div_pow] at *
+  grind
+
+grind_pattern [agrind] Nat.shiftRight_equation => m >>> n where
+  is_strict_value n
+  is_ground n
+
+/- When `n` is not a concrete value, we can nonetheless introduce an inequation -/
+grind_pattern [agrind] Nat.div_le_self => n / k where
+  not_value n
+
+/- When `n` is not a concrete value, we can nonetheless introduce an inequation -/
+grind_pattern [agrind] Nat.shiftRight_le => m >>> n where
+  not_value n
 
 example (x : Nat) : x >>> 31 ≤ x := by agrind
 
