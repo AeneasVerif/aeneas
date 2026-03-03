@@ -446,13 +446,13 @@ let eval_builtin_function_call_concrete (config : config) (span : Meta.span)
       (* Create and push the return variable *)
       let ret_vid = LocalId.zero in
       let ret_ty = get_builtin_function_return_type span fid generics in
-      let ret_var = mk_var ret_vid (Some "@return") ret_ty in
+      let ret_var = mk_var ret_vid (Some "@return") ret_ty span in
       let ctx = push_uninitialized_var span ret_var ctx in
 
       (* Create and push the input variables *)
       let input_vars =
         LocalId.mapi_from1
-          (fun id (v : tvalue) -> (mk_var id None v.ty, v))
+          (fun id (v : tvalue) -> (mk_var id None v.ty span, v))
           args_vl
       in
       let ctx = push_vars span input_vars ctx in

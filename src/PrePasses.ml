@@ -885,7 +885,14 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
             (LocalId.of_int (List.length body.locals.locals))
         in
         let fresh_local ty =
-          let local = { index = gen (); local_ty = ty; name = None } in
+          let local =
+            {
+              index = gen ();
+              local_ty = ty;
+              name = None;
+              span = f.item_meta.span;
+            }
+          in
           new_locals := local :: !new_locals;
           local.index
         in
@@ -1127,7 +1134,14 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
             (LocalId.of_int (List.length body.locals.locals))
         in
         let fresh_local ty =
-          let local = { index = gen (); local_ty = ty; name = None } in
+          let local =
+            {
+              index = gen ();
+              local_ty = ty;
+              name = None;
+              span = f.item_meta.span;
+            }
+          in
           new_locals := local :: !new_locals;
           local.index
         in
