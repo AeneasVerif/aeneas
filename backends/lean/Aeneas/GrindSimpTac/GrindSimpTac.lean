@@ -241,6 +241,7 @@ def grindSimpTac
     (simpConfig : Simp.Config)
     (args : GrindSimpArgs)
     (loc : Utils.Location)
+    (addSimpThms : TacticM (Array FVarId))
     (preprocessSimpThms : Array SimpTheorems := #[])
     (preprocessSimprocs : Simp.SimprocsArray := #[])
     (preprocessHypsToUseSimpThms : Array SimpTheorems := #[])
@@ -252,14 +253,20 @@ def grindSimpTac
   Elab.Tactic.focus do
   withTraceNode `GrindSimpTac (fun _ => pure m!"grindSimpTac") do
   withMainContext do
+  /- Introduce the additional simp theorems to use -/
+  let addSimpThms ← addSimpThms
+  withMainContext do
   /- Preprocess hypsToUse -/
   let mvarId ← getMainGoal
   let (mvarId, args, newHypIds) ←
     preprocessHypsToUse mvarId args preprocessHypsToUseSimpThms preprocessHypsToUseSimprocs
   setGoals [mvarId]
+  trace[GrindSimpTac] "Goal after preprocessing the hyps to use: {← getMainGoal}"
   /- Initialize the simp context and elaborate the syntax (we have to do this here
     because `elabSimpArgs` lives in `TacticM`, not `MetaM`) -/
-  let (ctx, simprocs) ← Simp.mkSimpCtx true simpConfig .simp args.toSimpArgs
+  let simpArgs := args.toSimpArgs
+  let simpArgs := { simpArgs with hypsToUse := simpArgs.hypsToUse ++ addSimpThms }
+  let (ctx, simprocs) ← Simp.mkSimpCtx true simpConfig .simp simpArgs
   let (ctx, simprocs) ← do
       match simpArgsStx with
       | none => pure (ctx, simprocs)
@@ -280,12 +287,17 @@ def grindSimpTac
       preprocessSimpThms preprocessSimprocs
       genPreprocess useMinimalSolver
       ctx simprocs) params
-  -- Replace the goal and clear the duplicated `hypsToUse`
+  -- Replace the goal and clear the duplicated `hypsToUse` as well as the additional theorem
   let fvars ←
     match result? with
-    | none => replaceMainGoal []; pure none
+    | none =>
+      trace[GrindSimpTac] "Goal proved!"
+      replaceMainGoal []; pure none
     | some (fvars, mvarId) =>
-      let mvarId ← mvarId.tryClearMany newHypIds
+      mvarId.withContext do
+      let toClear := newHypIds ++ addSimpThms
+      trace[GrindSimpTac] "Resulting goal: {← getMainGoal}\nAssumptions to clear: {toClear.map Expr.fvar}"
+      let mvarId ← mvarId.tryClearMany toClear
       replaceMainGoal [mvarId]
       pure (some fvars)
   --
@@ -297,6 +309,7 @@ def standardGrindSimpTac (loc : Utils.Location)
     (simps : SimpTheorems × Simprocs)
     (hypsSimps : SimpTheorems × Simprocs)
     (simpArgsStx : Option (TSyntax ``simpArgs))
+    (addSimpThms : TacticM (Array FVarId) := pure #[])
     : TacticM Unit := do
   let (simpThms, simprocs) := simps
   let (hypsSimpThms, hypsSimprocs) := hypsSimps
@@ -307,6 +320,7 @@ def standardGrindSimpTac (loc : Utils.Location)
   let simpArgs : GrindSimpArgs := {
     simpThms, simprocs,
   }
+  -- TODO: make this a parameter
   let grindConfig : Lean.Grind.Config := {
     splits := 4, ematch := 1, splitMatch := false, splitIte := false,
     splitIndPred := false, funext := false, gen := 2, instances := 1000,
@@ -316,7 +330,7 @@ def standardGrindSimpTac (loc : Utils.Location)
   let _ ←
     grindSimpTac grindConfig (withGroundSimprocs := true) extensions
       { maxDischargeDepth := 2, failIfUnchanged := false, contextual := true }
-      simpArgs loc
+      simpArgs loc addSimpThms
       (preprocessSimpThms := #[← ScalarTac.scalarTacSimpExt.getTheorems,
                                 ← SimpBoolProp.simpBoolPropSimpExt.getTheorems])
       (preprocessSimprocs := #[← ScalarTac.scalarTacSimprocExt.getSimprocs,
