@@ -3043,8 +3043,7 @@ let decompose_loops_aux (ctx : ctx) (def : fun_decl) (body : fun_body) :
         src = def.src;
         backend_attributes = def.backend_attributes;
         num_loops;
-        loop_id = Some loop.loop_id;
-        loop_body = false;
+        loop_id = Some (loop.loop_id, false);
         loop_pos;
         name = def.name;
         signature = loop_sig;
@@ -3380,8 +3379,7 @@ let decompose_loop_body_aux (ctx : ctx) (def : fun_decl) (body : fun_body)
       src = def.src;
       backend_attributes = def.backend_attributes;
       num_loops = def.num_loops;
-      loop_id = def.loop_id;
-      loop_body = true;
+      loop_id = Option.map (fun (lid, _) -> (lid, true)) def.loop_id;
       loop_pos = def.loop_pos;
       name = def.name;
       signature = body_sig;
@@ -3425,7 +3423,8 @@ let decompose_loop_body_aux (ctx : ctx) (def : fun_decl) (body : fun_body)
                 (Fun
                    (FromLlbc
                       ( FunId (FRegular def.def_id),
-                        Some (Option.get def.loop_id, true (* is_body *)) )));
+                        Some (fst (Option.get def.loop_id), true (* is_body *))
+                      )));
             generics = generic_args;
           };
       ty = body_func_ty;

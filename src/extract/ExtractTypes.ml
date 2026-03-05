@@ -147,7 +147,7 @@ let start_fun_decl_group (ctx : extraction_ctx) (fmt : F.formatter)
       if is_single_opaque_fun_decl_group dg then ()
       else
         let compute_fun_def_name (def : Pure.fun_decl) : string =
-          ctx_get_local_function def.item_meta.span def.def_id def.loop_id ~is_body:def.loop_body ctx
+          ctx_get_local_function def.item_meta.span def.def_id def.loop_id ctx
           ^ "_def"
         in
         let names = List.map compute_fun_def_name dg in

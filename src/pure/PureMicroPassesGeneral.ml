@@ -3015,7 +3015,9 @@ let add_fuel_one (ctx : ctx) (loops : fun_decl LoopId.Map.t) (def : fun_decl) :
 let add_fuel (ctx : ctx) (trans : pure_fun_translation) : pure_fun_translation =
   let loops_map =
     LoopId.Map.of_list
-      (List.map (fun (f : fun_decl) -> (Option.get f.loop_id, f)) trans.loops)
+      (List.map
+         (fun (f : fun_decl) -> (fst (Option.get f.loop_id), f))
+         trans.loops)
   in
 
   (* Add the fuel and the state *)

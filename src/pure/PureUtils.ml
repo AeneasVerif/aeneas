@@ -26,11 +26,12 @@ end
 module RegularFunIdMap = Collections.MakeMap (RegularFunIdOrderedType)
 
 (** We use this type as a key for lookups *)
-type regular_fun_id_not_loop = LlbcAst.fun_id * RegionGroupId.id option
+type regular_fun_id_not_loop = LlbcAst.fun_sid * RegionGroupId.id option
 [@@deriving show, ord]
 
 (** We use this type as a key for lookups *)
-type fun_loop_id = FunDeclId.id * LoopId.id option [@@deriving show, ord]
+type fun_loop_id = FunDeclId.id * (LoopId.id * bool) option
+[@@deriving show, ord]
 
 module RegularFunIdNotLoopOrderedType = struct
   type t = regular_fun_id_not_loop
@@ -67,10 +68,6 @@ end
 
 module FunLoopIdMap = Collections.MakeMap (FunLoopIdOrderedType)
 module FunLoopIdSet = Collections.MakeSet (FunLoopIdOrderedType)
-
-(** Build the [(loop_id * bool) option] value from [fun_decl] fields *)
-let loop_info_of_decl (def : fun_decl) : (loop_id * bool) option =
-  Option.map (fun lid -> (lid, def.loop_body)) def.loop_id
 
 module ExprOrderedType = struct
   type t = expr

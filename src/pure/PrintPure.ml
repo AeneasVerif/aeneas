@@ -825,8 +825,7 @@ let fun_suffix (lp_id : (LoopId.id * bool) option) : string =
     match lp_id with
     | None -> ""
     | Some (lp_id, is_body) ->
-        "^loop" ^ LoopId.to_string lp_id
-        ^ if is_body then "^body" else ""
+        "^loop" ^ LoopId.to_string lp_id ^ if is_body then "^body" else ""
   in
   lp_suff
 
@@ -1263,7 +1262,7 @@ let fun_body_to_string (env : fmt_env) (body : fun_body) : string =
 
 let fun_decl_to_string (env : fmt_env) (def : fun_decl) : string =
   let env = { env with generics = [ def.signature.generics ] } in
-  let name = def.name ^ fun_suffix (PureUtils.loop_info_of_decl def) in
+  let name = def.name ^ fun_suffix def.loop_id in
   let signature = fun_sig_to_string env def.signature in
   match def.body with
   | None -> "val " ^ name ^ " :\n  " ^ signature

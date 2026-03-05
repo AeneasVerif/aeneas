@@ -69,7 +69,7 @@ let group_reorder_fun_decls (decls : fun_decl list) :
     (bool * fun_decl list) list =
   let module IntMap = MakeMap (OrderedInt) in
   let get_fun_id (decl : fun_decl) : fun_id =
-    { def_id = decl.def_id; lp_id = PureUtils.loop_info_of_decl decl }
+    { def_id = decl.def_id; lp_id = decl.loop_id }
   in
   (* Compute the list/set of identifiers *)
   let idl = List.map get_fun_id decls in

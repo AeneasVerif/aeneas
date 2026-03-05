@@ -117,7 +117,6 @@ let translate_fun_decl (ctx : bs_ctx) (body : S.expr option) : fun_decl =
       backend_attributes;
       num_loops;
       loop_id;
-      loop_body = false;
       loop_pos = [];
       name;
       signature;
