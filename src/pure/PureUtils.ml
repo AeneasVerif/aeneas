@@ -26,7 +26,7 @@ end
 module RegularFunIdMap = Collections.MakeMap (RegularFunIdOrderedType)
 
 (** We use this type as a key for lookups *)
-type regular_fun_id_not_loop = LlbcAst.fun_sid * RegionGroupId.id option
+type regular_fun_id_not_loop = LlbcAst.fun_id * RegionGroupId.id option
 [@@deriving show, ord]
 
 (** We use this type as a key for lookups *)
