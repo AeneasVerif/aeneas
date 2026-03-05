@@ -64,19 +64,25 @@ def read (a : Array Std.U8 4#usize) : Result Unit := do
 @[global_simps, irreducible]
 def CARRAY : Array Std.U16 4#usize := Array.repeat 4#usize 0#u16
 
+/- [loops_issues::loop_access_array]: loop body 0:
+   Source: 'tests/src/loops-issues.rs', lines 15:4-18:5 -/
+def loop_access_array_loop.body
+  (k : Std.Usize) (start : Std.Usize) :
+  Result (ControlFlow Std.Usize Unit)
+  := do
+  if start < 4#usize
+  then
+    let _ ← Array.index_usize CARRAY k
+    let start1 ← start + 1#usize
+    ok (cont start1)
+  else ok (done ())
+
 /- [loops_issues::loop_access_array]: loop 0:
    Source: 'tests/src/loops-issues.rs', lines 15:4-18:5 -/
 def loop_access_array_loop
   (k : Std.Usize) (start : Std.Usize) : Result Unit := do
   loop
-    (fun start1 =>
-      if start1 < 4#usize
-      then
-        do
-        let _ ← Array.index_usize CARRAY k
-        let start2 ← start1 + 1#usize
-        ok (cont start2)
-      else ok (done ()))
+    (fun start1 => loop_access_array_loop.body k start1)
     start
 
 /- [loops_issues::loop_access_array]:
@@ -85,13 +91,18 @@ def loop_access_array_loop
 def loop_access_array (k : Std.Usize) : Result Unit := do
   loop_access_array_loop k 0#usize
 
+/- [loops_issues::loop_array_len]: loop body 0:
+   Source: 'tests/src/loops-issues.rs', lines 26:4-28:5 -/
+def loop_array_len_loop.body (b : Bool) : Result (ControlFlow Bool Unit) := do
+  if b
+  then ok (cont true)
+  else ok (done ())
+
 /- [loops_issues::loop_array_len]: loop 0:
    Source: 'tests/src/loops-issues.rs', lines 26:4-28:5 -/
 def loop_array_len_loop (b : Bool) : Result Unit := do
   loop
-    (fun b1 => if b1
-               then ok (cont true)
-               else ok (done ()))
+    (fun b1 => loop_array_len_loop.body b1)
     b
 
 /- [loops_issues::loop_array_len]:
@@ -100,20 +111,26 @@ def loop_array_len_loop (b : Bool) : Result Unit := do
 def loop_array_len (b : Bool) : Result Unit := do
   loop_array_len_loop b
 
+/- [loops_issues::loop_array_len_write]: loop body 0:
+   Source: 'tests/src/loops-issues.rs', lines 36:4-40:5 -/
+def loop_array_len_write_loop.body
+  (b0 : Bool) (b1 : Bool) (buf : Array Std.U8 4#usize) :
+  Result (ControlFlow (Bool × Bool × (Array Std.U8 4#usize)) Unit)
+  := do
+  if b0
+  then
+    if b1
+    then let buf1 ← write buf
+         ok (cont (true, true, buf1))
+    else ok (cont (true, false, buf))
+  else ok (done ())
+
 /- [loops_issues::loop_array_len_write]: loop 0:
    Source: 'tests/src/loops-issues.rs', lines 36:4-40:5 -/
 def loop_array_len_write_loop
   (b0 : Bool) (b1 : Bool) (buf : Array Std.U8 4#usize) : Result Unit := do
   loop
-    (fun (b01, b11, buf1) =>
-      if b01
-      then
-        if b11
-        then do
-             let buf2 ← write buf1
-             ok (cont (true, true, buf2))
-        else ok (cont (true, false, buf1))
-      else ok (done ()))
+    (fun (b01, b11, buf1) => loop_array_len_write_loop.body b01 b11 buf1)
     (b0, b1, buf)
 
 /- [loops_issues::loop_array_len_write]:
@@ -126,13 +143,19 @@ def loop_array_len_write (b0 : Bool) (b1 : Bool) : Result Unit := do
    Source: 'tests/src/loops-issues.rs', lines 43:0-43:27 -/
 @[global_simps, irreducible] def MAX_NROWS : Std.Usize := 4#usize
 
+/- [loops_issues::read_global_loop]: loop body 0:
+   Source: 'tests/src/loops-issues.rs', lines 48:4-48:14 -/
+def read_global_loop_loop.body
+  (b : Bool) : Result (ControlFlow Bool Unit) := do
+  if b
+  then ok (cont true)
+  else ok (done ())
+
 /- [loops_issues::read_global_loop]: loop 0:
    Source: 'tests/src/loops-issues.rs', lines 48:4-48:14 -/
 def read_global_loop_loop (b : Bool) : Result Unit := do
   loop
-    (fun b1 => if b1
-               then ok (cont true)
-               else ok (done ()))
+    (fun b1 => read_global_loop_loop.body b1)
     b
 
 /- [loops_issues::read_global_loop]:
@@ -141,21 +164,27 @@ def read_global_loop (b : Bool) (n_rows : Std.Usize) : Result Unit := do
   massert (n_rows <= MAX_NROWS)
   read_global_loop_loop b
 
+/- [loops_issues::mut_loop_len]: loop body 0:
+   Source: 'tests/src/loops-issues.rs', lines 55:10-55:11 -/
+def mut_loop_len_loop.body
+  (buf : Array Std.U8 4#usize) (b : Bool) :
+  Result (ControlFlow Bool Unit)
+  := do
+  if b
+  then
+    let s ← lift (Array.to_slice buf)
+    let i := Slice.len s
+    if 0#usize <= i
+    then ok (cont true)
+    else fail panic
+  else ok (done ())
+
 /- [loops_issues::mut_loop_len]: loop 0:
    Source: 'tests/src/loops-issues.rs', lines 55:10-55:11 -/
 def mut_loop_len_loop
   (b : Bool) (buf : Array Std.U8 4#usize) : Result Unit := do
   loop
-    (fun b1 =>
-      if b1
-      then
-        do
-        let s ← lift (Array.to_slice buf)
-        let i := Slice.len s
-        if 0#usize <= i
-        then ok (cont true)
-        else fail panic
-      else ok (done ()))
+    (fun b1 => mut_loop_len_loop.body buf b1)
     b
 
 /- [loops_issues::mut_loop_len]:
@@ -165,21 +194,27 @@ def mut_loop_len (i : Std.U32) (b : Bool) : Result Std.U32 := do
   mut_loop_len_loop b buf
   ok i
 
+/- [loops_issues::test]: loop body 0:
+   Source: 'tests/src/loops-issues.rs', lines 65:4-71:5 -/
+def test_loop.body
+  (b1 : Bool) (b0 : Bool) (buf : Array Std.U8 4#usize) :
+  Result (ControlFlow (Bool × (Array Std.U8 4#usize)) Unit)
+  := do
+  if b0
+  then
+    let buf1 ← if b1
+                 then write buf
+                 else ok buf
+    read buf1
+    ok (cont (true, buf1))
+  else ok (done ())
+
 /- [loops_issues::test]: loop 0:
    Source: 'tests/src/loops-issues.rs', lines 65:4-71:5 -/
 def test_loop
   (b0 : Bool) (b1 : Bool) (buf : Array Std.U8 4#usize) : Result Unit := do
   loop
-    (fun (b01, buf1) =>
-      if b01
-      then
-        do
-        let buf2 ← if b1
-                     then write buf1
-                     else ok buf1
-        read buf2
-        ok (cont (true, buf2))
-      else ok (done ()))
+    (fun (b01, buf1) => test_loop.body b1 b01 buf1)
     (b0, buf)
 
 /- [loops_issues::test]:
@@ -198,6 +233,19 @@ structure WrapperU32 where
 def consume_u32 (eta : Std.U32) : Result Unit := do
   ok ()
 
+/- [loops_issues::loop_consume_u32]: loop body 0:
+   Source: 'tests/src/loops-issues.rs', lines 84:4-86:5 -/
+def loop_consume_u32_loop.body
+  (params : WrapperU32) (iter : core.ops.range.Range Std.I32) :
+  Result (ControlFlow (core.ops.range.Range Std.I32) Unit)
+  := do
+  let (o, iter1) ←
+    core.iter.range.IteratorRange.next I32.Insts.CoreIterRangeStep iter
+  match o with
+  | none => ok (done ())
+  | some _ => consume_u32 params.x
+              ok (cont iter1)
+
 /- [loops_issues::loop_consume_u32]: loop 0:
    Source: 'tests/src/loops-issues.rs', lines 84:4-86:5 -/
 def loop_consume_u32_loop
@@ -205,14 +253,7 @@ def loop_consume_u32_loop
   Result Unit
   := do
   loop
-    (fun iter1 =>
-      do
-      let (o, iter2) ←
-        core.iter.range.IteratorRange.next I32.Insts.CoreIterRangeStep iter1
-      match o with
-      | none => ok (done ())
-      | some _ => consume_u32 params.x
-                  ok (cont iter2))
+    (fun iter1 => loop_consume_u32_loop.body params iter1)
     iter
 
 /- [loops_issues::loop_consume_u32]:

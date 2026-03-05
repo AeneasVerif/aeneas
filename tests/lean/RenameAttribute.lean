@@ -82,18 +82,24 @@ def Factfn (n : Std.U64) : Result Std.U64 := do
        n * i1
 partial_fixpoint
 
+/- [rename_attribute::sum]: loop body 0:
+   Source: 'tests/src/rename_attribute.rs', lines 70:4-73:5 -/
+def No_borrows_sum_loop.body
+  (max : Std.U32) (i : Std.U32) (s : Std.U32) :
+  Result (ControlFlow (Std.U32 × Std.U32) Std.U32)
+  := do
+  if i < max
+  then let s1 ← s + i
+       let i1 ← i + 1#u32
+       ok (cont (i1, s1))
+  else ok (done s)
+
 /- [rename_attribute::sum]: loop 0:
    Source: 'tests/src/rename_attribute.rs', lines 70:4-73:5 -/
 def No_borrows_sum_loop
   (max : Std.U32) (i : Std.U32) (s : Std.U32) : Result Std.U32 := do
   loop
-    (fun (i1, s1) =>
-      if i1 < max
-      then do
-           let s2 ← s1 + i1
-           let i2 ← i1 + 1#u32
-           ok (cont (i2, s2))
-      else ok (done s1))
+    (fun (i1, s1) => No_borrows_sum_loop.body max i1 s1)
     (i, s)
 
 /- [rename_attribute::sum]:

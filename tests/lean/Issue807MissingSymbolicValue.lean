@@ -16,6 +16,24 @@ namespace issue_807_missing_symbolic_value
 structure PortableVector where
   elements : Array Std.U8 16#usize
 
+/- [issue_807_missing_symbolic_value::to_bytes]: loop body 0:
+   Source: 'tests/src/issue-807-missing-symbolic-value.rs', lines 8:4-10:5 -/
+def to_bytes_loop.body
+  (x : PortableVector) (bytes : Slice Std.U8)
+  (iter : core.ops.range.Range Std.Usize) :
+  Result (ControlFlow ((Slice Std.U8) × (core.ops.range.Range Std.Usize))
+    (Slice Std.U8))
+  := do
+  let (o, iter1) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepUsize iter
+  match o with
+  | none => ok (done bytes)
+  | some i =>
+    let i1 ← Array.index_usize x.elements i
+    let i2 ← 2#usize * i
+    let s ← Slice.update bytes i2 i1
+    ok (cont (s, iter1))
+
 /- [issue_807_missing_symbolic_value::to_bytes]: loop 0:
    Source: 'tests/src/issue-807-missing-symbolic-value.rs', lines 8:4-10:5 -/
 def to_bytes_loop
@@ -24,17 +42,7 @@ def to_bytes_loop
   Result (Slice Std.U8)
   := do
   loop
-    (fun (bytes1, iter1) =>
-      do
-      let (o, iter2) ←
-        core.iter.range.IteratorRange.next core.iter.range.StepUsize iter1
-      match o with
-      | none => ok (done bytes1)
-      | some i =>
-        let i1 ← Array.index_usize x.elements i
-        let i2 ← 2#usize * i
-        let s ← Slice.update bytes1 i2 i1
-        ok (cont (s, iter2)))
+    (fun (bytes1, iter1) => to_bytes_loop.body x bytes1 iter1)
     (bytes, iter)
 
 /- [issue_807_missing_symbolic_value::to_bytes]:

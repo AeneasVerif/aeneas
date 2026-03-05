@@ -11,19 +11,25 @@ set_option maxHeartbeats 1000000
 
 namespace iterators_scalar
 
+/- [iterators_scalar::iter]: loop body 0:
+   Source: 'tests/src/iterators-scalar.rs', lines 5:4-7:5 -/
+def iter_loop.body
+  (x : Std.I32) (iter1 : core.ops.range.Range Std.Usize) :
+  Result (ControlFlow (Std.I32 × (core.ops.range.Range Std.Usize)) Unit)
+  := do
+  let (o, iter2) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepUsize iter1
+  match o with
+  | none => ok (done ())
+  | some _ => let x1 ← x + 1#i32
+              ok (cont (x1, iter2))
+
 /- [iterators_scalar::iter]: loop 0:
    Source: 'tests/src/iterators-scalar.rs', lines 5:4-7:5 -/
 def iter_loop
   (x : Std.I32) (iter1 : core.ops.range.Range Std.Usize) : Result Unit := do
   loop
-    (fun (x1, iter2) =>
-      do
-      let (o, iter3) ←
-        core.iter.range.IteratorRange.next core.iter.range.StepUsize iter2
-      match o with
-      | none => ok (done ())
-      | some _ => let x2 ← x1 + 1#i32
-                  ok (cont (x2, iter3)))
+    (fun (x1, iter2) => iter_loop.body x1 iter2)
     (x, iter1)
 
 /- [iterators_scalar::iter]:

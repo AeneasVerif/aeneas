@@ -11,6 +11,18 @@ set_option maxHeartbeats 1000000
 
 namespace iterators_array
 
+/- [iterators_array::iter_array]: loop body 0:
+   Source: 'tests/src/iterators-array.rs', lines 6:4-8:5 -/
+def iter_array_loop.body
+  (x : Std.I32) (iter : alloc.vec.into_iter.IntoIter Std.U32) :
+  Result (ControlFlow (Std.I32 × (alloc.vec.into_iter.IntoIter Std.U32)) Unit)
+  := do
+  let (o, iter1) ← alloc.vec.into_iter.IteratorIntoIter.next iter
+  match o with
+  | none => ok (done ())
+  | some _ => let x1 ← x + 1#i32
+              ok (cont (x1, iter1))
+
 /- [iterators_array::iter_array]: loop 0:
    Source: 'tests/src/iterators-array.rs', lines 6:4-8:5 -/
 def iter_array_loop
@@ -18,13 +30,7 @@ def iter_array_loop
   Result Unit
   := do
   loop
-    (fun (x1, iter1) =>
-      do
-      let (o, iter2) ← alloc.vec.into_iter.IteratorIntoIter.next iter1
-      match o with
-      | none => ok (done ())
-      | some _ => let x2 ← x1 + 1#i32
-                  ok (cont (x2, iter2)))
+    (fun (x1, iter1) => iter_array_loop.body x1 iter1)
     (x, iter)
 
 /- [iterators_array::iter_array]:
