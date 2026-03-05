@@ -85,6 +85,7 @@ partial_fixpoint
 
 /- [tutorial::list_nth1]: loop 0:
    Source: 'src/lib.rs', lines 66:4-74:1 -/
+@[rust_loop]
 def list_nth1_loop {T : Type} (l : CList T) (i : Std.U32) : Result T := do
   match l with
   | CList.CCons x tl =>
@@ -160,6 +161,7 @@ def use_counter
 
 /- [tutorial::list_nth_mut1]: loop 0:
    Source: 'src/lib.rs', lines 124:4-132:1 -/
+@[rust_loop]
 def list_nth_mut1_loop
   {T : Type} (l : CList T) (i : Std.U32) : Result (T × (T → CList T)) := do
   match l with
@@ -184,6 +186,7 @@ def list_nth_mut1
 
 /- [tutorial::list_tail]: loop 0:
    Source: 'src/lib.rs', lines 135:4-137:5 -/
+@[rust_loop]
 def list_tail_loop
   {T : Type} (l : CList T) : Result (CList T → CList T) := do
   match l with
@@ -210,6 +213,7 @@ def append_in_place
 
 /- [tutorial::reverse]: loop 0:
    Source: 'src/lib.rs', lines 148:4-152:5 -/
+@[rust_loop]
 def reverse_loop
   {T : Type} (l : CList T) (out : CList T) : Result (CList T) := do
   match l with
@@ -225,6 +229,7 @@ def reverse {T : Type} (l : CList T) : Result (CList T) := do
 
 /- [tutorial::zero]: loop 0:
    Source: 'src/lib.rs', lines 164:4-167:5 -/
+@[rust_loop]
 def zero_loop
   (x : alloc.vec.Vec Std.U32) (i : Std.Usize) :
   Result (alloc.vec.Vec Std.U32)
@@ -249,6 +254,7 @@ def zero (x : alloc.vec.Vec Std.U32) : Result (alloc.vec.Vec Std.U32) := do
 
 /- [tutorial::add_no_overflow]: loop 0:
    Source: 'src/lib.rs', lines 177:4-180:5 -/
+@[rust_loop]
 def add_no_overflow_loop
   (x : alloc.vec.Vec Std.U32) (y : alloc.vec.Vec Std.U32) (i : Std.Usize) :
   Result (alloc.vec.Vec Std.U32)
@@ -279,6 +285,7 @@ def add_no_overflow
 
 /- [tutorial::add_with_carry]: loop 0:
    Source: 'src/lib.rs', lines 190:4-197:5 -/
+@[rust_loop]
 def add_with_carry_loop
   (x : alloc.vec.Vec Std.U32) (y : alloc.vec.Vec Std.U32) (c0 : Std.U8)
   (i : Std.Usize) :
@@ -333,6 +340,7 @@ def get_or_zero
 
 /- [tutorial::add]: loop 0:
    Source: 'src/lib.rs', lines 221:4-229:5 -/
+@[rust_loop]
 def add_loop
   (x : alloc.vec.Vec Std.U32) (y : alloc.vec.Vec Std.U32) (max1 : Std.Usize)
   (c0 : Std.U8) (i : Std.Usize) :

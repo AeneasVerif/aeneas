@@ -66,6 +66,7 @@ def CARRAY : Array Std.U16 4#usize := Array.repeat 4#usize 0#u16
 
 /- [loops_issues::loop_access_array]: loop body 0:
    Source: 'tests/src/loops-issues.rs', lines 15:4-18:5 -/
+@[rust_loop_body]
 def loop_access_array_loop.body
   (k : Std.Usize) (start : Std.Usize) :
   Result (ControlFlow Std.Usize Unit)
@@ -79,6 +80,7 @@ def loop_access_array_loop.body
 
 /- [loops_issues::loop_access_array]: loop 0:
    Source: 'tests/src/loops-issues.rs', lines 15:4-18:5 -/
+@[rust_loop]
 def loop_access_array_loop
   (k : Std.Usize) (start : Std.Usize) : Result Unit := do
   loop
@@ -93,6 +95,7 @@ def loop_access_array (k : Std.Usize) : Result Unit := do
 
 /- [loops_issues::loop_array_len]: loop body 0:
    Source: 'tests/src/loops-issues.rs', lines 26:4-28:5 -/
+@[rust_loop_body]
 def loop_array_len_loop.body (b : Bool) : Result (ControlFlow Bool Unit) := do
   if b
   then ok (cont true)
@@ -100,6 +103,7 @@ def loop_array_len_loop.body (b : Bool) : Result (ControlFlow Bool Unit) := do
 
 /- [loops_issues::loop_array_len]: loop 0:
    Source: 'tests/src/loops-issues.rs', lines 26:4-28:5 -/
+@[rust_loop]
 def loop_array_len_loop (b : Bool) : Result Unit := do
   loop
     (fun b1 => loop_array_len_loop.body b1)
@@ -113,6 +117,7 @@ def loop_array_len (b : Bool) : Result Unit := do
 
 /- [loops_issues::loop_array_len_write]: loop body 0:
    Source: 'tests/src/loops-issues.rs', lines 36:4-40:5 -/
+@[rust_loop_body]
 def loop_array_len_write_loop.body
   (b0 : Bool) (b1 : Bool) (buf : Array Std.U8 4#usize) :
   Result (ControlFlow (Bool × Bool × (Array Std.U8 4#usize)) Unit)
@@ -127,6 +132,7 @@ def loop_array_len_write_loop.body
 
 /- [loops_issues::loop_array_len_write]: loop 0:
    Source: 'tests/src/loops-issues.rs', lines 36:4-40:5 -/
+@[rust_loop]
 def loop_array_len_write_loop
   (b0 : Bool) (b1 : Bool) (buf : Array Std.U8 4#usize) : Result Unit := do
   loop
@@ -145,6 +151,7 @@ def loop_array_len_write (b0 : Bool) (b1 : Bool) : Result Unit := do
 
 /- [loops_issues::read_global_loop]: loop body 0:
    Source: 'tests/src/loops-issues.rs', lines 48:4-48:14 -/
+@[rust_loop_body]
 def read_global_loop_loop.body
   (b : Bool) : Result (ControlFlow Bool Unit) := do
   if b
@@ -153,6 +160,7 @@ def read_global_loop_loop.body
 
 /- [loops_issues::read_global_loop]: loop 0:
    Source: 'tests/src/loops-issues.rs', lines 48:4-48:14 -/
+@[rust_loop]
 def read_global_loop_loop (b : Bool) : Result Unit := do
   loop
     (fun b1 => read_global_loop_loop.body b1)
@@ -166,6 +174,7 @@ def read_global_loop (b : Bool) (n_rows : Std.Usize) : Result Unit := do
 
 /- [loops_issues::mut_loop_len]: loop body 0:
    Source: 'tests/src/loops-issues.rs', lines 55:10-55:11 -/
+@[rust_loop_body]
 def mut_loop_len_loop.body
   (buf : Array Std.U8 4#usize) (b : Bool) :
   Result (ControlFlow Bool Unit)
@@ -181,6 +190,7 @@ def mut_loop_len_loop.body
 
 /- [loops_issues::mut_loop_len]: loop 0:
    Source: 'tests/src/loops-issues.rs', lines 55:10-55:11 -/
+@[rust_loop]
 def mut_loop_len_loop
   (b : Bool) (buf : Array Std.U8 4#usize) : Result Unit := do
   loop
@@ -196,6 +206,7 @@ def mut_loop_len (i : Std.U32) (b : Bool) : Result Std.U32 := do
 
 /- [loops_issues::test]: loop body 0:
    Source: 'tests/src/loops-issues.rs', lines 65:4-71:5 -/
+@[rust_loop_body]
 def test_loop.body
   (b1 : Bool) (b0 : Bool) (buf : Array Std.U8 4#usize) :
   Result (ControlFlow (Bool × (Array Std.U8 4#usize)) Unit)
@@ -211,6 +222,7 @@ def test_loop.body
 
 /- [loops_issues::test]: loop 0:
    Source: 'tests/src/loops-issues.rs', lines 65:4-71:5 -/
+@[rust_loop]
 def test_loop
   (b0 : Bool) (b1 : Bool) (buf : Array Std.U8 4#usize) : Result Unit := do
   loop
@@ -235,6 +247,7 @@ def consume_u32 (eta : Std.U32) : Result Unit := do
 
 /- [loops_issues::loop_consume_u32]: loop body 0:
    Source: 'tests/src/loops-issues.rs', lines 84:4-86:5 -/
+@[rust_loop_body]
 def loop_consume_u32_loop.body
   (params : WrapperU32) (iter : core.ops.range.Range Std.I32) :
   Result (ControlFlow (core.ops.range.Range Std.I32) Unit)
@@ -248,6 +261,7 @@ def loop_consume_u32_loop.body
 
 /- [loops_issues::loop_consume_u32]: loop 0:
    Source: 'tests/src/loops-issues.rs', lines 84:4-86:5 -/
+@[rust_loop]
 def loop_consume_u32_loop
   (params : WrapperU32) (iter : core.ops.range.Range Std.I32) :
   Result Unit

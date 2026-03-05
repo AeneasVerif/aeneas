@@ -13,6 +13,7 @@ namespace iterators_scalar
 
 /- [iterators_scalar::iter]: loop body 0:
    Source: 'tests/src/iterators-scalar.rs', lines 5:4-7:5 -/
+@[rust_loop_body]
 def iter_loop.body
   (x : Std.I32) (iter1 : core.ops.range.Range Std.Usize) :
   Result (ControlFlow (Std.I32 × (core.ops.range.Range Std.Usize)) Unit)
@@ -26,6 +27,7 @@ def iter_loop.body
 
 /- [iterators_scalar::iter]: loop 0:
    Source: 'tests/src/iterators-scalar.rs', lines 5:4-7:5 -/
+@[rust_loop]
 def iter_loop
   (x : Std.I32) (iter1 : core.ops.range.Range Std.Usize) : Result Unit := do
   loop

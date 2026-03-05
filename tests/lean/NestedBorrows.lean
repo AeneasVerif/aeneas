@@ -115,6 +115,7 @@ def call_iter_mut_next_u32
 
 /- [nested_borrows::iter_mut_loop]: loop body 0:
    Source: 'tests/src/nested-borrows.rs', lines 86:4-86:36 -/
+@[rust_loop_body]
 def iter_mut_loop_loop.body
   {T : Type} (back : IterMut T → Option T) (it : IterMut T) :
   Result (ControlFlow ((IterMut T → Option T) × (IterMut T)) (Option T))
@@ -126,6 +127,7 @@ def iter_mut_loop_loop.body
 
 /- [nested_borrows::iter_mut_loop]: loop 0:
    Source: 'tests/src/nested-borrows.rs', lines 86:4-86:36 -/
+@[rust_loop]
 def iter_mut_loop_loop
   {T : Type} (back : IterMut T → Option T) (it : IterMut T) :
   Result (Option T)
@@ -142,6 +144,7 @@ def iter_mut_loop {T : Type} (it : IterMut T) : Result (IterMut T) := do
 
 /- [nested_borrows::iter_mut_incr]: loop body 0:
    Source: 'tests/src/nested-borrows.rs', lines 90:4-92:5 -/
+@[rust_loop_body]
 def iter_mut_incr_loop.body
   (back : IterMut Std.U32 → Option Std.U32) (it : IterMut Std.U32) :
   Result (ControlFlow ((IterMut Std.U32 → Option Std.U32) × (IterMut
@@ -156,6 +159,7 @@ def iter_mut_incr_loop.body
 
 /- [nested_borrows::iter_mut_incr]: loop 0:
    Source: 'tests/src/nested-borrows.rs', lines 90:4-92:5 -/
+@[rust_loop]
 def iter_mut_incr_loop
   (back : IterMut Std.U32 → Option Std.U32) (it : IterMut Std.U32) :
   Result (Option Std.U32)
@@ -241,6 +245,7 @@ def ListIterMut.next
 
 /- [nested_borrows::incr_list]: loop body 0:
    Source: 'tests/src/nested-borrows.rs', lines 132:4-134:5 -/
+@[rust_loop_body]
 def incr_list_loop.body
   (back : ListIterMut Std.U32 → Option (List Std.U32))
   (it : ListIterMut Std.U32) :
@@ -256,6 +261,7 @@ def incr_list_loop.body
 
 /- [nested_borrows::incr_list]: loop 0:
    Source: 'tests/src/nested-borrows.rs', lines 132:4-134:5 -/
+@[rust_loop]
 def incr_list_loop
   (back : ListIterMut Std.U32 → Option (List Std.U32))
   (it : ListIterMut Std.U32) :
@@ -282,6 +288,7 @@ def next1
 
 /- [nested_borrows::iter_list_while]: loop body 1:
    Source: 'tests/src/nested-borrows.rs', lines 143:8-143:18 -/
+@[rust_loop_body]
 def iter_list_while_loop0_loop0.body
   (b : Bool) : Result (ControlFlow Bool Unit) := do
   if b
@@ -290,6 +297,7 @@ def iter_list_while_loop0_loop0.body
 
 /- [nested_borrows::iter_list_while]: loop 1:
    Source: 'tests/src/nested-borrows.rs', lines 143:8-143:18 -/
+@[rust_loop]
 def iter_list_while_loop0_loop0 (b : Bool) : Result Unit := do
   loop
     (fun b1 => iter_list_while_loop0_loop0.body b1)
@@ -297,6 +305,7 @@ def iter_list_while_loop0_loop0 (b : Bool) : Result Unit := do
 
 /- [nested_borrows::iter_list_while]: loop body 0:
    Source: 'tests/src/nested-borrows.rs', lines 142:4-144:5 -/
+@[rust_loop_body]
 def iter_list_while_loop0.body
   {T : Type} (back : List T → List T) (b : Bool) (l : List T) :
   Result (ControlFlow ((List T → List T) × Bool × (List T)) ((List T) ×
@@ -314,6 +323,7 @@ def iter_list_while_loop0.body
 
 /- [nested_borrows::iter_list_while]: loop 0:
    Source: 'tests/src/nested-borrows.rs', lines 142:4-144:5 -/
+@[rust_loop]
 def iter_list_while_loop0
   {T : Type} (back : List T → List T) (b : Bool) (l : List T) :
   Result ((List T) × (List T → List T))

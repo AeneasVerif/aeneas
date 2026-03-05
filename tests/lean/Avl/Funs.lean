@@ -198,6 +198,7 @@ def Tree.new {T : Type} (OrdInst : Ord T) : Result (Tree T) := do
 
 /- [avl::{avl::Tree<T>}::find]: loop 0:
    Source: 'src/avl.rs', lines 330:8-339:5 -/
+@[rust_loop]
 def Tree.find_loop
   {T : Type} (OrdInst : Ord T) (value : T) (current_tree : Option (Node T)) :
   Result Bool

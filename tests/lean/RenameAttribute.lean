@@ -84,6 +84,7 @@ partial_fixpoint
 
 /- [rename_attribute::sum]: loop body 0:
    Source: 'tests/src/rename_attribute.rs', lines 70:4-73:5 -/
+@[rust_loop_body]
 def No_borrows_sum_loop.body
   (max : Std.U32) (i : Std.U32) (s : Std.U32) :
   Result (ControlFlow (Std.U32 × Std.U32) Std.U32)
@@ -96,6 +97,7 @@ def No_borrows_sum_loop.body
 
 /- [rename_attribute::sum]: loop 0:
    Source: 'tests/src/rename_attribute.rs', lines 70:4-73:5 -/
+@[rust_loop]
 def No_borrows_sum_loop
   (max : Std.U32) (i : Std.U32) (s : Std.U32) : Result Std.U32 := do
   loop

@@ -18,6 +18,7 @@ structure PortableVector where
 
 /- [issue_807_missing_symbolic_value::to_bytes]: loop body 0:
    Source: 'tests/src/issue-807-missing-symbolic-value.rs', lines 8:4-10:5 -/
+@[rust_loop_body]
 def to_bytes_loop.body
   (x : PortableVector) (bytes : Slice Std.U8)
   (iter : core.ops.range.Range Std.Usize) :
@@ -36,6 +37,7 @@ def to_bytes_loop.body
 
 /- [issue_807_missing_symbolic_value::to_bytes]: loop 0:
    Source: 'tests/src/issue-807-missing-symbolic-value.rs', lines 8:4-10:5 -/
+@[rust_loop]
 def to_bytes_loop
   (x : PortableVector) (bytes : Slice Std.U8)
   (iter : core.ops.range.Range Std.Usize) :

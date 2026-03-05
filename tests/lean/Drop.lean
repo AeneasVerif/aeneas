@@ -13,6 +13,7 @@ namespace drop
 
 /- [drop::fill]: loop body 0:
    Source: 'tests/src/drop.rs', lines 7:4-9:5 -/
+@[rust_loop_body]
 def fill_loop.body
   {T : Type} (corecloneCloneInst : core.clone.Clone T) (value : T)
   (s : Slice T) (iter : core.ops.range.Range Std.Usize) :
@@ -32,6 +33,7 @@ def fill_loop.body
 
 /- [drop::fill]: loop 0:
    Source: 'tests/src/drop.rs', lines 7:4-9:5 -/
+@[rust_loop]
 def fill_loop
   {T : Type} (corecloneCloneInst : core.clone.Clone T) (s : Slice T)
   (value : T) (iter : core.ops.range.Range Std.Usize) :

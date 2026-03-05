@@ -375,6 +375,7 @@ def non_copyable_array : Result Unit := do
 
 /- [arrays::sum]: loop body 0:
    Source: 'tests/src/arrays.rs', lines 276:4-279:5 -/
+@[rust_loop_body]
 def sum_loop.body
   (s : Slice Std.U32) (sum1 : Std.U32) (i : Std.Usize) :
   Result (ControlFlow (Std.U32 × Std.Usize) Std.U32)
@@ -390,6 +391,7 @@ def sum_loop.body
 
 /- [arrays::sum]: loop 0:
    Source: 'tests/src/arrays.rs', lines 276:4-279:5 -/
+@[rust_loop]
 def sum_loop
   (s : Slice Std.U32) (sum1 : Std.U32) (i : Std.Usize) : Result Std.U32 := do
   loop
@@ -404,6 +406,7 @@ def sum (s : Slice Std.U32) : Result Std.U32 := do
 
 /- [arrays::sum2]: loop body 0:
    Source: 'tests/src/arrays.rs', lines 287:4-290:5 -/
+@[rust_loop_body]
 def sum2_loop.body
   (s : Slice Std.U32) (s2 : Slice Std.U32) (sum1 : Std.U32) (i : Std.Usize) :
   Result (ControlFlow (Std.U32 × Std.Usize) Std.U32)
@@ -421,6 +424,7 @@ def sum2_loop.body
 
 /- [arrays::sum2]: loop 0:
    Source: 'tests/src/arrays.rs', lines 287:4-290:5 -/
+@[rust_loop]
 def sum2_loop
   (s : Slice Std.U32) (s2 : Slice Std.U32) (sum1 : Std.U32) (i : Std.Usize) :
   Result Std.U32
@@ -498,6 +502,7 @@ def ite : Result Unit := do
 
 /- [arrays::zero_slice]: loop body 0:
    Source: 'tests/src/arrays.rs', lines 337:4-340:5 -/
+@[rust_loop_body]
 def zero_slice_loop.body
   (len : Std.Usize) (a : Slice Std.U8) (i : Std.Usize) :
   Result (ControlFlow ((Slice Std.U8) × Std.Usize) (Slice Std.U8))
@@ -510,6 +515,7 @@ def zero_slice_loop.body
 
 /- [arrays::zero_slice]: loop 0:
    Source: 'tests/src/arrays.rs', lines 337:4-340:5 -/
+@[rust_loop]
 def zero_slice_loop
   (a : Slice Std.U8) (i : Std.Usize) (len : Std.Usize) :
   Result (Slice Std.U8)
@@ -526,6 +532,7 @@ def zero_slice (a : Slice Std.U8) : Result (Slice Std.U8) := do
 
 /- [arrays::iter_mut_slice]: loop body 0:
    Source: 'tests/src/arrays.rs', lines 346:4-348:5 -/
+@[rust_loop_body]
 def iter_mut_slice_loop.body
   (len : Std.Usize) (i : Std.Usize) : Result (ControlFlow Std.Usize Unit) := do
   if i < len
@@ -535,6 +542,7 @@ def iter_mut_slice_loop.body
 
 /- [arrays::iter_mut_slice]: loop 0:
    Source: 'tests/src/arrays.rs', lines 346:4-348:5 -/
+@[rust_loop]
 def iter_mut_slice_loop (len : Std.Usize) (i : Std.Usize) : Result Unit := do
   loop
     (fun i1 => iter_mut_slice_loop.body len i1)
@@ -549,6 +557,7 @@ def iter_mut_slice (a : Slice Std.U8) : Result (Slice Std.U8) := do
 
 /- [arrays::sum_mut_slice]: loop body 0:
    Source: 'tests/src/arrays.rs', lines 354:4-357:5 -/
+@[rust_loop_body]
 def sum_mut_slice_loop.body
   (a : Slice Std.U32) (i : Std.Usize) (s : Std.U32) :
   Result (ControlFlow (Std.Usize × Std.U32) Std.U32)
@@ -564,6 +573,7 @@ def sum_mut_slice_loop.body
 
 /- [arrays::sum_mut_slice]: loop 0:
    Source: 'tests/src/arrays.rs', lines 354:4-357:5 -/
+@[rust_loop]
 def sum_mut_slice_loop
   (a : Slice Std.U32) (i : Std.Usize) (s : Std.U32) : Result Std.U32 := do
   loop
@@ -579,6 +589,7 @@ def sum_mut_slice
 
 /- [arrays::add_acc]: loop body 0:
    Source: 'tests/src/arrays.rs', lines 363:4-372:5 -/
+@[rust_loop_body]
 def add_acc_loop.body
   (paSrc : Array Std.U32 256#usize) (peDst : Array Std.U32 256#usize)
   (i : Std.Usize) :
@@ -598,6 +609,7 @@ def add_acc_loop.body
 
 /- [arrays::add_acc]: loop 0:
    Source: 'tests/src/arrays.rs', lines 363:4-372:5 -/
+@[rust_loop]
 def add_acc_loop
   (paSrc : Array Std.U32 256#usize) (peDst : Array Std.U32 256#usize)
   (i : Std.Usize) :

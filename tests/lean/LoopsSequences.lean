@@ -66,6 +66,7 @@ def sample_cbd
 
 /- [loops_sequences::key_expand]: loop body 0:
    Source: 'tests/src/loops-sequences.rs', lines 29:4-36:5 -/
+@[rust_loop_body]
 def key_expand_loop0.body
   (state_base : Array Std.U8 8#usize) (key : Key)
   (state_work : Array Std.U8 8#usize) (sample_buffer : Array Std.U8 1#usize)
@@ -93,6 +94,7 @@ def key_expand_loop0.body
 
 /- [loops_sequences::key_expand]: loop 0:
    Source: 'tests/src/loops-sequences.rs', lines 29:4-36:5 -/
+@[rust_loop]
 def key_expand_loop0
   (key : Key) (state_base : Array Std.U8 8#usize)
   (state_work : Array Std.U8 8#usize) (sample_buffer : Array Std.U8 1#usize)
@@ -106,6 +108,7 @@ def key_expand_loop0
 
 /- [loops_sequences::key_expand]: loop body 1:
    Source: 'tests/src/loops-sequences.rs', lines 39:4-46:5 -/
+@[rust_loop_body]
 def key_expand_loop1.body
   (state_base : Array Std.U8 8#usize) (key : Key)
   (state_work : Array Std.U8 8#usize) (sample_buffer : Array Std.U8 1#usize)
@@ -133,6 +136,7 @@ def key_expand_loop1.body
 
 /- [loops_sequences::key_expand]: loop 1:
    Source: 'tests/src/loops-sequences.rs', lines 39:4-46:5 -/
+@[rust_loop]
 def key_expand_loop1
   (key : Key) (state_base : Array Std.U8 8#usize)
   (state_work : Array Std.U8 8#usize) (sample_buffer : Array Std.U8 1#usize)

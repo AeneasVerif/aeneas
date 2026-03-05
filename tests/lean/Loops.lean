@@ -13,6 +13,7 @@ namespace loops
 
 /- [loops::iter]: loop body 0:
    Source: 'tests/src/loops.rs', lines 6:4-8:5 -/
+@[rust_loop_body]
 def iter_loop.body
   (max : Std.U32) (i : Std.U32) : Result (ControlFlow Std.U32 Std.U32) := do
   if i < max
@@ -22,6 +23,7 @@ def iter_loop.body
 
 /- [loops::iter]: loop 0:
    Source: 'tests/src/loops.rs', lines 6:4-8:5 -/
+@[rust_loop]
 def iter_loop (max : Std.U32) (i : Std.U32) : Result Std.U32 := do
   loop
     (fun i1 => iter_loop.body max i1)
@@ -35,6 +37,7 @@ def iter (max : Std.U32) : Result Std.U32 := do
 
 /- [loops::sum]: loop body 0:
    Source: 'tests/src/loops.rs', lines 17:4-20:5 -/
+@[rust_loop_body]
 def sum_loop.body
   (max : Std.U32) (i : Std.U32) (s : Std.U32) :
   Result (ControlFlow (Std.U32 × Std.U32) Std.U32)
@@ -47,6 +50,7 @@ def sum_loop.body
 
 /- [loops::sum]: loop 0:
    Source: 'tests/src/loops.rs', lines 17:4-20:5 -/
+@[rust_loop]
 def sum_loop (max : Std.U32) (i : Std.U32) (s : Std.U32) : Result Std.U32 := do
   loop
     (fun (i1, s1) => sum_loop.body max i1 s1)
@@ -60,6 +64,7 @@ def sum (max : Std.U32) : Result Std.U32 := do
 
 /- [loops::sum_with_mut_borrows]: loop body 0:
    Source: 'tests/src/loops.rs', lines 32:4-37:5 -/
+@[rust_loop_body]
 def sum_with_mut_borrows_loop.body
   (max : Std.U32) (i : Std.U32) (s : Std.U32) :
   Result (ControlFlow (Std.U32 × Std.U32) Std.U32)
@@ -72,6 +77,7 @@ def sum_with_mut_borrows_loop.body
 
 /- [loops::sum_with_mut_borrows]: loop 0:
    Source: 'tests/src/loops.rs', lines 32:4-37:5 -/
+@[rust_loop]
 def sum_with_mut_borrows_loop
   (max : Std.U32) (i : Std.U32) (s : Std.U32) : Result Std.U32 := do
   loop
@@ -86,6 +92,7 @@ def sum_with_mut_borrows (max : Std.U32) : Result Std.U32 := do
 
 /- [loops::sum_with_shared_borrows]: loop body 0:
    Source: 'tests/src/loops.rs', lines 47:4-54:5 -/
+@[rust_loop_body]
 def sum_with_shared_borrows_loop.body
   (max : Std.U32) (i : Std.U32) (s : Std.U32) :
   Result (ControlFlow (Std.U32 × Std.U32) Std.U32)
@@ -98,6 +105,7 @@ def sum_with_shared_borrows_loop.body
 
 /- [loops::sum_with_shared_borrows]: loop 0:
    Source: 'tests/src/loops.rs', lines 47:4-54:5 -/
+@[rust_loop]
 def sum_with_shared_borrows_loop
   (max : Std.U32) (i : Std.U32) (s : Std.U32) : Result Std.U32 := do
   loop
@@ -112,6 +120,7 @@ def sum_with_shared_borrows (max : Std.U32) : Result Std.U32 := do
 
 /- [loops::sum_array]: loop body 0:
    Source: 'tests/src/loops.rs', lines 63:4-66:5 -/
+@[rust_loop_body]
 def sum_array_loop.body
   {N : Std.Usize} (a : Array Std.U32 N) (i : Std.Usize) (s : Std.U32) :
   Result (ControlFlow (Std.Usize × Std.U32) Std.U32)
@@ -126,6 +135,7 @@ def sum_array_loop.body
 
 /- [loops::sum_array]: loop 0:
    Source: 'tests/src/loops.rs', lines 63:4-66:5 -/
+@[rust_loop]
 def sum_array_loop
   {N : Std.Usize} (a : Array Std.U32 N) (i : Std.Usize) (s : Std.U32) :
   Result Std.U32
@@ -142,6 +152,7 @@ def sum_array {N : Std.Usize} (a : Array Std.U32 N) : Result Std.U32 := do
 
 /- [loops::clear]: loop body 0:
    Source: 'tests/src/loops.rs', lines 74:4-77:5 -/
+@[rust_loop_body]
 def clear_loop.body
   (v : alloc.vec.Vec Std.U32) (i : Std.Usize) :
   Result (ControlFlow ((alloc.vec.Vec Std.U32) × Std.Usize) (alloc.vec.Vec
@@ -160,6 +171,7 @@ def clear_loop.body
 
 /- [loops::clear]: loop 0:
    Source: 'tests/src/loops.rs', lines 74:4-77:5 -/
+@[rust_loop]
 def clear_loop
   (v : alloc.vec.Vec Std.U32) (i : Std.Usize) :
   Result (alloc.vec.Vec Std.U32)
@@ -183,6 +195,7 @@ inductive List (T : Type) where
 
 /- [loops::list_mem]: loop 0:
    Source: 'tests/src/loops.rs', lines 87:4-95:1 -/
+@[rust_loop]
 def list_mem_loop (x : Std.U32) (ls : List Std.U32) : Result Bool := do
   match ls with
   | List.Cons y tl => if y = x
@@ -199,6 +212,7 @@ def list_mem (x : Std.U32) (ls : List Std.U32) : Result Bool := do
 
 /- [loops::list_nth_mut]: loop 0:
    Source: 'tests/src/loops.rs', lines 98:4-107:1 -/
+@[rust_loop]
 def list_nth_mut_loop
   {T : Type} (ls : List T) (i : Std.U32) : Result (T × (T → List T)) := do
   match ls with
@@ -223,6 +237,7 @@ def list_nth_mut
 
 /- [loops::list_nth_shared]: loop 0:
    Source: 'tests/src/loops.rs', lines 111:4-120:1 -/
+@[rust_loop]
 def list_nth_shared_loop
   {T : Type} (ls : List T) (i : Std.U32) : Result T := do
   match ls with
@@ -242,6 +257,7 @@ def list_nth_shared {T : Type} (ls : List T) (i : Std.U32) : Result T := do
 
 /- [loops::get_elem_mut]: loop 0:
    Source: 'tests/src/loops.rs', lines 124:4-136:1 -/
+@[rust_loop]
 def get_elem_mut_loop
   (x : Std.Usize) (ls : List Std.Usize) :
   Result (Std.Usize × (Std.Usize → List Std.Usize))
@@ -274,6 +290,7 @@ def get_elem_mut
 
 /- [loops::get_elem_shared]: loop 0:
    Source: 'tests/src/loops.rs', lines 140:4-152:1 -/
+@[rust_loop]
 def get_elem_shared_loop
   (x : Std.Usize) (ls : List Std.Usize) : Result Std.Usize := do
   match ls with
@@ -307,6 +324,7 @@ def id_shared {T : Type} (ls : List T) : Result (List T) := do
 
 /- [loops::list_nth_mut_with_id]: loop 0:
    Source: 'tests/src/loops.rs', lines 165:4-174:1 -/
+@[rust_loop]
 def list_nth_mut_with_id_loop
   {T : Type} (i : Std.U32) (ls : List T) : Result (T × (T → List T)) := do
   match ls with
@@ -334,6 +352,7 @@ def list_nth_mut_with_id
 
 /- [loops::list_nth_shared_with_id]: loop 0:
    Source: 'tests/src/loops.rs', lines 179:4-188:1 -/
+@[rust_loop]
 def list_nth_shared_with_id_loop
   {T : Type} (i : Std.U32) (ls : List T) : Result T := do
   match ls with
@@ -354,6 +373,7 @@ def list_nth_shared_with_id
 
 /- [loops::list_nth_mut_pair]: loop 0:
    Source: 'tests/src/loops.rs', lines 198:4-214:1 -/
+@[rust_loop]
 def list_nth_mut_pair_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T × (T → List T) × (T → List T))
@@ -387,6 +407,7 @@ def list_nth_mut_pair
 
 /- [loops::list_nth_shared_pair]: loop 0:
    Source: 'tests/src/loops.rs', lines 222:4-238:1 -/
+@[rust_loop]
 def list_nth_shared_pair_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T)
@@ -414,6 +435,7 @@ def list_nth_shared_pair
 
 /- [loops::list_nth_mut_pair_merge]: loop 0:
    Source: 'tests/src/loops.rs', lines 247:4-257:1 -/
+@[rust_loop]
 def list_nth_mut_pair_merge_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T × (T → List T) × (T → List T))
@@ -453,6 +475,7 @@ def list_nth_mut_pair_merge
 
 /- [loops::list_nth_shared_pair_merge]: loop 0:
    Source: 'tests/src/loops.rs', lines 265:4-275:1 -/
+@[rust_loop]
 def list_nth_shared_pair_merge_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T)
@@ -480,6 +503,7 @@ def list_nth_shared_pair_merge
 
 /- [loops::list_nth_mut_shared_pair]: loop 0:
    Source: 'tests/src/loops.rs', lines 283:4-293:1 -/
+@[rust_loop]
 def list_nth_mut_shared_pair_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T × (T → List T))
@@ -511,6 +535,7 @@ def list_nth_mut_shared_pair
 
 /- [loops::list_nth_mut_shared_pair_merge]: loop 0:
    Source: 'tests/src/loops.rs', lines 302:4-312:1 -/
+@[rust_loop]
 def list_nth_mut_shared_pair_merge_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T × (T → List T))
@@ -542,6 +567,7 @@ def list_nth_mut_shared_pair_merge
 
 /- [loops::list_nth_shared_mut_pair]: loop 0:
    Source: 'tests/src/loops.rs', lines 321:4-331:1 -/
+@[rust_loop]
 def list_nth_shared_mut_pair_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T × (T → List T))
@@ -573,6 +599,7 @@ def list_nth_shared_mut_pair
 
 /- [loops::list_nth_shared_mut_pair_merge]: loop 0:
    Source: 'tests/src/loops.rs', lines 340:4-350:1 -/
+@[rust_loop]
 def list_nth_shared_mut_pair_merge_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T × (T → List T))
@@ -604,6 +631,7 @@ def list_nth_shared_mut_pair_merge
 
 /- [loops::ignore_input_mut_borrow]: loop body 0:
    Source: 'tests/src/loops.rs', lines 355:4-357:5 -/
+@[rust_loop_body]
 def ignore_input_mut_borrow_loop.body
   (i : Std.U32) : Result (ControlFlow Std.U32 Unit) := do
   if i > 0#u32
@@ -613,6 +641,7 @@ def ignore_input_mut_borrow_loop.body
 
 /- [loops::ignore_input_mut_borrow]: loop 0:
    Source: 'tests/src/loops.rs', lines 355:4-357:5 -/
+@[rust_loop]
 def ignore_input_mut_borrow_loop (i : Std.U32) : Result Unit := do
   loop
     (fun i1 => ignore_input_mut_borrow_loop.body i1)
@@ -626,6 +655,7 @@ def ignore_input_mut_borrow (_a : Std.U32) (i : Std.U32) : Result Std.U32 := do
 
 /- [loops::incr_ignore_input_mut_borrow]: loop body 0:
    Source: 'tests/src/loops.rs', lines 364:4-366:5 -/
+@[rust_loop_body]
 def incr_ignore_input_mut_borrow_loop.body
   (i : Std.U32) : Result (ControlFlow Std.U32 Unit) := do
   if i > 0#u32
@@ -635,6 +665,7 @@ def incr_ignore_input_mut_borrow_loop.body
 
 /- [loops::incr_ignore_input_mut_borrow]: loop 0:
    Source: 'tests/src/loops.rs', lines 364:4-366:5 -/
+@[rust_loop]
 def incr_ignore_input_mut_borrow_loop (i : Std.U32) : Result Unit := do
   loop
     (fun i1 => incr_ignore_input_mut_borrow_loop.body i1)
@@ -650,6 +681,7 @@ def incr_ignore_input_mut_borrow
 
 /- [loops::ignore_input_shared_borrow]: loop body 0:
    Source: 'tests/src/loops.rs', lines 372:4-374:5 -/
+@[rust_loop_body]
 def ignore_input_shared_borrow_loop.body
   (i : Std.U32) : Result (ControlFlow Std.U32 Unit) := do
   if i > 0#u32
@@ -659,6 +691,7 @@ def ignore_input_shared_borrow_loop.body
 
 /- [loops::ignore_input_shared_borrow]: loop 0:
    Source: 'tests/src/loops.rs', lines 372:4-374:5 -/
+@[rust_loop]
 def ignore_input_shared_borrow_loop (i : Std.U32) : Result Unit := do
   loop
     (fun i1 => ignore_input_shared_borrow_loop.body i1)
@@ -678,6 +711,7 @@ def issue500_1.bar (_a : Bool) : Result Bool := do
 
 /- [loops::issue500_1]: loop body 0:
    Source: 'tests/src/loops.rs', lines 382:4-384:5 -/
+@[rust_loop_body]
 def issue500_1_loop.body (a : Bool) : Result (ControlFlow Bool Bool) := do
   if 0#i32 < 0#i32
   then let a1 ← issue500_1.bar a
@@ -686,6 +720,7 @@ def issue500_1_loop.body (a : Bool) : Result (ControlFlow Bool Bool) := do
 
 /- [loops::issue500_1]: loop 0:
    Source: 'tests/src/loops.rs', lines 382:4-384:5 -/
+@[rust_loop]
 def issue500_1_loop (a : Bool) : Result Bool := do
   loop
     (fun a1 => issue500_1_loop.body a1)
@@ -709,11 +744,13 @@ def issue500_2.A := Array Bool 1#usize
 
 /- [loops::issue500_2]: loop body 0:
    Source: 'tests/src/loops.rs', lines 394:4-396:5 -/
+@[rust_loop_body]
 def issue500_2_loop.body : Result (ControlFlow Unit Unit) := do
   ok (done ())
 
 /- [loops::issue500_2]: loop 0:
    Source: 'tests/src/loops.rs', lines 394:4-396:5 -/
+@[rust_loop]
 def issue500_2_loop : Result Unit := do
   loop
     (fun () => issue500_2_loop.body)
@@ -732,6 +769,7 @@ def issue500_3.A := Array Bool 1#usize
 
 /- [loops::issue500_3]: loop body 0:
    Source: 'tests/src/loops.rs', lines 404:4-404:18 -/
+@[rust_loop_body]
 def issue500_3_loop.body : Result (ControlFlow Unit Unit) := do
   if 0#i32 < 0#i32
   then ok (cont ())
@@ -739,6 +777,7 @@ def issue500_3_loop.body : Result (ControlFlow Unit Unit) := do
 
 /- [loops::issue500_3]: loop 0:
    Source: 'tests/src/loops.rs', lines 404:4-404:18 -/
+@[rust_loop]
 def issue500_3_loop : Result Unit := do
   loop
     (fun () => issue500_3_loop.body)
@@ -752,6 +791,7 @@ def issue500_3 (s : Array Bool 1#usize) : Result (Array Bool 1#usize) := do
 
 /- [loops::issue351]: loop 0:
    Source: 'tests/src/loops.rs', lines 411:4-414:5 -/
+@[rust_loop]
 def issue351_loop (t : List Std.U8) (last : Std.U8) : Result Std.U8 := do
   match t with
   | List.Cons ht tt => issue351_loop tt ht
@@ -771,6 +811,7 @@ def issue270.box_get_borrow {T : Type} (x : T) : Result T := do
 
 /- [loops::issue270]: loop body 0:
    Source: 'tests/src/loops.rs', lines 426:8-429:9 -/
+@[rust_loop_body]
 def issue270_loop.body
   (t : List (List Std.U8)) (last : List Std.U8) :
   Result (ControlFlow ((List (List Std.U8)) × (List Std.U8)) (List Std.U8))
@@ -782,6 +823,7 @@ def issue270_loop.body
 
 /- [loops::issue270]: loop 0:
    Source: 'tests/src/loops.rs', lines 426:8-429:9 -/
+@[rust_loop]
 def issue270_loop
   (t : List (List Std.U8)) (last : List Std.U8) : Result (List Std.U8) := do
   loop
@@ -800,6 +842,7 @@ def issue270 (v : List (List Std.U8)) : Result (Option (List Std.U8)) := do
 
 /- [loops::issue400_1]: loop body 0:
    Source: 'tests/src/loops.rs', lines 440:4-447:5 -/
+@[rust_loop_body]
 def issue400_1_loop.body
   (cond : Bool) (back : Std.I32 → (Std.I32 × Std.I32)) (y : Std.I32)
   (i : Std.I32) :
@@ -821,6 +864,7 @@ def issue400_1_loop.body
 
 /- [loops::issue400_1]: loop 0:
    Source: 'tests/src/loops.rs', lines 440:4-447:5 -/
+@[rust_loop]
 def issue400_1_loop
   (back : Std.I32 → (Std.I32 × Std.I32)) (cond : Bool) (y : Std.I32)
   (i : Std.I32) :
@@ -839,6 +883,7 @@ def issue400_1
 
 /- [loops::issue400_2]: loop body 0:
    Source: 'tests/src/loops.rs', lines 455:4-464:5 -/
+@[rust_loop_body]
 def issue400_2_loop.body
   (conds : Slice Bool)
   (back : Std.I32 → Std.I32 → (Std.I32 × Std.I32 × Std.I32))
@@ -863,6 +908,7 @@ def issue400_2_loop.body
 
 /- [loops::issue400_2]: loop 0:
    Source: 'tests/src/loops.rs', lines 455:4-464:5 -/
+@[rust_loop]
 def issue400_2_loop
   (back : Std.I32 → Std.I32 → (Std.I32 × Std.I32 × Std.I32))
   (conds : Slice Bool) (y : Std.I32) (z : Std.I32) (i : Std.Usize) :
@@ -893,6 +939,7 @@ def copy_carray.CARRAY : Array Std.U32 2#usize :=
 
 /- [loops::copy_carray]: loop body 0:
    Source: 'tests/src/loops.rs', lines 473:4-476:5 -/
+@[rust_loop_body]
 def copy_carray_loop.body
   (a : Array Std.U32 2#usize) (i : Std.Usize) :
   Result (ControlFlow ((Array Std.U32 2#usize) × Std.Usize) (Array Std.U32
@@ -908,6 +955,7 @@ def copy_carray_loop.body
 
 /- [loops::copy_carray]: loop 0:
    Source: 'tests/src/loops.rs', lines 473:4-476:5 -/
+@[rust_loop]
 def copy_carray_loop
   (a : Array Std.U32 2#usize) (i : Std.Usize) :
   Result (Array Std.U32 2#usize)
@@ -925,6 +973,7 @@ def copy_carray
 
 /- [loops::iter_local_mut_borrow]: loop body 0:
    Source: 'tests/src/loops.rs', lines 483:4-490:5 -/
+@[rust_loop_body]
 def iter_local_mut_borrow_loop.body
   (p : Std.I32) : Result (ControlFlow Std.I32 Unit) := do
   let p1 ← p + 1#i32
@@ -934,6 +983,7 @@ def iter_local_mut_borrow_loop.body
 
 /- [loops::iter_local_mut_borrow]: loop 0:
    Source: 'tests/src/loops.rs', lines 483:4-490:5 -/
+@[rust_loop]
 def iter_local_mut_borrow_loop (p : Std.I32) : Result Unit := do
   loop
     (fun p1 => iter_local_mut_borrow_loop.body p1)
@@ -947,6 +997,7 @@ def iter_local_mut_borrow : Result Unit := do
 
 /- [loops::iter_local_shared_borrow]: loop body 0:
    Source: 'tests/src/loops.rs', lines 497:4-503:5 -/
+@[rust_loop_body]
 def iter_local_shared_borrow_loop.body : Result (ControlFlow Unit Unit) := do
   if 0#i32 = 0#i32
   then ok (done ())
@@ -954,6 +1005,7 @@ def iter_local_shared_borrow_loop.body : Result (ControlFlow Unit Unit) := do
 
 /- [loops::iter_local_shared_borrow]: loop 0:
    Source: 'tests/src/loops.rs', lines 497:4-503:5 -/
+@[rust_loop]
 def iter_local_shared_borrow_loop : Result Unit := do
   loop
     (fun () => iter_local_shared_borrow_loop.body)
@@ -974,6 +1026,7 @@ inductive AList (T : Type) where
 
 /- [loops::insert_in_list]: loop 0:
    Source: 'tests/src/loops.rs', lines 1:0-528:5 -/
+@[rust_loop]
 def insert_in_list_loop
   {T : Type} (key : Std.Usize) (value : T) (ls : AList T) :
   Result (Bool × (AList T))
@@ -1005,6 +1058,7 @@ def reborrow_const.reborrow (x : Std.U64) : Result Std.U64 := do
 
 /- [loops::reborrow_const]: loop body 0:
    Source: 'tests/src/loops.rs', lines 0:0-542:5 -/
+@[rust_loop_body]
 def reborrow_const_loop.body : Result (ControlFlow Unit Unit) := do
   if 0#i32 < 5#i32
   then let _ ← reborrow_const.reborrow 0#u64
@@ -1013,6 +1067,7 @@ def reborrow_const_loop.body : Result (ControlFlow Unit Unit) := do
 
 /- [loops::reborrow_const]: loop 0:
    Source: 'tests/src/loops.rs', lines 0:0-542:5 -/
+@[rust_loop]
 def reborrow_const_loop : Result Unit := do
   loop
     (fun () => reborrow_const_loop.body)
@@ -1025,6 +1080,7 @@ def reborrow_const_loop : Result Unit := do
 
 /- [loops::decode]: loop body 1:
    Source: 'tests/src/loops.rs', lines 552:8-552:32 -/
+@[rust_loop_body]
 def decode_loop0_loop0.body
   (dst_coeff : Std.U8) : Result (ControlFlow Unit Unit) := do
   if dst_coeff > 32#u8
@@ -1033,6 +1089,7 @@ def decode_loop0_loop0.body
 
 /- [loops::decode]: loop 1:
    Source: 'tests/src/loops.rs', lines 552:8-552:32 -/
+@[rust_loop]
 def decode_loop0_loop0 (dst_coeff : Std.U8) : Result Unit := do
   loop
     (fun () => decode_loop0_loop0.body dst_coeff)
@@ -1040,6 +1097,7 @@ def decode_loop0_loop0 (dst_coeff : Std.U8) : Result Unit := do
 
 /- [loops::decode]: loop body 0:
    Source: 'tests/src/loops.rs', lines 550:4-563:1 -/
+@[rust_loop_body]
 def decode_loop0.body
   (pe_dst : Slice Std.U8) (i : Std.Usize) :
   Result (ControlFlow ((Slice Std.U8) × Std.Usize) (Bool × (Slice Std.U8)))
@@ -1058,6 +1116,7 @@ def decode_loop0.body
 
 /- [loops::decode]: loop 0:
    Source: 'tests/src/loops.rs', lines 550:4-563:1 -/
+@[rust_loop]
 def decode_loop0
   (pe_dst : Slice Std.U8) (i : Std.Usize) :
   Result (Bool × (Slice Std.U8))
@@ -1074,6 +1133,7 @@ def decode (pe_dst : Slice Std.U8) : Result (Bool × (Slice Std.U8)) := do
 
 /- [loops::as_radix_minimized]: loop body 0:
    Source: 'tests/src/loops.rs', lines 569:4-576:5 -/
+@[rust_loop_body]
 def as_radix_minimized_loop.body
   (scalar : Array Std.U64 4#usize) (i : Std.Usize) :
   Result (ControlFlow Std.Usize Unit)
@@ -1095,6 +1155,7 @@ def as_radix_minimized_loop.body
 
 /- [loops::as_radix_minimized]: loop 0:
    Source: 'tests/src/loops.rs', lines 569:4-576:5 -/
+@[rust_loop]
 def as_radix_minimized_loop
   (scalar : Array Std.U64 4#usize) (i : Std.Usize) : Result Unit := do
   loop

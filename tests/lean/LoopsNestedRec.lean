@@ -13,6 +13,7 @@ namespace loops_nested_rec
 
 /- [loops_nested_rec::iter]: loop 1:
    Source: 'tests/src/loops-nested-rec.rs', lines 8:8-10:9 -/
+@[rust_loop]
 def iter_loop0_loop0 (n : Std.U32) (j : Std.U32) : Result Unit := do
   if j < n
   then let j1 ← j + 1#u32
@@ -22,6 +23,7 @@ partial_fixpoint
 
 /- [loops_nested_rec::iter]: loop 0:
    Source: 'tests/src/loops-nested-rec.rs', lines 6:4-12:5 -/
+@[rust_loop]
 def iter_loop0 (m : Std.U32) (n : Std.U32) (i : Std.U32) : Result Unit := do
   if i < m
   then iter_loop0_loop0 n 0#u32
@@ -38,6 +40,7 @@ def iter (m : Std.U32) (n : Std.U32) : Result Unit := do
 
 /- [loops_nested_rec::sum]: loop 1:
    Source: 'tests/src/loops-nested-rec.rs', lines 20:8-23:9 -/
+@[rust_loop]
 def sum_loop0_loop0
   (n : Std.U32) (s : Std.U32) (j : Std.U32) : Result Std.U32 := do
   if j < n
@@ -49,6 +52,7 @@ partial_fixpoint
 
 /- [loops_nested_rec::sum]: loop 0:
    Source: 'tests/src/loops-nested-rec.rs', lines 18:4-25:5 -/
+@[rust_loop]
 def sum_loop0
   (m : Std.U32) (n : Std.U32) (s : Std.U32) (i : Std.U32) :
   Result Std.U32
@@ -69,6 +73,7 @@ def sum (m : Std.U32) (n : Std.U32) : Result Std.U32 := do
 
 /- [loops_nested_rec::update_array]: loop 1:
    Source: 'tests/src/loops-nested-rec.rs', lines 38:8-41:9 -/
+@[rust_loop]
 def update_array_loop0_loop0
   (out : Array Std.U8 4#usize) (j : Std.Usize) :
   Result (Array Std.U8 4#usize)
@@ -83,6 +88,7 @@ partial_fixpoint
 
 /- [loops_nested_rec::update_array]: loop 0:
    Source: 'tests/src/loops-nested-rec.rs', lines 35:4-43:5 -/
+@[rust_loop]
 def update_array_loop0
   (out : Array Std.U8 4#usize) (i : Std.Usize) : Result Unit := do
   if i < 4#usize
@@ -128,6 +134,7 @@ def mod_sub (a : Std.U32) (b : Std.U32) : Result Std.U32 := do
 
 /- [loops_nested_rec::ntt_layer]: loop 1:
    Source: 'tests/src/loops-nested-rec.rs', lines 67:8-79:9 -/
+@[rust_loop]
 def ntt_layer_loop0_loop0
   (a : Array Std.U16 256#usize) (len : Std.Usize) (start : Std.Usize)
   (factor : Std.U32) (j : Std.Usize) :
@@ -156,6 +163,7 @@ partial_fixpoint
 
 /- [loops_nested_rec::ntt_layer]: loop 0:
    Source: 'tests/src/loops-nested-rec.rs', lines 62:4-81:5 -/
+@[rust_loop]
 def ntt_layer_loop0
   (a : Array Std.U16 256#usize) (k : Std.Usize) (len : Std.Usize)
   (start : Std.Usize) :
@@ -229,6 +237,7 @@ def sample_ntt
 
 /- [loops_nested_rec::generate_matrix_inner]: loop 0:
    Source: 'tests/src/loops-nested-rec.rs', lines 105:4-109:5 -/
+@[rust_loop]
 def generate_matrix_inner_loop
   (key : Key) (state : Array Std.U8 8#usize) (j : Std.Usize) :
   Result (Key × (Array Std.U8 8#usize))
@@ -256,6 +265,7 @@ def generate_matrix_inner
 
 /- [loops_nested_rec::generate_matrix]: loop 1:
    Source: 'tests/src/loops-nested-rec.rs', lines 124:8-132:9 -/
+@[rust_loop]
 def generate_matrix_loop0_loop0
   (key : Key) (state_base : Array Std.U8 8#usize)
   (state_work : Array Std.U8 8#usize) (coordinates : Array Std.U8 2#usize)
@@ -283,6 +293,7 @@ partial_fixpoint
 
 /- [loops_nested_rec::generate_matrix]: loop 0:
    Source: 'tests/src/loops-nested-rec.rs', lines 121:4-134:5 -/
+@[rust_loop]
 def generate_matrix_loop0
   (key : Key) (state_base : Array Std.U8 8#usize)
   (state_work : Array Std.U8 8#usize) (coordinates : Array Std.U8 2#usize)
@@ -316,6 +327,7 @@ def generate_matrix
 
 /- [loops_nested_rec::mul_add_as_plus_e]: loop 1:
    Source: 'tests/src/loops-nested-rec.rs', lines 144:8-146:9 -/
+@[rust_loop]
 def mul_add_as_plus_e_loop0_loop0
   (a_row_temp : alloc.vec.Vec Std.U8) (j : Std.Usize)
   (iter1 : core.ops.range.Range Std.Usize) :
@@ -335,6 +347,7 @@ partial_fixpoint
 
 /- [loops_nested_rec::mul_add_as_plus_e]: loop 0:
    Source: 'tests/src/loops-nested-rec.rs', lines 143:4-147:5 -/
+@[rust_loop]
 def mul_add_as_plus_e_loop0
   (a_row_temp : alloc.vec.Vec Std.U8)
   (iter1 : core.iter.adapters.step_by.StepBy (core.ops.range.Range Std.Usize))

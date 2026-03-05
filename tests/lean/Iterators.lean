@@ -13,6 +13,7 @@ namespace iterators
 
 /- [iterators::iter_range]: loop body 0:
    Source: 'tests/src/iterators.rs', lines 5:4-5:28 -/
+@[rust_loop_body]
 def iter_range_loop.body
   (iter : core.ops.range.Range Std.Usize) :
   Result (ControlFlow (core.ops.range.Range Std.Usize) Unit)
@@ -25,6 +26,7 @@ def iter_range_loop.body
 
 /- [iterators::iter_range]: loop 0:
    Source: 'tests/src/iterators.rs', lines 5:4-5:28 -/
+@[rust_loop]
 def iter_range_loop (iter : core.ops.range.Range Std.Usize) : Result Unit := do
   loop
     (fun iter1 => iter_range_loop.body iter1)
@@ -38,6 +40,7 @@ def iter_range : Result Unit := do
 
 /- [iterators::iter_range_step_by]: loop body 0:
    Source: 'tests/src/iterators.rs', lines 9:4-9:33 -/
+@[rust_loop_body]
 def iter_range_step_by_loop.body
   (iter : core.iter.adapters.step_by.StepBy (core.ops.range.Range Std.Usize)) :
   Result (ControlFlow (core.iter.adapters.step_by.StepBy (core.ops.range.Range
@@ -52,6 +55,7 @@ def iter_range_step_by_loop.body
 
 /- [iterators::iter_range_step_by]: loop 0:
    Source: 'tests/src/iterators.rs', lines 9:4-9:33 -/
+@[rust_loop]
 def iter_range_step_by_loop
   (iter : core.iter.adapters.step_by.StepBy (core.ops.range.Range Std.Usize)) :
   Result Unit
@@ -70,6 +74,7 @@ def iter_range_step_by (n : Std.Usize) : Result Unit := do
 
 /- [iterators::slice_iter_mut_while]: loop body 1:
    Source: 'tests/src/iterators.rs', lines 15:8-15:18 -/
+@[rust_loop_body]
 def slice_iter_mut_while_loop0_loop0.body
   (b : Bool) : Result (ControlFlow Bool Unit) := do
   if b
@@ -78,6 +83,7 @@ def slice_iter_mut_while_loop0_loop0.body
 
 /- [iterators::slice_iter_mut_while]: loop 1:
    Source: 'tests/src/iterators.rs', lines 15:8-15:18 -/
+@[rust_loop]
 def slice_iter_mut_while_loop0_loop0 (b : Bool) : Result Unit := do
   loop
     (fun b1 => slice_iter_mut_while_loop0_loop0.body b1)
@@ -85,6 +91,7 @@ def slice_iter_mut_while_loop0_loop0 (b : Bool) : Result Unit := do
 
 /- [iterators::slice_iter_mut_while]: loop body 0:
    Source: 'tests/src/iterators.rs', lines 14:4-16:5 -/
+@[rust_loop_body]
 def slice_iter_mut_while_loop0.body
   (back : core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16)
   (b : Bool) (it : core.slice.iter.IterMut Std.U16) :
@@ -103,6 +110,7 @@ def slice_iter_mut_while_loop0.body
 
 /- [iterators::slice_iter_mut_while]: loop 0:
    Source: 'tests/src/iterators.rs', lines 14:4-16:5 -/
+@[rust_loop]
 def slice_iter_mut_while_loop0
   (back : core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16)
   (b : Bool) (it : core.slice.iter.IterMut Std.U16) :
@@ -122,6 +130,7 @@ def slice_iter_mut_while
 
 /- [iterators::slice_iter_while]: loop body 1:
    Source: 'tests/src/iterators.rs', lines 22:8-22:18 -/
+@[rust_loop_body]
 def slice_iter_while_loop0_loop0.body
   (b : Bool) : Result (ControlFlow Bool Unit) := do
   if b
@@ -130,6 +139,7 @@ def slice_iter_while_loop0_loop0.body
 
 /- [iterators::slice_iter_while]: loop 1:
    Source: 'tests/src/iterators.rs', lines 22:8-22:18 -/
+@[rust_loop]
 def slice_iter_while_loop0_loop0 (b : Bool) : Result Unit := do
   loop
     (fun b1 => slice_iter_while_loop0_loop0.body b1)
@@ -137,6 +147,7 @@ def slice_iter_while_loop0_loop0 (b : Bool) : Result Unit := do
 
 /- [iterators::slice_iter_while]: loop body 0:
    Source: 'tests/src/iterators.rs', lines 21:4-23:5 -/
+@[rust_loop_body]
 def slice_iter_while_loop0.body
   (b : Bool) (it : core.slice.iter.Iter Std.U16) :
   Result (ControlFlow (Bool × (core.slice.iter.Iter Std.U16)) Unit)
@@ -149,6 +160,7 @@ def slice_iter_while_loop0.body
 
 /- [iterators::slice_iter_while]: loop 0:
    Source: 'tests/src/iterators.rs', lines 21:4-23:5 -/
+@[rust_loop]
 def slice_iter_while_loop0
   (b : Bool) (it : core.slice.iter.Iter Std.U16) : Result Unit := do
   loop
@@ -163,6 +175,7 @@ def slice_iter_while (b : Bool) (s : Slice Std.U16) : Result Unit := do
 
 /- [iterators::slice_iter_mut_while_early_return]: loop body 1:
    Source: 'tests/src/iterators.rs', lines 29:8-29:18 -/
+@[rust_loop_body]
 def slice_iter_mut_while_early_return_loop0_loop0.body
   (b : Bool) : Result (ControlFlow Bool Unit) := do
   if b
@@ -171,6 +184,7 @@ def slice_iter_mut_while_early_return_loop0_loop0.body
 
 /- [iterators::slice_iter_mut_while_early_return]: loop 1:
    Source: 'tests/src/iterators.rs', lines 29:8-29:18 -/
+@[rust_loop]
 def slice_iter_mut_while_early_return_loop0_loop0
   (b : Bool) : Result Unit := do
   loop
@@ -179,6 +193,7 @@ def slice_iter_mut_while_early_return_loop0_loop0
 
 /- [iterators::slice_iter_mut_while_early_return]: loop body 0:
    Source: 'tests/src/iterators.rs', lines 28:4-35:1 -/
+@[rust_loop_body]
 def slice_iter_mut_while_early_return_loop0.body
   (back : core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16)
   (b : Bool) (it : core.slice.iter.IterMut Std.U16) :
@@ -197,6 +212,7 @@ def slice_iter_mut_while_early_return_loop0.body
 
 /- [iterators::slice_iter_mut_while_early_return]: loop 0:
    Source: 'tests/src/iterators.rs', lines 28:4-35:1 -/
+@[rust_loop]
 def slice_iter_mut_while_early_return_loop0
   (back : core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16)
   (b : Bool) (it : core.slice.iter.IterMut Std.U16) :
@@ -221,6 +237,7 @@ def slice_iter_mut_while_early_return
 
 /- [iterators::slice_iter_mut_while_early_return_two_bools]: loop body 1:
    Source: 'tests/src/iterators.rs', lines 40:8-40:19 -/
+@[rust_loop_body]
 def slice_iter_mut_while_early_return_two_bools_loop0_loop0.body
   (b0 : Bool) : Result (ControlFlow Bool Unit) := do
   if b0
@@ -229,6 +246,7 @@ def slice_iter_mut_while_early_return_two_bools_loop0_loop0.body
 
 /- [iterators::slice_iter_mut_while_early_return_two_bools]: loop 1:
    Source: 'tests/src/iterators.rs', lines 40:8-40:19 -/
+@[rust_loop]
 def slice_iter_mut_while_early_return_two_bools_loop0_loop0
   (b0 : Bool) : Result Unit := do
   loop
@@ -238,6 +256,7 @@ def slice_iter_mut_while_early_return_two_bools_loop0_loop0
 
 /- [iterators::slice_iter_mut_while_early_return_two_bools]: loop body 0:
    Source: 'tests/src/iterators.rs', lines 39:4-46:1 -/
+@[rust_loop_body]
 def slice_iter_mut_while_early_return_two_bools_loop0.body
   (back : core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16)
   (b0 : Bool) (b1 : Bool) (it : core.slice.iter.IterMut Std.U16) :
@@ -260,6 +279,7 @@ def slice_iter_mut_while_early_return_two_bools_loop0.body
 
 /- [iterators::slice_iter_mut_while_early_return_two_bools]: loop 0:
    Source: 'tests/src/iterators.rs', lines 39:4-46:1 -/
+@[rust_loop]
 def slice_iter_mut_while_early_return_two_bools_loop0
   (back : core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16)
   (b0 : Bool) (b1 : Bool) (it : core.slice.iter.IterMut Std.U16) :
@@ -285,6 +305,7 @@ def slice_iter_mut_while_early_return_two_bools
 
 /- [iterators::slice_chunks_exact_iter]: loop body 1:
    Source: 'tests/src/iterators.rs', lines 50:8-50:30 -/
+@[rust_loop_body]
 def slice_chunks_exact_iter_loop0_loop0.body
   (iter : core.slice.iter.Iter Std.U128) :
   Result (ControlFlow (core.slice.iter.Iter Std.U128) Unit)
@@ -296,6 +317,7 @@ def slice_chunks_exact_iter_loop0_loop0.body
 
 /- [iterators::slice_chunks_exact_iter]: loop 1:
    Source: 'tests/src/iterators.rs', lines 50:8-50:30 -/
+@[rust_loop]
 def slice_chunks_exact_iter_loop0_loop0
   (iter : core.slice.iter.Iter Std.U128) : Result Unit := do
   loop
@@ -304,6 +326,7 @@ def slice_chunks_exact_iter_loop0_loop0
 
 /- [iterators::slice_chunks_exact_iter]: loop body 0:
    Source: 'tests/src/iterators.rs', lines 49:4-51:5 -/
+@[rust_loop_body]
 def slice_chunks_exact_iter_loop0.body
   (key : Array Std.U128 128#usize) (iter : core.slice.iter.ChunksExact Std.U8)
   :
@@ -320,6 +343,7 @@ def slice_chunks_exact_iter_loop0.body
 
 /- [iterators::slice_chunks_exact_iter]: loop 0:
    Source: 'tests/src/iterators.rs', lines 49:4-51:5 -/
+@[rust_loop]
 def slice_chunks_exact_iter_loop0
   (key : Array Std.U128 128#usize) (iter : core.slice.iter.ChunksExact Std.U8)
   :
@@ -343,6 +367,7 @@ def Key := Array Std.U128 128#usize
 
 /- [iterators::key_iter_slice_iter]: loop body 1:
    Source: 'tests/src/iterators.rs', lines 58:8-58:32 -/
+@[rust_loop_body]
 def key_iter_slice_iter_loop0_loop0.body
   (iter : core.slice.iter.Iter Std.U128) :
   Result (ControlFlow (core.slice.iter.Iter Std.U128) Unit)
@@ -354,6 +379,7 @@ def key_iter_slice_iter_loop0_loop0.body
 
 /- [iterators::key_iter_slice_iter]: loop 1:
    Source: 'tests/src/iterators.rs', lines 58:8-58:32 -/
+@[rust_loop]
 def key_iter_slice_iter_loop0_loop0
   (iter : core.slice.iter.Iter Std.U128) : Result Unit := do
   loop
@@ -362,6 +388,7 @@ def key_iter_slice_iter_loop0_loop0
 
 /- [iterators::key_iter_slice_iter]: loop body 0:
    Source: 'tests/src/iterators.rs', lines 57:4-59:5 -/
+@[rust_loop_body]
 def key_iter_slice_iter_loop0.body
   (key : Key) (iter : core.slice.iter.Iter Std.U8) :
   Result (ControlFlow (Key × (core.slice.iter.Iter Std.U8)) Unit)
@@ -377,6 +404,7 @@ def key_iter_slice_iter_loop0.body
 
 /- [iterators::key_iter_slice_iter]: loop 0:
    Source: 'tests/src/iterators.rs', lines 57:4-59:5 -/
+@[rust_loop]
 def key_iter_slice_iter_loop0
   (key : Key) (iter : core.slice.iter.Iter Std.U8) : Result Unit := do
   loop

@@ -20,6 +20,7 @@ inductive List (T : Type) where
 
 /- [loops_adts::nth_shared]: loop 0:
    Source: 'tests/src/loops-adts.rs', lines 9:4-18:1 -/
+@[rust_loop]
 def nth_shared_loop
   {T : Type} (ls : List T) (i : Std.U32) : Result (Option T) := do
   match ls with
@@ -39,6 +40,7 @@ def nth_shared {T : Type} (ls : List T) (i : Std.U32) : Result (Option T) := do
 
 /- [loops_adts::nth_mut]: loop 0:
    Source: 'tests/src/loops-adts.rs', lines 21:4-30:1 -/
+@[rust_loop]
 def nth_mut_loop
   {T : Type} (ls : List T) (i : Std.U32) :
   Result ((Option T) × (Option T → List T))
@@ -81,6 +83,7 @@ def update_array_mut_borrow
 
 /- [loops_adts::array_mut_borrow_loop1]: loop body 0:
    Source: 'tests/src/loops-adts.rs', lines 37:4-39:5 -/
+@[rust_loop_body]
 def array_mut_borrow_loop1_loop.body
   (back : Array Std.U32 32#usize → Array Std.U32 32#usize) (b : Bool)
   (a : Array Std.U32 32#usize) :
@@ -96,6 +99,7 @@ def array_mut_borrow_loop1_loop.body
 
 /- [loops_adts::array_mut_borrow_loop1]: loop 0:
    Source: 'tests/src/loops-adts.rs', lines 37:4-39:5 -/
+@[rust_loop]
 def array_mut_borrow_loop1_loop
   (back : Array Std.U32 32#usize → Array Std.U32 32#usize) (b : Bool)
   (a : Array Std.U32 32#usize) :
@@ -116,6 +120,7 @@ def array_mut_borrow_loop1
 
 /- [loops_adts::array_mut_borrow_loop2]: loop body 0:
    Source: 'tests/src/loops-adts.rs', lines 43:4-45:5 -/
+@[rust_loop_body]
 def array_mut_borrow_loop2_loop.body
   (back : Array Std.U32 32#usize → Array Std.U32 32#usize) (b : Bool)
   (a : Array Std.U32 32#usize) :
@@ -132,6 +137,7 @@ def array_mut_borrow_loop2_loop.body
 
 /- [loops_adts::array_mut_borrow_loop2]: loop 0:
    Source: 'tests/src/loops-adts.rs', lines 43:4-45:5 -/
+@[rust_loop]
 def array_mut_borrow_loop2_loop
   (back : Array Std.U32 32#usize → Array Std.U32 32#usize) (b : Bool)
   (a : Array Std.U32 32#usize) :
@@ -160,6 +166,7 @@ def copy_shared_array
 
 /- [loops_adts::array_shared_borrow_loop1]: loop body 0:
    Source: 'tests/src/loops-adts.rs', lines 54:4-56:5 -/
+@[rust_loop_body]
 def array_shared_borrow_loop1_loop.body
   (b : Bool) (a : Array Std.U32 32#usize) :
   Result (ControlFlow (Bool × (Array Std.U32 32#usize)) Unit)
@@ -171,6 +178,7 @@ def array_shared_borrow_loop1_loop.body
 
 /- [loops_adts::array_shared_borrow_loop1]: loop 0:
    Source: 'tests/src/loops-adts.rs', lines 54:4-56:5 -/
+@[rust_loop]
 def array_shared_borrow_loop1_loop
   (b : Bool) (a : Array Std.U32 32#usize) : Result Unit := do
   loop
@@ -186,6 +194,7 @@ def array_shared_borrow_loop1
 
 /- [loops_adts::array_shared_borrow_loop2]: loop body 0:
    Source: 'tests/src/loops-adts.rs', lines 60:4-62:5 -/
+@[rust_loop_body]
 def array_shared_borrow_loop2_loop.body
   (b : Bool) (a : Array Std.U32 32#usize) :
   Result (ControlFlow (Bool × (Array Std.U32 32#usize)) (Array Std.U32
@@ -198,6 +207,7 @@ def array_shared_borrow_loop2_loop.body
 
 /- [loops_adts::array_shared_borrow_loop2]: loop 0:
    Source: 'tests/src/loops-adts.rs', lines 60:4-62:5 -/
+@[rust_loop]
 def array_shared_borrow_loop2_loop
   (b : Bool) (a : Array Std.U32 32#usize) :
   Result (Array Std.U32 32#usize)

@@ -13,6 +13,7 @@ namespace loops_nested
 
 /- [loops_nested::iter]: loop body 1:
    Source: 'tests/src/loops-nested.rs', lines 7:8-9:9 -/
+@[rust_loop_body]
 def iter_loop0_loop0.body
   (n : Std.U32) (j : Std.U32) : Result (ControlFlow Std.U32 Unit) := do
   if j < n
@@ -22,6 +23,7 @@ def iter_loop0_loop0.body
 
 /- [loops_nested::iter]: loop 1:
    Source: 'tests/src/loops-nested.rs', lines 7:8-9:9 -/
+@[rust_loop]
 def iter_loop0_loop0 (n : Std.U32) (j : Std.U32) : Result Unit := do
   loop
     (fun j1 => iter_loop0_loop0.body n j1)
@@ -29,6 +31,7 @@ def iter_loop0_loop0 (n : Std.U32) (j : Std.U32) : Result Unit := do
 
 /- [loops_nested::iter]: loop body 0:
    Source: 'tests/src/loops-nested.rs', lines 5:4-11:5 -/
+@[rust_loop_body]
 def iter_loop0.body
   (m : Std.U32) (n : Std.U32) (i : Std.U32) :
   Result (ControlFlow Std.U32 Unit)
@@ -41,6 +44,7 @@ def iter_loop0.body
 
 /- [loops_nested::iter]: loop 0:
    Source: 'tests/src/loops-nested.rs', lines 5:4-11:5 -/
+@[rust_loop]
 def iter_loop0 (m : Std.U32) (n : Std.U32) (i : Std.U32) : Result Unit := do
   loop
     (fun i1 => iter_loop0.body m n i1)
@@ -54,6 +58,7 @@ def iter (m : Std.U32) (n : Std.U32) : Result Unit := do
 
 /- [loops_nested::sum]: loop body 1:
    Source: 'tests/src/loops-nested.rs', lines 19:8-22:9 -/
+@[rust_loop_body]
 def sum_loop0_loop0.body
   (n : Std.U32) (s : Std.U32) (j : Std.U32) :
   Result (ControlFlow (Std.U32 × Std.U32) Std.U32)
@@ -66,6 +71,7 @@ def sum_loop0_loop0.body
 
 /- [loops_nested::sum]: loop 1:
    Source: 'tests/src/loops-nested.rs', lines 19:8-22:9 -/
+@[rust_loop]
 def sum_loop0_loop0
   (n : Std.U32) (s : Std.U32) (j : Std.U32) : Result Std.U32 := do
   loop
@@ -74,6 +80,7 @@ def sum_loop0_loop0
 
 /- [loops_nested::sum]: loop body 0:
    Source: 'tests/src/loops-nested.rs', lines 17:4-24:5 -/
+@[rust_loop_body]
 def sum_loop0.body
   (m : Std.U32) (n : Std.U32) (s : Std.U32) (i : Std.U32) :
   Result (ControlFlow (Std.U32 × Std.U32) Std.U32)
@@ -87,6 +94,7 @@ def sum_loop0.body
 
 /- [loops_nested::sum]: loop 0:
    Source: 'tests/src/loops-nested.rs', lines 17:4-24:5 -/
+@[rust_loop]
 def sum_loop0
   (m : Std.U32) (n : Std.U32) (s : Std.U32) (i : Std.U32) :
   Result Std.U32
@@ -103,6 +111,7 @@ def sum (m : Std.U32) (n : Std.U32) : Result Std.U32 := do
 
 /- [loops_nested::update_array]: loop body 1:
    Source: 'tests/src/loops-nested.rs', lines 37:8-40:9 -/
+@[rust_loop_body]
 def update_array_loop0_loop0.body
   (out : Array Std.U8 4#usize) (j : Std.Usize) :
   Result (ControlFlow ((Array Std.U8 4#usize) × Std.Usize) (Array Std.U8
@@ -117,6 +126,7 @@ def update_array_loop0_loop0.body
 
 /- [loops_nested::update_array]: loop 1:
    Source: 'tests/src/loops-nested.rs', lines 37:8-40:9 -/
+@[rust_loop]
 def update_array_loop0_loop0
   (out : Array Std.U8 4#usize) (j : Std.Usize) :
   Result (Array Std.U8 4#usize)
@@ -127,6 +137,7 @@ def update_array_loop0_loop0
 
 /- [loops_nested::update_array]: loop body 0:
    Source: 'tests/src/loops-nested.rs', lines 34:4-42:5 -/
+@[rust_loop_body]
 def update_array_loop0.body
   (out : Array Std.U8 4#usize) (i : Std.Usize) :
   Result (ControlFlow ((Array Std.U8 4#usize) × Std.Usize) Unit)
@@ -141,6 +152,7 @@ def update_array_loop0.body
 
 /- [loops_nested::update_array]: loop 0:
    Source: 'tests/src/loops-nested.rs', lines 34:4-42:5 -/
+@[rust_loop]
 def update_array_loop0
   (out : Array Std.U8 4#usize) (i : Std.Usize) : Result Unit := do
   loop
@@ -181,6 +193,7 @@ def mod_sub (a : Std.U32) (b : Std.U32) : Result Std.U32 := do
 
 /- [loops_nested::ntt_layer]: loop body 1:
    Source: 'tests/src/loops-nested.rs', lines 66:8-78:9 -/
+@[rust_loop_body]
 def ntt_layer_loop0_loop0.body
   (len : Std.Usize) (start : Std.Usize) (factor : Std.U32)
   (a : Array Std.U16 256#usize) (j : Std.Usize) :
@@ -209,6 +222,7 @@ def ntt_layer_loop0_loop0.body
 
 /- [loops_nested::ntt_layer]: loop 1:
    Source: 'tests/src/loops-nested.rs', lines 66:8-78:9 -/
+@[rust_loop]
 def ntt_layer_loop0_loop0
   (a : Array Std.U16 256#usize) (len : Std.Usize) (start : Std.Usize)
   (factor : Std.U32) (j : Std.Usize) :
@@ -220,6 +234,7 @@ def ntt_layer_loop0_loop0
 
 /- [loops_nested::ntt_layer]: loop body 0:
    Source: 'tests/src/loops-nested.rs', lines 61:4-80:5 -/
+@[rust_loop_body]
 def ntt_layer_loop0.body
   (len : Std.Usize) (a : Array Std.U16 256#usize) (k : Std.Usize)
   (start : Std.Usize) :
@@ -239,6 +254,7 @@ def ntt_layer_loop0.body
 
 /- [loops_nested::ntt_layer]: loop 0:
    Source: 'tests/src/loops-nested.rs', lines 61:4-80:5 -/
+@[rust_loop]
 def ntt_layer_loop0
   (a : Array Std.U16 256#usize) (k : Std.Usize) (len : Std.Usize)
   (start : Std.Usize) :
@@ -304,6 +320,7 @@ def sample_ntt
 
 /- [loops_nested::generate_matrix_inner]: loop body 0:
    Source: 'tests/src/loops-nested.rs', lines 104:4-108:5 -/
+@[rust_loop_body]
 def generate_matrix_inner_loop.body
   (key : Key) (state : Array Std.U8 8#usize) (j : Std.Usize) :
   Result (ControlFlow (Key × (Array Std.U8 8#usize) × Std.Usize) (Key ×
@@ -322,6 +339,7 @@ def generate_matrix_inner_loop.body
 
 /- [loops_nested::generate_matrix_inner]: loop 0:
    Source: 'tests/src/loops-nested.rs', lines 104:4-108:5 -/
+@[rust_loop]
 def generate_matrix_inner_loop
   (key : Key) (state : Array Std.U8 8#usize) (j : Std.Usize) :
   Result (Key × (Array Std.U8 8#usize))
@@ -341,6 +359,7 @@ def generate_matrix_inner
 
 /- [loops_nested::generate_matrix]: loop body 1:
    Source: 'tests/src/loops-nested.rs', lines 123:8-131:9 -/
+@[rust_loop_body]
 def generate_matrix_loop0_loop0.body
   (state_base : Array Std.U8 8#usize) (i : Std.U8) (key : Key)
   (state_work : Array Std.U8 8#usize) (coordinates : Array Std.U8 2#usize)
@@ -368,6 +387,7 @@ def generate_matrix_loop0_loop0.body
 
 /- [loops_nested::generate_matrix]: loop 1:
    Source: 'tests/src/loops-nested.rs', lines 123:8-131:9 -/
+@[rust_loop]
 def generate_matrix_loop0_loop0
   (key : Key) (state_base : Array Std.U8 8#usize)
   (state_work : Array Std.U8 8#usize) (coordinates : Array Std.U8 2#usize)
@@ -382,6 +402,7 @@ def generate_matrix_loop0_loop0
 
 /- [loops_nested::generate_matrix]: loop body 0:
    Source: 'tests/src/loops-nested.rs', lines 120:4-133:5 -/
+@[rust_loop_body]
 def generate_matrix_loop0.body
   (state_base : Array Std.U8 8#usize) (key : Key)
   (state_work : Array Std.U8 8#usize) (coordinates : Array Std.U8 2#usize)
@@ -400,6 +421,7 @@ def generate_matrix_loop0.body
 
 /- [loops_nested::generate_matrix]: loop 0:
    Source: 'tests/src/loops-nested.rs', lines 120:4-133:5 -/
+@[rust_loop]
 def generate_matrix_loop0
   (key : Key) (state_base : Array Std.U8 8#usize)
   (state_work : Array Std.U8 8#usize) (coordinates : Array Std.U8 2#usize)
@@ -428,6 +450,7 @@ def generate_matrix
 
 /- [loops_nested::mul_add_as_plus_e]: loop body 1:
    Source: 'tests/src/loops-nested.rs', lines 143:8-145:9 -/
+@[rust_loop_body]
 def mul_add_as_plus_e_loop0_loop0.body
   (j : Std.Usize) (a_row_temp : alloc.vec.Vec Std.U8)
   (iter1 : core.ops.range.Range Std.Usize) :
@@ -447,6 +470,7 @@ def mul_add_as_plus_e_loop0_loop0.body
 
 /- [loops_nested::mul_add_as_plus_e]: loop 1:
    Source: 'tests/src/loops-nested.rs', lines 143:8-145:9 -/
+@[rust_loop]
 def mul_add_as_plus_e_loop0_loop0
   (a_row_temp : alloc.vec.Vec Std.U8) (j : Std.Usize)
   (iter1 : core.ops.range.Range Std.Usize) :
@@ -459,6 +483,7 @@ def mul_add_as_plus_e_loop0_loop0
 
 /- [loops_nested::mul_add_as_plus_e]: loop body 0:
    Source: 'tests/src/loops-nested.rs', lines 142:4-146:5 -/
+@[rust_loop_body]
 def mul_add_as_plus_e_loop0.body
   (a_row_temp : alloc.vec.Vec Std.U8)
   (iter1 : core.iter.adapters.step_by.StepBy (core.ops.range.Range Std.Usize))
@@ -479,6 +504,7 @@ def mul_add_as_plus_e_loop0.body
 
 /- [loops_nested::mul_add_as_plus_e]: loop 0:
    Source: 'tests/src/loops-nested.rs', lines 142:4-146:5 -/
+@[rust_loop]
 def mul_add_as_plus_e_loop0
   (a_row_temp : alloc.vec.Vec Std.U8)
   (iter1 : core.iter.adapters.step_by.StepBy (core.ops.range.Range Std.Usize))

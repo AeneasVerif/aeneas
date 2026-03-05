@@ -13,6 +13,7 @@ namespace iterators_array
 
 /- [iterators_array::iter_array]: loop body 0:
    Source: 'tests/src/iterators-array.rs', lines 6:4-8:5 -/
+@[rust_loop_body]
 def iter_array_loop.body
   (x : Std.I32) (iter : alloc.vec.into_iter.IntoIter Std.U32) :
   Result (ControlFlow (Std.I32 × (alloc.vec.into_iter.IntoIter Std.U32)) Unit)
@@ -25,6 +26,7 @@ def iter_array_loop.body
 
 /- [iterators_array::iter_array]: loop 0:
    Source: 'tests/src/iterators-array.rs', lines 6:4-8:5 -/
+@[rust_loop]
 def iter_array_loop
   (x : Std.I32) (iter : alloc.vec.into_iter.IntoIter Std.U32) :
   Result Unit

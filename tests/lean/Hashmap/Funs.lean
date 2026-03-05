@@ -46,6 +46,7 @@ def Fraction.Insts.CoreMarkerCopy : core.marker.Copy Fraction := {
 
 /- [hashmap::{hashmap::HashMap<T>}::allocate_slots]: loop 0:
    Source: 'tests/src/hashmap.rs', lines 68:8-71:9 -/
+@[rust_loop]
 def HashMap.allocate_slots_loop
   {T : Type} (slots : alloc.vec.Vec (AList T)) (n : Std.Usize) :
   Result (alloc.vec.Vec (AList T))
@@ -93,6 +94,7 @@ def HashMap.new (T : Type) : Result (HashMap T) := do
 
 /- [hashmap::{hashmap::HashMap<T>}::clear]: loop 0:
    Source: 'tests/src/hashmap.rs', lines 104:8-107:9 -/
+@[rust_loop]
 def HashMap.clear_loop
   {T : Type} (slots : alloc.vec.Vec (AList T)) (i : Std.Usize) :
   Result (alloc.vec.Vec (AList T))
@@ -122,6 +124,7 @@ def HashMap.len {T : Type} (self : HashMap T) : Result Std.Usize := do
 
 /- [hashmap::{hashmap::HashMap<T>}::insert_in_list]: loop 0:
    Source: 'tests/src/hashmap.rs', lines 1:0-133:9 -/
+@[rust_loop]
 def HashMap.insert_in_list_loop
   {T : Type} (key : Std.Usize) (value : T) (ls : AList T) :
   Result (Bool × (AList T))
@@ -169,6 +172,7 @@ def HashMap.insert_no_resize
 
 /- [hashmap::{hashmap::HashMap<T>}::move_elements_from_list]: loop 0:
    Source: 'tests/src/hashmap.rs', lines 199:12-206:17 -/
+@[rust_loop]
 def HashMap.move_elements_from_list_loop
   {T : Type} (ntable : HashMap T) (ls : AList T) : Result (HashMap T) := do
   match ls with
@@ -187,6 +191,7 @@ def HashMap.move_elements_from_list
 
 /- [hashmap::{hashmap::HashMap<T>}::move_elements]: loop 0:
    Source: 'tests/src/hashmap.rs', lines 185:8-192:9 -/
+@[rust_loop]
 def HashMap.move_elements_loop
   {T : Type} (ntable : HashMap T) (slots : alloc.vec.Vec (AList T))
   (i : Std.Usize) :
@@ -245,6 +250,7 @@ def HashMap.insert
 
 /- [hashmap::{hashmap::HashMap<T>}::contains_key_in_list]: loop 0:
    Source: 'tests/src/hashmap.rs', lines 1:0-231:9 -/
+@[rust_loop]
 def HashMap.contains_key_in_list_loop
   {T : Type} (key : Std.Usize) (ls : AList T) : Result Bool := do
   match ls with
@@ -276,6 +282,7 @@ def HashMap.contains_key
 
 /- [hashmap::{hashmap::HashMap<T>}::get_in_list]: loop 0:
    Source: 'tests/src/hashmap.rs', lines 238:8-246:5 -/
+@[rust_loop]
 def HashMap.get_in_list_loop
   {T : Type} (key : Std.Usize) (ls : AList T) : Result (Option T) := do
   match ls with
@@ -307,6 +314,7 @@ def HashMap.get
 
 /- [hashmap::{hashmap::HashMap<T>}::get_mut_in_list]: loop 0:
    Source: 'tests/src/hashmap.rs', lines 255:8-263:5 -/
+@[rust_loop]
 def HashMap.get_mut_in_list_loop
   {T : Type} (ls : AList T) (key : Std.Usize) :
   Result ((Option T) × (Option T → AList T))
@@ -360,6 +368,7 @@ def HashMap.get_mut
 
 /- [hashmap::{hashmap::HashMap<T>}::remove_from_list]: loop 0:
    Source: 'tests/src/hashmap.rs', lines 1:0-297:17 -/
+@[rust_loop]
 def HashMap.remove_from_list_loop
   {T : Type} (key : Std.Usize) (ls : AList T) :
   Result ((Option T) × (AList T))
