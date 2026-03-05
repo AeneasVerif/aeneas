@@ -2084,11 +2084,20 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
    * one line and indents are correct *)
   F.pp_open_hvbox fmt 0;
   (* Extract the attributes *)
-  let attributes =
+  let rust_attributes =
+    if backend () = Lean then
+      match def.loop_id with
+      | None -> []
+      | Some (_, false) -> [ "rust_loop" ]
+      | Some (_, true) -> [ "rust_loop_body" ]
+    else []
+  in
+  let reduc_attribute =
     if def.backend_attributes.reducible && backend () = Lean then
       [ "reducible" ]
     else []
   in
+  let attributes = rust_attributes @ reduc_attribute in
   extract_attributes span ctx fmt def.item_meta.name None attributes "rust_fun"
     []
     ~is_external:(not def.item_meta.is_local);
