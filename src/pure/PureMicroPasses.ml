@@ -144,6 +144,8 @@ let passes :
        functions. This is in preparation of [decompose_loops], which introduces
        auxiliary (and potentially recursive) functions. *)
     (None, "loops_to_recursive", loops_to_recursive);
+    (* Reorder some of the loop inputs to make them easier to verify *)
+    (None, "reorder_loop_inputs", reorder_loop_inputs);
     (* Introduce match expressions where let-bindings need to open enumerations *)
     (None, "let_to_match", let_to_match);
     (None, "flatten_struct_updates", flatten_struct_updates);

@@ -2256,6 +2256,159 @@ let reorder_loop_outputs (ctx : ctx) (def : fun_decl) =
   in
   { def with body }
 
+(** Reorder the inputs of loops to make them easier to verify.
+
+    We target in particular loops that use iterators: if a loop uses an
+    iterator, we want the iterator to be the first element of the state.
+
+    We do the following transformations:
+
+    1. If a loop starts with a function call followed by a match like so:
+    {[
+      let y <- f x
+      match y with
+      ...
+    ]}
+    then we move [x] so that it becomes the first input element of the loop.
+
+    2. If a loop starts by matching over a value:
+    {[
+      match x with ...
+    ]}
+    we do the same. *)
+let reorder_loop_inputs_visitor (ctx : ctx) (def : fun_decl) =
+  let span = def.item_meta.span in
+
+  let update_loop (loop : loop) : loop =
+    let body = loop.loop_body in
+
+    (* Collect the FVarIds of value inputs (those after the continuations) *)
+    let num_conts = loop.num_input_conts in
+    let value_input_pats = Collections.List.drop num_conts body.inputs in
+    let value_input_fvids =
+      List.filter_map
+        (fun (p : tpat) ->
+          match p.pat with
+          | POpen (fv, _) -> Some fv.id
+          | _ -> None)
+        value_input_pats
+    in
+    let value_input_fvid_set = FVarId.Set.of_list value_input_fvids in
+
+    let body_expr = body.loop_body in
+
+    (* Try to find the id of the variable to move to the front:
+         1. let y <- f ... x; match y with ... => x
+         2. match x with ... => x *)
+    let target_fvid =
+      match body_expr.e with
+      | Let
+          ( _,
+            { pat = POpen (fv1, _); _ },
+            { e = App (_, { e = FVar fv0; _ }); _ },
+            { e = Switch ({ e = FVar fv2; _ }, _); _ } )
+        when fv2 = fv1.id && FVarId.Set.mem fv0 value_input_fvid_set ->
+          (* Pattern 1: let y <- f ... x; match y with ... => x *)
+          Some fv0
+      | Switch ({ e = FVar fid; _ }, _)
+        when FVarId.Set.mem fid value_input_fvid_set ->
+          (* Pattern 2: match x with ... *)
+          Some fid
+      | _ -> None
+    in
+
+    match target_fvid with
+    | None -> loop
+    | Some target_fvid -> (
+        (* Find the index of this FVarId among all inputs (including conts) *)
+        let target_idx =
+          List.find_index
+            (fun (p : tpat) ->
+              match p.pat with
+              | POpen (fv, _) -> fv.id = target_fvid
+              | _ -> false)
+            body.inputs
+        in
+        match target_idx with
+        | None -> loop
+        | Some idx ->
+            (* Helper to permute the inputs: move element at [idx] to the first position,
+                 shifting the others *)
+            let reorder lst =
+              List.init (List.length lst) (fun i ->
+                  let j =
+                    if i = 0 then idx else if i <= idx then i - 1 else i
+                  in
+                  List.nth lst j)
+            in
+
+            (* Reorder loop.inputs and loop_body.inputs *)
+            let new_loop_inputs = reorder loop.inputs in
+            let new_body_inputs = reorder body.inputs in
+
+            (* Reorder the Continue arguments inside the loop body *)
+            let rec update_continues (e : texpr) : texpr =
+              match e.e with
+              | FVar _ | BVar _ | CVar _ | Const _ | EError _ -> e
+              | App _ | Qualif _ -> (
+                  match
+                    opt_destruct_loop_result_decompose_outputs ctx span
+                      ~intro_let:true ~opened_vars:true e
+                  with
+                  | Some ({ variant_id; args; break_ty; _ }, rebind)
+                    when variant_id = loop_result_continue_id ->
+                      let args = reorder args in
+                      let arg = mk_simpl_tuple_texpr span args in
+                      rebind (mk_continue_texpr span arg break_ty)
+                  | _ -> e)
+              | Lambda (pat, lbody) ->
+                  mk_opened_lambda span pat (update_continues lbody)
+              | Let (monadic, pat, bound, next) ->
+                  let bound = update_continues bound in
+                  let next = update_continues next in
+                  mk_opened_let monadic pat bound next
+              | Switch (scrut, switch) ->
+                  let switch =
+                    match switch with
+                    | If (e0, e1) ->
+                        If (update_continues e0, update_continues e1)
+                    | Match branches ->
+                        Match
+                          (List.map
+                             (fun ({ pat; branch } : match_branch) ->
+                               { pat; branch = update_continues branch })
+                             branches)
+                  in
+                  { e with e = Switch (scrut, switch) }
+              | Loop _ ->
+                  (* Inner loops: don't touch *)
+                  e
+              | StructUpdate _ ->
+                  (* Loops shouldn't appear in there *)
+                  e
+              | Meta (m, inner) -> mk_emeta m (update_continues inner)
+            in
+            let new_body_expr = update_continues body.loop_body in
+
+            let new_body : loop_body =
+              { inputs = new_body_inputs; loop_body = new_body_expr }
+            in
+            { loop with inputs = new_loop_inputs; loop_body = new_body })
+  in
+
+  object (_self)
+    inherit [_] map_expr as super
+
+    method! visit_loop env loop =
+      (* First, recursively visit inner loops *)
+      let loop = super#visit_loop env loop in
+
+      (* Update, but only if the loop will not get extracted to a recursive definition *)
+      if loop.to_rec then loop else update_loop loop
+  end
+
+let reorder_loop_inputs = lift_expr_map_visitor reorder_loop_inputs_visitor
+
 (** Return [true] if the input/output relation implies that the loop has a
     termination measure.
 
