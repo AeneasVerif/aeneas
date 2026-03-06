@@ -112,6 +112,7 @@ def i32_id (i : Std.I32) : Result Std.I32 := do
 partial_fixpoint
 
 mutual
+
 /-- [tutorial::even]:
    Source: 'src/lib.rs', lines 85:0-92:1 -/
 def even (i : Std.U32) : Result Bool := do

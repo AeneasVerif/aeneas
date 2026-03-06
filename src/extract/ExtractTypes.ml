@@ -145,7 +145,8 @@ let start_fun_decl_group (ctx : extraction_ctx) (fmt : F.formatter)
   | Lean ->
       if is_rec && List.length dg > 1 then (
         F.pp_print_space fmt ();
-        F.pp_print_string fmt "mutual")
+        F.pp_print_string fmt "mutual";
+        F.pp_print_break fmt 0 0)
   | HOL4 ->
       (* In HOL4, opaque functions have a special treatment *)
       if is_single_opaque_fun_decl_group dg then ()

@@ -110,6 +110,7 @@ def Node.rotate_right_left
         (some (Node.mk z.value a z.right 1#i8)) 0#i8)
 
 mutual
+
 /-- [avl::{avl::Node<T>}::insert_in_left]:
    Source: 'src/avl.rs', lines 235:4-267:5 -/
 def Node.insert_in_left
