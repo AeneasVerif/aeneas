@@ -1211,8 +1211,8 @@ let extract_content (fmt : F.formatter) (ld, space, rd) (sl : string list) :
   F.pp_print_string fmt rd;
   F.pp_close_box fmt ()
 
-(** Extract a plain comment *)
-let extract_comment (fmt : F.formatter) (sl : string list) : unit =
+(** Wrap strings in plain comment delimiters *)
+let wrap_plain_comment (fmt : F.formatter) (sl : string list) : unit =
   let delimiters =
     match backend () with
     | Coq | FStar | HOL4 -> ("(** ", 4, " *)")
@@ -1220,8 +1220,8 @@ let extract_comment (fmt : F.formatter) (sl : string list) : unit =
   in
   extract_content fmt delimiters sl
 
-(** Extract a doc-string comment (attaches to the following declaration) *)
-let extract_docstring (fmt : F.formatter) (sl : string list) : unit =
+(** Wrap strings in doc comment delimiters (attaches to the following declaration) *)
+let wrap_doc_comment (fmt : F.formatter) (sl : string list) : unit =
   let delimiters =
     match backend () with
     | Coq | FStar | HOL4 -> ("(** ", 4, " *)")
@@ -1251,7 +1251,7 @@ let extract_comment_with_span (ctx : extraction_ctx) (fmt : F.formatter)
         ]
   in
   let span = Errors.span_to_string span in
-  extract_docstring fmt (sl @ [ span ] @ name)
+  wrap_doc_comment fmt (sl @ [ span ] @ name)
 
 let extract_attributes (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (name : Types.name)
