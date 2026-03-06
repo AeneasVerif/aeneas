@@ -11,12 +11,12 @@ set_option maxHeartbeats 1000000
 
 namespace issue_807_missing_symbolic_value
 
-/- [issue_807_missing_symbolic_value::PortableVector]
+/-- [issue_807_missing_symbolic_value::PortableVector]
    Source: 'tests/src/issue-807-missing-symbolic-value.rs', lines 4:0-6:1 -/
 structure PortableVector where
   elements : Array Std.U8 16#usize
 
-/- [issue_807_missing_symbolic_value::to_bytes]: loop 0:
+/-- [issue_807_missing_symbolic_value::to_bytes]: loop 0:
    Source: 'tests/src/issue-807-missing-symbolic-value.rs', lines 8:4-10:5 -/
 def to_bytes_loop
   (x : PortableVector) (bytes : Slice Std.U8)
@@ -37,7 +37,7 @@ def to_bytes_loop
         ok (cont (s, iter2)))
     (bytes, iter)
 
-/- [issue_807_missing_symbolic_value::to_bytes]:
+/-- [issue_807_missing_symbolic_value::to_bytes]:
    Source: 'tests/src/issue-807-missing-symbolic-value.rs', lines 7:0-11:1 -/
 @[reducible]
 def to_bytes
