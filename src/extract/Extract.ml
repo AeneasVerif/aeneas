@@ -2450,6 +2450,12 @@ let extract_global_decl_body_gen (span : Meta.span) (ctx : extraction_ctx)
       else [ "global_simps" ]
     else []
   in
+  let trait_default =
+    match decl.src with
+    | TraitDeclItem (_, _, true) -> [ "trait_default" ]
+    | _ -> []
+  in
+  let attributes = attributes @ trait_default in
   extract_attributes span ctx fmt decl.item_meta.name None attributes
     "rust_const" []
     ~is_external:(not decl.item_meta.is_local);
@@ -2605,17 +2611,7 @@ let extract_global_decl_aux (ctx : extraction_ctx) (fmt : F.formatter)
   F.pp_print_space fmt ();
 
   let decl_name = ctx_get_global span global.def_id ctx in
-  let body_name =
-    ctx_get_function span
-      (FromLlbc (Pure.FunId (FRegular global.body_id), None))
-      ctx
-  in
-  let decl_ty, body_ty =
-    let ty = body.signature.output in
-    if body.signature.fwd_info.effect_info.can_fail then
-      (unwrap_result_ty span ty, ty)
-    else (ty, mk_result_ty ty)
-  in
+  let output_ty = body.signature.output in
   (* Add the type parameters *)
   let ctx, type_params, cg_params, trait_clauses =
     ctx_add_generic_params span global.item_meta.name Item global.llbc_generics
@@ -2627,120 +2623,29 @@ let extract_global_decl_aux (ctx : extraction_ctx) (fmt : F.formatter)
       let kind = if interface then Declared else Builtin in
       if backend () = HOL4 then
         extract_global_decl_hol4_opaque span ctx fmt decl_name global.generics
-          decl_ty
+          output_ty
       else (
         extract_global_decl_body_gen span ctx fmt global kind ~irreducible:false
           ~with_do:false decl_name global.generics global.explicit_info
-          type_params cg_params trait_clauses decl_ty None;
+          type_params cg_params trait_clauses output_ty None;
         F.pp_print_space fmt ())
-  | Some body -> (
-      (* There is a body. There are two sub-cases:
-         - if the body is exactly [Ok v] then we directly generate [let x : u32 := v]
-         - otherwise we generate two definitions, one for the initialization function
-           and another for the global itself
-      *)
-      let pure_value =
+  | Some body ->
+      (* There is a body *)
+      let with_do =
         match body.body.e with
-        | App
-            ( {
-                e =
-                  Qualif
-                    {
-                      id =
-                        AdtCons
-                          {
-                            adt_id = TBuiltin TResult;
-                            variant_id = Some variant_id;
-                          };
-                      _;
-                    };
-                _;
-              },
-              v )
-          when variant_id = result_ok_id -> Some v
-        | _ -> None
+        | Let (true, _, _, _) -> true
+        | _ -> false
       in
-      match pure_value with
-      | Some pure_value ->
-          extract_global_decl_body_gen span ctx fmt global SingleNonRec
-            ~irreducible:(backend () = Lean)
-            ~with_do:false decl_name global.generics global.explicit_info
-            type_params cg_params trait_clauses decl_ty
-            (Some
-               (fun fmt ->
-                 extract_texpr span ctx fmt ~inside:false ~inside_do:true
-                   pure_value));
-          (* Add a break to insert lines between declarations *)
-          F.pp_print_break fmt 0 0
-      | None ->
-          (* Generate: [let x_body : result u32 = Return 3] *)
-          extract_global_decl_body_gen span ctx fmt global SingleNonRec
-            ~irreducible:false ~with_do:true body_name global.generics
-            global.explicit_info type_params cg_params trait_clauses body_ty
-            (Some
-               (fun fmt ->
-                 extract_texpr span ctx fmt ~inside:false ~inside_do:true
-                   body.body));
-          F.pp_print_break fmt 0 0;
-          (* Generate: [let x_c : u32 = eval_global x_body] *)
-          extract_global_decl_body_gen span ctx fmt global SingleNonRec
-            ~irreducible:(backend () = Lean)
-            ~with_do:false decl_name global.generics global.explicit_info
-            type_params cg_params trait_clauses decl_ty
-            (Some
-               (fun fmt ->
-                 let all_params =
-                   (* Filter *)
-                   let filter : 'a. explicit list -> 'a list -> 'a list =
-                    fun el l ->
-                     List.filter_map
-                       (fun (b, x) -> if b = Explicit then Some x else None)
-                       (List.combine el l)
-                   in
-                   let type_params =
-                     filter global.explicit_info.explicit_types type_params
-                   in
-                   let cg_params =
-                     filter global.explicit_info.explicit_const_generics
-                       cg_params
-                   in
-                   List.concat [ type_params; cg_params; trait_clauses ]
-                 in
-                 let extract_params () =
-                   List.iter
-                     (fun p ->
-                       F.pp_print_space fmt ();
-                       F.pp_print_string fmt p)
-                     all_params
-                 in
-                 let use_brackets = all_params <> [] in
-                 (* Extract the name *)
-                 let before, after =
-                   match backend () with
-                   | FStar | Lean ->
-                       ( (fun () ->
-                           F.pp_print_string fmt "eval_global";
-                           F.pp_print_space fmt ()),
-                         fun () -> () )
-                   | Coq ->
-                       ( (fun () -> ()),
-                         fun () -> F.pp_print_string fmt "%global" )
-                   | HOL4 ->
-                       ( (fun () ->
-                           F.pp_print_string fmt "get_return_value";
-                           F.pp_print_space fmt ()),
-                         fun () -> () )
-                 in
-                 before ();
-                 if use_brackets then F.pp_print_string fmt "(";
-                 F.pp_print_string fmt body_name;
-                 (* Extract the generic params *)
-                 extract_params ();
-                 if use_brackets then F.pp_print_string fmt ")";
-                 (* *)
-                 after ()));
-          (* Add a break to insert lines between declarations *)
-          F.pp_print_break fmt 0 0)
+      extract_global_decl_body_gen span ctx fmt global SingleNonRec
+        ~irreducible:(backend () = Lean)
+        ~with_do decl_name global.generics global.explicit_info type_params
+        cg_params trait_clauses output_ty
+        (Some
+           (fun fmt ->
+             extract_texpr span ctx fmt ~inside:false ~inside_do:with_do
+               body.body));
+      (* Add a break to insert lines between declarations *)
+      F.pp_print_break fmt 0 0
 
 let extract_global_decl (ctx : extraction_ctx) (fmt : F.formatter)
     (global : global_decl option) (body : fun_decl) (interface : bool) : unit =
@@ -3298,6 +3203,7 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
         let ty () =
           let inside = false in
           F.pp_print_space fmt ();
+          let ty = mk_result_ty ty in
           extract_ty decl.item_meta.span ctx fmt TypeDeclId.Set.empty ~inside ty
         in
         extract_trait_decl_item ctx fmt item_name ty)
@@ -3484,10 +3390,11 @@ let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
 
 (** Extract a trait implementation *)
 let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
-    (impl : trait_impl) : unit =
+    ~(is_rec : bool) (impl : trait_impl) : unit =
   [%ltrace name_to_string ctx impl.item_meta.name];
+  let span = impl.item_meta.span in
   (* Retrieve the impl name *)
-  let impl_name = ctx_get_trait_impl impl.item_meta.span impl.def_id ctx in
+  let impl_name = ctx_get_trait_impl span impl.def_id ctx in
   (* Add a break before *)
   F.pp_print_break fmt 0 0;
   (* Print a comment to link the extracted type to its original rust definition *)
@@ -3521,12 +3428,12 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
          ^ "]";
        ]
        (* TODO: why option option for the generics? Looks like a bug in OCaml!? *)
-       name ?generics:(Some generics) impl.item_meta.span);
+       name ?generics:(Some generics) span);
     F.pp_print_break fmt 0 0;
     (* Extract the attributes *)
     let attributes = if backend () = Lean then [ "reducible" ] else [] in
-    extract_attributes impl.item_meta.span ctx fmt name (Some generics)
-      attributes "rust_trait_impl" []
+    extract_attributes span ctx fmt name (Some generics) attributes
+      "rust_trait_impl" []
       ~is_external:(not impl.item_meta.is_local)
   end;
 
@@ -3546,29 +3453,34 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   (* `let (....) : Trait ... =` *)
   (* Open the box for the name + generics *)
   F.pp_open_hovbox fmt ctx.indent_incr;
-  (match fun_decl_kind_to_qualif SingleNonRec with
-  | Some qualif ->
-      F.pp_print_string fmt qualif;
-      F.pp_print_space fmt ()
-  | None -> ());
+  (* Lean only: we have a special elaboration if the impl is recursive *)
+  (if is_rec then (
+     F.pp_print_string fmt "impl_def";
+     F.pp_print_space fmt ())
+   else
+     match fun_decl_kind_to_qualif SingleNonRec with
+     | Some qualif ->
+         F.pp_print_string fmt qualif;
+         F.pp_print_space fmt ()
+     | None -> ());
   F.pp_print_string fmt impl_name;
 
   (* Print the generics *)
   (* Add the type and const generic params - note that we need those bindings only for the
    * body translation (they are not top-level) *)
   let ctx, type_params, cg_params, trait_clauses =
-    ctx_add_generic_params impl.item_meta.span impl.item_meta.name Item
-      impl.llbc_generics impl.generics ctx
+    ctx_add_generic_params span impl.item_meta.name Item impl.llbc_generics
+      impl.generics ctx
   in
-  extract_generic_params impl.item_meta.span ctx fmt TypeDeclId.Set.empty Item
-    impl.generics (Some impl.explicit_info) type_params cg_params trait_clauses;
+  extract_generic_params span ctx fmt TypeDeclId.Set.empty Item impl.generics
+    (Some impl.explicit_info) type_params cg_params trait_clauses;
 
   (* Print the type *)
   F.pp_print_space fmt ();
   F.pp_print_string fmt ":";
   F.pp_print_space fmt ();
-  extract_trait_decl_ref impl.item_meta.span ctx fmt TypeDeclId.Set.empty
-    ~inside:false impl.impl_trait;
+  extract_trait_decl_ref span ctx fmt TypeDeclId.Set.empty ~inside:false
+    impl.impl_trait;
 
   let is_empty = trait_impl_is_empty impl in
 
@@ -3580,8 +3492,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   else if is_empty && backend () = Coq then (
     (* Coq is not very good at infering constructors *)
     let cons =
-      ctx_get_trait_constructor impl.item_meta.span
-        impl.impl_trait.trait_decl_id ctx
+      ctx_get_trait_constructor span impl.impl_trait.trait_decl_id ctx
     in
     F.pp_print_string fmt (":= " ^ cons ^ ".");
     (* Outer box *)
@@ -3603,9 +3514,7 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     (* The constants *)
     List.iter
       (fun (name, gref) ->
-        let item_name =
-          ctx_get_trait_const impl.item_meta.span trait_decl_id name ctx
-        in
+        let item_name = ctx_get_trait_const span trait_decl_id name ctx in
         (* Lookup the information about the explicit/implicit parameters *)
         let explicit =
           match GlobalDeclId.Map.find_opt gref.global_id ctx.trans_globals with
@@ -3614,14 +3523,37 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
           | Some d -> Some d.explicit_info
         in
         let print_params () =
-          extract_generic_args impl.item_meta.span ctx fmt TypeDeclId.Set.empty
-            ~explicit gref.global_generics
+          extract_generic_args span ctx fmt TypeDeclId.Set.empty ~explicit
+            gref.global_generics
+        in
+        let global_decl =
+          [%unwrap_with_span] span
+            (GlobalDeclId.Map.find_opt gref.global_id ctx.trans_globals)
+            "Internal error"
+        in
+        let needs_brackets =
+          (not global_decl.can_fail)
+          &&
+          match explicit with
+          | Some explicit ->
+              PureUtils.explicit_info_has_explicit explicit
+              || gref.global_generics.trait_refs <> []
+          | None -> gref.global_generics <> empty_generic_args
         in
         let ty () =
           F.pp_print_space fmt ();
-          F.pp_print_string fmt
-            (ctx_get_global impl.item_meta.span gref.global_id ctx);
-          print_params ()
+          if not global_decl.can_fail then (
+            let ok =
+              match backend () with
+              | Lean -> "ok"
+              | _ -> "Ok"
+            in
+            F.pp_print_string fmt ok;
+            F.pp_print_space fmt ());
+          if needs_brackets then F.pp_print_string fmt "(";
+          F.pp_print_string fmt (ctx_get_global span gref.global_id ctx);
+          print_params ();
+          if needs_brackets then F.pp_print_string fmt ")"
         in
 
         extract_trait_impl_item ctx fmt item_name ty)
@@ -3631,13 +3563,10 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     List.iter
       (fun (name, ty) ->
         (* Extract the type *)
-        let item_name =
-          ctx_get_trait_type impl.item_meta.span trait_decl_id name ctx
-        in
+        let item_name = ctx_get_trait_type span trait_decl_id name ctx in
         let ty () =
           F.pp_print_space fmt ();
-          extract_ty impl.item_meta.span ctx fmt TypeDeclId.Set.empty
-            ~inside:false ty
+          extract_ty span ctx fmt TypeDeclId.Set.empty ~inside:false ty
         in
         extract_trait_impl_item ctx fmt item_name ty)
       impl.types;
@@ -3646,13 +3575,12 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     List.iter
       (fun (clause, trait_ref) ->
         let item_name =
-          ctx_get_trait_parent_clause impl.item_meta.span trait_decl_id
-            clause.T.clause_id ctx
+          ctx_get_trait_parent_clause span trait_decl_id clause.T.clause_id ctx
         in
         let ty () =
           F.pp_print_space fmt ();
-          extract_trait_ref impl.item_meta.span ctx fmt TypeDeclId.Set.empty
-            ~inside:false trait_ref
+          extract_trait_ref span ctx fmt TypeDeclId.Set.empty ~inside:false
+            trait_ref
         in
         extract_trait_impl_item ctx fmt item_name ty)
       (List.combine trait_decl.implied_clauses impl.parent_trait_refs);

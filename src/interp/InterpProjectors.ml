@@ -136,6 +136,20 @@ let rec apply_proj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
               variant_id = adt.variant_id;
               fields = proj_fields;
             }
+      | VAdt adt, TArray (elem_ty, _) ->
+          let proj_fields =
+            List.map
+              (fun fv ->
+                apply_proj_borrows span check_symbolic_no_ended ctx regions fv
+                  elem_ty)
+              adt.fields
+          in
+          AAdt
+            {
+              borrow_proj = true;
+              variant_id = adt.variant_id;
+              fields = proj_fields;
+            }
       | VBottom, _ -> [%craise] span "Unreachable"
       | VBorrow bc, TRef (r, ref_ty, kind) ->
           if
@@ -268,6 +282,20 @@ let rec apply_eproj_borrows (span : Meta.span) (check_symbolic_no_ended : bool)
                 apply_eproj_borrows span check_symbolic_no_ended ctx regions fv
                   fty)
               fields_types
+          in
+          EAdt
+            {
+              borrow_proj = true;
+              variant_id = adt.variant_id;
+              fields = proj_fields;
+            }
+      | VAdt adt, TArray (elem_ty, _) ->
+          let proj_fields =
+            List.map
+              (fun fv ->
+                apply_eproj_borrows span check_symbolic_no_ended ctx regions fv
+                  elem_ty)
+              adt.fields
           in
           EAdt
             {

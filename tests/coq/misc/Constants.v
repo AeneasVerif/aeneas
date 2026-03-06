@@ -27,8 +27,7 @@ Definition incr (n : u32) : result u32 :=
 
 (** [constants::X3]
     Source: 'tests/src/constants.rs', lines 17:0-17:29 *)
-Definition x3_body : result u32 := incr 32%u32.
-Definition x3 : u32 := x3_body%global.
+Definition x3 : result u32 := incr 32%u32.
 
 (** [constants::mk_pair0]:
     Source: 'tests/src/constants.rs', lines 25:0-27:1 *)
@@ -55,13 +54,11 @@ Definition mk_pair1 (x : u32) (y1 : u32) : result (Pair_t u32 u32) :=
 
 (** [constants::P0]
     Source: 'tests/src/constants.rs', lines 33:0-33:42 *)
-Definition p0_body : result (u32 * u32) := mk_pair0 0%u32 1%u32.
-Definition p0 : (u32 * u32) := p0_body%global.
+Definition p0 : result (u32 * u32) := mk_pair0 0%u32 1%u32.
 
 (** [constants::P1]
     Source: 'tests/src/constants.rs', lines 34:0-34:46 *)
-Definition p1_body : result (Pair_t u32 u32) := mk_pair1 0%u32 1%u32.
-Definition p1 : Pair_t u32 u32 := p1_body%global.
+Definition p1 : result (Pair_t u32 u32) := mk_pair1 0%u32 1%u32.
 
 (** [constants::P2]
     Source: 'tests/src/constants.rs', lines 35:0-35:34 *)
@@ -86,27 +83,25 @@ Definition wrap_new {T : Type} (value : T) : result (Wrap_t T) :=
 
 (** [constants::Y]
     Source: 'tests/src/constants.rs', lines 43:0-43:38 *)
-Definition y_body : result (Wrap_t i32) := wrap_new 2%i32.
-Definition y : Wrap_t i32 := y_body%global.
+Definition y : result (Wrap_t i32) := wrap_new 2%i32.
 
 (** [constants::unwrap_y]:
     Source: 'tests/src/constants.rs', lines 45:0-47:1 *)
 Definition unwrap_y : result i32 :=
-  Ok y.(wrap_value).
+  w <- y; Ok w.(wrap_value).
 
 (** [constants::YVAL]
     Source: 'tests/src/constants.rs', lines 49:0-49:33 *)
-Definition yval_body : result i32 := unwrap_y.
-Definition yval : i32 := yval_body%global.
+Definition yVAL : result i32 := unwrap_y.
 
 (** [constants::get_z1::Z1]
     Source: 'tests/src/constants.rs', lines 64:4-64:22 *)
-Definition get_z1_z1 : i32 := 3%i32.
+Definition get_z1_Z1 : i32 := 3%i32.
 
 (** [constants::get_z1]:
     Source: 'tests/src/constants.rs', lines 63:0-66:1 *)
 Definition get_z1 : result i32 :=
-  Ok get_z1_z1.
+  Ok get_z1_Z1.
 
 (** [constants::add]:
     Source: 'tests/src/constants.rs', lines 68:0-70:1 *)
@@ -123,13 +118,13 @@ Definition q2 : i32 := q1.
 
 (** [constants::Q3]
     Source: 'tests/src/constants.rs', lines 78:0-78:31 *)
-Definition q3_body : result i32 := add q2 3%i32.
-Definition q3 : i32 := q3_body%global.
+Definition q3 : result i32 := add q2 3%i32.
 
 (** [constants::get_z2]:
     Source: 'tests/src/constants.rs', lines 72:0-74:1 *)
 Definition get_z2 : result i32 :=
-  i <- get_z1; i1 <- add i q3; add q1 i1.
+  i <- get_z1; i1 <- q3; i2 <- add i i1; add q1 i2
+.
 
 (** [constants::S1]
     Source: 'tests/src/constants.rs', lines 82:0-82:23 *)
@@ -137,8 +132,7 @@ Definition s1 : u32 := 6%u32.
 
 (** [constants::S2]
     Source: 'tests/src/constants.rs', lines 83:0-83:30 *)
-Definition s2_body : result u32 := incr s1.
-Definition s2 : u32 := s2_body%global.
+Definition s2 : result u32 := incr s1.
 
 (** [constants::S3]
     Source: 'tests/src/constants.rs', lines 84:0-84:35 *)
@@ -146,8 +140,7 @@ Definition s3 : Pair_t u32 u32 := p3.
 
 (** [constants::S4]
     Source: 'tests/src/constants.rs', lines 85:0-85:47 *)
-Definition s4_body : result (Pair_t u32 u32) := mk_pair1 7%u32 8%u32.
-Definition s4 : Pair_t u32 u32 := s4_body%global.
+Definition s4 : result (Pair_t u32 u32) := mk_pair1 7%u32 8%u32.
 
 (** [constants::V]
     Source: 'tests/src/constants.rs', lines 88:0-90:1 *)
@@ -158,11 +151,11 @@ Arguments v_x { _ } { _ }.
 
 (** [constants::{constants::V<T, N>}::LEN]
     Source: 'tests/src/constants.rs', lines 93:4-93:29 *)
-Definition v_len (T : Type) (N : usize) : usize := N.
+Definition v_LEN (T : Type) (N : usize) : usize := N.
 
 (** [constants::use_v]:
     Source: 'tests/src/constants.rs', lines 96:0-98:1 *)
 Definition use_v (T : Type) (N : usize) : result usize :=
-  Ok (v_len T N).
+  Ok (v_LEN T N).
 
 End Constants.

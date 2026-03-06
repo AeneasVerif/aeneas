@@ -30,6 +30,7 @@ import Aeneas.Std
 import Aeneas.Setup
 import Aeneas.SimpBoolProp
 import Aeneas.Tests
+import Aeneas.TraitDefault
 import Aeneas.Vector
 import Aeneas.Zify
 import Aeneas.ZModify

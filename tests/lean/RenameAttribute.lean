@@ -63,17 +63,14 @@ structure StructTest where
 
 /-- [rename_attribute::C]
    Source: 'tests/src/rename_attribute.rs', lines 52:0-52:28 -/
-@[global_simps]
-def Const_Test_body : Result Std.U32 := do let i ← 100#u32 + 10#u32
-                                           i + 1#u32
 @[global_simps, irreducible]
-def Const_Test : Std.U32 := eval_global Const_Test_body
+def Const_Test : Result Std.U32 := do let i ← 100#u32 + 10#u32
+                                      i + 1#u32
 
 /-- [rename_attribute::CA]
    Source: 'tests/src/rename_attribute.rs', lines 55:0-55:23 -/
-@[global_simps] def Const_Aeneas11_body : Result Std.U32 := do 10#u32 + 1#u32
 @[global_simps, irreducible]
-def Const_Aeneas11 : Std.U32 := eval_global Const_Aeneas11_body
+def Const_Aeneas11 : Result Std.U32 := 10#u32 + 1#u32
 
 /-- [rename_attribute::factorial]:
    Source: 'tests/src/rename_attribute.rs', lines 58:0-64:1 -/
