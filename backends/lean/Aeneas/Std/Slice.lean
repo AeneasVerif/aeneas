@@ -660,6 +660,20 @@ theorem core.slice.index.SliceIndexRangeUsizeSlice.index_mut.progress_spec (r : 
   . scalar_tac
 
 @[progress]
+theorem core.slice.index.SliceIndexRangeUsizeSlice.index.progress_spec {α : Type}
+    (r : core.ops.range.Range Usize) (s : Slice α) (h0 : r.start ≤ r.end) (h1 : r.end ≤ s.length) :
+    core.slice.index.SliceIndexRangeUsizeSlice.index r s ⦃ (s1 : Slice α) =>
+      s1.val = s.val.slice r.start r.end ∧
+      s1.length = r.end - r.start ⦄ := by
+  simp only [core.slice.index.SliceIndexRangeUsizeSlice.index, UScalar.le_equiv, Slice.length]
+  split
+  · simp only [spec_ok, true_and]
+    simp_lists
+    omega
+  · simp only [spec_fail]
+    scalar_tac
+
+@[progress]
 theorem core.slice.Slice.copy_from_slice.progress_spec (copyInst : core.marker.Copy α) (s0 s1 : Slice α)
   (h : s0.length = s1.length) :
   core.slice.Slice.copy_from_slice copyInst s0 s1 ⦃ s1' => s1 = s1' ⦄ := by
