@@ -82,7 +82,7 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
           in
           (* We have to register the function itself, and the loops it
              may contain (which are extracted as functions) *)
-          let funs = def.f :: def.loops in
+          let funs = (def.f :: def.loops) @ def.bodies in
           (* Register the decrease clauses *)
           let ctx = List.fold_left register_decreases ctx funs in
           (* Register the name of the function and the loops *)
@@ -995,7 +995,8 @@ and extract_function_call (span : Meta.span) (ctx : extraction_ctx)
             let trans_fun =
               match lp_id with
               | None -> trans_fun.f
-              | Some lp_id -> Pure.LoopId.nth trans_fun.loops lp_id
+              | Some (lp_id, true) -> Pure.LoopId.nth trans_fun.bodies lp_id
+              | Some (lp_id, false) -> Pure.LoopId.nth trans_fun.loops lp_id
             in
             let explicit = trans_fun.signature.explicit_info in
             (* If it is a trait method, we need to remove the prefix
@@ -2035,7 +2036,8 @@ let extract_fun_comment (ctx : extraction_ctx) (fmt : F.formatter)
     let loop_comment =
       match def.loop_id with
       | None -> ""
-      | Some id -> " loop " ^ LoopId.to_string id ^ ":"
+      | Some (id, false) -> " loop " ^ LoopId.to_string id ^ ":"
+      | Some (id, true) -> " loop body " ^ LoopId.to_string id ^ ":"
     in
     [ comment_pre ^ loop_comment ]
   in
@@ -2082,11 +2084,20 @@ let extract_fun_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
    * one line and indents are correct *)
   F.pp_open_hvbox fmt 0;
   (* Extract the attributes *)
-  let attributes =
+  let rust_attributes =
+    if backend () = Lean then
+      match def.loop_id with
+      | None -> []
+      | Some (_, false) -> [ "rust_loop" ]
+      | Some (_, true) -> [ "rust_loop_body" ]
+    else []
+  in
+  let reduc_attribute =
     if def.backend_attributes.reducible && backend () = Lean then
       [ "reducible" ]
     else []
   in
+  let attributes = rust_attributes @ reduc_attribute in
   extract_attributes span ctx fmt def.item_meta.name None attributes "rust_fun"
     []
     ~is_external:(not def.item_meta.is_local);

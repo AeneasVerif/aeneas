@@ -373,21 +373,29 @@ def take_array_t (a : Array AB 2#usize) : Result Unit := do
 def non_copyable_array : Result Unit := do
   take_array_t (Array.make 2#usize [ AB.A, AB.B ])
 
+/- [arrays::sum]: loop body 0:
+   Source: 'tests/src/arrays.rs', lines 276:4-279:5 -/
+@[rust_loop_body]
+def sum_loop.body
+  (s : Slice Std.U32) (sum1 : Std.U32) (i : Std.Usize) :
+  Result (ControlFlow (Std.U32 × Std.Usize) Std.U32)
+  := do
+  let i1 := Slice.len s
+  if i < i1
+  then
+    let i2 ← Slice.index_usize s i
+    let sum3 ← sum1 + i2
+    let i3 ← i + 1#usize
+    ok (cont (sum3, i3))
+  else ok (done sum1)
+
 /- [arrays::sum]: loop 0:
    Source: 'tests/src/arrays.rs', lines 276:4-279:5 -/
+@[rust_loop]
 def sum_loop
   (s : Slice Std.U32) (sum1 : Std.U32) (i : Std.Usize) : Result Std.U32 := do
   loop
-    (fun (sum3, i1) =>
-      let i2 := Slice.len s
-      if i1 < i2
-      then
-        do
-        let i3 ← Slice.index_usize s i1
-        let sum4 ← sum3 + i3
-        let i4 ← i1 + 1#usize
-        ok (cont (sum4, i4))
-      else ok (done sum3))
+    (fun (sum3, i1) => sum_loop.body s sum3 i1)
     (sum1, i)
 
 /- [arrays::sum]:
@@ -396,25 +404,33 @@ def sum_loop
 def sum (s : Slice Std.U32) : Result Std.U32 := do
   sum_loop s 0#u32 0#usize
 
+/- [arrays::sum2]: loop body 0:
+   Source: 'tests/src/arrays.rs', lines 287:4-290:5 -/
+@[rust_loop_body]
+def sum2_loop.body
+  (s : Slice Std.U32) (s2 : Slice Std.U32) (sum1 : Std.U32) (i : Std.Usize) :
+  Result (ControlFlow (Std.U32 × Std.Usize) Std.U32)
+  := do
+  let i1 := Slice.len s
+  if i < i1
+  then
+    let i2 ← Slice.index_usize s i
+    let i3 ← Slice.index_usize s2 i
+    let i4 ← i2 + i3
+    let sum3 ← sum1 + i4
+    let i5 ← i + 1#usize
+    ok (cont (sum3, i5))
+  else ok (done sum1)
+
 /- [arrays::sum2]: loop 0:
    Source: 'tests/src/arrays.rs', lines 287:4-290:5 -/
+@[rust_loop]
 def sum2_loop
   (s : Slice Std.U32) (s2 : Slice Std.U32) (sum1 : Std.U32) (i : Std.Usize) :
   Result Std.U32
   := do
   loop
-    (fun (sum3, i1) =>
-      let i2 := Slice.len s
-      if i1 < i2
-      then
-        do
-        let i3 ← Slice.index_usize s i1
-        let i4 ← Slice.index_usize s2 i1
-        let i5 ← i3 + i4
-        let sum4 ← sum3 + i5
-        let i6 ← i1 + 1#usize
-        ok (cont (sum4, i6))
-      else ok (done sum3))
+    (fun (sum3, i1) => sum2_loop.body s s2 sum3 i1)
     (sum1, i)
 
 /- [arrays::sum2]:
@@ -484,21 +500,28 @@ def ite : Result Unit := do
   let _ ← index_mut_slice_u32_0 s1
   ok ()
 
+/- [arrays::zero_slice]: loop body 0:
+   Source: 'tests/src/arrays.rs', lines 337:4-340:5 -/
+@[rust_loop_body]
+def zero_slice_loop.body
+  (len : Std.Usize) (a : Slice Std.U8) (i : Std.Usize) :
+  Result (ControlFlow ((Slice Std.U8) × Std.Usize) (Slice Std.U8))
+  := do
+  if i < len
+  then let s ← Slice.update a i 0#u8
+       let i1 ← i + 1#usize
+       ok (cont (s, i1))
+  else ok (done a)
+
 /- [arrays::zero_slice]: loop 0:
    Source: 'tests/src/arrays.rs', lines 337:4-340:5 -/
+@[rust_loop]
 def zero_slice_loop
   (a : Slice Std.U8) (i : Std.Usize) (len : Std.Usize) :
   Result (Slice Std.U8)
   := do
   loop
-    (fun (a1, i1) =>
-      if i1 < len
-      then
-        do
-        let s ← Slice.update a1 i1 0#u8
-        let i2 ← i1 + 1#usize
-        ok (cont (s, i2))
-      else ok (done a1))
+    (fun (a1, i1) => zero_slice_loop.body len a1 i1)
     (a, i)
 
 /- [arrays::zero_slice]:
@@ -507,16 +530,22 @@ def zero_slice (a : Slice Std.U8) : Result (Slice Std.U8) := do
   let len := Slice.len a
   zero_slice_loop a 0#usize len
 
+/- [arrays::iter_mut_slice]: loop body 0:
+   Source: 'tests/src/arrays.rs', lines 346:4-348:5 -/
+@[rust_loop_body]
+def iter_mut_slice_loop.body
+  (len : Std.Usize) (i : Std.Usize) : Result (ControlFlow Std.Usize Unit) := do
+  if i < len
+  then let i1 ← i + 1#usize
+       ok (cont i1)
+  else ok (done ())
+
 /- [arrays::iter_mut_slice]: loop 0:
    Source: 'tests/src/arrays.rs', lines 346:4-348:5 -/
+@[rust_loop]
 def iter_mut_slice_loop (len : Std.Usize) (i : Std.Usize) : Result Unit := do
   loop
-    (fun i1 =>
-      if i1 < len
-      then do
-           let i2 ← i1 + 1#usize
-           ok (cont i2)
-      else ok (done ()))
+    (fun i1 => iter_mut_slice_loop.body len i1)
     i
 
 /- [arrays::iter_mut_slice]:
@@ -526,21 +555,29 @@ def iter_mut_slice (a : Slice Std.U8) : Result (Slice Std.U8) := do
   iter_mut_slice_loop len 0#usize
   ok a
 
+/- [arrays::sum_mut_slice]: loop body 0:
+   Source: 'tests/src/arrays.rs', lines 354:4-357:5 -/
+@[rust_loop_body]
+def sum_mut_slice_loop.body
+  (a : Slice Std.U32) (i : Std.Usize) (s : Std.U32) :
+  Result (ControlFlow (Std.Usize × Std.U32) Std.U32)
+  := do
+  let i1 := Slice.len a
+  if i < i1
+  then
+    let i2 ← Slice.index_usize a i
+    let s1 ← s + i2
+    let i3 ← i + 1#usize
+    ok (cont (i3, s1))
+  else ok (done s)
+
 /- [arrays::sum_mut_slice]: loop 0:
    Source: 'tests/src/arrays.rs', lines 354:4-357:5 -/
+@[rust_loop]
 def sum_mut_slice_loop
   (a : Slice Std.U32) (i : Std.Usize) (s : Std.U32) : Result Std.U32 := do
   loop
-    (fun (i1, s1) =>
-      let i2 := Slice.len a
-      if i1 < i2
-      then
-        do
-        let i3 ← Slice.index_usize a i1
-        let s2 ← s1 + i3
-        let i4 ← i1 + 1#usize
-        ok (cont (i4, s2))
-      else ok (done s1))
+    (fun (i1, s1) => sum_mut_slice_loop.body a i1 s1)
     (i, s)
 
 /- [arrays::sum_mut_slice]:
@@ -550,26 +587,36 @@ def sum_mut_slice
   let s ← sum_mut_slice_loop a 0#usize 0#u32
   ok (s, a)
 
+/- [arrays::add_acc]: loop body 0:
+   Source: 'tests/src/arrays.rs', lines 363:4-372:5 -/
+@[rust_loop_body]
+def add_acc_loop.body
+  (paSrc : Array Std.U32 256#usize) (peDst : Array Std.U32 256#usize)
+  (i : Std.Usize) :
+  Result (ControlFlow ((Array Std.U32 256#usize) × (Array Std.U32 256#usize)
+    × Std.Usize) ((Array Std.U32 256#usize) × (Array Std.U32 256#usize)))
+  := do
+  if i < 256#usize
+  then
+    let a ← Array.index_usize paSrc i
+    let a1 ← Array.update paSrc i 0#u32
+    let c ← Array.index_usize peDst i
+    let c1 ← c + a
+    let a2 ← Array.update peDst i c1
+    let i1 ← i + 1#usize
+    ok (cont (a1, a2, i1))
+  else ok (done (paSrc, peDst))
+
 /- [arrays::add_acc]: loop 0:
    Source: 'tests/src/arrays.rs', lines 363:4-372:5 -/
+@[rust_loop]
 def add_acc_loop
   (paSrc : Array Std.U32 256#usize) (peDst : Array Std.U32 256#usize)
   (i : Std.Usize) :
   Result ((Array Std.U32 256#usize) × (Array Std.U32 256#usize))
   := do
   loop
-    (fun (paSrc1, peDst1, i1) =>
-      if i1 < 256#usize
-      then
-        do
-        let a ← Array.index_usize paSrc1 i1
-        let a1 ← Array.update paSrc1 i1 0#u32
-        let c ← Array.index_usize peDst1 i1
-        let c1 ← c + a
-        let a2 ← Array.update peDst1 i1 c1
-        let i2 ← i1 + 1#usize
-        ok (cont (a1, a2, i2))
-      else ok (done (paSrc1, peDst1)))
+    (fun (paSrc1, peDst1, i1) => add_acc_loop.body paSrc1 peDst1 i1)
     (paSrc, peDst, i)
 
 /- [arrays::add_acc]:

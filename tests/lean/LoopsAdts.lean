@@ -20,6 +20,7 @@ inductive List (T : Type) where
 
 /- [loops_adts::nth_shared]: loop 0:
    Source: 'tests/src/loops-adts.rs', lines 9:4-18:1 -/
+@[rust_loop]
 def nth_shared_loop
   {T : Type} (ls : List T) (i : Std.U32) : Result (Option T) := do
   match ls with
@@ -39,6 +40,7 @@ def nth_shared {T : Type} (ls : List T) (i : Std.U32) : Result (Option T) := do
 
 /- [loops_adts::nth_mut]: loop 0:
    Source: 'tests/src/loops-adts.rs', lines 21:4-30:1 -/
+@[rust_loop]
 def nth_mut_loop
   {T : Type} (ls : List T) (i : Std.U32) :
   Result ((Option T) × (Option T → List T))
@@ -79,22 +81,32 @@ def update_array_mut_borrow
   := do
   ok (a, fun a1 => a1)
 
+/- [loops_adts::array_mut_borrow_loop1]: loop body 0:
+   Source: 'tests/src/loops-adts.rs', lines 37:4-39:5 -/
+@[rust_loop_body]
+def array_mut_borrow_loop1_loop.body
+  (back : Array Std.U32 32#usize → Array Std.U32 32#usize) (b : Bool)
+  (a : Array Std.U32 32#usize) :
+  Result (ControlFlow ((Array Std.U32 32#usize → Array Std.U32 32#usize) ×
+    Bool × (Array Std.U32 32#usize)) (Array Std.U32 32#usize))
+  := do
+  if b
+  then
+    let (a1, update_array_mut_borrow_back) ← update_array_mut_borrow a
+    ok (cont (fun a2 => let a3 := update_array_mut_borrow_back a2
+                        back a3, true, a1))
+  else ok (done (back a))
+
 /- [loops_adts::array_mut_borrow_loop1]: loop 0:
    Source: 'tests/src/loops-adts.rs', lines 37:4-39:5 -/
+@[rust_loop]
 def array_mut_borrow_loop1_loop
   (back : Array Std.U32 32#usize → Array Std.U32 32#usize) (b : Bool)
   (a : Array Std.U32 32#usize) :
   Result (Array Std.U32 32#usize)
   := do
   loop
-    (fun (back1, b1, a1) =>
-      if b1
-      then
-        do
-        let (a2, update_array_mut_borrow_back) ← update_array_mut_borrow a1
-        ok (cont (fun a3 => let a4 := update_array_mut_borrow_back a3
-                            back1 a4, true, a2))
-      else ok (done (back1 a1)))
+    (fun (back1, b1, a1) => array_mut_borrow_loop1_loop.body back1 b1 a1)
     (back, b, a)
 
 /- [loops_adts::array_mut_borrow_loop1]:
@@ -106,8 +118,26 @@ def array_mut_borrow_loop1
   := do
   array_mut_borrow_loop1_loop (fun a1 => a1) b a
 
+/- [loops_adts::array_mut_borrow_loop2]: loop body 0:
+   Source: 'tests/src/loops-adts.rs', lines 43:4-45:5 -/
+@[rust_loop_body]
+def array_mut_borrow_loop2_loop.body
+  (back : Array Std.U32 32#usize → Array Std.U32 32#usize) (b : Bool)
+  (a : Array Std.U32 32#usize) :
+  Result (ControlFlow ((Array Std.U32 32#usize → Array Std.U32 32#usize) ×
+    Bool × (Array Std.U32 32#usize)) ((Array Std.U32 32#usize) × (Array
+    Std.U32 32#usize → Array Std.U32 32#usize)))
+  := do
+  if b
+  then
+    let (a1, update_array_mut_borrow_back) ← update_array_mut_borrow a
+    ok (cont (fun a2 => let a3 := update_array_mut_borrow_back a2
+                        back a3, true, a1))
+  else ok (done (a, back))
+
 /- [loops_adts::array_mut_borrow_loop2]: loop 0:
    Source: 'tests/src/loops-adts.rs', lines 43:4-45:5 -/
+@[rust_loop]
 def array_mut_borrow_loop2_loop
   (back : Array Std.U32 32#usize → Array Std.U32 32#usize) (b : Bool)
   (a : Array Std.U32 32#usize) :
@@ -115,14 +145,7 @@ def array_mut_borrow_loop2_loop
     32#usize))
   := do
   loop
-    (fun (back1, b1, a1) =>
-      if b1
-      then
-        do
-        let (a2, update_array_mut_borrow_back) ← update_array_mut_borrow a1
-        ok (cont (fun a3 => let a4 := update_array_mut_borrow_back a3
-                            back1 a4, true, a2))
-      else ok (done (a1, back1)))
+    (fun (back1, b1, a1) => array_mut_borrow_loop2_loop.body back1 b1 a1)
     (back, b, a)
 
 /- [loops_adts::array_mut_borrow_loop2]:
@@ -141,17 +164,25 @@ def copy_shared_array
   (a : Array Std.U32 32#usize) : Result (Array Std.U32 32#usize) := do
   ok a
 
+/- [loops_adts::array_shared_borrow_loop1]: loop body 0:
+   Source: 'tests/src/loops-adts.rs', lines 54:4-56:5 -/
+@[rust_loop_body]
+def array_shared_borrow_loop1_loop.body
+  (b : Bool) (a : Array Std.U32 32#usize) :
+  Result (ControlFlow (Bool × (Array Std.U32 32#usize)) Unit)
+  := do
+  if b
+  then let a1 ← copy_shared_array a
+       ok (cont (true, a1))
+  else ok (done ())
+
 /- [loops_adts::array_shared_borrow_loop1]: loop 0:
    Source: 'tests/src/loops-adts.rs', lines 54:4-56:5 -/
+@[rust_loop]
 def array_shared_borrow_loop1_loop
   (b : Bool) (a : Array Std.U32 32#usize) : Result Unit := do
   loop
-    (fun (b1, a1) =>
-      if b1
-      then do
-           let a2 ← copy_shared_array a1
-           ok (cont (true, a2))
-      else ok (done ()))
+    (fun (b1, a1) => array_shared_borrow_loop1_loop.body b1 a1)
     (b, a)
 
 /- [loops_adts::array_shared_borrow_loop1]:
@@ -161,19 +192,28 @@ def array_shared_borrow_loop1
   (b : Bool) (a : Array Std.U32 32#usize) : Result Unit := do
   array_shared_borrow_loop1_loop b a
 
+/- [loops_adts::array_shared_borrow_loop2]: loop body 0:
+   Source: 'tests/src/loops-adts.rs', lines 60:4-62:5 -/
+@[rust_loop_body]
+def array_shared_borrow_loop2_loop.body
+  (b : Bool) (a : Array Std.U32 32#usize) :
+  Result (ControlFlow (Bool × (Array Std.U32 32#usize)) (Array Std.U32
+    32#usize))
+  := do
+  if b
+  then let a1 ← copy_shared_array a
+       ok (cont (true, a1))
+  else ok (done a)
+
 /- [loops_adts::array_shared_borrow_loop2]: loop 0:
    Source: 'tests/src/loops-adts.rs', lines 60:4-62:5 -/
+@[rust_loop]
 def array_shared_borrow_loop2_loop
   (b : Bool) (a : Array Std.U32 32#usize) :
   Result (Array Std.U32 32#usize)
   := do
   loop
-    (fun (b1, a1) =>
-      if b1
-      then do
-           let a2 ← copy_shared_array a1
-           ok (cont (true, a2))
-      else ok (done a1))
+    (fun (b1, a1) => array_shared_borrow_loop2_loop.body b1 a1)
     (b, a)
 
 /- [loops_adts::array_shared_borrow_loop2]:

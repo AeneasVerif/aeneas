@@ -1166,8 +1166,12 @@ and fn_ptr_kind =
       (** The fun decl id is not really needed and only provided for convenience
           purposes *)
 
-(** A function id for a non-builtin function *)
-and regular_fun_id = fn_ptr_kind * loop_id option
+(** A function id for a non-builtin function.
+
+    The optional pair is [Some (loop_id, is_body)] if the function was generated
+    for a loop. [is_body] is [true] if this is the auxiliary function for the
+    loop body (the continuation used by the loop fixed-point operator). *)
+and regular_fun_id = fn_ptr_kind * (loop_id * bool) option
 
 (** A function identifier *)
 and fun_id =
@@ -1760,8 +1764,11 @@ type fun_decl = {
           number of loops appearing in the original Rust functions, unless some
           loops are duplicated because we don't join the control-flow after a
           branching) *)
-  loop_id : LoopId.id option;
-      (** [Some] if this definition was generated for a loop *)
+  loop_id : (LoopId.id * bool) option;
+      (** [Some (id, is_body)] if this definition was generated for a loop. The
+          boolean [is_body] is [true] when this definition is the auxiliary
+          function for the loop body continuation (i.e., the continuation used
+          by the loop fixed point operator). *)
   loop_pos : int list;
       (** The position of this loop (empty if this is not a loop)
 
