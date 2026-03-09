@@ -2306,11 +2306,11 @@ let reorder_loop_inputs_visitor (ctx : ctx) (def : fun_decl) =
           ( _,
             { pat = POpen (fv1, _); _ },
             { e = App (_, { e = FVar fv0; _ }); _ },
-            { e = Switch ({ e = FVar fv2; _ }, _); _ } )
+            { e = Switch ({ e = FVar fv2; _ }, Match _); _ } )
         when fv2 = fv1.id && FVarId.Set.mem fv0 value_input_fvid_set ->
           (* Pattern 1: let y <- f ... x; match y with ... => x *)
           Some fv0
-      | Switch ({ e = FVar fid; _ }, _)
+      | Switch ({ e = FVar fid; _ }, Match _)
         when FVarId.Set.mem fid value_input_fvid_set ->
           (* Pattern 2: match x with ... *)
           Some fid
