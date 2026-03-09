@@ -307,8 +307,8 @@ def iter_list_while_loop0_loop0 (b : Bool) : Result Unit := do
    Source: 'tests/src/nested-borrows.rs', lines 142:4-144:5 -/
 @[rust_loop_body]
 def iter_list_while_loop0.body
-  {T : Type} (back : List T → List T) (b : Bool) (l : List T) :
-  Result (ControlFlow ((List T → List T) × Bool × (List T)) ((List T) ×
+  {T : Type} (l : List T) (back : List T → List T) (b : Bool) :
+  Result (ControlFlow ((List T) × (List T → List T) × Bool) ((List T) ×
     (List T → List T)))
   := do
   let (o, l1, next1_back) ← next1 l
@@ -318,19 +318,19 @@ def iter_list_while_loop0.body
   | some t =>
     iter_list_while_loop0_loop0 b
     let back1 := fun t1 l2 => next1_back l2 (some t1)
-    ok (cont (fun l2 => let l3 := back1 t l2
-                        back l3, false, l1))
+    ok (cont (l1, fun l2 => let l3 := back1 t l2
+                            back l3, false))
 
 /- [nested_borrows::iter_list_while]: loop 0:
    Source: 'tests/src/nested-borrows.rs', lines 142:4-144:5 -/
 @[rust_loop]
 def iter_list_while_loop0
-  {T : Type} (back : List T → List T) (b : Bool) (l : List T) :
+  {T : Type} (l : List T) (back : List T → List T) (b : Bool) :
   Result ((List T) × (List T → List T))
   := do
   loop
-    (fun (back1, b1, l1) => iter_list_while_loop0.body back1 b1 l1)
-    (back, b, l)
+    (fun (l1, back1, b1) => iter_list_while_loop0.body l1 back1 b1)
+    (l, back, b)
 
 /- [nested_borrows::iter_list_while]:
    Source: 'tests/src/nested-borrows.rs', lines 141:0-145:1 -/
@@ -339,7 +339,7 @@ def iter_list_while
   {T : Type} (b : Bool) (l : List T) :
   Result ((List T) × (List T → List T))
   := do
-  iter_list_while_loop0 (fun l1 => l1) b l
+  iter_list_while_loop0 l (fun l1 => l1) b
 
 /- [nested_borrows::BitReader]
    Source: 'tests/src/nested-borrows.rs', lines 148:0-151:1 -/

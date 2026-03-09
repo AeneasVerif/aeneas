@@ -329,8 +329,8 @@ def generate_matrix
    Source: 'tests/src/loops-nested-rec.rs', lines 144:8-146:9 -/
 @[rust_loop]
 def mul_add_as_plus_e_loop0_loop0
-  (a_row_temp : alloc.vec.Vec Std.U8) (j : Std.Usize)
-  (iter1 : core.ops.range.Range Std.Usize) :
+  (iter1 : core.ops.range.Range Std.Usize) (a_row_temp : alloc.vec.Vec Std.U8)
+  (j : Std.Usize) :
   Result (alloc.vec.Vec Std.U8)
   := do
   let (o, iter2) ←
@@ -342,16 +342,15 @@ def mul_add_as_plus_e_loop0_loop0
       alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice Std.U8)
         a_row_temp j
     let a_row_temp1 := index_mut_back 0#u8
-    mul_add_as_plus_e_loop0_loop0 a_row_temp1 j iter2
+    mul_add_as_plus_e_loop0_loop0 iter2 a_row_temp1 j
 partial_fixpoint
 
 /- [loops_nested_rec::mul_add_as_plus_e]: loop 0:
    Source: 'tests/src/loops-nested-rec.rs', lines 143:4-147:5 -/
 @[rust_loop]
 def mul_add_as_plus_e_loop0
-  (a_row_temp : alloc.vec.Vec Std.U8)
   (iter1 : core.iter.adapters.step_by.StepBy (core.ops.range.Range Std.Usize))
-  :
+  (a_row_temp : alloc.vec.Vec Std.U8) :
   Result Unit
   := do
   let (o, iter2) ←
@@ -361,9 +360,9 @@ def mul_add_as_plus_e_loop0
   | none => ok ()
   | some j =>
     let a_row_temp1 ←
-      mul_add_as_plus_e_loop0_loop0 a_row_temp j
-        { start := 0#usize, «end» := 4#usize }
-    mul_add_as_plus_e_loop0 a_row_temp1 iter2
+      mul_add_as_plus_e_loop0_loop0 { start := 0#usize, «end» := 4#usize }
+        a_row_temp j
+    mul_add_as_plus_e_loop0 iter2 a_row_temp1
 partial_fixpoint
 
 /- [loops_nested_rec::mul_add_as_plus_e]:
@@ -381,7 +380,7 @@ def mul_add_as_plus_e
   let iter1 ←
     core.iter.range.IteratorRange.step_by core.iter.range.StepUsize
       { start := 0#usize, «end» := N } 8#usize
-  mul_add_as_plus_e_loop0 a_row_temp iter1
+  mul_add_as_plus_e_loop0 iter1 a_row_temp
   ok out
 
 end loops_nested_rec

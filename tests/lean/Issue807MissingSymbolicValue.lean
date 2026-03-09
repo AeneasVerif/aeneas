@@ -20,9 +20,9 @@ structure PortableVector where
    Source: 'tests/src/issue-807-missing-symbolic-value.rs', lines 8:4-10:5 -/
 @[rust_loop_body]
 def to_bytes_loop.body
-  (x : PortableVector) (bytes : Slice Std.U8)
-  (iter : core.ops.range.Range Std.Usize) :
-  Result (ControlFlow ((Slice Std.U8) × (core.ops.range.Range Std.Usize))
+  (x : PortableVector) (iter : core.ops.range.Range Std.Usize)
+  (bytes : Slice Std.U8) :
+  Result (ControlFlow ((core.ops.range.Range Std.Usize) × (Slice Std.U8))
     (Slice Std.U8))
   := do
   let (o, iter1) ←
@@ -33,25 +33,25 @@ def to_bytes_loop.body
     let i1 ← Array.index_usize x.elements i
     let i2 ← 2#usize * i
     let s ← Slice.update bytes i2 i1
-    ok (cont (s, iter1))
+    ok (cont (iter1, s))
 
 /- [issue_807_missing_symbolic_value::to_bytes]: loop 0:
    Source: 'tests/src/issue-807-missing-symbolic-value.rs', lines 8:4-10:5 -/
 @[rust_loop]
 def to_bytes_loop
-  (x : PortableVector) (bytes : Slice Std.U8)
-  (iter : core.ops.range.Range Std.Usize) :
+  (iter : core.ops.range.Range Std.Usize) (x : PortableVector)
+  (bytes : Slice Std.U8) :
   Result (Slice Std.U8)
   := do
   loop
-    (fun (bytes1, iter1) => to_bytes_loop.body x bytes1 iter1)
-    (bytes, iter)
+    (fun (iter1, bytes1) => to_bytes_loop.body x iter1 bytes1)
+    (iter, bytes)
 
 /- [issue_807_missing_symbolic_value::to_bytes]:
    Source: 'tests/src/issue-807-missing-symbolic-value.rs', lines 7:0-11:1 -/
 @[reducible]
 def to_bytes
   (x : PortableVector) (bytes : Slice Std.U8) : Result (Slice Std.U8) := do
-  to_bytes_loop x bytes { start := 0#usize, «end» := 16#usize }
+  to_bytes_loop { start := 0#usize, «end» := 16#usize } x bytes
 
 end issue_807_missing_symbolic_value

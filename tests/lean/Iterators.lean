@@ -93,11 +93,12 @@ def slice_iter_mut_while_loop0_loop0 (b : Bool) : Result Unit := do
    Source: 'tests/src/iterators.rs', lines 14:4-16:5 -/
 @[rust_loop_body]
 def slice_iter_mut_while_loop0.body
+  (it : core.slice.iter.IterMut Std.U16)
   (back : core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16)
-  (b : Bool) (it : core.slice.iter.IterMut Std.U16) :
-  Result (ControlFlow ((core.slice.iter.IterMut Std.U16 →
-    core.slice.iter.IterMut Std.U16) × Bool × (core.slice.iter.IterMut
-    Std.U16)) (core.slice.iter.IterMut Std.U16))
+  (b : Bool) :
+  Result (ControlFlow ((core.slice.iter.IterMut Std.U16) ×
+    (core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16) ×
+    Bool) (core.slice.iter.IterMut Std.U16))
   := do
   let (o, it1, next_back) ← core.slice.iter.IteratorIterMut.next it
   match o with
@@ -105,27 +106,28 @@ def slice_iter_mut_while_loop0.body
                       back im))
   | some _ =>
     slice_iter_mut_while_loop0_loop0 b
-    ok (cont (fun im => let im1 := next_back im o
-                        back im1, false, it1))
+    ok (cont (it1, fun im => let im1 := next_back im o
+                             back im1, false))
 
 /- [iterators::slice_iter_mut_while]: loop 0:
    Source: 'tests/src/iterators.rs', lines 14:4-16:5 -/
 @[rust_loop]
 def slice_iter_mut_while_loop0
+  (it : core.slice.iter.IterMut Std.U16)
   (back : core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16)
-  (b : Bool) (it : core.slice.iter.IterMut Std.U16) :
+  (b : Bool) :
   Result (core.slice.iter.IterMut Std.U16)
   := do
   loop
-    (fun (back1, b1, it1) => slice_iter_mut_while_loop0.body back1 b1 it1)
-    (back, b, it)
+    (fun (it1, back1, b1) => slice_iter_mut_while_loop0.body it1 back1 b1)
+    (it, back, b)
 
 /- [iterators::slice_iter_mut_while]:
    Source: 'tests/src/iterators.rs', lines 12:0-17:1 -/
 def slice_iter_mut_while
   (b : Bool) (s : Slice Std.U16) : Result (Slice Std.U16) := do
   let (it, iter_mut_back) ← core.slice.Slice.iter_mut s
-  let back ← slice_iter_mut_while_loop0 (fun im => im) b it
+  let back ← slice_iter_mut_while_loop0 it (fun im => im) b
   ok (iter_mut_back back)
 
 /- [iterators::slice_iter_while]: loop body 1:
@@ -149,29 +151,29 @@ def slice_iter_while_loop0_loop0 (b : Bool) : Result Unit := do
    Source: 'tests/src/iterators.rs', lines 21:4-23:5 -/
 @[rust_loop_body]
 def slice_iter_while_loop0.body
-  (b : Bool) (it : core.slice.iter.Iter Std.U16) :
-  Result (ControlFlow (Bool × (core.slice.iter.Iter Std.U16)) Unit)
+  (it : core.slice.iter.Iter Std.U16) (b : Bool) :
+  Result (ControlFlow ((core.slice.iter.Iter Std.U16) × Bool) Unit)
   := do
   let (o, it1) ← core.slice.iter.IteratorSliceIter.next it
   match o with
   | none => ok (done ())
   | some _ => slice_iter_while_loop0_loop0 b
-              ok (cont (false, it1))
+              ok (cont (it1, false))
 
 /- [iterators::slice_iter_while]: loop 0:
    Source: 'tests/src/iterators.rs', lines 21:4-23:5 -/
 @[rust_loop]
 def slice_iter_while_loop0
-  (b : Bool) (it : core.slice.iter.Iter Std.U16) : Result Unit := do
+  (it : core.slice.iter.Iter Std.U16) (b : Bool) : Result Unit := do
   loop
-    (fun (b1, it1) => slice_iter_while_loop0.body b1 it1)
-    (b, it)
+    (fun (it1, b1) => slice_iter_while_loop0.body it1 b1)
+    (it, b)
 
 /- [iterators::slice_iter_while]:
    Source: 'tests/src/iterators.rs', lines 19:0-24:1 -/
 def slice_iter_while (b : Bool) (s : Slice Std.U16) : Result Unit := do
   let it ← core.slice.Slice.iter s
-  slice_iter_while_loop0 b it
+  slice_iter_while_loop0 it b
 
 /- [iterators::slice_iter_mut_while_early_return]: loop body 1:
    Source: 'tests/src/iterators.rs', lines 29:8-29:18 -/
@@ -195,11 +197,12 @@ def slice_iter_mut_while_early_return_loop0_loop0
    Source: 'tests/src/iterators.rs', lines 28:4-35:1 -/
 @[rust_loop_body]
 def slice_iter_mut_while_early_return_loop0.body
+  (it : core.slice.iter.IterMut Std.U16)
   (back : core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16)
-  (b : Bool) (it : core.slice.iter.IterMut Std.U16) :
-  Result (ControlFlow ((core.slice.iter.IterMut Std.U16 →
-    core.slice.iter.IterMut Std.U16) × Bool × (core.slice.iter.IterMut
-    Std.U16)) (core.slice.iter.IterMut Std.U16))
+  (b : Bool) :
+  Result (ControlFlow ((core.slice.iter.IterMut Std.U16) ×
+    (core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16) ×
+    Bool) (core.slice.iter.IterMut Std.U16))
   := do
   let (o, it1, next_back) ← core.slice.iter.IteratorIterMut.next it
   match o with
@@ -207,21 +210,22 @@ def slice_iter_mut_while_early_return_loop0.body
                       back im))
   | some _ =>
     slice_iter_mut_while_early_return_loop0_loop0 b
-    ok (cont (fun im => let im1 := next_back im o
-                        back im1, false, it1))
+    ok (cont (it1, fun im => let im1 := next_back im o
+                             back im1, false))
 
 /- [iterators::slice_iter_mut_while_early_return]: loop 0:
    Source: 'tests/src/iterators.rs', lines 28:4-35:1 -/
 @[rust_loop]
 def slice_iter_mut_while_early_return_loop0
+  (it : core.slice.iter.IterMut Std.U16)
   (back : core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16)
-  (b : Bool) (it : core.slice.iter.IterMut Std.U16) :
+  (b : Bool) :
   Result (core.slice.iter.IterMut Std.U16)
   := do
   loop
-    (fun (back1, b1, it1) => slice_iter_mut_while_early_return_loop0.body back1
-      b1 it1)
-    (back, b, it)
+    (fun (it1, back1, b1) => slice_iter_mut_while_early_return_loop0.body it1
+      back1 b1)
+    (it, back, b)
 
 /- [iterators::slice_iter_mut_while_early_return]:
    Source: 'tests/src/iterators.rs', lines 26:0-35:1 -/
@@ -231,7 +235,7 @@ def slice_iter_mut_while_early_return
   := do
   let (s1, to_slice_mut_back) ← lift (Array.to_slice_mut s)
   let (it, iter_mut_back) ← core.slice.Slice.iter_mut s1
-  let back ← slice_iter_mut_while_early_return_loop0 (fun im => im) b it
+  let back ← slice_iter_mut_while_early_return_loop0 it (fun im => im) b
   let s2 := iter_mut_back back
   ok (to_slice_mut_back s2)
 
@@ -258,11 +262,12 @@ def slice_iter_mut_while_early_return_two_bools_loop0_loop0
    Source: 'tests/src/iterators.rs', lines 39:4-46:1 -/
 @[rust_loop_body]
 def slice_iter_mut_while_early_return_two_bools_loop0.body
+  (it : core.slice.iter.IterMut Std.U16)
   (back : core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16)
-  (b0 : Bool) (b1 : Bool) (it : core.slice.iter.IterMut Std.U16) :
-  Result (ControlFlow ((core.slice.iter.IterMut Std.U16 →
-    core.slice.iter.IterMut Std.U16) × Bool × Bool ×
-    (core.slice.iter.IterMut Std.U16)) (core.slice.iter.IterMut Std.U16))
+  (b0 : Bool) (b1 : Bool) :
+  Result (ControlFlow ((core.slice.iter.IterMut Std.U16) ×
+    (core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16) ×
+    Bool × Bool) (core.slice.iter.IterMut Std.U16))
   := do
   let (o, it1, next_back) ← core.slice.iter.IteratorIterMut.next it
   match o with
@@ -274,21 +279,22 @@ def slice_iter_mut_while_early_return_two_bools_loop0.body
     then ok (done (let im := next_back it1 o
                    back im))
     else
-      ok (cont (fun im => let im1 := next_back im o
-                          back im1, false, false, it1))
+      ok (cont (it1, fun im => let im1 := next_back im o
+                               back im1, false, false))
 
 /- [iterators::slice_iter_mut_while_early_return_two_bools]: loop 0:
    Source: 'tests/src/iterators.rs', lines 39:4-46:1 -/
 @[rust_loop]
 def slice_iter_mut_while_early_return_two_bools_loop0
+  (it : core.slice.iter.IterMut Std.U16)
   (back : core.slice.iter.IterMut Std.U16 → core.slice.iter.IterMut Std.U16)
-  (b0 : Bool) (b1 : Bool) (it : core.slice.iter.IterMut Std.U16) :
+  (b0 : Bool) (b1 : Bool) :
   Result (core.slice.iter.IterMut Std.U16)
   := do
   loop
-    (fun (back1, b01, b11, it1) =>
-      slice_iter_mut_while_early_return_two_bools_loop0.body back1 b01 b11 it1)
-    (back, b0, b1, it)
+    (fun (it1, back1, b01, b11) =>
+      slice_iter_mut_while_early_return_two_bools_loop0.body it1 back1 b01 b11)
+    (it, back, b0, b1)
 
 /- [iterators::slice_iter_mut_while_early_return_two_bools]:
    Source: 'tests/src/iterators.rs', lines 37:0-46:1 -/
@@ -299,7 +305,7 @@ def slice_iter_mut_while_early_return_two_bools
   let (s1, to_slice_mut_back) ← lift (Array.to_slice_mut s)
   let (it, iter_mut_back) ← core.slice.Slice.iter_mut s1
   let back ←
-    slice_iter_mut_while_early_return_two_bools_loop0 (fun im => im) b0 b1 it
+    slice_iter_mut_while_early_return_two_bools_loop0 it (fun im => im) b0 b1
   let s2 := iter_mut_back back
   ok (to_slice_mut_back s2)
 
@@ -345,7 +351,7 @@ def slice_chunks_exact_iter_loop0.body
    Source: 'tests/src/iterators.rs', lines 49:4-51:5 -/
 @[rust_loop]
 def slice_chunks_exact_iter_loop0
-  (key : Array Std.U128 128#usize) (iter : core.slice.iter.ChunksExact Std.U8)
+  (iter : core.slice.iter.ChunksExact Std.U8) (key : Array Std.U128 128#usize)
   :
   Result Unit
   := do
@@ -358,7 +364,7 @@ def slice_chunks_exact_iter_loop0
 def slice_chunks_exact_iter
   (key : Array Std.U128 128#usize) (data : Slice Std.U8) : Result Unit := do
   let iter ← core.slice.Slice.chunks_exact data 16#usize
-  slice_chunks_exact_iter_loop0 key iter
+  slice_chunks_exact_iter_loop0 iter key
 
 /- [iterators::Key]
    Source: 'tests/src/iterators.rs', lines 54:0-54:24 -/
@@ -390,8 +396,8 @@ def key_iter_slice_iter_loop0_loop0
    Source: 'tests/src/iterators.rs', lines 57:4-59:5 -/
 @[rust_loop_body]
 def key_iter_slice_iter_loop0.body
-  (key : Key) (iter : core.slice.iter.Iter Std.U8) :
-  Result (ControlFlow (Key × (core.slice.iter.Iter Std.U8)) Unit)
+  (iter : core.slice.iter.Iter Std.U8) (key : Key) :
+  Result (ControlFlow ((core.slice.iter.Iter Std.U8) × Key) Unit)
   := do
   let (o, iter1) ← core.slice.iter.IteratorSliceIter.next iter
   match o with
@@ -400,21 +406,60 @@ def key_iter_slice_iter_loop0.body
     let s ← lift (Array.to_slice key)
     let iter2 ← core.slice.Slice.iter s
     key_iter_slice_iter_loop0_loop0 iter2
-    ok (cont (key, iter1))
+    ok (cont (iter1, key))
 
 /- [iterators::key_iter_slice_iter]: loop 0:
    Source: 'tests/src/iterators.rs', lines 57:4-59:5 -/
 @[rust_loop]
 def key_iter_slice_iter_loop0
-  (key : Key) (iter : core.slice.iter.Iter Std.U8) : Result Unit := do
+  (iter : core.slice.iter.Iter Std.U8) (key : Key) : Result Unit := do
   loop
-    (fun (key1, iter1) => key_iter_slice_iter_loop0.body key1 iter1)
-    (key, iter)
+    (fun (iter1, key1) => key_iter_slice_iter_loop0.body iter1 key1)
+    (iter, key)
 
 /- [iterators::key_iter_slice_iter]:
    Source: 'tests/src/iterators.rs', lines 56:0-60:1 -/
 def key_iter_slice_iter (key : Key) (data : Slice Std.U8) : Result Unit := do
   let iter ← core.slice.Slice.iter data
-  key_iter_slice_iter_loop0 key iter
+  key_iter_slice_iter_loop0 iter key
+
+/- [iterators::copy_arrays]: loop body 0:
+   Source: 'tests/src/iterators.rs', lines 63:4-65:5 -/
+@[rust_loop_body]
+def copy_arrays_loop.body
+  (src : Array Std.U8 256#usize) (iter : core.ops.range.Range Std.Usize)
+  (dst : Array Std.U8 256#usize) :
+  Result (ControlFlow ((core.ops.range.Range Std.Usize) × (Array Std.U8
+    256#usize)) (Array Std.U8 256#usize))
+  := do
+  let (o, iter1) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepUsize iter
+  match o with
+  | none => ok (done dst)
+  | some i =>
+    let i1 ← Array.index_usize src i
+    let a ← Array.update dst i i1
+    ok (cont (iter1, a))
+
+/- [iterators::copy_arrays]: loop 0:
+   Source: 'tests/src/iterators.rs', lines 63:4-65:5 -/
+@[rust_loop]
+def copy_arrays_loop
+  (iter : core.ops.range.Range Std.Usize) (src : Array Std.U8 256#usize)
+  (dst : Array Std.U8 256#usize) :
+  Result (Array Std.U8 256#usize)
+  := do
+  loop
+    (fun (iter1, dst1) => copy_arrays_loop.body src iter1 dst1)
+    (iter, dst)
+
+/- [iterators::copy_arrays]:
+   Source: 'tests/src/iterators.rs', lines 62:0-66:1 -/
+@[reducible]
+def copy_arrays
+  (src : Array Std.U8 256#usize) (dst : Array Std.U8 256#usize) :
+  Result (Array Std.U8 256#usize)
+  := do
+  copy_arrays_loop { start := 0#usize, «end» := 256#usize } src dst
 
 end iterators

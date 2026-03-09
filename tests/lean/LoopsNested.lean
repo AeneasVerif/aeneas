@@ -452,10 +452,10 @@ def generate_matrix
    Source: 'tests/src/loops-nested.rs', lines 143:8-145:9 -/
 @[rust_loop_body]
 def mul_add_as_plus_e_loop0_loop0.body
-  (j : Std.Usize) (a_row_temp : alloc.vec.Vec Std.U8)
-  (iter1 : core.ops.range.Range Std.Usize) :
-  Result (ControlFlow ((alloc.vec.Vec Std.U8) × (core.ops.range.Range
-    Std.Usize)) (alloc.vec.Vec Std.U8))
+  (j : Std.Usize) (iter1 : core.ops.range.Range Std.Usize)
+  (a_row_temp : alloc.vec.Vec Std.U8) :
+  Result (ControlFlow ((core.ops.range.Range Std.Usize) × (alloc.vec.Vec
+    Std.U8)) (alloc.vec.Vec Std.U8))
   := do
   let (o, iter2) ←
     core.iter.range.IteratorRange.next core.iter.range.StepUsize iter1
@@ -466,30 +466,29 @@ def mul_add_as_plus_e_loop0_loop0.body
       alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice Std.U8)
         a_row_temp j
     let a_row_temp1 := index_mut_back 0#u8
-    ok (cont (a_row_temp1, iter2))
+    ok (cont (iter2, a_row_temp1))
 
 /- [loops_nested::mul_add_as_plus_e]: loop 1:
    Source: 'tests/src/loops-nested.rs', lines 143:8-145:9 -/
 @[rust_loop]
 def mul_add_as_plus_e_loop0_loop0
-  (a_row_temp : alloc.vec.Vec Std.U8) (j : Std.Usize)
-  (iter1 : core.ops.range.Range Std.Usize) :
+  (iter1 : core.ops.range.Range Std.Usize) (a_row_temp : alloc.vec.Vec Std.U8)
+  (j : Std.Usize) :
   Result (alloc.vec.Vec Std.U8)
   := do
   loop
-    (fun (a_row_temp1, iter2) => mul_add_as_plus_e_loop0_loop0.body j
-      a_row_temp1 iter2)
-    (a_row_temp, iter1)
+    (fun (iter2, a_row_temp1) => mul_add_as_plus_e_loop0_loop0.body j iter2
+      a_row_temp1)
+    (iter1, a_row_temp)
 
 /- [loops_nested::mul_add_as_plus_e]: loop body 0:
    Source: 'tests/src/loops-nested.rs', lines 142:4-146:5 -/
 @[rust_loop_body]
 def mul_add_as_plus_e_loop0.body
-  (a_row_temp : alloc.vec.Vec Std.U8)
   (iter1 : core.iter.adapters.step_by.StepBy (core.ops.range.Range Std.Usize))
-  :
-  Result (ControlFlow ((alloc.vec.Vec Std.U8) ×
-    (core.iter.adapters.step_by.StepBy (core.ops.range.Range Std.Usize))) Unit)
+  (a_row_temp : alloc.vec.Vec Std.U8) :
+  Result (ControlFlow ((core.iter.adapters.step_by.StepBy (core.ops.range.Range
+    Std.Usize)) × (alloc.vec.Vec Std.U8)) Unit)
   := do
   let (o, iter2) ←
     core.iter.adapters.step_by.IteratorStepBy.next
@@ -498,23 +497,22 @@ def mul_add_as_plus_e_loop0.body
   | none => ok (done ())
   | some j =>
     let a_row_temp1 ←
-      mul_add_as_plus_e_loop0_loop0 a_row_temp j
-        { start := 0#usize, «end» := 4#usize }
-    ok (cont (a_row_temp1, iter2))
+      mul_add_as_plus_e_loop0_loop0 { start := 0#usize, «end» := 4#usize }
+        a_row_temp j
+    ok (cont (iter2, a_row_temp1))
 
 /- [loops_nested::mul_add_as_plus_e]: loop 0:
    Source: 'tests/src/loops-nested.rs', lines 142:4-146:5 -/
 @[rust_loop]
 def mul_add_as_plus_e_loop0
-  (a_row_temp : alloc.vec.Vec Std.U8)
   (iter1 : core.iter.adapters.step_by.StepBy (core.ops.range.Range Std.Usize))
-  :
+  (a_row_temp : alloc.vec.Vec Std.U8) :
   Result Unit
   := do
   loop
-    (fun (a_row_temp1, iter2) => mul_add_as_plus_e_loop0.body a_row_temp1
-      iter2)
-    (a_row_temp, iter1)
+    (fun (iter2, a_row_temp1) => mul_add_as_plus_e_loop0.body iter2
+      a_row_temp1)
+    (iter1, a_row_temp)
 
 /- [loops_nested::mul_add_as_plus_e]:
    Source: 'tests/src/loops-nested.rs', lines 137:0-147:1 -/
@@ -531,7 +529,7 @@ def mul_add_as_plus_e
   let iter1 ←
     core.iter.range.IteratorRange.step_by core.iter.range.StepUsize
       { start := 0#usize, «end» := N } 8#usize
-  mul_add_as_plus_e_loop0 a_row_temp iter1
+  mul_add_as_plus_e_loop0 iter1 a_row_temp
   ok out
 
 end loops_nested
