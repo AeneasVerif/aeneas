@@ -258,11 +258,16 @@ let compute_pretty_names_accumulate_constraints (ctx : ctx) (def : fun_decl)
           match f.e with
           | Qualif
               {
-                id = FunOrOp (Fun (FromLlbc (FunId (FRegular fid), Some lp_id)));
+                id =
+                  FunOrOp
+                    (Fun
+                       (FromLlbc (FunId (FRegular fid), Some (lp_id, is_body))));
                 _;
               }
             when fid = def.def_id ->
-              (* This is a loop! *)
+              (* This is a loop! - TODO: can this case still happen? I think no: we should remove it *)
+              (* Note that we shouldn't have introduced loop bodies yet *)
+              [%sanity_check] span (not is_body);
               let info = LoopId.Map.find lp_id !loop_infos in
               (* Link the input arguments to the input variables.
                Note that there shouldn't be partial applications *)

@@ -30,7 +30,8 @@ type regular_fun_id_not_loop = LlbcAst.fun_id * RegionGroupId.id option
 [@@deriving show, ord]
 
 (** We use this type as a key for lookups *)
-type fun_loop_id = FunDeclId.id * LoopId.id option [@@deriving show, ord]
+type fun_loop_id = FunDeclId.id * (LoopId.id * bool) option
+[@@deriving show, ord]
 
 module RegularFunIdNotLoopOrderedType = struct
   type t = regular_fun_id_not_loop

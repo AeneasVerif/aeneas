@@ -5,7 +5,7 @@ open Pure
 (** The local logger *)
 let log = Logging.reorder_decls_log
 
-type fun_id = { def_id : FunDeclId.id; lp_id : LoopId.id option }
+type fun_id = { def_id : FunDeclId.id; lp_id : (LoopId.id * bool) option }
 [@@deriving show, ord]
 
 module FunIdOrderedType : OrderedType with type t = fun_id = struct

@@ -11,27 +11,37 @@ set_option maxHeartbeats 1000000
 
 namespace drop
 
+/- [drop::fill]: loop body 0:
+   Source: 'tests/src/drop.rs', lines 7:4-9:5 -/
+@[rust_loop_body]
+def fill_loop.body
+  {T : Type} (corecloneCloneInst : core.clone.Clone T) (value : T)
+  (iter : core.ops.range.Range Std.Usize) (s : Slice T) :
+  Result (ControlFlow ((core.ops.range.Range Std.Usize) × (Slice T)) (Slice
+    T))
+  := do
+  let (o, iter1) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepUsize iter
+  match o with
+  | none => ok (done s)
+  | some i =>
+    let t ← corecloneCloneInst.clone value
+    let (t1, index_mut_back) ← Slice.index_mut_usize s i
+    let s1 := index_mut_back t1
+    let s2 ← Slice.update s1 i t
+    ok (cont (iter1, s2))
+
 /- [drop::fill]: loop 0:
    Source: 'tests/src/drop.rs', lines 7:4-9:5 -/
+@[rust_loop]
 def fill_loop
-  {T : Type} (corecloneCloneInst : core.clone.Clone T) (s : Slice T)
-  (value : T) (iter : core.ops.range.Range Std.Usize) :
+  {T : Type} (corecloneCloneInst : core.clone.Clone T)
+  (iter : core.ops.range.Range Std.Usize) (s : Slice T) (value : T) :
   Result (Slice T)
   := do
   loop
-    (fun (s1, iter1) =>
-      do
-      let (o, iter2) ←
-        core.iter.range.IteratorRange.next core.iter.range.StepUsize iter1
-      match o with
-      | none => ok (done s1)
-      | some i =>
-        let t ← corecloneCloneInst.clone value
-        let (t1, index_mut_back) ← Slice.index_mut_usize s1 i
-        let s2 := index_mut_back t1
-        let s3 ← Slice.update s2 i t
-        ok (cont (s3, iter2)))
-    (s, iter)
+    (fun (iter1, s1) => fill_loop.body corecloneCloneInst value iter1 s1)
+    (iter, s)
 
 /- [drop::fill]:
    Source: 'tests/src/drop.rs', lines 3:0-10:1 -/
@@ -41,6 +51,6 @@ def fill
   Result (Slice T)
   := do
   let i := Slice.len s
-  fill_loop corecloneCloneInst s value { start := 0#usize, «end» := i }
+  fill_loop corecloneCloneInst { start := 0#usize, «end» := i } s value
 
 end drop

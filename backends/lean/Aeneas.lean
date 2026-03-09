@@ -18,6 +18,7 @@ import Aeneas.Range
 import Aeneas.ReduceFin
 import Aeneas.ReduceNat
 import Aeneas.ReduceZMod
+import Aeneas.RustAttributes
 import Aeneas.ScalarDecrTac
 import Aeneas.ScalarNF
 import Aeneas.ScalarTac

@@ -57,6 +57,7 @@ def cons
 
 /- [list_borrows::increment_list]: loop 0:
    Source: 'tests/src/list-borrows.rs', lines 19:4-22:5 -/
+@[rust_loop]
 def increment_list_loop (l : List) : Result List := do
   match l with
   | List.Nil => ok List.Nil

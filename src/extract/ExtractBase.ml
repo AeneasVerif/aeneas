@@ -117,7 +117,7 @@ and id =
             def CONST : Result u32 := ok CONST.val
           ]} *)
   | FunId of fun_id
-  | TerminationMeasureId of (A.fun_id * LoopId.id option)
+  | TerminationMeasureId of (A.fun_id * (LoopId.id * bool) option)
       (** The definition which provides the decreases/termination measure. We
           insert calls to this clause to prove/reason about termination: the
           body of those clauses must be defined by the user, in the proper
@@ -133,7 +133,7 @@ and id =
            }
            {- in Lean, this is the content of the [termination_by] clause. }
           } *)
-  | DecreasesProofId of (A.fun_id * LoopId.id option)
+  | DecreasesProofId of (A.fun_id * (LoopId.id * bool) option)
       (** The definition which provides the decreases/termination proof. We
           insert calls to this clause to prove/reason about termination: the
           body of those clauses must be defined by the user, in the proper
@@ -686,7 +686,9 @@ let id_to_string (span : Meta.span option) (id : id) (ctx : extraction_ctx) :
       let loop =
         match lid with
         | None -> ""
-        | Some lid -> ", loop: " ^ LoopId.to_string lid
+        | Some (lid, is_body) ->
+            ", loop: " ^ LoopId.to_string lid
+            ^ if is_body then " (body)" else ""
       in
       "decreases proof for function: " ^ fun_name ^ loop
   | TerminationMeasureId (fid, lid) ->
@@ -694,7 +696,9 @@ let id_to_string (span : Meta.span option) (id : id) (ctx : extraction_ctx) :
       let loop =
         match lid with
         | None -> ""
-        | Some lid -> ", loop: " ^ LoopId.to_string lid
+        | Some (lid, is_body) ->
+            ", loop: " ^ LoopId.to_string lid
+            ^ if is_body then " (body)" else ""
       in
       "termination measure for function: " ^ fun_name ^ loop
   | TypeId id -> "type name: " ^ type_id_to_string ctx id
@@ -753,7 +757,7 @@ let ctx_get_function (span : Meta.span) (id : fun_id) (ctx : extraction_ctx) :
   ctx_get (Some span) (FunId id) ctx
 
 let ctx_get_local_function (span : Meta.span) (id : A.FunDeclId.id)
-    (lp : LoopId.id option) (ctx : extraction_ctx) : string =
+    (lp : (LoopId.id * bool) option) (ctx : extraction_ctx) : string =
   ctx_get_function span (FromLlbc (FunId (FRegular id), lp)) ctx
 
 let ctx_get_type (span : Meta.span option) (id : type_id) (ctx : extraction_ctx)
@@ -843,11 +847,11 @@ let ctx_get_variant (span : Meta.span) (def_id : type_id)
   ctx_get (Some span) (VariantId (def_id, variant_id)) ctx
 
 let ctx_get_decreases_proof (span : Meta.span) (def_id : A.FunDeclId.id)
-    (loop_id : LoopId.id option) (ctx : extraction_ctx) : string =
+    (loop_id : (LoopId.id * bool) option) (ctx : extraction_ctx) : string =
   ctx_get (Some span) (DecreasesProofId (FRegular def_id, loop_id)) ctx
 
 let ctx_get_termination_measure (span : Meta.span) (def_id : A.FunDeclId.id)
-    (loop_id : LoopId.id option) (ctx : extraction_ctx) : string =
+    (loop_id : (LoopId.id * bool) option) (ctx : extraction_ctx) : string =
   ctx_get (Some span) (TerminationMeasureId (FRegular def_id, loop_id)) ctx
 
 (** Small helper to compute the name of a unary operation *)
@@ -1674,9 +1678,13 @@ let ctx_fun_global_name_to_extract_string (meta : T.item_meta)
   | Lean -> fname
 
 (** Helper function: generate a suffix for a function name, i.e., generates a
-    suffix like "_loop", "loop1", etc. to append to a function name. *)
-let default_fun_loop_suffix (num_loops : int) (loop_id : LoopId.id option)
-    (loop_pos : int list) : string =
+    suffix like "_loop", "loop1", etc. to append to a function name.
+
+    Note that this function does not take into account the fact that the
+    function may be a loop body (i.e., the continuation used by a loop
+    fixed-point): this is done by [default_fun_suffix]. *)
+let default_fun_loop_suffix (num_loops : int)
+    (loop_id : (LoopId.id * bool) option) (loop_pos : int list) : string =
   match loop_id with
   | None -> ""
   | Some _ ->
@@ -1687,12 +1695,20 @@ let default_fun_loop_suffix (num_loops : int) (loop_id : LoopId.id option)
         String.concat ""
           (List.map (fun id -> "_loop" ^ string_of_int id) loop_pos)
 
-(** A helper function: generates a function suffix. TODO: move all those
-    helpers. *)
-let default_fun_suffix (num_loops : int) (loop_id : LoopId.id option)
+(** A helper function: generates a function suffix, including the body suffix
+    when the boolean in [loop_id] is [true]. *)
+let default_fun_suffix (num_loops : int) (loop_id : (LoopId.id * bool) option)
     (loop_pos : int list) : string =
-  (* We only generate a suffix for the functions we generate from the loops *)
-  default_fun_loop_suffix num_loops loop_id loop_pos
+  let loop_suffix = default_fun_loop_suffix num_loops loop_id loop_pos in
+  let body_suffix =
+    match loop_id with
+    | Some (_, true) -> (
+        match Config.backend () with
+        | Lean -> ".body"
+        | _ -> "_body")
+    | _ -> ""
+  in
+  loop_suffix ^ body_suffix
 
 (** Compute the name of a regular (non-builtin) function.
 
@@ -1706,7 +1722,7 @@ let default_fun_suffix (num_loops : int) (loop_id : LoopId.id option)
       one loop, we don't need to use indices)
     - loop id (if pertinent) TODO: use the fun id for the builtin functions. *)
 let ctx_compute_fun_name_base (meta : T.item_meta) (ctx : extraction_ctx)
-    (fname : llbc_name) (num_loops : int) (loop_id : LoopId.id option)
+    (fname : llbc_name) (num_loops : int) (loop_id : (LoopId.id * bool) option)
     (loop_pos : int list) : string =
   let fname = ctx_fun_global_name_to_extract_string meta ctx fname in
   (* Compute the suffix *)
@@ -2415,7 +2431,7 @@ let ctx_compute_termination_measure_name (decl : fun_decl)
       ~is_trait_decl_field:false ~is_fun:true ctx
   in
   let lp_suffix =
-    default_fun_loop_suffix decl.num_loops decl.loop_id decl.loop_pos
+    default_fun_suffix decl.num_loops decl.loop_id decl.loop_pos
   in
   (* Compute the suffix *)
   let suffix =
@@ -2447,7 +2463,7 @@ let ctx_compute_decreases_proof_name (decl : fun_decl) (ctx : extraction_ctx) :
       ~is_trait_decl_field:false ~is_fun:true ctx
   in
   let lp_suffix =
-    default_fun_loop_suffix decl.num_loops decl.loop_id decl.loop_pos
+    default_fun_suffix decl.num_loops decl.loop_id decl.loop_pos
   in
   (* Compute the suffix *)
   let suffix =

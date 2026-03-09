@@ -11,21 +11,29 @@ set_option maxHeartbeats 1000000
 
 namespace iterators_array
 
+/- [iterators_array::iter_array]: loop body 0:
+   Source: 'tests/src/iterators-array.rs', lines 6:4-8:5 -/
+@[rust_loop_body]
+def iter_array_loop.body
+  (iter : alloc.vec.into_iter.IntoIter Std.U32) (x : Std.I32) :
+  Result (ControlFlow ((alloc.vec.into_iter.IntoIter Std.U32) × Std.I32) Unit)
+  := do
+  let (o, iter1) ← alloc.vec.into_iter.IteratorIntoIter.next iter
+  match o with
+  | none => ok (done ())
+  | some _ => let x1 ← x + 1#i32
+              ok (cont (iter1, x1))
+
 /- [iterators_array::iter_array]: loop 0:
    Source: 'tests/src/iterators-array.rs', lines 6:4-8:5 -/
+@[rust_loop]
 def iter_array_loop
-  (x : Std.I32) (iter : alloc.vec.into_iter.IntoIter Std.U32) :
+  (iter : alloc.vec.into_iter.IntoIter Std.U32) (x : Std.I32) :
   Result Unit
   := do
   loop
-    (fun (x1, iter1) =>
-      do
-      let (o, iter2) ← alloc.vec.into_iter.IteratorIntoIter.next iter1
-      match o with
-      | none => ok (done ())
-      | some _ => let x2 ← x1 + 1#i32
-                  ok (cont (x2, iter2)))
-    (x, iter)
+    (fun (iter1, x1) => iter_array_loop.body iter1 x1)
+    (iter, x)
 
 /- [iterators_array::iter_array]:
    Source: 'tests/src/iterators-array.rs', lines 3:0-9:1 -/
@@ -33,6 +41,6 @@ def iter_array : Result Unit := do
   let v ←
     alloc.vec.FromVecArray.from (Array.make 3#usize [ 1#u32, 2#u32, 3#u32 ])
   let iter ← alloc.vec.IntoIteratorVec.into_iter v
-  iter_array_loop 0#i32 iter
+  iter_array_loop iter 0#i32
 
 end iterators_array

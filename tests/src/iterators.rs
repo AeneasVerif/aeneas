@@ -59,6 +59,12 @@ fn key_iter_slice_iter(key: &Key, data: &[u8]) {
     }
 }
 
+fn copy_arrays(src: &[u8; 256], dst: &mut [u8; 256]) {
+    for i in 0usize..256 {
+        dst[i] = src[i];
+    }
+}
+
 /*
 fn array_into_iter<const N : usize>(s : &[u8; N]) {
     for _ in s {}

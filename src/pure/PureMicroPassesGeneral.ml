@@ -2892,7 +2892,7 @@ let add_fuel_one (ctx : ctx) (loops : fun_decl LoopId.Map.t) (def : fun_decl) :
               let def' : fun_decl =
                 match lp_id with
                 | None -> FunDeclId.Map.find fid' ctx.fun_decls
-                | Some lp_id ->
+                | Some (lp_id, _) ->
                     [%sanity_check] span (fid' = def.def_id);
                     LoopId.Map.find lp_id loops
               in
@@ -2928,7 +2928,7 @@ let add_fuel_one (ctx : ctx) (loops : fun_decl LoopId.Map.t) (def : fun_decl) :
               let def' : fun_decl =
                 match lp_id with
                 | None -> FunDeclId.Map.find fid' ctx.fun_decls
-                | Some lp_id ->
+                | Some (lp_id, _) ->
                     [%sanity_check] span (fid' = def.def_id);
                     LoopId.Map.find lp_id loops
               in
@@ -3015,24 +3015,28 @@ let add_fuel_one (ctx : ctx) (loops : fun_decl LoopId.Map.t) (def : fun_decl) :
 let add_fuel (ctx : ctx) (trans : pure_fun_translation) : pure_fun_translation =
   let loops_map =
     LoopId.Map.of_list
-      (List.map (fun (f : fun_decl) -> (Option.get f.loop_id, f)) trans.loops)
+      (List.map
+         (fun (f : fun_decl) -> (fst (Option.get f.loop_id), f))
+         trans.loops)
   in
 
   (* Add the fuel and the state *)
   let f = add_fuel_one ctx loops_map trans.f in
   let loops = List.map (add_fuel_one ctx loops_map) trans.loops in
+  let bodies = List.map (add_fuel_one ctx loops_map) trans.bodies in
 
   (* Decompose the monadic let-bindings if necessary (Coq needs this) *)
-  let f, loops =
+  let f, loops, bodies =
     if !Config.decompose_monadic_let_bindings then
       let f = decompose_monadic_let_bindings ctx f in
       let loops = List.map (decompose_monadic_let_bindings ctx) loops in
-      (f, loops)
-    else (f, loops)
+      let bodies = List.map (decompose_monadic_let_bindings ctx) bodies in
+      (f, loops, bodies)
+    else (f, loops, bodies)
   in
 
   (* *)
-  { f; loops }
+  { f; loops; bodies }
 
 (** Perform the following transformation:
 

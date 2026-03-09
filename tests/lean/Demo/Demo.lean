@@ -67,6 +67,7 @@ partial_fixpoint
 
 /- [demo::list_nth1]: loop 0:
    Source: 'tests/src/demo.rs', lines 58:4-66:1 -/
+@[rust_loop]
 def list_nth1_loop {T : Type} (l : CList T) (i : Std.U32) : Result T := do
   match l with
   | CList.CCons x tl =>

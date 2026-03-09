@@ -761,7 +761,7 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     [%silent_unwrap_opt_span] None
       (FunDeclId.Map.find_opt global.init ctx.trans_funs)
   in
-  [%sanity_check] global.item_meta.span (trans.loops = []);
+  [%sanity_check] global.item_meta.span (trans.loops = [] && trans.bodies = []);
   let body = trans.f in
 
   let is_opaque = Option.is_none body.Pure.body in
@@ -813,7 +813,7 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     been checked by the caller. *)
 let export_functions_group_scc (fmt : Format.formatter) (config : gen_config)
     (ctx : gen_ctx) (is_rec : bool) (decls : Pure.fun_decl list) : unit =
-  (* Utility to check a function has a decrease clause *)
+  (* Utility to check whether a function has a decrease clause *)
   let has_decreases_clause (def : Pure.fun_decl) : bool =
     PureUtils.FunLoopIdSet.mem (def.def_id, def.loop_id)
       ctx.functions_with_decreases_clause
@@ -954,7 +954,8 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
     (* Flatten the translated functions (concatenate the functions with
        the declarations introduced for the loops) *)
     let decls =
-      List.concat (List.map (fun f -> List.append f.loops [ f.f ]) pure_ls)
+      List.concat
+        (List.map (fun f -> List.append (f.loops @ f.bodies) [ f.f ]) pure_ls)
     in
 
     (* Extract the function definitions *)
