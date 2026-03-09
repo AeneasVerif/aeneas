@@ -2265,7 +2265,7 @@ let reorder_loop_outputs (ctx : ctx) (def : fun_decl) =
 
     1. If a loop starts with a function call followed by a match like so:
     {[
-      let y <- f x
+      let (y, ...) <- f x
       match y with
       ...
     ]}
@@ -2280,7 +2280,11 @@ let reorder_loop_inputs_visitor (ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
 
   let update_loop (loop : loop) : loop =
+    [%ldebug "loop:\n" ^ loop_to_string ctx loop];
+
     let body = loop.loop_body in
+
+    [%ldebug "loop:\n" ^ loop_to_string ctx loop];
 
     (* Collect the FVarIds of value inputs (those after the continuations) *)
     let num_conts = loop.num_input_conts in
@@ -2298,13 +2302,22 @@ let reorder_loop_inputs_visitor (ctx : ctx) (def : fun_decl) =
     let body_expr = body.loop_body in
 
     (* Try to find the id of the variable to move to the front:
-         1. let y <- f ... x; match y with ... => x
-         2. match x with ... => x *)
+       1. let (y, ...) <- f ... x; match y with ... => x
+       2. match x with ... => x *)
     let target_fvid =
       match body_expr.e with
       | Let
           ( _,
-            { pat = POpen (fv1, _); _ },
+            {
+              pat =
+                ( POpen (fv1, _)
+                | PAdt
+                    {
+                      variant_id = None;
+                      fields = { pat = POpen (fv1, _); _ } :: _;
+                    } );
+              _;
+            },
             { e = App (_, { e = FVar fv0; _ }); _ },
             { e = Switch ({ e = FVar fv2; _ }, Match _); _ } )
         when fv2 = fv1.id && FVarId.Set.mem fv0 value_input_fvid_set ->
@@ -2320,6 +2333,8 @@ let reorder_loop_inputs_visitor (ctx : ctx) (def : fun_decl) =
     match target_fvid with
     | None -> loop
     | Some target_fvid -> (
+        [%ldebug "Found a target_fvid"];
+
         (* Find the index of this FVarId among all inputs (including conts) *)
         let target_idx =
           List.find_index
@@ -2332,8 +2347,10 @@ let reorder_loop_inputs_visitor (ctx : ctx) (def : fun_decl) =
         match target_idx with
         | None -> loop
         | Some idx ->
+            [%ldebug "Found a target_idx"];
+
             (* Helper to permute the inputs: move element at [idx] to the first position,
-                 shifting the others *)
+               shifting the others *)
             let reorder lst =
               List.init (List.length lst) (fun i ->
                   let j =
@@ -2404,6 +2421,7 @@ let reorder_loop_inputs_visitor (ctx : ctx) (def : fun_decl) =
       let loop = super#visit_loop env loop in
 
       (* Update, but only if the loop will not get extracted to a recursive definition *)
+      [%ldebug "loop.to_rec: " ^ string_of_bool loop.to_rec];
       if loop.to_rec then loop else update_loop loop
   end
 
