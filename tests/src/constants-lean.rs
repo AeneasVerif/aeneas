@@ -37,3 +37,11 @@ impl Trait1 for bool {
     const N: usize = 0;
     const M: usize = 1;
 }
+
+trait Params1 {
+    const N: usize;
+    const LOGQ: usize;
+
+    const PACKED_LEN: usize = (Self::N * Self::LOGQ) / 8;
+    const CT1_LEN: usize = Self::PACKED_LEN;
+}

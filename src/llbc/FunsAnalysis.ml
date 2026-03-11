@@ -109,6 +109,10 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
 
           method! visit_rvalue env rv =
             match rv with
+            | Use (Constant { kind = CTraitConst _; _ }) ->
+                (* We consider that trait constants can fail, similarly to
+                   trait methods. *)
+                self#may_fail true
             | Use _
             | RvRef ({ kind = PlaceLocal _ | PlaceProjection _; _ }, _, _)
             | Discriminant _
