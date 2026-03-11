@@ -611,7 +611,8 @@ where
   onBind (cfg : Config) (names : Array (Option Name)) : TacticM (Info × Option MVarId) := do
     withTraceNode `Progress (fun _ => pure m!"onBind ({names})") do
     let postsBasename := names[0]?.join
-    if let some {usedTheorem, unassignedVars, preconditions, mainGoal } ← tryProgress cfg names postsBasename then
+    if let some res ← tryProgress cfg names postsBasename then
+      let {usedTheorem, unassignedVars, preconditions, mainGoal } := res
       withTraceNode `Progress (fun _ => pure m!"progress succeeded") do
       match mainGoal with
       | none => trace[Progress] "Main goal solved"
@@ -728,7 +729,7 @@ where
       return (infos, mkStx)
 
   tryProgress (cfg : Config) (ids : Array (Option Name) := #[]) (postsBasename : Option Name := none) := do
-    try some <$> Progress.evalProgressCore cfg.progressConfig (some (.str .anonymous "_")) none ids postsBasename cfg.preconditionTac
+    try some <$> Progress.evalProgressCore cfg.progressConfig (some (.str .anonymous "_")) none ids false postsBasename cfg.preconditionTac
     catch _ => pure none
 
   makeIds (base: Name) (numElem numPost : Nat) (defaultId := "x"): Array (TSyntax ``Lean.binderIdent) :=
@@ -1169,6 +1170,14 @@ example
     pure x
     ) ⦃ _ => False ⦄ := by
     progress*
+
+/-- Test with functions outputting nothing -/
+example (x : U32) (h : x.val < 32) :
+  (do
+    massert (x < 32#u32)
+    massert (x < 32#u32)
+    massert (x < 32#u32)) ⦃ _ => True ⦄ := by
+  progress*
 
 end Examples
 
