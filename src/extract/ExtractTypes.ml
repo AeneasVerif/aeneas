@@ -1196,7 +1196,7 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
 
 (** Format a multi-line comment block with the given delimiters (ld, space, rd)
 *)
-let format_comment_block (fmt : F.formatter) (ld, space, rd) (sl : string list)
+let extract_comment_block (fmt : F.formatter) (ld, space, rd) (sl : string list)
     : unit =
   F.pp_open_vbox fmt space;
   F.pp_print_string fmt ld;
@@ -1213,23 +1213,23 @@ let format_comment_block (fmt : F.formatter) (ld, space, rd) (sl : string list)
   F.pp_close_box fmt ()
 
 (** Wrap strings in plain comment delimiters *)
-let wrap_plain_comment (fmt : F.formatter) (sl : string list) : unit =
+let extract_plain_comment (fmt : F.formatter) (sl : string list) : unit =
   let delimiters =
     match backend () with
     | Coq | FStar | HOL4 -> ("(** ", 4, " *)")
     | Lean -> ("/- ", 3, " -/")
   in
-  format_comment_block fmt delimiters sl
+  extract_comment_block fmt delimiters sl
 
 (** Wrap strings in doc comment delimiters (attaches to the following
     declaration) *)
-let wrap_doc_comment (fmt : F.formatter) (sl : string list) : unit =
+let extract_doc_comment (fmt : F.formatter) (sl : string list) : unit =
   let delimiters =
     match backend () with
     | Coq | FStar | HOL4 -> ("(** ", 4, " *)")
-    | Lean -> ("/-- ", 3, " -/")
+    | Lean -> ("/-- ", 4, " -/")
   in
-  format_comment_block fmt delimiters sl
+  extract_comment_block fmt delimiters sl
 
 let extract_comment_with_span (ctx : extraction_ctx) (fmt : F.formatter)
     (sl : string list) (name : Types.name option)
@@ -1253,7 +1253,7 @@ let extract_comment_with_span (ctx : extraction_ctx) (fmt : F.formatter)
         ]
   in
   let span = Errors.span_to_string span in
-  wrap_doc_comment fmt (sl @ [ span ] @ name)
+  extract_doc_comment fmt (sl @ [ span ] @ name)
 
 let extract_attributes (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (name : Types.name)

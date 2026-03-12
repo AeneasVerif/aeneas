@@ -3640,7 +3640,7 @@ let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
     (* Add a break before *)
     F.pp_print_break fmt 0 0;
     (* Print a comment *)
-    wrap_plain_comment fmt
+    extract_plain_comment fmt
       [ "Unit test for [" ^ name_to_string ctx def.item_meta.name ^ "]" ];
     F.pp_print_space fmt ();
     (* Open a box for the test *)
