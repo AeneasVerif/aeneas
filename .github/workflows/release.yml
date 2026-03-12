@@ -1,0 +1,85 @@
+name: Release
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build (${{ matrix.artifact_name }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: aeneas-linux-x86_64
+            # We use the static variant to produce a portable, statically-linked musl binary.
+            ocaml_compiler: ocaml-variants.5.2.0+options,ocaml-option-static
+          - os: macos-15-intel
+            artifact_name: aeneas-macos-x86_64
+            ocaml_compiler: 5.2.0
+          - os: macos-latest
+            artifact_name: aeneas-macos-aarch64
+            ocaml_compiler: 5.2.0
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Install musl-tools (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: ${{ matrix.ocaml_compiler }}
+
+      - name: Install dependencies
+        run: |
+          opam install ppx_deriving visitors easy_logging zarith yojson core_unix odoc \
+            ocamlgraph menhir ocamlformat.0.27.0 unionFind zarith progress domainslib -y
+
+      - name: Setup Charon
+        # 1. Make sure we've fetched the right Charon commit.
+        run: make setup-charon
+
+      - name: Build Aeneas
+        run: make
+
+      - name: Package
+        run: |
+          set -eo pipefail
+
+          mkdir -p staging
+          cp bin/aeneas staging/
+          cp -r backends staging/
+          cd staging
+          tar -czvf ../${{ matrix.artifact_name }}.tar.gz *
+
+      # Verify the binary is functional.
+      - name: Smoke Test
+        run: |
+          set -eo pipefail
+          ./staging/aeneas --help > /dev/null
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            # Verify the binary is indeed statically linked (not a dynamic executable).
+            (ldd ./staging/aeneas 2>&1 | grep "not a dynamic executable") || (echo "Binary is not statically linked!" && ldd ./staging/aeneas && exit 1)
+          fi
+
+      # Archive every individual commit in a unique 'build-<sha>' prerelease.
+      - name: Release (Historical)
+        if: github.ref_type != 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.sha }}
+          prerelease: true
+          files: ${{ matrix.artifact_name }}.tar.gz
+          make_latest: false
+          generate_release_notes: true
