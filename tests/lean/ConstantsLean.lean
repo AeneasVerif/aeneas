@@ -103,4 +103,29 @@ impl_def Bool.Insts.Constants_leanTrait1 : Trait1 Bool := {
   NM := Trait1.NM.default Bool.Insts.Constants_leanTrait1
 }
 
+/- Trait declaration: [constants_lean::Params1]
+   Source: 'tests/src/constants-lean.rs', lines 41:0-47:1 -/
+structure Params1 (Self : Type) where
+  N : Result Std.Usize
+  LOGQ : Result Std.Usize
+  PACKED_LEN : Result Std.Usize
+  CT1_LEN : Result Std.Usize
+
+/- [constants_lean::Params1::PACKED_LEN]
+   Source: 'tests/src/constants-lean.rs', lines 45:4-45:57 -/
+@[global_simps, irreducible, trait_default]
+def Params1.PACKED_LEN.default {Self : Type} (Params1Inst : Params1 Self)
+  : Result Std.Usize := do
+  let i ← Params1Inst.N
+  let i1 ← Params1Inst.LOGQ
+  let i2 ← i * i1
+  i2 / 8#usize
+
+/- [constants_lean::Params1::CT1_LEN]
+   Source: 'tests/src/constants-lean.rs', lines 46:4-46:44 -/
+@[global_simps, irreducible, trait_default]
+def Params1.CT1_LEN.default {Self : Type} (Params1Inst : Params1 Self)
+  : Result Std.Usize :=
+  Params1Inst.PACKED_LEN
+
 end constants_lean
