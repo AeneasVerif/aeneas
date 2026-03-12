@@ -9,6 +9,7 @@
 // Note that the symbolic execution simplifies `if true` away, which is why we
 // introduce a variant below that branches on booleans that the function receives
 // as input.
+#[allow(dropping_references)]
 fn unnecessary_error() {
     let mut x: (&u32,) = (&0,);
     let mut y: (&u32,) = (&1,);
@@ -20,6 +21,7 @@ fn unnecessary_error() {
 
     if true {
         x.0 = &z; // creates `{L0} in 'x` constraint
+
         // at this point, we have `'x: 'y` and `{L0} in 'x`, so we also have `{L0} in 'y`
         drop(x.0);
     }
@@ -29,6 +31,7 @@ fn unnecessary_error() {
     drop(y.0);
 }
 
+#[allow(dropping_references)]
 fn unnecessary_error_2(b0: bool, b1: bool) {
     let mut x: (&u32,) = (&0,);
     let mut y: (&u32,) = (&1,);
