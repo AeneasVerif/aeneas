@@ -13,13 +13,13 @@ namespace list_borrows
 
 mutual
 
-/- [list_borrows::LCell]
-   Source: 'tests/src/list-borrows.rs', lines 3:0-6:1 -/
+/-- [list_borrows::LCell]
+    Source: 'tests/src/list-borrows.rs', lines 3:0-6:1 -/
 inductive LCell where
 | mk : Std.I32 → List → LCell
 
-/- [list_borrows::List]
-   Source: 'tests/src/list-borrows.rs', lines 8:0-11:1 -/
+/-- [list_borrows::List]
+    Source: 'tests/src/list-borrows.rs', lines 8:0-11:1 -/
 @[discriminant isize]
 inductive List where
 | Nil : List
@@ -39,8 +39,8 @@ theorem LCell.value._simpLemma_ (value : Std.I32) (next : List) :
 theorem LCell.next._simpLemma_ (value : Std.I32) (next : List) :
   (LCell.mk value next).next = next := by rfl
 
-/- [list_borrows::cons]:
-   Source: 'tests/src/list-borrows.rs', lines 14:0-16:1 -/
+/-- [list_borrows::cons]:
+    Source: 'tests/src/list-borrows.rs', lines 14:0-16:1 -/
 def cons
   (value : Std.I32) (next : List) :
   Result (List × (List → (Std.I32 × List)))
@@ -55,8 +55,8 @@ def cons
   ok (List.Cons (LCell.mk (LCell.mk value next).value
     (LCell.mk value next).next), back)
 
-/- [list_borrows::increment_list]: loop 0:
-   Source: 'tests/src/list-borrows.rs', lines 19:4-22:5 -/
+/-- [list_borrows::increment_list]: loop 0:
+    Source: 'tests/src/list-borrows.rs', lines 19:4-22:5 -/
 @[rust_loop]
 def increment_list_loop (l : List) : Result List := do
   match l with
@@ -67,8 +67,8 @@ def increment_list_loop (l : List) : Result List := do
     ok (List.Cons (LCell.mk i back))
 partial_fixpoint
 
-/- [list_borrows::increment_list]:
-   Source: 'tests/src/list-borrows.rs', lines 18:0-23:1 -/
+/-- [list_borrows::increment_list]:
+    Source: 'tests/src/list-borrows.rs', lines 18:0-23:1 -/
 @[reducible]
 def increment_list (l : List) : Result List := do
   increment_list_loop l

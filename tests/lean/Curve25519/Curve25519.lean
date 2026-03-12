@@ -11,34 +11,34 @@ set_option maxHeartbeats 1000000
 
 namespace curve25519
 
-/- [curve25519::Scalar52]
-   Source: 'tests/src/curve25519.rs', lines 7:0-7:34 -/
+/-- [curve25519::Scalar52]
+    Source: 'tests/src/curve25519.rs', lines 7:0-7:34 -/
 @[reducible]
 def Scalar52 := Array Std.U64 5#usize
 
-/- [curve25519::{core::ops::index::Index<usize, u64> for curve25519::Scalar52}::index]:
-   Source: 'tests/src/curve25519.rs', lines 11:4-13:5 -/
+/-- [curve25519::{core::ops::index::Index<usize, u64> for curve25519::Scalar52}::index]:
+    Source: 'tests/src/curve25519.rs', lines 11:4-13:5 -/
 def Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index
   (self : Scalar52) (_index : Std.Usize) : Result Std.U64 := do
   Array.index_usize self _index
 
-/- Trait implementation: [curve25519::{core::ops::index::Index<usize, u64> for curve25519::Scalar52}]
-   Source: 'tests/src/curve25519.rs', lines 9:0-14:1 -/
+/-- Trait implementation: [curve25519::{core::ops::index::Index<usize, u64> for curve25519::Scalar52}]
+    Source: 'tests/src/curve25519.rs', lines 9:0-14:1 -/
 @[reducible]
 def Scalar52.Insts.CoreOpsIndexIndexUsizeU64 : core.ops.index.Index Scalar52
   Std.Usize Std.U64 := {
   index := Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index
 }
 
-/- [curve25519::m]:
-   Source: 'tests/src/curve25519.rs', lines 16:0-18:1 -/
+/-- [curve25519::m]:
+    Source: 'tests/src/curve25519.rs', lines 16:0-18:1 -/
 def m (x : Std.U64) (y : Std.U64) : Result Std.U128 := do
   let i ← lift (UScalar.cast .U128 x)
   let i1 ← lift (UScalar.cast .U128 y)
   i * i1
 
-/- [curve25519::mul_internal]:
-   Source: 'tests/src/curve25519.rs', lines 20:0-34:1 -/
+/-- [curve25519::mul_internal]:
+    Source: 'tests/src/curve25519.rs', lines 20:0-34:1 -/
 def mul_internal
   (a : Scalar52) (b : Scalar52) : Result (Array Std.U128 9#usize) := do
   let z := Array.repeat 9#usize 0#u128

@@ -12,13 +12,13 @@ set_option maxHeartbeats 1000000
 
 namespace bst
 
-/- [bst::{bst::TreeSet<T>}::new]:
-   Source: 'src/bst.rs', lines 28:4-30:5 -/
+/-- [bst::{bst::TreeSet<T>}::new]:
+    Source: 'src/bst.rs', lines 28:4-30:5 -/
 def TreeSet.new {T : Type} (OrdInst : Ord T) : Result (TreeSet T) := do
   ok { root := none }
 
-/- [bst::{bst::TreeSet<T>}::find]: loop 0:
-   Source: 'src/bst.rs', lines 35:8-44:5 -/
+/-- [bst::{bst::TreeSet<T>}::find]: loop 0:
+    Source: 'src/bst.rs', lines 35:8-44:5 -/
 @[rust_loop]
 def TreeSet.find_loop
   {T : Type} (OrdInst : Ord T) (value : T) (current_tree : Option (Node T)) :
@@ -34,8 +34,8 @@ def TreeSet.find_loop
     | Ordering.Greater => TreeSet.find_loop OrdInst value current_node.left
 partial_fixpoint
 
-/- [bst::{bst::TreeSet<T>}::find]:
-   Source: 'src/bst.rs', lines 32:4-44:5 -/
+/-- [bst::{bst::TreeSet<T>}::find]:
+    Source: 'src/bst.rs', lines 32:4-44:5 -/
 @[reducible]
 def TreeSet.find
   {T : Type} (OrdInst : Ord T) (self : TreeSet T) (value : T) :
@@ -43,8 +43,8 @@ def TreeSet.find
   := do
   TreeSet.find_loop OrdInst value self.root
 
-/- [bst::{bst::TreeSet<T>}::insert]: loop 0:
-   Source: 'src/bst.rs', lines 48:8-63:5 -/
+/-- [bst::{bst::TreeSet<T>}::insert]: loop 0:
+    Source: 'src/bst.rs', lines 48:8-63:5 -/
 @[rust_loop]
 def TreeSet.insert_loop
   {T : Type} (OrdInst : Ord T) (value : T) (current_tree : Option (Node T)) :
@@ -66,8 +66,8 @@ def TreeSet.insert_loop
       ok (b, back1)
 partial_fixpoint
 
-/- [bst::{bst::TreeSet<T>}::insert]:
-   Source: 'src/bst.rs', lines 45:4-63:5 -/
+/-- [bst::{bst::TreeSet<T>}::insert]:
+    Source: 'src/bst.rs', lines 45:4-63:5 -/
 def TreeSet.insert
   {T : Type} (OrdInst : Ord T) (self : TreeSet T) (value : T) :
   Result (Bool × (TreeSet T))

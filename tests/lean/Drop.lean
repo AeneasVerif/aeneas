@@ -11,8 +11,8 @@ set_option maxHeartbeats 1000000
 
 namespace drop
 
-/- [drop::fill]: loop body 0:
-   Source: 'tests/src/drop.rs', lines 7:4-9:5 -/
+/-- [drop::fill]: loop body 0:
+    Source: 'tests/src/drop.rs', lines 7:4-9:5 -/
 @[rust_loop_body]
 def fill_loop.body
   {T : Type} (corecloneCloneInst : core.clone.Clone T) (value : T)
@@ -31,8 +31,8 @@ def fill_loop.body
     let s2 ← Slice.update s1 i t
     ok (cont (iter1, s2))
 
-/- [drop::fill]: loop 0:
-   Source: 'tests/src/drop.rs', lines 7:4-9:5 -/
+/-- [drop::fill]: loop 0:
+    Source: 'tests/src/drop.rs', lines 7:4-9:5 -/
 @[rust_loop]
 def fill_loop
   {T : Type} (corecloneCloneInst : core.clone.Clone T)
@@ -43,8 +43,8 @@ def fill_loop
     (fun (iter1, s1) => fill_loop.body corecloneCloneInst value iter1 s1)
     (iter, s)
 
-/- [drop::fill]:
-   Source: 'tests/src/drop.rs', lines 3:0-10:1 -/
+/-- [drop::fill]:
+    Source: 'tests/src/drop.rs', lines 3:0-10:1 -/
 def fill
   {T : Type} (corecloneCloneInst : core.clone.Clone T) (s : Slice T)
   (value : T) :
