@@ -13,6 +13,7 @@ namespace loops_rec
 
 /-- [loops_rec::iter]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 8:4-10:5 -/
+@[rust_loop]
 def iter_loop (max : Std.U32) (i : Std.U32) : Result Std.U32 := do
   if i < max
   then let i1 ← i + 1#u32
@@ -28,6 +29,7 @@ def iter (max : Std.U32) : Result Std.U32 := do
 
 /-- [loops_rec::sum]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 19:4-22:5 -/
+@[rust_loop]
 def sum_loop (max : Std.U32) (i : Std.U32) (s : Std.U32) : Result Std.U32 := do
   if i < max
   then let s1 ← s + i
@@ -44,6 +46,7 @@ def sum (max : Std.U32) : Result Std.U32 := do
 
 /-- [loops_rec::sum_with_mut_borrows]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 34:4-39:5 -/
+@[rust_loop]
 def sum_with_mut_borrows_loop
   (max : Std.U32) (i : Std.U32) (s : Std.U32) : Result Std.U32 := do
   if i < max
@@ -62,6 +65,7 @@ def sum_with_mut_borrows (max : Std.U32) : Result Std.U32 := do
 
 /-- [loops_rec::sum_with_shared_borrows]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 49:4-56:5 -/
+@[rust_loop]
 def sum_with_shared_borrows_loop
   (max : Std.U32) (i : Std.U32) (s : Std.U32) : Result Std.U32 := do
   if i < max
@@ -80,6 +84,7 @@ def sum_with_shared_borrows (max : Std.U32) : Result Std.U32 := do
 
 /-- [loops_rec::sum_array]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 65:4-68:5 -/
+@[rust_loop]
 def sum_array_loop
   {N : Std.Usize} (a : Array Std.U32 N) (i : Std.Usize) (s : Std.U32) :
   Result Std.U32
@@ -101,6 +106,7 @@ def sum_array {N : Std.Usize} (a : Array Std.U32 N) : Result Std.U32 := do
 
 /-- [loops_rec::clear]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 76:4-79:5 -/
+@[rust_loop]
 def clear_loop
   (v : alloc.vec.Vec Std.U32) (i : Std.Usize) :
   Result (alloc.vec.Vec Std.U32)
@@ -132,6 +138,7 @@ inductive List (T : Type) where
 
 /-- [loops_rec::list_mem]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 89:4-97:1 -/
+@[rust_loop]
 def list_mem_loop (x : Std.U32) (ls : List Std.U32) : Result Bool := do
   match ls with
   | List.Cons y tl => if y = x
@@ -148,6 +155,7 @@ def list_mem (x : Std.U32) (ls : List Std.U32) : Result Bool := do
 
 /-- [loops_rec::list_nth_mut]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 100:4-109:1 -/
+@[rust_loop]
 def list_nth_mut_loop
   {T : Type} (ls : List T) (i : Std.U32) : Result (T × (T → List T)) := do
   match ls with
@@ -172,6 +180,7 @@ def list_nth_mut
 
 /-- [loops_rec::list_nth_shared]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 113:4-122:1 -/
+@[rust_loop]
 def list_nth_shared_loop
   {T : Type} (ls : List T) (i : Std.U32) : Result T := do
   match ls with
@@ -191,6 +200,7 @@ def list_nth_shared {T : Type} (ls : List T) (i : Std.U32) : Result T := do
 
 /-- [loops_rec::get_elem_mut]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 126:4-138:1 -/
+@[rust_loop]
 def get_elem_mut_loop
   (x : Std.Usize) (ls : List Std.Usize) :
   Result (Std.Usize × (Std.Usize → List Std.Usize))
@@ -223,6 +233,7 @@ def get_elem_mut
 
 /-- [loops_rec::get_elem_shared]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 142:4-154:1 -/
+@[rust_loop]
 def get_elem_shared_loop
   (x : Std.Usize) (ls : List Std.Usize) : Result Std.Usize := do
   match ls with
@@ -256,6 +267,7 @@ def id_shared {T : Type} (ls : List T) : Result (List T) := do
 
 /-- [loops_rec::list_nth_mut_with_id]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 167:4-176:1 -/
+@[rust_loop]
 def list_nth_mut_with_id_loop
   {T : Type} (i : Std.U32) (ls : List T) : Result (T × (T → List T)) := do
   match ls with
@@ -283,6 +295,7 @@ def list_nth_mut_with_id
 
 /-- [loops_rec::list_nth_shared_with_id]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 181:4-190:1 -/
+@[rust_loop]
 def list_nth_shared_with_id_loop
   {T : Type} (i : Std.U32) (ls : List T) : Result T := do
   match ls with
@@ -303,6 +316,7 @@ def list_nth_shared_with_id
 
 /-- [loops_rec::list_nth_mut_pair]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 200:4-216:1 -/
+@[rust_loop]
 def list_nth_mut_pair_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T × (T → List T) × (T → List T))
@@ -336,6 +350,7 @@ def list_nth_mut_pair
 
 /-- [loops_rec::list_nth_shared_pair]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 224:4-240:1 -/
+@[rust_loop]
 def list_nth_shared_pair_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T)
@@ -363,6 +378,7 @@ def list_nth_shared_pair
 
 /-- [loops_rec::list_nth_mut_pair_merge]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 249:4-259:1 -/
+@[rust_loop]
 def list_nth_mut_pair_merge_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T × (T → List T) × (T → List T))
@@ -402,6 +418,7 @@ def list_nth_mut_pair_merge
 
 /-- [loops_rec::list_nth_shared_pair_merge]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 267:4-277:1 -/
+@[rust_loop]
 def list_nth_shared_pair_merge_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T)
@@ -429,6 +446,7 @@ def list_nth_shared_pair_merge
 
 /-- [loops_rec::list_nth_mut_shared_pair]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 285:4-295:1 -/
+@[rust_loop]
 def list_nth_mut_shared_pair_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T × (T → List T))
@@ -460,6 +478,7 @@ def list_nth_mut_shared_pair
 
 /-- [loops_rec::list_nth_mut_shared_pair_merge]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 304:4-314:1 -/
+@[rust_loop]
 def list_nth_mut_shared_pair_merge_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T × (T → List T))
@@ -491,6 +510,7 @@ def list_nth_mut_shared_pair_merge
 
 /-- [loops_rec::list_nth_shared_mut_pair]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 323:4-333:1 -/
+@[rust_loop]
 def list_nth_shared_mut_pair_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T × (T → List T))
@@ -522,6 +542,7 @@ def list_nth_shared_mut_pair
 
 /-- [loops_rec::list_nth_shared_mut_pair_merge]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 342:4-352:1 -/
+@[rust_loop]
 def list_nth_shared_mut_pair_merge_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T × (T → List T))
@@ -553,6 +574,7 @@ def list_nth_shared_mut_pair_merge
 
 /-- [loops_rec::ignore_input_mut_borrow]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 357:4-359:5 -/
+@[rust_loop]
 def ignore_input_mut_borrow_loop (i : Std.U32) : Result Unit := do
   if i > 0#u32
   then let i1 ← i - 1#u32
@@ -568,6 +590,7 @@ def ignore_input_mut_borrow (_a : Std.U32) (i : Std.U32) : Result Std.U32 := do
 
 /-- [loops_rec::incr_ignore_input_mut_borrow]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 366:4-368:5 -/
+@[rust_loop]
 def incr_ignore_input_mut_borrow_loop (i : Std.U32) : Result Unit := do
   if i > 0#u32
   then let i1 ← i - 1#u32
@@ -585,6 +608,7 @@ def incr_ignore_input_mut_borrow
 
 /-- [loops_rec::ignore_input_shared_borrow]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 374:4-376:5 -/
+@[rust_loop]
 def ignore_input_shared_borrow_loop (i : Std.U32) : Result Unit := do
   if i > 0#u32
   then let i1 ← i - 1#u32
@@ -606,6 +630,7 @@ def issue500_1.bar (_a : Bool) : Result Bool := do
 
 /-- [loops_rec::issue500_1]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 384:4-386:5 -/
+@[rust_loop]
 def issue500_1_loop (a : Bool) : Result Bool := do
   if 0#i32 < 0#i32
   then let a1 ← issue500_1.bar a
@@ -631,8 +656,8 @@ def issue500_2.A := Array Bool 1#usize
 
 /-- [loops_rec::issue500_2]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 396:4-398:5 -/
-def issue500_2_loop : Result Unit := do
-  ok ()
+@[rust_loop] def issue500_2_loop : Result Unit := do
+               ok ()
 
 /-- [loops_rec::issue500_2]:
    Source: 'tests/src/loops-rec.rs', lines 391:0-400:1 -/
@@ -647,6 +672,7 @@ def issue500_3.A := Array Bool 1#usize
 
 /-- [loops_rec::issue500_3]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 406:4-406:18 -/
+@[rust_loop]
 def issue500_3_loop : Result Unit := do
   if 0#i32 < 0#i32
   then issue500_3_loop
@@ -661,6 +687,7 @@ def issue500_3 (s : Array Bool 1#usize) : Result (Array Bool 1#usize) := do
 
 /-- [loops_rec::issue351]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 413:4-416:5 -/
+@[rust_loop]
 def issue351_loop (t : List Std.U8) (last : Std.U8) : Result Std.U8 := do
   match t with
   | List.Cons ht tt => issue351_loop tt ht
@@ -680,6 +707,7 @@ def issue270.box_get_borrow {T : Type} (x : T) : Result T := do
 
 /-- [loops_rec::issue270]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 428:8-431:9 -/
+@[rust_loop]
 def issue270_loop
   (t : List (List Std.U8)) (last : List Std.U8) : Result (List Std.U8) := do
   match t with
@@ -701,6 +729,7 @@ def issue270 (v : List (List Std.U8)) : Result (Option (List Std.U8)) := do
 
 /-- [loops_rec::issue400_1]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 442:4-449:5 -/
+@[rust_loop]
 def issue400_1_loop
   (back : Std.I32 → (Std.I32 × Std.I32)) (cond : Bool) (y : Std.I32)
   (i : Std.I32) :
@@ -728,6 +757,7 @@ def issue400_1
 
 /-- [loops_rec::issue400_2]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 457:4-466:5 -/
+@[rust_loop]
 def issue400_2_loop
   (back : Std.I32 → Std.I32 → (Std.I32 × Std.I32 × Std.I32))
   (conds : Slice Bool) (y : Std.I32) (z : Std.I32) (i : Std.Usize) :
@@ -769,6 +799,7 @@ def copy_carray.CARRAY : Array Std.U32 2#usize :=
 
 /-- [loops_rec::copy_carray]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 475:4-478:5 -/
+@[rust_loop]
 def copy_carray_loop
   (a : Array Std.U32 2#usize) (i : Std.Usize) :
   Result (Array Std.U32 2#usize)
@@ -791,6 +822,7 @@ def copy_carray
 
 /-- [loops_rec::iter_local_mut_borrow]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 485:4-492:5 -/
+@[rust_loop]
 def iter_local_mut_borrow_loop (p : Std.I32) : Result Unit := do
   let p1 ← p + 1#i32
   if p1 = 10#i32
@@ -806,6 +838,7 @@ def iter_local_mut_borrow : Result Unit := do
 
 /-- [loops_rec::iter_local_shared_borrow]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 499:4-505:5 -/
+@[rust_loop]
 def iter_local_shared_borrow_loop : Result Unit := do
   if 0#i32 = 0#i32
   then ok ()
@@ -827,6 +860,7 @@ inductive AList (T : Type) where
 
 /-- [loops_rec::insert_in_list]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 1:0-530:5 -/
+@[rust_loop]
 def insert_in_list_loop
   {T : Type} (key : Std.Usize) (value : T) (ls : AList T) :
   Result (Bool × (AList T))
@@ -858,6 +892,7 @@ def reborrow_const.reborrow (x : Std.U64) : Result Std.U64 := do
 
 /-- [loops_rec::reborrow_const]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 0:0-544:5 -/
+@[rust_loop]
 def reborrow_const_loop : Result Unit := do
   if 0#i32 < 5#i32
   then let _ ← reborrow_const.reborrow 0#u64
@@ -872,6 +907,7 @@ partial_fixpoint
 
 /-- [loops_rec::decode]: loop 1:
    Source: 'tests/src/loops-rec.rs', lines 554:8-554:32 -/
+@[rust_loop]
 def decode_loop0_loop0 (dst_coeff : Std.U8) : Result Unit := do
   if dst_coeff > 32#u8
   then decode_loop0_loop0 dst_coeff
@@ -880,6 +916,7 @@ partial_fixpoint
 
 /-- [loops_rec::decode]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 552:4-565:1 -/
+@[rust_loop]
 def decode_loop0
   (pe_dst : Slice Std.U8) (i : Std.Usize) :
   Result (Bool × (Slice Std.U8))
@@ -905,6 +942,7 @@ def decode (pe_dst : Slice Std.U8) : Result (Bool × (Slice Std.U8)) := do
 
 /-- [loops_rec::as_radix_minimized]: loop 0:
    Source: 'tests/src/loops-rec.rs', lines 571:4-578:5 -/
+@[rust_loop]
 def as_radix_minimized_loop
   (scalar : Array Std.U64 4#usize) (i : Std.Usize) : Result Unit := do
   if i < 4#usize

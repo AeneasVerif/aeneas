@@ -64,8 +64,37 @@ def sample_cbd
   := do
   ok _dst
 
+/-- [loops_sequences::key_expand]: loop body 0:
+   Source: 'tests/src/loops-sequences.rs', lines 29:4-36:5 -/
+@[rust_loop_body]
+def key_expand_loop0.body
+  (state_base : Array Std.U8 8#usize) (key : Key)
+  (state_work : Array Std.U8 8#usize) (sample_buffer : Array Std.U8 1#usize)
+  (i : Std.I32) :
+  Result (ControlFlow (Key × (Array Std.U8 8#usize) × (Array Std.U8 1#usize)
+    × Std.I32) (Key × (Array Std.U8 8#usize) × (Array Std.U8 1#usize)))
+  := do
+  if i < 32#i32
+  then
+    let i1 ← lift (IScalar.hcast .U8 i)
+    let sample_buffer1 ← Array.update sample_buffer 0#usize i1
+    let state_work1 ← shake_state_copy state_base state_work
+    let s ← lift (Array.to_slice sample_buffer1)
+    let state_work2 ← shake_append state_work1 s
+    let (s1, to_slice_mut_back) ← lift (Array.to_slice_mut sample_buffer1)
+    let s2 ← shake_extract state_work2 s1
+    let s3 ← lift (Array.to_slice state_work2)
+    let (a, t_mut_back) ← Key.t_mut key
+    let a1 ← sample_cbd s3 a
+    let i2 ← i + 1#i32
+    let key1 := t_mut_back a1
+    let sample_buffer2 := to_slice_mut_back s2
+    ok (cont (key1, state_work2, sample_buffer2, i2))
+  else ok (done (key, state_work, sample_buffer))
+
 /-- [loops_sequences::key_expand]: loop 0:
    Source: 'tests/src/loops-sequences.rs', lines 29:4-36:5 -/
+@[rust_loop]
 def key_expand_loop0
   (key : Key) (state_base : Array Std.U8 8#usize)
   (state_work : Array Std.U8 8#usize) (sample_buffer : Array Std.U8 1#usize)
@@ -73,30 +102,41 @@ def key_expand_loop0
   Result (Key × (Array Std.U8 8#usize) × (Array Std.U8 1#usize))
   := do
   loop
-    (fun (key1, state_work1, sample_buffer1, i1) =>
-      if i1 < 32#i32
-      then
-        do
-        let i2 ← lift (IScalar.hcast .U8 i1)
-        let sample_buffer2 ← Array.update sample_buffer1 0#usize i2
-        let state_work2 ← shake_state_copy state_base state_work1
-        let s ← lift (Array.to_slice sample_buffer2)
-        let state_work3 ← shake_append state_work2 s
-        let (s1, to_slice_mut_back) ←
-          lift (Array.to_slice_mut sample_buffer2)
-        let s2 ← shake_extract state_work3 s1
-        let s3 ← lift (Array.to_slice state_work3)
-        let (a, t_mut_back) ← Key.t_mut key1
-        let a1 ← sample_cbd s3 a
-        let i3 ← i1 + 1#i32
-        let key2 := t_mut_back a1
-        let sample_buffer3 := to_slice_mut_back s2
-        ok (cont (key2, state_work3, sample_buffer3, i3))
-      else ok (done (key1, state_work1, sample_buffer1)))
+    (fun (key1, state_work1, sample_buffer1, i1) => key_expand_loop0.body
+      state_base key1 state_work1 sample_buffer1 i1)
     (key, state_work, sample_buffer, i)
+
+/-- [loops_sequences::key_expand]: loop body 1:
+   Source: 'tests/src/loops-sequences.rs', lines 39:4-46:5 -/
+@[rust_loop_body]
+def key_expand_loop1.body
+  (state_base : Array Std.U8 8#usize) (key : Key)
+  (state_work : Array Std.U8 8#usize) (sample_buffer : Array Std.U8 1#usize)
+  (i : Std.I32) :
+  Result (ControlFlow (Key × (Array Std.U8 8#usize) × (Array Std.U8 1#usize)
+    × Std.I32) (Key × (Array Std.U8 8#usize)))
+  := do
+  if i < 32#i32
+  then
+    let i1 ← lift (IScalar.hcast .U8 i)
+    let sample_buffer1 ← Array.update sample_buffer 0#usize i1
+    let state_work1 ← shake_state_copy state_base state_work
+    let s ← lift (Array.to_slice sample_buffer1)
+    let state_work2 ← shake_append state_work1 s
+    let (s1, to_slice_mut_back) ← lift (Array.to_slice_mut sample_buffer1)
+    let s2 ← shake_extract state_work2 s1
+    let s3 ← lift (Array.to_slice state_work2)
+    let (a, t_mut_back) ← Key.t_mut key
+    let a1 ← sample_cbd s3 a
+    let i2 ← i + 1#i32
+    let key1 := t_mut_back a1
+    let sample_buffer2 := to_slice_mut_back s2
+    ok (cont (key1, state_work2, sample_buffer2, i2))
+  else ok (done (key, state_work))
 
 /-- [loops_sequences::key_expand]: loop 1:
    Source: 'tests/src/loops-sequences.rs', lines 39:4-46:5 -/
+@[rust_loop]
 def key_expand_loop1
   (key : Key) (state_base : Array Std.U8 8#usize)
   (state_work : Array Std.U8 8#usize) (sample_buffer : Array Std.U8 1#usize)
@@ -104,26 +144,8 @@ def key_expand_loop1
   Result (Key × (Array Std.U8 8#usize))
   := do
   loop
-    (fun (key1, state_work1, sample_buffer1, i1) =>
-      if i1 < 32#i32
-      then
-        do
-        let i2 ← lift (IScalar.hcast .U8 i1)
-        let sample_buffer2 ← Array.update sample_buffer1 0#usize i2
-        let state_work2 ← shake_state_copy state_base state_work1
-        let s ← lift (Array.to_slice sample_buffer2)
-        let state_work3 ← shake_append state_work2 s
-        let (s1, to_slice_mut_back) ←
-          lift (Array.to_slice_mut sample_buffer2)
-        let s2 ← shake_extract state_work3 s1
-        let s3 ← lift (Array.to_slice state_work3)
-        let (a, t_mut_back) ← Key.t_mut key1
-        let a1 ← sample_cbd s3 a
-        let i3 ← i1 + 1#i32
-        let key2 := t_mut_back a1
-        let sample_buffer3 := to_slice_mut_back s2
-        ok (cont (key2, state_work3, sample_buffer3, i3))
-      else ok (done (key1, state_work1)))
+    (fun (key1, state_work1, sample_buffer1, i1) => key_expand_loop1.body
+      state_base key1 state_work1 sample_buffer1 i1)
     (key, state_work, sample_buffer, i)
 
 /-- [loops_sequences::key_expand]:

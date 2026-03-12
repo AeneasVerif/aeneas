@@ -820,11 +820,12 @@ let inst_fun_sig_to_string (env : fmt_env) (sg : inst_fun_sig) : string =
   let all_types = List.append inputs [ output ] in
   String.concat " -> " all_types
 
-let fun_suffix (lp_id : LoopId.id option) : string =
+let fun_suffix (lp_id : (LoopId.id * bool) option) : string =
   let lp_suff =
     match lp_id with
     | None -> ""
-    | Some lp_id -> "^loop" ^ LoopId.to_string lp_id
+    | Some (lp_id, is_body) ->
+        "^loop" ^ LoopId.to_string lp_id ^ if is_body then "^body" else ""
   in
   lp_suff
 

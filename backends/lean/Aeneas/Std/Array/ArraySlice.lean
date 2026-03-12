@@ -220,4 +220,11 @@ def core.array.Array.as_mut_slice
     else a
   ok (⟨ a.val, by scalar_tac ⟩, back)
 
+@[simp, progress_simps]
+theorem Array.index_SliceIndexRangeUsizeSlice {T : Type} {N : Usize}
+    (a : Array T N) (r : core.ops.range.Range Usize) :
+    core.array.Array.index (core.ops.index.IndexSlice
+      (core.slice.index.SliceIndexRangeUsizeSlice T)) a r =
+    core.slice.index.SliceIndexRangeUsizeSlice.index r a.to_slice := by rfl
+
 end Aeneas.Std

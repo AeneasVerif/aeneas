@@ -29,6 +29,7 @@ structure AVLTreeSet where
 
 /-- [issue_134_loop_shared_borrows::{issue_134_loop_shared_borrows::AVLNode}::find]: loop 0:
    Source: 'tests/src/issue-134-loop-shared-borrows.rs', lines 15:8-17:9 -/
+@[rust_loop]
 def AVLNode.find_loop (current_tree : Option AVLNode) : Result Unit := do
   match current_tree with
   | none => ok ()

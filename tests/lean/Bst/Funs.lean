@@ -19,6 +19,7 @@ def TreeSet.new {T : Type} (OrdInst : Ord T) : Result (TreeSet T) := do
 
 /-- [bst::{bst::TreeSet<T>}::find]: loop 0:
    Source: 'src/bst.rs', lines 35:8-44:5 -/
+@[rust_loop]
 def TreeSet.find_loop
   {T : Type} (OrdInst : Ord T) (value : T) (current_tree : Option (Node T)) :
   Result Bool
@@ -44,6 +45,7 @@ def TreeSet.find
 
 /-- [bst::{bst::TreeSet<T>}::insert]: loop 0:
    Source: 'src/bst.rs', lines 48:8-63:5 -/
+@[rust_loop]
 def TreeSet.insert_loop
   {T : Type} (OrdInst : Ord T) (value : T) (current_tree : Option (Node T)) :
   Result (Bool × (Option (Node T)))

@@ -113,19 +113,27 @@ def call_iter_mut_next_u32
   | some x => let x1 ← x + 1#u32
               ok (next_back im (some x1))
 
+/-- [nested_borrows::iter_mut_loop]: loop body 0:
+   Source: 'tests/src/nested-borrows.rs', lines 86:4-86:36 -/
+@[rust_loop_body]
+def iter_mut_loop_loop.body
+  {T : Type} (back : IterMut T → Option T) (it : IterMut T) :
+  Result (ControlFlow ((IterMut T → Option T) × (IterMut T)) (Option T))
+  := do
+  let (o, it1, next_back) ← IterMut.next it
+  match o with
+  | none => ok (done (back (next_back it1 none)))
+  | some _ => ok (cont (fun im => back (next_back im o), it1))
+
 /-- [nested_borrows::iter_mut_loop]: loop 0:
    Source: 'tests/src/nested-borrows.rs', lines 86:4-86:36 -/
+@[rust_loop]
 def iter_mut_loop_loop
   {T : Type} (back : IterMut T → Option T) (it : IterMut T) :
   Result (Option T)
   := do
   loop
-    (fun (back1, it1) =>
-      do
-      let (o, it2, next_back) ← IterMut.next it1
-      match o with
-      | none => ok (done (back1 (next_back it2 none)))
-      | some _ => ok (cont (fun im => back1 (next_back im o), it2)))
+    (fun (back1, it1) => iter_mut_loop_loop.body back1 it1)
     (back, it)
 
 /-- [nested_borrows::iter_mut_loop]:
@@ -134,21 +142,30 @@ def iter_mut_loop {T : Type} (it : IterMut T) : Result (IterMut T) := do
   let back ← iter_mut_loop_loop (fun im => im.v) it
   ok { v := back }
 
+/-- [nested_borrows::iter_mut_incr]: loop body 0:
+   Source: 'tests/src/nested-borrows.rs', lines 90:4-92:5 -/
+@[rust_loop_body]
+def iter_mut_incr_loop.body
+  (back : IterMut Std.U32 → Option Std.U32) (it : IterMut Std.U32) :
+  Result (ControlFlow ((IterMut Std.U32 → Option Std.U32) × (IterMut
+    Std.U32)) (Option Std.U32))
+  := do
+  let (o, it1, next_back) ← IterMut.next it
+  match o with
+  | none => ok (done (back (next_back it1 none)))
+  | some x =>
+    let x1 ← x + 1#u32
+    ok (cont (fun im => back (next_back im (some x1)), it1))
+
 /-- [nested_borrows::iter_mut_incr]: loop 0:
    Source: 'tests/src/nested-borrows.rs', lines 90:4-92:5 -/
+@[rust_loop]
 def iter_mut_incr_loop
   (back : IterMut Std.U32 → Option Std.U32) (it : IterMut Std.U32) :
   Result (Option Std.U32)
   := do
   loop
-    (fun (back1, it1) =>
-      do
-      let (o, it2, next_back) ← IterMut.next it1
-      match o with
-      | none => ok (done (back1 (next_back it2 none)))
-      | some x =>
-        let x1 ← x + 1#u32
-        ok (cont (fun im => back1 (next_back im (some x1)), it2)))
+    (fun (back1, it1) => iter_mut_incr_loop.body back1 it1)
     (back, it)
 
 /-- [nested_borrows::iter_mut_incr]:
@@ -226,22 +243,32 @@ def ListIterMut.next
           ({ current := o3 } : ListIterMut T)
       ok (some value, { current := (some next) }, back'a)
 
+/-- [nested_borrows::incr_list]: loop body 0:
+   Source: 'tests/src/nested-borrows.rs', lines 132:4-134:5 -/
+@[rust_loop_body]
+def incr_list_loop.body
+  (back : ListIterMut Std.U32 → Option (List Std.U32))
+  (it : ListIterMut Std.U32) :
+  Result (ControlFlow ((ListIterMut Std.U32 → Option (List Std.U32)) ×
+    (ListIterMut Std.U32)) (Option (List Std.U32)))
+  := do
+  let (o, it1, next_back) ← ListIterMut.next it
+  match o with
+  | none => ok (done (back (next_back it1 none)))
+  | some x =>
+    let x1 ← x + 1#u32
+    ok (cont (fun lim => back (next_back lim (some x1)), it1))
+
 /-- [nested_borrows::incr_list]: loop 0:
    Source: 'tests/src/nested-borrows.rs', lines 132:4-134:5 -/
+@[rust_loop]
 def incr_list_loop
   (back : ListIterMut Std.U32 → Option (List Std.U32))
   (it : ListIterMut Std.U32) :
   Result (Option (List Std.U32))
   := do
   loop
-    (fun (back1, it1) =>
-      do
-      let (o, it2, next_back) ← ListIterMut.next it1
-      match o with
-      | none => ok (done (back1 (next_back it2 none)))
-      | some x =>
-        let x1 ← x + 1#u32
-        ok (cont (fun lim => back1 (next_back lim (some x1)), it2)))
+    (fun (back1, it1) => incr_list_loop.body back1 it1)
     (back, it)
 
 /-- [nested_borrows::incr_list]:
@@ -259,34 +286,51 @@ def next1
   := do
   fail panic
 
+/-- [nested_borrows::iter_list_while]: loop body 1:
+   Source: 'tests/src/nested-borrows.rs', lines 143:8-143:18 -/
+@[rust_loop_body]
+def iter_list_while_loop0_loop0.body
+  (b : Bool) : Result (ControlFlow Bool Unit) := do
+  if b
+  then ok (cont true)
+  else ok (done ())
+
 /-- [nested_borrows::iter_list_while]: loop 1:
    Source: 'tests/src/nested-borrows.rs', lines 143:8-143:18 -/
+@[rust_loop]
 def iter_list_while_loop0_loop0 (b : Bool) : Result Unit := do
   loop
-    (fun b1 => if b1
-               then ok (cont true)
-               else ok (done ()))
+    (fun b1 => iter_list_while_loop0_loop0.body b1)
     b
+
+/-- [nested_borrows::iter_list_while]: loop body 0:
+   Source: 'tests/src/nested-borrows.rs', lines 142:4-144:5 -/
+@[rust_loop_body]
+def iter_list_while_loop0.body
+  {T : Type} (l : List T) (back : List T → List T) (b : Bool) :
+  Result (ControlFlow ((List T) × (List T → List T) × Bool) ((List T) ×
+    (List T → List T)))
+  := do
+  let (o, l1, next1_back) ← next1 l
+  match o with
+  | none => ok (done (l1, fun l2 => let l3 := next1_back l2 none
+                                    back l3))
+  | some t =>
+    iter_list_while_loop0_loop0 b
+    let back1 := fun t1 l2 => next1_back l2 (some t1)
+    ok (cont (l1, fun l2 => let l3 := back1 t l2
+                            back l3, false))
 
 /-- [nested_borrows::iter_list_while]: loop 0:
    Source: 'tests/src/nested-borrows.rs', lines 142:4-144:5 -/
+@[rust_loop]
 def iter_list_while_loop0
-  {T : Type} (back : List T → List T) (b : Bool) (l : List T) :
+  {T : Type} (l : List T) (back : List T → List T) (b : Bool) :
   Result ((List T) × (List T → List T))
   := do
   loop
-    (fun (back1, b1, l1) =>
-      do
-      let (o, l2, next1_back) ← next1 l1
-      match o with
-      | none => ok (done (l2, fun l3 => let l4 := next1_back l3 none
-                                        back1 l4))
-      | some t =>
-        iter_list_while_loop0_loop0 b1
-        let back2 := fun t1 l3 => next1_back l3 (some t1)
-        ok (cont (fun l3 => let l4 := back2 t l3
-                            back1 l4, false, l2)))
-    (back, b, l)
+    (fun (l1, back1, b1) => iter_list_while_loop0.body l1 back1 b1)
+    (l, back, b)
 
 /-- [nested_borrows::iter_list_while]:
    Source: 'tests/src/nested-borrows.rs', lines 141:0-145:1 -/
@@ -295,7 +339,7 @@ def iter_list_while
   {T : Type} (b : Bool) (l : List T) :
   Result ((List T) × (List T → List T))
   := do
-  iter_list_while_loop0 (fun l1 => l1) b l
+  iter_list_while_loop0 l (fun l1 => l1) b
 
 /-- [nested_borrows::BitReader]
    Source: 'tests/src/nested-borrows.rs', lines 148:0-151:1 -/

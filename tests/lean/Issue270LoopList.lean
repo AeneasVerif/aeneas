@@ -20,6 +20,7 @@ inductive List (T : Type) where
 
 /-- [issue_270_loop_list::foo]: loop 0:
    Source: 'tests/src/issue-270-loop-list.rs', lines 10:8-12:9 -/
+@[rust_loop]
 def foo_loop (t : List (List Std.U8)) : Result Unit := do
   match t with
   | List.Cons _ tt => foo_loop tt
