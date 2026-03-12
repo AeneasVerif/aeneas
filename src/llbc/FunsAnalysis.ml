@@ -107,10 +107,14 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
             self#may_fail true;
             super#visit_Assert env a
 
-          method! visit_rvalue _env rv =
+          method! visit_rvalue env rv =
             match rv with
+            | Use (Constant { kind = CTraitConst _; _ }) ->
+                (* We consider that trait constants can fail, similarly to
+                   trait methods. *)
+                self#may_fail true
             | Use _
-            | RvRef _
+            | RvRef ({ kind = PlaceLocal _ | PlaceProjection _; _ }, _, _)
             | Discriminant _
             | Aggregate _
             | Len _
@@ -118,6 +122,20 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
             | RawPtr _
             | Repeat _
             | ShallowInitBox _ -> ()
+            | RvRef ({ kind = PlaceGlobal gref; _ }, _, _) -> (
+                (* A reference to a global: propagate can_fail.
+
+                   Check the builtin globals map first (for opaque builtins like
+                   [u32::MAX]), then fall back to the initializer function's info. *)
+                let global = GlobalDeclId.Map.find gref.id m.global_decls in
+                let open ExtractBuiltin in
+                let builtin_info =
+                  NameMatcherMap.find_opt name_matcher_ctx global.item_meta.name
+                    (builtin_globals_map ())
+                in
+                match builtin_info with
+                | Some info -> self#may_fail info.can_fail
+                | None -> self#visit_fid env global.init)
             | UnaryOp (uop, _) -> can_fail := unop_can_fail uop || !can_fail
             | BinaryOp (bop, _, _) ->
                 can_fail := binop_can_fail bop || !can_fail

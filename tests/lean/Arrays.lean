@@ -11,89 +11,89 @@ set_option maxHeartbeats 1000000
 
 namespace arrays
 
-/- [arrays::AB]
-   Source: 'tests/src/arrays.rs', lines 8:0-11:1 -/
+/-- [arrays::AB]
+    Source: 'tests/src/arrays.rs', lines 8:0-11:1 -/
 @[discriminant isize]
 inductive AB where
 | A : AB
 | B : AB
 
-/- [arrays::incr]:
-   Source: 'tests/src/arrays.rs', lines 13:0-15:1 -/
+/-- [arrays::incr]:
+    Source: 'tests/src/arrays.rs', lines 13:0-15:1 -/
 def incr (x : Std.U32) : Result Std.U32 := do
   x + 1#u32
 
-/- [arrays::array_to_shared_slice_]:
-   Source: 'tests/src/arrays.rs', lines 21:0-23:1 -/
+/-- [arrays::array_to_shared_slice_]:
+    Source: 'tests/src/arrays.rs', lines 21:0-23:1 -/
 def array_to_shared_slice_
   {T : Type} (s : Array T 32#usize) : Result (Slice T) := do
   ok (Array.to_slice s)
 
-/- [arrays::array_to_mut_slice_]:
-   Source: 'tests/src/arrays.rs', lines 26:0-28:1 -/
+/-- [arrays::array_to_mut_slice_]:
+    Source: 'tests/src/arrays.rs', lines 26:0-28:1 -/
 def array_to_mut_slice_
   {T : Type} (s : Array T 32#usize) :
   Result ((Slice T) × (Slice T → Array T 32#usize))
   := do
   ok (Array.to_slice_mut s)
 
-/- [arrays::array_len]:
-   Source: 'tests/src/arrays.rs', lines 30:0-32:1 -/
+/-- [arrays::array_len]:
+    Source: 'tests/src/arrays.rs', lines 30:0-32:1 -/
 def array_len {T : Type} (s : Array T 32#usize) : Result Std.Usize := do
   let s1 ← lift (Array.to_slice s)
   ok (Slice.len s1)
 
-/- [arrays::shared_array_len]:
-   Source: 'tests/src/arrays.rs', lines 34:0-36:1 -/
+/-- [arrays::shared_array_len]:
+    Source: 'tests/src/arrays.rs', lines 34:0-36:1 -/
 def shared_array_len {T : Type} (s : Array T 32#usize) : Result Std.Usize := do
   let s1 ← lift (Array.to_slice s)
   ok (Slice.len s1)
 
-/- [arrays::shared_slice_len]:
-   Source: 'tests/src/arrays.rs', lines 38:0-40:1 -/
+/-- [arrays::shared_slice_len]:
+    Source: 'tests/src/arrays.rs', lines 38:0-40:1 -/
 def shared_slice_len {T : Type} (s : Slice T) : Result Std.Usize := do
   ok (Slice.len s)
 
-/- [arrays::index_array_shared]:
-   Source: 'tests/src/arrays.rs', lines 42:0-44:1 -/
+/-- [arrays::index_array_shared]:
+    Source: 'tests/src/arrays.rs', lines 42:0-44:1 -/
 def index_array_shared
   {T : Type} (s : Array T 32#usize) (i : Std.Usize) : Result T := do
   Array.index_usize s i
 
-/- [arrays::index_array_u32]:
-   Source: 'tests/src/arrays.rs', lines 49:0-51:1 -/
+/-- [arrays::index_array_u32]:
+    Source: 'tests/src/arrays.rs', lines 49:0-51:1 -/
 def index_array_u32
   (s : Array Std.U32 32#usize) (i : Std.Usize) : Result Std.U32 := do
   Array.index_usize s i
 
-/- [arrays::index_array_copy]:
-   Source: 'tests/src/arrays.rs', lines 53:0-55:1 -/
+/-- [arrays::index_array_copy]:
+    Source: 'tests/src/arrays.rs', lines 53:0-55:1 -/
 def index_array_copy (x : Array Std.U32 32#usize) : Result Std.U32 := do
   Array.index_usize x 0#usize
 
-/- [arrays::index_mut_array]:
-   Source: 'tests/src/arrays.rs', lines 57:0-59:1 -/
+/-- [arrays::index_mut_array]:
+    Source: 'tests/src/arrays.rs', lines 57:0-59:1 -/
 def index_mut_array
   {T : Type} (s : Array T 32#usize) (i : Std.Usize) :
   Result (T × (T → Array T 32#usize))
   := do
   Array.index_mut_usize s i
 
-/- [arrays::index_slice]:
-   Source: 'tests/src/arrays.rs', lines 61:0-63:1 -/
+/-- [arrays::index_slice]:
+    Source: 'tests/src/arrays.rs', lines 61:0-63:1 -/
 def index_slice {T : Type} (s : Slice T) (i : Std.Usize) : Result T := do
   Slice.index_usize s i
 
-/- [arrays::index_mut_slice]:
-   Source: 'tests/src/arrays.rs', lines 65:0-67:1 -/
+/-- [arrays::index_mut_slice]:
+    Source: 'tests/src/arrays.rs', lines 65:0-67:1 -/
 def index_mut_slice
   {T : Type} (s : Slice T) (i : Std.Usize) :
   Result (T × (T → Slice T))
   := do
   Slice.index_mut_usize s i
 
-/- [arrays::slice_subslice_shared_]:
-   Source: 'tests/src/arrays.rs', lines 69:0-71:1 -/
+/-- [arrays::slice_subslice_shared_]:
+    Source: 'tests/src/arrays.rs', lines 69:0-71:1 -/
 def slice_subslice_shared_
   (x : Slice Std.U32) (y : Std.Usize) (z : Std.Usize) :
   Result (Slice Std.U32)
@@ -101,8 +101,8 @@ def slice_subslice_shared_
   core.slice.index.Slice.index (core.slice.index.SliceIndexRangeUsizeSlice
     Std.U32) x { start := y, «end» := z }
 
-/- [arrays::slice_subslice_mut_]:
-   Source: 'tests/src/arrays.rs', lines 73:0-75:1 -/
+/-- [arrays::slice_subslice_mut_]:
+    Source: 'tests/src/arrays.rs', lines 73:0-75:1 -/
 def slice_subslice_mut_
   (x : Slice Std.U32) (y : Std.Usize) (z : Std.Usize) :
   Result ((Slice Std.U32) × (Slice Std.U32 → Slice Std.U32))
@@ -110,22 +110,22 @@ def slice_subslice_mut_
   core.slice.index.Slice.index_mut (core.slice.index.SliceIndexRangeUsizeSlice
     Std.U32) x { start := y, «end» := z }
 
-/- [arrays::array_to_slice_shared_]:
-   Source: 'tests/src/arrays.rs', lines 77:0-79:1 -/
+/-- [arrays::array_to_slice_shared_]:
+    Source: 'tests/src/arrays.rs', lines 77:0-79:1 -/
 def array_to_slice_shared_
   (x : Array Std.U32 32#usize) : Result (Slice Std.U32) := do
   ok (Array.to_slice x)
 
-/- [arrays::array_to_slice_mut_]:
-   Source: 'tests/src/arrays.rs', lines 81:0-83:1 -/
+/-- [arrays::array_to_slice_mut_]:
+    Source: 'tests/src/arrays.rs', lines 81:0-83:1 -/
 def array_to_slice_mut_
   (x : Array Std.U32 32#usize) :
   Result ((Slice Std.U32) × (Slice Std.U32 → Array Std.U32 32#usize))
   := do
   ok (Array.to_slice_mut x)
 
-/- [arrays::array_subslice_shared_]:
-   Source: 'tests/src/arrays.rs', lines 85:0-87:1 -/
+/-- [arrays::array_subslice_shared_]:
+    Source: 'tests/src/arrays.rs', lines 85:0-87:1 -/
 def array_subslice_shared_
   (x : Array Std.U32 32#usize) (y : Std.Usize) (z : Std.Usize) :
   Result (Slice Std.U32)
@@ -134,8 +134,8 @@ def array_subslice_shared_
     (core.slice.index.SliceIndexRangeUsizeSlice Std.U32)) x
     { start := y, «end» := z }
 
-/- [arrays::array_subslice_mut_]:
-   Source: 'tests/src/arrays.rs', lines 89:0-91:1 -/
+/-- [arrays::array_subslice_mut_]:
+    Source: 'tests/src/arrays.rs', lines 89:0-91:1 -/
 def array_subslice_mut_
   (x : Array Std.U32 32#usize) (y : Std.Usize) (z : Std.Usize) :
   Result ((Slice Std.U32) × (Slice Std.U32 → Array Std.U32 32#usize))
@@ -144,18 +144,18 @@ def array_subslice_mut_
     (core.slice.index.SliceIndexRangeUsizeSlice Std.U32)) x
     { start := y, «end» := z }
 
-/- [arrays::index_slice_0]:
-   Source: 'tests/src/arrays.rs', lines 93:0-95:1 -/
+/-- [arrays::index_slice_0]:
+    Source: 'tests/src/arrays.rs', lines 93:0-95:1 -/
 def index_slice_0 {T : Type} (s : Slice T) : Result T := do
   Slice.index_usize s 0#usize
 
-/- [arrays::index_array_0]:
-   Source: 'tests/src/arrays.rs', lines 97:0-99:1 -/
+/-- [arrays::index_array_0]:
+    Source: 'tests/src/arrays.rs', lines 97:0-99:1 -/
 def index_array_0 {T : Type} (s : Array T 32#usize) : Result T := do
   Array.index_usize s 0#usize
 
-/- [arrays::index_index_array]:
-   Source: 'tests/src/arrays.rs', lines 108:0-110:1 -/
+/-- [arrays::index_index_array]:
+    Source: 'tests/src/arrays.rs', lines 108:0-110:1 -/
 def index_index_array
   (s : Array (Array Std.U32 32#usize) 32#usize) (i : Std.Usize) (j : Std.Usize)
   :
@@ -164,8 +164,8 @@ def index_index_array
   let a ← Array.index_usize s i
   Array.index_usize a j
 
-/- [arrays::update_update_array]:
-   Source: 'tests/src/arrays.rs', lines 119:0-121:1 -/
+/-- [arrays::update_update_array]:
+    Source: 'tests/src/arrays.rs', lines 119:0-121:1 -/
 def update_update_array
   (s : Array (Array Std.U32 32#usize) 32#usize) (i : Std.Usize) (j : Std.Usize)
   :
@@ -175,13 +175,13 @@ def update_update_array
   let a1 ← Array.update a j 0#u32
   ok (index_mut_back a1)
 
-/- [arrays::array_local_deep_copy]:
-   Source: 'tests/src/arrays.rs', lines 123:0-125:1 -/
+/-- [arrays::array_local_deep_copy]:
+    Source: 'tests/src/arrays.rs', lines 123:0-125:1 -/
 def array_local_deep_copy (x : Array Std.U32 32#usize) : Result Unit := do
   ok ()
 
-/- [arrays::array_update1]:
-   Source: 'tests/src/arrays.rs', lines 128:0-130:1 -/
+/-- [arrays::array_update1]:
+    Source: 'tests/src/arrays.rs', lines 128:0-130:1 -/
 def array_update1
   (a : Slice Std.U32) (i : Std.Usize) (x : Std.U32) :
   Result (Slice Std.U32)
@@ -190,8 +190,8 @@ def array_update1
   let i2 ← i + 1#usize
   Slice.update a i2 i1
 
-/- [arrays::array_update2]:
-   Source: 'tests/src/arrays.rs', lines 133:0-136:1 -/
+/-- [arrays::array_update2]:
+    Source: 'tests/src/arrays.rs', lines 133:0-136:1 -/
 def array_update2
   (a : Slice Std.U32) (i : Std.Usize) (x : Std.U32) :
   Result (Slice Std.U32)
@@ -201,8 +201,8 @@ def array_update2
   let i2 ← i + 1#usize
   Slice.update a1 i2 i1
 
-/- [arrays::array_update3]:
-   Source: 'tests/src/arrays.rs', lines 138:0-142:1 -/
+/-- [arrays::array_update3]:
+    Source: 'tests/src/arrays.rs', lines 138:0-142:1 -/
 def array_update3
   (a : Slice Std.U32) (i : Std.Usize) (x : Std.U32) :
   Result (Slice Std.U32)
@@ -213,40 +213,40 @@ def array_update3
   let i2 ← i + 2#usize
   Slice.update a2 i2 x
 
-/- [arrays::take_array]:
-   Source: 'tests/src/arrays.rs', lines 144:0-144:33 -/
+/-- [arrays::take_array]:
+    Source: 'tests/src/arrays.rs', lines 144:0-144:33 -/
 def take_array (a : Array Std.U32 2#usize) : Result Unit := do
   ok ()
 
-/- [arrays::take_array_borrow]:
-   Source: 'tests/src/arrays.rs', lines 145:0-145:41 -/
+/-- [arrays::take_array_borrow]:
+    Source: 'tests/src/arrays.rs', lines 145:0-145:41 -/
 def take_array_borrow (a : Array Std.U32 2#usize) : Result Unit := do
   ok ()
 
-/- [arrays::take_slice]:
-   Source: 'tests/src/arrays.rs', lines 146:0-146:31 -/
+/-- [arrays::take_slice]:
+    Source: 'tests/src/arrays.rs', lines 146:0-146:31 -/
 def take_slice (s : Slice Std.U32) : Result Unit := do
   ok ()
 
-/- [arrays::take_mut_slice]:
-   Source: 'tests/src/arrays.rs', lines 147:0-147:39 -/
+/-- [arrays::take_mut_slice]:
+    Source: 'tests/src/arrays.rs', lines 147:0-147:39 -/
 def take_mut_slice (s : Slice Std.U32) : Result (Slice Std.U32) := do
   ok s
 
-/- [arrays::const_array]:
-   Source: 'tests/src/arrays.rs', lines 149:0-151:1 -/
+/-- [arrays::const_array]:
+    Source: 'tests/src/arrays.rs', lines 149:0-151:1 -/
 def const_array : Result (Array Std.U32 2#usize) := do
   ok (Array.repeat 2#usize 0#u32)
 
-/- [arrays::const_slice]:
-   Source: 'tests/src/arrays.rs', lines 153:0-156:1 -/
+/-- [arrays::const_slice]:
+    Source: 'tests/src/arrays.rs', lines 153:0-156:1 -/
 def const_slice : Result Std.U32 := do
   let a := Array.repeat 2#usize 0#u32
   let s ← lift (Array.to_slice a)
   Slice.index_usize s 0#usize
 
-/- [arrays::take_all]:
-   Source: 'tests/src/arrays.rs', lines 164:0-176:1 -/
+/-- [arrays::take_all]:
+    Source: 'tests/src/arrays.rs', lines 164:0-176:1 -/
 def take_all : Result Unit := do
   let x := Array.repeat 2#usize 0#u32
   take_array x
@@ -258,30 +258,30 @@ def take_all : Result Unit := do
   let _ ← take_mut_slice s1
   ok ()
 
-/- [arrays::index_array]:
-   Source: 'tests/src/arrays.rs', lines 178:0-180:1 -/
+/-- [arrays::index_array]:
+    Source: 'tests/src/arrays.rs', lines 178:0-180:1 -/
 def index_array (x : Array Std.U32 2#usize) : Result Std.U32 := do
   Array.index_usize x 0#usize
 
-/- [arrays::index_array_borrow]:
-   Source: 'tests/src/arrays.rs', lines 181:0-183:1 -/
+/-- [arrays::index_array_borrow]:
+    Source: 'tests/src/arrays.rs', lines 181:0-183:1 -/
 def index_array_borrow (x : Array Std.U32 2#usize) : Result Std.U32 := do
   Array.index_usize x 0#usize
 
-/- [arrays::index_slice_u32_0]:
-   Source: 'tests/src/arrays.rs', lines 185:0-187:1 -/
+/-- [arrays::index_slice_u32_0]:
+    Source: 'tests/src/arrays.rs', lines 185:0-187:1 -/
 def index_slice_u32_0 (x : Slice Std.U32) : Result Std.U32 := do
   Slice.index_usize x 0#usize
 
-/- [arrays::index_mut_slice_u32_0]:
-   Source: 'tests/src/arrays.rs', lines 189:0-191:1 -/
+/-- [arrays::index_mut_slice_u32_0]:
+    Source: 'tests/src/arrays.rs', lines 189:0-191:1 -/
 def index_mut_slice_u32_0
   (x : Slice Std.U32) : Result (Std.U32 × (Slice Std.U32)) := do
   let i ← Slice.index_usize x 0#usize
   ok (i, x)
 
-/- [arrays::index_all]:
-   Source: 'tests/src/arrays.rs', lines 193:0-205:1 -/
+/-- [arrays::index_all]:
+    Source: 'tests/src/arrays.rs', lines 193:0-205:1 -/
 def index_all : Result Std.U32 := do
   let x := Array.repeat 2#usize 0#u32
   let i ← index_array x
@@ -295,25 +295,25 @@ def index_all : Result Std.U32 := do
   let (i6, _) ← index_mut_slice_u32_0 s1
   i5 + i6
 
-/- [arrays::update_array]:
-   Source: 'tests/src/arrays.rs', lines 207:0-209:1 -/
+/-- [arrays::update_array]:
+    Source: 'tests/src/arrays.rs', lines 207:0-209:1 -/
 def update_array (x : Array Std.U32 2#usize) : Result Unit := do
   let _ ← Array.index_mut_usize x 0#usize
   ok ()
 
-/- [arrays::update_array_mut_borrow]:
-   Source: 'tests/src/arrays.rs', lines 210:0-212:1 -/
+/-- [arrays::update_array_mut_borrow]:
+    Source: 'tests/src/arrays.rs', lines 210:0-212:1 -/
 def update_array_mut_borrow
   (x : Array Std.U32 2#usize) : Result (Array Std.U32 2#usize) := do
   Array.update x 0#usize 1#u32
 
-/- [arrays::update_mut_slice]:
-   Source: 'tests/src/arrays.rs', lines 213:0-215:1 -/
+/-- [arrays::update_mut_slice]:
+    Source: 'tests/src/arrays.rs', lines 213:0-215:1 -/
 def update_mut_slice (x : Slice Std.U32) : Result (Slice Std.U32) := do
   Slice.update x 0#usize 1#u32
 
-/- [arrays::update_all]:
-   Source: 'tests/src/arrays.rs', lines 217:0-223:1 -/
+/-- [arrays::update_all]:
+    Source: 'tests/src/arrays.rs', lines 217:0-223:1 -/
 def update_all : Result Unit := do
   let x := Array.repeat 2#usize 0#u32
   update_array x
@@ -323,23 +323,23 @@ def update_all : Result Unit := do
   let _ ← update_mut_slice s
   ok ()
 
-/- [arrays::incr_array]:
-   Source: 'tests/src/arrays.rs', lines 225:0-227:1 -/
+/-- [arrays::incr_array]:
+    Source: 'tests/src/arrays.rs', lines 225:0-227:1 -/
 def incr_array
   (x : Array Std.U32 2#usize) : Result (Array Std.U32 2#usize) := do
   let i ← Array.index_usize x 0#usize
   let i1 ← i + 1#u32
   Array.update x 0#usize i1
 
-/- [arrays::incr_slice]:
-   Source: 'tests/src/arrays.rs', lines 229:0-231:1 -/
+/-- [arrays::incr_slice]:
+    Source: 'tests/src/arrays.rs', lines 229:0-231:1 -/
 def incr_slice (x : Slice Std.U32) : Result (Slice Std.U32) := do
   let i ← Slice.index_usize x 0#usize
   let i1 ← i + 1#u32
   Slice.update x 0#usize i1
 
-/- [arrays::range_all]:
-   Source: 'tests/src/arrays.rs', lines 236:0-240:1 -/
+/-- [arrays::range_all]:
+    Source: 'tests/src/arrays.rs', lines 236:0-240:1 -/
 def range_all : Result Unit := do
   let x := Array.repeat 4#usize 0#u32
   let (s, _) ←
@@ -349,13 +349,13 @@ def range_all : Result Unit := do
   let _ ← update_mut_slice s
   ok ()
 
-/- [arrays::deref_array_borrow]:
-   Source: 'tests/src/arrays.rs', lines 245:0-248:1 -/
+/-- [arrays::deref_array_borrow]:
+    Source: 'tests/src/arrays.rs', lines 245:0-248:1 -/
 def deref_array_borrow (x : Array Std.U32 2#usize) : Result Std.U32 := do
   Array.index_usize x 0#usize
 
-/- [arrays::deref_array_mut_borrow]:
-   Source: 'tests/src/arrays.rs', lines 250:0-253:1 -/
+/-- [arrays::deref_array_mut_borrow]:
+    Source: 'tests/src/arrays.rs', lines 250:0-253:1 -/
 def deref_array_mut_borrow
   (x : Array Std.U32 2#usize) :
   Result (Std.U32 × (Array Std.U32 2#usize))
@@ -363,18 +363,18 @@ def deref_array_mut_borrow
   let i ← Array.index_usize x 0#usize
   ok (i, x)
 
-/- [arrays::take_array_t]:
-   Source: 'tests/src/arrays.rs', lines 258:0-258:34 -/
+/-- [arrays::take_array_t]:
+    Source: 'tests/src/arrays.rs', lines 258:0-258:34 -/
 def take_array_t (a : Array AB 2#usize) : Result Unit := do
   ok ()
 
-/- [arrays::non_copyable_array]:
-   Source: 'tests/src/arrays.rs', lines 260:0-268:1 -/
+/-- [arrays::non_copyable_array]:
+    Source: 'tests/src/arrays.rs', lines 260:0-268:1 -/
 def non_copyable_array : Result Unit := do
   take_array_t (Array.make 2#usize [ AB.A, AB.B ])
 
-/- [arrays::sum]: loop body 0:
-   Source: 'tests/src/arrays.rs', lines 276:4-279:5 -/
+/-- [arrays::sum]: loop body 0:
+    Source: 'tests/src/arrays.rs', lines 276:4-279:5 -/
 @[rust_loop_body]
 def sum_loop.body
   (s : Slice Std.U32) (sum1 : Std.U32) (i : Std.Usize) :
@@ -389,8 +389,8 @@ def sum_loop.body
     ok (cont (sum3, i3))
   else ok (done sum1)
 
-/- [arrays::sum]: loop 0:
-   Source: 'tests/src/arrays.rs', lines 276:4-279:5 -/
+/-- [arrays::sum]: loop 0:
+    Source: 'tests/src/arrays.rs', lines 276:4-279:5 -/
 @[rust_loop]
 def sum_loop
   (s : Slice Std.U32) (sum1 : Std.U32) (i : Std.Usize) : Result Std.U32 := do
@@ -398,14 +398,14 @@ def sum_loop
     (fun (sum3, i1) => sum_loop.body s sum3 i1)
     (sum1, i)
 
-/- [arrays::sum]:
-   Source: 'tests/src/arrays.rs', lines 273:0-281:1 -/
+/-- [arrays::sum]:
+    Source: 'tests/src/arrays.rs', lines 273:0-281:1 -/
 @[reducible]
 def sum (s : Slice Std.U32) : Result Std.U32 := do
   sum_loop s 0#u32 0#usize
 
-/- [arrays::sum2]: loop body 0:
-   Source: 'tests/src/arrays.rs', lines 287:4-290:5 -/
+/-- [arrays::sum2]: loop body 0:
+    Source: 'tests/src/arrays.rs', lines 287:4-290:5 -/
 @[rust_loop_body]
 def sum2_loop.body
   (s : Slice Std.U32) (s2 : Slice Std.U32) (sum1 : Std.U32) (i : Std.Usize) :
@@ -422,8 +422,8 @@ def sum2_loop.body
     ok (cont (sum3, i5))
   else ok (done sum1)
 
-/- [arrays::sum2]: loop 0:
-   Source: 'tests/src/arrays.rs', lines 287:4-290:5 -/
+/-- [arrays::sum2]: loop 0:
+    Source: 'tests/src/arrays.rs', lines 287:4-290:5 -/
 @[rust_loop]
 def sum2_loop
   (s : Slice Std.U32) (s2 : Slice Std.U32) (sum1 : Std.U32) (i : Std.Usize) :
@@ -433,35 +433,35 @@ def sum2_loop
     (fun (sum3, i1) => sum2_loop.body s s2 sum3 i1)
     (sum1, i)
 
-/- [arrays::sum2]:
-   Source: 'tests/src/arrays.rs', lines 283:0-292:1 -/
+/-- [arrays::sum2]:
+    Source: 'tests/src/arrays.rs', lines 283:0-292:1 -/
 def sum2 (s : Slice Std.U32) (s2 : Slice Std.U32) : Result Std.U32 := do
   let i := Slice.len s
   let i1 := Slice.len s2
   massert (i = i1)
   sum2_loop s s2 0#u32 0#usize
 
-/- [arrays::f0]:
-   Source: 'tests/src/arrays.rs', lines 294:0-297:1 -/
+/-- [arrays::f0]:
+    Source: 'tests/src/arrays.rs', lines 294:0-297:1 -/
 def f0 : Result Unit := do
   let (s, _) ←
     lift (Array.to_slice_mut (Array.make 2#usize [ 1#u32, 2#u32 ]))
   let _ ← Slice.index_mut_usize s 0#usize
   ok ()
 
-/- [arrays::f1]:
-   Source: 'tests/src/arrays.rs', lines 299:0-302:1 -/
+/-- [arrays::f1]:
+    Source: 'tests/src/arrays.rs', lines 299:0-302:1 -/
 def f1 : Result Unit := do
   let _ ← Array.index_mut_usize (Array.make 2#usize [ 1#u32, 2#u32 ]) 0#usize
   ok ()
 
-/- [arrays::f2]:
-   Source: 'tests/src/arrays.rs', lines 304:0-304:20 -/
+/-- [arrays::f2]:
+    Source: 'tests/src/arrays.rs', lines 304:0-304:20 -/
 def f2 (i : Std.U32) : Result Unit := do
   ok ()
 
-/- [arrays::f4]:
-   Source: 'tests/src/arrays.rs', lines 313:0-315:1 -/
+/-- [arrays::f4]:
+    Source: 'tests/src/arrays.rs', lines 313:0-315:1 -/
 def f4
   (x : Array Std.U32 32#usize) (y : Std.Usize) (z : Std.Usize) :
   Result (Slice Std.U32)
@@ -470,8 +470,8 @@ def f4
     (core.slice.index.SliceIndexRangeUsizeSlice Std.U32)) x
     { start := y, «end» := z }
 
-/- [arrays::f3]:
-   Source: 'tests/src/arrays.rs', lines 306:0-311:1 -/
+/-- [arrays::f3]:
+    Source: 'tests/src/arrays.rs', lines 306:0-311:1 -/
 def f3 : Result Std.U32 := do
   let i ← Array.index_usize (Array.make 2#usize [ 1#u32, 2#u32 ]) 0#usize
   f2 i
@@ -480,17 +480,17 @@ def f3 : Result Std.U32 := do
   let s1 ← f4 b 16#usize 18#usize
   sum2 s s1
 
-/- [arrays::SZ]
-   Source: 'tests/src/arrays.rs', lines 317:0-317:25 -/
+/-- [arrays::SZ]
+    Source: 'tests/src/arrays.rs', lines 317:0-317:25 -/
 @[global_simps, irreducible] def SZ : Std.Usize := 32#usize
 
-/- [arrays::f5]:
-   Source: 'tests/src/arrays.rs', lines 320:0-322:1 -/
+/-- [arrays::f5]:
+    Source: 'tests/src/arrays.rs', lines 320:0-322:1 -/
 def f5 (x : Array Std.U32 32#usize) : Result Std.U32 := do
   Array.index_usize x 0#usize
 
-/- [arrays::ite]:
-   Source: 'tests/src/arrays.rs', lines 325:0-332:1 -/
+/-- [arrays::ite]:
+    Source: 'tests/src/arrays.rs', lines 325:0-332:1 -/
 def ite : Result Unit := do
   let x := Array.repeat 2#usize 0#u32
   let y := Array.repeat 2#usize 0#u32
@@ -500,8 +500,8 @@ def ite : Result Unit := do
   let _ ← index_mut_slice_u32_0 s1
   ok ()
 
-/- [arrays::zero_slice]: loop body 0:
-   Source: 'tests/src/arrays.rs', lines 337:4-340:5 -/
+/-- [arrays::zero_slice]: loop body 0:
+    Source: 'tests/src/arrays.rs', lines 337:4-340:5 -/
 @[rust_loop_body]
 def zero_slice_loop.body
   (len : Std.Usize) (a : Slice Std.U8) (i : Std.Usize) :
@@ -513,8 +513,8 @@ def zero_slice_loop.body
        ok (cont (s, i1))
   else ok (done a)
 
-/- [arrays::zero_slice]: loop 0:
-   Source: 'tests/src/arrays.rs', lines 337:4-340:5 -/
+/-- [arrays::zero_slice]: loop 0:
+    Source: 'tests/src/arrays.rs', lines 337:4-340:5 -/
 @[rust_loop]
 def zero_slice_loop
   (a : Slice Std.U8) (i : Std.Usize) (len : Std.Usize) :
@@ -524,14 +524,14 @@ def zero_slice_loop
     (fun (a1, i1) => zero_slice_loop.body len a1 i1)
     (a, i)
 
-/- [arrays::zero_slice]:
-   Source: 'tests/src/arrays.rs', lines 334:0-341:1 -/
+/-- [arrays::zero_slice]:
+    Source: 'tests/src/arrays.rs', lines 334:0-341:1 -/
 def zero_slice (a : Slice Std.U8) : Result (Slice Std.U8) := do
   let len := Slice.len a
   zero_slice_loop a 0#usize len
 
-/- [arrays::iter_mut_slice]: loop body 0:
-   Source: 'tests/src/arrays.rs', lines 346:4-348:5 -/
+/-- [arrays::iter_mut_slice]: loop body 0:
+    Source: 'tests/src/arrays.rs', lines 346:4-348:5 -/
 @[rust_loop_body]
 def iter_mut_slice_loop.body
   (len : Std.Usize) (i : Std.Usize) : Result (ControlFlow Std.Usize Unit) := do
@@ -540,23 +540,23 @@ def iter_mut_slice_loop.body
        ok (cont i1)
   else ok (done ())
 
-/- [arrays::iter_mut_slice]: loop 0:
-   Source: 'tests/src/arrays.rs', lines 346:4-348:5 -/
+/-- [arrays::iter_mut_slice]: loop 0:
+    Source: 'tests/src/arrays.rs', lines 346:4-348:5 -/
 @[rust_loop]
 def iter_mut_slice_loop (len : Std.Usize) (i : Std.Usize) : Result Unit := do
   loop
     (fun i1 => iter_mut_slice_loop.body len i1)
     i
 
-/- [arrays::iter_mut_slice]:
-   Source: 'tests/src/arrays.rs', lines 343:0-349:1 -/
+/-- [arrays::iter_mut_slice]:
+    Source: 'tests/src/arrays.rs', lines 343:0-349:1 -/
 def iter_mut_slice (a : Slice Std.U8) : Result (Slice Std.U8) := do
   let len := Slice.len a
   iter_mut_slice_loop len 0#usize
   ok a
 
-/- [arrays::sum_mut_slice]: loop body 0:
-   Source: 'tests/src/arrays.rs', lines 354:4-357:5 -/
+/-- [arrays::sum_mut_slice]: loop body 0:
+    Source: 'tests/src/arrays.rs', lines 354:4-357:5 -/
 @[rust_loop_body]
 def sum_mut_slice_loop.body
   (a : Slice Std.U32) (i : Std.Usize) (s : Std.U32) :
@@ -571,8 +571,8 @@ def sum_mut_slice_loop.body
     ok (cont (i3, s1))
   else ok (done s)
 
-/- [arrays::sum_mut_slice]: loop 0:
-   Source: 'tests/src/arrays.rs', lines 354:4-357:5 -/
+/-- [arrays::sum_mut_slice]: loop 0:
+    Source: 'tests/src/arrays.rs', lines 354:4-357:5 -/
 @[rust_loop]
 def sum_mut_slice_loop
   (a : Slice Std.U32) (i : Std.Usize) (s : Std.U32) : Result Std.U32 := do
@@ -580,15 +580,15 @@ def sum_mut_slice_loop
     (fun (i1, s1) => sum_mut_slice_loop.body a i1 s1)
     (i, s)
 
-/- [arrays::sum_mut_slice]:
-   Source: 'tests/src/arrays.rs', lines 351:0-359:1 -/
+/-- [arrays::sum_mut_slice]:
+    Source: 'tests/src/arrays.rs', lines 351:0-359:1 -/
 def sum_mut_slice
   (a : Slice Std.U32) : Result (Std.U32 × (Slice Std.U32)) := do
   let s ← sum_mut_slice_loop a 0#usize 0#u32
   ok (s, a)
 
-/- [arrays::add_acc]: loop body 0:
-   Source: 'tests/src/arrays.rs', lines 363:4-372:5 -/
+/-- [arrays::add_acc]: loop body 0:
+    Source: 'tests/src/arrays.rs', lines 363:4-372:5 -/
 @[rust_loop_body]
 def add_acc_loop.body
   (paSrc : Array Std.U32 256#usize) (peDst : Array Std.U32 256#usize)
@@ -607,8 +607,8 @@ def add_acc_loop.body
     ok (cont (a1, a2, i1))
   else ok (done (paSrc, peDst))
 
-/- [arrays::add_acc]: loop 0:
-   Source: 'tests/src/arrays.rs', lines 363:4-372:5 -/
+/-- [arrays::add_acc]: loop 0:
+    Source: 'tests/src/arrays.rs', lines 363:4-372:5 -/
 @[rust_loop]
 def add_acc_loop
   (paSrc : Array Std.U32 256#usize) (peDst : Array Std.U32 256#usize)
@@ -619,8 +619,8 @@ def add_acc_loop
     (fun (paSrc1, peDst1, i1) => add_acc_loop.body paSrc1 peDst1 i1)
     (paSrc, peDst, i)
 
-/- [arrays::add_acc]:
-   Source: 'tests/src/arrays.rs', lines 361:0-373:1 -/
+/-- [arrays::add_acc]:
+    Source: 'tests/src/arrays.rs', lines 361:0-373:1 -/
 @[reducible]
 def add_acc
   (paSrc : Array Std.U32 256#usize) (peDst : Array Std.U32 256#usize) :
@@ -628,18 +628,18 @@ def add_acc
   := do
   add_acc_loop paSrc peDst 0#usize
 
-/- [arrays::ARRAY1]
-   Source: 'tests/src/arrays.rs', lines 375:0-375:32 -/
+/-- [arrays::ARRAY1]
+    Source: 'tests/src/arrays.rs', lines 375:0-375:32 -/
 @[global_simps, irreducible]
 def ARRAY1 : Array Std.U32 2#usize := Array.make 2#usize [ 0#u32, 1#u32 ]
 
-/- [arrays::Scalar]
-   Source: 'tests/src/arrays.rs', lines 378:0-378:24 -/
+/-- [arrays::Scalar]
+    Source: 'tests/src/arrays.rs', lines 378:0-378:24 -/
 @[reducible]
 def Scalar := Array Std.U32 2#usize
 
-/- [arrays::L]
-   Source: 'tests/src/arrays.rs', lines 379:0-379:33 -/
+/-- [arrays::L]
+    Source: 'tests/src/arrays.rs', lines 379:0-379:33 -/
 @[global_simps, irreducible]
 def L : Scalar := Array.make 2#usize [ 0#u32, 1#u32 ]
 

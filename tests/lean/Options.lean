@@ -11,8 +11,8 @@ set_option maxHeartbeats 1000000
 
 namespace options
 
-/- [options::test_unwrap_or]:
-   Source: 'tests/src/options.rs', lines 3:0-5:1 -/
+/-- [options::test_unwrap_or]:
+    Source: 'tests/src/options.rs', lines 3:0-5:1 -/
 def test_unwrap_or {T : Type} (x : Option T) (default : T) : Result T := do
   ok (core.option.Option.unwrap_or x default)
 

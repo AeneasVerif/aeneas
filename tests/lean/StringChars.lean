@@ -11,8 +11,8 @@ set_option maxHeartbeats 1000000
 
 namespace string_chars
 
-/- [string_chars::collect]:
-   Source: 'tests/src/string-chars.rs', lines 3:0-6:1 -/
+/-- [string_chars::collect]:
+    Source: 'tests/src/string-chars.rs', lines 3:0-6:1 -/
 def collect : Result Unit := do
   let c ← core.str.Str.chars (toStr "hello")
   let _ ←
@@ -20,8 +20,8 @@ def collect : Result Unit := do
       (core.iter.traits.collect.FromIteratorVec Char) c
   ok ()
 
-/- [string_chars::print_vec]:
-   Source: 'tests/src/string-chars.rs', lines 8:0-11:1 -/
+/-- [string_chars::print_vec]:
+    Source: 'tests/src/string-chars.rs', lines 8:0-11:1 -/
 def print_vec : Result Unit := do
   let s ← lift (Array.to_slice (Array.make 3#usize [ 1#i32, 3#i32, 2#i32 ]))
   let v ← alloc.slice.Slice.to_vec core.clone.CloneI32 s
