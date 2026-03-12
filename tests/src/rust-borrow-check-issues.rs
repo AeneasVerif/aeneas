@@ -77,12 +77,21 @@ fn conditional() {
     }
 }
 
+// TODO: remove (this currently causes issues with the *translation* - it has
+// nothing to do with the symbolic execution).
+fn unwrap_option_mut<'a, T>(x: Option<&'a mut T>) -> &'a mut T {
+    match x {
+        Some(x) => x,
+        None => panic!(),
+    }
+}
+
 fn conditional_with_indirection() {
     let mut b = Some(Box::new(X { next: None }));
     let mut p = &mut b;
     while let Some(now) = p {
         if true {
-            p = &mut p.as_mut().unwrap().next;
+            p = &mut (unwrap_option_mut(p.as_mut())).next;
         }
     }
 }
@@ -92,7 +101,7 @@ fn conditional_with_indirection_2(b0: bool) {
     let mut p = &mut b;
     while let Some(now) = p {
         if b0 {
-            p = &mut p.as_mut().unwrap().next;
+            p = &mut (unwrap_option_mut(p.as_mut())).next;
         }
     }
 }
