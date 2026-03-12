@@ -12,19 +12,19 @@ set_option maxHeartbeats 1000000
 namespace default
 
 /-- [default::f0]:
-   Source: 'tests/src/default.rs', lines 3:0-5:1 -/
+    Source: 'tests/src/default.rs', lines 3:0-5:1 -/
 def f0 : Result Unit := do
   let _ ← core.default.DefaultArrayEmpty.default Std.U32
   ok ()
 
 /-- [default::f1]:
-   Source: 'tests/src/default.rs', lines 7:0-9:1 -/
+    Source: 'tests/src/default.rs', lines 7:0-9:1 -/
 def f1 : Result Unit := do
   let _ ← core.default.DefaultArray.default 1#usize core.default.DefaultU32
   ok ()
 
 /-- [default::f2]:
-   Source: 'tests/src/default.rs', lines 11:0-13:1 -/
+    Source: 'tests/src/default.rs', lines 11:0-13:1 -/
 def f2 : Result Unit := do
   let _ ← core.default.DefaultArray.default 2#usize core.default.DefaultU32
   ok ()

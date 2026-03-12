@@ -12,26 +12,26 @@ set_option maxHeartbeats 1000000
 namespace blanket_impl
 
 /-- Trait declaration: [blanket_impl::Trait1]
-   Source: 'tests/src/blanket_impl.rs', lines 3:0-3:15 -/
+    Source: 'tests/src/blanket_impl.rs', lines 3:0-3:15 -/
 structure Trait1 (Self : Type) where
 
 /-- Trait declaration: [blanket_impl::Trait2]
-   Source: 'tests/src/blanket_impl.rs', lines 4:0-6:1 -/
+    Source: 'tests/src/blanket_impl.rs', lines 4:0-6:1 -/
 structure Trait2 (Self : Type) where
   foo : Result Unit
 
 /-- [blanket_impl::Trait2::foo]:
-   Source: 'tests/src/blanket_impl.rs', lines 5:4-5:15 -/
+    Source: 'tests/src/blanket_impl.rs', lines 5:4-5:15 -/
 def Trait2.foo.default (Self : Type) : Result Unit := do
   ok ()
 
 /-- [blanket_impl::{blanket_impl::Trait2 for T}::foo]:
-   Source: 'tests/src/blanket_impl.rs', lines 9:0-9:31 -/
+    Source: 'tests/src/blanket_impl.rs', lines 9:0-9:31 -/
 def Trait2.Blanket.foo {T : Type} (Trait1Inst : Trait1 T) : Result Unit := do
   ok ()
 
 /-- Trait implementation: [blanket_impl::{blanket_impl::Trait2 for T}]
-   Source: 'tests/src/blanket_impl.rs', lines 9:0-9:31 -/
+    Source: 'tests/src/blanket_impl.rs', lines 9:0-9:31 -/
 @[reducible]
 def Trait2.Blanket {T : Type} (Trait1Inst : Trait1 T) : Trait2 T := {
   foo := Trait2.Blanket.foo Trait1Inst

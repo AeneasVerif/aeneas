@@ -12,7 +12,7 @@ set_option maxHeartbeats 1000000
 namespace joins
 
 /-- [joins::opt_add_1]:
-   Source: 'tests/src/joins.rs', lines 4:0-7:1 -/
+    Source: 'tests/src/joins.rs', lines 4:0-7:1 -/
 def opt_add_1 (b : Bool) (x : Std.U32) : Result Std.U32 := do
   let y ← if b
             then ok 1#u32
@@ -20,7 +20,7 @@ def opt_add_1 (b : Bool) (x : Std.U32) : Result Std.U32 := do
   x + y
 
 /-- [joins::opt_add_2]:
-   Source: 'tests/src/joins.rs', lines 9:0-13:1 -/
+    Source: 'tests/src/joins.rs', lines 9:0-13:1 -/
 def opt_add_2 (b : Bool) (x : Std.U32) : Result Std.U32 := do
   let y ← if b
             then ok 1#u32
@@ -32,13 +32,13 @@ def opt_add_2 (b : Bool) (x : Std.U32) : Result Std.U32 := do
   i + z
 
 /-- [joins::opt_add_1_or_panic]:
-   Source: 'tests/src/joins.rs', lines 15:0-18:1 -/
+    Source: 'tests/src/joins.rs', lines 15:0-18:1 -/
 def opt_add_1_or_panic (b : Bool) (x : Std.U32) : Result Std.U32 := do
   massert b
   x + 1#u32
 
 /-- [joins::opt_add_switch_1]:
-   Source: 'tests/src/joins.rs', lines 20:0-27:1 -/
+    Source: 'tests/src/joins.rs', lines 20:0-27:1 -/
 def opt_add_switch_1 (a : Std.U32) (x : Std.U32) : Result Std.U32 := do
   let y ←
     match a with
@@ -48,14 +48,14 @@ def opt_add_switch_1 (a : Std.U32) (x : Std.U32) : Result Std.U32 := do
   x + y
 
 /-- [joins::opt_add_switch_2]:
-   Source: 'tests/src/joins.rs', lines 29:0-35:1 -/
+    Source: 'tests/src/joins.rs', lines 29:0-35:1 -/
 def opt_add_switch_2 (a : Std.U32) (x : Std.U32) : Result Std.U32 := do
   match a with
   | 0#uscalar => x + 0#u32
   | _ => fail panic
 
 /-- [joins::Enum]
-   Source: 'tests/src/joins.rs', lines 37:0-41:1 -/
+    Source: 'tests/src/joins.rs', lines 37:0-41:1 -/
 @[discriminant isize]
 inductive Enum where
 | V0 : Enum
@@ -63,7 +63,7 @@ inductive Enum where
 | V2 : Enum
 
 /-- [joins::use_enum]:
-   Source: 'tests/src/joins.rs', lines 43:0-51:1 -/
+    Source: 'tests/src/joins.rs', lines 43:0-51:1 -/
 def use_enum (e : Enum) (x : Std.U32) : Result Std.U32 := do
   let y ←
     match e with
@@ -73,7 +73,7 @@ def use_enum (e : Enum) (x : Std.U32) : Result Std.U32 := do
   x + y
 
 /-- [joins::call_choose]:
-   Source: 'tests/src/joins.rs', lines 53:0-56:1 -/
+    Source: 'tests/src/joins.rs', lines 53:0-56:1 -/
 def call_choose
   (b : Bool) (x : Std.U32) (y : Std.U32) : Result (Std.U32 × Std.U32) := do
   let (z, back) ←

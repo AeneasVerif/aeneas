@@ -12,7 +12,7 @@ set_option maxHeartbeats 1000000
 namespace issue_194_recursive_struct_projector
 
 /-- [issue_194_recursive_struct_projector::AVLNode]
-   Source: 'tests/src/issue-194-recursive-struct-projector.rs', lines 2:0-6:1 -/
+    Source: 'tests/src/issue-194-recursive-struct-projector.rs', lines 2:0-6:1 -/
 inductive AVLNode (T : Type) where
 | mk : T → Option (AVLNode T) → Option (AVLNode T) → AVLNode T
 
@@ -41,12 +41,12 @@ theorem AVLNode.right._simpLemma_ {T : Type} (value : T) (left : Option
   (AVLNode.mk value left right).right = right := by rfl
 
 /-- [issue_194_recursive_struct_projector::get_val]:
-   Source: 'tests/src/issue-194-recursive-struct-projector.rs', lines 10:0-12:1 -/
+    Source: 'tests/src/issue-194-recursive-struct-projector.rs', lines 10:0-12:1 -/
 def get_val {T : Type} (x : AVLNode T) : Result T := do
   ok x.value
 
 /-- [issue_194_recursive_struct_projector::get_left]:
-   Source: 'tests/src/issue-194-recursive-struct-projector.rs', lines 14:0-16:1 -/
+    Source: 'tests/src/issue-194-recursive-struct-projector.rs', lines 14:0-16:1 -/
 def get_left {T : Type} (x : AVLNode T) : Result (Option (AVLNode T)) := do
   ok x.left
 

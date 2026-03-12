@@ -12,14 +12,14 @@ set_option maxHeartbeats 1000000
 namespace issue_440_type_error
 
 /-- [issue_440_type_error::PeanoNum]
-   Source: 'tests/src/issue-440-type-error.rs', lines 3:0-6:1 -/
+    Source: 'tests/src/issue-440-type-error.rs', lines 3:0-6:1 -/
 @[discriminant isize]
 inductive PeanoNum where
 | Zero : PeanoNum
 | Succ : PeanoNum → PeanoNum
 
 /-- [issue_440_type_error::f]:
-   Source: 'tests/src/issue-440-type-error.rs', lines 8:0-15:1 -/
+    Source: 'tests/src/issue-440-type-error.rs', lines 8:0-15:1 -/
 def f (x : PeanoNum) (value : Std.Isize) : Result PeanoNum := do
   match x with
   | PeanoNum.Zero =>

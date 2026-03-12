@@ -12,13 +12,13 @@ set_option maxHeartbeats 1000000
 namespace loops_sequences
 
 /-- [loops_sequences::Key]
-   Source: 'tests/src/loops-sequences.rs', lines 3:0-6:1 -/
+    Source: 'tests/src/loops-sequences.rs', lines 3:0-6:1 -/
 structure Key where
   seed : Array Std.U8 32#usize
   t : Array Std.U16 32#usize
 
 /-- [loops_sequences::{loops_sequences::Key}::t_mut]:
-   Source: 'tests/src/loops-sequences.rs', lines 9:4-11:5 -/
+    Source: 'tests/src/loops-sequences.rs', lines 9:4-11:5 -/
 def Key.t_mut
   (self : Key) :
   Result ((Array Std.U16 32#usize) × (Array Std.U16 32#usize → Key))
@@ -27,13 +27,13 @@ def Key.t_mut
   ok (self.t, back)
 
 /-- [loops_sequences::shake_init]:
-   Source: 'tests/src/loops-sequences.rs', lines 16:0-16:40 -/
+    Source: 'tests/src/loops-sequences.rs', lines 16:0-16:40 -/
 def shake_init
   (_state : Array Std.U8 8#usize) : Result (Array Std.U8 8#usize) := do
   ok _state
 
 /-- [loops_sequences::shake_append]:
-   Source: 'tests/src/loops-sequences.rs', lines 17:0-17:56 -/
+    Source: 'tests/src/loops-sequences.rs', lines 17:0-17:56 -/
 def shake_append
   (_state : Array Std.U8 8#usize) (_data : Slice Std.U8) :
   Result (Array Std.U8 8#usize)
@@ -41,7 +41,7 @@ def shake_append
   ok _state
 
 /-- [loops_sequences::shake_state_copy]:
-   Source: 'tests/src/loops-sequences.rs', lines 18:0-18:62 -/
+    Source: 'tests/src/loops-sequences.rs', lines 18:0-18:62 -/
 def shake_state_copy
   (_src : Array Std.U8 8#usize) (_dst : Array Std.U8 8#usize) :
   Result (Array Std.U8 8#usize)
@@ -49,7 +49,7 @@ def shake_state_copy
   ok _dst
 
 /-- [loops_sequences::shake_extract]:
-   Source: 'tests/src/loops-sequences.rs', lines 19:0-19:54 -/
+    Source: 'tests/src/loops-sequences.rs', lines 19:0-19:54 -/
 def shake_extract
   (_src : Array Std.U8 8#usize) (_dst : Slice Std.U8) :
   Result (Slice Std.U8)
@@ -57,7 +57,7 @@ def shake_extract
   ok _dst
 
 /-- [loops_sequences::sample_cbd]:
-   Source: 'tests/src/loops-sequences.rs', lines 21:0-21:51 -/
+    Source: 'tests/src/loops-sequences.rs', lines 21:0-21:51 -/
 def sample_cbd
   (_src : Slice Std.U8) (_dst : Array Std.U16 32#usize) :
   Result (Array Std.U16 32#usize)
@@ -65,7 +65,7 @@ def sample_cbd
   ok _dst
 
 /-- [loops_sequences::key_expand]: loop body 0:
-   Source: 'tests/src/loops-sequences.rs', lines 29:4-36:5 -/
+    Source: 'tests/src/loops-sequences.rs', lines 29:4-36:5 -/
 @[rust_loop_body]
 def key_expand_loop0.body
   (state_base : Array Std.U8 8#usize) (key : Key)
@@ -93,7 +93,7 @@ def key_expand_loop0.body
   else ok (done (key, state_work, sample_buffer))
 
 /-- [loops_sequences::key_expand]: loop 0:
-   Source: 'tests/src/loops-sequences.rs', lines 29:4-36:5 -/
+    Source: 'tests/src/loops-sequences.rs', lines 29:4-36:5 -/
 @[rust_loop]
 def key_expand_loop0
   (key : Key) (state_base : Array Std.U8 8#usize)
@@ -107,7 +107,7 @@ def key_expand_loop0
     (key, state_work, sample_buffer, i)
 
 /-- [loops_sequences::key_expand]: loop body 1:
-   Source: 'tests/src/loops-sequences.rs', lines 39:4-46:5 -/
+    Source: 'tests/src/loops-sequences.rs', lines 39:4-46:5 -/
 @[rust_loop_body]
 def key_expand_loop1.body
   (state_base : Array Std.U8 8#usize) (key : Key)
@@ -135,7 +135,7 @@ def key_expand_loop1.body
   else ok (done (key, state_work))
 
 /-- [loops_sequences::key_expand]: loop 1:
-   Source: 'tests/src/loops-sequences.rs', lines 39:4-46:5 -/
+    Source: 'tests/src/loops-sequences.rs', lines 39:4-46:5 -/
 @[rust_loop]
 def key_expand_loop1
   (key : Key) (state_base : Array Std.U8 8#usize)
@@ -149,7 +149,7 @@ def key_expand_loop1
     (key, state_work, sample_buffer, i)
 
 /-- [loops_sequences::key_expand]:
-   Source: 'tests/src/loops-sequences.rs', lines 23:0-47:1 -/
+    Source: 'tests/src/loops-sequences.rs', lines 23:0-47:1 -/
 def key_expand
   (key : Key) (state_base : Array Std.U8 8#usize)
   (state_work : Array Std.U8 8#usize) :

@@ -12,7 +12,7 @@ set_option maxHeartbeats 1000000
 namespace vec
 
 /-- [vec::use_extend_from_slice]:
-   Source: 'tests/src/vec.rs', lines 5:0-7:1 -/
+    Source: 'tests/src/vec.rs', lines 5:0-7:1 -/
 def use_extend_from_slice
   {T : Type} (corecloneCloneInst : core.clone.Clone T) (v : alloc.vec.Vec T)
   (s : Slice T) :
@@ -21,13 +21,13 @@ def use_extend_from_slice
   alloc.vec.Vec.extend_from_slice corecloneCloneInst v s
 
 /-- [vec::use_alloc_with_capacity]:
-   Source: 'tests/src/vec.rs', lines 9:0-11:1 -/
+    Source: 'tests/src/vec.rs', lines 9:0-11:1 -/
 def use_alloc_with_capacity
   (T : Type) (n : Std.Usize) : Result (alloc.vec.Vec T) := do
   ok (alloc.vec.Vec.with_capacity T n)
 
 /-- [vec::from_elem]:
-   Source: 'tests/src/vec.rs', lines 13:0-15:1 -/
+    Source: 'tests/src/vec.rs', lines 13:0-15:1 -/
 def from_elem
   {T : Type} (corecloneCloneInst : core.clone.Clone T) (x : T) (n : Std.Usize)
   :

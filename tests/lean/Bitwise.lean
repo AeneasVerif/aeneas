@@ -12,29 +12,29 @@ set_option maxHeartbeats 1000000
 namespace bitwise
 
 /-- [bitwise::shift_u32]:
-   Source: 'tests/src/bitwise.rs', lines 5:0-10:1 -/
+    Source: 'tests/src/bitwise.rs', lines 5:0-10:1 -/
 def shift_u32 (a : Std.U32) : Result Std.U32 := do
   let t ← a >>> 16#usize
   t <<< 16#usize
 
 /-- [bitwise::shift_i32]:
-   Source: 'tests/src/bitwise.rs', lines 12:0-17:1 -/
+    Source: 'tests/src/bitwise.rs', lines 12:0-17:1 -/
 def shift_i32 (a : Std.I32) : Result Std.I32 := do
   let t ← a >>> 16#isize
   t <<< 16#isize
 
 /-- [bitwise::xor_u32]:
-   Source: 'tests/src/bitwise.rs', lines 19:0-21:1 -/
+    Source: 'tests/src/bitwise.rs', lines 19:0-21:1 -/
 def xor_u32 (a : Std.U32) (b : Std.U32) : Result Std.U32 := do
   ok (a ^^^ b)
 
 /-- [bitwise::or_u32]:
-   Source: 'tests/src/bitwise.rs', lines 23:0-25:1 -/
+    Source: 'tests/src/bitwise.rs', lines 23:0-25:1 -/
 def or_u32 (a : Std.U32) (b : Std.U32) : Result Std.U32 := do
   ok (a ||| b)
 
 /-- [bitwise::and_u32]:
-   Source: 'tests/src/bitwise.rs', lines 27:0-29:1 -/
+    Source: 'tests/src/bitwise.rs', lines 27:0-29:1 -/
 def and_u32 (a : Std.U32) (b : Std.U32) : Result Std.U32 := do
   ok (a &&& b)
 

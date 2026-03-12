@@ -12,7 +12,7 @@ set_option maxHeartbeats 1000000
 namespace iterators
 
 /-- [iterators::iter_range]: loop body 0:
-   Source: 'tests/src/iterators.rs', lines 5:4-5:28 -/
+    Source: 'tests/src/iterators.rs', lines 5:4-5:28 -/
 @[rust_loop_body]
 def iter_range_loop.body
   (iter : core.ops.range.Range Std.Usize) :
@@ -25,7 +25,7 @@ def iter_range_loop.body
   | some _ => ok (cont iter1)
 
 /-- [iterators::iter_range]: loop 0:
-   Source: 'tests/src/iterators.rs', lines 5:4-5:28 -/
+    Source: 'tests/src/iterators.rs', lines 5:4-5:28 -/
 @[rust_loop]
 def iter_range_loop (iter : core.ops.range.Range Std.Usize) : Result Unit := do
   loop
@@ -33,13 +33,13 @@ def iter_range_loop (iter : core.ops.range.Range Std.Usize) : Result Unit := do
     iter
 
 /-- [iterators::iter_range]:
-   Source: 'tests/src/iterators.rs', lines 4:0-6:1 -/
+    Source: 'tests/src/iterators.rs', lines 4:0-6:1 -/
 @[reducible]
 def iter_range : Result Unit := do
   iter_range_loop { start := 0#usize, «end» := 32#usize }
 
 /-- [iterators::iter_range_step_by]: loop body 0:
-   Source: 'tests/src/iterators.rs', lines 9:4-9:33 -/
+    Source: 'tests/src/iterators.rs', lines 9:4-9:33 -/
 @[rust_loop_body]
 def iter_range_step_by_loop.body
   (iter : core.iter.adapters.step_by.StepBy (core.ops.range.Range Std.Usize)) :
@@ -54,7 +54,7 @@ def iter_range_step_by_loop.body
   | some _ => ok (cont iter1)
 
 /-- [iterators::iter_range_step_by]: loop 0:
-   Source: 'tests/src/iterators.rs', lines 9:4-9:33 -/
+    Source: 'tests/src/iterators.rs', lines 9:4-9:33 -/
 @[rust_loop]
 def iter_range_step_by_loop
   (iter : core.iter.adapters.step_by.StepBy (core.ops.range.Range Std.Usize)) :
@@ -65,7 +65,7 @@ def iter_range_step_by_loop
     iter
 
 /-- [iterators::iter_range_step_by]:
-   Source: 'tests/src/iterators.rs', lines 8:0-10:1 -/
+    Source: 'tests/src/iterators.rs', lines 8:0-10:1 -/
 def iter_range_step_by (n : Std.Usize) : Result Unit := do
   let iter ←
     core.iter.range.IteratorRange.step_by core.iter.range.StepUsize
@@ -73,7 +73,7 @@ def iter_range_step_by (n : Std.Usize) : Result Unit := do
   iter_range_step_by_loop iter
 
 /-- [iterators::slice_iter_mut_while]: loop body 1:
-   Source: 'tests/src/iterators.rs', lines 15:8-15:18 -/
+    Source: 'tests/src/iterators.rs', lines 15:8-15:18 -/
 @[rust_loop_body]
 def slice_iter_mut_while_loop0_loop0.body
   (b : Bool) : Result (ControlFlow Bool Unit) := do
@@ -82,7 +82,7 @@ def slice_iter_mut_while_loop0_loop0.body
   else ok (done ())
 
 /-- [iterators::slice_iter_mut_while]: loop 1:
-   Source: 'tests/src/iterators.rs', lines 15:8-15:18 -/
+    Source: 'tests/src/iterators.rs', lines 15:8-15:18 -/
 @[rust_loop]
 def slice_iter_mut_while_loop0_loop0 (b : Bool) : Result Unit := do
   loop
@@ -90,7 +90,7 @@ def slice_iter_mut_while_loop0_loop0 (b : Bool) : Result Unit := do
     b
 
 /-- [iterators::slice_iter_mut_while]: loop body 0:
-   Source: 'tests/src/iterators.rs', lines 14:4-16:5 -/
+    Source: 'tests/src/iterators.rs', lines 14:4-16:5 -/
 @[rust_loop_body]
 def slice_iter_mut_while_loop0.body
   (it : core.slice.iter.IterMut Std.U16)
@@ -110,7 +110,7 @@ def slice_iter_mut_while_loop0.body
                              back im1, false))
 
 /-- [iterators::slice_iter_mut_while]: loop 0:
-   Source: 'tests/src/iterators.rs', lines 14:4-16:5 -/
+    Source: 'tests/src/iterators.rs', lines 14:4-16:5 -/
 @[rust_loop]
 def slice_iter_mut_while_loop0
   (it : core.slice.iter.IterMut Std.U16)
@@ -123,7 +123,7 @@ def slice_iter_mut_while_loop0
     (it, back, b)
 
 /-- [iterators::slice_iter_mut_while]:
-   Source: 'tests/src/iterators.rs', lines 12:0-17:1 -/
+    Source: 'tests/src/iterators.rs', lines 12:0-17:1 -/
 def slice_iter_mut_while
   (b : Bool) (s : Slice Std.U16) : Result (Slice Std.U16) := do
   let (it, iter_mut_back) ← core.slice.Slice.iter_mut s
@@ -131,7 +131,7 @@ def slice_iter_mut_while
   ok (iter_mut_back back)
 
 /-- [iterators::slice_iter_while]: loop body 1:
-   Source: 'tests/src/iterators.rs', lines 22:8-22:18 -/
+    Source: 'tests/src/iterators.rs', lines 22:8-22:18 -/
 @[rust_loop_body]
 def slice_iter_while_loop0_loop0.body
   (b : Bool) : Result (ControlFlow Bool Unit) := do
@@ -140,7 +140,7 @@ def slice_iter_while_loop0_loop0.body
   else ok (done ())
 
 /-- [iterators::slice_iter_while]: loop 1:
-   Source: 'tests/src/iterators.rs', lines 22:8-22:18 -/
+    Source: 'tests/src/iterators.rs', lines 22:8-22:18 -/
 @[rust_loop]
 def slice_iter_while_loop0_loop0 (b : Bool) : Result Unit := do
   loop
@@ -148,7 +148,7 @@ def slice_iter_while_loop0_loop0 (b : Bool) : Result Unit := do
     b
 
 /-- [iterators::slice_iter_while]: loop body 0:
-   Source: 'tests/src/iterators.rs', lines 21:4-23:5 -/
+    Source: 'tests/src/iterators.rs', lines 21:4-23:5 -/
 @[rust_loop_body]
 def slice_iter_while_loop0.body
   (it : core.slice.iter.Iter Std.U16) (b : Bool) :
@@ -161,7 +161,7 @@ def slice_iter_while_loop0.body
               ok (cont (it1, false))
 
 /-- [iterators::slice_iter_while]: loop 0:
-   Source: 'tests/src/iterators.rs', lines 21:4-23:5 -/
+    Source: 'tests/src/iterators.rs', lines 21:4-23:5 -/
 @[rust_loop]
 def slice_iter_while_loop0
   (it : core.slice.iter.Iter Std.U16) (b : Bool) : Result Unit := do
@@ -170,13 +170,13 @@ def slice_iter_while_loop0
     (it, b)
 
 /-- [iterators::slice_iter_while]:
-   Source: 'tests/src/iterators.rs', lines 19:0-24:1 -/
+    Source: 'tests/src/iterators.rs', lines 19:0-24:1 -/
 def slice_iter_while (b : Bool) (s : Slice Std.U16) : Result Unit := do
   let it ← core.slice.Slice.iter s
   slice_iter_while_loop0 it b
 
 /-- [iterators::slice_iter_mut_while_early_return]: loop body 1:
-   Source: 'tests/src/iterators.rs', lines 29:8-29:18 -/
+    Source: 'tests/src/iterators.rs', lines 29:8-29:18 -/
 @[rust_loop_body]
 def slice_iter_mut_while_early_return_loop0_loop0.body
   (b : Bool) : Result (ControlFlow Bool Unit) := do
@@ -185,7 +185,7 @@ def slice_iter_mut_while_early_return_loop0_loop0.body
   else ok (done ())
 
 /-- [iterators::slice_iter_mut_while_early_return]: loop 1:
-   Source: 'tests/src/iterators.rs', lines 29:8-29:18 -/
+    Source: 'tests/src/iterators.rs', lines 29:8-29:18 -/
 @[rust_loop]
 def slice_iter_mut_while_early_return_loop0_loop0
   (b : Bool) : Result Unit := do
@@ -194,7 +194,7 @@ def slice_iter_mut_while_early_return_loop0_loop0
     b
 
 /-- [iterators::slice_iter_mut_while_early_return]: loop body 0:
-   Source: 'tests/src/iterators.rs', lines 28:4-35:1 -/
+    Source: 'tests/src/iterators.rs', lines 28:4-35:1 -/
 @[rust_loop_body]
 def slice_iter_mut_while_early_return_loop0.body
   (it : core.slice.iter.IterMut Std.U16)
@@ -214,7 +214,7 @@ def slice_iter_mut_while_early_return_loop0.body
                              back im1, false))
 
 /-- [iterators::slice_iter_mut_while_early_return]: loop 0:
-   Source: 'tests/src/iterators.rs', lines 28:4-35:1 -/
+    Source: 'tests/src/iterators.rs', lines 28:4-35:1 -/
 @[rust_loop]
 def slice_iter_mut_while_early_return_loop0
   (it : core.slice.iter.IterMut Std.U16)
@@ -228,7 +228,7 @@ def slice_iter_mut_while_early_return_loop0
     (it, back, b)
 
 /-- [iterators::slice_iter_mut_while_early_return]:
-   Source: 'tests/src/iterators.rs', lines 26:0-35:1 -/
+    Source: 'tests/src/iterators.rs', lines 26:0-35:1 -/
 def slice_iter_mut_while_early_return
   (s : Array Std.U16 256#usize) (b : Bool) :
   Result (Array Std.U16 256#usize)
@@ -240,7 +240,7 @@ def slice_iter_mut_while_early_return
   ok (to_slice_mut_back s2)
 
 /-- [iterators::slice_iter_mut_while_early_return_two_bools]: loop body 1:
-   Source: 'tests/src/iterators.rs', lines 40:8-40:19 -/
+    Source: 'tests/src/iterators.rs', lines 40:8-40:19 -/
 @[rust_loop_body]
 def slice_iter_mut_while_early_return_two_bools_loop0_loop0.body
   (b0 : Bool) : Result (ControlFlow Bool Unit) := do
@@ -249,7 +249,7 @@ def slice_iter_mut_while_early_return_two_bools_loop0_loop0.body
   else ok (done ())
 
 /-- [iterators::slice_iter_mut_while_early_return_two_bools]: loop 1:
-   Source: 'tests/src/iterators.rs', lines 40:8-40:19 -/
+    Source: 'tests/src/iterators.rs', lines 40:8-40:19 -/
 @[rust_loop]
 def slice_iter_mut_while_early_return_two_bools_loop0_loop0
   (b0 : Bool) : Result Unit := do
@@ -259,7 +259,7 @@ def slice_iter_mut_while_early_return_two_bools_loop0_loop0
     b0
 
 /-- [iterators::slice_iter_mut_while_early_return_two_bools]: loop body 0:
-   Source: 'tests/src/iterators.rs', lines 39:4-46:1 -/
+    Source: 'tests/src/iterators.rs', lines 39:4-46:1 -/
 @[rust_loop_body]
 def slice_iter_mut_while_early_return_two_bools_loop0.body
   (it : core.slice.iter.IterMut Std.U16)
@@ -283,7 +283,7 @@ def slice_iter_mut_while_early_return_two_bools_loop0.body
                                back im1, false, false))
 
 /-- [iterators::slice_iter_mut_while_early_return_two_bools]: loop 0:
-   Source: 'tests/src/iterators.rs', lines 39:4-46:1 -/
+    Source: 'tests/src/iterators.rs', lines 39:4-46:1 -/
 @[rust_loop]
 def slice_iter_mut_while_early_return_two_bools_loop0
   (it : core.slice.iter.IterMut Std.U16)
@@ -297,7 +297,7 @@ def slice_iter_mut_while_early_return_two_bools_loop0
     (it, back, b0, b1)
 
 /-- [iterators::slice_iter_mut_while_early_return_two_bools]:
-   Source: 'tests/src/iterators.rs', lines 37:0-46:1 -/
+    Source: 'tests/src/iterators.rs', lines 37:0-46:1 -/
 def slice_iter_mut_while_early_return_two_bools
   (s : Array Std.U16 256#usize) (b0 : Bool) (b1 : Bool) :
   Result (Array Std.U16 256#usize)
@@ -310,7 +310,7 @@ def slice_iter_mut_while_early_return_two_bools
   ok (to_slice_mut_back s2)
 
 /-- [iterators::slice_chunks_exact_iter]: loop body 1:
-   Source: 'tests/src/iterators.rs', lines 50:8-50:30 -/
+    Source: 'tests/src/iterators.rs', lines 50:8-50:30 -/
 @[rust_loop_body]
 def slice_chunks_exact_iter_loop0_loop0.body
   (iter : core.slice.iter.Iter Std.U128) :
@@ -322,7 +322,7 @@ def slice_chunks_exact_iter_loop0_loop0.body
   | some _ => ok (cont iter1)
 
 /-- [iterators::slice_chunks_exact_iter]: loop 1:
-   Source: 'tests/src/iterators.rs', lines 50:8-50:30 -/
+    Source: 'tests/src/iterators.rs', lines 50:8-50:30 -/
 @[rust_loop]
 def slice_chunks_exact_iter_loop0_loop0
   (iter : core.slice.iter.Iter Std.U128) : Result Unit := do
@@ -331,7 +331,7 @@ def slice_chunks_exact_iter_loop0_loop0
     iter
 
 /-- [iterators::slice_chunks_exact_iter]: loop body 0:
-   Source: 'tests/src/iterators.rs', lines 49:4-51:5 -/
+    Source: 'tests/src/iterators.rs', lines 49:4-51:5 -/
 @[rust_loop_body]
 def slice_chunks_exact_iter_loop0.body
   (key : Array Std.U128 128#usize) (iter : core.slice.iter.ChunksExact Std.U8)
@@ -348,7 +348,7 @@ def slice_chunks_exact_iter_loop0.body
     ok (cont iter1)
 
 /-- [iterators::slice_chunks_exact_iter]: loop 0:
-   Source: 'tests/src/iterators.rs', lines 49:4-51:5 -/
+    Source: 'tests/src/iterators.rs', lines 49:4-51:5 -/
 @[rust_loop]
 def slice_chunks_exact_iter_loop0
   (iter : core.slice.iter.ChunksExact Std.U8) (key : Array Std.U128 128#usize)
@@ -360,19 +360,19 @@ def slice_chunks_exact_iter_loop0
     iter
 
 /-- [iterators::slice_chunks_exact_iter]:
-   Source: 'tests/src/iterators.rs', lines 48:0-52:1 -/
+    Source: 'tests/src/iterators.rs', lines 48:0-52:1 -/
 def slice_chunks_exact_iter
   (key : Array Std.U128 128#usize) (data : Slice Std.U8) : Result Unit := do
   let iter ← core.slice.Slice.chunks_exact data 16#usize
   slice_chunks_exact_iter_loop0 iter key
 
 /-- [iterators::Key]
-   Source: 'tests/src/iterators.rs', lines 54:0-54:24 -/
+    Source: 'tests/src/iterators.rs', lines 54:0-54:24 -/
 @[reducible]
 def Key := Array Std.U128 128#usize
 
 /-- [iterators::key_iter_slice_iter]: loop body 1:
-   Source: 'tests/src/iterators.rs', lines 58:8-58:32 -/
+    Source: 'tests/src/iterators.rs', lines 58:8-58:32 -/
 @[rust_loop_body]
 def key_iter_slice_iter_loop0_loop0.body
   (iter : core.slice.iter.Iter Std.U128) :
@@ -384,7 +384,7 @@ def key_iter_slice_iter_loop0_loop0.body
   | some _ => ok (cont iter1)
 
 /-- [iterators::key_iter_slice_iter]: loop 1:
-   Source: 'tests/src/iterators.rs', lines 58:8-58:32 -/
+    Source: 'tests/src/iterators.rs', lines 58:8-58:32 -/
 @[rust_loop]
 def key_iter_slice_iter_loop0_loop0
   (iter : core.slice.iter.Iter Std.U128) : Result Unit := do
@@ -393,7 +393,7 @@ def key_iter_slice_iter_loop0_loop0
     iter
 
 /-- [iterators::key_iter_slice_iter]: loop body 0:
-   Source: 'tests/src/iterators.rs', lines 57:4-59:5 -/
+    Source: 'tests/src/iterators.rs', lines 57:4-59:5 -/
 @[rust_loop_body]
 def key_iter_slice_iter_loop0.body
   (iter : core.slice.iter.Iter Std.U8) (key : Key) :
@@ -409,7 +409,7 @@ def key_iter_slice_iter_loop0.body
     ok (cont (iter1, key))
 
 /-- [iterators::key_iter_slice_iter]: loop 0:
-   Source: 'tests/src/iterators.rs', lines 57:4-59:5 -/
+    Source: 'tests/src/iterators.rs', lines 57:4-59:5 -/
 @[rust_loop]
 def key_iter_slice_iter_loop0
   (iter : core.slice.iter.Iter Std.U8) (key : Key) : Result Unit := do
@@ -418,13 +418,13 @@ def key_iter_slice_iter_loop0
     (iter, key)
 
 /-- [iterators::key_iter_slice_iter]:
-   Source: 'tests/src/iterators.rs', lines 56:0-60:1 -/
+    Source: 'tests/src/iterators.rs', lines 56:0-60:1 -/
 def key_iter_slice_iter (key : Key) (data : Slice Std.U8) : Result Unit := do
   let iter ← core.slice.Slice.iter data
   key_iter_slice_iter_loop0 iter key
 
 /-- [iterators::copy_arrays]: loop body 0:
-   Source: 'tests/src/iterators.rs', lines 63:4-65:5 -/
+    Source: 'tests/src/iterators.rs', lines 63:4-65:5 -/
 @[rust_loop_body]
 def copy_arrays_loop.body
   (src : Array Std.U8 256#usize) (iter : core.ops.range.Range Std.Usize)
@@ -442,7 +442,7 @@ def copy_arrays_loop.body
     ok (cont (iter1, a))
 
 /-- [iterators::copy_arrays]: loop 0:
-   Source: 'tests/src/iterators.rs', lines 63:4-65:5 -/
+    Source: 'tests/src/iterators.rs', lines 63:4-65:5 -/
 @[rust_loop]
 def copy_arrays_loop
   (iter : core.ops.range.Range Std.Usize) (src : Array Std.U8 256#usize)
@@ -454,7 +454,7 @@ def copy_arrays_loop
     (iter, dst)
 
 /-- [iterators::copy_arrays]:
-   Source: 'tests/src/iterators.rs', lines 62:0-66:1 -/
+    Source: 'tests/src/iterators.rs', lines 62:0-66:1 -/
 @[reducible]
 def copy_arrays
   (src : Array Std.U8 256#usize) (dst : Array Std.U8 256#usize) :

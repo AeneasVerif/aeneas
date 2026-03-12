@@ -12,7 +12,7 @@ set_option maxHeartbeats 1000000
 namespace print
 
 /-- [print::call_println]:
-   Source: 'tests/src/print.rs', lines 4:0-6:1 -/
+    Source: 'tests/src/print.rs', lines 4:0-6:1 -/
 def call_println : Result Unit := do
   let a ← core.fmt.Arguments.from_str (toStr "Hello World!\n")
   std.io.stdio._print a

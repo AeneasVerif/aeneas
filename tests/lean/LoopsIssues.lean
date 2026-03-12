@@ -15,31 +15,31 @@ noncomputable section
 namespace loops_issues
 
 /-- [core::iter::range::{core::iter::range::Step for i32}::backward_checked]:
-   Source: '/rustc/library/core/src/iter/range.rs', lines 340:16-340:74
-   Name pattern: [core::iter::range::{core::iter::range::Step<i32>}::backward_checked] -/
+    Source: '/rustc/library/core/src/iter/range.rs', lines 340:16-340:74
+    Name pattern: [core::iter::range::{core::iter::range::Step<i32>}::backward_checked] -/
 @[rust_fun
   "core::iter::range::{core::iter::range::Step<i32>}::backward_checked"]
 axiom I32.Insts.CoreIterRangeStep.backward_checked
   : Std.I32 → Std.Usize → Result (Option Std.I32)
 
 /-- [core::iter::range::{core::iter::range::Step for i32}::forward_checked]:
-   Source: '/rustc/library/core/src/iter/range.rs', lines 319:16-319:73
-   Name pattern: [core::iter::range::{core::iter::range::Step<i32>}::forward_checked] -/
+    Source: '/rustc/library/core/src/iter/range.rs', lines 319:16-319:73
+    Name pattern: [core::iter::range::{core::iter::range::Step<i32>}::forward_checked] -/
 @[rust_fun
   "core::iter::range::{core::iter::range::Step<i32>}::forward_checked"]
 axiom I32.Insts.CoreIterRangeStep.forward_checked
   : Std.I32 → Std.Usize → Result (Option Std.I32)
 
 /-- [core::iter::range::{core::iter::range::Step for i32}::steps_between]:
-   Source: '/rustc/library/core/src/iter/range.rs', lines 304:16-304:84
-   Name pattern: [core::iter::range::{core::iter::range::Step<i32>}::steps_between] -/
+    Source: '/rustc/library/core/src/iter/range.rs', lines 304:16-304:84
+    Name pattern: [core::iter::range::{core::iter::range::Step<i32>}::steps_between] -/
 @[rust_fun "core::iter::range::{core::iter::range::Step<i32>}::steps_between"]
 axiom I32.Insts.CoreIterRangeStep.steps_between
   : Std.I32 → Std.I32 → Result (Std.Usize × (Option Std.Usize))
 
 /-- Trait implementation: [core::iter::range::{core::iter::range::Step for i32}]
-   Source: '/rustc/library/core/src/iter/range.rs', lines 299:12-299:37
-   Name pattern: [core::iter::range::Step<i32>] -/
+    Source: '/rustc/library/core/src/iter/range.rs', lines 299:12-299:37
+    Name pattern: [core::iter::range::Step<i32>] -/
 @[reducible, rust_trait_impl "core::iter::range::Step<i32>"]
 def I32.Insts.CoreIterRangeStep : core.iter.range.Step Std.I32 := {
   cloneInst := core.clone.CloneI32
@@ -50,22 +50,22 @@ def I32.Insts.CoreIterRangeStep : core.iter.range.Step Std.I32 := {
 }
 
 /-- [loops_issues::write]:
-   Source: 'tests/src/loops-issues.rs', lines 5:0-5:28 -/
+    Source: 'tests/src/loops-issues.rs', lines 5:0-5:28 -/
 def write (a : Array Std.U8 4#usize) : Result (Array Std.U8 4#usize) := do
   ok a
 
 /-- [loops_issues::read]:
-   Source: 'tests/src/loops-issues.rs', lines 8:0-8:23 -/
+    Source: 'tests/src/loops-issues.rs', lines 8:0-8:23 -/
 def read (a : Array Std.U8 4#usize) : Result Unit := do
   ok ()
 
 /-- [loops_issues::CARRAY]
-   Source: 'tests/src/loops-issues.rs', lines 10:0-10:38 -/
+    Source: 'tests/src/loops-issues.rs', lines 10:0-10:38 -/
 @[global_simps, irreducible]
 def CARRAY : Array Std.U16 4#usize := Array.repeat 4#usize 0#u16
 
 /-- [loops_issues::loop_access_array]: loop body 0:
-   Source: 'tests/src/loops-issues.rs', lines 15:4-18:5 -/
+    Source: 'tests/src/loops-issues.rs', lines 15:4-18:5 -/
 @[rust_loop_body]
 def loop_access_array_loop.body
   (k : Std.Usize) (start : Std.Usize) :
@@ -79,7 +79,7 @@ def loop_access_array_loop.body
   else ok (done ())
 
 /-- [loops_issues::loop_access_array]: loop 0:
-   Source: 'tests/src/loops-issues.rs', lines 15:4-18:5 -/
+    Source: 'tests/src/loops-issues.rs', lines 15:4-18:5 -/
 @[rust_loop]
 def loop_access_array_loop
   (k : Std.Usize) (start : Std.Usize) : Result Unit := do
@@ -88,13 +88,13 @@ def loop_access_array_loop
     start
 
 /-- [loops_issues::loop_access_array]:
-   Source: 'tests/src/loops-issues.rs', lines 13:0-19:1 -/
+    Source: 'tests/src/loops-issues.rs', lines 13:0-19:1 -/
 @[reducible]
 def loop_access_array (k : Std.Usize) : Result Unit := do
   loop_access_array_loop k 0#usize
 
 /-- [loops_issues::loop_array_len]: loop body 0:
-   Source: 'tests/src/loops-issues.rs', lines 26:4-28:5 -/
+    Source: 'tests/src/loops-issues.rs', lines 26:4-28:5 -/
 @[rust_loop_body]
 def loop_array_len_loop.body (b : Bool) : Result (ControlFlow Bool Unit) := do
   if b
@@ -102,7 +102,7 @@ def loop_array_len_loop.body (b : Bool) : Result (ControlFlow Bool Unit) := do
   else ok (done ())
 
 /-- [loops_issues::loop_array_len]: loop 0:
-   Source: 'tests/src/loops-issues.rs', lines 26:4-28:5 -/
+    Source: 'tests/src/loops-issues.rs', lines 26:4-28:5 -/
 @[rust_loop]
 def loop_array_len_loop (b : Bool) : Result Unit := do
   loop
@@ -110,13 +110,13 @@ def loop_array_len_loop (b : Bool) : Result Unit := do
     b
 
 /-- [loops_issues::loop_array_len]:
-   Source: 'tests/src/loops-issues.rs', lines 22:0-29:1 -/
+    Source: 'tests/src/loops-issues.rs', lines 22:0-29:1 -/
 @[reducible]
 def loop_array_len (b : Bool) : Result Unit := do
   loop_array_len_loop b
 
 /-- [loops_issues::loop_array_len_write]: loop body 0:
-   Source: 'tests/src/loops-issues.rs', lines 36:4-40:5 -/
+    Source: 'tests/src/loops-issues.rs', lines 36:4-40:5 -/
 @[rust_loop_body]
 def loop_array_len_write_loop.body
   (b0 : Bool) (b1 : Bool) (buf : Array Std.U8 4#usize) :
@@ -131,7 +131,7 @@ def loop_array_len_write_loop.body
   else ok (done ())
 
 /-- [loops_issues::loop_array_len_write]: loop 0:
-   Source: 'tests/src/loops-issues.rs', lines 36:4-40:5 -/
+    Source: 'tests/src/loops-issues.rs', lines 36:4-40:5 -/
 @[rust_loop]
 def loop_array_len_write_loop
   (b0 : Bool) (b1 : Bool) (buf : Array Std.U8 4#usize) : Result Unit := do
@@ -140,17 +140,17 @@ def loop_array_len_write_loop
     (b0, b1, buf)
 
 /-- [loops_issues::loop_array_len_write]:
-   Source: 'tests/src/loops-issues.rs', lines 32:0-41:1 -/
+    Source: 'tests/src/loops-issues.rs', lines 32:0-41:1 -/
 def loop_array_len_write (b0 : Bool) (b1 : Bool) : Result Unit := do
   let buf := Array.repeat 4#usize 0#u8
   loop_array_len_write_loop b0 b1 buf
 
 /-- [loops_issues::MAX_NROWS]
-   Source: 'tests/src/loops-issues.rs', lines 43:0-43:27 -/
+    Source: 'tests/src/loops-issues.rs', lines 43:0-43:27 -/
 @[global_simps, irreducible] def MAX_NROWS : Std.Usize := 4#usize
 
 /-- [loops_issues::read_global_loop]: loop body 0:
-   Source: 'tests/src/loops-issues.rs', lines 48:4-48:14 -/
+    Source: 'tests/src/loops-issues.rs', lines 48:4-48:14 -/
 @[rust_loop_body]
 def read_global_loop_loop.body
   (b : Bool) : Result (ControlFlow Bool Unit) := do
@@ -159,7 +159,7 @@ def read_global_loop_loop.body
   else ok (done ())
 
 /-- [loops_issues::read_global_loop]: loop 0:
-   Source: 'tests/src/loops-issues.rs', lines 48:4-48:14 -/
+    Source: 'tests/src/loops-issues.rs', lines 48:4-48:14 -/
 @[rust_loop]
 def read_global_loop_loop (b : Bool) : Result Unit := do
   loop
@@ -167,13 +167,13 @@ def read_global_loop_loop (b : Bool) : Result Unit := do
     b
 
 /-- [loops_issues::read_global_loop]:
-   Source: 'tests/src/loops-issues.rs', lines 46:0-49:1 -/
+    Source: 'tests/src/loops-issues.rs', lines 46:0-49:1 -/
 def read_global_loop (b : Bool) (n_rows : Std.Usize) : Result Unit := do
   massert (n_rows <= MAX_NROWS)
   read_global_loop_loop b
 
 /-- [loops_issues::mut_loop_len]: loop body 0:
-   Source: 'tests/src/loops-issues.rs', lines 55:10-55:11 -/
+    Source: 'tests/src/loops-issues.rs', lines 55:10-55:11 -/
 @[rust_loop_body]
 def mut_loop_len_loop.body
   (buf : Array Std.U8 4#usize) (b : Bool) :
@@ -189,7 +189,7 @@ def mut_loop_len_loop.body
   else ok (done ())
 
 /-- [loops_issues::mut_loop_len]: loop 0:
-   Source: 'tests/src/loops-issues.rs', lines 55:10-55:11 -/
+    Source: 'tests/src/loops-issues.rs', lines 55:10-55:11 -/
 @[rust_loop]
 def mut_loop_len_loop
   (b : Bool) (buf : Array Std.U8 4#usize) : Result Unit := do
@@ -198,14 +198,14 @@ def mut_loop_len_loop
     b
 
 /-- [loops_issues::mut_loop_len]:
-   Source: 'tests/src/loops-issues.rs', lines 52:0-58:1 -/
+    Source: 'tests/src/loops-issues.rs', lines 52:0-58:1 -/
 def mut_loop_len (i : Std.U32) (b : Bool) : Result Std.U32 := do
   let buf := Array.repeat 4#usize 0#u8
   mut_loop_len_loop b buf
   ok i
 
 /-- [loops_issues::test]: loop body 0:
-   Source: 'tests/src/loops-issues.rs', lines 65:4-71:5 -/
+    Source: 'tests/src/loops-issues.rs', lines 65:4-71:5 -/
 @[rust_loop_body]
 def test_loop.body
   (b1 : Bool) (b0 : Bool) (buf : Array Std.U8 4#usize) :
@@ -221,7 +221,7 @@ def test_loop.body
   else ok (done ())
 
 /-- [loops_issues::test]: loop 0:
-   Source: 'tests/src/loops-issues.rs', lines 65:4-71:5 -/
+    Source: 'tests/src/loops-issues.rs', lines 65:4-71:5 -/
 @[rust_loop]
 def test_loop
   (b0 : Bool) (b1 : Bool) (buf : Array Std.U8 4#usize) : Result Unit := do
@@ -230,23 +230,23 @@ def test_loop
     (b0, buf)
 
 /-- [loops_issues::test]:
-   Source: 'tests/src/loops-issues.rs', lines 61:0-72:1 -/
+    Source: 'tests/src/loops-issues.rs', lines 61:0-72:1 -/
 def test (b0 : Bool) (b1 : Bool) : Result Unit := do
   let buf := Array.repeat 4#usize 0#u8
   test_loop b0 b1 buf
 
 /-- [loops_issues::WrapperU32]
-   Source: 'tests/src/loops-issues.rs', lines 74:0-76:1 -/
+    Source: 'tests/src/loops-issues.rs', lines 74:0-76:1 -/
 structure WrapperU32 where
   x : Std.U32
 
 /-- [loops_issues::consume_u32]:
-   Source: 'tests/src/loops-issues.rs', lines 78:0-78:27 -/
+    Source: 'tests/src/loops-issues.rs', lines 78:0-78:27 -/
 def consume_u32 (eta : Std.U32) : Result Unit := do
   ok ()
 
 /-- [loops_issues::loop_consume_u32]: loop body 0:
-   Source: 'tests/src/loops-issues.rs', lines 84:4-86:5 -/
+    Source: 'tests/src/loops-issues.rs', lines 84:4-86:5 -/
 @[rust_loop_body]
 def loop_consume_u32_loop.body
   (params : WrapperU32) (iter : core.ops.range.Range Std.I32) :
@@ -260,7 +260,7 @@ def loop_consume_u32_loop.body
               ok (cont iter1)
 
 /-- [loops_issues::loop_consume_u32]: loop 0:
-   Source: 'tests/src/loops-issues.rs', lines 84:4-86:5 -/
+    Source: 'tests/src/loops-issues.rs', lines 84:4-86:5 -/
 @[rust_loop]
 def loop_consume_u32_loop
   (params : WrapperU32) (iter : core.ops.range.Range Std.I32) :
@@ -271,7 +271,7 @@ def loop_consume_u32_loop
     iter
 
 /-- [loops_issues::loop_consume_u32]:
-   Source: 'tests/src/loops-issues.rs', lines 81:0-87:1 -/
+    Source: 'tests/src/loops-issues.rs', lines 81:0-87:1 -/
 @[reducible]
 def loop_consume_u32 (params : WrapperU32) : Result Unit := do
   loop_consume_u32_loop params { start := 0#i32, «end» := 32#i32 }

@@ -12,20 +12,20 @@ set_option maxHeartbeats 1000000
 namespace hashmap
 
 /-- [hashmap::AList]
-   Source: 'tests/src/hashmap.rs', lines 28:0-31:1 -/
+    Source: 'tests/src/hashmap.rs', lines 28:0-31:1 -/
 @[discriminant isize]
 inductive AList (T : Type) where
 | Cons : Std.Usize → T → AList T → AList T
 | Nil : AList T
 
 /-- [hashmap::Fraction]
-   Source: 'tests/src/hashmap.rs', lines 44:0-47:1 -/
+    Source: 'tests/src/hashmap.rs', lines 44:0-47:1 -/
 structure Fraction where
   dividend : Std.Usize
   divisor : Std.Usize
 
 /-- [hashmap::HashMap]
-   Source: 'tests/src/hashmap.rs', lines 50:0-62:1 -/
+    Source: 'tests/src/hashmap.rs', lines 50:0-62:1 -/
 structure HashMap (T : Type) where
   num_entries : Std.Usize
   max_load_factor : Fraction

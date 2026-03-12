@@ -12,7 +12,7 @@ set_option maxHeartbeats 1000000
 namespace drop
 
 /-- [drop::fill]: loop body 0:
-   Source: 'tests/src/drop.rs', lines 7:4-9:5 -/
+    Source: 'tests/src/drop.rs', lines 7:4-9:5 -/
 @[rust_loop_body]
 def fill_loop.body
   {T : Type} (corecloneCloneInst : core.clone.Clone T) (value : T)
@@ -32,7 +32,7 @@ def fill_loop.body
     ok (cont (iter1, s2))
 
 /-- [drop::fill]: loop 0:
-   Source: 'tests/src/drop.rs', lines 7:4-9:5 -/
+    Source: 'tests/src/drop.rs', lines 7:4-9:5 -/
 @[rust_loop]
 def fill_loop
   {T : Type} (corecloneCloneInst : core.clone.Clone T)
@@ -44,7 +44,7 @@ def fill_loop
     (iter, s)
 
 /-- [drop::fill]:
-   Source: 'tests/src/drop.rs', lines 3:0-10:1 -/
+    Source: 'tests/src/drop.rs', lines 3:0-10:1 -/
 def fill
   {T : Type} (corecloneCloneInst : core.clone.Clone T) (s : Slice T)
   (value : T) :
