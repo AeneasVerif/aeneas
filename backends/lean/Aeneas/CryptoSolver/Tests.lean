@@ -175,12 +175,114 @@ example (a d : Nat) (hd : 0 < d) (ha : a < 2^64) :
 /-! ### Nested multiplication + division -/
 
 -- (a * b / 2^32) * c / 2^32 < 2^32 when a, b, c < 2^32
--- This requires multi-level bound introduction (future work)
+-- This requires multi-level bound introduction
+set_option maxHeartbeats 400000 in
 example (a b c : Nat) (ha : a < 2^32) (hb : b < 2^32) (hc : c < 2^32) :
     (a * b / 2^32) * c / 2^32 < 2^32 := by
-  have hab : a * b < 2^64 := by nlinarith
-  have hdiv : a * b / 2^32 < 2^32 := by omega
-  have hdc : (a * b / 2^32) * c < 2^64 := by nlinarith
-  omega
+  crypto_solver
 
 end Aeneas.CryptoSolver.AdvancedTests
+
+/-! ## Bitwise operation tests -/
+
+namespace Aeneas.CryptoSolver.BitwiseTests
+
+/-! ### Masking (AND with power-of-2 minus 1) -/
+
+-- Basic mask: x &&& 0xFF < 256
+example (x : Nat) : x &&& 0xFF < 256 := by crypto_solver
+
+-- 32-bit mask
+example (x : Nat) : x &&& (2^32 - 1) < 2^32 := by crypto_solver
+
+-- AND is bounded by right operand
+example (x y : Nat) (hy : y < 2^16) : x &&& y < 2^16 := by crypto_solver
+
+/-! ### Shift operations -/
+
+-- Right shift reduces bit width
+example (x : Nat) (hx : x < 2^64) : x >>> 32 < 2^32 := by crypto_solver
+
+-- Right shift reduces value
+example (x : Nat) (hx : x < 2^64) : x >>> 16 < 2^48 := by crypto_solver
+
+-- Left shift preserves bound (expressed as multiplication)
+example (x : Nat) (hx : x < 2^16) : x <<< 8 < 2^24 := by crypto_solver
+
+/-! ### Limb extraction patterns -/
+
+-- Extract low 52 bits (Curve25519 limb extraction)
+example (x : Nat) : x &&& (2^52 - 1) < 2^52 := by crypto_solver
+
+-- Extract carry from addition
+example (x : Nat) (hx : x < 2^65) : x >>> 64 < 2 := by crypto_solver
+
+/-! ### Combined bitwise + arithmetic -/
+
+-- After extracting a 32-bit limb, its product with another 32-bit value fits in 64 bits
+set_option maxHeartbeats 400000 in
+example (x y : Nat) (hx : x < 2^64) (hy : y < 2^32) :
+    (x &&& (2^32 - 1)) * y < 2^64 := by crypto_solver
+
+-- Shift-and-mask extraction: (x >>> 32) &&& (2^32 - 1)
+-- After shift, x >>> 32 < 2^32 (when x < 2^64), so the mask is identity
+example (x : Nat) (hx : x < 2^64) : (x >>> 32) &&& (2^32 - 1) < 2^32 := by
+  crypto_solver
+
+/-! ### Carry chain with shifts -/
+
+-- Sum fits in 65 bits, carry is 1 bit
+example (a b : Nat) (ha : a < 2^64) (hb : b < 2^64) :
+    (a + b) >>> 64 < 2 := by crypto_solver
+
+end Aeneas.CryptoSolver.BitwiseTests
+
+/-! ## Additional regression and crypto tests -/
+
+namespace Aeneas.CryptoSolver.CryptoTests
+
+/-! ### Single-level div bound -/
+
+-- a * b / 2^32 < 2^32, the inner step of nested div
+set_option maxHeartbeats 400000 in
+example (a b : Nat) (ha : a < 2^32) (hb : b < 2^32) :
+    a * b / 2^32 < 2^32 := by crypto_solver
+
+/-! ### Three-limb chain -/
+
+-- Three levels of mul+div representing a carry chain
+set_option maxHeartbeats 800000 in
+example (a b c d : Nat) (ha : a < 2^32) (hb : b < 2^32)
+    (hc : c < 2^32) (hd : d < 2^32) :
+    ((a * b / 2^32) * c / 2^32) * d / 2^32 < 2^32 := by crypto_solver
+
+/-! ### Widening multiplication patterns -/
+
+-- 32-bit × 32-bit fits in 64 bits
+example (a b : Nat) (ha : a < 2^32) (hb : b < 2^32) :
+    a * b < 2^64 := by crypto_solver
+
+-- 52-bit × 52-bit fits in 104 bits (Curve25519 limb multiply)
+example (a b : Nat) (ha : a < 2^52) (hb : b < 2^52) :
+    a * b < 2^104 := by crypto_solver
+
+-- 64-bit × 64-bit fits in 128 bits
+example (a b : Nat) (ha : a < 2^64) (hb : b < 2^64) :
+    a * b < 2^128 := by crypto_solver
+
+/-! ### Accumulation patterns (sums of products) -/
+
+-- Sum of two 64-bit products fits in 129 bits
+example (a b c d : Nat) (ha : a < 2^64) (hb : b < 2^64)
+    (hc : c < 2^64) (hd : d < 2^64) :
+    a * b + c * d < 2^129 := by crypto_solver
+
+/-! ### Modular arithmetic -/
+
+-- Modulo produces smaller value
+example (x n : Nat) (hn : 0 < n) : x % n < n := by crypto_solver
+
+-- Modulo is bounded by the modulus minus 1
+example (x : Nat) : x % 2^32 < 2^32 := by crypto_solver
+
+end Aeneas.CryptoSolver.CryptoTests

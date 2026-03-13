@@ -113,6 +113,7 @@ partial def toAExpr (e : Expr) : MetaM AExpr := do
 /-- Extract a comparison from a proposition expression.
     Returns (lhs, rhs, isStrict) where isStrict means `<` vs `≤`. -/
 def parseComparison (prop : Expr) : MetaM (Option (Expr × Expr × Bool)) := do
+  let prop := prop.consumeMData
   let fn := prop.getAppFn
   let args := prop.getAppArgs
   -- LT.lt α inst a b  (4 args)
@@ -189,7 +190,6 @@ def collectBounds : MetaM IntervalEnv := do
   -- Also extract implicit non-negativity for Nat-typed variables
   for decl in ctx do
     if decl.isImplementationDetail then continue
-    if !decl.type.isFVar && !decl.type.isApp then continue
     let ty ← inferType (mkFVar decl.fvarId)
     let ty ← whnfD ty
     if ty.isConstOf ``Nat then
