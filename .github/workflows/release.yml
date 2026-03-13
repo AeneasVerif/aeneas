@@ -60,15 +60,23 @@ jobs:
 
       - name: Package
         run: |
-          nix build -L .#aeneas-release
-          cp result ${{ matrix.artifact_name }}.tar.gz
+          set -eo pipefail
+
+          nix build -L .#aeneas
+          # Create a staging directory for the archive
+          mkdir release
+          # Copy the binary and ensure it's not a symlink
+          cp -L result/bin/aeneas release/aeneas
+          tar -C release -czvf ${{ matrix.artifact_name }}.tar.gz aeneas
 
       # Verify the binary is functional.
       - name: Smoke Test
         run: |
+          set -eo pipefail
+
           mkdir staging
           cd staging
-          tar xf ../result
+          tar xf ../${{ matrix.artifact_name }}.tar.gz
           ./aeneas --help > /dev/null
 
       - name: Upload Artifact
