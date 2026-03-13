@@ -87,6 +87,14 @@
             charon-ml = charon-ml.override { inherit ocamlPackages; };
           };
 
+        aeneas-release = pkgs.runCommand "aeneas-release.tar.gz" { } ''
+          mkdir release
+          cd release
+          cp ${aeneas}/bin/aeneas .
+          cp -r ${./backends} backends
+          tar -czvf $out *
+        '';
+
         aeneas-check-tidiness = pkgs.stdenv.mkDerivation rec {
           name = "aeneas-check-tidiness";
           src = ./.;
@@ -239,7 +247,7 @@
       in
       {
         packages = {
-          inherit aeneas aeneas-static;
+          inherit aeneas aeneas-static aeneas-release;
           inherit charon charon-ml;
           default = aeneas;
         };
