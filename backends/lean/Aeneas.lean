@@ -21,7 +21,6 @@ import Aeneas.ReduceZMod
 import Aeneas.RingEqNF
 import Aeneas.RustAttributes
 import Aeneas.ScalarDecrTac
-import Aeneas.ScalarNF
 import Aeneas.ScalarTac
 import Aeneas.SimpIfs
 import Aeneas.SimpLemmas

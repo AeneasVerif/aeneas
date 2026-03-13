@@ -649,9 +649,9 @@ partial_fixpoint
     Advice: do the proof of `add_no_overflow_loop_spec` first, then come back to prove this lemma.
 
     Hint: you will need to reason about non-linear arithmetic. You can use two tactics to do so:
-    - `scalar_nf`, `scalar_nf at h`, `scalar_nf at *`:
+    - `ring_nf`, `ring_nf at h`, `ring_nf at *`:
       normalizes (simplifies) the expressions of the shape `a ^ k * x + ... + b ^ k * y `
-    - `scalar_eq_nf`: similar, but tuned to prove goals of the shape: `... = ...`
+    - `ring_eq_nf`: similar, but tuned to prove goals of the shape: `... = ...`
     You can try both tactics and see their effect.
  -/
 @[simp]
@@ -679,8 +679,8 @@ theorem toInt_update (l : List U32) (i : Nat) (x : U32) (h0 : i < l.length) :
 
 /-- The proof about `add_no_overflow_loop`.
 
-    Hint: you will need to reason about non-linear arithmetic with `scalar_nf` and
-    `scalar_eq_nf` (see above).
+    Hint: you will need to reason about non-linear arithmetic with `ring_nf` and
+    `ring_eq_nf` (see above).
  -/
 @[progress]
 theorem add_no_overflow_loop_spec

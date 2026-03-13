@@ -68,8 +68,7 @@ example (x y : Int) (h : x * 2 = y) : 3 * x + 2 * y = x + 3 * y := by
 /-! ## Big-integer limb arithmetic
 
 These tests are modelled on the `toInt_update` and `add_with_carry_loop_spec`
-proofs from the Aeneas Tutorial where `scalar_eq_nf` (a wrapper around
-`ring_nf` that moves terms to one side) is used. In those proofs the goals
+proofs from the Aeneas Tutorial where `ring_eq_nf` is used. In those proofs the goals
 involve equalities between large polynomial expressions over integer limb
 values, powers of 2, and shared sub-expressions that should be cancelled.
 -/

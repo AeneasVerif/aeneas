@@ -286,7 +286,7 @@ theorem toInt_drop (l : List U32) (i : Nat) (h0 : i < l.length) :
     dcases i = 0 <;> simp_all
     have := toInt_drop tl (i - 1) (by scalar_tac)
     simp_all
-    scalar_nf at *
+    ring_nf at *
     have : 1 + (i - 1) = i := by scalar_tac
     simp [*]
 
@@ -298,17 +298,17 @@ theorem toInt_update (l : List U32) (i : Nat) (x : U32) (h0 : i < l.length) :
   | cons hd tl =>
     simp_all
     dcases i = 0 <;> simp_all
-    . scalar_eq_nf
+    . ring_eq_nf
     . have := toInt_update tl (i - 1) x (by scalar_tac)
       simp_all
-      scalar_nf at *
-      scalar_eq_nf
+      ring_nf at *
+      ring_eq_nf
       /- Note that we coerce the righ-hand side (also works with the left-hand side) so that
          it gets interpreted as an ℤ and not a ℕ. It is important: `(2 : ℕ) ^ ...` is not (at all)
          the same as `2 : ℤ`.
        -/
       have : 2 ^ (i * 32) = (2 ^ ((i - 1) * 32) * 4294967296 : Int) := by
-        scalar_nf
+        ring_nf
         have : i = i - 1 + 1 := by scalar_tac
         /- This is slightly technical: we use a "conversion" to apply the rewriting only
            to the left-hand-side of the goal. Also note that we're using `rw` instead of
@@ -322,9 +322,9 @@ theorem toInt_update (l : List U32) (i : Nat) (x : U32) (h0 : i < l.length) :
            ```
          -/
         conv => lhs; rw [this]
-        scalar_nf
+        ring_nf
       simp [mul_assoc, *]
-      scalar_eq_nf
+      ring_eq_nf
 
 /-- The proof about `add_no_overflow_loop` -/
 @[progress]
@@ -405,7 +405,7 @@ theorem add_with_carry_loop_spec
       simp [hxUpdate]; clear hxUpdate
       have hyDrop := toInt_drop y.val i.val (by scalar_tac)
       simp [hyDrop]; clear hyDrop
-      scalar_eq_nf
+      ring_eq_nf
 
       -- The best way is to do a case disjunction and treat each sub-case separately
       split at hConv1 <;>
@@ -420,7 +420,7 @@ theorem add_with_carry_loop_spec
         simp [*, U32.size_eq]
         grind
       . simp [*]
-        scalar_eq_nf
+        ring_eq_nf
   . simp_all
     agrind
 termination_by x.length - i.val
