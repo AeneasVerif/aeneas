@@ -59,6 +59,7 @@ package «tests» {}
 @[default_target] lean_lib Order
 @[default_target] lean_lib Paper
 @[default_target] lean_lib PoloniusList
+@[default_target] lean_lib RustBorrowCheckIssues
 @[default_target] lean_lib Print
 @[default_target] lean_lib Range
 @[default_target] lean_lib RenameAttribute

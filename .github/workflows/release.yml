@@ -1,0 +1,78 @@
+name: Release
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  prepare:
+    name: Prepare Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag_name: ${{ steps.tag.outputs.tag_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate Tag
+        id: tag
+        run: |
+          set -eo pipefail
+
+          # Generates a sortable timestamp: YYYY.MM.DD.HHMMSS. We append the SHA
+          # for uniqueness.
+          TAG_NAME="build-$(date +'%Y.%m.%d.%H%M%S')-${{ github.sha }}"
+          echo "tag_name=${TAG_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag_name }}
+          prerelease: true
+          make_latest: false
+          generate_release_notes: true
+
+  build:
+    name: Build (${{ matrix.artifact_name }})
+    needs: prepare
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: aeneas-linux-x86_64
+          - os: macos-15-intel
+            artifact_name: aeneas-macos-x86_64
+          - os: macos-latest
+            artifact_name: aeneas-macos-aarch64
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Package
+        run: |
+          nix build -L .#aeneas-release
+          cp result ${{ matrix.artifact_name }}.tar.gz
+
+      # Verify the binary is functional.
+      - name: Smoke Test
+        run: |
+          mkdir staging
+          cd staging
+          tar xf ../result
+          ./aeneas --help > /dev/null
+
+      - name: Upload Artifact
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag_name }}
+          files: ${{ matrix.artifact_name }}.tar.gz
