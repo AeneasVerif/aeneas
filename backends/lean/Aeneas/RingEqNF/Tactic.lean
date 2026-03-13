@@ -14,13 +14,13 @@ canceling common additive terms between the left and right sides.
 For example, `ring_eq_nf` transforms:
 - `3 * x + 2 * y = x + 3 * y`  →  `2 * x = y`
 - `x + y = y`                   →  `x = 0`
-- `a + b = a + b`               →  closes the goal
+- `a + b = a + b`               →  `True`
 
-## Algorithm
-1. Apply `ring_nf` to normalize both sides into a canonical polynomial form
-2. Parse each side as a sum of `coefficient * monomial` pairs
-3. For each monomial appearing on both sides, subtract the minimum coefficient
-4. Reconstruct the simplified equality, using `ring` to prove the decomposition
+## Implementation
+`ring_eq_nf` is implemented as a `simproc` that triggers on equalities.
+The tactic combines `ring_nf` (to normalize both sides) with the simproc
+(to cancel common terms). Because it is a simproc, `simp` naturally handles
+applying it to goals, hypotheses, and inside sub-expressions.
 -/
 
 open Lean Meta Elab Tactic
@@ -29,61 +29,44 @@ namespace Aeneas.RingEqNF
 
 /-! ## Helper theorems -/
 
-/-- Transform a goal: if `a = a' + c` and `b = b' + c` (provable by `ring`),
-    then `a' = b'` implies `a = b`. No cancellation typeclass needed. -/
-theorem goal_cancel_right {α : Type*} [Add α]
+/-- If `a = a' + c` and `b = b' + c` (provable by `ring`),
+    then `(a = b) ↔ (a' = b')`. -/
+theorem eq_cancel_right_iff {α : Type*} [AddRightCancelMonoid α]
     {a b a' b' c : α}
-    (hlhs : a = a' + c) (hrhs : b = b' + c) (heq : a' = b') : a = b := by
-  rw [hlhs, hrhs, heq]
-
-/-- Transform a hypothesis: if `a = a' + c` and `b = b' + c` (provable by `ring`),
-    and `a = b`, then `a' = b'`. Requires additive right cancellation. -/
-theorem hyp_cancel_right {α : Type*} [Add α] [IsRightCancelAdd α]
-    {a b a' b' c : α}
-    (hlhs : a = a' + c) (hrhs : b = b' + c) (hab : a = b) : a' = b' := by
-  have h : a' + c = b' + c := by rw [← hlhs, hab, hrhs]
-  exact add_right_cancel h
+    (hlhs : a = a' + c) (hrhs : b = b' + c) : (a = b) ↔ (a' = b') := by
+  constructor
+  · intro h; exact add_right_cancel (by rw [← hlhs, h, hrhs])
+  · intro h; rw [hlhs, hrhs, h]
 
 /-! ## Expression parsing utilities -/
 
-/-- Extract a natural number from an expression. Handles both `OfNat.ofNat`
-    patterns and raw `Nat` literals. -/
 private def exprToNat? (e : Expr) : Option Nat :=
   let e := e.consumeMData
   if let some n := e.nat? then some n
   else if let some n := e.rawNatLit? then some n
   else none
 
-/-- Flatten a left-associated addition tree into a list of additive terms.
-    After `ring_nf`, addition is left-associated: `((a + b) + c) + d`. -/
+/-- Flatten a left-associated addition tree into a list of additive terms. -/
 private partial def flattenAdd (e : Expr) : List Expr :=
   match e.consumeMData.getAppFnArgs with
   | (``HAdd.hAdd, #[_, _, _, _, lhs, rhs]) =>
     flattenAdd lhs ++ [rhs]
   | _ => [e]
 
-/-- A monomial with its coefficient: represents `coeff * base`.
-    Stores the original coefficient expression from `ring_nf` output
-    so we can reuse it in canonical form without re-normalization. -/
+/-- A monomial with its coefficient and original coefficient expression. -/
 private structure CMonomial where
   coeff : Nat
-  coeffExpr : Option Expr  -- the original coefficient expression (canonical form from ring_nf)
-  base : Option Expr  -- `none` for pure constant (numeric) terms
+  coeffExpr : Option Expr
+  base : Option Expr
   deriving Inhabited
 
-/-- Extract `(coefficient, monomial_base)` from a normalized additive term.
-    Handles both `n * m` and `m * n` forms since `ring_nf` may place the coefficient
-    on either side (typically `variable * coefficient`).
-    Preserves the original coefficient expression for later reuse. -/
 private def parseTerm (e : Expr) : CMonomial :=
   let e := e.consumeMData
   match e.getAppFnArgs with
   | (``HMul.hMul, #[_, _, _, _, a, b]) =>
-    -- Try coefficient on the left: n * m
     match exprToNat? a with
     | some n => { coeff := n, coeffExpr := some a, base := some b }
     | none =>
-      -- Try coefficient on the right: m * n (ring_nf convention)
       match exprToNat? b with
       | some n => { coeff := n, coeffExpr := some b, base := some a }
       | none => { coeff := 1, coeffExpr := none, base := some e }
@@ -92,28 +75,22 @@ private def parseTerm (e : Expr) : CMonomial :=
     | some n => { coeff := n, coeffExpr := some e, base := none }
     | none => { coeff := 1, coeffExpr := none, base := some e }
 
-/-- Parse a normalized expression into a list of coefficient-monomial pairs. -/
 private def parseNormExpr (e : Expr) : List CMonomial :=
   (flattenAdd e).map parseTerm
 
 /-! ## Cancellation algorithm -/
 
-/-- Check if two monomial bases match (using definitional equality). -/
 private def sameBase (a b : CMonomial) : MetaM Bool :=
   match a.base, b.base with
   | none,   none   => return true
   | some x, some y => isDefEq x y
   | _,      _      => return false
 
-/-- Result of the cancellation: remaining terms on each side plus common terms. -/
 private structure CancelResult where
   lhsRem : List CMonomial
   rhsRem : List CMonomial
   common : List CMonomial
 
-/-- Cancel common monomials between LHS and RHS term lists.
-    For each monomial appearing on both sides, subtracts `min(coeff_lhs, coeff_rhs)`.
-    Preserves original `coeffExpr` when the coefficient is unchanged. -/
 private def cancelCommon (lhs rhs : List CMonomial) : MetaM CancelResult := do
   let mut lhsRem : List CMonomial := []
   let mut rhsRem := rhs
@@ -126,11 +103,9 @@ private def cancelCommon (lhs rhs : List CMonomial) : MetaM CancelResult := do
         found := true
         let minC := min lm.coeff rm.coeff
         if minC > 0 then
-          -- Use the coeffExpr from whichever side has the min coefficient
           let cExpr := if lm.coeff ≤ rm.coeff then lm.coeffExpr else rm.coeffExpr
           common := common ++ [{ coeff := minC, coeffExpr := cExpr, base := lm.base }]
         if lm.coeff > minC then
-          -- Coefficient changed: clear coeffExpr (will be rebuilt)
           lhsRem := lhsRem ++ [{ coeff := lm.coeff - minC, coeffExpr := none, base := lm.base }]
         if rm.coeff > minC then
           newRhsRem := newRhsRem ++ [{ coeff := rm.coeff - minC, coeffExpr := none, base := rm.base }]
@@ -144,34 +119,23 @@ private def cancelCommon (lhs rhs : List CMonomial) : MetaM CancelResult := do
 
 /-! ## Expression construction -/
 
-/-- Create a well-typed numeral `(n : ty)`.
-    Uses `mkRawNatLit` for the Nat argument to produce the same `OfNat.ofNat`
-    form that `ring_nf` uses (with a raw Nat literal, not `OfNat.ofNat Nat n`). -/
 private def mkOfNat (ty : Expr) (n : Nat) : MetaM Expr :=
   mkAppOptM ``OfNat.ofNat #[some ty, some (mkRawNatLit n), none]
 
-/-- Get the coefficient expression: reuse the original from ring_nf if available,
-    otherwise construct one via `mkOfNat`. -/
 private def getCoeffExpr (ty : Expr) (m : CMonomial) : MetaM Expr :=
   match m.coeffExpr with
   | some e => return e
   | none => mkOfNat ty m.coeff
 
-/-- Build the expression for a single monomial.
-    Uses `base * coeff` ordering to match `ring_nf`'s convention.
-    Reuses original coefficient expressions when available. -/
 private def buildMonomialExpr (ty : Expr) (m : CMonomial) : MetaM Expr := do
   match m.base with
   | none => getCoeffExpr ty m
   | some base =>
-    if m.coeff == 1 then
-      return base
+    if m.coeff == 1 then return base
     else
       let coeffExpr ← getCoeffExpr ty m
       mkAppM ``HMul.hMul #[base, coeffExpr]
 
-/-- Build a sum expression from a list of monomials.
-    Returns `0` for an empty list. -/
 private def buildSumExpr (ty : Expr) (terms : List CMonomial) : MetaM Expr := do
   match terms with
   | [] => mkOfNat ty 0
@@ -182,154 +146,68 @@ private def buildSumExpr (ty : Expr) (terms : List CMonomial) : MetaM Expr := do
       let mExpr ← buildMonomialExpr ty m
       mkAppM ``HAdd.hAdd #[acc, mExpr]) first
 
-/-! ## Core tactic implementations -/
+/-! ## Simproc core -/
 
-/-- Run `ring_nf` targeting a specific hypothesis, working around location syntax construction. -/
-private def evalRingNfAtHyp (hName : Name) : TacticM Unit := do
-  let env ← getEnv
-  let stx ← ofExcept <| Lean.Parser.runParserCategory env `tactic s!"ring_nf at {hName}"
-  evalTactic stx
+/-- Close a goal by `ring`. Returns the proof term or `none` on failure. -/
+private def proveByRing (goalType : Expr) : MetaM (Option Expr) := do
+  let mvar ← mkFreshExprMVar (some goalType)
+  let (goals, _) ← Elab.runTactic mvar.mvarId!
+    (← `(tactic| ring)) {} {}
+  if goals.isEmpty then
+    return some (← instantiateMVars mvar)
+  else
+    return none
 
-/-- Run `ring` on a specific goal (metavariable). -/
-private def closeByRing (mvarId : MVarId) : TacticM Unit := do
-  let saved ← getGoals
-  setGoals [mvarId]
-  try
-    evalTactic (← `(tactic| ring))
-  finally
-    setGoals saved
+/-- Core cancellation logic, operating on a `ring_nf`-normalized equality expression.
+    Returns a `Simp.Result` rewriting the equality to a simpler one. -/
+private def cancelEq (e : Expr) : MetaM Simp.Result := do
+  let some (ty, lhs, rhs) := e.eq?
+    | return { expr := e }
+  let lhsTerms := parseNormExpr lhs
+  let rhsTerms := parseNormExpr rhs
+  let result ← cancelCommon lhsTerms rhsTerms
+  if result.common.isEmpty then return { expr := e }
+  -- Build simplified expressions
+  let newLhs ← buildSumExpr ty result.lhsRem
+  let newRhs ← buildSumExpr ty result.rhsRem
+  let common ← buildSumExpr ty result.common
+  let newLhsPlusCommon ← mkAppM ``HAdd.hAdd #[newLhs, common]
+  let newRhsPlusCommon ← mkAppM ``HAdd.hAdd #[newRhs, common]
+  -- Prove lhs = newLhs + common and rhs = newRhs + common by ring
+  let hlhsType ← mkEq lhs newLhsPlusCommon
+  let hrhsType ← mkEq rhs newRhsPlusCommon
+  let some hlhsProof ← proveByRing hlhsType | return { expr := e }
+  let some hrhsProof ← proveByRing hrhsType | return { expr := e }
+  -- Build: (lhs = rhs) = (newLhs = newRhs) via propext + eq_cancel_right_iff
+  let newEq ← mkEq newLhs newRhs
+  let iffProof ← mkAppM ``eq_cancel_right_iff #[hlhsProof, hrhsProof]
+  let proof ← mkAppM ``propext #[iffProof]
+  return { expr := newEq, proof? := some proof }
 
-/-- Core implementation of `ring_eq_nf` on the goal. -/
-private def ringEqNfGoal : TacticM Unit := do
-  -- Step 1: Normalize with ring_nf
-  try evalTactic (← `(tactic| ring_nf))
-  catch _ => return
-  -- Step 2: Get the current goal
-  let goals ← getGoals
-  if goals.isEmpty then return
-  let mvarId := goals.head!
-  let restGoals := goals.tail!
-  mvarId.withContext do
-    let target ← instantiateMVars (← mvarId.getType)
-    -- Step 3: Must be an equality
-    let some (ty, lhs, rhs) := target.eq?
-      | return
-    -- Step 4: Parse both sides into coefficient-monomial lists
-    let lhsTerms := parseNormExpr lhs
-    let rhsTerms := parseNormExpr rhs
-    -- Step 5: Cancel common terms
-    let result ← cancelCommon lhsTerms rhsTerms
-    if result.common.isEmpty then return
-    -- Step 6: If everything cancels, try closing the goal with ring
-    if result.lhsRem.isEmpty && result.rhsRem.isEmpty then
-      let saved ← saveState
-      try
-        setGoals [mvarId]
-        evalTactic (← `(tactic| ring))
-        setGoals restGoals
-        return
-      catch _ =>
-        restoreState saved
-        return
-    -- Step 7: Build the simplified expressions
-    let newLhs ← buildSumExpr ty result.lhsRem
-    let newRhs ← buildSumExpr ty result.rhsRem
-    let common ← buildSumExpr ty result.common
-    -- Step 8: Construct the proof via goal_cancel_right
-    --   hlhs : lhs = newLhs + common     (proved by ring)
-    --   hrhs : rhs = newRhs + common     (proved by ring)
-    --   heq  : newLhs = newRhs           (new goal for the user)
-    let newLhsPlusCommon ← mkAppM ``HAdd.hAdd #[newLhs, common]
-    let newRhsPlusCommon ← mkAppM ``HAdd.hAdd #[newRhs, common]
-    let hlhsType ← mkEq lhs newLhsPlusCommon
-    let hrhsType ← mkEq rhs newRhsPlusCommon
-    let heqType ← mkEq newLhs newRhs
-    let hlhsMVar ← mkFreshExprMVar (some hlhsType)
-    let hrhsMVar ← mkFreshExprMVar (some hrhsType)
-    let heqMVar ← mkFreshExprMVar (some heqType)
-    let proof ← mkAppM ``goal_cancel_right #[hlhsMVar, hrhsMVar, heqMVar]
-    let saved ← saveState
-    try
-      mvarId.assign proof
-      closeByRing hlhsMVar.mvarId!
-      closeByRing hrhsMVar.mvarId!
-      setGoals (heqMVar.mvarId! :: restGoals)
-    catch _ =>
-      restoreState saved
+/-! ## Simproc definition -/
 
-/-- Core implementation of `ring_eq_nf` on a hypothesis. -/
-private def ringEqNfAtHyp (hName : Name) : TacticM Unit := do
-  -- Step 1: Normalize with ring_nf at h
-  try evalRingNfAtHyp hName
-  catch _ => return
-  -- Step 2: Get the hypothesis
-  let mvarId ← getMainGoal
-  mvarId.withContext do
-    let hDecl ← getLocalDeclFromUserName hName
-    let hType ← instantiateMVars hDecl.type
-    -- Step 3: Must be an equality
-    let some (ty, lhs, rhs) := hType.eq?
-      | return
-    -- Step 4: Parse and cancel
-    let lhsTerms := parseNormExpr lhs
-    let rhsTerms := parseNormExpr rhs
-    let result ← cancelCommon lhsTerms rhsTerms
-    if result.common.isEmpty then return
-    if result.lhsRem.isEmpty && result.rhsRem.isEmpty then return
-    -- Step 5: Build simplified expressions
-    let newLhs ← buildSumExpr ty result.lhsRem
-    let newRhs ← buildSumExpr ty result.rhsRem
-    let common ← buildSumExpr ty result.common
-    -- Step 6: Construct the proof via hyp_cancel_right
-    let newLhsPlusCommon ← mkAppM ``HAdd.hAdd #[newLhs, common]
-    let newRhsPlusCommon ← mkAppM ``HAdd.hAdd #[newRhs, common]
-    let hlhsType ← mkEq lhs newLhsPlusCommon
-    let hrhsType ← mkEq rhs newRhsPlusCommon
-    let hlhsMVar ← mkFreshExprMVar (some hlhsType)
-    let hrhsMVar ← mkFreshExprMVar (some hrhsType)
-    let newHType ← mkEq newLhs newRhs
-    let newHProof ← mkAppM ``hyp_cancel_right #[hlhsMVar, hrhsMVar, hDecl.toExpr]
-    let saved ← saveState
-    try
-      closeByRing hlhsMVar.mvarId!
-      closeByRing hrhsMVar.mvarId!
-      -- Replace hypothesis: assert new, clear old
-      let mvarId ← mvarId.assert hName newHType newHProof
-      let (_, mvarId) ← mvarId.intro1P
-      let mvarId ← mvarId.clear hDecl.fvarId
-      replaceMainGoal [mvarId]
-    catch _ =>
-      restoreState saved
+/-- Simproc that cancels common additive terms in equalities over `Nat`.
+    Not registered in the default simp set — use `ring_eq_nf` or
+    `simp only [ringEqNfNat]` to invoke. -/
+simproc_decl ringEqNfNat (@Eq Nat _ _) := fun e => do
+  let r ← cancelEq e
+  if r.expr == e then return .continue
+  return .visit r
 
-/-! ## Tactic syntax -/
+/-- Simproc that cancels common additive terms in equalities over `Int`.
+    Not registered in the default simp set — use `ring_eq_nf` or
+    `simp only [ringEqNfInt]` to invoke. -/
+simproc_decl ringEqNfInt (@Eq Int _ _) := fun e => do
+  let r ← cancelEq e
+  if r.expr == e then return .continue
+  return .visit r
 
-syntax "ring_eq_nf" : tactic
-syntax "ring_eq_nf" " at " ident : tactic
-syntax "ring_eq_nf" " at " "*" : tactic
+/-! ## Tactic -/
 
-elab_rules : tactic
-  | `(tactic| ring_eq_nf) => ringEqNfGoal
+syntax "ring_eq_nf" (Lean.Parser.Tactic.location)? : tactic
 
-elab_rules : tactic
-  | `(tactic| ring_eq_nf at $h:ident) => ringEqNfAtHyp h.getId
-
-elab_rules : tactic
-  | `(tactic| ring_eq_nf at *) => do
-    -- Collect hypothesis names that are equalities
-    let mvarId ← getMainGoal
-    let hypNames ← mvarId.withContext do
-      let ctx ← getLCtx
-      let mut names : Array Name := #[]
-      for decl in ctx do
-        if !decl.isImplementationDetail then
-          let ty ← instantiateMVars decl.type
-          if ty.eq?.isSome then
-            names := names.push decl.userName
-      return names
-    -- Apply to each hypothesis (ignoring failures)
-    for hName in hypNames do
-      try ringEqNfAtHyp hName catch _ => pure ()
-    -- Apply to the goal
-    try ringEqNfGoal catch _ => pure ()
+macro_rules
+  | `(tactic| ring_eq_nf $[$loc]?) =>
+    `(tactic| (ring_nf $[$loc]?; try simp (config := {failIfUnchanged := false}) only [ringEqNfNat, ringEqNfInt] $[$loc]?))
 
 end Aeneas.RingEqNF
