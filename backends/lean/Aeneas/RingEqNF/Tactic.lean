@@ -62,34 +62,35 @@ private partial def flattenAdd (e : Expr) : List Expr :=
     flattenAdd lhs ++ [rhs]
   | _ => [e]
 
-/-- A monomial with its coefficient: represents `coeff * base`. -/
+/-- A monomial with its coefficient: represents `coeff * base`.
+    Stores the original coefficient expression from `ring_nf` output
+    so we can reuse it in canonical form without re-normalization. -/
 private structure CMonomial where
   coeff : Nat
+  coeffExpr : Option Expr  -- the original coefficient expression (canonical form from ring_nf)
   base : Option Expr  -- `none` for pure constant (numeric) terms
   deriving Inhabited
 
 /-- Extract `(coefficient, monomial_base)` from a normalized additive term.
     Handles both `n * m` and `m * n` forms since `ring_nf` may place the coefficient
     on either side (typically `variable * coefficient`).
-    - `n * m` or `m * n` where one is a numeral → `(n, some m)`
-    - `m` (non-numeral)                        → `(1, some m)`
-    - `n` (numeral)                             → `(n, none)` -/
+    Preserves the original coefficient expression for later reuse. -/
 private def parseTerm (e : Expr) : CMonomial :=
   let e := e.consumeMData
   match e.getAppFnArgs with
   | (``HMul.hMul, #[_, _, _, _, a, b]) =>
     -- Try coefficient on the left: n * m
     match exprToNat? a with
-    | some n => { coeff := n, base := some b }
+    | some n => { coeff := n, coeffExpr := some a, base := some b }
     | none =>
       -- Try coefficient on the right: m * n (ring_nf convention)
       match exprToNat? b with
-      | some n => { coeff := n, base := some a }
-      | none => { coeff := 1, base := some e }
+      | some n => { coeff := n, coeffExpr := some b, base := some a }
+      | none => { coeff := 1, coeffExpr := none, base := some e }
   | _ =>
     match exprToNat? e with
-    | some n => { coeff := n, base := none }
-    | none => { coeff := 1, base := some e }
+    | some n => { coeff := n, coeffExpr := some e, base := none }
+    | none => { coeff := 1, coeffExpr := none, base := some e }
 
 /-- Parse a normalized expression into a list of coefficient-monomial pairs. -/
 private def parseNormExpr (e : Expr) : List CMonomial :=
@@ -111,7 +112,8 @@ private structure CancelResult where
   common : List CMonomial
 
 /-- Cancel common monomials between LHS and RHS term lists.
-    For each monomial appearing on both sides, subtracts `min(coeff_lhs, coeff_rhs)`. -/
+    For each monomial appearing on both sides, subtracts `min(coeff_lhs, coeff_rhs)`.
+    Preserves original `coeffExpr` when the coefficient is unchanged. -/
 private def cancelCommon (lhs rhs : List CMonomial) : MetaM CancelResult := do
   let mut lhsRem : List CMonomial := []
   let mut rhsRem := rhs
@@ -124,11 +126,14 @@ private def cancelCommon (lhs rhs : List CMonomial) : MetaM CancelResult := do
         found := true
         let minC := min lm.coeff rm.coeff
         if minC > 0 then
-          common := common ++ [{ coeff := minC, base := lm.base }]
+          -- Use the coeffExpr from whichever side has the min coefficient
+          let cExpr := if lm.coeff ≤ rm.coeff then lm.coeffExpr else rm.coeffExpr
+          common := common ++ [{ coeff := minC, coeffExpr := cExpr, base := lm.base }]
         if lm.coeff > minC then
-          lhsRem := lhsRem ++ [{ coeff := lm.coeff - minC, base := lm.base }]
+          -- Coefficient changed: clear coeffExpr (will be rebuilt)
+          lhsRem := lhsRem ++ [{ coeff := lm.coeff - minC, coeffExpr := none, base := lm.base }]
         if rm.coeff > minC then
-          newRhsRem := newRhsRem ++ [{ coeff := rm.coeff - minC, base := rm.base }]
+          newRhsRem := newRhsRem ++ [{ coeff := rm.coeff - minC, coeffExpr := none, base := rm.base }]
       else
         newRhsRem := newRhsRem ++ [rm]
     if found then
@@ -139,20 +144,30 @@ private def cancelCommon (lhs rhs : List CMonomial) : MetaM CancelResult := do
 
 /-! ## Expression construction -/
 
-/-- Create a well-typed numeral `(n : ty)`. -/
+/-- Create a well-typed numeral `(n : ty)`.
+    Uses `mkRawNatLit` for the Nat argument to produce the same `OfNat.ofNat`
+    form that `ring_nf` uses (with a raw Nat literal, not `OfNat.ofNat Nat n`). -/
 private def mkOfNat (ty : Expr) (n : Nat) : MetaM Expr :=
-  mkAppOptM ``OfNat.ofNat #[some ty, some (mkNatLit n), none]
+  mkAppOptM ``OfNat.ofNat #[some ty, some (mkRawNatLit n), none]
+
+/-- Get the coefficient expression: reuse the original from ring_nf if available,
+    otherwise construct one via `mkOfNat`. -/
+private def getCoeffExpr (ty : Expr) (m : CMonomial) : MetaM Expr :=
+  match m.coeffExpr with
+  | some e => return e
+  | none => mkOfNat ty m.coeff
 
 /-- Build the expression for a single monomial.
-    Uses `base * coeff` ordering to match `ring_nf`'s convention. -/
+    Uses `base * coeff` ordering to match `ring_nf`'s convention.
+    Reuses original coefficient expressions when available. -/
 private def buildMonomialExpr (ty : Expr) (m : CMonomial) : MetaM Expr := do
   match m.base with
-  | none => mkOfNat ty m.coeff
+  | none => getCoeffExpr ty m
   | some base =>
     if m.coeff == 1 then
       return base
     else
-      let coeffExpr ← mkOfNat ty m.coeff
+      let coeffExpr ← getCoeffExpr ty m
       mkAppM ``HMul.hMul #[base, coeffExpr]
 
 /-- Build a sum expression from a list of monomials.

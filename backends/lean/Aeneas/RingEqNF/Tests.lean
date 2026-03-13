@@ -89,9 +89,8 @@ example (hd tl_upd tl_int diff pow32i : Int)
     (h : hd + 2 ^ 32 * tl_upd = hd + 2 ^ 32 * (tl_int + pow32i * diff)) :
     2 ^ 32 * tl_upd = 2 ^ 32 * (tl_int + pow32i * diff) := by
   ring_eq_nf at h
-  ring_nf
-  ring_nf at h
-  exact h
+  -- The user-written goal is not in ring_nf form; normalize it to match h
+  ring_nf; exact h
 
 -- Cancelling a shared `hd` and `2^32 * tl_int` from both sides
 example (hd tl_int pow32i diff : Int) :
@@ -111,17 +110,14 @@ example (toInt_x s2_val x_i y_i rest_y c0 c1 pow_i pow_len pow32 : Int)
     pow_i * (s2_val - x_i) + c1 * pow_len =
     pow_i * (y_i + pow32 * rest_y) + c0 * pow_i := by
   ring_eq_nf at h
-  ring_nf
-  ring_nf at h
-  exact h
+  -- The user-written goal is not in ring_nf form; normalize it to match h
+  ring_nf; exact h
 
 -- Simpler version: cancel shared addend from both sides of a carry equation
 example (a b c d shared : Int)
     (h : shared + a + b = shared + c + d) :
     a + b = c + d := by
   ring_eq_nf at h
-  ring_nf
-  ring_nf at h
   exact h
 
 -- Multiple shared terms
@@ -129,8 +125,6 @@ example (a b c x y z : Int)
     (h : a + x + b + y + c = x + y + a + 2 * b + z) :
     c = b + z := by
   ring_eq_nf at h
-  ring_nf
-  ring_nf at h
   exact h
 
 -- With multiplication by constants and powers (like limb arithmetic)
