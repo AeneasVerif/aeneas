@@ -1,5 +1,6 @@
 import Init.Data.List.OfFn
 import Init.Data.BitVec.Lemmas
+import Batteries.Data.BitVec.Lemmas
 import Mathlib.Data.Nat.Basic
 import Mathlib.Data.Fin.Basic
 import Mathlib.Data.Nat.Cast.Basic
@@ -121,15 +122,6 @@ theorem BitVec.getElem_set {n} {bv: BitVec n} {b: Bool} {i: Fin n} {j: Nat}
 
 attribute [simp, bvify_simps] BitVec.ofNat_mul
 
-theorem BitVec.ofNat_pow {n : ℕ} (x d : ℕ) : BitVec.ofNat n (x ^ d) = (BitVec.ofNat n x)^d := by
-  revert x
-  induction d <;> simp_all [pow_succ]
-
-@[simp]
-theorem BitVec.toNat_pow {w : ℕ} (x : BitVec w) (d : ℕ) :
-  BitVec.toNat (x ^ d) = (x.toNat ^ d) % 2^w := by
-  induction d <;> simp_all [pow_succ]
-
 @[simp, simp_lists_simps, grind =, agrind =]
 theorem BitVec.getElem!_eq_false {w : ℕ} (x : BitVec w) (i : ℕ) (hi : w ≤ i) :
   x[i]! = false := by
@@ -171,7 +163,7 @@ attribute [natify_simps] BitVec.toNat_twoPow
 
 @[simp]
 theorem BitVec.twoPow_eq_two_pow {w i} : BitVec.twoPow w i = 2#w ^ i := by
-  natify; simp only [toNat_pow, toNat_ofNat]
+  natify; simp only [BitVec.toNat_pow, toNat_ofNat]
   by_cases w ≤ 1 <;> cases i <;> simp_scalar
 
 theorem BitVec.getElem!_eq_testBit_toNat {w : ℕ} (x : BitVec w) (i : ℕ) :
@@ -191,7 +183,7 @@ theorem BitVec.getElem!_eq_testBit_toNat {w : ℕ} (x : BitVec w) (i : ℕ) :
 theorem BitVec.and_two_pow_sub_one_eq_mod {w} (x : BitVec w) (n : Nat) :
   x &&& 2#w ^ n - 1#w = x % 2#w ^ n := by
   by_cases hn : n < w
-  . simp only [← ofNat_pow]
+  . simp only [← BitVec.ofNat_pow]
     natify
     simp
     have : 2^n < 2^w := by
@@ -204,7 +196,7 @@ theorem BitVec.and_two_pow_sub_one_eq_mod {w} (x : BitVec w) (n : Nat) :
     have : 2 ^ w - 1 + 2 ^ n = 2^w + (2^n - 1) := by omega
     rw [this]
     simp (disch := omega) only [Nat.add_mod_left, Nat.mod_eq_of_lt, Nat.and_two_pow_sub_one_eq_mod]
-  . simp only [← ofNat_pow]
+  . simp only [← BitVec.ofNat_pow]
     simp only [not_lt] at hn
     have : BitVec.ofNat w (2 ^ n) = 0 := by
       unfold BitVec.ofNat Fin.Internal.ofNat
@@ -241,7 +233,7 @@ theorem BitVec.shiftLeft_sub_one_eq_mod {w} (x : BitVec w) (n : Nat) :
     have : 1#w = 1 := by simp
     rw [this]
     ring_nf
-    natify; simp only [toNat_pow, BitVec.toNat_ofNat]
+    natify; simp only [BitVec.toNat_pow, BitVec.toNat_ofNat]
     zmodify
   rw [this]
   simp only [BitVec.and_two_pow_sub_one_eq_mod]
