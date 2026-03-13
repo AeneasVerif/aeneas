@@ -43,7 +43,6 @@ def removeInvImageAssumptions : TacticM Unit := do
 elab "remove_invImage_assumptions" : tactic =>
   removeInvImageAssumptions
 
-
 def clearUnusedDeclsOnePass : TacticM Unit := do
   withMainContext do
   let lctx ← getLCtx
