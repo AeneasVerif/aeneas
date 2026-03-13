@@ -3,13 +3,39 @@ on:
   push:
     branches:
       - main
-    tags:
-      - 'v*'
   workflow_dispatch:
 
 jobs:
+  prepare:
+    name: Prepare Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag_name: ${{ steps.tag.outputs.tag_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate Tag
+        id: tag
+        run: |
+          set -eo pipefail
+
+          # Generates a sortable timestamp: YYYY.MM.DD.HHMMSS. We append the SHA
+          # for uniqueness.
+          TAG_NAME="build-$(date +'%Y.%m.%d.%H%M%S')-${{ github.sha }}"
+          echo "tag_name=${TAG_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag_name }}
+          prerelease: true
+          make_latest: false
+          generate_release_notes: true
+
   build:
     name: Build (${{ matrix.artifact_name }})
+    needs: prepare
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
@@ -89,13 +115,8 @@ jobs:
             (ldd ./staging/aeneas 2>&1 | grep "not a dynamic executable") || (echo "Binary is not statically linked!" && ldd ./staging/aeneas && exit 1)
           fi
 
-      # Archive every individual commit in a unique 'build-<sha>' prerelease.
-      - name: Release (Historical)
-        if: github.ref_type != 'tag'
+      - name: Upload Artifact
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: build-${{ github.sha }}
-          prerelease: true
+          tag_name: ${{ needs.prepare.outputs.tag_name }}
           files: ${{ matrix.artifact_name }}.tar.gz
-          make_latest: false
-          generate_release_notes: true
