@@ -48,7 +48,17 @@ jobs:
           opam-disable-sandboxing: true
 
       - name: Install dependencies
+        env:
+          # On some Linux runners (especially for static builds), we need to
+          # explicitly point to the multiarch include/lib paths for gmp and ffi.
+          CPATH: /usr/include/x86_64-linux-gnu
+          LIBRARY_PATH: /usr/lib/x86_64-linux-gnu
         run: |
+          set -eo pipefail
+
+          # Explicitly install system-dependent opam packages to ensure
+          # detection.
+          opam install conf-gmp conf-libffi -y
           opam install ppx_deriving visitors easy_logging zarith yojson core_unix odoc \
             ocamlgraph menhir ocamlformat.0.27.0 unionFind zarith progress domainslib -y
 
