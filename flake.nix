@@ -12,24 +12,88 @@
 
   # Remark: keep the list of outputs in sync with the list of inputs above
   # (see above remark)
-  outputs = { self, charon, flake-utils, nixpkgs, fstar, ... }:
+  outputs = inputs @ { self, flake-utils, nixpkgs, fstar, ... }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
         ocamlPackages = pkgs.ocaml-ng.ocamlPackages_5_2;
+        ocamlPackagesStatic = pkgs.pkgsStatic.ocaml-ng.ocamlPackages_5_2;
         coqPackages = pkgs.coqPackages_8_18;
-        charon-ml = charon.packages.${system}.charon-ml.override { inherit ocamlPackages; };
-        easy_logging = ocamlPackages.buildDunePackage rec {
-          pname = "easy_logging";
-          version = "0.8.2";
-          src = pkgs.fetchFromGitHub {
-            owner = "sapristi";
-            repo = "easy_logging";
-            rev = "v${version}";
-            sha256 = "sha256-Xy6Rfef7r2K8DTok7AYa/9m3ZEV07LlUeMQSRayLBco=";
+        charon = inputs.charon.packages.${system}.charon;
+        charon-ml = inputs.charon.packages.${system}.charon-ml.override { inherit ocamlPackages; };
+
+        easy_logging = pkgs.callPackage
+          ({ fetchFromGitHub, ocamlPackages }:
+            ocamlPackages.buildDunePackage rec {
+              pname = "easy_logging";
+              version = "0.8.2";
+              src = fetchFromGitHub {
+                owner = "sapristi";
+                repo = "easy_logging";
+                rev = "v${version}";
+                sha256 = "sha256-Xy6Rfef7r2K8DTok7AYa/9m3ZEV07LlUeMQSRayLBco=";
+              };
+              buildInputs = [ ocamlPackages.calendar ];
+            }
+          )
+          { inherit ocamlPackages; };
+
+        aeneas = pkgs.callPackage
+          (
+            { lib
+            , ocamlPackages
+            , easy_logging
+            , charon
+            , charon-ml
+            }:
+            ocamlPackages.buildDunePackage {
+              pname = "aeneas";
+              version = "0.1.0";
+              duneVersion = "3";
+              src = ./src;
+              OCAMLPARAM = "_,warn-error=+A"; # Turn all warnings into errors.
+              propagatedBuildInputs = [
+                easy_logging
+                charon-ml
+              ] ++ (with ocamlPackages; [
+                calendar
+                core_unix
+                ppx_deriving
+                visitors
+                yojson
+                zarith
+                ocamlgraph
+                progress
+                domainslib
+              ]);
+              postInstall = ''
+                ln -s ${charon}/bin/charon $out/bin
+              '';
+            }
+          )
+          {
+            inherit ocamlPackages easy_logging charon charon-ml;
           };
-          buildInputs = [ ocamlPackages.calendar ];
-        };
+
+        # With statically-linked glibc (doesn't compile because of some deps :( ).
+        aeneas-static =
+          let
+            ocamlPackages = ocamlPackagesStatic;
+          in
+          aeneas.override {
+            inherit ocamlPackages charon;
+            easy_logging = easy_logging.override
+              { inherit ocamlPackages; };
+            charon-ml = charon-ml.override { inherit ocamlPackages; };
+          };
+
+        aeneas-release = pkgs.runCommand "aeneas-release.tar.gz" { } ''
+          mkdir release
+          cd release
+          cp ${aeneas}/bin/aeneas .
+          cp -r ${./backends} backends
+          tar -czvf $out *
+        '';
 
         aeneas-check-tidiness = pkgs.stdenv.mkDerivation rec {
           name = "aeneas-check-tidiness";
@@ -38,7 +102,7 @@
             ocamlPackages.dune_3
             ocamlPackages.ocaml
             ocamlPackages.ocamlformat_0_27_0
-            charon.packages.${system}.rustToolchain
+            inputs.charon.packages.${system}.rustToolchain
           ];
           buildPhase = ''
             make format
@@ -50,31 +114,6 @@
             fi
           '';
           installPhase = "touch $out";
-        };
-
-        aeneas = ocamlPackages.buildDunePackage {
-          pname = "aeneas";
-          version = "0.1.0";
-          duneVersion = "3";
-          src = ./src;
-          OCAMLPARAM = "_,warn-error=+A"; # Turn all warnings into errors.
-          propagatedBuildInputs = [
-            easy_logging
-            charon-ml
-          ] ++ (with ocamlPackages; [
-            calendar
-            core_unix
-            ppx_deriving
-            visitors
-            yojson
-            zarith
-            ocamlgraph
-            progress
-            domainslib
-          ]);
-          postInstall = ''
-            ln -s ${charon.packages.${system}.charon}/bin/charon $out/bin
-          '';
         };
 
         test_runner = ocamlPackages.buildDunePackage {
@@ -104,7 +143,7 @@
               || (pkgs.lib.hasPrefix (toString ./tests) path
               && !pkgs.lib.hasSuffix ".llbc" path);
           };
-          buildInputs = [ charon.packages.${system}.rustToolchain ];
+          buildInputs = [ inputs.charon.packages.${system}.rustToolchain ];
           buildPhase = ''
             export AENEAS_EXE=${aeneas}/bin/aeneas
             export CHARON_EXE=${aeneas}/bin/charon
@@ -208,9 +247,8 @@
       in
       {
         packages = {
-          inherit aeneas;
-          inherit (charon.packages.${system}) charon;
-          inherit charon-ml;
+          inherit aeneas aeneas-static aeneas-release;
+          inherit charon charon-ml;
           default = aeneas;
         };
         devShells.default = pkgs.mkShell {

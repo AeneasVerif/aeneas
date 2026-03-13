@@ -44,14 +44,10 @@ jobs:
         include:
           - os: ubuntu-latest
             artifact_name: aeneas-linux-x86_64
-            # We use the static variant to produce a portable, statically-linked musl binary.
-            ocaml_compiler: ocaml-variants.5.2.0+options,ocaml-option-static
           - os: macos-15-intel
             artifact_name: aeneas-macos-x86_64
-            ocaml_compiler: 5.2.0
           - os: macos-latest
             artifact_name: aeneas-macos-aarch64
-            ocaml_compiler: 5.2.0
 
     steps:
       - uses: actions/checkout@v4
@@ -59,61 +55,22 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Install musl-tools (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        # We need libgmp-dev and libffi-dev for certain OCaml packages (like
-        # zarith and core_unix) to build correctly, especially for static
-        # linking.
-        run: sudo apt-get update && sudo apt-get install -y musl-tools libgmp-dev libffi-dev
-
-      - uses: ocaml/setup-ocaml@v3
+      - uses: cachix/install-nix-action@v25
         with:
-          ocaml-compiler: ${{ matrix.ocaml_compiler }}
-          # Disabling sandboxing is often necessary on GHA runners to avoid
-          # bwrap errors (e.g., "Failed RTM_NEWADDR: Operation not permitted").
-          opam-disable-sandboxing: true
-
-      - name: Install dependencies
-        env:
-          # On some Linux runners (especially for static builds), we need to
-          # explicitly point to the multiarch include/lib paths for gmp and ffi.
-          CPATH: /usr/include/x86_64-linux-gnu
-          LIBRARY_PATH: /usr/lib/x86_64-linux-gnu
-        run: |
-          set -eo pipefail
-
-          # Explicitly install system-dependent opam packages to ensure
-          # detection.
-          opam install conf-gmp conf-libffi -y
-          opam install ppx_deriving visitors easy_logging zarith yojson core_unix odoc \
-            ocamlgraph menhir ocamlformat.0.27.0 unionFind zarith progress domainslib -y
-
-      - name: Setup Charon
-        # 1. Make sure we've fetched the right Charon commit.
-        run: make setup-charon
-
-      - name: Build Aeneas
-        run: make
+          nix_path: nixpkgs=channel:nixos-unstable
 
       - name: Package
         run: |
-          set -eo pipefail
-
-          mkdir -p staging
-          cp bin/aeneas staging/
-          cp -r backends staging/
-          cd staging
-          tar -czvf ../${{ matrix.artifact_name }}.tar.gz *
+          nix build -L .#aeneas-release
+          cp result ${{ matrix.artifact_name }}.tar.gz
 
       # Verify the binary is functional.
       - name: Smoke Test
         run: |
-          set -eo pipefail
-          ./staging/aeneas --help > /dev/null
-          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
-            # Verify the binary is indeed statically linked (not a dynamic executable).
-            (ldd ./staging/aeneas 2>&1 | grep "not a dynamic executable") || (echo "Binary is not statically linked!" && ldd ./staging/aeneas && exit 1)
-          fi
+          mkdir staging
+          cd staging
+          tar xf ../result
+          ./aeneas --help > /dev/null
 
       - name: Upload Artifact
         uses: softprops/action-gh-release@v2
