@@ -35,11 +35,17 @@ jobs:
 
       - name: Install musl-tools (Linux)
         if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get update && sudo apt-get install -y musl-tools
+        # We need libgmp-dev and libffi-dev for certain OCaml packages (like
+        # zarith and core_unix) to build correctly, especially for static
+        # linking.
+        run: sudo apt-get update && sudo apt-get install -y musl-tools libgmp-dev libffi-dev
 
       - uses: ocaml/setup-ocaml@v3
         with:
           ocaml-compiler: ${{ matrix.ocaml_compiler }}
+          # Disabling sandboxing is often necessary on GHA runners to avoid
+          # bwrap errors (e.g., "Failed RTM_NEWADDR: Operation not permitted").
+          opam-disable-sandboxing: true
 
       - name: Install dependencies
         run: |
