@@ -186,6 +186,14 @@ structure Args where
   keepPretty : Option Name
   /-- Identifiers to use when introducing fresh variables -/
   ids : Array (Option Name)
+  /-- [true] if the ids were user provided, [false] otherwise.
+
+  This is useful when printing warning messages: we can infer too many id names by analyzing
+  the let-bindings (for happens, when writing `massert b; ...`, the output of `massert b` is
+  bound in a let-binding, while `massert` actually outputs nothing: if we infer id names
+  by analyzing the let-binding, we do not want to print a warning if there are too many of them).
+  -/
+  idsUserProvided : Bool
   /-- Base name for post-conditions (e.g., `z` gives `z_post`). Used when the user
       doesn't provide explicit names via `as ⟨...⟩`. -/
   postsBasename : Option Name := none
@@ -486,7 +494,7 @@ def introOutputs (args : Args) (fExpr : Expr) :
 
   -- Warning if the user provided too many ids
   let nFVars := outputIsProp.size
-  if nFVars < args.ids.size then
+  if nFVars < args.ids.size ∧ args.idsUserProvided then
     logWarning m!"Too many ids provided ({args.ids}): expected ≤ {nFVars} ids, got {args.ids.size}"
 
   /- Split the fvars between the output variables and the post-conditions -/
@@ -819,8 +827,10 @@ def progressAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
 syntax progressArgs := Parser.Tactic.optConfig ("with" term)? ("as" " ⟨ " binderIdent,* " ⟩")? ("by" tacticSeq)?
 
 def parseProgressArgs
-: TSyntax ``Aeneas.Progress.progressArgs → TacticM (Config × Option Expr × Array (Option Name) × Option Name × Option Syntax.Tactic)
-| args@`(progressArgs| $config $[with $pspec:term]? $[as ⟨ $ids,* ⟩]? $[by $byTac]? ) => withMainContext do
+: TSyntax ``Aeneas.Progress.progressArgs →
+  TacticM (Config × Option Expr × Array (Option Name) × Bool × Option Name × Option Syntax.Tactic)
+| args@`(progressArgs| $config $[with $pspec:term]? $[as ⟨ $ids,* ⟩]? $[by $byTac]? ) =>
+  withMainContext do
   withTraceNode `Progress (fun _ => do pure m!"progressArgs") do
   trace[Progress] "Progress arguments: {args.raw}"
   let config ← elabPartialConfig config
@@ -850,14 +860,15 @@ def parseProgressArgs
       | `(binderIdent| $name:ident) => some name.getId
       | _ => none
   -- If the user didn't provide names via `as ⟨...⟩`, extract them from the goal
-  let (ids, postsBasename) ← if !userGaveIds then do
-      getVarNamesFromGoal
-    else pure (ids, none)
+  let (ids, idsUserProvided, postsBasename) ← if !userGaveIds then do
+      let (ids, postsBasename) ← getVarNamesFromGoal
+      pure (ids, false, postsBasename)
+    else pure (ids, true, none)
   trace[Progress] "User-provided ids: {ids}"
   let byTac : Option Syntax.Tactic := match byTac with
     | none => none
     | some byTac => some ⟨byTac.raw⟩
-  return (config, withTh?, ids, postsBasename, byTac)
+  return (config, withTh?, ids, idsUserProvided, postsBasename, byTac)
 | _ => throwUnsupportedSyntax
 
 /-- Use `agrind` after preprocessing goal the goal, in particular to simplify arithmetic expressions. -/
@@ -884,8 +895,9 @@ def evalAGrindWithPreprocess (withGroundSimprocs : Bool) (config : Grind.Config)
       Aeneas.Grind.agrindEval config params mvarId
     catch e => trace[Progress] "Grind failed:\n{e.toMessageData}"
 
-def evalProgressCore (config : Config) (keepPretty : Option Name) (withArg: Option Expr) (ids: Array (Option Name))
-  (postsBasename : Option Name := none) (byTacStx : Option Syntax.Tactic)
+def evalProgressCore (config : Config) (keepPretty : Option Name) (withArg : Option Expr)
+  (ids : Array (Option Name)) (idsUserProvided : Bool) (postsBasename : Option Name := none)
+  (byTacStx : Option Syntax.Tactic)
   : TacticM Stats := do
   withTraceNode `Progress (fun _ => pure m!"evalProgress") do
   /- Simplify the goal -- TODO: this might close it: we need to check that and abort if necessary,
@@ -973,7 +985,7 @@ def evalProgressCore (config : Config) (keepPretty : Option Name) (withArg: Opti
   let args : Args := {
     async := config.async,
     inferGhostVars := config.inferGhostVars,
-    keepPretty, ids, postsBasename, assumTac := customAssumTac,
+    keepPretty, ids, idsUserProvided, postsBasename, assumTac := customAssumTac,
     solvePreconditionTac, byTacSyntax := byTacStx
   }
   let (goals, usedTheorem) ← progressAsmsOrLookupTheorem args withArg
@@ -981,11 +993,12 @@ def evalProgressCore (config : Config) (keepPretty : Option Name) (withArg: Opti
   return ⟨ goals, usedTheorem ⟩
 
 def evalProgress
-  (config : Config) (keepPretty : Option Name) (withArg: Option Expr) (ids: Array (Option Name))
+  (config : Config) (keepPretty : Option Name) (withArg: Option Expr)
+  (ids: Array (Option Name)) (idsUserProvided : Bool)
   (postsBasename : Option Name := none) (byTac : Option Syntax.Tactic)
   : TacticM UsedTheorem := do
   focus do
-  let ⟨goals, usedTheorem⟩ ← evalProgressCore config keepPretty withArg ids postsBasename byTac
+  let ⟨goals, usedTheorem⟩ ← evalProgressCore config keepPretty withArg ids idsUserProvided postsBasename byTac
   -- Wait for all the proof attempts to finish
   let mut sgs := #[]
   for (mvarId, proof) in goals.preconditions do
@@ -1097,13 +1110,13 @@ which repeatedly calls `progress` until no further progress can be made. See the
 of `progress*` for more details.
 -/
 elab (name := progress) "progress" args:progressArgs : tactic => do
-  let (config, withArg, ids, postsBasename, byTac) ← parseProgressArgs args
-  evalProgress config none withArg ids postsBasename byTac *> return ()
+  let (config, withArg, ids, idsUserProvided, postsBasename, byTac) ← parseProgressArgs args
+  evalProgress config none withArg ids idsUserProvided postsBasename byTac *> return ()
 
 @[inherit_doc progress]
 elab tk:"progress?" args:progressArgs : tactic => do
-  let (config, withArg, ids, postsBasename, byTac) ← parseProgressArgs args
-  let stats ← evalProgress config none withArg ids postsBasename byTac
+  let (config, withArg, ids, idsUserProvided, postsBasename, byTac) ← parseProgressArgs args
+  let stats ← evalProgress config none withArg ids idsUserProvided postsBasename byTac
   let mut stxArgs := args.raw
   -- Update the syntax to add the `with thm`
   if stxArgs[1].isNone then
@@ -1171,7 +1184,8 @@ def parseLetProgress
 elab tk:letProgress : tactic => do
   withMainContext do
   let (config, withArg, suggest, ids, postsBasename, byTac) ← parseLetProgress tk
-  let stats ← evalProgress config (some (.str .anonymous "_")) withArg ids postsBasename byTac
+  let idsUserProvided := true
+  let stats ← evalProgress config (some (.str .anonymous "_")) withArg ids idsUserProvided postsBasename byTac
   let mut stxArgs := tk.raw
   if suggest then
     trace[Progress] "suggest is true"
@@ -1647,11 +1661,22 @@ z_post : ↑z = ↑x + ↑y
   example (x y : U32) : x + y ⦃ z => z.val = x.val + y.val ⦄  := by
     progress
 
+  /- When using a function call that outputs nothing, we need to ignore the name
+     of the let-binding (`massert` is actually bound by a let-binding below). -/
+  example (x : U32) (h : x.val < 32):
+    (do
+      massert (x < 32#u32)
+      massert (x < 32#u32)
+      x + x) ⦃ _ => True ⦄ := by
+      progress
+      progress
+      progress
+
   -- `Inhabited α` is not necessary: we add it for the purpose of testing
-  theorem get_spec [Inhabited α] (x : Option α) (h : x.isSome) : get x ⦃ _ => True ⦄ := by
+  theorem get_spec {α} [Inhabited α] (x : Option α) (h : x.isSome) : get x ⦃ _ => True ⦄ := by
     cases x <;> grind [get]
 
-  example [Inhabited α] (x : Option α) (h : x.isSome) : get x ⦃ _ => True ⦄ := by
+  example {α} [Inhabited α] (x : Option α) (h : x.isSome) : get x ⦃ _ => True ⦄ := by
     progress with get_spec
 
   namespace Ntt

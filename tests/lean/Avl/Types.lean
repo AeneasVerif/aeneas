@@ -11,21 +11,21 @@ set_option maxHeartbeats 1000000
 
 namespace avl
 
-/- [avl::Ordering]
-   Source: 'src/avl.rs', lines 18:0-22:1 -/
+/-- [avl::Ordering]
+    Source: 'src/avl.rs', lines 18:0-22:1 -/
 @[discriminant isize]
 inductive Ordering where
 | Less : Ordering
 | Equal : Ordering
 | Greater : Ordering
 
-/- Trait declaration: [avl::Ord]
-   Source: 'src/avl.rs', lines 24:0-26:1 -/
+/-- Trait declaration: [avl::Ord]
+    Source: 'src/avl.rs', lines 24:0-26:1 -/
 structure Ord (Self : Type) where
   cmp : Self → Self → Result Ordering
 
-/- [avl::Node]
-   Source: 'src/avl.rs', lines 28:0-33:1 -/
+/-- [avl::Node]
+    Source: 'src/avl.rs', lines 28:0-33:1 -/
 inductive Node (T : Type) where
 | mk : T → Option (Node T) → Option (Node T) → Std.I8 → Node T
 
@@ -59,8 +59,8 @@ theorem Node.balance_factor._simpLemma_ {T : Type} (value : T) (left : Option
   (Node.mk value left right balance_factor).balance_factor = balance_factor :=
   by rfl
 
-/- [avl::Tree]
-   Source: 'src/avl.rs', lines 35:0-37:1 -/
+/-- [avl::Tree]
+    Source: 'src/avl.rs', lines 35:0-37:1 -/
 structure Tree (T : Type) where
   root : Option (Node T)
 

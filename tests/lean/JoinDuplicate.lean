@@ -11,8 +11,8 @@ set_option maxHeartbeats 1000000
 
 namespace join_duplicate
 
-/- [join_duplicate::join_nested_shared]:
-   Source: 'tests/src/join-duplicate.rs', lines 3:0-10:1 -/
+/-- [join_duplicate::join_nested_shared]:
+    Source: 'tests/src/join-duplicate.rs', lines 3:0-10:1 -/
 def join_nested_shared (b : Bool) : Result Unit := do
   if b
   then massert (1#i32 > 0#i32)
