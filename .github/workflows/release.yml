@@ -44,10 +44,13 @@ jobs:
         include:
           - os: ubuntu-latest
             artifact_name: aeneas-linux-x86_64
+            nix_attr: aeneas-static-release
           - os: macos-15-intel
             artifact_name: aeneas-macos-x86_64
+            nix_attr: aeneas-release
           - os: macos-latest
             artifact_name: aeneas-macos-aarch64
+            nix_attr: aeneas-release
 
     steps:
       - uses: actions/checkout@v4
@@ -60,15 +63,19 @@ jobs:
 
       - name: Package
         run: |
-          nix build -L .#aeneas-release
+          set -eo pipefail
+
+          nix build -L .#${{ matrix.nix_attr }}
           cp result ${{ matrix.artifact_name }}.tar.gz
 
       # Verify the binary is functional.
       - name: Smoke Test
         run: |
+          set -eo pipefail
+
           mkdir staging
           cd staging
-          tar xf ../result
+          tar xf ../${{ matrix.artifact_name }}.tar.gz
           ./aeneas --help > /dev/null
 
       - name: Upload Artifact
