@@ -15,7 +15,81 @@
   outputs = inputs @ { self, flake-utils, nixpkgs, fstar, ... }:
     flake-utils.lib.eachDefaultSystem (system:
       let
-        pkgs = import nixpkgs { inherit system; };
+        pkgs = import nixpkgs {
+          inherit system;
+          overlays = [
+            (final: prev: {
+              pkgsStatic = prev.pkgsStatic.appendOverlays [
+                (sFinal: sPrev: {
+                  # Use the native version of `opaline` as a build tool, as it
+                  # avoids bootstrapping issues in the static environment.
+                  opaline = prev.opaline;
+
+                  ocaml-ng = sPrev.ocaml-ng // {
+                    ocamlPackages_5_2 = sPrev.ocaml-ng.ocamlPackages_5_2.overrideScope (oFinal: oPrev: {
+                      buildDunePackage = args: oPrev.buildDunePackage (args // {
+                        # Disable tests globally for static OCaml packages, as
+                        # many test suites assume a dynamic environment or
+                        # non-musl features that are unavailable here.
+                        doCheck = false;
+
+                        # Ensure `as` and other basic binutils are available in
+                        # the static build environment.
+                        nativeBuildInputs = (args.nativeBuildInputs or []) ++ [ sFinal.stdenv.cc.bintools ];
+                      });
+
+                      alcotest = oPrev.alcotest.overrideAttrs (old: {
+                        doCheck = false;
+                      });
+
+                      findlib = oPrev.findlib.overrideAttrs (old: {
+                        # Disable `dynlink` support in `findlib`, as the static
+                        # OCaml compiler does not support dynamic loading.
+                        propagatedBuildInputs = builtins.filter (p: (p.pname or "") != "dynlink") (old.propagatedBuildInputs or []);
+                      });
+
+                      ppx_deriving = oPrev.ppx_deriving.overrideAttrs (old: {
+                        # Patch `ppx_deriving` to remove dependencies on
+                        # dynamic loading, as it is unavailable in this static
+                        # environment.
+                        propagatedBuildInputs = builtins.filter (p: (p.pname or "") != "dynlink") (old.propagatedBuildInputs or []);
+                        postPatch = (old.postPatch or "") + ''
+                          # Remove `findlib.dynload` from the build
+                          # dependencies.
+                          substituteInPlace src/dune --replace "findlib.dynload" "findlib"
+
+                          # Stub out dynamic loading calls in the source, as
+                          # they will fail to link or run otherwise.
+                          substituteInPlace src/ppx_deriving_main.cppo.ml \
+                            --replace "Dynlink.adapt_filename filename" "filename" \
+                            --replace "Dynlink.loadfile filename" "()" \
+                            --replace "Dynlink.Error error" "Failure _" \
+                            --replace "Dynlink.error_message error" "\"\"" \
+                            --replace "Fl_dynload.load_packages [pkg]" "()"
+                        '';
+                      });
+
+                      visitors = oPrev.visitors.overrideAttrs (old: {
+                        # Remove `dynlink` as it is incompatible with the
+                        # static compiler.
+                        propagatedBuildInputs = builtins.filter (p: (p.pname or "") != "dynlink") (old.propagatedBuildInputs or []);
+                      });
+
+                      core_unix = oPrev.core_unix.overrideAttrs (old: {
+                        # Work around a compilation error in `musl` when using
+                        # GCC 14, where a `struct msghdr` field is incorrectly
+                        # initialized with `NULL` instead of `0`.
+                        env.NIX_CFLAGS_COMPILE = (old.env.NIX_CFLAGS_COMPILE or "") + " -Wno-error=int-conversion";
+                        doCheck = false;
+                      });
+                    });
+                  };
+                })
+              ];
+            })
+          ];
+        };
+
         ocamlPackages = pkgs.ocaml-ng.ocamlPackages_5_2;
         ocamlPackagesStatic = pkgs.pkgsStatic.ocaml-ng.ocamlPackages_5_2;
         coqPackages = pkgs.coqPackages_8_18;
