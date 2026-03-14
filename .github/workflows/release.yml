@@ -44,10 +44,13 @@ jobs:
         include:
           - os: ubuntu-latest
             artifact_name: aeneas-linux-x86_64
+            nix_attr: aeneas-static
           - os: macos-15-intel
             artifact_name: aeneas-macos-x86_64
+            nix_attr: aeneas
           - os: macos-latest
             artifact_name: aeneas-macos-aarch64
+            nix_attr: aeneas
 
     steps:
       - uses: actions/checkout@v4
@@ -62,7 +65,7 @@ jobs:
         run: |
           set -eo pipefail
 
-          nix build -L .#aeneas
+          nix build -L .#${{ matrix.nix_attr }}
           # Create a staging directory for the archive
           mkdir release
           # Copy the binary and ensure it's not a symlink
