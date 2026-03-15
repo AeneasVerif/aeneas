@@ -1802,12 +1802,72 @@ let simplify_trait_calls (crate : crate) : crate =
   (* *)
   { crate with declarations }
 
+(** Add missing outlives constraints for closure trait implementations.
+
+    Charon sometimes fails to properly retrieves the lifetime constraints
+    between the inputs and outputs of closures. This passes is a temporary
+    (ad-hoc) fix for the following situation:
+    {[
+      call_mut<'a, 'b, 'c>(v@1 : &'c mut closure<'a>) -> &'b T
+    ]}
+    that we update to:
+    {[
+      call_mut<'b, 'c>(v@1 : &'c mut closure<'a>) -> &'a T
+    ]}
+
+    Similarly we do:
+    {[
+      call_once<'a, 'b>(v@1 : mut closure<'a>) -> &'b T
+    ]}
+    that we update to:
+    {[
+      call_once<'b, 'c>(v@1 : mut closure<'a>) -> &'a T
+    ]}
+
+    See https://github.com/AeneasVerif/aeneas/issues/804 and
+    https://github.com/AeneasVerif/charon/issues/1040.
+
+    TODO: remove once the Charon issue is fixed. *)
+let fix_closure_lifetimes (crate : crate) (f : fun_decl) : fun_decl =
+  (* Check that the function is a closure *)
+  (* Decompose the type of the first argument (it should be the state).
+     We do the update only if the state is inside a reference. *)
+  let find_input_region (ty : ty) =
+    match ty with
+    | TAdt { id = TAdtId id; generics = { regions = [ RVar rid ]; _ } }
+    | TRef
+        (_, TAdt { id = TAdtId id; generics = { regions = [ RVar rid ]; _ } }, _)
+      -> (
+        match TypeDeclId.Map.find_opt id crate.type_decls with
+        | Some decl -> (
+            match decl.src with
+            | ClosureItem _ -> Some rid
+            | _ -> None)
+        | None -> None)
+    | _ -> None
+  in
+  match f.signature.inputs with
+  | [] -> f
+  | first_input :: _ -> (
+      match (find_input_region first_input, f.signature.output) with
+      | Some input_rid, TRef (RVar _, ref_ty, kind) ->
+          (* TODO: support more cases for the output? *)
+          let output = TRef (RVar input_rid, ref_ty, kind) in
+          (* Remark: we don't have to remove the region we substitute from the region
+             parameters *)
+          let signature = { f.signature with output } in
+          let f = { f with signature } in
+          [%ltrace "Updated: " ^ Print.Crate.crate_fun_decl_to_string crate f];
+          f
+      | _, _ -> f)
+
 let apply_passes (crate : crate) : crate =
   (* Passes that apply to the whole crate *)
   let crate = update_array_default crate in
   (* Passes that apply to individual function bodies *)
   let function_passes =
     [
+      ("fix_closure_lifetimes", fix_closure_lifetimes);
       ("erase_body_regions", erase_body_regions);
       ("remove_unreachable", remove_unreachable);
       ("update_loop", update_loops);
