@@ -9,9 +9,12 @@ package «aeneas» {}
 
 @[default_target] lean_lib «Aeneas» {}
 
+private def notCI : Bool := run_io
+  return (← IO.getEnv "CI").isNone
+
 @[default_target] lean_lib «AeneasMeta» {
-  -- TODO: activating this makes the Nix CI fail
-  --precompileModules := true
+  -- Precompiling modules triggers issues in CI so we deactivate this.
+  precompileModules := notCI
 }
 
 /-- Generate the `.ml` file listing the definitions supported by the standard library. -/
