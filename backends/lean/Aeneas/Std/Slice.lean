@@ -134,6 +134,43 @@ theorem Slice.set_opt_val_eq {α : Type u} (v: Slice α) (i: Usize) (x: Option �
   (v.set_opt i x) = v.val.set_opt i.val x := by
   simp [set_opt]
 
+
+/-- Using `↓` to eagerly simplify combinations of `set` and `getElem!` in expressions like:
+`(((l.set i0 x0) ...).set in xn)[j]!`
+
+Otherwise we might lose a lot of time reordering the `set` expressions.
+-/
+@[simp↓, simp_lists_simps↓]
+theorem Slice.getElem!_Usize_set_ne
+  {α : Type u} [Inhabited α] (a: Slice α) (i j : Usize) (x: α)
+  (h : i.val ≠ j.val) : (a.set i x)[j]! = a[j]!
+  := by
+  simp only [getElem!_Usize_eq, set_val_eq]; grind
+
+@[simp↓, simp_lists_simps↓]
+theorem Slice.getElem!_Usize_set_eq
+  {α : Type u} [Inhabited α] (a: Slice α) (i i' : Usize) (x: α)
+  (h : i = i' ∧ i'.val < a.length) : getElem! (a.set i x) i' = x
+  := by
+  simp only [getElem!_Usize_eq, set_val_eq]; grind
+
+/-- Using `↓` to eagerly simplify combinations of `set` and `getElem!` in expressions like:
+`(((l.set i0 x0) ...).set in xn)[j]!`
+
+Otherwise we might lose a lot of time reordering the `set` expressions.
+-/
+@[simp↓, simp_lists_simps↓]
+theorem Slice.getElem!_Nat_set_ne
+  {α : Type u} [Inhabited α] (a: Slice α) (i : Usize) (j : Nat) (x: α)
+  (h : i.val ≠ j) : (a.set i x)[j]! = a[j]!
+  := by simp only [getElem!_Nat_eq, set_val_eq]; grind
+
+@[simp↓, simp_lists_simps↓]
+theorem Slice.getElem!_Nat_set_eq
+  {α : Type u} [Inhabited α] (a: Slice α) (i : Usize) (i' : Nat) (x: α)
+  (h : i.val = i' ∧ i' < a.length) : getElem! (a.set i x) i' = x
+  := by simp only [getElem!_Nat_eq, set_val_eq]; grind
+
 @[simp, scalar_tac_simps, simp_lists_simps]
 theorem Slice.set_length {α : Type u} (v: Slice α) (i: Usize) (x: α) :
   (v.set i x).length = v.length := by simp
