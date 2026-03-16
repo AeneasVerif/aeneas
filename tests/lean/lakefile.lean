@@ -39,6 +39,7 @@ package «tests» {}
 @[default_target] lean_lib Issue194RecursiveStructProjector
 @[default_target] lean_lib Issue270LoopList
 @[default_target] lean_lib Issue440TypeError
+@[default_target] lean_lib Issue789LoopCtxMatch
 @[default_target] lean_lib Issue803SelfInArray
 @[default_target] lean_lib Issue807MissingSymbolicValue
 @[default_target] lean_lib Issue815GlobalReferencingFallibleGlobal
