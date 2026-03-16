@@ -11,51 +11,59 @@ set_option maxHeartbeats 1000000
 
 namespace issue_789_loop_ctx_match
 
-/- [issue_789_loop_ctx_match::S]
-   Source: 'tests/src/issue-789-loop-ctx-match.rs', lines 4:0-7:1 -/
+/-- [issue_789_loop_ctx_match::S]
+    Source: 'tests/src/issue-789-loop-ctx-match.rs', lines 4:0-7:1 -/
 structure S where
   x : Std.U8
   y : Array Std.U8 4#usize
 
-/- [issue_789_loop_ctx_match::f]:
-   Source: 'tests/src/issue-789-loop-ctx-match.rs', lines 9:0-11:1 -/
+/-- [issue_789_loop_ctx_match::f]:
+    Source: 'tests/src/issue-789-loop-ctx-match.rs', lines 9:0-11:1 -/
 def f
   (_r : Std.U8) (_a : Slice Std.U8) (_b : Slice Std.U8) :
   Result ((Bool × Std.Usize) × Std.U8 × (Slice Std.U8))
   := do
   ok ((true, 0#usize), _r, _b)
 
-/- [issue_789_loop_ctx_match::the_loop]: loop 0:
-   Source: 'tests/src/issue-789-loop-ctx-match.rs', lines 14:4-22:5 -/
+/-- [issue_789_loop_ctx_match::the_loop]: loop body 0:
+    Source: 'tests/src/issue-789-loop-ctx-match.rs', lines 14:4-22:5 -/
+@[rust_loop_body]
+def the_loop_loop.body
+  (s : S) (next_in : Slice Std.U8) :
+  Result (ControlFlow (S × (Slice Std.U8)) (Std.U8 × (Array Std.U8 4#usize)
+    × (Slice Std.U8) × Bool))
+  := do
+  let (s1, to_slice_mut_back) ← lift (Array.to_slice_mut s.y)
+  let (result, i, s2) ← f s.x next_in s1
+  let (done1, n) := result
+  let next_in1 ←
+    core.slice.index.Slice.index
+      (core.slice.index.SliceIndexRangeFromUsizeSlice Std.U8) next_in
+      { start := n }
+  if done1
+  then let a := to_slice_mut_back s2
+       ok (done (i, a, next_in1, true))
+  else
+    let b ← core.slice.Slice.is_empty next_in1
+    if b
+    then let a := to_slice_mut_back s2
+         ok (done (i, a, next_in1, false))
+    else let a := to_slice_mut_back s2
+         ok (cont ({ x := i, y := a }, next_in1))
+
+/-- [issue_789_loop_ctx_match::the_loop]: loop 0:
+    Source: 'tests/src/issue-789-loop-ctx-match.rs', lines 14:4-22:5 -/
+@[rust_loop]
 def the_loop_loop
   (s : S) (next_in : Slice Std.U8) :
   Result (Std.U8 × (Array Std.U8 4#usize) × (Slice Std.U8) × Bool)
   := do
   loop
-    (fun (s1, next_in1) =>
-      do
-      let (s2, to_slice_mut_back) ← lift (Array.to_slice_mut s1.y)
-      let (result, i, s3) ← f s1.x next_in1 s2
-      let (done1, n) := result
-      let next_in2 ←
-        core.slice.index.Slice.index
-          (core.slice.index.SliceIndexRangeFromUsizeSlice Std.U8) next_in1
-          { start := n }
-      if done1
-      then let a := to_slice_mut_back s3
-           ok (done (i, a, next_in2, true))
-      else
-        let b ← core.slice.Slice.is_empty next_in2
-        if b
-        then let a := to_slice_mut_back s3
-             ok (done (i, a, next_in2, false))
-        else
-          let a := to_slice_mut_back s3
-          ok (cont (({ x := i, y := a } : S), next_in2)))
+    (fun (s1, next_in1) => the_loop_loop.body s1 next_in1)
     (s, next_in)
 
-/- [issue_789_loop_ctx_match::the_loop]:
-   Source: 'tests/src/issue-789-loop-ctx-match.rs', lines 13:0-23:1 -/
+/-- [issue_789_loop_ctx_match::the_loop]:
+    Source: 'tests/src/issue-789-loop-ctx-match.rs', lines 13:0-23:1 -/
 def the_loop
   (s : S) (next_in : Slice Std.U8) : Result (Bool × S × (Slice Std.U8)) := do
   let (i, a, next_in1, done1) ← the_loop_loop s next_in
