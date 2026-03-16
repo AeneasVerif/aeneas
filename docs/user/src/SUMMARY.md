@@ -6,6 +6,5 @@
 
 # Proving with Lean
 
-## Tactics guide
-
-- [Progress](./lean/tactics/progress.md)
+- [Getting started]()
+  - [Factorial function](./lean/basics/factorial.lean.md)
