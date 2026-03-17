@@ -4,64 +4,6 @@ open Aeneas Aeneas.Std Result ControlFlow Error
 
 namespace higher_order
 
-section tactic
-open Lean Elab Tactic Meta
-
-elab "infer_post" : tactic => do
-  withMainContext do
-  let goal ← getMainGoal
-  let goalTy ← instantiateMVars (← goal.getType)
-
-  -- The goal should be of the form `?post arg`
-  let (mvarFn, args) := goalTy.withApp fun f a => (f, a)
-  unless mvarFn.isMVar do
-    throwTacticEx `infer_post goal
-      m!"goal should be of the form `?post args...`, got {goalTy}"
-  let mvarId := mvarFn.mvarId!
-  let argFVar ← match (← instantiateMVars args[0]!).fvarId? with
-    | some fv => pure fv
-    | none => throwTacticEx `infer_post goal m!"argument {args[0]!} is not a free variable"
-  let argTy ← argFVar.getType
-
-  let mvarLCtx := (← mvarId.getDecl).lctx
-  let lctx ← getLCtx
-  logInfo m!"lctx: {(←lctx.getDecls).map fun d => (d.userName, d.type)}"
-
-  -- Must also quantify over non-prop free vars that aren't in the mvar's context
-  let nonProps ← (← lctx.getDecls).filterMapM fun decl => do
-    if mvarLCtx.contains decl.fvarId then return none
-    if decl.fvarId == argFVar then return none
-    if ← isProp decl.type then return none
-    return some decl.fvarId
-  logInfo
-    m!"escaping nonprops: {(←nonProps.mapM fun f => f.getDecl).map fun d => d.userName}"
-
-  -- Collect props mentioning argFVar or any escaping non-prop variable.
-  let relevantFVars := nonProps ++ [argFVar]
-  let relevantProps := (← lctx.getAssumptions).filter fun decl =>
-    relevantFVars.any fun fv => decl.type.find? (·.isFVarOf fv) |>.isSome
-  logInfo m!"relevant props: {relevantProps.map fun d => d.type}"
-
-  -- Build postcondition:
-  let postExpr ← withLocalDeclD `res argTy fun resExpr => do
-    let eq ← mkEq resExpr (.fvar argFVar)
-    let andBody ← relevantProps.foldrM (fun p acc => mkAppM ``And #[p.type, acc]) eq
-    logInfo m!"andBody: {andBody}"
-
-    -- Build existentials: innermost is ∃ arg', then wrap with escaping vars.
-    let existsBody ← (nonProps ++ [argFVar]).foldrM (fun fVar acc => do
-        let pred ← mkLambdaFVars #[.fvar fVar] acc
-        mkAppOptM ``Exists #[none, some pred]
-      ) andBody
-    mkLambdaFVars #[resExpr] existsBody
-  logInfo m!"expr: {postExpr}"
-  mvarId.assign postExpr
-
-  -- let grind close the postcondition goal
-  evalTactic (←`(tactic|grind only))
-
-end tactic
-
 def applyF (f : U32 → Result U32) (x : U32) : Result U32 := f x
 
 theorem applyF_spec (f : U32 → Result U32) (x : U32)
@@ -123,6 +65,35 @@ example (x : U32) (h1 : x.val + 1 ≤ U32.max) (h2 : x.val + 2 ≤ U32.max) :
   case hg =>
     intro y hy
     progress as ⟨ b, hb ⟩
+    infer_post
+  grind
+
+def _root_.Aeneas.Std.Slice.mapM  {α β} (f : α → Result β) (x : Slice α) : Result (Slice β) :=
+  match h : x.val.mapM f with
+  | ok xs  => ok ⟨xs, List.mapM_Result_length h ▸ x.prop⟩
+  | fail e => fail e
+  | div    => div
+
+theorem _root_.Aeneas.Std.Slice.mapM_spec {α β} {f : α → Result β} {s : Slice α} {post : Nat → β → Prop}
+    (hf : ∀ i (hi : i < s.len), f s[i] ⦃ post i ⦄) :
+    s.mapM f ⦃ s' => s'.len = s.len ∧ ∀ i (hi : i < s'.len), post i s'[i] ⦄ := by
+  -- NOTE: We don't need to prove this, we just want the statement for the example below
+  sorry
+
+def callSlicemapM (x : Slice U32) : Result (Slice U32) := do
+  let y ← x.mapM (fun x => x + 1#u32)
+  return y
+
+example (s : Slice U32) (h : ∀ i (hi : i < s.len), s[i] < U32.max) :
+  callSlicemapM s ⦃ s' =>
+    s'.len = s.len ∧
+    ∀ i (hi₁ : i < s.len) (hi₂ : i < s'.len), s'[i].val = s[i].val + 1
+    ⦄ := by
+  unfold callSlicemapM
+  progress with Slice.mapM_spec
+  case hf =>
+    intros t ht
+    progress as ⟨u, hu⟩
     infer_post
   grind
 
