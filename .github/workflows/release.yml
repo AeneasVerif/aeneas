@@ -39,6 +39,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
+      actions: write
     strategy:
       matrix:
         include:
@@ -65,7 +66,9 @@ jobs:
         id: restore-nix-cache
         uses: nix-community/cache-nix-action/restore@v6
         with:
-          primary-key: ${{ runner.os }}-release
+          primary-key: ${{ matrix.os }}-release-${{ hashFiles('**/flake.lock') }}
+          # if there's no cache hit, restore a cache by this prefix
+          restore-prefixes-first-match: ${{ matrix.os }}-release
 
       - name: Package
         run: |
@@ -95,3 +98,6 @@ jobs:
         uses: nix-community/cache-nix-action/save@v6
         with:
           primary-key: ${{ steps.restore-nix-cache.outputs.primary-key }}
+          gc-max-store-size: 2G
+          purge: true
+          purge-created: 604800 # 7 * 24 * 3600 = 7 days in seconds
