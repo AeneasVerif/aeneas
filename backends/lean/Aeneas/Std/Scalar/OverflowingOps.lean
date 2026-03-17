@@ -16,7 +16,7 @@ def UScalar.overflowing_add {ty} (x y : UScalar ty) : UScalar ty × Bool :=
 
 def IScalar.overflowing_add (ty : IScalarTy) (x y : IScalar ty) : IScalar ty × Bool :=
   (⟨ BitVec.ofInt _ (x.val + y.val) ⟩,
-     ¬ (-2^(ty.numBits -1) ≤ x.val + y.val ∧ x.val + y.val < 2^ty.numBits))
+     ¬ (-2^(ty.numBits -1) ≤ x.val + y.val ∧ x.val + y.val < 2^(ty.numBits-1)))
 
 /- [core::num::{u8}::overflowing_add] -/
 uscalar def core.num.«%S».overflowing_add := @UScalar.overflowing_add .«%S»

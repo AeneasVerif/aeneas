@@ -1,0 +1,103 @@
+name: Release
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  prepare:
+    name: Prepare Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag_name: ${{ steps.tag.outputs.tag_name }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate Tag
+        id: tag
+        run: |
+          set -eo pipefail
+
+          # Generates a sortable timestamp: YYYY.MM.DD.HHMMSS. We append the SHA
+          # for uniqueness.
+          TAG_NAME="build-$(date +'%Y.%m.%d.%H%M%S')-${{ github.sha }}"
+          echo "tag_name=${TAG_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag_name }}
+          prerelease: true
+          make_latest: false
+          generate_release_notes: true
+
+  build:
+    name: Build (${{ matrix.artifact_name }})
+    needs: prepare
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+      actions: write
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: aeneas-linux-x86_64
+            nix_attr: aeneas-static-release
+          - os: macos-15-intel
+            artifact_name: aeneas-macos-x86_64
+            nix_attr: aeneas-release
+          - os: macos-latest
+            artifact_name: aeneas-macos-aarch64
+            nix_attr: aeneas-release
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install nix
+        uses: nixbuild/nix-quick-install-action@v30
+        with:
+          nix_conf: |
+            keep-env-derivations = true
+            keep-outputs = true
+      - name: Restore Nix Cache
+        id: restore-nix-cache
+        uses: nix-community/cache-nix-action/restore@v6
+        with:
+          primary-key: ${{ matrix.os }}-release-${{ hashFiles('**/flake.lock') }}
+          # if there's no cache hit, restore a cache by this prefix
+          restore-prefixes-first-match: ${{ matrix.os }}-release
+
+      - name: Package
+        run: |
+          set -eo pipefail
+
+          nix build -L .#${{ matrix.nix_attr }}
+          cp result ${{ matrix.artifact_name }}.tar.gz
+
+      # Verify the binary is functional.
+      - name: Smoke Test
+        run: |
+          set -eo pipefail
+
+          mkdir staging
+          cd staging
+          tar xf ../${{ matrix.artifact_name }}.tar.gz
+          ./aeneas --help > /dev/null
+
+      - name: Upload Artifact
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare.outputs.tag_name }}
+          files: ${{ matrix.artifact_name }}.tar.gz
+
+      - name: Save Nix Cache
+        if: always()
+        uses: nix-community/cache-nix-action/save@v6
+        with:
+          primary-key: ${{ steps.restore-nix-cache.outputs.primary-key }}
+          gc-max-store-size: 2G
+          purge: true
+          purge-created: 604800 # 7 * 24 * 3600 = 7 days in seconds

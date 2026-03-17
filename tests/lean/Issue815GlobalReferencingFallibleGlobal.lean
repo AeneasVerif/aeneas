@@ -11,12 +11,12 @@ set_option maxHeartbeats 1000000
 
 namespace issue_815_global_referencing_fallible_global
 
-/- [issue_815_global_referencing_fallible_global::INNER]
-   Source: 'tests/src/issue-815-global-referencing-fallible-global.rs', lines 4:0-4:25 -/
+/-- [issue_815_global_referencing_fallible_global::INNER]
+    Source: 'tests/src/issue-815-global-referencing-fallible-global.rs', lines 4:0-4:25 -/
 @[global_simps, irreducible] def INNER : Result Std.U32 := 1#u32 + 1#u32
 
-/- [issue_815_global_referencing_fallible_global::OUTER]
-   Source: 'tests/src/issue-815-global-referencing-fallible-global.rs', lines 5:0-5:29 -/
+/-- [issue_815_global_referencing_fallible_global::OUTER]
+    Source: 'tests/src/issue-815-global-referencing-fallible-global.rs', lines 5:0-5:29 -/
 @[global_simps, irreducible] def OUTER : Result Std.U32 := INNER
 
 end issue_815_global_referencing_fallible_global

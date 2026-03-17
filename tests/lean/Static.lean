@@ -11,13 +11,13 @@ set_option maxHeartbeats 1000000
 
 namespace static
 
-/- Trait declaration: [static::WithSlice]
-   Source: 'tests/src/static.rs', lines 3:0-5:1 -/
+/-- Trait declaration: [static::WithSlice]
+    Source: 'tests/src/static.rs', lines 3:0-5:1 -/
 structure WithSlice (Self : Type) where
   SLICE : Result (Slice Std.U16)
 
-/- [static::read]:
-   Source: 'tests/src/static.rs', lines 27:0-29:1 -/
+/-- [static::read]:
+    Source: 'tests/src/static.rs', lines 27:0-29:1 -/
 def read
   {S : Type} (WithSliceInst : WithSlice S) (t : S) (i : Std.Usize) :
   Result Std.U16
@@ -25,13 +25,13 @@ def read
   let s ← WithSliceInst.SLICE
   Slice.index_usize s i
 
-/- [static::use_static::PREFIX]
-   Source: 'tests/src/static.rs', lines 40:4-40:34 -/
+/-- [static::use_static::PREFIX]
+    Source: 'tests/src/static.rs', lines 40:4-40:34 -/
 @[global_simps, irreducible]
 def use_static.PREFIX : Array Std.U8 1#usize := Array.make 1#usize [ 0#u8 ]
 
-/- [static::use_static]:
-   Source: 'tests/src/static.rs', lines 39:0-42:1 -/
+/-- [static::use_static]:
+    Source: 'tests/src/static.rs', lines 39:0-42:1 -/
 def use_static : Result Unit := do
   ok ()
 

@@ -11,13 +11,13 @@ set_option maxHeartbeats 1000000
 
 namespace issue_803_self_in_array
 
-/- [issue_803_self_in_array::Arguments]
-   Source: 'tests/src/issue-803-self-in-array.rs', lines 5:0-5:33 -/
+/-- [issue_803_self_in_array::Arguments]
+    Source: 'tests/src/issue-803-self-in-array.rs', lines 5:0-5:33 -/
 @[reducible]
 def Arguments := Unit
 
-/- [issue_803_self_in_array::{issue_803_self_in_array::Arguments<'a>}::none]:
-   Source: 'tests/src/issue-803-self-in-array.rs', lines 8:4-10:5 -/
+/-- [issue_803_self_in_array::{issue_803_self_in_array::Arguments<'a>}::none]:
+    Source: 'tests/src/issue-803-self-in-array.rs', lines 8:4-10:5 -/
 def Arguments.none (x : Arguments) : Result (Array Arguments 1#usize) := do
   ok (Array.make 1#usize [ () ])
 

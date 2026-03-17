@@ -11,13 +11,13 @@ set_option maxHeartbeats 1000000
 
 namespace issue_807_missing_symbolic_value
 
-/- [issue_807_missing_symbolic_value::PortableVector]
-   Source: 'tests/src/issue-807-missing-symbolic-value.rs', lines 4:0-6:1 -/
+/-- [issue_807_missing_symbolic_value::PortableVector]
+    Source: 'tests/src/issue-807-missing-symbolic-value.rs', lines 4:0-6:1 -/
 structure PortableVector where
   elements : Array Std.U8 16#usize
 
-/- [issue_807_missing_symbolic_value::to_bytes]: loop body 0:
-   Source: 'tests/src/issue-807-missing-symbolic-value.rs', lines 8:4-10:5 -/
+/-- [issue_807_missing_symbolic_value::to_bytes]: loop body 0:
+    Source: 'tests/src/issue-807-missing-symbolic-value.rs', lines 8:4-10:5 -/
 @[rust_loop_body]
 def to_bytes_loop.body
   (x : PortableVector) (iter : core.ops.range.Range Std.Usize)
@@ -35,8 +35,8 @@ def to_bytes_loop.body
     let s ← Slice.update bytes i2 i1
     ok (cont (iter1, s))
 
-/- [issue_807_missing_symbolic_value::to_bytes]: loop 0:
-   Source: 'tests/src/issue-807-missing-symbolic-value.rs', lines 8:4-10:5 -/
+/-- [issue_807_missing_symbolic_value::to_bytes]: loop 0:
+    Source: 'tests/src/issue-807-missing-symbolic-value.rs', lines 8:4-10:5 -/
 @[rust_loop]
 def to_bytes_loop
   (iter : core.ops.range.Range Std.Usize) (x : PortableVector)
@@ -47,8 +47,8 @@ def to_bytes_loop
     (fun (iter1, bytes1) => to_bytes_loop.body x iter1 bytes1)
     (iter, bytes)
 
-/- [issue_807_missing_symbolic_value::to_bytes]:
-   Source: 'tests/src/issue-807-missing-symbolic-value.rs', lines 7:0-11:1 -/
+/-- [issue_807_missing_symbolic_value::to_bytes]:
+    Source: 'tests/src/issue-807-missing-symbolic-value.rs', lines 7:0-11:1 -/
 @[reducible]
 def to_bytes
   (x : PortableVector) (bytes : Slice Std.U8) : Result (Slice Std.U8) := do
