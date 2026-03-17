@@ -35,19 +35,12 @@
 
                         # Ensure `as` and other basic binutils are available in
                         # the static build environment.
-                        nativeBuildInputs = (args.nativeBuildInputs or []) ++ [ sFinal.stdenv.cc.bintools ];
+                        nativeBuildInputs = (args.nativeBuildInputs or [ ]) ++ [ sFinal.stdenv.cc.bintools ];
 
                         # Remove `dynlink` as it is incompatible with the
                         # static compiler.
-                        #
-                        # FIXME: this is a bit too broad as it might remove
-                        # legitimate dependencies, but it works for now.
-                        propagatedBuildInputs = builtins.filter (p: (p.pname or "") != "dynlink") (args.propagatedBuildInputs or []);
+                        propagatedBuildInputs = builtins.filter (p: (p.pname or "") != "dynlink") (args.propagatedBuildInputs or [ ]);
                       });
-
-                      alcotest = oPrev.alcotest;
-
-                      findlib = oPrev.findlib;
 
                       ppx_deriving = oPrev.ppx_deriving.overrideAttrs (old: {
                         postPatch = (old.postPatch or "") + ''
@@ -65,8 +58,6 @@
                             --replace "Fl_dynload.load_packages [pkg]" "()"
                         '';
                       });
-
-                      visitors = oPrev.visitors;
 
                       core_unix = oPrev.core_unix.overrideAttrs (old: {
                         # Work around a compilation error in `musl` when using
@@ -141,11 +132,9 @@
             inherit ocamlPackages easy_logging charon charon-ml;
           };
 
-        # With statically-linked glibc (doesn't compile because of some deps :( ).
+        # With statically-linked glibc.
         aeneas-static =
-          let
-            ocamlPackages = ocamlPackagesStatic;
-          in
+          let ocamlPackages = ocamlPackagesStatic; in
           aeneas.override {
             inherit ocamlPackages charon;
             easy_logging = easy_logging.override
@@ -153,16 +142,17 @@
             charon-ml = charon-ml.override { inherit ocamlPackages; };
           };
 
-        mk-aeneas-release = { aeneas }: pkgs.runCommand "aeneas-release.tar.gz" { } ''
+        mk-aeneas-release = { aeneas, charon }: pkgs.runCommand "aeneas-release.tar.gz" { } ''
           mkdir release
           cd release
+          cp ${charon}/bin/charon ${charon}/bin/charon-driver .
           cp ${aeneas}/bin/aeneas .
           cp -r ${./backends} backends
           tar -czvf $out *
         '';
 
-        aeneas-release = mk-aeneas-release { inherit aeneas; };
-        aeneas-static-release = mk-aeneas-release { aeneas = aeneas-static; };
+        aeneas-release = mk-aeneas-release { inherit charon aeneas; };
+        aeneas-static-release = mk-aeneas-release { inherit charon; aeneas = aeneas-static; };
 
         aeneas-check-tidiness = pkgs.stdenv.mkDerivation rec {
           name = "aeneas-check-tidiness";

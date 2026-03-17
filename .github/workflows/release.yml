@@ -54,12 +54,18 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          fetch-depth: 0
 
-      - uses: DeterminateSystems/nix-installer-action@main
-      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - name: Install nix
+        uses: nixbuild/nix-quick-install-action@v30
+        with:
+          nix_conf: |
+            keep-env-derivations = true
+            keep-outputs = true
+      - name: Restore Nix Cache
+        id: restore-nix-cache
+        uses: nix-community/cache-nix-action/restore@v6
+        with:
+          primary-key: ${{ runner.os }}-release
 
       - name: Package
         run: |
@@ -81,5 +87,9 @@ jobs:
       - name: Upload Artifact
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.prepare.outputs.tag_name }}
-          files: ${{ matrix.artifact_name }}.tar.gz
+
+      - name: Save Nix Cache
+        if: always()
+        uses: nix-community/cache-nix-action/save@v6
+        with:
+          primary-key: ${{ steps.restore-nix-cache.outputs.primary-key }}
