@@ -160,3 +160,35 @@ Agent ◀──stdout── lean_lsp.py ◀──JSON-RPC── lake serve
 ```
 
 Incremental checking is handled by the Lean server — after an edit, only the changed portion and its dependents are re-elaborated, which is typically much faster than rebuilding from scratch.
+
+## Common Lean Error Messages
+
+When working with lean_lsp.py, you'll encounter these errors in diagnostics. Here's what they mean and how to debug them:
+
+### "application type mismatch"
+**Cause:** A function or tactic received an argument of the wrong type.
+**Debug:** Use `hover <line> <col>` to check the actual types involved. Often caused by passing the wrong hypothesis to `progress`.
+
+### "unsolved goals"
+**Cause:** Your tactic sequence didn't close all goals.
+**Debug:** Use `goal <line>` on the line after your last tactic to see what remains.
+
+### "unknown identifier '...'"
+**Cause:** You referenced a name that doesn't exist in scope.
+**Debug:** Check imports. Use `complete <line> <col>` to see available names. Common cause: missing `import Aeneas` or project-specific imports.
+
+### "type mismatch" (in `progress`)
+**Cause:** `progress` found a spec but its postcondition doesn't match the current goal.
+**Debug:** Use `progress with <specific_theorem>` to control which spec is applied. Check if you need a more specific spec variant.
+
+### "tactic ... failed, ..."
+**Cause:** The tactic couldn't make progress on the current goal.
+**Debug:** Use `goal <line>` to see the exact goal shape, then consult the tactic decision tree to pick the right tactic.
+
+### "maximum recursion depth has been reached" / termination error
+**Cause:** Usually means `progress` applied the theorem being proved recursively. See the termination pitfall in proof-strategies.md.
+**Fix:** Add `split` or `cases` before `progress` to case-split first.
+
+### "(kernel) declaration has been defined with sorry"
+**Cause:** There's still a `sorry` in the proof. This is a warning, not an error — the proof is incomplete.
+**Debug:** Use `sorry` command to list remaining obligations.

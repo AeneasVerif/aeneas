@@ -168,9 +168,40 @@ private theorem fold_reduce_add_mont_reduce (a : U32) (f : U32 → Result α) :
 
 This technique makes large proofs tractable by breaking them into manageable pieces.
 
-## Intermediate Pure Specifications
+## Finding Existing Specifications
 
-When the refinement proof (proving that the Aeneas code matches a high-level spec) is complex, introduce an **intermediate specification** that:
+**Before writing a new spec, always search for an existing one.** Many functions already have specs.
+
+### Where to look:
+
+1. **Same file or companion Properties file:**
+   ```
+   grep -r "theorem.*<function_name>.*spec" .
+   ```
+
+2. **Aeneas library primitives** (already have specs):
+   - `U32.add_spec`, `U64.mul_spec`, etc. — scalar arithmetic
+   - `Vec.push_spec`, `Vec.index_spec`, etc. — vector operations
+   - `Array.index_spec`, `Array.update_spec`, etc. — array operations
+   - These are imported with `import Aeneas`
+
+3. **External function models:**
+   - Check `FunsExternal.lean` / `TypesExternal.lean` for hand-written models
+
+4. **Already-proved specs in the project:**
+   ```
+   grep -r "@\[progress\]" . --include="*.lean"
+   ```
+
+### When to write a new spec:
+
+- The function is Aeneas-generated and has no existing spec
+- An existing spec doesn't provide the postcondition you need (write a more specific variant)
+- The function is a helper you decomposed (fold theorem pattern)
+
+## Intermediate Pure Specifications (Auxiliary Specs)
+
+When the refinement proof (proving that the Aeneas code matches a high-level spec) is complex, introduce an **auxiliary specification** that:
 - Closely follows the implementation structure
 - But is pure (doesn't live in the error monad)
 - Acts as a bridge between the high-level mathematical spec and the low-level Aeneas code
@@ -349,6 +380,44 @@ This is more effective than calling `agrind` on the conjunction directly: each c
 5. Identify hard sub-goals and prove them manually or register automation lemmas
 6. For loops: use `loop.spec_decr_nat` with an invariant and termination measure
 7. For large functions: decompose with fold theorems
-8. For complex refinements: introduce intermediate pure specs
+8. For complex refinements: introduce auxiliary specs
 9. Refold the proof to be as short as possible
 10. Check proof time — decompose if too slow
+
+## What To Do Next (Decision Tree)
+
+When you're stuck after a tactic, use `goal` (via lean_lsp.py) to inspect the current proof state, then follow this guide:
+
+**The goal has a monadic bind (`let x ← f args; ...`):**
+→ `progress` (or `progress with <thm>` if auto-resolution fails)
+→ If `progress` fails: does `f` have a spec? Search with `grep -r "theorem.*f.*spec"`.
+→ If no spec exists: you need to write one first.
+
+**The goal is arithmetic (`a + b ≤ c`, `x < 2^32`, etc.):**
+→ Linear: `omega` or `scalar_tac`
+→ Nonlinear: `scalar_tac +nonLin`
+→ Simplification needed first: `simp_scalar` then `omega`/`scalar_tac`
+
+**The goal involves bit operations (`&&&`, `|||`, `>>>`, `<<<`):**
+→ `bv_tac 32` (or 64, matching the bit-width)
+→ If goal is about Nat but involves bitwise: `bvify 32; bv_tac 32`
+→ If `bvify` fails: use the reverse lifting trick (see Bit-Vector Reasoning)
+
+**The goal involves modular arithmetic (`a % n`, ZMod):**
+→ `zmodify; ring` (ZMod is a ring, so `ring` works well there)
+→ For bounds (`a < n`): stay in Nat/Int, use `scalar_tac`/`omega`
+
+**The goal involves lists/arrays (`getElem!`, `set`):**
+→ `agrind`
+→ If slow: `cases idx <;> simp_lists [*]`
+
+**The goal is a conjunction (`A ∧ B ∧ C`):**
+→ `split_conjs <;> agrind` (each conjunct is easier to prove separately)
+
+**The goal has an if-then-else:**
+→ `simp_ifs` or `split`
+
+**Nothing works:**
+→ Try `simp [*]; agrind`
+→ Still stuck? Inspect the goal carefully — you may need a `have` with a key intermediate fact
+→ Check if preconditions in your theorem are strong enough

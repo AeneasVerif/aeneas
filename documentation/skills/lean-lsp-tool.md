@@ -160,3 +160,30 @@ batch_end
 8. **`edit` preserves indentation** — provide just the tactic text, not the leading spaces
 9. **`edit_range` and `insert` use exact content** — include indentation in the content
 10. **Use `\n` in content** for multi-line inserts: `insert 35 tactic1\n  tactic2\n  tactic3`
+
+## JSON Response Examples (Common Scenarios)
+
+### Successful proof step
+```json
+{"command":"edit","status":"ok","line":42,"old":"sorry","new":"unfold add_overflow","ready":true,"elapsed":2.1,"errors":[],"error_count":0}
+```
+Agent action: `errors` returns 0 → tactic worked. Use `goal 43` to see remaining goals.
+
+### Failed tactic (type mismatch)
+```json
+{"command":"edit","status":"ok","line":42,"old":"sorry","new":"omega","ready":true,"elapsed":1.5,"errors":[{"severity":"ERROR","severity_code":1,"line":42,"end_line":42,"col":2,"end_col":7,"message":"omega failed to prove the goal..."}],"error_count":1}
+```
+Agent action: `omega` can't solve this — try `scalar_tac` or `agrind` instead. Use `goal 42` to re-inspect.
+
+### Progress fails (no matching spec)
+```json
+{"command":"edit","status":"ok","line":42,"old":"sorry","new":"progress","ready":true,"elapsed":3.0,"errors":[{"severity":"ERROR","severity_code":1,"line":42,"end_line":42,"col":2,"end_col":10,"message":"progress failed: no matching spec found for 'my_function'"}],"error_count":1}
+```
+Agent action: `my_function` has no spec. Search for one (`grep -r "theorem.*my_function.*spec"`) or write one.
+
+### Proof complete (no errors, no sorry)
+```json
+{"command":"errors","status":"ok","diagnostics":[],"count":0}
+{"command":"sorry","status":"ok","sorry_lines":[],"count":0}
+```
+Agent action: Both empty → proof is complete. No remaining obligations.

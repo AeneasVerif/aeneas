@@ -174,6 +174,28 @@ Always try to make it shorter:
 
 Shorter proofs are easier to maintain, faster to check, and easier for others to read.
 
+## Proof Time Budget
+
+**Expected proof times (rough guide):**
+
+| Function complexity | Expected time | Action if exceeded |
+|---|---|---|
+| Simple (3–5 monadic binds) | 0.5–2s | — |
+| Medium (10–15 binds) | 2–10s | — |
+| Complex (20+ binds) | 10–60s | Consider decomposition |
+| >60s | — | **Decompose** (fold theorems, helper lemmas) |
+
+**Red flags that a proof will be slow:**
+- More than ~25 `progress` calls in sequence
+- Deeply nested quantifiers in the spec
+- Using `grind` instead of `agrind`
+- Large `simp` calls with many hypotheses
+- Calls to `simp_all` in a big function
+
+**When to use `maxHeartbeats`:**
+- Last resort only, after attempting decomposition
+- If you need >1,000,000 heartbeats, the proof needs restructuring, not more time
+
 ## Quick Reference: Attribute Tags
 
 | Attribute | Used by | Purpose |
