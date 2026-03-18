@@ -2,7 +2,7 @@
 
 ## Context
 
-This skill file covers strategies for verifying cryptographic Rust code translated by Aeneas to Lean. Techniques drawn from the symcrust project (ML-KEM / Kyber verification for Microsoft SymCrypt).
+This skill file covers strategies for verifying cryptographic Rust code translated by Aeneas to Lean. Techniques drawn from the SymCrypt verification project (ML-KEM / Kyber verification for Microsoft SymCrypt).
 
 **PREREQUISITE:** Always use `lean_lsp.py --repl --json` for interactive proof development. See the `lean-lsp-tool` skill file.
 

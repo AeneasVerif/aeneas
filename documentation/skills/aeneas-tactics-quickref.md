@@ -13,6 +13,9 @@ What does the goal look like?
 ├─ Loop fixed-point (loop body x)
 │  → apply loop.spec_decr_nat (Nat measure) or loop.spec (general)
 │
+├─ Recursive _loop function
+│  → unfold + split + progress (invariant = pre + post), termination_by + scalar_decr_tac
+│
 ├─ Arithmetic
 │  ├─ Linear Nat/Int → omega
 │  ├─ Scalar bounds/overflow → scalar_tac

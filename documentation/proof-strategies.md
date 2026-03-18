@@ -99,9 +99,35 @@ theorem my_recursive_fn_spec ... := by
 
 By splitting first, `progress` sees a non-recursive goal shape and applies the correct inner specs rather than the theorem being proved.
 
-## Loop Reasoning with `loop.spec`
+## Loop Reasoning
 
-Rust loops are translated to a fixed-point operator `loop`. To reason about loop correctness, use:
+Loops are translated to auxiliary `_loop` functions. **Always write a separate theorem for each `_loop` function.**
+
+### Recursive `_loop` functions (Pattern A)
+
+Most loops become recursive functions. The loop invariant serves as both precondition and postcondition:
+
+```lean
+@[progress]
+theorem my_loop_spec (x : State) (h : loop_invariant x) :
+  my_loop x ⦃ r => postcondition r ⦄ := by
+  unfold my_loop
+  split
+  · progress ...    -- recursive case: progress applies my_loop_spec
+    split_conjs <;> (try scalar_tac) <;> agrind
+  · ...              -- base case
+termination_by some_decreasing_measure x
+decreasing_by scalar_decr_tac
+```
+
+Key points:
+- `progress` on the recursive call applies the theorem being proved (this is safe here — unlike the termination pitfall, the recursion is structural)
+- Add `termination_by` with a `Nat` measure that decreases at each recursive call
+- Use `decreasing_by scalar_decr_tac` to discharge the decreasing obligation
+
+### `loop` fixed-point functions (Pattern B)
+
+Some loops use the `loop` combinator. Use `loop.spec_decr_nat` (or `loop.spec` for general well-founded measures):
 
 - **`loop.spec_decr_nat`** (most common) — requires a `Nat` termination measure, a loop invariant, and a postcondition:
 
@@ -132,7 +158,7 @@ theorem loop.spec_decr_nat
 
 When a Rust function is large, the Aeneas-generated Lean code may contain long sequences of monadic binds that are difficult to verify in one shot. The solution: **introduce helper definitions on the Lean side** that extract portions of the function body.
 
-**Pattern from symcrust's Ntt.lean:**
+**Pattern from SymCrypt's Ntt.lean:**
 
 1. Define a helper function that captures a subsequence of operations:
 ```lean
@@ -206,7 +232,7 @@ When the refinement proof (proving that the Aeneas code matches a high-level spe
 - But is pure (doesn't live in the error monad)
 - Acts as a bridge between the high-level mathematical spec and the low-level Aeneas code
 
-**The symcrust CompressEncode proofs demonstrate this pattern well:**
+**The SymCrypt CompressEncode proofs demonstrate this pattern well:**
 
 ```
 Nist spec ⟷₁ Lean spec ⟷₂ Auxiliary spec ⟷₃ Aeneas translation

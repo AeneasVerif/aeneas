@@ -172,23 +172,39 @@ theorem list_nth_mut_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
   simp_all
 ```
 
-### Pattern 4: Loop with `loop.spec_decr_nat`
+### Pattern 4: Recursive loop (most common loop pattern)
 ```lean
+-- Loops become _loop auxiliary functions. Write a separate theorem for each.
+-- The loop invariant is both the precondition and postcondition.
+@[progress]
+theorem zero_loop_spec (x : alloc.vec.Vec U32) (i : Usize) (h : i.val ≤ x.length) :
+  zero_loop x i ⦃ x' =>
+    x'.length = x.length ∧
+    (∀ j, j < i.val → x'[j]! = x[j]!) ∧
+    (∀ j, i.val ≤ j → j < x.length → x'[j]! = 0#u32) ⦄ := by
+  unfold zero_loop
+  simp; split
+  · progress ...    -- progress applies zero_loop_spec recursively
+  · simp; scalar_tac
+termination_by x.length - i.val
+decreasing_by scalar_decr_tac
+```
+
+### Pattern 5: Loop with `loop.spec_decr_nat` (fixed-point combinator)
+```lean
+-- Some loops use the `loop` combinator instead of direct recursion
 @[progress]
 theorem my_loop_spec (x : MyState) (h : x.inv) :
   my_loop_body.loop x ⦃ r => r.post ⦄ := by
   apply loop.spec_decr_nat (measure := fun s => s.remaining) (inv := fun s => s.inv)
-  · -- Prove body preserves invariant + decreases measure on cont,
-    -- and establishes postcondition on done
-    intro s hs
+  · intro s hs
     unfold my_loop_body
     progress*
     split_conjs <;> (try scalar_tac) <;> agrind
-  · -- Prove initial state satisfies invariant
-    exact h
+  · exact h
 ```
 
-### Pattern 5: Bit-vector operation spec
+### Pattern 6: Bit-vector operation spec
 ```lean
 -- Optional: swap to bv specs (bv_tac/bvify are efficient without this)
 attribute [-progress] U32.add_spec
@@ -202,7 +218,7 @@ theorem bitwise_op_spec (x : U32) (h : x.val < 65536) :
   bv_tac 32
 ```
 
-### Pattern 6: Large function with fold decomposition
+### Pattern 7: Large function with fold decomposition
 ```lean
 -- 1. Define helper
 private def helper (a : U32) : Result U32 := do

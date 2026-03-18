@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide presents strategies and techniques for verifying cryptographic code with Aeneas and Lean. The techniques are drawn from the symcrust project, which verifies ML-KEM (NIST FIPS 203, also known as Kyber) — a post-quantum key encapsulation mechanism originally written in Rust as part of Microsoft's SymCrypt library.
+This guide presents strategies and techniques for verifying cryptographic code with Aeneas and Lean. The techniques are drawn from the SymCrypt verification project, which verifies ML-KEM (NIST FIPS 203, also known as Kyber) — a post-quantum key encapsulation mechanism originally written in Rust as part of Microsoft's SymCrypt library.
 
 Cryptographic code presents unique verification challenges:
 - Heavy use of modular arithmetic (polynomial rings over ZMod q)
@@ -61,7 +61,7 @@ The proof is structured as:
 
 ### CompressEncode: A Model for Proof Structure
 
-The CompressEncode module in symcrust is a good model for well-structured proofs:
+The CompressEncode module in SymCrypt is a good model for well-structured proofs:
 
 - Clear separation into `spec_aux` (auxiliary spec proof) and `spec` (full spec proof)
 - Explicit documentation of the verification pipeline at the top of the file
@@ -275,7 +275,7 @@ Crypto proofs can be expensive. Strategies:
    theorem my_expensive_proof ...
    ```
 4. **After completing a proof, try to make it shorter.** Shorter proofs check faster.
-5. **Track proof times** — the symcrust project maintains a `proof-time.md` document.
+5. **Track proof times** — the SymCrypt project maintains a `proof-time.md` document.
 6. **Prefer `agrind` over `grind`** — `grind` calls tend to explode in proof time.
 
 ## Summary: Crypto Verification Checklist
