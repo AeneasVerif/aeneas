@@ -422,7 +422,7 @@ def _print_human(data):
     if cmd == "open":
         print(f"Opened ({data.get('lines', '?')} lines, elaborated in {data.get('elapsed', 0):.1f}s)")
         for s in data.get("sorry_lines", []):
-            print(f"  sorry at line {s}")
+            print(f"  sorry at line {s['line']}: {s['text']}")
         for e in data.get("errors", []):
             print(f"  [{e['severity']}] line {e['line']}: {e['message']}")
 
@@ -575,7 +575,7 @@ def _cmd_open(lsp, out, args):
     for i, line in enumerate(lines, 1):
         stripped = line.strip()
         if "sorry" in stripped and not stripped.startswith("--") and not stripped.startswith("/-"):
-            sorry_lines.append(i)
+            sorry_lines.append({"line": i, "text": stripped})
     errs = [_normalize_diag(d) for d in lsp.get_diagnostics(severity=1)]
     return {"command": "open", "status": "ok", "file": fp, "lines": nlines,
             "elapsed": round(elapsed, 1), "sorry_lines": sorry_lines,
