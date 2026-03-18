@@ -511,4 +511,19 @@ theorem loop.spec {α : Type u} {β : Type v} {γ : Type w}
     inv x → loop body x ⦃ post ⦄)
   grind [loop]
 
+theorem loop.spec_decr_nat {α : Type u} {β : Type v}
+  (measure : α → Nat)
+  (inv : α → Prop)
+  (post : β → Prop)
+  (body : α → Result (ControlFlow α β)) (x : α)
+  (hBody :
+    ∀ x, inv x → body x ⦃ r =>
+      match r with
+      | .done y => post y
+      | .cont x' => inv x' ∧ measure x' < measure x ⦄)
+  (hInv : inv x) :
+  loop body x ⦃ post ⦄ := by
+  have := loop.spec measure inv post body x hBody hInv
+  apply this
+
 end Aeneas.Std
