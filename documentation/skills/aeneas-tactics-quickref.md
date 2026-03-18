@@ -1,0 +1,133 @@
+# Aeneas Tactics Quick Reference
+
+## Decision Tree: Which Tactic?
+
+```
+What does the goal look like?
+
+├─ Monadic function call (let x ← f args; ...)
+│  → progress / progress* / progress with <thm>
+│
+├─ Arithmetic
+│  ├─ Linear Nat/Int → omega
+│  ├─ Scalar bounds/overflow → scalar_tac
+│  ├─ Nonlinear → scalar_tac +nonLin
+│  └─ Scalar simplification (min, max, %) → simp_scalar
+│
+├─ Bit-vector / Bitwise
+│  ├─ Pure BitVec goal → bv_tac N
+│  ├─ Nat goal about bitwise result → bvify N; bv_tac N
+│  └─ bvify fails → have h : bv_prop := by bv_tac N; natify at h; simp_scalar
+│
+├─ Modular arithmetic
+│  ├─ Equivalence (a ≡ b [MOD n]) → zmodify; ring / simp
+│  └─ Bounds (a < n) → stay Nat/Int; scalar_tac / omega
+│
+├─ List/Array (get/set)
+│  ├─ Automatic → agrind
+│  └─ Slow → cases idx <;> simp_lists [*]
+│
+├─ If-then-else → simp_ifs / split
+├─ Conjunction (∧) → split_conjs <;> agrind
+├─ Boolean/Propositional → simp_bool_prop / tauto
+├─ Concrete computation → decide / native_decide
+├─ Congruence → fcongr
+│
+└─ General / stuck
+   ├─ Try → agrind
+   └─ If fails → simp [*]; agrind
+```
+
+## Tactic Reference Table
+
+### Aeneas-Specific Tactics
+
+| Tactic | Purpose | Syntax | Key Attributes |
+|---|---|---|---|
+| `progress` | Apply function spec | `progress`, `progress as ⟨x,h⟩`, `progress with thm` | `@[progress]` |
+| `progress*` | Repeat progress + case split | `progress*` | — |
+| `progress*?` | Generate proof script | `progress*?` | — |
+| `scalar_tac` | Integer arithmetic/bounds | `scalar_tac`, `scalar_tac +nonLin` | `@[scalar_tac_simps]` |
+| `simp_scalar` | Simplify scalar exprs | `simp_scalar`, `simp_scalar [lemmas]` | `@[simp_scalar_simps]` |
+| `simp_lists` | Simplify list get/set | `simp_lists`, `simp_lists [lemmas]` | `@[simp_lists_simps]` |
+| `bvify` | Lift to BitVec | `bvify N`, `bvify N at h` | `@[bvify_simps]` |
+| `bv_tac` | Decide BitVec goals | `bv_tac N` | — |
+| `natify` | Convert to Nat | `natify`, `natify at h` | `@[natify_simps]` |
+| `zmodify` | Convert to ZMod | `zmodify`, `zmodify [to N]`, `zmodify at h` | `@[zmodify_simps]` |
+| `simp_ifs` | Simplify if-then-else | `simp_ifs` | — |
+| `simp_bool_prop` | Bool/prop simplification | `simp_bool_prop` | `@[simp_bool_prop_simps]` |
+| `fcongr` | Congruence (safe whnf) | `fcongr`, `fcongr N` | — |
+| `split_conjs` | Split nested ∧ | `split_conjs`, `split_conjs at h` | — |
+
+### Commonly Used Lean Builtins
+
+| Tactic | Purpose | Notes |
+|---|---|---|
+| `agrind` | General automation | **PREFER over `grind`** — `grind` explodes |
+| `omega` | Linear Nat/Int arithmetic | Very reliable |
+| `simp` / `simp [*]` | Simplification | Use `simp [*]` to keep hypotheses |
+| `simp_all` | Aggressive simplification | **Caution:** may remove needed hypotheses |
+| `tauto` | Propositional tautologies | |
+| `decide` | Concrete decidable goals | |
+| `ring` | Ring equalities | |
+| `split` | Case-split match/if | |
+| `cases` | Structural case analysis | |
+
+## Common Tactic Combinations
+
+| Pattern | Use When |
+|---|---|
+| `split_conjs <;> agrind` | Goal is a conjunction |
+| `simp [*]; agrind` | `agrind` alone fails (grind issue workaround) |
+| `progress* <;> bv_tac 32` | Monadic code with bitwise ops |
+| `bvify N; bv_tac N` | Nat goal about bitwise operation |
+| `have h := ...; natify at h; simp_scalar at h` | Reverse bv lifting (goal → bv → back to Nat) |
+| `zify at h; zify; simp [h, Int.mul_emod]` | Modular equivalence via Int |
+| `unfold fn; split; progress` | Recursive function (avoid termination issue) |
+
+## Attribute Management Cheatsheet
+
+```lean
+-- Setup for crypto/array proofs
+#setup_aeneas_simps
+
+-- Optional: swap to bit-vector specs (bv_tac/bvify are efficient without this)
+attribute [-progress] U32.add_spec U32.mul_spec
+attribute [local progress] U32.add_bv_spec U32.mul_bv_spec
+
+-- Swap to simpler cast spec
+attribute [-progress] UScalar.cast.progress_spec
+attribute [local progress] UScalar.cast_inBounds_spec
+
+-- Register lemma for specific tactic
+attribute [local simp_scalar_simps] my_lemma
+attribute [local simp_lists_simps] my_lemma
+attribute [local agrind] my_lemma
+
+-- Register constant for all tactics
+@[simp, scalar_tac_simps, bvify_simps, agrind =]
+theorem MY_CONST_val : MY_CONST.val = 42 := by decide
+```
+
+**Safety:** simp_scalar/simp_lists are simp-based. Activating many local lemmas is safe (no complexity explosion).
+
+## Critical Pitfalls
+
+| Pitfall | Symptom | Fix |
+|---|---|---|
+| Recursive progress | Termination error after unfold+progress | `split` before `progress` |
+| Nat subtraction | Spec is wrong (truncated at 0) | Use Int, add `h : a ≥ b`, or rewrite as addition |
+| `simp_all` drops hyps | Needed hypothesis gone | Use `simp [*]` or `simp [h1,h2]` |
+| `grind` explodes | Timeout | Use `agrind` instead |
+| `agrind` fails | Goal unsolved | Try `simp [*]; agrind` |
+| Wrong progress spec | Unexpected behavior | `progress with specific_thm` |
+
+## Debugging Commands
+
+```lean
+set_option trace.progress true        -- trace progress decisions
+set_option trace.scalar_tac true      -- trace scalar_tac
+set_option trace.Aeneas.progress true -- detailed progress
+set_option maxHeartbeats 5000000      -- increase timeout (last resort)
+set_option maxRecDepth 2048           -- increase recursion depth
+```
