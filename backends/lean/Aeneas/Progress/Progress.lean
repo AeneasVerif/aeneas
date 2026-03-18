@@ -1,6 +1,7 @@
 import Lean
 import Aeneas.ScalarTac
 import Aeneas.Progress.Init
+import Aeneas.Progress.InferPost
 import Aeneas.Std
 import Aeneas.FSimp
 import AeneasMeta.Async
@@ -179,6 +180,9 @@ structure Args where
   /-- Attempt to infer ghost variables by matching preconditions with meta-variables against
   local assumptions -/
   inferGhostVars : Bool
+  /-- If the main goal after progress is of the form `?post args...`, use `inferPost` to
+      synthesize and assign the metavariable and attempt to close the goal with `agrind` -/
+  inferPost : Bool
   /-- Introduce a dummy variable in the environment, which gets pretty-printed to something
   of the following shape:
   `[> let z ← x + y <]`
@@ -689,6 +693,25 @@ def progressWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
     withTraceNode `Progress
       (fun _ => pure m!"Main goal after simplifying the post-conditions and the target") do
       trace[Progress] "{mainGoal.goal}"
+  /- If inferPost is enabled, try to infer and prove the postcondition -/
+  let mainGoal ← do
+    if args.inferPost then
+      if let some mg := mainGoal then
+        let goalTy ← instantiateMVars (← mg.goal.getType)
+        let (head, _) := goalTy.withApp fun f a => (f, a)
+        if head.isMVar then
+          commitIfNoEx do
+            let goal ← inferPost mg.goal
+            setGoals [goal]
+            evalTactic (←`(tactic|agrind))
+            match ← getGoals with
+            | [] => pure none
+            | g :: gs =>
+              setGoals gs
+              pure (some { mg with goal := g })
+        else pure mainGoal
+      else pure mainGoal
+    else pure mainGoal
   /- Put everything together -/
   let newNonPropGoals ← newNonPropGoals.filterM fun mvar => not <$> mvar.isAssigned
   pure ({ unassignedVars := newNonPropGoals.toArray, preconditions := newPropGoals.toArray, mainGoal })
@@ -985,6 +1008,7 @@ def evalProgressCore (config : Config) (keepPretty : Option Name) (withArg : Opt
   let args : Args := {
     async := config.async,
     inferGhostVars := config.inferGhostVars,
+    inferPost := config.inferPost,
     keepPretty, ids, idsUserProvided, postsBasename, assumTac := customAssumTac,
     solvePreconditionTac, byTacSyntax := byTacStx
   }

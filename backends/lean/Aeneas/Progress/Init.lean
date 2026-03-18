@@ -65,8 +65,8 @@ structure Config where
       that are not bound in the function call). This requires `assumTac` to
       be `true`. -/
   inferGhostVars : Bool := true
-  /-- TODO: Docs -/
-  inferPostcondition : Bool := false
+  /-- Infer a postcondition for unresolved `?post args...` subgoals left by `progress` -/
+  inferPost : Bool := false
   /-- Use `scalar_tac` to discharge preconditions -/
   scalarTac : Bool := false
   /- Use `simp [*]` to discharge preconditions -/
@@ -96,7 +96,7 @@ structure Config where
 deriving Repr
 
 def Config.toGrindConfig (cfg : Config) : Grind.Config :=
-  let { async := _, assumTac := _, inferGhostVars := _, inferPostcondition := _, scalarTac := _,
+  let { async := _, assumTac := _, inferGhostVars := _, inferPost := _, scalarTac := _,
         simpStar := _, grind := _, withGroundSimprocs := _,
         splits, ematch, splitMatch, splitIte, splitIndPred, funext, gen, instances, canonHeartbeats } := cfg
   { splits, ematch, splitMatch, splitIte, splitIndPred, funext, gen, instances, canonHeartbeats }

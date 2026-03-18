@@ -15,7 +15,7 @@ theorem applyF_spec (f : U32 → Result U32) (x : U32)
 example (a : U32) (h : a.val + 1 ≤ U32.max) :
     applyF (fun x => x + 1#u32) a ⦃ y => y.val = a.val + 1 ⦄ := by
   progress with applyF_spec
-  case hf => progress as ⟨ b, hb ⟩; infer_post
+  case hf => progress +inferPost as ⟨ b, hb ⟩
   grind
 
 -- Higher-order in 2 functions, operates on a pair of inputs/outputs
@@ -39,8 +39,8 @@ theorem callPair_spec (f g : U32 → Result U32) (xy : U32 × U32)
 example (x y : U32) (hx : x.val + 1 ≤ U32.max) (hy : y.val + 2 ≤ U32.max) :
     callPair (fun a => a + 1#u32) (fun b => b + 2#u32) (x, y) ⦃ ab => ab.1.val = x.val + 1 ∧ ab.2.val = y.val + 2 ⦄ := by
   progress with callPair_spec
-  case hf => progress as ⟨ a, ha ⟩; infer_post
-  case hg => progress as ⟨ b, hb ⟩; infer_post
+  case hf => progress +inferPost as ⟨ a, ha ⟩
+  case hg => progress +inferPost as ⟨ b, hb ⟩
   grind
 
 -- Calls f then g in sequence
@@ -61,11 +61,10 @@ theorem callFThenG_spec (f g : U32 → Result U32) (x : U32)
 example (x : U32) (h1 : x.val + 1 ≤ U32.max) (h2 : x.val + 2 ≤ U32.max) :
     callFThenG (fun a => a + 1#u32) (fun b => b + 1#u32) x ⦃ y => y.val = x.val + 2 ⦄ := by
   progress with callFThenG_spec
-  case hf => progress as ⟨ a, ha ⟩; infer_post
+  case hf => progress +inferPost as ⟨ a, ha ⟩
   case hg =>
     intro y hy
-    progress as ⟨ b, hb ⟩
-    infer_post
+    progress +inferPost as ⟨ b, hb ⟩
   grind
 
 def _root_.Aeneas.Std.Slice.mapM  {α β} (f : α → Result β) (x : Slice α) : Result (Slice β) :=
@@ -93,8 +92,7 @@ example (s : Slice U32) (h : ∀ i (hi : i < s.len), s[i] < U32.max) :
   progress with Slice.mapM_spec
   case hf =>
     intros t ht
-    progress as ⟨u, hu⟩
-    infer_post
+    progress +inferPost as ⟨u, hu⟩
   grind
 
 end higher_order
