@@ -146,7 +146,7 @@ zmodify [to 256]        -- specify modulus explicitly
 zmodify at h            -- convert hypothesis
 ```
 
-**When to use:** Use `zmodify` (and ZMod) when reasoning about modular arithmetic operations (e.g., `a % n = b % n`). ZMod is a ring, so once you've lifted to ZMod you can use `ring` and algebraic reasoning. Stay in Nat/Int when proving bounds (e.g., `a < n`). The Montgomery and Barrett reduction proofs in symcrust demonstrate this nicely.
+**When to use:** Use `zmodify` (and ZMod) when reasoning about modular arithmetic operations (e.g., `a % n = b % n`). ZMod is a ring, so once you've lifted to ZMod you can use `ring` and algebraic reasoning. Stay in Nat/Int when proving bounds (e.g., `a < n`). The Montgomery and Barrett reduction proofs in SymCrypt demonstrate this nicely.
 
 ### `simp_bool_prop`
 Simplifies boolean and propositional expressions. Uses lemmas tagged with `@[simp_bool_prop_simps]`.
