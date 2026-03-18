@@ -3,6 +3,24 @@
 ## Context
 Aeneas translates Rust programs to pure Lean code via the LLBC intermediate representation. The generated code uses the `Result` error monad. Proofs verify functional correctness by writing specification theorems tagged with `@[progress]`.
 
+## PREREQUISITE: Use lean_lsp.py for All Proof Work
+
+**Before writing or editing any Lean proof**, start a `lean_lsp.py` REPL session:
+
+```bash
+python3 scripts/lean_lsp.py --repl --json
+```
+
+This gives you incremental checking, proof goal inspection, and error feedback without rebuilding the full file. See the `lean-lsp-tool` skill file for the complete command reference.
+
+**Minimal workflow:**
+1. `open <file.lean>` — open and elaborate the file
+2. `sorry` — find proof obligations
+3. `goal <line>` — see what needs to be proved
+4. `edit <line> <tactic>` — try a tactic
+5. `errors` — check if it worked
+6. Repeat 3–5 until done
+
 ## Reading Aeneas-Generated Code
 
 ### File layout

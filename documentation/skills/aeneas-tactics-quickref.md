@@ -2,6 +2,8 @@
 
 ## Decision Tree: Which Tactic?
 
+**PREREQUISITE:** Always use `lean_lsp.py --repl --json` for interactive proof development. Use `goal <line>` to inspect the proof state before choosing a tactic. See the `lean-lsp-tool` skill file.
+
 ```
 What does the goal look like?
 
