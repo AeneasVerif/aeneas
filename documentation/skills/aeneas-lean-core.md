@@ -154,7 +154,23 @@ theorem list_nth_mut_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
   simp_all
 ```
 
-### Pattern 4: Bit-vector operation spec
+### Pattern 4: Loop with `loop.spec_decr_nat`
+```lean
+@[progress]
+theorem my_loop_spec (x : MyState) (h : x.inv) :
+  my_loop_body.loop x ⦃ r => r.post ⦄ := by
+  apply loop.spec_decr_nat (measure := fun s => s.remaining) (inv := fun s => s.inv)
+  · -- Prove body preserves invariant + decreases measure on cont,
+    -- and establishes postcondition on done
+    intro s hs
+    unfold my_loop_body
+    progress*
+    split_conjs <;> (try scalar_tac) <;> agrind
+  · -- Prove initial state satisfies invariant
+    exact h
+```
+
+### Pattern 5: Bit-vector operation spec
 ```lean
 -- Optional: swap to bv specs (bv_tac/bvify are efficient without this)
 attribute [-progress] U32.add_spec
@@ -168,7 +184,7 @@ theorem bitwise_op_spec (x : U32) (h : x.val < 65536) :
   bv_tac 32
 ```
 
-### Pattern 5: Large function with fold decomposition
+### Pattern 6: Large function with fold decomposition
 ```lean
 -- 1. Define helper
 private def helper (a : U32) : Result U32 := do

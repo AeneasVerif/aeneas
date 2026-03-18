@@ -28,6 +28,10 @@ A very useful workflow: use `progress*?` to automatically generate a complete, e
 
 **Termination pitfall:** If your proof starts with `unfold foo; progress` and the proof appears finished but you get a termination error, it's likely because `progress` applied the specification theorem recursively (this typically happens when the function starts with a `match` or `if-then-else`). Fix: start with `split` (or `cases`) before calling `progress`, to case-split on the match/if first.
 
+**Loop reasoning:** Loops are translated to a fixed-point operator `loop`. To prove specs of loop-based code, use:
+- `loop.spec_decr_nat` — provide a `Nat` termination measure, a loop invariant, and a postcondition. This is the practical workhorse for most loop proofs.
+- `loop.spec` — general version with an arbitrary well-founded termination measure.
+
 ### `scalar_tac`
 Arithmetic reasoning over Rust integer types. Handles bounds checking, overflow verification, and integer arithmetic.
 

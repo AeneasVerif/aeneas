@@ -40,6 +40,7 @@ NIST spec ⟷₁ Lean spec ⟷₂ Auxiliary spec ⟷₃ Aeneas code
 
 - **Always have:** NIST spec (pure math) + Aeneas code (auto-generated)
 - **Add auxiliary spec when:** The code structure differs significantly from the mathematical spec (loops vs. closed-form, array indexing vs. polynomial operations, bit-packing vs. abstract operations)
+- **For loops:** Use `loop.spec_decr_nat` with a loop invariant and a `Nat` termination measure (or `loop.spec` for general well-founded measures)
 - **Specs are always pure:** They may use monadic notation (Id monad) but never the Result monad
 - **The auxiliary spec:** Also pure, closely follows code structure
 

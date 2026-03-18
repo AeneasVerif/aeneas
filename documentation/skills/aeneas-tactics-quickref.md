@@ -8,6 +8,9 @@ What does the goal look like?
 ├─ Monadic function call (let x ← f args; ...)
 │  → progress / progress* / progress with <thm>
 │
+├─ Loop fixed-point (loop body x)
+│  → apply loop.spec_decr_nat (Nat measure) or loop.spec (general)
+│
 ├─ Arithmetic
 │  ├─ Linear Nat/Int → omega
 │  ├─ Scalar bounds/overflow → scalar_tac

@@ -131,6 +131,28 @@ def sum_three (a b c : U32) : Result U32 := do
 Each `←` is a monadic bind: if the addition overflows, the whole computation
 short-circuits to `fail`.
 
+### 2.4 Loop Translation and the Fixed-Point Operator
+
+Rust loops (`loop`, `while`, `for`) are translated to a **fixed-point combinator** called `loop`:
+
+```lean
+def loop (body : α → Result (ControlFlow α β)) (x : α) : Result β
+```
+
+The `body` function takes the current loop state and returns either:
+- `ControlFlow.cont x'` — continue with new state `x'`
+- `ControlFlow.done y` — break with result `y`
+
+To **reason about loop correctness**, Aeneas provides two key theorems:
+
+- **`loop.spec`** — General spec with an arbitrary well-founded termination measure, a loop invariant, and a postcondition.
+- **`loop.spec_decr_nat`** — Simplified version where the termination measure is a `Nat` with standard `<` ordering (the practical workhorse for most proofs).
+
+Both require you to provide:
+1. A **termination measure** that strictly decreases on each iteration
+2. A **loop invariant** preserved by the body on `cont`
+3. A **postcondition** established by the body on `done`
+
 ---
 
 ## 3. How to Read Aeneas-Generated Code

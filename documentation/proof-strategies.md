@@ -99,6 +99,35 @@ theorem my_recursive_fn_spec ... := by
 
 By splitting first, `progress` sees a non-recursive goal shape and applies the correct inner specs rather than the theorem being proved.
 
+## Loop Reasoning with `loop.spec`
+
+Rust loops are translated to a fixed-point operator `loop`. To reason about loop correctness, use:
+
+- **`loop.spec_decr_nat`** (most common) — requires a `Nat` termination measure, a loop invariant, and a postcondition:
+
+```lean
+theorem loop.spec_decr_nat
+  (measure : α → Nat)
+  (inv : α → Prop)
+  (post : β → Prop)
+  (body : α → Result (ControlFlow α β)) (x : α)
+  (hBody : ∀ x, inv x → body x ⦃ r =>
+    match r with
+    | .done y => post y
+    | .cont x' => inv x' ∧ measure x' < measure x ⦄)
+  (hInv : inv x) :
+  loop body x ⦃ post ⦄
+```
+
+- **`loop.spec`** — general version with an arbitrary well-founded termination measure (use when `Nat` isn't convenient).
+
+**Proof pattern:**
+1. Identify the loop invariant (what holds at each iteration)
+2. Choose a termination measure (typically a `Nat` that decreases)
+3. Apply `loop.spec_decr_nat` (or `loop.spec`)
+4. Prove the body preserves the invariant and decreases the measure on `cont`
+5. Prove the body establishes the postcondition on `done`
+
 ## Splitting Large Functions (Function Decomposition)
 
 When a Rust function is large, the Aeneas-generated Lean code may contain long sequences of monadic binds that are difficult to verify in one shot. The solution: **introduce helper definitions on the Lean side** that extract portions of the function body.
@@ -318,7 +347,8 @@ This is more effective than calling `agrind` on the conjunction directly: each c
 3. Try `progress*` — if it works, great!
 4. If not, use `progress*?` to generate a full script
 5. Identify hard sub-goals and prove them manually or register automation lemmas
-6. For large functions: decompose with fold theorems
-7. For complex refinements: introduce intermediate pure specs
-8. Refold the proof to be as short as possible
-9. Check proof time — decompose if too slow
+6. For loops: use `loop.spec_decr_nat` with an invariant and termination measure
+7. For large functions: decompose with fold theorems
+8. For complex refinements: introduce intermediate pure specs
+9. Refold the proof to be as short as possible
+10. Check proof time — decompose if too slow
