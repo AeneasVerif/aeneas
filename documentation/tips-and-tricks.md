@@ -10,6 +10,21 @@ Before diving into a function proof:
 
 3. **Don't `exact` big terms.** Large `exact ⟨..., fun x => by ..., fun y => by ...⟩` expressions are bad for proof incrementality — the LSP must re-elaborate the entire term on every edit. Instead, use `refine ⟨..., ?_, ?_⟩` or `apply` to create separate goals, then prove each with `·` focus blocks.
 
+## Loop Translation: Prefer `-loops-to-rec`
+
+Aeneas supports two loop translation modes:
+- **`-loops-to-rec`** (recommended): Translates loops to recursive Lean functions.
+  This is the mode used for most verified proofs so far. The resulting code uses
+  direct recursion with `termination_by` / `decreasing_by`, and proofs use
+  `unfold` + `progress`.
+- **Fixed-point combinator** (default): Translates loops using a `loop` fixed-point
+  operator. Proofs use `loop.spec_decr_nat`. The proof infrastructure for this
+  mode is less mature — fewer lemmas, less automation, and less battle-tested.
+
+We are in the process of switching the default translation style to use the fixed-point
+combinator, but the proof infrastructure for it is not yet fully developed. Until it
+matures, **use `-loops-to-rec`** for any project where you need to write proofs.
+
 ## Tactic Selection Quick Guide
 
 | Goal Shape | Try First | Then Try |

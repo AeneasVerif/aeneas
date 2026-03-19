@@ -172,6 +172,14 @@ theorem list_nth_mut_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
   simp_all
 ```
 
+### Loop Translation: Prefer `-loops-to-rec`
+
+Aeneas supports two loop translation modes:
+- **`-loops-to-rec`** (recommended): Translates loops to recursive Lean functions. This is the mode used for most verified proofs so far. The resulting code uses direct recursion with `termination_by` / `decreasing_by`, and proofs use `unfold` + `progress` (Pattern 4 below).
+- **Fixed-point combinator** (default): Translates loops using a `loop` fixed-point operator. Proofs use `loop.spec_decr_nat` (Pattern 5 below). The proof infrastructure for this mode is less mature — fewer lemmas, less automation, and less battle-tested.
+
+We are in the process of switching the default translation style to use the fixed-point combinator, but the proof infrastructure for it is not yet fully developed. Until it matures, **use `-loops-to-rec`** for any project where you need to write proofs.
+
 ### Pattern 4: Recursive loop (most common loop pattern)
 ```lean
 -- Loops become _loop auxiliary functions. Write a separate theorem for each.
