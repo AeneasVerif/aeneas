@@ -1,3 +1,4 @@
+import Aeneas.Std.Slice
 import Aeneas.Vector
 
 namespace Aeneas
