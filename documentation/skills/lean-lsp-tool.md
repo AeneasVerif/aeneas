@@ -28,7 +28,17 @@ If driving from a subprocess (piped stdin), prompts are automatically suppressed
 ```
 open MyProject/Properties/Foo.lean
 ```
-Response includes: line count, sorry positions, errors. Waits for full elaboration.
+Response includes: line count, sorry positions, processing ranges. **Returns immediately**
+without waiting for full elaboration (~0.5s). Use `wait` after open to block until
+elaboration finishes.
+
+```
+wait
+```
+Blocks until the entire file is elaborated. You can also `wait <line>` to block until
+a specific line is ready (but note: during import elaboration, Lean reports the entire
+file as one processing range, so `wait <line>` may not be faster than `wait` for files
+with heavy imports).
 
 ### 2. Find what needs proving
 ```
@@ -63,9 +73,18 @@ Repeat steps 3–5: inspect goal → try a tactic → check result.
 ### File Operations
 | Command | Description |
 |---|---|
-| `open <file.lean>` | Open file, wait for elaboration |
+| `open <file.lean>` | Open file (returns immediately, non-blocking) |
 | `update` | Re-read current file from disk |
 | `replace <file.lean>` | Re-read a different file from disk |
+
+### Viewing and Searching
+| Command | Description |
+|---|---|
+| `show [start] [end]` | Show current file with line numbers (requires open file) |
+| `grep <pattern> [glob]` | Search current file, or project files if glob given |
+| `search <pattern> [glob]` | Search project `.lean` files (default: `**/*.lean`) |
+| `cat <file> [start] [end]` | Read another file with line numbers |
+| `ls [path]` | List directory contents |
 
 ### Goal and Diagnostics
 | Command | Description |
@@ -100,7 +119,7 @@ Repeat steps 3–5: inspect goal → try a tactic → check result.
 | Command | Description |
 |---|---|
 | `status` | Current file, version, line count, elaboration state |
-| `wait` | Block until elaboration finishes |
+| `wait [line]` | Block until elaboration finishes (optionally up to line) |
 | `logs` | Server log messages |
 | `quit` | Exit |
 
@@ -120,7 +139,10 @@ Repeat steps 3–5: inspect goal → try a tactic → check result.
 
 ```
 open MyProject/Properties/Add.lean
-→ {"command":"open","status":"ok","lines":42,"sorry_lines":[{"line":35,"text":"sorry"}],"errors":[],...}
+→ {"command":"open","status":"ok","lines":42,"sorry_lines":[{"line":35,"text":"sorry"}],"ready":false,"processing_ranges":[...],...}
+
+wait
+→ {"command":"wait","status":"ok","ready":true,"elapsed":15.2,"error_count":0,"warning_count":1}
 
 goal 35
 → {"command":"goal","status":"ok","goals":["⊢ add_overflow a b ⦃ c => c.val = a.val + b.val ⦄"],...}
@@ -164,7 +186,7 @@ batch_end
 **DO NOT use `lake build` to iterate on proofs.** It rebuilds everything from scratch (2–5 min per cycle). The LSP gives incremental feedback in 5–30 seconds. Your workflow must be:
 
 ```
-open file → sorry → goal → edit → errors → repeat
+open file → wait → sorry → goal → edit → errors → repeat
 ```
 
 **Never** fall back to `lake build` loops. Only use `lake build` once at the very end to confirm the final result.

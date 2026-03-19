@@ -30,7 +30,14 @@ REPL commands:
     status                              Show current file status and elaboration state
     logs                                Show Lean server log messages
     sorry                               List all sorry positions in current file
-    wait                                Wait for elaboration to finish
+    wait [line]                         Wait for elaboration (up to line, or full file)
+    check                               Wait for full elaboration, return all errors/warnings
+    next_error                          Wait until a new error appears (or elaboration ends)
+    show [start] [end]                  Show current file with line numbers
+    grep <pattern> [glob]               Search current file (or project files if glob given)
+    search <pattern> [glob]             Search project .lean files (default: **/*.lean)
+    cat <file> [start] [end]            Read another file with line numbers
+    ls [path]                           List directory contents
     quit                                Exit
 
 Flags:
@@ -53,6 +60,8 @@ import sys
 import os
 import time
 import threading
+import re
+import glob as glob_mod
 
 
 def _find_project_root():
@@ -199,6 +208,19 @@ class LeanLSP:
                 return False
             return len(self.file_progress[self.current_uri]) == 0
 
+    def is_ready_until(self, line):
+        """Check if elaboration has completed up to (and including) the given line (1-indexed)."""
+        with self.lock:
+            if self.current_uri not in self.file_progress:
+                return False
+            processing = self.file_progress[self.current_uri]
+            if len(processing) == 0:
+                return True  # fully elaborated
+            # Find the earliest line still being processed
+            earliest = min(r["range"]["start"]["line"] for r in processing)
+            # earliest is 0-indexed; line is 1-indexed
+            return line <= earliest
+
     def get_processing_ranges(self):
         with self.lock:
             ranges = self.file_progress.get(self.current_uri, [])
@@ -213,8 +235,22 @@ class LeanLSP:
             "version": self.version,
             "lines": nlines,
             "ready": self.is_file_ready(),
+            "processing_imports": self.is_processing_imports(),
             "processing_ranges": self.get_processing_ranges(),
         }
+
+    def is_processing_imports(self):
+        """Check if we're still in the import phase (single range covering from line 1)."""
+        with self.lock:
+            if self.current_uri not in self.file_progress:
+                return True  # no progress yet — assume still loading
+            processing = self.file_progress[self.current_uri]
+            if len(processing) == 0:
+                return False  # fully done
+            if len(processing) == 1:
+                start = processing[0]["range"]["start"]["line"]
+                return start == 0  # 0-indexed line 0 = file start
+            return False  # multiple ranges = imports done
 
     def wait_ready(self, timeout=180):
         """Wait until file elaboration is complete. Returns (ready, elapsed)."""
@@ -226,10 +262,41 @@ class LeanLSP:
             time.sleep(0.1)
         return False, time.time() - t0
 
+    def wait_until(self, line, timeout=180):
+        """Wait until elaboration has completed up to the given line. Returns (ready, elapsed)."""
+        t0 = time.time()
+        time.sleep(0.5)
+        for _ in range(timeout * 10):
+            if self.is_ready_until(line):
+                return True, time.time() - t0
+            time.sleep(0.1)
+        return False, time.time() - t0
+
+    def wait_for_error(self, timeout=180):
+        """Wait until a new error diagnostic appears or elaboration finishes.
+        Returns (found_error, errors, elapsed)."""
+        t0 = time.time()
+        baseline_errors = set()
+        for d in self.get_diagnostics(severity=1):
+            key = (d["range"]["start"]["line"], d.get("message", ""))
+            baseline_errors.add(key)
+        time.sleep(0.5)
+        for _ in range(timeout * 10):
+            current_errors = self.get_diagnostics(severity=1)
+            for d in current_errors:
+                key = (d["range"]["start"]["line"], d.get("message", ""))
+                if key not in baseline_errors:
+                    return True, current_errors, time.time() - t0
+            if self.is_file_ready():
+                return False, current_errors, time.time() - t0
+            time.sleep(0.1)
+        return False, self.get_diagnostics(severity=1), time.time() - t0
+
     # --- File operations ---
 
     def open_file(self, filepath):
-        """Open a file and wait for elaboration. Returns (uri, text)."""
+        """Open a file and send didOpen to the server. Returns immediately without
+        waiting for full elaboration. Use wait_until(line) or wait_ready() to block."""
         abs_path = os.path.join(self.project_root, filepath) if not os.path.isabs(filepath) else filepath
         uri = f"file://{abs_path}"
         with open(abs_path) as f:
@@ -244,16 +311,8 @@ class LeanLSP:
         self.current_uri = uri
         self.current_text = text
         self.current_path = abs_path
-        ready, elapsed = self.wait_ready(timeout=180)
-        if not ready:
-            for _ in range(60):
-                time.sleep(0.5)
-                r = self._request("$/lean/plainGoal", {
-                    "textDocument": {"uri": uri},
-                    "position": {"line": 0, "character": 0},
-                }, timeout=5)
-                if r is not None:
-                    break
+        # Brief pause to let the server start processing
+        time.sleep(0.5)
         return uri, text
 
     def send_change(self, new_text):
@@ -502,6 +561,27 @@ def _print_human(data):
             for s in items:
                 print(f"  line {s['line']}: {s['text']}")
 
+    elif cmd == "show":
+        print(data.get("content", ""))
+
+    elif cmd in ("grep", "search"):
+        matches = data.get("matches", [])
+        if not matches:
+            print(f"  (no matches for '{data.get('pattern', '')}')")
+        else:
+            for m in matches:
+                prefix = f"{m['file']}:" if "file" in m else ""
+                print(f"  {prefix}{m['line']}: {m['text']}")
+            print(f"  ({len(matches)} match(es))")
+
+    elif cmd == "cat":
+        print(data.get("content", ""))
+
+    elif cmd == "ls":
+        for e in data.get("entries", []):
+            suffix = "/" if e["type"] == "dir" else ""
+            print(f"  {e['name']}{suffix}")
+
     elif cmd == "wait":
         if data.get("ready"):
             print(f"  Ready ({data.get('elapsed', 0):.1f}s)")
@@ -562,7 +642,7 @@ def _cmd_open(lsp, out, args):
     if not args:
         return {"command": "open", "status": "error", "error": "Usage: open <file.lean>"}
     fp = args[0]
-    out.info(f"Opening {fp}...")
+    out.info(f"Opening {fp} (non-blocking — use 'wait [line]' to wait for elaboration)...")
     t0 = time.time()
     try:
         uri, text = lsp.open_file(fp)
@@ -576,10 +656,11 @@ def _cmd_open(lsp, out, args):
         stripped = line.strip()
         if "sorry" in stripped and not stripped.startswith("--") and not stripped.startswith("/-"):
             sorry_lines.append({"line": i, "text": stripped})
-    errs = [_normalize_diag(d) for d in lsp.get_diagnostics(severity=1)]
     return {"command": "open", "status": "ok", "file": fp, "lines": nlines,
             "elapsed": round(elapsed, 1), "sorry_lines": sorry_lines,
-            "errors": errs, "error_count": len(errs)}
+            "ready": lsp.is_file_ready(),
+            "processing_imports": lsp.is_processing_imports(),
+            "processing_ranges": lsp.get_processing_ranges()}
 
 
 def _cmd_goal(lsp, out, args):
@@ -768,16 +849,57 @@ def _cmd_sorry(lsp):
     return {"command": "sorry", "status": "ok", "sorry_lines": items, "count": len(items)}
 
 
-def _cmd_wait(lsp, out):
+def _cmd_wait(lsp, out, args):
     if lsp.current_uri is None:
         return {"command": "wait", "status": "error", "error": "No file open"}
-    out.info("Waiting for elaboration...")
+    if args:
+        line = int(args[0])
+        out.info(f"Waiting for elaboration up to line {line}...")
+        ready, elapsed = lsp.wait_until(line, timeout=180)
+        errs = [_normalize_diag(d) for d in lsp.get_diagnostics(severity=1)
+                if d.get("range", {}).get("start", {}).get("line", 0) < line]
+        return {"command": "wait", "status": "ok", "ready": ready,
+                "waited_until": line, "elapsed": round(elapsed, 1),
+                "error_count": len(errs), "errors": errs}
+    else:
+        out.info("Waiting for full elaboration...")
+        ready, elapsed = lsp.wait_ready(timeout=180)
+        errs = lsp.get_diagnostics(severity=1)
+        warns = lsp.get_diagnostics(severity=2)
+        return {"command": "wait", "status": "ok", "ready": ready,
+                "elapsed": round(elapsed, 1),
+                "error_count": len(errs), "warning_count": len(warns)}
+
+
+def _cmd_check(lsp, out):
+    """Wait for full elaboration and return all errors and warnings."""
+    if lsp.current_uri is None:
+        return {"command": "check", "status": "error", "error": "No file open"}
+    out.info("Waiting for full elaboration...")
     ready, elapsed = lsp.wait_ready(timeout=180)
-    errs = lsp.get_diagnostics(severity=1)
-    warns = lsp.get_diagnostics(severity=2)
-    return {"command": "wait", "status": "ok", "ready": ready,
+    errs = [_normalize_diag(d) for d in lsp.get_diagnostics(severity=1)]
+    warns = [_normalize_diag(d) for d in lsp.get_diagnostics(severity=2)]
+    return {"command": "check", "status": "ok", "ready": ready,
             "elapsed": round(elapsed, 1),
-            "error_count": len(errs), "warning_count": len(warns)}
+            "error_count": len(errs), "errors": errs,
+            "warning_count": len(warns), "warnings": warns}
+
+
+def _cmd_next_error(lsp, out):
+    """Wait until a new error appears or elaboration finishes with no new errors."""
+    if lsp.current_uri is None:
+        return {"command": "next_error", "status": "error", "error": "No file open"}
+    out.info("Watching for errors...")
+    found, errors, elapsed = lsp.wait_for_error(timeout=180)
+    norm_errors = [_normalize_diag(d) for d in errors]
+    if found:
+        return {"command": "next_error", "status": "ok", "found": True,
+                "elapsed": round(elapsed, 1),
+                "error_count": len(norm_errors), "errors": norm_errors}
+    else:
+        return {"command": "next_error", "status": "ok", "found": False,
+                "elapsed": round(elapsed, 1), "message": "Elaboration finished with no new errors",
+                "error_count": len(norm_errors), "errors": norm_errors}
 
 
 def _cmd_update(lsp, out, args, project_root):
@@ -798,6 +920,127 @@ def _cmd_update(lsp, out, args, project_root):
     return {"command": cmd_name, "status": "ok", "file": fp,
             "ready": ready, "elapsed": round(elapsed, 1),
             "errors": errs, "error_count": len(errs)}
+
+
+def _cmd_show(lsp, args_str):
+    """Show current file contents with line numbers."""
+    if lsp.current_text is None:
+        return {"command": "show", "status": "error", "error": "No file open"}
+    lines = lsp.current_text.split("\n")
+    args = args_str.split() if args_str else []
+    start = int(args[0]) if len(args) >= 1 else 1
+    end = int(args[1]) if len(args) >= 2 else len(lines)
+    start = max(1, min(start, len(lines)))
+    end = max(start, min(end, len(lines)))
+    output_lines = []
+    for i in range(start - 1, end):
+        output_lines.append(f"{i+1:>4}. {lines[i]}")
+    return {"command": "show", "status": "ok", "start": start, "end": end,
+            "total_lines": len(lines), "content": "\n".join(output_lines)}
+
+
+def _cmd_grep(lsp, args_str, project_root):
+    """Search for a pattern in the current file or project files."""
+    if not args_str:
+        return {"command": "grep", "status": "error",
+                "error": "Usage: grep <pattern> [glob]"}
+    parts = args_str.split(None, 1)
+    pattern = parts[0]
+    file_glob = parts[1] if len(parts) > 1 else None
+
+    try:
+        regex = re.compile(pattern, re.IGNORECASE)
+    except re.error as e:
+        return {"command": "grep", "status": "error", "error": f"Invalid regex: {e}"}
+
+    if file_glob is None:
+        # Search current file
+        if lsp.current_text is None:
+            return {"command": "grep", "status": "error", "error": "No file open"}
+        matches = []
+        for i, line in enumerate(lsp.current_text.split("\n"), 1):
+            if regex.search(line):
+                matches.append({"line": i, "text": line.strip()})
+        return {"command": "grep", "status": "ok", "pattern": pattern,
+                "file": lsp.current_path, "matches": matches, "count": len(matches)}
+    else:
+        # Search project files matching glob
+        search_root = project_root
+        matched_files = glob_mod.glob(os.path.join(search_root, file_glob), recursive=True)
+        matches = []
+        for fp in sorted(matched_files):
+            try:
+                with open(fp) as f:
+                    for i, line in enumerate(f, 1):
+                        if regex.search(line):
+                            rel = os.path.relpath(fp, search_root)
+                            matches.append({"file": rel, "line": i, "text": line.strip()})
+            except (OSError, UnicodeDecodeError):
+                continue
+        return {"command": "grep", "status": "ok", "pattern": pattern,
+                "glob": file_glob, "matches": matches, "count": len(matches)}
+
+
+def _cmd_search(lsp, args_str, project_root):
+    """Search project files for a pattern. Alias for: grep <pattern> <glob>"""
+    if not args_str:
+        return {"command": "search", "status": "error",
+                "error": "Usage: search <pattern> [glob]  (default glob: **/*.lean)"}
+    parts = args_str.split(None, 1)
+    pattern = parts[0]
+    file_glob = parts[1] if len(parts) > 1 else "**/*.lean"
+    return _cmd_grep(lsp, f"{pattern} {file_glob}", project_root)
+
+
+def _cmd_cat(project_root, args_str):
+    """Read another file and display its contents."""
+    if not args_str:
+        return {"command": "cat", "status": "error", "error": "Usage: cat <file>"}
+    parts = args_str.split(None, 1)
+    fp = parts[0]
+    abs_path = fp if os.path.isabs(fp) else os.path.join(project_root, fp)
+    try:
+        with open(abs_path) as f:
+            text = f.read()
+    except FileNotFoundError:
+        return {"command": "cat", "status": "error", "error": f"File not found: {fp}"}
+    except OSError as e:
+        return {"command": "cat", "status": "error", "error": str(e)}
+    lines = text.split("\n")
+    # Support optional line range: cat <file> [start] [end]
+    args = parts[1].split() if len(parts) > 1 else []
+    start = int(args[0]) if len(args) >= 1 else 1
+    end = int(args[1]) if len(args) >= 2 else len(lines)
+    start = max(1, min(start, len(lines)))
+    end = max(start, min(end, len(lines)))
+    output_lines = []
+    for i in range(start - 1, end):
+        output_lines.append(f"{i+1:>4}. {lines[i]}")
+    return {"command": "cat", "status": "ok", "file": fp,
+            "start": start, "end": end, "total_lines": len(lines),
+            "content": "\n".join(output_lines)}
+
+
+def _cmd_ls(project_root, args_str):
+    """List directory contents."""
+    path = args_str.strip() if args_str else "."
+    abs_path = path if os.path.isabs(path) else os.path.join(project_root, path)
+    if not os.path.exists(abs_path):
+        return {"command": "ls", "status": "error", "error": f"Path not found: {path}"}
+    if os.path.isfile(abs_path):
+        return {"command": "ls", "status": "ok", "path": path,
+                "entries": [{"name": os.path.basename(abs_path), "type": "file"}]}
+    entries = []
+    try:
+        for name in sorted(os.listdir(abs_path)):
+            if name.startswith("."):
+                continue
+            full = os.path.join(abs_path, name)
+            entries.append({"name": name, "type": "dir" if os.path.isdir(full) else "file"})
+    except OSError as e:
+        return {"command": "ls", "status": "error", "error": str(e)}
+    return {"command": "ls", "status": "ok", "path": path, "entries": entries,
+            "count": len(entries)}
 
 
 HELP_TEXT = """\
@@ -822,7 +1065,14 @@ Commands:
   status                              File status and elaboration state
   logs                                Server log messages
   sorry                               List sorry positions
-  wait                                Wait for elaboration
+  wait [line]                           Wait for elaboration (up to line, or full file)
+  check                                 Wait for full elaboration, return all errors/warnings
+  next_error                            Wait until a new error appears (or elaboration ends)
+  show [start] [end]                  Show current file with line numbers
+  grep <pattern> [glob]               Search current file (or project files if glob given)
+  search <pattern> [glob]             Search project .lean files (default: **/*.lean)
+  cat <file> [start] [end]            Read another file with line numbers
+  ls [path]                           List directory contents
   quit                                Exit"""
 
 
@@ -1015,8 +1265,29 @@ def repl_mode(project_root, json_mode=False, fail_fast=False):
             elif cmd == "sorry":
                 result = _cmd_sorry(lsp)
 
+            elif cmd == "show":
+                result = _cmd_show(lsp, args_str)
+
+            elif cmd == "grep":
+                result = _cmd_grep(lsp, args_str, project_root)
+
+            elif cmd == "search":
+                result = _cmd_search(lsp, args_str, project_root)
+
+            elif cmd == "cat":
+                result = _cmd_cat(project_root, args_str)
+
+            elif cmd == "ls":
+                result = _cmd_ls(project_root, args_str)
+
             elif cmd == "wait":
-                result = _cmd_wait(lsp, out)
+                result = _cmd_wait(lsp, out, args)
+
+            elif cmd == "check":
+                result = _cmd_check(lsp, out)
+
+            elif cmd == "next_error":
+                result = _cmd_next_error(lsp, out)
 
             elif cmd in ("update", "replace"):
                 result = _cmd_update(lsp, out, args if cmd == "replace" else [], project_root)
