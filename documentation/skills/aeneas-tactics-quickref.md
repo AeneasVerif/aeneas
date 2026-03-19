@@ -18,7 +18,7 @@ What does the goal look like?
 │
 ├─ Arithmetic
 │  ├─ Any with UScalar/IScalar → scalar_tac (NEVER omega)
-│  ├─ Linear Nat/Int only → scalar_tac or omega
+│  ├─ Linear Nat/Int only → scalar_tac (NEVER omega)
 │  ├─ Nonlinear → scalar_tac +nonLin
 │  └─ Scalar simplification (min, max, %) → simp_scalar
 │
@@ -78,8 +78,8 @@ What does the goal look like?
 
 | Tactic | Purpose | Notes |
 |---|---|---|
-| `agrind` | General automation | **PREFER over `grind`** — `grind` explodes |
-| `omega` | Linear Nat/Int arithmetic | **Only for pure Nat/Int** — use scalar_tac with machine ints |
+| `agrind` | General automation | Prefer over `grind` — faster. If it fails, try `grind` |
+| `omega` | **NEVER use** — use `scalar_tac`, `agrind`, or `grind` instead |
 | `simp` / `simp [*]` | Simplification | Use `simp [*]` to keep hypotheses |
 | `simp_all` | Aggressive simplification | **Caution:** may remove needed hypotheses |
 | `tauto` | Propositional tautologies | |

@@ -62,8 +62,7 @@ For function bodies with multiple monadic calls:
 ```
 ## Key Rules
 - NEVER unfold Aeneas stdlib definitions — search for existing lemmas
-- `scalar_tac` not `omega` for machine integers
-- `agrind` not `grind`
+- NEVER use `omega` — use `scalar_tac`, `agrind`, or `grind` instead
 - DO NOT COMMIT
 ```
 
@@ -128,8 +127,8 @@ After each agent completes:
 | Agent uses `lake build` loops | Didn't read LSP skill | Stronger prompt, mandate LSP |
 | `progress*` times out | Too many monadic calls | Use `progress*?` workflow |
 | Unfolds stdlib definitions | Didn't read core skill | Add "don't unfold" rule to prompt |
-| Uses `omega` on UScalar | Wrong tactic choice | Specify `scalar_tac` in prompt |
-| Uses `grind` | Explodes on large goals | Specify `agrind` in prompt |
+| Uses `omega` | `omega` can't reason about scalars, `U32.max`, list lengths, etc. | NEVER use `omega` — use `scalar_tac`, `agrind`, or `grind` |
+| Uses `omega` | Cannot reason about scalars, definitions, etc. | Use `scalar_tac`, `agrind`, or `grind` |
 | Edits wrong file/section | Ambiguous instructions | Be very specific about what to change |
 
 ## Example: Full Agent Prompt
@@ -155,7 +154,7 @@ Use `progress*?` to generate the body proof script, then fix sub-goals.
 
 ## Key Rules
 - NEVER unfold stdlib
-- scalar_tac not omega
+- NEVER use `omega` — use `scalar_tac` instead, or `agrind` (prefer), or `grind`
 - ONLY modify the specified sorry
 - DO NOT COMMIT
 ```

@@ -133,8 +133,9 @@ Weakest precondition: `f ⦃ x => P x ⦄` means "if f succeeds with value x, th
 ### Lean builtins (commonly used)
 | Tactic | Use for |
 |---|---|
-| `agrind` | General automation (PREFER over `grind`) |
-| `omega` | Linear Nat/Int arithmetic |
+| `agrind` | General automation (prefer over `grind` — faster) |
+| `grind` | General automation (slower but more powerful — try if `agrind` fails) |
+| `omega` | **NEVER use omega.** It cannot reason about scalars (U8, U32, etc.), does not know `U32.max`, list lengths, etc. Use `scalar_tac`, `agrind`, or `grind` instead |
 | `simp [*]` | Simplification with all hypotheses |
 | `tauto` | Propositional tautologies |
 | `decide` | Concrete finite computations |
