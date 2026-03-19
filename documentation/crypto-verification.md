@@ -129,7 +129,7 @@ Step 4 — In the main proof, use `simp only [fold_reduce_add_mont_reduce]` to r
 Crypto code is fundamentally about modular arithmetic. The key strategy:
 
 - **For modular equivalences** (e.g., `a ≡ b [MOD q]`): Use `zmodify` to lift to `ZMod`, then reason algebraically. ZMod is a ring, so the `ring` tactic and standard algebraic lemmas apply directly.
-- **For bounds** (e.g., `0 ≤ a < q`): Stay in `Nat`/`Int` and use `scalar_tac`, `omega`.
+- **For bounds** (e.g., `0 ≤ a < q`): Stay in `Nat`/`Int` and use `scalar_tac`, `agrind`.
 
 **Example from Montgomery reduction (MontReduction.lean):**
 ```lean
@@ -153,12 +153,7 @@ Uses `field_simp` for rational arithmetic, `scalar_tac +nonLin` for nonlinear bo
 Crypto code is full of bitwise operations. Strategy:
 
 ### `bv_tac` and `bvify`
-`bv_tac` (which uses `bvify` under the hood) is quite efficient and can often handle bit-vector goals directly without any special setup. It can be useful to swap to bit-vector specifications by activating/deactivating progress theorems, but it's not strictly necessary:
-```lean
--- Optional: swap to bit-vector specs if you find it helps
-attribute [-progress] U32.add_spec U32.mul_spec
-attribute [local progress] U32.add_bv_spec U32.mul_bv_spec
-```
+`bv_tac` (which uses `bvify` under the hood) is quite efficient and can handle bit-vector goals directly without any special setup.
 
 ### Common proof patterns
 ```lean

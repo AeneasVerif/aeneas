@@ -126,6 +126,47 @@ simp [*]; agrind    -- or: simp [*]; grind
 
 `scalar_tac`, `agrind`, and `grind` know how to reason about the models of Rust definitions like `Array`, `Slice`, machine integers (`Usize`, `U32`, `UScalar`, `IScalar`, etc.). For instance, they can see through `Slice.length`. **NEVER use `omega`** — it cannot reason about scalars, does not know `U32.max`, list lengths, etc.
 
+### Proof style: maintainability
+
+**Remove unused simp lemmas.** When Lean warns "This simp argument is unused", remove
+the offending lemma from `simp only [...]`. Do not leave dead arguments.
+
+**Avoid big `simp only [...]` in implementation proofs.** The generated Rust model is
+unstable (names change on re-extraction). Large `simp only` with many model-specific
+lemmas will break. Prefer `simp [*]`, `agrind`, or targeted rewrites. Big `simp only`
+calls are fine in pure spec lemmas where definitions are stable.
+
+**Extract complex sub-proofs as auxiliary lemmas.** If a proof step requires complex
+non-linear arithmetic or bitwise reasoning (especially in the middle of a `progress*`
+proof), extract it into a separate lemma. This gives it a small context and keeps the
+main proof clean.
+
+**Simplify shifts early.** Rewrite `x >>> n` as `x / 2^n` and `x <<< n` as `x * 2^n`
+using `Nat.shiftRight_eq_div_pow` / `Nat.shiftLeft_eq_mul_pow`.
+
+### Structuring non-linear arithmetic proofs
+
+For multi-step arithmetic (modulo, division, shifts):
+
+**Option 1: Chain of `have` steps** — each provable by `simp_scalar`:
+```lean
+have h1 : a * b < 2^32 := by simp_scalar
+have h2 : (a * b) / q < q := by simp_scalar
+have h3 : (a * b) % q = a * b - q * ((a * b) / q) := by simp_scalar
+simp only [h3]; simp_scalar
+```
+
+**Option 2: `calc` block** for equational chains:
+```lean
+calc a * b % (2^16)
+    _ = (a * b) - (2^16) * ((a * b) / 2^16) := by simp_scalar
+    _ = ... := by simp_scalar
+```
+
+If `simp_scalar` can't close a step, provide more lemmas (`simp_scalar [my_lemma]`),
+mark for simp_scalar (`attribute [local simp_scalar_simps] my_lemma`), or apply
+manually. If no theorem exists, prove it as an auxiliary lemma.
+
 ### `progress* n` — surgical stepping
 
 `progress* n` runs progress for exactly `n` steps (each step is a `progress` call or a `split`). Useful when you want to advance through part of a function and stop at a specific point.

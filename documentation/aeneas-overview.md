@@ -290,7 +290,6 @@ The main tactics used in Aeneas proofs:
 | `progress` | Apply a registered `@[progress]` spec for the next monadic call |
 | `progress*` | Repeatedly apply `progress` |
 | `scalar_tac` | Discharge scalar arithmetic goals (bounds, overflow) |
-| `omega` | Linear arithmetic over integers |
 | `simp` / `simp_all` | Simplification |
 | `agrind` | Arithmetic + congruence closure |
 
@@ -352,7 +351,7 @@ This is the lens pattern: `x` is the "get", and `back` is the "set".
    `@[progress]` spec for the called function and introduces hypotheses about
    the result.
 3. **Discharge side conditions** (overflow bounds, index bounds) using
-   `scalar_tac`, `omega`, or hypotheses in context.
+   `scalar_tac`, `agrind`, or hypotheses in context.
 4. **Conclude** with `simp`, `simp_all`, or direct term-level reasoning.
 
 For recursive functions, use induction on the decreasing argument and apply

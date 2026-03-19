@@ -99,6 +99,15 @@ What does the goal look like?
 | `have h := ...; natify at h; simp_scalar at h` | Reverse bv lifting (goal → bv → back to Nat) |
 | `zify at h; zify; simp [h, Int.mul_emod]` | Modular equivalence via Int |
 | `unfold fn; split; progress` | Recursive function (avoid termination issue) |
+| chain of `have` + `simp_scalar` | Non-linear arithmetic (modulo, division) |
+| `calc _ = _ := by simp_scalar` | Equational chains for arithmetic |
+
+## Proof Style Rules
+
+- **Remove unused simp lemmas** when warned — don't leave dead arguments
+- **No big `simp only [...]` in implementation proofs** — model names are unstable. Use `simp [*]` or targeted rewrites. (OK in spec lemmas.)
+- **Extract complex sub-proofs** as auxiliary lemmas — don't inline 15 lines of arithmetic inside `progress*`
+- **Simplify shifts early**: rewrite `>>>` as `/ 2^n`, `<<<` as `* 2^n`
 
 ## Attribute Management Cheatsheet
 

@@ -249,6 +249,9 @@ the proof against the skill files and project guidelines. This is also a loop:
 - Prefers `agrind` over `grind`? Uses `scalar_tac` instead of `omega`?
 - Does not unfold Aeneas stdlib definitions?
 - Uses `lean_lsp.py`, not `lake build` loops?
+- No unused simp lemma warnings? (remove dead arguments from `simp only`)
+- No big `simp only [...]` calls in implementation proofs? (model is unstable)
+- Complex arithmetic/bitwise sub-proofs extracted as auxiliary lemmas?
 - Is the proof reasonably concise? (no unnecessary steps, no copy-paste bloat)
 - Are helper lemmas properly named and documented if non-obvious?
 

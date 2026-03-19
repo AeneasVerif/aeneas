@@ -276,10 +276,6 @@ Compare with the `progress_spec_aux` / `progress_spec` layering:
 Control which specifications tactics use by locally managing attributes:
 
 ```lean
--- Use bit-vector specs instead of default integer specs
-attribute [-progress] U32.add_spec U32.mul_spec
-attribute [local progress] U32.add_bv_spec U32.mul_bv_spec
-
 -- Use simpler cast specification
 attribute [-progress] UScalar.cast.progress_spec
 attribute [local progress] UScalar.cast_inBounds_spec
@@ -347,7 +343,7 @@ simp_scalar at h_bv   -- then use h_bv
 ## Modular Arithmetic Strategy
 
 - **For modular reasoning** (e.g., `a % n = b % n`): Use `zmodify` to lift to `ZMod`, then reason algebraically. ZMod is a ring, so `ring` and algebraic lemmas apply directly.
-- **For bounds** (e.g., `a < n`): Stay in `Nat`/`Int` and use `scalar_tac`, `omega`
+- **For bounds** (e.g., `a < n`): Stay in `Nat`/`Int` and use `scalar_tac`, `agrind`
 
 **Example from Montgomery reduction:**
 ```lean
@@ -430,9 +426,9 @@ When you're stuck after a tactic, use `goal` (via lean_lsp.py) to inspect the cu
 → If no spec exists: you need to write one first.
 
 **The goal is arithmetic (`a + b ≤ c`, `x < 2^32`, etc.):**
-→ Linear: `omega` or `scalar_tac`
+→ Linear: `scalar_tac` or `agrind` (NEVER `omega`)
 → Nonlinear: `scalar_tac +nonLin`
-→ Simplification needed first: `simp_scalar` then `omega`/`scalar_tac`
+→ Simplification needed first: `simp_scalar` then `scalar_tac`
 
 **The goal involves bit operations (`&&&`, `|||`, `>>>`, `<<<`):**
 → `bv_tac 32` (or 64, matching the bit-width)
@@ -441,7 +437,7 @@ When you're stuck after a tactic, use `goal` (via lean_lsp.py) to inspect the cu
 
 **The goal involves modular arithmetic (`a % n`, ZMod):**
 → `zmodify; ring` (ZMod is a ring, so `ring` works well there)
-→ For bounds (`a < n`): stay in Nat/Int, use `scalar_tac`/`omega`
+→ For bounds (`a < n`): stay in Nat/Int, use `scalar_tac`/`agrind`
 
 **The goal involves lists/arrays (`getElem!`, `set`):**
 → `agrind`

@@ -265,6 +265,80 @@ theorem helper_spec (a : U32) (h : a.val < 1000) :
 -- 4. Main proof uses simp only [fold_helper]
 ```
 
+## Proof Style and Maintainability
+
+### Unused simp lemma warnings
+When Lean warns about unused simp lemmas (e.g., "This simp argument is unused"), remove
+the offending lemma from the `simp only [...]` call. Do not leave unused arguments.
+
+### Avoid large `simp only` calls in implementation proofs
+Do **not** leave big `simp only [lemma1, lemma2, ..., lemma20]` or `simp_all only [...]`
+calls in proofs about the generated Rust code. The generated model can be unstable (names
+change when Rust code is re-extracted), making such proofs hard to maintain. Prefer
+`simp [*]`, `agrind`, or targeted rewrites.
+
+**Exception:** Large `simp only` calls are fine in proofs about auxiliary specifications
+(pure mathematical lemmas), where the definitions are stable.
+
+### Extract auxiliary lemmas for complex sub-proofs
+When a proof step requires complex non-linear arithmetic, bitwise reasoning, or
+multi-step calculation, **extract it as a separate auxiliary lemma** rather than
+inlining it in the middle of a `progress*` proof. This:
+- Gives the sub-proof its own small context (faster, less noise)
+- Keeps the main proof clean and readable
+- Makes maintenance easier when the model changes
+
+```lean
+-- BAD: complex arithmetic inlined in the middle of progress*
+theorem main_spec ... := by
+  unfold main_fn
+  progress*
+  -- 15 lines of manual arithmetic here
+  progress*
+
+-- GOOD: extract as auxiliary lemma
+private theorem aux_arith (a b : Nat) (h1 : ...) (h2 : ...) :
+  a * b % q = ... := by
+  simp_scalar
+  ...
+
+theorem main_spec ... := by
+  unfold main_fn
+  progress*
+  · apply aux_arith ...
+  progress*
+```
+
+### Structuring non-linear arithmetic proofs
+When proving non-linear arithmetic goals (with modulo, division, shifts, etc.) that
+require multiple steps:
+
+1. **Decompose into a chain of `have` steps**, each provable by `simp_scalar`:
+```lean
+have h1 : a * b < 2^32 := by simp_scalar
+have h2 : (a * b) / q < q := by simp_scalar
+have h3 : (a * b) % q = a * b - q * ((a * b) / q) := by simp_scalar
+simp only [h3]; simp_scalar
+```
+
+2. **Or use `calc`** for equational chains:
+```lean
+calc a * b % (2^16)
+    _ = a * b % (2^16) := rfl
+    _ = (a * b) - (2^16) * ((a * b) / 2^16) := by simp_scalar
+    _ = ... := by simp_scalar
+```
+
+3. **If `simp_scalar` can't close a step**: either provide more lemmas
+   (`simp_scalar [my_lemma]`), mark lemmas for simp_scalar
+   (`attribute [local simp_scalar_simps] my_lemma`), or apply the relevant
+   theorem manually. If no suitable theorem exists, prove it as an auxiliary lemma.
+
+4. **Always simplify shifts to modulo/division**: rewrite `x >>> n` as `x / 2^n`
+   and `x <<< n` as `x * 2^n` (or `x % 2^n` for the relevant bits). Use
+   `Nat.shiftRight_eq_div_pow` and `Nat.shiftLeft_eq_mul_pow` or the corresponding
+   scalar lemmas.
+
 ## Critical Pitfalls
 
 1. **Termination error after unfold + progress**: Function starts with match/if → use `split` first
