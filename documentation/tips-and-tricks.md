@@ -27,6 +27,28 @@ Before diving into a function proof:
 | Concrete computation | `decide` | `native_decide` |
 | General automation | `agrind` | `simp [*]; agrind` |
 
+## Standard Library: Don't Unfold, Find Lemmas
+
+The Aeneas standard library (`Aeneas.Std`) provides lemmas for reasoning about
+its types (Slice, Array, UScalar, etc.). **When in the middle of a proof, you
+should never need to unfold standard library definitions.** If you find yourself
+doing so:
+
+1. **Stop.** Unfolding is a sign that a lemma is missing.
+2. **Search** the Aeneas library to check whether the lemma already exists
+   (e.g., `grep` for related names, check simp/progress attributes).
+3. **If it doesn't exist:** figure out what the lemma should be, state it, and
+   prove it. Place it in a local `section` or as a `private` lemma if it's
+   specific to your proof, or propose it for the Aeneas library if it's general.
+
+This applies to definitions in `Slice.*`, `Array.*`, `UScalar.*`, `IScalar.*`,
+iterator types, `core.*`, etc.
+
+**This principle extends to all auxiliary definitions**, including project-local
+ones. When in the middle of a big proof, you should not have to unfold many
+auxiliary definitions. If you find yourself unfolding too many, step back and
+introduce auxiliary lemmas to bridge the gap.
+
 ## Common Pitfalls
 
 ### 1. Termination Error After `unfold; progress`

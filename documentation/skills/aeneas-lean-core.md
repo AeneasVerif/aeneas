@@ -246,6 +246,11 @@ theorem helper_spec (a : U32) (h : a.val < 1000) :
 4. **`agrind` fails**: Try `simp [*]; agrind`
 5. **`grind` explodes**: Use `agrind` instead (controlled context)
 6. **Progress applies wrong spec**: Use `progress with specific_theorem`
+7. **NEVER unfold Aeneas stdlib definitions in a proof.** When in the middle of a proof, you should never need to unfold definitions from `Aeneas.Std` (Slice, Array, UScalar, IScalar, iterator types, core.*, etc.). If you feel the need to unfold:
+   - **Stop.** This is a sign that a lemma is missing.
+   - **Search** the Aeneas library for an existing lemma (grep for related names, check simp/progress attributes).
+   - **If it doesn't exist:** state and prove the missing lemma yourself, then use it in the proof.
+   - **This principle extends to all auxiliary definitions**, including project-local ones. When in the middle of a big proof, you should not have to unfold many auxiliary definitions. If you find yourself unfolding too many, step back and introduce auxiliary lemmas to bridge the gap.
 
 ## Attribute Management
 
