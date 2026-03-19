@@ -153,8 +153,23 @@ Launch agents to write theorem statements with `sorry` proofs. Each agent:
    - Preconditions (input lengths, bounds, divisibility)
    - Postcondition relating the output to the specification function
    - Any bridge definitions needed (e.g., `Slice.toMatrix`, `sliceToByteVec`)
-4. **Verifies the statement typechecks** (sorry proof is fine at this stage)
-5. **Reports back** with the statement for review
+4. **Checks for correctness and corner cases**: Before finalizing, the statement agent
+   should convince itself that the theorem is actually true by **informally proving it**:
+   lay out the key steps of the proof in plain language, checking that each step follows.
+   For loops and recursive functions, **explicitly state the loop invariant** — this is
+   one of the most valuable parts of the informal proof, as it directly guides the
+   mechanized proof (the invariant is a required argument to `loop.spec_decr_nat`).
+   The agent is encouraged to write this informal proof as a comment in the theorem body
+   (above the `sorry`), to guide the mechanized proof later on. Also look for:
+   - Edge cases (empty inputs, zero-length slices, boundary values)
+   - Off-by-one errors in the Rust code
+   - Potential bugs in the implementation (e.g., incorrect masks, wrong shift amounts,
+     missing modular reductions)
+   - Whether the spec and implementation actually agree on all inputs
+   If the agent suspects a bug, it should report it rather than writing a statement
+   that papers over the issue.
+5. **Verifies the statement typechecks** (sorry proof is fine at this stage)
+6. **Reports back** with the statement for review
 
 **Agent prompt for Phase 1:**
 ```
@@ -228,6 +243,11 @@ until all statements are validated. Only then do proof agents launch.
 - Does it relate to the pure specification function (not just structural properties)?
 - Are the preconditions reasonable? (not too strong, not missing necessary ones)
 - Are bridge definitions correct?
+- **Is the theorem actually true?** The reviewer should actively look for corner cases
+  and potential bugs in the Rust implementation that would make the theorem false.
+  Check: edge cases (empty inputs, boundary values), off-by-one errors, incorrect
+  bit manipulation, missing modular reductions. If a bug is suspected, flag it
+  immediately rather than letting proof agents waste time on an unprovable theorem.
 
 **Common weak-postcondition patterns to reject:**
 - `res.length = n` — length only, says nothing about values
@@ -239,6 +259,28 @@ until all statements are validated. Only then do proof agents launch.
 
 Only after statements are validated, launch agents to fill the `sorry` proofs.
 Each proof agent works on one file (for isolation) and targets specific sorry's.
+
+**Detecting unprovable theorems and Rust bugs:**
+
+If a proof agent spends a long time stuck on a goal that won't close, it should
+consider the possibility that the theorem is **unprovable** — either because:
+- The theorem statement is wrong (preconditions too weak, postcondition too strong)
+- There is a **bug in the Rust source code** (the implementation doesn't match the spec)
+
+The agent should actively look for counterexamples: try specific parameter values,
+trace the Rust logic by hand, check if a particular input would violate the
+postcondition. If a bug is found or suspected, the agent must **stop proving
+immediately and report the finding**.
+
+The master should also watch for this: if an agent has been stuck on the same goal
+for multiple iterations without progress, remind it: "Consider whether this theorem
+is actually true. Look for counterexamples or bugs in the Rust code."
+
+**🚨 CRITICAL: When a bug in the Rust code is discovered, report it IMMEDIATELY
+and IMPERATIVELY to the user.** This is one of the most valuable outcomes of formal
+verification — finding real bugs. Do not bury it in a status update. Make it
+prominent: "BUG FOUND in `function_name`: [description of the bug]. The Rust code
+does X but the spec requires Y. Counterexample: [specific input that triggers it]."
 
 **After a proof agent makes good progress on a theorem** (e.g., reduces sorry count,
 completes a loop proof, fills a significant chunk), a **review agent** should check
