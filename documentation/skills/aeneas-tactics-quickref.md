@@ -23,9 +23,11 @@ What does the goal look like?
 │  └─ Scalar simplification (min, max, %) → simp_scalar
 │
 ├─ Bit-vector / Bitwise
+│  ├─ **Always use `bv_tac N` for bitwise ops** (&&&, |||, ^^^, ~~~, >>>, <<<, %)
 │  ├─ Pure BitVec goal → bv_tac N
 │  ├─ Nat goal about bitwise result → bvify N; bv_tac N
-│  └─ bvify fails → have h : bv_prop := by bv_tac N; natify at h; simp_scalar
+│  ├─ bvify fails → have h : bv_prop := by bv_tac N; natify at h; simp_scalar
+│  └─ bv_tac error shows non-decomposed expr (e.g. `(x &&& y).bv`) → missing @[bvify_simps] lemma
 │
 ├─ Modular arithmetic
 │  ├─ Equivalence (a ≡ b [MOD n]) → zmodify; ring / simp

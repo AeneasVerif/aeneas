@@ -136,6 +136,25 @@ Weakest precondition: `f ⦃ x => P x ⦄` means "if f succeeds with value x, th
 | `tauto` | Propositional tautologies |
 | `decide` | Concrete finite computations |
 
+### Bitwise reasoning: `bv_tac` and `bvify`
+
+**Always use `bv_tac N` for goals involving bitwise operations** (`&&&`, `|||`, `^^^`, `~~~`, `>>>`, `<<<`, `%` on bounded types). The `N` is the bit width (e.g., `bv_tac 8` for U8, `bv_tac 16` for U16).
+
+**How `bv_tac N` works internally:**
+1. **`bvify N`** — rewrites the goal to work over `BitVec N` by applying `@[bvify_simps]` lemmas (e.g., `(x &&& y).bv = x.bv &&& y.bv`, `(x ^^^ y).bv = x.bv ^^^ y.bv`)
+2. **`bv_decide`** — decides the resulting BitVec goal via SAT solving
+
+**Diagnosing `bv_tac` failures:** If `bv_tac` fails with a goal that contains non-decomposed expressions (e.g., `(x &&& y).bv` instead of `x.bv &&& y.bv`, or `(someOp x).val` not reduced), it means the `bvify` preprocessing step is stuck because a `@[bvify_simps]` lemma is missing. In that case:
+- Identify the non-decomposed subexpression in the error
+- Add the missing `@[bvify_simps]` simp lemma to the Aeneas standard library
+- Then retry `bv_tac`
+
+**Common identity lemmas** (already in Aeneas, marked `@[simp]`):
+- `U8.and_allOnes`: `x &&& 255#u8 = x`, `U16.and_allOnes`: `x &&& 65535#u16 = x`, etc.
+- `U8.val_and_max`: `x.val &&& 255 = x.val`, etc.
+- `U8.bv_mod_size`: `x.bv % 256#8 = x.bv`, etc.
+- `U8.val_mod_size`: `x.val % 256 = x.val`, etc.
+
 ## Key Patterns
 
 ### Pattern 1: Simple function spec
