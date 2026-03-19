@@ -35,6 +35,11 @@ What does the goal look like?
 │  ├─ Automatic → grind (more list lemmas than agrind)
 │  └─ Slow → cases idx <;> simp_lists [*]
 │
+├─ Slice/List getElem mismatch
+│  ├─ Use #setup_aeneas_simps at file top (auto-converts getElem → getElem!)
+│  ├─ Manual bridge → List.Inhabited_getElem_eq_getElem! s.val i proof
+│  └─ Slice getElem! → List getElem! → rw [Slice.getElem!_Nat_eq]
+│
 ├─ If-then-else → simp_ifs / split
 ├─ Conjunction (∧) → split_conjs <;> agrind
 ├─ Boolean/Propositional → simp_bool_prop / tauto
@@ -72,7 +77,7 @@ What does the goal look like?
 | Tactic | Purpose | Notes |
 |---|---|---|
 | `agrind` | General automation | **PREFER over `grind`** — `grind` explodes |
-| `omega` | Linear Nat/Int arithmetic | Very reliable |
+| `omega` | Linear Nat/Int arithmetic | **Only for pure Nat/Int** — use scalar_tac with machine ints |
 | `simp` / `simp [*]` | Simplification | Use `simp [*]` to keep hypotheses |
 | `simp_all` | Aggressive simplification | **Caution:** may remove needed hypotheses |
 | `tauto` | Propositional tautologies | |
@@ -118,6 +123,17 @@ theorem MY_CONST_val : MY_CONST.val = 42 := by decide
 ```
 
 **Safety:** simp_scalar/simp_lists are simp-based. Activating many local lemmas is safe (no complexity explosion).
+
+## Key Lemmas Reference
+
+| Lemma | Statement | Use Case |
+|---|---|---|
+| `WP.spec_ok` | `spec (ok x) p ↔ p x` | Proving `@[progress]` for constants that reduce to `ok v` |
+| `bind_assoc_eq` | `(x >>= f) >>= g = x >>= (λ a => f a >>= g)` | Fold theorem proofs (reassociate binds) |
+| `bind_tc_ok` | `(do let y ← .ok x; f y) = f x` | Fold theorem proofs (eliminate trivial ok binds) |
+| `Slice.Inhabited_getElem_eq_getElem!` | `s[i] = s[i]!` for Slice | Bridge proof-based → default-based access |
+| `Slice.getElem!_Nat_eq` | `s[i]! = s.val[i]!` | Bridge Slice getElem! → List getElem! |
+| `List.Inhabited_getElem_eq_getElem!` | `l[i] = l[i]!` for List | Bridge proof-based → default-based access |
 
 ## Critical Pitfalls
 

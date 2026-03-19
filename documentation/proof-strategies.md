@@ -188,6 +188,16 @@ private theorem fold_reduce_add_mont_reduce (a : U32) (f : U32 → Result α) :
   simp only [reduce_add_mont_reduce, bind_assoc_eq, bind_tc_ok, pure]
 ```
 
+**Key lemmas for fold theorem proofs:**
+
+The `simp only [helper_def, bind_assoc_eq, bind_tc_ok, pure]` pattern works because:
+
+- **`bind_assoc_eq`** — monadic bind is associative: `(x >>= f) >>= g = x >>= (fun a => f a >>= g)`. This re-associates nested binds so the helper definition can be matched.
+- **`bind_tc_ok`** — `(do let y ← .ok x; f y) = f x`. This eliminates trivial `ok` binds that appear when unfolding the helper definition.
+- **`pure`** — unfolds `pure` in the `Result` monad.
+
+Together, these three lemmas normalize the monadic expression so that `simp` can recognize the helper definition as a subterm.
+
 3. Use `simp only [fold_reduce_add_mont_reduce]` in the main proof to replace the inline sequence with the helper function call.
 
 4. Prove specs for the helper functions independently.

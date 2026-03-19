@@ -161,6 +161,74 @@ For inhabited types (common in crypto), use `getElem!`:
 ```
 This configures simp to prefer `getElem!` and `set!` over `getElem`/`set`.
 
+**What `#setup_aeneas_simps` registers:**
+
+*Deactivated (removed from simp):*
+- `List.getElem!_eq_getElem?_getD` — prevents unfolding `getElem!` into `getElem?`/`getD`
+- `Array.set!_eq_setIfInBounds`
+- `getElem!_pos`
+- `List.reduceReplicate`
+- `Bool.exists_bool`
+
+*Activated (added as local simp):*
+- `List.Inhabited_getElem_eq_getElem!` — converts `l[i]` → `l[i]!` for Lists
+- `Array.Inhabited_getElem_eq_getElem!` — same for Arrays
+- `Slice.Inhabited_getElem_eq_getElem!` — same for Slices
+- `Vector.Inhabited_getElem_eq_getElem!` — same for Vectors
+- `Array.set_eq_set!` — converts `set` → `set!`
+- `Vector.set_eq_set!` — converts `set` → `set!`
+
+### Slice ↔ List interop
+
+This is a common source of confusion. Understanding the relationship is critical for proving properties about slice operations.
+
+**The coercion:** `Slice α` has a `CoeOut` instance to `List α`:
+```lean
+(↑s : List α)   -- extracts s.val, the underlying list
+```
+
+**GetElem instances:** Slice's `GetElem` is `@[reducible]` and delegates to List:
+```lean
+-- Slice getElem delegates to List getElem:
+instance : GetElem (Slice α) Nat α (fun a i => i < a.val.length) where
+  getElem a i h := getElem a.val i h   -- a.val is the underlying List
+```
+
+**getElem vs getElem! — the key distinction:**
+- `s[i]` (getElem) — proof-based access, requires `h : i < s.length`
+- `s[i]!` (getElem!) — default-based access, uses `Inhabited` to provide a fallback
+
+These use **different GetElem instances** that don't directly unify. When your goal involves one form and your hypotheses the other, you need to bridge them.
+
+**Automatic bridging with `#setup_aeneas_simps`:**
+After `#setup_aeneas_simps`, `simp` rewrites `s[i]` → `s[i]!` automatically via `Slice.Inhabited_getElem_eq_getElem!`. This is the preferred approach — most of the time you don't need to think about this.
+
+**Manual bridging when needed:**
+Sometimes you need to convert explicitly (e.g., when `simp` can't fire or when working with hypotheses):
+
+```lean
+-- Bridge Slice getElem → List getElem!:
+-- Step 1: Slice getElem = List getElem (by @[reducible] instance)
+-- Step 2: List.Inhabited_getElem_eq_getElem! converts List getElem → List getElem!
+have h : s[j]'(by scalar_tac) = (↑s : List α)[j]! :=
+  List.Inhabited_getElem_eq_getElem! s.val j (by scalar_tac)
+
+-- Bridge Slice getElem! → List getElem!:
+-- Slice.getElem!_Nat_eq shows s[i]! = s.val[i]!
+rw [Slice.getElem!_Nat_eq]
+```
+
+**Debugging getElem type mismatches:**
+If you see an error like:
+```
+type mismatch: expected @GetElem.getElem (List α) ... but got @GetElem.getElem (Slice α) ...
+```
+This means Lean didn't unfold the `@[reducible]` Slice instance. Typical fixes:
+1. Make sure `#setup_aeneas_simps` is at the top of your file
+2. Use `simp` or `simp_all` to let the registered lemmas fire
+3. Manually apply `List.Inhabited_getElem_eq_getElem! s.val i proof`
+4. Use `rw [Slice.getElem!_Nat_eq]` when working with `getElem!` on Slices
+
 ### List get/set reasoning
 ```lean
 -- Try automatic first (grind has more list lemmas than agrind)
@@ -256,4 +324,10 @@ When working with Rust constants/globals translated by Aeneas:
 - **Monadic constants** (in the `Result` monad): Treat them like functions and prove a `@[progress]` theorem.
   - First prove a raw equation: `theorem MyConst_eq : MyConst = ok value := by native_decide`
   - Then prove the progress form: `@[progress] theorem MyConst : MyConst ⦃ fun res => res = value ⦄ := by rw [MyConst_eq]; simp [WP.spec_ok]`
-  - Now `progress` will handle the constant automatically.
+  - Now `progress` (and `progress*`) will handle the constant automatically.
+
+**Key lemma: `WP.spec_ok`** (in `Aeneas.Std.WP`):
+```lean
+theorem spec_ok (x : α) : spec (ok x) p ↔ p x
+```
+This states that proving a specification about `ok x` reduces to proving the postcondition `p x` directly. It's essential when proving `@[progress]` theorems for constants that compute to `ok value` — after `rw [MyConst_eq]`, the goal becomes `spec (ok value) p` and `simp [WP.spec_ok]` closes it.
