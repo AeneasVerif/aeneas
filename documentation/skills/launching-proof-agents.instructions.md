@@ -75,6 +75,31 @@ elaboration, causing the agent working on A to see spurious errors.
 - ❌ Agent A on `Ntt.lean` inner loop, Agent B on `Ntt.lean` outer loop (same file)
 - ❌ Agent A on `VectorOps.lean`, Agent B on `Ntt.lean` (if VectorOps imports Ntt)
 
+### Pre-Launch Conflict Check (MANDATORY)
+
+**Before launching any fleet of agents**, the supervisor must explicitly verify
+that no two agents will conflict. For each pair of agents in the batch:
+
+1. **Same-file check**: Are any two agents targeting the same `.lean` file?
+   If yes, merge them into one agent or serialize them (run one after the other).
+
+2. **Import-dependency check**: Does any agent's file import (directly or
+   transitively) another agent's file? Trace the `import` chain. If A imports B,
+   the agent on A must wait until the agent on B finishes and its changes are saved.
+
+3. **Shared-definition check**: Do any two agents' files depend on a shared
+   definition file (e.g., `Defs.lean`, `MatDefs.lean`) that a *third* agent is
+   also modifying? If so, the third agent must finish first.
+
+**How to verify:** Before launching, list each agent's target file and quickly
+check the `import` statements at the top of each file. Draw the dependency edges
+and confirm there are no conflicts. State this check explicitly in your reasoning
+(e.g., "CT.lean imports Defs.lean, MulBS.lean imports MatDefs.lean — no mutual
+dependencies, safe to parallelize").
+
+**If you discover a conflict after agents are already running**, stop the
+conflicting agent immediately, wait for the other to finish, then relaunch.
+
 ## Task Decomposition and Agent Supervision
 
 When the user asks for a large task (e.g., "prove all sorry's in this file"), do NOT
