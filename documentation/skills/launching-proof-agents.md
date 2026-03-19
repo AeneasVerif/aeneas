@@ -213,10 +213,134 @@ until all statements are validated. Only then do proof agents launch.
 - Missing existential for length + functional property
 - Only one half of a bidirectional property (e.g., only correctness, not bounds)
 
-### Phase 3: Proof Agents (slower, parallelizable)
+### Phase 3: Proof Agents with Review Loop (slower, parallelizable)
 
 Only after statements are validated, launch agents to fill the `sorry` proofs.
 Each proof agent works on one file (for isolation) and targets specific sorry's.
+
+**After a proof agent makes good progress on a theorem** (e.g., reduces sorry count,
+completes a loop proof, fills a significant chunk), a **review agent** should check
+the proof against the skill files and project guidelines. This is also a loop:
+
+```
+┌──────────────────────────────────────┐
+│  Proof agent works on sorry's        │
+│  (reports progress to master)        │
+└──────────────┬───────────────────────┘
+               ▼
+┌──────────────────────────────────────┐
+│  Review agent checks proof quality   │◄─┐
+│  (re-reads skill files, checks       │  │
+│   idioms, tactics, style)            │  │
+└──────────────┬───────────────────────┘  │
+               │                          │
+          ┌────┴────┐                     │
+          │ Clean?  │                     │
+          └────┬────┘                     │
+         yes   │   no                     │
+               │    └─────────────────────┘
+               │    Proof agent fixes issues
+               ▼    (reports fixes to master)
+┌──────────────────────────────────────┐
+│  Done — report final result          │
+└──────────────────────────────────────┘
+```
+
+**Review agent checklist for proofs:**
+
+- Does the proof follow skill file guidelines? (re-read the skill files to check)
+- No deprecated tactics (`fsimp`, `fsimp_all`, `Brute`, `saturate`, `ReduceZMod`)?
+- Prefers `agrind` over `grind`? Uses `scalar_tac` instead of `omega`?
+- Does not unfold Aeneas stdlib definitions?
+- Uses `lean_lsp.py`, not `lake build` loops?
+- Is the proof reasonably concise? (no unnecessary steps, no copy-paste bloat)
+- Are helper lemmas properly named and documented if non-obvious?
+
+**Skill file freshness:**
+
+- **Every agent invocation** (statement agents, proof agents, review agents) **must
+  include the "read skill files first" instruction** in its prompt — both the
+  **Aeneas skill files** (in the aeneas repo under `documentation/skills/`) and any
+  **project-local skill files** (e.g., `.github/instructions/`, `.claude/skills/`).
+  Since each agent invocation is a fresh context, this ensures the agent always works
+  from the latest version of all skill files — including any mid-run updates the
+  master made (with user approval).
+- If the reviewer finds **many guideline violations** (e.g., 3+ issues that the
+  skill files clearly address), the feedback to the proof agent should include an
+  explicit instruction: **"Re-read the skill files before fixing these issues."**
+  This forces the proof agent to refresh its understanding rather than just
+  mechanically patching the flagged spots. The proof agent may have read an older
+  version of the skills, or may have drifted from the guidelines over a long run.
+
+**Progress reporting:** At every step of the loop (proof agent progress, review agent
+feedback, proof agent fixes), the agent reports to the master orchestrator:
+- What was accomplished (e.g., "reduced 5 sorries to 2", "fixed deprecated tactic usage")
+- What remains (e.g., "2 sorries left in inner loop", "review flagged 1 issue")
+- Any blockers discovered (e.g., "needs missing spec from Aeneas lib")
+
+This lets the master maintain situational awareness and intervene if needed (e.g.,
+redirect an agent, provide missing context, escalate to the user).
+
+## Master Synthesis: Learning from Agent Reports
+
+The master orchestrator should not just passively relay agent results. It should
+**regularly synthesize patterns** across all running agents' progress reports to
+identify systemic issues and improvement opportunities. This is a key reason for
+requiring regular progress reports.
+
+After receiving a batch of reports (or periodically during long runs), the master
+should ask itself:
+
+### 1. Proof Strategy Issues
+- Are multiple agents struggling with the same kind of sub-goal? (e.g., all stuck
+  on bitwise reasoning, or all failing to close a loop invariant)
+- Would a different proof strategy unblock several agents at once?
+- Is there a common missing lemma that, if proved once, would help many proofs?
+- Should the master pause agents, prove that lemma centrally, then resume?
+
+### 2. Skill File Updates
+- Are agents repeatedly making the same mistake despite reading the skill files?
+  → The skill file is missing guidance on that specific pattern.
+- Did an agent discover a useful technique not yet documented?
+  → Add it to the skills so future agents benefit.
+- Are agents confused by ambiguous or outdated instructions?
+  → Clarify the skill files.
+
+### 3. Automation and Tooling Opportunities
+- Is there a repetitive mechanical step that agents do manually every time?
+  → Could it be automated (e.g., a new tactic, a script, a code generator)?
+- Are agents spending a lot of time on boilerplate (e.g., writing bridge definitions,
+  unfolding the same chain of lets)?
+  → Consider adding automation or shared infrastructure.
+- Is the `lean_lsp.py` workflow missing a feature that would speed up agents?
+
+### 4. Reporting to the User
+The master should surface these synthesis findings to the user, not just raw agent
+results. For example:
+
+- "Three agents are all stuck on ZMod bitwise reasoning — we may need a shared lemma
+  `zmod_and_pow2` before they can proceed."
+- "Agents keep using `grind` instead of `agrind` — I've updated the skill file to
+  make this more prominent."
+- "The inner-loop pattern `for i in (0..n).step_by(k)` appears in 4 functions. The
+  first agent found a workaround; I'll propagate it to the others."
+- "I notice agents spend ~30% of their time on bridge definitions. We could add
+  `Slice.toBitstring` to Defs.lean to eliminate this across all encode/decode proofs."
+
+**Important:** The master does NOT act on these findings autonomously. It reports
+them to the user as recommendations and waits for validation before making changes.
+For example:
+- "I noticed X pattern — should I update the skill file?" (wait for yes/no)
+- "Three agents are blocked on the same lemma — should I pause them and prove it
+  centrally?" (wait for approval)
+- "Agent A found a useful workaround — should I propagate it to the others?" (wait)
+
+The user decides what to act on. The master's job is to synthesize and surface
+insights, not to make unilateral decisions about strategy, skill files, or tooling.
+
+This synthesis loop is what makes a fleet of agents more effective than the same
+agents running independently — the master surfaces cross-agent patterns and the
+user steers improvements.
 
 ### Summary: Fleet Organization
 
@@ -230,23 +354,24 @@ Each proof agent works on one file (for isolation) and targets specific sorry's.
                      │ report statements
                      ▼
 ┌─────────────────────────────────────────────────┐
-│  Phase 2: Review Gate                           │
+│  Phase 2: Statement Review Gate (loop)          │
 │  - Human or code-review agent validates         │
 │  - Check postconditions are strong enough       │
-│  - Fix any issues before proceeding             │
+│  - Fix any issues, re-review until approved     │
 └────────────────────┬────────────────────────────┘
                      │ approved statements
                      ▼
 ┌─────────────────────────────────────────────────┐
-│  Phase 3: Proof Agents (parallel per file)      │
-│  - Fill sorry proofs                            │
-│  - Use lean_lsp.py for iteration                │
-│  - Report progress                              │
+│  Phase 3: Proof Agents + Review Loop            │
+│  - Proof agent fills sorry proofs               │
+│  - Review agent checks quality & guidelines     │
+│  - Fix issues, re-review until clean            │
+│  - Report progress to master at every step      │
 └─────────────────────────────────────────────────┘
 ```
 
-After each proof agent completes:
-- Review its output (did it succeed? partial? fail?)
+After each proof+review cycle completes:
+- Master reviews the final output (did it succeed? partial? fail?)
 - Verify the file builds (`lake build` once)
 - If partial, launch a follow-up agent with refined instructions
 
