@@ -70,10 +70,42 @@ For function bodies with multiple monadic calls:
 ## File Isolation
 
 When multiple agents run in parallel, each must work on a **separate file**.
-Two agents editing the same file will create merge conflicts. Plan accordingly:
+Two agents editing the same file will create merge conflicts. Additionally,
+the files must **not depend on each other**: file A depends on file B if A
+transitively imports B. If A imports B, then changes to B would invalidate A's
+elaboration, causing the agent working on A to see spurious errors.
 
-- ✅ Agent A on `Ntt.lean`, Agent B on `CompressEncode.lean`
-- ❌ Agent A on `Ntt.lean` inner loop, Agent B on `Ntt.lean` outer loop
+- ✅ Agent A on `Ntt.lean`, Agent B on `CompressEncode.lean` (no import relationship)
+- ❌ Agent A on `Ntt.lean` inner loop, Agent B on `Ntt.lean` outer loop (same file)
+- ❌ Agent A on `VectorOps.lean`, Agent B on `Ntt.lean` (if VectorOps imports Ntt)
+
+## Task Decomposition and Agent Supervision
+
+When the user asks for a large task (e.g., "prove all sorry's in this file"), do NOT
+give the entire task to a single agent in one shot. Instead:
+
+1. **Decompose into small tasks**: Each agent call should target one or two specific
+   sorry's, or one well-defined sub-problem. Small tasks are easier for agents to
+   complete successfully.
+
+2. **Give one small task at a time**: Launch an agent with a focused objective. When it
+   reports back, analyze the result before deciding what to do next.
+
+3. **Supervise actively**: When an agent reports:
+   - **Step back**: Understand whether the work is going well. Did the agent make progress?
+     Did it get stuck? Is it going in circles?
+   - **Diagnose slowness**: If the agent is slow, check why — is it using `lake build`
+     instead of `lean_lsp.py`? Is it stuck on a heartbeat explosion? Is it trying an
+     approach that won't work?
+   - **Assess the approach**: Is the proof strategy sound? Should you redirect the agent
+     with different hints?
+   - **Report to the user**: Surface interesting findings — e.g., "the agent discovered
+     that spec X is missing", "this sorry requires a new lemma about bit operations",
+     "the agent reduced 8 sorry's to 3 but the remaining ones are hard because..."
+
+4. **Iterate**: Based on the agent's report, launch a follow-up agent with refined
+   instructions, or pivot to a different approach. Never let an agent run for hours
+   without checking in.
 
 ## Incremental Strategy
 
