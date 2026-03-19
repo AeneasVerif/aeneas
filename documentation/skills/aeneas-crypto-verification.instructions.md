@@ -18,11 +18,6 @@ open Aeneas Std Result
 
 #setup_aeneas_simps
 
--- Optional: swap to bit-vector specs (can help but not strictly necessary
--- since bv_tac/bvify are quite efficient on their own)
-attribute [-progress] U32.add_spec U32.mul_spec
-attribute [local progress] U32.add_bv_spec U32.mul_bv_spec
-
 -- Simpler cast spec when values fit in target type
 attribute [-progress] UScalar.cast.progress_spec
 attribute [local progress] UScalar.cast_inBounds_spec
@@ -106,7 +101,7 @@ Goal involves modular equivalence (a ≡ b [MOD n])?
   │
   └─ NO → Goal involves bounds (a < n, 0 ≤ a)?
            ├─ YES → Stay in Nat/Int
-           │        Use: scalar_tac, scalar_tac +nonLin, omega
+           │        Use: scalar_tac, scalar_tac +nonLin, agrind
            │
            └─ NO → Mixed? Split into separate goals
                     split_conjs
@@ -146,15 +141,7 @@ Goal involves bitwise ops (AND, OR, XOR, shifts)?
   │
   └─ Need to prove scalar bounds after bitwise op?
       → Use bv_tac for the bitwise part,
-        then scalar_tac/omega for bounds
-```
-
-### Attribute setup for bit-vector proofs:
-Swapping to bit-vector specs can help but is not strictly necessary — `bv_tac` (which uses `bvify` under the hood) is quite efficient on its own:
-```lean
--- Optional: swap to bit-vector specs if it helps
-attribute [-progress] U32.add_spec U32.mul_spec
-attribute [local progress] U32.add_bv_spec U32.mul_bv_spec
+        then scalar_tac/agrind for bounds
 ```
 
 ## Array/Polynomial Proof Patterns

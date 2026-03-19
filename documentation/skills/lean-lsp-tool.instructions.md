@@ -120,6 +120,8 @@ Repeat steps 3–5: inspect goal → try a tactic → check result.
 |---|---|
 | `status` | Current file, version, line count, elaboration state |
 | `wait [line]` | Block until elaboration finishes (optionally up to line) |
+| `check` | Wait for full elaboration, return all errors and warnings with messages |
+| `next_error` | Wait until a new error appears (or elaboration finishes with no new errors) |
 | `logs` | Server log messages |
 | `quit` | Exit |
 

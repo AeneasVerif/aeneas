@@ -30,12 +30,12 @@ matures, **use `-loops-to-rec`** for any project where you need to write proofs.
 | Goal Shape | Try First | Then Try |
 |---|---|---|
 | Monadic function call | `progress` | `progress with specific_theorem` |
-| Arithmetic (Nat/Int) | `scalar_tac` or `agrind` | `omega` (only if pure spec, no machine ints) |
-| Arithmetic (nonlinear) | `scalar_tac +nonLin` | manual `have` + `omega` |
+| Arithmetic (Nat/Int) | `scalar_tac` or `agrind` | `grind` |
+| Arithmetic (nonlinear) | `scalar_tac +nonLin` | manual `have` + `scalar_tac` |
 | Scalar bounds (UScalar/IScalar) | `scalar_tac` | `agrind` |
 | Bitwise operations | `bv_tac 32` | `bvify` + `bv_tac` |
 | Modular equivalence | `zmodify` + ring tactics | manual |
-| List get/set | `grind` (more lemmas) | `cases` + `simp_lists` |
+| List get/set | `agrind` | `grind` (slower, more lemmas), or `cases` + `simp_lists` |
 | If-then-else | `simp_ifs` | `split` |
 | Conjunction goal | `split_conjs <;> try agrind` | focus on hard goals manually |
 | Boolean/prop | `simp_bool_prop` | `tauto` |
@@ -124,9 +124,7 @@ simp [*]; agrind    -- or: simp [*]; grind
 
 ### `scalar_tac` and `agrind` understand Rust models
 
-`scalar_tac`, `agrind`, and `grind` know how to reason about the models of Rust definitions like `Array`, `Slice`, machine integers (`Usize`, `U32`, `UScalar`, `IScalar`, etc.). For instance, they can see through `Slice.length`. **Always prefer them over `omega`.**
-
-**When to use `omega`:** Only when reasoning about pure specifications with only `Nat`/`Int` — no machine integers. Even then, `scalar_tac` or `agrind` often work. When reasoning about an implementation, you should use `scalar_tac` or `agrind`, never `omega`.
+`scalar_tac`, `agrind`, and `grind` know how to reason about the models of Rust definitions like `Array`, `Slice`, machine integers (`Usize`, `U32`, `UScalar`, `IScalar`, etc.). For instance, they can see through `Slice.length`. **NEVER use `omega`** — it cannot reason about scalars, does not know `U32.max`, list lengths, etc.
 
 ### `progress* n` — surgical stepping
 
@@ -146,10 +144,6 @@ Each conjunct is easier to prove separately. The `try` lets you focus on the rem
 
 ### Local attribute management
 ```lean
--- Optional: swap to bit-vector specs (bv_tac/bvify are efficient without this)
-attribute [-progress] U32.add_spec U32.mul_spec
-attribute [local progress] U32.add_bv_spec U32.mul_bv_spec
-
 -- Add local simp/simp_scalar/simp_lists lemmas
 attribute [local simp_scalar_simps] my_scalar_lemma
 attribute [local simp_lists_simps] my_list_lemma
@@ -189,7 +183,7 @@ have h_bv : (bv_equivalent_of_hyp) := by natify; simp [original_hyp]
 
 ### Modular arithmetic: choose your domain
 - **Modular equivalences** → `zmodify` to lift to ZMod (a ring — enables `ring` tactic and algebraic reasoning)
-- **Bounds proofs** → stay in Nat/Int, use `scalar_tac`/`omega`
+- **Bounds proofs** → stay in Nat/Int, use `scalar_tac`/`agrind`
 
 ### Array access with `getElem!`
 For inhabited types (common in crypto), use `getElem!`:
@@ -268,8 +262,8 @@ This means Lean didn't unfold the `@[reducible]` Slice instance. Typical fixes:
 
 ### List get/set reasoning
 ```lean
--- Try automatic first (grind has more list lemmas than agrind)
-grind
+-- Try agrind first; if it fails, try grind (slower but more list lemmas)
+agrind
 -- If too slow, go manual
 cases h_idx <;> simp_lists [*]
 ```

@@ -43,7 +43,7 @@ scalar_tac              -- basic usage
 scalar_tac +nonLin      -- enable nonlinear arithmetic reasoning
 ```
 
-**Known limitation:** `scalar_tac` sometimes struggles with Int ↔ Nat conversions. When this happens, try explicit `zify` or `natify` conversions first, or use `omega` directly on simpler goals.
+**Known limitation:** `scalar_tac` sometimes struggles with Int ↔ Nat conversions. When this happens, try explicit `zify` or `natify` conversions first, or use `agrind`/`grind`.
 
 ### `simp_scalar`
 Simplifies arithmetic expressions. Essentially equivalent to `simp (discharger := scalar_tac) [simp_bool_prop_simps, simp_scalar_simps]` but with the preprocessing step of `scalar_tac` factored out for better performance.
@@ -192,7 +192,7 @@ A variant of `grind` that uses theorems tagged with `@[agrind]` instead of `@[gr
 **Tag lemmas:** Use `@[agrind]` or `@[agrind =]` to register lemmas for agrind.
 
 ### `omega`
-Linear arithmetic solver. Very useful for goals involving `<`, `≤`, `+`, `-`, `*` (by constants) on `Nat` and `Int`.
+**⚠️ NEVER use `omega` in Aeneas proofs.** It cannot reason about scalars (U8, U32, etc.), does not know `U32.max`, list lengths, etc. Use `scalar_tac`, `agrind`, or `grind` instead.
 
 ### `simp` / `simp_all`
 Standard Lean simplifier. 
@@ -225,10 +225,6 @@ A setup command for files that work with `getElem!` (bang-version of getElem). C
 You can locally activate or deactivate attributes to control which specifications tactics use:
 
 ```lean
--- Disable default specs, enable bit-vector versions (optional — bv_tac/bvify are efficient without this)
-attribute [-progress] U32.add_spec U32.mul_spec
-attribute [local progress] U32.add_bv_spec U32.mul_bv_spec
-
 -- Disable default cast spec, use simpler version
 attribute [-progress] UScalar.cast.progress_spec
 attribute [local progress] UScalar.cast_inBounds_spec

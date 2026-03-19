@@ -237,10 +237,6 @@ theorem my_loop_spec (x : MyState) (h : x.inv) :
 
 ### Pattern 6: Bit-vector operation spec
 ```lean
--- Optional: swap to bv specs (bv_tac/bvify are efficient without this)
-attribute [-progress] U32.add_spec
-attribute [local progress] U32.add_bv_spec
-
 @[progress]
 theorem bitwise_op_spec (x : U32) (h : x.val < 65536) :
   bitwise_op x ⦃ r => r.val = x.val % 256 ⦄ := by
@@ -288,10 +284,6 @@ theorem helper_spec (a : U32) (h : a.val < 1000) :
 ```lean
 -- File-level setup for crypto/array proofs
 #setup_aeneas_simps
-
--- Optional: swap specs (bv_tac/bvify are efficient without this)
-attribute [-progress] U32.add_spec
-attribute [local progress] U32.add_bv_spec
 
 -- Register lemmas for tactics
 attribute [local simp_scalar_simps] my_lemma

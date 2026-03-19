@@ -31,10 +31,10 @@ What does the goal look like?
 │
 ├─ Modular arithmetic
 │  ├─ Equivalence (a ≡ b [MOD n]) → zmodify; ring / simp
-│  └─ Bounds (a < n) → stay Nat/Int; scalar_tac / omega
+│  └─ Bounds (a < n) → stay Nat/Int; scalar_tac / agrind
 │
 ├─ List/Array (get/set)
-│  ├─ Automatic → grind (more list lemmas than agrind)
+│  ├─ Automatic → agrind first; if fails, try grind (slower, more list lemmas)
 │  └─ Slow → cases idx <;> simp_lists [*]
 │
 ├─ Slice/List getElem mismatch
@@ -105,10 +105,6 @@ What does the goal look like?
 ```lean
 -- Setup for crypto/array proofs
 #setup_aeneas_simps
-
--- Optional: swap to bit-vector specs (bv_tac/bvify are efficient without this)
-attribute [-progress] U32.add_spec U32.mul_spec
-attribute [local progress] U32.add_bv_spec U32.mul_bv_spec
 
 -- Swap to simpler cast spec
 attribute [-progress] UScalar.cast.progress_spec

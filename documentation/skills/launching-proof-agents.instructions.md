@@ -17,9 +17,9 @@ Every proof agent prompt should include:
 ## Aeneas Skills — READ FIRST
 
 Before doing anything, read these files for essential proof guidance:
-- <path-to-aeneas>/documentation/skills/aeneas-lean-core.md
-- <path-to-aeneas>/documentation/skills/lean-lsp-tool.md
-- <path-to-aeneas>/documentation/skills/aeneas-tactics-quickref.md
+- <path-to-aeneas>/documentation/skills/aeneas-lean-core.instructions.md
+- <path-to-aeneas>/documentation/skills/lean-lsp-tool.instructions.md
+- <path-to-aeneas>/documentation/skills/aeneas-tactics-quickref.instructions.md
 ```
 
 ### 2. Mandatory lean_lsp.py usage
@@ -41,12 +41,9 @@ Only use `lake build` once at the very end to confirm the final result.
 ```
 ### Use progress*? to develop proofs
 
-For function bodies with multiple monadic calls:
-1. Write `progress*?` as the tactic
-2. Run `info <line>` to read the "Try this:" suggestion
-3. Copy the expanded `let*` script into your proof
-4. Fix any failing sub-goals
-5. Once done, try collapsing back to `progress*`
+See lean-lsp-tool.instructions.md for the full progress*? workflow.
+In short: write `progress*?` → `info <line>` to read the expanded script →
+copy it into your proof → fix sub-goals → collapse back to `progress*` if possible.
 ```
 
 ### 4. Task-specific context
@@ -249,7 +246,6 @@ the proof against the skill files and project guidelines. This is also a loop:
 **Review agent checklist for proofs:**
 
 - Does the proof follow skill file guidelines? (re-read the skill files to check)
-- No deprecated tactics (`fsimp`, `fsimp_all`, `Brute`, `saturate`, `ReduceZMod`)?
 - Prefers `agrind` over `grind`? Uses `scalar_tac` instead of `omega`?
 - Does not unfold Aeneas stdlib definitions?
 - Uses `lean_lsp.py`, not `lake build` loops?
@@ -383,7 +379,6 @@ After each proof+review cycle completes:
 | `progress*` times out | Too many monadic calls | Use `progress*?` workflow |
 | Unfolds stdlib definitions | Didn't read core skill | Add "don't unfold" rule to prompt |
 | Uses `omega` | `omega` can't reason about scalars, `U32.max`, list lengths, etc. | NEVER use `omega` — use `scalar_tac`, `agrind`, or `grind` |
-| Uses `omega` | Cannot reason about scalars, definitions, etc. | Use `scalar_tac`, `agrind`, or `grind` |
 | Edits wrong file/section | Ambiguous instructions | Be very specific about what to change |
 
 ## Example: Full Agent Prompt
