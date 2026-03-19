@@ -53,6 +53,10 @@ theorem Slice.len_val {α : Type u} (v : Slice α) : (Slice.len v).val = v.lengt
 @[reducible] instance {α : Type u} : GetElem (Slice α) Nat α (fun a i => i < a.val.length) where
   getElem a i h := getElem a.val i h
 
+@[simp, grind =, simp_lists_simps]
+theorem Slice.getElem_Nat_eq {α : Type u} (v : Slice α) (i : Nat) (h : i < v.val.length) :
+    v[i] = v.val[i] := rfl
+
 @[reducible] instance {α : Type u} : GetElem? (Slice α) Nat α (fun a i => i < a.val.length) where
   getElem? a i := getElem? a.val i
 
@@ -176,6 +180,13 @@ theorem Slice.Inhabited_getElem_eq_getElem! {α} [Inhabited α] (v : Slice α) (
     v[i] = v[i]! := by
   rw [Slice.getElem!_Nat_eq]
   exact List.Inhabited_getElem_eq_getElem! v.val i hi
+
+theorem Slice.ext_getElem {α} {s1 s2 : Slice α}
+    (hlen : s1.length = s2.length)
+    (hget : ∀ (i : Nat) (h1 : i < s1.length) (h2 : i < s2.length), s1[i] = s2[i]) :
+    s1 = s2 := by
+  apply Subtype.ext
+  exact List.ext_getElem (by simp_all) fun i h1 h2 => hget i h1 h2
 
 @[simp, scalar_tac_simps, simp_lists_simps, grind =, agrind =]
 theorem Slice.set_length {α : Type u} (v: Slice α) (i: Usize) (x: α) :
