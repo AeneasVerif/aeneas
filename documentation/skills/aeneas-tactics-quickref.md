@@ -60,8 +60,8 @@ What does the goal look like?
 | Tactic | Purpose | Syntax | Key Attributes |
 |---|---|---|---|
 | `progress` | Apply function spec | `progress`, `progress as ⟨x,h⟩`, `progress with thm` | `@[progress]` |
-| `progress*` | Repeat progress + case split | `progress*`, `progress* n` (n steps) | — |
-| `progress*?` | Generate proof script | `progress*?` | — |
+| `progress*` | Repeat progress + case split | `progress*`, `progress* n` (n steps) | Use for final compact proof |
+| `progress*?` | Generate proof script | `progress*?` | Start here when developing proofs |
 | `scalar_tac` | Integer arithmetic/bounds | `scalar_tac`, `scalar_tac +nonLin` | `@[scalar_tac_simps]` |
 | `simp_scalar` | Simplify scalar exprs | `simp_scalar`, `simp_scalar [lemmas]` | `@[simp_scalar_simps]` |
 | `simp_lists` | Simplify list get/set | `simp_lists`, `simp_lists [lemmas]` | `@[simp_lists_simps]` |

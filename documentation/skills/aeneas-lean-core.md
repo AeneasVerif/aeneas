@@ -92,20 +92,23 @@ Weakest precondition: `f ⦃ x => P x ⦄` means "if f succeeds with value x, th
    - YES → `unfold fn; split` then `progress` per branch
    - NO → `unfold fn; progress`
 
-2. Is the function simple (few monadic steps)?
-   - YES → `unfold fn; progress*` may complete it
-   - NO → Use `progress*?` to generate script, then optimize
+2. Is the function simple (few monadic steps, say ≤ 5)?
+   - YES → `unfold fn; progress*` may complete it directly
+   - NO → Use `progress*?` to generate an expanded proof script, then work from there
 
-3. Is the function large/complex?
-   - YES → Decompose with fold theorems (see Function Decomposition)
-   - NO → Direct proof
+3. Is the function large/complex (10+ monadic steps)?
+   - Start with `progress*?` to generate the step-by-step script
+   - Work through the generated script, fixing any sub-goals that fail
+   - Once the whole proof is done, try collapsing back into `progress*` if possible
+   - You can increase `set_option maxHeartbeats` if needed (it's fine to do so)
 
-### The progress*? → automate → refold workflow:
-1. `progress*?` — generates expanded proof script
-2. Review script, identify hard sub-goals
-3. Register lemmas: `attribute [local agrind] my_lemma`
-4. Re-run `progress*` — now handles more automatically
-5. Repeat until compact
+### The progress*? → fix → collapse workflow:
+1. `progress*?` — generates expanded proof script (one `progress` per monadic call)
+2. Copy the generated script into your proof
+3. Work through it: fix failing sub-goals, add lemmas, adjust tactics
+4. Once the full proof works, try collapsing sections back to `progress*`
+5. If `progress*` works on the whole body, use that (shorter is better)
+6. If not, keep the expanded script for the parts that need manual intervention
 
 ## Tactic Quick Reference
 

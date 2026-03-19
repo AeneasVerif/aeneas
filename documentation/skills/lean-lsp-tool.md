@@ -158,6 +158,52 @@ batch_end
 6. **Use `status`** to check if elaboration is still running or file is ready
 7. **Use `errors` after every edit** — if count is 0, your tactic worked
 8. **`edit` preserves indentation** — provide just the tactic text, not the leading spaces
+
+## MANDATORY: Use lean_lsp.py Instead of lake build
+
+**DO NOT use `lake build` to iterate on proofs.** It rebuilds everything from scratch (2–5 min per cycle). The LSP gives incremental feedback in 5–30 seconds. Your workflow must be:
+
+```
+open file → sorry → goal → edit → errors → repeat
+```
+
+**Never** fall back to `lake build` loops. Only use `lake build` once at the very end to confirm the final result.
+
+## The progress*? Workflow for Complex Function Bodies
+
+When developing a proof for a function body with many monadic calls:
+
+1. Write `progress*?` as the tactic
+2. Run `info <line>` in the LSP — the "Try this: ..." diagnostic contains the expanded script
+3. Copy the expanded script into your proof and work through it
+4. Once the full proof works, try collapsing back into a single `progress*`
+5. If `progress*` works, use it (shorter is better). If not, keep the expanded form.
+
+**How it works:** `progress*?` generates a suggestion via `addTryThisTacticSeqSuggestion`.
+In VS Code this is a clickable code action. In `lean_lsp.py`, it appears as an INFO
+diagnostic at the `progress*?` line — use `info <line>` or `diagnostics` to read it.
+
+**Example workflow:**
+```
+-- Step 1: Write progress*? to generate script
+edit 42 progress*?
+
+-- Step 2: Read the "Try this:" suggestion
+info 42
+-- → [INFO] line 42: Try this:
+--     let* ⟨ x2, x2_post ⟩ ← U32.add_spec
+--     let* ⟨ x3, x3_post ⟩ ← U32.add_spec
+--     let* ⟨ ⟩ ← U32.add_spec
+
+-- Step 3: Replace with the expanded script (using batch mode)
+batch_start
+delete 42
+insert 41 let* ⟨ x2, x2_post ⟩ ← U32.add_spec\n  let* ⟨ x3, x3_post ⟩ ← U32.add_spec\n  let* ⟨ ⟩ ← U32.add_spec
+batch_end
+
+-- Step 4: Once everything works, try collapsing
+edit 42 progress*
+```
 9. **`edit_range` and `insert` use exact content** — include indentation in the content
 10. **Use `\n` in content** for multi-line inserts: `insert 35 tactic1\n  tactic2\n  tactic3`
 
