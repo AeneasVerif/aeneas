@@ -124,7 +124,7 @@ theorem Slice.index_usize_spec {α : Type u} [Inhabited α] (v: Slice α) (i: Us
   simp only [length, getElem?_Usize_eq] at *
   simp only [List.getElem?_eq_getElem, List.getElem!_eq_getElem?_getD, Option.getD_some, hbound, spec_ok]
 
-@[simp, scalar_tac_simps, simp_lists_hyps_simps]
+@[simp, scalar_tac_simps, simp_lists_hyps_simps, grind =]
 theorem Slice.set_val_eq {α : Type u} (v: Slice α) (i: Usize) (x: α) :
   (v.set i x) = v.val.set i.val x := by
   simp [set, setAtNat]
@@ -171,7 +171,13 @@ theorem Slice.getElem!_Nat_set_eq
   (h : i.val = i' ∧ i' < a.length) : getElem! (a.set i x) i' = x
   := by simp only [getElem!_Nat_eq, set_val_eq]; grind
 
-@[simp, scalar_tac_simps, simp_lists_simps]
+@[simp_lists_simps]
+theorem Slice.Inhabited_getElem_eq_getElem! {α} [Inhabited α] (v : Slice α) (i : ℕ) (hi : i < v.length) :
+    v[i] = v[i]! := by
+  rw [Slice.getElem!_Nat_eq]
+  exact List.Inhabited_getElem_eq_getElem! v.val i hi
+
+@[simp, scalar_tac_simps, simp_lists_simps, grind =, agrind =]
 theorem Slice.set_length {α : Type u} (v: Slice α) (i: Usize) (x: α) :
   (v.set i x).length = v.length := by simp
 
