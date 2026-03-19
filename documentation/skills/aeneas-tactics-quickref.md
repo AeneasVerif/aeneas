@@ -17,8 +17,8 @@ What does the goal look like?
 │  → unfold + split + progress (invariant = pre + post), termination_by + scalar_decr_tac
 │
 ├─ Arithmetic
-│  ├─ Linear Nat/Int → omega
-│  ├─ Scalar bounds/overflow → scalar_tac
+│  ├─ Any with UScalar/IScalar → scalar_tac (NEVER omega)
+│  ├─ Linear Nat/Int only → scalar_tac or omega
 │  ├─ Nonlinear → scalar_tac +nonLin
 │  └─ Scalar simplification (min, max, %) → simp_scalar
 │
@@ -32,7 +32,7 @@ What does the goal look like?
 │  └─ Bounds (a < n) → stay Nat/Int; scalar_tac / omega
 │
 ├─ List/Array (get/set)
-│  ├─ Automatic → agrind
+│  ├─ Automatic → grind (more list lemmas than agrind)
 │  └─ Slow → cases idx <;> simp_lists [*]
 │
 ├─ If-then-else → simp_ifs / split
@@ -53,7 +53,7 @@ What does the goal look like?
 | Tactic | Purpose | Syntax | Key Attributes |
 |---|---|---|---|
 | `progress` | Apply function spec | `progress`, `progress as ⟨x,h⟩`, `progress with thm` | `@[progress]` |
-| `progress*` | Repeat progress + case split | `progress*` | — |
+| `progress*` | Repeat progress + case split | `progress*`, `progress* n` (n steps) | — |
 | `progress*?` | Generate proof script | `progress*?` | — |
 | `scalar_tac` | Integer arithmetic/bounds | `scalar_tac`, `scalar_tac +nonLin` | `@[scalar_tac_simps]` |
 | `simp_scalar` | Simplify scalar exprs | `simp_scalar`, `simp_scalar [lemmas]` | `@[simp_scalar_simps]` |

@@ -31,6 +31,13 @@ See `documentation/skills/lean-lsp-tool.md` for full usage.
 - Specifications are always pure (never in the Result monad)
 - Tag specs with `@[progress]` for automation
 - Use `#setup_aeneas_simps` at the top of proof files
+- **Do NOT use `omega`** with machine integers (UScalar/IScalar) — use `scalar_tac` or `agrind`
+- `scalar_tac`/`agrind`/`grind` see through Rust model definitions (Slice.length, etc.)
+- Use `apply`/`refine` instead of `exact` for large expressions (better proof incrementality)
+- For list/slice reasoning: prefer `grind` (has more list lemmas than `agrind`)
+- Think informally before starting a proof; modularize with fold theorems when possible
+- Pure constants: mark with `@[simp]`, `@[agrind]`, `@[scalar_tac_simps]`, `@[bvify_simps]`
+- Monadic constants: prove `@[progress]` theorem
 
 ## Note on Skill Discovery
 
