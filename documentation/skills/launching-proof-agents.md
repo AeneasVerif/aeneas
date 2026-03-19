@@ -112,16 +112,140 @@ give the entire task to a single agent in one shot. Instead:
    is not optional — agents that use `lake build` waste 2–5 minutes per cycle instead
    of 5–30 seconds with the LSP.
 
-## Incremental Strategy
+## Two-Phase Workflow: Statements First, Then Proofs
 
-Proofs should be done incrementally:
+**Never let agents write proofs before the theorem statements are validated.**
+Agents tend to prove trivially weak postconditions (e.g., just `res.length = n`)
+when the spec should express full functional correctness (e.g., relating the output
+to a pure specification function). Proving a wrong/weak theorem is wasted work.
 
-1. **Skeleton first**: State all theorem signatures with `sorry` proofs. Verify builds.
-2. **Easy sorry's next**: Fill in the straightforward ones (loop framework, base cases).
-3. **Hard sorry's last**: Bit-level reasoning, complex invariants — these may need
-   multiple agent iterations.
+### Phase 1: Statement Agents (fast, parallelizable)
 
-After each agent completes:
+Launch agents to write theorem statements with `sorry` proofs. Each agent:
+
+1. **Reads the auto-generated Rust→Lean code** (in `Funs.lean`) to understand the
+   function's structure, arguments, and return type.
+2. **Reads the pure specification** (in the spec file) to understand what the function
+   should compute.
+3. **Writes the theorem statement** with appropriate:
+   - Preconditions (input lengths, bounds, divisibility)
+   - Postcondition relating the output to the specification function
+   - Any bridge definitions needed (e.g., `Slice.toMatrix`, `sliceToByteVec`)
+4. **Verifies the statement typechecks** (sorry proof is fine at this stage)
+5. **Reports back** with the statement for review
+
+**Agent prompt for Phase 1:**
+```
+Write the theorem statement (with sorry proof) for `function_name.spec`.
+
+Read:
+- The auto-generated code in Funs.lean (line N)
+- The pure specification `Spec.Foo.Bar` in FooSpec.lean (line M)
+
+The postcondition must express FULL FUNCTIONAL CORRECTNESS:
+- NOT just length preservation (that's trivially weak)
+- NOT just `True` (useless)
+- It must relate the output to the spec function using bridge definitions
+  like `Slice.toMatrix`, etc.
+
+Verify the statement typechecks with `sorry` as the proof.
+DO NOT attempt the proof — just the statement.
+```
+
+### Phase 2: Review Gate (human or code-review agent)
+
+Before launching proof agents, **review every theorem statement**.
+
+**Important:** When the user asks to do a large batch of proofs or launch parallel
+proof agents, **ask the user upfront** how they want the review gate handled:
+
+- **(a) Human reviews statements** — Best when the user is actively working and wants
+  tight control. Statement agents report back, the user inspects postconditions, then
+  proof agents are launched. Higher quality but requires the user to be available.
+- **(b) Code-review agent validates** — Best when the user wants agents to work
+  uninterrupted for a long time (e.g., overnight). A code-review agent checks that
+  postconditions reference the spec functions and aren't trivially weak, then proof
+  agents launch automatically. Faster end-to-end but may miss subtle issues.
+- **(c) Skip review, go straight to proofs** — Only if the user has already written
+  and validated the theorem statements themselves.
+
+Ask this question **before starting any work**, so the user can choose the workflow
+that fits their availability. Never assume one mode silently.
+
+**The review gate is a loop, not a one-shot check:**
+
+```
+┌──────────────────────────────────────┐
+│  Statement agents write statements   │
+└──────────────┬───────────────────────┘
+               ▼
+┌──────────────────────────────────────┐
+│  Reviewer checks postconditions      │◄─┐
+│  (human or code-review agent)        │  │
+└──────────────┬───────────────────────┘  │
+               │                          │
+          ┌────┴────┐                     │
+          │ Valid?  │                     │
+          └────┬────┘                     │
+         yes   │   no                     │
+               │    └─────────────────────┘
+               │    Statement agents fix
+               ▼    postconditions
+┌──────────────────────────────────────┐
+│  Proof agents fill sorry proofs      │
+└──────────────────────────────────────┘
+```
+
+The reviewer sends back specific feedback (e.g., "postcondition too weak — must relate
+to `Spec.Frodo.Encode`, not just length") and the statement agent revises. This repeats
+until all statements are validated. Only then do proof agents launch.
+
+**Review checklist (for human or code-review agent):**
+
+- Is the postcondition strong enough? Does it express full functional correctness?
+- Does it relate to the pure specification function (not just structural properties)?
+- Are the preconditions reasonable? (not too strong, not missing necessary ones)
+- Are bridge definitions correct?
+
+**Common weak-postcondition patterns to reject:**
+- `res.length = n` — length only, says nothing about values
+- `True` or `fun _ => True` — vacuously true
+- Missing existential for length + functional property
+- Only one half of a bidirectional property (e.g., only correctness, not bounds)
+
+### Phase 3: Proof Agents (slower, parallelizable)
+
+Only after statements are validated, launch agents to fill the `sorry` proofs.
+Each proof agent works on one file (for isolation) and targets specific sorry's.
+
+### Summary: Fleet Organization
+
+```
+┌─────────────────────────────────────────────────┐
+│  Phase 1: Statement Agents (parallel per file)  │
+│  - Read Funs.lean + Spec                        │
+│  - Write theorem statements + sorry             │
+│  - Typecheck                                    │
+└────────────────────┬────────────────────────────┘
+                     │ report statements
+                     ▼
+┌─────────────────────────────────────────────────┐
+│  Phase 2: Review Gate                           │
+│  - Human or code-review agent validates         │
+│  - Check postconditions are strong enough       │
+│  - Fix any issues before proceeding             │
+└────────────────────┬────────────────────────────┘
+                     │ approved statements
+                     ▼
+┌─────────────────────────────────────────────────┐
+│  Phase 3: Proof Agents (parallel per file)      │
+│  - Fill sorry proofs                            │
+│  - Use lean_lsp.py for iteration                │
+│  - Report progress                              │
+└─────────────────────────────────────────────────┘
+```
+
+After each proof agent completes:
 - Review its output (did it succeed? partial? fail?)
 - Verify the file builds (`lake build` once)
 - If partial, launch a follow-up agent with refined instructions
