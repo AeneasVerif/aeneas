@@ -248,6 +248,10 @@ until all statements are validated. Only then do proof agents launch.
   Check: edge cases (empty inputs, boundary values), off-by-one errors, incorrect
   bit manipulation, missing modular reductions. If a bug is suspected, flag it
   immediately rather than letting proof agents waste time on an unprovable theorem.
+- **Is the informal proof correct?** If the theorem body contains an informal proof
+  as a comment, the reviewer should check it: are the steps logically sound? Are the
+  loop invariants stated correctly and strong enough? Does the informal proof actually
+  cover all cases? A wrong informal proof will mislead the proof agent.
 
 **Common weak-postcondition patterns to reject:**
 - `res.length = n` — length only, says nothing about values
