@@ -135,10 +135,36 @@ Weakest precondition: `f ⦃ x => P x ⦄` means "if f succeeds with value x, th
 |---|---|
 | `agrind` | General automation (prefer over `grind` — faster) |
 | `grind` | General automation (slower but more powerful — try if `agrind` fails) |
-| `omega` | **NEVER use omega.** It cannot reason about scalars (U8, U32, etc.), does not know `U32.max`, list lengths, etc. Use `scalar_tac`, `agrind`, or `grind` instead |
 | `simp [*]` | Simplification with all hypotheses |
 | `tauto` | Propositional tautologies |
 | `decide` | Concrete finite computations |
+
+### ⛔ BANNED TACTICS — NEVER USE THESE
+
+**`omega`, `linarith`, `nlinarith` are BANNED in all Aeneas proofs.** This is the single
+most important rule for writing idiomatic Aeneas proofs. These tactics do not understand
+Aeneas scalar types (U8, U16, U32, U64, U128, Usize, I8, ..., Isize), do not know their
+bounds (e.g., `U32.max`), do not understand `Slice.length`, `Vec.length`, or any Aeneas
+container. They will either fail silently or produce fragile proofs that break on model changes.
+
+| Banned tactic | Why it fails | Use instead (in preference order) |
+|---|---|---|
+| `omega` | Cannot reason about `.val`, `.bv`, scalar bounds, list/slice lengths | `agrind` > `grind` > `scalar_tac` |
+| `linarith` | Same: no knowledge of scalar types, no `.val` reasoning | `agrind` > `grind` > `scalar_tac` |
+| `nlinarith` | Same, plus explosion risk on nonlinear goals | `agrind` > `grind` > `scalar_tac +nonLin` or `simp_scalar` |
+
+**Preference order for replacements: `agrind` first, then `grind`, then `scalar_tac`.**
+`agrind` is fast and handles most goals. `grind` is slower but more powerful. `scalar_tac`
+is specialized for arithmetic bounds and should be used when the goal is purely arithmetic.
+
+**This applies everywhere:** in `progress` theorem proofs, in helper lemmas, in `have` steps,
+in `termination_by`/`decreasing_by` blocks, in `calc` chains — everywhere, including pure
+`Nat` arithmetic in `decreasing_by` clauses. There are **no exceptions**.
+
+**If you see a proof using these banned tactics, it must be rewritten.** Replace:
+- `omega` → `agrind` (or `grind`, or `scalar_tac`)
+- `linarith` → `agrind` (or `grind`, or `scalar_tac`)
+- `nlinarith` → `agrind` (or `grind`, or `scalar_tac +nonLin`, or `simp_scalar`)
 
 ### Bitwise reasoning: `bv_tac` and `bvify`
 
@@ -267,9 +293,18 @@ theorem helper_spec (a : U32) (h : a.val < 1000) :
 
 ## Proof Style and Maintainability
 
-### Unused simp lemma warnings
-When Lean warns about unused simp lemmas (e.g., "This simp argument is unused"), remove
-the offending lemma from the `simp only [...]` call. Do not leave unused arguments.
+### Address all warnings
+Lean warnings are not optional — they indicate problems that must be fixed:
+- **"This simp argument is unused"**: Remove the unused lemma from `simp only [...]`.
+- **"Too many ids provided"**: Reduce binder count in `progress as ⟨...⟩`.
+- **"'...' tactic does nothing"** / **"'...' tactic is never executed"**: Remove the dead tactic.
+- **"unused variable"**: Remove or prefix with `_`.
+The only acceptable warning is `"declaration uses 'sorry'"` for remaining proof obligations.
+
+### Spaces around binary operators in comments
+Always put spaces around binary operators (`<`, `>`, `=`, `≤`, `≥`, `+`, `*`, etc.) in
+comments and doc strings. Write `j < N`, not `j<N`. This avoids a VS Code highlighter bug
+that misinterprets `<` as an HTML tag opening, causing broken syntax highlighting in the file.
 
 ### Avoid large `simp only` calls in implementation proofs
 Do **not** leave big `simp only [lemma1, lemma2, ..., lemma20]` or `simp_all only [...]`
@@ -310,6 +345,48 @@ theorem main_spec ... := by
 ```
 
 ### Structuring non-linear arithmetic proofs
+
+### Avoid early case splits on parameters in progress proofs
+In cryptographic code, functions are often parameterized by a parameter set (e.g.,
+`p : Spec.Frodo.parameterSet` in FrodoKEM) from which lengths, dimensions, and bounds
+are derived. **Do NOT case-split on such parameters at the beginning of a `progress` proof.**
+This duplicates the entire proof for each parameter variant (3× for FrodoKEM) and makes
+the proof unmaintainable.
+
+Instead:
+- **Do case splits locally** inside specific proof obligations that need concrete values:
+  ```lean
+  -- BAD: duplicates the entire proof 3 times
+  theorem my_spec (p : Spec.Frodo.parameterSet) ... := by
+    cases p <;> (unfold my_fn; progress*; ...)
+
+  -- GOOD: case split only where needed
+  theorem my_spec (p : Spec.Frodo.parameterSet) ... := by
+    unfold my_fn
+    progress*
+    · cases p <;> simp_all [Spec.Frodo.n, NBAR] <;> scalar_tac  -- only this sub-goal needs it
+    progress*
+  ```
+
+- **Give definitions/lemmas to `agrind`/`grind`** so they can case-split automatically:
+  ```lean
+  -- Give agrind the parameter definition so it can case-split internally
+  attribute [local agrind] Spec.Frodo.n Spec.Frodo.nbar in
+  theorem my_spec ... := by
+    unfold my_fn
+    progress*  -- agrind (used by progress for preconditions) now auto-splits on p
+  ```
+  This is especially effective because `agrind` is the default tactic used by `progress`
+  to discharge preconditions — giving it the right definitions lets it handle parameter-
+  dependent bounds without any manual case splits.
+
+- **Write auxiliary lemmas** for arithmetic facts that depend on the parameter:
+  ```lean
+  private lemma n_mul_nbar_bound (p : Spec.Frodo.parameterSet) :
+      Spec.Frodo.n p * Spec.Frodo.nbar < 2^16 := by
+    cases p <;> native_decide
+  ```
+
 When proving non-linear arithmetic goals (with modulo, division, shifts, etc.) that
 require multiple steps:
 
@@ -329,7 +406,15 @@ calc a * b % (2^16)
     _ = ... := by simp_scalar
 ```
 
-3. **If `simp_scalar` can't close a step**: either provide more lemmas
+3. **Use `ring`** in `have`/`calc` steps for purely algebraic equalities (no
+   inequalities, no modulo, no division — just `+`, `*`, `-` rearrangements):
+```lean
+have h : (a + b) * c = a * c + b * c := by ring
+calc (x + 1) * (x + 1)
+    _ = x * x + 2 * x + 1 := by ring
+```
+
+4. **If `simp_scalar` can't close a step**: either provide more lemmas
    (`simp_scalar [my_lemma]`), mark lemmas for simp_scalar
    (`attribute [local simp_scalar_simps] my_lemma`), or apply the relevant
    theorem manually. If no suitable theorem exists, prove it as an auxiliary lemma.
@@ -347,7 +432,10 @@ calc a * b % (2^16)
 4. **`agrind` fails**: Try `simp [*]; agrind`
 5. **`grind` explodes**: Use `agrind` instead (controlled context)
 6. **Progress applies wrong spec**: Use `progress with specific_theorem`
-7. **NEVER unfold Aeneas stdlib definitions in a proof.** When in the middle of a proof, you should never need to unfold definitions from `Aeneas.Std` (Slice, Array, UScalar, IScalar, iterator types, core.*, etc.). If you feel the need to unfold:
+7. **"Too many ids provided" from `progress`**: You gave more binder names in `progress as ⟨...⟩` than the tactic produced. Remove excess names until the count matches. Check `goal` to see how many binders the postcondition actually has.
+8. **"This simp argument is unused"**: A lemma in `simp only [...]` or `simp_all only [...]` didn't fire. **Always fix this** — remove the unused lemma from the list. Don't ignore these warnings.
+9. **"'...' tactic does nothing"** / **"'...' tactic is never executed"**: The tactic call is dead code. **Always fix this** — remove the tactic entirely. Don't leave dead tactics in proofs.
+10. **NEVER unfold Aeneas stdlib definitions in a proof.** When in the middle of a proof, you should never need to unfold definitions from `Aeneas.Std` (Slice, Array, UScalar, IScalar, iterator types, core.*, etc.). If you feel the need to unfold:
    - **Stop.** This is a sign that a lemma is missing.
    - **Search** the Aeneas library for an existing lemma (grep for related names, check simp/progress attributes).
    - **If it doesn't exist:** state and prove the missing lemma yourself, then use it in the proof.

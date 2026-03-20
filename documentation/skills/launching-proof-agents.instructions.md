@@ -124,7 +124,33 @@ give the entire task to a single agent in one shot. Instead:
      that spec X is missing", "this sorry requires a new lemma about bit operations",
      "the agent reduced 8 sorry's to 3 but the remaining ones are hard because..."
 
-4. **Iterate**: Based on the agent's report, launch a follow-up agent with refined
+4. **Review completed work for reusable lemmas**: When an agent finishes, review the
+   helpers, definitions, and lemmas it introduced. Classify them into three categories:
+
+   **(a) Project-wide helpers** — lemmas that are general within the project but not
+   general enough for the Aeneas stdlib. Move these to shared definition files
+   (e.g., `Defs.lean`, `MatDefs.lean`) so other proof files can import them.
+   Examples: index arithmetic helpers (`mul_NBAR_add_div`), project-specific
+   simp lemmas, bridge definitions between Aeneas types and spec types.
+
+   **(b) Aeneas stdlib candidates** — lemmas that are fully general and would benefit
+   any Aeneas user, not just this project. **Do not move these yourself.** Instead,
+   collect them and report to the user as a batch:
+   "These lemmas from agent X are good candidates for the Aeneas stdlib:
+   - `Slice.getElem_set_ne` — general Slice lemma about set-at-different-index
+   - `UScalar.bv_xor_eq` — missing `@[bvify_simps]` lemma for XOR
+   - ..."
+   The user decides whether and when to upstream them.
+
+   **(c) Proof-local helpers** — lemmas that are specific to one theorem's proof.
+   Leave these `private` in the Properties file where they were created.
+
+   **When moving (a) to shared files:** Be careful about import cycles. Only move
+   a lemma to `Defs.lean` if it doesn't require imports beyond what `Defs.lean`
+   already has. Same for `MatDefs.lean`. If a helper needs imports from a Properties
+   file, it stays in the Properties file.
+
+5. **Iterate**: Based on the agent's report, launch a follow-up agent with refined
    instructions, or pivot to a different approach. Never let an agent run for hours
    without checking in.
 
@@ -243,6 +269,13 @@ until all statements are validated. Only then do proof agents launch.
 - Does it relate to the pure specification function (not just structural properties)?
 - Are the preconditions reasonable? (not too strong, not missing necessary ones)
 - Are bridge definitions correct?
+- **Is the postcondition strong enough for callers?** Check which other theorems
+  (e.g., outer loop specs, top-level function specs) will need this theorem's result
+  via `progress`. Those callers will only see the postcondition — so it must contain
+  everything they need. For example, if an outer loop needs both the length AND
+  element-wise values of a slice, the inner loop's postcondition must provide both.
+  Trace the call chain: find the callers in the generated Lean code, look at what
+  their proof goals will require, and verify the postcondition delivers it.
 - **Is the theorem actually true?** The reviewer should actively look for corner cases
   and potential bugs in the Rust implementation that would make the theorem false.
   Check: edge cases (empty inputs, boundary values), off-by-one errors, incorrect
@@ -286,20 +319,68 @@ verification — finding real bugs. Do not bury it in a status update. Make it
 prominent: "BUG FOUND in `function_name`: [description of the bug]. The Rust code
 does X but the spec requires Y. Counterexample: [specific input that triggers it]."
 
+**🚨 CRITICAL: When an axiom or external model is too weak, report it IMMEDIATELY.**
+In Aeneas projects, external functions (FFI, stdlib, crypto primitives) are modeled via
+hand-written definitions and axiomatized progress specs (typically in `ExternalSpecs.lean`
+or similar files). If a statement or proof agent discovers that such an axiom has a
+postcondition that is too weak to prove the needed theorem (e.g., `fun _ => True` when
+the proof needs functional properties of the output), the agent MUST:
+
+1. **Report immediately** — do not silently work around a fundamentally weak axiom.
+2. **Identify the axiom** — name the specific axiom/spec and its file location.
+3. **Explain what is missing** — what postcondition property does the proof need?
+4. **Suggest the fix** — propose a strengthened postcondition. For example:
+   "The axiom `encrypt_block.spec` has postcondition `True`, but the outer loop proof
+   needs it to return the AES encryption of the input block. Suggested fix:
+   ```lean
+   axiom frodokem.encrypt_block.spec (c : aes.soft.Aes128) (block : Array U16 8#usize) :
+     frodokem.encrypt_block c block ⦃ fun out =>
+       out = specEncryptBlock c block ⦄
+   ```
+   where `specEncryptBlock` is a pure specification of AES-128 block encryption."
+
+**What happens after reporting depends on the workflow mode.** Before launching agents,
+the supervisor must ask the user which mode to use:
+
+- **(a) Stop and wait** — The agent stops working on the blocked theorem and reports back.
+  Best when the user is available and wants to fix the axiom before the agent continues.
+- **(b) Continue and assume locally** — The agent locally assumes the spec it needs
+  (as a local `axiom` or `sorry`'d lemma with a
+  `-- TODO: the spec for X in ExternalSpecs.lean is too weak; strengthen it and move this assumption there`
+  comment) and continues proving as far as possible. Best when the user is away and wants
+  maximum progress. The supervisor collects these local assumptions and presents them to
+  the user for review later.
+
+The supervisor should ask this question **once upfront** (not per-agent), and include
+the chosen mode in every agent prompt.
+
+This applies equally to statement agents (who may realize the axiom is too weak to even
+*state* a meaningful theorem) and proof agents (who get stuck because the axiom provides
+no usable information).
+
 **After a proof agent makes good progress on a theorem** (e.g., reduces sorry count,
 completes a loop proof, fills a significant chunk), a **review agent** should check
 the proof against the skill files and project guidelines. This is also a loop:
+
+**Before handing off to the review agent, the proof agent MUST verify that the entire
+file builds without errors.** Run `lake build <module>` (e.g., `lake build Properties.CT`)
+and confirm 0 errors. Warnings about `sorry` are acceptable if some sorry's remain, but
+there must be NO type errors, NO elaboration failures, NO tactic failures. If the file
+doesn't build cleanly, the proof agent must fix the errors before reporting.
 
 ```
 ┌──────────────────────────────────────┐
 │  Proof agent works on sorry's        │
 │  (reports progress to master)        │
+├──────────────────────────────────────┤
+│  Proof agent runs lake build         │
+│  → MUST be 0 errors before handoff   │
 └──────────────┬───────────────────────┘
                ▼
 ┌──────────────────────────────────────┐
 │  Review agent checks proof quality   │◄─┐
 │  (re-reads skill files, checks       │  │
-│   idioms, tactics, style)            │  │
+│   idioms, tactics, build, style)     │  │
 └──────────────┬───────────────────────┘  │
                │                          │
           ┌────┴────┐                     │
@@ -316,15 +397,40 @@ the proof against the skill files and project guidelines. This is also a loop:
 
 **Review agent checklist for proofs:**
 
-- Does the proof follow skill file guidelines? (re-read the skill files to check)
-- Prefers `agrind` over `grind`? Uses `scalar_tac` instead of `omega`?
-- Does not unfold Aeneas stdlib definitions?
-- Uses `lean_lsp.py`, not `lake build` loops?
-- No unused simp lemma warnings? (remove dead arguments from `simp only`)
+- **Does the file build without errors?** The review agent MUST run `lake build <module>`
+  and verify 0 errors. If the proof agent handed off a broken file, send it back immediately.
+  `sorry` warnings are acceptable; type errors, tactic failures, and elaboration errors are NOT.
+- **Is the proof idiomatic?** Uses standard Aeneas patterns (progress, WP.spec_mono,
+  split_ifs, etc.) rather than ad-hoc workarounds? Follows the patterns documented
+  in proof-patterns.instructions.md?
+- **Is the proof clean and not verbose?** No unnecessary intermediate steps, no
+  copy-paste bloat, no redundant `have` statements that could be inlined. Each tactic
+  call should earn its place.
+- **Does the proof use only idiomatic tactics?** This is a critical idiomaticity criterion.
+  Re-read the skill files and **grep the file for banned tactics**:
+  - `omega` — **BANNED.** Replace with `agrind`, `grind`, or `scalar_tac`
+  - `linarith` — **BANNED.** Replace with `agrind`, `grind`, or `scalar_tac`
+  - `nlinarith` — **BANNED.** Replace with `agrind`, `grind`, `scalar_tac +nonLin`, or `simp_scalar`
+  - These tactics cannot reason about Aeneas scalar types (U8, U32, Usize, etc.),
+    `Slice.length`, `Vec.length`, or any Aeneas-specific concepts. A proof using them
+    is non-idiomatic and fragile — it must be rewritten, even if it currently works.
+  - Also check: uses `agrind` over `grind`? Uses `ring` in `calc`/`have` steps?
+  - Does not unfold Aeneas stdlib definitions?
+- **Are all warnings addressed?** After building, check the warning output. The following
+  warnings are **NOT acceptable** and must be fixed before the proof is considered done:
+  - `"This simp argument is unused"` — remove the unused lemma from `simp only [...]`
+  - `"Too many ids provided"` — reduce the binder count in `progress as ⟨...⟩`
+  - `"unused variable"` — remove or rename with `_` prefix
+  - `"'tactic' does nothing"` / `"'tactic' tactic is never executed"` — remove the dead tactic
+  - The ONLY acceptable warnings are `"declaration uses 'sorry'"` (for remaining sorry's).
 - No big `simp only [...]` calls in implementation proofs? (model is unstable)
 - Complex arithmetic/bitwise sub-proofs extracted as auxiliary lemmas?
-- Is the proof reasonably concise? (no unnecessary steps, no copy-paste bloat)
 - Are helper lemmas properly named and documented if non-obvious?
+- **No early case splits on parameters?** If the proof does `cases p` at the top level
+  (duplicating the entire proof for each parameter variant), it should be refactored:
+  case splits should be local (inside sub-goals) or handled via `attribute [local agrind]`.
+- **Spaces around binary operators in comments?** Check that comments and doc strings
+  use `j < N`, not `j<N`. Missing spaces cause VS Code highlighting bugs.
 
 **Skill file freshness:**
 
@@ -453,6 +559,8 @@ After each proof+review cycle completes:
 | `progress*` times out | Too many monadic calls | Use `progress*?` workflow |
 | Unfolds stdlib definitions | Didn't read core skill | Add "don't unfold" rule to prompt |
 | Uses `omega` | `omega` can't reason about scalars, `U32.max`, list lengths, etc. | NEVER use `omega` — use `scalar_tac`, `agrind`, or `grind` |
+| Uses `nlinarith` | Same issues as `omega` — can't reason about scalars | NEVER use `nlinarith` — use `scalar_tac` or `simp_scalar` |
+| Uses `linarith` | Same issues as `omega` — can't reason about scalars | NEVER use `linarith` — use `scalar_tac` or `agrind` |
 | Edits wrong file/section | Ambiguous instructions | Be very specific about what to change |
 
 ## Example: Full Agent Prompt

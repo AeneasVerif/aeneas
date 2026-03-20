@@ -17,9 +17,8 @@ What does the goal look like?
 │  → unfold + split + progress (invariant = pre + post), termination_by + scalar_decr_tac
 │
 ├─ Arithmetic
-│  ├─ Any with UScalar/IScalar → scalar_tac (NEVER omega)
-│  ├─ Linear Nat/Int only → scalar_tac (NEVER omega)
-│  ├─ Nonlinear → scalar_tac +nonLin
+│  ├─ General → agrind (preferred), then grind, then scalar_tac (NEVER omega/linarith/nlinarith)
+│  ├─ Nonlinear → agrind, then grind, then simp_scalar, then scalar_tac +nonLin
 │  └─ Scalar simplification (min, max, %) → simp_scalar
 │
 ├─ Bit-vector / Bitwise
@@ -31,7 +30,7 @@ What does the goal look like?
 │
 ├─ Modular arithmetic
 │  ├─ Equivalence (a ≡ b [MOD n]) → zmodify; ring / simp
-│  └─ Bounds (a < n) → stay Nat/Int; scalar_tac / agrind
+│  └─ Bounds (a < n) → stay Nat/Int; agrind / grind / scalar_tac
 │
 ├─ List/Array (get/set)
 │  ├─ Automatic → agrind first; if fails, try grind (slower, more list lemmas)
@@ -79,7 +78,6 @@ What does the goal look like?
 | Tactic | Purpose | Notes |
 |---|---|---|
 | `agrind` | General automation | Prefer over `grind` — faster. If it fails, try `grind` |
-| `omega` | **NEVER use** — use `scalar_tac`, `agrind`, or `grind` instead |
 | `simp` / `simp [*]` | Simplification | Use `simp [*]` to keep hypotheses |
 | `simp_all` | Aggressive simplification | **Caution:** may remove needed hypotheses |
 | `tauto` | Propositional tautologies | |
@@ -87,6 +85,20 @@ What does the goal look like?
 | `ring` | Ring equalities | |
 | `split` | Case-split match/if | |
 | `cases` | Structural case analysis | |
+
+### ⛔ BANNED TACTICS
+
+| Banned | Why | Use instead (preference order) |
+|---|---|---|
+| `omega` | No scalar/Slice/Vec knowledge | `agrind` > `grind` > `scalar_tac` |
+| `linarith` | No scalar/Slice/Vec knowledge | `agrind` > `grind` > `scalar_tac` |
+| `nlinarith` | No scalar knowledge, explosion risk | `agrind` > `grind` > `scalar_tac +nonLin` / `simp_scalar` |
+
+**These tactics are NEVER acceptable in Aeneas proofs** — not in `progress` theorems,
+not in helper lemmas, not in `have` steps, not in `decreasing_by` (even for pure Nat).
+They cannot reason about U8, U32, Usize, Slice.length, etc. A proof using them is
+non-idiomatic and must be rewritten. There are **no exceptions**.
+See `aeneas-lean-core` skill file for the full rationale.
 
 ## Common Tactic Combinations
 
@@ -104,7 +116,11 @@ What does the goal look like?
 
 ## Proof Style Rules
 
-- **Remove unused simp lemmas** when warned — don't leave dead arguments
+- **Address ALL warnings** — the only acceptable warning is `"declaration uses 'sorry'"`:
+  - `"This simp argument is unused"` → remove the unused lemma from `simp only [...]`
+  - `"Too many ids provided"` → reduce binders in `progress as ⟨...⟩`
+  - `"'...' tactic does nothing"` / `"is never executed"` → remove the dead tactic
+  - `"unused variable"` → remove or prefix with `_`
 - **No big `simp only [...]` in implementation proofs** — model names are unstable. Use `simp [*]` or targeted rewrites. (OK in spec lemmas.)
 - **Extract complex sub-proofs** as auxiliary lemmas — don't inline 15 lines of arithmetic inside `progress*`
 - **Simplify shifts early**: rewrite `>>>` as `/ 2^n`, `<<<` as `* 2^n`
