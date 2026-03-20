@@ -41,8 +41,13 @@ See `documentation/skills/lean-lsp-tool.instructions.md` for full usage.
 
 ## Note on Skill Discovery
 
-Skills are stored in `documentation/skills/` and symlinked to:
-- `.claude/skills/` (for Claude Code)
-- `.github/instructions/` (for GitHub Copilot)
+Skills are stored in `documentation/skills/` — this is the **source of truth**.
+They are distributed to AI tools via:
+- `.claude/skills/<name>/SKILL.md` — **symlinks** to `documentation/skills/<name>.instructions.md` (for Claude Code)
+- `.github/instructions/<name>.instructions.md` — **hard links** to `documentation/skills/<name>.instructions.md` (for GitHub Copilot)
+
+Since both `.claude/skills/` (symlinks) and `.github/instructions/` (hard links) point
+to the same underlying files, editing `documentation/skills/` automatically updates all
+locations.
 
 If skills aren't loading automatically, read them directly from `documentation/skills/`.
