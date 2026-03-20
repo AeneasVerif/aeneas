@@ -74,7 +74,7 @@ class OrdSpecRel [O: _root_.Ord T] (R: outParam (T -> T -> Prop)) extends OrdSpe
 class OrdSpecLinearOrderEq [O: _root_.Ord T] extends OrdSpecSymmetry H, OrdSpecRel H Eq
 
 theorem infallible [_root_.Ord T] [OrdSpec H]: ∀ a b, H.cmp a b ⦃ _ => True ⦄ := fun a b => by
-  progress with OrdSpec.infallible
+  step with OrdSpec.infallible
 
 instance: Coe (avl.Ordering) (_root_.Ordering) where
   coe a := a.toLeanOrdering

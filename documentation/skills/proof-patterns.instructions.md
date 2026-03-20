@@ -38,19 +38,19 @@ private theorem add_loop.spec_gen
   -- Step 1: Unfold the recursive function
   unfold crypto.add_loop
   -- Step 2: Process the range iterator
-  progress with range_next_usize as ⟨ret, h_range⟩
+  step with range_next_usize as ⟨ret, h_range⟩
   -- Step 3: Case split on whether loop continues
   by_cases h : iter.start.val < iter.«end».val <;> simp [h] at h_range
   · -- INDUCTIVE CASE: start < end
     obtain ⟨hov, hstart', hend'⟩ := h_range
     simp only [hov]
     -- Step 4: Progress through the loop body
-    progress as ⟨i1, hi1⟩   -- index a[i]
-    progress as ⟨i2, hi2⟩   -- index out[i]
-    progress as ⟨i3⟩        -- wrapping_add
-    progress as ⟨i4, hi4⟩   -- QMASK
-    progress as ⟨i5⟩        -- i3 &&& i4
-    progress as ⟨s, hs_len, hs_eq, hs_ne⟩  -- Slice.update
+    step as ⟨i1, hi1⟩   -- index a[i]
+    step as ⟨i2, hi2⟩   -- index out[i]
+    step as ⟨i3⟩        -- wrapping_add
+    step as ⟨i4, hi4⟩   -- QMASK
+    step as ⟨i5⟩        -- i3 &&& i4
+    step as ⟨s, hs_len, hs_eq, hs_ne⟩  -- Slice.update
     -- Step 5: Rebuild the invariant for the next iteration
     have hdone' : ∀ j (hj : j < iter.start.val + 1),
         s[j]'(by grind) = addZ p (a[j]'(by agrind)) (out0[j]'(by agrind)) := by
@@ -84,7 +84,7 @@ decreasing_by
 ### spec (public, starts at 0)
 
 ```lean
-@[progress]
+@[step]
 theorem crypto.add_loop.spec
   (out a : Slice Std.U16)
   (hlen : out.length = a.length) :
@@ -103,7 +103,7 @@ theorem crypto.add_loop.spec
 ### Top-level (unfold wrapper, delegate)
 
 ```lean
-@[progress]
+@[step]
 theorem crypto.add.spec p (out a : Slice Std.U16)
   (hlen : out.length = a.length) :
   crypto.add (Params p) out a ⦃ fun res =>
@@ -112,21 +112,21 @@ theorem crypto.add.spec p (out a : Slice Std.U16)
   simp only [Slice.len]
   split_ifs with h
   · have : out.len = a.len := h
-    progress*
+    step*
   · simp_all [Slice.len]
 ```
 
 ### Matrix-level lifting
 
 ```lean
-@[progress]
+@[step]
 theorem add_spec_ext p {m n A B} (a b : Slice Std.U16)
   (halen : a.length = m * n) (ha : Slice.toMatrix a = A)
   (hblen : b.length = m * n) (hb : Slice.toMatrix b = B) :
   crypto.add (Params p) b a ⦃ fun res =>
     ∃ hreslen : res.length = m * n,
     Slice.toMatrix (p := p) res = A + B ⦄ := by
-  progress as ⟨res, hres⟩
+  step as ⟨res, hres⟩
   refine ⟨by grind, ?_⟩
   rw [← ha, ← hb]
   ext i j
@@ -185,11 +185,11 @@ private theorem inner_loop.spec_gen p (b s : Slice U16)
   inner_loop ... r b s i j acc ⦃ fun acc' =>
     toZq p (IScalar.hcast .U16 acc') = dotZq p b s i j hi hj ⦄ := by
   unfold inner_loop
-  progress with range_next_usize as ⟨ret, h_range⟩
+  step with range_next_usize as ⟨ret, h_range⟩
   by_cases h : r.start.val < r.«end».val <;> simp [h] at h_range
   · obtain ⟨hov, hstart', hend'⟩ := h_range; simp only [hov]
-    -- progress through: index b, index s, casts, wrapping_mul, wrapping_add
-    progress as ⟨...⟩  -- each arithmetic step
+    -- step through: index b, index s, casts, wrapping_mul, wrapping_add
+    step as ⟨...⟩  -- each arithmetic step
     -- Prove accumulator invariant for next iteration
     have hacc1 : toZq p (IScalar.hcast .U16 acc1) =
         dotZq_partial ... (r.start.val + 1) := by
@@ -215,7 +215,7 @@ decreasing_by have : ret.2.«end».val = r.«end».val := by rw [hend']; scalar_
 ### Structure
 
 ```lean
-@[progress]
+@[step]
 theorem outer_loop.spec p (out b s : Slice U16)
   (iter : core.ops.range.Range Usize) (hout hb hs hlo hhi)
   -- Invariant: rows before iter.start are already correct
@@ -225,16 +225,16 @@ theorem outer_loop.spec p (out b s : Slice U16)
     ∃ hreslen : res.length = NBAR * NBAR,
     ∀ (i j : Fin NBAR), toZq p (res[...]) = dotZq p b s i j ... ⦄ := by
   unfold outer_loop
-  progress with range_next_usize as ⟨ret, h_range⟩
+  step with range_next_usize as ⟨ret, h_range⟩
   by_cases hcont : iter.start.val < iter.«end».val <;> simp [hcont] at h_range
   · obtain ⟨hov, hstart', hend'⟩ := h_range; simp only [hov]
     -- Call the inner/middle loop spec
-    progress with inner_loop.spec as ⟨out1, hout1_inv⟩
+    step with inner_loop.spec as ⟨out1, hout1_inv⟩
     · exact ...  -- provide required arguments
     -- Unpack the inner loop invariant
     obtain ⟨hout1_len, hout1_done, hout1_rest⟩ := hout1_inv
     -- Recurse on the outer loop
-    progress as ⟨res, hreslen, hres⟩
+    step as ⟨res, hreslen, hres⟩
     · ...  -- provide length, bounds, invariant for next iteration
     · -- Rebuild invariant: for i < start+1, all entries correct
       intro i j hi_lt
@@ -281,15 +281,15 @@ have hinv' : diff1 = 0#u16 ↔ ∀ j, (hj : j < iter.start.val + 1) → ... := b
 **Use when:** The top-level function does setup then calls the loop.
 
 ```lean
-@[progress]
+@[step]
 theorem mul_bs.spec p (out b s : Slice U16) (hout hb hs) :
   crypto.mul_bs (Params p) out b s ⦃ fun res => ... ⦄ := by
   unfold crypto.mul_bs
-  -- progress through setup (creating ranges, getting parameters)
-  progress as ⟨n_p, hn_p⟩      -- (Params p).N
-  progress as ⟨nbar, hnbar⟩    -- crypto.NBAR
+  -- step through setup (creating ranges, getting parameters)
+  step as ⟨n_p, hn_p⟩      -- (Params p).N
+  step as ⟨nbar, hnbar⟩    -- crypto.NBAR
   -- now the loop call appears
-  progress with mul_bs_loop0.spec as ⟨res, hreslen, hres⟩
+  step with mul_bs_loop0.spec as ⟨res, hreslen, hres⟩
   · ... -- provide preconditions
   exact ⟨hreslen, hres⟩
 ```
@@ -301,14 +301,14 @@ theorem mul_bs.spec p (out b s : Slice U16) (hout hb hs) :
 **Use when:** The function starts with an `if len_a == len_b` guard.
 
 ```lean
-@[progress]
+@[step]
 theorem add.spec p (out a : Slice U16) (hlen : out.length = a.length) :
   crypto.add (Params p) out a ⦃ fun res => ... ⦄ := by
   unfold crypto.add
   simp only [Slice.len]
   split_ifs with h
   · have : out.len = a.len := h
-    progress*
+    step*
   · simp_all [Slice.len]   -- contradiction: lengths must be equal
 ```
 
@@ -316,9 +316,9 @@ theorem add.spec p (out a : Slice U16) (hlen : out.length = a.length) :
 
 ## Common Sub-Patterns
 
-### Slice.update reasoning (after `progress` on a write)
+### Slice.update reasoning (after `step` on a write)
 
-After `progress as ⟨s, hs_len, hs_eq, hs_ne⟩` on a Slice.update:
+After `step as ⟨s, hs_len, hs_eq, hs_ne⟩` on a Slice.update:
 - `hs_eq`: `s[idx] = new_value` (written entry)
 - `hs_ne`: `∀ j ≠ idx, s[j] = old[j]` (unchanged entries)
 
@@ -334,7 +334,7 @@ have h_unchanged : s[j]'... = out[j]'... := by
 
 ### getElem! ↔ getElem bridge
 
-When `progress` gives `getElem!` but you need proof-bounded `getElem`:
+When `step` gives `getElem!` but you need proof-bounded `getElem`:
 ```lean
 have h : s.val[i]! = s[i]'proof := getElem!_pos _ _ proof
 ```
@@ -351,7 +351,7 @@ decreasing_by
 ### Rebuilding bounds after range_next_usize
 
 ```lean
-progress with range_next_usize as ⟨ret, h_range⟩
+step with range_next_usize as ⟨ret, h_range⟩
 by_cases h : iter.start.val < iter.«end».val <;> simp [h] at h_range
 · obtain ⟨hov, hstart', hend'⟩ := h_range
   simp only [hov]
@@ -364,7 +364,7 @@ by_cases h : iter.start.val < iter.«end».val <;> simp [h] at h_range
 
 When spec_gen gives a low-level postcondition and you want something cleaner:
 ```lean
-@[progress]
+@[step]
 theorem loop.spec ... :
   loop ... ⦃ fun res => nice_postcondition res ⦄ := by
   apply WP.spec_mono

@@ -1,6 +1,6 @@
 import Aeneas.Std.Scalar.Core
 import Aeneas.Std.Scalar.Elab
-import Aeneas.ScalarTac
+import Aeneas.Tactic.Solver.ScalarTac
 import Mathlib.Data.BitVec
 
 namespace Aeneas.Std
@@ -169,7 +169,7 @@ theorem UScalar.ShiftRight_spec {ty0 ty1} (x : UScalar ty0) (y : UScalar ty1)
   simp only [BitVec.ushiftRight_eq, val]
   simp only [HShiftRight.hShiftRight, BitVec.ushiftRight, bv_toNat, BitVec.toNat_ofNatLT, and_self]
 
-uscalar @[progress] theorem «%S».ShiftRight_spec {ty1} (x : «%S») (y : UScalar ty1) (hy : y.val < %BitWidth) :
+uscalar @[step] theorem «%S».ShiftRight_spec {ty1} (x : «%S») (y : UScalar ty1) (hy : y.val < %BitWidth) :
   (x >>> y) ⦃ z => z.val = x.val >>> y.val ∧ z.bv = x.bv >>> y.val ⦄
   := by apply UScalar.ShiftRight_spec; simp [*]
 
@@ -182,7 +182,7 @@ theorem UScalar.ShiftRight_IScalar_spec {ty0 ty1} (x : UScalar ty0) (y : IScalar
   simp only [BitVec.ushiftRight_eq, val, Nat.instShiftRight]
   simp only [IScalar.toNat, BitVec.toNat_ushiftRight, bv_toNat, Nat.shiftRight_eq, and_self]
 
-uscalar @[progress] theorem «%S».ShiftRight_IScalar_spec {ty1} (x : «%S») (y : IScalar ty1) (hy0 : 0 ≤ y.val) (hy : y.val < %BitWidth) :
+uscalar @[step] theorem «%S».ShiftRight_IScalar_spec {ty1} (x : «%S») (y : IScalar ty1) (hy0 : 0 ≤ y.val) (hy : y.val < %BitWidth) :
   (x >>> y) ⦃ z => z.val = x.val >>> y.toNat ∧ z.bv = x.bv >>> y.toNat ⦄
   := by apply UScalar.ShiftRight_IScalar_spec <;> simp [*]
 
@@ -196,7 +196,7 @@ theorem UScalar.ShiftLeft_spec {ty0 ty1} (x : UScalar ty0) (y : UScalar ty1) (si
   simp only [BitVec.shiftLeft_eq, val]
   simp only [bv_toNat, BitVec.toNat_shiftLeft, ShiftLeft.shiftLeft, Nat.shiftLeft_eq', and_self]
 
-uscalar @[progress] theorem «%S».ShiftLeft_spec {ty1} (x : «%S») (y : UScalar ty1) (hy : y.val < %BitWidth) :
+uscalar @[step] theorem «%S».ShiftLeft_spec {ty1} (x : «%S») (y : UScalar ty1) (hy : y.val < %BitWidth) :
   (x <<< y) ⦃ z => z.val = (x.val <<< y.val) % «%S».size ∧ z.bv = x.bv <<< y.val ⦄
   := by apply UScalar.ShiftLeft_spec <;> simp [*]
 
@@ -213,7 +213,7 @@ theorem UScalar.ShiftLeft_IScalar_spec {ty0 ty1} (x : UScalar ty0) (y : IScalar 
   simp only [IScalar.toNat, BitVec.toNat_shiftLeft, bv_toNat, ShiftLeft.shiftLeft,
     Nat.shiftLeft_eq', and_self]
 
-uscalar @[progress] theorem «%S».ShiftLeft_IScalar_spec {ty1} (x : «%S») (y : IScalar ty1) (hy0 : 0 ≤ y.val) (hy : y.val < %BitWidth) :
+uscalar @[step] theorem «%S».ShiftLeft_IScalar_spec {ty1} (x : «%S») (y : IScalar ty1) (hy0 : 0 ≤ y.val) (hy : y.val < %BitWidth) :
   (x <<< y) ⦃ z => z.val = (x.val <<< y.toNat) % «%S».size ∧ z.bv = x.bv <<< y.toNat ⦄
   := by apply UScalar.ShiftLeft_IScalar_spec <;> simp [*]
 
@@ -221,48 +221,48 @@ uscalar @[progress] theorem «%S».ShiftLeft_IScalar_spec {ty1} (x : «%S») (y 
 ## Bitwise And, Or
 -/
 
-@[progress]
+@[step]
 theorem UScalar.and_spec {ty} (x y : UScalar ty) :
   lift (x &&& y) ⦃ z => z.val = (x &&& y).val ∧ z.bv = x.bv &&& y.bv ⦄ := by
   simp [lift]
   rfl
 
-@[progress]
+@[step]
 theorem UScalar.or_spec {ty} (x y : UScalar ty) :
   lift (x ||| y) ⦃ z => z.val = (x ||| y).val ∧ z.bv = x.bv ||| y.bv ⦄ := by
   simp [lift]
   rfl
 
-@[progress]
+@[step]
 theorem UScalar.xor_spec {ty} (x y : UScalar ty) :
   lift (x ^^^ y) ⦃ z => z.val = (x ^^^ y).val ∧ z.bv = x.bv ^^^ y.bv ⦄ := by
   simp [lift]
   rfl
 
-@[progress]
+@[step]
 theorem IScalar.and_spec {ty} (x y : IScalar ty) :
   lift (x &&& y) ⦃ z => z.val = (x &&& y).val ∧ z.bv = x.bv &&& y.bv ⦄ := by
   simp [lift]
   rfl
 
-@[progress]
+@[step]
 theorem IScalar.or_spec {ty} (x y : IScalar ty) :
   lift (x ||| y) ⦃ z => z.val = (x ||| y).val ∧ z.bv = x.bv ||| y.bv ⦄ := by
   simp [lift]
   rfl
 
-@[progress]
+@[step]
 theorem IScalar.xor_spec {ty} (x y : IScalar ty) :
   lift (x ^^^ y) ⦃ z => z.val = (x ^^^ y).val ∧ z.bv = x.bv ^^^ y.bv ⦄ := by
   simp [lift]
   rfl
 
-@[progress]
+@[step]
 theorem UScalar.not_spec {ty} (x : UScalar ty) :
   lift (~~~x) ⦃ z => z = ~~~x ⦄ := by
   simp [lift]
 
-@[progress]
+@[step]
 theorem IScalar.not_spec {ty} (x : IScalar ty) :
   lift (~~~x) ⦃ z => z = ~~~x ⦄ := by
   simp [lift]

@@ -1,6 +1,6 @@
 import Aeneas.Std.Primitives
 import Std.Do
-import Aeneas.Grind.Init
+import Aeneas.Tactic.Solver.Grind.Init
 
 namespace Aeneas.Std.WP
 
@@ -323,10 +323,10 @@ example (x : Nat) :
   (do
     let y ← add1 x
     add1 y) ⦃ y => y = x + 2 ⦄ := by
-    -- progress as ⟨ y, z ⟩
+    -- step as ⟨ y, z ⟩
     apply spec_bind (add1_spec _)
     intro y h
-    -- progress as ⟨ y1, z1⟩
+    -- step as ⟨ y1, z1⟩
     apply spec_mono (add1_spec _)
     intro y' h
     --
@@ -337,12 +337,12 @@ example (x : Nat) :
   (do
     let y ← add1 x
     add1 y) ⦃ y => y = x + 2 ⦄ := by
-    -- progress as ⟨ y, z ⟩
+    -- step as ⟨ y, z ⟩
     apply spec_bind' (add1_spec _)
     simp -failIfUnchanged only -- introduce the quantifiers
     simp only [qimp_spec_iff] -- eliminate `qimp_spec`
     intro y h
-    -- progress as ⟨ y1, z1⟩
+    -- step as ⟨ y1, z1⟩
     apply spec_mono' (add1_spec _)
     simp -failIfUnchanged only -- introduce the quantifiers
     simp only [qimp_iff] -- eliminate `qimp_spec`
@@ -361,14 +361,14 @@ example (x : Nat) :
   (do
     let (y, _) ← add2 x
     add2 y) ⦃ (y, _) => y = x + 2 ⦄ := by
-    -- progress as ⟨ y, z ⟩
+    -- step as ⟨ y, z ⟩
     apply spec_bind
     . apply add2_spec
     intro tmp h
     split at h
     rename_i tmp y z
     clear tmp
-    -- progress as ⟨ y1, z1⟩
+    -- step as ⟨ y1, z1⟩
     apply spec_mono
     . apply add2_spec
     intro tmp h
@@ -386,14 +386,14 @@ example (x : Nat) :
   (do
     let (y, _) ← add2 x
     add2 y) ⦃ y _ => y = x + 2 ⦄ := by
-    -- progress as ⟨ y, z ⟩
+    -- step as ⟨ y, z ⟩
     apply spec_bind'
     . apply add2_spec'
     simp -failIfUnchanged only [qimp_spec_predn] -- introduce the quantifiers
     simp only [qimp_spec_iff, curry] -- eliminate `qimp_spec` and `curry`
     simp only [imp] -- eliminate `imp`
     intro y z h0
-    -- progress as ⟨ y1, z1⟩
+    -- step as ⟨ y1, z1⟩
     apply spec_mono'
     . apply add2_spec'
     simp -failIfUnchanged only [qimp_predn] -- introduce the quantifiers

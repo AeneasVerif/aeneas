@@ -34,16 +34,18 @@ DO NOT use `lake build` to iterate on proofs. Use lean_lsp.py:
 
 Workflow: open → sorry → goal → edit → errors → repeat
 Only use `lake build` once at the very end to confirm the final result.
+
+⛔ NEVER run `lake clean` or delete `.lake/`. This forces a full rebuild (30+ min). Fix root causes instead.
 ```
 
-### 3. The progress*? workflow
+### 3. The step*? workflow
 
 ```
-### Use progress*? to develop proofs
+### Use step*? to develop proofs
 
-See lean-lsp-tool.instructions.md for the full progress*? workflow.
-In short: write `progress*?` → `info <line>` to read the expanded script →
-copy it into your proof → fix sub-goals → collapse back to `progress*` if possible.
+See lean-lsp-tool.instructions.md for the full step*? workflow.
+In short: write `step*?` → `info <line>` to read the expanded script →
+copy it into your proof → fix sub-goals → collapse back to `step*` if possible.
 ```
 
 ### 4. Task-specific context
@@ -342,7 +344,7 @@ until all statements are validated. Only then do proof agents launch.
 - Are bridge definitions correct?
 - **Is the postcondition strong enough for callers?** Check which other theorems
   (e.g., outer loop specs, top-level function specs) will need this theorem's result
-  via `progress`. Those callers will only see the postcondition — so it must contain
+  via `step`. Those callers will only see the postcondition — so it must contain
   everything they need. For example, if an outer loop needs both the length AND
   element-wise values of a slice, the inner loop's postcondition must provide both.
   Trace the call chain: find the callers in the generated Lean code, look at what
@@ -400,7 +402,7 @@ does X but the spec requires Y. Counterexample: [specific input that triggers it
 
 **🚨 CRITICAL: When an axiom or external model is too weak, report it IMMEDIATELY.**
 In Aeneas projects, external functions (FFI, stdlib, crypto primitives) are modeled via
-hand-written definitions and axiomatized progress specs (typically in `ExternalSpecs.lean`
+hand-written definitions and axiomatized step specs (typically in `ExternalSpecs.lean`
 or similar files). If a statement or proof agent discovers that such an axiom has a
 postcondition that is too weak to prove the needed theorem (e.g., `fun _ => True` when
 the proof needs functional properties of the output), the agent MUST:
@@ -479,7 +481,7 @@ doesn't build cleanly, the proof agent must fix the errors before reporting.
 - **Does the file build without errors?** The review agent MUST run `lake build <module>`
   and verify 0 errors. If the proof agent handed off a broken file, send it back immediately.
   `sorry` warnings are acceptable; type errors, tactic failures, and elaboration errors are NOT.
-- **Is the proof idiomatic?** Uses standard Aeneas patterns (progress, WP.spec_mono,
+- **Is the proof idiomatic?** Uses standard Aeneas patterns (step, WP.spec_mono,
   split_ifs, etc.) rather than ad-hoc workarounds? Follows the patterns documented
   in proof-patterns.instructions.md?
 - **Is the proof clean and not verbose?** No unnecessary intermediate steps, no
@@ -498,7 +500,7 @@ doesn't build cleanly, the proof agent must fix the errors before reporting.
 - **Are all warnings addressed?** After building, check the warning output. The following
   warnings are **NOT acceptable** and must be fixed before the proof is considered done:
   - `"This simp argument is unused"` — remove the unused lemma from `simp only [...]`
-  - `"Too many ids provided"` — reduce the binder count in `progress as ⟨...⟩`
+  - `"Too many ids provided"` — reduce the binder count in `step as ⟨...⟩`
   - `"unused variable"` — remove or rename with `_` prefix
   - `"'tactic' does nothing"` / `"'tactic' tactic is never executed"` — remove the dead tactic
   - The ONLY acceptable warnings are `"declaration uses 'sorry'"` (for remaining sorry's).
@@ -645,7 +647,7 @@ After each proof+review cycle completes:
 | Failure | Cause | Fix |
 |---------|-------|-----|
 | Agent uses `lake build` loops | Didn't read LSP skill | Stronger prompt, mandate LSP |
-| `progress*` times out | Too many monadic calls | Use `progress*?` workflow |
+| `step*` times out | Too many monadic calls | Use `step*?` workflow |
 | Unfolds stdlib definitions | Didn't read core skill | Add "don't unfold" rule to prompt |
 | Uses `omega` | `omega` can't reason about scalars, `U32.max`, list lengths, etc. | NEVER use `omega` — use `scalar_tac`, `agrind`, or `grind` |
 | Uses `nlinarith` | Same issues as `omega` — can't reason about scalars | NEVER use `nlinarith` — use `scalar_tac` or `simp_scalar` |
@@ -670,7 +672,7 @@ Read these files: [list paths]
 
 ## Proof Strategy
 Use `loop.spec_decr_nat` with measure `iter.end - iter.start`.
-Use `progress*?` to generate the body proof script, then fix sub-goals.
+Use `step*?` to generate the body proof script, then fix sub-goals.
 
 ## Available Specs
 - `butterfly_spec`, `mod_add_spec`, etc.

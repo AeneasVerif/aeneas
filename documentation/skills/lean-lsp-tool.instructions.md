@@ -155,7 +155,7 @@ edit 35 unfold add_overflow
 goal 35
 → {"command":"goal","status":"ok","goals":["⊢ a.val + b.val ≤ U32.max → ..."],...}
 
-insert 35 progress
+insert 35 step
 → {"command":"insert","status":"ok","ready":true,"elapsed":1.8,"errors":[],...}
 
 errors
@@ -167,7 +167,7 @@ errors
 ```
 batch_start
 delete 35 37
-insert 34 unfold add_overflow\n  progress\n  simp_all
+insert 34 unfold add_overflow\n  step\n  simp_all
 batch_end
 → {"command":"batch_end","status":"ok","ready":true,"elapsed":3.2,"errors":[],...}
 ```
@@ -241,24 +241,26 @@ open file → wait → sorry → goal → edit → errors → repeat
 
 **Never** fall back to `lake build` loops. Only use `lake build` once at the very end to confirm the final result.
 
-## The progress*? Workflow for Complex Function Bodies
+**⛔ NEVER run `lake clean` or delete `.lake/`.** This forces a full rebuild (30+ min). Fix root causes instead.
+
+## The step*? Workflow for Complex Function Bodies
 
 When developing a proof for a function body with many monadic calls:
 
-1. Write `progress*?` as the tactic
+1. Write `step*?` as the tactic
 2. Run `info <line>` in the LSP — the "Try this: ..." diagnostic contains the expanded script
 3. Copy the expanded script into your proof and work through it
-4. Once the full proof works, try collapsing back into a single `progress*`
-5. If `progress*` works, use it (shorter is better). If not, keep the expanded form.
+4. Once the full proof works, try collapsing back into a single `step*`
+5. If `step*` works, use it (shorter is better). If not, keep the expanded form.
 
-**How it works:** `progress*?` generates a suggestion via `addTryThisTacticSeqSuggestion`.
+**How it works:** `step*?` generates a suggestion via `addTryThisTacticSeqSuggestion`.
 In VS Code this is a clickable code action. In `lean_lsp.py`, it appears as an INFO
-diagnostic at the `progress*?` line — use `info <line>` or `diagnostics` to read it.
+diagnostic at the `step*?` line — use `info <line>` or `diagnostics` to read it.
 
 **Example workflow:**
 ```
--- Step 1: Write progress*? to generate script
-edit 42 progress*?
+-- Step 1: Write step*? to generate script
+edit 42 step*?
 
 -- Step 2: Read the "Try this:" suggestion
 info 42
@@ -274,7 +276,7 @@ insert 41 let* ⟨ x2, x2_post ⟩ ← U32.add_spec\n  let* ⟨ x3, x3_post ⟩ 
 batch_end
 
 -- Step 4: Once everything works, try collapsing
-edit 42 progress*
+edit 42 step*
 ```
 
 ## JSON Response Examples (Common Scenarios)
@@ -293,7 +295,7 @@ Agent action: `omega` can't solve this — try `scalar_tac` or `agrind` instead.
 
 ### Progress fails (no matching spec)
 ```json
-{"command":"edit","status":"ok","line":42,"old":"sorry","new":"progress","ready":true,"elapsed":3.0,"errors":[{"severity":"ERROR","severity_code":1,"line":42,"end_line":42,"col":2,"end_col":10,"message":"progress failed: no matching spec found for 'my_function'"}],"error_count":1}
+{"command":"edit","status":"ok","line":42,"old":"sorry","new":"step","ready":true,"elapsed":3.0,"errors":[{"severity":"ERROR","severity_code":1,"line":42,"end_line":42,"col":2,"end_col":10,"message":"step failed: no matching spec found for 'my_function'"}],"error_count":1}
 ```
 Agent action: `my_function` has no spec. Search for one (`grep -r "theorem.*my_function.*spec"`) or write one.
 

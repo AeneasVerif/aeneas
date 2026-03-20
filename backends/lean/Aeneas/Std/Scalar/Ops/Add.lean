@@ -1,7 +1,7 @@
 import Aeneas.Std.Scalar.Core
 import Aeneas.Std.Scalar.Misc
 import Aeneas.Std.Scalar.Elab
-import Aeneas.ScalarTac
+import Aeneas.Tactic.Solver.ScalarTac
 import Mathlib.Data.BitVec
 
 namespace Aeneas.Std
@@ -106,11 +106,11 @@ iscalar theorem «%S».add_bv_spec {x y : «%S»}
 /-!
 Theorems about the addition, with a specification which uses
 only integers. Those are the most common to use, so we mark them with the
-`progress` attribute.
+`step` attribute.
 -/
 
 /-- Generic theorem - shouldn't be used much -/
-@[progress]
+@[step]
 theorem UScalar.add_spec {ty} {x y : UScalar ty}
   (hmax : ↑x + ↑y ≤ UScalar.max ty) :
   x + y ⦃ z => (↑z : Nat) = ↑x + ↑y ⦄ := by
@@ -120,7 +120,7 @@ theorem UScalar.add_spec {ty} {x y : UScalar ty}
   omega
 
 /-- Generic theorem - shouldn't be used much -/
-@[progress]
+@[step]
 theorem IScalar.add_spec {ty} {x y : IScalar ty}
   (hmin : IScalar.min ty ≤ ↑x + ↑y)
   (hmax : ↑x + ↑y ≤ IScalar.max ty) :
@@ -129,11 +129,11 @@ theorem IScalar.add_spec {ty} {x y : IScalar ty}
   split at h <;> simp_all [min, max]
   omega
 
-uscalar @[progress] theorem «%S».add_spec {x y : «%S»} (hmax : x.val + y.val ≤ «%S».max) :
+uscalar @[step] theorem «%S».add_spec {x y : «%S»} (hmax : x.val + y.val ≤ «%S».max) :
   x + y ⦃ z => (↑z : Nat) = ↑x + ↑y ⦄ :=
   UScalar.add_spec (by scalar_tac)
 
-iscalar @[progress] theorem «%S».add_spec {x y : «%S»}
+iscalar @[step] theorem «%S».add_spec {x y : «%S»}
   (hmin : «%S».min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ «%S».max) :
   x + y ⦃ z => (↑z : Int) = ↑x + ↑y ⦄ :=
   IScalar.add_spec (by scalar_tac) (by scalar_tac)

@@ -1,10 +1,10 @@
 /- Arrays/Slices -/
-import Aeneas.List
+import Aeneas.Data.List
 import Aeneas.Std.Array.Core
 import Aeneas.Std.Range
 import Aeneas.Std.Core.Ops
 import Aeneas.Std.RawPtr
-import Aeneas.SimpScalar.SimpScalar
+import Aeneas.Tactic.Simp.SimpScalar.SimpScalar
 
 namespace Aeneas.Std
 
@@ -114,13 +114,13 @@ theorem Slice.eq_iff {α} (s0 s1 : Slice α) : s0 = s1 ↔ s0.val = s1.val := by
 @[rust_fun "core::slice::{[@T]}::is_empty", simp]
 def core.slice.Slice.is_empty {T : Type} (s : Slice T) : Result Bool := ok (s.length = 0)
 
-@[progress]
+@[step]
 theorem core.slice.Slice.is_empty_spec {T : Type} (s : Slice T) :
   core.slice.Slice.is_empty s ⦃ b => b = (s.length = 0) ⦄ := by
   simp only [is_empty, Slice.length, List.length_eq_zero_iff, eq_iff_iff, spec_ok,
     decide_eq_true_eq]
 
-@[progress]
+@[step]
 theorem Slice.index_usize_spec {α : Type u} [Inhabited α] (v: Slice α) (i: Usize)
   (hbound : i.val < v.length) :
   v.index_usize i ⦃ x => x = v.val[i.val]! ⦄ := by
@@ -198,7 +198,7 @@ def Slice.update {α : Type u} (v: Slice α) (i: Usize) (x: α) : Result (Slice 
   | some _ =>
     ok ⟨ v.val.set i.val x, by have := v.property; simp [*] ⟩
 
-@[progress]
+@[step]
 theorem Slice.update_spec {α : Type u} (v: Slice α) (i: Usize) (x : α)
   (hbound : i.val < v.length) :
   v.update i x ⦃ nv => nv = v.set i x ⦄ := by
@@ -211,7 +211,7 @@ def Slice.index_mut_usize {α : Type u} (v: Slice α) (i: Usize) :
   let x ← Slice.index_usize v i
   ok (x, Slice.set v i)
 
-@[progress]
+@[step]
 theorem Slice.index_mut_usize_spec {α : Type u} [Inhabited α] (v: Slice α) (i: Usize)
   (hbound : i.val < v.length) :
   v.index_mut_usize i ⦃ p => p = (v.val[i.val]!, Slice.set v i) ⦄ := by
@@ -234,7 +234,7 @@ def Slice.subslice {α : Type u} (s : Slice α) (r : Range Usize) : Result (Slic
   else
     fail panic
 
-@[progress]
+@[step]
 theorem Slice.subslice_spec {α : Type u} [Inhabited α] (s : Slice α) (r : Range Usize)
   (h0 : r.start.val < r.end.val) (h1 : r.end.val ≤ s.val.length) :
   subslice s r ⦃ ns => ns.val = s.slice r.start.val r.end.val ∧
@@ -253,7 +253,7 @@ def Slice.update_subslice {α : Type u} (s : Slice α) (r : Range Usize) (ss : S
   else
     fail panic
 
-@[progress]
+@[step]
 theorem Slice.update_subslice_spec {α : Type u} [Inhabited α] (a : Slice α) (r : Range Usize) (ss : Slice α)
   (_ : r.start.val < r.end.val) (_ : r.end.val ≤ a.length) (_ : ss.length = r.end.val - r.start.val) :
   update_subslice a r ss ⦃ na =>
@@ -469,12 +469,12 @@ def core.ops.index.IndexMutSlice {T I Output : Type}
   index_mut := core.slice.index.Slice.index_mut inst
 }
 
-@[simp, progress_simps, rust_fun "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], @T>}::get"]
+@[simp, step_simps, rust_fun "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], @T>}::get"]
 abbrev core.slice.index.Usize.get
   {T : Type} (i : Usize) (s : Slice T) : Result (Option T) :=
   ok s[i]?
 
-@[simp, progress_simps, rust_fun "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], @T>}::get_mut"]
+@[simp, step_simps, rust_fun "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], @T>}::get_mut"]
 abbrev core.slice.index.Usize.get_mut
   {T : Type} (i : Usize) (s : Slice T) : Result (Option T × (Option T → Slice T)) :=
   ok (s[i]?, s.set_opt i)
@@ -491,11 +491,11 @@ def core.slice.index.Usize.get_unchecked_mut
   -- We don't have a model for now
   fun _ _ => fail .undef
 
-@[simp, progress_simps, rust_fun "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], @T>}::index"]
+@[simp, step_simps, rust_fun "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], @T>}::index"]
 abbrev core.slice.index.Usize.index {T : Type} (i : Usize) (s : Slice T) : Result T :=
   Slice.index_usize s i
 
-@[simp, progress_simps, rust_fun "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], @T>}::index_mut"]
+@[simp, step_simps, rust_fun "core::slice::index::{core::slice::index::SliceIndex<usize, [@T], @T>}::index_mut"]
 abbrev core.slice.index.Usize.index_mut {T : Type}
   (i : Usize) (s : Slice T) : Result (T × (T → (Slice T))) :=
   Slice.index_mut_usize s i
@@ -516,7 +516,7 @@ def core.slice.index.SliceIndexUsizeSlice (T : Type) :
   index_mut := core.slice.index.Usize.index_mut
 }
 
-@[progress]
+@[step]
 theorem core.slice.Slice.get_unchecked_SliceIndexUsizeSlice_spec {T s i} [Inhabited T]
   (h : i.val < s.length) :
   core.slice.Slice.get_unchecked  (core.slice.index.SliceIndexUsizeSlice T) s i
@@ -625,7 +625,7 @@ theorem Slice.clone_length {T : Type} {clone : T → Result T} {s s' : Slice T} 
   cases s'; simp_all
   cases h; simp_all
 
-@[progress]
+@[step]
 theorem Slice.clone_spec {T : Type} {clone : T → Result T} {s : Slice T} (h : ∀ x ∈ s.val, clone x = ok x) :
   Slice.clone clone s ⦃ s' => s = s' ⦄ := by
   simp only [Slice.clone]
@@ -668,12 +668,12 @@ def core.slice.Slice.swap {T : Type} (s : Slice T) (a b : Usize) : Result (Slice
   let s1 ← Slice.update s a av
   Slice.update s1 b bv
 
-@[simp, progress_simps]
+@[simp, step_simps]
 theorem Slice.index_mut_SliceIndexRangeUsizeSliceInst (s : Slice α) (r : core.ops.range.Range Usize) :
   core.slice.index.Slice.index_mut (core.slice.index.SliceIndexRangeUsizeSlice α) s r = core.slice.index.SliceIndexRangeUsizeSlice.index_mut r s := by
   rfl
 
-@[simp, progress_simps]
+@[simp, step_simps]
 theorem Slice.index_SliceIndexRangeUsizeSliceInst (s : Slice α) (r : core.ops.range.Range Usize) :
   core.slice.index.Slice.index (core.slice.index.SliceIndexRangeUsizeSlice α) s r = core.slice.index.SliceIndexRangeUsizeSlice.index r s := by
   rfl
@@ -706,8 +706,8 @@ theorem Slice.setSlice!_val (s : Slice α) (i : ℕ) (s' : List α) :
   (s.setSlice! i s').val = s.val.setSlice! i s' := by
   simp only [setSlice!]
 
-@[progress]
-theorem core.slice.index.SliceIndexRangeUsizeSlice.index_mut.progress_spec (r : core.ops.range.Range Usize) (s : Slice α)
+@[step]
+theorem core.slice.index.SliceIndexRangeUsizeSlice.index_mut.step_spec (r : core.ops.range.Range Usize) (s : Slice α)
   (h0 : r.start ≤ r.end) (h1 : r.end ≤ s.length) :
   core.slice.index.SliceIndexRangeUsizeSlice.index_mut r s ⦃ (s1, index_mut_back) =>
   s1.val = s.val.slice r.start r.end ∧
@@ -721,8 +721,8 @@ theorem core.slice.index.SliceIndexRangeUsizeSlice.index_mut.progress_spec (r : 
     simp_lists [Slice.eq_iff]
   . scalar_tac
 
-@[progress]
-theorem core.slice.index.SliceIndexRangeUsizeSlice.index.progress_spec {α : Type}
+@[step]
+theorem core.slice.index.SliceIndexRangeUsizeSlice.index.step_spec {α : Type}
     (r : core.ops.range.Range Usize) (s : Slice α) (h0 : r.start ≤ r.end) (h1 : r.end ≤ s.length) :
     core.slice.index.SliceIndexRangeUsizeSlice.index r s ⦃ (s1 : Slice α) =>
       s1.val = s.val.slice r.start r.end ∧
@@ -735,20 +735,20 @@ theorem core.slice.index.SliceIndexRangeUsizeSlice.index.progress_spec {α : Typ
   · simp only [spec_fail]
     scalar_tac
 
--- RangeTo progress specs
+-- RangeTo step specs
 
-@[simp, progress_simps]
+@[simp, step_simps]
 theorem Slice.index_mut_SliceIndexRangeToUsizeSliceInst (s : Slice α) (r : core.ops.range.RangeTo Usize) :
   core.slice.index.Slice.index_mut (core.slice.index.SliceIndexRangeToUsizeSlice α) s r =
   core.slice.index.SliceIndexRangeToUsizeSlice.index_mut r s := by rfl
 
-@[simp, progress_simps]
+@[simp, step_simps]
 theorem Slice.index_SliceIndexRangeToUsizeSliceInst (s : Slice α) (r : core.ops.range.RangeTo Usize) :
   core.slice.index.Slice.index (core.slice.index.SliceIndexRangeToUsizeSlice α) s r =
   core.slice.index.SliceIndexRangeToUsizeSlice.index r s := by rfl
 
-@[progress]
-theorem core.slice.index.SliceIndexRangeToUsizeSlice.index_mut.progress_spec
+@[step]
+theorem core.slice.index.SliceIndexRangeToUsizeSlice.index_mut.step_spec
     (r : core.ops.range.RangeTo Usize) (s : Slice α) (h : r.end ≤ s.length) :
   core.slice.index.SliceIndexRangeToUsizeSlice.index_mut r s
     ⦃ (s1, back) =>
@@ -763,8 +763,8 @@ theorem core.slice.index.SliceIndexRangeToUsizeSlice.index_mut.progress_spec
     · intro s'; simp
   · scalar_tac
 
-@[progress]
-theorem core.slice.index.SliceIndexRangeToUsizeSlice.index.progress_spec
+@[step]
+theorem core.slice.index.SliceIndexRangeToUsizeSlice.index.step_spec
     (r : core.ops.range.RangeTo Usize) (s : Slice α) (h : r.end ≤ s.length) :
   core.slice.index.SliceIndexRangeToUsizeSlice.index r s
     ⦃ s1 =>
@@ -776,20 +776,20 @@ theorem core.slice.index.SliceIndexRangeToUsizeSlice.index.progress_spec
     simp; scalar_tac
   · scalar_tac
 
--- RangeFrom progress specs
+-- RangeFrom step specs
 
-@[simp, progress_simps]
+@[simp, step_simps]
 theorem Slice.index_mut_SliceIndexRangeFromUsizeSliceInst (s : Slice α) (r : core.ops.range.RangeFrom Usize) :
   core.slice.index.Slice.index_mut (core.slice.index.SliceIndexRangeFromUsizeSlice α) s r =
   core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut r s := by rfl
 
-@[simp, progress_simps]
+@[simp, step_simps]
 theorem Slice.index_SliceIndexRangeFromUsizeSliceInst (s : Slice α) (r : core.ops.range.RangeFrom Usize) :
   core.slice.index.Slice.index (core.slice.index.SliceIndexRangeFromUsizeSlice α) s r =
   core.slice.index.SliceIndexRangeFromUsizeSlice.index r s := by rfl
 
-@[progress]
-theorem core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut.progress_spec
+@[step]
+theorem core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut.step_spec
     (r : core.ops.range.RangeFrom Usize) (s : Slice α) (h : r.start ≤ s.length) :
   core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut r s
     ⦃ (s1, back) =>
@@ -804,8 +804,8 @@ theorem core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut.progress_spec
     · intro s'; simp
   · scalar_tac
 
-@[progress]
-theorem core.slice.index.SliceIndexRangeFromUsizeSlice.index.progress_spec
+@[step]
+theorem core.slice.index.SliceIndexRangeFromUsizeSlice.index.step_spec
     (r : core.ops.range.RangeFrom Usize) (s : Slice α) (h : r.start ≤ s.length) :
   core.slice.index.SliceIndexRangeFromUsizeSlice.index r s
     ⦃ s1 =>
@@ -817,8 +817,8 @@ theorem core.slice.index.SliceIndexRangeFromUsizeSlice.index.progress_spec
     simp [Slice.length, List.length_drop]
   · scalar_tac
 
-@[progress]
-theorem core.slice.Slice.copy_from_slice.progress_spec (copyInst : core.marker.Copy α) (s0 s1 : Slice α)
+@[step]
+theorem core.slice.Slice.copy_from_slice.step_spec (copyInst : core.marker.Copy α) (s0 s1 : Slice α)
   (h : s0.length = s1.length) :
   core.slice.Slice.copy_from_slice copyInst s0 s1 ⦃ s1' => s1 = s1' ⦄ := by
   simp only [copy_from_slice]

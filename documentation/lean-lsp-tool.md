@@ -100,12 +100,12 @@ echo -e "open File.lean\ngoal 42\nquit" | python3 scripts/lean_lsp.py --repl --j
 **`edit_range <start> <end> <content>`** — Replace a range of lines (inclusive).
 - Use `\n` (literal backslash-n) for newlines in content
 - Content is used exactly as provided (include any indentation)
-- Example: `edit_range 35 37 unfold foo\n  progress\n  simp_all`
+- Example: `edit_range 35 37 unfold foo\n  step\n  simp_all`
 
 **`insert <after_line> <content>`** — Insert new line(s) after a given line.
 - Use `0` to insert at the beginning of the file
 - Use `\n` for multi-line inserts
-- Example: `insert 35   progress as ⟨x, h⟩\n  simp [*]`
+- Example: `insert 35   step as ⟨x, h⟩\n  simp [*]`
 
 **`delete <start> [end]`** — Delete line(s) (inclusive).
 - Single line: `delete 35`
@@ -167,7 +167,7 @@ When working with lean_lsp.py, you'll encounter these errors in diagnostics. Her
 
 ### "application type mismatch"
 **Cause:** A function or tactic received an argument of the wrong type.
-**Debug:** Use `hover <line> <col>` to check the actual types involved. Often caused by passing the wrong hypothesis to `progress`.
+**Debug:** Use `hover <line> <col>` to check the actual types involved. Often caused by passing the wrong hypothesis to `step`.
 
 ### "unsolved goals"
 **Cause:** Your tactic sequence didn't close all goals.
@@ -177,17 +177,17 @@ When working with lean_lsp.py, you'll encounter these errors in diagnostics. Her
 **Cause:** You referenced a name that doesn't exist in scope.
 **Debug:** Check imports. Use `complete <line> <col>` to see available names. Common cause: missing `import Aeneas` or project-specific imports.
 
-### "type mismatch" (in `progress`)
-**Cause:** `progress` found a spec but its postcondition doesn't match the current goal.
-**Debug:** Use `progress with <specific_theorem>` to control which spec is applied. Check if you need a more specific spec variant.
+### "type mismatch" (in `step`)
+**Cause:** `step` found a spec but its postcondition doesn't match the current goal.
+**Debug:** Use `step with <specific_theorem>` to control which spec is applied. Check if you need a more specific spec variant.
 
 ### "tactic ... failed, ..."
 **Cause:** The tactic couldn't make progress on the current goal.
 **Debug:** Use `goal <line>` to see the exact goal shape, then consult the tactic decision tree to pick the right tactic.
 
 ### "maximum recursion depth has been reached" / termination error
-**Cause:** Usually means `progress` applied the theorem being proved recursively. See the termination pitfall in proof-strategies.md.
-**Fix:** Add `split` or `cases` before `progress` to case-split first.
+**Cause:** Usually means `step` applied the theorem being proved recursively. See the termination pitfall in proof-strategies.md.
+**Fix:** Add `split` or `cases` before `step` to case-split first.
 
 ### "(kernel) declaration has been defined with sorry"
 **Cause:** There's still a `sorry` in the proof. This is a warning, not an error — the proof is incomplete.

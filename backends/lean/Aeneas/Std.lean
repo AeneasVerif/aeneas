@@ -12,4 +12,4 @@ import Aeneas.Std.String
 import Aeneas.Std.StringIter
 import Aeneas.Std.Vec
 import Aeneas.Std.VecIter
-import Aeneas.Tuples
+import Aeneas.Data.Tuples

@@ -1,7 +1,7 @@
 # Aeneas + Lean Core Skill File
 
 ## Context
-Aeneas translates Rust programs to pure Lean code via the LLBC intermediate representation. The generated code uses the `Result` error monad. Proofs verify functional correctness by writing specification theorems tagged with `@[progress]`.
+Aeneas translates Rust programs to pure Lean code via the LLBC intermediate representation. The generated code uses the `Result` error monad. Proofs verify functional correctness by writing specification theorems tagged with `@[step]`.
 
 ## PREREQUISITE: Use lean_lsp.py for All Proof Work
 
@@ -73,18 +73,18 @@ When writing hand-written models of Rust functions (e.g., in `FunsExternal.lean`
 ```lean
 /-- **Spec theorem for `crate_name::module::function_name`**
 Concise natural-language description of the spec. -/
-@[progress]
+@[step]
 theorem function_name.spec (params : Types) (preconditions : hypotheses) :
     function_name params ⦃ (result : ResultType) =>
       postcondition result ⦄ := by
   unfold function_name
-  progress  -- or progress* for automation
+  step  -- or step* for automation
   -- finish remaining goals
 ```
 
 ### With backward function
 ```lean
-@[progress]
+@[step]
 theorem function_name.spec (param1 : U32) (param2 : Slice U16)
     (hpre : param1.val < param2.length) :
     function_name param1 param2 ⦃ (result : U32) (back : U32 → Slice U16) =>
@@ -93,7 +93,7 @@ theorem function_name.spec (param1 : U32) (param2 : Slice U16)
 ```
 
 ### Indentation rules for spec theorems
-- `@[progress]` and `theorem name`: base indentation (0 additional)
+- `@[step]` and `theorem name`: base indentation (0 additional)
 - Arguments, preconditions, and the line with the function application: +4 spaces
 - Postconditions inside `⦃ ⦄`: +6 spaces
 - Proof body (after `:= by`): +2 spaces
@@ -119,7 +119,7 @@ theorem function_name.spec (param1 : U32) (param2 : Slice U16)
   -- GOOD: hlen is in scope when type-checking res[i]
   ∃ (hlen : res.length = n), res[i] = 42
   ```
-- **`@[progress]` attribute**: always add it so the Aeneas `progress` tactic can
+- **`@[step]` attribute**: always add it so the Aeneas `step` tactic can
   find the theorem. Start a new line after the attribute.
 
 ### The `⦃ ⦄` notation
@@ -138,25 +138,25 @@ fun_name a b ⦃ (x : U32) (s : Slice U16) =>
 ### Decision tree for starting a proof:
 
 1. Does the function start with `match`/`if`?
-   - YES → `unfold fn; split` then `progress` per branch
-   - NO → `unfold fn; progress`
+   - YES → `unfold fn; split` then `step` per branch
+   - NO → `unfold fn; step`
 
 2. Is the function simple (few monadic steps, say ≤ 5)?
-   - YES → `unfold fn; progress*` may complete it directly
-   - NO → Use `progress*?` to generate an expanded proof script, then work from there
+   - YES → `unfold fn; step*` may complete it directly
+   - NO → Use `step*?` to generate an expanded proof script, then work from there
 
 3. Is the function large/complex (10+ monadic steps)?
-   - Start with `progress*?` to generate the step-by-step script
+   - Start with `step*?` to generate the step-by-step script
    - Work through the generated script, fixing any sub-goals that fail
-   - Once the whole proof is done, try collapsing back into `progress*` if possible
+   - Once the whole proof is done, try collapsing back into `step*` if possible
    - If heartbeats are tight, decompose the function (fold theorems) or extract sub-goals as auxiliary lemmas — aim for < 8M heartbeats even for large proofs; increase the default to 1M as a baseline (see "Debugging Commands" in the tactics quickref)
 
-### The progress*? → fix → collapse workflow:
-1. `progress*?` — generates expanded proof script (one `progress` per monadic call)
+### The step*? → fix → collapse workflow:
+1. `step*?` — generates expanded proof script (one `step` per monadic call)
 2. Copy the generated script into your proof
 3. Work through it: fix failing sub-goals, add lemmas, adjust tactics
-4. Once the full proof works, try collapsing sections back to `progress*`
-5. If `progress*` works on the whole body, use that (shorter is better)
+4. Once the full proof works, try collapsing sections back to `step*`
+5. If `step*` works on the whole body, use that (shorter is better)
 6. If not, keep the expanded script for the parts that need manual intervention
 
 ## Tactic Quick Reference
@@ -164,9 +164,9 @@ fun_name a b ⦃ (x : U32) (s : Slice U16) =>
 ### Primary tactics (Aeneas-specific)
 | Tactic | Use for | Syntax |
 |---|---|---|
-| `progress` | Apply function spec | `progress`, `progress as ⟨x, h⟩`, `progress with thm` |
-| `progress*` | Repeated progress | `progress*` |
-| `progress*?` | Generate proof script | `progress*?` |
+| `step` | Apply function spec | `step`, `step as ⟨x, h⟩`, `step with thm` |
+| `step*` | Repeated step | `step*` |
+| `step*?` | Generate proof script | `step*?` |
 | `scalar_tac` | Integer arithmetic/bounds | `scalar_tac`, `scalar_tac +nonLin` |
 | `simp_scalar` | Simplify scalar exprs | `simp_scalar [lemmas]` |
 | `simp_lists` | Simplify list get/set | `simp_lists [lemmas]` |
@@ -206,7 +206,7 @@ container. They will either fail silently or produce fragile proofs that break o
 `agrind` is fast and handles most goals. `grind` is slower but more powerful. `scalar_tac`
 is specialized for arithmetic bounds and should be used when the goal is purely arithmetic.
 
-**This applies everywhere:** in `progress` theorem proofs, in helper lemmas, in `have` steps,
+**This applies everywhere:** in `step` theorem proofs, in helper lemmas, in `have` steps,
 in `termination_by`/`decreasing_by` blocks, in `calc` chains — everywhere, including pure
 `Nat` arithmetic in `decreasing_by` clauses. There are **no exceptions**.
 
@@ -238,42 +238,42 @@ in `termination_by`/`decreasing_by` blocks, in `calc` chains — everywhere, inc
 
 ### Pattern 1: Simple function spec
 ```lean
-@[progress]
+@[step]
 theorem add_overflow.spec (a b : U32) (h : a.val + b.val ≤ U32.max) :
   add_overflow a b ⦃ c => c.val = a.val + b.val ⦄ := by
   unfold add_overflow
-  progress
+  step
 ```
 
 ### Pattern 2: Recursive function with case split
 ```lean
-@[progress]
+@[step]
 theorem list_len.spec {T : Type} (l : CList T) :
   list_len l ⦃ n => n.val = l.toList.length ⦄ := by
   unfold list_len list_len_loop
   split
-  · progress as ⟨ n ⟩   -- Cons case
+  · step as ⟨ n ⟩   -- Cons case
     simp [*]
   · simp_all              -- Nil case
 ```
 
 ### Pattern 3: Function with backward continuation
 ```lean
-@[progress]
+@[step]
 theorem list_nth_mut.spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
   list_nth_mut l i ⦃ x back =>
     x = l.toList[i.val]! ∧
     ∀ x', (back x').toList = l.toList.set i.val x' ⦄ := by
   unfold list_nth_mut list_nth_mut_loop
-  progress*
+  step*
   simp_all
 ```
 
 ### Loop Translation: Prefer `-loops-to-rec`
 
 Aeneas supports two loop translation modes:
-- **`-loops-to-rec`** (recommended): Translates loops to recursive Lean functions. This is the mode used for most verified proofs so far. The resulting code uses direct recursion with `termination_by` / `decreasing_by`, and proofs use `unfold` + `progress` (Pattern 4 below).
+- **`-loops-to-rec`** (recommended): Translates loops to recursive Lean functions. This is the mode used for most verified proofs so far. The resulting code uses direct recursion with `termination_by` / `decreasing_by`, and proofs use `unfold` + `step` (Pattern 4 below).
 - **Fixed-point combinator** (default): Translates loops using a `loop` fixed-point operator. Proofs use `loop.spec_decr_nat` (Pattern 5 below). The proof infrastructure for this mode is less mature — fewer lemmas, less automation, and less battle-tested.
 
 We are in the process of switching the default translation style to use the fixed-point combinator, but the proof infrastructure for it is not yet fully developed. Until it matures, **use `-loops-to-rec`** for any project where you need to write proofs.
@@ -282,7 +282,7 @@ We are in the process of switching the default translation style to use the fixe
 ```lean
 -- Loops become _loop auxiliary functions. Write a separate theorem for each.
 -- The loop invariant is both the precondition and postcondition.
-@[progress]
+@[step]
 theorem zero_loop.spec (x : alloc.vec.Vec U32) (i : Usize) (h : i.val ≤ x.length) :
   zero_loop x i ⦃ x' =>
     x'.length = x.length ∧
@@ -290,7 +290,7 @@ theorem zero_loop.spec (x : alloc.vec.Vec U32) (i : Usize) (h : i.val ≤ x.leng
     (∀ j, i.val ≤ j → j < x.length → x'[j]! = 0#u32) ⦄ := by
   unfold zero_loop
   simp; split
-  · progress ...    -- progress applies zero_loop.spec recursively
+  · step ...    -- step applies zero_loop.spec recursively
   · simp; scalar_tac
 termination_by x.length - i.val
 decreasing_by scalar_decr_tac
@@ -299,24 +299,24 @@ decreasing_by scalar_decr_tac
 ### Pattern 5: Loop with `loop.spec_decr_nat` (fixed-point combinator)
 ```lean
 -- Some loops use the `loop` combinator instead of direct recursion
-@[progress]
+@[step]
 theorem my_loop.spec (x : MyState) (h : x.inv) :
   my_loop_body.loop x ⦃ r => r.post ⦄ := by
   apply loop.spec_decr_nat (measure := fun s => s.remaining) (inv := fun s => s.inv)
   · intro s hs
     unfold my_loop_body
-    progress*
+    step*
     split_conjs <;> (try scalar_tac) <;> agrind
   · exact h
 ```
 
 ### Pattern 6: Bit-vector operation spec
 ```lean
-@[progress]
+@[step]
 theorem bitwise_op.spec (x : U32) (h : x.val < 65536) :
   bitwise_op x ⦃ r => r.val = x.val % 256 ⦄ := by
   unfold bitwise_op
-  progress*
+  step*
   bv_tac 32
 ```
 
@@ -333,7 +333,7 @@ private theorem fold_helper (a : U32) (f : U32 → Result α) :
   simp only [helper, bind_assoc_eq, bind_tc_ok, pure]
 
 -- 3. Helper spec
-@[local progress]
+@[local step]
 theorem helper.spec (a : U32) (h : a.val < 1000) :
   helper a ⦃ c => c.val = (a.val + 1) * 2 ⦄ := by ...
 
@@ -345,7 +345,7 @@ theorem helper.spec (a : U32) (h : a.val < 1000) :
 ### Address all warnings
 Lean warnings are not optional — they indicate problems that must be fixed:
 - **"This simp argument is unused"**: Remove the unused lemma from `simp only [...]`.
-- **"Too many ids provided"**: Reduce binder count in `progress as ⟨...⟩`.
+- **"Too many ids provided"**: Reduce binder count in `step as ⟨...⟩`.
 - **"'...' tactic does nothing"** / **"'...' tactic is never executed"**: Remove the dead tactic.
 - **"unused variable"**: Remove or prefix with `_`.
 The only acceptable warning is `"declaration uses 'sorry'"` for remaining proof obligations.
@@ -367,18 +367,18 @@ change when Rust code is re-extracted), making such proofs hard to maintain. Pre
 ### Extract auxiliary lemmas for complex sub-proofs
 When a proof step requires complex non-linear arithmetic, bitwise reasoning, or
 multi-step calculation, **extract it as a separate auxiliary lemma** rather than
-inlining it in the middle of a `progress*` proof. This:
+inlining it in the middle of a `step*` proof. This:
 - Gives the sub-proof its own small context (faster, less noise)
 - Keeps the main proof clean and readable
 - Makes maintenance easier when the model changes
 
 ```lean
--- BAD: complex arithmetic inlined in the middle of progress*
+-- BAD: complex arithmetic inlined in the middle of step*
 theorem main.spec ... := by
   unfold main_fn
-  progress*
+  step*
   -- 15 lines of manual arithmetic here
-  progress*
+  step*
 
 -- GOOD: extract as auxiliary lemma
 private theorem aux_arith (a b : Nat) (h1 : ...) (h2 : ...) :
@@ -388,15 +388,17 @@ private theorem aux_arith (a b : Nat) (h1 : ...) (h2 : ...) :
 
 theorem main.spec ... := by
   unfold main_fn
-  progress*
+  step*
   · apply aux_arith ...
-  progress*
+  step*
 ```
 
-### Avoid early case splits on parameters in progress proofs
+### Structuring non-linear arithmetic proofs
+
+### Avoid early case splits on parameters in step proofs
 In cryptographic code, functions are often parameterized by a parameter set (e.g.,
 `p : Spec.Frodo.parameterSet` in FrodoKEM) from which lengths, dimensions, and bounds
-are derived. **Do NOT case-split on such parameters at the beginning of a `progress` proof.**
+are derived. **Do NOT case-split on such parameters at the beginning of a `step` proof.**
 This duplicates the entire proof for each parameter variant (3× for FrodoKEM) and makes
 the proof unmaintainable.
 
@@ -405,14 +407,14 @@ Instead:
   ```lean
   -- BAD: duplicates the entire proof 3 times
   theorem my_fn.spec (p : Spec.Frodo.parameterSet) ... := by
-    cases p <;> (unfold my_fn; progress*; ...)
+    cases p <;> (unfold my_fn; step*; ...)
 
   -- GOOD: case split only where needed
   theorem my_fn.spec (p : Spec.Frodo.parameterSet) ... := by
     unfold my_fn
-    progress*
+    step*
     · cases p <;> simp_all [Spec.Frodo.n, NBAR] <;> scalar_tac  -- only this sub-goal needs it
-    progress*
+    step*
   ```
 
 - **Give definitions/lemmas to `agrind`/`grind`** so they can case-split automatically:
@@ -421,9 +423,9 @@ Instead:
   attribute [local agrind] Spec.Frodo.n Spec.Frodo.nbar in
   theorem my_fn.spec ... := by
     unfold my_fn
-    progress*  -- agrind (used by progress for preconditions) now auto-splits on p
+    step*  -- agrind (used by step for preconditions) now auto-splits on p
   ```
-  This is especially effective because `agrind` is the default tactic used by `progress`
+  This is especially effective because `agrind` is the default tactic used by `step`
   to discharge preconditions — giving it the right definitions lets it handle parameter-
   dependent bounds without any manual case splits.
 
@@ -487,18 +489,18 @@ calc (x + 1) * (x + 1)
 
 ## Critical Pitfalls
 
-1. **Termination error after unfold + progress**: Function starts with match/if → use `split` first
+1. **Termination error after unfold + step**: Function starts with match/if → use `split` first
 2. **Nat subtraction truncated**: `3 - 5 = 0` in Nat → use Int, add preconditions, or rewrite as addition (`z + y = x` instead of `z = x - y`)
 3. **`simp_all` removes hypotheses**: Use `simp [*]` or `simp [h1, h2]` instead
 4. **`agrind` fails**: Try `simp [*]; agrind`
 5. **`grind` explodes**: Use `agrind` instead (controlled context)
-6. **Progress applies wrong spec**: Use `progress with specific_theorem`
-7. **"Too many ids provided" from `progress`**: You gave more binder names in `progress as ⟨...⟩` than the tactic produced. Remove excess names until the count matches. Check `goal` to see how many binders the postcondition actually has.
+6. **Progress applies wrong spec**: Use `step with specific_theorem`
+7. **"Too many ids provided" from `step`**: You gave more binder names in `step as ⟨...⟩` than the tactic produced. Remove excess names until the count matches. Check `goal` to see how many binders the postcondition actually has.
 8. **"This simp argument is unused"**: A lemma in `simp only [...]` or `simp_all only [...]` didn't fire. **Always fix this** — remove the unused lemma from the list. Don't ignore these warnings.
 9. **"'...' tactic does nothing"** / **"'...' tactic is never executed"**: The tactic call is dead code. **Always fix this** — remove the tactic entirely. Don't leave dead tactics in proofs.
 10. **NEVER unfold Aeneas stdlib definitions in a proof.** When in the middle of a proof, you should never need to unfold definitions from `Aeneas.Std` (Slice, Array, UScalar, IScalar, iterator types, core.*, etc.). If you feel the need to unfold:
    - **Stop.** This is a sign that a lemma is missing.
-   - **Search** the Aeneas library for an existing lemma (grep for related names, check simp/progress attributes).
+   - **Search** the Aeneas library for an existing lemma (grep for related names, check simp/step attributes).
    - **If it doesn't exist:** state and prove the missing lemma yourself, then use it in the proof.
    - **This principle extends to all auxiliary definitions**, including project-local ones. When in the middle of a big proof, you should not have to unfold many auxiliary definitions. If you find yourself unfolding too many, step back and introduce auxiliary lemmas to bridge the gap.
 11. **NEVER increase `maxRecDepth`.** If you hit a `maxRecDepth` error, it signals a
@@ -541,3 +543,85 @@ attribute [local agrind] my_lemma
 ```
 
 Safe to activate many local lemmas for `simp_scalar`/`simp_lists` — simp-based, no complexity explosion.
+
+## Tactic Development: Config Parsing with `declare_config_elab`
+
+When developing a new tactic (or extending an existing one) that needs configurable
+options, use the `declare_config_elab` pattern. This auto-generates a parser for
+`(field := value, ...)` syntax from a Lean `structure`.
+
+### Pattern
+
+```lean
+structure MyTacConfig where
+  /-- Description of option -/
+  myOption : Bool := true
+  /-- Another option -/
+  passes : Nat := 3
+
+-- This generates `elabMyTacConfig : Syntax → TacticM MyTacConfig`
+declare_config_elab elabMyTacConfig MyTacConfig
+
+-- Use `optConfig` in syntax to accept the config
+syntax (name := myTac) "my_tac" Parser.Tactic.optConfig : tactic
+
+elab_rules : tactic
+  | `(tactic| my_tac $config:optConfig) => do
+    let cfg ← elabMyTacConfig config
+    -- Use cfg.myOption, cfg.passes, etc.
+```
+
+Users then write: `my_tac (myOption := false, passes := 5)`.
+
+**Boolean shorthand:** For boolean fields, `optConfig` supports `+field` (set to `true`)
+and `-field` (set to `false`). So `my_tac -myOption` is equivalent to
+`my_tac (myOption := false)`.
+
+### Extending an existing config
+
+To add options to an existing tactic whose config comes from another library
+(e.g., extending `Lean.Grind.Config`), use `extends`:
+
+```lean
+structure AGrindConfig extends Lean.Grind.Config where
+  nla : Bool := true
+
+declare_config_elab elabAGrindConfig AGrindConfig
+```
+
+Users can then set both the parent fields (`maxSteps`, etc.) and the new field
+(`nla`) in one config block: `agrind -nla` or `agrind (nla := false, maxSteps := 1000)`.
+
+### Examples in the codebase
+
+| Tactic | Config struct | File |
+|--------|-------------|------|
+| `scalar_tac` | `Config extends SaturateConfig` | `ScalarTac/ScalarTac.lean` |
+| `bvify` | `Config` (with `nonLin`, `saturationPasses`) | `Bvify/Bvify.lean` |
+| `bv_tac` | `Config extends BVDecideConfig, Bvify.Config` | `BvTac/BvTac.lean` |
+| `zmodify` | `Config` (with `nonLin`, `saturationPasses`) | `ZModify/ZModify.lean` |
+
+## Custom Grind Extensions: `register_grind_attr'`
+
+To register a new grind-like attribute that collects lemmas into a separate extension
+(independent of the standard `@[grind]` pool), use the `register_grind_attr'` macro
+defined in `Aeneas/Grind/Attribute.lean`:
+
+```lean
+/-- Doc comment for the extension -/
+register_grind_attr' myExtName my_attr
+```
+
+This creates:
+- An `Extension` value named `myExtName`
+- Attribute syntax: `@[my_attr]`, `@[my_attr!]`, `@[my_attr?]`, `@[my_attr!?]`
+- Lemma patterns: `grind_pattern [my_attr] lemma_name => pattern`
+
+At tactic execution time, retrieve the extension state and pass it to grind:
+
+```lean
+let extensions := #[myExtName.getState (← Lean.getEnv)]
+let params ← mkParams config extensions withGroundSimprocs
+```
+
+Multiple extensions can be combined by pushing them all into the array.

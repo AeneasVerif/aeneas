@@ -2,47 +2,30 @@
 
 Aeneas translates Rust programs to pure Lean code for formal verification.
 
+## Skill Files
+
+All detailed instructions for AI agents live in `documentation/skills/`. These are
+the **source of truth** — they are symlinked to `.github/instructions/` (for GitHub
+Copilot) and `.claude/skills/` (for Claude Code). **Always edit files in
+`documentation/skills/`**; changes propagate automatically through the symlinks.
+
+| Skill file | Covers |
+|---|---|
+| `aeneas-compiler-dev` | Dev workflow, formatting, tests, error macros, **skill file structure**, **build rules** |
+| `aeneas-lean-core` | Translation model, spec patterns, tactic reference, pitfalls |
+| `aeneas-tactics-quickref` | Tactic decision tree, banned tactics, combinations |
+| `lean-lsp-tool` | `lean_lsp.py` REPL for interactive proof development |
+| `launching-proof-agents` | Multi-agent proof orchestration, review gates |
+| `proof-patterns` | Worked proof examples (loops, dot products, comparisons) |
+| `aeneas-crypto-verification` | Crypto-specific proof strategies (Montgomery, NTT, etc.) |
+
 ## Key Documentation
 
 - `documentation/getting-started.md` — **Start here:** Rust → LLBC → Lean → first proof
 - `documentation/aeneas-overview.md` — How Aeneas works, translation model, workflow
-- `documentation/proof-strategies.md` — Proof strategies (progress, loops, decomposition, specs)
+- `documentation/proof-strategies.md` — Proof strategies (step, loops, decomposition, specs)
 - `documentation/tactics-reference.md` — All tactics with docstrings and examples
 - `documentation/crypto-verification.md` — Crypto verification guide (ML-KEM/Kyber patterns)
 - `documentation/tips-and-tricks.md` — Pitfalls, tips, and tricks
 - `documentation/lean-lsp-tool.md` — The `lean_lsp.py` tool for incremental proof development
-
 - `documentation/glossary.md` — Glossary of Aeneas-specific terms
-
-## Critical: Use lean_lsp.py for Lean Proofs
-
-When working on Lean proofs, **always** start a `lean_lsp.py` REPL session for incremental checking and goal inspection:
-
-```bash
-python3 scripts/lean_lsp.py --repl --json
-```
-
-See `documentation/skills/lean-lsp-tool.instructions.md` for full usage.
-
-## Conventions
-
-- Prefer `agrind` over `grind` (grind calls tend to explode)
-- Never use deprecated tactics: `fsimp`, `fsimp_all`, `Brute`, `saturate`, `ReduceZMod`
-- Specifications are always pure (never in the Result monad)
-- Tag specs with `@[progress]` for automation
-- Use `#setup_aeneas_simps` at the top of proof files
-- **Do NOT use `omega`** with machine integers (UScalar/IScalar) — use `scalar_tac` or `agrind`
-- `scalar_tac`/`agrind`/`grind` see through Rust model definitions (Slice.length, etc.)
-- Use `apply`/`refine` instead of `exact` for large expressions (better proof incrementality)
-- For list/slice reasoning: prefer `grind` (has more list lemmas than `agrind`)
-- Think informally before starting a proof; modularize with fold theorems when possible
-- Pure constants: mark with `@[simp]`, `@[agrind]`, `@[scalar_tac_simps]`, `@[bvify_simps]`
-- Monadic constants: prove `@[progress]` theorem
-
-## Note on Skill Discovery
-
-Skills are stored in `documentation/skills/` and symlinked to:
-- `.claude/skills/` (for Claude Code)
-- `.github/instructions/` (for GitHub Copilot)
-
-If skills aren't loading automatically, read them directly from `documentation/skills/`.

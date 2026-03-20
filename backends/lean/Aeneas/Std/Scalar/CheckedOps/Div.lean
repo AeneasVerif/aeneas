@@ -44,7 +44,7 @@ theorem core.num.checked_div_UScalar_bv_spec {ty} (x y : UScalar ty) :
     simp [this, UScalar.div, hnz] at hz
     simp [hz, hnz']
 
-uscalar @[progress_pure «%S».checked_div x y]
+uscalar @[step_pure «%S».checked_div x y]
 theorem «%S».checked_div_bv_spec (x y : «%S») :
   match «%S».checked_div x y with
   | some z => y.val ≠ 0 ∧ z.val = x.val / y.val ∧ z.bv = x.bv / y.bv
@@ -76,7 +76,7 @@ theorem core.num.checked_div_IScalar_bv_spec {ty} (x y : IScalar ty) :
     tauto
   . simp_all
 
-iscalar @[progress_pure «%S».checked_div x y]
+iscalar @[step_pure «%S».checked_div x y]
 theorem «%S».checked_div_bv_spec (x y : «%S») :
   match core.num.checked_div_IScalar x y with
   | some z => y.val ≠ 0 ∧ ¬ (x.val = «%S».min ∧ y.val = -1) ∧ z.val = Int.tdiv x.val y.val ∧ z.bv = BitVec.sdiv x.bv y.bv

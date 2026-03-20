@@ -135,7 +135,7 @@ short-circuits to `fail`.
 
 Rust loops (`loop`, `while`, `for`) are translated to **auxiliary `_loop` functions**. The parent function calls the `_loop` function to enter the loop. For example, a Rust function `zero` with a loop becomes `zero` (which calls `zero_loop`) and `zero_loop` (which contains the loop body).
 
-**Always write a separate theorem for each `_loop` function.** The parent function's spec can then use the loop theorem via `progress`.
+**Always write a separate theorem for each `_loop` function.** The parent function's spec can then use the loop theorem via `step`.
 
 There are two translation patterns:
 
@@ -156,10 +156,10 @@ def zero (x : alloc.vec.Vec U32) : Result (alloc.vec.Vec U32) := do
   zero_loop x 0#usize
 ```
 
-**Proving the spec:** The loop invariant appears as both the precondition and postcondition of the `_loop` theorem. Use `unfold`, `split`, and `progress` (which applies the theorem recursively on the recursive call). Add a `termination_by` clause:
+**Proving the spec:** The loop invariant appears as both the precondition and postcondition of the `_loop` theorem. Use `unfold`, `split`, and `step` (which applies the theorem recursively on the recursive call). Add a `termination_by` clause:
 
 ```lean
-@[progress]
+@[step]
 theorem zero_loop_spec (x : alloc.vec.Vec U32) (i : Usize) (h : i.val ≤ x.length) :
   zero_loop x i ⦃ x' =>
     x'.length = x.length ∧
@@ -167,7 +167,7 @@ theorem zero_loop_spec (x : alloc.vec.Vec U32) (i : Usize) (h : i.val ≤ x.leng
     (∀ j, i.val ≤ j → j < x.length → x'[j]! = 0#u32) ⦄ := by
   unfold zero_loop
   simp; split
-  · progress ...    -- recursive case: progress applies zero_loop_spec
+  · step ...    -- recursive case: step applies zero_loop_spec
   · simp; scalar_tac -- base case
 termination_by x.length - i.val
 decreasing_by scalar_decr_tac
@@ -250,10 +250,10 @@ specification-then-proof pattern.
 
 ### 4.1 Writing a Specification
 
-Specifications are theorems decorated with `@[progress]`:
+Specifications are theorems decorated with `@[step]`:
 
 ```lean
-@[progress]
+@[step]
 theorem my_function_spec (args...) (preconditions...) :
     my_function args ⦃ result => postcondition result ⦄ := by
   -- proof goes here
@@ -273,12 +273,12 @@ This notation lets you state properties about successful executions without
 separately reasoning about the error case — if the function fails, the
 postcondition is vacuously true.
 
-### 4.2 Registering Specs with `@[progress]`
+### 4.2 Registering Specs with `@[step]`
 
-The `@[progress]` attribute registers a theorem in a database so that the
-`progress` tactic can automatically apply it when verifying callers. This is
+The `@[step]` attribute registers a theorem in a database so that the
+`step` tactic can automatically apply it when verifying callers. This is
 what makes proofs compositional: once you prove a spec for `foo`, every function
-that calls `foo` can use that spec automatically via `progress`.
+that calls `foo` can use that spec automatically via `step`.
 
 ### 4.3 Proof Tactics
 
@@ -287,8 +287,8 @@ The main tactics used in Aeneas proofs:
 | Tactic | Purpose |
 |---|---|
 | `unfold f` | Expand the definition of `f` |
-| `progress` | Apply a registered `@[progress]` spec for the next monadic call |
-| `progress*` | Repeatedly apply `progress` |
+| `step` | Apply a registered `@[step]` spec for the next monadic call |
+| `step*` | Repeatedly apply `step` |
 | `scalar_tac` | Discharge scalar arithmetic goals (bounds, overflow) |
 | `simp` / `simp_all` | Simplification |
 | `agrind` | Arithmetic + congruence closure |
@@ -309,30 +309,30 @@ def add (a : U32) (b : U32) : Result U32 :=
 
 **Specification and proof:**
 ```lean
-@[progress]
+@[step]
 theorem add_spec (a b : U32) (h : a.val + b.val < U32.max) :
     add a b ⦃ c => c.val = a.val + b.val ⦄ := by
   unfold add
-  progress
+  step
 ```
 
 **Reading this proof:**
 1. The precondition `h` states the addition won't overflow.
 2. `unfold add` expands the definition.
-3. `progress` applies the spec for `U32` addition, using `h` to discharge the
+3. `step` applies the spec for `U32` addition, using `h` to discharge the
    overflow check, and concludes that `c.val = a.val + b.val`.
 
 ### 4.5 Example with Backward Functions: Mutable List Indexing
 
 ```lean
-@[progress]
+@[step]
 theorem list_nth_mut1_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
     (h : i.val < l.toList.length) :
     list_nth_mut1 l i ⦃ x back =>
       x = l.toList[i.val]! ∧
       ∀ x', (back x').toList = l.toList.set i.val x' ⦄ := by
   unfold list_nth_mut1 list_nth_mut1_loop
-  progress*
+  step*
   simp_all
 ```
 
@@ -347,8 +347,8 @@ This is the lens pattern: `x` is the "get", and `back` is the "set".
 ### 4.6 Typical Proof Workflow
 
 1. **Start with `unfold`** to expose the function body.
-2. **Use `progress`** at each monadic bind (`←`). The tactic looks up the
-   `@[progress]` spec for the called function and introduces hypotheses about
+2. **Use `step`** at each monadic bind (`←`). The tactic looks up the
+   `@[step]` spec for the called function and introduces hypotheses about
    the result.
 3. **Discharge side conditions** (overflow bounds, index bounds) using
    `scalar_tac`, `agrind`, or hypotheses in context.
@@ -455,5 +455,5 @@ Think of the translation as follows:
    runtime (overflow, out-of-bounds, panic) is wrapped in `Result`. Your
    preconditions establish that these failures don't occur.
 
-4. **`@[progress]` = composable specs.** Each function's spec is registered so
+4. **`@[step]` = composable specs.** Each function's spec is registered so
    that callers can use it automatically. Proofs compose bottom-up.

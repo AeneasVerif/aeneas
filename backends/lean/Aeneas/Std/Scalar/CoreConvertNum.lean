@@ -6,10 +6,10 @@ import Aeneas.Std.Scalar.Core
 import Aeneas.Std.Scalar.Notations
 import Aeneas.Std.Scalar.Elab
 import Aeneas.Std.Array.Array
-import Aeneas.ScalarTac
-import Aeneas.Progress.Init
-import Aeneas.Arith.Lemmas
-import Aeneas.BitVec
+import Aeneas.Tactic.Solver.ScalarTac
+import Aeneas.Tactic.Step.Init
+import Aeneas.Tactic.Solver.Arith.Lemmas
+import Aeneas.Data.BitVec
 
 namespace Aeneas
 
@@ -609,26 +609,26 @@ iscalar_no_isize def core.num.«%S».from_be_bytes (a : Array I8 (%Size)#usize) 
 /-!
 # Progress theorems: To Little-Endian
 -/
-uscalar_no_usize @[progress]
-theorem core.num.«%S».to_le_bytes.progress_spec (x : «%S») :
+uscalar_no_usize @[step]
+theorem core.num.«%S».to_le_bytes.step_spec (x : «%S») :
   lift (core.num.«%S».to_le_bytes x) ⦃ y => y.val = x.bv.toLEBytes.map (@UScalar.mk UScalarTy.U8) ⦄ := by
   simp only [spec_ok, lift, to_le_bytes, UScalarTy.U8_numBits_eq]
 
-iscalar_no_isize @[progress]
-theorem core.num.«%S».to_le_bytes.progress_spec (x : «%S») :
+iscalar_no_isize @[step]
+theorem core.num.«%S».to_le_bytes.step_spec (x : «%S») :
   lift (core.num.«%S».to_le_bytes x) ⦃ y => y.val = x.bv.toLEBytes.map (@IScalar.mk IScalarTy.I8) ⦄ := by
   simp only [spec_ok, lift, to_le_bytes, IScalarTy.I8_numBits_eq]
 
 /-!
 # Progress theorems: From Little-Endian
 -/
-uscalar_no_usize @[progress]
-theorem core.num.«%S».from_le_bytes.progress_spec (x : Array U8 (%Size)#usize) :
+uscalar_no_usize @[step]
+theorem core.num.«%S».from_le_bytes.step_spec (x : Array U8 (%Size)#usize) :
   lift (core.num.«%S».from_le_bytes x) ⦃ y => y.bv = (BitVec.fromLEBytes (x.val.map U8.bv)).cast (by simp) ⦄ := by
   simp only [spec_ok, lift, from_le_bytes]
 
-iscalar_no_isize @[progress]
-theorem core.num.«%S».from_le_bytes.progress_spec (x : Array I8 (%Size)#usize) :
+iscalar_no_isize @[step]
+theorem core.num.«%S».from_le_bytes.step_spec (x : Array I8 (%Size)#usize) :
   lift (core.num.«%S».from_le_bytes x) ⦃ y => y.bv = (BitVec.fromLEBytes (x.val.map I8.bv)).cast (by simp) ⦄  := by
   simp only [spec_ok, lift, from_le_bytes]
 

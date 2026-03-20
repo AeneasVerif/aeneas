@@ -4,8 +4,8 @@ import Lean.Meta.Tactic.Simp
 import Init.Data.List.Basic
 import Mathlib.Tactic.Linarith
 import Aeneas.Std.Scalar.Core
-import Aeneas.ScalarTac
-import Aeneas.Progress.Init
+import Aeneas.Tactic.Solver.ScalarTac
+import Aeneas.Tactic.Step.Init
 
 namespace Aeneas
 
