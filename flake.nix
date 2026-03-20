@@ -208,6 +208,10 @@
             export CHARON_EXE=${aeneas}/bin/charon
             export TEST_RUNNER_EXE=${test_runner}/bin/test_runner
 
+            # In Nix, the Rust toolchain is already nightly — no need for +nightly
+            export RUSTC_CMD=rustc
+            export CARGO_CMD=cargo
+
             # Copy the tests
             cp -r tests tests-copy
             make clean-generated-aeneas
