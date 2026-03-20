@@ -60,6 +60,13 @@ def choose {T : Type} (b : Bool) (x : T) (y : T) :
 ```
 The backward function propagates updates back to the original variables.
 
+### Writing models of Rust code
+When writing hand-written models of Rust functions (e.g., in `FunsExternal.lean`):
+- **Do NOT use `partial`** — `partial` definitions are opaque and cannot be unfolded or
+  reasoned about. If the function lives in `Result`, use `partial_fixpoint` instead.
+- **Do NOT use `private`** — we need access to all definitions so that we can unfold
+  them and reason about them in proofs.
+
 ## The Specification Pattern
 
 ### Template
