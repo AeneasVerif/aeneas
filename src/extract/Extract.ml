@@ -3628,90 +3628,107 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     {[
       Check (FUNCTION)%return).
     ]} *)
-let extract_unit_test_if_unit_fun (ctx : extraction_ctx) (fmt : F.formatter)
+let extract_unit_test_if_marked (ctx : extraction_ctx) (fmt : F.formatter)
     (def : fun_decl) : unit =
-  (* Check if this is a unit function *)
-  let sg = def.signature in
-  if
-    sg.generics = empty_generic_params
-    && (sg.inputs = [ mk_unit_ty ] || sg.inputs = [])
-    && sg.output = mk_result_ty mk_unit_ty
-  then (
-    (* Add a break before *)
-    F.pp_print_break fmt 0 0;
-    (* Print a comment *)
-    extract_plain_comment fmt
-      [ "Unit test for [" ^ name_to_string ctx def.item_meta.name ^ "]" ];
-    F.pp_print_space fmt ();
-    (* Open a box for the test *)
-    F.pp_open_hovbox fmt ctx.indent_incr;
-    (* Print the test *)
-    (match backend () with
-    | FStar ->
-        F.pp_print_string fmt "let _ =";
-        F.pp_print_space fmt ();
-        F.pp_print_string fmt "assert_norm";
-        F.pp_print_space fmt ();
-        F.pp_print_string fmt "(";
-        let fun_name =
-          ctx_get_local_function def.item_meta.span def.def_id def.loop_id ctx
-        in
-        F.pp_print_string fmt fun_name;
-        if sg.inputs <> [] then (
+  (* Check if this function has the #[verify::test] attribute *)
+  let has_test_attr =
+    List.exists
+      (fun (attr : Meta.attribute) ->
+        match attr with
+        | AttrUnknown { path; _ } -> path = "verify::test"
+        | _ -> false)
+      def.item_meta.attr_info.attributes
+  in
+  if not has_test_attr then ()
+  else
+    (* Check if this is a unit function *)
+    let sg = def.signature in
+    if
+      sg.generics = empty_generic_params
+      && (sg.inputs = [ mk_unit_ty ] || sg.inputs = [])
+      && sg.output = mk_result_ty mk_unit_ty
+    then (
+      (* Add a break before *)
+      F.pp_print_break fmt 0 0;
+      (* Print a comment *)
+      extract_plain_comment fmt
+        [ "Unit test for [" ^ name_to_string ctx def.item_meta.name ^ "]" ];
+      F.pp_print_space fmt ();
+      (* Open a box for the test *)
+      F.pp_open_hovbox fmt ctx.indent_incr;
+      (* Print the test *)
+      (match backend () with
+      | FStar ->
+          F.pp_print_string fmt "let _ =";
           F.pp_print_space fmt ();
-          F.pp_print_string fmt "()");
-        F.pp_print_space fmt ();
-        F.pp_print_string fmt "=";
-        F.pp_print_space fmt ();
-        let success =
-          ctx_get_variant def.item_meta.span (TBuiltin TResult) result_ok_id ctx
-        in
-        F.pp_print_string fmt (success ^ " ())")
-    | Coq ->
-        F.pp_print_string fmt "Check";
-        F.pp_print_space fmt ();
-        F.pp_print_string fmt "(";
-        let fun_name =
-          ctx_get_local_function def.item_meta.span def.def_id def.loop_id ctx
-        in
-        F.pp_print_string fmt fun_name;
-        if sg.inputs <> [] then (
+          F.pp_print_string fmt "assert_norm";
           F.pp_print_space fmt ();
-          F.pp_print_string fmt "()";
-          F.pp_print_space fmt ());
-        F.pp_print_string fmt ")%return."
-    | Lean ->
-        F.pp_print_string fmt "#assert";
-        F.pp_print_space fmt ();
-        F.pp_print_string fmt "(";
-        let fun_name =
-          ctx_get_local_function def.item_meta.span def.def_id def.loop_id ctx
-        in
-        F.pp_print_string fmt fun_name;
-        if sg.inputs <> [] then (
+          F.pp_print_string fmt "(";
+          let fun_name =
+            ctx_get_local_function def.item_meta.span def.def_id def.loop_id ctx
+          in
+          F.pp_print_string fmt fun_name;
+          if sg.inputs <> [] then (
+            F.pp_print_space fmt ();
+            F.pp_print_string fmt "()");
           F.pp_print_space fmt ();
-          F.pp_print_string fmt "()");
-        F.pp_print_space fmt ();
-        F.pp_print_string fmt "==";
-        F.pp_print_space fmt ();
-        let success =
-          ctx_get_variant def.item_meta.span (TBuiltin TResult) result_ok_id ctx
-        in
-        F.pp_print_string fmt (success ^ " ())")
-    | HOL4 ->
-        F.pp_print_string fmt "val _ = assert_ok (";
-        F.pp_print_string fmt "“";
-        let fun_name =
-          ctx_get_local_function def.item_meta.span def.def_id def.loop_id ctx
-        in
-        F.pp_print_string fmt fun_name;
-        if sg.inputs <> [] then (
+          F.pp_print_string fmt "=";
           F.pp_print_space fmt ();
-          F.pp_print_string fmt "()");
-        F.pp_print_string fmt "”)");
-    (* Close the box for the test *)
-    F.pp_close_box fmt ();
-    (* Add a break after *)
-    F.pp_print_break fmt 0 0)
-  else (* Do nothing *)
-    ()
+          let success =
+            ctx_get_variant def.item_meta.span (TBuiltin TResult) result_ok_id
+              ctx
+          in
+          F.pp_print_string fmt (success ^ " ())")
+      | Coq ->
+          F.pp_print_string fmt "Check";
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt "(";
+          let fun_name =
+            ctx_get_local_function def.item_meta.span def.def_id def.loop_id ctx
+          in
+          F.pp_print_string fmt fun_name;
+          if sg.inputs <> [] then (
+            F.pp_print_space fmt ();
+            F.pp_print_string fmt "()";
+            F.pp_print_space fmt ());
+          F.pp_print_string fmt ")%return."
+      | Lean ->
+          F.pp_print_string fmt "#assert";
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt "(";
+          let fun_name =
+            ctx_get_local_function def.item_meta.span def.def_id def.loop_id ctx
+          in
+          F.pp_print_string fmt fun_name;
+          if sg.inputs <> [] then (
+            F.pp_print_space fmt ();
+            F.pp_print_string fmt "()");
+          F.pp_print_space fmt ();
+          F.pp_print_string fmt "==";
+          F.pp_print_space fmt ();
+          let success =
+            ctx_get_variant def.item_meta.span (TBuiltin TResult) result_ok_id
+              ctx
+          in
+          F.pp_print_string fmt (success ^ " ())")
+      | HOL4 ->
+          F.pp_print_string fmt "val _ = assert_ok (";
+          F.pp_print_string fmt "“";
+          let fun_name =
+            ctx_get_local_function def.item_meta.span def.def_id def.loop_id ctx
+          in
+          F.pp_print_string fmt fun_name;
+          if sg.inputs <> [] then (
+            F.pp_print_space fmt ();
+            F.pp_print_string fmt "()");
+          F.pp_print_string fmt "”)");
+      (* Close the box for the test *)
+      F.pp_close_box fmt ();
+      (* Add a break after *)
+      F.pp_print_break fmt 0 0)
+    else
+      [%craise_opt_span] (Some def.item_meta.span)
+        ("#[verify::test] on function with unsupported signature: "
+        ^ name_to_string ctx def.item_meta.name
+        ^ " (expected no generics, no params or unit param, and Result<()> \
+           output)")

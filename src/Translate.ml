@@ -587,7 +587,6 @@ type gen_config = {
           definitions. In the future, we might want to extract all the
           declarations in an interface file, together with an implementation
           file if needed. *)
-  test_trans_unit_functions : bool;
 }
 
 (** Returns the pair: (has opaque type decls, has opaque fun decls).
@@ -969,11 +968,10 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
        in
        List.iter (fun (is_rec, decls) -> export_subgroup is_rec decls) subgroups);
 
-    (* Insert unit tests if necessary *)
-    if config.test_trans_unit_functions then
-      List.iter
-        (fun trans -> Extract.extract_unit_test_if_unit_fun ctx fmt trans.f)
-        pure_ls
+    (* Insert unit tests for functions marked with #[verify::test] *)
+    List.iter
+      (fun trans -> Extract.extract_unit_test_if_marked ctx fmt trans.f)
+      pure_ls
 
 let trait_decl_is_builtin (ctx : gen_ctx) (id : Pure.trait_decl_id) : bool =
   let trait_decl =
@@ -1776,7 +1774,6 @@ let extract_translated_crate (filename : string) (dest_dir : string)
          extract_opaque = false;
          extract_globals = false;
          interface = false;
-         test_trans_unit_functions = false;
        }
      in
 
@@ -1972,7 +1969,6 @@ let extract_translated_crate (filename : string) (dest_dir : string)
          extract_fun_decls = true;
          extract_trait_impls = true;
          extract_globals = true;
-         test_trans_unit_functions = !Config.test_trans_unit_functions;
        }
      in
      let clauses_module =
@@ -2014,7 +2010,6 @@ let extract_translated_crate (filename : string) (dest_dir : string)
          extract_opaque = true;
          extract_globals = true;
          interface = false;
-         test_trans_unit_functions = !Config.test_trans_unit_functions;
        }
      in
      let file_info =
