@@ -149,7 +149,7 @@ fun_name a b ⦃ (x : U32) (s : Slice U16) =>
    - Start with `step*?` to generate the step-by-step script
    - Work through the generated script, fixing any sub-goals that fail
    - Once the whole proof is done, try collapsing back into `step*` if possible
-   - You can increase `set_option maxHeartbeats` if needed (it's fine to do so)
+   - If heartbeats are tight, decompose the function (fold theorems) or extract sub-goals as auxiliary lemmas — aim for < 8M heartbeats even for large proofs; increase the default to 1M as a baseline (see "Debugging Commands" in the tactics quickref)
 
 ### The step*? → fix → collapse workflow:
 1. `step*?` — generates expanded proof script (one `step` per monadic call)
@@ -429,6 +429,20 @@ Instead:
   to discharge preconditions — giving it the right definitions lets it handle parameter-
   dependent bounds without any manual case splits.
 
+  **Practical tips for `attribute [local agrind]`:**
+  - You may need to give **multiple definitions** (not just the top-level parameter
+    accessor, but also definitions it depends on). Figuring out which ones is tricky.
+  - **Isolate in a temporary `example`**: Copy the proof obligation into a standalone
+    `example` with a minimal context, then experiment with `attribute [local agrind]`
+    on different definitions until the `example` goes through. Once you find the right
+    set, go back to the main proof.
+  - **⚠️ Monitor proof time carefully.** Adding definitions to `agrind`/`grind` can
+    cause proof time to explode. Remember that `progress*` calls `agrind` on **every
+    precondition** it encounters — so marking a definition as `[local agrind]` affects
+    every `progress` step in the proof, not just the one you're targeting. After each
+    addition, check that `progress*` doesn't become significantly slower. If it does,
+    back off and use auxiliary lemmas or local case splits instead.
+
 - **Write auxiliary lemmas** for arithmetic facts that depend on the parameter:
   ```lean
   private lemma n_mul_nbar_bound (p : Spec.Frodo.parameterSet) :
@@ -489,8 +503,32 @@ calc (x + 1) * (x + 1)
    - **Search** the Aeneas library for an existing lemma (grep for related names, check simp/step attributes).
    - **If it doesn't exist:** state and prove the missing lemma yourself, then use it in the proof.
    - **This principle extends to all auxiliary definitions**, including project-local ones. When in the middle of a big proof, you should not have to unfold many auxiliary definitions. If you find yourself unfolding too many, step back and introduce auxiliary lemmas to bridge the gap.
-11. **NEVER increase `maxRecDepth`.** If you hit a `maxRecDepth` error, it signals a real problem — either the proof is poorly structured (causing unbounded unfolding), or there is a bug in a tactic. For tactics that internally use `simp` (like `agrind`, `grind`, `scalar_tac`, `simp_scalar`), check whether hypotheses in the goal trigger a simp loop — if so, `clear` the offending hypothesis or use `simp only [...]`. If it's not a simp loop, **report the issue to the user** as a possible tactic bug.
+11. **NEVER increase `maxRecDepth`.** If you hit a `maxRecDepth` error, it signals a
+    **simp loop**, not a depth limit to raise. A simp loop occurs when two or more lemmas
+    rewrite back and forth (A → B → A → ...), causing unbounded recursion.
+
+    **How to fix simp loops (in preference order):**
+    - **Split `simp only [A, B, C]` into separate calls**: `simp only [A]` then
+      `simp only [B, C]`. The loop is caused by a specific pair — separating them
+      breaks the cycle.
+    - **Use `rw` instead of `simp only`**: `rw` applies exactly once, no loop risk.
+    - **Reduce the lemma list**: Remove lemmas one by one to find the conflicting pair.
+    - **`clear` offending hypotheses**: For tactics that internally use `simp`
+      (`agrind`, `grind`, `scalar_tac`, `simp_scalar`), a hypothesis may trigger the
+      loop — `clear` it before calling the tactic.
+    - **Use `conv`** for targeted rewriting when `simp` rewrites too broadly.
+
+    A common loop in Aeneas: `Slice.Inhabited_getElem_eq_getElem!` combined with
+    `List.Inhabited_getElem_eq_getElem!` in a single `simp only` call. Split them
+    into separate calls, or use `rw`.
+
+    If the `maxRecDepth` issue is not caused by a simp loop (e.g., unbounded proof
+    unfolding), **report it to the user** — it may indicate a structural proof problem
+    or a tactic bug.
 12. **Report misbehaving tactics.** If a tactic doesn't do what it should — for example, `progress` fails to make progress even though the appropriate `@[progress]` lemma exists, or `scalar_tac` can't close a pure arithmetic goal it should handle — **report this to the user**. It may indicate a bug or missing feature worth fixing upstream.
+13. **Keep `maxHeartbeats` reasonable (< 8M).** Lean's default (200K) is too low for Aeneas proofs — increase to 1M as a baseline. But if a proof needs more than ~8M heartbeats, the proof is ill-structured or uses tactics inefficiently. Don't just bump the number — instead: decompose the function with fold theorems, extract sub-goals as auxiliary lemmas, minimize the context with `clear`, prefer `agrind` over `grind`, or use `progress*?` instead of `progress*` for finer control.
+14. **⚠️ Keep proof wall-clock time < 30s — this is important.** Fast proofs enable fast iteration. Even the biggest proofs (for functions of 50+ lines) should elaborate in under 30 seconds. Use `set_option trace.profiler true in` to identify bottleneck tactics. If the proof is slow, decompose it — see the tactics quickref for strategies.
+15. **⚠️ Keeping Lean reactive is critical (< 0.5s per tactic).** Adding a tactic at the end of a proof should take < 0.5s (everything above is cached). If it takes several seconds, big chunks are being re-elaborated. Common cause: `by ...` blocks inside `apply`/`exact`/`refine` arguments (e.g., `apply lemma (by scalar_tac) (by agrind)`) — all `by` blocks re-elaborate together. Fix: extract them into `have` statements. See the "Diagnosing Slow Incremental Replay" section in the lean-lsp-tool skill file.
 
 ## Attribute Management
 

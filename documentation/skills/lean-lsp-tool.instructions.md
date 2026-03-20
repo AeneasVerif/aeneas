@@ -185,6 +185,52 @@ batch_end
 9. **`edit_range` and `insert` use exact content** — include indentation in the content
 10. **Use `\n` in content** for multi-line inserts: `insert 35 tactic1\n  tactic2\n  tactic3`
 
+## Diagnosing Slow Incremental Replay — KEEPING LEAN REACTIVE IS CRITICAL
+
+Keeping Lean reactive during interactive proof development is **the single most important
+factor for productivity**. Fast feedback (< 0.5s per tactic) enables rapid iteration —
+try a tactic, see the result, adjust, repeat. Slow feedback destroys this loop.
+
+**Target: < 0.5s response when appending a tactic at the end of the proof.** When you
+add a new tactic line at the bottom of a proof, Lean should react almost immediately
+(under half a second) because only the new tactic needs elaboration — everything above
+is already cached. If instead you see multi-second delays, big chunks of the proof are
+being re-elaborated. **Step back and restructure the proof** rather than tolerating the
+slowness — it compounds over many edit cycles.
+
+**Common causes:**
+
+1. **`by ...` blocks inside `apply`/`exact`/`refine` arguments.** For example:
+   ```lean
+   apply lemma arg1 (by scalar_tac) (by agrind) (by grind)
+   exact foo (by bv_tac 16) (by simp_all)
+   ```
+   The entire `apply`/`exact`/`refine` expression (including all `by` blocks) is
+   elaborated as a single unit. Editing *any* `by` block forces re-elaboration of
+   *all* of them. If those `by` blocks contain expensive tactics, every edit pays
+   the full cost.
+
+   **Fix:** Extract inline `by` blocks into `have` statements:
+   ```lean
+   -- SLOW: all by-blocks re-elaborate together
+   apply lemma arg1 (by scalar_tac) (by agrind) (by grind)
+
+   -- FAST: each have is independently checkpointed
+   have h1 : precond1 := by scalar_tac
+   have h2 : precond2 := by agrind
+   have h3 : precond3 := by grind
+   apply lemma arg1 h1 h2 h3
+   ```
+
+2. **Large proof blocks without `have` boundaries.** Each tactic step is an elaboration
+   checkpoint, but `have` is especially effective: it creates a self-contained sub-proof
+   whose result is cached. If the sub-proof's input hasn't changed, the elaborator can
+   skip it entirely during incremental replay. Without `have` boundaries, changes can
+   force re-elaboration of large contiguous sections.
+
+   **Fix:** Use `have` to break large proofs into independently checkpointed sections,
+   especially around expensive tactic calls.
+
 ## MANDATORY: Use lean_lsp.py Instead of lake build
 
 **DO NOT use `lake build` to iterate on proofs.** It rebuilds everything from scratch (2–5 min per cycle). The LSP gives incremental feedback in 5–30 seconds. Your workflow must be:
