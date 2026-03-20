@@ -1,6 +1,6 @@
 /- Arrays -/
-import Aeneas.List
-import Aeneas.Step.Init
+import Aeneas.Data.List
+import Aeneas.Tactic.Step.Init
 import Aeneas.Std.Array.Core
 import Aeneas.Std.Core.Default
 

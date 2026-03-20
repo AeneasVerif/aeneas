@@ -1,10 +1,10 @@
 /- Arrays/Slices -/
-import Aeneas.List
+import Aeneas.Data.List
 import Aeneas.Std.Array.Core
 import Aeneas.Std.Range
 import Aeneas.Std.Core.Ops
 import Aeneas.Std.RawPtr
-import Aeneas.SimpScalar.SimpScalar
+import Aeneas.Tactic.Simp.SimpScalar.SimpScalar
 
 namespace Aeneas.Std
 

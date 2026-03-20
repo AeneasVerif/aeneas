@@ -2,7 +2,7 @@ import Aeneas.Std.Core.Fmt
 import Aeneas.Std.Array.Array
 import Aeneas.Std.Slice
 import Aeneas.Std.Range
-import Aeneas.List.List
+import Aeneas.Data.List.List
 import Aeneas.Std.Core.Convert
 import Aeneas.Std.Core.Cmp
 

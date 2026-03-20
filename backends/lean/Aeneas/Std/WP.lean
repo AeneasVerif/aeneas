@@ -1,6 +1,6 @@
 import Aeneas.Std.Primitives
 import Std.Do
-import Aeneas.Grind.Init
+import Aeneas.Tactic.Solver.Grind.Init
 
 namespace Aeneas.Std.WP
 

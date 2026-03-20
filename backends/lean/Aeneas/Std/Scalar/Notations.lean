@@ -3,7 +3,7 @@ import Lean.Meta.Tactic.Simp
 import Mathlib.Tactic.Linarith
 import Aeneas.Std.Scalar.Core
 import Aeneas.Std.Scalar.Ops.Add -- we need to use addition in some of the tests below
-import Aeneas.ScalarTac
+import Aeneas.Tactic.Solver.ScalarTac
 
 namespace Aeneas
 

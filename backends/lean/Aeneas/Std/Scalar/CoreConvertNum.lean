@@ -6,10 +6,10 @@ import Aeneas.Std.Scalar.Core
 import Aeneas.Std.Scalar.Notations
 import Aeneas.Std.Scalar.Elab
 import Aeneas.Std.Array.Array
-import Aeneas.ScalarTac
-import Aeneas.Step.Init
-import Aeneas.Arith.Lemmas
-import Aeneas.BitVec
+import Aeneas.Tactic.Solver.ScalarTac
+import Aeneas.Tactic.Step.Init
+import Aeneas.Tactic.Solver.Arith.Lemmas
+import Aeneas.Data.BitVec
 
 namespace Aeneas
 
