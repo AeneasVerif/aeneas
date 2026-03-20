@@ -1,3 +1,4 @@
-import Aeneas.Progress.Progress
-import Aeneas.Progress.ProgressArraySpec
-import Aeneas.Progress.ProgressStar
+import Aeneas.Step.Step
+import Aeneas.Step.StepArraySpec
+import Aeneas.Step.StepStar
+import Aeneas.Step.Deprecated
