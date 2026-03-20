@@ -182,6 +182,8 @@ batch_end
 6. **Use `status`** to check if elaboration is still running or file is ready
 7. **Use `errors` after every edit** — if count is 0, your tactic worked
 8. **`edit` preserves indentation** — provide just the tactic text, not the leading spaces
+9. **`edit_range` and `insert` use exact content** — include indentation in the content
+10. **Use `\n` in content** for multi-line inserts: `insert 35 tactic1\n  tactic2\n  tactic3`
 
 ## MANDATORY: Use lean_lsp.py Instead of lake build
 
@@ -228,8 +230,6 @@ batch_end
 -- Step 4: Once everything works, try collapsing
 edit 42 progress*
 ```
-9. **`edit_range` and `insert` use exact content** — include indentation in the content
-10. **Use `\n` in content** for multi-line inserts: `insert 35 tactic1\n  tactic2\n  tactic3`
 
 ## JSON Response Examples (Common Scenarios)
 

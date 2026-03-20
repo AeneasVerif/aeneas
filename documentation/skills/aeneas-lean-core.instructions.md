@@ -75,8 +75,8 @@ theorem function_name_spec (params : Types) (preconditions : hypotheses) :
 ### With backward function
 ```lean
 @[progress]
-theorem function_name_spec (params...) (preconditions...) :
-  function_name params ⦃ result back =>
+theorem function_name_spec (param1 : U32) (param2 : Slice U16) (hpre : param1.val < param2.length) :
+  function_name param1 param2 ⦃ result back =>
     postcondition_on_result ∧
     postcondition_on_backward_function back ⦄ := by ...
 ```

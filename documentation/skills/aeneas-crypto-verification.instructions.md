@@ -71,20 +71,20 @@ NIST spec ⟷₁ Lean spec ⟷₂ Auxiliary spec ⟷₃ Aeneas code
 
 ```lean
 -- 1. Extract helper
-private def helper_name (args...) : Result ReturnType := do
+private def helper_name (a : U32) (b : Slice U16) : Result U32 := do
   -- copy the relevant subsequence of monadic operations
   ...
 
 -- 2. Fold theorem (proves inline = helper call)
-private theorem fold_helper_name (args...) (f : ReturnType → Result α) :
-  (do ...inline operations...; f result) =
-  (do let r ← helper_name args; f r)
+private theorem fold_helper_name (a : U32) (b : Slice U16) (f : U32 → Result α) :
+  (do /- ...inline operations... -/ f result) =
+  (do let r ← helper_name a b; f r)
   := by simp only [helper_name, bind_assoc_eq, bind_tc_ok, pure]
 
 -- 3. Helper spec
 @[local progress]
-theorem helper_name_spec (args...) (preconditions...) :
-  helper_name args ⦃ r => postcondition r ⦄ := by ...
+theorem helper_name_spec (a : U32) (b : Slice U16) (hpre : a.val < b.length) :
+  helper_name a b ⦃ r => postcondition r ⦄ := by ...
 
 -- 4. In main proof:
 --    simp only [fold_helper_name, fold_other_helper]

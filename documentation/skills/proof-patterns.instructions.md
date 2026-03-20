@@ -1,14 +1,14 @@
-# FrodoKEM Proof Patterns — Completed Examples
+# Proof Patterns — Completed Examples
 
-This document collects fully-worked proof patterns from the FrodoKEM verification
-project. Agents should reference these patterns when writing proofs for similar
+This document collects fully-worked proof patterns from real-world cryptographic
+verification projects. Agents should reference these patterns when writing proofs for similar
 functions. Each pattern shows the complete proof with commentary.
 
 ## Pattern 1: Simple Range Loop (pointwise map)
 
 **Use when:** A loop iterates `for i in 0..n` and writes `out[i] = f(a[i], out[i])`.
 
-**Example:** `frodo_add_loop` — pointwise `out[i] := (a[i] + out[i]) & QMASK`.
+**Example:** `add_loop` — pointwise `out[i] := (a[i] + out[i]) & QMASK`.
 
 **Structure:**
 1. A **generalized spec** (`spec_gen`) with an arbitrary starting position
@@ -18,7 +18,7 @@ functions. Each pattern shows the complete proof with commentary.
 ### spec_gen (the workhorse)
 
 ```lean
-private theorem frodo_add_loop.spec_gen
+private theorem add_loop.spec_gen
   (out out0 a : Slice Std.U16) (p)
   (hlen : out.length = a.length)
   (hlen0 : out.length = out0.length)
@@ -31,12 +31,12 @@ private theorem frodo_add_loop.spec_gen
   -- Invariant part 2: entries at or after start are untouched
   (hrest : ∀ j (hj : iter.start.val ≤ j ∧ j < out.length),
     out[j]'(by grind) = out0[j]'(by agrind)) :
-  frodokem.frodo_add_loop (Params p) iter out a ⦃ fun res =>
+  crypto.add_loop (Params p) iter out a ⦃ fun res =>
     ∃ hlen' : res.length = out0.length,
     ∀ j (hj : j < res.length),
       (res[j] : Std.U16) = addZ p (a[j]'(by agrind)) (out0[j]'(by agrind)) ⦄ := by
   -- Step 1: Unfold the recursive function
-  unfold frodokem.frodo_add_loop
+  unfold crypto.add_loop
   -- Step 2: Process the range iterator
   progress with range_next_usize as ⟨ret, h_range⟩
   -- Step 3: Case split on whether loop continues
@@ -57,41 +57,41 @@ private theorem frodo_add_loop.spec_gen
       intro j hj
       by_cases hji : j = iter.start.val
       · subst hji; grind [addZ]           -- freshly written entry
-      · have hj' : j < iter.start.val := by omega
+      · have hj' : j < iter.start.val := by scalar_tac
         have := hdone j hj'; grind         -- previously done entry
     have hrest' : ∀ j (hj : iter.start.val + 1 ≤ j ∧ j < s.length),
         s[j]'(by grind) = out0[j]'(by agrind) := by
       intro j hj; grind                    -- unchanged entry
     -- Step 6: Recursive call
     have hend_val : ret.2.«end».val = iter.«end».val := by rw [hend']
-    exact frodo_add_loop.spec_gen s out0 a p (by grind) (by grind)
-      ret.2 (by omega) (by grind)
-      (fun j hj => hdone' j (by omega))
-      (fun j hj => hrest' j ⟨by omega, by grind⟩)
+    exact add_loop.spec_gen s out0 a p (by grind) (by grind)
+      ret.2 (by scalar_tac) (by grind)
+      (fun j hj => hdone' j (by scalar_tac))
+      (fun j hj => hrest' j ⟨by scalar_tac, by grind⟩)
   · -- BASE CASE: start ≥ end, loop is done
     obtain ⟨hnone, _⟩ := h_range
     simp only [hnone]
-    refine ⟨by omega, fun j hj => ?_⟩
-    have : j < iter.start.val := by omega
+    refine ⟨by scalar_tac, fun j hj => ?_⟩
+    have : j < iter.start.val := by scalar_tac
     exact hdone j this
 -- Step 7: Termination
 termination_by iter.«end».val - iter.start.val
 decreasing_by
   have : ret.2.«end».val = iter.«end».val := by rw [hend']
-  omega
+  scalar_tac
 ```
 
 ### spec (public, starts at 0)
 
 ```lean
 @[progress]
-theorem frodokem.frodo_add_loop.spec
+theorem crypto.add_loop.spec
   (out a : Slice Std.U16)
   (hlen : out.length = a.length) :
-  frodokem.frodo_add_loop (Params p) { start := 0#usize, «end» := out.len } out a ⦃ fun res =>
+  crypto.add_loop (Params p) { start := 0#usize, «end» := out.len } out a ⦃ fun res =>
     res = Slice.mapIdx out (fun j x hj => addZ p a[j] x) ⦄ := by
   apply WP.spec_mono
-  · exact frodo_add_loop.spec_gen out out a p hlen rfl
+  · exact add_loop.spec_gen out out a p hlen rfl
       { start := 0#usize, «end» := out.len } (by simp) rfl
       (fun j hj => by simp at hj) (fun j _ => rfl)
   · intro res ⟨hlen', hall⟩
@@ -104,11 +104,11 @@ theorem frodokem.frodo_add_loop.spec
 
 ```lean
 @[progress]
-theorem frodokem.frodo_add.spec p (out a : Slice Std.U16)
+theorem crypto.add.spec p (out a : Slice Std.U16)
   (hlen : out.length = a.length) :
-  frodokem.frodo_add (Params p) out a ⦃ fun res =>
+  crypto.add (Params p) out a ⦃ fun res =>
     res = Slice.mapIdx out (fun j x hj => addZ p a[j] x) ⦄ := by
-  unfold frodokem.frodo_add
+  unfold crypto.add
   simp only [Slice.len]
   split_ifs with h
   · have : out.len = a.len := h
@@ -120,10 +120,10 @@ theorem frodokem.frodo_add.spec p (out a : Slice Std.U16)
 
 ```lean
 @[progress]
-theorem frodo_add_spec_ext p {m n A B} (a b : Slice Std.U16)
+theorem add_spec_ext p {m n A B} (a b : Slice Std.U16)
   (halen : a.length = m * n) (ha : Slice.toMatrix a = A)
   (hblen : b.length = m * n) (hb : Slice.toMatrix b = B) :
-  frodokem.frodo_add (Params p) b a ⦃ fun res =>
+  crypto.add (Params p) b a ⦃ fun res =>
     ∃ hreslen : res.length = m * n,
     Slice.toMatrix (p := p) res = A + B ⦄ := by
   progress as ⟨res, hres⟩
@@ -143,7 +143,7 @@ theorem frodo_add_spec_ext p {m n A B} (a b : Slice Std.U16)
 **Use when:** A loop accumulates `acc += a[i] * b[i]` in wrapping arithmetic,
 then the result is projected to Zq.
 
-**Example:** `frodo_mul_bs_loop0_loop0_loop0` — innermost k-loop of B×S multiply.
+**Example:** `mul_bs_loop0_loop0_loop0` — innermost k-loop of B×S multiply.
 
 **Key idea:** The I32 wrapping accumulator tracks the Zq partial dot-product.
 Prove a helper `toZq_hcast_step` showing that wrapping arithmetic commutes with
@@ -163,7 +163,7 @@ private lemma dotZq_partial_zero ... : dotZq_partial ... 0 = 0 := by simp [dotZq
 
 -- Full partial = total
 private lemma dotZq_partial_full ... :
-    dotZq_partial ... (Spec.Frodo.n p) = dotZq ... := by simp [dotZq_partial, dotZq]
+    dotZq_partial ... (Spec.n p) = dotZq ... := by simp [dotZq_partial, dotZq]
 
 -- Wrapping arithmetic projects to Zq
 private theorem toZq_hcast_step (p) (acc : I32) (a b : U16) :
@@ -201,7 +201,7 @@ private theorem inner_loop.spec_gen p (b s : Slice U16)
     simp only [..., WP.spec_ok]
     rw [hacc]; convert dotZq_partial_full ...
 termination_by r.«end».val - r.start.val
-decreasing_by have : ret.2.«end».val = r.«end».val := by rw [hend']; omega
+decreasing_by have : ret.2.«end».val = r.«end».val := by rw [hend']; scalar_tac
 ```
 
 ---
@@ -210,7 +210,7 @@ decreasing_by have : ret.2.«end».val = r.«end».val := by rw [hend']; omega
 
 **Use when:** An outer loop iterates rows, calling an inner loop for each row.
 
-**Example:** `frodo_mul_bs_loop0` — outer i-loop calling the middle j-loop.
+**Example:** `mul_bs_loop0` — outer i-loop calling the middle j-loop.
 
 ### Structure
 
@@ -242,7 +242,7 @@ theorem outer_loop.spec p (out b s : Slice U16)
     exact ⟨hreslen, hres⟩
   · -- Base case
     obtain ⟨hnone, _⟩ := h_range; simp only [hnone, WP.spec_ok]
-    exact ⟨by omega, fun i j => hinv i j (by omega)⟩
+    exact ⟨by scalar_tac, fun i j => hinv i j (by scalar_tac)⟩
 termination_by iter.«end».val - iter.start.val
 decreasing_by ...
 ```
@@ -282,14 +282,14 @@ have hinv' : diff1 = 0#u16 ↔ ∀ j, (hj : j < iter.start.val + 1) → ... := b
 
 ```lean
 @[progress]
-theorem frodo_mul_bs.spec p (out b s : Slice U16) (hout hb hs) :
-  frodokem.frodo_mul_bs (Params p) out b s ⦃ fun res => ... ⦄ := by
-  unfold frodokem.frodo_mul_bs
+theorem mul_bs.spec p (out b s : Slice U16) (hout hb hs) :
+  crypto.mul_bs (Params p) out b s ⦃ fun res => ... ⦄ := by
+  unfold crypto.mul_bs
   -- progress through setup (creating ranges, getting parameters)
   progress as ⟨n_p, hn_p⟩      -- (Params p).N
-  progress as ⟨nbar, hnbar⟩    -- frodokem.NBAR
+  progress as ⟨nbar, hnbar⟩    -- crypto.NBAR
   -- now the loop call appears
-  progress with frodo_mul_bs_loop0.spec as ⟨res, hreslen, hres⟩
+  progress with mul_bs_loop0.spec as ⟨res, hreslen, hres⟩
   · ... -- provide preconditions
   exact ⟨hreslen, hres⟩
 ```
@@ -302,9 +302,9 @@ theorem frodo_mul_bs.spec p (out b s : Slice U16) (hout hb hs) :
 
 ```lean
 @[progress]
-theorem frodo_add.spec p (out a : Slice U16) (hlen : out.length = a.length) :
-  frodokem.frodo_add (Params p) out a ⦃ fun res => ... ⦄ := by
-  unfold frodokem.frodo_add
+theorem add.spec p (out a : Slice U16) (hlen : out.length = a.length) :
+  crypto.add (Params p) out a ⦃ fun res => ... ⦄ := by
+  unfold crypto.add
   simp only [Slice.len]
   split_ifs with h
   · have : out.len = a.len := h
@@ -345,7 +345,7 @@ have h : s.val[i]! = s[i]'proof := getElem!_pos _ _ proof
 termination_by iter.«end».val - iter.start.val
 decreasing_by
   have : ret.2.«end».val = iter.«end».val := by rw [hend']
-  omega
+  scalar_tac
 ```
 
 ### Rebuilding bounds after range_next_usize
@@ -378,11 +378,11 @@ theorem loop.spec ... :
 ```lean
 -- (i * NBAR + j) / NBAR = i when j < NBAR
 private lemma mul_NBAR_add_div (i j : ℕ) (hj : j < NBAR) :
-    (i * NBAR + j) / NBAR = i := by simp_all [NBAR]; omega
+    (i * NBAR + j) / NBAR = i := by simp_all [NBAR]; scalar_tac
 
 -- (i * NBAR + j) % NBAR = j when j < NBAR
 private lemma mul_NBAR_add_mod (i j : ℕ) (hj : j < NBAR) :
-    (i * NBAR + j) % NBAR = j := by simp [NBAR]; omega
+    (i * NBAR + j) % NBAR = j := by simp [NBAR]; scalar_tac
 ```
 
 ---

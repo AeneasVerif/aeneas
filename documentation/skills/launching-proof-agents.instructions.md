@@ -154,7 +154,7 @@ give the entire task to a single agent in one shot. Instead:
    instructions, or pivot to a different approach. Never let an agent run for hours
    without checking in.
 
-5. **Reinforce lean_lsp.py usage on every interaction**: Agents tend to fall back to
+6. **Reinforce lean_lsp.py usage on every interaction**: Agents tend to fall back to
    `lake build` loops. Every time you launch an agent or send it a follow-up message,
    remind it: "Use lean_lsp.py for all proof iteration — do NOT use lake build." This
    is not optional — agents that use `lake build` waste 2–5 minutes per cycle instead
