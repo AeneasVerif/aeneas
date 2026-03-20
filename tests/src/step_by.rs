@@ -117,27 +117,49 @@ mod tests {
     use super::*;
 
     #[test]
-    fn step_by_1() { test_step_by_1(); }
+    fn step_by_1() {
+        test_step_by_1();
+    }
     #[test]
-    fn step_by_2() { test_step_by_2(); }
+    fn step_by_2() {
+        test_step_by_2();
+    }
     #[test]
-    fn step_by_3() { test_step_by_3(); }
+    fn step_by_3() {
+        test_step_by_3();
+    }
     #[test]
-    fn step_by_larger_than_len() { test_step_by_larger_than_len(); }
+    fn step_by_larger_than_len() {
+        test_step_by_larger_than_len();
+    }
     #[test]
-    fn step_by_empty() { test_step_by_empty(); }
+    fn step_by_empty() {
+        test_step_by_empty();
+    }
     #[test]
-    fn step_by_single() { test_step_by_single(); }
+    fn step_by_single() {
+        test_step_by_single();
+    }
     #[test]
-    fn step_by_single_step_2() { test_step_by_single_step_2(); }
+    fn step_by_single_step_2() {
+        test_step_by_single_step_2();
+    }
     #[test]
-    fn step_by_eq_len() { test_step_by_eq_len(); }
+    fn step_by_eq_len() {
+        test_step_by_eq_len();
+    }
     #[test]
-    fn step_by_len_minus_1() { test_step_by_len_minus_1(); }
+    fn step_by_len_minus_1() {
+        test_step_by_len_minus_1();
+    }
     #[test]
-    fn step_by_two_elements() { test_step_by_two_elements(); }
+    fn step_by_two_elements() {
+        test_step_by_two_elements();
+    }
     #[test]
-    fn step_by_4_on_longer() { test_step_by_4_on_longer(); }
+    fn step_by_4_on_longer() {
+        test_step_by_4_on_longer();
+    }
 
     #[test]
     #[should_panic]
