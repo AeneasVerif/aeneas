@@ -1,4 +1,5 @@
 import Aeneas.CryptoSolver
+import Mathlib.Data.ZMod.Basic
 
 namespace Aeneas.CryptoSolver.Tests
 
@@ -284,5 +285,27 @@ example (x n : Nat) (hn : 0 < n) : x % n < n := by crypto_solver
 
 -- Modulo is bounded by the modulus minus 1
 example (x : Nat) : x % 2^32 < 2^32 := by crypto_solver
+
+/-! ### Montegomery reduction -/
+def mont_reduce (q R : Nat) (minus_q_minus_1 : Int) (a : Nat) : Int :=
+  let f := (a * minus_q_minus_1) % R
+  let t := (a + f * q) / R
+  t
+
+example
+  (q: Nat)
+  (R: Nat)
+  (minus_q_minus_1: Int)
+  (a: Nat)
+  (h_R: R > q ∧ exists n, R = 2 ^ n)
+  (h_q_minus_1: (minus_q_minus_1 * q) % R = (-1) % R)
+  (h_q: 0 < q)
+  (h_a: a < q * R)
+  (h_q_R: Nat.Coprime R q) :
+  let t := mont_reduce q R minus_q_minus_1 a
+  t % (q : Int) = (a * (R: ZMod q)⁻¹.val) % q ∧
+  0 ≤ t ∧ t < 2 * q
+  := by
+  crypto_solver
 
 end Aeneas.CryptoSolver.CryptoTests

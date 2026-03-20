@@ -2,6 +2,7 @@ import Lean
 import Mathlib.Tactic.Linarith
 import Mathlib.Tactic.NormNum
 import Mathlib.Tactic.Ring
+import Mathlib.Tactic.Positivity
 import Aeneas.CryptoSolver.Init
 import Aeneas.CryptoSolver.Expr
 import Aeneas.CryptoSolver.Interval
@@ -11,6 +12,7 @@ import Aeneas.CryptoSolver.Certify
 import Aeneas.CryptoSolver.Preprocess
 import Aeneas.CryptoSolver.Dispatch
 import Aeneas.CryptoSolver.ModRing
+import Aeneas.CryptoSolver.ModArith
 import Aeneas.CryptoSolver.CryptoRules
 
 namespace Aeneas.CryptoSolver
@@ -236,10 +238,21 @@ private def tryModSubexprBounds : TacticM Bool := do
         let nStx ← PrettyPrinter.delab n
         let freshName ← mkFreshUserName `_hmod
         let nameStx := mkIdent freshName
+        -- Guard against delab/re-elab errors (e.g., ZMod inverse → Inv ℕ)
+        let saved ← saveState
+        let msgsBefore ← Core.getMessageLog
         try
           evalTactic (← `(tactic|
             have $nameStx : $xStx % $nStx < $nStx := Nat.mod_lt _ (by omega)))
-        catch _ => pure ()
+          let msgsAfter ← Core.getMessageLog
+          if msgsAfter.toList.length > msgsBefore.toList.length then
+            let newMsgs := msgsAfter.toList.drop msgsBefore.toList.length
+            if newMsgs.any (fun m => m.severity == .error) then
+              saved.restore
+              Core.setMessageLog msgsBefore
+        catch _ =>
+          saved.restore
+          Core.setMessageLog msgsBefore
     if ← tryCloseWith (← `(tactic| omega)) then return true
     if ← tryCloseWith (← `(tactic| nlinarith)) then return true
     return false
@@ -456,6 +469,128 @@ private def doMulSaturationRound : TacticM Bool := do
         saved.restore
   return madeProgress
 
+/-- Collect `_ % _` subexpressions over Int from goal and hypotheses. -/
+private def collectIntModExprs (root : Expr) : TacticM (Array (Expr × Expr)) := do
+  let goal ← getMainGoal
+  goal.withContext do
+    let mut result : Array (Expr × Expr) := #[]
+    let mut worklist : Array Expr := #[root.consumeMData]
+    let ctx ← getLCtx
+    for decl in ctx do
+      if !decl.isAuxDecl then worklist := worklist.push decl.type
+    let mut fuel := 80
+    while fuel > 0 do
+      fuel := fuel - 1
+      match worklist.back? with
+      | none => break
+      | some e =>
+        worklist := worklist.pop
+        let e := e.consumeMData
+        let fn := e.getAppFn
+        let args := e.getAppArgs
+        if args.size == 6 && fn.isConstOf ``HMod.hMod &&
+           args[0]!.isConstOf ``Int then
+          let isDup := result.any fun (x', n') =>
+            x' == args[4]! && n' == args[5]!
+          if !isDup then
+            result := result.push (args[4]!, args[5]!)
+        for arg in args do
+          if arg.isApp then worklist := worklist.push arg
+    return result
+
+/-- Try to introduce a single Int emod bound pair (nonneg + upper). Returns true if any succeeded. -/
+private def introIntEmodBound (x n : Expr) : TacticM Bool := do
+  let mut ok := false
+  let xStx ← withMainContext do PrettyPrinter.delab x
+  let nStx ← withMainContext do PrettyPrinter.delab n
+  -- 0 ≤ x % n
+  let saved ← saveState
+  let name1 ← mkFreshUserName `_hmod_nn
+  let msgsBefore := (← Core.getMessageLog).toList.length
+  try
+    evalTactic (← `(tactic| have $(mkIdent name1) : 0 ≤ $xStx % $nStx :=
+      Int.emod_nonneg _ (by omega)))
+    if (← Core.getMessageLog).toList.length > msgsBefore then saved.restore
+    else ok := true
+  catch _ => saved.restore
+  -- x % n < n
+  let saved2 ← saveState
+  let name2 ← mkFreshUserName `_hmod_lt
+  let msgsBefore2 := (← Core.getMessageLog).toList.length
+  try
+    evalTactic (← `(tactic| have $(mkIdent name2) : $xStx % $nStx < $nStx :=
+      Int.emod_lt_of_pos _ (by omega)))
+    if (← Core.getMessageLog).toList.length > msgsBefore2 then saved2.restore
+    else ok := true
+  catch _ => saved2.restore
+  return ok
+
+/-- Introduce Int emod bounds for `_ % _` subexpressions over Int. -/
+private def tryIntEmodBounds : TacticM Bool := do
+  let goal ← getMainGoal
+  let tgt ← goal.getType >>= instantiateMVars
+  let args := tgt.consumeMData.getAppArgs
+  let isIntGoal := args.size >= 1 && args[0]!.isConstOf ``Int
+  if !isIntGoal then return false
+  let intModExprs ← collectIntModExprs tgt
+  if intModExprs.isEmpty then return false
+  let mut introduced := false
+  for (x, n) in intModExprs do
+    if ← introIntEmodBound x n then introduced := true
+  if introduced then
+    if ← tryCloseWith (← `(tactic| omega)) then return true
+    if ← tryCloseWith (← `(tactic| nlinarith)) then return true
+    if ← tryCloseWith (← `(tactic| linarith)) then return true
+  return false
+
+/-- Try to close `0 ≤ expr` goals where expr involves Int div/mod/Nat casts. -/
+private def tryIntNonneg : TacticM Bool := do
+  if ← tryCloseWith (← `(tactic| positivity)) then return true
+  if ← tryCloseWith (← `(tactic|
+    apply Int.ediv_nonneg <;>
+      first
+      | positivity
+      | (apply add_nonneg <;>
+          first
+          | positivity
+          | (apply mul_nonneg <;>
+              first | positivity | exact Int.emod_nonneg _ (by omega))
+          | exact Int.emod_nonneg _ (by omega))
+      | omega)) then return true
+  return false
+
+/-- Try to close `expr / n < bound` goals for Int division.
+    Uses `Int.ediv_lt_of_lt_mul` then tries to discharge the numerator bound. -/
+private def tryIntEdivBound : TacticM Bool := do
+  -- First introduce emod bounds that nlinarith will need
+  let _ ← tryIntEmodBounds
+  if (← getGoals).isEmpty then return true
+  -- push_cast to lift Nat hypotheses to Int
+  let saved ← saveState
+  let msgsBefore ← Core.getMessageLog
+  try evalTactic (← `(tactic| push_cast at *))
+  catch _ => saved.restore
+  -- Restore if push_cast generated errors (e.g., Inv ℕ for ZMod expressions)
+  let msgsAfter ← Core.getMessageLog
+  if msgsAfter.toList.length > msgsBefore.toList.length then
+    let newMsgs := msgsAfter.toList.drop msgsBefore.toList.length
+    if newMsgs.any (fun m => m.severity == .error) then
+      saved.restore
+      Core.setMessageLog msgsBefore
+  -- Try applying ediv_lt_of_lt_mul then closing the resulting obligation
+  let saved2 ← saveState
+  try
+    evalTactic (← `(tactic| apply Int.ediv_lt_of_lt_mul (by omega)))
+    -- Now goal should be: numerator < bound * divisor
+    if ← tryCloseWith (← `(tactic| nlinarith)) then return true
+    if ← tryCloseWith (← `(tactic| linarith)) then return true
+    if ← tryCloseWith (← `(tactic| omega)) then return true
+    -- Failed to close the numerator goal
+    saved2.restore
+  catch _ =>
+    saved2.restore
+  return false
+
 /-- The core solving loop for a single goal. Tries multiple strategies. -/
 def solveSingleGoal : TacticM Unit := do
   -- Step 0: Simplify bitwise operations to arithmetic
@@ -472,11 +607,20 @@ def solveSingleGoal : TacticM Unit := do
   if ← tryCloseWith (← `(tactic| exact Nat.div_mul_le_self _ _)) then return
   -- nlinarith for non-linear goals (degree ≤ 2)
   if ← tryCloseWith (← `(tactic| nlinarith)) then return
-  -- Signed multiplication: try nlinarith with sq_nonneg hints (Int goals only)
+  -- Int-specific strategies
   let tgtForNatCheck ← (← getMainGoal).getType >>= instantiateMVars
   let goalIsNat := tgtForNatCheck.getAppArgs.size >= 1 &&
                    tgtForNatCheck.getAppArgs[0]!.isConstOf ``Nat
   if !goalIsNat then
+    -- Modular arithmetic: a%n = b%n, n∣expr, ZMod inverse goals
+    if ← ModArith.tryModArith then return
+    -- Int non-negativity (0 ≤ expr involving div/mod/Nat casts)
+    if ← tryIntNonneg then return
+    -- Int emod bounds: 0 ≤ x%n, x%n < n
+    if ← tryIntEmodBounds then return
+    -- Int ediv upper bound: a/b < c from a < c*b
+    if ← tryIntEdivBound then return
+    -- Signed multiplication: try nlinarith with sq_nonneg hints
     if ← trySqNonnegHints then return
   -- Try interval-guided bound introduction
   if ← tryIntervalGuidedBounds then return
@@ -504,6 +648,9 @@ def solveSingleGoal : TacticM Unit := do
 /-- Main `crypto_solver` tactic -/
 elab "crypto_solver" : tactic => withMainContext do
   trace[CryptoSolver] "Starting crypto_solver"
+  -- Try simp only to unfold definitions and simplify before preprocessing
+  let _ ← tryCloseWith (← `(tactic| simp only []))
+  if (← getGoals).isEmpty then return
   let goal ← getMainGoal
   let goals ← preprocessGoal goal
   let mut remaining : List MVarId := []
