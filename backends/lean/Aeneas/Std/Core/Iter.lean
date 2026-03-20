@@ -77,8 +77,10 @@ def core.iter.adapters.step_by.IteratorStepBy.step_by
   {I : Type} {Item : Type}
   (IteratorInst : core.iter.traits.iterator.Iterator I Item) :
   core.iter.adapters.step_by.StepBy I → Std.Usize →
-  Result (core.iter.adapters.step_by.StepBy (core.iter.adapters.step_by.StepBy I)) := by
-  sorry -- TODO
+  Result (core.iter.adapters.step_by.StepBy (core.iter.adapters.step_by.StepBy I)) :=
+  fun self steps =>
+    if steps.val = 0 then .fail .panic
+    else .ok ⟨ self, steps ⟩
 
 @[rust_fun
   "core::iter::adapters::step_by::{core::iter::traits::iterator::Iterator<core::iter::adapters::step_by::StepBy<@I>, @Clause0_Item>}::enumerate"]
@@ -86,8 +88,8 @@ def core.iter.adapters.step_by.IteratorStepBy.enumerate
   {I : Type} {Item : Type}
   (IteratorInst : core.iter.traits.iterator.Iterator I Item) :
   core.iter.adapters.step_by.StepBy I →
-  Result (core.iter.adapters.enumerate.Enumerate (core.iter.adapters.step_by.StepBy I)) := by
-  sorry -- TODO
+  Result (core.iter.adapters.enumerate.Enumerate (core.iter.adapters.step_by.StepBy I)) :=
+  fun self => .ok { iter := self, count := 0#usize }
 
 @[rust_fun
   "core::iter::adapters::step_by::{core::iter::traits::iterator::Iterator<core::iter::adapters::step_by::StepBy<@I>, @Clause0_Item>}::take"]
@@ -95,8 +97,8 @@ def core.iter.adapters.step_by.IteratorStepBy.take
   {I : Type} {Item : Type}
   (IteratorInst : core.iter.traits.iterator.Iterator I Item) :
   core.iter.adapters.step_by.StepBy I → Std.Usize →
-  Result (core.iter.adapters.take.Take (core.iter.adapters.step_by.StepBy I)) := by
-  sorry -- TODO
+  Result (core.iter.adapters.take.Take (core.iter.adapters.step_by.StepBy I)) :=
+  fun self n => .ok ⟨ self, n ⟩
 
 @[reducible, rust_trait_impl
   "core::iter::traits::iterator::Iterator<core::iter::adapters::step_by::StepBy<@I>, @Clause0_Item>"]
@@ -130,13 +132,6 @@ structure core.iter.traits.collect.FromIterator (Self : Type) (A : Type) where
     (_ : core.iter.traits.collect.IntoIterator T A IntoIter),
     T → Result Self
 
-@[rust_fun "core::iter::traits::iterator::Iterator::collect"]
-def core.iter.traits.iterator.Iterator.collect.default
-  {Self : Type} {B : Type} {Item : Type} (IteratorInst :
-  core.iter.traits.iterator.Iterator Self Item)
-  (collectFromIteratorInst : core.iter.traits.collect.FromIterator B Item) :
-  Self → Result B := sorry
-
 @[rust_fun
   "core::iter::traits::collect::{core::iter::traits::collect::IntoIterator<@I, @Item, @I>}::into_iter",
   simp]
@@ -153,6 +148,15 @@ def core.iter.traits.collect.IntoIterator.Blanket {I : Type} {Item : Type}
   iteratorInst := IteratorInst
   into_iter := core.iter.traits.collect.IntoIterator.Blanket.into_iter IteratorInst
 }
+
+@[rust_fun "core::iter::traits::iterator::Iterator::collect"]
+def core.iter.traits.iterator.Iterator.collect.default
+  {Self : Type} {B : Type} {Item : Type} (IteratorInst :
+  core.iter.traits.iterator.Iterator Self Item)
+  (collectFromIteratorInst : core.iter.traits.collect.FromIterator B Item) :
+  Self → Result B :=
+  fun self => collectFromIteratorInst.from_iter
+    (core.iter.traits.collect.IntoIterator.Blanket IteratorInst) self
 
 @[rust_trait "core::iter::traits::collect::Extend"]
 structure core.iter.traits.collect.Extend (Self : Type) (A : Type) where
@@ -220,7 +224,9 @@ def core.iter.range.IteratorRange.next
 def core.iter.range.IteratorRange.step_by
    {A : Type} (_StepInst : core.iter.range.Step A) :
   core.ops.range.Range A → Usize → Result (adapters.step_by.StepBy (ops.range.Range A)) :=
-  λ range step_by => .ok ⟨ range, step_by ⟩
+  λ range step_by =>
+    if step_by.val = 0 then .fail .panic
+    else .ok ⟨ range, step_by ⟩
 
 @[rust_fun
   "core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>}::enumerate"]

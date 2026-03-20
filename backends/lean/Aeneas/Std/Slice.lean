@@ -727,6 +727,54 @@ theorem core.slice.index.SliceIndexRangeUsizeSlice.index.progress_spec {α : Typ
   · simp only [spec_fail]
     scalar_tac
 
+-- RangeTo progress specs
+
+@[simp, progress_simps]
+theorem Slice.index_mut_SliceIndexRangeToUsizeSliceInst (s : Slice α) (r : core.ops.range.RangeTo Usize) :
+  core.slice.index.Slice.index_mut (core.slice.index.SliceIndexRangeToUsizeSlice α) s r =
+  core.slice.index.SliceIndexRangeToUsizeSlice.index_mut r s := by rfl
+
+@[simp, progress_simps]
+theorem Slice.index_SliceIndexRangeToUsizeSliceInst (s : Slice α) (r : core.ops.range.RangeTo Usize) :
+  core.slice.index.Slice.index (core.slice.index.SliceIndexRangeToUsizeSlice α) s r =
+  core.slice.index.SliceIndexRangeToUsizeSlice.index r s := by rfl
+
+@[progress]
+theorem core.slice.index.SliceIndexRangeToUsizeSlice.index.progress_spec
+    (r : core.ops.range.RangeTo Usize) (s : Slice α) (h : r.end ≤ s.length) :
+  core.slice.index.SliceIndexRangeToUsizeSlice.index r s
+    ⦃ s1 =>
+      s1.val = s.val.slice 0 r.end ∧
+      s1.length = r.end ⦄ := by
+  simp only [index]
+  split
+  · simp only [spec_ok, Slice.length, true_and]
+    simp; scalar_tac
+  · scalar_tac
+
+-- RangeFrom progress specs
+
+@[simp, progress_simps]
+theorem Slice.index_mut_SliceIndexRangeFromUsizeSliceInst (s : Slice α) (r : core.ops.range.RangeFrom Usize) :
+  core.slice.index.Slice.index_mut (core.slice.index.SliceIndexRangeFromUsizeSlice α) s r =
+  core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut r s := by rfl
+
+@[simp, progress_simps]
+theorem Slice.index_SliceIndexRangeFromUsizeSliceInst (s : Slice α) (r : core.ops.range.RangeFrom Usize) :
+  core.slice.index.Slice.index (core.slice.index.SliceIndexRangeFromUsizeSlice α) s r =
+  core.slice.index.SliceIndexRangeFromUsizeSlice.index r s := by rfl
+@[progress]
+theorem core.slice.index.SliceIndexRangeFromUsizeSlice.index.progress_spec
+    (r : core.ops.range.RangeFrom Usize) (s : Slice α) (h : r.start ≤ s.length) :
+  core.slice.index.SliceIndexRangeFromUsizeSlice.index r s
+    ⦃ s1 =>
+      s1.length = s.length - r.start ⦄ := by
+  simp only [index]
+  split
+  · simp only [spec_ok]
+    simp [Slice.length, List.length_drop]
+  · scalar_tac
+
 @[progress]
 theorem core.slice.Slice.copy_from_slice.progress_spec (copyInst : core.marker.Copy α) (s0 s1 : Slice α)
   (h : s0.length = s1.length) :

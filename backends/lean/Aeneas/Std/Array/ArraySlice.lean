@@ -227,4 +227,20 @@ theorem Array.index_SliceIndexRangeUsizeSlice {T : Type} {N : Usize}
       (core.slice.index.SliceIndexRangeUsizeSlice T)) a r =
     core.slice.index.SliceIndexRangeUsizeSlice.index r a.to_slice := by rfl
 
+-- Array index/index_mut with RangeTo
+
+@[simp, progress_simps]
+theorem Array.index_SliceIndexRangeToUsizeSlice {T : Type} {N : Usize}
+    (a : Array T N) (r : core.ops.range.RangeTo Usize) :
+    core.array.Array.index (core.ops.index.IndexSlice
+      (core.slice.index.SliceIndexRangeToUsizeSlice T)) a r =
+    core.slice.index.SliceIndexRangeToUsizeSlice.index r a.to_slice := by rfl
+-- Array index/index_mut with RangeFrom
+
+@[simp, progress_simps]
+theorem Array.index_SliceIndexRangeFromUsizeSlice {T : Type} {N : Usize}
+    (a : Array T N) (r : core.ops.range.RangeFrom Usize) :
+    core.array.Array.index (core.ops.index.IndexSlice
+      (core.slice.index.SliceIndexRangeFromUsizeSlice T)) a r =
+    core.slice.index.SliceIndexRangeFromUsizeSlice.index r a.to_slice := by rfl
 end Aeneas.Std
