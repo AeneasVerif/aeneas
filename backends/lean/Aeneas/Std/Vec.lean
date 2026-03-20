@@ -219,6 +219,81 @@ theorem Vec.index_mut_slice_index {α : Type} (v : Vec α) (i : Usize) :
   simp [Vec.index_mut, Vec.index_mut_usize, Slice.index_mut_usize]
   rfl
 
+-- Vec index/index_mut with RangeTo
+
+@[progress]
+theorem Vec.index_RangeTo_spec {α : Type} (v : Vec α) (r : core.ops.range.RangeTo Usize)
+    (h : r.end ≤ v.length) :
+    Vec.index (core.slice.index.SliceIndexRangeToUsizeSlice α) v r
+    ⦃ s1 =>
+      s1.val = v.val.slice 0 r.end ∧
+      s1.length = r.end ⦄ := by
+  simp only [Vec.index]
+  have := core.slice.index.SliceIndexRangeToUsizeSlice.index.progress_spec r v h
+  exact this
+
+@[progress]
+theorem Vec.index_mut_RangeTo_spec {α : Type} (v : Vec α) (r : core.ops.range.RangeTo Usize)
+    (h : r.end ≤ v.length) :
+    Vec.index_mut (core.slice.index.SliceIndexRangeToUsizeSlice α) v r
+    ⦃ (s1, back) =>
+      s1.val = v.val.slice 0 r.end ∧
+      s1.length = r.«end» ∧
+      ∀ s', (back s').val = v.val.setSlice! 0 s'.val ⦄ := by
+  simp only [Vec.index_mut]
+  have := core.slice.index.SliceIndexRangeToUsizeSlice.index_mut.progress_spec r v h
+  exact this
+
+-- Vec index/index_mut with RangeFrom
+
+@[progress]
+theorem Vec.index_RangeFrom_spec {α : Type} (v : Vec α) (r : core.ops.range.RangeFrom Usize)
+    (h : r.start ≤ v.length) :
+    Vec.index (core.slice.index.SliceIndexRangeFromUsizeSlice α) v r
+    ⦃ s1 =>
+      s1.val = v.val.drop r.start ∧
+      s1.length = v.length - r.start.val ⦄ := by
+  simp only [Vec.index]
+  have := core.slice.index.SliceIndexRangeFromUsizeSlice.index.progress_spec r v h
+  exact this
+
+@[progress]
+theorem Vec.index_mut_RangeFrom_spec {α : Type} (v : Vec α) (r : core.ops.range.RangeFrom Usize)
+    (h : r.start ≤ v.length) :
+    Vec.index_mut (core.slice.index.SliceIndexRangeFromUsizeSlice α) v r
+    ⦃ (s1, back) =>
+      s1.val = v.val.drop r.start ∧
+      s1.length = v.length - r.start.val ∧
+      ∀ s', (back s').val = v.val.setSlice! r.start.val s'.val ⦄ := by
+  simp only [Vec.index_mut]
+  have := core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut.progress_spec r v h
+  exact this
+
+-- Vec index/index_mut with Range
+
+@[progress]
+theorem Vec.index_Range_spec {α : Type} (v : Vec α) (r : core.ops.range.Range Usize)
+    (h0 : r.start ≤ r.end) (h1 : r.end ≤ v.length) :
+    Vec.index (core.slice.index.SliceIndexRangeUsizeSlice α) v r
+    ⦃ s1 =>
+      s1.val = v.val.slice r.start r.end ∧
+      s1.length = r.end - r.start ⦄ := by
+  simp only [Vec.index]
+  have := core.slice.index.SliceIndexRangeUsizeSlice.index.progress_spec r v h0 h1
+  exact this
+
+@[progress]
+theorem Vec.index_mut_Range_spec {α : Type} (v : Vec α) (r : core.ops.range.Range Usize)
+    (h0 : r.start ≤ r.end) (h1 : r.end ≤ v.length) :
+    Vec.index_mut (core.slice.index.SliceIndexRangeUsizeSlice α) v r
+    ⦃ (s1, back) =>
+      s1.val = v.val.slice r.start r.end ∧
+      s1.length = r.end - r.start ∧
+      ∀ s2, back s2 = Slice.setSlice! v r.start.val s2 ⦄ := by
+  simp only [Vec.index_mut]
+  have := core.slice.index.SliceIndexRangeUsizeSlice.index_mut.progress_spec r v h0 h1
+  exact this
+
 end alloc.vec
 
 @[rust_fun "alloc::slice::{[@T]}::to_vec"]
