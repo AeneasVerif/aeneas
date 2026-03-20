@@ -673,6 +673,11 @@ theorem Slice.index_mut_SliceIndexRangeUsizeSliceInst (s : Slice α) (r : core.o
   core.slice.index.Slice.index_mut (core.slice.index.SliceIndexRangeUsizeSlice α) s r = core.slice.index.SliceIndexRangeUsizeSlice.index_mut r s := by
   rfl
 
+@[simp, progress_simps]
+theorem Slice.index_SliceIndexRangeUsizeSliceInst (s : Slice α) (r : core.ops.range.Range Usize) :
+  core.slice.index.Slice.index (core.slice.index.SliceIndexRangeUsizeSlice α) s r = core.slice.index.SliceIndexRangeUsizeSlice.index r s := by
+  rfl
+
 def Slice.setSlice! {α : Type u} (s : Slice α) (i : ℕ) (s' : List α) : Slice α :=
   ⟨s.val.setSlice! i s', by scalar_tac⟩
 
