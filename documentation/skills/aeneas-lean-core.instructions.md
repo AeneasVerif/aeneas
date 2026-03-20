@@ -489,6 +489,8 @@ calc (x + 1) * (x + 1)
    - **Search** the Aeneas library for an existing lemma (grep for related names, check simp/progress attributes).
    - **If it doesn't exist:** state and prove the missing lemma yourself, then use it in the proof.
    - **This principle extends to all auxiliary definitions**, including project-local ones. When in the middle of a big proof, you should not have to unfold many auxiliary definitions. If you find yourself unfolding too many, step back and introduce auxiliary lemmas to bridge the gap.
+11. **NEVER increase `maxRecDepth`.** If you hit a `maxRecDepth` error, it signals a real problem — either the proof is poorly structured (causing unbounded unfolding), or there is a bug in a tactic. For tactics that internally use `simp` (like `agrind`, `grind`, `scalar_tac`, `simp_scalar`), check whether hypotheses in the goal trigger a simp loop — if so, `clear` the offending hypothesis or use `simp only [...]`. If it's not a simp loop, **report the issue to the user** as a possible tactic bug.
+12. **Report misbehaving tactics.** If a tactic doesn't do what it should — for example, `progress` fails to make progress even though the appropriate `@[progress]` lemma exists, or `scalar_tac` can't close a pure arithmetic goal it should handle — **report this to the user**. It may indicate a bug or missing feature worth fixing upstream.
 
 ## Attribute Management
 
