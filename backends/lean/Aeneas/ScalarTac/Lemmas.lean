@@ -406,7 +406,7 @@ grind_pattern lt_mul_lt_le => x * y, x < a, y < b
     guard y < b
     gen < 2
 
-grind_pattern [agrind] lt_mul_lt_le => x * y, x < a, y < b
+grind_pattern [agrind_nla] lt_mul_lt_le => x * y, x < a, y < b
   where
     guard x < a
     guard y < b
@@ -422,7 +422,7 @@ grind_pattern le_mul_lt_le => x * y, x ≤ a, y < b
     guard y < b
     gen < 2
 
-grind_pattern [agrind] le_mul_lt_le => x * y, x ≤ a, y < b
+grind_pattern [agrind_nla] le_mul_lt_le => x * y, x ≤ a, y < b
   where
     guard x ≤ a
     guard y < b
@@ -438,7 +438,7 @@ grind_pattern lt_mul_le_le => x * y, x < a, y ≤ b
     guard y ≤ b
     gen < 2
 
-grind_pattern [agrind] lt_mul_le_le => x * y, x < a, y ≤ b
+grind_pattern [agrind_nla] lt_mul_le_le => x * y, x < a, y ≤ b
   where
     guard x < a
     guard y ≤ b
@@ -454,7 +454,7 @@ grind_pattern le_mul_le_le => x * y, x ≤ a, y ≤ b
     guard y ≤ b
     gen < 2
 
-grind_pattern [agrind] le_mul_le_le => x * y, x ≤ a, y ≤ b
+grind_pattern [agrind_nla] le_mul_le_le => x * y, x ≤ a, y ≤ b
   where
     guard x ≤ a
     guard y ≤ b
@@ -535,7 +535,7 @@ example (i j n1 n2 : ℕ)
 theorem mod_lt (x y : ℕ) (h : 0 < y) : x % y < y := by exact Nat.mod_lt x h
 
 grind_pattern mod_lt => x % y
-grind_pattern [agrind] mod_lt => x % y
+grind_pattern [agrind_nla] mod_lt => x % y
 
 /-!
 # Size
