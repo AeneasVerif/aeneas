@@ -195,6 +195,8 @@ open file → wait → sorry → goal → edit → errors → repeat
 
 **Never** fall back to `lake build` loops. Only use `lake build` once at the very end to confirm the final result.
 
+**⛔ NEVER run `lake clean` or delete `.lake/`.** This forces a full rebuild (30+ min). Fix root causes instead.
+
 ## The step*? Workflow for Complex Function Bodies
 
 When developing a proof for a function body with many monadic calls:

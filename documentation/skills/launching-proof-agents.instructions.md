@@ -34,6 +34,8 @@ DO NOT use `lake build` to iterate on proofs. Use lean_lsp.py:
 
 Workflow: open → sorry → goal → edit → errors → repeat
 Only use `lake build` once at the very end to confirm the final result.
+
+⛔ NEVER run `lake clean` or delete `.lake/`. This forces a full rebuild (30+ min). Fix root causes instead.
 ```
 
 ### 3. The step*? workflow
