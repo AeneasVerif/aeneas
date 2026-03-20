@@ -533,20 +533,24 @@ elab_rules : tactic
 
 Users then write: `my_tac (myOption := false, passes := 5)`.
 
+**Boolean shorthand:** For boolean fields, `optConfig` supports `+field` (set to `true`)
+and `-field` (set to `false`). So `my_tac -myOption` is equivalent to
+`my_tac (myOption := false)`.
+
 ### Extending an existing config
 
 To add options to an existing tactic whose config comes from another library
 (e.g., extending `Lean.Grind.Config`), use `extends`:
 
 ```lean
-structure AgrindConfig extends Lean.Grind.Config where
+structure AGrindConfig extends Lean.Grind.Config where
   nla : Bool := true
 
-declare_config_elab elabAgrindConfig AgrindConfig
+declare_config_elab elabAGrindConfig AGrindConfig
 ```
 
 Users can then set both the parent fields (`maxSteps`, etc.) and the new field
-(`nla`) in one config block: `agrind (nla := false, maxSteps := 1000)`.
+(`nla`) in one config block: `agrind -nla` or `agrind (nla := false, maxSteps := 1000)`.
 
 ### Examples in the codebase
 
