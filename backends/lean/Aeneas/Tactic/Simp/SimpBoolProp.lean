@@ -1,1 +1,1 @@
-import Aeneas.SimpIfs.SimpIfs
+import Aeneas.Tactic.Simp.SimpIfs.SimpIfs

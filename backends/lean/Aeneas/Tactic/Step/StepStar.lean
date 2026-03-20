@@ -1,4 +1,4 @@
-import Aeneas.Step.Step
+import Aeneas.Tactic.Step.Step
 import AeneasMeta.Split
 open Lean Meta Elab Tactic
 

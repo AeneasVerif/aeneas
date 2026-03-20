@@ -1,4 +1,4 @@
-import Aeneas.ScalarTac.ScalarTac
+import Aeneas.Tactic.Solver.ScalarTac.ScalarTac
 import Mathlib.Algebra.Algebra.ZMod
 import Mathlib.RingTheory.Int.Basic
 import Init.Data.BitVec.Lemmas

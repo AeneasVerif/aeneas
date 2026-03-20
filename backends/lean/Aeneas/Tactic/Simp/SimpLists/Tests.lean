@@ -1,5 +1,5 @@
-import Aeneas.SimpLists.SimpLists
-import Aeneas.List.List
+import Aeneas.Tactic.Simp.SimpLists.SimpLists
+import Aeneas.Data.List.List
 import Aeneas.Std.Array
 import Aeneas.Std.Slice
 import Aeneas.Std

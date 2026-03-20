@@ -1,4 +1,4 @@
-import Aeneas.Array
+import Aeneas.Data.Array
 
 namespace Vector
 

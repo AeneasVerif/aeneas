@@ -3,9 +3,9 @@ Copyright (c) 2024-2025 Inria. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Son Ho
 -/
-import Aeneas.Step.Step
-import Aeneas.Step.StepStar
-import Aeneas.Step.StepArraySpec
+import Aeneas.Tactic.Step.Step
+import Aeneas.Tactic.Step.StepStar
+import Aeneas.Tactic.Step.StepArraySpec
 
 /-!
 # Deprecated `progress` syntax and attributes

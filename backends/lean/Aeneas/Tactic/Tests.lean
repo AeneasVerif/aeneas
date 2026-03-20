@@ -1,1 +1,1 @@
-import Aeneas.ScalarTac.Tests
+import Aeneas.Tactic.Solver.ScalarTac.Tests

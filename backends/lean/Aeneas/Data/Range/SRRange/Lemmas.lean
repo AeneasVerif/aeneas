@@ -1,7 +1,7 @@
 import Mathlib.Tactic.Ring.RingNF
 import Mathlib.Algebra.Order.Sub.Basic
-import Aeneas.Range.SRRange.Basic
-import Aeneas.List.List
+import Aeneas.Data.Range.SRRange.Basic
+import Aeneas.Data.List.List
 
 namespace Aeneas
 

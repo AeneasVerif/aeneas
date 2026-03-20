@@ -1,5 +1,5 @@
 import AeneasMeta.Utils
-import Aeneas.ScalarTac.Init
+import Aeneas.Tactic.Solver.ScalarTac.Init
 
 namespace Aeneas.ReduceNat
 

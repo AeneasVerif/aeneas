@@ -1,5 +1,5 @@
-import Aeneas.Range.DivRange
-import Aeneas.Range.Lemmas
-import Aeneas.Range.MulRange
-import Aeneas.Range.Notations
-import Aeneas.Range.SRRange
+import Aeneas.Data.Range.DivRange
+import Aeneas.Data.Range.Lemmas
+import Aeneas.Data.Range.MulRange
+import Aeneas.Data.Range.Notations
+import Aeneas.Data.Range.SRRange

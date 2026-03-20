@@ -1,4 +1,4 @@
-import Aeneas.ReduceFin.Init
+import Aeneas.Tactic.Simproc.ReduceFin.Init
 import AeneasMeta.Utils
 
 namespace Aeneas.ReduceFin

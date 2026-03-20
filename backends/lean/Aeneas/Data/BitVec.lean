@@ -7,14 +7,14 @@ import Mathlib.Data.Nat.Cast.Basic
 import Mathlib.Data.BitVec
 import Mathlib.Tactic.Ring
 import Mathlib.Data.Nat.Bitwise
-import Aeneas.Byte
-import Aeneas.Bvify.Init
-import Aeneas.SimpLists.SimpLists
-import Aeneas.Natify.Natify
-import Aeneas.ZModify.ZModify
-import Aeneas.List
-import Aeneas.SimpScalar
-import Aeneas.Grind.Init
+import Aeneas.Data.Byte
+import Aeneas.Tactic.Conv.Bvify.Init
+import Aeneas.Tactic.Simp.SimpLists.SimpLists
+import Aeneas.Tactic.Conv.Natify.Natify
+import Aeneas.Tactic.Conv.ZModify.ZModify
+import Aeneas.Data.List
+import Aeneas.Tactic.Simp.SimpScalar
+import Aeneas.Tactic.Solver.Grind.Init
 
 open Lean
 

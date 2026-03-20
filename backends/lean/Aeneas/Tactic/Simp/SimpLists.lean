@@ -1,2 +1,2 @@
-import Aeneas.SimpLists.SimpLists
-import Aeneas.SimpLists.Tests
+import Aeneas.Tactic.Simp.SimpLists.SimpLists
+import Aeneas.Tactic.Simp.SimpLists.Tests

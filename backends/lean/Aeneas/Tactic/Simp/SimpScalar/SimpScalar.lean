@@ -1,8 +1,8 @@
 import Mathlib.Data.Nat.Bitwise
-import Aeneas.SimpScalar.Init
-import Aeneas.ScalarTac.CondSimpTac
-import Aeneas.SimpLists.Init -- We need to mark some lemmas as `simp_lists_simps`
-import Aeneas.SimpBoolProp.SimpBoolProp
+import Aeneas.Tactic.Simp.SimpScalar.Init
+import Aeneas.Tactic.Solver.ScalarTac.CondSimpTac
+import Aeneas.Tactic.Simp.SimpLists.Init -- We need to mark some lemmas as `simp_lists_simps`
+import Aeneas.Tactic.Simp.SimpBoolProp.SimpBoolProp
 
 /-!
 # `simp_scalar` tactic

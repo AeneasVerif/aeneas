@@ -1,7 +1,7 @@
 import Mathlib.Data.Nat.Bitwise
-import Aeneas.SimpLists.Init
-import Aeneas.ScalarTac.CondSimpTac
-import Aeneas.SimpBoolProp.SimpBoolProp
+import Aeneas.Tactic.Simp.SimpLists.Init
+import Aeneas.Tactic.Solver.ScalarTac.CondSimpTac
+import Aeneas.Tactic.Simp.SimpBoolProp.SimpBoolProp
 
 /-!
 # `simp_lists` tactic

@@ -1,5 +1,5 @@
 import Mathlib.Tactic.Tauto
-import Aeneas.SimpBoolProp.Init
+import Aeneas.Tactic.Simp.SimpBoolProp.Init
 
 /-!
 # `simp_bool_prop` lemmas and simp procedures

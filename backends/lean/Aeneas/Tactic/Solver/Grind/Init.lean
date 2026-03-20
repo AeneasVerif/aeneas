@@ -1,5 +1,5 @@
 import Lean
-import Aeneas.Grind.Attribute
+import Aeneas.Tactic.Solver.Grind.Attribute
 
 namespace Aeneas.Grind
 

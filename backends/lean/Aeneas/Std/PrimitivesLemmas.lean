@@ -1,6 +1,6 @@
 import Aeneas.Std.Primitives
-import Aeneas.Step.Init
-import Aeneas.Bvify.Init
+import Aeneas.Tactic.Step.Init
+import Aeneas.Tactic.Conv.Bvify.Init
 
 namespace Aeneas.Std
 

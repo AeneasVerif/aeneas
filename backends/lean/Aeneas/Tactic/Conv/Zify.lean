@@ -1,4 +1,4 @@
-import Aeneas.Arith.Lemmas
+import Aeneas.Tactic.Solver.Arith.Lemmas
 import Aeneas.Std.Scalar.Core
 open Aeneas Arith Std
 

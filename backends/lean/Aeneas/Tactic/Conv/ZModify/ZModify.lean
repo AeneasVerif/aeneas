@@ -2,11 +2,11 @@ import Mathlib.Tactic.Basic
 import Mathlib.Tactic.Attr.Register
 import Mathlib.Data.Int.Cast.Basic
 import Mathlib.Order.Basic
-import Aeneas.ZModify.Init
-import Aeneas.Arith.Lemmas
+import Aeneas.Tactic.Conv.ZModify.Init
+import Aeneas.Tactic.Solver.Arith.Lemmas
 import Aeneas.Std.Scalar.Core
-import Aeneas.ScalarTac.CondSimpTac
-import Aeneas.SimpBoolProp.SimpBoolProp
+import Aeneas.Tactic.Solver.ScalarTac.CondSimpTac
+import Aeneas.Tactic.Simp.SimpBoolProp.SimpBoolProp
 
 /-!
 # ZMod-ify tactic

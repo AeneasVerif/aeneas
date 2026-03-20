@@ -1,1 +1,1 @@
-import Aeneas.Arith.Lemmas
+import Aeneas.Tactic.Solver.Arith.Lemmas

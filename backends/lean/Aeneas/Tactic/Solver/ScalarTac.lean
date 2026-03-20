@@ -1,4 +1,4 @@
-import Aeneas.ScalarTac.ScalarTac
-import Aeneas.ScalarTac.Lemmas
-import Aeneas.ScalarTac.CondSimpTac
-import Aeneas.Arith.Lemmas
+import Aeneas.Tactic.Solver.ScalarTac.ScalarTac
+import Aeneas.Tactic.Solver.ScalarTac.Lemmas
+import Aeneas.Tactic.Solver.ScalarTac.CondSimpTac
+import Aeneas.Tactic.Solver.Arith.Lemmas

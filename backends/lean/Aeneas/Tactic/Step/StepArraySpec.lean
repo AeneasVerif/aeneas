@@ -1,4 +1,4 @@
-import Aeneas.Step.Step
+import Aeneas.Tactic.Step.Step
 
 /-!
 # Step Array Spec

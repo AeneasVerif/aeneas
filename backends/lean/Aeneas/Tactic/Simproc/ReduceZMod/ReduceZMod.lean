@@ -1,4 +1,4 @@
-import Aeneas.ReduceZMod.Init
+import Aeneas.Tactic.Simproc.ReduceZMod.Init
 import Mathlib.Algebra.Algebra.ZMod
 import AeneasMeta.Utils
 

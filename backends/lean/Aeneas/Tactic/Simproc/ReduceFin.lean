@@ -1,1 +1,1 @@
-import Aeneas.ReduceFin.ReduceFin
+import Aeneas.Tactic.Simproc.ReduceFin.ReduceFin

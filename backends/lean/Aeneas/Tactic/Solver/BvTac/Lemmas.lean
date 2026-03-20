@@ -1,4 +1,4 @@
-import Aeneas.BvTac.BvTac
+import Aeneas.Tactic.Solver.BvTac.BvTac
 
 /-!
 # Bitwise identity lemmas for scalar types

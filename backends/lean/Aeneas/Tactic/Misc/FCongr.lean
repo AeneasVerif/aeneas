@@ -1,1 +1,1 @@
-import Aeneas.FCongr.FCongr
+import Aeneas.Tactic.Misc.FCongr.FCongr

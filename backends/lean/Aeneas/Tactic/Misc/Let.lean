@@ -1,1 +1,1 @@
-import Aeneas.Let.Let
+import Aeneas.Tactic.Misc.Let.Let

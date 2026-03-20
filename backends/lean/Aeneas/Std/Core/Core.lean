@@ -1,6 +1,6 @@
 import Lean
 import Aeneas.Std.Primitives
-import Aeneas.Step.Init
+import Aeneas.Tactic.Step.Init
 import Aeneas.Std.Alloc
 
 namespace Aeneas

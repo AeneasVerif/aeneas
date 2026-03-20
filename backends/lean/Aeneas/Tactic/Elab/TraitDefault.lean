@@ -1,2 +1,2 @@
-import Aeneas.TraitDefault.Init
-import Aeneas.TraitDefault.Test
+import Aeneas.Tactic.Elab.TraitDefault.Init
+import Aeneas.Tactic.Elab.TraitDefault.Test

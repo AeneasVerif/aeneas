@@ -1,5 +1,5 @@
-import Aeneas.SimpScalar.SimpScalar
-import Aeneas.ReduceNat
+import Aeneas.Tactic.Simp.SimpScalar.SimpScalar
+import Aeneas.Tactic.Simproc.ReduceNat
 
 section
 

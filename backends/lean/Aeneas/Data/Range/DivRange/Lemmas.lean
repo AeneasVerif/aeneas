@@ -1,6 +1,6 @@
 import Mathlib.Data.Nat.Log
 import Mathlib.Algebra.Order.Sub.Defs
-import Aeneas.Range.DivRange.Basic
+import Aeneas.Data.Range.DivRange.Basic
 
 namespace Aeneas
 

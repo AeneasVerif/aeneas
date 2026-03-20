@@ -1,4 +1,4 @@
-import Aeneas.SimpScalar.SimpScalar
+import Aeneas.Tactic.Simp.SimpScalar.SimpScalar
 
 example {n d} : n * (d / (8 * n)) = n * (d / 8 / n) := by
   simp_scalar

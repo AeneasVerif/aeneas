@@ -1,3 +1,3 @@
-import Aeneas.SimpScalar.Lemmas
-import Aeneas.SimpScalar.SimpScalar
-import Aeneas.SimpScalar.Tests
+import Aeneas.Tactic.Simp.SimpScalar.Lemmas
+import Aeneas.Tactic.Simp.SimpScalar.SimpScalar
+import Aeneas.Tactic.Simp.SimpScalar.Tests

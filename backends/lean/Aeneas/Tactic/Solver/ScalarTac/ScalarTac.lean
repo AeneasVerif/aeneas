@@ -3,11 +3,11 @@ import Lean.Meta.Tactic.Simp
 import Init.Data.List.Basic
 import Mathlib.Tactic.Ring.RingNF
 import AeneasMeta.Utils
-import Aeneas.ScalarTac.Core
-import Aeneas.ScalarTac.Init
+import Aeneas.Tactic.Solver.ScalarTac.Core
+import Aeneas.Tactic.Solver.ScalarTac.Init
 import AeneasMeta.Saturate
-import Aeneas.SimpScalar.Init
-import Aeneas.SimpBoolProp.SimpBoolProp
+import Aeneas.Tactic.Simp.SimpScalar.Init
+import Aeneas.Tactic.Simp.SimpBoolProp.SimpBoolProp
 import AeneasMeta.Simp
 
 namespace Aeneas

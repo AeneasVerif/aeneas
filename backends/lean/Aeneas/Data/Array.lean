@@ -1,5 +1,5 @@
-import Aeneas.List
-import Aeneas.SimpIfs
+import Aeneas.Data.List
+import Aeneas.Tactic.Simp.SimpIfs
 
 namespace Array
 

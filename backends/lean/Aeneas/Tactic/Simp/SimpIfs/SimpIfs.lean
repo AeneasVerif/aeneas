@@ -1,6 +1,6 @@
-import Aeneas.SimpIfs.Init
-import Aeneas.SimpBoolProp.SimpBoolProp
-import Aeneas.ScalarTac.CondSimpTac
+import Aeneas.Tactic.Simp.SimpIfs.Init
+import Aeneas.Tactic.Simp.SimpBoolProp.SimpBoolProp
+import Aeneas.Tactic.Solver.ScalarTac.CondSimpTac
 
 /-!
 # `simp_ifs` tactic

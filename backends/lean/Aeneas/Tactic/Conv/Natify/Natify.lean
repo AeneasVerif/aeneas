@@ -2,10 +2,10 @@ import Mathlib.Tactic.Basic
 import Mathlib.Tactic.Attr.Register
 import Mathlib.Data.Int.Cast.Basic
 import Mathlib.Order.Basic
-import Aeneas.Natify.Init
-import Aeneas.Arith.Lemmas
+import Aeneas.Tactic.Conv.Natify.Init
+import Aeneas.Tactic.Solver.Arith.Lemmas
 import Aeneas.Std.Scalar.Core
-import Aeneas.SimpBoolProp.SimpBoolProp
+import Aeneas.Tactic.Simp.SimpBoolProp.SimpBoolProp
 
 /-!
 # `natify` tactic

@@ -2,7 +2,7 @@ import Lean
 import AeneasMeta.Utils
 import Aeneas.Std.Primitives
 import AeneasMeta.Extensions
-import Aeneas.Step.Trace
+import Aeneas.Tactic.Step.Trace
 import Aeneas.Std.WP
 import AeneasMeta.OptionConfig
 

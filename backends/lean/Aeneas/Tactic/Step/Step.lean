@@ -1,10 +1,10 @@
 import Lean
-import Aeneas.ScalarTac
-import Aeneas.Step.Init
+import Aeneas.Tactic.Solver.ScalarTac
+import Aeneas.Tactic.Step.Init
 import Aeneas.Std
-import Aeneas.FSimp
+import Aeneas.Tactic.Simp.FSimp
 import AeneasMeta.Async
-import Aeneas.Grind.Init
+import Aeneas.Tactic.Solver.Grind.Init
 
 namespace Aeneas
 

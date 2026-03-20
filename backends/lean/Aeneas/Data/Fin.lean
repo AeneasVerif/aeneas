@@ -1,6 +1,6 @@
 import Lean
 import Mathlib.Tactic.OfNat
-import Aeneas.ScalarTac.ScalarTac
+import Aeneas.Tactic.Solver.ScalarTac.ScalarTac
 
 attribute [scalar_tac_simps] Fin.val_ofNat
 

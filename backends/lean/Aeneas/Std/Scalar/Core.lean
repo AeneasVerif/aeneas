@@ -1,12 +1,12 @@
 import Lean
 import Lean.Meta.Tactic.Simp
 import Aeneas.Std.Core.Core
-import Aeneas.Step.Init
-import Aeneas.ScalarTac.ScalarTac
-import Aeneas.Bvify.Init
-import Aeneas.Nat
-import Aeneas.Int
-import Aeneas.SimpLists.Init
+import Aeneas.Tactic.Step.Init
+import Aeneas.Tactic.Solver.ScalarTac.ScalarTac
+import Aeneas.Tactic.Conv.Bvify.Init
+import Aeneas.Data.Nat
+import Aeneas.Data.Int
+import Aeneas.Tactic.Simp.SimpLists.Init
 
 namespace Aeneas
 

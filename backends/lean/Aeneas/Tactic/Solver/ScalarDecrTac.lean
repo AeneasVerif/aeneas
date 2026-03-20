@@ -2,7 +2,7 @@
 import Lean
 import Mathlib.Tactic.Core
 import AeneasMeta.Utils
-import Aeneas.ScalarTac
+import Aeneas.Tactic.Solver.ScalarTac
 
 namespace Aeneas
 

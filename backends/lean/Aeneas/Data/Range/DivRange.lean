@@ -1,3 +1,3 @@
-import Aeneas.Range.DivRange.Basic
-import Aeneas.Range.DivRange.Lemmas
-import Aeneas.Range.DivRange.Notations
+import Aeneas.Data.Range.DivRange.Basic
+import Aeneas.Data.Range.DivRange.Lemmas
+import Aeneas.Data.Range.DivRange.Notations
