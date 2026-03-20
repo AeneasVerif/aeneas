@@ -872,7 +872,7 @@ def parseStepArgs
 | _ => throwUnsupportedSyntax
 
 /-- Use `agrind` after preprocessing goal the goal, in particular to simplify arithmetic expressions. -/
-def evalAGrindWithPreprocess (withGroundSimprocs : Bool) (config : Grind.Config) : TacticM Unit := do
+def evalAGrindWithPreprocess (withGroundSimprocs : Bool) (config : Grind.Config) (nla : Bool) : TacticM Unit := do
   withTraceNode `Step (fun _ => do pure m!"evalAGrindWithPreprocess") do
   traceGoalWithNode "before preprocessing"
   let simpArgs : Simp.SimpArgs ← ScalarTac.getSimpArgs
@@ -889,7 +889,7 @@ def evalAGrindWithPreprocess (withGroundSimprocs : Bool) (config : Grind.Config)
        TODO: make those options of `step`
        TODO: fine tune the parameters
      -/
-    let params ← Aeneas.Grind.mkParams config #[Aeneas.Grind.agrindExt.getState (← Lean.getEnv)] withGroundSimprocs
+    let params ← Aeneas.Grind.mkParams config (← Aeneas.Grind.getAgrindExtensions nla) withGroundSimprocs
     let mvarId ← Lean.Elab.Tactic.getMainGoal
     try
       Aeneas.Grind.agrindEval config params mvarId
@@ -924,7 +924,7 @@ def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Option 
 
   /- **Grind tactic**: -/
   let grindTac : List (TacticM Unit) :=
-    if config.grind then [evalAGrindWithPreprocess config.withGroundSimprocs config.toGrindConfig]
+    if config.grind then [evalAGrindWithPreprocess config.withGroundSimprocs config.toGrindConfig config.nla]
     else []
 
   /- **ScalarTac**:

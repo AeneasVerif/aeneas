@@ -567,7 +567,7 @@ where
       -- TODO: don't use syntax
       -- TODO: use global options
       let grindTac : TacticM Unit :=
-        Step.evalAGrindWithPreprocess cfg.stepConfig.withGroundSimprocs cfg.stepConfig.toGrindConfig
+        Step.evalAGrindWithPreprocess cfg.stepConfig.withGroundSimprocs cfg.stepConfig.toGrindConfig cfg.stepConfig.nla
       -- TODO: add the tactic given by the user
       let tacStx : IO.Promise Syntax.Tactic ← IO.Promise.new
       let rec tryFinish (tacl : List (String × Syntax.Tactic × TacticM Unit)) : TacticM Unit := do
