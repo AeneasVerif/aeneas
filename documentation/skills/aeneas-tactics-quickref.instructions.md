@@ -168,6 +168,7 @@ theorem MY_CONST_val : MY_CONST.val = 42 := by decide
 | `grind` explodes | Timeout | Use `agrind` instead |
 | `agrind` fails | Goal unsolved | Try `simp [*]; agrind` |
 | Wrong progress spec | Unexpected behavior | `progress with specific_thm` |
+| `simp only` loop | `maxRecDepth` error inside `simp` | Split into multiple `simp only` calls with shorter lemma lists, or use `rw` instead |
 
 ## Debugging Commands
 
@@ -181,10 +182,58 @@ set_option maxHeartbeats 5000000      -- increase timeout (last resort)
 
 ### ⛔ NEVER increase `maxRecDepth`
 
-If you hit a `maxRecDepth` error, **do NOT increase it**. This is a symptom, not a problem to work around:
-- **Poorly written proof**: The proof structure causes unbounded unfolding. Refactor the proof.
-- **Tactic bug (simp loop)**: For tactics that internally use `simp` (e.g., `agrind`, `grind`, `scalar_tac`, `simp_scalar`), check whether hypotheses in the goal trigger a simp loop. If so, `clear` the offending hypothesis or use `simp only [...]` to control rewriting. This is a known pitfall, not a bug to report.
-- **Tactic bug (other)**: If the recursion depth issue is not caused by a simp loop, **report it to the user** — it may indicate a bug in the tactic implementation.
+If you hit a `maxRecDepth` error, **do NOT increase it**. This is a symptom of a
+**simp loop** or a poorly structured proof, not a depth limit to raise.
+
+**Root cause: simp loops.** A simp loop occurs when two or more simp lemmas rewrite
+back and forth (A → B → A → ...), or when a lemma rewrites to a term that reduces
+back to the original (e.g., `s[i]'h → s[i]!` but `s[i]!` unfolds back to something
+containing `s[i]'h`). This causes `simp` to recurse until it hits `maxRecDepth`.
+
+**How to diagnose:**
+1. The error says "maximum recursion depth has been reached" inside a `simp` call
+2. Use the LSP: comment out the failing `simp` call, add `sorry`, inspect the goal
+   with `goal <line>` to see what the `simp` was trying to simplify
+3. Identify which lemmas interact badly — try each lemma individually
+
+**How to fix (in order of preference):**
+1. **Split the `simp only` call**: If `simp only [A, B, C]` loops, try splitting into
+   sequential calls: `simp only [A]` then `simp only [B, C]`. The loop is often caused
+   by a specific pair of lemmas — separating them breaks the cycle.
+   ```lean
+   -- BAD: loops because A and B interact
+   simp only [A, B, C] at h ⊢
+   -- GOOD: separate the conflicting lemmas
+   simp only [A] at h ⊢
+   simp only [B, C] at h ⊢
+   ```
+2. **Use `rw` instead of `simp only`**: If you only need to apply a lemma once (not
+   repeatedly), `rw` is safer — it applies exactly once and doesn't loop.
+   ```lean
+   -- BAD: simp loops
+   simp only [Slice.Inhabited_getElem_eq_getElem!] at h
+   -- GOOD: apply once
+   rw [Slice.Inhabited_getElem_eq_getElem!] at h
+   ```
+3. **Reduce the lemma list**: Remove lemmas one by one until the loop stops. The last
+   lemma you removed is part of the loop — find its interaction partner.
+4. **Use `conv` for targeted rewriting**: When `simp` loops because it rewrites in
+   too many places, use `conv` to target a specific subterm.
+5. **`clear` offending hypotheses**: If a hypothesis triggers the loop (e.g., a
+   hypothesis whose type causes simp to loop when it tries to rewrite it), `clear` it
+   before calling `simp`, then re-introduce it if needed.
+6. **For tactics that internally use `simp`** (`agrind`, `grind`, `scalar_tac`,
+   `simp_scalar`): the loop may be triggered by hypotheses in the context. Try
+   `clear`-ing suspicious hypotheses before calling the tactic.
+
+**Common simp loop patterns in Aeneas:**
+- `Slice.Inhabited_getElem_eq_getElem!` + `List.Inhabited_getElem_eq_getElem!`:
+  These can loop when used together in `simp only`, because rewriting a Slice getElem
+  may expose a List getElem that rewrites back. Split them into separate calls.
+- `getElem → getElem!` lemmas combined with lemmas that unfold `getElem!`: The
+  `Inhabited_getElem_eq_getElem!` lemma rewrites `s[i]'h` to `s[i]!`, but if another
+  lemma or reduction rule unfolds `s[i]!` back to a form containing `s[i]'h`, you
+  get a loop. Use `rw` instead of `simp` for these.
 
 ### Report misbehaving tactics
 
