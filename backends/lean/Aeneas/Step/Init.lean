@@ -91,11 +91,13 @@ structure Config where
   instances : Nat  := 1000
   /--`grind` parameter: see `Lean.Grind.Config` -/
   canonHeartbeats : Nat := 1000
+  /-- Should we use non-linear arithmetic lemmas when calling `grind`? See `Aeneas.Grind.AGrindConfig`. -/
+  nla : Bool := true
 deriving Repr
 
 def Config.toGrindConfig (cfg : Config) : Grind.Config :=
   let { async := _, assumTac := _, inferGhostVars := _, scalarTac := _, simpStar := _,
-        grind := _, withGroundSimprocs := _,
+        grind := _, withGroundSimprocs := _, nla := _,
         splits, ematch, splitMatch, splitIte, splitIndPred, funext, gen, instances, canonHeartbeats } := cfg
   { splits, ematch, splitMatch, splitIte, splitIndPred, funext, gen, instances, canonHeartbeats }
 

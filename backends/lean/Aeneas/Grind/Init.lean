@@ -6,7 +6,20 @@ namespace Aeneas.Grind
 /-- The Aeneas grind attribute -/
 register_grind_attr' agrindExt agrind
 
+/-- The Aeneas grind extension for non-linear arithmetic lemmas.
+    Lemmas tagged with `@[agrind_nla]` are only loaded when `agrind` is called
+    with `nla := true` (the default). Use `agrind -nla` to disable. -/
+register_grind_attr' agrindNlaExt agrind_nla
+
 open Lean Lean.Meta
+
+/-- Configuration for the `agrind` tactic, extending `Lean.Grind.Config` with
+    Aeneas-specific options. -/
+structure AGrindConfig extends Lean.Grind.Config where
+  /-- Should agrind use non-linear arithmetic lemmas (tagged with `@[agrind_nla]`)? -/
+  nla : Bool := true
+
+declare_config_elab elabAGrindConfig AGrindConfig
 
 /-- Adapted from `Lean.Meta.Grind.getSimpContext` -/
 def getSimpContext (config : Lean.Grind.Config) : MetaM Simp.Context := do
@@ -44,8 +57,18 @@ def mkParams (config : Lean.Grind.Config)
   let symPrios ← Lean.Meta.Grind.getGlobalSymbolPriorities
   return { config, norm, normProcs := groundNormProcs, symPrios, extensions }
 
+/-- Build the grind extension state array for agrind, optionally including NLA lemmas. -/
+def getAgrindExtensions (nla : Bool) : Lean.CoreM Lean.Meta.Grind.ExtensionStateArray := do
+  let env ← Lean.getEnv
+  let extensions := #[agrindExt.getState env]
+  if nla then
+    return extensions.push (agrindNlaExt.getState env)
+  else
+    return extensions
+
 /-- The `agrind` tactic: like `grind`, but uses theorems tagged with `@[agrind]`
-    (via `agrindExt`) instead of the standard `@[grind]` extension. -/
+    (via `agrindExt`) instead of the standard `@[grind]` extension.
+    Use `agrind -nla` to disable non-linear arithmetic lemmas. -/
 syntax (name := agrindTactic) "agrind" Lean.Parser.Tactic.optConfig
     (ppSpace "only")? (" [" Lean.Parser.Tactic.grindParam,* "]")? : tactic
 
@@ -57,18 +80,18 @@ def agrindEval (config : Lean.Grind.Config) (params : Grind.Params) (mvarId : Le
       if result.hasFailed then
         throwError "`agrind` failed\n{← result.toMessageData}"
 
-private def agrindCore (config : Lean.Grind.Config) (isOnly : Bool) (withGroundSimprocs : Bool)
+private def agrindCore (config : AGrindConfig) (isOnly : Bool) (withGroundSimprocs : Bool)
     (ps : Array (Lean.TSyntax `Lean.Parser.Tactic.grindParam)) :
     Lean.Elab.Tactic.TacticM Unit := do
   let mvarId ← Lean.Elab.Tactic.getMainGoal
   mvarId.withContext do
     let baseParams ← if isOnly then
-        Lean.Meta.Grind.mkOnlyParams config
+        Lean.Meta.Grind.mkOnlyParams config.toConfig
       else
-        mkParams config #[agrindExt.getState (← Lean.getEnv)] withGroundSimprocs
+        mkParams config.toConfig (← getAgrindExtensions config.nla) withGroundSimprocs
     let fullParams ← Lean.Elab.Tactic.elabGrindParams baseParams ps
                         (lax := config.lax) («only» := isOnly)
-    agrindEval config fullParams mvarId
+    agrindEval config.toConfig fullParams mvarId
   Lean.Elab.Tactic.replaceMainGoal []
 
 -- Note: `$[tok%$var]?` (optional binding with %) is only supported in Lean's core
@@ -77,9 +100,9 @@ open Lean.Parser.Tactic in
 elab_rules : tactic
   | `(tactic| agrind $config:optConfig only $[ [$params:grindParam,*] ]?) => do
     let ps := if let some ps := params then ps.getElems else #[]
-    agrindCore (← Lean.Elab.Tactic.elabGrindConfig config) (isOnly := true) (withGroundSimprocs := true) ps
+    agrindCore (← elabAGrindConfig config) (isOnly := true) (withGroundSimprocs := true) ps
   | `(tactic| agrind $config:optConfig $[ [$params:grindParam,*] ]?) => do
     let ps := if let some ps := params then ps.getElems else #[]
-    agrindCore (← Lean.Elab.Tactic.elabGrindConfig config) (isOnly := false) (withGroundSimprocs := true) ps
+    agrindCore (← elabAGrindConfig config) (isOnly := false) (withGroundSimprocs := true) ps
 
 end Aeneas.Grind

@@ -505,3 +505,85 @@ attribute [local agrind] my_lemma
 ```
 
 Safe to activate many local lemmas for `simp_scalar`/`simp_lists` — simp-based, no complexity explosion.
+
+## Tactic Development: Config Parsing with `declare_config_elab`
+
+When developing a new tactic (or extending an existing one) that needs configurable
+options, use the `declare_config_elab` pattern. This auto-generates a parser for
+`(field := value, ...)` syntax from a Lean `structure`.
+
+### Pattern
+
+```lean
+structure MyTacConfig where
+  /-- Description of option -/
+  myOption : Bool := true
+  /-- Another option -/
+  passes : Nat := 3
+
+-- This generates `elabMyTacConfig : Syntax → TacticM MyTacConfig`
+declare_config_elab elabMyTacConfig MyTacConfig
+
+-- Use `optConfig` in syntax to accept the config
+syntax (name := myTac) "my_tac" Parser.Tactic.optConfig : tactic
+
+elab_rules : tactic
+  | `(tactic| my_tac $config:optConfig) => do
+    let cfg ← elabMyTacConfig config
+    -- Use cfg.myOption, cfg.passes, etc.
+```
+
+Users then write: `my_tac (myOption := false, passes := 5)`.
+
+**Boolean shorthand:** For boolean fields, `optConfig` supports `+field` (set to `true`)
+and `-field` (set to `false`). So `my_tac -myOption` is equivalent to
+`my_tac (myOption := false)`.
+
+### Extending an existing config
+
+To add options to an existing tactic whose config comes from another library
+(e.g., extending `Lean.Grind.Config`), use `extends`:
+
+```lean
+structure AGrindConfig extends Lean.Grind.Config where
+  nla : Bool := true
+
+declare_config_elab elabAGrindConfig AGrindConfig
+```
+
+Users can then set both the parent fields (`maxSteps`, etc.) and the new field
+(`nla`) in one config block: `agrind -nla` or `agrind (nla := false, maxSteps := 1000)`.
+
+### Examples in the codebase
+
+| Tactic | Config struct | File |
+|--------|-------------|------|
+| `scalar_tac` | `Config extends SaturateConfig` | `ScalarTac/ScalarTac.lean` |
+| `bvify` | `Config` (with `nonLin`, `saturationPasses`) | `Bvify/Bvify.lean` |
+| `bv_tac` | `Config extends BVDecideConfig, Bvify.Config` | `BvTac/BvTac.lean` |
+| `zmodify` | `Config` (with `nonLin`, `saturationPasses`) | `ZModify/ZModify.lean` |
+
+## Custom Grind Extensions: `register_grind_attr'`
+
+To register a new grind-like attribute that collects lemmas into a separate extension
+(independent of the standard `@[grind]` pool), use the `register_grind_attr'` macro
+defined in `Aeneas/Grind/Attribute.lean`:
+
+```lean
+/-- Doc comment for the extension -/
+register_grind_attr' myExtName my_attr
+```
+
+This creates:
+- An `Extension` value named `myExtName`
+- Attribute syntax: `@[my_attr]`, `@[my_attr!]`, `@[my_attr?]`, `@[my_attr!?]`
+- Lemma patterns: `grind_pattern [my_attr] lemma_name => pattern`
+
+At tactic execution time, retrieve the extension state and pass it to grind:
+
+```lean
+let extensions := #[myExtName.getState (← Lean.getEnv)]
+let params ← mkParams config extensions withGroundSimprocs
+```
+
+Multiple extensions can be combined by pushing them all into the array.
