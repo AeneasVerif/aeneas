@@ -194,4 +194,40 @@ theorem U32.zero_or (x : U32) : 0#u32 ||| x = x := by rw [UScalar.eq_equiv_bv_eq
 theorem U64.zero_or (x : U64) : 0#u64 ||| x = x := by rw [UScalar.eq_equiv_bv_eq]; simp
 @[simp, simp_scalar_simps, bvify_simps, grind =, agrind =]
 theorem U128.zero_or (x : U128) : 0#u128 ||| x = x := by rw [UScalar.eq_equiv_bv_eq]; simp
+
+-- ============================================================================
+-- a ^^^ b = 0 ↔ a = b  (scalar level)
+-- ============================================================================
+
+@[simp, simp_scalar_simps, grind =, agrind =]
+theorem U8.xor_eq_zero_iff (a b : U8) : a ^^^ b = 0#u8 ↔ a = b := by bv_tac 8
+@[simp, simp_scalar_simps, grind =, agrind =]
+theorem U16.xor_eq_zero_iff (a b : U16) : a ^^^ b = 0#u16 ↔ a = b := by bv_tac 16
+@[simp, simp_scalar_simps, grind =, agrind =]
+theorem U32.xor_eq_zero_iff (a b : U32) : a ^^^ b = 0#u32 ↔ a = b := by bv_tac 32
+@[simp, simp_scalar_simps, grind =, agrind =]
+theorem U64.xor_eq_zero_iff (a b : U64) : a ^^^ b = 0#u64 ↔ a = b := by bv_tac 64
+@[simp, simp_scalar_simps, grind =, agrind =]
+theorem U128.xor_eq_zero_iff (a b : U128) : a ^^^ b = 0#u128 ↔ a = b := by bv_tac 128
+
+-- ============================================================================
+-- a ||| b = 0 ↔ a = 0 ∧ b = 0  (scalar level)
+-- ============================================================================
+
+@[simp, simp_scalar_simps, grind =, agrind =]
+theorem U8.or_eq_zero_iff (a b : U8) : a ||| b = 0#u8 ↔ a = 0#u8 ∧ b = 0#u8 := by
+  simp only [U8.eq_equiv_bv_eq, U8.ofNat_bv]; exact BitVec.or_eq_zero_iff
+@[simp, simp_scalar_simps, grind =, agrind =]
+theorem U16.or_eq_zero_iff (a b : U16) : a ||| b = 0#u16 ↔ a = 0#u16 ∧ b = 0#u16 := by
+  simp only [U16.eq_equiv_bv_eq, U16.ofNat_bv]; exact BitVec.or_eq_zero_iff
+@[simp, simp_scalar_simps, grind =, agrind =]
+theorem U32.or_eq_zero_iff (a b : U32) : a ||| b = 0#u32 ↔ a = 0#u32 ∧ b = 0#u32 := by
+  simp only [U32.eq_equiv_bv_eq, U32.ofNat_bv]; exact BitVec.or_eq_zero_iff
+@[simp, simp_scalar_simps, grind =, agrind =]
+theorem U64.or_eq_zero_iff (a b : U64) : a ||| b = 0#u64 ↔ a = 0#u64 ∧ b = 0#u64 := by
+  simp only [U64.eq_equiv_bv_eq, U64.ofNat_bv]; exact BitVec.or_eq_zero_iff
+@[simp, simp_scalar_simps, grind =, agrind =]
+theorem U128.or_eq_zero_iff (a b : U128) : a ||| b = 0#u128 ↔ a = 0#u128 ∧ b = 0#u128 := by
+  simp only [U128.eq_equiv_bv_eq, U128.ofNat_bv]; exact BitVec.or_eq_zero_iff
+
 end Aeneas.Std
