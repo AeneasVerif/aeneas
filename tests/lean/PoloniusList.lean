@@ -12,14 +12,14 @@ set_option maxHeartbeats 1000000
 namespace polonius_list
 
 /-- [polonius_list::List]
-    Source: 'tests/src/polonius_list.rs', lines 6:0-9:1 -/
+    Source: 'tests/src/polonius_list.rs', lines 5:0-8:1 -/
 @[discriminant isize]
 inductive List (T : Type) where
 | Cons : T → List T → List T
 | Nil : List T
 
 /-- [polonius_list::get_list_at_x]:
-    Source: 'tests/src/polonius_list.rs', lines 16:0-30:1 -/
+    Source: 'tests/src/polonius_list.rs', lines 15:0-29:1 -/
 def get_list_at_x
   (ls : List Std.U32) (x : Std.U32) :
   Result ((List Std.U32) × (List Std.U32 → List Std.U32))

@@ -1,5 +1,6 @@
-//@ [!borrow-check] aeneas-args=-test-trans-units
 //@ [coq,fstar] subdir=misc
+#![feature(register_tool)]
+#![register_tool(verify)]
 //! This module doesn't contain **functions which use nested borrows in their
 //! signatures**, and doesn't contain functions with loops.
 
@@ -59,6 +60,7 @@ pub fn cast_bool_to_bool(x: bool) -> bool {
 }
 
 #[allow(unused_variables)]
+#[verify::test]
 pub fn test2() {
     let x: u32 = 23;
     let y: u32 = 44;
@@ -79,6 +81,7 @@ pub fn get_max(x: u32, y: u32) -> u32 {
     }
 }
 
+#[verify::test]
 pub fn test3() {
     let x = get_max(4, 3);
     let y = get_max(10, 11);
@@ -86,6 +89,7 @@ pub fn test3() {
     assert!(z == 15);
 }
 
+#[verify::test]
 pub fn test_neg1() {
     let x: i32 = 3;
     let y = -x;
@@ -93,6 +97,7 @@ pub fn test_neg1() {
 }
 
 /// Testing nested references.
+#[verify::test]
 pub fn refs_test1() {
     let mut x = 0;
     let mut px = &mut x;
@@ -104,6 +109,7 @@ pub fn refs_test1() {
     assert!(x == 1);
 }
 
+#[verify::test]
 pub fn refs_test2() {
     let mut x = 0;
     let mut y = 1;
@@ -120,6 +126,7 @@ pub fn refs_test2() {
 
 /// Box creation
 #[allow(unused_variables)]
+#[verify::test]
 pub fn test_list1() {
     let l: List<i32> = List::Cons(0, Box::new(List::Nil));
 }
@@ -152,6 +159,7 @@ pub fn test_panic_msg(b: bool) {
 }
 
 // Just testing that shared loans are correctly handled
+#[verify::test]
 pub fn test_copy_int() {
     let x = 0;
     let px = &x;
@@ -166,6 +174,7 @@ pub fn is_cons<T>(l: &List<T>) -> bool {
     }
 }
 
+#[verify::test]
 pub fn test_is_cons() {
     let l: List<i32> = List::Cons(0, Box::new(List::Nil));
 
@@ -180,6 +189,7 @@ pub fn split_list<T>(l: List<T>) -> (T, List<T>) {
 }
 
 #[allow(unused_variables)]
+#[verify::test]
 pub fn test_split_list() {
     let l: List<i32> = List::Cons(0, Box::new(List::Nil));
 
@@ -195,6 +205,7 @@ pub fn choose<'a, T>(b: bool, x: &'a mut T, y: &'a mut T) -> &'a mut T {
     }
 }
 
+#[verify::test]
 pub fn choose_test() {
     let mut x = 0;
     let mut y = 0;
@@ -248,6 +259,7 @@ pub fn odd(x: u32) -> bool {
     }
 }
 
+#[verify::test]
 pub fn test_even_odd() {
     assert!(even(0));
     assert!(even(4));
@@ -316,6 +328,7 @@ pub fn list_rev<'a, T>(l: &'a mut List<T>) {
     *l = list_rev_aux(li, List::Nil);
 }
 
+#[verify::test]
 pub fn test_list_functions() {
     let mut ls = List::Cons(
         0,
@@ -380,6 +393,7 @@ pub fn new_pair1() -> StructWithPair<u32, u32> {
     }
 }
 
+#[verify::test]
 pub fn test_constants() {
     assert!(new_tuple1().p.0 == 1);
     assert!(new_tuple2().p.0 == 1);
@@ -389,6 +403,7 @@ pub fn test_constants() {
 
 /// This assignment is trickier than it seems
 #[allow(unused_assignments)]
+#[verify::test]
 pub fn test_weird_borrows1() {
     let mut x = 0;
     let mut px = &mut x;
