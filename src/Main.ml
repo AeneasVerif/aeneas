@@ -97,10 +97,6 @@ let () =
         Arg.Set test_unit_functions,
         " Test the unit functions with the concrete (i.e., not symbolic) \
          interpreter" );
-      ( "-test-trans-units",
-        Arg.Set test_trans_unit_functions,
-        " Test the translated unit functions with the target theorem prover's \
-         normalizer" );
       ( "-decreases-clauses",
         Arg.Set extract_decreases_clauses,
         " Use decreases clauses/termination measures for the recursive \
@@ -452,8 +448,6 @@ let () =
       "Options -borrow-check and -split-files are not compatible";
     check_not !test_unit_functions
       "Options -borrow-check and -test-unit-functions are not compatible";
-    check_not !test_trans_unit_functions
-      "Options -borrow-check and -test-trans-units are not compatible";
     check_not !extract_decreases_clauses
       "Options -borrow-check and -decreases-clauses are not compatible";
     check_not !use_fuel "Options -borrow-check and -use-fuel are not compatible";
