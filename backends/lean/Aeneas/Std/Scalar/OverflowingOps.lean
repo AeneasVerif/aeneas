@@ -55,7 +55,7 @@ theorem UScalar.overflowing_add_eq {ty} (x y : UScalar ty) :
       omega
     . omega
 
-uscalar @[progress_pure overflowing_add x y]
+uscalar @[step_pure overflowing_add x y]
 theorem core.num.«%S».overflowing_add_eq (x y : «%S») :
   let z := overflowing_add x y
   if x.val + y.val > UScalar.max .«%S» then z.fst.val + UScalar.size .«%S» = x.val + y.val ∧ z.snd = true

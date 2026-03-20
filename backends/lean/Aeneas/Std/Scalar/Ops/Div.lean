@@ -415,11 +415,11 @@ theorem IScalar.div_spec {ty} {x y : IScalar ty}
   have ⟨ z, hz ⟩ := IScalar.div_bv_spec hzero hNoOverflow
   simp [hz]
 
-uscalar @[progress] theorem «%S».div_spec (x : «%S») {y : «%S»} (hnz : ↑y ≠ (0 : Nat)) :
+uscalar @[step] theorem «%S».div_spec (x : «%S») {y : «%S»} (hnz : ↑y ≠ (0 : Nat)) :
   (x / y) ⦃ z => (↑z : Nat) = ↑x / ↑y ⦄ :=
   exists_imp_spec (UScalar.div_spec x hnz)
 
-iscalar @[progress] theorem «%S».div_spec {x y : «%S»} (hnz : ↑y ≠ (0 : Int))
+iscalar @[step] theorem «%S».div_spec {x y : «%S»} (hnz : ↑y ≠ (0 : Int))
   (hNoOverflow : ¬ (x.val = «%S».min ∧ y.val = -1)) :
   (x / y) ⦃ z => (↑z : Int) = Int.tdiv ↑x ↑y ⦄ :=
   exists_imp_spec (IScalar.div_spec hnz (by scalar_tac))

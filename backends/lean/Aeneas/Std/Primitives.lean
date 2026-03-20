@@ -187,8 +187,8 @@ end Order
     We don't mark this as reducible so that **let-bindings don't get simplified away**.
 
     In the generated code if regularly happens that we want to lift pure function calls so
-    that `progress` can reason about them. For instance, `U32.wrapping_add` has type `U32 → U32 → U32`,
-    but we provide a `progress` theorem with an informative post-condition, and which matches the pattern
+    that `step` can reason about them. For instance, `U32.wrapping_add` has type `U32 → U32 → U32`,
+    but we provide a `step` theorem with an informative post-condition, and which matches the pattern
     `lift (wrapping_add x y)`. This theorem can only be looked up and appliced if the code is of the
     following shape:
     ```
@@ -196,7 +196,7 @@ end Order
     ...
     ```
 
-    The downside is that using `lift` forces users to write `progress` theorems for pure expressions
+    The downside is that using `lift` forces users to write `step` theorems for pure expressions
     which appear inside a `lift`. As only a specific set of functions from the standard library are
     purified (i.e., don't live in `Result`), this should not be a big issue in practice.
   -/

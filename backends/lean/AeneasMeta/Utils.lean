@@ -481,7 +481,7 @@ def filterAssumptionTacCore (dtree : DiscrTree FVarId) : TacticM Bool := do
     This means that the tactic is less powerful than `assumptionTac`, as we might miss an assumption
     which actually reduces to the goal, but it allows doing a preprocessing step, which makes it
     faster when we need to solve several goals while having the same context (this happens when
-    solving preconditions in the tactic `progress`) and also it is safer to use, as unifying terms
+    solving preconditions in the tactic `step`) and also it is safer to use, as unifying terms
     easily triggers "maximum recursion reached" errors when there are big integer constants in the
     context.
 -/
@@ -543,7 +543,7 @@ def singleAssumptionTacCore (dtree : DiscrTree FVarId) (instMVars : Bool) : Tact
     /- There are meta-variables that we need to instantiate
 
        Remark: at some point I tried using a discrimination tree to filter the assumptions,
-       in particular inside the `progress` tactic as may need to call the `singleAssumptionTac`
+       in particular inside the `step` tactic as may need to call the `singleAssumptionTac`
        several times, but discrimination trees don't work if the expression we match over
        contains meta-variables.
      -/

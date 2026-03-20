@@ -71,8 +71,8 @@ theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
         have hUpdate := @List.set_cons_zero _ hd tl.toList x
         simp only [hUpdate]
     . simp at *
-      progress as ⟨ i1, hi1 ⟩
-      progress as ⟨ tl1, back, htl1, hback ⟩
+      step as ⟨ i1, hi1 ⟩
+      step as ⟨ tl1, back, htl1, hback ⟩
       simp
       split_conjs
       . have hIndex := List.getElem!_cons_nzero hd tl.toList i.val (by scalar_tac)
@@ -110,8 +110,8 @@ theorem list_nth_mut1_spec' {T: Type} [Inhabited T] (l : CList T) (i : U32)
       . intro x
         simp_all
     . simp at *
-      progress as ⟨ i1 ⟩
-      progress as ⟨ tl1, back ⟩
+      step as ⟨ i1 ⟩
+      step as ⟨ tl1, back ⟩
       simp
       split_conjs
       . simp [*]
@@ -120,21 +120,21 @@ theorem list_nth_mut1_spec' {T: Type} [Inhabited T] (l : CList T) (i : U32)
         simp [*]
   . simp_all
 
-/- Even simpler: `progress*` can do most of the work -/
+/- Even simpler: `step*` can do most of the work -/
 theorem list_nth_mut1_spec'' {T: Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
   list_nth_mut1 l i ⦃ x back =>
     x = l.toList[i.val]! ∧
     ∀ x', (back x').toList = l.toList.set i.val x' ⦄ := by
   unfold list_nth_mut1 list_nth_mut1_loop
-  /- `progress*` repeatedly applies `progress`, while doing a case disjunction whenever it
+  /- `step*` repeatedly applies `step`, while doing a case disjunction whenever it
       encounters a branching. Note that one can automatically generate the corresponding
-      proof script by using `progress*?`. -/
-  progress*
+      proof script by using `step*?`. -/
+  step*
   simp_all
 
 /-- Theorem about `list_tail_loop`: verbose version -/
-@[progress]
+@[step]
 theorem list_tail_loop_spec {T : Type} (l : CList T) :
   list_tail_loop l ⦃ back =>
     ∀ tl', (back tl').toList = l.toList ++ tl'.toList ⦄ := by
@@ -142,7 +142,7 @@ theorem list_tail_loop_spec {T : Type} (l : CList T) :
   cases h: l
   . rename_i hd tl
     simp
-    progress as ⟨ back, hBack ⟩
+    step as ⟨ back, hBack ⟩
     -- This call to `simp` simplifies the `∃ ...`
     simp
     -- Proving the post-condition about the backward function
@@ -153,28 +153,28 @@ theorem list_tail_loop_spec {T : Type} (l : CList T) :
     simp
 
 /-- Theorem about `list_tail_loop: simple version -/
-@[progress]
+@[step]
 theorem list_tail_loop_spec' {T : Type} (l : CList T) :
   list_tail_loop l ⦃ back =>
     ∀ tl', (back tl').toList = l.toList ++ tl'.toList ⦄ := by
   unfold list_tail_loop
-  progress*
+  step*
 
-@[progress]
+@[step]
 theorem list_tail_spec {T : Type} (l : CList T) :
   list_tail l ⦃ tl back =>
     tl = CNil ∧
     ∀ tl', (back tl').toList = l.toList ++ tl'.toList ⦄ := by
   unfold list_tail
-  progress*
+  step*
 
 /-- Theorem about `append_in_place` -/
-@[progress]
+@[step]
 theorem append_in_place_spec {T : Type} (l0 l1 : CList T) :
   append_in_place l0 l1 ⦃ l2 =>
     l2.toList = l0.toList ++ l1.toList ⦄ := by
   unfold append_in_place
-  progress*
+  step*
 
 -- Verbose version
 theorem reverse_loop_spec {T : Type} (l : CList T) (out : CList T) :
@@ -182,18 +182,18 @@ theorem reverse_loop_spec {T : Type} (l : CList T) (out : CList T) :
     l'.toList = l.toList.reverse ++ out.toList ⦄ := by
   unfold reverse_loop
   cases h: l
-  . progress as ⟨ l1, hl1 ⟩
+  . step as ⟨ l1, hl1 ⟩
     simp at *
     simp [hl1]
   . simp
 
 -- Simple version
-@[progress]
+@[step]
 theorem reverse_loop_spec' {T : Type} (l : CList T) (out : CList T) :
   reverse_loop l out ⦃ l' =>
     l'.toList = l.toList.reverse ++ out.toList ⦄ := by
   unfold reverse_loop
-  progress*
+  step*
   agrind
 
 
@@ -201,7 +201,7 @@ theorem reverse_spec {T : Type} (l : CList T) :
   reverse l ⦃ l' =>
     l'.toList = l.toList.reverse ⦄ := by
   unfold reverse
-  progress*
+  step*
 
 /-
   # BIG NUMBERS
@@ -218,7 +218,7 @@ def toInt (l : List U32) : Int :=
     x + 2 ^ 32 * toInt l
 
 /-- The theorem about `zero_loop` -/
-@[progress]
+@[step]
 theorem zero_loop_spec
   (x : alloc.vec.Vec U32) (i : Usize) (h : i.val ≤ x.length) :
   zero_loop x i ⦃ x' =>
@@ -228,9 +228,9 @@ theorem zero_loop_spec
   unfold zero_loop
   simp
   split
-  . progress as ⟨ _ ⟩
-    progress as ⟨ i1 ⟩
-    progress as ⟨ x1, _, hSame, hZero ⟩
+  . step as ⟨ _ ⟩
+    step as ⟨ i1 ⟩
+    step as ⟨ x1, _, hSame, hZero ⟩
     simp_all
     simp at hSame hZero -- TODO: why doesn't `simp_all` simplify these two hypotheses?
     split_conjs
@@ -267,7 +267,7 @@ theorem zero_spec (x : alloc.vec.Vec U32) :
     x'.length = x.length ∧
     toInt x' = 0 ⦄ := by
   unfold zero
-  progress as ⟨ x', hLength, hSame, hZero ⟩
+  step as ⟨ x', hLength, hSame, hZero ⟩
   simp_all
   apply all_nil_impl_toInt_eq_zero
   simp_all
@@ -327,7 +327,7 @@ theorem toInt_update (l : List U32) (i : Nat) (x : U32) (h0 : i < l.length) :
       scalar_eq_nf
 
 /-- The proof about `add_no_overflow_loop` -/
-@[progress]
+@[step]
 theorem add_no_overflow_loop_spec
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (i : Usize)
   (hLength : x.length = y.length)
@@ -339,11 +339,11 @@ theorem add_no_overflow_loop_spec
   unfold add_no_overflow_loop
   simp
   split
-  . progress as ⟨ yv ⟩
-    progress as ⟨ xv ⟩
-    progress as ⟨ sum ⟩
-    progress as ⟨ i' ⟩
-    progress as ⟨ x1 ⟩
+  . step as ⟨ yv ⟩
+    step as ⟨ xv ⟩
+    step as ⟨ sum ⟩
+    step as ⟨ i' ⟩
+    step as ⟨ x1 ⟩
     all_goals simp_all <;> grind
   . simp_all
 termination_by x.length - i.val
@@ -357,11 +357,11 @@ theorem add_no_overflow_spec (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
     x'.length = y.length ∧
     toInt x' = toInt x + toInt y ⦄ := by
   unfold add_no_overflow
-  progress as ⟨ x' ⟩
+  step as ⟨ x' ⟩
   simp_all
 
 /-- The proof about `add_with_carry_loop`: detailed version -/
-@[progress]
+@[step]
 theorem add_with_carry_loop_spec
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (c0 : U8) (i : Usize)
   (hLength : x.length = y.length)
@@ -375,18 +375,18 @@ theorem add_with_carry_loop_spec
   unfold add_with_carry_loop
   simp
   split
-  . progress as ⟨ xi ⟩
-    progress as ⟨ c0u ⟩
-    progress as ⟨ s1, c1, hConv1 ⟩
-    progress as ⟨ yi ⟩
-    progress as ⟨ s2, c2, hConv2 ⟩
-    progress as ⟨ c1u, hc1u ⟩
-    progress as ⟨ c2u, hc2u ⟩
-    progress as ⟨ c3, hc3 ⟩
-    · -- The call to `agrind` in `progress` doesn't perform case splits on the `if then else` by default
+  . step as ⟨ xi ⟩
+    step as ⟨ c0u ⟩
+    step as ⟨ s1, c1, hConv1 ⟩
+    step as ⟨ yi ⟩
+    step as ⟨ s2, c2, hConv2 ⟩
+    step as ⟨ c1u, hc1u ⟩
+    step as ⟨ c2u, hc2u ⟩
+    step as ⟨ c3, hc3 ⟩
+    · -- The call to `agrind` in `step` doesn't perform case splits on the `if then else` by default
       agrind
-    progress as ⟨ fst, index_back, _, hIndexBack ⟩
-    progress as ⟨ i1 ⟩
+    step as ⟨ fst, index_back, _, hIndexBack ⟩
+    step as ⟨ i1 ⟩
     have : c3.val ≤ 1 := by
       /- We need to make a case disjunction on hConv1 and hConv2.
          This can be done with `split at hConv1 <;> ...`, but
@@ -395,7 +395,7 @@ theorem add_with_carry_loop_spec
         the `if then else` appearing in the context.
        -/
       scalar_tac +split
-    progress as ⟨ c4, x1, _, _, hc4 ⟩
+    step as ⟨ c4, x1, _, _, hc4 ⟩
     -- Proving the post-condition
     . simp [*]
     . simp only [*]
@@ -427,7 +427,7 @@ termination_by x.length - i.val
 decreasing_by scalar_decr_tac
 
 /-- The proof about `add_with_carry` -/
-@[progress]
+@[step]
 theorem add_with_carry_spec
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
   (hLength : x.length = y.length) :
@@ -436,7 +436,7 @@ theorem add_with_carry_spec
     c.val ≤ 1 ∧
     toInt x' + c.val * 2 ^ (32 * x'.length) = toInt x + toInt y ⦄ := by
   unfold add_with_carry
-  progress as ⟨ c, x' ⟩
+  step as ⟨ c, x' ⟩
   simp_all
 
 end tutorial

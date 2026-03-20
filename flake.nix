@@ -77,6 +77,7 @@
         ocamlPackagesStatic = pkgs.pkgsStatic.ocaml-ng.ocamlPackages_5_2;
         coqPackages = pkgs.coqPackages_8_18;
         charon = inputs.charon.packages.${system}.charon;
+        charon-portable = inputs.charon.packages.${system}.charon-portable;
         charon-ml = inputs.charon.packages.${system}.charon-ml.override { inherit ocamlPackages; };
 
         easy_logging = pkgs.callPackage
@@ -142,17 +143,17 @@
             charon-ml = charon-ml.override { inherit ocamlPackages; };
           };
 
-        mk-aeneas-release = { aeneas, charon }: pkgs.runCommand "aeneas-release.tar.gz" { } ''
+        mk-aeneas-release = { aeneas, charon-portable }: pkgs.runCommand "aeneas-release.tar.gz" { } ''
           mkdir release
           cd release
-          cp ${charon}/bin/charon ${charon}/bin/charon-driver .
+          cp ${charon-portable}/bin/charon ${charon-portable}/bin/charon-driver .
           cp ${aeneas}/bin/aeneas .
           cp -r ${./backends} backends
           tar -czvf $out *
         '';
 
-        aeneas-release = mk-aeneas-release { inherit charon aeneas; };
-        aeneas-static-release = mk-aeneas-release { inherit charon; aeneas = aeneas-static; };
+        aeneas-release = mk-aeneas-release { inherit charon-portable aeneas; };
+        aeneas-static-release = mk-aeneas-release { inherit charon-portable; aeneas = aeneas-static; };
 
         aeneas-check-tidiness = pkgs.stdenv.mkDerivation rec {
           name = "aeneas-check-tidiness";

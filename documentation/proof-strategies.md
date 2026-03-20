@@ -5,11 +5,11 @@
 The basic pattern for verifying an Aeneas-generated function:
 
 ```lean
-@[progress]
+@[step]
 theorem my_function_spec (x : U32) (h : precondition) :
   my_function x ⦃ result => postcondition result ⦄ := by
   unfold my_function
-  progress           -- applies specs of called functions
+  step           -- applies specs of called functions
   -- finish remaining goals
 ```
 
@@ -17,42 +17,42 @@ The `⦃ result => postcondition ⦄` notation is the weakest-precondition spec 
 
 For functions with backward continuations:
 ```lean
-@[progress]
+@[step]
 theorem choose_spec {T : Type} (b : Bool) (x y : T) :
   choose b x y ⦃ z back =>
     (b → z = x ∧ ∀ z', back z' = (z', y)) ∧
     (¬b → z = y ∧ ∀ z', back z' = (x, z')) ⦄ := by ...
 ```
 
-## The `progress*?` Workflow
+## The `step*?` Workflow
 
 This is one of the most effective proof strategies:
 
-1. **Generate a complete proof script** by using `progress*?`. This interactively applies `progress` repeatedly, doing case splits on branches, and outputs the full expanded proof script.
+1. **Generate a complete proof script** by using `step*?`. This interactively applies `step` repeatedly, doing case splits on branches, and outputs the full expanded proof script.
 
-2. **Review the generated script.** It will be verbose but complete. Each line applies one `progress` step or handles a case.
+2. **Review the generated script.** It will be verbose but complete. Each line applies one `step` step or handles a case.
 
-3. **Automate proof obligations.** Many of the intermediate goals left by `progress` can be automated. Register lemmas locally for `agrind`:
+3. **Automate proof obligations.** Many of the intermediate goals left by `step` can be automated. Register lemmas locally for `agrind`:
    ```lean
    attribute [local agrind] my_lemma1 my_lemma2
    ```
-   This way, `progress*` will discharge those goals automatically on the next run.
+   This way, `step*` will discharge those goals automatically on the next run.
 
-4. **Refold the proof.** Progressively replace the expanded script with `progress*`, which now handles more goals automatically thanks to the registered lemmas. The final proof might be a single `progress*` call followed by a small finishing script.
+4. **Refold the proof.** Progressively replace the expanded script with `step*`, which now handles more goals automatically thanks to the registered lemmas. The final proof might be a single `step*` call followed by a small finishing script.
 
 **Example from tests/lean/Tutorial/Solutions.lean:**
 ```lean
--- Using progress* to do most of the work
+-- Using step* to do most of the work
 theorem list_nth_mut1_spec'' {T: Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
   list_nth_mut1 l i ⦃ x back =>
     x = l.toList[i.val]! ∧
     ∀ x', (back x').toList = l.toList.set i.val x' ⦄ := by
   unfold list_nth_mut1 list_nth_mut1_loop
-  /- `progress*` repeatedly applies `progress`, while doing a case disjunction whenever it
+  /- `step*` repeatedly applies `step`, while doing a case disjunction whenever it
       encounters a branching. Note that one can automatically generate the corresponding
-      proof script by using `progress*?`. -/
-  progress*
+      proof script by using `step*?`. -/
+  step*
   simp_all
 ```
 
@@ -74,7 +74,7 @@ def my_function (x : U32) (y : U32) : Result U32 := do
 - `fail` — return failure
 - `massert condition` — monadic assert (fails if condition is false)
 
-When proving specs of monadic code, `progress` handles the bind steps one at a time. Each call to `progress` peels off one `let x ← f args` and applies the specification of `f`.
+When proving specs of monadic code, `step` handles the bind steps one at a time. Each call to `step` peels off one `let x ← f args` and applies the specification of `f`.
 
 ## Recursive Functions and the Termination Pitfall
 
@@ -82,22 +82,22 @@ When proving specs of monadic code, `progress` handles the bind steps one at a t
 ```lean
 theorem my_recursive_fn_spec ... :=  by
   unfold my_recursive_fn
-  progress
+  step
 ```
-and the proof appears finished but Lean reports a termination error, it's because `progress` found your own theorem (the one you're currently proving) and applied it recursively. This typically happens when the function starts with a `match` or `if-then-else`.
+and the proof appears finished but Lean reports a termination error, it's because `step` found your own theorem (the one you're currently proving) and applied it recursively. This typically happens when the function starts with a `match` or `if-then-else`.
 
-**The fix:** Case-split first before calling `progress`:
+**The fix:** Case-split first before calling `step`:
 ```lean
 theorem my_recursive_fn_spec ... := by
   unfold my_recursive_fn
   split         -- or: cases ..., or: simp_ifs
-  . progress    -- first branch
+  . step    -- first branch
     ...
-  . progress    -- second branch
+  . step    -- second branch
     ...
 ```
 
-By splitting first, `progress` sees a non-recursive goal shape and applies the correct inner specs rather than the theorem being proved.
+By splitting first, `step` sees a non-recursive goal shape and applies the correct inner specs rather than the theorem being proved.
 
 ## Loop Reasoning
 
@@ -108,12 +108,12 @@ Loops are translated to auxiliary `_loop` functions. **Always write a separate t
 Most loops become recursive functions. The loop invariant serves as both precondition and postcondition:
 
 ```lean
-@[progress]
+@[step]
 theorem my_loop_spec (x : State) (h : loop_invariant x) :
   my_loop x ⦃ r => postcondition r ⦄ := by
   unfold my_loop
   split
-  · progress ...    -- recursive case: progress applies my_loop_spec
+  · step ...    -- recursive case: step applies my_loop_spec
     split_conjs <;> (try scalar_tac) <;> agrind
   · ...              -- base case
 termination_by some_decreasing_measure x
@@ -121,7 +121,7 @@ decreasing_by scalar_decr_tac
 ```
 
 Key points:
-- `progress` on the recursive call applies the theorem being proved (this is safe here — unlike the termination pitfall, the recursion is structural)
+- `step` on the recursive call applies the theorem being proved (this is safe here — unlike the termination pitfall, the recursion is structural)
 - Add `termination_by` with a `Nat` measure that decreases at each recursive call
 - Use `decreasing_by scalar_decr_tac` to discharge the decreasing obligation
 
@@ -267,9 +267,9 @@ Prove equivalences between adjacent levels separately. Each proof is simpler bec
 -/
 ```
 
-Compare with the `progress_spec_aux` / `progress_spec` layering:
-- `encode_coefficient.progress_spec_aux` — proves a low-level property relating to the auxiliary spec
-- `encode_coefficient.progress_spec` — proves the full specification using the aux result
+Compare with the `step_spec_aux` / `step_spec` layering:
+- `encode_coefficient.step_spec_aux` — proves a low-level property relating to the auxiliary spec
+- `encode_coefficient.step_spec` — proves the full specification using the aux result
 
 ## Locally Activating/Deactivating Attributes
 
@@ -277,8 +277,8 @@ Control which specifications tactics use by locally managing attributes:
 
 ```lean
 -- Use simpler cast specification
-attribute [-progress] UScalar.cast.progress_spec
-attribute [local progress] UScalar.cast_inBounds_spec
+attribute [-step] UScalar.cast.step_spec
+attribute [local step] UScalar.cast_inBounds_spec
 
 -- Add custom simplification lemmas locally
 attribute [local simp_scalar_simps] my_custom_scalar_lemma
@@ -407,8 +407,8 @@ This is more effective than calling `agrind` on the conjunction directly: each c
 
 1. Start with `unfold foo`
 2. If the function starts with match/if: use `split` first
-3. Try `progress*` — if it works, great!
-4. If not, use `progress*?` to generate a full script
+3. Try `step*` — if it works, great!
+4. If not, use `step*?` to generate a full script
 5. Identify hard sub-goals and prove them manually or register automation lemmas
 6. For loops: use `loop.spec_decr_nat` with an invariant and termination measure
 7. For large functions: decompose with fold theorems
@@ -421,8 +421,8 @@ This is more effective than calling `agrind` on the conjunction directly: each c
 When you're stuck after a tactic, use `goal` (via lean_lsp.py) to inspect the current proof state, then follow this guide:
 
 **The goal has a monadic bind (`let x ← f args; ...`):**
-→ `progress` (or `progress with <thm>` if auto-resolution fails)
-→ If `progress` fails: does `f` have a spec? Search with `grep -r "theorem.*f.*spec"`.
+→ `step` (or `step with <thm>` if auto-resolution fails)
+→ If `step` fails: does `f` have a spec? Search with `grep -r "theorem.*f.*spec"`.
 → If no spec exists: you need to write one first.
 
 **The goal is arithmetic (`a + b ≤ c`, `x < 2^32`, etc.):**

@@ -1,6 +1,6 @@
 import Lean
 import Aeneas.Std.Primitives
-import Aeneas.Progress.Init
+import Aeneas.Step.Init
 import Aeneas.Std.Alloc
 
 namespace Aeneas
@@ -36,7 +36,7 @@ def core.clone.CloneGlobal : core.clone.Clone Global := {
 }
 
 /- [core::clone::impls::{(core::clone::Clone for bool)#19}::clone] -/
-@[reducible, simp, progress_simps]
+@[reducible, simp, step_simps]
 def clone.impls.CloneBool.clone (b : Bool) : Bool := b
 
 @[reducible, rust_trait_impl "core::clone::Clone<bool>"]
@@ -70,11 +70,11 @@ def core.marker.CopyBool : core.marker.Copy Bool := {
    This acts like a swap effectively in a functional pure world.
    We return the old value of `dst`, i.e. `dst` itself.
    The new value of `dst` is `src`. -/
-@[simp, progress_simps, rust_fun "core::mem::replace" (canFail := false) (lift := false)]
+@[simp, step_simps, rust_fun "core::mem::replace" (canFail := false) (lift := false)]
 def mem.replace {a : Type} (dst : a) (src : a) : a × a := (dst, src)
 
 /- [core::mem::swap] -/
-@[simp, progress_simps, rust_fun "core::mem::swap" (canFail := false) (lift := false)]
+@[simp, step_simps, rust_fun "core::mem::swap" (canFail := false) (lift := false)]
 def mem.swap {T : Type} (a b : T): T × T := (b, a)
 
 end core
@@ -88,11 +88,11 @@ def BuiltinClone (Self : Type) : core.clone.Clone Self where
 def BuiltinCopy (Self : Type) : core.marker.Copy Self where
   cloneInst := BuiltinClone Self
 
-@[simp, progress_simps, rust_fun "core::option::{core::option::Option<@T>}::unwrap"]
+@[simp, step_simps, rust_fun "core::option::{core::option::Option<@T>}::unwrap"]
 def core.option.Option.unwrap {T : Type} (x : Option T) : Result T :=
   Result.ofOption x Error.panic
 
-@[progress_pure_def, rust_fun "core::option::{core::option::Option<@T>}::unwrap_or" -canFail]
+@[step_pure_def, rust_fun "core::option::{core::option::Option<@T>}::unwrap_or" -canFail]
 def core.option.Option.unwrap_or (self : Option T) (default : T) : T :=
   match self with
   | none => default
@@ -104,10 +104,10 @@ def core.option.Option.unwrap_or (self : Option T) (default : T) : T :=
 @[simp] def core.option.Option.unwrap_or_none (default : T) :
   core.option.Option.unwrap_or none default = default := by simp [unwrap_or]
 
-@[simp, progress_simps, rust_fun "core::option::{core::option::Option<@T>}::take" -canFail -lift]
+@[simp, step_simps, rust_fun "core::option::{core::option::Option<@T>}::take" -canFail -lift]
 def core.option.Option.take {T: Type} (self: Option T): Option T × Option T := (self, .none)
 
-@[simp, progress_simps, rust_fun "core::option::{core::option::Option<@T>}::is_none" -canFail -lift]
+@[simp, step_simps, rust_fun "core::option::{core::option::Option<@T>}::is_none" -canFail -lift]
 def core.option.Option.is_none {T: Type} (self: Option T): Bool := self.isNone
 
 @[rust_type "core::ops::range::RangeFrom"]

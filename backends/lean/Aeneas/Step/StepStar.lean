@@ -1,4 +1,4 @@
-import Aeneas.Progress.Progress
+import Aeneas.Step.Step
 import AeneasMeta.Split
 open Lean Meta Elab Tactic
 
@@ -290,17 +290,17 @@ def Info.toExpr(info: Info): Expr :=
 
 end Bifurcation
 
-namespace ProgressStar
+namespace StepStar
 
-abbrev traceGoalWithNode := Progress.traceGoalWithNode
+abbrev traceGoalWithNode := Step.traceGoalWithNode
 
 structure Config where
-  progressConfig : Progress.Config
+  stepConfig : Step.Config
   /-- We need the original configuration syntax to generate the proof script -/
   configSyntax : Option (TSyntax `Lean.Parser.Tactic.optConfig)
   preconditionTac: Option Syntax.Tactic := none
-  /-- Should we use the special syntax `let* ⟨ ...⟩ ← ...` or the more standard syntax `progress with ... as ⟨ ... ⟩`? -/
-  prettyPrintedProgress : Bool := true
+  /-- Should we use the special syntax `let* ⟨ ...⟩ ← ...` or the more standard syntax `step with ... as ⟨ ... ⟩`? -/
+  prettyPrintedStep : Bool := true
   useCase : Bool := false
   useRename : Bool := true
 
@@ -375,7 +375,7 @@ partial def Script.toSyntax (script : Script) : MetaM (Array Syntax.Tactic) := d
     let s1 ← toSyntax s1
     pure (s0 ++ s1)
 
-attribute [progress_simps] Aeneas.Std.bind_assoc_eq
+attribute [step_simps] Aeneas.Std.bind_assoc_eq
 
 inductive TargetKind where
 | bind (fn : Name)
@@ -385,13 +385,13 @@ inductive TargetKind where
 
 /- Smaller helper which we use to check in which situation we are -/
 def analyzeTarget : TacticM TargetKind := do
-  withTraceNode `Progress (fun _ => do pure m!"analyzeTarget") do
+  withTraceNode `Step (fun _ => do pure m!"analyzeTarget") do
   try
     let goalTy ← (← getMainGoal).getType
     -- Dive into the `spec program post`
     goalTy.consumeMData.withApp fun spec? args => do
     if h: spec?.isConstOf ``Std.WP.spec ∧ args.size = 3 then
-      trace[Progress] "application of `spec` with arity 3"
+      trace[Step] "application of `spec` with arity 3"
       let program := args[1]
       -- Check if this is a bind
       let e ← Utils.normalizeLetBindings program
@@ -406,15 +406,15 @@ def analyzeTarget : TacticM TargetKind := do
       else
         pure .result
     else
-      trace[Progress] "not an application of `spec` with arity 3"
+      trace[Step] "not an application of `spec` with arity 3"
       pure .result
   catch _ =>
-    trace[Progress] "exception caught"
+    trace[Step] "exception caught"
     pure .unknown
 
-partial def evalProgressStar (cfg: Config) (fuel : Option Nat) : TacticM Result :=
+partial def evalStepStar (cfg: Config) (fuel : Option Nat) : TacticM Result :=
   withMainContext do focus do
-  withTraceNode `Progress (fun _ => do pure m!"evalProgressStar") do
+  withTraceNode `Step (fun _ => do pure m!"evalStepStar") do
   -- Simplify the target
   let (info, mvarId) ← simplifyTarget
   -- Continue
@@ -423,7 +423,7 @@ partial def evalProgressStar (cfg: Config) (fuel : Option Nat) : TacticM Result 
     let info' ← traverseProgram cfg fuel
     let info := info ++ info'
     -- Wait for the asynchronous execution to finish
-    withTraceNode `Progress (fun _ => do pure m!"filtering subgoals") do
+    withTraceNode `Step (fun _ => do pure m!"filtering subgoals") do
     let mut sgs := #[]
     for (mvarId, proof) in info.subgoals do
       match proof with
@@ -443,12 +443,12 @@ partial def evalProgressStar (cfg: Config) (fuel : Option Nat) : TacticM Result 
 
 where
   simplifyTarget : TacticM (Info × Option MVarId) := do
-    withTraceNode `Progress (fun _ => do pure m!"simplifyTarget") do
+    withTraceNode `Step (fun _ => do pure m!"simplifyTarget") do
     traceGoalWithNode "about to simplify goal"
     let mvarId0 ← getMainGoal
     let r ← Simp.simpAt (simpOnly := true)
       { maxDischargeDepth := 1, failIfUnchanged := false}
-      {simpThms := #[← Progress.progressSimpExt.getTheorems]}
+      {simpThms := #[← Step.stepSimpExt.getTheorems]}
       (.targets #[] true)
     /- We may have proven the goal already -/
     let tac : Array Syntax.Tactic ← do
@@ -457,19 +457,19 @@ where
         else do
           pure ((← getMainGoal) != mvarId0)
       if genSimp then
-        let progress_simps ← `(Parser.Tactic.simpLemma| $(mkIdent `progress_simps):term)
-        let tac ← `(tactic|simp only [$progress_simps])
+        let step_simps ← `(Parser.Tactic.simpLemma| $(mkIdent `step_simps):term)
+        let tac ← `(tactic|simp only [$step_simps])
         pure #[TaskOrDone.mk (some tac)]
       else pure #[]
     let info : Info := ⟨ .tacs tac, #[], #[] ⟩
     if r.isSome then traceGoalWithNode "after simplification"
-    else trace[Progress] "goal proved"
+    else trace[Step] "goal proved"
     let goal ← do if r.isSome then pure (some (← getMainGoal)) else pure none
     pure (info, goal)
 
   traverseProgram (cfg : Config) (fuel : Option Nat) : TacticM Info := do
     withMainContext do
-    withTraceNode `Progress (fun _ => do pure m!"traverseProgram") do
+    withTraceNode `Step (fun _ => do pure m!"traverseProgram") do
     traceGoalWithNode "current goal"
     -- Check if there remains fuel
     let fuel ←
@@ -487,7 +487,7 @@ where
       match mainGoal with
       | none =>
         -- Stop
-        trace[Progress] "stop"
+        trace[Step] "stop"
         return info
       | some mainGoal =>
         setGoals [mainGoal]
@@ -497,7 +497,7 @@ where
           let restInfo ← traverseProgram cfg fuel
           return info ++ restInfo
         else
-          trace[Progress] "Found unassigned meta-variables of type ≠ Prop: stopping"
+          trace[Step] "Found unassigned meta-variables of type ≠ Prop: stopping"
           let info' : Info ← pure
             { script := .tacs #[.done (← `(tactic| sorry))],
               unassignedVars := #[],
@@ -509,9 +509,9 @@ where
           Utils.lambdaTelescopeN br.toExpr br.numArgs fun xs _ => do
             let names ← xs.mapM (·.fvarId!.getUserName)
             return names
-      trace[Progress] "Match over scrutinee: {bfInfo.scrut}"
+      trace[Step] "Match over scrutinee: {bfInfo.scrut}"
       let (branchGoals, mkStx) ← onMatch cfg bfInfo contsTaggedVals
-      withTraceNode `Progress (fun _ => do pure m!"exploring branches") do
+      withTraceNode `Step (fun _ => do pure m!"exploring branches") do
       /- Continue exploring from the subgoals -/
       let branchInfos ← branchGoals.mapM fun mainGoal => do
         setGoals [mainGoal]
@@ -526,7 +526,7 @@ where
         | some mainGoal => pure #[(mainGoal, none)]
       pure { info with subgoals := info.subgoals ++ mainGoal }
     | .unknown => do
-      trace[Progress] "don't know what to do: it may be a terminal goal, attempting to solve it with grind"
+      trace[Step] "don't know what to do: it may be a terminal goal, attempting to solve it with grind"
       let (info, mainGoal) ← onResult cfg
       let mainGoal ← match mainGoal with
         | none => pure #[]
@@ -534,7 +534,7 @@ where
       pure { info with subgoals := info.subgoals ++ mainGoal }
 
   onResult (cfg : Config) : TacticM (Info × Option MVarId) := do
-    withTraceNode `Progress (fun _ => pure m!"onResult") do
+    withTraceNode `Step (fun _ => pure m!"onResult") do
     /- If we encounter `(do f a)` we process it as if it were `(do let res ← f a; return res)`
        since (id = (· >>= pure)) and when we desugar the do block we have that
 
@@ -544,18 +544,18 @@ where
 
        We known in advance the result of processing `return res`, which is to do nothing.
        This allows us to prevent code duplication with the `onBind` function. -/
-    let names ← Progress.getPostNamesFromGoal
+    let names ← Step.getPostNamesFromGoal
     let res ← onBind cfg names
     match res.snd with
     | none =>
-      trace[Progress] "done"
+      trace[Step] "done"
       pure res
     | some mvarId =>
       let (info', mvarId) ← onFinish cfg mvarId
       pure (res.fst ++ info', mvarId)
 
   onFinish (cfg : Config) (mvarId : MVarId) : TacticM (Info × Option MVarId) := do
-    withTraceNode `Progress (fun _ => pure m!"onFinish") do
+    withTraceNode `Step (fun _ => pure m!"onFinish") do
     setGoals [mvarId]
     traceGoalWithNode "goal"
     /- Simplify a bit -/
@@ -567,17 +567,17 @@ where
       -- TODO: don't use syntax
       -- TODO: use global options
       let grindTac : TacticM Unit :=
-        Progress.evalAGrindWithPreprocess cfg.progressConfig.withGroundSimprocs cfg.progressConfig.toGrindConfig
+        Step.evalAGrindWithPreprocess cfg.stepConfig.withGroundSimprocs cfg.stepConfig.toGrindConfig
       -- TODO: add the tactic given by the user
       let tacStx : IO.Promise Syntax.Tactic ← IO.Promise.new
       let rec tryFinish (tacl : List (String × Syntax.Tactic × TacticM Unit)) : TacticM Unit := do
         match tacl with
         | [] =>
-          trace[Progress] "could not prove the goal: inserting a sorry"
+          trace[Step] "could not prove the goal: inserting a sorry"
           tacStx.resolve (← `(tactic| sorry))
         | (name, stx, tac) :: tacl =>
           let stx : Option Syntax.Tactic ←
-            withTraceNode `Progress (fun _ => do pure m!"Attempting to solve finish goal with `{name}`:\n{← getMainGoal}") do
+            withTraceNode `Step (fun _ => do pure m!"Attempting to solve finish goal with `{name}`:\n{← getMainGoal}") do
             try
               tac
               -- Check that there are no remaining goals
@@ -587,11 +587,11 @@ where
             catch _ => pure none
           match stx with
           | some stx =>
-            trace[Progress] "goal solved"
+            trace[Step] "goal solved"
             tacStx.resolve stx
           | none => tryFinish tacl
       let info' ← do
-        if cfg.progressConfig.async then
+        if cfg.stepConfig.async then
           let proof ← Async.asyncRunTactic (tryFinish [("grind", ← `(tactic| agrind), grindTac)])
           let proof := proof.result?.map (fun x => match x with | none | some none => none | some (some x) => some x)
           let info' : Info ← pure
@@ -609,17 +609,17 @@ where
       pure (info ++ info', none)
 
   onBind (cfg : Config) (names : Array (Option Name)) : TacticM (Info × Option MVarId) := do
-    withTraceNode `Progress (fun _ => pure m!"onBind ({names})") do
+    withTraceNode `Step (fun _ => pure m!"onBind ({names})") do
     let postsBasename := names[0]?.join
-    if let some res ← tryProgress cfg names postsBasename then
+    if let some res ← tryStep cfg names postsBasename then
       let {usedTheorem, unassignedVars, preconditions, mainGoal } := res
-      withTraceNode `Progress (fun _ => pure m!"progress succeeded") do
+      withTraceNode `Step (fun _ => pure m!"step succeeded") do
       match mainGoal with
-      | none => trace[Progress] "Main goal solved"
+      | none => trace[Step] "Main goal solved"
       | some goal =>
-        withTraceNode `Progress (fun _ => pure m!"New main goal:") do
-        trace[Progress] "{goal.goal}"
-      withTraceNode `Progress (fun _ => pure m!"all preconditions") do trace[Progress] "All preconditions:\n{preconditions.map Prod.fst}"
+        withTraceNode `Step (fun _ => pure m!"New main goal:") do
+        trace[Step] "{goal.goal}"
+      withTraceNode `Step (fun _ => pure m!"all preconditions") do trace[Step] "All preconditions:\n{preconditions.map Prod.fst}"
       /- Compute ids for the tactic script from the introduced variables -/
       let ids : Array (TSyntax ``Lean.binderIdent) :=
         match mainGoal with
@@ -629,11 +629,11 @@ where
             match o.name? with
             | some n => mkNode ``Lean.binderIdent #[mkIdent n]
             | none => mkNode ``Lean.binderIdent #[mkIdent `_]
-      trace[Progress] "ids from introduced vars: {ids}"
+      trace[Step] "ids from introduced vars: {ids}"
       let mainGoal := mainGoal.map fun mainGoal => mainGoal.goal
       /- Generate the tactic scripts for the preconditions -/
       let currTac ←
-        if cfg.prettyPrintedProgress then
+        if cfg.prettyPrintedStep then
           -- TODO: how to factor this out?
           let config ←
             match cfg.configSyntax with
@@ -658,12 +658,12 @@ where
           if ids.isEmpty
           then
             match cfg.preconditionTac with
-            | none => `(tactic| progress $config with $(←usedTheorem.toSyntax))
-            | some tac => `(tactic| progress $config with $(←usedTheorem.toSyntax) by $(#[tac])*)
+            | none => `(tactic| step $config with $(←usedTheorem.toSyntax))
+            | some tac => `(tactic| step $config with $(←usedTheorem.toSyntax) by $(#[tac])*)
           else
             match cfg.preconditionTac with
-            | none => `(tactic| progress $config with $(←usedTheorem.toSyntax) as ⟨$ids,*⟩)
-            | some tac => `(tactic| progress $config with $(←usedTheorem.toSyntax) as ⟨$ids,*⟩ by $(#[tac])*)
+            | none => `(tactic| step $config with $(←usedTheorem.toSyntax) as ⟨$ids,*⟩)
+            | some tac => `(tactic| step $config with $(←usedTheorem.toSyntax) as ⟨$ids,*⟩ by $(#[tac])*)
       let sorryStx ← `(tactic|· sorry)
       let unassignedVarsScript : Array (TaskOrDone (Option Syntax.Tactic)) :=
         unassignedVars.map fun _ => TaskOrDone.mk (some sorryStx)
@@ -685,10 +685,10 @@ where
       onFinish cfg (← getMainGoal)
 
   onMatch (cfg : Config) (bfInfo : Bifurcation.Info) (toBeProcessed : Array (Array Name)): TacticM (List MVarId × (List Info → TacticM Info)) := do
-    withTraceNode `Progress (fun _ => pure m!"onMatch") do
-    trace[Progress] "onMatch: encountered {bfInfo.kind}"
+    withTraceNode `Step (fun _ => pure m!"onMatch") do
+    trace[Step] "onMatch: encountered {bfInfo.kind}"
     if (←getGoals).isEmpty then
-      trace[Progress] "onMatch: no goals to be solved!"
+      trace[Step] "onMatch: no goals to be solved!"
       -- Tactic.focus fails if there are no goals to be solved.
       return ({}, fun infos => assert! (infos.length == 0); pure {})
     Tactic.focus do
@@ -696,7 +696,7 @@ where
       let splitStx ← `(tactic| spec_split)
       let subgoals ← esplitAtSpec h none
       --
-      trace[Progress] "onMatch: Bifurcation generated {subgoals.length} subgoals"
+      trace[Step] "onMatch: Bifurcation generated {subgoals.length} subgoals"
       unless subgoals.length == toBeProcessed.size do
         throwError "onMatch: Expected {toBeProcessed.size} cases, found {subgoals.length}"
 
@@ -728,8 +728,8 @@ where
 
       return (infos, mkStx)
 
-  tryProgress (cfg : Config) (ids : Array (Option Name) := #[]) (postsBasename : Option Name := none) := do
-    try some <$> Progress.evalProgressCore cfg.progressConfig (some (.str .anonymous "_")) none ids false postsBasename cfg.preconditionTac
+  tryStep (cfg : Config) (ids : Array (Option Name) := #[]) (postsBasename : Option Name := none) := do
+    try some <$> Step.evalStepCore cfg.stepConfig (some (.str .anonymous "_")) none ids false postsBasename cfg.preconditionTac
     catch _ => pure none
 
   makeIds (base: Name) (numElem numPost : Nat) (defaultId := "x"): Array (TSyntax ``Lean.binderIdent) :=
@@ -751,44 +751,44 @@ where
     let binderIdents := names.map nameToBinderIdent
     Lean.mkNode ``Lean.Parser.Tactic.caseArg #[tag, mkNullNode (args := binderIdents)]
 
-syntax «progress*_args» := (num)? Lean.Parser.Tactic.optConfig ("by" tacticSeq)?
-def parseArgs: TSyntax `Aeneas.ProgressStar.«progress*_args» → TermElabM (Config × Option Nat)
-| `(«progress*_args»| $(fuel)? $config $[by $preconditionTac:tacticSeq]?) => do
-  withTraceNode `Progress (fun _ => pure m!"parseArgs") do
+syntax «step*_args» := (num)? Lean.Parser.Tactic.optConfig ("by" tacticSeq)?
+def parseArgs: TSyntax `Aeneas.StepStar.«step*_args» → TermElabM (Config × Option Nat)
+| `(«step*_args»| $(fuel)? $config $[by $preconditionTac:tacticSeq]?) => do
+  withTraceNode `Step (fun _ => pure m!"parseArgs") do
   let fuel ← do match fuel with
     | none => pure none
     | some fuel =>
       match fuel.raw.isNatLit? with
       | some fuel => pure fuel
       | none => throwUnsupportedSyntax
-  let progressConfig ← Progress.elabPartialConfig config
+  let stepConfig ← Step.elabPartialConfig config
   -- TODO: find a simpler way of checking whether the syntax is empty
   let configSyntax := if (Aeneas.Meta.OptionConfig.decomposeOptConfig config).isEmpty then none else some config
   let preconditionTac ← do
     match preconditionTac with
-    | none => pure { progressConfig, configSyntax, preconditionTac := none }
+    | none => pure { stepConfig, configSyntax, preconditionTac := none }
     | some preconditionTac => do
       let preconditionTac : Syntax.Tactic := ⟨preconditionTac.raw⟩
-      trace[Progress] "preconditionTac: {preconditionTac}"
-      pure { progressConfig, configSyntax, preconditionTac }
+      trace[Step] "preconditionTac: {preconditionTac}"
+      pure { stepConfig, configSyntax, preconditionTac }
   pure (preconditionTac, fuel)
 | _ => throwUnsupportedSyntax
 
-/-- The `progress*` tactic repeatedly applies `progress` and `split` on the goal.
+/-- The `step*` tactic repeatedly applies `step` and `split` on the goal.
 
-Its variant `progress*?` allows automatically generating the equivalent proof script.
+Its variant `step*?` allows automatically generating the equivalent proof script.
 -/
-syntax (name := progressStar) "progress" noWs ("*" <|> "*?") «progress*_args»: tactic
+syntax (name := stepStar) "step" noWs ("*" <|> "*?") «step*_args»: tactic
 
-@[tactic progressStar, inherit_doc Progress.progress]
-def evalProgressStarTac : Tactic := fun stx => do
+@[tactic stepStar, inherit_doc Step.step]
+def evalStepStarTac : Tactic := fun stx => do
   match stx with
-  | `(tactic| progress* $args:«progress*_args») =>
+  | `(tactic| step* $args:«step*_args») =>
     let (cfg, fuel) ← parseArgs args
-    evalProgressStar cfg fuel *> pure ()
-  | `(tactic| progress*? $args:«progress*_args») =>
+    evalStepStar cfg fuel *> pure ()
+  | `(tactic| step*? $args:«step*_args») =>
     let (cfg, fuel) ← parseArgs args
-    let info ← evalProgressStar cfg fuel
+    let info ← evalStepStar cfg fuel
     let suggestion ← info.script.toSyntax
     let suggestion ← `(tacticSeq|$(suggestion)*)
     /- TODO: do not use the Aesop helper but our own (it mentions Aesop in the message)
@@ -798,7 +798,7 @@ def evalProgressStarTac : Tactic := fun stx => do
     --Meta.Tactic.TryThis.addSuggestion stx suggestion (origSpan? := ← getRef)
   | _ => throwUnsupportedSyntax
 
-end ProgressStar
+end StepStar
 
 section Examples
 
@@ -807,10 +807,10 @@ open Std.WP
 /--
 info: Try this:
 
-  [apply]   simp only [progress_simps]
+  [apply]   simp only [step_simps]
 -/
 #guard_msgs in
-example : True := by progress*?
+example : True := by step*?
 
 open Std Result
 
@@ -830,7 +830,7 @@ info: Try this:
 example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
   add1 x y ⦃ _ => True ⦄ := by
   unfold add1
-  progress*?
+  step*?
 
 /--
 info: Try this:
@@ -843,7 +843,7 @@ info: Try this:
 example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
   add1 x y ⦃ _ => True ⦄ := by
   unfold add1
-  progress*? +scalarTac -grind
+  step*? +scalarTac -grind
 
 /--
 error: unsolved goals
@@ -861,7 +861,7 @@ x3_post : ↑x3 = ↑x2 + ↑x2
 example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
   add1 x y ⦃ z => True ⦄ := by
   unfold add1
-  progress* 2
+  step* 2
 
 /--
 info: Try this:
@@ -884,12 +884,12 @@ x3_post : ↑x3 = ↑x2 + ↑x2
 example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
   add1 x y ⦃ z => True ⦄ := by
   unfold add1
-  progress*? 2
+  step*? 2
 
 /--
 info: Try this:
 
-  [apply]     simp only [progress_simps]
+  [apply]     simp only [step_simps]
     let* ⟨ x2, x2_post ⟩ ← U32.add_spec
     let* ⟨ x3, x3_post ⟩ ← U32.add_spec
     let* ⟨ z, z_post ⟩ ← U32.add_spec
@@ -900,7 +900,7 @@ example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
   let v := 2 * x.val + 2 * y.val + 4
   add1 x y ⦃ z => z.val = v ⦄ := by
   unfold add1
-  progress*?
+  step*?
 
 def add2 (b : Bool) (x0 x1 : U32) : Std.Result U32 := do
   if b then
@@ -925,7 +925,7 @@ info: Try this:
 example b (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
       add2 b x y ⦃ _ => True ⦄ := by
   unfold add2
-  progress*?
+  step*?
 
 /--
 info: Try this:
@@ -953,7 +953,7 @@ x3_post : ↑x3 = ↑x2 + ↑x2
 example b (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
   add2 b x y ⦃ z => True ⦄ := by
   unfold add2
-  progress*? 3
+  step*? 3
 
 /--
 info: Try this:
@@ -1017,7 +1017,7 @@ y_post : ↑y = ↑x + ↑y✝
 example b (x y : U32) :
       add2 b x y ⦃ _ => True ⦄ := by
   unfold add2
-  progress*?
+  step*?
 
 /- Checking that if we can't prove the final goal, we do introduce names for the outputs of the last
    monadic call -/
@@ -1047,66 +1047,66 @@ _✝ : ↑x✝ = ↑x3 + 4
 example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
       add1 x y ⦃ _ => x.val < 32 ⦄ := by
   unfold add1
-  progress*?
+  step*?
 
 example (x y : U32) (h : x.val * y.val ≤ U32.max):
   (do
     let z0 ← x * y
     let z1 ← y * x
     massert (z1 == z0)) ⦃ _ => True ⦄ := by
-    progress*
+    step*
 
 /--
 info: Try this:
 
   [apply]     spec_split
-    · simp only [progress_simps]
+    · simp only [step_simps]
     · rename_i x _
-      simp only [progress_simps]
+      simp only [step_simps]
 -/
 #guard_msgs in
 example (x : Option Nat) :
   (match x with | none => .ok 0 | some x => .ok x) ⦃ _ => True ⦄ := by
-  progress*?
+  step*?
 
 /--
 info: Try this:
 
   [apply]     spec_split
-    · simp only [progress_simps]
-    · simp only [progress_simps]
+    · simp only [step_simps]
+    · simp only [step_simps]
 -/
 #guard_msgs in
 example (x : Option α) :
   (match x with | none => .ok 0 | some _ => .ok 1) ⦃ _ => True ⦄ := by
-  progress*?
+  step*?
 
 /--
 info: Try this:
 
   [apply]     spec_split
-    · simp only [progress_simps]
-    · simp only [progress_simps]
+    · simp only [step_simps]
+    · simp only [step_simps]
     · rename_i a b _ _
-      simp only [progress_simps]
+      simp only [step_simps]
 -/
 #guard_msgs in
 example (l : List Nat) :
   (match l with
    | [] | [_] => .ok 0
    | a :: b :: _ => .ok (a + b)) ⦃ _ => True ⦄ := by
-  progress*?
+  step*?
 
 /--
 info: Try this:
 
-  [apply]     simp only [progress_simps]
-    let* ⟨ ⟩ ← core.num.U32.overflowing_add_eq.progress_spec
+  [apply]     simp only [step_simps]
+    let* ⟨ ⟩ ← core.num.U32.overflowing_add_eq.step_spec
 -/
 #guard_msgs in
 example (x y : U32) :
   (lift (core.num.U32.overflowing_add x y)) ⦃ (_, _) => True ⦄ := by
-  progress*?
+  step*?
 
 /--
 error: unsolved goals
@@ -1119,8 +1119,8 @@ _✝ : if ↑x + ↑y > UScalar.max UScalarTy.U32 then ↑x✝¹ + U32.size = �
 #guard_msgs in
 example (x y : U32) :
   (lift (core.num.U32.overflowing_add x y)) ⦃ (_, _) => False ⦄ := by
-  simp only [progress_simps]
-  progress*
+  simp only [step_simps]
+  step*
 
 /--
 error: unsolved goals
@@ -1150,7 +1150,7 @@ example {α : Type}
     let () ← f x
     pure ()
     ) ⦃ _ => True ⦄ := by
-    progress*
+    step*
 
 /--
 error: unsolved goals
@@ -1169,7 +1169,7 @@ example
     let (x, _) ← f
     pure x
     ) ⦃ _ => False ⦄ := by
-    progress*
+    step*
 
 /-- Test with functions outputting nothing -/
 example (x : U32) (h : x.val < 32) :
@@ -1177,7 +1177,7 @@ example (x : U32) (h : x.val < 32) :
     massert (x < 32#u32)
     massert (x < 32#u32)
     massert (x < 32#u32)) ⦃ _ => True ⦄ := by
-  progress*
+  step*
 
 end Examples
 

@@ -107,17 +107,17 @@ open MyCrate
 -- Suppose the generated code contains:
 --   def add_overflow (a : U32) (b : U32) : Result U32 := a + b
 
-@[progress]
+@[step]
 theorem add_overflow_spec (a b : U32) (h : a.val + b.val ≤ U32.max) :
   add_overflow a b ⦃ c => c.val = a.val + b.val ⦄ := by
   unfold add_overflow
-  progress
+  step
 ```
 
 Key elements:
 - **`import Aeneas`** — brings in all Aeneas tactics and primitives
 - **`#setup_aeneas_simps`** — configures simp lemmas for Aeneas patterns
-- **`@[progress]`** — registers the theorem for the `progress` tactic
+- **`@[step]`** — registers the theorem for the `step` tactic
 - **`⦃ c => ... ⦄`** — weakest-precondition notation: "if it succeeds, the result `c` satisfies..."
 
 ## Step 5: Develop the Proof Incrementally
@@ -142,7 +142,7 @@ errors
 → {"command":"errors","status":"ok","diagnostics":[],"count":0}
 ```
 
-If the proof had `sorry` instead of `progress`:
+If the proof had `sorry` instead of `step`:
 
 ```
 sorry
@@ -154,7 +154,7 @@ goal 14
 edit 14 unfold add_overflow
 → {"command":"edit","status":"ok",...}
 
-insert 14   progress
+insert 14   step
 → {"command":"insert","status":"ok","ready":true,"errors":[],...}
 
 errors
@@ -177,5 +177,5 @@ cd proofs && lake build
 - [ ] `lean-toolchain` matches Aeneas backend
 - [ ] `lakefile.lean` has `require aeneas from ...`
 - [ ] `lake build` succeeds (generated code compiles)
-- [ ] First `@[progress]` theorem type-checks
+- [ ] First `@[step]` theorem type-checks
 - [ ] `lean_lsp.py --repl --json` can open and query files

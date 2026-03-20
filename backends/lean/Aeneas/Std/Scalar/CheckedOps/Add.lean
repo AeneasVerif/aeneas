@@ -39,7 +39,7 @@ theorem core.num.checked_add_UScalar_bv_spec {ty} (x y : UScalar ty) :
   (have : 0 < 2^ty.numBits := by simp) <;>
   omega
 
-uscalar @[progress_pure «%S».checked_add x y]
+uscalar @[step_pure «%S».checked_add x y]
 theorem «%S».checked_add_bv_spec (x y : «%S») :
   match «%S».checked_add x y with
   | some z => x.val + y.val ≤ «%S».max ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
@@ -61,7 +61,7 @@ theorem core.num.checked_add_IScalar_bv_spec {ty} (x y : IScalar ty) :
   cases hEq : IScalar.add x y <;> simp_all [Option.ofResult, checked_add_IScalar, IScalar.min, IScalar.max] <;>
   omega
 
-iscalar @[progress_pure «%S».checked_add x y]
+iscalar @[step_pure «%S».checked_add x y]
 theorem «%S».checked_add_bv_spec (x y : «%S») :
   match core.num.checked_add_IScalar x y with
   | some z => «%S».min ≤ x.val + y.val ∧ x.val + y.val ≤ «%S».max ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
