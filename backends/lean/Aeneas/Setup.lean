@@ -1,3 +1,4 @@
+import Aeneas.Std.Slice
 import Aeneas.Vector
 
 namespace Aeneas
@@ -31,6 +32,7 @@ elab "#setup_aeneas_simps" : command => do
       attribute [local simp]
           _root_.List.Inhabited_getElem_eq_getElem!
           _root_.Array.Inhabited_getElem_eq_getElem!
+          _root_.Aeneas.Std.Slice.Inhabited_getElem_eq_getElem!
           _root_.Vector.Inhabited_getElem_eq_getElem!
           _root_.Array.set_eq_set!
           _root_.Vector.set_eq_set!)
