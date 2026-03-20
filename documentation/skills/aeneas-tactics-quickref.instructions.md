@@ -176,5 +176,16 @@ set_option trace.progress true        -- trace progress decisions
 set_option trace.scalar_tac true      -- trace scalar_tac
 set_option trace.Aeneas.progress true -- detailed progress
 set_option maxHeartbeats 5000000      -- increase timeout (last resort)
-set_option maxRecDepth 2048           -- increase recursion depth
+-- ⛔ NEVER set_option maxRecDepth — see below
 ```
+
+### ⛔ NEVER increase `maxRecDepth`
+
+If you hit a `maxRecDepth` error, **do NOT increase it**. This is a symptom, not a problem to work around:
+- **Poorly written proof**: The proof structure causes unbounded unfolding. Refactor the proof.
+- **Tactic bug (simp loop)**: For tactics that internally use `simp` (e.g., `agrind`, `grind`, `scalar_tac`, `simp_scalar`), check whether hypotheses in the goal trigger a simp loop. If so, `clear` the offending hypothesis or use `simp only [...]` to control rewriting. This is a known pitfall, not a bug to report.
+- **Tactic bug (other)**: If the recursion depth issue is not caused by a simp loop, **report it to the user** — it may indicate a bug in the tactic implementation.
+
+### Report misbehaving tactics
+
+If a tactic doesn't do what it should — for example, `progress` fails to make progress on a goal even though the appropriate `@[progress]` lemma is available, or `scalar_tac` can't close a pure arithmetic goal it should handle — **report this to the user**. It may indicate a tactic bug or a missing feature that should be fixed upstream.
