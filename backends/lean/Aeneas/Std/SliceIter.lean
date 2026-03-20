@@ -69,13 +69,14 @@ def core.slice.iter.IteratorSliceIter.next
   "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::step_by"]
 def core.slice.iter.IteratorSliceIter.step_by {T} (slice : core.slice.iter.Iter T) (steps : Usize) :
   Result (core.iter.adapters.step_by.StepBy (core.slice.iter.Iter T)) :=
-  ok (⟨ slice, steps ⟩)
+  if steps.val = 0 then .fail .panic
+  else ok (⟨ slice, steps ⟩)
 
 @[rust_fun
   "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::enumerate"]
 def core.slice.iter.IteratorSliceIter.enumerate {T} (slice : core.slice.iter.Iter T) :
   Result (core.iter.adapters.enumerate.Enumerate (core.slice.iter.Iter T)) :=
-  sorry
+  .ok { iter := slice, count := 0#usize }
 
 @[rust_fun
   "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::take"]
@@ -111,13 +112,14 @@ def core.slice.iter.IteratorChunksExact.next
 def core.slice.iter.IteratorChunksExact.step_by
   {T : Type} (self : slice.iter.ChunksExact T) (steps : Usize) :
   Result (core.iter.adapters.step_by.StepBy (slice.iter.ChunksExact T)) :=
-  ok (⟨ self, steps ⟩)
+  if steps.val = 0 then .fail .panic
+  else ok (⟨ self, steps ⟩)
 
 @[rust_fun
   "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::ChunksExact<'a, @T>, &'a [@T]>}::enumerate"]
 def core.slice.iter.IteratorChunksExact.enumerate {T : Type} (self : core.slice.iter.ChunksExact T) :
   Result (core.iter.adapters.enumerate.Enumerate (core.slice.iter.ChunksExact T)) :=
-  sorry
+  .ok { iter := self, count := 0#usize }
 
 @[rust_fun
   "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::ChunksExact<'a, @T>, &'a [@T]>}::take"]
