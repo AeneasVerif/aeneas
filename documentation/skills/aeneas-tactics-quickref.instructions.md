@@ -170,15 +170,74 @@ theorem MY_CONST_val : MY_CONST.val = 42 := by decide
 | Wrong progress spec | Unexpected behavior | `progress with specific_thm` |
 | `simp only` loop | `maxRecDepth` error inside `simp` | Split into multiple `simp only` calls with shorter lemma lists, or use `rw` instead |
 
-## Debugging Commands
+## Debugging and Profiling Commands
 
 ```lean
 set_option trace.progress true        -- trace progress decisions
 set_option trace.scalar_tac true      -- trace scalar_tac
 set_option trace.Aeneas.progress true -- detailed progress
-set_option maxHeartbeats 5000000      -- increase timeout (last resort)
+-- ⚠️ maxHeartbeats: see guidelines below
 -- ⛔ NEVER set_option maxRecDepth — see below
 ```
+
+### Profiling proof time
+
+Use these options to identify slow tactics:
+
+```lean
+-- Per-tactic timing breakdown (recommended — shows each tactic's time)
+set_option trace.profiler true in
+set_option trace.profiler.threshold 10 in  -- report tactics > 10ms (default: 100ms)
+
+-- Overall proof timing (coarser, shows elaboration phases)
+set_option profiler true in
+set_option profiler.threshold 10 in
+```
+
+Use `trace.profiler` to find which tactic dominates the time, then optimize or replace it.
+
+### ⚠️ `maxHeartbeats` guidelines
+
+Lean's default `maxHeartbeats` (200K) is very low for Aeneas proofs. **Increase it to
+1M as a baseline** (`set_option maxHeartbeats 1000000`) — this is a reasonable default
+for most proofs.
+
+Well-structured proofs should stay **under 8M heartbeats** even for the biggest proofs.
+If you need to increase beyond that, it signals a problem with the proof — don't just
+bump the number, fix the root cause:
+
+1. **Decompose the function** — use fold theorems to split a large function into
+   smaller helpers (see "Function Decomposition" in the crypto verification skill file).
+   Smaller functions → smaller proof contexts → faster elaboration.
+2. **Minimize the context** — `clear` unused hypotheses before expensive tactics.
+   Large contexts make `simp`, `agrind`, and `grind` slower.
+3. **Use `progress*?` instead of `progress*`** — the expanded script gives you
+   control over each step and avoids the combinatorial blowup of repeated automation.
+4. **Avoid `grind` when `agrind` suffices** — `grind` is much more expensive.
+5. **Extract complex sub-goals as auxiliary lemmas** — a separate lemma gets a fresh,
+   minimal context, which is faster for tactics to process.
+6. **Check for tactic inefficiency** — if a single tactic call dominates the heartbeat
+   budget, consider whether a different tactic would be faster (e.g., `bv_tac` instead
+   of `agrind` for bitwise goals, `scalar_tac` instead of `agrind` for pure arithmetic).
+
+### ⏱️ Wall-clock time target: < 30s — THIS IS IMPORTANT
+
+**Keeping proof times low is critical for productivity.** Fast proofs mean fast iteration
+— you can try tactics, see results, and adjust quickly. Slow proofs kill this feedback
+loop and make proof development painful.
+
+**Aim for < 30 seconds wall-clock time** even for the biggest proofs (functions of 50+
+lines). If a proof takes longer, it's a sign that the proof is ill-structured or uses
+tactics inefficiently. Use `set_option trace.profiler true in` to identify the bottleneck,
+then apply the strategies above (decompose, extract lemmas, minimize context, pick
+better tactics).
+
+**Keeping Lean reactive is even more important.** When developing a proof interactively,
+adding a tactic at the end should take **< 0.5s** — this is what enables rapid iteration.
+If incremental edits are slow (several seconds), the proof structure is forcing
+re-elaboration of large chunks. See the lean-lsp-tool skill file for guidance
+(avoid `by ...` blocks inside `apply`/`exact`/`refine` arguments, use `have` to create
+elaboration checkpoints).
 
 ### ⛔ NEVER increase `maxRecDepth`
 

@@ -149,7 +149,7 @@ fun_name a b ⦃ (x : U32) (s : Slice U16) =>
    - Start with `progress*?` to generate the step-by-step script
    - Work through the generated script, fixing any sub-goals that fail
    - Once the whole proof is done, try collapsing back into `progress*` if possible
-   - You can increase `set_option maxHeartbeats` if needed (it's fine to do so)
+   - If heartbeats are tight, decompose the function (fold theorems) or extract sub-goals as auxiliary lemmas — aim for < 8M heartbeats even for large proofs; increase the default to 1M as a baseline (see "Debugging Commands" in the tactics quickref)
 
 ### The progress*? → fix → collapse workflow:
 1. `progress*?` — generates expanded proof script (one `progress` per monadic call)
@@ -393,8 +393,6 @@ theorem main.spec ... := by
   progress*
 ```
 
-### Structuring non-linear arithmetic proofs
-
 ### Avoid early case splits on parameters in progress proofs
 In cryptographic code, functions are often parameterized by a parameter set (e.g.,
 `p : Spec.Frodo.parameterSet` in FrodoKEM) from which lengths, dimensions, and bounds
@@ -428,6 +426,20 @@ Instead:
   This is especially effective because `agrind` is the default tactic used by `progress`
   to discharge preconditions — giving it the right definitions lets it handle parameter-
   dependent bounds without any manual case splits.
+
+  **Practical tips for `attribute [local agrind]`:**
+  - You may need to give **multiple definitions** (not just the top-level parameter
+    accessor, but also definitions it depends on). Figuring out which ones is tricky.
+  - **Isolate in a temporary `example`**: Copy the proof obligation into a standalone
+    `example` with a minimal context, then experiment with `attribute [local agrind]`
+    on different definitions until the `example` goes through. Once you find the right
+    set, go back to the main proof.
+  - **⚠️ Monitor proof time carefully.** Adding definitions to `agrind`/`grind` can
+    cause proof time to explode. Remember that `progress*` calls `agrind` on **every
+    precondition** it encounters — so marking a definition as `[local agrind]` affects
+    every `progress` step in the proof, not just the one you're targeting. After each
+    addition, check that `progress*` doesn't become significantly slower. If it does,
+    back off and use auxiliary lemmas or local case splits instead.
 
 - **Write auxiliary lemmas** for arithmetic facts that depend on the parameter:
   ```lean
@@ -512,6 +524,9 @@ calc (x + 1) * (x + 1)
     unfolding), **report it to the user** — it may indicate a structural proof problem
     or a tactic bug.
 12. **Report misbehaving tactics.** If a tactic doesn't do what it should — for example, `progress` fails to make progress even though the appropriate `@[progress]` lemma exists, or `scalar_tac` can't close a pure arithmetic goal it should handle — **report this to the user**. It may indicate a bug or missing feature worth fixing upstream.
+13. **Keep `maxHeartbeats` reasonable (< 8M).** Lean's default (200K) is too low for Aeneas proofs — increase to 1M as a baseline. But if a proof needs more than ~8M heartbeats, the proof is ill-structured or uses tactics inefficiently. Don't just bump the number — instead: decompose the function with fold theorems, extract sub-goals as auxiliary lemmas, minimize the context with `clear`, prefer `agrind` over `grind`, or use `progress*?` instead of `progress*` for finer control.
+14. **⚠️ Keep proof wall-clock time < 30s — this is important.** Fast proofs enable fast iteration. Even the biggest proofs (for functions of 50+ lines) should elaborate in under 30 seconds. Use `set_option trace.profiler true in` to identify bottleneck tactics. If the proof is slow, decompose it — see the tactics quickref for strategies.
+15. **⚠️ Keeping Lean reactive is critical (< 0.5s per tactic).** Adding a tactic at the end of a proof should take < 0.5s (everything above is cached). If it takes several seconds, big chunks are being re-elaborated. Common cause: `by ...` blocks inside `apply`/`exact`/`refine` arguments (e.g., `apply lemma (by scalar_tac) (by agrind)`) — all `by` blocks re-elaborate together. Fix: extract them into `have` statements. See the "Diagnosing Slow Incremental Replay" section in the lean-lsp-tool skill file.
 
 ## Attribute Management
 
