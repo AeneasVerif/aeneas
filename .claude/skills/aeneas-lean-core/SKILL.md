@@ -1,1 +1,1 @@
-../../../documentation/skills/aeneas-lean-core.md
+../../../documentation/skills/aeneas-lean-core.instructions.md

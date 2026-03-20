@@ -1,1 +1,1 @@
-../../../documentation/skills/aeneas-crypto-verification.md
+../../../documentation/skills/aeneas-crypto-verification.instructions.md

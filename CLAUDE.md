@@ -22,7 +22,7 @@ When working on Lean proofs, **always** start a `lean_lsp.py` REPL session for i
 python3 scripts/lean_lsp.py --repl --json
 ```
 
-See `documentation/skills/lean-lsp-tool.md` for full usage.
+See `documentation/skills/lean-lsp-tool.instructions.md` for full usage.
 
 ## Conventions
 

@@ -1,1 +1,1 @@
-../../../documentation/skills/aeneas-tactics-quickref.md
+../../../documentation/skills/aeneas-tactics-quickref.instructions.md
