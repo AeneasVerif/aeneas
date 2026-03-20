@@ -11,7 +11,7 @@ open Result Error Arith
 /-!
 # Negation: Definitions
 -/
-@[progress_pure_def]
+@[step_pure_def]
 def IScalar.neg {ty : IScalarTy} (x : IScalar ty) : Result (IScalar ty) := IScalar.tryMk ty (- x.val)
 
 /--

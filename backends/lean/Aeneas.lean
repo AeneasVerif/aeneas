@@ -13,7 +13,7 @@ import Aeneas.Let
 import Aeneas.List
 import Aeneas.Nat
 import Aeneas.Natify
-import Aeneas.Progress
+import Aeneas.Step
 import Aeneas.Range
 import Aeneas.ReduceFin
 import Aeneas.ReduceNat

@@ -150,11 +150,11 @@ theorem IScalar.mul_spec {ty} {x y : IScalar ty}
   apply @mul_bv_spec ty x y (by scalar_tac) (by scalar_tac)
   grind
 
-uscalar @[progress] theorem «%S».mul_spec {x y : «%S»} (hmax : x.val * y.val ≤ «%S».max) :
+uscalar @[step] theorem «%S».mul_spec {x y : «%S»} (hmax : x.val * y.val ≤ «%S».max) :
   x * y ⦃ z => (↑z : Nat) = ↑x * ↑y ⦄ :=
   UScalar.mul_spec (by scalar_tac)
 
-iscalar @[progress] theorem «%S».mul_spec {x y : «%S»}
+iscalar @[step] theorem «%S».mul_spec {x y : «%S»}
   (hmin : «%S».min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ «%S».max) :
   (x * y) ⦃ z => (↑z : Int) = ↑x * ↑y ⦄ :=
   IScalar.mul_spec (by scalar_tac) (by scalar_tac)

@@ -19,8 +19,8 @@ open Aeneas Std Result
 #setup_aeneas_simps
 
 -- Simpler cast spec when values fit in target type
-attribute [-progress] UScalar.cast.progress_spec
-attribute [local progress] UScalar.cast_inBounds_spec
+attribute [-step] UScalar.cast.step_spec
+attribute [local step] UScalar.cast_inBounds_spec
 
 -- Register crypto constants for all tactics
 @[simp, scalar_tac_simps, bvify_simps, agrind =]
@@ -45,7 +45,7 @@ NIST spec ⟷₁ Lean spec ⟷₂ Auxiliary spec ⟷₃ Aeneas code
 
 - Prove each `⟷` separately — each gap is small
 - Name convention: `spec_aux` for code↔aux, `spec` for full specification
-- Use `progress_spec_aux` for code↔auxiliary spec properties, `progress_spec` for full spec with invariants
+- Use `step_spec_aux` for code↔auxiliary spec properties, `step_spec` for full spec with invariants
 
 ### Template:
 
@@ -82,13 +82,13 @@ private theorem fold_helper_name (a : U32) (b : Slice U16) (f : U32 → Result �
   := by simp only [helper_name, bind_assoc_eq, bind_tc_ok, pure]
 
 -- 3. Helper spec
-@[local progress]
+@[local step]
 theorem helper_name_spec (a : U32) (b : Slice U16) (hpre : a.val < b.length) :
   helper_name a b ⦃ r => postcondition r ⦄ := by ...
 
 -- 4. In main proof:
 --    simp only [fold_helper_name, fold_other_helper]
---    progress*  -- now uses helper specs
+--    step*  -- now uses helper specs
 ```
 
 ## Modular Arithmetic Decision Tree
@@ -177,7 +177,7 @@ theorem to_poly_getElem! (arr : Array U32 256) (i : Nat) :
 ## Crypto Proof Spec Template
 
 ```lean
-@[local progress]  -- or @[progress] if used globally
+@[local step]  -- or @[step] if used globally
 theorem crypto_operation_spec
   (input : U32)
   (h_bounds : input.val ≤ INPUT_BOUND)
@@ -190,7 +190,7 @@ theorem crypto_operation_spec
   := by
   unfold crypto_operation
   -- Apply monadic step specs
-  progress* <;> bv_tac 32   -- or handle manually
+  step* <;> bv_tac 32   -- or handle manually
   -- Split bounds vs modular goals
   split_conjs
   · -- Bounds: stay in Nat/Int
@@ -208,7 +208,7 @@ theorem crypto_operation_spec
 4. ☐ Register constants for all tactics (`@[simp, scalar_tac_simps, bvify_simps, agrind =]`)
 5. ☐ Monitor proof times — decompose if slow
 6. ☐ Shorten proofs after completion
-7. ☐ Use `progress*?` to find automation opportunities
+7. ☐ Use `step*?` to find automation opportunities
 
 ## Anti-Patterns to Avoid
 

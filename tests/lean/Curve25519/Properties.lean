@@ -14,22 +14,22 @@ def Scalar52.wideAsNat (limbs : Array U128 9#usize) : Nat :=
 
 attribute [-simp] Int.reducePow Nat.reducePow
 
-@[progress]
+@[step]
 theorem m_spec (x y : U64) :
     m x y ⦃ result => result.val = x.val * y.val ⦄ := by
   unfold m
-  progress*
+  step*
 
 set_option maxHeartbeats 1000000 in
 set_option exponentiation.threshold 500 in
-@[progress]
+@[step]
 theorem mul_internal_spec (a b : Array U64 5#usize)
     (ha : ∀ i < 5, a[i]!.val < 2 ^ 62) (hb : ∀ i < 5, b[i]!.val < 2 ^ 62) :
     mul_internal a b ⦃ result =>
       Scalar52.wideAsNat result = Scalar52.asNat a * Scalar52.asNat b ⦄ := by
   unfold mul_internal
   simp [Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index]
-  progress*
+  step*
   -- Post-condition
   simp [*, Scalar52.wideAsNat, Scalar52.asNat, Finset.sum_range_succ]
   ring_nf

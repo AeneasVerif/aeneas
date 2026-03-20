@@ -18,7 +18,7 @@
 
 ## Specification Terms
 
-**Progress theorem** — A theorem tagged with `@[progress]` that specifies the behavior of a function. The `progress` tactic searches these to step through monadic code.
+**Progress theorem** — A theorem tagged with `@[step]` that specifies the behavior of a function. The `step` tactic searches these to step through monadic code.
 
 **Auxiliary spec** — An intermediate specification that mirrors the code structure but is pure (no Result monad). Used as a bridge between a high-level mathematical spec and the Aeneas-generated code. Also called "intermediate spec."
 
@@ -30,11 +30,11 @@
 
 ## Tactic Terms
 
-**`progress`** — Core Aeneas tactic. Applies a function specification to step through one monadic bind (`let x ← f args`). Searches `@[progress]`-tagged theorems.
+**`step`** — Core Aeneas tactic. Applies a function specification to step through one monadic bind (`let x ← f args`). Searches `@[step]`-tagged theorems.
 
-**`progress*`** — Repeatedly applies `progress` with automatic case splitting until it gets stuck.
+**`step*`** — Repeatedly applies `step` with automatic case splitting until it gets stuck.
 
-**`progress*?`** — Like `progress*` but generates an explicit proof script that can be copied, reviewed, and optimized.
+**`step*?`** — Like `step*` but generates an explicit proof script that can be copied, reviewed, and optimized.
 
 **`scalar_tac`** — Arithmetic reasoning tactic for Rust integer types. Handles bounds checking, overflow, and integer arithmetic. Supports `+nonLin` for nonlinear reasoning.
 
@@ -66,7 +66,7 @@
 
 **Function decomposition** — Breaking a large generated function into smaller helper definitions with fold theorems, proving specs for each piece independently.
 
-**The `progress*?` → automate → refold workflow** — Use `progress*?` to generate a full script, register automation lemmas, then progressively compact the script back into `progress*` + finishing tactics.
+**The `step*?` → automate → refold workflow** — Use `step*?` to generate a full script, register automation lemmas, then progressively compact the script back into `step*` + finishing tactics.
 
 ## Project Structure
 

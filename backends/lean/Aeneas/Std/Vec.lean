@@ -5,7 +5,7 @@ import Init.Data.List.Basic
 import Aeneas.Std.Scalar
 import Aeneas.Std.Slice
 import Aeneas.ScalarTac
-import Aeneas.Progress.Init
+import Aeneas.Step.Init
 
 namespace Aeneas
 
@@ -109,7 +109,7 @@ def Vec.push {α : Type u} (v : Vec α) (x : α) : Result (Vec α)
   else
     fail maximumSizeExceeded
 
-@[progress]
+@[step]
 theorem Vec.push_spec {α : Type u} (v : Vec α) (x : α) (h : v.val.length < Usize.max) :
   v.push x ⦃ v1 =>
   v1.val = v.val ++ [x] ⦄ := by
@@ -122,7 +122,7 @@ def Vec.insert {α : Type u} (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
   else
     fail arrayOutOfBounds
 
-@[progress]
+@[step]
 theorem Vec.insert_spec {α : Type u} (v: Vec α) (i: Usize) (x: α)
   (hbound : i.val < v.length) :
   v.insert i x ⦃ nv => nv.val = v.val.set i x ⦄ := by
@@ -133,7 +133,7 @@ def Vec.index_usize {α : Type u} (v: Vec α) (i: Usize) : Result α :=
   | none => fail .arrayOutOfBounds
   | some x => ok x
 
-@[progress]
+@[step]
 theorem Vec.index_usize_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize)
   (hbound : i.val < v.length) :
   v.index_usize i ⦃ x => x = v.val[i.val]! ⦄ := by
@@ -147,7 +147,7 @@ def Vec.update {α : Type u} (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
   | some _ =>
     ok ⟨ v.val.set i x, by have := v.property; simp [*] ⟩
 
-@[progress]
+@[step]
 theorem Vec.update_spec {α : Type u} (v: Vec α) (i: Usize) (x : α)
   (hbound : i.val < v.length) :
   v.update i x ⦃ nv => nv = v.set i x ⦄ := by
@@ -167,7 +167,7 @@ def Vec.index_mut_usize {α : Type u} (v: Vec α) (i: Usize) :
   | fail e => fail e
   | div => div
 
-@[progress]
+@[step]
 theorem Vec.index_mut_usize_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize)
   (hbound : i.val < v.length) :
   v.index_mut_usize i ⦃ x y => x = v.val[i.val]! ∧ y = v.set i ⦄ := by
@@ -205,14 +205,14 @@ def Vec.IndexMut {T I Output : Type}
   index_mut := Vec.index_mut inst
 }
 
-@[simp, progress_simps]
+@[simp, step_simps]
 theorem Vec.index_slice_index {α : Type} (v : Vec α) (i : Usize) :
   Vec.index (core.slice.index.SliceIndexUsizeSlice α) v i =
   Vec.index_usize v i := by
   simp [Vec.index, Vec.index_usize, Slice.index_usize]
   rfl
 
-@[simp, progress_simps]
+@[simp, step_simps]
 theorem Vec.index_mut_slice_index {α : Type} (v : Vec α) (i : Usize) :
   Vec.index_mut (core.slice.index.SliceIndexUsizeSlice α) v i =
   index_mut_usize v i := by
@@ -221,7 +221,7 @@ theorem Vec.index_mut_slice_index {α : Type} (v : Vec α) (i : Usize) :
 
 -- Vec index/index_mut with RangeTo
 
-@[progress]
+@[step]
 theorem Vec.index_RangeTo_spec {α : Type} (v : Vec α) (r : core.ops.range.RangeTo Usize)
     (h : r.end ≤ v.length) :
     Vec.index (core.slice.index.SliceIndexRangeToUsizeSlice α) v r
@@ -229,10 +229,10 @@ theorem Vec.index_RangeTo_spec {α : Type} (v : Vec α) (r : core.ops.range.Rang
       s1.val = v.val.slice 0 r.end ∧
       s1.length = r.end ⦄ := by
   simp only [Vec.index]
-  have := core.slice.index.SliceIndexRangeToUsizeSlice.index.progress_spec r v h
+  have := core.slice.index.SliceIndexRangeToUsizeSlice.index.step_spec r v h
   exact this
 
-@[progress]
+@[step]
 theorem Vec.index_mut_RangeTo_spec {α : Type} (v : Vec α) (r : core.ops.range.RangeTo Usize)
     (h : r.end ≤ v.length) :
     Vec.index_mut (core.slice.index.SliceIndexRangeToUsizeSlice α) v r
@@ -241,12 +241,12 @@ theorem Vec.index_mut_RangeTo_spec {α : Type} (v : Vec α) (r : core.ops.range.
       s1.length = r.«end» ∧
       ∀ s', (back s').val = v.val.setSlice! 0 s'.val ⦄ := by
   simp only [Vec.index_mut]
-  have := core.slice.index.SliceIndexRangeToUsizeSlice.index_mut.progress_spec r v h
+  have := core.slice.index.SliceIndexRangeToUsizeSlice.index_mut.step_spec r v h
   exact this
 
 -- Vec index/index_mut with RangeFrom
 
-@[progress]
+@[step]
 theorem Vec.index_RangeFrom_spec {α : Type} (v : Vec α) (r : core.ops.range.RangeFrom Usize)
     (h : r.start ≤ v.length) :
     Vec.index (core.slice.index.SliceIndexRangeFromUsizeSlice α) v r
@@ -254,10 +254,10 @@ theorem Vec.index_RangeFrom_spec {α : Type} (v : Vec α) (r : core.ops.range.Ra
       s1.val = v.val.drop r.start ∧
       s1.length = v.length - r.start.val ⦄ := by
   simp only [Vec.index]
-  have := core.slice.index.SliceIndexRangeFromUsizeSlice.index.progress_spec r v h
+  have := core.slice.index.SliceIndexRangeFromUsizeSlice.index.step_spec r v h
   exact this
 
-@[progress]
+@[step]
 theorem Vec.index_mut_RangeFrom_spec {α : Type} (v : Vec α) (r : core.ops.range.RangeFrom Usize)
     (h : r.start ≤ v.length) :
     Vec.index_mut (core.slice.index.SliceIndexRangeFromUsizeSlice α) v r
@@ -266,12 +266,12 @@ theorem Vec.index_mut_RangeFrom_spec {α : Type} (v : Vec α) (r : core.ops.rang
       s1.length = v.length - r.start.val ∧
       ∀ s', (back s').val = v.val.setSlice! r.start.val s'.val ⦄ := by
   simp only [Vec.index_mut]
-  have := core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut.progress_spec r v h
+  have := core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut.step_spec r v h
   exact this
 
 -- Vec index/index_mut with Range
 
-@[progress]
+@[step]
 theorem Vec.index_Range_spec {α : Type} (v : Vec α) (r : core.ops.range.Range Usize)
     (h0 : r.start ≤ r.end) (h1 : r.end ≤ v.length) :
     Vec.index (core.slice.index.SliceIndexRangeUsizeSlice α) v r
@@ -279,10 +279,10 @@ theorem Vec.index_Range_spec {α : Type} (v : Vec α) (r : core.ops.range.Range 
       s1.val = v.val.slice r.start r.end ∧
       s1.length = r.end - r.start ⦄ := by
   simp only [Vec.index]
-  have := core.slice.index.SliceIndexRangeUsizeSlice.index.progress_spec r v h0 h1
+  have := core.slice.index.SliceIndexRangeUsizeSlice.index.step_spec r v h0 h1
   exact this
 
-@[progress]
+@[step]
 theorem Vec.index_mut_Range_spec {α : Type} (v : Vec α) (r : core.ops.range.Range Usize)
     (h0 : r.start ≤ r.end) (h1 : r.end ≤ v.length) :
     Vec.index_mut (core.slice.index.SliceIndexRangeUsizeSlice α) v r
@@ -291,7 +291,7 @@ theorem Vec.index_mut_Range_spec {α : Type} (v : Vec α) (r : core.ops.range.Ra
       s1.length = r.end - r.start ∧
       ∀ s2, back s2 = Slice.setSlice! v r.start.val s2 ⦄ := by
   simp only [Vec.index_mut]
-  have := core.slice.index.SliceIndexRangeUsizeSlice.index_mut.progress_spec r v h0 h1
+  have := core.slice.index.SliceIndexRangeUsizeSlice.index_mut.step_spec r v h0 h1
   exact this
 
 end alloc.vec
@@ -301,7 +301,7 @@ def alloc.slice.Slice.to_vec
   {T : Type} (cloneInst : core.clone.Clone T) (s : Slice T) : Result (alloc.vec.Vec T) := do
   Slice.clone cloneInst.clone s
 
-@[progress]
+@[step]
 theorem alloc.slice.Slice.to_vec_spec {T : Type} (cloneInst : core.clone.Clone T) (s : Slice T)
   (h : ∀ x ∈ s.val, cloneInst.clone x = ok x) :
   alloc.slice.Slice.to_vec cloneInst s ⦃ s' => s = s'⦄ := by
@@ -319,7 +319,7 @@ def alloc.vec.from_elem
   let l ← List.clone cloneInst.clone (List.replicate n.val x)
   ok ⟨ l.val, by have := l.property; scalar_tac ⟩
 
-@[progress]
+@[step]
 theorem alloc.vec.from_elem_spec {T : Type} (cloneInst : core.clone.Clone T)
   (x : T) (n : Usize) (h : cloneInst.clone x = ok x) :
   alloc.vec.from_elem cloneInst x n ⦃ v =>
@@ -375,7 +375,7 @@ def alloc.vec.Vec.resize {T : Type} (cloneInst : core.clone.Clone T)
     let value ← cloneInst.clone value
     ok ⟨ v.val.resize new_len value, by scalar_tac ⟩
 
-@[progress]
+@[step]
 theorem alloc.vec.Vec.resize_spec {T} (cloneInst : core.clone.Clone T)
   (v : alloc.vec.Vec T) (new_len : Usize) (value : T)
   (hClone : cloneInst.clone value = ok value) :
@@ -409,7 +409,7 @@ def core.convert.FromVecArray (T : Type) (N : Std.Usize) : core.convert.From
 @[rust_fun "alloc::vec::{core::convert::From<Box<[@T]>, alloc::vec::Vec<@T>>}::from" (keepParams := [true,false])]
 def alloc.vec.FromBoxSliceVec.from {T : Type} (v : alloc.vec.Vec T) : Result (Slice T) := ok v
 
-@[progress]
+@[step]
 theorem alloc.vec.FromBoxSliceVec.from_spec {T : Type} (v : alloc.vec.Vec T) :
   alloc.vec.FromBoxSliceVec.from v ⦃ s => s.length = v.length ∧ s.val = v.val⦄ := by
   simp [alloc.vec.FromBoxSliceVec.from]

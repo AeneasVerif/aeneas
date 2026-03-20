@@ -99,7 +99,7 @@ structure FunInfo where
   keepTraitClauses : Option (List Bool) := none
   canFail : Bool := true
   /-- If the function can not fail, should we still lift it to the [Result]
-      monad? This can make reasonings easier, as we can then use [progress]
+      monad? This can make reasonings easier, as we can then use [step]
       to do proofs in a Hoare-Logic style, rather than equational reasonings. -/
   lift : Bool := true
   /-- If this is a trait method: does this method have a default

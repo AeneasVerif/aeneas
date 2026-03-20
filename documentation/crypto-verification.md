@@ -56,8 +56,8 @@ Prove equivalences between adjacent levels separately. Each proof is simpler bec
 The proof is structured as:
 - `compress_coeff.spec_aux` — low-level correctness (code → aux spec)
 - `compress_coeff.spec` — full specification (code → Lean spec), using the aux result
-- `encode_coefficient.progress_spec_aux` — encoding correctness with auxiliary spec
-- `encode_coefficient.progress_spec` — full encoding specification with invariants
+- `encode_coefficient.step_spec_aux` — encoding correctness with auxiliary spec
+- `encode_coefficient.step_spec` — full encoding specification with invariants
 
 ### CompressEncode: A Model for Proof Structure
 
@@ -114,7 +114,7 @@ private theorem fold_reduce_add_mont_reduce (a : U32) (f : U32 → Result α) :
 
 Step 3 — Prove specs for the helper:
 ```lean
-@[local progress]
+@[local step]
 theorem reduce_add_mont_reduce_spec (a : U32) (h1 : a.val ≤ reduceAddInputBound) :
   reduce_add_mont_reduce a ⦃ a1 =>
     a1.val ≤ reduceAddStepBound ∧
@@ -215,14 +215,14 @@ cases h_idx <;> simp_lists [*]
 
 ### Specification theorem with bounds and modular equivalence
 ```lean
-@[local progress]
+@[local step]
 theorem reduce_add_mont_reduce_spec (a : U32) (h1 : a.val ≤ reduceAddInputBound) :
   reduce_add_mont_reduce a ⦃ a1 =>
     a1.val ≤ reduceAddStepBound ∧
     (a1.val : Spec.Zq) = (a.val : Spec.Zq) * 169 ⦄ := by
   unfold reduce_add_mont_reduce
-  -- Apply progress for each monadic step, naming results
-  let* ⟨ amul, amul_post ⟩ ← core.num.U32.wrapping_mul.progress_spec
+  -- Apply step for each monadic step, naming results
+  let* ⟨ amul, amul_post ⟩ ← core.num.U32.wrapping_mul.step_spec
   let* ⟨ inv, inv_post_1, inv_post_2 ⟩ ← UScalar.and_spec
   let* ⟨ invq, invq_post_1, invq_post_2 ⟩ ← U32.mul_bv_spec
   let* ⟨ ainvq, ainvq_post_1, ainvq_post_2 ⟩ ← U32.add_bv_spec
@@ -250,7 +250,7 @@ theorem compress_coeff.spec (d coeff : U32) (hd : d.val ≤ 12) (hc: coeff.val <
     (coeff'.val : ZMod (Spec.m d.val)) =
       (SpecAux.compressOpt d.val coeff.val : ZMod (Spec.m d.val)) ∧
     coeff'.val < Spec.m d.val ⦄ := by
-  progress with compress_coeff.spec_aux as ⟨ coeff', h1 ⟩
+  step with compress_coeff.spec_aux as ⟨ coeff', h1 ⟩
   have : NeZero (Spec.m d.val) := by constructor; simp [Spec.m]; split <;> simp
   simp only [SpecAux.compressOpt, Nat.cast_ofNat, Spec.m] at *
   split <;> simp_all

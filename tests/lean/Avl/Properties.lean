@@ -231,7 +231,7 @@ attribute [scalar_tac_simps]
   Node.balanceFactor
   Node.balance_factor._simpLemma_
 
-@[progress]
+@[step]
 theorem Tree.find_loop_spec
   {T : Type} (OrdInst : Ord T)
   [DecidableEq T] [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
@@ -243,19 +243,19 @@ theorem Tree.find_loop_spec
   | some (.mk v left right height) =>
     fsimp only
     have hCmp := Ospec.infallible -- TODO
-    progress as ⟨ ordering ⟩; clear hCmp
+    step as ⟨ ordering ⟩; clear hCmp
     have hInvLeft := Node.inv_left hInv
     have hInvRight := Node.inv_right hInv
     cases ordering <;> fsimp only
     . /- node.value < value -/
-      progress
+      step
       have hNotIn := Node.lt_imp_not_in_left _ hInv
       simp_all
       intro; simp_all
     . /- node.value = value -/
       fsimp_all
     . /- node.value > value -/
-      progress
+      step
       have hNotIn := Node.lt_imp_not_in_right _ hInv
       simp_all
       intro; simp_all
@@ -267,13 +267,13 @@ theorem Tree.find_spec
   Tree.find OrdInst t value ⦃ b => b ↔ value ∈ t.v ⦄
   := by
   rw [find]
-  progress
+  step
   fsimp [Tree.v]; assumption
 
 -- TODO: move
 set_option maxHeartbeats 5000000
 
-@[progress]
+@[step]
 theorem Node.rotate_left_spec
   {T : Type} [LinearOrder T]
   (x z : T) (a b c : Option (Node T)) (bf_x bf_z : I8)
@@ -388,7 +388,7 @@ theorem Node.rotate_left_spec
       fsimp_all
       scalar_tac
 
-@[progress]
+@[step]
 theorem Node.rotate_right_spec
   {T : Type} [LinearOrder T]
   (x z : T) (a b c : Option (Node T)) (bf_x bf_z : I8)
@@ -501,7 +501,7 @@ theorem Node.rotate_right_spec
       fsimp_all
       scalar_tac
 
-@[progress]
+@[step]
 theorem Node.rotate_left_right_spec
   {T : Type} [LinearOrder T]
   (x y z : T) (bf_x bf_y bf_z : I8)
@@ -626,7 +626,7 @@ theorem Node.rotate_left_right_spec
       . -- Height
         scalar_tac
 
-@[progress]
+@[step]
 theorem Node.rotate_right_left_spec
   {T : Type} [LinearOrder T]
   (x y z : T) (bf_x bf_y bf_z : I8)
@@ -765,7 +765,7 @@ theorem Node.right_height_lt_height (n : Node T) :
 
 mutual
 
-@[progress]
+@[step]
 theorem Node.insert_spec
   {T : Type} (OrdInst : Ord T) [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
   (node : Node T) (value : T)
@@ -779,20 +779,20 @@ theorem Node.insert_spec
     (b → node'.balanceFactor ≠ 0)  ⦄ := by
   unfold Node.insert
   have hCmp := Ospec.infallible -- TODO
-  progress as ⟨ ordering ⟩
+  step as ⟨ ordering ⟩
   split <;> rename _ => hEq <;> clear hCmp <;> fsimp at *
   . -- value < node.value
-    progress as ⟨ updt, node', h1, h2 ⟩
+    step as ⟨ updt, node', h1, h2 ⟩
     fsimp_all
   . -- value = node.value
     cases node; fsimp_all
   . -- node.value < value
-    progress as ⟨ updt, node', h1, h2 ⟩
+    step as ⟨ updt, node', h1, h2 ⟩
     fsimp_all
 termination_by (node.height, 1)
 decreasing_by all_goals simp_wf
 
-@[progress]
+@[step]
 theorem Tree.insert_in_opt_node_spec
   {T : Type} (OrdInst : Ord T) [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
   (tree : Option (Node T)) (value : T)
@@ -811,13 +811,13 @@ theorem Tree.insert_in_opt_node_spec
   . -- tree = some
     rename Node T => node
     have hNodeInv : Node.inv node := by fsimp_all
-    progress as ⟨ updt, tree' ⟩
+    step as ⟨ updt, tree' ⟩
     fsimp_all
 termination_by (Subtree.height tree, 2)
 decreasing_by simp_wf; fsimp [*]
 
 -- TODO: any modification triggers the replay of the whole proof
-@[progress]
+@[step]
 theorem Node.insert_in_left_spec
   {T : Type} (OrdInst : Ord T)
   [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
@@ -832,13 +832,13 @@ theorem Node.insert_in_left_spec
     (b → node'.balanceFactor ≠ 0) ⦄ := by
   unfold Node.insert_in_left
   have hInvLeft : Subtree.inv node.left := by cases node; fsimp_all
-  progress as ⟨ updt, left_opt' ⟩
+  step as ⟨ updt, left_opt' ⟩
   split
   . -- the height of the subtree changed
     have hBalanceFactor : node.balance_factor = node.balanceFactor ∧
            -1 ≤ node.balanceFactor ∧ node.balanceFactor ≤ 1 := by
       cases node; fsimp_all [Node.invAux]
-    progress as ⟨ i ⟩
+    step as ⟨ i ⟩
     split
     . -- i = -2
       simp
@@ -849,9 +849,9 @@ theorem Node.insert_in_left_spec
         cases node with | mk x left right balance_factor =>
         split
         . -- rotate_right
-          -- TODO: fix progress
+          -- TODO: fix step
           cases h:left' with | mk z a b bf_z =>
-          progress as ⟨ tree', hInv', hTree'Set, hTree'Height ⟩
+          step as ⟨ tree', hInv', hTree'Set, hTree'Height ⟩
           -- TODO: syntax for preconditions
           . fsimp_all
           . fsimp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]
@@ -878,7 +878,7 @@ theorem Node.insert_in_left_spec
             fsimp_all [Node.balanceFactor, Node.invAux]
           . rename_i y
             cases h: y with | mk y a b bf_y =>
-            progress as ⟨ tree', hInv', hTree'Set, hTree'Height ⟩
+            step as ⟨ tree', hInv', hTree'Set, hTree'Height ⟩
             -- TODO: syntax for preconditions
             . fsimp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac
             . fsimp_all
@@ -916,7 +916,7 @@ theorem Node.insert_in_left_spec
 termination_by (node.height, 0)
 decreasing_by simp_wf
 
-@[progress]
+@[step]
 theorem Node.insert_in_right_spec
   {T : Type} (OrdInst : Ord T)
   [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
@@ -931,13 +931,13 @@ theorem Node.insert_in_right_spec
     (b → node'.balanceFactor ≠ 0) ⦄ := by
   unfold Node.insert_in_right
   have hInvLeft : Subtree.inv node.right := by cases node; fsimp_all
-  progress as ⟨ updt, right_opt' ⟩
+  step as ⟨ updt, right_opt' ⟩
   split
   . -- the height of the subtree changed
     have hBalanceFactor : node.balance_factor = node.balanceFactor ∧
            -1 ≤ node.balanceFactor ∧ node.balanceFactor ≤ 1 := by
       cases node; fsimp_all [Node.invAux]
-    progress as ⟨ i ⟩
+    step as ⟨ i ⟩
     split
     . -- i = 2
       simp
@@ -949,10 +949,10 @@ theorem Node.insert_in_right_spec
         . -- rotate_left
           cases node
           rename_i x a right balance_factor
-          -- TODO: fix progress
+          -- TODO: fix step
           cases h:right'
           rename_i z b c bf_z
-          progress as ⟨ tree', hInv', hTree'Set, hTree'Height ⟩
+          step as ⟨ tree', hInv', hTree'Set, hTree'Height ⟩
           -- TODO: syntax for preconditions
           . fsimp_all
           . fsimp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac
@@ -979,7 +979,7 @@ theorem Node.insert_in_right_spec
           . rename_i y
             cases h: y
             rename_i y b a bf_y
-            progress as ⟨ tree', hInv', hTree'Set, hTree'Height ⟩
+            step as ⟨ tree', hInv', hTree'Set, hTree'Height ⟩
             -- TODO: syntax for preconditions
             . fsimp_all [Node.inv, Node.invAux, Node.invAuxNotBalanced, Node.balanceFactor]; scalar_tac
             . fsimp_all
@@ -1003,7 +1003,7 @@ theorem Node.insert_in_right_spec
       . fsimp_all [Node.balanceFactor]
         scalar_tac
   . -- the height of the subtree did not change
-    fsimp [*] -- TODO: annoying to use this fsimp everytime: put this in progress
+    fsimp [*] -- TODO: annoying to use this fsimp everytime: put this in step
     split_conjs
     . cases node;
       fsimp_all [Node.invAux, Node.balanceFactor]
@@ -1016,7 +1016,7 @@ decreasing_by simp_wf
 
 end
 
-@[progress]
+@[step]
 theorem Tree.insert_spec {T : Type}
   (OrdInst : Ord T) [LinOrd : LinearOrder T] [Ospec: OrdSpecLinearOrderEq OrdInst]
   (tree : Tree T) (value : T)
@@ -1027,10 +1027,10 @@ theorem Tree.insert_spec {T : Type}
     (if updt then tree'.height = tree.height + 1 else tree'.height = tree.height) ∧
     tree'.v = tree.v ∪ {value} ⦄ := by
   unfold Tree.insert
-  progress as ⟨ updt, tree' ⟩
+  step as ⟨ updt, tree' ⟩
   fsimp [*]
 
-@[progress]
+@[step]
 theorem Tree.new_spec {T : Type} (OrdInst : Ord T) :
   Tree.new OrdInst ⦃ t => t.v = ∅ ∧ t.height = 0 ⦄ := by
   fsimp [new, Tree.v, Tree.height]

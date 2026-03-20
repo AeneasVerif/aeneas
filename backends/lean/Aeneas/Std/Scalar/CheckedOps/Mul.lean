@@ -36,7 +36,7 @@ theorem core.num.checked_mul_UScalar_bv_spec {ty} (x y : UScalar ty) :
   simp [checked_mul_UScalar]
   cases hEq : UScalar.mul x y <;> simp_all [Option.ofResult]
 
-uscalar @[progress_pure «%S».checked_mul x y]
+uscalar @[step_pure «%S».checked_mul x y]
 theorem «%S».checked_mul_bv_spec (x y : «%S») :
   match «%S».checked_mul x y with
   | some z => x.val * y.val ≤ «%S».max ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
@@ -56,7 +56,7 @@ theorem core.num.checked_mul_IScalar_bv_spec {ty} (x y : IScalar ty) :
   simp [checked_mul_IScalar]
   cases hEq : IScalar.mul x y <;> simp_all [Option.ofResult]
 
-iscalar @[progress_pure «%S».checked_mul x y]
+iscalar @[step_pure «%S».checked_mul x y]
 theorem «%S».checked_mul_bv_spec (x y : «%S») :
   match core.num.checked_mul_IScalar x y with
   | some z => «%S».min ≤ x.val * y.val ∧ x.val * y.val ≤ «%S».max ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv

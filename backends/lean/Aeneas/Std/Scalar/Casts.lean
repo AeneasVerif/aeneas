@@ -14,7 +14,7 @@ The reference semantics are here: https://doc.rust-lang.org/reference/expression
 -/
 
 /-- When casting between unsigned integers, we truncate or **zero**-extend the integer. -/
-@[progress_pure_def]
+@[step_pure_def]
 def UScalar.cast {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) : UScalar tgt_ty :=
   -- This truncates the integer if the numBits is smaller
   ⟨ x.bv.zeroExtend tgt_ty.numBits ⟩
@@ -23,13 +23,13 @@ def UScalar.cast {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) 
 
    When casting from an unsigned integer to a signed integer, we truncate or **zero**-extend.
 -/
-@[progress_pure_def]
+@[step_pure_def]
 def UScalar.hcast {src_ty : UScalarTy} (tgt_ty : IScalarTy) (x : UScalar src_ty) : IScalar tgt_ty :=
   -- This truncates the integer if the numBits is smaller
   ⟨ x.bv.zeroExtend tgt_ty.numBits ⟩
 
 /-- When casting between signed integers, we truncate or **sign**-extend. -/
-@[progress_pure_def]
+@[step_pure_def]
 def IScalar.cast {src_ty : IScalarTy} (tgt_ty : IScalarTy) (x : IScalar src_ty) : IScalar tgt_ty :=
   ⟨ x.bv.signExtend tgt_ty.numBits ⟩
 
@@ -37,7 +37,7 @@ def IScalar.cast {src_ty : IScalarTy} (tgt_ty : IScalarTy) (x : IScalar src_ty) 
 
    When casting from a signed integer to a unsigned integer, we truncate or **sign**-extend.
 -/
-@[progress_pure_def]
+@[step_pure_def]
 def IScalar.hcast {src_ty : IScalarTy} (tgt_ty : UScalarTy) (x : IScalar src_ty) : UScalar tgt_ty :=
   ⟨ x.bv.signExtend tgt_ty.numBits ⟩
 
@@ -153,14 +153,14 @@ def IScalar.hcast_inBounds_spec {src_ty : IScalarTy}
   simp only [this, sup_eq_left, ge_iff_le]
   scalar_tac
 
-@[simp, progress_pure cast_fromBool ty b]
+@[simp, step_pure cast_fromBool ty b]
 theorem UScalar.cast_fromBool_val_eq ty (b : Bool) : (UScalar.cast_fromBool ty b).val = b.toNat := by
   simp only [cast_fromBool]
   split <;> simp only [val, *] <;> simp
   have := ty.numBits_nonzero
   omega
 
-@[simp, progress_pure cast_fromBool ty b]
+@[simp, step_pure cast_fromBool ty b]
 theorem IScalar.cast_fromBool_val_eq ty (b : Bool) :(IScalar.cast_fromBool ty b).val = b.toInt := by
   simp only [cast_fromBool]
   split <;> simp only [val, *] <;> simp
