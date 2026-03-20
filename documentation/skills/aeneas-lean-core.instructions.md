@@ -71,9 +71,12 @@ When writing hand-written models of Rust functions (e.g., in `FunsExternal.lean`
 
 ### Template
 ```lean
+/-- **Spec theorem for `crate_name::module::function_name`**
+Concise natural-language description of the spec. -/
 @[progress]
-theorem function_name_spec (params : Types) (preconditions : hypotheses) :
-  function_name params ⦃ result => postcondition result ⦄ := by
+theorem function_name.spec (params : Types) (preconditions : hypotheses) :
+    function_name params ⦃ (result : ResultType) =>
+      postcondition result ⦄ := by
   unfold function_name
   progress  -- or progress* for automation
   -- finish remaining goals
@@ -82,14 +85,53 @@ theorem function_name_spec (params : Types) (preconditions : hypotheses) :
 ### With backward function
 ```lean
 @[progress]
-theorem function_name_spec (param1 : U32) (param2 : Slice U16) (hpre : param1.val < param2.length) :
-  function_name param1 param2 ⦃ result back =>
-    postcondition_on_result ∧
-    postcondition_on_backward_function back ⦄ := by ...
+theorem function_name.spec (param1 : U32) (param2 : Slice U16)
+    (hpre : param1.val < param2.length) :
+    function_name param1 param2 ⦃ (result : U32) (back : U32 → Slice U16) =>
+      postcondition_on_result ∧
+      postcondition_on_backward_function back ⦄ := by ...
 ```
+
+### Indentation rules for spec theorems
+- `@[progress]` and `theorem name`: base indentation (0 additional)
+- Arguments, preconditions, and the line with the function application: +4 spaces
+- Postconditions inside `⦃ ⦄`: +6 spaces
+- Proof body (after `:= by`): +2 spaces
+- Always annotate the result with its type: `(result : ResultType) =>`
+
+### Key guidelines for spec theorems
+- **Docstring**: add a `/-- **Spec theorem for \`full::rust::path\`** ... -/` docstring
+  with a concise natural-language description of the spec.
+- **Naming**: the theorem name is the function's full Lean name with suffix `.spec`.
+  Open namespaces so the identifier prefix doesn't clutter the code.
+- **Argument names**: name the spec theorem arguments exactly like the corresponding
+  entities in the original Lean function definition.
+- **Result type annotation**: always annotate the result binder with its type,
+  e.g., `⦃ (result : U32) =>` — this makes the postcondition readable and helps
+  type inference.
+- **Postconditions**: write them as a conjunction `post1 ∧ post2 ∧ ...` inside `⦃ ⦄`.
+- **Dependent postconditions**: if type-checking `b` in `a ∧ b` requires `a` to hold
+  (e.g., `b` contains a `getElem` expression and `a` provides the index bound), use
+  `∃ (_ : a), b` instead. This makes the proof of `a` available when elaborating `b`:
+  ```lean
+  -- BAD: won't type-check because res[i] needs hlen
+  hlen : res.length = n ∧ res[i] = 42
+  -- GOOD: hlen is in scope when type-checking res[i]
+  ∃ (hlen : res.length = n), res[i] = 42
+  ```
+- **`@[progress]` attribute**: always add it so the Aeneas `progress` tactic can
+  find the theorem. Start a new line after the attribute.
 
 ### The `⦃ ⦄` notation
 Weakest precondition: `f ⦃ x => P x ⦄` means "if f succeeds with value x, then P x holds."
+
+When the result is a tuple, decompose it directly in the binder — no need to
+destructure manually:
+```lean
+-- Result is (U32 × Slice U16)
+fun_name a b ⦃ (x : U32) (s : Slice U16) =>
+  x.val < 100 ∧ s.length = a.length ⦄
+```
 
 ## Proof Development Workflow
 
@@ -197,7 +239,7 @@ in `termination_by`/`decreasing_by` blocks, in `calc` chains — everywhere, inc
 ### Pattern 1: Simple function spec
 ```lean
 @[progress]
-theorem add_overflow_spec (a b : U32) (h : a.val + b.val ≤ U32.max) :
+theorem add_overflow.spec (a b : U32) (h : a.val + b.val ≤ U32.max) :
   add_overflow a b ⦃ c => c.val = a.val + b.val ⦄ := by
   unfold add_overflow
   progress
@@ -206,7 +248,7 @@ theorem add_overflow_spec (a b : U32) (h : a.val + b.val ≤ U32.max) :
 ### Pattern 2: Recursive function with case split
 ```lean
 @[progress]
-theorem list_len_spec {T : Type} (l : CList T) :
+theorem list_len.spec {T : Type} (l : CList T) :
   list_len l ⦃ n => n.val = l.toList.length ⦄ := by
   unfold list_len list_len_loop
   split
@@ -218,7 +260,7 @@ theorem list_len_spec {T : Type} (l : CList T) :
 ### Pattern 3: Function with backward continuation
 ```lean
 @[progress]
-theorem list_nth_mut_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
+theorem list_nth_mut.spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
   list_nth_mut l i ⦃ x back =>
     x = l.toList[i.val]! ∧
@@ -241,14 +283,14 @@ We are in the process of switching the default translation style to use the fixe
 -- Loops become _loop auxiliary functions. Write a separate theorem for each.
 -- The loop invariant is both the precondition and postcondition.
 @[progress]
-theorem zero_loop_spec (x : alloc.vec.Vec U32) (i : Usize) (h : i.val ≤ x.length) :
+theorem zero_loop.spec (x : alloc.vec.Vec U32) (i : Usize) (h : i.val ≤ x.length) :
   zero_loop x i ⦃ x' =>
     x'.length = x.length ∧
     (∀ j, j < i.val → x'[j]! = x[j]!) ∧
     (∀ j, i.val ≤ j → j < x.length → x'[j]! = 0#u32) ⦄ := by
   unfold zero_loop
   simp; split
-  · progress ...    -- progress applies zero_loop_spec recursively
+  · progress ...    -- progress applies zero_loop.spec recursively
   · simp; scalar_tac
 termination_by x.length - i.val
 decreasing_by scalar_decr_tac
@@ -258,7 +300,7 @@ decreasing_by scalar_decr_tac
 ```lean
 -- Some loops use the `loop` combinator instead of direct recursion
 @[progress]
-theorem my_loop_spec (x : MyState) (h : x.inv) :
+theorem my_loop.spec (x : MyState) (h : x.inv) :
   my_loop_body.loop x ⦃ r => r.post ⦄ := by
   apply loop.spec_decr_nat (measure := fun s => s.remaining) (inv := fun s => s.inv)
   · intro s hs
@@ -271,7 +313,7 @@ theorem my_loop_spec (x : MyState) (h : x.inv) :
 ### Pattern 6: Bit-vector operation spec
 ```lean
 @[progress]
-theorem bitwise_op_spec (x : U32) (h : x.val < 65536) :
+theorem bitwise_op.spec (x : U32) (h : x.val < 65536) :
   bitwise_op x ⦃ r => r.val = x.val % 256 ⦄ := by
   unfold bitwise_op
   progress*
@@ -292,7 +334,7 @@ private theorem fold_helper (a : U32) (f : U32 → Result α) :
 
 -- 3. Helper spec
 @[local progress]
-theorem helper_spec (a : U32) (h : a.val < 1000) :
+theorem helper.spec (a : U32) (h : a.val < 1000) :
   helper a ⦃ c => c.val = (a.val + 1) * 2 ⦄ := by ...
 
 -- 4. Main proof uses simp only [fold_helper]
@@ -332,7 +374,7 @@ inlining it in the middle of a `progress*` proof. This:
 
 ```lean
 -- BAD: complex arithmetic inlined in the middle of progress*
-theorem main_spec ... := by
+theorem main.spec ... := by
   unfold main_fn
   progress*
   -- 15 lines of manual arithmetic here
@@ -344,7 +386,7 @@ private theorem aux_arith (a b : Nat) (h1 : ...) (h2 : ...) :
   simp_scalar
   ...
 
-theorem main_spec ... := by
+theorem main.spec ... := by
   unfold main_fn
   progress*
   · apply aux_arith ...
@@ -364,11 +406,11 @@ Instead:
 - **Do case splits locally** inside specific proof obligations that need concrete values:
   ```lean
   -- BAD: duplicates the entire proof 3 times
-  theorem my_spec (p : Spec.Frodo.parameterSet) ... := by
+  theorem my_fn.spec (p : Spec.Frodo.parameterSet) ... := by
     cases p <;> (unfold my_fn; progress*; ...)
 
   -- GOOD: case split only where needed
-  theorem my_spec (p : Spec.Frodo.parameterSet) ... := by
+  theorem my_fn.spec (p : Spec.Frodo.parameterSet) ... := by
     unfold my_fn
     progress*
     · cases p <;> simp_all [Spec.Frodo.n, NBAR] <;> scalar_tac  -- only this sub-goal needs it
@@ -379,7 +421,7 @@ Instead:
   ```lean
   -- Give agrind the parameter definition so it can case-split internally
   attribute [local agrind] Spec.Frodo.n Spec.Frodo.nbar in
-  theorem my_spec ... := by
+  theorem my_fn.spec ... := by
     unfold my_fn
     progress*  -- agrind (used by progress for preconditions) now auto-splits on p
   ```

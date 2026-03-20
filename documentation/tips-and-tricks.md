@@ -177,6 +177,17 @@ split_conjs <;> try agrind
 ```
 Each conjunct is easier to prove separately. The `try` lets you focus on the remaining hard goals manually.
 
+### Dependent postconditions with `∃`
+If type-checking `b` in `a ∧ b` requires `a` to hold (e.g., `b` contains a `getElem`
+expression and `a` provides the index bound), use `∃ (_ : a), b` instead of `a ∧ b`.
+This makes the proof of `a` available when elaborating `b`:
+```lean
+-- BAD: won't type-check because res[i] needs hlen
+hlen : res.length = n ∧ res[i] = 42
+-- GOOD: hlen is in scope when type-checking res[i]
+∃ (hlen : res.length = n), res[i] = 42
+```
+
 ### The `progress*?` → automate → refold workflow
 1. Use `progress*?` to generate the full expanded proof script
 2. Register local lemmas for `agrind`: `attribute [local agrind] my_lemma`
