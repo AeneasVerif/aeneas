@@ -2,31 +2,31 @@
 
 ## Core Tactics
 
-### `progress`
-The main workhorse tactic for Aeneas proofs. It applies function specifications (theorems tagged with `@[progress]`) to make progress on goals involving monadic function calls.
+### `step`
+The main workhorse tactic for Aeneas proofs. It applies function specifications (theorems tagged with `@[step]`) to make progress on goals involving monadic function calls.
 
-**How it works:** When the goal contains a monadic bind like `do let x ← f args; ...`, `progress` looks for a theorem tagged with `@[progress]` whose conclusion matches `f args ⦃ x => ... ⦄`, applies it, and leaves the preconditions and remaining goals for the user to prove.
+**How it works:** When the goal contains a monadic bind like `do let x ← f args; ...`, `step` looks for a theorem tagged with `@[step]` whose conclusion matches `f args ⦃ x => ... ⦄`, applies it, and leaves the preconditions and remaining goals for the user to prove.
 
 **Syntax:**
 ```lean
-progress                    -- basic: apply matching progress theorem
-progress as ⟨ x, h1, h2 ⟩  -- name the result and hypotheses
-progress with my_theorem    -- use a specific theorem
-progress*                   -- repeatedly apply progress
-progress*?                  -- like progress* but prints the proof script
+step                        -- basic: apply matching step theorem
+step as ⟨ x, h1, h2 ⟩  -- name the result and hypotheses
+step with my_theorem    -- use a specific theorem
+step*                   -- repeatedly apply step
+step*?                  -- like step* but prints the proof script
 ```
 
-**The `@[progress]` attribute:** Tag your specification theorems with `@[progress]` so they are automatically found:
+**The `@[step]` attribute:** Tag your specification theorems with `@[step]` so they are automatically found:
 ```lean
-@[progress]
+@[step]
 theorem my_func_spec (x : U32) (h : x.val < 100) :
   my_func x ⦃ r => r.val = x.val + 1 ⦄ := by ...
 ```
 
-**The `progress*?` workflow:**
-A very useful workflow: use `progress*?` to automatically generate a complete, expanded proof script. Then review the generated script, automate individual proof obligations (e.g., by registering local lemmas for `agrind`), and progressively refold the script back into a compact `progress*` call plus a small finishing script.
+**The `step*?` workflow:**
+A very useful workflow: use `step*?` to automatically generate a complete, expanded proof script. Then review the generated script, automate individual proof obligations (e.g., by registering local lemmas for `agrind`), and progressively refold the script back into a compact `step*` call plus a small finishing script.
 
-**Termination pitfall:** If your proof starts with `unfold foo; progress` and the proof appears finished but you get a termination error, it's likely because `progress` applied the specification theorem recursively (this typically happens when the function starts with a `match` or `if-then-else`). Fix: start with `split` (or `cases`) before calling `progress`, to case-split on the match/if first.
+**Termination pitfall:** If your proof starts with `unfold foo; step` and the proof appears finished but you get a termination error, it's likely because `step` applied the specification theorem recursively (this typically happens when the function starts with a `match` or `if-then-else`). Fix: start with `split` (or `cases`) before calling `step`, to case-split on the match/if first.
 
 **Loop reasoning:** Loops are translated to a fixed-point operator `loop`. To prove specs of loop-based code, use:
 - `loop.spec_decr_nat` — provide a `Nat` termination measure, a loop invariant, and a postcondition. This is the practical workhorse for most loop proofs.
@@ -226,8 +226,8 @@ You can locally activate or deactivate attributes to control which specification
 
 ```lean
 -- Disable default cast spec, use simpler version
-attribute [-progress] UScalar.cast.progress_spec
-attribute [local progress] UScalar.cast_inBounds_spec
+attribute [-step] UScalar.cast.step_spec
+attribute [local step] UScalar.cast_inBounds_spec
 
 -- Add local simp lemmas
 attribute [local simp] my_custom_lemma

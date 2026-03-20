@@ -6,26 +6,26 @@ open Aeneas Std Result
 
 namespace demo
 
--- @[progress]
+-- @[step]
 theorem mul2_add1.spec (x : U32) (h : 2 * x.val + 1 ≤ U32.max)
   : mul2_add1 x ⦃ y => y.val = 2 * x.val + (1 : Nat) ⦄
   := by
   unfold mul2_add1
-  progress as ⟨ i ⟩
-  progress as ⟨ i' ⟩
+  step as ⟨ i ⟩
+  step as ⟨ i' ⟩
   scalar_tac
 
 theorem use_mul2_add.spec (x : U32) (y : U32) (h : 2 * x.val + 1 + y.val ≤ U32.max) :
   use_mul2_add1 x y ⦃ z => ↑z = 2 * ↑x + (1 : Nat) + ↑y ⦄ := by
   unfold use_mul2_add1
-  progress with mul2_add1.spec as ⟨ i ⟩
-  progress as ⟨ i' ⟩
+  step with mul2_add1.spec as ⟨ i ⟩
+  step as ⟨ i' ⟩
   scalar_tac
 
 theorem mod_add.spec (x y : U32) (h : x.val < 3329 ∧ y.val < 3329) :
   mod_add x y ⦃ z => z.val = (x.val + y.val) % 3329 ⦄ := by
   unfold mod_add
-  progress*
+  step*
   bv_tac 32
 
 open CList
@@ -49,8 +49,8 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
       simp [*]
     else
       simp [*]
-      progress as ⟨ i1 ⟩
-      progress as ⟨ x ⟩
+      step as ⟨ i1 ⟩
+      step as ⟨ x ⟩
       simp_lists [*]
 
 theorem i32_id_spec (n : I32) (h : 0 ≤ n.val) :
@@ -58,9 +58,9 @@ theorem i32_id_spec (n : I32) (h : 0 ≤ n.val) :
   unfold i32_id
   split
   . simp [*]
-  . progress as ⟨ n1 ⟩
-    progress
-    progress as ⟨ n2 ⟩
+  . step as ⟨ n1 ⟩
+    step
+    step as ⟨ n2 ⟩
     scalar_tac
 termination_by n.toNat
 decreasing_by simp_wf; scalar_tac
@@ -73,7 +73,7 @@ theorem list_tail_spec {T : Type} [Inhabited T] (l : CList T) :
   match l with
   | CNil => simp
   | CCons hd tl =>
-    progress as ⟨ back ⟩
+    step as ⟨ back ⟩
     grind
 
 end demo

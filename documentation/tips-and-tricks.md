@@ -16,7 +16,7 @@ Aeneas supports two loop translation modes:
 - **`-loops-to-rec`** (recommended): Translates loops to recursive Lean functions.
   This is the mode used for most verified proofs so far. The resulting code uses
   direct recursion with `termination_by` / `decreasing_by`, and proofs use
-  `unfold` + `progress`.
+  `unfold` + `step`.
 - **Fixed-point combinator** (default): Translates loops using a `loop` fixed-point
   operator. Proofs use `loop.spec_decr_nat`. The proof infrastructure for this
   mode is less mature — fewer lemmas, less automation, and less battle-tested.
@@ -29,7 +29,7 @@ matures, **use `-loops-to-rec`** for any project where you need to write proofs.
 
 | Goal Shape | Try First | Then Try |
 |---|---|---|
-| Monadic function call | `progress` | `progress with specific_theorem` |
+| Monadic function call | `step` | `step with specific_theorem` |
 | Arithmetic (Nat/Int) | `scalar_tac` or `agrind` | `grind` |
 | Arithmetic (nonlinear) | `scalar_tac +nonLin` | manual `have` + `scalar_tac` |
 | Scalar bounds (UScalar/IScalar) | `scalar_tac` | `agrind` |
@@ -51,7 +51,7 @@ doing so:
 
 1. **Stop.** Unfolding is a sign that a lemma is missing.
 2. **Search** the Aeneas library to check whether the lemma already exists
-   (e.g., `grep` for related names, check simp/progress attributes).
+   (e.g., `grep` for related names, check simp/step attributes).
 3. **If it doesn't exist:** figure out what the lemma should be, state it, and
    prove it. Place it in a local `section` or as a `private` lemma if it's
    specific to your proof, or propose it for the Aeneas library if it's general.
@@ -66,22 +66,22 @@ introduce auxiliary lemmas to bridge the gap.
 
 ## Common Pitfalls
 
-### 1. Termination Error After `unfold; progress`
+### 1. Termination Error After `unfold; step`
 **Symptom:** Proof appears done but Lean reports a termination error.
-**Cause:** `progress` found and applied the theorem you're currently proving (recursive application). Happens when the function starts with `match` or `if-then-else`.
-**Fix:** Split first, then progress:
+**Cause:** `step` found and applied the theorem you're currently proving (recursive application). Happens when the function starts with `match` or `if-then-else`.
+**Fix:** Split first, then step:
 ```lean
 -- BAD: termination error
 theorem my_spec ... := by
   unfold my_func
-  progress  -- applies my_spec recursively!
+  step  -- applies my_spec recursively!
 
 -- GOOD: split first
 theorem my_spec ... := by
   unfold my_func
   split
-  · progress  -- now applies inner specs
-  · progress
+  · step  -- now applies inner specs
+  · step
 ```
 
 ### 2. Nat Subtraction is Truncated
@@ -137,7 +137,7 @@ lemmas will break. Prefer `simp [*]`, `agrind`, or targeted rewrites. Big `simp 
 calls are fine in pure spec lemmas where definitions are stable.
 
 **Extract complex sub-proofs as auxiliary lemmas.** If a proof step requires complex
-non-linear arithmetic or bitwise reasoning (especially in the middle of a `progress*`
+non-linear arithmetic or bitwise reasoning (especially in the middle of a `step*`
 proof), extract it into a separate lemma. This gives it a small context and keeps the
 main proof clean.
 
@@ -167,9 +167,9 @@ If `simp_scalar` can't close a step, provide more lemmas (`simp_scalar [my_lemma
 mark for simp_scalar (`attribute [local simp_scalar_simps] my_lemma`), or apply
 manually. If no theorem exists, prove it as an auxiliary lemma.
 
-### `progress* n` — surgical stepping
+### `step* n` — surgical stepping
 
-`progress* n` runs progress for exactly `n` steps (each step is a `progress` call or a `split`). Useful when you want to advance through part of a function and stop at a specific point.
+`step* n` runs step for exactly `n` steps (each step is a `step` call or a `split`). Useful when you want to advance through part of a function and stop at a specific point.
 
 ### Split conjunctions before agrind
 ```lean
@@ -188,10 +188,10 @@ hlen : res.length = n ∧ res[i] = 42
 ∃ (hlen : res.length = n), res[i] = 42
 ```
 
-### The `progress*?` → automate → refold workflow
-1. Use `progress*?` to generate the full expanded proof script
+### The `step*?` → automate → refold workflow
+1. Use `step*?` to generate the full expanded proof script
 2. Register local lemmas for `agrind`: `attribute [local agrind] my_lemma`
-3. Re-run `progress*` — it now handles more sub-goals automatically
+3. Re-run `step*` — it now handles more sub-goals automatically
 4. Repeat until the proof is compact
 
 ### Local attribute management
@@ -207,7 +207,7 @@ attribute [local agrind] my_implication_lemma
 
 **Safety note:** `simp_scalar` and `simp_lists` are based on `simp`. Adding many local lemmas does NOT cause complexity explosions (unlike SMT-based tactics). Feel free to activate many ad-hoc lemmas.
 
-Don't hesitate to register local `agrind` lemmas and patterns to make proofs using `progress` or `progress*` work — they work the same as `grind` lemmas and patterns.
+Don't hesitate to register local `agrind` lemmas and patterns to make proofs using `step` or `step*` work — they work the same as `grind` lemmas and patterns.
 
 ### When `simp_scalar` / `simp_lists` don't work
 
@@ -324,14 +324,14 @@ cases h_idx <;> simp_lists [*]
 
 ### Tracing tactics
 ```lean
-set_option trace.progress true           -- trace progress tactic decisions
+set_option trace.step true           -- trace step tactic decisions
 set_option trace.scalar_tac true         -- trace scalar_tac
-set_option trace.Aeneas.progress true    -- more detailed progress traces
+set_option trace.Aeneas.step true    -- more detailed step traces
 ```
 
-### Checking what progress would do
+### Checking what step would do
 ```lean
-progress*?   -- prints the expanded proof script without committing to it
+step*?   -- prints the expanded proof script without committing to it
 ```
 
 ## Performance Tips
@@ -355,7 +355,7 @@ Use these as escape hatches, not default settings. If you need them, consider de
 Always try to make it shorter:
 - Can multiple `simp` calls be merged?
 - Can intermediate steps be eliminated?
-- Can `progress*` handle more of it with registered lemmas?
+- Can `step*` handle more of it with registered lemmas?
 
 Shorter proofs are easier to maintain, faster to check, and easier for others to read.
 
@@ -371,7 +371,7 @@ Shorter proofs are easier to maintain, faster to check, and easier for others to
 | >60s | — | **Decompose** (fold theorems, helper lemmas) |
 
 **Red flags that a proof will be slow:**
-- More than ~25 `progress` calls in sequence
+- More than ~25 `step` calls in sequence
 - Deeply nested quantifiers in the spec
 - Using `grind` instead of `agrind`
 - Large `simp` calls with many hypotheses
@@ -385,7 +385,7 @@ Shorter proofs are easier to maintain, faster to check, and easier for others to
 
 | Attribute | Used by | Purpose |
 |---|---|---|
-| `@[progress]` | `progress` tactic | Register function specifications |
+| `@[step]` | `step` tactic | Register function specifications |
 | `@[simp_scalar_simps]` | `simp_scalar` | Register scalar simplification lemmas |
 | `@[simp_lists_simps]` | `simp_lists` | Register list simplification lemmas |
 | `@[bvify_simps]` | `bvify` | Register bit-vector lifting lemmas |
@@ -404,13 +404,13 @@ When working with Rust constants/globals translated by Aeneas:
   - `@[simp]`, `@[agrind]`, `@[scalar_tac_simps]`, `@[bvify_simps]`
   - `@[simp_lists_simps]` if they involve lists/arrays
 
-- **Monadic constants** (in the `Result` monad): Treat them like functions and prove a `@[progress]` theorem.
+- **Monadic constants** (in the `Result` monad): Treat them like functions and prove a `@[step]` theorem.
   - First prove a raw equation: `theorem MyConst_eq : MyConst = ok value := by native_decide`
-  - Then prove the progress form: `@[progress] theorem MyConst : MyConst ⦃ fun res => res = value ⦄ := by rw [MyConst_eq]; simp [WP.spec_ok]`
-  - Now `progress` (and `progress*`) will handle the constant automatically.
+  - Then prove the step form: `@[step] theorem MyConst : MyConst ⦃ fun res => res = value ⦄ := by rw [MyConst_eq]; simp [WP.spec_ok]`
+  - Now `step` (and `step*`) will handle the constant automatically.
 
 **Key lemma: `WP.spec_ok`** (in `Aeneas.Std.WP`):
 ```lean
 theorem spec_ok (x : α) : spec (ok x) p ↔ p x
 ```
-This states that proving a specification about `ok x` reduces to proving the postcondition `p x` directly. It's essential when proving `@[progress]` theorems for constants that compute to `ok value` — after `rw [MyConst_eq]`, the goal becomes `spec (ok value) p` and `simp [WP.spec_ok]` closes it.
+This states that proving a specification about `ok x` reduces to proving the postcondition `p x` directly. It's essential when proving `@[step]` theorems for constants that compute to `ok value` — after `rw [MyConst_eq]`, the goal becomes `spec (ok value) p` and `simp [WP.spec_ok]` closes it.

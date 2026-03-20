@@ -13,18 +13,18 @@ def UScalar.wrapping_mul {ty} (x y : UScalar ty) : UScalar ty := ⟨ x.bv * y.bv
 
 def IScalar.wrapping_mul {ty} (x y : IScalar ty) : IScalar ty := ⟨ x.bv * y.bv ⟩
 
-uscalar @[progress_pure_def]
+uscalar @[step_pure_def]
 def «%S».wrapping_mul (x y : «%S») : «%S» := @UScalar.wrapping_mul UScalarTy.«%S» x y
 
-iscalar @[progress_pure_def]
+iscalar @[step_pure_def]
 def «%S».wrapping_mul (x y : «%S») : «%S» := @IScalar.wrapping_mul IScalarTy.«%S» x y
 
 /- [core::num::{_}::wrapping_mul] -/
-uscalar @[progress_pure_def]
+uscalar @[step_pure_def]
 def core.num.«%S».wrapping_mul : «%S» → «%S» → «%S» := @UScalar.wrapping_mul UScalarTy.«%S»
 
 /- [core::num::{_}::wrapping_mul] -/
-iscalar @[progress_pure_def]
+iscalar @[step_pure_def]
 def core.num.«%S».wrapping_mul : «%S» → «%S» → «%S»  := @IScalar.wrapping_mul IScalarTy.«%S»
 
 @[simp, bvify_simps, grind =, agrind =] theorem UScalar.wrapping_mul_bv_eq {ty} (x y : UScalar ty) :

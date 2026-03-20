@@ -39,7 +39,7 @@ def List.clone (clone : α → Result α) (l : List α) : Result ({ l' : List α
   | fail e => fail e
   | div => div
 
-@[progress]
+@[step]
 def List.clone_spec {clone : α → Result α} {l : List α} (h : ∀ x ∈ l, clone x = ok x) :
   List.clone clone l ⦃ l' => l'.val = l ∧ l'.val.length = l.length ⦄ := by
   simp only [List.clone]

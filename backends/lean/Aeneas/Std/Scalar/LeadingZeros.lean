@@ -19,6 +19,6 @@ def BitVec.leadingZeros {w : Nat} (x : BitVec w) : Nat :=
 #assert BitVec.leadingZeros 1#32 = 31
 #assert BitVec.leadingZeros 255#32 = 24
 
-scalar @[progress_pure_def] def core.num.«%S».leading_zeros (x : «%S») : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
+scalar @[step_pure_def] def core.num.«%S».leading_zeros (x : «%S») : U32 := ⟨ BitVec.leadingZeros x.bv ⟩
 
 end Aeneas.Std

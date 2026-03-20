@@ -1,6 +1,6 @@
 /- Arrays -/
 import Aeneas.List
-import Aeneas.Progress.Init
+import Aeneas.Step.Init
 import Aeneas.Std.Array.Core
 import Aeneas.Std.Core.Default
 
@@ -100,7 +100,7 @@ def Array.repeat {α : Type u} (n : Usize) (x : α) : Array α n :=
 theorem Array.repeat_val (n : Usize) (x : α) : (Array.repeat n x).val = List.replicate n.val x := by
   simp only [Array.repeat]
 
-@[progress]
+@[step]
 theorem Array.index_usize_spec {α : Type u} {n : Usize} [Inhabited α] (v: Array α n) (i: Usize)
   (hbound : i.val < v.length) :
   (v.index_usize i) ⦃ x => x = v.val[i.val]! ⦄ := by
@@ -173,7 +173,7 @@ def Array.update {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) : 
   | some _ =>
     ok ⟨ v.val.set i.val x, by have := v.property; simp [*] ⟩
 
-@[progress]
+@[step]
 theorem Array.update_spec {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x : α)
   (hbound : i.val < v.length) :
   v.update i x ⦃ nv => nv = v.set i x ⦄
@@ -187,7 +187,7 @@ def Array.index_mut_usize {α : Type u} {n : Usize} (v: Array α n) (i: Usize) :
   let x ← index_usize v i
   ok (x, set v i)
 
-@[progress]
+@[step]
 theorem Array.index_mut_usize_spec {α : Type u} {n : Usize} [Inhabited α] (v: Array α n) (i: Usize)
   (hbound : i.val < v.length) :
   v.index_mut_usize i ⦃ x y => y = set v i ∧
@@ -213,7 +213,7 @@ theorem Array.clone_length {α : Type u} {n : Usize} (clone : α → Result α) 
   simp [List.clone] at h
   split at h <;> simp_all
 
-@[progress]
+@[step]
 theorem Array.clone_spec {α : Type u} {n : Usize} {clone : α → Result α} {s : Array α n} (h : ∀ x ∈ s.val, clone x = ok x) :
   Array.clone clone s ⦃ s' => s' = s ⦄ := by
   simp only [Array.clone]
@@ -225,7 +225,7 @@ def core.array.CloneArray.clone
   {T : Type} {N : Usize} (cloneInst : core.clone.Clone T) (a : Array T N) : Result (Array T N) :=
   Array.clone cloneInst.clone a
 
-@[progress]
+@[step]
 theorem core.array.CloneArray.clone_spec {T : Type} {N : Usize} (cloneInst : core.clone.Clone T) (a : Array T N)
   (h : ∀ x ∈ a.val, cloneInst.clone x = ok x) :
   core.array.CloneArray.clone cloneInst a ⦃ a' => a = a' ⦄:= by
@@ -238,7 +238,7 @@ def core.array.CloneArray.clone_from {T : Type} {N : Usize} (cloneInst : core.cl
   (_self source : Array T N) : Result (Array T N) :=
   Array.clone cloneInst.clone source
 
-@[progress]
+@[step]
 theorem core.array.CloneArray.clone_from_spec {T : Type} {N : Usize} (cloneInst : core.clone.Clone T)
   (self source : Array T N) (h : ∀ x ∈ source.val, cloneInst.clone x = ok x) :
   core.array.CloneArray.clone_from cloneInst self source ⦃ source' => source = source' ⦄ := by
