@@ -60,7 +60,21 @@ structure core.iter.traits.iterator.Iterator (Self : Type) (Self_Item : Type)
 @[rust_fun "core::iter::traits::iterator::Iterator::step_by"]
 def core.iter.traits.iterator.Iterator.step_by.default
   {Self : Type} (self: Self) (step_by : Std.Usize) :
-  Result (core.iter.adapters.step_by.StepBy Self) := .ok ⟨ self, step_by ⟩
+  Result (core.iter.adapters.step_by.StepBy Self) :=
+  if step_by.val = 0 then .fail .panic
+  else .ok ⟨ self, step_by ⟩
+
+/-- Skip up to `n` elements from an iterator -/
+def core.iter.adapters.step_by.skipN
+    {I : Type} {Item : Type}
+    (iterInst : core.iter.traits.iterator.Iterator I Item)
+    (iter : I) : (n : Nat) → Result I
+  | 0 => .ok iter
+  | n + 1 => do
+    let (opt, iter) ← iterInst.next iter
+    match opt with
+    | none => .ok iter
+    | some _ => core.iter.adapters.step_by.skipN iterInst iter n
 
 @[rust_fun
   "core::iter::adapters::step_by::{core::iter::traits::iterator::Iterator<core::iter::adapters::step_by::StepBy<@I>, @Clause0_Item>}::next"]
@@ -69,7 +83,13 @@ def core.iter.adapters.step_by.IteratorStepBy.next
   (IteratorInst : core.iter.traits.iterator.Iterator I Item) :
   core.iter.adapters.step_by.StepBy I →
   Result ((Option Item) × (core.iter.adapters.step_by.StepBy I)) :=
-  sorry -- TODO
+  fun self => do
+    let (opt, iter) ← IteratorInst.next self.iter
+    match opt with
+    | none => .ok (none, { self with iter })
+    | some item => do
+      let iter ← core.iter.adapters.step_by.skipN IteratorInst iter (self.step_by.val - 1)
+      .ok (some item, { iter, step_by := self.step_by })
 
 @[rust_fun
   "core::iter::adapters::step_by::{core::iter::traits::iterator::Iterator<core::iter::adapters::step_by::StepBy<@I>, @Clause0_Item>}::step_by"]
