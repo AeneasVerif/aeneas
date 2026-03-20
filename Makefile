@@ -19,6 +19,11 @@ AENEAS_DEBUG ?= $(PWD)/src/_build/default/main
 TEST_RUNNER_EXE ?= $(PWD)/bin/test_runner
 CHARON_EXE ?= $(PWD)/charon/bin/charon
 
+# Rust toolchain commands. Use `+nightly` by default (requires rustup).
+# In Nix, the toolchain is already nightly, so override with plain `rustc`/`cargo`.
+RUSTC_CMD ?= rustc +nightly
+CARGO_CMD ?= cargo +nightly
+
 # The user can specify additional translation options for Aeneas.
 AENEAS_OPTIONS ?=
 CHARON_OPTIONS ?=
@@ -187,11 +192,11 @@ cargo-test:
 	@echo "# Running Rust unit tests"
 	@for f in $(CARGO_TEST_FILES); do \
 		echo "# cargo-test: $$f"; \
-		rustc +nightly --edition 2021 --test -o /tmp/aeneas_test_$$(basename $$f .rs) $$f && /tmp/aeneas_test_$$(basename $$f .rs) && rm -f /tmp/aeneas_test_$$(basename $$f .rs) || exit 1; \
+		$(RUSTC_CMD) --edition 2021 --test -o /tmp/aeneas_test_$$(basename $$f .rs) $$f && /tmp/aeneas_test_$$(basename $$f .rs) && rm -f /tmp/aeneas_test_$$(basename $$f .rs) || exit 1; \
 	done
 	@for d in $(CARGO_TEST_DIRS); do \
 		echo "# cargo-test: $$d"; \
-		(cd $$d && cargo +nightly test --quiet) || exit 1; \
+		(cd $$d && $(CARGO_CMD) test --quiet) || exit 1; \
 	done
 	@echo "# Rust unit tests done"
 
