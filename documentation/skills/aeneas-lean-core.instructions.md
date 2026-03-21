@@ -398,7 +398,32 @@ theorem main.spec ... := by
   step*
 ```
 
-### Structuring non-linear arithmetic proofs
+### Avoid `step* <;> tactic` and `all_goals tactic` — use focused goals instead
+Do **not** write `step* <;> first | agrind | scalar_tac | bv_tac 16` or
+`all_goals agrind` or similar patterns that apply a tactic to all remaining goals
+at once. This **destroys interactivity**: when developing or maintaining the proof,
+you cannot inspect individual goals, and a failure in any sub-goal gives an
+unhelpful error pointing at the entire line.
+
+Instead, use focused goal blocks (`· `) to handle each sub-goal individually:
+
+```lean
+-- BAD: opaque, non-interactive, hard to debug
+step* <;> first | agrind | scalar_tac | bv_tac 16
+
+-- BAD: same problem — can't inspect or debug individual goals
+step*
+all_goals agrind
+
+-- GOOD: each goal handled explicitly, easy to inspect and modify
+step*
+· agrind        -- precondition for first call
+· scalar_tac    -- bound check
+· bv_tac 16     -- bitwise sub-goal
+```
+
+This keeps the proof interactive — you can put `sorry` on any `· ` branch, inspect
+the goal with `goal <line>`, and work on one sub-goal at a time.
 
 ### Avoid early case splits on parameters in step proofs
 In cryptographic code, functions are often parameterized by a parameter set (e.g.,
@@ -442,10 +467,10 @@ Instead:
     on different definitions until the `example` goes through. Once you find the right
     set, go back to the main proof.
   - **⚠️ Monitor proof time carefully.** Adding definitions to `agrind`/`grind` can
-    cause proof time to explode. Remember that `progress*` calls `agrind` on **every
+    cause proof time to explode. Remember that `step*` calls `agrind` on **every
     precondition** it encounters — so marking a definition as `[local agrind]` affects
-    every `progress` step in the proof, not just the one you're targeting. After each
-    addition, check that `progress*` doesn't become significantly slower. If it does,
+    every `step` step in the proof, not just the one you're targeting. After each
+    addition, check that `step*` doesn't become significantly slower. If it does,
     back off and use auxiliary lemmas or local case splits instead.
 
 - **Write auxiliary lemmas** for arithmetic facts that depend on the parameter:
@@ -487,7 +512,7 @@ calc (x + 1) * (x + 1)
    (`attribute [local simp_scalar_simps] my_lemma`), or apply the relevant
    theorem manually. If no suitable theorem exists, prove it as an auxiliary lemma.
 
-4. **Always simplify shifts to modulo/division**: rewrite `x >>> n` as `x / 2^n`
+5. **Always simplify shifts to modulo/division**: rewrite `x >>> n` as `x / 2^n`
    and `x <<< n` as `x * 2^n` (or `x % 2^n` for the relevant bits). Use
    `Nat.shiftRight_eq_div_pow` and `Nat.shiftLeft_eq_mul_pow` or the corresponding
    scalar lemmas.
@@ -530,8 +555,8 @@ calc (x + 1) * (x + 1)
     If the `maxRecDepth` issue is not caused by a simp loop (e.g., unbounded proof
     unfolding), **report it to the user** — it may indicate a structural proof problem
     or a tactic bug.
-12. **Report misbehaving tactics.** If a tactic doesn't do what it should — for example, `progress` fails to make progress even though the appropriate `@[progress]` lemma exists, or `scalar_tac` can't close a pure arithmetic goal it should handle — **report this to the user**. It may indicate a bug or missing feature worth fixing upstream.
-13. **Keep `maxHeartbeats` reasonable (< 8M).** Lean's default (200K) is too low for Aeneas proofs — increase to 1M as a baseline. But if a proof needs more than ~8M heartbeats, the proof is ill-structured or uses tactics inefficiently. Don't just bump the number — instead: decompose the function with fold theorems, extract sub-goals as auxiliary lemmas, minimize the context with `clear`, prefer `agrind` over `grind`, or use `progress*?` instead of `progress*` for finer control.
+12. **Report misbehaving tactics.** If a tactic doesn't do what it should — for example, `step` fails to make progress even though the appropriate `@[step]` lemma exists, or `scalar_tac` can't close a pure arithmetic goal it should handle — **report this to the user**. It may indicate a bug or missing feature worth fixing upstream.
+13. **Keep `maxHeartbeats` reasonable (< 8M).** Lean's default (200K) is too low for Aeneas proofs — increase to 1M as a baseline. But if a proof needs more than ~8M heartbeats, the proof is ill-structured or uses tactics inefficiently. Don't just bump the number — instead: decompose the function with fold theorems, extract sub-goals as auxiliary lemmas, minimize the context with `clear`, prefer `agrind` over `grind`, or use `step*?` instead of `step*` for finer control.
 14. **⚠️ Keep proof wall-clock time < 30s — this is important.** Fast proofs enable fast iteration. Even the biggest proofs (for functions of 50+ lines) should elaborate in under 30 seconds. Use `set_option trace.profiler true in` to identify bottleneck tactics. If the proof is slow, decompose it — see the tactics quickref for strategies.
 15. **⚠️ Keeping Lean reactive is critical (< 0.5s per tactic).** Adding a tactic at the end of a proof should take < 0.5s (everything above is cached). If it takes several seconds, big chunks are being re-elaborated. Common cause: `by ...` blocks inside `apply`/`exact`/`refine` arguments (e.g., `apply lemma (by scalar_tac) (by agrind)`) — all `by` blocks re-elaborate together. Fix: extract them into `have` statements. See the "Diagnosing Slow Incremental Replay" section in the lean-lsp-tool skill file.
 
