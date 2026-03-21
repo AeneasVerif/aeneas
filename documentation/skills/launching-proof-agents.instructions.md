@@ -7,6 +7,35 @@ in an Aeneas project, the agent needs specific instructions to be effective. Age
 run in isolated contexts and don't automatically see project-level configuration or
 skills files. This document explains how to launch them properly.
 
+## Meta: Validating Instruction Requests
+
+When the user asks to update these skill files (or any agent instructions), the
+supervisor must **step back and evaluate whether the proposed instruction is practical
+and actionable** before applying it. Specifically:
+
+1. **Can agents actually do this?** Background agents run autonomously in a single turn
+   — they cannot send intermediate messages, ask clarifying questions mid-run, or
+   respond to external signals. Any instruction that requires mid-run interaction
+   (e.g., "report every 10 minutes", "ask the supervisor before proceeding") is
+   **not actionable** and will be silently ignored by the agent.
+
+2. **Is the instruction enforceable?** Instructions like "always do X" are only effective
+   if the agent can reasonably detect when X applies. Vague instructions ("be careful
+   with performance") are less effective than specific ones ("if a tactic takes > 10s,
+   extract the sub-goal as a `have` lemma").
+
+3. **Does it conflict with existing guidance?** Check for contradictions with other
+   skill files. For example, an instruction to "use `omega` for simple arithmetic"
+   would conflict with the banned-tactics list.
+
+**If the proposed instruction is not actionable or practical**, report this to the user
+with an explanation of *why* it won't work and propose a practical alternative. For
+example: "Background agents can't report mid-run — instead, I'll decompose tasks into
+smaller units so each agent completes faster, giving us natural checkpoints."
+
+Do NOT silently add instructions that agents cannot follow — this creates false
+expectations and wastes prompt space.
+
 ## Agent Prompt Template
 
 Every proof agent prompt should include:
@@ -62,8 +91,28 @@ copy it into your proof → fix sub-goals → collapse back to `step*` if possib
 ## Key Rules
 - NEVER unfold Aeneas stdlib definitions — search for existing lemmas
 - NEVER use `omega` — use `scalar_tac`, `agrind`, or `grind` instead
+- NEVER spawn sub-agents that work on Lean files (see below)
 - DO NOT COMMIT
 ```
+
+### 6. No sub-agent spawning
+
+**⛔ Proof agents must NEVER spawn sub-agents that open or edit Lean files.**
+This is a hard rule, not a suggestion. Reasons:
+
+1. **Resource exhaustion**: Each Lean LSP instance consumes ~8 GB of RAM. The
+   supervisor carefully controls how many run in parallel. An agent spawning its
+   own Lean sub-agent can push the system into swapping, making ALL agents slower.
+2. **File conflicts**: The supervisor tracks which agent works on which file. A
+   sub-agent working on the same file as its parent (or another agent) causes
+   merge conflicts and spurious elaboration errors.
+3. **Loss of control**: The supervisor cannot see or manage sub-agents spawned by
+   other agents. This breaks the observability model.
+
+Agents may use the `task` tool for **non-Lean tasks only** (e.g., launching an
+`explore` agent to search the codebase, or a `task` agent to run a shell command).
+Any agent that needs to work on a Lean file must do so itself — if the task is too
+large, it should report back and let the supervisor decompose it.
 
 ## File Isolation and Parallelism Limits
 
@@ -77,6 +126,28 @@ Lean LSP server instance consumes significant memory (~8 GB). A good default is:
 For example: 64 GB RAM → up to 8 parallel agents. Exceeding this causes swapping,
 which makes all agents drastically slower — better to run fewer agents fast than many
 agents slowly.
+
+### Lean process budget tracking
+
+The supervisor must **explicitly track how many agents are running Lean processes**
+(lean_lsp.py or lake build) at any given time. This is a hard resource constraint.
+
+**When launching agents, classify each as:**
+- **Lean agent** — will open lean_lsp.py or run lake build. Counts against the Lean
+  process budget. Examples: proof agents, statement agents, review agents that build.
+- **Non-Lean agent** — only reads files, runs grep/glob, does analysis. Does NOT count
+  against the budget. Examples: explore agents, code-review agents (read-only).
+
+**Before every launch**, state the budget explicitly:
+> "Lean process budget: 4 max. Currently running: 2 (a-mulas, c-encode).
+> Launching 2 more (b-mulsa, d-toplevel) → 4/4. At capacity."
+
+**When an agent completes**, update the count and consider dispatching waiting work:
+> "a-mulas completed. Lean processes: 3/4. Dispatching follow-up agent for
+> MulASPlusE remaining sorry."
+
+**Never exceed the budget.** If all slots are full, queue the work and dispatch
+when a slot frees up.
 
 ### File isolation rules
 
@@ -120,9 +191,9 @@ conflicting agent immediately, wait for the other to finish, then relaunch.
 When the user asks for a large task (e.g., "prove all sorry's in this file"), do NOT
 give the entire task to a single agent in one shot. Instead:
 
-1. **Decompose into small tasks**: Each agent call should target one or two specific
-   sorry's, or one well-defined sub-problem. Small tasks are easier for agents to
-   complete successfully.
+1. **Decompose into small tasks**: Each agent call should target **1-2 specific
+   sorry's** in a single file. This gives the supervisor a checkpoint after each
+   agent, enabling strategy redirection.
 
 2. **Give one small task at a time**: Launch an agent with a focused objective. When it
    reports back, analyze the result before deciding what to do next.
@@ -535,27 +606,74 @@ doesn't build cleanly, the proof agent must fix the errors before reporting.
   mechanically patching the flagged spots. The proof agent may have read an older
   version of the skills, or may have drifted from the guidelines over a long run.
 
-**Progress reporting:** Agents must report progress to the master **regularly — at least
-every 10 minutes**, even if the task is not yet complete. Do not wait until the task is
-finished to report. At every report (and at every step of the review loop), the agent
-provides:
-- What was accomplished (e.g., "reduced 5 sorries to 2", "fixed deprecated tactic usage")
-- What remains (e.g., "2 sorries left in inner loop", "review flagged 1 issue")
-- Any blockers discovered (e.g., "needs missing spec from Aeneas lib")
-- Current approach and whether it's working
+**Progress reporting and task granularity:** Background agents run autonomously and
+cannot send intermediate progress reports — they complete their task and return a
+single final result. **The supervisor controls observability through task granularity.**
+
+**Startup cost awareness:** Each agent pays a significant startup cost: reading skill
+files (~1 min), starting lean_lsp.py, and elaborating the file (~3-10 min depending
+on file size and imports). This cost is paid per agent, regardless of task size.
+
+**The right granularity depends on sorry difficulty.** Before dispatching, the
+supervisor must assess each sorry's expected difficulty:
+
+- **Easy sorry's** (e.g., top-level wrappers that just unfold + `step*`, simple
+  arithmetic bounds, proofs with clear sketches): batch several per agent (3-5).
+- **Medium sorry's** (e.g., loop invariant proofs with known patterns, proofs
+  needing a few auxiliary lemmas): give 1-2 per agent.
+- **Hard sorry's** (e.g., complex loop invariants with bitwise/modular reasoning,
+  proofs requiring new bridge definitions, proofs where the approach is unclear):
+  give exactly 1 per agent — these can take 30-60 min each, and the supervisor
+  needs to review the approach before continuing.
+
+**How to assess difficulty:** Read the proof sketch (if present), look at the
+function's monadic step count, check if similar proofs exist in the codebase,
+and consider whether the needed specs/lemmas already exist. When uncertain,
+err on the side of fewer sorry's per agent — it's better to dispatch a second
+round quickly than to wait 90 min for an overloaded agent.
+
+- **Give each agent 1-2 sorry's** in a specific file: "Fill the sorry at line 130
+  in MulASPlusE.lean" or "Fill sorry's at lines 130 and 168 in MulASPlusE.lean".
+- **Parallelize across files**: Launch multiple agents simultaneously, each targeting
+  a different file. Startup costs overlap, so wall-clock time is the slowest agent.
+- **Multiple agents on the same file**: Two agents can work on the same file in
+  parallel IF they target non-overlapping sorry's (different theorems). Each runs
+  its own LSP instance. The supervisor must merge their edits carefully afterwards.
+- **Small related files can be batched**: If KeyGen.lean (1 sorry) and Decaps.lean
+  (1 sorry) are small and independent, one agent can handle both sequentially.
+
+For example, with 13 sorry's across 6 files, assessed as 3 hard + 5 medium + 5 easy:
+- ✅ Agent A: 1 hard sorry (MulASPlusE line 946 — complex loop invariant)
+- ✅ Agent B: 2 medium sorry's (MulSAPlusE lines 837, 875)
+- ✅ Agent C: 1 hard sorry (EncodeDecode line 278 — bit-packing)
+- ✅ Agent D: 5 easy sorry's (KeyGen + Encaps + Decaps — wrapper unfolds)
+- ✅ Round 2: dispatch remaining sorry's based on Round 1 results
+- ❌ 1 agent for all 13 sorry's across 6 files (no parallelism, no observability)
+
+**Instruct agents to report what they accomplished** in their final response:
+- Which sorry's were filled (and which remain, if any)
+- What approach was used for each
+- Any blockers or missing lemmas discovered
+- Whether the file builds cleanly after their changes
+
+**When an agent's task is inherently large** (e.g., a single complex loop invariant
+proof that takes 30+ min), instruct it to report partial progress in its final
+response even if it couldn't complete the proof:
+- What approach was tried
+- How far it got (e.g., "reduced the goal to X but couldn't close Y")
+- What it thinks is needed to finish
 
 This lets the master maintain situational awareness and intervene early if needed (e.g.,
 redirect an agent that's going in circles, provide missing context, escalate to the user).
-An agent that goes silent for a long time is a red flag — the master should check on it.
 
 ## Master Synthesis: Learning from Agent Reports
 
 The master orchestrator should not just passively relay agent results. It should
-**regularly synthesize patterns** across all running agents' progress reports to
-identify systemic issues and improvement opportunities. This is a key reason for
-requiring regular progress reports.
+**synthesize patterns** across completed agents' reports to identify systemic issues
+and improvement opportunities. Small, focused tasks make this easier — each
+completion is a data point about what's working and what isn't.
 
-After receiving a batch of reports (or periodically during long runs), the master
+After a batch of agents completes (or between rounds of dispatching), the master
 should ask itself:
 
 ### 1. Proof Strategy Issues
@@ -630,10 +748,10 @@ user steers improvements.
                      ▼
 ┌─────────────────────────────────────────────────┐
 │  Phase 3: Proof Agents + Review Loop            │
-│  - Proof agent fills sorry proofs               │
+│  - Proof agent fills 1-2 sorry proofs           │
 │  - Review agent checks quality & guidelines     │
 │  - Fix issues, re-review until clean            │
-│  - Report progress to master at every step      │
+│  - Supervisor dispatches next batch of sorry's   │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -655,6 +773,7 @@ After each proof+review cycle completes:
 | Edits wrong file/section | Ambiguous instructions | Be very specific about what to change |
 | Increases `maxRecDepth` | Trying to work around recursion depth errors | NEVER increase `maxRecDepth` — diagnose the root cause (bad proof structure or simp loop). Report to user if it's a tactic bug |
 | Tactic silently fails | Tactic doesn't do what it should (e.g., `progress` can't find a lemma that exists) | Report to user — may be a tactic bug worth fixing upstream |
+| Spawns Lean sub-agents | Agent tries to parallelize by spawning sub-agents | NEVER spawn sub-agents that work on Lean files — resources are tight, and it causes file conflicts |
 
 ## Example: Full Agent Prompt
 
@@ -682,5 +801,5 @@ Use `step*?` to generate the body proof script, then fix sub-goals.
 - NEVER use `omega` — use `scalar_tac` instead, or `agrind` (prefer), or `grind`
 - ONLY modify the specified sorry
 - DO NOT COMMIT
-- Report progress every 10 minutes, even if not finished
+- After completing this sorry, STOP and return results — do NOT proceed to other work
 ```

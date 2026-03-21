@@ -169,7 +169,7 @@ fun_name a b ⦃ (x : U32) (s : Slice U16) =>
 | `step*?` | Generate proof script | `step*?` |
 | `scalar_tac` | Integer arithmetic/bounds | `scalar_tac`, `scalar_tac +nonLin` |
 | `simp_scalar` | Simplify scalar exprs | `simp_scalar [lemmas]` |
-| `simp_lists` | Simplify list get/set | `simp_lists [lemmas]` |
+| `simp_lists` | Simplify list/slice structural ops (setSlice!, replicate, append, take, drop, length, get/set) | `simp_lists [lemmas]` |
 | `bvify` | Lift to BitVec | `bvify N`, `bvify N at h` |
 | `bv_tac` | Decide BitVec goals | `bv_tac N` |
 | `natify` | Convert to Nat | `natify`, `natify at h` |

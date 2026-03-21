@@ -32,9 +32,12 @@ What does the goal look like?
 │  ├─ Equivalence (a ≡ b [MOD n]) → zmodify; ring / simp
 │  └─ Bounds (a < n) → stay Nat/Int; agrind / grind / scalar_tac
 │
-├─ List/Array (get/set)
+├─ List/Array/Slice structural (setSlice!, replicate, append, take, drop, length)
+│  → simp_lists  (designed for these operations)
+│
+├─ List/Array (get/set by index)
 │  ├─ Automatic → agrind first; if fails, try grind (slower, more list lemmas)
-│  └─ Slow → cases idx <;> simp_lists [*]
+│  └─ Slow → cases idx <;> simp_lists
 │
 ├─ Slice/List getElem mismatch
 │  ├─ Use #setup_aeneas_simps at file top (auto-converts getElem → getElem!)
