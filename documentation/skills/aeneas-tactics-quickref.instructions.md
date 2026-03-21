@@ -218,7 +218,7 @@ bump the number, fix the root cause:
    Smaller functions → smaller proof contexts → faster elaboration.
 2. **Minimize the context** — `clear` unused hypotheses before expensive tactics.
    Large contexts make `simp`, `agrind`, and `grind` slower.
-3. **Use `progress*?` instead of `progress*`** — the expanded script gives you
+3. **Use `step*?` instead of `step*`** — the expanded script gives you
    control over each step and avoids the combinatorial blowup of repeated automation.
 4. **Avoid `grind` when `agrind` suffices** — `grind` is much more expensive.
 5. **Extract complex sub-goals as auxiliary lemmas** — a separate lemma gets a fresh,
@@ -303,4 +303,4 @@ containing `s[i]'h`). This causes `simp` to recurse until it hits `maxRecDepth`.
 
 ### Report misbehaving tactics
 
-If a tactic doesn't do what it should — for example, `progress` fails to make progress on a goal even though the appropriate `@[progress]` lemma is available, or `scalar_tac` can't close a pure arithmetic goal it should handle — **report this to the user**. It may indicate a tactic bug or a missing feature that should be fixed upstream.
+If a tactic doesn't do what it should — for example, `step` fails to make progress on a goal even though the appropriate `@[step]` lemma is available, or `scalar_tac` can't close a pure arithmetic goal it should handle — **report this to the user**. It may indicate a tactic bug or a missing feature that should be fixed upstream.
