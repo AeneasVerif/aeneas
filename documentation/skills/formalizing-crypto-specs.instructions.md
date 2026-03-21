@@ -250,9 +250,9 @@ bounds (array/vector index proofs). Guidelines:
 - If the same tactic calls appear repeatedly (e.g., `by cases p <;> simp_all`
   for every `getElem` bound), introduce a **local macro** to avoid clutter:
   ```lean
-  local macro "param_bound" : tactic => `(tactic| cases p <;> simp_all [n, nbar])
+  local macro "param_bounds_tac" : tactic => `(tactic| cases p <;> simp_all [n, nbar])
   ```
-  Then use `(by param_bound)` throughout the spec instead of repeating the
+  Then use `(by param_bounds_tac)` throughout the spec instead of repeating the
   full tactic sequence.
 
 ### Interactive development
