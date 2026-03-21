@@ -160,7 +160,7 @@
             # -x: executable to act upon
             # -d: directory where to put the libraries
             # -p: prefix for the path in the load command
-            macdylibbundler -od -b -x ./aeneas -d ./libs -p @executable_path/libs
+            dylibbundler -od -b -x ./aeneas -d ./libs -p @executable_path/libs
           ''}
 
           tar -czvf $out *
