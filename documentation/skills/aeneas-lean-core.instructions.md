@@ -1,3 +1,8 @@
+---
+name: aeneas-lean-core
+description: Translation model, spec patterns, tactic reference, and pitfalls for Aeneas Lean proofs
+---
+
 # Aeneas + Lean Core Skill File
 
 ## Context

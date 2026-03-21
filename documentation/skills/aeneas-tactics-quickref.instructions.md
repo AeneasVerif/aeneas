@@ -1,3 +1,8 @@
+---
+name: aeneas-tactics-quickref
+description: Tactic decision tree, banned tactics, and common combinations for Aeneas Lean proofs
+---
+
 # Aeneas Tactics Quick Reference
 
 ## Decision Tree: Which Tactic?
