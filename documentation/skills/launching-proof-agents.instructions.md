@@ -70,7 +70,20 @@ copy it into your proof → fix sub-goals → collapse back to `step*` if possib
 - DO NOT COMMIT
 ```
 
-## File Isolation
+## File Isolation and Parallelism Limits
+
+### How many agents in parallel?
+
+**Ask the user upfront** how many agents can work on Lean files simultaneously. Each
+Lean LSP server instance consumes significant memory (~8 GB). A good default is:
+
+> **Max parallel Lean agents = RAM (in GB) / 8**
+
+For example: 64 GB RAM → up to 8 parallel agents. Exceeding this causes swapping,
+which makes all agents drastically slower — better to run fewer agents fast than many
+agents slowly.
+
+### File isolation rules
 
 When multiple agents run in parallel, each must work on a **separate file**.
 Two agents editing the same file will create merge conflicts. Additionally,
@@ -186,23 +199,68 @@ Launch agents to write theorem statements with `sorry` proofs. Each agent:
    - Preconditions (input lengths, bounds, divisibility)
    - Postcondition relating the output to the specification function
    - Any bridge definitions needed (e.g., `Slice.toMatrix`, `sliceToByteVec`)
-4. **Checks for correctness and corner cases**: Before finalizing, the statement agent
-   should convince itself that the theorem is actually true by **informally proving it**:
-   lay out the key steps of the proof in plain language, checking that each step follows.
-   For loops and recursive functions, **explicitly state the loop invariant** — this is
-   one of the most valuable parts of the informal proof, as it directly guides the
-   mechanized proof (the invariant is a required argument to `loop.spec_decr_nat`).
-   The agent is encouraged to write this informal proof as a comment in the theorem body
-   (above the `sorry`), to guide the mechanized proof later on. Also look for:
+4. **Sketches the proof strategy**: Before finalizing, the statement agent **must always
+   sketch the proof** — this is not optional. Lay out the key steps in plain language,
+   checking that each step follows. For loops and recursive functions, **explicitly state
+   the loop invariant** — this directly guides the mechanized proof. Write this sketch
+   as a comment in the theorem body (above the `sorry`).
+
+   The sketch should cover:
+   - The main proof structure (unfold + progress, case split, loop invariant, etc.)
+   - Which existing specs will be needed (list them by name)
+   - Any auxiliary lemmas that will be required
    - Edge cases (empty inputs, zero-length slices, boundary values)
    - Off-by-one errors in the Rust code
    - Potential bugs in the implementation (e.g., incorrect masks, wrong shift amounts,
      missing modular reductions)
    - Whether the spec and implementation actually agree on all inputs
+
    If the agent suspects a bug, it should report it rather than writing a statement
    that papers over the issue.
-5. **Verifies the statement typechecks** (sorry proof is fine at this stage)
-6. **Reports back** with the statement for review
+
+5. **Assesses function decomposition (for functions > 30 lines)**: For large functions
+   (> 30 lines of generated Lean code), the statement agent must assess whether the
+   function should be **split using the fold/refolding technique** (see "Function
+   Decomposition" in the crypto verification skill file). This is critical for proof
+   performance — proofs for large monolithic functions are slow and hard to maintain.
+
+   The agent should:
+   - Identify natural sub-computations in the function body (e.g., a setup phase,
+     a loop body, a finalization step, repeated sub-patterns like Montgomery reduction)
+   - For each proposed split, define the **auxiliary function** (the subsequence of
+     monadic operations to extract) and write its **spec** (theorem statement with
+     `sorry` proof)
+   - Indicate where the **fold theorem** will be needed (which lines of the original
+     function body correspond to each auxiliary function)
+   - Include the auxiliary function specs in the output alongside the main theorem
+
+   Example output structure:
+   ```lean
+   -- Auxiliary function: extracted from lines 15-25 of the main function
+   private def setup_phase (params : U32) (buf : Slice U16) : Result (Slice U16) := do
+     ...
+
+   -- Fold theorem (to be proved)
+   private theorem fold_setup_phase ... :
+     (do /- lines 15-25 inline -/ f result) = (do let r ← setup_phase params buf; f r) := by
+     sorry
+
+   -- Auxiliary spec
+   @[local progress]
+   theorem setup_phase.spec ... :
+     setup_phase params buf ⦃ res => ... ⦄ := by sorry
+
+   -- Main theorem (uses auxiliary specs via progress)
+   @[progress]
+   theorem main_function.spec ... :
+     main_function ... ⦃ res => ... ⦄ := by sorry
+   ```
+
+   If the function is small enough (≤ 30 lines) or naturally simple (few monadic steps),
+   the agent should note "no decomposition needed" and explain why.
+
+6. **Verifies the statement typechecks** (sorry proof is fine at this stage)
+7. **Reports back** with the statement for review
 
 **Agent prompt for Phase 1:**
 ```
@@ -218,8 +276,21 @@ The postcondition must express FULL FUNCTIONAL CORRECTNESS:
 - It must relate the output to the spec function using bridge definitions
   like `Slice.toMatrix`, etc.
 
+ALWAYS sketch the proof strategy as a comment above the sorry. Include:
+- Main proof structure (unfold + progress, case split, loop invariant, etc.)
+- Which existing specs are needed (by name)
+- Any auxiliary lemmas required
+- Edge cases and potential bugs to watch for
+
+If the function is > 30 lines of generated Lean code, assess whether it should
+be SPLIT using the fold/refolding technique. If yes:
+- Define the auxiliary functions (extracted subsequences of monadic operations)
+- Write their specs (theorem statements with sorry)
+- Indicate where fold theorems are needed
+- Include all of this in your output
+
 Verify the statement typechecks with `sorry` as the proof.
-DO NOT attempt the proof — just the statement.
+DO NOT attempt the mechanized proof — just the statement + sketch + decomposition.
 ```
 
 ### Phase 2: Review Gate (human or code-review agent)
@@ -288,10 +359,18 @@ until all statements are validated. Only then do proof agents launch.
   Check: edge cases (empty inputs, boundary values), off-by-one errors, incorrect
   bit manipulation, missing modular reductions. If a bug is suspected, flag it
   immediately rather than letting proof agents waste time on an unprovable theorem.
-- **Is the informal proof correct?** If the theorem body contains an informal proof
-  as a comment, the reviewer should check it: are the steps logically sound? Are the
-  loop invariants stated correctly and strong enough? Does the informal proof actually
-  cover all cases? A wrong informal proof will mislead the proof agent.
+- **Is the proof sketch present, complete, and correct?** Every statement must include
+  a proof sketch as a comment. Check that it covers: main proof structure, required
+  specs by name, auxiliary lemmas, and edge cases. Are the steps logically sound? Are
+  loop invariants stated correctly and strong enough? Does the sketch actually cover
+  all cases? A missing, vague, or incorrect sketch should be sent back — it will
+  mislead the proof agent.
+- **Is the function decomposition adequate?** For functions > 30 lines: did the agent
+  assess whether splitting is needed? If yes, are the auxiliary functions well-chosen
+  (natural sub-computations, not arbitrary splits)? Are their specs strong enough for
+  the main proof to use via `progress`? If the agent said "no decomposition needed",
+  is that justified? A function with 50+ monadic steps that wasn't decomposed should
+  be flagged.
 
 **Common weak-postcondition patterns to reject:**
 - `res.length = n` — length only, says nothing about values
@@ -438,6 +517,12 @@ doesn't build cleanly, the proof agent must fix the errors before reporting.
   case splits should be local (inside sub-goals) or handled via `attribute [local agrind]`.
 - **Spaces around binary operators in comments?** Check that comments and doc strings
   use `j < N`, not `j<N`. Missing spaces cause VS Code highlighting bugs.
+- **Is the proof fast enough?** Profile with `set_option trace.profiler true in` and
+  check that the proof completes in **< 30 seconds wall-clock** (even for the biggest
+  functions of 50+ lines). If it's slower, identify the bottleneck tactic and send the
+  proof back for optimization — decompose the function, extract auxiliary lemmas,
+  minimize the context, or pick better tactics. See the "Wall-clock time target"
+  section in `aeneas-tactics-quickref`.
 
 **Skill file freshness:**
 
@@ -455,14 +540,18 @@ doesn't build cleanly, the proof agent must fix the errors before reporting.
   mechanically patching the flagged spots. The proof agent may have read an older
   version of the skills, or may have drifted from the guidelines over a long run.
 
-**Progress reporting:** At every step of the loop (proof agent progress, review agent
-feedback, proof agent fixes), the agent reports to the master orchestrator:
+**Progress reporting:** Agents must report progress to the master **regularly — at least
+every 10 minutes**, even if the task is not yet complete. Do not wait until the task is
+finished to report. At every report (and at every step of the review loop), the agent
+provides:
 - What was accomplished (e.g., "reduced 5 sorries to 2", "fixed deprecated tactic usage")
 - What remains (e.g., "2 sorries left in inner loop", "review flagged 1 issue")
 - Any blockers discovered (e.g., "needs missing spec from Aeneas lib")
+- Current approach and whether it's working
 
-This lets the master maintain situational awareness and intervene if needed (e.g.,
-redirect an agent, provide missing context, escalate to the user).
+This lets the master maintain situational awareness and intervene early if needed (e.g.,
+redirect an agent that's going in circles, provide missing context, escalate to the user).
+An agent that goes silent for a long time is a red flag — the master should check on it.
 
 ## Master Synthesis: Learning from Agent Reports
 
@@ -598,4 +687,5 @@ Use `step*?` to generate the body proof script, then fix sub-goals.
 - NEVER use `omega` — use `scalar_tac` instead, or `agrind` (prefer), or `grind`
 - ONLY modify the specified sorry
 - DO NOT COMMIT
+- Report progress every 10 minutes, even if not finished
 ```
