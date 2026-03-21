@@ -1,3 +1,8 @@
+---
+name: aeneas-compiler-dev
+description: Dev workflow, formatting, tests, error macros, skill file structure, build rules for the Aeneas compiler
+---
+
 # Aeneas Compiler Development — Skill File
 
 ## ⛔ NEVER Commit or Push

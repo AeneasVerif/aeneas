@@ -1,3 +1,8 @@
+---
+name: aeneas-crypto-verification
+description: Crypto-specific proof strategies including Montgomery, NTT, modular arithmetic, and bit-vectors for Aeneas Lean proofs
+---
+
 # Aeneas Crypto Verification Skill File
 
 ## Context

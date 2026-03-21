@@ -1,3 +1,8 @@
+---
+name: lean-lsp-tool
+description: lean_lsp.py REPL for interactive Lean proof development including commands, workflows, and examples
+---
+
 # Lean LSP Tool — Skill File for AI Agents
 
 ## IMPORTANT: Always Use This Tool for Lean Proofs
