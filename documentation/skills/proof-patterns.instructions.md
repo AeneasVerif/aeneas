@@ -1,3 +1,8 @@
+---
+name: proof-patterns
+description: Fully-worked proof examples including loops, dot products, comparisons, and nested loops for Aeneas Lean proofs
+---
+
 # Proof Patterns — Completed Examples
 
 This document collects fully-worked proof patterns from real-world cryptographic

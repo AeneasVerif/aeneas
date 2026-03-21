@@ -1,3 +1,8 @@
+---
+name: launching-proof-agents
+description: Multi-agent proof orchestration, review gates, and task decomposition for Aeneas Lean proofs
+---
+
 # Launching Proof Agents — Skill File
 
 ## Overview
