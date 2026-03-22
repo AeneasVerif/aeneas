@@ -37,9 +37,12 @@ What does the goal look like?
 │  ├─ Equivalence (a ≡ b [MOD n]) → zmodify; ring / simp
 │  └─ Bounds (a < n) → stay Nat/Int; agrind / grind / scalar_tac
 │
-├─ List/Array (get/set)
+├─ List/Array/Slice structural (setSlice!, replicate, append, take, drop, length)
+│  → simp_lists  (designed for these operations)
+│
+├─ List/Array (get/set by index)
 │  ├─ Automatic → agrind first; if fails, try grind (slower, more list lemmas)
-│  └─ Slow → cases idx <;> simp_lists [*]
+│  └─ Slow → cases idx <;> simp_lists
 │
 ├─ Slice/List getElem mismatch
 │  ├─ Use #setup_aeneas_simps at file top (auto-converts getElem → getElem!)
@@ -174,23 +177,130 @@ theorem MY_CONST_val : MY_CONST.val = 42 := by decide
 | `agrind` fails | Goal unsolved | Try `simp [*]; agrind` |
 | Wrong step spec | Unexpected behavior | `step with specific_thm` |
 
-## Debugging Commands
+## Debugging and Profiling Commands
 
 ```lean
 set_option trace.step true        -- trace step decisions
 set_option trace.scalar_tac true      -- trace scalar_tac
-set_option trace.Aeneas.step true -- detailed step
-set_option maxHeartbeats 5000000      -- increase timeout (last resort)
+set_option trace.Aeneas.progress true -- detailed progress
+-- ⚠️ maxHeartbeats: see guidelines below
 -- ⛔ NEVER set_option maxRecDepth — see below
 ```
 
+### Profiling proof time
+
+Use these options to identify slow tactics:
+
+```lean
+-- Per-tactic timing breakdown (recommended — shows each tactic's time)
+set_option trace.profiler true in
+set_option trace.profiler.threshold 10 in  -- report tactics > 10ms (default: 100ms)
+
+-- Overall proof timing (coarser, shows elaboration phases)
+set_option profiler true in
+set_option profiler.threshold 10 in
+```
+
+Use `trace.profiler` to find which tactic dominates the time, then optimize or replace it.
+
+### ⚠️ `maxHeartbeats` guidelines
+
+Lean's default `maxHeartbeats` (200K) is very low for Aeneas proofs. **Increase it to
+1M as a baseline** (`set_option maxHeartbeats 1000000`) — this is a reasonable default
+for most proofs.
+
+Well-structured proofs should stay **under 8M heartbeats** even for the biggest proofs.
+If you need to increase beyond that, it signals a problem with the proof — don't just
+bump the number, fix the root cause:
+
+1. **Decompose the function** — use fold theorems to split a large function into
+   smaller helpers (see "Function Decomposition" in the crypto verification skill file).
+   Smaller functions → smaller proof contexts → faster elaboration.
+2. **Minimize the context** — `clear` unused hypotheses before expensive tactics.
+   Large contexts make `simp`, `agrind`, and `grind` slower.
+3. **Use `step*?` instead of `step*`** — the expanded script gives you
+   control over each step and avoids the combinatorial blowup of repeated automation.
+4. **Avoid `grind` when `agrind` suffices** — `grind` is much more expensive.
+5. **Extract complex sub-goals as auxiliary lemmas** — a separate lemma gets a fresh,
+   minimal context, which is faster for tactics to process.
+6. **Check for tactic inefficiency** — if a single tactic call dominates the heartbeat
+   budget, consider whether a different tactic would be faster (e.g., `bv_tac` instead
+   of `agrind` for bitwise goals, `scalar_tac` instead of `agrind` for pure arithmetic).
+
+### ⏱️ Wall-clock time target: < 30s — THIS IS IMPORTANT
+
+**Keeping proof times low is critical for productivity.** Fast proofs mean fast iteration
+— you can try tactics, see results, and adjust quickly. Slow proofs kill this feedback
+loop and make proof development painful.
+
+**Aim for < 30 seconds wall-clock time** even for the biggest proofs (functions of 50+
+lines). If a proof takes longer, it's a sign that the proof is ill-structured or uses
+tactics inefficiently. Use `set_option trace.profiler true in` to identify the bottleneck,
+then apply the strategies above (decompose, extract lemmas, minimize context, pick
+better tactics).
+
+**Keeping Lean reactive is even more important.** When developing a proof interactively,
+adding a tactic at the end should take **< 0.5s** — this is what enables rapid iteration.
+If incremental edits are slow (several seconds), the proof structure is forcing
+re-elaboration of large chunks. See the lean-lsp-tool skill file for guidance
+(avoid `by ...` blocks inside `apply`/`exact`/`refine` arguments, use `have` to create
+elaboration checkpoints).
+
 ### ⛔ NEVER increase `maxRecDepth`
 
-If you hit a `maxRecDepth` error, **do NOT increase it**. This is a symptom, not a problem to work around:
-- **Poorly written proof**: The proof structure causes unbounded unfolding. Refactor the proof.
-- **Tactic bug (simp loop)**: For tactics that internally use `simp` (e.g., `agrind`, `grind`, `scalar_tac`, `simp_scalar`), check whether hypotheses in the goal trigger a simp loop. If so, `clear` the offending hypothesis or use `simp only [...]` to control rewriting. This is a known pitfall, not a bug to report.
-- **Tactic bug (other)**: If the recursion depth issue is not caused by a simp loop, **report it to the user** — it may indicate a bug in the tactic implementation.
+If you hit a `maxRecDepth` error, **do NOT increase it**. This is a symptom of a
+**simp loop** or a poorly structured proof, not a depth limit to raise.
+
+**Root cause: simp loops.** A simp loop occurs when two or more simp lemmas rewrite
+back and forth (A → B → A → ...), or when a lemma rewrites to a term that reduces
+back to the original (e.g., `s[i]'h → s[i]!` but `s[i]!` unfolds back to something
+containing `s[i]'h`). This causes `simp` to recurse until it hits `maxRecDepth`.
+
+**How to diagnose:**
+1. The error says "maximum recursion depth has been reached" inside a `simp` call
+2. Use the LSP: comment out the failing `simp` call, add `sorry`, inspect the goal
+   with `goal <line>` to see what the `simp` was trying to simplify
+3. Identify which lemmas interact badly — try each lemma individually
+
+**How to fix (in order of preference):**
+1. **Split the `simp only` call**: If `simp only [A, B, C]` loops, try splitting into
+   sequential calls: `simp only [A]` then `simp only [B, C]`. The loop is often caused
+   by a specific pair of lemmas — separating them breaks the cycle.
+   ```lean
+   -- BAD: loops because A and B interact
+   simp only [A, B, C] at h ⊢
+   -- GOOD: separate the conflicting lemmas
+   simp only [A] at h ⊢
+   simp only [B, C] at h ⊢
+   ```
+2. **Use `rw` instead of `simp only`**: If you only need to apply a lemma once (not
+   repeatedly), `rw` is safer — it applies exactly once and doesn't loop.
+   ```lean
+   -- BAD: simp loops
+   simp only [Slice.Inhabited_getElem_eq_getElem!] at h
+   -- GOOD: apply once
+   rw [Slice.Inhabited_getElem_eq_getElem!] at h
+   ```
+3. **Reduce the lemma list**: Remove lemmas one by one until the loop stops. The last
+   lemma you removed is part of the loop — find its interaction partner.
+4. **Use `conv` for targeted rewriting**: When `simp` loops because it rewrites in
+   too many places, use `conv` to target a specific subterm.
+5. **`clear` offending hypotheses**: If a hypothesis triggers the loop (e.g., a
+   hypothesis whose type causes simp to loop when it tries to rewrite it), `clear` it
+   before calling `simp`, then re-introduce it if needed.
+6. **For tactics that internally use `simp`** (`agrind`, `grind`, `scalar_tac`,
+   `simp_scalar`): the loop may be triggered by hypotheses in the context. Try
+   `clear`-ing suspicious hypotheses before calling the tactic.
+
+**Common simp loop patterns in Aeneas:**
+- `Slice.Inhabited_getElem_eq_getElem!` + `List.Inhabited_getElem_eq_getElem!`:
+  These can loop when used together in `simp only`, because rewriting a Slice getElem
+  may expose a List getElem that rewrites back. Split them into separate calls.
+- `getElem → getElem!` lemmas combined with lemmas that unfold `getElem!`: The
+  `Inhabited_getElem_eq_getElem!` lemma rewrites `s[i]'h` to `s[i]!`, but if another
+  lemma or reduction rule unfolds `s[i]!` back to a form containing `s[i]'h`, you
+  get a loop. Use `rw` instead of `simp` for these.
 
 ### Report misbehaving tactics
 
-If a tactic doesn't do what it should — for example, `progress` fails to make progress on a goal even though the appropriate `@[progress]` lemma is available, or `scalar_tac` can't close a pure arithmetic goal it should handle — **report this to the user**. It may indicate a tactic bug or a missing feature that should be fixed upstream.
+If a tactic doesn't do what it should — for example, `step` fails to make progress on a goal even though the appropriate `@[step]` lemma is available, or `scalar_tac` can't close a pure arithmetic goal it should handle — **report this to the user**. It may indicate a tactic bug or a missing feature that should be fixed upstream.

@@ -12,6 +12,10 @@ in an Aeneas project, the agent needs specific instructions to be effective. Age
 run in isolated contexts and don't automatically see project-level configuration or
 skills files. This document explains how to launch them properly.
 
+**For general agent management rules** (resource budgets, file isolation, spawning
+rules, task granularity, etc.), see `agent-fleet-management.instructions.md`. This
+file only covers proof-specific workflow and instructions.
+
 ## Agent Prompt Template
 
 Every proof agent prompt should include:
@@ -68,65 +72,98 @@ copy it into your proof → fix sub-goals → collapse back to `step*` if possib
 - NEVER unfold Aeneas stdlib definitions — search for existing lemmas
 - NEVER use `omega` — use `scalar_tac`, `agrind`, or `grind` instead
 - Do not commit or push without asking the user first
+- NEVER spawn sub-agents that work on Lean files (see below)
+- ONLY modify your assigned file(s) — NEVER edit other files (see below)
+- DO NOT COMMIT
 ```
 
-## File Isolation
+### 6. File modification restriction
 
-When multiple agents run in parallel, each must work on a **separate file**.
-Two agents editing the same file will create merge conflicts. Additionally,
-the files must **not depend on each other**: file A depends on file B if A
-transitively imports B. If A imports B, then changes to B would invalidate A's
-elaboration, causing the agent working on A to see spurious errors.
+**⛔ Agents must ONLY modify the file(s) they have been explicitly assigned.**
+They must NEVER edit other files — not shared definition files (Defs.lean,
+MatDefs.lean), not external specs (ExternalSpecs.lean), not other Properties files.
 
-- ✅ Agent A on `Ntt.lean`, Agent B on `CompressEncode.lean` (no import relationship)
-- ❌ Agent A on `Ntt.lean` inner loop, Agent B on `Ntt.lean` outer loop (same file)
-- ❌ Agent A on `VectorOps.lean`, Agent B on `Ntt.lean` (if VectorOps imports Ntt)
+**If an agent needs a stronger spec or axiom from another file**, it must NOT
+modify that file. Instead:
 
-### Pre-Launch Conflict Check (MANDATORY)
+1. **Introduce a local version** in its own file — a `private axiom` or a
+   `sorry`'d `private theorem` that states what it needs:
+   ```lean
+   -- TODO: strengthen encrypt_block.spec in ExternalSpecs.lean to provide
+   -- functional correctness (currently only gives `True`). Move this local
+   -- axiom there once the external spec is updated.
+   --
+   -- WHY NEEDED: The outer loop proof needs to know that encrypt_block returns
+   -- the AES-128 encryption of the input block, not just `True`. Without this,
+   -- the loop invariant cannot relate the accumulated matrix to genA.
+   --
+   -- WHY VALID: The Rust code calls `aes::soft::Aes128::encrypt_block`, which
+   -- is the standard AES-128 block cipher. The postcondition simply states that
+   -- the output equals the spec's pure AES function applied to the same inputs.
+   -- This is the expected behavior of any correct AES implementation.
+   private axiom encrypt_block_functional_spec (c : aes.soft.Aes128) (block : Array U16 8#usize) :
+     frodokem.encrypt_block c block ⦃ fun out =>
+       out = specEncryptBlock c block ⦄
+   ```
 
-**Before launching any fleet of agents**, the supervisor must explicitly verify
-that no two agents will conflict. For each pair of agents in the batch:
+2. **The comment must explain TWO things:**
+   - **Why needed** — what does the proof require that the current spec doesn't
+     provide? Which specific goal or sub-goal is blocked?
+   - **Why valid** — why is the proposed postcondition true? What does the Rust
+     code actually do that justifies this spec? The supervisor needs this to
+     validate the spec before consolidating it into the shared file.
 
-1. **Same-file check**: Are any two agents targeting the same `.lean` file?
-   If yes, merge them into one agent or serialize them (run one after the other).
+3. **Report the dependency** in its final response so the supervisor can
+   coordinate the fix across files.
 
-2. **Import-dependency check**: Does any agent's file import (directly or
-   transitively) another agent's file? Trace the `import` chain. If A imports B,
-   the agent on A must wait until the agent on B finishes and its changes are saved.
+**Why:** Multiple agents may run in parallel on different files. If agent A edits
+`ExternalSpecs.lean` while agent B also depends on it, B's elaboration breaks.
+Only the supervisor coordinates cross-file changes — after all agents complete.
 
-3. **Shared-definition check**: Do any two agents' files depend on a shared
-   definition file (e.g., `Defs.lean`, `MatDefs.lean`) that a *third* agent is
-   also modifying? If so, the third agent must finish first.
+### 7. No sub-agent spawning / file isolation / resource limits
 
-**How to verify:** Before launching, list each agent's target file and quickly
-check the `import` statements at the top of each file. Draw the dependency edges
-and confirm there are no conflicts. State this check explicitly in your reasoning
-(e.g., "CT.lean imports Defs.lean, MulBS.lean imports MatDefs.lean — no mutual
-dependencies, safe to parallelize").
+These rules are defined in `agent-fleet-management.instructions.md`. Key points
+for proof agents:
 
-**If you discover a conflict after agents are already running**, stop the
-conflicting agent immediately, wait for the other to finish, then relaunch.
+- **⛔ NEVER spawn sub-agents that run Lean processes** (lean_lsp.py, lake build)
+- **⛔ ONLY modify your assigned file(s)** — use local axioms with TODO comments
+  for specs from other files (see section 6 above)
+- Agents may use lightweight `explore` agents for codebase searches
+
+## File Isolation and Parallelism (Lean-Specific)
+
+See `agent-fleet-management.instructions.md` for the general rules. Additional
+Lean-specific notes:
+
+- **Import-dependency check**: Lean files form an import DAG. If file A imports
+  file B (directly or transitively), the agent on A must wait until B's agent
+  finishes. Check `import` statements at the top of each file before launching.
+- **Examples**:
+  - ✅ Agent A on `Ntt.lean`, Agent B on `CompressEncode.lean` (no import relationship)
+  - ❌ Agent A on `Ntt.lean` inner loop, Agent B on `Ntt.lean` outer loop (same file)
+  - ❌ Agent A on `VectorOps.lean`, Agent B on `Ntt.lean` (if VectorOps imports Ntt)
 
 ## Task Decomposition and Agent Supervision
 
 When the user asks for a large task (e.g., "prove all sorry's in this file"), do NOT
 give the entire task to a single agent in one shot. Instead:
 
-1. **Decompose into small tasks**: Each agent call should target one or two specific
-   sorry's, or one well-defined sub-problem. Small tasks are easier for agents to
-   complete successfully.
+1. **Decompose into small tasks**: The number of sorry's per agent depends on
+   difficulty (see `agent-fleet-management.instructions.md` for the general
+   difficulty-based sizing rule). For proof agents specifically:
+   - **Easy sorry's** (wrapper unfolds, clear `step*` proofs): 3-5 per agent
+   - **Medium sorry's** (loop invariants with known patterns): 1-2 per agent
+   - **Hard sorry's** (complex bitwise/modular reasoning, unclear approach): 1 per agent
 
 2. **Give one small task at a time**: Launch an agent with a focused objective. When it
    reports back, analyze the result before deciding what to do next.
 
-3. **Supervise actively**: When an agent reports:
-   - **Step back**: Understand whether the work is going well. Did the agent make progress?
-     Did it get stuck? Is it going in circles?
-   - **Diagnose slowness**: If the agent is slow, check why — is it using `lake build`
-     instead of `lean_lsp.py`? Is it stuck on a heartbeat explosion? Is it trying an
-     approach that won't work?
-   - **Assess the approach**: Is the proof strategy sound? Should you redirect the agent
-     with different hints?
+3. **Supervise actively**: When an agent completes and reports back:
+   - **Step back**: Did the agent make progress? Did it get stuck? Did it go in circles?
+   - **Diagnose issues from the output**: Did it use `lake build` instead of `lean_lsp.py`?
+     Did it hit heartbeat explosions? Did it try an approach that won't work?
+   - **Assess the approach**: Is the proof strategy sound? Should the next agent try
+     differently?
    - **Report to the user**: Surface interesting findings — e.g., "the agent discovered
      that spec X is missing", "this sorry requires a new lemma about bit operations",
      "the agent reduced 8 sorry's to 3 but the remaining ones are hard because..."
@@ -158,12 +195,11 @@ give the entire task to a single agent in one shot. Instead:
    file, it stays in the Properties file.
 
 5. **Iterate**: Based on the agent's report, launch a follow-up agent with refined
-   instructions, or pivot to a different approach. Never let an agent run for hours
-   without checking in.
+   instructions, or pivot to a different approach.
 
-6. **Reinforce lean_lsp.py usage on every interaction**: Agents tend to fall back to
-   `lake build` loops. Every time you launch an agent or send it a follow-up message,
-   remind it: "Use lean_lsp.py for all proof iteration — do NOT use lake build." This
+6. **Reinforce lean_lsp.py usage in every agent prompt**: Agents tend to fall back to
+   `lake build` loops. Every time you launch an agent, include in the prompt:
+   "Use lean_lsp.py for all proof iteration — do NOT use lake build." This
    is not optional — agents that use `lake build` waste 2–5 minutes per cycle instead
    of 5–30 seconds with the LSP.
 
@@ -186,23 +222,68 @@ Launch agents to write theorem statements with `sorry` proofs. Each agent:
    - Preconditions (input lengths, bounds, divisibility)
    - Postcondition relating the output to the specification function
    - Any bridge definitions needed (e.g., `Slice.toMatrix`, `sliceToByteVec`)
-4. **Checks for correctness and corner cases**: Before finalizing, the statement agent
-   should convince itself that the theorem is actually true by **informally proving it**:
-   lay out the key steps of the proof in plain language, checking that each step follows.
-   For loops and recursive functions, **explicitly state the loop invariant** — this is
-   one of the most valuable parts of the informal proof, as it directly guides the
-   mechanized proof (the invariant is a required argument to `loop.spec_decr_nat`).
-   The agent is encouraged to write this informal proof as a comment in the theorem body
-   (above the `sorry`), to guide the mechanized proof later on. Also look for:
+4. **Sketches the proof strategy**: Before finalizing, the statement agent **must always
+   sketch the proof** — this is not optional. Lay out the key steps in plain language,
+   checking that each step follows. For loops and recursive functions, **explicitly state
+   the loop invariant** — this directly guides the mechanized proof. Write this sketch
+   as a comment in the theorem body (above the `sorry`).
+
+   The sketch should cover:
+   - The main proof structure (unfold + step, case split, loop invariant, etc.)
+   - Which existing specs will be needed (list them by name)
+   - Any auxiliary lemmas that will be required
    - Edge cases (empty inputs, zero-length slices, boundary values)
    - Off-by-one errors in the Rust code
    - Potential bugs in the implementation (e.g., incorrect masks, wrong shift amounts,
      missing modular reductions)
    - Whether the spec and implementation actually agree on all inputs
+
    If the agent suspects a bug, it should report it rather than writing a statement
    that papers over the issue.
-5. **Verifies the statement typechecks** (sorry proof is fine at this stage)
-6. **Reports back** with the statement for review
+
+5. **Assesses function decomposition (for functions > 30 lines)**: For large functions
+   (> 30 lines of generated Lean code), the statement agent must assess whether the
+   function should be **split using the fold/refolding technique** (see "Function
+   Decomposition" in the crypto verification skill file). This is critical for proof
+   performance — proofs for large monolithic functions are slow and hard to maintain.
+
+   The agent should:
+   - Identify natural sub-computations in the function body (e.g., a setup phase,
+     a loop body, a finalization step, repeated sub-patterns like Montgomery reduction)
+   - For each proposed split, define the **auxiliary function** (the subsequence of
+     monadic operations to extract) and write its **spec** (theorem statement with
+     `sorry` proof)
+   - Indicate where the **fold theorem** will be needed (which lines of the original
+     function body correspond to each auxiliary function)
+   - Include the auxiliary function specs in the output alongside the main theorem
+
+   Example output structure:
+   ```lean
+   -- Auxiliary function: extracted from lines 15-25 of the main function
+   private def setup_phase (params : U32) (buf : Slice U16) : Result (Slice U16) := do
+     ...
+
+   -- Fold theorem (to be proved)
+   private theorem fold_setup_phase ... :
+     (do /- lines 15-25 inline -/ f result) = (do let r ← setup_phase params buf; f r) := by
+     sorry
+
+   -- Auxiliary spec
+   @[local step]
+   theorem setup_phase.spec ... :
+     setup_phase params buf ⦃ res => ... ⦄ := by sorry
+
+   -- Main theorem (uses auxiliary specs via step)
+   @[step]
+   theorem main_function.spec ... :
+     main_function ... ⦃ res => ... ⦄ := by sorry
+   ```
+
+   If the function is small enough (≤ 30 lines) or naturally simple (few monadic steps),
+   the agent should note "no decomposition needed" and explain why.
+
+6. **Verifies the statement typechecks** (sorry proof is fine at this stage)
+7. **Reports back** with the statement for review
 
 **Agent prompt for Phase 1:**
 ```
@@ -218,8 +299,21 @@ The postcondition must express FULL FUNCTIONAL CORRECTNESS:
 - It must relate the output to the spec function using bridge definitions
   like `Slice.toMatrix`, etc.
 
+ALWAYS sketch the proof strategy as a comment above the sorry. Include:
+- Main proof structure (unfold + step, case split, loop invariant, etc.)
+- Which existing specs are needed (by name)
+- Any auxiliary lemmas required
+- Edge cases and potential bugs to watch for
+
+If the function is > 30 lines of generated Lean code, assess whether it should
+be SPLIT using the fold/refolding technique. If yes:
+- Define the auxiliary functions (extracted subsequences of monadic operations)
+- Write their specs (theorem statements with sorry)
+- Indicate where fold theorems are needed
+- Include all of this in your output
+
 Verify the statement typechecks with `sorry` as the proof.
-DO NOT attempt the proof — just the statement.
+DO NOT attempt the mechanized proof — just the statement + sketch + decomposition.
 ```
 
 ### Phase 2: Review Gate (human or code-review agent)
@@ -288,10 +382,18 @@ until all statements are validated. Only then do proof agents launch.
   Check: edge cases (empty inputs, boundary values), off-by-one errors, incorrect
   bit manipulation, missing modular reductions. If a bug is suspected, flag it
   immediately rather than letting proof agents waste time on an unprovable theorem.
-- **Is the informal proof correct?** If the theorem body contains an informal proof
-  as a comment, the reviewer should check it: are the steps logically sound? Are the
-  loop invariants stated correctly and strong enough? Does the informal proof actually
-  cover all cases? A wrong informal proof will mislead the proof agent.
+- **Is the proof sketch present, complete, and correct?** Every statement must include
+  a proof sketch as a comment. Check that it covers: main proof structure, required
+  specs by name, auxiliary lemmas, and edge cases. Are the steps logically sound? Are
+  loop invariants stated correctly and strong enough? Does the sketch actually cover
+  all cases? A missing, vague, or incorrect sketch should be sent back — it will
+  mislead the proof agent.
+- **Is the function decomposition adequate?** For functions > 30 lines: did the agent
+  assess whether splitting is needed? If yes, are the auxiliary functions well-chosen
+  (natural sub-computations, not arbitrary splits)? Are their specs strong enough for
+  the main proof to use via `step`? If the agent said "no decomposition needed",
+  is that justified? A function with 50+ monadic steps that wasn't decomposed should
+  be flagged.
 
 **Common weak-postcondition patterns to reject:**
 - `res.length = n` — length only, says nothing about values
@@ -316,9 +418,9 @@ trace the Rust logic by hand, check if a particular input would violate the
 postcondition. If a bug is found or suspected, the agent must **stop proving
 immediately and report the finding**.
 
-The master should also watch for this: if an agent has been stuck on the same goal
-for multiple iterations without progress, remind it: "Consider whether this theorem
-is actually true. Look for counterexamples or bugs in the Rust code."
+**Include in every proof agent prompt:** "If you spend a long time stuck on a goal
+that won't close, consider whether the theorem is actually true. Look for
+counterexamples or bugs in the Rust code. Report findings immediately."
 
 **🚨 CRITICAL: When a bug in the Rust code is discovered, report it IMMEDIATELY
 and IMPERATIVELY to the user.** This is one of the most valuable outcomes of formal
@@ -378,7 +480,6 @@ doesn't build cleanly, the proof agent must fix the errors before reporting.
 ```
 ┌──────────────────────────────────────┐
 │  Proof agent works on sorry's        │
-│  (reports progress to master)        │
 ├──────────────────────────────────────┤
 │  Proof agent runs lake build         │
 │  → MUST be 0 errors before handoff   │
@@ -438,6 +539,12 @@ doesn't build cleanly, the proof agent must fix the errors before reporting.
   case splits should be local (inside sub-goals) or handled via `attribute [local agrind]`.
 - **Spaces around binary operators in comments?** Check that comments and doc strings
   use `j < N`, not `j<N`. Missing spaces cause VS Code highlighting bugs.
+- **Is the proof fast enough?** Profile with `set_option trace.profiler true in` and
+  check that the proof completes in **< 30 seconds wall-clock** (even for the biggest
+  functions of 50+ lines). If it's slower, identify the bottleneck tactic and send the
+  proof back for optimization — decompose the function, extract auxiliary lemmas,
+  minimize the context, or pick better tactics. See the "Wall-clock time target"
+  section in `aeneas-tactics-quickref`.
 
 **Skill file freshness:**
 
@@ -449,81 +556,60 @@ doesn't build cleanly, the proof agent must fix the errors before reporting.
   from the latest version of all skill files — including any mid-run updates the
   master made (with user approval).
 - If the reviewer finds **many guideline violations** (e.g., 3+ issues that the
-  skill files clearly address), the feedback to the proof agent should include an
-  explicit instruction: **"Re-read the skill files before fixing these issues."**
-  This forces the proof agent to refresh its understanding rather than just
-  mechanically patching the flagged spots. The proof agent may have read an older
-  version of the skills, or may have drifted from the guidelines over a long run.
+  skill files clearly address), the prompt for the follow-up fix agent should include:
+  **"Re-read the skill files before fixing these issues."**
+  The follow-up agent is a fresh context and may have different knowledge — explicitly
+  pointing it to the skill files ensures it doesn't repeat the same violations.
 
-**Progress reporting:** At every step of the loop (proof agent progress, review agent
-feedback, proof agent fixes), the agent reports to the master orchestrator:
-- What was accomplished (e.g., "reduced 5 sorries to 2", "fixed deprecated tactic usage")
-- What remains (e.g., "2 sorries left in inner loop", "review flagged 1 issue")
-- Any blockers discovered (e.g., "needs missing spec from Aeneas lib")
+**Progress reporting and task granularity:** See `agent-fleet-management.instructions.md`
+for the general rules. Proof-specific notes:
 
-This lets the master maintain situational awareness and intervene if needed (e.g.,
-redirect an agent, provide missing context, escalate to the user).
+- **Assess sorry difficulty before dispatching** — read the proof sketch (if present),
+  check the function's monadic step count, check if similar proofs exist, and consider
+  whether needed specs/lemmas already exist.
+- **Give each agent sorry's in a specific file**: "Fill the sorry at line 130
+  in MulASPlusE.lean" or "Fill sorry's at lines 130 and 168 in MulASPlusE.lean".
+- **Parallelize across files**: Launch multiple agents simultaneously, each targeting
+  a different file. Startup costs overlap, so wall-clock time is the slowest agent.
+- **Small related files can be batched**: If KeyGen.lean (1 sorry) and Decaps.lean
+  (1 sorry) are small and independent, one agent can handle both sequentially.
 
-## Master Synthesis: Learning from Agent Reports
+For example, with 13 sorry's across 6 files, assessed as 3 hard + 5 medium + 5 easy:
+- ✅ Agent A: 1 hard sorry (MulASPlusE line 946 — complex loop invariant)
+- ✅ Agent B: 2 medium sorry's (MulSAPlusE lines 837, 875)
+- ✅ Agent C: 1 hard sorry (EncodeDecode line 278 — bit-packing)
+- ✅ Agent D: 5 easy sorry's (KeyGen + Encaps + Decaps — wrapper unfolds)
+- ✅ Round 2: dispatch remaining sorry's based on Round 1 results
+- ❌ 1 agent for all 13 sorry's across 6 files (no parallelism, no observability)
 
-The master orchestrator should not just passively relay agent results. It should
-**regularly synthesize patterns** across all running agents' progress reports to
-identify systemic issues and improvement opportunities. This is a key reason for
-requiring regular progress reports.
+**Instruct agents to report what they accomplished** in their final response:
+- Which sorry's were filled (and which remain, if any)
+- What approach was used for each
+- Any blockers or missing lemmas discovered
+- Whether the file builds cleanly after their changes
 
-After receiving a batch of reports (or periodically during long runs), the master
-should ask itself:
+**When an agent's task is inherently large** (e.g., a single complex loop invariant
+proof that takes 30+ min), instruct it to report partial progress in its final
+response even if it couldn't complete the proof:
+- What approach was tried
+- How far it got (e.g., "reduced the goal to X but couldn't close Y")
+- What it thinks is needed to finish
 
-### 1. Proof Strategy Issues
-- Are multiple agents struggling with the same kind of sub-goal? (e.g., all stuck
-  on bitwise reasoning, or all failing to close a loop invariant)
-- Would a different proof strategy unblock several agents at once?
-- Is there a common missing lemma that, if proved once, would help many proofs?
-- Should the master pause agents, prove that lemma centrally, then resume?
+This lets the master maintain situational awareness and intervene early if needed (e.g.,
+redirect an agent that's going in circles, provide missing context, escalate to the user).
 
-### 2. Skill File Updates
-- Are agents repeatedly making the same mistake despite reading the skill files?
-  → The skill file is missing guidance on that specific pattern.
-- Did an agent discover a useful technique not yet documented?
-  → Add it to the skills so future agents benefit.
-- Are agents confused by ambiguous or outdated instructions?
-  → Clarify the skill files.
+## Master Synthesis
 
-### 3. Automation and Tooling Opportunities
-- Is there a repetitive mechanical step that agents do manually every time?
-  → Could it be automated (e.g., a new tactic, a script, a code generator)?
-- Are agents spending a lot of time on boilerplate (e.g., writing bridge definitions,
-  unfolding the same chain of lets)?
-  → Consider adding automation or shared infrastructure.
-- Is the `lean_lsp.py` workflow missing a feature that would speed up agents?
+See `agent-fleet-management.instructions.md` for the general cross-agent synthesis
+rules. Proof-specific patterns to watch for:
 
-### 4. Reporting to the User
-The master should surface these synthesis findings to the user, not just raw agent
-results. For example:
+- Multiple agents stuck on the same kind of sub-goal (e.g., bitwise reasoning)
+  → may need a shared lemma proved centrally
+- Agents discovering missing specs in `ExternalSpecs.lean` → consolidate after fleet
+- Common bridge definitions needed across proofs → add to `Defs.lean`/`MatDefs.lean`
 
-- "Three agents are all stuck on ZMod bitwise reasoning — we may need a shared lemma
-  `zmod_and_pow2` before they can proceed."
-- "Agents keep using `grind` instead of `agrind` — I've updated the skill file to
-  make this more prominent."
-- "The inner-loop pattern `for i in (0..n).step_by(k)` appears in 4 functions. The
-  first agent found a workaround; I'll propagate it to the others."
-- "I notice agents spend ~30% of their time on bridge definitions. We could add
-  `Slice.toBitstring` to Defs.lean to eliminate this across all encode/decode proofs."
-
-**Important:** The master does NOT act on these findings autonomously. It reports
-them to the user as recommendations and waits for validation before making changes.
-For example:
-- "I noticed X pattern — should I update the skill file?" (wait for yes/no)
-- "Three agents are blocked on the same lemma — should I pause them and prove it
-  centrally?" (wait for approval)
-- "Agent A found a useful workaround — should I propagate it to the others?" (wait)
-
-The user decides what to act on. The master's job is to synthesize and surface
-insights, not to make unilateral decisions about strategy, skill files, or tooling.
-
-This synthesis loop is what makes a fleet of agents more effective than the same
-agents running independently — the master surfaces cross-agent patterns and the
-user steers improvements.
+**The master does NOT act on these findings autonomously** — it reports to the user
+and waits for approval.
 
 ### Summary: Fleet Organization
 
@@ -546,10 +632,10 @@ user steers improvements.
                      ▼
 ┌─────────────────────────────────────────────────┐
 │  Phase 3: Proof Agents + Review Loop            │
-│  - Proof agent fills sorry proofs               │
+│  - Proof agent fills 1-2 sorry proofs           │
 │  - Review agent checks quality & guidelines     │
 │  - Fix issues, re-review until clean            │
-│  - Report progress to master at every step      │
+│  - Supervisor dispatches next batch of sorry's   │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -570,7 +656,9 @@ After each proof+review cycle completes:
 | Uses `linarith` | Same issues as `omega` — can't reason about scalars | NEVER use `linarith` — use `scalar_tac` or `agrind` |
 | Edits wrong file/section | Ambiguous instructions | Be very specific about what to change |
 | Increases `maxRecDepth` | Trying to work around recursion depth errors | NEVER increase `maxRecDepth` — diagnose the root cause (bad proof structure or simp loop). Report to user if it's a tactic bug |
-| Tactic silently fails | Tactic doesn't do what it should (e.g., `progress` can't find a lemma that exists) | Report to user — may be a tactic bug worth fixing upstream |
+| Tactic silently fails | Tactic doesn't do what it should (e.g., `step` can't find a lemma that exists) | Report to user — may be a tactic bug worth fixing upstream |
+| Spawns Lean sub-agents | Agent tries to parallelize by spawning sub-agents | NEVER spawn sub-agents that work on Lean files — resources are tight, and it causes file conflicts |
+| Edits other files | Agent modifies shared defs or specs it wasn't assigned | NEVER edit files other than assigned ones — introduce local axioms with TODO comments instead |
 
 ## Example: Full Agent Prompt
 
@@ -587,7 +675,7 @@ Read these files: [list paths]
 `poly_element_ntt_layer_generic_loop0_loop0_spec` at line ~421.
 
 ## Proof Strategy
-Use `loop.spec_decr_nat` with measure `iter.end - iter.start`.
+The loop is a recursive function — use `unfold` + `step` with case split.
 Use `step*?` to generate the body proof script, then fix sub-goals.
 
 ## Available Specs
@@ -598,4 +686,5 @@ Use `step*?` to generate the body proof script, then fix sub-goals.
 - NEVER use `omega` — use `scalar_tac` instead, or `agrind` (prefer), or `grind`
 - ONLY modify the specified sorry
 - Do not commit or push without asking the user first
+- After completing this sorry, STOP and return results — do NOT proceed to other work
 ```

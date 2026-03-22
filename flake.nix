@@ -143,12 +143,26 @@
             charon-ml = charon-ml.override { inherit ocamlPackages; };
           };
 
-        mk-aeneas-release = { aeneas, charon-portable }: pkgs.runCommand "aeneas-release.tar.gz" { } ''
+        mk-aeneas-release = { aeneas, charon-portable }: pkgs.runCommand "aeneas-release.tar.gz" {
+          buildInputs = pkgs.lib.optionals pkgs.stdenv.isDarwin [ pkgs.macdylibbundler ];
+        } ''
           mkdir release
           cd release
           cp ${charon-portable}/bin/charon ${charon-portable}/bin/charon-driver .
           cp ${aeneas}/bin/aeneas .
           cp -r ${./backends} backends
+
+          ${pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
+            # Make the binary writable so macdylibbundler can modify its load paths
+            chmod +w aeneas
+            # -od: Overwrite directories
+            # -b: fix dependencies of the bundled libraries themselves
+            # -x: executable to act upon
+            # -d: directory where to put the libraries
+            # -p: prefix for the path in the load command
+            macdylibbundler -od -b -x ./aeneas -d ./libs -p @executable_path/libs
+          ''}
+
           tar -czvf $out *
         '';
 
