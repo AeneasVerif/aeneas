@@ -227,17 +227,33 @@ bump the number, fix the root cause:
    budget, consider whether a different tactic would be faster (e.g., `bv_tac` instead
    of `agrind` for bitwise goals, `scalar_tac` instead of `agrind` for pure arithmetic).
 
-### ⏱️ Wall-clock time target: < 30s — THIS IS IMPORTANT
+### ⏱️ Wall-clock time target: < 60s — THIS IS IMPORTANT
 
 **Keeping proof times low is critical for productivity.** Fast proofs mean fast iteration
 — you can try tactics, see results, and adjust quickly. Slow proofs kill this feedback
 loop and make proof development painful.
 
-**Aim for < 30 seconds wall-clock time** even for the biggest proofs (functions of 50+
-lines). If a proof takes longer, it's a sign that the proof is ill-structured or uses
-tactics inefficiently. Use `set_option trace.profiler true in` to identify the bottleneck,
-then apply the strategies above (decompose, extract lemmas, minimize context, pick
-better tactics).
+**The total proof time for a function should be < 60 seconds wall-clock** even for the
+biggest functions (50+ lines). This includes both tactic elaboration AND kernel proof-term
+replay. If a proof takes longer, it's a sign that the proof is ill-structured or uses
+tactics inefficiently — it must be fixed, not tolerated.
+
+**Note:** It can happen that the tactic proof itself runs reasonably fast but *accepting*
+the proof (the kernel replaying the proof term) takes very long. This is a distinct issue
+from tactic slowness — it means the proof term is too large or complex.
+
+**How to detect kernel replay slowness:** In the LSP, after all tactics have been
+elaborated, the server will report that it is still processing the last line of the proof
+AND the `theorem` declaration line (along with any `set_option ... in` above it). If it
+stays in this state for a long time, it is likely spending time in the kernel checking the
+proof term — not running tactics.
+
+**Fixes:** Decompose the function (fold theorems), extract sub-goals as auxiliary lemmas
+(which get their own smaller proof terms), or use more direct proof strategies that
+produce simpler terms.
+
+Use `set_option trace.profiler true in` to profile tactic elaboration time. If tactic
+times are reasonable but the overall proof is slow, the bottleneck is kernel replay.
 
 **Keeping Lean reactive is even more important.** When developing a proof interactively,
 adding a tactic at the end should take **< 0.5s** — this is what enables rapid iteration.
@@ -248,8 +264,9 @@ elaboration checkpoints).
 
 ### ⛔ NEVER increase `maxRecDepth`
 
-If you hit a `maxRecDepth` error, **do NOT increase it**. This is a symptom of a
-**simp loop** or a poorly structured proof, not a depth limit to raise.
+If you hit a `maxRecDepth` error, **do NOT increase it**. If calling any tactic
+triggers `maxRecDepth`, it almost certainly means **the tactic is looping internally**
+(typically via `simp`). The fix is never to raise the limit — it's to break the loop.
 
 **Root cause: simp loops.** A simp loop occurs when two or more simp lemmas rewrite
 back and forth (A → B → A → ...), or when a lemma rewrites to a term that reduces
@@ -291,6 +308,21 @@ containing `s[i]'h`). This causes `simp` to recurse until it hits `maxRecDepth`.
 6. **For tactics that internally use `simp`** (`agrind`, `grind`, `scalar_tac`,
    `simp_scalar`): the loop may be triggered by hypotheses in the context. Try
    `clear`-ing suspicious hypotheses before calling the tactic.
+
+**`scalar_tac`, `simp_scalar`, and `simp_lists` trigger `simp_all` internally.** This means they can
+cause `maxRecDepth` errors even though you didn't write a `simp` call yourself. The
+loop is typically triggered by a hypothesis in the context — often an equation whose
+LHS appears in its RHS (e.g., `h : x = f x y`), causing `simp_all` to rewrite
+endlessly.
+
+**Fixes for `scalar_tac`/`simp_scalar`/`simp_lists` maxRecDepth errors (in preference order):**
+1. **Use `agrind` or `grind` instead** — they don't call `simp_all` and are immune to
+   this class of loops. This is the safest fix.
+2. **Identify and modify the faulty hypothesis** — look for an equation in the context
+   whose LHS appears in its RHS. Reverse its direction with `rw [← h]` or `symm at h`
+   before calling `scalar_tac`. This is more technical but preserves the use of
+   `scalar_tac`.
+3. **`clear` the offending hypothesis** before calling `scalar_tac` — but only if the hypothesis is irrelevant to proving the goal.
 
 **Common simp loop patterns in Aeneas:**
 - `Slice.Inhabited_getElem_eq_getElem!` + `List.Inhabited_getElem_eq_getElem!`:

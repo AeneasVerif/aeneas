@@ -184,6 +184,36 @@ When an agent completes:
 - **Assess the approach**: Was it sound? Should the next agent try differently?
 - **Report to the user**: Surface interesting findings.
 
+### Status table format
+
+When the user asks for status, **always include the current date and time** at the top
+of the report (e.g., "**Status at 2026-03-22 06:50 UTC**"). This helps the user track
+progress over time, especially during long autonomous runs.
+
+Present a table with these columns:
+
+| Column | Description |
+|--------|-------------|
+| **File** | The Properties file name (without `.lean`) |
+| **Sorry's** | Current number of `sorry` occurrences in the file |
+| **Δ** | Change in sorry count since the last status check (e.g., ↓3, ↑1, —) |
+| **Modified** | Whether the file has been modified since the last status check (✏️ yes / — no) |
+| **Agent** | Which agent is working on it (name + 🔄), or — if none |
+| **Runtime** | How long the agent has been running (e.g., 2.3h) |
+| **Build** | Whether the file builds cleanly since last modification (✅ / ❌ / ❓ unknown) |
+
+**How to populate each column:**
+- **Sorry's**: `grep -c 'sorry' <file>` on disk
+- **Δ**: Compare with the count from the previous status check (track in session state)
+- **Modified**: `git diff --name-only` or compare file mtimes since last check
+- **Agent**: From the agent list (`list_agents`)
+- **Runtime**: From agent metadata (seconds since launch)
+- **Build**: Track whether a successful `lake build <module>` has run since the file
+  (or any of its transitive dependencies) was last modified. If unknown, show ❓.
+
+Include a summary line below the table: total sorry's, total non-obsolete sorry's,
+notable wins (files that hit 0, big drops), and any concerns.
+
 ### Cross-agent synthesis
 
 After a batch of agents completes, synthesize patterns:

@@ -533,8 +533,11 @@ calc (x + 1) * (x + 1)
    - **Search** the Aeneas library for an existing lemma (grep for related names, check simp/step attributes).
    - **If it doesn't exist:** state and prove the missing lemma yourself, then use it in the proof.
    - **This principle extends to all auxiliary definitions**, including project-local ones. When in the middle of a big proof, you should not have to unfold many auxiliary definitions. If you find yourself unfolding too many, step back and introduce auxiliary lemmas to bridge the gap.
-11. **NEVER increase `maxRecDepth`.** If you hit a `maxRecDepth` error, it signals a
-    **simp loop**, not a depth limit to raise. A simp loop occurs when two or more lemmas
+11. **NEVER increase `maxRecDepth`.** If calling any tactic triggers a `maxRecDepth`
+    error, it almost certainly means **the tactic is looping internally** (typically
+    via `simp`). The fix is never to raise the limit — it's to break the loop.
+
+    A simp loop occurs when two or more lemmas
     rewrite back and forth (A → B → A → ...), causing unbounded recursion.
 
     **How to fix simp loops (in preference order):**
@@ -548,6 +551,15 @@ calc (x + 1) * (x + 1)
       loop — `clear` it before calling the tactic.
     - **Use `conv`** for targeted rewriting when `simp` rewrites too broadly.
 
+    **`scalar_tac`, `simp_scalar`, and `simp_lists` call `simp_all` internally**, so they can trigger
+    `maxRecDepth` errors even though you didn't write `simp` yourself. The loop is
+    typically caused by a hypothesis whose LHS appears in its RHS (e.g., `h : x = f x y`),
+    making `simp_all` rewrite endlessly. **Fixes:**
+    - **Safest: use `agrind` or `grind` instead** — they don't call `simp_all`.
+    - **Reverse the faulty hypothesis**: use `rw [← h]` or `symm at h` before calling
+      `scalar_tac` to break the rewriting cycle.
+    - **`clear` the hypothesis** before calling `scalar_tac` — but only if it is irrelevant to proving the goal.
+
     A common loop in Aeneas: `Slice.Inhabited_getElem_eq_getElem!` combined with
     `List.Inhabited_getElem_eq_getElem!` in a single `simp only` call. Split them
     into separate calls, or use `rw`.
@@ -557,7 +569,7 @@ calc (x + 1) * (x + 1)
     or a tactic bug.
 12. **Report misbehaving tactics.** If a tactic doesn't do what it should — for example, `step` fails to make progress even though the appropriate `@[step]` lemma exists, or `scalar_tac` can't close a pure arithmetic goal it should handle — **report this to the user**. It may indicate a bug or missing feature worth fixing upstream.
 13. **Keep `maxHeartbeats` reasonable (< 8M).** Lean's default (200K) is too low for Aeneas proofs — increase to 1M as a baseline. But if a proof needs more than ~8M heartbeats, the proof is ill-structured or uses tactics inefficiently. Don't just bump the number — instead: decompose the function with fold theorems, extract sub-goals as auxiliary lemmas, minimize the context with `clear`, prefer `agrind` over `grind`, or use `step*?` instead of `step*` for finer control.
-14. **⚠️ Keep proof wall-clock time < 30s — this is important.** Fast proofs enable fast iteration. Even the biggest proofs (for functions of 50+ lines) should elaborate in under 30 seconds. Use `set_option trace.profiler true in` to identify bottleneck tactics. If the proof is slow, decompose it — see the tactics quickref for strategies.
+14. **⚠️ Keep proof wall-clock time < 60s — this is important.** Fast proofs enable fast iteration. Even the biggest proofs (for functions of 50+ lines) should complete in under 60 seconds wall-clock (including kernel proof-term replay). If a proof takes longer, it must be fixed — decompose it, extract auxiliary lemmas, or use more direct proof strategies. **Detecting kernel replay slowness:** In the LSP, after all tactics are elaborated, the server reports it is still processing the last proof line AND the `theorem` declaration line (plus `set_option ... in` above it). If it stays in this state a long time, the kernel is replaying the proof term — the fix is to produce simpler/smaller proof terms (decompose the function, extract sub-goals as separate lemmas). Use `set_option trace.profiler true in` to profile tactic time; if tactics are fast but overall proof is slow, the bottleneck is kernel replay.
 15. **⚠️ Keeping Lean reactive is critical (< 0.5s per tactic).** Adding a tactic at the end of a proof should take < 0.5s (everything above is cached). If it takes several seconds, big chunks are being re-elaborated. Common cause: `by ...` blocks inside `apply`/`exact`/`refine` arguments (e.g., `apply lemma (by scalar_tac) (by agrind)`) — all `by` blocks re-elaborate together. Fix: extract them into `have` statements. See the "Diagnosing Slow Incremental Replay" section in the lean-lsp-tool skill file.
 
 ## Attribute Management

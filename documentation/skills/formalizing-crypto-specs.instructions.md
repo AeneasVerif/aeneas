@@ -137,6 +137,12 @@ def ntt (f : Polynomial) := Id.run do
 Range notations (as defined in Aeneas) can be used to match RFC loop syntax
 (e.g., `[0 : 256 : 2*len]` for strided ranges).
 
+**Array initialization:** When the informal specification uses an array without
+explicitly initializing it (e.g., `bytesToBits` declares an output array and
+immediately starts writing to it), initialize it with default values (typically
+zeros). In Lean, use `Vector.replicate n 0` or `Vector.mkVector n default`
+as appropriate.
+
 ### Mathlib integration
 
 Use mathlib notations and definitions wherever they match the RFC's mathematical
@@ -144,6 +150,7 @@ objects:
 - `ZMod q` for modular arithmetic
 - `Polynomial (ZMod q)` or custom polynomial types as appropriate
 - `Matrix` for matrix operations
+- `Bool` for individual bits (not `Nat`, not `UInt8`, not `Fin 2`)
 - `BitVec n` for fixed-width bit strings
 - Standard algebraic typeclasses (`Ring`, `CommRing`, etc.)
 
@@ -227,6 +234,15 @@ Cryptographic functions often use random inputs. This is the ONE case where we
 3. **Only the `_internal` function** will be used for verification (proving
    refinement of the Rust code). The wrapper with the random tape is for
    completeness and composability.
+
+### Static bounds checking
+
+**Always use bounds-checked accessors** — never use the `!` (panicking) variants:
+- Use `getElem` (i.e., `a[i]` with a proof), **not** `getElem!` (i.e., `a[i]!`)
+- Use `Vector.set` / `Array.set`, **not** `Vector.set!` / `Array.set!`
+
+This ensures all index accesses are statically verified to be in bounds. The proof
+obligations are discharged by the `get_elem_tactic` override described below.
 
 ### Proofs and `getElem` bounds
 
