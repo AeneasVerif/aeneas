@@ -9,7 +9,7 @@ namespace Aeneas.SimpBoolProp
 
 open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 
-attribute [simp_bool_prop_simps]
+attribute [simp_bool_prop]
   reduceIte
   true_implies false_implies implies_true imp_false
   Bool.true_and Bool.and_true
@@ -34,7 +34,7 @@ attribute [simp_bool_prop_simps]
   forall_const
   exists_false
 
-@[simp_bool_prop_simps]
+@[simp_bool_prop]
 theorem not_and_equiv_or_not (a b : Prop) : ¬ (a ∧ b) ↔ ¬ a ∨ ¬ b := by tauto
 
 end Aeneas.SimpBoolProp

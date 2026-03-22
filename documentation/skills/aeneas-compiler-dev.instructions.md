@@ -5,9 +5,12 @@ description: Dev workflow, formatting, tests, error macros, skill file structure
 
 # Aeneas Compiler Development — Skill File
 
-## ⛔ NEVER Commit or Push
+## Commits and Pushes
 
-Do NOT run `git commit` or `git push`. Leave all commits to the user.
+Never commit or push without asking the user first. You can suggest to commit, in
+which case you should show the user the commit message you would use. If the user
+approves and you commit, and you haven't already shown the commit message, show it
+after committing.
 
 ## Skill Files: Structure and Editing Rules
 

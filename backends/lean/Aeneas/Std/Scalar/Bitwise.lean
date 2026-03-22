@@ -267,14 +267,14 @@ theorem IScalar.not_spec {ty} (x : IScalar ty) :
   lift (~~~x) ⦃ z => z = ~~~x ⦄ := by
   simp [lift]
 
-@[simp, bvify_simps, grind =, agrind =] theorem UScalar.bv_and {ty} (x y : UScalar ty) : (x &&& y).bv = x.bv &&& y.bv := by rfl
-@[simp, bvify_simps, grind =, agrind =] theorem UScalar.bv_or {ty} (x y : UScalar ty) : (x ||| y).bv = x.bv ||| y.bv := by rfl
-@[simp, bvify_simps, grind =, agrind =] theorem UScalar.bv_xor {ty} (x y : UScalar ty) : (x ^^^ y).bv = x.bv ^^^ y.bv := by rfl
-@[simp, bvify_simps, grind =, agrind =] theorem UScalar.bv_not {ty} (x : UScalar ty) : (~~~x).bv = ~~~x.bv := by rfl
-@[simp, bvify_simps, grind =, agrind =] theorem IScalar.bv_and {ty} (x y : IScalar ty) : (x &&& y).bv = x.bv &&& y.bv := by rfl
-@[simp, bvify_simps, grind =, agrind =] theorem IScalar.bv_or {ty} (x y : IScalar ty) : (x ||| y).bv = x.bv ||| y.bv := by rfl
-@[simp, bvify_simps, grind =, agrind =] theorem IScalar.bv_xor {ty} (x y : IScalar ty) : (x ^^^ y).bv = x.bv ^^^ y.bv := by rfl
-@[simp, bvify_simps, grind =, agrind =] theorem IScalar.bv_not {ty} (x : IScalar ty) : (~~~x).bv = ~~~x.bv := by rfl
+@[simp, bvify, grind =, agrind =] theorem UScalar.bv_and {ty} (x y : UScalar ty) : (x &&& y).bv = x.bv &&& y.bv := by rfl
+@[simp, bvify, grind =, agrind =] theorem UScalar.bv_or {ty} (x y : UScalar ty) : (x ||| y).bv = x.bv ||| y.bv := by rfl
+@[simp, bvify, grind =, agrind =] theorem UScalar.bv_xor {ty} (x y : UScalar ty) : (x ^^^ y).bv = x.bv ^^^ y.bv := by rfl
+@[simp, bvify, grind =, agrind =] theorem UScalar.bv_not {ty} (x : UScalar ty) : (~~~x).bv = ~~~x.bv := by rfl
+@[simp, bvify, grind =, agrind =] theorem IScalar.bv_and {ty} (x y : IScalar ty) : (x &&& y).bv = x.bv &&& y.bv := by rfl
+@[simp, bvify, grind =, agrind =] theorem IScalar.bv_or {ty} (x y : IScalar ty) : (x ||| y).bv = x.bv ||| y.bv := by rfl
+@[simp, bvify, grind =, agrind =] theorem IScalar.bv_xor {ty} (x y : IScalar ty) : (x ^^^ y).bv = x.bv ^^^ y.bv := by rfl
+@[simp, bvify, grind =, agrind =] theorem IScalar.bv_not {ty} (x : IScalar ty) : (~~~x).bv = ~~~x.bv := by rfl
 
 @[simp, scalar_tac_simps, grind =, agrind =] theorem UScalar.val_and {ty} (x y : UScalar ty) : (x &&& y).val = x.val &&& y.val := by rfl
 @[simp, scalar_tac_simps, grind =, agrind =] theorem UScalar.val_or {ty} (x y : UScalar ty) : (x ||| y).val = x.val ||| y.val := by rfl

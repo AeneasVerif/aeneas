@@ -115,11 +115,11 @@ def core.ops.index.IndexMutArray {T I Output : Type} {N : Usize}
 @[reducible, rust_type "core::array::TryFromSliceError"]
 def core.array.TryFromSliceError := Unit
 
-@[simp, simp_lists_simps, grind =, agrind =]
+@[simp, simp_lists_safe, grind =, agrind =]
 theorem Array.val_to_slice {α} {n} (a : Array α n) : a.to_slice.val = a.val := by
   simp only [Array.to_slice]
 
-@[simp, simp_lists_simps, simp_scalar_simps, scalar_tac a.to_slice]
+@[simp, simp_lists_safe, simp_scalar_safe, scalar_tac a.to_slice]
 theorem Array.length_to_slice (a : Array α n) :
   a.to_slice.length = n := by
   simp only [Slice.length, Array.to_slice, List.Vector.length_val]

@@ -40,7 +40,7 @@ simproc reduceUScalarNot (@Complement.complement (Aeneas.Std.UScalar _) _ _) := 
     return .done { expr := reduced }
   | _ => return .continue
 
-attribute [simp, simp_scalar_simps, bvify_simps] reduceUScalarNot
+attribute [simp, simp_scalar_safe, bvify] reduceUScalarNot
 
 end
 
@@ -57,7 +57,7 @@ simproc reduceIScalarNot (@Complement.complement (Aeneas.Std.IScalar _) _ _) := 
     return .done { expr := reduced }
   | _ => return .continue
 
-attribute [simp, simp_scalar_simps, bvify_simps] reduceIScalarNot
+attribute [simp, simp_scalar_safe, bvify] reduceIScalarNot
 
 end
 
