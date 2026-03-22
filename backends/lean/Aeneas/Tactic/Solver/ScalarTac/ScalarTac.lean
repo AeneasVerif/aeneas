@@ -12,42 +12,42 @@ import AeneasMeta.Simp
 
 namespace Aeneas
 
-@[simp_scalar_simps↓]
+@[simp_scalar_safe↓]
 theorem Nat.le_mul_le (a0 a1 b0 b1 : Nat) (h : a0 ≤ a1 ∧ b0 ≤ b1) : a0 * b0 ≤ a1 * b1 := by
   have := @Nat.mul_le_mul_left b0 b1 a0 h.right
   have := @Nat.mul_le_mul_right a0 a1 b1 h.left
   omega
 
-@[simp_scalar_simps↓]
+@[simp_scalar_safe↓]
 theorem Nat.lt_mul_lt (a0 a1 b0 b1 : Nat) (h : a0 < a1 ∧ b0 < b1) : a0 * b0 < a1 * b1 := by
   apply Nat.mul_lt_mul_of_lt_of_lt <;> tauto
 
-@[simp_scalar_simps↓]
+@[simp_scalar_safe↓]
 theorem Nat.le_mul_lt (a0 a1 b0 b1 : Nat) (h0 : a0 ≤ a1 ∧ 0 < a1 ∧ b0 < b1) : a0 * b0 < a1 * b1 := by
   have := @Nat.mul_le_mul_right a0 a1 b0 (by tauto)
   have := @Nat.mul_lt_mul_left a1 b0 b1 (by tauto)
   omega
 
-@[simp_scalar_simps↓]
+@[simp_scalar_safe↓]
 theorem Nat.lt_mul_le (a0 a1 b0 b1 : Nat) (h0 : a0 < a1 ∧ b0 ≤ b1 ∧ 0 < b1) : a0 * b0 < a1 * b1 := by
   have := @Nat.mul_lt_mul_right b1 a0 a1 (by tauto)
   have := @Nat.mul_le_mul_left b0 b1 a0 (by tauto)
   omega
 
-@[simp_scalar_simps]
+@[simp_scalar_safe]
 theorem Nat.zero_lt_mul (a0 a1 : Nat) (h : 0 < a0 ∧ 0 < a1) : 0 < a0 * a1 := by simp [*]
 theorem Nat.mul_le_zero (a0 a1 : Nat) (h : a0 = 0 ∨ a1 = 0) : a0 * a1 ≤ 0 := by simp [*]
 
-@[simp_scalar_simps]
+@[simp_scalar_safe]
 theorem Int.emod_eq_of_lt' {a b : ℤ} (h : 0 ≤ a ∧ a < b) : a % b = a := by
   apply Int.emod_eq_of_lt <;> omega
 
-@[simp_scalar_simps]
+@[simp_scalar_safe]
 theorem Nat.le_pow (a i : ℕ) (h : 0 < a ∧ 0 < i) : a ≤ a ^ i := by
   have : a ^ 1 ≤ a ^ i := by apply Nat.pow_le_pow_right <;> omega
   simp_all
 
-@[simp_scalar_simps]
+@[simp_scalar_safe]
 theorem Nat.lt_pow (a i : ℕ) (h : 1 < a ∧ 1 < i) : a < a ^ i := by
   have : a ^ 1 < a ^ i := by apply Nat.pow_lt_pow_right <;> omega
   simp_all
@@ -533,7 +533,7 @@ def scalarTac (config : Config) : TacticM Unit := do
 
   **Debugging**:
   If you want to debug a failing call to `scalar_tac`, you can replace `scalar_tac` with
-  `scalar_tac_preprocess; simp_all only [simp_bool_prop_simps, scalar_tac_simps]; omega`:
+  `scalar_tac_preprocess; simp_all only [simp_bool_prop, scalar_tac_simps]; omega`:
   this sequence of tactics is *roughly* equivalent to `scalar_tac`, and will allow you
   to see the goal after preprocessing.
  -/

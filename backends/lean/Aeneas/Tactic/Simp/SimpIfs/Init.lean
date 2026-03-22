@@ -14,8 +14,14 @@ initialize registerTraceClass `SimpIfs
 # Simp Ifs Simpsets
 -/
 
-/-- The `simp_ifs_simps` attribute registers simp lemmas to be used by `simp_ifs` -/
-register_simp_attr' simpIfsSimpExt simpIfsSimprocExt simp_ifs_simps
+/-- The `simp_ifs` attribute registers simp lemmas to be used by `simp_ifs`.
+    Those are the "general" lemmas, used only when `safe` is `false` (the default).
+    See also `simp_ifs_safe`. -/
+register_simp_attr' simpIfsSimpExt simpIfsSimprocExt simp_ifs
+
+/-- The `simp_ifs_safe` attribute registers "safe" simp lemmas for `simp_ifs`.
+    These lemmas are always used, even with `simp_ifs +safe`. -/
+register_simp_attr' simpIfsSafeSimpExt simpIfsSafeSimprocExt simp_ifs_safe
 
 /-- The `simp_ifs_hyps_simps` attribute registers simp lemmas to be used by `simp_ifs` when
 preprocessing assumptions -/

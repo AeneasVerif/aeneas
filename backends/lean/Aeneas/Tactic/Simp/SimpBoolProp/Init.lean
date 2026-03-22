@@ -19,9 +19,9 @@ propositions. They gather simp lemmas and procedures that are commonly used
 by other specialized tactics (such as `scalar_tac`, `simp_lists`, etc.).
 -/
 
-/-- The `simp_bool_prop_simps` attribute registers simp lemmas to be used to simplify booleans and propositions.
+/-- The `simp_bool_prop` attribute registers simp lemmas to be used to simplify booleans and propositions.
     Those simp lemmas are used by several tactics such as `scalar_tac`, `simp_scalar`, `simp_ifs`, etc. -/
-register_simp_attr' simpBoolPropSimpExt simpBoolPropSimprocExt simp_bool_prop_simps
+register_simp_attr' simpBoolPropSimpExt simpBoolPropSimprocExt simp_bool_prop
 
 /-- The `simp_bool_prop_hyps_simps` attribute registers simp lemmas to be used by tactics like `scalar_tac`,
 `simp_scalar`, `simp_ifs`, etc. to simplify booleans and propositions in assumptions. -/

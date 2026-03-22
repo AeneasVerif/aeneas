@@ -67,7 +67,7 @@ copy it into your proof → fix sub-goals → collapse back to `step*` if possib
 ## Key Rules
 - NEVER unfold Aeneas stdlib definitions — search for existing lemmas
 - NEVER use `omega` — use `scalar_tac`, `agrind`, or `grind` instead
-- DO NOT COMMIT
+- Do not commit or push without asking the user first
 ```
 
 ## File Isolation
@@ -597,5 +597,5 @@ Use `step*?` to generate the body proof script, then fix sub-goals.
 - NEVER unfold stdlib
 - NEVER use `omega` — use `scalar_tac` instead, or `agrind` (prefer), or `grind`
 - ONLY modify the specified sorry
-- DO NOT COMMIT
+- Do not commit or push without asking the user first
 ```
