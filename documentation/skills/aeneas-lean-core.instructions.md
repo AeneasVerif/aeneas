@@ -547,8 +547,9 @@ calc (x + 1) * (x + 1)
     - **Use `rw` instead of `simp only`**: `rw` applies exactly once, no loop risk.
     - **Reduce the lemma list**: Remove lemmas one by one to find the conflicting pair.
     - **`clear` offending hypotheses**: For tactics that internally use `simp`
-      (`agrind`, `grind`, `scalar_tac`, `simp_scalar`), a hypothesis may trigger the
-      loop — `clear` it before calling the tactic.
+      (`agrind`, `grind`, `scalar_tac`, `simp_scalar`, `simp_lists`), a hypothesis may trigger the
+      loop — `clear` it before calling the tactic, but only if the hypothesis is
+      irrelevant to proving the goal.
     - **Use `conv`** for targeted rewriting when `simp` rewrites too broadly.
 
     **`scalar_tac`, `simp_scalar`, and `simp_lists` call `simp_all` internally**, so they can trigger
@@ -571,6 +572,38 @@ calc (x + 1) * (x + 1)
 13. **Keep `maxHeartbeats` reasonable (< 8M).** Lean's default (200K) is too low for Aeneas proofs — increase to 1M as a baseline. But if a proof needs more than ~8M heartbeats, the proof is ill-structured or uses tactics inefficiently. Don't just bump the number — instead: decompose the function with fold theorems, extract sub-goals as auxiliary lemmas, minimize the context with `clear`, prefer `agrind` over `grind`, or use `step*?` instead of `step*` for finer control.
 14. **⚠️ Keep proof wall-clock time < 60s — this is important.** Fast proofs enable fast iteration. Even the biggest proofs (for functions of 50+ lines) should complete in under 60 seconds wall-clock (including kernel proof-term replay). If a proof takes longer, it must be fixed — decompose it, extract auxiliary lemmas, or use more direct proof strategies. **Detecting kernel replay slowness:** In the LSP, after all tactics are elaborated, the server reports it is still processing the last proof line AND the `theorem` declaration line (plus `set_option ... in` above it). If it stays in this state a long time, the kernel is replaying the proof term — the fix is to produce simpler/smaller proof terms (decompose the function, extract sub-goals as separate lemmas). Use `set_option trace.profiler true in` to profile tactic time; if tactics are fast but overall proof is slow, the bottleneck is kernel replay.
 15. **⚠️ Keeping Lean reactive is critical (< 0.5s per tactic).** Adding a tactic at the end of a proof should take < 0.5s (everything above is cached). If it takes several seconds, big chunks are being re-elaborated. Common cause: `by ...` blocks inside `apply`/`exact`/`refine` arguments (e.g., `apply lemma (by scalar_tac) (by agrind)`) — all `by` blocks re-elaborate together. Fix: extract them into `have` statements. See the "Diagnosing Slow Incremental Replay" section in the lean-lsp-tool skill file.
+16. **Auto-param tactics in recursive theorem statements cause elaboration loops.** When a theorem statement contains `(hbound : x ≤ n := by scalar_tac)` or similar auto-param defaults, the tactic fires during *elaboration* of the statement — not during the proof. If the theorem is recursive and the context has complex hypotheses, the tactic loops. **Fix:** Make all such parameters fully explicit (no `:= by ...` default). Pass proofs manually at every call site. **Rule: ZERO tactic calls in auto-params of recursive theorem statements with complex invariants.**
+    ```lean
+    -- BAD: scalar_tac fires during elaboration of every recursive call
+    private theorem loop.spec_gen ...
+        (hbound : bound ≤ N := by scalar_tac) : ...
+    -- GOOD: caller provides the proof explicitly
+    private theorem loop.spec_gen ...
+        (hbound : bound ≤ N) : ...
+    ```
+17. **Dependent proof terms break `rw`/`simp only`.** When a term has a proof argument that depends on the value being rewritten (e.g., `partial_sum arr bound (hbound : bound ≤ N)`), `simp`/`rw` tries to update both the value AND the proof simultaneously and may loop. **Fix:** Use `congr 1` to peel off the proof argument (handled by proof irrelevance), then rewrite the value part separately.
+    ```lean
+    -- BAD: loops because hbound depends on bound
+    simp only [show bound = new_bound from h] at goal_with_partial_sum
+    -- GOOD: congr 1 separates value from proof
+    congr 1  -- one goal for the value, one trivial goal for the proof
+    ```
+18. **`step*` doesn't recognize structure field projections.** When a function is accessed via structure field projection (e.g., `(Params p).shake` instead of `specShake`), `step` can't match it to an `@[step]` lemma. **Fix:** Add a simp lemma `@[simp, step_simps]` that unfolds the projection, then `simp only [step_simps]` before `step*`.
+    ```lean
+    @[simp, step_simps]
+    theorem Params_shake : (Params p).shake = specShake := by rfl
+    -- In the proof:
+    simp only [step_simps]; step*
+    ```
+19. **Doc comments `/--` before `set_option` cause parse errors.** Doc comments must be followed by a declaration (`theorem`, `def`, etc.), not `set_option ... in`. Use a regular comment (`/- ... -/` or `-- ...`) instead.
+20. **Concrete computation goals need `native_decide`.** Goals like `¬(64 % Usize.size = 64) ⊢ False` (from `wrapping_add` preconditions) are concrete computations that `agrind`/`grind`/`scalar_tac` cannot efficiently evaluate. **Fix:** Use `native_decide` (or `decide` for smaller computations).
+21. **In loop proofs (`spec_gen`), prefer `agrind` over `scalar_tac` throughout.** Loop invariant proofs carry complex hypotheses in context throughout the entire proof body. Any `scalar_tac` call risks a simp loop (see item 11). When one `scalar_tac` fails in a spec_gen, mass-replace ALL `scalar_tac` → `agrind` in the proof body — don't fix them one by one, because any remaining `scalar_tac` is at risk as the context grows.
+22. **Extract recurring index bounds as standalone helper lemmas.** In loop proofs over multi-dimensional arrays, bounds like `k * N + q < NBAR * N` appear repeatedly. Proving them inline is slow (tactic runs in full context) and fragile. **Fix:** Extract a standalone lemma with a clean context:
+    ```lean
+    private theorem idx_lt_bound (k : Fin NBAR) (q : Fin N) :
+        k.val * N + q.val < NBAR * N := by agrind
+    ```
+    Then reference the lemma at each use site — fast, stable, and reusable.
 
 ## Attribute Management
 

@@ -176,6 +176,13 @@ theorem MY_CONST_val : MY_CONST.val = 42 := by decide
 | `grind` explodes | Timeout | Use `agrind` instead |
 | `agrind` fails | Goal unsolved | Try `simp [*]; agrind` |
 | Wrong step spec | Unexpected behavior | `step with specific_thm` |
+| Auto-param tactic loops | `maxRecDepth`/timeout at theorem statement | Make params explicit, no `:= by ...` in recursive theorems |
+| Dependent proof in `rw` | `simp only`/`rw` loops on term with proof arg | `congr 1` to separate value from proof (proof irrelevance) |
+| `step*` stuck on projection | No progress on `(Struct p).field args` | `simp only [step_simps]` before `step*`; add `@[simp, step_simps]` lemma |
+| Doc comment before `set_option` | Parse error "expected 'lemma'" | Use `/- ... -/` (regular comment), not `/-- ... -/` (doc comment) |
+| Concrete computation fails | `agrind`/`scalar_tac` fail on numeric literals | `native_decide` or `decide` |
+| `scalar_tac` in spec_gen | Cascading `maxRecDepth` in loop proof | Mass-replace ALL `scalar_tac` → `agrind` in proof body |
+| Recurring index bounds slow | Same bound proved inline many times | Extract standalone helper lemma with clean context |
 
 ## Debugging and Profiling Commands
 
@@ -304,10 +311,12 @@ containing `s[i]'h`). This causes `simp` to recurse until it hits `maxRecDepth`.
    too many places, use `conv` to target a specific subterm.
 5. **`clear` offending hypotheses**: If a hypothesis triggers the loop (e.g., a
    hypothesis whose type causes simp to loop when it tries to rewrite it), `clear` it
-   before calling `simp`, then re-introduce it if needed.
+   before calling `simp` — but only if the hypothesis is irrelevant to proving the goal.
+   Re-introduce it if needed.
 6. **For tactics that internally use `simp`** (`agrind`, `grind`, `scalar_tac`,
-   `simp_scalar`): the loop may be triggered by hypotheses in the context. Try
-   `clear`-ing suspicious hypotheses before calling the tactic.
+   `simp_scalar`, `simp_lists`): the loop may be triggered by hypotheses in the context.
+   Try `clear`-ing suspicious hypotheses before calling the tactic — but only if the
+   hypothesis is irrelevant to proving the goal.
 
 **`scalar_tac`, `simp_scalar`, and `simp_lists` trigger `simp_all` internally.** This means they can
 cause `maxRecDepth` errors even though you didn't write a `simp` call yourself. The

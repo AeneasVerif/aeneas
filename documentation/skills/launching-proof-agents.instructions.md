@@ -540,7 +540,7 @@ doesn't build cleanly, the proof agent must fix the errors before reporting.
 - **Spaces around binary operators in comments?** Check that comments and doc strings
   use `j < N`, not `j<N`. Missing spaces cause VS Code highlighting bugs.
 - **Is the proof fast enough?** Profile with `set_option trace.profiler true in` and
-  check that the proof completes in **< 30 seconds wall-clock** (even for the biggest
+  check that the proof completes in **< 60 seconds wall-clock** (even for the biggest
   functions of 50+ lines). If it's slower, identify the bottleneck tactic and send the
   proof back for optimization — decompose the function, extract auxiliary lemmas,
   minimize the context, or pick better tactics. See the "Wall-clock time target"
@@ -659,6 +659,8 @@ After each proof+review cycle completes:
 | Tactic silently fails | Tactic doesn't do what it should (e.g., `step` can't find a lemma that exists) | Report to user — may be a tactic bug worth fixing upstream |
 | Spawns Lean sub-agents | Agent tries to parallelize by spawning sub-agents | NEVER spawn sub-agents that work on Lean files — resources are tight, and it causes file conflicts |
 | Edits other files | Agent modifies shared defs or specs it wasn't assigned | NEVER edit files other than assigned ones — introduce local axioms with TODO comments instead |
+| Agent crashes mid-edit | API loss, timeout, resource limit | Check for referenced-but-undefined identifiers; create missing defs in shared files |
+| `scalar_tac` loops in spec_gen | `maxRecDepth` in loop invariant proof | Mass-replace ALL `scalar_tac` → `agrind` in the proof body |
 
 ## Example: Full Agent Prompt
 

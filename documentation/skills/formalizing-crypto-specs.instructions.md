@@ -77,14 +77,52 @@ For example:
 of its algorithm. Follow the file isolation rules from
 `agent-fleet-management.instructions.md`.
 
-### Step 4: Review loop
+### Step 4: Fix → Review → Fix convergence loop
 
-When a formalizer agent finishes:
-1. **Spawn a reviewer agent** that checks the mechanization against the rules below.
-2. If issues are found, spawn a formalizer agent to fix them.
-3. Repeat until the reviewer approves.
-4. **Report to the user** at each step — what was formalized, what issues were
-   found, what remains.
+The supervisor drives an iterative convergence loop until each spec file
+passes review with zero issues.
+
+**Round structure:**
+
+1. **Review round:** Dispatch one reviewer agent per spec file (in parallel).
+   Each reviewer checks against the full Reviewer Agent Checklist below and
+   returns a list of issues with severities (Critical / High / Medium / Low).
+
+2. **Triage:** The supervisor consolidates review results across all files and
+   reports to the user:
+   - Number of issues per file and severity breakdown
+   - Summary of each issue (one line)
+   The supervisor does NOT ask permission to fix — it proceeds immediately
+   unless a review finding is ambiguous (in which case, ask the user).
+
+3. **Fix round:** Dispatch one fixer agent per file that has issues (in parallel).
+   Each fixer agent receives:
+   - The file path
+   - The exact list of issues to fix (copy-pasted from the reviewer output)
+   - The instruction: "Fix ALL listed issues. Do NOT introduce new issues.
+     Run `lake build <module>` after fixing to verify 0 errors."
+   Fixer agents work on **separate files** — no two agents touch the same file.
+   Cross-file issues (e.g., "add RandomTape threading") may require sequential
+   fixing if the change spans multiple files.
+
+4. **Verify build:** After all fixers complete, the supervisor runs
+   `lake build` on the full project to confirm 0 errors.
+
+5. **Repeat:** Go back to step 1 (review round) with the updated files.
+   Continue until a review round returns zero issues for all files.
+
+**Convergence guarantee:** Each round must strictly reduce the number of issues.
+If a fix round introduces new issues or fails to fix existing ones, the
+supervisor should:
+- Re-dispatch the fixer with more specific instructions
+- Or fix the issue directly if it's small
+- After 3 failed rounds on the same issue, escalate to the user
+
+**Parallelization rules:**
+- Reviewers: always parallel (they are read-only)
+- Fixers: parallel when working on different files; sequential when a fix
+  in file A affects file B (e.g., changing a type in Common.lean)
+- Build verification: always sequential (one `lake build` at the end)
 
 ### Step 5: Test against official test vectors
 
