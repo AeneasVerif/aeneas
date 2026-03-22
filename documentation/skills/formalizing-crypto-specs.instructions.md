@@ -287,12 +287,17 @@ obligations are discharged by the `get_elem_tactic` override described below.
 The mechanization will need proofs here and there, typically to satisfy `getElem`
 bounds (array/vector index proofs). Guidelines:
 
+- **Never use `omega`** for discharging bounds. Use the following tactics, in
+  order of preference:
+  1. `agrind` — first choice; handles most arithmetic goals
+  2. `grind` — fallback when `agrind` doesn't close the goal
+  3. `scalar_tac` — last resort for simple linear arithmetic on scalars
 - It is fine to locally override `get_elem_tactic` to handle these automatically:
   ```lean
   scoped macro_rules
-  | `(tactic| get_elem_tactic) => `(tactic| scalar_tac)
+  | `(tactic| get_elem_tactic) => `(tactic| agrind)
   ```
-  This makes `a[i]` notation work without explicit bound proofs — `scalar_tac` will
+  This makes `a[i]` notation work without explicit bound proofs — `agrind` will
   try to discharge the bound automatically. Place this in a `namespace` / `end` block
   and `open` it where needed.
 - For parameter-dependent bounds (e.g., array sizes that depend on the parameter

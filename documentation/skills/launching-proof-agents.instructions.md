@@ -71,7 +71,7 @@ copy it into your proof → fix sub-goals → collapse back to `step*` if possib
 ## Key Rules
 - NEVER unfold Aeneas stdlib definitions — search for existing lemmas
 - NEVER use `omega` — use `scalar_tac`, `agrind`, or `grind` instead
-- Do not commit or push without asking the user first
+- NEVER commit or push without explicit user approval
 - NEVER spawn sub-agents that work on Lean files (see below)
 - ONLY modify your assigned file(s) — NEVER edit other files (see below)
 - DO NOT COMMIT
@@ -687,6 +687,6 @@ Use `step*?` to generate the body proof script, then fix sub-goals.
 - NEVER unfold stdlib
 - NEVER use `omega` — use `scalar_tac` instead, or `agrind` (prefer), or `grind`
 - ONLY modify the specified sorry
-- Do not commit or push without asking the user first
+- NEVER commit or push without explicit user approval
 - After completing this sorry, STOP and return results — do NOT proceed to other work
 ```
