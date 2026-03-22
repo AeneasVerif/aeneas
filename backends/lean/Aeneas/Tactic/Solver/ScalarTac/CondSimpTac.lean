@@ -8,6 +8,11 @@ open Utils
 structure CondSimpTacConfig where
   nonLin : Bool := false
   saturationPasses := 3
+  /-- When `safe` is `true`, restrict the tactic to only use lemmas marked with the
+      `_safe` variant of the attribute (e.g., `@[simp_scalar_safe]`). When `false`
+      (the default), also use lemmas from the general attribute (e.g., `@[simp_scalar]`).
+      Use `+safe` to activate: `simp_scalar +safe`. -/
+  safe : Bool := false
 
 declare_config_elab elabCondSimpTacConfig CondSimpTacConfig
 

@@ -210,59 +210,59 @@ theorem UScalar.cast_val_eq {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScal
 
 -- TODO: factor our the casts
 
-@[simp, scalar_tac_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_scalar_safe]
 theorem U8.cast_U16_val_eq (x : U8) : (UScalar.cast .U16 x).val = x.val := by
   simp [UScalar.cast_val_eq]; scalar_tac
 
-@[simp, scalar_tac_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_scalar_safe]
 theorem U8.cast_U32_val_eq (x : U8) : (UScalar.cast .U32 x).val = x.val := by
   simp [UScalar.cast_val_eq]; scalar_tac
 
-@[simp, scalar_tac_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_scalar_safe]
 theorem U8.cast_U64_val_eq (x : U8) : (UScalar.cast .U64 x).val = x.val := by
   simp [UScalar.cast_val_eq]; scalar_tac
 
-@[simp, scalar_tac_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_scalar_safe]
 theorem U8.cast_U128_val_eq (x : U8) : (UScalar.cast .U128 x).val = x.val := by
   simp [UScalar.cast_val_eq]; scalar_tac
 
-@[simp, scalar_tac_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_scalar_safe]
 theorem U8.cast_Usize_val_eq (x : U8) : (UScalar.cast .Usize x).val = x.val := by
   simp [UScalar.cast_val_eq]; cases System.Platform.numBits_eq <;> simp [*] <;> scalar_tac
 
-@[simp, scalar_tac_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_scalar_safe]
 theorem U16.cast_U32_val_eq (x : U16) : (UScalar.cast .U32 x).val = x.val := by
   simp [UScalar.cast_val_eq]; scalar_tac
 
-@[simp, scalar_tac_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_scalar_safe]
 theorem U16.cast_U64_val_eq (x : U16) : (UScalar.cast .U64 x).val = x.val := by
   simp [UScalar.cast_val_eq]; scalar_tac
 
-@[simp, scalar_tac_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_scalar_safe]
 theorem U16.cast_U128_val_eq (x : U16) : (UScalar.cast .U128 x).val = x.val := by
   simp [UScalar.cast_val_eq]; scalar_tac
 
-@[simp, scalar_tac_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_scalar_safe]
 theorem U16.cast_Usize_val_eq (x : U16) : (UScalar.cast .Usize x).val = x.val := by
   simp [UScalar.cast_val_eq]; cases System.Platform.numBits_eq <;> simp [*] <;> scalar_tac
 
-@[simp, scalar_tac_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_scalar_safe]
 theorem U32.cast_U64_val_eq (x : U32) : (UScalar.cast .U64 x).val = x.val := by
   simp [UScalar.cast_val_eq]; scalar_tac
 
-@[simp, scalar_tac_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_scalar_safe]
 theorem U32.cast_U128_val_eq (x : U32) : (UScalar.cast .U128 x).val = x.val := by
   simp [UScalar.cast_val_eq]; scalar_tac
 
-@[simp, scalar_tac_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_scalar_safe]
 theorem U32.cast_Usize_val_eq (x : U32) : (UScalar.cast .Usize x).val = x.val := by
   simp [UScalar.cast_val_eq]; cases System.Platform.numBits_eq <;> simp [*] <;> scalar_tac
 
-@[simp, scalar_tac_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_scalar_safe]
 theorem U64.cast_U128_val_eq (x : U64) : (UScalar.cast .U128 x).val = x.val := by
   simp [UScalar.cast_val_eq]; scalar_tac
 
-@[simp, scalar_tac_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_scalar_safe]
 theorem UScalar.cast_val_mod_pow_greater_numBits_eq {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) (h : src_ty.numBits ≤ tgt_ty.numBits) :
   (cast tgt_ty x).val = x.val := by
   simp [UScalar.cast_val_eq]

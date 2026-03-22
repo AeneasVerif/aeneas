@@ -54,7 +54,7 @@ open CList
     By putting this definition in the namespace `CList`, we give the possibility of using the `.`
     notation: if `x` has type `CList α` we can write `x.toList` instead of `toList x`.
  -/
-@[simp, grind, scalar_tac_simps, simp_lists_simps] def CList.toList {α : Type} (x : CList α) : List α :=
+@[simp, grind, scalar_tac_simps, simp_lists] def CList.toList {α : Type} (x : CList α) : List α :=
   match x with
   | CNil => []
   | CCons hd tl => hd :: tl.toList

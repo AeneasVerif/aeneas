@@ -31,10 +31,10 @@ def Array.empty (α : Type u) : Array α (Usize.ofNat 0) := ⟨ [], by simp ⟩
 theorem Array.length_eq {α : Type u} {n : Usize} (a : Array α n) : a.val.length = n.val := by
   cases a; simp[*]
 
-@[simp, scalar_tac_simps, simp_scalar_simps, simp_lists_simps, grind, agrind]
+@[simp, scalar_tac_simps, simp_scalar_safe, simp_lists_safe, grind, agrind]
 abbrev Array.length {α : Type u} {n : Usize} (v : Array α n) : Nat := v.val.length
 
-@[simp, scalar_tac_simps, simp_scalar_simps, simp_lists_simps, grind, agrind]
+@[simp, scalar_tac_simps, simp_scalar_safe, simp_lists_safe, grind, agrind]
 abbrev Array.v {α : Type u} {n : Usize} (v : Array α n) : List α := v.val
 
 example {α: Type u} {n : Usize} (v : Array α n) : v.length ≤ Usize.max := by
@@ -116,12 +116,12 @@ def Array.set {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) : Arr
 def Array.set_opt {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: Option α) : Array α n :=
   ⟨ v.val.set_opt i.val x, by have := v.property; simp [*] ⟩
 
-@[simp, scalar_tac_simps, simp_lists_hyps_simps, simp_lists_simps, grind =, agrind =]
+@[simp, scalar_tac_simps, simp_lists_hyps_simps, simp_lists_safe, grind =, agrind =]
 theorem Array.set_val_eq {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) :
   (v.set i x).val = v.val.set i.val x := by
   simp [set]
 
-@[simp, scalar_tac_simps, simp_lists_hyps_simps, simp_lists_simps, grind =, agrind =]
+@[simp, scalar_tac_simps, simp_lists_hyps_simps, simp_lists_safe, grind =, agrind =]
 theorem Array.set_opt_val_eq {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: Option α) :
   (v.set_opt i x).val = v.val.set_opt i.val x := by
   simp [set_opt]
@@ -132,14 +132,14 @@ theorem Array.set_opt_val_eq {α : Type u} {n : Usize} (v: Array α n) (i: Usize
 
 Otherwise we might lose a lot of time reordering the `set` expressions.
 -/
-@[simp↓, simp_lists_simps↓]
+@[simp↓, simp_lists_safe↓]
 theorem Array.getElem!_Usize_set_ne
   {α : Type u} {N : Usize} [Inhabited α] (a: Array α N) (i j : Usize) (x: α)
   (h : i.val ≠ j.val) : (a.set i x)[j]! = a[j]!
   := by
   grind
 
-@[simp↓, simp_lists_simps↓]
+@[simp↓, simp_lists_safe↓]
 theorem Array.getElem!_Usize_set_eq
   {α : Type u} {N : Usize} [Inhabited α] (a: Array α N) (i i' : Usize) (x: α)
   (h : i = i' ∧ i'.val < a.length) : getElem! (a.set i x) i' = x
@@ -151,19 +151,19 @@ theorem Array.getElem!_Usize_set_eq
 
 Otherwise we might lose a lot of time reordering the `set` expressions.
 -/
-@[simp↓, simp_lists_simps↓]
+@[simp↓, simp_lists_safe↓]
 theorem Array.getElem!_Nat_set_ne
   {α : Type u} {N : Usize} [Inhabited α] (a: Array α N) (i : Usize) (j : Nat) (x: α)
   (h : i.val ≠ j) : (a.set i x)[j]! = a[j]!
   := by grind
 
-@[simp↓, simp_lists_simps↓]
+@[simp↓, simp_lists_safe↓]
 theorem Array.getElem!_Nat_set_eq
   {α : Type u} {N : Usize} [Inhabited α] (a: Array α N) (i : Usize) (i' : Nat) (x: α)
   (h : i.val = i' ∧ i' < a.length) : getElem! (a.set i x) i' = x
   := by grind
 
-@[scalar_tac_simps, simp_lists_simps, grind =, agrind =]
+@[scalar_tac_simps, simp_lists_safe, grind =, agrind =]
 theorem Array.set_length {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) :
   (v.set i x).length = v.length := by simp
 
@@ -256,14 +256,14 @@ def core.clone.CloneArray {T : Type} (N : Usize)
 def Array.setSlice! {α : Type u} {n} (s : Array α n) (i : ℕ) (s' : List α) : Array α n :=
   ⟨s.val.setSlice! i s', by scalar_tac⟩
 
-@[simp_lists_simps]
+@[simp_lists_safe]
 theorem Array.setSlice!_getElem!_prefix {α} {n} [Inhabited α]
   (s : Array α n) (s' : List α) (i j : ℕ) (h : j < i) :
   (s.setSlice! i s')[j]! = s[j]! := by
   simp only [Array.setSlice!, Array.getElem!_Nat_eq]
   simp_lists
 
-@[simp_lists_simps]
+@[simp_lists_safe]
 theorem Array.setSlice!_getElem!_middle {α} {n} [Inhabited α]
   (s : Array α n) (s' : List α) (i j : ℕ) (h : i ≤ j ∧ j - i < s'.length ∧ j < s.length) :
   (s.setSlice! i s')[j]! = s'[j - i]! := by

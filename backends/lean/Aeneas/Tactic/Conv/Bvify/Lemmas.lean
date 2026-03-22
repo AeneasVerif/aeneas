@@ -1,7 +1,7 @@
 import Aeneas.Tactic.Conv.Bvify.Bvify
 import Aeneas.Tactic.Simp.SimpScalar
 
-@[bvify_simps]
+@[bvify]
 theorem BitVec.ofNat_mod_two_pow (n a k : Nat) :
   BitVec.ofNat n (a % 2^k) = (BitVec.ofNat n a) % (2^k) := by
   natify; simp only [ofNat_eq_ofNat, BitVec.toNat_pow, toNat_ofNat]
@@ -9,7 +9,7 @@ theorem BitVec.ofNat_mod_two_pow (n a k : Nat) :
   · cases k <;> cases n <;> simp_scalar
   · by_cases k < n <;> simp_scalar
 
-@[bvify_simps]
+@[bvify]
 theorem BitVec.ofNat_two_pow (n k : Nat) :
   BitVec.ofNat n (2^k) = (2#n ^ k) := by
   natify; simp only [BitVec.toNat_pow, toNat_ofNat]
@@ -17,7 +17,7 @@ theorem BitVec.ofNat_two_pow (n k : Nat) :
   cases k <;> simp_scalar
 
 /-- Same as `BitVec.ofNat_mod'` but with a precondition expressed in terms of `isPowerOfTwo'`. -/
-@[bvify_simps]
+@[bvify]
 theorem BitVec.ofNat_mod_isPowerOfTwo' (n a b : Nat) (h : b.isPowerOfTwo' ∧ b.log2 < n) :
   BitVec.ofNat n (a % b) = (BitVec.ofNat n a) % b := by
   simp only [Nat.isPowerOfTwo'_iff] at h
@@ -25,14 +25,14 @@ theorem BitVec.ofNat_mod_isPowerOfTwo' (n a b : Nat) (h : b.isPowerOfTwo' ∧ b.
   have := BitVec.ofNat_mod_two_pow n a k
   simp only [ofNat_eq_ofNat, Nat.cast_pow, Nat.cast_ofNat, h, this]
 
-@[bvify_simps]
+@[bvify]
 theorem BitVec.ofNat_shiftLeft (a b : ℕ) (hb : b < 2 ^ n) :
   BitVec.ofNat n (a <<< b) = BitVec.ofNat n a <<< BitVec.ofNat n b := by
   natify
   simp only [Nat.shiftLeft_eq, shiftLeft_eq', toNat_ofNat, toNat_shiftLeft, Nat.mod_mul_mod]
   simp_scalar
 
-@[bvify_simps]
+@[bvify]
 theorem BitVec.ofNat_shiftRight (a b : ℕ) (h : a < 2 ^n ∧ b < 2 ^ n) :
   BitVec.ofNat n (a >>> b) = BitVec.ofNat n a >>> BitVec.ofNat n b := by
   natify
