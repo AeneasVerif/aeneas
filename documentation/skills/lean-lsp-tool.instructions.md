@@ -80,7 +80,10 @@ Repeat steps 3–5: inspect goal → try a tactic → check result.
 |---|---|
 | `open <file.lean>` | Open file (returns immediately, non-blocking) |
 | `update` | Re-read current file from disk |
-| `replace <file.lean>` | Re-read a different file from disk |
+| `reread <file.lean>` | Re-read a different file from disk |
+| `save` | Write in-memory buffer to disk |
+| `diff` | Show unified diff (disk vs in-memory) |
+| `undo` | Revert to previous text state (batch = one undo step) |
 
 ### Viewing and Searching
 | Command | Description |
@@ -111,6 +114,8 @@ Repeat steps 3–5: inspect goal → try a tactic → check result.
 | `edit_range <start> <end> <content>` | Replace lines start..end (`\n` for newlines) |
 | `insert <after_line> <content>` | Insert after line (`\n` for newlines, 0=prepend) |
 | `delete <start> [end]` | Delete line(s) |
+| `replace "old" "new"` | Find-and-replace unique occurrence (escapes: `\"` `\\` `\n` `\t`) |
+| `replace_all "old" "new"` | Find-and-replace all occurrences |
 
 ### Batch Editing (Critical for Multi-Line Changes)
 | Command | Description |
@@ -119,6 +124,26 @@ Repeat steps 3–5: inspect goal → try a tactic → check result.
 | `batch_end` | End batch — send all changes, wait for one re-elaboration |
 
 **Always use batch mode for multi-line edits.** Without it, each `edit` triggers a full re-elaboration cycle (potentially 30+ seconds each).
+
+### String-Based Editing (replace / replace_all)
+
+The `replace` and `replace_all` commands do content-based find-and-replace, similar to
+an external editor's find-and-replace. Both arguments are double-quoted strings.
+
+```
+replace "old text here" "new text here"
+replace_all "pattern" "replacement"
+```
+
+- `replace` requires **exactly one** occurrence — errors on 0 or >1 (safe, like surgical edit).
+  On >1 matches, the error includes **line numbers and context** for each match.
+- `replace_all` replaces **all** occurrences — errors on 0
+- Escapes inside quotes: `\"` (literal quote), `\\` (literal backslash), `\n` (newline), `\t` (tab)
+- Both work in batch mode
+
+**Prefer `replace` over line-number-based `edit`** when you know the content to change
+but not the exact line number. This is especially useful after multiple edits have
+shifted line numbers.
 
 ### Status and Control
 | Command | Description |
@@ -189,6 +214,10 @@ batch_end
 8. **`edit` preserves indentation** — provide just the tactic text, not the leading spaces
 9. **`edit_range` and `insert` use exact content** — include indentation in the content
 10. **Use `\n` in content** for multi-line inserts: `insert 35 tactic1\n  tactic2\n  tactic3`
+11. **Use `replace` for content-based edits** — safer than `edit <line>` when line numbers shift
+12. **Stay within lean_lsp.py** — do all single-file editing and proof iteration inside the REPL. Do not escape to external editors + `lake build` loops. lean_lsp.py has all the editing commands you need (`edit`, `edit_range`, `insert`, `delete`, `replace`, `replace_all`, batch mode).
+13. **Use `save` to persist** — after completing a proof, `save` writes the buffer to disk. Use `diff` to review before saving.
+14. **Use `undo` to recover** — each edit is an undo step; a batch (`batch_start`...`batch_end`) is one undo step.
 
 ## Diagnosing Slow Incremental Replay — KEEPING LEAN REACTIVE IS CRITICAL
 
