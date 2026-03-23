@@ -584,9 +584,6 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
     { fvarId := fv, name? := mkName? (postsIds.getD i `_), isProp := outputIsProp[prefixLength + i]! : Output }
   let introducedVars := outputInfos ++ postInfos
 
-  -- Update the grind state with newly introduced hypotheses
-  let stepState ← stepState.update args.config (← getMainGoal)
-
   pure (some { goal := ← getMainGoal, outputs := introducedVars, stepState })
 
 /-- Attempt to solve the preconditions.
@@ -715,6 +712,14 @@ def stepWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
       because by solving the preconditions we may have instantiated meta-variables.
       We also simplify the goal again (to simplify let-bindings, etc.) -/
   let mainGoal ← postprocessMainGoal mainGoal
+  -- Update the grind state with newly introduced hypotheses.
+  -- We do this AFTER postprocessMainGoal so that we internalize the simplified
+  -- postconditions (not the raw ones that get replaced by simp).
+  let mainGoal ← match mainGoal with
+    | some mg =>
+      let stepState ← mg.stepState.update args.config mg.goal
+      pure (some { mg with stepState })
+    | none => pure none
   if let some mainGoal := mainGoal then
     withTraceNode `Step
       (fun _ => pure m!"Main goal after simplifying the post-conditions and the target") do
