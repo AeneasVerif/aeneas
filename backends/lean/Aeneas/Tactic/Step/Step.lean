@@ -687,7 +687,7 @@ def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option MainGoal)
       let r ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
         {simpThms := #[← stepSimpExt.getTheorems], declsToUnfold := #[``pure]} (.targets #[] true)
       if r.isSome then
-        pure (some ({goal := ← getMainGoal, outputs} : MainGoal))
+        pure (some ({goal := ← getMainGoal, outputs, grindState? := mainGoal.grindState?} : MainGoal))
       else pure none
 
 def stepWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
