@@ -169,12 +169,11 @@ private def internalizeHypotheses (goal : Goal) (config : Config)
 def initStepGrindState (config : Config) (mvarId : MVarId) : MetaM StepGrindState := do
   let params ← mkGrindParams config
   let (simpCtx, simprocs) ← mkAeneasSimpCtx
-  let ((goalState, contradiction), grindState, symState) ← runGrindWithState params {} {} do
-    -- Create a fresh Goal for the current MVarId
-    let goal ← Grind.mkGoalCore mvarId
-    -- Internalize all current hypotheses
-    let (goal, contradiction) ← internalizeHypotheses goal config simpCtx simprocs
-    pure (goal.toGoalState, contradiction)
+  let ((goalState, contradiction), grindState, symState) ←
+    runGrindWithState params {} {} do
+      let goal ← Grind.mkGoalCore mvarId
+      let (goal, contradiction) ← internalizeHypotheses goal config simpCtx simprocs
+      pure (goal.toGoalState, contradiction)
   pure { grindState, symState, goalState, contradiction, params, simpCtx, simprocs }
 
 /-- Update the grind state after new fvars have been introduced (by `introOutputs` or
