@@ -7,7 +7,7 @@ description: Crypto-specific proof strategies including Montgomery, NTT, modular
 
 ## Context
 
-This skill file covers strategies for verifying cryptographic Rust code translated by Aeneas to Lean. Techniques drawn from the SymCrypt verification project (ML-KEM / Kyber verification for Microsoft SymCrypt).
+This skill file covers strategies for verifying cryptographic Rust code translated by Aeneas to Lean. Techniques drawn from real-world cryptographic verification projects.
 
 **PREREQUISITE:** Always use `lean_lsp.py --repl --json --log <path>` for interactive proof development. See the `lean-lsp-tool` skill file.
 
@@ -194,8 +194,10 @@ theorem crypto_operation_spec
     (result.val : ZMod q) = spec_function (input.val : ZMod q) ⦄
   := by
   unfold crypto_operation
-  -- Apply monadic step specs
-  step* <;> bv_tac 32   -- or handle manually
+  -- Apply monadic step specs, then handle sub-goals individually
+  step*
+  · bv_tac 32     -- bitwise sub-goal 1
+  · bv_tac 32     -- bitwise sub-goal 2
   -- Split bounds vs modular goals
   split_conjs
   · -- Bounds: stay in Nat/Int

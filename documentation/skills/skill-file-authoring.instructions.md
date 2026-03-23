@@ -8,6 +8,25 @@ description: Rules for writing, editing, reviewing, and maintaining Aeneas skill
 This file contains rules about writing, editing, and maintaining skill files
 themselves. All agents that create or modify skill files must read this first.
 
+## YAML Frontmatter Requirement
+
+Every skill file must begin with a YAML frontmatter block:
+
+```yaml
+---
+name: kebab-case-name
+description: One-line description of what this skill covers
+---
+```
+
+Both fields are required:
+- **`name`**: kebab-case identifier (e.g., `aeneas-lean-core`, `proof-patterns`)
+- **`description`**: concise summary, used by Copilot CLI and Claude to decide when
+  to load the skill
+
+This is required by the Copilot CLI `/skills` mechanism (`SKILL.md` format) and by
+Claude Code's skill discovery. Files without frontmatter will not be detected as skills.
+
 ## Skill File Structure and Editing
 
 Skill files are stored in `documentation/skills/` — this is the **source of truth**.
@@ -79,3 +98,27 @@ reviewer finding, or as part of routine maintenance), check:
 4. **Examples match rules.** If a rule says "don't do X" but a worked example in
    proof-patterns or elsewhere does X, that's a contradiction. Either fix the example
    or clarify the rule boundary.
+
+## Keeping Derived Checklists in Sync
+
+Some skill files contain **derived checklists** — condensed versions of rules whose
+source of truth lives in another file. For example, the reviewer checklist in
+`launching-proof-agents` is derived from the "Proof Style and Maintainability" section
+in `aeneas-lean-core` and the "Proof Style Rules" in `aeneas-tactics-quickref`.
+
+**Rules for derived content:**
+
+1. **Mark derived sections** with a `⚠️ SYNC RULE` comment identifying the source:
+   ```markdown
+   <!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Proof Style and Maintainability" -->
+   ```
+
+2. **When updating a source-of-truth section**, check all files that reference it
+   (search for `SYNC RULE` markers mentioning the source file) and update the
+   derived versions to match.
+
+3. **Derived content should reference the source** with `(Rule: "...")` or
+   `(Pitfall #N)` for traceability, so reviewers can verify alignment.
+
+4. **When reviewing**, re-read the source-of-truth sections to verify derived
+   checklists haven't drifted.

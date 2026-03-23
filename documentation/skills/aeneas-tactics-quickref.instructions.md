@@ -116,7 +116,6 @@ See `aeneas-lean-core` skill file for the full rationale.
 |---|---|
 | `split_conjs <;> agrind` | Goal is a conjunction |
 | `simp [*]; agrind` | `agrind` alone fails (grind issue workaround) |
-| `step* <;> bv_tac 32` | Monadic code with bitwise ops |
 | `bvify N; bv_tac N` | Nat goal about bitwise operation |
 | `have h := ...; natify at h; simp_scalar at h` | Reverse bv lifting (goal → bv → back to Nat) |
 | `zify at h; zify; simp [h, Int.mul_emod]` | Modular equivalence via Int |

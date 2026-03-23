@@ -95,17 +95,16 @@ modify that file. Instead:
    -- functional correctness (currently only gives `True`). Move this local
    -- axiom there once the external spec is updated.
    --
-   -- WHY NEEDED: The outer loop proof needs to know that encrypt_block returns
-   -- the AES-128 encryption of the input block, not just `True`. Without this,
-   -- the loop invariant cannot relate the accumulated matrix to genA.
+   -- WHY NEEDED: The outer loop proof needs to know that the external function
+   -- returns a meaningful result, not just `True`. Without this, the loop
+   -- invariant cannot relate the accumulated output to the specification.
    --
-   -- WHY VALID: The Rust code calls `aes::soft::Aes128::encrypt_block`, which
-   -- is the standard AES-128 block cipher. The postcondition simply states that
-   -- the output equals the spec's pure AES function applied to the same inputs.
-   -- This is the expected behavior of any correct AES implementation.
-   private axiom encrypt_block_functional_spec (c : aes.soft.Aes128) (block : Array U16 8#usize) :
-     frodokem.encrypt_block c block ⦃ fun out =>
-       out = specEncryptBlock c block ⦄
+   -- WHY VALID: The Rust code calls the corresponding library function, which
+   -- implements the standard algorithm. The postcondition simply states that
+   -- the output equals the spec's pure function applied to the same inputs.
+   private axiom external_fn_spec (key : KeyType) (input : Array U16 8#usize) :
+     my_module.external_fn key input ⦃ fun out =>
+       out = specExternalFn key input ⦄
    ```
 
 2. **The comment must explain TWO things:**
@@ -363,7 +362,7 @@ that fits their availability. Never assume one mode silently.
 ```
 
 The reviewer sends back specific feedback (e.g., "postcondition too weak — must relate
-to `Spec.Frodo.Encode`, not just length") and the statement agent revises. This repeats
+to the spec function, not just length") and the statement agent revises. This repeats
 until all statements are validated. Only then do proof agents launch.
 
 **Review checklist (for human or code-review agent):**
@@ -441,14 +440,14 @@ the proof needs functional properties of the output), the agent MUST:
 2. **Identify the axiom** — name the specific axiom/spec and its file location.
 3. **Explain what is missing** — what postcondition property does the proof need?
 4. **Suggest the fix** — propose a strengthened postcondition. For example:
-   "The axiom `encrypt_block.spec` has postcondition `True`, but the outer loop proof
-   needs it to return the AES encryption of the input block. Suggested fix:
+   "The axiom `external_fn.spec` has postcondition `True`, but the outer loop proof
+   needs it to return the correct output. Suggested fix:
    ```lean
-   axiom frodokem.encrypt_block.spec (c : aes.soft.Aes128) (block : Array U16 8#usize) :
-     frodokem.encrypt_block c block ⦃ fun out =>
-       out = specEncryptBlock c block ⦄
+   axiom my_module.external_fn.spec (key : KeyType) (input : Array U16 8#usize) :
+     my_module.external_fn key input ⦃ fun out =>
+       out = specExternalFn key input ⦄
    ```
-   where `specEncryptBlock` is a pure specification of AES-128 block encryption."
+   where `specExternalFn` is a pure specification of the external function."
 
 **What happens after reporting depends on the workflow mode.** Before launching agents,
 the supervisor must ask the user which mode to use:
@@ -513,12 +512,8 @@ doesn't build cleanly, the proof agent must fix the errors before reporting.
 
 **Review agent checklist for proofs:**
 
-**⚠️ SYNC RULE:** This checklist is derived from the "Proof Style and Maintainability"
-section and "Critical Pitfalls" in `aeneas-lean-core.instructions.md`, plus the
-"Proof Style Rules" in `aeneas-tactics-quickref.instructions.md`. Those are the
-**source of truth**. When a new rule is added there, a corresponding reviewer check
-must be added here. When reviewing this checklist, re-read those sections to verify
-nothing is missing.
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Proof Style and Maintainability"
+     and aeneas-tactics-quickref "Proof Style Rules". See skill-file-authoring for sync rules. -->
 
 **⚠️ READ THE FILES, DON'T JUST GREP.** The reviewer must **read the modified proof
 files** — not just run grep patterns. Grep catches mechanical violations (banned

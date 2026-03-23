@@ -446,15 +446,11 @@ exact loop.spec_gen ret.2 out a p h1 h2 hdone' hrest'
 
 ### Avoid `step* <;> tactic` and `all_goals tactic` — use focused goals instead
 Do **not** write `step* <;> first | agrind | scalar_tac | bv_tac 16` or
-`all_goals agrind` or similar patterns that apply a tactic to all remaining goals
-at once. This **destroys incrementality**: you cannot inspect individual goals (a
-failure points at the entire line, not the failing sub-goal), and constructs like
-`first | tac1 | tac2 | ...` retry all alternatives on every re-elaboration — if
-any alternative is expensive, every edit pays the full cost.
-
-**Exception:** `step* <;> bv_tac 32` (or any single cheap closing tactic) is acceptable
-when all remaining sub-goals are homogeneous and the tactic is fast. The ban targets
-multi-tactic dispatchers like `step* <;> first | ... | ...` that are opaque to debug.
+`step* <;> bv_tac 32` or `all_goals agrind` or similar patterns that apply a tactic
+to all remaining goals at once. This **destroys incrementality**: you cannot inspect
+individual goals (a failure points at the entire line, not the failing sub-goal),
+and constructs like `first | tac1 | tac2 | ...` retry all alternatives on every
+re-elaboration — if any alternative is expensive, every edit pays the full cost.
 
 Instead, use focused goal blocks (`· `) to handle each sub-goal individually:
 
@@ -478,32 +474,32 @@ the goal with `goal <line>`, and work on one sub-goal at a time.
 
 ### Avoid early case splits on parameters in step proofs
 In cryptographic code, functions are often parameterized by a parameter set (e.g.,
-`p : Spec.Frodo.parameterSet` in FrodoKEM) from which lengths, dimensions, and bounds
-are derived. **Do NOT case-split on such parameters at the beginning of a `step` proof.**
-This duplicates the entire proof for each parameter variant (3× for FrodoKEM) and makes
-the proof unmaintainable. **Measured impact:** In FrodoKEM, `cases p <;> step*` at
-the top level turned a 110s proof into 327s (3× slowdown). Moving `cases p` to only
-the residual goals that need concrete values brought it back to 112s.
+`p : Spec.Crypto.parameterSet`) from which lengths, dimensions, and bounds are derived.
+**Do NOT case-split on such parameters at the beginning of a `step` proof.** This
+duplicates the entire proof for each parameter variant and makes the proof unmaintainable.
+**Measured impact:** `cases p <;> step*` at the top level turned a 110s proof into 327s
+(3× slowdown). Moving `cases p` to only the residual goals that need concrete values
+brought it back to 112s.
 
 Instead:
 - **Do case splits locally** inside specific proof obligations that need concrete values:
   ```lean
-  -- BAD: duplicates the entire proof 3 times
-  theorem my_fn.spec (p : Spec.Frodo.parameterSet) ... := by
+  -- BAD: duplicates the entire proof N times
+  theorem my_fn.spec (p : Spec.Crypto.parameterSet) ... := by
     cases p <;> (unfold my_fn; step*; ...)
 
   -- GOOD: case split only where needed
-  theorem my_fn.spec (p : Spec.Frodo.parameterSet) ... := by
+  theorem my_fn.spec (p : Spec.Crypto.parameterSet) ... := by
     unfold my_fn
     step*
-    · cases p <;> simp_all [Spec.Frodo.n, NBAR] <;> scalar_tac  -- only this sub-goal needs it
+    · cases p <;> simp_all [Spec.Crypto.n, Spec.Crypto.k] <;> scalar_tac  -- only this sub-goal needs it
     step*
   ```
 
 - **Give definitions/lemmas to `agrind`/`grind`** so they can case-split automatically:
   ```lean
   -- Give agrind the parameter definition so it can case-split internally
-  attribute [local agrind] Spec.Frodo.n Spec.Frodo.nbar in
+  attribute [local agrind] Spec.Crypto.n Spec.Crypto.k in
   theorem my_fn.spec ... := by
     unfold my_fn
     step*  -- agrind (used by step for preconditions) now auto-splits on p
@@ -528,8 +524,8 @@ Instead:
 
 - **Write auxiliary lemmas** for arithmetic facts that depend on the parameter:
   ```lean
-  private lemma n_mul_nbar_bound (p : Spec.Frodo.parameterSet) :
-      Spec.Frodo.n p * Spec.Frodo.nbar < 2^16 := by
+  private lemma n_mul_k_bound (p : Spec.Crypto.parameterSet) :
+      Spec.Crypto.n p * Spec.Crypto.k p < 2^16 := by
     cases p <;> native_decide
   ```
 

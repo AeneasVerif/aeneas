@@ -589,8 +589,9 @@ Use poppler's `pdftohtml` to extract PDF content as XML. The XML output contains
 per-span font size, position (top/left), and width — enough for an agent to
 interpret superscripts, subscripts, and indentation directly.
 
-**Requirement:** `pdftohtml` from poppler (install with `brew install poppler`
-on macOS, `apt install poppler-utils` on Linux).
+**Requirement:** `pdftohtml` from poppler. **Do not install it without asking the user
+first.** If poppler is not available, ask the user for permission before installing
+(`brew install poppler` on macOS, `apt install poppler-utils` on Linux).
 
 #### Usage
 
@@ -641,8 +642,8 @@ Preserves indentation but loses font-size metadata.
 
 #### When poppler is not available
 
-If poppler is not installed, offer alternatives:
-1. Install poppler: `brew install poppler` (macOS) or `apt install poppler-utils` (Linux)
+If poppler is not installed, **ask the user** which approach they prefer:
+1. Install poppler: `brew install poppler` (macOS) or `apt install poppler-utils` (Linux) — **only with user permission**
 2. User pastes relevant sections into the chat
 3. User converts PDF to text themselves
 4. Look for HTML versions of the same document (e.g., IETF drafts on datatracker.ietf.org)

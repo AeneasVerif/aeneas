@@ -163,11 +163,12 @@ etc.), the supervisor should **propose and follow this loop**:
 
 ```
 1. Do the task (yourself or via agents)
-2. Dispatch reviewer(s) to check the result
+2. Dispatch reviewer(s) — every review is a **full review from scratch**.
+   Do NOT tell reviewers to "confirm fixes" or reference prior rounds.
+   The reviewer prompt should be identical to a first-time review.
 3. Fix issues found by reviewers
-4. Go to step 2. Every review round is a full review from scratch —
-   do NOT tell reviewers to "confirm fixes" or reference prior rounds.
-5. When a review returns zero issues, report final result to user
+4. Go to step 2 until a review returns zero issues
+5. Report final result to user
 ```
 
 **Before starting**, propose this workflow to the user and ask for validation:
