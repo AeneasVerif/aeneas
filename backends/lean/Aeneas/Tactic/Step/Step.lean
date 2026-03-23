@@ -1515,7 +1515,7 @@ hf : ∀ (x y : U32), ↑x < 10 → ↑y < 10 → f x y ⦃ x✝ => True ⦄
   -/
   #guard_msgs in
   example {x y} (f : U32 → U32 → Result U32) (hf : ∀ x y, x.val < 10 → y.val < 10 → f x y ⦃ _ => True⦄) :
-    f x y ⦃ _ => True⦄ := by
+    f x y ⦃ _ => True ⦄ := by
     step
 
   -- Testing with mutually recursive definitions
