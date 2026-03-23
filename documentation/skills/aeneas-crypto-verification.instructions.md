@@ -170,13 +170,13 @@ cases h_idx <;> simp_lists [*]
 ### Polynomial-to-array correspondence:
 
 ```lean
--- Define conversion
+-- Define conversion using map (not ofFn)
 def to_poly (arr : Array U32 256) : Spec.Polynomial :=
-  Vector.ofFn (fun i => (arr[i.val]!.val : ZMod q))
+  arr.map (fun x => (x.val : ZMod q))
 
 -- Prove element-wise correspondence
-theorem to_poly_getElem! (arr : Array U32 256) (i : Nat) :
-  (to_poly arr)[i]! = (arr[i]!.val : ZMod q) := by ...
+theorem to_poly_getElem (arr : Array U32 256) (i : Fin 256) :
+  (to_poly arr)[i] = (arr[i].val : ZMod q) := by simp [to_poly]
 ```
 
 ## Crypto Proof Spec Template

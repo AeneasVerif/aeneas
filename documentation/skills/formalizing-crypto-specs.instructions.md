@@ -195,6 +195,20 @@ structural level:
   as subroutines (e.g., `BitRev₇` is defined in the RFC, so `bitRev7` is fine).
   Do NOT introduce helpers for subexpressions that the RFC writes inline.
 
+**Variable scope and type must match the RFC.** If the RFC declares a variable
+before a loop (e.g., `C ← B` on line 1, outside the `for` on line 2), the Lean
+code must declare it at the same scope — not inside the loop. Likewise, if the
+RFC says `C ∈ 𝔹^ℓ` (an array), the Lean variable must be a `Vector`/`𝔹`, not a
+scalar `Nat`. Hoisting a variable into a narrower scope or changing its type to a
+scalar may be semantically equivalent but is a syntactic fidelity violation.
+
+**Side-remarks are facts, not operations.** When RFC pseudocode has text to the
+right of an executable statement (after `▷`, or as an annotation like `a ∈ ℤ_m`),
+that text states a fact that holds at that point — it is NOT an operation to
+implement. Translate it as a Lean comment (`-- a ∈ ℤ_m`), not as a runtime
+operation (`% m`, a cast, an `if`). Only the executable part of the line (left of
+the remark) should produce Lean code.
+
 **The test:** for each line of Lean code annotated `-- line N`, a reviewer must be
 able to look at RFC line N and confirm the expressions match without needing to
 unfold any definitions that don't appear in the RFC.
@@ -410,6 +424,32 @@ for h:i in [0 : ℓ] do
     bits := bits.set (8 * i + j) (...)
 ```
 
+**Same rule applies to matrices.** When the RFC builds a matrix with nested loops,
+initialize the full matrix upfront and use a nested `set` — do NOT build rows
+with `Array.push` then collect rows into another `Array.push`. If a `Mat.set`
+helper for element-wise update doesn't already exist, define one:
+```lean
+def Mat.set (M : Mat rows cols) (i : Fin rows) (j : Fin cols) (val : Nat) : Mat rows cols :=
+  M.set i (M[i].set j val)
+```
+Then matrix-building loops become:
+```lean
+-- Good: initialize once, set elements
+let mut M : Mat n₁ n₂ := Vector.replicate n₁ (Vector.replicate n₂ 0)
+for h:i in [0 : n₁] do
+  for h2:j in [0 : n₂] do
+    M := M.set i j (f i j)
+
+-- Bad: build rows with push, collect with push
+let mut rows := #[]
+for i in [:n₁] do
+  let mut row := #[]
+  for j in [:n₂] do
+    row := row.push (f i j)
+  rows := rows.push row
+return ⟨rows.map ..., by sorry⟩
+```
+
 **When a bounds check cannot be discharged by `agrind`:** use `by sorry` to fill
 the proof obligation — **never** fall back to `!` (panicking) accessors, `.getD`,
 `Array` conversions, or restructuring the code away from the RFC's loop structure.
@@ -536,6 +576,12 @@ the Lean expressions match the RFC expressions.
 
 If the reviewer cannot fill in the "RFC expression" column, it hasn't read the
 spec. Every row must have both columns filled.
+
+**Variable declaration audit:** For each `let mut` / `let` in the Lean code,
+verify: (1) the variable is declared at the **same nesting depth** as in the RFC
+(e.g., before-loop vs inside-loop), and (2) the variable's **type matches the
+RFC's declared type** (e.g., if the RFC says `C ∈ 𝔹^ℓ`, the Lean variable must
+be `𝔹 ℓ`, not `Nat`). Flag any scope or type mismatch.
 
 **Signature types check:** For every algorithm, verify that function input/output
 types carry the RFC's dimension constraints. When the RFC specifies a fixed-size
