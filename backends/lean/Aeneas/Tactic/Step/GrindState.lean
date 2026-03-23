@@ -27,21 +27,19 @@ iterations instead of rebuilding from scratch each time.
     point is identical whether we initialize from scratch (single `step`) or incrementally
     (threaded `step*`).
 - **No GrindM.run fork**: We use `GrindM.run` as-is and use `set`/`get` inside the action
-  to inject/extract the `Grind.State`.
+  to inject/extract the `Grind.State` and `Sym.State`.
 
 ## Discharge with `Grind.solve`
 
 To discharge preconditions, we construct a `Goal` from the precondition `MVarId` and the
 threaded GoalState, then call `Grind.solve`. Both `Grind.State` and `Sym.State` are
-restored before the solve call — this is critical because `Sym.State` contains the
-hash-consing tables and `inferType`/`congrInfo` caches that the e-graph's proof
-reconstruction depends on (via pointer equality).
+restored before the solve call via `set`/`get` inside `GrindM.run`.
 
 ## State Management Pattern
 
 ```
 runGrindWithState params savedGrindState savedSymState do
-  -- Both Grind.State and Sym.State are restored
+  -- Both Grind.State and Sym.State are restored via set/get
   let goal := { toGoalState := savedGoalState, mvarId := currentMVarId }
   -- ... operations on goal ...
   -- Returns (result, finalGrindState, finalSymState)
@@ -79,20 +77,15 @@ private def mkAeneasSimpCtx : MetaM (Simp.Context × Simp.SimprocsArray) := do
     congrTheorems
   pure (ctx, #[defaultSimprocs] ++ simpArgs.simprocs)
 
-/-- Run a `GrindM` action with injected `Grind.State` and `Sym.State`, returning
-    both final states alongside the result.
+/-- Run a `GrindM` action with injected `Grind.State` and `Sym.State`,
+    returning all final states alongside the result.
 
-    **Why we preserve `Sym.State`:** `GrindM.run` calls `Sym.SymM.run` which creates
-    a completely fresh `Sym.State` (hash-consing tables, `inferType` cache, `congrInfo`
-    cache). The e-graph stores expression nodes using pointer-equality-based identifiers
-    that depend on the `Sym.State`'s hash-consing. If we lose the `Sym.State` between
-    runs, proof reconstruction fails (PANIC in `mkCongrDefaultProof`) because the
-    pointer-equality relationships from the first run are meaningless in a fresh
-    `Sym.State`. -/
+    Uses `GrindM.run` as-is, and injects/extracts state via `get`/`set` inside the action.
+    For fresh initialization, pass default `{}` for both states (the `set` is a no-op). -/
 def runGrindWithState {α} (params : Grind.Params)
     (savedGrindState : Grind.State)
     (savedSymState : Lean.Meta.Sym.State)
-    (action : GrindM α) : MetaM (α × Grind.State × Lean.Meta.Sym.State) :=
+    (action : GrindM α) : MetaM (α × Grind.State × Lean.Meta.Sym.State) := do
   Grind.GrindM.run (params := params) do
     set savedGrindState
     modifyThe Lean.Meta.Sym.State fun _ => savedSymState
@@ -138,18 +131,25 @@ private def internalizeHypotheses (goal : Goal) (config : Config)
       Grind.internalizeLocalDecl localDecl
       let type := localDecl.type
       if (← isProp type) then
-        -- Step 1: Simplify using our Aeneas simpsets
-        let (simpResult, _) ← Lean.Meta.simp type simpCtx simprocs
-        -- Step 2: Apply grind's normalization (add expects canonical form)
-        let normalizedType ← Grind.shareCommon (← Grind.canon simpResult.expr)
-        -- Step 3: Add the simplified+normalized type as a fact
-        match simpResult.proof? with
-        | none => Grind.add normalizedType localDecl.toExpr
-        | some h =>
-          Grind.add normalizedType
-            (mkApp4 (mkConst ``Eq.mp [0]) type simpResult.expr h localDecl.toExpr)
-        -- Step 4: Optionally run preprocessing after THIS hypothesis
-        -- Drains newRawFacts and runs satellite solvers (CommRing, linear arithmetic, etc.)
+        -- Prop hypothesis: simplify with Aeneas simpsets, then use grind's preprocessHypothesis
+        let (simplifiedType, simpProof?) ← do
+          let (simpResult, _) ← Lean.Meta.simp type simpCtx simprocs
+          let simplifiedType ← instantiateMVars simpResult.expr
+          pure (simplifiedType, simpResult.proof?)
+        -- Use grind's preprocessHypothesis for normalization
+        let r ← Grind.preprocessHypothesis simplifiedType
+        -- Build proof chain: fvar → (optional Eq.mp for simp) → (optional Eq.mp for preprocess)
+        let basePrf : Expr :=
+          if let some simpH := simpProof? then
+            mkApp4 (mkConst ``Eq.mp [0]) type simplifiedType simpH localDecl.toExpr
+          else
+            localDecl.toExpr
+        if let some ppH := r.proof? then
+          Grind.add r.expr
+            (mkApp4 (mkConst ``Eq.mp [0]) simplifiedType r.expr ppH basePrf)
+        else
+          Grind.add r.expr basePrf
+        -- Optionally run preprocessing after THIS hypothesis
         if config.preprocessGrind then
           let goal ← get
           match ← preprocessAction.run goal with
