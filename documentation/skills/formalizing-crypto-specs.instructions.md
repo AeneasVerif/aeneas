@@ -370,6 +370,9 @@ Cryptographic functions often use random inputs. This is the ONE case where we
 **Always use bounds-checked accessors** — never use the `!` (panicking) variants:
 - Use `getElem` (i.e., `a[i]` with a proof), **not** `getElem!` (i.e., `a[i]!`)
 - Use `Vector.set` / `Array.set`, **not** `Vector.set!` / `Array.set!`
+- **Never** use `.getD` (default-value fallback) to avoid bounds proofs. `.getD`
+  silently returns a default on out-of-bounds, masking bugs. Use bounds-checked
+  access with `by sorry` if `agrind` can't discharge the proof.
 
 **Prefer `Vector n α` over `Array α`** when the size is known statically (which
 is almost always the case in crypto specs — polynomials are degree-256, matrices
@@ -385,12 +388,31 @@ def ntt (f : Poly) : Poly := Id.run do
 ```
 
 When a function builds an array incrementally (via `push` in a loop), use `Array`
-locally, then convert to `Vector` at the return point via `⟨arr, by agrind⟩` or
-`arrayToPoly` etc.
+locally, then convert to `Vector` at the return point via `⟨arr, by sorry⟩` (not
+`Vector.ofFn fun i => if h : i.val < arr.size then arr[i.val] else 0` — that
+pattern silently maps out-of-bounds to a default, same problem as `.getD`).
+
+**`Vector.set` over `Array.push`:** When the RFC pseudocode builds an array inside
+a loop, ask: (1) is the final size known before the loop starts? (2) can each
+element's destination index be computed from the loop variables? If both are true,
+initialize the collection as `Vector.replicate n default` and use
+`Vector.set idx val` — do NOT start with `#[]` and `Array.push`. This keeps the
+`Vector` type throughout the loop body, avoids a size proof at the return point,
+and makes every index access bounds-checked (the `get_elem_tactic` override
+discharges the implicit bound via `agrind`, or leaves a `sorry` if it can't).
+
+Example — `bytesToBits` builds `8*ℓ` elements where element `8*i+j` is known at
+each step:
+```lean
+let mut bits : Vector Nat (8 * ℓ) := Vector.replicate (8 * ℓ) 0
+for h:i in [0 : ℓ] do
+  for h2:j in [0 : 8] do
+    bits := bits.set (8 * i + j) (...)
+```
 
 **When a bounds check cannot be discharged by `agrind`:** use `by sorry` to fill
-the proof obligation — **never** fall back to `!` (panicking) accessors, `Array`
-conversions, or restructuring the code away from the RFC's loop structure.
+the proof obligation — **never** fall back to `!` (panicking) accessors, `.getD`,
+`Array` conversions, or restructuring the code away from the RFC's loop structure.
 `by sorry` makes the proof debt explicit and preserves syntactic fidelity.
 Example:
 ```lean
@@ -404,9 +426,6 @@ obligations for a later proof agent to close.
 **NEVER** convert `Vector` to `Array` (via `.toArray`) or `𝔹 n` to `ByteArray`
 (via `.toByteArray`) just to avoid bounds proofs. This defeats the purpose of
 carrying sizes in types.
-
-This ensures all index accesses are statically verified to be in bounds. The proof
-obligations are discharged by the `get_elem_tactic` override described below.
 
 ### Proofs and `getElem` bounds
 
@@ -549,9 +568,16 @@ This agent checks everything EXCEPT syntactic fidelity (that's Agent A's job):
 6. **Proof overhead**: Minimal, non-distracting?
 7. **Test separation**: No test code in spec files?
 8. **Banned tactics**: No `omega` — only `agrind`/`grind`/`scalar_tac`.
-9. **No `!` panicking accessors** — flag ANY use of `!` (`get!`, `set!`, `[i]!`).
-   Also flag `.toArray` / `.toByteArray` conversions that exist only to dodge
-   bounds proofs. The correct fix is `by sorry`, not `!` or type-stripping.
+9. **No `!` / `.getD` / type-stripping** — flag ANY use of:
+   - `!` accessors (`get!`, `set!`, `[i]!`)
+   - `.getD` (default-value fallback that silently masks out-of-bounds)
+   - `.toArray` / `.toByteArray` conversions that strip size information
+   - `Vector.ofFn fun i => if h : i.val < arr.size then arr[i.val] else 0`
+     (silently maps out-of-bounds to default — same problem as `.getD`)
+   - `let mut x := #[]` followed by `x := x.push` inside a loop — ask: is the
+     final size known before the loop? Can each element's index be computed from
+     loop variables? If both yes, flag: should use `Vector.replicate` + `.set`.
+   The correct fix for all of these is bounds-checked access with `by sorry`.
 10. **File builds cleanly**: `lake build <module>` — 0 errors.
 
 ## Common Failure Modes
