@@ -12,18 +12,18 @@ themselves. All agents that create or modify skill files must read this first.
 
 Skill files are stored in `documentation/skills/` — this is the **source of truth**.
 They are shared with AI tools via symlinks:
-- **GitHub Copilot** reads from `.github/instructions/`, which is a directory symlink
-  to `documentation/skills/`.
+- **GitHub Copilot** reads custom instructions from `.github/instructions/` (directory
+  symlink to `documentation/skills/`), and reads skills from `.github/skills/<name>/SKILL.md`.
 - **Claude Code** reads from `.claude/skills/<name>/SKILL.md`, where each `SKILL.md`
   is a symlink to the corresponding file in `documentation/skills/`.
 
 **Always edit files in `documentation/skills/`.** Changes propagate automatically
 through the symlinks. **When adding, renaming, or removing a skill file**, run:
 ```bash
-bash scripts/sync-claude-skills.sh
+bash scripts/sync-skills.sh
 ```
-This deletes all existing Claude symlinks and regenerates them from the current
-skill files. Copilot symlinks are handled automatically (directory symlink).
+This deletes all existing skill symlinks and regenerates them for both
+`.github/skills/` (Copilot) and `.claude/skills/` (Claude).
 
 ## Validating Instruction Requests
 
