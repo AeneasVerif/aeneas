@@ -12,6 +12,16 @@ as a verification target for Rust implementations.
 rules, etc.), see `agent-fleet-management.instructions.md`. This file only covers
 the formalization-specific workflow.
 
+**Prerequisite skill files:** All agents (formalizer, reviewer, fixer) MUST read
+the following skill files before starting work:
+- `formalizing-crypto-specs.instructions.md` (this file)
+- `aeneas-lean-core.instructions.md` — Aeneas translation model and Lean idioms
+- `aeneas-tactics-quickref.instructions.md` — tactic decision tree, banned tactics
+- `aeneas-crypto-verification.instructions.md` — crypto proof strategies
+- `unreadable-file-formats.instructions.md` — how to read PDFs and other formats
+
+The supervisor MUST include these file paths in every agent dispatch prompt.
+
 ## Supervisor Workflow
 
 ### Step 1: Identify the specification document
@@ -21,7 +31,13 @@ The supervisor (not the agent) handles document identification:
 1. **Search for the official specification** — typically a NIST standard, RFC,
    or IETF draft. Look for the most authoritative source (FIPS publication >
    NIST draft > RFC > academic paper).
-2. **List all candidate documents** to the user with brief descriptions:
+2. **Obtain the specification document.** Download the PDF and extract text
+   using `pdftohtml -xml` (see `unreadable-file-formats.instructions.md`).
+   **If the document cannot be downloaded or read** (paywall, restricted access,
+   network issues), **inform the user explicitly and immediately** — do NOT
+   silently fall back to training knowledge. The user may provide a local copy
+   or choose an alternative source.
+3. **List all candidate documents** to the user with brief descriptions:
    > "Found these candidates for ML-KEM:
    > - FIPS 203 (final, Aug 2024) — ML-KEM standard
    > - NIST SP 800-227 (draft) — recommendations for ML-KEM
@@ -68,6 +84,14 @@ structure to the user for approval:
 
 Once the project structure is approved, the supervisor dispatches formalizer agents.
 
+**Every agent prompt MUST include:**
+1. Paths to all prerequisite skill files (listed in Overview above)
+2. The specification document (extracted text or XML from the PDF)
+3. The instruction to read the skill files before starting work
+
+If the specification PDF could not be obtained, do NOT dispatch agents — inform
+the user and wait for them to provide the document.
+
 **Parallelization:** Each algorithm gets its own agent working on its own file.
 For example:
 - Agent A: FrodoKem (`Spec/FrodoKem.lean`)
@@ -87,6 +111,12 @@ passes review with zero issues.
 1. **Review round:** Dispatch one reviewer agent per spec file (in parallel).
    Each reviewer checks against the full Reviewer Agent Checklist below and
    returns a list of issues with severities (Critical / High / Medium / Low).
+
+   **Every review round is a FULL review.** Do NOT tell reviewers to "confirm
+   fixes" or "check only new issues." Reviewers must read the spec and the
+   code from scratch every time. Do NOT mention prior rounds, prior issues,
+   or prior fix agents in the reviewer prompt — this biases the agent toward
+   rubber-stamping. The prompt should be identical to a first-time review.
 
 2. **Triage:** The supervisor consolidates review results across all files and
    reports to the user:
@@ -146,15 +176,73 @@ The mechanized specification in Lean must be **syntactically as close as possibl
 to the reference document. This is the primary design goal — reviewers should be
 able to read the Lean code side-by-side with the RFC and verify correspondence.
 
+**What "syntactically close" means concretely:**
+Every line of pseudocode in the RFC should map to a recognizable line in the Lean
+code. The correspondence must hold at the **expression level**, not just at the
+structural level:
+- If the RFC says `zeta ← ζ^{BitRev₇(i)} mod q`, the Lean code must say
+  something like `let zeta := ζ ^ (bitRev7 i)` (with `ζ : ZMod q` handling
+  the modular reduction). It must NOT wrap this in a helper function like
+  `zetaNTT i` — that breaks the 1:1 line correspondence even if semantically
+  equivalent.
+- If the RFC says `a ← (a − b[i·d + j])/2`, the Lean code must write the
+  subtraction and division, not simplify to `a / 2`.
+- Helper functions are allowed ONLY for operations that the RFC itself defines
+  as subroutines (e.g., `BitRev₇` is defined in the RFC, so `bitRev7` is fine).
+  Do NOT introduce helpers for subexpressions that the RFC writes inline.
+
+**The test:** for each line of Lean code annotated `-- line N`, a reviewer must be
+able to look at RFC line N and confirm the expressions match without needing to
+unfold any definitions that don't appear in the RFC.
+
 **Structural rules:**
 - Go through sections/algorithms **one by one**, in the order they appear in the RFC.
-- For each Lean definition, include a comment referencing the RFC:
+- For each Lean definition, include a **doc-comment that quotes the relevant RFC
+  pseudocode verbatim** (or as close as plain text allows). This lets reviewers
+  verify correspondence without opening the RFC:
   ```lean
-  /-- ML-KEM KeyGen — FIPS 203, Algorithm 16 -/
+  /-- ML-KEM KeyGen — FIPS 203, Algorithm 16
+      ```
+      (ek, dk) ← ML-KEM.KeyGen()
+      z ← B32
+      ek ← ByteEncode₁₂(t̂) ‖ ρ
+      dk ← ...
+      ``` -/
   def mlkem.keygen ...
   ```
 - Name definitions to match the RFC where possible (e.g., `ntt`, `Compress`,
   `K_PKE.Encrypt`).
+
+**Unicode naming conventions:**
+- When a variable in the RFC has a hat/circumflex (e.g., f̂, t̂, k̂), use Lean's
+  **escaped identifier syntax** `«f̂»` (French quotes `«»` around the letter +
+  combining circumflex U+0302). Lean normally rejects combining characters in
+  identifiers, but the `«»` escape allows any Unicode string as an identifier.
+  This works everywhere: `def`, `let`, `let mut`, function parameters, pattern
+  matching, etc.
+  ```lean
+  -- «f̂» = U+00AB, f, U+0302 (combining circumflex), U+00BB
+  def ntt (f : Poly) : Poly := Id.run do
+    let mut «f̂» := f              -- f̂ ← f
+    for h : j in [0 : 256] do
+      «f̂» := «f̂».set ⟨j, by agrind⟩ (...)
+    return «f̂»
+
+  def multiplyNTTs («f̂» «ĝ» : Poly) : Poly := ...
+  ```
+  **Which characters need `«»` escaping?** Only those without a precomposed
+  Unicode form. In practice:
+  - **Need `«»`**: f̂, t̂, k̂, Â (no precomposed form for f/t/k/A + circumflex)
+  - **No `«»` needed**: ĉ, ĝ, ĥ, ĵ, ŝ, ŵ, ŷ, ẑ (precomposed forms exist)
+  
+  To type `«f̂»` in your editor: type `«`, then `f`, then the combining
+  circumflex (often via compose key or character picker), then `»`.
+
+- When a variable has a bar/macron (e.g., n̄, m̄), use the `bar` suffix:
+  `nbar`, `mbar`. (No precomposed form exists for most of these, and `«n̄»`
+  is less readable than `nbar`.)
+- Greek letters (ζ, ρ, σ, η, μ, θ, etc.) work fine — they are single codepoints.
+- Subscripts (η₁, η₂, dᵤ, dᵥ) work fine in struct fields.
 
 **Use `do` notation (Id monad)** when the RFC is written algorithmically:
 ```lean
@@ -279,6 +367,23 @@ Cryptographic functions often use random inputs. This is the ONE case where we
 - Use `getElem` (i.e., `a[i]` with a proof), **not** `getElem!` (i.e., `a[i]!`)
 - Use `Vector.set` / `Array.set`, **not** `Vector.set!` / `Array.set!`
 
+**Prefer `Vector n α` over `Array α`** when the size is known statically (which
+is almost always the case in crypto specs — polynomials are degree-256, matrices
+are n×n, etc.). `Vector` carries the size in the type, making bounds proofs
+automatic via `get_elem_tactic`. For example:
+```lean
+abbrev Poly := Vector (ZMod q) 256
+
+def ntt (f : Poly) : Poly := Id.run do
+  let mut «f̂» := f              -- Vector (ZMod q) 256, size tracked
+  ...
+  «f̂» := «f̂».set ⟨j + len, by agrind⟩ (...)  -- bounds-checked
+```
+
+When a function builds an array incrementally (via `push` in a loop), use `Array`
+locally, then convert to `Vector` at the return point via `⟨arr, by agrind⟩` or
+`arrayToPoly` etc.
+
 This ensures all index accesses are statically verified to be in bounds. The proof
 obligations are discharged by the `get_elem_tactic` override described below.
 
@@ -365,25 +470,66 @@ paths or inline data).
 
 ## Reviewer Agent Checklist
 
-The reviewer checks the mechanization against all rules above:
+**Every review is a full review from scratch.** Do not assume prior rounds were
+correct. Read the spec and the code independently.
 
-1. **RFC correspondence**: Can each Lean definition be traced to a specific
-   algorithm/section in the RFC? Are the references documented?
-2. **Syntactic closeness**: Does the Lean code read naturally alongside the RFC?
-   Are unnecessary deviations justified and documented?
-3. **Mathlib usage**: Are standard mathlib types used where appropriate?
-4. **Executability**: Can the definitions be `#eval`'d? If not, is a computable
-   alternative provided with an equivalence proof?
-5. **Ambiguity documentation**: Are all non-obvious mechanization choices documented?
-6. **Randomness handling**: Do functions with randomness follow the `_internal`
-   pattern? Is the random function defined once and reused (not duplicated)?
-7. **Notation**: Are introduced notations simple, documented, and scoped?
-8. **Proof overhead**: Are `getElem` bound proofs minimal and non-distracting?
-9. **Test separation**: Are all test infrastructure, efficient implementations, and
-   equivalence proofs in the `Test/` folder? The reference spec files must not
-   contain test-only code.
-10. **Test coverage**: Were test vectors run? Do they pass?
-11. **File builds cleanly**: Run `lake build <module>` — 0 errors required.
+The supervisor should dispatch **two separate reviewer agents per file**:
+
+### Agent A: Syntactic fidelity reviewer
+
+This agent's ONLY job is to compare the Lean code against the RFC line by line.
+It must NOT comment on code quality, correctness, or style — only on whether
+the Lean expressions match the RFC expressions.
+
+**Required output format — a comparison table for each algorithm:**
+
+```
+## Algorithm 9: NTT (FIPS 203, §4.3)
+
+| RFC line | RFC expression                  | Lean expression                    | Match? |
+|----------|---------------------------------|------------------------------------|--------|
+| 1        | f̂ ← f                          | let mut «f̂» := f.toArray          | ⚠ toArray not in RFC |
+| 5        | zeta ← ζ^{BitRev₇(i)} mod q    | let zeta := ζ_root ^ (bitRev7 i)  | ✅     |
+| 8        | t ← zeta · f̂[j + len]          | let t := zeta * «f̂»[j + len]!    | ⚠ uses ! |
+...
+```
+
+If the reviewer cannot fill in the "RFC expression" column, it hasn't read the
+spec. Every row must have both columns filled.
+
+**Signature types check:** For every algorithm, verify that function input/output
+types carry the RFC's dimension constraints. When the RFC specifies a fixed-size
+collection (e.g., `b ∈ {0,1}^{8ℓ}`, `B ∈ 𝔹^ℓ`, `f ∈ ℤ^{256}_q`), the Lean
+signature must use `Vector` with the matching size — not `Array`. Flag any
+`Array α` parameter or return type where the RFC gives an explicit dimension.
+
+**Additionally, list all `def`s in the Lean file that do NOT correspond to a
+named algorithm/function in the RFC:**
+
+```
+## Non-RFC definitions audit
+
+| Lean def          | RFC counterpart?  | Verdict                          |
+|-------------------|-------------------|----------------------------------|
+| ζ_root            | ζ (FIPS §4.3)     | ✅ Justified — module-level constant |
+| arrayToPoly       | (none)            | ❌ Spurious — should be inlined  |
+| polyAdd           | (none)            | ❌ Spurious — use + instance     |
+```
+
+### Agent B: Semantic correctness reviewer
+
+This agent checks everything EXCEPT syntactic fidelity (that's Agent A's job):
+
+1. **Mathlib usage**: Are standard mathlib types used where appropriate?
+2. **Executability**: Can the definitions be `#eval`'d?
+3. **Ambiguity documentation**: Are all mechanization choices documented?
+4. **Randomness handling**: `_internal` pattern, RandomTape shared?
+5. **Notation**: Simple, documented, scoped?
+6. **Proof overhead**: Minimal, non-distracting?
+7. **Test separation**: No test code in spec files?
+8. **Banned tactics**: No `omega` — only `agrind`/`grind`/`scalar_tac`.
+9. **No `!` panicking accessors** (or documented with NOTE if unavoidable).
+10. **File builds cleanly**: `lake build <module>` — 0 errors.
 
 ## Common Failure Modes
 
@@ -395,3 +541,5 @@ The reviewer checks the mechanization against all rules above:
 | Unreadable code | Drifted from RFC structure | Restructure to match RFC section by section |
 | Missing documentation | Ambiguous choices not documented | Add mechanization notes for every non-obvious choice |
 | `getElem` proof explosion | Many array accesses with complex bounds | Configure `get_elem_tactic` locally, extract bound lemmas |
+| Spurious helper functions | Subexpression wrapped in helper not in RFC | Inline the expression; only RFC-named subroutines are allowed as helpers |
+| Algebraic simplification | Expression simplified relative to RFC | Write the RFC's form, even if a simpler equivalent exists |
