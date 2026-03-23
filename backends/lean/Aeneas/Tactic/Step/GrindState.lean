@@ -97,17 +97,15 @@ def runGrindFresh {α} (params : Grind.Params)
 def runGrindWithState {α} (state : StepGrindState) (action : GrindM α)
     : MetaM (α × Grind.State × Lean.Meta.Sym.State) := do
   let wrappedAction : GrindM (α × Grind.State × Lean.Meta.Sym.State) := do
-    set state.grindState
-    modifyThe Lean.Meta.Sym.State fun _ => state.symState
     let result ← action
     let finalGrindState ← get
     let finalSymState ← getThe Lean.Meta.Sym.State
     pure (result, finalGrindState, finalSymState)
-  -- Reuse the exact same MethodsRef and Grind.Context from init
+  -- Reuse the exact same MethodsRef, Grind.Context, Sym.Context from init.
+  -- Pass saved Grind.State and Sym.State as initial values to .run'.
   let symAction : Lean.Meta.Sym.SymM _ :=
-    (wrappedAction state.methodsRef state.grindCtx).run' {}
-  -- Bypass SymM.run: inject saved Sym.Context and Sym.State directly
-  symAction state.symCtx |>.run' state.symState
+    (wrappedAction state.methodsRef state.grindCtx).run' state.grindState
+  (symAction state.symCtx).run' state.symState
 
 /-- Internalize local hypotheses into a grind goal, using Aeneas simpsets.
 
