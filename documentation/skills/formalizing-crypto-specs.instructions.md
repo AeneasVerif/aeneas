@@ -388,6 +388,23 @@ When a function builds an array incrementally (via `push` in a loop), use `Array
 locally, then convert to `Vector` at the return point via `⟨arr, by agrind⟩` or
 `arrayToPoly` etc.
 
+**When a bounds check cannot be discharged by `agrind`:** use `by sorry` to fill
+the proof obligation — **never** fall back to `!` (panicking) accessors, `Array`
+conversions, or restructuring the code away from the RFC's loop structure.
+`by sorry` makes the proof debt explicit and preserves syntactic fidelity.
+Example:
+```lean
+for h:i in [0 : 8 * ℓ] do
+  have hByte : i / 8 < ℓ := by sorry  -- TODO: bounds obligation
+  B := B.set ⟨i / 8, hByte⟩ (...)
+```
+Agents must report all `sorry`s in their final output. These are proof
+obligations for a later proof agent to close.
+
+**NEVER** convert `Vector` to `Array` (via `.toArray`) or `𝔹 n` to `ByteArray`
+(via `.toByteArray`) just to avoid bounds proofs. This defeats the purpose of
+carrying sizes in types.
+
 This ensures all index accesses are statically verified to be in bounds. The proof
 obligations are discharged by the `get_elem_tactic` override described below.
 
@@ -532,7 +549,9 @@ This agent checks everything EXCEPT syntactic fidelity (that's Agent A's job):
 6. **Proof overhead**: Minimal, non-distracting?
 7. **Test separation**: No test code in spec files?
 8. **Banned tactics**: No `omega` — only `agrind`/`grind`/`scalar_tac`.
-9. **No `!` panicking accessors** (or documented with NOTE if unavoidable).
+9. **No `!` panicking accessors** — flag ANY use of `!` (`get!`, `set!`, `[i]!`).
+   Also flag `.toArray` / `.toByteArray` conversions that exist only to dodge
+   bounds proofs. The correct fix is `by sorry`, not `!` or type-stripping.
 10. **File builds cleanly**: `lake build <module>` — 0 errors.
 
 ## Common Failure Modes
