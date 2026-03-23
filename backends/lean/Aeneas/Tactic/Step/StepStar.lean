@@ -695,7 +695,7 @@ where
           unassignedVars,
           subgoals := preconditions,
         }
-      pure (info, mainGoalMVarId.map (·, ss))
+      pure (info, mainGoal)
     else
       let (info, mvarId) ← onFinish cfg (← getMainGoal)
       pure (info, mvarId.map (·, ss))
