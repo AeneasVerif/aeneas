@@ -135,8 +135,8 @@ structure MainGoal where
   /-- The variables introduced in the context after applying the step theorem (this includes variables "output"
       by the monadic function call as well as post-conditions). -/
   outputs : Array Output
-  /-- Grind state initialized/threaded during precondition discharge (for reuse by subsequent steps) -/
-  grindState? : Option StepGrindState := none
+  /-- Step state threaded from precondition discharge and hypothesis internalization -/
+  stepState : StepState := {}
 
 inductive OptTask α where
 | task (t : Task α)
@@ -208,8 +208,8 @@ structure Args where
   solvePreconditionTac : Option StepGrindState → TacticM Unit
   /-- Step config (needed for lazy grind state initialization in `trySolvePreconditions`) -/
   config : Config
-  /-- Pre-initialized grind state from step* (if available) -/
-  grindState? : Option StepGrindState := none
+  /-- Step state from step* (carries grind state when threading is enabled) -/
+  stepState : StepState := {}
   /- Syntax of the tactic provided by the user to solve the remaining proof obligations -/
   byTacSyntax : Option Syntax
 
@@ -452,7 +452,7 @@ def introPrettyEquality (args : Args) (fExpr : Expr) (outputFVars : Array Expr) 
     TODO: we use `simp` a lot, which uselessely explores the monadic term and the post-condition.
     We might want to optimize this.
 -/
-def introOutputs (args : Args) (fExpr : Expr) (grindState? : Option StepGrindState) :
+def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
   TacticM (Option MainGoal) := do
   withTraceNode `Step (fun _ => pure m!"introOutputs") do
   /- Decompose nested uses of `predn` to introduce a sequence of universal quantifiers.
@@ -584,16 +584,10 @@ def introOutputs (args : Args) (fExpr : Expr) (grindState? : Option StepGrindSta
     { fvarId := fv, name? := mkName? (postsIds.getD i `_), isProp := outputIsProp[prefixLength + i]! : Output }
   let introducedVars := outputInfos ++ postInfos
 
-  -- Update the grind state with the newly introduced hypotheses
-  let grindState? ← match grindState? with
-    | some gs =>
-      try
-        let mvarId ← getMainGoal
-        pure (some (← Step.updateStepGrindState gs args.config mvarId))
-      catch _ => pure grindState?
-    | none => pure none
+  -- Update the grind state with newly introduced hypotheses
+  let stepState ← stepState.update args.config (← getMainGoal)
 
-  pure (some { goal := ← getMainGoal, outputs := introducedVars, grindState? })
+  pure (some { goal := ← getMainGoal, outputs := introducedVars, stepState })
 
 /-- Attempt to solve the preconditions.
 
@@ -604,10 +598,10 @@ def introOutputs (args : Args) (fExpr : Expr) (grindState? : Option StepGrindSta
     - we then use the other tactic on the preconditions
  -/
 def trySolvePreconditions (args : Args) (config : Config)
-    (originalGoal : MVarId) (gs? : Option StepGrindState)
+    (originalGoal : MVarId) (stepState : StepState)
     (solvePreconditionTac : Option StepGrindState → TacticM Unit)
     (newPropGoals : List MVarId)
-    : TacticM (Option StepGrindState × List (MVarId × OptTask (Option Expr))) := do
+    : TacticM (StepState × List (MVarId × OptTask (Option Expr))) := do
   withTraceNode `Step (fun _ => pure m!"trySolvePreconditions") do
   let ordPropGoals ←
     newPropGoals.mapM (fun g => do
@@ -626,22 +620,22 @@ def trySolvePreconditions (args : Args) (config : Config)
   let goals ← newPropGoals.filterMapM (fun g => do if ← g.isAssigned then pure none else pure (some g))
   /- If `threadGrindState` is on but we don't have an already-initialized grind state,
      initialize it now (lazily: only if there are unsolved preconditions) -/
-  let gs? ← do
-    if config.threadGrindState && gs?.isNone && !goals.isEmpty then
-      pure (some (← Step.initStepGrindState config originalGoal))
+  let stepState ← do
+    if config.threadGrindState && stepState.grindState?.isNone && !goals.isEmpty then
+      pure { stepState with grindState? := some (← Step.initStepGrindState config originalGoal) }
     else
-      pure gs?
+      pure stepState
   /- Then attempt to solve the remaining preconditions by using more sophisticated tactics, potentially *asynchronously* -/
   if args.async then
-    let promises ← Async.asyncRunTacticOnGoals (solvePreconditionTac gs?) goals (cancelTk? := ← IO.CancelToken.new) (inlineFreshProofs := false)
+    let promises ← Async.asyncRunTacticOnGoals (solvePreconditionTac stepState.grindState?) goals (cancelTk? := ← IO.CancelToken.new) (inlineFreshProofs := false)
     let promises : Array (Task _) := promises.map IO.Promise.result?
     let promises : Array (Task _) := promises.map (
         fun o => o.map (sync := true) (fun o => match o with | none | some none => none | some (some o) => some o))
-    pure (gs?, List.zip goals (promises.toList.map OptTask.task))
+    pure (stepState, List.zip goals (promises.toList.map OptTask.task))
   else
     setGoals goals
-    allGoalsNoRecover (solvePreconditionTac gs?)
-    pure (gs?, (← getUnsolvedGoals).map fun g => (g, OptTask.none))
+    allGoalsNoRecover (solvePreconditionTac stepState.grindState?)
+    pure (stepState, (← getUnsolvedGoals).map fun g => (g, OptTask.none))
 
 /-- Post-process the main goal.
 
@@ -687,7 +681,7 @@ def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option MainGoal)
       let r ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
         {simpThms := #[← stepSimpExt.getTheorems], declsToUnfold := #[``pure]} (.targets #[] true)
       if r.isSome then
-        pure (some ({goal := ← getMainGoal, outputs, grindState? := mainGoal.grindState?} : MainGoal))
+        pure (some ({goal := ← getMainGoal, outputs, stepState := mainGoal.stepState} : MainGoal))
       else pure none
 
 def stepWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
@@ -712,11 +706,11 @@ def stepWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
   withTraceNode `Step (fun _ => pure m!"non prop goals") do
     trace[Step] "{← newNonPropGoals.mapM fun mvarId => do pure ((← mvarId.getDecl).userName, mvarId)}"
   -- Attempt to solve the goals which are propositions
-  let (newGrindState?, newPropGoals) ← trySolvePreconditions args args.config originalGoal args.grindState? args.solvePreconditionTac newPropGoals
+  let (stepState, newPropGoals) ← trySolvePreconditions args args.config originalGoal args.stepState args.solvePreconditionTac newPropGoals
   /- Process the main goal -/
   -- Introduce the outputs, including the post-conditions, into the context
   setGoals [mainGoal]
-  let mainGoal ← introOutputs args fExpr newGrindState?
+  let mainGoal ← introOutputs args fExpr stepState
   /- Simplify the post-conditions in the main goal - note that we waited until now
       because by solving the preconditions we may have instantiated meta-variables.
       We also simplify the goal again (to simplify let-bindings, etc.) -/
@@ -1051,7 +1045,7 @@ def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Option 
     keepPretty, ids, idsUserProvided, postsBasename, assumTac := customAssumTac,
     solvePreconditionTac,
     config,
-    grindState? := if config.threadGrindState then stepState.grindState? else none,
+    stepState := if config.threadGrindState then stepState else {},
     byTacSyntax := byTacStx
   }
   let (goals, usedTheorem) ← stepAsmsOrLookupTheorem args withArg

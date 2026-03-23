@@ -525,11 +525,7 @@ where
          introduced by `esplitAtSpec` (case variables, discriminant equality). -/
       let branchInfos ← branchGoals.mapM fun mainGoal => do
         setGoals [mainGoal]
-        let ss ← match ss.grindState? with
-          | some gs =>
-            let gs' ← Step.updateStepGrindState gs cfg.stepConfig mainGoal
-            pure { ss with grindState? := some gs' }
-          | none => pure ss
+        let ss ← ss.update cfg.stepConfig mainGoal
         traverseProgram cfg fuel ss
       /- Put everything together — after branches, state is discarded (we can't merge
          divergent e-graphs). Use the pre-branch state going forward. -/
@@ -645,7 +641,7 @@ where
             | some n => mkNode ``Lean.binderIdent #[mkIdent n]
             | none => mkNode ``Lean.binderIdent #[mkIdent `_]
       trace[Step] "ids from introduced vars: {ids}"
-      let mainGoal := mainGoal.map fun mainGoal => (mainGoal.goal, ({ grindState? := mainGoal.grindState?} : Step.StepState))
+      let mainGoal := mainGoal.map fun mainGoal => (mainGoal.goal, mainGoal.stepState)
       /- Generate the tactic scripts for the preconditions -/
       let currTac ←
         if cfg.prettyPrintedStep then

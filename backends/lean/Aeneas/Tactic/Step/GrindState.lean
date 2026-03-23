@@ -26,8 +26,9 @@ iterations instead of rebuilding from scratch each time.
   - the fact that we run it after *each* prop hypothesis ensures the grind state at any
     point is identical whether we initialize from scratch (single `step`) or incrementally
     (threaded `step*`).
-- **No GrindM.run fork**: We use `GrindM.run` as-is and use `set`/`get` inside the action
-  to inject/extract the `Grind.State` and `Sym.State`.
+- **No GrindM.run fork**: We replicate the `GrindM.run` monad stack construction once
+  (`runGrindFresh`), save all contexts (`Sym.Context`, `Grind.Context`, `MethodsRef`),
+  and reuse them in subsequent calls (`runGrindWithState`) to preserve pointer identity.
 
 ## Discharge with `Grind.solve`
 
@@ -77,22 +78,36 @@ private def mkAeneasSimpCtx : MetaM (Simp.Context × Simp.SimprocsArray) := do
     congrTheorems
   pure (ctx, #[defaultSimprocs] ++ simpArgs.simprocs)
 
-/-- Run a `GrindM` action with injected `Grind.State` and `Sym.State`,
-    returning all final states alongside the result.
-
-    Uses `GrindM.run` as-is, and injects/extracts state via `get`/`set` inside the action.
-    For fresh initialization, pass default `{}` for both states (the `set` is a no-op). -/
-def runGrindWithState {α} (params : Grind.Params)
-    (savedGrindState : Grind.State)
-    (savedSymState : Lean.Meta.Sym.State)
-    (action : GrindM α) : MetaM (α × Grind.State × Lean.Meta.Sym.State) := do
+/-- Run a `GrindM` action with a fresh monad stack (via `GrindM.run`).
+    Used for initialization — reads out all contexts and states for subsequent reuse. -/
+def runGrindFresh {α} (params : Grind.Params)
+    (action : GrindM α) : MetaM (α × Grind.State × Lean.Meta.Sym.State × Lean.Meta.Sym.Context × Grind.Context × Grind.MethodsRef) :=
   Grind.GrindM.run (params := params) do
-    set savedGrindState
-    modifyThe Lean.Meta.Sym.State fun _ => savedSymState
+    let result ← action
+    let grindState ← get
+    let symState ← getThe Lean.Meta.Sym.State
+    let symCtx ← readThe Lean.Meta.Sym.Context
+    let grindCtx ← readThe Grind.Context
+    let methodsRef ← readThe Grind.MethodsRef
+    pure (result, grindState, symState, symCtx, grindCtx, methodsRef)
+
+/-- Run a `GrindM` action reusing saved contexts and states from a previous run.
+    Preserves pointer identity of all contexts (`Sym.Context`, `Grind.Context`,
+    `MethodsRef`) to avoid PANICs in the e-graph's proof reconstruction. -/
+def runGrindWithState {α} (state : StepGrindState) (action : GrindM α)
+    : MetaM (α × Grind.State × Lean.Meta.Sym.State) := do
+  let wrappedAction : GrindM (α × Grind.State × Lean.Meta.Sym.State) := do
+    set state.grindState
+    modifyThe Lean.Meta.Sym.State fun _ => state.symState
     let result ← action
     let finalGrindState ← get
     let finalSymState ← getThe Lean.Meta.Sym.State
     pure (result, finalGrindState, finalSymState)
+  -- Reuse the exact same MethodsRef and Grind.Context from init
+  let symAction : Lean.Meta.Sym.SymM _ :=
+    (wrappedAction state.methodsRef state.grindCtx).run' {}
+  -- Bypass SymM.run: inject saved Sym.Context and Sym.State directly
+  symAction state.symCtx |>.run' state.symState
 
 /-- Internalize local hypotheses into a grind goal, using Aeneas simpsets.
 
@@ -169,24 +184,25 @@ private def internalizeHypotheses (goal : Goal) (config : Config)
 def initStepGrindState (config : Config) (mvarId : MVarId) : MetaM StepGrindState := do
   let params ← mkGrindParams config
   let (simpCtx, simprocs) ← mkAeneasSimpCtx
-  let ((goalState, contradiction), grindState, symState) ←
-    runGrindWithState params {} {} do
+  let ((goalState, contradiction), grindState, symState, symCtx, grindCtx, methodsRef) ←
+    runGrindFresh params do
       let goal ← Grind.mkGoalCore mvarId
       let (goal, contradiction) ← internalizeHypotheses goal config simpCtx simprocs
       pure (goal.toGoalState, contradiction)
-  pure { grindState, symState, goalState, contradiction, params, simpCtx, simprocs }
+  pure { grindState, symState, symCtx, grindCtx, methodsRef, goalState, contradiction, params, simpCtx, simprocs }
 
 /-- Update the grind state after new fvars have been introduced (by `introOutputs` or
     case splits). Only processes fvars with index ≥ `nextDeclIdx` (incremental). -/
 def updateStepGrindState (state : StepGrindState) (config : Config) (mvarId : MVarId)
     : MetaM StepGrindState := do
+  let action : GrindM _ := do
+    -- Reconstruct Goal from saved GoalState + current MVarId
+    let goal : Goal := { toGoalState := state.goalState, mvarId }
+    -- Process only NEW fvars (via nextDeclIdx)
+    let (goal, contradiction) ← internalizeHypotheses goal config state.simpCtx state.simprocs
+    pure (goal.toGoalState, contradiction)
   let ((goalState, contradiction), grindState, symState) ←
-    runGrindWithState state.params state.grindState state.symState do
-      -- Reconstruct Goal from saved GoalState + current MVarId
-      let goal : Goal := { toGoalState := state.goalState, mvarId }
-      -- Process only NEW fvars (via nextDeclIdx)
-      let (goal, contradiction) ← internalizeHypotheses goal config state.simpCtx state.simprocs
-      pure (goal.toGoalState, contradiction)
+    runGrindWithState state action
   pure { state with grindState, symState, goalState, contradiction := state.contradiction || contradiction }
 
 /-- Discharge a precondition using `Grind.solve` with the threaded grind state.
@@ -205,15 +221,23 @@ def dischargeWithGrindState (state : StepGrindState) (precondMVarId : MVarId)
     let goalState : GoalState :=
       { state.goalState with
         nextDeclIdx := mvarDecl.lctx.decls.size }
-    let (solved, _, _) ←
-      runGrindWithState state.params state.grindState state.symState do
-        let goal : Goal := { toGoalState := goalState, mvarId := precondMVarId }
-        match ← Grind.solve goal with
-        | none   => pure true
-        | some _ => pure false
+    let action : GrindM _ := do
+      let goal : Goal := { toGoalState := goalState, mvarId := precondMVarId }
+      match ← Grind.solve goal with
+      | none   => pure true
+      | some _ => pure false
+    let (solved, _, _) ← runGrindWithState state action
     unless solved do throwError "grind could not solve precondition"
   return result.isSome
 
+/-- Update the step state by internalizing new hypotheses from the given goal.
+    No-op if grind state threading is disabled (`grindState? = none`). -/
+def StepState.update (state : StepState) (config : Config) (mvarId : MVarId) : MetaM StepState :=
+  match state.grindState? with
+  | some gs => do
+    let gs' ← updateStepGrindState gs config mvarId
+    pure { state with grindState? := some gs' }
+  | none => pure state
 end Step
 
 end Aeneas

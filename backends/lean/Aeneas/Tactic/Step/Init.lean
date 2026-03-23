@@ -131,6 +131,17 @@ structure StepGrindState where
       `Sym.State` each time, so without explicit save/restore the e-graph's
       pointer-equality-based proof reconstruction breaks. -/
   symState : Lean.Meta.Sym.State
+  /-- Sym-level context (hash-consed SharedExprs: True, False, 0, etc.).
+      Must be preserved across runs — the e-graph uses pointer equality on
+      these expressions, so recreating them (via a new `SymM.run`) breaks lookups. -/
+  symCtx : Lean.Meta.Sym.Context
+  /-- Grind-level context (config, simpMethods, extensions, etc.).
+      Must be preserved across runs — rebuilt `Grind.Context` may produce
+      structurally equal but pointer-different internal values. -/
+  grindCtx : Grind.Context
+  /-- Grind methods reference (propagators, etc.).
+      Must be preserved across runs — contains IO.Refs that the e-graph depends on. -/
+  methodsRef : Grind.MethodsRef
   /-- The knowledge base: e-graph, accumulated facts, e-matching state.
       Decoupled from any MVarId — can be shared across goals. -/
   goalState : Grind.GoalState
