@@ -124,12 +124,16 @@ theorem function_name.spec (param1 : U32) (param2 : Slice U16)
 ### The `⦃ ⦄` notation
 Weakest precondition: `f ⦃ x => P x ⦄` means "if f succeeds with value x, then P x holds."
 
-When the result is a tuple, decompose it directly in the binder — no need to
-destructure manually:
+When the result is a tuple, **always decompose it in the binder** — do NOT use
+projectors (`.1`, `.2`, `.fst`, `.snd`, etc.):
 ```lean
--- Result is (U32 × Slice U16)
+-- GOOD: decompose the tuple in the binder
 fun_name a b ⦃ (x : U32) (s : Slice U16) =>
   x.val < 100 ∧ s.length = a.length ⦄
+
+-- BAD: projectors are hard to read and fragile
+fun_name a b ⦃ result =>
+  result.1.val < 100 ∧ result.2.length = a.length ⦄
 ```
 
 ## Proof Development Workflow
