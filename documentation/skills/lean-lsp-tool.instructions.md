@@ -20,12 +20,24 @@ Without this tool, you are flying blind — you cannot see proof goals, you cann
 
 ```bash
 # From the Lean project root (where lakefile.toml lives):
-python3 /path/to/aeneas/scripts/lean_lsp.py --repl --json
+python3 /path/to/aeneas/scripts/lean_lsp.py --repl --json --log /tmp/lean_lsp.log
 ```
 
 Always use `--json` — it gives you one JSON object per line, easy to parse programmatically. Every response has `"status": "ok"` or `"status": "error"`.
 
+**`--log` is MANDATORY.** Always pass `--log <path>` to record all commands and results
+with timestamps. This is required for monitoring agent activity — without it, there is
+no way to verify that agents are actually using the LSP or to diagnose workflow issues.
+Use a unique log path per agent (e.g., `/tmp/lean_lsp_<agent-name>.log`).
+
 If driving from a subprocess (piped stdin), prompts are automatically suppressed.
+
+### Log Format
+
+Each command is logged as `[timestamp] CMD: <raw command>` and each result as
+`[timestamp] RES: status=ok, errors=N, elapsed=Xs`. Session start/end are marked
+with `====` separators. The log is append-mode and line-buffered (entries appear
+immediately).
 
 ## Core Workflow
 
@@ -221,6 +233,10 @@ batch_end
 
 ## Diagnosing Slow Incremental Replay — KEEPING LEAN REACTIVE IS CRITICAL
 
+> **Terminology:** "Interactivity" and "incrementality" mean the same thing in this
+> context — the ability to edit one tactic and get near-instant feedback because Lean
+> only re-elaborates the changed part. We use both terms interchangeably.
+
 Keeping Lean reactive during interactive proof development is **the single most important
 factor for productivity**. Fast feedback (< 0.5s per tactic) enables rapid iteration —
 try a tactic, see the result, adjust, repeat. Slow feedback destroys this loop.
@@ -272,6 +288,9 @@ slowness — it compounds over many edit cycles.
 ```
 open file → wait → sorry → goal → edit → errors → repeat
 ```
+
+**`--log` is MANDATORY.** Every `lean_lsp.py` invocation MUST include `--log <path>`.
+Use a unique path per agent (e.g., `--log /tmp/lean_lsp_<agent-name>.log`).
 
 **Never** fall back to `lake build` loops. Only use `lake build` once at the very end to confirm the final result.
 

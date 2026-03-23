@@ -7,7 +7,7 @@ description: Tactic decision tree, banned tactics, and common combinations for A
 
 ## Decision Tree: Which Tactic?
 
-**PREREQUISITE:** Always use `lean_lsp.py --repl --json` for interactive proof development. Use `goal <line>` to inspect the proof state before choosing a tactic. See the `lean-lsp-tool` skill file.
+**PREREQUISITE:** Always use `lean_lsp.py --repl --json --log <path>` for interactive proof development. Use `goal <line>` to inspect the proof state before choosing a tactic. See the `lean-lsp-tool` skill file.
 
 ```
 What does the goal look like?
@@ -96,6 +96,8 @@ What does the goal look like?
 
 ### ⛔ BANNED TACTICS
 
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "⛔ BANNED TACTICS" -->
+
 | Banned | Why | Use instead (preference order) |
 |---|---|---|
 | `omega` | No scalar/Slice/Vec knowledge | `agrind` > `grind` > `scalar_tac` |
@@ -124,14 +126,20 @@ See `aeneas-lean-core` skill file for the full rationale.
 
 ## Proof Style Rules
 
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Proof Style and Maintainability" -->
+
 - **Address ALL warnings** — the only acceptable warning is `"declaration uses 'sorry'"`:
   - `"This simp argument is unused"` → remove the unused lemma from `simp only [...]`
   - `"Too many ids provided"` → reduce binders in `step as ⟨...⟩`
   - `"'...' tactic does nothing"` / `"is never executed"` → remove the dead tactic
   - `"unused variable"` → remove or prefix with `_`
+  - **This applies to sorry'd proofs too.** Warnings in incomplete proofs must still be
+    fixed — the sorry is acceptable, but dead tactics, unused simp args, and other
+    warnings are not. Keep sorry'd proofs clean so they're ready for completion.
 - **No big `simp only [...]` in implementation proofs** — model names are unstable. Use `simp [*]` or targeted rewrites. (OK in spec lemmas.)
 - **Extract complex sub-proofs** as auxiliary lemmas — don't inline 15 lines of arithmetic inside `step*`
 - **Simplify shifts early**: rewrite `>>>` as `/ 2^n`, `<<<` as `* 2^n`
+- **Sorry'd proofs must be fast**: do not leave expensive `step*`, `cases p`, or `first | ...` before a sorry. Use plain `sorry` (with a comment sketching the approach). Expensive sorry'd proofs waste build time on every `lake build` for zero verification value.
 
 ## Attribute Management Cheatsheet
 
@@ -212,6 +220,8 @@ Use `trace.profiler` to find which tactic dominates the time, then optimize or r
 
 ### ⚠️ `maxHeartbeats` guidelines
 
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core Pitfall #13 -->
+
 Lean's default `maxHeartbeats` (200K) is very low for Aeneas proofs. **Increase it to
 1M as a baseline** (`set_option maxHeartbeats 1000000`) — this is a reasonable default
 for most proofs.
@@ -235,6 +245,8 @@ bump the number, fix the root cause:
    of `agrind` for bitwise goals, `scalar_tac` instead of `agrind` for pure arithmetic).
 
 ### ⏱️ Wall-clock time target: < 60s — THIS IS IMPORTANT
+
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core Pitfall #14 -->
 
 **Keeping proof times low is critical for productivity.** Fast proofs mean fast iteration
 — you can try tactics, see results, and adjust quickly. Slow proofs kill this feedback
@@ -262,6 +274,25 @@ produce simpler terms.
 Use `set_option trace.profiler true in` to profile tactic elaboration time. If tactic
 times are reasonable but the overall proof is slow, the bottleneck is kernel replay.
 
+### Measuring per-file build time
+
+To measure the elaboration time of each file in isolation (with dependencies already
+built), use `lake env lean`:
+
+```bash
+cd <project-lean-root>
+lake build   # ensure all dependencies are compiled
+find Properties -name "*.lean" | sort | while read f; do
+  printf "%s: " "$f"
+  { time lake env lean "$f" ; } 2>&1 | grep "^real"
+done
+```
+
+`lake env` sets up `LEAN_PATH` so bare `lean` can find all olean dependencies.
+`time lean file.lean` then elaborates just that one file from scratch and reports
+wall-clock time. This gives accurate per-file measurements without lake's caching
+or scheduling overhead.
+
 **Keeping Lean reactive is even more important.** When developing a proof interactively,
 adding a tactic at the end should take **< 0.5s** — this is what enables rapid iteration.
 If incremental edits are slow (several seconds), the proof structure is forcing
@@ -270,6 +301,8 @@ re-elaboration of large chunks. See the lean-lsp-tool skill file for guidance
 elaboration checkpoints).
 
 ### ⛔ NEVER increase `maxRecDepth`
+
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core Pitfall #11 -->
 
 If you hit a `maxRecDepth` error, **do NOT increase it**. If calling any tactic
 triggers `maxRecDepth`, it almost certainly means **the tactic is looping internally**

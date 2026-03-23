@@ -48,6 +48,7 @@ REPL commands:
 Flags:
     --json          Machine-readable JSON output (one JSON object per line on stdout)
     --fail-fast     Exit on first error (useful for scripted usage)
+    --log <path>    Append all commands and results with timestamps to a log file
 
 Environment:
     LEAN_PROJECT_ROOT   Override project root (default: auto-detect via lakefile.toml)
@@ -67,6 +68,7 @@ import time
 import threading
 import re
 import glob as glob_mod
+from datetime import datetime
 
 
 def _find_project_root():
@@ -1312,12 +1314,27 @@ Commands:
 # REPL
 # ---------------------------------------------------------------------------
 
-def repl_mode(project_root, json_mode=False, fail_fast=False):
+def repl_mode(project_root, json_mode=False, fail_fast=False, log_path=None):
     out = Output(json_mode=json_mode)
     out.info(f"Lean 4 LSP REPL — project: {project_root}")
     out.info("Starting lake serve...")
     lsp = LeanLSP(project_root)
     out.info("Ready. Type 'help' for commands.\n")
+
+    # Open log file for appending if --log was given
+    log_file = None
+    if log_path:
+        log_file = open(log_path, "a", buffering=1)  # line-buffered
+        log_file.write(f"\n{'='*60}\n")
+        log_file.write(f"[{datetime.now().isoformat()}] Session started — project: {project_root}\n")
+        log_file.write(f"{'='*60}\n")
+
+    def _log(tag, text):
+        """Append a timestamped entry to the log file."""
+        if log_file:
+            ts = datetime.now().isoformat(timespec='milliseconds')
+            for line in text.splitlines():
+                log_file.write(f"[{ts}] {tag}: {line}\n")
 
     batch_mode = False
     batch_text_before = None  # Text snapshot at batch_start for undo
@@ -1338,9 +1355,11 @@ def repl_mode(project_root, json_mode=False, fail_fast=False):
         args = args_str.split() if args_str else []
 
         if cmd in ("quit", "exit"):
+            _log("CMD", raw)
             break
 
         result = None
+        _log("CMD", raw)
         # Save text before any potentially mutating command for undo.
         # In batch mode, individual edits don't push — the whole batch
         # is captured at batch_start and pushed at batch_end.
@@ -1574,12 +1593,29 @@ def repl_mode(project_root, json_mode=False, fail_fast=False):
             undo_stack.append(text_before)
 
         if result:
+            # Log result summary (status + key fields, not full content)
+            if log_file:
+                status = result.get("status", "?")
+                error_count = result.get("error_count")
+                elapsed = result.get("elapsed")
+                summary_parts = [f"status={status}"]
+                if error_count is not None:
+                    summary_parts.append(f"errors={error_count}")
+                if elapsed is not None:
+                    summary_parts.append(f"elapsed={elapsed:.1f}s")
+                err = result.get("error")
+                if err:
+                    summary_parts.append(f"error={err[:200]}")
+                _log("RES", ", ".join(summary_parts))
             out.result(result)
             if fail_fast and result.get("status") == "error":
                 exit_code = 1
                 break
 
     lsp.close()
+    if log_file:
+        log_file.write(f"[{datetime.now().isoformat()}] Session ended\n")
+        log_file.close()
     out.info("Bye.")
     return exit_code
 
@@ -1635,6 +1671,8 @@ def main():
     parser.add_argument("--project-root",
                         default=os.environ.get("LEAN_PROJECT_ROOT") or _find_project_root(),
                         help="Lean project root (default: auto-detect)")
+    parser.add_argument("--log",
+                        help="Path to log file. All commands are appended with timestamps.")
     parser.add_argument("file", nargs="?", help="Lean file to query")
     parser.add_argument("query", nargs="?",
                         help="Line number, 'diagnostics', 'errors', 'warnings', 'logs', or 'sorry'")
@@ -1643,7 +1681,8 @@ def main():
     args = parser.parse_args()
 
     if args.repl:
-        code = repl_mode(args.project_root, json_mode=args.json, fail_fast=args.fail_fast)
+        code = repl_mode(args.project_root, json_mode=args.json,
+                         fail_fast=args.fail_fast, log_path=args.log)
         sys.exit(code)
     elif args.file and args.query:
         code = oneshot_mode(args.project_root, args.file, args.query,

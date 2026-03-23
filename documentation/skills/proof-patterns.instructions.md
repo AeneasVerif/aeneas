@@ -68,6 +68,10 @@ private theorem add_loop.spec_gen
         s[j]'(by grind) = out0[j]'(by agrind) := by
       intro j hj; grind                    -- unchanged entry
     -- Step 6: Recursive call
+    -- NOTE on inline (by ...) blocks: The single cheap-tactic args below are acceptable.
+    -- If any argument required tactic sequences, multi-line proofs, or expensive tactics
+    -- (first|..., all_goals, grind), extract it as a `have` first — see
+    -- "Extract inline (by ...) blocks" in aeneas-lean-core.instructions.md.
     have hend_val : ret.2.«end».val = iter.«end».val := by rw [hend']
     exact add_loop.spec_gen s out0 a p (by grind) (by grind)
       ret.2 (by scalar_tac) (by grind)
