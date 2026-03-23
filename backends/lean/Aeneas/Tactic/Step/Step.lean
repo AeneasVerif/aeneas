@@ -434,19 +434,25 @@ def introPrettyEquality (args : Args) (fExpr : Expr) (outputFVars : Array Expr) 
   Utils.addDeclTac name e (← inferType e) (asLet := false) fun e => do
     trace[Step] "Introduced the \"pretty\" let binding: {← inferType e}"
 
-/-- After application of the step theorem, the target should be of the shape:
-  `qimp_spec P k Q` (or `qimp P Q`)
+/-- Introduce the outputs (variables and postconditions) into the context after applying
+    the step theorem.
 
-  We transform it to a target of the shape:
-  `∀ x₀ ... xₙ, P₀ → ... → Pₘ → k ⦃ Q ⦄`
+    After application of the step theorem, the target should be of the shape:
+    `qimp_spec P k Q` (or `qimp P Q`)
 
-  Then we introduce `x₀`, ..., `xₙ`, `P₀`, ..., `Pₘ` in the context, by using the names
-  provided by the user.
+    We transform it to a target of the shape:
+    `∀ x₀ ... xₙ, P₀ → ... → Pₘ → k ⦃ Q ⦄`
 
-  TODO: we use `simp` a lot, which uselessely explores the monadic term and the post-condition.
-  We might want to optimize this.
+    Then we introduce `x₀`, ..., `xₙ`, `P₀`, ..., `Pₘ` in the context, by using the names
+    provided by the user.
+
+    If a grind state is provided, it is updated with the newly introduced hypotheses so that
+    subsequent steps can reuse it.
+
+    TODO: we use `simp` a lot, which uselessely explores the monadic term and the post-condition.
+    We might want to optimize this.
 -/
-def introOutputs (args : Args) (fExpr : Expr) :
+def introOutputs (args : Args) (fExpr : Expr) (grindState? : Option StepGrindState) :
   TacticM (Option MainGoal) := do
   withTraceNode `Step (fun _ => pure m!"introOutputs") do
   /- Decompose nested uses of `predn` to introduce a sequence of universal quantifiers.
@@ -578,7 +584,16 @@ def introOutputs (args : Args) (fExpr : Expr) :
     { fvarId := fv, name? := mkName? (postsIds.getD i `_), isProp := outputIsProp[prefixLength + i]! : Output }
   let introducedVars := outputInfos ++ postInfos
 
-  pure (some { goal := ← getMainGoal, outputs := introducedVars })
+  -- Update the grind state with the newly introduced hypotheses
+  let grindState? ← match grindState? with
+    | some gs =>
+      try
+        let mvarId ← getMainGoal
+        pure (some (← Step.updateStepGrindState gs args.config mvarId))
+      catch _ => pure grindState?
+    | none => pure none
+
+  pure (some { goal := ← getMainGoal, outputs := introducedVars, grindState? })
 
 /-- Attempt to solve the preconditions.
 
@@ -701,7 +716,7 @@ def stepWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
   /- Process the main goal -/
   -- Introduce the outputs, including the post-conditions, into the context
   setGoals [mainGoal]
-  let mainGoal ← introOutputs args fExpr
+  let mainGoal ← introOutputs args fExpr newGrindState?
   /- Simplify the post-conditions in the main goal - note that we waited until now
       because by solving the preconditions we may have instantiated meta-variables.
       We also simplify the goal again (to simplify let-bindings, etc.) -/
@@ -712,7 +727,6 @@ def stepWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
       trace[Step] "{mainGoal.goal}"
   /- Put everything together -/
   let newNonPropGoals ← newNonPropGoals.filterM fun mvar => not <$> mvar.isAssigned
-  let mainGoal := mainGoal.map fun mg => { mg with grindState? := newGrindState? }
   pure ({ unassignedVars := newNonPropGoals.toArray, preconditions := newPropGoals.toArray, mainGoal })
 
 /-- Small utility: if `args` is not empty, return the name of the app in the first
