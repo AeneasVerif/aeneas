@@ -67,16 +67,19 @@ private def mkGrindParams (config : Config) : MetaM Grind.Params := do
 /-- Build the Aeneas simp context for hypothesis preprocessing.
     Uses the same simpsets as `scalar_tac` (scalar_tac_simps, simp_bool_prop_simps, etc.)
     combined with the standard Lean simp theorems. -/
-private def mkAeneasSimpCtx : MetaM (Simp.Context × Simp.SimprocsArray) := do
+/- Build a simp context for preprocessing hypotheses before internalization.
+   Uses the SAME simpset as `ScalarTac.getSimpArgs` (scalar_tac_simps + simpBoolProp)
+   so that internalized hypotheses are normalized identically to how `threadedGrindTac`
+   and `evalAGrindWithPreprocess` normalize them before calling grind. Using a different
+   simpset (e.g., the full `@[simp]` set) would cause form mismatches in the e-graph. -/
+private def mkPreprocessSimpCtx : MetaM (Simp.Context × Simp.SimprocsArray) := do
   let simpArgs ← ScalarTac.getSimpArgs
-  let defaultSimpThms ← getSimpTheorems
   let congrTheorems ← getSimpCongrTheorems
-  let defaultSimprocs ← Simp.getSimprocs
   let ctx ← Simp.mkContext
     (config := { dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1 })
-    (simpTheorems := #[defaultSimpThms] ++ simpArgs.simpThms)
+    (simpTheorems := simpArgs.simpThms)
     congrTheorems
-  pure (ctx, #[defaultSimprocs] ++ simpArgs.simprocs)
+  pure (ctx, simpArgs.simprocs)
 
 /-- Run a `GrindM` action with a fresh monad stack (via `GrindM.run`).
     Used for initialization — reads out all contexts and states for subsequent reuse. -/
@@ -189,7 +192,7 @@ private def internalizeHypotheses (goal : Goal) (config : Config)
     Creates a fresh `GoalState` and internalizes all current local hypotheses. -/
 def initStepGrindState (config : Config) (mvarId : MVarId) : MetaM StepGrindState := do
   let params ← mkGrindParams config
-  let (simpCtx, simprocs) ← mkAeneasSimpCtx
+  let (simpCtx, simprocs) ← mkPreprocessSimpCtx
   let ((goalState, contradiction), grindState, symState, symCtx, grindCtx, methodsRef) ←
     runGrindFresh params do
       let goal ← Grind.mkGoalCore mvarId
