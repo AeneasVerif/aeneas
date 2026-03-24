@@ -210,6 +210,11 @@ def updateStepGrindState (state : StepGrindState) (config : Config) (mvarId : MV
     to the e-graph and runs the full solver pipeline (assertAll, satellite solvers,
     e-matching, case splitting) to find a contradiction.
 
+    The proof is wrapped in an auxiliary theorem (`mkAuxTheorem`) to prevent kernel
+    reduction loops in recursive theorems. Without this, the grind proof term (which
+    chains through `Classical.byContradiction` + linear arithmetic) can trigger
+    `maxRecDepth` during the kernel's well-founded recursion checking.
+
     Returns `true` if the precondition was solved, `false` otherwise.
     On failure, all MetaM state changes are reverted (via `observing?`). -/
 def dischargeWithGrindState (state : StepGrindState) (precondMVarId : MVarId)
@@ -226,6 +231,15 @@ def dischargeWithGrindState (state : StepGrindState) (precondMVarId : MVarId)
       | some _ => pure false
     let (solved, _, _) ← runGrindWithState state action
     unless solved do throwError "grind could not solve precondition"
+    /- Wrap the proof in an auxiliary theorem to prevent kernel reduction loops.
+       Grind proofs chain through Classical.byContradiction + Int.Linear.eq_of_core
+       which cause maxRecDepth in the kernel during well-founded recursion checking
+       for recursive theorems (the kernel tries to reduce the proof, which references
+       hypotheses from the recursive call, triggering infinite unfolding). -/
+    let proof ← instantiateMVars (mkMVar precondMVarId)
+    let goalType ← precondMVarId.getType
+    let auxTheorem ← Lean.Meta.mkAuxTheorem goalType proof (zetaDelta := true)
+    precondMVarId.assign auxTheorem
   return result.isSome
 
 /-- Update the step state by internalizing new hypotheses from the given goal.
