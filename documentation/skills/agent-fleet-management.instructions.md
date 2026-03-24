@@ -1,3 +1,8 @@
+---
+name: agent-fleet-management
+description: General rules for managing fleets of AI agents working on a shared codebase
+---
+
 # Agent Fleet Management — Skill File
 
 ## Overview

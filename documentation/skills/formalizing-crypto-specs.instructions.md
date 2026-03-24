@@ -1,3 +1,8 @@
+---
+name: formalizing-crypto-specs
+description: How to formalize cryptographic algorithms from standards into pure Lean specifications
+---
+
 # Formalizing Cryptographic Specifications — Skill File
 
 ## Overview
