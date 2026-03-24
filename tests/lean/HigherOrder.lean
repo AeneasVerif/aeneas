@@ -6,17 +6,24 @@ namespace higher_order
 
 def applyF (f : U32 → Result U32) (x : U32) : Result U32 := f x
 
+@[progress]
 theorem applyF_spec (f : U32 → Result U32) (x : U32)
     (post : U32 → Prop)
     (hf : f x ⦃ post ⦄) :
     applyF f x ⦃ post ⦄ := by
   simp [applyF]; exact hf
 
+/--
+info: Try this:
+
+  [apply]     let* ⟨ y, y_post ⟩ ← [ +inferPost ] applyF_spec
+    case hf => let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
+    agrind
+-/
+#guard_msgs in
 example (a : U32) (h : a.val + 1 ≤ U32.max) :
     applyF (fun x => x + 1#u32) a ⦃ y => y.val = a.val + 1 ⦄ := by
-  progress with applyF_spec
-  case hf => progress +inferPost as ⟨ b, hb ⟩
-  grind
+  progress*? +inferPost
 
 -- Higher-order in 2 functions, operates on a pair of inputs/outputs
 def callPair (f : U32 → Result U32) (g : U32 → Result U32) (xy : U32 × U32) : Result (U32 × U32) := do
@@ -24,6 +31,7 @@ def callPair (f : U32 → Result U32) (g : U32 → Result U32) (xy : U32 × U32)
   let b ← g xy.2
   return (a, b)
 
+@[progress]
 theorem callPair_spec (f g : U32 → Result U32) (xy : U32 × U32)
     (postF : U32 → Prop) (postG : U32 → Prop)
     (hf : f xy.1 ⦃ postF ⦄) (hg : g xy.2 ⦃ postG ⦄) :
@@ -36,18 +44,25 @@ theorem callPair_spec (f g : U32 → Result U32) (xy : U32 × U32)
   simp [WP.spec, WP.theta, WP.wp_return]
   exact ⟨ha, hb⟩
 
+/--
+info: Try this:
+
+  [apply]     let* ⟨ ab, ab_post1, ab_post2 ⟩ ← [ +inferPost ] callPair_spec
+    case hf => let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
+    case hg => let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
+    agrind
+-/
+#guard_msgs in
 example (x y : U32) (hx : x.val + 1 ≤ U32.max) (hy : y.val + 2 ≤ U32.max) :
     callPair (fun a => a + 1#u32) (fun b => b + 2#u32) (x, y) ⦃ ab => ab.1.val = x.val + 1 ∧ ab.2.val = y.val + 2 ⦄ := by
-  progress with callPair_spec
-  case hf => progress +inferPost as ⟨ a, ha ⟩
-  case hg => progress +inferPost as ⟨ b, hb ⟩
-  grind
+  progress*? +inferPost
 
 -- Calls f then g in sequence
 def callFThenG (f g : U32 → Result U32) (x : U32) : Result U32 := do
   let y ← f x
   g y
 
+@[progress]
 theorem callFThenG_spec (f g : U32 → Result U32) (x : U32)
     (mid post : U32 → Prop)
     (hf : f x ⦃ mid ⦄)
@@ -58,14 +73,20 @@ theorem callFThenG_spec (f g : U32 → Result U32) (x : U32)
   intro y hy
   exact hg y hy
 
+/--
+info: Try this:
+
+  [apply]     let* ⟨ y, y_post ⟩ ← [ +inferPost ] callFThenG_spec
+    case hf => let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
+    case hg =>
+      intros
+      let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
+    agrind
+-/
+#guard_msgs in
 example (x : U32) (h1 : x.val + 1 ≤ U32.max) (h2 : x.val + 2 ≤ U32.max) :
     callFThenG (fun a => a + 1#u32) (fun b => b + 1#u32) x ⦃ y => y.val = x.val + 2 ⦄ := by
-  progress with callFThenG_spec
-  case hf => progress +inferPost as ⟨ a, ha ⟩
-  case hg =>
-    intro y hy
-    progress +inferPost as ⟨ b, hb ⟩
-  grind
+  progress*? +inferPost
 
 def _root_.Aeneas.Std.Slice.mapM  {α β} (f : α → Result β) (x : Slice α) : Result (Slice β) :=
   match h : x.val.mapM f with
@@ -73,6 +94,7 @@ def _root_.Aeneas.Std.Slice.mapM  {α β} (f : α → Result β) (x : Slice α) 
   | fail e => fail e
   | div    => div
 
+@[progress]
 theorem _root_.Aeneas.Std.Slice.mapM_spec {α β} {f : α → Result β} {s : Slice α} {post : Nat → β → Prop}
     (hf : ∀ i (hi : i < s.len), f s[i] ⦃ post i ⦄) :
     s.mapM f ⦃ s' => s'.len = s.len ∧ ∀ i (hi : i < s'.len), post i s'[i] ⦄ := by
@@ -83,16 +105,22 @@ def callSlicemapM (x : Slice U32) : Result (Slice U32) := do
   let y ← x.mapM (fun x => x + 1#u32)
   return y
 
+/--
+info: Try this:
+
+  [apply]     let* ⟨ y, y_post1, y_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec
+    case hf =>
+      intros
+      let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
+    agrind
+-/
+#guard_msgs in
 example (s : Slice U32) (h : ∀ i (hi : i < s.len), s[i] < U32.max) :
   callSlicemapM s ⦃ s' =>
     s'.len = s.len ∧
     ∀ i (hi₁ : i < s.len) (hi₂ : i < s'.len), s'[i].val = s[i].val + 1
     ⦄ := by
   unfold callSlicemapM
-  progress with Slice.mapM_spec
-  case hf =>
-    intros t ht
-    progress +inferPost as ⟨u, hu⟩
-  grind
+  progress*? +inferPost
 
 end higher_order

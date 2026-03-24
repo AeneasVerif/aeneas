@@ -563,6 +563,16 @@ where
     match mvarId with
     | none => pure (info, mvarId)
     | some mvarId =>
+      /- If inferPost is enabled, try to infer the postcondition before attempting agrind -/
+      let mvarId ←
+        if cfg.progressConfig.inferPost then
+          let goalTy ← instantiateMVars (← mvarId.getType)
+          let (head, _) := goalTy.withApp fun f a => (f, a)
+          if head.isMVar then
+            commitIfNoEx do Progress.inferPost mvarId
+          else pure mvarId
+        else pure mvarId
+      setGoals [mvarId]
       /- Attempt to finish with a tactic -/
       -- TODO: don't use syntax
       -- TODO: use global options
@@ -664,13 +674,87 @@ where
             match cfg.preconditionTac with
             | none => `(tactic| progress $config with $(←usedTheorem.toSyntax) as ⟨$ids,*⟩)
             | some tac => `(tactic| progress $config with $(←usedTheorem.toSyntax) as ⟨$ids,*⟩ by $(#[tac])*)
+      /- If inferPost is enabled, try to recursively process unsolved preconditions
+         that are `spec` goals. This handles higher-order cases where a precondition
+         like `hf : f x ⦃ ?post ⦄` is itself a monadic spec that needs progress + inferPost.
+
+         For each recursively processed precondition, we wrap its script in
+         `case <tag> => [intro ...;] <recursive script>` so the generated proof
+         navigates to the correct goal. -/
       let sorryStx ← `(tactic|· sorry)
+      let (preconditions, extraInfo, preconditionsScript) ←
+        if cfg.progressConfig.inferPost then
+          let mut remaining : Array (MVarId × Progress.OptTask (Option Expr)) := #[]
+          let mut extra : Info := {}
+          let mut scriptEntries : Array (TaskOrDone (Option Syntax.Tactic)) := #[]
+          for (mvarId, proof) in preconditions do
+            match proof with
+            | .task y =>
+              -- Async proof in progress, keep as-is
+              remaining := remaining.push (mvarId, proof)
+              scriptEntries := scriptEntries.push
+                (TaskOrDone.task (y.map fun (e : Option _) => if e.isNone then some sorryStx else none))
+            | .none =>
+              if ← mvarId.isAssigned then
+                continue
+              -- Check if this precondition contains a spec goal
+              -- (possibly under ∀ binders, e.g., ∀ y, mid y → f y ⦃ post ⦄)
+              let precTy ← instantiateMVars (← mvarId.getType)
+              let rec stripForall (e : Expr) : Expr :=
+                match e.consumeMData with
+                | .forallE _ _ body _ => stripForall body
+                | e => e
+              let innerTy := stripForall precTy
+              let isSpec := innerTy.consumeMData.withApp fun f args =>
+                f.isConstOf ``Std.WP.spec && args.size == 3
+              if isSpec then
+                let tag ← mvarId.getTag
+                try
+                  -- Recursively process this spec precondition
+                  let (subInfo, didIntro) ← commitIfNoEx do
+                    setGoals [mvarId]
+                    let (introFVars, mvarId) ← mvarId.intros
+                    setGoals [mvarId]
+                    let info ← traverseProgram cfg fuel
+                    pure (info, !introFVars.isEmpty)
+                  -- Build the script: case <tag> => [intros;] <recursive script>
+                  let recursiveStx ← subInfo.script.toSyntax
+                  let introStx : Array Syntax.Tactic ←
+                    if didIntro then pure #[← `(tactic| intros)]
+                    else pure #[]
+                  let allTacs := introStx ++ recursiveStx
+                  let caseArgs := makeCaseArgs tag #[]
+                  let caseTac ← `(tactic| case $caseArgs => $allTacs*)
+                  scriptEntries := scriptEntries.push (TaskOrDone.mk (some caseTac))
+                  extra := extra ++ { subInfo with script := .tacs #[] }
+                catch e =>
+                  -- Recursive processing failed, keep as normal precondition
+                  logWarning m!"Recursive spec processing failed for {tag}: {e.toMessageData}"
+                  remaining := remaining.push (mvarId, proof)
+                  scriptEntries := scriptEntries.push (TaskOrDone.mk (some sorryStx))
+              else
+                remaining := remaining.push (mvarId, proof)
+                scriptEntries := scriptEntries.push (TaskOrDone.mk (some sorryStx))
+          pure (remaining, extra, scriptEntries)
+        else
+          let scriptEntries : Array (TaskOrDone (Option Syntax.Tactic)) := preconditions.map fun (_, p) =>
+            match p with
+            | .none => TaskOrDone.mk (some sorryStx)
+            | .task y => TaskOrDone.task (y.map fun (e : Option _) => if e.isNone then some sorryStx else none)
+          pure (preconditions, {}, scriptEntries)
+
+      /- After recursive processing, filter out unassigned vars that got assigned
+         (e.g., `?post` assigned by `inferPost` during recursive spec processing) -/
+      let unassignedVars ←
+        if cfg.progressConfig.inferPost then
+          unassignedVars.filterM fun mvarId => do
+            pure !(← mvarId.isAssigned)
+        else
+          pure unassignedVars
+
       let unassignedVarsScript : Array (TaskOrDone (Option Syntax.Tactic)) :=
         unassignedVars.map fun _ => TaskOrDone.mk (some sorryStx)
-      let preconditionsScript : Array (TaskOrDone (Option Syntax.Tactic)) := preconditions.map fun (_, p) =>
-        match p with
-        | .none => TaskOrDone.mk (some sorryStx)
-        | .task y => TaskOrDone.task (y.map fun (e : Option _) => if e.isNone then some sorryStx else none)
+
       let preconditions ← preconditions.mapM fun (x, y) => do
         let y := match y with | .none => TaskOrDone.done .none | .task y => TaskOrDone.task y
         pure (x, some y)
@@ -678,8 +762,9 @@ where
       let info : Info := {
           script := .tacs (#[TaskOrDone.mk (some currTac)] ++ unassignedVarsScript ++ preconditionsScript),
           unassignedVars,
-          subgoals := preconditions,
+          subgoals := preconditions ++ extraInfo.subgoals,
         }
+      let info := { info with unassignedVars := info.unassignedVars ++ extraInfo.unassignedVars }
       pure (info, mainGoal)
     else
       onFinish cfg (← getMainGoal)
