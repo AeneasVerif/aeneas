@@ -1,3 +1,8 @@
+---
+name: agent-fleet-management
+description: Resource management, file isolation, task sizing, and supervisor rules for AI agent fleets
+---
+
 # Agent Fleet Management — Skill File
 
 ## Overview
@@ -7,34 +12,8 @@ shared codebase. All skill files that involve agent supervision (proof agents,
 formalization agents, etc.) must follow these rules and reference this file rather
 than duplicating them.
 
-## Meta: Validating Instruction Requests
-
-When the user asks to update skill files (or any agent instructions), the supervisor
-must **step back and evaluate whether the proposed instruction is practical and
-actionable** before applying it. Specifically:
-
-1. **Can agents actually do this?** Background agents run autonomously in a single turn
-   — they cannot send intermediate messages, ask clarifying questions mid-run, or
-   respond to external signals. Any instruction that requires mid-run interaction
-   (e.g., "report every 10 minutes", "ask the supervisor before proceeding") is
-   **not actionable** and will be silently ignored by the agent.
-
-2. **Is the instruction enforceable?** Instructions like "always do X" are only effective
-   if the agent can reasonably detect when X applies. Vague instructions ("be careful
-   with performance") are less effective than specific ones ("if a tactic takes > 10s,
-   extract the sub-goal as a `have` lemma").
-
-3. **Does it conflict with existing guidance?** Check for contradictions with other
-   skill files. For example, an instruction to "use `omega` for simple arithmetic"
-   would conflict with the banned-tactics list in Aeneas projects.
-
-**If the proposed instruction is not actionable or practical**, report this to the user
-with an explanation of *why* it won't work and propose a practical alternative. For
-example: "Background agents can't report mid-run — instead, I'll decompose tasks into
-smaller units so each agent completes faster, giving us natural checkpoints."
-
-Do NOT silently add instructions that agents cannot follow — this creates false
-expectations and wastes prompt space.
+For rules about writing, editing, and reviewing skill files, see
+`skill-file-authoring.instructions.md`.
 
 ## Resource Management
 
@@ -177,12 +156,78 @@ partial progress: what was tried, how far it got, what it thinks is needed.
 
 ## Supervisor Responsibilities
 
+### Default workflow: do → review → fix → converge
+
+Whenever the user asks to perform a task (proof work, code changes, skill file edits,
+etc.), the supervisor should **propose and follow this loop**:
+
+```
+1. Do the task (yourself or via agents)
+2. Dispatch reviewer(s) — every review is a **full review from scratch**.
+   Do NOT tell reviewers to "confirm fixes" or reference prior rounds.
+   The reviewer prompt should be identical to a first-time review.
+3. Fix issues found by reviewers
+4. Go to step 2 until a review returns zero issues
+5. Report final result to user
+```
+
+**Before starting**, propose this workflow to the user and ask for validation:
+> "I'll [do X], then dispatch a reviewer to check [Y]. I'll fix any issues and
+> iterate until it converges. Sound good?"
+
+The user may want to skip the review (for trivial tasks), do the review themselves,
+or adjust the scope. Always ask rather than assume.
+
+**Review depth depends on the task:**
+- **Skill file edits**: reviewer checks cross-file consistency, actionability, and
+  that examples match rules (see `skill-file-authoring.instructions.md`).
+- **Proof work**: reviewer runs the full checklist (see launching-proof-agents).
+  **The reviewer should read the modified files** (not just grep) — the token cost
+  is modest (~15K tokens per file) and grep alone misses structural issues like
+  multi-line inline `(by ...)` blocks and proof organization problems.
+- **Mechanical changes** (bulk rename, sed replacement): reviewer spot-checks a
+  sample + verifies the build passes. Full read not needed.
+
+**Convergence:** The loop typically converges in 1-2 iterations. If a third review
+still finds issues, escalate to the user — the task or the guidelines may need
+rethinking.
+
 ### Active supervision
 
 When an agent completes:
 - **Review the result**: Did it succeed? Partially? Fail?
 - **Assess the approach**: Was it sound? Should the next agent try differently?
 - **Report to the user**: Surface interesting findings.
+
+### Status table format
+
+When the user asks for status, **always include the current date and time** at the top
+of the report (e.g., "**Status at 2026-03-22 06:50 UTC**"). This helps the user track
+progress over time, especially during long autonomous runs.
+
+Present a table with these columns:
+
+| Column | Description |
+|--------|-------------|
+| **File** | The Properties file name (without `.lean`) |
+| **Sorry's** | Current number of `sorry` occurrences in the file |
+| **Δ** | Change in sorry count since the last status check (e.g., ↓3, ↑1, —) |
+| **Modified** | Whether the file has been modified since the last status check (✏️ yes / — no) |
+| **Agent** | Which agent is working on it (name + 🔄), or — if none |
+| **Runtime** | How long the agent has been running (e.g., 2.3h) |
+| **Build** | Whether the file builds cleanly since last modification (✅ / ❌ / ❓ unknown) |
+
+**How to populate each column:**
+- **Sorry's**: `grep -c 'sorry' <file>` on disk
+- **Δ**: Compare with the count from the previous status check (track in session state)
+- **Modified**: `git diff --name-only` or compare file mtimes since last check
+- **Agent**: From the agent list (`list_agents`)
+- **Runtime**: From agent metadata (seconds since launch)
+- **Build**: Track whether a successful `lake build <module>` has run since the file
+  (or any of its transitive dependencies) was last modified. If unknown, show ❓.
+
+Include a summary line below the table: total sorry's, total non-obsolete sorry's,
+notable wins (files that hit 0, big drops), and any concerns.
 
 ### Cross-agent synthesis
 

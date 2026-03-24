@@ -10,21 +10,15 @@ Aeneas translates Rust programs to pure Lean code via the LLBC intermediate repr
 
 ## PREREQUISITE: Use lean_lsp.py for All Proof Work
 
-**Before writing or editing any Lean proof**, start a `lean_lsp.py` REPL session:
+**Before writing or editing any Lean proof**, start a `lean_lsp.py` REPL session.
+See the `lean-lsp-tool` skill file for full setup and command reference.
 
 ```bash
-python3 scripts/lean_lsp.py --repl --json
+python3 scripts/lean_lsp.py --repl --json --log /tmp/lean_lsp.log
 ```
 
-This gives you incremental checking, proof goal inspection, and error feedback without rebuilding the full file. See the `lean-lsp-tool` skill file for the complete command reference.
-
-**Minimal workflow:**
-1. `open <file.lean>` — open and elaborate the file
-2. `sorry` — find proof obligations
-3. `goal <line>` — see what needs to be proved
-4. `edit <line> <tactic>` — try a tactic
-5. `errors` — check if it worked
-6. Repeat 3–5 until done
+**`--log` is MANDATORY** — always pass a log path. This records all commands with
+timestamps for monitoring and debugging. Use a unique path per agent.
 
 ## Reading Aeneas-Generated Code
 
@@ -130,12 +124,16 @@ theorem function_name.spec (param1 : U32) (param2 : Slice U16)
 ### The `⦃ ⦄` notation
 Weakest precondition: `f ⦃ x => P x ⦄` means "if f succeeds with value x, then P x holds."
 
-When the result is a tuple, decompose it directly in the binder — no need to
-destructure manually:
+When the result is a tuple, **always decompose it in the binder** — do NOT use
+projectors (`.1`, `.2`, `.fst`, `.snd`, etc.):
 ```lean
--- Result is (U32 × Slice U16)
+-- GOOD: decompose the tuple in the binder
 fun_name a b ⦃ (x : U32) (s : Slice U16) =>
   x.val < 100 ∧ s.length = a.length ⦄
+
+-- BAD: projectors are hard to read and fragile
+fun_name a b ⦃ result =>
+  result.1.val < 100 ∧ result.2.length = a.length ⦄
 ```
 
 ## Proof Development Workflow
@@ -355,6 +353,10 @@ Lean warnings are not optional — they indicate problems that must be fixed:
 - **"unused variable"**: Remove or prefix with `_`.
 The only acceptable warning is `"declaration uses 'sorry'"` for remaining proof obligations.
 
+**This applies to sorry'd proofs too.** A proof containing `sorry` may still generate
+warnings (dead tactics, unused simp args, unused variables around the sorry). These
+must be fixed — keep sorry'd proofs clean so they're ready for completion.
+
 ### Spaces around binary operators in comments
 Always put spaces around binary operators (`<`, `>`, `=`, `≤`, `≥`, `+`, `*`, etc.) in
 comments and doc strings. Write `j < N`, not `j<N`. This avoids a VS Code highlighter bug
@@ -398,17 +400,66 @@ theorem main.spec ... := by
   step*
 ```
 
+### Extract inline `(by ...)` blocks from `exact`/`apply`/`refine` arguments
+When `exact`, `apply`, or `refine` takes arguments with inline `(by ...)` proof blocks,
+**all** those blocks re-elaborate as a single unit. Editing any one forces re-elaboration
+of all of them. This destroys incrementality — a single tactic change can trigger 30+
+seconds of re-elaboration instead of < 0.5s.
+
+**What counts as "expensive":** A `(by ...)` block is expensive if it contains:
+- **Multiple tactics** — `(by tac1; tac2; tac3)` or multi-line blocks
+- **`first` with many alternatives** — `(by first | agrind | scalar_tac | bv_tac 16)`
+- **`all_goals` with non-trivial tactics** — `(by all_goals agrind)`
+- **Any tactic that takes more than a fraction of a second** (e.g., `grind`, complex `simp`)
+
+A single cheap tactic like `(by scalar_tac)` or `(by grind)` is acceptable as an inline
+argument. The problem starts when:
+- An `exact`/`apply`/`refine` has **2 or more expensive `(by ...)` blocks**, or
+- **Any single `(by ...)` block is multi-line or contains tactic sequences**
+
+In those cases, extract the blocks into `have` statements:
+
+```lean
+-- BAD: multiple expensive blocks, all re-elaborate together
+exact loop.spec_gen ret.2 out a p
+    (by scalar_tac) (by simp_all)
+    (by intro q hq
+        by_cases hq_eq : q = r.start.val
+        · subst hq_eq; simp [...]
+        · have h := hdone q (by scalar_tac); simp [...]; exact h)
+    (by intro q hq1 hq2; ...)
+
+-- GOOD: each have is independently cached by the elaborator
+have h1 : precond1 := by scalar_tac
+have h2 : precond2 := by simp_all
+have hdone' : ∀ q, q < r.start.val + 1 → ... := by
+  intro q hq
+  by_cases hq_eq : q = r.start.val
+  · subst hq_eq; simp [...]
+  · have h := hdone q (by scalar_tac); simp [...]; exact h
+have hrest' : ∀ q, r.start.val + 1 ≤ q → ... := by
+  intro q hq1 hq2; ...
+exact loop.spec_gen ret.2 out a p h1 h2 hdone' hrest'
+```
+
+**The same principle applies to `<;>`, `first`, and `all_goals`:**
+- `step* <;> (first | agrind | scalar_tac | bv_tac 16)` — all alternatives re-elaborate
+  together on every edit. See the next section for the fix.
+- `all_goals agrind` — acceptable only if the tactic is a single cheap call. If it
+  contains `first | ...` or multiple tactics, it has the same re-elaboration problem.
+
 ### Avoid `step* <;> tactic` and `all_goals tactic` — use focused goals instead
 Do **not** write `step* <;> first | agrind | scalar_tac | bv_tac 16` or
-`all_goals agrind` or similar patterns that apply a tactic to all remaining goals
-at once. This **destroys interactivity**: when developing or maintaining the proof,
-you cannot inspect individual goals, and a failure in any sub-goal gives an
-unhelpful error pointing at the entire line.
+`step* <;> bv_tac 32` or `all_goals agrind` or similar patterns that apply a tactic
+to all remaining goals at once. This **destroys incrementality**: you cannot inspect
+individual goals (a failure points at the entire line, not the failing sub-goal),
+and constructs like `first | tac1 | tac2 | ...` retry all alternatives on every
+re-elaboration — if any alternative is expensive, every edit pays the full cost.
 
 Instead, use focused goal blocks (`· `) to handle each sub-goal individually:
 
 ```lean
--- BAD: opaque, non-interactive, hard to debug
+-- BAD: opaque, hard to debug, kills incrementality
 step* <;> first | agrind | scalar_tac | bv_tac 16
 
 -- BAD: same problem — can't inspect or debug individual goals
@@ -422,35 +473,37 @@ step*
 · bv_tac 16     -- bitwise sub-goal
 ```
 
-This keeps the proof interactive — you can put `sorry` on any `· ` branch, inspect
+This keeps the proof incremental — you can put `sorry` on any `· ` branch, inspect
 the goal with `goal <line>`, and work on one sub-goal at a time.
 
 ### Avoid early case splits on parameters in step proofs
 In cryptographic code, functions are often parameterized by a parameter set (e.g.,
-`p : Spec.Frodo.parameterSet` in FrodoKEM) from which lengths, dimensions, and bounds
-are derived. **Do NOT case-split on such parameters at the beginning of a `step` proof.**
-This duplicates the entire proof for each parameter variant (3× for FrodoKEM) and makes
-the proof unmaintainable.
+`p : Spec.Crypto.parameterSet`) from which lengths, dimensions, and bounds are derived.
+**Do NOT case-split on such parameters at the beginning of a `step` proof.** This
+duplicates the entire proof for each parameter variant and makes the proof unmaintainable.
+**Measured impact:** `cases p <;> step*` at the top level turned a 110s proof into 327s
+(3× slowdown). Moving `cases p` to only the residual goals that need concrete values
+brought it back to 112s.
 
 Instead:
 - **Do case splits locally** inside specific proof obligations that need concrete values:
   ```lean
-  -- BAD: duplicates the entire proof 3 times
-  theorem my_fn.spec (p : Spec.Frodo.parameterSet) ... := by
+  -- BAD: duplicates the entire proof N times
+  theorem my_fn.spec (p : Spec.Crypto.parameterSet) ... := by
     cases p <;> (unfold my_fn; step*; ...)
 
   -- GOOD: case split only where needed
-  theorem my_fn.spec (p : Spec.Frodo.parameterSet) ... := by
+  theorem my_fn.spec (p : Spec.Crypto.parameterSet) ... := by
     unfold my_fn
     step*
-    · cases p <;> simp_all [Spec.Frodo.n, NBAR] <;> scalar_tac  -- only this sub-goal needs it
+    · cases p <;> simp_all [Spec.Crypto.n, Spec.Crypto.k] <;> scalar_tac  -- only this sub-goal needs it
     step*
   ```
 
 - **Give definitions/lemmas to `agrind`/`grind`** so they can case-split automatically:
   ```lean
   -- Give agrind the parameter definition so it can case-split internally
-  attribute [local agrind] Spec.Frodo.n Spec.Frodo.nbar in
+  attribute [local agrind] Spec.Crypto.n Spec.Crypto.k in
   theorem my_fn.spec ... := by
     unfold my_fn
     step*  -- agrind (used by step for preconditions) now auto-splits on p
@@ -475,8 +528,8 @@ Instead:
 
 - **Write auxiliary lemmas** for arithmetic facts that depend on the parameter:
   ```lean
-  private lemma n_mul_nbar_bound (p : Spec.Frodo.parameterSet) :
-      Spec.Frodo.n p * Spec.Frodo.nbar < 2^16 := by
+  private lemma n_mul_k_bound (p : Spec.Crypto.parameterSet) :
+      Spec.Crypto.n p * Spec.Crypto.k p < 2^16 := by
     cases p <;> native_decide
   ```
 
@@ -533,8 +586,11 @@ calc (x + 1) * (x + 1)
    - **Search** the Aeneas library for an existing lemma (grep for related names, check simp/step attributes).
    - **If it doesn't exist:** state and prove the missing lemma yourself, then use it in the proof.
    - **This principle extends to all auxiliary definitions**, including project-local ones. When in the middle of a big proof, you should not have to unfold many auxiliary definitions. If you find yourself unfolding too many, step back and introduce auxiliary lemmas to bridge the gap.
-11. **NEVER increase `maxRecDepth`.** If you hit a `maxRecDepth` error, it signals a
-    **simp loop**, not a depth limit to raise. A simp loop occurs when two or more lemmas
+11. **NEVER increase `maxRecDepth`.** If calling any tactic triggers a `maxRecDepth`
+    error, it almost certainly means **the tactic is looping internally** (typically
+    via `simp`). The fix is never to raise the limit — it's to break the loop.
+
+    A simp loop occurs when two or more lemmas
     rewrite back and forth (A → B → A → ...), causing unbounded recursion.
 
     **How to fix simp loops (in preference order):**
@@ -544,9 +600,19 @@ calc (x + 1) * (x + 1)
     - **Use `rw` instead of `simp only`**: `rw` applies exactly once, no loop risk.
     - **Reduce the lemma list**: Remove lemmas one by one to find the conflicting pair.
     - **`clear` offending hypotheses**: For tactics that internally use `simp`
-      (`agrind`, `grind`, `scalar_tac`, `simp_scalar`), a hypothesis may trigger the
-      loop — `clear` it before calling the tactic.
+      (`agrind`, `grind`, `scalar_tac`, `simp_scalar`, `simp_lists`), a hypothesis may trigger the
+      loop — `clear` it before calling the tactic, but only if the hypothesis is
+      irrelevant to proving the goal.
     - **Use `conv`** for targeted rewriting when `simp` rewrites too broadly.
+
+    **`scalar_tac`, `simp_scalar`, and `simp_lists` call `simp_all` internally**, so they can trigger
+    `maxRecDepth` errors even though you didn't write `simp` yourself. The loop is
+    typically caused by a hypothesis whose LHS appears in its RHS (e.g., `h : x = f x y`),
+    making `simp_all` rewrite endlessly. **Fixes:**
+    - **Safest: use `agrind` or `grind` instead** — they don't call `simp_all`.
+    - **Reverse the faulty hypothesis**: use `rw [← h]` or `symm at h` before calling
+      `scalar_tac` to break the rewriting cycle.
+    - **`clear` the hypothesis** before calling `scalar_tac` — but only if it is irrelevant to proving the goal.
 
     A common loop in Aeneas: `Slice.Inhabited_getElem_eq_getElem!` combined with
     `List.Inhabited_getElem_eq_getElem!` in a single `simp only` call. Split them
@@ -557,8 +623,42 @@ calc (x + 1) * (x + 1)
     or a tactic bug.
 12. **Report misbehaving tactics.** If a tactic doesn't do what it should — for example, `step` fails to make progress even though the appropriate `@[step]` lemma exists, or `scalar_tac` can't close a pure arithmetic goal it should handle — **report this to the user**. It may indicate a bug or missing feature worth fixing upstream.
 13. **Keep `maxHeartbeats` reasonable (< 8M).** Lean's default (200K) is too low for Aeneas proofs — increase to 1M as a baseline. But if a proof needs more than ~8M heartbeats, the proof is ill-structured or uses tactics inefficiently. Don't just bump the number — instead: decompose the function with fold theorems, extract sub-goals as auxiliary lemmas, minimize the context with `clear`, prefer `agrind` over `grind`, or use `step*?` instead of `step*` for finer control.
-14. **⚠️ Keep proof wall-clock time < 30s — this is important.** Fast proofs enable fast iteration. Even the biggest proofs (for functions of 50+ lines) should elaborate in under 30 seconds. Use `set_option trace.profiler true in` to identify bottleneck tactics. If the proof is slow, decompose it — see the tactics quickref for strategies.
-15. **⚠️ Keeping Lean reactive is critical (< 0.5s per tactic).** Adding a tactic at the end of a proof should take < 0.5s (everything above is cached). If it takes several seconds, big chunks are being re-elaborated. Common cause: `by ...` blocks inside `apply`/`exact`/`refine` arguments (e.g., `apply lemma (by scalar_tac) (by agrind)`) — all `by` blocks re-elaborate together. Fix: extract them into `have` statements. See the "Diagnosing Slow Incremental Replay" section in the lean-lsp-tool skill file.
+14. **⚠️ Keep proof wall-clock time < 60s — this is important.** Fast proofs enable fast iteration. Even the biggest proofs (for functions of 50+ lines) should complete in under 60 seconds wall-clock (including kernel proof-term replay). If a proof takes longer, it must be fixed — decompose it, extract auxiliary lemmas, or use more direct proof strategies. **Detecting kernel replay slowness:** In the LSP, after all tactics are elaborated, the server reports it is still processing the last proof line AND the `theorem` declaration line (plus `set_option ... in` above it). If it stays in this state a long time, the kernel is replaying the proof term — the fix is to produce simpler/smaller proof terms (decompose the function, extract sub-goals as separate lemmas). Use `set_option trace.profiler true in` to profile tactic time; if tactics are fast but overall proof is slow, the bottleneck is kernel replay.
+15. **⚠️ Keeping Lean reactive is critical (< 0.5s per tactic).** Adding a tactic at the end of a proof should take < 0.5s (everything above is cached). If it takes several seconds, big chunks are being re-elaborated. See the "Extract inline `(by ...)` blocks" and "Avoid `step* <;> tactic`" sections above for the main causes and fixes.
+16. **Auto-param tactics in recursive theorem statements cause elaboration loops.** When a theorem statement contains `(hbound : x ≤ n := by scalar_tac)` or similar auto-param defaults, the tactic fires during *elaboration* of the statement — not during the proof. If the theorem is recursive and the context has complex hypotheses, the tactic loops. **Fix:** Make all such parameters fully explicit (no `:= by ...` default). Pass proofs manually at every call site. **Rule: ZERO tactic calls in auto-params of recursive theorem statements with complex invariants.**
+    ```lean
+    -- BAD: scalar_tac fires during elaboration of every recursive call
+    private theorem loop.spec_gen ...
+        (hbound : bound ≤ N := by scalar_tac) : ...
+    -- GOOD: caller provides the proof explicitly
+    private theorem loop.spec_gen ...
+        (hbound : bound ≤ N) : ...
+    ```
+17. **Dependent proof terms break `rw`/`simp only`.** When a term has a proof argument that depends on the value being rewritten (e.g., `partial_sum arr bound (hbound : bound ≤ N)`), `simp`/`rw` tries to update both the value AND the proof simultaneously and may loop. **Fix:** Use `congr 1` to peel off the proof argument (handled by proof irrelevance), then rewrite the value part separately.
+    ```lean
+    -- BAD: loops because hbound depends on bound
+    simp only [show bound = new_bound from h] at goal_with_partial_sum
+    -- GOOD: congr 1 separates value from proof
+    congr 1  -- one goal for the value, one trivial goal for the proof
+    ```
+18. **`step*` doesn't recognize structure field projections.** When a function is accessed via structure field projection (e.g., `(Params p).shake` instead of `specShake`), `step` can't match it to an `@[step]` lemma. **Fix:** Add a simp lemma `@[simp, step_simps]` that unfolds the projection, then `simp only [step_simps]` before `step*`.
+    ```lean
+    @[simp, step_simps]
+    theorem Params_shake : (Params p).shake = specShake := by rfl
+    -- In the proof:
+    simp only [step_simps]; step*
+    ```
+19. **Doc comments `/--` before `set_option` cause parse errors.** Doc comments must be followed by a declaration (`theorem`, `def`, etc.), not `set_option ... in`. Use a regular comment (`/- ... -/` or `-- ...`) instead.
+20. **Concrete computation goals need `native_decide`.** Goals like `¬(64 % Usize.size = 64) ⊢ False` (from `wrapping_add` preconditions) are concrete computations that `agrind`/`grind`/`scalar_tac` cannot efficiently evaluate. **Fix:** Use `native_decide` (or `decide` for smaller computations).
+21. **In loop proofs (`spec_gen`), prefer `agrind` over `scalar_tac` throughout.** Loop invariant proofs carry complex hypotheses in context throughout the entire proof body. Any `scalar_tac` call risks a simp loop (see item 11). When one `scalar_tac` fails in a spec_gen, mass-replace ALL `scalar_tac` → `agrind` in the proof body — don't fix them one by one, because any remaining `scalar_tac` is at risk as the context grows.
+22. **Extract recurring index bounds as standalone helper lemmas.** In loop proofs over multi-dimensional arrays, bounds like `k * N + q < NBAR * N` appear repeatedly. Proving them inline is slow (tactic runs in full context) and fragile. **Fix:** Extract a standalone lemma with a clean context:
+    ```lean
+    private theorem idx_lt_bound (k : Fin NBAR) (q : Fin N) :
+        k.val * N + q.val < NBAR * N := by agrind
+    ```
+    Then reference the lemma at each use site — fast, stable, and reusable.
+23. **`congr_arg UScalar.val h; scalar_tac` always triggers simp loops.** Using `congr_arg` to create a hypothesis like `UScalar.val x = UScalar.val y` produces a term whose LHS appears in its RHS after `simp_all` normalization, causing `scalar_tac` to loop (see item 11). **Fix:** Always use `agrind` (not `scalar_tac`) after `congr_arg`. More generally, any tactic that creates hypotheses of the form `f x = f y` followed by `scalar_tac` is at risk.
+24. **Sorry'd proofs must be fast.** A sorry'd proof with `step* <;> (first | ... | sorry)` can take 300+ seconds — the `step*` does massive work just to leave a sorry at the end. **Fix:** Sorry'd proofs should do the absolute minimum work. If a proof is incomplete, use plain `sorry` (possibly with a comment sketching the approach). Do not leave expensive `step*` or `cases p` before a sorry — they waste build time on every `lake build` for zero verification value.
 
 ## Attribute Management
 

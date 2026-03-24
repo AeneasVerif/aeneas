@@ -7,9 +7,9 @@ description: Crypto-specific proof strategies including Montgomery, NTT, modular
 
 ## Context
 
-This skill file covers strategies for verifying cryptographic Rust code translated by Aeneas to Lean. Techniques drawn from the SymCrypt verification project (ML-KEM / Kyber verification for Microsoft SymCrypt).
+This skill file covers strategies for verifying cryptographic Rust code translated by Aeneas to Lean. Techniques drawn from real-world cryptographic verification projects.
 
-**PREREQUISITE:** Always use `lean_lsp.py --repl --json` for interactive proof development. See the `lean-lsp-tool` skill file.
+**PREREQUISITE:** Always use `lean_lsp.py --repl --json --log <path>` for interactive proof development. See the `lean-lsp-tool` skill file.
 
 ## File Setup Template
 
@@ -170,13 +170,13 @@ cases h_idx <;> simp_lists [*]
 ### Polynomial-to-array correspondence:
 
 ```lean
--- Define conversion
+-- Define conversion using map (not ofFn)
 def to_poly (arr : Array U32 256) : Spec.Polynomial :=
-  Vector.ofFn (fun i => (arr[i.val]!.val : ZMod q))
+  arr.map (fun x => (x.val : ZMod q))
 
 -- Prove element-wise correspondence
-theorem to_poly_getElem! (arr : Array U32 256) (i : Nat) :
-  (to_poly arr)[i]! = (arr[i]!.val : ZMod q) := by ...
+theorem to_poly_getElem (arr : Array U32 256) (i : Fin 256) :
+  (to_poly arr)[i] = (arr[i].val : ZMod q) := by simp [to_poly]
 ```
 
 ## Crypto Proof Spec Template
@@ -194,8 +194,10 @@ theorem crypto_operation_spec
     (result.val : ZMod q) = spec_function (input.val : ZMod q) ⦄
   := by
   unfold crypto_operation
-  -- Apply monadic step specs
-  step* <;> bv_tac 32   -- or handle manually
+  -- Apply monadic step specs, then handle sub-goals individually
+  step*
+  · bv_tac 32     -- bitwise sub-goal 1
+  · bv_tac 32     -- bitwise sub-goal 2
   -- Split bounds vs modular goals
   split_conjs
   · -- Bounds: stay in Nat/Int

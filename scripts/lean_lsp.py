@@ -16,10 +16,15 @@ REPL commands:
     edit_range <start> <end> <content>  Replace lines start..end inclusive (\\n for newlines)
     insert <after_line> <content>       Insert line(s) after given line (\\n for newlines, 0=prepend)
     delete <start> [end]               Delete line(s) (inclusive)
+    replace "old" "new"                Find-and-replace unique occurrence (escapes: \" \\ \n \t)
+    replace_all "old" "new"            Find-and-replace all occurrences
     batch_start                         Start batch mode (edits deferred, no re-elaboration)
     batch_end                           End batch, send all edits, wait for elaboration
-    replace <file.lean>                 Re-read a file from disk and send update
+    reread <file.lean>                  Re-read a file from disk and send update
     update                              Re-read current file from disk and send update
+    save                                Write in-memory buffer to disk
+    diff                                Show unified diff (disk vs in-memory)
+    undo                                Revert to previous text state
     diagnostics [line]                  Show all diagnostics, optionally at a specific line
     errors                              Show only errors (severity=1)
     warnings                            Show only warnings (severity=2)
@@ -43,6 +48,7 @@ REPL commands:
 Flags:
     --json          Machine-readable JSON output (one JSON object per line on stdout)
     --fail-fast     Exit on first error (useful for scripted usage)
+    --log <path>    Append all commands and results with timestamps to a log file
 
 Environment:
     LEAN_PROJECT_ROOT   Override project root (default: auto-detect via lakefile.toml)
@@ -62,6 +68,7 @@ import time
 import threading
 import re
 import glob as glob_mod
+from datetime import datetime
 
 
 def _find_project_root():
@@ -507,12 +514,25 @@ def _print_human(data):
         print(f"Line {data.get('line', '?')}: '{data.get('old', '')}' -> '{data.get('new', '')}'")
         _print_elab_human(data)
 
-    elif cmd in ("edit_range", "insert", "delete", "batch_end"):
+    elif cmd in ("edit_range", "insert", "delete", "batch_end", "replace", "replace_all"):
         print(data.get("description", cmd))
         _print_elab_human(data)
 
-    elif cmd in ("update", "replace"):
+    elif cmd in ("update", "reread"):
         print(f"Re-read from disk")
+        _print_elab_human(data)
+
+    elif cmd == "save":
+        print(f"Saved {data.get('file', '?')} ({data.get('lines', '?')} lines)")
+
+    elif cmd == "diff":
+        if not data.get("changed"):
+            print("No changes (in-memory matches disk)")
+        else:
+            print(data.get("diff", ""))
+
+    elif cmd == "undo":
+        print(data.get("description", "Undone"))
         _print_elab_human(data)
 
     elif cmd == "status":
@@ -632,6 +652,99 @@ def _send_and_wait(lsp, out, timeout=120):
 def _unescape_content(s):
     r"""Replace literal \\n with newlines."""
     return s.replace("\\n", "\n")
+
+
+def _parse_quoted_string(s, pos):
+    """Parse a double-quoted string starting at s[pos].
+    Returns (parsed_string, next_pos) or raises ValueError on error.
+    Supports escapes: \\\" \\\\  \\n  \\t"""
+    if pos >= len(s) or s[pos] != '"':
+        raise ValueError(f"Expected '\"' at position {pos}")
+    pos += 1  # skip opening quote
+    chars = []
+    while pos < len(s):
+        ch = s[pos]
+        if ch == '\\' and pos + 1 < len(s):
+            nxt = s[pos + 1]
+            if nxt == '"':
+                chars.append('"')
+                pos += 2
+            elif nxt == '\\':
+                chars.append('\\')
+                pos += 2
+            elif nxt == 'n':
+                chars.append('\n')
+                pos += 2
+            elif nxt == 't':
+                chars.append('\t')
+                pos += 2
+            else:
+                # Unknown escape — keep as-is
+                chars.append(ch)
+                pos += 1
+        elif ch == '"':
+            return ''.join(chars), pos + 1
+        else:
+            chars.append(ch)
+            pos += 1
+    raise ValueError("Unterminated string (missing closing '\"')")
+
+
+def _parse_two_quoted_strings(args_str):
+    """Parse 'replace "old" "new"' arguments.
+    Returns (old_str, new_str) or (None, error_message)."""
+    if not args_str:
+        return None, "Missing arguments"
+    s = args_str
+    # Skip leading whitespace to find first quote
+    pos = 0
+    while pos < len(s) and s[pos] == ' ':
+        pos += 1
+    if pos >= len(s) or s[pos] != '"':
+        return None, "Expected '\"' to start first string"
+    try:
+        old_str, pos = _parse_quoted_string(s, pos)
+    except ValueError as e:
+        return None, f"Error parsing first string: {e}"
+    # Skip whitespace between strings
+    while pos < len(s) and s[pos] == ' ':
+        pos += 1
+    if pos >= len(s) or s[pos] != '"':
+        return None, "Expected '\"' to start second string"
+    try:
+        new_str, pos = _parse_quoted_string(s, pos)
+    except ValueError as e:
+        return None, f"Error parsing second string: {e}"
+    # Check nothing meaningful remains
+    tail = s[pos:].strip()
+    if tail:
+        return None, f"Unexpected content after second string: {tail[:40]}"
+    return (old_str, new_str), None
+
+
+def _find_match_locations(text, pattern):
+    """Find all occurrences of pattern in text, return list of {line, context}."""
+    matches = []
+    start = 0
+    lines = text.split('\n')
+    while True:
+        idx = text.find(pattern, start)
+        if idx == -1:
+            break
+        # Find the line number (1-indexed)
+        line_num = text[:idx].count('\n') + 1
+        # Get context: the line(s) containing the match
+        match_end = idx + len(pattern)
+        end_line_num = text[:match_end].count('\n') + 1
+        # Show the lines that contain the match
+        context_lines = lines[line_num - 1 : end_line_num]
+        context = '\n'.join(context_lines)
+        # Truncate long contexts
+        if len(context) > 120:
+            context = context[:120] + "..."
+        matches.append({"line": line_num, "context": context})
+        start = idx + 1
+    return matches
 
 
 # ---------------------------------------------------------------------------
@@ -775,6 +888,122 @@ def _cmd_delete(lsp, out, args):
     return result
 
 
+def _cmd_replace(lsp, out, args_str, batch=False):
+    """Find-and-replace: replace exactly one occurrence of old_str with new_str.
+    Syntax: replace "old_str" "new_str"
+    Supports escapes: \\\" \\\\  \\n  \\t
+    If batch=True, modifies in-memory text only (no re-elaboration)."""
+    if lsp.current_text is None:
+        return {"command": "replace", "status": "error", "error": "No file open"}
+    parsed, err = _parse_two_quoted_strings(args_str)
+    if err:
+        return {"command": "replace", "status": "error",
+                "error": f'Usage: replace "old_text" "new_text"  — {err}'}
+    old_str, new_str = parsed
+    count = lsp.current_text.count(old_str)
+    if count == 0:
+        return {"command": "replace", "status": "error",
+                "error": "old_text not found in file",
+                "old_text": old_str[:80]}
+    if count > 1:
+        matches = _find_match_locations(lsp.current_text, old_str)
+        return {"command": "replace", "status": "error",
+                "error": f"old_text found {count} times (must be unique). Add more context to disambiguate.",
+                "matches": matches}
+    lsp.current_text = lsp.current_text.replace(old_str, new_str, 1)
+    if batch:
+        return {"command": "replace", "status": "ok",
+                "old_text": old_str[:80], "new_text": new_str[:80],
+                "batched": True,
+                "description": "Replaced 1 occurrence (batched)"}
+    result = _send_and_wait(lsp, out)
+    result.update({"command": "replace", "status": "ok",
+                    "old_text": old_str[:80], "new_text": new_str[:80],
+                    "description": "Replaced 1 occurrence"})
+    return result
+
+
+def _cmd_replace_all(lsp, out, args_str, batch=False):
+    """Find-and-replace all occurrences of old_str with new_str.
+    Syntax: replace_all "old_str" "new_str"
+    If batch=True, modifies in-memory text only (no re-elaboration)."""
+    if lsp.current_text is None:
+        return {"command": "replace_all", "status": "error", "error": "No file open"}
+    parsed, err = _parse_two_quoted_strings(args_str)
+    if err:
+        return {"command": "replace_all", "status": "error",
+                "error": f'Usage: replace_all "old_text" "new_text"  — {err}'}
+    old_str, new_str = parsed
+    count = lsp.current_text.count(old_str)
+    if count == 0:
+        return {"command": "replace_all", "status": "error",
+                "error": "old_text not found in file",
+                "old_text": old_str[:80]}
+    lsp.current_text = lsp.current_text.replace(old_str, new_str)
+    if batch:
+        return {"command": "replace_all", "status": "ok",
+                "old_text": old_str[:80], "new_text": new_str[:80],
+                "replacements": count, "batched": True,
+                "description": f"Replaced {count} occurrence(s) (batched)"}
+    result = _send_and_wait(lsp, out)
+    result.update({"command": "replace_all", "status": "ok",
+                    "old_text": old_str[:80], "new_text": new_str[:80],
+                    "replacements": count,
+                    "description": f"Replaced {count} occurrence(s)"})
+    return result
+
+
+def _cmd_save(lsp, out):
+    """Write the current in-memory buffer to disk."""
+    if lsp.current_text is None or lsp.current_path is None:
+        return {"command": "save", "status": "error", "error": "No file open"}
+    try:
+        with open(lsp.current_path, 'w') as f:
+            f.write(lsp.current_text)
+    except OSError as e:
+        return {"command": "save", "status": "error", "error": f"Write failed: {e}"}
+    out.info(f"Saved {lsp.current_path}")
+    return {"command": "save", "status": "ok", "file": lsp.current_path,
+            "lines": len(lsp.current_text.split('\n'))}
+
+
+def _cmd_diff(lsp, out):
+    """Show unified diff between the on-disk file and the in-memory buffer."""
+    if lsp.current_text is None or lsp.current_path is None:
+        return {"command": "diff", "status": "error", "error": "No file open"}
+    try:
+        with open(lsp.current_path) as f:
+            disk_text = f.read()
+    except FileNotFoundError:
+        return {"command": "diff", "status": "error",
+                "error": f"File not found on disk: {lsp.current_path}"}
+    if disk_text == lsp.current_text:
+        return {"command": "diff", "status": "ok", "changed": False,
+                "diff": "", "description": "No changes"}
+    import difflib
+    disk_lines = disk_text.splitlines(keepends=True)
+    mem_lines = lsp.current_text.splitlines(keepends=True)
+    diff = difflib.unified_diff(disk_lines, mem_lines,
+                                fromfile="disk", tofile="buffer", lineterm="")
+    diff_str = '\n'.join(diff)
+    return {"command": "diff", "status": "ok", "changed": True,
+            "diff": diff_str}
+
+
+def _cmd_undo(lsp, out, undo_stack):
+    """Restore the previous text state from the undo stack and re-elaborate."""
+    if lsp.current_text is None:
+        return {"command": "undo", "status": "error", "error": "No file open"}
+    if not undo_stack:
+        return {"command": "undo", "status": "error", "error": "Nothing to undo"}
+    lsp.current_text = undo_stack.pop()
+    result = _send_and_wait(lsp, out)
+    result.update({"command": "undo", "status": "ok",
+                    "remaining": len(undo_stack),
+                    "description": f"Undone (stack depth: {len(undo_stack)})"})
+    return result
+
+
 def _cmd_diagnostics(lsp, args, severity=None, cmd_name="diagnostics"):
     if lsp.current_uri is None:
         return {"command": cmd_name, "status": "error", "error": "No file open"}
@@ -904,7 +1133,7 @@ def _cmd_next_error(lsp, out):
 
 def _cmd_update(lsp, out, args, project_root):
     fp = args[0] if args else lsp.current_path
-    cmd_name = "replace" if args else "update"
+    cmd_name = "reread" if args else "update"
     if fp is None:
         return {"command": cmd_name, "status": "error", "error": "No file open"}
     abs_path = fp if os.path.isabs(fp) else os.path.join(project_root, fp)
@@ -1051,10 +1280,15 @@ Commands:
   edit_range <start> <end> <content>  Replace lines start..end (\\n for newlines)
   insert <after_line> <content>       Insert after line (\\n for newlines, 0=prepend)
   delete <start> [end]               Delete line(s)
+  replace "old" "new"                Find-and-replace unique occurrence (escapes: \" \\ \n \t)
+  replace_all "old" "new"            Find-and-replace all occurrences
   batch_start                         Defer edits (no re-elaboration until batch_end)
   batch_end                           Apply deferred edits, wait for elaboration
   update                              Re-read current file from disk
-  replace <file.lean>                 Re-read a file from disk
+  reread <file.lean>                  Re-read a file from disk
+  save                                Write in-memory buffer to disk
+  diff                                Show unified diff (disk vs in-memory)
+  undo                                Revert to previous text state
   diagnostics [line]                  All diagnostics, optionally at a line
   errors                              Errors only (severity=1)
   warnings                            Warnings only (severity=2)
@@ -1080,14 +1314,31 @@ Commands:
 # REPL
 # ---------------------------------------------------------------------------
 
-def repl_mode(project_root, json_mode=False, fail_fast=False):
+def repl_mode(project_root, json_mode=False, fail_fast=False, log_path=None):
     out = Output(json_mode=json_mode)
     out.info(f"Lean 4 LSP REPL — project: {project_root}")
     out.info("Starting lake serve...")
     lsp = LeanLSP(project_root)
     out.info("Ready. Type 'help' for commands.\n")
 
+    # Open log file for appending if --log was given
+    log_file = None
+    if log_path:
+        log_file = open(log_path, "a", buffering=1)  # line-buffered
+        log_file.write(f"\n{'='*60}\n")
+        log_file.write(f"[{datetime.now().isoformat()}] Session started — project: {project_root}\n")
+        log_file.write(f"{'='*60}\n")
+
+    def _log(tag, text):
+        """Append a timestamped entry to the log file."""
+        if log_file:
+            ts = datetime.now().isoformat(timespec='milliseconds')
+            for line in text.splitlines():
+                log_file.write(f"[{ts}] {tag}: {line}\n")
+
     batch_mode = False
+    batch_text_before = None  # Text snapshot at batch_start for undo
+    undo_stack = []  # Stack of previous text states for undo
     exit_code = 0
 
     while True:
@@ -1104,9 +1355,24 @@ def repl_mode(project_root, json_mode=False, fail_fast=False):
         args = args_str.split() if args_str else []
 
         if cmd in ("quit", "exit"):
+            _log("CMD", raw)
             break
 
         result = None
+        _log("CMD", raw)
+        # Save text before any potentially mutating command for undo.
+        # In batch mode, individual edits don't push — the whole batch
+        # is captured at batch_start and pushed at batch_end.
+        _MUTATING_CMDS = {"edit", "edit_range", "insert", "delete",
+                          "replace", "replace_all", "update", "reread"}
+        if cmd == "batch_end":
+            text_before = batch_text_before  # Push the pre-batch snapshot
+        elif batch_mode:
+            text_before = None  # Don't push individual edits in batch
+        elif cmd in _MUTATING_CMDS:
+            text_before = lsp.current_text
+        else:
+            text_before = None
 
         try:
             if cmd == "help":
@@ -1213,6 +1479,12 @@ def repl_mode(project_root, json_mode=False, fail_fast=False):
                 else:
                     result = _cmd_delete(lsp, out, args)
 
+            elif cmd == "replace":
+                result = _cmd_replace(lsp, out, args_str, batch=batch_mode)
+
+            elif cmd == "replace_all":
+                result = _cmd_replace_all(lsp, out, args_str, batch=batch_mode)
+
             elif cmd == "batch_start":
                 if batch_mode:
                     result = {"command": "batch_start", "status": "error",
@@ -1222,6 +1494,7 @@ def repl_mode(project_root, json_mode=False, fail_fast=False):
                               "error": "No file open"}
                 else:
                     batch_mode = True
+                    batch_text_before = lsp.current_text  # Snapshot for undo
                     result = {"command": "batch_start", "status": "ok"}
 
             elif cmd == "batch_end":
@@ -1289,8 +1562,17 @@ def repl_mode(project_root, json_mode=False, fail_fast=False):
             elif cmd == "next_error":
                 result = _cmd_next_error(lsp, out)
 
-            elif cmd in ("update", "replace"):
-                result = _cmd_update(lsp, out, args if cmd == "replace" else [], project_root)
+            elif cmd in ("update", "reread"):
+                result = _cmd_update(lsp, out, args if cmd == "reread" else [], project_root)
+
+            elif cmd == "save":
+                result = _cmd_save(lsp, out)
+
+            elif cmd == "diff":
+                result = _cmd_diff(lsp, out)
+
+            elif cmd == "undo":
+                result = _cmd_undo(lsp, out, undo_stack)
 
             else:
                 result = {"command": cmd, "status": "error",
@@ -1303,13 +1585,37 @@ def repl_mode(project_root, json_mode=False, fail_fast=False):
             result = {"command": cmd, "status": "error",
                       "error": f"Unexpected error: {e}"}
 
+        # Push onto undo stack if the text actually changed
+        if (text_before is not None
+                and result and result.get("status") == "ok"
+                and lsp.current_text is not None
+                and lsp.current_text != text_before):
+            undo_stack.append(text_before)
+
         if result:
+            # Log result summary (status + key fields, not full content)
+            if log_file:
+                status = result.get("status", "?")
+                error_count = result.get("error_count")
+                elapsed = result.get("elapsed")
+                summary_parts = [f"status={status}"]
+                if error_count is not None:
+                    summary_parts.append(f"errors={error_count}")
+                if elapsed is not None:
+                    summary_parts.append(f"elapsed={elapsed:.1f}s")
+                err = result.get("error")
+                if err:
+                    summary_parts.append(f"error={err[:200]}")
+                _log("RES", ", ".join(summary_parts))
             out.result(result)
             if fail_fast and result.get("status") == "error":
                 exit_code = 1
                 break
 
     lsp.close()
+    if log_file:
+        log_file.write(f"[{datetime.now().isoformat()}] Session ended\n")
+        log_file.close()
     out.info("Bye.")
     return exit_code
 
@@ -1365,6 +1671,8 @@ def main():
     parser.add_argument("--project-root",
                         default=os.environ.get("LEAN_PROJECT_ROOT") or _find_project_root(),
                         help="Lean project root (default: auto-detect)")
+    parser.add_argument("--log",
+                        help="Path to log file. All commands are appended with timestamps.")
     parser.add_argument("file", nargs="?", help="Lean file to query")
     parser.add_argument("query", nargs="?",
                         help="Line number, 'diagnostics', 'errors', 'warnings', 'logs', or 'sorry'")
@@ -1373,7 +1681,8 @@ def main():
     args = parser.parse_args()
 
     if args.repl:
-        code = repl_mode(args.project_root, json_mode=args.json, fail_fast=args.fail_fast)
+        code = repl_mode(args.project_root, json_mode=args.json,
+                         fail_fast=args.fail_fast, log_path=args.log)
         sys.exit(code)
     elif args.file and args.query:
         code = oneshot_mode(args.project_root, args.file, args.query,

@@ -36,12 +36,15 @@ Before doing anything, read these files for essential proof guidance:
 ```
 ### MANDATORY: Use lean_lsp.py — NOT lake build
 
-DO NOT use `lake build` to iterate on proofs. Use lean_lsp.py:
+DO NOT use `lake build` to iterate on proofs. Use lean_lsp.py
+(see lean-lsp-tool skill file for full reference):
 
   cd <project-lean-root>
-  python3 <path-to-aeneas>/scripts/lean_lsp.py --repl --json
+  python3 <path-to-aeneas>/scripts/lean_lsp.py --repl --json --log /tmp/lean_lsp_<agent-name>.log
 
-Workflow: open → sorry → goal → edit → errors → repeat
+**`--log` is MANDATORY** — always pass a unique log path per agent.
+
+Workflow: open → wait → sorry → goal → edit → errors → repeat
 Only use `lake build` once at the very end to confirm the final result.
 
 ⛔ NEVER run `lake clean` or delete `.lake/`. This forces a full rebuild (30+ min). Fix root causes instead.
@@ -70,8 +73,7 @@ copy it into your proof → fix sub-goals → collapse back to `step*` if possib
 ```
 ## Key Rules
 - NEVER unfold Aeneas stdlib definitions — search for existing lemmas
-- NEVER use `omega` — use `scalar_tac`, `agrind`, or `grind` instead
-- Do not commit or push without asking the user first
+- NEVER use `omega` — use `agrind`, `grind`, or `scalar_tac` instead
 - NEVER spawn sub-agents that work on Lean files (see below)
 - ONLY modify your assigned file(s) — NEVER edit other files (see below)
 - DO NOT COMMIT
@@ -93,17 +95,16 @@ modify that file. Instead:
    -- functional correctness (currently only gives `True`). Move this local
    -- axiom there once the external spec is updated.
    --
-   -- WHY NEEDED: The outer loop proof needs to know that encrypt_block returns
-   -- the AES-128 encryption of the input block, not just `True`. Without this,
-   -- the loop invariant cannot relate the accumulated matrix to genA.
+   -- WHY NEEDED: The outer loop proof needs to know that the external function
+   -- returns a meaningful result, not just `True`. Without this, the loop
+   -- invariant cannot relate the accumulated output to the specification.
    --
-   -- WHY VALID: The Rust code calls `aes::soft::Aes128::encrypt_block`, which
-   -- is the standard AES-128 block cipher. The postcondition simply states that
-   -- the output equals the spec's pure AES function applied to the same inputs.
-   -- This is the expected behavior of any correct AES implementation.
-   private axiom encrypt_block_functional_spec (c : aes.soft.Aes128) (block : Array U16 8#usize) :
-     frodokem.encrypt_block c block ⦃ fun out =>
-       out = specEncryptBlock c block ⦄
+   -- WHY VALID: The Rust code calls the corresponding library function, which
+   -- implements the standard algorithm. The postcondition simply states that
+   -- the output equals the spec's pure function applied to the same inputs.
+   private axiom external_fn_spec (key : KeyType) (input : Array U16 8#usize) :
+     my_module.external_fn key input ⦃ fun out =>
+       out = specExternalFn key input ⦄
    ```
 
 2. **The comment must explain TWO things:**
@@ -361,7 +362,7 @@ that fits their availability. Never assume one mode silently.
 ```
 
 The reviewer sends back specific feedback (e.g., "postcondition too weak — must relate
-to `Spec.Frodo.Encode`, not just length") and the statement agent revises. This repeats
+to the spec function, not just length") and the statement agent revises. This repeats
 until all statements are validated. Only then do proof agents launch.
 
 **Review checklist (for human or code-review agent):**
@@ -439,14 +440,14 @@ the proof needs functional properties of the output), the agent MUST:
 2. **Identify the axiom** — name the specific axiom/spec and its file location.
 3. **Explain what is missing** — what postcondition property does the proof need?
 4. **Suggest the fix** — propose a strengthened postcondition. For example:
-   "The axiom `encrypt_block.spec` has postcondition `True`, but the outer loop proof
-   needs it to return the AES encryption of the input block. Suggested fix:
+   "The axiom `external_fn.spec` has postcondition `True`, but the outer loop proof
+   needs it to return the correct output. Suggested fix:
    ```lean
-   axiom frodokem.encrypt_block.spec (c : aes.soft.Aes128) (block : Array U16 8#usize) :
-     frodokem.encrypt_block c block ⦃ fun out =>
-       out = specEncryptBlock c block ⦄
+   axiom my_module.external_fn.spec (key : KeyType) (input : Array U16 8#usize) :
+     my_module.external_fn key input ⦃ fun out =>
+       out = specExternalFn key input ⦄
    ```
-   where `specEncryptBlock` is a pure specification of AES-128 block encryption."
+   where `specExternalFn` is a pure specification of the external function."
 
 **What happens after reporting depends on the workflow mode.** Before launching agents,
 the supervisor must ask the user which mode to use:
@@ -470,6 +471,12 @@ no usable information).
 **After a proof agent makes good progress on a theorem** (e.g., reduces sorry count,
 completes a loop proof, fills a significant chunk), a **review agent** should check
 the proof against the skill files and project guidelines. This is also a loop:
+
+**Every proof review is a full review from scratch.** The reviewer must re-read the
+proof files and re-check every item in the checklist — not just verify that specific
+issues from a prior round were fixed. Do NOT tell the reviewer what the prior round
+found; this biases toward rubber-stamping. The prompt should be identical to a
+first-time review.
 
 **Before handing off to the review agent, the proof agent MUST verify that the entire
 file builds without errors.** Run `lake build <module>` (e.g., `lake build Properties.CT`)
@@ -505,46 +512,133 @@ doesn't build cleanly, the proof agent must fix the errors before reporting.
 
 **Review agent checklist for proofs:**
 
-- **Does the file build without errors?** The review agent MUST run `lake build <module>`
-  and verify 0 errors. If the proof agent handed off a broken file, send it back immediately.
-  `sorry` warnings are acceptable; type errors, tactic failures, and elaboration errors are NOT.
-- **Is the proof idiomatic?** Uses standard Aeneas patterns (step, WP.spec_mono,
-  split_ifs, etc.) rather than ad-hoc workarounds? Follows the patterns documented
-  in proof-patterns.instructions.md?
-- **Is the proof clean and not verbose?** No unnecessary intermediate steps, no
-  copy-paste bloat, no redundant `have` statements that could be inlined. Each tactic
-  call should earn its place.
-- **Does the proof use only idiomatic tactics?** This is a critical idiomaticity criterion.
-  Re-read the skill files and **grep the file for banned tactics**:
-  - `omega` — **BANNED.** Replace with `agrind`, `grind`, or `scalar_tac`
-  - `linarith` — **BANNED.** Replace with `agrind`, `grind`, or `scalar_tac`
-  - `nlinarith` — **BANNED.** Replace with `agrind`, `grind`, `scalar_tac +nonLin`, or `simp_scalar`
-  - These tactics cannot reason about Aeneas scalar types (U8, U32, Usize, etc.),
-    `Slice.length`, `Vec.length`, or any Aeneas-specific concepts. A proof using them
-    is non-idiomatic and fragile — it must be rewritten, even if it currently works.
-  - Also check: uses `agrind` over `grind`? Uses `ring` in `calc`/`have` steps?
-  - Does not unfold Aeneas stdlib definitions?
-- **Are all warnings addressed?** After building, check the warning output. The following
-  warnings are **NOT acceptable** and must be fixed before the proof is considered done:
-  - `"This simp argument is unused"` — remove the unused lemma from `simp only [...]`
-  - `"Too many ids provided"` — reduce the binder count in `step as ⟨...⟩`
-  - `"unused variable"` — remove or rename with `_` prefix
-  - `"'tactic' does nothing"` / `"'tactic' tactic is never executed"` — remove the dead tactic
-  - The ONLY acceptable warnings are `"declaration uses 'sorry'"` (for remaining sorry's).
-- No big `simp only [...]` calls in implementation proofs? (model is unstable)
-- Complex arithmetic/bitwise sub-proofs extracted as auxiliary lemmas?
-- Are helper lemmas properly named and documented if non-obvious?
-- **No early case splits on parameters?** If the proof does `cases p` at the top level
-  (duplicating the entire proof for each parameter variant), it should be refactored:
-  case splits should be local (inside sub-goals) or handled via `attribute [local agrind]`.
-- **Spaces around binary operators in comments?** Check that comments and doc strings
-  use `j < N`, not `j<N`. Missing spaces cause VS Code highlighting bugs.
-- **Is the proof fast enough?** Profile with `set_option trace.profiler true in` and
-  check that the proof completes in **< 30 seconds wall-clock** (even for the biggest
-  functions of 50+ lines). If it's slower, identify the bottleneck tactic and send the
-  proof back for optimization — decompose the function, extract auxiliary lemmas,
-  minimize the context, or pick better tactics. See the "Wall-clock time target"
-  section in `aeneas-tactics-quickref`.
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Proof Style and Maintainability"
+     and aeneas-tactics-quickref "Proof Style Rules". See skill-file-authoring for sync rules. -->
+
+**⚠️ READ THE FILES, DON'T JUST GREP.** The reviewer must **read the modified proof
+files** — not just run grep patterns. Grep catches mechanical violations (banned
+tactics, maxRecDepth) but misses structural problems (multi-line inline `(by ...)`
+blocks, proof organization, unnecessary complexity). Reading a typical proof file
+costs ~10-15K tokens — this is affordable and catches far more issues.
+
+### Build and warnings
+
+- **Does the file build without errors?** Run `lake build <module>` and verify 0
+  errors. `sorry` warnings are acceptable; type errors, tactic failures, and
+  elaboration errors are NOT.
+- **Are all warnings addressed?** (Rule: "Address all warnings")
+  The ONLY acceptable warning is `"declaration uses 'sorry'"`.
+  **This applies to sorry'd proofs too** — dead tactics, unused simp args, and unused
+  variables around a sorry must be fixed.
+  ```bash
+  # After building, check warning output for:
+  # "This simp argument is unused" — remove from simp only [...]
+  # "Too many ids provided" — reduce binders in step as ⟨...⟩
+  # "unused variable" — remove or prefix with _
+  # "'...' tactic does nothing" / "is never executed" — remove dead tactic
+  ```
+
+### Banned constructs (mechanical grep)
+
+Run these grep checks on every file under review. **Any match is a mandatory fix.**
+
+```bash
+# Banned tactics (Rule: "BANNED TACTICS"; Pitfalls #1-#5 preference order)
+grep -n '\bomega\b' FILE          # → replace with agrind > grind > scalar_tac
+grep -n '\blinarith\b' FILE       # → replace with agrind > grind > scalar_tac
+grep -n '\bnlinarith\b' FILE      # → replace with agrind > grind > scalar_tac +nonLin
+
+# Never increase maxRecDepth (Pitfall #11)
+grep -n 'maxRecDepth' FILE        # → diagnose simp loop, never raise limit
+
+# maxHeartbeats too high (Pitfall #13)
+grep -n 'maxHeartbeats' FILE      # → verify value < 8_000_000; if higher, proof needs restructuring
+
+# Unfold of Aeneas stdlib definitions (Pitfall #10)
+grep -n 'unfold.*Aeneas\|unfold.*Std\.\|unfold.*core\.' FILE
+# → search for existing lemma instead of unfolding
+
+# step* <;> tactic (Rule: "Avoid step* <;> tactic")
+grep -n 'step\*.*<;>' FILE       # → use focused goal blocks (· ) instead
+
+# all_goals (Rule: "Avoid step* <;> tactic")
+grep -n 'all_goals' FILE          # → acceptable ONLY if single cheap tactic (e.g., all_goals agrind).
+                                   #   BAD if contains first|..., tactic sequences, or expensive tactics.
+
+# Inline (by ...) in exact/apply/refine (Rule: "Extract inline by blocks"; Pitfall #15)
+grep -n 'exact.*(by ' FILE        # → check: 2+ expensive blocks or any multi-line block → extract
+grep -n 'apply.*(by ' FILE        # (same check)
+grep -n 'refine.*(by ' FILE       # (same check)
+# ⚠️ These greps only catch single-line cases. The most common violation is multi-line:
+#   exact lemma arg1
+#       (by tac1) (by tac2)    ← grep misses this
+# The reviewer MUST also read multi-line exact/apply/refine statements manually.
+# "Expensive" = multi-line, tactic sequences (tac1; tac2), first|..., all_goals, or slow tactics.
+# A single cheap (by scalar_tac) or (by grind) is acceptable.
+```
+
+### Checks requiring manual inspection
+
+These cannot be reliably grepped — the reviewer must read the proof:
+
+- **Auto-param tactics in recursive theorems?** (Pitfall #16)
+  In recursive `spec_gen` theorems, all parameters must be explicit — no `:= by ...`
+  defaults. Look for `:= by` in theorem parameter lists (not in proof bodies).
+
+### Structural and style checks (manual inspection)
+
+These require reading the proof, not just grepping:
+
+- **Is the proof idiomatic?** (Rule: all of "Proof Style and Maintainability")
+  Uses standard Aeneas patterns (step, WP.spec_mono, split_ifs, etc.) rather than
+  ad-hoc workarounds? Follows patterns in proof-patterns.instructions.md?
+
+- **No big `simp only [...]` in implementation proofs?** (Rule: "Avoid large simp only")
+  Big lemma lists in `simp only` make proofs fragile when the model changes.
+  OK in spec lemmas. Prefer `simp [*]`, `agrind`, or targeted rewrites.
+
+- **Complex sub-proofs extracted as auxiliary lemmas?** (Rule: "Extract auxiliary lemmas")
+  No 15-line arithmetic blocks inlined in the middle of `step*`.
+
+- **Recurring index bounds extracted as standalone helpers?** (Pitfall #22)
+  Bounds like `k * N + q < NBAR * N` should not be proved inline repeatedly.
+
+- **No early case splits on parameters?** (Rule: "Avoid early case splits")
+  `cases p` at proof top duplicates everything. Case splits should be local or
+  handled via `attribute [local agrind]`.
+
+- **`agrind` preferred over `grind`?** (Pitfall #5)
+  `grind` should only appear when `agrind` fails. In loop proofs (`spec_gen`),
+  prefer `agrind` over `scalar_tac` throughout (Pitfall #21).
+
+- **Shifts simplified?** (Rule: "Simplify shifts early")
+  `>>>` should be rewritten as `/ 2^n`, `<<<` as `* 2^n`.
+
+- **Spaces around binary operators in comments?** (Rule: "Spaces around binary operators")
+  `j < N`, not `j<N`. Missing spaces cause VS Code highlighting bugs.
+
+- **Helper lemmas properly named and documented if non-obvious?**
+
+- **Is the proof clean and not verbose?** No copy-paste bloat, no redundant `have`
+  that could be inlined. Each tactic call should earn its place.
+
+### Performance checks
+
+- **Is the proof fast enough?** (Pitfall #14)
+  Profile with `set_option trace.profiler true in` and check that the proof
+  completes in **< 60 seconds wall-clock**. If slower, send back for optimization.
+
+- **Is the proof reactive for interactive development?** (Pitfall #15)
+  Adding a tactic at the end should take < 0.5s. If not, look for inline `(by ...)`
+  blocks (see grep above) and suggest extracting them into `have` statements.
+
+- **Are `maxHeartbeats` values reasonable?** (Pitfall #13)
+  If any `set_option maxHeartbeats` exceeds 8M, the proof needs restructuring.
+
+- **Are sorry'd proofs fast?** (Pitfall #24)
+  A sorry'd proof should use plain `sorry`, not `step* <;> (first | ... | sorry)` or
+  `cases p <;> step* <;> sorry`. Expensive sorry'd proofs waste build time for zero
+  verification value.
 
 **Skill file freshness:**
 
@@ -651,14 +745,16 @@ After each proof+review cycle completes:
 | Agent uses `lake build` loops | Didn't read LSP skill | Stronger prompt, mandate LSP |
 | `step*` times out | Too many monadic calls | Use `step*?` workflow |
 | Unfolds stdlib definitions | Didn't read core skill | Add "don't unfold" rule to prompt |
-| Uses `omega` | `omega` can't reason about scalars, `U32.max`, list lengths, etc. | NEVER use `omega` — use `scalar_tac`, `agrind`, or `grind` |
-| Uses `nlinarith` | Same issues as `omega` — can't reason about scalars | NEVER use `nlinarith` — use `scalar_tac` or `simp_scalar` |
-| Uses `linarith` | Same issues as `omega` — can't reason about scalars | NEVER use `linarith` — use `scalar_tac` or `agrind` |
+| Uses `omega` | `omega` can't reason about scalars, `U32.max`, list lengths, etc. | NEVER use `omega` — use `agrind` > `grind` > `scalar_tac` |
+| Uses `nlinarith` | Same issues as `omega` — can't reason about scalars | NEVER use `nlinarith` — use `agrind` > `grind` > `scalar_tac +nonLin` / `simp_scalar` |
+| Uses `linarith` | Same issues as `omega` — can't reason about scalars | NEVER use `linarith` — use `agrind` > `grind` > `scalar_tac` |
 | Edits wrong file/section | Ambiguous instructions | Be very specific about what to change |
 | Increases `maxRecDepth` | Trying to work around recursion depth errors | NEVER increase `maxRecDepth` — diagnose the root cause (bad proof structure or simp loop). Report to user if it's a tactic bug |
 | Tactic silently fails | Tactic doesn't do what it should (e.g., `step` can't find a lemma that exists) | Report to user — may be a tactic bug worth fixing upstream |
 | Spawns Lean sub-agents | Agent tries to parallelize by spawning sub-agents | NEVER spawn sub-agents that work on Lean files — resources are tight, and it causes file conflicts |
 | Edits other files | Agent modifies shared defs or specs it wasn't assigned | NEVER edit files other than assigned ones — introduce local axioms with TODO comments instead |
+| Agent crashes mid-edit | API loss, timeout, resource limit | Check for referenced-but-undefined identifiers; create missing defs in shared files |
+| `scalar_tac` loops in spec_gen | `maxRecDepth` in loop invariant proof | Mass-replace ALL `scalar_tac` → `agrind` in the proof body |
 
 ## Example: Full Agent Prompt
 
@@ -683,8 +779,8 @@ Use `step*?` to generate the body proof script, then fix sub-goals.
 
 ## Key Rules
 - NEVER unfold stdlib
-- NEVER use `omega` — use `scalar_tac` instead, or `agrind` (prefer), or `grind`
+- NEVER use `omega` — use `agrind` (preferred), `grind`, or `scalar_tac`
 - ONLY modify the specified sorry
-- Do not commit or push without asking the user first
+- NEVER commit or push without explicit user approval
 - After completing this sorry, STOP and return results — do NOT proceed to other work
 ```

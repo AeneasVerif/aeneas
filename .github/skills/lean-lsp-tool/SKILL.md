@@ -1,0 +1,1 @@
+../../../documentation/skills/lean-lsp-tool.instructions.md
