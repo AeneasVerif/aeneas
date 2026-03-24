@@ -325,7 +325,7 @@ Before launching proof agents, **review every theorem statement**.
 plans, specification mappings, function mapping tables, and any other structured
 output produced by agents must also go through the do → review → fix → converge
 loop. A plan with incorrect line numbers, stale function references, or logically
-inconsistent dependency graphs is just as harmful as a wrong theorem statement.
+inconsistent dependency graphs wastes significant agent time downstream.
 
 **Important:** When the user asks to do a large batch of proofs or launch parallel
 proof agents, **ask the user upfront** how they want the review gate handled:
@@ -401,6 +401,32 @@ until all statements are validated. Only then do proof agents launch.
   the main proof to use via `step`? If the agent said "no decomposition needed",
   is that justified? A function with 50+ monadic steps that wasn't decomposed should
   be flagged.
+- **Are axioms and external specs sound?** For any `axiom`, `private axiom`, or
+  sorry'd `private theorem` introduced by the agent (including local assumptions
+  about external functions), verify all of the following:
+  - **Non-vacuous postcondition:** The postcondition says something meaningful.
+    A postcondition of `True` is acceptable **only** when the axiom's sole purpose
+    is to assert that the external function succeeds (doesn't crash/diverge) — e.g.,
+    `cpu_features_present feature ⦃ _ => True ⦄` asserts it returns *some* boolean.
+    But if the proof actually needs properties of the return value and the axiom
+    only provides `True`, the axiom is too weak and must be strengthened.
+  - **Minimal postcondition:** The postcondition doesn't assert more than what the
+    external function actually guarantees. An overly strong axiom is unsound — it
+    introduces an unjustified assumption that may be false for some inputs, even if
+    it doesn't outright derive `False`. For example, an axiom
+    `hash input ⦃ out => out = spec_hash input ⦄` is fine if the external function
+    genuinely implements `spec_hash`. But adding `∧ out.length < 100` when the
+    external function doesn't guarantee that is an unjustified extra assumption.
+  - **Sufficient preconditions:** The preconditions are strong enough to make the
+    postcondition actually true. If the axiom states `f x ⦃ y => y < 100 ⦄` but
+    this only holds when `x > 0`, the missing precondition makes the axiom unsound.
+  - **No hidden contradictions:** Check whether the axiom, combined with other axioms
+    in the project, could derive `False`. In particular, check for overlapping axioms
+    about the same function with incompatible postconditions, or axioms whose
+    preconditions are unsatisfiable (making them vacuously true but misleading).
+  - **Justification comment present:** Every axiom must have a comment explaining
+    WHY it is sound — what property of the external system/function justifies it.
+    An axiom without justification should be flagged.
 
 **Common weak-postcondition patterns to reject:**
 - `res.length = n` — length only, says nothing about values
