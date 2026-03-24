@@ -659,6 +659,14 @@ calc (x + 1) * (x + 1)
     Then reference the lemma at each use site — fast, stable, and reusable.
 23. **`congr_arg UScalar.val h; scalar_tac` always triggers simp loops.** Using `congr_arg` to create a hypothesis like `UScalar.val x = UScalar.val y` produces a term whose LHS appears in its RHS after `simp_all` normalization, causing `scalar_tac` to loop (see item 11). **Fix:** Always use `agrind` (not `scalar_tac`) after `congr_arg`. More generally, any tactic that creates hypotheses of the form `f x = f y` followed by `scalar_tac` is at risk.
 24. **Sorry'd proofs must be fast.** A sorry'd proof with `step* <;> (first | ... | sorry)` can take 300+ seconds — the `step*` does massive work just to leave a sorry at the end. **Fix:** Sorry'd proofs should do the absolute minimum work. If a proof is incomplete, use plain `sorry` (possibly with a comment sketching the approach). Do not leave expensive `step*` or `cases p` before a sorry — they waste build time on every `lake build` for zero verification value.
+25. **`first | simp_all | ...` silently swallows goals.** In `all_goals (first | simp_all | tac2 | tac3)`, `simp_all` may partially simplify the goal without closing it. Since `simp_all` doesn't throw an exception (it "succeeds" even if the goal remains), `first` considers it successful and never tries `tac2` or `tac3`. The goal is left in a partially simplified state that no subsequent tactic handles. This applies to **all simp variants**: `simp`, `simp [*]`, `simp [...]`, and `simp_all` — they all succeed even when they don't close the goal. **Fix:** Always pair simp-based tactics with `done` when used inside `first`: write `(simp_all; done)` instead of `simp_all`. This forces full closure — if the simp call can't close the goal, `done` fails and `first` backtracks to the next alternative.
+    ```lean
+    -- BAD: simp_all partially simplifies without closing, first considers it done
+    all_goals first | simp_all | scalar_tac | bv_tac 16
+
+    -- GOOD: simp_all must fully close the goal, otherwise first tries alternatives
+    all_goals first | (simp_all; done) | scalar_tac | bv_tac 16
+    ```
 
 ## Attribute Management
 

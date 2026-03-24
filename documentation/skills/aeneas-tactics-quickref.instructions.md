@@ -190,6 +190,7 @@ theorem MY_CONST_val : MY_CONST.val = 42 := by decide
 | Concrete computation fails | `agrind`/`scalar_tac` fail on numeric literals | `native_decide` or `decide` |
 | `scalar_tac` in spec_gen | Cascading `maxRecDepth` in loop proof | Mass-replace ALL `scalar_tac` → `agrind` in proof body |
 | Recurring index bounds slow | Same bound proved inline many times | Extract standalone helper lemma with clean context |
+| `first \| simp_all` swallows goals | `simp_all` partially simplifies, `first` considers it done | `(simp_all; done)` — forces full closure; applies to all `simp` variants |
 
 ## Debugging and Profiling Commands
 

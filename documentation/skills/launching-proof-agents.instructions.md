@@ -321,6 +321,12 @@ DO NOT attempt the mechanized proof — just the statement + sketch + decomposit
 
 Before launching proof agents, **review every theorem statement**.
 
+**The review loop applies to ALL agent outputs — not just proofs.** Plans, proof
+plans, specification mappings, function mapping tables, and any other structured
+output produced by agents must also go through the do → review → fix → converge
+loop. A plan with incorrect line numbers, stale function references, or logically
+inconsistent dependency graphs is just as harmful as a wrong theorem statement.
+
 **Important:** When the user asks to do a large batch of proofs or launch parallel
 proof agents, **ask the user upfront** how they want the review gate handled:
 
