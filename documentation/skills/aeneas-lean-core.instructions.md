@@ -355,6 +355,21 @@ Lean warnings are not optional — they indicate problems that must be fixed:
 - **"unused variable"**: Remove or prefix with `_`.
 The only acceptable warning is `"declaration uses 'sorry'"` for remaining proof obligations.
 
+### Comment style: use block comments
+Use block comments `/- ... -/` rather than multiple lines starting with `--`.
+For multi-line comments, use:
+```lean
+/- This is a multi-line comment
+   explaining something important. -/
+```
+Not:
+```lean
+-- This is a multi-line comment
+-- explaining something important.
+```
+Single-line `--` is acceptable for very short inline annotations, but for anything
+spanning multiple lines, prefer `/- ... -/`.
+
 ### Spaces around binary operators in comments
 Always put spaces around binary operators (`<`, `>`, `=`, `≤`, `≥`, `+`, `*`, etc.) in
 comments and doc strings. Write `j < N`, not `j<N`. This avoids a VS Code highlighter bug
