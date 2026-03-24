@@ -13,7 +13,7 @@ formalization agents, etc.) must follow these rules and reference this file rath
 than duplicating them.
 
 For rules about writing, editing, and reviewing skill files, see
-`skill-file-authoring.instructions.md`.
+the `skill-file-authoring` skill file.
 
 ## Resource Management
 
@@ -180,7 +180,7 @@ or adjust the scope. Always ask rather than assume.
 
 **Review depth depends on the task:**
 - **Skill file edits**: reviewer checks cross-file consistency, actionability, and
-  that examples match rules (see `skill-file-authoring.instructions.md`).
+  that examples match rules (see the `skill-file-authoring` skill file).
 - **Proof work**: reviewer runs the full checklist (see launching-proof-agents).
   **The reviewer should read the modified files** (not just grep) — the token cost
   is modest (~15K tokens per file) and grep alone misses structural issues like
