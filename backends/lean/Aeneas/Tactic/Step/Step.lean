@@ -1013,11 +1013,14 @@ def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Option 
   -- Try threaded `Grind.solve` first when available (uses warm e-graph + fresh sstates)
   let threadedGrindTac (gs : Step.StepGrindState) : TacticM Unit := do
     withTraceNode `Step (fun _ => pure m!"Attempting grind discharge (threaded e-graph)") do
-    -- Preprocess: simplify the goal with ScalarTac simpsets (same as evalAGrindWithPreprocess)
-    -- This resolves e.g. UScalar.cast and U128.max to their simplified forms
+    /- Preprocess: simplify only the TARGET with ScalarTac simpsets.
+       This resolves e.g. UScalar.cast and U128.max to their simplified forms.
+       We must NOT simplify the hypotheses here: the grind e-graph already has
+       them internalized (with Aeneas simpset normalization). Running simp on
+       the hypotheses would create new fvar IDs that the e-graph hasn't seen. -/
     let simpArgs : Simp.SimpArgs ← ScalarTac.getSimpArgs
     let sconfig : Simp.Config := {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1}
-    match ← ScalarTac.simpAsmsTarget true sconfig simpArgs with
+    match ← Aeneas.Simp.simpAt true sconfig simpArgs (.targets #[] true) with
     | none =>
       trace[Step] "Precondition solved by preprocessing!"
     | some _ =>
