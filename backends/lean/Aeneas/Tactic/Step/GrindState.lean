@@ -122,9 +122,12 @@ def runGrindWithState {α} (state : StepGrindState) (action : GrindM α)
 
     For each local declaration (starting from `goal.nextDeclIdx`):
     - **All declarations**: `internalizeLocalDecl` first (adds the fvar to the e-graph).
-    - **Propositions** (additionally): Simplify type with Aeneas simpsets, apply grind's
-      `canon`/`shareCommon`, add the simplified type as a fact, run the preprocessing loop
-      (`assertAll >> solvers.loop`). -/
+    - **Propositions** (additionally):
+      1. Internalize exactly like grind does: `preprocessHypothesis` on the original type,
+         then `Grind.add`.
+      2. Additionally: simplify with Aeneas simpsets (scalar_tac_simps, etc.) and, if the
+         simplified type differs from the original, internalize the simplified fact too.
+      3. Optionally run the preprocessing loop (`assertAll >> solvers.loop`). -/
 private def internalizeHypotheses (goal : Goal) (config : Config)
     (simpCtx : Simp.Context) (simprocs : Simp.SimprocsArray)
     : GrindM (Goal × Bool) := do
@@ -144,24 +147,29 @@ private def internalizeHypotheses (goal : Goal) (config : Config)
       Grind.internalizeLocalDecl localDecl
       let type := localDecl.type
       if (← isProp type) then
-        -- Prop hypothesis: simplify with Aeneas simpsets, then use grind's preprocessHypothesis
-        let (simplifiedType, simpProof?) ← do
-          let (simpResult, _) ← Lean.Meta.simp type simpCtx simprocs
-          let simplifiedType ← instantiateMVars simpResult.expr
-          pure (simplifiedType, simpResult.proof?)
-        -- Use grind's preprocessHypothesis for normalization
-        let r ← Grind.preprocessHypothesis simplifiedType
-        -- Build proof chain: fvar → (optional Eq.mp for simp) → (optional Eq.mp for preprocess)
-        let basePrf : Expr :=
-          if let some simpH := simpProof? then
-            mkApp4 (mkConst ``Eq.mp [0]) type simplifiedType simpH localDecl.toExpr
+        /- Helper: internalize a proposition into the grind e-graph.
+           Runs preprocessHypothesis for normalization, then Grind.add with proof chaining. -/
+        let addProp (propType : Expr) (proof : Expr) : GoalM Unit := do
+          let r ← Grind.preprocessHypothesis propType
+          if let some ppH := r.proof? then
+            Grind.add r.expr (mkApp4 (mkConst ``Eq.mp [0]) propType r.expr ppH proof)
           else
-            localDecl.toExpr
-        if let some ppH := r.proof? then
-          Grind.add r.expr
-            (mkApp4 (mkConst ``Eq.mp [0]) simplifiedType r.expr ppH basePrf)
-        else
-          Grind.add r.expr basePrf
+            Grind.add r.expr proof
+        /- Step 1: internalize the proposition exactly the way grind does -/
+        addProp type localDecl.toExpr
+        /- Step 2: additionally, simplify with Aeneas simpsets and, if the resulting
+           type is different from the original, internalize this simplified fact too.
+           Note: the type may differ even when `simpResult.proof?` is none (proof by
+           reflection / definitional equality), so we compare expressions directly. -/
+        let (simpResult, _) ← Lean.Meta.simp type simpCtx simprocs
+        let simplifiedType ← instantiateMVars simpResult.expr
+        if !simplifiedType.equal type then
+          let simpPrf : Expr :=
+            if let some simpH := simpResult.proof? then
+              mkApp4 (mkConst ``Eq.mp [0]) type simplifiedType simpH localDecl.toExpr
+            else
+              localDecl.toExpr
+          addProp simplifiedType simpPrf
         -- Optionally run preprocessing after THIS hypothesis
         if config.preprocessGrind then
           let goal ← get
