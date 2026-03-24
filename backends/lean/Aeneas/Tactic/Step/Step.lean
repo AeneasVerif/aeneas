@@ -1016,7 +1016,7 @@ def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Option 
     /- Preprocess: simplify only the TARGET with ScalarTac simpsets.
        This resolves e.g. UScalar.cast and U128.max to their simplified forms.
        We must NOT simplify the hypotheses here: the grind e-graph already has
-       them internalized (with Aeneas simpset normalization). Running simp on
+       them internalized (with preprocess simpset normalization). Running simp on
        the hypotheses would create new fvar IDs that the e-graph hasn't seen. -/
     let simpArgs : Simp.SimpArgs ← ScalarTac.getSimpArgs
     let sconfig : Simp.Config := {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1}
