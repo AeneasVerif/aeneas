@@ -409,7 +409,7 @@ seconds of re-elaboration instead of < 0.5s.
 **What counts as "expensive":** A `(by ...)` block is expensive if it contains:
 - **Multiple tactics** — `(by tac1; tac2; tac3)` or multi-line blocks
 - **`first` with many alternatives** — `(by first | agrind | scalar_tac | bv_tac 16)`
-- **`all_goals` with non-trivial tactics** — `(by all_goals agrind)`
+- **`all_goals`** — banned everywhere (see below); never use even in `by` blocks
 - **Any tactic that takes more than a fraction of a second** (e.g., `grind`, complex `simp`)
 
 A single cheap tactic like `(by scalar_tac)` or `(by grind)` is acceptable as an inline
@@ -445,16 +445,21 @@ exact loop.spec_gen ret.2 out a p h1 h2 hdone' hrest'
 **The same principle applies to `<;>`, `first`, and `all_goals`:**
 - `step* <;> (first | agrind | scalar_tac | bv_tac 16)` — all alternatives re-elaborate
   together on every edit. See the next section for the fix.
-- `all_goals agrind` — acceptable only if the tactic is a single cheap call. If it
-  contains `first | ...` or multiple tactics, it has the same re-elaboration problem.
+- `all_goals` — banned in ALL contexts, not just after `step*`. Even a standalone
+  `all_goals scalar_tac` makes all remaining goals a single elaboration unit.
 
-### Avoid `step* <;> tactic` and `all_goals tactic` — use focused goals instead
-Do **not** write `step* <;> first | agrind | scalar_tac | bv_tac 16` or
+### ⛔ NEVER use `step* <;> tactic` or `all_goals tactic` — use focused goals instead
+**NEVER** write `step* <;> first | agrind | scalar_tac | bv_tac 16` or
 `step* <;> bv_tac 32` or `all_goals agrind` or similar patterns that apply a tactic
-to all remaining goals at once. This **destroys incrementality**: you cannot inspect
-individual goals (a failure points at the entire line, not the failing sub-goal),
-and constructs like `first | tac1 | tac2 | ...` retry all alternatives on every
-re-elaboration — if any alternative is expensive, every edit pays the full cost.
+to all remaining goals at once. This **destroys incrementality**: editing any tactic
+after `<;>` forces Lean to replay the entire `step*` from scratch (30+ seconds per
+edit). You cannot inspect individual goals (a failure points at the entire line, not
+the failing sub-goal), and constructs like `first | tac1 | tac2 | ...` retry all
+alternatives on every re-elaboration.
+
+**This is a hard ban** — the same level as `omega`/`linarith`. There are no exceptions.
+The pattern is never acceptable, not even for "quick" proofs: what seems quick today
+becomes slow when the function body grows, and the pattern trains agents into bad habits.
 
 Instead, use focused goal blocks (`· `) to handle each sub-goal individually:
 
@@ -659,13 +664,13 @@ calc (x + 1) * (x + 1)
     Then reference the lemma at each use site — fast, stable, and reusable.
 23. **`congr_arg UScalar.val h; scalar_tac` always triggers simp loops.** Using `congr_arg` to create a hypothesis like `UScalar.val x = UScalar.val y` produces a term whose LHS appears in its RHS after `simp_all` normalization, causing `scalar_tac` to loop (see item 11). **Fix:** Always use `agrind` (not `scalar_tac`) after `congr_arg`. More generally, any tactic that creates hypotheses of the form `f x = f y` followed by `scalar_tac` is at risk.
 24. **Sorry'd proofs must be fast.** A sorry'd proof with `step* <;> (first | ... | sorry)` can take 300+ seconds — the `step*` does massive work just to leave a sorry at the end. **Fix:** Sorry'd proofs should do the absolute minimum work. If a proof is incomplete, use plain `sorry` (possibly with a comment sketching the approach). Do not leave expensive `step*` or `cases p` before a sorry — they waste build time on every `lake build` for zero verification value.
-25. **`first | simp_all | ...` silently swallows goals.** In `all_goals (first | simp_all | tac2 | tac3)`, `simp_all` may partially simplify the goal without closing it. Since `simp_all` doesn't throw an exception (it "succeeds" even if the goal remains), `first` considers it successful and never tries `tac2` or `tac3`. The goal is left in a partially simplified state that no subsequent tactic handles. This applies to **all simp variants**: `simp`, `simp [*]`, `simp [...]`, and `simp_all` — they all succeed even when they don't close the goal. **Fix:** Always pair simp-based tactics with `done` when used inside `first`: write `(simp_all; done)` instead of `simp_all`. This forces full closure — if the simp call can't close the goal, `done` fails and `first` backtracks to the next alternative.
+25. **`first | simp_all | ...` silently swallows goals.** In `first | simp_all | tac2 | tac3`, `simp_all` may partially simplify the goal without closing it. Since `simp_all` doesn't throw an exception (it "succeeds" even if the goal remains), `first` considers it successful and never tries `tac2` or `tac3`. The goal is left in a partially simplified state that no subsequent tactic handles. This applies to **all simp variants**: `simp`, `simp [*]`, `simp [...]`, and `simp_all` — they all succeed even when they don't close the goal. **Fix:** Always pair simp-based tactics with `done` when used inside `first`: write `(simp_all; done)` instead of `simp_all`. This forces full closure — if the simp call can't close the goal, `done` fails and `first` backtracks to the next alternative.
     ```lean
     -- BAD: simp_all partially simplifies without closing, first considers it done
-    all_goals first | simp_all | scalar_tac | bv_tac 16
+    · first | simp_all | scalar_tac | bv_tac 16
 
     -- GOOD: simp_all must fully close the goal, otherwise first tries alternatives
-    all_goals first | (simp_all; done) | scalar_tac | bv_tac 16
+    · first | (simp_all; done) | scalar_tac | bv_tac 16
     ```
 
 ## Attribute Management

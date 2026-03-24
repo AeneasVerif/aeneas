@@ -201,9 +201,11 @@ When an agent completes:
 
 ### Status table format
 
-When the user asks for status, **always include the current date and time** at the top
-of the report (e.g., "**Status at 2026-03-22 06:50 UTC**"). This helps the user track
-progress over time, especially during long autonomous runs.
+When giving a status report — whether the user asked for it, or you are reporting
+proactively (e.g., agent completion results, phase transitions, progress updates) —
+**always include the current date and time** at the top of the report (e.g.,
+"**Status at 2026-03-22 06:50 UTC**"). This helps the user track progress over time,
+especially during long autonomous runs.
 
 Present a table with these columns:
 
