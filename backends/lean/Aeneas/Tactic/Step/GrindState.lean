@@ -110,26 +110,39 @@ def runGrindWithState {α} (state : StepGrindState) (action : GrindM α)
     (wrappedAction state.methodsRef state.grindCtx).run' state.grindState
   (symAction state.symCtx).run' state.symState
 
-/-- Internalize local hypotheses into a grind goal, using Aeneas simpsets.
+/-- Internalize local hypotheses into a grind goal.
 
-    **Invariant:** Preprocessing runs after each *proposition* hypothesis is internalized.
-    This ensures the grind state at any point is identical whether we:
-    (a) Initialize from scratch with all current hypotheses (single `step` call), or
-    (b) Incrementally add hypotheses one by one (threaded `step*`)
+    **Why we simplify hypotheses on the fly:** For grind to successfully discharge
+    preconditions, hypotheses need to be simplified first (normalizing scalar casts,
+    unfolding constants via Aeneas simpsets). Previously, `step` would do
+    `simp [...] at *; agrind`, which modified the proof context. With threading, we want
+    to incrementally internalize hypotheses *without modifying the context* (so the user
+    sees a clean context after `step*`). To achieve this, we simplify each hypothesis type
+    on the fly during internalization and add the simplified version to the e-graph.
 
-    This invariant is critical for `step*?`: the generated proof script (individual
-    `step` calls) must produce the same grind state as `step*` (threaded calls),
-    so proofs work identically in both modes (otherwise the risk is that the number of unsolved
-    preconditions is not the same when we call `step*` or when we expand it to the script generated
-    by `step*?`).
+    **What we internalize for each proposition:** We internalize both the original type
+    and the simplified type:
+    1. The **original type** is internalized first (exactly as grind would). This is done
+       out of precaution: if some fvar `f` refers to hypothesis `h` in its type, `h`
+       should also be present in the e-graph (though it's unclear whether this is strictly
+       necessary).
+    2. The **simplified type** (after applying Aeneas simpsets: `scalar_tac_simps`, etc.)
+       is additionally internalized if it differs from the original. This is the version
+       that grind actually needs to discharge most preconditions.
+
+    **Invariant:** The internalization procedure runs identically whether we:
+    (a) initialize from scratch with all current hypotheses (single `step` call), or
+    (b) incrementally add hypotheses one by one (threaded `step*`).
+    This is critical for `step*?`: the generated proof script (individual `step` calls)
+    must produce the same grind state as `step*` (threaded calls), so the number of
+    unsolved preconditions is the same in both modes.
 
     For each local declaration (starting from `goal.nextDeclIdx`):
     - **All declarations**: `internalizeLocalDecl` first (adds the fvar to the e-graph).
     - **Propositions** (additionally):
-      1. Internalize exactly like grind does: `preprocessHypothesis` on the original type,
-         then `Grind.add`.
-      2. Additionally: simplify with Aeneas simpsets (scalar_tac_simps, etc.) and, if the
-         simplified type differs from the original, internalize the simplified fact too.
+      1. Internalize the original type via `preprocessHypothesis` + `Grind.add`.
+      2. Simplify with Aeneas simpsets and, if the simplified type differs, internalize
+         the simplified fact too.
       3. Optionally run the preprocessing loop (`assertAll >> solvers.loop`). -/
 private def internalizeHypotheses (goal : Goal) (config : Config)
     (simpCtx : Simp.Context) (simprocs : Simp.SimprocsArray)
@@ -184,10 +197,13 @@ private def internalizeHypotheses (goal : Goal) (config : Config)
           catch e =>
             trace[Step] "addProp: Grind.add failed on hypothesis (skipping):\n  \
               type: {propType}\n  error: {e.toMessageData}"
-        /- Step 1: internalize the proposition exactly the way grind does -/
+        /- Step 1: internalize the original type (out of precaution, so that fvars
+           referring to this hypothesis in their types also get internalized) -/
         addProp type localDecl.toExpr
-        /- Step 2: additionally, simplify with Aeneas simpsets and, if the resulting
-           type is different from the original, internalize this simplified fact too.
+        /- Step 2: simplify with Aeneas simpsets (scalar_tac_simps, etc.) and internalize
+           the simplified type. This is the version grind actually needs to discharge most
+           preconditions — previously `step` would do `simp [...] at *; agrind`, but here
+           we simplify on the fly to avoid modifying the user-visible context.
            Note: the type may differ even when `simpResult.proof?` is none (proof by
            reflection / definitional equality), so we compare expressions directly. -/
         let (simpResult, _) ← Lean.Meta.simp type simpCtx simprocs
