@@ -30,7 +30,7 @@ downstream modules.
 
 ## Workflow: Lean Backend Changes
 
-For skill file editing rules (structure, symlinks, sync script), see `skill-file-authoring.instructions.md`.
+For skill file editing rules (structure, symlinks, sync script), see the `skill-file-authoring` skill file.
 
 When modifying the Lean backend (files under `backends/lean/`), **always ask the user**
 whether the documentation and skill files need to be updated afterwards. The following

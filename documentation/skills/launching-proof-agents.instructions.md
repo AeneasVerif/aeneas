@@ -13,7 +13,7 @@ run in isolated contexts and don't automatically see project-level configuration
 skills files. This document explains how to launch them properly.
 
 **For general agent management rules** (resource budgets, file isolation, spawning
-rules, task granularity, etc.), see `agent-fleet-management.instructions.md`. This
+rules, task granularity, etc.), see the `agent-fleet-management` skill file. This
 file only covers proof-specific workflow and instructions.
 
 ## Agent Prompt Template
@@ -25,10 +25,10 @@ Every proof agent prompt should include:
 ```
 ## Aeneas Skills — READ FIRST
 
-Before doing anything, read these files for essential proof guidance:
-- <path-to-aeneas>/documentation/skills/aeneas-lean-core.instructions.md
-- <path-to-aeneas>/documentation/skills/lean-lsp-tool.instructions.md
-- <path-to-aeneas>/documentation/skills/aeneas-tactics-quickref.instructions.md
+Before doing anything, read these skill files for essential proof guidance:
+- the `aeneas-lean-core` skill file
+- the `lean-lsp-tool` skill file
+- the `aeneas-tactics-quickref` skill file
 ```
 
 ### 2. Mandatory lean_lsp.py usage
@@ -55,7 +55,7 @@ Only use `lake build` once at the very end to confirm the final result.
 ```
 ### Use step*? to develop proofs
 
-See lean-lsp-tool.instructions.md for the full step*? workflow.
+See the `lean-lsp-tool` skill file for the full step*? workflow.
 In short: write `step*?` → `info <line>` to read the expanded script →
 copy it into your proof → fix sub-goals → collapse back to `step*` if possible.
 ```
@@ -123,7 +123,7 @@ Only the supervisor coordinates cross-file changes — after all agents complete
 
 ### 7. No sub-agent spawning / file isolation / resource limits
 
-These rules are defined in `agent-fleet-management.instructions.md`. Key points
+These rules are defined in the `agent-fleet-management` skill file. Key points
 for proof agents:
 
 - **⛔ NEVER spawn sub-agents that run Lean processes** (lean_lsp.py, lake build)
@@ -133,7 +133,7 @@ for proof agents:
 
 ## File Isolation and Parallelism (Lean-Specific)
 
-See `agent-fleet-management.instructions.md` for the general rules. Additional
+See the `agent-fleet-management` skill file for the general rules. Additional
 Lean-specific notes:
 
 - **Import-dependency check**: Lean files form an import DAG. If file A imports
@@ -150,7 +150,7 @@ When the user asks for a large task (e.g., "prove all sorry's in this file"), do
 give the entire task to a single agent in one shot. Instead:
 
 1. **Decompose into small tasks**: The number of sorry's per agent depends on
-   difficulty (see `agent-fleet-management.instructions.md` for the general
+   difficulty (see the `agent-fleet-management` skill file for the general
    difficulty-based sizing rule). For proof agents specifically:
    - **Easy sorry's** (wrapper unfolds, clear `step*` proofs): 3-5 per agent
    - **Medium sorry's** (loop invariants with known patterns): 1-2 per agent
@@ -199,10 +199,18 @@ give the entire task to a single agent in one shot. Instead:
    instructions, or pivot to a different approach.
 
 6. **Reinforce lean_lsp.py usage in every agent prompt**: Agents tend to fall back to
-   `lake build` loops. Every time you launch an agent, include in the prompt:
-   "Use lean_lsp.py for all proof iteration — do NOT use lake build." This
-   is not optional — agents that use `lake build` waste 2–5 minutes per cycle instead
-   of 5–30 seconds with the LSP.
+   `lake build` loops even when told not to. **Skill files alone are not enough** —
+   agents may not read them. The fix is putting the constraint directly in the prompt
+   with consequences. Every agent prompt MUST include the `⛔ HARD REQUIREMENT`
+   block (see "Example: Full Agent Prompt" below) as the FIRST section. Key elements:
+   - "Your FIRST action must be starting lean_lsp.py"
+   - "If lean_lsp.py crashes, RESTART it — do NOT fall back to lake build"
+   - "If you use lake build for iterative proof development, your work will be REJECTED"
+   
+   **Why agents ignore the rule**: They don't read skill files unless the content is
+   in their prompt. They see `lake build` in training data and default to it. The only
+   reliable fix is making the LSP instruction the first thing they read, with explicit
+   rejection consequences.
 
 ## Two-Phase Workflow: Statements First, Then Proofs
 
@@ -321,6 +329,12 @@ DO NOT attempt the mechanized proof — just the statement + sketch + decomposit
 
 Before launching proof agents, **review every theorem statement**.
 
+**The review loop applies to ALL agent outputs — not just proofs.** Plans, proof
+plans, specification mappings, function mapping tables, and any other structured
+output produced by agents must also go through the do → review → fix → converge
+loop. A plan with incorrect line numbers, stale function references, or logically
+inconsistent dependency graphs wastes significant agent time downstream.
+
 **Important:** When the user asks to do a large batch of proofs or launch parallel
 proof agents, **ask the user upfront** how they want the review gate handled:
 
@@ -395,6 +409,32 @@ until all statements are validated. Only then do proof agents launch.
   the main proof to use via `step`? If the agent said "no decomposition needed",
   is that justified? A function with 50+ monadic steps that wasn't decomposed should
   be flagged.
+- **Are axioms and external specs sound?** For any `axiom`, `private axiom`, or
+  sorry'd `private theorem` introduced by the agent (including local assumptions
+  about external functions), verify all of the following:
+  - **Non-vacuous postcondition:** The postcondition says something meaningful.
+    A postcondition of `True` is acceptable **only** when the axiom's sole purpose
+    is to assert that the external function succeeds (doesn't crash/diverge) — e.g.,
+    `cpu_features_present feature ⦃ _ => True ⦄` asserts it returns *some* boolean.
+    But if the proof actually needs properties of the return value and the axiom
+    only provides `True`, the axiom is too weak and must be strengthened.
+  - **Minimal postcondition:** The postcondition doesn't assert more than what the
+    external function actually guarantees. An overly strong axiom is unsound — it
+    introduces an unjustified assumption that may be false for some inputs, even if
+    it doesn't outright derive `False`. For example, an axiom
+    `hash input ⦃ out => out = spec_hash input ⦄` is fine if the external function
+    genuinely implements `spec_hash`. But adding `∧ out.length < 100` when the
+    external function doesn't guarantee that is an unjustified extra assumption.
+  - **Sufficient preconditions:** The preconditions are strong enough to make the
+    postcondition actually true. If the axiom states `f x ⦃ y => y < 100 ⦄` but
+    this only holds when `x > 0`, the missing precondition makes the axiom unsound.
+  - **No hidden contradictions:** Check whether the axiom, combined with other axioms
+    in the project, could derive `False`. In particular, check for overlapping axioms
+    about the same function with incompatible postconditions, or axioms whose
+    preconditions are unsatisfiable (making them vacuously true but misleading).
+  - **Justification comment present:** Every axiom must have a comment explaining
+    WHY it is sound — what property of the external system/function justifies it.
+    An axiom without justification should be flagged.
 
 **Common weak-postcondition patterns to reject:**
 - `res.length = n` — length only, says nothing about values
@@ -561,9 +601,8 @@ grep -n 'unfold.*Aeneas\|unfold.*Std\.\|unfold.*core\.' FILE
 # step* <;> tactic (Rule: "Avoid step* <;> tactic")
 grep -n 'step\*.*<;>' FILE       # → use focused goal blocks (· ) instead
 
-# all_goals (Rule: "Avoid step* <;> tactic")
-grep -n 'all_goals' FILE          # → acceptable ONLY if single cheap tactic (e.g., all_goals agrind).
-                                   #   BAD if contains first|..., tactic sequences, or expensive tactics.
+# all_goals (Rule: "NEVER use all_goals — banned everywhere")
+grep -n 'all_goals' FILE          # → ALWAYS replace with focused · blocks. No exceptions.
 
 # Inline (by ...) in exact/apply/refine (Rule: "Extract inline by blocks"; Pitfall #15)
 grep -n 'exact.*(by ' FILE        # → check: 2+ expensive blocks or any multi-line block → extract
@@ -573,7 +612,8 @@ grep -n 'refine.*(by ' FILE       # (same check)
 #   exact lemma arg1
 #       (by tac1) (by tac2)    ← grep misses this
 # The reviewer MUST also read multi-line exact/apply/refine statements manually.
-# "Expensive" = multi-line, tactic sequences (tac1; tac2), first|..., all_goals, or slow tactics.
+# "Expensive" = multi-line, tactic sequences (tac1; tac2), first|..., or slow tactics.
+# Note: all_goals is banned outright (see above), so it's never acceptable here either.
 # A single cheap (by scalar_tac) or (by grind) is acceptable.
 ```
 
@@ -591,7 +631,7 @@ These require reading the proof, not just grepping:
 
 - **Is the proof idiomatic?** (Rule: all of "Proof Style and Maintainability")
   Uses standard Aeneas patterns (step, WP.spec_mono, split_ifs, etc.) rather than
-  ad-hoc workarounds? Follows patterns in proof-patterns.instructions.md?
+  ad-hoc workarounds? Follows patterns in the `proof-patterns` skill file?
 
 - **No big `simp only [...]` in implementation proofs?** (Rule: "Avoid large simp only")
   Big lemma lists in `simp only` make proofs fragile when the model changes.
@@ -655,7 +695,7 @@ These require reading the proof, not just grepping:
   The follow-up agent is a fresh context and may have different knowledge — explicitly
   pointing it to the skill files ensures it doesn't repeat the same violations.
 
-**Progress reporting and task granularity:** See `agent-fleet-management.instructions.md`
+**Progress reporting and task granularity:** See the `agent-fleet-management` skill file
 for the general rules. Proof-specific notes:
 
 - **Assess sorry difficulty before dispatching** — read the proof sketch (if present),
@@ -694,7 +734,7 @@ redirect an agent that's going in circles, provide missing context, escalate to 
 
 ## Master Synthesis
 
-See `agent-fleet-management.instructions.md` for the general cross-agent synthesis
+See the `agent-fleet-management` skill file for the general cross-agent synthesis
 rules. Proof-specific patterns to watch for:
 
 - Multiple agents stuck on the same kind of sub-goal (e.g., bitwise reasoning)
@@ -760,6 +800,14 @@ After each proof+review cycle completes:
 
 ```
 Fix the inner loop sorry in `/path/to/Ntt.lean`.
+
+## ⛔ HARD REQUIREMENT: lean_lsp.py ONLY — READ THIS FIRST
+Your FIRST action must be starting lean_lsp.py:
+  python3 /path/to/aeneas/scripts/lean_lsp.py --repl --json --log /tmp/lean_lsp_<agent-name>.log
+Do ALL proof editing and checking inside lean_lsp.py (open, edit, goal, errors, save).
+If lean_lsp.py crashes, RESTART it — do NOT fall back to lake build.
+`lake build` is ONLY allowed as a SINGLE final verification after all proofs are done.
+If you use `lake build` for iterative proof development, your work will be REJECTED.
 
 ## Aeneas Skills — READ FIRST
 Read these files: [list paths]

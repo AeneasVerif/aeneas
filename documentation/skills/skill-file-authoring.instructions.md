@@ -122,3 +122,18 @@ in `aeneas-lean-core` and the "Proof Style Rules" in `aeneas-tactics-quickref`.
 
 4. **When reviewing**, re-read the source-of-truth sections to verify derived
    checklists haven't drifted.
+
+## Cross-Reference Convention
+
+Cross-references between skill files **MUST** use skill names (e.g.,
+`` the `aeneas-lean-core` skill file ``), **NOT** filenames (e.g.,
+`aeneas-lean-core.instructions.md`). This is more robust since skill files are
+served through both Copilot (`.github/skills/*/SKILL.md`) and Claude
+(`.claude/skills/*/SKILL.md`) via symlinks — the on-disk filename is an
+implementation detail that differs across delivery mechanisms.
+
+Examples:
+- ✅ `see the \`agent-fleet-management\` skill file`
+- ✅ `defined in the \`aeneas-lean-core\` skill file`
+- ❌ `see \`agent-fleet-management.instructions.md\``
+- ❌ `<path-to-aeneas>/documentation/skills/aeneas-lean-core.instructions.md`
