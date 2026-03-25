@@ -263,15 +263,14 @@ theorem my_function_spec (args...) (preconditions...) :
 
 The `⦃ ... ⦄` notation expresses weakest preconditions over `Result` values:
 
-- **For `Result T`:** `f ⦃ x => P x ⦄` means "if `f` succeeds with value `x`,
-  then `P x` holds."
+- **For `Result T`:** `f ⦃ x => P x ⦄` means "`f` succeeds with value `x`
+  and `P x` holds."
 - **For `Result (T × (T → ...))`:** You can name both the returned value and
   the backward continuation:
   `f ⦃ x back => P x back ⦄`
 
-This notation lets you state properties about successful executions without
-separately reasoning about the error case — if the function fails, the
-postcondition is vacuously true.
+This notation lets you state that the function succeeds and its result satisfies
+the postcondition.
 
 ### 4.2 Registering Specs with `@[step]`
 
