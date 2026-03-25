@@ -726,7 +726,7 @@ where
                     setGoals [mvarId]
                     let (introFVars, mvarId) ← mvarId.intros
                     setGoals [mvarId]
-                    let info ← traverseProgram cfg fuel
+                    let info ← traverseProgram cfg fuel ss
                     pure (info, !introFVars.isEmpty)
                   -- Build the script: case <tag> => [intros;] <recursive script>
                   let recursiveStx ← subInfo.script.toSyntax
