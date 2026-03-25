@@ -11,7 +11,7 @@ description: Lean LSP MCP tools for interactive Lean proof development — tool 
 
 ## IMPORTANT: Always Use Lean MCP Tools for Lean Proofs
 
-When working on Lean proofs in an Aeneas project, **always** use the lean-lsp-mcp
+When working on Lean proofs in a Lean project, **always** use the lean-lsp-mcp
 tools. These tools are available directly in your tool palette — you do NOT need to
 start a subprocess, launch a REPL, or run any setup commands.
 

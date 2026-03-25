@@ -8,17 +8,10 @@ description: Translation model, spec patterns, tactic reference, and pitfalls fo
 ## Context
 Aeneas translates Rust programs to pure Lean code via the LLBC intermediate representation. The generated code uses the `Result` error monad. Proofs verify functional correctness by writing specification theorems tagged with `@[step]`.
 
-## PREREQUISITE: Use lean_lsp.py for All Proof Work
+## PREREQUISITE: Use lean-lsp-mcp for All Proof Work
 
-**Before writing or editing any Lean proof**, start a `lean_lsp.py` REPL session.
-See the `lean-lsp-tool` skill file for full setup and command reference.
-
-```bash
-python3 scripts/lean_lsp.py --repl --json --log /tmp/lean_lsp.log
-```
-
-**`--log` is MANDATORY** — always pass a log path. This records all commands with
-timestamps for monitoring and debugging. Use a unique path per agent.
+**Before writing or editing any Lean proof**, use the lean-lsp-mcp tools.
+See the `lean-lsp-mcp` skill file for the full tool reference and workflow.
 
 ## Reading Aeneas-Generated Code
 
@@ -500,7 +493,7 @@ step*
 ```
 
 This keeps the proof incremental — you can put `sorry` on any `· ` branch, inspect
-the goal with `goal <line>`, and work on one sub-goal at a time.
+the goal with `lean_goal`, and work on one sub-goal at a time.
 
 ### Avoid early case splits on parameters in step proofs
 In cryptographic code, functions are often parameterized by a parameter set (e.g.,
@@ -604,7 +597,7 @@ calc (x + 1) * (x + 1)
 4. **`agrind` fails**: Try `simp [*]; agrind`
 5. **`grind` explodes**: Use `agrind` instead (controlled context)
 6. **Progress applies wrong spec**: Use `step with specific_theorem`
-7. **"Too many ids provided" from `step`**: You gave more binder names in `step as ⟨...⟩` than the tactic produced. Remove excess names until the count matches. Check `goal` to see how many binders the postcondition actually has.
+7. **"Too many ids provided" from `step`**: You gave more binder names in `step as ⟨...⟩` than the tactic produced. Remove excess names until the count matches. Check `lean_goal` to see how many binders the postcondition actually has.
 8. **"This simp argument is unused"**: A lemma in `simp only [...]` or `simp_all only [...]` didn't fire. **Always fix this** — remove the unused lemma from the list. Don't ignore these warnings.
 9. **"'...' tactic does nothing"** / **"'...' tactic is never executed"**: The tactic call is dead code. **Always fix this** — remove the tactic entirely. Don't leave dead tactics in proofs.
 10. **NEVER unfold Aeneas stdlib definitions in a proof.** When in the middle of a proof, you should never need to unfold definitions from `Aeneas.Std` (Slice, Array, UScalar, IScalar, iterator types, core.*, etc.). If you feel the need to unfold:

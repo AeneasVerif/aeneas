@@ -7,7 +7,7 @@ description: Tactic decision tree, banned tactics, and common combinations for A
 
 ## Decision Tree: Which Tactic?
 
-**PREREQUISITE:** Always use `lean_lsp.py --repl --json --log <path>` for interactive proof development. Use `goal <line>` to inspect the proof state before choosing a tactic. See the `lean-lsp-tool` skill file.
+**PREREQUISITE:** Always use the lean-lsp-mcp tools for interactive proof development. Use `lean_goal` to inspect the proof state before choosing a tactic. See the `lean-lsp-mcp` skill file.
 
 ```
 What does the goal look like?
@@ -344,7 +344,7 @@ or scheduling overhead.
 **Keeping Lean reactive is even more important.** When developing a proof interactively,
 adding a tactic at the end should take **< 0.5s** — this is what enables rapid iteration.
 If incremental edits are slow (several seconds), the proof structure is forcing
-re-elaboration of large chunks. See the lean-lsp-tool skill file for guidance
+re-elaboration of large chunks. See the `lean-lsp-mcp` skill file for guidance
 (avoid `by ...` blocks inside `apply`/`exact`/`refine` arguments, use `have` to create
 elaboration checkpoints).
 
@@ -364,7 +364,7 @@ containing `s[i]'h`). This causes `simp` to recurse until it hits `maxRecDepth`.
 **How to diagnose:**
 1. The error says "maximum recursion depth has been reached" inside a `simp` call
 2. Use the LSP: comment out the failing `simp` call, add `sorry`, inspect the goal
-   with `goal <line>` to see what the `simp` was trying to simplify
+   with `lean_goal` to see what the `simp` was trying to simplify
 3. Identify which lemmas interact badly — try each lemma individually
 
 **How to fix (in order of preference):**
