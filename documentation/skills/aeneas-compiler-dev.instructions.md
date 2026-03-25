@@ -1,32 +1,9 @@
 ---
 name: aeneas-compiler-dev
-description: Dev workflow, formatting, tests, error macros, skill file structure, build rules for the Aeneas compiler
+description: Dev workflow, formatting, tests, error macros, build rules for the Aeneas compiler
 ---
 
 # Aeneas Compiler Development — Skill File
-
-## Commits and Pushes
-
-Never commit or push without asking the user first. You can suggest to commit, in
-which case you should show the user the commit message you would use. If the user
-approves and you commit, and you haven't already shown the commit message, show it
-after committing.
-
-## Skill Files: Structure and Editing Rules
-
-Skill files are stored in `documentation/skills/` — this is the **source of truth**.
-They are shared with AI tools via symlinks:
-- **GitHub Copilot** reads from `.github/instructions/`, which is a directory symlink
-  to `documentation/skills/`.
-- **Claude Code** reads from `.claude/skills/<name>/SKILL.md`, where each `SKILL.md`
-  is a symlink to the corresponding file in `documentation/skills/`.
-
-**Always edit files in `documentation/skills/`.** Changes propagate automatically
-through the symlinks. When adding a new skill file, also create the Claude symlink:
-```bash
-mkdir -p .claude/skills/<name>
-ln -s ../../../documentation/skills/<name>.instructions.md .claude/skills/<name>/SKILL.md
-```
 
 ## ⛔ NEVER Clean the Lake Cache
 
@@ -52,6 +29,8 @@ gives sub-second feedback on individual files while `lake build` must re-elabora
 downstream modules.
 
 ## Workflow: Lean Backend Changes
+
+For skill file editing rules (structure, symlinks, sync script), see the `skill-file-authoring` skill file.
 
 When modifying the Lean backend (files under `backends/lean/`), **always ask the user**
 whether the documentation and skill files need to be updated afterwards. The following
