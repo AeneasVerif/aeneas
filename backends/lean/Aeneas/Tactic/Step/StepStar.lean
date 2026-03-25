@@ -415,12 +415,19 @@ def analyzeTarget : TacticM TargetKind := do
 partial def evalStepStar (cfg: Config) (fuel : Option Nat) : TacticM Result :=
   withMainContext do focus do
   withTraceNode `Step (fun _ => do pure m!"evalStepStar") do
+  -- Initialize the step state (grind threading)
+  let initState : Step.StepState ←
+    if cfg.stepConfig.threadGrindState then
+      let mvarId ← getMainGoal
+      let gs ← Step.initStepGrindState cfg.stepConfig mvarId
+      pure { grindState? := some gs }
+    else pure {}
   -- Simplify the target
   let (info, mvarId) ← simplifyTarget
   -- Continue
   match mvarId with
   | some _ =>
-    let info' ← traverseProgram cfg fuel
+    let info' ← traverseProgram cfg fuel initState
     let info := info ++ info'
     -- Wait for the asynchronous execution to finish
     withTraceNode `Step (fun _ => do pure m!"filtering subgoals") do
@@ -467,7 +474,7 @@ where
     let goal ← do if r.isSome then pure (some (← getMainGoal)) else pure none
     pure (info, goal)
 
-  traverseProgram (cfg : Config) (fuel : Option Nat) : TacticM Info := do
+  traverseProgram (cfg : Config) (fuel : Option Nat) (ss : Step.StepState) : TacticM Info := do
     withMainContext do
     withTraceNode `Step (fun _ => do pure m!"traverseProgram") do
     traceGoalWithNode "current goal"
@@ -482,20 +489,20 @@ where
     match targetKind with
     | .bind varName => do
       let names := if varName.hasMacroScopes then #[] else #[some varName]
-      let (info, mainGoal) ← onBind cfg names
+      let (info, mainGoalAndState) ← onBind cfg names ss
       /- Continue, if necessary -/
-      match mainGoal with
+      match mainGoalAndState with
       | none =>
         -- Stop
         trace[Step] "stop"
         return info
-      | some mainGoal =>
+      | some (mainGoal, ss) =>
         setGoals [mainGoal]
         /- Check if there are unassigned meta-variables which are not `Prop`:
            if it is the case it means there are meta-variables we could not infer, so we stop -/
         if info.unassignedVars.isEmpty then
-          let restInfo ← traverseProgram cfg fuel
-          return info ++ restInfo
+          let restInfo ← traverseProgram cfg fuel ss
+          return (info ++ restInfo)
         else
           trace[Step] "Found unassigned meta-variables of type ≠ Prop: stopping"
           let info' : Info ← pure
@@ -512,28 +519,32 @@ where
       trace[Step] "Match over scrutinee: {bfInfo.scrut}"
       let (branchGoals, mkStx) ← onMatch cfg bfInfo contsTaggedVals
       withTraceNode `Step (fun _ => do pure m!"exploring branches") do
-      /- Continue exploring from the subgoals -/
+      /- Continue exploring from the subgoals.
+         Each branch starts from the same state (branches are independent).
+         We update the grind state for each branch to internalize the hypotheses
+         introduced by `esplitAtSpec` (case variables, discriminant equality). -/
       let branchInfos ← branchGoals.mapM fun mainGoal => do
         setGoals [mainGoal]
-        let restInfo ← traverseProgram cfg fuel
-        pure restInfo
-      /- Put everything together -/
+        let ss ← ss.update cfg.stepConfig mainGoal
+        traverseProgram cfg fuel ss
+      /- Put everything together — after branches, state is discarded (we can't merge
+         divergent e-graphs). Use the pre-branch state going forward. -/
       mkStx branchInfos
     | .result => do
-      let (info, mainGoal) ← onResult cfg
+      let (info, mainGoal) ← onResult cfg ss
       let mainGoal ← match mainGoal with
         | none => pure #[]
         | some mainGoal => pure #[(mainGoal, none)]
       pure { info with subgoals := info.subgoals ++ mainGoal }
     | .unknown => do
       trace[Step] "don't know what to do: it may be a terminal goal, attempting to solve it with grind"
-      let (info, mainGoal) ← onResult cfg
+      let (info, mainGoal) ← onResult cfg ss
       let mainGoal ← match mainGoal with
         | none => pure #[]
         | some mainGoal => pure #[(mainGoal, none)]
       pure { info with subgoals := info.subgoals ++ mainGoal }
 
-  onResult (cfg : Config) : TacticM (Info × Option MVarId) := do
+  onResult (cfg : Config) (ss : Step.StepState) : TacticM (Info × Option MVarId) := do
     withTraceNode `Step (fun _ => pure m!"onResult") do
     /- If we encounter `(do f a)` we process it as if it were `(do let res ← f a; return res)`
        since (id = (· >>= pure)) and when we desugar the do block we have that
@@ -545,14 +556,14 @@ where
        We known in advance the result of processing `return res`, which is to do nothing.
        This allows us to prevent code duplication with the `onBind` function. -/
     let names ← Step.getPostNamesFromGoal
-    let res ← onBind cfg names
-    match res.snd with
+    let (info, mainGoalAndState) ← onBind cfg names ss
+    match mainGoalAndState with
     | none =>
       trace[Step] "done"
-      pure res
-    | some mvarId =>
+      pure (info, none)
+    | some (mvarId, _) =>
       let (info', mvarId) ← onFinish cfg mvarId
-      pure (res.fst ++ info', mvarId)
+      pure (info ++ info', mvarId)
 
   onFinish (cfg : Config) (mvarId : MVarId) : TacticM (Info × Option MVarId) := do
     withTraceNode `Step (fun _ => pure m!"onFinish") do
@@ -608,10 +619,10 @@ where
           pure info'
       pure (info ++ info', none)
 
-  onBind (cfg : Config) (names : Array (Option Name)) : TacticM (Info × Option MVarId) := do
+  onBind (cfg : Config) (names : Array (Option Name)) (ss : Step.StepState) : TacticM (Info × Option (MVarId × Step.StepState)) := do
     withTraceNode `Step (fun _ => pure m!"onBind ({names})") do
     let postsBasename := names[0]?.join
-    if let some res ← tryStep cfg names postsBasename then
+    if let some res ← tryStep cfg names postsBasename ss then
       let {usedTheorem, unassignedVars, preconditions, mainGoal } := res
       withTraceNode `Step (fun _ => pure m!"step succeeded") do
       match mainGoal with
@@ -630,7 +641,7 @@ where
             | some n => mkNode ``Lean.binderIdent #[mkIdent n]
             | none => mkNode ``Lean.binderIdent #[mkIdent `_]
       trace[Step] "ids from introduced vars: {ids}"
-      let mainGoal := mainGoal.map fun mainGoal => mainGoal.goal
+      let mainGoal := mainGoal.map fun mainGoal => (mainGoal.goal, mainGoal.stepState)
       /- Generate the tactic scripts for the preconditions -/
       let currTac ←
         if cfg.prettyPrintedStep then
@@ -682,7 +693,8 @@ where
         }
       pure (info, mainGoal)
     else
-      onFinish cfg (← getMainGoal)
+      let (info, mvarId) ← onFinish cfg (← getMainGoal)
+      pure (info, mvarId.map (·, ss))
 
   onMatch (cfg : Config) (bfInfo : Bifurcation.Info) (toBeProcessed : Array (Array Name)): TacticM (List MVarId × (List Info → TacticM Info)) := do
     withTraceNode `Step (fun _ => pure m!"onMatch") do
@@ -728,8 +740,8 @@ where
 
       return (infos, mkStx)
 
-  tryStep (cfg : Config) (ids : Array (Option Name) := #[]) (postsBasename : Option Name := none) := do
-    try some <$> Step.evalStepCore cfg.stepConfig (some (.str .anonymous "_")) none ids false postsBasename cfg.preconditionTac
+  tryStep (cfg : Config) (ids : Array (Option Name) := #[]) (postsBasename : Option Name := none) (ss : Step.StepState) := do
+    try some <$> Step.evalStepCore cfg.stepConfig (some (.str .anonymous "_")) none ids false postsBasename cfg.preconditionTac ss
     catch _ => pure none
 
   makeIds (base: Name) (numElem numPost : Nat) (defaultId := "x"): Array (TSyntax ``Lean.binderIdent) :=

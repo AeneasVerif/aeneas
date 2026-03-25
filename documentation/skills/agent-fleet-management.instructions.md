@@ -1,6 +1,6 @@
 ---
 name: agent-fleet-management
-description: Resource management, file isolation, task sizing, and supervisor rules for AI agent fleets
+description: General rules for managing fleets of AI agents working on a shared codebase
 ---
 
 # Agent Fleet Management — Skill File
