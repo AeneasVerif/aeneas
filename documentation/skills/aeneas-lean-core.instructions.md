@@ -357,6 +357,27 @@ The only acceptable warning is `"declaration uses 'sorry'"` for remaining proof 
 warnings (dead tactics, unused simp args, unused variables around the sorry). These
 must be fixed — keep sorry'd proofs clean so they're ready for completion.
 
+### Do not introduce redundant macros or notations
+Do **not** define a new macro or notation when the desired behavior can be achieved
+by overriding or configuring an existing Lean mechanism. Redundant macros create
+maintenance burden (must be kept in sync, imported everywhere, can conflict when
+multiple files define the same macro).
+
+**Example:** To make `a[i]` work without explicit bound proofs, override
+`get_elem_tactic` rather than introducing a custom `a[i]^` macro:
+```lean
+/- Override get_elem_tactic so that a[i] auto-discharges bounds with agrind -/
+scoped macro_rules
+| `(tactic| get_elem_tactic) => `(tactic| agrind)
+```
+The `[i]^` macro was introduced in a project but is strictly subsumed by this
+`get_elem_tactic` override — it does the same thing (discharge bounds automatically)
+but requires a different syntax and must be defined/imported separately. The override
+is better because it works with standard `a[i]` notation everywhere.
+
+**General rule:** Before defining a macro, check whether an existing tactic override,
+attribute, or notation mechanism already covers the use case. If so, use that instead.
+
 ### Spaces around binary operators in comments
 Always put spaces around binary operators (`<`, `>`, `=`, `≤`, `≥`, `+`, `*`, etc.) in
 comments and doc strings. Write `j < N`, not `j<N`. This avoids a VS Code highlighter bug
