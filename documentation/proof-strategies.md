@@ -13,7 +13,7 @@ theorem my_function_spec (x : U32) (h : precondition) :
   -- finish remaining goals
 ```
 
-The `⦃ result => postcondition ⦄` notation is the weakest-precondition spec notation. For functions returning `Result T`, it means "if the function succeeds, the result satisfies the postcondition."
+The `⦃ result => postcondition ⦄` notation is the weakest-precondition spec notation. For functions returning `Result T`, it means "the function succeeds and the result satisfies the postcondition."
 
 For functions with backward continuations:
 ```lean

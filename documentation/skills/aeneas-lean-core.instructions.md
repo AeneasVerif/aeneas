@@ -115,7 +115,7 @@ theorem function_name.spec (param1 : U32) (param2 : Slice U16)
   find the theorem. Start a new line after the attribute.
 
 ### The `⦃ ⦄` notation
-Weakest precondition: `f ⦃ x => P x ⦄` means "if f succeeds with value x, then P x holds."
+Weakest precondition: `f ⦃ x => P x ⦄` means "f succeeds with value x and P x holds."
 
 When the result is a tuple, **always decompose it in the binder** — do NOT use
 projectors (`.1`, `.2`, `.fst`, `.snd`, etc.):
