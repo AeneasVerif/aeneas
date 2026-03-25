@@ -6,7 +6,7 @@ namespace higher_order
 
 def applyF (f : U32 → Result U32) (x : U32) : Result U32 := f x
 
-@[progress]
+@[step]
 theorem applyF_spec (f : U32 → Result U32) (x : U32)
     (post : U32 → Prop)
     (hf : f x ⦃ post ⦄) :
@@ -23,7 +23,7 @@ info: Try this:
 #guard_msgs in
 example (a : U32) (h : a.val + 1 ≤ U32.max) :
     applyF (fun x => x + 1#u32) a ⦃ y => y.val = a.val + 1 ⦄ := by
-  progress*? +inferPost
+  step*? +inferPost
 
 -- Higher-order in 2 functions, operates on a pair of inputs/outputs
 def callPair (f : U32 → Result U32) (g : U32 → Result U32) (xy : U32 × U32) : Result (U32 × U32) := do
@@ -31,7 +31,7 @@ def callPair (f : U32 → Result U32) (g : U32 → Result U32) (xy : U32 × U32)
   let b ← g xy.2
   return (a, b)
 
-@[progress]
+@[step]
 theorem callPair_spec (f g : U32 → Result U32) (xy : U32 × U32)
     (postF : U32 → Prop) (postG : U32 → Prop)
     (hf : f xy.1 ⦃ postF ⦄) (hg : g xy.2 ⦃ postG ⦄) :
@@ -55,14 +55,14 @@ info: Try this:
 #guard_msgs in
 example (x y : U32) (hx : x.val + 1 ≤ U32.max) (hy : y.val + 2 ≤ U32.max) :
     callPair (fun a => a + 1#u32) (fun b => b + 2#u32) (x, y) ⦃ ab => ab.1.val = x.val + 1 ∧ ab.2.val = y.val + 2 ⦄ := by
-  progress*? +inferPost
+  step*? +inferPost
 
 -- Calls f then g in sequence
 def callFThenG (f g : U32 → Result U32) (x : U32) : Result U32 := do
   let y ← f x
   g y
 
-@[progress]
+@[step]
 theorem callFThenG_spec (f g : U32 → Result U32) (x : U32)
     (mid post : U32 → Prop)
     (hf : f x ⦃ mid ⦄)
@@ -86,7 +86,7 @@ info: Try this:
 #guard_msgs in
 example (x : U32) (h1 : x.val + 1 ≤ U32.max) (h2 : x.val + 2 ≤ U32.max) :
     callFThenG (fun a => a + 1#u32) (fun b => b + 1#u32) x ⦃ y => y.val = x.val + 2 ⦄ := by
-  progress*? +inferPost
+  step*? +inferPost
 
 def _root_.Aeneas.Std.Slice.mapM  {α β} (f : α → Result β) (x : Slice α) : Result (Slice β) :=
   match h : x.val.mapM f with
@@ -94,7 +94,7 @@ def _root_.Aeneas.Std.Slice.mapM  {α β} (f : α → Result β) (x : Slice α) 
   | fail e => fail e
   | div    => div
 
-@[progress]
+@[step]
 theorem _root_.Aeneas.Std.Slice.mapM_spec {α β} {f : α → Result β} {s : Slice α} {post : Nat → β → Prop}
     (hf : ∀ i (hi : i < s.len), f s[i] ⦃ post i ⦄) :
     s.mapM f ⦃ s' => s'.len = s.len ∧ ∀ i (hi : i < s'.len), post i s'[i] ⦄ := by
@@ -121,6 +121,6 @@ example (s : Slice U32) (h : ∀ i (hi : i < s.len), s[i] < U32.max) :
     ∀ i (hi₁ : i < s.len) (hi₂ : i < s'.len), s'[i].val = s[i].val + 1
     ⦄ := by
   unfold callSlicemapM
-  progress*? +inferPost
+  step*? +inferPost
 
 end higher_order

@@ -233,15 +233,6 @@ let lean_gen_lakefile = ref false
     they don't panic. *)
 let test_unit_functions = ref false
 
-(** If true, insert tests in the generated files to check that the unit
-    functions normalize to [Success _].
-
-    For instance, in F* it generates code like this:
-    {[
-      let _ = assert_norm (FUNCTION () = Success ())
-    ]} *)
-let test_trans_unit_functions = ref false
-
 (** If [true], use decreases clauses/termination measures for all the recursive
     definitions.
 

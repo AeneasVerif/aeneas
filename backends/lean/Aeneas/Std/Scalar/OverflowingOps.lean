@@ -16,7 +16,7 @@ def UScalar.overflowing_add {ty} (x y : UScalar ty) : UScalar ty × Bool :=
 
 def IScalar.overflowing_add (ty : IScalarTy) (x y : IScalar ty) : IScalar ty × Bool :=
   (⟨ BitVec.ofInt _ (x.val + y.val) ⟩,
-     ¬ (-2^(ty.numBits -1) ≤ x.val + y.val ∧ x.val + y.val < 2^ty.numBits))
+     ¬ (-2^(ty.numBits -1) ≤ x.val + y.val ∧ x.val + y.val < 2^(ty.numBits-1)))
 
 /- [core::num::{u8}::overflowing_add] -/
 uscalar def core.num.«%S».overflowing_add := @UScalar.overflowing_add .«%S»
@@ -55,7 +55,7 @@ theorem UScalar.overflowing_add_eq {ty} (x y : UScalar ty) :
       omega
     . omega
 
-uscalar @[progress_pure overflowing_add x y]
+uscalar @[step_pure overflowing_add x y]
 theorem core.num.«%S».overflowing_add_eq (x y : «%S») :
   let z := overflowing_add x y
   if x.val + y.val > UScalar.max .«%S» then z.fst.val + UScalar.size .«%S» = x.val + y.val ∧ z.snd = true

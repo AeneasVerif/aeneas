@@ -1,5 +1,6 @@
-//@ [!borrow-check] aeneas-args=-test-trans-units
 //@ [coq,fstar] subdir=misc
+#![feature(register_tool)]
+#![register_tool(verify)]
 //! The examples from the ICFP 2022 submission, all in one place.
 
 // 2.1
@@ -7,6 +8,7 @@ pub fn ref_incr(x: &mut i32) {
     *x = *x + 1;
 }
 
+#[verify::test]
 pub fn test_incr() {
     let mut x = 0i32;
     ref_incr(&mut x);
@@ -22,6 +24,7 @@ pub fn choose<'a, T>(b: bool, x: &'a mut T, y: &'a mut T) -> &'a mut T {
     }
 }
 
+#[verify::test]
 pub fn test_choose() {
     let mut x = 0;
     let mut y = 0;
@@ -67,6 +70,7 @@ pub fn sum(l: &List<i32>) -> i32 {
     }
 }
 
+#[verify::test]
 pub fn test_nth() {
     let mut l = Cons(1, Box::new(Cons(2, Box::new(Cons(3, Box::new(Nil))))));
     let x = list_nth_mut(&mut l, 2);

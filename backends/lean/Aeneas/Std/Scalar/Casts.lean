@@ -1,5 +1,5 @@
 import Aeneas.Std.Scalar.Core
-import Aeneas.ScalarTac
+import Aeneas.Tactic.Solver.ScalarTac
 import Mathlib.Data.BitVec
 
 namespace Aeneas.Std
@@ -14,7 +14,7 @@ The reference semantics are here: https://doc.rust-lang.org/reference/expression
 -/
 
 /-- When casting between unsigned integers, we truncate or **zero**-extend the integer. -/
-@[progress_pure_def]
+@[step_pure_def]
 def UScalar.cast {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) : UScalar tgt_ty :=
   -- This truncates the integer if the numBits is smaller
   ⟨ x.bv.zeroExtend tgt_ty.numBits ⟩
@@ -23,13 +23,13 @@ def UScalar.cast {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) 
 
    When casting from an unsigned integer to a signed integer, we truncate or **zero**-extend.
 -/
-@[progress_pure_def]
+@[step_pure_def]
 def UScalar.hcast {src_ty : UScalarTy} (tgt_ty : IScalarTy) (x : UScalar src_ty) : IScalar tgt_ty :=
   -- This truncates the integer if the numBits is smaller
   ⟨ x.bv.zeroExtend tgt_ty.numBits ⟩
 
 /-- When casting between signed integers, we truncate or **sign**-extend. -/
-@[progress_pure_def]
+@[step_pure_def]
 def IScalar.cast {src_ty : IScalarTy} (tgt_ty : IScalarTy) (x : IScalar src_ty) : IScalar tgt_ty :=
   ⟨ x.bv.signExtend tgt_ty.numBits ⟩
 
@@ -37,7 +37,7 @@ def IScalar.cast {src_ty : IScalarTy} (tgt_ty : IScalarTy) (x : IScalar src_ty) 
 
    When casting from a signed integer to a unsigned integer, we truncate or **sign**-extend.
 -/
-@[progress_pure_def]
+@[step_pure_def]
 def IScalar.hcast {src_ty : IScalarTy} (tgt_ty : UScalarTy) (x : IScalar src_ty) : UScalar tgt_ty :=
   ⟨ x.bv.signExtend tgt_ty.numBits ⟩
 
@@ -153,14 +153,14 @@ def IScalar.hcast_inBounds_spec {src_ty : IScalarTy}
   simp only [this, sup_eq_left, ge_iff_le]
   scalar_tac
 
-@[simp, progress_pure cast_fromBool ty b]
+@[simp, step_pure cast_fromBool ty b]
 theorem UScalar.cast_fromBool_val_eq ty (b : Bool) : (UScalar.cast_fromBool ty b).val = b.toNat := by
   simp only [cast_fromBool]
   split <;> simp only [val, *] <;> simp
   have := ty.numBits_nonzero
   omega
 
-@[simp, progress_pure cast_fromBool ty b]
+@[simp, step_pure cast_fromBool ty b]
 theorem IScalar.cast_fromBool_val_eq ty (b : Bool) :(IScalar.cast_fromBool ty b).val = b.toInt := by
   simp only [cast_fromBool]
   split <;> simp only [val, *] <;> simp
@@ -210,59 +210,59 @@ theorem UScalar.cast_val_eq {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScal
 
 -- TODO: factor our the casts
 
-@[simp, scalar_tac_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_scalar_safe]
 theorem U8.cast_U16_val_eq (x : U8) : (UScalar.cast .U16 x).val = x.val := by
   simp [UScalar.cast_val_eq]; scalar_tac
 
-@[simp, scalar_tac_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_scalar_safe]
 theorem U8.cast_U32_val_eq (x : U8) : (UScalar.cast .U32 x).val = x.val := by
   simp [UScalar.cast_val_eq]; scalar_tac
 
-@[simp, scalar_tac_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_scalar_safe]
 theorem U8.cast_U64_val_eq (x : U8) : (UScalar.cast .U64 x).val = x.val := by
   simp [UScalar.cast_val_eq]; scalar_tac
 
-@[simp, scalar_tac_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_scalar_safe]
 theorem U8.cast_U128_val_eq (x : U8) : (UScalar.cast .U128 x).val = x.val := by
   simp [UScalar.cast_val_eq]; scalar_tac
 
-@[simp, scalar_tac_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_scalar_safe]
 theorem U8.cast_Usize_val_eq (x : U8) : (UScalar.cast .Usize x).val = x.val := by
   simp [UScalar.cast_val_eq]; cases System.Platform.numBits_eq <;> simp [*] <;> scalar_tac
 
-@[simp, scalar_tac_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_scalar_safe]
 theorem U16.cast_U32_val_eq (x : U16) : (UScalar.cast .U32 x).val = x.val := by
   simp [UScalar.cast_val_eq]; scalar_tac
 
-@[simp, scalar_tac_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_scalar_safe]
 theorem U16.cast_U64_val_eq (x : U16) : (UScalar.cast .U64 x).val = x.val := by
   simp [UScalar.cast_val_eq]; scalar_tac
 
-@[simp, scalar_tac_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_scalar_safe]
 theorem U16.cast_U128_val_eq (x : U16) : (UScalar.cast .U128 x).val = x.val := by
   simp [UScalar.cast_val_eq]; scalar_tac
 
-@[simp, scalar_tac_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_scalar_safe]
 theorem U16.cast_Usize_val_eq (x : U16) : (UScalar.cast .Usize x).val = x.val := by
   simp [UScalar.cast_val_eq]; cases System.Platform.numBits_eq <;> simp [*] <;> scalar_tac
 
-@[simp, scalar_tac_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_scalar_safe]
 theorem U32.cast_U64_val_eq (x : U32) : (UScalar.cast .U64 x).val = x.val := by
   simp [UScalar.cast_val_eq]; scalar_tac
 
-@[simp, scalar_tac_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_scalar_safe]
 theorem U32.cast_U128_val_eq (x : U32) : (UScalar.cast .U128 x).val = x.val := by
   simp [UScalar.cast_val_eq]; scalar_tac
 
-@[simp, scalar_tac_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_scalar_safe]
 theorem U32.cast_Usize_val_eq (x : U32) : (UScalar.cast .Usize x).val = x.val := by
   simp [UScalar.cast_val_eq]; cases System.Platform.numBits_eq <;> simp [*] <;> scalar_tac
 
-@[simp, scalar_tac_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_scalar_safe]
 theorem U64.cast_U128_val_eq (x : U64) : (UScalar.cast .U128 x).val = x.val := by
   simp [UScalar.cast_val_eq]; scalar_tac
 
-@[simp, scalar_tac_simps, simp_scalar_simps]
+@[simp, scalar_tac_simps, simp_scalar_safe]
 theorem UScalar.cast_val_mod_pow_greater_numBits_eq {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) (h : src_ty.numBits ≤ tgt_ty.numBits) :
   (cast tgt_ty x).val = x.val := by
   simp [UScalar.cast_val_eq]

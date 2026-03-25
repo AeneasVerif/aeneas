@@ -16,6 +16,7 @@ package «tests» {}
 @[default_target] lean_lib Bitwise
 @[default_target] lean_lib BlanketImpl
 @[default_target] lean_lib Builtin
+@[default_target] lean_lib Issue804ClosureReturnRef
 @[default_target] lean_lib Closures
 @[default_target] lean_lib Constants
 @[default_target] lean_lib ConstantsLean
@@ -38,6 +39,7 @@ package «tests» {}
 @[default_target] lean_lib Issue194RecursiveStructProjector
 @[default_target] lean_lib Issue270LoopList
 @[default_target] lean_lib Issue440TypeError
+@[default_target] lean_lib Issue789LoopCtxMatch
 @[default_target] lean_lib Issue803SelfInArray
 @[default_target] lean_lib Issue807MissingSymbolicValue
 @[default_target] lean_lib Issue815GlobalReferencingFallibleGlobal
@@ -59,12 +61,14 @@ package «tests» {}
 @[default_target] lean_lib Order
 @[default_target] lean_lib Paper
 @[default_target] lean_lib PoloniusList
+@[default_target] lean_lib RustBorrowCheckIssues
 @[default_target] lean_lib Print
 @[default_target] lean_lib Range
 @[default_target] lean_lib RenameAttribute
 @[default_target] lean_lib Scalars
 @[default_target] lean_lib Slices
 @[default_target] lean_lib Static
+@[default_target] lean_lib StepBy
 @[default_target] lean_lib StringChars
 @[default_target] lean_lib SwitchTest
 @[default_target] lean_lib Traits

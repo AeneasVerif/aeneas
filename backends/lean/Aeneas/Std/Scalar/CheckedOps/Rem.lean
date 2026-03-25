@@ -44,7 +44,7 @@ theorem core.num.checked_rem_UScalar_bv_spec {ty} (x y : UScalar ty) :
     simp [this, UScalar.rem, hnz] at hz
     simp [hz, hnz']
 
-uscalar @[progress_pure «%S».checked_rem x y]
+uscalar @[step_pure «%S».checked_rem x y]
 theorem «%S».checked_rem_bv_spec (x y : «%S») :
   match «%S».checked_rem x y with
   | some z => y.val ≠ 0 ∧ z.val = x.val % y.val ∧ z.bv = x.bv % y.bv
@@ -72,7 +72,7 @@ theorem core.num.checked_rem_IScalar_bv_spec {ty} (x y : IScalar ty) :
     simp [this, IScalar.rem, hnz] at hz
     simp [*]
 
-iscalar @[progress_pure «%S».checked_rem x y]
+iscalar @[step_pure «%S».checked_rem x y]
 theorem «%S».checked_rem_bv_spec (x y : «%S») :
   match core.num.checked_rem_IScalar x y with
   | some z => y.val ≠ 0 ∧ z.val = Int.tmod x.val y.val ∧ z.bv = BitVec.srem x.bv y.bv

@@ -1,7 +1,7 @@
 import Aeneas.Std.Scalar.Core
 import Aeneas.Std.Scalar.Misc
 import Aeneas.Std.Scalar.Elab
-import Aeneas.ScalarTac
+import Aeneas.Tactic.Solver.ScalarTac
 import Mathlib.Data.BitVec
 
 namespace Aeneas.Std
@@ -117,11 +117,11 @@ theorem IScalar.rem_spec {ty} (x : IScalar ty) {y : IScalar ty} (hzero : y.val �
   · intros x' h
     exact h.1
 
-uscalar @[progress] theorem «%S».rem_spec (x : «%S») {y : «%S»} (hnz : y.val ≠ 0) :
+uscalar @[step] theorem «%S».rem_spec (x : «%S») {y : «%S»} (hnz : y.val ≠ 0) :
   x % y ⦃ z => (↑z : Nat) = ↑x % ↑y ⦄ :=
   UScalar.rem_spec x hnz
 
-iscalar @[progress] theorem «%S».rem_spec (x : «%S») {y : «%S»} (hnz : y.val ≠ 0) :
+iscalar @[step] theorem «%S».rem_spec (x : «%S») {y : «%S»} (hnz : y.val ≠ 0) :
   x % y ⦃ z => (↑z : Int) = Int.tmod ↑x ↑y ⦄ :=
   IScalar.rem_spec x hnz
 
