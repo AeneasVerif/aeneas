@@ -254,9 +254,15 @@ def updateStepGrindState (state : StepGrindState) (config : Config) (mvarId : MV
 
     Returns `true` if the precondition was solved, `false` otherwise.
     On failure, all MetaM state changes are reverted (via `observing?`). -/
-def dischargeWithGrindState (state : StepGrindState) (precondMVarId : MVarId)
-    : MetaM Bool := do
+def dischargeWithGrindState (state : StepGrindState) (config : Config)
+    (precondMVarId : MVarId) : MetaM Bool := do
   let result ← observing? do
+    /- First, internalize any fvars the e-graph hasn't seen yet.
+      The precondition goal's local context may contain hypotheses introduced
+      after the last `StepState.update` (e.g., by `split_ifs`, `cases`, or
+      tactic-generated intermediate goals). This is unlikely (and would be a bug)
+      but something to account for. -/
+    let state ← updateStepGrindState state config precondMVarId
     let mvarDecl ← precondMVarId.getDecl
     let goalState : GoalState :=
       { state.goalState with

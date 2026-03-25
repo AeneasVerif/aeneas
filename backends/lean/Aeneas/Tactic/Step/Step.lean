@@ -1025,7 +1025,7 @@ def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Option 
       trace[Step] "Precondition solved by preprocessing!"
     | some _ =>
       let mvarId ← getMainGoal
-      let solved ← Step.dischargeWithGrindState gs mvarId
+      let solved ← Step.dischargeWithGrindState gs config mvarId
       unless solved do throwError "grind discharge failed"
   let solvePreconditionTac (gs? : Option Step.StepGrindState) : TacticM Unit :=
     withMainContext do
