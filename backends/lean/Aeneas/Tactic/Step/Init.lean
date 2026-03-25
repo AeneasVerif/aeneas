@@ -93,15 +93,75 @@ structure Config where
   canonHeartbeats : Nat := 1000
   /-- Should we use non-linear arithmetic lemmas when calling `grind`? See `Aeneas.Grind.AGrindConfig`. -/
   nla : Bool := true
+  /-- Thread a grind state through `step*` calls, reusing simp caches, the e-graph, and
+      derived facts across iterations. When `false`, each `step` creates a fresh grind
+      call (current behavior). -/
+  threadGrindState : Bool := true
+  /-- Number of grind preprocessing iterations after internalizing each proposition hypothesis.
+      This is the N in `(solvers <|> instantiate [<|> splitNext <|> mbtc]).loop N`. -/
+  grindPreprocessIters : Nat := 3
+  /-- Allow case splitting (and mbtc) during grind preprocessing. Default `false` because
+      case splits create subgoals and mbtc is useless without case splitting. -/
+  grindPreprocessSplit : Bool := false
+  /-- Run the preprocessing loop (assertAll + solvers) after internalizing each proposition
+      hypothesis. When `false`, hypotheses are added to the e-graph but satellite solvers
+      and e-matching (`instantiate`) are not run until discharge time. -/
+  preprocessGrind : Bool := false
 deriving Repr
 
 def Config.toGrindConfig (cfg : Config) : Grind.Config :=
   let { async := _, assumTac := _, inferGhostVars := _, scalarTac := _, simpStar := _,
         grind := _, withGroundSimprocs := _, nla := _,
+        threadGrindState := _, grindPreprocessIters := _, grindPreprocessSplit := _,
+        preprocessGrind := _,
         splits, ematch, splitMatch, splitIte, splitIndPred, funext, gen, instances, canonHeartbeats } := cfg
   { splits, ematch, splitMatch, splitIte, splitIndPred, funext, gen, instances, canonHeartbeats }
 
 declare_option_config_elab Config elabPartialConfig aeneas.step
+
+/-! # Step State (threaded through `step*`) -/
+
+/-- State threaded through `step*` iterations when `threadGrindState = true`.
+    Contains the grind state layers needed to resume `GrindM` operations. -/
+structure StepGrindState where
+  /-- GrindM-level state (caches: simp state, congruence theorems, hash-consing) -/
+  grindState : Grind.State
+  /-- Sym-level state (hash-consing, inferType cache, congrInfo cache).
+      Must be preserved alongside `grindState` — `GrindM.run` creates a fresh
+      `Sym.State` each time, so without explicit save/restore the e-graph's
+      pointer-equality-based proof reconstruction breaks. -/
+  symState : Lean.Meta.Sym.State
+  /-- Sym-level context (hash-consed SharedExprs: True, False, 0, etc.).
+      Must be preserved across runs — the e-graph uses pointer equality on
+      these expressions, so recreating them (via a new `SymM.run`) breaks lookups. -/
+  symCtx : Lean.Meta.Sym.Context
+  /-- Grind-level context (config, simpMethods, extensions, etc.).
+      Must be preserved across runs — rebuilt `Grind.Context` may produce
+      structurally equal but pointer-different internal values. -/
+  grindCtx : Grind.Context
+  /-- Grind methods reference (propagators, etc.).
+      Must be preserved across runs — contains IO.Refs that the e-graph depends on. -/
+  methodsRef : Grind.MethodsRef
+  /-- The knowledge base: e-graph, accumulated facts, e-matching state.
+      Decoupled from any MVarId — can be shared across goals. -/
+  goalState : Grind.GoalState
+  /-- Whether preprocessing derived a contradiction during internalization.
+      If `true`, the e-graph already contains `False` — discharge can succeed
+      trivially on any precondition. -/
+  contradiction : Bool := false
+  /-- Parameters (config, simp context, extensions, etc.) -/
+  params : Grind.Params
+  /-- Cached Aeneas simp context (expensive to build — cached at init). -/
+  simpCtx : Simp.Context
+  /-- Cached Aeneas simprocs array (expensive to build — cached at init). -/
+  simprocs : Simp.SimprocsArray
+
+/-- Top-level state threaded through `step*` iterations.
+    When `threadGrindState = false`, `grindState?` stays `none` and
+    every `step` call creates a fresh grind context. -/
+structure StepState where
+  /-- Optional grind state. `none` when threading is disabled or not yet initialized. -/
+  grindState? : Option StepGrindState := none
 
 /-! # Attribute: `step` -/
 

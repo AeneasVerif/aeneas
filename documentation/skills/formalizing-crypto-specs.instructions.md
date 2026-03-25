@@ -1,6 +1,6 @@
 ---
 name: formalizing-crypto-specs
-description: Formalizing crypto algorithms from NIST/RFC specs into executable Lean definitions
+description: How to formalize cryptographic algorithms from standards into pure Lean specifications
 ---
 
 # Formalizing Cryptographic Specifications — Skill File

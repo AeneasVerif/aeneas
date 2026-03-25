@@ -889,10 +889,6 @@ theorem try_resize_spec {α : Type} (hm : HashMap α) (hInv : hm.inv):
       --
       ring_nf at *
       scalar_tac
-    . -- Pre 2
-      fsimp_all [inv, inv_load]
-      unfold max_load_factor at * -- TODO: this is really annoying
-      omega
     . -- End of the proof
       have : slots_t_inv hm.slots := by fsimp_all [inv] -- TODO
       have : (Slots.al_v hm.slots).length ≤ Usize.max := by fsimp_all [inv, al_v, v, Slots.al_v]; scalar_tac
