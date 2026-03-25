@@ -144,24 +144,28 @@ private def progressPureDefDeprecatedAttrImpl : AttributeImpl where
 initialize _progressPureDefDeprecatedAttr : Unit ←
   registerBuiltinAttribute progressPureDefDeprecatedAttrImpl
 
-/-- **Deprecated:** Use `@[step_simps]` instead. -/
-initialize _progressSimpsDeprecatedAttr : SimpExtension ←
-  registerSimpAttr `progress_simps "\
-    Deprecated: use `step_simps` instead."
+/-- **Deprecated:** Use `@[step_simps]` instead. Forwards to `step_simps`. -/
+initialize do
+  mkSimpAttr `progress_simps
+    "Deprecated: use `step_simps` instead. Forwards to `step_simps`."
+    Step.stepSimpExt
 
-/-- **Deprecated:** Use `@[step_pre_simps]` instead. -/
-initialize _progressPreSimpsDeprecatedAttr : SimpExtension ←
-  registerSimpAttr `progress_pre_simps "\
-    Deprecated: use `step_pre_simps` instead."
+/-- **Deprecated:** Use `@[step_pre_simps]` instead. Forwards to `step_pre_simps`. -/
+initialize do
+  mkSimpAttr `progress_pre_simps
+    "Deprecated: use `step_pre_simps` instead. Forwards to `step_pre_simps`."
+    Step.stepPreSimpExt
 
-/-- **Deprecated:** Use `@[step_post_simps]` instead. -/
-initialize _progressPostSimpsDeprecatedAttr : SimpExtension ←
-  registerSimpAttr `progress_post_simps "\
-    Deprecated: use `step_post_simps` instead."
+/-- **Deprecated:** Use `@[step_post_simps]` instead. Forwards to `step_post_simps`. -/
+initialize do
+  mkSimpAttr `progress_post_simps
+    "Deprecated: use `step_post_simps` instead. Forwards to `step_post_simps`."
+    Step.stepPostSimpExt
 
-/-- **Deprecated:** Use `@[step_post_simps_proc]` instead. -/
-initialize _progressPostSimpsProcDeprecatedAttr : Simp.SimprocExtension ←
-  Simp.registerSimprocAttr `progress_post_simps_proc "\
-    Deprecated: use `step_post_simps_proc` instead." none
+/-- **Deprecated:** Use `@[step_post_simps_proc]` instead. Forwards to `step_post_simps_proc`. -/
+initialize do
+  Simp.mkSimprocAttr `progress_post_simps_proc
+    "Deprecated: use `step_post_simps_proc` instead. Forwards to `step_post_simps_proc`."
+    Step.stepPostSimprocExt `Aeneas.Deprecated.progressPostSimpsProcDeprecated
 
 end Aeneas.Deprecated
