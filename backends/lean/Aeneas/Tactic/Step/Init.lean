@@ -100,8 +100,7 @@ structure Config where
   /-- Number of grind preprocessing iterations after internalizing each proposition hypothesis.
       This is the N in `(solvers <|> instantiate [<|> splitNext <|> mbtc]).loop N`. -/
   grindPreprocessIters : Nat := 3
-  /-- Allow case splitting (and mbtc) during grind preprocessing. Default `false` because
-      case splits create subgoals and mbtc is useless without case splitting. -/
+  /-- Allow case splitting (and mbtc) during grind preprocessing. -/
   grindPreprocessSplit : Bool := false
   /-- Run the preprocessing loop (assertAll + solvers) after internalizing each proposition
       hypothesis. When `false`, hypotheses are added to the e-graph but satellite solvers
