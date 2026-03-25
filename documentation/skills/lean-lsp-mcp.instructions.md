@@ -1,5 +1,5 @@
 ---
-name: lean-lsp-tool
+name: lean-lsp-mcp
 description: Lean LSP MCP tools for interactive Lean proof development — tool reference, workflows, and examples
 ---
 
