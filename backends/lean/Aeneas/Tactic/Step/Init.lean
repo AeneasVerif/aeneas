@@ -896,6 +896,12 @@ initialize stepPureDefAttribute : StepPureDefSpecAttr ← do
   registerBuiltinAttribute attrImpl
   pure { attr := attrImpl }
 
+open Tactic
+
+/-! # Logging Utils -/
+def traceGoalWithNode (msg : String) : TacticM Unit := Utils.traceGoalWithNode `Step msg
+
 end Step
+
 
 end Aeneas

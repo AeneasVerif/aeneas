@@ -34,7 +34,6 @@ def eq_imp_prettyMonadEq {α : Type u} {β : Type v} (x : Std.Result α) (y : β
   unfold prettyMonadEq
   constructor
 
-def traceGoalWithNode (msg : String) : TacticM Unit := Utils.traceGoalWithNode `Step msg
 
 -- TODO: the scalar types annoyingly often get reduced when we use the step
 -- tactic. We should find a way of controling reduction. For now we use rewriting
@@ -701,7 +700,7 @@ def stepWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
         let (head, _) := goalTy.withApp fun f a => (f, a)
         if head.isMVar then
           commitIfNoEx do
-            let goal ← inferPost mg.goal
+            let goal ← inferPost
             setGoals [goal]
             evalTactic (←`(tactic|agrind))
             match ← getGoals with

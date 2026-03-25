@@ -1,21 +1,23 @@
 import Lean
 import AeneasMeta.Utils
 import Aeneas.Tactic.Solver.Grind.Init
+import Aeneas.Tactic.Step.Init
 
 namespace Aeneas
 
 namespace Step
 
-open Lean Elab Term Meta Tactic
+open Lean Elab Meta Tactic TacticM
 
 /-- Infer a postcondition for a goal of the form `?post args...` of the form
     `fun x₁ ... xₙ => ∃ vars..., x₁ = a₁ ∧ ... ∧ xₙ = aₙ ∧ props` and assign it to the postcondition metavariable.
 
     `eliminate` controls which free variables to try clearing from the context before collecting
     escaping variables -/
-def inferPost (goal : MVarId) (eliminate : LocalDecl → Bool := fun _ => true) :
-    MetaM MVarId := do
-  goal.withContext do
+def inferPost (eliminate : LocalDecl → Bool := fun _ => true) :
+    TacticM MVarId := withTraceNode `Step (fun _ => do pure m!"inferPost") <| withMainContext do
+  traceGoalWithNode "metavariable context"
+  let goal ← getMainGoal
   let goalTy ← instantiateMVars (← goal.getType)
 
   -- The goal should be of the form `?post args...`
@@ -48,7 +50,7 @@ def inferPost (goal : MVarId) (eliminate : LocalDecl → Bool := fun _ => true) 
       relevantFVars.any fun fv => decl.type.find? (·.isFVarOf fv) |>.isSome
 
     -- Build postcondition: fun x₁ ... xₙ => ∃ vars..., x₁ = a₁ ∧ ... ∧ xₙ = aₙ ∧ props
-    let argTys ← args.mapM inferType
+    let argTys ← liftMetaM (args.mapM inferType)
     let declInfos : Array (Name × Expr) :=
       argTys.mapIdx fun (i : Nat) ty => (Name.mkSimple s!"x{i + 1}", ty)
     let postExpr ← withLocalDeclsDND declInfos fun resExprs => do
@@ -76,13 +78,13 @@ def inferPost (goal : MVarId) (eliminate : LocalDecl → Bool := fun _ => true) 
           mkAppOptM ``Exists #[none, some pred]
         ) body
       mkLambdaFVars resExprs existsBody
+    trace[Step] m!"inferred postcondition: {←ppExpr postExpr}"
     postMVarId.assign postExpr
   return goal
 
 /-- Tactic that infers the postcondition and attempts to prove it with `grind` -/
 elab "infer_post" : tactic => do
-  let goal ← getMainGoal
-  let goal ← inferPost goal
+  let goal ← inferPost
   replaceMainGoal [goal]
   evalTactic (←`(tactic|agrind))
 
