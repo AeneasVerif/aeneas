@@ -1,235 +1,169 @@
 ---
 name: lean-lsp-tool
-description: lean_lsp.py REPL for interactive Lean proof development including commands, workflows, and examples
+description: Lean LSP MCP tools for interactive Lean proof development — tool reference, workflows, and examples
 ---
 
-# Lean LSP Tool — Skill File for AI Agents
+# Lean LSP MCP — Skill File for AI Agents
 
-## IMPORTANT: Always Use This Tool for Lean Proofs
+/- Adapted from the lean-lsp-mcp README (MIT License, (c) Oliver Dressler).
+   Source: https://github.com/oOo0oOo/lean-lsp-mcp
+   MIT License is compatible with this project's Apache-2.0 License. -/
 
-When working on Lean proofs in an Aeneas project, **always** start a `lean_lsp.py` REPL session. It gives you:
-- Incremental checking (no need to rebuild the entire file on each change)
-- Proof goal context at any line (what remains to be proved)
-- Diagnostics (errors, warnings) without leaving the terminal
-- Type information via hover
-- Batch edits that trigger only one re-elaboration
+## IMPORTANT: Always Use Lean MCP Tools for Lean Proofs
 
-Without this tool, you are flying blind — you cannot see proof goals, you cannot tell if a tactic worked, and you must recompile the whole file after every change.
+When working on Lean proofs in an Aeneas project, **always** use the lean-lsp-mcp
+tools. These tools are available directly in your tool palette — you do NOT need to
+start a subprocess, launch a REPL, or run any setup commands.
 
-## Starting a Session
+**If the tools are not in your palette** (i.e., you cannot find `lean_goal`,
+`lean_diagnostic_messages`, etc. among your available tools), tell the user:
+> "The lean-lsp-mcp tools are not available in my tool palette. These tools are
+> essential for efficient Lean proof development: they provide interactive feedback
+> (proof goals, diagnostics, type information) without rebuilding the project.
+> Without them, the only option is `lake build`, which can easily take minutes on
+> a big file and does not provide intermediate goal states — making iterative proof
+> development impractical. Please install the MCP server (`pip install lean-lsp-mcp` or
+> `uvx lean-lsp-mcp`) and configure it in your MCP client settings. See
+> https://github.com/oOo0oOo/lean-lsp-mcp for setup instructions."
+Do NOT proceed with proof work without these tools — you need them.
 
-```bash
-# From the Lean project root (where lakefile.toml lives):
-python3 /path/to/aeneas/scripts/lean_lsp.py --repl --json --log /tmp/lean_lsp.log
-```
+The tools give you:
+- Proof goal context at any position (`lean_goal`)
+- Diagnostics (errors, warnings) without rebuilding (`lean_diagnostic_messages`)
+- Type information via hover (`lean_hover_info`)
+- Try multiple tactics without modifying the file (`lean_multi_attempt`)
+- Code actions for `step*?` suggestions (`lean_code_actions`)
+- External search tools (LeanSearch, Loogle, Lean Finder, Hammer, State Search)
+- Verification of axiom usage (`lean_verify`)
 
-Always use `--json` — it gives you one JSON object per line, easy to parse programmatically. Every response has `"status": "ok"` or `"status": "error"`.
+Without these tools, you are flying blind — you cannot see proof goals, you cannot
+tell if a tactic worked, and you must recompile the whole file after every change.
 
-**`--log` is MANDATORY.** Always pass `--log <path>` to record all commands and results
-with timestamps. This is required for monitoring agent activity — without it, there is
-no way to verify that agents are actually using the LSP or to diagnose workflow issues.
-Use a unique log path per agent (e.g., `/tmp/lean_lsp_<agent-name>.log`).
+**Do NOT use `lake build` to iterate on proofs.** The MCP tools give incremental
+feedback in seconds. `lake build` rebuilds from scratch and can easily take minutes
+on a big file. Only use `lake build` once at the very end to confirm the final result.
 
-If driving from a subprocess (piped stdin), prompts are automatically suppressed.
+**NEVER run `lake clean` or delete `.lake/`.** This forces a full rebuild (30+ min).
+Fix root causes instead.
 
-### Log Format
+## Tool Reference
 
-Each command is logged as `[timestamp] CMD: <raw command>` and each result as
-`[timestamp] RES: status=ok, errors=N, elapsed=Xs`. Session start/end are marked
-with `====` separators. The log is append-mode and line-buffered (entries appear
-immediately).
+### File and Goal Inspection (read-only — use freely)
+
+| Tool | Purpose | Key Parameters |
+|---|---|---|
+| `lean_goal` | **THE MOST IMPORTANT TOOL** — get proof goals at a position | `file_path`, `line`, optional `column` |
+| `lean_diagnostic_messages` | Get errors/warnings/infos for a file | `file_path`, optional `severity`, `start_line`, `end_line` |
+| `lean_file_outline` | Get imports and declarations with type signatures | `file_path` |
+| `lean_hover_info` | Get type and docs for a symbol | `file_path`, `line`, `column` |
+| `lean_term_goal` | Get expected type at a position | `file_path`, `line`, optional `column` |
+| `lean_completions` | Get autocompletions (use on incomplete code) | `file_path`, `line`, `column` |
+| `lean_declaration_file` | Find where a symbol is declared | `file_path`, `symbol` |
+| `lean_references` | Find all references to a symbol | `file_path`, `line`, `column` |
+| `lean_code_actions` | Get quick fixes and "Try This" suggestions | `file_path`, `line` |
+| `lean_run_code` | Run a self-contained Lean code snippet (must include imports) | `code` |
+| `lean_verify` | Check axioms used by a theorem | `file_path`, `theorem_name` |
+
+### Tactic Exploration (does NOT modify the file)
+
+| Tool | Purpose | Key Parameters |
+|---|---|---|
+| `lean_multi_attempt` | **Try multiple tactics and see results** — does not modify the file | `file_path`, `line`, `snippets` (array of tactics) |
+
+`lean_multi_attempt` is extremely valuable: pass 3+ candidate tactics and see which
+ones close the goal (or make progress) — all without touching the file. Use this
+before committing to a tactic with `edit`.
+
+### File Modification
+
+| Tool | Purpose | Key Parameters |
+|---|---|---|
+| `lean_build` | Rebuild project and restart LSP | optional `clean`, `lean_project_path` |
+
+**Important:** The MCP server manages a single LSP session per project. When you
+edit a `.lean` file on disk (using `edit`/`create` tools), the LSP server picks up
+the change automatically (typically within a few seconds). You do NOT need to call
+`lean_build` after every edit — only call it when you need a full rebuild (e.g., after
+adding new imports that require recompilation).
+
+### External Search Tools (rate-limited)
+
+| Tool | Purpose | Rate Limit |
+|---|---|---|
+| `lean_leansearch` | Search Mathlib via natural language (leansearch.net) | 3 req/30s |
+| `lean_loogle` | Search Mathlib by type signature (loogle.lean-lang.org) | 3 req/30s |
+| `lean_leanfinder` | Semantic search by mathematical meaning (Lean Finder) | 10 req/30s |
+| `lean_state_search` | Find lemmas to close the current goal (premise-search.com) | 6 req/30s |
+| `lean_hammer_premise` | Get premise suggestions for automation tactics | 6 req/30s |
+| `lean_local_search` | Search local project + stdlib for declarations | No limit |
+
+**Use `lean_local_search` first** — it is fast, free, and confirms declarations exist
+before you try to use them. Use the external tools when you need Mathlib results or
+cannot find what you need locally.
+
+### Profiling
+
+| Tool | Purpose | Key Parameters |
+|---|---|---|
+| `lean_profile_proof` | Run `lean --profile` on a theorem — returns per-line timing | `file_path`, `line` |
+
+**Use sparingly** — profiling is slow. Only profile when a proof is taking too long
+and you need to identify the bottleneck.
 
 ## Core Workflow
 
-### 1. Open a file
-```
-open MyProject/Properties/Foo.lean
-```
-Response includes: line count, sorry positions, processing ranges. **Returns immediately**
-without waiting for full elaboration (~0.5s). Use `wait` after open to block until
-elaboration finishes.
+### 1. Edit the file on disk, then inspect goals
 
-```
-wait
-```
-Blocks until the entire file is elaborated. You can also `wait <line>` to block until
-a specific line is ready (but note: during import elaboration, Lean reports the entire
-file as one processing range, so `wait <line>` may not be faster than `wait` for files
-with heavy imports).
+The MCP tools operate on the file as it exists on disk. Your workflow is:
 
-### 2. Find what needs proving
-```
-sorry
-```
-Lists all `sorry` positions — these are your proof obligations.
+1. **Edit the `.lean` file** using the standard `edit`/`create` tools
+2. **Use `lean_goal`** to inspect the proof state (the LSP picks up the change)
+3. **Use `lean_diagnostic_messages`** to check for errors
 
-### 3. Inspect a proof goal
-```
-goal <line> [col]
-```
-Query the proof state at any line (1-indexed). Place it on the `sorry` line or on a tactic line to see what the goal looks like after that tactic. Default column is 4 (typical indent).
-
-### 4. Edit a line
-```
-edit <line> <new_tactic>
-```
-Replaces the line (preserving indentation), sends the change to the server, and waits for re-elaboration. Returns errors if any.
-
-### 5. Check the result
-```
-goal <line>
-errors
-```
-After editing, inspect the new goal or check if errors were resolved.
-
-### 6. Iterate until done
-Repeat steps 3–5: inspect goal → try a tactic → check result.
-
-## Complete Command Reference
-
-### File Operations
-| Command | Description |
-|---|---|
-| `open <file.lean>` | Open file (returns immediately, non-blocking) |
-| `update` | Re-read current file from disk |
-| `reread <file.lean>` | Re-read a different file from disk |
-| `save` | Write in-memory buffer to disk |
-| `diff` | Show unified diff (disk vs in-memory) |
-| `undo` | Revert to previous text state (batch = one undo step) |
-
-### Viewing and Searching
-| Command | Description |
-|---|---|
-| `show [start] [end]` | Show current file with line numbers (requires open file) |
-| `grep <pattern> [glob]` | Search current file, or project files if glob given |
-| `search <pattern> [glob]` | Search project `.lean` files (default: `**/*.lean`) |
-| `cat <file> [start] [end]` | Read another file with line numbers |
-| `ls [path]` | List directory contents |
-
-### Goal and Diagnostics
-| Command | Description |
-|---|---|
-| `goal <line> [col]` | Proof goal at position (1-indexed line, 0-indexed col) |
-| `diagnostics [line]` | All diagnostics, optionally filtered to a line |
-| `errors` | Errors only |
-| `warnings` | Warnings only |
-| `info <line>` | All diagnostics at a specific line |
-| `sorry` | List all sorry positions |
-| `hover <line> <col>` | Type/documentation at position |
-| `complete <line> <col>` | Available completions at position |
-| `definition <line> <col>` | Go to definition |
-
-### Editing
-| Command | Description |
-|---|---|
-| `edit <line> <content>` | Replace one line (preserves indent) |
-| `edit_range <start> <end> <content>` | Replace lines start..end (`\n` for newlines) |
-| `insert <after_line> <content>` | Insert after line (`\n` for newlines, 0=prepend) |
-| `delete <start> [end]` | Delete line(s) |
-| `replace "old" "new"` | Find-and-replace unique occurrence (escapes: `\"` `\\` `\n` `\t`) |
-| `replace_all "old" "new"` | Find-and-replace all occurrences |
-
-### Batch Editing (Critical for Multi-Line Changes)
-| Command | Description |
-|---|---|
-| `batch_start` | Start batch mode — edits modify text but skip re-elaboration |
-| `batch_end` | End batch — send all changes, wait for one re-elaboration |
-
-**Always use batch mode for multi-line edits.** Without it, each `edit` triggers a full re-elaboration cycle (potentially 30+ seconds each).
-
-### String-Based Editing (replace / replace_all)
-
-The `replace` and `replace_all` commands do content-based find-and-replace, similar to
-an external editor's find-and-replace. Both arguments are double-quoted strings.
-
-```
-replace "old text here" "new text here"
-replace_all "pattern" "replacement"
-```
-
-- `replace` requires **exactly one** occurrence — errors on 0 or >1 (safe, like surgical edit).
-  On >1 matches, the error includes **line numbers and context** for each match.
-- `replace_all` replaces **all** occurrences — errors on 0
-- Escapes inside quotes: `\"` (literal quote), `\\` (literal backslash), `\n` (newline), `\t` (tab)
-- Both work in batch mode
-
-**Prefer `replace` over line-number-based `edit`** when you know the content to change
-but not the exact line number. This is especially useful after multiple edits have
-shifted line numbers.
-
-### Status and Control
-| Command | Description |
-|---|---|
-| `status` | Current file, version, line count, elaboration state |
-| `wait [line]` | Block until elaboration finishes (optionally up to line) |
-| `check` | Wait for full elaboration, return all errors and warnings with messages |
-| `next_error` | Wait until a new error appears (or elaboration finishes with no new errors) |
-| `logs` | Server log messages |
-| `quit` | Exit |
-
-## Proof Development Strategy
-
-### The sorry-driven workflow
+### 2. The sorry-driven workflow
 
 1. **Start with sorry:** Write the theorem statement with `sorry` as the proof body
-2. **Open the file** and wait for elaboration
-3. **Query the goal** at the sorry line to see what needs to be proved
-4. **Replace sorry** with a tactic (e.g., `unfold foo`)
+2. **Use `lean_goal`** on the sorry line to see what needs to be proved
+3. **Use `lean_multi_attempt`** to try several tactics at once
+4. **Replace sorry** with the successful tactic (via `edit` tool)
 5. **Add sorry below** the tactic to pause and inspect the new goal
-6. **Repeat:** inspect goal → add next tactic → add sorry → inspect
+6. **Repeat:** `lean_goal` -> `lean_multi_attempt` -> `edit` -> `lean_goal`
 7. **Remove the final sorry** when the proof is complete
 
-### Example session (JSON mode)
+### 3. Check proof state — use lean_goal liberally
+
+`lean_goal` is your most important tool. Call it:
+- On sorry lines to see what needs to be proved
+- On tactic lines to see the state before/after the tactic
+- After every edit to verify the tactic did what you expected
+
+**Omit `column`** to see both `goals_before` (line start) and `goals_after` (line end)
+— this shows how the tactic transforms the proof state. "no goals" means the proof
+is complete at that point.
+
+### 4. Try multiple tactics before committing
+
+Use `lean_multi_attempt` to test tactics without modifying the file:
 
 ```
-open MyProject/Properties/Add.lean
-→ {"command":"open","status":"ok","lines":42,"sorry_lines":[{"line":35,"text":"sorry"}],"ready":false,"processing_ranges":[...],...}
-
-wait
-→ {"command":"wait","status":"ok","ready":true,"elapsed":15.2,"error_count":0,"warning_count":1}
-
-goal 35
-→ {"command":"goal","status":"ok","goals":["⊢ add_overflow a b ⦃ c => c.val = a.val + b.val ⦄"],...}
-
-edit 35 unfold add_overflow
-→ {"command":"edit","status":"ok","ready":true,"elapsed":2.1,"errors":[],...}
-
-goal 35
-→ {"command":"goal","status":"ok","goals":["⊢ a.val + b.val ≤ U32.max → ..."],...}
-
-insert 35 step
-→ {"command":"insert","status":"ok","ready":true,"elapsed":1.8,"errors":[],...}
-
-errors
-→ {"command":"errors","status":"ok","diagnostics":[],"count":0}
+lean_multi_attempt(
+  file_path="MyProject/Properties/Foo.lean",
+  line=42,
+  snippets=["agrind", "scalar_tac", "grind", "bv_tac 16", "simp [*]; agrind"]
+)
 ```
 
-### Batch edit example
+This returns the resulting goal state for each tactic. Pick the one that works best,
+then apply it with `edit`.
 
-```
-batch_start
-delete 35 37
-insert 34 unfold add_overflow\n  step\n  simp_all
-batch_end
-→ {"command":"batch_end","status":"ok","ready":true,"elapsed":3.2,"errors":[],...}
-```
+### 5. Verify a completed proof
 
-## Key Tips
+After finishing a proof:
 
-1. **Always use `--json`** for agent interaction — structured output, no ambiguity
-2. **Check `sorry` first** after opening — they mark your proof obligations
-3. **Use `goal` liberally** — it's fast (sub-second) and tells you exactly what remains
-4. **Use `hover`** to check types of terms you're unsure about
-5. **Use `batch_start`/`batch_end`** for multi-line edits — avoids N separate re-elaborations
-6. **Use `status`** to check if elaboration is still running or file is ready
-7. **Use `errors` after every edit** — if count is 0, your tactic worked
-8. **`edit` preserves indentation** — provide just the tactic text, not the leading spaces
-9. **`edit_range` and `insert` use exact content** — include indentation in the content
-10. **Use `\n` in content** for multi-line inserts: `insert 35 tactic1\n  tactic2\n  tactic3`
-11. **Use `replace` for content-based edits** — safer than `edit <line>` when line numbers shift
-12. **Stay within lean_lsp.py** — do all single-file editing and proof iteration inside the REPL. Do not escape to external editors + `lake build` loops. lean_lsp.py has all the editing commands you need (`edit`, `edit_range`, `insert`, `delete`, `replace`, `replace_all`, batch mode).
-13. **Use `save` to persist** — after completing a proof, `save` writes the buffer to disk. Use `diff` to review before saving.
-14. **Use `undo` to recover** — each edit is an undo step; a batch (`batch_start`...`batch_end`) is one undo step.
+1. **`lean_diagnostic_messages`** with `severity="error"` — must return empty
+2. **`lean_verify`** with the theorem name — checks axiom usage, flags suspicious
+   patterns (sorry, native_decide in non-test code, etc.)
+3. **`lean_build`** — one final build to confirm everything compiles cleanly
 
 ## Diagnosing Slow Incremental Replay — KEEPING LEAN REACTIVE IS CRITICAL
 
@@ -281,80 +215,34 @@ slowness — it compounds over many edit cycles.
    **Fix:** Use `have` to break large proofs into independently checkpointed sections,
    especially around expensive tactic calls.
 
-## MANDATORY: Use lean_lsp.py Instead of lake build
-
-**DO NOT use `lake build` to iterate on proofs.** It rebuilds everything from scratch (2–5 min per cycle). The LSP gives incremental feedback in 5–30 seconds. Your workflow must be:
-
-```
-open file → wait → sorry → goal → edit → errors → repeat
-```
-
-**`--log` is MANDATORY.** Every `lean_lsp.py` invocation MUST include `--log <path>`.
-Use a unique path per agent (e.g., `--log /tmp/lean_lsp_<agent-name>.log`).
-
-**Never** fall back to `lake build` loops. Only use `lake build` once at the very end to confirm the final result.
-
-**⛔ NEVER run `lake clean` or delete `.lake/`.** This forces a full rebuild (30+ min). Fix root causes instead.
-
 ## The step*? Workflow for Complex Function Bodies
 
 When developing a proof for a function body with many monadic calls:
 
-1. Write `step*?` as the tactic
-2. Run `info <line>` in the LSP — the "Try this: ..." diagnostic contains the expanded script
-3. Copy the expanded script into your proof and work through it
-4. Once the full proof works, try collapsing back into a single `step*`
-5. If `step*` works, use it (shorter is better). If not, keep the expanded form.
+1. Write `step*?` as the tactic (via `edit` tool on disk)
+2. Call `lean_code_actions` on that line — it returns the expanded proof script
+   as a "Try This" resolved edit
+3. Alternatively, call `lean_diagnostic_messages` on that line — the expansion
+   appears as an INFO diagnostic
+4. Copy the expanded script into your proof and work through it
+5. Once the full proof works, try collapsing back into a single `step*`
+6. If `step*` works, use it (shorter is better). If not, keep the expanded form.
 
 **How it works:** `step*?` generates a suggestion via `addTryThisTacticSeqSuggestion`.
-In VS Code this is a clickable code action. In `lean_lsp.py`, it appears as an INFO
-diagnostic at the `step*?` line — use `info <line>` or `diagnostics` to read it.
+`lean_code_actions` retrieves it as a resolved edit with the full tactic sequence.
 
-**Example workflow:**
-```
--- Step 1: Write step*? to generate script
-edit 42 step*?
+## Key Tips
 
--- Step 2: Read the "Try this:" suggestion
-info 42
--- → [INFO] line 42: Try this:
---     let* ⟨ x2, x2_post ⟩ ← U32.add_spec
---     let* ⟨ x3, x3_post ⟩ ← U32.add_spec
---     let* ⟨ ⟩ ← U32.add_spec
-
--- Step 3: Replace with the expanded script (using batch mode)
-batch_start
-delete 42
-insert 41 let* ⟨ x2, x2_post ⟩ ← U32.add_spec\n  let* ⟨ x3, x3_post ⟩ ← U32.add_spec\n  let* ⟨ ⟩ ← U32.add_spec
-batch_end
-
--- Step 4: Once everything works, try collapsing
-edit 42 step*
-```
-
-## JSON Response Examples (Common Scenarios)
-
-### Successful proof step
-```json
-{"command":"edit","status":"ok","line":42,"old":"sorry","new":"unfold add_overflow","ready":true,"elapsed":2.1,"errors":[],"error_count":0}
-```
-Agent action: `errors` returns 0 → tactic worked. Use `goal 43` to see remaining goals.
-
-### Failed tactic (type mismatch)
-```json
-{"command":"edit","status":"ok","line":42,"old":"sorry","new":"omega","ready":true,"elapsed":1.5,"errors":[{"severity":"ERROR","severity_code":1,"line":42,"end_line":42,"col":2,"end_col":7,"message":"omega failed to prove the goal..."}],"error_count":1}
-```
-Agent action: `omega` can't solve this — try `scalar_tac` or `agrind` instead. Use `goal 42` to re-inspect.
-
-### Progress fails (no matching spec)
-```json
-{"command":"edit","status":"ok","line":42,"old":"sorry","new":"step","ready":true,"elapsed":3.0,"errors":[{"severity":"ERROR","severity_code":1,"line":42,"end_line":42,"col":2,"end_col":10,"message":"step failed: no matching spec found for 'my_function'"}],"error_count":1}
-```
-Agent action: `my_function` has no spec. Search for one (`grep -r "theorem.*my_function.*spec"`) or write one.
-
-### Proof complete (no errors, no sorry)
-```json
-{"command":"errors","status":"ok","diagnostics":[],"count":0}
-{"command":"sorry","status":"ok","sorry_lines":[],"count":0}
-```
-Agent action: Both empty → proof is complete. No remaining obligations.
+1. **Use `lean_goal` after every edit** — it is the primary feedback mechanism
+2. **Use `lean_multi_attempt` to explore** — try 3-5 tactics at once without touching the file
+3. **Use `lean_local_search` before guessing** — verify lemma names exist before using them
+4. **Use `lean_hover_info` to check types** — essential when building complex proof terms
+5. **Use `lean_code_actions` for step*?** — retrieves the expanded proof script
+6. **Use `lean_diagnostic_messages` after edits** — check for errors (empty = tactic worked)
+7. **Use `lean_verify` on completed proofs** — confirms no `sorry`, checks axiom usage
+8. **Use `lean_state_search` when stuck** — finds lemmas that could close the current goal
+9. **Use `lean_hammer_premise` for automation hints** — suggests lemmas for `simp only [...]`
+10. **File edits are via the standard `edit`/`create` tools** — MCP tools are read-only
+    (except `lean_build`). Edit the file on disk, then use MCP tools to inspect the result.
+11. **`lean_multi_attempt` does not modify the file** — it only shows what *would* happen.
+    After choosing a tactic, you must apply it yourself with the `edit` tool.
