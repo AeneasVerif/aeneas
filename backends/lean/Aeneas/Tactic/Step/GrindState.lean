@@ -151,13 +151,39 @@ private def internalizeHypotheses (goal : Goal) (config : Config)
       let type := localDecl.type
       if (← isProp type) then
         /- Helper: internalize a proposition into the grind e-graph.
-           Runs preprocessHypothesis for normalization, then Grind.add with proof chaining. -/
+           Runs preprocessHypothesis for normalization, then Grind.add with proof chaining.
+
+           **Resilience:** `Grind.add` may throw if the proposition involves types whose
+           algebraic instances are incompatible with grind's linarith satellite solver.
+           Specifically, `Grind.Arith.Linear.getStructId?` calls `ensureToHomoFieldDefEq`
+           which checks that the `HAdd`/`HMul` instances on a type are definitionally equal
+           to instances derived from the standard algebra hierarchy (`Grind.AddCommMonoid`,
+           etc.). Types with raw `HAdd`/`HMul` instances (not derived from `CommRing`,
+           `AddCommMonoid`, etc.) cause this check to throw.
+
+           **Example:** In the SymCrypt ML-KEM verification project, `Spec.Polynomial`
+           (polynomials over `Spec.Zq`) has direct `HAdd`/`HMul` instances defined via
+           pointwise operations, not derived from any algebra hierarchy. When `step*`
+           applies a spec whose postcondition involves `Spec.Polynomial` addition (e.g.,
+           `to_poly peSrc1 = to_poly pe_src7 * 3303 * 2 ^ 16`), `Grind.add` throws:
+           `` `grind linarith` expected Spec.instHAddPolynomial to be definitionally
+           equal to instHAdd ``
+
+           This is a bug (or limitation) in Lean's grind linarith: `getStructId?` should
+           return `none` for types it can't handle instead of throwing. Until that is fixed
+           upstream (Lean/Meta/Tactic/Grind/Arith/Linear/StructId.lean:234), we catch the
+           error here and skip the hypothesis — the e-graph simply has less information,
+           which is the correct best-effort behavior. -/
         let addProp (propType : Expr) (proof : Expr) : GoalM Unit := do
           let r ← Grind.preprocessHypothesis propType
-          if let some ppH := r.proof? then
-            Grind.add r.expr (mkApp4 (mkConst ``Eq.mp [0]) propType r.expr ppH proof)
-          else
-            Grind.add r.expr proof
+          try
+            if let some ppH := r.proof? then
+              Grind.add r.expr (mkApp4 (mkConst ``Eq.mp [0]) propType r.expr ppH proof)
+            else
+              Grind.add r.expr proof
+          catch e =>
+            trace[Step] "addProp: Grind.add failed on hypothesis (skipping):\n  \
+              type: {propType}\n  error: {e.toMessageData}"
         /- Step 1: internalize the proposition exactly the way grind does -/
         addProp type localDecl.toExpr
         /- Step 2: additionally, simplify with Aeneas simpsets and, if the resulting
