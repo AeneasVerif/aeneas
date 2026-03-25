@@ -27,24 +27,23 @@ Every proof agent prompt should include:
 
 Before doing anything, read these skill files for essential proof guidance:
 - the `aeneas-lean-core` skill file
-- the `lean-lsp-tool` skill file
+- the `lean-lsp-mcp` skill file
 - the `aeneas-tactics-quickref` skill file
 ```
 
-### 2. Mandatory lean_lsp.py usage
+### 2. Mandatory lean-lsp-mcp usage
 
 ```
-### MANDATORY: Use lean_lsp.py — NOT lake build
+### MANDATORY: Use lean-lsp-mcp tools — NOT lake build
 
-DO NOT use `lake build` to iterate on proofs. Use lean_lsp.py
-(see lean-lsp-tool skill file for full reference):
+DO NOT use `lake build` to iterate on proofs. Use the lean-lsp-mcp tools
+(see the `lean-lsp-mcp` skill file for full reference).
 
-  cd <project-lean-root>
-  python3 <path-to-aeneas>/scripts/lean_lsp.py --repl --json --log /tmp/lean_lsp_<agent-name>.log
+The tools (`lean_goal`, `lean_diagnostic_messages`, `lean_multi_attempt`, etc.)
+are available directly in your tool palette. If they are not available, ask the
+user to install lean-lsp-mcp (see the `lean-lsp-mcp` skill file).
 
-**`--log` is MANDATORY** — always pass a unique log path per agent.
-
-Workflow: open → wait → sorry → goal → edit → errors → repeat
+Workflow: edit file on disk → lean_goal → lean_multi_attempt → edit → repeat
 Only use `lake build` once at the very end to confirm the final result.
 
 ⛔ NEVER run `lake clean` or delete `.lake/`. This forces a full rebuild (30+ min). Fix root causes instead.
@@ -55,9 +54,9 @@ Only use `lake build` once at the very end to confirm the final result.
 ```
 ### Use step*? to develop proofs
 
-See the `lean-lsp-tool` skill file for the full step*? workflow.
-In short: write `step*?` → `info <line>` to read the expanded script →
-copy it into your proof → fix sub-goals → collapse back to `step*` if possible.
+See the `lean-lsp-mcp` skill file for the full step*? workflow.
+In short: write `step*?` → `lean_code_actions` on that line to read the expanded
+script → copy it into your proof → fix sub-goals → collapse back to `step*` if possible.
 ```
 
 ### 4. Task-specific context
@@ -126,7 +125,7 @@ Only the supervisor coordinates cross-file changes — after all agents complete
 These rules are defined in the `agent-fleet-management` skill file. Key points
 for proof agents:
 
-- **⛔ NEVER spawn sub-agents that run Lean processes** (lean_lsp.py, lake build)
+- **⛔ NEVER spawn sub-agents that run Lean processes** (lean-lsp-mcp, lake build)
 - **⛔ ONLY modify your assigned file(s)** — use local axioms with TODO comments
   for specs from other files (see section 6 above)
 - Agents may use lightweight `explore` agents for codebase searches
@@ -161,7 +160,7 @@ give the entire task to a single agent in one shot. Instead:
 
 3. **Supervise actively**: When an agent completes and reports back:
    - **Step back**: Did the agent make progress? Did it get stuck? Did it go in circles?
-   - **Diagnose issues from the output**: Did it use `lake build` instead of `lean_lsp.py`?
+   - **Diagnose issues from the output**: Did it use `lake build` instead of the lean-lsp-mcp tools?
      Did it hit heartbeat explosions? Did it try an approach that won't work?
    - **Assess the approach**: Is the proof strategy sound? Should the next agent try
      differently?
@@ -198,19 +197,18 @@ give the entire task to a single agent in one shot. Instead:
 5. **Iterate**: Based on the agent's report, launch a follow-up agent with refined
    instructions, or pivot to a different approach.
 
-6. **Reinforce lean_lsp.py usage in every agent prompt**: Agents tend to fall back to
+6. **Reinforce lean-lsp-mcp usage in every agent prompt**: Agents tend to fall back to
    `lake build` loops even when told not to. **Skill files alone are not enough** —
    agents may not read them. The fix is putting the constraint directly in the prompt
    with consequences. Every agent prompt MUST include the `⛔ HARD REQUIREMENT`
    block (see "Example: Full Agent Prompt" below) as the FIRST section. Key elements:
-   - "Your FIRST action must be starting lean_lsp.py"
-   - "If lean_lsp.py crashes, RESTART it — do NOT fall back to lake build"
+   - "Your FIRST action must be using lean-lsp-mcp tools (lean_goal, etc.)"
    - "If you use lake build for iterative proof development, your work will be REJECTED"
    
    **Why agents ignore the rule**: They don't read skill files unless the content is
    in their prompt. They see `lake build` in training data and default to it. The only
-   reliable fix is making the LSP instruction the first thing they read, with explicit
-   rejection consequences.
+   reliable fix is making the lean-lsp-mcp instruction the first thing they read, with
+   explicit rejection consequences.
 
 ## Two-Phase Workflow: Statements First, Then Proofs
 
@@ -782,7 +780,7 @@ After each proof+review cycle completes:
 
 | Failure | Cause | Fix |
 |---------|-------|-----|
-| Agent uses `lake build` loops | Didn't read LSP skill | Stronger prompt, mandate LSP |
+| Agent uses `lake build` loops | Didn't read lean-lsp-mcp skill | Stronger prompt, mandate lean-lsp-mcp tools |
 | `step*` times out | Too many monadic calls | Use `step*?` workflow |
 | Unfolds stdlib definitions | Didn't read core skill | Add "don't unfold" rule to prompt |
 | Uses `omega` | `omega` can't reason about scalars, `U32.max`, list lengths, etc. | NEVER use `omega` — use `agrind` > `grind` > `scalar_tac` |
@@ -801,19 +799,19 @@ After each proof+review cycle completes:
 ```
 Fix the inner loop sorry in `/path/to/Ntt.lean`.
 
-## ⛔ HARD REQUIREMENT: lean_lsp.py ONLY — READ THIS FIRST
-Your FIRST action must be starting lean_lsp.py:
-  python3 /path/to/aeneas/scripts/lean_lsp.py --repl --json --log /tmp/lean_lsp_<agent-name>.log
-Do ALL proof editing and checking inside lean_lsp.py (open, edit, goal, errors, save).
-If lean_lsp.py crashes, RESTART it — do NOT fall back to lake build.
+## ⛔ HARD REQUIREMENT: lean-lsp-mcp tools ONLY — READ THIS FIRST
+Your FIRST action must be using the lean-lsp-mcp tools (`lean_goal`,
+`lean_diagnostic_messages`, `lean_multi_attempt`, etc.) to inspect the file.
+Do ALL proof checking via these tools. Edit the file on disk, then use
+`lean_goal` and `lean_diagnostic_messages` to inspect the result.
 `lake build` is ONLY allowed as a SINGLE final verification after all proofs are done.
 If you use `lake build` for iterative proof development, your work will be REJECTED.
 
 ## Aeneas Skills — READ FIRST
 Read these files: [list paths]
 
-### MANDATORY: Use lean_lsp.py
-[lean_lsp.py instructions]
+### MANDATORY: Use lean-lsp-mcp tools
+[lean-lsp-mcp instructions — see the `lean-lsp-mcp` skill file]
 
 ## The Sorry
 `poly_element_ntt_layer_generic_loop0_loop0_spec` at line ~421.

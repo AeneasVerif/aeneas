@@ -9,7 +9,7 @@ description: Crypto-specific proof strategies including Montgomery, NTT, modular
 
 This skill file covers strategies for verifying cryptographic Rust code translated by Aeneas to Lean. Techniques drawn from real-world cryptographic verification projects.
 
-**PREREQUISITE:** Always use `lean_lsp.py --repl --json --log <path>` for interactive proof development. See the `lean-lsp-tool` skill file.
+**PREREQUISITE:** Always use the lean-lsp-mcp tools for interactive proof development. See the `lean-lsp-mcp` skill file.
 
 ## File Setup Template
 
@@ -106,7 +106,7 @@ Goal involves modular equivalence (a ≡ b [MOD n])?
   │
   └─ NO → Goal involves bounds (a < n, 0 ≤ a)?
            ├─ YES → Stay in Nat/Int
-           │        Use: scalar_tac, scalar_tac +nonLin, agrind
+           │        Use: agrind, grind, scalar_tac / scalar_tac +nonLin
            │
            └─ NO → Mixed? Split into separate goals
                     split_conjs
@@ -146,7 +146,7 @@ Goal involves bitwise ops (AND, OR, XOR, shifts)?
   │
   └─ Need to prove scalar bounds after bitwise op?
       → Use bv_tac for the bitwise part,
-        then scalar_tac/agrind for bounds
+        then agrind/scalar_tac for bounds
 ```
 
 ## Array/Polynomial Proof Patterns

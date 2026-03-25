@@ -501,7 +501,7 @@ bounds (array/vector index proofs). Guidelines:
 
 ### Interactive development
 
-**Use `lean_lsp.py` for interactive development** — see the `lean-lsp-tool` skill file.
+**Use the lean-lsp-mcp tools for interactive development** — see the `lean-lsp-mcp` skill file.
 Do NOT use `lake build` loops.
 
 ## Testing Against Test Vectors

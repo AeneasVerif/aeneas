@@ -118,7 +118,7 @@ Key elements:
 - **`import Aeneas`** — brings in all Aeneas tactics and primitives
 - **`#setup_aeneas_simps`** — configures simp lemmas for Aeneas patterns
 - **`@[step]`** — registers the theorem for the `step` tactic
-- **`⦃ c => ... ⦄`** — weakest-precondition notation: "if it succeeds, the result `c` satisfies..."
+- **`⦃ c => ... ⦄`** — weakest-precondition notation: "the function succeeds and the result `c` satisfies..."
 
 ## Step 5: Develop the Proof Incrementally
 
