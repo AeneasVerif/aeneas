@@ -580,7 +580,7 @@ where
           let goalTy ← instantiateMVars (← mvarId.getType)
           let (head, _) := goalTy.withApp fun f a => (f, a)
           if head.isMVar then
-            commitIfNoEx do Step.inferPost
+            commitIfNoEx do Step.inferPost mvarId
           else pure mvarId
         else pure mvarId
       setGoals [mvarId]

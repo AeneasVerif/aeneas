@@ -13,6 +13,8 @@ theorem applyF_spec (f : U32 → Result U32) (x : U32)
     applyF f x ⦃ post ⦄ := by
   simp [applyF]; exact hf
 
+/- set_option trace.Step true -/
+
 /--
 info: Try this:
 

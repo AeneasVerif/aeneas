@@ -10,14 +10,13 @@ namespace Step
 open Lean Elab Meta Tactic TacticM
 
 /-- Infer a postcondition for a goal of the form `?post args...` of the form
-    `fun x₁ ... xₙ => ∃ vars..., x₁ = a₁ ∧ ... ∧ xₙ = aₙ ∧ props` and assign it to the postcondition metavariable.
+    `fun x₁ ... xₙ => ∃ vars..., x₁ = a₁ ∧ ... ∧ xₙ = aₙ` and assign it to the postcondition metavariable.
 
     `eliminate` controls which free variables to try clearing from the context before collecting
     escaping variables -/
-def inferPost (eliminate : LocalDecl → Bool := fun _ => true) :
+def inferPost (goal : MVarId) (eliminate : LocalDecl → Bool := fun _ => true) :
     TacticM MVarId := withTraceNode `Step (fun _ => do pure m!"inferPost") <| withMainContext do
   traceGoalWithNode "metavariable context"
-  let goal ← getMainGoal
   let goalTy ← instantiateMVars (← goal.getType)
 
   -- The goal should be of the form `?post args...`
@@ -27,65 +26,40 @@ def inferPost (eliminate : LocalDecl → Bool := fun _ => true) :
   let postMVarId := mvarFn.mvarId!
   let args ← args.mapM instantiateMVars
 
-  -- Try to clear eliminable variables (e.g., display-only vars from step)
+  -- Get local contexts and decls
+  let lctx ← getLCtx
+  let lclDecls ← lctx.getDecls
   let mvarLCtx := (← postMVarId.getDecl).lctx
-  let toClear ← (← (← getLCtx).getDecls).filterMapM fun decl => do
-    if mvarLCtx.contains decl.fvarId then return none
-    if ← isProp decl.type then return none  -- keep props: they carry postcondition info
-    if eliminate decl then return some decl.fvarId else return none
-  let goal ← goal.tryClearMany toClear.toArray
 
-  goal.withContext do
-    let lctx ← getLCtx
+  -- Collect free vars not in the mvar's context or marked for elimination
+  let escapingLocalDecls := lclDecls.filter fun decl =>
+    mvarLCtx.contains decl.fvarId
 
-    -- Collect non-prop free vars not in the mvar's context
-    let nonPropEscaping ← (← lctx.getDecls).filterMapM fun decl => do
-      if mvarLCtx.contains decl.fvarId then return none
-      if ← isProp decl.type then return none
-      return some decl.fvarId
+  -- Build postcondition: fun x₁ ... xₙ => ∃ vars..., x₁ = a₁ ∧ ... ∧ xₙ = aₙ ∧ props
+  let argTys ← liftMetaM (args.mapM inferType)
+  let lambdaArgs : Array (Name × Expr) :=
+    argTys.mapIdx fun (i : Nat) ty => (Name.mkSimple s!"x{i + 1}", ty)
+  let postExpr ← withLocalDeclsDND lambdaArgs fun boundVars => do
+    -- Build conjuncts: equalities x₁ = a₁, ..., xₙ = aₙ, then relevant props
+    let conjuncts ← boundVars.zip args |>.mapM fun (bvar, arg) => mkEq bvar arg
 
-    -- Collect relevant props (those mentioning any escaping non-prop variable)
-    let relevantFVars := nonPropEscaping
-    let relevantProps := (← lctx.getAssumptions).filter fun decl =>
-      relevantFVars.any fun fv => decl.type.find? (·.isFVarOf fv) |>.isSome
+    let body ← match conjuncts.toList.reverse with
+      | [] => pure (Lean.mkConst ``True)
+      | last :: rest => rest.foldlM (fun acc c => mkAppM ``And #[c, acc]) last
 
-    -- Build postcondition: fun x₁ ... xₙ => ∃ vars..., x₁ = a₁ ∧ ... ∧ xₙ = aₙ ∧ props
-    let argTys ← liftMetaM (args.mapM inferType)
-    let declInfos : Array (Name × Expr) :=
-      argTys.mapIdx fun (i : Nat) ty => (Name.mkSimple s!"x{i + 1}", ty)
-    let postExpr ← withLocalDeclsDND declInfos fun resExprs => do
-      -- Build conjuncts: equalities x₁ = a₁, ..., xₙ = aₙ, then relevant props
-      let mut conjuncts : Array Expr := #[]
-      for i in [:args.size] do
-        conjuncts := conjuncts.push (← mkEq resExprs[i]! args[i]!)
-      for p in relevantProps do
-        conjuncts := conjuncts.push p.type
-      let body ← match conjuncts.toList.reverse with
-        | [] => pure (Lean.mkConst ``True)
-        | last :: rest => rest.foldlM (fun acc c => mkAppM ``And #[c, acc]) last
-
-      -- Determine which fvars to existentially quantify
-      let bodyFVarSet := (collectFVars {} body).fvarSet
-      let allEscaping ← (← lctx.getDecls).filterMapM fun decl => do
-        if mvarLCtx.contains decl.fvarId then return none
-        if nonPropEscaping.contains decl.fvarId then return some decl.fvarId
-        if bodyFVarSet.contains decl.fvarId then return some decl.fvarId
-        return none
-
-      -- Wrap with existentials over all escaping vars
-      let existsBody ← allEscaping.foldrM (fun fVar acc => do
-          let pred ← mkLambdaFVars #[.fvar fVar] acc
-          mkAppOptM ``Exists #[none, some pred]
-        ) body
-      mkLambdaFVars resExprs existsBody
-    trace[Step] m!"inferred postcondition: {←ppExpr postExpr}"
-    postMVarId.assign postExpr
-  return goal
+    -- Wrap with existentials over all escaping vars
+    let existsBody ← escapingLocalDecls.foldrM (fun decl acc => do
+        mkAppM ``Exists #[← mkLambdaFVars #[.fvar decl.fvarId] acc]) body
+    mkLambdaFVars boundVars existsBody
+  trace[Step] m!"inferred postcondition: {←ppExpr postExpr}"
+  dbg_trace s!"inferred postcondition: {← ppExpr postExpr}"
+  postMVarId.assign postExpr
+  pure goal
 
 /-- Tactic that infers the postcondition and attempts to prove it with `grind` -/
 elab "infer_post" : tactic => do
-  let goal ← inferPost
-  replaceMainGoal [goal]
+  let goal ← getMainGoal
+  let _ ← inferPost goal
   evalTactic (←`(tactic|agrind))
 
 end Step

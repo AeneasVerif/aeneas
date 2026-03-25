@@ -735,7 +735,7 @@ def stepWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
         let (head, _) := goalTy.withApp fun f a => (f, a)
         if head.isMVar then
           commitIfNoEx do
-            let goal ← inferPost
+            let goal ← inferPost mg.goal
             setGoals [goal]
             evalTactic (←`(tactic|agrind))
             match ← getGoals with
