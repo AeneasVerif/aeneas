@@ -1,6 +1,6 @@
 ---
 name: formalizing-crypto-specs
-description: Formalizing crypto algorithms from NIST/RFC specs into executable Lean definitions
+description: How to formalize cryptographic algorithms from standards into pure Lean specifications
 ---
 
 # Formalizing Cryptographic Specifications — Skill File
@@ -14,15 +14,15 @@ possible to the reference document**, executable against test vectors, and suita
 as a verification target for Rust implementations.
 
 **For general agent management rules** (resource budgets, file isolation, spawning
-rules, etc.), see `agent-fleet-management.instructions.md`. This file only covers
+rules, etc.), see the `agent-fleet-management` skill file. This file only covers
 the formalization-specific workflow.
 
 **Prerequisite skill files:** All agents (formalizer, reviewer, fixer) MUST read
 the following skill files before starting work:
-- `formalizing-crypto-specs.instructions.md` (this file — includes PDF handling)
-- `aeneas-lean-core.instructions.md` — Aeneas translation model and Lean idioms
-- `aeneas-tactics-quickref.instructions.md` — tactic decision tree, banned tactics
-- `aeneas-crypto-verification.instructions.md` — crypto proof strategies
+- the `formalizing-crypto-specs` skill file (this file — includes PDF handling)
+- the `aeneas-lean-core` skill file — Aeneas translation model and Lean idioms
+- the `aeneas-tactics-quickref` skill file — tactic decision tree, banned tactics
+- the `aeneas-crypto-verification` skill file — crypto proof strategies
 
 The supervisor MUST include these file paths in every agent dispatch prompt.
 
@@ -103,7 +103,7 @@ For example:
 
 **Each agent produces exactly one `.lean` file** containing the complete formalization
 of its algorithm. Follow the file isolation rules from
-`agent-fleet-management.instructions.md`.
+the `agent-fleet-management` skill file.
 
 ### Step 4: Fix → Review → Fix convergence loop
 
@@ -487,7 +487,7 @@ bounds (array/vector index proofs). Guidelines:
   and `open` it where needed.
 - For parameter-dependent bounds (e.g., array sizes that depend on the parameter
   set), see the "Avoid early case splits on parameters" section in
-  `aeneas-lean-core.instructions.md` — prefer `attribute [local agrind]` or
+  the `aeneas-lean-core` skill file — prefer `attribute [local agrind]` or
   local auxiliary lemmas over top-level `cases p`.
 - Keep proofs minimal — they should not distract from the specification. If a
   bound proof requires more than 2-3 lines, extract it as an auxiliary lemma.
@@ -501,7 +501,7 @@ bounds (array/vector index proofs). Guidelines:
 
 ### Interactive development
 
-**Use `lean_lsp.py` for interactive development** — see `lean-lsp-tool.instructions.md`.
+**Use the lean-lsp-mcp tools for interactive development** — see the `lean-lsp-mcp` skill file.
 Do NOT use `lake build` loops.
 
 ## Testing Against Test Vectors

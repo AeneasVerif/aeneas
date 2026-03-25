@@ -7,7 +7,7 @@ description: Tactic decision tree, banned tactics, and common combinations for A
 
 ## Decision Tree: Which Tactic?
 
-**PREREQUISITE:** Always use `lean_lsp.py --repl --json --log <path>` for interactive proof development. Use `goal <line>` to inspect the proof state before choosing a tactic. See the `lean-lsp-tool` skill file.
+**PREREQUISITE:** Always use the lean-lsp-mcp tools for interactive proof development. Use `lean_goal` to inspect the proof state before choosing a tactic. See the `lean-lsp-mcp` skill file.
 
 ```
 What does the goal look like?
@@ -103,12 +103,60 @@ What does the goal look like?
 | `omega` | No scalar/Slice/Vec knowledge | `agrind` > `grind` > `scalar_tac` |
 | `linarith` | No scalar/Slice/Vec knowledge | `agrind` > `grind` > `scalar_tac` |
 | `nlinarith` | No scalar knowledge, explosion risk | `agrind` > `grind` > `scalar_tac +nonLin` / `simp_scalar` |
+| `step* <;> ...` | Replays full `step*` on every edit | `step*` then `· tactic` per goal |
+| `all_goals tactic` | Same re-elaboration problem | `· tactic` per goal |
 
-**These tactics are NEVER acceptable in Aeneas proofs** — not in `step` theorems,
-not in helper lemmas, not in `have` steps, not in `decreasing_by` (even for pure Nat).
-They cannot reason about U8, U32, Usize, Slice.length, etc. A proof using them is
-non-idiomatic and must be rewritten. There are **no exceptions**.
+**The first three tactics are NEVER acceptable in Aeneas proofs** — not in `step`
+theorems, not in helper lemmas, not in `have` steps, not in `decreasing_by` (even
+for pure Nat). They cannot reason about U8, U32, Usize, Slice.length, etc. A proof
+using them is non-idiomatic and must be rewritten. There are **no exceptions**.
 See `aeneas-lean-core` skill file for the full rationale.
+
+**`step* <;>` and `all_goals` are NEVER acceptable either** — they destroy
+incrementality by forcing full re-elaboration on every edit. `all_goals` is banned
+**everywhere**, not just after `step*`: even a standalone `all_goals scalar_tac` at
+the end of a proof forces all goals to be a single elaboration unit. Always use
+focused `· tactic` (cdot) blocks — one per goal. There are **no exceptions**.
+
+### ⛔ BANNED PATTERN: `step* <;> tactic` and `all_goals tactic`
+
+**NEVER use `step* <;> ...`, `all_goals ...`, or `step* <;> all_goals ...`.**
+
+`all_goals` is banned in ALL contexts — not just after `step*`. Even a standalone
+`all_goals scalar_tac` at the end of a tactic block makes all remaining goals a
+single elaboration unit: editing anything forces re-elaboration of everything.
+
+When you modify any tactic after `<;>`, Lean replays the entire `step*` first —
+this can take 30+ seconds per edit, destroying interactive feedback.
+
+Instead, close each remaining goal individually using focused `· ...` (cdot) blocks:
+
+```lean
+-- ⛔ BAD: editing any tactic after <;> replays the full step*
+step* <;> scalar_tac
+
+-- ⛔ ALSO BAD: same problem even with all_goals
+step* <;> all_goals agrind
+
+-- ⛔ ALSO BAD: standalone all_goals — all goals become one elaboration unit
+step*
+all_goals scalar_tac
+
+-- ✅ GOOD: each goal is independently checkpointed
+step*
+· scalar_tac          -- goal 1: independently elaborated
+· agrind              -- goal 2: independently elaborated
+· simp [*]; scalar_tac -- goal 3: independently elaborated
+```
+
+**Why this matters:** `step*` unfolds the function body and steps through every
+monadic call — it can produce 5–20 remaining side-condition goals. With `<;>`, Lean
+treats `step* <;> tactic` as a single elaboration unit. Changing `tactic` forces
+`step*` to replay from scratch. With `·` blocks, each goal is a separate checkpoint —
+editing goal 3 does not re-elaborate goals 1 or 2.
+
+**The same applies to any expensive tactic before `<;>`:** `simp [*] <;> scalar_tac`,
+`progress* <;> agrind`, etc. If the left-hand side is slow, always use `·` blocks.
 
 ## Common Tactic Combinations
 
@@ -190,6 +238,7 @@ theorem MY_CONST_val : MY_CONST.val = 42 := by decide
 | Concrete computation fails | `agrind`/`scalar_tac` fail on numeric literals | `native_decide` or `decide` |
 | `scalar_tac` in spec_gen | Cascading `maxRecDepth` in loop proof | Mass-replace ALL `scalar_tac` → `agrind` in proof body |
 | Recurring index bounds slow | Same bound proved inline many times | Extract standalone helper lemma with clean context |
+| `first \| simp_all` swallows goals | `simp_all` partially simplifies, `first` considers it done | `(simp_all; done)` — forces full closure; applies to all `simp` variants |
 
 ## Debugging and Profiling Commands
 
@@ -295,7 +344,7 @@ or scheduling overhead.
 **Keeping Lean reactive is even more important.** When developing a proof interactively,
 adding a tactic at the end should take **< 0.5s** — this is what enables rapid iteration.
 If incremental edits are slow (several seconds), the proof structure is forcing
-re-elaboration of large chunks. See the lean-lsp-tool skill file for guidance
+re-elaboration of large chunks. See the `lean-lsp-mcp` skill file for guidance
 (avoid `by ...` blocks inside `apply`/`exact`/`refine` arguments, use `have` to create
 elaboration checkpoints).
 
@@ -315,7 +364,7 @@ containing `s[i]'h`). This causes `simp` to recurse until it hits `maxRecDepth`.
 **How to diagnose:**
 1. The error says "maximum recursion depth has been reached" inside a `simp` call
 2. Use the LSP: comment out the failing `simp` call, add `sorry`, inspect the goal
-   with `goal <line>` to see what the `simp` was trying to simplify
+   with `lean_goal` to see what the `simp` was trying to simplify
 3. Identify which lemmas interact badly — try each lemma individually
 
 **How to fix (in order of preference):**

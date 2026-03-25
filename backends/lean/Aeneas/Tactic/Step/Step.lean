@@ -1,6 +1,7 @@
 import Lean
 import Aeneas.Tactic.Solver.ScalarTac
 import Aeneas.Tactic.Step.Init
+import Aeneas.Tactic.Step.GrindState
 import Aeneas.Std
 import Aeneas.Tactic.Simp.FSimp
 import AeneasMeta.Async
@@ -134,6 +135,8 @@ structure MainGoal where
   /-- The variables introduced in the context after applying the step theorem (this includes variables "output"
       by the monadic function call as well as post-conditions). -/
   outputs : Array Output
+  /-- Step state threaded from precondition discharge and hypothesis internalization -/
+  stepState : StepState := {}
 
 inductive OptTask α where
 | task (t : Task α)
@@ -203,8 +206,13 @@ structure Args where
   /-- Tactic to use to prove preconditions while instantiating meta-variables by
      matching these preconditions with the assumptions in the context. -/
   assumTac : Option (TacticM Unit)
-  /- Tactic to use to solve the preconditions -/
-  solvePreconditionTac : TacticM Unit
+  /- Tactic to use to solve the preconditions.
+     Takes an optional `StepGrindState` that is used when threading the grind state. -/
+  solvePreconditionTac : Option StepGrindState → TacticM Unit
+  /-- Step config (needed for lazy grind state initialization in `trySolvePreconditions`) -/
+  config : Config
+  /-- Step state from step* (carries grind state when threading is enabled) -/
+  stepState : StepState := {}
   /- Syntax of the tactic provided by the user to solve the remaining proof obligations -/
   byTacSyntax : Option Syntax
 
@@ -429,19 +437,25 @@ def introPrettyEquality (args : Args) (fExpr : Expr) (outputFVars : Array Expr) 
   Utils.addDeclTac name e (← inferType e) (asLet := false) fun e => do
     trace[Step] "Introduced the \"pretty\" let binding: {← inferType e}"
 
-/-- After application of the step theorem, the target should be of the shape:
-  `qimp_spec P k Q` (or `qimp P Q`)
+/-- Introduce the outputs (variables and postconditions) into the context after applying
+    the step theorem.
 
-  We transform it to a target of the shape:
-  `∀ x₀ ... xₙ, P₀ → ... → Pₘ → k ⦃ Q ⦄`
+    After application of the step theorem, the target should be of the shape:
+    `qimp_spec P k Q` (or `qimp P Q`)
 
-  Then we introduce `x₀`, ..., `xₙ`, `P₀`, ..., `Pₘ` in the context, by using the names
-  provided by the user.
+    We transform it to a target of the shape:
+    `∀ x₀ ... xₙ, P₀ → ... → Pₘ → k ⦃ Q ⦄`
 
-  TODO: we use `simp` a lot, which uselessely explores the monadic term and the post-condition.
-  We might want to optimize this.
+    Then we introduce `x₀`, ..., `xₙ`, `P₀`, ..., `Pₘ` in the context, by using the names
+    provided by the user.
+
+    If a grind state is provided, it is updated with the newly introduced hypotheses so that
+    subsequent steps can reuse it.
+
+    TODO: we use `simp` a lot, which uselessely explores the monadic term and the post-condition.
+    We might want to optimize this.
 -/
-def introOutputs (args : Args) (fExpr : Expr) :
+def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
   TacticM (Option MainGoal) := do
   withTraceNode `Step (fun _ => pure m!"introOutputs") do
   /- Decompose nested uses of `predn` to introduce a sequence of universal quantifiers.
@@ -573,7 +587,7 @@ def introOutputs (args : Args) (fExpr : Expr) :
     { fvarId := fv, name? := mkName? (postsIds.getD i `_), isProp := outputIsProp[prefixLength + i]! : Output }
   let introducedVars := outputInfos ++ postInfos
 
-  pure (some ⟨ ← getMainGoal, introducedVars ⟩)
+  pure (some { goal := ← getMainGoal, outputs := introducedVars, stepState })
 
 /-- Attempt to solve the preconditions.
 
@@ -583,7 +597,11 @@ def introOutputs (args : Args) (fExpr : Expr) :
       (this is a way of avoiding spurious instantiations). This helps with the second phase.
     - we then use the other tactic on the preconditions
  -/
-def trySolvePreconditions (args : Args) (newPropGoals : List MVarId) : TacticM (List (MVarId × OptTask (Option Expr))) := do
+def trySolvePreconditions (args : Args) (config : Config)
+    (originalGoal : MVarId) (stepState : StepState)
+    (solvePreconditionTac : Option StepGrindState → TacticM Unit)
+    (newPropGoals : List MVarId)
+    : TacticM (StepState × List (MVarId × OptTask (Option Expr))) := do
   withTraceNode `Step (fun _ => pure m!"trySolvePreconditions") do
   let ordPropGoals ←
     newPropGoals.mapM (fun g => do
@@ -600,17 +618,24 @@ def trySolvePreconditions (args : Args) (newPropGoals : List MVarId) : TacticM (
     setGoals (← trySolveTypeclasses (← getGoals))
   /- Retrieve the unsolved preconditions - make sure we recover them in the original order -/
   let goals ← newPropGoals.filterMapM (fun g => do if ← g.isAssigned then pure none else pure (some g))
+  /- If `threadGrindState` is on but we don't have an already-initialized grind state,
+     initialize it now (lazily: only if there are unsolved preconditions) -/
+  let stepState ← do
+    if config.threadGrindState && stepState.grindState?.isNone && !goals.isEmpty then
+      pure { stepState with grindState? := some (← Step.initStepGrindState config originalGoal) }
+    else
+      pure stepState
   /- Then attempt to solve the remaining preconditions by using more sophisticated tactics, potentially *asynchronously* -/
   if args.async then
-    let promises ← Async.asyncRunTacticOnGoals args.solvePreconditionTac goals (cancelTk? := ← IO.CancelToken.new) (inlineFreshProofs := false)
+    let promises ← Async.asyncRunTacticOnGoals (solvePreconditionTac stepState.grindState?) goals (cancelTk? := ← IO.CancelToken.new) (inlineFreshProofs := false)
     let promises : Array (Task _) := promises.map IO.Promise.result?
     let promises : Array (Task _) := promises.map (
         fun o => o.map (sync := true) (fun o => match o with | none | some none => none | some (some o) => some o))
-    pure (List.zip goals (promises.toList.map OptTask.task))
+    pure (stepState, List.zip goals (promises.toList.map OptTask.task))
   else
     setGoals goals
-    allGoalsNoRecover args.solvePreconditionTac
-    pure ((← getUnsolvedGoals).map fun g => (g, OptTask.none))
+    allGoalsNoRecover (solvePreconditionTac stepState.grindState?)
+    pure (stepState, (← getUnsolvedGoals).map fun g => (g, OptTask.none))
 
 /-- Post-process the main goal.
 
@@ -656,12 +681,14 @@ def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option MainGoal)
       let r ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
         {simpThms := #[← stepSimpExt.getTheorems], declsToUnfold := #[``pure]} (.targets #[] true)
       if r.isSome then
-        pure (some ({goal := ← getMainGoal, outputs} : MainGoal))
+        pure (some ({goal := ← getMainGoal, outputs, stepState := mainGoal.stepState} : MainGoal))
       else pure none
 
 def stepWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
   TacticM Goals := do
   withTraceNode `Step (fun _ => pure m!"stepWith") do
+  -- Save the main goal before tryMatch (needed for lazy grind state initialization)
+  let originalGoal ← getMainGoal
   -- Attempt to instantiate the theorem and introduce it in the context
   let newGoals ← tryMatch isLet th
   --
@@ -679,15 +706,23 @@ def stepWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
   withTraceNode `Step (fun _ => pure m!"non prop goals") do
     trace[Step] "{← newNonPropGoals.mapM fun mvarId => do pure ((← mvarId.getDecl).userName, mvarId)}"
   -- Attempt to solve the goals which are propositions
-  let newPropGoals ← trySolvePreconditions args newPropGoals
+  let (stepState, newPropGoals) ← trySolvePreconditions args args.config originalGoal args.stepState args.solvePreconditionTac newPropGoals
   /- Process the main goal -/
   -- Introduce the outputs, including the post-conditions, into the context
   setGoals [mainGoal]
-  let mainGoal ← introOutputs args fExpr
+  let mainGoal ← introOutputs args fExpr stepState
   /- Simplify the post-conditions in the main goal - note that we waited until now
       because by solving the preconditions we may have instantiated meta-variables.
       We also simplify the goal again (to simplify let-bindings, etc.) -/
   let mainGoal ← postprocessMainGoal mainGoal
+  -- Update the grind state with newly introduced hypotheses.
+  -- We do this AFTER postprocessMainGoal so that we internalize the simplified
+  -- postconditions (not the raw ones that get replaced by simp).
+  let mainGoal ← match mainGoal with
+    | some mg =>
+      let stepState ← mg.stepState.update args.config mg.goal
+      pure (some { mg with stepState })
+    | none => pure none
   if let some mainGoal := mainGoal then
     withTraceNode `Step
       (fun _ => pure m!"Main goal after simplifying the post-conditions and the target") do
@@ -920,6 +955,7 @@ def evalAGrindWithPreprocess (withGroundSimprocs : Bool) (config : Grind.Config)
 def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Option Expr)
   (ids : Array (Option Name)) (idsUserProvided : Bool) (postsBasename : Option Name := none)
   (byTacStx : Option Syntax.Tactic)
+  (stepState : StepState := {})
   : TacticM Stats := do
   withTraceNode `Step (fun _ => pure m!"evalStep") do
   /- Simplify the goal -- TODO: this might close it: we need to check that and abort if necessary,
@@ -944,9 +980,10 @@ def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Option 
         singleAssumptionTacCore singleAssumptionTacDtree (instMVars := config.inferGhostVars))
     else pure none
 
-  /- **Grind tactic**: -/
+  /- **Grind tactic**: Excluded from allTacs when `threadGrindState = true` -/
   let grindTac : List (TacticM Unit) :=
-    if config.grind then [evalAGrindWithPreprocess config.withGroundSimprocs config.toGrindConfig config.nla]
+    if config.grind && !config.threadGrindState then
+      [evalAGrindWithPreprocess config.withGroundSimprocs config.toGrindConfig config.nla]
     else []
 
   /- **ScalarTac**:
@@ -995,13 +1032,41 @@ def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Option 
 
   /- **Putting everything together** -/
   let allTacs := simpTac ++ grindTac ++ scalarTac ++ byTac
-  let solvePreconditionTac :=
+  -- Try threaded `Grind.solve` first when available (uses warm e-graph + fresh sstates)
+  let threadedGrindTac (gs : Step.StepGrindState) : TacticM Unit := do
+    withTraceNode `Step (fun _ => pure m!"Attempting grind discharge (threaded e-graph)") do
+    /- Preprocess: simplify only the TARGET with ScalarTac simpsets.
+       This resolves e.g. UScalar.cast and U128.max to their simplified forms.
+       We must NOT simplify the hypotheses here: the grind e-graph already has
+       them internalized (with preprocess simpset normalization). Running simp on
+       the hypotheses would create new fvar IDs that the e-graph hasn't seen. -/
+    let simpArgs : Simp.SimpArgs ← ScalarTac.getSimpArgs
+    let sconfig : Simp.Config := {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1}
+    match ← Aeneas.Simp.simpAt true sconfig simpArgs (.targets #[] true) with
+    | none =>
+      trace[Step] "Precondition solved by preprocessing!"
+    | some _ =>
+      let mvarId ← getMainGoal
+      let solved ← Step.dischargeWithGrindState gs config mvarId
+      unless solved do throwError "grind discharge failed"
+  let solvePreconditionTac (gs? : Option Step.StepGrindState) : TacticM Unit :=
     withMainContext do
     withTraceNode `Step (fun _ => pure m!"Trying to solve a precondition") do
     trace[Step] "Precondition: {← getMainGoal}"
     try
-      firstTacSolve allTacs
-      trace[Step] "Precondition solved!"
+      -- Try threaded grind discharge first, fall back to standard tactics
+      match gs? with
+      | some gs =>
+        try
+          threadedGrindTac gs
+          trace[Step] "Precondition solved via threaded grind!"
+        catch _ =>
+          trace[Step] "Threaded grind failed, falling back to standard tactics"
+          firstTacSolve allTacs
+          trace[Step] "Precondition solved!"
+      | none =>
+        firstTacSolve allTacs
+        trace[Step] "Precondition solved!"
     catch _ =>
       trace[Step] "Precondition not solved"
   let args : Args := {
@@ -1009,7 +1074,10 @@ def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Option 
     inferGhostVars := config.inferGhostVars,
     inferPost := config.inferPost,
     keepPretty, ids, idsUserProvided, postsBasename, assumTac := customAssumTac,
-    solvePreconditionTac, byTacSyntax := byTacStx
+    solvePreconditionTac,
+    config,
+    stepState := if config.threadGrindState then stepState else {},
+    byTacSyntax := byTacStx
   }
   let (goals, usedTheorem) ← stepAsmsOrLookupTheorem args withArg
   trace[Step] "Step done"
@@ -1472,7 +1540,7 @@ hf : ∀ (x y : U32), ↑x < 10 → ↑y < 10 → f x y ⦃ x✝ => True ⦄
   -/
   #guard_msgs in
   example {x y} (f : U32 → U32 → Result U32) (hf : ∀ x y, x.val < 10 → y.val < 10 → f x y ⦃ _ => True⦄) :
-    f x y ⦃ _ => True⦄ := by
+    f x y ⦃ _ => True ⦄ := by
     step
 
   -- Testing with mutually recursive definitions

@@ -8,17 +8,10 @@ description: Translation model, spec patterns, tactic reference, and pitfalls fo
 ## Context
 Aeneas translates Rust programs to pure Lean code via the LLBC intermediate representation. The generated code uses the `Result` error monad. Proofs verify functional correctness by writing specification theorems tagged with `@[step]`.
 
-## PREREQUISITE: Use lean_lsp.py for All Proof Work
+## PREREQUISITE: Use lean-lsp-mcp for All Proof Work
 
-**Before writing or editing any Lean proof**, start a `lean_lsp.py` REPL session.
-See the `lean-lsp-tool` skill file for full setup and command reference.
-
-```bash
-python3 scripts/lean_lsp.py --repl --json --log /tmp/lean_lsp.log
-```
-
-**`--log` is MANDATORY** — always pass a log path. This records all commands with
-timestamps for monitoring and debugging. Use a unique path per agent.
+**Before writing or editing any Lean proof**, use the lean-lsp-mcp tools.
+See the `lean-lsp-mcp` skill file for the full tool reference and workflow.
 
 ## Reading Aeneas-Generated Code
 
@@ -122,7 +115,7 @@ theorem function_name.spec (param1 : U32) (param2 : Slice U16)
   find the theorem. Start a new line after the attribute.
 
 ### The `⦃ ⦄` notation
-Weakest precondition: `f ⦃ x => P x ⦄` means "if f succeeds with value x, then P x holds."
+Weakest precondition: `f ⦃ x => P x ⦄` means "f succeeds with value x and P x holds."
 
 When the result is a tuple, **always decompose it in the binder** — do NOT use
 projectors (`.1`, `.2`, `.fst`, `.snd`, etc.):
@@ -357,6 +350,42 @@ The only acceptable warning is `"declaration uses 'sorry'"` for remaining proof 
 warnings (dead tactics, unused simp args, unused variables around the sorry). These
 must be fixed — keep sorry'd proofs clean so they're ready for completion.
 
+### Do not introduce redundant macros or notations
+Do **not** define a new macro or notation when the desired behavior can be achieved
+by overriding or configuring an existing Lean mechanism. Redundant macros create
+maintenance burden (must be kept in sync, imported everywhere, can conflict when
+multiple files define the same macro).
+
+**Example:** To make `a[i]` work without explicit bound proofs, override
+`get_elem_tactic` rather than introducing a custom `a[i]^` macro:
+```lean
+/- Override get_elem_tactic so that a[i] auto-discharges bounds with agrind -/
+scoped macro_rules
+| `(tactic| get_elem_tactic) => `(tactic| agrind)
+```
+The `[i]^` macro was introduced in a project but is strictly subsumed by this
+`get_elem_tactic` override — it does the same thing (discharge bounds automatically)
+but requires a different syntax and must be defined/imported separately. The override
+is better because it works with standard `a[i]` notation everywhere.
+
+**General rule:** Before defining a macro, check whether an existing tactic override,
+attribute, or notation mechanism already covers the use case. If so, use that instead.
+
+### Comment style: use block comments
+Use block comments `/- ... -/` rather than multiple lines starting with `--`.
+For multi-line comments, use:
+```lean
+/- This is a multi-line comment
+   explaining something important. -/
+```
+Not:
+```lean
+-- This is a multi-line comment
+-- explaining something important.
+```
+Single-line `--` is acceptable for very short inline annotations, but for anything
+spanning multiple lines, prefer `/- ... -/`.
+
 ### Spaces around binary operators in comments
 Always put spaces around binary operators (`<`, `>`, `=`, `≤`, `≥`, `+`, `*`, etc.) in
 comments and doc strings. Write `j < N`, not `j<N`. This avoids a VS Code highlighter bug
@@ -409,7 +438,7 @@ seconds of re-elaboration instead of < 0.5s.
 **What counts as "expensive":** A `(by ...)` block is expensive if it contains:
 - **Multiple tactics** — `(by tac1; tac2; tac3)` or multi-line blocks
 - **`first` with many alternatives** — `(by first | agrind | scalar_tac | bv_tac 16)`
-- **`all_goals` with non-trivial tactics** — `(by all_goals agrind)`
+- **`all_goals`** — banned everywhere (see below); never use even in `by` blocks
 - **Any tactic that takes more than a fraction of a second** (e.g., `grind`, complex `simp`)
 
 A single cheap tactic like `(by scalar_tac)` or `(by grind)` is acceptable as an inline
@@ -445,16 +474,21 @@ exact loop.spec_gen ret.2 out a p h1 h2 hdone' hrest'
 **The same principle applies to `<;>`, `first`, and `all_goals`:**
 - `step* <;> (first | agrind | scalar_tac | bv_tac 16)` — all alternatives re-elaborate
   together on every edit. See the next section for the fix.
-- `all_goals agrind` — acceptable only if the tactic is a single cheap call. If it
-  contains `first | ...` or multiple tactics, it has the same re-elaboration problem.
+- `all_goals` — banned in ALL contexts, not just after `step*`. Even a standalone
+  `all_goals scalar_tac` makes all remaining goals a single elaboration unit.
 
-### Avoid `step* <;> tactic` and `all_goals tactic` — use focused goals instead
-Do **not** write `step* <;> first | agrind | scalar_tac | bv_tac 16` or
+### ⛔ NEVER use `step* <;> tactic` or `all_goals tactic` — use focused goals instead
+**NEVER** write `step* <;> first | agrind | scalar_tac | bv_tac 16` or
 `step* <;> bv_tac 32` or `all_goals agrind` or similar patterns that apply a tactic
-to all remaining goals at once. This **destroys incrementality**: you cannot inspect
-individual goals (a failure points at the entire line, not the failing sub-goal),
-and constructs like `first | tac1 | tac2 | ...` retry all alternatives on every
-re-elaboration — if any alternative is expensive, every edit pays the full cost.
+to all remaining goals at once. This **destroys incrementality**: editing any tactic
+after `<;>` forces Lean to replay the entire `step*` from scratch (30+ seconds per
+edit). You cannot inspect individual goals (a failure points at the entire line, not
+the failing sub-goal), and constructs like `first | tac1 | tac2 | ...` retry all
+alternatives on every re-elaboration.
+
+**This is a hard ban** — the same level as `omega`/`linarith`. There are no exceptions.
+The pattern is never acceptable, not even for "quick" proofs: what seems quick today
+becomes slow when the function body grows, and the pattern trains agents into bad habits.
 
 Instead, use focused goal blocks (`· `) to handle each sub-goal individually:
 
@@ -474,7 +508,7 @@ step*
 ```
 
 This keeps the proof incremental — you can put `sorry` on any `· ` branch, inspect
-the goal with `goal <line>`, and work on one sub-goal at a time.
+the goal with `lean_goal`, and work on one sub-goal at a time.
 
 ### Avoid early case splits on parameters in step proofs
 In cryptographic code, functions are often parameterized by a parameter set (e.g.,
@@ -578,7 +612,7 @@ calc (x + 1) * (x + 1)
 4. **`agrind` fails**: Try `simp [*]; agrind`
 5. **`grind` explodes**: Use `agrind` instead (controlled context)
 6. **Progress applies wrong spec**: Use `step with specific_theorem`
-7. **"Too many ids provided" from `step`**: You gave more binder names in `step as ⟨...⟩` than the tactic produced. Remove excess names until the count matches. Check `goal` to see how many binders the postcondition actually has.
+7. **"Too many ids provided" from `step`**: You gave more binder names in `step as ⟨...⟩` than the tactic produced. Remove excess names until the count matches. Check `lean_goal` to see how many binders the postcondition actually has.
 8. **"This simp argument is unused"**: A lemma in `simp only [...]` or `simp_all only [...]` didn't fire. **Always fix this** — remove the unused lemma from the list. Don't ignore these warnings.
 9. **"'...' tactic does nothing"** / **"'...' tactic is never executed"**: The tactic call is dead code. **Always fix this** — remove the tactic entirely. Don't leave dead tactics in proofs.
 10. **NEVER unfold Aeneas stdlib definitions in a proof.** When in the middle of a proof, you should never need to unfold definitions from `Aeneas.Std` (Slice, Array, UScalar, IScalar, iterator types, core.*, etc.). If you feel the need to unfold:
@@ -659,6 +693,14 @@ calc (x + 1) * (x + 1)
     Then reference the lemma at each use site — fast, stable, and reusable.
 23. **`congr_arg UScalar.val h; scalar_tac` always triggers simp loops.** Using `congr_arg` to create a hypothesis like `UScalar.val x = UScalar.val y` produces a term whose LHS appears in its RHS after `simp_all` normalization, causing `scalar_tac` to loop (see item 11). **Fix:** Always use `agrind` (not `scalar_tac`) after `congr_arg`. More generally, any tactic that creates hypotheses of the form `f x = f y` followed by `scalar_tac` is at risk.
 24. **Sorry'd proofs must be fast.** A sorry'd proof with `step* <;> (first | ... | sorry)` can take 300+ seconds — the `step*` does massive work just to leave a sorry at the end. **Fix:** Sorry'd proofs should do the absolute minimum work. If a proof is incomplete, use plain `sorry` (possibly with a comment sketching the approach). Do not leave expensive `step*` or `cases p` before a sorry — they waste build time on every `lake build` for zero verification value.
+25. **`first | simp_all | ...` silently swallows goals.** In `first | simp_all | tac2 | tac3`, `simp_all` may partially simplify the goal without closing it. Since `simp_all` doesn't throw an exception (it "succeeds" even if the goal remains), `first` considers it successful and never tries `tac2` or `tac3`. The goal is left in a partially simplified state that no subsequent tactic handles. This applies to **all simp variants**: `simp`, `simp [*]`, `simp [...]`, and `simp_all` — they all succeed even when they don't close the goal. **Fix:** Always pair simp-based tactics with `done` when used inside `first`: write `(simp_all; done)` instead of `simp_all`. This forces full closure — if the simp call can't close the goal, `done` fails and `first` backtracks to the next alternative.
+    ```lean
+    -- BAD: simp_all partially simplifies without closing, first considers it done
+    · first | simp_all | scalar_tac | bv_tac 16
+
+    -- GOOD: simp_all must fully close the goal, otherwise first tries alternatives
+    · first | (simp_all; done) | scalar_tac | bv_tac 16
+    ```
 
 ## Attribute Management
 
