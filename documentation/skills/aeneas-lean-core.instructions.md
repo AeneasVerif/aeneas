@@ -172,6 +172,7 @@ fun_name a b ⦃ result =>
 | `zmodify` | Convert to ZMod | `zmodify`, `zmodify [to N]` |
 | `simp_ifs` | Simplify if-then-else | `simp_ifs` |
 | `simp_bool_prop` | Simplify bool/prop | `simp_bool_prop` |
+| `ring_eq_nf` | Cancel common terms in equalities | `ring_eq_nf`, `ring_eq_nf at h` |
 | `fcongr` | Congruence (safe whnf) | `fcongr`, `fcongr N` |
 | `split_conjs` | Split ∧ recursively | `split_conjs`, `split_conjs at h` |
 
