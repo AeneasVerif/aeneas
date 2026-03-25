@@ -1739,7 +1739,7 @@ example (a b : Nat) (h0 : a < b) (h1 : b ≤ 1024) : b ≤ 1024 := by
   assumption
 
 def parseOptLocation (loc : Option (TSyntax `Lean.Parser.Tactic.location)) :
-  Elab.TermElabM (Utils.Location) :=
+  Elab.Tactic.TacticM (Utils.Location) :=
   let loc := Option.map expandLocation loc
   match loc with
   | none => pure (Utils.Location.targets #[] true)
@@ -1747,11 +1747,8 @@ def parseOptLocation (loc : Option (TSyntax `Lean.Parser.Tactic.location)) :
     match loc with
     | .wildcard => pure .wildcard
     | .targets ids goal => do
-      let ids ← ids.mapM Lean.Elab.Term.resolveId?
-      if ids.all Option.isSome then
-        pure (.targets (ids.filterMap (Option.map Expr.fvarId!)) goal)
-      else
-        Lean.Elab.throwUnsupportedSyntax
+      let fvarIds ← ids.mapM Lean.Elab.Tactic.getFVarId
+      pure (.targets fvarIds goal)
 
 def exprToNat? (e : Expr) : Option Nat :=
   let e := e.consumeMData
