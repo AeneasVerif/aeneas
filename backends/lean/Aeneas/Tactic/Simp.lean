@@ -1,4 +1,3 @@
-import Aeneas.Tactic.Simp.FSimp
 import Aeneas.Tactic.Simp.SimpBoolProp
 import Aeneas.Tactic.Simp.SimpIfs
 import Aeneas.Tactic.Simp.SimpLemmas
