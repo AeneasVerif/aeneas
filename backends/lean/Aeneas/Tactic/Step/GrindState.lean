@@ -230,31 +230,70 @@ private def internalizeHypotheses (goal : Goal) (config : Config)
     pure contradiction
   return (goal, contradiction)
 
+/-- **Fresh-mvar protection:** To prevent grind from accidentally assigning the real
+    goal mvar during hypothesis internalization (the "grind contradiction" bug),
+    we create a fresh mvar with target `False` in the real mvar's local context and
+    give it to grind. If grind detects a contradiction (e.g., `h : a = b` and
+    `h' : ¬a = b` in the same context), it closes the fresh mvar with a proof of
+    `False` — not the real goal. We save this `False` proof so that callers can
+    derive a proof of the real goal's type via `False.elim`.
+
+    Using `False` as the target type is safer than mirroring the real goal's type:
+    a proof of `False` is universally applicable to close any goal.
+
+    Returns `(freshMVarId, checkContradiction)` where `checkContradiction` is an action
+    to run after grind completes — it checks whether grind assigned the fresh mvar and
+    returns `(contradiction, contradictionProof?)`. The saved proof is a proof of `False`. -/
+private def withFreshMVar (mvarId : MVarId)
+    : MetaM (MVarId × (Bool → MetaM (Bool × Option Expr))) := do
+  let freshMVar ← mvarId.withContext (mkFreshExprMVar (mkConst ``False))
+  let freshMVarId := freshMVar.mvarId!
+  let checkContradiction := fun (internalContradiction : Bool) => do
+    let freshMVarAssigned ← freshMVarId.isAssigned
+    let contradiction := internalContradiction || freshMVarAssigned
+    let contradictionProof? ← if contradiction && freshMVarAssigned then
+      pure (some (← instantiateMVars (mkMVar freshMVarId)))
+    else
+      pure none
+    pure (contradiction, contradictionProof?)
+  pure (freshMVarId, checkContradiction)
+
+/-- Close a goal using a proof of `False`. -/
+def closeGoalWithFalse (mvarId : MVarId) (falseProof : Expr) : MetaM Unit := do
+  let target ← mvarId.getType
+  let level ← getLevel target
+  mvarId.assign (mkApp (mkApp (mkConst ``False.elim [level]) target) falseProof)
+
 /-- Initialize the grind state from the current proof context.
     Creates a fresh `GoalState` and internalizes all current local hypotheses. -/
 def initStepGrindState (config : Config) (mvarId : MVarId) : MetaM StepGrindState := do
   let params ← mkGrindParams config
   let (simpCtx, simprocs) ← mkPreprocessSimpCtx
-  let ((goalState, contradiction), grindState, symState, symCtx, grindCtx, methodsRef) ←
+  let (freshMVarId, checkContradiction) ← withFreshMVar mvarId
+  let ((goalState, internalContradiction), grindState, symState, symCtx, grindCtx, methodsRef) ←
     runGrindFresh params do
-      let goal ← Grind.mkGoalCore mvarId
+      let goal ← Grind.mkGoalCore freshMVarId
       let (goal, contradiction) ← internalizeHypotheses goal config simpCtx simprocs
       pure (goal.toGoalState, contradiction)
-  pure { grindState, symState, symCtx, grindCtx, methodsRef, goalState, contradiction, params, simpCtx, simprocs }
+  let (contradiction, contradictionProof?) ← checkContradiction internalContradiction
+  pure { grindState, symState, symCtx, grindCtx, methodsRef, goalState, contradiction, params, simpCtx, simprocs, contradictionProof? }
 
 /-- Update the grind state after new fvars have been introduced (by `introOutputs` or
     case splits). Only processes fvars with index ≥ `nextDeclIdx` (incremental). -/
 def updateStepGrindState (state : StepGrindState) (config : Config) (mvarId : MVarId)
     : MetaM StepGrindState := do
+  let (freshMVarId, checkContradiction) ← withFreshMVar mvarId
   let action : GrindM _ := do
-    -- Reconstruct Goal from saved GoalState + current MVarId
-    let goal : Goal := { toGoalState := state.goalState, mvarId }
-    -- Process only NEW fvars (via nextDeclIdx)
+    let goal : Goal := { toGoalState := state.goalState, mvarId := freshMVarId }
     let (goal, contradiction) ← internalizeHypotheses goal config state.simpCtx state.simprocs
     pure (goal.toGoalState, contradiction)
-  let ((goalState, contradiction), grindState, symState) ←
+  let ((goalState, internalContradiction), grindState, symState) ←
     runGrindWithState state action
-  pure { state with grindState, symState, goalState, contradiction := state.contradiction || contradiction }
+  let (contradiction, contradictionProof?) ← checkContradiction internalContradiction
+  pure { state with
+    grindState, symState, goalState,
+    contradiction := state.contradiction || contradiction,
+    contradictionProof? := if contradictionProof?.isSome then contradictionProof? else state.contradictionProof? }
 
 /-- Discharge a precondition using `Grind.solve` with the threaded grind state.
 
