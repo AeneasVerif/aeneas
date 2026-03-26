@@ -5,7 +5,6 @@ import AeneasMeta.Extensions
 import Aeneas.Tactic.Step.Trace
 import Aeneas.Std.WP
 import AeneasMeta.OptionConfig
-import Aeneas.Tactic.Step.SymHelpers
 
 namespace Aeneas
 
@@ -155,6 +154,53 @@ structure StepGrindState where
   simpCtx : Simp.Context
   /-- Cached Aeneas simprocs array (expensive to build — cached at init). -/
   simprocs : Simp.SimprocsArray
+
+open Lean.Meta.Sym (SymM) in
+/-- A persistent SymM session that can be reused across multiple SymM actions.
+    Created once at the start of `step*` and passed to each `tryStep` call
+    so that inferType caches accumulate across steps. -/
+structure SymSession where
+  ctx : Lean.Meta.Sym.Context
+  stateRef : IO.Ref Lean.Meta.Sym.State
+
+open Lean.Meta.Sym (SymM) in
+/-- Create a fresh persistent SymM session. -/
+def SymSession.create : MetaM SymSession := do
+  let ctxRef ← IO.mkRef (none : Option Lean.Meta.Sym.Context)
+  let stateRef ← IO.mkRef (none : Option Lean.Meta.Sym.State)
+  Lean.Meta.Sym.SymM.run (do
+    ctxRef.set (some (← read))
+    stateRef.set (some (← get)))
+  let some ctx ← ctxRef.get | throwError "SymSession.create: failed to capture context"
+  let some state ← stateRef.get | throwError "SymSession.create: failed to capture state"
+  let persistentRef ← IO.mkRef state
+  return { ctx, stateRef := persistentRef }
+
+open Lean.Meta.Sym (SymM) in
+/-- Run a `SymM` action within an existing persistent session.
+    The state is preserved across calls, so inferType caches accumulate. -/
+def SymSession.run (session : SymSession) (x : SymM α) : MetaM α := do
+  let state ← session.stateRef.get
+  let stRef ← ST.mkRef state
+  let result ← x session.ctx stRef
+  session.stateRef.set (← stRef.get)
+  return result
+
+/-- Pre-built simp contexts for the step pipeline. Built once at the start of
+    `step*` or `step`, then passed through `StepState` to each step. -/
+structure SimpCaches where
+  /-- stepSimpExt theorems — used for initial simplification + introOutputs final simp -/
+  stepSimps : Lean.Meta.Simp.Context × Lean.Meta.Simp.SimprocsArray
+  /-- Decompose nested `predn` (introOutputs phase 1) -/
+  decompPredn : Lean.Meta.Simp.Context × Lean.Meta.Simp.SimprocsArray
+  /-- Eliminate `qimp_spec`/`qimp` (introOutputs phase 2) -/
+  elimQimp : Lean.Meta.Simp.Context × Lean.Meta.Simp.SimprocsArray
+  /-- Eliminate `imp` + fold scalar types (introOutputs phase 3, dsimp) -/
+  elimImp : Lean.Meta.Simp.Context × Lean.Meta.Simp.SimprocsArray
+  /-- Post-condition simplification -/
+  postSimps : Lean.Meta.Simp.Context × Lean.Meta.Simp.SimprocsArray
+  /-- Final target simplification (stepSimps + unfold pure) -/
+  finalSimps : Lean.Meta.Simp.Context × Lean.Meta.Simp.SimprocsArray
 
 /-- Top-level state threaded through `step*` iterations.
     When `threadGrindState = false`, `grindState?` stays `none` and

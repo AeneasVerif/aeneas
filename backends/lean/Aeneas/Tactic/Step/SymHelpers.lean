@@ -5,7 +5,9 @@ Authors: Son Ho
 -/
 import Lean
 import AeneasMeta.Simp.Simp
+import AeneasMeta.Split
 import AeneasMeta.Utils
+import Aeneas.Tactic.Step.GrindState
 
 /-!
 # SymM Helpers for Step Tactics
@@ -84,35 +86,6 @@ open Lean.Meta.Sym (SymM)
     For `step*`, a persistent session should be used instead. -/
 def runInSymM (x : SymM α) : MetaM α :=
   Lean.Meta.Sym.SymM.run x
-
-/-- A persistent SymM session that can be reused across multiple SymM actions.
-    Created once at the start of `step*` and passed to each `tryStep` call
-    so that inferType caches accumulate across steps. -/
-structure SymSession where
-  ctx : Lean.Meta.Sym.Context
-  stateRef : IO.Ref Lean.Meta.Sym.State
-
-/-- Create a fresh persistent SymM session. -/
-def SymSession.create : MetaM SymSession := do
-  -- Use SymM.run to create the context and initial state, then capture them
-  let ctxRef ← IO.mkRef (none : Option Lean.Meta.Sym.Context)
-  let stateRef ← IO.mkRef (none : Option Lean.Meta.Sym.State)
-  Lean.Meta.Sym.SymM.run (do
-    ctxRef.set (some (← read))
-    stateRef.set (some (← get)))
-  let some ctx ← ctxRef.get | throwError "SymSession.create: failed to capture context"
-  let some state ← stateRef.get | throwError "SymSession.create: failed to capture state"
-  let persistentRef ← IO.mkRef state
-  return { ctx, stateRef := persistentRef }
-
-/-- Run a `SymM` action within an existing persistent session.
-    The state is preserved across calls, so inferType caches accumulate. -/
-def SymSession.run (session : SymSession) (x : SymM α) : MetaM α := do
-  let state ← session.stateRef.get
-  let stRef ← ST.mkRef state
-  let result ← x session.ctx stRef
-  session.stateRef.set (← stRef.get)
-  return result
 
 /-! ## SymM-Native Simp Operations
 
@@ -197,22 +170,6 @@ Each `step` call uses ~7 simp invocations with fixed configurations. Building th
 `Simp.Context` + `SimprocsArray` from scratch each time is wasteful — these can be
 built once and reused across all steps in a `step*` traversal. -/
 
-/-- Pre-built simp contexts for the step pipeline. Built once at the start of
-    `step*` or `step`, then passed through `StepState` to each step. -/
-structure SimpCaches where
-  /-- stepSimpExt theorems — used for initial simplification + introOutputs final simp -/
-  stepSimps : Lean.Meta.Simp.Context × Lean.Meta.Simp.SimprocsArray
-  /-- Decompose nested `predn` (introOutputs phase 1) -/
-  decompPredn : Lean.Meta.Simp.Context × Lean.Meta.Simp.SimprocsArray
-  /-- Eliminate `qimp_spec`/`qimp` (introOutputs phase 2) -/
-  elimQimp : Lean.Meta.Simp.Context × Lean.Meta.Simp.SimprocsArray
-  /-- Eliminate `imp` + fold scalar types (introOutputs phase 3, dsimp) -/
-  elimImp : Lean.Meta.Simp.Context × Lean.Meta.Simp.SimprocsArray
-  /-- Post-condition simplification -/
-  postSimps : Lean.Meta.Simp.Context × Lean.Meta.Simp.SimprocsArray
-  /-- Final target simplification (stepSimps + unfold pure) -/
-  finalSimps : Lean.Meta.Simp.Context × Lean.Meta.Simp.SimprocsArray
-
 /-! ## SymM-Native Assumption Tactic
 
 MetaM port of `singleAssumptionTac` to avoid the `runTacticMOnGoal` bridge.
@@ -264,6 +221,228 @@ def singleAssumptionTacCoreM (mvarId : MVarId) (dtree : DiscrTree FVarId)
       let fvars := fvars.map Prod.snd
       throwError "Several assumptions match the goal: {fvars}"
   else throwError "Could not find an assumption matching the goal"
+
+/-! ## SymM-Native Precondition Discharge
+
+Direct MetaM/SymM replacement for the TacticM `solvePreconditionTac` path.
+When `threadGrindState` is enabled (default), preconditions are solved by:
+1. Preprocessing the target with ScalarTac simp (target-only, not hypotheses)
+2. Calling `dischargeWithGrindState` which uses the warm e-graph from prior steps
+
+This avoids the `runTacticMOnGoal` → TacticM → `solvePreconditionTac` overhead. -/
+
+/-- Preprocess a precondition goal by simplifying the target with ScalarTac simpsets.
+    This resolves e.g. `UScalar.cast`, `U128.max` to their simplified forms.
+    We must NOT simplify hypotheses: the grind e-graph already has them internalized.
+    Returns `none` if simp solved the goal, `some mvarId` otherwise. -/
+def preprocessPreconditionTargetM (mvarId : MVarId) : MetaM (Option MVarId) := do
+  mvarId.withContext do
+  let simpArgs ← Aeneas.ScalarTac.getSimpArgs
+  let sconfig : Lean.Meta.Simp.Config := { dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1 }
+  let (ctx, simprocs) ← Aeneas.Simp.mkSimpCtx true sconfig .simp simpArgs
+  simpAtTargetMCached mvarId ctx simprocs
+
+/-- Try to discharge a precondition using the threaded grind state.
+    Preprocesses the target, then calls `dischargeWithGrindState`.
+    Returns `true` if the goal was solved. -/
+def dischargeWithThreadedGrindM (gs : StepGrindState) (config : Config) (mvarId : MVarId) : MetaM Bool := do
+  withTraceNode `Step (fun _ => pure m!"dischargeWithThreadedGrindM") do
+  match ← preprocessPreconditionTargetM mvarId with
+  | none =>
+    trace[Step] "Precondition solved by preprocessing!"
+    return true
+  | some mvarId =>
+    dischargeWithGrindState gs config mvarId
+
+/-- Solve a precondition directly in MetaM/SymM, bypassing TacticM.
+    When a threaded grind state is available, uses `dischargeWithThreadedGrindM`.
+    Returns `true` if the goal was solved. -/
+def solvePreconditionM (gs? : Option StepGrindState) (config : Config) (mvarId : MVarId) : MetaM Bool := do
+  withTraceNode `Step (fun _ => pure m!"solvePreconditionM") do
+  trace[Step] "Precondition: {mvarId}"
+  match gs? with
+  | some gs =>
+    try
+      let solved ← dischargeWithThreadedGrindM gs config mvarId
+      if solved then
+        trace[Step] "Precondition solved via threaded grind!"
+        return true
+      else
+        trace[Step] "Threaded grind failed"
+        return false
+    catch _ =>
+      trace[Step] "Threaded grind threw an exception"
+      return false
+  | none =>
+    return false
+
+/-- Try to discharge a "finish" goal (onFinish in step*) directly in MetaM.
+    Uses the threaded grind state if available, with target preprocessing.
+    For onFinish, we also try a standalone agrind as fallback (like `evalAGrindWithPreprocess`).
+    Returns `true` if the goal was solved.
+    IMPORTANT: The caller must save/restore the MetaVar context if this returns `false`,
+    because preprocessing simp may have assigned the input mvarId. -/
+def dischargeWithThreadedGrindM_onFinish (config : Config) (gs? : Option StepGrindState)
+    (mvarId : MVarId) : MetaM Bool := do
+  withTraceNode `Step (fun _ => pure m!"dischargeWithThreadedGrindM_onFinish") do
+  -- Try threaded grind state first if available
+  match gs? with
+  | some gs =>
+    try
+      if ← dischargeWithThreadedGrindM gs config mvarId then
+        trace[Step] "Finish goal solved via threaded grind!"
+        return true
+    catch _ =>
+      trace[Step] "Threaded grind threw exception, trying standalone agrind"
+  | none => pure ()
+  -- Fallback: standalone agrind with preprocessing (MetaM-native)
+  mvarId.withContext do
+  let simpArgs ← Aeneas.ScalarTac.getSimpArgs
+  let sconfig : Lean.Meta.Simp.Config := { dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1 }
+  -- Preprocess: simp target only (lighter than simpGoal which also does hypotheses)
+  let (ctx, simprocs) ← Aeneas.Simp.mkSimpCtx true sconfig .simp simpArgs
+  let (result?, _stats) ← Lean.Meta.simpTarget mvarId ctx simprocs
+  match result? with
+  | none =>
+    trace[Step] "Finish goal solved by preprocessing simp!"
+    return true
+  | some mvarId' =>
+    -- Run agrind (MetaM-native, avoids TacticM bridge)
+    try
+      let params ← Aeneas.Grind.mkParams config.toGrindConfig (← Aeneas.Grind.getAgrindExtensions config.nla) config.withGroundSimprocs
+      mvarId'.withContext do
+        Lean.Meta.Grind.withProtectedMCtx config.toGrindConfig mvarId' fun mvarId'' => do
+          let result ← Lean.Meta.Grind.main mvarId'' params
+          if result.hasFailed then
+            throwError "`agrind` failed\n{← result.toMessageData}"
+      return true
+    catch _ =>
+      trace[Step] "agrind failed on finish goal"
+      return false
+
+/-! ## MVarId-Based Match/ITE Splitting
+
+MetaM ports of `esplitIteAtSpec` and `esplitMatchAtSpec` that work with explicit
+MVarId threading instead of TacticM's `focus`/`setGoals`/`getMainGoal`. These are
+called from `onMatchSplit` in SymM without bridging to TacticM.
+
+The key changes from the TacticM versions:
+- Take `MVarId` explicitly instead of using `getMainGoal`
+- Return new `MVarId`s directly instead of using `setGoals`
+- Use `mvarId.withContext` instead of `withMainContext`
+- `simpGoal` (MetaM) instead of `Simp.simpAt` (TacticM) -/
+
+/-- Split an `if then else` in a spec predicate (MVarId-based, no TacticM).
+    Returns list of (hypothesis fvarId, new goal MVarId) pairs. -/
+def esplitIteAtSpecM (h : Name) (mvarId : MVarId) : MetaM (List (FVarId × MVarId)) := do
+  mvarId.withContext do
+  let tgt ← mvarId.getType
+  tgt.consumeMData.withApp fun spec? args => do
+  if ¬ (spec?.isConstOf ``Std.WP.spec) ∨ args.size ≠ 3 then throwError "Not a valid spec goal"
+  let prog := args[1]!
+  prog.withApp fun ite? args => do
+  trace[Utils] "ite?: {ite?}, args: {args}"
+  if ¬ ite?.isConstOf ``ite ∧ ¬ ite?.isConstOf ``dite then throwError "Not an if then else"
+  if args.size ≠ 5 then throwError "Incorrect number of arguments"
+  let prop := args[1]!
+  let decInst := args[2]!
+  let target ← mvarId.getType
+  let thm ← mkAppOptM ``Decidable.byCases #[prop, target, decInst]
+  let thmTy ← inferType thm
+  let (goals, _, _) ← forallMetaTelescope thmTy
+  let thm := mkAppN thm goals
+  mvarId.assign thm
+  let goalMVarIds := goals.toList.map Expr.mvarId!
+  -- Introduce the equality and simplify each branch
+  let results ← goalMVarIds.filterMapM fun goal => do
+    let (hFVar, goal) ← goal.intro h
+    goal.withContext do
+    -- Build simp context: add h as a rewrite rule + ite/dite lemmas
+    let mut simpThms : Lean.Meta.SimpTheorems := {}
+    simpThms ← simpThms.add (.fvar hFVar) #[] (mkFVar hFVar) (post := true) (inv := false)
+    simpThms ← simpThms.addConst ``Bool.false_eq_true
+    simpThms ← simpThms.addConst ``ite_false
+    simpThms ← simpThms.addConst ``ite_true
+    simpThms ← simpThms.addConst ``dite_true
+    simpThms ← simpThms.addConst ``dite_false
+    let ctx ← Lean.Meta.Simp.mkContext {}
+      (simpTheorems := #[simpThms])
+      (← Lean.Meta.getSimpCongrTheorems)
+    let (result?, _stats) ← Lean.Meta.simpGoal goal ctx
+      (simprocs := #[])
+      (simplifyTarget := true)
+      (fvarIdsToSimp := #[])
+    match result? with
+    | none => pure none
+    | some (_fvars, newGoal) => pure (some (hFVar, newGoal))
+  pure results
+
+/-- Split a match in a spec predicate (MVarId-based, no TacticM).
+    Returns list of (introduced variables, hypothesis fvarId, new goal MVarId). -/
+def esplitMatchAtSpecM (h : Name) (names : Option (List (List (Option Name)))) (mvarId : MVarId)
+    : MetaM (List (Array FVarId × FVarId × MVarId)) := do
+  withTraceNode `Utils (fun _ => do pure m!"esplitMatchAtSpecM") do
+  mvarId.withContext do
+  let tgt ← mvarId.getType
+  tgt.consumeMData.withApp fun spec? args => do
+  if ¬ (spec?.isConstOf ``Std.WP.spec) ∨ args.size ≠ 3 then throwError "Not a valid spec goal"
+  let prog := args[1]!
+  let some ma ← Meta.matchMatcherApp? prog (alsoCasesOn := true)
+    | throwError "not a matcher: {prog}"
+  if ma.discrs.size ≠ 1 then throwError "Don't know what to do with > 1 scrutinees: discrs"
+  let matcherName := ma.matcherName
+  let scrut := ma.discrs[0]!
+  let names ← do
+    match names with
+    | none =>
+      ma.alts.toList.mapM fun alt => do
+      lambdaTelescope alt.consumeMData fun args _ => do
+      args.toList.mapM fun arg => do
+      pure (some (← arg.fvarId!.getDecl).userName)
+    | some names => pure names
+  -- Split — this calls into `Split.esplitCasesOn` which is TacticM.
+  -- We bridge through runTacticMOnGoal once for the core splitting logic.
+  let goals ← runTacticMOnGoal mvarId do
+    Lean.Elab.Tactic.focus do
+    Split.esplitCasesOn true scrut matcherName h names
+  let goals := goals.1
+  trace[Utils] "after esplitCasesOn:\n{goals.map fun (_, _, g) => g}"
+  -- Simplify the goal with the equality — this part is MetaM-native
+  let goals ← goals.filterMapM fun (vars, hFVar, goal) => do
+    goal.withContext do
+    trace[Goal] "About to simplify the goal (with h: {← hFVar.getType}):\n{goal}"
+    -- Add h as a rewrite rule in the simp context
+    let mut simpThms : Lean.Meta.SimpTheorems := {}
+    simpThms ← simpThms.add (.fvar hFVar) #[] (mkFVar hFVar) (post := true) (inv := false)
+    let ctx ← Lean.Meta.Simp.mkContext {}
+      (simpTheorems := #[simpThms])
+      (← Lean.Meta.getSimpCongrTheorems)
+    let (result?, _stats) ← Lean.Meta.simpGoal goal ctx
+      (simprocs := #[])
+      (simplifyTarget := true)
+      (fvarIdsToSimp := #[])
+    match result? with
+    | none => pure none
+    | some (_fvars, newGoal) => pure (some (vars, hFVar, newGoal))
+  pure goals
+
+/-- Split a match or if-then-else in a spec predicate (MVarId-based).
+    Returns list of (introduced variables, hypothesis fvarId, new goal MVarId). -/
+def esplitAtSpecM (h : Name) (names : Option (List (List (Option Name)))) (mvarId : MVarId)
+    : MetaM (List (Array FVarId × FVarId × MVarId)) := do
+  withTraceNode `Utils (fun _ => do pure m!"esplitAtSpecM") do
+  mvarId.withContext do
+  let tgt ← mvarId.getType
+  tgt.consumeMData.withApp fun spec? args => do
+  if ¬ (spec?.isConstOf ``Std.WP.spec) ∨ args.size ≠ 3 then throwError "Not a valid spec goal"
+  let prog := args[1]!
+  let ma ← Meta.matchMatcherApp? prog (alsoCasesOn := true)
+  if ma.isSome then
+    trace[Utils] "splitting a match"
+    esplitMatchAtSpecM h names mvarId
+  else
+    trace[Utils] "splitting an if then else"
+    pure ((← esplitIteAtSpecM h mvarId).map fun (hFVar, g) => (#[], hFVar, g))
 
 end Step
 

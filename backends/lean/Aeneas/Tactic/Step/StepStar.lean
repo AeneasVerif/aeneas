@@ -569,56 +569,71 @@ where
       trace[Step] "done"
       pure (info, none)
     | some (mvarId, _) =>
-      let (info', mvarId) ← onFinishM cfg ss.simpCaches? mvarId
+      let (info', mvarId) ← onFinishM cfg ss mvarId
       pure (info ++ info', mvarId)
 
-  /-- Try to finish a goal (simplify + grind). SymM-native for simp, bridges to TacticM for grind. -/
-  onFinishM (cfg : Config) (simpCaches? : Option Step.SimpCaches) (mvarId : MVarId) : SymM (Info × Option MVarId) := do
+  /-- Try to finish a goal (simplify + grind). SymM-native for simp, direct MetaM for grind
+      when in sync mode, bridges to TacticM only for async. -/
+  onFinishM (cfg : Config) (ss : Step.StepState) (mvarId : MVarId) : SymM (Info × Option MVarId) := do
     withTraceNode `Step (fun _ => pure m!"onFinish") do
     traceGoalWithNode "goal" mvarId
     /- Simplify a bit (SymM-native) -/
-    let (info, mvarId?) ← simplifyTargetM simpCaches? mvarId
+    let (info, mvarId?) ← simplifyTargetM ss.simpCaches? mvarId
     match mvarId? with
     | none => pure (info, none)
     | some mvarId =>
-      /- Attempt to finish with a tactic — bridge to TacticM for grind/async -/
-      let (finishInfo, _) ← Step.runTacticMOnGoal mvarId do
-        let grindTac : TacticM Unit :=
-          Step.evalAGrindWithPreprocess cfg.stepConfig.withGroundSimprocs cfg.stepConfig.toGrindConfig cfg.stepConfig.nla
-        let tacStx : IO.Promise Syntax.Tactic ← IO.Promise.new
-        let rec tryFinish (tacl : List (String × Syntax.Tactic × TacticM Unit)) : TacticM Unit := do
-          match tacl with
-          | [] =>
-            trace[Step] "could not prove the goal: inserting a sorry"
-            tacStx.resolve (← `(tactic| sorry))
-          | (name, stx, tac) :: tacl =>
-            let stx : Option Syntax.Tactic ←
-              withTraceNode `Step (fun _ => do pure m!"Attempting to solve finish goal with `{name}`:\n{← getMainGoal}") do
-              try
-                tac
-                let gl ← Tactic.getUnsolvedGoals
-                if ¬ gl.isEmpty then throwError "tactic failed"
-                else pure stx
-              catch _ => pure none
-            match stx with
-            | some stx =>
-              trace[Step] "goal solved"
-              tacStx.resolve stx
-            | none => tryFinish tacl
-        let finishInfo ← do
-          if cfg.stepConfig.async then
+      if !cfg.stepConfig.async then
+        /- Synchronous path: try fully in MetaM (no TacticM bridge).
+           Save the mctx so that if simp-preprocessing assigns mvarId, we can
+           restore it and report the goal as unsolved with the original mvarId. -/
+        let saved ← getMCtx
+        let solved ← try
+          Step.dischargeWithThreadedGrindM_onFinish cfg.stepConfig ss.grindState? mvarId
+        catch _ => pure false
+        let tacStx ←
+          if solved then `(tactic| agrind)
+          else
+            /- Restore mctx: preprocessing simp inside dischargeWithThreadedGrindM_onFinish
+               may have assigned mvarId. Restoring ensures the mvarId stays unassigned
+               so it appears correctly as an unsolved goal. -/
+            setMCtx saved
+            `(tactic| sorry)
+        let finishInfo : Info := {
+          script := .tacs #[.done (some tacStx)],
+          unassignedVars := #[],
+          subgoals := if solved then #[] else #[(mvarId, none)] }
+        pure (info ++ finishInfo, none)
+      else
+        /- Async path: must use TacticM bridge for Async.asyncRunTactic -/
+        let (finishInfo, _) ← Step.runTacticMOnGoal mvarId do
+            let grindTac : TacticM Unit :=
+              Step.evalAGrindWithPreprocess cfg.stepConfig.withGroundSimprocs cfg.stepConfig.toGrindConfig cfg.stepConfig.nla
+            let tacStx : IO.Promise Syntax.Tactic ← IO.Promise.new
+            let rec tryFinish (tacl : List (String × Syntax.Tactic × TacticM Unit)) : TacticM Unit := do
+              match tacl with
+              | [] =>
+                trace[Step] "could not prove the goal: inserting a sorry"
+                tacStx.resolve (← `(tactic| sorry))
+              | (name, stx, tac) :: tacl =>
+                let stx : Option Syntax.Tactic ←
+                  withTraceNode `Step (fun _ => do pure m!"Attempting to solve finish goal with `{name}`:\n{← Tactic.getMainGoal}") do
+                  try
+                    tac
+                    let gl ← Tactic.getUnsolvedGoals
+                    if ¬ gl.isEmpty then throwError "tactic failed"
+                    else pure stx
+                  catch _ => pure none
+                match stx with
+                | some stx =>
+                  trace[Step] "goal solved"
+                  tacStx.resolve stx
+                | none => tryFinish tacl
             let proof ← Async.asyncRunTactic (tryFinish [("grind", ← `(tactic| agrind), grindTac)])
             let proof := proof.result?.map (fun x => match x with | none | some none => none | some (some x) => some x)
             pure ({ script := .tacs #[.task tacStx.result?],
                     unassignedVars := #[],
                     subgoals := #[(mvarId, some (TaskOrDone.task proof))] } : Info)
-          else
-            tryFinish [("grind", ← `(tactic| agrind), grindTac)]
-            pure ({ script := .tacs #[.task tacStx.result?],
-                    unassignedVars := #[],
-                    subgoals := #[(mvarId, none)] } : Info)
-        pure finishInfo
-      pure (info ++ finishInfo, none)
+        pure (info ++ finishInfo, none)
 
   /-- Process a bind (one step). SymM-native: calls evalStepCore directly. -/
   onBindM (cfg : Config) (names : Array (Option Name)) (ss : Step.StepState) (mvarId : MVarId) : SymM (Info × Option (MVarId × Step.StepState)) := do
@@ -707,7 +722,7 @@ where
         }
         pure (info, none)
       else
-        let (info, mvarId) ← onFinishM cfg ss.simpCaches? mvarId
+        let (info, mvarId) ← onFinishM cfg ss mvarId
         pure (info, mvarId.map (·, ss))
 
   /-- Split a match/ite in TacticM (needs focus/setGoals), returning branch goals and names.
