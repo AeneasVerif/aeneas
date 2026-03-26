@@ -49,6 +49,9 @@ What does the goal look like?
 │  ├─ Manual bridge → List.Inhabited_getElem_eq_getElem! s.val i proof
 │  └─ Slice getElem! → List getElem! → rw [Slice.getElem!_Nat_eq]
 │
+├─ Equality with shared terms (3*x + 2*y = x + 3*y)
+│  → ring_eq_nf / ring_eq_nf at h
+│
 ├─ If-then-else → simp_ifs / split
 ├─ Conjunction (∧) → split_conjs <;> agrind
 ├─ Boolean/Propositional → simp_bool_prop / tauto
@@ -78,6 +81,7 @@ What does the goal look like?
 | `zmodify` | Convert to ZMod | `zmodify`, `zmodify [to N]`, `zmodify at h` | `@[zmodify_simps]` |
 | `simp_ifs` | Simplify if-then-else | `simp_ifs` | — |
 | `simp_bool_prop` | Bool/prop simplification | `simp_bool_prop` | `@[simp_bool_prop_simps]` |
+| `ring_eq_nf` | Cancel common terms in equalities | `ring_eq_nf`, `ring_eq_nf at h` | — |
 | `fcongr` | Congruence (safe whnf) | `fcongr`, `fcongr N` | — |
 | `split_conjs` | Split nested ∧ | `split_conjs`, `split_conjs at h` | — |
 
