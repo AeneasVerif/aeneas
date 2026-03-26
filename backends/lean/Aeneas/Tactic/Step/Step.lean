@@ -1150,7 +1150,7 @@ def evalStep
     | some (some proof) => mvarId.withContext do
       -- Introduce an auxiliary theorem
       mvarId.withContext do
-      let e ← mkAuxTheorem (← mvarId.getType) proof (zetaDelta := true)
+      let e ← mkAuxTheoremPreserveCache (← mvarId.getType) proof (zetaDelta := true)
       mvarId.assign e
   let mainGoal := match goals.mainGoal with
     | none => []

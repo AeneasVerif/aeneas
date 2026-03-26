@@ -447,7 +447,7 @@ partial def evalStepStar (cfg: Config) (fuel : Option Nat) : TacticM Result :=
             | none => sgs := sgs.push sgMvarId
             | some proof =>
               sgMvarId.withContext do
-              let _e ← mkAuxTheorem (← sgMvarId.getType) proof (zetaDelta := true)
+              let _e ← Step.mkAuxTheoremPreserveCache (← sgMvarId.getType) proof (zetaDelta := true)
               sgMvarId.assign proof
         pure sgs
       pure ({ script := info.script, unassignedVars := info.unassignedVars, subgoals := sgs },

@@ -1005,6 +1005,29 @@ initialize stepPureDefAttribute : StepPureDefSpecAttr ← do
   registerBuiltinAttribute attrImpl
   pure { attr := attrImpl }
 
+/-- Like `Lean.Meta.mkAuxTheorem` but preserves the `Meta.Cache` and `Core.Cache`.
+
+    `mkAuxTheorem` adds a theorem declaration to the environment via `addDecl`, which
+    calls `modifyEnv`, which unconditionally clears both `Core.State.cache` and
+    `Meta.State.cache` (including `synthInstance`, `inferType`, `whnf`, etc.).
+
+    Since theorem declarations are neither instances nor reducible definitions, they
+    don't affect instance synthesis, type inference, whnf, or definitional equality
+    results. Restoring the caches after the environment change is therefore sound.
+
+    This matters for performance: in the step* pipeline, `mkAuxTheorem` is called
+    once per precondition per step. Without cache preservation, every subsequent
+    `synthInstance` call (e.g., during grind state updates) is a cache miss costing
+    ~4-5ms per step. -/
+def mkAuxTheoremPreserveCache (type : Expr) (value : Expr) (zetaDelta : Bool := false)
+    (kind? : Option Name := none) (cache := true) : MetaM Expr := do
+  let savedMetaCache := (← get).cache
+  let savedCoreCache := (← getThe Core.State).cache
+  let result ← Lean.Meta.mkAuxTheorem type value (zetaDelta := zetaDelta) (kind? := kind?) (cache := cache)
+  modify fun s => { s with cache := savedMetaCache }
+  modifyThe Core.State fun s => { s with cache := savedCoreCache }
+  return result
+
 end Step
 
 end Aeneas

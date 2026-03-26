@@ -335,7 +335,7 @@ def dischargeWithGrindState (state : StepGrindState) (config : Config)
        hypotheses from the recursive call, triggering infinite unfolding). -/
     let proof ← instantiateMVars (mkMVar precondMVarId)
     let goalType ← precondMVarId.getType
-    let auxTheorem ← Lean.Meta.mkAuxTheorem goalType proof (zetaDelta := true)
+    let auxTheorem ← mkAuxTheoremPreserveCache goalType proof (zetaDelta := true)
     precondMVarId.assign auxTheorem
   return result.isSome
 
