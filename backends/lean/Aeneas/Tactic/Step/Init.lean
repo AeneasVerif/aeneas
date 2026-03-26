@@ -165,6 +165,8 @@ structure StepState where
   /-- Optional persistent SymM session for `step*`. When present, all `tryStep` calls
       share the same inferType/getLevel caches, giving cache hits across steps. -/
   symSession? : Option Step.SymSession := none
+  /-- Cached simp contexts for the step pipeline. Built once, reused across all steps. -/
+  simpCaches? : Option Step.SimpCaches := none
 
 /-! # Attribute: `step` -/
 

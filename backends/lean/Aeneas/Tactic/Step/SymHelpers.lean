@@ -124,6 +124,17 @@ TacticM context via `Tactic.run`, runs `pruneSolvedGoals`, and tears down the co
 These direct MetaM calls skip all of that overhead. In `evalStepCore`, there were 6
 such bridges for simp operations — each called on every step in `step*`. -/
 
+/-- Cached version: takes a pre-built simp context instead of rebuilding it each time.
+    Use when the same simp configuration is applied on every step. -/
+def simpAtTargetMCached (mvarId : MVarId) (ctx : Lean.Meta.Simp.Context)
+    (simprocs : Lean.Meta.Simp.SimprocsArray) : MetaM (Option MVarId) := do
+  mvarId.withContext do
+  let (result?, _stats) ← Lean.Meta.simpGoal mvarId ctx
+    (simprocs := simprocs) (simplifyTarget := true) (fvarIdsToSimp := #[])
+  match result? with
+  | none => return none
+  | some (_fvars, mvarId) => return some mvarId
+
 /-- SymM-native replacement for `simpAt` on the target.
     Calls `simpGoal` directly in MetaM (auto-lifted to SymM).
     Returns `none` if the goal was closed, `some mvarId` otherwise. -/
@@ -131,11 +142,17 @@ def simpAtTargetM (mvarId : MVarId) (simpOnly : Bool) (config : Lean.Meta.Simp.C
     (args : Aeneas.Simp.SimpArgs) : MetaM (Option MVarId) := do
   mvarId.withContext do
   let (ctx, simprocs) ← Aeneas.Simp.mkSimpCtx simpOnly config .simp args
-  let (result?, _stats) ← Lean.Meta.simpGoal mvarId ctx
+  simpAtTargetMCached mvarId ctx simprocs
+
+/-- Cached version for dsimp. -/
+def dsimpAtTargetMCached (mvarId : MVarId) (ctx : Lean.Meta.Simp.Context)
+    (simprocs : Lean.Meta.Simp.SimprocsArray) : MetaM (Option MVarId) := do
+  mvarId.withContext do
+  let (result?, _stats) ← Lean.Meta.dsimpGoal mvarId ctx
     (simprocs := simprocs) (simplifyTarget := true) (fvarIdsToSimp := #[])
   match result? with
   | none => return none
-  | some (_fvars, mvarId) => return some mvarId
+  | some mvarId => return some mvarId
 
 /-- SymM-native replacement for `dsimpAt` on the target.
     Calls `dsimpGoal` directly in MetaM (auto-lifted to SymM).
@@ -144,11 +161,23 @@ def dsimpAtTargetM (mvarId : MVarId) (simpOnly : Bool) (config : Lean.Meta.Simp.
     (args : Aeneas.Simp.SimpArgs) : MetaM (Option MVarId) := do
   mvarId.withContext do
   let (ctx, simprocs) ← Aeneas.Simp.mkSimpCtx simpOnly config .dsimp args
-  let (result?, _stats) ← Lean.Meta.dsimpGoal mvarId ctx
-    (simprocs := simprocs) (simplifyTarget := true) (fvarIdsToSimp := #[])
+  dsimpAtTargetMCached mvarId ctx simprocs
+
+/-- Cached version of simpAtM. -/
+def simpAtMCached (mvarId : MVarId) (ctx : Lean.Meta.Simp.Context)
+    (simprocs : Lean.Meta.Simp.SimprocsArray) (fvarIdsToSimp : Array FVarId := #[])
+    (simplifyTarget : Bool := true) : MetaM (Option (Array FVarId × MVarId)) := do
+  mvarId.withContext do
+  let (result?, _stats) ← Lean.Meta.simpGoal mvarId ctx
+    (simprocs := simprocs) (simplifyTarget := simplifyTarget) (fvarIdsToSimp := fvarIdsToSimp)
   match result? with
   | none => return none
-  | some mvarId => return some mvarId
+  | some (freshFVarIds, mvarId) =>
+    mvarId.withContext do
+    let lctx ← getLCtx
+    let ldecls := lctx.foldl (fun set decl => set.insert decl.fvarId) Std.HashSet.emptyWithCapacity
+    let filteredFVars := fvarIdsToSimp.filter ldecls.contains ++ freshFVarIds
+    return some (filteredFVars, mvarId)
 
 /-- SymM-native replacement for `simpAt` that can also simplify hypotheses.
     When `fvarIdsToSimp` is non-empty, simplifies those hypotheses too.
@@ -160,17 +189,29 @@ def simpAtM (mvarId : MVarId) (simpOnly : Bool) (config : Lean.Meta.Simp.Config)
     (simplifyTarget : Bool := true) : MetaM (Option (Array FVarId × MVarId)) := do
   mvarId.withContext do
   let (ctx, simprocs) ← Aeneas.Simp.mkSimpCtx simpOnly config .simp args
-  let (result?, _stats) ← Lean.Meta.simpGoal mvarId ctx
-    (simprocs := simprocs) (simplifyTarget := simplifyTarget) (fvarIdsToSimp := fvarIdsToSimp)
-  match result? with
-  | none => return none
-  | some (freshFVarIds, mvarId) =>
-    -- Replicate customSimpLocation's filtering: keep original fvars still in context + fresh ones
-    mvarId.withContext do
-    let lctx ← getLCtx
-    let ldecls := lctx.foldl (fun set decl => set.insert decl.fvarId) Std.HashSet.emptyWithCapacity
-    let filteredFVars := fvarIdsToSimp.filter ldecls.contains ++ freshFVarIds
-    return some (filteredFVars, mvarId)
+  simpAtMCached mvarId ctx simprocs fvarIdsToSimp simplifyTarget
+
+/-! ## Cached Simp Contexts for Step Pipeline
+
+Each `step` call uses ~7 simp invocations with fixed configurations. Building the
+`Simp.Context` + `SimprocsArray` from scratch each time is wasteful — these can be
+built once and reused across all steps in a `step*` traversal. -/
+
+/-- Pre-built simp contexts for the step pipeline. Built once at the start of
+    `step*` or `step`, then passed through `StepState` to each step. -/
+structure SimpCaches where
+  /-- stepSimpExt theorems — used for initial simplification + introOutputs final simp -/
+  stepSimps : Lean.Meta.Simp.Context × Lean.Meta.Simp.SimprocsArray
+  /-- Decompose nested `predn` (introOutputs phase 1) -/
+  decompPredn : Lean.Meta.Simp.Context × Lean.Meta.Simp.SimprocsArray
+  /-- Eliminate `qimp_spec`/`qimp` (introOutputs phase 2) -/
+  elimQimp : Lean.Meta.Simp.Context × Lean.Meta.Simp.SimprocsArray
+  /-- Eliminate `imp` + fold scalar types (introOutputs phase 3, dsimp) -/
+  elimImp : Lean.Meta.Simp.Context × Lean.Meta.Simp.SimprocsArray
+  /-- Post-condition simplification -/
+  postSimps : Lean.Meta.Simp.Context × Lean.Meta.Simp.SimprocsArray
+  /-- Final target simplification (stepSimps + unfold pure) -/
+  finalSimps : Lean.Meta.Simp.Context × Lean.Meta.Simp.SimprocsArray
 
 /-! ## SymM-Native Assumption Tactic
 

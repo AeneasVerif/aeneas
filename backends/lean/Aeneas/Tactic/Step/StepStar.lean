@@ -417,19 +417,20 @@ partial def evalStepStar (cfg: Config) (fuel : Option Nat) : TacticM Result :=
   withMainContext do focus do
   withTraceNode `Step (fun _ => do pure m!"evalStepStar") do
   let mvarId ← getMainGoal
-  -- Initialize the step state (grind threading + persistent SymM session)
+  -- Initialize the step state (grind threading + persistent SymM session + cached simp contexts)
   let symSession ← Step.SymSession.create
+  let simpCaches ← Step.SimpCaches.create
   let initState : Step.StepState ←
     if cfg.stepConfig.threadGrindState then
       let gs ← Step.initStepGrindState cfg.stepConfig mvarId
-      pure { grindState? := some gs, symSession? := some symSession }
-    else pure { symSession? := some symSession }
+      pure { grindState? := some gs, symSession? := some symSession, simpCaches? := some simpCaches }
+    else pure { symSession? := some symSession, simpCaches? := some simpCaches }
   /- Run the entire step* pipeline inside one SymM session.
      This eliminates per-step session creation overhead and allows caches
      to accumulate across all steps in the step* traversal. -/
   let (result, finalGoals) ← symSession.run do
     -- Simplify the target
-    let (info, mvarId?) ← simplifyTargetM mvarId
+    let (info, mvarId?) ← simplifyTargetM initState.simpCaches? mvarId
     -- Continue
     match mvarId? with
     | some mvarId =>
@@ -458,12 +459,15 @@ partial def evalStepStar (cfg: Config) (fuel : Option Nat) : TacticM Result :=
 
 where
   /-- Simplify the target using step_simps. SymM-native: uses `simpAtTargetM` directly. -/
-  simplifyTargetM (mvarId : MVarId) : SymM (Info × Option MVarId) := do
+  simplifyTargetM (simpCaches? : Option Step.SimpCaches) (mvarId : MVarId) : SymM (Info × Option MVarId) := do
     withTraceNode `Step (fun _ => do pure m!"simplifyTarget") do
     Step.traceGoalWithNode "about to simplify goal" mvarId
-    let mvarId? ← Step.simpAtTargetM mvarId true
-      { maxDischargeDepth := 1, failIfUnchanged := false}
-      {simpThms := #[← Step.stepSimpExt.getTheorems]}
+    let mvarId? ← match simpCaches? with
+      | some c => Step.simpAtTargetMCached mvarId c.stepSimps.1 c.stepSimps.2
+      | none =>
+        Step.simpAtTargetM mvarId true
+          { maxDischargeDepth := 1, failIfUnchanged := false}
+          {simpThms := #[← Step.stepSimpExt.getTheorems]}
     /- Generate script and check if we proved/changed the goal -/
     let tac : Array Syntax.Tactic ← do
       let genSimp : Bool := match mvarId? with
@@ -565,15 +569,15 @@ where
       trace[Step] "done"
       pure (info, none)
     | some (mvarId, _) =>
-      let (info', mvarId) ← onFinishM cfg mvarId
+      let (info', mvarId) ← onFinishM cfg ss.simpCaches? mvarId
       pure (info ++ info', mvarId)
 
   /-- Try to finish a goal (simplify + grind). SymM-native for simp, bridges to TacticM for grind. -/
-  onFinishM (cfg : Config) (mvarId : MVarId) : SymM (Info × Option MVarId) := do
+  onFinishM (cfg : Config) (simpCaches? : Option Step.SimpCaches) (mvarId : MVarId) : SymM (Info × Option MVarId) := do
     withTraceNode `Step (fun _ => pure m!"onFinish") do
     traceGoalWithNode "goal" mvarId
     /- Simplify a bit (SymM-native) -/
-    let (info, mvarId?) ← simplifyTargetM mvarId
+    let (info, mvarId?) ← simplifyTargetM simpCaches? mvarId
     match mvarId? with
     | none => pure (info, none)
     | some mvarId =>
@@ -703,7 +707,7 @@ where
         }
         pure (info, none)
       else
-        let (info, mvarId) ← onFinishM cfg mvarId
+        let (info, mvarId) ← onFinishM cfg ss.simpCaches? mvarId
         pure (info, mvarId.map (·, ss))
 
   /-- Split a match/ite in TacticM (needs focus/setGoals), returning branch goals and names.

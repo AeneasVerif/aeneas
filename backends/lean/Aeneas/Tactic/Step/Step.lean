@@ -468,13 +468,16 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState)
      Note that at the same time we simplify the (monadic) continuation by using
      some monad simp theorems. -/
   let mvarId? ← withTraceNode `Step (fun _ => pure m!"simpAt: decomposing nested uses of `predn`") do
-    simpAtTargetM mvarId true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
-            { simpThms := #[← stepSimpExt.getTheorems],
-              addSimpThms :=
-                #[``Std.WP.qimp_spec_predn, ``Std.WP.qimp_spec_unit,
-                  ``Std.WP.qimp_predn, ``Std.WP.qimp_unit,
-                  ``Std.WP.qimp_spec_exists, ``Std.WP.qimp_exists,
-                  ``forall_unit, ``true_imp_iff] }
+    match stepState.simpCaches? with
+    | some c => simpAtTargetMCached mvarId c.decompPredn.1 c.decompPredn.2
+    | none =>
+      simpAtTargetM mvarId true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
+        { simpThms := #[← stepSimpExt.getTheorems],
+          addSimpThms :=
+            #[``Std.WP.qimp_spec_predn, ``Std.WP.qimp_spec_unit,
+              ``Std.WP.qimp_predn, ``Std.WP.qimp_unit,
+              ``Std.WP.qimp_spec_exists, ``Std.WP.qimp_exists,
+              ``forall_unit, ``true_imp_iff] }
   let some mvarId := mvarId?
     | trace[Step] "The main goal was solved!"; return none
   traceGoalWithNode "goal after decomposing the nested `predn`" mvarId
@@ -482,11 +485,14 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState)
   /- Eliminate `qimp_spec`/`qimp` to reveal `imp` and decompose the post-condition into a sequence
      of implications -/
   let mvarId? ← withTraceNode `Step (fun _ => pure m!"simpAt: eliminating `qimp_spec` and `qimp`") do
-    simpAtTargetM mvarId true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
-            { declsToUnfold := #[``Std.WP.curry, ``Std.WP.predn]
-              addSimpThms :=
-                #[``Std.WP.qimp_spec_iff, ``Std.WP.qimp_iff,
-                  ``Std.WP.imp_and_iff, ``forall_unit, ``true_imp_iff] }
+    match stepState.simpCaches? with
+    | some c => simpAtTargetMCached mvarId c.elimQimp.1 c.elimQimp.2
+    | none =>
+      simpAtTargetM mvarId true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
+        { declsToUnfold := #[``Std.WP.curry, ``Std.WP.predn]
+          addSimpThms :=
+            #[``Std.WP.qimp_spec_iff, ``Std.WP.qimp_iff,
+              ``Std.WP.imp_and_iff, ``forall_unit, ``true_imp_iff] }
   let some mvarId := mvarId?
     | trace[Step] "The main goal was solved!"; return none
   traceGoalWithNode "goal after aliminating `qimp_spec` and `qimp` and decomposing the post-condition" mvarId
@@ -496,8 +502,11 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState)
   Some types get unfolded too much (e.g., `U32` sometimes gets unfolded to `U32) so we use this call
   to `dsimp` to also fold them back. -/
   let mvarId? ← withTraceNode `Step (fun _ => pure m!"dsimpAt: eliminating `imp` and folding back scalar types") do
-    dsimpAtTargetM mvarId true {implicitDefEqProofs := true, failIfUnchanged := false, iota := false}
-      { declsToUnfold := #[``Std.WP.imp], addSimpThms := scalar_eqs }
+    match stepState.simpCaches? with
+    | some c => dsimpAtTargetMCached mvarId c.elimImp.1 c.elimImp.2
+    | none =>
+      dsimpAtTargetM mvarId true {implicitDefEqProofs := true, failIfUnchanged := false, iota := false}
+        { declsToUnfold := #[``Std.WP.imp], addSimpThms := scalar_eqs }
   let some mvarId := mvarId?
     | trace[Step] "The main goal was solved!"; return none
   traceGoalWithNode "goal after aliminating `imp` and folding back the scalar types" mvarId
@@ -658,24 +667,26 @@ The main thing we do is simplify the post-conditions.
 
 TODO: simplify or remove this function.
 -/
-def postprocessMainGoal (mainGoal : Option MainGoal) : SymM (Option MainGoal) := do
+def postprocessMainGoal (stepState : StepState) (mainGoal : Option MainGoal) : SymM (Option MainGoal) := do
   withTraceNode `Step (fun _ => pure m!"postprocessMainGoal") do
   match mainGoal with
   | none => pure none
   | some mainGoal =>
     traceGoalWithNode "current goal" mainGoal.goal
     -- Simplify the post-conditions
-    let args : Simp.SimpArgs :=
-      {simpThms := #[← stepPostSimpExt.getTheorems],
-       simprocs := #[← stepPostSimprocExt.getSimprocs] }
-    -- Simplify
-    let result ←
-      simpAtM mainGoal.goal true { maxDischargeDepth := 0, failIfUnchanged := false }
-        args (fvarIdsToSimp := mainGoal.outputs.map Output.fvarId) (simplifyTarget := false)
+    let fvarIds := mainGoal.outputs.map Output.fvarId
+    let result ← match stepState.simpCaches? with
+      | some c =>
+        simpAtMCached mainGoal.goal c.postSimps.1 c.postSimps.2
+          (fvarIdsToSimp := fvarIds) (simplifyTarget := false)
+      | none =>
+        let args : Simp.SimpArgs :=
+          {simpThms := #[← stepPostSimpExt.getTheorems],
+           simprocs := #[← stepPostSimprocExt.getSimprocs] }
+        simpAtM mainGoal.goal true { maxDischargeDepth := 0, failIfUnchanged := false }
+          args (fvarIdsToSimp := fvarIds) (simplifyTarget := false)
     match result with
     | none =>
-      -- We actually closed the goal: we shouldn't get there
-      -- TODO: make this more robust
       trace[Step] "Goal closed by simplifying the introduced post-conditions"
       pure none
     | some (posts, mvarId) =>
@@ -687,13 +698,12 @@ def postprocessMainGoal (mainGoal : Option MainGoal) : SymM (Option MainGoal) :=
         let isProp ← isProp (← fvid.getType)
         pure ({ fvarId := fvid, name?, isProp } : Output)
 
-      /- Simplify the goal again
-
-      Note that we want to simplify targets of the shape:
-      `ok ... ⦃ x₀ ... xₙ => ... ⦄`
-      -/
-      let mvarId? ← simpAtTargetM mvarId true { maxDischargeDepth := 1, failIfUnchanged := false}
-          {simpThms := #[← stepSimpExt.getTheorems], declsToUnfold := #[``pure]}
+      /- Simplify the goal again -/
+      let mvarId? ← match stepState.simpCaches? with
+        | some c => simpAtTargetMCached mvarId c.finalSimps.1 c.finalSimps.2
+        | none =>
+          simpAtTargetM mvarId true { maxDischargeDepth := 1, failIfUnchanged := false}
+            {simpThms := #[← stepSimpExt.getTheorems], declsToUnfold := #[``pure]}
       match mvarId? with
       | some finalGoal =>
         pure (some ({goal := finalGoal, outputs, stepState := mainGoal.stepState} : MainGoal))
@@ -728,7 +738,7 @@ def stepWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr)
   /- Simplify the post-conditions in the main goal - note that we waited until now
       because by solving the preconditions we may have instantiated meta-variables.
       We also simplify the goal again (to simplify let-bindings, etc.) -/
-  let mainGoalRes ← postprocessMainGoal mainGoalRes
+  let mainGoalRes ← postprocessMainGoal stepState mainGoalRes
   -- Update the grind state with newly introduced hypotheses.
   -- We do this AFTER postprocessMainGoal so that we internalize the simplified
   -- postconditions (not the raw ones that get replaced by simp).
@@ -947,6 +957,38 @@ def evalAGrindWithPreprocess (withGroundSimprocs : Bool) (config : Grind.Config)
       Aeneas.Grind.agrindEval config params mvarId
     catch e => trace[Step] "Grind failed:\n{e.toMessageData}"
 
+/-- Build all simp contexts used by the step pipeline.
+    Called once at the start of `step*` and cached in `StepState.simpCaches?`. -/
+def SimpCaches.create : MetaM SimpCaches := do
+  let stepSimps ← Aeneas.Simp.mkSimpCtx true
+    { maxDischargeDepth := 1, failIfUnchanged := false} .simp
+    {simpThms := #[← stepSimpExt.getTheorems]}
+  let decompPredn ← Aeneas.Simp.mkSimpCtx true
+    { maxDischargeDepth := 1, failIfUnchanged := false, iota := false} .simp
+    { simpThms := #[← stepSimpExt.getTheorems],
+      addSimpThms :=
+        #[``Std.WP.qimp_spec_predn, ``Std.WP.qimp_spec_unit,
+          ``Std.WP.qimp_predn, ``Std.WP.qimp_unit,
+          ``Std.WP.qimp_spec_exists, ``Std.WP.qimp_exists,
+          ``forall_unit, ``true_imp_iff] }
+  let elimQimp ← Aeneas.Simp.mkSimpCtx true
+    { maxDischargeDepth := 1, failIfUnchanged := false, iota := false} .simp
+    { declsToUnfold := #[``Std.WP.curry, ``Std.WP.predn]
+      addSimpThms :=
+        #[``Std.WP.qimp_spec_iff, ``Std.WP.qimp_iff,
+          ``Std.WP.imp_and_iff, ``forall_unit, ``true_imp_iff] }
+  let elimImp ← Aeneas.Simp.mkSimpCtx true
+    {implicitDefEqProofs := true, failIfUnchanged := false, iota := false} .dsimp
+    { declsToUnfold := #[``Std.WP.imp], addSimpThms := scalar_eqs }
+  let postSimps ← Aeneas.Simp.mkSimpCtx true
+    { maxDischargeDepth := 0, failIfUnchanged := false } .simp
+    {simpThms := #[← stepPostSimpExt.getTheorems],
+     simprocs := #[← stepPostSimprocExt.getSimprocs] }
+  let finalSimps ← Aeneas.Simp.mkSimpCtx true
+    { maxDischargeDepth := 1, failIfUnchanged := false} .simp
+    {simpThms := #[← stepSimpExt.getTheorems], declsToUnfold := #[``pure]}
+  return { stepSimps, decompPredn, elimQimp, elimImp, postSimps, finalSimps }
+
 def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Option Expr)
   (ids : Array (Option Name)) (idsUserProvided : Bool) (postsBasename : Option Name := none)
   (byTacStx : Option Syntax.Tactic)
@@ -954,10 +996,12 @@ def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Option 
   (mvarId : MVarId)
   : SymM Stats := do
   withTraceNode `Step (fun _ => pure m!"evalStep") do
-  /- Simplify the goal -- TODO: this might close it: we need to check that and abort if necessary,
-     and properly track that in the `Stats` -/
-  let mvarId? ← simpAtTargetM mvarId true { maxDischargeDepth := 1, failIfUnchanged := false}
-      {simpThms := #[← stepSimpExt.getTheorems]}
+  /- Simplify the goal -/
+  let mvarId? ← match stepState.simpCaches? with
+    | some c => simpAtTargetMCached mvarId c.stepSimps.1 c.stepSimps.2
+    | none =>
+      simpAtTargetM mvarId true { maxDischargeDepth := 1, failIfUnchanged := false}
+        {simpThms := #[← stepSimpExt.getTheorems]}
   let some mvarId := mvarId?
     | throwError "step: goal solved by initial simplification (not yet tracked in Stats)"
   mvarId.withContext do
