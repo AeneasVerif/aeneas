@@ -583,6 +583,13 @@ doesn't build cleanly, the proof agent must fix the errors before reporting.
 <!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Proof Style and Maintainability"
      and aeneas-tactics-quickref "Proof Style Rules". See skill-file-authoring for sync rules. -->
 
+**⚠️ BEFORE DIVING INTO SPECIFIC CHECKS:** Re-read the spec theorem conventions in
+the `aeneas-lean-core` skill file — tuple decomposition in postconditions, result type
+annotation, naming, docstrings, indentation rules, `⦃ ⦄` notation conventions. Check
+each convention mechanically against the code under review. Mechanical rule violations
+are the easiest to miss when reviewing "by feel" — they require deliberate
+checklist-style checking.
+
 **⚠️ READ THE FILES, DON'T JUST GREP.** The reviewer must **read the modified proof
 files** — not just run grep patterns. Grep catches mechanical violations (banned
 tactics, maxRecDepth) but misses structural problems (multi-line inline `(by ...)`
@@ -621,6 +628,14 @@ grep -n 'maxRecDepth' FILE        # → diagnose simp loop, never raise limit
 
 # maxHeartbeats too high (Pitfall #13)
 grep -n 'maxHeartbeats' FILE      # → verify value < 8_000_000; if higher, proof needs restructuring
+
+# set_option ... in inside proof script (Pitfall #13) — breaks incrementality
+grep -n 'set_option.*in$' FILE    # → check if inside a proof (by block); OK before theorem declaration
+
+# ⛔ Converting sorry → axiom (NEVER allowed)
+grep -n '^axiom' FILE             # → if agent added new axioms that were sorry before, REJECT
+# Agents must NEVER convert a sorry into an axiom. The whole point is to PROVE the theorem.
+# If the proof is too hard, leave it as sorry and report what was tried.
 
 # Unfold of Aeneas stdlib definitions (Pitfall #10)
 grep -n 'unfold.*Aeneas\|unfold.*Std\.\|unfold.*core\.' FILE
@@ -686,6 +701,14 @@ These require reading the proof, not just grepping:
   `j < N`, not `j<N`. Missing spaces cause VS Code highlighting bugs.
 
 - **Helper lemmas properly named and documented if non-obvious?**
+
+- **Repeated `simp [...]; solver` in cdot sub-goals?** If the same constants appear
+  in `simp` calls before a solver (`scalar_tac`, `agrind`, `grind`, `bv_tac`) in 3+
+  sub-goals after `step`/`step*`, they should be promoted to solver attributes
+  (`@[scalar_tac_simps]`, `@[agrind =]`, `@[grind =]`, `@[bvify]`) so `step`/`step*`
+  discharges the sub-goals automatically and they disappear. Also flag
+  `have hFoo : CONST.val = N := by simp` — the underlying definition likely needs
+  attributes. (Rule: "Register Rust global/const definitions with solver attributes")
 
 - **Is the proof clean and not verbose?** No copy-paste bloat, no redundant `have`
   that could be inlined. Each tactic call should earn its place.

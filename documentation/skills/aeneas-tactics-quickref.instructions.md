@@ -188,6 +188,7 @@ editing goal 3 does not re-elaborate goals 1 or 2.
     fixed — the sorry is acceptable, but dead tactics, unused simp args, and other
     warnings are not. Keep sorry'd proofs clean so they're ready for completion.
 - **No big `simp only [...]` in implementation proofs** — model names are unstable. Use `simp [*]` or targeted rewrites. (OK in spec lemmas.)
+- **Register Rust global/const scalar definitions with solver attributes** — pure Rust global/const definitions should be marked `@[simp, scalar_tac_simps, agrind =, grind =, bvify]`. This lets `step` / `step*` discharge precondition sub-goals automatically (they disappear). If you see repeated `simp [CONST]; solver` in cdot sub-goals after `step`, or `have hFoo : CONST.val = N := by simp ...`, the definition is missing attributes.
 - **Extract complex sub-proofs** as auxiliary lemmas — don't inline 15 lines of arithmetic inside `step*`
 - **Simplify shifts early**: rewrite `>>>` as `/ 2^n`, `<<<` as `* 2^n`
 - **Sorry'd proofs must be fast**: do not leave expensive `step*`, `cases p`, or `first | ...` before a sorry. Use plain `sorry` (with a comment sketching the approach). Expensive sorry'd proofs waste build time on every `lake build` for zero verification value.
@@ -273,6 +274,23 @@ Use `trace.profiler` to find which tactic dominates the time, then optimize or r
 ### ⚠️ `maxHeartbeats` guidelines
 
 <!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core Pitfall #13 -->
+
+**⛔ NEVER use `set_option ... in` inside a proof script.** For example:
+```lean
+-- ⛔ BAD: breaks incrementality inside the proof
+theorem my_fn.spec ... := by
+  set_option maxHeartbeats 16000000 in
+  step* ...
+```
+The `in` scoping inside a tactic block makes everything below it a single elaboration
+unit — any edit forces full re-elaboration, destroying incremental feedback.
+
+Using `set_option ... in` **before** a theorem declaration is fine and standard practice:
+```lean
+-- ✅ GOOD: set_option before the theorem declaration
+set_option maxHeartbeats 16000000 in
+theorem my_fn.spec ... := by ...
+```
 
 Lean's default `maxHeartbeats` (200K) is very low for Aeneas proofs. **Increase it to
 1M as a baseline** (`set_option maxHeartbeats 1000000`) — this is a reasonable default

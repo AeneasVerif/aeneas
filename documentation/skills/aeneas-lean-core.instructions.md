@@ -401,6 +401,59 @@ change when Rust code is re-extracted), making such proofs hard to maintain. Pre
 **Exception:** Large `simp only` calls are fine in proofs about auxiliary specifications
 (pure mathematical lemmas), where the definitions are stable.
 
+### Register Rust global/const definitions with solver attributes
+Pure (i.e., not living in `Result`) Rust global/const scalar definitions should be
+registered with all relevant solver attributes:
+```lean
+@[simp, scalar_tac_simps, agrind =, grind =, bvify]
+theorem MY_CONST_val : MY_CONST.val = 42 := by decide
+```
+This is generally safe and lets all solvers use the concrete value directly.
+
+**Why this matters for `step` / `step*`:** When `step` applies a function spec, it
+generates precondition sub-goals (e.g., bounds checks). If the solver (`agrind`,
+`scalar_tac`, etc.) already knows the concrete values of global constants via its
+attributes, it can discharge these sub-goals automatically — they disappear entirely.
+Without the attributes, each sub-goal requires a manual `simp [CONST]; solver` call
+in a cdot block, which is verbose and fragile.
+
+**Detecting missing attributes — patterns to look for:**
+
+1. **Repeated `simp [foo₁, ...]; solver` in cdot sub-goals after `step` / `step*`:**
+   If the same constants appear in `simp` calls before a solver across multiple
+   sub-goals, those constants should be promoted to solver attributes. Once marked,
+   the sub-goals are discharged by `step` / `step*` automatically and disappear.
+   ```lean
+   -- BEFORE: manual simp + solver in every sub-goal
+   step as ⟨i1, _⟩
+   · simp only [NBAR, LOGQ] at *; scalar_tac
+   step as ⟨i2, _⟩
+   · simp only [NBAR, LOGQ] at *; scalar_tac
+
+   -- AFTER: mark NBAR, LOGQ with @[scalar_tac_simps] (and other attrs)
+   -- sub-goals disappear, proof simplifies to:
+   step as ⟨i1, _⟩
+   step as ⟨i2, _⟩
+   ```
+
+2. **`have hFoo : CONST.val = N := by simp ...` followed by `simp [hFoo]; solver`:**
+   A local hypothesis that unfolds a global constant to its concrete value is a strong
+   signal that the global definition is missing solver attributes. Mark the definition
+   directly — the hypothesis becomes unnecessary.
+
+3. **`simp` with a simpset (e.g., `global_simps`):** Use `simp?` to discover which
+   individual lemmas `simp` actually uses, then mark those with the appropriate solver
+   attributes.
+
+The attribute-to-solver mapping:
+
+| Solver | Attribute |
+|--------|-----------|
+| `scalar_tac` | `@[scalar_tac_simps]` |
+| `agrind` | `@[agrind =]` |
+| `grind` | `@[grind =]` |
+| `bv_tac` | `@[bvify]` |
+
 ### Extract auxiliary lemmas for complex sub-proofs
 When a proof step requires complex non-linear arithmetic, bitwise reasoning, or
 multi-step calculation, **extract it as a separate auxiliary lemma** rather than
@@ -657,7 +710,7 @@ calc (x + 1) * (x + 1)
     unfolding), **report it to the user** — it may indicate a structural proof problem
     or a tactic bug.
 12. **Report misbehaving tactics.** If a tactic doesn't do what it should — for example, `step` fails to make progress even though the appropriate `@[step]` lemma exists, or `scalar_tac` can't close a pure arithmetic goal it should handle — **report this to the user**. It may indicate a bug or missing feature worth fixing upstream.
-13. **Keep `maxHeartbeats` reasonable (< 8M).** Lean's default (200K) is too low for Aeneas proofs — increase to 1M as a baseline. But if a proof needs more than ~8M heartbeats, the proof is ill-structured or uses tactics inefficiently. Don't just bump the number — instead: decompose the function with fold theorems, extract sub-goals as auxiliary lemmas, minimize the context with `clear`, prefer `agrind` over `grind`, or use `step*?` instead of `step*` for finer control.
+13. **Keep `maxHeartbeats` reasonable (< 8M).** Lean's default (200K) is too low for Aeneas proofs — increase to 1M as a baseline. But if a proof needs more than ~8M heartbeats, the proof is ill-structured or uses tactics inefficiently. Don't just bump the number — instead: decompose the function with fold theorems, extract sub-goals as auxiliary lemmas, minimize the context with `clear`, prefer `agrind` over `grind`, or use `step*?` instead of `step*` for finer control. **⛔ NEVER use `set_option ... in` inside a proof script** (e.g., within a `by` block). The `in` scoping inside a tactic block makes everything below it a single elaboration unit — any edit forces full re-elaboration, destroying incrementality. Using `set_option ... in` **before** a theorem declaration is fine and standard practice (e.g., `set_option maxHeartbeats 16000000 in theorem ...`).
 14. **⚠️ Keep proof wall-clock time < 60s — this is important.** Fast proofs enable fast iteration. Even the biggest proofs (for functions of 50+ lines) should complete in under 60 seconds wall-clock (including kernel proof-term replay). If a proof takes longer, it must be fixed — decompose it, extract auxiliary lemmas, or use more direct proof strategies. **Detecting kernel replay slowness:** In the LSP, after all tactics are elaborated, the server reports it is still processing the last proof line AND the `theorem` declaration line (plus `set_option ... in` above it). If it stays in this state a long time, the kernel is replaying the proof term — the fix is to produce simpler/smaller proof terms (decompose the function, extract sub-goals as separate lemmas). Use `set_option trace.profiler true in` to profile tactic time; if tactics are fast but overall proof is slow, the bottleneck is kernel replay.
 15. **⚠️ Keeping Lean reactive is critical (< 0.5s per tactic).** Adding a tactic at the end of a proof should take < 0.5s (everything above is cached). If it takes several seconds, big chunks are being re-elaborated. See the "Extract inline `(by ...)` blocks" and "Avoid `step* <;> tactic`" sections above for the main causes and fixes.
 16. **Auto-param tactics in recursive theorem statements cause elaboration loops.** When a theorem statement contains `(hbound : x ≤ n := by scalar_tac)` or similar auto-param defaults, the tactic fires during *elaboration* of the statement — not during the proof. If the theorem is recursive and the context has complex hypotheses, the tactic loops. **Fix:** Make all such parameters fully explicit (no `:= by ...` default). Pass proofs manually at every call site. **Rule: ZERO tactic calls in auto-params of recursive theorem statements with complex invariants.**
