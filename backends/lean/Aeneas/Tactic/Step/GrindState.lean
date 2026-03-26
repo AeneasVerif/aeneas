@@ -230,33 +230,40 @@ private def internalizeHypotheses (goal : Goal) (config : Config)
     pure contradiction
   return (goal, contradiction)
 
-/-- **Fresh-mvar protection:** To prevent grind from accidentally assigning the real
-    goal mvar during hypothesis internalization (the "grind contradiction" bug),
-    we create a fresh mvar with target `False` in the real mvar's local context and
-    give it to grind. If grind detects a contradiction (e.g., `h : a = b` and
-    `h' : ¬a = b` in the same context), it closes the fresh mvar with a proof of
-    `False` — not the real goal. We save this `False` proof so that callers can
-    derive a proof of the real goal's type via `False.elim`.
+/-- **Fresh-mvar protection + MCtx depth protection.**
 
-    Using `False` as the target type is safer than mirroring the real goal's type:
-    a proof of `False` is universally applicable to close any goal.
+    Two layers of protection against grind accidentally modifying external state:
 
-    Returns `(freshMVarId, checkContradiction)` where `checkContradiction` is an action
-    to run after grind completes — it checks whether grind assigned the fresh mvar and
-    returns `(contradiction, contradictionProof?)`. The saved proof is a proof of `False`. -/
-private def withFreshMVar (mvarId : MVarId)
-    : MetaM (MVarId × (Bool → MetaM (Bool × Option Expr))) := do
-  let freshMVar ← mvarId.withContext (mkFreshExprMVar (mkConst ``False))
-  let freshMVarId := freshMVar.mvarId!
-  let checkContradiction := fun (internalContradiction : Bool) => do
+    1. **Fresh mvar with `False` target:** Grind operates on a fresh mvar (not the real
+       goal mvar). If grind finds a contradiction, it closes the fresh mvar — not the
+       real one. We save the proof of `False` for callers to use via `False.elim`.
+
+    2. **`withNewMCtxDepth`:** All grind operations run at an increased MetavarContext
+       depth. This prevents `isDefEq` (called internally by grind's congruence closure,
+       e-matching, and satellite solvers) from accidentally instantiating pre-existing
+       metavariables in the proof context. This mirrors the protection used by the
+       standard `grind` tactic via `Grind.withProtectedMCtx`.
+
+    The grind state (`Grind.State`, `Sym.State`, `GoalState`) is extracted as return
+    values before `withNewMCtxDepth` restores the old mctx, so it persists across calls.
+    The contradiction proof (if any) is `instantiateMVars`'d before exiting the block.
+
+    Takes an action that receives a fresh `MVarId` (at the new depth) and an internal
+    contradiction `Bool`, and returns some result plus the contradiction flag. -/
+private def withProtectedGrind {α} (mvarId : MVarId)
+    (action : MVarId → MetaM (α × Bool))
+    : MetaM (α × Bool × Option Expr) :=
+  withNewMCtxDepth (allowLevelAssignments := true) do
+    let freshMVar ← mvarId.withContext (mkFreshExprMVar (mkConst ``False))
+    let freshMVarId := freshMVar.mvarId!
+    let (result, internalContradiction) ← action freshMVarId
     let freshMVarAssigned ← freshMVarId.isAssigned
     let contradiction := internalContradiction || freshMVarAssigned
     let contradictionProof? ← if contradiction && freshMVarAssigned then
       pure (some (← instantiateMVars (mkMVar freshMVarId)))
     else
       pure none
-    pure (contradiction, contradictionProof?)
-  pure (freshMVarId, checkContradiction)
+    pure (result, contradiction, contradictionProof?)
 
 /-- Close a goal using a proof of `False`. -/
 def closeGoalWithFalse (mvarId : MVarId) (falseProof : Expr) : MetaM Unit := do
@@ -265,31 +272,35 @@ def closeGoalWithFalse (mvarId : MVarId) (falseProof : Expr) : MetaM Unit := do
   mvarId.assign (mkApp (mkApp (mkConst ``False.elim [level]) target) falseProof)
 
 /-- Initialize the grind state from the current proof context.
-    Creates a fresh `GoalState` and internalizes all current local hypotheses. -/
+    Creates a fresh `GoalState` and internalizes all current local hypotheses.
+    Runs inside `withNewMCtxDepth` to protect external metavariables. -/
 def initStepGrindState (config : Config) (mvarId : MVarId) : MetaM StepGrindState := do
   let params ← mkGrindParams config
   let (simpCtx, simprocs) ← mkPreprocessSimpCtx
-  let (freshMVarId, checkContradiction) ← withFreshMVar mvarId
-  let ((goalState, internalContradiction), grindState, symState, symCtx, grindCtx, methodsRef) ←
-    runGrindFresh params do
-      let goal ← Grind.mkGoalCore freshMVarId
-      let (goal, contradiction) ← internalizeHypotheses goal config simpCtx simprocs
-      pure (goal.toGoalState, contradiction)
-  let (contradiction, contradictionProof?) ← checkContradiction internalContradiction
+  let ((goalState, grindState, symState, symCtx, grindCtx, methodsRef), contradiction, contradictionProof?) ←
+    withProtectedGrind mvarId fun freshMVarId => do
+      let ((goalState, contradiction), grindState, symState, symCtx, grindCtx, methodsRef) ←
+        runGrindFresh params do
+          let goal ← Grind.mkGoalCore freshMVarId
+          let (goal, contradiction) ← internalizeHypotheses goal config simpCtx simprocs
+          pure (goal.toGoalState, contradiction)
+      pure ((goalState, grindState, symState, symCtx, grindCtx, methodsRef), contradiction)
   pure { grindState, symState, symCtx, grindCtx, methodsRef, goalState, contradiction, params, simpCtx, simprocs, contradictionProof? }
 
 /-- Update the grind state after new fvars have been introduced (by `introOutputs` or
-    case splits). Only processes fvars with index ≥ `nextDeclIdx` (incremental). -/
+    case splits). Only processes fvars with index ≥ `nextDeclIdx` (incremental).
+    Runs inside `withNewMCtxDepth` to protect external metavariables. -/
 def updateStepGrindState (state : StepGrindState) (config : Config) (mvarId : MVarId)
     : MetaM StepGrindState := do
-  let (freshMVarId, checkContradiction) ← withFreshMVar mvarId
-  let action : GrindM _ := do
-    let goal : Goal := { toGoalState := state.goalState, mvarId := freshMVarId }
-    let (goal, contradiction) ← internalizeHypotheses goal config state.simpCtx state.simprocs
-    pure (goal.toGoalState, contradiction)
-  let ((goalState, internalContradiction), grindState, symState) ←
-    runGrindWithState state action
-  let (contradiction, contradictionProof?) ← checkContradiction internalContradiction
+  let ((goalState, grindState, symState), contradiction, contradictionProof?) ←
+    withProtectedGrind mvarId fun freshMVarId => do
+      let action : GrindM _ := do
+        let goal : Goal := { toGoalState := state.goalState, mvarId := freshMVarId }
+        let (goal, contradiction) ← internalizeHypotheses goal config state.simpCtx state.simprocs
+        pure (goal.toGoalState, contradiction)
+      let ((goalState, internalContradiction), grindState, symState) ←
+        runGrindWithState state action
+      pure ((goalState, grindState, symState), internalContradiction)
   pure { state with
     grindState, symState, goalState,
     contradiction := state.contradiction || contradiction,
@@ -302,6 +313,12 @@ def updateStepGrindState (state : StepGrindState) (config : Config) (mvarId : MV
     to the e-graph and runs the full solver pipeline (assertAll, satellite solvers,
     e-matching, case splitting) to find a contradiction.
 
+    **MCtx depth protection:** Like `initStepGrindState` and `updateStepGrindState`,
+    the solve action runs inside `withNewMCtxDepth` to prevent grind from instantiating
+    pre-existing metavariables in the proof context. A fresh mvar (at the new depth)
+    mirrors the precondition goal; after solving, the proof is instantiated and assigned
+    to the real precondition mvar outside the depth barrier.
+
     The proof is wrapped in an auxiliary theorem (`mkAuxTheorem`) to prevent kernel
     reduction loops in recursive theorems. Without this, the grind proof term (which
     chains through `Classical.byContradiction` + linear arithmetic) can trigger
@@ -312,29 +329,27 @@ def updateStepGrindState (state : StepGrindState) (config : Config) (mvarId : MV
 def dischargeWithGrindState (state : StepGrindState) (config : Config)
     (precondMVarId : MVarId) : MetaM Bool := do
   let result ← observing? do
-    /- First, internalize any fvars the e-graph hasn't seen yet.
-      The precondition goal's local context may contain hypotheses introduced
-      after the last `StepState.update` (e.g., by `split_ifs`, `cases`, or
-      tactic-generated intermediate goals). This is unlikely (and would be a bug)
-      but something to account for. -/
+    /- First, internalize any fvars the e-graph hasn't seen yet. -/
     let state ← updateStepGrindState state config precondMVarId
     let mvarDecl ← precondMVarId.getDecl
     let goalState : GoalState :=
       { state.goalState with
         nextDeclIdx := mvarDecl.lctx.decls.size }
-    let action : GrindM _ := do
-      let goal : Goal := { toGoalState := goalState, mvarId := precondMVarId }
-      match ← Grind.solve goal with
-      | none   => pure true
-      | some _ => pure false
-    let (solved, _, _) ← runGrindWithState state action
-    unless solved do throwError "grind could not solve precondition"
-    /- Wrap the proof in an auxiliary theorem to prevent kernel reduction loops.
-       Grind proofs chain through Classical.byContradiction + Int.Linear.eq_of_core
-       which cause maxRecDepth in the kernel during well-founded recursion checking
-       for recursive theorems (the kernel tries to reduce the proof, which references
-       hypotheses from the recursive call, triggering infinite unfolding). -/
-    let proof ← instantiateMVars (mkMVar precondMVarId)
+    /- Solve inside withNewMCtxDepth to protect external mvars.
+       Create a fresh mvar at the new depth for grind to solve. -/
+    let proof ← withNewMCtxDepth (allowLevelAssignments := true) do
+      let freshMVar ← precondMVarId.withContext
+        (mkFreshExprMVar (← precondMVarId.getType))
+      let freshMVarId := freshMVar.mvarId!
+      let action : GrindM _ := do
+        let goal : Goal := { toGoalState := goalState, mvarId := freshMVarId }
+        match ← Grind.solve goal with
+        | none   => pure true
+        | some _ => pure false
+      let (solved, _, _) ← runGrindWithState state action
+      unless solved do throwError "grind could not solve precondition"
+      instantiateMVars (mkMVar freshMVarId)
+    /- Wrap the proof in an auxiliary theorem to prevent kernel reduction loops. -/
     let goalType ← precondMVarId.getType
     let auxTheorem ← Lean.Meta.mkAuxTheorem goalType proof (zetaDelta := true)
     precondMVarId.assign auxTheorem
