@@ -694,6 +694,14 @@ These require reading the proof, not just grepping:
 
 - **Helper lemmas properly named and documented if non-obvious?**
 
+- **Repeated `simp [...]; solver` in cdot sub-goals?** If the same constants appear
+  in `simp` calls before a solver (`scalar_tac`, `agrind`, `grind`, `bv_tac`) in 3+
+  sub-goals after `step`/`step*`, they should be promoted to solver attributes
+  (`@[scalar_tac_simps]`, `@[agrind =]`, `@[grind =]`, `@[bvify]`) so `step`/`step*`
+  discharges the sub-goals automatically and they disappear. Also flag
+  `have hFoo : CONST.val = N := by simp` — the underlying definition likely needs
+  attributes. (Rule: "Register Rust global/const definitions with solver attributes")
+
 - **Is the proof clean and not verbose?** No copy-paste bloat, no redundant `have`
   that could be inlined. Each tactic call should earn its place.
 

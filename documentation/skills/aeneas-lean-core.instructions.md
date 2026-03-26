@@ -401,6 +401,59 @@ change when Rust code is re-extracted), making such proofs hard to maintain. Pre
 **Exception:** Large `simp only` calls are fine in proofs about auxiliary specifications
 (pure mathematical lemmas), where the definitions are stable.
 
+### Register Rust global/const definitions with solver attributes
+Pure (i.e., not living in `Result`) Rust global/const scalar definitions should be
+registered with all relevant solver attributes:
+```lean
+@[simp, scalar_tac_simps, agrind =, grind =, bvify]
+theorem MY_CONST_val : MY_CONST.val = 42 := by decide
+```
+This is generally safe and lets all solvers use the concrete value directly.
+
+**Why this matters for `step` / `step*`:** When `step` applies a function spec, it
+generates precondition sub-goals (e.g., bounds checks). If the solver (`agrind`,
+`scalar_tac`, etc.) already knows the concrete values of global constants via its
+attributes, it can discharge these sub-goals automatically — they disappear entirely.
+Without the attributes, each sub-goal requires a manual `simp [CONST]; solver` call
+in a cdot block, which is verbose and fragile.
+
+**Detecting missing attributes — patterns to look for:**
+
+1. **Repeated `simp [foo₁, ...]; solver` in cdot sub-goals after `step` / `step*`:**
+   If the same constants appear in `simp` calls before a solver across multiple
+   sub-goals, those constants should be promoted to solver attributes. Once marked,
+   the sub-goals are discharged by `step` / `step*` automatically and disappear.
+   ```lean
+   -- BEFORE: manual simp + solver in every sub-goal
+   step as ⟨i1, _⟩
+   · simp only [NBAR, LOGQ] at *; scalar_tac
+   step as ⟨i2, _⟩
+   · simp only [NBAR, LOGQ] at *; scalar_tac
+
+   -- AFTER: mark NBAR, LOGQ with @[scalar_tac_simps] (and other attrs)
+   -- sub-goals disappear, proof simplifies to:
+   step as ⟨i1, _⟩
+   step as ⟨i2, _⟩
+   ```
+
+2. **`have hFoo : CONST.val = N := by simp ...` followed by `simp [hFoo]; solver`:**
+   A local hypothesis that unfolds a global constant to its concrete value is a strong
+   signal that the global definition is missing solver attributes. Mark the definition
+   directly — the hypothesis becomes unnecessary.
+
+3. **`simp` with a simpset (e.g., `global_simps`):** Use `simp?` to discover which
+   individual lemmas `simp` actually uses, then mark those with the appropriate solver
+   attributes.
+
+The attribute-to-solver mapping:
+
+| Solver | Attribute |
+|--------|-----------|
+| `scalar_tac` | `@[scalar_tac_simps]` |
+| `agrind` | `@[agrind =]` |
+| `grind` | `@[grind =]` |
+| `bv_tac` | `@[bvify]` |
+
 ### Extract auxiliary lemmas for complex sub-proofs
 When a proof step requires complex non-linear arithmetic, bitwise reasoning, or
 multi-step calculation, **extract it as a separate auxiliary lemma** rather than

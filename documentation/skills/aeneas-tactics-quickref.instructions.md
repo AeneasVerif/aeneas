@@ -188,6 +188,7 @@ editing goal 3 does not re-elaborate goals 1 or 2.
     fixed — the sorry is acceptable, but dead tactics, unused simp args, and other
     warnings are not. Keep sorry'd proofs clean so they're ready for completion.
 - **No big `simp only [...]` in implementation proofs** — model names are unstable. Use `simp [*]` or targeted rewrites. (OK in spec lemmas.)
+- **Register Rust global/const scalar definitions with solver attributes** — pure Rust global/const definitions should be marked `@[simp, scalar_tac_simps, agrind =, grind =, bvify]`. This lets `step` / `step*` discharge precondition sub-goals automatically (they disappear). If you see repeated `simp [CONST]; solver` in cdot sub-goals after `step`, or `have hFoo : CONST.val = N := by simp ...`, the definition is missing attributes.
 - **Extract complex sub-proofs** as auxiliary lemmas — don't inline 15 lines of arithmetic inside `step*`
 - **Simplify shifts early**: rewrite `>>>` as `/ 2^n`, `<<<` as `* 2^n`
 - **Sorry'd proofs must be fast**: do not leave expensive `step*`, `cases p`, or `first | ...` before a sorry. Use plain `sorry` (with a comment sketching the approach). Expensive sorry'd proofs waste build time on every `lake build` for zero verification value.
