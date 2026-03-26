@@ -629,6 +629,9 @@ grep -n 'maxRecDepth' FILE        # → diagnose simp loop, never raise limit
 # maxHeartbeats too high (Pitfall #13)
 grep -n 'maxHeartbeats' FILE      # → verify value < 8_000_000; if higher, proof needs restructuring
 
+# set_option ... in inside proof script (Pitfall #13) — breaks incrementality
+grep -n 'set_option.*in$' FILE    # → check if inside a proof (by block); OK before theorem declaration
+
 # Unfold of Aeneas stdlib definitions (Pitfall #10)
 grep -n 'unfold.*Aeneas\|unfold.*Std\.\|unfold.*core\.' FILE
 # → search for existing lemma instead of unfolding

@@ -275,6 +275,23 @@ Use `trace.profiler` to find which tactic dominates the time, then optimize or r
 
 <!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core Pitfall #13 -->
 
+**⛔ NEVER use `set_option ... in` inside a proof script.** For example:
+```lean
+-- ⛔ BAD: breaks incrementality inside the proof
+theorem my_fn.spec ... := by
+  set_option maxHeartbeats 16000000 in
+  step* ...
+```
+The `in` scoping inside a tactic block makes everything below it a single elaboration
+unit — any edit forces full re-elaboration, destroying incremental feedback.
+
+Using `set_option ... in` **before** a theorem declaration is fine and standard practice:
+```lean
+-- ✅ GOOD: set_option before the theorem declaration
+set_option maxHeartbeats 16000000 in
+theorem my_fn.spec ... := by ...
+```
+
 Lean's default `maxHeartbeats` (200K) is very low for Aeneas proofs. **Increase it to
 1M as a baseline** (`set_option maxHeartbeats 1000000`) — this is a reasonable default
 for most proofs.
