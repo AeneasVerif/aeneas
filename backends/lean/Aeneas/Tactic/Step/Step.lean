@@ -2,6 +2,7 @@ import Lean
 import Aeneas.Tactic.Solver.ScalarTac
 import Aeneas.Tactic.Step.Init
 import Aeneas.Tactic.Step.GrindState
+import Aeneas.Tactic.Step.SymHelpers
 import Aeneas.Std
 import Aeneas.Tactic.Simp.FSimp
 import AeneasMeta.Async
@@ -13,6 +14,7 @@ namespace Step
 
 open Lean Elab Term Meta Tactic
 open Utils
+open Lean.Meta.Sym (SymM)
 
 /-- A special definition that we use to introduce pretty-printed terms in the context.
 
@@ -34,7 +36,12 @@ def eq_imp_prettyMonadEq {α : Type u} {β : Type v} (x : Std.Result α) (y : β
   unfold prettyMonadEq
   constructor
 
-def traceGoalWithNode (msg : String) : TacticM Unit := Utils.traceGoalWithNode `Step msg
+def traceGoalWithNode (msg : String) (mvarId : MVarId) : MetaM Unit :=
+  mvarId.withContext do
+    withTraceNode `Step (fun _ => do pure msg) do
+      if ← isTracingEnabledFor `Step then do
+          addTrace `Step m!"{mvarId}"
+      else pure ()
 
 -- TODO: the scalar types annoyingly often get reduced when we use the step
 -- tactic. We should find a way of controling reduction. For now we use rewriting
@@ -286,9 +293,9 @@ partial def getPostNames (e : Expr) : MetaM (Array (Option Name)) := do
 
 /-- Extract the names used in the post-condition of the current goal.
     The goal should have the shape `spec program post`. -/
-def getPostNamesFromGoal : TacticM (Array (Option Name)) := do
+def getPostNamesFromGoal (mvarId : MVarId) : MetaM (Array (Option Name)) := do
   try
-    let goalTy ← (← getMainGoal).getType
+    let goalTy ← mvarId.getType
     let goalTy ← instantiateMVars goalTy
     goalTy.consumeMData.withApp fun spec? args => do
     if spec?.isConstOf ``Std.WP.spec ∧ args.size = 3 then
@@ -303,11 +310,11 @@ def getVarNamesFromGoal : TacticM (Array (Option Name) × Option Name) := do
   match ← getBindVarName with
   | some name => pure (#[some name], some name)
   | none =>
-    let names ← getPostNamesFromGoal
+    let names ← getPostNamesFromGoal (← getMainGoal)
     pure (names, names[0]?.join)
 
 /-- Attempt to resolve typeclasses. -/
-def trySolveTypeclasses (mvarsIds : List MVarId) : TacticM (List MVarId) := do
+def trySolveTypeclasses (mvarsIds : List MVarId) : MetaM (List MVarId) := do
   withTraceNode `Step (fun _ => pure m!"trySolveTypeclasses") do
   mvarsIds.filterMapM fun (mvar : MVarId) => do
     trace[Step] "goal: {mvar}"
@@ -339,8 +346,8 @@ def trySolveTypeclasses (mvarsIds : List MVarId) : TacticM (List MVarId) := do
 The resulting target should be of the shape:
 `qimp_spec P k Q` (or `qimp P Q`)
 -/
-def tryMatch (isLet : Bool) (th : Expr) :
-  TacticM (Array MVarId) := do
+def tryMatch (isLet : Bool) (th : Expr) (mvarId : MVarId) :
+  SymM (MVarId × Array MVarId) := do
   withTraceNode `Step (fun _ => pure m!"tryMatch") do
   /- Apply the theorem
      We try to match the theorem with the goal
@@ -373,7 +380,7 @@ def tryMatch (isLet : Bool) (th : Expr) :
     if isLet
     then (``Std.WP.spec_bind', 4)
     else (``Std.WP.spec_mono', 2)
-  let specMonoBind ← Term.mkConst specMonoBindName
+  let specMonoBind ← mkConstWithFreshMVarLevels specMonoBindName
   let specMonoBindTy ← inferType specMonoBind
   trace[Step] "specMonoBind (isLet:{isLet}): {specMonoBind}: {← inferType specMonoBind}"
   let (specMonoBindMVars, _, specMonoBindTy) ← forallMetaBoundedTelescope specMonoBindTy varNum
@@ -390,16 +397,15 @@ def tryMatch (isLet : Bool) (th : Expr) :
   let specMonoBind ← mkAppOptM' specMonoBind (specMonoBindMVars.map some)
   trace[Step] "Applied specMonoBind with theorem: {specMonoBind}: {specMonoBindTy}"
 
-  let mgoal ← Tactic.getMainGoal
   let specMonoBindTy ← inferType specMonoBind
-  let goalTy ← mgoal.getType
+  let goalTy ← mvarId.getType
   trace[Step] "About to check defeq:\n- specMonoBindTy: {specMonoBindTy}\n- goalTy: {goalTy}"
   let ok ← isDefEq specMonoBindTy goalTy
   if ¬ ok then
     trace[Step] "Could not unify the theorem with the target"
     throwError "Could not unify the theorem with the target:\n- theorem: {specMonoBindTy}\n- target: {goalTy}"
 
-  mgoal.assign specMonoBind
+  mvarId.assign specMonoBind
   trace[Step] "New goal: {ngoal}"
 
   let env ← getEnv
@@ -410,20 +416,18 @@ def tryMatch (isLet : Bool) (th : Expr) :
   let mvarsIds ← trySolveTypeclasses mvarsIds.toList
   let mvarsIds := mvarsIds.toArray
 
-  -- Update the goal and return
-  setGoals [ngoal]
-
   --
-  pure mvarsIds
+  pure (ngoal, mvarsIds)
 
 /-- Small helper: introduce the pretty equality (e.g., `[> let z ← x + y <]`) -/
-def introPrettyEquality (args : Args) (fExpr : Expr) (outputFVars : Array Expr) :
-  TacticM Unit := do
+def introPrettyEquality (args : Args) (fExpr : Expr) (outputFVars : Array Expr)
+    (mvarId : MVarId) :
+  SymM MVarId := do
   withTraceNode `Step (fun _ => pure m!"introPrettyEquality") do
-  withMainContext do
+  mvarId.withContext do
   trace[Step] "fExpr: {fExpr},\noutputFVars: {outputFVars}"
   let some name := args.keepPretty
-    | return
+    | return mvarId
   -- Construct the tuple of outputs
   let pat ← mkProdsVal outputFVars.toList
   trace[Step] "Constructed the pattern: {pat}"
@@ -431,8 +435,12 @@ def introPrettyEquality (args : Args) (fExpr : Expr) (outputFVars : Array Expr) 
   let e ← mkAppM ``eq_imp_prettyMonadEq #[fExpr, pat]
   trace[Step] "Created the equality expression: {e}"
   -- Introduce it
-  Utils.addDeclTac name e (← inferType e) (asLet := false) fun e => do
-    trace[Step] "Introduced the \"pretty\" let binding: {← inferType e}"
+  let ty ← inferType e
+  let mvarId ← mvarId.assert name ty e
+  let (_, mvarId) ← mvarId.intro1
+  mvarId.withContext do
+    trace[Step] "Introduced the \"pretty\" let binding"
+  return mvarId
 
 /-- Introduce the outputs (variables and postconditions) into the context after applying
     the step theorem.
@@ -452,45 +460,52 @@ def introPrettyEquality (args : Args) (fExpr : Expr) (outputFVars : Array Expr) 
     TODO: we use `simp` a lot, which uselessely explores the monadic term and the post-condition.
     We might want to optimize this.
 -/
-def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
-  TacticM (Option MainGoal) := do
+def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState)
+    (mvarId : MVarId) :
+  SymM (Option MainGoal) := do
   withTraceNode `Step (fun _ => pure m!"introOutputs") do
   /- Decompose nested uses of `predn` to introduce a sequence of universal quantifiers.
      Note that at the same time we simplify the (monadic) continuation by using
      some monad simp theorems. -/
-  let some _ ← withTraceNode `Step (fun _ => pure m!"simpAt: decomposing nested uses of `predn`") do
-    Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
-            { simpThms := #[← stepSimpExt.getTheorems],
-              addSimpThms :=
-                #[``Std.WP.qimp_spec_predn, ``Std.WP.qimp_spec_unit,
-                  ``Std.WP.qimp_predn, ``Std.WP.qimp_unit,
-                  ``Std.WP.qimp_spec_exists, ``Std.WP.qimp_exists,
-                  ``forall_unit, ``true_imp_iff] }
-            (.targets #[] true)
+  let (simpResult, remainingGoals) ← withTraceNode `Step (fun _ => pure m!"simpAt: decomposing nested uses of `predn`") do
+    runTacticMOnGoal mvarId do
+      Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
+              { simpThms := #[← stepSimpExt.getTheorems],
+                addSimpThms :=
+                  #[``Std.WP.qimp_spec_predn, ``Std.WP.qimp_spec_unit,
+                    ``Std.WP.qimp_predn, ``Std.WP.qimp_unit,
+                    ``Std.WP.qimp_spec_exists, ``Std.WP.qimp_exists,
+                    ``forall_unit, ``true_imp_iff] }
+              (.targets #[] true)
+  let some mvarId := (if simpResult.isSome then remainingGoals.head? else none)
     | trace[Step] "The main goal was solved!"; return none
-  traceGoalWithNode "goal after decomposing the nested `predn`"
+  traceGoalWithNode "goal after decomposing the nested `predn`" mvarId
 
   /- Eliminate `qimp_spec`/`qimp` to reveal `imp` and decompose the post-condition into a sequence
      of implications -/
-  let some _ ← withTraceNode `Step (fun _ => pure m!"simpAt: eliminating `qimp_spec` and `qimp`") do
-    Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
-            { declsToUnfold := #[``Std.WP.curry, ``Std.WP.predn]
-              addSimpThms :=
-                #[``Std.WP.qimp_spec_iff, ``Std.WP.qimp_iff,
-                  ``Std.WP.imp_and_iff, ``forall_unit, ``true_imp_iff] }
-            (.targets #[] true)
+  let (simpResult, remainingGoals) ← withTraceNode `Step (fun _ => pure m!"simpAt: eliminating `qimp_spec` and `qimp`") do
+    runTacticMOnGoal mvarId do
+      Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
+              { declsToUnfold := #[``Std.WP.curry, ``Std.WP.predn]
+                addSimpThms :=
+                  #[``Std.WP.qimp_spec_iff, ``Std.WP.qimp_iff,
+                    ``Std.WP.imp_and_iff, ``forall_unit, ``true_imp_iff] }
+              (.targets #[] true)
+  let some mvarId := (if simpResult.isSome then remainingGoals.head? else none)
     | trace[Step] "The main goal was solved!"; return none
-  traceGoalWithNode "goal after aliminating `qimp_spec` and `qimp` and decomposing the post-condition"
+  traceGoalWithNode "goal after aliminating `qimp_spec` and `qimp` and decomposing the post-condition" mvarId
 
   /- Eliminate `imp`
 
   Some types get unfolded too much (e.g., `U32` sometimes gets unfolded to `U32) so we use this call
   to `dsimp` to also fold them back. -/
-  withTraceNode `Step (fun _ => pure m!"dsimpAt: eliminating `imp` and folding back scalar types") do
-    Simp.dsimpAt true {implicitDefEqProofs := true, failIfUnchanged := false, iota := false}
-      { declsToUnfold := #[``Std.WP.imp], addSimpThms := scalar_eqs } (.targets #[] true)
-  if (← getUnsolvedGoals).isEmpty then trace[Step] "The main goal was solved!"; return none
-  traceGoalWithNode "goal after aliminating `imp` and folding back the scalar types"
+  let (_, remainingGoals) ← withTraceNode `Step (fun _ => pure m!"dsimpAt: eliminating `imp` and folding back scalar types") do
+    runTacticMOnGoal mvarId do
+      Simp.dsimpAt true {implicitDefEqProofs := true, failIfUnchanged := false, iota := false}
+        { declsToUnfold := #[``Std.WP.imp], addSimpThms := scalar_eqs } (.targets #[] true)
+  let some mvarId := remainingGoals.head?
+    | trace[Step] "The main goal was solved!"; return none
+  traceGoalWithNode "goal after aliminating `imp` and folding back the scalar types" mvarId
 
   /- Introduce the outputs.
 
@@ -498,10 +513,9 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
   of shape `[> let (xi) ← f yi <]`). We introduce it just before the first proposition: in practice, it generally
   works well.
   -/
-  let goal ← getMainGoal
   /- For every universally quantified variable, check whether it is a `Prop` or not -/
   let outputIsProp ← do
-    let type ← goal.getType
+    let type ← mvarId.getType
     let type ← instantiateMVars type
     forallTelescope type.consumeMData fun fvars _ => do
     fvars.mapM fun e => do isProp (← inferType e)
@@ -523,7 +537,7 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
   let totalNumProps := (outputIsProp.filter (fun b => b)).size
   let mkFreshAnon isProp :=
     if isProp then mkFreshAnonPropUserName else mkFreshUserName `x
-  let mkFreshName (nPropsBefore : Nat) (i : Nat) (isProp : Bool) : TacticM Name := do
+  let mkFreshName (nPropsBefore : Nat) (i : Nat) (isProp : Bool) : MetaM Name := do
     trace[Step] "i: {i}, isProp: {isProp}"
     -- Use the user-provided name if possible
     if h : i < args.ids.size then
@@ -559,19 +573,16 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
   let (outputIds, postsIds) := ids.toList.splitAt prefixLength
 
   -- Introduce the outputs
-  let (outputs, goal) ← goal.introN prefixLength outputIds
-  setGoals [goal]
-  traceGoalWithNode "goal after introducing the outputs"
+  let (outputs, mvarId) ← mvarId.introN prefixLength outputIds
+  traceGoalWithNode "goal after introducing the outputs" mvarId
 
   -- Introduce the pretty equality
-  introPrettyEquality args fExpr (outputs.map Expr.fvar)
-  traceGoalWithNode "goal after introducing the pretty equality"
+  let mvarId ← introPrettyEquality args fExpr (outputs.map Expr.fvar) mvarId
+  traceGoalWithNode "goal after introducing the pretty equality" mvarId
 
   -- Introduce the remaining outputs
-  let goal ← getMainGoal
-  let (posts, goal) ← goal.introN postFixLength postsIds
-  setGoals [goal]
-  traceGoalWithNode "goal after introducing the post-conditions"
+  let (posts, mvarId) ← mvarId.introN postFixLength postsIds
+  traceGoalWithNode "goal after introducing the post-conditions" mvarId
 
   -- Build the Output information
   let mkName? (n : Name) : Option Name :=
@@ -584,7 +595,7 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
     { fvarId := fv, name? := mkName? (postsIds.getD i `_), isProp := outputIsProp[prefixLength + i]! : Output }
   let introducedVars := outputInfos ++ postInfos
 
-  pure (some { goal := ← getMainGoal, outputs := introducedVars, stepState })
+  pure (some { goal := mvarId, outputs := introducedVars, stepState })
 
 /-- Attempt to solve the preconditions.
 
@@ -597,22 +608,27 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
 def trySolvePreconditions (args : Args) (config : Config)
     (originalGoal : MVarId) (stepState : StepState)
     (solvePreconditionTac : Option StepGrindState → TacticM Unit)
-    (newPropGoals : List MVarId)
-    : TacticM (StepState × List (MVarId × OptTask (Option Expr))) := do
+    (newPropGoals : List MVarId) (mvarId : MVarId)
+    : SymM (StepState × List (MVarId × OptTask (Option Expr)) × MVarId) := do
   withTraceNode `Step (fun _ => pure m!"trySolvePreconditions") do
   let ordPropGoals ←
     newPropGoals.mapM (fun g => do
       let ty ← g.getType
       pure ((← Utils.getMVarIds ty).size, g))
   let ordPropGoals := (ordPropGoals.mergeSort (fun (mvars0, _) (mvars1, _) => mvars0 ≤ mvars1)).reverse
-  setGoals (ordPropGoals.map Prod.snd)
   /- First attempt to solve the preconditions in a *synchronous* manner by using the `singleAssumptionTac`.
      We do this to instantiate meta-variables -/
   if let some assumTac := args.assumTac then
-    allGoalsNoRecover (tryTac assumTac)
+    let allGoals := ordPropGoals.map Prod.snd
+    for g in allGoals do
+      if ← g.isAssigned then continue
+      try
+        let (_, _) ← runTacticMOnGoal g (tryTac assumTac)
+      catch _ => pure ()
     /- Attempt to resolve the typeclass instances again (we already tried once, but maybe we couldn't
       because some meta-variables were not resolved) -/
-    setGoals (← trySolveTypeclasses (← getGoals))
+    let remainingGoals ← (ordPropGoals.map Prod.snd).filterM (fun g => do pure (not (← g.isAssigned)))
+    let _ ← trySolveTypeclasses remainingGoals
   /- Retrieve the unsolved preconditions - make sure we recover them in the original order -/
   let goals ← newPropGoals.filterMapM (fun g => do if ← g.isAssigned then pure none else pure (some g))
   /- If `threadGrindState` is on but we don't have an already-initialized grind state,
@@ -624,15 +640,20 @@ def trySolvePreconditions (args : Args) (config : Config)
       pure stepState
   /- Then attempt to solve the remaining preconditions by using more sophisticated tactics, potentially *asynchronously* -/
   if args.async then
-    let promises ← Async.asyncRunTacticOnGoals (solvePreconditionTac stepState.grindState?) goals (cancelTk? := ← IO.CancelToken.new) (inlineFreshProofs := false)
+    let (promises, _) ← runTacticMOnGoal mvarId do
+      Async.asyncRunTacticOnGoals (solvePreconditionTac stepState.grindState?) goals (cancelTk? := ← IO.CancelToken.new) (inlineFreshProofs := false)
     let promises : Array (Task _) := promises.map IO.Promise.result?
     let promises : Array (Task _) := promises.map (
         fun o => o.map (sync := true) (fun o => match o with | none | some none => none | some (some o) => some o))
-    pure (stepState, List.zip goals (promises.toList.map OptTask.task))
+    pure (stepState, List.zip goals (promises.toList.map OptTask.task), mvarId)
   else
-    setGoals goals
-    allGoalsNoRecover (solvePreconditionTac stepState.grindState?)
-    pure (stepState, (← getUnsolvedGoals).map fun g => (g, OptTask.none))
+    for g in goals do
+      if ← g.isAssigned then continue
+      try
+        let (_, _) ← runTacticMOnGoal g (solvePreconditionTac stepState.grindState?)
+      catch _ => pure ()
+    let unsolvedGoals ← goals.filterM (fun g => do pure (not (← g.isAssigned)))
+    pure (stepState, unsolvedGoals.map fun g => (g, OptTask.none), mvarId)
 
 /-- Post-process the main goal.
 
@@ -640,21 +661,21 @@ The main thing we do is simplify the post-conditions.
 
 TODO: simplify or remove this function.
 -/
-def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option MainGoal) := do
+def postprocessMainGoal (mainGoal : Option MainGoal) : SymM (Option MainGoal) := do
   withTraceNode `Step (fun _ => pure m!"postprocessMainGoal") do
   match mainGoal with
   | none => pure none
   | some mainGoal =>
-    setGoals [mainGoal.goal]
-    traceGoalWithNode "current goal"
+    traceGoalWithNode "current goal" mainGoal.goal
     -- Simplify the post-conditions
     let args : Simp.SimpArgs :=
       {simpThms := #[← stepPostSimpExt.getTheorems],
        simprocs := #[← stepPostSimprocExt.getSimprocs] }
     -- Simplify
-    let posts ←
-      Simp.simpAt true { maxDischargeDepth := 0, failIfUnchanged := false }
-        args (.targets (mainGoal.outputs.map Output.fvarId) false)
+    let (posts, remainingGoals) ←
+      runTacticMOnGoal mainGoal.goal do
+        Simp.simpAt true { maxDischargeDepth := 0, failIfUnchanged := false }
+          args (.targets (mainGoal.outputs.map Output.fvarId) false)
     match posts with
     | none =>
       -- We actually closed the goal: we shouldn't get there
@@ -663,7 +684,9 @@ def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option MainGoal)
       pure none
     | some posts =>
       trace[Step] "Goal not closed"
-      withMainContext do
+      let some mvarId := remainingGoals.head?
+        | trace[Step] "No remaining goals after simplification"; return none
+      mvarId.withContext do
       let outputs ← posts.mapM fun fvid => do
         let name ← fvid.getUserName
         let name? := if name.hasMacroScopes then none else some name
@@ -675,23 +698,26 @@ def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option MainGoal)
       Note that we want to simplify targets of the shape:
       `ok ... ⦃ x₀ ... xₙ => ... ⦄`
       -/
-      let r ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
-        {simpThms := #[← stepSimpExt.getTheorems], declsToUnfold := #[``pure]} (.targets #[] true)
+      let (r, remainingGoals) ← runTacticMOnGoal mvarId do
+        Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
+          {simpThms := #[← stepSimpExt.getTheorems], declsToUnfold := #[``pure]} (.targets #[] true)
       if r.isSome then
-        pure (some ({goal := ← getMainGoal, outputs, stepState := mainGoal.stepState} : MainGoal))
+        let some finalGoal := remainingGoals.head?
+          | return none
+        pure (some ({goal := finalGoal, outputs, stepState := mainGoal.stepState} : MainGoal))
       else pure none
 
-def stepWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
-  TacticM Goals := do
+def stepWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr)
+    (mvarId : MVarId) :
+  SymM Goals := do
   withTraceNode `Step (fun _ => pure m!"stepWith") do
   -- Save the main goal before tryMatch (needed for lazy grind state initialization)
-  let originalGoal ← getMainGoal
+  let originalGoal := mvarId
   -- Attempt to instantiate the theorem and introduce it in the context
-  let newGoals ← tryMatch isLet th
+  let (mainGoal, newGoals) ← tryMatch isLet th mvarId
   --
-  withMainContext do
-  traceGoalWithNode "current goal"
-  let mainGoal ← getMainGoal
+  mainGoal.withContext do
+  traceGoalWithNode "current goal" mainGoal
   /- Process the pre-conditions as soon as possible (we want to start processing them
      in parallel) -/
   -- Split between the sub-goals which are propositions and the others
@@ -703,30 +729,29 @@ def stepWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
   withTraceNode `Step (fun _ => pure m!"non prop goals") do
     trace[Step] "{← newNonPropGoals.mapM fun mvarId => do pure ((← mvarId.getDecl).userName, mvarId)}"
   -- Attempt to solve the goals which are propositions
-  let (stepState, newPropGoals) ← trySolvePreconditions args args.config originalGoal args.stepState args.solvePreconditionTac newPropGoals
+  let (stepState, newPropGoals, _) ← trySolvePreconditions args args.config originalGoal args.stepState args.solvePreconditionTac newPropGoals mainGoal
   /- Process the main goal -/
   -- Introduce the outputs, including the post-conditions, into the context
-  setGoals [mainGoal]
-  let mainGoal ← introOutputs args fExpr stepState
+  let mainGoalRes ← introOutputs args fExpr stepState mainGoal
   /- Simplify the post-conditions in the main goal - note that we waited until now
       because by solving the preconditions we may have instantiated meta-variables.
       We also simplify the goal again (to simplify let-bindings, etc.) -/
-  let mainGoal ← postprocessMainGoal mainGoal
+  let mainGoalRes ← postprocessMainGoal mainGoalRes
   -- Update the grind state with newly introduced hypotheses.
   -- We do this AFTER postprocessMainGoal so that we internalize the simplified
   -- postconditions (not the raw ones that get replaced by simp).
-  let mainGoal ← match mainGoal with
+  let mainGoalRes ← match mainGoalRes with
     | some mg =>
       let stepState ← mg.stepState.update args.config mg.goal
       pure (some { mg with stepState })
     | none => pure none
-  if let some mainGoal := mainGoal then
+  if let some mg := mainGoalRes then
     withTraceNode `Step
       (fun _ => pure m!"Main goal after simplifying the post-conditions and the target") do
-      trace[Step] "{mainGoal.goal}"
+      trace[Step] "{mg.goal}"
   /- Put everything together -/
   let newNonPropGoals ← newNonPropGoals.filterM fun mvar => not <$> mvar.isAssigned
-  pure ({ unassignedVars := newNonPropGoals.toArray, preconditions := newPropGoals.toArray, mainGoal })
+  pure ({ unassignedVars := newNonPropGoals.toArray, preconditions := newPropGoals.toArray, mainGoal := mainGoalRes })
 
 /-- Small utility: if `args` is not empty, return the name of the app in the first
     arg, if it is a const. -/
@@ -744,8 +769,9 @@ def getFirstArg (args : Array Expr) : Option Expr := do
 /-- Helper: try to apply a theorem.
 
     Return the list of post-conditions we introduced if it succeeded. -/
-def tryApply (args : Args) (isLet:Bool) (fExpr : Expr) (kind : String) (th : Option Expr) :
-  TacticM (Option Goals) := do
+def tryApply (args : Args) (isLet:Bool) (fExpr : Expr) (kind : String) (th : Option Expr)
+    (mvarId : MVarId) :
+  SymM (Option Goals) := do
   let res ← do
     match th with
     | none =>
@@ -756,7 +782,7 @@ def tryApply (args : Args) (isLet:Bool) (fExpr : Expr) (kind : String) (th : Opt
       -- Apply the theorem
       let res ← do
         try
-          let res ← stepWith args isLet fExpr th
+          let res ← stepWith args isLet fExpr th mvarId
           pure (some res)
         catch _ => pure none
   match res with
@@ -768,28 +794,27 @@ def tryApply (args : Args) (isLet:Bool) (fExpr : Expr) (kind : String) (th : Opt
 
     -- TODO: check that they are "compatible" with the goal to avoid a potentially expensive unification
 -/
-def tryAssumptions (args : Args) (isLet:Bool) (fExpr : Expr) :
-  TacticM (Option (Goals × UsedTheorem)) := do
-  withTraceNode `Step (fun _ => pure m!"tryAssumptions") do run
-where
-  run :=
-  withMainContext do
+def tryAssumptions (args : Args) (isLet:Bool) (fExpr : Expr)
+    (mvarId : MVarId) :
+  SymM (Option (Goals × UsedTheorem)) := do
+  withTraceNode `Step (fun _ => pure m!"tryAssumptions") do
+  mvarId.withContext do
   let ctx ← Lean.MonadLCtx.getLCtx
   let decls ← ctx.getAssumptions
   for decl in decls.reverse do
     trace[Step] "Trying assumption: {decl.userName} : {decl.type}"
     try
-      let goal ← stepWith args isLet fExpr decl.toExpr
+      let goal ← stepWith args isLet fExpr decl.toExpr mvarId
       return (some (goal, .localHyp decl))
     catch _ => continue
   pure none
 
-def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
-  TacticM (Goals × UsedTheorem) := do
-  withMainContext do
+def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr)
+    (mvarId : MVarId) :
+  SymM (Goals × UsedTheorem) := do
+  mvarId.withContext do
   -- Retrieve the goal
-  let mgoal ← Tactic.getMainGoal
-  let goalTy ← mgoal.getType
+  let goalTy ← mvarId.getType
   /- There might be uninstantiated meta-variables in the goal that we need
      to instantiate (otherwise we will get stuck). -/
   let goalTy ← instantiateMVars goalTy
@@ -809,11 +834,11 @@ def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
      Otherwise, lookup one. -/
   match withTh with
   | some th => do
-    let goals ← stepWith args goalIsLet fExpr th
+    let goals ← stepWith args goalIsLet fExpr th mvarId
     return (goals, .givenExpr th)
   | none =>
     -- Try all the assumptions one by one and if it fails try to lookup a theorem.
-    if let some res ← tryAssumptions args goalIsLet fExpr then return res
+    if let some res ← tryAssumptions args goalIsLet fExpr mvarId then return res
     /- It failed: lookup the pspec theorems which match the expression *only
        if the function is a constant* -/
     let fIsConst ← do
@@ -835,8 +860,8 @@ def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
         pure thNames
       -- Try the theorems one by one
       for pspec in pspecs do
-        let pspecExpr ← Term.mkConst pspec
-        match ← tryApply args goalIsLet fExpr "pspec theorem" pspecExpr with
+        let pspecExpr ← mkConstWithFreshMVarLevels pspec
+        match ← tryApply args goalIsLet fExpr "pspec theorem" pspecExpr mvarId with
         | some goals => return (goals, .stepThm pspec)
         | none => pure ()
       -- It failed: try to use the recursive assumptions
@@ -851,7 +876,7 @@ def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
       for decl in decls.reverse do
         trace[Step] "Trying recursive assumption: {decl.userName} : {decl.type}"
         try
-          let goals ← stepWith args goalIsLet fExpr decl.toExpr
+          let goals ← stepWith args goalIsLet fExpr decl.toExpr mvarId
           return (goals, .localHyp decl)
         catch _ => continue
       -- Nothing worked: failed
@@ -909,14 +934,14 @@ def parseStepArgs
 /-- Use `agrind` after preprocessing goal the goal, in particular to simplify arithmetic expressions. -/
 def evalAGrindWithPreprocess (withGroundSimprocs : Bool) (config : Grind.Config) (nla : Bool) : TacticM Unit := do
   withTraceNode `Step (fun _ => do pure m!"evalAGrindWithPreprocess") do
-  traceGoalWithNode "before preprocessing"
+  traceGoalWithNode "before preprocessing" (← getMainGoal)
   let simpArgs : Simp.SimpArgs ← ScalarTac.getSimpArgs
   let sconfig : Simp.Config := {dsimp := false, failIfUnchanged := false, maxDischargeDepth := 1}
   match ← ScalarTac.simpAsmsTarget true sconfig simpArgs with
   | none =>
     trace[Step] "Goal solved by preprocessing!"
   | some _ =>
-    traceGoalWithNode "after preprocessing"
+    traceGoalWithNode "after preprocessing" (← getMainGoal)
     /- We reduce the search space but increase the number of instances (we need this when the
        context is big).
 
@@ -934,13 +959,17 @@ def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Option 
   (ids : Array (Option Name)) (idsUserProvided : Bool) (postsBasename : Option Name := none)
   (byTacStx : Option Syntax.Tactic)
   (stepState : StepState := {})
-  : TacticM Stats := do
+  (mvarId : MVarId)
+  : SymM Stats := do
   withTraceNode `Step (fun _ => pure m!"evalStep") do
   /- Simplify the goal -- TODO: this might close it: we need to check that and abort if necessary,
      and properly track that in the `Stats` -/
-  let _ ← Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
-      {simpThms := #[← stepSimpExt.getTheorems]} (.targets #[] true)
-  withMainContext do
+  let (_, remainingGoals) ← runTacticMOnGoal mvarId do
+    Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
+        {simpThms := #[← stepSimpExt.getTheorems]} (.targets #[] true)
+  let some mvarId := remainingGoals.head?
+    | throwError "step: goal solved by initial simplification (not yet tracked in Stats)"
+  mvarId.withContext do
 
   /- **Assumption tactic**:
 
@@ -949,14 +978,14 @@ def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Option 
     - more importantly, instantiate meta-variables introduced because of ghost variables, by matching
       preconditions against local assumptions (this is activated by `Config.inferGhostVars`)
   -/
-  let customAssumTac : Option (TacticM Unit) ← do
+  let customAssumTac : Option (TacticM Unit) :=
     if config.assumTac then
-      /- Preprocessing step for `singleAssumptionTac` -/
-      let singleAssumptionTacDtree ← singleAssumptionTacPreprocess
-      pure (some do
+      some do
+        /- Preprocessing step for `singleAssumptionTac` -/
+        let singleAssumptionTacDtree ← singleAssumptionTacPreprocess
         withTraceNode `Step (fun _ => pure m!"Attempting to solve with `singleAssumptionTac`") do
-        singleAssumptionTacCore singleAssumptionTacDtree (instMVars := config.inferGhostVars))
-    else pure none
+        singleAssumptionTacCore singleAssumptionTacDtree (instMVars := config.inferGhostVars)
+    else none
 
   /- **Grind tactic**: Excluded from allTacs when `threadGrindState = true` -/
   let grindTac : List (TacticM Unit) :=
@@ -1056,7 +1085,7 @@ def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Option 
     stepState := if config.threadGrindState then stepState else {},
     byTacSyntax := byTacStx
   }
-  let (goals, usedTheorem) ← stepAsmsOrLookupTheorem args withArg
+  let (goals, usedTheorem) ← stepAsmsOrLookupTheorem args withArg mvarId
   trace[Step] "Step done"
   return ⟨ goals, usedTheorem ⟩
 
@@ -1064,9 +1093,9 @@ def evalStep
   (config : Config) (keepPretty : Option Name) (withArg: Option Expr)
   (ids: Array (Option Name)) (idsUserProvided : Bool)
   (postsBasename : Option Name := none) (byTac : Option Syntax.Tactic)
-  : TacticM UsedTheorem := do
-  focus do
-  let ⟨goals, usedTheorem⟩ ← evalStepCore config keepPretty withArg ids idsUserProvided postsBasename byTac
+  (mvarId : MVarId)
+  : SymM (List MVarId × UsedTheorem) := do
+  let ⟨goals, usedTheorem⟩ ← evalStepCore config keepPretty withArg ids idsUserProvided postsBasename byTac (mvarId := mvarId)
   -- Wait for all the proof attempts to finish
   let mut sgs := #[]
   for (mvarId, proof) in goals.preconditions do
@@ -1080,8 +1109,30 @@ def evalStep
   let mainGoal := match goals.mainGoal with
     | none => []
     | some goal => [goal.goal]
-  setGoals (goals.unassignedVars.toList ++ sgs.toList ++ mainGoal)
-  pure usedTheorem
+  let allGoals := goals.unassignedVars.toList ++ sgs.toList ++ mainGoal
+  pure (allGoals, usedTheorem)
+
+/-- TacticM compatibility wrapper for `evalStepCore`. -/
+def evalStepCoreTac (config : Config) (keepPretty : Option Name) (withArg : Option Expr)
+  (ids : Array (Option Name)) (idsUserProvided : Bool) (postsBasename : Option Name := none)
+  (byTacStx : Option Syntax.Tactic)
+  (stepState : StepState := {})
+  : TacticM Stats := do
+  let mvarId ← getMainGoal
+  let stats ← runInSymM (evalStepCore config keepPretty withArg ids idsUserProvided postsBasename byTacStx stepState mvarId)
+  pure stats
+
+/-- TacticM compatibility wrapper for `evalStep`. -/
+def evalStepTac
+  (config : Config) (keepPretty : Option Name) (withArg: Option Expr)
+  (ids: Array (Option Name)) (idsUserProvided : Bool)
+  (postsBasename : Option Name := none) (byTac : Option Syntax.Tactic)
+  : TacticM UsedTheorem := do
+  focus do
+  let mvarId ← getMainGoal
+  let result ← runInSymM (evalStep config keepPretty withArg ids idsUserProvided postsBasename byTac mvarId)
+  setGoals result.1
+  pure result.2
 
 /-- The `step` tactic is used to reason about monadic goals.
 It is a bit equivalent to the `mvcgen` tactic from the Lean standard library.
@@ -1179,12 +1230,12 @@ of `step*` for more details.
 -/
 elab (name := step) "step" args:stepArgs : tactic => do
   let (config, withArg, ids, idsUserProvided, postsBasename, byTac) ← parseStepArgs args
-  evalStep config none withArg ids idsUserProvided postsBasename byTac *> return ()
+  evalStepTac config none withArg ids idsUserProvided postsBasename byTac *> return ()
 
 @[inherit_doc step]
 elab tk:"step?" args:stepArgs : tactic => do
   let (config, withArg, ids, idsUserProvided, postsBasename, byTac) ← parseStepArgs args
-  let stats ← evalStep config none withArg ids idsUserProvided postsBasename byTac
+  let stats ← evalStepTac config none withArg ids idsUserProvided postsBasename byTac
   let mut stxArgs := args.raw
   -- Update the syntax to add the `with thm`
   if stxArgs[1].isNone then
@@ -1253,7 +1304,7 @@ elab tk:letStep : tactic => do
   withMainContext do
   let (config, withArg, suggest, ids, postsBasename, byTac) ← parseLetStep tk
   let idsUserProvided := true
-  let stats ← evalStep config (some (.str .anonymous "_")) withArg ids idsUserProvided postsBasename byTac
+  let stats ← evalStepTac config (some (.str .anonymous "_")) withArg ids idsUserProvided postsBasename byTac
   let mut stxArgs := tk.raw
   if suggest then
     trace[Step] "suggest is true"
@@ -1341,7 +1392,7 @@ info: example
   (y : UScalar ty)
   (h : ↑x + ↑y ≤ UScalar.max ty)
   (z : UScalar ty)
-  (_ : [> let z ← x + y <])
+  (_✝ : [> let z ← x + y <])
   (h1 : ↑z = ↑x + ↑y) :
   ↑z = ↑x + ↑y
   := by sorry
@@ -1361,10 +1412,10 @@ info: example
   (y : UScalar ty)
   (h : 2 * ↑x + ↑y ≤ UScalar.max ty)
   (z1 : UScalar ty)
-  (__1 : [> let z1 ← x + y <])
+  (_ : [> let z1 ← x + y <])
   (h1 : ↑z1 = ↑x + ↑y)
   (z2 : UScalar ty)
-  (_ : [> let z2 ← z1 + x <])
+  (_✝ : [> let z2 ← z1 + x <])
   (h2 : ↑z2 = ↑z1 + ↑x) :
   ↑z2 = 2 * ↑x + ↑y
   := by sorry

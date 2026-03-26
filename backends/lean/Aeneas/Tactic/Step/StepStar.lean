@@ -384,10 +384,10 @@ inductive TargetKind where
 | unknown
 
 /- Smaller helper which we use to check in which situation we are -/
-def analyzeTarget : TacticM TargetKind := do
+def analyzeTarget (mvarId : MVarId) : MetaM TargetKind := do
   withTraceNode `Step (fun _ => do pure m!"analyzeTarget") do
   try
-    let goalTy ← (← getMainGoal).getType
+    let goalTy ← mvarId.getType
     -- Dive into the `spec program post`
     goalTy.consumeMData.withApp fun spec? args => do
     if h: spec?.isConstOf ``Std.WP.spec ∧ args.size = 3 then
@@ -451,7 +451,7 @@ partial def evalStepStar (cfg: Config) (fuel : Option Nat) : TacticM Result :=
 where
   simplifyTarget : TacticM (Info × Option MVarId) := do
     withTraceNode `Step (fun _ => do pure m!"simplifyTarget") do
-    traceGoalWithNode "about to simplify goal"
+    Step.traceGoalWithNode "about to simplify goal" (← getMainGoal)
     let mvarId0 ← getMainGoal
     let r ← Simp.simpAt (simpOnly := true)
       { maxDischargeDepth := 1, failIfUnchanged := false}
@@ -469,7 +469,7 @@ where
         pure #[TaskOrDone.mk (some tac)]
       else pure #[]
     let info : Info := ⟨ .tacs tac, #[], #[] ⟩
-    if r.isSome then traceGoalWithNode "after simplification"
+    if r.isSome then Step.traceGoalWithNode "after simplification" (← getMainGoal)
     else trace[Step] "goal proved"
     let goal ← do if r.isSome then pure (some (← getMainGoal)) else pure none
     pure (info, goal)
@@ -477,7 +477,7 @@ where
   traverseProgram (cfg : Config) (fuel : Option Nat) (ss : Step.StepState) : TacticM Info := do
     withMainContext do
     withTraceNode `Step (fun _ => do pure m!"traverseProgram") do
-    traceGoalWithNode "current goal"
+    traceGoalWithNode "current goal" (← getMainGoal)
     -- Check if there remains fuel
     let fuel ←
       match fuel with
@@ -485,7 +485,7 @@ where
       | some fuel =>
         if fuel = 0 then return { script := .tacs #[], unassignedVars := #[], subgoals := #[(← getMainGoal, none)] }
         else pure (some (fuel - 1))
-    let targetKind ← analyzeTarget
+    let targetKind ← analyzeTarget (← getMainGoal)
     match targetKind with
     | .bind varName => do
       let names := if varName.hasMacroScopes then #[] else #[some varName]
@@ -555,7 +555,7 @@ where
 
        We known in advance the result of processing `return res`, which is to do nothing.
        This allows us to prevent code duplication with the `onBind` function. -/
-    let names ← Step.getPostNamesFromGoal
+    let names ← Step.getPostNamesFromGoal (← getMainGoal)
     let (info, mainGoalAndState) ← onBind cfg names ss
     match mainGoalAndState with
     | none =>
@@ -568,7 +568,7 @@ where
   onFinish (cfg : Config) (mvarId : MVarId) : TacticM (Info × Option MVarId) := do
     withTraceNode `Step (fun _ => pure m!"onFinish") do
     setGoals [mvarId]
-    traceGoalWithNode "goal"
+    traceGoalWithNode "goal" mvarId
     /- Simplify a bit -/
     let (info, mvarId) ← simplifyTarget
     match mvarId with
@@ -741,7 +741,8 @@ where
       return (infos, mkStx)
 
   tryStep (cfg : Config) (ids : Array (Option Name) := #[]) (postsBasename : Option Name := none) (ss : Step.StepState) := do
-    try some <$> Step.evalStepCore cfg.stepConfig (some (.str .anonymous "_")) none ids false postsBasename cfg.preconditionTac ss
+    let mvarId ← getMainGoal
+    try some <$> Step.runInSymM (Step.evalStepCore cfg.stepConfig (some (.str .anonymous "_")) none ids false postsBasename cfg.preconditionTac ss mvarId)
     catch _ => pure none
 
   makeIds (base: Name) (numElem numPost : Nat) (defaultId := "x"): Array (TSyntax ``Lean.binderIdent) :=
@@ -859,13 +860,14 @@ example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
 
 /--
 error: unsolved goals
+case a
 x y : U32
 h : 2 * ↑x + 2 * ↑y + 4 ≤ U32.max
 x2 : U32
-_✝ : [> let x2 ← x + y <]
+_✝¹ : [> let x2 ← x + y <]
 x2_post : ↑x2 = ↑x + ↑y
 x3 : U32
-_ : [> let x3 ← x2 + x2 <]
+_✝ : [> let x3 ← x2 + x2 <]
 x3_post : ↑x3 = ↑x2 + ↑x2
 ⊢ x3 + 4#u32 ⦃ z => True ⦄
 -/
@@ -882,13 +884,14 @@ info: Try this:
     let* ⟨ x3, x3_post ⟩ ← U32.add_spec
 ---
 error: unsolved goals
+case a
 x y : U32
 h : 2 * ↑x + 2 * ↑y + 4 ≤ U32.max
 x2 : U32
-_✝ : [> let x2 ← x + y <]
+_✝¹ : [> let x2 ← x + y <]
 x2_post : ↑x2 = ↑x + ↑y
 x3 : U32
-_ : [> let x3 ← x2 + x2 <]
+_✝ : [> let x3 ← x2 + x2 <]
 x3_post : ↑x3 = ↑x2 + ↑x2
 ⊢ x3 + 4#u32 ⦃ z => True ⦄
 -/
@@ -949,15 +952,16 @@ info: Try this:
       let* ⟨ ⟩ ← U32.add_spec
 ---
 error: unsolved goals
+case a
 b : Bool
 x y : U32
 h : 2 * ↑x + 2 * ↑y + 4 ≤ U32.max
 h✝ : b = true
 x2 : U32
-_✝ : [> let x2 ← x + y <]
+_✝¹ : [> let x2 ← x + y <]
 x2_post : ↑x2 = ↑x + ↑y
 x3 : U32
-_ : [> let x3 ← x2 + x2 <]
+_✝ : [> let x3 ← x2 + x2 <]
 x3_post : ↑x3 = ↑x2 + ↑x2
 ⊢ x3 + 4#u32 ⦃ z => True ⦄
 -/
@@ -994,7 +998,7 @@ b : Bool
 x y : U32
 h✝ : b = true
 x2 : U32
-_ : [> let x2 ← x + y <]
+_✝ : [> let x2 ← x + y <]
 x2_post : ↑x2 = ↑x + ↑y
 ⊢ ↑x2 + ↑x2 ≤ U32.max
 
@@ -1003,10 +1007,10 @@ b : Bool
 x y : U32
 h✝ : b = true
 x2 : U32
-_✝ : [> let x2 ← x + y <]
+_✝¹ : [> let x2 ← x + y <]
 x2_post : ↑x2 = ↑x + ↑y
 x3 : U32
-_ : [> let x3 ← x2 + x2 <]
+_✝ : [> let x3 ← x2 + x2 <]
 x3_post : ↑x3 = ↑x2 + ↑x2
 ⊢ ↑x3 + ↑4#u32 ≤ U32.max
 
@@ -1021,7 +1025,7 @@ b : Bool
 x y✝ : U32
 h✝ : ¬b = true
 y : U32
-_ : [> let y ← x + y✝ <]
+_✝ : [> let y ← x + y✝ <]
 y_post : ↑y = ↑x + ↑y✝
 ⊢ ↑y + ↑2#u32 ≤ U32.max
 -/
@@ -1042,16 +1046,17 @@ info: Try this:
     sorry
 ---
 error: unsolved goals
+case a
 x y : U32
 h : 2 * ↑x + 2 * ↑y + 4 ≤ U32.max
 x2 : U32
-_✝² : [> let x2 ← x + y <]
+_✝³ : [> let x2 ← x + y <]
 x2_post : ↑x2 = ↑x + ↑y
 x3 : U32
-_✝¹ : [> let x3 ← x2 + x2 <]
+_✝² : [> let x3 ← x2 + x2 <]
 x3_post : ↑x3 = ↑x2 + ↑x2
 x✝ : U32
-_ : [> let x✝ ← x3 + 4#u32 <]
+_✝¹ : [> let x✝ ← x3 + 4#u32 <]
 _✝ : ↑x✝ = ↑x3 + 4
 ⊢ ↑x < 32
 -/
@@ -1122,9 +1127,10 @@ example (x y : U32) :
 
 /--
 error: unsolved goals
+case a
 x y x✝¹ : U32
 x✝ : Bool
-_ : [> let(x✝¹, x✝) ← lift (core.num.U32.overflowing_add x y) <]
+_✝¹ : [> let(x✝¹, x✝) ← lift (core.num.U32.overflowing_add x y) <]
 _✝ : if ↑x + ↑y > UScalar.max UScalarTy.U32 then ↑x✝¹ + U32.size = ↑x + ↑y ∧ x✝ = true else ↑x✝¹ = ↑x + ↑y ∧ x✝ = false
 ⊢ False
 -/
@@ -1143,11 +1149,12 @@ f : α → Result Unit
 f_spec : ∀ (x : α) [Inhabited α], f x ⦃ x✝ => True ⦄
 ⊢ Inhabited α
 
+case a
 α : Type
 x : α
 f : α → Result Unit
 f_spec : ∀ (x : α) [Inhabited α], f x ⦃ x✝ => True ⦄
-_ : [> let PUnit.unit ← f x <]
+_✝ : [> let PUnit.unit ← f x <]
 ⊢ (do
       f x
       ok ()) ⦃
@@ -1166,10 +1173,11 @@ example {α : Type}
 
 /--
 error: unsolved goals
+case a
 f : Result (Bool × Bool)
 f_spec : f ⦃ x✝ x✝¹ => True ⦄
 x✝¹ x✝ : Bool
-_ : [> let(x✝¹, x✝) ← f <]
+_✝¹ : [> let(x✝¹, x✝) ← f <]
 _✝ : True
 ⊢ False
 -/

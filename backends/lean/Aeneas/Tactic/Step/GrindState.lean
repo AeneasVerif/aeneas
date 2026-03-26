@@ -18,6 +18,11 @@ iterations instead of rebuilding from scratch each time.
 ## Key Design Decisions
 
 - **Thread `GoalState` (not `Goal`)**: Avoids carrying an MVarId between proof states.
+- **Persistent SymM session**: A single SymM session (Context + mutable IO.Ref State)
+  is created once at initialization and shared across all `runGrindWithState` calls.
+  SymM caches (inferType, congrInfo, hash-consing) grow monotonically and benefit all
+  iterations. This replaces the old value-based save/restore of `Sym.State`, which
+  required creating a fresh `SymM.run` session each time and broke cache accumulation.
 - **Custom internalization**: Uses Aeneas simpsets (scalar_tac_simps, etc.) for hypothesis
   simplification, followed by grind's `canon`/`shareCommon` for canonical form, then `add`.
 - **Preprocessing per proposition**: After each prop hypothesis is internalized, we run
@@ -26,25 +31,28 @@ iterations instead of rebuilding from scratch each time.
   - the fact that we run it after *each* prop hypothesis ensures the grind state at any
     point is identical whether we initialize from scratch (single `step`) or incrementally
     (threaded `step*`).
-- **No GrindM.run fork**: We replicate the `GrindM.run` monad stack construction once
-  (`runGrindFresh`), save all contexts (`Sym.Context`, `Grind.Context`, `MethodsRef`),
-  and reuse them in subsequent calls (`runGrindWithState`) to preserve pointer identity.
+
+## Session Architecture
+
+```
+createPersistentSymSession
+  → (symCtx : Sym.Context, symRef : IO.Ref Sym.State)
+
+extractGrindConfig params
+  → (grindCtx : Grind.Context, methodsRef : Grind.MethodsRef)
+
+runGrindFresh / runGrindWithState
+  → layers GrindM on top of the persistent SymM session (symCtx, symRef)
+  → GrindM state is passed by value (saved/restored per call)
+  → Sym.State mutations (caches) persist through symRef
+```
 
 ## Discharge with `Grind.solve`
 
 To discharge preconditions, we construct a `Goal` from the precondition `MVarId` and the
-threaded GoalState, then call `Grind.solve`. Both `Grind.State` and `Sym.State` are
-restored before the solve call via `set`/`get` inside `GrindM.run`.
-
-## State Management Pattern
-
-```
-runGrindWithState params savedGrindState savedSymState do
-  -- Both Grind.State and Sym.State are restored via set/get
-  let goal := { toGoalState := savedGoalState, mvarId := currentMVarId }
-  -- ... operations on goal ...
-  -- Returns (result, finalGrindState, finalSymState)
-```
+threaded GoalState, then call `Grind.solve`. Grind.State is restored from the saved value
+via `StateRefT.run'`; Sym.State is accessed through the persistent `symRef` (no
+save/restore needed — cache additions are safe to keep even on rollback via `observing?`).
 -/
 
 namespace Aeneas
@@ -81,34 +89,58 @@ private def mkPreprocessSimpCtx : MetaM (Simp.Context × Simp.SimprocsArray) := 
     congrTheorems
   pure (ctx, simpArgs.simprocs)
 
-/-- Run a `GrindM` action with a fresh monad stack (via `GrindM.run`).
-    Used for initialization — reads out all contexts and states for subsequent reuse. -/
-def runGrindFresh {α} (params : Grind.Params)
-    (action : GrindM α) : MetaM (α × Grind.State × Lean.Meta.Sym.State × Lean.Meta.Sym.Context × Grind.Context × Grind.MethodsRef) :=
+/-- Create a persistent SymM session (Context + mutable State ref).
+    The Context holds pointer-identical SharedExprs (True, False, etc.);
+    the IO.Ref holds the Sym.State (share tables, inferType cache, etc.)
+    and persists across all subsequent `runGrindWithState` calls. -/
+private def createPersistentSymSession
+    : MetaM (Lean.Meta.Sym.Context × IO.Ref Lean.Meta.Sym.State) :=
+  Lean.Meta.Sym.SymM.run do
+    let ctx ← readThe Lean.Meta.Sym.Context
+    let state ← getThe Lean.Meta.Sym.State
+    let ref ← IO.mkRef state
+    return (ctx, ref)
+
+/-- Extract `Grind.Context` and `MethodsRef` from a temporary `GrindM.run`.
+    These are pure config objects (no SharedExprs references) and can be
+    used across SymM sessions. -/
+private def extractGrindConfig (params : Grind.Params)
+    : MetaM (Grind.Context × Grind.MethodsRef) :=
   Grind.GrindM.run (params := params) do
+    pure (← readThe Grind.Context, ← readThe Grind.MethodsRef)
+
+/-- Run a `GrindM` action on a persistent SymM session with a fresh Grind.State.
+    Used for initialization — returns the final Grind.State for subsequent reuse. -/
+private def runGrindFresh {α} (symCtx : Lean.Meta.Sym.Context)
+    (symRef : IO.Ref Lean.Meta.Sym.State)
+    (grindCtx : Grind.Context) (methodsRef : Grind.MethodsRef)
+    (action : GrindM α) : MetaM (α × Grind.State) := do
+  let wrappedAction : GrindM (α × Grind.State) := do
     let result ← action
     let grindState ← get
-    let symState ← getThe Lean.Meta.Sym.State
-    let symCtx ← readThe Lean.Meta.Sym.Context
-    let grindCtx ← readThe Grind.Context
-    let methodsRef ← readThe Grind.MethodsRef
-    pure (result, grindState, symState, symCtx, grindCtx, methodsRef)
+    pure (result, grindState)
+  -- Layer GrindM (ReaderT MethodsRef → ReaderT Grind.Context → StateRefT Grind.State)
+  -- on top of the persistent SymM session (symCtx, symRef).
+  -- Fresh Grind.State starts as default ({}).
+  let symAction : Lean.Meta.Sym.SymM _ :=
+    (wrappedAction methodsRef grindCtx).run' {}
+  symAction symCtx symRef
 
 /-- Run a `GrindM` action reusing saved contexts and states from a previous run.
-    Preserves pointer identity of all contexts (`Sym.Context`, `Grind.Context`,
-    `MethodsRef`) to avoid PANICs in the e-graph's proof reconstruction. -/
+    Preserves pointer identity of SharedExprs via the persistent `symRef`.
+    SymM caches grow monotonically across calls (mutations through symRef persist). -/
 def runGrindWithState {α} (state : StepGrindState) (action : GrindM α)
-    : MetaM (α × Grind.State × Lean.Meta.Sym.State) := do
-  let wrappedAction : GrindM (α × Grind.State × Lean.Meta.Sym.State) := do
+    : MetaM (α × Grind.State) := do
+  let wrappedAction : GrindM (α × Grind.State) := do
     let result ← action
     let finalGrindState ← get
-    let finalSymState ← getThe Lean.Meta.Sym.State
-    pure (result, finalGrindState, finalSymState)
+    pure (result, finalGrindState)
   -- Reuse the exact same MethodsRef, Grind.Context, Sym.Context from init.
-  -- Pass saved Grind.State and Sym.State as initial values to .run'.
+  -- Restore saved Grind.State as initial value via .run'.
+  -- Sym.State is accessed through the persistent symRef (no save/restore needed).
   let symAction : Lean.Meta.Sym.SymM _ :=
     (wrappedAction state.methodsRef state.grindCtx).run' state.grindState
-  (symAction state.symCtx).run' state.symState
+  symAction state.symCtx state.symRef
 
 /-- Internalize local hypotheses into a grind goal.
 
@@ -231,16 +263,22 @@ private def internalizeHypotheses (goal : Goal) (config : Config)
   return (goal, contradiction)
 
 /-- Initialize the grind state from the current proof context.
-    Creates a fresh `GoalState` and internalizes all current local hypotheses. -/
+    Creates a persistent SymM session, extracts grind config, and internalizes
+    all current local hypotheses into a fresh e-graph. -/
 def initStepGrindState (config : Config) (mvarId : MVarId) : MetaM StepGrindState := do
   let params ← mkGrindParams config
   let (simpCtx, simprocs) ← mkPreprocessSimpCtx
-  let ((goalState, contradiction), grindState, symState, symCtx, grindCtx, methodsRef) ←
-    runGrindFresh params do
+  -- Create persistent SymM session (Context with SharedExprs + mutable State ref)
+  let (symCtx, symRef) ← createPersistentSymSession
+  -- Extract grind config (temporary GrindM.run — config objects are session-independent)
+  let (grindCtx, methodsRef) ← extractGrindConfig params
+  -- Run initialization on the persistent SymM session
+  let ((goalState, contradiction), grindState) ←
+    runGrindFresh symCtx symRef grindCtx methodsRef do
       let goal ← Grind.mkGoalCore mvarId
       let (goal, contradiction) ← internalizeHypotheses goal config simpCtx simprocs
       pure (goal.toGoalState, contradiction)
-  pure { grindState, symState, symCtx, grindCtx, methodsRef, goalState, contradiction, params, simpCtx, simprocs }
+  pure { grindState, symRef, symCtx, grindCtx, methodsRef, goalState, contradiction, params, simpCtx, simprocs }
 
 /-- Update the grind state after new fvars have been introduced (by `introOutputs` or
     case splits). Only processes fvars with index ≥ `nextDeclIdx` (incremental). -/
@@ -252,9 +290,9 @@ def updateStepGrindState (state : StepGrindState) (config : Config) (mvarId : MV
     -- Process only NEW fvars (via nextDeclIdx)
     let (goal, contradiction) ← internalizeHypotheses goal config state.simpCtx state.simprocs
     pure (goal.toGoalState, contradiction)
-  let ((goalState, contradiction), grindState, symState) ←
+  let ((goalState, contradiction), grindState) ←
     runGrindWithState state action
-  pure { state with grindState, symState, goalState, contradiction := state.contradiction || contradiction }
+  pure { state with grindState, goalState, contradiction := state.contradiction || contradiction }
 
 /-- Discharge a precondition using `Grind.solve` with the threaded grind state.
 
@@ -288,7 +326,7 @@ def dischargeWithGrindState (state : StepGrindState) (config : Config)
       match ← Grind.solve goal with
       | none   => pure true
       | some _ => pure false
-    let (solved, _, _) ← runGrindWithState state action
+    let (solved, _) ← runGrindWithState state action
     unless solved do throwError "grind could not solve precondition"
     /- Wrap the proof in an auxiliary theorem to prevent kernel reduction loops.
        Grind proofs chain through Classical.byContradiction + Int.Linear.eq_of_core

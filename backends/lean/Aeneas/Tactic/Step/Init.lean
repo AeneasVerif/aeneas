@@ -125,11 +125,11 @@ declare_option_config_elab Config elabPartialConfig aeneas.step
 structure StepGrindState where
   /-- GrindM-level state (caches: simp state, congruence theorems, hash-consing) -/
   grindState : Grind.State
-  /-- Sym-level state (hash-consing, inferType cache, congrInfo cache).
-      Must be preserved alongside `grindState` — `GrindM.run` creates a fresh
-      `Sym.State` each time, so without explicit save/restore the e-graph's
-      pointer-equality-based proof reconstruction breaks. -/
-  symState : Lean.Meta.Sym.State
+  /-- Persistent SymM session — mutable reference to `Sym.State`.
+      Unlike the old value-based save/restore, this `IO.Ref` is shared across all
+      `runGrindWithState` calls, so SymM caches (inferType, congrInfo, hash-consing)
+      grow monotonically and benefit all iterations. -/
+  symRef : IO.Ref Lean.Meta.Sym.State
   /-- Sym-level context (hash-consed SharedExprs: True, False, 0, etc.).
       Must be preserved across runs — the e-graph uses pointer equality on
       these expressions, so recreating them (via a new `SymM.run`) breaks lookups. -/

@@ -41,13 +41,13 @@ private def emitProgressWarning (what : String) : CoreM Unit := do
 elab (name := deprecatedProgress) "progress" args:Step.stepArgs : tactic => do
   emitProgressWarning "progress"
   let (config, withArg, ids, idsUserProvided, postsBasename, byTac) ← Step.parseStepArgs args
-  Step.evalStep config none withArg ids idsUserProvided postsBasename byTac *> return ()
+  Step.evalStepTac config none withArg ids idsUserProvided postsBasename byTac *> return ()
 
 /-- **Deprecated:** Use `step?` instead. -/
 elab tk:"progress?" args:Step.stepArgs : tactic => do
   emitProgressWarning "progress?"
   let (config, withArg, ids, idsUserProvided, postsBasename, byTac) ← Step.parseStepArgs args
-  let stats ← Step.evalStep config none withArg ids idsUserProvided postsBasename byTac
+  let stats ← Step.evalStepTac config none withArg ids idsUserProvided postsBasename byTac
   let mut stxArgs := args.raw
   if stxArgs[1].isNone then
     let withArg := mkNullNode #[mkAtom "with", ← stats.toSyntax]
