@@ -632,6 +632,11 @@ grep -n 'maxHeartbeats' FILE      # → verify value < 8_000_000; if higher, pro
 # set_option ... in inside proof script (Pitfall #13) — breaks incrementality
 grep -n 'set_option.*in$' FILE    # → check if inside a proof (by block); OK before theorem declaration
 
+# ⛔ Converting sorry → axiom (NEVER allowed)
+grep -n '^axiom' FILE             # → if agent added new axioms that were sorry before, REJECT
+# Agents must NEVER convert a sorry into an axiom. The whole point is to PROVE the theorem.
+# If the proof is too hard, leave it as sorry and report what was tried.
+
 # Unfold of Aeneas stdlib definitions (Pitfall #10)
 grep -n 'unfold.*Aeneas\|unfold.*Std\.\|unfold.*core\.' FILE
 # → search for existing lemma instead of unfolding
