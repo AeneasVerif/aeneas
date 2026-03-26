@@ -98,6 +98,12 @@ def core.option.Option.unwrap_or (self : Option T) (default : T) : T :=
   | none => default
   | some self => self
 
+/-- Returns the contained `some` value. The message is ignored: on `none`, this
+    fails with `Error.panic`, which is the same behavior as `unwrap`. -/
+@[simp, step_simps, rust_fun "core::option::{core::option::Option<@T>}::expect"]
+def core.option.Option.expect {T : Type} (x : Option T) (_msg: Str) : Result T :=
+  Result.ofOption x Error.panic
+
 @[simp] def core.option.Option.unwrap_or_some (self default : T) :
   core.option.Option.unwrap_or (some self) default = self := by simp [unwrap_or]
 

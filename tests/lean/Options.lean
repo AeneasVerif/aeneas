@@ -16,4 +16,9 @@ namespace options
 def test_unwrap_or {T : Type} (x : Option T) (default : T) : Result T := do
   ok (core.option.Option.unwrap_or x default)
 
+/-- [options::test_expect]:
+    Source: 'tests/src/options.rs', lines 7:0-9:1 -/
+def test_expect {T : Type} (x : Option T) (msg : Str) : Result T := do
+  core.option.Option.expect x msg
+
 end options
