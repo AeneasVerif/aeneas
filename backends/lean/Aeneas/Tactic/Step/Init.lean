@@ -5,6 +5,7 @@ import AeneasMeta.Extensions
 import Aeneas.Tactic.Step.Trace
 import Aeneas.Std.WP
 import AeneasMeta.OptionConfig
+import Aeneas.Tactic.Step.SymHelpers
 
 namespace Aeneas
 
@@ -161,6 +162,9 @@ structure StepGrindState where
 structure StepState where
   /-- Optional grind state. `none` when threading is disabled or not yet initialized. -/
   grindState? : Option StepGrindState := none
+  /-- Optional persistent SymM session for `step*`. When present, all `tryStep` calls
+      share the same inferType/getLevel caches, giving cache hits across steps. -/
+  symSession? : Option Step.SymSession := none
 
 /-! # Attribute: `step` -/
 

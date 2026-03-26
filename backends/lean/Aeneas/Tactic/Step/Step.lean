@@ -467,31 +467,27 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState)
   /- Decompose nested uses of `predn` to introduce a sequence of universal quantifiers.
      Note that at the same time we simplify the (monadic) continuation by using
      some monad simp theorems. -/
-  let (simpResult, remainingGoals) ← withTraceNode `Step (fun _ => pure m!"simpAt: decomposing nested uses of `predn`") do
-    runTacticMOnGoal mvarId do
-      Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
-              { simpThms := #[← stepSimpExt.getTheorems],
-                addSimpThms :=
-                  #[``Std.WP.qimp_spec_predn, ``Std.WP.qimp_spec_unit,
-                    ``Std.WP.qimp_predn, ``Std.WP.qimp_unit,
-                    ``Std.WP.qimp_spec_exists, ``Std.WP.qimp_exists,
-                    ``forall_unit, ``true_imp_iff] }
-              (.targets #[] true)
-  let some mvarId := (if simpResult.isSome then remainingGoals.head? else none)
+  let mvarId? ← withTraceNode `Step (fun _ => pure m!"simpAt: decomposing nested uses of `predn`") do
+    simpAtTargetM mvarId true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
+            { simpThms := #[← stepSimpExt.getTheorems],
+              addSimpThms :=
+                #[``Std.WP.qimp_spec_predn, ``Std.WP.qimp_spec_unit,
+                  ``Std.WP.qimp_predn, ``Std.WP.qimp_unit,
+                  ``Std.WP.qimp_spec_exists, ``Std.WP.qimp_exists,
+                  ``forall_unit, ``true_imp_iff] }
+  let some mvarId := mvarId?
     | trace[Step] "The main goal was solved!"; return none
   traceGoalWithNode "goal after decomposing the nested `predn`" mvarId
 
   /- Eliminate `qimp_spec`/`qimp` to reveal `imp` and decompose the post-condition into a sequence
      of implications -/
-  let (simpResult, remainingGoals) ← withTraceNode `Step (fun _ => pure m!"simpAt: eliminating `qimp_spec` and `qimp`") do
-    runTacticMOnGoal mvarId do
-      Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
-              { declsToUnfold := #[``Std.WP.curry, ``Std.WP.predn]
-                addSimpThms :=
-                  #[``Std.WP.qimp_spec_iff, ``Std.WP.qimp_iff,
-                    ``Std.WP.imp_and_iff, ``forall_unit, ``true_imp_iff] }
-              (.targets #[] true)
-  let some mvarId := (if simpResult.isSome then remainingGoals.head? else none)
+  let mvarId? ← withTraceNode `Step (fun _ => pure m!"simpAt: eliminating `qimp_spec` and `qimp`") do
+    simpAtTargetM mvarId true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
+            { declsToUnfold := #[``Std.WP.curry, ``Std.WP.predn]
+              addSimpThms :=
+                #[``Std.WP.qimp_spec_iff, ``Std.WP.qimp_iff,
+                  ``Std.WP.imp_and_iff, ``forall_unit, ``true_imp_iff] }
+  let some mvarId := mvarId?
     | trace[Step] "The main goal was solved!"; return none
   traceGoalWithNode "goal after aliminating `qimp_spec` and `qimp` and decomposing the post-condition" mvarId
 
@@ -499,11 +495,10 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState)
 
   Some types get unfolded too much (e.g., `U32` sometimes gets unfolded to `U32) so we use this call
   to `dsimp` to also fold them back. -/
-  let (_, remainingGoals) ← withTraceNode `Step (fun _ => pure m!"dsimpAt: eliminating `imp` and folding back scalar types") do
-    runTacticMOnGoal mvarId do
-      Simp.dsimpAt true {implicitDefEqProofs := true, failIfUnchanged := false, iota := false}
-        { declsToUnfold := #[``Std.WP.imp], addSimpThms := scalar_eqs } (.targets #[] true)
-  let some mvarId := remainingGoals.head?
+  let mvarId? ← withTraceNode `Step (fun _ => pure m!"dsimpAt: eliminating `imp` and folding back scalar types") do
+    dsimpAtTargetM mvarId true {implicitDefEqProofs := true, failIfUnchanged := false, iota := false}
+      { declsToUnfold := #[``Std.WP.imp], addSimpThms := scalar_eqs }
+  let some mvarId := mvarId?
     | trace[Step] "The main goal was solved!"; return none
   traceGoalWithNode "goal after aliminating `imp` and folding back the scalar types" mvarId
 
@@ -618,12 +613,14 @@ def trySolvePreconditions (args : Args) (config : Config)
   let ordPropGoals := (ordPropGoals.mergeSort (fun (mvars0, _) (mvars1, _) => mvars0 ≤ mvars1)).reverse
   /- First attempt to solve the preconditions in a *synchronous* manner by using the `singleAssumptionTac`.
      We do this to instantiate meta-variables -/
-  if let some assumTac := args.assumTac then
+  if config.assumTac then
     let allGoals := ordPropGoals.map Prod.snd
     for g in allGoals do
       if ← g.isAssigned then continue
       try
-        let (_, _) ← runTacticMOnGoal g (tryTac assumTac)
+        let dtree ← filterAssumptionTacPreprocessM g
+        withTraceNode `Step (fun _ => pure m!"Attempting to solve with `singleAssumptionTac`") do
+        singleAssumptionTacCoreM g dtree (instMVars := config.inferGhostVars)
       catch _ => pure ()
     /- Attempt to resolve the typeclass instances again (we already tried once, but maybe we couldn't
       because some meta-variables were not resolved) -/
@@ -672,20 +669,17 @@ def postprocessMainGoal (mainGoal : Option MainGoal) : SymM (Option MainGoal) :=
       {simpThms := #[← stepPostSimpExt.getTheorems],
        simprocs := #[← stepPostSimprocExt.getSimprocs] }
     -- Simplify
-    let (posts, remainingGoals) ←
-      runTacticMOnGoal mainGoal.goal do
-        Simp.simpAt true { maxDischargeDepth := 0, failIfUnchanged := false }
-          args (.targets (mainGoal.outputs.map Output.fvarId) false)
-    match posts with
+    let result ←
+      simpAtM mainGoal.goal true { maxDischargeDepth := 0, failIfUnchanged := false }
+        args (fvarIdsToSimp := mainGoal.outputs.map Output.fvarId) (simplifyTarget := false)
+    match result with
     | none =>
       -- We actually closed the goal: we shouldn't get there
       -- TODO: make this more robust
       trace[Step] "Goal closed by simplifying the introduced post-conditions"
       pure none
-    | some posts =>
+    | some (posts, mvarId) =>
       trace[Step] "Goal not closed"
-      let some mvarId := remainingGoals.head?
-        | trace[Step] "No remaining goals after simplification"; return none
       mvarId.withContext do
       let outputs ← posts.mapM fun fvid => do
         let name ← fvid.getUserName
@@ -698,14 +692,12 @@ def postprocessMainGoal (mainGoal : Option MainGoal) : SymM (Option MainGoal) :=
       Note that we want to simplify targets of the shape:
       `ok ... ⦃ x₀ ... xₙ => ... ⦄`
       -/
-      let (r, remainingGoals) ← runTacticMOnGoal mvarId do
-        Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
-          {simpThms := #[← stepSimpExt.getTheorems], declsToUnfold := #[``pure]} (.targets #[] true)
-      if r.isSome then
-        let some finalGoal := remainingGoals.head?
-          | return none
+      let mvarId? ← simpAtTargetM mvarId true { maxDischargeDepth := 1, failIfUnchanged := false}
+          {simpThms := #[← stepSimpExt.getTheorems], declsToUnfold := #[``pure]}
+      match mvarId? with
+      | some finalGoal =>
         pure (some ({goal := finalGoal, outputs, stepState := mainGoal.stepState} : MainGoal))
-      else pure none
+      | none => pure none
 
 def stepWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr)
     (mvarId : MVarId) :
@@ -964,10 +956,9 @@ def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Option 
   withTraceNode `Step (fun _ => pure m!"evalStep") do
   /- Simplify the goal -- TODO: this might close it: we need to check that and abort if necessary,
      and properly track that in the `Stats` -/
-  let (_, remainingGoals) ← runTacticMOnGoal mvarId do
-    Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false}
-        {simpThms := #[← stepSimpExt.getTheorems]} (.targets #[] true)
-  let some mvarId := remainingGoals.head?
+  let mvarId? ← simpAtTargetM mvarId true { maxDischargeDepth := 1, failIfUnchanged := false}
+      {simpThms := #[← stepSimpExt.getTheorems]}
+  let some mvarId := mvarId?
     | throwError "step: goal solved by initial simplification (not yet tracked in Stats)"
   mvarId.withContext do
 

@@ -4,13 +4,16 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Son Ho
 -/
 import Lean
+import AeneasMeta.Simp.Simp
+import AeneasMeta.Utils
 
 /-!
 # SymM Helpers for Step Tactics
 
 Utility functions for running the `step`/`step*` tactic pipeline within `SymM`
 (the incremental expression-sharing monad). These helpers bridge between SymM and
-TacticM where necessary.
+TacticM where necessary, and provide SymM-native replacements for TacticM simp
+operations to avoid costly TacticM bridging.
 
 ## Background
 
@@ -18,6 +21,13 @@ The `step`/`step*` tactics are being migrated from `TacticM` to `SymM` for perfo
 (incremental expression sharing/caching). `SymM` wraps `MetaM`, not `TacticM`, so we
 need helpers to call TacticM from within the SymM pipeline (e.g., for `step by tactic`
 or for running precondition-solving automation that lives in TacticM).
+
+## SymM-Native Simp
+
+The `simpAtM` and `dsimpAtM` functions are MetaM-level replacements for the TacticM
+`Simp.simpAt` and `Simp.dsimpAt`. They call `simpGoal`/`dsimpGoal` directly, avoiding
+the overhead of `Tactic.run` + `pruneSolvedGoals` + goal state management that the
+TacticM bridge (`runTacticMOnGoal`) imposes.
 -/
 
 namespace Aeneas
@@ -74,6 +84,145 @@ open Lean.Meta.Sym (SymM)
     For `step*`, a persistent session should be used instead. -/
 def runInSymM (x : SymM α) : MetaM α :=
   Lean.Meta.Sym.SymM.run x
+
+/-- A persistent SymM session that can be reused across multiple SymM actions.
+    Created once at the start of `step*` and passed to each `tryStep` call
+    so that inferType caches accumulate across steps. -/
+structure SymSession where
+  ctx : Lean.Meta.Sym.Context
+  stateRef : IO.Ref Lean.Meta.Sym.State
+
+/-- Create a fresh persistent SymM session. -/
+def SymSession.create : MetaM SymSession := do
+  -- Use SymM.run to create the context and initial state, then capture them
+  let ctxRef ← IO.mkRef (none : Option Lean.Meta.Sym.Context)
+  let stateRef ← IO.mkRef (none : Option Lean.Meta.Sym.State)
+  Lean.Meta.Sym.SymM.run (do
+    ctxRef.set (some (← read))
+    stateRef.set (some (← get)))
+  let some ctx ← ctxRef.get | throwError "SymSession.create: failed to capture context"
+  let some state ← stateRef.get | throwError "SymSession.create: failed to capture state"
+  let persistentRef ← IO.mkRef state
+  return { ctx, stateRef := persistentRef }
+
+/-- Run a `SymM` action within an existing persistent session.
+    The state is preserved across calls, so inferType caches accumulate. -/
+def SymSession.run (session : SymSession) (x : SymM α) : MetaM α := do
+  let state ← session.stateRef.get
+  let stRef ← ST.mkRef state
+  let result ← x session.ctx stRef
+  session.stateRef.set (← stRef.get)
+  return result
+
+/-! ## SymM-Native Simp Operations
+
+These replace `runTacticMOnGoal mvarId do Simp.simpAt ...` with direct MetaM calls.
+The underlying `simpGoal`/`dsimpGoal` are MetaM and auto-lift into SymM.
+
+**Why this matters for performance:** Each `runTacticMOnGoal` call creates a full
+TacticM context via `Tactic.run`, runs `pruneSolvedGoals`, and tears down the context.
+These direct MetaM calls skip all of that overhead. In `evalStepCore`, there were 6
+such bridges for simp operations — each called on every step in `step*`. -/
+
+/-- SymM-native replacement for `simpAt` on the target.
+    Calls `simpGoal` directly in MetaM (auto-lifted to SymM).
+    Returns `none` if the goal was closed, `some mvarId` otherwise. -/
+def simpAtTargetM (mvarId : MVarId) (simpOnly : Bool) (config : Lean.Meta.Simp.Config)
+    (args : Aeneas.Simp.SimpArgs) : MetaM (Option MVarId) := do
+  mvarId.withContext do
+  let (ctx, simprocs) ← Aeneas.Simp.mkSimpCtx simpOnly config .simp args
+  let (result?, _stats) ← Lean.Meta.simpGoal mvarId ctx
+    (simprocs := simprocs) (simplifyTarget := true) (fvarIdsToSimp := #[])
+  match result? with
+  | none => return none
+  | some (_fvars, mvarId) => return some mvarId
+
+/-- SymM-native replacement for `dsimpAt` on the target.
+    Calls `dsimpGoal` directly in MetaM (auto-lifted to SymM).
+    Returns `none` if the goal was closed, `some mvarId` otherwise. -/
+def dsimpAtTargetM (mvarId : MVarId) (simpOnly : Bool) (config : Lean.Meta.Simp.Config)
+    (args : Aeneas.Simp.SimpArgs) : MetaM (Option MVarId) := do
+  mvarId.withContext do
+  let (ctx, simprocs) ← Aeneas.Simp.mkSimpCtx simpOnly config .dsimp args
+  let (result?, _stats) ← Lean.Meta.dsimpGoal mvarId ctx
+    (simprocs := simprocs) (simplifyTarget := true) (fvarIdsToSimp := #[])
+  match result? with
+  | none => return none
+  | some mvarId => return some mvarId
+
+/-- SymM-native replacement for `simpAt` that can also simplify hypotheses.
+    When `fvarIdsToSimp` is non-empty, simplifies those hypotheses too.
+    Returns `none` if the goal was closed, `some (freshFVars, mvarId)` otherwise.
+    The `freshFVars` include both surviving original fvars and new replacement fvars
+    (replicating the behavior of Aeneas.Simp.customSimpLocation). -/
+def simpAtM (mvarId : MVarId) (simpOnly : Bool) (config : Lean.Meta.Simp.Config)
+    (args : Aeneas.Simp.SimpArgs) (fvarIdsToSimp : Array FVarId := #[])
+    (simplifyTarget : Bool := true) : MetaM (Option (Array FVarId × MVarId)) := do
+  mvarId.withContext do
+  let (ctx, simprocs) ← Aeneas.Simp.mkSimpCtx simpOnly config .simp args
+  let (result?, _stats) ← Lean.Meta.simpGoal mvarId ctx
+    (simprocs := simprocs) (simplifyTarget := simplifyTarget) (fvarIdsToSimp := fvarIdsToSimp)
+  match result? with
+  | none => return none
+  | some (freshFVarIds, mvarId) =>
+    -- Replicate customSimpLocation's filtering: keep original fvars still in context + fresh ones
+    mvarId.withContext do
+    let lctx ← getLCtx
+    let ldecls := lctx.foldl (fun set decl => set.insert decl.fvarId) Std.HashSet.emptyWithCapacity
+    let filteredFVars := fvarIdsToSimp.filter ldecls.contains ++ freshFVarIds
+    return some (filteredFVars, mvarId)
+
+/-! ## SymM-Native Assumption Tactic
+
+MetaM port of `singleAssumptionTac` to avoid the `runTacticMOnGoal` bridge.
+The original TacticM version uses `withMainContext`/`getMainGoal` which are just
+convenience wrappers around `mvarId.withContext` and goal-state management. -/
+
+/-- Build a discrimination tree from the local context of `mvarId`.
+    MetaM port of `filterAssumptionTacPreprocess`. -/
+def filterAssumptionTacPreprocessM (mvarId : MVarId) : MetaM (DiscrTree FVarId) :=
+  mvarId.withContext do
+  let decls ← (← getLCtx).getDecls
+  let mut dtree := DiscrTree.empty
+  for decl in decls do
+    dtree ← dtree.insert decl.type decl.fvarId
+  pure dtree
+
+/-- Try to close `mvarId` by matching against a local hypothesis using the dtree.
+    MetaM port of `filterAssumptionTacCore`. Returns `true` if the goal was closed. -/
+def filterAssumptionTacCoreM (mvarId : MVarId) (dtree : DiscrTree FVarId) : MetaM Bool :=
+  mvarId.withContext do
+  let type ← instantiateMVars (← mvarId.getType)
+  let candidates ← dtree.getMatch type
+  let asm ← candidates.findM? fun fvar => do
+    let localDecl ← fvar.getDecl
+    isDefEq type localDecl.type
+  match asm with
+  | none => return false
+  | some fvarId => mvarId.assign (mkFVar fvarId); return true
+
+/-- MetaM port of `singleAssumptionTacCore`.
+    Tries to close `mvarId` by matching against a hypothesis.
+    When `instMVars` is true, also tries to instantiate metavariables. -/
+def singleAssumptionTacCoreM (mvarId : MVarId) (dtree : DiscrTree FVarId)
+    (instMVars : Bool) : MetaM Unit :=
+  mvarId.withContext do
+  mvarId.checkNotAssigned `sassumption
+  let goal ← instantiateMVars (← mvarId.getType)
+  let goalMVars ← Utils.getMVarIds goal
+  if goalMVars.isEmpty then
+    unless ← filterAssumptionTacCoreM mvarId dtree do
+      throwError "sassumption: failed to find matching assumption"
+  else if instMVars then
+    match ← Utils.getMatchingAssumptions goal with
+    | [(localDecl, _)] =>
+      let _ ← isDefEq goal localDecl.type
+      mvarId.assign (mkFVar localDecl.fvarId)
+    | [] => throwError "Could not find an assumption matching the goal"
+    | fvars =>
+      let fvars := fvars.map Prod.snd
+      throwError "Several assumptions match the goal: {fvars}"
+  else throwError "Could not find an assumption matching the goal"
 
 end Step
 

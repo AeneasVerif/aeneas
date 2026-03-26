@@ -1,6 +1,7 @@
 import Aeneas.Tactic.Step.Step
 import AeneasMeta.Split
 open Lean Meta Elab Tactic
+open Lean.Meta.Sym (SymM)
 
 namespace Aeneas
 
@@ -415,81 +416,89 @@ def analyzeTarget (mvarId : MVarId) : MetaM TargetKind := do
 partial def evalStepStar (cfg: Config) (fuel : Option Nat) : TacticM Result :=
   withMainContext do focus do
   withTraceNode `Step (fun _ => do pure m!"evalStepStar") do
-  -- Initialize the step state (grind threading)
+  let mvarId ← getMainGoal
+  -- Initialize the step state (grind threading + persistent SymM session)
+  let symSession ← Step.SymSession.create
   let initState : Step.StepState ←
     if cfg.stepConfig.threadGrindState then
-      let mvarId ← getMainGoal
       let gs ← Step.initStepGrindState cfg.stepConfig mvarId
-      pure { grindState? := some gs }
-    else pure {}
-  -- Simplify the target
-  let (info, mvarId) ← simplifyTarget
-  -- Continue
-  match mvarId with
-  | some _ =>
-    let info' ← traverseProgram cfg fuel initState
-    let info := info ++ info'
-    -- Wait for the asynchronous execution to finish
-    withTraceNode `Step (fun _ => do pure m!"filtering subgoals") do
-    let mut sgs := #[]
-    for (mvarId, proof) in info.subgoals do
-      match proof with
-      | none => sgs := sgs.push mvarId
-      | some proof =>
-        match proof.get with
-        | none => sgs := sgs.push mvarId
-        | some proof =>
-          -- Introduce an auxiliary theorem (TODO: is this really a good idea?)
-          let declName? ← Term.getDeclName?
-          mvarId.withContext do
-          let e ← mkAuxTheorem (← mvarId.getType) proof (zetaDelta := true)
-          mvarId.assign proof
-    setGoals (info.unassignedVars.toList ++ sgs.toList)
-    pure { script := info.script, unassignedVars := info.unassignedVars, subgoals := sgs }
-  | none => pure { script := info.script, unassignedVars := #[], subgoals := #[] }
+      pure { grindState? := some gs, symSession? := some symSession }
+    else pure { symSession? := some symSession }
+  /- Run the entire step* pipeline inside one SymM session.
+     This eliminates per-step session creation overhead and allows caches
+     to accumulate across all steps in the step* traversal. -/
+  let (result, finalGoals) ← symSession.run do
+    -- Simplify the target
+    let (info, mvarId?) ← simplifyTargetM mvarId
+    -- Continue
+    match mvarId? with
+    | some mvarId =>
+      let info' ← traverseProgramM cfg fuel initState mvarId
+      let info := info ++ info'
+      -- Wait for the asynchronous execution to finish
+      let sgs ← withTraceNode `Step (fun _ => do pure m!"filtering subgoals") do
+        let mut sgs := #[]
+        for (sgMvarId, proof) in info.subgoals do
+          match proof with
+          | none => sgs := sgs.push sgMvarId
+          | some proof =>
+            match proof.get with
+            | none => sgs := sgs.push sgMvarId
+            | some proof =>
+              sgMvarId.withContext do
+              let _e ← mkAuxTheorem (← sgMvarId.getType) proof (zetaDelta := true)
+              sgMvarId.assign proof
+        pure sgs
+      pure ({ script := info.script, unassignedVars := info.unassignedVars, subgoals := sgs },
+            info.unassignedVars.toList ++ sgs.toList)
+    | none =>
+      pure ({ script := info.script, unassignedVars := #[], subgoals := #[] }, [])
+  setGoals finalGoals
+  pure result
 
 where
-  simplifyTarget : TacticM (Info × Option MVarId) := do
+  /-- Simplify the target using step_simps. SymM-native: uses `simpAtTargetM` directly. -/
+  simplifyTargetM (mvarId : MVarId) : SymM (Info × Option MVarId) := do
     withTraceNode `Step (fun _ => do pure m!"simplifyTarget") do
-    Step.traceGoalWithNode "about to simplify goal" (← getMainGoal)
-    let mvarId0 ← getMainGoal
-    let r ← Simp.simpAt (simpOnly := true)
+    Step.traceGoalWithNode "about to simplify goal" mvarId
+    let mvarId? ← Step.simpAtTargetM mvarId true
       { maxDischargeDepth := 1, failIfUnchanged := false}
       {simpThms := #[← Step.stepSimpExt.getTheorems]}
-      (.targets #[] true)
-    /- We may have proven the goal already -/
+    /- Generate script and check if we proved/changed the goal -/
     let tac : Array Syntax.Tactic ← do
-      let genSimp : Bool ← do
-        if r.isNone then pure true
-        else do
-          pure ((← getMainGoal) != mvarId0)
+      let genSimp : Bool := match mvarId? with
+        | none => true
+        | some mvarId' => mvarId' != mvarId
       if genSimp then
-        let step_simps ← `(Parser.Tactic.simpLemma| $(mkIdent `step_simps):term)
+        -- Use scope-free identifier so generated script is user-pasteable
+        let stepSimpsIdent : Lean.Ident := ⟨.ident .none "step_simps".toRawSubstring `step_simps []⟩
+        let step_simps ← `(Parser.Tactic.simpLemma| $(stepSimpsIdent):term)
         let tac ← `(tactic|simp only [$step_simps])
         pure #[TaskOrDone.mk (some tac)]
       else pure #[]
     let info : Info := ⟨ .tacs tac, #[], #[] ⟩
-    if r.isSome then Step.traceGoalWithNode "after simplification" (← getMainGoal)
-    else trace[Step] "goal proved"
-    let goal ← do if r.isSome then pure (some (← getMainGoal)) else pure none
-    pure (info, goal)
+    match mvarId? with
+    | some mvarId' => Step.traceGoalWithNode "after simplification" mvarId'
+    | none => trace[Step] "goal proved"
+    pure (info, mvarId?)
 
-  traverseProgram (cfg : Config) (fuel : Option Nat) (ss : Step.StepState) : TacticM Info := do
-    withMainContext do
+  /-- Main traversal loop. SymM-native: threads MVarId explicitly. -/
+  traverseProgramM (cfg : Config) (fuel : Option Nat) (ss : Step.StepState) (mvarId : MVarId) : SymM Info := do
+    mvarId.withContext do
     withTraceNode `Step (fun _ => do pure m!"traverseProgram") do
-    traceGoalWithNode "current goal" (← getMainGoal)
+    traceGoalWithNode "current goal" mvarId
     -- Check if there remains fuel
     let fuel ←
       match fuel with
       | none => pure none
       | some fuel =>
-        if fuel = 0 then return { script := .tacs #[], unassignedVars := #[], subgoals := #[(← getMainGoal, none)] }
+        if fuel = 0 then return { script := .tacs #[], unassignedVars := #[], subgoals := #[(mvarId, none)] }
         else pure (some (fuel - 1))
-    let targetKind ← analyzeTarget (← getMainGoal)
+    let targetKind ← analyzeTarget mvarId
     match targetKind with
     | .bind varName => do
       let names := if varName.hasMacroScopes then #[] else #[some varName]
-      let (info, mainGoalAndState) ← onBind cfg names ss
+      let (info, mainGoalAndState) ← onBindM cfg names ss mvarId
       /- Continue, if necessary -/
       match mainGoalAndState with
       | none =>
@@ -497,11 +506,10 @@ where
         trace[Step] "stop"
         return info
       | some (mainGoal, ss) =>
-        setGoals [mainGoal]
         /- Check if there are unassigned meta-variables which are not `Prop`:
            if it is the case it means there are meta-variables we could not infer, so we stop -/
         if info.unassignedVars.isEmpty then
-          let restInfo ← traverseProgram cfg fuel ss
+          let restInfo ← traverseProgramM cfg fuel ss mainGoal
           return (info ++ restInfo)
         else
           trace[Step] "Found unassigned meta-variables of type ≠ Prop: stopping"
@@ -517,112 +525,102 @@ where
             let names ← xs.mapM (·.fvarId!.getUserName)
             return names
       trace[Step] "Match over scrutinee: {bfInfo.scrut}"
-      let (branchGoals, mkStx) ← onMatch cfg bfInfo contsTaggedVals
+      /- Bridge to TacticM for esplitAtSpec (needs focus/setGoals).
+         We get back the branch goals and a syntax-generation closure. -/
+      let (splitResult, _) ← Step.runTacticMOnGoal mvarId do
+        onMatchSplit cfg bfInfo contsTaggedVals
+      let (branchGoals, branchNames, splitStx) := splitResult
       withTraceNode `Step (fun _ => do pure m!"exploring branches") do
       /- Continue exploring from the subgoals.
          Each branch starts from the same state (branches are independent).
          We update the grind state for each branch to internalize the hypotheses
          introduced by `esplitAtSpec` (case variables, discriminant equality). -/
       let branchInfos ← branchGoals.mapM fun mainGoal => do
-        setGoals [mainGoal]
         let ss ← ss.update cfg.stepConfig mainGoal
-        traverseProgram cfg fuel ss
+        traverseProgramM cfg fuel ss mainGoal
       /- Put everything together — after branches, state is discarded (we can't merge
          divergent e-graphs). Use the pre-branch state going forward. -/
-      mkStx branchInfos
+      mkMatchInfo splitStx branchNames branchInfos
     | .result => do
-      let (info, mainGoal) ← onResult cfg ss
+      let (info, mainGoal) ← onResultM cfg ss mvarId
       let mainGoal ← match mainGoal with
         | none => pure #[]
         | some mainGoal => pure #[(mainGoal, none)]
       pure { info with subgoals := info.subgoals ++ mainGoal }
     | .unknown => do
       trace[Step] "don't know what to do: it may be a terminal goal, attempting to solve it with grind"
-      let (info, mainGoal) ← onResult cfg ss
+      let (info, mainGoal) ← onResultM cfg ss mvarId
       let mainGoal ← match mainGoal with
         | none => pure #[]
         | some mainGoal => pure #[(mainGoal, none)]
       pure { info with subgoals := info.subgoals ++ mainGoal }
 
-  onResult (cfg : Config) (ss : Step.StepState) : TacticM (Info × Option MVarId) := do
+  /-- Process a result (terminal call). SymM-native. -/
+  onResultM (cfg : Config) (ss : Step.StepState) (mvarId : MVarId) : SymM (Info × Option MVarId) := do
     withTraceNode `Step (fun _ => pure m!"onResult") do
-    /- If we encounter `(do f a)` we process it as if it were `(do let res ← f a; return res)`
-       since (id = (· >>= pure)) and when we desugar the do block we have that
-
-                            (do f a) == f a
-                                     == (f a) >>= pure
-                                     == (do let res ← f a; return res)
-
-       We known in advance the result of processing `return res`, which is to do nothing.
-       This allows us to prevent code duplication with the `onBind` function. -/
-    let names ← Step.getPostNamesFromGoal (← getMainGoal)
-    let (info, mainGoalAndState) ← onBind cfg names ss
+    let names ← Step.getPostNamesFromGoal mvarId
+    let (info, mainGoalAndState) ← onBindM cfg names ss mvarId
     match mainGoalAndState with
     | none =>
       trace[Step] "done"
       pure (info, none)
     | some (mvarId, _) =>
-      let (info', mvarId) ← onFinish cfg mvarId
+      let (info', mvarId) ← onFinishM cfg mvarId
       pure (info ++ info', mvarId)
 
-  onFinish (cfg : Config) (mvarId : MVarId) : TacticM (Info × Option MVarId) := do
+  /-- Try to finish a goal (simplify + grind). SymM-native for simp, bridges to TacticM for grind. -/
+  onFinishM (cfg : Config) (mvarId : MVarId) : SymM (Info × Option MVarId) := do
     withTraceNode `Step (fun _ => pure m!"onFinish") do
-    setGoals [mvarId]
     traceGoalWithNode "goal" mvarId
-    /- Simplify a bit -/
-    let (info, mvarId) ← simplifyTarget
-    match mvarId with
-    | none => pure (info, mvarId)
+    /- Simplify a bit (SymM-native) -/
+    let (info, mvarId?) ← simplifyTargetM mvarId
+    match mvarId? with
+    | none => pure (info, none)
     | some mvarId =>
-      /- Attempt to finish with a tactic -/
-      -- TODO: don't use syntax
-      -- TODO: use global options
-      let grindTac : TacticM Unit :=
-        Step.evalAGrindWithPreprocess cfg.stepConfig.withGroundSimprocs cfg.stepConfig.toGrindConfig cfg.stepConfig.nla
-      -- TODO: add the tactic given by the user
-      let tacStx : IO.Promise Syntax.Tactic ← IO.Promise.new
-      let rec tryFinish (tacl : List (String × Syntax.Tactic × TacticM Unit)) : TacticM Unit := do
-        match tacl with
-        | [] =>
-          trace[Step] "could not prove the goal: inserting a sorry"
-          tacStx.resolve (← `(tactic| sorry))
-        | (name, stx, tac) :: tacl =>
-          let stx : Option Syntax.Tactic ←
-            withTraceNode `Step (fun _ => do pure m!"Attempting to solve finish goal with `{name}`:\n{← getMainGoal}") do
-            try
-              tac
-              -- Check that there are no remaining goals
-              let gl ← Tactic.getUnsolvedGoals
-              if ¬ gl.isEmpty then throwError "tactic failed"
-              else pure stx
-            catch _ => pure none
-          match stx with
-          | some stx =>
-            trace[Step] "goal solved"
-            tacStx.resolve stx
-          | none => tryFinish tacl
-      let info' ← do
-        if cfg.stepConfig.async then
-          let proof ← Async.asyncRunTactic (tryFinish [("grind", ← `(tactic| agrind), grindTac)])
-          let proof := proof.result?.map (fun x => match x with | none | some none => none | some (some x) => some x)
-          let info' : Info ← pure
-            { script := .tacs #[.task tacStx.result?],
-              unassignedVars := #[],
-              subgoals := #[(mvarId, some (TaskOrDone.task proof))] }
-          pure info'
-        else
-          tryFinish [("grind", ← `(tactic| agrind), grindTac)]
-          let info' : Info ← pure
-            { script := .tacs #[.task tacStx.result?],
-              unassignedVars := #[],
-              subgoals := #[(mvarId, none)] }
-          pure info'
-      pure (info ++ info', none)
+      /- Attempt to finish with a tactic — bridge to TacticM for grind/async -/
+      let (finishInfo, _) ← Step.runTacticMOnGoal mvarId do
+        let grindTac : TacticM Unit :=
+          Step.evalAGrindWithPreprocess cfg.stepConfig.withGroundSimprocs cfg.stepConfig.toGrindConfig cfg.stepConfig.nla
+        let tacStx : IO.Promise Syntax.Tactic ← IO.Promise.new
+        let rec tryFinish (tacl : List (String × Syntax.Tactic × TacticM Unit)) : TacticM Unit := do
+          match tacl with
+          | [] =>
+            trace[Step] "could not prove the goal: inserting a sorry"
+            tacStx.resolve (← `(tactic| sorry))
+          | (name, stx, tac) :: tacl =>
+            let stx : Option Syntax.Tactic ←
+              withTraceNode `Step (fun _ => do pure m!"Attempting to solve finish goal with `{name}`:\n{← getMainGoal}") do
+              try
+                tac
+                let gl ← Tactic.getUnsolvedGoals
+                if ¬ gl.isEmpty then throwError "tactic failed"
+                else pure stx
+              catch _ => pure none
+            match stx with
+            | some stx =>
+              trace[Step] "goal solved"
+              tacStx.resolve stx
+            | none => tryFinish tacl
+        let finishInfo ← do
+          if cfg.stepConfig.async then
+            let proof ← Async.asyncRunTactic (tryFinish [("grind", ← `(tactic| agrind), grindTac)])
+            let proof := proof.result?.map (fun x => match x with | none | some none => none | some (some x) => some x)
+            pure ({ script := .tacs #[.task tacStx.result?],
+                    unassignedVars := #[],
+                    subgoals := #[(mvarId, some (TaskOrDone.task proof))] } : Info)
+          else
+            tryFinish [("grind", ← `(tactic| agrind), grindTac)]
+            pure ({ script := .tacs #[.task tacStx.result?],
+                    unassignedVars := #[],
+                    subgoals := #[(mvarId, none)] } : Info)
+        pure finishInfo
+      pure (info ++ finishInfo, none)
 
-  onBind (cfg : Config) (names : Array (Option Name)) (ss : Step.StepState) : TacticM (Info × Option (MVarId × Step.StepState)) := do
+  /-- Process a bind (one step). SymM-native: calls evalStepCore directly. -/
+  onBindM (cfg : Config) (names : Array (Option Name)) (ss : Step.StepState) (mvarId : MVarId) : SymM (Info × Option (MVarId × Step.StepState)) := do
     withTraceNode `Step (fun _ => pure m!"onBind ({names})") do
     let postsBasename := names[0]?.join
-    if let some res ← tryStep cfg names postsBasename ss then
+    if let some res ← tryStepM cfg names postsBasename ss mvarId then
       let {usedTheorem, unassignedVars, preconditions, mainGoal } := res
       withTraceNode `Step (fun _ => pure m!"step succeeded") do
       match mainGoal with
@@ -645,7 +643,6 @@ where
       /- Generate the tactic scripts for the preconditions -/
       let currTac ←
         if cfg.prettyPrintedStep then
-          -- TODO: how to factor this out?
           let config ←
             match cfg.configSyntax with
             | none => `(Lean.Parser.Tactic.optConfig|)
@@ -693,56 +690,63 @@ where
         }
       pure (info, mainGoal)
     else
-      let (info, mvarId) ← onFinish cfg (← getMainGoal)
-      pure (info, mvarId.map (·, ss))
+      -- Check if simp inside tryStep already solved the goal as a side effect
+      if ← mvarId.isAssigned then
+        -- Goal was solved by initial simplification — generate script entry and return success
+        let stepSimpsIdent : Lean.Ident := ⟨.ident .none "step_simps".toRawSubstring `step_simps []⟩
+        let stepSimpsSimpLemma ← `(Parser.Tactic.simpLemma| $(stepSimpsIdent):term)
+        let simpStx ← `(tactic| simp only [$stepSimpsSimpLemma])
+        let info : Info := {
+          script := .tacs #[.done (some simpStx)],
+          unassignedVars := #[],
+          subgoals := #[],
+        }
+        pure (info, none)
+      else
+        let (info, mvarId) ← onFinishM cfg mvarId
+        pure (info, mvarId.map (·, ss))
 
-  onMatch (cfg : Config) (bfInfo : Bifurcation.Info) (toBeProcessed : Array (Array Name)): TacticM (List MVarId × (List Info → TacticM Info)) := do
+  /-- Split a match/ite in TacticM (needs focus/setGoals), returning branch goals and names.
+      Called via bridge from traverseProgramM. -/
+  onMatchSplit (_cfg : Config) (_bfInfo : Bifurcation.Info) (toBeProcessed : Array (Array Name))
+      : TacticM (List MVarId × List (Array Name) × Syntax.Tactic) := do
     withTraceNode `Step (fun _ => pure m!"onMatch") do
-    trace[Step] "onMatch: encountered {bfInfo.kind}"
-    if (←getGoals).isEmpty then
-      trace[Step] "onMatch: no goals to be solved!"
-      -- Tactic.focus fails if there are no goals to be solved.
-      return ({}, fun infos => assert! (infos.length == 0); pure {})
-    Tactic.focus do
-      let h ← mkFreshUserName `h
-      let splitStx ← `(tactic| spec_split)
-      let subgoals ← esplitAtSpec h none
-      --
-      trace[Step] "onMatch: Bifurcation generated {subgoals.length} subgoals"
-      unless subgoals.length == toBeProcessed.size do
-        throwError "onMatch: Expected {toBeProcessed.size} cases, found {subgoals.length}"
+    trace[Step] "onMatch: encountered {_bfInfo.kind}"
+    let h ← mkFreshUserName `h
+    let splitStx ← `(tactic| spec_split)
+    let subgoals ← esplitAtSpec h none
+    trace[Step] "onMatch: Bifurcation generated {subgoals.length} subgoals"
+    unless subgoals.length == toBeProcessed.size do
+      throwError "onMatch: Expected {toBeProcessed.size} cases, found {subgoals.length}"
+    -- Collect branch goals and names for later SymM processing
+    let branchData ← subgoals.mapM fun (vars, hFvar, sg) => do
+      sg.withContext do
+      let names ← vars.mapM fun v => v.getUserName
+      let hName ← hFvar.getUserName
+      let allNames := (names.toList ++ [hName]).toArray
+      pure (sg, allNames)
+    let (branchGoals, branchNames) := branchData.unzip
+    pure (branchGoals, branchNames, splitStx)
 
-      let infos_mkBranchesStx ← subgoals.mapM fun (vars, h, sg) => do
-        setGoals [sg]
-        sg.withContext do
-        let names ← vars.mapM fun v => v.getUserName
-        let h ← h.getUserName
-        let names := names ++ [h]
-        let mkStx (branchScript : Script) : TacticM (BranchArg × Script) := do
-          let caseArgs : BranchArg ← do
-            if cfg.useRename then
-              pure (BranchArg.rename names)
-            else if cfg.useCase then
-              pure (BranchArg.case (makeCaseArgs (← sg.getTag) names))
-            else pure .empty
-          pure (caseArgs, branchScript)
-        pure (sg,  mkStx)
-      let (infos, mkBranchesStx) := infos_mkBranchesStx.unzip
+  /-- Generate the combined Info for a match/ite from branch results. SymM-native. -/
+  mkMatchInfo (splitStx : Syntax.Tactic) (branchNames : List (Array Name)) (branchInfos : List Info)
+      : SymM Info := do
+    unless branchInfos.length == branchNames.length do
+      throwError "mkMatchInfo: Expected {branchNames.length} infos, found {branchInfos.length}"
+    let branchesStx ← (branchInfos.zip branchNames).mapM fun (info, names) => do
+      let caseArgs : BranchArg ←
+        if cfg.useRename then
+          pure (BranchArg.rename names)
+        else pure .empty
+      pure (caseArgs, info.script)
+    let unassignedVars := (List.flatten (branchInfos.map (fun info => info.unassignedVars.toList))).toArray
+    let subgoals := (List.flatten (branchInfos.map (fun info => info.subgoals.toList))).toArray
+    let script := Script.split splitStx branchesStx.toArray
+    pure ({ script, unassignedVars, subgoals } : Info)
 
-      let mkStx (infos : List Info) : TacticM Info := do
-        unless infos.length == mkBranchesStx.length do
-          throwError "onMatch: Expected {mkBranchesStx.length} infos, found {infos.length}"
-        let branchesStx ← (infos.zip mkBranchesStx).mapM fun (info, mkBranchStx) => mkBranchStx info.script
-        let unassignedVars := (List.flatten (infos.map (fun info => info.unassignedVars.toList))).toArray
-        let subgoals := (List.flatten (infos.map (fun info => info.subgoals.toList))).toArray
-        let script := Script.split splitStx branchesStx.toArray
-        pure ({ script, unassignedVars, subgoals } : Info)
-
-      return (infos, mkStx)
-
-  tryStep (cfg : Config) (ids : Array (Option Name) := #[]) (postsBasename : Option Name := none) (ss : Step.StepState) := do
-    let mvarId ← getMainGoal
-    try some <$> Step.runInSymM (Step.evalStepCore cfg.stepConfig (some (.str .anonymous "_")) none ids false postsBasename cfg.preconditionTac ss mvarId)
+  /-- Try one step. SymM-native: calls evalStepCore directly (no per-step session overhead). -/
+  tryStepM (_cfg : Config) (ids : Array (Option Name) := #[]) (postsBasename : Option Name := none) (ss : Step.StepState) (mvarId : MVarId) : SymM (Option Step.Stats) := do
+    try some <$> Step.evalStepCore _cfg.stepConfig (some (.str .anonymous "_")) none ids false postsBasename _cfg.preconditionTac ss mvarId
     catch _ => pure none
 
   makeIds (base: Name) (numElem numPost : Nat) (defaultId := "x"): Array (TSyntax ``Lean.binderIdent) :=
@@ -759,7 +763,7 @@ where
     let postNames := optionallyEnumerated s!"{base}_post" numPost
     elemNames ++ postNames |>.map (mkNode ``Lean.binderIdent #[mkIdent ·])
 
-  makeCaseArgs tag names :=
+  makeCaseArgs (tag : Name) (names : Array Name) :=
     let tag := Lean.mkNode ``Lean.binderIdent #[mkIdent tag]
     let binderIdents := names.map nameToBinderIdent
     Lean.mkNode ``Lean.Parser.Tactic.caseArg #[tag, mkNullNode (args := binderIdents)]
