@@ -365,7 +365,7 @@ def esplitIteAtSpecM (h : Name) (mvarId : MVarId) : MetaM (List (FVarId × MVarI
     simpThms ← simpThms.addConst ``ite_true
     simpThms ← simpThms.addConst ``dite_true
     simpThms ← simpThms.addConst ``dite_false
-    let ctx ← Lean.Meta.Simp.mkContext {}
+    let ctx ← Lean.Meta.Simp.mkContext { failIfUnchanged := false }
       (simpTheorems := #[simpThms])
       (← Lean.Meta.getSimpCongrTheorems)
     let (result?, _stats) ← Lean.Meta.simpGoal goal ctx
@@ -414,7 +414,7 @@ def esplitMatchAtSpecM (h : Name) (names : Option (List (List (Option Name)))) (
     -- Add h as a rewrite rule in the simp context
     let mut simpThms : Lean.Meta.SimpTheorems := {}
     simpThms ← simpThms.add (.fvar hFVar) #[] (mkFVar hFVar) (post := true) (inv := false)
-    let ctx ← Lean.Meta.Simp.mkContext {}
+    let ctx ← Lean.Meta.Simp.mkContext { failIfUnchanged := false }
       (simpTheorems := #[simpThms])
       (← Lean.Meta.getSimpCongrTheorems)
     let (result?, _stats) ← Lean.Meta.simpGoal goal ctx

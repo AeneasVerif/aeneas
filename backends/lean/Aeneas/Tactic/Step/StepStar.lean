@@ -725,6 +725,26 @@ where
         let (info, mvarId) ← onFinishM cfg ss mvarId
         pure (info, mvarId.map (·, ss))
 
+  /-- Split a match/ite using MetaM-native esplitAtSpecM (avoids outer TacticM bridge).
+      Returns branch goals, names, and tactic syntax. -/
+  onMatchSplitM (toBeProcessed : Array (Array Name)) (mvarId : MVarId)
+      : SymM (List MVarId × List (Array Name) × Syntax.Tactic) := do
+    withTraceNode `Step (fun _ => pure m!"onMatchSplitM") do
+    let h ← mkFreshUserName `h
+    let splitStx ← `(tactic| spec_split)
+    let subgoals ← Step.esplitAtSpecM h none mvarId
+    trace[Step] "onMatch: Bifurcation generated {subgoals.length} subgoals"
+    unless subgoals.length == toBeProcessed.size do
+      throwError "onMatch: Expected {toBeProcessed.size} cases, found {subgoals.length}"
+    let branchData ← subgoals.mapM fun (vars, hFvar, sg) => do
+      sg.withContext do
+      let names ← vars.mapM fun v => v.getUserName
+      let hName ← hFvar.getUserName
+      let allNames := (names.toList ++ [hName]).toArray
+      pure (sg, allNames)
+    let (branchGoals, branchNames) := branchData.unzip
+    pure (branchGoals, branchNames, splitStx)
+
   /-- Split a match/ite in TacticM (needs focus/setGoals), returning branch goals and names.
       Called via bridge from traverseProgramM. -/
   onMatchSplit (_cfg : Config) (_bfInfo : Bifurcation.Info) (toBeProcessed : Array (Array Name))

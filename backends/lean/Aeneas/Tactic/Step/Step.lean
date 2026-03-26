@@ -16,6 +16,10 @@ open Lean Elab Term Meta Tactic
 open Utils
 open Lean.Meta.Sym (SymM)
 
+/-- Cached `inferType` for use in `SymM` contexts. Uses `Sym.State.inferType` cache
+    keyed by `ExprPtr` (pointer identity), avoiding redundant kernel calls. -/
+private def symInferType (e : Expr) : SymM Expr := Lean.Meta.Sym.inferType e
+
 /-- A special definition that we use to introduce pretty-printed terms in the context.
 
 Note that we should have `α = β`, but we allow the types to not be equal in case `step` has
@@ -356,16 +360,16 @@ def tryMatch (isLet : Bool) (th : Expr) (mvarId : MVarId) :
    -/
   /- There might be meta-variables in the type if the theorem comes from a local declaration,
      especially if this declaration was introduced by a tactic -/
-  let thTy ← instantiateMVars (← inferType th)
+  let thTy ← instantiateMVars (← symInferType th)
   trace[Step] "Looked up theorem/assumption type: {thTy}"
   -- Normalize to inline the let-bindings
   let thTy ← normalizeLetBindings thTy
   trace[Step] "After normalizing the let-bindings: {thTy}"
-  trace[Step] "Theorem: {th}: {← inferType th}"
+  trace[Step] "Theorem: {th}: {thTy}"
   -- Introduce the meta-variables for the quantified parameters
   let (mvars, _, thTy) ← forallMetaTelescope thTy
   let th := mkAppN th mvars
-  trace[Step] "Uninstantiated theorem: {th}: {← inferType th}"
+  trace[Step] "Uninstantiated theorem: {th}: {← symInferType th}"
 
   -- `thTy` should be of the shape `spec program post`: we need to retrieve `program`
   let (thHead, thArgs) := thTy.consumeMData.withApp (fun f args => (f, args))
@@ -381,14 +385,14 @@ def tryMatch (isLet : Bool) (th : Expr) (mvarId : MVarId) :
     then (``Std.WP.spec_bind', 4)
     else (``Std.WP.spec_mono', 2)
   let specMonoBind ← mkConstWithFreshMVarLevels specMonoBindName
-  let specMonoBindTy ← inferType specMonoBind
-  trace[Step] "specMonoBind (isLet:{isLet}): {specMonoBind}: {← inferType specMonoBind}"
+  let specMonoBindTy ← symInferType specMonoBind
+  trace[Step] "specMonoBind (isLet:{isLet}): {specMonoBind}: {specMonoBindTy}"
   let (specMonoBindMVars, _, specMonoBindTy) ← forallMetaBoundedTelescope specMonoBindTy varNum
   let specMonoBind ← mkAppOptM' specMonoBind (specMonoBindMVars.map some)
-  trace[Step] "Uninstantiated specMonoBind: {specMonoBind}: {← inferType specMonoBind}"
+  trace[Step] "Uninstantiated specMonoBind: {specMonoBind}: {← symInferType specMonoBind}"
 
   let specMonoBind := mkAppN specMonoBind #[program, P, th]
-  let specMonoBindTy ← inferType specMonoBind
+  let specMonoBindTy ← symInferType specMonoBind
   trace[Step] "Applied specMonoBind with theorem: {specMonoBind}: {specMonoBindTy}"
 
   let (specMonoBindMVars, _, specMonoBindTy) ← forallMetaBoundedTelescope specMonoBindTy 1
@@ -397,7 +401,7 @@ def tryMatch (isLet : Bool) (th : Expr) (mvarId : MVarId) :
   let specMonoBind ← mkAppOptM' specMonoBind (specMonoBindMVars.map some)
   trace[Step] "Applied specMonoBind with theorem: {specMonoBind}: {specMonoBindTy}"
 
-  let specMonoBindTy ← inferType specMonoBind
+  let specMonoBindTy ← symInferType specMonoBind
   let goalTy ← mvarId.getType
   trace[Step] "About to check defeq:\n- specMonoBindTy: {specMonoBindTy}\n- goalTy: {goalTy}"
   let ok ← isDefEq specMonoBindTy goalTy
@@ -435,7 +439,7 @@ def introPrettyEquality (args : Args) (fExpr : Expr) (outputFVars : Array Expr)
   let e ← mkAppM ``eq_imp_prettyMonadEq #[fExpr, pat]
   trace[Step] "Created the equality expression: {e}"
   -- Introduce it
-  let ty ← inferType e
+  let ty ← symInferType e
   let mvarId ← mvarId.assert name ty e
   let (_, mvarId) ← mvarId.intro1
   mvarId.withContext do
@@ -522,7 +526,7 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState)
     let type ← mvarId.getType
     let type ← instantiateMVars type
     forallTelescope type.consumeMData fun fvars _ => do
-    fvars.mapM fun e => do isProp (← inferType e)
+    fvars.mapM fun e => do isProp (← symInferType e)
 
   -- Warning if the user provided too many ids
   let nFVars := outputIsProp.size
@@ -656,7 +660,14 @@ def trySolvePreconditions (args : Args) (config : Config)
     for g in goals do
       if ← g.isAssigned then continue
       try
-        let (_, _) ← runTacticMOnGoal g (solvePreconditionTac stepState.grindState?)
+        -- Use MetaM-native path when threaded grind state is available (avoids TacticM bridge)
+        match stepState.grindState? with
+        | some gs =>
+          let saved ← getMCtx
+          let solved ← try solvePreconditionM (some gs) config g catch _ => pure false
+          unless solved do setMCtx saved
+        | none =>
+          let (_, _) ← runTacticMOnGoal g (solvePreconditionTac none)
       catch _ => pure ()
     let unsolvedGoals ← goals.filterM (fun g => do pure (not (← g.isAssigned)))
     pure (stepState, unsolvedGoals.map fun g => (g, OptTask.none), mvarId)
