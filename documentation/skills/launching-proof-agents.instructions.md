@@ -583,6 +583,13 @@ doesn't build cleanly, the proof agent must fix the errors before reporting.
 <!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Proof Style and Maintainability"
      and aeneas-tactics-quickref "Proof Style Rules". See skill-file-authoring for sync rules. -->
 
+**⚠️ BEFORE DIVING INTO SPECIFIC CHECKS:** Re-read the spec theorem conventions in
+the `aeneas-lean-core` skill file — tuple decomposition in postconditions, result type
+annotation, naming, docstrings, indentation rules, `⦃ ⦄` notation conventions. Check
+each convention mechanically against the code under review. Mechanical rule violations
+are the easiest to miss when reviewing "by feel" — they require deliberate
+checklist-style checking.
+
 **⚠️ READ THE FILES, DON'T JUST GREP.** The reviewer must **read the modified proof
 files** — not just run grep patterns. Grep catches mechanical violations (banned
 tactics, maxRecDepth) but misses structural problems (multi-line inline `(by ...)`
