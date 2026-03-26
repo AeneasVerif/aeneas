@@ -465,18 +465,33 @@ instance : WPMonad Result (.except Error .pure) where
   wp_pure := by
     intros
     ext Q
-    simp [wp, PredTrans.pure, pure, Except.pure, Id.run]
+    rfl
   wp_bind x f := by
-    simp only [Result.instWP]
+    simp [wp, pure, Except.pure]
     ext Q
-    cases x <;> simp [PredTrans.const]
+    cases x <;> rfl
 
 theorem Result.of_wp {α} {x : Result α} (P : Result α → Prop) :
     (⊢ₛ wp⟦x⟧ post⟨fun a => ⌜P (.ok a)⌝,
                   fun e => ⌜P (.fail e)⌝⟩) → P x := by
   intro hspec
-  simp only [instWP] at hspec
-  split at hspec <;> simp_all
+  unfold Result.instWP at hspec
+  cases x
+  case ok v =>
+    -- dsimp reduces the WP "onion" down to the bare Proposition
+    dsimp [WP.wp, pure, Except.pure, PredTrans.pure, PredTrans.pushExcept,
+           Except.instWP._aux_1, ExceptT.run] at hspec
+    simp at hspec
+    exact hspec
+  case fail e =>
+    dsimp [WP.wp, throw, throwThe, MonadExceptOf.throw,
+           PredTrans.pushExcept, Except.instWP._aux_1, ExceptT.run] at hspec
+    simp at hspec
+    exact hspec
+  case div =>
+    dsimp [WP.wp, PredTrans.const] at hspec
+    simp at hspec
+    contradiction
 
 end Aeneas.Std.WP
 

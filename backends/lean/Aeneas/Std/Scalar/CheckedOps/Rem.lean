@@ -52,6 +52,9 @@ theorem «%S».checked_rem_bv_spec (x y : «%S») :
   have := core.num.checked_rem_UScalar_bv_spec x y
   simp_all [«%S».checked_rem, «%S».bv]
   cases h: core.num.checked_rem_UScalar x y <;> simp_all
+  obtain ⟨left, right⟩ := this
+  obtain ⟨left_1, right⟩ := right
+  rfl
 
 /-!
 Signed checked rem

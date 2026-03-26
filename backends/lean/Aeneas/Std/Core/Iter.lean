@@ -95,7 +95,7 @@ def core.iter.adapters.step_by.IteratorStepBy.next
   "core::iter::adapters::step_by::{core::iter::traits::iterator::Iterator<core::iter::adapters::step_by::StepBy<@I>, @Clause0_Item>}::step_by"]
 def core.iter.adapters.step_by.IteratorStepBy.step_by
   {I : Type} {Item : Type}
-  (IteratorInst : core.iter.traits.iterator.Iterator I Item) :
+  (_IteratorInst : core.iter.traits.iterator.Iterator I Item) :
   core.iter.adapters.step_by.StepBy I → Std.Usize →
   Result (core.iter.adapters.step_by.StepBy (core.iter.adapters.step_by.StepBy I)) :=
   fun self steps =>
@@ -106,7 +106,7 @@ def core.iter.adapters.step_by.IteratorStepBy.step_by
   "core::iter::adapters::step_by::{core::iter::traits::iterator::Iterator<core::iter::adapters::step_by::StepBy<@I>, @Clause0_Item>}::enumerate"]
 def core.iter.adapters.step_by.IteratorStepBy.enumerate
   {I : Type} {Item : Type}
-  (IteratorInst : core.iter.traits.iterator.Iterator I Item) :
+  (_IteratorInst : core.iter.traits.iterator.Iterator I Item) :
   core.iter.adapters.step_by.StepBy I →
   Result (core.iter.adapters.enumerate.Enumerate (core.iter.adapters.step_by.StepBy I)) :=
   fun self => .ok { iter := self, count := 0#usize }
@@ -115,7 +115,7 @@ def core.iter.adapters.step_by.IteratorStepBy.enumerate
   "core::iter::adapters::step_by::{core::iter::traits::iterator::Iterator<core::iter::adapters::step_by::StepBy<@I>, @Clause0_Item>}::take"]
 def core.iter.adapters.step_by.IteratorStepBy.take
   {I : Type} {Item : Type}
-  (IteratorInst : core.iter.traits.iterator.Iterator I Item) :
+  (_IteratorInst : core.iter.traits.iterator.Iterator I Item) :
   core.iter.adapters.step_by.StepBy I → Std.Usize →
   Result (core.iter.adapters.take.Take (core.iter.adapters.step_by.StepBy I)) :=
   fun self n => .ok ⟨ self, n ⟩

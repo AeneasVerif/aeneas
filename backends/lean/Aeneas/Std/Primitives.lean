@@ -165,7 +165,7 @@ section Order
 open Lean.Order
 
 instance : PartialOrder (Result α) := inferInstanceAs (PartialOrder (FlatOrder .div))
-noncomputable instance : CCPO (Result α) := inferInstanceAs (CCPO (FlatOrder .div))
+noncomputable instance : CCPO (Result α) := inferInstanceAs (CCPO (FlatOrder Result.div))
 noncomputable instance : MonoBind Result where
   bind_mono_left h := by
     cases h
