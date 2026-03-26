@@ -98,23 +98,27 @@ def core.option.Option.unwrap_or (self : Option T) (default : T) : T :=
   | none => default
   | some self => self
 
-/-- Returns the contained `some` value. The message is ignored: on `none`, this
-    fails with `Error.panic`, which is the same behavior as `unwrap`. -/
-@[simp, step_simps, rust_fun "core::option::{core::option::Option<@T>}::expect"]
-def core.option.Option.expect {T : Type} (x : Option T) (_msg: Str) : Result T :=
-  Result.ofOption x Error.panic
-
 @[simp] def core.option.Option.unwrap_or_some (self default : T) :
   core.option.Option.unwrap_or (some self) default = self := by simp [unwrap_or]
 
 @[simp] def core.option.Option.unwrap_or_none (default : T) :
   core.option.Option.unwrap_or none default = default := by simp [unwrap_or]
 
+/-- Returns the contained `some` value. The message is ignored: on `none`, this
+    fails with `Error.panic`, which is the same behavior as `unwrap`. -/
+@[simp, step_simps, rust_fun "core::option::{core::option::Option<@T>}::expect"]
+def core.option.Option.expect {T : Type} (x : Option T) (_msg: Str) : Result T :=
+  Result.ofOption x Error.panic
+
 @[simp, step_simps, rust_fun "core::option::{core::option::Option<@T>}::take" -canFail -lift]
 def core.option.Option.take {T: Type} (self: Option T): Option T × Option T := (self, .none)
 
 @[simp, step_simps, rust_fun "core::option::{core::option::Option<@T>}::is_none" -canFail -lift]
 def core.option.Option.is_none {T: Type} (self: Option T): Bool := self.isNone
+
+/-- Returns `true` if the option is `some`. -/
+@[simp, step_simps, rust_fun "core::option::{core::option::Option<@T>}::is_some" -canFail -lift]
+def core.option.Option.is_some {T: Type} (self: Option T): Bool := self.isSome
 
 @[rust_type "core::ops::range::RangeFrom"]
 structure core.ops.range.RangeFrom (Idx : Type) where
