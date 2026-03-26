@@ -1261,6 +1261,39 @@ example (a b : U32) (h : a = b) (hbnd : a.val + b.val ≤ U32.max) :
     agrind
   · agrind
 
+/-- Test: contradiction after a match (explicit match on an inductive type).
+    The `none` branch leads to `fail`, which contradicts the postcondition.
+    With `h : x = some v` in context, the `none` branch is contradictory. -/
+private def matchContradictionFn (x : Option U32) : Result U32 :=
+  match x with
+  | some v => .ok v
+  | none => fail .panic
+
+set_option maxHeartbeats 800000 in
+example (v : U32) (h : x = some v) :
+    matchContradictionFn x ⦃ r => r = v ⦄ := by
+  unfold matchContradictionFn
+  step*
+
+/-- Test: contradiction after a let-binding.
+    After the `add` step, the postcondition introduces `c.val = a.val + b.val`.
+    The if-then-else checks `a = b`. In the `else` branch, we have `¬(a = b)` from
+    the branch plus any accumulated facts. With `h : a = b` in scope, this contradicts.
+    The contradiction is detected after the let-binding step introduces `c` and its
+    postcondition, and then the if-split creates the contradicting branch. -/
+private def letBindContradictionFn (a b : U32) : Result U32 := do
+  let c ← a + b
+  if a = b then
+    .ok c
+  else
+    fail .panic
+
+set_option maxHeartbeats 800000 in
+example (a b : U32) (h : a = b) (hbnd : a.val + b.val ≤ U32.max) :
+    letBindContradictionFn a b ⦃ r => r.val = a.val + b.val ⦄ := by
+  unfold letBindContradictionFn
+  step*
+
 end Examples
 
 end Aeneas
