@@ -65,30 +65,30 @@ theorem Array.index_usize_const_spec {α} [Inhabited α]
       -- Contradiction
       grind
     | hd :: l =>
-      fsimp [Std.Array.allIdx] at h
+      simp [Std.Array.allIdx] at h
       have : i ≤ U32.max := by scalar_tac
-      fsimp [this] at h
+      simp [this] at h
       if hj: j = 0 then
-        have hl' := hl 0; fsimp at hl'
-        fsimp [hl'] at h
+        have hl' := hl 0; simp at hl'
+        simp [hl'] at h
         have hp' := hp (Usize.ofNat i (by scalar_tac)) a[i]!
-        fsimp [h] at hp'
-        fsimp [hp', hj]
+        simp [h] at hp'
+        simp [hp', hj]
       else
         have hind := aux l (i + 1) (by scalar_tac)
           (by intro j
               replace hl := hl (j + 1)
-              fsimp at hl
+              simp at hl
               have : i + 1 + j = i + (j + 1) := by omega
               simp only [List.getElem!_eq_getElem?_getD, getElem!_Nat_eq]
               rw [this]
               apply hl)
-          (by fsimp [h]) (j - 1) (by omega) (by omega)
+          (by simp [h]) (j - 1) (by omega) (by omega)
         have : i + 1 + (j - 1) = i + j := by omega
-        fsimp [this] at hind
-        fsimp [hind]
-  have hi := aux a.val 0 (by scalar_tac) (by fsimp) hPred i (by scalar_tac) (by scalar_tac)
-  fsimp at hi
+        simp [this] at hind
+        simp [hind]
+  have hi := aux a.val 0 (by scalar_tac) (by simp) hPred i (by scalar_tac) (by scalar_tac)
+  simp at hi
   step as ⟨ x, hx ⟩
   grind
 

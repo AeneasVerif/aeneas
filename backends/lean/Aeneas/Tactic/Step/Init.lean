@@ -150,6 +150,13 @@ structure StepGrindState where
       If `true`, the e-graph already contains `False` — discharge can succeed
       trivially on any precondition. -/
   contradiction : Bool := false
+  /-- Proof of `False` derived from contradicting hypotheses in the local context.
+      Set when grind finds a contradiction during context internalization and
+      preprocessing of the grind state (in both `initStepGrindState` and
+      `updateStepGrindState`). The proof comes from a fresh mvar with target `False`
+      that grind closed. Callers use `closeGoalWithFalse` to derive a proof of the
+      real goal's type via `False.elim`. -/
+  contradictionProof? : Option Expr := none
   /-- Parameters (config, simp context, extensions, etc.) -/
   params : Grind.Params
   /-- Cached Aeneas simp context (expensive to build — cached at init). -/
@@ -163,6 +170,12 @@ structure StepGrindState where
 structure StepState where
   /-- Optional grind state. `none` when threading is disabled or not yet initialized. -/
   grindState? : Option StepGrindState := none
+
+/-- Get the contradiction proof from the grind state, if any.
+    Returns `some falseProof` when grind found contradicting hypotheses during
+    the last `init` or `update` call. Use `closeGoalWithFalse` to close the goal. -/
+def StepState.contradictionProof? (state : StepState) : Option Expr :=
+  state.grindState?.bind (·.contradictionProof?)
 
 /-! # Attribute: `step` -/
 
