@@ -189,13 +189,21 @@ etc.), the supervisor should **propose and follow this loop**:
 The user may want to skip the review (for trivial tasks), do the review themselves,
 or adjust the scope. Always ask rather than assume.
 
-**Review depth depends on the task:**
+**Review depth and priority depends on the task:**
+- **Axiom files / trust boundaries** (HIGHEST PRIORITY): Every new axiom file or
+  trust boundary (e.g., hash bridge, SIMD model) MUST get a dedicated code-review
+  agent **immediately after creation**, before any other work proceeds. Never mark
+  an axiom-creating task as "done" until a separate reviewer has verified the axioms.
+  Axiom reviews focus on mathematical correctness (see the `launching-proof-agents`
+  skill file for the axiom review checklist). **Axioms are more dangerous than
+  sorry's** — a sorry is an honest gap, but a wrong axiom is a silent lie that makes
+  all downstream proofs vacuous.
 - **Skill file edits**: reviewer checks cross-file consistency, actionability, and
   that examples match rules (see the `skill-file-authoring` skill file).
-- **Proof work**: reviewer runs the full checklist (see launching-proof-agents).
-  **The reviewer should read the modified files** (not just grep) — the token cost
-  is modest (~15K tokens per file) and grep alone misses structural issues like
-  multi-line inline `(by ...)` blocks and proof organization problems.
+- **Proof work**: reviewer runs the full checklist (see the `launching-proof-agents`
+  skill file). **The reviewer should read the modified files** (not just grep) — the
+  token cost is modest (~15K tokens per file) and grep alone misses structural issues
+  like multi-line inline `(by ...)` blocks and proof organization problems.
 - **Mechanical changes** (bulk rename, sed replacement): reviewer spot-checks a
   sample + verifies the build passes. Full read not needed.
 

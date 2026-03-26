@@ -440,6 +440,36 @@ until all statements are validated. Only then do proof agents launch.
 - Missing existential for length + functional property
 - Only one half of a bidirectional property (e.g., only correctness, not bounds)
 
+<!-- ⚠️ SYNC RULE: source of truth is agent-fleet-management "Review depth and priority" -->
+**⚠️ MANDATORY: Axiom files must be reviewed immediately after creation.**
+
+Every new axiom file or trust boundary (hash bridge, SIMD model, external function
+specs, etc.) MUST get a **dedicated code-review agent immediately after creation**,
+before any other work proceeds. This is not optional — it is the highest-priority
+review task. The supervisor must never mark an axiom-creating task as "done" until
+a separate reviewer has verified the axioms.
+
+**Why:** Axioms are more dangerous than sorry's. A sorry is an honest gap — the proof
+system tracks it and everyone knows it's incomplete. A wrong axiom is a silent lie:
+it makes all downstream proofs vacuous while appearing to succeed. An axiom file with
+incorrect postconditions (e.g., missing spec connections, vacuous simulation relations)
+can waste weeks of proof work building on a foundation that proves nothing.
+
+**Axiom review checklist** (in addition to the general review checklist above):
+- **Does every axiom connect output to the specification?** An axiom that only asserts
+  structural properties (e.g., `output.length = n`, `offset advances`) without
+  connecting the output VALUES to the spec function is critically incomplete. The
+  output must be related to the pure spec (e.g., `output = Spec.SHAKE128(input)[offset..offset+len]`).
+- **Are simulation/abstraction relations non-vacuous?** A `Simulates` relation defined
+  as `True` provides zero guarantees — any implementation state "simulates" any abstract
+  state. Either make the relation `opaque` (axiom without body) or give it real content.
+- **Could an incorrect implementation satisfy all axioms?** Mentally substitute a
+  trivially wrong implementation (e.g., one that always returns zeros) and check
+  whether it would satisfy every axiom. If yes, the axioms are too weak.
+- **Are axiom chains consistent?** When multiple axioms model a stateful protocol
+  (init → absorb → squeeze → result), verify the chain is consistent: state flows
+  correctly, accumulated data is preserved, offsets advance properly.
+
 ### Phase 3: Proof Agents with Review Loop (slower, parallelizable)
 
 Only after statements are validated, launch agents to fill the `sorry` proofs.
