@@ -170,8 +170,8 @@ structure StepState where
   grindState? : Option StepGrindState := none
 
 /-- Get the contradiction proof from the grind state, if any.
-    Returns `some proof` when grind found contradicting hypotheses during
-    the last `update` call. The proof can be assigned to the goal's mvar. -/
+    Returns `some falseProof` when grind found contradicting hypotheses during
+    the last `init` or `update` call. Use `closeGoalWithFalse` to close the goal. -/
 def StepState.contradictionProof? (state : StepState) : Option Expr :=
   state.grindState?.bind (·.contradictionProof?)
 

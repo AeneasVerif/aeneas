@@ -230,26 +230,25 @@ private def internalizeHypotheses (goal : Goal) (config : Config)
     pure contradiction
   return (goal, contradiction)
 
-/-- **Fresh-mvar protection + MCtx depth protection.**
+/-- **Two layers of protection for grind operations.**
 
-    Two layers of protection against grind accidentally modifying external state:
+    Grind internally calls `isDefEq` (in canonicalization, e-matching, and satellite
+    solvers) and `MVarId.assign` (when closing a goal by contradiction). Without
+    protection, both can modify metavariables from the caller's context. We need two
+    complementary defenses:
 
-    1. **Fresh mvar with `False` target:** Grind operates on a fresh mvar (not the real
-       goal mvar). If grind finds a contradiction, it closes the fresh mvar — not the
-       real one. We save the proof of `False` for callers to use via `False.elim`.
+    1. **`withNewMCtxDepth`** prevents `isDefEq` from assigning pre-existing metavariables
+       (it checks `decl.depth == mctx.depth` and refuses to assign mvars at a lower depth).
+       This mirrors the protection in `Grind.withProtectedMCtx`.
 
-    2. **`withNewMCtxDepth`:** All grind operations run at an increased MetavarContext
-       depth. This prevents `isDefEq` (called internally by grind's congruence closure,
-       e-matching, and satellite solvers) from accidentally instantiating pre-existing
-       metavariables in the proof context. This mirrors the protection used by the
-       standard `grind` tactic via `Grind.withProtectedMCtx`.
+    2. **Fresh mvar with target `False`** prevents grind from closing the real goal mvar
+       via `MVarId.assign` (which bypasses the depth check). The fresh mvar is created
+       at the new depth so grind can assign it. If grind finds a contradiction, it closes
+       the fresh mvar — we extract the proof of `False` and return it to callers, who use
+       `closeGoalWithFalse` to close the real goal via `False.elim`.
 
     The grind state (`Grind.State`, `Sym.State`, `GoalState`) is extracted as return
-    values before `withNewMCtxDepth` restores the old mctx, so it persists across calls.
-    The contradiction proof (if any) is `instantiateMVars`'d before exiting the block.
-
-    Takes an action that receives a fresh `MVarId` (at the new depth) and an internal
-    contradiction `Bool`, and returns some result plus the contradiction flag. -/
+    values before `withNewMCtxDepth` restores the old mctx, so it persists across calls. -/
 private def withProtectedGrind {α} (mvarId : MVarId)
     (action : MVarId → MetaM (α × Bool))
     : MetaM (α × Bool × Option Expr) :=
@@ -273,7 +272,7 @@ def closeGoalWithFalse (mvarId : MVarId) (falseProof : Expr) : MetaM Unit := do
 
 /-- Initialize the grind state from the current proof context.
     Creates a fresh `GoalState` and internalizes all current local hypotheses.
-    Runs inside `withNewMCtxDepth` to protect external metavariables. -/
+    Runs inside `withProtectedGrind` (see its docstring for the protection rationale). -/
 def initStepGrindState (config : Config) (mvarId : MVarId) : MetaM StepGrindState := do
   let params ← mkGrindParams config
   let (simpCtx, simprocs) ← mkPreprocessSimpCtx
@@ -289,7 +288,7 @@ def initStepGrindState (config : Config) (mvarId : MVarId) : MetaM StepGrindStat
 
 /-- Update the grind state after new fvars have been introduced (by `introOutputs` or
     case splits). Only processes fvars with index ≥ `nextDeclIdx` (incremental).
-    Runs inside `withNewMCtxDepth` to protect external metavariables. -/
+    Runs inside `withProtectedGrind` (see its docstring for the protection rationale). -/
 def updateStepGrindState (state : StepGrindState) (config : Config) (mvarId : MVarId)
     : MetaM StepGrindState := do
   let ((goalState, grindState, symState), contradiction, contradictionProof?) ←
@@ -313,16 +312,16 @@ def updateStepGrindState (state : StepGrindState) (config : Config) (mvarId : MV
     to the e-graph and runs the full solver pipeline (assertAll, satellite solvers,
     e-matching, case splitting) to find a contradiction.
 
-    **MCtx depth protection:** Like `initStepGrindState` and `updateStepGrindState`,
-    the solve action runs inside `withNewMCtxDepth` to prevent grind from instantiating
-    pre-existing metavariables in the proof context. A fresh mvar (at the new depth)
-    mirrors the precondition goal; after solving, the proof is instantiated and assigned
-    to the real precondition mvar outside the depth barrier.
+    Like `initStepGrindState` and `updateStepGrindState`, the solve action runs inside
+    `withNewMCtxDepth` with a fresh mvar (see `withProtectedGrind` for the rationale).
+    Here the fresh mvar has the precondition's type (not `False`) so that grind produces
+    a proof of the right type directly. The proof is instantiated before exiting the
+    depth barrier, then wrapped in an auxiliary theorem (`mkAuxTheorem`) and assigned to
+    the real precondition mvar.
 
-    The proof is wrapped in an auxiliary theorem (`mkAuxTheorem`) to prevent kernel
-    reduction loops in recursive theorems. Without this, the grind proof term (which
-    chains through `Classical.byContradiction` + linear arithmetic) can trigger
-    `maxRecDepth` during the kernel's well-founded recursion checking.
+    The `mkAuxTheorem` wrapping prevents kernel reduction loops in recursive theorems:
+    grind proofs chain through `Classical.byContradiction` + linear arithmetic, which
+    can trigger `maxRecDepth` during the kernel's well-founded recursion checking.
 
     Returns `true` if the precondition was solved, `false` otherwise.
     On failure, all MetaM state changes are reverted (via `observing?`). -/

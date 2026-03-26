@@ -544,9 +544,7 @@ where
         let ss ← ss.update cfg.stepConfig mainGoal
         /- Check if grind detected a contradiction during hypothesis internalization.
            This happens when a branch's hypotheses contradict the pre-split context
-           (e.g., `h : a = b` from before the split and `h' : ¬a = b` from the branch).
-           The fresh-mvar protection in `updateStepGrindState` prevents grind from
-           assigning the real branch mvar — we close it ourselves here. -/
+           (e.g., `h : a = b` from before the split and `h' : ¬a = b` from the branch). -/
         if let some falseProof := ss.contradictionProof? then
           trace[Step] "grind detected contradiction in branch — closing goal"
           Step.closeGoalWithFalse mainGoal falseProof
