@@ -3,7 +3,7 @@ import Aeneas.Tactic.Solver.ScalarTac
 import Aeneas.Tactic.Step.Init
 import Aeneas.Tactic.Step.GrindState
 import Aeneas.Std
-import Aeneas.Tactic.Simp.FSimp
+import Aeneas.Tactic.Simp.SimpLemmas
 import AeneasMeta.Async
 import Aeneas.Tactic.Solver.Grind.Init
 
@@ -1680,7 +1680,7 @@ info: example
     := by
     step as ⟨ c', _, hc' ⟩ -- we have: `hc' : c'.bv = c.bv >>> 16`
     extract_goal1
-    fsimp [hc']
+    simp [hc']
 
   example (x y : U32) (h : x.val + y.val < U32.max) :
     (do
