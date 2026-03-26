@@ -14,7 +14,7 @@ open Lean Elab Meta Tactic TacticM
 
     `eliminate` controls which free variables to try clearing from the context before collecting
     escaping variables -/
-def inferPost (goal : MVarId) (_eliminate : LocalDecl → Bool := fun _ => true) :
+def inferPost (goal : MVarId) (eliminate : LocalDecl → Bool := fun _ => true) :
     TacticM MVarId := withTraceNode `Step (fun _ => do pure m!"inferPost") <| goal.withContext do
   traceGoalWithNode "metavariable context"
   let goalTy ← instantiateMVars (← goal.getType)
@@ -31,8 +31,9 @@ def inferPost (goal : MVarId) (_eliminate : LocalDecl → Bool := fun _ => true)
   let lclDecls ← lctx.getDecls
   let mvarLCtx := (← postMVarId.getDecl).lctx
 
-  -- Collect free vars not in the mvar's context or marked for elimination
-  let escapingLocalDecls := lclDecls.filter fun decl => !mvarLCtx.contains decl.fvarId
+  -- Collect free vars not in the mvar's context or marked for elimination.
+  let escapingLocalDecls := lclDecls.filter fun decl =>
+    !(mvarLCtx.contains decl.fvarId || eliminate decl)
 
   -- Build postcondition: fun x₁ ... xₙ => ∃ vars..., x₁ = a₁ ∧ ... ∧ xₙ = aₙ ∧ props
   let argTys ← liftMetaM (args.mapM inferType)
@@ -51,7 +52,6 @@ def inferPost (goal : MVarId) (_eliminate : LocalDecl → Bool := fun _ => true)
         mkAppM ``Exists #[← mkLambdaFVars #[.fvar decl.fvarId] acc]) body
     mkLambdaFVars boundVars existsBody
   trace[Step] m!"inferred postcondition: {←ppExpr postExpr}"
-  dbg_trace s!"inferred postcondition: {← ppExpr postExpr}"
   postMVarId.assign postExpr
   pure goal
 

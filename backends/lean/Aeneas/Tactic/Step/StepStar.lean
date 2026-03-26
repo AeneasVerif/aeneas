@@ -574,15 +574,6 @@ where
     match mvarId with
     | none => pure (info, mvarId)
     | some mvarId =>
-      /- If inferPost is enabled, try to infer the postcondition before attempting agrind -/
-      let mvarId ←
-        if cfg.stepConfig.inferPost then
-          let goalTy ← instantiateMVars (← mvarId.getType)
-          let (head, _) := goalTy.withApp fun f a => (f, a)
-          if head.isMVar then
-            commitIfNoEx do Step.inferPost mvarId
-          else pure mvarId
-        else pure mvarId
       setGoals [mvarId]
       /- Attempt to finish with a tactic -/
       -- TODO: don't use syntax
@@ -686,8 +677,7 @@ where
             | none => `(tactic| step $config with $(←usedTheorem.toSyntax) as ⟨$ids,*⟩)
             | some tac => `(tactic| step $config with $(←usedTheorem.toSyntax) as ⟨$ids,*⟩ by $(#[tac])*)
       /- If inferPost is enabled, try to recursively process unsolved preconditions
-         that are `spec` goals. This handles higher-order cases where a precondition
-         like `hf : f x ⦃ ?post ⦄` is itself a monadic spec that needs progress + inferPost.
+         that are `spec` goals.
 
          For each recursively processed precondition, we wrap its script in
          `case <tag> => [intro ...;] <recursive script>` so the generated proof

@@ -727,22 +727,25 @@ def stepWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
     withTraceNode `Step
       (fun _ => pure m!"Main goal after simplifying the post-conditions and the target") do
       trace[Step] "{mainGoal.goal}"
-  /- If inferPost is enabled, try to infer and prove the postcondition -/
+  -- If inferPost is enabled, try to infer the postcondition
   let mainGoal ← do
     if args.inferPost then
       if let some mg := mainGoal then
         let goalTy ← instantiateMVars (← mg.goal.getType)
         let (head, _) := goalTy.withApp fun f a => (f, a)
         if head.isMVar then
-          commitIfNoEx do
-            let goal ← inferPost mg.goal
-            setGoals [goal]
-            evalTactic (←`(tactic|agrind))
-            match ← getGoals with
-            | [] => pure none
-            | g :: gs =>
-              setGoals gs
-              pure (some { mg with goal := g })
+          let mainGoal ← commitIfNoEx do
+            let goal ← inferPost mg.goal (eliminate := fun decl => decl.type.isAppOf ``prettyMonadEq)
+            pure (some { mg with goal := goal })
+          -- Try to solve the inferred postcondition with `agrind`
+          if let some mg := mainGoal then
+            setGoals [mg.goal]
+            try
+              evalTactic (←`(tactic|agrind))
+              if (← getGoals).isEmpty then pure none
+              else pure mainGoal
+            catch _ => pure mainGoal
+          else pure none
         else pure mainGoal
       else pure mainGoal
     else pure mainGoal
