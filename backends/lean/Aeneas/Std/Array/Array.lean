@@ -85,7 +85,7 @@ theorem Array.getElem!_Nat_eq {α : Type u} [Inhabited α] {n : Usize} (v : Arra
 
 @[simp]
 abbrev Array.slice {α : Type u} {n : Usize} [Inhabited α] (v : Array α n) (i j : Nat) : List α :=
-  v.val.slice i j
+  v.val.extract i j
 
 def Array.index_usize {α : Type u} {n : Usize} (v: Array α n) (i: Usize) : Result α :=
   match v[i]? with

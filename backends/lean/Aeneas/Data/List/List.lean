@@ -35,8 +35,8 @@ attribute [simp] getElem?_cons_zero getElem!_cons_zero
 @[simp] theorem getElem?_cons_nzero (hne : Nat.not_eq i 0) : getElem? ((x :: tl) : List α) i = getElem? tl (i - 1) := by cases i <;> simp_all
 @[simp] theorem getElem!_cons_nzero (x : α) (tl : List α) (i : Nat) [Inhabited α] (hne : Nat.not_eq i 0) : getElem! ((x :: tl) : List α) i = getElem! tl (i - 1) := by cases i <;> simp_all
 
-def slice (start end_ : Nat) (ls : List α) : List α :=
-  (ls.drop start).take (end_ - start)
+@[deprecated List.extract (since := "2026-03-27")]
+abbrev slice (start stop : Nat) (ls : List α) : List α := ls.extract start stop
 
 def allP {α : Type u} (l : List α) (p: α → Prop) : Prop :=
   foldr (fun a r => p a ∧ r) True l
@@ -62,8 +62,15 @@ def resize (l : List α) (new_len : Nat) (x : α) : List α :=
 
 @[simp] theorem take_cons_nzero i x tl (hne : Nat.not_eq i 0) : take i ((x :: tl) : List α) = x :: take (i - 1) tl := by cases i <;> simp_all
 
-@[simp] theorem slice_nil i j : slice i j ([] : List α) = [] := by simp [slice]
-@[simp] theorem slice_zero ls : slice 0 0 (ls : List α) = [] := by cases ls <;> simp [slice]
+@[simp] theorem extract_nil i j : ([] : List α).extract i j = [] := by simp
+
+@[deprecated extract_nil (since := "2026-03-27")]
+alias slice_nil := extract_nil
+
+@[simp] theorem extract_zero ls : (ls : List α).extract 0 0 = [] := by simp
+
+@[deprecated extract_zero (since := "2026-03-27")]
+alias slice_zero := extract_zero
 
 @[simp] theorem replicate_cons_nzero i (x : List α) (hne : Nat.not_eq i 0) : replicate i x = x :: replicate (i - 1) x := by
   cases i <;> simp_all [replicate]
@@ -73,10 +80,13 @@ def resize (l : List α) (new_len : Nat) (x : α) : List α :=
 @[simp] theorem set_opt_cons_nzero x tl i y (hne : Nat.not_eq i 0) : set_opt ((x :: tl) : List α) i y = x :: set_opt tl (i - 1) y := by simp [set_opt]; intro; simp_all
 
 @[simp]
-theorem slice_cons_nzero (i j : Nat) (x : α) (tl : List α) (hne : Nat.not_eq i 0) :
-  slice i j ((x :: tl) : List α) = slice (i - 1) (j - 1) tl := by
+theorem extract_cons_nzero (i j : Nat) (x : α) (tl : List α) (hne : Nat.not_eq i 0) :
+  ((x :: tl) : List α).extract i j = tl.extract (i - 1) (j - 1) := by
   apply Nat.not_eq_imp_not_eq at hne
-  induction i <;> cases j <;> simp_all [slice]
+  induction i <;> cases j <;> simp_all
+
+@[deprecated extract_cons_nzero (since := "2026-03-27")]
+alias slice_cons_nzero := extract_cons_nzero
 
 @[simp, scalar_tac_simps, grind =, agrind =]
 theorem replicate_length {α : Type u} (l : Nat) (x : α) :
@@ -174,33 +184,37 @@ theorem resize_length (l : List α) (new_len : Nat) (x : α) :
   induction l <;> simp_all [resize]
   scalar_tac
 
-@[simp] theorem slice_zero_j (l : List α) : l.slice 0 j = l.take j := by simp [slice]
+@[simp] theorem extract_zero_j (l : List α) : l.extract 0 j = l.take j := take_eq_take_iff.mpr rfl
 
-theorem slice_length_le (i j : Nat) (ls : List α) : (ls.slice i j).length ≤ ls.length := by
-  simp [slice]
+@[deprecated extract_zero_j (since := "2026-03-27")]
+alias slice_zero_j := extract_zero_j
+
+theorem extract_length_le (i j : Nat) (ls : List α) : (ls.extract i j).length ≤ ls.length := by simp
+
+@[deprecated extract_length_le (since := "2026-03-27")]
+alias slice_length_le := extract_length_le
 
 @[simp_lists_safe, scalar_tac_simps, grind =, agrind =]
-theorem slice_length (i j : Nat) (ls : List α) : (ls.slice i j).length = min (ls.length - i) (j - i) := by
-  simp [slice]; scalar_tac
+theorem extract_length (i j : Nat) (ls : List α) : (ls.extract i j).length = min (ls.length - i) (j - i) := by grind
+
+@[deprecated extract_length (since := "2026-03-27")]
+alias slice_length := extract_length
 
 @[simp, simp_lists_safe, grind =, agrind =]
-theorem getElem?_slice (i j k : Nat) (ls : List α)
+theorem getElem?_extract (i j k : Nat) (ls : List α)
   (_ : j ≤ ls.length ∧ i + k < j) :
-  (ls.slice i j)[k]? = ls[i + k]? := by
-  revert i j
-  induction ls
-  . intro i j; simp_all
-  . intro i j h
-    simp_all [slice]
-    have : k < j - i := by scalar_tac
-    simp [*]
+  (ls.extract i j)[k]? = ls[i + k]? := by grind
+
+@[deprecated getElem?_extract (since := "2026-03-27")]
+alias getElem?_slice := getElem?_extract
 
 @[simp, simp_lists_safe, grind =, agrind =]
-theorem getElem!_slice [Inhabited α] (i j k : Nat) (ls : List α)
+theorem getElem!_extract [Inhabited α] (i j k : Nat) (ls : List α)
   (_ : j ≤ ls.length ∧ i + k < j) :
-  (ls.slice i j)[k]! = ls[i + k]! := by
-  have := getElem?_slice i j k ls
-  simp_all
+  (ls.extract i j)[k]! = ls[i + k]! := by grind
+
+@[deprecated getElem!_extract (since := "2026-03-27")]
+alias getElem!_slice := getElem!_extract
 
 @[simp, simp_lists_safe, grind =, agrind =]
 theorem getElem?_take_append_beg (i j : Nat) (l0 l1 : List α)
