@@ -843,7 +843,7 @@ let lean_builtin_funs =
     mk_fun "core::slice::{[@T]}::split_at" "core.slice.Slice.split_at";
     (* file: "Aeneas/Std/Slice.lean", line: 646 *)
     mk_fun "core::slice::{[@T]}::split_at_mut" "core.slice.Slice.split_at_mut";
-    (* file: "Aeneas/Std/Slice.lean", line: 664 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 705 *)
     mk_fun "core::slice::{[@T]}::swap" "core.slice.Slice.swap";
     (* file: "Aeneas/Std/StringIter.lean", line: 11 *)
     mk_fun
