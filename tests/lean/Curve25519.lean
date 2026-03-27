@@ -1,0 +1,1 @@
+import Curve25519.Properties

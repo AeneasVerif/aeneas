@@ -12,32 +12,28 @@ set_option maxHeartbeats 1000000
 namespace rename_attribute
 
 /-- Trait declaration: [rename_attribute::BoolTrait]
-   Source: 'tests/src/rename_attribute.rs', lines 10:0-20:1
-   Visibility: public -/
+    Source: 'tests/src/rename_attribute.rs', lines 10:0-20:1 -/
 structure BoolTest (Self : Type) where
   getTest : Self → Result Bool
   retTest : Self → Result Bool
 
 /-- [rename_attribute::BoolTrait::ret_true]:
-   Source: 'tests/src/rename_attribute.rs', lines 17:4-19:5
-   Visibility: public -/
+    Source: 'tests/src/rename_attribute.rs', lines 17:4-19:5 -/
 def BoolTrait.retTest.default {Self : Type} (self : Self) : Result Bool := do
   ok true
 
 /-- [rename_attribute::{rename_attribute::BoolTrait for bool}::get_bool]:
-   Source: 'tests/src/rename_attribute.rs', lines 24:4-26:5
-   Visibility: public -/
+    Source: 'tests/src/rename_attribute.rs', lines 24:4-26:5 -/
 def BoolImpl.getTest (self : Bool) : Result Bool := do
   ok self
 
 /-- [rename_attribute::{rename_attribute::BoolTrait for bool}::ret_true]:
-   Source: 'tests/src/rename_attribute.rs', lines 23:0-27:1
-   Visibility: public -/
+    Source: 'tests/src/rename_attribute.rs', lines 23:0-27:1 -/
 def BoolImpl.retTest (self : Bool) : Result Bool := do
   ok true
 
 /-- Trait implementation: [rename_attribute::{rename_attribute::BoolTrait for bool}]
-   Source: 'tests/src/rename_attribute.rs', lines 23:0-27:1 -/
+    Source: 'tests/src/rename_attribute.rs', lines 23:0-27:1 -/
 @[reducible]
 def BoolImpl : BoolTest Bool := {
   getTest := BoolImpl.getTest
@@ -45,8 +41,7 @@ def BoolImpl : BoolTest Bool := {
 }
 
 /-- [rename_attribute::test_bool_trait]:
-   Source: 'tests/src/rename_attribute.rs', lines 30:0-32:1
-   Visibility: public -/
+    Source: 'tests/src/rename_attribute.rs', lines 30:0-32:1 -/
 def BoolFn (T : Type) (x : Bool) : Result Bool := do
   let b ← BoolImpl.getTest x
   if b
@@ -54,7 +49,7 @@ def BoolFn (T : Type) (x : Bool) : Result Bool := do
   else ok false
 
 /-- [rename_attribute::SimpleEnum]
-   Source: 'tests/src/rename_attribute.rs', lines 38:0-43:1 -/
+    Source: 'tests/src/rename_attribute.rs', lines 38:0-43:1 -/
 @[discriminant isize]
 inductive VariantsTest where
 | Variant1 : VariantsTest
@@ -62,26 +57,23 @@ inductive VariantsTest where
 | ThirdVariant : VariantsTest
 
 /-- [rename_attribute::Foo]
-   Source: 'tests/src/rename_attribute.rs', lines 46:0-49:1 -/
+    Source: 'tests/src/rename_attribute.rs', lines 46:0-49:1 -/
 structure StructTest where
   FieldTest : Std.U32
 
 /-- [rename_attribute::C]
-   Source: 'tests/src/rename_attribute.rs', lines 52:0-52:28 -/
-@[global_simps]
-def Const_Test_body : Result Std.U32 := do let i ← 100#u32 + 10#u32
-                                           i + 1#u32
+    Source: 'tests/src/rename_attribute.rs', lines 52:0-52:28 -/
 @[global_simps, irreducible]
-def Const_Test : Std.U32 := eval_global Const_Test_body
+def Const_Test : Result Std.U32 := do let i ← 100#u32 + 10#u32
+                                      i + 1#u32
 
 /-- [rename_attribute::CA]
-   Source: 'tests/src/rename_attribute.rs', lines 55:0-55:23 -/
-@[global_simps] def Const_Aeneas11_body : Result Std.U32 := do 10#u32 + 1#u32
+    Source: 'tests/src/rename_attribute.rs', lines 55:0-55:23 -/
 @[global_simps, irreducible]
-def Const_Aeneas11 : Std.U32 := eval_global Const_Aeneas11_body
+def Const_Aeneas11 : Result Std.U32 := 10#u32 + 1#u32
 
 /-- [rename_attribute::factorial]:
-   Source: 'tests/src/rename_attribute.rs', lines 58:0-64:1 -/
+    Source: 'tests/src/rename_attribute.rs', lines 58:0-64:1 -/
 def Factfn (n : Std.U64) : Result Std.U64 := do
   if n <= 1#u64
   then ok 1#u64
@@ -90,24 +82,30 @@ def Factfn (n : Std.U64) : Result Std.U64 := do
        n * i1
 partial_fixpoint
 
+/-- [rename_attribute::sum]: loop body 0:
+    Source: 'tests/src/rename_attribute.rs', lines 70:4-73:5 -/
+@[rust_loop_body]
+def No_borrows_sum_loop.body
+  (max : Std.U32) (i : Std.U32) (s : Std.U32) :
+  Result (ControlFlow (Std.U32 × Std.U32) Std.U32)
+  := do
+  if i < max
+  then let s1 ← s + i
+       let i1 ← i + 1#u32
+       ok (cont (i1, s1))
+  else ok (done s)
+
 /-- [rename_attribute::sum]: loop 0:
-   Source: 'tests/src/rename_attribute.rs', lines 70:4-73:5
-   Visibility: public -/
+    Source: 'tests/src/rename_attribute.rs', lines 70:4-73:5 -/
+@[rust_loop]
 def No_borrows_sum_loop
   (max : Std.U32) (i : Std.U32) (s : Std.U32) : Result Std.U32 := do
   loop
-    (fun (i1, s1) =>
-      if i1 < max
-      then do
-           let s2 ← s1 + i1
-           let i2 ← i1 + 1#u32
-           ok (cont (i2, s2))
-      else ok (done s1))
+    (fun (i1, s1) => No_borrows_sum_loop.body max i1 s1)
     (i, s)
 
 /-- [rename_attribute::sum]:
-   Source: 'tests/src/rename_attribute.rs', lines 67:0-77:1
-   Visibility: public -/
+    Source: 'tests/src/rename_attribute.rs', lines 67:0-77:1 -/
 def No_borrows_sum (max : Std.U32) : Result Std.U32 := do
   let s ← No_borrows_sum_loop max 0#u32 0#u32
   s * 2#u32

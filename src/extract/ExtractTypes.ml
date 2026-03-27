@@ -145,7 +145,8 @@ let start_fun_decl_group (ctx : extraction_ctx) (fmt : F.formatter)
   | Lean ->
       if is_rec && List.length dg > 1 then (
         F.pp_print_space fmt ();
-        F.pp_print_string fmt "mutual")
+        F.pp_print_string fmt "mutual";
+        F.pp_print_break fmt 0 0)
   | HOL4 ->
       (* In HOL4, opaque functions have a special treatment *)
       if is_single_opaque_fun_decl_group dg then ()
@@ -1193,9 +1194,10 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
   in
   ()
 
-(** Extract a nestable, multi-line comment with the given delimiters *)
-let extract_content (fmt : F.formatter) (ld, space, rd) (sl : string list) :
-    unit =
+(** Format a multi-line comment block with the given delimiters (ld, space, rd)
+*)
+let extract_comment_block (fmt : F.formatter) (ld, space, rd) (sl : string list)
+    : unit =
   F.pp_open_vbox fmt space;
   F.pp_print_string fmt ld;
   (match sl with
@@ -1210,23 +1212,24 @@ let extract_content (fmt : F.formatter) (ld, space, rd) (sl : string list) :
   F.pp_print_string fmt rd;
   F.pp_close_box fmt ()
 
-(** Extract a plain comment *)
-let extract_comment (fmt : F.formatter) (sl : string list) : unit =
+(** Wrap strings in plain comment delimiters *)
+let extract_plain_comment (fmt : F.formatter) (sl : string list) : unit =
   let delimiters =
     match backend () with
     | Coq | FStar | HOL4 -> ("(** ", 4, " *)")
     | Lean -> ("/- ", 3, " -/")
   in
-  extract_content fmt delimiters sl
+  extract_comment_block fmt delimiters sl
 
-(** Extract a doc-string comment (attaches to the following declaration) *)
-let extract_docstring (fmt : F.formatter) (sl : string list) : unit =
+(** Wrap strings in doc comment delimiters (attaches to the following
+    declaration) *)
+let extract_doc_comment (fmt : F.formatter) (sl : string list) : unit =
   let delimiters =
     match backend () with
     | Coq | FStar | HOL4 -> ("(** ", 4, " *)")
-    | Lean -> ("/-- ", 3, " -/")
+    | Lean -> ("/-- ", 4, " -/")
   in
-  extract_content fmt delimiters sl
+  extract_comment_block fmt delimiters sl
 
 let extract_comment_with_span (ctx : extraction_ctx) (fmt : F.formatter)
     (sl : string list) (name : Types.name option)
@@ -1250,10 +1253,7 @@ let extract_comment_with_span (ctx : extraction_ctx) (fmt : F.formatter)
         ]
   in
   let span = Errors.span_to_string span in
-  let visibility =
-    if public && backend () = Lean then [ "Visibility: public" ] else []
-  in
-  extract_docstring fmt (sl @ [ span ] @ visibility @ name)
+  extract_doc_comment fmt (sl @ [ span ] @ name)
 
 let extract_attributes (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (name : Types.name)

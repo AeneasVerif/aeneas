@@ -12,8 +12,7 @@ set_option maxHeartbeats 1000000
 namespace bst
 
 /-- [bst::Ordering]
-   Source: 'src/bst.rs', lines 5:0-9:1
-   Visibility: public -/
+    Source: 'src/bst.rs', lines 5:0-9:1 -/
 @[discriminant isize]
 inductive Ordering where
 | Less : Ordering
@@ -21,12 +20,12 @@ inductive Ordering where
 | Greater : Ordering
 
 /-- Trait declaration: [bst::Ord]
-   Source: 'src/bst.rs', lines 11:0-13:1 -/
+    Source: 'src/bst.rs', lines 11:0-13:1 -/
 structure Ord (Self : Type) where
   cmp : Self → Self → Result Ordering
 
 /-- [bst::Node]
-   Source: 'src/bst.rs', lines 15:0-19:1 -/
+    Source: 'src/bst.rs', lines 15:0-19:1 -/
 inductive Node (T : Type) where
 | mk : T → Option (Node T) → Option (Node T) → Node T
 
@@ -51,7 +50,7 @@ theorem Node.right._simpLemma_ {T : Type} (value : T) (left : Option (Node T))
   by rfl
 
 /-- [bst::TreeSet]
-   Source: 'src/bst.rs', lines 23:0-25:1 -/
+    Source: 'src/bst.rs', lines 23:0-25:1 -/
 structure TreeSet (T : Type) where
   root : Option (Node T)
 

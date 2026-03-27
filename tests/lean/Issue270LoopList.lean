@@ -12,15 +12,15 @@ set_option maxHeartbeats 1000000
 namespace issue_270_loop_list
 
 /-- [issue_270_loop_list::List]
-   Source: 'tests/src/issue-270-loop-list.rs', lines 2:0-5:1
-   Visibility: public -/
+    Source: 'tests/src/issue-270-loop-list.rs', lines 2:0-5:1 -/
 @[discriminant isize]
 inductive List (T : Type) where
 | Cons : T → List T → List T
 | Nil : List T
 
 /-- [issue_270_loop_list::foo]: loop 0:
-   Source: 'tests/src/issue-270-loop-list.rs', lines 10:8-12:9 -/
+    Source: 'tests/src/issue-270-loop-list.rs', lines 10:8-12:9 -/
+@[rust_loop]
 def foo_loop (t : List (List Std.U8)) : Result Unit := do
   match t with
   | List.Cons _ tt => foo_loop tt
@@ -28,7 +28,7 @@ def foo_loop (t : List (List Std.U8)) : Result Unit := do
 partial_fixpoint
 
 /-- [issue_270_loop_list::foo]:
-   Source: 'tests/src/issue-270-loop-list.rs', lines 7:0-14:1 -/
+    Source: 'tests/src/issue-270-loop-list.rs', lines 7:0-14:1 -/
 def foo (v : List (List Std.U8)) : Result Unit := do
   match v with
   | List.Cons _ t => foo_loop t

@@ -12,7 +12,7 @@ inductive core.convert.Infallible where
 structure core.convert.Into (Self : Type) (T : Type) where
   into : Self → Result T
 
-@[reducible, simp, progress_simps, rust_fun "core::convert::{core::convert::Into<@T, @U>}::into"]
+@[reducible, simp, step_simps, rust_fun "core::convert::{core::convert::Into<@T, @U>}::into"]
 def core.convert.IntoFrom.into {T : Type} {U : Type}
   (fromInst : core.convert.From U T) (x : T) : Result U :=
   fromInst.from_ x
@@ -23,7 +23,7 @@ def core.convert.IntoFrom {T : Type} {U : Type} (fromInst : core.convert.From U 
   into := core.convert.IntoFrom.into fromInst
 }
 
-@[simp, progress_simps, rust_fun "core::convert::{core::convert::From<@T, @T>}::from" -canFail]
+@[simp, step_simps, rust_fun "core::convert::{core::convert::From<@T, @T>}::from" -canFail]
 def core.convert.FromSame.from_ {T : Type} (x : T) : T := x
 
 @[reducible, rust_trait_impl "core::convert::From<@Self, @Self>"]

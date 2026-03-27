@@ -92,6 +92,7 @@ let check_fun_decl_vars_are_well_bound (trans_ctx : trans_ctx)
 let translate_function_to_pure_aux (trans_ctx : trans_ctx)
     (marked_ids : marked_ids)
     (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t)
+    (pure_global_decls : Pure.global_decl GlobalDeclId.Map.t)
     (fun_sigs : SymbolicToPureCore.fun_sigs FunDeclId.Map.t) (fdef : fun_decl) :
     pure_fun_translation_no_loops =
   (* Debug *)
@@ -175,6 +176,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
     {
       SymbolicToPureCore.span = fdef.item_meta.span;
       decls_ctx = trans_ctx;
+      trans_global_decls = pure_global_decls;
       bid = None;
       sg;
       fun_sigs;
@@ -245,12 +247,13 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
 
 let translate_function_to_pure (trans_ctx : trans_ctx) (marked_ids : marked_ids)
     (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t)
+    (pure_global_decls : Pure.global_decl Pure.GlobalDeclId.Map.t)
     (fun_sigs : SymbolicToPureCore.fun_sigs FunDeclId.Map.t) (fdef : fun_decl) :
     pure_fun_translation_no_loops option =
   try
     Some
       (translate_function_to_pure_aux trans_ctx marked_ids pure_type_decls
-         fun_sigs fdef)
+         pure_global_decls fun_sigs fdef)
   with CFailure error ->
     let name = name_to_string trans_ctx fdef.item_meta.name in
     let name_pattern =
@@ -295,7 +298,8 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
       (List.map (fun (def : Pure.type_decl) -> (def.def_id, def)) type_decls)
   in
 
-  (* Translate the globals (remark: their bodies are translated at the same time
+  (* Translate the globals (remark: this does not translate their *bodies* (i.e.:
+     their initialization functions), that are translated later, at the same time
      as the "regular" functions) *)
   let global_decls =
     let num_decls = GlobalDeclId.Map.cardinal crate.global_decls in
@@ -325,6 +329,10 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
                     (IdGlobal global.def_id));
               None)
           (GlobalDeclId.Map.values trans_ctx.global_decls_to_extract))
+  in
+  let global_decls_map =
+    GlobalDeclId.Map.of_list
+      (List.map (fun (d : Pure.global_decl) -> (d.def_id, d)) global_decls)
   in
 
   (* Compute the fun sigs for the whole crate *)
@@ -406,25 +414,68 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
       else transparent
     in
 
-    (* Small helper *)
-    let process (kind : string) (funs : fun_decl list) =
+    (* Assign size-based ranks (rank 1 = biggest):
+       transparent functions are already sorted by decreasing size *)
+    let n_transparent = List.length transparent in
+    let transparent_ranked = List.mapi (fun i f -> (i + 1, f)) transparent in
+    let opaque_ranked =
+      List.mapi (fun i f -> (n_transparent + i + 1, f)) opaque
+    in
+
+    let diagnose_transl_data : (string * float * int * int) list ref = ref [] in
+    let diagnose_transl_mutex = Mutex.create () in
+
+    (* Process a function *)
+    let process (kind : string) (funs : (int * fun_decl) list) =
       let num_decls = List.length funs in
       ProgressBar.with_parallel_reporter num_decls
         ("Translated " ^ kind ^ " functions: ")
         (fun report ->
           parallel_filter_map
-            (fun x ->
+            (fun (rank, x) ->
+              let start =
+                if !Config.diagnose_translation then Unix.gettimeofday ()
+                else 0.0
+              in
               let f =
                 translate_function_to_pure trans_ctx marked_ids type_decls_map
-                  fun_sigs x
+                  global_decls_map fun_sigs x
               in
+              if !Config.diagnose_translation then begin
+                let elapsed = Unix.gettimeofday () -. start in
+                let fname = name_to_string trans_ctx x.item_meta.name in
+                let size = LlbcAstUtils.compute_fun_decl_size x in
+                Mutex.lock diagnose_transl_mutex;
+                diagnose_transl_data :=
+                  (fname, elapsed, size, rank) :: !diagnose_transl_data;
+                Mutex.unlock diagnose_transl_mutex
+              end;
               report 1;
               f)
             funs)
     in
 
-    let opaque = process "opaque" opaque in
-    let transparent = process "transparent" transparent in
+    let opaque = process "opaque" opaque_ranked in
+    let transparent = process "transparent" transparent_ranked in
+
+    (* Print -diagnose-translation results *)
+    if !Config.diagnose_translation then begin
+      let sorted =
+        List.sort
+          (fun (_, t1, _, _) (_, t2, _, _) -> Float.compare t2 t1)
+          !diagnose_transl_data
+      in
+      let limit = !Config.diagnose_limit in
+      let to_print =
+        if limit >= 0 then Collections.List.prefix limit sorted else sorted
+      in
+      Printf.printf "\n=== Translation time per function ===\n";
+      List.iter
+        (fun (name, time, size, rank) ->
+          Printf.printf "  %s: %.4fs (size: %d, rank: %d)\n" name time size rank)
+        to_print
+    end;
+
     opaque @ transparent
   in
 
@@ -536,7 +587,6 @@ type gen_config = {
           definitions. In the future, we might want to extract all the
           declarations in an interface file, together with an implementation
           file if needed. *)
-  test_trans_unit_functions : bool;
 }
 
 (** Returns the pair: (has opaque type decls, has opaque fun decls).
@@ -710,7 +760,7 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     [%silent_unwrap_opt_span] None
       (FunDeclId.Map.find_opt global.init ctx.trans_funs)
   in
-  [%sanity_check] global.item_meta.span (trans.loops = []);
+  [%sanity_check] global.item_meta.span (trans.loops = [] && trans.bodies = []);
   let body = trans.f in
 
   let is_opaque = Option.is_none body.Pure.body in
@@ -762,7 +812,7 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     been checked by the caller. *)
 let export_functions_group_scc (fmt : Format.formatter) (config : gen_config)
     (ctx : gen_ctx) (is_rec : bool) (decls : Pure.fun_decl list) : unit =
-  (* Utility to check a function has a decrease clause *)
+  (* Utility to check whether a function has a decrease clause *)
   let has_decreases_clause (def : Pure.fun_decl) : bool =
     PureUtils.FunLoopIdSet.mem (def.def_id, def.loop_id)
       ctx.functions_with_decreases_clause
@@ -903,7 +953,8 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
     (* Flatten the translated functions (concatenate the functions with
        the declarations introduced for the loops) *)
     let decls =
-      List.concat (List.map (fun f -> List.append f.loops [ f.f ]) pure_ls)
+      List.concat
+        (List.map (fun f -> List.append (f.loops @ f.bodies) [ f.f ]) pure_ls)
     in
 
     (* Extract the function definitions *)
@@ -917,11 +968,10 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
        in
        List.iter (fun (is_rec, decls) -> export_subgroup is_rec decls) subgroups);
 
-    (* Insert unit tests if necessary *)
-    if config.test_trans_unit_functions then
-      List.iter
-        (fun trans -> Extract.extract_unit_test_if_unit_fun ctx fmt trans.f)
-        pure_ls
+    (* Insert unit tests for functions marked with #[verify::test] *)
+    List.iter
+      (fun trans -> Extract.extract_unit_test_if_marked ctx fmt trans.f)
+      pure_ls
 
 let trait_decl_is_builtin (ctx : gen_ctx) (id : Pure.trait_decl_id) : bool =
   let trait_decl =
@@ -971,14 +1021,15 @@ let export_trait_decl (fmt : Format.formatter) (_config : gen_config)
 
 (** Export a trait implementation. *)
 let export_trait_impl (fmt : Format.formatter) (_config : gen_config)
-    (ctx : gen_ctx) (trait_impl_id : Pure.trait_impl_id) : unit =
+    (ctx : gen_ctx) ~(is_rec : bool) (trait_impl_id : Pure.trait_impl_id) : unit
+    =
   (* Lookup the definition *)
   let trait_impl =
     [%silent_unwrap_opt_span] None
       (TraitImplId.Map.find_opt trait_impl_id ctx.trans_trait_impls)
   in
   if not (trait_impl_is_builtin ctx trait_impl_id) then
-    Extract.extract_trait_impl ctx fmt trait_impl
+    Extract.extract_trait_impl ctx fmt ~is_rec trait_impl
 
 (** A generic utility to generate the extracted definitions: as we may want to
     split the definitions between different files (or not), we can control what
@@ -999,7 +1050,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
   let export_trait_decl_group_extra_info id =
     export_trait_decl fmt config ctx id false true
   in
-  let export_trait_impl = export_trait_impl fmt config ctx in
+  let export_trait_impl ~is_rec = export_trait_impl fmt config ctx ~is_rec in
 
   let export_decl_group (dg : declaration_group) : unit =
     match dg with
@@ -1086,7 +1137,7 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
           export_trait_decl_group_extra_info id)
     | TraitImplGroup (NonRecGroup id) ->
         if config.extract_trait_impls && config.extract_transparent then
-          export_trait_impl id
+          export_trait_impl ~is_rec:false id
     | TraitImplGroup (RecGroup ids) ->
         (* Only print the warning if we extract the impl group *)
         let extract =
@@ -1107,11 +1158,15 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
           in
           let decls = List.map to_string ids in
           if not (List.for_all (trait_impl_is_builtin ctx) ids) then (
+            (* We actually have a special elaboration in Lean that allows us
+               to support recursive trait impls *)
             if List.length decls = 1 then
-              [%warn_opt_span] None
-                ("Recursive trait implementations are not supported; the \
-                  following recursive impl is going to be extracted but its \
-                  model will not type-check:\n" ^ String.concat "\n" decls)
+              if Config.backend () = Lean then ()
+              else
+                [%warn_opt_span] None
+                  ("Recursive trait implementations are not supported; the \
+                    following recursive impl is going to be extracted but its \
+                    model will not type-check:\n" ^ String.concat "\n" decls)
             else
               [%warn_opt_span] None
                 ("Mutually recursive trait implementations are not supported; \
@@ -1119,9 +1174,13 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
                   be extracted but their model will not type-check:\n"
                ^ String.concat "\n" decls);
             (* We still extract something so that the user can look at it and
-             eventually fix it *)
+               eventually fix it *)
             (* TODO: update to extract groups *)
-            List.iter (fun id -> export_trait_impl id) ids)
+            (* We mark the definition as recursive only if the group is a
+               singleton and we extract for Lean: Lean's special elaboration
+               doesn't work for mutually recursive impls. *)
+            let is_rec = List.length decls = 1 && Config.backend () = Lean in
+            List.iter (fun id -> export_trait_impl ~is_rec id) ids)
     | MixedGroup _ ->
         [%craise_opt_span] None
           "Mixed-recursive declaration groups are not supported"
@@ -1715,7 +1774,6 @@ let extract_translated_crate (filename : string) (dest_dir : string)
          extract_opaque = false;
          extract_globals = false;
          interface = false;
-         test_trans_unit_functions = false;
        }
      in
 
@@ -1911,7 +1969,6 @@ let extract_translated_crate (filename : string) (dest_dir : string)
          extract_fun_decls = true;
          extract_trait_impls = true;
          extract_globals = true;
-         test_trans_unit_functions = !Config.test_trans_unit_functions;
        }
      in
      let clauses_module =
@@ -1953,7 +2010,6 @@ let extract_translated_crate (filename : string) (dest_dir : string)
          extract_opaque = true;
          extract_globals = true;
          interface = false;
-         test_trans_unit_functions = !Config.test_trans_unit_functions;
        }
      in
      let file_info =

@@ -16,14 +16,14 @@ def mul2_add1 (x : U32) : Result U32 :=
 
 #check U32.add_spec
 
-/-- Theorem about `mul2_add1`: with the `progress` tactic -/
--- @[progress]
+/-- Theorem about `mul2_add1`: with the `step` tactic -/
+-- @[step]
 theorem mul2_add1_spec (x : U32) (h : 2 * x.val + 1 ≤ U32.max)
   : mul2_add1 x ⦃ y => ↑y = 2 * ↑x + (1 : Int) ∧ ↑y = 2 * ↑x + (1 : Int) ⦄
   := by
   unfold mul2_add1
-  progress with U32.add_spec as ⟨ x1 ⟩
-  progress as ⟨ x2 ⟩
+  step with U32.add_spec as ⟨ x1 ⟩
+  step as ⟨ x2 ⟩
   scalar_tac
 
 /- [tutorial::mul2_add1_add]:
@@ -37,8 +37,8 @@ def mul2_add1_add (x : U32) (y : U32) : Result U32 :=
 theorem mul2_add1_add_spec (x : U32) (y : U32) (h : 2 * x.val + 1 + y.val ≤ U32.max) :
   mul2_add1_add x y ⦃ z => ↑z = 2 * ↑x + (1 : Int) + ↑y ⦄ := by
   unfold mul2_add1_add
-  progress with mul2_add1_spec as ⟨ x1 ⟩
-  progress as ⟨ x2 ⟩
+  step with mul2_add1_spec as ⟨ x1 ⟩
+  step as ⟨ x2 ⟩
   scalar_tac
 
 /- [tutorial::CList]
@@ -54,7 +54,7 @@ open CList
     By putting this definition in the namespace `CList`, we give the possibility of using the `.`
     notation: if `x` has type `CList α` we can write `x.toList` instead of `toList x`.
  -/
-@[simp, grind, scalar_tac_simps, simp_lists_simps] def CList.toList {α : Type} (x : CList α) : List α :=
+@[simp, grind, scalar_tac_simps, simp_lists] def CList.toList {α : Type} (x : CList α) : List α :=
   match x with
   | CNil => []
   | CCons hd tl => hd :: tl.toList
@@ -81,8 +81,8 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
   split
   . split
     . simp_all
-    . progress as ⟨ i1 ⟩
-      progress as ⟨ x ⟩
+    . step as ⟨ i1 ⟩
+      step as ⟨ x ⟩
       simp_lists [*]
   . simp_all
 
@@ -103,9 +103,9 @@ theorem i32_id_spec (n : I32) (h : 0 ≤ n.val) :
   unfold i32_id
   split
   . simp [*]
-  . progress as ⟨ n1 ⟩
-    progress
-    progress as ⟨ n2 ⟩
+  . step as ⟨ n1 ⟩
+    step
+    step as ⟨ n2 ⟩
     scalar_tac
 termination_by n.toNat
 decreasing_by
@@ -146,8 +146,8 @@ theorem even_spec (n : U32) :
   unfold even
   split
   . simp [*]
-  . progress as ⟨ n' ⟩
-    progress as ⟨ b ⟩
+  . step as ⟨ n' ⟩
+    step as ⟨ b ⟩
     simp [Nat.odd_sub, *]
 termination_by n.val
 decreasing_by scalar_decr_tac
@@ -158,8 +158,8 @@ theorem odd_spec (n : U32) :
   unfold odd
   split
   . simp [*]
-  . progress as ⟨ n' ⟩
-    progress as ⟨ b ⟩
+  . step as ⟨ n' ⟩
+    step as ⟨ b ⟩
     simp [Nat.even_sub, *]
 termination_by n.val
 decreasing_by scalar_decr_tac
@@ -359,12 +359,6 @@ set_option pp.coercions true
    Small preparation for theorem `list_nth_mut1`.
  -/
 
-/- The notation `l[i]!` stands for `getElem! l`, and is the `i`th element of list `l`.
-
-   We deactivate the simp lemma below as it replaces terms of the shape `l[i]!` with more
-   complicated terms: in the present case it is more annoying than anything. -/
-attribute [-simp] List.getElem!_eq_getElem?_getD
-
 /- Reasoning about `List.index`.
 
    You can use the following two lemmas.
@@ -423,12 +417,12 @@ example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
 /-- Theorem about `list_nth_mut1`.
 
     **Hints**:
-    - you can use `progress` to automatically apply a lemma, then refine it into
-      `progress as ⟨ ... ⟩` to name the variables and the post-conditions(s) it introduces.
+    - you can use `step` to automatically apply a lemma, then refine it into
+      `step as ⟨ ... ⟩` to name the variables and the post-conditions(s) it introduces.
     - if there is a disjunction or branching (like an `if then else`) in the goal, use `split`
     - if the goal is a conjunction, you can use `split_conjs` to introduce one subgoal
       per disjunct
-    - you should use `progress` for as long as you see a monadic `do` block, unless you
+    - you should use `step` for as long as you see a monadic `do` block, unless you
       see a branching, in which case you should use `split`.
 
     **Remark**: we wrote two versions of the solution in `Solutions.lean`:
@@ -482,7 +476,7 @@ def append_in_place
 
 
 /-- Theorem about `list_tail`: exercise -/
-@[progress]
+@[step]
 theorem list_tail_spec {T : Type} (l : CList T) :
   list_tail l ⦃ tl back =>
     tl = CList.CNil ∧
@@ -491,7 +485,7 @@ theorem list_tail_spec {T : Type} (l : CList T) :
   sorry
 
 /-- Theorem about `append_in_place`: exercise -/
-@[progress]
+@[step]
 theorem append_in_place_spec {T : Type} (l0 l1 : CList T) :
   append_in_place l0 l1 ⦃ l2 => l2.toList = l0.toList ++ l1.toList ⦄ := by
   unfold append_in_place
@@ -506,7 +500,7 @@ def reverse_loop
   | CList.CNil => Result.ok out
 partial_fixpoint
 
-@[progress]
+@[step]
 theorem reverse_loop_spec {T : Type} (l : CList T) (out : CList T) :
   reverse_loop l out ⦃ l' =>
     True -- Leaving the post-condition as an exercise
@@ -576,7 +570,7 @@ def toInt (l : List U32) : ℤ :=
       Ex.: `dcases x = y` will introduce two goals, one with the assumption `x = y` and the
       other with the assumption `x ≠ y`. You can name this assumption by writing: `dcases h : x = y`
  -/
-@[progress]
+@[step]
 theorem zero_loop_spec
   (x : alloc.vec.Vec U32) (i : Usize) (h : i.val ≤ x.length) :
   zero_loop x i ⦃ x' =>
@@ -655,9 +649,9 @@ partial_fixpoint
     Advice: do the proof of `add_no_overflow_loop_spec` first, then come back to prove this lemma.
 
     Hint: you will need to reason about non-linear arithmetic. You can use two tactics to do so:
-    - `scalar_nf`, `scalar_nf at h`, `scalar_nf at *`:
+    - `ring_nf`, `ring_nf at h`, `ring_nf at *`:
       normalizes (simplifies) the expressions of the shape `a ^ k * x + ... + b ^ k * y `
-    - `scalar_eq_nf`: similar, but tuned to prove goals of the shape: `... = ...`
+    - `ring_eq_nf`: similar, but tuned to prove goals of the shape: `... = ...`
     You can try both tactics and see their effect.
  -/
 @[simp]
@@ -685,10 +679,10 @@ theorem toInt_update (l : List U32) (i : Nat) (x : U32) (h0 : i < l.length) :
 
 /-- The proof about `add_no_overflow_loop`.
 
-    Hint: you will need to reason about non-linear arithmetic with `scalar_nf` and
-    `scalar_eq_nf` (see above).
+    Hint: you will need to reason about non-linear arithmetic with `ring_nf` and
+    `ring_eq_nf` (see above).
  -/
-@[progress]
+@[step]
 theorem add_no_overflow_loop_spec
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (i : Usize)
   (hLength : x.length = y.length)
@@ -751,7 +745,7 @@ def add_with_carry_loop
 partial_fixpoint
 
 /-- The proof about `add_with_carry_loop` -/
-@[progress]
+@[step]
 theorem add_with_carry_loop_spec
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (c0 : U8) (i : Usize)
   (hLength : x.length = y.length)
@@ -775,7 +769,7 @@ def add_with_carry
   add_with_carry_loop x y 0#u8 0#usize
 
 /-- The proof about `add_with_carry` -/
-@[progress]
+@[step]
 theorem add_with_carry_spec
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
   (hLength : x.length = y.length) :

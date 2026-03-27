@@ -293,6 +293,111 @@ let simplify_lambdas_visitor (ctx : ctx) (def : fun_decl) =
 
 let simplify_lambdas = lift_expr_map_visitor simplify_lambdas_visitor
 
+(** Because of constant promotions, it happens that we get the following kind of
+    code:
+
+    {[
+      let _ ← a * b
+      let c ← lift (Std.Usize.wrapping_mul a b)
+      ...
+    ]}
+
+    We simplify it to:
+    {[
+      let c ← a * b
+      ...
+    ]}
+
+    Note that at the stage when the pass is called, the lifts are not introduced
+    yet (meaning the second let-binding should be pure). *)
+let simplify_binop_panic_then_wrapping_visitor (_ctx : ctx) (_def : fun_decl) =
+  let binop_is_panicking (binop : binop) =
+    match binop with
+    | Add (OPanic, _) ->
+        Some
+          (fun b ->
+            match b with
+            | Add (OWrap, _) -> true
+            | _ -> false)
+    | Sub (OPanic, _) ->
+        Some
+          (fun b ->
+            match b with
+            | Sub (OWrap, _) -> true
+            | _ -> false)
+    | Mul (OPanic, _) ->
+        Some
+          (fun b ->
+            match b with
+            | Mul (OWrap, _) -> true
+            | _ -> false)
+    | Div (OPanic, _) ->
+        Some
+          (fun b ->
+            match b with
+            | Div (OWrap, _) -> true
+            | _ -> false)
+    | Rem (OPanic, _) ->
+        Some
+          (fun b ->
+            match b with
+            | Rem (OWrap, _) -> true
+            | _ -> false)
+    | _ -> None
+  in
+  object
+    inherit [_] map_expr as super
+
+    method! visit_Let env monadic pat bound next =
+      if monadic then
+        match (pat.pat, bound.e) with
+        | ( PIgnored,
+            App
+              ( {
+                  e =
+                    App
+                      ( { e = Qualif { id = FunOrOp (Binop binop); _ }; _ },
+                        { e = FVar x; _ } );
+                  _;
+                },
+                { e = FVar y; _ } ) ) -> (
+            match binop_is_panicking binop with
+            | None -> super#visit_Let env monadic pat bound next
+            | Some binop_is_wrapping -> (
+                match next.e with
+                | Let
+                    ( false,
+                      pat',
+                      {
+                        e =
+                          App
+                            ( {
+                                e =
+                                  App
+                                    ( {
+                                        e =
+                                          Qualif
+                                            { id = FunOrOp (Binop binop'); _ };
+                                        _;
+                                      },
+                                      { e = FVar x'; _ } );
+                                _;
+                              },
+                              { e = FVar y'; _ } );
+                        _;
+                      },
+                      next' )
+                  when binop_is_wrapping binop' && x' = x && y' = y ->
+                    (* Merge the two lets *)
+                    super#visit_Let env true pat' bound next'
+                | _ -> super#visit_Let env monadic pat bound next))
+        | _ -> super#visit_Let env monadic pat bound next
+      else super#visit_Let env monadic pat bound next
+  end
+
+let simplify_binop_panic_then_wrapping =
+  lift_expr_map_visitor simplify_binop_panic_then_wrapping_visitor
+
 (** Simplify the let-bindings by performing the following rewritings:
 
     Move inner let-bindings outside. This is especially useful to simplify the
@@ -927,11 +1032,11 @@ let filter_useless (ctx : ctx) (def : fun_decl) : fun_decl =
   let expr_visitor =
     object (self)
       inherit [_] mapreduce_expr as super
-      method zero _ = FVarId.Set.empty
-      method plus s0 s1 _ = FVarId.Set.union (s0 ()) (s1 ())
+      method zero : FVarId.Set.t = FVarId.Set.empty
+      method plus s0 s1 = FVarId.Set.union s0 s1
 
       (** Whenever we visit a variable, we need to register the used variable *)
-      method! visit_FVar _ vid = (FVar vid, fun _ -> FVarId.Set.singleton vid)
+      method! visit_FVar _ vid = (FVar vid, FVarId.Set.singleton vid)
 
       method! visit_expr env e =
         match e with
@@ -949,21 +1054,26 @@ let filter_useless (ctx : ctx) (def : fun_decl) : fun_decl =
                   (* Compute the set of values used inside the branch *)
                   let branch, used = self#visit_texpr env br.branch in
                   (* Simplify the pattern *)
-                  let pat, _ = filter_tpat (used ()) br.pat in
-                  { pat; branch }
+                  let pat, _ = filter_tpat used br.pat in
+                  ({ pat; branch }, used)
                 in
-                super#visit_expr env
-                  (Switch (scrut, Match (List.map simplify_branch branches))))
+                let branches, usedl =
+                  List.split (List.map simplify_branch branches)
+                in
+                let used0 = List.fold_left FVarId.Set.union self#zero usedl in
+                (* Simplify the scrutinee *)
+                let scrut, used1 = self#visit_texpr () scrut in
+                let used = FVarId.Set.union used0 used1 in
+                (Switch (scrut, Match branches), used))
         | Let (monadic, lv, re, e) ->
             (* Compute the set of values used in the next expression *)
             let e, used = self#visit_texpr env e in
-            let used = used () in
             (* Filter the left values *)
             let lv, all_dummies = filter_tpat used lv in
             (* Small utility - called if we can't filter the let-binding *)
             let dont_filter () =
               let re, used_re = self#visit_texpr env re in
-              let used = FVarId.Set.union used (used_re ()) in
+              let used = FVarId.Set.union used used_re in
               (* Simplify the left pattern if it only contains ignored variables *)
               let lv =
                 if all_dummies then
@@ -977,17 +1087,20 @@ let filter_useless (ctx : ctx) (def : fun_decl) : fun_decl =
               let lv, re, updated = simplify_let_tuple span ctx monadic lv re in
 
               (* We may need to revisited the bound expression if we modified it:
-                 some values may now be unused. *)
+                 some values may now be unused
+
+                 TODO: try to avoid that, this is bad for complexity.
+              *)
               let re = if updated then fst (self#visit_texpr env re) else re in
 
               (* Put everything together *)
-              (Let (monadic, lv, re, e), fun _ -> used)
+              (Let (monadic, lv, re, e), used)
             in
             (* Potentially filter the let-binding *)
             if all_dummies then
               if not monadic then
                 (* Not a monadic let-binding: simple case *)
-                (e.e, fun _ -> used)
+                (e.e, used)
               else (* Monadic let-binding: can't filter *)
                 dont_filter ()
             else (* There are used variables: don't filter *)
@@ -1031,7 +1144,6 @@ let filter_useless (ctx : ctx) (def : fun_decl) : fun_decl =
          inputs are replaced by '_' we can't give it to the function used in the
          decreases clause).
          For now we deactivate the filtering. *)
-      let used_vars = used_vars () in
       let inputs =
         if false then
           List.map (fun lv -> fst (filter_tpat used_vars lv)) body.inputs
@@ -2780,7 +2892,7 @@ let add_fuel_one (ctx : ctx) (loops : fun_decl LoopId.Map.t) (def : fun_decl) :
               let def' : fun_decl =
                 match lp_id with
                 | None -> FunDeclId.Map.find fid' ctx.fun_decls
-                | Some lp_id ->
+                | Some (lp_id, _) ->
                     [%sanity_check] span (fid' = def.def_id);
                     LoopId.Map.find lp_id loops
               in
@@ -2816,7 +2928,7 @@ let add_fuel_one (ctx : ctx) (loops : fun_decl LoopId.Map.t) (def : fun_decl) :
               let def' : fun_decl =
                 match lp_id with
                 | None -> FunDeclId.Map.find fid' ctx.fun_decls
-                | Some lp_id ->
+                | Some (lp_id, _) ->
                     [%sanity_check] span (fid' = def.def_id);
                     LoopId.Map.find lp_id loops
               in
@@ -2903,24 +3015,28 @@ let add_fuel_one (ctx : ctx) (loops : fun_decl LoopId.Map.t) (def : fun_decl) :
 let add_fuel (ctx : ctx) (trans : pure_fun_translation) : pure_fun_translation =
   let loops_map =
     LoopId.Map.of_list
-      (List.map (fun (f : fun_decl) -> (Option.get f.loop_id, f)) trans.loops)
+      (List.map
+         (fun (f : fun_decl) -> (fst (Option.get f.loop_id), f))
+         trans.loops)
   in
 
   (* Add the fuel and the state *)
   let f = add_fuel_one ctx loops_map trans.f in
   let loops = List.map (add_fuel_one ctx loops_map) trans.loops in
+  let bodies = List.map (add_fuel_one ctx loops_map) trans.bodies in
 
   (* Decompose the monadic let-bindings if necessary (Coq needs this) *)
-  let f, loops =
+  let f, loops, bodies =
     if !Config.decompose_monadic_let_bindings then
       let f = decompose_monadic_let_bindings ctx f in
       let loops = List.map (decompose_monadic_let_bindings ctx) loops in
-      (f, loops)
-    else (f, loops)
+      let bodies = List.map (decompose_monadic_let_bindings ctx) bodies in
+      (f, loops, bodies)
+    else (f, loops, bodies)
   in
 
   (* *)
-  { f; loops }
+  { f; loops; bodies }
 
 (** Perform the following transformation:
 

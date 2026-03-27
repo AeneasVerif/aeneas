@@ -30,7 +30,8 @@ type regular_fun_id_not_loop = LlbcAst.fun_id * RegionGroupId.id option
 [@@deriving show, ord]
 
 (** We use this type as a key for lookups *)
-type fun_loop_id = FunDeclId.id * LoopId.id option [@@deriving show, ord]
+type fun_loop_id = FunDeclId.id * (LoopId.id * bool) option
+[@@deriving show, ord]
 
 module RegularFunIdNotLoopOrderedType = struct
   type t = regular_fun_id_not_loop
@@ -1048,6 +1049,24 @@ let mk_result_ok_pat (v : tpat) : tpat =
   let pat = PAdt { variant_id = Some result_ok_id; fields = [ v ] } in
   { pat; ty }
 
+let texpr_as_ok (e : texpr) : texpr option =
+  match e.e with
+  | App
+      ( {
+          e =
+            Qualif
+              {
+                id =
+                  AdtCons
+                    { adt_id = TBuiltin TResult; variant_id = Some variant_id };
+                _;
+              };
+          _;
+        },
+        v )
+    when variant_id = result_ok_id -> Some v
+  | _ -> None
+
 let mk_sum_ty (left : ty) (right : ty) : ty =
   TAdt (TBuiltin TSum, mk_generic_args_from_types [ left; right ])
 
@@ -1683,6 +1702,10 @@ let compute_explicit_info (generics : Pure.generic_params) (input_tys : ty list)
     explicit_types = List.map make_explicit_ty generics.types;
     explicit_const_generics = List.map make_explicit_cg generics.const_generics;
   }
+
+let explicit_info_has_explicit (info : explicit_info) : bool =
+  let { explicit_types; explicit_const_generics } = info in
+  List.exists (fun e -> e = Explicit) (explicit_types @ explicit_const_generics)
 
 (** Compute which input parameters can be infered if only the explicit types and
     the trait refs are provided.

@@ -44,7 +44,8 @@ module Sig = struct
   let cgvar_0 : constant_expr_kind = CVar (Free cgvar_id_0)
 
   (** Region 'a of id 0 *)
-  let region_param_0 : region_param = { index = rvar_id_0; name = Some "'a" }
+  let region_param_0 : region_param =
+    { index = rvar_id_0; name = Some "'a"; mutability = LtUnknown }
 
   (** Region group: [{ parent={}; regions:{'a of id 0} }] *)
   let region_group_0 : region_var_group =

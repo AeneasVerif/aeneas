@@ -11,25 +11,33 @@ set_option maxHeartbeats 1000000
 
 namespace iterators_scalar
 
+/-- [iterators_scalar::iter]: loop body 0:
+    Source: 'tests/src/iterators-scalar.rs', lines 5:4-7:5 -/
+@[rust_loop_body]
+def iter_loop.body
+  (iter1 : core.ops.range.Range Std.Usize) (x : Std.I32) :
+  Result (ControlFlow ((core.ops.range.Range Std.Usize) × Std.I32) Unit)
+  := do
+  let (o, iter2) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepUsize iter1
+  match o with
+  | none => ok (done ())
+  | some _ => let x1 ← x + 1#i32
+              ok (cont (iter2, x1))
+
 /-- [iterators_scalar::iter]: loop 0:
-   Source: 'tests/src/iterators-scalar.rs', lines 5:4-7:5 -/
+    Source: 'tests/src/iterators-scalar.rs', lines 5:4-7:5 -/
+@[rust_loop]
 def iter_loop
-  (x : Std.I32) (iter1 : core.ops.range.Range Std.Usize) : Result Unit := do
+  (iter1 : core.ops.range.Range Std.Usize) (x : Std.I32) : Result Unit := do
   loop
-    (fun (x1, iter2) =>
-      do
-      let (o, iter3) ←
-        core.iter.range.IteratorRange.next core.iter.range.StepUsize iter2
-      match o with
-      | none => ok (done ())
-      | some _ => let x2 ← x1 + 1#i32
-                  ok (cont (x2, iter3)))
-    (x, iter1)
+    (fun (iter2, x1) => iter_loop.body iter2 x1)
+    (iter1, x)
 
 /-- [iterators_scalar::iter]:
-   Source: 'tests/src/iterators-scalar.rs', lines 3:0-8:1 -/
+    Source: 'tests/src/iterators-scalar.rs', lines 3:0-8:1 -/
 @[reducible]
 def iter (n : Std.Usize) : Result Unit := do
-  iter_loop 0#i32 { start := 0#usize, «end» := n }
+  iter_loop { start := 0#usize, «end» := n } 0#i32
 
 end iterators_scalar

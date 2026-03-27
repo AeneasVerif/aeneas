@@ -69,13 +69,14 @@ def core.slice.iter.IteratorSliceIter.next
   "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::step_by"]
 def core.slice.iter.IteratorSliceIter.step_by {T} (slice : core.slice.iter.Iter T) (steps : Usize) :
   Result (core.iter.adapters.step_by.StepBy (core.slice.iter.Iter T)) :=
-  ok (⟨ slice, steps ⟩)
+  if steps.val = 0 then .fail .panic
+  else ok (⟨ slice, steps ⟩)
 
 @[rust_fun
   "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::enumerate"]
 def core.slice.iter.IteratorSliceIter.enumerate {T} (slice : core.slice.iter.Iter T) :
   Result (core.iter.adapters.enumerate.Enumerate (core.slice.iter.Iter T)) :=
-  sorry
+  .ok { iter := slice, count := 0#usize }
 
 @[rust_fun
   "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::take"]
@@ -111,13 +112,14 @@ def core.slice.iter.IteratorChunksExact.next
 def core.slice.iter.IteratorChunksExact.step_by
   {T : Type} (self : slice.iter.ChunksExact T) (steps : Usize) :
   Result (core.iter.adapters.step_by.StepBy (slice.iter.ChunksExact T)) :=
-  ok (⟨ self, steps ⟩)
+  if steps.val = 0 then .fail .panic
+  else ok (⟨ self, steps ⟩)
 
 @[rust_fun
   "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::ChunksExact<'a, @T>, &'a [@T]>}::enumerate"]
 def core.slice.iter.IteratorChunksExact.enumerate {T : Type} (self : core.slice.iter.ChunksExact T) :
   Result (core.iter.adapters.enumerate.Enumerate (core.slice.iter.ChunksExact T)) :=
-  sorry
+  .ok { iter := self, count := 0#usize }
 
 @[rust_fun
   "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::ChunksExact<'a, @T>, &'a [@T]>}::take"]
@@ -143,5 +145,125 @@ def core.slice.Slice.chunks_exact {T : Type} (s : Slice T) (chunk_size : Std.Usi
     ok ⟨ List.map (fun s => ⟨ s, by sorry ⟩) (s.val.toChunks chunk_size.val) ⟩
   else fail .panic
 
+
+-- ============================================================================
+-- StepBy tests
+-- ============================================================================
+
+private def mkSliceIter (l : List Nat) (h : l.length ≤ Usize.max := by scalar_tac) :
+    core.slice.iter.Iter Nat :=
+  { slice := ⟨l, h⟩, i := 0 }
+
+private def collectStepBy (sbi : core.iter.adapters.step_by.StepBy (core.slice.iter.Iter Nat))
+    (fuel : Nat := 100) : Result (List Nat) :=
+  match fuel with
+  | 0 => .ok []
+  | fuel + 1 => do
+    let (opt, sbi) ←
+      core.iter.adapters.step_by.IteratorStepBy.next
+        (core.iter.traits.iterator.IteratorSliceIter Nat) sbi
+    match opt with
+    | none => .ok []
+    | some x => do
+      let rest ← collectStepBy sbi fuel
+      .ok (x :: rest)
+
+-- step_by(0) panics
+#assert
+  match core.slice.iter.IteratorSliceIter.step_by (mkSliceIter [1, 2, 3]) 0#usize with
+  | .fail .panic => true
+  | _ => false
+
+-- step_by(1) returns all elements
+#assert (do
+  let sbi ← core.slice.iter.IteratorSliceIter.step_by (mkSliceIter [0, 1, 2, 3, 4]) 1#usize
+  collectStepBy sbi) == .ok [0, 1, 2, 3, 4]
+
+-- step_by(2) returns every other element
+#assert (do
+  let sbi ← core.slice.iter.IteratorSliceIter.step_by (mkSliceIter [0, 1, 2, 3, 4]) 2#usize
+  collectStepBy sbi) == .ok [0, 2, 4]
+
+-- step_by(3)
+#assert (do
+  let sbi ← core.slice.iter.IteratorSliceIter.step_by (mkSliceIter [0, 1, 2, 3, 4, 5, 6]) 3#usize
+  collectStepBy sbi) == .ok [0, 3, 6]
+
+-- step_by larger than collection: returns only first element
+#assert (do
+  let sbi ← core.slice.iter.IteratorSliceIter.step_by (mkSliceIter [0, 1, 2]) 10#usize
+  collectStepBy sbi) == .ok [0]
+
+-- step_by on empty iterator
+#assert (do
+  let sbi ← core.slice.iter.IteratorSliceIter.step_by (mkSliceIter []) 2#usize
+  collectStepBy sbi) == .ok []
+
+-- step_by(1) on single element
+#assert (do
+  let sbi ← core.slice.iter.IteratorSliceIter.step_by (mkSliceIter [42]) 1#usize
+  collectStepBy sbi) == .ok [42]
+
+-- step_by(2) on single element
+#assert (do
+  let sbi ← core.slice.iter.IteratorSliceIter.step_by (mkSliceIter [42]) 2#usize
+  collectStepBy sbi) == .ok [42]
+
+-- step_by equal to length: returns only first element
+#assert (do
+  let sbi ← core.slice.iter.IteratorSliceIter.step_by (mkSliceIter [0, 1, 2]) 3#usize
+  collectStepBy sbi) == .ok [0]
+
+-- step_by = length - 1
+#assert (do
+  let sbi ← core.slice.iter.IteratorSliceIter.step_by (mkSliceIter [0, 1, 2]) 2#usize
+  collectStepBy sbi) == .ok [0, 2]
+
+-- step_by(2) on two elements: returns only first
+#assert (do
+  let sbi ← core.slice.iter.IteratorSliceIter.step_by (mkSliceIter [0, 1]) 2#usize
+  collectStepBy sbi) == .ok [0]
+
+-- step_by(2) on three elements: returns first and third
+#assert (do
+  let sbi ← core.slice.iter.IteratorSliceIter.step_by (mkSliceIter [0, 1, 2]) 2#usize
+  collectStepBy sbi) == .ok [0, 2]
+
+-- step_by(4) on longer sequence
+#assert (do
+  let sbi ← core.slice.iter.IteratorSliceIter.step_by
+    (mkSliceIter [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]) 4#usize
+  collectStepBy sbi) == .ok [0, 4, 8]
+
+-- Verify that step_by(0) on the generic Iterator.step_by.default also panics
+#assert
+  match core.iter.traits.iterator.Iterator.step_by.default (mkSliceIter [1]) 0#usize with
+  | .fail .panic => true
+  | _ => false
+
+-- Nested step_by: step_by(2) then step_by(2) on [0..8] gives [0, 4]
+private def collectNestedStepBy
+    (sbi : core.iter.adapters.step_by.StepBy
+      (core.iter.adapters.step_by.StepBy (core.slice.iter.Iter Nat)))
+    (fuel : Nat := 100) : Result (List Nat) :=
+  match fuel with
+  | 0 => .ok []
+  | fuel + 1 => do
+    let (opt, sbi) ←
+      (core.iter.traits.iterator.IteratorStepBy
+        (core.iter.traits.iterator.IteratorStepBy
+          (core.iter.traits.iterator.IteratorSliceIter Nat))).next sbi
+    match opt with
+    | none => .ok []
+    | some x => do
+      let rest ← collectNestedStepBy sbi fuel
+      .ok (x :: rest)
+
+#assert (do
+  let sbi ← core.slice.iter.IteratorSliceIter.step_by
+    (mkSliceIter [0, 1, 2, 3, 4, 5, 6, 7]) 2#usize
+  let sbi2 ← core.iter.adapters.step_by.IteratorStepBy.step_by
+    (core.iter.traits.iterator.IteratorSliceIter Nat) sbi 2#usize
+  collectNestedStepBy sbi2) == .ok [0, 4]
 
 end Aeneas.Std

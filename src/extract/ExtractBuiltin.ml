@@ -11,16 +11,26 @@ include ExtractName (* TODO: only open? *)
 
 let log = Logging.builtin_log
 
-let builtin_globals () : (string * string) list =
-  let mk_int_global (ty : string) (name : string) : string * string =
-    ( "core::num::{" ^ ty ^ "}::" ^ name,
+let builtin_globals () : Pure.builtin_global_info list =
+  let mk_int_global (ty : string) (name : string) : Pure.builtin_global_info =
+    let rust_name = "core::num::{" ^ ty ^ "}::" ^ name in
+    let extract_name =
       let sep = if backend () = Lean then "." else "_" in
       "core" ^ sep ^ "num" ^ sep
       ^ StringUtils.capitalize_first_letter ty
-      ^ sep ^ name )
+      ^ sep ^ name
+    in
+    { rust_name; extract_name; can_fail = false }
   in
   let mk_ints_globals name =
     List.map (fun ty -> mk_int_global ty name) all_int_names
+  in
+  let unit_metadata : Pure.builtin_global_info =
+    {
+      rust_name = "UNIT_METADATA";
+      extract_name = "UNIT_METADATA";
+      can_fail = false;
+    }
   in
   List.concat
     ([
@@ -28,8 +38,8 @@ let builtin_globals () : (string * string) list =
        mk_ints_globals "MAX";
        [
          (* UNIT_METADATA should be eliminated through a micro-pass and should
-           never appear in the code.. *)
-         ("UNIT_METADATA", "UNIT_METADATA");
+            never appear in the code. *)
+         unit_metadata;
        ];
      ]
     @ mk_lean_only lean_builtin_consts)
@@ -37,7 +47,8 @@ let builtin_globals () : (string * string) list =
 let mk_builtin_globals_map () : Pure.builtin_global_info NameMatcherMap.t =
   NameMatcherMap.of_list
     (List.map
-       (fun (x, y) -> (parse_pattern x, { Pure.global_name = y }))
+       (fun (info : Pure.builtin_global_info) ->
+         (parse_pattern info.rust_name, info))
        (builtin_globals ()))
 
 let builtin_globals_map = mk_memoized mk_builtin_globals_map

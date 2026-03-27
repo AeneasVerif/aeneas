@@ -6,7 +6,7 @@ open Primitives
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [core::cmp::impls::{core::cmp::Ord for i32}::min]:
-    Source: '/rustc/library/core/src/cmp.rs', lines 1995:12-1995:33
+    Source: '/rustc/library/core/src/cmp.rs', lines 2000:12-2000:33
     Name pattern: [core::cmp::impls::{core::cmp::Ord<i32>}::min] *)
 assume val i32_Insts_CoreCmpOrd_min : i32 -> i32 -> result i32
 

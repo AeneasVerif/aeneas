@@ -11,157 +11,191 @@ set_option maxHeartbeats 1000000
 
 namespace loops
 
+/-- [loops::iter]: loop body 0:
+    Source: 'tests/src/loops.rs', lines 6:4-8:5 -/
+@[rust_loop_body]
+def iter_loop.body
+  (max : Std.U32) (i : Std.U32) : Result (ControlFlow Std.U32 Std.U32) := do
+  if i < max
+  then let i1 ← i + 1#u32
+       ok (cont i1)
+  else ok (done i)
+
 /-- [loops::iter]: loop 0:
-   Source: 'tests/src/loops.rs', lines 6:4-8:5
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 6:4-8:5 -/
+@[rust_loop]
 def iter_loop (max : Std.U32) (i : Std.U32) : Result Std.U32 := do
   loop
-    (fun i1 =>
-      if i1 < max
-      then do
-           let i2 ← i1 + 1#u32
-           ok (cont i2)
-      else ok (done i1))
+    (fun i1 => iter_loop.body max i1)
     i
 
 /-- [loops::iter]:
-   Source: 'tests/src/loops.rs', lines 4:0-11:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 4:0-11:1 -/
 @[reducible]
 def iter (max : Std.U32) : Result Std.U32 := do
   iter_loop max 0#u32
 
+/-- [loops::sum]: loop body 0:
+    Source: 'tests/src/loops.rs', lines 17:4-20:5 -/
+@[rust_loop_body]
+def sum_loop.body
+  (max : Std.U32) (i : Std.U32) (s : Std.U32) :
+  Result (ControlFlow (Std.U32 × Std.U32) Std.U32)
+  := do
+  if i < max
+  then let s1 ← s + i
+       let i1 ← i + 1#u32
+       ok (cont (i1, s1))
+  else ok (done s)
+
 /-- [loops::sum]: loop 0:
-   Source: 'tests/src/loops.rs', lines 17:4-20:5
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 17:4-20:5 -/
+@[rust_loop]
 def sum_loop (max : Std.U32) (i : Std.U32) (s : Std.U32) : Result Std.U32 := do
   loop
-    (fun (i1, s1) =>
-      if i1 < max
-      then do
-           let s2 ← s1 + i1
-           let i2 ← i1 + 1#u32
-           ok (cont (i2, s2))
-      else ok (done s1))
+    (fun (i1, s1) => sum_loop.body max i1 s1)
     (i, s)
 
 /-- [loops::sum]:
-   Source: 'tests/src/loops.rs', lines 14:0-24:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 14:0-24:1 -/
 def sum (max : Std.U32) : Result Std.U32 := do
   let s ← sum_loop max 0#u32 0#u32
   s * 2#u32
 
+/-- [loops::sum_with_mut_borrows]: loop body 0:
+    Source: 'tests/src/loops.rs', lines 32:4-37:5 -/
+@[rust_loop_body]
+def sum_with_mut_borrows_loop.body
+  (max : Std.U32) (i : Std.U32) (s : Std.U32) :
+  Result (ControlFlow (Std.U32 × Std.U32) Std.U32)
+  := do
+  if i < max
+  then let ms ← s + i
+       let mi ← i + 1#u32
+       ok (cont (mi, ms))
+  else ok (done s)
+
 /-- [loops::sum_with_mut_borrows]: loop 0:
-   Source: 'tests/src/loops.rs', lines 32:4-37:5
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 32:4-37:5 -/
+@[rust_loop]
 def sum_with_mut_borrows_loop
   (max : Std.U32) (i : Std.U32) (s : Std.U32) : Result Std.U32 := do
   loop
-    (fun (i1, s1) =>
-      if i1 < max
-      then do
-           let ms ← s1 + i1
-           let mi ← i1 + 1#u32
-           ok (cont (mi, ms))
-      else ok (done s1))
+    (fun (i1, s1) => sum_with_mut_borrows_loop.body max i1 s1)
     (i, s)
 
 /-- [loops::sum_with_mut_borrows]:
-   Source: 'tests/src/loops.rs', lines 29:0-41:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 29:0-41:1 -/
 def sum_with_mut_borrows (max : Std.U32) : Result Std.U32 := do
   let s ← sum_with_mut_borrows_loop max 0#u32 0#u32
   s * 2#u32
 
+/-- [loops::sum_with_shared_borrows]: loop body 0:
+    Source: 'tests/src/loops.rs', lines 47:4-54:5 -/
+@[rust_loop_body]
+def sum_with_shared_borrows_loop.body
+  (max : Std.U32) (i : Std.U32) (s : Std.U32) :
+  Result (ControlFlow (Std.U32 × Std.U32) Std.U32)
+  := do
+  if i < max
+  then let i1 ← i + 1#u32
+       let s1 ← s + i1
+       ok (cont (i1, s1))
+  else ok (done s)
+
 /-- [loops::sum_with_shared_borrows]: loop 0:
-   Source: 'tests/src/loops.rs', lines 47:4-54:5
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 47:4-54:5 -/
+@[rust_loop]
 def sum_with_shared_borrows_loop
   (max : Std.U32) (i : Std.U32) (s : Std.U32) : Result Std.U32 := do
   loop
-    (fun (i1, s1) =>
-      if i1 < max
-      then do
-           let i2 ← i1 + 1#u32
-           let s2 ← s1 + i2
-           ok (cont (i2, s2))
-      else ok (done s1))
+    (fun (i1, s1) => sum_with_shared_borrows_loop.body max i1 s1)
     (i, s)
 
 /-- [loops::sum_with_shared_borrows]:
-   Source: 'tests/src/loops.rs', lines 44:0-58:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 44:0-58:1 -/
 def sum_with_shared_borrows (max : Std.U32) : Result Std.U32 := do
   let s ← sum_with_shared_borrows_loop max 0#u32 0#u32
   s * 2#u32
 
+/-- [loops::sum_array]: loop body 0:
+    Source: 'tests/src/loops.rs', lines 63:4-66:5 -/
+@[rust_loop_body]
+def sum_array_loop.body
+  {N : Std.Usize} (a : Array Std.U32 N) (i : Std.Usize) (s : Std.U32) :
+  Result (ControlFlow (Std.Usize × Std.U32) Std.U32)
+  := do
+  if i < N
+  then
+    let i1 ← Array.index_usize a i
+    let s1 ← s + i1
+    let i2 ← i + 1#usize
+    ok (cont (i2, s1))
+  else ok (done s)
+
 /-- [loops::sum_array]: loop 0:
-   Source: 'tests/src/loops.rs', lines 63:4-66:5
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 63:4-66:5 -/
+@[rust_loop]
 def sum_array_loop
   {N : Std.Usize} (a : Array Std.U32 N) (i : Std.Usize) (s : Std.U32) :
   Result Std.U32
   := do
   loop
-    (fun (i1, s1) =>
-      if i1 < N
-      then
-        do
-        let i2 ← Array.index_usize a i1
-        let s2 ← s1 + i2
-        let i3 ← i1 + 1#usize
-        ok (cont (i3, s2))
-      else ok (done s1))
+    (fun (i1, s1) => sum_array_loop.body a i1 s1)
     (i, s)
 
 /-- [loops::sum_array]:
-   Source: 'tests/src/loops.rs', lines 60:0-68:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 60:0-68:1 -/
 @[reducible]
 def sum_array {N : Std.Usize} (a : Array Std.U32 N) : Result Std.U32 := do
   sum_array_loop a 0#usize 0#u32
 
+/-- [loops::clear]: loop body 0:
+    Source: 'tests/src/loops.rs', lines 74:4-77:5 -/
+@[rust_loop_body]
+def clear_loop.body
+  (v : alloc.vec.Vec Std.U32) (i : Std.Usize) :
+  Result (ControlFlow ((alloc.vec.Vec Std.U32) × Std.Usize) (alloc.vec.Vec
+    Std.U32))
+  := do
+  let i1 := alloc.vec.Vec.len v
+  if i < i1
+  then
+    let (_, index_mut_back) ←
+      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice Std.U32) v
+        i
+    let i2 ← i + 1#usize
+    let v1 := index_mut_back 0#u32
+    ok (cont (v1, i2))
+  else ok (done v)
+
 /-- [loops::clear]: loop 0:
-   Source: 'tests/src/loops.rs', lines 74:4-77:5
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 74:4-77:5 -/
+@[rust_loop]
 def clear_loop
   (v : alloc.vec.Vec Std.U32) (i : Std.Usize) :
   Result (alloc.vec.Vec Std.U32)
   := do
   loop
-    (fun (v1, i1) =>
-      let i2 := alloc.vec.Vec.len v1
-      if i1 < i2
-      then
-        do
-        let (_, index_mut_back) ←
-          alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice
-            Std.U32) v1 i1
-        let i3 ← i1 + 1#usize
-        let v2 := index_mut_back 0#u32
-        ok (cont (v2, i3))
-      else ok (done v1))
+    (fun (v1, i1) => clear_loop.body v1 i1)
     (v, i)
 
 /-- [loops::clear]:
-   Source: 'tests/src/loops.rs', lines 72:0-78:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 72:0-78:1 -/
 @[reducible]
 def clear (v : alloc.vec.Vec Std.U32) : Result (alloc.vec.Vec Std.U32) := do
   clear_loop v 0#usize
 
 /-- [loops::List]
-   Source: 'tests/src/loops.rs', lines 80:0-83:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 80:0-83:1 -/
 @[discriminant isize]
 inductive List (T : Type) where
 | Cons : T → List T → List T
 | Nil : List T
 
 /-- [loops::list_mem]: loop 0:
-   Source: 'tests/src/loops.rs', lines 87:4-95:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 87:4-95:1 -/
+@[rust_loop]
 def list_mem_loop (x : Std.U32) (ls : List Std.U32) : Result Bool := do
   match ls with
   | List.Cons y tl => if y = x
@@ -171,15 +205,14 @@ def list_mem_loop (x : Std.U32) (ls : List Std.U32) : Result Bool := do
 partial_fixpoint
 
 /-- [loops::list_mem]:
-   Source: 'tests/src/loops.rs', lines 86:0-95:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 86:0-95:1 -/
 @[reducible]
 def list_mem (x : Std.U32) (ls : List Std.U32) : Result Bool := do
   list_mem_loop x ls
 
 /-- [loops::list_nth_mut]: loop 0:
-   Source: 'tests/src/loops.rs', lines 98:4-107:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 98:4-107:1 -/
+@[rust_loop]
 def list_nth_mut_loop
   {T : Type} (ls : List T) (i : Std.U32) : Result (T × (T → List T)) := do
   match ls with
@@ -196,16 +229,15 @@ def list_nth_mut_loop
 partial_fixpoint
 
 /-- [loops::list_nth_mut]:
-   Source: 'tests/src/loops.rs', lines 97:0-107:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 97:0-107:1 -/
 @[reducible]
 def list_nth_mut
   {T : Type} (ls : List T) (i : Std.U32) : Result (T × (T → List T)) := do
   list_nth_mut_loop ls i
 
 /-- [loops::list_nth_shared]: loop 0:
-   Source: 'tests/src/loops.rs', lines 111:4-120:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 111:4-120:1 -/
+@[rust_loop]
 def list_nth_shared_loop
   {T : Type} (ls : List T) (i : Std.U32) : Result T := do
   match ls with
@@ -218,15 +250,14 @@ def list_nth_shared_loop
 partial_fixpoint
 
 /-- [loops::list_nth_shared]:
-   Source: 'tests/src/loops.rs', lines 110:0-120:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 110:0-120:1 -/
 @[reducible]
 def list_nth_shared {T : Type} (ls : List T) (i : Std.U32) : Result T := do
   list_nth_shared_loop ls i
 
 /-- [loops::get_elem_mut]: loop 0:
-   Source: 'tests/src/loops.rs', lines 124:4-136:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 124:4-136:1 -/
+@[rust_loop]
 def get_elem_mut_loop
   (x : Std.Usize) (ls : List Std.Usize) :
   Result (Std.Usize × (Std.Usize → List Std.Usize))
@@ -244,8 +275,7 @@ def get_elem_mut_loop
 partial_fixpoint
 
 /-- [loops::get_elem_mut]:
-   Source: 'tests/src/loops.rs', lines 122:0-136:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 122:0-136:1 -/
 def get_elem_mut
   (slots : alloc.vec.Vec (List Std.Usize)) (x : Std.Usize) :
   Result (Std.Usize × (Std.Usize → alloc.vec.Vec (List Std.Usize)))
@@ -259,8 +289,8 @@ def get_elem_mut
   ok (i, back1)
 
 /-- [loops::get_elem_shared]: loop 0:
-   Source: 'tests/src/loops.rs', lines 140:4-152:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 140:4-152:1 -/
+@[rust_loop]
 def get_elem_shared_loop
   (x : Std.Usize) (ls : List Std.Usize) : Result Std.Usize := do
   match ls with
@@ -271,8 +301,7 @@ def get_elem_shared_loop
 partial_fixpoint
 
 /-- [loops::get_elem_shared]:
-   Source: 'tests/src/loops.rs', lines 138:0-152:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 138:0-152:1 -/
 def get_elem_shared
   (slots : alloc.vec.Vec (List Std.Usize)) (x : Std.Usize) :
   Result Std.Usize
@@ -283,21 +312,19 @@ def get_elem_shared
   get_elem_shared_loop x ls
 
 /-- [loops::id_mut]:
-   Source: 'tests/src/loops.rs', lines 154:0-156:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 154:0-156:1 -/
 def id_mut
   {T : Type} (ls : List T) : Result ((List T) × (List T → List T)) := do
   ok (ls, fun ls1 => ls1)
 
 /-- [loops::id_shared]:
-   Source: 'tests/src/loops.rs', lines 158:0-160:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 158:0-160:1 -/
 def id_shared {T : Type} (ls : List T) : Result (List T) := do
   ok ls
 
 /-- [loops::list_nth_mut_with_id]: loop 0:
-   Source: 'tests/src/loops.rs', lines 165:4-174:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 165:4-174:1 -/
+@[rust_loop]
 def list_nth_mut_with_id_loop
   {T : Type} (i : Std.U32) (ls : List T) : Result (T × (T → List T)) := do
   match ls with
@@ -314,8 +341,7 @@ def list_nth_mut_with_id_loop
 partial_fixpoint
 
 /-- [loops::list_nth_mut_with_id]:
-   Source: 'tests/src/loops.rs', lines 163:0-174:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 163:0-174:1 -/
 def list_nth_mut_with_id
   {T : Type} (ls : List T) (i : Std.U32) : Result (T × (T → List T)) := do
   let (ls1, id_mut_back) ← id_mut ls
@@ -325,8 +351,8 @@ def list_nth_mut_with_id
   ok (t, back1)
 
 /-- [loops::list_nth_shared_with_id]: loop 0:
-   Source: 'tests/src/loops.rs', lines 179:4-188:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 179:4-188:1 -/
+@[rust_loop]
 def list_nth_shared_with_id_loop
   {T : Type} (i : Std.U32) (ls : List T) : Result T := do
   match ls with
@@ -339,16 +365,15 @@ def list_nth_shared_with_id_loop
 partial_fixpoint
 
 /-- [loops::list_nth_shared_with_id]:
-   Source: 'tests/src/loops.rs', lines 177:0-188:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 177:0-188:1 -/
 def list_nth_shared_with_id
   {T : Type} (ls : List T) (i : Std.U32) : Result T := do
   let ls1 ← id_shared ls
   list_nth_shared_with_id_loop i ls1
 
 /-- [loops::list_nth_mut_pair]: loop 0:
-   Source: 'tests/src/loops.rs', lines 198:4-214:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 198:4-214:1 -/
+@[rust_loop]
 def list_nth_mut_pair_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T × (T → List T) × (T → List T))
@@ -372,8 +397,7 @@ def list_nth_mut_pair_loop
 partial_fixpoint
 
 /-- [loops::list_nth_mut_pair]:
-   Source: 'tests/src/loops.rs', lines 193:0-214:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 193:0-214:1 -/
 def list_nth_mut_pair
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result ((T × T) × (T → List T) × (T → List T))
@@ -382,8 +406,8 @@ def list_nth_mut_pair
   ok ((t, t1), back, back1)
 
 /-- [loops::list_nth_shared_pair]: loop 0:
-   Source: 'tests/src/loops.rs', lines 222:4-238:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 222:4-238:1 -/
+@[rust_loop]
 def list_nth_shared_pair_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T)
@@ -401,8 +425,7 @@ def list_nth_shared_pair_loop
 partial_fixpoint
 
 /-- [loops::list_nth_shared_pair]:
-   Source: 'tests/src/loops.rs', lines 217:0-238:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 217:0-238:1 -/
 @[reducible]
 def list_nth_shared_pair
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
@@ -411,8 +434,8 @@ def list_nth_shared_pair
   list_nth_shared_pair_loop ls0 ls1 i
 
 /-- [loops::list_nth_mut_pair_merge]: loop 0:
-   Source: 'tests/src/loops.rs', lines 247:4-257:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 247:4-257:1 -/
+@[rust_loop]
 def list_nth_mut_pair_merge_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T × (T → List T) × (T → List T))
@@ -436,8 +459,7 @@ def list_nth_mut_pair_merge_loop
 partial_fixpoint
 
 /-- [loops::list_nth_mut_pair_merge]:
-   Source: 'tests/src/loops.rs', lines 242:0-257:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 242:0-257:1 -/
 def list_nth_mut_pair_merge
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result ((T × T) × ((T × T) → ((List T) × (List T))))
@@ -452,8 +474,8 @@ def list_nth_mut_pair_merge
   ok ((t, t1), back2)
 
 /-- [loops::list_nth_shared_pair_merge]: loop 0:
-   Source: 'tests/src/loops.rs', lines 265:4-275:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 265:4-275:1 -/
+@[rust_loop]
 def list_nth_shared_pair_merge_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T)
@@ -471,8 +493,7 @@ def list_nth_shared_pair_merge_loop
 partial_fixpoint
 
 /-- [loops::list_nth_shared_pair_merge]:
-   Source: 'tests/src/loops.rs', lines 260:0-275:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 260:0-275:1 -/
 @[reducible]
 def list_nth_shared_pair_merge
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
@@ -481,8 +502,8 @@ def list_nth_shared_pair_merge
   list_nth_shared_pair_merge_loop ls0 ls1 i
 
 /-- [loops::list_nth_mut_shared_pair]: loop 0:
-   Source: 'tests/src/loops.rs', lines 283:4-293:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 283:4-293:1 -/
+@[rust_loop]
 def list_nth_mut_shared_pair_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T × (T → List T))
@@ -504,8 +525,7 @@ def list_nth_mut_shared_pair_loop
 partial_fixpoint
 
 /-- [loops::list_nth_mut_shared_pair]:
-   Source: 'tests/src/loops.rs', lines 278:0-293:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 278:0-293:1 -/
 def list_nth_mut_shared_pair
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result ((T × T) × (T → List T))
@@ -514,8 +534,8 @@ def list_nth_mut_shared_pair
   ok ((t, t1), back)
 
 /-- [loops::list_nth_mut_shared_pair_merge]: loop 0:
-   Source: 'tests/src/loops.rs', lines 302:4-312:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 302:4-312:1 -/
+@[rust_loop]
 def list_nth_mut_shared_pair_merge_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T × (T → List T))
@@ -537,8 +557,7 @@ def list_nth_mut_shared_pair_merge_loop
 partial_fixpoint
 
 /-- [loops::list_nth_mut_shared_pair_merge]:
-   Source: 'tests/src/loops.rs', lines 297:0-312:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 297:0-312:1 -/
 def list_nth_mut_shared_pair_merge
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result ((T × T) × (T → List T))
@@ -547,8 +566,8 @@ def list_nth_mut_shared_pair_merge
   ok ((t, t1), back)
 
 /-- [loops::list_nth_shared_mut_pair]: loop 0:
-   Source: 'tests/src/loops.rs', lines 321:4-331:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 321:4-331:1 -/
+@[rust_loop]
 def list_nth_shared_mut_pair_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T × (T → List T))
@@ -570,8 +589,7 @@ def list_nth_shared_mut_pair_loop
 partial_fixpoint
 
 /-- [loops::list_nth_shared_mut_pair]:
-   Source: 'tests/src/loops.rs', lines 316:0-331:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 316:0-331:1 -/
 def list_nth_shared_mut_pair
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result ((T × T) × (T → List T))
@@ -580,8 +598,8 @@ def list_nth_shared_mut_pair
   ok ((t, t1), back)
 
 /-- [loops::list_nth_shared_mut_pair_merge]: loop 0:
-   Source: 'tests/src/loops.rs', lines 340:4-350:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 340:4-350:1 -/
+@[rust_loop]
 def list_nth_shared_mut_pair_merge_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result (T × T × (T → List T))
@@ -603,8 +621,7 @@ def list_nth_shared_mut_pair_merge_loop
 partial_fixpoint
 
 /-- [loops::list_nth_shared_mut_pair_merge]:
-   Source: 'tests/src/loops.rs', lines 335:0-350:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 335:0-350:1 -/
 def list_nth_shared_mut_pair_merge
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result ((T × T) × (T → List T))
@@ -612,137 +629,169 @@ def list_nth_shared_mut_pair_merge
   let (t, t1, back) ← list_nth_shared_mut_pair_merge_loop ls0 ls1 i
   ok ((t, t1), back)
 
+/-- [loops::ignore_input_mut_borrow]: loop body 0:
+    Source: 'tests/src/loops.rs', lines 355:4-357:5 -/
+@[rust_loop_body]
+def ignore_input_mut_borrow_loop.body
+  (i : Std.U32) : Result (ControlFlow Std.U32 Unit) := do
+  if i > 0#u32
+  then let i1 ← i - 1#u32
+       ok (cont i1)
+  else ok (done ())
+
 /-- [loops::ignore_input_mut_borrow]: loop 0:
-   Source: 'tests/src/loops.rs', lines 355:4-357:5
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 355:4-357:5 -/
+@[rust_loop]
 def ignore_input_mut_borrow_loop (i : Std.U32) : Result Unit := do
   loop
-    (fun i1 =>
-      if i1 > 0#u32
-      then do
-           let i2 ← i1 - 1#u32
-           ok (cont i2)
-      else ok (done ()))
+    (fun i1 => ignore_input_mut_borrow_loop.body i1)
     i
 
 /-- [loops::ignore_input_mut_borrow]:
-   Source: 'tests/src/loops.rs', lines 354:0-358:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 354:0-358:1 -/
 def ignore_input_mut_borrow (_a : Std.U32) (i : Std.U32) : Result Std.U32 := do
   ignore_input_mut_borrow_loop i
   ok _a
 
+/-- [loops::incr_ignore_input_mut_borrow]: loop body 0:
+    Source: 'tests/src/loops.rs', lines 364:4-366:5 -/
+@[rust_loop_body]
+def incr_ignore_input_mut_borrow_loop.body
+  (i : Std.U32) : Result (ControlFlow Std.U32 Unit) := do
+  if i > 0#u32
+  then let i1 ← i - 1#u32
+       ok (cont i1)
+  else ok (done ())
+
 /-- [loops::incr_ignore_input_mut_borrow]: loop 0:
-   Source: 'tests/src/loops.rs', lines 364:4-366:5
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 364:4-366:5 -/
+@[rust_loop]
 def incr_ignore_input_mut_borrow_loop (i : Std.U32) : Result Unit := do
   loop
-    (fun i1 =>
-      if i1 > 0#u32
-      then do
-           let i2 ← i1 - 1#u32
-           ok (cont i2)
-      else ok (done ()))
+    (fun i1 => incr_ignore_input_mut_borrow_loop.body i1)
     i
 
 /-- [loops::incr_ignore_input_mut_borrow]:
-   Source: 'tests/src/loops.rs', lines 362:0-367:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 362:0-367:1 -/
 def incr_ignore_input_mut_borrow
   (a : Std.U32) (i : Std.U32) : Result Std.U32 := do
   let a1 ← a + 1#u32
   incr_ignore_input_mut_borrow_loop i
   ok a1
 
+/-- [loops::ignore_input_shared_borrow]: loop body 0:
+    Source: 'tests/src/loops.rs', lines 372:4-374:5 -/
+@[rust_loop_body]
+def ignore_input_shared_borrow_loop.body
+  (i : Std.U32) : Result (ControlFlow Std.U32 Unit) := do
+  if i > 0#u32
+  then let i1 ← i - 1#u32
+       ok (cont i1)
+  else ok (done ())
+
 /-- [loops::ignore_input_shared_borrow]: loop 0:
-   Source: 'tests/src/loops.rs', lines 372:4-374:5
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 372:4-374:5 -/
+@[rust_loop]
 def ignore_input_shared_borrow_loop (i : Std.U32) : Result Unit := do
   loop
-    (fun i1 =>
-      if i1 > 0#u32
-      then do
-           let i2 ← i1 - 1#u32
-           ok (cont i2)
-      else ok (done ()))
+    (fun i1 => ignore_input_shared_borrow_loop.body i1)
     i
 
 /-- [loops::ignore_input_shared_borrow]:
-   Source: 'tests/src/loops.rs', lines 371:0-375:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 371:0-375:1 -/
 def ignore_input_shared_borrow
   (_a : Std.U32) (i : Std.U32) : Result Std.U32 := do
   ignore_input_shared_borrow_loop i
   ok _a
 
 /-- [loops::issue500_1::bar]:
-   Source: 'tests/src/loops.rs', lines 379:4-379:28 -/
+    Source: 'tests/src/loops.rs', lines 379:4-379:28 -/
 def issue500_1.bar (_a : Bool) : Result Bool := do
   ok _a
 
+/-- [loops::issue500_1]: loop body 0:
+    Source: 'tests/src/loops.rs', lines 382:4-384:5 -/
+@[rust_loop_body]
+def issue500_1_loop.body (a : Bool) : Result (ControlFlow Bool Bool) := do
+  if 0#i32 < 0#i32
+  then let a1 ← issue500_1.bar a
+       ok (cont a1)
+  else ok (done a)
+
 /-- [loops::issue500_1]: loop 0:
-   Source: 'tests/src/loops.rs', lines 382:4-384:5 -/
+    Source: 'tests/src/loops.rs', lines 382:4-384:5 -/
+@[rust_loop]
 def issue500_1_loop (a : Bool) : Result Bool := do
   loop
-    (fun a1 =>
-      if 0#i32 < 0#i32
-      then do
-           let a2 ← issue500_1.bar a1
-           ok (cont a2)
-      else ok (done a1))
+    (fun a1 => issue500_1_loop.body a1)
     a
 
 /-- [loops::issue500_1]:
-   Source: 'tests/src/loops.rs', lines 378:0-386:1 -/
+    Source: 'tests/src/loops.rs', lines 378:0-386:1 -/
 @[reducible] def issue500_1 (s : Bool) : Result Bool := do
                issue500_1_loop s
 
 /-- [loops::issue500_2::bar]:
-   Source: 'tests/src/loops.rs', lines 391:4-391:33 -/
+    Source: 'tests/src/loops.rs', lines 391:4-391:33 -/
 def issue500_2.bar
   (_a : Array Bool 1#usize) : Result (Array Bool 1#usize) := do
   ok _a
 
 /-- [loops::issue500_2::A]
-   Source: 'tests/src/loops.rs', lines 390:4-390:24 -/
+    Source: 'tests/src/loops.rs', lines 390:4-390:24 -/
 @[reducible]
 def issue500_2.A := Array Bool 1#usize
 
+/-- [loops::issue500_2]: loop body 0:
+    Source: 'tests/src/loops.rs', lines 394:4-396:5 -/
+@[rust_loop_body]
+def issue500_2_loop.body : Result (ControlFlow Unit Unit) := do
+  ok (done ())
+
 /-- [loops::issue500_2]: loop 0:
-   Source: 'tests/src/loops.rs', lines 394:4-396:5 -/
+    Source: 'tests/src/loops.rs', lines 394:4-396:5 -/
+@[rust_loop]
 def issue500_2_loop : Result Unit := do
   loop
-    (fun () => ok (done ()))
+    (fun () => issue500_2_loop.body)
     ()
 
 /-- [loops::issue500_2]:
-   Source: 'tests/src/loops.rs', lines 389:0-398:1 -/
+    Source: 'tests/src/loops.rs', lines 389:0-398:1 -/
 def issue500_2 (s : Array Bool 1#usize) : Result (Array Bool 1#usize) := do
   issue500_2_loop
   ok s
 
 /-- [loops::issue500_3::A]
-   Source: 'tests/src/loops.rs', lines 402:4-402:24 -/
+    Source: 'tests/src/loops.rs', lines 402:4-402:24 -/
 @[reducible]
 def issue500_3.A := Array Bool 1#usize
 
+/-- [loops::issue500_3]: loop body 0:
+    Source: 'tests/src/loops.rs', lines 404:4-404:18 -/
+@[rust_loop_body]
+def issue500_3_loop.body : Result (ControlFlow Unit Unit) := do
+  if 0#i32 < 0#i32
+  then ok (cont ())
+  else ok (done ())
+
 /-- [loops::issue500_3]: loop 0:
-   Source: 'tests/src/loops.rs', lines 404:4-404:18 -/
+    Source: 'tests/src/loops.rs', lines 404:4-404:18 -/
+@[rust_loop]
 def issue500_3_loop : Result Unit := do
   loop
-    (fun () => if 0#i32 < 0#i32
-               then ok (cont ())
-               else ok (done ()))
+    (fun () => issue500_3_loop.body)
     ()
 
 /-- [loops::issue500_3]:
-   Source: 'tests/src/loops.rs', lines 401:0-406:1 -/
+    Source: 'tests/src/loops.rs', lines 401:0-406:1 -/
 def issue500_3 (s : Array Bool 1#usize) : Result (Array Bool 1#usize) := do
   issue500_3_loop
   ok s
 
 /-- [loops::issue351]: loop 0:
-   Source: 'tests/src/loops.rs', lines 411:4-414:5 -/
+    Source: 'tests/src/loops.rs', lines 411:4-414:5 -/
+@[rust_loop]
 def issue351_loop (t : List Std.U8) (last : Std.U8) : Result Std.U8 := do
   match t with
   | List.Cons ht tt => issue351_loop tt ht
@@ -750,32 +799,39 @@ def issue351_loop (t : List Std.U8) (last : Std.U8) : Result Std.U8 := do
 partial_fixpoint
 
 /-- [loops::issue351]:
-   Source: 'tests/src/loops.rs', lines 409:0-416:1 -/
+    Source: 'tests/src/loops.rs', lines 409:0-416:1 -/
 @[reducible]
 def issue351 (h : Std.U8) (t : List Std.U8) : Result Std.U8 := do
   issue351_loop t h
 
 /-- [loops::issue270::box_get_borrow]:
-   Source: 'tests/src/loops.rs', lines 420:4-422:5 -/
+    Source: 'tests/src/loops.rs', lines 420:4-422:5 -/
 def issue270.box_get_borrow {T : Type} (x : T) : Result T := do
   ok x
 
+/-- [loops::issue270]: loop body 0:
+    Source: 'tests/src/loops.rs', lines 426:8-429:9 -/
+@[rust_loop_body]
+def issue270_loop.body
+  (t : List (List Std.U8)) (last : List Std.U8) :
+  Result (ControlFlow ((List (List Std.U8)) × (List Std.U8)) (List Std.U8))
+  := do
+  match t with
+  | List.Cons ht tt => let t1 ← issue270.box_get_borrow tt
+                       ok (cont (t1, ht))
+  | List.Nil => ok (done last)
+
 /-- [loops::issue270]: loop 0:
-   Source: 'tests/src/loops.rs', lines 426:8-429:9 -/
+    Source: 'tests/src/loops.rs', lines 426:8-429:9 -/
+@[rust_loop]
 def issue270_loop
   (t : List (List Std.U8)) (last : List Std.U8) : Result (List Std.U8) := do
   loop
-    (fun (t1, last1) =>
-      match t1 with
-      | List.Cons ht tt =>
-        do
-        let t2 ← issue270.box_get_borrow tt
-        ok (cont (t2, ht))
-      | List.Nil => ok (done last1))
+    (fun (t1, last1) => issue270_loop.body t1 last1)
     (t, last)
 
 /-- [loops::issue270]:
-   Source: 'tests/src/loops.rs', lines 419:0-434:1 -/
+    Source: 'tests/src/loops.rs', lines 419:0-434:1 -/
 def issue270 (v : List (List Std.U8)) : Result (Option (List Std.U8)) := do
   match v with
   | List.Cons h t =>
@@ -784,39 +840,75 @@ def issue270 (v : List (List Std.U8)) : Result (Option (List Std.U8)) := do
     ok (some last)
   | List.Nil => ok none
 
+/-- [loops::issue400_1]: loop body 0:
+    Source: 'tests/src/loops.rs', lines 440:4-447:5 -/
+@[rust_loop_body]
+def issue400_1_loop.body
+  (cond : Bool) (back : Std.I32 → (Std.I32 × Std.I32)) (y : Std.I32)
+  (i : Std.I32) :
+  Result (ControlFlow ((Std.I32 → (Std.I32 × Std.I32)) × Std.I32 ×
+    Std.I32) (Std.I32 × Std.I32))
+  := do
+  if i < 32#i32
+  then
+    let (y1, back1) ←
+      if cond
+      then let (a, b) := back y
+           ok (a, fun i1 => (i1, b))
+      else let (a, b) := back y
+           ok (b, fun i1 => (a, i1))
+    let i1 ← i + 1#i32
+    ok (cont (back1, y1, i1))
+  else let (i1, i2) := back y
+       ok (done (i1, i2))
+
 /-- [loops::issue400_1]: loop 0:
-   Source: 'tests/src/loops.rs', lines 440:4-447:5 -/
+    Source: 'tests/src/loops.rs', lines 440:4-447:5 -/
+@[rust_loop]
 def issue400_1_loop
   (back : Std.I32 → (Std.I32 × Std.I32)) (cond : Bool) (y : Std.I32)
   (i : Std.I32) :
   Result (Std.I32 × Std.I32)
   := do
   loop
-    (fun (back1, y1, i1) =>
-      if i1 < 32#i32
-      then
-        do
-        let (y2, back2) ←
-          if cond
-          then let (a, b) := back1 y1
-               ok (a, fun i2 => (i2, b))
-          else let (a, b) := back1 y1
-               ok (b, fun i2 => (a, i2))
-        let i2 ← i1 + 1#i32
-        ok (cont (back2, y2, i2))
-      else let (i2, i3) := back1 y1
-           ok (done (i2, i3)))
+    (fun (back1, y1, i1) => issue400_1_loop.body cond back1 y1 i1)
     (back, y, i)
 
 /-- [loops::issue400_1]:
-   Source: 'tests/src/loops.rs', lines 437:0-448:1 -/
+    Source: 'tests/src/loops.rs', lines 437:0-448:1 -/
 @[reducible]
 def issue400_1
   (a : Std.I32) (b : Std.I32) (cond : Bool) : Result (Std.I32 × Std.I32) := do
   issue400_1_loop (fun i => (i, b)) cond a 0#i32
 
+/-- [loops::issue400_2]: loop body 0:
+    Source: 'tests/src/loops.rs', lines 455:4-464:5 -/
+@[rust_loop_body]
+def issue400_2_loop.body
+  (conds : Slice Bool)
+  (back : Std.I32 → Std.I32 → (Std.I32 × Std.I32 × Std.I32))
+  (y : Std.I32) (z : Std.I32) (i : Std.Usize) :
+  Result (ControlFlow ((Std.I32 → Std.I32 → (Std.I32 × Std.I32 ×
+    Std.I32)) × Std.I32 × Std.I32 × Std.Usize) (Std.I32 × Std.I32 ×
+    (Std.I32 → Std.I32 → (Std.I32 × Std.I32 × Std.I32))))
+  := do
+  let i1 := Slice.len conds
+  if i < i1
+  then
+    let b ← Slice.index_usize conds i
+    let (y1, z1, back1) ←
+      if b
+      then let (a, b1, c) := back y z
+           ok (a, b1, fun i2 i3 => (i2, i3, c))
+      else let (a, b1, c) := back y z
+           ok (b1, c, fun i2 i3 => (a, i2, i3))
+    let i2 ← i + 1#usize
+    ok (cont (back1, y1, z1, i2))
+  else ok (done (y, z, back))
+
 /-- [loops::issue400_2]: loop 0:
-   Source: 'tests/src/loops.rs', lines 455:4-464:5 -/
+    Source: 'tests/src/loops.rs', lines 455:4-464:5 -/
+@[rust_loop]
 def issue400_2_loop
   (back : Std.I32 → Std.I32 → (Std.I32 × Std.I32 × Std.I32))
   (conds : Slice Bool) (y : Std.I32) (z : Std.I32) (i : Std.Usize) :
@@ -824,27 +916,11 @@ def issue400_2_loop
     Std.I32)))
   := do
   loop
-    (fun (back1, y1, z1, i1) =>
-      let i2 := Slice.len conds
-      if i1 < i2
-      then
-        do
-        let b ← Slice.index_usize conds i1
-        let (y2, z2, back2) ←
-          if b
-          then
-            let (a, b1, c) := back1 y1 z1
-            ok (a, b1, fun i3 i4 => (i3, i4, c))
-          else
-            let (a, b1, c) := back1 y1 z1
-            ok (b1, c, fun i3 i4 => (a, i3, i4))
-        let i3 ← i1 + 1#usize
-        ok (cont (back2, y2, z2, i3))
-      else ok (done (y1, z1, back1)))
+    (fun (back1, y1, z1, i1) => issue400_2_loop.body conds back1 y1 z1 i1)
     (back, y, z, i)
 
 /-- [loops::issue400_2]:
-   Source: 'tests/src/loops.rs', lines 451:0-467:1 -/
+    Source: 'tests/src/loops.rs', lines 451:0-467:1 -/
 def issue400_2
   (a : Std.I32) (b : Std.I32) (c : Std.I32) (conds : Slice Bool) :
   Result (Std.I32 × Std.I32 × Std.I32)
@@ -856,79 +932,101 @@ def issue400_2
   ok (back y1 z1)
 
 /-- [loops::copy_carray::CARRAY]
-   Source: 'tests/src/loops.rs', lines 471:4-471:36 -/
+    Source: 'tests/src/loops.rs', lines 471:4-471:36 -/
 @[global_simps, irreducible]
 def copy_carray.CARRAY : Array Std.U32 2#usize :=
   Array.make 2#usize [ 0#u32, 1#u32 ]
 
+/-- [loops::copy_carray]: loop body 0:
+    Source: 'tests/src/loops.rs', lines 473:4-476:5 -/
+@[rust_loop_body]
+def copy_carray_loop.body
+  (a : Array Std.U32 2#usize) (i : Std.Usize) :
+  Result (ControlFlow ((Array Std.U32 2#usize) × Std.Usize) (Array Std.U32
+    2#usize))
+  := do
+  if i < 2#usize
+  then
+    let i1 ← Array.index_usize copy_carray.CARRAY i
+    let a1 ← Array.update a i i1
+    let i2 ← i + 1#usize
+    ok (cont (a1, i2))
+  else ok (done a)
+
 /-- [loops::copy_carray]: loop 0:
-   Source: 'tests/src/loops.rs', lines 473:4-476:5 -/
+    Source: 'tests/src/loops.rs', lines 473:4-476:5 -/
+@[rust_loop]
 def copy_carray_loop
   (a : Array Std.U32 2#usize) (i : Std.Usize) :
   Result (Array Std.U32 2#usize)
   := do
   loop
-    (fun (a1, i1) =>
-      if i1 < 2#usize
-      then
-        do
-        let i2 ← Array.index_usize copy_carray.CARRAY i1
-        let a2 ← Array.update a1 i1 i2
-        let i3 ← i1 + 1#usize
-        ok (cont (a2, i3))
-      else ok (done a1))
+    (fun (a1, i1) => copy_carray_loop.body a1 i1)
     (a, i)
 
 /-- [loops::copy_carray]:
-   Source: 'tests/src/loops.rs', lines 470:0-477:1 -/
+    Source: 'tests/src/loops.rs', lines 470:0-477:1 -/
 @[reducible]
 def copy_carray
   (a : Array Std.U32 2#usize) : Result (Array Std.U32 2#usize) := do
   copy_carray_loop a 0#usize
 
+/-- [loops::iter_local_mut_borrow]: loop body 0:
+    Source: 'tests/src/loops.rs', lines 483:4-490:5 -/
+@[rust_loop_body]
+def iter_local_mut_borrow_loop.body
+  (p : Std.I32) : Result (ControlFlow Std.I32 Unit) := do
+  let p1 ← p + 1#i32
+  if p1 = 10#i32
+  then ok (done ())
+  else ok (cont p1)
+
 /-- [loops::iter_local_mut_borrow]: loop 0:
-   Source: 'tests/src/loops.rs', lines 483:4-490:5 -/
+    Source: 'tests/src/loops.rs', lines 483:4-490:5 -/
+@[rust_loop]
 def iter_local_mut_borrow_loop (p : Std.I32) : Result Unit := do
   loop
-    (fun p1 =>
-      do
-      let p2 ← p1 + 1#i32
-      if p2 = 10#i32
-      then ok (done ())
-      else ok (cont p2))
+    (fun p1 => iter_local_mut_borrow_loop.body p1)
     p
 
 /-- [loops::iter_local_mut_borrow]:
-   Source: 'tests/src/loops.rs', lines 480:0-491:1 -/
+    Source: 'tests/src/loops.rs', lines 480:0-491:1 -/
 @[reducible]
 def iter_local_mut_borrow : Result Unit := do
   iter_local_mut_borrow_loop 0#i32
 
+/-- [loops::iter_local_shared_borrow]: loop body 0:
+    Source: 'tests/src/loops.rs', lines 497:4-503:5 -/
+@[rust_loop_body]
+def iter_local_shared_borrow_loop.body : Result (ControlFlow Unit Unit) := do
+  if 0#i32 = 0#i32
+  then ok (done ())
+  else ok (cont ())
+
 /-- [loops::iter_local_shared_borrow]: loop 0:
-   Source: 'tests/src/loops.rs', lines 497:4-503:5 -/
+    Source: 'tests/src/loops.rs', lines 497:4-503:5 -/
+@[rust_loop]
 def iter_local_shared_borrow_loop : Result Unit := do
   loop
-    (fun () => if 0#i32 = 0#i32
-               then ok (done ())
-               else ok (cont ()))
+    (fun () => iter_local_shared_borrow_loop.body)
     ()
 
 /-- [loops::iter_local_shared_borrow]:
-   Source: 'tests/src/loops.rs', lines 494:0-504:1 -/
+    Source: 'tests/src/loops.rs', lines 494:0-504:1 -/
 @[reducible]
 def iter_local_shared_borrow : Result Unit := do
   iter_local_shared_borrow_loop
 
 /-- [loops::AList]
-   Source: 'tests/src/loops.rs', lines 506:0-509:1
-   Visibility: public -/
+    Source: 'tests/src/loops.rs', lines 506:0-509:1 -/
 @[discriminant isize]
 inductive AList (T : Type) where
 | Cons : Std.Usize → T → AList T → AList T
 | Nil : AList T
 
 /-- [loops::insert_in_list]: loop 0:
-   Source: 'tests/src/loops.rs', lines 1:0-528:5 -/
+    Source: 'tests/src/loops.rs', lines 1:0-528:5 -/
+@[rust_loop]
 def insert_in_list_loop
   {T : Type} (key : Std.Usize) (value : T) (ls : AList T) :
   Result (Bool × (AList T))
@@ -945,7 +1043,7 @@ def insert_in_list_loop
 partial_fixpoint
 
 /-- [loops::insert_in_list]:
-   Source: 'tests/src/loops.rs', lines 512:0-529:1 -/
+    Source: 'tests/src/loops.rs', lines 512:0-529:1 -/
 @[reducible]
 def insert_in_list
   {T : Type} (key : Std.Usize) (value : T) (ls : AList T) :
@@ -954,90 +1052,118 @@ def insert_in_list
   insert_in_list_loop key value ls
 
 /-- [loops::reborrow_const::reborrow]:
-   Source: 'tests/src/loops.rs', lines 534:4-538:5 -/
+    Source: 'tests/src/loops.rs', lines 534:4-538:5 -/
 def reborrow_const.reborrow (x : Std.U64) : Result Std.U64 := do
   ok x
 
+/-- [loops::reborrow_const]: loop body 0:
+    Source: 'tests/src/loops.rs', lines 0:0-542:5 -/
+@[rust_loop_body]
+def reborrow_const_loop.body : Result (ControlFlow Unit Unit) := do
+  if 0#i32 < 5#i32
+  then let _ ← reborrow_const.reborrow 0#u64
+       ok (cont ())
+  else ok (done ())
+
 /-- [loops::reborrow_const]: loop 0:
-   Source: 'tests/src/loops.rs', lines 0:0-542:5 -/
+    Source: 'tests/src/loops.rs', lines 0:0-542:5 -/
+@[rust_loop]
 def reborrow_const_loop : Result Unit := do
   loop
-    (fun () =>
-      if 0#i32 < 5#i32
-      then do
-           let _ ← reborrow_const.reborrow 0#u64
-           ok (cont ())
-      else ok (done ()))
+    (fun () => reborrow_const_loop.body)
     ()
 
 /-- [loops::reborrow_const]:
-   Source: 'tests/src/loops.rs', lines 533:0-543:1 -/
+    Source: 'tests/src/loops.rs', lines 533:0-543:1 -/
 @[reducible] def reborrow_const : Result Unit := do
                reborrow_const_loop
 
+/-- [loops::decode]: loop body 1:
+    Source: 'tests/src/loops.rs', lines 552:8-552:32 -/
+@[rust_loop_body]
+def decode_loop0_loop0.body
+  (dst_coeff : Std.U8) : Result (ControlFlow Unit Unit) := do
+  if dst_coeff > 32#u8
+  then ok (cont ())
+  else ok (done ())
+
 /-- [loops::decode]: loop 1:
-   Source: 'tests/src/loops.rs', lines 552:8-552:32 -/
+    Source: 'tests/src/loops.rs', lines 552:8-552:32 -/
+@[rust_loop]
 def decode_loop0_loop0 (dst_coeff : Std.U8) : Result Unit := do
   loop
-    (fun () => if dst_coeff > 32#u8
-               then ok (cont ())
-               else ok (done ()))
+    (fun () => decode_loop0_loop0.body dst_coeff)
     ()
 
+/-- [loops::decode]: loop body 0:
+    Source: 'tests/src/loops.rs', lines 550:4-563:1 -/
+@[rust_loop_body]
+def decode_loop0.body
+  (pe_dst : Slice Std.U8) (i : Std.Usize) :
+  Result (ControlFlow ((Slice Std.U8) × Std.Usize) (Bool × (Slice Std.U8)))
+  := do
+  if i < 128#usize
+  then
+    let (dst_coeff, index_mut_back) ← Slice.index_mut_usize pe_dst i
+    decode_loop0_loop0 dst_coeff
+    if dst_coeff > 32#u8
+    then let s := index_mut_back dst_coeff
+         ok (done (true, s))
+    else let i1 ← i + 1#usize
+         let s := index_mut_back 0#u8
+         ok (cont (s, i1))
+  else ok (done (false, pe_dst))
+
 /-- [loops::decode]: loop 0:
-   Source: 'tests/src/loops.rs', lines 550:4-563:1 -/
+    Source: 'tests/src/loops.rs', lines 550:4-563:1 -/
+@[rust_loop]
 def decode_loop0
   (pe_dst : Slice Std.U8) (i : Std.Usize) :
   Result (Bool × (Slice Std.U8))
   := do
   loop
-    (fun (pe_dst1, i1) =>
-      if i1 < 128#usize
-      then
-        do
-        let (dst_coeff, index_mut_back) ← Slice.index_mut_usize pe_dst1 i1
-        decode_loop0_loop0 dst_coeff
-        if dst_coeff > 32#u8
-        then let s := index_mut_back dst_coeff
-             ok (done (true, s))
-        else
-          let i2 ← i1 + 1#usize
-          let s := index_mut_back 0#u8
-          ok (cont (s, i2))
-      else ok (done (false, pe_dst1)))
+    (fun (pe_dst1, i1) => decode_loop0.body pe_dst1 i1)
     (pe_dst, i)
 
 /-- [loops::decode]:
-   Source: 'tests/src/loops.rs', lines 546:0-563:1 -/
+    Source: 'tests/src/loops.rs', lines 546:0-563:1 -/
 @[reducible]
 def decode (pe_dst : Slice Std.U8) : Result (Bool × (Slice Std.U8)) := do
   decode_loop0 pe_dst 0#usize
 
+/-- [loops::as_radix_minimized]: loop body 0:
+    Source: 'tests/src/loops.rs', lines 569:4-576:5 -/
+@[rust_loop_body]
+def as_radix_minimized_loop.body
+  (scalar : Array Std.U64 4#usize) (i : Std.Usize) :
+  Result (ControlFlow Std.Usize Unit)
+  := do
+  if i < 4#usize
+  then
+    let _ ←
+      if i = 0#usize
+      then let i1 ← Array.index_usize scalar i
+           i1 >>> 1#i32
+      else
+        let i1 ← Array.index_usize scalar i
+        let i2 ← i1 >>> 1#i32
+        let i3 ← i1 <<< 63#i32
+        ok (i2 ||| i3)
+    let i1 ← i + 1#usize
+    ok (cont i1)
+  else ok (done ())
+
 /-- [loops::as_radix_minimized]: loop 0:
-   Source: 'tests/src/loops.rs', lines 569:4-576:5 -/
+    Source: 'tests/src/loops.rs', lines 569:4-576:5 -/
+@[rust_loop]
 def as_radix_minimized_loop
   (scalar : Array Std.U64 4#usize) (i : Std.Usize) : Result Unit := do
   loop
-    (fun i1 =>
-      if i1 < 4#usize
-      then
-        do
-        let _ ←
-          if i1 = 0#usize
-          then let i2 ← Array.index_usize scalar i1
-               i2 >>> 1#i32
-          else
-            let i2 ← Array.index_usize scalar i1
-            let i3 ← i2 >>> 1#i32
-            let i4 ← i2 <<< 63#i32
-            ok (i3 ||| i4)
-        let i2 ← i1 + 1#usize
-        ok (cont i2)
-      else ok (done ()))
+    (fun i1 => as_radix_minimized_loop.body scalar i1)
     i
 
 /-- [loops::as_radix_minimized]:
-   Source: 'tests/src/loops.rs', lines 566:0-577:1 -/
+    Source: 'tests/src/loops.rs', lines 566:0-577:1 -/
 def as_radix_minimized : Result Unit := do
   let scalar := Array.repeat 4#usize 0#u64
   as_radix_minimized_loop scalar 0#usize

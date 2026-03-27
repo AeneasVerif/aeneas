@@ -1,5 +1,6 @@
 import Aeneas.Std.Primitives
 import Std.Do
+import Aeneas.Tactic.Solver.Grind.Init
 
 namespace Aeneas.Std.WP
 
@@ -63,13 +64,13 @@ def predn {α β} (p : α → β → Prop) : α × β → Prop :=
 @[simp] theorem predn_pair x y (p : α → β → Prop) : predn p (x, y) = p x y := by simp [predn]
 @[defeq] theorem predn_eq x (p : α → β → Prop) : predn p x = p x.fst x.snd := by simp [predn]
 
-@[simp, grind =]
+@[simp, grind =, agrind =]
 theorem spec_ok (x : α) : spec (ok x) p ↔ p x := by simp [spec, theta, wp_return]
 
-@[simp, grind =]
+@[simp, grind =, agrind =]
 theorem spec_fail (e : Error) : spec (fail e) p ↔ False := by simp [spec, theta]
 
-@[simp, grind =]
+@[simp, grind =, agrind =]
 theorem spec_div : spec div p ↔ False := by simp [spec, theta]
 
 theorem spec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : spec m P₀):
@@ -322,10 +323,10 @@ example (x : Nat) :
   (do
     let y ← add1 x
     add1 y) ⦃ y => y = x + 2 ⦄ := by
-    -- progress as ⟨ y, z ⟩
+    -- step as ⟨ y, z ⟩
     apply spec_bind (add1_spec _)
     intro y h
-    -- progress as ⟨ y1, z1⟩
+    -- step as ⟨ y1, z1⟩
     apply spec_mono (add1_spec _)
     intro y' h
     --
@@ -336,12 +337,12 @@ example (x : Nat) :
   (do
     let y ← add1 x
     add1 y) ⦃ y => y = x + 2 ⦄ := by
-    -- progress as ⟨ y, z ⟩
+    -- step as ⟨ y, z ⟩
     apply spec_bind' (add1_spec _)
     simp -failIfUnchanged only -- introduce the quantifiers
     simp only [qimp_spec_iff] -- eliminate `qimp_spec`
     intro y h
-    -- progress as ⟨ y1, z1⟩
+    -- step as ⟨ y1, z1⟩
     apply spec_mono' (add1_spec _)
     simp -failIfUnchanged only -- introduce the quantifiers
     simp only [qimp_iff] -- eliminate `qimp_spec`
@@ -360,14 +361,14 @@ example (x : Nat) :
   (do
     let (y, _) ← add2 x
     add2 y) ⦃ (y, _) => y = x + 2 ⦄ := by
-    -- progress as ⟨ y, z ⟩
+    -- step as ⟨ y, z ⟩
     apply spec_bind
     . apply add2_spec
     intro tmp h
     split at h
     rename_i tmp y z
     clear tmp
-    -- progress as ⟨ y1, z1⟩
+    -- step as ⟨ y1, z1⟩
     apply spec_mono
     . apply add2_spec
     intro tmp h
@@ -385,14 +386,14 @@ example (x : Nat) :
   (do
     let (y, _) ← add2 x
     add2 y) ⦃ y _ => y = x + 2 ⦄ := by
-    -- progress as ⟨ y, z ⟩
+    -- step as ⟨ y, z ⟩
     apply spec_bind'
     . apply add2_spec'
     simp -failIfUnchanged only [qimp_spec_predn] -- introduce the quantifiers
     simp only [qimp_spec_iff, curry] -- eliminate `qimp_spec` and `curry`
     simp only [imp] -- eliminate `imp`
     intro y z h0
-    -- progress as ⟨ y1, z1⟩
+    -- step as ⟨ y1, z1⟩
     apply spec_mono'
     . apply add2_spec'
     simp -failIfUnchanged only [qimp_predn] -- introduce the quantifiers
@@ -509,5 +510,20 @@ theorem loop.spec {α : Type u} {β : Type v} {γ : Type w}
     ∀ x, measure x = x' →
     inv x → loop body x ⦃ post ⦄)
   grind [loop]
+
+theorem loop.spec_decr_nat {α : Type u} {β : Type v}
+  (measure : α → Nat)
+  (inv : α → Prop)
+  (post : β → Prop)
+  (body : α → Result (ControlFlow α β)) (x : α)
+  (hBody :
+    ∀ x, inv x → body x ⦃ r =>
+      match r with
+      | .done y => post y
+      | .cont x' => inv x' ∧ measure x' < measure x ⦄)
+  (hInv : inv x) :
+  loop body x ⦃ post ⦄ := by
+  have := loop.spec measure inv post body x hBody hInv
+  apply this
 
 end Aeneas.Std

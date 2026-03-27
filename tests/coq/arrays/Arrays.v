@@ -488,7 +488,7 @@ Definition f3 (n : nat) : result u32 :=
 
 (** [arrays::SZ]
     Source: 'tests/src/arrays.rs', lines 317:0-317:25 *)
-Definition sz : usize := 32%usize.
+Definition sZ : usize := 32%usize.
 
 (** [arrays::f5]:
     Source: 'tests/src/arrays.rs', lines 320:0-322:1 *)
@@ -608,7 +608,7 @@ Definition add_acc
 
 (** [arrays::ARRAY1]
     Source: 'tests/src/arrays.rs', lines 375:0-375:32 *)
-Definition array1 : array u32 2%usize := mk_array 2%usize [ 0%u32; 1%u32 ].
+Definition aRRAY1 : array u32 2%usize := mk_array 2%usize [ 0%u32; 1%u32 ].
 
 (** [arrays::Scalar]
     Source: 'tests/src/arrays.rs', lines 378:0-378:24 *)

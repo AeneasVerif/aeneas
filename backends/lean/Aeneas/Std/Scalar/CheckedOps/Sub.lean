@@ -37,7 +37,7 @@ theorem core.num.checked_sub_UScalar_bv_spec {ty} (x y : UScalar ty) :
   rw [hsub] at h
   cases hEq : UScalar.sub x y <;> simp_all [Option.ofResult, checked_sub_UScalar]
 
-uscalar @[progress_pure «%S».checked_sub x y]
+uscalar @[step_pure «%S».checked_sub x y]
 theorem «%S».checked_sub_bv_spec (x y : «%S») :
   match «%S».checked_sub x y with
   | some z => y.val ≤ x.val ∧ z.val = x.val - y.val ∧ z.bv = x.bv - y.bv
@@ -60,7 +60,7 @@ theorem core.num.checked_sub_IScalar_bv_spec {ty} (x y : IScalar ty) :
   (have : 0 < 2^ty.numBits := by simp) <;>
   omega
 
-iscalar @[progress_pure «%S».checked_sub x y]
+iscalar @[step_pure «%S».checked_sub x y]
 theorem «%S».checked_sub_bv_spec (x y : «%S») :
   match core.num.checked_sub_IScalar x y with
   | some z => «%S».min ≤ x.val - y.val ∧ x.val - y.val ≤ «%S».max ∧ z.val = x.val - y.val ∧ z.bv = x.bv - y.bv

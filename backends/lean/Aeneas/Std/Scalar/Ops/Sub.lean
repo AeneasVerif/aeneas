@@ -1,7 +1,7 @@
 import Aeneas.Std.Scalar.Core
 import Aeneas.Std.Scalar.Misc
 import Aeneas.Std.Scalar.Elab
-import Aeneas.ScalarTac
+import Aeneas.Tactic.Solver.ScalarTac
 import Mathlib.Data.BitVec
 
 namespace Aeneas.Std
@@ -133,7 +133,7 @@ Theorems with a specification which only uses integers
 -/
 
 /- Generic theorem - shouldn't be used much -/
-@[progress]
+@[step]
 theorem UScalar.sub_spec {ty} {x y : UScalar ty}
   (h : y.val ≤ x.val) :
   x - y ⦃ z => z.val = x.val - y.val ∧ y.val ≤ x.val ⦄ := by
@@ -142,7 +142,7 @@ theorem UScalar.sub_spec {ty} {x y : UScalar ty}
   omega
 
 /- Generic theorem - shouldn't be used much -/
-@[progress]
+@[step]
 theorem IScalar.sub_spec {ty} {x y : IScalar ty}
   (hmin : IScalar.min ty ≤ ↑x - ↑y)
   (hmax : ↑x - ↑y ≤ IScalar.max ty) :
@@ -151,11 +151,11 @@ theorem IScalar.sub_spec {ty} {x y : IScalar ty}
   split at h <;> simp_all [min, max]
   omega
 
-uscalar @[progress] theorem «%S».sub_spec {x y : «%S»} (h : y.val ≤ x.val) :
+uscalar @[step] theorem «%S».sub_spec {x y : «%S»} (h : y.val ≤ x.val) :
   x - y ⦃ z => z.val = x.val - y.val ∧ y.val ≤ x.val ⦄ :=
   UScalar.sub_spec h
 
-iscalar @[progress] theorem «%S».sub_spec {x y : «%S»}
+iscalar @[step] theorem «%S».sub_spec {x y : «%S»}
   (hmin : «%S».min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ «%S».max) :
   x - y ⦃ z => (↑z : Int) = ↑x - ↑y ⦄ :=
   IScalar.sub_spec (by scalar_tac) (by scalar_tac)

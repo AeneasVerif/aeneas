@@ -265,10 +265,10 @@ def addDeclTac {α} (name : Name) (val : Expr) (type : Expr) (asLet : Bool) (m :
     let mvarId ← getMainGoal
     let newMVar ← mkFreshExprSyntheticOpaqueMVar (← mvarId.getType)
     let newVal ← mkLetFVars #[nval] newMVar
-    -- There are two cases:
-    -- - asLet is true: newVal is `let $name := $val in $newMVar`
-    -- - asLet is false: enwVal is `λ $name => $newMVar`
-    --   We need to apply it to `val`
+    /- There are two cases:
+     - asLet is true: newVal is `let $name := $val in $newMVar`
+     - asLet is false: ewVal is `λ $name => $newMVar`
+       We need to apply it to `val` -/
     let newVal := if asLet then newVal else mkAppN newVal #[val]
     -- Assign the main goal and update the current goal
     mvarId.assign newVal
@@ -481,7 +481,7 @@ def filterAssumptionTacCore (dtree : DiscrTree FVarId) : TacticM Bool := do
     This means that the tactic is less powerful than `assumptionTac`, as we might miss an assumption
     which actually reduces to the goal, but it allows doing a preprocessing step, which makes it
     faster when we need to solve several goals while having the same context (this happens when
-    solving preconditions in the tactic `progress`) and also it is safer to use, as unifying terms
+    solving preconditions in the tactic `step`) and also it is safer to use, as unifying terms
     easily triggers "maximum recursion reached" errors when there are big integer constants in the
     context.
 -/
@@ -526,7 +526,8 @@ def getMatchingAssumptions (type : Expr) : MetaM (List (LocalDecl × Name)) := d
 
 def singleAssumptionTacPreprocess := filterAssumptionTacPreprocess
 
-def singleAssumptionTacCore (dtree : DiscrTree FVarId) : TacticM Unit := do
+/-- `instMVars`: if `true`, we allow instantiating meta-variables -/
+def singleAssumptionTacCore (dtree : DiscrTree FVarId) (instMVars : Bool) : TacticM Unit := do
   withMainContext do
   let mvarId ← getMainGoal
   mvarId.checkNotAssigned `sassumption
@@ -537,12 +538,12 @@ def singleAssumptionTacCore (dtree : DiscrTree FVarId) : TacticM Unit := do
     trace[Utils] "The goal does not contain meta-variables"
     unless ← filterAssumptionTacCore dtree do
       throwTacticEx `sassumption mvarId
-  else
+  else if instMVars then
     trace[Utils] "The goal contains meta-variables"
     /- There are meta-variables that we need to instantiate
 
        Remark: at some point I tried using a discrimination tree to filter the assumptions,
-       in particular inside the `progress` tactic as may need to call the `singleAssumptionTac`
+       in particular inside the `step` tactic as may need to call the `singleAssumptionTac`
        several times, but discrimination trees don't work if the expression we match over
        contains meta-variables.
      -/
@@ -559,6 +560,7 @@ def singleAssumptionTacCore (dtree : DiscrTree FVarId) : TacticM Unit := do
       -- Several assumptions
       let fvars := fvars.map Prod.snd
       throwError "Several assumptions match the goal: {fvars}"
+  else throwError "Could not find an assumption matching the goal"
 
 /- Like the assumption tactic, but if the goal contains meta-variables it applies an assumption only
    if there is a single assumption matching the goal. Aborts if several assumptions match the goal.
@@ -567,7 +569,7 @@ def singleAssumptionTacCore (dtree : DiscrTree FVarId) : TacticM Unit := do
 -/
 def singleAssumptionTac : TacticM Unit := do
   let dtree ← singleAssumptionTacPreprocess
-  singleAssumptionTacCore dtree
+  singleAssumptionTacCore dtree true
 
 elab "sassumption " : tactic => do singleAssumptionTac
 
@@ -1737,7 +1739,7 @@ example (a b : Nat) (h0 : a < b) (h1 : b ≤ 1024) : b ≤ 1024 := by
   assumption
 
 def parseOptLocation (loc : Option (TSyntax `Lean.Parser.Tactic.location)) :
-  Elab.TermElabM (Utils.Location) :=
+  Elab.Tactic.TacticM (Utils.Location) :=
   let loc := Option.map expandLocation loc
   match loc with
   | none => pure (Utils.Location.targets #[] true)
@@ -1745,11 +1747,8 @@ def parseOptLocation (loc : Option (TSyntax `Lean.Parser.Tactic.location)) :
     match loc with
     | .wildcard => pure .wildcard
     | .targets ids goal => do
-      let ids ← ids.mapM Lean.Elab.Term.resolveId?
-      if ids.all Option.isSome then
-        pure (.targets (ids.filterMap (Option.map Expr.fvarId!)) goal)
-      else
-        Lean.Elab.throwUnsupportedSyntax
+      let fvarIds ← ids.mapM Lean.Elab.Tactic.getFVarId
+      pure (.targets fvarIds goal)
 
 def exprToNat? (e : Expr) : Option Nat :=
   let e := e.consumeMData

@@ -11,121 +11,162 @@ set_option maxHeartbeats 1000000
 
 namespace loops_nested
 
+/-- [loops_nested::iter]: loop body 1:
+    Source: 'tests/src/loops-nested.rs', lines 7:8-9:9 -/
+@[rust_loop_body]
+def iter_loop0_loop0.body
+  (n : Std.U32) (j : Std.U32) : Result (ControlFlow Std.U32 Unit) := do
+  if j < n
+  then let j1 ← j + 1#u32
+       ok (cont j1)
+  else ok (done ())
+
 /-- [loops_nested::iter]: loop 1:
-   Source: 'tests/src/loops-nested.rs', lines 7:8-9:9
-   Visibility: public -/
+    Source: 'tests/src/loops-nested.rs', lines 7:8-9:9 -/
+@[rust_loop]
 def iter_loop0_loop0 (n : Std.U32) (j : Std.U32) : Result Unit := do
   loop
-    (fun j1 =>
-      if j1 < n
-      then do
-           let j2 ← j1 + 1#u32
-           ok (cont j2)
-      else ok (done ()))
+    (fun j1 => iter_loop0_loop0.body n j1)
     j
 
+/-- [loops_nested::iter]: loop body 0:
+    Source: 'tests/src/loops-nested.rs', lines 5:4-11:5 -/
+@[rust_loop_body]
+def iter_loop0.body
+  (m : Std.U32) (n : Std.U32) (i : Std.U32) :
+  Result (ControlFlow Std.U32 Unit)
+  := do
+  if i < m
+  then iter_loop0_loop0 n 0#u32
+       let i1 ← i + 1#u32
+       ok (cont i1)
+  else ok (done ())
+
 /-- [loops_nested::iter]: loop 0:
-   Source: 'tests/src/loops-nested.rs', lines 5:4-11:5
-   Visibility: public -/
+    Source: 'tests/src/loops-nested.rs', lines 5:4-11:5 -/
+@[rust_loop]
 def iter_loop0 (m : Std.U32) (n : Std.U32) (i : Std.U32) : Result Unit := do
   loop
-    (fun i1 =>
-      if i1 < m
-      then do
-           iter_loop0_loop0 n 0#u32
-           let i2 ← i1 + 1#u32
-           ok (cont i2)
-      else ok (done ()))
+    (fun i1 => iter_loop0.body m n i1)
     i
 
 /-- [loops_nested::iter]:
-   Source: 'tests/src/loops-nested.rs', lines 3:0-12:1
-   Visibility: public -/
+    Source: 'tests/src/loops-nested.rs', lines 3:0-12:1 -/
 @[reducible]
 def iter (m : Std.U32) (n : Std.U32) : Result Unit := do
   iter_loop0 m n 0#u32
 
+/-- [loops_nested::sum]: loop body 1:
+    Source: 'tests/src/loops-nested.rs', lines 19:8-22:9 -/
+@[rust_loop_body]
+def sum_loop0_loop0.body
+  (n : Std.U32) (s : Std.U32) (j : Std.U32) :
+  Result (ControlFlow (Std.U32 × Std.U32) Std.U32)
+  := do
+  if j < n
+  then let s1 ← s + 1#u32
+       let j1 ← j + 1#u32
+       ok (cont (s1, j1))
+  else ok (done s)
+
 /-- [loops_nested::sum]: loop 1:
-   Source: 'tests/src/loops-nested.rs', lines 19:8-22:9
-   Visibility: public -/
+    Source: 'tests/src/loops-nested.rs', lines 19:8-22:9 -/
+@[rust_loop]
 def sum_loop0_loop0
   (n : Std.U32) (s : Std.U32) (j : Std.U32) : Result Std.U32 := do
   loop
-    (fun (s1, j1) =>
-      if j1 < n
-      then do
-           let s2 ← s1 + 1#u32
-           let j2 ← j1 + 1#u32
-           ok (cont (s2, j2))
-      else ok (done s1))
+    (fun (s1, j1) => sum_loop0_loop0.body n s1 j1)
     (s, j)
 
+/-- [loops_nested::sum]: loop body 0:
+    Source: 'tests/src/loops-nested.rs', lines 17:4-24:5 -/
+@[rust_loop_body]
+def sum_loop0.body
+  (m : Std.U32) (n : Std.U32) (s : Std.U32) (i : Std.U32) :
+  Result (ControlFlow (Std.U32 × Std.U32) Std.U32)
+  := do
+  if i < m
+  then
+    let s1 ← sum_loop0_loop0 n s 0#u32
+    let i1 ← i + 1#u32
+    ok (cont (s1, i1))
+  else ok (done s)
+
 /-- [loops_nested::sum]: loop 0:
-   Source: 'tests/src/loops-nested.rs', lines 17:4-24:5
-   Visibility: public -/
+    Source: 'tests/src/loops-nested.rs', lines 17:4-24:5 -/
+@[rust_loop]
 def sum_loop0
   (m : Std.U32) (n : Std.U32) (s : Std.U32) (i : Std.U32) :
   Result Std.U32
   := do
   loop
-    (fun (s1, i1) =>
-      if i1 < m
-      then
-        do
-        let s2 ← sum_loop0_loop0 n s1 0#u32
-        let i2 ← i1 + 1#u32
-        ok (cont (s2, i2))
-      else ok (done s1))
+    (fun (s1, i1) => sum_loop0.body m n s1 i1)
     (s, i)
 
 /-- [loops_nested::sum]:
-   Source: 'tests/src/loops-nested.rs', lines 14:0-26:1
-   Visibility: public -/
+    Source: 'tests/src/loops-nested.rs', lines 14:0-26:1 -/
 @[reducible]
 def sum (m : Std.U32) (n : Std.U32) : Result Std.U32 := do
   sum_loop0 m n 0#u32 0#u32
 
+/-- [loops_nested::update_array]: loop body 1:
+    Source: 'tests/src/loops-nested.rs', lines 37:8-40:9 -/
+@[rust_loop_body]
+def update_array_loop0_loop0.body
+  (out : Array Std.U8 4#usize) (j : Std.Usize) :
+  Result (ControlFlow ((Array Std.U8 4#usize) × Std.Usize) (Array Std.U8
+    4#usize))
+  := do
+  if j < 4#usize
+  then
+    let a ← Array.update out j 1#u8
+    let j1 ← j + 1#usize
+    ok (cont (a, j1))
+  else ok (done out)
+
 /-- [loops_nested::update_array]: loop 1:
-   Source: 'tests/src/loops-nested.rs', lines 37:8-40:9 -/
+    Source: 'tests/src/loops-nested.rs', lines 37:8-40:9 -/
+@[rust_loop]
 def update_array_loop0_loop0
   (out : Array Std.U8 4#usize) (j : Std.Usize) :
   Result (Array Std.U8 4#usize)
   := do
   loop
-    (fun (out1, j1) =>
-      if j1 < 4#usize
-      then
-        do
-        let a ← Array.update out1 j1 1#u8
-        let j2 ← j1 + 1#usize
-        ok (cont (a, j2))
-      else ok (done out1))
+    (fun (out1, j1) => update_array_loop0_loop0.body out1 j1)
     (out, j)
 
+/-- [loops_nested::update_array]: loop body 0:
+    Source: 'tests/src/loops-nested.rs', lines 34:4-42:5 -/
+@[rust_loop_body]
+def update_array_loop0.body
+  (out : Array Std.U8 4#usize) (i : Std.Usize) :
+  Result (ControlFlow ((Array Std.U8 4#usize) × Std.Usize) Unit)
+  := do
+  if i < 4#usize
+  then
+    let a ← Array.update out i 0#u8
+    let out1 ← update_array_loop0_loop0 a 0#usize
+    let i1 ← i + 1#usize
+    ok (cont (out1, i1))
+  else ok (done ())
+
 /-- [loops_nested::update_array]: loop 0:
-   Source: 'tests/src/loops-nested.rs', lines 34:4-42:5 -/
+    Source: 'tests/src/loops-nested.rs', lines 34:4-42:5 -/
+@[rust_loop]
 def update_array_loop0
   (out : Array Std.U8 4#usize) (i : Std.Usize) : Result Unit := do
   loop
-    (fun (out1, i1) =>
-      if i1 < 4#usize
-      then
-        do
-        let a ← Array.update out1 i1 0#u8
-        let out2 ← update_array_loop0_loop0 a 0#usize
-        let i2 ← i1 + 1#usize
-        ok (cont (out2, i2))
-      else ok (done ()))
+    (fun (out1, i1) => update_array_loop0.body out1 i1)
     (out, i)
 
 /-- [loops_nested::update_array]:
-   Source: 'tests/src/loops-nested.rs', lines 30:0-43:1 -/
+    Source: 'tests/src/loops-nested.rs', lines 30:0-43:1 -/
 def update_array : Result Unit := do
   let out := Array.repeat 4#usize 0#u8
   update_array_loop0 out 0#usize
 
 /-- [loops_nested::FACTORS]
-   Source: 'tests/src/loops-nested.rs', lines 45:0-48:2 -/
+    Source: 'tests/src/loops-nested.rs', lines 45:0-48:2 -/
 @[global_simps, irreducible]
 def FACTORS : Array Std.U16 32#usize :=
   Array.make 32#usize [
@@ -137,74 +178,94 @@ def FACTORS : Array Std.U16 32#usize :=
     ]
 
 /-- [loops_nested::mod_add]:
-   Source: 'tests/src/loops-nested.rs', lines 50:0-52:1 -/
+    Source: 'tests/src/loops-nested.rs', lines 50:0-52:1 -/
 def mod_add (a : Std.U32) (b : Std.U32) : Result Std.U32 := do
   let i ← a + b
   i % 3329#u32
 
 /-- [loops_nested::mod_sub]:
-   Source: 'tests/src/loops-nested.rs', lines 54:0-56:1 -/
+    Source: 'tests/src/loops-nested.rs', lines 54:0-56:1 -/
 def mod_sub (a : Std.U32) (b : Std.U32) : Result Std.U32 := do
   let i ← a + 3329#u32
   let i1 ← b % 3329#u32
   let i2 ← i - i1
   i2 % 3329#u32
 
+/-- [loops_nested::ntt_layer]: loop body 1:
+    Source: 'tests/src/loops-nested.rs', lines 66:8-78:9 -/
+@[rust_loop_body]
+def ntt_layer_loop0_loop0.body
+  (len : Std.Usize) (start : Std.Usize) (factor : Std.U32)
+  (a : Array Std.U16 256#usize) (j : Std.Usize) :
+  Result (ControlFlow ((Array Std.U16 256#usize) × Std.Usize) (Array Std.U16
+    256#usize))
+  := do
+  if j < len
+  then
+    let i ← start + j
+    let i1 ← Array.index_usize a i
+    let c0 ← core.convert.IntoFrom.into core.convert.FromU32U16 i1
+    let i2 ← i + len
+    let i3 ← Array.index_usize a i2
+    let c1 ← core.convert.IntoFrom.into core.convert.FromU32U16 i3
+    let c1_factor ← c1 * factor
+    let c11 ← mod_sub c0 c1_factor
+    let c01 ← mod_add c0 c1_factor
+    let i4 ← lift (UScalar.cast .U16 c01)
+    let a1 ← Array.update a i i4
+    let i5 ← i + len
+    let i6 ← lift (UScalar.cast .U16 c11)
+    let a2 ← Array.update a1 i5 i6
+    let j1 ← j + 1#usize
+    ok (cont (a2, j1))
+  else ok (done a)
+
 /-- [loops_nested::ntt_layer]: loop 1:
-   Source: 'tests/src/loops-nested.rs', lines 66:8-78:9 -/
+    Source: 'tests/src/loops-nested.rs', lines 66:8-78:9 -/
+@[rust_loop]
 def ntt_layer_loop0_loop0
   (a : Array Std.U16 256#usize) (len : Std.Usize) (start : Std.Usize)
   (factor : Std.U32) (j : Std.Usize) :
   Result (Array Std.U16 256#usize)
   := do
   loop
-    (fun (a1, j1) =>
-      if j1 < len
-      then
-        do
-        let i ← start + j1
-        let i1 ← Array.index_usize a1 i
-        let c0 ← core.convert.IntoFrom.into core.convert.FromU32U16 i1
-        let i2 ← i + len
-        let i3 ← Array.index_usize a1 i2
-        let c1 ← core.convert.IntoFrom.into core.convert.FromU32U16 i3
-        let c1_factor ← c1 * factor
-        let c11 ← mod_sub c0 c1_factor
-        let c01 ← mod_add c0 c1_factor
-        let i4 ← lift (UScalar.cast .U16 c01)
-        let a2 ← Array.update a1 i i4
-        let i5 ← i + len
-        let i6 ← lift (UScalar.cast .U16 c11)
-        let a3 ← Array.update a2 i5 i6
-        let j2 ← j1 + 1#usize
-        ok (cont (a3, j2))
-      else ok (done a1))
+    (fun (a1, j1) => ntt_layer_loop0_loop0.body len start factor a1 j1)
     (a, j)
 
+/-- [loops_nested::ntt_layer]: loop body 0:
+    Source: 'tests/src/loops-nested.rs', lines 61:4-80:5 -/
+@[rust_loop_body]
+def ntt_layer_loop0.body
+  (len : Std.Usize) (a : Array Std.U16 256#usize) (k : Std.Usize)
+  (start : Std.Usize) :
+  Result (ControlFlow ((Array Std.U16 256#usize) × Std.Usize × Std.Usize)
+    (Array Std.U16 256#usize))
+  := do
+  if start < 256#usize
+  then
+    let i ← Array.index_usize FACTORS k
+    let factor ← core.convert.IntoFrom.into core.convert.FromU32U16 i
+    let k1 ← k + 1#usize
+    let a1 ← ntt_layer_loop0_loop0 a len start factor 0#usize
+    let i1 ← 2#usize * len
+    let start1 ← start + i1
+    ok (cont (a1, k1, start1))
+  else ok (done a)
+
 /-- [loops_nested::ntt_layer]: loop 0:
-   Source: 'tests/src/loops-nested.rs', lines 61:4-80:5 -/
+    Source: 'tests/src/loops-nested.rs', lines 61:4-80:5 -/
+@[rust_loop]
 def ntt_layer_loop0
   (a : Array Std.U16 256#usize) (k : Std.Usize) (len : Std.Usize)
   (start : Std.Usize) :
   Result (Array Std.U16 256#usize)
   := do
   loop
-    (fun (a1, k1, start1) =>
-      if start1 < 256#usize
-      then
-        do
-        let i ← Array.index_usize FACTORS k1
-        let factor ← core.convert.IntoFrom.into core.convert.FromU32U16 i
-        let k2 ← k1 + 1#usize
-        let a2 ← ntt_layer_loop0_loop0 a1 len start1 factor 0#usize
-        let i1 ← 2#usize * len
-        let start2 ← start1 + i1
-        ok (cont (a2, k2, start2))
-      else ok (done a1))
+    (fun (a1, k1, start1) => ntt_layer_loop0.body len a1 k1 start1)
     (a, k, start)
 
 /-- [loops_nested::ntt_layer]:
-   Source: 'tests/src/loops-nested.rs', lines 59:0-81:1 -/
+    Source: 'tests/src/loops-nested.rs', lines 59:0-81:1 -/
 @[reducible]
 def ntt_layer
   (a : Array Std.U16 256#usize) (k : Std.Usize) (len : Std.Usize) :
@@ -213,13 +274,13 @@ def ntt_layer
   ntt_layer_loop0 a k len 0#usize
 
 /-- [loops_nested::Key]
-   Source: 'tests/src/loops-nested.rs', lines 83:0-86:1 -/
+    Source: 'tests/src/loops-nested.rs', lines 83:0-86:1 -/
 structure Key where
   seed : Array Std.U8 32#usize
   atranspose : Array Std.U16 32#usize
 
 /-- [loops_nested::{loops_nested::Key}::atranspose_mut]:
-   Source: 'tests/src/loops-nested.rs', lines 89:4-91:5 -/
+    Source: 'tests/src/loops-nested.rs', lines 89:4-91:5 -/
 def Key.atranspose_mut
   (self : Key) :
   Result ((Array Std.U16 32#usize) × (Array Std.U16 32#usize → Key))
@@ -228,13 +289,13 @@ def Key.atranspose_mut
   ok (self.atranspose, back)
 
 /-- [loops_nested::shake_init]:
-   Source: 'tests/src/loops-nested.rs', lines 96:0-96:40 -/
+    Source: 'tests/src/loops-nested.rs', lines 96:0-96:40 -/
 def shake_init
   (_state : Array Std.U8 8#usize) : Result (Array Std.U8 8#usize) := do
   ok _state
 
 /-- [loops_nested::shake_append]:
-   Source: 'tests/src/loops-nested.rs', lines 97:0-97:56 -/
+    Source: 'tests/src/loops-nested.rs', lines 97:0-97:56 -/
 def shake_append
   (_state : Array Std.U8 8#usize) (_data : Slice Std.U8) :
   Result (Array Std.U8 8#usize)
@@ -242,7 +303,7 @@ def shake_append
   ok _state
 
 /-- [loops_nested::shake_state_copy]:
-   Source: 'tests/src/loops-nested.rs', lines 98:0-98:62 -/
+    Source: 'tests/src/loops-nested.rs', lines 98:0-98:62 -/
 def shake_state_copy
   (_src : Array Std.U8 8#usize) (_dst : Array Std.U8 8#usize) :
   Result (Array Std.U8 8#usize)
@@ -250,36 +311,45 @@ def shake_state_copy
   ok _dst
 
 /-- [loops_nested::sample_ntt]:
-   Source: 'tests/src/loops-nested.rs', lines 99:0-99:56 -/
+    Source: 'tests/src/loops-nested.rs', lines 99:0-99:56 -/
 def sample_ntt
   (_state : Array Std.U8 8#usize) (_dst : Std.U16) :
   Result ((Array Std.U8 8#usize) × Std.U16)
   := do
   ok (_state, _dst)
 
+/-- [loops_nested::generate_matrix_inner]: loop body 0:
+    Source: 'tests/src/loops-nested.rs', lines 104:4-108:5 -/
+@[rust_loop_body]
+def generate_matrix_inner_loop.body
+  (key : Key) (state : Array Std.U8 8#usize) (j : Std.Usize) :
+  Result (ControlFlow (Key × (Array Std.U8 8#usize) × Std.Usize) (Key ×
+    (Array Std.U8 8#usize)))
+  := do
+  if j < 4#usize
+  then
+    let (a_transpose, atranspose_mut_back) ← Key.atranspose_mut key
+    let (i, index_mut_back) ← Array.index_mut_usize a_transpose j
+    let (state1, i1) ← sample_ntt state i
+    let j1 ← j + 1#usize
+    let a := index_mut_back i1
+    let k := atranspose_mut_back a
+    ok (cont (k, state1, j1))
+  else ok (done (key, state))
+
 /-- [loops_nested::generate_matrix_inner]: loop 0:
-   Source: 'tests/src/loops-nested.rs', lines 104:4-108:5 -/
+    Source: 'tests/src/loops-nested.rs', lines 104:4-108:5 -/
+@[rust_loop]
 def generate_matrix_inner_loop
   (key : Key) (state : Array Std.U8 8#usize) (j : Std.Usize) :
   Result (Key × (Array Std.U8 8#usize))
   := do
   loop
-    (fun (key1, state1, j1) =>
-      if j1 < 4#usize
-      then
-        do
-        let (a_transpose, atranspose_mut_back) ← Key.atranspose_mut key1
-        let (i, index_mut_back) ← Array.index_mut_usize a_transpose j1
-        let (state2, i1) ← sample_ntt state1 i
-        let j2 ← j1 + 1#usize
-        let a := index_mut_back i1
-        let k := atranspose_mut_back a
-        ok (cont (k, state2, j2))
-      else ok (done (key1, state1)))
+    (fun (key1, state1, j1) => generate_matrix_inner_loop.body key1 state1 j1)
     (key, state, j)
 
 /-- [loops_nested::generate_matrix_inner]:
-   Source: 'tests/src/loops-nested.rs', lines 102:0-109:1 -/
+    Source: 'tests/src/loops-nested.rs', lines 102:0-109:1 -/
 @[reducible]
 def generate_matrix_inner
   (key : Key) (state : Array Std.U8 8#usize) :
@@ -287,8 +357,37 @@ def generate_matrix_inner
   := do
   generate_matrix_inner_loop key state 0#usize
 
+/-- [loops_nested::generate_matrix]: loop body 1:
+    Source: 'tests/src/loops-nested.rs', lines 123:8-131:9 -/
+@[rust_loop_body]
+def generate_matrix_loop0_loop0.body
+  (state_base : Array Std.U8 8#usize) (i : Std.U8) (key : Key)
+  (state_work : Array Std.U8 8#usize) (coordinates : Array Std.U8 2#usize)
+  (j : Std.U8) :
+  Result (ControlFlow (Key × (Array Std.U8 8#usize) × (Array Std.U8 2#usize)
+    × Std.U8) (Key × (Array Std.U8 8#usize) × (Array Std.U8 2#usize)))
+  := do
+  if j < 4#u8
+  then
+    let coordinates1 ← Array.update coordinates 0#usize j
+    let state_work1 ← shake_state_copy state_base state_work
+    let s ← lift (Array.to_slice coordinates1)
+    let state_work2 ← shake_append state_work1 s
+    let (a_transpose, atranspose_mut_back) ← Key.atranspose_mut key
+    let i1 ← i * 4#u8
+    let i2 ← i1 + j
+    let i3 ← lift (UScalar.cast .Usize i2)
+    let (i4, index_mut_back) ← Array.index_mut_usize a_transpose i3
+    let (state_work3, i5) ← sample_ntt state_work2 i4
+    let j1 ← j + 1#u8
+    let a := index_mut_back i5
+    let k := atranspose_mut_back a
+    ok (cont (k, state_work3, coordinates1, j1))
+  else ok (done (key, state_work, coordinates))
+
 /-- [loops_nested::generate_matrix]: loop 1:
-   Source: 'tests/src/loops-nested.rs', lines 123:8-131:9 -/
+    Source: 'tests/src/loops-nested.rs', lines 123:8-131:9 -/
+@[rust_loop]
 def generate_matrix_loop0_loop0
   (key : Key) (state_base : Array Std.U8 8#usize)
   (state_work : Array Std.U8 8#usize) (coordinates : Array Std.U8 2#usize)
@@ -297,28 +396,32 @@ def generate_matrix_loop0_loop0
   := do
   loop
     (fun (key1, state_work1, coordinates1, j1) =>
-      if j1 < 4#u8
-      then
-        do
-        let coordinates2 ← Array.update coordinates1 0#usize j1
-        let state_work2 ← shake_state_copy state_base state_work1
-        let s ← lift (Array.to_slice coordinates2)
-        let state_work3 ← shake_append state_work2 s
-        let (a_transpose, atranspose_mut_back) ← Key.atranspose_mut key1
-        let i1 ← i * 4#u8
-        let i2 ← i1 + j1
-        let i3 ← lift (UScalar.cast .Usize i2)
-        let (i4, index_mut_back) ← Array.index_mut_usize a_transpose i3
-        let (state_work4, i5) ← sample_ntt state_work3 i4
-        let j2 ← j1 + 1#u8
-        let a := index_mut_back i5
-        let k := atranspose_mut_back a
-        ok (cont (k, state_work4, coordinates2, j2))
-      else ok (done (key1, state_work1, coordinates1)))
+      generate_matrix_loop0_loop0.body state_base i key1 state_work1
+      coordinates1 j1)
     (key, state_work, coordinates, j)
 
+/-- [loops_nested::generate_matrix]: loop body 0:
+    Source: 'tests/src/loops-nested.rs', lines 120:4-133:5 -/
+@[rust_loop_body]
+def generate_matrix_loop0.body
+  (state_base : Array Std.U8 8#usize) (key : Key)
+  (state_work : Array Std.U8 8#usize) (coordinates : Array Std.U8 2#usize)
+  (i : Std.U8) :
+  Result (ControlFlow (Key × (Array Std.U8 8#usize) × (Array Std.U8 2#usize)
+    × Std.U8) (Key × (Array Std.U8 8#usize)))
+  := do
+  if i < 4#u8
+  then
+    let a ← Array.update coordinates 1#usize i
+    let (key1, state_work1, coordinates1) ←
+      generate_matrix_loop0_loop0 key state_base state_work a i 0#u8
+    let i1 ← i + 1#u8
+    ok (cont (key1, state_work1, coordinates1, i1))
+  else ok (done (key, state_work))
+
 /-- [loops_nested::generate_matrix]: loop 0:
-   Source: 'tests/src/loops-nested.rs', lines 120:4-133:5 -/
+    Source: 'tests/src/loops-nested.rs', lines 120:4-133:5 -/
+@[rust_loop]
 def generate_matrix_loop0
   (key : Key) (state_base : Array Std.U8 8#usize)
   (state_work : Array Std.U8 8#usize) (coordinates : Array Std.U8 2#usize)
@@ -326,20 +429,12 @@ def generate_matrix_loop0
   Result (Key × (Array Std.U8 8#usize))
   := do
   loop
-    (fun (key1, state_work1, coordinates1, i1) =>
-      if i1 < 4#u8
-      then
-        do
-        let a ← Array.update coordinates1 1#usize i1
-        let (key2, state_work2, coordinates2) ←
-          generate_matrix_loop0_loop0 key1 state_base state_work1 a i1 0#u8
-        let i2 ← i1 + 1#u8
-        ok (cont (key2, state_work2, coordinates2, i2))
-      else ok (done (key1, state_work1)))
+    (fun (key1, state_work1, coordinates1, i1) => generate_matrix_loop0.body
+      state_base key1 state_work1 coordinates1 i1)
     (key, state_work, coordinates, i)
 
 /-- [loops_nested::generate_matrix]:
-   Source: 'tests/src/loops-nested.rs', lines 112:0-134:1 -/
+    Source: 'tests/src/loops-nested.rs', lines 112:0-134:1 -/
 def generate_matrix
   (key : Key) (state_base : Array Std.U8 8#usize)
   (state_work : Array Std.U8 8#usize) :
@@ -353,54 +448,74 @@ def generate_matrix
     generate_matrix_loop0 key state_base2 state_work coordinates 0#u8
   ok (key1, state_base2, state_work1)
 
+/-- [loops_nested::mul_add_as_plus_e]: loop body 1:
+    Source: 'tests/src/loops-nested.rs', lines 143:8-145:9 -/
+@[rust_loop_body]
+def mul_add_as_plus_e_loop0_loop0.body
+  (j : Std.Usize) (iter1 : core.ops.range.Range Std.Usize)
+  (a_row_temp : alloc.vec.Vec Std.U8) :
+  Result (ControlFlow ((core.ops.range.Range Std.Usize) × (alloc.vec.Vec
+    Std.U8)) (alloc.vec.Vec Std.U8))
+  := do
+  let (o, iter2) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepUsize iter1
+  match o with
+  | none => ok (done a_row_temp)
+  | some _ =>
+    let (_, index_mut_back) ←
+      alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice Std.U8)
+        a_row_temp j
+    let a_row_temp1 := index_mut_back 0#u8
+    ok (cont (iter2, a_row_temp1))
+
 /-- [loops_nested::mul_add_as_plus_e]: loop 1:
-   Source: 'tests/src/loops-nested.rs', lines 143:8-145:9 -/
+    Source: 'tests/src/loops-nested.rs', lines 143:8-145:9 -/
+@[rust_loop]
 def mul_add_as_plus_e_loop0_loop0
-  (a_row_temp : alloc.vec.Vec Std.U8) (j : Std.Usize)
-  (iter1 : core.ops.range.Range Std.Usize) :
+  (iter1 : core.ops.range.Range Std.Usize) (a_row_temp : alloc.vec.Vec Std.U8)
+  (j : Std.Usize) :
   Result (alloc.vec.Vec Std.U8)
   := do
   loop
-    (fun (a_row_temp1, iter2) =>
-      do
-      let (o, iter3) ←
-        core.iter.range.IteratorRange.next core.iter.range.StepUsize iter2
-      match o with
-      | none => ok (done a_row_temp1)
-      | some _ =>
-        let (_, index_mut_back) ←
-          alloc.vec.Vec.index_mut (core.slice.index.SliceIndexUsizeSlice
-            Std.U8) a_row_temp1 j
-        let a_row_temp2 := index_mut_back 0#u8
-        ok (cont (a_row_temp2, iter3)))
-    (a_row_temp, iter1)
+    (fun (iter2, a_row_temp1) => mul_add_as_plus_e_loop0_loop0.body j iter2
+      a_row_temp1)
+    (iter1, a_row_temp)
+
+/-- [loops_nested::mul_add_as_plus_e]: loop body 0:
+    Source: 'tests/src/loops-nested.rs', lines 142:4-146:5 -/
+@[rust_loop_body]
+def mul_add_as_plus_e_loop0.body
+  (iter1 : core.iter.adapters.step_by.StepBy (core.ops.range.Range Std.Usize))
+  (a_row_temp : alloc.vec.Vec Std.U8) :
+  Result (ControlFlow ((core.iter.adapters.step_by.StepBy (core.ops.range.Range
+    Std.Usize)) × (alloc.vec.Vec Std.U8)) Unit)
+  := do
+  let (o, iter2) ←
+    core.iter.adapters.step_by.IteratorStepBy.next
+      (core.iter.traits.iterator.IteratorRange core.iter.range.StepUsize) iter1
+  match o with
+  | none => ok (done ())
+  | some j =>
+    let a_row_temp1 ←
+      mul_add_as_plus_e_loop0_loop0 { start := 0#usize, «end» := 4#usize }
+        a_row_temp j
+    ok (cont (iter2, a_row_temp1))
 
 /-- [loops_nested::mul_add_as_plus_e]: loop 0:
-   Source: 'tests/src/loops-nested.rs', lines 142:4-146:5 -/
+    Source: 'tests/src/loops-nested.rs', lines 142:4-146:5 -/
+@[rust_loop]
 def mul_add_as_plus_e_loop0
-  (a_row_temp : alloc.vec.Vec Std.U8)
   (iter1 : core.iter.adapters.step_by.StepBy (core.ops.range.Range Std.Usize))
-  :
+  (a_row_temp : alloc.vec.Vec Std.U8) :
   Result Unit
   := do
   loop
-    (fun (a_row_temp1, iter2) =>
-      do
-      let (o, iter3) ←
-        core.iter.adapters.step_by.IteratorStepBy.next
-          (core.iter.traits.iterator.IteratorRange core.iter.range.StepUsize)
-          iter2
-      match o with
-      | none => ok (done ())
-      | some j =>
-        let a_row_temp2 ←
-          mul_add_as_plus_e_loop0_loop0 a_row_temp1 j
-            { start := 0#usize, «end» := 4#usize }
-        ok (cont (a_row_temp2, iter3)))
-    (a_row_temp, iter1)
+    (fun (iter2, a_row_temp1) => mul_add_as_plus_e_loop0.body iter2
+      a_row_temp1)
+    (iter1, a_row_temp)
 
 /-- [loops_nested::mul_add_as_plus_e]:
-   Source: 'tests/src/loops-nested.rs', lines 137:0-147:1 -/
+    Source: 'tests/src/loops-nested.rs', lines 137:0-147:1 -/
 def mul_add_as_plus_e
   (N : Std.Usize) (out : Slice Std.U16) (s : Slice Std.U16)
   (seed_a : Array Std.U8 16#usize) :
@@ -414,7 +529,7 @@ def mul_add_as_plus_e
   let iter1 ←
     core.iter.range.IteratorRange.step_by core.iter.range.StepUsize
       { start := 0#usize, «end» := N } 8#usize
-  mul_add_as_plus_e_loop0 a_row_temp iter1
+  mul_add_as_plus_e_loop0 iter1 a_row_temp
   ok out
 
 end loops_nested

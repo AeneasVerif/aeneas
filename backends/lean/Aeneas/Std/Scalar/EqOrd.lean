@@ -62,12 +62,12 @@ scalar @[reducible] def core.cmp.PartialOrd'S : core.cmp.PartialOrd «%S» «%S�
   ge := liftFun2 core.cmp.impls.PartialOrd'S.ge }
 
 /- Name pattern: core::cmp::impls::{core::cmp::Ord<SCALAR>}::min -/
-scalar @[progress_pure_def] def core.cmp.impls.Ord'S.min (x y : «%S») : «%S» := if x < y then x else y
+scalar @[step_pure_def] def core.cmp.impls.Ord'S.min (x y : «%S») : «%S» := if x < y then x else y
 
 scalar @[simp, scalar_tac_simps] theorem core.cmp.impls.Ord'S.min_val (x y : «%S») : (min x y).val = Min.min x.val y.val := by simp [min]; split <;> simp <;> omega
 
 /- Name pattern: core::cmp::impls::{core::cmp::Ord<SCALAR>}::max -/
-scalar @[progress_pure_def] def core.cmp.impls.Ord'S.max (x y : «%S») : «%S» := if x < y then y else x
+scalar @[step_pure_def] def core.cmp.impls.Ord'S.max (x y : «%S») : «%S» := if x < y then y else x
 
 scalar @[simp, scalar_tac_simps] theorem core.cmp.impls.Ord'S.max_val (x y : «%S») : (max x y).val = Max.max x.val y.val := by simp [max]; split <;> simp <;> omega
 

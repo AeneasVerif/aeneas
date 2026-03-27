@@ -116,52 +116,52 @@ theorem mul2_add1_spec
      succeeds and returns the value we expect, as given by the theorem [U32.add_spec].
      Doing this properly requires a few manipulations: we need to instantiate
      the theorem, introduce it in the context, destruct it to introduce [x1], etc.
-     We automate this with the [progress] tactic: [progress with th as ⟨ x1 ⟩]
+     We automate this with the [step] tactic: [step with th as ⟨ x1 ⟩]
      uses theorem [th], instantiates it properly by looking at the goal, renames
      the output to [x1] and further decomposes the postcondition of [th].
 
      Note that it is possible to provide more inputs to name the assumptions
      introduced by the postcondition (for instance: [as ⟨ x1, h ⟩]).
 
-     If you look at the goal after the call to [progress], you wil see that:
+     If you look at the goal after the call to [step], you wil see that:
      - there is a new variable [x1] and an assumption stating that [↑x1 = ↑x + ↑x]
      - the call [x + x] disappeared from the goal: we "progressed" by one step
 
      Remark: the theorem [U32.add_spec] actually has a precondition, namely that
      the addition doesn't overflow.
-     In the present case, [progress] manages to prove this automatically by using
-     the fact that [2 * x + 1 < U32.max]. In case [progress] fails to prove a
+     In the present case, [step] manages to prove this automatically by using
+     the fact that [2 * x + 1 < U32.max]. In case [step] fails to prove a
      precondition, it leaves it as a subgoal.
    -/
-  progress with U32.add_spec as ⟨ x1 ⟩
-  /- We can call [progress] a second time for the second addition -/
-  progress with U32.add_spec as ⟨ x2 ⟩
+  step with U32.add_spec as ⟨ x1 ⟩
+  /- We can call [step] a second time for the second addition -/
+  step with U32.add_spec as ⟨ x2 ⟩
   /- We are now left with the remaining goal. We do this by calling
-     [scalar_tac], a tactic to solve arithmetic problems:
+     [grind], an automated decision procedure
    -/
-  scalar_tac
+  grind
 
 /- The proof above works, but it can actually be simplified a bit. In particular,
-   it is a bit tedious to specify that [progress] should use [U32.add_spec], while
+   it is a bit tedious to specify that [step] should use [U32.add_spec], while
    in most situations the theorem to use is obvious by looking at the function.
 
    For this reason, we provide the possibility of registering theorems in a database
-   so that [progress] can automatically look them up. This is done by marking
-   theorems with custom attributes, like [progress] below.
+   so that [step] can automatically look them up. This is done by marking
+   theorems with custom attributes, like [step] below.
 
    Theorems in the standard library like [U32.add_spec] have already been marked with such
-   attributes, meaning we don't need to tell [progress] to use them.
+   attributes, meaning we don't need to tell [step] to use them.
  -/
-@[progress] -- the [progress] attribute saves the theorem in a database, for [progress] to use it
+@[step] -- the [step] attribute saves the theorem in a database, for [step] to use it
 theorem mul2_add1_spec2 (x : U32) (h : 2 * x.val + 1 ≤ U32.max) :
   mul2_add1 x ⦃ y => ↑y = 2 * ↑x + (1 : Int) ⦄
   := by
   unfold mul2_add1
-  progress as ⟨ x1⟩ -- [progress] automatically lookups [U32.add_spec]
-  progress as ⟨ x2 ⟩ -- same
-  scalar_tac
+  step as ⟨ x1⟩ -- [step] automatically lookups [U32.add_spec]
+  step as ⟨ x2 ⟩ -- same
+  grind
 
-/- Because we marked [mul2_add1_spec2] theorem with [progress], [progress] can
+/- Because we marked [mul2_add1_spec2] theorem with [step], [step] can
    now automatically look it up. For instance, below:
  -/
 -- A dummy function which uses [mul2_add1]
@@ -169,15 +169,15 @@ def use_mul2_add1 (x : U32) (y : U32) : Result U32 := do
   let x1 ← mul2_add1 x
   x1 + y
 
-@[progress]
+@[step]
 theorem use_mul2_add1_spec (x : U32) (y : U32) (h : 2 * x.val + 1 + y.val ≤ U32.max) :
   use_mul2_add1 x y ⦃ z => ↑z = 2 * ↑x + (1 : Int) + ↑y ⦄
   := by
   unfold use_mul2_add1
-  -- Here we use [progress] on [mul2_add1]
-  progress as ⟨ x1 ⟩
-  progress as ⟨ z ⟩
-  scalar_tac
+  -- Here we use [step] on [mul2_add1]
+  step as ⟨ x1 ⟩
+  step as ⟨ z ⟩
+  grind
 
 
 /-#===========================================================================#
@@ -241,7 +241,7 @@ partial_fixpoint
    Note that because we use the suffix "CList.", we can use the notation [l.toList]
    if [l] has type [CList ...].
  -/
-@[simp, simp_lists_simps, scalar_tac_simps]
+@[simp, simp_lists, scalar_tac_simps, grind]
 def CList.toList {α : Type} (x : CList α) : List α :=
   match x with
   | CNil => []
@@ -297,10 +297,10 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
       -- Simplify the condition and the [if then else]
       simp [hi]
       -- i0 := i - 1
-      progress as ⟨ i1, hi1 ⟩
-      -- [progress] can handle recursion
+      step as ⟨ i1, hi1 ⟩
+      -- [step] can handle recursion
       simp [CList.toList] at h -- we need to simplify this inequality to prove the precondition
-      progress as ⟨ l1 ⟩
+      step as ⟨ l1 ⟩
       -- Proving the postcondition
       -- We need this to trigger the simplification of [index to.toList i.val]
       --
@@ -311,7 +311,7 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
       -- by giving it [*] as argument, we tell [simp] to use all the assumptions
       -- to perform rewritings. In particular, it will use [i.val ≠ 0] to
       -- apply [List.index_nzero_cons].
-      have : i.val ≠ 0 := by scalar_tac -- Remark: [simp at hi] also works
+      have : i.val ≠ 0 := by grind -- Remark: [simp at hi] also works
       simp_lists [*]
 
 /-#===========================================================================#
@@ -361,13 +361,13 @@ theorem i32_id_spec (x : I32) (h : 0 ≤ x.val) :
   else
     simp [hx]
     -- x - 1
-    progress as ⟨ x1 ⟩
+    step as ⟨ x1 ⟩
     -- Recursive call
-    progress
+    step
     -- x2 + 1
-    progress as ⟨ x2 ⟩
+    step as ⟨ x2 ⟩
     -- Postcondition
-    scalar_tac
+    grind
 -- Below: we have to prove that the recursive call performed in the proof terminates.
 -- Otherwise, we could prove any result we want by simply writing a theorem which
 -- uses itself in the proof.
@@ -380,7 +380,7 @@ decreasing_by
   -- We first need to "massage" the goal (in practice, all the proofs of [decreasing_by]
   -- should start with a call to [simp_wf]).
   simp_wf
-  -- This is just a linear arithmetic goal so we conclude with [scalar_tac]
-  scalar_tac
+  -- This is just a linear arithmetic goal so we conclude with [grind]
+  grind
 
 end Tutorial

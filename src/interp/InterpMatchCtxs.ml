@@ -590,6 +590,18 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
   let push_abs (abs : abs) : unit = S.nabs := abs :: !S.nabs
   let push_absl (absl : abs list) : unit = List.iter push_abs absl
 
+  (** Cache for joined symbolic values: when the same pair [(id0, id1)] of
+      source/target symbolic value ids is encountered more than once, we reuse
+      the previously created fresh symbolic value. This ensures that values
+      which are shared in both the source and target contexts remain shared
+      after the join.
+
+      Note that it happens that symbolic values can get duplicated when
+      performing copies. *)
+  let joined_sv_cache :
+      (SymbolicValueId.id * SymbolicValueId.id, symbolic_value) Hashtbl.t =
+    Hashtbl.create 16
+
   let add_symbolic_value (sv_id : SymbolicValueId.id) (left : tvalue)
       (right : tvalue) : unit =
     S.symbolic_to_value :=
@@ -933,7 +945,7 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
 
           let ty = v0.ty in
           [%sanity_check_recover] S.recover span (ty_no_regions ty);
-          let sv = mk_fresh_symbolic_tvalue span ctx0 ty in
+          let sv = add_fresh_symbolic_value ctx0 ty v0 v1 in
           let value = VLoan (VSharedLoan (lid, sv)) in
           { value; ty })
         else [%craise_recover] S.recover span "Not implemented yet"))
@@ -1412,13 +1424,19 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
           fresh_regions;
         svj)
       else
-        (* Otherwise we simply introduce a fresh symbolic value *)
-        let sv =
-          add_fresh_symbolic_value ctx0 sv0.sv_ty
-            { value = VSymbolic sv0; ty = sv0.sv_ty }
-            { value = VSymbolic sv1; ty = sv1.sv_ty }
-        in
-        get_symbolic_tvalue span sv)
+        (* Otherwise we simply introduce a fresh symbolic value, or reuse a
+           previously created one if the same pair was already joined. *)
+        match Hashtbl.find_opt joined_sv_cache (id0, id1) with
+        | Some svj -> svj
+        | None ->
+            let sv =
+              add_fresh_symbolic_value ctx0 sv0.sv_ty
+                { value = VSymbolic sv0; ty = sv0.sv_ty }
+                { value = VSymbolic sv1; ty = sv1.sv_ty }
+            in
+            let svj = get_symbolic_tvalue span sv in
+            Hashtbl.add joined_sv_cache (id0, id1) svj;
+            svj)
 
   let match_symbolic_with_other (_ : tvalue_matcher) (ctx0 : eval_ctx)
       (ctx1 : eval_ctx) ~(symbolic_is_left : bool) (sv : symbolic_value)
@@ -1905,6 +1923,13 @@ struct
             (SymbolicValueId.Map.find_opt id0 !S.sid_to_value_map)];
 
       let sv1 = mk_tvalue_from_symbolic_value sv1 in
+      (* We check consistency explicitly and raise [Distinct] on mismatch
+         instead of relying on [add_strict_or_unchanged], whose [Assert_failure]
+         would bypass [try_match_ctxs]'s recovery mechanism. *)
+      (match SymbolicValueId.Map.find_opt id0 !S.sid_to_value_map with
+      | Some sv1' when sv1 <> sv1' ->
+          raise (Distinct "match_symbolic_values: incoherent value mapping")
+      | _ -> ());
       S.sid_to_value_map :=
         SymbolicValueId.Map.add_strict_or_unchanged id0 sv1 !S.sid_to_value_map;
 
@@ -1922,9 +1947,14 @@ struct
       (* Check: fixed values are fixed *)
       [%sanity_check_recover] S.recover span
         (not (SymbolicValueId.InjSubst.mem id !S.sid_map));
-      (* Update the binding for the target symbolic value *)
-      S.sid_to_value_map :=
-        SymbolicValueId.Map.add_strict_or_unchanged id v !S.sid_to_value_map;
+      (* Update the binding for the target symbolic value.
+         See the comment in [match_symbolic_values] for why we avoid
+         [add_strict_or_unchanged] and check consistency explicitly. *)
+      (match SymbolicValueId.Map.find_opt id !S.sid_to_value_map with
+      | Some v' when v <> v' ->
+          raise (Distinct "match_symbolic_with_other: incoherent value mapping")
+      | _ -> ());
+      S.sid_to_value_map := SymbolicValueId.Map.add id v !S.sid_to_value_map;
       (* Return - the returned value is not used, so we can return whatever we want *)
       v)
 

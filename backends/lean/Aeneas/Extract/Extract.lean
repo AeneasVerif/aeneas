@@ -78,6 +78,7 @@ instance : ToMessageData TypeInfo where
 
 structure ConstInfo where
   extract : Option String := none
+  canFail : Bool := false
 deriving Repr, Inhabited
 
 instance : ToMessageData ConstInfo where
@@ -98,7 +99,7 @@ structure FunInfo where
   keepTraitClauses : Option (List Bool) := none
   canFail : Bool := true
   /-- If the function can not fail, should we still lift it to the [Result]
-      monad? This can make reasonings easier, as we can then use [progress]
+      monad? This can make reasonings easier, as we can then use [step]
       to do proofs in a Hoare-Logic style, rather than equational reasonings. -/
   lift : Bool := true
   /-- If this is a trait method: does this method have a default
@@ -752,7 +753,7 @@ syntax (name := rustConst) "rust_const" str Parser.Tactic.optConfig : attr
 def elabConstNameInfo (stx : Syntax) : AttrM (String × ConstInfo) :=
   withRef stx do
     match stx with
-    | `(attr| rust_trait_impl $pat $config) => do
+    | `(attr| rust_const $pat $config) => do
       let pat := pat.getString
       if pat = "" then throwError "Not a valid name pattern: {pat}"
       let info ← liftCommandElabM (elabRustConstInfo config)
@@ -916,7 +917,7 @@ def write (env : Environment) (printLn : String → IO Unit) : IO Unit := do
   printLn "let lean_builtin_consts = ["
   for (pat, span, info) in infos do
     printSpan span
-    let msg ← m!"  mk_trait_impl \"{pat}\" {info.toExtract};".toString
+    let msg ← m!"  mk_global \"{pat}\" {info.toExtract} ~can_fail:{info.canFail};".toString
     printLn msg
   printLn "]"
   printLn ""

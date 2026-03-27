@@ -16,6 +16,7 @@ def core.str.iter.IteratorChars.collect
   core.str.iter.Chars → Result B := sorry
 
 @[rust_fun "core::str::{str}::chars"]
-def core.str.Str.chars (s : Str) : Result core.str.iter.Chars := sorry
+def core.str.Str.chars (s : Str) : Result core.str.iter.Chars :=
+  .ok { iter := { slice := s, i := 0 } }
 
 end Aeneas.Std

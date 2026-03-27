@@ -2,7 +2,7 @@ import Aeneas.Std.Core.Fmt
 import Aeneas.Std.Array.Array
 import Aeneas.Std.Slice
 import Aeneas.Std.Range
-import Aeneas.List.List
+import Aeneas.Data.List.List
 import Aeneas.Std.Core.Convert
 import Aeneas.Std.Core.Cmp
 
@@ -16,7 +16,7 @@ attribute [-simp] List.getElem!_eq_getElem?_getD
 
 /-! Array to slice/subslices -/
 
-@[progress_pure_def]
+@[step_pure_def]
 def Array.to_slice {α : Type u} {n : Usize} (v : Array α n) : Slice α :=
   ⟨ v.val, by scalar_tac ⟩
 
@@ -30,7 +30,7 @@ theorem Array.from_slice_val {α : Type u} {n : Usize} (a : Array α n) (ns : Sl
   (from_slice a ns).val = ns.val
   := by simp [from_slice, *]
 
-@[progress_pure_def]
+@[step_pure_def]
 def Array.to_slice_mut {α : Type u} {n : Usize} (a : Array α n) :
   Slice α × (Slice α → Array α n) :=
   (Array.to_slice a, Array.from_slice a)
@@ -45,7 +45,7 @@ def Array.subslice {α : Type u} {n : Usize} (a : Array α n) (r : Range Usize) 
   else
     fail panic
 
-@[progress]
+@[step]
 theorem Array.subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array α n) (r : Range Usize)
   (h0 : r.start.val < r.end.val) (h1 : r.end.val ≤ a.val.length) :
   subslice a r ⦃ s =>
@@ -70,7 +70,7 @@ def Array.update_subslice {α : Type u} {n : Usize} (a : Array α n) (r : Range 
 -- operations/
 -- We should introduce special symbols for the monadic arithmetic operations
 -- (the user will never write those symbols directly).
-@[progress]
+@[step]
 theorem Array.update_subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array α n) (r : Range Usize) (s : Slice α)
   (_ : r.start.val < r.end.val) (_ : r.end.val ≤ a.length) (_ : s.length = r.end.val - r.start.val) :
   update_subslice a r s ⦃ na =>
@@ -115,14 +115,17 @@ def core.ops.index.IndexMutArray {T I Output : Type} {N : Usize}
 @[reducible, rust_type "core::array::TryFromSliceError"]
 def core.array.TryFromSliceError := Unit
 
-@[simp, simp_lists_simps]
+@[simp, simp_lists_safe, grind =, agrind =]
 theorem Array.val_to_slice {α} {n} (a : Array α n) : a.to_slice.val = a.val := by
   simp only [Array.to_slice]
 
-@[simp, simp_lists_simps, simp_scalar_simps, scalar_tac a.to_slice]
+@[simp, simp_lists_safe, simp_scalar_safe, scalar_tac a.to_slice]
 theorem Array.length_to_slice (a : Array α n) :
   a.to_slice.length = n := by
   simp only [Slice.length, Array.to_slice, List.Vector.length_val]
+
+grind_pattern Array.length_to_slice => a.to_slice
+grind_pattern [agrind] Array.length_to_slice => a.to_slice
 
 @[rust_fun "core::array::equality::{core::cmp::PartialEq<[@T; @N], [@U; @N]>}::eq"]
 def core.array.equality.PartialEqArray.eq
@@ -216,5 +219,71 @@ def core.array.Array.as_mut_slice
     if h: s.length = N then ⟨ s.val, by scalar_tac ⟩
     else a
   ok (⟨ a.val, by scalar_tac ⟩, back)
+
+@[simp, step_simps]
+theorem Array.index_SliceIndexRangeUsizeSlice {T : Type} {N : Usize}
+    (a : Array T N) (r : core.ops.range.Range Usize) :
+    core.array.Array.index (core.ops.index.IndexSlice
+      (core.slice.index.SliceIndexRangeUsizeSlice T)) a r =
+    core.slice.index.SliceIndexRangeUsizeSlice.index r a.to_slice := by rfl
+
+-- Array index/index_mut with RangeTo
+
+@[simp, step_simps]
+theorem Array.index_SliceIndexRangeToUsizeSlice {T : Type} {N : Usize}
+    (a : Array T N) (r : core.ops.range.RangeTo Usize) :
+    core.array.Array.index (core.ops.index.IndexSlice
+      (core.slice.index.SliceIndexRangeToUsizeSlice T)) a r =
+    core.slice.index.SliceIndexRangeToUsizeSlice.index r a.to_slice := by rfl
+
+@[step]
+theorem Array.index_mut_SliceIndexRangeToUsizeSlice {T : Type} {N : Usize}
+    (a : Array T N) (r : core.ops.range.RangeTo Usize)
+    (h : r.end ≤ N) :
+    core.array.Array.index_mut (core.ops.index.IndexMutSlice
+      (core.slice.index.SliceIndexRangeToUsizeSlice T)) a r
+    ⦃ (s, back) =>
+      s.val = a.val.slice 0 r.end ∧
+      s.length = r.end.val ∧
+      ∀ s', (back s').val = a.val.setSlice! 0 s'.val ⦄ := by
+  simp only [core.array.Array.index_mut, core.ops.index.IndexMutSlice,
+    core.slice.index.Slice.index_mut]
+  have hts : a.to_slice.length = N := by simp [Array.to_slice, Slice.length]
+  simp only [core.slice.index.SliceIndexRangeToUsizeSlice.index_mut,
+    show (r.end : Usize) ≤ a.to_slice.length from by scalar_tac]
+  refine ⟨?_, ?_, ?_⟩
+  · simp [Array.to_slice]
+  · simp [Slice.length]; scalar_tac
+  · intro s'; simp [Array.from_slice, Array.to_slice]
+
+-- Array index/index_mut with RangeFrom
+
+@[simp, step_simps]
+theorem Array.index_SliceIndexRangeFromUsizeSlice {T : Type} {N : Usize}
+    (a : Array T N) (r : core.ops.range.RangeFrom Usize) :
+    core.array.Array.index (core.ops.index.IndexSlice
+      (core.slice.index.SliceIndexRangeFromUsizeSlice T)) a r =
+    core.slice.index.SliceIndexRangeFromUsizeSlice.index r a.to_slice := by rfl
+
+@[step]
+theorem Array.index_mut_SliceIndexRangeFromUsizeSlice {T : Type} {N : Usize}
+    (a : Array T N) (r : core.ops.range.RangeFrom Usize)
+    (h : r.start ≤ N) :
+    core.array.Array.index_mut (core.ops.index.IndexMutSlice
+      (core.slice.index.SliceIndexRangeFromUsizeSlice T)) a r
+    ⦃ (s, back) =>
+      s.val = a.val.drop r.start ∧
+      s.length = N.val - r.start.val ∧
+      ∀ s', (back s').val = a.val.setSlice! r.start.val s'.val ⦄ := by
+  simp only [core.array.Array.index_mut, core.ops.index.IndexMutSlice,
+    core.slice.index.Slice.index_mut]
+  have hts : a.to_slice.length = N := by simp [Array.to_slice, Slice.length]
+  simp only [core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut,
+    Slice.drop,
+    show (r.start : Usize) ≤ a.to_slice.length from by scalar_tac]
+  refine ⟨?_, ?_, ?_⟩
+  · simp [Array.to_slice]
+  · simp [Slice.length, List.length_drop]
+  · intro s'; simp [Array.from_slice, Array.to_slice]
 
 end Aeneas.Std

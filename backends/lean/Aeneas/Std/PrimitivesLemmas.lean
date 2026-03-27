@@ -1,20 +1,20 @@
 import Aeneas.Std.Primitives
-import Aeneas.Progress.Init
-import Aeneas.Bvify.Init
+import Aeneas.Tactic.Step.Init
+import Aeneas.Tactic.Conv.Bvify.Init
 
 namespace Aeneas.Std
 
 open Result WP
 
-@[progress]
+@[step]
 theorem massert_spec (b : Prop) [Decidable b] (h : b) :
   massert b ⦃ _ => True ⦄ := by
   simp [massert, *]
 
-@[simp, progress_pre_simps, bvify_simps]
+@[simp, step_pre_simps, bvify]
 theorem massert_ok (b : Prop) [Decidable b] : massert b = ok () ↔ b := by simp [massert]
 
-@[simp, progress_pre_simps, bvify_simps]
+@[simp, step_pre_simps, bvify]
 theorem spec_massert (b : Prop) [Decidable b] : Std.WP.spec (massert b) P ↔ (b ∧ P ()) := by
   simp [massert]
   split <;> simp <;> grind

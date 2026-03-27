@@ -36,13 +36,11 @@ let boolFn (t : Type0) (x : bool) : result bool =
 
 (** [rename_attribute::C]
     Source: 'tests/src/rename_attribute.rs', lines 52:0-52:28 *)
-let const_test_body : result u32 = let* i = u32_add 100 10 in u32_add i 1
-let const_test : u32 = eval_global const_test_body
+let const_Test : result u32 = let* i = u32_add 100 10 in u32_add i 1
 
 (** [rename_attribute::CA]
     Source: 'tests/src/rename_attribute.rs', lines 55:0-55:23 *)
-let const_aeneas11_body : result u32 = u32_add 10 1
-let const_aeneas11 : u32 = eval_global const_aeneas11_body
+let const_Aeneas11 : result u32 = u32_add 10 1
 
 (** [rename_attribute::factorial]:
     Source: 'tests/src/rename_attribute.rs', lines 58:0-64:1 *)

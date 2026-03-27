@@ -12,7 +12,7 @@ set_option maxHeartbeats 1000000
 namespace names
 
 /-- [names::Struct]
-   Source: 'tests/src/names.rs', lines 3:0-5:1 -/
+    Source: 'tests/src/names.rs', lines 3:0-5:1 -/
 structure Struct where
   «name» : String
 

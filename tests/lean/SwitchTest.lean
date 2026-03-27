@@ -12,7 +12,7 @@ set_option maxHeartbeats 1000000
 namespace switch_test
 
 /-- [switch_test::match_u32]:
-   Source: 'tests/src/switch_test.rs', lines 4:0-10:1 -/
+    Source: 'tests/src/switch_test.rs', lines 4:0-10:1 -/
 def match_u32 (x : Std.U32) : Result Std.U32 := do
   match x with
   | 0#uscalar => ok 0#u32

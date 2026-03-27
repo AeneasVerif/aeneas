@@ -8,4 +8,4 @@
 
 ## Tactics guide
 
-- [Progress](./lean/tactics/progress.md)
+- [Step](./lean/tactics/step.md)
