@@ -30,6 +30,7 @@ setup.log
 
 # Dune generated files
 *.install
+src/GitVersion.ml
 
 # Local OPAM switch
 _opam/

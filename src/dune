@@ -52,6 +52,7 @@
   ExtractName
   ExtractTypes
   FunsAnalysis
+  GitVersion
   Identifiers
   InterpAbs
   InterpBorrowsCore
@@ -115,6 +116,17 @@
   Utils
   Values
   ValuesUtils))
+
+(rule
+ (target GitVersion.ml)
+ (deps (universe))
+ (mode
+  (promote (until-clean)))
+ (action
+  (with-stdout-to
+   %{target}
+   (system
+    "echo 'let commit = \"'$(git rev-parse --short HEAD 2>/dev/null || echo unknown)'\"'"))))
 
 (documentation
  (package aeneas))
