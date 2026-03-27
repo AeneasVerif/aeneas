@@ -9,7 +9,8 @@ Local Open Scope Primitives_scope.
 Module RenameAttribute.
 
 (** Trait declaration: [rename_attribute::BoolTrait]
-    Source: 'tests/src/rename_attribute.rs', lines 10:0-20:1 *)
+    Source: 'tests/src/rename_attribute.rs', lines 10:0-20:1
+    Visibility: public *)
 Record BoolTest_t (Self : Type) := mkBoolTest_t {
   BoolTest_t_getTest : Self -> result bool;
   BoolTest_t_retTest : Self -> result bool;
@@ -20,19 +21,22 @@ Arguments BoolTest_t_getTest { _ } _.
 Arguments BoolTest_t_retTest { _ } _.
 
 (** [rename_attribute::BoolTrait::ret_true]:
-    Source: 'tests/src/rename_attribute.rs', lines 17:4-19:5 *)
+    Source: 'tests/src/rename_attribute.rs', lines 17:4-19:5
+    Visibility: public *)
 Definition boolTrait_retTest_default
   {Self : Type} (self : Self) : result bool :=
   Ok true
 .
 
 (** [rename_attribute::{rename_attribute::BoolTrait for bool}::get_bool]:
-    Source: 'tests/src/rename_attribute.rs', lines 24:4-26:5 *)
+    Source: 'tests/src/rename_attribute.rs', lines 24:4-26:5
+    Visibility: public *)
 Definition BoolImpl_getTest (self : bool) : result bool :=
   Ok self.
 
 (** [rename_attribute::{rename_attribute::BoolTrait for bool}::ret_true]:
-    Source: 'tests/src/rename_attribute.rs', lines 23:0-27:1 *)
+    Source: 'tests/src/rename_attribute.rs', lines 23:0-27:1
+    Visibility: public *)
 Definition BoolImpl_retTest (self : bool) : result bool :=
   Ok true.
 
@@ -44,7 +48,8 @@ Definition BoolImpl : BoolTest_t bool := {|
 |}.
 
 (** [rename_attribute::test_bool_trait]:
-    Source: 'tests/src/rename_attribute.rs', lines 30:0-32:1 *)
+    Source: 'tests/src/rename_attribute.rs', lines 30:0-32:1
+    Visibility: public *)
 Definition boolFn (T : Type) (x : bool) : result bool :=
   b <- BoolImpl_getTest x; if b then BoolImpl_retTest x else Ok false
 .
@@ -84,7 +89,8 @@ Fixpoint factfn (n : nat) (n1 : u64) : result u64 :=
 .
 
 (** [rename_attribute::sum]: loop 0:
-    Source: 'tests/src/rename_attribute.rs', lines 70:4-73:5 *)
+    Source: 'tests/src/rename_attribute.rs', lines 70:4-73:5
+    Visibility: public *)
 Fixpoint no_borrows_sum_loop
   (n : nat) (max : u32) (i : u32) (s : u32) : result u32 :=
   match n with
@@ -100,7 +106,8 @@ Fixpoint no_borrows_sum_loop
 .
 
 (** [rename_attribute::sum]:
-    Source: 'tests/src/rename_attribute.rs', lines 67:0-77:1 *)
+    Source: 'tests/src/rename_attribute.rs', lines 67:0-77:1
+    Visibility: public *)
 Definition no_borrows_sum (n : nat) (max : u32) : result u32 :=
   s <- no_borrows_sum_loop n max 0%u32 0%u32; u32_mul s 2%u32
 .

@@ -188,7 +188,8 @@ structure ListIterMut (T : Type) where
   current : Option (List T)
 
 /-- [nested_borrows::{nested_borrows::List<T>}::iter_mut]:
-    Source: 'tests/src/nested-borrows.rs', lines 105:4-109:5 -/
+    Source: 'tests/src/nested-borrows.rs', lines 105:4-109:5
+    Visibility: public -/
 def List.iter_mut
   {T : Type} (self : List T) :
   Result ((ListIterMut T) × (ListIterMut T → List T))
@@ -342,7 +343,8 @@ def iter_list_while
   iter_list_while_loop0 l (fun l1 => l1) b
 
 /-- [nested_borrows::BitReader]
-    Source: 'tests/src/nested-borrows.rs', lines 148:0-151:1 -/
+    Source: 'tests/src/nested-borrows.rs', lines 148:0-151:1
+    Visibility: public -/
 structure BitReader where
   data : Slice Std.U8
   bit_buf : Std.U64
@@ -353,7 +355,8 @@ def BitReader.refill (self : BitReader) : Result BitReader := do
   ok self
 
 /-- [nested_borrows::{nested_borrows::BitReader<'a>}::peek]:
-    Source: 'tests/src/nested-borrows.rs', lines 154:4-159:5 -/
+    Source: 'tests/src/nested-borrows.rs', lines 154:4-159:5
+    Visibility: public -/
 def BitReader.peek
   (self : BitReader) (b : Bool) : Result (Std.U64 × BitReader) := do
   let (s, i) ←

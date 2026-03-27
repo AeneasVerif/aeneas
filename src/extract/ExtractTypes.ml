@@ -1253,7 +1253,8 @@ let extract_comment_with_span (ctx : extraction_ctx) (fmt : F.formatter)
         ]
   in
   let span = Errors.span_to_string span in
-  extract_doc_comment fmt (sl @ [ span ] @ name)
+  let visibility = if public then [ "Visibility: public" ] else [] in
+  extract_doc_comment fmt (sl @ [ span ] @ name @ visibility)
 
 let extract_attributes (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (name : Types.name)

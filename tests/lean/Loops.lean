@@ -12,7 +12,8 @@ set_option maxHeartbeats 1000000
 namespace loops
 
 /-- [loops::iter]: loop body 0:
-    Source: 'tests/src/loops.rs', lines 6:4-8:5 -/
+    Source: 'tests/src/loops.rs', lines 6:4-8:5
+    Visibility: public -/
 @[rust_loop_body]
 def iter_loop.body
   (max : Std.U32) (i : Std.U32) : Result (ControlFlow Std.U32 Std.U32) := do
@@ -22,7 +23,8 @@ def iter_loop.body
   else ok (done i)
 
 /-- [loops::iter]: loop 0:
-    Source: 'tests/src/loops.rs', lines 6:4-8:5 -/
+    Source: 'tests/src/loops.rs', lines 6:4-8:5
+    Visibility: public -/
 @[rust_loop]
 def iter_loop (max : Std.U32) (i : Std.U32) : Result Std.U32 := do
   loop
@@ -30,13 +32,15 @@ def iter_loop (max : Std.U32) (i : Std.U32) : Result Std.U32 := do
     i
 
 /-- [loops::iter]:
-    Source: 'tests/src/loops.rs', lines 4:0-11:1 -/
+    Source: 'tests/src/loops.rs', lines 4:0-11:1
+    Visibility: public -/
 @[reducible]
 def iter (max : Std.U32) : Result Std.U32 := do
   iter_loop max 0#u32
 
 /-- [loops::sum]: loop body 0:
-    Source: 'tests/src/loops.rs', lines 17:4-20:5 -/
+    Source: 'tests/src/loops.rs', lines 17:4-20:5
+    Visibility: public -/
 @[rust_loop_body]
 def sum_loop.body
   (max : Std.U32) (i : Std.U32) (s : Std.U32) :
@@ -49,7 +53,8 @@ def sum_loop.body
   else ok (done s)
 
 /-- [loops::sum]: loop 0:
-    Source: 'tests/src/loops.rs', lines 17:4-20:5 -/
+    Source: 'tests/src/loops.rs', lines 17:4-20:5
+    Visibility: public -/
 @[rust_loop]
 def sum_loop (max : Std.U32) (i : Std.U32) (s : Std.U32) : Result Std.U32 := do
   loop
@@ -57,13 +62,15 @@ def sum_loop (max : Std.U32) (i : Std.U32) (s : Std.U32) : Result Std.U32 := do
     (i, s)
 
 /-- [loops::sum]:
-    Source: 'tests/src/loops.rs', lines 14:0-24:1 -/
+    Source: 'tests/src/loops.rs', lines 14:0-24:1
+    Visibility: public -/
 def sum (max : Std.U32) : Result Std.U32 := do
   let s ← sum_loop max 0#u32 0#u32
   s * 2#u32
 
 /-- [loops::sum_with_mut_borrows]: loop body 0:
-    Source: 'tests/src/loops.rs', lines 32:4-37:5 -/
+    Source: 'tests/src/loops.rs', lines 32:4-37:5
+    Visibility: public -/
 @[rust_loop_body]
 def sum_with_mut_borrows_loop.body
   (max : Std.U32) (i : Std.U32) (s : Std.U32) :
@@ -76,7 +83,8 @@ def sum_with_mut_borrows_loop.body
   else ok (done s)
 
 /-- [loops::sum_with_mut_borrows]: loop 0:
-    Source: 'tests/src/loops.rs', lines 32:4-37:5 -/
+    Source: 'tests/src/loops.rs', lines 32:4-37:5
+    Visibility: public -/
 @[rust_loop]
 def sum_with_mut_borrows_loop
   (max : Std.U32) (i : Std.U32) (s : Std.U32) : Result Std.U32 := do
@@ -85,13 +93,15 @@ def sum_with_mut_borrows_loop
     (i, s)
 
 /-- [loops::sum_with_mut_borrows]:
-    Source: 'tests/src/loops.rs', lines 29:0-41:1 -/
+    Source: 'tests/src/loops.rs', lines 29:0-41:1
+    Visibility: public -/
 def sum_with_mut_borrows (max : Std.U32) : Result Std.U32 := do
   let s ← sum_with_mut_borrows_loop max 0#u32 0#u32
   s * 2#u32
 
 /-- [loops::sum_with_shared_borrows]: loop body 0:
-    Source: 'tests/src/loops.rs', lines 47:4-54:5 -/
+    Source: 'tests/src/loops.rs', lines 47:4-54:5
+    Visibility: public -/
 @[rust_loop_body]
 def sum_with_shared_borrows_loop.body
   (max : Std.U32) (i : Std.U32) (s : Std.U32) :
@@ -104,7 +114,8 @@ def sum_with_shared_borrows_loop.body
   else ok (done s)
 
 /-- [loops::sum_with_shared_borrows]: loop 0:
-    Source: 'tests/src/loops.rs', lines 47:4-54:5 -/
+    Source: 'tests/src/loops.rs', lines 47:4-54:5
+    Visibility: public -/
 @[rust_loop]
 def sum_with_shared_borrows_loop
   (max : Std.U32) (i : Std.U32) (s : Std.U32) : Result Std.U32 := do
@@ -113,13 +124,15 @@ def sum_with_shared_borrows_loop
     (i, s)
 
 /-- [loops::sum_with_shared_borrows]:
-    Source: 'tests/src/loops.rs', lines 44:0-58:1 -/
+    Source: 'tests/src/loops.rs', lines 44:0-58:1
+    Visibility: public -/
 def sum_with_shared_borrows (max : Std.U32) : Result Std.U32 := do
   let s ← sum_with_shared_borrows_loop max 0#u32 0#u32
   s * 2#u32
 
 /-- [loops::sum_array]: loop body 0:
-    Source: 'tests/src/loops.rs', lines 63:4-66:5 -/
+    Source: 'tests/src/loops.rs', lines 63:4-66:5
+    Visibility: public -/
 @[rust_loop_body]
 def sum_array_loop.body
   {N : Std.Usize} (a : Array Std.U32 N) (i : Std.Usize) (s : Std.U32) :
@@ -134,7 +147,8 @@ def sum_array_loop.body
   else ok (done s)
 
 /-- [loops::sum_array]: loop 0:
-    Source: 'tests/src/loops.rs', lines 63:4-66:5 -/
+    Source: 'tests/src/loops.rs', lines 63:4-66:5
+    Visibility: public -/
 @[rust_loop]
 def sum_array_loop
   {N : Std.Usize} (a : Array Std.U32 N) (i : Std.Usize) (s : Std.U32) :
@@ -145,13 +159,15 @@ def sum_array_loop
     (i, s)
 
 /-- [loops::sum_array]:
-    Source: 'tests/src/loops.rs', lines 60:0-68:1 -/
+    Source: 'tests/src/loops.rs', lines 60:0-68:1
+    Visibility: public -/
 @[reducible]
 def sum_array {N : Std.Usize} (a : Array Std.U32 N) : Result Std.U32 := do
   sum_array_loop a 0#usize 0#u32
 
 /-- [loops::clear]: loop body 0:
-    Source: 'tests/src/loops.rs', lines 74:4-77:5 -/
+    Source: 'tests/src/loops.rs', lines 74:4-77:5
+    Visibility: public -/
 @[rust_loop_body]
 def clear_loop.body
   (v : alloc.vec.Vec Std.U32) (i : Std.Usize) :
@@ -170,7 +186,8 @@ def clear_loop.body
   else ok (done v)
 
 /-- [loops::clear]: loop 0:
-    Source: 'tests/src/loops.rs', lines 74:4-77:5 -/
+    Source: 'tests/src/loops.rs', lines 74:4-77:5
+    Visibility: public -/
 @[rust_loop]
 def clear_loop
   (v : alloc.vec.Vec Std.U32) (i : Std.Usize) :
@@ -181,20 +198,23 @@ def clear_loop
     (v, i)
 
 /-- [loops::clear]:
-    Source: 'tests/src/loops.rs', lines 72:0-78:1 -/
+    Source: 'tests/src/loops.rs', lines 72:0-78:1
+    Visibility: public -/
 @[reducible]
 def clear (v : alloc.vec.Vec Std.U32) : Result (alloc.vec.Vec Std.U32) := do
   clear_loop v 0#usize
 
 /-- [loops::List]
-    Source: 'tests/src/loops.rs', lines 80:0-83:1 -/
+    Source: 'tests/src/loops.rs', lines 80:0-83:1
+    Visibility: public -/
 @[discriminant isize]
 inductive List (T : Type) where
 | Cons : T → List T → List T
 | Nil : List T
 
 /-- [loops::list_mem]: loop 0:
-    Source: 'tests/src/loops.rs', lines 87:4-95:1 -/
+    Source: 'tests/src/loops.rs', lines 87:4-95:1
+    Visibility: public -/
 @[rust_loop]
 def list_mem_loop (x : Std.U32) (ls : List Std.U32) : Result Bool := do
   match ls with
@@ -205,13 +225,15 @@ def list_mem_loop (x : Std.U32) (ls : List Std.U32) : Result Bool := do
 partial_fixpoint
 
 /-- [loops::list_mem]:
-    Source: 'tests/src/loops.rs', lines 86:0-95:1 -/
+    Source: 'tests/src/loops.rs', lines 86:0-95:1
+    Visibility: public -/
 @[reducible]
 def list_mem (x : Std.U32) (ls : List Std.U32) : Result Bool := do
   list_mem_loop x ls
 
 /-- [loops::list_nth_mut]: loop 0:
-    Source: 'tests/src/loops.rs', lines 98:4-107:1 -/
+    Source: 'tests/src/loops.rs', lines 98:4-107:1
+    Visibility: public -/
 @[rust_loop]
 def list_nth_mut_loop
   {T : Type} (ls : List T) (i : Std.U32) : Result (T × (T → List T)) := do
@@ -229,14 +251,16 @@ def list_nth_mut_loop
 partial_fixpoint
 
 /-- [loops::list_nth_mut]:
-    Source: 'tests/src/loops.rs', lines 97:0-107:1 -/
+    Source: 'tests/src/loops.rs', lines 97:0-107:1
+    Visibility: public -/
 @[reducible]
 def list_nth_mut
   {T : Type} (ls : List T) (i : Std.U32) : Result (T × (T → List T)) := do
   list_nth_mut_loop ls i
 
 /-- [loops::list_nth_shared]: loop 0:
-    Source: 'tests/src/loops.rs', lines 111:4-120:1 -/
+    Source: 'tests/src/loops.rs', lines 111:4-120:1
+    Visibility: public -/
 @[rust_loop]
 def list_nth_shared_loop
   {T : Type} (ls : List T) (i : Std.U32) : Result T := do
@@ -250,13 +274,15 @@ def list_nth_shared_loop
 partial_fixpoint
 
 /-- [loops::list_nth_shared]:
-    Source: 'tests/src/loops.rs', lines 110:0-120:1 -/
+    Source: 'tests/src/loops.rs', lines 110:0-120:1
+    Visibility: public -/
 @[reducible]
 def list_nth_shared {T : Type} (ls : List T) (i : Std.U32) : Result T := do
   list_nth_shared_loop ls i
 
 /-- [loops::get_elem_mut]: loop 0:
-    Source: 'tests/src/loops.rs', lines 124:4-136:1 -/
+    Source: 'tests/src/loops.rs', lines 124:4-136:1
+    Visibility: public -/
 @[rust_loop]
 def get_elem_mut_loop
   (x : Std.Usize) (ls : List Std.Usize) :
@@ -275,7 +301,8 @@ def get_elem_mut_loop
 partial_fixpoint
 
 /-- [loops::get_elem_mut]:
-    Source: 'tests/src/loops.rs', lines 122:0-136:1 -/
+    Source: 'tests/src/loops.rs', lines 122:0-136:1
+    Visibility: public -/
 def get_elem_mut
   (slots : alloc.vec.Vec (List Std.Usize)) (x : Std.Usize) :
   Result (Std.Usize × (Std.Usize → alloc.vec.Vec (List Std.Usize)))
@@ -289,7 +316,8 @@ def get_elem_mut
   ok (i, back1)
 
 /-- [loops::get_elem_shared]: loop 0:
-    Source: 'tests/src/loops.rs', lines 140:4-152:1 -/
+    Source: 'tests/src/loops.rs', lines 140:4-152:1
+    Visibility: public -/
 @[rust_loop]
 def get_elem_shared_loop
   (x : Std.Usize) (ls : List Std.Usize) : Result Std.Usize := do
@@ -301,7 +329,8 @@ def get_elem_shared_loop
 partial_fixpoint
 
 /-- [loops::get_elem_shared]:
-    Source: 'tests/src/loops.rs', lines 138:0-152:1 -/
+    Source: 'tests/src/loops.rs', lines 138:0-152:1
+    Visibility: public -/
 def get_elem_shared
   (slots : alloc.vec.Vec (List Std.Usize)) (x : Std.Usize) :
   Result Std.Usize
@@ -312,18 +341,21 @@ def get_elem_shared
   get_elem_shared_loop x ls
 
 /-- [loops::id_mut]:
-    Source: 'tests/src/loops.rs', lines 154:0-156:1 -/
+    Source: 'tests/src/loops.rs', lines 154:0-156:1
+    Visibility: public -/
 def id_mut
   {T : Type} (ls : List T) : Result ((List T) × (List T → List T)) := do
   ok (ls, fun ls1 => ls1)
 
 /-- [loops::id_shared]:
-    Source: 'tests/src/loops.rs', lines 158:0-160:1 -/
+    Source: 'tests/src/loops.rs', lines 158:0-160:1
+    Visibility: public -/
 def id_shared {T : Type} (ls : List T) : Result (List T) := do
   ok ls
 
 /-- [loops::list_nth_mut_with_id]: loop 0:
-    Source: 'tests/src/loops.rs', lines 165:4-174:1 -/
+    Source: 'tests/src/loops.rs', lines 165:4-174:1
+    Visibility: public -/
 @[rust_loop]
 def list_nth_mut_with_id_loop
   {T : Type} (i : Std.U32) (ls : List T) : Result (T × (T → List T)) := do
@@ -341,7 +373,8 @@ def list_nth_mut_with_id_loop
 partial_fixpoint
 
 /-- [loops::list_nth_mut_with_id]:
-    Source: 'tests/src/loops.rs', lines 163:0-174:1 -/
+    Source: 'tests/src/loops.rs', lines 163:0-174:1
+    Visibility: public -/
 def list_nth_mut_with_id
   {T : Type} (ls : List T) (i : Std.U32) : Result (T × (T → List T)) := do
   let (ls1, id_mut_back) ← id_mut ls
@@ -351,7 +384,8 @@ def list_nth_mut_with_id
   ok (t, back1)
 
 /-- [loops::list_nth_shared_with_id]: loop 0:
-    Source: 'tests/src/loops.rs', lines 179:4-188:1 -/
+    Source: 'tests/src/loops.rs', lines 179:4-188:1
+    Visibility: public -/
 @[rust_loop]
 def list_nth_shared_with_id_loop
   {T : Type} (i : Std.U32) (ls : List T) : Result T := do
@@ -365,14 +399,16 @@ def list_nth_shared_with_id_loop
 partial_fixpoint
 
 /-- [loops::list_nth_shared_with_id]:
-    Source: 'tests/src/loops.rs', lines 177:0-188:1 -/
+    Source: 'tests/src/loops.rs', lines 177:0-188:1
+    Visibility: public -/
 def list_nth_shared_with_id
   {T : Type} (ls : List T) (i : Std.U32) : Result T := do
   let ls1 ← id_shared ls
   list_nth_shared_with_id_loop i ls1
 
 /-- [loops::list_nth_mut_pair]: loop 0:
-    Source: 'tests/src/loops.rs', lines 198:4-214:1 -/
+    Source: 'tests/src/loops.rs', lines 198:4-214:1
+    Visibility: public -/
 @[rust_loop]
 def list_nth_mut_pair_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
@@ -397,7 +433,8 @@ def list_nth_mut_pair_loop
 partial_fixpoint
 
 /-- [loops::list_nth_mut_pair]:
-    Source: 'tests/src/loops.rs', lines 193:0-214:1 -/
+    Source: 'tests/src/loops.rs', lines 193:0-214:1
+    Visibility: public -/
 def list_nth_mut_pair
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result ((T × T) × (T → List T) × (T → List T))
@@ -406,7 +443,8 @@ def list_nth_mut_pair
   ok ((t, t1), back, back1)
 
 /-- [loops::list_nth_shared_pair]: loop 0:
-    Source: 'tests/src/loops.rs', lines 222:4-238:1 -/
+    Source: 'tests/src/loops.rs', lines 222:4-238:1
+    Visibility: public -/
 @[rust_loop]
 def list_nth_shared_pair_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
@@ -425,7 +463,8 @@ def list_nth_shared_pair_loop
 partial_fixpoint
 
 /-- [loops::list_nth_shared_pair]:
-    Source: 'tests/src/loops.rs', lines 217:0-238:1 -/
+    Source: 'tests/src/loops.rs', lines 217:0-238:1
+    Visibility: public -/
 @[reducible]
 def list_nth_shared_pair
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
@@ -434,7 +473,8 @@ def list_nth_shared_pair
   list_nth_shared_pair_loop ls0 ls1 i
 
 /-- [loops::list_nth_mut_pair_merge]: loop 0:
-    Source: 'tests/src/loops.rs', lines 247:4-257:1 -/
+    Source: 'tests/src/loops.rs', lines 247:4-257:1
+    Visibility: public -/
 @[rust_loop]
 def list_nth_mut_pair_merge_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
@@ -459,7 +499,8 @@ def list_nth_mut_pair_merge_loop
 partial_fixpoint
 
 /-- [loops::list_nth_mut_pair_merge]:
-    Source: 'tests/src/loops.rs', lines 242:0-257:1 -/
+    Source: 'tests/src/loops.rs', lines 242:0-257:1
+    Visibility: public -/
 def list_nth_mut_pair_merge
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result ((T × T) × ((T × T) → ((List T) × (List T))))
@@ -474,7 +515,8 @@ def list_nth_mut_pair_merge
   ok ((t, t1), back2)
 
 /-- [loops::list_nth_shared_pair_merge]: loop 0:
-    Source: 'tests/src/loops.rs', lines 265:4-275:1 -/
+    Source: 'tests/src/loops.rs', lines 265:4-275:1
+    Visibility: public -/
 @[rust_loop]
 def list_nth_shared_pair_merge_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
@@ -493,7 +535,8 @@ def list_nth_shared_pair_merge_loop
 partial_fixpoint
 
 /-- [loops::list_nth_shared_pair_merge]:
-    Source: 'tests/src/loops.rs', lines 260:0-275:1 -/
+    Source: 'tests/src/loops.rs', lines 260:0-275:1
+    Visibility: public -/
 @[reducible]
 def list_nth_shared_pair_merge
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
@@ -502,7 +545,8 @@ def list_nth_shared_pair_merge
   list_nth_shared_pair_merge_loop ls0 ls1 i
 
 /-- [loops::list_nth_mut_shared_pair]: loop 0:
-    Source: 'tests/src/loops.rs', lines 283:4-293:1 -/
+    Source: 'tests/src/loops.rs', lines 283:4-293:1
+    Visibility: public -/
 @[rust_loop]
 def list_nth_mut_shared_pair_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
@@ -525,7 +569,8 @@ def list_nth_mut_shared_pair_loop
 partial_fixpoint
 
 /-- [loops::list_nth_mut_shared_pair]:
-    Source: 'tests/src/loops.rs', lines 278:0-293:1 -/
+    Source: 'tests/src/loops.rs', lines 278:0-293:1
+    Visibility: public -/
 def list_nth_mut_shared_pair
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result ((T × T) × (T → List T))
@@ -534,7 +579,8 @@ def list_nth_mut_shared_pair
   ok ((t, t1), back)
 
 /-- [loops::list_nth_mut_shared_pair_merge]: loop 0:
-    Source: 'tests/src/loops.rs', lines 302:4-312:1 -/
+    Source: 'tests/src/loops.rs', lines 302:4-312:1
+    Visibility: public -/
 @[rust_loop]
 def list_nth_mut_shared_pair_merge_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
@@ -557,7 +603,8 @@ def list_nth_mut_shared_pair_merge_loop
 partial_fixpoint
 
 /-- [loops::list_nth_mut_shared_pair_merge]:
-    Source: 'tests/src/loops.rs', lines 297:0-312:1 -/
+    Source: 'tests/src/loops.rs', lines 297:0-312:1
+    Visibility: public -/
 def list_nth_mut_shared_pair_merge
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result ((T × T) × (T → List T))
@@ -566,7 +613,8 @@ def list_nth_mut_shared_pair_merge
   ok ((t, t1), back)
 
 /-- [loops::list_nth_shared_mut_pair]: loop 0:
-    Source: 'tests/src/loops.rs', lines 321:4-331:1 -/
+    Source: 'tests/src/loops.rs', lines 321:4-331:1
+    Visibility: public -/
 @[rust_loop]
 def list_nth_shared_mut_pair_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
@@ -589,7 +637,8 @@ def list_nth_shared_mut_pair_loop
 partial_fixpoint
 
 /-- [loops::list_nth_shared_mut_pair]:
-    Source: 'tests/src/loops.rs', lines 316:0-331:1 -/
+    Source: 'tests/src/loops.rs', lines 316:0-331:1
+    Visibility: public -/
 def list_nth_shared_mut_pair
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result ((T × T) × (T → List T))
@@ -598,7 +647,8 @@ def list_nth_shared_mut_pair
   ok ((t, t1), back)
 
 /-- [loops::list_nth_shared_mut_pair_merge]: loop 0:
-    Source: 'tests/src/loops.rs', lines 340:4-350:1 -/
+    Source: 'tests/src/loops.rs', lines 340:4-350:1
+    Visibility: public -/
 @[rust_loop]
 def list_nth_shared_mut_pair_merge_loop
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
@@ -621,7 +671,8 @@ def list_nth_shared_mut_pair_merge_loop
 partial_fixpoint
 
 /-- [loops::list_nth_shared_mut_pair_merge]:
-    Source: 'tests/src/loops.rs', lines 335:0-350:1 -/
+    Source: 'tests/src/loops.rs', lines 335:0-350:1
+    Visibility: public -/
 def list_nth_shared_mut_pair_merge
   {T : Type} (ls0 : List T) (ls1 : List T) (i : Std.U32) :
   Result ((T × T) × (T → List T))
@@ -630,7 +681,8 @@ def list_nth_shared_mut_pair_merge
   ok ((t, t1), back)
 
 /-- [loops::ignore_input_mut_borrow]: loop body 0:
-    Source: 'tests/src/loops.rs', lines 355:4-357:5 -/
+    Source: 'tests/src/loops.rs', lines 355:4-357:5
+    Visibility: public -/
 @[rust_loop_body]
 def ignore_input_mut_borrow_loop.body
   (i : Std.U32) : Result (ControlFlow Std.U32 Unit) := do
@@ -640,7 +692,8 @@ def ignore_input_mut_borrow_loop.body
   else ok (done ())
 
 /-- [loops::ignore_input_mut_borrow]: loop 0:
-    Source: 'tests/src/loops.rs', lines 355:4-357:5 -/
+    Source: 'tests/src/loops.rs', lines 355:4-357:5
+    Visibility: public -/
 @[rust_loop]
 def ignore_input_mut_borrow_loop (i : Std.U32) : Result Unit := do
   loop
@@ -648,13 +701,15 @@ def ignore_input_mut_borrow_loop (i : Std.U32) : Result Unit := do
     i
 
 /-- [loops::ignore_input_mut_borrow]:
-    Source: 'tests/src/loops.rs', lines 354:0-358:1 -/
+    Source: 'tests/src/loops.rs', lines 354:0-358:1
+    Visibility: public -/
 def ignore_input_mut_borrow (_a : Std.U32) (i : Std.U32) : Result Std.U32 := do
   ignore_input_mut_borrow_loop i
   ok _a
 
 /-- [loops::incr_ignore_input_mut_borrow]: loop body 0:
-    Source: 'tests/src/loops.rs', lines 364:4-366:5 -/
+    Source: 'tests/src/loops.rs', lines 364:4-366:5
+    Visibility: public -/
 @[rust_loop_body]
 def incr_ignore_input_mut_borrow_loop.body
   (i : Std.U32) : Result (ControlFlow Std.U32 Unit) := do
@@ -664,7 +719,8 @@ def incr_ignore_input_mut_borrow_loop.body
   else ok (done ())
 
 /-- [loops::incr_ignore_input_mut_borrow]: loop 0:
-    Source: 'tests/src/loops.rs', lines 364:4-366:5 -/
+    Source: 'tests/src/loops.rs', lines 364:4-366:5
+    Visibility: public -/
 @[rust_loop]
 def incr_ignore_input_mut_borrow_loop (i : Std.U32) : Result Unit := do
   loop
@@ -672,7 +728,8 @@ def incr_ignore_input_mut_borrow_loop (i : Std.U32) : Result Unit := do
     i
 
 /-- [loops::incr_ignore_input_mut_borrow]:
-    Source: 'tests/src/loops.rs', lines 362:0-367:1 -/
+    Source: 'tests/src/loops.rs', lines 362:0-367:1
+    Visibility: public -/
 def incr_ignore_input_mut_borrow
   (a : Std.U32) (i : Std.U32) : Result Std.U32 := do
   let a1 ← a + 1#u32
@@ -680,7 +737,8 @@ def incr_ignore_input_mut_borrow
   ok a1
 
 /-- [loops::ignore_input_shared_borrow]: loop body 0:
-    Source: 'tests/src/loops.rs', lines 372:4-374:5 -/
+    Source: 'tests/src/loops.rs', lines 372:4-374:5
+    Visibility: public -/
 @[rust_loop_body]
 def ignore_input_shared_borrow_loop.body
   (i : Std.U32) : Result (ControlFlow Std.U32 Unit) := do
@@ -690,7 +748,8 @@ def ignore_input_shared_borrow_loop.body
   else ok (done ())
 
 /-- [loops::ignore_input_shared_borrow]: loop 0:
-    Source: 'tests/src/loops.rs', lines 372:4-374:5 -/
+    Source: 'tests/src/loops.rs', lines 372:4-374:5
+    Visibility: public -/
 @[rust_loop]
 def ignore_input_shared_borrow_loop (i : Std.U32) : Result Unit := do
   loop
@@ -698,7 +757,8 @@ def ignore_input_shared_borrow_loop (i : Std.U32) : Result Unit := do
     i
 
 /-- [loops::ignore_input_shared_borrow]:
-    Source: 'tests/src/loops.rs', lines 371:0-375:1 -/
+    Source: 'tests/src/loops.rs', lines 371:0-375:1
+    Visibility: public -/
 def ignore_input_shared_borrow
   (_a : Std.U32) (i : Std.U32) : Result Std.U32 := do
   ignore_input_shared_borrow_loop i
@@ -1018,7 +1078,8 @@ def iter_local_shared_borrow : Result Unit := do
   iter_local_shared_borrow_loop
 
 /-- [loops::AList]
-    Source: 'tests/src/loops.rs', lines 506:0-509:1 -/
+    Source: 'tests/src/loops.rs', lines 506:0-509:1
+    Visibility: public -/
 @[discriminant isize]
 inductive AList (T : Type) where
 | Cons : Std.Usize → T → AList T → AList T

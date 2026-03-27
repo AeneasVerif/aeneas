@@ -18,7 +18,8 @@ def alloc_slice (N : Std.Usize) : Result (Slice Std.U8) := do
   ok (Std.Array.to_slice a)
 
 /-- [dynamic_size::Wrapper]
-    Source: 'tests/src/dynamic_size.rs', lines 7:0-9:1 -/
+    Source: 'tests/src/dynamic_size.rs', lines 7:0-9:1
+    Visibility: public -/
 structure Wrapper (T : Type) where
   data : T
 

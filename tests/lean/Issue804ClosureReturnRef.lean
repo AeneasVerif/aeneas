@@ -16,7 +16,8 @@ namespace issue_804_closure_return_ref
 
 /-- [core::array::from_fn]:
     Source: '/rustc/library/core/src/array/mod.rs', lines 109:0-111:52
-    Name pattern: [core::array::from_fn] -/
+    Name pattern: [core::array::from_fn]
+    Visibility: public -/
 @[rust_fun "core::array::from_fn"]
 axiom core.array.from_fn
   {T : Type} {F : Type} (N : Std.Usize) (opsfunctionFnMutFTupleUsizeTInst :
@@ -65,7 +66,8 @@ def each_ref.closure.Insts.CoreOpsFunctionFnMutTupleUsizeSharedU8 :
 }
 
 /-- [issue_804_closure_return_ref::each_ref]:
-    Source: 'tests/src/issue-804-closure-return-ref.rs', lines 5:0-7:1 -/
+    Source: 'tests/src/issue-804-closure-return-ref.rs', lines 5:0-7:1
+    Visibility: public -/
 def each_ref (s : Array Std.U8 10#usize) : Result (Array Std.U8 10#usize) := do
   core.array.from_fn 10#usize
     each_ref.closure.Insts.CoreOpsFunctionFnMutTupleUsizeSharedU8 s

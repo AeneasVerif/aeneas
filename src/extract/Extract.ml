@@ -3440,7 +3440,8 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
          ^ "]";
        ]
        (* TODO: why option option for the generics? Looks like a bug in OCaml!? *)
-       name ?generics:(Some generics) span);
+       name ?generics:(Some generics) ~public:impl.item_meta.attr_info.public
+         span);
     F.pp_print_break fmt 0 0;
     (* Extract the attributes *)
     let attributes = if backend () = Lean then [ "reducible" ] else [] in
