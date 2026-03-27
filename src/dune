@@ -120,6 +120,7 @@
 ;; Embed the git commit into the binary so that `aeneas -version` can report it.
 ;; Follows the same pattern as opam (see https://github.com/ocaml/opam/blob/master/src/client/dune).
 ;; Step 1: capture the git description (commit hash, with -dirty suffix if needed).
+
 (rule
  (target git-sha)
  (deps (universe))
@@ -131,6 +132,7 @@
 
 ;; Step 2: generate GitVersion.ml from the captured hash.
 ;; Produces `let commit = Some "<hash>"` or `let commit = None` if git is unavailable.
+
 (rule
  (target GitVersion.ml)
  (deps git-sha)
