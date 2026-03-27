@@ -124,7 +124,7 @@
   (ignore-stderr
    (with-stdout-to
     %{target}
-    (system "git rev-parse --quiet --short HEAD || echo")))))
+    (system "git describe --always --dirty 2>/dev/null || echo")))))
 
 (rule
  (target GitVersion.ml)
