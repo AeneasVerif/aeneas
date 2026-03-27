@@ -13,6 +13,12 @@ definitions. The goal is a mechanization that is **syntactically as close as
 possible to the reference document**, executable against test vectors, and suitable
 as a verification target for Rust implementations.
 
+**RFC conformity is the top priority.** If a prior agent's work does not conform to
+the RFC — even if it builds, passes tests, and was previously reviewed — it MUST be
+refactored until it does. No amount of prior work justifies keeping code that deviates
+from the RFC when a conformant alternative exists. When a major refactor is necessary
+to bring the mechanization closer to the RFC, that refactor should happen.
+
 **For general agent management rules** (resource budgets, file isolation, spawning
 rules, etc.), see the `agent-fleet-management` skill file. This file only covers
 the formalization-specific workflow.
