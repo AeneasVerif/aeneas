@@ -507,7 +507,10 @@ obligations for a later proof agent to close.
 **`while` for RFC `while` loops.** Lean's `while` in `Id.run do` compiles via
 `Lean.Loop` and is total — no termination proof is required. Do NOT replace RFC
 `while` loops with bounded `for` loops + `break`. The `while` matches the RFC
-structure directly.
+structure directly. Use the **dependent** form `while h : j < 256 do ...` when
+you need to use the loop guard as a bound proof inside the body (e.g., for
+indexing `a[j]` where the bound `j < 256` is required). This is the common case
+in crypto loops — the loop variable is almost always used as an array index.
 
 **Do not force termination on non-terminating RFC functions.** If the RFC defines
 a function that may not terminate (e.g., rejection sampling loops with no a priori
