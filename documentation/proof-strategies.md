@@ -418,7 +418,7 @@ This is more effective than calling `agrind` on the conjunction directly: each c
 
 ## What To Do Next (Decision Tree)
 
-When you're stuck after a tactic, use `goal` (via lean_lsp.py) to inspect the current proof state, then follow this guide:
+When you're stuck after a tactic, use `lean_goal` (via lean-lsp-mcp) to inspect the current proof state, then follow this guide:
 
 **The goal has a monadic bind (`let x ← f args; ...`):**
 → `step` (or `step with <thm>` if auto-resolution fails)
