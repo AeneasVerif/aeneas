@@ -118,15 +118,22 @@
   ValuesUtils))
 
 (rule
- (target GitVersion.ml)
+ (target git-sha)
  (deps (universe))
- (mode
-  (promote (until-clean)))
+ (action
+  (ignore-stderr
+   (with-stdout-to
+    %{target}
+    (system "git rev-parse --quiet --short HEAD || echo")))))
+
+(rule
+ (target GitVersion.ml)
+ (deps git-sha)
  (action
   (with-stdout-to
    %{target}
    (system
-    "echo 'let commit = \"'$(git rev-parse --short HEAD 2>/dev/null || echo unknown)'\"'"))))
+    "read -r hash < git-sha && [ -n \"$hash\" ] && echo 'let commit = Some \"'$hash'\"' || echo 'let commit = None'"))))
 
 (documentation
  (package aeneas))

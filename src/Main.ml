@@ -77,7 +77,12 @@ let () =
       ( "-version",
         Arg.Unit
           (fun () ->
-            print_endline ("aeneas " ^ GitVersion.commit);
+            let v =
+              match GitVersion.commit with
+              | Some h -> h
+              | None -> "unknown"
+            in
+            print_endline ("aeneas " ^ v);
             exit 0),
         " Print the version (git commit) and exit" );
       ( "-print-error-emitters",
