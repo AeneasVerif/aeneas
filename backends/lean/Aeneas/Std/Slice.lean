@@ -671,7 +671,7 @@ theorem core.slice.Slice.split_at.spec {T : Type} (s : Slice T) (n : Usize)
         s0.val = s.val.take n.val ∧ s1.val = s.val.drop n.val ⦄ := by
   unfold core.slice.Slice.split_at
   simp only [h, ↓reduceDIte, WP.spec_ok, predn_pair]
-  refine ⟨?_, ?_, ?_, ?_⟩ <;> simp [Slice.length, List.splitAt_eq] <;> scalar_tac
+  refine ⟨?_, ?_, ?_, ?_⟩ <;> simp [Slice.length, List.splitAt_eq]; scalar_tac
 
 /-- **Spec theorem for `core::slice::{[@T]}::split_at_mut`** -/
 -- TODO: ideally the postcondition binder would decompose the result pair as
@@ -719,24 +719,22 @@ theorem core.slice.Slice.swap_spec {T : Type} [Inhabited T] (s : Slice T) (a b :
       ∀ i, i ≠ a.val → i ≠ b.val → s'.val[i]! = s.val[i]! ⦄ := by
   simp only [core.slice.Slice.swap, Bind.bind, bind]
   have ⟨av, hav⟩ := spec_imp_exists (Slice.index_usize_spec s a ha)
-  simp only [hav, spec_ok]
+  simp only [hav]
   have ⟨bv, hbv⟩ := spec_imp_exists (Slice.index_usize_spec s b hb)
-  simp only [hbv, spec_ok]
+  simp only [hbv]
   have ⟨s1, hs1⟩ := spec_imp_exists (Slice.update_spec s a (s.val[b.val]!) ha)
-  simp only [hs1, spec_ok]
+  simp only [hs1]
   have hlen1 : b.val < s1.length := by rw [hs1.2, Slice.set_length]; exact hb
   have ⟨s', hs'⟩ := spec_imp_exists (Slice.update_spec s1 b (s.val[a.val]!) hlen1)
   rw [hs1.2] at hs'
   simp only [hs', spec_ok]
   refine ⟨?_, ?_, ?_, ?_⟩
-  · simp [hs'.2, Slice.set_length]
+  · simp
   · by_cases hab : (↑a : ℕ) = ↑b
-    · simp only [Slice.getElem!_Nat_eq, Slice.set_val_eq, hab]; grind
-    · simp only [Slice.getElem!_Nat_eq, Slice.set_val_eq]
-      grind
-  · simp only [Slice.getElem!_Nat_eq, Slice.set_val_eq]; grind
+    · grind
+    · grind
+  · grind
   · intro i hia hib
-    simp only [Slice.getElem!_Nat_eq, Slice.set_val_eq]
     grind
 
 @[simp, step_simps]
