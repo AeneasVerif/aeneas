@@ -205,6 +205,14 @@ structural level:
   that operation appears in more than one definition, introduce a helper with a
   matching scoped notation. This is the one exception to "no non-RFC helpers" —
   it replaces a repeated multi-token expression with the RFC's own notation.
+- **Name helpers via type abbreviations and namespaces.** When a helper applies
+  an RFC operation pointwise to a compound type (e.g., compress applied to a
+  polynomial, encode applied to a vector of polynomials), introduce a type
+  abbreviation (`abbrev Poly := ...`, `abbrev PolyVec := ...`) and place the
+  helper in its namespace: `Poly.compress`, `PolyVec.encode`. Do NOT use
+  flat names like `compressPoly` or `encodeVector`. The abbreviations are often
+  needed for type-checking anyway, and the namespaced call sites read closer to
+  the RFC (e.g., `Poly.compress dᵤ u` vs `compressPoly dᵤ u`).
 
 **Function signatures must exactly match the RFC.** If the RFC says
 `SampleNTT(B)` with `B ∈ 𝔹^{34}`, the Lean function must take a single
@@ -248,6 +256,11 @@ that text states a fact that holds at that point — it is NOT an operation to
 implement. Translate it as a Lean comment (`-- a ∈ ℤ_m`), not as a runtime
 operation (`% m`, a cast, an `if`). Only the executable part of the line (left of
 the remark) should produce Lean code.
+
+**No redundant modulo before `ZMod` cast.** When casting a `Nat` to `ZMod n`,
+do not apply `% n` first — the cast into `ZMod n` already reduces mod `n`.
+Write `((x : Nat) : ZMod n)`, not `((x % n : Nat) : ZMod n)`. The `% n` is
+dead code that adds noise.
 
 **The test:** for each line of Lean code annotated `-- line N`, a reviewer must be
 able to look at RFC line N and confirm the expressions match without needing to
@@ -325,7 +338,12 @@ Range notations (as defined in Aeneas) can be used to match RFC loop syntax
 explicitly initializing it (e.g., `bytesToBits` declares an output array and
 immediately starts writing to it), initialize it with default values (typically
 zeros). In Lean, use `Vector.replicate n 0` or `Vector.mkVector n default`
-as appropriate.
+as appropriate. When `Vector.replicate n 0` appears repeatedly — especially
+nested for multi-dimensional arrays or matrices (e.g.,
+`Vector.replicate k (Vector.replicate n 0)`) — introduce a `zero` helper on
+the relevant type abbreviation (e.g., `def Poly.zero : Poly := Vector.replicate
+n 0`, `def PolyVec.zero : PolyVec := Vector.replicate k Poly.zero`). This
+reduces noise in algorithm bodies where the RFC implicitly initializes to zero.
 
 ### Mathlib integration
 
