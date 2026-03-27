@@ -32,12 +32,12 @@ aeneas -backend lean my_crate.llbc -dest proofs -subdir /MyCrate/Code -split-fil
 
 This creates Lean files under `proofs/MyCrate/Code/`:
 
-| Generated file | Contains |
-|---|---|
-| `Types.lean` | Rust types → Lean inductive types |
-| `Funs.lean` | Rust functions → Lean monadic functions |
-| `FunsExternal_Template.lean` | Stubs for external functions (you complete this) |
-| `TypesExternal_Template.lean` | Stubs for external types (you complete this) |
+| Generated file                   | Contains                                         |
+|----------------------------------|--------------------------------------------------|
+| `Types.lean`                     | Rust types → Lean inductive types                |
+| `Funs.lean`                      | Rust functions → Lean monadic functions          |
+| `FunsExternal_Template.lean`     | Stubs for external functions (you complete this) |
+| `TypesExternal_Template.lean`    | Stubs for external types (you complete this)     |
 
 **Key aeneas flags:**
 - `-split-files` — one file per declaration group (recommended for large crates)
@@ -53,16 +53,16 @@ Create a Lean project in the `proofs/` directory:
 proofs/
 ├── lakefile.lean
 ├── lean-toolchain
-├── MyCrate.lean              ← module root (import all)
+├── MyCrate.lean                      ← module root (import all)
 └── MyCrate/
-    ├── Code/                 ← generated code (step 2 output)
+    ├── Code/                         ← generated code (step 2 output)
     │   ├── Types.lean
     │   ├── Funs.lean
-    │   ├── FunsExternal.lean     ← rename from _Template, fill in
-    │   └── TypesExternal.lean    ← rename from _Template, fill in
-    ├── Spec/                 ← your pure specifications
+    │   ├── FunsExternal.lean         ← rename from _Template, fill in
+    │   └── TypesExternal.lean        ← rename from _Template, fill in
+    ├── Spec/                         ← your pure specifications
     │   └── Basic.lean
-    └── Properties/           ← your proofs
+    └── Properties/                   ← your proofs
         └── Basic.lean
 ```
 
