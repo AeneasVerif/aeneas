@@ -12,7 +12,8 @@ set_option maxHeartbeats 1000000
 namespace issue_270_loop_list
 
 /-- [issue_270_loop_list::List]
-    Source: 'tests/src/issue-270-loop-list.rs', lines 2:0-5:1 -/
+    Source: 'tests/src/issue-270-loop-list.rs', lines 2:0-5:1
+    Visibility: public -/
 @[discriminant isize]
 inductive List (T : Type) where
 | Cons : T → List T → List T

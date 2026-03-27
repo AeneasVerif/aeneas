@@ -28,7 +28,8 @@ structure AVLTreeSet where
   root : Option AVLNode
 
 /-- [issue_134_loop_shared_borrows::{issue_134_loop_shared_borrows::AVLNode}::find]: loop 0:
-    Source: 'tests/src/issue-134-loop-shared-borrows.rs', lines 15:8-17:9 -/
+    Source: 'tests/src/issue-134-loop-shared-borrows.rs', lines 15:8-17:9
+    Visibility: public -/
 @[rust_loop]
 def AVLNode.find_loop (current_tree : Option AVLNode) : Result Unit := do
   match current_tree with
@@ -37,7 +38,8 @@ def AVLNode.find_loop (current_tree : Option AVLNode) : Result Unit := do
 partial_fixpoint
 
 /-- [issue_134_loop_shared_borrows::{issue_134_loop_shared_borrows::AVLNode}::find]:
-    Source: 'tests/src/issue-134-loop-shared-borrows.rs', lines 12:4-20:5 -/
+    Source: 'tests/src/issue-134-loop-shared-borrows.rs', lines 12:4-20:5
+    Visibility: public -/
 def AVLNode.find (self : AVLNode) : Result Bool := do
   AVLNode.find_loop self.child
   ok false

@@ -7,7 +7,8 @@ open Primitives
 
 (** [core::cmp::impls::{core::cmp::Ord for i32}::min]:
     Source: '/rustc/library/core/src/cmp.rs', lines 2000:12-2000:33
-    Name pattern: [core::cmp::impls::{core::cmp::Ord<i32>}::min] *)
+    Name pattern: [core::cmp::impls::{core::cmp::Ord<i32>}::min]
+    Visibility: public *)
 assume val i32_Insts_CoreCmpOrd_min : i32 -> i32 -> result i32
 
 (** Trait declaration: [defaulted_method::Trait]

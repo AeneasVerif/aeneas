@@ -9,29 +9,34 @@ Local Open Scope Primitives_scope.
 Module Bitwise.
 
 (** [bitwise::shift_u32]:
-    Source: 'tests/src/bitwise.rs', lines 4:0-9:1 *)
+    Source: 'tests/src/bitwise.rs', lines 4:0-9:1
+    Visibility: public *)
 Definition shift_u32 (a : u32) : result u32 :=
   t <- u32_shr a 16%usize; u32_shl t 16%usize
 .
 
 (** [bitwise::shift_i32]:
-    Source: 'tests/src/bitwise.rs', lines 11:0-16:1 *)
+    Source: 'tests/src/bitwise.rs', lines 11:0-16:1
+    Visibility: public *)
 Definition shift_i32 (a : i32) : result i32 :=
   t <- i32_shr a 16%isize; i32_shl t 16%isize
 .
 
 (** [bitwise::xor_u32]:
-    Source: 'tests/src/bitwise.rs', lines 18:0-20:1 *)
+    Source: 'tests/src/bitwise.rs', lines 18:0-20:1
+    Visibility: public *)
 Definition xor_u32 (a : u32) (b : u32) : result u32 :=
   Ok (u32_xor a b).
 
 (** [bitwise::or_u32]:
-    Source: 'tests/src/bitwise.rs', lines 22:0-24:1 *)
+    Source: 'tests/src/bitwise.rs', lines 22:0-24:1
+    Visibility: public *)
 Definition or_u32 (a : u32) (b : u32) : result u32 :=
   Ok (u32_or a b).
 
 (** [bitwise::and_u32]:
-    Source: 'tests/src/bitwise.rs', lines 26:0-28:1 *)
+    Source: 'tests/src/bitwise.rs', lines 26:0-28:1
+    Visibility: public *)
 Definition and_u32 (a : u32) (b : u32) : result u32 :=
   Ok (u32_and a b).
 
