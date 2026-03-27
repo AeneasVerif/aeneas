@@ -1234,7 +1234,7 @@ let extract_doc_comment (fmt : F.formatter) (sl : string list) : unit =
 let extract_comment_with_span (ctx : extraction_ctx) (fmt : F.formatter)
     (sl : string list) (name : Types.name option)
     ?(generics : (Types.generic_params * Types.generic_args) option = None)
-    (span : Meta.span) : unit =
+    ?(public : bool = false) (span : Meta.span) : unit =
   let name =
     match (name, generics) with
     | None, _ -> []
@@ -1253,7 +1253,8 @@ let extract_comment_with_span (ctx : extraction_ctx) (fmt : F.formatter)
         ]
   in
   let span = Errors.span_to_string span in
-  extract_doc_comment fmt (sl @ [ span ] @ name)
+  let visibility = if public then [ "Visibility: public" ] else [] in
+  extract_doc_comment fmt (sl @ [ span ] @ name @ visibility)
 
 let extract_attributes (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (name : Types.name)
@@ -1504,7 +1505,7 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
    in
    extract_comment_with_span ctx fmt
      [ "[" ^ name_to_string ctx def.item_meta.name ^ "]" ]
-     name span;
+     name ~public:def.item_meta.attr_info.public span;
    F.pp_print_break fmt 0 0;
    (* Extract the attributes.
 

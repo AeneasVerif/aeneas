@@ -7,58 +7,70 @@ open Primitives
 
 (** [core::fmt::Arguments]
     Source: '/rustc/library/core/src/fmt/mod.rs', lines 716:0-716:24
-    Name pattern: [core::fmt::Arguments] *)
+    Name pattern: [core::fmt::Arguments]
+    Visibility: public *)
 assume type core_fmt_Arguments_t : Type0
 
 (** [no_nested_borrows::Pair]
-    Source: 'tests/src/no_nested_borrows.rs', lines 7:0-10:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 7:0-10:1
+    Visibility: public *)
 type pair_t (t1 : Type0) (t2 : Type0) = { x : t1; y : t2; }
 
 (** [no_nested_borrows::List]
-    Source: 'tests/src/no_nested_borrows.rs', lines 12:0-15:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 12:0-15:1
+    Visibility: public *)
 type list_t (t : Type0) =
 | List_Cons : t -> list_t t -> list_t t
 | List_Nil : list_t t
 
 (** [no_nested_borrows::One]
-    Source: 'tests/src/no_nested_borrows.rs', lines 23:0-25:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 23:0-25:1
+    Visibility: public *)
 type one_t (t1 : Type0) = | One_One : t1 -> one_t t1
 
 (** [no_nested_borrows::EmptyEnum]
-    Source: 'tests/src/no_nested_borrows.rs', lines 29:0-31:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 29:0-31:1
+    Visibility: public *)
 type emptyEnum_t = | EmptyEnum_Empty : emptyEnum_t
 
 (** [no_nested_borrows::Enum]
-    Source: 'tests/src/no_nested_borrows.rs', lines 35:0-38:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 35:0-38:1
+    Visibility: public *)
 type enum_t = | Enum_Variant1 : enum_t | Enum_Variant2 : enum_t
 
 (** [no_nested_borrows::EmptyStruct]
-    Source: 'tests/src/no_nested_borrows.rs', lines 42:0-42:25 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 42:0-42:25
+    Visibility: public *)
 type emptyStruct_t = unit
 
 (** [no_nested_borrows::Sum]
-    Source: 'tests/src/no_nested_borrows.rs', lines 44:0-47:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 44:0-47:1
+    Visibility: public *)
 type sum_t (t1 : Type0) (t2 : Type0) =
 | Sum_Left : t1 -> sum_t t1 t2
 | Sum_Right : t2 -> sum_t t1 t2
 
 (** [no_nested_borrows::cast_u32_to_i32]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 49:0-51:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 49:0-51:1
+    Visibility: public *)
 let cast_u32_to_i32 (x : u32) : result i32 =
   scalar_cast U32 I32 x
 
 (** [no_nested_borrows::cast_bool_to_i32]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 53:0-55:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 53:0-55:1
+    Visibility: public *)
 let cast_bool_to_i32 (x : bool) : result i32 =
   scalar_cast_bool I32 x
 
 (** [no_nested_borrows::cast_bool_to_bool]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 58:0-60:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 58:0-60:1
+    Visibility: public *)
 let cast_bool_to_bool (x : bool) : result bool =
   Ok x
 
 (** [no_nested_borrows::test2]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 64:0-74:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 64:0-74:1
+    Visibility: public *)
 let test2 : result unit =
   let* _ = u32_add 23 44 in Ok ()
 
@@ -66,12 +78,14 @@ let test2 : result unit =
 let _ = assert_norm (test2 = Ok ())
 
 (** [no_nested_borrows::get_max]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 76:0-82:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 76:0-82:1
+    Visibility: public *)
 let get_max (x : u32) (y : u32) : result u32 =
   if x >= y then Ok x else Ok y
 
 (** [no_nested_borrows::test3]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 85:0-90:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 85:0-90:1
+    Visibility: public *)
 let test3 : result unit =
   let* x = get_max 4 3 in
   let* y = get_max 10 11 in
@@ -82,7 +96,8 @@ let test3 : result unit =
 let _ = assert_norm (test3 = Ok ())
 
 (** [no_nested_borrows::test_neg1]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 93:0-97:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 93:0-97:1
+    Visibility: public *)
 let test_neg1 : result unit =
   let* y = i32_neg 3 in if y = -3 then Ok () else Fail Failure
 
@@ -90,7 +105,8 @@ let test_neg1 : result unit =
 let _ = assert_norm (test_neg1 = Ok ())
 
 (** [no_nested_borrows::refs_test1]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 101:0-110:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 101:0-110:1
+    Visibility: public *)
 let refs_test1 : result unit =
   if 1 = 1 then Ok () else Fail Failure
 
@@ -98,7 +114,8 @@ let refs_test1 : result unit =
 let _ = assert_norm (refs_test1 = Ok ())
 
 (** [no_nested_borrows::refs_test2]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 113:0-125:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 113:0-125:1
+    Visibility: public *)
 let refs_test2 : result unit =
   if 2 = 2
   then
@@ -111,7 +128,8 @@ let refs_test2 : result unit =
 let _ = assert_norm (refs_test2 = Ok ())
 
 (** [no_nested_borrows::test_list1]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 130:0-132:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 130:0-132:1
+    Visibility: public *)
 let test_list1 : result unit =
   Ok ()
 
@@ -119,27 +137,32 @@ let test_list1 : result unit =
 let _ = assert_norm (test_list1 = Ok ())
 
 (** [no_nested_borrows::copy_int]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 134:0-136:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 134:0-136:1
+    Visibility: public *)
 let copy_int (x : i32) : result i32 =
   Ok x
 
 (** [no_nested_borrows::test_unreachable]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 140:0-144:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 140:0-144:1
+    Visibility: public *)
 let test_unreachable (b : bool) : result unit =
   massert (not b)
 
 (** [no_nested_borrows::test_panic]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 147:0-151:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 147:0-151:1
+    Visibility: public *)
 let test_panic (b : bool) : result unit =
   massert (not b)
 
 (** [no_nested_borrows::test_panic_msg]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 155:0-159:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 155:0-159:1
+    Visibility: public *)
 let test_panic_msg (b : bool) : result unit =
   if b then Fail Failure else Ok ()
 
 (** [no_nested_borrows::test_copy_int]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 163:0-168:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 163:0-168:1
+    Visibility: public *)
 let test_copy_int : result unit =
   let* y = copy_int 0 in if 0 = y then Ok () else Fail Failure
 
@@ -147,12 +170,14 @@ let test_copy_int : result unit =
 let _ = assert_norm (test_copy_int = Ok ())
 
 (** [no_nested_borrows::is_cons]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 170:0-175:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 170:0-175:1
+    Visibility: public *)
 let is_cons (#t : Type0) (l : list_t t) : result bool =
   begin match l with | List_Cons _ _ -> Ok true | List_Nil -> Ok false end
 
 (** [no_nested_borrows::test_is_cons]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 178:0-182:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 178:0-182:1
+    Visibility: public *)
 let test_is_cons : result unit =
   let* b = is_cons (List_Cons 0 List_Nil) in if b then Ok () else Fail Failure
 
@@ -160,7 +185,8 @@ let test_is_cons : result unit =
 let _ = assert_norm (test_is_cons = Ok ())
 
 (** [no_nested_borrows::split_list]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 184:0-189:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 184:0-189:1
+    Visibility: public *)
 let split_list (#t : Type0) (l : list_t t) : result (t & (list_t t)) =
   begin match l with
   | List_Cons hd tl -> Ok (hd, tl)
@@ -168,7 +194,8 @@ let split_list (#t : Type0) (l : list_t t) : result (t & (list_t t)) =
   end
 
 (** [no_nested_borrows::test_split_list]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 193:0-198:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 193:0-198:1
+    Visibility: public *)
 let test_split_list : result unit =
   let* p = split_list (List_Cons 0 List_Nil) in
   let (hd, _) = p in
@@ -178,7 +205,8 @@ let test_split_list : result unit =
 let _ = assert_norm (test_split_list = Ok ())
 
 (** [no_nested_borrows::choose]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 200:0-206:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 200:0-206:1
+    Visibility: public *)
 let choose
   (#t : Type0) (b : bool) (x : t) (y : t) : result (t & (t -> (t & t))) =
   if b
@@ -186,7 +214,8 @@ let choose
   else let back = fun y1 -> (x, y1) in Ok (y, back)
 
 (** [no_nested_borrows::choose_test]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 209:0-218:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 209:0-218:1
+    Visibility: public *)
 let choose_test : result unit =
   let* (z, choose_back) = choose true 0 0 in
   let* z1 = i32_add z 1 in
@@ -200,29 +229,34 @@ let choose_test : result unit =
 let _ = assert_norm (choose_test = Ok ())
 
 (** [no_nested_borrows::test_char]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 221:0-223:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 221:0-223:1
+    Visibility: public *)
 let test_char : result char =
   Ok 'a'
 
 (** [no_nested_borrows::panic_mut_borrow]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 226:0-228:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 226:0-228:1
+    Visibility: public *)
 let panic_mut_borrow (i : u32) : result u32 =
   Fail Failure
 
 (** [no_nested_borrows::Tree]
-    Source: 'tests/src/no_nested_borrows.rs', lines 231:0-234:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 231:0-234:1
+    Visibility: public *)
 type tree_t (t : Type0) =
 | Tree_Leaf : t -> tree_t t
 | Tree_Node : t -> nodeElem_t t -> tree_t t -> tree_t t
 
 (** [no_nested_borrows::NodeElem]
-    Source: 'tests/src/no_nested_borrows.rs', lines 236:0-239:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 236:0-239:1
+    Visibility: public *)
 and nodeElem_t (t : Type0) =
 | NodeElem_Cons : tree_t t -> nodeElem_t t -> nodeElem_t t
 | NodeElem_Nil : nodeElem_t t
 
 (** [no_nested_borrows::list_length]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 272:0-277:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 272:0-277:1
+    Visibility: public *)
 let rec list_length (#t : Type0) (l : list_t t) : result u32 =
   begin match l with
   | List_Cons _ l1 -> let* i = list_length l1 in u32_add 1 i
@@ -230,7 +264,8 @@ let rec list_length (#t : Type0) (l : list_t t) : result u32 =
   end
 
 (** [no_nested_borrows::list_nth_shared]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 280:0-293:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 280:0-293:1
+    Visibility: public *)
 let rec list_nth_shared (#t : Type0) (l : list_t t) (i : u32) : result t =
   begin match l with
   | List_Cons x tl ->
@@ -239,7 +274,8 @@ let rec list_nth_shared (#t : Type0) (l : list_t t) (i : u32) : result t =
   end
 
 (** [no_nested_borrows::list_nth_mut]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 296:0-309:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 296:0-309:1
+    Visibility: public *)
 let rec list_nth_mut
   (#t : Type0) (l : list_t t) (i : u32) : result (t & (t -> list_t t)) =
   begin match l with
@@ -255,7 +291,8 @@ let rec list_nth_mut
   end
 
 (** [no_nested_borrows::list_rev_aux]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 312:0-322:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 312:0-322:1
+    Visibility: public *)
 let rec list_rev_aux
   (#t : Type0) (li : list_t t) (lo : list_t t) : result (list_t t) =
   begin match li with
@@ -264,12 +301,14 @@ let rec list_rev_aux
   end
 
 (** [no_nested_borrows::list_rev]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 326:0-329:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 326:0-329:1
+    Visibility: public *)
 let list_rev (#t : Type0) (l : list_t t) : result (list_t t) =
   let (li, _) = core_mem_replace l List_Nil in list_rev_aux li List_Nil
 
 (** [no_nested_borrows::test_list_functions]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 332:0-346:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 332:0-346:1
+    Visibility: public *)
 let test_list_functions : result unit =
   let* i = list_length (List_Cons 0 (List_Cons 1 (List_Cons 2 List_Nil))) in
   if i = 3
@@ -312,7 +351,8 @@ let test_list_functions : result unit =
 let _ = assert_norm (test_list_functions = Ok ())
 
 (** [no_nested_borrows::id_mut_pair1]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 348:0-350:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 348:0-350:1
+    Visibility: public *)
 let id_mut_pair1
   (#t1 : Type0) (#t2 : Type0) (x : t1) (y : t2) :
   result ((t1 & t2) & ((t1 & t2) -> (t1 & t2)))
@@ -320,7 +360,8 @@ let id_mut_pair1
   Ok ((x, y), (fun p -> p))
 
 (** [no_nested_borrows::id_mut_pair2]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 352:0-354:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 352:0-354:1
+    Visibility: public *)
 let id_mut_pair2
   (#t1 : Type0) (#t2 : Type0) (p : (t1 & t2)) :
   result ((t1 & t2) & ((t1 & t2) -> (t1 & t2)))
@@ -328,7 +369,8 @@ let id_mut_pair2
   Ok (p, (fun p1 -> p1))
 
 (** [no_nested_borrows::id_mut_pair3]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 356:0-358:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 356:0-358:1
+    Visibility: public *)
 let id_mut_pair3
   (#t1 : Type0) (#t2 : Type0) (x : t1) (y : t2) :
   result ((t1 & t2) & (t1 -> t1) & (t2 -> t2))
@@ -336,7 +378,8 @@ let id_mut_pair3
   Ok ((x, y), (fun x1 -> x1), (fun y1 -> y1))
 
 (** [no_nested_borrows::id_mut_pair4]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 360:0-362:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 360:0-362:1
+    Visibility: public *)
 let id_mut_pair4
   (#t1 : Type0) (#t2 : Type0) (p : (t1 & t2)) :
   result ((t1 & t2) & (t1 -> t1) & (t2 -> t2))
@@ -344,35 +387,42 @@ let id_mut_pair4
   Ok (p, (fun p1 -> p1), (fun p1 -> p1))
 
 (** [no_nested_borrows::StructWithTuple]
-    Source: 'tests/src/no_nested_borrows.rs', lines 367:0-369:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 367:0-369:1
+    Visibility: public *)
 type structWithTuple_t (t1 : Type0) (t2 : Type0) = { p : (t1 & t2); }
 
 (** [no_nested_borrows::new_tuple1]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 371:0-373:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 371:0-373:1
+    Visibility: public *)
 let new_tuple1 : result (structWithTuple_t u32 u32) =
   Ok { p = (1, 2) }
 
 (** [no_nested_borrows::new_tuple2]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 375:0-377:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 375:0-377:1
+    Visibility: public *)
 let new_tuple2 : result (structWithTuple_t i16 i16) =
   Ok { p = (1, 2) }
 
 (** [no_nested_borrows::new_tuple3]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 379:0-381:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 379:0-381:1
+    Visibility: public *)
 let new_tuple3 : result (structWithTuple_t u64 i64) =
   Ok { p = (1, 2) }
 
 (** [no_nested_borrows::StructWithPair]
-    Source: 'tests/src/no_nested_borrows.rs', lines 384:0-386:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 384:0-386:1
+    Visibility: public *)
 type structWithPair_t (t1 : Type0) (t2 : Type0) = { p : pair_t t1 t2; }
 
 (** [no_nested_borrows::new_pair1]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 388:0-394:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 388:0-394:1
+    Visibility: public *)
 let new_pair1 : result (structWithPair_t u32 u32) =
   Ok { p = { x = 1; y = 2 } }
 
 (** [no_nested_borrows::test_constants]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 397:0-402:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 397:0-402:1
+    Visibility: public *)
 let test_constants : result unit =
   let* swt = new_tuple1 in
   let (i, _) = swt.p in
@@ -394,7 +444,8 @@ let test_constants : result unit =
 let _ = assert_norm (test_constants = Ok ())
 
 (** [no_nested_borrows::test_weird_borrows1]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 407:0-415:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 407:0-415:1
+    Visibility: public *)
 let test_weird_borrows1 : result unit =
   Ok ()
 
@@ -402,100 +453,120 @@ let test_weird_borrows1 : result unit =
 let _ = assert_norm (test_weird_borrows1 = Ok ())
 
 (** [no_nested_borrows::test_mem_replace]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 417:0-421:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 417:0-421:1
+    Visibility: public *)
 let test_mem_replace (px : u32) : result u32 =
   let (y, _) = core_mem_replace px 1 in if y = 0 then Ok 2 else Fail Failure
 
 (** [no_nested_borrows::test_shared_borrow_bool1]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 424:0-433:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 424:0-433:1
+    Visibility: public *)
 let test_shared_borrow_bool1 (b : bool) : result u32 =
   if b then Ok 0 else Ok 1
 
 (** [no_nested_borrows::test_shared_borrow_bool2]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 437:0-447:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 437:0-447:1
+    Visibility: public *)
 let test_shared_borrow_bool2 : result u32 =
   Ok 0
 
 (** [no_nested_borrows::test_shared_borrow_enum1]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 452:0-460:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 452:0-460:1
+    Visibility: public *)
 let test_shared_borrow_enum1 (l : list_t u32) : result u32 =
   begin match l with | List_Cons _ _ -> Ok 1 | List_Nil -> Ok 0 end
 
 (** [no_nested_borrows::test_shared_borrow_enum2]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 464:0-473:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 464:0-473:1
+    Visibility: public *)
 let test_shared_borrow_enum2 : result u32 =
   Ok 0
 
 (** [no_nested_borrows::incr]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 475:0-477:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 475:0-477:1
+    Visibility: public *)
 let incr (x : u32) : result u32 =
   u32_add x 1
 
 (** [no_nested_borrows::call_incr]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 479:0-482:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 479:0-482:1
+    Visibility: public *)
 let call_incr (x : u32) : result u32 =
   incr x
 
 (** [no_nested_borrows::read_then_incr]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 484:0-488:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 484:0-488:1
+    Visibility: public *)
 let read_then_incr (x : u32) : result (u32 & u32) =
   let* x1 = u32_add x 1 in Ok (x, x1)
 
 (** [no_nested_borrows::Tuple]
-    Source: 'tests/src/no_nested_borrows.rs', lines 490:0-490:33 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 490:0-490:33
+    Visibility: public *)
 type tuple_t (t1 : Type0) (t2 : Type0) = t1 * t2
 
 (** [no_nested_borrows::read_tuple]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 492:0-494:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 492:0-494:1
+    Visibility: public *)
 let read_tuple (x : (u32 & u32)) : result u32 =
   let (i, _) = x in Ok i
 
 (** [no_nested_borrows::update_tuple]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 496:0-498:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 496:0-498:1
+    Visibility: public *)
 let update_tuple (x : (u32 & u32)) : result (u32 & u32) =
   let (_, i) = x in Ok (1, i)
 
 (** [no_nested_borrows::read_tuple_struct]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 500:0-502:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 500:0-502:1
+    Visibility: public *)
 let read_tuple_struct (x : tuple_t u32 u32) : result u32 =
   let (i, _) = x in Ok i
 
 (** [no_nested_borrows::update_tuple_struct]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 504:0-506:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 504:0-506:1
+    Visibility: public *)
 let update_tuple_struct (x : tuple_t u32 u32) : result (tuple_t u32 u32) =
   let (_, i) = x in Ok (1, i)
 
 (** [no_nested_borrows::create_tuple_struct]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 508:0-510:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 508:0-510:1
+    Visibility: public *)
 let create_tuple_struct (x : u32) (y : u64) : result (tuple_t u32 u64) =
   Ok (x, y)
 
 (** [no_nested_borrows::IdType]
-    Source: 'tests/src/no_nested_borrows.rs', lines 513:0-513:24 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 513:0-513:24
+    Visibility: public *)
 type idType_t (t : Type0) = t
 
 (** [no_nested_borrows::use_id_type]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 515:0-517:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 515:0-517:1
+    Visibility: public *)
 let use_id_type (#t : Type0) (x : idType_t t) : result t =
   Ok x
 
 (** [no_nested_borrows::create_id_type]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 519:0-521:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 519:0-521:1
+    Visibility: public *)
 let create_id_type (#t : Type0) (x : t) : result (idType_t t) =
   Ok x
 
 (** [no_nested_borrows::not_bool]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 523:0-525:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 523:0-525:1
+    Visibility: public *)
 let not_bool (x : bool) : result bool =
   Ok (not x)
 
 (** [no_nested_borrows::not_u32]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 527:0-529:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 527:0-529:1
+    Visibility: public *)
 let not_u32 (x : u32) : result u32 =
   Ok (u32_not x)
 
 (** [no_nested_borrows::not_i32]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 531:0-533:1 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 531:0-533:1
+    Visibility: public *)
 let not_i32 (x : i32) : result i32 =
   Ok (i32_not x)
 
@@ -508,21 +579,25 @@ let borrow_mut_tuple
   Ok (x, (fun x1 -> x1))
 
 (** [no_nested_borrows::ExpandSimpliy::Wrapper]
-    Source: 'tests/src/no_nested_borrows.rs', lines 541:4-541:32 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 541:4-541:32
+    Visibility: public *)
 type expandSimpliy_Wrapper_t (t : Type0) = t * t
 
 (** [no_nested_borrows::ExpandSimpliy::check_expand_simplify_symb1]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 543:4-549:5 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 543:4-549:5
+    Visibility: public *)
 let expandSimpliy_check_expand_simplify_symb1
   (x : expandSimpliy_Wrapper_t bool) : result (expandSimpliy_Wrapper_t bool) =
   let (b, _) = x in if b then Ok x else Ok x
 
 (** [no_nested_borrows::ExpandSimpliy::Wrapper2]
-    Source: 'tests/src/no_nested_borrows.rs', lines 551:4-554:5 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 551:4-554:5
+    Visibility: public *)
 type expandSimpliy_Wrapper2_t = { b : bool; x : u32; }
 
 (** [no_nested_borrows::ExpandSimpliy::check_expand_simplify_symb2]:
-    Source: 'tests/src/no_nested_borrows.rs', lines 556:4-562:5 *)
+    Source: 'tests/src/no_nested_borrows.rs', lines 556:4-562:5
+    Visibility: public *)
 let expandSimpliy_check_expand_simplify_symb2
   (x : expandSimpliy_Wrapper2_t) : result expandSimpliy_Wrapper2_t =
   if x.b then Ok x else Ok x

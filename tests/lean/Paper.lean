@@ -12,12 +12,14 @@ set_option maxHeartbeats 1000000
 namespace paper
 
 /-- [paper::ref_incr]:
-    Source: 'tests/src/paper.rs', lines 7:0-9:1 -/
+    Source: 'tests/src/paper.rs', lines 7:0-9:1
+    Visibility: public -/
 def ref_incr (x : Std.I32) : Result Std.I32 := do
   x + 1#i32
 
 /-- [paper::test_incr]:
-    Source: 'tests/src/paper.rs', lines 12:0-16:1 -/
+    Source: 'tests/src/paper.rs', lines 12:0-16:1
+    Visibility: public -/
 def test_incr : Result Unit := do
   let x ← ref_incr 0#i32
   massert (x = 1#i32)
@@ -26,7 +28,8 @@ def test_incr : Result Unit := do
 #assert (test_incr == ok ())
 
 /-- [paper::choose]:
-    Source: 'tests/src/paper.rs', lines 19:0-25:1 -/
+    Source: 'tests/src/paper.rs', lines 19:0-25:1
+    Visibility: public -/
 def choose
   {T : Type} (b : Bool) (x : T) (y : T) : Result (T × (T → (T × T))) := do
   if b
@@ -36,7 +39,8 @@ def choose
        ok (y, back)
 
 /-- [paper::test_choose]:
-    Source: 'tests/src/paper.rs', lines 28:0-36:1 -/
+    Source: 'tests/src/paper.rs', lines 28:0-36:1
+    Visibility: public -/
 def test_choose : Result Unit := do
   let (z, choose_back) ← choose true 0#i32 0#i32
   let z1 ← z + 1#i32
@@ -49,14 +53,16 @@ def test_choose : Result Unit := do
 #assert (test_choose == ok ())
 
 /-- [paper::List]
-    Source: 'tests/src/paper.rs', lines 40:0-43:1 -/
+    Source: 'tests/src/paper.rs', lines 40:0-43:1
+    Visibility: public -/
 @[discriminant isize]
 inductive List (T : Type) where
 | Cons : T → List T → List T
 | Nil : List T
 
 /-- [paper::list_nth_mut]:
-    Source: 'tests/src/paper.rs', lines 47:0-60:1 -/
+    Source: 'tests/src/paper.rs', lines 47:0-60:1
+    Visibility: public -/
 def list_nth_mut
   {T : Type} (l : List T) (i : Std.U32) : Result (T × (T → List T)) := do
   match l with
@@ -74,7 +80,8 @@ def list_nth_mut
 partial_fixpoint
 
 /-- [paper::sum]:
-    Source: 'tests/src/paper.rs', lines 62:0-71:1 -/
+    Source: 'tests/src/paper.rs', lines 62:0-71:1
+    Visibility: public -/
 def sum (l : List Std.I32) : Result Std.I32 := do
   match l with
   | List.Cons x tl => let i ← sum tl
@@ -83,7 +90,8 @@ def sum (l : List Std.I32) : Result Std.I32 := do
 partial_fixpoint
 
 /-- [paper::test_nth]:
-    Source: 'tests/src/paper.rs', lines 74:0-79:1 -/
+    Source: 'tests/src/paper.rs', lines 74:0-79:1
+    Visibility: public -/
 def test_nth : Result Unit := do
   let (x, list_nth_mut_back) ←
     list_nth_mut (List.Cons 1#i32 (List.Cons 2#i32 (List.Cons 3#i32 List.Nil)))
@@ -97,7 +105,8 @@ def test_nth : Result Unit := do
 #assert (test_nth == ok ())
 
 /-- [paper::call_choose]:
-    Source: 'tests/src/paper.rs', lines 82:0-88:1 -/
+    Source: 'tests/src/paper.rs', lines 82:0-88:1
+    Visibility: public -/
 def call_choose (p : (Std.U32 × Std.U32)) : Result Std.U32 := do
   let (px, py) := p
   let (pz, choose_back) ← choose true px py

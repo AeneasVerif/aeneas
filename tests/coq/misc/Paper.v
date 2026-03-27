@@ -9,12 +9,14 @@ Local Open Scope Primitives_scope.
 Module Paper.
 
 (** [paper::ref_incr]:
-    Source: 'tests/src/paper.rs', lines 7:0-9:1 *)
+    Source: 'tests/src/paper.rs', lines 7:0-9:1
+    Visibility: public *)
 Definition ref_incr (x : i32) : result i32 :=
   i32_add x 1%i32.
 
 (** [paper::test_incr]:
-    Source: 'tests/src/paper.rs', lines 12:0-16:1 *)
+    Source: 'tests/src/paper.rs', lines 12:0-16:1
+    Visibility: public *)
 Definition test_incr : result unit :=
   x <- ref_incr 0%i32; massert (x s= 1%i32)
 .
@@ -23,7 +25,8 @@ Definition test_incr : result unit :=
 Check (test_incr)%return.
 
 (** [paper::choose]:
-    Source: 'tests/src/paper.rs', lines 19:0-25:1 *)
+    Source: 'tests/src/paper.rs', lines 19:0-25:1
+    Visibility: public *)
 Definition choose
   {T : Type} (b : bool) (x : T) (y : T) : result (T * (T -> (T * T))) :=
   if b
@@ -32,7 +35,8 @@ Definition choose
 .
 
 (** [paper::test_choose]:
-    Source: 'tests/src/paper.rs', lines 28:0-36:1 *)
+    Source: 'tests/src/paper.rs', lines 28:0-36:1
+    Visibility: public *)
 Definition test_choose : result unit :=
   p <- choose true 0%i32 0%i32;
   let (z, choose_back) := p in
@@ -47,7 +51,8 @@ Definition test_choose : result unit :=
 Check (test_choose)%return.
 
 (** [paper::List]
-    Source: 'tests/src/paper.rs', lines 40:0-43:1 *)
+    Source: 'tests/src/paper.rs', lines 40:0-43:1
+    Visibility: public *)
 Inductive List_t (T : Type) :=
 | List_Cons : T -> List_t T -> List_t T
 | List_Nil : List_t T
@@ -57,7 +62,8 @@ Arguments List_Cons { _ }.
 Arguments List_Nil { _ }.
 
 (** [paper::list_nth_mut]:
-    Source: 'tests/src/paper.rs', lines 47:0-60:1 *)
+    Source: 'tests/src/paper.rs', lines 47:0-60:1
+    Visibility: public *)
 Fixpoint list_nth_mut
   {T : Type} (l : List_t T) (i : u32) : result (T * (T -> List_t T)) :=
   match l with
@@ -77,7 +83,8 @@ Fixpoint list_nth_mut
 .
 
 (** [paper::sum]:
-    Source: 'tests/src/paper.rs', lines 62:0-71:1 *)
+    Source: 'tests/src/paper.rs', lines 62:0-71:1
+    Visibility: public *)
 Fixpoint sum (l : List_t i32) : result i32 :=
   match l with
   | List_Cons x tl => i <- sum tl; i32_add x i
@@ -86,7 +93,8 @@ Fixpoint sum (l : List_t i32) : result i32 :=
 .
 
 (** [paper::test_nth]:
-    Source: 'tests/src/paper.rs', lines 74:0-79:1 *)
+    Source: 'tests/src/paper.rs', lines 74:0-79:1
+    Visibility: public *)
 Definition test_nth : result unit :=
   p <-
     list_nth_mut (List_Cons 1%i32 (List_Cons 2%i32 (List_Cons 3%i32 List_Nil)))
@@ -102,7 +110,8 @@ Definition test_nth : result unit :=
 Check (test_nth)%return.
 
 (** [paper::call_choose]:
-    Source: 'tests/src/paper.rs', lines 82:0-88:1 *)
+    Source: 'tests/src/paper.rs', lines 82:0-88:1
+    Visibility: public *)
 Definition call_choose (p : (u32 * u32)) : result u32 :=
   let (px, py) := p in
   p1 <- choose true px py;

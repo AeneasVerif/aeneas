@@ -8,17 +8,20 @@ include RenameAttribute.Clauses
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [rename_attribute::BoolTrait::ret_true]:
-    Source: 'tests/src/rename_attribute.rs', lines 17:4-19:5 *)
+    Source: 'tests/src/rename_attribute.rs', lines 17:4-19:5
+    Visibility: public *)
 let boolTrait_retTest_default (#self : Type0) (self1 : self) : result bool =
   Ok true
 
 (** [rename_attribute::{rename_attribute::BoolTrait for bool}::get_bool]:
-    Source: 'tests/src/rename_attribute.rs', lines 24:4-26:5 *)
+    Source: 'tests/src/rename_attribute.rs', lines 24:4-26:5
+    Visibility: public *)
 let boolImpl_getTest (self : bool) : result bool =
   Ok self
 
 (** [rename_attribute::{rename_attribute::BoolTrait for bool}::ret_true]:
-    Source: 'tests/src/rename_attribute.rs', lines 23:0-27:1 *)
+    Source: 'tests/src/rename_attribute.rs', lines 23:0-27:1
+    Visibility: public *)
 let boolImpl_retTest (self : bool) : result bool =
   Ok true
 
@@ -30,7 +33,8 @@ let boolImpl : boolTest_t bool = {
 }
 
 (** [rename_attribute::test_bool_trait]:
-    Source: 'tests/src/rename_attribute.rs', lines 30:0-32:1 *)
+    Source: 'tests/src/rename_attribute.rs', lines 30:0-32:1
+    Visibility: public *)
 let boolFn (t : Type0) (x : bool) : result bool =
   let* b = boolImpl_getTest x in if b then boolImpl_retTest x else Ok false
 
@@ -50,7 +54,8 @@ let rec factfn (n : u64) : Tot (result u64) (decreases (factfn_decreases n)) =
   else let* i = u64_sub n 1 in let* i1 = factfn i in u64_mul n i1
 
 (** [rename_attribute::sum]: loop 0:
-    Source: 'tests/src/rename_attribute.rs', lines 70:4-73:5 *)
+    Source: 'tests/src/rename_attribute.rs', lines 70:4-73:5
+    Visibility: public *)
 let rec no_borrows_sum_loop
   (max : u32) (i : u32) (s : u32) :
   Tot (result u32) (decreases (no_borrows_sum_loop_decreases max i s))
@@ -63,7 +68,8 @@ let rec no_borrows_sum_loop
   else Ok s
 
 (** [rename_attribute::sum]:
-    Source: 'tests/src/rename_attribute.rs', lines 67:0-77:1 *)
+    Source: 'tests/src/rename_attribute.rs', lines 67:0-77:1
+    Visibility: public *)
 let no_borrows_sum (max : u32) : result u32 =
   let* s = no_borrows_sum_loop max 0 0 in u32_mul s 2
 

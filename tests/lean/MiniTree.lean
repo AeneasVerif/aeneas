@@ -28,7 +28,8 @@ structure Tree where
   root : Option Node
 
 /-- [mini_tree::{mini_tree::Tree}::explore]: loop 0:
-    Source: 'tests/src/mini_tree.rs', lines 17:8-19:9 -/
+    Source: 'tests/src/mini_tree.rs', lines 17:8-19:9
+    Visibility: public -/
 @[rust_loop]
 def Tree.explore_loop (current_tree : Option Node) : Result Unit := do
   match current_tree with
@@ -37,7 +38,8 @@ def Tree.explore_loop (current_tree : Option Node) : Result Unit := do
 partial_fixpoint
 
 /-- [mini_tree::{mini_tree::Tree}::explore]:
-    Source: 'tests/src/mini_tree.rs', lines 14:4-20:5 -/
+    Source: 'tests/src/mini_tree.rs', lines 14:4-20:5
+    Visibility: public -/
 @[reducible]
 def Tree.explore (self : Tree) : Result Unit := do
   Tree.explore_loop self.root

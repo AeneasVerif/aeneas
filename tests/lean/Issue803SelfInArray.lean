@@ -12,7 +12,8 @@ set_option maxHeartbeats 1000000
 namespace issue_803_self_in_array
 
 /-- [issue_803_self_in_array::Arguments]
-    Source: 'tests/src/issue-803-self-in-array.rs', lines 5:0-5:33 -/
+    Source: 'tests/src/issue-803-self-in-array.rs', lines 5:0-5:33
+    Visibility: public -/
 @[reducible]
 def Arguments := Unit
 
