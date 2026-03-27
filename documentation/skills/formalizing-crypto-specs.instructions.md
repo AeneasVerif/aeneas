@@ -512,9 +512,37 @@ structure directly.
 **Do not force termination on non-terminating RFC functions.** If the RFC defines
 a function that may not terminate (e.g., rejection sampling loops with no a priori
 bound), do NOT introduce artificial bounds, pre-generate a fixed amount of output,
-or otherwise restructure the algorithm to make it terminating. Instead, mark the
-function `partial_fixpoint` — Lean will generate a reasoning principle that can be
-used for partial correctness proofs.
+or otherwise restructure the algorithm to make it terminating. Instead, use
+`partial_fixpoint` — Lean will generate a reasoning principle that can be used for
+partial correctness proofs.
+
+**Do NOT use `partial`.** `partial` definitions are opaque axioms — Lean generates
+no reasoning principle for them, making them useless for proofs. Always use
+`partial_fixpoint` instead.
+
+**`partial_fixpoint` requires a default value** for the return type (an `Inhabited`
+instance). For `Id a` where `a` is inhabited, this works directly — which is
+usually the case with cryptographic specs (we manipulate integers, arrays of
+integers, polynomials, byte strings, etc.). **Syntax:** place `partial_fixpoint`
+after the definition body:
+```lean
+def sampleNTT (B : 𝔹 34) : Poly := Id.run do
+  let mut j := 0
+  while j < 256 do
+    ...  -- rejection sampling
+  return â
+partial_fixpoint
+```
+Here `Poly = Vector (ZMod q) n` is `Inhabited` (zero vector), so `Id Poly` has a
+default value and `partial_fixpoint` works.
+
+If (and only if) the return type is not inhabited — which is rare in cryptographic
+specs — wrap the output type in `Option`:
+```lean
+@[partial_fixpoint]
+def foo (x : Nat) : Option Result := do
+  ...
+```
 
 **NEVER** convert `Vector` to `Array` (via `.toArray`) or `𝔹 n` to `ByteArray`
 (via `.toByteArray`) just to avoid bounds proofs. This defeats the purpose of
@@ -551,27 +579,28 @@ bounds (array/vector index proofs). Guidelines:
   1. `agrind` — first choice; handles most arithmetic goals
   2. `grind` — fallback when `agrind` doesn't close the goal
   3. `scalar_tac` — last resort for simple linear arithmetic on scalars
-- It is fine to locally override `get_elem_tactic` to handle these automatically:
+- **Always override `get_elem_tactic` with `agrind`** so that `a[i]` auto-discharges
+  bounds without explicit `(by ...)` blocks:
   ```lean
   scoped macro_rules
   | `(tactic| get_elem_tactic) => `(tactic| agrind)
   ```
-  This makes `a[i]` notation work without explicit bound proofs — `agrind` will
-  try to discharge the bound automatically. Place this in a `namespace` / `end` block
-  and `open` it where needed.
+  The override must be either **`scoped`** (in a namespace — open the scope where
+  needed) or **`local`**. With this override, `a[i]` notation works without explicit
+  bound proofs everywhere in scope. This is important not just for convenience but
+  for performance: `(by ...)` blocks in type signatures cause severe kernel
+  type-checking slowness (see the `aeneas-lean-core` skill file for details).
 - For parameter-dependent bounds (e.g., array sizes that depend on the parameter
   set), see the "Avoid early case splits on parameters" section in
   the `aeneas-lean-core` skill file — prefer `attribute [local agrind]` or
   local auxiliary lemmas over top-level `cases p`.
 - Keep proofs minimal — they should not distract from the specification. If a
   bound proof requires more than 2-3 lines, extract it as an auxiliary lemma.
-- If the same tactic calls appear repeatedly (e.g., `by cases p <;> simp_all`
-  for every `getElem` bound), introduce a **local macro** to avoid clutter:
-  ```lean
-  local macro "param_bounds_tac" : tactic => `(tactic| cases p <;> simp_all [n, nbar])
-  ```
-  Then use `(by param_bounds_tac)` throughout the spec instead of repeating the
-  full tactic sequence.
+- **⛔ NEVER use `cases p <;> simp_all [...] <;> tactic` for `getElem` bounds** in
+  definition or theorem type signatures — this produces massive proof terms that cause
+  kernel slowness (see the `aeneas-lean-core` skill file for the full rationale and
+  accepted tactic list). If `agrind` via `get_elem_tactic` cannot discharge a bound,
+  extract it as a standalone lemma registered with `@[agrind =]`.
 
 ### Interactive development
 

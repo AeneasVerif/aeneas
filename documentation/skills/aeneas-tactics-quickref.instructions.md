@@ -242,7 +242,8 @@ theorem MY_CONST_val : MY_CONST.val = 42 := by decide
 | Doc comment before `set_option` | Parse error "expected 'lemma'" | Use `/- ... -/` (regular comment), not `/-- ... -/` (doc comment) |
 | Concrete computation fails | `agrind`/`scalar_tac` fail on numeric literals | `native_decide` or `decide` |
 | `scalar_tac` in spec_gen | Cascading `maxRecDepth` in loop proof | Mass-replace ALL `scalar_tac` → `agrind` in proof body |
-| Recurring index bounds slow | Same bound proved inline many times | Extract standalone helper lemma with clean context |
+| Recurring index bounds slow | Same bound proved inline many times | Extract as solver-attributed lemma (`@[agrind =]`); see Pitfall #22 in `aeneas-lean-core` |
+| `(by ...)` in type signature | Kernel slowness on `apply`/`exact` of theorem | Use `get_elem_tactic` override with `agrind`; if that fails, use `(by agrind)` > `(by grind)` > `(by scalar_tac)` > standalone lemma. NEVER `cases p <;> simp_all <;> tactic`. See "Never embed (by ...) in type signatures" in `aeneas-lean-core` |
 | `first \| simp_all` swallows goals | `simp_all` partially simplifies, `first` considers it done | `(simp_all; done)` — forces full closure; applies to all `simp` variants |
 
 ## Debugging and Profiling Commands
