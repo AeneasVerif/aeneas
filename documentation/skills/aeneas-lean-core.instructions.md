@@ -351,23 +351,36 @@ The only acceptable warning is `"declaration uses 'sorry'"` for remaining proof 
 warnings (dead tactics, unused simp args, unused variables around the sorry). These
 must be fixed — keep sorry'd proofs clean so they're ready for completion.
 
+### Always override `get_elem_tactic` with `agrind`
+
+**Always override `get_elem_tactic`** so that `a[i]` auto-discharges bounds with `agrind`.
+This avoids writing `(by ...)` blocks for getElem bounds throughout definitions and proofs:
+
+```lean
+/- Override get_elem_tactic so that a[i] auto-discharges bounds with agrind -/
+scoped macro_rules
+| `(tactic| get_elem_tactic) => `(tactic| agrind)
+```
+
+The override must be either **`scoped`** (in a namespace — open the scope where needed)
+or **`local`**. When writing definitions or proving lemmas, **open the corresponding
+scope** so the override is active.
+
+**Why `agrind`:** It handles both linear and nonlinear index arithmetic (e.g.,
+`r * M + c < N * M` from `Fin` bounds), and produces compact proof terms that don't
+cause kernel type-checking slowness (see "Never embed expensive `(by ...)` proof terms
+in theorem TYPE SIGNATURES" below).
+
 ### Do not introduce redundant macros or notations
 Do **not** define a new macro or notation when the desired behavior can be achieved
 by overriding or configuring an existing Lean mechanism. Redundant macros create
 maintenance burden (must be kept in sync, imported everywhere, can conflict when
 multiple files define the same macro).
 
-**Example:** To make `a[i]` work without explicit bound proofs, override
-`get_elem_tactic` rather than introducing a custom `a[i]^` macro:
-```lean
-/- Override get_elem_tactic so that a[i] auto-discharges bounds with agrind -/
-scoped macro_rules
-| `(tactic| get_elem_tactic) => `(tactic| agrind)
-```
-The `[i]^` macro was introduced in a project but is strictly subsumed by this
-`get_elem_tactic` override — it does the same thing (discharge bounds automatically)
-but requires a different syntax and must be defined/imported separately. The override
-is better because it works with standard `a[i]` notation everywhere.
+**Example:** The `[i]^` macro was introduced in a project to make array access work
+without explicit bound proofs. This is strictly subsumed by the `get_elem_tactic`
+override above — it does the same thing but requires a different syntax and must be
+defined/imported separately.
 
 **General rule:** Before defining a macro, check whether an existing tactic override,
 attribute, or notation mechanism already covers the use case. If so, use that instead.
@@ -487,7 +500,16 @@ theorem main.spec ... := by
 When `exact`, `apply`, or `refine` takes arguments with inline `(by ...)` proof blocks,
 **all** those blocks re-elaborate as a single unit. Editing any one forces re-elaboration
 of all of them. This destroys incrementality — a single tactic change can trigger 30+
-seconds of re-elaboration instead of < 0.5s.
+seconds of re-elaboration instead of &lt; 0.5s.
+
+**⚠️ This also causes severe kernel type-checking slowness.** Even if the individual
+tactics run fast, the kernel must type-check the entire `exact`/`apply`/`refine`
+expression as a single proof term. When the expression contains many `(by ...)` blocks,
+the kernel term is much larger and more expensive to check. **Real-world example:**
+extracting inline `(by ...)` blocks from proof bodies and type signatures (see also
+"Never embed expensive `(by ...)` in type signatures" below) reduced a file's build
+time from **5m37s to 38s** (8.8× speedup). The tactics themselves ran in milliseconds
+— the cost was entirely in the kernel processing the combined proof term.
 
 **What counts as "expensive":** A `(by ...)` block is expensive if it contains:
 - **Multiple tactics** — `(by tac1; tac2; tac3)` or multi-line blocks
@@ -496,14 +518,15 @@ seconds of re-elaboration instead of < 0.5s.
 - **Any tactic that takes more than a fraction of a second** (e.g., `grind`, complex `simp`)
 
 A single cheap tactic like `(by scalar_tac)` or `(by grind)` is acceptable as an inline
-argument. The problem starts when:
-- An `exact`/`apply`/`refine` has **2 or more expensive `(by ...)` blocks**, or
+argument **only when there are at most 1-2 such blocks in the entire `exact`/`apply`/
+`refine` expression**. The problem starts when:
+- An `exact`/`apply`/`refine` has **3 or more `(by ...)` blocks** (even cheap ones), or
 - **Any single `(by ...)` block is multi-line or contains tactic sequences**
 
 In those cases, extract the blocks into `have` statements:
 
 ```lean
--- BAD: multiple expensive blocks, all re-elaborate together
+-- BAD: multiple blocks, all re-elaborate together AND kernel checks them as one term
 exact loop.spec_gen ret.2 out a p
     (by scalar_tac) (by simp_all)
     (by intro q hq
@@ -515,7 +538,7 @@ exact loop.spec_gen ret.2 out a p
 -- GOOD: each have is independently cached by the elaborator
 have h1 : precond1 := by scalar_tac
 have h2 : precond2 := by simp_all
-have hdone' : ∀ q, q < r.start.val + 1 → ... := by
+have hdone' : ∀ q, q &lt; r.start.val + 1 → ... := by
   intro q hq
   by_cases hq_eq : q = r.start.val
   · subst hq_eq; simp [...]
@@ -524,6 +547,91 @@ have hrest' : ∀ q, r.start.val + 1 ≤ q → ... := by
   intro q hq1 hq2; ...
 exact loop.spec_gen ret.2 out a p h1 h2 hdone' hrest'
 ```
+
+### ⛔ Never embed expensive `(by ...)` proof terms in theorem TYPE SIGNATURES
+
+**This is even more critical than inline blocks in proof bodies.** When `(by ...)` blocks
+appear in the TYPE signature of a theorem (e.g., for `getElem` array bounds), the proof
+terms they produce become part of the theorem's type. Every time the kernel instantiates
+the theorem (via `exact`, `apply`, or recursive calls), it must process these embedded
+proof terms. If they are large (e.g., produced by `cases p <;> simp_all [...] <;> agrind`),
+this makes every application of the theorem expensive.
+
+**Real-world example:** A `spec_gen` theorem with 6 `(by cases p <;> simp_all [...] <;>
+agrind)` blocks in its type for `getElem` bounds took **3m58s** to elaborate. Replacing
+them with `(by agrind)` brought the time to **38 seconds** (6× speedup). The individual
+tactics ran in milliseconds — the cost was entirely in the kernel processing the large
+proof terms produced by `cases p <;> simp_all [...] <;> agrind`.
+
+#### Accepted tactics for `(by ...)` in type signatures
+
+The key insight is that some tactics produce **compact proof terms** (small kernel
+footprint) while others produce **large proof terms** (e.g., full case trees). Only
+tactics that produce compact terms are acceptable in type signatures.
+
+**Accepted (in preference order):**
+1. **`agrind`** (preferred) — fast, handles nonlinear arithmetic, produces compact proof
+   terms. Works for goals like `r.val * M + c.val < N * M` from `Fin` bounds.
+2. **`grind`** (fallback) — also produces compact proof terms. Slightly slower (~20%)
+   than `agrind`. Use when `agrind` fails.
+3. **`scalar_tac`** (last resort) — produces compact proof terms. Cannot handle nonlinear
+   bounds (e.g., `r * M + c < N * M`), so only works for simple linear goals.
+
+**⛔ BANNED in type signatures:**
+- **`cases p <;> simp_all [...] <;> tactic`** — produces massive case-split proof terms.
+  This is the most common cause of kernel slowness (measured: **6× slower** than
+  `agrind` for the same goal). Never use this pattern in a type signature.
+- **`native_decide` / `decide`** — cannot handle goals with parametric values (e.g.,
+  abstract `p : parameterSet`).
+- **Any multi-tactic sequence** — the combined term is large.
+
+#### Preferred approach: override `get_elem_tactic` with `agrind`
+
+The best approach for `getElem` bounds in type signatures is to avoid writing
+`(by ...)` at all. Instead, **always override `get_elem_tactic`** so that plain
+`a[i]` auto-discharges bounds:
+
+```lean
+scoped macro_rules
+| `(tactic| get_elem_tactic) => `(tactic| agrind)
+```
+
+The override must be either **`scoped`** (in a namespace — open the scope where needed)
+or **`local`**. With this override, `getElem` bounds are discharged automatically by
+`agrind`, which produces compact proof terms:
+
+```lean
+-- With get_elem_tactic override: no (by ...) needed at all
+private theorem loop.spec_gen ...
+    (hdone : ∀ (r : Fin N) (c : Fin M),
+      r.val &lt; iter.start.val →
+      toZq p out[r.val * M + c.val] = ...) : ... := by
+```
+
+When writing definitions or proving lemmas that need this override, **open the
+corresponding scope**. This is the cleanest approach and should be the default.
+
+#### Fallback: standalone helper lemma
+
+If `agrind` cannot discharge a particular bound (e.g., it requires domain-specific
+knowledge), extract the proof into a standalone lemma referenced by name in the type:
+
+```lean
+private lemma idx_lt_N_M (p : parameterSet)
+    {s : Slice U16} (hs : s.length = N p * M)
+    (r : Fin (N p)) (c : Fin M) :
+    r.val * M + c.val &lt; s.length := by
+  cases p <;> simp_all [N, M] <;> agrind
+
+private theorem loop.spec_gen ...
+    (hdone : ∀ (r : Fin N) (c : Fin M),
+      r.val &lt; iter.start.val →
+      toZq p (out[r.val * M + c.val]'(idx_lt_N_M p hout r c)) = ...) : ... := by
+```
+
+**When to use a standalone lemma:** When the same bound appears 2+ times in a theorem's
+type and `agrind` (via `get_elem_tactic`) cannot discharge it. The standalone lemma is
+proved once; the type references it by name (tiny proof term).
 
 **The same principle applies to `<;>`, `first`, and `all_goals`:**
 - `step* <;> (first | agrind | scalar_tac | bv_tac 16)` — all alternatives re-elaborate
@@ -712,7 +820,7 @@ calc (x + 1) * (x + 1)
 12. **Report misbehaving tactics.** If a tactic doesn't do what it should — for example, `step` fails to make progress even though the appropriate `@[step]` lemma exists, or `scalar_tac` can't close a pure arithmetic goal it should handle — **report this to the user**. It may indicate a bug or missing feature worth fixing upstream.
 13. **Keep `maxHeartbeats` reasonable (< 8M).** Lean's default (200K) is too low for Aeneas proofs — increase to 1M as a baseline. But if a proof needs more than ~8M heartbeats, the proof is ill-structured or uses tactics inefficiently. Don't just bump the number — instead: decompose the function with fold theorems, extract sub-goals as auxiliary lemmas, minimize the context with `clear`, prefer `agrind` over `grind`, or use `step*?` instead of `step*` for finer control. **⛔ NEVER use `set_option ... in` inside a proof script** (e.g., within a `by` block). The `in` scoping inside a tactic block makes everything below it a single elaboration unit — any edit forces full re-elaboration, destroying incrementality. Using `set_option ... in` **before** a theorem declaration is fine and standard practice (e.g., `set_option maxHeartbeats 16000000 in theorem ...`).
 14. **⚠️ Keep proof wall-clock time < 60s — this is important.** Fast proofs enable fast iteration. Even the biggest proofs (for functions of 50+ lines) should complete in under 60 seconds wall-clock (including kernel proof-term replay). If a proof takes longer, it must be fixed — decompose it, extract auxiliary lemmas, or use more direct proof strategies. **Detecting kernel replay slowness:** In the LSP, after all tactics are elaborated, the server reports it is still processing the last proof line AND the `theorem` declaration line (plus `set_option ... in` above it). If it stays in this state a long time, the kernel is replaying the proof term — the fix is to produce simpler/smaller proof terms (decompose the function, extract sub-goals as separate lemmas). Use `set_option trace.profiler true in` to profile tactic time; if tactics are fast but overall proof is slow, the bottleneck is kernel replay.
-15. **⚠️ Keeping Lean reactive is critical (< 0.5s per tactic).** Adding a tactic at the end of a proof should take < 0.5s (everything above is cached). If it takes several seconds, big chunks are being re-elaborated. See the "Extract inline `(by ...)` blocks" and "Avoid `step* <;> tactic`" sections above for the main causes and fixes.
+15. **⚠️ Keeping Lean reactive is critical (&lt; 0.5s per tactic).** Adding a tactic at the end of a proof should take &lt; 0.5s (everything above is cached). If it takes several seconds, big chunks are being re-elaborated. See the "Extract inline `(by ...)` blocks" and "Never embed `(by ...)` in type signatures" and "Avoid `step* <;> tactic`" sections above for the main causes and fixes.
 16. **Auto-param tactics in recursive theorem statements cause elaboration loops.** When a theorem statement contains `(hbound : x ≤ n := by scalar_tac)` or similar auto-param defaults, the tactic fires during *elaboration* of the statement — not during the proof. If the theorem is recursive and the context has complex hypotheses, the tactic loops. **Fix:** Make all such parameters fully explicit (no `:= by ...` default). Pass proofs manually at every call site. **Rule: ZERO tactic calls in auto-params of recursive theorem statements with complex invariants.**
     ```lean
     -- BAD: scalar_tac fires during elaboration of every recursive call
@@ -739,12 +847,59 @@ calc (x + 1) * (x + 1)
 19. **Doc comments `/--` before `set_option` cause parse errors.** Doc comments must be followed by a declaration (`theorem`, `def`, etc.), not `set_option ... in`. Use a regular comment (`/- ... -/` or `-- ...`) instead.
 20. **Concrete computation goals need `native_decide`.** Goals like `¬(64 % Usize.size = 64) ⊢ False` (from `wrapping_add` preconditions) are concrete computations that `agrind`/`grind`/`scalar_tac` cannot efficiently evaluate. **Fix:** Use `native_decide` (or `decide` for smaller computations).
 21. **In loop proofs (`spec_gen`), prefer `agrind` over `scalar_tac` throughout.** Loop invariant proofs carry complex hypotheses in context throughout the entire proof body. Any `scalar_tac` call risks a simp loop (see item 11). When one `scalar_tac` fails in a spec_gen, mass-replace ALL `scalar_tac` → `agrind` in the proof body — don't fix them one by one, because any remaining `scalar_tac` is at risk as the context grows.
-22. **Extract recurring index bounds as standalone helper lemmas.** In loop proofs over multi-dimensional arrays, bounds like `k * N + q < NBAR * N` appear repeatedly. Proving them inline is slow (tactic runs in full context) and fragile. **Fix:** Extract a standalone lemma with a clean context:
+22. **Extract recurring inline proof blocks as solver-attributed lemmas.** When the same
+    `(by tactic_sequence)` pattern appears repeatedly — whether in theorem signatures
+    (e.g., `getElem` bounds), `have` statements, or `exact`/`apply` arguments — extract
+    it as a standalone lemma. This is especially common for:
+    - **Index bounds** in loop proofs: `k * N + q < NBAR * N`
+    - **Parameter-dependent arithmetic**: `Spec.Frodo.n p * NBAR ≤ Usize.max`
+    - **Type coercions**: `x.val < 2^16`
+
+    **Preferred approach — `get_elem_tactic` override:** For `getElem` bounds, the best
+    solution is often the `get_elem_tactic` override (see "Always override
+    `get_elem_tactic` with `agrind`" above). With the override active, `a[i]` notation
+    auto-discharges bounds via `agrind` — no `(by ...)` needed. If `agrind` can already
+    handle the bound, you don't need a standalone lemma at all.
+
+    **When a standalone lemma IS needed:** If `agrind` alone can't discharge the bound
+    (e.g., it requires domain-specific knowledge about parameter sets), extract a lemma
+    and register it with solver attributes so `agrind` can find it:
+
+    **Detection rule:** If you see 3+ occurrences of the same `(by ...)` block (or
+    substantially similar blocks differing only in variable names), extract a lemma.
+
     ```lean
-    private theorem idx_lt_bound (k : Fin NBAR) (q : Fin N) :
-        k.val * N + q.val < NBAR * N := by agrind
+    -- BAD: same expensive tactic repeated 6× in theorem signature + proof body
+    (out[r.val * NBAR + c.val]'(by cases p <;> simp_all [Spec.Frodo.n, NBAR] <;> agrind))
+
+    -- GOOD: extract once, register with solvers — agrind auto-discharges at use sites
+    @[agrind =]
+    private theorem idx_lt_bound (p : Spec.Frodo.parameterSet)
+        (r : Fin (Spec.Frodo.n p)) (c : Fin NBAR)
+        (h : out.length = Spec.Frodo.n p * NBAR) :
+        r.val * NBAR + c.val < out.length := by
+      cases p <;> simp_all [Spec.Frodo.n, NBAR] <;> agrind
+
+    -- Now with get_elem_tactic override, the bound is automatic:
+    (out[r.val * NBAR + c.val])
     ```
-    Then reference the lemma at each use site — fast, stable, and reusable.
+
+    **Which attribute to use** depends on which solver needs the fact. It is fine
+    (and encouraged) to register the same lemma with **multiple attributes** so that
+    all relevant solvers can use it:
+    - `@[agrind =]` — makes the fact available to `agrind`
+    - `@[scalar_tac_simps]` — makes the fact available to `scalar_tac`
+    - `@[simp]` — makes the fact available to `simp` / `simp_all`
+
+    For index bounds that may be needed by any solver, register with all of them:
+    ```lean
+    @[simp, scalar_tac_simps, agrind =, grind =, bvify]
+    private theorem idx_lt_bound ... := by ...
+    ```
+
+    **This applies to `have` patterns too:** If you see `have h : P := by tac` repeated
+    with the same `P` and `tac` across multiple proofs, extract `P` as a lemma with
+    solver attributes — the `have` disappears entirely.
 23. **`congr_arg UScalar.val h; scalar_tac` always triggers simp loops.** Using `congr_arg` to create a hypothesis like `UScalar.val x = UScalar.val y` produces a term whose LHS appears in its RHS after `simp_all` normalization, causing `scalar_tac` to loop (see item 11). **Fix:** Always use `agrind` (not `scalar_tac`) after `congr_arg`. More generally, any tactic that creates hypotheses of the form `f x = f y` followed by `scalar_tac` is at risk.
 24. **Sorry'd proofs must be fast.** A sorry'd proof with `step* <;> (first | ... | sorry)` can take 300+ seconds — the `step*` does massive work just to leave a sorry at the end. **Fix:** Sorry'd proofs should do the absolute minimum work. If a proof is incomplete, use plain `sorry` (possibly with a comment sketching the approach). Do not leave expensive `step*` or `cases p` before a sorry — they waste build time on every `lake build` for zero verification value.
 25. **`first | simp_all | ...` silently swallows goals.** In `first | simp_all | tac2 | tac3`, `simp_all` may partially simplify the goal without closing it. Since `simp_all` doesn't throw an exception (it "succeeds" even if the goal remains), `first` considers it successful and never tries `tac2` or `tac3`. The goal is left in a partially simplified state that no subsequent tactic handles. This applies to **all simp variants**: `simp`, `simp [*]`, `simp [...]`, and `simp_all` — they all succeed even when they don't close the goal. **Fix:** Always pair simp-based tactics with `done` when used inside `first`: write `(simp_all; done)` instead of `simp_all`. This forces full closure — if the simp call can't close the goal, `done` fails and `first` backtracks to the next alternative.

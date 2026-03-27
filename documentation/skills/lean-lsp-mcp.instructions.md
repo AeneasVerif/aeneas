@@ -16,16 +16,21 @@ tools. These tools are available directly in your tool palette — you do NOT ne
 start a subprocess, launch a REPL, or run any setup commands.
 
 **If the tools are not in your palette** (i.e., you cannot find `lean_goal`,
-`lean_diagnostic_messages`, etc. among your available tools), tell the user:
+`lean_diagnostic_messages`, etc. among your available tools), **STOP IMMEDIATELY
+and signal the user BEFORE doing anything else** — do not attempt proof work, do
+not fall back to `lake build` loops, do not dispatch proof agents. Tell the user:
 > "The lean-lsp-mcp tools are not available in my tool palette. These tools are
 > essential for efficient Lean proof development: they provide interactive feedback
 > (proof goals, diagnostics, type information) without rebuilding the project.
 > Without them, the only option is `lake build`, which can easily take minutes on
 > a big file and does not provide intermediate goal states — making iterative proof
-> development impractical. Please install the MCP server (`pip install lean-lsp-mcp` or
-> `uvx lean-lsp-mcp`) and configure it in your MCP client settings. See
-> https://github.com/oOo0oOo/lean-lsp-mcp for setup instructions."
-Do NOT proceed with proof work without these tools — you need them.
+> development impractical. Please connect the MCP server or install it
+> (`pip install lean-lsp-mcp` or `uvx lean-lsp-mcp`) and configure it in your MCP
+> client settings. See https://github.com/oOo0oOo/lean-lsp-mcp for setup
+> instructions."
+**Do NOT proceed with proof work without these tools** — wait for the user to
+connect the MCP server. Falling back to `lake build` loops wastes minutes per
+iteration where the MCP tools give sub-second feedback.
 
 The tools give you:
 - Proof goal context at any position (`lean_goal`)

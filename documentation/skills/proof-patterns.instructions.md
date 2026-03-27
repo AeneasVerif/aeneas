@@ -384,7 +384,18 @@ theorem loop.spec ... :
 
 ### Index arithmetic helpers
 
+**Register recurring bounds/arithmetic helpers with solver attributes** so they
+are used automatically (see Pitfall #22 in the `aeneas-lean-core` skill file).
+If you see the same `(by ...)` tactic block 3+ times, extract it as a lemma
+with `@[agrind =]` (or `@[scalar_tac_simps]`, `@[simp]` as appropriate).
+
 ```lean
+-- Index bound: register with @[agrind =] so getElem bounds auto-discharge
+@[agrind =]
+private lemma idx_lt_bound (r : Fin NBAR) (c : Fin N)
+    (h : out.length = NBAR * N) :
+    r.val * N + c.val < out.length := by agrind
+
 -- (i * NBAR + j) / NBAR = i when j < NBAR
 private lemma mul_NBAR_add_div (i j : ℕ) (hj : j < NBAR) :
     (i * NBAR + j) / NBAR = i := by simp_all [NBAR]; scalar_tac

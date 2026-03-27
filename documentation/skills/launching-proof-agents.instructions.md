@@ -648,7 +648,7 @@ grep -n 'step\*.*<;>' FILE       # → use focused goal blocks (· ) instead
 grep -n 'all_goals' FILE          # → ALWAYS replace with focused · blocks. No exceptions.
 
 # Inline (by ...) in exact/apply/refine (Rule: "Extract inline by blocks"; Pitfall #15)
-grep -n 'exact.*(by ' FILE        # → check: 2+ expensive blocks or any multi-line block → extract
+grep -n 'exact.*(by ' FILE        # → check: 3+ blocks or any multi-line block → extract
 grep -n 'apply.*(by ' FILE        # (same check)
 grep -n 'refine.*(by ' FILE       # (same check)
 # ⚠️ These greps only catch single-line cases. The most common violation is multi-line:
@@ -657,12 +657,26 @@ grep -n 'refine.*(by ' FILE       # (same check)
 # The reviewer MUST also read multi-line exact/apply/refine statements manually.
 # "Expensive" = multi-line, tactic sequences (tac1; tac2), first|..., or slow tactics.
 # Note: all_goals is banned outright (see above), so it's never acceptable here either.
-# A single cheap (by scalar_tac) or (by grind) is acceptable.
+# A single cheap (by scalar_tac) or (by grind) is acceptable only with 1-2 blocks total.
+# ⚠️ ALSO CHECK THEOREM TYPE SIGNATURES for embedded (by ...) blocks — especially
+# getElem bounds proofs like (by cases p <;> simp_all [...] <;> agrind). These cause
+# severe kernel slowness on every application of the theorem (measured 6× slowdown).
+# Fix: use get_elem_tactic override with agrind (preferred), or (by agrind) / (by grind)
+# / (by scalar_tac) for individual bounds. NEVER cases p <;> simp_all in a type.
 ```
 
 ### Checks requiring manual inspection
 
 These cannot be reliably grepped — the reviewer must read the proof:
+
+- **`(by ...)` in theorem TYPE SIGNATURES?** (Rule: "Never embed (by ...) in type signatures")
+  Check theorem parameters and postconditions for embedded `(by ...)` blocks — especially
+  for `getElem` array bounds. **Accepted tactics in type signatures** (in preference order):
+  `agrind`, `grind`, `scalar_tac`. **BANNED:** `cases p <;> simp_all [...] <;> tactic`
+  (produces huge proof terms, causes kernel slowness — measured 6× slowdown).
+  Best approach: the file should have a `get_elem_tactic` override with `agrind` so
+  that `a[i]` auto-discharges bounds without any `(by ...)` at all. If a standalone
+  helper lemma is used, that's also acceptable.
 
 - **Auto-param tactics in recursive theorems?** (Pitfall #16)
   In recursive `spec_gen` theorems, all parameters must be explicit — no `:= by ...`
@@ -709,6 +723,15 @@ These require reading the proof, not just grepping:
   discharges the sub-goals automatically and they disappear. Also flag
   `have hFoo : CONST.val = N := by simp` — the underlying definition likely needs
   attributes. (Rule: "Register Rust global/const definitions with solver attributes")
+
+- **Repeated inline `(by ...)` proof blocks?** (Pitfall #22)
+  If the same `(by tactic_sequence)` appears 3+ times — in theorem signatures
+  (`getElem` bounds), `have` statements, or `exact`/`apply` arguments — it should
+  be extracted as a standalone lemma with solver attributes (`@[agrind =]`). With
+  the lemma registered, a `get_elem_tactic` override (`agrind`) auto-discharges
+  the bound — no `(by ...)` needed at all. Flag any `(by cases p <;> simp_all [...]
+  <;> agrind)` in a type signature — this is always wrong (use `get_elem_tactic`
+  override or `(by agrind)` instead).
 
 - **Is the proof clean and not verbose?** No copy-paste bloat, no redundant `have`
   that could be inlined. Each tactic call should earn its place.
