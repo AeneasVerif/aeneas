@@ -498,6 +498,18 @@ for h:i in [0 : 8 * ℓ] do
 Agents must report all `sorry`s in their final output. These are proof
 obligations for a later proof agent to close.
 
+**`while` for RFC `while` loops.** Lean's `while` in `Id.run do` compiles via
+`Lean.Loop` and is total — no termination proof is required. Do NOT replace RFC
+`while` loops with bounded `for` loops + `break`. The `while` matches the RFC
+structure directly.
+
+**Do not force termination on non-terminating RFC functions.** If the RFC defines
+a function that may not terminate (e.g., rejection sampling loops with no a priori
+bound), do NOT introduce artificial bounds, pre-generate a fixed amount of output,
+or otherwise restructure the algorithm to make it terminating. Instead, mark the
+function `partial_fixpoint` — Lean will generate a reasoning principle that can be
+used for partial correctness proofs.
+
 **NEVER** convert `Vector` to `Array` (via `.toArray`) or `𝔹 n` to `ByteArray`
 (via `.toByteArray`) just to avoid bounds proofs. This defeats the purpose of
 carrying sizes in types.
