@@ -428,14 +428,14 @@ described in Section 4.
 | Rust Concept             | Lean Translation                                             |
 |--------------------------|--------------------------------------------------------------|
 | `&mut T` parameter       | `T` parameter (passed by value)                              |
-| Returning `&'a mut T`    | Returns `Result (T × (T → ...))` with backward continuation |
+| Returning `&'a mut T`    | Returns `Result (T × (T → ...))` with backward continuation  |
 | `&T` (shared borrow)     | `T` parameter (immutable, may be copied)                     |
 | `panic!()`               | `fail` in the `Result` monad                                 |
-| Integer overflow          | `fail` (all arithmetic is checked)                           |
+| Integer overflow         | `fail` (all arithmetic is checked)                           |
 | `Box<T>`                 | `T` (heap indirection erased)                                |
-| Pattern matching          | `match` in Lean                                              |
-| Recursive functions       | Lean recursive functions (may need termination proofs)       |
-| Traits                    | Type classes in Lean                                         |
+| Pattern matching         | `match` in Lean                                              |
+| Recursive functions      | Lean recursive functions (may need termination proofs)       |
+| Traits                   | Type classes in Lean                                         |
 | `Vec<T>`                 | `Vec T`                                                      |
 | `[T; N]`                 | `Array T n`                                                  |
 
