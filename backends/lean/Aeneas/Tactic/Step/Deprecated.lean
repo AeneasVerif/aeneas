@@ -72,7 +72,7 @@ def evalDeprecatedProgressStarTac : Tactic := fun stx => do
     let info ← StepStar.evalStepStar cfg fuel
     let suggestion ← info.script.toSyntax
     let suggestion ← `(tacticSeq|$(suggestion)*)
-    Aesop.addTryThisTacticSeqSuggestion stx suggestion (origSpan? := ← getRef)
+    Aeneas.Utils.addTryThisTacticSeqSuggestion stx suggestion (origSpan? := ← getRef)
   | _ => throwUnsupportedSyntax
 
 /-!
