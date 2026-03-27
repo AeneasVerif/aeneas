@@ -120,7 +120,7 @@ Key elements:
 - **`@[step]`** — registers the theorem for the `step` tactic
 - **`⦃ c => ... ⦄`** — weakest-precondition notation: "the function succeeds and the result `c` satisfies..."
 
-## Step 5: Develop the Proof Incrementally
+## Step 5: For AI Agents: Develop the Proof Incrementally
 
 Use the `lean-lsp-mcp` MCP server for interactive proof development. It provides
 tools like `lean_goal`, `lean_edit`, and `lean_diagnostic_messages` for inspecting
