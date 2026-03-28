@@ -9,6 +9,8 @@ namespace Aeneas.Std
 def core.option.Option.expect {T : Type} (x : Option T) (_msg: Str) : Result T :=
   Result.ofOption x Error.panic
 
+attribute [agrind =] Option.isSome_none Option.isSome_some
+
 theorem core.option.Option.expect.spec {T : Type} (x : Option T) (msg: Str) (h : x.isSome) :
   expect x msg ⦃ v => x = some v ⦄ := by
   simp only [expect, Result.ofOption]; grind
