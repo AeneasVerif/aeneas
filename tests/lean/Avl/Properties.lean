@@ -583,6 +583,7 @@ theorem Node.rotate_left_right_spec
     intro e hIn; simp [invAux] at *
     tauto
   -- Case disjunction on the balance factor of Y
+  simp [core.option.Option.unwrap]
   split
   . -- BF(Y) = 0
     simp [balanceFactor] at *
@@ -709,6 +710,7 @@ theorem Node.rotate_right_left_spec
     intro e hIn; simp [invAux] at *
     tauto
   -- Case disjunction on the balance factor of Y
+  simp [core.option.Option.unwrap]
   split
   . -- BF(Y) = 0
     simp [balanceFactor] at *
@@ -805,7 +807,7 @@ theorem Tree.insert_in_opt_node_spec
     else Subtree.height tree' = Subtree.height tree) ∧
     (b → Subtree.height tree > 0 → Subtree.balanceFactor tree' ≠ 0) ⦄ := by
   unfold Tree.insert_in_opt_node
-  cases hNode : tree <;> simp [hNode]
+  cases hNode : tree <;> simp
   . -- tree = none
     simp [Node.invAux, Node.balanceFactor]
   . -- tree = some
@@ -845,7 +847,7 @@ theorem Node.insert_in_left_spec
       cases h: left_opt'
       . simp_all -- absurd
       . rename_i left'
-        simp [h]
+        simp [core.option.Option.unwrap]
         cases node with | mk x left right balance_factor =>
         split
         . -- rotate_right
@@ -944,7 +946,7 @@ theorem Node.insert_in_right_spec
       cases h: right_opt'
       . simp_all -- absurd
       . rename_i right'
-        simp [h]
+        simp [core.option.Option.unwrap]
         split
         . -- rotate_left
           cases node

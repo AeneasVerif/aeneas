@@ -324,7 +324,6 @@ theorem toInt_update (l : List U32) (i : Nat) (x : U32) (h0 : i < l.length) :
         conv => lhs; rw [this]
         ring_nf
       simp [mul_assoc, *]
-      ring_eq_nf
 
 /-- The proof about `add_no_overflow_loop` -/
 @[step]
