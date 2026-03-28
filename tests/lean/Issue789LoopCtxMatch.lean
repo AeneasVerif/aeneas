@@ -12,13 +12,15 @@ set_option maxHeartbeats 1000000
 namespace issue_789_loop_ctx_match
 
 /-- [issue_789_loop_ctx_match::S]
-    Source: 'tests/src/issue-789-loop-ctx-match.rs', lines 4:0-7:1 -/
+    Source: 'tests/src/issue-789-loop-ctx-match.rs', lines 4:0-7:1
+    Visibility: public -/
 structure S where
   x : Std.U8
   y : Array Std.U8 4#usize
 
 /-- [issue_789_loop_ctx_match::f]:
-    Source: 'tests/src/issue-789-loop-ctx-match.rs', lines 9:0-11:1 -/
+    Source: 'tests/src/issue-789-loop-ctx-match.rs', lines 9:0-11:1
+    Visibility: public -/
 def f
   (_r : Std.U8) (_a : Slice Std.U8) (_b : Slice Std.U8) :
   Result ((Bool × Std.Usize) × Std.U8 × (Slice Std.U8))
@@ -26,7 +28,8 @@ def f
   ok ((true, 0#usize), _r, _b)
 
 /-- [issue_789_loop_ctx_match::the_loop]: loop body 0:
-    Source: 'tests/src/issue-789-loop-ctx-match.rs', lines 14:4-22:5 -/
+    Source: 'tests/src/issue-789-loop-ctx-match.rs', lines 14:4-22:5
+    Visibility: public -/
 @[rust_loop_body]
 def the_loop_loop.body
   (s : S) (next_in : Slice Std.U8) :
@@ -52,7 +55,8 @@ def the_loop_loop.body
          ok (cont ({ x := i, y := a }, next_in1))
 
 /-- [issue_789_loop_ctx_match::the_loop]: loop 0:
-    Source: 'tests/src/issue-789-loop-ctx-match.rs', lines 14:4-22:5 -/
+    Source: 'tests/src/issue-789-loop-ctx-match.rs', lines 14:4-22:5
+    Visibility: public -/
 @[rust_loop]
 def the_loop_loop
   (s : S) (next_in : Slice Std.U8) :
@@ -63,7 +67,8 @@ def the_loop_loop
     (s, next_in)
 
 /-- [issue_789_loop_ctx_match::the_loop]:
-    Source: 'tests/src/issue-789-loop-ctx-match.rs', lines 13:0-23:1 -/
+    Source: 'tests/src/issue-789-loop-ctx-match.rs', lines 13:0-23:1
+    Visibility: public -/
 def the_loop
   (s : S) (next_in : Slice Std.U8) : Result (Bool × S × (Slice Std.U8)) := do
   let (i, a, next_in1, done1) ← the_loop_loop s next_in

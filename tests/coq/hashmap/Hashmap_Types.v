@@ -9,7 +9,8 @@ Local Open Scope Primitives_scope.
 Module Hashmap_Types.
 
 (** [hashmap::AList]
-    Source: 'tests/src/hashmap.rs', lines 28:0-31:1 *)
+    Source: 'tests/src/hashmap.rs', lines 28:0-31:1
+    Visibility: public *)
 Inductive AList_t (T : Type) :=
 | AList_Cons : usize -> T -> AList_t T -> AList_t T
 | AList_Nil : AList_t T
@@ -27,7 +28,8 @@ mkFraction_t {
 .
 
 (** [hashmap::HashMap]
-    Source: 'tests/src/hashmap.rs', lines 50:0-62:1 *)
+    Source: 'tests/src/hashmap.rs', lines 50:0-62:1
+    Visibility: public *)
 Record HashMap_t (T : Type) :=
 mkHashMap_t {
   hashMap_num_entries : usize;

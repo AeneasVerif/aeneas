@@ -6,7 +6,8 @@ open Primitives
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** Trait declaration: [rename_attribute::BoolTrait]
-    Source: 'tests/src/rename_attribute.rs', lines 10:0-20:1 *)
+    Source: 'tests/src/rename_attribute.rs', lines 10:0-20:1
+    Visibility: public *)
 noeq type boolTest_t (self : Type0) = {
   getTest : self -> result bool;
   retTest : self -> result bool;

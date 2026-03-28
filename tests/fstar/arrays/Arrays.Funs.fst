@@ -8,17 +8,20 @@ include Arrays.Clauses
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [arrays::incr]:
-    Source: 'tests/src/arrays.rs', lines 13:0-15:1 *)
+    Source: 'tests/src/arrays.rs', lines 13:0-15:1
+    Visibility: public *)
 let incr (x : u32) : result u32 =
   u32_add x 1
 
 (** [arrays::array_to_shared_slice_]:
-    Source: 'tests/src/arrays.rs', lines 21:0-23:1 *)
+    Source: 'tests/src/arrays.rs', lines 21:0-23:1
+    Visibility: public *)
 let array_to_shared_slice_ (#t : Type0) (s : array t 32) : result (slice t) =
   Ok (array_to_slice s)
 
 (** [arrays::array_to_mut_slice_]:
-    Source: 'tests/src/arrays.rs', lines 26:0-28:1 *)
+    Source: 'tests/src/arrays.rs', lines 26:0-28:1
+    Visibility: public *)
 let array_to_mut_slice_
   (#t : Type0) (s : array t 32) :
   result ((slice t) & (slice t -> array t 32))
@@ -26,61 +29,72 @@ let array_to_mut_slice_
   Ok (array_to_slice_mut s)
 
 (** [arrays::array_len]:
-    Source: 'tests/src/arrays.rs', lines 30:0-32:1 *)
+    Source: 'tests/src/arrays.rs', lines 30:0-32:1
+    Visibility: public *)
 let array_len (#t : Type0) (s : array t 32) : result usize =
   let s1 = array_to_slice s in Ok (slice_len s1)
 
 (** [arrays::shared_array_len]:
-    Source: 'tests/src/arrays.rs', lines 34:0-36:1 *)
+    Source: 'tests/src/arrays.rs', lines 34:0-36:1
+    Visibility: public *)
 let shared_array_len (#t : Type0) (s : array t 32) : result usize =
   let s1 = array_to_slice s in Ok (slice_len s1)
 
 (** [arrays::shared_slice_len]:
-    Source: 'tests/src/arrays.rs', lines 38:0-40:1 *)
+    Source: 'tests/src/arrays.rs', lines 38:0-40:1
+    Visibility: public *)
 let shared_slice_len (#t : Type0) (s : slice t) : result usize =
   Ok (slice_len s)
 
 (** [arrays::index_array_shared]:
-    Source: 'tests/src/arrays.rs', lines 42:0-44:1 *)
+    Source: 'tests/src/arrays.rs', lines 42:0-44:1
+    Visibility: public *)
 let index_array_shared (#t : Type0) (s : array t 32) (i : usize) : result t =
   array_index_usize s i
 
 (** [arrays::index_array_u32]:
-    Source: 'tests/src/arrays.rs', lines 49:0-51:1 *)
+    Source: 'tests/src/arrays.rs', lines 49:0-51:1
+    Visibility: public *)
 let index_array_u32 (s : array u32 32) (i : usize) : result u32 =
   array_index_usize s i
 
 (** [arrays::index_array_copy]:
-    Source: 'tests/src/arrays.rs', lines 53:0-55:1 *)
+    Source: 'tests/src/arrays.rs', lines 53:0-55:1
+    Visibility: public *)
 let index_array_copy (x : array u32 32) : result u32 =
   array_index_usize x 0
 
 (** [arrays::index_mut_array]:
-    Source: 'tests/src/arrays.rs', lines 57:0-59:1 *)
+    Source: 'tests/src/arrays.rs', lines 57:0-59:1
+    Visibility: public *)
 let index_mut_array
   (#t : Type0) (s : array t 32) (i : usize) : result (t & (t -> array t 32)) =
   array_index_mut_usize s i
 
 (** [arrays::index_slice]:
-    Source: 'tests/src/arrays.rs', lines 61:0-63:1 *)
+    Source: 'tests/src/arrays.rs', lines 61:0-63:1
+    Visibility: public *)
 let index_slice (#t : Type0) (s : slice t) (i : usize) : result t =
   slice_index_usize s i
 
 (** [arrays::index_mut_slice]:
-    Source: 'tests/src/arrays.rs', lines 65:0-67:1 *)
+    Source: 'tests/src/arrays.rs', lines 65:0-67:1
+    Visibility: public *)
 let index_mut_slice
   (#t : Type0) (s : slice t) (i : usize) : result (t & (t -> slice t)) =
   slice_index_mut_usize s i
 
 (** [arrays::slice_subslice_shared_]:
-    Source: 'tests/src/arrays.rs', lines 69:0-71:1 *)
+    Source: 'tests/src/arrays.rs', lines 69:0-71:1
+    Visibility: public *)
 let slice_subslice_shared_
   (x : slice u32) (y : usize) (z : usize) : result (slice u32) =
   core_slice_index_Slice_index (core_slice_index_SliceIndexRangeUsizeSliceInst
     u32) x { start = y; end_ = z }
 
 (** [arrays::slice_subslice_mut_]:
-    Source: 'tests/src/arrays.rs', lines 73:0-75:1 *)
+    Source: 'tests/src/arrays.rs', lines 73:0-75:1
+    Visibility: public *)
 let slice_subslice_mut_
   (x : slice u32) (y : usize) (z : usize) :
   result ((slice u32) & (slice u32 -> slice u32))
@@ -90,18 +104,21 @@ let slice_subslice_mut_
     { start = y; end_ = z }
 
 (** [arrays::array_to_slice_shared_]:
-    Source: 'tests/src/arrays.rs', lines 77:0-79:1 *)
+    Source: 'tests/src/arrays.rs', lines 77:0-79:1
+    Visibility: public *)
 let array_to_slice_shared_ (x : array u32 32) : result (slice u32) =
   Ok (array_to_slice x)
 
 (** [arrays::array_to_slice_mut_]:
-    Source: 'tests/src/arrays.rs', lines 81:0-83:1 *)
+    Source: 'tests/src/arrays.rs', lines 81:0-83:1
+    Visibility: public *)
 let array_to_slice_mut_
   (x : array u32 32) : result ((slice u32) & (slice u32 -> array u32 32)) =
   Ok (array_to_slice_mut x)
 
 (** [arrays::array_subslice_shared_]:
-    Source: 'tests/src/arrays.rs', lines 85:0-87:1 *)
+    Source: 'tests/src/arrays.rs', lines 85:0-87:1
+    Visibility: public *)
 let array_subslice_shared_
   (x : array u32 32) (y : usize) (z : usize) : result (slice u32) =
   core_array_Array_index (core_ops_index_IndexSliceInst
@@ -109,7 +126,8 @@ let array_subslice_shared_
     { start = y; end_ = z }
 
 (** [arrays::array_subslice_mut_]:
-    Source: 'tests/src/arrays.rs', lines 89:0-91:1 *)
+    Source: 'tests/src/arrays.rs', lines 89:0-91:1
+    Visibility: public *)
 let array_subslice_mut_
   (x : array u32 32) (y : usize) (z : usize) :
   result ((slice u32) & (slice u32 -> array u32 32))
@@ -119,23 +137,27 @@ let array_subslice_mut_
     { start = y; end_ = z }
 
 (** [arrays::index_slice_0]:
-    Source: 'tests/src/arrays.rs', lines 93:0-95:1 *)
+    Source: 'tests/src/arrays.rs', lines 93:0-95:1
+    Visibility: public *)
 let index_slice_0 (#t : Type0) (s : slice t) : result t =
   slice_index_usize s 0
 
 (** [arrays::index_array_0]:
-    Source: 'tests/src/arrays.rs', lines 97:0-99:1 *)
+    Source: 'tests/src/arrays.rs', lines 97:0-99:1
+    Visibility: public *)
 let index_array_0 (#t : Type0) (s : array t 32) : result t =
   array_index_usize s 0
 
 (** [arrays::index_index_array]:
-    Source: 'tests/src/arrays.rs', lines 108:0-110:1 *)
+    Source: 'tests/src/arrays.rs', lines 108:0-110:1
+    Visibility: public *)
 let index_index_array
   (s : array (array u32 32) 32) (i : usize) (j : usize) : result u32 =
   let* a = array_index_usize s i in array_index_usize a j
 
 (** [arrays::update_update_array]:
-    Source: 'tests/src/arrays.rs', lines 119:0-121:1 *)
+    Source: 'tests/src/arrays.rs', lines 119:0-121:1
+    Visibility: public *)
 let update_update_array
   (s : array (array u32 32) 32) (i : usize) (j : usize) :
   result (array (array u32 32) 32)
@@ -145,19 +167,22 @@ let update_update_array
   Ok (index_mut_back a1)
 
 (** [arrays::array_local_deep_copy]:
-    Source: 'tests/src/arrays.rs', lines 123:0-125:1 *)
+    Source: 'tests/src/arrays.rs', lines 123:0-125:1
+    Visibility: public *)
 let array_local_deep_copy (x : array u32 32) : result unit =
   Ok ()
 
 (** [arrays::array_update1]:
-    Source: 'tests/src/arrays.rs', lines 128:0-130:1 *)
+    Source: 'tests/src/arrays.rs', lines 128:0-130:1
+    Visibility: public *)
 let array_update1 (a : slice u32) (i : usize) (x : u32) : result (slice u32) =
   let* i1 = u32_add x 1 in
   let* i2 = usize_add i 1 in
   slice_update_usize a i2 i1
 
 (** [arrays::array_update2]:
-    Source: 'tests/src/arrays.rs', lines 133:0-136:1 *)
+    Source: 'tests/src/arrays.rs', lines 133:0-136:1
+    Visibility: public *)
 let array_update2 (a : slice u32) (i : usize) (x : u32) : result (slice u32) =
   let* i1 = u32_add x 1 in
   let* a1 = slice_update_usize a i i1 in
@@ -165,7 +190,8 @@ let array_update2 (a : slice u32) (i : usize) (x : u32) : result (slice u32) =
   slice_update_usize a1 i2 i1
 
 (** [arrays::array_update3]:
-    Source: 'tests/src/arrays.rs', lines 138:0-142:1 *)
+    Source: 'tests/src/arrays.rs', lines 138:0-142:1
+    Visibility: public *)
 let array_update3 (a : slice u32) (i : usize) (x : u32) : result (slice u32) =
   let* a1 = slice_update_usize a i x in
   let* i1 = usize_add i 1 in
@@ -174,37 +200,44 @@ let array_update3 (a : slice u32) (i : usize) (x : u32) : result (slice u32) =
   slice_update_usize a2 i2 x
 
 (** [arrays::take_array]:
-    Source: 'tests/src/arrays.rs', lines 144:0-144:33 *)
+    Source: 'tests/src/arrays.rs', lines 144:0-144:33
+    Visibility: public *)
 let take_array (a : array u32 2) : result unit =
   Ok ()
 
 (** [arrays::take_array_borrow]:
-    Source: 'tests/src/arrays.rs', lines 145:0-145:41 *)
+    Source: 'tests/src/arrays.rs', lines 145:0-145:41
+    Visibility: public *)
 let take_array_borrow (a : array u32 2) : result unit =
   Ok ()
 
 (** [arrays::take_slice]:
-    Source: 'tests/src/arrays.rs', lines 146:0-146:31 *)
+    Source: 'tests/src/arrays.rs', lines 146:0-146:31
+    Visibility: public *)
 let take_slice (s : slice u32) : result unit =
   Ok ()
 
 (** [arrays::take_mut_slice]:
-    Source: 'tests/src/arrays.rs', lines 147:0-147:39 *)
+    Source: 'tests/src/arrays.rs', lines 147:0-147:39
+    Visibility: public *)
 let take_mut_slice (s : slice u32) : result (slice u32) =
   Ok s
 
 (** [arrays::const_array]:
-    Source: 'tests/src/arrays.rs', lines 149:0-151:1 *)
+    Source: 'tests/src/arrays.rs', lines 149:0-151:1
+    Visibility: public *)
 let const_array : result (array u32 2) =
   Ok (array_repeat 2 0)
 
 (** [arrays::const_slice]:
-    Source: 'tests/src/arrays.rs', lines 153:0-156:1 *)
+    Source: 'tests/src/arrays.rs', lines 153:0-156:1
+    Visibility: public *)
 let const_slice : result u32 =
   let a = array_repeat 2 0 in let s = array_to_slice a in slice_index_usize s 0
 
 (** [arrays::take_all]:
-    Source: 'tests/src/arrays.rs', lines 164:0-176:1 *)
+    Source: 'tests/src/arrays.rs', lines 164:0-176:1
+    Visibility: public *)
 let take_all : result unit =
   let x = array_repeat 2 0 in
   let* _ = take_array x in
@@ -217,27 +250,32 @@ let take_all : result unit =
   Ok ()
 
 (** [arrays::index_array]:
-    Source: 'tests/src/arrays.rs', lines 178:0-180:1 *)
+    Source: 'tests/src/arrays.rs', lines 178:0-180:1
+    Visibility: public *)
 let index_array (x : array u32 2) : result u32 =
   array_index_usize x 0
 
 (** [arrays::index_array_borrow]:
-    Source: 'tests/src/arrays.rs', lines 181:0-183:1 *)
+    Source: 'tests/src/arrays.rs', lines 181:0-183:1
+    Visibility: public *)
 let index_array_borrow (x : array u32 2) : result u32 =
   array_index_usize x 0
 
 (** [arrays::index_slice_u32_0]:
-    Source: 'tests/src/arrays.rs', lines 185:0-187:1 *)
+    Source: 'tests/src/arrays.rs', lines 185:0-187:1
+    Visibility: public *)
 let index_slice_u32_0 (x : slice u32) : result u32 =
   slice_index_usize x 0
 
 (** [arrays::index_mut_slice_u32_0]:
-    Source: 'tests/src/arrays.rs', lines 189:0-191:1 *)
+    Source: 'tests/src/arrays.rs', lines 189:0-191:1
+    Visibility: public *)
 let index_mut_slice_u32_0 (x : slice u32) : result (u32 & (slice u32)) =
   let* i = slice_index_usize x 0 in Ok (i, x)
 
 (** [arrays::index_all]:
-    Source: 'tests/src/arrays.rs', lines 193:0-205:1 *)
+    Source: 'tests/src/arrays.rs', lines 193:0-205:1
+    Visibility: public *)
 let index_all : result u32 =
   let x = array_repeat 2 0 in
   let* i = index_array x in
@@ -252,22 +290,26 @@ let index_all : result u32 =
   u32_add i5 i6
 
 (** [arrays::update_array]:
-    Source: 'tests/src/arrays.rs', lines 207:0-209:1 *)
+    Source: 'tests/src/arrays.rs', lines 207:0-209:1
+    Visibility: public *)
 let update_array (x : array u32 2) : result unit =
   let* _ = array_index_mut_usize x 0 in Ok ()
 
 (** [arrays::update_array_mut_borrow]:
-    Source: 'tests/src/arrays.rs', lines 210:0-212:1 *)
+    Source: 'tests/src/arrays.rs', lines 210:0-212:1
+    Visibility: public *)
 let update_array_mut_borrow (x : array u32 2) : result (array u32 2) =
   array_update_usize x 0 1
 
 (** [arrays::update_mut_slice]:
-    Source: 'tests/src/arrays.rs', lines 213:0-215:1 *)
+    Source: 'tests/src/arrays.rs', lines 213:0-215:1
+    Visibility: public *)
 let update_mut_slice (x : slice u32) : result (slice u32) =
   slice_update_usize x 0 1
 
 (** [arrays::update_all]:
-    Source: 'tests/src/arrays.rs', lines 217:0-223:1 *)
+    Source: 'tests/src/arrays.rs', lines 217:0-223:1
+    Visibility: public *)
 let update_all : result unit =
   let x = array_repeat 2 0 in
   let* _ = update_array x in
@@ -278,21 +320,24 @@ let update_all : result unit =
   Ok ()
 
 (** [arrays::incr_array]:
-    Source: 'tests/src/arrays.rs', lines 225:0-227:1 *)
+    Source: 'tests/src/arrays.rs', lines 225:0-227:1
+    Visibility: public *)
 let incr_array (x : array u32 2) : result (array u32 2) =
   let* i = array_index_usize x 0 in
   let* i1 = u32_add i 1 in
   array_update_usize x 0 i1
 
 (** [arrays::incr_slice]:
-    Source: 'tests/src/arrays.rs', lines 229:0-231:1 *)
+    Source: 'tests/src/arrays.rs', lines 229:0-231:1
+    Visibility: public *)
 let incr_slice (x : slice u32) : result (slice u32) =
   let* i = slice_index_usize x 0 in
   let* i1 = u32_add i 1 in
   slice_update_usize x 0 i1
 
 (** [arrays::range_all]:
-    Source: 'tests/src/arrays.rs', lines 236:0-240:1 *)
+    Source: 'tests/src/arrays.rs', lines 236:0-240:1
+    Visibility: public *)
 let range_all : result unit =
   let x = array_repeat 4 0 in
   let* (s, _) =
@@ -304,27 +349,32 @@ let range_all : result unit =
   Ok ()
 
 (** [arrays::deref_array_borrow]:
-    Source: 'tests/src/arrays.rs', lines 245:0-248:1 *)
+    Source: 'tests/src/arrays.rs', lines 245:0-248:1
+    Visibility: public *)
 let deref_array_borrow (x : array u32 2) : result u32 =
   array_index_usize x 0
 
 (** [arrays::deref_array_mut_borrow]:
-    Source: 'tests/src/arrays.rs', lines 250:0-253:1 *)
+    Source: 'tests/src/arrays.rs', lines 250:0-253:1
+    Visibility: public *)
 let deref_array_mut_borrow (x : array u32 2) : result (u32 & (array u32 2)) =
   let* i = array_index_usize x 0 in Ok (i, x)
 
 (** [arrays::take_array_t]:
-    Source: 'tests/src/arrays.rs', lines 258:0-258:34 *)
+    Source: 'tests/src/arrays.rs', lines 258:0-258:34
+    Visibility: public *)
 let take_array_t (a : array aB_t 2) : result unit =
   Ok ()
 
 (** [arrays::non_copyable_array]:
-    Source: 'tests/src/arrays.rs', lines 260:0-268:1 *)
+    Source: 'tests/src/arrays.rs', lines 260:0-268:1
+    Visibility: public *)
 let non_copyable_array : result unit =
   take_array_t (mk_array 2 [ AB_A; AB_B ])
 
 (** [arrays::sum]: loop 0:
-    Source: 'tests/src/arrays.rs', lines 276:4-279:5 *)
+    Source: 'tests/src/arrays.rs', lines 276:4-279:5
+    Visibility: public *)
 let rec sum_loop
   (s : slice u32) (sum1 : u32) (i : usize) :
   Tot (result u32) (decreases (sum_loop_decreases s sum1 i))
@@ -339,12 +389,14 @@ let rec sum_loop
   else Ok sum1
 
 (** [arrays::sum]:
-    Source: 'tests/src/arrays.rs', lines 273:0-281:1 *)
+    Source: 'tests/src/arrays.rs', lines 273:0-281:1
+    Visibility: public *)
 let sum (s : slice u32) : result u32 =
   sum_loop s 0 0
 
 (** [arrays::sum2]: loop 0:
-    Source: 'tests/src/arrays.rs', lines 287:4-290:5 *)
+    Source: 'tests/src/arrays.rs', lines 287:4-290:5
+    Visibility: public *)
 let rec sum2_loop
   (s : slice u32) (s2 : slice u32) (sum1 : u32) (i : usize) :
   Tot (result u32) (decreases (sum2_loop_decreases s s2 sum1 i))
@@ -361,38 +413,44 @@ let rec sum2_loop
   else Ok sum1
 
 (** [arrays::sum2]:
-    Source: 'tests/src/arrays.rs', lines 283:0-292:1 *)
+    Source: 'tests/src/arrays.rs', lines 283:0-292:1
+    Visibility: public *)
 let sum2 (s : slice u32) (s2 : slice u32) : result u32 =
   let i = slice_len s in
   let i1 = slice_len s2 in
   if i = i1 then sum2_loop s s2 0 0 else Fail Failure
 
 (** [arrays::f0]:
-    Source: 'tests/src/arrays.rs', lines 294:0-297:1 *)
+    Source: 'tests/src/arrays.rs', lines 294:0-297:1
+    Visibility: public *)
 let f0 : result unit =
   let (s, _) = array_to_slice_mut (mk_array 2 [ 1; 2 ]) in
   let* _ = slice_index_mut_usize s 0 in
   Ok ()
 
 (** [arrays::f1]:
-    Source: 'tests/src/arrays.rs', lines 299:0-302:1 *)
+    Source: 'tests/src/arrays.rs', lines 299:0-302:1
+    Visibility: public *)
 let f1 : result unit =
   let* _ = array_index_mut_usize (mk_array 2 [ 1; 2 ]) 0 in Ok ()
 
 (** [arrays::f2]:
-    Source: 'tests/src/arrays.rs', lines 304:0-304:20 *)
+    Source: 'tests/src/arrays.rs', lines 304:0-304:20
+    Visibility: public *)
 let f2 (i : u32) : result unit =
   Ok ()
 
 (** [arrays::f4]:
-    Source: 'tests/src/arrays.rs', lines 313:0-315:1 *)
+    Source: 'tests/src/arrays.rs', lines 313:0-315:1
+    Visibility: public *)
 let f4 (x : array u32 32) (y : usize) (z : usize) : result (slice u32) =
   core_array_Array_index (core_ops_index_IndexSliceInst
     (core_slice_index_SliceIndexRangeUsizeSliceInst u32)) x
     { start = y; end_ = z }
 
 (** [arrays::f3]:
-    Source: 'tests/src/arrays.rs', lines 306:0-311:1 *)
+    Source: 'tests/src/arrays.rs', lines 306:0-311:1
+    Visibility: public *)
 let f3 : result u32 =
   let* i = array_index_usize (mk_array 2 [ 1; 2 ]) 0 in
   let* _ = f2 i in
@@ -402,16 +460,19 @@ let f3 : result u32 =
   sum2 s s1
 
 (** [arrays::SZ]
-    Source: 'tests/src/arrays.rs', lines 317:0-317:25 *)
+    Source: 'tests/src/arrays.rs', lines 317:0-317:25
+    Visibility: public *)
 let sZ : usize = 32
 
 (** [arrays::f5]:
-    Source: 'tests/src/arrays.rs', lines 320:0-322:1 *)
+    Source: 'tests/src/arrays.rs', lines 320:0-322:1
+    Visibility: public *)
 let f5 (x : array u32 32) : result u32 =
   array_index_usize x 0
 
 (** [arrays::ite]:
-    Source: 'tests/src/arrays.rs', lines 325:0-332:1 *)
+    Source: 'tests/src/arrays.rs', lines 325:0-332:1
+    Visibility: public *)
 let ite : result unit =
   let x = array_repeat 2 0 in
   let y = array_repeat 2 0 in
@@ -422,7 +483,8 @@ let ite : result unit =
   Ok ()
 
 (** [arrays::zero_slice]: loop 0:
-    Source: 'tests/src/arrays.rs', lines 337:4-340:5 *)
+    Source: 'tests/src/arrays.rs', lines 337:4-340:5
+    Visibility: public *)
 let rec zero_slice_loop
   (a : slice u8) (i : usize) (len : usize) :
   Tot (result (slice u8)) (decreases (zero_slice_loop_decreases a i len))
@@ -435,12 +497,14 @@ let rec zero_slice_loop
   else Ok a
 
 (** [arrays::zero_slice]:
-    Source: 'tests/src/arrays.rs', lines 334:0-341:1 *)
+    Source: 'tests/src/arrays.rs', lines 334:0-341:1
+    Visibility: public *)
 let zero_slice (a : slice u8) : result (slice u8) =
   let len = slice_len a in zero_slice_loop a 0 len
 
 (** [arrays::iter_mut_slice]: loop 0:
-    Source: 'tests/src/arrays.rs', lines 346:4-348:5 *)
+    Source: 'tests/src/arrays.rs', lines 346:4-348:5
+    Visibility: public *)
 let rec iter_mut_slice_loop
   (len : usize) (i : usize) :
   Tot (result unit) (decreases (iter_mut_slice_loop_decreases len i))
@@ -450,12 +514,14 @@ let rec iter_mut_slice_loop
   else Ok ()
 
 (** [arrays::iter_mut_slice]:
-    Source: 'tests/src/arrays.rs', lines 343:0-349:1 *)
+    Source: 'tests/src/arrays.rs', lines 343:0-349:1
+    Visibility: public *)
 let iter_mut_slice (a : slice u8) : result (slice u8) =
   let len = slice_len a in let* _ = iter_mut_slice_loop len 0 in Ok a
 
 (** [arrays::sum_mut_slice]: loop 0:
-    Source: 'tests/src/arrays.rs', lines 354:4-357:5 *)
+    Source: 'tests/src/arrays.rs', lines 354:4-357:5
+    Visibility: public *)
 let rec sum_mut_slice_loop
   (a : slice u32) (i : usize) (s : u32) :
   Tot (result u32) (decreases (sum_mut_slice_loop_decreases a i s))
@@ -470,7 +536,8 @@ let rec sum_mut_slice_loop
   else Ok s
 
 (** [arrays::sum_mut_slice]:
-    Source: 'tests/src/arrays.rs', lines 351:0-359:1 *)
+    Source: 'tests/src/arrays.rs', lines 351:0-359:1
+    Visibility: public *)
 let sum_mut_slice (a : slice u32) : result (u32 & (slice u32)) =
   let* s = sum_mut_slice_loop a 0 0 in Ok (s, a)
 

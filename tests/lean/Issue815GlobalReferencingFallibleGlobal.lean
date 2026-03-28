@@ -16,7 +16,8 @@ namespace issue_815_global_referencing_fallible_global
 @[global_simps, irreducible] def INNER : Result Std.U32 := 1#u32 + 1#u32
 
 /-- [issue_815_global_referencing_fallible_global::OUTER]
-    Source: 'tests/src/issue-815-global-referencing-fallible-global.rs', lines 5:0-5:29 -/
+    Source: 'tests/src/issue-815-global-referencing-fallible-global.rs', lines 5:0-5:29
+    Visibility: public -/
 @[global_simps, irreducible] def OUTER : Result Std.U32 := INNER
 
 end issue_815_global_referencing_fallible_global

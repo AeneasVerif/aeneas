@@ -312,13 +312,15 @@ inductive SharedList (T : Type) where
 | Cons : T → SharedList T → SharedList T
 
 /-- [adt_borrows::{adt_borrows::SharedList<'a, T>}::push]:
-    Source: 'tests/src/adt-borrows.rs', lines 214:4-216:5 -/
+    Source: 'tests/src/adt-borrows.rs', lines 214:4-216:5
+    Visibility: public -/
 def SharedList.push
   {T : Type} (self : SharedList T) (x : T) : Result (SharedList T) := do
   ok (SharedList.Cons x self)
 
 /-- [adt_borrows::{adt_borrows::SharedList<'a, T>}::pop]:
-    Source: 'tests/src/adt-borrows.rs', lines 218:4-224:5 -/
+    Source: 'tests/src/adt-borrows.rs', lines 218:4-224:5
+    Visibility: public -/
 def SharedList.pop
   {T : Type} (self : SharedList T) : Result (T × (SharedList T)) := do
   match self with
@@ -333,7 +335,8 @@ inductive MutList (T : Type) where
 | Cons : T → MutList T → MutList T
 
 /-- [adt_borrows::{adt_borrows::MutList<'a, T>}::push]:
-    Source: 'tests/src/adt-borrows.rs', lines 234:4-236:5 -/
+    Source: 'tests/src/adt-borrows.rs', lines 234:4-236:5
+    Visibility: public -/
 def MutList.push
   {T : Type} (self : MutList T) (x : T) :
   Result ((MutList T) × (MutList T → ((MutList T) × T)))
@@ -348,7 +351,8 @@ def MutList.push
   ok (MutList.Cons x self, back)
 
 /-- [adt_borrows::{adt_borrows::MutList<'a, T>}::pop]:
-    Source: 'tests/src/adt-borrows.rs', lines 238:4-244:5 -/
+    Source: 'tests/src/adt-borrows.rs', lines 238:4-244:5
+    Visibility: public -/
 def MutList.pop
   {T : Type} (self : MutList T) :
   Result ((T × (MutList T)) × ((T × (MutList T)) → MutList T))
@@ -361,12 +365,14 @@ def MutList.pop
     ok ((hd, tl), back)
 
 /-- [adt_borrows::wrap_shared_in_option]:
-    Source: 'tests/src/adt-borrows.rs', lines 247:0-249:1 -/
+    Source: 'tests/src/adt-borrows.rs', lines 247:0-249:1
+    Visibility: public -/
 def wrap_shared_in_option {T : Type} (x : T) : Result (Option T) := do
   ok (some x)
 
 /-- [adt_borrows::wrap_mut_in_option]:
-    Source: 'tests/src/adt-borrows.rs', lines 251:0-253:1 -/
+    Source: 'tests/src/adt-borrows.rs', lines 251:0-253:1
+    Visibility: public -/
 def wrap_mut_in_option
   {T : Type} (x : T) : Result ((Option T) × (Option T → T)) := do
   let back := fun o => match o with

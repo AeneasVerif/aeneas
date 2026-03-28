@@ -10,7 +10,8 @@ Module Traits.
 
 (** [core::result::Result]
     Source: '/rustc/library/core/src/result.rs', lines 557:0-557:21
-    Name pattern: [core::result::Result] *)
+    Name pattern: [core::result::Result]
+    Visibility: public *)
 Inductive core_result_Result_t (T : Type) (E : Type) :=
 | Core_result_Result_Ok : T -> core_result_Result_t T E
 | Core_result_Result_Err : E -> core_result_Result_t T E
@@ -20,7 +21,8 @@ Arguments Core_result_Result_Ok { _ } { _ }.
 Arguments Core_result_Result_Err { _ } { _ }.
 
 (** Trait declaration: [traits::BoolTrait]
-    Source: 'tests/src/traits.rs', lines 3:0-11:1 *)
+    Source: 'tests/src/traits.rs', lines 3:0-11:1
+    Visibility: public *)
 Record BoolTrait_t (Self : Type) := mkBoolTrait_t {
   BoolTrait_t_get_bool : Self -> result bool;
   BoolTrait_t_ret_true : Self -> result bool;
@@ -31,20 +33,23 @@ Arguments BoolTrait_t_get_bool { _ } _.
 Arguments BoolTrait_t_ret_true { _ } _.
 
 (** [traits::BoolTrait::ret_true]:
-    Source: 'tests/src/traits.rs', lines 8:4-10:5 *)
+    Source: 'tests/src/traits.rs', lines 8:4-10:5
+    Visibility: public *)
 Definition boolTrait_ret_true_default
   {Self : Type} (self : Self) : result bool :=
   Ok true
 .
 
 (** [traits::{traits::BoolTrait for bool}::get_bool]:
-    Source: 'tests/src/traits.rs', lines 14:4-16:5 *)
+    Source: 'tests/src/traits.rs', lines 14:4-16:5
+    Visibility: public *)
 Definition Bool_Insts_TraitsBoolTrait_get_bool (self : bool) : result bool :=
   Ok self
 .
 
 (** [traits::{traits::BoolTrait for bool}::ret_true]:
-    Source: 'tests/src/traits.rs', lines 13:0-17:1 *)
+    Source: 'tests/src/traits.rs', lines 13:0-17:1
+    Visibility: public *)
 Definition Bool_Insts_TraitsBoolTrait_ret_true (self : bool) : result bool :=
   Ok true
 .
@@ -57,21 +62,24 @@ Definition Bool_Insts_TraitsBoolTrait : BoolTrait_t bool := {|
 |}.
 
 (** [traits::test_bool_trait_bool]:
-    Source: 'tests/src/traits.rs', lines 19:0-21:1 *)
+    Source: 'tests/src/traits.rs', lines 19:0-21:1
+    Visibility: public *)
 Definition test_bool_trait_bool (x : bool) : result bool :=
   b <- Bool_Insts_TraitsBoolTrait_get_bool x;
   if b then Bool_Insts_TraitsBoolTrait_ret_true x else Ok false
 .
 
 (** [traits::{traits::BoolTrait for core::option::Option<T>}::get_bool]:
-    Source: 'tests/src/traits.rs', lines 25:4-30:5 *)
+    Source: 'tests/src/traits.rs', lines 25:4-30:5
+    Visibility: public *)
 Definition core_option_Option_Insts_TraitsBoolTrait_get_bool
   {T : Type} (self : option T) : result bool :=
   match self with | None => Ok false | Some _ => Ok true end
 .
 
 (** [traits::{traits::BoolTrait for core::option::Option<T>}::ret_true]:
-    Source: 'tests/src/traits.rs', lines 24:0-31:1 *)
+    Source: 'tests/src/traits.rs', lines 24:0-31:1
+    Visibility: public *)
 Definition core_option_Option_Insts_TraitsBoolTrait_ret_true
   {T : Type} (self : option T) : result bool :=
   Ok true
@@ -86,21 +94,24 @@ Definition core_option_Option_Insts_TraitsBoolTrait (T : Type) : BoolTrait_t
 |}.
 
 (** [traits::test_bool_trait_option]:
-    Source: 'tests/src/traits.rs', lines 33:0-35:1 *)
+    Source: 'tests/src/traits.rs', lines 33:0-35:1
+    Visibility: public *)
 Definition test_bool_trait_option {T : Type} (x : option T) : result bool :=
   b <- core_option_Option_Insts_TraitsBoolTrait_get_bool x;
   if b then core_option_Option_Insts_TraitsBoolTrait_ret_true x else Ok false
 .
 
 (** [traits::test_bool_trait]:
-    Source: 'tests/src/traits.rs', lines 37:0-39:1 *)
+    Source: 'tests/src/traits.rs', lines 37:0-39:1
+    Visibility: public *)
 Definition test_bool_trait
   {T : Type} (boolTraitInst : BoolTrait_t T) (x : T) : result bool :=
   boolTraitInst.(BoolTrait_t_get_bool) x
 .
 
 (** Trait declaration: [traits::ToU64]
-    Source: 'tests/src/traits.rs', lines 41:0-43:1 *)
+    Source: 'tests/src/traits.rs', lines 41:0-43:1
+    Visibility: public *)
 Record ToU64_t (Self : Type) := mkToU64_t {
   ToU64_t_to_u64 : Self -> result u64;
 }.
@@ -109,7 +120,8 @@ Arguments mkToU64_t { _ }.
 Arguments ToU64_t_to_u64 { _ } _.
 
 (** [traits::{traits::ToU64 for u64}::to_u64]:
-    Source: 'tests/src/traits.rs', lines 46:4-48:5 *)
+    Source: 'tests/src/traits.rs', lines 46:4-48:5
+    Visibility: public *)
 Definition U64_Insts_TraitsToU64_to_u64 (self : u64) : result u64 :=
   Ok self.
 
@@ -120,7 +132,8 @@ Definition U64_Insts_TraitsToU64 : ToU64_t u64 := {|
 |}.
 
 (** [traits::{traits::ToU64 for (A, A)}::to_u64]:
-    Source: 'tests/src/traits.rs', lines 52:4-54:5 *)
+    Source: 'tests/src/traits.rs', lines 52:4-54:5
+    Visibility: public *)
 Definition Pair_Insts_TraitsToU64_to_u64
   {A : Type} (toU64Inst : ToU64_t A) (self : (A * A)) : result u64 :=
   let (t, t1) := self in
@@ -137,32 +150,37 @@ Definition Pair_Insts_TraitsToU64 {A : Type} (toU64Inst : ToU64_t A) : ToU64_t
 |}.
 
 (** [traits::f]:
-    Source: 'tests/src/traits.rs', lines 57:0-59:1 *)
+    Source: 'tests/src/traits.rs', lines 57:0-59:1
+    Visibility: public *)
 Definition f {T : Type} (toU64Inst : ToU64_t T) (x : (T * T)) : result u64 :=
   Pair_Insts_TraitsToU64_to_u64 toU64Inst x
 .
 
 (** [traits::g]:
-    Source: 'tests/src/traits.rs', lines 61:0-66:1 *)
+    Source: 'tests/src/traits.rs', lines 61:0-66:1
+    Visibility: public *)
 Definition g
   {T : Type} (toU64PairInst : ToU64_t (T * T)) (x : (T * T)) : result u64 :=
   toU64PairInst.(ToU64_t_to_u64) x
 .
 
 (** [traits::h0]:
-    Source: 'tests/src/traits.rs', lines 68:0-70:1 *)
+    Source: 'tests/src/traits.rs', lines 68:0-70:1
+    Visibility: public *)
 Definition h0 (x : u64) : result u64 :=
   U64_Insts_TraitsToU64_to_u64 x.
 
 (** [traits::Wrapper]
-    Source: 'tests/src/traits.rs', lines 72:0-74:1 *)
+    Source: 'tests/src/traits.rs', lines 72:0-74:1
+    Visibility: public *)
 Record Wrapper_t (T : Type) := mkWrapper_t { wrapper_x : T; }.
 
 Arguments mkWrapper_t { _ }.
 Arguments wrapper_x { _ }.
 
 (** [traits::{traits::ToU64 for traits::Wrapper<T>}::to_u64]:
-    Source: 'tests/src/traits.rs', lines 77:4-79:5 *)
+    Source: 'tests/src/traits.rs', lines 77:4-79:5
+    Visibility: public *)
 Definition Wrapper_Insts_TraitsToU64_to_u64
   {T : Type} (toU64Inst : ToU64_t T) (self : Wrapper_t T) : result u64 :=
   toU64Inst.(ToU64_t_to_u64) self.(wrapper_x)
@@ -176,20 +194,23 @@ Definition Wrapper_Insts_TraitsToU64 {T : Type} (toU64Inst : ToU64_t T) :
 |}.
 
 (** [traits::h1]:
-    Source: 'tests/src/traits.rs', lines 82:0-84:1 *)
+    Source: 'tests/src/traits.rs', lines 82:0-84:1
+    Visibility: public *)
 Definition h1 (x : Wrapper_t u64) : result u64 :=
   Wrapper_Insts_TraitsToU64_to_u64 U64_Insts_TraitsToU64 x
 .
 
 (** [traits::h2]:
-    Source: 'tests/src/traits.rs', lines 86:0-88:1 *)
+    Source: 'tests/src/traits.rs', lines 86:0-88:1
+    Visibility: public *)
 Definition h2
   {T : Type} (toU64Inst : ToU64_t T) (x : Wrapper_t T) : result u64 :=
   Wrapper_Insts_TraitsToU64_to_u64 toU64Inst x
 .
 
 (** Trait declaration: [traits::ToType]
-    Source: 'tests/src/traits.rs', lines 90:0-92:1 *)
+    Source: 'tests/src/traits.rs', lines 90:0-92:1
+    Visibility: public *)
 Record ToType_t (Self : Type) (T : Type) := mkToType_t {
   ToType_t_to_type : Self -> result T;
 }.
@@ -198,7 +219,8 @@ Arguments mkToType_t { _ } { _ }.
 Arguments ToType_t_to_type { _ } { _ } _.
 
 (** [traits::{traits::ToType<bool> for u64}::to_type]:
-    Source: 'tests/src/traits.rs', lines 95:4-97:5 *)
+    Source: 'tests/src/traits.rs', lines 95:4-97:5
+    Visibility: public *)
 Definition U64_Insts_TraitsToTypeBool_to_type (self : u64) : result bool :=
   Ok (self s> 0%u64)
 .
@@ -210,7 +232,8 @@ Definition U64_Insts_TraitsToTypeBool : ToType_t u64 bool := {|
 |}.
 
 (** Trait declaration: [traits::OfType]
-    Source: 'tests/src/traits.rs', lines 100:0-104:1 *)
+    Source: 'tests/src/traits.rs', lines 100:0-104:1
+    Visibility: public *)
 Record OfType_t (Self : Type) := mkOfType_t {
   OfType_t_of_type : forall {T : Type} (toTypeInst : ToType_t T Self), T ->
     result Self;
@@ -220,7 +243,8 @@ Arguments mkOfType_t { _ }.
 Arguments OfType_t_of_type { _ } _ { _ }.
 
 (** [traits::h3]:
-    Source: 'tests/src/traits.rs', lines 106:0-108:1 *)
+    Source: 'tests/src/traits.rs', lines 106:0-108:1
+    Visibility: public *)
 Definition h3
   {T1 : Type} {T2 : Type} (ofTypeInst : OfType_t T1) (toTypeInst : ToType_t T2
   T1) (y : T2) :
@@ -230,7 +254,8 @@ Definition h3
 .
 
 (** Trait declaration: [traits::OfTypeBis]
-    Source: 'tests/src/traits.rs', lines 111:0-118:1 *)
+    Source: 'tests/src/traits.rs', lines 111:0-118:1
+    Visibility: public *)
 Record OfTypeBis_t (Self : Type) (T : Type) := mkOfTypeBis_t {
   OfTypeBis_tOfTypeBis_t_ToTypeInst : ToType_t T Self;
   OfTypeBis_t_of_type : T -> result Self;
@@ -241,7 +266,8 @@ Arguments OfTypeBis_tOfTypeBis_t_ToTypeInst { _ } { _ } _.
 Arguments OfTypeBis_t_of_type { _ } { _ } _.
 
 (** [traits::h4]:
-    Source: 'tests/src/traits.rs', lines 120:0-122:1 *)
+    Source: 'tests/src/traits.rs', lines 120:0-122:1
+    Visibility: public *)
 Definition h4
   {T1 : Type} {T2 : Type} (ofTypeBisInst : OfTypeBis_t T1 T2) (toTypeInst :
   ToType_t T2 T1) (y : T2) :
@@ -251,7 +277,8 @@ Definition h4
 .
 
 (** [traits::TestType]
-    Source: 'tests/src/traits.rs', lines 124:0-124:26 *)
+    Source: 'tests/src/traits.rs', lines 124:0-124:26
+    Visibility: public *)
 Definition TestType_t (T : Type) : Type := T.
 
 (** [traits::{traits::TestType<T>}::test::TestType1]
@@ -266,7 +293,8 @@ Definition TestType_test_TestType1_Insts_TraitsTestTypeTestTestTrait_test
 .
 
 (** [traits::{traits::TestType<T>}::test]:
-    Source: 'tests/src/traits.rs', lines 128:4-149:5 *)
+    Source: 'tests/src/traits.rs', lines 128:4-149:5
+    Visibility: public *)
 Definition testType_test
   {T : Type} (toU64Inst : ToU64_t T) (self : TestType_t T) (x : T) :
   result bool
@@ -295,11 +323,13 @@ Definition TestType_test_TestType1_Insts_TraitsTestTypeTestTestTrait :
 |}.
 
 (** [traits::BoolWrapper]
-    Source: 'tests/src/traits.rs', lines 152:0-152:33 *)
+    Source: 'tests/src/traits.rs', lines 152:0-152:33
+    Visibility: public *)
 Definition BoolWrapper_t : Type := bool.
 
 (** [traits::{traits::ToType<T> for traits::BoolWrapper}::to_type]:
-    Source: 'tests/src/traits.rs', lines 158:4-160:5 *)
+    Source: 'tests/src/traits.rs', lines 158:4-160:5
+    Visibility: public *)
 Definition BoolWrapper_Insts_TraitsToType_to_type
   {T : Type} (toTypeBoolTInst : ToType_t bool T) (self : BoolWrapper_t) :
   result T
@@ -315,7 +345,8 @@ Definition BoolWrapper_Insts_TraitsToType {T : Type} (toTypeBoolTInst :
 |}.
 
 (** Trait declaration: [traits::WithConstTy]
-    Source: 'tests/src/traits.rs', lines 163:0-174:1 *)
+    Source: 'tests/src/traits.rs', lines 163:0-174:1
+    Visibility: public *)
 Record WithConstTy_t (Self : Type) (Self_V : Type) (Self_W : Type) (LEN :
   usize) := mkWithConstTy_t {
   WithConstTy_tWithConstTy_t_LEN1 : result usize;
@@ -331,20 +362,23 @@ Arguments WithConstTy_tWithConstTy_t_ToU64Inst { _ } { _ } { _ } { _ } _.
 Arguments WithConstTy_t_f { _ } { _ } { _ } { _ } _.
 
 (** [traits::WithConstTy::LEN2]
-    Source: 'tests/src/traits.rs', lines 166:4-166:27 *)
+    Source: 'tests/src/traits.rs', lines 166:4-166:27
+    Visibility: public *)
 Definition withConstTy_LEN2_default (Self : Type) (LEN : usize) : usize :=
   32%usize
 .
 
 (** [traits::{traits::WithConstTy<u8, u64, 32usize> for bool}::f]:
-    Source: 'tests/src/traits.rs', lines 182:4-182:42 *)
+    Source: 'tests/src/traits.rs', lines 182:4-182:42
+    Visibility: public *)
 Definition Bool_Insts_TraitsWithConstTyU8U6432_f
   (i : u64) (a : array u8 32%usize) : result u64 :=
   Ok i
 .
 
 (** [traits::{traits::WithConstTy<u8, u64, 32usize> for bool}::LEN1]
-    Source: 'tests/src/traits.rs', lines 177:4-177:27 *)
+    Source: 'tests/src/traits.rs', lines 177:4-177:27
+    Visibility: public *)
 Definition Bool_Insts_TraitsWithConstTyU8U6432_LEN1 : usize := 12%usize.
 
 (** Trait implementation: [traits::{traits::WithConstTy<u8, u64, 32usize> for bool}]
@@ -360,7 +394,8 @@ Definition Bool_Insts_TraitsWithConstTyU8U6432 : WithConstTy_t bool u8 u64
 |}.
 
 (** [traits::use_with_const_ty1]:
-    Source: 'tests/src/traits.rs', lines 185:0-187:1 *)
+    Source: 'tests/src/traits.rs', lines 185:0-187:1
+    Visibility: public *)
 Definition use_with_const_ty1
   {H : Type} {Clause0_V : Type} {Clause0_W : Type} {LEN : usize}
   (withConstTyInst : WithConstTy_t H Clause0_V Clause0_W LEN) :
@@ -370,7 +405,8 @@ Definition use_with_const_ty1
 .
 
 (** [traits::use_with_const_ty2]:
-    Source: 'tests/src/traits.rs', lines 189:0-189:76 *)
+    Source: 'tests/src/traits.rs', lines 189:0-189:76
+    Visibility: public *)
 Definition use_with_const_ty2
   {H : Type} {Clause0_V : Type} {Clause0_W : Type} {LEN : usize}
   (withConstTyInst : WithConstTy_t H Clause0_V Clause0_W LEN) (t : Clause0_W) :
@@ -380,7 +416,8 @@ Definition use_with_const_ty2
 .
 
 (** [traits::use_with_const_ty3]:
-    Source: 'tests/src/traits.rs', lines 191:0-193:1 *)
+    Source: 'tests/src/traits.rs', lines 191:0-193:1
+    Visibility: public *)
 Definition use_with_const_ty3
   {H : Type} {Clause0_V : Type} {Clause0_W : Type} {LEN : usize}
   (withConstTyInst : WithConstTy_t H Clause0_V Clause0_W LEN) (x : Clause0_W) :
@@ -390,12 +427,14 @@ Definition use_with_const_ty3
 .
 
 (** [traits::test_where1]:
-    Source: 'tests/src/traits.rs', lines 195:0-195:43 *)
+    Source: 'tests/src/traits.rs', lines 195:0-195:43
+    Visibility: public *)
 Definition test_where1 {T : Type} (_x : T) : result unit :=
   Ok tt.
 
 (** [traits::test_where2]:
-    Source: 'tests/src/traits.rs', lines 196:0-196:60 *)
+    Source: 'tests/src/traits.rs', lines 196:0-196:60
+    Visibility: public *)
 Definition test_where2
   {T : Type} {Clause0_W : Type} (withConstTyTU32Clause0_W32Inst : WithConstTy_t
   T u32 Clause0_W 32%usize) (_x : u32) :
@@ -405,7 +444,8 @@ Definition test_where2
 .
 
 (** Trait declaration: [traits::ParentTrait0]
-    Source: 'tests/src/traits.rs', lines 202:0-206:1 *)
+    Source: 'tests/src/traits.rs', lines 202:0-206:1
+    Visibility: public *)
 Record ParentTrait0_t (Self : Type) (Self_W : Type) := mkParentTrait0_t {
   ParentTrait0_t_get_name : Self -> result string;
   ParentTrait0_t_get_w : Self -> result Self_W;
@@ -416,13 +456,15 @@ Arguments ParentTrait0_t_get_name { _ } { _ } _.
 Arguments ParentTrait0_t_get_w { _ } { _ } _.
 
 (** Trait declaration: [traits::ParentTrait1]
-    Source: 'tests/src/traits.rs', lines 207:0-207:25 *)
+    Source: 'tests/src/traits.rs', lines 207:0-207:25
+    Visibility: public *)
 Record ParentTrait1_t (Self : Type) := mkParentTrait1_t{}.
 
 Arguments mkParentTrait1_t { _ }.
 
 (** Trait declaration: [traits::ChildTrait]
-    Source: 'tests/src/traits.rs', lines 208:0-208:52 *)
+    Source: 'tests/src/traits.rs', lines 208:0-208:52
+    Visibility: public *)
 Record ChildTrait_t (Self : Type) (Self_Clause0_W : Type) := mkChildTrait_t {
   ChildTrait_tChildTrait_t_ParentTrait0Inst : ParentTrait0_t Self
     Self_Clause0_W;
@@ -434,7 +476,8 @@ Arguments ChildTrait_tChildTrait_t_ParentTrait0Inst { _ } { _ } _.
 Arguments ChildTrait_tChildTrait_t_ParentTrait1Inst { _ } { _ } _.
 
 (** [traits::test_child_trait1]:
-    Source: 'tests/src/traits.rs', lines 211:0-213:1 *)
+    Source: 'tests/src/traits.rs', lines 211:0-213:1
+    Visibility: public *)
 Definition test_child_trait1
   {T : Type} {Clause0_Clause0_W : Type} (childTraitInst : ChildTrait_t T
   Clause0_Clause0_W) (x : T) :
@@ -445,7 +488,8 @@ Definition test_child_trait1
 .
 
 (** [traits::test_child_trait2]:
-    Source: 'tests/src/traits.rs', lines 215:0-217:1 *)
+    Source: 'tests/src/traits.rs', lines 215:0-217:1
+    Visibility: public *)
 Definition test_child_trait2
   {T : Type} {Clause0_Clause0_W : Type} (childTraitInst : ChildTrait_t T
   Clause0_Clause0_W) (x : T) :
@@ -456,7 +500,8 @@ Definition test_child_trait2
 .
 
 (** [traits::order1]:
-    Source: 'tests/src/traits.rs', lines 221:0-221:62 *)
+    Source: 'tests/src/traits.rs', lines 221:0-221:62
+    Visibility: public *)
 Definition order1
   {T : Type} {U : Type} {Clause1_W : Type} (parentTrait0Inst : ParentTrait0_t T
   Clause1_W) (parentTrait0Inst1 : ParentTrait0_t U Clause1_W) :
@@ -466,7 +511,8 @@ Definition order1
 .
 
 (** Trait declaration: [traits::ChildTrait1]
-    Source: 'tests/src/traits.rs', lines 224:0-224:38 *)
+    Source: 'tests/src/traits.rs', lines 224:0-224:38
+    Visibility: public *)
 Record ChildTrait1_t (Self : Type) := mkChildTrait1_t {
   ChildTrait1_tChildTrait1_t_ParentTrait1Inst : ParentTrait1_t Self;
 }.
@@ -487,13 +533,15 @@ Definition Usize_Insts_TraitsChildTrait1 : ChildTrait1_t usize := {|
 |}.
 
 (** Trait declaration: [traits::Iterator]
-    Source: 'tests/src/traits.rs', lines 231:0-233:1 *)
+    Source: 'tests/src/traits.rs', lines 231:0-233:1
+    Visibility: public *)
 Record Iterator_t (Self : Type) (Self_Item : Type) := mkIterator_t{}.
 
 Arguments mkIterator_t { _ } { _ }.
 
 (** Trait declaration: [traits::IntoIterator]
-    Source: 'tests/src/traits.rs', lines 235:0-241:1 *)
+    Source: 'tests/src/traits.rs', lines 235:0-241:1
+    Visibility: public *)
 Record IntoIterator_t (Self : Type) (Self_Item : Type) (Self_IntoIter : Type)
   := mkIntoIterator_t {
   IntoIterator_tIntoIterator_t_IteratorInst : Iterator_t Self_IntoIter
@@ -521,13 +569,15 @@ Arguments mkTry_t { _ } { _ }.
 Arguments Try_tTry_t_FromResidualInst { _ } { _ } _.
 
 (** Trait declaration: [traits::WithTarget]
-    Source: 'tests/src/traits.rs', lines 254:0-256:1 *)
+    Source: 'tests/src/traits.rs', lines 254:0-256:1
+    Visibility: public *)
 Record WithTarget_t (Self : Type) (Self_Target : Type) := mkWithTarget_t{}.
 
 Arguments mkWithTarget_t { _ } { _ }.
 
 (** Trait declaration: [traits::ParentTrait2]
-    Source: 'tests/src/traits.rs', lines 258:0-260:1 *)
+    Source: 'tests/src/traits.rs', lines 258:0-260:1
+    Visibility: public *)
 Record ParentTrait2_t (Self : Type) (Self_U : Type) (Self_Clause0_Target :
   Type) := mkParentTrait2_t {
   ParentTrait2_tParentTrait2_t_WithTargetInst : WithTarget_t Self_U
@@ -538,7 +588,8 @@ Arguments mkParentTrait2_t { _ } { _ } { _ }.
 Arguments ParentTrait2_tParentTrait2_t_WithTargetInst { _ } { _ } { _ } _.
 
 (** Trait declaration: [traits::ChildTrait2]
-    Source: 'tests/src/traits.rs', lines 262:0-264:1 *)
+    Source: 'tests/src/traits.rs', lines 262:0-264:1
+    Visibility: public *)
 Record ChildTrait2_t (Self : Type) (Self_Clause0_U : Type)
   (Self_Clause0_Clause0_Target : Type) := mkChildTrait2_t {
   ChildTrait2_tChildTrait2_t_ParentTrait2Inst : ParentTrait2_t Self
@@ -563,7 +614,8 @@ Definition U32_Insts_TraitsParentTrait2U32U32 : ParentTrait2_t u32 u32 u32
 |}.
 
 (** [traits::{traits::ChildTrait2<u32, u32> for u32}::convert]:
-    Source: 'tests/src/traits.rs', lines 275:4-277:5 *)
+    Source: 'tests/src/traits.rs', lines 275:4-277:5
+    Visibility: public *)
 Definition U32_Insts_TraitsChildTrait2U32U32_convert (x : u32) : result u32 :=
   Ok x
 .
@@ -577,7 +629,8 @@ Definition U32_Insts_TraitsChildTrait2U32U32 : ChildTrait2_t u32 u32 u32 := {|
 |}.
 
 (** Trait declaration: [traits::CFnOnce]
-    Source: 'tests/src/traits.rs', lines 288:0-292:1 *)
+    Source: 'tests/src/traits.rs', lines 288:0-292:1
+    Visibility: public *)
 Record CFnOnce_t (Self : Type) (Args : Type) (Self_Output : Type)
   := mkCFnOnce_t {
   CFnOnce_t_call_once : Self -> Args -> result Self_Output;
@@ -587,7 +640,8 @@ Arguments mkCFnOnce_t { _ } { _ } { _ }.
 Arguments CFnOnce_t_call_once { _ } { _ } { _ } _.
 
 (** Trait declaration: [traits::CFnMut]
-    Source: 'tests/src/traits.rs', lines 294:0-296:1 *)
+    Source: 'tests/src/traits.rs', lines 294:0-296:1
+    Visibility: public *)
 Record CFnMut_t (Self : Type) (Args : Type) (Self_Clause0_Output : Type)
   := mkCFnMut_t {
   CFnMut_tCFnMut_t_CFnOnceInst : CFnOnce_t Self Args Self_Clause0_Output;
@@ -599,7 +653,8 @@ Arguments CFnMut_tCFnMut_t_CFnOnceInst { _ } { _ } { _ } _.
 Arguments CFnMut_t_call_mut { _ } { _ } { _ } _.
 
 (** Trait declaration: [traits::CFn]
-    Source: 'tests/src/traits.rs', lines 298:0-300:1 *)
+    Source: 'tests/src/traits.rs', lines 298:0-300:1
+    Visibility: public *)
 Record CFn_t (Self : Type) (Args : Type) (Self_Clause0_Clause0_Output : Type)
   := mkCFn_t {
   CFn_tCFn_t_CFnMutInst : CFnMut_t Self Args Self_Clause0_Clause0_Output;
@@ -611,7 +666,8 @@ Arguments CFn_tCFn_t_CFnMutInst { _ } { _ } { _ } _.
 Arguments CFn_t_call { _ } { _ } { _ } _.
 
 (** Trait declaration: [traits::GetTrait]
-    Source: 'tests/src/traits.rs', lines 302:0-305:1 *)
+    Source: 'tests/src/traits.rs', lines 302:0-305:1
+    Visibility: public *)
 Record GetTrait_t (Self : Type) (Self_W : Type) := mkGetTrait_t {
   GetTrait_t_get_w : Self -> result Self_W;
 }.
@@ -620,7 +676,8 @@ Arguments mkGetTrait_t { _ } { _ }.
 Arguments GetTrait_t_get_w { _ } { _ } _.
 
 (** [traits::test_get_trait]:
-    Source: 'tests/src/traits.rs', lines 307:0-309:1 *)
+    Source: 'tests/src/traits.rs', lines 307:0-309:1
+    Visibility: public *)
 Definition test_get_trait
   {T : Type} {Clause0_W : Type} (getTraitInst : GetTrait_t T Clause0_W) 
   (x : T) :
@@ -630,7 +687,8 @@ Definition test_get_trait
 .
 
 (** Trait declaration: [traits::Trait]
-    Source: 'tests/src/traits.rs', lines 312:0-314:1 *)
+    Source: 'tests/src/traits.rs', lines 312:0-314:1
+    Visibility: public *)
 Record Trait_t (Self : Type) := mkTrait_t { Trait_tTrait_t_LEN : result usize;
 }.
 
@@ -638,7 +696,8 @@ Arguments mkTrait_t { _ }.
 Arguments Trait_tTrait_t_LEN { _ } _.
 
 (** [traits::{traits::Trait for [T; N]}::LEN]
-    Source: 'tests/src/traits.rs', lines 317:4-317:25 *)
+    Source: 'tests/src/traits.rs', lines 317:4-317:25
+    Visibility: public *)
 Definition Array_Insts_TraitsTrait_LEN (T : Type) (N : usize) : usize := N.
 
 (** Trait implementation: [traits::{traits::Trait for [T; N]}]
@@ -649,7 +708,8 @@ Definition Array_Insts_TraitsTrait (T : Type) (N : usize) : Trait_t (array T N)
 |}.
 
 (** [traits::{traits::Trait for traits::Wrapper<T>}::LEN]
-    Source: 'tests/src/traits.rs', lines 321:4-321:25 *)
+    Source: 'tests/src/traits.rs', lines 321:4-321:25
+    Visibility: public *)
 Definition Wrapper_Insts_TraitsTrait_LEN {T : Type} (traitInst : Trait_t T)
   : usize :=
   0%usize
@@ -663,13 +723,15 @@ Definition Wrapper_Insts_TraitsTrait {T : Type} (traitInst : Trait_t T) :
 |}.
 
 (** [traits::use_wrapper_len]:
-    Source: 'tests/src/traits.rs', lines 324:0-326:1 *)
+    Source: 'tests/src/traits.rs', lines 324:0-326:1
+    Visibility: public *)
 Definition use_wrapper_len {T : Type} (traitInst : Trait_t T) : result usize :=
   Ok (Wrapper_Insts_TraitsTrait_LEN traitInst)
 .
 
 (** [traits::Foo]
-    Source: 'tests/src/traits.rs', lines 328:0-331:1 *)
+    Source: 'tests/src/traits.rs', lines 328:0-331:1
+    Visibility: public *)
 Record Foo_t (T : Type) (U : Type) := mkFoo_t { foo_x : T; foo_y : U; }.
 
 Arguments mkFoo_t { _ } { _ }.
@@ -677,14 +739,16 @@ Arguments foo_x { _ } { _ }.
 Arguments foo_y { _ } { _ }.
 
 (** [traits::{traits::Foo<T, U>}::FOO]
-    Source: 'tests/src/traits.rs', lines 334:4-334:43 *)
+    Source: 'tests/src/traits.rs', lines 334:4-334:43
+    Visibility: public *)
 Definition foo_FOO {T : Type} (U : Type) (traitInst : Trait_t T)
   : core_result_Result_t T i32 :=
   Core_result_Result_Err 0%i32
 .
 
 (** [traits::use_foo1]:
-    Source: 'tests/src/traits.rs', lines 337:0-339:1 *)
+    Source: 'tests/src/traits.rs', lines 337:0-339:1
+    Visibility: public *)
 Definition use_foo1
   {T : Type} (U : Type) (traitInst : Trait_t T) :
   result (core_result_Result_t T i32)
@@ -693,7 +757,8 @@ Definition use_foo1
 .
 
 (** [traits::use_foo2]:
-    Source: 'tests/src/traits.rs', lines 341:0-343:1 *)
+    Source: 'tests/src/traits.rs', lines 341:0-343:1
+    Visibility: public *)
 Definition use_foo2
   (T : Type) {U : Type} (traitInst : Trait_t U) :
   result (core_result_Result_t U i32)

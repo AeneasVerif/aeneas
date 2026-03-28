@@ -828,11 +828,7 @@ def evalStepStarTac : Tactic := fun stx => do
     let info ← evalStepStar cfg fuel
     let suggestion ← info.script.toSyntax
     let suggestion ← `(tacticSeq|$(suggestion)*)
-    /- TODO: do not use the Aesop helper but our own (it mentions Aesop in the message)
-       See https://github.com/AeneasVerif/aeneas/issues/476 -/
-    Aesop.addTryThisTacticSeqSuggestion stx suggestion (origSpan? := ← getRef)
-    --TODO: if we use this the indentation is not correct
-    --Meta.Tactic.TryThis.addSuggestion stx suggestion (origSpan? := ← getRef)
+    Aeneas.Utils.addTryThisTacticSeqSuggestion stx suggestion (origSpan? := ← getRef)
   | _ => throwUnsupportedSyntax
 
 end StepStar

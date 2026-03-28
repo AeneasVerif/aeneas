@@ -12,7 +12,8 @@ set_option maxHeartbeats 1000000
 namespace static
 
 /-- Trait declaration: [static::WithSlice]
-    Source: 'tests/src/static.rs', lines 3:0-5:1 -/
+    Source: 'tests/src/static.rs', lines 3:0-5:1
+    Visibility: public -/
 structure WithSlice (Self : Type) where
   SLICE : Result (Slice Std.U16)
 
