@@ -65,6 +65,8 @@ structure Config where
       that are not bound in the function call). This requires `assumTac` to
       be `true`. -/
   inferGhostVars : Bool := true
+  /-- Infer a postcondition for unresolved `?post args...` subgoals left by `progress` -/
+  inferPost : Bool := false
   /-- Use `scalar_tac` to discharge preconditions -/
   scalarTac : Bool := false
   /- Use `simp [*]` to discharge preconditions -/
@@ -109,7 +111,7 @@ structure Config where
 deriving Repr
 
 def Config.toGrindConfig (cfg : Config) : Grind.Config :=
-  let { async := _, assumTac := _, inferGhostVars := _, scalarTac := _, simpStar := _,
+  let { async := _, assumTac := _, inferGhostVars := _, inferPost := _, scalarTac := _, simpStar := _,
         grind := _, withGroundSimprocs := _, nla := _,
         threadGrindState := _, grindPreprocessIters := _, grindPreprocessSplit := _,
         preprocessGrind := _,
@@ -966,6 +968,12 @@ initialize stepPureDefAttribute : StepPureDefSpecAttr ← do
   registerBuiltinAttribute attrImpl
   pure { attr := attrImpl }
 
+open Tactic
+
+/-! # Logging Utils -/
+def traceGoalWithNode (msg : String) : TacticM Unit := Utils.traceGoalWithNode `Step msg
+
 end Step
+
 
 end Aeneas
