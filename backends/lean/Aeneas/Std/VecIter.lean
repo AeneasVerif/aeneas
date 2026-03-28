@@ -101,7 +101,7 @@ def core.iter.traits.collect.FromIteratorVec (T : Type) :
   "alloc::vec::into_iter::{core::iter::traits::iterator::Iterator<alloc::vec::into_iter::IntoIter<@T, @A>, @T>}::map"]
 def alloc.vec.into_iter.IntoIter.Insts.CoreIterTraitsIteratorIterator.map
   {T : Type} {A : Type} {F : Type}
-  (FnMutInst : core.ops.function.FnMut F T A) :
+  (_FnMutInst : core.ops.function.FnMut F T A) :
   alloc.vec.into_iter.IntoIter T → F →
   Result (core.iter.adapters.map.Map (alloc.vec.into_iter.IntoIter T) F) :=
   fun it f => .ok ⟨ it, f ⟩
