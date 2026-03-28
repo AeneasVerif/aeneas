@@ -1,4 +1,5 @@
-import Aeneas
+import Aeneas.Std.Slice
+import Aeneas.Tactic.Step
 
 open Aeneas Aeneas.Std Result ControlFlow Error
 
@@ -36,13 +37,8 @@ theorem callPair_spec (f g : U32 → Result U32) (xy : U32 × U32)
     (postF : U32 → Prop) (postG : U32 → Prop)
     (hf : f xy.1 ⦃ postF ⦄) (hg : g xy.2 ⦃ postG ⦄) :
     callPair f g xy ⦃ fun p => postF p.1 ∧ postG p.2 ⦄ := by
-  simp only [callPair]
-  apply WP.spec_bind hf
-  intro a ha
-  apply WP.spec_bind hg
-  intro b hb
-  simp [WP.spec, WP.theta, WP.wp_return]
-  exact ⟨ha, hb⟩
+  unfold callPair
+  step*
 
 /--
 info: Try this:
@@ -68,10 +64,8 @@ theorem callFThenG_spec (f g : U32 → Result U32) (x : U32)
     (hf : f x ⦃ mid ⦄)
     (hg : ∀ y, mid y → g y ⦃ post ⦄) :
     callFThenG f g x ⦃ post ⦄ := by
-  simp only [callFThenG]
-  apply WP.spec_bind hf
-  intro y hy
-  exact hg y hy
+  unfold callFThenG
+  step*
 
 /--
 info: Try this:
@@ -87,19 +81,6 @@ info: Try this:
 example (x : U32) (h1 : x.val + 1 ≤ U32.max) (h2 : x.val + 2 ≤ U32.max) :
     callFThenG (fun a => a + 1#u32) (fun b => b + 1#u32) x ⦃ y => y.val = x.val + 2 ⦄ := by
   step*? +inferPost
-
-def _root_.Aeneas.Std.Slice.mapM  {α β} (f : α → Result β) (x : Slice α) : Result (Slice β) :=
-  match h : x.val.mapM f with
-  | ok xs  => ok ⟨xs, List.mapM_Result_length h ▸ x.prop⟩
-  | fail e => fail e
-  | div    => div
-
-@[step]
-theorem _root_.Aeneas.Std.Slice.mapM_spec {α β} {f : α → Result β} {s : Slice α} {post : Nat → β → Prop}
-    (hf : ∀ i (hi : i < s.len), f s[i] ⦃ post i ⦄) :
-    s.mapM f ⦃ s' => s'.len = s.len ∧ ∀ i (hi : i < s'.len), post i s'[i] ⦄ := by
-  -- NOTE: We don't need to prove this, we just want the statement for the example below
-  sorry
 
 def callSlicemapM (x : Slice U32) : Result (Slice U32) := do
   let y ← x.mapM (fun x => x + 1#u32)

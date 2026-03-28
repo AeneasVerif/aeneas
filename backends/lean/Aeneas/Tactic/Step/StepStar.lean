@@ -735,29 +735,28 @@ where
                 f.isConstOf ``Std.WP.spec && args.size == 3
               if isSpec then
                 let tag ← mvarId.getTag
-                try
-                  -- Recursively process this spec precondition
-                  let (subInfo, didIntro) ← commitIfNoEx do
-                    setGoals [mvarId]
-                    let (introFVars, mvarId) ← mvarId.intros
-                    setGoals [mvarId]
-                    let info ← traverseProgram cfg fuel ss
-                    pure (info, !introFVars.isEmpty)
-                  -- Build the script: case <tag> => [intros;] <recursive script>
-                  let recursiveStx ← subInfo.script.toSyntax
-                  let introStx : Array Syntax.Tactic ←
-                    if didIntro then pure #[← `(tactic| intros)]
-                    else pure #[]
-                  let allTacs := introStx ++ recursiveStx
-                  let caseArgs := makeCaseArgs tag #[]
-                  let caseTac ← `(tactic| case $caseArgs => $allTacs*)
-                  scriptEntries := scriptEntries.push (TaskOrDone.mk (some caseTac))
-                  extra := extra ++ { subInfo with script := .tacs #[] }
-                catch e =>
-                  -- Recursive processing failed, keep as normal precondition
-                  logWarning m!"Recursive spec processing failed for {tag}: {e.toMessageData}"
-                  remaining := remaining.push (mvarId, proof)
-                  scriptEntries := scriptEntries.push (TaskOrDone.mk (some sorryStx))
+                -- Recursively process this spec precondition
+                let (subInfo, introFVars) ← commitIfNoEx do
+                  setGoals [mvarId]
+                  let size ← getIntrosSize <$> mvarId.getType
+                  let (introFVars, mvarId) ← mvarId.introNP size
+                  setGoals [mvarId]
+                  let info ← traverseProgram cfg fuel ss
+                  pure (info, introFVars)
+                -- Build the script: case <tag> => [intros;] <recursive script>
+                let subStx ← subInfo.script.toSyntax
+                let introStx : Array Syntax.Tactic ←
+                  if !introFVars.isEmpty then
+                  -- TODO: For some reason this doesn't work
+                  -- let idents ← introFVars.mapM fun fvar => mkIdent <$> fvar.getUserName
+                  -- pure #[← `(tactic| intros $idents*)]
+                    pure #[← `(tactic| intros)]
+                  else pure #[]
+                let allTacs := introStx ++ subStx
+                let caseArgs := makeCaseArgs tag #[]
+                let caseTac ← `(tactic| case $caseArgs => $allTacs*)
+                scriptEntries := scriptEntries.push (TaskOrDone.mk (some caseTac))
+                extra := extra ++ { subInfo with script := .tacs #[] }
               else
                 remaining := remaining.push (mvarId, proof)
                 scriptEntries := scriptEntries.push (TaskOrDone.mk (some sorryStx))

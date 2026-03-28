@@ -737,14 +737,12 @@ def stepWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
           let mainGoal ← commitIfNoEx do
             let goal ← inferPost mg.goal (eliminate := fun decl => decl.type.isAppOf ``prettyMonadEq)
             pure (some { mg with goal := goal })
-          -- Try to solve the inferred postcondition with `agrind`
+          -- Try to solve the inferred postcondition
           if let some mg := mainGoal then
             setGoals [mg.goal]
-            try
-              evalTactic (←`(tactic|agrind))
-              if (← getGoals).isEmpty then pure none
-              else pure mainGoal
-            catch _ => pure mainGoal
+            args.solvePreconditionTac args.stepState.grindState?
+            if ← mg.goal.isAssigned then pure none
+            else pure mainGoal
           else pure none
         else pure mainGoal
       else pure mainGoal

@@ -36,9 +36,15 @@ def inferPost (goal : MVarId) (eliminate : LocalDecl → Bool := fun _ => true) 
     !(mvarLCtx.contains decl.fvarId || eliminate decl)
 
   -- Build postcondition: fun x₁ ... xₙ => ∃ vars..., x₁ = a₁ ∧ ... ∧ xₙ = aₙ ∧ props
-  let argTys ← liftMetaM (args.mapM inferType)
-  let lambdaArgs : Array (Name × Expr) :=
-    argTys.mapIdx fun (i : Nat) ty => (Name.mkSimple s!"x{i + 1}", ty)
+  let lambdaArgs : Array (Name × Expr) ←
+    args.mapM fun arg => do
+      let argTy ← inferType arg
+      let name ←
+        if let some fvarId := arg.fvarId? then
+          fvarId.getUserName
+        else
+          mkFreshUserName `x
+      pure (name, argTy)
   let postExpr ← withLocalDeclsDND lambdaArgs fun boundVars => do
     -- Build conjuncts: equalities x₁ = a₁, ..., xₙ = aₙ, then relevant props
     let conjuncts ← boundVars.zip args |>.mapM fun (bvar, arg) => mkEq bvar arg
