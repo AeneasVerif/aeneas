@@ -401,6 +401,8 @@ done
 wall-clock time. This gives accurate per-file measurements without lake's caching
 or scheduling overhead.
 
+Note: `time` output format varies by shell. This works in both bash and zsh.
+
 **Keeping Lean reactive is even more important.** When developing a proof interactively,
 adding a tactic at the end should take **< 0.5s** — this is what enables rapid iteration.
 If incremental edits are slow (several seconds), the proof structure is forcing
