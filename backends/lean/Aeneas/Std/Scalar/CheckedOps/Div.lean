@@ -52,6 +52,9 @@ theorem «%S».checked_div_bv_spec (x y : «%S») :
   have := core.num.checked_div_UScalar_bv_spec x y
   simp_all [«%S».checked_div, «%S».bv]
   cases h: core.num.checked_div_UScalar x y <;> simp_all
+  obtain ⟨left, right⟩ := this
+  obtain ⟨left_1, right⟩ := right
+  rfl
 
 /-!
 Signed checked div
@@ -81,8 +84,8 @@ theorem «%S».checked_div_bv_spec (x y : «%S») :
   match core.num.checked_div_IScalar x y with
   | some z => y.val ≠ 0 ∧ ¬ (x.val = «%S».min ∧ y.val = -1) ∧ z.val = Int.tdiv x.val y.val ∧ z.bv = BitVec.sdiv x.bv y.bv
   | none => y.val = 0 ∨ (x.val = «%S».min ∧ y.val = -1) := by
-  have := core.num.checked_div_IScalar_bv_spec x y
-  simp_all only [«%S».bv, IScalar.min, «%S».min, «%S».numBits]
-  cases h: core.num.checked_div_IScalar x y <;> simp_all only [ne_eq, not_false_eq_true, and_self]
+  have h_spec := core.num.checked_div_IScalar_bv_spec x y
+  simp_all [«%S».bv, «%S».min, «%S».numBits, IScalar.min]
+  cases h: core.num.checked_div_IScalar x y <;> simp_all
 
 end Aeneas.Std

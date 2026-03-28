@@ -47,6 +47,9 @@ theorem «%S».checked_add_bv_spec (x y : «%S») :
   have := core.num.checked_add_UScalar_bv_spec x y
   simp_all [«%S».checked_add, UScalar.max, «%S».bv]
   cases h: core.num.checked_add_UScalar x y <;> simp_all [«%S».max, «%S».numBits]
+  obtain ⟨left, right⟩ := this
+  obtain ⟨left_1, right⟩ := right
+  rfl
 
 /-!
 Signed checked add
@@ -68,6 +71,10 @@ theorem «%S».checked_add_bv_spec (x y : «%S») :
   | none => ¬ («%S».min ≤ x.val + y.val ∧ x.val + y.val ≤ «%S».max) := by
   have := core.num.checked_add_IScalar_bv_spec x y
   simp_all only [IScalar.min, IScalar.max, «%S».bv, «%S».min, «%S».max, «%S».numBits]
-  cases h: core.num.checked_add_IScalar x y <;> simp_all only [] <;> simp
+  cases h: core.num.checked_add_IScalar x y <;> simp_all
+  obtain ⟨left, right⟩ := this
+  obtain ⟨left_1, right⟩ := right
+  obtain ⟨left_2, right⟩ := right
+  rfl
 
 end Aeneas.Std
