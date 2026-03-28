@@ -739,8 +739,11 @@ These require reading the proof, not just grepping:
 ### Performance checks
 
 - **Is the proof fast enough?** (Pitfall #14)
-  Profile with `set_option trace.profiler true in` and check that the proof
-  completes in **< 60 seconds wall-clock**. If slower, send back for optimization.
+  Use the `measure` tactic wrapper (see the `aeneas-tactics-quickref` skill file,
+  "Profiling proof time") to check that the proof completes in **< 60 seconds
+  wall-clock**. **Do NOT use `trace.profiler` for this** — it only measures tactic
+  execution and misses kernel type-checking time, which can dominate. If slower than
+  60s, send back for optimization.
 
 - **Is the proof reactive for interactive development?** (Pitfall #15)
   Adding a tactic at the end should take < 0.5s. If not, look for inline `(by ...)`

@@ -258,10 +258,17 @@ set_option trace.Aeneas.progress true -- detailed progress
 
 ### Profiling proof time
 
-Use these options to identify slow tactics:
+**⚠️ `trace.profiler` only measures tactic execution time — NOT kernel type-checking.**
+When a tactic introduces auxiliary theorems (e.g., `agrind`, `grind`), the kernel must
+type-check those proof terms *after* the tactic finishes. `trace.profiler` does not
+include this cost. **The discrepancy can be huge** — a tactic may report 50ms in the
+profiler but actually take 5s wall-clock because the kernel spends 4.95s checking the
+proof term it produced.
+
+Use `trace.profiler` to identify which tactic is slow at the *tactic* level:
 
 ```lean
--- Per-tactic timing breakdown (recommended — shows each tactic's time)
+-- Per-tactic timing breakdown (tactic execution only, excludes kernel checking)
 set_option trace.profiler true in
 set_option trace.profiler.threshold 10 in  -- report tactics > 10ms (default: 100ms)
 
@@ -270,7 +277,33 @@ set_option profiler true in
 set_option profiler.threshold 10 in
 ```
 
-Use `trace.profiler` to find which tactic dominates the time, then optimize or replace it.
+To measure **true wall-clock time including kernel type-checking**, use the `measure`
+tactic wrapper. Define it locally (or in a shared utilities file):
+
+```lean
+/-- Measure wall-clock time of a tactic (including kernel type-checking). -/
+elab "measure" t:tactic : tactic => do
+  let start ← IO.monoNanosNow
+  Lean.Elab.Tactic.evalTactic t
+  let stop ← IO.monoNanosNow
+  IO.eprintln s!"[measure] {(stop - start) / 1000000}ms"
+```
+
+Then wrap the tactic or proof script you want to measure:
+
+```lean
+theorem my_fn.spec ... := by
+  measure (agrind)          -- measures agrind + kernel checking of its proof term
+  measure (simp [*]; grind) -- measures the whole sequence
+```
+
+**When to use which:**
+- **`trace.profiler`**: first pass — find which tactic is slow at the tactic level
+- **`measure`**: second pass — verify true wall-clock cost including kernel checking.
+  If `trace.profiler` says a tactic is fast but `measure` says it's slow, the
+  bottleneck is kernel type-checking of the proof term the tactic produced. The fix
+  is to use a tactic that produces simpler proof terms, or extract the sub-goal as
+  an auxiliary lemma (which gets its own smaller proof term).
 
 ### ⚠️ `maxHeartbeats` guidelines
 
@@ -342,8 +375,12 @@ proof term — not running tactics.
 (which get their own smaller proof terms), or use more direct proof strategies that
 produce simpler terms.
 
-Use `set_option trace.profiler true in` to profile tactic elaboration time. If tactic
-times are reasonable but the overall proof is slow, the bottleneck is kernel replay.
+Use `set_option trace.profiler true in` to profile tactic elaboration time. **But note:**
+`trace.profiler` only measures tactic execution, not kernel type-checking — the
+discrepancy can be huge. Use the `measure` tactic wrapper (see "Profiling proof time"
+above) to get true wall-clock time including kernel checking. If `trace.profiler` says
+tactics are fast but `measure` (or overall proof time) is slow, the bottleneck is kernel
+replay — the fix is to produce simpler/smaller proof terms.
 
 ### Measuring per-file build time
 
@@ -363,6 +400,8 @@ done
 `time lean file.lean` then elaborates just that one file from scratch and reports
 wall-clock time. This gives accurate per-file measurements without lake's caching
 or scheduling overhead.
+
+Note: `time` output format varies by shell. This works in both bash and zsh.
 
 **Keeping Lean reactive is even more important.** When developing a proof interactively,
 adding a tactic at the end should take **< 0.5s** — this is what enables rapid iteration.
