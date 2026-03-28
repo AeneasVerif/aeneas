@@ -232,10 +232,10 @@ theorem new_with_capacity_spec
   . simp_all [al_v, Slots.al_v, v]
   . assumption
   . scalar_tac
-  . simp_all [alloc.vec.Vec.len, alloc.vec.Vec.new]
+  . simp_all [alloc.vec.Vec.len]
   . simp_all
   . scalar_tac
-  . simp_all [alloc.vec.Vec.len, alloc.vec.Vec.new]
+  . simp_all [alloc.vec.Vec.len]
   . simp_all [al_v, Slots.al_v, v]
   . simp_all [HashMap.v]
   . simp [lookup]
@@ -369,7 +369,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
     slot_s_inv_hash hm.slots.length (hash_mod_key key hm.slots.length) l.v := by
     simp [inv, slots_t_inv] at hinv
     have h := (hinv.right.left hash_mod.val (by scalar_tac)).right
-    simp [slot_t_inv, hhm] at h
+    simp [hhm] at h
     simp_all
   step as ⟨ inserted, l0, _, _, _, _, hlen ⟩
   . simp [inv, slots_t_inv, slot_t_inv, slot_s_inv] at hinv
@@ -428,7 +428,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
     split_conjs
     . match h: lookup hm key with
       | none =>
-        simp [h, lookup, nhm] at *
+        simp [lookup, nhm] at *
         simp_all
       | some _ =>
         simp_all [lookup, nhm]
@@ -438,7 +438,7 @@ theorem insert_no_resize_spec {α : Type} (hm : HashMap α) (key : Usize) (value
       -- We need a case disjunction
       cases h_ieq : key.val % List.length hm.slots.val == i <;> simp_all [slot_s_inv]
     . simp [hinv]
-    . simp_all [frame_load, inv_base, inv_load]
+    . simp_all [inv_load]
   . simp_all [frame_slots_params]
   . simp [lookup] at *
     simp_all
@@ -529,7 +529,7 @@ theorem move_elements_from_list_spec
         have := hDisjoint2 key' v
         have := hTable1LookupImp key' v
         have := hSlot1LookupImp key' v
-        simp_all [Slots.lookup]
+        simp_all
       else
         have := hLookup12 key'
         split <;>
@@ -621,7 +621,7 @@ private theorem move_slots_updated_table_lookup_imp
     cases hTableLookup <;> try simp [*]
     right
     have := slots_inv_lookup_imp_eq slots hSlotsInv i hi key (by simp_all)
-    simp_all [Slots.lookup]
+    simp_all
   | inr hTable1Lookup =>
     right
     -- The key can't be for the slot we replaced
@@ -795,7 +795,7 @@ theorem move_elements_loop_spec
     . apply hLookupPreserve.right
     . intro j h0
       apply hIndexNil j h0
-  . simp [hi, *]
+  . simp [*]
     -- TODO: simp_all removes hEmpty!!
     have hi : i = alloc.vec.Vec.len slots := by scalar_tac
     have hEmpty : ∀ (j : Nat), j < slots.val.length → slots[j]! = AList.Nil := by
@@ -804,7 +804,7 @@ theorem move_elements_loop_spec
     have hNil : slots.al_v = [] := slots_forall_nil_imp_al_v_nil slots hEmpty
     have hLenNonZero : slots.val.length ≠ 0 := by simp [*]
     have hLookupEmpty := slots_forall_nil_imp_lookup_none slots hLenNonZero hEmpty
-    simp [hNil, hLookupEmpty, frame_slots_params]
+    simp [hNil, frame_slots_params]
     split_conjs
     . intros
       simp [*]
@@ -864,7 +864,7 @@ theorem try_resize_spec {α : Type} (hm : HashMap α) (hInv : hm.inv):
           simp [alloc.vec.Vec.len, inv, inv_load] at *
           -- TODO: this should be automated
           have hIneq1 : n1.val ≤ Usize.max / 2 := by simp [*]
-          simp [Int.le_ediv_iff_mul_le] at hIneq1
+          simp at hIneq1
           -- TODO: this should be automated
           have hIneq2 : n2.val ≤ n1.val / hm.2.1.val := by simp [*]
           rw [Nat.le_div_iff_mul_le] at hIneq2 <;> try simp [*]
@@ -900,7 +900,7 @@ theorem try_resize_spec {α : Type} (hm : HashMap α) (hInv : hm.inv):
         replace hLookup := hLookup key
         cases h1: (ntable2.slots.val[key.val % ntable2.slots.val.length]!).v.lookup key <;>
         cases h2: (hm.slots.val[key.val % hm.slots.val.length]!).v.lookup key <;>
-        simp_all [Slots.lookup]
+        simp_all
   else
     simp [hSmaller]
     tauto
@@ -1020,7 +1020,7 @@ theorem get_mut_spec {α} (hm : HashMap α) (key : Usize) (hInv : hm.inv) :
   step as ⟨ opt_v, back, _, hBackNone, hBackSome ⟩
   simp [lookup, *]
   constructor
-  . simp_all [lookup]
+  . simp_all
   . -- Backward function
     split_conjs
     . -- case: none

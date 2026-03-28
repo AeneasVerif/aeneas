@@ -88,9 +88,14 @@ def BuiltinClone (Self : Type) : core.clone.Clone Self where
 def BuiltinCopy (Self : Type) : core.marker.Copy Self where
   cloneInst := BuiltinClone Self
 
-@[simp, step_simps, rust_fun "core::option::{core::option::Option<@T>}::unwrap"]
+@[rust_fun "core::option::{core::option::Option<@T>}::unwrap"]
 def core.option.Option.unwrap {T : Type} (x : Option T) : Result T :=
   Result.ofOption x Error.panic
+
+@[step]
+theorem core.option.Option.unwrap.spec {T : Type} (x : Option T) (h : x.isSome) :
+  unwrap x ⦃ v => x = some v ⦄ := by
+  simp only [unwrap, ofOption]; grind
 
 @[step_pure_def, rust_fun "core::option::{core::option::Option<@T>}::unwrap_or" -canFail]
 def core.option.Option.unwrap_or (self : Option T) (default : T) : T :=
@@ -103,12 +108,6 @@ def core.option.Option.unwrap_or (self : Option T) (default : T) : T :=
 
 @[simp] def core.option.Option.unwrap_or_none (default : T) :
   core.option.Option.unwrap_or none default = default := by simp [unwrap_or]
-
-/-- Returns the contained `some` value. The message is ignored: on `none`, this
-    fails with `Error.panic`, which is the same behavior as `unwrap`. -/
-@[simp, step_simps, rust_fun "core::option::{core::option::Option<@T>}::expect"]
-def core.option.Option.expect {T : Type} (x : Option T) (_msg: Str) : Result T :=
-  Result.ofOption x Error.panic
 
 @[simp, step_simps, rust_fun "core::option::{core::option::Option<@T>}::take" -canFail -lift]
 def core.option.Option.take {T: Type} (self: Option T): Option T × Option T := (self, .none)

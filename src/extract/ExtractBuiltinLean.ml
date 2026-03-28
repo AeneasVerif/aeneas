@@ -56,7 +56,7 @@ let lean_builtin_types =
     (* file: "Aeneas/Std/Range.lean", line: 14 *)
     mk_type "core::ops::range::Range" "core.ops.range.Range"
       ~kind:(KStruct [ ("start", Some "start"); ("end", Some "«end»") ]);
-    (* file: "Aeneas/Std/Core/Core.lean", line: 123 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 122 *)
     mk_type "core::ops::range::RangeFrom" "core.ops.range.RangeFrom"
       ~kind:(KStruct [ ("start", Some "start") ]);
     (* file: "Aeneas/Std/Range.lean", line: 20 *)
@@ -68,7 +68,7 @@ let lean_builtin_types =
     (* file: "Aeneas/Std/Core/Panic.lean", line: 6 *)
     mk_type "core::panic::panic_info::PanicInfo"
       "core.panic.panic_info.PanicInfo";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 127 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 126 *)
     mk_type "core::panicking::AssertKind" "core.panicking.AssertKind"
       ~kind:
         (KEnum [ ("Eq", Some "Eq"); ("Ne", Some "Ne"); ("Match", Some "Match") ]);
@@ -379,7 +379,7 @@ let lean_builtin_funs =
     mk_fun
       "core::array::{core::ops::index::IndexMut<[@T; @N], @I, @O>}::index_mut"
       "core.array.Array.index_mut";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 133 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 132 *)
     mk_fun "core::clone::impls::{core::clone::Clone<&'0 @T>}::clone"
       "core.clone.impls.CloneShared.clone";
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 18 *)
@@ -618,22 +618,22 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Scalar/Pow.lean", line: 7 *)
     mk_fun "core::num::{usize}::is_power_of_two"
       "core.num.Usize.is_power_of_two";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 109 *)
+    (* file: "Aeneas/Std/Core/CoreOption.lean", line: 8 *)
     mk_fun "core::option::{core::option::Option<@T>}::expect"
       "core.option.Option.expect";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 116 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 115 *)
     mk_fun "core::option::{core::option::Option<@T>}::is_none"
       "core.option.Option.is_none" ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Core/Core.lean", line: 120 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 119 *)
     mk_fun "core::option::{core::option::Option<@T>}::is_some"
       "core.option.Option.is_some" ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Core/Core.lean", line: 113 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 112 *)
     mk_fun "core::option::{core::option::Option<@T>}::take"
       "core.option.Option.take" ~can_fail:false ~lift:false;
     (* file: "Aeneas/Std/Core/Core.lean", line: 91 *)
     mk_fun "core::option::{core::option::Option<@T>}::unwrap"
       "core.option.Option.unwrap";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 95 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 100 *)
     mk_fun "core::option::{core::option::Option<@T>}::unwrap_or"
       "core.option.Option.unwrap_or" ~can_fail:false;
     (* file: "Aeneas/Std/Core/Fmt.lean", line: 95 *)
@@ -843,7 +843,7 @@ let lean_builtin_funs =
     mk_fun "core::slice::{[@T]}::split_at" "core.slice.Slice.split_at";
     (* file: "Aeneas/Std/Slice.lean", line: 646 *)
     mk_fun "core::slice::{[@T]}::split_at_mut" "core.slice.Slice.split_at_mut";
-    (* file: "Aeneas/Std/Slice.lean", line: 705 *)
+    (* file: "Aeneas/Std/Slice.lean", line: 706 *)
     mk_fun "core::slice::{[@T]}::swap" "core.slice.Slice.swap";
     (* file: "Aeneas/Std/StringIter.lean", line: 11 *)
     mk_fun
