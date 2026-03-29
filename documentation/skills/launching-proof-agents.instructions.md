@@ -26,9 +26,10 @@ Every proof agent prompt should include:
 ## Aeneas Skills — READ FIRST
 
 Before doing anything, read these skill files for essential proof guidance:
-- the `aeneas-lean-core` skill file
-- the `lean-lsp-mcp` skill file
-- the `aeneas-tactics-quickref` skill file
+- the `aeneas-lean-core` skill file (translation model, spec patterns, pitfalls)
+- the `aeneas-tactics-quickref` skill file (which tactic for which goal)
+- the `aeneas-crypto-verification` skill file (crypto-specific strategies)
+- the `lean-lsp-mcp` skill file (mandatory tooling for proof checking)
 ```
 
 ### 2. Mandatory lean-lsp-mcp usage
@@ -132,8 +133,12 @@ for proof agents:
 
 ## File Isolation and Parallelism (Lean-Specific)
 
-See the `agent-fleet-management` skill file for the general rules. Additional
-Lean-specific notes:
+<!-- ⚠️ SYNC RULE: general file ownership, SQL tracking, and "agents cannot cancel"
+     rules are in agent-fleet-management and global-rules -->
+
+See the `agent-fleet-management` skill file for the general rules (file ownership
+tracking via SQL `agent_files` table, dispatch checklist, "agents cannot cancel"
+constraint). Additional Lean-specific notes:
 
 - **Import-dependency check**: Lean files form an import DAG. If file A imports
   file B (directly or transitively), the agent on A must wait until B's agent
@@ -331,6 +336,8 @@ DO NOT attempt the mechanized proof — just the statement + sketch + decomposit
 ```
 
 ### Phase 2: Review Gate (human or code-review agent)
+
+<!-- ⚠️ SYNC RULE: review loop mechanics are defined in global-rules "Mandatory Review Loop" -->
 
 Before launching proof agents, **review every theorem statement**.
 

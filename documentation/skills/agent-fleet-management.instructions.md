@@ -51,7 +51,30 @@ The supervisor must:
 
 ## Agent Isolation Rules
 
-### File ownership
+### Agents cannot kill other agents
+
+Agents (including the supervisor) **cannot cancel or kill other running agents.**
+There is no API for it. If you need a stuck or misdirected agent stopped, **ask
+the user** to cancel it (e.g., via `/tasks` in the CLI). If you attempt to
+"cancel" an agent (which silently does nothing) and then dispatch a replacement,
+you get two agents editing the same file — causing conflicts and data loss.
+
+### File ownership tracking
+
+<!-- ⚠️ SYNC RULE: SQL mechanism and dispatch checklist defined in global-rules
+     "Agent File Ownership and Conflict Prevention" -->
+
+Maintain a SQL table `agent_files` to track which files each running agent owns.
+Before dispatching any agent: (1) call `list_agents`, (2) query `agent_files` for
+conflicts, (3) only dispatch if no file is already owned. When an agent completes
+or is cancelled, delete its entries. See the `global-rules` skill file for the
+full SQL schema and dispatch checklist.
+
+**Conflicts include transitive dependencies.** If file A imports file B (directly
+or transitively), editing A and B simultaneously is a conflict — the agent on A
+sees a stale version of B.
+
+### File assignment
 
 Each agent is assigned specific file(s). It may **ONLY modify those files**.
 It must NEVER edit other files — not shared definition files, not spec files,
