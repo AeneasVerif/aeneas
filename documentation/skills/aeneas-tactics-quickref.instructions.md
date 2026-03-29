@@ -162,6 +162,18 @@ editing goal 3 does not re-elaborate goals 1 or 2.
 **The same applies to any expensive tactic before `<;>`:** `simp [*] <;> scalar_tac`,
 `progress* <;> agrind`, etc. If the left-hand side is slow, always use `·` blocks.
 
+**After `step*`, always use focused `·` blocks** to close each remaining goal
+individually. This is mandatory regardless of the number of goals — even 2 goals
+must use `·` blocks, not `all_goals` or `<;>`.
+
+If `step*` produces **more than 15 remaining goals**, this is a signal that the
+function body likely needs fold decomposition — see "Function Decomposition" in
+the `aeneas-crypto-verification` skill file. The solution to many goals is fewer
+goals through decomposition, not a clever tactic.
+
+If you are tempted to use `all_goals` because there are many goals, the answer
+is fold decomposition (see `aeneas-crypto-verification`), not a bulk tactic.
+
 ## Common Tactic Combinations
 
 | Pattern | Use When |

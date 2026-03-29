@@ -54,10 +54,23 @@ The supervisor must:
 ### Agents cannot kill other agents
 
 Agents (including the supervisor) **cannot cancel or kill other running agents.**
-There is no API for it. If you need a stuck or misdirected agent stopped, **ask
+There is no API for it — `stop_bash` does NOT stop background agents, it only
+stops shell sessions. If you need a stuck or misdirected agent stopped, **ask
 the user** to cancel it (e.g., via `/tasks` in the CLI). If you attempt to
 "cancel" an agent (which silently does nothing) and then dispatch a replacement,
 you get two agents editing the same file — causing conflicts and data loss.
+**DO NOT** dispatch a replacement for an agent that is running, as it will create
+conflicts.
+
+**⛔ Stuck agent protocol:**
+1. **Diagnose**: Check `read_agent` (wait: false) + `list_agents` to confirm it's stuck
+2. **ASK THE USER** to kill it — never try to kill it yourself
+3. **Wait for confirmation** — the user will say "done" or "killed"
+4. **Verify with `list_agents`** — confirm the agent shows as cancelled/completed
+5. **Only then** clean up `agent_files` and dispatch a replacement
+
+**NEVER skip step 4.** Even after the user says "killed", always call `list_agents`
+to verify the agent is no longer running before dispatching any replacement.
 
 ### File ownership tracking
 
@@ -77,8 +90,35 @@ sees a stale version of B.
 ### File assignment
 
 Each agent is assigned specific file(s). It may **ONLY modify those files**.
-It must NEVER edit other files — not shared definition files, not spec files,
-not other agents' files.
+It must NEVER edit other `.lean` files — not shared definition files, not spec
+files, not other agents' files — because **other agents are working in parallel
+on those files**. Editing a file that another agent is working on will corrupt
+their in-progress work, break their elaboration, or cause silent data loss when
+the `edit` tool applies string-matching patches to stale content.
+
+**This is the single most common cause of lost work in multi-agent runs.**
+
+### ⛔ NEVER use git checkout, git restore, or any file-reverting command
+
+**Agents must NEVER run `git checkout`, `git restore`, `git stash`, `git reset`,
+or any command that reverts, discards, or overwrites uncommitted file changes.**
+This is a **hard ban** — the same level as banned tactics.
+
+**Why:** In a multi-agent environment, other agents may have made uncommitted changes
+to files that this agent doesn't own. Running `git checkout -- .` or
+`git restore <file>` destroys their work silently. Even reverting "just your own
+file" is dangerous — `git checkout -- <file>` reverts to HEAD, which may lose
+changes from a DIFFERENT agent that touched the file before you.
+
+**If your file has unexpected content or build errors:**
+1. **Read the file** to understand the current state
+2. **Make targeted edits** (using the `edit` tool) to fix only the broken parts
+3. **NEVER bulk-revert** — if the file seems badly broken, report the problem
+   and let the supervisor handle it
+
+**If you need a clean version of a file you don't own:**
+- Read it (read-only) — that's fine
+- NEVER revert it to get a "known good" state
 
 **If an agent needs a different version of a spec or definition from another file:**
 

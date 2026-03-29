@@ -75,7 +75,10 @@ script → copy it into your proof → fix sub-goals → collapse back to `step*
 - NEVER unfold Aeneas stdlib definitions — search for existing lemmas
 - NEVER use `omega` — use `agrind`, `grind`, or `scalar_tac` instead
 - NEVER spawn sub-agents that work on Lean files (see below)
-- ONLY modify your assigned file(s) — NEVER edit other files (see below)
+- ⛔ ONLY modify YOUR assigned file(s) — NEVER edit ANY other .lean file.
+  Other agents are working in parallel on other files. If you touch their
+  files, you will break their work. If you need something from another file,
+  use a local `private axiom` with a TODO comment (see below).
 - DO NOT COMMIT
 ```
 
@@ -129,6 +132,7 @@ for proof agents:
 - **⛔ NEVER spawn sub-agents that run Lean processes** (lean-lsp-mcp, lake build)
 - **⛔ ONLY modify your assigned file(s)** — use local axioms with TODO comments
   for specs from other files (see section 6 above)
+- **⛔ NEVER use git checkout/restore/reset** — see `agent-fleet-management` for why
 - Agents may use lightweight `explore` agents for codebase searches
 
 ## File Isolation and Parallelism (Lean-Specific)
@@ -221,6 +225,15 @@ give the entire task to a single agent in one shot. Instead:
 Agents tend to prove trivially weak postconditions (e.g., just `res.length = n`)
 when the spec should express full functional correctness (e.g., relating the output
 to a pure specification function). Proving a wrong/weak theorem is wasted work.
+
+**⚠️ Always write the final full-correctness postcondition from the start.** Do NOT
+write a weaker version (e.g., only `wfArray`/`wfSlice`/length preservation) with the
+intent of strengthening it later. Upgrading postconditions is extremely expensive —
+it changes the theorem interface, breaking every caller that uses it via `step`, and
+often cascades across many theorems and files. Instead: write the final statement
+(full spec equality + structural conjuncts), use `sorry` for the proof, then close
+sorrys one by one. This enables modular, parallel proof work — each conjunct can be
+tackled independently without touching the statement or its callers.
 
 ### Phase 1: Statement Agents (fast, parallelizable)
 
@@ -421,6 +434,13 @@ until all statements are validated. Only then do proof agents launch.
   the main proof to use via `step`? If the agent said "no decomposition needed",
   is that justified? A function with 50+ monadic steps that wasn't decomposed should
   be flagged.
+- **Decomposition adequacy (proof-level)**: Read the Aeneas-generated function body
+  being verified. Identify the algorithmic phases (see `aeneas-crypto-verification`
+  "Function Decomposition"). Check that each complex phase (bitwise ops, wrapping
+  arithmetic, signed/unsigned casts) has its own fold helper with a focused spec.
+  Check that existing mathematical lemmas (`MontReduction.lean`, `ModArith.lean`)
+  are reused where applicable. A proof that closes >15 goals after `step*` without
+  fold helpers should be flagged.
 - **Are axioms and external specs sound?** For any `axiom`, `private axiom`, or
   sorry'd `private theorem` introduced by the agent (including local assumptions
   about external functions), verify all of the following:
@@ -727,6 +747,26 @@ These cannot be reliably grepped — the reviewer must read the proof:
   straightforwardly map to well-identified spec functions. Their postconditions should
   make this mapping explicit.
 
+- **Are fold theorems non-vacuous?** (Rule: "Fold theorem vacuity check")
+  For each fold theorem (typically named `fold_*` or `*_fold`), check that the LHS
+  and RHS are **different**. The LHS must be the original inline monadic steps from
+  the generated code; the RHS must use the fold helper. If both sides are identical
+  (provable by `rfl`), the theorem is vacuous and must be either fixed (fill in the
+  real LHS) or removed and replaced with a TODO comment.
+
+- **Do fold theorems use curried continuations?** (Rule: "Fold theorem continuation
+  must use curried arguments, not tuples")
+  When the fold helper returns a tuple, the continuation `f` must take separate
+  curried arguments (`f : A → B → C → Result α` with `f a b c`), NOT a single
+  tuple (`f : A × B × C → Result α` with `f (a, b, c)`). The tuple form silently
+  breaks `simp` matching — the theorem type-checks and proves but does nothing
+  when applied inside a parent function.
+
+- **Have fold theorems been tested?** (Rule: "Always test fold theorems")
+  Every fold theorem must be tested by writing a small `example` that unfolds the
+  parent function and applies `simp only [fold_*]`, verifying that it actually
+  makes progress. A fold theorem that doesn't rewrite is worse than no fold theorem.
+
 ### NEVER trust comments
 
 When reviewing code, proofs, specs, and axioms, reviewers must **never trust comments
@@ -959,7 +999,9 @@ Use `step*?` to generate the body proof script, then fix sub-goals.
 ## Key Rules
 - NEVER unfold stdlib
 - NEVER use `omega` — use `agrind` (preferred), `grind`, or `scalar_tac`
-- ONLY modify the specified sorry
+- ⛔ ONLY modify `/path/to/Ntt.lean` — NEVER edit ANY other .lean file.
+  Other agents are working in parallel on other files. Editing them will
+  destroy their work. Use local `private axiom` + TODO for cross-file needs.
 - NEVER commit or push without explicit user approval
 - After completing this sorry, STOP and return results — do NOT proceed to other work
 ```

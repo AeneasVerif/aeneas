@@ -138,6 +138,17 @@ introducing a representation function, define it.
 Structural properties (`wfArray`, lengths, metadata) are necessary but never sufficient
 — they are supplementary conjuncts, not the main postcondition.
 
+**Write final postconditions from the start — never upgrade incrementally.** Always
+write the full functional-correctness postcondition in the theorem statement, even if
+the proof is `sorry`. Do NOT write a weaker version first (e.g., only structural
+properties) with the intent of strengthening it later. Upgrading a postcondition after
+the fact is extremely costly: it often requires strengthening the `step` theorems the
+function depends on, which in return requires strengthening the `step` theorems used by
+these theorems, cascading across many files. The correct workflow is: write the final
+statement (with full spec equality + structural conjuncts), leave `sorry` as the proof,
+then prove the conjuncts one by one — each conjunct can be tackled independently and in
+parallel.
+
 ```lean
 -- ⛔ BAD: length preservation only — says nothing about the computed values
 theorem poly_element_ntt_layer.spec
@@ -437,23 +448,116 @@ theorem bitwise_op.spec (x : U32) (h : x.val < 65536) :
 
 ### Pattern 7: Large function with fold decomposition
 ```lean
--- 1. Define helper
-private def helper (a : U32) : Result U32 := do
-  let b ← a + 1#u32; let c ← b * 2#u32; pure c
+-- 1. Define helper (may return a tuple if multiple values are needed downstream -
+-- pay attention to the fact the continuation may need to access the intermediate
+-- values introduced inside the helper).
+private def helper (a : U32) : Result (U32 × U32) := do
+  let b ← a + 1#u32; let c ← b * 2#u32; ok (b, c)
 
--- 2. Fold theorem
-private theorem fold_helper (a : U32) (f : U32 → Result α) :
-  (do let b ← a + 1#u32; let c ← b * 2#u32; f c) =
-  (do let c ← helper a; f c) := by
+-- 2. Fold theorem — continuation uses CURRIED args, NOT a tuple
+private theorem fold_helper (a : U32) (f : U32 → U32 → Result α) :
+  (do let b ← a + 1#u32; let c ← b * 2#u32; f b c) =
+  (do let r ← helper a; f r.1 r.2) := by
   simp only [helper, bind_assoc_eq, bind_tc_ok, pure]
+
+-- For single-value helpers, the continuation is just (f : U32 → Result α):
+-- (do let c ← helper a; f c)
 
 -- 3. Helper spec
 @[local step]
 theorem helper.spec (a : U32) (h : a.val < 1000) :
-  helper a ⦃ c => c.val = (a.val + 1) * 2 ⦄ := by ...
+  helper a ⦃ (b : U32) (c : U32) =>
+    b.val = a.val + 1 ∧ c.val = (a.val + 1) * 2 ⦄ := by ...
 
--- 4. Main proof uses simp only [fold_helper]
+-- 4. Main proof uses simp only [fold_helper] to fold inline steps
 ```
+
+### ⚠️ Fold theorem vacuity check
+
+A fold theorem MUST have **different** LHS and RHS. The LHS is the original
+inline monadic steps; the RHS uses the fold helper. If both sides are
+identical, the theorem is vacuous (`rfl`) and useless — it doesn't actually
+fold anything.
+
+**Detection:** If a fold theorem is provable by `rfl`, it's wrong. The proof
+should require `simp only [helper_name, bind_assoc_eq, bind_tc_ok, pure]` to
+unfold the helper and match the inline steps.
+
+```lean
+-- ⛔ BAD: LHS = RHS — vacuous, folds nothing
+private theorem fold_helper ... :
+    (do let r ← helper a; f r) =
+    (do let r ← helper a; f r) := by rfl
+
+-- ✅ GOOD: LHS is inline steps, RHS uses helper
+private theorem fold_helper (a : U32) (f : U32 → Result α) :
+    (do let b ← a + 1#u32; let c ← b * 2#u32; f c) =
+    (do let c ← helper a; f c) := by
+  simp only [helper, bind_assoc_eq, bind_tc_ok, pure]
+```
+
+**If you can't write the LHS yet** (e.g., the inline steps are too long to
+copy right now), do NOT write a vacuous theorem — instead write a TODO comment
+explaining what the fold theorem should look like, and omit the theorem entirely.
+A missing fold theorem is honest; a vacuous one is misleading.
+
+### ⛔ Fold theorem continuation must use curried arguments, not tuples
+
+When the fold helper returns a tuple (e.g., `Result (A × B × C)`), the fold
+theorem's continuation `f` must take **separate curried arguments**, not a
+single tuple argument. This is because `simp` cannot match `f (a, b, c)`
+against a continuation that uses `a`, `b`, `c` as separate variables — it
+would need to construct `fun ⟨a, b, c⟩ => ...` (pattern matching on `Prod`),
+which is beyond simp's higher-order matching capability. With curried arguments
+`f a b c`, simp can trivially abstract `fun a b c => ...`.
+
+```lean
+-- ⛔ BAD: tuple continuation — simp can't match this in the parent function
+private theorem fold_helper (a : U32) {α : Type}
+    (f : U32 × U32 → Result α) :
+    (do let b ← a + 1#u32; let c ← a + 2#u32; f (b, c)) =
+    (do let r ← helper a; f r) := by ...
+-- simp only [fold_helper] makes NO PROGRESS inside a parent function
+
+-- ✅ GOOD: curried continuation — simp matches this correctly
+private theorem fold_helper (a : U32) {α : Type}
+    (f : U32 → U32 → Result α) :
+    (do let b ← a + 1#u32; let c ← a + 2#u32; f b c) =
+    (do let r ← helper a; f r.1 r.2) := by ...
+-- simp only [fold_helper] works even deep inside nested bind chains
+```
+
+For n-element tuples, the RHS uses nested projections:
+- 2-tuple: `f r.1 r.2`
+- 3-tuple: `f r.1 r.2.1 r.2.2`
+- 4-tuple: `f r.1 r.2.1 r.2.2.1 r.2.2.2`
+
+If the helper returns a single value (not a tuple), `f` is just `f : A → Result α`
+and the RHS is `f r` — no change needed.
+
+### ⚠️ Always test fold theorems after writing them
+
+A fold theorem that type-checks and proves is NOT sufficient — it must also
+**actually rewrite** when applied via `simp only [fold_*]` inside the parent
+function. Always verify this with a concrete test:
+
+```lean
+-- After writing fold_helper, test it:
+example : parent_fn args = _ := by
+  unfold parent_fn
+  simp only [fold_helper]  -- MUST make progress (goal should change)
+  sorry
+```
+
+If `simp only [fold_helper]` reports "made no progress", the fold theorem is
+broken. The most common cause is a **tuple continuation** (see the section above).
+Other possible causes:
+- The LHS doesn't exactly match the generated code (missing or extra `let` bindings, etc.)
+- `bind_assoc_eq` normalization is needed before `simp` can match — try
+  `simp only [bind_assoc_eq]; simp only [fold_helper]`
+
+**This test is mandatory.** A fold theorem that doesn't actually fold is worse
+than no fold theorem — it gives a false sense of progress.
 
 ## Proof Style and Maintainability
 
