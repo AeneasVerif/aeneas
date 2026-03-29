@@ -52,6 +52,16 @@ NIST spec ⟷₁ Lean spec ⟷₂ Auxiliary spec ⟷₃ Aeneas code
 - Name convention: `spec_aux` for code↔aux, `spec` for full specification
 - Use `step_spec_aux` for code↔auxiliary spec properties, `step_spec` for full spec with invariants
 
+### Spec adequacy: direct equality, not relational
+
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Postcondition quality" -->
+
+Every `@[step]` theorem must have a **direct equality** postcondition:
+`repr(output) = Spec.algorithmName(repr(input1), repr(input2), ...)`.
+Relational specs and structural-only specs are not acceptable.
+See aeneas-lean-core "Postcondition quality" for full rules, examples, and the
+vacuity test.
+
 ### Template:
 
 ```lean

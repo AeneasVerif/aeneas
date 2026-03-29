@@ -296,15 +296,22 @@ Launch agents to write theorem statements with `sorry` proofs. Each agent:
 ```
 Write the theorem statement (with sorry proof) for `function_name.spec`.
 
+READ FIRST: the `aeneas-lean-core` and `aeneas-crypto-verification` skill files
+for postcondition quality rules and the multi-level verification pipeline.
+
 Read:
 - The auto-generated code in Funs.lean (line N)
 - The pure specification `Spec.Foo.Bar` in FooSpec.lean (line M)
 
-The postcondition must express FULL FUNCTIONAL CORRECTNESS:
+The postcondition must express FULL FUNCTIONAL CORRECTNESS as a direct equality:
+- repr(output) = Spec.algorithmName(repr(input1), repr(input2), ...)
+- Use representation/conversion functions on BOTH inputs and outputs
 - NOT just length preservation (that's trivially weak)
 - NOT just `True` (useless)
-- It must relate the output to the spec function using bridge definitions
-  like `Slice.toMatrix`, etc.
+- NOT relational specs (simulation relations, abstract state) — use direct equalities
+- Structural properties (wfArray, lengths) are supplementary conjuncts, not the main spec
+- Apply the VACUITY TEST: would this postcondition hold if the implementation returned
+  arbitrary/zero data? If yes, it's too weak.
 
 ALWAYS sketch the proof strategy as a comment above the sorry. Include:
 - Main proof structure (unfold + step, case split, loop invariant, etc.)

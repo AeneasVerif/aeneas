@@ -123,11 +123,20 @@ theorem function_name.spec (param1 : U32) (param2 : Slice U16)
 
 ### Postcondition quality
 
-**Full functional correctness.** Postconditions must link the Rust model to a
-high-level specification function — not just assert structural properties. Stating
-that lengths are preserved, that a result is `True`, or that an index is in bounds is
-NOT functional correctness. The postcondition must express the mathematical relationship
-between the input and the output.
+**Full functional correctness via direct equality.** Postconditions must be a direct
+equality linking the Rust output to a high-level specification function, using
+representation/conversion functions on **both inputs and outputs**:
+
+```
+repr(output) = Spec.algorithmName(repr(input1), repr(input2), ...)
+```
+
+Relational specs (simulation relations, abstract state) are not acceptable as final
+specs — they must be replaced with direct equalities. If a direct equality requires
+introducing a representation function, define it.
+
+Structural properties (`wfArray`, lengths, metadata) are necessary but never sufficient
+— they are supplementary conjuncts, not the main postcondition.
 
 ```lean
 -- ⛔ BAD: length preservation only — says nothing about the computed values
@@ -136,12 +145,26 @@ theorem poly_element_ntt_layer.spec
     poly_element_ntt_layer src k len
     ⦃ src' => src'.length = src.length ⦄ := by ...
 
--- ✅ GOOD: links output to the spec function
+-- ⛔ BAD: relational spec instead of direct equality
+theorem sample_ntt.spec
+    (p_state : HashState) (pe_dst : Array U16 256#usize)
+    (s_abs : AbstractState) (h_sim : Simulates p_state s_abs) ... :
+    sample_ntt p_state pe_dst
+    ⦃ (p_state', pe_dst') =>
+      ∃ s_abs', Simulates p_state' s_abs' ⦄ := by ...
+-- Two problems: (1) uses a relation instead of equality, (2) ignores pe_dst' entirely
+
+-- ✅ GOOD: direct equality with repr on both inputs and outputs
 theorem poly_element_ntt_layer.spec
     (src : Array U16 256#usize) ... :
     poly_element_ntt_layer src k len
     ⦃ src' => toPoly src' = Spec.ntt (toPoly src) ⦄ := by ...
 ```
+
+**Vacuity test.** When reviewing a postcondition, ask: *"Would this postcondition still
+hold if the implementation returned arbitrary/zero data?"* If yes, the spec is too weak.
+This catches specs that only track metadata or structural properties while ignoring the
+actual computed output.
 
 **Thread invariants.** When a function preserves a well-formedness property, include
 it both as a precondition and in the postcondition. Callers need the invariant to flow
