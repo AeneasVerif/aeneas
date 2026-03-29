@@ -26,9 +26,10 @@ Every proof agent prompt should include:
 ## Aeneas Skills — READ FIRST
 
 Before doing anything, read these skill files for essential proof guidance:
-- the `aeneas-lean-core` skill file
-- the `lean-lsp-mcp` skill file
-- the `aeneas-tactics-quickref` skill file
+- the `aeneas-lean-core` skill file (translation model, spec patterns, pitfalls)
+- the `aeneas-tactics-quickref` skill file (which tactic for which goal)
+- the `aeneas-crypto-verification` skill file (crypto-specific strategies)
+- the `lean-lsp-mcp` skill file (mandatory tooling for proof checking)
 ```
 
 ### 2. Mandatory lean-lsp-mcp usage
@@ -132,8 +133,12 @@ for proof agents:
 
 ## File Isolation and Parallelism (Lean-Specific)
 
-See the `agent-fleet-management` skill file for the general rules. Additional
-Lean-specific notes:
+<!-- ⚠️ SYNC RULE: general file ownership, SQL tracking, and "agents cannot cancel"
+     rules are in agent-fleet-management and global-rules -->
+
+See the `agent-fleet-management` skill file for the general rules (file ownership
+tracking via SQL `agent_files` table, dispatch checklist, "agents cannot cancel"
+constraint). Additional Lean-specific notes:
 
 - **Import-dependency check**: Lean files form an import DAG. If file A imports
   file B (directly or transitively), the agent on A must wait until B's agent
@@ -296,15 +301,22 @@ Launch agents to write theorem statements with `sorry` proofs. Each agent:
 ```
 Write the theorem statement (with sorry proof) for `function_name.spec`.
 
+READ FIRST: the `aeneas-lean-core` and `aeneas-crypto-verification` skill files
+for postcondition quality rules and the multi-level verification pipeline.
+
 Read:
 - The auto-generated code in Funs.lean (line N)
 - The pure specification `Spec.Foo.Bar` in FooSpec.lean (line M)
 
-The postcondition must express FULL FUNCTIONAL CORRECTNESS:
+The postcondition must express FULL FUNCTIONAL CORRECTNESS as a direct equality:
+- repr(output) = Spec.algorithmName(repr(input1), repr(input2), ...)
+- Use representation/conversion functions on BOTH inputs and outputs
 - NOT just length preservation (that's trivially weak)
 - NOT just `True` (useless)
-- It must relate the output to the spec function using bridge definitions
-  like `Slice.toMatrix`, etc.
+- NOT relational specs (simulation relations, abstract state) — use direct equalities
+- Structural properties (wfArray, lengths) are supplementary conjuncts, not the main spec
+- Apply the VACUITY TEST: would this postcondition hold if the implementation returned
+  arbitrary/zero data? If yes, it's too weak.
 
 ALWAYS sketch the proof strategy as a comment above the sorry. Include:
 - Main proof structure (unfold + step, case split, loop invariant, etc.)
@@ -324,6 +336,8 @@ DO NOT attempt the mechanized proof — just the statement + sketch + decomposit
 ```
 
 ### Phase 2: Review Gate (human or code-review agent)
+
+<!-- ⚠️ SYNC RULE: review loop mechanics are defined in global-rules "Mandatory Review Loop" -->
 
 Before launching proof agents, **review every theorem statement**.
 
@@ -469,6 +483,19 @@ can waste weeks of proof work building on a foundation that proves nothing.
 - **Are axiom chains consistent?** When multiple axioms model a stateful protocol
   (init → absorb → squeeze → result), verify the chain is consistent: state flows
   correctly, accumulated data is preserved, offsets advance properly.
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-crypto-verification "Axiomatizing SIMD/Intrinsic Operations" -->
+- **Do SIMD/intrinsic axioms cite reference documentation?** Every SIMD axiom must
+  include a docstring naming the intrinsic, linking to the vendor reference (Intel
+  Intrinsics Guide, ARM NEON docs, etc.), and quoting or summarizing the operation.
+  An axiom without a reference link should be flagged.
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Axiom organization" -->
+- **Are axioms grouped in `Axioms.lean` or `Axioms/`?** All intentional axioms must
+  be in a dedicated file or directory for auditability. Axioms scattered across proof
+  files should be flagged.
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Axiom organization" -->
+- **Is a problematic axiom being left unfixed to avoid refactoring?** If a reviewer
+  identifies an axiom that is incorrect or too weak, it must be fixed regardless of
+  how many proofs depend on it. "It would break too many proofs" is never acceptable.
 
 ### Phase 3: Proof Agents with Review Loop (slower, parallelizable)
 
@@ -611,6 +638,7 @@ costs ~10-15K tokens — this is affordable and catches far more issues.
   # "Too many ids provided" — reduce binders in step as ⟨...⟩
   # "unused variable" — remove or prefix with _
   # "'...' tactic does nothing" / "is never executed" — remove dead tactic
+  # "Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice" — replace <;> with ;
   ```
 
 ### Banned constructs (mechanical grep)
@@ -681,6 +709,32 @@ These cannot be reliably grepped — the reviewer must read the proof:
 - **Auto-param tactics in recursive theorems?** (Pitfall #16)
   In recursive `spec_gen` theorems, all parameters must be explicit — no `:= by ...`
   defaults. Look for `:= by` in theorem parameter lists (not in proof bodies).
+
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Postcondition quality" -->
+- **Postcondition quality?** (Rule: "Postcondition quality")
+  - Does the postcondition link to a spec function (not just structural properties
+    like length preservation)?
+  - Are well-formedness invariants threaded through (precondition → postcondition)?
+  - Are there existential quantifiers over non-proposition variables? If so, flag them
+    — the postcondition should use explicit conversion functions, not existential
+    witnesses.
+  - Does the postcondition use conversion *functions* (e.g., `toPoly`) rather than
+    *relations* (e.g., `isPoly`)?
+
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Interface functions must map to the spec" -->
+- **Do interface functions map to spec functions?** (Rule: "Interface functions must
+  map to the spec") Public Rust API functions and FFI/external functions should
+  straightforwardly map to well-identified spec functions. Their postconditions should
+  make this mapping explicit.
+
+### NEVER trust comments
+
+When reviewing code, proofs, specs, and axioms, reviewers must **never trust comments
+at face value**. Always independently assess whether each comment is accurate:
+- Does a comment claim a function preserves an invariant? Verify it in the postcondition.
+- Does a comment say "this is sound because..."? Check the reasoning independently.
+- Does a comment reference a spec section or line number? Verify the reference is current.
+Comments can be stale, misleading, or outright wrong — they are documentation, not proof.
 
 ### Structural and style checks (manual inspection)
 

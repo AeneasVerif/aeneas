@@ -184,6 +184,7 @@ editing goal 3 does not re-elaborate goals 1 or 2.
   - `"Too many ids provided"` → reduce binders in `step as ⟨...⟩`
   - `"'...' tactic does nothing"` / `"is never executed"` → remove the dead tactic
   - `"unused variable"` → remove or prefix with `_`
+  - `"Used tac1 <;> tac2 where (tac1; tac2) would suffice"` → replace `<;>` with `;`
   - **This applies to sorry'd proofs too.** Warnings in incomplete proofs must still be
     fixed — the sorry is acceptable, but dead tactics, unused simp args, and other
     warnings are not. Keep sorry'd proofs clean so they're ready for completion.
