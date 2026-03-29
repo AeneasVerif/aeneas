@@ -469,6 +469,19 @@ can waste weeks of proof work building on a foundation that proves nothing.
 - **Are axiom chains consistent?** When multiple axioms model a stateful protocol
   (init → absorb → squeeze → result), verify the chain is consistent: state flows
   correctly, accumulated data is preserved, offsets advance properly.
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-crypto-verification "Axiomatizing SIMD/Intrinsic Operations" -->
+- **Do SIMD/intrinsic axioms cite reference documentation?** Every SIMD axiom must
+  include a docstring naming the intrinsic, linking to the vendor reference (Intel
+  Intrinsics Guide, ARM NEON docs, etc.), and quoting or summarizing the operation.
+  An axiom without a reference link should be flagged.
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Axiom organization" -->
+- **Are axioms grouped in `Axioms.lean` or `Axioms/`?** All intentional axioms must
+  be in a dedicated file or directory for auditability. Axioms scattered across proof
+  files should be flagged.
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Axiom organization" -->
+- **Is a problematic axiom being left unfixed to avoid refactoring?** If a reviewer
+  identifies an axiom that is incorrect or too weak, it must be fixed regardless of
+  how many proofs depend on it. "It would break too many proofs" is never acceptable.
 
 ### Phase 3: Proof Agents with Review Loop (slower, parallelizable)
 
@@ -611,6 +624,7 @@ costs ~10-15K tokens — this is affordable and catches far more issues.
   # "Too many ids provided" — reduce binders in step as ⟨...⟩
   # "unused variable" — remove or prefix with _
   # "'...' tactic does nothing" / "is never executed" — remove dead tactic
+  # "Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice" — replace <;> with ;
   ```
 
 ### Banned constructs (mechanical grep)
@@ -681,6 +695,32 @@ These cannot be reliably grepped — the reviewer must read the proof:
 - **Auto-param tactics in recursive theorems?** (Pitfall #16)
   In recursive `spec_gen` theorems, all parameters must be explicit — no `:= by ...`
   defaults. Look for `:= by` in theorem parameter lists (not in proof bodies).
+
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Postcondition quality" -->
+- **Postcondition quality?** (Rule: "Postcondition quality")
+  - Does the postcondition link to a spec function (not just structural properties
+    like length preservation)?
+  - Are well-formedness invariants threaded through (precondition → postcondition)?
+  - Are there existential quantifiers over non-proposition variables? If so, flag them
+    — the postcondition should use explicit conversion functions, not existential
+    witnesses.
+  - Does the postcondition use conversion *functions* (e.g., `toPoly`) rather than
+    *relations* (e.g., `isPoly`)?
+
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Interface functions must map to the spec" -->
+- **Do interface functions map to spec functions?** (Rule: "Interface functions must
+  map to the spec") Public Rust API functions and FFI/external functions should
+  straightforwardly map to well-identified spec functions. Their postconditions should
+  make this mapping explicit.
+
+### NEVER trust comments
+
+When reviewing code, proofs, specs, and axioms, reviewers must **never trust comments
+at face value**. Always independently assess whether each comment is accurate:
+- Does a comment claim a function preserves an invariant? Verify it in the postcondition.
+- Does a comment say "this is sound because..."? Check the reasoning independently.
+- Does a comment reference a spec section or line number? Verify the reference is current.
+Comments can be stale, misleading, or outright wrong — they are documentation, not proof.
 
 ### Structural and style checks (manual inspection)
 

@@ -217,6 +217,59 @@ theorem crypto_operation_spec
 6. ☐ Shorten proofs after completion
 7. ☐ Use `step*?` to find automation opportunities
 
+## Axiomatizing SIMD/Intrinsic Operations
+
+When verifying code that uses SIMD intrinsics (SSE2/AVX, NEON, etc.) or assembly
+wrappers, the operations cannot be translated by Aeneas and must be axiomatized.
+
+### Reference-driven axiomatization
+
+**Always look up the vendor reference documentation** (Intel Intrinsics Guide, ARM
+NEON Reference, AMD manuals, etc.) for the precise semantics of each intrinsic. Use
+the reference semantics — not guesses or reverse engineering — to formalize the axiom.
+
+- **If the reference provides an executable pseudocode/spec**, formalize it as a Lean
+  `def` (the model) and state the axiom as: intrinsic result equals the model applied
+  to the inputs. If the reference pseudocode is short (< 25 lines), include it in the
+  docstring for easy cross-checking. Follow the same rules as formalizing cryptographic
+  specifications (see the `formalizing-crypto-specs` skill file).
+- **If no executable spec is available**, an axiomatized step theorem with a precise
+  postcondition is acceptable — but the postcondition must capture the full semantics,
+  not just partial properties.
+- **If no reference document could be found** for a specific intrinsic, report this
+  to the user. Do not guess the semantics.
+
+### Documentation requirements
+
+Every SIMD axiom must include a docstring that:
+1. **Names the intrinsic** (e.g., `_mm_add_epi16`, `vaddq_u16`)
+2. **Links to the reference** (URL to Intel Intrinsics Guide, ARM docs, etc.)
+3. **Quotes or summarizes the operation** from the reference (e.g., "Adds packed
+   16-bit integers in `a` and `b`")
+
+```lean
+/-- **Axiom for `_mm_add_epi16` (SSE2)**
+Adds packed 16-bit signed integers in `a` and `b`.
+Ref: https://www.intel.com/content/www/us/en/docs/intrinsics-guide/...
+Operation: `FOR j := 0 to 7: dst[j] := a[j] + b[j]` -/
+axiom vec128_add_spec (a b : XmmVec128) : ...
+```
+
+### SIMD lemma library
+
+When axiomatizing SIMD operations, build a **complete lemma library** for reasoning
+about the vector type. If a lemma is needed for one operation (e.g., element access
+for addition), equivalent lemmas are typically needed for related operations
+(subtraction, multiplication, shifts, etc.). The library should cover:
+
+- Element access (`v.val[i]!` for each lane)
+- Conversion between the vector type and arrays/lists
+- Well-formedness propagation (e.g., `wfVec` preservation through operations)
+- Commutativity, associativity, and other algebraic properties where applicable
+
+Aim for completeness: a missing lemma in the SIMD library often blocks proofs in
+unrelated parts of the codebase.
+
 ## Anti-Patterns to Avoid
 
 - ❌ Trying to prove NIST spec ↔ Aeneas code in one theorem (too big a gap)
@@ -224,3 +277,5 @@ theorem crypto_operation_spec
 - ❌ Monolithic proofs without helper lemmas
 - ❌ Using `grind` where `agrind` suffices (explosion risk)
 - ❌ Not decomposing large functions
+- ❌ SIMD axioms without reference documentation links
+- ❌ SIMD axioms that only assert partial properties (e.g., length but not values)
