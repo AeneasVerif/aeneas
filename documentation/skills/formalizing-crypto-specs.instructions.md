@@ -13,6 +13,12 @@ definitions. The goal is a mechanization that is **syntactically as close as
 possible to the reference document**, executable against test vectors, and suitable
 as a verification target for Rust implementations.
 
+**RFC conformity is the top priority.** If a prior agent's work does not conform to
+the RFC — even if it builds, passes tests, and was previously reviewed — it MUST be
+refactored until it does. No amount of prior work justifies keeping code that deviates
+from the RFC when a conformant alternative exists. When a major refactor is necessary
+to bring the mechanization closer to the RFC, that refactor should happen.
+
 **For general agent management rules** (resource budgets, file isolation, spawning
 rules, etc.), see the `agent-fleet-management` skill file. This file only covers
 the formalization-specific workflow.
@@ -194,6 +200,48 @@ structural level:
 - Helper functions are allowed ONLY for operations that the RFC itself defines
   as subroutines (e.g., `BitRev₇` is defined in the RFC, so `bitRev7` is fine).
   Do NOT introduce helpers for subexpressions that the RFC writes inline.
+  **Exception — repeated RFC operations:** when the RFC uses a dedicated symbol
+  for an operation (e.g., `⌈x⌋` for rounding) and the Lean implementation of
+  that operation appears in more than one definition, introduce a helper with a
+  matching scoped notation. This is the one exception to "no non-RFC helpers" —
+  it replaces a repeated multi-token expression with the RFC's own notation.
+- **Name helpers via type abbreviations and namespaces.** When a helper applies
+  an RFC operation pointwise to a compound type (e.g., compress applied to a
+  polynomial, encode applied to a vector of polynomials), introduce a type
+  abbreviation (`abbrev Poly := ...`, `abbrev PolyVec := ...`) and place the
+  helper in its namespace: `Poly.compress`, `PolyVec.encode`. Do NOT use
+  flat names like `compressPoly` or `encodeVector`. The abbreviations are often
+  needed for type-checking anyway, and the namespaced call sites read closer to
+  the RFC (e.g., `Poly.compress dᵤ u` vs `compressPoly dᵤ u`).
+
+**Function signatures must exactly match the RFC.** If the RFC says
+`SampleNTT(B)` with `B ∈ 𝔹^{34}`, the Lean function must take a single
+parameter `B : 𝔹 34`. Do not decompose, reorder, add, or remove parameters
+relative to the RFC's definition. The correspondence between RFC parameter list
+and Lean parameter list must be 1:1.
+
+**Use mathematical notation, not bitwise.** Write mathematical operations as the
+RFC writes them. If the RFC says `2^d`, write `2 ^ d`, not `1 <<< d`. Bitwise
+operators (`<<<`, `>>>`, `&&&`, `|||`) should only appear when the RFC itself
+uses bitwise notation. The RFC is a mathematical document — match its register.
+
+**No unnecessary auxiliary `let` bindings.** Do not introduce `let` bindings for
+subexpressions that are short (≤ 20 characters) and used only once, unless the
+RFC names them. If the RFC writes `⌊i/8⌋` inline, write `i / 8` inline — do not
+bind it to `let byteIdx := i / 8`. Auxiliary `let` is justified only when:
+(a) the RFC names the subexpression, OR (b) the expression is long (> 20 chars),
+OR (c) the same expression appears multiple times in the same block.
+
+**Shared parameters → top-level definitions.** When a value (like
+`m := if d < 12 then 2^d else q`) is computed identically in multiple functions
+that share the same parameter, extract it as a top-level `def`. If the RFC
+defines it in a preamble or section header, it should be a module-level
+definition, not a local `let` in each function.
+
+**Parameterized types must reflect the RFC.** When the RFC parameterizes a type
+by a value (e.g., `F ∈ ℤ^{256}_m` where `m` depends on `d`), the Lean type
+should reflect that parameterization — not silently widen it (e.g., using
+`ZMod q` when the RFC says `ℤ_m` with `m ≠ q`).
 
 **Variable scope and type must match the RFC.** If the RFC declares a variable
 before a loop (e.g., `C ← B` on line 1, outside the `for` on line 2), the Lean
@@ -208,6 +256,11 @@ that text states a fact that holds at that point — it is NOT an operation to
 implement. Translate it as a Lean comment (`-- a ∈ ℤ_m`), not as a runtime
 operation (`% m`, a cast, an `if`). Only the executable part of the line (left of
 the remark) should produce Lean code.
+
+**No redundant modulo before `ZMod` cast.** When casting a `Nat` to `ZMod n`,
+do not apply `% n` first — the cast into `ZMod n` already reduces mod `n`.
+Write `((x : Nat) : ZMod n)`, not `((x % n : Nat) : ZMod n)`. The `% n` is
+dead code that adds noise.
 
 **The test:** for each line of Lean code annotated `-- line N`, a reviewer must be
 able to look at RFC line N and confirm the expressions match without needing to
@@ -285,7 +338,12 @@ Range notations (as defined in Aeneas) can be used to match RFC loop syntax
 explicitly initializing it (e.g., `bytesToBits` declares an output array and
 immediately starts writing to it), initialize it with default values (typically
 zeros). In Lean, use `Vector.replicate n 0` or `Vector.mkVector n default`
-as appropriate.
+as appropriate. When `Vector.replicate n 0` appears repeatedly — especially
+nested for multi-dimensional arrays or matrices (e.g.,
+`Vector.replicate k (Vector.replicate n 0)`) — introduce a `zero` helper on
+the relevant type abbreviation (e.g., `def Poly.zero : Poly := Vector.replicate
+n 0`, `def PolyVec.zero : PolyVec := Vector.replicate k Poly.zero`). This
+reduces noise in algorithm bodies where the RFC implicitly initializes to zero.
 
 ### Mathlib integration
 
@@ -406,14 +464,15 @@ locally, then convert to `Vector` at the return point via `⟨arr, by sorry⟩` 
 `Vector.ofFn fun i => if h : i.val < arr.size then arr[i.val] else 0` — that
 pattern silently maps out-of-bounds to a default, same problem as `.getD`).
 
-**`Vector.set` over `Array.push`:** When the RFC pseudocode builds an array inside
-a loop, ask: (1) is the final size known before the loop starts? (2) can each
-element's destination index be computed from the loop variables? If both are true,
-initialize the collection as `Vector.replicate n default` and use
-`Vector.set idx val` — do NOT start with `#[]` and `Array.push`. This keeps the
-`Vector` type throughout the loop body, avoids a size proof at the return point,
-and makes every index access bounds-checked (the `get_elem_tactic` override
-discharges the implicit bound via `agrind`, or leaves a `sorry` if it can't).
+**`Vector.set` over `Array.push`:** When the RFC pseudocode writes an indexed
+assignment like `a[j] ← val`, use `Vector.set`. More generally, when the RFC
+builds an array inside a loop and the final size is known before the loop starts,
+initialize as `Vector.replicate n default` and use `Vector.set idx val` — do NOT
+start with `#[]` and `Array.push`. This keeps the `Vector` type throughout the
+loop body, avoids a size proof at the return point, and makes every index access
+bounds-checked. The `Array` + `push` pattern is only acceptable when the RFC
+itself uses an append/push-like operation (not indexed assignment) AND the final
+length genuinely cannot be determined before the loop starts.
 
 Example — `bytesToBits` builds `8*ℓ` elements where element `8*i+j` is known at
 each step:
@@ -463,9 +522,73 @@ for h:i in [0 : 8 * ℓ] do
 Agents must report all `sorry`s in their final output. These are proof
 obligations for a later proof agent to close.
 
+**`while` for RFC `while` loops.** Lean's `while` in `Id.run do` compiles via
+`Lean.Loop` and is total — no termination proof is required. Do NOT replace RFC
+`while` loops with bounded `for` loops + `break`. The `while` matches the RFC
+structure directly. Use the **dependent** form `while h : j < 256 do ...` when
+you need to use the loop guard as a bound proof inside the body (e.g., for
+indexing `a[j]` where the bound `j < 256` is required). This is the common case
+in crypto loops — the loop variable is almost always used as an array index.
+
+**Do not force termination on non-terminating RFC functions.** If the RFC defines
+a function that may not terminate (e.g., rejection sampling loops with no a priori
+bound), do NOT introduce artificial bounds, pre-generate a fixed amount of output,
+or otherwise restructure the algorithm to make it terminating. Instead, use
+`partial_fixpoint` — Lean will generate a reasoning principle that can be used for
+partial correctness proofs.
+
+**Do NOT use `partial`.** `partial` definitions are opaque axioms — Lean generates
+no reasoning principle for them, making them useless for proofs. Always use
+`partial_fixpoint` instead.
+
+**`partial_fixpoint` requires a default value** for the return type (an `Inhabited`
+instance). For `Id a` where `a` is inhabited, this works directly — which is
+usually the case with cryptographic specs (we manipulate integers, arrays of
+integers, polynomials, byte strings, etc.). **Syntax:** place `partial_fixpoint`
+after the definition body:
+```lean
+def sampleNTT (B : 𝔹 34) : Poly := Id.run do
+  let mut j := 0
+  while j < 256 do
+    ...  -- rejection sampling
+  return â
+partial_fixpoint
+```
+Here `Poly = Vector (ZMod q) n` is `Inhabited` (zero vector), so `Id Poly` has a
+default value and `partial_fixpoint` works.
+
+If (and only if) the return type is not inhabited — which is rare in cryptographic
+specs — wrap the output type in `Option`:
+```lean
+@[partial_fixpoint]
+def foo (x : Nat) : Option Result := do
+  ...
+```
+
 **NEVER** convert `Vector` to `Array` (via `.toArray`) or `𝔹 n` to `ByteArray`
 (via `.toByteArray`) just to avoid bounds proofs. This defeats the purpose of
 carrying sizes in types.
+
+### Minimizing type conversions
+
+Type conversions (`.toByteArray`, `.toBytes`, `.cast`) are noise that does not
+appear in the RFC. Minimize their presence:
+
+- **Postpone conversions to the boundary.** When the RFC writes a single
+  expression like `dk ← dkPKE ‖ ek ‖ H(ek) ‖ z`, express the concatenation at
+  the sized-type level as much as possible, with a single conversion at the end.
+  Do NOT convert each operand separately then concatenate — that introduces N
+  conversions instead of 1.
+- **Extract multi-step conversions as auxiliary definitions.** When the RFC writes
+  a single expression (e.g., `ByteEncode₁₂(t̂) ‖ ρ`) but the Lean implementation
+  requires multiple conversion steps (loop + `.toByteArray` + `++`), extract the
+  multi-step conversion as an auxiliary definition with a descriptive name. The
+  RFC line should remain a single readable expression that calls the auxiliary.
+- **Use functional style for conversions.** Inside conversion auxiliaries, prefer
+  functional combinators (`Vector.map`, `Vector.foldl`, `ByteArray.flatten`,
+  `Vector.toByteArray`, etc.) over `for` loops with mutable `ByteArray`
+  accumulators. A `for` loop that only builds a `ByteArray` by concatenating
+  converted chunks should be replaced by a map + flatten (or equivalent).
 
 ### Proofs and `getElem` bounds
 
@@ -477,27 +600,28 @@ bounds (array/vector index proofs). Guidelines:
   1. `agrind` — first choice; handles most arithmetic goals
   2. `grind` — fallback when `agrind` doesn't close the goal
   3. `scalar_tac` — last resort for simple linear arithmetic on scalars
-- It is fine to locally override `get_elem_tactic` to handle these automatically:
+- **Always override `get_elem_tactic` with `agrind`** so that `a[i]` auto-discharges
+  bounds without explicit `(by ...)` blocks:
   ```lean
   scoped macro_rules
   | `(tactic| get_elem_tactic) => `(tactic| agrind)
   ```
-  This makes `a[i]` notation work without explicit bound proofs — `agrind` will
-  try to discharge the bound automatically. Place this in a `namespace` / `end` block
-  and `open` it where needed.
+  The override must be either **`scoped`** (in a namespace — open the scope where
+  needed) or **`local`**. With this override, `a[i]` notation works without explicit
+  bound proofs everywhere in scope. This is important not just for convenience but
+  for performance: `(by ...)` blocks in type signatures cause severe kernel
+  type-checking slowness (see the `aeneas-lean-core` skill file for details).
 - For parameter-dependent bounds (e.g., array sizes that depend on the parameter
   set), see the "Avoid early case splits on parameters" section in
   the `aeneas-lean-core` skill file — prefer `attribute [local agrind]` or
   local auxiliary lemmas over top-level `cases p`.
 - Keep proofs minimal — they should not distract from the specification. If a
   bound proof requires more than 2-3 lines, extract it as an auxiliary lemma.
-- If the same tactic calls appear repeatedly (e.g., `by cases p <;> simp_all`
-  for every `getElem` bound), introduce a **local macro** to avoid clutter:
-  ```lean
-  local macro "param_bounds_tac" : tactic => `(tactic| cases p <;> simp_all [n, nbar])
-  ```
-  Then use `(by param_bounds_tac)` throughout the spec instead of repeating the
-  full tactic sequence.
+- **⛔ NEVER use `cases p <;> simp_all [...] <;> tactic` for `getElem` bounds** in
+  definition or theorem type signatures — this produces massive proof terms that cause
+  kernel slowness (see the `aeneas-lean-core` skill file for the full rationale and
+  accepted tactic list). If `agrind` via `get_elem_tactic` cannot discharge a bound,
+  extract it as a standalone lemma registered with `@[agrind =]`.
 
 ### Interactive development
 
@@ -553,6 +677,12 @@ paths or inline data).
 **Every review is a full review from scratch.** Do not assume prior rounds were
 correct. Read the spec and the code independently.
 
+**Do not trust NOTE comments in the code.** NOTE comments are claims made by the
+formalizer agent — they may be wrong, outdated, or overly permissive. When a NOTE
+claims an exemption to a rule (e.g., "uses Array+push because ..."), verify the
+claim against the RFC pseudocode and the skill file rules independently. If the
+NOTE contradicts the RFC or the rules, flag it.
+
 The supervisor should dispatch **two separate reviewer agents per file**:
 
 ### Agent A: Syntactic fidelity reviewer
@@ -579,9 +709,31 @@ spec. Every row must have both columns filled.
 
 **Variable declaration audit:** For each `let mut` / `let` in the Lean code,
 verify: (1) the variable is declared at the **same nesting depth** as in the RFC
-(e.g., before-loop vs inside-loop), and (2) the variable's **type matches the
+(e.g., before-loop vs inside-loop), (2) the variable's **type matches the
 RFC's declared type** (e.g., if the RFC says `C ∈ 𝔹^ℓ`, the Lean variable must
-be `𝔹 ℓ`, not `Nat`). Flag any scope or type mismatch.
+be `𝔹 ℓ`, not `Nat`), and (3) the variable **exists in the RFC**. Flag any
+`let` or `let mut` binding that introduces a name not present in the RFC
+pseudocode — unless it is loop bookkeeping required by Lean (must have a NOTE).
+Also flag `let` bindings for short subexpressions (≤ 20 chars) that are used only
+once and not named in the RFC (e.g., `let byteIdx := i / 8` when the RFC writes
+`⌊i/8⌋` inline).
+
+**Signature parameter count check:** For each function, compare the Lean
+parameter list against the RFC. The number and types of parameters must match
+1:1. Flag any function where the Lean signature has more or fewer parameters than
+the RFC definition, or where a single RFC parameter has been decomposed into
+multiple Lean parameters.
+
+**Notation check:** After completing the comparison tables, review all Lean
+expressions that implement an RFC symbol (e.g., `⌈x⌋` for rounding). If the
+same multi-token Lean expression (> 20 chars) implements the same RFC symbol in
+two or more definitions, flag it: should be extracted as a scoped notation
+matching the RFC's symbol. For example, if `(Int.floor (r + 1/2)).toNat`
+implements `⌈…⌋` in both `compress` and `decompress`, it should be a notation.
+
+**Mathematical notation check:** Flag any bitwise operator (`<<<`, `>>>`, `&&&`,
+`|||`) that does not correspond to a bitwise operation in the RFC. If the RFC
+writes `2^d`, the Lean code must write `2 ^ d`, not `1 <<< d`.
 
 **Signature types check:** For every algorithm, verify that function input/output
 types carry the RFC's dimension constraints. When the RFC specifies a fixed-size
@@ -589,8 +741,14 @@ collection (e.g., `b ∈ {0,1}^{8ℓ}`, `B ∈ 𝔹^ℓ`, `f ∈ ℤ^{256}_q`), 
 signature must use `Vector` with the matching size — not `Array`. Flag any
 `Array α` parameter or return type where the RFC gives an explicit dimension.
 
+**Shared parameter check:** If the same `let` binding (identical RHS) appears in
+multiple functions sharing the same parameter (e.g., `let m := if d < 12 then
+2^d else q` in both `byteEncode` and `byteDecode`), flag it: should be a
+top-level `def` per the "shared parameters → top-level definitions" rule.
+
 **Additionally, list all `def`s in the Lean file that do NOT correspond to a
-named algorithm/function in the RFC:**
+named algorithm/function in the RFC** (the variable declaration audit above
+already covers local variables):
 
 ```
 ## Non-RFC definitions audit
@@ -625,6 +783,14 @@ This agent checks everything EXCEPT syntactic fidelity (that's Agent A's job):
      loop variables? If both yes, flag: should use `Vector.replicate` + `.set`.
    The correct fix for all of these is bounds-checked access with `by sorry`.
 10. **File builds cleanly**: `lake build <module>` — 0 errors.
+11. **Conversion style** — flag any of:
+   - Multiple `.toByteArray` calls in a single expression feeding into `++`
+     (conversions should be consolidated — one conversion at the boundary)
+   - `for` loops with mutable `ByteArray` accumulators that only concatenate
+     converted chunks (should use functional combinators: `map`, `foldl`,
+     `flatten`)
+   - Multi-step conversion sequences that are not extracted into an auxiliary
+     definition (the RFC line should remain a single readable expression)
 
 ## Common Failure Modes
 

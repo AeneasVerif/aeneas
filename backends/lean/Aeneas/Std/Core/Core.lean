@@ -88,9 +88,14 @@ def BuiltinClone (Self : Type) : core.clone.Clone Self where
 def BuiltinCopy (Self : Type) : core.marker.Copy Self where
   cloneInst := BuiltinClone Self
 
-@[simp, step_simps, rust_fun "core::option::{core::option::Option<@T>}::unwrap"]
+@[rust_fun "core::option::{core::option::Option<@T>}::unwrap"]
 def core.option.Option.unwrap {T : Type} (x : Option T) : Result T :=
   Result.ofOption x Error.panic
+
+@[step]
+theorem core.option.Option.unwrap.spec {T : Type} (x : Option T) (h : x.isSome) :
+  unwrap x ⦃ v => x = some v ⦄ := by
+  simp only [unwrap, ofOption]; grind
 
 @[step_pure_def, rust_fun "core::option::{core::option::Option<@T>}::unwrap_or" -canFail]
 def core.option.Option.unwrap_or (self : Option T) (default : T) : T :=
@@ -109,6 +114,10 @@ def core.option.Option.take {T: Type} (self: Option T): Option T × Option T := 
 
 @[simp, step_simps, rust_fun "core::option::{core::option::Option<@T>}::is_none" -canFail -lift]
 def core.option.Option.is_none {T: Type} (self: Option T): Bool := self.isNone
+
+/-- Returns `true` if the option is `some`. -/
+@[simp, step_simps, rust_fun "core::option::{core::option::Option<@T>}::is_some" -canFail -lift]
+def core.option.Option.is_some {T: Type} (self: Option T): Bool := self.isSome
 
 @[rust_type "core::ops::range::RangeFrom"]
 structure core.ops.range.RangeFrom (Idx : Type) where

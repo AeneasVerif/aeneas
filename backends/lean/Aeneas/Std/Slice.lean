@@ -661,12 +661,84 @@ def core.slice.Slice.split_at_mut {T : Type} (s : Slice T) (n : Usize) :
     ok ((s0, s1), back)
   else fail .panic
 
+/-- **Spec theorem for `core::slice::{[@T]}::split_at`** -/
+@[step]
+theorem core.slice.Slice.split_at.spec {T : Type} (s : Slice T) (n : Usize)
+    (h : n ≤ s.length) :
+    core.slice.Slice.split_at s n
+      ⦃ (s0 : Slice T) (s1 : Slice T) =>
+        s0.length = n.val ∧ s1.length = s.length - n.val ∧
+        s0.val = s.val.take n.val ∧ s1.val = s.val.drop n.val ⦄ := by
+  unfold core.slice.Slice.split_at
+  simp only [h, ↓reduceDIte, WP.spec_ok, predn_pair]
+  refine ⟨?_, ?_, ?_, ?_⟩ <;>
+  simp only [Slice.length, List.splitAt_eq, List.length_take, inf_eq_left, List.length_drop, *]
+
+/-- **Spec theorem for `core::slice::{[@T]}::split_at_mut`** -/
+-- TODO: ideally the postcondition binder would decompose the result pair as
+-- `(s0 : Slice T) (s1 : Slice T) (back : ...)`, but the `⦃ ⦄` notation's
+-- `predn` only handles right-associated products, so the left-associated
+-- `((Slice T × Slice T) × BackFn)` return type cannot be split into three
+-- separate binders. We keep projectors for now.
+@[step]
+theorem core.slice.Slice.split_at_mut.spec {T : Type} (s : Slice T) (n : Usize)
+    (h : n ≤ s.length) :
+    core.slice.Slice.split_at_mut s n
+      ⦃ (res : Slice T × Slice T) (back : (Slice T × Slice T) → Slice T) =>
+        res.1.length = n.val ∧ res.2.length = s.length - n.val ∧
+        res.1.val = s.val.take n.val ∧ res.2.val = s.val.drop n.val ∧
+        (∀ s0' s1', s0'.length = n.val → s1'.length = s.length - n.val →
+          (back (s0', s1')).val = s0'.val ++ s1'.val ∧
+          (back (s0', s1')).length = s.length) ⦄ := by
+  unfold core.slice.Slice.split_at_mut
+  simp only [h, ↓reduceDIte, WP.spec_ok, predn_pair]
+  refine ⟨?_, ?_, ?_, ?_, fun s0' s1' hs0' hs1' => ?_⟩
+  · simp [Slice.length, List.splitAt_eq]; scalar_tac
+  · simp [Slice.length, List.splitAt_eq]
+  · simp [List.splitAt_eq]
+  · simp [List.splitAt_eq]
+  · split_ifs with hcond
+    · exact ⟨rfl, by simp [Slice.length, List.length_append]; scalar_tac⟩
+    · exfalso; apply hcond
+      simp [Slice.length, List.splitAt_eq] at *
+      exact ⟨by scalar_tac, by scalar_tac⟩
+
 @[rust_fun "core::slice::{[@T]}::swap"]
 def core.slice.Slice.swap {T : Type} (s : Slice T) (a b : Usize) : Result (Slice T) := do
   let av ← Slice.index_usize s a
   let bv ← Slice.index_usize s b
-  let s1 ← Slice.update s a av
-  Slice.update s1 b bv
+  let s1 ← Slice.update s a bv
+  Slice.update s1 b av
+
+@[step]
+theorem core.slice.Slice.swap_spec {T : Type} [Inhabited T] (s : Slice T) (a b : Usize)
+    (ha : a.val < s.length) (hb : b.val < s.length) :
+    core.slice.Slice.swap s a b ⦃ s' =>
+      s'.length = s.length ∧
+      s'.val[a.val]! = s.val[b.val]! ∧
+      s'.val[b.val]! = s.val[a.val]! ∧
+      ∀ i, i ≠ a.val → i ≠ b.val → s'.val[i]! = s.val[i]! ⦄ := by
+  simp only [core.slice.Slice.swap, Bind.bind, bind]
+  have ⟨av, hav⟩ := spec_imp_exists (Slice.index_usize_spec s a ha)
+  simp only [hav]
+  have ⟨bv, hbv⟩ := spec_imp_exists (Slice.index_usize_spec s b hb)
+  simp only [hbv]
+  have ⟨s1, hs1⟩ := spec_imp_exists (Slice.update_spec s a (s.val[b.val]!) ha)
+  simp only [hs1]
+  have hlen1 : b.val < s1.length := by rw [hs1.2, Slice.set_length]; exact hb
+  have ⟨s', hs'⟩ := spec_imp_exists (Slice.update_spec s1 b (s.val[a.val]!) hlen1)
+  rw [hs1.2] at hs'
+  simp only [hs', spec_ok]
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · simp only [Slice.length, Slice.set_val_eq, List.length_set]
+  · by_cases hab : (↑a : ℕ) = ↑b
+    · simp only [Slice.set_val_eq, hab]; grind
+    · simp only [Slice.set_val_eq]
+      grind
+  · simp only [Slice.set_val_eq]; grind
+  · intro i hia hib
+    simp only [Slice.set_val_eq]
+    grind
 
 @[simp, step_simps]
 theorem Slice.index_mut_SliceIndexRangeUsizeSliceInst (s : Slice α) (r : core.ops.range.Range Usize) :

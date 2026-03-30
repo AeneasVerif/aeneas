@@ -184,10 +184,12 @@ editing goal 3 does not re-elaborate goals 1 or 2.
   - `"Too many ids provided"` → reduce binders in `step as ⟨...⟩`
   - `"'...' tactic does nothing"` / `"is never executed"` → remove the dead tactic
   - `"unused variable"` → remove or prefix with `_`
+  - `"Used tac1 <;> tac2 where (tac1; tac2) would suffice"` → replace `<;>` with `;`
   - **This applies to sorry'd proofs too.** Warnings in incomplete proofs must still be
     fixed — the sorry is acceptable, but dead tactics, unused simp args, and other
     warnings are not. Keep sorry'd proofs clean so they're ready for completion.
 - **No big `simp only [...]` in implementation proofs** — model names are unstable. Use `simp [*]` or targeted rewrites. (OK in spec lemmas.)
+- **Register Rust global/const scalar definitions with solver attributes** — pure Rust global/const definitions should be marked `@[simp, scalar_tac_simps, agrind =, grind =, bvify]`. This lets `step` / `step*` discharge precondition sub-goals automatically (they disappear). If you see repeated `simp [CONST]; solver` in cdot sub-goals after `step`, or `have hFoo : CONST.val = N := by simp ...`, the definition is missing attributes.
 - **Extract complex sub-proofs** as auxiliary lemmas — don't inline 15 lines of arithmetic inside `step*`
 - **Simplify shifts early**: rewrite `>>>` as `/ 2^n`, `<<<` as `* 2^n`
 - **Sorry'd proofs must be fast**: do not leave expensive `step*`, `cases p`, or `first | ...` before a sorry. Use plain `sorry` (with a comment sketching the approach). Expensive sorry'd proofs waste build time on every `lake build` for zero verification value.
@@ -241,7 +243,8 @@ theorem MY_CONST_val : MY_CONST.val = 42 := by decide
 | Doc comment before `set_option` | Parse error "expected 'lemma'" | Use `/- ... -/` (regular comment), not `/-- ... -/` (doc comment) |
 | Concrete computation fails | `agrind`/`scalar_tac` fail on numeric literals | `native_decide` or `decide` |
 | `scalar_tac` in spec_gen | Cascading `maxRecDepth` in loop proof | Mass-replace ALL `scalar_tac` → `agrind` in proof body |
-| Recurring index bounds slow | Same bound proved inline many times | Extract standalone helper lemma with clean context |
+| Recurring index bounds slow | Same bound proved inline many times | Extract as solver-attributed lemma (`@[agrind =]`); see Pitfall #22 in `aeneas-lean-core` |
+| `(by ...)` in type signature | Kernel slowness on `apply`/`exact` of theorem | Use `get_elem_tactic` override with `agrind`; if that fails, use `(by agrind)` > `(by grind)` > `(by scalar_tac)` > standalone lemma. NEVER `cases p <;> simp_all <;> tactic`. See "Never embed (by ...) in type signatures" in `aeneas-lean-core` |
 | `first \| simp_all` swallows goals | `simp_all` partially simplifies, `first` considers it done | `(simp_all; done)` — forces full closure; applies to all `simp` variants |
 
 ## Debugging and Profiling Commands
@@ -256,10 +259,17 @@ set_option trace.Aeneas.progress true -- detailed progress
 
 ### Profiling proof time
 
-Use these options to identify slow tactics:
+**⚠️ `trace.profiler` only measures tactic execution time — NOT kernel type-checking.**
+When a tactic introduces auxiliary theorems (e.g., `agrind`, `grind`), the kernel must
+type-check those proof terms *after* the tactic finishes. `trace.profiler` does not
+include this cost. **The discrepancy can be huge** — a tactic may report 50ms in the
+profiler but actually take 5s wall-clock because the kernel spends 4.95s checking the
+proof term it produced.
+
+Use `trace.profiler` to identify which tactic is slow at the *tactic* level:
 
 ```lean
--- Per-tactic timing breakdown (recommended — shows each tactic's time)
+-- Per-tactic timing breakdown (tactic execution only, excludes kernel checking)
 set_option trace.profiler true in
 set_option trace.profiler.threshold 10 in  -- report tactics > 10ms (default: 100ms)
 
@@ -268,11 +278,54 @@ set_option profiler true in
 set_option profiler.threshold 10 in
 ```
 
-Use `trace.profiler` to find which tactic dominates the time, then optimize or replace it.
+To measure **true wall-clock time including kernel type-checking**, use the `measure`
+tactic wrapper. Define it locally (or in a shared utilities file):
+
+```lean
+/-- Measure wall-clock time of a tactic (including kernel type-checking). -/
+elab "measure" t:tactic : tactic => do
+  let start ← IO.monoNanosNow
+  Lean.Elab.Tactic.evalTactic t
+  let stop ← IO.monoNanosNow
+  IO.eprintln s!"[measure] {(stop - start) / 1000000}ms"
+```
+
+Then wrap the tactic or proof script you want to measure:
+
+```lean
+theorem my_fn.spec ... := by
+  measure (agrind)          -- measures agrind + kernel checking of its proof term
+  measure (simp [*]; grind) -- measures the whole sequence
+```
+
+**When to use which:**
+- **`trace.profiler`**: first pass — find which tactic is slow at the tactic level
+- **`measure`**: second pass — verify true wall-clock cost including kernel checking.
+  If `trace.profiler` says a tactic is fast but `measure` says it's slow, the
+  bottleneck is kernel type-checking of the proof term the tactic produced. The fix
+  is to use a tactic that produces simpler proof terms, or extract the sub-goal as
+  an auxiliary lemma (which gets its own smaller proof term).
 
 ### ⚠️ `maxHeartbeats` guidelines
 
 <!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core Pitfall #13 -->
+
+**⛔ NEVER use `set_option ... in` inside a proof script.** For example:
+```lean
+-- ⛔ BAD: breaks incrementality inside the proof
+theorem my_fn.spec ... := by
+  set_option maxHeartbeats 16000000 in
+  step* ...
+```
+The `in` scoping inside a tactic block makes everything below it a single elaboration
+unit — any edit forces full re-elaboration, destroying incremental feedback.
+
+Using `set_option ... in` **before** a theorem declaration is fine and standard practice:
+```lean
+-- ✅ GOOD: set_option before the theorem declaration
+set_option maxHeartbeats 16000000 in
+theorem my_fn.spec ... := by ...
+```
 
 Lean's default `maxHeartbeats` (200K) is very low for Aeneas proofs. **Increase it to
 1M as a baseline** (`set_option maxHeartbeats 1000000`) — this is a reasonable default
@@ -323,8 +376,12 @@ proof term — not running tactics.
 (which get their own smaller proof terms), or use more direct proof strategies that
 produce simpler terms.
 
-Use `set_option trace.profiler true in` to profile tactic elaboration time. If tactic
-times are reasonable but the overall proof is slow, the bottleneck is kernel replay.
+Use `set_option trace.profiler true in` to profile tactic elaboration time. **But note:**
+`trace.profiler` only measures tactic execution, not kernel type-checking — the
+discrepancy can be huge. Use the `measure` tactic wrapper (see "Profiling proof time"
+above) to get true wall-clock time including kernel checking. If `trace.profiler` says
+tactics are fast but `measure` (or overall proof time) is slow, the bottleneck is kernel
+replay — the fix is to produce simpler/smaller proof terms.
 
 ### Measuring per-file build time
 
@@ -344,6 +401,8 @@ done
 `time lean file.lean` then elaborates just that one file from scratch and reports
 wall-clock time. This gives accurate per-file measurements without lake's caching
 or scheduling overhead.
+
+Note: `time` output format varies by shell. This works in both bash and zsh.
 
 **Keeping Lean reactive is even more important.** When developing a proof interactively,
 adding a tactic at the end should take **< 0.5s** — this is what enables rapid iteration.

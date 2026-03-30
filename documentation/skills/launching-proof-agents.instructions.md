@@ -26,9 +26,10 @@ Every proof agent prompt should include:
 ## Aeneas Skills — READ FIRST
 
 Before doing anything, read these skill files for essential proof guidance:
-- the `aeneas-lean-core` skill file
-- the `lean-lsp-mcp` skill file
-- the `aeneas-tactics-quickref` skill file
+- the `aeneas-lean-core` skill file (translation model, spec patterns, pitfalls)
+- the `aeneas-tactics-quickref` skill file (which tactic for which goal)
+- the `aeneas-crypto-verification` skill file (crypto-specific strategies)
+- the `lean-lsp-mcp` skill file (mandatory tooling for proof checking)
 ```
 
 ### 2. Mandatory lean-lsp-mcp usage
@@ -132,8 +133,12 @@ for proof agents:
 
 ## File Isolation and Parallelism (Lean-Specific)
 
-See the `agent-fleet-management` skill file for the general rules. Additional
-Lean-specific notes:
+<!-- ⚠️ SYNC RULE: general file ownership, SQL tracking, and "agents cannot cancel"
+     rules are in agent-fleet-management and global-rules -->
+
+See the `agent-fleet-management` skill file for the general rules (file ownership
+tracking via SQL `agent_files` table, dispatch checklist, "agents cannot cancel"
+constraint). Additional Lean-specific notes:
 
 - **Import-dependency check**: Lean files form an import DAG. If file A imports
   file B (directly or transitively), the agent on A must wait until B's agent
@@ -296,15 +301,22 @@ Launch agents to write theorem statements with `sorry` proofs. Each agent:
 ```
 Write the theorem statement (with sorry proof) for `function_name.spec`.
 
+READ FIRST: the `aeneas-lean-core` and `aeneas-crypto-verification` skill files
+for postcondition quality rules and the multi-level verification pipeline.
+
 Read:
 - The auto-generated code in Funs.lean (line N)
 - The pure specification `Spec.Foo.Bar` in FooSpec.lean (line M)
 
-The postcondition must express FULL FUNCTIONAL CORRECTNESS:
+The postcondition must express FULL FUNCTIONAL CORRECTNESS as a direct equality:
+- repr(output) = Spec.algorithmName(repr(input1), repr(input2), ...)
+- Use representation/conversion functions on BOTH inputs and outputs
 - NOT just length preservation (that's trivially weak)
 - NOT just `True` (useless)
-- It must relate the output to the spec function using bridge definitions
-  like `Slice.toMatrix`, etc.
+- NOT relational specs (simulation relations, abstract state) — use direct equalities
+- Structural properties (wfArray, lengths) are supplementary conjuncts, not the main spec
+- Apply the VACUITY TEST: would this postcondition hold if the implementation returned
+  arbitrary/zero data? If yes, it's too weak.
 
 ALWAYS sketch the proof strategy as a comment above the sorry. Include:
 - Main proof structure (unfold + step, case split, loop invariant, etc.)
@@ -324,6 +336,8 @@ DO NOT attempt the mechanized proof — just the statement + sketch + decomposit
 ```
 
 ### Phase 2: Review Gate (human or code-review agent)
+
+<!-- ⚠️ SYNC RULE: review loop mechanics are defined in global-rules "Mandatory Review Loop" -->
 
 Before launching proof agents, **review every theorem statement**.
 
@@ -469,6 +483,19 @@ can waste weeks of proof work building on a foundation that proves nothing.
 - **Are axiom chains consistent?** When multiple axioms model a stateful protocol
   (init → absorb → squeeze → result), verify the chain is consistent: state flows
   correctly, accumulated data is preserved, offsets advance properly.
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-crypto-verification "Axiomatizing SIMD/Intrinsic Operations" -->
+- **Do SIMD/intrinsic axioms cite reference documentation?** Every SIMD axiom must
+  include a docstring naming the intrinsic, linking to the vendor reference (Intel
+  Intrinsics Guide, ARM NEON docs, etc.), and quoting or summarizing the operation.
+  An axiom without a reference link should be flagged.
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Axiom organization" -->
+- **Are axioms grouped in `Axioms.lean` or `Axioms/`?** All intentional axioms must
+  be in a dedicated file or directory for auditability. Axioms scattered across proof
+  files should be flagged.
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Axiom organization" -->
+- **Is a problematic axiom being left unfixed to avoid refactoring?** If a reviewer
+  identifies an axiom that is incorrect or too weak, it must be fixed regardless of
+  how many proofs depend on it. "It would break too many proofs" is never acceptable.
 
 ### Phase 3: Proof Agents with Review Loop (slower, parallelizable)
 
@@ -583,6 +610,13 @@ doesn't build cleanly, the proof agent must fix the errors before reporting.
 <!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Proof Style and Maintainability"
      and aeneas-tactics-quickref "Proof Style Rules". See skill-file-authoring for sync rules. -->
 
+**⚠️ BEFORE DIVING INTO SPECIFIC CHECKS:** Re-read the spec theorem conventions in
+the `aeneas-lean-core` skill file — tuple decomposition in postconditions, result type
+annotation, naming, docstrings, indentation rules, `⦃ ⦄` notation conventions. Check
+each convention mechanically against the code under review. Mechanical rule violations
+are the easiest to miss when reviewing "by feel" — they require deliberate
+checklist-style checking.
+
 **⚠️ READ THE FILES, DON'T JUST GREP.** The reviewer must **read the modified proof
 files** — not just run grep patterns. Grep catches mechanical violations (banned
 tactics, maxRecDepth) but misses structural problems (multi-line inline `(by ...)`
@@ -604,6 +638,7 @@ costs ~10-15K tokens — this is affordable and catches far more issues.
   # "Too many ids provided" — reduce binders in step as ⟨...⟩
   # "unused variable" — remove or prefix with _
   # "'...' tactic does nothing" / "is never executed" — remove dead tactic
+  # "Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice" — replace <;> with ;
   ```
 
 ### Banned constructs (mechanical grep)
@@ -622,6 +657,14 @@ grep -n 'maxRecDepth' FILE        # → diagnose simp loop, never raise limit
 # maxHeartbeats too high (Pitfall #13)
 grep -n 'maxHeartbeats' FILE      # → verify value < 8_000_000; if higher, proof needs restructuring
 
+# set_option ... in inside proof script (Pitfall #13) — breaks incrementality
+grep -n 'set_option.*in$' FILE    # → check if inside a proof (by block); OK before theorem declaration
+
+# ⛔ Converting sorry → axiom (NEVER allowed)
+grep -n '^axiom' FILE             # → if agent added new axioms that were sorry before, REJECT
+# Agents must NEVER convert a sorry into an axiom. The whole point is to PROVE the theorem.
+# If the proof is too hard, leave it as sorry and report what was tried.
+
 # Unfold of Aeneas stdlib definitions (Pitfall #10)
 grep -n 'unfold.*Aeneas\|unfold.*Std\.\|unfold.*core\.' FILE
 # → search for existing lemma instead of unfolding
@@ -633,7 +676,7 @@ grep -n 'step\*.*<;>' FILE       # → use focused goal blocks (· ) instead
 grep -n 'all_goals' FILE          # → ALWAYS replace with focused · blocks. No exceptions.
 
 # Inline (by ...) in exact/apply/refine (Rule: "Extract inline by blocks"; Pitfall #15)
-grep -n 'exact.*(by ' FILE        # → check: 2+ expensive blocks or any multi-line block → extract
+grep -n 'exact.*(by ' FILE        # → check: 3+ blocks or any multi-line block → extract
 grep -n 'apply.*(by ' FILE        # (same check)
 grep -n 'refine.*(by ' FILE       # (same check)
 # ⚠️ These greps only catch single-line cases. The most common violation is multi-line:
@@ -642,16 +685,56 @@ grep -n 'refine.*(by ' FILE       # (same check)
 # The reviewer MUST also read multi-line exact/apply/refine statements manually.
 # "Expensive" = multi-line, tactic sequences (tac1; tac2), first|..., or slow tactics.
 # Note: all_goals is banned outright (see above), so it's never acceptable here either.
-# A single cheap (by scalar_tac) or (by grind) is acceptable.
+# A single cheap (by scalar_tac) or (by grind) is acceptable only with 1-2 blocks total.
+# ⚠️ ALSO CHECK THEOREM TYPE SIGNATURES for embedded (by ...) blocks — especially
+# getElem bounds proofs like (by cases p <;> simp_all [...] <;> agrind). These cause
+# severe kernel slowness on every application of the theorem (measured 6× slowdown).
+# Fix: use get_elem_tactic override with agrind (preferred), or (by agrind) / (by grind)
+# / (by scalar_tac) for individual bounds. NEVER cases p <;> simp_all in a type.
 ```
 
 ### Checks requiring manual inspection
 
 These cannot be reliably grepped — the reviewer must read the proof:
 
+- **`(by ...)` in theorem TYPE SIGNATURES?** (Rule: "Never embed (by ...) in type signatures")
+  Check theorem parameters and postconditions for embedded `(by ...)` blocks — especially
+  for `getElem` array bounds. **Accepted tactics in type signatures** (in preference order):
+  `agrind`, `grind`, `scalar_tac`. **BANNED:** `cases p <;> simp_all [...] <;> tactic`
+  (produces huge proof terms, causes kernel slowness — measured 6× slowdown).
+  Best approach: the file should have a `get_elem_tactic` override with `agrind` so
+  that `a[i]` auto-discharges bounds without any `(by ...)` at all. If a standalone
+  helper lemma is used, that's also acceptable.
+
 - **Auto-param tactics in recursive theorems?** (Pitfall #16)
   In recursive `spec_gen` theorems, all parameters must be explicit — no `:= by ...`
   defaults. Look for `:= by` in theorem parameter lists (not in proof bodies).
+
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Postcondition quality" -->
+- **Postcondition quality?** (Rule: "Postcondition quality")
+  - Does the postcondition link to a spec function (not just structural properties
+    like length preservation)?
+  - Are well-formedness invariants threaded through (precondition → postcondition)?
+  - Are there existential quantifiers over non-proposition variables? If so, flag them
+    — the postcondition should use explicit conversion functions, not existential
+    witnesses.
+  - Does the postcondition use conversion *functions* (e.g., `toPoly`) rather than
+    *relations* (e.g., `isPoly`)?
+
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Interface functions must map to the spec" -->
+- **Do interface functions map to spec functions?** (Rule: "Interface functions must
+  map to the spec") Public Rust API functions and FFI/external functions should
+  straightforwardly map to well-identified spec functions. Their postconditions should
+  make this mapping explicit.
+
+### NEVER trust comments
+
+When reviewing code, proofs, specs, and axioms, reviewers must **never trust comments
+at face value**. Always independently assess whether each comment is accurate:
+- Does a comment claim a function preserves an invariant? Verify it in the postcondition.
+- Does a comment say "this is sound because..."? Check the reasoning independently.
+- Does a comment reference a spec section or line number? Verify the reference is current.
+Comments can be stale, misleading, or outright wrong — they are documentation, not proof.
 
 ### Structural and style checks (manual inspection)
 
@@ -687,14 +770,34 @@ These require reading the proof, not just grepping:
 
 - **Helper lemmas properly named and documented if non-obvious?**
 
+- **Repeated `simp [...]; solver` in cdot sub-goals?** If the same constants appear
+  in `simp` calls before a solver (`scalar_tac`, `agrind`, `grind`, `bv_tac`) in 3+
+  sub-goals after `step`/`step*`, they should be promoted to solver attributes
+  (`@[scalar_tac_simps]`, `@[agrind =]`, `@[grind =]`, `@[bvify]`) so `step`/`step*`
+  discharges the sub-goals automatically and they disappear. Also flag
+  `have hFoo : CONST.val = N := by simp` — the underlying definition likely needs
+  attributes. (Rule: "Register Rust global/const definitions with solver attributes")
+
+- **Repeated inline `(by ...)` proof blocks?** (Pitfall #22)
+  If the same `(by tactic_sequence)` appears 3+ times — in theorem signatures
+  (`getElem` bounds), `have` statements, or `exact`/`apply` arguments — it should
+  be extracted as a standalone lemma with solver attributes (`@[agrind =]`). With
+  the lemma registered, a `get_elem_tactic` override (`agrind`) auto-discharges
+  the bound — no `(by ...)` needed at all. Flag any `(by cases p <;> simp_all [...]
+  <;> agrind)` in a type signature — this is always wrong (use `get_elem_tactic`
+  override or `(by agrind)` instead).
+
 - **Is the proof clean and not verbose?** No copy-paste bloat, no redundant `have`
   that could be inlined. Each tactic call should earn its place.
 
 ### Performance checks
 
 - **Is the proof fast enough?** (Pitfall #14)
-  Profile with `set_option trace.profiler true in` and check that the proof
-  completes in **< 60 seconds wall-clock**. If slower, send back for optimization.
+  Use the `measure` tactic wrapper (see the `aeneas-tactics-quickref` skill file,
+  "Profiling proof time") to check that the proof completes in **< 60 seconds
+  wall-clock**. **Do NOT use `trace.profiler` for this** — it only measures tactic
+  execution and misses kernel type-checking time, which can dominate. If slower than
+  60s, send back for optimization.
 
 - **Is the proof reactive for interactive development?** (Pitfall #15)
   Adding a tactic at the end should take < 0.5s. If not, look for inline `(by ...)`

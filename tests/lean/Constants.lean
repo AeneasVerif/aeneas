@@ -12,83 +12,100 @@ set_option maxHeartbeats 1000000
 namespace constants
 
 /-- [constants::X0]
-    Source: 'tests/src/constants.rs', lines 6:0-6:22 -/
+    Source: 'tests/src/constants.rs', lines 6:0-6:22
+    Visibility: public -/
 @[global_simps, irreducible] def X0 : Std.U32 := 0#u32
 
 /-- [constants::X1]
-    Source: 'tests/src/constants.rs', lines 8:0-8:29 -/
+    Source: 'tests/src/constants.rs', lines 8:0-8:29
+    Visibility: public -/
 @[global_simps, irreducible] def X1 : Std.U32 := core.num.U32.MAX
 
 /-- [constants::X2]
-    Source: 'tests/src/constants.rs', lines 11:0-14:2 -/
+    Source: 'tests/src/constants.rs', lines 11:0-14:2
+    Visibility: public -/
 @[global_simps, irreducible] def X2 : Std.U32 := 3#u32
 
 /-- [constants::incr]:
-    Source: 'tests/src/constants.rs', lines 18:0-20:1 -/
+    Source: 'tests/src/constants.rs', lines 18:0-20:1
+    Visibility: public -/
 def incr (n : Std.U32) : Result Std.U32 := do
   n + 1#u32
 
 /-- [constants::X3]
-    Source: 'tests/src/constants.rs', lines 16:0-16:29 -/
+    Source: 'tests/src/constants.rs', lines 16:0-16:29
+    Visibility: public -/
 @[global_simps, irreducible] def X3 : Result Std.U32 := incr 32#u32
 
 /-- [constants::mk_pair0]:
-    Source: 'tests/src/constants.rs', lines 24:0-26:1 -/
+    Source: 'tests/src/constants.rs', lines 24:0-26:1
+    Visibility: public -/
 def mk_pair0 (x : Std.U32) (y : Std.U32) : Result (Std.U32 × Std.U32) := do
   ok (x, y)
 
 /-- [constants::Pair]
-    Source: 'tests/src/constants.rs', lines 37:0-40:1 -/
+    Source: 'tests/src/constants.rs', lines 37:0-40:1
+    Visibility: public -/
 structure Pair (T1 : Type) (T2 : Type) where
   x : T1
   y : T2
 
 /-- [constants::mk_pair1]:
-    Source: 'tests/src/constants.rs', lines 28:0-30:1 -/
+    Source: 'tests/src/constants.rs', lines 28:0-30:1
+    Visibility: public -/
 def mk_pair1 (x : Std.U32) (y : Std.U32) : Result (Pair Std.U32 Std.U32) := do
   ok { x, y }
 
 /-- [constants::P0]
-    Source: 'tests/src/constants.rs', lines 32:0-32:42 -/
+    Source: 'tests/src/constants.rs', lines 32:0-32:42
+    Visibility: public -/
 @[global_simps, irreducible]
 def P0 : Result (Std.U32 × Std.U32) := mk_pair0 0#u32 1#u32
 
 /-- [constants::P1]
-    Source: 'tests/src/constants.rs', lines 33:0-33:46 -/
+    Source: 'tests/src/constants.rs', lines 33:0-33:46
+    Visibility: public -/
 @[global_simps, irreducible]
 def P1 : Result (Pair Std.U32 Std.U32) := mk_pair1 0#u32 1#u32
 
 /-- [constants::P2]
-    Source: 'tests/src/constants.rs', lines 34:0-34:34 -/
+    Source: 'tests/src/constants.rs', lines 34:0-34:34
+    Visibility: public -/
 @[global_simps, irreducible] def P2 : (Std.U32 × Std.U32) := (0#u32, 1#u32)
 
 /-- [constants::P3]
-    Source: 'tests/src/constants.rs', lines 35:0-35:51 -/
+    Source: 'tests/src/constants.rs', lines 35:0-35:51
+    Visibility: public -/
 @[global_simps, irreducible]
 def P3 : Pair Std.U32 Std.U32 := { x := 0#u32, y := 1#u32 }
 
 /-- [constants::Wrap]
-    Source: 'tests/src/constants.rs', lines 50:0-52:1 -/
+    Source: 'tests/src/constants.rs', lines 50:0-52:1
+    Visibility: public -/
 structure Wrap (T : Type) where
   value : T
 
 /-- [constants::{constants::Wrap<T>}::new]:
-    Source: 'tests/src/constants.rs', lines 55:4-57:5 -/
+    Source: 'tests/src/constants.rs', lines 55:4-57:5
+    Visibility: public -/
 def Wrap.new {T : Type} (value : T) : Result (Wrap T) := do
   ok { value }
 
 /-- [constants::Y]
-    Source: 'tests/src/constants.rs', lines 42:0-42:38 -/
+    Source: 'tests/src/constants.rs', lines 42:0-42:38
+    Visibility: public -/
 @[global_simps, irreducible] def Y : Result (Wrap Std.I32) := Wrap.new 2#i32
 
 /-- [constants::unwrap_y]:
-    Source: 'tests/src/constants.rs', lines 44:0-46:1 -/
+    Source: 'tests/src/constants.rs', lines 44:0-46:1
+    Visibility: public -/
 def unwrap_y : Result Std.I32 := do
   let w ← Y
   ok w.value
 
 /-- [constants::YVAL]
-    Source: 'tests/src/constants.rs', lines 48:0-48:33 -/
+    Source: 'tests/src/constants.rs', lines 48:0-48:33
+    Visibility: public -/
 @[global_simps, irreducible] def YVAL : Result Std.I32 := unwrap_y
 
 /-- [constants::get_z1::Z1]
@@ -96,29 +113,35 @@ def unwrap_y : Result Std.I32 := do
 @[global_simps, irreducible] def get_z1.Z1 : Std.I32 := 3#i32
 
 /-- [constants::get_z1]:
-    Source: 'tests/src/constants.rs', lines 62:0-65:1 -/
+    Source: 'tests/src/constants.rs', lines 62:0-65:1
+    Visibility: public -/
 def get_z1 : Result Std.I32 := do
   ok get_z1.Z1
 
 /-- [constants::add]:
-    Source: 'tests/src/constants.rs', lines 67:0-69:1 -/
+    Source: 'tests/src/constants.rs', lines 67:0-69:1
+    Visibility: public -/
 def add (a : Std.I32) (b : Std.I32) : Result Std.I32 := do
   a + b
 
 /-- [constants::Q1]
-    Source: 'tests/src/constants.rs', lines 75:0-75:22 -/
+    Source: 'tests/src/constants.rs', lines 75:0-75:22
+    Visibility: public -/
 @[global_simps, irreducible] def Q1 : Std.I32 := 5#i32
 
 /-- [constants::Q2]
-    Source: 'tests/src/constants.rs', lines 76:0-76:23 -/
+    Source: 'tests/src/constants.rs', lines 76:0-76:23
+    Visibility: public -/
 @[global_simps, irreducible] def Q2 : Std.I32 := Q1
 
 /-- [constants::Q3]
-    Source: 'tests/src/constants.rs', lines 77:0-77:31 -/
+    Source: 'tests/src/constants.rs', lines 77:0-77:31
+    Visibility: public -/
 @[global_simps, irreducible] def Q3 : Result Std.I32 := add Q2 3#i32
 
 /-- [constants::get_z2]:
-    Source: 'tests/src/constants.rs', lines 71:0-73:1 -/
+    Source: 'tests/src/constants.rs', lines 71:0-73:1
+    Visibility: public -/
 def get_z2 : Result Std.I32 := do
   let i ← get_z1
   let i1 ← Q3
@@ -126,34 +149,41 @@ def get_z2 : Result Std.I32 := do
   add Q1 i2
 
 /-- [constants::S1]
-    Source: 'tests/src/constants.rs', lines 81:0-81:23 -/
+    Source: 'tests/src/constants.rs', lines 81:0-81:23
+    Visibility: public -/
 @[global_simps, irreducible] def S1 : Std.U32 := 6#u32
 
 /-- [constants::S2]
-    Source: 'tests/src/constants.rs', lines 82:0-82:30 -/
+    Source: 'tests/src/constants.rs', lines 82:0-82:30
+    Visibility: public -/
 @[global_simps, irreducible] def S2 : Result Std.U32 := incr S1
 
 /-- [constants::S3]
-    Source: 'tests/src/constants.rs', lines 83:0-83:35 -/
+    Source: 'tests/src/constants.rs', lines 83:0-83:35
+    Visibility: public -/
 @[global_simps, irreducible] def S3 : Pair Std.U32 Std.U32 := P3
 
 /-- [constants::S4]
-    Source: 'tests/src/constants.rs', lines 84:0-84:47 -/
+    Source: 'tests/src/constants.rs', lines 84:0-84:47
+    Visibility: public -/
 @[global_simps, irreducible]
 def S4 : Result (Pair Std.U32 Std.U32) := mk_pair1 7#u32 8#u32
 
 /-- [constants::V]
-    Source: 'tests/src/constants.rs', lines 87:0-89:1 -/
+    Source: 'tests/src/constants.rs', lines 87:0-89:1
+    Visibility: public -/
 structure V (T : Type) (N : Std.Usize) where
   x : Array T N
 
 /-- [constants::{constants::V<T, N>}::LEN]
-    Source: 'tests/src/constants.rs', lines 92:4-92:29 -/
+    Source: 'tests/src/constants.rs', lines 92:4-92:29
+    Visibility: public -/
 @[global_simps, irreducible]
 def V.LEN (T : Type) (N : Std.Usize) : Std.Usize := N
 
 /-- [constants::use_v]:
-    Source: 'tests/src/constants.rs', lines 95:0-97:1 -/
+    Source: 'tests/src/constants.rs', lines 95:0-97:1
+    Visibility: public -/
 def use_v (T : Type) (N : Std.Usize) : Result Std.Usize := do
   ok (V.LEN T N)
 

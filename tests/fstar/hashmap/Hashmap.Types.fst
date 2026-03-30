@@ -6,7 +6,8 @@ open Primitives
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [hashmap::AList]
-    Source: 'tests/src/hashmap.rs', lines 28:0-31:1 *)
+    Source: 'tests/src/hashmap.rs', lines 28:0-31:1
+    Visibility: public *)
 type aList_t (t : Type0) =
 | AList_Cons : usize -> t -> aList_t t -> aList_t t
 | AList_Nil : aList_t t
@@ -16,7 +17,8 @@ type aList_t (t : Type0) =
 type fraction_t = { dividend : usize; divisor : usize; }
 
 (** [hashmap::HashMap]
-    Source: 'tests/src/hashmap.rs', lines 50:0-62:1 *)
+    Source: 'tests/src/hashmap.rs', lines 50:0-62:1
+    Visibility: public *)
 type hashMap_t (t : Type0) =
 {
   num_entries : usize;

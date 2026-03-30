@@ -12,7 +12,8 @@ set_option maxHeartbeats 1000000
 namespace loops_nested
 
 /-- [loops_nested::iter]: loop body 1:
-    Source: 'tests/src/loops-nested.rs', lines 7:8-9:9 -/
+    Source: 'tests/src/loops-nested.rs', lines 7:8-9:9
+    Visibility: public -/
 @[rust_loop_body]
 def iter_loop0_loop0.body
   (n : Std.U32) (j : Std.U32) : Result (ControlFlow Std.U32 Unit) := do
@@ -22,7 +23,8 @@ def iter_loop0_loop0.body
   else ok (done ())
 
 /-- [loops_nested::iter]: loop 1:
-    Source: 'tests/src/loops-nested.rs', lines 7:8-9:9 -/
+    Source: 'tests/src/loops-nested.rs', lines 7:8-9:9
+    Visibility: public -/
 @[rust_loop]
 def iter_loop0_loop0 (n : Std.U32) (j : Std.U32) : Result Unit := do
   loop
@@ -30,7 +32,8 @@ def iter_loop0_loop0 (n : Std.U32) (j : Std.U32) : Result Unit := do
     j
 
 /-- [loops_nested::iter]: loop body 0:
-    Source: 'tests/src/loops-nested.rs', lines 5:4-11:5 -/
+    Source: 'tests/src/loops-nested.rs', lines 5:4-11:5
+    Visibility: public -/
 @[rust_loop_body]
 def iter_loop0.body
   (m : Std.U32) (n : Std.U32) (i : Std.U32) :
@@ -43,7 +46,8 @@ def iter_loop0.body
   else ok (done ())
 
 /-- [loops_nested::iter]: loop 0:
-    Source: 'tests/src/loops-nested.rs', lines 5:4-11:5 -/
+    Source: 'tests/src/loops-nested.rs', lines 5:4-11:5
+    Visibility: public -/
 @[rust_loop]
 def iter_loop0 (m : Std.U32) (n : Std.U32) (i : Std.U32) : Result Unit := do
   loop
@@ -51,13 +55,15 @@ def iter_loop0 (m : Std.U32) (n : Std.U32) (i : Std.U32) : Result Unit := do
     i
 
 /-- [loops_nested::iter]:
-    Source: 'tests/src/loops-nested.rs', lines 3:0-12:1 -/
+    Source: 'tests/src/loops-nested.rs', lines 3:0-12:1
+    Visibility: public -/
 @[reducible]
 def iter (m : Std.U32) (n : Std.U32) : Result Unit := do
   iter_loop0 m n 0#u32
 
 /-- [loops_nested::sum]: loop body 1:
-    Source: 'tests/src/loops-nested.rs', lines 19:8-22:9 -/
+    Source: 'tests/src/loops-nested.rs', lines 19:8-22:9
+    Visibility: public -/
 @[rust_loop_body]
 def sum_loop0_loop0.body
   (n : Std.U32) (s : Std.U32) (j : Std.U32) :
@@ -70,7 +76,8 @@ def sum_loop0_loop0.body
   else ok (done s)
 
 /-- [loops_nested::sum]: loop 1:
-    Source: 'tests/src/loops-nested.rs', lines 19:8-22:9 -/
+    Source: 'tests/src/loops-nested.rs', lines 19:8-22:9
+    Visibility: public -/
 @[rust_loop]
 def sum_loop0_loop0
   (n : Std.U32) (s : Std.U32) (j : Std.U32) : Result Std.U32 := do
@@ -79,7 +86,8 @@ def sum_loop0_loop0
     (s, j)
 
 /-- [loops_nested::sum]: loop body 0:
-    Source: 'tests/src/loops-nested.rs', lines 17:4-24:5 -/
+    Source: 'tests/src/loops-nested.rs', lines 17:4-24:5
+    Visibility: public -/
 @[rust_loop_body]
 def sum_loop0.body
   (m : Std.U32) (n : Std.U32) (s : Std.U32) (i : Std.U32) :
@@ -93,7 +101,8 @@ def sum_loop0.body
   else ok (done s)
 
 /-- [loops_nested::sum]: loop 0:
-    Source: 'tests/src/loops-nested.rs', lines 17:4-24:5 -/
+    Source: 'tests/src/loops-nested.rs', lines 17:4-24:5
+    Visibility: public -/
 @[rust_loop]
 def sum_loop0
   (m : Std.U32) (n : Std.U32) (s : Std.U32) (i : Std.U32) :
@@ -104,7 +113,8 @@ def sum_loop0
     (s, i)
 
 /-- [loops_nested::sum]:
-    Source: 'tests/src/loops-nested.rs', lines 14:0-26:1 -/
+    Source: 'tests/src/loops-nested.rs', lines 14:0-26:1
+    Visibility: public -/
 @[reducible]
 def sum (m : Std.U32) (n : Std.U32) : Result Std.U32 := do
   sum_loop0 m n 0#u32 0#u32
