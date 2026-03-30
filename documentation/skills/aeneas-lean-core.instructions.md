@@ -89,6 +89,26 @@ theorem function_name.spec (param1 : U32) (param2 : Slice U16)
       postcondition_on_backward_function back ⦄ := by ...
 ```
 
+### Sorry'd definitions vs sorry'd theorems
+
+A sorry'd **definition** (`def foo := sorry`) needs a **value** — a Lean term of the
+correct type. A sorry'd **theorem** (`theorem foo := by sorry`) needs a **proof** — a
+tactic sequence. Agents often confuse these, trying to write tactics for a `def` or
+trying to produce a term for a `theorem`. Know which one you're filling:
+
+- **`def`** (sorry'd definition): provide a concrete Lean expression. Common patterns:
+  - Byte assembly: `arrayToSpecBytes field1 ++ arrayToSpecBytes field2`
+  - Extraction: `(arrayToSpecBytes field).extract start len`
+  - Casting: `expr.cast (by scalar_tac)`  or  `expr.cast (by simp [...])`
+  - Concatenation: `a ++ b ++ c` with `Vector.append`
+- **`theorem`** (sorry'd theorem): provide a tactic proof (`by unfold ...; step*; ...`)
+
+When you encounter `noncomputable def foo ... := sorry`, step back and ask:
+*"What concrete data should this be?"* Read the docstring and the expected type
+carefully. The answer is almost always a composition of conversion functions
+(`arrayToSpecBytes`, `sliceToSpecBytes`, `toPoly`) applied to the relevant fields,
+possibly with `.extract`, `.cast`, or `++`.
+
 ### Indentation rules for spec theorems
 - `@[step]` and `theorem name`: base indentation (0 additional)
 - Arguments, preconditions, and the line with the function application: +4 spaces
@@ -218,6 +238,29 @@ high-level (spec) types, use a conversion *function* (e.g.,
 (`isPoly : Array Std.U16 256#usize → Polynomial → Prop`). Functions are deterministic
 and compose — they can be used on both sides of equations, fed into `simp`, and
 rewritten. Relations require existential witnesses and make proofs heavier.
+
+### Recognizing a weak-spec bottleneck
+
+After `step*` processes a function, you may be stuck with goals that mention
+spec-level functions (e.g., `Spec.encrypt`, `Spec.G`) while your hypotheses only
+contain structural properties (`wfArray`, `.length = n`, `result = ok ...`). This
+means a sub-operation's `@[step]` theorem has a **too-weak postcondition**: it proves
+structural facts but says nothing about the actual computed value.
+
+**How to detect:** After `step*`, if the remaining goal requires a spec equality
+(`toRepr output = Spec.f (toRepr input)`) but no hypothesis connects the output
+to the spec, the `@[step]` theorem for the intermediate call is the bottleneck.
+
+**What to do:**
+1. Identify which call produced the hypothesis gap (look at the last `step` that
+   made progress — the next call's spec is the weak one).
+2. **Do NOT try to work around it** with `sorry`, `admit`, `native_decide`, or manual
+   unfolding. The fix must happen at the source.
+3. **Report it**: state which theorem needs strengthening, what the current
+   postcondition provides, and what the goal requires. Include the exact goal state.
+4. If you have the authority (the theorem is in your file), strengthen the
+   postcondition to include a direct spec equality. If it's in another file,
+   report it as a blocker.
 
 ### Interface functions must map to the spec
 

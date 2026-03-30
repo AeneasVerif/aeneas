@@ -13,7 +13,7 @@ functions. Each pattern shows the complete proof with commentary.
 
 **Use when:** A loop iterates `for i in 0..n` and writes `out[i] = f(a[i], out[i])`.
 
-**Example:** `add_loop` — pointwise `out[i] := (a[i] + out[i]) & QMASK`.
+**Example:** `add_loop` — pointwise `out[i] := (a[i] + out[i]) mod M`.
 
 **Structure:**
 1. A **generalized spec** (`spec_gen`) with an arbitrary starting position
@@ -32,14 +32,14 @@ private theorem add_loop.spec_gen
   (hend : iter.«end».val = out.length)
   -- Invariant part 1: entries before start are "done"
   (hdone : ∀ j (hj : j < iter.start.val),
-    out[j]'(by grind) = addZ p (a[j]'(by agrind)) (out0[j]'(by agrind)))
+    out[j]'(by grind) = addMod p (a[j]'(by agrind)) (out0[j]'(by agrind)))
   -- Invariant part 2: entries at or after start are untouched
   (hrest : ∀ j (hj : iter.start.val ≤ j ∧ j < out.length),
     out[j]'(by grind) = out0[j]'(by agrind)) :
   crypto.add_loop (Params p) iter out a ⦃ fun res =>
     ∃ hlen' : res.length = out0.length,
     ∀ j (hj : j < res.length),
-      (res[j] : Std.U16) = addZ p (a[j]'(by agrind)) (out0[j]'(by agrind)) ⦄ := by
+      (res[j] : Std.U16) = addMod p (a[j]'(by agrind)) (out0[j]'(by agrind)) ⦄ := by
   -- Step 1: Unfold the recursive function
   unfold crypto.add_loop
   -- Step 2: Process the range iterator
@@ -53,15 +53,15 @@ private theorem add_loop.spec_gen
     step as ⟨i1, hi1⟩   -- index a[i]
     step as ⟨i2, hi2⟩   -- index out[i]
     step as ⟨i3⟩        -- wrapping_add
-    step as ⟨i4, hi4⟩   -- QMASK
+    step as ⟨i4, hi4⟩   -- MOD_MASK
     step as ⟨i5⟩        -- i3 &&& i4
     step as ⟨s, hs_len, hs_eq, hs_ne⟩  -- Slice.update
     -- Step 5: Rebuild the invariant for the next iteration
     have hdone' : ∀ j (hj : j < iter.start.val + 1),
-        s[j]'(by grind) = addZ p (a[j]'(by agrind)) (out0[j]'(by agrind)) := by
+        s[j]'(by grind) = addMod p (a[j]'(by agrind)) (out0[j]'(by agrind)) := by
       intro j hj
       by_cases hji : j = iter.start.val
-      · subst hji; grind [addZ]           -- freshly written entry
+      · subst hji; grind [addMod]           -- freshly written entry
       · have hj' : j < iter.start.val := by scalar_tac
         have := hdone j hj'; grind         -- previously done entry
     have hrest' : ∀ j (hj : iter.start.val + 1 ≤ j ∧ j < s.length),
@@ -98,7 +98,7 @@ theorem crypto.add_loop.spec
   (out a : Slice Std.U16)
   (hlen : out.length = a.length) :
   crypto.add_loop (Params p) { start := 0#usize, «end» := out.len } out a ⦃ fun res =>
-    res = Slice.mapIdx out (fun j x hj => addZ p a[j] x) ⦄ := by
+    res = Slice.mapIdx out (fun j x hj => addMod p a[j] x) ⦄ := by
   apply WP.spec_mono
   · exact add_loop.spec_gen out out a p hlen rfl
       { start := 0#usize, «end» := out.len } (by simp) rfl
@@ -116,7 +116,7 @@ theorem crypto.add_loop.spec
 theorem crypto.add.spec p (out a : Slice Std.U16)
   (hlen : out.length = a.length) :
   crypto.add (Params p) out a ⦃ fun res =>
-    res = Slice.mapIdx out (fun j x hj => addZ p a[j] x) ⦄ := by
+    res = Slice.mapIdx out (fun j x hj => addMod p a[j] x) ⦄ := by
   unfold crypto.add
   simp only [Slice.len]
   split_ifs with h
@@ -142,7 +142,7 @@ theorem add_spec_ext p {m n A B} (a b : Slice Std.U16)
   simp only [Slice.toMatrix, Matrix.of_apply, Matrix.add_apply]
   simp_all only [Slice.mapIdx]
   erw [List.getElem_mapFinIdx]
-  exact (addZ.spec p _ _).1
+  exact (addMod.spec p _ _).1
 ```
 
 ---
@@ -152,33 +152,33 @@ theorem add_spec_ext p {m n A B} (a b : Slice Std.U16)
 **Use when:** A loop accumulates `acc += a[i] * b[i]` in wrapping arithmetic,
 then the result is projected to Zq.
 
-**Example:** `mul_bs_loop0_loop0_loop0` — innermost k-loop of B×S multiply.
+**Example:** `matrix_mul_inner_loop` — innermost k-loop of matrix multiply.
 
-**Key idea:** The I32 wrapping accumulator tracks the Zq partial dot-product.
-Prove a helper `toZq_hcast_step` showing that wrapping arithmetic commutes with
-the Zq projection, then use `dotZq_partial_succ` to step the partial sum.
+**Key idea:** The I32 wrapping accumulator tracks the modular partial dot-product.
+Prove a helper `toMod_hcast_step` showing that wrapping arithmetic commutes with
+the modular-ring projection, then use `dotMod_partial_succ` to step the partial sum.
 
 ### Helper lemmas needed
 
 ```lean
 -- Step the partial dot-product
-private lemma dotZq_partial_succ ... :
-    dotZq_partial ... (k + 1) = dotZq_partial ... k + term_k := by
-  simp only [dotZq_partial]; rw [Fin.sum_univ_castSucc]; simp [...]
+private lemma dotMod_partial_succ ... :
+    dotMod_partial ... (k + 1) = dotMod_partial ... k + term_k := by
+  simp only [dotMod_partial]; rw [Fin.sum_univ_castSucc]; simp [...]
 
 -- Empty partial dot-product
 @[simp]
-private lemma dotZq_partial_zero ... : dotZq_partial ... 0 = 0 := by simp [dotZq_partial]
+private lemma dotMod_partial_zero ... : dotMod_partial ... 0 = 0 := by simp [dotMod_partial]
 
 -- Full partial = total
-private lemma dotZq_partial_full ... :
-    dotZq_partial ... (Spec.n p) = dotZq ... := by simp [dotZq_partial, dotZq]
+private lemma dotMod_partial_full ... :
+    dotMod_partial ... (Spec.dim p) = dotMod ... := by simp [dotMod_partial, dotMod]
 
 -- Wrapping arithmetic projects to Zq
-private theorem toZq_hcast_step (p) (acc : I32) (a b : U16) :
-    toZq p (IScalar.hcast .U16 (wrapping_add acc (wrapping_mul (hcast a) (cast b))))
-    = toZq p (IScalar.hcast .U16 acc) + toZq p a * toZq p b := by
-  suffices h : ... by rw [h, toZq_wrapping_add, toZq_wrapping_mul]
+private theorem toMod_hcast_step (p) (acc : I32) (a b : U16) :
+    toMod p (IScalar.hcast .U16 (wrapping_add acc (wrapping_mul (hcast a) (cast b))))
+    = toMod p (IScalar.hcast .U16 acc) + toMod p a * toMod p b := by
+  suffices h : ... by rw [h, toMod_wrapping_add, toMod_wrapping_mul]
   bv_tac 16
 ```
 
@@ -189,10 +189,10 @@ private theorem inner_loop.spec_gen p (b s : Slice U16)
   (hb hs) (i j : Usize) (hi hj)
   (r : core.ops.range.Range Usize) (hlo hend)
   (acc : I32)
-  (hacc : toZq p (IScalar.hcast .U16 acc) =
-    dotZq_partial p b s i j hi hj r.start.val) :
+  (hacc : toMod p (IScalar.hcast .U16 acc) =
+    dotMod_partial p b s i j hi hj r.start.val) :
   inner_loop ... r b s i j acc ⦃ fun acc' =>
-    toZq p (IScalar.hcast .U16 acc') = dotZq p b s i j hi hj ⦄ := by
+    toMod p (IScalar.hcast .U16 acc') = dotMod p b s i j hi hj ⦄ := by
   unfold inner_loop
   step with range_next_usize as ⟨ret, h_range⟩
   by_cases h : r.start.val < r.«end».val <;> simp [h] at h_range
@@ -200,15 +200,15 @@ private theorem inner_loop.spec_gen p (b s : Slice U16)
     -- step through: index b, index s, casts, wrapping_mul, wrapping_add
     step as ⟨...⟩  -- each arithmetic step
     -- Prove accumulator invariant for next iteration
-    have hacc1 : toZq p (IScalar.hcast .U16 acc1) =
-        dotZq_partial ... (r.start.val + 1) := by
-      rw [dotZq_partial_succ ...]; rw [← hacc]; ...
-      rw [toZq_hcast_step]
+    have hacc1 : toMod p (IScalar.hcast .U16 acc1) =
+        dotMod_partial ... (r.start.val + 1) := by
+      rw [dotMod_partial_succ ...]; rw [← hacc]; ...
+      rw [toMod_hcast_step]
     -- Recurse
     exact inner_loop.spec_gen ... ret.2 ... acc1 (by convert hacc1 ...)
   · -- Base case: r.start ≥ r.end
     simp only [..., WP.spec_ok]
-    rw [hacc]; convert dotZq_partial_full ...
+    rw [hacc]; convert dotMod_partial_full ...
 termination_by r.«end».val - r.start.val
 decreasing_by have : ret.2.«end».val = r.«end».val := by rw [hend']; scalar_tac
 ```
@@ -219,7 +219,7 @@ decreasing_by have : ret.2.«end».val = r.«end».val := by rw [hend']; scalar_
 
 **Use when:** An outer loop iterates rows, calling an inner loop for each row.
 
-**Example:** `mul_bs_loop0` — outer i-loop calling the middle j-loop.
+**Example:** `matrix_mul_outer_loop` — outer i-loop calling the middle j-loop.
 
 ### Structure
 
@@ -228,11 +228,11 @@ decreasing_by have : ret.2.«end».val = r.«end».val := by rw [hend']; scalar_
 theorem outer_loop.spec p (out b s : Slice U16)
   (iter : core.ops.range.Range Usize) (hout hb hs hlo hhi)
   -- Invariant: rows before iter.start are already correct
-  (hinv : ∀ (i j : Fin NBAR), i < iter.start.val →
-    toZq p (out[i * NBAR + j]'...) = dotZq p b s i j ...) :
+  (hinv : ∀ (i j : Fin DIM), i < iter.start.val →
+    toMod p (out[i * DIM + j]'...) = dotMod p b s i j ...) :
   outer_loop (Params p) ... iter out b s ⦃ fun res =>
-    ∃ hreslen : res.length = NBAR * NBAR,
-    ∀ (i j : Fin NBAR), toZq p (res[...]) = dotZq p b s i j ... ⦄ := by
+    ∃ hreslen : res.length = DIM * DIM,
+    ∀ (i j : Fin DIM), toMod p (res[...]) = dotMod p b s i j ... ⦄ := by
   unfold outer_loop
   step with range_next_usize as ⟨ret, h_range⟩
   by_cases hcont : iter.start.val < iter.«end».val <;> simp [hcont] at h_range
@@ -291,14 +291,14 @@ have hinv' : diff1 = 0#u16 ↔ ∀ j, (hj : j < iter.start.val + 1) → ... := b
 
 ```lean
 @[step]
-theorem mul_bs.spec p (out b s : Slice U16) (hout hb hs) :
-  crypto.mul_bs (Params p) out b s ⦃ fun res => ... ⦄ := by
-  unfold crypto.mul_bs
+theorem matrix_mul.spec p (out b s : Slice U16) (hout hb hs) :
+  module.matrix_mul (Params p) out b s ⦃ fun res => ... ⦄ := by
+  unfold module.matrix_mul
   -- step through setup (creating ranges, getting parameters)
   step as ⟨n_p, hn_p⟩      -- (Params p).N
-  step as ⟨nbar, hnbar⟩    -- crypto.NBAR
+  step as ⟨dim, hdim⟩      -- module.DIM
   -- now the loop call appears
-  step with mul_bs_loop0.spec as ⟨res, hreslen, hres⟩
+  step with matrix_mul_outer_loop.spec as ⟨res, hreslen, hres⟩
   · ... -- provide preconditions
   exact ⟨hreslen, hres⟩
 ```
@@ -392,17 +392,17 @@ with `@[agrind =]` (or `@[scalar_tac_simps]`, `@[simp]` as appropriate).
 ```lean
 -- Index bound: register with @[agrind =] so getElem bounds auto-discharge
 @[agrind =]
-private lemma idx_lt_bound (r : Fin NBAR) (c : Fin N)
-    (h : out.length = NBAR * N) :
+private lemma idx_lt_bound (r : Fin DIM) (c : Fin N)
+    (h : out.length = DIM * N) :
     r.val * N + c.val < out.length := by agrind
 
--- (i * NBAR + j) / NBAR = i when j < NBAR
-private lemma mul_NBAR_add_div (i j : ℕ) (hj : j < NBAR) :
-    (i * NBAR + j) / NBAR = i := by simp_all [NBAR]; scalar_tac
+-- (i * DIM + j) / DIM = i when j < DIM
+private lemma mul_DIM_add_div (i j : ℕ) (hj : j < DIM) :
+    (i * DIM + j) / DIM = i := by simp_all [DIM]; scalar_tac
 
--- (i * NBAR + j) % NBAR = j when j < NBAR
-private lemma mul_NBAR_add_mod (i j : ℕ) (hj : j < NBAR) :
-    (i * NBAR + j) % NBAR = j := by simp [NBAR]; scalar_tac
+-- (i * DIM + j) % DIM = j when j < DIM
+private lemma mul_DIM_add_mod (i j : ℕ) (hj : j < DIM) :
+    (i * DIM + j) % DIM = j := by simp [DIM]; scalar_tac
 ```
 
 ---

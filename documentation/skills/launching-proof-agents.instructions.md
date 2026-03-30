@@ -153,9 +153,9 @@ constraint). Additional Lean-specific notes:
   file B (directly or transitively), the agent on A must wait until B's agent
   finishes. Check `import` statements at the top of each file before launching.
 - **Examples**:
-  - ✅ Agent A on `Ntt.lean`, Agent B on `CompressEncode.lean` (no import relationship)
-  - ❌ Agent A on `Ntt.lean` inner loop, Agent B on `Ntt.lean` outer loop (same file)
-  - ❌ Agent A on `VectorOps.lean`, Agent B on `Ntt.lean` (if VectorOps imports Ntt)
+  - ✅ Agent A on `ModuleA.lean`, Agent B on `ModuleB.lean` (no import relationship)
+  - ❌ Agent A on `ModuleA.lean` inner loop, Agent B on `ModuleA.lean` outer loop (same file)
+  - ❌ Agent A on `Helpers.lean`, Agent B on `ModuleA.lean` (if Helpers imports ModuleA)
 
 ## Task Decomposition and Agent Supervision
 
@@ -932,17 +932,17 @@ for the general rules. Proof-specific notes:
   check the function's monadic step count, check if similar proofs exist, and consider
   whether needed specs/lemmas already exist.
 - **Give each agent sorry's in a specific file**: "Fill the sorry at line 130
-  in MulASPlusE.lean" or "Fill sorry's at lines 130 and 168 in MulASPlusE.lean".
+  in MatrixMul.lean" or "Fill sorry's at lines 130 and 168 in MatrixMul.lean".
 - **Parallelize across files**: Launch multiple agents simultaneously, each targeting
   a different file. Startup costs overlap, so wall-clock time is the slowest agent.
-- **Small related files can be batched**: If KeyGen.lean (1 sorry) and Decaps.lean
-  (1 sorry) are small and independent, one agent can handle both sequentially.
+- **Small related files can be batched**: If two small files (1 sorry each) are
+  independent, one agent can handle both sequentially.
 
 For example, with 13 sorry's across 6 files, assessed as 3 hard + 5 medium + 5 easy:
-- ✅ Agent A: 1 hard sorry (MulASPlusE line 946 — complex loop invariant)
-- ✅ Agent B: 2 medium sorry's (MulSAPlusE lines 837, 875)
-- ✅ Agent C: 1 hard sorry (EncodeDecode line 278 — bit-packing)
-- ✅ Agent D: 5 easy sorry's (KeyGen + Encaps + Decaps — wrapper unfolds)
+- ✅ Agent A: 1 hard sorry (MatrixMul.lean line 946 — complex loop invariant)
+- ✅ Agent B: 2 medium sorry's (TransposeMul.lean lines 837, 875)
+- ✅ Agent C: 1 hard sorry (EncodeDecode.lean line 278 — bit-packing)
+- ✅ Agent D: 5 easy sorry's (TopLevel1 + TopLevel2 + TopLevel3 — wrapper unfolds)
 - ✅ Round 2: dispatch remaining sorry's based on Round 1 results
 - ❌ 1 agent for all 13 sorry's across 6 files (no parallelism, no observability)
 
@@ -969,8 +969,8 @@ rules. Proof-specific patterns to watch for:
 
 - Multiple agents stuck on the same kind of sub-goal (e.g., bitwise reasoning)
   → may need a shared lemma proved centrally
-- Agents discovering missing specs in `ExternalSpecs.lean` → consolidate after fleet
-- Common bridge definitions needed across proofs → add to `Defs.lean`/`MatDefs.lean`
+- Agents discovering missing specs in shared axiom/external files → consolidate after fleet
+- Common bridge definitions needed across proofs → add to shared `Defs.lean`/`Basic.lean`
 
 **The master does NOT act on these findings autonomously** — it reports to the user
 and waits for approval.
@@ -1038,8 +1038,8 @@ do (because they're file-isolated):
    add the import (after checking for circular dependencies).
 
 5. **Deduplicate across files** — Collect duplicate theorems, axioms, and helpers that
-   appear in multiple files (e.g., `copy_from_slice_spec` in both Encapsulate and
-   Decapsulate, `ict_default_spec` in multiple places, `Array_index_mut_Range` stubs).
+   appear in multiple files (e.g., identical `stdlib_fn.spec` stubs in two files,
+   `default_value_spec` in multiple places, `Array_index_mut_Range` stubs).
    Move each to a single shared file (e.g., `Basic.lean`, a new `StdlibSpecs.lean`, or
    the appropriate Axioms file) with `@[step]`, then remove all local duplicates and
    add imports. This prevents agents from re-introducing private axioms that already
@@ -1096,7 +1096,7 @@ where agents try to "fix" unexpected file content by reverting to HEAD.
 ## Example: Full Agent Prompt
 
 ```
-Fix the inner loop sorry in `/path/to/Ntt.lean`.
+Fix the inner loop sorry in `/path/to/MyModule.lean`.
 
 ## ⛔ HARD REQUIREMENT: lean-lsp-mcp tools ONLY — READ THIS FIRST
 Your FIRST action must be using the lean-lsp-mcp tools (`lean_goal`,
@@ -1113,19 +1113,19 @@ Read these files: [list paths]
 [lean-lsp-mcp instructions — see the `lean-lsp-mcp` skill file]
 
 ## The Sorry
-`poly_element_ntt_layer_generic_loop0_loop0_spec` at line ~421.
+`my_function_loop0_loop0_spec` at line ~421.
 
 ## Proof Strategy
 The loop is a recursive function — use `unfold` + `step` with case split.
 Use `step*?` to generate the body proof script, then fix sub-goals.
 
 ## Available Specs
-- `butterfly_spec`, `mod_add_spec`, etc.
+- `helper_spec`, `mod_add_spec`, etc.
 
 ## Key Rules
 - NEVER unfold stdlib
 - NEVER use `omega` — use `agrind` (preferred), `grind`, or `scalar_tac`
-- ⛔ ONLY modify `/path/to/Ntt.lean` — NEVER edit ANY other .lean file.
+- ⛔ ONLY modify `/path/to/MyModule.lean` — NEVER edit ANY other .lean file.
   Other agents are working in parallel on other files. Editing them will
   destroy their work. Use local `private axiom` + TODO for cross-file needs.
 - ⛔ NEVER run `git checkout`, `git restore`, `git stash`, `git reset`, or
