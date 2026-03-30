@@ -174,8 +174,44 @@ agents will conflict. For each pair of agents in the batch:
 > "CT.lean imports Defs.lean, MulBS.lean imports MatDefs.lean — no mutual
 > dependencies, safe to parallelize."
 
-**If you discover a conflict after agents are already running**, stop the
-conflicting agent immediately, wait for the other to finish, then relaunch.
+**If you discover a conflict after agents are already running**, DO NOT dispatch a
+conflicting agent. Wait for the existing agent to complete, then dispatch.
+
+### Infrastructure tasks MUST run between waves — never during
+
+Some tasks are inherently cross-cutting: they touch shared files (import fixes,
+shared definitions, diamond conflict resolution), modify files that multiple proof
+agents work on, or change imports that affect the build DAG. These are called
+**infrastructure tasks**.
+
+**⛔ NEVER dispatch an infrastructure agent while proof agents are running on
+files that the infrastructure agent would touch.** The infrastructure agent will
+either: (a) overwrite the proof agent's uncommitted changes, or (b) break the
+proof agent's build by changing imports/definitions mid-elaboration.
+
+**The correct pattern is wave-based:**
+
+```
+Wave N proof agents run (each on their own file)
+  ↓ all complete
+Supervisor reads results + runs cleaning/infrastructure step
+  ↓ infrastructure changes applied (imports, shared defs, diamond fixes, etc.)
+  ↓ lake build passes
+Wave N+1 proof agents run
+```
+
+**Infrastructure tasks include:**
+- Adding/removing imports in a file
+- Resolving diamond import conflicts (touches multiple files)
+- Moving definitions between files (reorganization or deduplication)
+- Proving shared specs or theorems (if proof agents import it)
+- Changing axiom files that proof agents import
+
+**If an infrastructure need is discovered mid-wave:** Document it, wait for all
+proof agents in the current wave to complete, then do the infrastructure work
+before dispatching the next wave. Do NOT try to "squeeze in" infrastructure
+changes between agent completions — even if one agent finished, others may still
+be running on files that import the shared file you'd modify.
 
 ### Mid-flight modification check
 

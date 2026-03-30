@@ -238,6 +238,17 @@ axioms easy to find for auditing — axioms are unproved assumptions, and review
 need to inspect every one of them. Scattering axioms across proof files makes them
 hard to discover and audit.
 
+**When axioms are allowed:**
+- **External/opaque functions** (FFI, SIMD, OS calls, FunsExternal.lean) — no body to unfold
+- **Raw pointer operations** — features strictly outside Aeneas' model of Rust. Functions
+  containing raw pointers may axiomatize ONLY the raw pointers operations, then prove the
+  rest of the function around the axioms.
+
+**When axioms are NEVER allowed:**
+- **Transparent functions** — if the function body is in the generated Lean code, it
+  MUST be proved, not axiomatized. "Too many monadic steps" is never a valid reason
+  — decompose using fold theorems instead.
+
 **Always fix problematic axioms.** If an axiom is found to be incorrect, too weak, or
 otherwise problematic, it must be fixed — even if the fix causes a major refactor of
 the proofs that depend on it. The entire verification effort rests on axioms being
@@ -271,10 +282,21 @@ fun_name a b ⦃ result =>
    - NO → Use `step*?` to generate an expanded proof script, then work from there
 
 3. Is the function large/complex (10+ monadic steps)?
-   - Start with `step*?` to generate the step-by-step script
-   - Work through the generated script, fixing any sub-goals that fail
-   - Once the whole proof is done, try collapsing back into `step*` if possible
-   - If heartbeats are tight, decompose the function (fold theorems) or extract sub-goals as auxiliary lemmas — aim for < 8M heartbeats even for large proofs; increase the default to 1M as a baseline (see "Debugging Commands" in the tactics quickref)
+   - **First, try to decompose using fold theorems** — extract logical phases
+     (setup, hash, finalize) into auxiliary functions with their own
+     `@[local step]` specs. Then the parent proof only `step`s through the
+     phase calls instead of 50+ monadic operations at once.
+   - If decomposition is not feasible (no natural phase boundaries), use
+     `step*` to go as far as possible, then close each remaining
+     subgoal individually using focused `· tactic` (cdot) blocks.
+   - **NEVER use `<;>` after `step*` or any tactic that creates many subgoals.**
+     `<;>` forces full re-elaboration on every edit. Use cdot blocks instead.
+   - **NEVER use `all_goals`** — it has the same re-elaboration problem.
+   - If heartbeats are tight, the function MUST be decomposed (fold theorems)
+     — aim for < 8M heartbeats even for large proofs; increase the default
+     to 1M as a baseline (see "Debugging Commands" in the tactics quickref)
+   - **"Too many monadic steps" is NEVER a reason to skip a proof or axiomatize.**
+     It is a reason to decompose via fold theorems.
 
 ### The step*? → fix → collapse workflow:
 1. `step*?` — generates expanded proof script (one `step` per monadic call)

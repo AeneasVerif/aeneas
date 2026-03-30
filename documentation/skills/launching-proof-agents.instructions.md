@@ -79,6 +79,11 @@ script → copy it into your proof → fix sub-goals → collapse back to `step*
   Other agents are working in parallel on other files. If you touch their
   files, you will break their work. If you need something from another file,
   use a local `private axiom` with a TODO comment (see below).
+- ⛔ NEVER run `git checkout`, `git restore`, `git stash`, `git reset`,
+  or any command that reverts/discards/overwrites file changes. Other agents
+  have uncommitted work on disk. Any git revert command DESTROYS their work.
+  If your file has unexpected content, read it and make targeted edits — never
+  bulk-revert.
 - DO NOT COMMIT
 ```
 
@@ -724,10 +729,17 @@ grep -n '^axiom' FILE             # → if agent added new axioms that were sorr
 # Agents must NEVER convert a sorry into an axiom. The whole point is to PROVE the theorem.
 # If the proof is too hard, leave it as sorry and report what was tried.
 
-# ⛔ Axiomatizing transparent functions (NEVER allowed)
+# ⛔ Axiomatizing transparent functions (NEVER allowed — with ONE exception)
 # Check every `axiom` in the file. If the function being axiomatized is TRANSPARENT
 # (i.e., its body is available in the generated Lean code), the axiom MUST be rejected.
 # Only external/opaque functions (FFI, stdlib without source, FunsExternal.lean) may be axioms.
+#
+# THE ONLY EXCEPTION: functions that use features strictly outside Aeneas' model of Rust.
+# Specifically: raw pointer operations (core::ptr::read_volatile, core::ptr::write_volatile,
+# as_ptr, add, etc.) cannot be reasoned about in the Aeneas framework because Aeneas does
+# not model raw pointers. For such functions, axiomatize the raw pointer ops (e.g., model
+# `read_volatile(a.as_ptr().add(i))` as `a[i]`) and then prove the rest of the function.
+#
 # Common violation: agent axiomatizes a function with "too many monadic steps" (~100-200 steps).
 # Fix: fold decomposition to split into phases, then step through each phase.
 # "Too many steps" is NEVER a valid reason to axiomatize — it's a reason to decompose.
@@ -1010,6 +1022,9 @@ do (because they're file-isolated):
    converted back to `theorem ... := by sorry`. Transparent functions (those whose body
    is in the generated Lean code) must NEVER be axiomatized, regardless of size.
    "Too many monadic steps" → fold decomposition, not axiomatization.
+   **Exception:** functions containing features strictly outside Aeneas' Rust model
+   (raw pointers: `read_volatile`, `write_volatile`, `as_ptr`) may axiomatize ONLY the raw
+   pointer operations, then prove the rest of the function around the axiom.
 
 2. **Prove missing stdlib specs** — If agents reported missing `@[step]` specs for
    Aeneas stdlib functions (e.g., `Array.index_mut` with `Range`, `core.result.Result.unwrap`),
@@ -1045,6 +1060,15 @@ do (because they're file-isolated):
 same blockers is the #1 cause of wasted agent time. If no infrastructure gaps were
 found, the cleaning step is trivially empty — but it must always be explicitly checked.
 
+**⛔ The cleaning step MUST run after ALL agents in the wave complete — never
+while agents are still running.** Infrastructure changes (import fixes, shared
+file edits, deduplication) touch files that running agents depend on. Applying them
+mid-wave corrupts running agents' builds and can trigger `git checkout` cascades
+where agents try to "fix" unexpected file content by reverting to HEAD.
+
+<!-- ⚠️ SYNC RULE: expanded infrastructure-between-waves rule is in
+     agent-fleet-management "Infrastructure tasks MUST run between waves" -->
+
 ## Common Agent Failure Modes
 
 | Failure | Cause | Fix |
@@ -1063,8 +1087,11 @@ found, the cleaning step is trivially empty — but it must always be explicitly
 | Agent crashes mid-edit | API loss, timeout, resource limit | Check for referenced-but-undefined identifiers; create missing defs in shared files |
 | `scalar_tac` loops in spec_gen | `maxRecDepth` in loop invariant proof | Mass-replace ALL `scalar_tac` → `agrind` in the proof body |
 | Review ignores remaining sorry's | Review only checks quality, not completeness | **Reviews MUST flag remaining sorry's and dispatch fix agents** — "well-documented sorry" is not convergence |
-| Axiomatizes transparent function | Function has "too many steps" (~100-200 monadic lets) | **NEVER axiomatize transparent functions** — use fold decomposition to split into phases, then step through each |
+| Axiomatizes transparent function | Function has "too many steps" (~100-200 monadic lets) | **NEVER axiomatize transparent functions** — use fold decomposition to split into phases, then step through each. Exception: raw pointer ops (read_volatile, write_volatile) may be axiomatized as array indexing |
 | Skips cleaning step | Redispatches into same blockers | **Always run cleaning step** between review and redispatch — resolve infrastructure gaps first |
+| Reverts files via git | Runs `git checkout`/`git restore`, wiping other agents' uncommitted work | **NEVER use git checkout/restore/reset** — make targeted edits only. Include the git ban in every agent prompt |
+| Infrastructure agent conflicts with proof agents | Supervisor dispatches cross-file agent (e.g., diamond fix, import changes) while proof agents are running on those files | **Infrastructure tasks MUST run between waves** — never while proof agents are running on affected files |
+| Supervisor skips `agent_files` tracking | Doesn't INSERT/query file ownership before dispatch, causing same-file conflicts | **Always maintain `agent_files` table** — INSERT before dispatch, SELECT before every new agent, DELETE on completion |
 
 ## Example: Full Agent Prompt
 
@@ -1101,6 +1128,9 @@ Use `step*?` to generate the body proof script, then fix sub-goals.
 - ⛔ ONLY modify `/path/to/Ntt.lean` — NEVER edit ANY other .lean file.
   Other agents are working in parallel on other files. Editing them will
   destroy their work. Use local `private axiom` + TODO for cross-file needs.
+- ⛔ NEVER run `git checkout`, `git restore`, `git stash`, `git reset`, or
+  any command that reverts/discards file changes. Other agents have uncommitted
+  work on disk — any git revert command DESTROYS their work silently.
 - NEVER commit or push without explicit user approval
 - After completing this sorry, STOP and return results — do NOT proceed to other work
 ```
