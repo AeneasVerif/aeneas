@@ -736,21 +736,22 @@ where
               if isSpec then
                 let tag ← mvarId.getTag
                 -- Recursively process this spec precondition
-                let (subInfo, introFVars) ← commitIfNoEx do
+                let (subInfo, introNames) ← commitIfNoEx do
                   setGoals [mvarId]
                   let size ← getIntrosSize <$> mvarId.getType
                   let (introFVars, mvarId) ← mvarId.introNP size
+                  -- Collect the user names while the fvars are still in scope
+                  let introNames ← mvarId.withContext do
+                    introFVars.mapM fun fvar => fvar.getUserName
                   setGoals [mvarId]
                   let info ← traverseProgram cfg fuel ss
-                  pure (info, introFVars)
+                  pure (info, introNames)
                 -- Build the script: case <tag> => [intros;] <recursive script>
                 let subStx ← subInfo.script.toSyntax
                 let introStx : Array Syntax.Tactic ←
-                  if !introFVars.isEmpty then
-                  -- TODO: For some reason this doesn't work
-                  -- let idents ← introFVars.mapM fun fvar => mkIdent <$> fvar.getUserName
-                  -- pure #[← `(tactic| intros $idents*)]
-                    pure #[← `(tactic| intros)]
+                  if !introNames.isEmpty then
+                    let idents := introNames.map mkIdent
+                    pure #[← `(tactic| intros $idents*)]
                   else pure #[]
                 let allTacs := introStx ++ subStx
                 let caseArgs := makeCaseArgs tag #[]

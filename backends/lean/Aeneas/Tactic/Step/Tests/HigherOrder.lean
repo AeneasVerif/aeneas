@@ -73,7 +73,7 @@ info: Try this:
   [apply]     let* ⟨ y, y_post ⟩ ← [ +inferPost ] callFThenG_spec
     case hf => let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
     case hg =>
-      intros
+      intros y a✝
       let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
     agrind
 -/
@@ -91,7 +91,7 @@ info: Try this:
 
   [apply]     let* ⟨ y, y_post1, y_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec
     case hf =>
-      intros
+      intros i hi
       let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
     agrind
 -/
@@ -114,11 +114,11 @@ info: Try this:
 
   [apply]     let* ⟨ y, y_post1, y_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec
     case hf =>
-      intros
+      intros i hi
       let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
     let* ⟨ z, z_post1, z_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec
     case hf =>
-      intros
+      intros i hi
       let* ⟨ ⟩ ← [ +inferPost ] U32.mul_spec
     agrind
 -/
