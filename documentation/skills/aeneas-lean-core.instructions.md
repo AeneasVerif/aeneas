@@ -436,6 +436,50 @@ theorem my_loop.spec (x : MyState) (h : x.inv) :
   · exact h
 ```
 
+### ⚠️ Every function spec requires loop specs too
+
+When writing a `@[step]` spec for a function that contains loops, you **must also
+write `@[step]` specs for all loop auxiliary functions** (`_loop`, `_loop0`,
+`_loop1`, etc.). Without loop specs, `step` cannot process the loop calls inside
+the function body — the proof will get stuck.
+
+This is not optional: a function spec without its loop specs is unprovable.
+The loop specs are prerequisites, not follow-up work.
+
+```lean
+-- Aeneas translates `fn process(data)` with an internal loop as:
+-- def process (data : Slice U32) : Result (Slice U32) := do
+--   ... setup ...
+--   let result ← process_loop data 0#usize ...
+--   ... cleanup ...
+
+-- ⛔ BAD: function spec without loop spec — proof will get stuck at loop call
+@[step]
+theorem process.spec (data : Slice U32) :
+    process data ⦃ result => result.length = data.length ⦄ := by
+  unfold process
+  step*  -- STUCK: no spec for process_loop
+
+-- ✅ GOOD: write loop spec FIRST, then function spec
+@[step]
+theorem process_loop.spec (data : Slice U32) (i : Usize) (h : i.val ≤ data.length) :
+    process_loop data i ⦃ result =>
+      result.length = data.length ⦄ := by ...
+termination_by data.length - i.val
+decreasing_by scalar_decr_tac
+
+@[step]
+theorem process.spec (data : Slice U32) :
+    process data ⦃ result => result.length = data.length ⦄ := by
+  unfold process
+  step*  -- step can now process the loop call
+```
+
+**When planning proof work**, always inventory the loops in a function and include
+their specs as explicit work items. A common planning mistake is listing only the
+top-level function spec without accounting for its loops — this leads to agents
+getting stuck mid-proof.
+
 ### Pattern 6: Bit-vector operation spec
 ```lean
 @[step]
@@ -534,6 +578,35 @@ For n-element tuples, the RHS uses nested projections:
 
 If the helper returns a single value (not a tuple), `f` is just `f : A → Result α`
 and the RHS is `f r` — no change needed.
+
+### ⛔ Every fold helper must have a step spec
+
+When you introduce a fold helper and its fold theorem, you **must also immediately
+write a full functional-correctness `@[local step]` spec theorem** for the fold
+helper. A fold helper without a spec is useless scaffolding — it decomposes the
+function syntactically but doesn't contribute to the proof. The caller's proof
+needs to `step` through the fold helper, and `step` requires an `@[step]` or
+`@[local step]` theorem.
+
+```lean
+-- ⛔ BAD: fold helper + fold theorem but no spec — useless
+private def helper (a : U32) : Result U32 := do ...
+private theorem fold_helper ... := by simp only [helper, ...]
+-- caller can't step through helper
+
+-- ✅ GOOD: fold helper + fold theorem + step spec — complete
+private def helper (a : U32) : Result U32 := do ...
+private theorem fold_helper ... := by simp only [helper, ...]
+@[local step]
+private theorem helper.spec (a : U32) (h : a.val < 1000) :
+    helper a ⦃ c => c.val = (a.val + 1) * 2 ⦄ := by ...
+-- caller can now simp only [fold_helper] then step
+```
+
+The spec may be `sorry`'d initially — that's fine. What matters is that the
+**statement** exists with a full functional-correctness postcondition from day one.
+This ensures the fold decomposition is immediately usable by the parent proof,
+even before the helper's proof is complete.
 
 ### ⚠️ Always test fold theorems after writing them
 

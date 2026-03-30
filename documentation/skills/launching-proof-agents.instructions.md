@@ -441,6 +441,18 @@ until all statements are validated. Only then do proof agents launch.
   Check that existing mathematical lemmas (`MontReduction.lean`, `ModArith.lean`)
   are reused where applicable. A proof that closes >15 goals after `step*` without
   fold helpers should be flagged.
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Every fold helper must have a step spec" -->
+- **Does every fold helper have a step spec?** A fold helper without a corresponding
+  `@[local step]` spec theorem is useless scaffolding — the parent proof can fold the
+  code but can't `step` through the helper. Every fold helper must have a spec with a
+  full functional-correctness postcondition (even if sorry'd). Flag any fold helper
+  that lacks a spec.
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Every function spec requires loop specs too" -->
+- **Are loop specs present for all loops?** When a function contains loops (translated
+  as `_loop`, `_loop0`, `_loop1` auxiliary functions), the proof requires `@[step]`
+  specs for each loop. Check that every loop has a spec with a full postcondition
+  (even if sorry'd). A function spec without its loop specs is unprovable. Flag any
+  function spec whose loops lack specs.
 - **Are axioms and external specs sound?** For any `axiom`, `private axiom`, or
   sorry'd `private theorem` introduced by the agent (including local assumptions
   about external functions), verify all of the following:
@@ -521,6 +533,13 @@ can waste weeks of proof work building on a foundation that proves nothing.
 
 Only after statements are validated, launch agents to fill the `sorry` proofs.
 Each proof agent works on one file (for isolation) and targets specific sorry's.
+
+**🚨 The purpose of the review/fix loop is to CLOSE sorry's — not just to validate
+code quality.** Reviews that only check style, banned tactics, and axiom soundness
+but ignore remaining sorry's are incomplete. Every review cycle must: (1) count
+remaining sorry's, (2) assess which are closable, (3) dispatch fix agents to close
+them. The loop continues until all sorry's are either closed or genuinely blocked
+by missing infrastructure. See the review checklist below for details.
 
 **Detecting unprovable theorems and Rust bugs:**
 
@@ -627,6 +646,26 @@ doesn't build cleanly, the proof agent must fix the errors before reporting.
 
 **Review agent checklist for proofs:**
 
+**🚨 MOST IMPORTANT CHECK: Are there remaining sorry's?**
+
+The #1 job of the review/fix loop is to **close sorry's**. A review that validates code
+quality (no banned tactics, good style, etc.) but ignores remaining sorry's has failed
+its primary purpose. The review MUST:
+
+1. **Count remaining sorry's** — run `grep -n 'sorry' FILE` and list every sorry line
+2. **For each sorry, assess**: Is it closable with current infrastructure? Does it need
+   a missing lemma, a local axiom, or a spec from another file?
+3. **Flag every closable sorry as a mandatory fix** — the fix agent MUST attempt to
+   close it, not just document why it's hard
+4. **For genuinely blocked sorry's**: identify the specific blocker (missing stdlib spec,
+   missing hash bridge lemma, etc.) and report it as a concrete action item
+
+**Convergence = zero sorry's, or every remaining sorry is blocked by a specific,
+documented infrastructure gap** (missing Aeneas stdlib spec, missing external function
+model, etc.). "Well-documented sorry" is NOT convergence — if the sorry can be closed
+with existing infrastructure, it MUST be closed. A review that accepts closable sorry's
+as "converged" must be rejected.
+
 <!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Proof Style and Maintainability"
      and aeneas-tactics-quickref "Proof Style Rules". See skill-file-authoring for sync rules. -->
 
@@ -684,6 +723,14 @@ grep -n 'set_option.*in$' FILE    # → check if inside a proof (by block); OK b
 grep -n '^axiom' FILE             # → if agent added new axioms that were sorry before, REJECT
 # Agents must NEVER convert a sorry into an axiom. The whole point is to PROVE the theorem.
 # If the proof is too hard, leave it as sorry and report what was tried.
+
+# ⛔ Axiomatizing transparent functions (NEVER allowed)
+# Check every `axiom` in the file. If the function being axiomatized is TRANSPARENT
+# (i.e., its body is available in the generated Lean code), the axiom MUST be rejected.
+# Only external/opaque functions (FFI, stdlib without source, FunsExternal.lean) may be axioms.
+# Common violation: agent axiomatizes a function with "too many monadic steps" (~100-200 steps).
+# Fix: fold decomposition to split into phases, then step through each phase.
+# "Too many steps" is NEVER a valid reason to axiomatize — it's a reason to decompose.
 
 # Unfold of Aeneas stdlib definitions (Pitfall #10)
 grep -n 'unfold.*Aeneas\|unfold.*Std\.\|unfold.*core\.' FILE
@@ -947,7 +994,56 @@ and waits for approval.
 After each proof+review cycle completes:
 - Master reviews the final output (did it succeed? partial? fail?)
 - Verify the file builds (`lake build` once)
+- **Run the cleaning step** (see below) before redispatching
 - If partial, launch a follow-up agent with refined instructions
+
+### Cleaning Step (between review and redispatch)
+
+**Before redispatching proof agents**, the supervisor (or a dedicated general-purpose
+agent) must resolve infrastructure gaps that blocked the previous round. This is
+critical — redispatching agents into the same blockers wastes time.
+
+The cleaning step handles cross-file and infrastructure work that proof agents can't
+do (because they're file-isolated):
+
+1. **Revert illegitimate axioms** — Any `axiom` for a transparent function must be
+   converted back to `theorem ... := by sorry`. Transparent functions (those whose body
+   is in the generated Lean code) must NEVER be axiomatized, regardless of size.
+   "Too many monadic steps" → fold decomposition, not axiomatization.
+
+2. **Prove missing stdlib specs** — If agents reported missing `@[step]` specs for
+   Aeneas stdlib functions (e.g., `Array.index_mut` with `Range`, `core.result.Result.unwrap`),
+   prove them in the appropriate stdlib file or a shared project file, and add `@[step]`.
+
+3. **Prove missing bridge lemmas** — Cross-cutting lemmas needed by multiple files
+   (e.g., `sliceToSpecBytes ↔ arrayToSpecBytes`, hash output → spec function bridges)
+   should be proved in shared files (e.g., `Basic.lean`, `HashBridge.lean`).
+
+4. **Add missing imports** — If file A needs a spec from file B but doesn't import it,
+   add the import (after checking for circular dependencies).
+
+5. **Deduplicate across files** — Collect duplicate theorems, axioms, and helpers that
+   appear in multiple files (e.g., `copy_from_slice_spec` in both Encapsulate and
+   Decapsulate, `ict_default_spec` in multiple places, `Array_index_mut_Range` stubs).
+   Move each to a single shared file (e.g., `Basic.lean`, a new `StdlibSpecs.lean`, or
+   the appropriate Axioms file) with `@[step]`, then remove all local duplicates and
+   add imports. This prevents agents from re-introducing private axioms that already
+   exist elsewhere.
+
+6. **Strengthen axiom postconditions** — If external function axioms are too weak
+   (e.g., missing `wfSlice`/`wfArray` in postconditions), strengthen them in the
+   axiom file.
+
+6. **Create fold helpers for large functions** — If a function has 100+ monadic steps
+   and the previous agent couldn't handle it, create fold helpers (identify natural
+   phases, define helper functions, prove fold theorems) before redispatching.
+
+7. **Build & verify** — Run `lake build` and ensure 0 errors. The next round of agents
+   must start from a clean baseline.
+
+**The cleaning step is NOT optional.** Skipping it and redispatching agents into the
+same blockers is the #1 cause of wasted agent time. If no infrastructure gaps were
+found, the cleaning step is trivially empty — but it must always be explicitly checked.
 
 ## Common Agent Failure Modes
 
@@ -966,6 +1062,9 @@ After each proof+review cycle completes:
 | Edits other files | Agent modifies shared defs or specs it wasn't assigned | NEVER edit files other than assigned ones — introduce local axioms with TODO comments instead |
 | Agent crashes mid-edit | API loss, timeout, resource limit | Check for referenced-but-undefined identifiers; create missing defs in shared files |
 | `scalar_tac` loops in spec_gen | `maxRecDepth` in loop invariant proof | Mass-replace ALL `scalar_tac` → `agrind` in the proof body |
+| Review ignores remaining sorry's | Review only checks quality, not completeness | **Reviews MUST flag remaining sorry's and dispatch fix agents** — "well-documented sorry" is not convergence |
+| Axiomatizes transparent function | Function has "too many steps" (~100-200 monadic lets) | **NEVER axiomatize transparent functions** — use fold decomposition to split into phases, then step through each |
+| Skips cleaning step | Redispatches into same blockers | **Always run cleaning step** between review and redispatch — resolve infrastructure gaps first |
 
 ## Example: Full Agent Prompt
 
