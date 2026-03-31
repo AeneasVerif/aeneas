@@ -54,10 +54,23 @@ The supervisor must:
 ### Agents cannot kill other agents
 
 Agents (including the supervisor) **cannot cancel or kill other running agents.**
-There is no API for it. If you need a stuck or misdirected agent stopped, **ask
+There is no API for it — `stop_bash` does NOT stop background agents, it only
+stops shell sessions. If you need a stuck or misdirected agent stopped, **ask
 the user** to cancel it (e.g., via `/tasks` in the CLI). If you attempt to
 "cancel" an agent (which silently does nothing) and then dispatch a replacement,
 you get two agents editing the same file — causing conflicts and data loss.
+**DO NOT** dispatch a replacement for an agent that is running, as it will create
+conflicts.
+
+**⛔ Stuck agent protocol:**
+1. **Diagnose**: Check `read_agent` (wait: false) + `list_agents` to confirm it's stuck
+2. **ASK THE USER** to kill it — never try to kill it yourself
+3. **Wait for confirmation** — the user will say "done" or "killed"
+4. **Verify with `list_agents`** — confirm the agent shows as cancelled/completed
+5. **Only then** clean up `agent_files` and dispatch a replacement
+
+**NEVER skip step 4.** Even after the user says "killed", always call `list_agents`
+to verify the agent is no longer running before dispatching any replacement.
 
 ### File ownership tracking
 
@@ -77,8 +90,50 @@ sees a stale version of B.
 ### File assignment
 
 Each agent is assigned specific file(s). It may **ONLY modify those files**.
-It must NEVER edit other files — not shared definition files, not spec files,
-not other agents' files.
+It must NEVER edit other `.lean` files — not shared definition files, not spec
+files, not other agents' files — because **other agents are working in parallel
+on those files**. Editing a file that another agent is working on will corrupt
+their in-progress work, break their elaboration, or cause silent data loss when
+the `edit` tool applies string-matching patches to stale content.
+
+**This is the single most common cause of lost work in multi-agent runs.**
+
+**Alternative: Clone-based isolation (PREFERRED).** When separate git clones of the
+repository are available, the supervisor should assign **one agent per clone** instead
+of enforcing file-level isolation within a shared working tree. This is strictly safer —
+there is zero risk of file conflicts, import-dependency races, or accidental
+`git checkout` damage. The tradeoff is that the supervisor must merge diffs post-hoc.
+
+**The supervisor must ask the user** whether to use same-clone (file-level isolation)
+or separate clones. If the user chooses separate clones, the supervisor must also
+ask where the clones are located — do NOT search for available clones on your own,
+as clones in the filesystem may be in use for other purposes.
+
+**Always prefer clone-based isolation** when clones are available; fall back to
+file-level isolation only when a single working tree is the only option. See the
+`launching-proof-agents` skill file for the full clone workflow.
+
+### ⛔ NEVER use git checkout, git restore, or any file-reverting command
+
+**Agents must NEVER run `git checkout`, `git restore`, `git stash`, `git reset`,
+or any command that reverts, discards, or overwrites uncommitted file changes.**
+This is a **hard ban** — the same level as banned tactics.
+
+**Why:** In a multi-agent environment, other agents may have made uncommitted changes
+to files that this agent doesn't own. Running `git checkout -- .` or
+`git restore <file>` destroys their work silently. Even reverting "just your own
+file" is dangerous — `git checkout -- <file>` reverts to HEAD, which may lose
+changes from a DIFFERENT agent that touched the file before you.
+
+**If your file has unexpected content or build errors:**
+1. **Read the file** to understand the current state
+2. **Make targeted edits** (using the `edit` tool) to fix only the broken parts
+3. **NEVER bulk-revert** — if the file seems badly broken, report the problem
+   and let the supervisor handle it
+
+**If you need a clean version of a file you don't own:**
+- Read it (read-only) — that's fine
+- NEVER revert it to get a "known good" state
 
 **If an agent needs a different version of a spec or definition from another file:**
 
@@ -134,8 +189,44 @@ agents will conflict. For each pair of agents in the batch:
 > "CT.lean imports Defs.lean, MulBS.lean imports MatDefs.lean — no mutual
 > dependencies, safe to parallelize."
 
-**If you discover a conflict after agents are already running**, stop the
-conflicting agent immediately, wait for the other to finish, then relaunch.
+**If you discover a conflict after agents are already running**, DO NOT dispatch a
+conflicting agent. Wait for the existing agent to complete, then dispatch.
+
+### Infrastructure tasks MUST run between waves — never during
+
+Some tasks are inherently cross-cutting: they touch shared files (import fixes,
+shared definitions, diamond conflict resolution), modify files that multiple proof
+agents work on, or change imports that affect the build DAG. These are called
+**infrastructure tasks**.
+
+**⛔ NEVER dispatch an infrastructure agent while proof agents are running on
+files that the infrastructure agent would touch.** The infrastructure agent will
+either: (a) overwrite the proof agent's uncommitted changes, or (b) break the
+proof agent's build by changing imports/definitions mid-elaboration.
+
+**The correct pattern is wave-based:**
+
+```
+Wave N proof agents run (each on their own file)
+  ↓ all complete
+Supervisor reads results + runs cleaning/infrastructure step
+  ↓ infrastructure changes applied (imports, shared defs, diamond fixes, etc.)
+  ↓ lake build passes
+Wave N+1 proof agents run
+```
+
+**Infrastructure tasks include:**
+- Adding/removing imports in a file
+- Resolving diamond import conflicts (touches multiple files)
+- Moving definitions between files (reorganization or deduplication)
+- Proving shared specs or theorems (if proof agents import it)
+- Changing axiom files that proof agents import
+
+**If an infrastructure need is discovered mid-wave:** Document it, wait for all
+proof agents in the current wave to complete, then do the infrastructure work
+before dispatching the next wave. Do NOT try to "squeeze in" infrastructure
+changes between agent completions — even if one agent finished, others may still
+be running on files that import the shared file you'd modify.
 
 ### Mid-flight modification check
 
