@@ -9,8 +9,9 @@ description: Multi-agent proof orchestration, review gates, and task decompositi
 
 When using AI agents (e.g., GitHub Copilot background agents) to work on Lean proofs
 in an Aeneas project, the agent needs specific instructions to be effective. Agents
-run in isolated contexts and don't automatically see project-level configuration or
-skills files. This document explains how to launch them properly.
+run in their own context window but **do have access to MCP tools and skill files**.
+Instruct them to invoke relevant skills (e.g., `aeneas-lean-core`, `lean-lsp-mcp`)
+as their first action — this is more reliable than copying instructions into prompts.
 
 **For general agent management rules** (resource budgets, file isolation, spawning
 rules, task granularity, etc.), see the `agent-fleet-management` skill file. This
@@ -20,16 +21,23 @@ file only covers proof-specific workflow and instructions.
 
 Every proof agent prompt should include:
 
-### 1. Pointer to skills files (read first)
+### 1. Skills invocation (FIRST action)
+
+Agents have access to MCP tools and skill files. Instead of copying instructions
+into prompts, instruct agents to **invoke skills directly** as their first action:
 
 ```
-## Aeneas Skills — READ FIRST
+## Skills — Invoke FIRST
 
-Before doing anything, read these skill files for essential proof guidance:
-- the `aeneas-lean-core` skill file (translation model, spec patterns, pitfalls)
-- the `aeneas-tactics-quickref` skill file (which tactic for which goal)
-- the `aeneas-crypto-verification` skill file (crypto-specific strategies)
-- the `lean-lsp-mcp` skill file (mandatory tooling for proof checking)
+As your FIRST action, invoke these skills (use the `skill` tool):
+1. `aeneas-lean-core` — translation model, spec patterns, pitfalls
+2. `aeneas-tactics-quickref` — which tactic for which goal
+3. `lean-lsp-mcp` — mandatory tooling for proof checking
+
+Then invoke `aeneas-crypto-verification` if working on crypto-specific proofs.
+
+These skills contain ALL the rules and patterns you need. Read them carefully
+before writing any Lean code.
 ```
 
 ### 2. Mandatory lean-lsp-mcp usage
@@ -70,10 +78,30 @@ script → copy it into your proof → fix sub-goals → collapse back to `step*
 
 ### 5. Constraints
 
+The file-modification rules depend on the isolation model (see "Agent Working Tree"
+section below). Include the appropriate variant in the agent prompt:
+
+**For separate-clone agents (each agent has its own clone):**
 ```
 ## Key Rules
 - NEVER unfold Aeneas stdlib definitions — search for existing lemmas
-- NEVER use `omega` — use `agrind`, `grind`, or `scalar_tac` instead
+- NEVER use `omega` — use `agrind` (preferred), `grind`, or `scalar_tac`
+- When stuck or unsure what tactic to use: **always try `agrind` first** (then `grind`). Do NOT use `simp_all` — it is very slow in big contexts and drops hypotheses.
+- NEVER spawn sub-agents that work on Lean files (see below)
+- Your PRIMARY task is the assigned file(s), but you MAY modify other files
+  in your clone if needed (e.g., shared definitions, axiom files, bridge lemmas).
+  The supervisor will handle merging across clones.
+- ⛔ NEVER run `git checkout`, `git restore`, `git stash`, `git reset`,
+  or any command that reverts/discards/overwrites file changes.
+- DO NOT COMMIT
+```
+
+**For same-clone agents (multiple agents share one working tree):**
+```
+## Key Rules
+- NEVER unfold Aeneas stdlib definitions — search for existing lemmas
+- NEVER use `omega` — use `agrind` (preferred), `grind`, or `scalar_tac`
+- When stuck or unsure what tactic to use: **always try `agrind` first** (then `grind`). Do NOT use `simp_all` — it is very slow in big contexts and drops hypotheses.
 - NEVER spawn sub-agents that work on Lean files (see below)
 - ⛔ ONLY modify YOUR assigned file(s) — NEVER edit ANY other .lean file.
   Other agents are working in parallel on other files. If you touch their
@@ -89,7 +117,11 @@ script → copy it into your proof → fix sub-goals → collapse back to `step*
 
 ### 6. File modification restriction
 
-**⛔ Agents must ONLY modify the file(s) they have been explicitly assigned.**
+**This section applies only to same-clone (Option B) isolation.** When agents work
+in separate clones, they may freely modify any file in their clone — the supervisor
+handles merging.
+
+**Same-clone rule: ⛔ Agents must ONLY modify the file(s) they have been explicitly assigned.**
 They must NEVER edit other files — not shared definition files (Defs.lean,
 MatDefs.lean), not external specs (ExternalSpecs.lean), not other Properties files.
 
@@ -135,15 +167,64 @@ These rules are defined in the `agent-fleet-management` skill file. Key points
 for proof agents:
 
 - **⛔ NEVER spawn sub-agents that run Lean processes** (lean-lsp-mcp, lake build)
-- **⛔ ONLY modify your assigned file(s)** — use local axioms with TODO comments
-  for specs from other files (see section 6 above)
+- **Same-clone only: ⛔ ONLY modify your assigned file(s)** — use local axioms with
+  TODO comments for specs from other files (see section 6 above). In separate-clone
+  mode, you may modify any file in your clone.
 - **⛔ NEVER use git checkout/restore/reset** — see `agent-fleet-management` for why
 - Agents may use lightweight `explore` agents for codebase searches
+
+## Agent Working Tree: Same Clone vs. Separate Clones
+
+Before dispatching any fleet of agents, the supervisor must ask the user which
+isolation model to use. **Always prefer separate clones when available** — they
+eliminate entire classes of conflicts.
+
+### Option A: Separate clones (clone-level isolation) — PREFERRED
+
+Each agent works in its own git clone of the repository. This eliminates all file
+conflict risks:
+- Each agent has its own working tree — no import-dependency issues
+- Agents can freely read any file in their clone without concern
+- No `agent_files` tracking needed (one agent per clone = no conflicts)
+- Each clone can have its own lean-lsp-mcp / LSP session — no MCP contention
+
+**The supervisor must ask the user where the clones are.** Do NOT search for available
+clones on your own — the user may have clones used for other purposes. Example prompt:
+
+> "Should I dispatch agents in the current clone (with file-level isolation), or use
+> separate git clones? If separate clones, where are they? (e.g., `../external/ProjectClone1`,
+> `../external/ProjectClone2`, etc.)"
+
+**Workflow with separate clones:**
+
+1. **User provides clone paths** (e.g., `../external/ProjectClone1`, `../external/ProjectClone2`, `../external/ProjectClone3`)
+2. **Verify all clones are at the same commit** as the main repo (`git -C <clone> rev-parse HEAD`)
+3. **Dispatch one agent per clone** (max agents = number of available clones)
+4. **Agent works entirely within its clone** — builds, edits, lean-lsp-mcp all use clone paths
+5. **Agent must NOT commit**
+6. **After all agents complete:** collect diffs from each clone (`git -C <clone> diff`), apply patches to main repo, resolve conflicts, build, verify
+
+**lean-lsp-mcp paths:** Instruct agents to use their clone's paths for all MCP tools
+(e.g., `file_path="/path/to/ProjectClone2/src/lean/..."`, not the main repo path).
+
+**Spare clones:** If the user provides more clones than needed for a batch, the extras
+serve as spares for follow-up batches or replacements if an agent fails.
+
+### Option B: Same clone (file-level isolation) — FALLBACK
+
+All agents work in the same git working tree. Each agent is assigned specific file(s)
+and may ONLY modify those. This requires careful file-ownership tracking (see
+`agent-fleet-management` for the `agent_files` SQL table and dispatch checklist).
+Import-dependency conflicts remain a risk. Use this only when separate clones are
+not available.
 
 ## File Isolation and Parallelism (Lean-Specific)
 
 <!-- ⚠️ SYNC RULE: general file ownership, SQL tracking, and "agents cannot cancel"
      rules are in agent-fleet-management and global-rules -->
+
+**This section applies only when using same-clone (Option B) isolation.** With
+separate clones, file isolation is automatic and these checks are unnecessary.
 
 See the `agent-fleet-management` skill file for the general rules (file ownership
 tracking via SQL `agent_files` table, dispatch checklist, "agents cannot cancel"
@@ -212,17 +293,17 @@ give the entire task to a single agent in one shot. Instead:
    instructions, or pivot to a different approach.
 
 6. **Reinforce lean-lsp-mcp usage in every agent prompt**: Agents tend to fall back to
-   `lake build` loops even when told not to. **Skill files alone are not enough** —
-   agents may not read them. The fix is putting the constraint directly in the prompt
-   with consequences. Every agent prompt MUST include the `⛔ HARD REQUIREMENT`
-   block (see "Example: Full Agent Prompt" below) as the FIRST section. Key elements:
+   `lake build` loops even when told not to. **Instruct agents to invoke the
+   `lean-lsp-mcp` skill as their first action** — this is more reliable than copying
+   instructions into the prompt, since agents have access to skill files and MCP tools.
+   Additionally, every agent prompt MUST include the `⛔ HARD REQUIREMENT` block
+   (see "Example: Full Agent Prompt" below) as the FIRST section. Key elements:
    - "Your FIRST action must be using lean-lsp-mcp tools (lean_goal, etc.)"
    - "If you use lake build for iterative proof development, your work will be REJECTED"
    
-   **Why agents ignore the rule**: They don't read skill files unless the content is
-   in their prompt. They see `lake build` in training data and default to it. The only
-   reliable fix is making the lean-lsp-mcp instruction the first thing they read, with
-   explicit rejection consequences.
+   **Why agents ignore the rule**: They see `lake build` in training data and default
+   to it. The combination of (a) skill invocation and (b) an explicit rejection
+   consequence in the prompt is the most reliable fix.
 
 ## Two-Phase Workflow: Statements First, Then Proofs
 
@@ -319,8 +400,11 @@ Launch agents to write theorem statements with `sorry` proofs. Each agent:
 ```
 Write the theorem statement (with sorry proof) for `function_name.spec`.
 
-READ FIRST: the `aeneas-lean-core` and `aeneas-crypto-verification` skill files
-for postcondition quality rules and the multi-level verification pipeline.
+## Skills — Invoke FIRST
+As your FIRST action, invoke these skills (use the `skill` tool):
+1. `aeneas-lean-core` — postcondition quality rules, spec patterns
+2. `aeneas-crypto-verification` — multi-level verification pipeline
+3. `lean-lsp-mcp` — mandatory tooling for type-checking statements
 
 Read:
 - The auto-generated code in Funs.lean (line N)
@@ -923,12 +1007,15 @@ These require reading the proof, not just grepping:
 **Skill file freshness:**
 
 - **Every agent invocation** (statement agents, proof agents, review agents) **must
-  include the "read skill files first" instruction** in its prompt — both the
-  **Aeneas skill files** (in the aeneas repo under `documentation/skills/`) and any
-  **project-local skill files** (e.g., `.github/instructions/`, `.claude/skills/`).
-  Since each agent invocation is a fresh context, this ensures the agent always works
-  from the latest version of all skill files — including any mid-run updates the
-  master made (with user approval).
+  include the "invoke skills first" instruction** in its prompt. Since agents have
+  access to skills via the `skill` tool, the preferred approach is to instruct them
+  to invoke skills directly (e.g., `aeneas-lean-core`, `lean-lsp-mcp`). This ensures
+  agents always work from the latest version of all skill files — including any
+  mid-run updates the supervisor made (with user approval).
+- As a fallback, the prompt may also list explicit file paths to skill files
+  (e.g., `documentation/skills/aeneas-lean-core/SKILL.md`). This is less preferred
+  because skill invocation is more reliable and doesn't require the supervisor to
+  know exact file paths.
 - If the reviewer finds **many guideline violations** (e.g., 3+ issues that the
   skill files clearly address), the prompt for the follow-up fix agent should include:
   **"Re-read the skill files before fixing these issues."**
@@ -1104,24 +1191,66 @@ where agents try to "fix" unexpected file content by reverting to HEAD.
 | Infrastructure agent conflicts with proof agents | Supervisor dispatches cross-file agent (e.g., diamond fix, import changes) while proof agents are running on those files | **Infrastructure tasks MUST run between waves** — never while proof agents are running on affected files |
 | Supervisor skips `agent_files` tracking | Doesn't INSERT/query file ownership before dispatch, causing same-file conflicts | **Always maintain `agent_files` table** — INSERT before dispatch, SELECT before every new agent, DELETE on completion |
 
-## Example: Full Agent Prompt
+## Example: Full Agent Prompt (separate-clone mode)
+
+```
+Fix the inner loop sorry in `/path/to/clone/MyModule.lean`.
+
+## Step 1: Invoke Skills
+As your FIRST action, invoke these skills (use the `skill` tool):
+1. `aeneas-lean-core` — translation model, spec patterns, pitfalls
+2. `aeneas-tactics-quickref` — which tactic for which goal
+3. `lean-lsp-mcp` — mandatory tooling for proof checking
+
+## Step 2: ⛔ HARD REQUIREMENT — lean-lsp-mcp tools ONLY
+After reading the skills, do ALL proof checking via lean-lsp-mcp tools
+(`lean_goal`, `lean_diagnostic_messages`, `lean_multi_attempt`, etc.).
+Edit the file on disk, then use `lean_goal` and `lean_diagnostic_messages`
+to inspect the result.
+`lake build` is ONLY allowed as a SINGLE final verification after all proofs are done.
+If you use `lake build` for iterative proof development, your work will be REJECTED.
+
+## The Sorry
+`my_function_loop0_loop0_spec` at line ~421.
+
+## Proof Strategy
+The loop is a recursive function — use `unfold` + `step` with case split.
+Use `step*?` to generate the body proof script, then fix sub-goals.
+
+## Available Specs
+- `helper_spec`, `mod_add_spec`, etc.
+
+## Key Rules
+- NEVER unfold stdlib
+- NEVER use `omega` — use `agrind` (preferred), `grind`, or `scalar_tac`
+- When stuck: **always try `agrind` first** (then `grind`). Do NOT use `simp_all` — it is very slow in big contexts and drops hypotheses.
+- Your PRIMARY task is `MyModule.lean`, but you MAY modify other files in
+  your clone if needed (e.g., shared defs, axiom files, bridge lemmas).
+  The supervisor will handle merging across clones.
+- ⛔ NEVER run `git checkout`, `git restore`, `git stash`, `git reset`, or
+  any command that reverts/discards file changes.
+- NEVER commit or push without explicit user approval
+- After completing this sorry, STOP and return results — do NOT proceed to other work
+```
+
+## Example: Full Agent Prompt (same-clone mode)
 
 ```
 Fix the inner loop sorry in `/path/to/MyModule.lean`.
 
-## ⛔ HARD REQUIREMENT: lean-lsp-mcp tools ONLY — READ THIS FIRST
-Your FIRST action must be using the lean-lsp-mcp tools (`lean_goal`,
-`lean_diagnostic_messages`, `lean_multi_attempt`, etc.) to inspect the file.
-Do ALL proof checking via these tools. Edit the file on disk, then use
-`lean_goal` and `lean_diagnostic_messages` to inspect the result.
+## Step 1: Invoke Skills
+As your FIRST action, invoke these skills (use the `skill` tool):
+1. `aeneas-lean-core` — translation model, spec patterns, pitfalls
+2. `aeneas-tactics-quickref` — which tactic for which goal
+3. `lean-lsp-mcp` — mandatory tooling for proof checking
+
+## Step 2: ⛔ HARD REQUIREMENT — lean-lsp-mcp tools ONLY
+After reading the skills, do ALL proof checking via lean-lsp-mcp tools
+(`lean_goal`, `lean_diagnostic_messages`, `lean_multi_attempt`, etc.).
+Edit the file on disk, then use `lean_goal` and `lean_diagnostic_messages`
+to inspect the result.
 `lake build` is ONLY allowed as a SINGLE final verification after all proofs are done.
 If you use `lake build` for iterative proof development, your work will be REJECTED.
-
-## Aeneas Skills — READ FIRST
-Read these files: [list paths]
-
-### MANDATORY: Use lean-lsp-mcp tools
-[lean-lsp-mcp instructions — see the `lean-lsp-mcp` skill file]
 
 ## The Sorry
 `my_function_loop0_loop0_spec` at line ~421.

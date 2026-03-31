@@ -98,6 +98,21 @@ the `edit` tool applies string-matching patches to stale content.
 
 **This is the single most common cause of lost work in multi-agent runs.**
 
+**Alternative: Clone-based isolation (PREFERRED).** When separate git clones of the
+repository are available, the supervisor should assign **one agent per clone** instead
+of enforcing file-level isolation within a shared working tree. This is strictly safer —
+there is zero risk of file conflicts, import-dependency races, or accidental
+`git checkout` damage. The tradeoff is that the supervisor must merge diffs post-hoc.
+
+**The supervisor must ask the user** whether to use same-clone (file-level isolation)
+or separate clones. If the user chooses separate clones, the supervisor must also
+ask where the clones are located — do NOT search for available clones on your own,
+as clones in the filesystem may be in use for other purposes.
+
+**Always prefer clone-based isolation** when clones are available; fall back to
+file-level isolation only when a single working tree is the only option. See the
+`launching-proof-agents` skill file for the full clone workflow.
+
 ### ⛔ NEVER use git checkout, git restore, or any file-reverting command
 
 **Agents must NEVER run `git checkout`, `git restore`, `git stash`, `git reset`,
