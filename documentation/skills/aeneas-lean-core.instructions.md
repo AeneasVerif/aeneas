@@ -367,7 +367,8 @@ fun_name a b ⦃ result =>
    - NO → `unfold fn; step`
 
 2. Is the function simple (few monadic steps, say ≤ 5)?
-   - YES → `unfold fn; step*` may complete it directly
+   - YES → `unfold fn; step*` may complete it directly. If sub-goals remain,
+     **immediately** scaffold one `· agrind` per sub-goal (see scaffolding workflow below).
    - NO → Use `step*?` to generate an expanded proof script, then work from there
 
 3. Is the function large/complex (10+ monadic steps)?
@@ -376,8 +377,8 @@ fun_name a b ⦃ result =>
      `@[local step]` specs. Then the parent proof only `step`s through the
      phase calls instead of 50+ monadic operations at once.
    - If decomposition is not feasible (no natural phase boundaries), use
-     `step*` to go as far as possible, then close each remaining
-     subgoal individually using focused `· tactic` (cdot) blocks.
+     `step*` to go as far as possible, then **immediately scaffold one `· agrind`
+     per remaining sub-goal** — this is mandatory before doing anything else.
    - **⚠️ Before writing cdot blocks: check for missing solver attributes.**
      If 3+ remaining goals need the same constant unfolded (`simp [CONST]; solver`),
      register it with `@[grind =, agrind =]` FIRST, then re-run
@@ -394,10 +395,14 @@ fun_name a b ⦃ result =>
 ### The step*? → fix → collapse workflow:
 1. `step*?` — generates expanded proof script (one `step` per monadic call)
 2. Copy the generated script into your proof
-3. Work through it: fix failing sub-goals, add lemmas, adjust tactics
-4. Once the full proof works, try collapsing sections back to `step*`
-5. If `step*` works on the whole body, use that (shorter is better)
-6. If not, keep the expanded script for the parts that need manual intervention
+3. **Immediately scaffold `· agrind` for every sub-goal** that remains open —
+   this is the first thing you do after pasting. Do NOT attempt to close any
+   goal before all are scaffolded.
+4. Work through each `· agrind` one at a time: if `agrind` didn't close a goal,
+   inspect with `lean_goal`, pick the right tactic, and replace
+5. Once the full proof works, try collapsing sections back to `step*`
+6. If `step*` works on the whole body, use that (shorter is better)
+7. If not, keep the expanded script for the parts that need manual intervention
 
 ## Tactic Quick Reference
 
@@ -418,14 +423,20 @@ fun_name a b ⦃ result =>
 | `simp_bool_prop` | Simplify bool/prop | `simp_bool_prop` |
 | `ring_eq_nf` | Cancel common terms in equalities | `ring_eq_nf`, `ring_eq_nf at h` |
 | `fcongr` | Congruence (safe whnf) | `fcongr`, `fcongr N` |
-| `split_conjs` | Split ∧ recursively | `split_conjs`, `split_conjs at h` |
+| `split_conjs` | Split ∧ recursively, then scaffold `· agrind` per sub-goal | `split_conjs`, `split_conjs at h` |
 
 ### Lean builtins (commonly used)
+
+> **🔑 DEFAULT TACTIC: When you don't know what to do, use `agrind`.**
+> It is always the first tactic to try. If `agrind` fails, try `grind`. **Do NOT
+> reach for `simp_all`** — it is very slow in large contexts and drops hypotheses.
+
 | Tactic | Use for |
 |---|---|
-| `agrind` | General automation (prefer over `grind` — faster) |
+| `agrind` | **Default tactic — always try first.** Fast, handles most goals |
 | `grind` | General automation (slower but more powerful — try if `agrind` fails) |
 | `simp [*]` | Simplification with all hypotheses |
+| `simp_all` | **⚠️ AVOID** — very slow in big contexts, silently drops hypotheses. Prefer `agrind` |
 | `tauto` | Propositional tautologies |
 | `decide` | Concrete finite computations |
 
@@ -444,8 +455,11 @@ container. They will either fail silently or produce fragile proofs that break o
 | `nlinarith` | Same, plus explosion risk on nonlinear goals | `agrind` > `grind` > `scalar_tac +nonLin` or `simp_scalar` |
 
 **Preference order for replacements: `agrind` first, then `grind`, then `scalar_tac`.**
-`agrind` is fast and handles most goals. `grind` is slower but more powerful. `scalar_tac`
-is specialized for arithmetic bounds and should be used when the goal is purely arithmetic.
+`agrind` is the default tactic for Aeneas proofs — always try it first. It is fast and
+handles most goals. `grind` is slower but more powerful. `scalar_tac` is specialized for
+arithmetic bounds and should be used when the goal is purely arithmetic. **Do NOT use
+`simp_all` as a general-purpose tactic** — it is very slow in the large contexts typical
+of Aeneas proofs and silently drops hypotheses. Use `agrind` instead.
 
 **This applies everywhere:** in `step` theorem proofs, in helper lemmas, in `have` steps,
 in `termination_by`/`decreasing_by` blocks, in `calc` chains — everywhere, including pure
@@ -547,7 +561,11 @@ theorem my_loop.spec (x : MyState) (h : x.inv) :
   · intro s hs
     unfold my_loop_body
     step*
-    split_conjs <;> (try scalar_tac) <;> agrind
+    · agrind -- sub-goal 1
+    · agrind -- sub-goal 2
+    split_conjs
+    · agrind -- conjunct 1
+    · agrind -- conjunct 2
   · exact h
 ```
 
@@ -1083,32 +1101,44 @@ step*
 This keeps the proof incremental — you can put `sorry` on any `· ` branch, inspect
 the goal with `lean_goal`, and work on one sub-goal at a time.
 
-### Scaffolding workflow: `· sorry` first, then fill in
+### Scaffolding workflow: `· agrind` first, then fix failures
 
 <!-- ⚠️ SYNC RULE: also in aeneas-tactics-quickref "Scaffolding workflow" -->
 
-When `step*` (or any tactic) produces multiple remaining goals, **immediately
-scaffold one `· sorry` per goal** before attempting to close any of them:
+> **🔑 MANDATORY: After every `step*`, immediately scaffold one `· agrind` per
+> remaining sub-goal.** This is the very first thing you do — before inspecting
+> goals, before trying tactics, before anything else. Never leave `step*` without
+> its cdot scaffolding. **The same rule applies to `split_conjs`** and any other
+> tactic that produces multiple sub-goals (e.g., `split`, `cases`).
 
 ```lean
+-- After step*:
 step*
-· sorry -- goal 1
-· sorry -- goal 2
-· sorry -- goal 3
-· sorry -- goal 4
+· agrind -- goal 1
+· agrind -- goal 2
+· agrind -- goal 3
+· agrind -- goal 4
+
+-- After split_conjs:
+split_conjs
+· agrind -- conjunct 1
+· agrind -- conjunct 2
+· agrind -- conjunct 3
 ```
 
 This is the mandatory workflow — never skip scaffolding and jump to `all_goals`
 or `<;>` to "handle them all at once". Critical benefits:
 
-- **Each goal becomes independently inspectable** — use `lean_goal` on any
-  `sorry` line to see exactly that goal's context and target.
-- **Edits are incremental** — replacing one `sorry` with a real tactic only
+- **`agrind` closes most sub-goals immediately** — many goals produced by `step*`
+  and `split_conjs` are arithmetic bounds or simple equalities that `agrind` handles.
+- **Each goal becomes independently inspectable** — for goals where `agrind` fails,
+  use `lean_goal` on that line to see exactly the context and target.
+- **Edits are incremental** — replacing one `· agrind` with a different tactic only
   re-elaborates that single goal, not the others.
 - **No `all_goals` temptation** — the structure prevents bulk tactics.
 
-After scaffolding, go through each `· sorry` one at a time: inspect the goal
-with `lean_goal`, pick the right tactic, and replace the `sorry`. This is the
+After scaffolding, check which `· agrind` goals still have errors. For those,
+inspect with `lean_goal`, pick the right tactic, and replace. This is the
 correct workflow even for 20+ goals — never try to close them in bulk. If
 there are too many goals (15+), consider fold decomposition first (see the
 `aeneas-crypto-verification` skill file).
@@ -1211,7 +1241,7 @@ calc (x + 1) * (x + 1)
 
 1. **Termination error after unfold + step**: Function starts with match/if → use `split` first
 2. **Nat subtraction truncated**: `3 - 5 = 0` in Nat → use Int, add preconditions, or rewrite as addition (`z + y = x` instead of `z = x - y`)
-3. **`simp_all` removes hypotheses**: Use `simp [*]` or `simp [h1, h2]` instead
+3. **`simp_all` is slow and removes hypotheses**: `simp_all` is very slow in big contexts (common in Aeneas proofs) and silently drops hypotheses. **Always prefer `agrind`** as your default tactic. If you need simplification, use `simp [*]` or `simp [h1, h2]` — they are faster and preserve hypotheses
 4. **`agrind` fails**: Try `simp [*]; agrind`
 5. **`grind` explodes**: Use `agrind` instead (controlled context)
 6. **Progress applies wrong spec**: Use `step with specific_theorem`

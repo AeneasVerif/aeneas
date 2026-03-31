@@ -715,13 +715,13 @@ grep -n '\bomega\b' FILE          # → replace with agrind > grind > scalar_tac
 grep -n '\blinarith\b' FILE       # → replace with agrind > grind > scalar_tac
 grep -n '\bnlinarith\b' FILE      # → replace with agrind > grind > scalar_tac +nonLin
 
-# Never increase maxRecDepth (Pitfall #11)
+# Never increase maxRecDepth (item 11: "NEVER increase maxRecDepth")
 grep -n 'maxRecDepth' FILE        # → diagnose simp loop, never raise limit
 
-# maxHeartbeats too high (Pitfall #13)
+# maxHeartbeats too high (item 13: "Keep maxHeartbeats reasonable")
 grep -n 'maxHeartbeats' FILE      # → verify value < 8_000_000; if higher, proof needs restructuring
 
-# set_option ... in inside proof script (Pitfall #13) — breaks incrementality
+# set_option ... in inside proof script (item 13) — breaks incrementality
 grep -n 'set_option.*in$' FILE    # → check if inside a proof (by block); OK before theorem declaration
 
 # ⛔ Converting sorry → axiom (NEVER allowed)
@@ -744,7 +744,7 @@ grep -n '^axiom' FILE             # → if agent added new axioms that were sorr
 # Fix: fold decomposition to split into phases, then step through each phase.
 # "Too many steps" is NEVER a valid reason to axiomatize — it's a reason to decompose.
 
-# Unfold of Aeneas stdlib definitions (Pitfall #10)
+# Unfold of Aeneas stdlib definitions (item 10: "NEVER unfold Aeneas stdlib")
 grep -n 'unfold.*Aeneas\|unfold.*Std\.\|unfold.*core\.' FILE
 # → search for existing lemma instead of unfolding
 
@@ -754,7 +754,7 @@ grep -n 'step\*.*<;>' FILE       # → use focused goal blocks (· ) instead
 # all_goals (Rule: "NEVER use all_goals — banned everywhere")
 grep -n 'all_goals' FILE          # → ALWAYS replace with focused · blocks. No exceptions.
 
-# Inline (by ...) in exact/apply/refine (Rule: "Extract inline by blocks"; Pitfall #15)
+# Inline (by ...) in exact/apply/refine (Rule: "Extract inline by blocks"; item 15: "proof reactive")
 grep -n 'exact.*(by ' FILE        # → check: 3+ blocks or any multi-line block → extract
 grep -n 'apply.*(by ' FILE        # (same check)
 grep -n 'refine.*(by ' FILE       # (same check)
@@ -785,7 +785,7 @@ These cannot be reliably grepped — the reviewer must read the proof:
   that `a[i]` auto-discharges bounds without any `(by ...)` at all. If a standalone
   helper lemma is used, that's also acceptable.
 
-- **Auto-param tactics in recursive theorems?** (Pitfall #16)
+- **Auto-param tactics in recursive theorems?** (item 16: "auto-param tactic loops")
   In recursive `spec_gen` theorems, all parameters must be explicit — no `:= by ...`
   defaults. Look for `:= by` in theorem parameter lists (not in proof bodies).
 
@@ -858,16 +858,18 @@ These require reading the proof, not just grepping:
 - **Complex sub-proofs extracted as auxiliary lemmas?** (Rule: "Extract auxiliary lemmas")
   No 15-line arithmetic blocks inlined in the middle of `step*`.
 
-- **Recurring index bounds extracted as standalone helpers?** (Pitfall #22)
+- **Recurring index bounds extracted as standalone helpers?** (item 22: "recurring index bounds")
   Bounds like `k * N + q < NBAR * N` should not be proved inline repeatedly.
 
 - **No early case splits on parameters?** (Rule: "Avoid early case splits")
   `cases p` at proof top duplicates everything. Case splits should be local or
   handled via `attribute [local agrind]`.
 
-- **`agrind` preferred over `grind`?** (Pitfall #5)
+- **`agrind` preferred over `grind`?** (item 5: "`grind` explodes")
   `grind` should only appear when `agrind` fails. In loop proofs (`spec_gen`),
-  prefer `agrind` over `scalar_tac` throughout (Pitfall #21).
+  prefer `agrind` over `scalar_tac` throughout (item 21: "prefer `agrind` in spec_gen").
+  **`simp_all` should NOT be used as a general-purpose tactic** — it is very slow
+  in big contexts and drops hypotheses. Flag any `simp_all` that could be `agrind`.
 
 - **Shifts simplified?** (Rule: "Simplify shifts early")
   `>>>` should be rewritten as `/ 2^n`, `<<<` as `* 2^n`.
@@ -885,7 +887,7 @@ These require reading the proof, not just grepping:
   `have hFoo : CONST.val = N := by simp` — the underlying definition likely needs
   attributes. (Rule: "Register Rust global/const definitions with solver attributes")
 
-- **Repeated inline `(by ...)` proof blocks?** (Pitfall #22)
+- **Repeated inline `(by ...)` proof blocks?** (item 22: "recurring index bounds")
   If the same `(by tactic_sequence)` appears 3+ times — in theorem signatures
   (`getElem` bounds), `have` statements, or `exact`/`apply` arguments — it should
   be extracted as a standalone lemma with solver attributes (`@[agrind =]`). With
@@ -899,21 +901,21 @@ These require reading the proof, not just grepping:
 
 ### Performance checks
 
-- **Is the proof fast enough?** (Pitfall #14)
+- **Is the proof fast enough?** (item 14: "Keep proof wall-clock time < 60s")
   Use the `measure` tactic wrapper (see the `aeneas-tactics-quickref` skill file,
   "Profiling proof time") to check that the proof completes in **< 60 seconds
   wall-clock**. **Do NOT use `trace.profiler` for this** — it only measures tactic
   execution and misses kernel type-checking time, which can dominate. If slower than
   60s, send back for optimization.
 
-- **Is the proof reactive for interactive development?** (Pitfall #15)
+- **Is the proof reactive for interactive development?** (item 15: "Extract inline by blocks")
   Adding a tactic at the end should take < 0.5s. If not, look for inline `(by ...)`
   blocks (see grep above) and suggest extracting them into `have` statements.
 
-- **Are `maxHeartbeats` values reasonable?** (Pitfall #13)
+- **Are `maxHeartbeats` values reasonable?** (item 13: "Keep maxHeartbeats reasonable")
   If any `set_option maxHeartbeats` exceeds 8M, the proof needs restructuring.
 
-- **Are sorry'd proofs fast?** (Pitfall #24)
+- **Are sorry'd proofs fast?** (item 24: "Sorry'd proofs must be fast")
   A sorry'd proof should use plain `sorry`, not `step* <;> (first | ... | sorry)` or
   `cases p <;> step* <;> sorry`. Expensive sorry'd proofs waste build time for zero
   verification value.
@@ -1087,6 +1089,7 @@ where agents try to "fix" unexpected file content by reverting to HEAD.
 | Uses `omega` | `omega` can't reason about scalars, `U32.max`, list lengths, etc. | NEVER use `omega` — use `agrind` > `grind` > `scalar_tac` |
 | Uses `nlinarith` | Same issues as `omega` — can't reason about scalars | NEVER use `nlinarith` — use `agrind` > `grind` > `scalar_tac +nonLin` / `simp_scalar` |
 | Uses `linarith` | Same issues as `omega` — can't reason about scalars | NEVER use `linarith` — use `agrind` > `grind` > `scalar_tac` |
+| Uses `simp_all` as default | `simp_all` is very slow in big contexts and drops hypotheses | Use `agrind` as default tactic — it is faster and safer. If simplification is needed, use `simp [*]` or `simp [h1, h2]` |
 | Edits wrong file/section | Ambiguous instructions | Be very specific about what to change |
 | Increases `maxRecDepth` | Trying to work around recursion depth errors | NEVER increase `maxRecDepth` — diagnose the root cause (bad proof structure or simp loop). Report to user if it's a tactic bug |
 | Tactic silently fails | Tactic doesn't do what it should (e.g., `step` can't find a lemma that exists) | Report to user — may be a tactic bug worth fixing upstream |
@@ -1133,6 +1136,7 @@ Use `step*?` to generate the body proof script, then fix sub-goals.
 ## Key Rules
 - NEVER unfold stdlib
 - NEVER use `omega` — use `agrind` (preferred), `grind`, or `scalar_tac`
+- When stuck: **always try `agrind` first** (then `grind`). Do NOT use `simp_all` — it is very slow in big contexts and drops hypotheses.
 - ⛔ ONLY modify `/path/to/MyModule.lean` — NEVER edit ANY other .lean file.
   Other agents are working in parallel on other files. Editing them will
   destroy their work. Use local `private axiom` + TODO for cross-file needs.
