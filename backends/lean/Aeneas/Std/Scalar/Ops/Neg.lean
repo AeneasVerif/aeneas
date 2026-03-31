@@ -6,7 +6,7 @@ import Mathlib.Data.BitVec
 
 namespace Aeneas.Std
 
-open Result Error Arith
+open Result Error Arith ScalarElab WP
 
 /-!
 # Negation: Definitions
@@ -48,5 +48,53 @@ prefix:75  "-."   => HNeg.hNeg
 attribute [match_pattern] HNeg.hNeg
 
 instance {ty} : HNeg (IScalar ty) (Result (IScalar ty)) where hNeg x := IScalar.neg x
+
+/-!
+# Negation: Theorems
+-/
+
+theorem IScalar.neg_equiv {ty} (x : IScalar ty) :
+  match -. x with
+  | ok z =>
+    IScalar.inBounds ty (- x.val) ∧
+    z.val = - x.val ∧
+    z.bv = - x.bv
+  | fail _ => ¬ (IScalar.inBounds ty (- x.val))
+  | _ => ⊥ := by
+  have : (-. x : Result (IScalar ty)) = neg x := by rfl
+  rw [this]
+  simp [neg]
+  have h := tryMk_eq ty (- x.val)
+  simp [inBounds] at h
+  split at h <;> simp_all
+  apply BitVec.eq_of_toInt_eq
+  rw [BitVec.toInt_neg]
+  have hbmod := bmod_pow_numBits_eq_of_lt ty (- x.val) (by omega) (by omega)
+  simp only [val] at hbmod h ⊢
+  rw [hbmod, h.1]
+
+/- Generic theorem - shouldn't be used much -/
+theorem IScalar.neg_bv_spec {ty} {x : IScalar ty}
+  (hmin : IScalar.min ty ≤ - x.val)
+  (hmax : - x.val ≤ IScalar.max ty) :
+  (-. x) ⦃ z => (↑z : Int) = - x.val ∧ z.bv = - x.bv ⦄ := by
+  have h := @neg_equiv ty x
+  split at h <;> simp_all [min, max]
+  omega
+
+/- Generic theorem - shouldn't be used much -/
+@[step]
+theorem IScalar.neg_spec {ty} {x : IScalar ty}
+  (hmin : IScalar.min ty ≤ - x.val)
+  (hmax : - x.val ≤ IScalar.max ty) :
+  (-. x) ⦃ z => (↑z : Int) = - x.val ⦄ := by
+  have h := @neg_equiv ty x
+  split at h <;> simp_all [min, max]
+  omega
+
+iscalar @[step] theorem «%S».neg_spec {x : «%S»}
+  (hmin : «%S».min ≤ - x.val) (hmax : - x.val ≤ «%S».max) :
+  (-. x) ⦃ z => (↑z : Int) = - x.val ⦄ :=
+  IScalar.neg_spec (by scalar_tac) (by scalar_tac)
 
 end Aeneas.Std
