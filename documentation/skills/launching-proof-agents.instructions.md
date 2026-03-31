@@ -799,6 +799,14 @@ These cannot be reliably grepped — the reviewer must read the proof:
     witnesses.
   - Does the postcondition use conversion *functions* (e.g., `toPoly`) rather than
     *relations* (e.g., `isPoly`)?
+  - **For top-level/public API functions:** Is the postcondition a single-call equality
+    with the spec function (`output_converted = Spec.F(input_converted)`)? If the
+    postcondition existentially quantifies over internal algorithm variables (e.g.,
+    intermediate matrices, hash outputs, sampled values, temporary buffers) instead of
+    stating a direct result, it is a **decomposed postcondition** and must be rejected.
+    The decomposition belongs in the proof, not the theorem statement. A caller of the
+    function should be able to use the postcondition without knowing how the algorithm
+    works internally.
 
 <!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Interface functions must map to the spec" -->
 - **Do interface functions map to spec functions?** (Rule: "Interface functions must

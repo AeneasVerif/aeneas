@@ -239,6 +239,53 @@ high-level (spec) types, use a conversion *function* (e.g.,
 and compose — they can be used on both sides of equations, fed into `simp`, and
 rewritten. Relations require existential witnesses and make proofs heavier.
 
+**Top-level specs must be single-call equalities — never decomposed.** For public Rust
+API functions (the top-level entry points that callers invoke), the postcondition must
+be a single equality (or conjunction of equalities) with **one call** to the
+corresponding spec function — not a step-by-step decomposition of the algorithm's
+internal computation.
+
+The decomposition of a complex algorithm into intermediate steps (matrix operations,
+hash outputs, sampling, etc.) is appropriate for the *proof strategy* — it is how you
+actually demonstrate that the equality holds. But the *theorem statement* must state
+only the final result. Internal algorithm variables should not appear in the public
+postcondition.
+
+```lean
+-- ⛔ BAD: decomposes the algorithm's internals — exposes intermediate variables
+--   that are meaningful only inside the algorithm implementation.
+theorem top_level_fn.spec (input output_buf : Slice U8) :
+    top_level_fn params input output_buf
+    ⦃ (status, result) =>
+      ∃ (s e b v c : Slice U16) (hs : ...) (he : ...) ...,
+        toMatrix s = SampleMatrix(...) ∧
+        toMatrix b = toMatrix(s) * GenA(...) + toMatrix(e) ∧
+        toMatrix v = ... ∧
+        result.val = Pack(b) ++ Pack(c) ++ salt ⦄ := by ...
+-- Problem: a caller of this function must understand the algorithm's internals
+-- to use this postcondition. The existentially quantified intermediate variables
+-- (s, e, b, v, c, ...) are opaque witnesses — the caller gets no usable equalities.
+
+-- ✅ GOOD: single call to the spec function via bridge conversions
+theorem top_level_fn.spec (input output_buf : Slice U8) :
+    top_level_fn params input output_buf
+    ⦃ (status, result) =>
+      ∃ (hinp : input.length = INPUT_BYTES)
+        (hres : result.length = OUTPUT_BYTES),
+      toSpecOutput result hres = Spec.Algorithm (toSpecInput input hinp) ⦄ := by ...
+-- The caller only sees: output = Spec.Algorithm(input). Clean, composable, usable.
+```
+
+**The test:** Can a caller of this function use the postcondition without knowing how
+the algorithm works internally? If the postcondition quantifies over variables that
+are internal to the algorithm (intermediate matrices, hash outputs, sampled values,
+temporary buffers), the answer is no — and the postcondition must be rewritten.
+
+**Bridge conversion functions** (e.g., `toSpecOutput`, `toSpecInput`) convert between
+Aeneas low-level types (`Slice U8`, `Slice U16`, `Array U8 N`) and spec-level types
+(bitstrings, typed records, algebraic structures). Define them in a shared file so
+they can be reused across all top-level specs.
+
 ### Recognizing a weak-spec bottleneck
 
 After `step*` processes a function, you may be stuck with goals that mention
@@ -264,13 +311,12 @@ to the spec, the `@[step]` theorem for the intermediate call is the bottleneck.
 
 ### Interface functions must map to the spec
 
-Functions at the interface of verified code — both the ones that callers use (typically
-the public Rust functions: `keygen`, `encaps`, `decaps` for a KEM) and the ones the
-verified code relies on (FFI/external functions) — must straightforwardly map to
-well-identified functions in the specification. Their postconditions should make this
-mapping explicit: the output of the Rust function equals (or is equivalent to) the
-output of the corresponding spec function applied to the same inputs (modulo type
-conversions).
+Functions at the interface of verified code — both the public Rust API functions that
+callers invoke and the external/FFI functions that the verified code relies on — must
+straightforwardly map to well-identified functions in the specification. Their
+postconditions should make this mapping explicit: the output of the Rust function
+equals (or is equivalent to) the output of the corresponding spec function applied to
+the same inputs (modulo type conversions via bridge functions).
 
 ### Axiom organization
 
