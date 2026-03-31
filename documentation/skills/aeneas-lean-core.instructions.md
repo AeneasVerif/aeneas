@@ -316,7 +316,7 @@ callers invoke and the external/FFI functions that the verified code relies on â
 straightforwardly map to well-identified functions in the specification. Their
 postconditions should make this mapping explicit: the output of the Rust function
 equals (or is equivalent to) the output of the corresponding spec function applied to
-the same inputs (modulo type conversions via bridge functions).
+the same inputs (modulo type conversions).
 
 ### Axiom organization
 
