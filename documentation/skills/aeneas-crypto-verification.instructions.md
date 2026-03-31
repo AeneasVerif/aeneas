@@ -76,11 +76,59 @@ vacuity test.
 
 ## Function Decomposition
 
-### When to use:
+### Phase analysis (mandatory — do BEFORE attempting any proof)
 
-- Function body has >10 monadic steps
-- Contains repeated sub-patterns (e.g., Montgomery reduction appears multiple times)
-- Proof is timing out or unmanageable
+Phase analysis and fold decomposition are **MANDATORY** before writing any proof
+for a function body with >10 monadic steps. Do NOT attempt a direct proof
+and then decompose after it fails — analyze and decompose first.
+
+**Analyze the body** and identify distinct **algorithmic phases**. An algorithmic
+phase is a contiguous sequence of monadic steps that implements a recognizable
+high-level operation with a concise specification. Examples:
+
+- **Montgomery reduction**: multiply, mask, multiply-add, shift →
+  spec: `a1 ≡ a · R⁻¹ (mod Q)` with bound `a1 < 2Q`
+- **Modular addition/subtraction**: add/sub with conditional correction →
+  spec: `c ≡ a + b (mod Q)` with bound `c < Q`
+- **Constant-time range reduction**: wrapping subtract, arithmetic shift,
+  mask-and-add (possibly repeated) → spec: `result = input % Q` with `result < Q`
+- **Repeated array load + type cast**: when the same array-index-then-cast
+  pattern appears multiple times, factor it into a single fold helper
+
+### Signals that a phase needs its own fold helper
+
+A phase MUST be extracted into a fold helper when it contains any of:
+- Bitwise operations (AND, OR, XOR, shifts) — these need `bv_tac` or `bvify`
+- Non-linear arithmetic (multiply-then-shift, multiply-then-mask)
+- Wrapping arithmetic (`wrapping_add`, `wrapping_sub`, `wrapping_mul`)
+- Signed↔unsigned casts (`IScalar.hcast`, `UScalar.hcast`)
+- Any combination that produces bounds requiring `native_decide` or exhaustive
+  case analysis
+
+When none of these signals are present (e.g., a single array index), the phase can stay
+inline, though it is recommended to introduce an auxiliary function for any phase with > 5
+lines of code.
+
+### Decomposition workflow
+
+1. **Identify phases**: Read the function body, draw phase boundaries
+2. **Search for existing lemmas**: Before writing any helper spec, search:
+   - `Properties/Ntt/MontReduction.lean` for `mont_reduce_spec`
+   - `Properties/Ntt/ModArith.lean` for modular arithmetic helpers
+   - `Properties/Basic.lean` for array/polynomial conversion lemmas
+   - Aeneas stdlib for `wrapping_*_val_eq` lemmas
+   If an existing lemma covers the phase, use it — do not reprove the same
+   mathematical property from scratch.
+3. **Create fold helpers**: For each complex phase, extract:
+   - A `private def` copying the monadic steps
+   - A fold theorem proving `(do <inline>; f result) = (do let r ← helper; f r)`
+   - A `@[local step]` spec theorem with focused pre/postconditions
+4. **Factor bounds into helper lemmas**: When the same bounds derivation
+   (e.g., "given `a ≤ B`, derive `a1 ≤ B'`") appears in multiple goals,
+   extract it as a standalone `private theorem`. Keep the main proof clean.
+5. **Assemble**: In the main proof, `simp only [fold_phase1, fold_phase2, ...]`
+   then `step*`. Remaining goals should be manageable and each closeable in
+   1–3 lines with focused `·` blocks.
 
 ### Template:
 
