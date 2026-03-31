@@ -75,7 +75,7 @@ What does the goal look like?
 | Tactic | Purpose | Syntax | Key Attributes |
 |---|---|---|---|
 | `step` | Apply function spec | `step`, `step as ⟨x,h⟩`, `step with thm` | `@[step]` |
-| `step*` | Repeat step + case split | `step*`, `step* n` (n steps) | Use for final compact proof |
+| `step*` | Repeat step + case split | `step*`, `step* n` (n steps) | Scaffold `· sorry` per goal after |
 | `step*?` | Generate proof script | `step*?` | Start here when developing proofs |
 | `scalar_tac` | Integer arithmetic/bounds | `scalar_tac`, `scalar_tac +nonLin` | `@[scalar_tac_simps]` |
 | `simp_scalar` | Simplify scalar exprs | `simp_scalar`, `simp_scalar [lemmas]` | `@[simp_scalar_simps]` |
@@ -170,6 +170,30 @@ editing goal 3 does not re-elaborate goals 1 or 2.
 **After `step*`, always use focused `·` blocks** to close each remaining goal
 individually. This is mandatory regardless of the number of goals — even 2 goals
 must use `·` blocks, not `all_goals` or `<;>`.
+
+### Scaffolding workflow: `· sorry` first, then fill in
+
+When `step*` (or any tactic) produces multiple remaining goals, **immediately
+scaffold one `· sorry` per goal** before attempting to close any of them:
+
+```lean
+step*
+· sorry -- goal 1
+· sorry -- goal 2
+· sorry -- goal 3
+· sorry -- goal 4
+```
+
+This has critical benefits:
+- **Each goal becomes independently inspectable** — use `lean_goal` on any
+  `sorry` line to see exactly that goal's context and target.
+- **Edits are incremental** — replacing one `sorry` with a real tactic only
+  re-elaborates that single goal, not the others.
+- **No risk of `all_goals` temptation** — the structure is already in place.
+
+Only after scaffolding, go through each `· sorry` one at a time: inspect the
+goal with `lean_goal`, pick the right tactic, and replace the `sorry`. This is
+the correct workflow even for 20+ goals — never try to close them in bulk.
 
 **⚠️ After `step*`, BEFORE writing any cdot blocks: check for missing solver
 attributes.** Scan the remaining goals. If 3+ goals need the same constant

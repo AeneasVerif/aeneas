@@ -1083,6 +1083,36 @@ step*
 This keeps the proof incremental — you can put `sorry` on any `· ` branch, inspect
 the goal with `lean_goal`, and work on one sub-goal at a time.
 
+### Scaffolding workflow: `· sorry` first, then fill in
+
+<!-- ⚠️ SYNC RULE: also in aeneas-tactics-quickref "Scaffolding workflow" -->
+
+When `step*` (or any tactic) produces multiple remaining goals, **immediately
+scaffold one `· sorry` per goal** before attempting to close any of them:
+
+```lean
+step*
+· sorry -- goal 1
+· sorry -- goal 2
+· sorry -- goal 3
+· sorry -- goal 4
+```
+
+This is the mandatory workflow — never skip scaffolding and jump to `all_goals`
+or `<;>` to "handle them all at once". Critical benefits:
+
+- **Each goal becomes independently inspectable** — use `lean_goal` on any
+  `sorry` line to see exactly that goal's context and target.
+- **Edits are incremental** — replacing one `sorry` with a real tactic only
+  re-elaborates that single goal, not the others.
+- **No `all_goals` temptation** — the structure prevents bulk tactics.
+
+After scaffolding, go through each `· sorry` one at a time: inspect the goal
+with `lean_goal`, pick the right tactic, and replace the `sorry`. This is the
+correct workflow even for 20+ goals — never try to close them in bulk. If
+there are too many goals (15+), consider fold decomposition first (see the
+`aeneas-crypto-verification` skill file).
+
 ### Avoid early case splits on parameters in step proofs
 In cryptographic code, functions are often parameterized by a parameter set (e.g.,
 `p : Spec.Crypto.parameterSet`) from which lengths, dimensions, and bounds are derived.
