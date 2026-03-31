@@ -474,4 +474,30 @@ theorem key_expand_from_private_seed_loop0.spec
 
 ---
 
+### Congruence on function equalities
+
+When the goal is `f(impl_args) = f(spec_args)`, use `fcongr 1`
+(NOT `congr 1`) to split into per-argument subgoals:
+
+```lean
+-- Goal: f(a_impl, b_impl) = f(a_spec, b_spec)
+fcongr 1
+· -- a_impl = a_spec
+  simp [...]
+· -- b_impl ≍ b_spec  (HEq when dependent type indices differ)
+  ...
+```
+
+**Why `fcongr`?** It wraps `congrN` with reducible transparency.
+`congr` uses default transparency and may unfold definitions deeply,
+causing heartbeat timeouts. `fcongr` produces identical subgoals
+without the overhead.
+
+**HEq subgoals:** When arguments are `Vector α n` and `Vector α m`
+with `n ≠ m` syntactically but propositionally equal, `fcongr`
+produces `HEq` (`≍`) goals. Close by showing the underlying data
+is equal and using proof irrelevance.
+
+---
+
 For tactic selection and banned tactics, see the `aeneas-tactics-quickref` skill file.

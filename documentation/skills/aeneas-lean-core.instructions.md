@@ -504,6 +504,7 @@ container. They will either fail silently or produce fragile proofs that break o
 | `omega` | Cannot reason about `.val`, `.bv`, scalar bounds, list/slice lengths | `agrind` > `grind` > `scalar_tac` |
 | `linarith` | Same: no knowledge of scalar types, no `.val` reasoning | `agrind` > `grind` > `scalar_tac` |
 | `nlinarith` | Same, plus explosion risk on nonlinear goals | `agrind` > `grind` > `scalar_tac +nonLin` or `simp_scalar` |
+| `congr N` | Default transparency unfolds definitions deeply → heartbeat timeout | `fcongr N` (reducible transparency, same subgoals, no deep unfolding) |
 
 **Preference order for replacements: `agrind` first, then `grind`, then `scalar_tac`.**
 `agrind` is the default tactic for Aeneas proofs — always try it first. It is fast and
@@ -1353,12 +1354,12 @@ calc (x + 1) * (x + 1)
     private theorem loop.spec_gen ...
         (hbound : bound ≤ N) : ...
     ```
-17. **Dependent proof terms break `rw`/`simp only`.** When a term has a proof argument that depends on the value being rewritten (e.g., `partial_sum arr bound (hbound : bound ≤ N)`), `simp`/`rw` tries to update both the value AND the proof simultaneously and may loop. **Fix:** Use `congr 1` to peel off the proof argument (handled by proof irrelevance), then rewrite the value part separately.
+17. **Dependent proof terms break `rw`/`simp only`.** When a term has a proof argument that depends on the value being rewritten (e.g., `partial_sum arr bound (hbound : bound ≤ N)`), `simp`/`rw` tries to update both the value AND the proof simultaneously and may loop. **Fix:** Use `fcongr 1` to peel off the proof argument (handled by proof irrelevance), then rewrite the value part separately. (Never use `congr 1` — it uses default transparency and can cause heartbeat timeouts; see item 26.)
     ```lean
     -- BAD: loops because hbound depends on bound
     simp only [show bound = new_bound from h] at goal_with_partial_sum
-    -- GOOD: congr 1 separates value from proof
-    congr 1  -- one goal for the value, one trivial goal for the proof
+    -- GOOD: fcongr 1 separates value from proof
+    fcongr 1  -- one goal for the value, one trivial goal for the proof
     ```
 18. **`step*` doesn't recognize structure field projections.** When a function is accessed via structure field projection (e.g., `(Params p).shake` instead of `specShake`), `step` can't match it to an `@[step]` lemma. **Fix:** Add a simp lemma `@[simp, step_simps]` that unfolds the projection, then `simp only [step_simps]` before `step*`.
     ```lean
@@ -1432,6 +1433,19 @@ calc (x + 1) * (x + 1)
 
     -- GOOD: simp_all must fully close the goal, otherwise first tries alternatives
     · first | (simp_all; done) | scalar_tac | bv_tac 16
+    ```
+
+26. **`congr` causes heartbeat timeout on function equalities.** When the goal is `f(a₁, a₂) = f(b₁, b₂)`, `congr 1` uses default transparency and may try to unfold `f` deeply, exceeding heartbeat limits. **Fix:** Always use `fcongr 1` instead — it wraps `congrN` with reducible transparency, producing the same subgoals (`a₁ = b₁`, `a₂ ≍ b₂`) without unfolding. Note: when arguments have dependent types with different indices (e.g., `Vector α n` vs `Vector α m`), subgoals may use `HEq` (`≍`). Show the underlying data is equal, then close with proof irrelevance.
+    ```lean
+    -- BAD: congr unfolds f deeply, heartbeat timeout
+    congr 1
+
+    -- GOOD: fcongr uses reducible transparency, same subgoals
+    fcongr 1
+    · -- a₁ = b₁
+      simp [...]
+    · -- a₂ ≍ b₂  (HEq when dependent type indices differ)
+      ...
     ```
 
 ## Attribute Management
