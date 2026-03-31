@@ -58,6 +58,11 @@ What does the goal look like?
 ├─ Concrete computation → decide / native_decide
 ├─ Congruence → fcongr
 │
+├─ Writing `simp [CONST]; solver` in a cdot block after step*?
+│  → STOP. Register CONST with @[grind =, agrind =] first.
+│    Re-run step* — the goal may disappear entirely.
+│    (See "Register Rust global/const scalar definitions" in Proof Style Rules)
+│
 └─ General / stuck
    ├─ Try → agrind
    └─ If fails → simp [*]; agrind
@@ -165,6 +170,14 @@ editing goal 3 does not re-elaborate goals 1 or 2.
 **After `step*`, always use focused `·` blocks** to close each remaining goal
 individually. This is mandatory regardless of the number of goals — even 2 goals
 must use `·` blocks, not `all_goals` or `<;>`.
+
+**⚠️ After `step*`, BEFORE writing any cdot blocks: check for missing solver
+attributes.** Scan the remaining goals. If 3+ goals need the same constant
+unfolded (e.g., you would write `simp [CONST]; solver` in each cdot block),
+**STOP** — register the constant with `@[grind =, agrind =]`
+FIRST, then re-run `step*`. The goals may disappear entirely. Only write
+manual cdot blocks for goals that survive after registration. This one step
+eliminates the most common source of verbose, fragile cdot blocks.
 
 If `step*` produces **more than 15 remaining goals**, this is a signal that the
 function body likely needs fold decomposition — see "Function Decomposition" in

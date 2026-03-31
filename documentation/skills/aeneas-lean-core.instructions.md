@@ -378,6 +378,10 @@ fun_name a b ⦃ result =>
    - If decomposition is not feasible (no natural phase boundaries), use
      `step*` to go as far as possible, then close each remaining
      subgoal individually using focused `· tactic` (cdot) blocks.
+   - **⚠️ Before writing cdot blocks: check for missing solver attributes.**
+     If 3+ remaining goals need the same constant unfolded (`simp [CONST]; solver`),
+     register it with `@[grind =, agrind =]` FIRST, then re-run
+     `step*` — the goals may vanish. See the `aeneas-tactics-quickref` skill file.
    - **NEVER use `<;>` after `step*` or any tactic that creates many subgoals.**
      `<;>` forces full re-elaboration on every edit. Use cdot blocks instead.
    - **NEVER use `all_goals`** — it has the same re-elaboration problem.
