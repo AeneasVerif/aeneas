@@ -407,4 +407,71 @@ private lemma mul_DIM_add_mod (i j : ℕ) (hj : j < DIM) :
 
 ---
 
+## Pattern 7: Recursive Loop with `unfold` + `step` (CBD sampling)
+
+**Use when:** A loop is generated as a recursive function (e.g., `foo_loop0`) that
+iterates over a range, accumulating results element-by-element.
+
+**Structure:**
+1. `unfold` the recursive function
+2. `by_cases` on whether the iterator is exhausted
+3. `step as ⟨..., h_...⟩` for each monadic bind in the loop body
+4. `step*` handles the recursive call automatically (applies the theorem being proved)
+5. `termination_by` + `decreasing_by scalar_decr_tac` for well-foundedness
+
+**Example:** `key_expand_from_private_seed_loop0` — CBD-samples a secret vector.
+
+```lean
+@[step]
+theorem key_expand_from_private_seed_loop0.spec
+    (iter : core.ops.range.Range Std.U8)
+    (pk_mlkem_key : mlkem.key.Key)
+    ...
+    (h_done : ∀ j, j < iter.start.val → keySecretPoly pk_mlkem_key j = spec j) :
+    key_expand_from_private_seed_loop0 iter pk_mlkem_key ...
+    ⦃ (pk_mlkem_key' : mlkem.key.Key) ... =>
+      (∀ j, j < iter.end.val → keySecretPoly pk_mlkem_key' j = spec j) ∧
+      structural_preservation pk_mlkem_key' pk_mlkem_key ⦄ := by
+  unfold key_expand_from_private_seed_loop0
+  by_cases hlt : iter.start.val < iter.end.val
+  · -- Some case: iteration body
+    rw [core.iter.range.IteratorRange.next_U8_def]; simp [hlt]
+    step as ⟨next_start, h_ns⟩
+    step as ⟨buf1, h_buf1⟩
+    step as ⟨chs2, h_chs2⟩
+    ...                         -- one step per monadic bind
+    step as ⟨a1, h_a1⟩         -- CBD sampling result
+    -- Recursive call: step* applies this theorem automatically
+    step*
+    · -- Invariant update: for j < next_start, keySecretPoly matches spec
+      intro j hj
+      simp only [h_ns] at hj
+      by_cases hjj : j = iter.start.val
+      · -- New element: prove from current iteration's a1
+        subst hjj
+        -- Chain: s_mut backward → index set → a1 → h_a1 → spec equality
+        have h_back := h_smut.2.2.2 (idx_res.2 a1) |>.2.2.2.2.2.1 (↑iter.start) (by omega)
+        rw [h_back]; simp only [h_idx, h_i4]; simp_lists; rw [h_a1]
+        ...  -- byte-level bridge
+      · -- Old element: delegate to h_done
+        have hj_lt : j < iter.start.val := by omega
+        simp only [*]; simp_lists [*]
+  · -- None case: iterator exhausted
+    rw [core.iter.range.IteratorRange.next_U8_def]; simp [hlt]
+    exact fun j hj => h_done j (by agrind)
+  termination_by iter.end.val - iter.start.val
+  decreasing_by scalar_decr_tac
+```
+
+**Key points:**
+- ❌ **Never use `partial_fixpoint_induct`** — it requires an explicit motive,
+  a sorry'd `admissible` proof, and manual IH threading.
+- ✅ `step*` auto-resolves preconditions of the recursive call from context.
+- ✅ `termination_by iter.end.val - iter.start.val` with `scalar_decr_tac`
+  handles well-foundedness.
+- The **old-element case** (`j < iter.start`) uses `simp only [*]; simp_lists [*]`
+  to chain backward-function preservation + index-set non-interference + `h_done`.
+
+---
+
 For tactic selection and banned tactics, see the `aeneas-tactics-quickref` skill file.

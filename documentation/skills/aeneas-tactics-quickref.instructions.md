@@ -25,7 +25,8 @@ What does the goal look like?
 │  → apply loop.spec_decr_nat (Nat measure) or loop.spec (general)
 │
 ├─ Recursive _loop function
-│  → unfold + split + step (invariant = pre + post), termination_by + scalar_decr_tac
+│  → unfold + by_cases + step (invariant = pre + post), termination_by + scalar_decr_tac
+│  → NEVER partial_fixpoint_induct (see aeneas-lean-core skill file)
 │
 ├─ Arithmetic
 │  ├─ General → agrind (preferred), then grind, then scalar_tac (NEVER omega/linarith/nlinarith)
@@ -121,6 +122,7 @@ What does the goal look like?
 | `nlinarith` | No scalar knowledge, explosion risk | `agrind` > `grind` > `scalar_tac +nonLin` / `simp_scalar` |
 | `step* <;> ...` | Replays full `step*` on every edit | `step*` then `· tactic` per goal |
 | `all_goals tactic` | Same re-elaboration problem | `· tactic` per goal |
+| `partial_fixpoint_induct` | Needs explicit motive + sorry'd `admissible` proof | `unfold` + `by_cases` + `step` + `termination_by` (see the `aeneas-lean-core` skill file) |
 
 **The first three tactics are NEVER acceptable in Aeneas proofs** — not in `step`
 theorems, not in helper lemmas, not in `have` steps, not in `decreasing_by` (even

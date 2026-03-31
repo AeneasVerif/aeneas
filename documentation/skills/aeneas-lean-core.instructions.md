@@ -358,6 +358,57 @@ fun_name a b ⦃ result =>
   result.1.val < 100 ∧ result.2.length = a.length ⦄
 ```
 
+### Recursive loop proofs: `unfold` + `step`, never `partial_fixpoint_induct`
+
+Aeneas-generated loops can produce recursive functions (e.g., `foo_loop0`). To prove
+specs for these, use `unfold` + `by_cases` + `step` with `termination_by`:
+
+```lean
+@[step]
+theorem foo_loop0.spec (iter : core.ops.range.Range Std.U8)
+    ...
+    (h_done : ∀ j, j < iter.start.val → invariant j) :
+    foo_loop0 iter ... ⦃ ... ⦄ := by
+  unfold foo_loop0
+  by_cases hlt : iter.start.val < iter.end.val
+  · -- Some case: iteration body
+    rw [core.iter.range.IteratorRange.next_U8_def]; simp [hlt]
+    step as ⟨next_start, h_ns⟩
+    step as ⟨..., h_...⟩   -- one per monadic bind in the body
+    step*                    -- handles recursive call automatically
+    · -- invariant update goal (new element + old element)
+      intro j hj
+      simp only [h_ns] at hj
+      by_cases hjj : j = iter.start.val
+      · -- New element: current iteration
+        subst hjj; ...
+      · -- Old element: from h_done
+        have hj_lt : j < iter.start.val := by omega
+        simp only [*]; simp_lists [*]
+  · -- None case: iterator exhausted
+    rw [core.iter.range.IteratorRange.next_U8_def]; simp [hlt]
+    exact fun j hj => h_done j (by agrind)
+  termination_by iter.end.val - iter.start.val
+  decreasing_by scalar_decr_tac
+```
+
+**Why not `partial_fixpoint_induct`?** It requires:
+- An explicit motive repeating the entire postcondition
+- An `admissible` proof that is typically sorry'd (giving only partial correctness)
+- Manual IH threading with extra `exact` goals for every precondition
+
+The `unfold + step` pattern avoids all of this because:
+- `step` on the recursive call automatically applies the `@[step]`-tagged theorem
+  being proved (self-reference works because Lean can see the recursive definition)
+- `termination_by` + `decreasing_by scalar_decr_tac` handles well-foundedness
+- Preconditions of the recursive call (like simulation witnesses) are auto-resolved
+  from context by `step*`
+
+**Invariant update pattern** (inside the Some case, after `step*`): The recursive call
+goal asks the invariant for `[0, next_start)`. Split with `by_cases hjj : j = iter.start.val`:
+- **New element** (`j = iter.start`): prove from the current iteration's computation
+- **Old element** (`j < iter.start`): delegate to `h_done` via `simp only [*]; simp_lists [*]`
+
 ## Proof Development Workflow
 
 ### Decision tree for starting a proof:
