@@ -112,10 +112,11 @@ the original structure.
 
 All translated functions return `Result T` to model potential runtime failures:
 
-| Constructor | Meaning |
-|---|---|
-| `ok v` | Success with value `v` |
-| `fail` | Error (panic, overflow, out-of-bounds, division by zero, etc.) |
+| Constructor | Meaning                                                        |
+|-------------|----------------------------------------------------------------|
+| `ok v`      | Success with value `v`                                         |
+| `fail e`    | Error (panic, overflow, out-of-bounds, division by zero, etc.) |
+| `div`       | Divergence (non-termination)                                   |
 
 Monadic combinators:
 - **`do` notation** — monadic bind for sequencing computations
@@ -197,40 +198,40 @@ The `body` returns `ControlFlow.cont x'` to continue or `ControlFlow.done y` to 
 
 When Aeneas translates a Rust crate, it produces several Lean files:
 
-| File | Contents |
-|---|---|
-| **Types.lean** | Rust type definitions (structs, enums) as Lean inductive types |
-| **Funs.lean** | Rust function bodies as Lean definitions (imports TypesExternal.lean) |
-| **TypesExternal_Template.lean** | Template for hand-written models of opaque/external types |
-| **FunsExternal_Template.lean** | Template for hand-written models of external functions (e.g., from Rust's standard library) |
-| **TypesExternal.lean** | User-maintained file with type models (never overwritten by Aeneas) |
-| **FunsExternal.lean** | User-maintained file with function models (never overwritten by Aeneas) |
+| File                               | Contents                                                                                    |
+|------------------------------------|---------------------------------------------------------------------------------------------|
+| **Types.lean**                     | Rust type definitions (structs, enums) as Lean inductive types (imports TypesExternal.lean) |
+| **Funs.lean**                      | Rust function bodies as Lean definitions (imports Types.lean and FunsExternal.lean)         |
+| **TypesExternal_Template.lean**    | Template for hand-written models of opaque/external types                                   |
+| **FunsExternal_Template.lean**     | Template for hand-written models of external functions (e.g., from Rust's standard library) |
+| **TypesExternal.lean**             | User-maintained file with type models (never overwritten by Aeneas)                         |
+| **FunsExternal.lean**              | User-maintained file with function models (never overwritten by Aeneas)                     |
 
 > **Tip:** Use the `-split-files` option to have Aeneas generate one file per
-> declaration group. This is helpful for large crates.
+> declaration group as detailed in the above table. This is helpful for large crates.
 
 ### 3.2 Scalar Types
 
 Aeneas maps Rust integer types to bounded scalar types with checked arithmetic:
 
-| Rust | Lean |
-|---|---|
-| `i8` / `i16` / `i32` / `i64` / `i128` | `I8` / `I16` / `I32` / `I64` / `I128` |
-| `u8` / `u16` / `u32` / `u64` / `u128` | `U8` / `U16` / `U32` / `U64` / `U128` |
-| `isize` / `usize` | `Isize` / `Usize` |
+| Rust                                    | Lean                                   |
+|-----------------------------------------|----------------------------------------|
+| `i8` / `i16` / `i32` / `i64` / `i128`   | `I8` / `I16` / `I32` / `I64` / `I128`  |
+| `u8` / `u16` / `u32` / `u64` / `u128`   | `U8` / `U16` / `U32` / `U64` / `U128`  |
+| `isize` / `usize`                       | `Isize` / `Usize`                      |
 
 Scalar literals use the `#type` suffix notation: `1#i32`, `0#u64`, etc.
 
-Each scalar value `s` has a `.val` field that IsExtracted the underlying natural number
+Each scalar value `s` has a `.val` field that extracts the underlying natural number
 (or integer), and arithmetic operations return `Result` to account for overflow.
 
 ### 3.3 Collections and Containers
 
-| Rust | Lean |
-|---|---|
-| `[T; N]` (fixed-size array) | `Array T n` |
-| `Vec<T>` | `Vec T` |
-| `Box<T>` | `T` (indirection is erased) |
+| Rust                         | Lean                          |
+|------------------------------|-------------------------------|
+| `[T; N]` (fixed-size array)  | `Array T n`                   |
+| `Vec<T>`                     | `Vec T`                       |
+| `Box<T>`                     | `T` (indirection is erased)   |
 
 ### 3.4 Conventions
 
@@ -263,15 +264,14 @@ theorem my_function_spec (args...) (preconditions...) :
 
 The `⦃ ... ⦄` notation expresses weakest preconditions over `Result` values:
 
-- **For `Result T`:** `f ⦃ x => P x ⦄` means "if `f` succeeds with value `x`,
-  then `P x` holds."
+- **For `Result T`:** `f ⦃ x => P x ⦄` means "`f` succeeds with value `x`
+  and `P x` holds."
 - **For `Result (T × (T → ...))`:** You can name both the returned value and
   the backward continuation:
   `f ⦃ x back => P x back ⦄`
 
-This notation lets you state properties about successful executions without
-separately reasoning about the error case — if the function fails, the
-postcondition is vacuously true.
+This notation lets you state that the function succeeds and its result satisfies
+the postcondition.
 
 ### 4.2 Registering Specs with `@[step]`
 
@@ -284,14 +284,14 @@ that calls `foo` can use that spec automatically via `step`.
 
 The main tactics used in Aeneas proofs:
 
-| Tactic | Purpose |
-|---|---|
-| `unfold f` | Expand the definition of `f` |
-| `step` | Apply a registered `@[step]` spec for the next monadic call |
-| `step*` | Repeatedly apply `step` |
-| `scalar_tac` | Discharge scalar arithmetic goals (bounds, overflow) |
-| `simp` / `simp_all` | Simplification |
-| `agrind` | Arithmetic + congruence closure |
+| Tactic               | Purpose                                                     |
+|----------------------|-------------------------------------------------------------|
+| `unfold f`           | Expand the definition of `f`                                |
+| `step`               | Apply a registered `@[step]` spec for the next monadic call |
+| `step*`              | Repeatedly apply `step`                                     |
+| `scalar_tac`         | Discharge scalar arithmetic goals (bounds, overflow)        |
+| `simp` / `simp_all`  | Simplification                                              |
+| `agrind`             | Arithmetic + congruence closure                             |
 
 ### 4.4 Simple Example: Addition
 
@@ -425,19 +425,19 @@ described in Section 4.
 
 ### Rust-to-Lean Translation Reference
 
-| Rust Concept | Lean Translation |
-|---|---|
-| `&mut T` parameter | `T` parameter (passed by value) |
-| Returning `&'a mut T` | Returns `Result (T × (T → ...))` with backward continuation |
-| `&T` (shared borrow) | `T` parameter (immutable, may be copied) |
-| `panic!()` | `fail` in the `Result` monad |
-| Integer overflow | `fail` (all arithmetic is checked) |
-| `Box<T>` | `T` (heap indirection erased) |
-| Pattern matching | `match` in Lean |
-| Recursive functions | Lean recursive functions (may need termination proofs) |
-| Traits | Type classes in Lean |
-| `Vec<T>` | `Vec T` |
-| `[T; N]` | `Array T n` |
+| Rust Concept             | Lean Translation                                             |
+|--------------------------|--------------------------------------------------------------|
+| `&mut T` parameter       | `T` parameter (passed by value)                              |
+| Returning `&'a mut T`    | Returns `Result (T × (T → ...))` with backward continuation  |
+| `&T` (shared borrow)     | `T` parameter (immutable, may be copied)                     |
+| `panic!()`               | `fail` in the `Result` monad                                 |
+| Integer overflow         | `fail` (all arithmetic is checked)                           |
+| `Box<T>`                 | `T` (heap indirection erased)                                |
+| Pattern matching         | `match` in Lean                                              |
+| Recursive functions      | Lean recursive functions (may need termination proofs)       |
+| Traits                   | Type classes in Lean                                         |
+| `Vec<T>`                 | `Vec T`                                                      |
+| `[T; N]`                 | `Array T n`                                                  |
 
 ### Mental Model
 

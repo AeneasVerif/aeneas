@@ -54,7 +54,7 @@ partial def bvTacPreprocess (config : Config) (n : Option Expr): TacticM Unit :=
   trace[BvTac] "Original goal: {← getMainGoal}"
   /- First try simplifying the goal - if it is an (in-)equality between scalars, it may get
      the bitwidth to use for the bit-vectors might be obvious from the goal: we marked some
-     theorems wiht `bvify_simps` for this reason. -/
+     theorems wiht `bvify` for this reason. -/
   let r ← Bvify.bvifyTacSimp (Utils.Location.targets #[] true)
   if r.isNone then return
   /- The simp call above may have proven the goal (unlikely, but we have to take this

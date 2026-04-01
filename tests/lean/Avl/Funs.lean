@@ -13,7 +13,8 @@ set_option maxHeartbeats 1000000
 namespace avl
 
 /-- [avl::{avl::Ord for i32}::cmp]:
-    Source: 'src/avl.rs', lines 7:4-15:5 -/
+    Source: 'src/avl.rs', lines 7:4-15:5
+    Visibility: public -/
 def I32.Insts.AvlOrd.cmp
   (self : Std.I32) (other : Std.I32) : Result Ordering := do
   if self < other
@@ -194,12 +195,14 @@ partial_fixpoint
 end
 
 /-- [avl::{avl::Tree<T>}::new]:
-    Source: 'src/avl.rs', lines 323:4-325:5 -/
+    Source: 'src/avl.rs', lines 323:4-325:5
+    Visibility: public -/
 def Tree.new {T : Type} (OrdInst : Ord T) : Result (Tree T) := do
   ok { root := none }
 
 /-- [avl::{avl::Tree<T>}::find]: loop 0:
-    Source: 'src/avl.rs', lines 330:8-339:5 -/
+    Source: 'src/avl.rs', lines 330:8-339:5
+    Visibility: public -/
 @[rust_loop]
 def Tree.find_loop
   {T : Type} (OrdInst : Ord T) (value : T) (current_tree : Option (Node T)) :
@@ -216,14 +219,16 @@ def Tree.find_loop
 partial_fixpoint
 
 /-- [avl::{avl::Tree<T>}::find]:
-    Source: 'src/avl.rs', lines 327:4-339:5 -/
+    Source: 'src/avl.rs', lines 327:4-339:5
+    Visibility: public -/
 @[reducible]
 def Tree.find
   {T : Type} (OrdInst : Ord T) (self : Tree T) (value : T) : Result Bool := do
   Tree.find_loop OrdInst value self.root
 
 /-- [avl::{avl::Tree<T>}::insert]:
-    Source: 'src/avl.rs', lines 357:4-359:5 -/
+    Source: 'src/avl.rs', lines 357:4-359:5
+    Visibility: public -/
 def Tree.insert
   {T : Type} (OrdInst : Ord T) (self : Tree T) (value : T) :
   Result (Bool × (Tree T))

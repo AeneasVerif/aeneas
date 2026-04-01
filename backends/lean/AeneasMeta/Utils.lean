@@ -1739,7 +1739,7 @@ example (a b : Nat) (h0 : a < b) (h1 : b ≤ 1024) : b ≤ 1024 := by
   assumption
 
 def parseOptLocation (loc : Option (TSyntax `Lean.Parser.Tactic.location)) :
-  Elab.TermElabM (Utils.Location) :=
+  Elab.Tactic.TacticM (Utils.Location) :=
   let loc := Option.map expandLocation loc
   match loc with
   | none => pure (Utils.Location.targets #[] true)
@@ -1747,11 +1747,8 @@ def parseOptLocation (loc : Option (TSyntax `Lean.Parser.Tactic.location)) :
     match loc with
     | .wildcard => pure .wildcard
     | .targets ids goal => do
-      let ids ← ids.mapM Lean.Elab.Term.resolveId?
-      if ids.all Option.isSome then
-        pure (.targets (ids.filterMap (Option.map Expr.fvarId!)) goal)
-      else
-        Lean.Elab.throwUnsupportedSyntax
+      let fvarIds ← ids.mapM Lean.Elab.Tactic.getFVarId
+      pure (.targets fvarIds goal)
 
 def exprToNat? (e : Expr) : Option Nat :=
   let e := e.consumeMData
@@ -1769,6 +1766,38 @@ def traceGoalWithNode (cls : Name) (msg : String) : TacticM Unit := do
     if ← isTracingEnabledFor cls then do
         addTrace cls m!"{← getMainGoal}"
     else pure ()
+
+/--
+Register a "Try this" suggestion for a tactic sequence.
+
+NOTE: This is lifted straight from Aesop. The reason we're not using it is because it has the code
+action title hard-coded to `Replace aesop with...`.
+-/
+def addTryThisTacticSeqSuggestion (ref : Syntax)
+    (suggestion : TSyntax ``Lean.Parser.Tactic.tacticSeq)
+    (origSpan? : Option Syntax := none) : MetaM Unit := do
+  let fmt ← PrettyPrinter.ppCategory ``Lean.Parser.Tactic.tacticSeq suggestion
+  let msgText := fmt.pretty (indent := 0) (column := 0)
+  if let some range := (origSpan?.getD ref).getRange? then
+    let map ← getFileMap
+    let (indent, column) := Lean.Meta.Tactic.TryThis.getIndentAndColumn map range
+    let text := fmt.pretty (indent := indent) (column := column)
+    let suggestion := {
+      -- HACK: The `tacticSeq` syntax category is pretty-printed with each line
+      -- indented by two spaces (for some reason), so we remove this
+      -- indentation.
+      suggestion := .string $ dedent text
+      toCodeActionTitle? := some λ _ => "Replace step* with the proof it found"
+      messageData? := some msgText
+      preInfo? := "  "
+    }
+    Lean.Meta.Tactic.TryThis.addSuggestion ref suggestion (origSpan? := origSpan?)
+      (header := "Try this:\n")
+where
+  dedent (s : String) : String :=
+    s.splitOn "\n"
+    |>.map (λ line => line.dropPrefix? "  " |>.map (·.toString) |>.getD line)
+    |> String.intercalate "\n"
 
 end Utils
 

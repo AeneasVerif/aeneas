@@ -53,6 +53,7 @@
   ExtractName
   ExtractTypes
   FunsAnalysis
+  GitVersion
   Identifiers
   InterpAbs
   InterpBorrowsCore
@@ -116,6 +117,31 @@
   Utils
   Values
   ValuesUtils))
+
+;; Embed the git commit into the binary so that `aeneas -version` can report it.
+;; Follows the same pattern as opam (see https://github.com/ocaml/opam/blob/master/src/client/dune).
+;; Step 1: capture the git description (commit hash, with -dirty suffix if needed).
+
+(rule
+ (target git-sha)
+ (deps (universe))
+ (action
+  (ignore-stderr
+   (with-stdout-to
+    %{target}
+    (system "git describe --always --dirty 2>/dev/null || echo")))))
+
+;; Step 2: generate GitVersion.ml from the captured hash.
+;; Produces `let commit = Some "<hash>"` or `let commit = None` if git is unavailable.
+
+(rule
+ (target GitVersion.ml)
+ (deps git-sha)
+ (action
+  (with-stdout-to
+   %{target}
+   (system
+    "read -r hash < git-sha && [ -n \"$hash\" ] && echo 'let commit = Some \"'$hash'\"' || echo 'let commit = None'"))))
 
 (documentation
  (package aeneas))

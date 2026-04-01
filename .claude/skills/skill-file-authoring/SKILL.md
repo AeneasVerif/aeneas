@@ -1,0 +1,1 @@
+../../../documentation/skills/skill-file-authoring.instructions.md

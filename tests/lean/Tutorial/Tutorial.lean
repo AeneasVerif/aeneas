@@ -12,7 +12,8 @@ set_option maxHeartbeats 1000000
 namespace tutorial
 
 /-- [tutorial::choose]:
-    Source: 'src/lib.rs', lines 1:0-7:1 -/
+    Source: 'src/lib.rs', lines 1:0-7:1
+    Visibility: public -/
 def choose
   {T : Type} (b : Bool) (x : T) (y : T) : Result (T × (T → (T × T))) := do
   if b
@@ -22,24 +23,28 @@ def choose
        ok (y, back)
 
 /-- [tutorial::mul2_add1]:
-    Source: 'src/lib.rs', lines 9:0-11:1 -/
+    Source: 'src/lib.rs', lines 9:0-11:1
+    Visibility: public -/
 def mul2_add1 (x : Std.U32) : Result Std.U32 := do
   let i ← x + x
   i + 1#u32
 
 /-- [tutorial::mul2_add1_add]:
-    Source: 'src/lib.rs', lines 13:0-15:1 -/
+    Source: 'src/lib.rs', lines 13:0-15:1
+    Visibility: public -/
 def mul2_add1_add (x : Std.U32) (y : Std.U32) : Result Std.U32 := do
   let i ← mul2_add1 x
   i + y
 
 /-- [tutorial::incr]:
-    Source: 'src/lib.rs', lines 17:0-19:1 -/
+    Source: 'src/lib.rs', lines 17:0-19:1
+    Visibility: public -/
 def incr (x : Std.U32) : Result Std.U32 := do
   x + 1#u32
 
 /-- [tutorial::use_incr]:
-    Source: 'src/lib.rs', lines 21:0-26:1 -/
+    Source: 'src/lib.rs', lines 21:0-26:1
+    Visibility: public -/
 def use_incr : Result Unit := do
   let x ← incr 0#u32
   let x1 ← incr x
@@ -47,14 +52,16 @@ def use_incr : Result Unit := do
   ok ()
 
 /-- [tutorial::CList]
-    Source: 'src/lib.rs', lines 30:0-33:1 -/
+    Source: 'src/lib.rs', lines 30:0-33:1
+    Visibility: public -/
 @[discriminant isize]
 inductive CList (T : Type) where
 | CCons : T → CList T → CList T
 | CNil : CList T
 
 /-- [tutorial::list_nth]:
-    Source: 'src/lib.rs', lines 35:0-48:1 -/
+    Source: 'src/lib.rs', lines 35:0-48:1
+    Visibility: public -/
 def list_nth {T : Type} (l : CList T) (i : Std.U32) : Result T := do
   match l with
   | CList.CCons x tl =>
@@ -66,7 +73,8 @@ def list_nth {T : Type} (l : CList T) (i : Std.U32) : Result T := do
 partial_fixpoint
 
 /-- [tutorial::list_nth_mut]:
-    Source: 'src/lib.rs', lines 50:0-63:1 -/
+    Source: 'src/lib.rs', lines 50:0-63:1
+    Visibility: public -/
 def list_nth_mut
   {T : Type} (l : CList T) (i : Std.U32) : Result (T × (T → CList T)) := do
   match l with
@@ -84,7 +92,8 @@ def list_nth_mut
 partial_fixpoint
 
 /-- [tutorial::list_nth1]: loop 0:
-    Source: 'src/lib.rs', lines 66:4-74:1 -/
+    Source: 'src/lib.rs', lines 66:4-74:1
+    Visibility: public -/
 @[rust_loop]
 def list_nth1_loop {T : Type} (l : CList T) (i : Std.U32) : Result T := do
   match l with
@@ -97,13 +106,15 @@ def list_nth1_loop {T : Type} (l : CList T) (i : Std.U32) : Result T := do
 partial_fixpoint
 
 /-- [tutorial::list_nth1]:
-    Source: 'src/lib.rs', lines 65:0-74:1 -/
+    Source: 'src/lib.rs', lines 65:0-74:1
+    Visibility: public -/
 @[reducible]
 def list_nth1 {T : Type} (l : CList T) (i : Std.U32) : Result T := do
   list_nth1_loop l i
 
 /-- [tutorial::i32_id]:
-    Source: 'src/lib.rs', lines 76:0-83:1 -/
+    Source: 'src/lib.rs', lines 76:0-83:1
+    Visibility: public -/
 def i32_id (i : Std.I32) : Result Std.I32 := do
   if i = 0#i32
   then ok 0#i32
@@ -115,7 +126,8 @@ partial_fixpoint
 mutual
 
 /-- [tutorial::even]:
-    Source: 'src/lib.rs', lines 85:0-92:1 -/
+    Source: 'src/lib.rs', lines 85:0-92:1
+    Visibility: public -/
 def even (i : Std.U32) : Result Bool := do
   if i = 0#u32
   then ok true
@@ -124,7 +136,8 @@ def even (i : Std.U32) : Result Bool := do
 partial_fixpoint
 
 /-- [tutorial::odd]:
-    Source: 'src/lib.rs', lines 94:0-101:1 -/
+    Source: 'src/lib.rs', lines 94:0-101:1
+    Visibility: public -/
 def odd (i : Std.U32) : Result Bool := do
   if i = 0#u32
   then ok false
@@ -135,12 +148,14 @@ partial_fixpoint
 end
 
 /-- Trait declaration: [tutorial::Counter]
-    Source: 'src/lib.rs', lines 105:0-107:1 -/
+    Source: 'src/lib.rs', lines 105:0-107:1
+    Visibility: public -/
 structure Counter (Self : Type) where
   incr : Self → Result (Std.Usize × Self)
 
 /-- [tutorial::{tutorial::Counter for usize}::incr]:
-    Source: 'src/lib.rs', lines 110:4-114:5 -/
+    Source: 'src/lib.rs', lines 110:4-114:5
+    Visibility: public -/
 def Usize.Insts.TutorialCounter.incr
   (self : Std.Usize) : Result (Std.Usize × Std.Usize) := do
   let self1 ← self + 1#usize
@@ -154,7 +169,8 @@ def Usize.Insts.TutorialCounter : Counter Std.Usize := {
 }
 
 /-- [tutorial::use_counter]:
-    Source: 'src/lib.rs', lines 117:0-119:1 -/
+    Source: 'src/lib.rs', lines 117:0-119:1
+    Visibility: public -/
 def use_counter
   {T : Type} (CounterInst : Counter T) (cnt : T) :
   Result (Std.Usize × T)
@@ -162,7 +178,8 @@ def use_counter
   CounterInst.incr cnt
 
 /-- [tutorial::list_nth_mut1]: loop 0:
-    Source: 'src/lib.rs', lines 124:4-132:1 -/
+    Source: 'src/lib.rs', lines 124:4-132:1
+    Visibility: public -/
 @[rust_loop]
 def list_nth_mut1_loop
   {T : Type} (l : CList T) (i : Std.U32) : Result (T × (T → CList T)) := do
@@ -180,14 +197,16 @@ def list_nth_mut1_loop
 partial_fixpoint
 
 /-- [tutorial::list_nth_mut1]:
-    Source: 'src/lib.rs', lines 123:0-132:1 -/
+    Source: 'src/lib.rs', lines 123:0-132:1
+    Visibility: public -/
 @[reducible]
 def list_nth_mut1
   {T : Type} (l : CList T) (i : Std.U32) : Result (T × (T → CList T)) := do
   list_nth_mut1_loop l i
 
 /-- [tutorial::list_tail]: loop 0:
-    Source: 'src/lib.rs', lines 135:4-137:5 -/
+    Source: 'src/lib.rs', lines 135:4-137:5
+    Visibility: public -/
 @[rust_loop]
 def list_tail_loop
   {T : Type} (l : CList T) : Result (CList T → CList T) := do
@@ -200,21 +219,24 @@ def list_tail_loop
 partial_fixpoint
 
 /-- [tutorial::list_tail]:
-    Source: 'src/lib.rs', lines 134:0-139:1 -/
+    Source: 'src/lib.rs', lines 134:0-139:1
+    Visibility: public -/
 def list_tail
   {T : Type} (l : CList T) : Result ((CList T) × (CList T → CList T)) := do
   let back ← list_tail_loop l
   ok (CList.CNil, back)
 
 /-- [tutorial::append_in_place]:
-    Source: 'src/lib.rs', lines 141:0-144:1 -/
+    Source: 'src/lib.rs', lines 141:0-144:1
+    Visibility: public -/
 def append_in_place
   {T : Type} (l0 : CList T) (l1 : CList T) : Result (CList T) := do
   let (_, list_tail_back) ← list_tail l0
   ok (list_tail_back l1)
 
 /-- [tutorial::reverse]: loop 0:
-    Source: 'src/lib.rs', lines 148:4-152:5 -/
+    Source: 'src/lib.rs', lines 148:4-152:5
+    Visibility: public -/
 @[rust_loop]
 def reverse_loop
   {T : Type} (l : CList T) (out : CList T) : Result (CList T) := do
@@ -224,13 +246,15 @@ def reverse_loop
 partial_fixpoint
 
 /-- [tutorial::reverse]:
-    Source: 'src/lib.rs', lines 146:0-154:1 -/
+    Source: 'src/lib.rs', lines 146:0-154:1
+    Visibility: public -/
 @[reducible]
 def reverse {T : Type} (l : CList T) : Result (CList T) := do
   reverse_loop l CList.CNil
 
 /-- [tutorial::zero]: loop 0:
-    Source: 'src/lib.rs', lines 164:4-167:5 -/
+    Source: 'src/lib.rs', lines 164:4-167:5
+    Visibility: public -/
 @[rust_loop]
 def zero_loop
   (x : alloc.vec.Vec Std.U32) (i : Std.Usize) :
@@ -249,13 +273,15 @@ def zero_loop
 partial_fixpoint
 
 /-- [tutorial::zero]:
-    Source: 'src/lib.rs', lines 162:0-168:1 -/
+    Source: 'src/lib.rs', lines 162:0-168:1
+    Visibility: public -/
 @[reducible]
 def zero (x : alloc.vec.Vec Std.U32) : Result (alloc.vec.Vec Std.U32) := do
   zero_loop x 0#usize
 
 /-- [tutorial::add_no_overflow]: loop 0:
-    Source: 'src/lib.rs', lines 177:4-180:5 -/
+    Source: 'src/lib.rs', lines 177:4-180:5
+    Visibility: public -/
 @[rust_loop]
 def add_no_overflow_loop
   (x : alloc.vec.Vec Std.U32) (y : alloc.vec.Vec Std.U32) (i : Std.Usize) :
@@ -277,7 +303,8 @@ def add_no_overflow_loop
 partial_fixpoint
 
 /-- [tutorial::add_no_overflow]:
-    Source: 'src/lib.rs', lines 175:0-181:1 -/
+    Source: 'src/lib.rs', lines 175:0-181:1
+    Visibility: public -/
 @[reducible]
 def add_no_overflow
   (x : alloc.vec.Vec Std.U32) (y : alloc.vec.Vec Std.U32) :
@@ -286,7 +313,8 @@ def add_no_overflow
   add_no_overflow_loop x y 0#usize
 
 /-- [tutorial::add_with_carry]: loop 0:
-    Source: 'src/lib.rs', lines 190:4-197:5 -/
+    Source: 'src/lib.rs', lines 190:4-197:5
+    Visibility: public -/
 @[rust_loop]
 def add_with_carry_loop
   (x : alloc.vec.Vec Std.U32) (y : alloc.vec.Vec Std.U32) (c0 : Std.U8)
@@ -316,7 +344,8 @@ def add_with_carry_loop
 partial_fixpoint
 
 /-- [tutorial::add_with_carry]:
-    Source: 'src/lib.rs', lines 186:0-199:1 -/
+    Source: 'src/lib.rs', lines 186:0-199:1
+    Visibility: public -/
 @[reducible]
 def add_with_carry
   (x : alloc.vec.Vec Std.U32) (y : alloc.vec.Vec Std.U32) :
@@ -341,7 +370,8 @@ def get_or_zero
   else ok 0#u32
 
 /-- [tutorial::add]: loop 0:
-    Source: 'src/lib.rs', lines 221:4-229:5 -/
+    Source: 'src/lib.rs', lines 221:4-229:5
+    Visibility: public -/
 @[rust_loop]
 def add_loop
   (x : alloc.vec.Vec Std.U32) (y : alloc.vec.Vec Std.U32) (max1 : Std.Usize)
@@ -369,7 +399,8 @@ def add_loop
 partial_fixpoint
 
 /-- [tutorial::add]:
-    Source: 'src/lib.rs', lines 214:0-235:1 -/
+    Source: 'src/lib.rs', lines 214:0-235:1
+    Visibility: public -/
 def add
   (x : alloc.vec.Vec Std.U32) (y : alloc.vec.Vec Std.U32) :
   Result (alloc.vec.Vec Std.U32)

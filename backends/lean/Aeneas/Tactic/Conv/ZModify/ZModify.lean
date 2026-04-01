@@ -29,7 +29,7 @@ structure Config where
 
 declare_config_elab elabConfig Config
 
-attribute [zmodify_simps] ge_iff_le gt_iff_lt Nat.mod_lt_of_lt
+attribute [zmodify] ge_iff_le gt_iff_lt Nat.mod_lt_of_lt
 
 theorem Nat.lt_imp_eq_iff_eq_ZMod (n a b : ℕ) (h : a < n ∧ b < n) : a = b ↔ (a : ZMod n) = (b : ZMod n) := by
   have ha := Nat.mod_eq_of_lt h.left
@@ -37,7 +37,7 @@ theorem Nat.lt_imp_eq_iff_eq_ZMod (n a b : ℕ) (h : a < n ∧ b < n) : a = b �
   conv => lhs; rw [← ha, ← hb]
   simp [Nat.eq_mod_iff_eq_ZMod]
 
-attribute [zmodify_simps] Nat.mod_lt
+attribute [zmodify] Nat.mod_lt
 
 /-- `n` is the parameter of `ZMod`, in case it is not obvious from the context.
     In particular, if the user provides `n`, it activates the use of conditional rewritings by means of `scalar_tac`.
@@ -80,7 +80,7 @@ This tactic is inspired by `zify`.
 The parameter `<n>` is optional and can be omitted if the tactic can infer it from the context.
 For instance, `zmodify` will successfully infer it should use `256` if the goal is `⊢ a % 256 = b % 256`.
 
-One can give lemmas to `zmodify` by annotating them with the attribute `@[zmodify_simps]`,
+One can give lemmas to `zmodify` by annotating them with the attribute `@[zmodify]`,
 or by passing them directly as arguments to the tactic, e.g., `zmodify [my_lemma1, my_lemma2]`.
 -/
 syntax (name := zmodify) "zmodify" Parser.Tactic.optConfig ("to" term)? ("[" (term<|>"*"),* "]")? (location)? : tactic
@@ -101,38 +101,38 @@ elab stx:zmodify : tactic =>
   let (config, n, args, loc) ← parseZModify stx
   zmodifyTac config n args loc
 
-attribute [zmodify_simps] Nat.eq_mod_iff_eq_ZMod Int.eq_mod_iff_eq_ZMod div_to_ZMod
-attribute [zmodify_simps] Nat.reduceGcd
+attribute [zmodify] Nat.eq_mod_iff_eq_ZMod Int.eq_mod_iff_eq_ZMod div_to_ZMod
+attribute [zmodify] Nat.reduceGcd
 
-attribute [zmodify_simps] ZMod.natCast_val ZMod.natCast_mod ZMod.cast_id' ZMod.intCast_mod id_eq
-attribute [zmodify_simps] Int.cast_add Int.cast_natCast Int.cast_mul
-attribute [zmodify_simps] Int.reduceNeg
+attribute [zmodify] ZMod.natCast_val ZMod.natCast_mod ZMod.cast_id' ZMod.intCast_mod id_eq
+attribute [zmodify] Int.cast_add Int.cast_natCast Int.cast_mul
+attribute [zmodify] Int.reduceNeg
 
-@[zmodify_simps]
+@[zmodify]
 theorem Nat.eq_mod_zero_iff_eq_ZMod (n : ℕ) (a : Nat) : a % n = 0 ↔ (a : ZMod n) = 0 := by
   have : 0 = 0 % n := by simp only [Nat.zero_mod]
   rw [this]
   simp only [Nat.eq_mod_iff_eq_ZMod, Nat.cast_zero]
 
-@[zmodify_simps]
+@[zmodify]
 theorem Nat.eq_zero_mod_iff_eq_ZMod (n : ℕ) (a : Nat) : 0 = a % n ↔ 0 = (a : ZMod n) := by
   have : 0 = 0 % n := by simp only [Nat.zero_mod]
   rw [this]
   simp only [Nat.eq_mod_iff_eq_ZMod, Nat.cast_zero]
 
-@[zmodify_simps]
+@[zmodify]
 theorem Int.eq_zero_mod_iff_eq_ZMod (n : ℕ) (a : ℤ) : 0 = a % n ↔ 0 = (a : ZMod n) := by
   have : (0 : Int) = 0 % n := by simp only [EuclideanDomain.zero_mod]
   rw [this]
   simp only [Int.eq_mod_iff_eq_ZMod, Int.cast_zero]
 
-@[zmodify_simps]
+@[zmodify]
 theorem Int.eq_mod_zero_iff_eq_ZMod (n : ℕ) (a : ℤ) : a % n = 0 ↔ (a : ZMod n) = 0 := by
   have : (0 : Int) = 0 % n := by simp only [EuclideanDomain.zero_mod]
   rw [this]
   simp only [Int.eq_mod_iff_eq_ZMod, Int.cast_zero]
 
-@[zmodify_simps]
+@[zmodify]
 theorem Nat.mod_eq_iff (n : ℕ) (a b : ℕ) : a % n = b ↔ ((b < n ∨ n = 0) ∧ (a : ZMod n) = (b : ZMod n)) := by
   by_cases h: b < n
   . have := Nat.mod_eq_of_lt h
@@ -144,7 +144,7 @@ theorem Nat.mod_eq_iff (n : ℕ) (a b : ℕ) : a % n = b ↔ ((b < n ∨ n = 0) 
       have := @Nat.mod_lt a n  (by omega)
       omega
 
-@[zmodify_simps]
+@[zmodify]
 theorem Nat.eq_mod_iff (n : ℕ) (a b : ℕ) : a = b % n ↔ ((a < n ∨ n = 0) ∧ (a : ZMod n) = (b : ZMod n)) := by
   have : a = b % n ↔ b % n = a := by tauto
   rw [this]
@@ -152,10 +152,10 @@ theorem Nat.eq_mod_iff (n : ℕ) (a b : ℕ) : a = b % n ↔ ((a < n ∨ n = 0) 
   tauto
 
 /- We introduce this lemma because of the case `n = 0` in the lemma above -/
-@[zmodify_simps]
+@[zmodify]
 theorem Nat.ne_zero_imp_eq_zero_false (n : ℕ) (h : ¬ n = 0) : (n = 0) ↔ False := by simp [*]
 
-@[zmodify_simps]
+@[zmodify]
 theorem Nat.lt_imp_lt (a b : ℕ) : a < b → a < b := by simp +contextual
 
 /- This example comes from Verus:

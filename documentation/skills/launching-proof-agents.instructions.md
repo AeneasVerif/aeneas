@@ -1,3 +1,8 @@
+---
+name: launching-proof-agents
+description: Multi-agent proof orchestration, review gates, and task decomposition for Aeneas Lean proofs
+---
+
 # Launching Proof Agents — Skill File
 
 ## Overview
@@ -6,6 +11,10 @@ When using AI agents (e.g., GitHub Copilot background agents) to work on Lean pr
 in an Aeneas project, the agent needs specific instructions to be effective. Agents
 run in isolated contexts and don't automatically see project-level configuration or
 skills files. This document explains how to launch them properly.
+
+**For general agent management rules** (resource budgets, file isolation, spawning
+rules, task granularity, etc.), see the `agent-fleet-management` skill file. This
+file only covers proof-specific workflow and instructions.
 
 ## Agent Prompt Template
 
@@ -16,23 +25,26 @@ Every proof agent prompt should include:
 ```
 ## Aeneas Skills — READ FIRST
 
-Before doing anything, read these files for essential proof guidance:
-- <path-to-aeneas>/documentation/skills/aeneas-lean-core.instructions.md
-- <path-to-aeneas>/documentation/skills/lean-lsp-tool.instructions.md
-- <path-to-aeneas>/documentation/skills/aeneas-tactics-quickref.instructions.md
+Before doing anything, read these skill files for essential proof guidance:
+- the `aeneas-lean-core` skill file (translation model, spec patterns, pitfalls)
+- the `aeneas-tactics-quickref` skill file (which tactic for which goal)
+- the `aeneas-crypto-verification` skill file (crypto-specific strategies)
+- the `lean-lsp-mcp` skill file (mandatory tooling for proof checking)
 ```
 
-### 2. Mandatory lean_lsp.py usage
+### 2. Mandatory lean-lsp-mcp usage
 
 ```
-### MANDATORY: Use lean_lsp.py — NOT lake build
+### MANDATORY: Use lean-lsp-mcp tools — NOT lake build
 
-DO NOT use `lake build` to iterate on proofs. Use lean_lsp.py:
+DO NOT use `lake build` to iterate on proofs. Use the lean-lsp-mcp tools
+(see the `lean-lsp-mcp` skill file for full reference).
 
-  cd <project-lean-root>
-  python3 <path-to-aeneas>/scripts/lean_lsp.py --repl --json
+The tools (`lean_goal`, `lean_diagnostic_messages`, `lean_multi_attempt`, etc.)
+are available directly in your tool palette. If they are not available, ask the
+user to install lean-lsp-mcp (see the `lean-lsp-mcp` skill file).
 
-Workflow: open → sorry → goal → edit → errors → repeat
+Workflow: edit file on disk → lean_goal → lean_multi_attempt → edit → repeat
 Only use `lake build` once at the very end to confirm the final result.
 
 ⛔ NEVER run `lake clean` or delete `.lake/`. This forces a full rebuild (30+ min). Fix root causes instead.
@@ -43,9 +55,9 @@ Only use `lake build` once at the very end to confirm the final result.
 ```
 ### Use step*? to develop proofs
 
-See lean-lsp-tool.instructions.md for the full step*? workflow.
-In short: write `step*?` → `info <line>` to read the expanded script →
-copy it into your proof → fix sub-goals → collapse back to `step*` if possible.
+See the `lean-lsp-mcp` skill file for the full step*? workflow.
+In short: write `step*?` → `lean_code_actions` on that line to read the expanded
+script → copy it into your proof → fix sub-goals → collapse back to `step*` if possible.
 ```
 
 ### 4. Task-specific context
@@ -61,80 +73,102 @@ copy it into your proof → fix sub-goals → collapse back to `step*` if possib
 ```
 ## Key Rules
 - NEVER unfold Aeneas stdlib definitions — search for existing lemmas
-- NEVER use `omega` — use `scalar_tac`, `agrind`, or `grind` instead
+- NEVER use `omega` — use `agrind`, `grind`, or `scalar_tac` instead
+- NEVER spawn sub-agents that work on Lean files (see below)
+- ONLY modify your assigned file(s) — NEVER edit other files (see below)
 - DO NOT COMMIT
 ```
 
-## File Isolation and Parallelism Limits
+### 6. File modification restriction
 
-### How many agents in parallel?
+**⛔ Agents must ONLY modify the file(s) they have been explicitly assigned.**
+They must NEVER edit other files — not shared definition files (Defs.lean,
+MatDefs.lean), not external specs (ExternalSpecs.lean), not other Properties files.
 
-**Ask the user upfront** how many agents can work on Lean files simultaneously. Each
-Lean LSP server instance consumes significant memory (~8 GB). A good default is:
+**If an agent needs a stronger spec or axiom from another file**, it must NOT
+modify that file. Instead:
 
-> **Max parallel Lean agents = RAM (in GB) / 8**
+1. **Introduce a local version** in its own file — a `private axiom` or a
+   `sorry`'d `private theorem` that states what it needs:
+   ```lean
+   -- TODO: strengthen encrypt_block.spec in ExternalSpecs.lean to provide
+   -- functional correctness (currently only gives `True`). Move this local
+   -- axiom there once the external spec is updated.
+   --
+   -- WHY NEEDED: The outer loop proof needs to know that the external function
+   -- returns a meaningful result, not just `True`. Without this, the loop
+   -- invariant cannot relate the accumulated output to the specification.
+   --
+   -- WHY VALID: The Rust code calls the corresponding library function, which
+   -- implements the standard algorithm. The postcondition simply states that
+   -- the output equals the spec's pure function applied to the same inputs.
+   private axiom external_fn_spec (key : KeyType) (input : Array U16 8#usize) :
+     my_module.external_fn key input ⦃ fun out =>
+       out = specExternalFn key input ⦄
+   ```
 
-For example: 64 GB RAM → up to 8 parallel agents. Exceeding this causes swapping,
-which makes all agents drastically slower — better to run fewer agents fast than many
-agents slowly.
+2. **The comment must explain TWO things:**
+   - **Why needed** — what does the proof require that the current spec doesn't
+     provide? Which specific goal or sub-goal is blocked?
+   - **Why valid** — why is the proposed postcondition true? What does the Rust
+     code actually do that justifies this spec? The supervisor needs this to
+     validate the spec before consolidating it into the shared file.
 
-### File isolation rules
+3. **Report the dependency** in its final response so the supervisor can
+   coordinate the fix across files.
 
-When multiple agents run in parallel, each must work on a **separate file**.
-Two agents editing the same file will create merge conflicts. Additionally,
-the files must **not depend on each other**: file A depends on file B if A
-transitively imports B. If A imports B, then changes to B would invalidate A's
-elaboration, causing the agent working on A to see spurious errors.
+**Why:** Multiple agents may run in parallel on different files. If agent A edits
+`ExternalSpecs.lean` while agent B also depends on it, B's elaboration breaks.
+Only the supervisor coordinates cross-file changes — after all agents complete.
 
-- ✅ Agent A on `Ntt.lean`, Agent B on `CompressEncode.lean` (no import relationship)
-- ❌ Agent A on `Ntt.lean` inner loop, Agent B on `Ntt.lean` outer loop (same file)
-- ❌ Agent A on `VectorOps.lean`, Agent B on `Ntt.lean` (if VectorOps imports Ntt)
+### 7. No sub-agent spawning / file isolation / resource limits
 
-### Pre-Launch Conflict Check (MANDATORY)
+These rules are defined in the `agent-fleet-management` skill file. Key points
+for proof agents:
 
-**Before launching any fleet of agents**, the supervisor must explicitly verify
-that no two agents will conflict. For each pair of agents in the batch:
+- **⛔ NEVER spawn sub-agents that run Lean processes** (lean-lsp-mcp, lake build)
+- **⛔ ONLY modify your assigned file(s)** — use local axioms with TODO comments
+  for specs from other files (see section 6 above)
+- Agents may use lightweight `explore` agents for codebase searches
 
-1. **Same-file check**: Are any two agents targeting the same `.lean` file?
-   If yes, merge them into one agent or serialize them (run one after the other).
+## File Isolation and Parallelism (Lean-Specific)
 
-2. **Import-dependency check**: Does any agent's file import (directly or
-   transitively) another agent's file? Trace the `import` chain. If A imports B,
-   the agent on A must wait until the agent on B finishes and its changes are saved.
+<!-- ⚠️ SYNC RULE: general file ownership, SQL tracking, and "agents cannot cancel"
+     rules are in agent-fleet-management and global-rules -->
 
-3. **Shared-definition check**: Do any two agents' files depend on a shared
-   definition file (e.g., `Defs.lean`, `MatDefs.lean`) that a *third* agent is
-   also modifying? If so, the third agent must finish first.
+See the `agent-fleet-management` skill file for the general rules (file ownership
+tracking via SQL `agent_files` table, dispatch checklist, "agents cannot cancel"
+constraint). Additional Lean-specific notes:
 
-**How to verify:** Before launching, list each agent's target file and quickly
-check the `import` statements at the top of each file. Draw the dependency edges
-and confirm there are no conflicts. State this check explicitly in your reasoning
-(e.g., "CT.lean imports Defs.lean, MulBS.lean imports MatDefs.lean — no mutual
-dependencies, safe to parallelize").
-
-**If you discover a conflict after agents are already running**, stop the
-conflicting agent immediately, wait for the other to finish, then relaunch.
+- **Import-dependency check**: Lean files form an import DAG. If file A imports
+  file B (directly or transitively), the agent on A must wait until B's agent
+  finishes. Check `import` statements at the top of each file before launching.
+- **Examples**:
+  - ✅ Agent A on `Ntt.lean`, Agent B on `CompressEncode.lean` (no import relationship)
+  - ❌ Agent A on `Ntt.lean` inner loop, Agent B on `Ntt.lean` outer loop (same file)
+  - ❌ Agent A on `VectorOps.lean`, Agent B on `Ntt.lean` (if VectorOps imports Ntt)
 
 ## Task Decomposition and Agent Supervision
 
 When the user asks for a large task (e.g., "prove all sorry's in this file"), do NOT
 give the entire task to a single agent in one shot. Instead:
 
-1. **Decompose into small tasks**: Each agent call should target one or two specific
-   sorry's, or one well-defined sub-problem. Small tasks are easier for agents to
-   complete successfully.
+1. **Decompose into small tasks**: The number of sorry's per agent depends on
+   difficulty (see the `agent-fleet-management` skill file for the general
+   difficulty-based sizing rule). For proof agents specifically:
+   - **Easy sorry's** (wrapper unfolds, clear `step*` proofs): 3-5 per agent
+   - **Medium sorry's** (loop invariants with known patterns): 1-2 per agent
+   - **Hard sorry's** (complex bitwise/modular reasoning, unclear approach): 1 per agent
 
 2. **Give one small task at a time**: Launch an agent with a focused objective. When it
    reports back, analyze the result before deciding what to do next.
 
-3. **Supervise actively**: When an agent reports:
-   - **Step back**: Understand whether the work is going well. Did the agent make progress?
-     Did it get stuck? Is it going in circles?
-   - **Diagnose slowness**: If the agent is slow, check why — is it using `lake build`
-     instead of `lean_lsp.py`? Is it stuck on a heartbeat explosion? Is it trying an
-     approach that won't work?
-   - **Assess the approach**: Is the proof strategy sound? Should you redirect the agent
-     with different hints?
+3. **Supervise actively**: When an agent completes and reports back:
+   - **Step back**: Did the agent make progress? Did it get stuck? Did it go in circles?
+   - **Diagnose issues from the output**: Did it use `lake build` instead of the lean-lsp-mcp tools?
+     Did it hit heartbeat explosions? Did it try an approach that won't work?
+   - **Assess the approach**: Is the proof strategy sound? Should the next agent try
+     differently?
    - **Report to the user**: Surface interesting findings — e.g., "the agent discovered
      that spec X is missing", "this sorry requires a new lemma about bit operations",
      "the agent reduced 8 sorry's to 3 but the remaining ones are hard because..."
@@ -166,14 +200,20 @@ give the entire task to a single agent in one shot. Instead:
    file, it stays in the Properties file.
 
 5. **Iterate**: Based on the agent's report, launch a follow-up agent with refined
-   instructions, or pivot to a different approach. Never let an agent run for hours
-   without checking in.
+   instructions, or pivot to a different approach.
 
-6. **Reinforce lean_lsp.py usage on every interaction**: Agents tend to fall back to
-   `lake build` loops. Every time you launch an agent or send it a follow-up message,
-   remind it: "Use lean_lsp.py for all proof iteration — do NOT use lake build." This
-   is not optional — agents that use `lake build` waste 2–5 minutes per cycle instead
-   of 5–30 seconds with the LSP.
+6. **Reinforce lean-lsp-mcp usage in every agent prompt**: Agents tend to fall back to
+   `lake build` loops even when told not to. **Skill files alone are not enough** —
+   agents may not read them. The fix is putting the constraint directly in the prompt
+   with consequences. Every agent prompt MUST include the `⛔ HARD REQUIREMENT`
+   block (see "Example: Full Agent Prompt" below) as the FIRST section. Key elements:
+   - "Your FIRST action must be using lean-lsp-mcp tools (lean_goal, etc.)"
+   - "If you use lake build for iterative proof development, your work will be REJECTED"
+   
+   **Why agents ignore the rule**: They don't read skill files unless the content is
+   in their prompt. They see `lake build` in training data and default to it. The only
+   reliable fix is making the lean-lsp-mcp instruction the first thing they read, with
+   explicit rejection consequences.
 
 ## Two-Phase Workflow: Statements First, Then Proofs
 
@@ -201,7 +241,7 @@ Launch agents to write theorem statements with `sorry` proofs. Each agent:
    as a comment in the theorem body (above the `sorry`).
 
    The sketch should cover:
-   - The main proof structure (unfold + progress, case split, loop invariant, etc.)
+   - The main proof structure (unfold + step, case split, loop invariant, etc.)
    - Which existing specs will be needed (list them by name)
    - Any auxiliary lemmas that will be required
    - Edge cases (empty inputs, zero-length slices, boundary values)
@@ -241,12 +281,12 @@ Launch agents to write theorem statements with `sorry` proofs. Each agent:
      sorry
 
    -- Auxiliary spec
-   @[local progress]
+   @[local step]
    theorem setup_phase.spec ... :
      setup_phase params buf ⦃ res => ... ⦄ := by sorry
 
-   -- Main theorem (uses auxiliary specs via progress)
-   @[progress]
+   -- Main theorem (uses auxiliary specs via step)
+   @[step]
    theorem main_function.spec ... :
      main_function ... ⦃ res => ... ⦄ := by sorry
    ```
@@ -261,18 +301,25 @@ Launch agents to write theorem statements with `sorry` proofs. Each agent:
 ```
 Write the theorem statement (with sorry proof) for `function_name.spec`.
 
+READ FIRST: the `aeneas-lean-core` and `aeneas-crypto-verification` skill files
+for postcondition quality rules and the multi-level verification pipeline.
+
 Read:
 - The auto-generated code in Funs.lean (line N)
 - The pure specification `Spec.Foo.Bar` in FooSpec.lean (line M)
 
-The postcondition must express FULL FUNCTIONAL CORRECTNESS:
+The postcondition must express FULL FUNCTIONAL CORRECTNESS as a direct equality:
+- repr(output) = Spec.algorithmName(repr(input1), repr(input2), ...)
+- Use representation/conversion functions on BOTH inputs and outputs
 - NOT just length preservation (that's trivially weak)
 - NOT just `True` (useless)
-- It must relate the output to the spec function using bridge definitions
-  like `Slice.toMatrix`, etc.
+- NOT relational specs (simulation relations, abstract state) — use direct equalities
+- Structural properties (wfArray, lengths) are supplementary conjuncts, not the main spec
+- Apply the VACUITY TEST: would this postcondition hold if the implementation returned
+  arbitrary/zero data? If yes, it's too weak.
 
 ALWAYS sketch the proof strategy as a comment above the sorry. Include:
-- Main proof structure (unfold + progress, case split, loop invariant, etc.)
+- Main proof structure (unfold + step, case split, loop invariant, etc.)
 - Which existing specs are needed (by name)
 - Any auxiliary lemmas required
 - Edge cases and potential bugs to watch for
@@ -290,7 +337,15 @@ DO NOT attempt the mechanized proof — just the statement + sketch + decomposit
 
 ### Phase 2: Review Gate (human or code-review agent)
 
+<!-- ⚠️ SYNC RULE: review loop mechanics are defined in global-rules "Mandatory Review Loop" -->
+
 Before launching proof agents, **review every theorem statement**.
+
+**The review loop applies to ALL agent outputs — not just proofs.** Plans, proof
+plans, specification mappings, function mapping tables, and any other structured
+output produced by agents must also go through the do → review → fix → converge
+loop. A plan with incorrect line numbers, stale function references, or logically
+inconsistent dependency graphs wastes significant agent time downstream.
 
 **Important:** When the user asks to do a large batch of proofs or launch parallel
 proof agents, **ask the user upfront** how they want the review gate handled:
@@ -333,7 +388,7 @@ that fits their availability. Never assume one mode silently.
 ```
 
 The reviewer sends back specific feedback (e.g., "postcondition too weak — must relate
-to `Spec.Frodo.Encode`, not just length") and the statement agent revises. This repeats
+to the spec function, not just length") and the statement agent revises. This repeats
 until all statements are validated. Only then do proof agents launch.
 
 **Review checklist (for human or code-review agent):**
@@ -363,15 +418,84 @@ until all statements are validated. Only then do proof agents launch.
 - **Is the function decomposition adequate?** For functions > 30 lines: did the agent
   assess whether splitting is needed? If yes, are the auxiliary functions well-chosen
   (natural sub-computations, not arbitrary splits)? Are their specs strong enough for
-  the main proof to use via `progress`? If the agent said "no decomposition needed",
+  the main proof to use via `step`? If the agent said "no decomposition needed",
   is that justified? A function with 50+ monadic steps that wasn't decomposed should
   be flagged.
+- **Are axioms and external specs sound?** For any `axiom`, `private axiom`, or
+  sorry'd `private theorem` introduced by the agent (including local assumptions
+  about external functions), verify all of the following:
+  - **Non-vacuous postcondition:** The postcondition says something meaningful.
+    A postcondition of `True` is acceptable **only** when the axiom's sole purpose
+    is to assert that the external function succeeds (doesn't crash/diverge) — e.g.,
+    `cpu_features_present feature ⦃ _ => True ⦄` asserts it returns *some* boolean.
+    But if the proof actually needs properties of the return value and the axiom
+    only provides `True`, the axiom is too weak and must be strengthened.
+  - **Minimal postcondition:** The postcondition doesn't assert more than what the
+    external function actually guarantees. An overly strong axiom is unsound — it
+    introduces an unjustified assumption that may be false for some inputs, even if
+    it doesn't outright derive `False`. For example, an axiom
+    `hash input ⦃ out => out = spec_hash input ⦄` is fine if the external function
+    genuinely implements `spec_hash`. But adding `∧ out.length < 100` when the
+    external function doesn't guarantee that is an unjustified extra assumption.
+  - **Sufficient preconditions:** The preconditions are strong enough to make the
+    postcondition actually true. If the axiom states `f x ⦃ y => y < 100 ⦄` but
+    this only holds when `x > 0`, the missing precondition makes the axiom unsound.
+  - **No hidden contradictions:** Check whether the axiom, combined with other axioms
+    in the project, could derive `False`. In particular, check for overlapping axioms
+    about the same function with incompatible postconditions, or axioms whose
+    preconditions are unsatisfiable (making them vacuously true but misleading).
+  - **Justification comment present:** Every axiom must have a comment explaining
+    WHY it is sound — what property of the external system/function justifies it.
+    An axiom without justification should be flagged.
 
 **Common weak-postcondition patterns to reject:**
 - `res.length = n` — length only, says nothing about values
 - `True` or `fun _ => True` — vacuously true
 - Missing existential for length + functional property
 - Only one half of a bidirectional property (e.g., only correctness, not bounds)
+
+<!-- ⚠️ SYNC RULE: source of truth is agent-fleet-management "Review depth and priority" -->
+**⚠️ MANDATORY: Axiom files must be reviewed immediately after creation.**
+
+Every new axiom file or trust boundary (hash bridge, SIMD model, external function
+specs, etc.) MUST get a **dedicated code-review agent immediately after creation**,
+before any other work proceeds. This is not optional — it is the highest-priority
+review task. The supervisor must never mark an axiom-creating task as "done" until
+a separate reviewer has verified the axioms.
+
+**Why:** Axioms are more dangerous than sorry's. A sorry is an honest gap — the proof
+system tracks it and everyone knows it's incomplete. A wrong axiom is a silent lie:
+it makes all downstream proofs vacuous while appearing to succeed. An axiom file with
+incorrect postconditions (e.g., missing spec connections, vacuous simulation relations)
+can waste weeks of proof work building on a foundation that proves nothing.
+
+**Axiom review checklist** (in addition to the general review checklist above):
+- **Does every axiom connect output to the specification?** An axiom that only asserts
+  structural properties (e.g., `output.length = n`, `offset advances`) without
+  connecting the output VALUES to the spec function is critically incomplete. The
+  output must be related to the pure spec (e.g., `output = Spec.SHAKE128(input)[offset..offset+len]`).
+- **Are simulation/abstraction relations non-vacuous?** A `Simulates` relation defined
+  as `True` provides zero guarantees — any implementation state "simulates" any abstract
+  state. Either make the relation `opaque` (axiom without body) or give it real content.
+- **Could an incorrect implementation satisfy all axioms?** Mentally substitute a
+  trivially wrong implementation (e.g., one that always returns zeros) and check
+  whether it would satisfy every axiom. If yes, the axioms are too weak.
+- **Are axiom chains consistent?** When multiple axioms model a stateful protocol
+  (init → absorb → squeeze → result), verify the chain is consistent: state flows
+  correctly, accumulated data is preserved, offsets advance properly.
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-crypto-verification "Axiomatizing SIMD/Intrinsic Operations" -->
+- **Do SIMD/intrinsic axioms cite reference documentation?** Every SIMD axiom must
+  include a docstring naming the intrinsic, linking to the vendor reference (Intel
+  Intrinsics Guide, ARM NEON docs, etc.), and quoting or summarizing the operation.
+  An axiom without a reference link should be flagged.
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Axiom organization" -->
+- **Are axioms grouped in `Axioms.lean` or `Axioms/`?** All intentional axioms must
+  be in a dedicated file or directory for auditability. Axioms scattered across proof
+  files should be flagged.
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Axiom organization" -->
+- **Is a problematic axiom being left unfixed to avoid refactoring?** If a reviewer
+  identifies an axiom that is incorrect or too weak, it must be fixed regardless of
+  how many proofs depend on it. "It would break too many proofs" is never acceptable.
 
 ### Phase 3: Proof Agents with Review Loop (slower, parallelizable)
 
@@ -390,9 +514,9 @@ trace the Rust logic by hand, check if a particular input would violate the
 postcondition. If a bug is found or suspected, the agent must **stop proving
 immediately and report the finding**.
 
-The master should also watch for this: if an agent has been stuck on the same goal
-for multiple iterations without progress, remind it: "Consider whether this theorem
-is actually true. Look for counterexamples or bugs in the Rust code."
+**Include in every proof agent prompt:** "If you spend a long time stuck on a goal
+that won't close, consider whether the theorem is actually true. Look for
+counterexamples or bugs in the Rust code. Report findings immediately."
 
 **🚨 CRITICAL: When a bug in the Rust code is discovered, report it IMMEDIATELY
 and IMPERATIVELY to the user.** This is one of the most valuable outcomes of formal
@@ -411,14 +535,14 @@ the proof needs functional properties of the output), the agent MUST:
 2. **Identify the axiom** — name the specific axiom/spec and its file location.
 3. **Explain what is missing** — what postcondition property does the proof need?
 4. **Suggest the fix** — propose a strengthened postcondition. For example:
-   "The axiom `encrypt_block.spec` has postcondition `True`, but the outer loop proof
-   needs it to return the AES encryption of the input block. Suggested fix:
+   "The axiom `external_fn.spec` has postcondition `True`, but the outer loop proof
+   needs it to return the correct output. Suggested fix:
    ```lean
-   axiom frodokem.encrypt_block.spec (c : aes.soft.Aes128) (block : Array U16 8#usize) :
-     frodokem.encrypt_block c block ⦃ fun out =>
-       out = specEncryptBlock c block ⦄
+   axiom my_module.external_fn.spec (key : KeyType) (input : Array U16 8#usize) :
+     my_module.external_fn key input ⦃ fun out =>
+       out = specExternalFn key input ⦄
    ```
-   where `specEncryptBlock` is a pure specification of AES-128 block encryption."
+   where `specExternalFn` is a pure specification of the external function."
 
 **What happens after reporting depends on the workflow mode.** Before launching agents,
 the supervisor must ask the user which mode to use:
@@ -443,6 +567,12 @@ no usable information).
 completes a loop proof, fills a significant chunk), a **review agent** should check
 the proof against the skill files and project guidelines. This is also a loop:
 
+**Every proof review is a full review from scratch.** The reviewer must re-read the
+proof files and re-check every item in the checklist — not just verify that specific
+issues from a prior round were fixed. Do NOT tell the reviewer what the prior round
+found; this biases toward rubber-stamping. The prompt should be identical to a
+first-time review.
+
 **Before handing off to the review agent, the proof agent MUST verify that the entire
 file builds without errors.** Run `lake build <module>` (e.g., `lake build Properties.CT`)
 and confirm 0 errors. Warnings about `sorry` are acceptable if some sorry's remain, but
@@ -452,7 +582,6 @@ doesn't build cleanly, the proof agent must fix the errors before reporting.
 ```
 ┌──────────────────────────────────────┐
 │  Proof agent works on sorry's        │
-│  (reports progress to master)        │
 ├──────────────────────────────────────┤
 │  Proof agent runs lake build         │
 │  → MUST be 0 errors before handoff   │
@@ -478,46 +607,209 @@ doesn't build cleanly, the proof agent must fix the errors before reporting.
 
 **Review agent checklist for proofs:**
 
-- **Does the file build without errors?** The review agent MUST run `lake build <module>`
-  and verify 0 errors. If the proof agent handed off a broken file, send it back immediately.
-  `sorry` warnings are acceptable; type errors, tactic failures, and elaboration errors are NOT.
-- **Is the proof idiomatic?** Uses standard Aeneas patterns (step, WP.spec_mono,
-  split_ifs, etc.) rather than ad-hoc workarounds? Follows the patterns documented
-  in proof-patterns.instructions.md?
-- **Is the proof clean and not verbose?** No unnecessary intermediate steps, no
-  copy-paste bloat, no redundant `have` statements that could be inlined. Each tactic
-  call should earn its place.
-- **Does the proof use only idiomatic tactics?** This is a critical idiomaticity criterion.
-  Re-read the skill files and **grep the file for banned tactics**:
-  - `omega` — **BANNED.** Replace with `agrind`, `grind`, or `scalar_tac`
-  - `linarith` — **BANNED.** Replace with `agrind`, `grind`, or `scalar_tac`
-  - `nlinarith` — **BANNED.** Replace with `agrind`, `grind`, `scalar_tac +nonLin`, or `simp_scalar`
-  - These tactics cannot reason about Aeneas scalar types (U8, U32, Usize, etc.),
-    `Slice.length`, `Vec.length`, or any Aeneas-specific concepts. A proof using them
-    is non-idiomatic and fragile — it must be rewritten, even if it currently works.
-  - Also check: uses `agrind` over `grind`? Uses `ring` in `calc`/`have` steps?
-  - Does not unfold Aeneas stdlib definitions?
-- **Are all warnings addressed?** After building, check the warning output. The following
-  warnings are **NOT acceptable** and must be fixed before the proof is considered done:
-  - `"This simp argument is unused"` — remove the unused lemma from `simp only [...]`
-  - `"Too many ids provided"` — reduce the binder count in `step as ⟨...⟩`
-  - `"unused variable"` — remove or rename with `_` prefix
-  - `"'tactic' does nothing"` / `"'tactic' tactic is never executed"` — remove the dead tactic
-  - The ONLY acceptable warnings are `"declaration uses 'sorry'"` (for remaining sorry's).
-- No big `simp only [...]` calls in implementation proofs? (model is unstable)
-- Complex arithmetic/bitwise sub-proofs extracted as auxiliary lemmas?
-- Are helper lemmas properly named and documented if non-obvious?
-- **No early case splits on parameters?** If the proof does `cases p` at the top level
-  (duplicating the entire proof for each parameter variant), it should be refactored:
-  case splits should be local (inside sub-goals) or handled via `attribute [local agrind]`.
-- **Spaces around binary operators in comments?** Check that comments and doc strings
-  use `j < N`, not `j<N`. Missing spaces cause VS Code highlighting bugs.
-- **Is the proof fast enough?** Profile with `set_option trace.profiler true in` and
-  check that the proof completes in **< 30 seconds wall-clock** (even for the biggest
-  functions of 50+ lines). If it's slower, identify the bottleneck tactic and send the
-  proof back for optimization — decompose the function, extract auxiliary lemmas,
-  minimize the context, or pick better tactics. See the "Wall-clock time target"
-  section in `aeneas-tactics-quickref`.
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Proof Style and Maintainability"
+     and aeneas-tactics-quickref "Proof Style Rules". See skill-file-authoring for sync rules. -->
+
+**⚠️ BEFORE DIVING INTO SPECIFIC CHECKS:** Re-read the spec theorem conventions in
+the `aeneas-lean-core` skill file — tuple decomposition in postconditions, result type
+annotation, naming, docstrings, indentation rules, `⦃ ⦄` notation conventions. Check
+each convention mechanically against the code under review. Mechanical rule violations
+are the easiest to miss when reviewing "by feel" — they require deliberate
+checklist-style checking.
+
+**⚠️ READ THE FILES, DON'T JUST GREP.** The reviewer must **read the modified proof
+files** — not just run grep patterns. Grep catches mechanical violations (banned
+tactics, maxRecDepth) but misses structural problems (multi-line inline `(by ...)`
+blocks, proof organization, unnecessary complexity). Reading a typical proof file
+costs ~10-15K tokens — this is affordable and catches far more issues.
+
+### Build and warnings
+
+- **Does the file build without errors?** Run `lake build <module>` and verify 0
+  errors. `sorry` warnings are acceptable; type errors, tactic failures, and
+  elaboration errors are NOT.
+- **Are all warnings addressed?** (Rule: "Address all warnings")
+  The ONLY acceptable warning is `"declaration uses 'sorry'"`.
+  **This applies to sorry'd proofs too** — dead tactics, unused simp args, and unused
+  variables around a sorry must be fixed.
+  ```bash
+  # After building, check warning output for:
+  # "This simp argument is unused" — remove from simp only [...]
+  # "Too many ids provided" — reduce binders in step as ⟨...⟩
+  # "unused variable" — remove or prefix with _
+  # "'...' tactic does nothing" / "is never executed" — remove dead tactic
+  # "Used `tac1 <;> tac2` where `(tac1; tac2)` would suffice" — replace <;> with ;
+  ```
+
+### Banned constructs (mechanical grep)
+
+Run these grep checks on every file under review. **Any match is a mandatory fix.**
+
+```bash
+# Banned tactics (Rule: "BANNED TACTICS"; Pitfalls #1-#5 preference order)
+grep -n '\bomega\b' FILE          # → replace with agrind > grind > scalar_tac
+grep -n '\blinarith\b' FILE       # → replace with agrind > grind > scalar_tac
+grep -n '\bnlinarith\b' FILE      # → replace with agrind > grind > scalar_tac +nonLin
+
+# Never increase maxRecDepth (Pitfall #11)
+grep -n 'maxRecDepth' FILE        # → diagnose simp loop, never raise limit
+
+# maxHeartbeats too high (Pitfall #13)
+grep -n 'maxHeartbeats' FILE      # → verify value < 8_000_000; if higher, proof needs restructuring
+
+# set_option ... in inside proof script (Pitfall #13) — breaks incrementality
+grep -n 'set_option.*in$' FILE    # → check if inside a proof (by block); OK before theorem declaration
+
+# ⛔ Converting sorry → axiom (NEVER allowed)
+grep -n '^axiom' FILE             # → if agent added new axioms that were sorry before, REJECT
+# Agents must NEVER convert a sorry into an axiom. The whole point is to PROVE the theorem.
+# If the proof is too hard, leave it as sorry and report what was tried.
+
+# Unfold of Aeneas stdlib definitions (Pitfall #10)
+grep -n 'unfold.*Aeneas\|unfold.*Std\.\|unfold.*core\.' FILE
+# → search for existing lemma instead of unfolding
+
+# step* <;> tactic (Rule: "Avoid step* <;> tactic")
+grep -n 'step\*.*<;>' FILE       # → use focused goal blocks (· ) instead
+
+# all_goals (Rule: "NEVER use all_goals — banned everywhere")
+grep -n 'all_goals' FILE          # → ALWAYS replace with focused · blocks. No exceptions.
+
+# Inline (by ...) in exact/apply/refine (Rule: "Extract inline by blocks"; Pitfall #15)
+grep -n 'exact.*(by ' FILE        # → check: 3+ blocks or any multi-line block → extract
+grep -n 'apply.*(by ' FILE        # (same check)
+grep -n 'refine.*(by ' FILE       # (same check)
+# ⚠️ These greps only catch single-line cases. The most common violation is multi-line:
+#   exact lemma arg1
+#       (by tac1) (by tac2)    ← grep misses this
+# The reviewer MUST also read multi-line exact/apply/refine statements manually.
+# "Expensive" = multi-line, tactic sequences (tac1; tac2), first|..., or slow tactics.
+# Note: all_goals is banned outright (see above), so it's never acceptable here either.
+# A single cheap (by scalar_tac) or (by grind) is acceptable only with 1-2 blocks total.
+# ⚠️ ALSO CHECK THEOREM TYPE SIGNATURES for embedded (by ...) blocks — especially
+# getElem bounds proofs like (by cases p <;> simp_all [...] <;> agrind). These cause
+# severe kernel slowness on every application of the theorem (measured 6× slowdown).
+# Fix: use get_elem_tactic override with agrind (preferred), or (by agrind) / (by grind)
+# / (by scalar_tac) for individual bounds. NEVER cases p <;> simp_all in a type.
+```
+
+### Checks requiring manual inspection
+
+These cannot be reliably grepped — the reviewer must read the proof:
+
+- **`(by ...)` in theorem TYPE SIGNATURES?** (Rule: "Never embed (by ...) in type signatures")
+  Check theorem parameters and postconditions for embedded `(by ...)` blocks — especially
+  for `getElem` array bounds. **Accepted tactics in type signatures** (in preference order):
+  `agrind`, `grind`, `scalar_tac`. **BANNED:** `cases p <;> simp_all [...] <;> tactic`
+  (produces huge proof terms, causes kernel slowness — measured 6× slowdown).
+  Best approach: the file should have a `get_elem_tactic` override with `agrind` so
+  that `a[i]` auto-discharges bounds without any `(by ...)` at all. If a standalone
+  helper lemma is used, that's also acceptable.
+
+- **Auto-param tactics in recursive theorems?** (Pitfall #16)
+  In recursive `spec_gen` theorems, all parameters must be explicit — no `:= by ...`
+  defaults. Look for `:= by` in theorem parameter lists (not in proof bodies).
+
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Postcondition quality" -->
+- **Postcondition quality?** (Rule: "Postcondition quality")
+  - Does the postcondition link to a spec function (not just structural properties
+    like length preservation)?
+  - Are well-formedness invariants threaded through (precondition → postcondition)?
+  - Are there existential quantifiers over non-proposition variables? If so, flag them
+    — the postcondition should use explicit conversion functions, not existential
+    witnesses.
+  - Does the postcondition use conversion *functions* (e.g., `toPoly`) rather than
+    *relations* (e.g., `isPoly`)?
+
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Interface functions must map to the spec" -->
+- **Do interface functions map to spec functions?** (Rule: "Interface functions must
+  map to the spec") Public Rust API functions and FFI/external functions should
+  straightforwardly map to well-identified spec functions. Their postconditions should
+  make this mapping explicit.
+
+### NEVER trust comments
+
+When reviewing code, proofs, specs, and axioms, reviewers must **never trust comments
+at face value**. Always independently assess whether each comment is accurate:
+- Does a comment claim a function preserves an invariant? Verify it in the postcondition.
+- Does a comment say "this is sound because..."? Check the reasoning independently.
+- Does a comment reference a spec section or line number? Verify the reference is current.
+Comments can be stale, misleading, or outright wrong — they are documentation, not proof.
+
+### Structural and style checks (manual inspection)
+
+These require reading the proof, not just grepping:
+
+- **Is the proof idiomatic?** (Rule: all of "Proof Style and Maintainability")
+  Uses standard Aeneas patterns (step, WP.spec_mono, split_ifs, etc.) rather than
+  ad-hoc workarounds? Follows patterns in the `proof-patterns` skill file?
+
+- **No big `simp only [...]` in implementation proofs?** (Rule: "Avoid large simp only")
+  Big lemma lists in `simp only` make proofs fragile when the model changes.
+  OK in spec lemmas. Prefer `simp [*]`, `agrind`, or targeted rewrites.
+
+- **Complex sub-proofs extracted as auxiliary lemmas?** (Rule: "Extract auxiliary lemmas")
+  No 15-line arithmetic blocks inlined in the middle of `step*`.
+
+- **Recurring index bounds extracted as standalone helpers?** (Pitfall #22)
+  Bounds like `k * N + q < NBAR * N` should not be proved inline repeatedly.
+
+- **No early case splits on parameters?** (Rule: "Avoid early case splits")
+  `cases p` at proof top duplicates everything. Case splits should be local or
+  handled via `attribute [local agrind]`.
+
+- **`agrind` preferred over `grind`?** (Pitfall #5)
+  `grind` should only appear when `agrind` fails. In loop proofs (`spec_gen`),
+  prefer `agrind` over `scalar_tac` throughout (Pitfall #21).
+
+- **Shifts simplified?** (Rule: "Simplify shifts early")
+  `>>>` should be rewritten as `/ 2^n`, `<<<` as `* 2^n`.
+
+- **Spaces around binary operators in comments?** (Rule: "Spaces around binary operators")
+  `j < N`, not `j<N`. Missing spaces cause VS Code highlighting bugs.
+
+- **Helper lemmas properly named and documented if non-obvious?**
+
+- **Repeated `simp [...]; solver` in cdot sub-goals?** If the same constants appear
+  in `simp` calls before a solver (`scalar_tac`, `agrind`, `grind`, `bv_tac`) in 3+
+  sub-goals after `step`/`step*`, they should be promoted to solver attributes
+  (`@[scalar_tac_simps]`, `@[agrind =]`, `@[grind =]`, `@[bvify]`) so `step`/`step*`
+  discharges the sub-goals automatically and they disappear. Also flag
+  `have hFoo : CONST.val = N := by simp` — the underlying definition likely needs
+  attributes. (Rule: "Register Rust global/const definitions with solver attributes")
+
+- **Repeated inline `(by ...)` proof blocks?** (Pitfall #22)
+  If the same `(by tactic_sequence)` appears 3+ times — in theorem signatures
+  (`getElem` bounds), `have` statements, or `exact`/`apply` arguments — it should
+  be extracted as a standalone lemma with solver attributes (`@[agrind =]`). With
+  the lemma registered, a `get_elem_tactic` override (`agrind`) auto-discharges
+  the bound — no `(by ...)` needed at all. Flag any `(by cases p <;> simp_all [...]
+  <;> agrind)` in a type signature — this is always wrong (use `get_elem_tactic`
+  override or `(by agrind)` instead).
+
+- **Is the proof clean and not verbose?** No copy-paste bloat, no redundant `have`
+  that could be inlined. Each tactic call should earn its place.
+
+### Performance checks
+
+- **Is the proof fast enough?** (Pitfall #14)
+  Use the `measure` tactic wrapper (see the `aeneas-tactics-quickref` skill file,
+  "Profiling proof time") to check that the proof completes in **< 60 seconds
+  wall-clock**. **Do NOT use `trace.profiler` for this** — it only measures tactic
+  execution and misses kernel type-checking time, which can dominate. If slower than
+  60s, send back for optimization.
+
+- **Is the proof reactive for interactive development?** (Pitfall #15)
+  Adding a tactic at the end should take < 0.5s. If not, look for inline `(by ...)`
+  blocks (see grep above) and suggest extracting them into `have` statements.
+
+- **Are `maxHeartbeats` values reasonable?** (Pitfall #13)
+  If any `set_option maxHeartbeats` exceeds 8M, the proof needs restructuring.
+
+- **Are sorry'd proofs fast?** (Pitfall #24)
+  A sorry'd proof should use plain `sorry`, not `step* <;> (first | ... | sorry)` or
+  `cases p <;> step* <;> sorry`. Expensive sorry'd proofs waste build time for zero
+  verification value.
 
 **Skill file freshness:**
 
@@ -529,85 +821,60 @@ doesn't build cleanly, the proof agent must fix the errors before reporting.
   from the latest version of all skill files — including any mid-run updates the
   master made (with user approval).
 - If the reviewer finds **many guideline violations** (e.g., 3+ issues that the
-  skill files clearly address), the feedback to the proof agent should include an
-  explicit instruction: **"Re-read the skill files before fixing these issues."**
-  This forces the proof agent to refresh its understanding rather than just
-  mechanically patching the flagged spots. The proof agent may have read an older
-  version of the skills, or may have drifted from the guidelines over a long run.
+  skill files clearly address), the prompt for the follow-up fix agent should include:
+  **"Re-read the skill files before fixing these issues."**
+  The follow-up agent is a fresh context and may have different knowledge — explicitly
+  pointing it to the skill files ensures it doesn't repeat the same violations.
 
-**Progress reporting:** Agents must report progress to the master **regularly — at least
-every 10 minutes**, even if the task is not yet complete. Do not wait until the task is
-finished to report. At every report (and at every step of the review loop), the agent
-provides:
-- What was accomplished (e.g., "reduced 5 sorries to 2", "fixed deprecated tactic usage")
-- What remains (e.g., "2 sorries left in inner loop", "review flagged 1 issue")
-- Any blockers discovered (e.g., "needs missing spec from Aeneas lib")
-- Current approach and whether it's working
+**Progress reporting and task granularity:** See the `agent-fleet-management` skill file
+for the general rules. Proof-specific notes:
+
+- **Assess sorry difficulty before dispatching** — read the proof sketch (if present),
+  check the function's monadic step count, check if similar proofs exist, and consider
+  whether needed specs/lemmas already exist.
+- **Give each agent sorry's in a specific file**: "Fill the sorry at line 130
+  in MulASPlusE.lean" or "Fill sorry's at lines 130 and 168 in MulASPlusE.lean".
+- **Parallelize across files**: Launch multiple agents simultaneously, each targeting
+  a different file. Startup costs overlap, so wall-clock time is the slowest agent.
+- **Small related files can be batched**: If KeyGen.lean (1 sorry) and Decaps.lean
+  (1 sorry) are small and independent, one agent can handle both sequentially.
+
+For example, with 13 sorry's across 6 files, assessed as 3 hard + 5 medium + 5 easy:
+- ✅ Agent A: 1 hard sorry (MulASPlusE line 946 — complex loop invariant)
+- ✅ Agent B: 2 medium sorry's (MulSAPlusE lines 837, 875)
+- ✅ Agent C: 1 hard sorry (EncodeDecode line 278 — bit-packing)
+- ✅ Agent D: 5 easy sorry's (KeyGen + Encaps + Decaps — wrapper unfolds)
+- ✅ Round 2: dispatch remaining sorry's based on Round 1 results
+- ❌ 1 agent for all 13 sorry's across 6 files (no parallelism, no observability)
+
+**Instruct agents to report what they accomplished** in their final response:
+- Which sorry's were filled (and which remain, if any)
+- What approach was used for each
+- Any blockers or missing lemmas discovered
+- Whether the file builds cleanly after their changes
+
+**When an agent's task is inherently large** (e.g., a single complex loop invariant
+proof that takes 30+ min), instruct it to report partial progress in its final
+response even if it couldn't complete the proof:
+- What approach was tried
+- How far it got (e.g., "reduced the goal to X but couldn't close Y")
+- What it thinks is needed to finish
 
 This lets the master maintain situational awareness and intervene early if needed (e.g.,
 redirect an agent that's going in circles, provide missing context, escalate to the user).
-An agent that goes silent for a long time is a red flag — the master should check on it.
 
-## Master Synthesis: Learning from Agent Reports
+## Master Synthesis
 
-The master orchestrator should not just passively relay agent results. It should
-**regularly synthesize patterns** across all running agents' progress reports to
-identify systemic issues and improvement opportunities. This is a key reason for
-requiring regular progress reports.
+See the `agent-fleet-management` skill file for the general cross-agent synthesis
+rules. Proof-specific patterns to watch for:
 
-After receiving a batch of reports (or periodically during long runs), the master
-should ask itself:
+- Multiple agents stuck on the same kind of sub-goal (e.g., bitwise reasoning)
+  → may need a shared lemma proved centrally
+- Agents discovering missing specs in `ExternalSpecs.lean` → consolidate after fleet
+- Common bridge definitions needed across proofs → add to `Defs.lean`/`MatDefs.lean`
 
-### 1. Proof Strategy Issues
-- Are multiple agents struggling with the same kind of sub-goal? (e.g., all stuck
-  on bitwise reasoning, or all failing to close a loop invariant)
-- Would a different proof strategy unblock several agents at once?
-- Is there a common missing lemma that, if proved once, would help many proofs?
-- Should the master pause agents, prove that lemma centrally, then resume?
-
-### 2. Skill File Updates
-- Are agents repeatedly making the same mistake despite reading the skill files?
-  → The skill file is missing guidance on that specific pattern.
-- Did an agent discover a useful technique not yet documented?
-  → Add it to the skills so future agents benefit.
-- Are agents confused by ambiguous or outdated instructions?
-  → Clarify the skill files.
-
-### 3. Automation and Tooling Opportunities
-- Is there a repetitive mechanical step that agents do manually every time?
-  → Could it be automated (e.g., a new tactic, a script, a code generator)?
-- Are agents spending a lot of time on boilerplate (e.g., writing bridge definitions,
-  unfolding the same chain of lets)?
-  → Consider adding automation or shared infrastructure.
-- Is the `lean_lsp.py` workflow missing a feature that would speed up agents?
-
-### 4. Reporting to the User
-The master should surface these synthesis findings to the user, not just raw agent
-results. For example:
-
-- "Three agents are all stuck on ZMod bitwise reasoning — we may need a shared lemma
-  `zmod_and_pow2` before they can proceed."
-- "Agents keep using `grind` instead of `agrind` — I've updated the skill file to
-  make this more prominent."
-- "The inner-loop pattern `for i in (0..n).step_by(k)` appears in 4 functions. The
-  first agent found a workaround; I'll propagate it to the others."
-- "I notice agents spend ~30% of their time on bridge definitions. We could add
-  `Slice.toBitstring` to Defs.lean to eliminate this across all encode/decode proofs."
-
-**Important:** The master does NOT act on these findings autonomously. It reports
-them to the user as recommendations and waits for validation before making changes.
-For example:
-- "I noticed X pattern — should I update the skill file?" (wait for yes/no)
-- "Three agents are blocked on the same lemma — should I pause them and prove it
-  centrally?" (wait for approval)
-- "Agent A found a useful workaround — should I propagate it to the others?" (wait)
-
-The user decides what to act on. The master's job is to synthesize and surface
-insights, not to make unilateral decisions about strategy, skill files, or tooling.
-
-This synthesis loop is what makes a fleet of agents more effective than the same
-agents running independently — the master surfaces cross-agent patterns and the
-user steers improvements.
+**The master does NOT act on these findings autonomously** — it reports to the user
+and waits for approval.
 
 ### Summary: Fleet Organization
 
@@ -630,10 +897,10 @@ user steers improvements.
                      ▼
 ┌─────────────────────────────────────────────────┐
 │  Phase 3: Proof Agents + Review Loop            │
-│  - Proof agent fills sorry proofs               │
+│  - Proof agent fills 1-2 sorry proofs           │
 │  - Review agent checks quality & guidelines     │
 │  - Fix issues, re-review until clean            │
-│  - Report progress to master at every step      │
+│  - Supervisor dispatches next batch of sorry's   │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -646,32 +913,44 @@ After each proof+review cycle completes:
 
 | Failure | Cause | Fix |
 |---------|-------|-----|
-| Agent uses `lake build` loops | Didn't read LSP skill | Stronger prompt, mandate LSP |
+| Agent uses `lake build` loops | Didn't read lean-lsp-mcp skill | Stronger prompt, mandate lean-lsp-mcp tools |
 | `step*` times out | Too many monadic calls | Use `step*?` workflow |
 | Unfolds stdlib definitions | Didn't read core skill | Add "don't unfold" rule to prompt |
-| Uses `omega` | `omega` can't reason about scalars, `U32.max`, list lengths, etc. | NEVER use `omega` — use `scalar_tac`, `agrind`, or `grind` |
-| Uses `nlinarith` | Same issues as `omega` — can't reason about scalars | NEVER use `nlinarith` — use `scalar_tac` or `simp_scalar` |
-| Uses `linarith` | Same issues as `omega` — can't reason about scalars | NEVER use `linarith` — use `scalar_tac` or `agrind` |
+| Uses `omega` | `omega` can't reason about scalars, `U32.max`, list lengths, etc. | NEVER use `omega` — use `agrind` > `grind` > `scalar_tac` |
+| Uses `nlinarith` | Same issues as `omega` — can't reason about scalars | NEVER use `nlinarith` — use `agrind` > `grind` > `scalar_tac +nonLin` / `simp_scalar` |
+| Uses `linarith` | Same issues as `omega` — can't reason about scalars | NEVER use `linarith` — use `agrind` > `grind` > `scalar_tac` |
 | Edits wrong file/section | Ambiguous instructions | Be very specific about what to change |
 | Increases `maxRecDepth` | Trying to work around recursion depth errors | NEVER increase `maxRecDepth` — diagnose the root cause (bad proof structure or simp loop). Report to user if it's a tactic bug |
-| Tactic silently fails | Tactic doesn't do what it should (e.g., `progress` can't find a lemma that exists) | Report to user — may be a tactic bug worth fixing upstream |
+| Tactic silently fails | Tactic doesn't do what it should (e.g., `step` can't find a lemma that exists) | Report to user — may be a tactic bug worth fixing upstream |
+| Spawns Lean sub-agents | Agent tries to parallelize by spawning sub-agents | NEVER spawn sub-agents that work on Lean files — resources are tight, and it causes file conflicts |
+| Edits other files | Agent modifies shared defs or specs it wasn't assigned | NEVER edit files other than assigned ones — introduce local axioms with TODO comments instead |
+| Agent crashes mid-edit | API loss, timeout, resource limit | Check for referenced-but-undefined identifiers; create missing defs in shared files |
+| `scalar_tac` loops in spec_gen | `maxRecDepth` in loop invariant proof | Mass-replace ALL `scalar_tac` → `agrind` in the proof body |
 
 ## Example: Full Agent Prompt
 
 ```
 Fix the inner loop sorry in `/path/to/Ntt.lean`.
 
+## ⛔ HARD REQUIREMENT: lean-lsp-mcp tools ONLY — READ THIS FIRST
+Your FIRST action must be using the lean-lsp-mcp tools (`lean_goal`,
+`lean_diagnostic_messages`, `lean_multi_attempt`, etc.) to inspect the file.
+Do ALL proof checking via these tools. Edit the file on disk, then use
+`lean_goal` and `lean_diagnostic_messages` to inspect the result.
+`lake build` is ONLY allowed as a SINGLE final verification after all proofs are done.
+If you use `lake build` for iterative proof development, your work will be REJECTED.
+
 ## Aeneas Skills — READ FIRST
 Read these files: [list paths]
 
-### MANDATORY: Use lean_lsp.py
-[lean_lsp.py instructions]
+### MANDATORY: Use lean-lsp-mcp tools
+[lean-lsp-mcp instructions — see the `lean-lsp-mcp` skill file]
 
 ## The Sorry
 `poly_element_ntt_layer_generic_loop0_loop0_spec` at line ~421.
 
 ## Proof Strategy
-Use `loop.spec_decr_nat` with measure `iter.end - iter.start`.
+The loop is a recursive function — use `unfold` + `step` with case split.
 Use `step*?` to generate the body proof script, then fix sub-goals.
 
 ## Available Specs
@@ -679,8 +958,8 @@ Use `step*?` to generate the body proof script, then fix sub-goals.
 
 ## Key Rules
 - NEVER unfold stdlib
-- NEVER use `omega` — use `scalar_tac` instead, or `agrind` (prefer), or `grind`
+- NEVER use `omega` — use `agrind` (preferred), `grind`, or `scalar_tac`
 - ONLY modify the specified sorry
-- DO NOT COMMIT
-- Report progress every 10 minutes, even if not finished
+- NEVER commit or push without explicit user approval
+- After completing this sorry, STOP and return results — do NOT proceed to other work
 ```

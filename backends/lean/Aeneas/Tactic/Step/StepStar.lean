@@ -415,12 +415,27 @@ def analyzeTarget : TacticM TargetKind := do
 partial def evalStepStar (cfg: Config) (fuel : Option Nat) : TacticM Result :=
   withMainContext do focus do
   withTraceNode `Step (fun _ => do pure m!"evalStepStar") do
+  -- Initialize the step state (grind threading)
+  let initState : Step.StepState ←
+    if cfg.stepConfig.threadGrindState then
+      let mvarId ← getMainGoal
+      let gs ← Step.initStepGrindState cfg.stepConfig mvarId
+      /- Check if grind detected a contradiction during initialization.
+         If so, close the main goal immediately. -/
+      if let some falseProof := gs.contradictionProof? then
+        trace[Step] "grind detected contradiction during initialization — closing goal"
+        Step.closeGoalWithFalse mvarId falseProof
+        setGoals []
+        let agrindStx ← `(tactic| agrind)
+        return { script := .tacs #[.done (some agrindStx)], unassignedVars := #[], subgoals := #[] }
+      pure { grindState? := some gs }
+    else pure {}
   -- Simplify the target
   let (info, mvarId) ← simplifyTarget
   -- Continue
   match mvarId with
   | some _ =>
-    let info' ← traverseProgram cfg fuel
+    let info' ← traverseProgram cfg fuel initState
     let info := info ++ info'
     -- Wait for the asynchronous execution to finish
     withTraceNode `Step (fun _ => do pure m!"filtering subgoals") do
@@ -467,7 +482,7 @@ where
     let goal ← do if r.isSome then pure (some (← getMainGoal)) else pure none
     pure (info, goal)
 
-  traverseProgram (cfg : Config) (fuel : Option Nat) : TacticM Info := do
+  traverseProgram (cfg : Config) (fuel : Option Nat) (ss : Step.StepState) : TacticM Info := do
     withMainContext do
     withTraceNode `Step (fun _ => do pure m!"traverseProgram") do
     traceGoalWithNode "current goal"
@@ -482,20 +497,28 @@ where
     match targetKind with
     | .bind varName => do
       let names := if varName.hasMacroScopes then #[] else #[some varName]
-      let (info, mainGoal) ← onBind cfg names
+      let (info, mainGoalAndState) ← onBind cfg names ss
       /- Continue, if necessary -/
-      match mainGoal with
+      match mainGoalAndState with
       | none =>
         -- Stop
         trace[Step] "stop"
         return info
-      | some mainGoal =>
+      | some (mainGoal, ss) =>
+        /- Check if grind detected a contradiction during the step state update.
+           This can happen when the new hypotheses introduced by the step contradict
+           existing ones. Close the goal ourselves with the saved proof. -/
+        if let some falseProof := ss.contradictionProof? then
+          trace[Step] "grind detected contradiction after let-binding step — closing goal"
+          Step.closeGoalWithFalse mainGoal falseProof
+          let agrindStx ← `(tactic| agrind)
+          return (info ++ { script := .tacs #[.done (some agrindStx)], unassignedVars := #[], subgoals := #[] })
         setGoals [mainGoal]
         /- Check if there are unassigned meta-variables which are not `Prop`:
            if it is the case it means there are meta-variables we could not infer, so we stop -/
         if info.unassignedVars.isEmpty then
-          let restInfo ← traverseProgram cfg fuel
-          return info ++ restInfo
+          let restInfo ← traverseProgram cfg fuel ss
+          return (info ++ restInfo)
         else
           trace[Step] "Found unassigned meta-variables of type ≠ Prop: stopping"
           let info' : Info ← pure
@@ -512,28 +535,41 @@ where
       trace[Step] "Match over scrutinee: {bfInfo.scrut}"
       let (branchGoals, mkStx) ← onMatch cfg bfInfo contsTaggedVals
       withTraceNode `Step (fun _ => do pure m!"exploring branches") do
-      /- Continue exploring from the subgoals -/
+      /- Continue exploring from the subgoals.
+         Each branch starts from the same state (branches are independent).
+         We update the grind state for each branch to internalize the hypotheses
+         introduced by `esplitAtSpec` (case variables, discriminant equality). -/
       let branchInfos ← branchGoals.mapM fun mainGoal => do
         setGoals [mainGoal]
-        let restInfo ← traverseProgram cfg fuel
-        pure restInfo
-      /- Put everything together -/
+        let ss ← ss.update cfg.stepConfig mainGoal
+        /- Check if grind detected a contradiction during hypothesis internalization.
+           This happens when a branch's hypotheses contradict the pre-split context
+           (e.g., `h : a = b` from before the split and `h' : ¬a = b` from the branch). -/
+        if let some falseProof := ss.contradictionProof? then
+          trace[Step] "grind detected contradiction in branch — closing goal"
+          Step.closeGoalWithFalse mainGoal falseProof
+          let agrindStx ← `(tactic| agrind)
+          pure { script := .tacs #[.done (some agrindStx)], unassignedVars := #[], subgoals := #[] }
+        else
+          traverseProgram cfg fuel ss
+      /- Put everything together — after branches, state is discarded (we can't merge
+         divergent e-graphs). Use the pre-branch state going forward. -/
       mkStx branchInfos
     | .result => do
-      let (info, mainGoal) ← onResult cfg
+      let (info, mainGoal) ← onResult cfg ss
       let mainGoal ← match mainGoal with
         | none => pure #[]
         | some mainGoal => pure #[(mainGoal, none)]
       pure { info with subgoals := info.subgoals ++ mainGoal }
     | .unknown => do
       trace[Step] "don't know what to do: it may be a terminal goal, attempting to solve it with grind"
-      let (info, mainGoal) ← onResult cfg
+      let (info, mainGoal) ← onResult cfg ss
       let mainGoal ← match mainGoal with
         | none => pure #[]
         | some mainGoal => pure #[(mainGoal, none)]
       pure { info with subgoals := info.subgoals ++ mainGoal }
 
-  onResult (cfg : Config) : TacticM (Info × Option MVarId) := do
+  onResult (cfg : Config) (ss : Step.StepState) : TacticM (Info × Option MVarId) := do
     withTraceNode `Step (fun _ => pure m!"onResult") do
     /- If we encounter `(do f a)` we process it as if it were `(do let res ← f a; return res)`
        since (id = (· >>= pure)) and when we desugar the do block we have that
@@ -545,14 +581,14 @@ where
        We known in advance the result of processing `return res`, which is to do nothing.
        This allows us to prevent code duplication with the `onBind` function. -/
     let names ← Step.getPostNamesFromGoal
-    let res ← onBind cfg names
-    match res.snd with
+    let (info, mainGoalAndState) ← onBind cfg names ss
+    match mainGoalAndState with
     | none =>
       trace[Step] "done"
-      pure res
-    | some mvarId =>
+      pure (info, none)
+    | some (mvarId, _) =>
       let (info', mvarId) ← onFinish cfg mvarId
-      pure (res.fst ++ info', mvarId)
+      pure (info ++ info', mvarId)
 
   onFinish (cfg : Config) (mvarId : MVarId) : TacticM (Info × Option MVarId) := do
     withTraceNode `Step (fun _ => pure m!"onFinish") do
@@ -608,10 +644,10 @@ where
           pure info'
       pure (info ++ info', none)
 
-  onBind (cfg : Config) (names : Array (Option Name)) : TacticM (Info × Option MVarId) := do
+  onBind (cfg : Config) (names : Array (Option Name)) (ss : Step.StepState) : TacticM (Info × Option (MVarId × Step.StepState)) := do
     withTraceNode `Step (fun _ => pure m!"onBind ({names})") do
     let postsBasename := names[0]?.join
-    if let some res ← tryStep cfg names postsBasename then
+    if let some res ← tryStep cfg names postsBasename ss then
       let {usedTheorem, unassignedVars, preconditions, mainGoal } := res
       withTraceNode `Step (fun _ => pure m!"step succeeded") do
       match mainGoal with
@@ -630,7 +666,7 @@ where
             | some n => mkNode ``Lean.binderIdent #[mkIdent n]
             | none => mkNode ``Lean.binderIdent #[mkIdent `_]
       trace[Step] "ids from introduced vars: {ids}"
-      let mainGoal := mainGoal.map fun mainGoal => mainGoal.goal
+      let mainGoal := mainGoal.map fun mainGoal => (mainGoal.goal, mainGoal.stepState)
       /- Generate the tactic scripts for the preconditions -/
       let currTac ←
         if cfg.prettyPrintedStep then
@@ -682,7 +718,8 @@ where
         }
       pure (info, mainGoal)
     else
-      onFinish cfg (← getMainGoal)
+      let (info, mvarId) ← onFinish cfg (← getMainGoal)
+      pure (info, mvarId.map (·, ss))
 
   onMatch (cfg : Config) (bfInfo : Bifurcation.Info) (toBeProcessed : Array (Array Name)): TacticM (List MVarId × (List Info → TacticM Info)) := do
     withTraceNode `Step (fun _ => pure m!"onMatch") do
@@ -728,8 +765,8 @@ where
 
       return (infos, mkStx)
 
-  tryStep (cfg : Config) (ids : Array (Option Name) := #[]) (postsBasename : Option Name := none) := do
-    try some <$> Step.evalStepCore cfg.stepConfig (some (.str .anonymous "_")) none ids false postsBasename cfg.preconditionTac
+  tryStep (cfg : Config) (ids : Array (Option Name) := #[]) (postsBasename : Option Name := none) (ss : Step.StepState) := do
+    try some <$> Step.evalStepCore cfg.stepConfig (some (.str .anonymous "_")) none ids false postsBasename cfg.preconditionTac ss
     catch _ => pure none
 
   makeIds (base: Name) (numElem numPost : Nat) (defaultId := "x"): Array (TSyntax ``Lean.binderIdent) :=
@@ -791,11 +828,7 @@ def evalStepStarTac : Tactic := fun stx => do
     let info ← evalStepStar cfg fuel
     let suggestion ← info.script.toSyntax
     let suggestion ← `(tacticSeq|$(suggestion)*)
-    /- TODO: do not use the Aesop helper but our own (it mentions Aesop in the message)
-       See https://github.com/AeneasVerif/aeneas/issues/476 -/
-    Aesop.addTryThisTacticSeqSuggestion stx suggestion (origSpan? := ← getRef)
-    --TODO: if we use this the indentation is not correct
-    --Meta.Tactic.TryThis.addSuggestion stx suggestion (origSpan? := ← getRef)
+    Aeneas.Utils.addTryThisTacticSeqSuggestion stx suggestion (origSpan? := ← getRef)
   | _ => throwUnsupportedSyntax
 
 end StepStar
@@ -1177,6 +1210,82 @@ example (x : U32) (h : x.val < 32) :
     massert (x < 32#u32)
     massert (x < 32#u32)
     massert (x < 32#u32)) ⦃ _ => True ⦄ := by
+  step*
+
+/-- Regression test: step* with if-then-else + fail + contradicting hypothesis.
+    Previously crashed with "No goals to be solved" because grind's
+    hypothesis internalization would assign the else-branch mvar when it
+    detected contradicting hypotheses (h : a = b from context + ¬a = b from
+    the else branch). The fix uses a fresh mvar during internalization and
+    closes the goal explicitly when a contradiction is found. -/
+private def grindContradictionFn (a b : U32) : Result U32 := do
+  if a = b then a + b
+  else fail .panic
+
+/- Test that step* works (previously crashed with "No goals to be solved") -/
+set_option maxHeartbeats 800000 in
+example (a b : U32) (h : a = b) (hbnd : a.val + b.val ≤ U32.max) :
+    grindContradictionFn a b ⦃ c => c.val = a.val + b.val ⦄ := by
+  unfold grindContradictionFn
+  step*
+
+/- Test that step*? generates `agrind` for the contradiction branch -/
+/--
+info: Try this:
+
+  [apply]     spec_split
+    · let* ⟨ c, c_post ⟩ ← U32.add_spec
+      agrind
+    · agrind
+-/
+#guard_msgs in
+set_option maxHeartbeats 800000 in
+example (a b : U32) (h : a = b) (hbnd : a.val + b.val ≤ U32.max) :
+    grindContradictionFn a b ⦃ c => c.val = a.val + b.val ⦄ := by
+  unfold grindContradictionFn
+  step*?
+
+/- Test that the script generated by step*? is valid -/
+set_option maxHeartbeats 800000 in
+example (a b : U32) (h : a = b) (hbnd : a.val + b.val ≤ U32.max) :
+    grindContradictionFn a b ⦃ c => c.val = a.val + b.val ⦄ := by
+  unfold grindContradictionFn
+  spec_split
+  · let* ⟨ c, c_post ⟩ ← U32.add_spec
+    agrind
+  · agrind
+
+/-- Test: contradiction after a match (explicit match on an inductive type).
+    The `none` branch leads to `fail`, which contradicts the postcondition.
+    With `h : x = some v` in context, the `none` branch is contradictory. -/
+private def matchContradictionFn (x : Option U32) : Result U32 :=
+  match x with
+  | some v => .ok v
+  | none => fail .panic
+
+set_option maxHeartbeats 800000 in
+example (v : U32) (h : x = some v) :
+    matchContradictionFn x ⦃ r => r = v ⦄ := by
+  unfold matchContradictionFn
+  step*
+
+/-- Test: contradiction after a let-binding.
+    After the `add` step, the postcondition introduces `c.val = a.val + b.val`.
+    The if-then-else checks `a = b`. In the `else` branch, we have `¬(a = b)` from
+    the branch plus any accumulated facts. With `h : a = b` in scope, this contradicts.
+    The contradiction is detected after the let-binding step introduces `c` and its
+    postcondition, and then the if-split creates the contradicting branch. -/
+private def letBindContradictionFn (a b : U32) : Result U32 := do
+  let c ← a + b
+  if a = b then
+    .ok c
+  else
+    fail .panic
+
+set_option maxHeartbeats 800000 in
+example (a b : U32) (h : a = b) (hbnd : a.val + b.val ≤ U32.max) :
+    letBindContradictionFn a b ⦃ r => r.val = a.val + b.val ⦄ := by
+  unfold letBindContradictionFn
   step*
 
 end Examples

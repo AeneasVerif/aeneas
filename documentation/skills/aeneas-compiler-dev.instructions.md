@@ -1,24 +1,9 @@
+---
+name: aeneas-compiler-dev
+description: Dev workflow, formatting, tests, error macros, build rules for the Aeneas compiler
+---
+
 # Aeneas Compiler Development — Skill File
-
-## ⛔ NEVER Commit or Push
-
-Do NOT run `git commit` or `git push`. Leave all commits to the user.
-
-## Skill Files: Structure and Editing Rules
-
-Skill files are stored in `documentation/skills/` — this is the **source of truth**.
-They are shared with AI tools via symlinks:
-- **GitHub Copilot** reads from `.github/instructions/`, which is a directory symlink
-  to `documentation/skills/`.
-- **Claude Code** reads from `.claude/skills/<name>/SKILL.md`, where each `SKILL.md`
-  is a symlink to the corresponding file in `documentation/skills/`.
-
-**Always edit files in `documentation/skills/`.** Changes propagate automatically
-through the symlinks. When adding a new skill file, also create the Claude symlink:
-```bash
-mkdir -p .claude/skills/<name>
-ln -s ../../../documentation/skills/<name>.instructions.md .claude/skills/<name>/SKILL.md
-```
 
 ## ⛔ NEVER Clean the Lake Cache
 
@@ -26,7 +11,7 @@ ln -s ../../../documentation/skills/<name>.instructions.md .claude/skills/<name>
 rebuild of all dependencies from scratch, which takes a very long time (30+ minutes).
 If the build fails due to stale cache entries, fix the root cause (e.g., stale imports,
 missing renames) instead of wiping the cache. When encountering build errors, use the
-`lake build` → `lean_lsp.py` → `lake build` iterative loop to diagnose and fix issues
+`lake build` → lean-lsp-mcp tools → `lake build` iterative loop to diagnose and fix issues
 incrementally.
 
 ## Building: Fixing Errors Iteratively
@@ -34,16 +19,18 @@ incrementally.
 When fixing build errors across multiple files, use this loop:
 
 1. **`lake build`** — identify the first failing module and its errors
-2. **`lean_lsp.py`** — open the failing file, inspect errors with `errors`, fix
-   interactively with `edit`/`batch_start`/`batch_end`, confirm with `check`
+2. **lean-lsp-mcp tools** — use `lean_diagnostic_messages` to inspect errors, fix with
+   `edit`, use `lean_goal` to check proof state, confirm with `lean_diagnostic_messages`
 3. **`lake build`** — confirm the fix, find the next failing module (if any)
 4. Repeat until the build succeeds
 
-This is much faster than running `lake build` after every single edit, because the LSP
-gives sub-second feedback on individual files while `lake build` must re-elaborate all
-downstream modules.
+This is much faster than running `lake build` after every single edit, because the
+lean-lsp-mcp tools give sub-second feedback on individual files while `lake build`
+must re-elaborate all downstream modules.
 
 ## Workflow: Lean Backend Changes
+
+For skill file editing rules (structure, symlinks, sync script), see the `skill-file-authoring` skill file.
 
 When modifying the Lean backend (files under `backends/lean/`), **always ask the user**
 whether the documentation and skill files need to be updated afterwards. The following

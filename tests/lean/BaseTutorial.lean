@@ -241,7 +241,7 @@ partial_fixpoint
    Note that because we use the suffix "CList.", we can use the notation [l.toList]
    if [l] has type [CList ...].
  -/
-@[simp, simp_lists_simps, scalar_tac_simps, grind]
+@[simp, simp_lists, scalar_tac_simps, grind]
 def CList.toList {α : Type} (x : CList α) : List α :=
   match x with
   | CNil => []

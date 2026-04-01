@@ -12,14 +12,16 @@ set_option maxHeartbeats 1000000
 namespace loops_adts
 
 /-- [loops_adts::List]
-    Source: 'tests/src/loops-adts.rs', lines 3:0-6:1 -/
+    Source: 'tests/src/loops-adts.rs', lines 3:0-6:1
+    Visibility: public -/
 @[discriminant isize]
 inductive List (T : Type) where
 | Cons : T → List T → List T
 | Nil : List T
 
 /-- [loops_adts::nth_shared]: loop 0:
-    Source: 'tests/src/loops-adts.rs', lines 9:4-18:1 -/
+    Source: 'tests/src/loops-adts.rs', lines 9:4-18:1
+    Visibility: public -/
 @[rust_loop]
 def nth_shared_loop
   {T : Type} (ls : List T) (i : Std.U32) : Result (Option T) := do
@@ -33,13 +35,15 @@ def nth_shared_loop
 partial_fixpoint
 
 /-- [loops_adts::nth_shared]:
-    Source: 'tests/src/loops-adts.rs', lines 8:0-18:1 -/
+    Source: 'tests/src/loops-adts.rs', lines 8:0-18:1
+    Visibility: public -/
 @[reducible]
 def nth_shared {T : Type} (ls : List T) (i : Std.U32) : Result (Option T) := do
   nth_shared_loop ls i
 
 /-- [loops_adts::nth_mut]: loop 0:
-    Source: 'tests/src/loops-adts.rs', lines 21:4-30:1 -/
+    Source: 'tests/src/loops-adts.rs', lines 21:4-30:1
+    Visibility: public -/
 @[rust_loop]
 def nth_mut_loop
   {T : Type} (ls : List T) (i : Std.U32) :
@@ -64,7 +68,8 @@ def nth_mut_loop
 partial_fixpoint
 
 /-- [loops_adts::nth_mut]:
-    Source: 'tests/src/loops-adts.rs', lines 20:0-30:1 -/
+    Source: 'tests/src/loops-adts.rs', lines 20:0-30:1
+    Visibility: public -/
 @[reducible]
 def nth_mut
   {T : Type} (ls : List T) (i : Std.U32) :
@@ -73,7 +78,8 @@ def nth_mut
   nth_mut_loop ls i
 
 /-- [loops_adts::update_array_mut_borrow]:
-    Source: 'tests/src/loops-adts.rs', lines 32:0-34:1 -/
+    Source: 'tests/src/loops-adts.rs', lines 32:0-34:1
+    Visibility: public -/
 def update_array_mut_borrow
   (a : Array Std.U32 32#usize) :
   Result ((Array Std.U32 32#usize) × (Array Std.U32 32#usize → Array Std.U32
@@ -82,7 +88,8 @@ def update_array_mut_borrow
   ok (a, fun a1 => a1)
 
 /-- [loops_adts::array_mut_borrow_loop1]: loop body 0:
-    Source: 'tests/src/loops-adts.rs', lines 37:4-39:5 -/
+    Source: 'tests/src/loops-adts.rs', lines 37:4-39:5
+    Visibility: public -/
 @[rust_loop_body]
 def array_mut_borrow_loop1_loop.body
   (back : Array Std.U32 32#usize → Array Std.U32 32#usize) (b : Bool)
@@ -98,7 +105,8 @@ def array_mut_borrow_loop1_loop.body
   else ok (done (back a))
 
 /-- [loops_adts::array_mut_borrow_loop1]: loop 0:
-    Source: 'tests/src/loops-adts.rs', lines 37:4-39:5 -/
+    Source: 'tests/src/loops-adts.rs', lines 37:4-39:5
+    Visibility: public -/
 @[rust_loop]
 def array_mut_borrow_loop1_loop
   (back : Array Std.U32 32#usize → Array Std.U32 32#usize) (b : Bool)
@@ -110,7 +118,8 @@ def array_mut_borrow_loop1_loop
     (back, b, a)
 
 /-- [loops_adts::array_mut_borrow_loop1]:
-    Source: 'tests/src/loops-adts.rs', lines 36:0-40:1 -/
+    Source: 'tests/src/loops-adts.rs', lines 36:0-40:1
+    Visibility: public -/
 @[reducible]
 def array_mut_borrow_loop1
   (b : Bool) (a : Array Std.U32 32#usize) :
@@ -119,7 +128,8 @@ def array_mut_borrow_loop1
   array_mut_borrow_loop1_loop (fun a1 => a1) b a
 
 /-- [loops_adts::array_mut_borrow_loop2]: loop body 0:
-    Source: 'tests/src/loops-adts.rs', lines 43:4-45:5 -/
+    Source: 'tests/src/loops-adts.rs', lines 43:4-45:5
+    Visibility: public -/
 @[rust_loop_body]
 def array_mut_borrow_loop2_loop.body
   (back : Array Std.U32 32#usize → Array Std.U32 32#usize) (b : Bool)
@@ -136,7 +146,8 @@ def array_mut_borrow_loop2_loop.body
   else ok (done (a, back))
 
 /-- [loops_adts::array_mut_borrow_loop2]: loop 0:
-    Source: 'tests/src/loops-adts.rs', lines 43:4-45:5 -/
+    Source: 'tests/src/loops-adts.rs', lines 43:4-45:5
+    Visibility: public -/
 @[rust_loop]
 def array_mut_borrow_loop2_loop
   (back : Array Std.U32 32#usize → Array Std.U32 32#usize) (b : Bool)
@@ -149,7 +160,8 @@ def array_mut_borrow_loop2_loop
     (back, b, a)
 
 /-- [loops_adts::array_mut_borrow_loop2]:
-    Source: 'tests/src/loops-adts.rs', lines 42:0-47:1 -/
+    Source: 'tests/src/loops-adts.rs', lines 42:0-47:1
+    Visibility: public -/
 @[reducible]
 def array_mut_borrow_loop2
   (b : Bool) (a : Array Std.U32 32#usize) :
@@ -159,13 +171,15 @@ def array_mut_borrow_loop2
   array_mut_borrow_loop2_loop (fun a1 => a1) b a
 
 /-- [loops_adts::copy_shared_array]:
-    Source: 'tests/src/loops-adts.rs', lines 49:0-51:1 -/
+    Source: 'tests/src/loops-adts.rs', lines 49:0-51:1
+    Visibility: public -/
 def copy_shared_array
   (a : Array Std.U32 32#usize) : Result (Array Std.U32 32#usize) := do
   ok a
 
 /-- [loops_adts::array_shared_borrow_loop1]: loop body 0:
-    Source: 'tests/src/loops-adts.rs', lines 54:4-56:5 -/
+    Source: 'tests/src/loops-adts.rs', lines 54:4-56:5
+    Visibility: public -/
 @[rust_loop_body]
 def array_shared_borrow_loop1_loop.body
   (b : Bool) (a : Array Std.U32 32#usize) :
@@ -177,7 +191,8 @@ def array_shared_borrow_loop1_loop.body
   else ok (done ())
 
 /-- [loops_adts::array_shared_borrow_loop1]: loop 0:
-    Source: 'tests/src/loops-adts.rs', lines 54:4-56:5 -/
+    Source: 'tests/src/loops-adts.rs', lines 54:4-56:5
+    Visibility: public -/
 @[rust_loop]
 def array_shared_borrow_loop1_loop
   (b : Bool) (a : Array Std.U32 32#usize) : Result Unit := do
@@ -186,14 +201,16 @@ def array_shared_borrow_loop1_loop
     (b, a)
 
 /-- [loops_adts::array_shared_borrow_loop1]:
-    Source: 'tests/src/loops-adts.rs', lines 53:0-57:1 -/
+    Source: 'tests/src/loops-adts.rs', lines 53:0-57:1
+    Visibility: public -/
 @[reducible]
 def array_shared_borrow_loop1
   (b : Bool) (a : Array Std.U32 32#usize) : Result Unit := do
   array_shared_borrow_loop1_loop b a
 
 /-- [loops_adts::array_shared_borrow_loop2]: loop body 0:
-    Source: 'tests/src/loops-adts.rs', lines 60:4-62:5 -/
+    Source: 'tests/src/loops-adts.rs', lines 60:4-62:5
+    Visibility: public -/
 @[rust_loop_body]
 def array_shared_borrow_loop2_loop.body
   (b : Bool) (a : Array Std.U32 32#usize) :
@@ -206,7 +223,8 @@ def array_shared_borrow_loop2_loop.body
   else ok (done a)
 
 /-- [loops_adts::array_shared_borrow_loop2]: loop 0:
-    Source: 'tests/src/loops-adts.rs', lines 60:4-62:5 -/
+    Source: 'tests/src/loops-adts.rs', lines 60:4-62:5
+    Visibility: public -/
 @[rust_loop]
 def array_shared_borrow_loop2_loop
   (b : Bool) (a : Array Std.U32 32#usize) :
@@ -217,7 +235,8 @@ def array_shared_borrow_loop2_loop
     (b, a)
 
 /-- [loops_adts::array_shared_borrow_loop2]:
-    Source: 'tests/src/loops-adts.rs', lines 59:0-64:1 -/
+    Source: 'tests/src/loops-adts.rs', lines 59:0-64:1
+    Visibility: public -/
 @[reducible]
 def array_shared_borrow_loop2
   (b : Bool) (a : Array Std.U32 32#usize) :

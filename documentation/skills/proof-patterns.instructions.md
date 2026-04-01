@@ -1,3 +1,8 @@
+---
+name: proof-patterns
+description: Fully-worked proof examples including loops, dot products, comparisons, and nested loops for Aeneas Lean proofs
+---
+
 # Proof Patterns — Completed Examples
 
 This document collects fully-worked proof patterns from real-world cryptographic
@@ -63,6 +68,10 @@ private theorem add_loop.spec_gen
         s[j]'(by grind) = out0[j]'(by agrind) := by
       intro j hj; grind                    -- unchanged entry
     -- Step 6: Recursive call
+    -- NOTE on inline (by ...) blocks: The single cheap-tactic args below are acceptable.
+    -- If any argument required tactic sequences, multi-line proofs, or expensive tactics
+    -- (first|..., all_goals, grind), extract it as a `have` first — see
+    -- "Extract inline (by ...) blocks" in the `aeneas-lean-core` skill file.
     have hend_val : ret.2.«end».val = iter.«end».val := by rw [hend']
     exact add_loop.spec_gen s out0 a p (by grind) (by grind)
       ret.2 (by scalar_tac) (by grind)
@@ -375,7 +384,18 @@ theorem loop.spec ... :
 
 ### Index arithmetic helpers
 
+**Register recurring bounds/arithmetic helpers with solver attributes** so they
+are used automatically (see Pitfall #22 in the `aeneas-lean-core` skill file).
+If you see the same `(by ...)` tactic block 3+ times, extract it as a lemma
+with `@[agrind =]` (or `@[scalar_tac_simps]`, `@[simp]` as appropriate).
+
 ```lean
+-- Index bound: register with @[agrind =] so getElem bounds auto-discharge
+@[agrind =]
+private lemma idx_lt_bound (r : Fin NBAR) (c : Fin N)
+    (h : out.length = NBAR * N) :
+    r.val * N + c.val < out.length := by agrind
+
 -- (i * NBAR + j) / NBAR = i when j < NBAR
 private lemma mul_NBAR_add_div (i j : ℕ) (hj : j < NBAR) :
     (i * NBAR + j) / NBAR = i := by simp_all [NBAR]; scalar_tac
@@ -387,4 +407,4 @@ private lemma mul_NBAR_add_mod (i j : ℕ) (hj : j < NBAR) :
 
 ---
 
-For tactic selection and banned tactics, see `aeneas-tactics-quickref.instructions.md`.
+For tactic selection and banned tactics, see the `aeneas-tactics-quickref` skill file.

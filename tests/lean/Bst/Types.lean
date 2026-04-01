@@ -12,7 +12,8 @@ set_option maxHeartbeats 1000000
 namespace bst
 
 /-- [bst::Ordering]
-    Source: 'src/bst.rs', lines 5:0-9:1 -/
+    Source: 'src/bst.rs', lines 5:0-9:1
+    Visibility: public -/
 @[discriminant isize]
 inductive Ordering where
 | Less : Ordering

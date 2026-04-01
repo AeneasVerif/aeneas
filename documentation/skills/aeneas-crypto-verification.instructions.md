@@ -1,10 +1,15 @@
+---
+name: aeneas-crypto-verification
+description: Crypto-specific proof strategies including Montgomery, NTT, modular arithmetic, and bit-vectors for Aeneas Lean proofs
+---
+
 # Aeneas Crypto Verification Skill File
 
 ## Context
 
-This skill file covers strategies for verifying cryptographic Rust code translated by Aeneas to Lean. Techniques drawn from the SymCrypt verification project (ML-KEM / Kyber verification for Microsoft SymCrypt).
+This skill file covers strategies for verifying cryptographic Rust code translated by Aeneas to Lean. Techniques drawn from real-world cryptographic verification projects.
 
-**PREREQUISITE:** Always use `lean_lsp.py --repl --json` for interactive proof development. See the `lean-lsp-tool` skill file.
+**PREREQUISITE:** Always use the lean-lsp-mcp tools for interactive proof development. See the `lean-lsp-mcp` skill file.
 
 ## File Setup Template
 
@@ -46,6 +51,16 @@ NIST spec ⟷₁ Lean spec ⟷₂ Auxiliary spec ⟷₃ Aeneas code
 - Prove each `⟷` separately — each gap is small
 - Name convention: `spec_aux` for code↔aux, `spec` for full specification
 - Use `step_spec_aux` for code↔auxiliary spec properties, `step_spec` for full spec with invariants
+
+### Spec adequacy: direct equality, not relational
+
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Postcondition quality" -->
+
+Every `@[step]` theorem must have a **direct equality** postcondition:
+`repr(output) = Spec.algorithmName(repr(input1), repr(input2), ...)`.
+Relational specs and structural-only specs are not acceptable.
+See aeneas-lean-core "Postcondition quality" for full rules, examples, and the
+vacuity test.
 
 ### Template:
 
@@ -101,7 +116,7 @@ Goal involves modular equivalence (a ≡ b [MOD n])?
   │
   └─ NO → Goal involves bounds (a < n, 0 ≤ a)?
            ├─ YES → Stay in Nat/Int
-           │        Use: scalar_tac, scalar_tac +nonLin, agrind
+           │        Use: agrind, grind, scalar_tac / scalar_tac +nonLin
            │
            └─ NO → Mixed? Split into separate goals
                     split_conjs
@@ -141,7 +156,7 @@ Goal involves bitwise ops (AND, OR, XOR, shifts)?
   │
   └─ Need to prove scalar bounds after bitwise op?
       → Use bv_tac for the bitwise part,
-        then scalar_tac/agrind for bounds
+        then agrind/scalar_tac for bounds
 ```
 
 ## Array/Polynomial Proof Patterns
@@ -165,13 +180,13 @@ cases h_idx <;> simp_lists [*]
 ### Polynomial-to-array correspondence:
 
 ```lean
--- Define conversion
+-- Define conversion using map (not ofFn)
 def to_poly (arr : Array U32 256) : Spec.Polynomial :=
-  Vector.ofFn (fun i => (arr[i.val]!.val : ZMod q))
+  arr.map (fun x => (x.val : ZMod q))
 
 -- Prove element-wise correspondence
-theorem to_poly_getElem! (arr : Array U32 256) (i : Nat) :
-  (to_poly arr)[i]! = (arr[i]!.val : ZMod q) := by ...
+theorem to_poly_getElem (arr : Array U32 256) (i : Fin 256) :
+  (to_poly arr)[i] = (arr[i].val : ZMod q) := by simp [to_poly]
 ```
 
 ## Crypto Proof Spec Template
@@ -189,8 +204,10 @@ theorem crypto_operation_spec
     (result.val : ZMod q) = spec_function (input.val : ZMod q) ⦄
   := by
   unfold crypto_operation
-  -- Apply monadic step specs
-  step* <;> bv_tac 32   -- or handle manually
+  -- Apply monadic step specs, then handle sub-goals individually
+  step*
+  · bv_tac 32     -- bitwise sub-goal 1
+  · bv_tac 32     -- bitwise sub-goal 2
   -- Split bounds vs modular goals
   split_conjs
   · -- Bounds: stay in Nat/Int
@@ -210,6 +227,59 @@ theorem crypto_operation_spec
 6. ☐ Shorten proofs after completion
 7. ☐ Use `step*?` to find automation opportunities
 
+## Axiomatizing SIMD/Intrinsic Operations
+
+When verifying code that uses SIMD intrinsics (SSE2/AVX, NEON, etc.) or assembly
+wrappers, the operations cannot be translated by Aeneas and must be axiomatized.
+
+### Reference-driven axiomatization
+
+**Always look up the vendor reference documentation** (Intel Intrinsics Guide, ARM
+NEON Reference, AMD manuals, etc.) for the precise semantics of each intrinsic. Use
+the reference semantics — not guesses or reverse engineering — to formalize the axiom.
+
+- **If the reference provides an executable pseudocode/spec**, formalize it as a Lean
+  `def` (the model) and state the axiom as: intrinsic result equals the model applied
+  to the inputs. If the reference pseudocode is short (< 25 lines), include it in the
+  docstring for easy cross-checking. Follow the same rules as formalizing cryptographic
+  specifications (see the `formalizing-crypto-specs` skill file).
+- **If no executable spec is available**, an axiomatized step theorem with a precise
+  postcondition is acceptable — but the postcondition must capture the full semantics,
+  not just partial properties.
+- **If no reference document could be found** for a specific intrinsic, report this
+  to the user. Do not guess the semantics.
+
+### Documentation requirements
+
+Every SIMD axiom must include a docstring that:
+1. **Names the intrinsic** (e.g., `_mm_add_epi16`, `vaddq_u16`)
+2. **Links to the reference** (URL to Intel Intrinsics Guide, ARM docs, etc.)
+3. **Quotes or summarizes the operation** from the reference (e.g., "Adds packed
+   16-bit integers in `a` and `b`")
+
+```lean
+/-- **Axiom for `_mm_add_epi16` (SSE2)**
+Adds packed 16-bit signed integers in `a` and `b`.
+Ref: https://www.intel.com/content/www/us/en/docs/intrinsics-guide/...
+Operation: `FOR j := 0 to 7: dst[j] := a[j] + b[j]` -/
+axiom vec128_add_spec (a b : XmmVec128) : ...
+```
+
+### SIMD lemma library
+
+When axiomatizing SIMD operations, build a **complete lemma library** for reasoning
+about the vector type. If a lemma is needed for one operation (e.g., element access
+for addition), equivalent lemmas are typically needed for related operations
+(subtraction, multiplication, shifts, etc.). The library should cover:
+
+- Element access (`v.val[i]!` for each lane)
+- Conversion between the vector type and arrays/lists
+- Well-formedness propagation (e.g., `wfVec` preservation through operations)
+- Commutativity, associativity, and other algebraic properties where applicable
+
+Aim for completeness: a missing lemma in the SIMD library often blocks proofs in
+unrelated parts of the codebase.
+
 ## Anti-Patterns to Avoid
 
 - ❌ Trying to prove NIST spec ↔ Aeneas code in one theorem (too big a gap)
@@ -217,3 +287,5 @@ theorem crypto_operation_spec
 - ❌ Monolithic proofs without helper lemmas
 - ❌ Using `grind` where `agrind` suffices (explosion risk)
 - ❌ Not decomposing large functions
+- ❌ SIMD axioms without reference documentation links
+- ❌ SIMD axioms that only assert partial properties (e.g., length but not values)

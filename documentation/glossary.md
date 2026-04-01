@@ -22,7 +22,7 @@
 
 **Auxiliary spec** — An intermediate specification that mirrors the code structure but is pure (no Result monad). Used as a bridge between a high-level mathematical spec and the Aeneas-generated code. Also called "intermediate spec."
 
-**Weakest-precondition notation (`⦃ ⦄`)** — The notation `f x ⦃ r => P r ⦄` means "if `f x` succeeds, the result `r` satisfies `P r`." Used in all Aeneas spec statements.
+**Weakest-precondition notation (`⦃ ⦄`)** — The notation `f x ⦃ r => P r ⦄` means "`f x` succeeds and the result `r` satisfies `P r`." Used in all Aeneas spec statements.
 
 **Fold theorem** — A theorem proving that a sequence of inline monadic operations equals a call to a helper function. Used to decompose large proofs into manageable pieces.
 

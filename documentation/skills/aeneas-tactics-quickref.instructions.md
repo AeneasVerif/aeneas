@@ -1,8 +1,13 @@
+---
+name: aeneas-tactics-quickref
+description: Tactic decision tree, banned tactics, and common combinations for Aeneas Lean proofs
+---
+
 # Aeneas Tactics Quick Reference
 
 ## Decision Tree: Which Tactic?
 
-**PREREQUISITE:** Always use `lean_lsp.py --repl --json` for interactive proof development. Use `goal <line>` to inspect the proof state before choosing a tactic. See the `lean-lsp-tool` skill file.
+**PREREQUISITE:** Always use the lean-lsp-mcp tools for interactive proof development. Use `lean_goal` to inspect the proof state before choosing a tactic. See the `lean-lsp-mcp` skill file.
 
 ```
 What does the goal look like?
@@ -32,14 +37,20 @@ What does the goal look like?
 │  ├─ Equivalence (a ≡ b [MOD n]) → zmodify; ring / simp
 │  └─ Bounds (a < n) → stay Nat/Int; agrind / grind / scalar_tac
 │
-├─ List/Array (get/set)
+├─ List/Array/Slice structural (setSlice!, replicate, append, take, drop, length)
+│  → simp_lists  (designed for these operations)
+│
+├─ List/Array (get/set by index)
 │  ├─ Automatic → agrind first; if fails, try grind (slower, more list lemmas)
-│  └─ Slow → cases idx <;> simp_lists [*]
+│  └─ Slow → cases idx <;> simp_lists
 │
 ├─ Slice/List getElem mismatch
 │  ├─ Use #setup_aeneas_simps at file top (auto-converts getElem → getElem!)
 │  ├─ Manual bridge → List.Inhabited_getElem_eq_getElem! s.val i proof
 │  └─ Slice getElem! → List getElem! → rw [Slice.getElem!_Nat_eq]
+│
+├─ Equality with shared terms (3*x + 2*y = x + 3*y)
+│  → ring_eq_nf / ring_eq_nf at h
 │
 ├─ If-then-else → simp_ifs / split
 ├─ Conjunction (∧) → split_conjs <;> agrind
@@ -70,6 +81,7 @@ What does the goal look like?
 | `zmodify` | Convert to ZMod | `zmodify`, `zmodify [to N]`, `zmodify at h` | `@[zmodify_simps]` |
 | `simp_ifs` | Simplify if-then-else | `simp_ifs` | — |
 | `simp_bool_prop` | Bool/prop simplification | `simp_bool_prop` | `@[simp_bool_prop_simps]` |
+| `ring_eq_nf` | Cancel common terms in equalities | `ring_eq_nf`, `ring_eq_nf at h` | — |
 | `fcongr` | Congruence (safe whnf) | `fcongr`, `fcongr N` | — |
 | `split_conjs` | Split nested ∧ | `split_conjs`, `split_conjs at h` | — |
 
@@ -88,17 +100,67 @@ What does the goal look like?
 
 ### ⛔ BANNED TACTICS
 
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "⛔ BANNED TACTICS" -->
+
 | Banned | Why | Use instead (preference order) |
 |---|---|---|
 | `omega` | No scalar/Slice/Vec knowledge | `agrind` > `grind` > `scalar_tac` |
 | `linarith` | No scalar/Slice/Vec knowledge | `agrind` > `grind` > `scalar_tac` |
 | `nlinarith` | No scalar knowledge, explosion risk | `agrind` > `grind` > `scalar_tac +nonLin` / `simp_scalar` |
+| `step* <;> ...` | Replays full `step*` on every edit | `step*` then `· tactic` per goal |
+| `all_goals tactic` | Same re-elaboration problem | `· tactic` per goal |
 
-**These tactics are NEVER acceptable in Aeneas proofs** — not in `step` theorems,
-not in helper lemmas, not in `have` steps, not in `decreasing_by` (even for pure Nat).
-They cannot reason about U8, U32, Usize, Slice.length, etc. A proof using them is
-non-idiomatic and must be rewritten. There are **no exceptions**.
+**The first three tactics are NEVER acceptable in Aeneas proofs** — not in `step`
+theorems, not in helper lemmas, not in `have` steps, not in `decreasing_by` (even
+for pure Nat). They cannot reason about U8, U32, Usize, Slice.length, etc. A proof
+using them is non-idiomatic and must be rewritten. There are **no exceptions**.
 See `aeneas-lean-core` skill file for the full rationale.
+
+**`step* <;>` and `all_goals` are NEVER acceptable either** — they destroy
+incrementality by forcing full re-elaboration on every edit. `all_goals` is banned
+**everywhere**, not just after `step*`: even a standalone `all_goals scalar_tac` at
+the end of a proof forces all goals to be a single elaboration unit. Always use
+focused `· tactic` (cdot) blocks — one per goal. There are **no exceptions**.
+
+### ⛔ BANNED PATTERN: `step* <;> tactic` and `all_goals tactic`
+
+**NEVER use `step* <;> ...`, `all_goals ...`, or `step* <;> all_goals ...`.**
+
+`all_goals` is banned in ALL contexts — not just after `step*`. Even a standalone
+`all_goals scalar_tac` at the end of a tactic block makes all remaining goals a
+single elaboration unit: editing anything forces re-elaboration of everything.
+
+When you modify any tactic after `<;>`, Lean replays the entire `step*` first —
+this can take 30+ seconds per edit, destroying interactive feedback.
+
+Instead, close each remaining goal individually using focused `· ...` (cdot) blocks:
+
+```lean
+-- ⛔ BAD: editing any tactic after <;> replays the full step*
+step* <;> scalar_tac
+
+-- ⛔ ALSO BAD: same problem even with all_goals
+step* <;> all_goals agrind
+
+-- ⛔ ALSO BAD: standalone all_goals — all goals become one elaboration unit
+step*
+all_goals scalar_tac
+
+-- ✅ GOOD: each goal is independently checkpointed
+step*
+· scalar_tac          -- goal 1: independently elaborated
+· agrind              -- goal 2: independently elaborated
+· simp [*]; scalar_tac -- goal 3: independently elaborated
+```
+
+**Why this matters:** `step*` unfolds the function body and steps through every
+monadic call — it can produce 5–20 remaining side-condition goals. With `<;>`, Lean
+treats `step* <;> tactic` as a single elaboration unit. Changing `tactic` forces
+`step*` to replay from scratch. With `·` blocks, each goal is a separate checkpoint —
+editing goal 3 does not re-elaborate goals 1 or 2.
+
+**The same applies to any expensive tactic before `<;>`:** `simp [*] <;> scalar_tac`,
+`progress* <;> agrind`, etc. If the left-hand side is slow, always use `·` blocks.
 
 ## Common Tactic Combinations
 
@@ -106,7 +168,6 @@ See `aeneas-lean-core` skill file for the full rationale.
 |---|---|
 | `split_conjs <;> agrind` | Goal is a conjunction |
 | `simp [*]; agrind` | `agrind` alone fails (grind issue workaround) |
-| `step* <;> bv_tac 32` | Monadic code with bitwise ops |
 | `bvify N; bv_tac N` | Nat goal about bitwise operation |
 | `have h := ...; natify at h; simp_scalar at h` | Reverse bv lifting (goal → bv → back to Nat) |
 | `zify at h; zify; simp [h, Int.mul_emod]` | Modular equivalence via Int |
@@ -116,14 +177,22 @@ See `aeneas-lean-core` skill file for the full rationale.
 
 ## Proof Style Rules
 
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Proof Style and Maintainability" -->
+
 - **Address ALL warnings** — the only acceptable warning is `"declaration uses 'sorry'"`:
   - `"This simp argument is unused"` → remove the unused lemma from `simp only [...]`
   - `"Too many ids provided"` → reduce binders in `step as ⟨...⟩`
   - `"'...' tactic does nothing"` / `"is never executed"` → remove the dead tactic
   - `"unused variable"` → remove or prefix with `_`
+  - `"Used tac1 <;> tac2 where (tac1; tac2) would suffice"` → replace `<;>` with `;`
+  - **This applies to sorry'd proofs too.** Warnings in incomplete proofs must still be
+    fixed — the sorry is acceptable, but dead tactics, unused simp args, and other
+    warnings are not. Keep sorry'd proofs clean so they're ready for completion.
 - **No big `simp only [...]` in implementation proofs** — model names are unstable. Use `simp [*]` or targeted rewrites. (OK in spec lemmas.)
+- **Register Rust global/const scalar definitions with solver attributes** — pure Rust global/const definitions should be marked `@[simp, scalar_tac_simps, agrind =, grind =, bvify]`. This lets `step` / `step*` discharge precondition sub-goals automatically (they disappear). If you see repeated `simp [CONST]; solver` in cdot sub-goals after `step`, or `have hFoo : CONST.val = N := by simp ...`, the definition is missing attributes.
 - **Extract complex sub-proofs** as auxiliary lemmas — don't inline 15 lines of arithmetic inside `step*`
 - **Simplify shifts early**: rewrite `>>>` as `/ 2^n`, `<<<` as `* 2^n`
+- **Sorry'd proofs must be fast**: do not leave expensive `step*`, `cases p`, or `first | ...` before a sorry. Use plain `sorry` (with a comment sketching the approach). Expensive sorry'd proofs waste build time on every `lake build` for zero verification value.
 
 ## Attribute Management Cheatsheet
 
@@ -168,6 +237,15 @@ theorem MY_CONST_val : MY_CONST.val = 42 := by decide
 | `grind` explodes | Timeout | Use `agrind` instead |
 | `agrind` fails | Goal unsolved | Try `simp [*]; agrind` |
 | Wrong step spec | Unexpected behavior | `step with specific_thm` |
+| Auto-param tactic loops | `maxRecDepth`/timeout at theorem statement | Make params explicit, no `:= by ...` in recursive theorems |
+| Dependent proof in `rw` | `simp only`/`rw` loops on term with proof arg | `congr 1` to separate value from proof (proof irrelevance) |
+| `step*` stuck on projection | No progress on `(Struct p).field args` | `simp only [step_simps]` before `step*`; add `@[simp, step_simps]` lemma |
+| Doc comment before `set_option` | Parse error "expected 'lemma'" | Use `/- ... -/` (regular comment), not `/-- ... -/` (doc comment) |
+| Concrete computation fails | `agrind`/`scalar_tac` fail on numeric literals | `native_decide` or `decide` |
+| `scalar_tac` in spec_gen | Cascading `maxRecDepth` in loop proof | Mass-replace ALL `scalar_tac` → `agrind` in proof body |
+| Recurring index bounds slow | Same bound proved inline many times | Extract as solver-attributed lemma (`@[agrind =]`); see Pitfall #22 in `aeneas-lean-core` |
+| `(by ...)` in type signature | Kernel slowness on `apply`/`exact` of theorem | Use `get_elem_tactic` override with `agrind`; if that fails, use `(by agrind)` > `(by grind)` > `(by scalar_tac)` > standalone lemma. NEVER `cases p <;> simp_all <;> tactic`. See "Never embed (by ...) in type signatures" in `aeneas-lean-core` |
+| `first \| simp_all` swallows goals | `simp_all` partially simplifies, `first` considers it done | `(simp_all; done)` — forces full closure; applies to all `simp` variants |
 
 ## Debugging and Profiling Commands
 
@@ -181,10 +259,17 @@ set_option trace.Aeneas.progress true -- detailed progress
 
 ### Profiling proof time
 
-Use these options to identify slow tactics:
+**⚠️ `trace.profiler` only measures tactic execution time — NOT kernel type-checking.**
+When a tactic introduces auxiliary theorems (e.g., `agrind`, `grind`), the kernel must
+type-check those proof terms *after* the tactic finishes. `trace.profiler` does not
+include this cost. **The discrepancy can be huge** — a tactic may report 50ms in the
+profiler but actually take 5s wall-clock because the kernel spends 4.95s checking the
+proof term it produced.
+
+Use `trace.profiler` to identify which tactic is slow at the *tactic* level:
 
 ```lean
--- Per-tactic timing breakdown (recommended — shows each tactic's time)
+-- Per-tactic timing breakdown (tactic execution only, excludes kernel checking)
 set_option trace.profiler true in
 set_option trace.profiler.threshold 10 in  -- report tactics > 10ms (default: 100ms)
 
@@ -193,9 +278,54 @@ set_option profiler true in
 set_option profiler.threshold 10 in
 ```
 
-Use `trace.profiler` to find which tactic dominates the time, then optimize or replace it.
+To measure **true wall-clock time including kernel type-checking**, use the `measure`
+tactic wrapper. Define it locally (or in a shared utilities file):
+
+```lean
+/-- Measure wall-clock time of a tactic (including kernel type-checking). -/
+elab "measure" t:tactic : tactic => do
+  let start ← IO.monoNanosNow
+  Lean.Elab.Tactic.evalTactic t
+  let stop ← IO.monoNanosNow
+  IO.eprintln s!"[measure] {(stop - start) / 1000000}ms"
+```
+
+Then wrap the tactic or proof script you want to measure:
+
+```lean
+theorem my_fn.spec ... := by
+  measure (agrind)          -- measures agrind + kernel checking of its proof term
+  measure (simp [*]; grind) -- measures the whole sequence
+```
+
+**When to use which:**
+- **`trace.profiler`**: first pass — find which tactic is slow at the tactic level
+- **`measure`**: second pass — verify true wall-clock cost including kernel checking.
+  If `trace.profiler` says a tactic is fast but `measure` says it's slow, the
+  bottleneck is kernel type-checking of the proof term the tactic produced. The fix
+  is to use a tactic that produces simpler proof terms, or extract the sub-goal as
+  an auxiliary lemma (which gets its own smaller proof term).
 
 ### ⚠️ `maxHeartbeats` guidelines
+
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core Pitfall #13 -->
+
+**⛔ NEVER use `set_option ... in` inside a proof script.** For example:
+```lean
+-- ⛔ BAD: breaks incrementality inside the proof
+theorem my_fn.spec ... := by
+  set_option maxHeartbeats 16000000 in
+  step* ...
+```
+The `in` scoping inside a tactic block makes everything below it a single elaboration
+unit — any edit forces full re-elaboration, destroying incremental feedback.
+
+Using `set_option ... in` **before** a theorem declaration is fine and standard practice:
+```lean
+-- ✅ GOOD: set_option before the theorem declaration
+set_option maxHeartbeats 16000000 in
+theorem my_fn.spec ... := by ...
+```
 
 Lean's default `maxHeartbeats` (200K) is very low for Aeneas proofs. **Increase it to
 1M as a baseline** (`set_option maxHeartbeats 1000000`) — this is a reasonable default
@@ -210,7 +340,7 @@ bump the number, fix the root cause:
    Smaller functions → smaller proof contexts → faster elaboration.
 2. **Minimize the context** — `clear` unused hypotheses before expensive tactics.
    Large contexts make `simp`, `agrind`, and `grind` slower.
-3. **Use `progress*?` instead of `progress*`** — the expanded script gives you
+3. **Use `step*?` instead of `step*`** — the expanded script gives you
    control over each step and avoids the combinatorial blowup of repeated automation.
 4. **Avoid `grind` when `agrind` suffices** — `grind` is much more expensive.
 5. **Extract complex sub-goals as auxiliary lemmas** — a separate lemma gets a fresh,
@@ -219,29 +349,75 @@ bump the number, fix the root cause:
    budget, consider whether a different tactic would be faster (e.g., `bv_tac` instead
    of `agrind` for bitwise goals, `scalar_tac` instead of `agrind` for pure arithmetic).
 
-### ⏱️ Wall-clock time target: < 30s — THIS IS IMPORTANT
+### ⏱️ Wall-clock time target: < 60s — THIS IS IMPORTANT
+
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core Pitfall #14 -->
 
 **Keeping proof times low is critical for productivity.** Fast proofs mean fast iteration
 — you can try tactics, see results, and adjust quickly. Slow proofs kill this feedback
 loop and make proof development painful.
 
-**Aim for < 30 seconds wall-clock time** even for the biggest proofs (functions of 50+
-lines). If a proof takes longer, it's a sign that the proof is ill-structured or uses
-tactics inefficiently. Use `set_option trace.profiler true in` to identify the bottleneck,
-then apply the strategies above (decompose, extract lemmas, minimize context, pick
-better tactics).
+**The total proof time for a function should be < 60 seconds wall-clock** even for the
+biggest functions (50+ lines). This includes both tactic elaboration AND kernel proof-term
+replay. If a proof takes longer, it's a sign that the proof is ill-structured or uses
+tactics inefficiently — it must be fixed, not tolerated.
+
+**Note:** It can happen that the tactic proof itself runs reasonably fast but *accepting*
+the proof (the kernel replaying the proof term) takes very long. This is a distinct issue
+from tactic slowness — it means the proof term is too large or complex.
+
+**How to detect kernel replay slowness:** In the LSP, after all tactics have been
+elaborated, the server will report that it is still processing the last line of the proof
+AND the `theorem` declaration line (along with any `set_option ... in` above it). If it
+stays in this state for a long time, it is likely spending time in the kernel checking the
+proof term — not running tactics.
+
+**Fixes:** Decompose the function (fold theorems), extract sub-goals as auxiliary lemmas
+(which get their own smaller proof terms), or use more direct proof strategies that
+produce simpler terms.
+
+Use `set_option trace.profiler true in` to profile tactic elaboration time. **But note:**
+`trace.profiler` only measures tactic execution, not kernel type-checking — the
+discrepancy can be huge. Use the `measure` tactic wrapper (see "Profiling proof time"
+above) to get true wall-clock time including kernel checking. If `trace.profiler` says
+tactics are fast but `measure` (or overall proof time) is slow, the bottleneck is kernel
+replay — the fix is to produce simpler/smaller proof terms.
+
+### Measuring per-file build time
+
+To measure the elaboration time of each file in isolation (with dependencies already
+built), use `lake env lean`:
+
+```bash
+cd <project-lean-root>
+lake build   # ensure all dependencies are compiled
+find Properties -name "*.lean" | sort | while read f; do
+  printf "%s: " "$f"
+  { time lake env lean "$f" ; } 2>&1 | grep "^real"
+done
+```
+
+`lake env` sets up `LEAN_PATH` so bare `lean` can find all olean dependencies.
+`time lean file.lean` then elaborates just that one file from scratch and reports
+wall-clock time. This gives accurate per-file measurements without lake's caching
+or scheduling overhead.
+
+Note: `time` output format varies by shell. This works in both bash and zsh.
 
 **Keeping Lean reactive is even more important.** When developing a proof interactively,
 adding a tactic at the end should take **< 0.5s** — this is what enables rapid iteration.
 If incremental edits are slow (several seconds), the proof structure is forcing
-re-elaboration of large chunks. See the lean-lsp-tool skill file for guidance
+re-elaboration of large chunks. See the `lean-lsp-mcp` skill file for guidance
 (avoid `by ...` blocks inside `apply`/`exact`/`refine` arguments, use `have` to create
 elaboration checkpoints).
 
 ### ⛔ NEVER increase `maxRecDepth`
 
-If you hit a `maxRecDepth` error, **do NOT increase it**. This is a symptom of a
-**simp loop** or a poorly structured proof, not a depth limit to raise.
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core Pitfall #11 -->
+
+If you hit a `maxRecDepth` error, **do NOT increase it**. If calling any tactic
+triggers `maxRecDepth`, it almost certainly means **the tactic is looping internally**
+(typically via `simp`). The fix is never to raise the limit — it's to break the loop.
 
 **Root cause: simp loops.** A simp loop occurs when two or more simp lemmas rewrite
 back and forth (A → B → A → ...), or when a lemma rewrites to a term that reduces
@@ -251,7 +427,7 @@ containing `s[i]'h`). This causes `simp` to recurse until it hits `maxRecDepth`.
 **How to diagnose:**
 1. The error says "maximum recursion depth has been reached" inside a `simp` call
 2. Use the LSP: comment out the failing `simp` call, add `sorry`, inspect the goal
-   with `goal <line>` to see what the `simp` was trying to simplify
+   with `lean_goal` to see what the `simp` was trying to simplify
 3. Identify which lemmas interact badly — try each lemma individually
 
 **How to fix (in order of preference):**
@@ -279,10 +455,27 @@ containing `s[i]'h`). This causes `simp` to recurse until it hits `maxRecDepth`.
    too many places, use `conv` to target a specific subterm.
 5. **`clear` offending hypotheses**: If a hypothesis triggers the loop (e.g., a
    hypothesis whose type causes simp to loop when it tries to rewrite it), `clear` it
-   before calling `simp`, then re-introduce it if needed.
+   before calling `simp` — but only if the hypothesis is irrelevant to proving the goal.
+   Re-introduce it if needed.
 6. **For tactics that internally use `simp`** (`agrind`, `grind`, `scalar_tac`,
-   `simp_scalar`): the loop may be triggered by hypotheses in the context. Try
-   `clear`-ing suspicious hypotheses before calling the tactic.
+   `simp_scalar`, `simp_lists`): the loop may be triggered by hypotheses in the context.
+   Try `clear`-ing suspicious hypotheses before calling the tactic — but only if the
+   hypothesis is irrelevant to proving the goal.
+
+**`scalar_tac`, `simp_scalar`, and `simp_lists` trigger `simp_all` internally.** This means they can
+cause `maxRecDepth` errors even though you didn't write a `simp` call yourself. The
+loop is typically triggered by a hypothesis in the context — often an equation whose
+LHS appears in its RHS (e.g., `h : x = f x y`), causing `simp_all` to rewrite
+endlessly.
+
+**Fixes for `scalar_tac`/`simp_scalar`/`simp_lists` maxRecDepth errors (in preference order):**
+1. **Use `agrind` or `grind` instead** — they don't call `simp_all` and are immune to
+   this class of loops. This is the safest fix.
+2. **Identify and modify the faulty hypothesis** — look for an equation in the context
+   whose LHS appears in its RHS. Reverse its direction with `rw [← h]` or `symm at h`
+   before calling `scalar_tac`. This is more technical but preserves the use of
+   `scalar_tac`.
+3. **`clear` the offending hypothesis** before calling `scalar_tac` — but only if the hypothesis is irrelevant to proving the goal.
 
 **Common simp loop patterns in Aeneas:**
 - `Slice.Inhabited_getElem_eq_getElem!` + `List.Inhabited_getElem_eq_getElem!`:
@@ -295,4 +488,4 @@ containing `s[i]'h`). This causes `simp` to recurse until it hits `maxRecDepth`.
 
 ### Report misbehaving tactics
 
-If a tactic doesn't do what it should — for example, `progress` fails to make progress on a goal even though the appropriate `@[progress]` lemma is available, or `scalar_tac` can't close a pure arithmetic goal it should handle — **report this to the user**. It may indicate a tactic bug or a missing feature that should be fixed upstream.
+If a tactic doesn't do what it should — for example, `step` fails to make progress on a goal even though the appropriate `@[step]` lemma is available, or `scalar_tac` can't close a pure arithmetic goal it should handle — **report this to the user**. It may indicate a tactic bug or a missing feature that should be fixed upstream.

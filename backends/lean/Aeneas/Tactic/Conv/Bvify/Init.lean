@@ -14,8 +14,8 @@ initialize registerTraceClass `Bvify
 # Bvify Simpsets
 -/
 
-/-- The `bvify_simps` attribute registers simp lemmas to be used by `bvify` -/
-register_simp_attr' bvifySimpExt bvifySimprocExt bvify_simps
+/-- The `bvify` attribute registers simp lemmas to be used by `bvify` -/
+register_simp_attr' bvifySimpExt bvifySimprocExt bvify
 
 /-- The `bvify_hyps_simps` attribute registers simp lemmas to be used by `bvify` to simplify
 assumptions during its preprocessing phase -/

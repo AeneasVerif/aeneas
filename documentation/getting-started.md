@@ -7,7 +7,7 @@ A complete walkthrough from Rust source code to a verified Lean proof using Aene
 1. **Lean 4** — matching the toolchain in `backends/lean/lean-toolchain`
 2. **Charon** — Rust compiler frontend that produces LLBC ([github.com/AeneasVerif/charon](https://github.com/AeneasVerif/charon))
 3. **Aeneas** — translates LLBC to Lean (`./bin/aeneas`)
-4. **Python 3** — for `scripts/lean_lsp.py`
+4. **lean-lsp-mcp** — MCP server for interactive proof development (`pip install lean-lsp-mcp`)
 
 ## Step 1: Translate Rust to LLBC
 
@@ -32,12 +32,12 @@ aeneas -backend lean my_crate.llbc -dest proofs -subdir /MyCrate/Code -split-fil
 
 This creates Lean files under `proofs/MyCrate/Code/`:
 
-| Generated file | Contains |
-|---|---|
-| `Types.lean` | Rust types → Lean inductive types |
-| `Funs.lean` | Rust functions → Lean monadic functions |
-| `FunsExternal_Template.lean` | Stubs for external functions (you complete this) |
-| `TypesExternal_Template.lean` | Stubs for external types (you complete this) |
+| Generated file                   | Contains                                         |
+|----------------------------------|--------------------------------------------------|
+| `Types.lean`                     | Rust types → Lean inductive types                |
+| `Funs.lean`                      | Rust functions → Lean monadic functions          |
+| `FunsExternal_Template.lean`     | Stubs for external functions (you complete this) |
+| `TypesExternal_Template.lean`    | Stubs for external types (you complete this)     |
 
 **Key aeneas flags:**
 - `-split-files` — one file per declaration group (recommended for large crates)
@@ -53,16 +53,16 @@ Create a Lean project in the `proofs/` directory:
 proofs/
 ├── lakefile.lean
 ├── lean-toolchain
-├── MyCrate.lean              ← module root (import all)
+├── MyCrate.lean                      ← module root (import all)
 └── MyCrate/
-    ├── Code/                 ← generated code (step 2 output)
+    ├── Code/                         ← generated code (step 2 output)
     │   ├── Types.lean
     │   ├── Funs.lean
-    │   ├── FunsExternal.lean     ← rename from _Template, fill in
-    │   └── TypesExternal.lean    ← rename from _Template, fill in
-    ├── Spec/                 ← your pure specifications
+    │   ├── FunsExternal.lean         ← rename from _Template, fill in
+    │   └── TypesExternal.lean        ← rename from _Template, fill in
+    ├── Spec/                         ← your pure specifications
     │   └── Basic.lean
-    └── Properties/           ← your proofs
+    └── Properties/                   ← your proofs
         └── Basic.lean
 ```
 
@@ -118,48 +118,17 @@ Key elements:
 - **`import Aeneas`** — brings in all Aeneas tactics and primitives
 - **`#setup_aeneas_simps`** — configures simp lemmas for Aeneas patterns
 - **`@[step]`** — registers the theorem for the `step` tactic
-- **`⦃ c => ... ⦄`** — weakest-precondition notation: "if it succeeds, the result `c` satisfies..."
+- **`⦃ c => ... ⦄`** — weakest-precondition notation: "the function succeeds and the result `c` satisfies..."
 
-## Step 5: Develop the Proof Incrementally
+## Step 5: For AI Agents: Develop the Proof Incrementally
 
-Start `lean_lsp.py` from the Lean project root:
+Use the `lean-lsp-mcp` MCP server for interactive proof development. It provides
+tools like `lean_goal`, `lean_edit`, and `lean_diagnostic_messages` for inspecting
+proof state and iterating on proofs with sub-second feedback.
 
-```bash
-cd proofs
-python3 /path/to/aeneas/scripts/lean_lsp.py --repl --json
-```
-
-Then:
-
-```
-open MyCrate/Properties/Basic.lean
-→ {"command":"open","status":"ok","lines":15,"sorry_lines":[],...}
-
-goal 14
-→ {"command":"goal","status":"ok","goals":["a b : U32\nh : a.val + b.val ≤ U32.max\n⊢ add_overflow a b ⦃ c => c.val = a.val + b.val ⦄"],...}
-
-errors
-→ {"command":"errors","status":"ok","diagnostics":[],"count":0}
-```
-
-If the proof had `sorry` instead of `step`:
-
-```
-sorry
-→ {"command":"sorry","status":"ok","sorry_lines":[{"line":14,"text":"sorry"}],"count":1}
-
-goal 14
-→ (shows what needs to be proved)
-
-edit 14 unfold add_overflow
-→ {"command":"edit","status":"ok",...}
-
-insert 14   step
-→ {"command":"insert","status":"ok","ready":true,"errors":[],...}
-
-errors
-→ {"command":"errors","status":"ok","diagnostics":[],"count":0}
-```
+Install it with `pip install lean-lsp-mcp` (or `uvx lean-lsp-mcp`). See the
+[lean-lsp-mcp skill file](skills/lean-lsp-mcp.instructions.md) for the full
+tool reference and workflow.
 
 Zero errors + zero sorry = proof complete.
 
@@ -178,4 +147,4 @@ cd proofs && lake build
 - [ ] `lakefile.lean` has `require aeneas from ...`
 - [ ] `lake build` succeeds (generated code compiles)
 - [ ] First `@[step]` theorem type-checks
-- [ ] `lean_lsp.py --repl --json` can open and query files
+- [ ] `lean-lsp-mcp` tools can open and query files

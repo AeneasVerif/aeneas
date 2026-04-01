@@ -78,6 +78,17 @@ let () =
 
   let spec_ls =
     [
+      ( "-version",
+        Arg.Unit
+          (fun () ->
+            let v =
+              match GitVersion.commit with
+              | Some h -> h
+              | None -> "unknown"
+            in
+            print_endline ("aeneas " ^ v);
+            exit 0),
+        " Print the version (git commit) and exit" );
       ( "-print-error-emitters",
         Arg.Set print_error_emitters,
         " Whenever reporting an error, print the span of the source code of \
