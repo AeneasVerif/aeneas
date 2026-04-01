@@ -1068,7 +1068,7 @@ def generate_index(crate_name: str, functions: list, types: list,
 
             # The crate root (depth 0) is always expanded to show level-1 modules
             is_expanded = (depth == 0)
-            indent = 16 * max(depth, 0)
+            indent = 16 + 16 * max(depth, 0)
             display = "" if parent_expanded else ' style="display:none"'
 
             if has_children:
@@ -1175,6 +1175,7 @@ def generate_index(crate_name: str, functions: list, types: list,
     <section>
       <h2>Modules</h2>
       <table class="data-table" id="module-table">
+        <colgroup><col class="col-mod"><col class="col-count"><col class="col-count"><col class="col-prog"></colgroup>
         <thead><tr><th>Module</th><th>Functions</th><th>Verified</th><th>Progress</th></tr></thead>
         <tbody>{module_html}</tbody>
       </table>
@@ -1232,6 +1233,7 @@ def generate_index(crate_name: str, functions: list, types: list,
     <section>
       <h2>Public Functions ({len(public_fns)})</h2>
       <table class="data-table">
+        <colgroup><col class="col-name"><col class="col-status"><col class="col-lean"><col class="col-thm"></colgroup>
         <thead><tr><th>Function</th><th>Status</th><th>Lean Model</th><th>Theorem</th></tr></thead>
         <tbody>{pub_rows}</tbody>
       </table>
@@ -1320,6 +1322,7 @@ def generate_module_page(mod_name: str, functions: list,
       "> Only public
     </label>
     <table class="data-table" id="fn-table">
+      <colgroup><col class="col-name"><col class="col-vis"><col class="col-status"><col class="col-lean"><col class="col-thm"></colgroup>
       <thead><tr><th>Function</th><th>Vis</th><th>Status</th><th>Lean Model</th><th>Theorem</th></tr></thead>
       <tbody>{fn_rows}</tbody>
     </table>
@@ -1329,6 +1332,7 @@ def generate_module_page(mod_name: str, functions: list,
         content += f'''
     <h2>Types</h2>
     <table class="data-table">
+      <colgroup><col style="width:60%"><col style="width:20%"><col style="width:20%"></colgroup>
       <thead><tr><th>Type</th><th>Kind</th><th>Vis</th></tr></thead>
       <tbody>{type_rows}</tbody>
     </table>
@@ -1345,6 +1349,7 @@ def generate_module_page(mod_name: str, functions: list,
         content += f'''
     <h2>Constants</h2>
     <table class="data-table">
+      <colgroup><col class="col-name"><col class="col-vis"><col class="col-status"><col class="col-lean"><col class="col-thm"></colgroup>
       <thead><tr><th>Constant</th><th>Vis</th><th>Status</th><th>Lean Model</th><th>Theorem</th></tr></thead>
       <tbody>{global_rows}</tbody>
     </table>
@@ -1537,6 +1542,7 @@ def generate_external_page(functions: list, output_dir: Path,
     for these functions is an axiom that must be trusted.</p>
 
     <table class="data-table">
+      <colgroup><col class="col-name"><col class="col-vis"><col class="col-status"><col class="col-lean"><col class="col-thm"></colgroup>
       <thead><tr><th>Function</th><th>Vis</th><th>Has Spec</th><th>Lean Model</th><th>Theorem</th></tr></thead>
       <tbody>{rows}</tbody>
     </table>
@@ -1828,7 +1834,8 @@ body {
 .breadcrumbs { color: #586069; font-size: 0.9em; }
 .breadcrumbs a { color: var(--link); text-decoration: none; }
 main {
-  max-width: 1100px;
+  width: 80%;
+  max-width: 1600px;
   margin: 0 auto;
   padding: 24px;
 }
@@ -1841,12 +1848,24 @@ a:hover { text-decoration: underline; }
   width: 100%;
   border-collapse: collapse;
   margin: 12px 0;
+  table-layout: fixed;
 }
 .data-table th, .data-table td {
   border: 1px solid var(--border);
   padding: 6px 12px;
   text-align: left;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
+/* Column width hints (applied via colgroup in HTML) */
+.col-name   { width: 32%; }
+.col-status { width: 13%; }
+.col-lean   { width: 27%; }
+.col-thm    { width: 23%; }
+.col-vis    { width: 5%; }
+.col-mod    { width: 40%; }
+.col-count  { width: 10%; }
+.col-prog   { width: 25%; }
 .data-table th {
   background: var(--bg-secondary);
   font-weight: 600;
@@ -1854,7 +1873,7 @@ a:hover { text-decoration: underline; }
 .data-table tr:hover { background: #f0f4f8; }
 .stats-table {
   border-collapse: collapse;
-  margin: 12px 0;
+  margin: 12px auto;
 }
 .stats-table th, .stats-table td {
   border: 1px solid var(--border);
