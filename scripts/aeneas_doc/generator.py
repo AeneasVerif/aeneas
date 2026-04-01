@@ -111,6 +111,9 @@ class StepTheorem:
         self.sorry_status = data["sorry_status"]
         self.statement = data["statement"]
         self.annotated_statement = data.get("annotated_statement")
+        self.spec_binders = data.get("spec_binders")       # [{name, type, annotated_type}]
+        self.spec_body = data.get("spec_body")
+        self.annotated_spec_body = data.get("annotated_spec_body")
 
 
 class LeanDefinition:
@@ -935,10 +938,41 @@ def _render_annotated_html(annotated: list, known_fns: dict,
 
 def _annotated_statement_block(thm, known_fns: dict = None, depth: int = 1,
                                current_fn_lean_name: str = None) -> str:
-    """Render a theorem's annotated statement as HTML with links baked in."""
+    """Render a theorem's annotated statement as HTML with links baked in.
+
+    If decomposed binders are available, renders in context/body format
+    with binders above a separator and the WP body below.
+    """
+    kf = known_fns or {}
+
+    # New decomposed format: binders + separator + body
+    if thm.spec_binders and thm.annotated_spec_body:
+        binder_lines = []
+        for b in thm.spec_binders:
+            name = _esc(b["name"])
+            type_html = _render_annotated_html(
+                b["annotated_type"], kf, inline=True,
+                current_fn_lean_name=current_fn_lean_name)
+            binder_lines.append(
+                f'<span class="spec-binder-name">{name}</span>'
+                f' : {type_html}')
+        body_html = _render_annotated_html(
+            thm.annotated_spec_body, kf, inline=True,
+            current_fn_lean_name=current_fn_lean_name)
+        binders_block = "\n".join(binder_lines)
+        # Use a wrapper div instead of putting block elements inside <code>
+        return (
+            f'<div class="spec-decomposed">'
+            f'<pre class="spec-context"><code>{binders_block}\n</code></pre>'
+            f'<hr class="spec-sep">'
+            f'<pre class="spec-body"><code>{body_html}</code></pre>'
+            f'</div>'
+        )
+
+    # Fallback: flat annotated statement
     if thm.annotated_statement:
         return _render_annotated_html(
-            thm.annotated_statement, known_fns or {},
+            thm.annotated_statement, kf,
             current_fn_lean_name=current_fn_lean_name)
     return _source_block(thm.statement, "lean")
 
@@ -1930,6 +1964,17 @@ a:hover { text-decoration: underline; }
   margin: 0;
   border-radius: 0;
 }
+/* Decomposed spec: binders above separator, body below */
+.spec-decomposed { font-family: 'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace; }
+.spec-decomposed pre { margin: 0; border: none; border-radius: 0; padding: 8px 16px; }
+.spec-context code { opacity: 0.85; }
+.spec-binder-name { color: #953800; font-weight: 600; }
+hr.spec-sep {
+  border: none;
+  border-top: 1px solid #8b949e;
+  margin: 4px 16px;
+}
+.spec-body code { font-weight: 500; }
 .thm-name { font-family: monospace; font-size: 0.9em; }
 
 /* Clickable Lean identifiers in annotated statements */

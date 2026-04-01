@@ -27,6 +27,9 @@ private structure TheoremInfo where
   sorryStatus : String
   ppType     : String
   annotated  : Array Json
+  specBinders : Array Json     -- [{name, type, annotated_type}, ...]
+  specBodyText : String
+  annotatedSpecBody : Array Json
 
 /-- Extract the head function name from an expression `f x1 ... xn`.
     Also handles `lift (f x1 ... xn)` by unwrapping the lift.
@@ -215,6 +218,28 @@ private def ppExprPlain (e : Expr) : MetaM (String × Array Json) := do
   let fmt ← Meta.ppExpr e
   return (toString fmt, #[])
 
+/-- Decompose a spec theorem type into binders (named params + preconditions) and body.
+    Uses `forallTelescope` to peel off all leading ∀ binders.
+    Named binders get their name; auto-generated binders (from →) get "_". -/
+private def decomposeSpecType (e : Expr) :
+    MetaM (Array Json × String × Array Json) := do
+  Meta.forallTelescope e fun xs body => do
+    let mut binders : Array Json := #[]
+    for x in xs do
+      let decl ← x.fvarId!.getDecl
+      let userName := decl.userName
+      let displayName :=
+        if userName.hasMacroScopes || userName.isInternal || userName == `_ then "_"
+        else toString userName
+      let (typeText, typeAnnotated) ← ppExprAnnotated decl.type
+      binders := binders.push (.mkObj [
+        ("name", .str displayName),
+        ("type", .str typeText),
+        ("annotated_type", .arr typeAnnotated)
+      ])
+    let (bodyText, bodyAnnotated) ← ppExprAnnotated body
+    return (binders, bodyText, bodyAnnotated)
+
 /-- Run an action inside a context with Aeneas namespaces opened and activated.
     This sets up open declarations for `Aeneas.Std` and `Aeneas.Std.Result`,
     and activates scoped attributes from the `Aeneas` and `Aeneas.Std` namespaces. -/
@@ -256,7 +281,11 @@ private def extractStepTheoremsFromAttr :
         let kind := classifyConstKind thmInfo
         let isPriv := Lean.isPrivateName thmName
         let (ppType, annotated) ← ppExprAnnotated thmInfo.type
-        results := results.push { funName, thmName, kind, isPrivate := isPriv, sorryStatus, ppType, annotated }
+        let (specBinders, specBodyText, annotatedSpecBody) ← decomposeSpecType thmInfo.type
+        results := results.push {
+          funName, thmName, kind, isPrivate := isPriv, sorryStatus,
+          ppType, annotated, specBinders, specBodyText, annotatedSpecBody
+        }
       catch e =>
         IO.eprintln s!"  Warning: error processing {thmName}: {← e.toMessageData.toString}"
     return results
@@ -290,7 +319,11 @@ private def extractStepTheorems (targetModule : Name) :
           let sorryStatus ← classifySorryStatus constName
           let kind := classifyConstKind info
           let isPriv := Lean.isPrivateName constName
-          results := results.push { funName, thmName := constName, kind, isPrivate := isPriv, sorryStatus, ppType := "TODO", annotated := #[] }
+          results := results.push {
+            funName, thmName := constName, kind, isPrivate := isPriv, sorryStatus,
+            ppType := "TODO", annotated := #[],
+            specBinders := #[], specBodyText := "", annotatedSpecBody := #[]
+          }
         | none => pure ()
       catch e =>
         IO.eprintln s!"  Warning: error processing {constName}: {← e.toMessageData.toString}"
@@ -626,7 +659,10 @@ unsafe def main (args : List String) : IO Unit := do
       ("is_private", .bool t.isPrivate),
       ("sorry_status", .str t.sorryStatus),
       ("statement", .str t.ppType),
-      ("annotated_statement", .arr t.annotated)
+      ("annotated_statement", .arr t.annotated),
+      ("spec_binders", .arr t.specBinders),
+      ("spec_body", .str t.specBodyText),
+      ("annotated_spec_body", .arr t.annotatedSpecBody)
     ]
   let json := Json.mkObj [
     ("theorems", .arr theoremJsons),
