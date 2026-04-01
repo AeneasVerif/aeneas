@@ -411,6 +411,18 @@ goal asks the invariant for `[0, next_start)`. Split with `by_cases hjj : j = it
 
 ## Proof Development Workflow
 
+### ⛔ Use the LSP for all checking — `lake build` only at the very end
+
+**Use only the lean-lsp-mcp tools** (diagnostics, goal, multi_attempt, etc.) when
+developing proofs: they give you incremental proof checking.
+**Do NOT run `lake build`** while developing proofs — the LSP server and `lake build`
+write to the same `.lake/build/` directory concurrently, causing file corruption,
+transient build failures, and wasted rebuild time.
+
+**`lake build` is allowed only once, at the very end**, as a final verification that
+the entire project builds. During proof development, the LSP gives you instant
+feedback on individual files without the overhead or corruption risk of a full build.
+
 ### Decision tree for starting a proof:
 
 1. Does the function start with `match`/`if`?
@@ -418,8 +430,10 @@ goal asks the invariant for `[0, next_start)`. Split with `by_cases hjj : j = it
    - NO → `unfold fn; step`
 
 2. Is the function simple (few monadic steps, say ≤ 5)?
-   - YES → `unfold fn; step*` may complete it directly. If sub-goals remain,
-     **immediately** scaffold one `· agrind` per sub-goal (see scaffolding workflow below).
+   - YES → `unfold fn; step*` may complete it directly (may take 60–120s on
+     larger functions — see "Tactics can take a long time" below). If sub-goals
+     remain, **immediately** scaffold one `· agrind` per sub-goal (see scaffolding
+     workflow below).
    - NO → Use `step*?` to generate an expanded proof script, then work from there
 
 3. Is the function large/complex (10+ monadic steps)?
@@ -442,6 +456,25 @@ goal asks the invariant for `[0, next_start)`. Split with `by_cases hjj : j = it
      to 1M as a baseline (see "Debugging Commands" in the tactics quickref)
    - **"Too many monadic steps" is NEVER a reason to skip a proof or axiomatize.**
      It is a reason to decompose via fold theorems.
+
+### Tactics can take a long time — be patient
+
+Lean tactics can take significant wall-clock time, especially in large proof
+contexts. In particular, `step*` on big monadic functions (25+ steps, complex
+postconditions, many hypotheses) routinely takes **60–120 seconds or more**. Other
+tactics (`agrind`, `grind`, `simp [*]`, `scalar_tac`) can also take 10–30s in
+large contexts. This is normal — the tactics are doing real work. Do NOT:
+
+- **Interrupt or cancel the operation** — wait for it to complete.
+- **Call `lean_build`** because "the LSP seems stuck" — the tactic is still running.
+- **Replace the tactic with `sorry`** because "it's taking too long" — give it time.
+
+The same applies to `lean_goal`, `lean_diagnostic_messages`, and other MCP tools
+called on lines after a slow tactic — they must wait for elaboration to finish
+before they can report results. If an MCP tool times out on a line that follows
+a slow tactic, it likely means elaboration is still in progress. Wait 2 minutes
+and retry. If you still get a timeout, wait 2 minutes (or do other things that do not
+modify the Lean files) and retry. The LSP will eventually work.
 
 ### The step*? → fix → collapse workflow:
 1. `step*?` — generates expanded proof script (one `step` per monadic call)
@@ -526,7 +559,7 @@ the postcondition has if unsure.
 | Tactic | Use for | Syntax |
 |---|---|---|
 | `step` | Apply function spec | `step`, `step as ⟨x, h⟩`, `step with thm` |
-| `step*` | Repeated step | `step*` |
+| `step*` | Repeated step (can take 60–120s on big functions — see "Tactics can take a long time" above) | `step*` |
 | `step*?` | Generate proof script | `step*?` |
 | `scalar_tac` | Integer arithmetic/bounds | `scalar_tac`, `scalar_tac +nonLin` |
 | `simp_scalar` | Simplify scalar exprs | `simp_scalar [lemmas]` |
@@ -1512,6 +1545,31 @@ calc (x + 1) * (x + 1)
     · -- a₂ ≍ b₂  (HEq when dependent type indices differ)
       ...
     ```
+
+27. **⛔ NEVER modify, delete, or touch anything inside the `.lake/` directory.** The
+    `.lake/` directory contains Lake's build cache, downloaded dependencies (Mathlib,
+    Aeneas stdlib, etc.), and their compiled artifacts. Deleting or modifying files in
+    `.lake/` causes **catastrophic rebuild times** — e.g., deleting Mathlib `.trace`
+    files forces a complete Mathlib replay that takes hours.
+
+    **Common mistakes that trigger this:**
+    - Deleting `.olean.server` files (created by the Lean LSP) because a build error
+      mentions them — these are transient LSP artifacts, not build inputs.
+    - Deleting `.trace` files to "fix" a stale cache — this forces full replays.
+    - Running `lake clean` on dependencies — this wipes everything.
+
+    **What to do instead when builds fail with `.lake/` errors:**
+    - **First: just re-run `lake build`.** Most `.lake/` errors are transient — caused
+      by the Lean LSP server and `lake build` writing to the same directory concurrently
+      (see "Use the LSP for all checking" above — this is why you should avoid running
+      `lake build` during development). Re-running `lake build` usually succeeds because
+      the corrupted file gets overwritten. You may need to re-run **several times** if
+      corruption happens repeatedly, but each run typically makes progress (builds more
+      modules before hitting the next corrupted file).
+    - **If the same error persists after 5+ retries**: Ask the user if you're not running
+      autonomously. They may want to run `lake clean` or re-fetch dependencies — but this
+      is their decision, not the agent's. By default (if you're running autonomously),
+      just wait.
 
 ## Attribute Management
 

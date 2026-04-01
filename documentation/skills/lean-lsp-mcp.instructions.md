@@ -88,8 +88,40 @@ before committing to a tactic with `edit`.
 **Important:** The MCP server manages a single LSP session per project. When you
 edit a `.lean` file on disk (using `edit`/`create` tools), the LSP server picks up
 the change automatically (typically within a few seconds). You do NOT need to call
-`lean_build` after every edit — only call it when you need a full rebuild (e.g., after
-adding new imports that require recompilation).
+`lean_build` after every edit.
+
+### When to use `lean_build` (and when NOT to)
+
+`lean_build` runs `lake build` and restarts the LSP server. It takes **10–30+
+minutes** on large projects. Use it ONLY when:
+
+- **You modified a dependency file** and need to refresh the imports in the file
+  you are currently working on (e.g., you changed a lemma in `A.lean` and
+  need `B.lean` to pick up the new version).
+- **You added new `import` statements** that require recompilation of upstream modules.
+- As a **final build check** after completing all proof work, to confirm the project
+  compiles cleanly end-to-end.
+
+Before calling `lean_build`, think twice — you will easily be waiting 10+ minutes. If
+you only edited the file you are currently working on, you do NOT need `lean_build`
+— the LSP picks up changes automatically.
+
+### ⛔ NEVER call `lean_build` to recover from LSP timeouts or crashes
+
+When an MCP tool call times out or returns an error (e.g., `McpError: MCP error
+-32001: Request timed out`), the LSP server has likely crashed and is auto-restarting.
+**Do NOT call `lean_build`** — it triggers a full `lake build` and restarts the LSP,
+which is massive overkill. The LSP auto-restarts on its own within 1–2 minutes.
+
+**The correct recovery procedure:**
+1. **Wait 2 minutes.** Do other work (update plan, write comments, think about the
+   next proof step) — do not poll the LSP repeatedly during this time.
+2. **Retry the MCP tool call.** If it still times out, wait another 2 minutes and
+   retry once more.
+3. **Only if the LSP is still unresponsive after 3 retries**, call `lean_build`.
+
+This applies to ALL MCP tool failures — `lean_goal`, `lean_diagnostic_messages`,
+`lean_multi_attempt`, etc. The pattern is always: **wait, then retry**.
 
 ### External Search Tools (rate-limited)
 
