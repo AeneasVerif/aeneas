@@ -455,7 +455,26 @@ goal asks the invariant for `[0, next_start)`. Split with `by_cases hjj : j = it
 6. If `step*` works on the whole body, use that (shorter is better)
 7. If not, keep the expanded script for the parts that need manual intervention
 
-### The inaccessible name problem and `let*` syntax
+### Naming hypotheses introduced by `step`
+
+When `step` applies a spec theorem, it introduces the result variable and any
+postcondition components into the context. Without `as`, postconditions get inaccessible
+names (`✝`, `✝¹`, etc.). Use `step as ⟨...⟩` to name them one by one, in order:
+
+```lean
+-- Suppose foo_spec has postcondition: ⦃ r => r.length = n ∧ ∀ i, r[i]! = 0 ⦄
+step as ⟨ r ⟩              -- name the result only; postcondition components are unnamed
+step as ⟨ r, h_len ⟩       -- name result + first conjunct (r.length = n)
+step as ⟨ r, h_len, h_val ⟩ -- name result + both conjuncts
+```
+
+Each name binds one component of the postcondition's top-level structure
+(conjunction components, existential witnesses). If unsure how many components
+there are, use `lean_goal` after a plain `step` to inspect the unnamed
+hypotheses, then add names to `step as ⟨...⟩` to match. If you provide too
+many names, Lean warns `"Too many ids provided"` — remove the excess.
+
+### The inaccessible name problem with `step*` and `let*` syntax
 
 **Problem:** When `step*` processes many monadic calls, all hypotheses from function
 specs receive inaccessible names (`_✝⁵⁵`, `_✝⁵⁶`, etc.). You cannot reference these
@@ -476,9 +495,10 @@ let* ⟨ x4 ⟩ ← bar_spec
 **You can rename the binders** to match the algorithm's variables (e.g., `seedA`,
 `ep1`, `ct_11`), making the proof readable and the final FC goal tractable.
 
-**Adding names to anonymous postconditions:** If a step introduces unnamed
-postcondition components (e.g., `let* ⟨ x ⟩ ← foo_spec`), simply add names for
-each component of the postcondition:
+**Adding names to anonymous postconditions:** The same naming principle applies
+to `let*` calls. If a step introduces unnamed postcondition components (e.g.,
+`let* ⟨ x ⟩ ← foo_spec`), simply add names for each component of the
+postcondition:
 
 ```lean
 -- Before: unnamed postcondition components
