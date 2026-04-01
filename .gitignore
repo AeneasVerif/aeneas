@@ -70,6 +70,12 @@ tests/fstar/misc/obj/
 *.uo
 *Theory.sml
 
+# Python
+__pycache__/
+
+# Generated verification docs
+test-viz/
+
 # Misc
 /fstar-tests
 *~
