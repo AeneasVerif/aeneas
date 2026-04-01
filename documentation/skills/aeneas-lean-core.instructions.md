@@ -455,6 +455,51 @@ goal asks the invariant for `[0, next_start)`. Split with `by_cases hjj : j = it
 6. If `step*` works on the whole body, use that (shorter is better)
 7. If not, keep the expanded script for the parts that need manual intervention
 
+### The inaccessible name problem and `let*` syntax
+
+**Problem:** When `step*` processes many monadic calls, all hypotheses from function
+specs receive inaccessible names (`_✝⁵⁵`, `_✝⁵⁶`, etc.). You cannot reference these
+by name in later proof steps, making it sometimes impossible to finish the proof.
+
+**Solution: Use `step*?` to generate a `let*`-based proof script with named bindings.**
+
+`step*?` generates a proof script using the `let*` syntax, where each monadic bind
+becomes a named `let*` call with explicit binder names:
+
+```lean
+let* ⟨ x2, x2_post ⟩ ← U32.add_spec
+let* ⟨ x3, x3_post ⟩ ← foo_spec
+let* ⟨ x4 ⟩ ← bar_spec
+...
+```
+
+**You can rename the binders** to match the algorithm's variables (e.g., `seedA`,
+`ep1`, `ct_11`), making the proof readable and the final FC goal tractable.
+
+**Adding names to anonymous postconditions:** If a step introduces unnamed
+postcondition components (e.g., `let* ⟨ x ⟩ ← foo_spec`), simply add names for
+each component of the postcondition:
+
+```lean
+-- Before: unnamed postcondition components
+let* ⟨ x ⟩ ← foo_spec
+
+-- After: named components — now you can reference h_len and h_val
+let* ⟨ x, h_len, h_val ⟩ ← foo_spec
+```
+
+The number of binders must match the postcondition's structure (conjunction
+components, existential witnesses). Use `lean_goal` to inspect how many components
+the postcondition has if unsure.
+
+**When to use `let*` vs `step*`:**
+- Use `step*` when you don't need to reference intermediates (simple functions,
+  or when the remaining goals are closeable by automation alone)
+- Use `step*?` → `let*` when you need named hypotheses for the final FC goal
+  (typically for top-level function proofs connecting to the spec)
+- You can mix: use `step*` for the easy prefix, then switch to `let*` calls
+  for the section where you need names
+
 ## Tactic Quick Reference
 
 ### Primary tactics (Aeneas-specific)

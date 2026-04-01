@@ -83,7 +83,7 @@ What does the goal look like?
 |---|---|---|---|
 | `step` | Apply function spec | `step`, `step as ⟨x,h⟩`, `step with thm` | `@[step]` |
 | `step*` | Repeat step + case split | `step*`, `step* n` (n steps) | **Immediately** scaffold `· agrind` per sub-goal after |
-| `step*?` | Generate proof script | `step*?` | Start here when developing proofs; scaffold `· agrind` after pasting |
+| `step*?` | Generate `let*` proof script | `step*?` | Use when you need named hypotheses (see below) |
 | `scalar_tac` | Integer arithmetic/bounds | `scalar_tac`, `scalar_tac +nonLin` | `@[scalar_tac_simps]` |
 | `simp_scalar` | Simplify scalar exprs | `simp_scalar`, `simp_scalar [lemmas]` | `@[simp_scalar_simps]` |
 | `simp_lists` | Simplify list get/set | `simp_lists`, `simp_lists [lemmas]` | `@[simp_lists_simps]` |
@@ -96,6 +96,21 @@ What does the goal look like?
 | `ring_eq_nf` | Cancel common terms in equalities | `ring_eq_nf`, `ring_eq_nf at h` | — |
 | `fcongr` | Congruence (safe whnf) | `fcongr`, `fcongr N` | — |
 | `split_conjs` | Split nested ∧, then scaffold `· agrind` per sub-goal | `split_conjs`, `split_conjs at h` | — |
+
+**`step*?` and `let*` — named hypotheses for large proofs:**
+`step*?` generates a proof script using `let*` syntax where every monadic bind has
+an explicit name. This is essential for functions with many steps where you need to
+reference intermediate results in the final goal. `step*` gives inaccessible names
+(`_✝⁵⁵`) that cannot be referenced; `step*?` → `let*` gives you full control:
+
+```lean
+-- step*? generates (use lean_code_actions to retrieve):
+let* ⟨ x2, x2_post ⟩ ← U32.add_spec
+let* ⟨ x3, h_len, h_val ⟩ ← foo_spec    -- name each postcondition component
+...
+```
+
+See the `aeneas-lean-core` skill file for the full explanation.
 
 ### Commonly Used Lean Builtins
 

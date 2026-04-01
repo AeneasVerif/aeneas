@@ -1190,6 +1190,7 @@ where agents try to "fix" unexpected file content by reverting to HEAD.
 | Reverts files via git | Runs `git checkout`/`git restore`, wiping other agents' uncommitted work | **NEVER use git checkout/restore/reset** — make targeted edits only. Include the git ban in every agent prompt |
 | Infrastructure agent conflicts with proof agents | Supervisor dispatches cross-file agent (e.g., diamond fix, import changes) while proof agents are running on those files | **Infrastructure tasks MUST run between waves** — never while proof agents are running on affected files |
 | Supervisor skips `agent_files` tracking | Doesn't INSERT/query file ownership before dispatch, causing same-file conflicts | **Always maintain `agent_files` table** — INSERT before dispatch, SELECT before every new agent, DELETE on completion |
+| Inaccessible names after `step*` | `step*` on 50+ binds gives `_✝⁵⁵` names — can't reference in FC goal | Use `step*?` to get `let*` proof script with named bindings; rename binders to match algorithm variables |
 
 ## Example: Full Agent Prompt (separate-clone mode)
 
