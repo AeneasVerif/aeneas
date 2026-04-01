@@ -545,6 +545,31 @@ The number of binders must match the postcondition's structure (conjunction
 components, existential witnesses). Use `lean_goal` to inspect how many components
 the postcondition has if unsure.
 
+**Precondition subgoals in `step*?` output:** When `step*` is used with cdot
+blocks (`step*` followed by `· tactic` for each subgoal), precondition failures
+appear as subgoals *after* the `step*` call. In the `step*?`-generated `let*`
+script, these same preconditions appear as `· sorry` blocks *inline*, immediately
+after the `let*` call that needs them. When migrating from `step*` + cdot blocks
+to a `let*` script, move the precondition proofs from the cdot blocks into the
+corresponding `· sorry` positions in the `let*` script:
+
+```lean
+/- BEFORE: step* with cdot blocks for preconditions -/
+step*
+· cases p <;> simp_all [Spec.dᵤ]   -- precondition for vector_decode_and_decompress
+· intro i hi; exact bit_sum _ _     -- precondition for poly_element_decode_and_decompress
+· sorry                              -- main FC goal
+
+/- AFTER: let* script — preconditions are inline after the relevant let* call -/
+let* ⟨ vdd, vdd_post ⟩ ← vector_decode_and_decompress_spec
+· cases p <;> simp_all [Spec.dᵤ]   -- same precondition, now inline
+...
+let* ⟨ dd, dd_post ⟩ ← poly_element_decode_and_decompress_spec
+· intro i hi; exact bit_sum _ _     -- same precondition, now inline
+...
+sorry                                -- main FC goal at the end
+```
+
 **When to use `let*` vs `step*`:**
 - Use `step*` when you don't need to reference intermediates (simple functions,
   or when the remaining goals are closeable by automation alone)
@@ -1435,9 +1460,47 @@ calc (x + 1) * (x + 1)
     `List.Inhabited_getElem_eq_getElem!` in a single `simp only` call. Split them
     into separate calls, or use `rw`.
 
-    If the `maxRecDepth` issue is not caused by a simp loop (e.g., unbounded proof
-    unfolding), **report it to the user** — it may indicate a structural proof problem
-    or a tactic bug.
+    **Second cause: deep definitional unification.** `maxRecDepth` can also be
+    triggered by `exact` or `apply` when the goal and the supplied term differ
+    by an opaque projection or intermediate definition that is only
+    *definitionally* (not syntactically) equal to the expected value. To verify
+    the equality, Lean's unifier must unfold through deeply nested terms —
+    hitting `maxRecDepth` even though no `simp` is involved.
+
+    **Fix: `rw` before `exact`/`apply`.** Rewrite opaque expressions to their
+    concrete values before the unification point. This makes the match
+    syntactic, so the unifier succeeds immediately.
+
+    ```lean
+    -- BAD: unifier must reduce next.2.start through deep terms → maxRecDepth
+    exact loop_spec next.2 ... hbounds_rec
+
+    -- GOOD: rw normalizes the goal first, exact sees a syntactic match
+    rw [hstart']          -- ↑next.2.start → ↑iter.start + 1
+    exact loop_spec ...   -- now matches directly
+    ```
+
+    **How to diagnose `maxRecDepth` when the cause is unclear — rolling stop:**
+    Insert `stop` at the top of the proof script (the existing proof below
+    remains untouched — `stop` prevents Lean from elaborating anything after
+    it). Then move `stop` down one line at a time. Everything above `stop`
+    executes; everything below is ignored. When the error appears, the tactic
+    just above `stop` is the trigger.
+
+    ```lean
+    theorem my_thm ... := by
+      stop           -- ← insert here, move down one line at a time
+      unfold my_fn
+      by_cases h : ...
+      · tactic_1
+        tactic_2
+        exact ...
+      · ...
+    ```
+
+    If the `maxRecDepth` issue is not caused by a simp loop or deep unification,
+    **report it to the user** — it may indicate a structural proof problem or a
+    tactic bug.
 12. **Report misbehaving tactics.** If a tactic doesn't do what it should — for example, `step` fails to make progress even though the appropriate `@[step]` lemma exists, or `scalar_tac` can't close a pure arithmetic goal it should handle — **report this to the user**. It may indicate a bug or missing feature worth fixing upstream.
 13. **Keep `maxHeartbeats` reasonable (< 8M).** Lean's default (200K) is too low for Aeneas proofs — increase to 1M as a baseline. But if a proof needs more than ~8M heartbeats, the proof is ill-structured or uses tactics inefficiently. Don't just bump the number — instead: decompose the function with fold theorems, extract sub-goals as auxiliary lemmas, minimize the context with `clear`, prefer `agrind` over `grind`, or use `step*?` instead of `step*` for finer control. **⛔ NEVER use `set_option ... in` inside a proof script** (e.g., within a `by` block). The `in` scoping inside a tactic block makes everything below it a single elaboration unit — any edit forces full re-elaboration, destroying incrementality. Using `set_option ... in` **before** a theorem declaration is fine and standard practice (e.g., `set_option maxHeartbeats 16000000 in theorem ...`).
 <!-- ⚠️ SYNC RULE: the measure tactic is defined in aeneas-tactics-quickref "Profiling proof time" -->

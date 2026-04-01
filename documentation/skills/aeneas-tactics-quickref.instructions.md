@@ -572,6 +572,24 @@ endlessly.
   lemma or reduction rule unfolds `s[i]!` back to a form containing `s[i]'h`, you
   get a loop. Use `rw` instead of `simp` for these.
 
+**Second cause of `maxRecDepth`: deep definitional unification.** Not all
+`maxRecDepth` errors come from simp loops. `exact` and `apply` can trigger
+`maxRecDepth` when the goal and the supplied term differ by opaque projections
+or intermediate definitions — the unifier must reduce through deeply nested
+terms to check definitional equality. **Fix:** use `rw` to normalize the goal
+before `exact`/`apply` so the match is syntactic (see aeneas-lean-core item 11
+for the full pattern and examples).
+
+**Diagnostic technique — rolling stop.** When `maxRecDepth` appears and the
+cause is unclear, insert `stop` at the top of the proof script and move it
+down one line at a time:
+1. Insert `stop` as the first tactic — the proof below stays untouched, Lean
+   ignores everything after `stop`
+2. Move `stop` down one tactic at a time (using the LSP for fast feedback)
+3. When the error appears, the tactic just above `stop` is the trigger
+4. Diagnose: is it a simp loop (fix per above) or deep unification (fix with
+   `rw`)?
+
 ### Report misbehaving tactics
 
 If a tactic doesn't do what it should — for example, `step` fails to make progress on a goal even though the appropriate `@[step]` lemma is available, or `scalar_tac` can't close a pure arithmetic goal it should handle — **report this to the user**. It may indicate a tactic bug or a missing feature that should be fixed upstream.

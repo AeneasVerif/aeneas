@@ -783,7 +783,13 @@ This agent checks everything EXCEPT syntactic fidelity (that's Agent A's job):
      loop variables? If both yes, flag: should use `Vector.replicate` + `.set`.
    The correct fix for all of these is bounds-checked access with `by sorry`.
 10. **File builds cleanly**: `lake build <module>` — 0 errors.
-11. **Conversion style** — flag any of:
+11. **Zero-initialization noise** — flag any `Vector.replicate ... (Vector.replicate ... 0)`
+   (nested replicate) or any `Vector.replicate n 0` that appears in more than one
+   function. These should use `zero` helpers on type abbreviations (e.g.,
+   `Poly.zero`, `PolyVec.zero`). In particular, a triple-nested replicate like
+   `Vector.replicate k (Vector.replicate k (Vector.replicate n 0))` is a strong
+   signal that `Poly.zero` and `PolyVec.zero` (or a matrix zero) are missing.
+12. **Conversion style** — flag any of:
    - Multiple `.toByteArray` calls in a single expression feeding into `++`
      (conversions should be consolidated — one conversion at the boundary)
    - `for` loops with mutable `ByteArray` accumulators that only concatenate
