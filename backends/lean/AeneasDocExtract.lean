@@ -18,6 +18,16 @@ import Aeneas
 
 open Lean Aeneas Step Meta Widget Elab PrettyPrinter
 
+/-- Metadata about a step theorem, extracted for documentation. -/
+private structure TheoremInfo where
+  funName    : Name
+  thmName    : Name
+  kind       : String  -- "theorem" or "axiom"
+  isPrivate  : Bool
+  sorryStatus : String
+  ppType     : String
+  annotated  : Array Json
+
 /-- Extract the head function name from an expression `f x1 ... xn`.
     Also handles `lift (f x1 ... xn)` by unwrapping the lift.
     Note: `Std.lift` has signature `{α : Type} → α → Result α`,
@@ -51,6 +61,10 @@ private def extractSpecFunName? (type : Expr) : MetaM (Option Name) := do
     - "partially_verified": uses `sorryAx` but isn't directly sorry -/
 private def classifySorryStatus (constName : Name) : CoreM String := do
   let env ← getEnv
+  -- Axioms have no proof body; classify as "verified" (axiomatized)
+  match env.find? constName with
+  | some (.axiomInfo _) => return "verified"
+  | _ => pure ()
   let axioms ← Lean.collectAxioms constName
   if !axioms.contains ``sorryAx then
     return "verified"
@@ -182,11 +196,24 @@ where
     Caller must ensure the Aeneas scoped namespaces are already activated. -/
 private def ppExprAnnotated (e : Expr) : MetaM (String × Array Json) := do
   let env ← getEnv
-  let fwi ← Meta.ppExprWithInfos e
-  let plainText := toString fwi.fmt
-  let tt := TaggedText.prettyTagged fwi.fmt
-  let annotated ← taggedTextToJson env fwi.infos tt
-  return (plainText, annotated)
+  try
+    let fwi ← Meta.ppExprWithInfos e
+    let plainText := toString fwi.fmt
+    let tt := TaggedText.prettyTagged fwi.fmt
+    let annotated ← taggedTextToJson env fwi.infos tt
+    return (plainText, annotated)
+  catch _ =>
+    -- Fallback: plain pretty-print without annotations
+    try
+      let fmt ← Meta.ppExpr e
+      return (toString fmt, #[])
+    catch _ =>
+      return (toString e, #[])
+
+/-- Plain pretty-print without annotations (fallback). -/
+private def ppExprPlain (e : Expr) : MetaM (String × Array Json) := do
+  let fmt ← Meta.ppExpr e
+  return (toString fmt, #[])
 
 /-- Run an action inside a context with Aeneas namespaces opened and activated.
     This sets up open declarations for `Aeneas.Std` and `Aeneas.Std.Result`,
@@ -197,66 +224,6 @@ private def withAeneasContext (action : MetaM α) : MetaM α := do
     Lean.activateScoped `Aeneas
     Lean.activateScoped `Aeneas.Std
     action
-
-/-- Extract step theorems from the step attribute's function map.
-    This iterates ALL registered `@[step]` theorems (including stdlib),
-    using the iterable map maintained by the step attribute. -/
-private def extractStepTheoremsFromAttr :
-    MetaM (Array (Name × Name × String × String × Array Json)) := do
-  let env ← getEnv
-  let funMap := Step.getStepFunMap env
-  withAeneasContext do
-    let mut results : Array (Name × Name × String × String × Array Json) := #[]
-    let mut seen : Std.HashSet Name := {}
-    for (funName, thmName) in funMap do
-      if seen.contains thmName then continue
-      seen := seen.insert thmName
-      let some thmInfo := env.find? thmName | continue
-      let sorryStatus ← classifySorryStatus thmName
-      let (ppType, annotated) ← ppExprAnnotated thmInfo.type
-      results := results.push (funName, thmName, sorryStatus, ppType, annotated)
-    return results
-
-/-- Extract all step theorems by iterating the environment constants.
-    Returns (functionName, theoremName, sorryStatus, prettyPrintedType, annotatedJson). -/
-private def extractStepTheorems (targetModule : Name) :
-    MetaM (Array (Name × Name × String × String × Array Json)) := do
-  let env ← getEnv
-
-  -- Collect constants from the target module and its children
-  let mut moduleConstants : Array Name := #[]
-  for i in [:env.header.moduleData.size] do
-    let modName := env.header.moduleNames[i]!
-    if modName == targetModule || targetModule.isPrefixOf modName then
-      moduleConstants := moduleConstants ++ env.header.moduleData[i]!.constNames
-  IO.println s!"  Scanning {moduleConstants.size} constants from module {targetModule}"
-
-  -- Set up Aeneas context once for all theorems
-  withAeneasContext do
-    let mut results : Array (Name × Name × String × String × Array Json) := #[]
-    for constName in moduleConstants do
-      if constName.isInternal then continue
-      let some info := env.find? constName | continue
-      match info with
-      | .thmInfo _ | .defnInfo _ => pure ()
-      | _ => continue
-      try
-        let funName? ← extractSpecFunName? info.type
-        match funName? with
-        | some funName =>
-          IO.println s!"  Found spec: {constName} → {funName}"
-          let sorryStatus ← classifySorryStatus constName
-          let (ppType, annotated) ← ppExprAnnotated info.type
-          results := results.push (funName, constName, sorryStatus, ppType, annotated)
-        | none => pure ()
-      catch e =>
-        IO.eprintln s!"  Warning: error processing {constName}: {← e.toMessageData.toString}"
-
-    return results
-
--- ============================================================
--- Definition extraction
--- ============================================================
 
 /-- Classify the kind of a ConstantInfo. -/
 private def classifyConstKind (info : ConstantInfo) : String :=
@@ -269,6 +236,70 @@ private def classifyConstKind (info : ConstantInfo) : String :=
   | .opaqueInfo _ => "opaque"
   | .quotInfo _ => "quot"
   | .thmInfo _ => "theorem"
+
+/-- Extract step theorems from the step attribute's function map.
+    This iterates ALL registered `@[step]` theorems (including stdlib),
+    using the iterable map maintained by the step attribute. -/
+private def extractStepTheoremsFromAttr :
+    MetaM (Array TheoremInfo) := do
+  let env ← getEnv
+  let funMap := Step.getStepFunMap env
+  withAeneasContext do
+    let mut results : Array TheoremInfo := #[]
+    let mut seen : Std.HashSet Name := {}
+    for (funName, thmName) in funMap do
+      if seen.contains thmName then continue
+      seen := seen.insert thmName
+      let some thmInfo := env.find? thmName | continue
+      try
+        let sorryStatus ← classifySorryStatus thmName
+        let kind := classifyConstKind thmInfo
+        let isPriv := Lean.isPrivateName thmName
+        let (ppType, annotated) ← ppExprAnnotated thmInfo.type
+        results := results.push { funName, thmName, kind, isPrivate := isPriv, sorryStatus, ppType, annotated }
+      catch e =>
+        IO.eprintln s!"  Warning: error processing {thmName}: {← e.toMessageData.toString}"
+    return results
+
+/-- Extract all step theorems by iterating the environment constants.
+    Returns (functionName, theoremName, sorryStatus, prettyPrintedType, annotatedJson). -/
+private def extractStepTheorems (targetModule : Name) :
+    MetaM (Array TheoremInfo) := do
+  let env ← getEnv
+
+  -- Collect constants from the target module and its children
+  let mut moduleConstants : Array Name := #[]
+  for i in [:env.header.moduleData.size] do
+    let modName := env.header.moduleNames[i]!
+    if modName == targetModule || targetModule.isPrefixOf modName then
+      moduleConstants := moduleConstants ++ env.header.moduleData[i]!.constNames
+
+  -- Set up Aeneas context once for all theorems
+  withAeneasContext do
+    let mut results : Array TheoremInfo := #[]
+    for constName in moduleConstants do
+      if constName.isInternal then continue
+      let some info := env.find? constName | continue
+      match info with
+      | .thmInfo _ | .defnInfo _ | .axiomInfo _ => pure ()
+      | _ => continue
+      try
+        let funName? ← extractSpecFunName? info.type
+        match funName? with
+        | some funName =>
+          let sorryStatus ← classifySorryStatus constName
+          let kind := classifyConstKind info
+          let isPriv := Lean.isPrivateName constName
+          results := results.push { funName, thmName := constName, kind, isPrivate := isPriv, sorryStatus, ppType := "TODO", annotated := #[] }
+        | none => pure ()
+      catch e =>
+        IO.eprintln s!"  Warning: error processing {constName}: {← e.toMessageData.toString}"
+
+    return results
+
+-- ============================================================
+-- Definition extraction
+-- ============================================================
 
 /-- Check if a name is internal/compiler-generated and should be skipped. -/
 private def isInternalDef (n : Name) : Bool :=
@@ -551,12 +582,11 @@ private def extractDefinitions (targetModule : Name) : MetaM (Array Json) := do
       catch e =>
         IO.eprintln s!"  Warning: error processing definition {constName}: {← e.toMessageData.toString}"
 
-    IO.println s!"  Found {results.size} definitions"
     return results
 
-def main (args : List String) : IO Unit := do
+unsafe def main (args : List String) : IO Unit := do
   if args.length < 2 then
-    IO.eprintln "Usage: AeneasDocExtract <ModuleName> <output.json>"
+    IO.eprintln "Usage: lake env lean --run AeneasDocExtract.lean <ModuleName> <output.json>"
     IO.Process.exit 1
 
   let moduleName := args[0]!.toName
@@ -564,46 +594,39 @@ def main (args : List String) : IO Unit := do
 
   IO.println s!"Loading module: {moduleName}"
   initSearchPath (← findSysroot)
+  Lean.enableInitializersExecution
   let env ← Lean.importModules #[{ module := moduleName }] {} 0 (loadExts := true)
 
-  let opts := Options.empty |> (·.insert `pp.unicode true)
+  let opts := Options.empty
+    |> (·.insert `pp.unicode true)
+    |> (·.insert `maxHeartbeats (8000000 : Nat))
   let ctx : Core.Context := { fileName := "", fileMap := FileMap.ofString "", options := opts }
   let state : Core.State := { env }
 
-  -- Extract step theorems from two sources:
-  -- 1. Module scan: finds spec-shaped theorems in the user module (even without @[step])
-  IO.println "Extracting step theorems from module..."
-  let (moduleThms, state) ← (extractStepTheorems moduleName).run'.toIO ctx state
-  IO.println s!"  Found {moduleThms.size} step theorems from module scan"
+  -- Extract step theorems from the @[step] attribute map
+  IO.println "Extracting step theorems..."
+  let (attrThms, state) ← (extractStepTheoremsFromAttr).run'.toIO ctx state
+  IO.println s!"  Found {attrThms.size} step theorems"
 
-  -- 2. Step attribute map: finds ALL @[step]-registered theorems (including stdlib)
-  IO.println "Extracting step theorems from @[step] attribute..."
-  let (attrThms, _) ← (extractStepTheoremsFromAttr).run'.toIO ctx state
-  IO.println s!"  Found {attrThms.size} step theorems from attribute map"
-
-  -- Merge, deduplicating by theorem name
+  -- Deduplicate
   let mut seen : Std.HashSet Name := {}
-  let mut allTheorems := moduleThms
-  for t in moduleThms do
-    seen := seen.insert t.2.1  -- theorem name
+  let mut allTheorems := attrThms
   for t in attrThms do
-    if !seen.contains t.2.1 then
-      seen := seen.insert t.2.1
-      allTheorems := allTheorems.push t
-  IO.println s!"Total: {allTheorems.size} unique step theorems"
+    seen := seen.insert t.thmName
 
   IO.println "Extracting definitions..."
   let (definitions, _) ← (extractDefinitions moduleName).run'.toIO ctx state
-  IO.println s!"Found {definitions.size} definitions"
 
   -- Build JSON output
-  let theoremJsons : Array Json := allTheorems.map fun (funName, thmName, sorryStatus, ppType, annotated) =>
+  let theoremJsons : Array Json := allTheorems.map fun t =>
     Json.mkObj [
-      ("function", .str funName.toString),
-      ("theorem", .str thmName.toString),
-      ("sorry_status", .str sorryStatus),
-      ("statement", .str ppType),
-      ("annotated_statement", .arr annotated)
+      ("function", .str t.funName.toString),
+      ("theorem", .str t.thmName.toString),
+      ("kind", .str t.kind),
+      ("is_private", .bool t.isPrivate),
+      ("sorry_status", .str t.sorryStatus),
+      ("statement", .str t.ppType),
+      ("annotated_statement", .arr t.annotated)
     ]
   let json := Json.mkObj [
     ("theorems", .arr theoremJsons),

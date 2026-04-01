@@ -106,6 +106,8 @@ class StepTheorem:
     def __init__(self, data: dict):
         self.function_name = data["function"]
         self.theorem_name = data["theorem"]
+        self.kind = data.get("kind", "theorem")  # "theorem" or "axiom"
+        self.is_private = data.get("is_private", False)
         self.sorry_status = data["sorry_status"]
         self.statement = data["statement"]
         self.annotated_statement = data.get("annotated_statement")
@@ -200,9 +202,48 @@ def parse_types(doc_info: dict) -> list:
     return [RustType(t) for t in doc_info.get("types", [])]
 
 
+class RustGlobal:
+    """A Rust global constant/static extracted from LLBC doc-info."""
+
+    def __init__(self, data: dict):
+        self.def_id = data["def_id"]
+        self.name_parts = data["name"]
+        self.name_pattern = data["name_pattern"]
+        self.is_public = data.get("is_public", False)
+        self.span = data.get("span")
+        self.source_text = data.get("source_text")
+
+    @property
+    def display_name(self) -> str:
+        return self.name_pattern
+
+    @property
+    def short_name(self) -> str:
+        parts = [p["name"] for p in self.name_parts if p["kind"] == "Ident"]
+        return parts[-1] if parts else self.name_pattern
+
+    @property
+    def module(self) -> str:
+        parts = [p["name"] for p in self.name_parts if p["kind"] == "Ident"]
+        if len(parts) >= 2:
+            return "::".join(parts[:-1])
+        return "(root)"
+
+    @property
+    def slug(self) -> str:
+        return self.name_pattern.replace("::", ".").replace(" ", "_")
+
+
+def parse_globals(doc_info: dict) -> list:
+    """Parse globals (constants/statics) from doc-info."""
+    return [RustGlobal(g) for g in doc_info.get("globals", [])]
+
+
 def parse_step_theorems(lean_doc: dict) -> list:
-    """Parse step theorems from lean-doc."""
-    return [StepTheorem(t) for t in lean_doc.get("theorems", [])]
+    """Parse step theorems from lean-doc, filtering out private theorems."""
+    all_thms = [StepTheorem(t) for t in lean_doc.get("theorems", [])]
+    # Filter out private theorems — they are implementation details
+    return [t for t in all_thms if not t.is_private]
 
 
 def parse_lean_definitions(lean_doc: dict) -> list:
@@ -242,14 +283,23 @@ def match_functions_to_theorems(functions: list, theorems: list):
         if not matched:
             fn.status = STATUS_UNVERIFIED
         else:
-            # Determine overall status from theorem statuses
-            statuses = {t.sorry_status for t in matched}
-            if all(s == "verified" for s in statuses):
-                fn.status = STATUS_VERIFIED
-            elif all(s == "specified" for s in statuses):
-                fn.status = STATUS_SPECIFIED
+            # Separate axioms from theorems
+            axiom_specs = [t for t in matched if t.kind == "axiom"]
+            theorem_specs = [t for t in matched if t.kind != "axiom"]
+
+            if not theorem_specs and axiom_specs:
+                # Only axiom specs — treat as axiomatized
+                fn.status = STATUS_EXTERNAL
             else:
-                fn.status = STATUS_PARTIAL
+                # Determine status from theorem-kind specs (ignore axioms)
+                specs_for_status = theorem_specs if theorem_specs else matched
+                statuses = {t.sorry_status for t in specs_for_status}
+                if all(s == "verified" for s in statuses):
+                    fn.status = STATUS_VERIFIED
+                elif all(s == "specified" for s in statuses):
+                    fn.status = STATUS_SPECIFIED
+                else:
+                    fn.status = STATUS_PARTIAL
 
 
 def _find_theorems_for(fn: 'RustFunction', thm_by_fun: dict,
@@ -565,6 +615,48 @@ def _theorem_links(theorems: list, lean_map: dict = None,
     return ", ".join(parts)
 
 
+def _render_theorem_card(thm: 'StepTheorem', known_fns: dict = None,
+                         depth: int = 1) -> str:
+    """Render a single theorem card (used in function and Lean definition pages)."""
+    sorry_badge = _badge_html(
+        STATUS_VERIFIED if thm.sorry_status == "verified"
+        else STATUS_SPECIFIED if thm.sorry_status == "specified"
+        else STATUS_PARTIAL
+    )
+    return f'''
+    <div class="theorem-card">
+      <div class="theorem-header">
+        <code class="thm-name">{_esc(thm.theorem_name)}</code>
+        {sorry_badge}
+      </div>
+      <div class="theorem-statement">
+        {_annotated_statement_block(thm, known_fns=known_fns, depth=depth)}
+      </div>
+    </div>
+    '''
+
+
+def _render_theorem_sections(theorems: list, known_fns: dict = None,
+                             depth: int = 1) -> str:
+    """Render theorem sections, splitting into Specifications and Axioms."""
+    if not theorems:
+        return '<p class="no-spec">No specification theorem found.</p>'
+
+    axiom_thms = [t for t in theorems if t.kind == "axiom"]
+    spec_thms = [t for t in theorems if t.kind != "axiom"]
+
+    html = ""
+    if spec_thms:
+        html += '<h2 id="spec">Specifications</h2>'
+        for thm in spec_thms:
+            html += _render_theorem_card(thm, known_fns=known_fns, depth=depth)
+    if axiom_thms:
+        html += '<h2 id="axioms">Axioms</h2>'
+        for thm in axiom_thms:
+            html += _render_theorem_card(thm, known_fns=known_fns, depth=depth)
+    return html
+
+
 def _lean_model_links(fn: 'RustFunction', rust_to_lean: dict = None,
                       link_prefix: str = "") -> str:
     """Render clickable Lean model name(s) for a Rust function, or '—' if none."""
@@ -587,8 +679,9 @@ def _function_row(fn: 'RustFunction', link_prefix: str = "",
     vis_col = f'<td>{"pub" if fn.is_public else ""}</td>' if show_vis else ""
     thm_col = _theorem_links(fn.step_theorems, lean_map, link_prefix) or "—"
     lean_col = _lean_model_links(fn, rust_to_lean, link_prefix)
+    pub_attr = "true" if fn.is_public else "false"
     return (
-        f'<tr>'
+        f'<tr data-public="{pub_attr}">'
         f'<td>{name_link}</td>'
         f'{vis_col}'
         f'<td>{badge}</td>'
@@ -1034,7 +1127,8 @@ def generate_index(crate_name: str, functions: list, types: list,
 def generate_module_page(mod_name: str, functions: list,
                          types: list, output_dir: Path,
                          lean_map: dict = None, type_lean_map: dict = None,
-                         rust_to_lean: dict = None):
+                         rust_to_lean: dict = None,
+                         globals_list: list = None):
     """Generate a module page."""
     mod_dir = output_dir / "mod"
     mod_dir.mkdir(parents=True, exist_ok=True)
@@ -1071,7 +1165,13 @@ def generate_module_page(mod_name: str, functions: list,
     {_stats_table(stats)}
 
     <h2>Functions</h2>
-    <table class="data-table">
+    <label style="margin-bottom:8px;display:inline-block;cursor:pointer">
+      <input type="checkbox" id="only-public" onchange="
+        document.querySelectorAll('#fn-table tbody tr').forEach(r =>
+          r.style.display = this.checked && r.dataset.public === 'false' ? 'none' : '')
+      "> Only public
+    </label>
+    <table class="data-table" id="fn-table">
       <thead><tr><th>Function</th><th>Vis</th><th>Status</th><th>Lean Model</th><th>Theorem</th></tr></thead>
       <tbody>{fn_rows}</tbody>
     </table>
@@ -1083,6 +1183,21 @@ def generate_module_page(mod_name: str, functions: list,
     <table class="data-table">
       <thead><tr><th>Type</th><th>Kind</th><th>Vis</th></tr></thead>
       <tbody>{type_rows}</tbody>
+    </table>
+    '''
+
+    # Constants/globals for this module
+    mod_globals = [g for g in (globals_list or []) if g.module == mod_name]
+    if mod_globals:
+        global_rows = ""
+        for g in sorted(mod_globals, key=lambda x: x.short_name):
+            vis = "pub" if g.is_public else ""
+            global_rows += f'<tr><td>{_esc(g.display_name)}</td><td>{vis}</td></tr>'
+        content += f'''
+    <h2>Constants</h2>
+    <table class="data-table">
+      <thead><tr><th>Constant</th><th>Vis</th></tr></thead>
+      <tbody>{global_rows}</tbody>
     </table>
     '''
 
@@ -1145,27 +1260,7 @@ def generate_function_page(fn: 'RustFunction', output_dir: Path,
     '''
 
     # Step theorems
-    if fn.step_theorems:
-        content += '<h2 id="spec">Specification</h2>'
-        for thm in fn.step_theorems:
-            sorry_badge = _badge_html(
-                STATUS_VERIFIED if thm.sorry_status == "verified"
-                else STATUS_SPECIFIED if thm.sorry_status == "specified"
-                else STATUS_PARTIAL
-            )
-            content += f'''
-    <div class="theorem-card">
-      <div class="theorem-header">
-        <code class="thm-name">{_esc(thm.theorem_name)}</code>
-        {sorry_badge}
-      </div>
-      <div class="theorem-statement">
-        {_annotated_statement_block(thm, known_fns=known_fns, depth=1)}
-      </div>
-    </div>
-    '''
-    else:
-        content += '<p class="no-spec">No specification theorem found.</p>'
+    content += _render_theorem_sections(fn.step_theorems, known_fns=known_fns, depth=1)
 
     content += _page_footer(depth=1)
     (fn_dir / f"{fn.slug}.html").write_text(content)
@@ -1432,25 +1527,7 @@ def generate_lean_page(lean_def: 'LeanDefinition', output_dir: Path,
     '''
 
     # Step theorems
-    if lean_def.step_theorems:
-        content += '<h2 id="spec">Specification</h2>'
-        for thm in lean_def.step_theorems:
-            sorry_badge = _badge_html(
-                STATUS_VERIFIED if thm.sorry_status == "verified"
-                else STATUS_SPECIFIED if thm.sorry_status == "specified"
-                else STATUS_PARTIAL
-            )
-            content += f'''
-    <div class="theorem-card">
-      <div class="theorem-header">
-        <code class="thm-name">{_esc(thm.theorem_name)}</code>
-        {sorry_badge}
-      </div>
-      <div class="theorem-statement">
-        {_annotated_statement_block(thm, known_fns=known_fns, depth=1)}
-      </div>
-    </div>
-    '''
+    content += _render_theorem_sections(lean_def.step_theorems, known_fns=known_fns, depth=1)
 
     content += _page_footer(depth=1)
     (lean_dir / f"{lean_def.slug}.html").write_text(content)
@@ -2013,6 +2090,7 @@ def generate_docs(
 
     functions = parse_functions(doc_info)
     types = parse_types(doc_info)
+    globals_list = parse_globals(doc_info)
 
     # Load Lean data if available
     theorems = []
@@ -2180,7 +2258,8 @@ def generate_docs(
         mod_types = [t for t in types if t.module == mod_name]
         generate_module_page(mod_name, mod_fns, mod_types, out,
                              lean_map=lean_map, type_lean_map=type_lean_map,
-                             rust_to_lean=rust_to_lean)
+                             rust_to_lean=rust_to_lean,
+                             globals_list=globals_list)
 
     # Function pages (with Lean model cross-link)
     for fn in functions:
@@ -2208,7 +2287,7 @@ def generate_docs(
                           type_lean_map=type_lean_map)
 
     print(f"Generated documentation in {out}/")
-    print(f"  {len(functions)} functions, {len(types)} types, {len(theorems)} theorems")
+    print(f"  {len(functions)} functions, {len(types)} types, {len(globals_list)} globals, {len(theorems)} theorems")
     print(f"  {len(lean_definitions)} Lean definitions")
     if errors:
         print(f"  ⚠ {len(errors)} diagnostic issues (see index.html)")

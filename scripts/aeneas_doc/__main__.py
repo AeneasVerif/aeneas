@@ -49,6 +49,10 @@ def main():
                      help="Documentation title (defaults to crate name)")
     gen.add_argument("--open", action="store_true",
                      help="Open the generated docs in a browser")
+    gen.add_argument("--serve", action="store_true",
+                     help="Start a local HTTP server and open in browser (fixes right-click issues)")
+    gen.add_argument("--port", type=int, default=8080,
+                     help="Port for --serve (default: 8080)")
 
     args = parser.parse_args()
 
@@ -61,9 +65,24 @@ def main():
             output_dir=args.output,
             title=args.title,
         )
-        if args.open:
+        abs_output = os.path.abspath(args.output)
+        if args.serve:
             import webbrowser
-            webbrowser.open(f"file://{os.path.abspath(args.output)}/index.html")
+            import http.server
+            import functools
+            print(f"Serving at http://localhost:{args.port}/")
+            webbrowser.open(f"http://localhost:{args.port}/index.html")
+            handler = functools.partial(
+                http.server.SimpleHTTPRequestHandler, directory=abs_output
+            )
+            server = http.server.HTTPServer(("localhost", args.port), handler)
+            try:
+                server.serve_forever()
+            except KeyboardInterrupt:
+                print("\nServer stopped.")
+        elif args.open:
+            import webbrowser
+            webbrowser.open(f"file://{abs_output}/index.html")
     else:
         parser.print_help()
         sys.exit(1)
