@@ -28,6 +28,12 @@ not fall back to `lake build` loops, do not dispatch proof agents. Tell the user
 > (`pip install lean-lsp-mcp` or `uvx lean-lsp-mcp`) and configure it in your MCP
 > client settings. See https://github.com/oOo0oOo/lean-lsp-mcp for setup
 > instructions."
+**If you get "Error: Not connected"** when calling a lean-lsp-mcp tool, the MCP
+server has likely crashed and is restarting. Wait a couple of minutes and retry.
+This is a transient error — the server will typically recover on its own. Do NOT
+fall back to `lake build` loops or stop working entirely; just wait briefly and
+retry the tool call.
+
 **Do NOT proceed with proof work without these tools** — wait for the user to
 connect the MCP server. Falling back to `lake build` loops wastes minutes per
 iteration where the MCP tools give sub-second feedback.

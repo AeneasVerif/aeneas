@@ -97,12 +97,17 @@ What does the goal look like?
 | `fcongr` | Congruence (safe whnf) | `fcongr`, `fcongr N` | — |
 | `split_conjs` | Split nested ∧, then scaffold `· agrind` per sub-goal | `split_conjs`, `split_conjs at h` | — |
 
-**`step*?` and `let*` — named hypotheses for large proofs:**
-`step*?` generates a proof script using `let*` syntax where every monadic bind has
-an explicit name. This is essential for functions with many steps where you need to
-reference intermediate results in the final goal. `step*` gives inaccessible names
-(`_✝⁵⁵`) that cannot be referenced; `step*?` → `let*` gives you full control:
+**Inaccessible hypotheses — two solutions (see `aeneas-lean-core` for full details):**
+Many tactics (`step*`, `step` without `as`, `cases`, `intro`, pattern matching) produce
+hypotheses with inaccessible names (`_✝⁵⁵`, `h✝`) that cannot be referenced directly.
 
+**Solution 1 (up to ~10 hypotheses):** Use `‹expr›` type matching and/or `rename_i`:
+```lean
+have h := ‹_ = some i›   -- finds hypothesis by type shape (wildcards match inaccessible parts)
+rename_i ih_cbd          -- grabs the last inaccessible hypothesis
+```
+
+**Solution 2 (many hypotheses, `step*`-specific):** Use `step*?` → `let*` script:
 ```lean
 -- step*? generates (use lean_code_actions to retrieve):
 let* ⟨ x2, x2_post ⟩ ← U32.add_spec
@@ -110,7 +115,7 @@ let* ⟨ x3, h_len, h_val ⟩ ← foo_spec    -- name each postcondition compone
 ...
 ```
 
-See the `aeneas-lean-core` skill file for the full explanation.
+See the `aeneas-lean-core` skill file for worked examples and disambiguation rules.
 
 ### Commonly Used Lean Builtins
 

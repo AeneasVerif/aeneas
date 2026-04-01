@@ -50,7 +50,9 @@ DO NOT use `lake build` to iterate on proofs. Use the lean-lsp-mcp tools
 
 The tools (`lean_goal`, `lean_diagnostic_messages`, `lean_multi_attempt`, etc.)
 are available directly in your tool palette. If they are not available, ask the
-user to install lean-lsp-mcp (see the `lean-lsp-mcp` skill file).
+user to install lean-lsp-mcp (see the `lean-lsp-mcp` skill file). Whenever you get
+"Error: Not connected", the MCP server likely crashed and is restarting — wait
+a couple of minutes and retry.
 
 Workflow: edit file on disk → lean_goal → lean_multi_attempt → edit → repeat
 Only use `lake build` once at the very end to confirm the final result.

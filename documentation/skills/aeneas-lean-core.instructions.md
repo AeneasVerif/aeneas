@@ -507,13 +507,73 @@ there are, use `lean_goal` after a plain `step` to inspect the unnamed
 hypotheses, then add names to `step as ⟨...⟩` to match. If you provide too
 many names, Lean warns `"Too many ids provided"` — remove the excess.
 
-### The inaccessible name problem with `step*` and `let*` syntax
+### The inaccessible name problem
 
-**Problem:** When `step*` processes many monadic calls, all hypotheses from function
-specs receive inaccessible names (`_✝⁵⁵`, `_✝⁵⁶`, etc.). You cannot reference these
-by name in later proof steps, making it sometimes impossible to finish the proof.
+**Problem:** Many Lean tactics introduce hypotheses with inaccessible names
+(`_✝⁵⁵`, `_✝⁵⁶`, `h✝`, etc.) that cannot be referenced directly in later
+proof steps. This is a general Lean behavior — it happens with any tactic
+that introduces anonymous hypotheses:
 
-**Solution: Use `step*?` to generate a `let*`-based proof script with named bindings.**
+- **`step*`** — the most common source in Aeneas proofs: processes many monadic
+  calls, and all postcondition hypotheses get inaccessible names.
+- **`cases`/`match`** on terms with many fields — destructured components are
+  inaccessible (e.g., `cases h` on an existential with nested conjunctions).
+- **`intro`** on unnamed binders — Lean generates `_✝` names.
+- **Pattern matching in monadic code** — `Option.some` matches produce
+  inaccessible equalities like `_✝²⁴ : x✝⁸.1 = some iter.start`.
+
+The problem is especially acute in Aeneas proofs because `step*` on large
+functions can produce dozens of inaccessible hypotheses at once, making it
+impossible to reference the specific ones you need.
+
+Two solutions exist, in order of preference:
+
+#### Solution 1: `‹_›` type matching and `rename_i` (lightweight — for up to ~10 hypotheses)
+
+When you only need to access a small number of inaccessible hypotheses (up to ~10),
+use the `‹expr›` syntax and/or `rename_i` to grab them without regenerating the
+entire proof script. This works after any tactic that produces inaccessible names
+(`step*`, `cases`, etc.).
+
+**`‹expr›`** (term-mode anonymous instance - prefered as it leads to more stable proofs)
+searches the context for a hypothesis whose **type** matches `expr`. Crucially, `_`
+wildcards in `expr` match any subexpression — including inaccessible variables like
+`x✝⁸`. This lets you extract hypotheses by their "shape" without naming the inaccessible
+parts:
+
+```lean
+-- Suppose the context has inaccessible hypotheses:
+--   _✝⁴² : P x✝⁸ someKnownTerm
+--   _✝²⁴ : Q x✝³ anotherKnownTerm
+-- You can't write x✝⁸ or x✝³, but you CAN write:
+have h1 := ‹P _ someKnownTerm›     -- _ matches x✝⁸
+have h2 := ‹Q _ anotherKnownTerm›  -- _ matches x✝³
+```
+
+**Disambiguation:** If multiple hypotheses match the pattern, Lean picks one
+(usually the most recent). Include enough of the known parts to make the
+pattern unique.
+
+**`rename_i`** renames inaccessible hypotheses starting from the most recently
+introduced (last in context). For instance:
+
+```lean
+step*
+rename_i h    -- grabs the last inaccessible hypothesis
+exact h
+```
+
+**When to use Solution 1:** You need 1–10 specific hypotheses from the context.
+`‹_›` + `rename_i` is fast to write and keeps `step*` as the proof backbone.
+
+#### Solution 2: `step*?` → `let*` script (heavyweight — for many hypotheses)
+
+In the specific case of `step*`, when Solution 1 is impractical (too many hypotheses to
+rename, or you need named access to most intermediates for a complex goal), use `step*?`
+to generate a full `let*`-based proof script with named bindings. This replaces `step*`
+with explicit `let*` bindings that give every intermediate a name. Note however that due
+to `step*`'s internal optimizations, the generated proof script will be significantly
+slower (~10x slower for > 50 let bindings).
 
 `step*?` generates a proof script using the `let*` syntax, where each monadic bind
 becomes a named `let*` call with explicit binder names:
@@ -570,11 +630,13 @@ let* ⟨ dd, dd_post ⟩ ← poly_element_decode_and_decompress_spec
 sorry                                -- main FC goal at the end
 ```
 
-**When to use `let*` vs `step*`:**
+**When to use `let*` vs `step*` vs `‹_›`/`rename_i`:**
 - Use `step*` when you don't need to reference intermediates (simple functions,
   or when the remaining goals are closeable by automation alone)
-- Use `step*?` → `let*` when you need named hypotheses for the final FC goal
-  (typically for top-level function proofs connecting to the spec)
+- Use `step*` + `‹_›`/`rename_i` (Solution 1) when you need a few specific
+  hypotheses (up to ~10) — this is the lightest approach
+- Use `step*?` → `let*` (Solution 2) when you need named hypotheses for most
+  intermediates in a complex FC goal (typically top-level function proofs)
 - You can mix: use `step*` for the easy prefix, then switch to `let*` calls
   for the section where you need names
 
