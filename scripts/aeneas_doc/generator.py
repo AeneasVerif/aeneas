@@ -213,6 +213,11 @@ class RustGlobal:
         self.span = data.get("span")
         self.source_text = data.get("source_text")
 
+        # Computed
+        self.step_theorems: list = []
+        self.lean_defs: list = []
+        self.status = STATUS_UNVERIFIED
+
     @property
     def display_name(self) -> str:
         return self.name_pattern
@@ -232,6 +237,19 @@ class RustGlobal:
     @property
     def slug(self) -> str:
         return self.name_pattern.replace("::", ".").replace(" ", "_")
+
+    @property
+    def file_path(self) -> Optional[str]:
+        if self.span and self.span.get("data"):
+            return self.span["data"].get("file_name")
+        return None
+
+    @property
+    def line_range(self) -> Optional[tuple]:
+        if self.span and self.span.get("data"):
+            d = self.span["data"]
+            return (d.get("beg_line"), d.get("end_line"))
+        return None
 
 
 def parse_globals(doc_info: dict) -> list:
@@ -323,6 +341,40 @@ def _find_theorems_for(fn: 'RustFunction', thm_by_fun: dict,
             return thm_by_fun[key]
 
     return []
+
+
+def match_globals_to_theorems(globals_list: list, theorems: list):
+    """Match each global constant to its step theorem(s) and set status.
+
+    Uses the same matching logic as functions (_find_theorems_for).
+    """
+    thm_by_fun = defaultdict(list)
+    for thm in theorems:
+        thm_by_fun[thm.function_name].append(thm)
+    thm_by_suffix = defaultdict(list)
+    for key in thm_by_fun:
+        short = key.rsplit(".", 1)[-1]
+        thm_by_suffix[short].append(key)
+
+    for g in globals_list:
+        matched = _find_theorems_for(g, thm_by_fun, thm_by_suffix)
+        g.step_theorems = matched
+        if not matched:
+            g.status = STATUS_UNVERIFIED
+        else:
+            axiom_specs = [t for t in matched if t.kind == "axiom"]
+            theorem_specs = [t for t in matched if t.kind != "axiom"]
+            if not theorem_specs and axiom_specs:
+                g.status = STATUS_EXTERNAL
+            else:
+                specs = theorem_specs if theorem_specs else matched
+                statuses = {t.sorry_status for t in specs}
+                if all(s == "verified" for s in statuses):
+                    g.status = STATUS_VERIFIED
+                elif all(s == "specified" for s in statuses):
+                    g.status = STATUS_SPECIFIED
+                else:
+                    g.status = STATUS_PARTIAL
 
 
 def _mark_verified_with_unverified_deps(functions: list):
@@ -597,10 +649,11 @@ document.querySelectorAll('pre:not(.lean-annotated) > code[class*="language-"]')
 
 
 def _theorem_links(theorems: list, lean_map: dict = None,
-                   link_prefix: str = "") -> str:
-    """Render theorem names as clickable links to their Lean page's #spec section.
+                   link_prefix: str = "", fn_slug: str = "") -> str:
+    """Render theorem names as clickable links.
 
-    lean_map maps Lean function name → LeanDefinition.
+    Links to the Lean definition page if available, otherwise to the
+    function's own page #spec section.
     """
     if not theorems:
         return ""
@@ -609,6 +662,11 @@ def _theorem_links(theorems: list, lean_map: dict = None,
         ld = lean_map.get(thm.function_name) if lean_map else None
         if ld:
             href = f"{link_prefix}lean/{ld.slug}.html#spec"
+        elif fn_slug:
+            href = f"{link_prefix}fn/{fn_slug}.html#spec"
+        else:
+            href = ""
+        if href:
             parts.append(f'<a href="{href}">{_esc(thm.theorem_name)}</a>')
         else:
             parts.append(_esc(thm.theorem_name))
@@ -616,17 +674,29 @@ def _theorem_links(theorems: list, lean_map: dict = None,
 
 
 def _render_theorem_card(thm: 'StepTheorem', known_fns: dict = None,
-                         depth: int = 1) -> str:
+                         depth: int = 1, lean_map: dict = None,
+                         link_prefix: str = "", fn_slug: str = "") -> str:
     """Render a single theorem card (used in function and Lean definition pages)."""
     sorry_badge = _badge_html(
         STATUS_VERIFIED if thm.sorry_status == "verified"
         else STATUS_SPECIFIED if thm.sorry_status == "specified"
         else STATUS_PARTIAL
     )
+    # Make theorem name clickable if we can find its Lean page
+    lm = lean_map or {}
+    ld = lm.get(thm.function_name)
+    if ld:
+        thm_name_html = (f'<a href="{link_prefix}lean/{ld.slug}.html#spec">'
+                         f'{_esc(thm.theorem_name)}</a>')
+    elif fn_slug:
+        thm_name_html = (f'<a href="{link_prefix}fn/{fn_slug}.html#spec">'
+                         f'{_esc(thm.theorem_name)}</a>')
+    else:
+        thm_name_html = _esc(thm.theorem_name)
     return f'''
     <div class="theorem-card">
       <div class="theorem-header">
-        <code class="thm-name">{_esc(thm.theorem_name)}</code>
+        <code class="thm-name">{thm_name_html}</code>
         {sorry_badge}
       </div>
       <div class="theorem-statement">
@@ -637,7 +707,8 @@ def _render_theorem_card(thm: 'StepTheorem', known_fns: dict = None,
 
 
 def _render_theorem_sections(theorems: list, known_fns: dict = None,
-                             depth: int = 1) -> str:
+                             depth: int = 1, lean_map: dict = None,
+                             link_prefix: str = "", fn_slug: str = "") -> str:
     """Render theorem sections, splitting into Specifications and Axioms."""
     if not theorems:
         return '<p class="no-spec">No specification theorem found.</p>'
@@ -649,11 +720,15 @@ def _render_theorem_sections(theorems: list, known_fns: dict = None,
     if spec_thms:
         html += '<h2 id="spec">Specifications</h2>'
         for thm in spec_thms:
-            html += _render_theorem_card(thm, known_fns=known_fns, depth=depth)
+            html += _render_theorem_card(thm, known_fns=known_fns, depth=depth,
+                                         lean_map=lean_map, link_prefix=link_prefix,
+                                         fn_slug=fn_slug)
     if axiom_thms:
         html += '<h2 id="axioms">Axioms</h2>'
         for thm in axiom_thms:
-            html += _render_theorem_card(thm, known_fns=known_fns, depth=depth)
+            html += _render_theorem_card(thm, known_fns=known_fns, depth=depth,
+                                         lean_map=lean_map, link_prefix=link_prefix,
+                                         fn_slug=fn_slug)
     return html
 
 
@@ -677,9 +752,32 @@ def _function_row(fn: 'RustFunction', link_prefix: str = "",
     badge = _badge_html(fn.status)
     name_link = f'<a href="{link_prefix}fn/{fn.slug}.html">{_esc(fn.display_name)}</a>'
     vis_col = f'<td>{"pub" if fn.is_public else ""}</td>' if show_vis else ""
-    thm_col = _theorem_links(fn.step_theorems, lean_map, link_prefix) or "—"
+    thm_col = _theorem_links(fn.step_theorems, lean_map, link_prefix,
+                             fn_slug=fn.slug) or "—"
     lean_col = _lean_model_links(fn, rust_to_lean, link_prefix)
     pub_attr = "true" if fn.is_public else "false"
+    return (
+        f'<tr data-public="{pub_attr}">'
+        f'<td>{name_link}</td>'
+        f'{vis_col}'
+        f'<td>{badge}</td>'
+        f'<td>{lean_col}</td>'
+        f'<td class="thm-name">{thm_col}</td>'
+        f'</tr>'
+    )
+
+
+def _global_row(g: 'RustGlobal', link_prefix: str = "",
+                show_vis: bool = True, lean_map: dict = None,
+                rust_to_lean: dict = None) -> str:
+    """Render one row in a constants listing table (same layout as function rows)."""
+    badge = _badge_html(g.status)
+    name_link = f'<a href="{link_prefix}fn/{g.slug}.html">{_esc(g.display_name)}</a>'
+    vis_col = f'<td>{"pub" if g.is_public else ""}</td>' if show_vis else ""
+    thm_col = _theorem_links(g.step_theorems, lean_map, link_prefix,
+                             fn_slug=g.slug) or "—"
+    lean_col = _lean_model_links(g, rust_to_lean, link_prefix)
+    pub_attr = "true" if g.is_public else "false"
     return (
         f'<tr data-public="{pub_attr}">'
         f'<td>{name_link}</td>'
@@ -925,68 +1023,89 @@ def generate_index(crate_name: str, functions: list, types: list,
         if any(not (f.is_opaque or not f.has_body) for f in fns)
     }
 
-    # Build tree: group child modules under their parent
-    root_modules = {}  # top-level name → {name, children, fns}
-    for mod_name in sorted(local_modules.keys()):
-        parts = mod_name.split("::")
-        root = parts[0]
-        if root not in root_modules:
-            root_modules[root] = {"children": {}, "fns": []}
-        if len(parts) == 1:
-            root_modules[root]["fns"] = local_modules[mod_name]
-        else:
-            root_modules[root]["children"][mod_name] = local_modules[mod_name]
+    # Build a proper hierarchical tree with arbitrary depth.
+    # Each node: {"fns": [...], "children": {child_name: node, ...}}
+    def _build_tree(module_names):
+        tree = {}  # top-level token → subtree node
+        for mod_name in sorted(module_names):
+            parts = mod_name.split("::")
+            # Navigate/create the tree path
+            current_children = tree
+            for part in parts:
+                if part not in current_children:
+                    current_children[part] = {"_fns": [], "_children": {}}
+                node = current_children[part]
+                current_children = node["_children"]
+            # `node` is now the leaf node for this module
+            node["_fns"] = local_modules[mod_name]
+        return tree
 
-    module_html = ""
-    for root_name in sorted(root_modules.keys()):
-        node = root_modules[root_name]
-        all_fns = list(node["fns"])
-        for child_fns in node["children"].values():
-            all_fns.extend(child_fns)
-        root_stats = VerificationStats(
-            [f for f in all_fns if f.status != STATUS_EXTERNAL], root_name)
-        count = len(all_fns)
-        verified = root_stats.counts[STATUS_VERIFIED] + root_stats.counts[STATUS_VERIFIED_UNVERIFIED_DEPS]
-        root_slug = root_name.replace("::", ".")
-        root_link = f'<a href="mod/{root_slug}.html">{_esc(root_name)}</a>'
+    tree = _build_tree(local_modules.keys())
 
-        if node["children"]:
-            # Collapsible parent with children
-            child_rows = ""
-            for child_name in sorted(node["children"].keys()):
-                child_fns = node["children"][child_name]
-                child_stats = VerificationStats(
-                    [f for f in child_fns if f.status != STATUS_EXTERNAL], child_name)
-                child_slug = child_name.replace("::", ".")
-                child_link = f'<a href="mod/{child_slug}.html">{_esc(child_name)}</a>'
-                child_rows += (
-                    f'<tr class="child-module">'
-                    f'<td style="padding-left:32px">{child_link}</td>'
-                    f'<td>{len(child_fns)}</td>'
-                    f'<td>{child_stats.counts[STATUS_VERIFIED] + child_stats.counts[STATUS_VERIFIED_UNVERIFIED_DEPS]}/{len(child_fns)}</td>'
+    def _collect_all_fns(node):
+        """Recursively collect all functions under a tree node."""
+        fns = list(node.get("_fns", []))
+        for child_node in node.get("_children", {}).values():
+            fns.extend(_collect_all_fns(child_node))
+        return fns
+
+    def _render_module_tree(node, prefix_parts, depth=0, parent_expanded=True):
+        """Recursively render a module tree as table rows."""
+        html = ""
+        children = node.get("_children", {})
+        for child_name in sorted(children.keys()):
+            child_node = children[child_name]
+            full_parts = prefix_parts + [child_name]
+            full_name = "::".join(full_parts)
+            all_child_fns = _collect_all_fns(child_node)
+            child_stats = VerificationStats(
+                [f for f in all_child_fns if f.status != STATUS_EXTERNAL], full_name)
+            count = len(all_child_fns)
+            verified = child_stats.counts[STATUS_VERIFIED] + child_stats.counts[STATUS_VERIFIED_UNVERIFIED_DEPS]
+            slug = full_name.replace("::", ".")
+            link = f'<a href="mod/{slug}.html">{_esc(full_name)}</a>'
+            has_children = bool(child_node.get("_children"))
+
+            # The crate root (depth 0) is always expanded to show level-1 modules
+            is_expanded = (depth == 0)
+            indent = 16 * max(depth, 0)
+            display = "" if parent_expanded else ' style="display:none"'
+
+            if has_children:
+                arrow = "▾" if is_expanded else "▸"
+                expanded_cls = " expanded" if is_expanded else ""
+                html += (
+                    f'<tr class="parent-module mod-row{expanded_cls}"'
+                    f' data-mod="{slug}" data-depth="{depth}"'
+                    f'{display}'
+                    f' onclick="toggleMod(this)">'
+                    f'<td style="padding-left:{indent}px">{link} '
+                    f'<span class="expand-arrow">{arrow}</span></td>'
+                    f'<td>{count}</td>'
+                    f'<td>{verified}/{count}</td>'
                     f'<td style="width:200px">{_progress_bar(child_stats)}</td></tr>'
                 )
-            module_html += (
-                f'<tr class="parent-module" onclick="this.classList.toggle(\'expanded\');'
-                f'let s=this.nextElementSibling;while(s&&s.classList.contains(\'child-module\'))'
-                f'{{s.style.display=s.style.display===\'none\'?\'table-row\':\'none\';s=s.nextElementSibling}}">'
-                f'<td>{root_link} <span class="expand-arrow">▸</span></td>'
-                f'<td>{count}</td>'
-                f'<td>{verified}/{count}</td>'
-                f'<td style="width:200px">{_progress_bar(root_stats)}</td></tr>'
-                + child_rows
-            )
-        else:
-            module_html += (
-                f'<tr><td>{root_link}</td><td>{count}</td>'
-                f'<td>{verified}/{count}</td>'
-                f'<td style="width:200px">{_progress_bar(root_stats)}</td></tr>'
-            )
+                html += _render_module_tree(child_node, full_parts, depth + 1,
+                                            parent_expanded=is_expanded and parent_expanded)
+            else:
+                html += (
+                    f'<tr class="mod-row" data-mod="{slug}" data-depth="{depth}"'
+                    f'{display}>'
+                    f'<td style="padding-left:{indent}px">{link}</td>'
+                    f'<td>{count}</td>'
+                    f'<td>{verified}/{count}</td>'
+                    f'<td style="width:200px">{_progress_bar(child_stats)}</td></tr>'
+                )
+        return html
+
+    # Start rendering from the tree root; depth 0 = crate root, expanded
+    root_node = {"_fns": [], "_children": tree}
+    module_html = _render_module_tree(root_node, [], depth=0, parent_expanded=True)
 
     # External functions summary
     externals = [f for f in functions if f.status == STATUS_EXTERNAL]
 
-    content = _page_header(f"{crate_name} — Verification Status")
+    content = _page_header(f"{crate_name} — Verification Dashboard")
     content += '''
     <div class="search-box">
       <input type="text" id="search-input" placeholder="Search functions, types..." autocomplete="off">
@@ -1055,10 +1174,39 @@ def generate_index(crate_name: str, functions: list, types: list,
     content += f'''
     <section>
       <h2>Modules</h2>
-      <table class="data-table">
+      <table class="data-table" id="module-table">
         <thead><tr><th>Module</th><th>Functions</th><th>Verified</th><th>Progress</th></tr></thead>
         <tbody>{module_html}</tbody>
       </table>
+      <script>
+        function toggleMod(row) {{
+          var expanded = row.classList.toggle('expanded');
+          var arrow = row.querySelector('.expand-arrow');
+          if (arrow) arrow.textContent = expanded ? '▾' : '▸';
+          var parentMod = row.getAttribute('data-mod');
+          var parentDepth = parseInt(row.getAttribute('data-depth'));
+          // Walk subsequent rows
+          var next = row.nextElementSibling;
+          while (next && next.classList.contains('mod-row')) {{
+            var d = parseInt(next.getAttribute('data-depth'));
+            if (d <= parentDepth) break;  // sibling or ancestor
+            if (d === parentDepth + 1) {{
+              // Direct child — toggle visibility
+              next.style.display = expanded ? '' : 'none';
+              // If collapsing, also collapse nested children
+              if (!expanded && next.classList.contains('expanded')) {{
+                next.classList.remove('expanded');
+                var sa = next.querySelector('.expand-arrow');
+                if (sa) sa.textContent = '▸';
+              }}
+            }} else {{
+              // Deeper descendant — hide when collapsing
+              if (!expanded) next.style.display = 'none';
+            }}
+            next = next.nextElementSibling;
+          }}
+        }}
+      </script>
     </section>
     '''
 
@@ -1070,7 +1218,7 @@ def generate_index(crate_name: str, functions: list, types: list,
         for fn in sorted(public_fns, key=lambda f: f.display_name):
             badge = _badge_html(fn.status)
             name_link = f'<a href="fn/{fn.slug}.html">{_esc(fn.display_name)}</a>'
-            thm_col = _theorem_links(fn.step_theorems, lm) or "—"
+            thm_col = _theorem_links(fn.step_theorems, lm, fn_slug=fn.slug) or "—"
             lean_col = _lean_model_links(fn, rust_to_lean)
             pub_rows += (
                 f'<tr>'
@@ -1189,14 +1337,15 @@ def generate_module_page(mod_name: str, functions: list,
     # Constants/globals for this module
     mod_globals = [g for g in (globals_list or []) if g.module == mod_name]
     if mod_globals:
-        global_rows = ""
-        for g in sorted(mod_globals, key=lambda x: x.short_name):
-            vis = "pub" if g.is_public else ""
-            global_rows += f'<tr><td>{_esc(g.display_name)}</td><td>{vis}</td></tr>'
+        global_rows = "".join(
+            _global_row(g, link_prefix="../", lean_map=lean_map,
+                        rust_to_lean=rust_to_lean)
+            for g in sorted(mod_globals, key=lambda x: x.short_name)
+        )
         content += f'''
     <h2>Constants</h2>
     <table class="data-table">
-      <thead><tr><th>Constant</th><th>Vis</th></tr></thead>
+      <thead><tr><th>Constant</th><th>Vis</th><th>Status</th><th>Lean Model</th><th>Theorem</th></tr></thead>
       <tbody>{global_rows}</tbody>
     </table>
     '''
@@ -1207,7 +1356,8 @@ def generate_module_page(mod_name: str, functions: list,
 
 def generate_function_page(fn: 'RustFunction', output_dir: Path,
                            known_fns: dict = None,
-                           lean_defs: list = None):
+                           lean_defs: list = None,
+                           lean_map: dict = None):
     """Generate a per-function detail page."""
     fn_dir = output_dir / "fn"
     fn_dir.mkdir(parents=True, exist_ok=True)
@@ -1259,11 +1409,78 @@ def generate_function_page(fn: 'RustFunction', output_dir: Path,
     </details>
     '''
 
-    # Step theorems
-    content += _render_theorem_sections(fn.step_theorems, known_fns=known_fns, depth=1)
+    # Step theorems (no fn_slug — we're already on this function's page)
+    content += _render_theorem_sections(fn.step_theorems, known_fns=known_fns,
+                                         depth=1, lean_map=lean_map,
+                                         link_prefix="../")
 
     content += _page_footer(depth=1)
     (fn_dir / f"{fn.slug}.html").write_text(content)
+
+
+def generate_global_page(g: 'RustGlobal', output_dir: Path,
+                         known_fns: dict = None,
+                         lean_defs: list = None,
+                         lean_map: dict = None):
+    """Generate a per-constant detail page (same layout as function pages)."""
+    fn_dir = output_dir / "fn"
+    fn_dir.mkdir(parents=True, exist_ok=True)
+    lean_defs = lean_defs or []
+
+    content = _page_header(
+        g.display_name,
+        breadcrumbs=[
+            ("Index", "index.html"),
+            (g.module, f"mod/{g.module.replace('::', '.')}.html"),
+            (g.short_name, None),
+        ],
+        depth=1,
+    )
+
+    content += f'''
+    <div class="fn-header">
+      {_badge_html(g.status)}
+      <span class="fn-visibility">{"pub " if g.is_public else ""}</span>
+      <code class="fn-name">{_esc(g.display_name)}</code>
+      <span style="color:#888;margin-left:8px">(constant)</span>
+    </div>
+    '''
+
+    # Lean model cross-link(s)
+    if lean_defs:
+        if len(lean_defs) == 1:
+            ld = lean_defs[0]
+            content += f'<p class="cross-link">Lean model: <a href="../lean/{ld.slug}.html">{_esc(ld.name)}</a></p>'
+        else:
+            links = ", ".join(
+                f'<a href="../lean/{ld.slug}.html">{_esc(ld.name)}</a>'
+                for ld in lean_defs
+            )
+            content += f'<p class="cross-link">Lean models: {links}</p>'
+
+    # Source location
+    if g.file_path and g.line_range:
+        begin, end = g.line_range
+        src_link = f"../source/rust/{g.file_path.replace('/', '_')}.html#L{begin}"
+        content += f'<p class="src-link">Source: <a href="{src_link}">{_esc(g.file_path)}:{begin}-{end}</a></p>'
+
+    # Rust source
+    if g.source_text:
+        content += f'''
+    <h2>Rust Source</h2>
+    <details open>
+      <summary>View source</summary>
+      {_source_block(g.source_text, "rust")}
+    </details>
+    '''
+
+    # Step theorems
+    content += _render_theorem_sections(g.step_theorems, known_fns=known_fns,
+                                         depth=1, lean_map=lean_map,
+                                         link_prefix="../")
+
+    content += _page_footer(depth=1)
+    (fn_dir / f"{g.slug}.html").write_text(content)
 
 
 def generate_external_page(functions: list, output_dir: Path,
@@ -1277,7 +1494,7 @@ def generate_external_page(functions: list, output_dir: Path,
     for fn in sorted(externals, key=lambda f: f.display_name):
         name_link = f'<a href="fn/{fn.slug}.html">{_esc(fn.display_name)}</a>'
         has_spec = "Yes" if fn.step_theorems else "No"
-        thm_col = _theorem_links(fn.step_theorems, lean_map) or "—"
+        thm_col = _theorem_links(fn.step_theorems, lean_map, fn_slug=fn.slug) or "—"
         lean_col = _lean_model_links(fn, rust_to_lean)
         rows += (
             f'<tr><td>{name_link}</td>'
@@ -1856,7 +2073,6 @@ pre code {
 .parent-module:hover { background: var(--bg-secondary); }
 .expand-arrow { font-size: 0.8em; color: #586069; transition: transform 0.15s; }
 .parent-module.expanded .expand-arrow { transform: rotate(90deg); }
-.child-module { display: none; }
 .child-module td:first-child { font-size: 0.95em; }
 '''
 
@@ -2086,7 +2302,7 @@ def generate_docs(
     crate_name = title or doc_info.get("crate_name", "Unknown Crate")
 
     global _CRATE_TITLE
-    _CRATE_TITLE = f"{crate_name} — Verification Status"
+    _CRATE_TITLE = f"{crate_name} — Verification Dashboard"
 
     functions = parse_functions(doc_info)
     types = parse_types(doc_info)
@@ -2103,13 +2319,18 @@ def generate_docs(
     # Match Rust functions ↔ step theorems (sets fn.status and fn.step_theorems)
     match_functions_to_theorems(functions, theorems)
 
+    # Match globals ↔ step theorems
+    match_globals_to_theorems(globals_list, theorems)
+
     # Downgrade verified functions with unverified transitive dependencies
     _mark_verified_with_unverified_deps(functions)
 
-    # Filter out uninteresting functions (global initializers with no name)
+    # Filter out uninteresting functions (global initializers are shown as
+    # constants, not functions)
     functions = [
         f for f in functions
         if f.name_pattern and f.name_pattern != "UNIT_METADATA"
+        and not f.is_global_init
     ]
 
     # --- Build Rust ↔ Lean mapping ---
@@ -2120,6 +2341,8 @@ def generate_docs(
 
     for fn in functions:
         rust_fn_map[fn.name_pattern] = fn
+    for g in globals_list:
+        rust_fn_map[g.name_pattern] = g
 
     for ld in lean_definitions:
         if not ld.rust_name:
@@ -2262,11 +2485,17 @@ def generate_docs(
                              globals_list=globals_list)
 
     # Function pages (with Lean model cross-link)
+    fn_known_fns = {k: f"../lean/{v}" for k, v in known_fns.items()}
     for fn in functions:
         lds = rust_to_lean.get(fn.name_pattern, [])
-        # known_fns links are relative within lean/ dir; from fn/ pages, prefix ../lean/
-        fn_known_fns = {k: f"../lean/{v}" for k, v in known_fns.items()}
-        generate_function_page(fn, out, known_fns=fn_known_fns, lean_defs=lds)
+        generate_function_page(fn, out, known_fns=fn_known_fns, lean_defs=lds,
+                               lean_map=lean_map)
+
+    # Global/constant pages
+    for g in globals_list:
+        lds = rust_to_lean.get(g.name_pattern, [])
+        generate_global_page(g, out, known_fns=fn_known_fns, lean_defs=lds,
+                             lean_map=lean_map)
 
     # Lean definition pages
     # known_fns links from lean/ pages stay as-is (sibling)
