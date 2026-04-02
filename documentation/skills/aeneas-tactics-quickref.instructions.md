@@ -9,6 +9,12 @@ description: Tactic decision tree, banned tactics, and common combinations for A
 
 **PREREQUISITE:** Always use the lean-lsp-mcp tools for interactive proof development. Use `lean_goal` to inspect the proof state before choosing a tactic. See the `lean-lsp-mcp` skill file.
 
+> **🔑 DEFAULT TACTIC: When you don't know what to do, use `agrind`.**
+> `agrind` is always the first tactic to try — it is fast, handles arithmetic,
+> equalities, and most structural goals. If `agrind` fails, try `grind` (slower
+> but more powerful). **Do NOT reach for `simp_all`** — it is very slow in large
+> contexts (common in Aeneas proofs) and silently drops hypotheses you may need later.
+
 ```
 What does the goal look like?
 
@@ -19,7 +25,8 @@ What does the goal look like?
 │  → apply loop.spec_decr_nat (Nat measure) or loop.spec (general)
 │
 ├─ Recursive _loop function
-│  → unfold + split + step (invariant = pre + post), termination_by + scalar_decr_tac
+│  → unfold + by_cases + step (invariant = pre + post), termination_by + scalar_decr_tac
+│  → NEVER partial_fixpoint_induct (see aeneas-lean-core skill file)
 │
 ├─ Arithmetic
 │  ├─ General → agrind (preferred), then grind, then scalar_tac (NEVER omega/linarith/nlinarith)
@@ -53,10 +60,15 @@ What does the goal look like?
 │  → ring_eq_nf / ring_eq_nf at h
 │
 ├─ If-then-else → simp_ifs / split
-├─ Conjunction (∧) → split_conjs <;> agrind
+├─ Conjunction (∧) → split_conjs, then immediately scaffold `· agrind` per sub-goal (same as step*)
 ├─ Boolean/Propositional → simp_bool_prop / tauto
 ├─ Concrete computation → decide / native_decide
 ├─ Congruence → fcongr
+│
+├─ Writing `simp [CONST]; solver` in a cdot block after step*?
+│  → STOP. Register CONST with @[grind =, agrind =] first.
+│    Re-run step* — the goal may disappear entirely.
+│    (See "Register Rust global/const scalar definitions" in Proof Style Rules)
 │
 └─ General / stuck
    ├─ Try → agrind
@@ -70,8 +82,8 @@ What does the goal look like?
 | Tactic | Purpose | Syntax | Key Attributes |
 |---|---|---|---|
 | `step` | Apply function spec | `step`, `step as ⟨x,h⟩`, `step with thm` | `@[step]` |
-| `step*` | Repeat step + case split | `step*`, `step* n` (n steps) | Use for final compact proof |
-| `step*?` | Generate proof script | `step*?` | Start here when developing proofs |
+| `step*` | Repeat step + case split | `step*`, `step* n` (n steps) | **Immediately** scaffold `· agrind` per sub-goal after |
+| `step*?` | Generate `let*` proof script | `step*?` | Use when you need named hypotheses (see below) |
 | `scalar_tac` | Integer arithmetic/bounds | `scalar_tac`, `scalar_tac +nonLin` | `@[scalar_tac_simps]` |
 | `simp_scalar` | Simplify scalar exprs | `simp_scalar`, `simp_scalar [lemmas]` | `@[simp_scalar_simps]` |
 | `simp_lists` | Simplify list get/set | `simp_lists`, `simp_lists [lemmas]` | `@[simp_lists_simps]` |
@@ -83,15 +95,36 @@ What does the goal look like?
 | `simp_bool_prop` | Bool/prop simplification | `simp_bool_prop` | `@[simp_bool_prop_simps]` |
 | `ring_eq_nf` | Cancel common terms in equalities | `ring_eq_nf`, `ring_eq_nf at h` | — |
 | `fcongr` | Congruence (safe whnf) | `fcongr`, `fcongr N` | — |
-| `split_conjs` | Split nested ∧ | `split_conjs`, `split_conjs at h` | — |
+| `split_conjs` | Split nested ∧, then scaffold `· agrind` per sub-goal | `split_conjs`, `split_conjs at h` | — |
+
+**Inaccessible hypotheses — two solutions (see `aeneas-lean-core` for full details):**
+Many tactics (`step*`, `step` without `as`, `cases`, `intro`, pattern matching) produce
+hypotheses with inaccessible names (`_✝⁵⁵`, `h✝`) that cannot be referenced directly.
+
+**Solution 1 (up to ~10 hypotheses):** Use `‹expr›` type matching and/or `rename_i`:
+```lean
+have h := ‹_ = some i›   -- finds hypothesis by type shape (wildcards match inaccessible parts)
+rename_i ih_cbd          -- grabs the last inaccessible hypothesis
+```
+
+**Solution 2 (many hypotheses, `step*`-specific):** Use `step*?` → `let*` script:
+```lean
+-- step*? generates (use lean_code_actions to retrieve):
+let* ⟨ x2, x2_post ⟩ ← U32.add_spec
+let* ⟨ x3, h_len, h_val ⟩ ← foo_spec    -- name each postcondition component
+...
+```
+
+See the `aeneas-lean-core` skill file for worked examples and disambiguation rules.
 
 ### Commonly Used Lean Builtins
 
 | Tactic | Purpose | Notes |
 |---|---|---|
-| `agrind` | General automation | Prefer over `grind` — faster. If it fails, try `grind` |
+| `agrind` | **Default tactic — always try first** | Fast, handles most goals. If it fails, try `grind` |
+| `grind` | General automation (fallback) | Slower but more powerful than `agrind`. Try when `agrind` fails |
 | `simp` / `simp [*]` | Simplification | Use `simp [*]` to keep hypotheses |
-| `simp_all` | Aggressive simplification | **Caution:** may remove needed hypotheses |
+| `simp_all` | Aggressive simplification | **⚠️ AVOID in big contexts** — very slow and drops hypotheses. Prefer `agrind` |
 | `tauto` | Propositional tautologies | |
 | `decide` | Concrete decidable goals | |
 | `ring` | Ring equalities | |
@@ -107,8 +140,10 @@ What does the goal look like?
 | `omega` | No scalar/Slice/Vec knowledge | `agrind` > `grind` > `scalar_tac` |
 | `linarith` | No scalar/Slice/Vec knowledge | `agrind` > `grind` > `scalar_tac` |
 | `nlinarith` | No scalar knowledge, explosion risk | `agrind` > `grind` > `scalar_tac +nonLin` / `simp_scalar` |
+| `congr N` | Default transparency unfolds definitions deeply → heartbeat timeout | `fcongr N` (reducible transparency, same subgoals) |
 | `step* <;> ...` | Replays full `step*` on every edit | `step*` then `· tactic` per goal |
 | `all_goals tactic` | Same re-elaboration problem | `· tactic` per goal |
+| `partial_fixpoint_induct` | Needs explicit motive + sorry'd `admissible` proof | `unfold` + `by_cases` + `step` + `termination_by` (see the `aeneas-lean-core` skill file) |
 
 **The first three tactics are NEVER acceptable in Aeneas proofs** — not in `step`
 theorems, not in helper lemmas, not in `have` steps, not in `decreasing_by` (even
@@ -162,11 +197,67 @@ editing goal 3 does not re-elaborate goals 1 or 2.
 **The same applies to any expensive tactic before `<;>`:** `simp [*] <;> scalar_tac`,
 `progress* <;> agrind`, etc. If the left-hand side is slow, always use `·` blocks.
 
+**After `step*`, always use focused `·` blocks** to close each remaining goal
+individually. This is mandatory regardless of the number of goals — even 2 goals
+must use `·` blocks, not `all_goals` or `<;>`.
+
+### Scaffolding workflow: `· agrind` first, then fix failures
+
+> **🔑 MANDATORY: After every `step*`, immediately scaffold one `· agrind` per
+> remaining sub-goal.** This is the very first thing you do — before inspecting
+> goals, before trying tactics, before anything else. Never leave `step*` without
+> its cdot scaffolding. **The same rule applies to `split_conjs`** and any other
+> tactic that produces multiple sub-goals (e.g., `split`, `cases`).
+
+```lean
+-- After step*:
+step*
+· agrind -- goal 1
+· agrind -- goal 2
+· agrind -- goal 3
+· agrind -- goal 4
+
+-- After split_conjs:
+split_conjs
+· agrind -- conjunct 1
+· agrind -- conjunct 2
+· agrind -- conjunct 3
+```
+
+This has critical benefits:
+- **`agrind` closes most sub-goals immediately** — many goals produced by `step*`
+  and `split_conjs` are arithmetic bounds or simple equalities that `agrind` handles.
+- **Each goal becomes independently inspectable** — for goals where `agrind` fails,
+  use `lean_goal` on that line to see exactly the context and target.
+- **Edits are incremental** — replacing one `· agrind` with a different tactic only
+  re-elaborates that single goal, not the others.
+- **No risk of `all_goals` temptation** — the structure is already in place.
+
+After scaffolding, check which `· agrind` goals still have errors. For those,
+inspect with `lean_goal`, pick the right tactic, and replace. This is
+the correct workflow even for 20+ goals — never try to close them in bulk.
+
+**⚠️ After `step*`, BEFORE writing any cdot blocks: check for missing solver
+attributes.** Scan the remaining goals. If 3+ goals need the same constant
+unfolded (e.g., you would write `simp [CONST]; solver` in each cdot block),
+**STOP** — register the constant with `@[grind =, agrind =]`
+FIRST, then re-run `step*`. The goals may disappear entirely. Only write
+manual cdot blocks for goals that survive after registration. This one step
+eliminates the most common source of verbose, fragile cdot blocks.
+
+If `step*` produces **more than 15 remaining goals**, this is a signal that the
+function body likely needs fold decomposition — see "Function Decomposition" in
+the `aeneas-crypto-verification` skill file. The solution to many goals is fewer
+goals through decomposition, not a clever tactic.
+
+If you are tempted to use `all_goals` because there are many goals, the answer
+is fold decomposition (see `aeneas-crypto-verification`), not a bulk tactic.
+
 ## Common Tactic Combinations
 
 | Pattern | Use When |
 |---|---|
-| `split_conjs <;> agrind` | Goal is a conjunction |
+| `split_conjs` then `· agrind` per goal | Goal is a conjunction — scaffold then fix failures (same as `step*`) |
 | `simp [*]; agrind` | `agrind` alone fails (grind issue workaround) |
 | `bvify N; bv_tac N` | Nat goal about bitwise operation |
 | `have h := ...; natify at h; simp_scalar at h` | Reverse bv lifting (goal → bv → back to Nat) |
@@ -233,17 +324,17 @@ theorem MY_CONST_val : MY_CONST.val = 42 := by decide
 |---|---|---|
 | Recursive step | Termination error after unfold+step | `split` before `step` |
 | Nat subtraction | Spec is wrong (truncated at 0) | Use Int, add `h : a ≥ b`, or rewrite as addition |
-| `simp_all` drops hyps | Needed hypothesis gone | Use `simp [*]` or `simp [h1,h2]` |
+| `simp_all` drops hyps / slow | Hypothesis gone or timeout | **Prefer `agrind`**. If you need simp, use `simp [*]` or `simp [h1,h2]` |
 | `grind` explodes | Timeout | Use `agrind` instead |
 | `agrind` fails | Goal unsolved | Try `simp [*]; agrind` |
 | Wrong step spec | Unexpected behavior | `step with specific_thm` |
 | Auto-param tactic loops | `maxRecDepth`/timeout at theorem statement | Make params explicit, no `:= by ...` in recursive theorems |
-| Dependent proof in `rw` | `simp only`/`rw` loops on term with proof arg | `congr 1` to separate value from proof (proof irrelevance) |
+| Dependent proof in `rw` | `simp only`/`rw` loops on term with proof arg | `fcongr 1` to separate value from proof (proof irrelevance) |
 | `step*` stuck on projection | No progress on `(Struct p).field args` | `simp only [step_simps]` before `step*`; add `@[simp, step_simps]` lemma |
 | Doc comment before `set_option` | Parse error "expected 'lemma'" | Use `/- ... -/` (regular comment), not `/-- ... -/` (doc comment) |
 | Concrete computation fails | `agrind`/`scalar_tac` fail on numeric literals | `native_decide` or `decide` |
 | `scalar_tac` in spec_gen | Cascading `maxRecDepth` in loop proof | Mass-replace ALL `scalar_tac` → `agrind` in proof body |
-| Recurring index bounds slow | Same bound proved inline many times | Extract as solver-attributed lemma (`@[agrind =]`); see Pitfall #22 in `aeneas-lean-core` |
+| Recurring index bounds slow | Same bound proved inline many times | Extract as solver-attributed lemma (`@[agrind =]`); see item 22 in `aeneas-lean-core` |
 | `(by ...)` in type signature | Kernel slowness on `apply`/`exact` of theorem | Use `get_elem_tactic` override with `agrind`; if that fails, use `(by agrind)` > `(by grind)` > `(by scalar_tac)` > standalone lemma. NEVER `cases p <;> simp_all <;> tactic`. See "Never embed (by ...) in type signatures" in `aeneas-lean-core` |
 | `first \| simp_all` swallows goals | `simp_all` partially simplifies, `first` considers it done | `(simp_all; done)` — forces full closure; applies to all `simp` variants |
 
@@ -308,7 +399,7 @@ theorem my_fn.spec ... := by
 
 ### ⚠️ `maxHeartbeats` guidelines
 
-<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core Pitfall #13 -->
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core item 13 ("Keep maxHeartbeats reasonable") -->
 
 **⛔ NEVER use `set_option ... in` inside a proof script.** For example:
 ```lean
@@ -351,7 +442,7 @@ bump the number, fix the root cause:
 
 ### ⏱️ Wall-clock time target: < 60s — THIS IS IMPORTANT
 
-<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core Pitfall #14 -->
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core item 14 ("Keep proof wall-clock time < 60s") -->
 
 **Keeping proof times low is critical for productivity.** Fast proofs mean fast iteration
 — you can try tactics, see results, and adjust quickly. Slow proofs kill this feedback
@@ -413,7 +504,7 @@ elaboration checkpoints).
 
 ### ⛔ NEVER increase `maxRecDepth`
 
-<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core Pitfall #11 -->
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core item 11 ("NEVER increase maxRecDepth") -->
 
 If you hit a `maxRecDepth` error, **do NOT increase it**. If calling any tactic
 triggers `maxRecDepth`, it almost certainly means **the tactic is looping internally**
@@ -485,6 +576,24 @@ endlessly.
   `Inhabited_getElem_eq_getElem!` lemma rewrites `s[i]'h` to `s[i]!`, but if another
   lemma or reduction rule unfolds `s[i]!` back to a form containing `s[i]'h`, you
   get a loop. Use `rw` instead of `simp` for these.
+
+**Second cause of `maxRecDepth`: deep definitional unification.** Not all
+`maxRecDepth` errors come from simp loops. `exact` and `apply` can trigger
+`maxRecDepth` when the goal and the supplied term differ by opaque projections
+or intermediate definitions — the unifier must reduce through deeply nested
+terms to check definitional equality. **Fix:** use `rw` to normalize the goal
+before `exact`/`apply` so the match is syntactic (see aeneas-lean-core item 11
+for the full pattern and examples).
+
+**Diagnostic technique — rolling stop.** When `maxRecDepth` appears and the
+cause is unclear, insert `stop` at the top of the proof script and move it
+down one line at a time:
+1. Insert `stop` as the first tactic — the proof below stays untouched, Lean
+   ignores everything after `stop`
+2. Move `stop` down one tactic at a time (using the LSP for fast feedback)
+3. When the error appears, the tactic just above `stop` is the trigger
+4. Diagnose: is it a simp loop (fix per above) or deep unification (fix with
+   `rw`)?
 
 ### Report misbehaving tactics
 

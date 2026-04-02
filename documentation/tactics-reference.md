@@ -16,6 +16,24 @@ step*                   -- repeatedly apply step
 step*?                  -- like step* but prints the proof script
 ```
 
+**Naming hypotheses with `step as`:** When `step` applies a spec theorem, it
+introduces the result variable and any postcondition components into the context.
+Without `as`, these get inaccessible names (`✝`, `✝¹`, etc.). Use
+`step as ⟨...⟩` to name them one by one, in order:
+
+```lean
+-- Suppose foo_spec has postcondition: ⦃ r => r.length = n ∧ ∀ i, r[i]! = 0 ⦄
+step as ⟨ r ⟩              -- name the result only; postcondition components are unnamed
+step as ⟨ r, h_len ⟩       -- name result + first conjunct (r.length = n)
+step as ⟨ r, h_len, h_val ⟩ -- name result + both conjuncts
+```
+
+Each name binds one component of the postcondition's top-level structure
+(conjunction components, existential witnesses). If unsure how many components
+there are, use `lean_goal` after a plain `step` to inspect the unnamed
+hypotheses, then add names to `step as ⟨...⟩` to match. If you provide too
+many names, Lean warns `"Too many ids provided"` — remove the excess.
+
 **The `@[step]` attribute:** Tag your specification theorems with `@[step]` so they are automatically found:
 ```lean
 @[step]
