@@ -1633,6 +1633,26 @@ calc (x + 1) * (x + 1)
     `List.Inhabited_getElem_eq_getElem!` in a single `simp only` call. Split them
     into separate calls, or use `rw`.
 
+    **Second cause: deep definitional unification.** `maxRecDepth` can also be
+    triggered by `exact` or `apply` when the goal and the supplied term differ
+    by an opaque projection or intermediate definition that is only
+    *definitionally* (not syntactically) equal to the expected value. To verify
+    the equality, Lean's unifier must unfold through deeply nested terms —
+    hitting `maxRecDepth` even though no `simp` is involved.
+
+    **Fix: `rw` before `exact`/`apply`.** Rewrite opaque expressions to their
+    concrete values before the unification point. This makes the match
+    syntactic, so the unifier succeeds immediately.
+
+    ```lean
+    -- BAD: unifier must reduce next.2.start through deep terms → maxRecDepth
+    exact loop_spec next.2 ... hbounds_rec
+
+    -- GOOD: rw normalizes the goal first, exact sees a syntactic match
+    rw [hstart']          -- ↑next.2.start → ↑iter.start + 1
+    exact loop_spec ...   -- now matches directly
+    ```
+
     **How to diagnose `maxRecDepth` when the cause is unclear — rolling stop:**
     Insert `stop` at the top of the proof script (the existing proof below
     remains untouched — `stop` prevents Lean from elaborating anything after
@@ -1651,92 +1671,9 @@ calc (x + 1) * (x + 1)
       · ...
     ```
 
-    If the `maxRecDepth` is caused by `exact` or `apply` (not a simp loop),
-    see "Unification pitfalls with `exact`/`apply`" below.
-
-    If the issue is not caused by a simp loop, deep unification, or proof-term
-    mismatch, **report it to the user** — it may indicate a structural proof
-    problem or a tactic bug.
-
-### Unification pitfalls with `exact`/`apply`
-
-When `exact` or `apply` is used to close a goal or apply a lemma, Lean's unifier
-must match every argument in the supplied term against what the goal expects. When
-the match is not syntactic, the unifier must reduce (unfold) terms to check
-definitional equality. This reduction can trigger either `maxRecDepth` errors or
-heartbeat timeouts (`maxHeartbeats`). Both failure modes can be caused by either
-**value mismatches** or **proof-term mismatches**.
-
-#### Two kinds of mismatches
-
-**Value mismatches.** The supplied *value* is only *definitionally* (not
-syntactically) equal to what the goal expects — e.g., an opaque projection like
-`next.2.start` instead of the concrete `iter.start + 1`, or a helper function
-call instead of its expanded result. The unifier must unfold through definitions
-to verify equality.
-
-**Proof-term mismatches.** The supplied *proof* argument is logically equivalent
-to what the goal expects but carried by a different hypothesis or constructed
-differently. Common cases:
-- Same proposition proved by different hypotheses (`h1` vs `h2` both prove
-  `s.size = N`, but they were introduced by different `have` statements,
-  case splits, or calls to `step`)
-- Subtype literal `⟨val, proof⟩` vs a helper function that constructs the
-  same subtype internally (the unifier must reduce through the helper's body)
-- Proof arguments threaded through different code paths
-
-#### Fixing value mismatches
-
-**`rw` before `exact`/`apply`.** Rewrite opaque expressions to their concrete
-values before the unification point. This makes the match syntactic, so the
-unifier succeeds immediately.
-
-```lean
--- BAD: unifier must reduce next.2.start through deep terms
-exact loop_spec next.2 ... hbounds_rec
-
--- GOOD: rw normalizes the goal first, exact sees a syntactic match
-rw [hstart']          -- ↑next.2.start → ↑iter.start + 1
-exact loop_spec ...   -- now matches directly
-```
-
-#### Fixing proof-term mismatches
-
-**Use `lean_goal` to inspect the exact names in the goal, then pass those
-exact names.** Do NOT construct equivalent proofs via helper functions or
-hypotheses from different scopes.
-
-**Real-world example (32M → <1M heartbeats):** An `exact` call passed a
-hypothesis from an outer scope where the goal expected a different hypothesis
-(from the local branch) proving the same proposition. Both proved `s.size = N`,
-but the kernel spent 32M+ heartbeats checking definitional equality of the
-proof terms. Replacing the outer hypothesis with the local one eliminated the
-timeout entirely.
-
-```lean
--- BAD: h_outer is logically equivalent to h_local but syntactically different
--- helper_fn constructs the same subtype but via internal reduction
-exact my_lemma acc h_outer (helper_fn x h_aux)
--- → timeout in large context
-
--- GOOD: pass the exact hypothesis names and constructors from the goal
-exact my_lemma acc h_local ⟨x, h_mem⟩
--- → succeeds immediately
-```
-
-#### Diagnosing `exact`/`apply` unification issues
-
-When `exact` or `apply` causes a `maxRecDepth` error or heartbeat timeout:
-
-1. **Replace with `refine ?_`** to see the full goal without triggering unification.
-2. **Compare each argument** you're passing against what the goal expects:
-   - For value arguments: are they syntactically equal? If not → `rw` to normalize
-     before `exact`/`apply`.
-   - For proof arguments (`h : P`): is the hypothesis name in the goal the same
-     as what you're passing? If not → pass the exact name from the goal.
-3. **If the culprit is unclear**, comment out arguments one by one (replace with `_`)
-   to isolate which argument causes the blowup.
-
+    If the `maxRecDepth` issue is not caused by a simp loop or deep unification,
+    **report it to the user** — it may indicate a structural proof problem or a
+    tactic bug.
 12. **Report misbehaving tactics.** If a tactic doesn't do what it should — for example, `step` fails to make progress even though the appropriate `@[step]` lemma exists, or `scalar_tac` can't close a pure arithmetic goal it should handle — **report this to the user**. It may indicate a bug or missing feature worth fixing upstream.
 13. **Keep `maxHeartbeats` reasonable (< 8M).** Lean's default (200K) is too low for Aeneas proofs — increase to 1M as a baseline. But if a proof needs more than ~8M heartbeats, the proof is ill-structured or uses tactics inefficiently. Don't just bump the number — instead: decompose the function with fold theorems, extract sub-goals as auxiliary lemmas, minimize the context with `clear`, prefer `agrind` over `grind`, or use `step*?` instead of `step*` for finer control. **⛔ NEVER use `set_option ... in` inside a proof script** (e.g., within a `by` block). The `in` scoping inside a tactic block makes everything below it a single elaboration unit — any edit forces full re-elaboration, destroying incrementality. Using `set_option ... in` **before** a theorem declaration is fine and standard practice (e.g., `set_option maxHeartbeats 16000000 in theorem ...`).
 <!-- ⚠️ SYNC RULE: the measure tactic is defined in aeneas-tactics-quickref "Profiling proof time" -->
