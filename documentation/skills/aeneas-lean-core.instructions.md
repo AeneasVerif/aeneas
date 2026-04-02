@@ -411,6 +411,18 @@ goal asks the invariant for `[0, next_start)`. Split with `by_cases hjj : j = it
 
 ## Proof Development Workflow
 
+### ⛔ Use the LSP for all checking — `lake build` only at the very end
+
+**Use only the lean-lsp-mcp tools** (diagnostics, goal, multi_attempt, etc.) when
+developing proofs: they give you incremental proof checking.
+**Do NOT run `lake build`** while developing proofs — the LSP server and `lake build`
+write to the same `.lake/build/` directory concurrently, causing file corruption,
+transient build failures, and wasted rebuild time.
+
+**`lake build` is allowed only once, at the very end**, as a final verification that
+the entire project builds. During proof development, the LSP gives you instant
+feedback on individual files without the overhead or corruption risk of a full build.
+
 ### Decision tree for starting a proof:
 
 1. Does the function start with `match`/`if`?
@@ -418,8 +430,10 @@ goal asks the invariant for `[0, next_start)`. Split with `by_cases hjj : j = it
    - NO → `unfold fn; step`
 
 2. Is the function simple (few monadic steps, say ≤ 5)?
-   - YES → `unfold fn; step*` may complete it directly. If sub-goals remain,
-     **immediately** scaffold one `· agrind` per sub-goal (see scaffolding workflow below).
+   - YES → `unfold fn; step*` may complete it directly (may take 60–120s on
+     larger functions — see "Tactics can take a long time" below). If sub-goals
+     remain, **immediately** scaffold one `· agrind` per sub-goal (see scaffolding
+     workflow below).
    - NO → Use `step*?` to generate an expanded proof script, then work from there
 
 3. Is the function large/complex (10+ monadic steps)?
@@ -443,6 +457,25 @@ goal asks the invariant for `[0, next_start)`. Split with `by_cases hjj : j = it
    - **"Too many monadic steps" is NEVER a reason to skip a proof or axiomatize.**
      It is a reason to decompose via fold theorems.
 
+### Tactics can take a long time — be patient
+
+Lean tactics can take significant wall-clock time, especially in large proof
+contexts. In particular, `step*` on big monadic functions (25+ steps, complex
+postconditions, many hypotheses) routinely takes **60–120 seconds or more**. Other
+tactics (`agrind`, `grind`, `simp [*]`, `scalar_tac`) can also take 10–30s in
+large contexts. This is normal — the tactics are doing real work. Do NOT:
+
+- **Interrupt or cancel the operation** — wait for it to complete.
+- **Call `lean_build`** because "the LSP seems stuck" — the tactic is still running.
+- **Replace the tactic with `sorry`** because "it's taking too long" — give it time.
+
+The same applies to `lean_goal`, `lean_diagnostic_messages`, and other MCP tools
+called on lines after a slow tactic — they must wait for elaboration to finish
+before they can report results. If an MCP tool times out on a line that follows
+a slow tactic, it likely means elaboration is still in progress. Wait 2 minutes
+and retry. If you still get a timeout, wait 2 minutes (or do other things that do not
+modify the Lean files) and retry. The LSP will eventually work.
+
 ### The step*? → fix → collapse workflow:
 1. `step*?` — generates expanded proof script (one `step` per monadic call)
 2. Copy the generated script into your proof
@@ -455,13 +488,165 @@ goal asks the invariant for `[0, next_start)`. Split with `by_cases hjj : j = it
 6. If `step*` works on the whole body, use that (shorter is better)
 7. If not, keep the expanded script for the parts that need manual intervention
 
+### Naming hypotheses introduced by `step`
+
+When `step` applies a spec theorem, it introduces the result variable and any
+postcondition components into the context. Without `as`, postconditions get inaccessible
+names (`✝`, `✝¹`, etc.). Use `step as ⟨...⟩` to name them one by one, in order:
+
+```lean
+-- Suppose foo_spec has postcondition: ⦃ r => r.length = n ∧ ∀ i, r[i]! = 0 ⦄
+step as ⟨ r ⟩              -- name the result only; postcondition components are unnamed
+step as ⟨ r, h_len ⟩       -- name result + first conjunct (r.length = n)
+step as ⟨ r, h_len, h_val ⟩ -- name result + both conjuncts
+```
+
+Each name binds one component of the postcondition's top-level structure
+(conjunction components, existential witnesses). If unsure how many components
+there are, use `lean_goal` after a plain `step` to inspect the unnamed
+hypotheses, then add names to `step as ⟨...⟩` to match. If you provide too
+many names, Lean warns `"Too many ids provided"` — remove the excess.
+
+### The inaccessible name problem
+
+**Problem:** Many Lean tactics introduce hypotheses with inaccessible names
+(`_✝⁵⁵`, `_✝⁵⁶`, `h✝`, etc.) that cannot be referenced directly in later
+proof steps. This is a general Lean behavior — it happens with any tactic
+that introduces anonymous hypotheses:
+
+- **`step*`** — the most common source in Aeneas proofs: processes many monadic
+  calls, and all postcondition hypotheses get inaccessible names.
+- **`cases`/`match`** on terms with many fields — destructured components are
+  inaccessible (e.g., `cases h` on an existential with nested conjunctions).
+- **`intro`** on unnamed binders — Lean generates `_✝` names.
+- **Pattern matching in monadic code** — `Option.some` matches produce
+  inaccessible equalities like `_✝²⁴ : x✝⁸.1 = some iter.start`.
+
+The problem is especially acute in Aeneas proofs because `step*` on large
+functions can produce dozens of inaccessible hypotheses at once, making it
+impossible to reference the specific ones you need.
+
+Two solutions exist, in order of preference:
+
+#### Solution 1: `‹_›` type matching and `rename_i` (lightweight — for up to ~10 hypotheses)
+
+When you only need to access a small number of inaccessible hypotheses (up to ~10),
+use the `‹expr›` syntax and/or `rename_i` to grab them without regenerating the
+entire proof script. This works after any tactic that produces inaccessible names
+(`step*`, `cases`, etc.).
+
+**`‹expr›`** (term-mode anonymous instance - prefered as it leads to more stable proofs)
+searches the context for a hypothesis whose **type** matches `expr`. Crucially, `_`
+wildcards in `expr` match any subexpression — including inaccessible variables like
+`x✝⁸`. This lets you extract hypotheses by their "shape" without naming the inaccessible
+parts:
+
+```lean
+-- Suppose the context has inaccessible hypotheses:
+--   _✝⁴² : P x✝⁸ someKnownTerm
+--   _✝²⁴ : Q x✝³ anotherKnownTerm
+-- You can't write x✝⁸ or x✝³, but you CAN write:
+have h1 := ‹P _ someKnownTerm›     -- _ matches x✝⁸
+have h2 := ‹Q _ anotherKnownTerm›  -- _ matches x✝³
+```
+
+**Disambiguation:** If multiple hypotheses match the pattern, Lean picks one
+(usually the most recent). Include enough of the known parts to make the
+pattern unique.
+
+**`rename_i`** renames inaccessible hypotheses starting from the most recently
+introduced (last in context). For instance:
+
+```lean
+step*
+rename_i h    -- grabs the last inaccessible hypothesis
+exact h
+```
+
+**When to use Solution 1:** You need 1–10 specific hypotheses from the context.
+`‹_›` + `rename_i` is fast to write and keeps `step*` as the proof backbone.
+
+#### Solution 2: `step*?` → `let*` script (heavyweight — for many hypotheses)
+
+In the specific case of `step*`, when Solution 1 is impractical (too many hypotheses to
+rename, or you need named access to most intermediates for a complex goal), use `step*?`
+to generate a full `let*`-based proof script with named bindings. This replaces `step*`
+with explicit `let*` bindings that give every intermediate a name. Note however that due
+to `step*`'s internal optimizations, the generated proof script will be significantly
+slower (~10x slower for > 50 let bindings).
+
+`step*?` generates a proof script using the `let*` syntax, where each monadic bind
+becomes a named `let*` call with explicit binder names:
+
+```lean
+let* ⟨ x2, x2_post ⟩ ← U32.add_spec
+let* ⟨ x3, x3_post ⟩ ← foo_spec
+let* ⟨ x4 ⟩ ← bar_spec
+...
+```
+
+**You can rename the binders** to match the algorithm's variables (e.g., `seedA`,
+`ep1`, `ct_11`), making the proof readable and the final FC goal tractable.
+
+**Adding names to anonymous postconditions:** The same naming principle applies
+to `let*` calls. If a step introduces unnamed postcondition components (e.g.,
+`let* ⟨ x ⟩ ← foo_spec`), simply add names for each component of the
+postcondition:
+
+```lean
+-- Before: unnamed postcondition components
+let* ⟨ x ⟩ ← foo_spec
+
+-- After: named components — now you can reference h_len and h_val
+let* ⟨ x, h_len, h_val ⟩ ← foo_spec
+```
+
+The number of binders must match the postcondition's structure (conjunction
+components, existential witnesses). Use `lean_goal` to inspect how many components
+the postcondition has if unsure.
+
+**Precondition subgoals in `step*?` output:** When `step*` is used with cdot
+blocks (`step*` followed by `· tactic` for each subgoal), precondition failures
+appear as subgoals *after* the `step*` call. In the `step*?`-generated `let*`
+script, these same preconditions appear as `· sorry` blocks *inline*, immediately
+after the `let*` call that needs them. When migrating from `step*` + cdot blocks
+to a `let*` script, move the precondition proofs from the cdot blocks into the
+corresponding `· sorry` positions in the `let*` script:
+
+```lean
+/- BEFORE: step* with cdot blocks for preconditions -/
+step*
+· cases p <;> simp_all [Spec.dᵤ]   -- precondition for vector_decode_and_decompress
+· intro i hi; exact bit_sum _ _     -- precondition for poly_element_decode_and_decompress
+· sorry                              -- main FC goal
+
+/- AFTER: let* script — preconditions are inline after the relevant let* call -/
+let* ⟨ vdd, vdd_post ⟩ ← vector_decode_and_decompress_spec
+· cases p <;> simp_all [Spec.dᵤ]   -- same precondition, now inline
+...
+let* ⟨ dd, dd_post ⟩ ← poly_element_decode_and_decompress_spec
+· intro i hi; exact bit_sum _ _     -- same precondition, now inline
+...
+sorry                                -- main FC goal at the end
+```
+
+**When to use `let*` vs `step*` vs `‹_›`/`rename_i`:**
+- Use `step*` when you don't need to reference intermediates (simple functions,
+  or when the remaining goals are closeable by automation alone)
+- Use `step*` + `‹_›`/`rename_i` (Solution 1) when you need a few specific
+  hypotheses (up to ~10) — this is the lightest approach
+- Use `step*?` → `let*` (Solution 2) when you need named hypotheses for most
+  intermediates in a complex FC goal (typically top-level function proofs)
+- You can mix: use `step*` for the easy prefix, then switch to `let*` calls
+  for the section where you need names
+
 ## Tactic Quick Reference
 
 ### Primary tactics (Aeneas-specific)
 | Tactic | Use for | Syntax |
 |---|---|---|
 | `step` | Apply function spec | `step`, `step as ⟨x, h⟩`, `step with thm` |
-| `step*` | Repeated step | `step*` |
+| `step*` | Repeated step (can take 60–120s on big functions — see "Tactics can take a long time" above) | `step*` |
 | `step*?` | Generate proof script | `step*?` |
 | `scalar_tac` | Integer arithmetic/bounds | `scalar_tac`, `scalar_tac +nonLin` |
 | `simp_scalar` | Simplify scalar exprs | `simp_scalar [lemmas]` |
@@ -504,6 +689,7 @@ container. They will either fail silently or produce fragile proofs that break o
 | `omega` | Cannot reason about `.val`, `.bv`, scalar bounds, list/slice lengths | `agrind` > `grind` > `scalar_tac` |
 | `linarith` | Same: no knowledge of scalar types, no `.val` reasoning | `agrind` > `grind` > `scalar_tac` |
 | `nlinarith` | Same, plus explosion risk on nonlinear goals | `agrind` > `grind` > `scalar_tac +nonLin` or `simp_scalar` |
+| `congr N` | Default transparency unfolds definitions deeply → heartbeat timeout | `fcongr N` (reducible transparency, same subgoals, no deep unfolding) |
 
 **Preference order for replacements: `agrind` first, then `grind`, then `scalar_tac`.**
 `agrind` is the default tactic for Aeneas proofs — always try it first. It is fast and
@@ -1336,9 +1522,47 @@ calc (x + 1) * (x + 1)
     `List.Inhabited_getElem_eq_getElem!` in a single `simp only` call. Split them
     into separate calls, or use `rw`.
 
-    If the `maxRecDepth` issue is not caused by a simp loop (e.g., unbounded proof
-    unfolding), **report it to the user** — it may indicate a structural proof problem
-    or a tactic bug.
+    **Second cause: deep definitional unification.** `maxRecDepth` can also be
+    triggered by `exact` or `apply` when the goal and the supplied term differ
+    by an opaque projection or intermediate definition that is only
+    *definitionally* (not syntactically) equal to the expected value. To verify
+    the equality, Lean's unifier must unfold through deeply nested terms —
+    hitting `maxRecDepth` even though no `simp` is involved.
+
+    **Fix: `rw` before `exact`/`apply`.** Rewrite opaque expressions to their
+    concrete values before the unification point. This makes the match
+    syntactic, so the unifier succeeds immediately.
+
+    ```lean
+    -- BAD: unifier must reduce next.2.start through deep terms → maxRecDepth
+    exact loop_spec next.2 ... hbounds_rec
+
+    -- GOOD: rw normalizes the goal first, exact sees a syntactic match
+    rw [hstart']          -- ↑next.2.start → ↑iter.start + 1
+    exact loop_spec ...   -- now matches directly
+    ```
+
+    **How to diagnose `maxRecDepth` when the cause is unclear — rolling stop:**
+    Insert `stop` at the top of the proof script (the existing proof below
+    remains untouched — `stop` prevents Lean from elaborating anything after
+    it). Then move `stop` down one line at a time. Everything above `stop`
+    executes; everything below is ignored. When the error appears, the tactic
+    just above `stop` is the trigger.
+
+    ```lean
+    theorem my_thm ... := by
+      stop           -- ← insert here, move down one line at a time
+      unfold my_fn
+      by_cases h : ...
+      · tactic_1
+        tactic_2
+        exact ...
+      · ...
+    ```
+
+    If the `maxRecDepth` issue is not caused by a simp loop or deep unification,
+    **report it to the user** — it may indicate a structural proof problem or a
+    tactic bug.
 12. **Report misbehaving tactics.** If a tactic doesn't do what it should — for example, `step` fails to make progress even though the appropriate `@[step]` lemma exists, or `scalar_tac` can't close a pure arithmetic goal it should handle — **report this to the user**. It may indicate a bug or missing feature worth fixing upstream.
 13. **Keep `maxHeartbeats` reasonable (< 8M).** Lean's default (200K) is too low for Aeneas proofs — increase to 1M as a baseline. But if a proof needs more than ~8M heartbeats, the proof is ill-structured or uses tactics inefficiently. Don't just bump the number — instead: decompose the function with fold theorems, extract sub-goals as auxiliary lemmas, minimize the context with `clear`, prefer `agrind` over `grind`, or use `step*?` instead of `step*` for finer control. **⛔ NEVER use `set_option ... in` inside a proof script** (e.g., within a `by` block). The `in` scoping inside a tactic block makes everything below it a single elaboration unit — any edit forces full re-elaboration, destroying incrementality. Using `set_option ... in` **before** a theorem declaration is fine and standard practice (e.g., `set_option maxHeartbeats 16000000 in theorem ...`).
 <!-- ⚠️ SYNC RULE: the measure tactic is defined in aeneas-tactics-quickref "Profiling proof time" -->
@@ -1353,12 +1577,12 @@ calc (x + 1) * (x + 1)
     private theorem loop.spec_gen ...
         (hbound : bound ≤ N) : ...
     ```
-17. **Dependent proof terms break `rw`/`simp only`.** When a term has a proof argument that depends on the value being rewritten (e.g., `partial_sum arr bound (hbound : bound ≤ N)`), `simp`/`rw` tries to update both the value AND the proof simultaneously and may loop. **Fix:** Use `congr 1` to peel off the proof argument (handled by proof irrelevance), then rewrite the value part separately.
+17. **Dependent proof terms break `rw`/`simp only`.** When a term has a proof argument that depends on the value being rewritten (e.g., `partial_sum arr bound (hbound : bound ≤ N)`), `simp`/`rw` tries to update both the value AND the proof simultaneously and may loop. **Fix:** Use `fcongr 1` to peel off the proof argument (handled by proof irrelevance), then rewrite the value part separately. (Never use `congr 1` — it uses default transparency and can cause heartbeat timeouts; see item 26.)
     ```lean
     -- BAD: loops because hbound depends on bound
     simp only [show bound = new_bound from h] at goal_with_partial_sum
-    -- GOOD: congr 1 separates value from proof
-    congr 1  -- one goal for the value, one trivial goal for the proof
+    -- GOOD: fcongr 1 separates value from proof
+    fcongr 1  -- one goal for the value, one trivial goal for the proof
     ```
 18. **`step*` doesn't recognize structure field projections.** When a function is accessed via structure field projection (e.g., `(Params p).shake` instead of `specShake`), `step` can't match it to an `@[step]` lemma. **Fix:** Add a simp lemma `@[simp, step_simps]` that unfolds the projection, then `simp only [step_simps]` before `step*`.
     ```lean
@@ -1433,6 +1657,44 @@ calc (x + 1) * (x + 1)
     -- GOOD: simp_all must fully close the goal, otherwise first tries alternatives
     · first | (simp_all; done) | scalar_tac | bv_tac 16
     ```
+
+26. **`congr` causes heartbeat timeout on function equalities.** When the goal is `f(a₁, a₂) = f(b₁, b₂)`, `congr 1` uses default transparency and may try to unfold `f` deeply, exceeding heartbeat limits. **Fix:** Always use `fcongr 1` instead — it wraps `congrN` with reducible transparency, producing the same subgoals (`a₁ = b₁`, `a₂ ≍ b₂`) without unfolding. Note: when arguments have dependent types with different indices (e.g., `Vector α n` vs `Vector α m`), subgoals may use `HEq` (`≍`). Show the underlying data is equal, then close with proof irrelevance.
+    ```lean
+    -- BAD: congr unfolds f deeply, heartbeat timeout
+    congr 1
+
+    -- GOOD: fcongr uses reducible transparency, same subgoals
+    fcongr 1
+    · -- a₁ = b₁
+      simp [...]
+    · -- a₂ ≍ b₂  (HEq when dependent type indices differ)
+      ...
+    ```
+
+27. **⛔ NEVER modify, delete, or touch anything inside the `.lake/` directory.** The
+    `.lake/` directory contains Lake's build cache, downloaded dependencies (Mathlib,
+    Aeneas stdlib, etc.), and their compiled artifacts. Deleting or modifying files in
+    `.lake/` causes **catastrophic rebuild times** — e.g., deleting Mathlib `.trace`
+    files forces a complete Mathlib replay that takes hours.
+
+    **Common mistakes that trigger this:**
+    - Deleting `.olean.server` files (created by the Lean LSP) because a build error
+      mentions them — these are transient LSP artifacts, not build inputs.
+    - Deleting `.trace` files to "fix" a stale cache — this forces full replays.
+    - Running `lake clean` on dependencies — this wipes everything.
+
+    **What to do instead when builds fail with `.lake/` errors:**
+    - **First: just re-run `lake build`.** Most `.lake/` errors are transient — caused
+      by the Lean LSP server and `lake build` writing to the same directory concurrently
+      (see "Use the LSP for all checking" above — this is why you should avoid running
+      `lake build` during development). Re-running `lake build` usually succeeds because
+      the corrupted file gets overwritten. You may need to re-run **several times** if
+      corruption happens repeatedly, but each run typically makes progress (builds more
+      modules before hitting the next corrupted file).
+    - **If the same error persists after 5+ retries**: Ask the user if you're not running
+      autonomously. They may want to run `lake clean` or re-fetch dependencies — but this
+      is their decision, not the agent's. By default (if you're running autonomously),
+      just wait.
 
 ## Attribute Management
 

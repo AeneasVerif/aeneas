@@ -83,7 +83,7 @@ What does the goal look like?
 |---|---|---|---|
 | `step` | Apply function spec | `step`, `step as ⟨x,h⟩`, `step with thm` | `@[step]` |
 | `step*` | Repeat step + case split | `step*`, `step* n` (n steps) | **Immediately** scaffold `· agrind` per sub-goal after |
-| `step*?` | Generate proof script | `step*?` | Start here when developing proofs; scaffold `· agrind` after pasting |
+| `step*?` | Generate `let*` proof script | `step*?` | Use when you need named hypotheses (see below) |
 | `scalar_tac` | Integer arithmetic/bounds | `scalar_tac`, `scalar_tac +nonLin` | `@[scalar_tac_simps]` |
 | `simp_scalar` | Simplify scalar exprs | `simp_scalar`, `simp_scalar [lemmas]` | `@[simp_scalar_simps]` |
 | `simp_lists` | Simplify list get/set | `simp_lists`, `simp_lists [lemmas]` | `@[simp_lists_simps]` |
@@ -96,6 +96,26 @@ What does the goal look like?
 | `ring_eq_nf` | Cancel common terms in equalities | `ring_eq_nf`, `ring_eq_nf at h` | — |
 | `fcongr` | Congruence (safe whnf) | `fcongr`, `fcongr N` | — |
 | `split_conjs` | Split nested ∧, then scaffold `· agrind` per sub-goal | `split_conjs`, `split_conjs at h` | — |
+
+**Inaccessible hypotheses — two solutions (see `aeneas-lean-core` for full details):**
+Many tactics (`step*`, `step` without `as`, `cases`, `intro`, pattern matching) produce
+hypotheses with inaccessible names (`_✝⁵⁵`, `h✝`) that cannot be referenced directly.
+
+**Solution 1 (up to ~10 hypotheses):** Use `‹expr›` type matching and/or `rename_i`:
+```lean
+have h := ‹_ = some i›   -- finds hypothesis by type shape (wildcards match inaccessible parts)
+rename_i ih_cbd          -- grabs the last inaccessible hypothesis
+```
+
+**Solution 2 (many hypotheses, `step*`-specific):** Use `step*?` → `let*` script:
+```lean
+-- step*? generates (use lean_code_actions to retrieve):
+let* ⟨ x2, x2_post ⟩ ← U32.add_spec
+let* ⟨ x3, h_len, h_val ⟩ ← foo_spec    -- name each postcondition component
+...
+```
+
+See the `aeneas-lean-core` skill file for worked examples and disambiguation rules.
 
 ### Commonly Used Lean Builtins
 
@@ -120,6 +140,7 @@ What does the goal look like?
 | `omega` | No scalar/Slice/Vec knowledge | `agrind` > `grind` > `scalar_tac` |
 | `linarith` | No scalar/Slice/Vec knowledge | `agrind` > `grind` > `scalar_tac` |
 | `nlinarith` | No scalar knowledge, explosion risk | `agrind` > `grind` > `scalar_tac +nonLin` / `simp_scalar` |
+| `congr N` | Default transparency unfolds definitions deeply → heartbeat timeout | `fcongr N` (reducible transparency, same subgoals) |
 | `step* <;> ...` | Replays full `step*` on every edit | `step*` then `· tactic` per goal |
 | `all_goals tactic` | Same re-elaboration problem | `· tactic` per goal |
 | `partial_fixpoint_induct` | Needs explicit motive + sorry'd `admissible` proof | `unfold` + `by_cases` + `step` + `termination_by` (see the `aeneas-lean-core` skill file) |
@@ -308,7 +329,7 @@ theorem MY_CONST_val : MY_CONST.val = 42 := by decide
 | `agrind` fails | Goal unsolved | Try `simp [*]; agrind` |
 | Wrong step spec | Unexpected behavior | `step with specific_thm` |
 | Auto-param tactic loops | `maxRecDepth`/timeout at theorem statement | Make params explicit, no `:= by ...` in recursive theorems |
-| Dependent proof in `rw` | `simp only`/`rw` loops on term with proof arg | `congr 1` to separate value from proof (proof irrelevance) |
+| Dependent proof in `rw` | `simp only`/`rw` loops on term with proof arg | `fcongr 1` to separate value from proof (proof irrelevance) |
 | `step*` stuck on projection | No progress on `(Struct p).field args` | `simp only [step_simps]` before `step*`; add `@[simp, step_simps]` lemma |
 | Doc comment before `set_option` | Parse error "expected 'lemma'" | Use `/- ... -/` (regular comment), not `/-- ... -/` (doc comment) |
 | Concrete computation fails | `agrind`/`scalar_tac` fail on numeric literals | `native_decide` or `decide` |
@@ -555,6 +576,24 @@ endlessly.
   `Inhabited_getElem_eq_getElem!` lemma rewrites `s[i]'h` to `s[i]!`, but if another
   lemma or reduction rule unfolds `s[i]!` back to a form containing `s[i]'h`, you
   get a loop. Use `rw` instead of `simp` for these.
+
+**Second cause of `maxRecDepth`: deep definitional unification.** Not all
+`maxRecDepth` errors come from simp loops. `exact` and `apply` can trigger
+`maxRecDepth` when the goal and the supplied term differ by opaque projections
+or intermediate definitions — the unifier must reduce through deeply nested
+terms to check definitional equality. **Fix:** use `rw` to normalize the goal
+before `exact`/`apply` so the match is syntactic (see aeneas-lean-core item 11
+for the full pattern and examples).
+
+**Diagnostic technique — rolling stop.** When `maxRecDepth` appears and the
+cause is unclear, insert `stop` at the top of the proof script and move it
+down one line at a time:
+1. Insert `stop` as the first tactic — the proof below stays untouched, Lean
+   ignores everything after `stop`
+2. Move `stop` down one tactic at a time (using the LSP for fast feedback)
+3. When the error appears, the tactic just above `stop` is the trigger
+4. Diagnose: is it a simp loop (fix per above) or deep unification (fix with
+   `rw`)?
 
 ### Report misbehaving tactics
 
