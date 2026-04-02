@@ -89,6 +89,26 @@ theorem function_name.spec (param1 : U32) (param2 : Slice U16)
       postcondition_on_backward_function back ⦄ := by ...
 ```
 
+### Sorry'd definitions vs sorry'd theorems
+
+A sorry'd **definition** (`def foo := sorry`) needs a **value** — a Lean term of the
+correct type. A sorry'd **theorem** (`theorem foo := by sorry`) needs a **proof** — a
+tactic sequence. Agents often confuse these, trying to write tactics for a `def` or
+trying to produce a term for a `theorem`. Know which one you're filling:
+
+- **`def`** (sorry'd definition): provide a concrete Lean expression. Common patterns:
+  - Byte assembly: `arrayToSpecBytes field1 ++ arrayToSpecBytes field2`
+  - Extraction: `(arrayToSpecBytes field).extract start len`
+  - Casting: `expr.cast (by scalar_tac)`  or  `expr.cast (by simp [...])`
+  - Concatenation: `a ++ b ++ c` with `Vector.append`
+- **`theorem`** (sorry'd theorem): provide a tactic proof (`by unfold ...; step*; ...`)
+
+When you encounter `noncomputable def foo ... := sorry`, step back and ask:
+*"What concrete data should this be?"* Read the docstring and the expected type
+carefully. The answer is almost always a composition of conversion functions
+(`arrayToSpecBytes`, `sliceToSpecBytes`, `toPoly`) applied to the relevant fields,
+possibly with `.extract`, `.cast`, or `++`.
+
 ### Indentation rules for spec theorems
 - `@[step]` and `theorem name`: base indentation (0 additional)
 - Arguments, preconditions, and the line with the function application: +4 spaces
@@ -137,6 +157,17 @@ introducing a representation function, define it.
 
 Structural properties (`wfArray`, lengths, metadata) are necessary but never sufficient
 — they are supplementary conjuncts, not the main postcondition.
+
+**Write final postconditions from the start — never upgrade incrementally.** Always
+write the full functional-correctness postcondition in the theorem statement, even if
+the proof is `sorry`. Do NOT write a weaker version first (e.g., only structural
+properties) with the intent of strengthening it later. Upgrading a postcondition after
+the fact is extremely costly: it often requires strengthening the `step` theorems the
+function depends on, which in return requires strengthening the `step` theorems used by
+these theorems, cascading across many files. The correct workflow is: write the final
+statement (with full spec equality + structural conjuncts), leave `sorry` as the proof,
+then prove the conjuncts one by one — each conjunct can be tackled independently and in
+parallel.
 
 ```lean
 -- ⛔ BAD: length preservation only — says nothing about the computed values
@@ -208,15 +239,84 @@ high-level (spec) types, use a conversion *function* (e.g.,
 and compose — they can be used on both sides of equations, fed into `simp`, and
 rewritten. Relations require existential witnesses and make proofs heavier.
 
+**Top-level specs must be single-call equalities — never decomposed.** For public Rust
+API functions (the top-level entry points that callers invoke), the postcondition must
+be a single equality (or conjunction of equalities) with **one call** to the
+corresponding spec function — not a step-by-step decomposition of the algorithm's
+internal computation.
+
+The decomposition of a complex algorithm into intermediate steps (matrix operations,
+hash outputs, sampling, etc.) is appropriate for the *proof strategy* — it is how you
+actually demonstrate that the equality holds. But the *theorem statement* must state
+only the final result. Internal algorithm variables should not appear in the public
+postcondition.
+
+```lean
+-- ⛔ BAD: decomposes the algorithm's internals — exposes intermediate variables
+--   that are meaningful only inside the algorithm implementation.
+theorem top_level_fn.spec (input output_buf : Slice U8) :
+    top_level_fn params input output_buf
+    ⦃ (status, result) =>
+      ∃ (s e b v c : Slice U16) (hs : ...) (he : ...) ...,
+        toMatrix s = SampleMatrix(...) ∧
+        toMatrix b = toMatrix(s) * GenA(...) + toMatrix(e) ∧
+        toMatrix v = ... ∧
+        result.val = Pack(b) ++ Pack(c) ++ salt ⦄ := by ...
+-- Problem: a caller of this function must understand the algorithm's internals
+-- to use this postcondition. The existentially quantified intermediate variables
+-- (s, e, b, v, c, ...) are opaque witnesses — the caller gets no usable equalities.
+
+-- ✅ GOOD: single call to the spec function via bridge conversions
+theorem top_level_fn.spec (input output_buf : Slice U8) :
+    top_level_fn params input output_buf
+    ⦃ (status, result) =>
+      ∃ (hinp : input.length = INPUT_BYTES)
+        (hres : result.length = OUTPUT_BYTES),
+      toSpecOutput result hres = Spec.Algorithm (toSpecInput input hinp) ⦄ := by ...
+-- The caller only sees: output = Spec.Algorithm(input). Clean, composable, usable.
+```
+
+**The test:** Can a caller of this function use the postcondition without knowing how
+the algorithm works internally? If the postcondition quantifies over variables that
+are internal to the algorithm (intermediate matrices, hash outputs, sampled values,
+temporary buffers), the answer is no — and the postcondition must be rewritten.
+
+**Bridge conversion functions** (e.g., `toSpecOutput`, `toSpecInput`) convert between
+Aeneas low-level types (`Slice U8`, `Slice U16`, `Array U8 N`) and spec-level types
+(bitstrings, typed records, algebraic structures). Define them in a shared file so
+they can be reused across all top-level specs.
+
+### Recognizing a weak-spec bottleneck
+
+After `step*` processes a function, you may be stuck with goals that mention
+spec-level functions (e.g., `Spec.encrypt`, `Spec.G`) while your hypotheses only
+contain structural properties (`wfArray`, `.length = n`, `result = ok ...`). This
+means a sub-operation's `@[step]` theorem has a **too-weak postcondition**: it proves
+structural facts but says nothing about the actual computed value.
+
+**How to detect:** After `step*`, if the remaining goal requires a spec equality
+(`toRepr output = Spec.f (toRepr input)`) but no hypothesis connects the output
+to the spec, the `@[step]` theorem for the intermediate call is the bottleneck.
+
+**What to do:**
+1. Identify which call produced the hypothesis gap (look at the last `step` that
+   made progress — the next call's spec is the weak one).
+2. **Do NOT try to work around it** with `sorry`, `admit`, `native_decide`, or manual
+   unfolding. The fix must happen at the source.
+3. **Report it**: state which theorem needs strengthening, what the current
+   postcondition provides, and what the goal requires. Include the exact goal state.
+4. If you have the authority (the theorem is in your file), strengthen the
+   postcondition to include a direct spec equality. If it's in another file,
+   report it as a blocker.
+
 ### Interface functions must map to the spec
 
-Functions at the interface of verified code — both the ones that callers use (typically
-the public Rust functions: `keygen`, `encaps`, `decaps` for a KEM) and the ones the
-verified code relies on (FFI/external functions) — must straightforwardly map to
-well-identified functions in the specification. Their postconditions should make this
-mapping explicit: the output of the Rust function equals (or is equivalent to) the
-output of the corresponding spec function applied to the same inputs (modulo type
-conversions).
+Functions at the interface of verified code — both the public Rust API functions that
+callers invoke and the external/FFI functions that the verified code relies on — must
+straightforwardly map to well-identified functions in the specification. Their
+postconditions should make this mapping explicit: the output of the Rust function
+equals (or is equivalent to) the output of the corresponding spec function applied to
+the same inputs (modulo type conversions).
 
 ### Axiom organization
 
@@ -226,6 +326,17 @@ if there are many, in files within an `Axioms/` directory. The purpose is to mak
 axioms easy to find for auditing — axioms are unproved assumptions, and reviewers
 need to inspect every one of them. Scattering axioms across proof files makes them
 hard to discover and audit.
+
+**When axioms are allowed:**
+- **External/opaque functions** (FFI, SIMD, OS calls, FunsExternal.lean) — no body to unfold
+- **Raw pointer operations** — features strictly outside Aeneas' model of Rust. Functions
+  containing raw pointers may axiomatize ONLY the raw pointers operations, then prove the
+  rest of the function around the axioms.
+
+**When axioms are NEVER allowed:**
+- **Transparent functions** — if the function body is in the generated Lean code, it
+  MUST be proved, not axiomatized. "Too many monadic steps" is never a valid reason
+  — decompose using fold theorems instead.
 
 **Always fix problematic axioms.** If an axiom is found to be incorrect, too weak, or
 otherwise problematic, it must be fixed — even if the fix causes a major refactor of
@@ -247,6 +358,57 @@ fun_name a b ⦃ result =>
   result.1.val < 100 ∧ result.2.length = a.length ⦄
 ```
 
+### Recursive loop proofs: `unfold` + `step`, never `partial_fixpoint_induct`
+
+Aeneas-generated loops can produce recursive functions (e.g., `foo_loop0`). To prove
+specs for these, use `unfold` + `by_cases` + `step` with `termination_by`:
+
+```lean
+@[step]
+theorem foo_loop0.spec (iter : core.ops.range.Range Std.U8)
+    ...
+    (h_done : ∀ j, j < iter.start.val → invariant j) :
+    foo_loop0 iter ... ⦃ ... ⦄ := by
+  unfold foo_loop0
+  by_cases hlt : iter.start.val < iter.end.val
+  · -- Some case: iteration body
+    rw [core.iter.range.IteratorRange.next_U8_def]; simp [hlt]
+    step as ⟨next_start, h_ns⟩
+    step as ⟨..., h_...⟩   -- one per monadic bind in the body
+    step*                    -- handles recursive call automatically
+    · -- invariant update goal (new element + old element)
+      intro j hj
+      simp only [h_ns] at hj
+      by_cases hjj : j = iter.start.val
+      · -- New element: current iteration
+        subst hjj; ...
+      · -- Old element: from h_done
+        have hj_lt : j < iter.start.val := by omega
+        simp only [*]; simp_lists [*]
+  · -- None case: iterator exhausted
+    rw [core.iter.range.IteratorRange.next_U8_def]; simp [hlt]
+    exact fun j hj => h_done j (by agrind)
+  termination_by iter.end.val - iter.start.val
+  decreasing_by scalar_decr_tac
+```
+
+**Why not `partial_fixpoint_induct`?** It requires:
+- An explicit motive repeating the entire postcondition
+- An `admissible` proof that is typically sorry'd (giving only partial correctness)
+- Manual IH threading with extra `exact` goals for every precondition
+
+The `unfold + step` pattern avoids all of this because:
+- `step` on the recursive call automatically applies the `@[step]`-tagged theorem
+  being proved (self-reference works because Lean can see the recursive definition)
+- `termination_by` + `decreasing_by scalar_decr_tac` handles well-foundedness
+- Preconditions of the recursive call (like simulation witnesses) are auto-resolved
+  from context by `step*`
+
+**Invariant update pattern** (inside the Some case, after `step*`): The recursive call
+goal asks the invariant for `[0, next_start)`. Split with `by_cases hjj : j = iter.start.val`:
+- **New element** (`j = iter.start`): prove from the current iteration's computation
+- **Old element** (`j < iter.start`): delegate to `h_done` via `simp only [*]; simp_lists [*]`
+
 ## Proof Development Workflow
 
 ### Decision tree for starting a proof:
@@ -256,22 +418,42 @@ fun_name a b ⦃ result =>
    - NO → `unfold fn; step`
 
 2. Is the function simple (few monadic steps, say ≤ 5)?
-   - YES → `unfold fn; step*` may complete it directly
+   - YES → `unfold fn; step*` may complete it directly. If sub-goals remain,
+     **immediately** scaffold one `· agrind` per sub-goal (see scaffolding workflow below).
    - NO → Use `step*?` to generate an expanded proof script, then work from there
 
 3. Is the function large/complex (10+ monadic steps)?
-   - Start with `step*?` to generate the step-by-step script
-   - Work through the generated script, fixing any sub-goals that fail
-   - Once the whole proof is done, try collapsing back into `step*` if possible
-   - If heartbeats are tight, decompose the function (fold theorems) or extract sub-goals as auxiliary lemmas — aim for < 8M heartbeats even for large proofs; increase the default to 1M as a baseline (see "Debugging Commands" in the tactics quickref)
+   - **First, try to decompose using fold theorems** — extract logical phases
+     (setup, hash, finalize) into auxiliary functions with their own
+     `@[local step]` specs. Then the parent proof only `step`s through the
+     phase calls instead of 50+ monadic operations at once.
+   - If decomposition is not feasible (no natural phase boundaries), use
+     `step*` to go as far as possible, then **immediately scaffold one `· agrind`
+     per remaining sub-goal** — this is mandatory before doing anything else.
+   - **⚠️ Before writing cdot blocks: check for missing solver attributes.**
+     If 3+ remaining goals need the same constant unfolded (`simp [CONST]; solver`),
+     register it with `@[grind =, agrind =]` FIRST, then re-run
+     `step*` — the goals may vanish. See the `aeneas-tactics-quickref` skill file.
+   - **NEVER use `<;>` after `step*` or any tactic that creates many subgoals.**
+     `<;>` forces full re-elaboration on every edit. Use cdot blocks instead.
+   - **NEVER use `all_goals`** — it has the same re-elaboration problem.
+   - If heartbeats are tight, the function MUST be decomposed (fold theorems)
+     — aim for < 8M heartbeats even for large proofs; increase the default
+     to 1M as a baseline (see "Debugging Commands" in the tactics quickref)
+   - **"Too many monadic steps" is NEVER a reason to skip a proof or axiomatize.**
+     It is a reason to decompose via fold theorems.
 
 ### The step*? → fix → collapse workflow:
 1. `step*?` — generates expanded proof script (one `step` per monadic call)
 2. Copy the generated script into your proof
-3. Work through it: fix failing sub-goals, add lemmas, adjust tactics
-4. Once the full proof works, try collapsing sections back to `step*`
-5. If `step*` works on the whole body, use that (shorter is better)
-6. If not, keep the expanded script for the parts that need manual intervention
+3. **Immediately scaffold `· agrind` for every sub-goal** that remains open —
+   this is the first thing you do after pasting. Do NOT attempt to close any
+   goal before all are scaffolded.
+4. Work through each `· agrind` one at a time: if `agrind` didn't close a goal,
+   inspect with `lean_goal`, pick the right tactic, and replace
+5. Once the full proof works, try collapsing sections back to `step*`
+6. If `step*` works on the whole body, use that (shorter is better)
+7. If not, keep the expanded script for the parts that need manual intervention
 
 ## Tactic Quick Reference
 
@@ -292,14 +474,20 @@ fun_name a b ⦃ result =>
 | `simp_bool_prop` | Simplify bool/prop | `simp_bool_prop` |
 | `ring_eq_nf` | Cancel common terms in equalities | `ring_eq_nf`, `ring_eq_nf at h` |
 | `fcongr` | Congruence (safe whnf) | `fcongr`, `fcongr N` |
-| `split_conjs` | Split ∧ recursively | `split_conjs`, `split_conjs at h` |
+| `split_conjs` | Split ∧ recursively, then scaffold `· agrind` per sub-goal | `split_conjs`, `split_conjs at h` |
 
 ### Lean builtins (commonly used)
+
+> **🔑 DEFAULT TACTIC: When you don't know what to do, use `agrind`.**
+> It is always the first tactic to try. If `agrind` fails, try `grind`. **Do NOT
+> reach for `simp_all`** — it is very slow in large contexts and drops hypotheses.
+
 | Tactic | Use for |
 |---|---|
-| `agrind` | General automation (prefer over `grind` — faster) |
+| `agrind` | **Default tactic — always try first.** Fast, handles most goals |
 | `grind` | General automation (slower but more powerful — try if `agrind` fails) |
 | `simp [*]` | Simplification with all hypotheses |
+| `simp_all` | **⚠️ AVOID** — very slow in big contexts, silently drops hypotheses. Prefer `agrind` |
 | `tauto` | Propositional tautologies |
 | `decide` | Concrete finite computations |
 
@@ -318,8 +506,11 @@ container. They will either fail silently or produce fragile proofs that break o
 | `nlinarith` | Same, plus explosion risk on nonlinear goals | `agrind` > `grind` > `scalar_tac +nonLin` or `simp_scalar` |
 
 **Preference order for replacements: `agrind` first, then `grind`, then `scalar_tac`.**
-`agrind` is fast and handles most goals. `grind` is slower but more powerful. `scalar_tac`
-is specialized for arithmetic bounds and should be used when the goal is purely arithmetic.
+`agrind` is the default tactic for Aeneas proofs — always try it first. It is fast and
+handles most goals. `grind` is slower but more powerful. `scalar_tac` is specialized for
+arithmetic bounds and should be used when the goal is purely arithmetic. **Do NOT use
+`simp_all` as a general-purpose tactic** — it is very slow in the large contexts typical
+of Aeneas proofs and silently drops hypotheses. Use `agrind` instead.
 
 **This applies everywhere:** in `step` theorem proofs, in helper lemmas, in `have` steps,
 in `termination_by`/`decreasing_by` blocks, in `calc` chains — everywhere, including pure
@@ -421,9 +612,57 @@ theorem my_loop.spec (x : MyState) (h : x.inv) :
   · intro s hs
     unfold my_loop_body
     step*
-    split_conjs <;> (try scalar_tac) <;> agrind
+    · agrind -- sub-goal 1
+    · agrind -- sub-goal 2
+    split_conjs
+    · agrind -- conjunct 1
+    · agrind -- conjunct 2
   · exact h
 ```
+
+### ⚠️ Every function spec requires loop specs too
+
+When writing a `@[step]` spec for a function that contains loops, you **must also
+write `@[step]` specs for all loop auxiliary functions** (`_loop`, `_loop0`,
+`_loop1`, etc.). Without loop specs, `step` cannot process the loop calls inside
+the function body — the proof will get stuck.
+
+This is not optional: a function spec without its loop specs is unprovable.
+The loop specs are prerequisites, not follow-up work.
+
+```lean
+-- Aeneas translates `fn process(data)` with an internal loop as:
+-- def process (data : Slice U32) : Result (Slice U32) := do
+--   ... setup ...
+--   let result ← process_loop data 0#usize ...
+--   ... cleanup ...
+
+-- ⛔ BAD: function spec without loop spec — proof will get stuck at loop call
+@[step]
+theorem process.spec (data : Slice U32) :
+    process data ⦃ result => result.length = data.length ⦄ := by
+  unfold process
+  step*  -- STUCK: no spec for process_loop
+
+-- ✅ GOOD: write loop spec FIRST, then function spec
+@[step]
+theorem process_loop.spec (data : Slice U32) (i : Usize) (h : i.val ≤ data.length) :
+    process_loop data i ⦃ result =>
+      result.length = data.length ⦄ := by ...
+termination_by data.length - i.val
+decreasing_by scalar_decr_tac
+
+@[step]
+theorem process.spec (data : Slice U32) :
+    process data ⦃ result => result.length = data.length ⦄ := by
+  unfold process
+  step*  -- step can now process the loop call
+```
+
+**When planning proof work**, always inventory the loops in a function and include
+their specs as explicit work items. A common planning mistake is listing only the
+top-level function spec without accounting for its loops — this leads to agents
+getting stuck mid-proof.
 
 ### Pattern 6: Bit-vector operation spec
 ```lean
@@ -437,23 +676,145 @@ theorem bitwise_op.spec (x : U32) (h : x.val < 65536) :
 
 ### Pattern 7: Large function with fold decomposition
 ```lean
--- 1. Define helper
-private def helper (a : U32) : Result U32 := do
-  let b ← a + 1#u32; let c ← b * 2#u32; pure c
+-- 1. Define helper (may return a tuple if multiple values are needed downstream -
+-- pay attention to the fact the continuation may need to access the intermediate
+-- values introduced inside the helper).
+private def helper (a : U32) : Result (U32 × U32) := do
+  let b ← a + 1#u32; let c ← b * 2#u32; ok (b, c)
 
--- 2. Fold theorem
-private theorem fold_helper (a : U32) (f : U32 → Result α) :
-  (do let b ← a + 1#u32; let c ← b * 2#u32; f c) =
-  (do let c ← helper a; f c) := by
+-- 2. Fold theorem — continuation uses CURRIED args, NOT a tuple
+private theorem fold_helper (a : U32) (f : U32 → U32 → Result α) :
+  (do let b ← a + 1#u32; let c ← b * 2#u32; f b c) =
+  (do let r ← helper a; f r.1 r.2) := by
   simp only [helper, bind_assoc_eq, bind_tc_ok, pure]
+
+-- For single-value helpers, the continuation is just (f : U32 → Result α):
+-- (do let c ← helper a; f c)
 
 -- 3. Helper spec
 @[local step]
 theorem helper.spec (a : U32) (h : a.val < 1000) :
-  helper a ⦃ c => c.val = (a.val + 1) * 2 ⦄ := by ...
+  helper a ⦃ (b : U32) (c : U32) =>
+    b.val = a.val + 1 ∧ c.val = (a.val + 1) * 2 ⦄ := by ...
 
--- 4. Main proof uses simp only [fold_helper]
+-- 4. Main proof uses simp only [fold_helper] to fold inline steps
 ```
+
+### ⚠️ Fold theorem vacuity check
+
+A fold theorem MUST have **different** LHS and RHS. The LHS is the original
+inline monadic steps; the RHS uses the fold helper. If both sides are
+identical, the theorem is vacuous (`rfl`) and useless — it doesn't actually
+fold anything.
+
+**Detection:** If a fold theorem is provable by `rfl`, it's wrong. The proof
+should require `simp only [helper_name, bind_assoc_eq, bind_tc_ok, pure]` to
+unfold the helper and match the inline steps.
+
+```lean
+-- ⛔ BAD: LHS = RHS — vacuous, folds nothing
+private theorem fold_helper ... :
+    (do let r ← helper a; f r) =
+    (do let r ← helper a; f r) := by rfl
+
+-- ✅ GOOD: LHS is inline steps, RHS uses helper
+private theorem fold_helper (a : U32) (f : U32 → Result α) :
+    (do let b ← a + 1#u32; let c ← b * 2#u32; f c) =
+    (do let c ← helper a; f c) := by
+  simp only [helper, bind_assoc_eq, bind_tc_ok, pure]
+```
+
+**If you can't write the LHS yet** (e.g., the inline steps are too long to
+copy right now), do NOT write a vacuous theorem — instead write a TODO comment
+explaining what the fold theorem should look like, and omit the theorem entirely.
+A missing fold theorem is honest; a vacuous one is misleading.
+
+### ⛔ Fold theorem continuation must use curried arguments, not tuples
+
+When the fold helper returns a tuple (e.g., `Result (A × B × C)`), the fold
+theorem's continuation `f` must take **separate curried arguments**, not a
+single tuple argument. This is because `simp` cannot match `f (a, b, c)`
+against a continuation that uses `a`, `b`, `c` as separate variables — it
+would need to construct `fun ⟨a, b, c⟩ => ...` (pattern matching on `Prod`),
+which is beyond simp's higher-order matching capability. With curried arguments
+`f a b c`, simp can trivially abstract `fun a b c => ...`.
+
+```lean
+-- ⛔ BAD: tuple continuation — simp can't match this in the parent function
+private theorem fold_helper (a : U32) {α : Type}
+    (f : U32 × U32 → Result α) :
+    (do let b ← a + 1#u32; let c ← a + 2#u32; f (b, c)) =
+    (do let r ← helper a; f r) := by ...
+-- simp only [fold_helper] makes NO PROGRESS inside a parent function
+
+-- ✅ GOOD: curried continuation — simp matches this correctly
+private theorem fold_helper (a : U32) {α : Type}
+    (f : U32 → U32 → Result α) :
+    (do let b ← a + 1#u32; let c ← a + 2#u32; f b c) =
+    (do let r ← helper a; f r.1 r.2) := by ...
+-- simp only [fold_helper] works even deep inside nested bind chains
+```
+
+For n-element tuples, the RHS uses nested projections:
+- 2-tuple: `f r.1 r.2`
+- 3-tuple: `f r.1 r.2.1 r.2.2`
+- 4-tuple: `f r.1 r.2.1 r.2.2.1 r.2.2.2`
+
+If the helper returns a single value (not a tuple), `f` is just `f : A → Result α`
+and the RHS is `f r` — no change needed.
+
+### ⛔ Every fold helper must have a step spec
+
+When you introduce a fold helper and its fold theorem, you **must also immediately
+write a full functional-correctness `@[local step]` spec theorem** for the fold
+helper. A fold helper without a spec is useless scaffolding — it decomposes the
+function syntactically but doesn't contribute to the proof. The caller's proof
+needs to `step` through the fold helper, and `step` requires an `@[step]` or
+`@[local step]` theorem.
+
+```lean
+-- ⛔ BAD: fold helper + fold theorem but no spec — useless
+private def helper (a : U32) : Result U32 := do ...
+private theorem fold_helper ... := by simp only [helper, ...]
+-- caller can't step through helper
+
+-- ✅ GOOD: fold helper + fold theorem + step spec — complete
+private def helper (a : U32) : Result U32 := do ...
+private theorem fold_helper ... := by simp only [helper, ...]
+@[local step]
+private theorem helper.spec (a : U32) (h : a.val < 1000) :
+    helper a ⦃ c => c.val = (a.val + 1) * 2 ⦄ := by ...
+-- caller can now simp only [fold_helper] then step
+```
+
+The spec may be `sorry`'d initially — that's fine. What matters is that the
+**statement** exists with a full functional-correctness postcondition from day one.
+This ensures the fold decomposition is immediately usable by the parent proof,
+even before the helper's proof is complete.
+
+### ⚠️ Always test fold theorems after writing them
+
+A fold theorem that type-checks and proves is NOT sufficient — it must also
+**actually rewrite** when applied via `simp only [fold_*]` inside the parent
+function. Always verify this with a concrete test:
+
+```lean
+-- After writing fold_helper, test it:
+example : parent_fn args = _ := by
+  unfold parent_fn
+  simp only [fold_helper]  -- MUST make progress (goal should change)
+  sorry
+```
+
+If `simp only [fold_helper]` reports "made no progress", the fold theorem is
+broken. The most common cause is a **tuple continuation** (see the section above).
+Other possible causes:
+- The LHS doesn't exactly match the generated code (missing or extra `let` bindings, etc.)
+- `bind_assoc_eq` normalization is needed before `simp` can match — try
+  `simp only [bind_assoc_eq]; simp only [fold_helper]`
+
+**This test is mandatory.** A fold theorem that doesn't actually fold is worse
+than no fold theorem — it gives a false sense of progress.
 
 ## Proof Style and Maintainability
 
@@ -791,6 +1152,48 @@ step*
 This keeps the proof incremental — you can put `sorry` on any `· ` branch, inspect
 the goal with `lean_goal`, and work on one sub-goal at a time.
 
+### Scaffolding workflow: `· agrind` first, then fix failures
+
+<!-- ⚠️ SYNC RULE: also in aeneas-tactics-quickref "Scaffolding workflow" -->
+
+> **🔑 MANDATORY: After every `step*`, immediately scaffold one `· agrind` per
+> remaining sub-goal.** This is the very first thing you do — before inspecting
+> goals, before trying tactics, before anything else. Never leave `step*` without
+> its cdot scaffolding. **The same rule applies to `split_conjs`** and any other
+> tactic that produces multiple sub-goals (e.g., `split`, `cases`).
+
+```lean
+-- After step*:
+step*
+· agrind -- goal 1
+· agrind -- goal 2
+· agrind -- goal 3
+· agrind -- goal 4
+
+-- After split_conjs:
+split_conjs
+· agrind -- conjunct 1
+· agrind -- conjunct 2
+· agrind -- conjunct 3
+```
+
+This is the mandatory workflow — never skip scaffolding and jump to `all_goals`
+or `<;>` to "handle them all at once". Critical benefits:
+
+- **`agrind` closes most sub-goals immediately** — many goals produced by `step*`
+  and `split_conjs` are arithmetic bounds or simple equalities that `agrind` handles.
+- **Each goal becomes independently inspectable** — for goals where `agrind` fails,
+  use `lean_goal` on that line to see exactly the context and target.
+- **Edits are incremental** — replacing one `· agrind` with a different tactic only
+  re-elaborates that single goal, not the others.
+- **No `all_goals` temptation** — the structure prevents bulk tactics.
+
+After scaffolding, check which `· agrind` goals still have errors. For those,
+inspect with `lean_goal`, pick the right tactic, and replace. This is the
+correct workflow even for 20+ goals — never try to close them in bulk. If
+there are too many goals (15+), consider fold decomposition first (see the
+`aeneas-crypto-verification` skill file).
+
 ### Avoid early case splits on parameters in step proofs
 In cryptographic code, functions are often parameterized by a parameter set (e.g.,
 `p : Spec.Crypto.parameterSet`) from which lengths, dimensions, and bounds are derived.
@@ -889,7 +1292,7 @@ calc (x + 1) * (x + 1)
 
 1. **Termination error after unfold + step**: Function starts with match/if → use `split` first
 2. **Nat subtraction truncated**: `3 - 5 = 0` in Nat → use Int, add preconditions, or rewrite as addition (`z + y = x` instead of `z = x - y`)
-3. **`simp_all` removes hypotheses**: Use `simp [*]` or `simp [h1, h2]` instead
+3. **`simp_all` is slow and removes hypotheses**: `simp_all` is very slow in big contexts (common in Aeneas proofs) and silently drops hypotheses. **Always prefer `agrind`** as your default tactic. If you need simplification, use `simp [*]` or `simp [h1, h2]` — they are faster and preserve hypotheses
 4. **`agrind` fails**: Try `simp [*]; agrind`
 5. **`grind` explodes**: Use `agrind` instead (controlled context)
 6. **Progress applies wrong spec**: Use `step with specific_theorem`
