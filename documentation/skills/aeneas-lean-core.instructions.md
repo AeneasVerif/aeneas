@@ -318,6 +318,113 @@ postconditions should make this mapping explicit: the output of the Rust functio
 equals (or is equivalent to) the output of the corresponding spec function applied to
 the same inputs (modulo type conversions).
 
+**Match top-level functions to top-level spec functions.** When writing a spec for a
+public Rust function (one at the top of the call graph), identify the corresponding
+*top-level* function in the specification — not an internal or auxiliary helper. A
+common mistake is to relate a public function to an `_internal` or `_aux` variant
+in the spec, which omits outer wrapping logic (validation, error handling, key
+formatting). The spec function should be the one that a caller of the Rust API would
+naturally compare against.
+
+```lean
+-- ⛔ BAD: relates to an internal spec function — misses outer logic
+theorem keygen.spec ... :
+    keygen params seed
+    ⦃ (key) => toSpecKey key = Spec.keygen_internal (toBytes seed) ⦄ := by ...
+-- keygen_internal is an internal helper; the caller expects Spec.keygen
+
+-- ✅ GOOD: relates to the top-level spec function
+theorem keygen.spec ... :
+    keygen params seed
+    ⦃ (key) => toSpecKey key = Spec.keygen (toBytes seed) ⦄ := by ...
+```
+
+**Review checklist for top-level specs:**
+- Does the spec function name obviously correspond to the Rust function name?
+  Naming conventions may differ (`key_generate` ↔ `keygen`, `decrypt` ↔ `decaps`),
+  but the correspondence must be clear. If you find `key_generate` mapped to
+  `Spec.encaps`, something is wrong.
+- Is the spec function the top-level version (not `_internal`, `_aux`, `_impl`)?
+- Does the spec function's signature in the specification file match what a caller
+  of the Rust API would expect (same inputs, same outputs, same semantics)?
+- If the spec file has both `Spec.foo` and `Spec.foo_internal`, the public Rust
+  function should map to `Spec.foo`, and only internal Rust helpers should map to
+  `Spec.foo_internal`.
+
+### Minimize preconditions
+
+Preconditions restrict when a spec theorem applies — every unnecessary precondition
+is a burden on callers (they must prove it) and a potential source of unsoundness
+(an overly strong precondition can make the theorem vacuously true). **Review each
+precondition individually** and verify that it is genuinely needed.
+
+**How to check whether a precondition is necessary:**
+1. **Read the function body.** Does the function actually fail (overflow, out-of-bounds)
+   without this precondition? If the function handles the case gracefully (e.g., returns
+   an error code), the precondition may be unnecessary.
+2. **Read the `@[step]` theorems of called functions.** A precondition may exist only
+   because a sub-call's spec requires it. Check whether the sub-call truly needs it —
+   the precondition may have been cargo-culted from an overly conservative sub-spec.
+   Do not hesitate to dive several call layers deep.
+3. **Try removing it.** Comment out the precondition, then check if the proof still
+   goes through (or if `step` can still discharge the sub-goals). If it does, the
+   precondition was unnecessary.
+
+**Common unnecessary preconditions:**
+- **Bounds that the function checks at runtime.** If the function has
+  `if input.length < MIN_SIZE then return Error` and the postcondition already
+  handles the error case, a precondition `h : input.length ≥ MIN_SIZE` is
+  unnecessary — the function handles that case.
+- **Invariants that are always true.** A precondition like `h : key.params.n ≤ 256`
+  may be always satisfied by construction. Check the type definition — if `n` is a
+  `U8`, the bound is automatic.
+- **Preconditions copied from internal helpers.** A top-level function may validate
+  inputs before calling an internal helper. The helper needs preconditions because it
+  doesn't validate; the top-level function doesn't because it does.
+
+### Error results: use exhaustive match, not conjunctions
+
+When a function returns a result type that includes an error (e.g.,
+`Result (Error × Output)`), the postcondition must use an **exhaustive `match`** on
+the error/status, not a conjunction of implications.
+
+```lean
+-- ⛔ BAD: conjunction of implications — hard to read, easy to miss cases
+theorem process.spec (input : Slice U8) :
+    process input
+    ⦃ (err, output) =>
+      (err = Error.NoError → output.length = INPUT_SIZE ∧ ...) ∧
+      (err = Error.Overflow → True) ∧
+      (err = Error.InvalidArg → True) ⦄ := by ...
+-- Problems: (1) non-exhaustive — what if err is Error.Memory?
+-- (2) the conjunction structure makes it hard to see which cases are actually specified
+-- (3) caller must destruct the conjunction and find the right implication
+
+-- ✅ GOOD: exhaustive match — every case is explicit
+theorem process.spec (input : Slice U8) :
+    process input
+    ⦃ (err, output) =>
+      match err with
+      | Error.NoError => output.length = INPUT_SIZE ∧ ...
+      | Error.Overflow => True
+      | Error.InvalidArg => True
+      | Error.Memory => True ⦄ := by ...
+-- Every error case is visible. Unhandled cases are `True` (to be filled in later).
+-- The match is exhaustive — Lean enforces that all constructors are covered.
+```
+
+**Why `match` over conjunctions:**
+- **Exhaustiveness.** Lean enforces that a `match` covers all constructors. A
+  conjunction of implications can silently omit cases.
+- **Readability.** Each case is a separate branch — easy to see what's specified
+  and what's `True` (placeholder).
+- **Usability for callers.** After `step`, the caller gets the relevant branch
+  directly — no need to destruct a conjunction and hunt for the right implication.
+
+**Use `True` for unspecified branches.** When you don't yet know what to say about
+an error case, write `True` — it's an honest placeholder that doesn't constrain
+anything. Fill it in when the spec for that case is known.
+
 ### Axiom organization
 
 All intentional axioms (axiomatized `spec` theorems for FFI/external functions, SIMD
