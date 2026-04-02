@@ -34,7 +34,7 @@ STATUS_LABELS = {
     STATUS_PARTIAL: ("Partially verified", "◐", "#007bff", "partial"),
     STATUS_SPECIFIED: ("Specified", "○", "#ffc107", "specified"),
     STATUS_UNVERIFIED: ("Unverified", "✗", "#dc3545", "unverified"),
-    STATUS_EXTERNAL: ("External (axiomatized)", "⚠", "#6f42c1", "external"),
+    STATUS_EXTERNAL: ("Axiomatized", "⚠", "#6f42c1", "external"),
 }
 
 
@@ -1194,7 +1194,7 @@ def generate_index(crate_name: str, functions: list, types: list,
         <dd>No matching theorem was found for this function. Either the function
             has not been specified yet, or the visualizer failed to link it to
             its Lean model.</dd>
-        <dt>{_badge_html(STATUS_EXTERNAL)} External (axiomatized)</dt>
+        <dt>{_badge_html(STATUS_EXTERNAL)} Axiomatized</dt>
         <dd>This function comes from outside the crate (e.g., the Rust standard
             library, intrinsic operations). Its behavior is modeled by a
             hand-written Lean definition and axiomatized — the model is
@@ -1327,9 +1327,8 @@ def generate_module_page(mod_name: str, functions: list,
     )
 
     tl = type_lean_map or {}
-    mod_types = [t for t in types if t.module == mod_name]
     type_rows = ""
-    for t in sorted(mod_types, key=lambda x: x.short_name):
+    for t in sorted(types, key=lambda x: x.short_name):
         ld = tl.get(t.name_pattern)
         name_cell = (f'<a href="../lean/{ld.slug}.html">{_esc(t.display_name)}</a>'
                      if ld else _esc(t.display_name))
@@ -1372,8 +1371,8 @@ def generate_module_page(mod_name: str, functions: list,
     </table>
     '''
 
-    # Constants/globals for this module
-    mod_globals = [g for g in (globals_list or []) if g.module == mod_name]
+    # Constants/globals for this module (already includes submodules)
+    mod_globals = globals_list or []
     if mod_globals:
         global_rows = "".join(
             _global_row(g, link_prefix="../", lean_map=lean_map,
@@ -2536,17 +2535,24 @@ def generate_docs(
     generate_external_page(functions, out, lean_map=lean_map, known_fns=known_fns,
                            rust_to_lean=rust_to_lean)
 
-    # Module pages
+    # Module pages — each module page includes functions from all submodules
     modules = defaultdict(list)
     for fn in functions:
         modules[fn.module].append(fn)
 
-    for mod_name, mod_fns in modules.items():
-        mod_types = [t for t in types if t.module == mod_name]
-        generate_module_page(mod_name, mod_fns, mod_types, out,
+    for mod_name in modules:
+        # Collect all functions in this module and its submodules
+        mod_prefix = mod_name + "::"
+        all_mod_fns = [fn for fn in functions
+                       if fn.module == mod_name or fn.module.startswith(mod_prefix)]
+        all_mod_types = [t for t in types
+                         if t.module == mod_name or t.module.startswith(mod_prefix)]
+        all_mod_globals = [g for g in globals_list
+                           if g.module == mod_name or g.module.startswith(mod_prefix)]
+        generate_module_page(mod_name, all_mod_fns, all_mod_types, out,
                              lean_map=lean_map, type_lean_map=type_lean_map,
                              rust_to_lean=rust_to_lean,
-                             globals_list=globals_list)
+                             globals_list=all_mod_globals)
 
     # Function pages (with Lean model cross-link)
     fn_known_fns = {k: f"../lean/{v}" for k, v in known_fns.items()}
