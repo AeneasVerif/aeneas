@@ -45,8 +45,14 @@ before writing any Lean code.
 ```
 ### MANDATORY: Use lean-lsp-mcp tools — NOT lake build
 
-DO NOT use `lake build` to iterate on proofs. Use the lean-lsp-mcp tools
-(see the `lean-lsp-mcp` skill file for full reference).
+⚠️ INITIAL BUILD REQUIRED: Before your VERY FIRST use of any lean-lsp-mcp tool,
+run `lake build` in the Lean project directory. The LSP server has a cold-start
+timeout issue — if `.olean` caches are missing or stale (after git merge, branch
+switch, or fresh clone), the first MCP tool call will time out. Running `lake build`
+once at the start pre-compiles all dependencies so the LSP can load them instantly.
+
+After this initial build, DO NOT use `lake build` to iterate on proofs. Use the
+lean-lsp-mcp tools (see the `lean-lsp-mcp` skill file for full reference).
 
 The tools (`lean_goal`, `lean_diagnostic_messages`, `lean_multi_attempt`, etc.)
 are available directly in your tool palette. If they are not available, ask the
@@ -54,8 +60,10 @@ user to install lean-lsp-mcp (see the `lean-lsp-mcp` skill file). Whenever you g
 "Error: Not connected", the MCP server likely crashed and is restarting — wait
 a couple of minutes and retry.
 
-Workflow: edit file on disk → lean_goal → lean_multi_attempt → edit → repeat
-Only use `lake build` once at the very end to confirm the final result.
+Workflow:
+  1. Run `lake build` ONCE at session start (initial build)
+  2. edit file on disk → lean_goal → lean_multi_attempt → edit → repeat
+  3. Only use `lake build` again at the very end to confirm the final result.
 
 ⛔ NEVER run `lake clean` or delete `.lake/`. This forces a full rebuild (30+ min). Fix root causes instead.
 ```
@@ -1205,13 +1213,17 @@ As your FIRST action, invoke these skills (use the `skill` tool):
 2. `aeneas-tactics-quickref` — which tactic for which goal
 3. `lean-lsp-mcp` — mandatory tooling for proof checking
 
-## Step 2: ⛔ HARD REQUIREMENT — lean-lsp-mcp tools ONLY
-After reading the skills, do ALL proof checking via lean-lsp-mcp tools
+## Step 2: ⛔ HARD REQUIREMENT — Initial build + lean-lsp-mcp tools ONLY
+As your VERY FIRST action after reading skills, run `lake build` in the Lean
+project directory to pre-compile .olean caches. This is required because the
+lean-lsp-mcp LSP server will time out on first use if caches are stale.
+
+After the initial build, do ALL proof checking via lean-lsp-mcp tools
 (`lean_goal`, `lean_diagnostic_messages`, `lean_multi_attempt`, etc.).
 Edit the file on disk, then use `lean_goal` and `lean_diagnostic_messages`
 to inspect the result.
-`lake build` is ONLY allowed as a SINGLE final verification after all proofs are done.
-If you use `lake build` for iterative proof development, your work will be REJECTED.
+Do NOT use `lake build` for iterative proof development — only as (1) the initial
+build and (2) a single final verification. Iterative `lake build` = REJECTED.
 
 ## The Sorry
 `my_function_loop0_loop0_spec` at line ~421.
@@ -1247,13 +1259,17 @@ As your FIRST action, invoke these skills (use the `skill` tool):
 2. `aeneas-tactics-quickref` — which tactic for which goal
 3. `lean-lsp-mcp` — mandatory tooling for proof checking
 
-## Step 2: ⛔ HARD REQUIREMENT — lean-lsp-mcp tools ONLY
-After reading the skills, do ALL proof checking via lean-lsp-mcp tools
+## Step 2: ⛔ HARD REQUIREMENT — Initial build + lean-lsp-mcp tools ONLY
+As your VERY FIRST action after reading skills, run `lake build` in the Lean
+project directory to pre-compile .olean caches. This is required because the
+lean-lsp-mcp LSP server will time out on first use if caches are stale.
+
+After the initial build, do ALL proof checking via lean-lsp-mcp tools
 (`lean_goal`, `lean_diagnostic_messages`, `lean_multi_attempt`, etc.).
 Edit the file on disk, then use `lean_goal` and `lean_diagnostic_messages`
 to inspect the result.
-`lake build` is ONLY allowed as a SINGLE final verification after all proofs are done.
-If you use `lake build` for iterative proof development, your work will be REJECTED.
+Do NOT use `lake build` for iterative proof development — only as (1) the initial
+build and (2) a single final verification. Iterative `lake build` = REJECTED.
 
 ## The Sorry
 `my_function_loop0_loop0_spec` at line ~421.

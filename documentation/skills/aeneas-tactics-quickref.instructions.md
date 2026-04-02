@@ -337,6 +337,7 @@ theorem MY_CONST_val : MY_CONST.val = 42 := by decide
 | Recurring index bounds slow | Same bound proved inline many times | Extract as solver-attributed lemma (`@[agrind =]`); see item 22 in `aeneas-lean-core` |
 | `(by ...)` in type signature | Kernel slowness on `apply`/`exact` of theorem | Use `get_elem_tactic` override with `agrind`; if that fails, use `(by agrind)` > `(by grind)` > `(by scalar_tac)` > standalone lemma. NEVER `cases p <;> simp_all <;> tactic`. See "Never embed (by ...) in type signatures" in `aeneas-lean-core` |
 | `first \| simp_all` swallows goals | `simp_all` partially simplifies, `first` considers it done | `(simp_all; done)` — forces full closure; applies to all `simp` variants |
+| `exact`/`apply` timeout or `maxRecDepth` | Value or proof args not syntactically matching goal | Use `lean_goal`, `rw` for values, pass exact hyp names for proofs. See "Unification pitfalls with `exact`/`apply`" in `aeneas-lean-core` |
 
 ## Debugging and Profiling Commands
 
@@ -577,13 +578,12 @@ endlessly.
   lemma or reduction rule unfolds `s[i]!` back to a form containing `s[i]'h`, you
   get a loop. Use `rw` instead of `simp` for these.
 
-**Second cause of `maxRecDepth`: deep definitional unification.** Not all
-`maxRecDepth` errors come from simp loops. `exact` and `apply` can trigger
-`maxRecDepth` when the goal and the supplied term differ by opaque projections
-or intermediate definitions — the unifier must reduce through deeply nested
-terms to check definitional equality. **Fix:** use `rw` to normalize the goal
-before `exact`/`apply` so the match is syntactic (see aeneas-lean-core item 11
-for the full pattern and examples).
+**`exact`/`apply` unification issues.** Not all `maxRecDepth` or heartbeat
+timeout errors come from simp loops. `exact` and `apply` can trigger either
+`maxRecDepth` (value mismatches) or heartbeat timeouts (proof-term mismatches)
+when the supplied arguments are not syntactically equal to what the goal expects.
+See "Unification pitfalls with `exact`/`apply`" in `aeneas-lean-core` for the
+full pattern, examples, and diagnostic technique.
 
 **Diagnostic technique — rolling stop.** When `maxRecDepth` appears and the
 cause is unclear, insert `stop` at the top of the proof script and move it
@@ -592,8 +592,8 @@ down one line at a time:
    ignores everything after `stop`
 2. Move `stop` down one tactic at a time (using the LSP for fast feedback)
 3. When the error appears, the tactic just above `stop` is the trigger
-4. Diagnose: is it a simp loop (fix per above) or deep unification (fix with
-   `rw`)?
+4. Diagnose: is it a simp loop (fix per above) or `exact`/`apply` unification
+   (see "Unification pitfalls" in `aeneas-lean-core`)?
 
 ### Report misbehaving tactics
 
