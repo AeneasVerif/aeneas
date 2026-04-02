@@ -610,10 +610,14 @@ def _page_header(title: str, breadcrumbs: list = None, depth: int = 0) -> str:
   <link rel="stylesheet" href="{root}static/github.min.css">
   <link rel="stylesheet" href="{root}static/style.css">
 </head>
-<body>
+<body data-root="{root}">
 <nav class="top-nav">
   <a href="{root}index.html" class="nav-home">{_esc(_CRATE_TITLE)}</a>
   {f'<span class="breadcrumbs">{bc_html}</span>' if bc_html else ''}
+  <div class="search-box nav-search">
+    <input type="text" id="search-input" placeholder="Search functions, types..." autocomplete="off">
+    <div id="search-results"></div>
+  </div>
 </nav>
 <main>
 <h1>{_esc(title)}</h1>
@@ -1163,9 +1167,9 @@ def generate_index(crate_name: str, functions: list, types: list,
 
     content = _page_header(f"{crate_name} — Verification Dashboard")
     content += '''
-    <div class="search-box">
-      <input type="text" id="search-input" placeholder="Search functions, types..." autocomplete="off">
-      <div id="search-results"></div>
+    <div class="search-box index-search">
+      <input type="text" id="search-input-main" placeholder="Search functions, types, modules..." autocomplete="off">
+      <div id="search-results-main"></div>
     </div>
     '''
     content += f'''
@@ -2128,15 +2132,31 @@ pre code {
   position: relative;
   margin: 16px 0;
 }
+.nav-search {
+  margin: 0;
+  margin-left: 16px;
+  flex: 1;
+  min-width: 150px;
+}
 #search-input {
   width: 100%;
-  padding: 8px 12px;
+  padding: 6px 10px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  font-size: 1em;
+  font-size: 0.9em;
 }
-#search-input:focus { outline: 2px solid var(--link); }
-#search-results {
+.index-search {
+  margin: 20px 0;
+}
+.index-search #search-input-main {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 1.1em;
+}
+#search-input:focus, #search-input-main:focus { outline: 2px solid var(--link); }
+#search-results, #search-results-main {
   position: absolute;
   top: 100%;
   left: 0;
@@ -2150,7 +2170,7 @@ pre code {
   overflow-y: auto;
   display: none;
 }
-#search-results:not(:empty) { display: block; }
+#search-results:not(:empty), #search-results-main:not(:empty) { display: block; }
 .search-item {
   padding: 6px 12px;
   border-bottom: 1px solid var(--border);
@@ -2674,31 +2694,40 @@ def generate_search_index(functions: list, types: list,
 // Simple client-side search for Aeneas verification docs
 (function() {{
   var searchData = {json.dumps(entries)};
-  var searchInput = document.getElementById('search-input');
-  var searchResults = document.getElementById('search-results');
-  if (!searchInput || !searchResults) return;
 
-  searchInput.addEventListener('input', function() {{
-    var q = this.value.toLowerCase().trim();
-    if (q.length < 2) {{ searchResults.innerHTML = ''; return; }}
+  var rootPath = document.body.getAttribute('data-root') || './';
 
-    var matches = searchData.filter(function(e) {{
-      return e.name.toLowerCase().indexOf(q) !== -1;
-    }}).slice(0, 20);
+  function wireSearch(inputId, resultsId) {{
+    var searchInput = document.getElementById(inputId);
+    var searchResults = document.getElementById(resultsId);
+    if (!searchInput || !searchResults) return;
 
-    if (matches.length === 0) {{
-      searchResults.innerHTML = '<div class="search-no-results">No results</div>';
-      return;
-    }}
+    searchInput.addEventListener('input', function() {{
+      var q = this.value.toLowerCase().trim();
+      if (q.length < 2) {{ searchResults.innerHTML = ''; return; }}
 
-    searchResults.innerHTML = matches.map(function(e) {{
-      var badge = e.status ? '<span class="search-status search-status-' + e.status + '">' +
-        e.status.replace('_', ' ') + '</span>' : '';
-      var link = e.url ? '<a href="' + e.url + '">' + e.name + '</a>' : e.name;
-      return '<div class="search-item">' + link + ' ' + badge +
-        '<span class="search-kind">' + e.kind + '</span></div>';
-    }}).join('');
-  }});
+      var matches = searchData.filter(function(e) {{
+        return e.name.toLowerCase().indexOf(q) !== -1;
+      }}).slice(0, 20);
+
+      if (matches.length === 0) {{
+        searchResults.innerHTML = '<div class="search-no-results">No results</div>';
+        return;
+      }}
+
+      searchResults.innerHTML = matches.map(function(e) {{
+        var badge = e.status ? '<span class="search-status search-status-' + e.status + '">' +
+          e.status.replace('_', ' ') + '</span>' : '';
+        var url = e.url ? rootPath + e.url : '';
+        var link = url ? '<a href="' + url + '">' + e.name + '</a>' : e.name;
+        return '<div class="search-item">' + link + ' ' + badge +
+          '<span class="search-kind">' + e.kind + '</span></div>';
+      }}).join('');
+    }});
+  }}
+
+  wireSearch('search-input', 'search-results');
+  wireSearch('search-input-main', 'search-results-main');
 }})();
 '''
     (output_dir / "static" / "search.js").write_text(search_js)
