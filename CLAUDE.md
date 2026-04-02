@@ -14,7 +14,7 @@ Copilot) and `.claude/skills/` (for Claude Code). **Always edit files in
 | `aeneas-compiler-dev` | Dev workflow, formatting, tests, error macros, **skill file structure**, **build rules** |
 | `aeneas-lean-core` | Translation model, spec patterns, tactic reference, pitfalls |
 | `aeneas-tactics-quickref` | Tactic decision tree, banned tactics, combinations |
-| `lean-lsp-tool` | `lean_lsp.py` REPL for interactive proof development |
+| `lean-lsp-mcp` | lean-lsp-mcp MCP tools for interactive proof development |
 | `launching-proof-agents` | Multi-agent proof orchestration, review gates |
 | `proof-patterns` | Worked proof examples (loops, dot products, comparisons) |
 | `aeneas-crypto-verification` | Crypto-specific proof strategies (Montgomery, NTT, etc.) |
@@ -27,5 +27,4 @@ Copilot) and `.claude/skills/` (for Claude Code). **Always edit files in
 - `documentation/tactics-reference.md` — All tactics with docstrings and examples
 - `documentation/crypto-verification.md` — Crypto verification guide (ML-KEM/Kyber patterns)
 - `documentation/tips-and-tricks.md` — Pitfalls, tips, and tricks
-- `documentation/lean-lsp-tool.md` — The `lean_lsp.py` tool for incremental proof development
 - `documentation/glossary.md` — Glossary of Aeneas-specific terms
