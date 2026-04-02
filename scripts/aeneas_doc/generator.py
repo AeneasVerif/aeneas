@@ -1827,7 +1827,8 @@ def generate_lean_page(lean_def: 'LeanDefinition', output_dir: Path,
 
 
 def generate_lean_source_pages(lean_definitions: list, lean_src_dir: Optional[str],
-                               output_dir: Path):
+                               output_dir: Path, theorems: list = None,
+                               lean_doc: dict = None):
     """Generate source viewer pages for Lean files."""
     src_dir = output_dir / "source" / "lean"
     src_dir.mkdir(parents=True, exist_ok=True)
@@ -1837,14 +1838,42 @@ def generate_lean_source_pages(lean_definitions: list, lean_src_dir: Optional[st
     for ld in lean_definitions:
         if ld.module:
             modules.add(ld.module)
+    for thm in (theorems or []):
+        if thm.module:
+            modules.add(thm.module)
+    # Also include modules from ALL theorems (including private ones filtered
+    # from the public theorems list) so their source pages exist for [source] links
+    if lean_doc:
+        for t in lean_doc.get("theorems", []):
+            m = t.get("module", "")
+            if m:
+                modules.add(m)
 
     for module in sorted(modules):
         module_file = module.replace(".", "/") + ".lean"
         source = None
+        # Search for the source file in multiple locations
+        search_dirs = []
         if lean_src_dir:
-            candidate = Path(lean_src_dir) / module_file
+            p = Path(lean_src_dir)
+            search_dirs.append(p)
+            # Also search Lake packages (dependencies like Aeneas stdlib)
+            lake_pkgs = p / ".lake" / "packages"
+            if lake_pkgs.is_dir():
+                for pkg_dir in lake_pkgs.iterdir():
+                    if pkg_dir.is_dir():
+                        search_dirs.append(pkg_dir)
+                        # Some packages have a nested directory (e.g., backends/lean)
+                        for sub in pkg_dir.iterdir():
+                            if sub.is_dir() and (sub / "lakefile.lean").exists():
+                                search_dirs.append(sub)
+                            elif sub.is_dir() and (sub / "lakefile.toml").exists():
+                                search_dirs.append(sub)
+        for search_dir in search_dirs:
+            candidate = search_dir / module_file
             if candidate.exists():
                 source = candidate.read_text()
+                break
 
         if source is None:
             source = f"-- Lean module: {module}\n-- (Full source not available)\n"
@@ -1992,7 +2021,8 @@ a:hover { text-decoration: underline; }
   padding: 8px 16px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: 8px 12px;
   border-bottom: 1px solid var(--border);
 }
 .theorem-statement { padding: 0; }
@@ -2014,11 +2044,14 @@ hr.spec-sep {
 .thm-name { font-family: monospace; font-size: 0.9em; }
 .thm-src-link {
   font-size: 0.8em;
-  color: #57606a;
+  color: var(--link, #0969da);
   text-decoration: none;
   margin-left: 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
-.thm-src-link:hover { color: #0969da; text-decoration: underline; }
+.thm-src-link:hover { color: #0550ae; text-decoration: underline; }
 
 /* Clickable Lean identifiers in annotated statements */
 a.lean-ident {
@@ -2434,6 +2467,7 @@ def generate_docs(
     # Load Lean data if available
     theorems = []
     lean_definitions = []
+    lean_doc = {}
     if lean_doc_path and os.path.exists(lean_doc_path):
         lean_doc = load_lean_doc(lean_doc_path)
         theorems = parse_step_theorems(lean_doc)
@@ -2635,7 +2669,8 @@ def generate_docs(
 
     # Source pages
     generate_source_pages(functions, rust_src_dir, out)
-    generate_lean_source_pages(lean_definitions, lean_src_dir, out)
+    generate_lean_source_pages(lean_definitions, lean_src_dir, out,
+                               theorems=theorems, lean_doc=lean_doc)
 
     # Dependency graph page
     generate_graph_page(functions, out)
