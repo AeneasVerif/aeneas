@@ -1,480 +1,146 @@
 ---
 name: proof-patterns
-description: Fully-worked proof examples including loops, dot products, comparisons, and nested loops for Aeneas Lean proofs
+description: Canonical proof patterns for Aeneas Lean proofs — loop template, function wrappers, and common sub-patterns
 ---
 
-# Proof Patterns — Completed Examples
+# Proof Patterns — Reference Examples
 
-This document collects fully-worked proof patterns from real-world cryptographic
-verification projects. Agents should reference these patterns when writing proofs for similar
-functions. Each pattern shows the complete proof with commentary.
+Canonical proof patterns for Aeneas-generated Lean code. Each pattern shows the
+minimal structure needed; adapt to your specific function.
 
-## Pattern 1: Simple Range Loop (pointwise map)
+## Loop — Canonical Template
 
-**Use when:** A loop iterates `for i in 0..n` and writes `out[i] = f(a[i], out[i])`.
+Every loop proof follows the same skeleton. The only things that change
+between loops are: (a) what the loop body does, (b) what the invariant says.
 
-**Example:** `add_loop` — pointwise `out[i] := (a[i] + out[i]) mod M`.
+**Three theorems per loop:**
+1. `spec_gen` — generalized loop spec with arbitrary start position + invariant
+2. `spec` — public `@[step]` wrapper that instantiates `spec_gen` at `start = 0`
+3. Top-level function spec — unfolds the wrapper function, delegates to `spec`
 
-**Structure:**
-1. A **generalized spec** (`spec_gen`) with an arbitrary starting position
-2. A **public spec** (`spec`) that instantiates `spec_gen` at `start = 0`
-3. A **top-level spec** that unfolds the wrapper and delegates to the loop spec
+### spec_gen — Variant A: `step*` does the work (PREFERRED)
 
-### spec_gen (the workhorse)
+Use this when the loop body is simple enough for `step*` to handle automatically.
+Only a few proof obligations remain after `step*` — typically the invariant
+rebuild and the base case.
 
 ```lean
-private theorem add_loop.spec_gen
-  (out out0 a : Slice Std.U16) (p)
+private theorem my_loop.spec_gen
+  (out out0 a : Slice Std.U16)
   (hlen : out.length = a.length)
   (hlen0 : out.length = out0.length)
   (iter : core.ops.range.Range Std.Usize)
   (hlo : iter.start.val ≤ iter.«end».val)
   (hend : iter.«end».val = out.length)
-  -- Invariant part 1: entries before start are "done"
-  (hdone : ∀ j (hj : j < iter.start.val),
-    out[j]'(by grind) = addMod p (a[j]'(by agrind)) (out0[j]'(by agrind)))
-  -- Invariant part 2: entries at or after start are untouched
-  (hrest : ∀ j (hj : iter.start.val ≤ j ∧ j < out.length),
-    out[j]'(by grind) = out0[j]'(by agrind)) :
-  crypto.add_loop (Params p) iter out a ⦃ fun res =>
-    ∃ hlen' : res.length = out0.length,
-    ∀ j (hj : j < res.length),
-      (res[j] : Std.U16) = addMod p (a[j]'(by agrind)) (out0[j]'(by agrind)) ⦄ := by
-  -- Step 1: Unfold the recursive function
-  unfold crypto.add_loop
-  -- Step 2: Process the range iterator
+  -- Invariant: entries before start are processed
+  (hdone : ∀ j, j < iter.start.val → out[j] = f a[j] out0[j])
+  -- Invariant: entries at or after start are untouched
+  (hrest : ∀ j, iter.start.val ≤ j → j < out.length → out[j] = out0[j]) :
+  my_loop iter out a ⦃ fun res =>
+    res.length = out0.length ∧
+    ∀ j, j < res.length → res[j] = f a[j] out0[j] ⦄ := by
+  unfold my_loop
+  step*
+  -- Remaining obligations (typically invariant rebuild + base case):
+  · -- Invariant rebuild: entries before start+1 are done
+    intro j hj
+    by_cases hji : j = iter.start.val
+    · subst hji; simp [*]   -- freshly written entry
+    · apply hdone; agrind  -- previously done entry
+  · -- Invariant rebuild: entries after start+1 are untouched
+    intro j hlo hhi; apply hrest <;> agrind
+  · -- BASE CASE: loop done
+    split_conjs <;> agrind
+termination_by iter.«end».val - iter.start.val
+decreasing_by agrind
+```
+
+### spec_gen — Variant B: manual `step as` (when step* can't handle the body)
+
+Use this when the loop body has complex monadic steps that `step*` can't resolve
+automatically, or when you need fine control over naming.
+
+```lean
+private theorem my_loop.spec_gen
+  ... -- same signature as Variant A
+  := by
+  unfold my_loop
   step with range_next_usize as ⟨ret, h_range⟩
-  -- Step 3: Case split on whether loop continues
   by_cases h : iter.start.val < iter.«end».val <;> simp [h] at h_range
-  · -- INDUCTIVE CASE: start < end
+  · -- INDUCTIVE CASE
     obtain ⟨hov, hstart', hend'⟩ := h_range
     simp only [hov]
-    -- Step 4: Progress through the loop body
-    step as ⟨i1, hi1⟩   -- index a[i]
-    step as ⟨i2, hi2⟩   -- index out[i]
-    step as ⟨i3⟩        -- wrapping_add
-    step as ⟨i4, hi4⟩   -- MOD_MASK
-    step as ⟨i5⟩        -- i3 &&& i4
+    -- Step through loop body (one `step as` per monadic bind)
+    step as ⟨a_i, ha_i⟩        -- index a[i]
+    step as ⟨o_i, ho_i⟩        -- index out[i]
+    step as ⟨v⟩                 -- compute f(a_i, o_i)
     step as ⟨s, hs_len, hs_eq, hs_ne⟩  -- Slice.update
-    -- Step 5: Rebuild the invariant for the next iteration
-    have hdone' : ∀ j (hj : j < iter.start.val + 1),
-        s[j]'(by grind) = addMod p (a[j]'(by agrind)) (out0[j]'(by agrind)) := by
-      intro j hj
-      by_cases hji : j = iter.start.val
-      · subst hji; grind [addMod]           -- freshly written entry
-      · have hj' : j < iter.start.val := by scalar_tac
-        have := hdone j hj'; grind         -- previously done entry
-    have hrest' : ∀ j (hj : iter.start.val + 1 ≤ j ∧ j < s.length),
-        s[j]'(by grind) = out0[j]'(by agrind) := by
-      intro j hj; grind                    -- unchanged entry
-    -- Step 6: Recursive call
-    -- NOTE on inline (by ...) blocks: The single cheap-tactic args below are acceptable.
-    -- If any argument required tactic sequences, multi-line proofs, or expensive tactics
-    -- (first|..., all_goals, grind), extract it as a `have` first — see
-    -- "Extract inline (by ...) blocks" in the `aeneas-lean-core` skill file.
-    have hend_val : ret.2.«end».val = iter.«end».val := by rw [hend']
-    exact add_loop.spec_gen s out0 a p (by grind) (by grind)
-      ret.2 (by scalar_tac) (by grind)
-      (fun j hj => hdone' j (by scalar_tac))
-      (fun j hj => hrest' j ⟨by scalar_tac, by grind⟩)
-  · -- BASE CASE: start ≥ end, loop is done
-    obtain ⟨hnone, _⟩ := h_range
-    simp only [hnone]
-    refine ⟨by scalar_tac, fun j hj => ?_⟩
-    have : j < iter.start.val := by scalar_tac
-    exact hdone j this
--- Step 7: Termination
+    -- Rebuild invariant (same as Variant A)
+    have hdone' : ... := by ...
+    have hrest' : ... := by ...
+    -- Recursive call (step resolves specs tagged @[step])
+    step
+  · -- BASE CASE
+    obtain ⟨hnone, _⟩ := h_range; simp only [hnone]
+    split_conjs <;> agrind
 termination_by iter.«end».val - iter.start.val
-decreasing_by
-  have : ret.2.«end».val = iter.«end».val := by rw [hend']
-  scalar_tac
+decreasing_by agrind
 ```
 
 ### spec (public, starts at 0)
 
 ```lean
 @[step]
-theorem crypto.add_loop.spec
-  (out a : Slice Std.U16)
-  (hlen : out.length = a.length) :
-  crypto.add_loop (Params p) { start := 0#usize, «end» := out.len } out a ⦃ fun res =>
-    res = Slice.mapIdx out (fun j x hj => addMod p a[j] x) ⦄ := by
+theorem my_loop.spec (out a : Slice Std.U16) (hlen : out.length = a.length) :
+  my_loop { start := 0#usize, «end» := out.len } out a ⦃ fun res =>
+    res.length = out.length ∧
+    ∀ j, j < res.length →
+      res[j] = f (a[j]) (out[j]) ⦄ := by
   apply WP.spec_mono
-  · exact add_loop.spec_gen out out a p hlen rfl
-      { start := 0#usize, «end» := out.len } (by simp) rfl
-      (fun j hj => by simp at hj) (fun j _ => rfl)
-  · intro res ⟨hlen', hall⟩
-    apply Slice.ext_getElem (by simp_all) fun i h1 h2 => by
-      simp only [Slice.mapIdx, Slice.getElem_Nat_eq, List.getElem_mapFinIdx]
-      exact hall i (by agrind)
+  · apply my_loop.spec_gen <;> agrind   -- instantiate spec_gen at start=0
+  · intro res ⟨h1, h2⟩; split_conjs <;> agrind   -- derive final postcondition
 ```
-
-### Top-level (unfold wrapper, delegate)
+### Top-level function (unfold wrapper, delegate)
 
 ```lean
 @[step]
-theorem crypto.add.spec p (out a : Slice Std.U16)
-  (hlen : out.length = a.length) :
-  crypto.add (Params p) out a ⦃ fun res =>
-    res = Slice.mapIdx out (fun j x hj => addMod p a[j] x) ⦄ := by
-  unfold crypto.add
-  simp only [Slice.len]
-  split_ifs with h
-  · have : out.len = a.len := h
-    step*
-  · simp_all [Slice.len]
+theorem my_function.spec (out a : Slice U16) (hlen : out.length = a.length) :
+  my_function out a ⦃ fun res => ... ⦄ := by
+  unfold my_function
+  step*
+  · ... -- proof of precondition 1
+  · ... -- proof of precondition 2
+  · ... -- proof of goal
 ```
 
-### Matrix-level lifting
+### Key points
 
-```lean
-@[step]
-theorem add_spec_ext p {m n A B} (a b : Slice Std.U16)
-  (halen : a.length = m * n) (ha : Slice.toMatrix a = A)
-  (hblen : b.length = m * n) (hb : Slice.toMatrix b = B) :
-  crypto.add (Params p) b a ⦃ fun res =>
-    ∃ hreslen : res.length = m * n,
-    Slice.toMatrix (p := p) res = A + B ⦄ := by
-  step as ⟨res, hres⟩
-  refine ⟨by grind, ?_⟩
-  rw [← ha, ← hb]
-  ext i j
-  simp only [Slice.toMatrix, Matrix.of_apply, Matrix.add_apply]
-  simp_all only [Slice.mapIdx]
-  erw [List.getElem_mapFinIdx]
-  exact (addMod.spec p _ _).1
-```
-
----
-
-## Pattern 2: Dot-Product Accumulation Loop
-
-**Use when:** A loop accumulates `acc += a[i] * b[i]` in wrapping arithmetic,
-then the result is projected to Zq.
-
-**Example:** `matrix_mul_inner_loop` — innermost k-loop of matrix multiply.
-
-**Key idea:** The I32 wrapping accumulator tracks the modular partial dot-product.
-Prove a helper `toMod_hcast_step` showing that wrapping arithmetic commutes with
-the modular-ring projection, then use `dotMod_partial_succ` to step the partial sum.
-
-### Helper lemmas needed
-
-```lean
--- Step the partial dot-product
-private lemma dotMod_partial_succ ... :
-    dotMod_partial ... (k + 1) = dotMod_partial ... k + term_k := by
-  simp only [dotMod_partial]; rw [Fin.sum_univ_castSucc]; simp [...]
-
--- Empty partial dot-product
-@[simp]
-private lemma dotMod_partial_zero ... : dotMod_partial ... 0 = 0 := by simp [dotMod_partial]
-
--- Full partial = total
-private lemma dotMod_partial_full ... :
-    dotMod_partial ... (Spec.dim p) = dotMod ... := by simp [dotMod_partial, dotMod]
-
--- Wrapping arithmetic projects to Zq
-private theorem toMod_hcast_step (p) (acc : I32) (a b : U16) :
-    toMod p (IScalar.hcast .U16 (wrapping_add acc (wrapping_mul (hcast a) (cast b))))
-    = toMod p (IScalar.hcast .U16 acc) + toMod p a * toMod p b := by
-  suffices h : ... by rw [h, toMod_wrapping_add, toMod_wrapping_mul]
-  bv_tac 16
-```
-
-### spec_gen structure
-
-```lean
-private theorem inner_loop.spec_gen p (b s : Slice U16)
-  (hb hs) (i j : Usize) (hi hj)
-  (r : core.ops.range.Range Usize) (hlo hend)
-  (acc : I32)
-  (hacc : toMod p (IScalar.hcast .U16 acc) =
-    dotMod_partial p b s i j hi hj r.start.val) :
-  inner_loop ... r b s i j acc ⦃ fun acc' =>
-    toMod p (IScalar.hcast .U16 acc') = dotMod p b s i j hi hj ⦄ := by
-  unfold inner_loop
-  step with range_next_usize as ⟨ret, h_range⟩
-  by_cases h : r.start.val < r.«end».val <;> simp [h] at h_range
-  · obtain ⟨hov, hstart', hend'⟩ := h_range; simp only [hov]
-    -- step through: index b, index s, casts, wrapping_mul, wrapping_add
-    step as ⟨...⟩  -- each arithmetic step
-    -- Prove accumulator invariant for next iteration
-    have hacc1 : toMod p (IScalar.hcast .U16 acc1) =
-        dotMod_partial ... (r.start.val + 1) := by
-      rw [dotMod_partial_succ ...]; rw [← hacc]; ...
-      rw [toMod_hcast_step]
-    -- Recurse
-    exact inner_loop.spec_gen ... ret.2 ... acc1 (by convert hacc1 ...)
-  · -- Base case: r.start ≥ r.end
-    simp only [..., WP.spec_ok]
-    rw [hacc]; convert dotMod_partial_full ...
-termination_by r.«end».val - r.start.val
-decreasing_by have : ret.2.«end».val = r.«end».val := by rw [hend']; scalar_tac
-```
-
----
-
-## Pattern 3: Nested Loop (outer calls inner)
-
-**Use when:** An outer loop iterates rows, calling an inner loop for each row.
-
-**Example:** `matrix_mul_outer_loop` — outer i-loop calling the middle j-loop.
-
-### Structure
-
-```lean
-@[step]
-theorem outer_loop.spec p (out b s : Slice U16)
-  (iter : core.ops.range.Range Usize) (hout hb hs hlo hhi)
-  -- Invariant: rows before iter.start are already correct
-  (hinv : ∀ (i j : Fin DIM), i < iter.start.val →
-    toMod p (out[i * DIM + j]'...) = dotMod p b s i j ...) :
-  outer_loop (Params p) ... iter out b s ⦃ fun res =>
-    ∃ hreslen : res.length = DIM * DIM,
-    ∀ (i j : Fin DIM), toMod p (res[...]) = dotMod p b s i j ... ⦄ := by
-  unfold outer_loop
-  step with range_next_usize as ⟨ret, h_range⟩
-  by_cases hcont : iter.start.val < iter.«end».val <;> simp [hcont] at h_range
-  · obtain ⟨hov, hstart', hend'⟩ := h_range; simp only [hov]
-    -- Call the inner/middle loop spec
-    step with inner_loop.spec as ⟨out1, hout1_inv⟩
-    · exact ...  -- provide required arguments
-    -- Unpack the inner loop invariant
-    obtain ⟨hout1_len, hout1_done, hout1_rest⟩ := hout1_inv
-    -- Recurse on the outer loop
-    step as ⟨res, hreslen, hres⟩
-    · ...  -- provide length, bounds, invariant for next iteration
-    · -- Rebuild invariant: for i < start+1, all entries correct
-      intro i j hi_lt
-      ... -- use hout1_done for row = start, hinv for rows < start
-    exact ⟨hreslen, hres⟩
-  · -- Base case
-    obtain ⟨hnone, _⟩ := h_range; simp only [hnone, WP.spec_ok]
-    exact ⟨by scalar_tac, fun i j => hinv i j (by scalar_tac)⟩
-termination_by iter.«end».val - iter.start.val
-decreasing_by ...
-```
-
----
-
-## Pattern 4: Constant-Time Comparison (XOR accumulation)
-
-**Use when:** A loop accumulates `diff |= a[i] ^ b[i]` and the result tells
-whether all elements were equal.
-
-**Example:** `ct_equal_u16_loop` — XOR-accumulates differences of U16 slices.
-
-### Key: The invariant is an iff
-
-```lean
--- Invariant: diff = 0 ↔ all pairs before start are equal
-(hinv : diff = 0#u16 ↔ ∀ j, (hj : j < iter.start.val) →
-    a.val[j]'... = b.val[j]'...)
-```
-
-### Rebuilding the invariant
-
-```lean
-have hinv' : diff1 = 0#u16 ↔ ∀ j, (hj : j < iter.start.val + 1) → ... := by
-  rw [show diff1 = diff ||| (a_i ^^^ b_i) by bv_tac]
-  constructor
-  · rw [U16.eq_or, U16.eq_xor]; grind
-  · grind
-```
-
----
-
-## Pattern 5: Top-Level Function (unfold + delegate)
-
-**Use when:** The top-level function does setup then calls the loop.
-
-```lean
-@[step]
-theorem matrix_mul.spec p (out b s : Slice U16) (hout hb hs) :
-  module.matrix_mul (Params p) out b s ⦃ fun res => ... ⦄ := by
-  unfold module.matrix_mul
-  -- step through setup (creating ranges, getting parameters)
-  step as ⟨n_p, hn_p⟩      -- (Params p).N
-  step as ⟨dim, hdim⟩      -- module.DIM
-  -- now the loop call appears
-  step with matrix_mul_outer_loop.spec as ⟨res, hreslen, hres⟩
-  · ... -- provide preconditions
-  exact ⟨hreslen, hres⟩
-```
-
----
-
-## Pattern 6: Wrapper with Length Check (split_ifs)
-
-**Use when:** The function starts with an `if len_a == len_b` guard.
-
-```lean
-@[step]
-theorem add.spec p (out a : Slice U16) (hlen : out.length = a.length) :
-  crypto.add (Params p) out a ⦃ fun res => ... ⦄ := by
-  unfold crypto.add
-  simp only [Slice.len]
-  split_ifs with h
-  · have : out.len = a.len := h
-    step*
-  · simp_all [Slice.len]   -- contradiction: lengths must be equal
-```
+- ❌ **Never use `partial_fixpoint_induct`** — it requires an explicit motive,
+  a sorry'd `admissible` proof, and manual IH threading.
+- ✅ Prefer `step*` (Variant A) over manual `step as` (Variant B).
+- ✅ `step*` auto-resolves preconditions of the recursive call from context.
+- ✅ `termination_by iter.end.val - iter.start.val` + `decreasing_by agrind`
+  is the universal termination pattern (the termination measure and the decreasing proof vary)
+- For **nested loops** (outer calls inner): the outer `spec_gen` calls the
+  inner loop's `@[step]` spec via `step with inner_loop.spec`, then rebuilds
+  the outer invariant.
 
 ---
 
 ## Common Sub-Patterns
 
-### Slice.update reasoning (after `step` on a write)
-
-After `step as ⟨s, hs_len, hs_eq, hs_ne⟩` on a Slice.update:
-- `hs_eq`: `s[idx] = new_value` (written entry)
-- `hs_ne`: `∀ j ≠ idx, s[j] = old[j]` (unchanged entries)
-
-```lean
--- Freshly written entry
-have h_written : s[idx]'... = new_value := by
-  grind  -- or: simp [hs_eq]
-
--- Unchanged entry
-have h_unchanged : s[j]'... = out[j]'... := by
-  grind  -- uses hs_ne since j ≠ idx
-```
-
-### getElem! ↔ getElem bridge
-
-When `step` gives `getElem!` but you need proof-bounded `getElem`:
-```lean
-have h : s.val[i]! = s[i]'proof := getElem!_pos _ _ proof
-```
-
-### Termination proof (always the same)
-
-```lean
-termination_by iter.«end».val - iter.start.val
-decreasing_by
-  have : ret.2.«end».val = iter.«end».val := by rw [hend']
-  scalar_tac
-```
-
-### Rebuilding bounds after range_next_usize
-
-```lean
-step with range_next_usize as ⟨ret, h_range⟩
-by_cases h : iter.start.val < iter.«end».val <;> simp [h] at h_range
-· obtain ⟨hov, hstart', hend'⟩ := h_range
-  simp only [hov]
-  -- hov: ret.1 = some iter.start
-  -- hstart': ret.2.start = iter.start + 1
-  -- hend': ret.2.end = iter.end
-```
-
 ### WP.spec_mono (strengthen postcondition)
 
-When spec_gen gives a low-level postcondition and you want something cleaner:
+When `spec_gen` gives a low-level postcondition and you want something cleaner:
 ```lean
-@[step]
-theorem loop.spec ... :
-  loop ... ⦃ fun res => nice_postcondition res ⦄ := by
-  apply WP.spec_mono
-  · exact loop.spec_gen ...  -- gives raw postcondition
-  · intro res ⟨h1, h2, ...⟩
-    ... -- derive nice_postcondition from raw
-```
-
-### Index arithmetic helpers
-
-**Register recurring bounds/arithmetic helpers with solver attributes** so they
-are used automatically (see Pitfall #22 in the `aeneas-lean-core` skill file).
-If you see the same `(by ...)` tactic block 3+ times, extract it as a lemma
-with `@[agrind =]` (or `@[scalar_tac_simps]`, `@[simp]` as appropriate).
-
-```lean
--- Index bound: register with @[agrind =] so getElem bounds auto-discharge
-@[agrind =]
-private lemma idx_lt_bound (r : Fin DIM) (c : Fin N)
-    (h : out.length = DIM * N) :
-    r.val * N + c.val < out.length := by agrind
-
--- (i * DIM + j) / DIM = i when j < DIM
-private lemma mul_DIM_add_div (i j : ℕ) (hj : j < DIM) :
-    (i * DIM + j) / DIM = i := by simp_all [DIM]; scalar_tac
-
--- (i * DIM + j) % DIM = j when j < DIM
-private lemma mul_DIM_add_mod (i j : ℕ) (hj : j < DIM) :
-    (i * DIM + j) % DIM = j := by simp [DIM]; scalar_tac
+apply WP.spec_mono
+· apply loop.spec_gen <;> agrind   -- gives raw postcondition
+· intro res ⟨h1, h2, ...⟩; ... -- derive nice_postcondition from raw
 ```
 
 ---
 
-## Pattern 7: Recursive Loop with `unfold` + `step` (CBD sampling)
-
-**Use when:** A loop is generated as a recursive function (e.g., `foo_loop0`) that
-iterates over a range, accumulating results element-by-element.
-
-**Structure:**
-1. `unfold` the recursive function
-2. `by_cases` on whether the iterator is exhausted
-3. `step as ⟨..., h_...⟩` for each monadic bind in the loop body
-4. `step*` handles the recursive call automatically (applies the theorem being proved)
-5. `termination_by` + `decreasing_by scalar_decr_tac` for well-foundedness
-
-**Example:** `key_expand_from_private_seed_loop0` — CBD-samples a secret vector.
-
-```lean
-@[step]
-theorem key_expand_from_private_seed_loop0.spec
-    (iter : core.ops.range.Range Std.U8)
-    (pk_mlkem_key : mlkem.key.Key)
-    ...
-    (h_done : ∀ j, j < iter.start.val → keySecretPoly pk_mlkem_key j = spec j) :
-    key_expand_from_private_seed_loop0 iter pk_mlkem_key ...
-    ⦃ (pk_mlkem_key' : mlkem.key.Key) ... =>
-      (∀ j, j < iter.end.val → keySecretPoly pk_mlkem_key' j = spec j) ∧
-      structural_preservation pk_mlkem_key' pk_mlkem_key ⦄ := by
-  unfold key_expand_from_private_seed_loop0
-  by_cases hlt : iter.start.val < iter.end.val
-  · -- Some case: iteration body
-    rw [core.iter.range.IteratorRange.next_U8_def]; simp [hlt]
-    step as ⟨next_start, h_ns⟩
-    step as ⟨buf1, h_buf1⟩
-    step as ⟨chs2, h_chs2⟩
-    ...                         -- one step per monadic bind
-    step as ⟨a1, h_a1⟩         -- CBD sampling result
-    -- Recursive call: step* applies this theorem automatically
-    step*
-    · -- Invariant update: for j < next_start, keySecretPoly matches spec
-      intro j hj
-      simp only [h_ns] at hj
-      by_cases hjj : j = iter.start.val
-      · -- New element: prove from current iteration's a1
-        subst hjj
-        -- Chain: s_mut backward → index set → a1 → h_a1 → spec equality
-        have h_back := h_smut.2.2.2 (idx_res.2 a1) |>.2.2.2.2.2.1 (↑iter.start) (by omega)
-        rw [h_back]; simp only [h_idx, h_i4]; simp_lists; rw [h_a1]
-        ...  -- byte-level bridge
-      · -- Old element: delegate to h_done
-        have hj_lt : j < iter.start.val := by omega
-        simp only [*]; simp_lists [*]
-  · -- None case: iterator exhausted
-    rw [core.iter.range.IteratorRange.next_U8_def]; simp [hlt]
-    exact fun j hj => h_done j (by agrind)
-  termination_by iter.end.val - iter.start.val
-  decreasing_by scalar_decr_tac
-```
-
-**Key points:**
-- ❌ **Never use `partial_fixpoint_induct`** — it requires an explicit motive,
-  a sorry'd `admissible` proof, and manual IH threading.
-- ✅ `step*` auto-resolves preconditions of the recursive call from context.
-- ✅ `termination_by iter.end.val - iter.start.val` with `scalar_decr_tac`
-  handles well-foundedness.
-- The **old-element case** (`j < iter.start`) uses `simp only [*]; simp_lists [*]`
-  to chain backward-function preservation + index-set non-interference + `h_done`.
-
----
-
-### Congruence on function equalities
+## Congruence on function equalities
 
 When the goal is `f(impl_args) = f(spec_args)`, use `fcongr 1`
 (NOT `congr 1`) to split into per-argument subgoals:
