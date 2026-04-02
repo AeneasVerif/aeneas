@@ -30,6 +30,8 @@ private structure TheoremInfo where
   specBinders : Array Json     -- [{name, type, annotated_type}, ...]
   specBodyText : String
   annotatedSpecBody : Array Json
+  leanSource : Option Json     -- {begin_line, begin_col, end_line, end_col}
+  moduleName : Option Name     -- Lean module containing this theorem
 
 /-- Extract the head function name from an expression `f x1 ... xn`.
     Also handles `lift (f x1 ... xn)` by unwrapping the lift.
@@ -282,9 +284,20 @@ private def extractStepTheoremsFromAttr :
         let isPriv := Lean.isPrivateName thmName
         let (ppType, annotated) ← ppExprAnnotated thmInfo.type
         let (specBinders, specBodyText, annotatedSpecBody) ← decomposeSpecType thmInfo.type
+        let declRanges ← Lean.findDeclarationRanges? thmName
+        let leanSource := declRanges.map fun ranges =>
+          let r := ranges.range
+          Json.mkObj [
+            ("begin_line", .num r.pos.line),
+            ("begin_col", .num r.pos.column),
+            ("end_line", .num r.endPos.line),
+            ("end_col", .num r.endPos.column)
+          ]
+        let constModule := env.getModuleFor? thmName
         results := results.push {
           funName, thmName, kind, isPrivate := isPriv, sorryStatus,
-          ppType, annotated, specBinders, specBodyText, annotatedSpecBody
+          ppType, annotated, specBinders, specBodyText, annotatedSpecBody,
+          leanSource, moduleName := constModule
         }
       catch e =>
         IO.eprintln s!"  Warning: error processing {thmName}: {← e.toMessageData.toString}"
@@ -319,10 +332,20 @@ private def extractStepTheorems (targetModule : Name) :
           let sorryStatus ← classifySorryStatus constName
           let kind := classifyConstKind info
           let isPriv := Lean.isPrivateName constName
+          let declRanges ← Lean.findDeclarationRanges? constName
+          let leanSource := declRanges.map fun ranges =>
+            let r := ranges.range
+            Json.mkObj [
+              ("begin_line", .num r.pos.line),
+              ("begin_col", .num r.pos.column),
+              ("end_line", .num r.endPos.line),
+              ("end_col", .num r.endPos.column)
+            ]
           results := results.push {
             funName, thmName := constName, kind, isPrivate := isPriv, sorryStatus,
             ppType := "TODO", annotated := #[],
-            specBinders := #[], specBodyText := "", annotatedSpecBody := #[]
+            specBinders := #[], specBodyText := "", annotatedSpecBody := #[],
+            leanSource, moduleName := env.getModuleFor? constName
           }
         | none => pure ()
       catch e =>
@@ -652,7 +675,7 @@ unsafe def main (args : List String) : IO Unit := do
 
   -- Build JSON output
   let theoremJsons : Array Json := allTheorems.map fun t =>
-    Json.mkObj [
+    let baseFields : List (String × Json) := [
       ("function", .str t.funName.toString),
       ("theorem", .str t.thmName.toString),
       ("kind", .str t.kind),
@@ -664,6 +687,13 @@ unsafe def main (args : List String) : IO Unit := do
       ("spec_body", .str t.specBodyText),
       ("annotated_spec_body", .arr t.annotatedSpecBody)
     ]
+    let lsFields := match t.leanSource with
+      | some ls => [("lean_source", ls)]
+      | none => []
+    let modFields := match t.moduleName with
+      | some m => [("module", .str m.toString)]
+      | none => []
+    Json.mkObj (baseFields ++ lsFields ++ modFields)
   let json := Json.mkObj [
     ("theorems", .arr theoremJsons),
     ("definitions", .arr definitions)

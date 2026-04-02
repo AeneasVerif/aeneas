@@ -114,6 +114,8 @@ class StepTheorem:
         self.spec_binders = data.get("spec_binders")       # [{name, type, annotated_type}]
         self.spec_body = data.get("spec_body")
         self.annotated_spec_body = data.get("annotated_spec_body")
+        self.lean_source = data.get("lean_source")          # {begin_line, end_line, ...}
+        self.module = data.get("module")                    # Lean module name (dot-separated)
 
 
 class LeanDefinition:
@@ -696,11 +698,22 @@ def _render_theorem_card(thm: 'StepTheorem', known_fns: dict = None,
                          f'{_esc(thm.theorem_name)}</a>')
     else:
         thm_name_html = _esc(thm.theorem_name)
+    # Source link to the proof
+    src_html = ""
+    if thm.lean_source and thm.module:
+        ls = thm.lean_source
+        begin = ls.get("begin_line", 0)
+        end = ls.get("end_line", 0)
+        module_file = thm.module.replace(".", "/") + ".lean"
+        src_slug = module_file.replace("/", "_")
+        src_href = f"{link_prefix}source/lean/{src_slug}.html#L{begin}"
+        src_html = (f' <a class="thm-src-link" href="{src_href}" '
+                    f'title="{_esc(module_file)}:{begin}-{end}">[source]</a>')
     return f'''
     <div class="theorem-card">
       <div class="theorem-header">
         <code class="thm-name">{thm_name_html}</code>
-        {sorry_badge}
+        {sorry_badge}{src_html}
       </div>
       <div class="theorem-statement">
         {_annotated_statement_block(thm, known_fns=known_fns, depth=depth)}
@@ -920,14 +933,19 @@ def _render_annotated_html(annotated: list, known_fns: dict,
             # Skip self-references (the function being specified)
             if current_fn_lean_name and ident == current_fn_lean_name:
                 return children_html
+            # Strip leading/trailing whitespace out of the clickable area
+            stripped = children_html.strip()
+            leading = children_html[:len(children_html) - len(children_html.lstrip())]
+            trailing = children_html[len(children_html.rstrip()):]
             href = _resolve_lean_ident_href(ident, known_fns or {},
                                             constructor_of=constructor_of)
             if href:
-                return (f'<a class="lean-ident" href="{_esc(href)}" '
-                        f'title="{_esc(ident)}">{children_html}</a>')
+                link = (f'<a class="lean-ident" href="{_esc(href)}" '
+                        f'title="{_esc(ident)}">{stripped}</a>')
             else:
-                return (f'<span class="lean-ident" '
-                        f'title="{_esc(ident)}">{children_html}</span>')
+                link = (f'<span class="lean-ident" '
+                        f'title="{_esc(ident)}">{stripped}</span>')
+            return leading + link + trailing
         return ""
 
     inner = "".join(_render_node(n) for n in annotated)
@@ -1975,6 +1993,13 @@ hr.spec-sep {
 }
 .spec-body code { font-weight: 500; }
 .thm-name { font-family: monospace; font-size: 0.9em; }
+.thm-src-link {
+  font-size: 0.8em;
+  color: #57606a;
+  text-decoration: none;
+  margin-left: 8px;
+}
+.thm-src-link:hover { color: #0969da; text-decoration: underline; }
 
 /* Clickable Lean identifiers in annotated statements */
 a.lean-ident {
