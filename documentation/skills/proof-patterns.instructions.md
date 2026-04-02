@@ -65,24 +65,6 @@ private theorem my_loop.spec_gen
   ... -- same signature as Variant A
   := by
   unfold my_loop
-  step with range_next_usize as ⟨ret, h_range⟩
-  by_cases h : iter.start.val < iter.«end».val <;> simp [h] at h_range
-  · -- INDUCTIVE CASE
-    obtain ⟨hov, hstart', hend'⟩ := h_range
-    simp only [hov]
-    -- Step through loop body (one `step as` per monadic bind)
-    step as ⟨a_i, ha_i⟩        -- index a[i]
-    step as ⟨o_i, ho_i⟩        -- index out[i]
-    step as ⟨v⟩                 -- compute f(a_i, o_i)
-    step as ⟨s, hs_len, hs_eq, hs_ne⟩  -- Slice.update
-    -- Rebuild invariant (same as Variant A)
-    have hdone' : ... := by ...
-    have hrest' : ... := by ...
-    -- Recursive call (step resolves specs tagged @[step])
-    step
-  · -- BASE CASE
-    obtain ⟨hnone, _⟩ := h_range; simp only [hnone]
-    split_conjs <;> agrind
 termination_by iter.«end».val - iter.start.val
 decreasing_by agrind
 ```
