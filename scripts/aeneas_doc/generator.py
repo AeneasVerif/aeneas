@@ -933,10 +933,14 @@ def _render_annotated_html(annotated: list, known_fns: dict,
             # Skip self-references (the function being specified)
             if current_fn_lean_name and ident == current_fn_lean_name:
                 return children_html
-            # Strip leading/trailing whitespace out of the clickable area
-            stripped = children_html.strip()
-            leading = children_html[:len(children_html) - len(children_html.lstrip())]
-            trailing = children_html[len(children_html.rstrip()):]
+            # Strip leading/trailing whitespace and punctuation from clickable area
+            _STRIP_CHARS = " \t\n\r()"
+            stripped = children_html.strip(_STRIP_CHARS)
+            leading = children_html[:len(children_html) - len(children_html.lstrip(_STRIP_CHARS))]
+            trailing = children_html[len(children_html.rstrip(_STRIP_CHARS)):]
+            # Highlight any extracted punctuation
+            leading = _highlight_text(leading) if leading else ""
+            trailing = _highlight_text(trailing) if trailing else ""
             href = _resolve_lean_ident_href(ident, known_fns or {},
                                             constructor_of=constructor_of)
             if href:
