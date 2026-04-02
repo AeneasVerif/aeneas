@@ -1694,6 +1694,26 @@ def generate_lean_page(lean_def: 'LeanDefinition', output_dir: Path,
     </div>
     '''
 
+    # Source code snippet (raw Lean source, like Rust function pages)
+    if lean_def.lean_source and lean_src_dir:
+        ls = lean_def.lean_source
+        begin = ls.get("begin_line", 1)
+        end = ls.get("end_line", begin)
+        module_file = lean_def.module.replace(".", "/") + ".lean"
+        src_path = Path(lean_src_dir) / module_file
+        if src_path.exists():
+            all_lines = src_path.read_text().split("\n")
+            snippet_lines = all_lines[max(0, begin - 1):end]
+            snippet_text = "\n".join(snippet_lines)
+            if snippet_text.strip():
+                src_slug = module_file.replace("/", "_")
+                src_link = f"../source/lean/{src_slug}.html#L{begin}"
+                content += f'''
+    <h2>Source Code</h2>
+    <p class="src-link"><a href="{src_link}">{_esc(module_file)}:{begin}-{end}</a></p>
+    {_source_block(snippet_text, "lean")}
+    '''
+
     # Signature block with binder-by-binder rendering when available
     kind_kw = lean_def.kind if lean_def.kind in ("def", "inductive", "structure",
         "opaque", "axiom", "abbrev") else "def"
@@ -1742,16 +1762,6 @@ def generate_lean_page(lean_def: 'LeanDefinition', output_dir: Path,
     <p class="cross-link">Implements: <code>{_esc(lean_def.rust_name)}</code></p>
     '''
 
-    # Lean source location
-    if lean_def.lean_source:
-        ls = lean_def.lean_source
-        begin = ls.get("begin_line", 0)
-        end = ls.get("end_line", 0)
-        module_file = lean_def.module.replace(".", "/") + ".lean"
-        src_slug = module_file.replace("/", "_")
-        src_link = f"../source/lean/{src_slug}.html#L{begin}"
-        content += f'<p class="src-link">Source: <a href="{src_link}">{_esc(module_file)}:{begin}-{end}</a></p>'
-
     # Lean definition body — show natural def header + annotated body with
     # clickable identifiers.  Fall back to source file.
     if lean_def.annotated_body:
@@ -1778,7 +1788,7 @@ def generate_lean_page(lean_def: 'LeanDefinition', output_dir: Path,
             f'  {body_html}</pre>'
         )
         content += f'''
-    <h2>Definition</h2>
+    <h2>Elaborated Definition</h2>
     <details open>
       <summary>View definition</summary>
       {full_def_html}
@@ -1797,15 +1807,16 @@ def generate_lean_page(lean_def: 'LeanDefinition', output_dir: Path,
             body_text = "\n".join(body_lines)
             if body_text.strip():
                 content += f'''
-    <h2>Definition</h2>
+    <h2>Elaborated Definition</h2>
     <details open>
       <summary>View definition</summary>
       {_annotated_lean_block(body_text, known_fns or {})}
     </details>
     '''
 
-    # Step theorems
-    content += _render_theorem_sections(lean_def.step_theorems, known_fns=known_fns, depth=1)
+    # Step theorems (only show if there are any — Lean functions typically don't have specs)
+    if lean_def.step_theorems:
+        content += _render_theorem_sections(lean_def.step_theorems, known_fns=known_fns, depth=1)
 
     content += _page_footer(depth=1)
     (lean_dir / f"{lean_def.slug}.html").write_text(content)

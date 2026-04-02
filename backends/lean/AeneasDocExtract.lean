@@ -201,6 +201,8 @@ where
     Caller must ensure the Aeneas scoped namespaces are already activated. -/
 private def ppExprAnnotated (e : Expr) : MetaM (String × Array Json) := do
   let env ← getEnv
+  -- Show target types of coercions: ↑x becomes (↑x : TargetType)
+  withOptions (fun o => o.set `pp.coercions.types true) do
   try
     let fwi ← Meta.ppExprWithInfos e
     let plainText := toString fwi.fmt
