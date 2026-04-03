@@ -45,6 +45,9 @@ theorem «%S».checked_sub_bv_spec (x y : «%S») :
   have := core.num.checked_sub_UScalar_bv_spec x y
   simp_all [«%S».checked_sub, «%S».bv]
   cases h: core.num.checked_sub_UScalar x y <;> simp_all
+  obtain ⟨left, right⟩ := this
+  obtain ⟨left_1, right⟩ := right
+  rfl
 
 /-!
 Signed checked sub
@@ -68,5 +71,11 @@ theorem «%S».checked_sub_bv_spec (x y : «%S») :
   have := core.num.checked_sub_IScalar_bv_spec x y
   simp_all only [IScalar.min, IScalar.max, «%S».bv, «%S».min, «%S».max, «%S».numBits]
   cases h: core.num.checked_sub_IScalar x y <;> simp_all only <;> simp
+  simp_all only [IScalarTy.I8_numBits_eq, Nat.add_one_sub_one, Int.reducePow, Int.reduceNeg, neg_le_sub_iff_le_add,
+    Int.reduceSub, tsub_le_iff_right]
+  obtain ⟨left, right⟩ := this
+  obtain ⟨left_1, right⟩ := right
+  obtain ⟨left_2, right⟩ := right
+  rfl
 
 end Aeneas.Std

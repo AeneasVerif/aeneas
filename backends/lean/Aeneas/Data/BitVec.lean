@@ -436,34 +436,40 @@ theorem BitVec.fromLEBytes_getElem! (v : List Byte) (j : ℕ) :
   (BitVec.fromLEBytes v)[j]! = v[j / 8]!.testBit (j % 8) := by
   unfold BitVec.fromLEBytes
   match hv: v with
-  | [] => simp only [List.length_nil, Nat.mul_zero, zero_le, getElem!_eq_false,
-    List.getElem!_default, Byte.testBit_default]
+  | [] =>
+    subst hv
+    simp_all only [List.length_nil, Nat.mul_zero, _root_.not_lt_zero, not_false_eq_true, getElem!_neg,
+      Byte.testBit_default]
+    rfl
   | x :: v' =>
-    simp only [List.length_cons, getElem!_or]
+    simp only [List.length_cons]
     by_cases hj: j < 8
     . have : j < 8 * (v'.length + 1) := by scalar_tac
       simp_lists
-      simp only [getElem!_eq_testBit_toNat, toNat_setWidth, Nat.testBit_mod_two_pow, decide_true,
-        Bool.true_and, this]
       have : j % 8 = j := by apply Nat.mod_eq_of_lt; omega
       simp only [this]
+      subst hv
+      simp_all only [Nat.mod_succ_eq_iff_lt, Nat.succ_eq_add_one, Nat.reduceAdd]
+      grind only [= getElem!_pos, = getElem!_or, = Nat.testBit_eq_decide_div_mod_eq,
+        =_ getElem_eq_testBit_toNat, = getElem!_shiftLeft_false, = getElem_or, = getElem_setWidth,
+        = getLsbD_eq_getElem, #283d]
     . have : 0 < j / 8 := by scalar_tac +nonLin
       simp_lists
-      simp only [getElem!_eq_testBit_toNat, toNat_setWidth, Nat.testBit_mod_two_pow,
-        toNat_shiftLeft, Nat.ofNat_pos, mul_lt_mul_iff_right₀, lt_add_iff_pos_right, Nat.lt_one_iff,
-        pos_of_gt, toNat_mod_cancel_of_lt, Nat.testBit_shiftLeft, ge_iff_le]
+      simp_all only [not_lt, Nat.div_pos_iff, Nat.ofNat_pos, _root_.and_self]
       have : 8 ≤ j := by omega
-      simp only [this, decide_true, Bool.true_and]
+      simp_all only
       have := BitVec.fromLEBytes_getElem! v' (j - 8)
       simp only [getElem!_eq_testBit_toNat] at this
-      simp only [this]
       simp_lists
       by_cases hj': j < 8 * (v'.length + 1)
-      . simp [hj']
-        have h0 : (j - 8) / 8 = (j / 8) - 1 := by omega
+      . have h0 : (j - 8) / 8 = (j / 8) - 1 := by omega
         have h1 : (j - 8) % 8 = j % 8 := by omega
-        simp only [h0, h1]
-      . simp_lists
+        grind only [=_ getElem_eq_testBit_toNat, = getElem!_or, = getElem!_pos,
+          = getElem!_shiftLeft_eq, = getElem_setWidth, = getLsbD_of_ge, = getLsbD_eq_getElem, #99b0]
+      . subst hv
+        simp_all only [not_lt]
+        simp_lists
+        grind only [= getElem!_eq_false]
 
 @[simp, simp_lists_safe, grind =, agrind =]
 theorem BitVec.fromLEBytes_toLEBytes {w : ℕ} (h : w % 8 = 0) (b : BitVec w) :

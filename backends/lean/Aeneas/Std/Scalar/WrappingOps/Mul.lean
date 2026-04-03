@@ -33,11 +33,11 @@ def core.num.«%S».wrapping_mul : «%S» → «%S» → «%S»  := @IScalar.wra
 
 uscalar @[simp, bvify, grind =, agrind =] theorem «%S».wrapping_mul_bv_eq (x y : «%S») :
   («%S».wrapping_mul x y).bv = x.bv * y.bv := by
-  simp [«%S».wrapping_mul]
+  unfold «%S».wrapping_mul; rfl
 
 uscalar @[simp, bvify, grind =, agrind =] theorem core.num.«%S».wrapping_mul_bv_eq (x y : «%S») :
   (core.num.«%S».wrapping_mul x y).bv = x.bv * y.bv := by
-  simp [core.num.«%S».wrapping_mul]
+  unfold core.num.«%S».wrapping_mul; rfl
 
 @[simp, bvify, grind =, agrind =] theorem IScalar.wrapping_mul_bv_eq {ty} (x y : IScalar ty) :
   (wrapping_mul x y).bv = x.bv * y.bv := by
@@ -45,11 +45,11 @@ uscalar @[simp, bvify, grind =, agrind =] theorem core.num.«%S».wrapping_mul_b
 
 iscalar @[simp, bvify, grind =, agrind =] theorem «%S».wrapping_mul_bv_eq (x y : «%S») :
   («%S».wrapping_mul x y).bv = x.bv * y.bv := by
-  simp [«%S».wrapping_mul]
+  unfold «%S».wrapping_mul; rfl
 
 iscalar @[simp, bvify, grind =, agrind =] theorem core.num.«%S».wrapping_mul_bv_eq (x y : «%S») :
   (core.num.«%S».wrapping_mul x y).bv = x.bv * y.bv := by
-  simp [core.num.«%S».wrapping_mul]
+  unfold core.num.«%S».wrapping_mul; rfl
 
 @[simp] theorem UScalar.wrapping_mul_val_eq {ty} (x y : UScalar ty) :
   (wrapping_mul x y).val = (x.val * y.val) % (UScalar.size ty) := by
