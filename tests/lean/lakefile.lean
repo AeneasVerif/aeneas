@@ -11,6 +11,7 @@ package «tests» {}
 @[default_target] lean_lib ArraysDefs
 @[default_target] lean_lib ArraySliceIndex
 @[default_target] lean_lib AsMut
+@[default_target] lean_lib AssertCfg
 @[default_target] lean_lib Avl
 @[default_target] lean_lib BaseTutorial
 @[default_target] lean_lib Bitwise
