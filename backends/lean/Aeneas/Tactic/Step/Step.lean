@@ -394,7 +394,10 @@ def tryMatch (isLet : Bool) (th : Expr) :
   let specMonoBindTy ← inferType specMonoBind
   let goalTy ← mgoal.getType
   trace[Step] "About to check defeq:\n- specMonoBindTy: {specMonoBindTy}\n- goalTy: {goalTy}"
-  let ok ← isDefEq specMonoBindTy goalTy
+  /- We need to control transparency.
+
+     See: https://github.com/AeneasVerif/aeneas/issues/897 -/
+  let ok ← withTransparency .instances <| isDefEq specMonoBindTy goalTy
   if ¬ ok then
     trace[Step] "Could not unify the theorem with the target"
     throwError "Could not unify the theorem with the target:\n- theorem: {specMonoBindTy}\n- target: {goalTy}"
