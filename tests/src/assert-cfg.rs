@@ -220,3 +220,36 @@ fn poly_element_mul_and_accumulate(
         pa_dst[2 * i + 1] = c1;
     }
 }
+
+fn montgomery_reduce_and_add_poly_element_accumulator_to_poly_element(
+    pa_src: &mut PolyElementAccumulator,
+    pe_dst: &mut PolyElement,
+) {
+    for i in 0usize..MLWE_POLYNOMIAL_COEFFICIENTS {
+        let mut a: u32 = pa_src[i];
+        assert!(a <= 4 * ((3328 * 3328) + (3494 * 3312)));
+        pa_src[i] = 0;
+
+        let mut c: u32 = pe_dst[i].into();
+        assert!(c < Q);
+
+        // montgomery reduce sum of products
+        let inv = (a.wrapping_mul(NEG_Q_INV_MOD_R)) & RMASK;
+        a = (a + (inv * Q)) >> RLOG2; // in range [0, 4711]
+        assert!(a <= 4711);
+
+        // add destination
+        c += a;
+        assert!(c <= 8039);
+
+        // subtraction and conditional additions for constant time range reduction
+        c = c.wrapping_sub(2 * Q); // in range [-2Q, 1381]
+        assert!((c >= ((-2 * (Q as i32)) as u32)) || (c < 1381));
+        c = c.wrapping_add(Q & (c >> 16)); // in range [-Q, Q-1]
+        assert!((c >= (-(Q as i32) as u32)) || (c < Q));
+        c = c.wrapping_add(Q & (c >> 16)); // in range [0, Q-1]
+        assert!(c < Q);
+
+        pe_dst[i] = c as u16;
+    }
+}

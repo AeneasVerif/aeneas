@@ -108,7 +108,8 @@ def assert_or_call : Result Unit := do
   let b ← get_b0
   if b
   then ok ()
-  else let b1 ← get_b1
+  else do
+       let b1 ← get_b1
        massert b1
   f
 
@@ -138,7 +139,8 @@ def assert_not_or_call : Result Unit := do
 def assert_not_and_call : Result Unit := do
   let b ← get_b0
   if b
-  then let b1 ← get_b1
+  then do
+       let b1 ← get_b1
        massert (¬ b1)
   else ok ()
   f
@@ -149,7 +151,8 @@ def assert_not_and_call : Result Unit := do
 def assert_not_b0_or_b1_call : Result Unit := do
   let b ← get_b0
   if b
-  then let b1 ← get_b1
+  then do
+       let b1 ← get_b1
        massert b1
   else ok ()
   f
@@ -161,7 +164,8 @@ def assert_b0_or_not_b1_call : Result Unit := do
   let b ← get_b0
   if b
   then ok ()
-  else let b1 ← get_b1
+  else do
+       let b1 ← get_b1
        massert (¬ b1)
   f
 
@@ -171,7 +175,8 @@ def assert_b0_or_not_b1_call : Result Unit := do
 def assert_not_b0_or_not_b1_call : Result Unit := do
   let b ← get_b0
   if b
-  then let b1 ← get_b1
+  then do
+       let b1 ← get_b1
        massert (¬ b1)
   else ok ()
   f
@@ -408,5 +413,92 @@ def poly_element_mul_and_accumulate
   let i ← MLWE_POLYNOMIAL_COEFFICIENTS / 2#usize
   poly_element_mul_and_accumulate_loop { start := 0#usize, «end» := i }
     pe_src1 pe_src2 pa_dst
+
+/-- [assert_cfg::montgomery_reduce_and_add_poly_element_accumulator_to_poly_element]: loop body 0:
+    Source: 'tests/src/assert-cfg.rs', lines 228:4-254:5 -/
+@[rust_loop_body]
+def
+  montgomery_reduce_and_add_poly_element_accumulator_to_poly_element_loop.body
+  (iter : core.ops.range.Range Std.Usize) (pa_src : Array Std.U32 256#usize)
+  (pe_dst : Array Std.U16 256#usize) :
+  Result (ControlFlow ((core.ops.range.Range Std.Usize) × (Array Std.U32
+    256#usize) × (Array Std.U16 256#usize)) ((Array Std.U32 256#usize) ×
+    (Array Std.U16 256#usize)))
+  := do
+  let (o, iter1) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepUsize iter
+  match o with
+  | none => ok (done (pa_src, pe_dst))
+  | some i =>
+    let a ← Array.index_usize pa_src i
+    let i1 ← 3328#u32 * 3328#u32
+    let i2 ← 3494#u32 * 3312#u32
+    let i3 ← i1 + i2
+    let i4 ← 4#u32 * i3
+    massert (a <= i4)
+    let (_, index_mut_back) ← Array.index_mut_usize pa_src i
+    let i5 ← Array.index_usize pe_dst i
+    let c ← core.convert.IntoFrom.into core.convert.FromU32U16 i5
+    massert (c < Q)
+    let i6 ← lift (core.num.U32.wrapping_mul a NEG_Q_INV_MOD_R)
+    let inv ← lift (i6 &&& RMASK)
+    let i7 ← inv * Q
+    let i8 ← a + i7
+    let a1 ← i8 >>> RLOG2
+    massert (a1 <= 4711#u32)
+    let c1 ← c + a1
+    massert (c1 <= 8039#u32)
+    let i9 ← 2#u32 * Q
+    let c2 ← lift (core.num.U32.wrapping_sub c1 i9)
+    let i10 ← lift (UScalar.hcast .I32 Q)
+    let i11 ← (-2)#i32 * i10
+    let i12 ← lift (IScalar.hcast .U32 i11)
+    let iter2 ←
+      do
+      massert ((c2 >= i12) || (c2 < 1381#u32))
+      if c2 >= i12
+      then ok iter1
+      else ok iter1
+    let i13 ← c2 >>> 16#i32
+    let i14 ← lift (Q &&& i13)
+    let c3 ← lift (core.num.U32.wrapping_add c2 i14)
+    let i15 ← lift (UScalar.hcast .I32 Q)
+    let i16 ← -. i15
+    let i17 ← lift (IScalar.hcast .U32 i16)
+    if c3 >= i17
+    then ok ()
+    else massert (c3 < Q)
+    let i18 ← c3 >>> 16#i32
+    let i19 ← lift (Q &&& i18)
+    let c4 ← lift (core.num.U32.wrapping_add c3 i19)
+    massert (c4 < Q)
+    let i20 ← lift (UScalar.cast .U16 c4)
+    let a2 ← Array.update pe_dst i i20
+    let a3 := index_mut_back 0#u32
+    ok (cont (iter2, a3, a2))
+
+/-- [assert_cfg::montgomery_reduce_and_add_poly_element_accumulator_to_poly_element]: loop 0:
+    Source: 'tests/src/assert-cfg.rs', lines 228:4-254:5 -/
+@[rust_loop]
+def montgomery_reduce_and_add_poly_element_accumulator_to_poly_element_loop
+  (iter : core.ops.range.Range Std.Usize) (pa_src : Array Std.U32 256#usize)
+  (pe_dst : Array Std.U16 256#usize) :
+  Result ((Array Std.U32 256#usize) × (Array Std.U16 256#usize))
+  := do
+  loop
+    (fun (iter1, pa_src1, pe_dst1) =>
+      montgomery_reduce_and_add_poly_element_accumulator_to_poly_element_loop.body
+      iter1 pa_src1 pe_dst1)
+    (iter, pa_src, pe_dst)
+
+/-- [assert_cfg::montgomery_reduce_and_add_poly_element_accumulator_to_poly_element]:
+    Source: 'tests/src/assert-cfg.rs', lines 224:0-255:1 -/
+@[reducible]
+def montgomery_reduce_and_add_poly_element_accumulator_to_poly_element
+  (pa_src : Array Std.U32 256#usize) (pe_dst : Array Std.U16 256#usize) :
+  Result ((Array Std.U32 256#usize) × (Array Std.U16 256#usize))
+  := do
+  montgomery_reduce_and_add_poly_element_accumulator_to_poly_element_loop
+    { start := 0#usize, «end» := MLWE_POLYNOMIAL_COEFFICIENTS } pa_src pe_dst
 
 end assert_cfg

@@ -1368,9 +1368,14 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
             (ctx, end_let))
           else (ctx, fun _ -> ())
         in
-        (* Print the bound expression *)
+        (* Print the bound expression. *)
         F.pp_open_hovbox fmt ctx.indent_incr;
-        extract_texpr span ctx fmt ~inside:false ~inside_do:monadic re;
+        let inside_do_rhs =
+          match backend () with
+          | Lean -> false
+          | _ -> monadic
+        in
+        extract_texpr span ctx fmt ~inside:false ~inside_do:inside_do_rhs re;
         F.pp_close_box fmt ();
         (ctx, end_let)
     in
