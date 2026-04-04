@@ -8,7 +8,7 @@ open Result WP
 
 @[step]
 theorem massert_spec (b : Prop) [Decidable b] (h : b) :
-  massert b ⦃ _ => True ⦄ := by
+  massert b ⦃ _ => b ⦄ := by
   simp [massert, *]
 
 @[simp, step_pre_simps, bvify]
