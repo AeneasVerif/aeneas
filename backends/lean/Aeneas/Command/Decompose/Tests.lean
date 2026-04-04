@@ -125,3 +125,20 @@ def test6 (x : Nat) : Nat :=
 #print axioms test4_eq
 #print axioms test5_eq
 #print axioms test6_eq
+
+-- ============================================================================
+-- Test 8: Noncomputable functions
+-- ============================================================================
+
+noncomputable opaque wipeSlice : Slice U8 → Result Unit
+
+noncomputable def test8 (x : U32) (s : Slice U8) : Result U32 := do
+  let a ← x + 1#u32
+  let _ ← wipeSlice s
+  a + 2#u32
+
+#decompose test8 test8_eq
+full => test8_body
+
+-- Verify
+#print axioms test8_eq

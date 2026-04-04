@@ -193,26 +193,46 @@ def filterRelevantFVars (e : Expr) (available : Array Expr) : MetaM (Array Expr)
   available.filterM fun fv => pure (e.containsFVar fv.fvarId!)
 
 -- ============================================================================
+-- Helpers: adding definitions (with noncomputable fallback)
+-- ============================================================================
+
+/-- Check if an expression transitively references any noncomputable or opaque constant. -/
+private def hasNoncomputableDep (env : Environment) (e : Expr) : Bool :=
+  e.foldConsts false fun n acc =>
+    acc || isNoncomputable env n ||
+    match env.find? n with
+    | some (.opaqueInfo _) => true
+    | _ => false
+
+/-- Add a definition. Uses `addAndCompile` + realizations when possible (for simp
+    unfolding). Falls back to `addDecl` + noncomputable tag when the value depends
+    on noncomputable or opaque constants (which cause deferred IR errors). -/
+private def addDefinition (name : Name) (levelParams : List Name)
+    (type value : Expr) (srcIsNoncomputable : Bool) : MetaM Unit := do
+  let decl : DefinitionVal := {
+    name, levelParams, type, value,
+    hints := .abbrev, safety := .safe, all := [name]
+  }
+  let env ← getEnv
+  if srcIsNoncomputable || hasNoncomputableDep env value then
+    addDecl (.defnDecl decl)
+    modifyEnv fun env' => noncomputableExt.tag env' name
+  else
+    addAndCompile (.defnDecl decl)
+    Lean.enableRealizationsForConst name
+
+-- ============================================================================
 -- Core extraction: `full`
 -- ============================================================================
 
 /-- Extract the whole expression as a new definition.
     Returns the call expression that replaces it. -/
 def extractFull (body : Expr) (newName : Name) (availableFVars : Array Expr)
-    (levelParams : List Name) : MetaM Expr := do
+    (levelParams : List Name) (srcIsNoncomputable : Bool) : MetaM Expr := do
   let relevantFVars ← filterRelevantFVars body availableFVars
   let fnValue ← mkLambdaFVars relevantFVars body
   let fnType  ← mkForallFVars relevantFVars (← inferType body)
-  addAndCompile (.defnDecl {
-    name        := newName
-    levelParams := levelParams
-    type        := fnType
-    value       := fnValue
-    hints       := .abbrev
-    safety      := .safe
-    all         := [newName]
-  })
-  Lean.enableRealizationsForConst newName
+  addDefinition newName levelParams fnType fnValue srcIsNoncomputable
   return mkAppN (mkConst newName (levelParams.map Level.param)) relevantFVars
 
 -- ============================================================================
@@ -223,7 +243,7 @@ def extractFull (body : Expr) (newName : Name) (availableFVars : Array Expr)
     Returns the **full** modified body (wrapping bindings before the range too). -/
 def extractLetRange (bindings : Array BindingEntry) (terminal : Expr)
     (start count : Nat) (newName : Name) (fnParams : Array Expr)
-    (levelParams : List Name) : MetaM Expr := do
+    (levelParams : List Name) (srcIsNoncomputable : Bool) : MetaM Expr := do
   let n := bindings.size            -- number of actual bindings
   let totalPositions := n + 1       -- bindings + terminal
   let endPos := start + count
@@ -249,11 +269,7 @@ def extractLetRange (bindings : Array BindingEntry) (terminal : Expr)
     let relevantFVars ← filterRelevantFVars fnValue outerFVars
     let fnValueClosed ← mkLambdaFVars relevantFVars fnValue
     let fnTypeClosed  ← mkForallFVars relevantFVars (← inferType fnValue)
-    addAndCompile (.defnDecl {
-      name := newName, levelParams, type := fnTypeClosed, value := fnValueClosed,
-      hints := .abbrev, safety := .safe, all := [newName]
-    })
-    Lean.enableRealizationsForConst newName
+    addDefinition newName levelParams fnTypeClosed fnValueClosed srcIsNoncomputable
     return mkAppN (mkConst newName (levelParams.map Level.param)) relevantFVars
 
   if includesTerminal then
@@ -271,7 +287,16 @@ def extractLetRange (bindings : Array BindingEntry) (terminal : Expr)
 
     if neededFVars.size == 1 && neededFVars[0]!.fvarId! == lastEntry.fvar.fvarId! then
       -- ── Optimized: only the last variable is needed ──────────────────
-      let extractedBody ← rebuildBindings bindings lastEntry.value start (endPos - 1)
+      -- Build the extracted body: all bindings in [start, endPos-1], with
+      -- the last binding's value as the terminal. If the last binding is
+      -- pure but the range has monadic bindings, wrap in `pure`.
+      let termVal := lastEntry.value
+      let needsWrap := hasMonadic && !lastEntry.isMonadic
+      let extractedTerminal ← if needsWrap then do
+        let some monadExpr ← getMonadExpr | throwError "letRange: no monad found for pure"
+        mkAppOptM ``Pure.pure #[some monadExpr, none, none, some termVal]
+      else pure termVal
+      let extractedBody ← rebuildBindings bindings extractedTerminal start (endPos - 1)
       let callExpr ← addDef extractedBody
       if hasMonadic then
         let cont ← mkLambdaFVars #[lastEntry.fvar] contExpr
@@ -286,13 +311,21 @@ def extractLetRange (bindings : Array BindingEntry) (terminal : Expr)
 
     else if neededFVars.size == 0 then
       -- ── No variables needed (side-effect only range) ─────────────────
-      let extractedBody ← rebuildBindings bindings lastEntry.value start (endPos - 1)
-      let callExpr ← addDef extractedBody
+      -- Build the extracted body from all range bindings. The terminal is
+      -- the last binding's value (for a single monadic binding) or we
+      -- need to rebuild the full range with `pure ()` as terminal.
       if hasMonadic then
+        -- Rebuild ALL range bindings with `pure ()` as terminal
+        let some monadExpr ← getMonadExpr | throwError "letRange: no monad found for pure"
+        let pureUnit ← mkAppOptM ``Pure.pure #[some monadExpr, none, none, some (mkConst ``PUnit.unit)]
+        let extractedBody ← rebuildBindings bindings pureUnit start endPos
+        let callExpr ← addDef extractedBody
         let cont ← mkLambdaFVars #[lastEntry.fvar] contExpr
         let replacement ← mkAppM ``Bind.bind #[callExpr, cont]
         rebuildBindings bindings replacement 0 start
       else
+        let extractedBody ← rebuildBindings bindings lastEntry.value start (endPos - 1)
+        let _callExpr ← addDef extractedBody
         rebuildBindings bindings contExpr 0 start
 
     else
@@ -321,11 +354,11 @@ def extractLetRange (bindings : Array BindingEntry) (terminal : Expr)
           let fvType ← inferType fv
           let fvName ← fv.fvarId!.getUserName
           -- Abstract fv out of result, then wrap in let
-          let abst ← mkLambdaFVars #[fv] result
+          let abst ← mkLambdaFVars #[fv] result (usedLetOnly := false)
           match abst with
           | .lam _ _ lamBody _ =>
             result := .letE fvName fvType proj lamBody false
-          | _ => throwError "#decompose: unexpected non-lambda from mkLambdaFVars"
+          | _ => throwError "#decompose: unexpected expression from mkLambdaFVars (expected lambda)"
         return result
 
       if hasMonadic then do
@@ -458,34 +491,35 @@ partial def modifyBindingValue (e : Expr) (idx : Nat)
 /-- Apply one decompose clause: navigate with the pattern, extract, replace.
     Returns the modified function body. -/
 partial def applyClause (body : Expr) (pat : DecomposePattern) (newName : Name)
-    (fnParams : Array Expr) (levelParams : List Name) : MetaM Expr := do
+    (fnParams : Array Expr) (levelParams : List Name)
+    (srcIsNoncomputable : Bool) : MetaM Expr := do
   match pat with
   | .full =>
-    extractFull body newName fnParams levelParams
+    extractFull body newName fnParams levelParams srcIsNoncomputable
 
   | .letRange start count =>
     withParsedBindings body #[] fun bindings terminal => do
-      extractLetRange bindings terminal start count newName fnParams levelParams
+      extractLetRange bindings terminal start count newName fnParams levelParams srcIsNoncomputable
 
   | .letAt idx inner =>
     modifyBindingValue body idx fun value => do
-      applyClause value inner newName fnParams levelParams
+      applyClause value inner newName fnParams levelParams srcIsNoncomputable
 
   | .branch idx inner =>
     modifyBranch body idx fun branchBody => do
-      applyClause branchBody inner newName fnParams levelParams
+      applyClause branchBody inner newName fnParams levelParams srcIsNoncomputable
 
   | .lam n inner =>
     modifyUnderLambdas body n fun innerBody => do
-      applyClause innerBody inner newName fnParams levelParams
+      applyClause innerBody inner newName fnParams levelParams srcIsNoncomputable
 
   | .appFun inner =>
     modifyAppFun body fun fn => do
-      applyClause fn inner newName fnParams levelParams
+      applyClause fn inner newName fnParams levelParams srcIsNoncomputable
 
   | .argArg idx inner =>
     modifyAppArg body idx fun arg => do
-      applyClause arg inner newName fnParams levelParams
+      applyClause arg inner newName fnParams levelParams srcIsNoncomputable
 
 -- ============================================================================
 -- Proof generation
@@ -517,12 +551,28 @@ def proveStep (goalType : Expr) (newFnName : Name) : TermElabM Expr := do
     simpNames := simpNames.push baEq
   if let some pb ← findLemma #[`LawfulMonad.pure_bind, `pure_bind] then
     simpNames := simpNames.push pb
-  -- Strategy 1: simp only [f_i, bind_assoc_eq]
+  -- Strategy 1: simp only [f_i, bind_assoc_eq, pure_bind]
   try
     let remaining ← Lean.Elab.Tactic.run mvarId do
       let lemmas ← simpNames.mapM fun n =>
         `(Lean.Parser.Tactic.simpLemma| $(mkIdent n):term)
       Lean.Elab.Tactic.evalTactic (← `(tactic| simp only [$[$lemmas],*]))
+    if remaining.isEmpty then
+      return ← instantiateMVars mvar
+  catch _ => pure ()
+  -- Strategy 2: unfold + simp (for noncomputable defs where simp only fails)
+  try
+    let remaining ← Lean.Elab.Tactic.run mvarId do
+      Lean.Elab.Tactic.evalTactic
+        (← `(tactic| unfold $(mkIdent newFnName)))
+      let lemmas ← simpNames.filterMapM fun n => do
+        if n != newFnName then
+          some <$> `(Lean.Parser.Tactic.simpLemma| $(mkIdent n):term)
+        else pure none
+      if lemmas.isEmpty then
+        Lean.Elab.Tactic.evalTactic (← `(tactic| rfl))
+      else
+        Lean.Elab.Tactic.evalTactic (← `(tactic| simp only [$[$lemmas],*]))
     if remaining.isEmpty then
       return ← instantiateMVars mvar
   catch _ => pure ()
@@ -548,6 +598,7 @@ def elabDecompose : CommandElab := fun stx => do
         | _ => throwError "{fnName} is not a definition"
       let _fnType := info.type
       let levelParams := info.levelParams
+      let srcIsNoncomputable := isNoncomputable env fnName
 
       -- Parse all clauses
       let mut parsedClauses : Array (DecomposePattern × Name) := #[]
@@ -571,7 +622,7 @@ def elabDecompose : CommandElab := fun stx => do
         -- Apply each clause sequentially; prove each step
         for (pat, newName) in parsedClauses do
           let prevBody := currentBody
-          currentBody ← applyClause currentBody pat newName params levelParams
+          currentBody ← applyClause currentBody pat newName params levelParams srcIsNoncomputable
 
           -- Prove: ∀ params, prevBody = currentBody
           let stepEqType ← mkForallFVars params (← mkEq prevBody currentBody)
