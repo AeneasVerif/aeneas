@@ -29,6 +29,7 @@ package «tests» {}
 @[default_target] lean_lib Deref
 @[default_target] lean_lib Discriminant
 @[default_target] lean_lib Drop
+@[default_target] lean_lib DropBug
 @[default_target] lean_lib Dyn
 @[default_target] lean_lib DynamicSize
 @[default_target] lean_lib FromTo
