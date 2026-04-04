@@ -94,6 +94,18 @@ theorem core.num.«%S».overflowing_add_assoc(x y z : «%S») :
   (overflowing_add (overflowing_add x y).1 z).1 = (overflowing_add x (overflowing_add y z).1).1 :=
   UScalar.overflowing_add_assoc x y z
 
+def UScalar.overflowing_sub {ty} (x y : UScalar ty) : UScalar ty × Bool :=
+  (⟨ x.bv - y.bv ⟩, x.val < y.val)
+
+def IScalar.overflowing_sub {ty} (x y : IScalar ty) : IScalar ty × Bool :=
+  (⟨ x.bv - y.bv ⟩,
+     ¬ (-2^(ty.numBits -1) ≤ x.val - y.val ∧ x.val - y.val < 2^(ty.numBits-1)))
+
+/- [core::num::{u8}::overflowing_sub] -/
+uscalar def core.num.«%S».overflowing_sub := @UScalar.overflowing_sub .«%S»
+
+/- [core::num::{i8}::overflowing_sub] -/
+iscalar def core.num.«%S».overflowing_sub := @IScalar.overflowing_sub .«%S»
 
 
 end Aeneas.Std
