@@ -206,4 +206,207 @@ def assert_not_b0_and_not_b1_call : Result Unit := do
   massert (¬ b1)
   f
 
+/-- [assert_cfg::assert_lt]:
+    Source: 'tests/src/assert-cfg.rs', lines 119:0-122:1
+    Visibility: public -/
+def assert_lt (x : Std.U32) : Result Unit := do
+  massert (x < 10#u32)
+  f
+
+/-- [assert_cfg::assert_le]:
+    Source: 'tests/src/assert-cfg.rs', lines 124:0-127:1
+    Visibility: public -/
+def assert_le (x : Std.U32) : Result Unit := do
+  massert (x <= 3494#u32)
+  f
+
+/-- [assert_cfg::assert_gt]:
+    Source: 'tests/src/assert-cfg.rs', lines 129:0-132:1
+    Visibility: public -/
+def assert_gt (x : Std.U32) : Result Unit := do
+  massert (x > 0#u32)
+  f
+
+/-- [assert_cfg::assert_ge]:
+    Source: 'tests/src/assert-cfg.rs', lines 134:0-137:1
+    Visibility: public -/
+def assert_ge (x : Std.U32) : Result Unit := do
+  massert (x >= 1#u32)
+  f
+
+/-- [assert_cfg::assert_eq]:
+    Source: 'tests/src/assert-cfg.rs', lines 139:0-142:1
+    Visibility: public -/
+def assert_eq (x : Std.U32) : Result Unit := do
+  massert (x = 42#u32)
+  f
+
+/-- [assert_cfg::assert_ne]:
+    Source: 'tests/src/assert-cfg.rs', lines 144:0-147:1
+    Visibility: public -/
+def assert_ne (x : Std.U32) : Result Unit := do
+  massert (x != 0#u32)
+  f
+
+/-- [assert_cfg::assert_arith]:
+    Source: 'tests/src/assert-cfg.rs', lines 149:0-152:1
+    Visibility: public -/
+def assert_arith (x : Std.U32) (y : Std.U32) : Result Unit := do
+  let i ← x + y
+  massert (i < 100#u32)
+  f
+
+/-- [assert_cfg::MLWE_POLYNOMIAL_COEFFICIENTS]
+    Source: 'tests/src/assert-cfg.rs', lines 156:0-156:48 -/
+@[global_simps, irreducible]
+def MLWE_POLYNOMIAL_COEFFICIENTS : Std.Usize := 256#usize
+
+/-- [assert_cfg::Q]
+    Source: 'tests/src/assert-cfg.rs', lines 159:0-159:20 -/
+@[global_simps, irreducible] def Q : Std.U32 := 3329#u32
+
+/-- [assert_cfg::RLOG2]
+    Source: 'tests/src/assert-cfg.rs', lines 160:0-160:22 -/
+@[global_simps, irreducible] def RLOG2 : Std.U32 := 16#u32
+
+/-- [assert_cfg::RMASK]
+    Source: 'tests/src/assert-cfg.rs', lines 161:0-161:26 -/
+@[global_simps, irreducible] def RMASK : Std.U32 := 65535#u32
+
+/-- [assert_cfg::NEG_Q_INV_MOD_R]
+    Source: 'tests/src/assert-cfg.rs', lines 162:0-162:34 -/
+@[global_simps, irreducible] def NEG_Q_INV_MOD_R : Std.U32 := 3327#u32
+
+/-- [assert_cfg::MATRIX_MAX_NROWS]
+    Source: 'tests/src/assert-cfg.rs', lines 163:0-163:34 -/
+@[global_simps, irreducible] def MATRIX_MAX_NROWS : Std.Usize := 4#usize
+
+/-- [assert_cfg::ZETA_TO_TIMES_BIT_REV_PLUS_1_TIMES_R]
+    Source: 'tests/src/assert-cfg.rs', lines 165:0-174:2 -/
+@[global_simps, irreducible]
+def ZETA_TO_TIMES_BIT_REV_PLUS_1_TIMES_R : Array Std.U16 128#usize :=
+  Array.make 128#usize [
+    2226#u16, 1103#u16, 430#u16, 2899#u16, 555#u16, 2774#u16, 843#u16,
+    2486#u16, 2078#u16, 1251#u16, 871#u16, 2458#u16, 1550#u16, 1779#u16,
+    105#u16, 3224#u16, 422#u16, 2907#u16, 587#u16, 2742#u16, 177#u16, 3152#u16,
+    3094#u16, 235#u16, 3038#u16, 291#u16, 2869#u16, 460#u16, 1574#u16,
+    1755#u16, 1653#u16, 1676#u16, 3083#u16, 246#u16, 778#u16, 2551#u16,
+    1159#u16, 2170#u16, 3182#u16, 147#u16, 2552#u16, 777#u16, 1483#u16,
+    1846#u16, 2727#u16, 602#u16, 1119#u16, 2210#u16, 1739#u16, 1590#u16,
+    644#u16, 2685#u16, 2457#u16, 872#u16, 349#u16, 2980#u16, 418#u16, 2911#u16,
+    329#u16, 3000#u16, 3173#u16, 156#u16, 3254#u16, 75#u16, 817#u16, 2512#u16,
+    1097#u16, 2232#u16, 603#u16, 2726#u16, 610#u16, 2719#u16, 1322#u16,
+    2007#u16, 2044#u16, 1285#u16, 1864#u16, 1465#u16, 384#u16, 2945#u16,
+    2114#u16, 1215#u16, 3193#u16, 136#u16, 1218#u16, 2111#u16, 1994#u16,
+    1335#u16, 2455#u16, 874#u16, 220#u16, 3109#u16, 2142#u16, 1187#u16,
+    1670#u16, 1659#u16, 2144#u16, 1185#u16, 1799#u16, 1530#u16, 2051#u16,
+    1278#u16, 794#u16, 2535#u16, 1819#u16, 1510#u16, 2475#u16, 854#u16,
+    2459#u16, 870#u16, 478#u16, 2851#u16, 3221#u16, 108#u16, 3021#u16, 308#u16,
+    996#u16, 2333#u16, 991#u16, 2338#u16, 958#u16, 2371#u16, 1869#u16,
+    1460#u16, 1522#u16, 1807#u16, 1628#u16, 1701#u16
+    ]
+
+/-- [assert_cfg::poly_element_mul_and_accumulate]: loop body 0:
+    Source: 'tests/src/assert-cfg.rs', lines 181:4-221:5 -/
+@[rust_loop_body]
+def poly_element_mul_and_accumulate_loop.body
+  (pe_src1 : Array Std.U16 256#usize) (pe_src2 : Array Std.U16 256#usize)
+  (iter : core.ops.range.Range Std.Usize) (pa_dst : Array Std.U32 256#usize) :
+  Result (ControlFlow ((core.ops.range.Range Std.Usize) × (Array Std.U32
+    256#usize)) (Array Std.U32 256#usize))
+  := do
+  let (o, iter1) ←
+    core.iter.range.IteratorRange.next core.iter.range.StepUsize iter
+  match o with
+  | none => ok (done pa_dst)
+  | some i =>
+    let i1 ← 2#usize * i
+    let i2 ← Array.index_usize pe_src1 i1
+    let a0 ← core.convert.IntoFrom.into core.convert.FromU32U16 i2
+    massert (a0 < Q)
+    let i3 ← i1 + 1#usize
+    let i4 ← Array.index_usize pe_src1 i3
+    let a1 ← core.convert.IntoFrom.into core.convert.FromU32U16 i4
+    massert (a1 < Q)
+    let i5 ← Array.index_usize pe_src2 i1
+    let b0 ← core.convert.IntoFrom.into core.convert.FromU32U16 i5
+    massert (b0 < Q)
+    let i6 ← i1 + 1#usize
+    let i7 ← Array.index_usize pe_src2 i6
+    let b1 ← core.convert.IntoFrom.into core.convert.FromU32U16 i7
+    massert (b1 < Q)
+    let c0 ← Array.index_usize pa_dst i1
+    let i8 ← 3328#u32 * 3328#u32
+    let i9 ← 3494#u32 * 3312#u32
+    let i10 ← i8 + i9
+    let i11 ← 3#u32 * i10
+    massert (c0 <= i11)
+    let i12 ← i1 + 1#usize
+    let c1 ← Array.index_usize pa_dst i12
+    let i13 ← i8 + i9
+    let i14 ← 3#u32 * i13
+    massert (c1 <= i14)
+    let a0b0 ← a0 * b0
+    let a1b1 ← a1 * b1
+    let a0b1 ← a0 * b1
+    let a1b0 ← a1 * b0
+    let i15 ← lift (core.num.U32.wrapping_mul a1b1 NEG_Q_INV_MOD_R)
+    let inv ← lift (i15 &&& RMASK)
+    let i16 ← inv * Q
+    let i17 ← a1b1 + i16
+    let a1b11 ← i17 >>> RLOG2
+    massert (a1b11 <= 3494#u32)
+    let i18 ← Array.index_usize ZETA_TO_TIMES_BIT_REV_PLUS_1_TIMES_R i
+    let i19 ← lift (UScalar.cast .U32 i18)
+    let a1b1zetapow ← a1b11 * i19
+    let a0b01 ← a0b0 + a1b1zetapow
+    let i20 ← i8 + i9
+    massert (a0b01 <= i20)
+    let a0b11 ← a0b1 + a1b0
+    let i21 ← 2#u32 * 3328#u32
+    let i22 ← i21 * 3328#u32
+    massert (a0b11 <= i22)
+    let c01 ← c0 + a0b01
+    let i23 ← 4#u32 * 3328#u32
+    let i24 ← i23 * 3328#u32
+    let i25 ← 4#u32 * 3494#u32
+    let i26 ← i25 * 3312#u32
+    let i27 ← i24 + i26
+    massert (c01 < i27)
+    let c11 ← c1 + a0b11
+    let i28 ← 5#u32 * 3328#u32
+    let i29 ← i28 * 3328#u32
+    let i30 ← 3#u32 * 3494#u32
+    let i31 ← i30 * 3312#u32
+    let i32 ← i29 + i31
+    massert (c11 < i32)
+    let pa_dst1 ← Array.update pa_dst i1 c01
+    let i33 ← i1 + 1#usize
+    let a ← Array.update pa_dst1 i33 c11
+    ok (cont (iter1, a))
+
+/-- [assert_cfg::poly_element_mul_and_accumulate]: loop 0:
+    Source: 'tests/src/assert-cfg.rs', lines 181:4-221:5 -/
+@[rust_loop]
+def poly_element_mul_and_accumulate_loop
+  (iter : core.ops.range.Range Std.Usize) (pe_src1 : Array Std.U16 256#usize)
+  (pe_src2 : Array Std.U16 256#usize) (pa_dst : Array Std.U32 256#usize) :
+  Result (Array Std.U32 256#usize)
+  := do
+  loop
+    (fun (iter1, pa_dst1) => poly_element_mul_and_accumulate_loop.body pe_src1
+      pe_src2 iter1 pa_dst1)
+    (iter, pa_dst)
+
+/-- [assert_cfg::poly_element_mul_and_accumulate]:
+    Source: 'tests/src/assert-cfg.rs', lines 176:0-222:1 -/
+def poly_element_mul_and_accumulate
+  (pe_src1 : Array Std.U16 256#usize) (pe_src2 : Array Std.U16 256#usize)
+  (pa_dst : Array Std.U32 256#usize) :
+  Result (Array Std.U32 256#usize)
+  := do
+  let i ← MLWE_POLYNOMIAL_COEFFICIENTS / 2#usize
+  poly_element_mul_and_accumulate_loop { start := 0#usize, «end» := i }
+    pe_src1 pe_src2 pa_dst
+
 end assert_cfg
