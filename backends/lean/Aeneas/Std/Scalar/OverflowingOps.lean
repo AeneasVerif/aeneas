@@ -14,7 +14,7 @@ open ScalarElab
 def UScalar.overflowing_add {ty} (x y : UScalar ty) : UScalar ty × Bool :=
   (⟨ BitVec.ofNat _ (x.val + y.val) ⟩, 2^ty.numBits ≤ x.val + y.val)
 
-def IScalar.overflowing_add (ty : IScalarTy) (x y : IScalar ty) : IScalar ty × Bool :=
+def IScalar.overflowing_add {ty} (x y : IScalar ty) : IScalar ty × Bool :=
   (⟨ BitVec.ofInt _ (x.val + y.val) ⟩,
      ¬ (-2^(ty.numBits -1) ≤ x.val + y.val ∧ x.val + y.val < 2^(ty.numBits-1)))
 
@@ -61,5 +61,39 @@ theorem core.num.«%S».overflowing_add_eq (x y : «%S») :
   if x.val + y.val > UScalar.max .«%S» then z.fst.val + UScalar.size .«%S» = x.val + y.val ∧ z.snd = true
   else z.fst.val = x.val + y.val ∧ z.snd = false
   := UScalar.overflowing_add_eq x y
+
+
+theorem UScalar.overflowing_add_comm {ty} (x y : UScalar ty) :
+  overflowing_add x y = overflowing_add y x := by
+  simp[overflowing_add, Nat.add_comm]
+
+theorem IScalar.overflowing_add_comm {ty} (x y : IScalar ty) :
+  overflowing_add x y = overflowing_add y x := by
+  simp[IScalar.overflowing_add, Int.add_comm]
+
+uscalar
+theorem core.num.«%S».overflowing_add_comm(x y z : «%S») :
+  overflowing_add x y = overflowing_add y x := UScalar.overflowing_add_comm x y
+
+iscalar
+theorem core.num.«%S».overflowing_add_comm(x y z : «%S») :
+  overflowing_add x y = overflowing_add y x := IScalar.overflowing_add_comm x y
+
+theorem UScalar.overflowing_add_assoc {ty} (x y  z : UScalar ty) :
+  (overflowing_add (overflowing_add x y).1 z).1 = (overflowing_add x (overflowing_add y z).1).1 := by
+  simp [overflowing_add]
+  simp [@BitVec.ofNat_add, BitVec.add_assoc]
+
+theorem IScalar.overflowing_add_assoc {ty} (x y  z : IScalar ty) :
+  (overflowing_add (overflowing_add x y).1 z).1 = (overflowing_add x (overflowing_add y z).1).1 := by
+  simp [overflowing_add]
+  simp [@BitVec.ofInt_add, BitVec.add_assoc]
+
+uscalar
+theorem core.num.«%S».overflowing_add_assoc(x y z : «%S») :
+  (overflowing_add (overflowing_add x y).1 z).1 = (overflowing_add x (overflowing_add y z).1).1 :=
+  UScalar.overflowing_add_assoc x y z
+
+
 
 end Aeneas.Std
