@@ -496,13 +496,11 @@ and compute_back_ty_num_levels (span : Meta.span option)
     | TRef (r, rty, rkind) -> (
         match rkind with
         | RShared ->
-            (* Stop here *)
-            (* We just check there are no mutable references below the shared reference *)
-            [%cassert_opt_span] span
-              (not
-                 (TypesUtils.ty_has_mut_borrow_for_region_in_pred type_infos
-                    keep_region rty))
-              "Unimplemented";
+            (* Stop here.
+               Note that there may be mutable borrows below the shared reference
+               (e.g., &'b Wrapper<'a> where Wrapper contains &'a mut u32), but
+               since the shared borrow freezes everything below it, we should
+               not generate backward types for these mutable borrows. *)
             save_count outer_regions
         | RMut ->
             [%ldebug "RMut"];

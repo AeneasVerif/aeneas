@@ -232,7 +232,23 @@ let check_loans_borrows_relation_invariant (span : Meta.span) (ctx : eval_ctx) :
 
       method! visit_abstract_shared_borrow _ asb =
         match asb with
-        | AsbBorrow (bid, sid) -> register_borrow BShared bid (Some sid)
+        | AsbBorrow (bid, sid) -> (
+            match BorrowId.Map.find_opt bid !borrows_infos with
+            | Some info ->
+                if info.loan_kind = RMut then
+                  (* The mutable borrow is inside a shared projection: it is
+                     frozen by the outer shared context. We don't register it
+                     because [register_borrow] doesn't allow (RMut, BShared),
+                     and the borrow is already tracked by the concrete
+                     [VMutBorrow] in the context. *)
+                  ()
+                else register_borrow BShared bid (Some sid)
+            | None ->
+                (* The loan for this borrow was already ended (e.g., because
+                   the mutable region was ended before the shared region).
+                   The [AsbBorrow] is a stale reference in a shared
+                   projection — this is fine. *)
+                ())
         | AsbProjReborrows _ -> ()
 
       method! visit_borrow_content env bc =
