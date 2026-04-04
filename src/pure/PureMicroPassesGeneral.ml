@@ -10,11 +10,23 @@ let remove_meta (ctx : ctx) (def : fun_decl) : fun_decl =
 (** Introduce calls to [massert] (monadic assertion).
 
     The pattern below is very frequent especially as it is introduced by the
-    [assert!] macro. We perform the following simplification:
+    [assert!] macro. We perform the following simplifications:
     {[
-      if b then e else fail ~~>massert b;
-      e
-    ]} *)
+      if b then e else fail ~~> massert b; e
+      if b then fail else e ~~> massert (¬b); e
+    ]}
+
+    We also reconstruct boolean OR patterns. After the above simplification
+    transforms inner switches, we look for:
+    {[
+      if e0 then (massert e1; cont) else e_else
+        ~~> massert (¬e0 || e1); if e0 then cont else e_else
+
+      if e0 then e_then else (massert e1; cont)
+        ~~> massert (¬e0 || e1); if e0 then cont else e_else
+    ]}
+    This eventually allows properly reconstructing the or patterns in
+    assertions. *)
 let intro_massert_visitor (_ctx : ctx) (def : fun_decl) =
   let span = def.item_meta.span in
   let mk_massert scrut =
@@ -26,6 +38,14 @@ let intro_massert_visitor (_ctx : ctx) (def : fun_decl) =
     in
     [%add_loc] mk_app span massert scrut
   in
+  (* Check if an expression is a [massert] application, and if so return the
+     argument *)
+  let get_massert_arg (e : texpr) : texpr option =
+    match e.e with
+    | App ({ e = Qualif { id = FunOrOp (Fun (Pure Assert)); _ }; _ }, scrut_arg)
+      -> Some scrut_arg
+    | _ -> None
+  in
   object
     inherit [_] map_expr as super
 
@@ -33,7 +53,7 @@ let intro_massert_visitor (_ctx : ctx) (def : fun_decl) =
       match switch with
       | If (e_true, e_false) ->
           if is_fail_panic e_false.e then begin
-            (* Introduce a call to [massert] *)
+            (* Introduce a call to [massert scrut] *)
             let massert = mk_massert scrut in
             (* Introduce the let-binding *)
             let monadic = true in
@@ -41,14 +61,62 @@ let intro_massert_visitor (_ctx : ctx) (def : fun_decl) =
             super#visit_Let env monadic pat massert e_true
           end
           else if is_fail_panic e_true.e then
-            (* Introduce a call to [massert] (we need to negate the scrutinee) *)
+            (* Introduce a call to [massert (¬scrut)] *)
             let scrut = mk_bool_not scrut in
             let massert = mk_massert scrut in
             (* Introduce the let-binding *)
             let monadic = true in
             let pat = mk_ignored_pat mk_unit_ty in
             super#visit_Let env monadic pat massert e_false
-          else super#visit_Switch env scrut switch
+          else begin
+            (* Visit the children first so that inner switches containing panics
+               are already transformed to massert calls *)
+            let scrut = super#visit_texpr env scrut in
+            let e_true = super#visit_texpr env e_true in
+            let e_false = super#visit_texpr env e_false in
+            (* Check for patterns where one branch starts with [massert]:
+               {[
+                 if e0 then (massert e1; cont) else e_else
+                   ~~> massert (¬e0 || e1); if e0 then cont else e_else
+
+                 if e0 then e_then else (massert e1; cont)
+                   ~~> massert (¬e0 || e1); if e0 then cont else e_else
+               ]}
+               This is valid because when [e0 = false], [¬e0 || e1 = true]
+               so the massert trivially succeeds, preserving the semantics. *)
+            let check_else_branch () =
+              match e_false.e with
+              | Let (true, pat, rhs, cont_else) -> (
+                  match get_massert_arg rhs with
+                  | Some e1 ->
+                      let new_scrut = mk_bool_or scrut e1 in
+                      let massert = mk_massert new_scrut in
+                      let remaining_switch =
+                        {
+                          e = Switch (scrut, If (e_true, cont_else));
+                          ty = e_false.ty;
+                        }
+                      in
+                      Let (true, pat, massert, remaining_switch)
+                  | None -> Switch (scrut, If (e_true, e_false)))
+              | _ -> Switch (scrut, If (e_true, e_false))
+            in
+            match e_true.e with
+            | Let (true, pat, rhs, cont_then) -> (
+                match get_massert_arg rhs with
+                | Some e1 ->
+                    let new_scrut = mk_bool_or (mk_bool_not scrut) e1 in
+                    let massert = mk_massert new_scrut in
+                    let remaining_switch =
+                      {
+                        e = Switch (scrut, If (cont_then, e_false));
+                        ty = e_true.ty;
+                      }
+                    in
+                    Let (true, pat, massert, remaining_switch)
+                | None -> check_else_branch ())
+            | _ -> check_else_branch ()
+          end
       | _ -> super#visit_Switch env scrut switch
   end
 
@@ -623,7 +691,7 @@ let inline_unop unop = not (lift_unop unop)
 (** A helper predicate *)
 let lift_binop (binop : binop) : bool =
   match binop with
-  | Eq _ | Lt _ | Le _ | Ne _ | Ge _ | Gt _ -> false
+  | Eq _ | Lt _ | Le _ | Ne _ | Ge _ | Gt _ | BoolOr -> false
   | BitXor _
   | BitAnd _
   | BitOr _
@@ -1101,7 +1169,11 @@ let filter_useless (ctx : ctx) (def : fun_decl) : fun_decl =
               if not monadic then
                 (* Not a monadic let-binding: simple case *)
                 (e.e, used)
-              else (* Monadic let-binding: can't filter *)
+              else if texpr_cannot_fail re then
+                (* Monadic let-binding that always succeeds: safe to remove *)
+                (e.e, used)
+              else
+                (* Monadic let-binding and the bound expression may fail: can't filter *)
                 dont_filter ()
             else (* There are used variables: don't filter *)
               dont_filter ()

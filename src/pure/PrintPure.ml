@@ -930,6 +930,7 @@ let binop_to_string (env : fmt_env) (binop : binop) =
   | SubChecked int_ty -> "checked.-" ^ int_ty_to_string int_ty
   | MulChecked int_ty -> "checked.*" ^ int_ty_to_string int_ty
   | Cmp int_ty -> "cmp" ^ int_ty_to_string int_ty
+  | BoolOr -> "||"
 
 let fun_or_op_id_to_string (env : fmt_env) (fun_id : fun_or_op_id) : string =
   match fun_id with
