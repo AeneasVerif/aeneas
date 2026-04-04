@@ -361,7 +361,8 @@ def BitReader.peek
   (self : BitReader) (b : Bool) : Result (Std.U64 × BitReader) := do
   let (s, i) ←
     if b
-    then let self1 ← BitReader.refill self
+    then do
+         let self1 ← BitReader.refill self
          ok (self1.data, self1.bit_buf)
     else ok (self.data, self.bit_buf)
   let i1 ← lift (i &&& 1#u64)

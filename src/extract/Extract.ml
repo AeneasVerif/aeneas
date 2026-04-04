@@ -594,7 +594,7 @@ let extract_binop (span : Meta.span) (ctx : extraction_ctx)
   (* Some binary operations have a special notation depending on the backend *)
   (match (backend (), binop) with
   | HOL4, (Eq _ | Ne _)
-  | (FStar | Coq | Lean), (Eq _ | Lt _ | Le _ | Ne _ | Ge _ | Gt _)
+  | (FStar | Coq | Lean), (Eq _ | Lt _ | Le _ | Ne _ | Ge _ | Gt _ | BoolOr)
   | ( Lean,
       ( Div (OPanic, _)
       | Rem (OPanic, _)
@@ -604,7 +604,7 @@ let extract_binop (span : Meta.span) (ctx : extraction_ctx)
       | Shl (OPanic, _, _)
       | Shr (OPanic, _, _)
       | BitXor _ | BitOr _ | BitAnd _ ) ) ->
-      let binop =
+      let binop_str =
         match binop with
         | Eq _ -> "="
         | Lt _ -> "<"
@@ -622,18 +622,20 @@ let extract_binop (span : Meta.span) (ctx : extraction_ctx)
         | BitXor _ -> "^^^"
         | BitOr _ -> "|||"
         | BitAnd _ -> "&&&"
+        | BoolOr -> "||"
         | _ ->
             [%add_loc] admit_string span
               ("Unimplemented binary operation: " ^ binop_to_string ctx binop)
       in
-      let binop =
-        match backend () with
-        | FStar | Lean | HOL4 -> binop
-        | Coq -> "s" ^ binop
+      let binop_str =
+        match (backend (), binop) with
+        | Coq, BoolOr -> binop_str
+        | Coq, _ -> "s" ^ binop_str
+        | _ -> binop_str
       in
       extract_expr ~inside:true arg0;
       F.pp_print_space fmt ();
-      F.pp_print_string fmt binop;
+      F.pp_print_string fmt binop_str;
       F.pp_print_space fmt ();
       extract_expr ~inside:true arg1
   | Lean, (Add (OWrap, _) | Sub (OWrap, _) | Mul (OWrap, _) | Div (OWrap, _)) ->
@@ -1366,9 +1368,14 @@ and extract_lets (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
             (ctx, end_let))
           else (ctx, fun _ -> ())
         in
-        (* Print the bound expression *)
+        (* Print the bound expression. *)
         F.pp_open_hovbox fmt ctx.indent_incr;
-        extract_texpr span ctx fmt ~inside:false ~inside_do:monadic re;
+        let inside_do_rhs =
+          match backend () with
+          | Lean -> false
+          | _ -> monadic
+        in
+        extract_texpr span ctx fmt ~inside:false ~inside_do:inside_do_rhs re;
         F.pp_close_box fmt ();
         (ctx, end_let)
     in

@@ -186,9 +186,8 @@ def mut_loop_len_loop.body
   then
     let s ← lift (Array.to_slice buf)
     let i := Slice.len s
-    if 0#usize <= i
-    then ok (cont true)
-    else fail panic
+    massert (0#usize <= i)
+    ok (cont true)
   else ok (done ())
 
 /-- [loops_issues::mut_loop_len]: loop 0:
