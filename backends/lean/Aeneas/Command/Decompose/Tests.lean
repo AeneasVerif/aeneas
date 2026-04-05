@@ -693,3 +693,111 @@ def test32 {n : Nat} (x : Fin n) : Nat :=
 #check @test32_aux
 #check @test32_eq
 #print axioms test32_eq
+
+-- ============================================================================
+-- Test 33: Big monadic function (66 lines) with nested if-then-else
+-- Stress test: decomposed into 10 auxiliary functions, from leaves to root.
+-- Profile the #decompose command to verify it is almost instant.
+-- ============================================================================
+
+def test33 (mode : Bool) (flag : Bool) (x y z w : U32) : Result U32 := do
+  if mode then
+    if flag then
+      -- Then-then: 10 heavy bindings
+      let c0 ← x + 1#u32
+      let c1 ← c0 + y
+      let c2 ← c1 * 2#u32
+      let c3 ← c2 + z
+      let c4 ← c3 + w
+      let c5 ← c4 + 10#u32
+      let c6 ← c5 * 3#u32
+      let c7 ← c6 + c0
+      let c8 ← c7 + c1
+      let c9 ← c8 + 1#u32
+      -- Then-then: 4 reduction bindings + tail
+      let r0 ← c0 + c3
+      let r1 ← r0 + c6
+      let r2 ← r1 + c9
+      r2 + w
+    else
+      -- Then-else: 10 heavy bindings
+      let d0 ← x + 2#u32
+      let d1 ← d0 + y
+      let d2 ← d1 * 3#u32
+      let d3 ← d2 + z
+      let d4 ← d3 + w
+      let d5 ← d4 + 20#u32
+      let d6 ← d5 * 2#u32
+      let d7 ← d6 + d0
+      let d8 ← d7 + d1
+      let d9 ← d8 + 1#u32
+      -- Then-else: 4 reduction bindings + tail
+      let s0 ← d0 + d4
+      let s1 ← s0 + d7
+      let s2 ← s1 + d9
+      s2 + w
+  else
+    if flag then
+      -- Else-then: 10 heavy bindings
+      let e0 ← x + 3#u32
+      let e1 ← e0 + z
+      let e2 ← e1 * 2#u32
+      let e3 ← e2 + w
+      let e4 ← e3 + y
+      let e5 ← e4 + 30#u32
+      let e6 ← e5 * 3#u32
+      let e7 ← e6 + e0
+      let e8 ← e7 + e1
+      let e9 ← e8 + 1#u32
+      -- Else-then: 4 reduction bindings + tail
+      let t0 ← e0 + e3
+      let t1 ← t0 + e6
+      let t2 ← t1 + e9
+      t2 + y
+    else
+      -- Else-else: 10 heavy bindings
+      let f0 ← x + 4#u32
+      let f1 ← f0 + w
+      let f2 ← f1 * 3#u32
+      let f3 ← f2 + y
+      let f4 ← f3 + z
+      let f5 ← f4 + 40#u32
+      let f6 ← f5 * 2#u32
+      let f7 ← f6 + f0
+      let f8 ← f7 + f1
+      let f9 ← f8 + 1#u32
+      -- Else-else: 4 reduction bindings + tail
+      let u0 ← f0 + f4
+      let u1 ← u0 + f7
+      let u2 ← u1 + f9
+      u2 + z
+
+set_option profiler true in
+#decompose test33 test33_eq
+  -- 1-4: Extract 10 heavy bindings from each inner branch
+  branch 0 (branch 0 (letRange 0 10)) => test33_tt_comp
+  branch 0 (branch 1 (letRange 0 10)) => test33_te_comp
+  branch 1 (branch 0 (letRange 0 10)) => test33_et_comp
+  branch 1 (branch 1 (letRange 0 10)) => test33_ee_comp
+  -- 5-8: Extract remaining from each inner branch
+  branch 0 (branch 0 full) => test33_tt
+  branch 0 (branch 1 full) => test33_te
+  branch 1 (branch 0 full) => test33_et
+  branch 1 (branch 1 full) => test33_ee
+  -- 9-10: Extract full outer branches
+  branch 0 full => test33_then
+  branch 1 full => test33_else
+
+-- Verify all 10 generated definitions exist
+#check @test33_tt_comp
+#check @test33_te_comp
+#check @test33_et_comp
+#check @test33_ee_comp
+#check @test33_tt
+#check @test33_te
+#check @test33_et
+#check @test33_ee
+#check @test33_then
+#check @test33_else
+#check @test33_eq
+#print axioms test33_eq
