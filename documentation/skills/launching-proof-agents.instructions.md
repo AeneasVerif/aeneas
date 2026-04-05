@@ -940,6 +940,13 @@ These cannot be reliably grepped — the reviewer must read the proof:
   straightforwardly map to well-identified spec functions. Their postconditions should
   make this mapping explicit.
 
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "API coverage" -->
+- **Do preconditions cover all valid API usage patterns?** (Rule: "API coverage")
+  For every public-facing function, read the Rust trait/function docs and verify the
+  spec's preconditions don't exclude documented usage patterns. If a precondition
+  restricts to a subset (e.g., first call only), this is a **critical issue** — the
+  spec must be generalized. No exceptions.
+
 - **Are fold theorems non-vacuous?** (Rule: "Fold theorem vacuity check")
   For each fold theorem (typically named `fold_*` or `*_fold`), check that the LHS
   and RHS are **different**. The LHS must be the original inline monadic steps from

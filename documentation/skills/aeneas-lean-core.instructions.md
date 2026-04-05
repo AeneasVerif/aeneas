@@ -239,6 +239,30 @@ high-level (spec) types, use a conversion *function* (e.g.,
 and compose — they can be used on both sides of equations, fed into `simp`, and
 rewritten. Relations require existential witnesses and make proofs heavier.
 
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "API coverage" -->
+
+**API coverage: preconditions must not exclude valid usage patterns.** For every
+public-facing function (trait methods, `pub fn`, FFI exports), the spec's preconditions
+must cover **all valid calling patterns** documented in the Rust API. No exceptions.
+
+1. Read the Rust trait definition and function doc comments for the function being
+   specified. Look for phrases like "can be called multiple times," "works in both
+   modes," "valid after X or Y," etc.
+2. For each documented usage pattern, verify the theorem's preconditions permit it.
+   If a precondition excludes a valid pattern (e.g., `hAbsorb : ¬self.squeeze_mode`
+   on a function documented as callable in both modes), the spec is **incomplete**
+   and must be fixed — the precondition must be removed or the theorem must be
+   generalized to cover all valid patterns.
+
+```lean
+-- ⛔ BAD: the Rust API documents extract as callable multiple times, but
+--   hAbsorb restricts to the first call only (squeeze_mode = false).
+theorem extract.spec (self : State) (hAbsorb : ¬self.squeeze_mode) : ...
+
+-- ✅ GOOD: no restrictive precondition — covers all valid usage patterns
+theorem extract.spec (self : State) : ...
+```
+
 **Top-level specs must be single-call equalities — never decomposed.** For public Rust
 API functions (the top-level entry points that callers invoke), the postcondition must
 be a single equality (or conjunction of equalities) with **one call** to the
