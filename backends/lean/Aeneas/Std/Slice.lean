@@ -903,4 +903,42 @@ theorem Slice.setSlice!_length {α : Type u} (s : Slice α) (i : ℕ) (s' : List
   (s.setSlice! i s').length = s.length := by
   simp only [Slice.length, Slice.setSlice!, List.length_setSlice!]
 
+def Slice.mapM  {α β} (f : α → Result β) (x : Slice α) : Result (Slice β) :=
+  match h : x.val.mapM f with
+  | ok xs  => ok ⟨xs, List.mapM_Result_length h ▸ x.prop⟩
+  | fail e => fail e
+  | div    => div
+
+@[step]
+theorem Slice.mapM_spec {α β} {f : α → Result β} {s : Slice α} {post : Nat → β → Prop}
+    (hf : ∀ i (hi : i < s.len), f s[i] ⦃ post i ⦄) :
+    s.mapM f ⦃ s' => s'.len = s.len ∧ ∀ i (hi : i < s'.len), post i s'[i] ⦄ := by
+  simp only [mapM]
+  have hmapM_ok : ∃ l', List.mapM f s.val = ok l' := by
+    suffices ∀ (l : List α), (∀ i (hi : i < l.length), ∃ b, f l[i] = ok b) → ∃ l', l.mapM f = ok l' by
+      apply this; intro i hi
+      let i' : Usize := Usize.ofNatCore i (by scalar_tac)
+      have hf' := hf i' (by scalar_tac)
+      simp [spec, theta] at hf'
+      show ∃ b, f s[i'] = ok b
+      cases hfi : f s[i'] <;> simp_all
+    intro l; induction l with
+    | nil => exact fun _ => ⟨[], rfl⟩
+    | cons a t ih =>
+      intro hall
+      obtain ⟨b, hb⟩ := hall 0 (by simp); simp at hb
+      obtain ⟨ts, hts⟩ := ih (fun i hi => hall (i + 1) (by simp; omega))
+      exact ⟨b :: ts, by simp [List.mapM_cons, hb, hts, pure, bind, Bind.bind]⟩
+  obtain ⟨l', hl'⟩ := hmapM_ok
+  split
+  case h_1 xs heq =>
+    simp only [UScalar.lt_equiv, Usize.ofNatCore_val_eq, spec_ok]
+    refine ⟨by grind [List.mapM_Result_length], fun i hi => ?_⟩
+    have hlen : i < s.len := by have := List.mapM_Result_length heq; simp [Slice.len] at *; omega
+    have : f s[i] = ok xs[↑i] := List.mapM_Result_ok heq (↑i) (by scalar_tac)
+    specialize hf i hlen; simp [spec, theta, this] at hf
+    convert hf using 1
+  case h_2 e heq => simp [hl'] at heq
+  case h_3 heq => simp [hl'] at heq
+
 end Aeneas.Std
