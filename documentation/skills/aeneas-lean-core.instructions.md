@@ -239,6 +239,49 @@ high-level (spec) types, use a conversion *function* (e.g.,
 and compose — they can be used on both sides of equations, fed into `simp`, and
 rewritten. Relations require existential witnesses and make proofs heavier.
 
+**No inline computation in postconditions — extract to named definitions.** When a
+postcondition requires case splits, `let` bindings with `if-then-else`, or any
+non-trivial expression that computes an intermediate value, **extract it into a named
+`def` or `abbrev`** in the shared definitions file (e.g., `Basic.lean`). The
+postcondition should reference the named definition, not inline the computation.
+
+This rule applies to both precondition-dependent expressions and multi-branch specs.
+If the postcondition needs different behavior depending on a flag (e.g.,
+`squeeze_mode`), define a spec helper that encapsulates the case split.
+
+```lean
+-- ⛔ BAD: inline computation with let + if-then-else in the postcondition
+theorem append.spec (self : State) (data : Slice U8) :
+    append self data
+    ⦃ result =>
+      (let initialState := if self.squeeze_mode
+        then Vector.replicate 1600 false
+        else toBitstring self.state
+       let initialOffset := if self.squeeze_mode then 0
+        else self.state_index.val * 8
+       toBitstring result.state =
+         (spongeAbsorbRaw keccakF initialState initialOffset
+           (sliceToBitstring data) (rateBits self)).1) ⦄ := by ...
+
+-- ✅ GOOD: named spec helper encapsulates the case split
+def appendSpec (self : State) (data : Slice U8) : Bitstring 1600 :=
+  let initialState := if self.squeeze_mode
+    then Vector.replicate 1600 false
+    else toBitstring self.state
+  let initialOffset := if self.squeeze_mode then 0
+    else self.state_index.val * 8
+  (spongeAbsorbRaw keccakF initialState initialOffset
+    (sliceToBitstring data) (rateBits self)).1
+
+theorem append.spec (self : State) (data : Slice U8) :
+    append self data
+    ⦃ result =>
+      toBitstring result.state = appendSpec self data ⦄ := by ...
+```
+
+The named definition is easier to read, can be `simp`-unfolded in proofs, and is
+reusable across multiple theorems that need the same case logic.
+
 <!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "API coverage" -->
 
 **API coverage: preconditions must not exclude valid usage patterns.** For every
