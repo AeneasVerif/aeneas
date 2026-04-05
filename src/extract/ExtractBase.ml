@@ -2249,6 +2249,23 @@ let ctx_add_generic_params (span : Meta.span) (current_def_name : Types.name)
   in
   (ctx, tys, cgs, tcs)
 
+(** Reserve a set of names in the names map so that {!basename_to_unique} will
+    avoid them when generating fresh names.
+
+    This is used to prevent generic parameter names from clashing with trait
+    field names: we reserve the field names before generating parameter names.
+*)
+let ctx_reserve_names (names : string list) (ctx : extraction_ctx) :
+    extraction_ctx =
+  let names_map = ctx.names_maps.names_map in
+  let names_set =
+    List.fold_left
+      (fun s name -> StringSet.add name s)
+      names_map.names_set names
+  in
+  let names_map = { names_map with names_set } in
+  { ctx with names_maps = { ctx.names_maps with names_map } }
+
 let ctx_add_adt_projector_names (decl_name : string) (field_names : string list)
     (ctx : extraction_ctx) : extraction_ctx =
   let names_maps = ctx.names_maps in
