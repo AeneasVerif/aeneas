@@ -163,6 +163,9 @@ one for Absorb, one for Squeeze+Variants). Each reviewer must check:
    if-then-else, case splits, non-trivial expressions) in postconditions. Any such
    logic must be extracted into a named `def`/`abbrev` in the shared definitions file.
    (See `aeneas-lean-core` "No inline computation in postconditions.")
+7. **No existential quantifiers over non-propositions**: `∃ a, P a` where `a` is
+   a value (not a proof) is banned. However, `∃ (_ : P), Q` where `P` is a
+   proposition used for dependent typing is **allowed** — do not flag it.
 
 **Informal proof review (line-by-line call-graph tracing):**
 
@@ -200,7 +203,12 @@ often hide deeper problems (a missing `wfKeccakState` hints at a provably false
 theorem; a stale TODO suggests the FC chain is incomplete). All issues must be
 resolved before starting Phase 3 (mechanized proofs), which is difficult and
 time-consuming — discovering a flawed theorem statement mid-mechanization wastes
-far more effort than fixing it now. Specific rules:
+far more effort than fixing it now.
+
+**For the agent fixing issues:** Do not skip warnings. Every item flagged by a
+reviewer — critical or warning — must be addressed. If you believe a reviewer
+finding is a false alarm, explain why concretely (e.g., cite the skill rule that
+permits the pattern), but do not silently skip it. Specific rules:
 
 - **Stale TODOs**: Remove or update. A TODO that says "needs strengthening" when the
   strengthening was already done is misleading.
