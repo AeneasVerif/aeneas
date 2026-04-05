@@ -140,7 +140,7 @@ See the `aeneas-lean-core` skill file for worked examples and disambiguation rul
 | `omega` | No scalar/Slice/Vec knowledge | `agrind` > `grind` > `scalar_tac` |
 | `linarith` | No scalar/Slice/Vec knowledge | `agrind` > `grind` > `scalar_tac` |
 | `nlinarith` | No scalar knowledge, explosion risk | `agrind` > `grind` > `scalar_tac +nonLin` / `simp_scalar` |
-| `congr N` | Default transparency unfolds definitions deeply → heartbeat timeout | `fcongr N` (reducible transparency, same subgoals) |
+| `congr N` | Default transparency → may WHNF function bodies → timeout on complex/recursive/looping functions | `fcongr N` — ALWAYS (reducible transparency, same subgoals) |
 | `step* <;> ...` | Replays full `step*` on every edit | `step*` then `· tactic` per goal |
 | `all_goals tactic` | Same re-elaboration problem | `· tactic` per goal |
 | `partial_fixpoint_induct` | Needs explicit motive + sorry'd `admissible` proof | `unfold` + `by_cases` + `step` + `termination_by` (see the `aeneas-lean-core` skill file) |

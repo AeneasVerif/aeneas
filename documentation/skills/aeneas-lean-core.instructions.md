@@ -251,6 +251,50 @@ actually demonstrate that the equality holds. But the *theorem statement* must s
 only the final result. Internal algorithm variables should not appear in the public
 postcondition.
 
+**Auxiliary function specs must also express full functional correctness.** This applies
+to every `@[step]` or `@[local step]` theorem — not just top-level functions. Auxiliary
+functions (loop bodies, sub-routines, fold helpers) don't always map to a single named
+spec function, but their postconditions must still express **what the function computes**,
+not just structural metadata about the output.
+
+The caller's proof works by composing postconditions via `step*`. If a helper's
+postcondition only says "state_index advanced by N" but not "state = f(input)", the
+caller's FC goal (`result = Spec.algorithm(...)`) becomes unprovable — no hypothesis
+constrains the actual computed values.
+
+```lean
+/- ⛔ BAD: structural-only — says everything except what matters -/
+@[local step]
+private theorem xor_bytes_phase.spec ... :
+    xor_bytes_phase self data ⦃ res =>
+      res.state_index.val = self.state_index.val + data.length ∧
+      res.squeeze_mode = false ∧
+      res.input_block_size = self.input_block_size ⦄ := by sorry
+/- Caller knows the index moved and flags are preserved, but can't
+   prove anything about what happened to the state — FC is lost.
+   (illustrative example — not real API names) -/
+
+/- ✅ GOOD: FC postcondition — says what the function computed -/
+@[local step]
+private theorem xor_bytes_phase.spec ... :
+    xor_bytes_phase self data ⦃ res =>
+      toBitstring res.state =
+        xorBytes (toBitstring self.state) self.state_index.val data ∧
+      res.state_index.val = self.state_index.val + data.length ∧
+      res.squeeze_mode = false ∧
+      res.input_block_size = self.input_block_size ⦄ := by sorry
+/- Now the caller can compose this with other phases to derive
+   top-level FC: result.state = spongeAbsorb(input)
+   (illustrative example — not real API names) -/
+```
+
+**The composability test.** For any auxiliary function postcondition, ask: *"Knowing
+only this postcondition, could the caller eventually derive its own FC equality?"*
+If the answer is no — the postcondition is too weak, regardless of how many structural
+properties it includes. Trace the call chain upward: find the top-level theorem that
+transitively depends on this helper, and check that the helper's postcondition provides
+enough information for that derivation.
+
 ```lean
 -- ⛔ BAD: decomposes the algorithm's internals — exposes intermediate variables
 --   that are meaningful only inside the algorithm implementation.
@@ -1085,6 +1129,71 @@ The spec may be `sorry`'d initially — that's fine. What matters is that the
 This ensures the fold decomposition is immediately usable by the parent proof,
 even before the helper's proof is complete.
 
+### ⛔ Structural-only fold helper postconditions are insufficient
+
+A fold helper's postcondition that only states **structural properties** (lengths
+preserved, indices advanced, mode flags unchanged, alignment maintained) without
+specifying **what the helper computes** is insufficient — even if the parent
+theorem has full FC. This is the most common failure mode for fold helpers.
+
+**Why this fails:** The parent proof uses `simp only [fold_*]` then `step*` to
+process each fold helper in sequence. `step*` applies each helper's spec theorem
+and adds its postcondition as hypotheses. If phase 1's postcondition says only
+"state_index advanced by N" but NOT "state bitstring = XOR of N bytes into the
+original state", then after all phases are processed, the parent's FC goal
+(`result.state = spec_function(...)`) has no hypothesis constraining actual
+computed values — the goal is unprovable.
+
+```lean
+/- Consider a function decomposed into 3 phases.
+   (illustrative example — function/spec names are placeholders) -/
+
+/- ⛔ BAD: all three helpers have structural-only postconditions -/
+@[local step]
+private theorem phase1.spec ... :
+    phase1 self data ⦃ res =>
+      res.state_index.val = self.state_index.val + consumed ∧
+      consumed ≤ 7 ∧
+      res.squeeze_mode = false ⦄ := by sorry
+/- After step* processes all 3 phases, the parent proof has:
+     h1 : result.state_index.val = ...   (from phase 1)
+     h2 : result.state_index.val = ...   (from phase 2)
+     h3 : result.state_index.val = ...   (from phase 3)
+   Goal: toBitstring result.state = spongeAbsorb(toBitstring self.state, data)
+   ← UNPROVABLE: no hypothesis mentions result.state or toBitstring -/
+
+/- ✅ GOOD: each helper says what it computed -/
+@[local step]
+private theorem phase1.spec ... :
+    phase1 self data ⦃ res =>
+      /- FC: what happened to the state -/
+      toBitstring res.state =
+        xorBytes (toBitstring self.state) self.state_index.val
+          data 0 consumed ∧
+      /- Structural properties for downstream phases -/
+      res.state_index.val = self.state_index.val + consumed ∧
+      consumed ≤ 7 ∧
+      res.squeeze_mode = false ⦄ := by sorry
+/- Now the parent proof can compose:
+     phase1 output = xorBytes(original, ...)
+     phase2 output = absorbBlocks(phase1 output, ...)
+     phase3 output = xorBytes(phase2 output, ...)
+   and derive: result = spongeAbsorb(original, data) ✅ -/
+```
+
+**The composability test (mechanical check for reviewers).** For each fold helper,
+ask: *"Knowing only this postcondition (not the helper's implementation), could I
+eventually derive the parent's FC equality?"* Concretely:
+1. Write down the parent's FC goal (the spec equality it must prove).
+2. For each fold helper in sequence, substitute its postcondition's FC clause
+   into the parent's goal.
+3. If at any point a helper provides no FC clause for a value that the parent
+   needs, the chain is broken — that helper's postcondition must be strengthened.
+
+If the composability test fails, the fix is always the same: add a spec-level
+equality to the helper's postcondition that says what happened to each modified
+output (typically: state, buffer contents, computed values).
+
 ### ⚠️ Always test fold theorems after writing them
 
 A fold theorem that type-checks and proves is NOT sufficient — it must also
@@ -1769,7 +1878,7 @@ calc (x + 1) * (x + 1)
     · first | (simp_all; done) | scalar_tac | bv_tac 16
     ```
 
-26. **`congr` causes heartbeat timeout on function equalities.** When the goal is `f(a₁, a₂) = f(b₁, b₂)`, `congr 1` uses default transparency and may try to unfold `f` deeply, exceeding heartbeat limits. **Fix:** Always use `fcongr 1` instead — it wraps `congrN` with reducible transparency, producing the same subgoals (`a₁ = b₁`, `a₂ ≍ b₂`) without unfolding. Note: when arguments have dependent types with different indices (e.g., `Vector α n` vs `Vector α m`), subgoals may use `HEq` (`≍`). Show the underlying data is equal, then close with proof irrelevance.
+26. **⛔ `congr` is BANNED — always use `fcongr`.** `congr N` uses default transparency, which means it may WHNF (weak head normal form) the function being decomposed. If the function is complex — recursive, contains loops, has large bodies — this causes deterministic heartbeat timeout. This is not a rare edge case; it happens routinely in Aeneas proofs. **Always use `fcongr N` instead** — it uses reducible transparency, producing the same subgoals without unfolding function bodies. When arguments have dependent types with different indices (e.g., `Vector α n` vs `Vector α m`), subgoals use `HEq` (`≍`). Show the underlying data is equal, then close with proof irrelevance.
     ```lean
     -- BAD: congr unfolds f deeply, heartbeat timeout
     congr 1
@@ -1806,6 +1915,56 @@ calc (x + 1) * (x + 1)
       autonomously. They may want to run `lake clean` or re-fetch dependencies — but this
       is their decision, not the agent's. By default (if you're running autonomously),
       just wait.
+
+28. **No vague blockers — verify before declaring something blocked.** When claiming
+    a definition, lemma, or type is "missing," "unavailable," or "needs infrastructure":
+
+    - **Explain the blocker"**: don't give it a vague name like "missing iterator
+      infrastructure", but explain the exact reason: "there misses models for 20 iterators
+      and iterator transformers, and writing such models is a huge task as there are many
+      of them"
+    - **Name the exact missing piece**: definition name, file, expected type signature,
+      missing lemma. Needs iterator infrastructure" is not
+      acceptable. "`iterRemainingLanes` at `AppendLanes.lean:84` needs a concrete body;
+      this requires knowingthe fields of `core.iter.adapters.take.Take`" is acceptable.
+    - **Search before declaring**: Check the Aeneas stdlib
+      (`grep -rn "structure.*TypeName\|def.*TypeName" .lake/packages/aeneas/`),
+      the project's generated code (`Code/Types*.lean`, `Code/FunsExternal*.lean`),
+      and Mathlib. Types that look opaque (iterators, containers, trait objects)
+      often have concrete structures with transparent fields in `Aeneas/Std/`.
+    - **Read TODO comments critically**: A TODO saying "define once X is available"
+      may be stale — X may already be available. Verify independently.
+    - **In reports and checkpoints**: Every blocker entry must include the precise reason,
+      what was searched and what was not found. "Checked `Aeneas/Std/Core/Iter.lean` and
+      `Aeneas/Std/SliceIter.lean` — `ChunksExact` is not defined there" is
+      verifiable. "Needs iterator specs" is not.
+
+    <!-- ⚠️ SYNC RULE: general principle in global-rules §18 "No Vague Blockers" -->
+
+29. **`congr` WHNF explosion on complex functions.** When the goal is `f a₁ = f a₂`
+    and `congr 1` cannot immediately match arguments by definitional equality, it
+    falls through to WHNF reduction of `f`. If `f` is complex (recursive, contains
+    loops, has large bodies), this causes deterministic timeout — the error message
+    says `(deterministic) timeout at 'isDefEq'` or `'whnf'`. This is the **mechanism**
+    behind the `congr` ban (item 26).
+
+    A common trigger in Aeneas proofs: `step*` introduces cast variables
+    (`i3 : U32`, `i3_post : ↑i3 = n`) so arguments that are propositionally equal
+    are not definitionally equal — enough to make `congr` attempt WHNF.
+
+    **Fix:** If `congr 1`, `apply`, or `exact` times out on `f a₁ = f a₂`,
+    replace with `fcongr 1` (reducible transparency — never unfolds `f`).
+    If `fcongr` succeeds, the problem is solved. To *confirm* the root cause
+    is WHNF explosion (e.g., for a bug report), you can test with an `opaque`
+    stand-in for `f` — the opaque version will fail instantly instead of timing out.
+    ```lean
+    -- BAD: congr tries to WHNF f → timeout
+    congr 1
+
+    -- GOOD: fcongr decomposes without unfolding
+    fcongr 1
+    · ...  -- argument equalities (may be HEq if types differ)
+    ```
 
 ## Attribute Management
 
