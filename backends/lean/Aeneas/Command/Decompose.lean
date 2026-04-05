@@ -192,6 +192,37 @@ partial def mkProjection (tuple : Expr) (totalSize idx : Nat) : MetaM Expr := do
 def filterRelevantFVars (e : Expr) (available : Array Expr) : MetaM (Array Expr) :=
   available.filterM fun fv => pure (e.containsFVar fv.fvarId!)
 
+/-- Collect all non-implementation-detail fvars from the local context that appear
+    free in `e`, in context order. This captures fvars from function parameters,
+    binding fvars opened by navigation patterns (`letAt`, `branch`, `lam`), etc. -/
+def collectFreeLocalFVars (e : Expr) : MetaM (Array Expr) := do
+  let lctx ← getLCtx
+  let mut result : Array Expr := #[]
+  for decl in lctx do
+    if !decl.isImplementationDetail && e.containsFVar decl.fvarId then
+      result := result.push (mkFVar decl.fvarId)
+  return result
+
+/-- Abstract over `fvars`, always creating lambda binders (even for let-decl fvars).
+    Standard `mkLambdaFVars` creates let-bindings for let-decl fvars, which is wrong
+    when building extracted function definitions that should take parameters. -/
+private def mkLamAbstract (fvars : Array Expr) (body : Expr) : MetaM Expr := do
+  let mut result := body
+  for fv in fvars.reverse do
+    let decl ← fv.fvarId!.getDecl
+    result := .lam decl.userName decl.type (result.abstract #[fv]) decl.binderInfo
+  return result
+
+/-- Abstract over `fvars`, always creating forall binders (even for let-decl fvars).
+    Standard `mkForallFVars` creates let-types for let-decl fvars, which is wrong
+    when building extracted function type signatures. -/
+private def mkForallAbstract (fvars : Array Expr) (body : Expr) : MetaM Expr := do
+  let mut result := body
+  for fv in fvars.reverse do
+    let decl ← fv.fvarId!.getDecl
+    result := .forallE decl.userName decl.type (result.abstract #[fv]) decl.binderInfo
+  return result
+
 -- ============================================================================
 -- Helpers: adding definitions (with noncomputable fallback)
 -- ============================================================================
@@ -214,8 +245,10 @@ private def addDefinition (name : Name) (levelParams : List Name)
     hints := .abbrev, safety := .safe, all := [name]
   }
   let env ← getEnv
-  if srcIsNoncomputable || hasNoncomputableDep env value then
+  let isNC := srcIsNoncomputable || hasNoncomputableDep env value
+  if isNC then
     addDecl (.defnDecl decl)
+    Lean.enableRealizationsForConst name
     modifyEnv fun env' => noncomputableExt.tag env' name
   else
     addAndCompile (.defnDecl decl)
@@ -227,11 +260,11 @@ private def addDefinition (name : Name) (levelParams : List Name)
 
 /-- Extract the whole expression as a new definition.
     Returns the call expression that replaces it. -/
-def extractFull (body : Expr) (newName : Name) (availableFVars : Array Expr)
+def extractFull (body : Expr) (newName : Name)
     (levelParams : List Name) (srcIsNoncomputable : Bool) : MetaM Expr := do
-  let relevantFVars ← filterRelevantFVars body availableFVars
-  let fnValue ← mkLambdaFVars relevantFVars body
-  let fnType  ← mkForallFVars relevantFVars (← inferType body)
+  let relevantFVars ← collectFreeLocalFVars body
+  let fnValue ← mkLamAbstract relevantFVars body
+  let fnType  ← mkForallAbstract relevantFVars (← inferType body)
   addDefinition newName levelParams fnType fnValue srcIsNoncomputable
   return mkAppN (mkConst newName (levelParams.map Level.param)) relevantFVars
 
@@ -242,7 +275,7 @@ def extractFull (body : Expr) (newName : Name) (availableFVars : Array Expr)
 /-- Extract `count` consecutive bindings starting at `start`.
     Returns the **full** modified body (wrapping bindings before the range too). -/
 def extractLetRange (bindings : Array BindingEntry) (terminal : Expr)
-    (start count : Nat) (newName : Name) (fnParams : Array Expr)
+    (start count : Nat) (newName : Name)
     (levelParams : List Name) (srcIsNoncomputable : Bool) : MetaM Expr := do
   let n := bindings.size            -- number of actual bindings
   let totalPositions := n + 1       -- bindings + terminal
@@ -251,8 +284,6 @@ def extractLetRange (bindings : Array BindingEntry) (terminal : Expr)
     throwError "letRange {start} {count}: out of range (total positions = {totalPositions})"
 
   let includesTerminal := (endPos == totalPositions)
-  -- fvars that are "outer" to the extracted range
-  let outerFVars := fnParams ++ (bindings[:start].toArray.map (·.fvar))
 
   -- Determine if the range is monadic (has any monadic binding)
   let rangeBindings := bindings[start : endPos].toArray
@@ -264,11 +295,13 @@ def extractLetRange (bindings : Array BindingEntry) (terminal : Expr)
       if let some m := entry.monadExpr then return some m
     return none
 
-  -- Helper: add the definition and build the full modified body
+  -- Helper: add the definition and build the call expression.
+  -- Uses `collectFreeLocalFVars` to capture all relevant fvars from the local
+  -- context (function params, navigation fvars from letAt/branch/lam, etc.).
   let addDef (fnValue : Expr) : MetaM Expr := do
-    let relevantFVars ← filterRelevantFVars fnValue outerFVars
-    let fnValueClosed ← mkLambdaFVars relevantFVars fnValue
-    let fnTypeClosed  ← mkForallFVars relevantFVars (← inferType fnValue)
+    let relevantFVars ← collectFreeLocalFVars fnValue
+    let fnValueClosed ← mkLamAbstract relevantFVars fnValue
+    let fnTypeClosed  ← mkForallAbstract relevantFVars (← inferType fnValue)
     addDefinition newName levelParams fnTypeClosed fnValueClosed srcIsNoncomputable
     return mkAppN (mkConst newName (levelParams.map Level.param)) relevantFVars
 
@@ -299,7 +332,9 @@ def extractLetRange (bindings : Array BindingEntry) (terminal : Expr)
       let extractedBody ← rebuildBindings bindings extractedTerminal start (endPos - 1)
       let callExpr ← addDef extractedBody
       if hasMonadic then
-        let cont ← mkLambdaFVars #[lastEntry.fvar] contExpr
+        -- Use mkLamAbstract to create a proper lambda even if lastEntry.fvar
+        -- is a let-decl (from a pure binding in a mixed-mode range)
+        let cont ← mkLamAbstract #[lastEntry.fvar] contExpr
         let replacement ← mkAppM ``Bind.bind #[callExpr, cont]
         rebuildBindings bindings replacement 0 start
       else
@@ -317,12 +352,15 @@ def extractLetRange (bindings : Array BindingEntry) (terminal : Expr)
       if hasMonadic then
         -- Rebuild ALL range bindings with `pure ()` as terminal
         let some monadExpr ← getMonadExpr | throwError "letRange: no monad found for pure"
-        let pureUnit ← mkAppOptM ``Pure.pure #[some monadExpr, none, none, some (mkConst ``PUnit.unit)]
+        let pureUnit ← mkAppOptM ``Pure.pure #[some monadExpr, none, none, some (mkConst ``Unit.unit)]
         let extractedBody ← rebuildBindings bindings pureUnit start endPos
         let callExpr ← addDef extractedBody
-        let cont ← mkLambdaFVars #[lastEntry.fvar] contExpr
-        let replacement ← mkAppM ``Bind.bind #[callExpr, cont]
-        rebuildBindings bindings replacement 0 start
+        -- The extracted function returns `m Unit`. Create a fresh Unit-typed
+        -- fvar for the continuation (not lastEntry.fvar which has the wrong type).
+        withLocalDeclD `_ (mkConst ``Unit) fun unitFvar => do
+          let cont ← mkLambdaFVars #[unitFvar] contExpr
+          let replacement ← mkAppM ``Bind.bind #[callExpr, cont]
+          rebuildBindings bindings replacement 0 start
       else
         let extractedBody ← rebuildBindings bindings lastEntry.value start (endPos - 1)
         let _callExpr ← addDef extractedBody
@@ -353,12 +391,9 @@ def extractLetRange (bindings : Array BindingEntry) (terminal : Expr)
           let proj ← mkProjection tupFVar neededFVars.size i
           let fvType ← inferType fv
           let fvName ← fv.fvarId!.getUserName
-          -- Abstract fv out of result, then wrap in let
-          let abst ← mkLambdaFVars #[fv] result (usedLetOnly := false)
-          match abst with
-          | .lam _ _ lamBody _ =>
-            result := .letE fvName fvType proj lamBody false
-          | _ => throwError "#decompose: unexpected expression from mkLambdaFVars (expected lambda)"
+          -- Abstract fv out of result: use Expr.abstract directly to avoid
+          -- mkLambdaFVars creating let-bindings for let-decl fvars
+          result := .letE fvName fvType proj (result.abstract #[fv]) false
         return result
 
       if hasMonadic then do
@@ -491,35 +526,35 @@ partial def modifyBindingValue (e : Expr) (idx : Nat)
 /-- Apply one decompose clause: navigate with the pattern, extract, replace.
     Returns the modified function body. -/
 partial def applyClause (body : Expr) (pat : DecomposePattern) (newName : Name)
-    (fnParams : Array Expr) (levelParams : List Name)
+    (levelParams : List Name)
     (srcIsNoncomputable : Bool) : MetaM Expr := do
   match pat with
   | .full =>
-    extractFull body newName fnParams levelParams srcIsNoncomputable
+    extractFull body newName levelParams srcIsNoncomputable
 
   | .letRange start count =>
     withParsedBindings body #[] fun bindings terminal => do
-      extractLetRange bindings terminal start count newName fnParams levelParams srcIsNoncomputable
+      extractLetRange bindings terminal start count newName levelParams srcIsNoncomputable
 
   | .letAt idx inner =>
     modifyBindingValue body idx fun value => do
-      applyClause value inner newName fnParams levelParams srcIsNoncomputable
+      applyClause value inner newName levelParams srcIsNoncomputable
 
   | .branch idx inner =>
     modifyBranch body idx fun branchBody => do
-      applyClause branchBody inner newName fnParams levelParams srcIsNoncomputable
+      applyClause branchBody inner newName levelParams srcIsNoncomputable
 
   | .lam n inner =>
     modifyUnderLambdas body n fun innerBody => do
-      applyClause innerBody inner newName fnParams levelParams srcIsNoncomputable
+      applyClause innerBody inner newName levelParams srcIsNoncomputable
 
   | .appFun inner =>
     modifyAppFun body fun fn => do
-      applyClause fn inner newName fnParams levelParams srcIsNoncomputable
+      applyClause fn inner newName levelParams srcIsNoncomputable
 
   | .argArg idx inner =>
     modifyAppArg body idx fun arg => do
-      applyClause arg inner newName fnParams levelParams srcIsNoncomputable
+      applyClause arg inner newName levelParams srcIsNoncomputable
 
 -- ============================================================================
 -- Proof generation
@@ -622,7 +657,7 @@ def elabDecompose : CommandElab := fun stx => do
         -- Apply each clause sequentially; prove each step
         for (pat, newName) in parsedClauses do
           let prevBody := currentBody
-          currentBody ← applyClause currentBody pat newName params levelParams srcIsNoncomputable
+          currentBody ← applyClause currentBody pat newName levelParams srcIsNoncomputable
 
           -- Prove: ∀ params, prevBody = currentBody
           let stepEqType ← mkForallFVars params (← mkEq prevBody currentBody)

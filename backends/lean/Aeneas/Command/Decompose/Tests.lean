@@ -142,3 +142,554 @@ full => test8_body
 
 -- Verify
 #print axioms test8_eq
+
+-- ============================================================================
+-- Test 9: Side-effect only range (monadic, continuation uses no range variables)
+-- ============================================================================
+
+noncomputable opaque sideEffect1 : U32 → Result Unit
+noncomputable opaque sideEffect2 : U32 → Result Unit
+
+noncomputable def test9 (x y : U32) : Result U32 := do
+  let _ ← sideEffect1 x
+  let _ ← sideEffect2 y
+  pure 42#u32
+
+-- Extract the two side-effect bindings — continuation uses none of them
+#decompose test9 test9_eq
+  letRange 0 2 => test9_effects
+
+#check @test9_effects  -- should return m PUnit
+#check @test9_eq
+#print axioms test9_eq
+
+-- ============================================================================
+-- Test 10: Single binding extraction
+-- ============================================================================
+
+def test10 (x y : U32) : Result U32 := do
+  let a ← x + 1#u32
+  let b ← y + 1#u32
+  a + b
+
+-- Extract only the first binding
+#decompose test10 test10_eq
+  letRange 0 1 => test10_first
+
+#check @test10_first
+#check @test10_eq
+#print axioms test10_eq
+
+-- ============================================================================
+-- Test 11: Triple tuple return (continuation needs 3 variables)
+-- ============================================================================
+
+def test11 (x : U32) : Result U32 := do
+  let a ← x + 1#u32
+  let b ← x + 2#u32
+  let c ← x + 3#u32
+  let sum ← a + b
+  sum + c
+
+#decompose test11 test11_eq
+  letRange 0 3 => test11_triple
+
+#check @test11_triple  -- should return Result (U32 × U32 × U32)
+#check @test11_eq
+#print axioms test11_eq
+
+-- ============================================================================
+-- Test 12: Quad tuple return (4 variables needed)
+-- ============================================================================
+
+def test12 (x : U32) : Result U32 := do
+  let a ← x + 1#u32
+  let b ← x + 2#u32
+  let c ← x + 3#u32
+  let d ← x + 4#u32
+  let s1 ← a + b
+  let s2 ← c + d
+  s1 + s2
+
+#decompose test12 test12_eq
+  letRange 0 4 => test12_quad
+
+#check @test12_quad  -- should return Result (U32 × U32 × U32 × U32)
+#check @test12_eq
+#print axioms test12_eq
+
+-- ============================================================================
+-- Test 13: Mixed pure and monadic bindings
+-- ============================================================================
+
+def test13 (x : U32) : Result U32 := do
+  let a := x.val     -- pure
+  let b ← x + 1#u32  -- monadic
+  let c := a + 1      -- pure
+  let d ← b + 2#u32  -- monadic
+  if c > 0 then pure d else d + 1#u32
+
+-- Extract first 2 (one pure, one monadic)
+#decompose test13 test13_eq
+  letRange 0 2 => test13_mixed1
+  letRange 1 2 => test13_mixed2
+
+#check @test13_mixed1
+#check @test13_mixed2
+#check @test13_eq
+#print axioms test13_eq
+
+-- ============================================================================
+-- Test 14: Big monadic function (20 bindings) with 4 sequential decompositions
+-- Performance stress test
+-- ============================================================================
+
+def test14 (x : U32) : Result U32 := do
+  let a0 ← x + 1#u32
+  let a1 ← a0 + 1#u32
+  let a2 ← a1 + 1#u32
+  let a3 ← a2 + 1#u32
+  let a4 ← a3 + 1#u32
+  let a5 ← a4 + 1#u32
+  let a6 ← a5 + 1#u32
+  let a7 ← a6 + 1#u32
+  let a8 ← a7 + 1#u32
+  let a9 ← a8 + 1#u32
+  let a10 ← a9 + 1#u32
+  let a11 ← a10 + 1#u32
+  let a12 ← a11 + 1#u32
+  let a13 ← a12 + 1#u32
+  let a14 ← a13 + 1#u32
+  let a15 ← a14 + 1#u32
+  let a16 ← a15 + 1#u32
+  let a17 ← a16 + 1#u32
+  let a18 ← a17 + 1#u32
+  let a19 ← a18 + 1#u32
+  a19 + x
+
+-- Four sequential letRange decompositions splitting the chain into 5-binding chunks
+#decompose test14 test14_eq
+  letRange 0 5 => test14_chunk1
+  letRange 1 5 => test14_chunk2
+  letRange 1 5 => test14_chunk3
+  letRange 1 5 => test14_chunk4
+
+#check @test14_chunk1
+#check @test14_chunk2
+#check @test14_chunk3
+#check @test14_chunk4
+#check @test14_eq
+#print axioms test14_eq
+
+-- ============================================================================
+-- Test 15: Big pure function (20 bindings) — performance test
+-- ============================================================================
+
+def test15 (x : Nat) : Nat :=
+  let a0 := x + 1
+  let a1 := a0 + 1
+  let a2 := a1 + 1
+  let a3 := a2 + 1
+  let a4 := a3 + 1
+  let a5 := a4 + 1
+  let a6 := a5 + 1
+  let a7 := a6 + 1
+  let a8 := a7 + 1
+  let a9 := a8 + 1
+  let a10 := a9 + 1
+  let a11 := a10 + 1
+  let a12 := a11 + 1
+  let a13 := a12 + 1
+  let a14 := a13 + 1
+  let a15 := a14 + 1
+  let a16 := a15 + 1
+  let a17 := a16 + 1
+  let a18 := a17 + 1
+  let a19 := a18 + 1
+  a19 + x
+
+-- Split into 4 chunks
+#decompose test15 test15_eq
+  letRange 0 5 => test15_chunk1
+  letRange 1 5 => test15_chunk2
+  letRange 1 5 => test15_chunk3
+  letRange 1 5 => test15_chunk4
+
+#check @test15_eq
+#print axioms test15_eq
+
+-- ============================================================================
+-- Test 16: Deep pattern composition — branch+branch+letRange
+-- ============================================================================
+
+def test16 (b1 b2 : Bool) (x : U32) : Result U32 := do
+  if b1 then
+    if b2 then
+      let a ← x + 1#u32
+      let b ← a + 2#u32
+      let c ← b + 3#u32
+      c + 4#u32
+    else
+      x + 10#u32
+  else
+    x + 20#u32
+
+#decompose test16 test16_eq
+  branch 0 (branch 0 (letRange 0 3)) => test16_inner
+
+#check @test16_inner
+#check @test16_eq
+#print axioms test16_eq
+
+-- ============================================================================
+-- Test 17: Pure with multiple variables needed by continuation (tuple)
+-- ============================================================================
+
+def test17 (x : Nat) : Nat :=
+  let a := x + 1
+  let b := x + 2
+  a + b + x
+
+#decompose test17 test17_eq
+  letRange 0 2 => test17_pair
+
+#check @test17_pair  -- should be Nat → Nat × Nat
+#check @test17_eq
+#print axioms test17_eq
+
+-- ============================================================================
+-- Test 18: letAt pattern — extract from inside a binding's value
+-- ============================================================================
+
+def test18_helper (x : U32) : Result U32 := do
+  let a ← x + 1#u32
+  let b ← a + 2#u32
+  b + 3#u32
+
+def test18 (x y : U32) : Result U32 := do
+  let z ← test18_helper x  -- binding 0
+  let w ← y + z             -- binding 1
+  w + 1#u32                  -- terminal
+
+-- Navigate to binding 0's value (test18_helper x) and extract it
+-- letAt syntax requires parens: letAt 0 (full)
+#decompose test18 test18_eq
+  letAt 0 (full) => test18_inner
+
+#check @test18_inner
+#check @test18_eq
+#print axioms test18_eq
+
+-- ============================================================================
+-- Test 19: dite branch — dependent if-then-else
+-- ============================================================================
+
+def test19 (n : Nat) : Nat :=
+  if _h : n > 0 then
+    n + 1
+  else
+    0
+
+#decompose test19 test19_eq
+  branch 0 full => test19_then
+
+#check @test19_then
+#check @test19_eq
+#print axioms test19_eq
+
+-- ============================================================================
+-- Test 20: appFun pattern — modify the function part of an application
+-- ============================================================================
+
+def test20_inner (x : U32) : Result U32 := do
+  let a ← x + 1#u32
+  let b ← a + 1#u32
+  b + 1#u32
+
+-- We use appFun to reach the function part.
+-- test20_fn wraps a pure function that directly calls test20_inner.
+def test20_fn (f : U32 → Result U32) (x : U32) : Result U32 :=
+  f x
+
+def test20 (x : U32) : Result U32 :=
+  test20_fn test20_inner x
+
+-- argArg 0 full: replace the first argument (test20_inner) of test20_fn
+#decompose test20 test20_eq
+  argArg 0 full => test20_extracted
+
+#check @test20_extracted
+#check @test20_eq
+#print axioms test20_eq
+
+-- ============================================================================
+-- Test 21: lam pattern — modify under lambda binders
+-- ============================================================================
+
+-- We create a function whose body is a lambda
+def test21_apply (f : U32 → Result U32) (x : U32) : Result U32 := f x
+
+def test21 (x : U32) : Result U32 :=
+  test21_apply (fun y => do let z ← y + x; z + 1#u32) x
+
+-- Navigate into the lambda argument with argArg 0 (lam 1 ...)
+#decompose test21 test21_eq
+  argArg 0 (lam 1 full) => test21_body
+
+#check @test21_body
+#check @test21_eq
+#print axioms test21_eq
+
+-- ============================================================================
+-- Test 22: Recursive function
+-- ============================================================================
+
+-- Recursive functions compile to Nat.brecOn/WellFounded.fix, creating complex
+-- internal structures. Let's test with a simpler pattern-match function that
+-- uses casesOn.
+-- Note: Lean compiles `match` to `casesOn` which can be navigated with argArg.
+-- For the successor case: Nat.casesOn n (zero_case) (fun n => succ_case)
+-- argArg 0 = zero case, argArg 1 = succ case (then lam 1 to enter the lambda)
+
+def test22 (n : Nat) : Nat :=
+  match n with
+  | 0 => 42
+  | k + 1 =>
+    let a := k + 1
+    let b := a + 1
+    let c := b + 1
+    c + k
+
+-- Match compiles to `test22.match_1 motive n zero_case succ_case`:
+-- argArg 0 = motive, 1 = discriminant, 2 = zero case, 3 = succ case.
+-- argArg 3 navigates to the successor branch, lam 1 enters the `fun k =>` binder
+#decompose test22 test22_eq
+  argArg 3 (lam 1 (letRange 0 3)) => test22_compute
+
+#check @test22_compute
+#check @test22_eq
+#print axioms test22_eq
+
+-- ============================================================================
+-- Test 23: Side-effect only with interleaved monadic+pure
+-- ============================================================================
+
+noncomputable opaque log : String → Result Unit
+
+noncomputable def test23 (x : U32) : Result U32 := do
+  let _ ← log "start"
+  let _ ← log "middle"
+  x + 1#u32
+
+-- Extract first 2 bindings (2 monadic side-effects, no vars needed by continuation)
+#decompose test23 test23_eq
+  letRange 0 2 => test23_prefix
+
+#check @test23_prefix
+#check @test23_eq
+#print axioms test23_eq
+
+-- ============================================================================
+-- Test 24: Multiple parameters with various types
+-- ============================================================================
+
+def test24 (n : Nat) (x : U32) (s : Slice U8) (b : Bool) : Result U32 := do
+  let a ← x + 1#u32
+  let len : Nat := s.val.length
+  let c ← if b then x + 2#u32 else pure a
+  if len > n then c + 1#u32 else pure c
+
+#decompose test24 test24_eq
+  letRange 0 3 => test24_prefix
+
+#check @test24_prefix
+#check @test24_eq
+#print axioms test24_eq
+
+-- ============================================================================
+-- Test 25: Bigger stress test — 30 bindings, 6 decomposition steps
+-- ============================================================================
+
+def test25 (x : U32) : Result U32 := do
+  let a0 ← x + 1#u32
+  let a1 ← a0 + 1#u32
+  let a2 ← a1 + 1#u32
+  let a3 ← a2 + 1#u32
+  let a4 ← a3 + 1#u32
+  let a5 ← a4 + 1#u32
+  let a6 ← a5 + 1#u32
+  let a7 ← a6 + 1#u32
+  let a8 ← a7 + 1#u32
+  let a9 ← a8 + 1#u32
+  let a10 ← a9 + 1#u32
+  let a11 ← a10 + 1#u32
+  let a12 ← a11 + 1#u32
+  let a13 ← a12 + 1#u32
+  let a14 ← a13 + 1#u32
+  let a15 ← a14 + 1#u32
+  let a16 ← a15 + 1#u32
+  let a17 ← a16 + 1#u32
+  let a18 ← a17 + 1#u32
+  let a19 ← a18 + 1#u32
+  let a20 ← a19 + 1#u32
+  let a21 ← a20 + 1#u32
+  let a22 ← a21 + 1#u32
+  let a23 ← a22 + 1#u32
+  let a24 ← a23 + 1#u32
+  let a25 ← a24 + 1#u32
+  let a26 ← a25 + 1#u32
+  let a27 ← a26 + 1#u32
+  let a28 ← a27 + 1#u32
+  let a29 ← a28 + 1#u32
+  a29 + x
+
+-- 6 sequential decompositions, each extracting 5 bindings
+#decompose test25 test25_eq
+  letRange 0 5 => test25_chunk1
+  letRange 1 5 => test25_chunk2
+  letRange 1 5 => test25_chunk3
+  letRange 1 5 => test25_chunk4
+  letRange 1 5 => test25_chunk5
+  letRange 1 5 => test25_chunk6
+
+#check @test25_eq
+#print axioms test25_eq
+
+-- ============================================================================
+-- Test 26: letRange starting in the middle — tests that outer bindings are captured
+-- ============================================================================
+
+def test26 (x : U32) : Result U32 := do
+  let a ← x + 1#u32     -- binding 0
+  let b ← a + 2#u32     -- binding 1
+  let c ← b + 3#u32     -- binding 2
+  let d ← c + a         -- binding 3 (references a from binding 0)
+  let e ← d + b         -- binding 4 (references b from binding 1)
+  e + 1#u32
+
+-- Extract bindings 2-4 (which reference a, b from outside the range)
+#decompose test26 test26_eq
+  letRange 2 3 => test26_middle
+
+#check @test26_middle  -- should take a, b as parameters
+#check @test26_eq
+#print axioms test26_eq
+
+-- ============================================================================
+-- Test 27: letAt navigating to binding 1's value (deeper navigation)
+-- ============================================================================
+
+def test27_aux1 (x : U32) : Result U32 := do
+  let a ← x + 1#u32
+  a + 2#u32
+
+def test27_aux2 (y : U32) : Result U32 := do
+  let b ← y + 10#u32
+  b + 20#u32
+
+def test27 (x y : U32) : Result U32 := do
+  let p ← test27_aux1 x    -- binding 0
+  let q ← test27_aux2 y    -- binding 1 (we will navigate into this)
+  p + q
+
+-- Navigate to binding 1's value (test27_aux2 y) and extract it
+#decompose test27 test27_eq
+  letAt 1 (full) => test27_extracted
+
+#check @test27_extracted
+#check @test27_eq
+#print axioms test27_eq
+
+-- ============================================================================
+-- Test 28: Pure function with branch — full extraction from branch body
+-- ============================================================================
+
+def test28 (b : Bool) (x : Nat) : Nat :=
+  if b then
+    let a := x + 1
+    let b := a + 2
+    let c := b + 3
+    c + a
+  else
+    x
+
+#decompose test28 test28_eq
+  branch 0 full => test28_then
+
+#check @test28_then
+#check @test28_eq
+#print axioms test28_eq
+
+-- ============================================================================
+-- Test 29: Pure neededFVars == 0 — range where no variables are used by continuation
+-- ============================================================================
+
+-- In pure mode, when no range variables are used, the definition is created
+-- but the body is just the continuation (let-reduction makes them equal by rfl)
+def test29 (x : Nat) : Nat :=
+  let _a := x + 1
+  let _b := x + 2
+  x + 3
+
+#decompose test29 test29_eq
+  letRange 0 2 => test29_unused
+
+#check @test29_unused
+#check @test29_eq
+#print axioms test29_eq
+
+-- ============================================================================
+-- Test 30: Universe polymorphism
+-- ============================================================================
+
+universe u
+def test30 {α : Type u} (x : α) : α :=
+  let a := x
+  let b := a
+  b
+
+#decompose test30 test30_eq
+  letRange 0 2 => test30_aux
+
+#check @test30_aux
+#check @test30_eq
+#print axioms test30_eq
+
+-- ============================================================================
+-- Test 31: Branch followed by letRange on both branches
+-- ============================================================================
+
+def test31 (b : Bool) (x y : U32) : Result U32 := do
+  if b then
+    let a ← x + 1#u32
+    let b ← a + 2#u32
+    b + y
+  else
+    let c ← y + 10#u32
+    let d ← c + 20#u32
+    d + x
+
+#decompose test31 test31_eq
+  branch 0 (letRange 0 2) => test31_then_prefix
+  branch 1 (letRange 0 2) => test31_else_prefix
+
+#check @test31_then_prefix
+#check @test31_else_prefix
+#check @test31_eq
+#print axioms test31_eq
+
+-- ============================================================================
+-- Test 32: Implicit type parameters
+-- ============================================================================
+
+def test32 {n : Nat} (x : Fin n) : Nat :=
+  let a := x.val + 1
+  let b := a + n
+  b
+
+#decompose test32 test32_eq
+  letRange 0 2 => test32_aux
+
+#check @test32_aux
+#check @test32_eq
+#print axioms test32_eq
