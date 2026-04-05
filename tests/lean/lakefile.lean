@@ -19,6 +19,7 @@ package «tests» {}
 @[default_target] lean_lib Builtin
 @[default_target] lean_lib Issue804ClosureReturnRef
 @[default_target] lean_lib Closures
+@[default_target] lean_lib ConstShadow
 @[default_target] lean_lib Constants
 @[default_target] lean_lib ConstantsLean
 @[default_target] lean_lib Curve25519
