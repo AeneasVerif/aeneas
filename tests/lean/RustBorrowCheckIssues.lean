@@ -44,7 +44,8 @@ def unnecessary_error_2 (b0 : Bool) (b1 : Bool) : Result Unit := do
             else ok 1#u32
   let _ ←
     if b1
-    then core.mem.drop 2#u32
+    then do
+         core.mem.drop 2#u32
          ok (true, 2#u32)
     else ok (false, 0#u32)
   let _ ← 2#u32 + 1#u32

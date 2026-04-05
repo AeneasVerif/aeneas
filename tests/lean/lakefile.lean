@@ -11,6 +11,7 @@ package «tests» {}
 @[default_target] lean_lib ArraysDefs
 @[default_target] lean_lib ArraySliceIndex
 @[default_target] lean_lib AsMut
+@[default_target] lean_lib AssertCfg
 @[default_target] lean_lib Avl
 @[default_target] lean_lib BaseTutorial
 @[default_target] lean_lib Bitwise
@@ -18,6 +19,7 @@ package «tests» {}
 @[default_target] lean_lib Builtin
 @[default_target] lean_lib Issue804ClosureReturnRef
 @[default_target] lean_lib Closures
+@[default_target] lean_lib ConstShadow
 @[default_target] lean_lib Constants
 @[default_target] lean_lib ConstantsLean
 @[default_target] lean_lib Curve25519
@@ -28,6 +30,7 @@ package «tests» {}
 @[default_target] lean_lib Deref
 @[default_target] lean_lib Discriminant
 @[default_target] lean_lib Drop
+@[default_target] lean_lib DropBug
 @[default_target] lean_lib Dyn
 @[default_target] lean_lib DynamicSize
 @[default_target] lean_lib FromTo
@@ -54,6 +57,7 @@ package «tests» {}
 @[default_target] lean_lib LoopsNestedRec
 @[default_target] lean_lib LoopsSequences
 @[default_target] lean_lib MiniTree
+@[default_target] lean_lib MutBorrowInSharedBorrow
 @[default_target] lean_lib Names
 @[default_target] lean_lib NestedBorrows
 @[default_target] lean_lib NoNestedBorrows
