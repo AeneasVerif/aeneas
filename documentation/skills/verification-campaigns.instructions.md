@@ -166,6 +166,10 @@ one for Absorb, one for Squeeze+Variants). Each reviewer must check:
 7. **No existential quantifiers over non-propositions**: `∃ a, P a` where `a` is
    a value (not a proof) is banned. However, `∃ (_ : P), Q` where `P` is a
    proposition used for dependent typing is **allowed** — do not flag it.
+8. **Factor repeated guards**: When multiple conjuncts share the same guard
+   (e.g., `(¬wipe → A) ∧ (¬wipe → B)`), factor it out: `¬wipe → (A ∧ B)`.
+   Applies to any predicate — implications, case splits, hypotheses.
+   (See `aeneas-lean-core` "Factor repeated guards in conjunctions.")
 
 **Informal proof review (line-by-line call-graph tracing):**
 

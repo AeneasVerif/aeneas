@@ -282,6 +282,41 @@ theorem append.spec (self : State) (data : Slice U8) :
 The named definition is easier to read, can be `simp`-unfolded in proofs, and is
 reusable across multiple theorems that need the same case logic.
 
+**Factor repeated guards in conjunctions.** When multiple conjuncts in a
+pre/postcondition share the same guard, factor it out. This applies to any
+predicate — implications, case splits, hypotheses, etc.
+
+```lean
+-- ⛔ BAD: repeated guard
+⦃ result =>
+  (¬wipe → wfKeccakState result) ∧
+  (¬wipe → result.squeeze_mode = true) ∧
+  (¬wipe → result.input_block_size = self.input_block_size) ⦄
+
+-- ✅ GOOD: factored
+⦃ result =>
+  (¬wipe →
+    wfKeccakState result ∧
+    result.squeeze_mode = true ∧
+    result.input_block_size = self.input_block_size) ⦄
+
+-- ⛔ BAD: repeated case-split guard
+⦃ result =>
+  (self.squeeze_mode → toBitstring result = f self) ∧
+  (self.squeeze_mode → result.state_index = 0) ∧
+  (¬self.squeeze_mode → toBitstring result = g self) ∧
+  (¬self.squeeze_mode → result.state_index = h self) ⦄
+
+-- ✅ GOOD: factored per branch
+⦃ result =>
+  (self.squeeze_mode →
+    toBitstring result = f self ∧
+    result.state_index = 0) ∧
+  (¬self.squeeze_mode →
+    toBitstring result = g self ∧
+    result.state_index = h self) ⦄
+```
+
 <!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "API coverage" -->
 
 **API coverage: preconditions must not exclude valid usage patterns.** For every
