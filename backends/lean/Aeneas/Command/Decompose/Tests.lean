@@ -801,3 +801,366 @@ set_option profiler true in
 #check @test33_else
 #check @test33_eq
 #print axioms test33_eq
+
+-- ============================================================================
+-- Test 34: Simple match on Nat — branch navigates into match alternatives
+-- ============================================================================
+
+def test34 (n : Nat) : Nat :=
+  match n with
+  | 0 => 42
+  | k + 1 =>
+    let a := k + 1
+    let b := a + 1
+    let c := b + 1
+    c + k
+
+-- Use `branch 1` to enter the successor case (alt index 1), then extract lets
+#decompose test34 test34_eq
+  branch 1 (letRange 0 3) => test34_succ_comp
+
+#check @test34_succ_comp
+#check @test34_eq
+#print axioms test34_eq
+
+-- ============================================================================
+-- Test 35: Match on Bool
+-- ============================================================================
+
+def test35 (b : Bool) : Nat :=
+  match b with
+  | true =>
+    let x := 100
+    let y := x + 200
+    y
+  | false =>
+    let x := 300
+    let y := x + 400
+    y
+
+-- Extract from true branch (alt 0) and false branch (alt 1)
+#decompose test35 test35_eq
+  branch 0 (letRange 0 2) => test35_true_comp
+  branch 1 (letRange 0 2) => test35_false_comp
+
+#check @test35_true_comp
+#check @test35_false_comp
+#check @test35_eq
+#print axioms test35_eq
+
+-- ============================================================================
+-- Test 36: Match on Option
+-- ============================================================================
+
+def test36 (o : Option Nat) : Nat :=
+  match o with
+  | none =>
+    let a := 0
+    let b := a + 1
+    b
+  | some v =>
+    let a := v + 10
+    let b := a + 20
+    let c := b + 30
+    c
+
+-- Extract from the some branch (alt 1), which has 1 pattern variable (v)
+#decompose test36 test36_eq
+  branch 1 (letRange 0 3) => test36_some_comp
+
+#check @test36_some_comp
+#check @test36_eq
+#print axioms test36_eq
+
+-- ============================================================================
+-- Test 37: Match on custom enum with many constructors
+-- ============================================================================
+
+inductive Color where
+  | red | green | blue | yellow
+
+def test37 (c : Color) : Nat :=
+  match c with
+  | .red =>
+    let a := 1
+    let b := a + 2
+    b
+  | .green =>
+    let a := 3
+    let b := a + 4
+    b
+  | .blue =>
+    let a := 5
+    let b := a + 6
+    b
+  | .yellow =>
+    let a := 7
+    let b := a + 8
+    b
+
+-- Extract from each branch
+#decompose test37 test37_eq
+  branch 0 (letRange 0 2) => test37_red
+  branch 1 (letRange 0 2) => test37_green
+  branch 2 (letRange 0 2) => test37_blue
+  branch 3 (letRange 0 2) => test37_yellow
+
+#check @test37_red
+#check @test37_green
+#check @test37_blue
+#check @test37_yellow
+#check @test37_eq
+#print axioms test37_eq
+
+-- ============================================================================
+-- Test 38: Match with full extraction of a branch
+-- ============================================================================
+
+def test38 (n : Nat) : Nat :=
+  match n with
+  | 0 => 42
+  | k + 1 =>
+    let a := k * 2
+    let b := a + 3
+    b
+
+-- Extract the full successor branch body
+#decompose test38 test38_eq
+  branch 1 full => test38_succ
+
+#check @test38_succ
+#check @test38_eq
+#print axioms test38_eq
+
+-- ============================================================================
+-- Test 39: Nested match — match inside a match branch
+-- ============================================================================
+
+def test39 (n : Nat) (b : Bool) : Nat :=
+  match n with
+  | 0 => 0
+  | k + 1 =>
+    match b with
+    | true =>
+      let a := k + 100
+      let b := a + 200
+      b
+    | false =>
+      let a := k + 300
+      let b := a + 400
+      b
+
+-- Navigate: outer match alt 1 → inner match alt 0 (true) → extract lets
+#decompose test39 test39_eq
+  branch 1 (branch 0 (letRange 0 2)) => test39_succ_true_comp
+  branch 1 (branch 1 (letRange 0 2)) => test39_succ_false_comp
+
+#check @test39_succ_true_comp
+#check @test39_succ_false_comp
+#check @test39_eq
+#print axioms test39_eq
+
+-- ============================================================================
+-- Test 40: Monadic match — match in the Result monad
+-- ============================================================================
+
+def test40 (n : Nat) : Result Nat := do
+  match n with
+  | 0 => .ok 42
+  | k + 1 =>
+    let a ← .ok (k + 10)
+    let b ← .ok (a + 1)
+    .ok b
+
+-- The match is directly at the top of the do-block body, so `branch` works directly
+#decompose test40 test40_eq
+  branch 1 (letRange 0 2) => test40_succ_comp
+
+#check @test40_succ_comp
+#check @test40_eq
+#print axioms test40_eq
+
+-- ============================================================================
+-- Test 41: Match with struct pattern — multiple pattern variables
+-- ============================================================================
+
+structure Point where
+  x : Nat
+  y : Nat
+
+def test41 (p : Point) : Nat :=
+  match p with
+  | ⟨x, y⟩ =>
+    let a := x + y
+    let b := a * 2
+    let c := b + 1
+    c
+
+-- The Point match has 1 alternative with 2 pattern variables (x, y)
+#decompose test41 test41_eq
+  branch 0 (letRange 0 3) => test41_comp
+
+#check @test41_comp
+#check @test41_eq
+#print axioms test41_eq
+
+-- ============================================================================
+-- Test 42: Match on Sum type
+-- ============================================================================
+
+def test42 (s : Nat ⊕ Bool) : Nat :=
+  match s with
+  | .inl n =>
+    let a := n + 1
+    let b := a + 2
+    b
+  | .inr b =>
+    let x := if b then 100 else 200
+    let y := x + 3
+    y
+
+-- Extract from the inl branch (alt 0, 1 pattern var) and inr branch (alt 1, 1 pattern var)
+#decompose test42 test42_eq
+  branch 0 (letRange 0 2) => test42_inl_comp
+  branch 1 (letRange 0 2) => test42_inr_comp
+
+#check @test42_inl_comp
+#check @test42_inr_comp
+#check @test42_eq
+#print axioms test42_eq
+
+-- ============================================================================
+-- Test 43: Match combined with if-then-else inside a branch
+-- ============================================================================
+
+def test43 (n : Nat) (flag : Bool) : Nat :=
+  match n with
+  | 0 => 0
+  | k + 1 =>
+    if flag then
+      let a := k + 10
+      let b := a + 20
+      b
+    else
+      let a := k + 30
+      let b := a + 40
+      b
+
+-- Navigate into match alt 1, then into if-then-else branch 0 (then)
+#decompose test43 test43_eq
+  branch 1 (branch 0 (letRange 0 2)) => test43_succ_then_comp
+  branch 1 (branch 1 (letRange 0 2)) => test43_succ_else_comp
+
+#check @test43_succ_then_comp
+#check @test43_succ_else_comp
+#check @test43_eq
+#print axioms test43_eq
+
+-- ============================================================================
+-- Test 44: Rewrite test22 using branch instead of argArg (regression check)
+-- ============================================================================
+
+-- test22 used `argArg 3 (lam 1 ...)` to navigate the match; now branch should work
+def test44 (n : Nat) : Nat :=
+  match n with
+  | 0 => 42
+  | k + 1 =>
+    let a := k + 1
+    let b := a + 1
+    let c := b + 1
+    c + k
+
+#decompose test44 test44_eq
+  branch 1 (letRange 0 3) => test44_compute
+
+-- Verify this produces the same result as test22 did with argArg
+#check @test44_compute
+#check @test44_eq
+#print axioms test44_eq
+
+-- ============================================================================
+-- Test 45: Big match with many branches, extracting from all — performance test
+-- ============================================================================
+
+inductive Weekday where
+  | mon | tue | wed | thu | fri | sat | sun
+
+def test45 (d : Weekday) : Nat :=
+  match d with
+  | .mon =>
+    let a := 1; let b := a + 2; let c := b + 3; let d := c + 4; let e := d + 5; e
+  | .tue =>
+    let a := 10; let b := a + 20; let c := b + 30; let d := c + 40; let e := d + 50; e
+  | .wed =>
+    let a := 100; let b := a + 200; let c := b + 300; let d := c + 400; let e := d + 500; e
+  | .thu =>
+    let a := 1000; let b := a + 2000; let c := b + 3000; let d := c + 4000; let e := d + 5000; e
+  | .fri =>
+    let a := 10000; let b := a + 20000; let c := b + 30000; let d := c + 40000; let e := d + 50000; e
+  | .sat =>
+    let a := 100000; let b := a + 200000; let c := b + 300000; let d := c + 400000; let e := d + 500000; e
+  | .sun =>
+    let a := 1000000; let b := a + 2000000; let c := b + 3000000; let d := c + 4000000; let e := d + 5000000; e
+
+set_option profiler true in
+#decompose test45 test45_eq
+  branch 0 (letRange 0 5) => test45_mon
+  branch 1 (letRange 0 5) => test45_tue
+  branch 2 (letRange 0 5) => test45_wed
+  branch 3 (letRange 0 5) => test45_thu
+  branch 4 (letRange 0 5) => test45_fri
+  branch 5 (letRange 0 5) => test45_sat
+  branch 6 (letRange 0 5) => test45_sun
+
+#check @test45_mon
+#check @test45_tue
+#check @test45_wed
+#check @test45_thu
+#check @test45_fri
+#check @test45_sat
+#check @test45_sun
+#check @test45_eq
+#print axioms test45_eq
+
+-- ============================================================================
+-- Test 46: Match with branch index out of bounds (error test)
+-- ============================================================================
+
+def test46 (b : Bool) : Nat :=
+  match b with
+  | true => 1
+  | false => 2
+
+-- Bool match has 2 alts (0 and 1); index 2 should fail
+/--
+error: branch 2: match has only 2 alternative(s) (0-indexed)
+-/
+#guard_msgs in
+#decompose test46 test46_eq
+  branch 2 full => test46_bad
+
+-- ============================================================================
+-- Test 47: Match on list — nil and cons with multiple pattern variables
+-- ============================================================================
+
+def test47 (l : List Nat) : Nat :=
+  match l with
+  | [] =>
+    let a := 0
+    let b := a + 1
+    b
+  | hd :: tl =>
+    let a := hd + tl.length
+    let b := a + 100
+    let c := b + 200
+    c
+
+-- nil branch (alt 0): 0 pattern vars, cons branch (alt 1): 2 pattern vars (hd, tl)
+#decompose test47 test47_eq
+  branch 0 (letRange 0 2) => test47_nil_comp
+  branch 1 (letRange 0 3) => test47_cons_comp
+
+#check @test47_nil_comp
+#check @test47_cons_comp
+#check @test47_eq
+#print axioms test47_eq

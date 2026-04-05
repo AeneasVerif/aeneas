@@ -414,8 +414,22 @@ def extractLetRange (bindings : Array BindingEntry) (terminal : Expr)
 -- Navigation helpers (for composite patterns)
 -- ============================================================================
 
+/-- Open `n` nested lambda binders, apply `action` to the innermost body, close them back. -/
+private def modifyUnderAllLambdas (e : Expr) (n : Nat) (action : Expr → MetaM Expr) : MetaM Expr := do
+  match n with
+  | 0 => action e
+  | n + 1 =>
+    match e with
+    | .lam name type body binfo =>
+      withLocalDecl name binfo type fun fvar => do
+        let body' := body.instantiate1 fvar
+        let modifiedBody ← modifyUnderAllLambdas body' n action
+        mkLambdaFVars #[fvar] modifiedBody
+    | _ => action e -- fewer lambdas than expected: apply to what's there
+
 /-- Modify branch `idx` of an ite/dite/match expression.
-    Calls `action` on the branch body; returns the reconstructed expression. -/
+    Calls `action` on the branch body (under all pattern-variable lambdas);
+    returns the reconstructed expression. -/
 def modifyBranch (e : Expr) (idx : Nat) (action : Expr → MetaM Expr) : MetaM Expr := do
   -- Try ite
   if let some (α, inst, cond, thenB, elseB) := matchIte? e then
@@ -429,26 +443,25 @@ def modifyBranch (e : Expr) (idx : Nat) (action : Expr → MetaM Expr) : MetaM E
   -- Try dite
   if let some (α, inst, cond, thenB, elseB) := matchDite? e then
     if idx == 0 then
-      -- thenB is a lambda: fun h : cond => body
-      let thenB' ← modifyLambdaBody thenB action
+      let thenB' ← modifyUnderAllLambdas thenB 1 action
       return mkApp5 (mkConst ``dite e.getAppFn.constLevels!) α inst cond thenB' elseB
     else if idx == 1 then
-      let elseB' ← modifyLambdaBody elseB action
+      let elseB' ← modifyUnderAllLambdas elseB 1 action
       return mkApp5 (mkConst ``dite e.getAppFn.constLevels!) α inst cond thenB elseB'
     else throwError "branch {idx}: dite has only branches 0 (then) and 1 (else)"
-  -- Try match (casesOn): branches are the last arguments
-  -- For now, treat as a generic app and modify the appropriate arg
-  -- The user can use `argArg` for fine-grained control
-  throwError "branch {idx}: expression is not an ite or dite; use argArg for match"
-where
-  modifyLambdaBody (e : Expr) (action : Expr → MetaM Expr) : MetaM Expr := do
-    match e with
-    | .lam name type body binfo =>
-      withLocalDecl name binfo type fun fvar => do
-        let body' := body.instantiate1 fvar
-        let modifiedBody ← action body'
-        mkLambdaFVars #[fvar] modifiedBody
-    | _ => action e
+  -- Try match (detected via matchMatcherApp?)
+  if let some mApp ← matchMatcherApp? e then
+    if h : idx < mApp.alts.size then
+      let some info ← getMatcherInfo? mApp.matcherName
+        | throwError "branch {idx}: could not get matcher info for '{mApp.matcherName}'"
+      let numLambdas := info.altNumParams[idx]?.getD 0
+      let alt := mApp.alts[idx]
+      let alt' ← modifyUnderAllLambdas alt numLambdas action
+      let mApp' := { mApp with alts := mApp.alts.set idx alt' }
+      return mApp'.toExpr
+    else
+      throwError "branch {idx}: match has only {mApp.alts.size} alternative(s) (0-indexed)"
+  throwError "branch {idx}: expression is not an ite, dite, or match"
 
 /-- Open `n` lambda binders, apply `action` to the inner body, close back. -/
 partial def modifyUnderLambdas (e : Expr) (n : Nat) (action : Expr → MetaM Expr) : MetaM Expr := do
