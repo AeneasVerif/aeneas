@@ -109,6 +109,32 @@ carefully. The answer is almost always a composition of conversion functions
 (`arrayToSpecBytes`, `sliceToSpecBytes`, `toPoly`) applied to the relevant fields,
 possibly with `.extract`, `.cast`, or `++`.
 
+**⛔ Sorry'd definitions are NEVER acceptable — not even at scaffold stage.** A `def`
+with `sorry` as its body is not a placeholder — it is a hole that makes every theorem
+referencing it vacuously true. Unlike a sorry'd *proof* (which leaves an honest gap in
+a correct statement), a sorry'd *definition* poisons the statement itself: any
+postcondition that mentions the definition can be trivially satisfied because `sorry`
+unifies with any type.
+
+This applies to ALL definitions: bridge/conversion functions (e.g., `aesBlockToArray`,
+`toSpecBytes`), spec helper functions (e.g., `ghashAfterMacData`, `computeTagSpec`),
+well-formedness predicates, and any `noncomputable def` used in theorem statements.
+
+**The fix is always the same: write the concrete body immediately.** If you cannot
+write the body because:
+- **You don't understand the computation**: Read the Rust source, the spec, and the
+  docstring more carefully. The body is always derivable from these.
+- **The body requires a function that doesn't exist yet**: Define that function first
+  (with a concrete body), then use it.
+- **The body is complex**: That's fine — write it anyway. A complex concrete body is
+  infinitely better than `sorry`. Use `let` bindings, helper functions, or pattern
+  matching to keep it readable.
+
+**The only exception** is for definitions whose bodies require Lean infrastructure that
+genuinely does not exist yet (e.g., a typeclass instance that Aeneas hasn't generated).
+In such cases, document the blocker precisely (see "No Vague Blockers" pitfall) and
+report it to the user.
+
 ### Indentation rules for spec theorems
 - `@[step]` and `theorem name`: base indentation (0 additional)
 - Arguments, preconditions, and the line with the function application: +4 spaces

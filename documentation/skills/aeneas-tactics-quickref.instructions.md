@@ -62,7 +62,7 @@ What does the goal look like?
 ├─ If-then-else → simp_ifs / split
 ├─ Conjunction (∧) → split_conjs, then immediately scaffold `· agrind` per sub-goal (same as step*)
 ├─ Boolean/Propositional → simp_bool_prop / tauto
-├─ Concrete computation → decide / native_decide
+├─ Concrete computation → decide / native_decide (⚠️ always time them — see pitfalls)
 ├─ Congruence → fcongr
 │
 ├─ Writing `simp [CONST]; solver` in a cdot block after step*?
@@ -126,7 +126,7 @@ See the `aeneas-lean-core` skill file for worked examples and disambiguation rul
 | `simp` / `simp [*]` | Simplification | Use `simp [*]` to keep hypotheses |
 | `simp_all` | Aggressive simplification | **⚠️ AVOID in big contexts** — very slow and drops hypotheses. Prefer `agrind` |
 | `tauto` | Propositional tautologies | |
-| `decide` | Concrete decidable goals | |
+| `decide`/`native_decide` | Concrete decidable goals | ⚠️ Can be very slow — always time it (see pitfalls) |
 | `ring` | Ring equalities | |
 | `split` | Case-split match/if | |
 | `cases` | Structural case analysis | |
@@ -332,7 +332,8 @@ theorem MY_CONST_val : MY_CONST.val = 42 := by decide
 | Dependent proof in `rw` | `simp only`/`rw` loops on term with proof arg | `fcongr 1` to separate value from proof (proof irrelevance) |
 | `step*` stuck on projection | No progress on `(Struct p).field args` | `simp only [step_simps]` before `step*`; add `@[simp, step_simps]` lemma |
 | Doc comment before `set_option` | Parse error "expected 'lemma'" | Use `/- ... -/` (regular comment), not `/-- ... -/` (doc comment) |
-| Concrete computation fails | `agrind`/`scalar_tac` fail on numeric literals | `native_decide` or `decide` |
+| Concrete computation fails | `agrind`/`scalar_tac` fail on numeric literals | `decide` or `native_decide` — but **always time them** (see below) |
+| `decide`/`native_decide` slowness | Build takes minutes or heartbeat timeout | **Both `decide` and `native_decide` can be extremely slow** — they compile/interpret the full term, which can explode on large terms or inside proofs with big contexts. **Always measure the time** using `set_option profiler true` or `lean_profile_proof`. If slow, extract the fact as a standalone `theorem ... := by native_decide` outside the main proof so the context is minimal. Never use either inside a large proof body without profiling first. |
 | `scalar_tac` in spec_gen | Cascading `maxRecDepth` in loop proof | Mass-replace ALL `scalar_tac` → `agrind` in proof body |
 | Recurring index bounds slow | Same bound proved inline many times | Extract as solver-attributed lemma (`@[agrind =]`); see item 22 in `aeneas-lean-core` |
 | `(by ...)` in type signature | Kernel slowness on `apply`/`exact` of theorem | Use `get_elem_tactic` override with `agrind`; if that fails, use `(by agrind)` > `(by grind)` > `(by scalar_tac)` > standalone lemma. NEVER `cases p <;> simp_all <;> tactic`. See "Never embed (by ...) in type signatures" in `aeneas-lean-core` |
@@ -504,6 +505,44 @@ re-elaboration of large chunks. See the `lean-lsp-mcp` skill file for guidance
 elaboration checkpoints).
 
 ### ⛔ NEVER increase `maxRecDepth`
+
+### 🛑 When a file is too slow: the sorry/stop diagnostic strategy
+
+**⛔ NEVER bump `maxHeartbeats` until a slow file finally builds.** This can turn a
+10-minute build into a multi-hour build, and you learn nothing about the root cause.
+A proof that needs more heartbeats is a **broken proof** — treat it as such.
+
+**Strategy: disable all proofs with `stop`, then re-enable one by one.**
+
+1. **Disable all suspect proofs with `stop`.** Put `stop` at the top of every non-trivial
+   theorem in the file to deactivate the elaboration of the proof. The file should now
+   build in seconds. If it doesn't, there's an issue at the declaration level (e.g., a
+   slow `by ...` in an index bound proof - put `stop` in those too).
+
+2. **Re-enable proofs one by one.** Remove each stop one at a time, build, and measure the
+   time. This identifies which proof(s) are the culprits.
+
+3. **For each culprit: use the rolling stop technique.** Move `stop` down step by step,
+   using the MCP to replay the proof incrementally and find which one is slow:
+   ```lean
+   theorem my_fn.spec ... := by
+     step*
+     stop    -- does it build fast up to here?
+     cases x -- move stop down by one line (below this line), retry, etc.
+     have ...
+     ...   
+   ```
+
+4. **Fix the slow tactic.** Common fixes:
+   - Extract the sub-goal as an auxiliary lemma (smaller context)
+   - Replace `simp_all` with targeted `simp [h1, h2]` or `agrind`
+   - Replace `fin_cases x <;> simp_all` with more direct case analysis
+   - Replace `decide`/`native_decide` with a standalone pre-proved lemma
+   - Decompose the function with fold theorems (smaller proof terms)
+
+**Key principle:** A file should always build in reasonable time (< 2 minutes). If it
+doesn't, `stop` the slow parts, diagnose, and fix — don't wait hours hoping a
+heartbeat bump will work.
 
 <!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core item 11 ("NEVER increase maxRecDepth") -->
 

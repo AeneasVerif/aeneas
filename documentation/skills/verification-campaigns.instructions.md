@@ -96,7 +96,10 @@ Create all proof files with:
 - Axioms and their `@[step]` lemmas
 - `@[step]` theorem statements for every function to verify
 - Proof bodies as `unfold FUNCTION_NAME; sorry`
-- All bridge/conversion functions needed to link implementation types to spec types
+- All bridge/conversion functions needed to link implementation types to spec types.
+  **Every bridge/conversion function and spec helper must have a concrete body — never
+  `sorry`.** A sorry'd definition makes every theorem that references it vacuously true.
+  See the `aeneas-lean-core` skill, "Sorry'd definitions vs sorry'd theorems."
 
 Write theorem statements per the `aeneas-lean-core` skill file. In particular:
 - **Full functional correctness (FC)** in every postcondition — not just structural
@@ -173,11 +176,35 @@ one for Absorb, one for Squeeze+Variants). Each reviewer must check:
 
 **Informal proof review (line-by-line call-graph tracing):**
 
-5. **For each monadic call in the function body**, the reviewer must look up the
-   corresponding `@[step]` theorem and verify:
-   - The preconditions are satisfied by the current proof context
-   - The postcondition provides what the caller needs
-   - The postcondition's FC clause feeds into the top-level FC goal
+5. **Exhaustive monadic call enumeration.** For each `@[step]` theorem, the
+   reviewer must open the corresponding function body in `Funs.lean` and
+   **list every `let ... ←` binding** (monadic call) in the review output.
+   For each binding, the reviewer must state one of:
+   - **Has spec**: "`<call>` — by `<theorem_name>`". (where `<theroem_name>` is a
+     step theorem).
+     Then verify: preconditions satisfied, postcondition provides what the
+     caller needs, FC clause feeds into the top-level FC goal.
+   - **MISSING spec** (critical): "`<call>` — **NO step spec exists** for
+     `<full_lean_name>`". This is a critical issue: without it, `step` cannot
+     make progress through this call, and the proof is blocked.
+   **All functions** must have a step spec, even axiomatized functions.
+
+   This enumeration must be **exhaustive** — cross-checked against the actual
+   function body in `Funs.lean`, not just the informal proof's summary. If the
+   informal proof skips a monadic call, that is itself a critical issue.
+
+   **External/stdlib calls deserve extra scrutiny.** Calls to functions defined
+   in `FunsExternal.lean` (axioms for std library, iterator methods, Pin API,
+   FFI) are the most likely to lack specs. For each such call, verify the spec
+   exists in one of: the Aeneas stdlib, the project's `Axioms/` folder, or an
+   iterator/stdlib specs file. A bare axiom with no postcondition (`axiom f :
+   A → Result B`) is NOT a spec — it says nothing about what `f` returns.
+
+   **Opaque types compound missing specs.** If an external function operates on
+   an opaque type (e.g., an iterator with no ghost state, `Pin T` with no
+   structure), then no meaningful spec can be written for it either. Flag both:
+   the missing spec AND the opaque type that prevents writing one.
+
 6. **Bridge lemma coverage**: Are all necessary conversions between implementation
    types and spec types covered? (e.g., `toBitstring ↔ toStateArray`,
    `iterRounds ↔ P 6 24`)
@@ -190,8 +217,15 @@ one for Absorb, one for Squeeze+Variants). Each reviewer must check:
    that is part of the primitive being verified must have a corresponding `@[step]`
    theorem. Every axiom (in `Axioms/`) must have a corresponding `@[step]` lemma.
    Cross-check against the generated code — no function should be forgotten.
+8b. **External dependency audit**: Collect all external functions called
+   (directly or transitively) by the verified functions. For each one, verify
+   a `@[step]` spec exists. Any external axiom that is called but has no spec is a
+   **critical gap** — list it by full Lean name and the file(s) where it is called.
 9. **Axiom audit**: List every `axiom`, `sorry`, `native_decide` found. Sorry in
-   proof bodies is expected (WIP); sorry in definitions is a bug.
+   proof bodies is expected (WIP); **sorry in definition bodies (bridge functions,
+   spec helpers, conversion functions) is a critical issue** — every theorem
+   referencing that definition is vacuously true. These must be filled with concrete
+   Lean expressions immediately.
 10. **Import completeness**: Do all referenced names resolve?
 11. **Dead code**: Remove unused definitions, orphaned comments, stale TODOs.
 12. **Documentation**: Non-obvious preconditions have explanatory comments.
