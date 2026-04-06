@@ -578,6 +578,11 @@ endlessly.
   lemma or reduction rule unfolds `s[i]!` back to a form containing `s[i]'h`, you
   get a loop. Use `rw` instead of `simp` for these.
 
+**`congr` transparency issues.** `congr` (and `congr N`) uses default transparency,
+which can WHNF-unfold recursive/looping function bodies and hit `maxRecDepth`.
+**Always use `fcongr` (or `fcongr N`) instead** — it uses reducible transparency
+and produces the same subgoals without unfolding opaque definitions.
+
 **`exact`/`apply` unification issues.** Not all `maxRecDepth` or heartbeat
 timeout errors come from simp loops. `exact` and `apply` can trigger either
 `maxRecDepth` (value mismatches) or heartbeat timeouts (proof-term mismatches)
@@ -592,7 +597,8 @@ down one line at a time:
    ignores everything after `stop`
 2. Move `stop` down one tactic at a time (using the LSP for fast feedback)
 3. When the error appears, the tactic just above `stop` is the trigger
-4. Diagnose: is it a simp loop (fix per above) or `exact`/`apply` unification
+4. Diagnose: is it a simp loop (fix per above), `congr` transparency (use
+   `fcongr`), or `exact`/`apply` unification
    (see "Unification pitfalls" in `aeneas-lean-core`)?
 
 ### Report misbehaving tactics

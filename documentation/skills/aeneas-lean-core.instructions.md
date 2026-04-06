@@ -1883,6 +1883,9 @@ calc (x + 1) * (x + 1)
     ```
 
     If the `maxRecDepth` issue is not caused by a simp loop or deep unification,
+    check if the trigger is `congr` — `congr N` uses default transparency and can
+    WHNF-unfold recursive definitions until it hits the recursion limit. **Always
+    use `fcongr N` instead** (see item 26). If none of these causes apply,
     **report it to the user** — it may indicate a structural proof problem or a
     tactic bug.
 12. **Report misbehaving tactics.** If a tactic doesn't do what it should — for example, `step` fails to make progress even though the appropriate `@[step]` lemma exists, or `scalar_tac` can't close a pure arithmetic goal it should handle — **report this to the user**. It may indicate a bug or missing feature worth fixing upstream.
