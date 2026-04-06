@@ -2,9 +2,10 @@ import Aeneas.Extract
 
 namespace Aeneas.Std
 
--- TODO
+-- TODO: make general
 @[rust_type "core::pin::Pin"]
-axiom core.pin.Pin (Ptr : Type) : Type
+structure core.pin.Pin (Ptr : Type) where
+  pointer : Ptr
 
 -- TODO
 @[rust_type "core::pin::helper::PinHelper"]
