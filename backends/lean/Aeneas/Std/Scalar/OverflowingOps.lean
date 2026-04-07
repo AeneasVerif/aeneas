@@ -72,11 +72,11 @@ theorem IScalar.overflowing_add_comm {ty} (x y : IScalar ty) :
   simp[IScalar.overflowing_add, Int.add_comm]
 
 uscalar
-theorem core.num.«%S».overflowing_add_comm(x y z : «%S») :
+theorem core.num.«%S».overflowing_add_comm(x y : «%S») :
   overflowing_add x y = overflowing_add y x := UScalar.overflowing_add_comm x y
 
 iscalar
-theorem core.num.«%S».overflowing_add_comm(x y z : «%S») :
+theorem core.num.«%S».overflowing_add_comm(x y : «%S») :
   overflowing_add x y = overflowing_add y x := IScalar.overflowing_add_comm x y
 
 theorem UScalar.overflowing_add_assoc {ty} (x y  z : UScalar ty) :
