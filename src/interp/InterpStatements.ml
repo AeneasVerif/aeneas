@@ -1048,7 +1048,7 @@ and eval_switch_raw (config : config) (span : Meta.span) (switch : switch) :
             with
             | None -> eval_block config otherwise ctx
             | Some (_, tgt) -> eval_block config tgt ctx)
-        | VSymbolic sv, _ ->
+        | VSymbolic sv, (TChar | TInt _ | TUInt _) ->
             (* Several branches may be grouped together: every branch is described
                by a pair (list of values, branch expression).
                In order to do a symbolic evaluation, we make this "flat" by
@@ -1062,11 +1062,9 @@ and eval_switch_raw (config : config) (span : Meta.span) (switch : switch) :
             in
             (* Expand the symbolic value *)
             let (ctx_branches, ctx_otherwise), cf_int =
-              expand_symbolic_int span sv
+              expand_symbolic_literal span sv
                 (S.mk_opt_place_from_op span op ctx)
-                (literal_as_integer int_ty)
-                (List.map literal_as_scalar values)
-                ctx
+                int_ty values ctx
             in
             (* Evaluate the branches: first the "regular" branches *)
             let resl_branches =

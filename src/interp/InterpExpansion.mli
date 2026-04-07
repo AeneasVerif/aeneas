@@ -51,17 +51,17 @@ val expand_symbolic_bool :
     scrutinee will then have a concrete value, the interpreter will switch to
     the proper branch.
 
-    When expanding a "regular" integer for a switch there is always an
-    *otherwise* branch. We treat it separately: for this reason we return a pair
-    of a list of evaluation contexts (for the branches which are not the
-    otherwise branch) and an additional evaluation context for the otherwise
-    branch. *)
-val expand_symbolic_int :
+    When expanding a literal (integer or char) for a [SwitchInt], there is
+    always an *otherwise* branch. We treat it separately: for this reason we
+    return a pair of a list of evaluation contexts (for the branches which are
+    not the otherwise branch) and an additional evaluation context for the
+    otherwise branch. *)
+val expand_symbolic_literal :
   Meta.span ->
   symbolic_value ->
   SA.mplace option ->
-  integer_type ->
-  scalar_value list ->
+  literal_type ->
+  literal list ->
   eval_ctx ->
   (eval_ctx list * eval_ctx) * (SA.expr list * SA.expr -> SA.expr)
 
