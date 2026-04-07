@@ -1357,6 +1357,29 @@ and translate_expansion (p : S.mplace option) (sv : V.symbolic_value)
       [%sanity_check] ctx.span
         (List.for_all (fun (br : match_branch) -> br.branch.ty = ty) branches);
       { e; ty }
+  | ExpandChar (branches, otherwise) ->
+      let translate_branch ((v, branch_e) : V.char_value * S.expr) :
+          match_branch =
+        let branch = translate_expr branch_e ctx in
+        let pat = mk_tpat_from_literal (VChar v) in
+        close_branch ctx.span pat branch
+      in
+      let branches = List.map translate_branch branches in
+      let otherwise = translate_expr otherwise ctx in
+      let pat_ty = TLiteral TChar in
+      let otherwise_pat : tpat = { pat = PIgnored; ty = pat_ty } in
+      let otherwise : match_branch =
+        { pat = otherwise_pat; branch = otherwise }
+      in
+      let all_branches = List.append branches [ otherwise ] in
+      let e =
+        Switch
+          (mk_opt_mplace_texpr scrutinee_mplace scrutinee, Match all_branches)
+      in
+      let ty = otherwise.branch.ty in
+      [%sanity_check] ctx.span
+        (List.for_all (fun (br : match_branch) -> br.branch.ty = ty) branches);
+      { e; ty }
 
 (* Translate and [ExpandAdt] when there is no branching (i.e., one branch).
 
