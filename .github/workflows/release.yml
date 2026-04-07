@@ -46,6 +46,9 @@ jobs:
           - os: ubuntu-latest
             artifact_name: aeneas-linux-x86_64
             nix_attr: aeneas-static-release
+          - os: ubuntu-24.04-arm
+            artifact_name: aeneas-linux-aarch64
+            nix_attr: aeneas-static-release
           - os: macos-15-intel
             artifact_name: aeneas-macos-x86_64
             nix_attr: aeneas-release
