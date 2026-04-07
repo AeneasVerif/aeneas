@@ -94,6 +94,11 @@ theorem core.num.«%S».overflowing_add_assoc(x y z : «%S») :
   (overflowing_add (overflowing_add x y).1 z).1 = (overflowing_add x (overflowing_add y z).1).1 :=
   UScalar.overflowing_add_assoc x y z
 
+iscalar
+theorem core.num.«%S».overflowing_add_assoc(x y z : «%S») :
+  (overflowing_add (overflowing_add x y).1 z).1 = (overflowing_add x (overflowing_add y z).1).1 :=
+  IScalar.overflowing_add_assoc x y z
+
 def UScalar.overflowing_sub {ty} (x y : UScalar ty) : UScalar ty × Bool :=
   (⟨ x.bv - y.bv ⟩, x.val < y.val)
 
