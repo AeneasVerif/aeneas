@@ -1,5 +1,3 @@
-//@ known-failure
-//@ no-check-output
 fn match_on_char_symbolic(c: char) -> usize {
     match c {
         'a' => 0,

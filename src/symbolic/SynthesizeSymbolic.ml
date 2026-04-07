@@ -90,8 +90,20 @@ let synthesize_symbolic_expansion (span : Meta.span) (sv : symbolic_value)
         match ls with
         | [ (Some see, exp) ] -> ExpandNoBranch (see, exp)
         | _ -> [%craise] span "Ill-formed borrow expansion")
+    | TLiteral TChar ->
+        let branches, otherwise = Collections.List.pop_last ls in
+        let get_char (see : symbolic_expansion option) : char_value =
+          match see with
+          | Some (SeLiteral (VChar cv)) -> cv
+          | _ -> [%craise] span "Unreachable"
+        in
+        let branches =
+          List.map (fun (see, exp) -> (get_char see, exp)) branches
+        in
+        let otherwise_see, otherwise = otherwise in
+        [%sanity_check] span (otherwise_see = None);
+        ExpandChar (branches, otherwise)
     | TVar _ | TArray _ | TSlice _
-    | TLiteral TChar
     | TNever
     | TTraitType _
     | TFnDef _
