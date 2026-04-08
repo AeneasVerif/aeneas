@@ -96,6 +96,7 @@ What does the goal look like?
 | `ring_eq_nf` | Cancel common terms in equalities | `ring_eq_nf`, `ring_eq_nf at h` | — |
 | `fcongr` | Congruence (safe whnf) | `fcongr`, `fcongr N` | — |
 | `split_conjs` | Split nested ∧, then scaffold `· agrind` per sub-goal | `split_conjs`, `split_conjs at h` | — |
+| `step_array_spec` | Generate `@[step]` for constant array indexing | `step_array_spec (name := N) arr[i]! { x => P } by tac` | See `aeneas-lean-core` |
 
 **Inaccessible hypotheses — two solutions (see `aeneas-lean-core` for full details):**
 Many tactics (`step*`, `step` without `as`, `cases`, `intro`, pattern matching) produce
@@ -143,6 +144,7 @@ See the `aeneas-lean-core` skill file for worked examples and disambiguation rul
 | `congr N` | Default transparency → may WHNF function bodies → timeout on complex/recursive/looping functions | `fcongr N` — ALWAYS (reducible transparency, same subgoals) |
 | `step* <;> ...` | Replays full `step*` on every edit | `step*` then `· tactic` per goal |
 | `all_goals tactic` | Same re-elaboration problem | `· tactic` per goal |
+| `cases x with \| Foo => ...` | Named arms are a single elaboration unit | `cases x with` then `·` per branch |
 | `partial_fixpoint_induct` | Needs explicit motive + sorry'd `admissible` proof | `unfold` + `by_cases` + `step` + `termination_by` (see the `aeneas-lean-core` skill file) |
 
 **The first three tactics are NEVER acceptable in Aeneas proofs** — not in `step`
@@ -156,6 +158,32 @@ incrementality by forcing full re-elaboration on every edit. `all_goals` is bann
 **everywhere**, not just after `step*`: even a standalone `all_goals scalar_tac` at
 the end of a proof forces all goals to be a single elaboration unit. Always use
 focused `· tactic` (cdot) blocks — one per goal. There are **no exceptions**.
+
+### ⛔ BANNED PATTERN: `cases` with named constructors (`| Foo =>`)
+
+**NEVER use named constructor arms with `cases ... with`:**
+
+```lean
+-- ⛔ BAD: named constructor arms break incrementality
+cases h : x.kind with
+| Foo => ...
+| Bar => ...
+| Baz => ...
+```
+
+Named arms (`| Foo =>`) force Lean to elaborate all branches as a single unit — editing
+any branch re-elaborates all of them. **Use cdot (`·`) blocks instead:**
+
+```lean
+-- ✅ GOOD: each branch is an independent elaboration unit
+cases h : x.kind with
+· ... -- Foo
+· ... -- Bar
+· ... -- Baz
+```
+
+With cdot blocks, each branch is independently elaborated and editable. Use a comment
+to document which constructor each `·` corresponds to if it's not obvious.
 
 ### ⛔ BANNED PATTERN: `step* <;> tactic` and `all_goals tactic`
 

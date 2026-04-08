@@ -258,12 +258,22 @@ theorem poly_element_ntt_layer.spec
     ⦃ src' => toPoly src' = Spec.ntt (toPoly src) ⦄ := by ...
 ```
 
-**Use conversion functions, not relations.** When mapping low-level (Rust) types to
-high-level (spec) types, use a conversion *function* (e.g.,
-`toPoly : Array Std.U16 256#usize → Polynomial`) rather than a relation
-(`isPoly : Array Std.U16 256#usize → Polynomial → Prop`). Functions are deterministic
-and compose — they can be used on both sides of equations, fed into `simp`, and
-rewritten. Relations require existential witnesses and make proofs heavier.
+**Use conversion functions, not relations (including predicates).** When mapping
+low-level (Rust) types to high-level (spec) types, use a conversion *function* (e.g.,
+`toPoly : Array Std.U16 256#usize → Polynomial`) rather than a relation or predicate
+(`isPoly : Array Std.U16 256#usize → Polynomial → Prop`, or
+`wfFoo : RuntimeType → Prop` with `∃ specVal, ...` or pointwise equality to a spec
+computation inside). Functions are deterministic and compose — they can be used on both
+sides of equations, fed into `simp`, and rewritten. Relations and predicates that encode
+spec correspondences require existential witnesses and make proofs heavier.
+
+**Detection:** A predicate `P : RuntimeType → Prop` is a disguised relation when its
+body mentions a spec-level value — either as a parameter (`P rt specVal`) or via an
+existential (`∃ specVal, ...`). Replace it with a conversion function
+`toSpec : RuntimeType → SpecType` and use a direct equality
+`toSpec rt = Spec.computation(...)` in postconditions. Genuine structural invariants
+that constrain a single runtime type without referencing spec values (e.g., coefficient
+bound checks) are fine as predicates.
 
 **No inline computation in postconditions — extract to named definitions.** When a
 postcondition requires case splits, `let` bindings with `if-then-else`, or any
@@ -969,6 +979,7 @@ container. They will either fail silently or produce fragile proofs that break o
 | `linarith` | Same: no knowledge of scalar types, no `.val` reasoning | `agrind` > `grind` > `scalar_tac` |
 | `nlinarith` | Same, plus explosion risk on nonlinear goals | `agrind` > `grind` > `scalar_tac +nonLin` or `simp_scalar` |
 | `congr N` | Default transparency unfolds definitions deeply → heartbeat timeout | `fcongr N` (reducible transparency, same subgoals, no deep unfolding) |
+| `cases x with \| Foo => ...` | Named arms are a single elaboration unit — breaks incrementality | `cases x with` then `·` per branch |
 
 **Preference order for replacements: `agrind` first, then `grind`, then `scalar_tac`.**
 `agrind` is the default tactic for Aeneas proofs — always try it first. It is fast and
@@ -1653,6 +1664,66 @@ proved once; the type references it by name (tiny proof term).
 - `all_goals` — banned in ALL contexts, not just after `step*`. Even a standalone
   `all_goals scalar_tac` makes all remaining goals a single elaboration unit.
 
+### Unification pitfalls with `exact`/`apply`
+
+<!-- ⚠️ SYNC RULE: aeneas-tactics-quickref references this section in 3 places -->
+
+When `exact h` or `apply thm` is slow (heartbeat timeout) or triggers `maxRecDepth`,
+the root cause is almost always that the **goal and the term being applied differ in
+subterms that are definitionally but not syntactically equal**. Lean's kernel must
+WHNF-reduce (weak head normal form) both sides to check equality. If those subterms
+involve large structures (arrays, foldl over 24 elements, 5×5×64 state matrices),
+WHNF reduction explodes — even though the terms are "the same" mathematically.
+
+**Symptoms:**
+- `exact h` takes minutes or times out, even though `h` "obviously" matches the goal
+- `apply thm` triggers `maxRecDepth` or heartbeat limit
+- The proof works fine with `sorry` but hangs when you replace `sorry` with `exact`
+
+**Root cause pattern:** The goal says `f a` and the hypothesis says `f b`, where
+`a` and `b` are definitionally equal but written differently. For example:
+- Goal: `state.get (rhoXY ⟨n, hn⟩).1 (rhoXY ⟨n, hn⟩).2 z = ...`
+- Hypothesis `h`: `state.get state_n.2.1 state_n.2.2 z = ...`
+- We know `state_n.2 = rhoXY ⟨n, hn⟩`, so they're definitionally equal
+- But `exact h` forces the kernel to WHNF both `(rhoXY ⟨n, hn⟩).1` and `state_n.2.1`
+  to check they match — which involves reducing `rhoXY` on all 24 cases
+
+**The fix: use `rw` to make the goal syntactically match before `exact`.**
+
+```lean
+-- ⛔ BAD: exact triggers WHNF explosion (minutes or timeout)
+exact inv.2.2
+
+-- ✅ GOOD: rw first to make goal syntactically match the hypothesis
+-- If the hypothesis uses `state_n.2.1` but the goal uses `(rhoXY ⟨n, hn⟩).1`:
+rw [← hxn, ← hyn]    -- rewrite goal to use state_n.2.1 / state_n.2.2
+exact inv.2.2          -- now syntactic match, instant
+```
+
+**Direction matters.** Choose `rw [h]` vs `rw [← h]` based on which direction makes
+the goal match the hypothesis:
+- `rw [hxn]` rewrites `state_n.2.1` → `(rhoXY ⟨n, hn⟩).1` in the goal
+- `rw [← hxn]` rewrites `(rhoXY ⟨n, hn⟩).1` → `state_n.2.1` in the goal
+- Pick the direction that makes the goal look like the term you're about to `exact`
+
+**Diagnostic technique:**
+1. Use `lean_goal` to inspect the goal just before the slow `exact`
+2. Compare the goal term with the hypothesis/theorem you're applying — look for
+   subterms that are "the same value" but written differently
+3. Add `rw` calls to normalize those subterms before `exact`
+
+**Common instances in Aeneas proofs:**
+- **Foldl invariant proofs**: goal has concrete coordinates `(rhoXY ⟨n, hn⟩).1`
+  but the invariant hypothesis uses tuple projections `state_n.2.1`
+- **Array indexing**: goal has `arr[5*y+x]!` but hypothesis has `arr[i]!` where
+  `i = 5*y+x`
+- **Spec unfolding**: goal has `(Spec.f A).get x y z` partially reduced but the
+  characterization lemma states it in unreduced form
+
+**This also applies to `apply`:** If `apply thm` is slow, the same pattern is at
+work — `thm`'s conclusion and the goal differ in reducible subterms. Use `rw` to
+align them before `apply`, or use `have` to pre-compute the result and `exact` it.
+
 ### ⛔ NEVER use `step* <;> tactic` or `all_goals tactic` — use focused goals instead
 **NEVER** write `step* <;> first | agrind | scalar_tac | bv_tac 16` or
 `step* <;> bv_tac 32` or `all_goals agrind` or similar patterns that apply a tactic
@@ -1685,6 +1756,34 @@ step*
 
 This keeps the proof incremental — you can put `sorry` on any `· ` branch, inspect
 the goal with `lean_goal`, and work on one sub-goal at a time.
+
+### ⛔ NEVER use `cases` with named constructor arms — use cdot blocks
+
+**NEVER** use named constructor arms (`| Foo => ...`) with `cases ... with`:
+
+```lean
+-- ⛔ BAD: named arms force all branches into a single elaboration unit
+cases h : x.kind with
+| Foo => ...
+| Bar => ...
+| Baz => ...
+```
+
+Named arms (`| Foo =>`) break incrementality the same way `all_goals` does — Lean
+treats all branches as a single elaboration unit, so editing any branch re-elaborates
+all of them. **Use cdot (`·`) blocks instead:**
+
+```lean
+-- ✅ GOOD: each branch is independently elaborated
+cases h : x.kind with
+· ... -- Foo
+· ... -- Bar
+· ... -- Baz
+```
+
+With cdot blocks, each branch is independently elaborated and editable — you can put
+`sorry` in one branch while working on another. Use a comment to document which
+constructor each `·` corresponds to if it's not obvious.
 
 ### Scaffolding workflow: `· agrind` first, then fix failures
 
@@ -1870,12 +1969,11 @@ calc (x + 1) * (x + 1)
     `List.Inhabited_getElem_eq_getElem!` in a single `simp only` call. Split them
     into separate calls, or use `rw`.
 
-    **Second cause: deep definitional unification.** `maxRecDepth` can also be
-    triggered by `exact` or `apply` when the goal and the supplied term differ
-    by an opaque projection or intermediate definition that is only
-    *definitionally* (not syntactically) equal to the expected value. To verify
-    the equality, Lean's unifier must unfold through deeply nested terms —
-    hitting `maxRecDepth` even though no `simp` is involved.
+    **Second cause: deep definitional unification.** `maxRecDepth` (or heartbeat
+    timeout) can also be triggered by `exact` or `apply` when the goal and the
+    supplied term differ by subterms that are only *definitionally* (not
+    syntactically) equal. See "Unification pitfalls with `exact`/`apply`" above
+    for the full pattern, worked examples, and diagnostic technique.
 
     **Fix: `rw` before `exact`/`apply`.** Rewrite opaque expressions to their
     concrete values before the unification point. This makes the match
@@ -2110,6 +2208,76 @@ attribute [local agrind] my_lemma
 ```
 
 Safe to activate many local lemmas for `simp_scalar`/`simp_lists` — simp-based, no complexity explosion.
+
+## `step_array_spec`: Step Theorems for Constant Arrays
+
+When a Rust program has a global constant array, Aeneas translates it as a Lean
+`Array` definition. To let `step` / `step*` automatically handle indexing into
+that array, use the `step_array_spec` macro. It generates an `@[step]` theorem
+proving that `Array.index_usize` succeeds and the returned element satisfies a
+user-specified predicate.
+
+### Syntax
+
+```lean
+[local | scoped] step_array_spec (name := <theorem_name>) <array>[<index>]!
+  { <elem> => <predicate> }
+  by <tactic>
+```
+
+- **`array`**: the constant array definition name
+- **`index`**: the index variable (becomes a `Usize` parameter in the theorem)
+- **`elem`**: bound variable for the returned element
+- **`predicate`**: a `Prop` about `elem` and `index` (the postcondition)
+- **`tactic`**: proves the proof obligation expressed via `Array.allIdx` — typically
+  `native_decide` for arrays up to a few hundred elements, or `decide +kernel` for
+  small arrays
+- **Prefix**: `local` makes the theorem `private` with `@[local step]`;
+  `scoped` uses `@[scoped step]`; no prefix uses `@[step]`
+
+### Example
+
+```lean
+-- Given a constant array:
+def const_array : Array U32 8#usize := Array.make 8#usize [
+  0#u32, 1#u32, 2#u32, 3#u32, 4#u32, 5#u32, 6#u32, 7#u32,
+]
+
+-- Generate a step theorem:
+step_array_spec (name := const_array_spec) const_array[i]!
+  { x => x.val = i.val }
+  by native_decide
+
+-- This generates (roughly):
+-- @[step] theorem const_array_spec (i : Usize) (_ : i.val < 8) :
+--   Array.index_usize const_array i ⦃ x => x.val = i.val ⦄
+```
+
+### When to use
+
+- **Global constant arrays** referenced in hot loops (e.g., `KECCAK_RHO_K`,
+  round constants, S-boxes). Register them once with `step_array_spec` and
+  `step*` will discharge array indexing calls automatically.
+- **Large arrays**: prefer `native_decide` over `decide` for the proof obligation
+  — `decide` can be very slow on arrays with 25+ elements.
+- **Scoped vs local**: use `scoped` if the theorem should be visible when the
+  namespace is opened; use `local` for file-private arrays.
+
+### ⚠️ Performance: always time the closing tactic
+
+The `by <tactic>` must prove an `Array.allIdx` predicate over the full array.
+For large arrays, `native_decide` spawns a native compiler subprocess — always
+measure its time (see "Profiling proof time" in the `aeneas-tactics-quickref`
+skill file). If it's too slow, consider splitting the predicate or using a
+custom proof.
+
+### What it does NOT do
+
+`step_array_spec` generates a theorem about the **monadic** `Array.index_usize`
+(which returns `Result`). It does **not** generate lemmas about the **pure**
+`array[i]!` (default-value indexing). If you need pure indexing facts (e.g.,
+for bridge proofs connecting implementation arrays to spec values), you must
+prove those separately.
 
 ## Tactic Development: Config Parsing with `declare_config_elab`
 
