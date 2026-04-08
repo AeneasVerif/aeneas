@@ -62,7 +62,7 @@ let erase_body_regions (crate : crate) (f : fun_decl) : fun_decl =
   (* Map  *)
   let body =
     match f.body with
-    | Some body ->
+    | Body body ->
         let body =
           {
             body with
@@ -74,8 +74,8 @@ let erase_body_regions (crate : crate) (f : fun_decl) : fun_decl =
               };
           }
         in
-        Some { body with body = erase_visitor#visit_block 0 body.body }
-    | None -> None
+        Body { body with body = erase_visitor#visit_block 0 body.body }
+    | other -> other
   in
 
   let f : fun_decl = { f with body } in
@@ -135,10 +135,10 @@ let remove_unreachable (crate : crate) (f : fun_decl) : fun_decl =
     end
   in
   match f.body with
-  | None -> f
-  | Some body ->
+  | Body body ->
       let body = { body with body = visitor#visit_block () body.body } in
-      { f with body = Some body }
+      { f with body = Body body }
+  | _ -> f
 
 (** The Rust compiler generates a unique implementation of [Default] for arrays
     for every choice of length. For instance, if we write:
@@ -642,8 +642,8 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
   (* Map  *)
   let body =
     match f.body with
-    | Some body -> Some { body with body = visitor#visit_block 0 body.body }
-    | None -> None
+    | Body body -> Body { body with body = visitor#visit_block 0 body.body }
+    | other -> other
   in
 
   let f : fun_decl = { f with body } in
@@ -726,8 +726,8 @@ let remove_useless_joins (crate : crate) (f : fun_decl) : fun_decl =
 
   let body =
     match f.body with
-    | Some body -> Some { body with body = snd (update_block [] body.body) }
-    | None -> None
+    | Body body -> Body { body with body = snd (update_block [] body.body) }
+    | other -> other
   in
 
   let f : fun_decl = { f with body } in
@@ -818,8 +818,8 @@ let remove_shallow_borrows_storage_live_dead (crate : crate) (f : fun_decl) :
 
   let body =
     match f.body with
-    | None -> None
-    | Some body -> Some { body with body = filter_in_body body.body }
+    | Body body -> Body { body with body = filter_in_body body.body }
+    | other -> other
   in
   let f = { f with body } in
   [%ldebug
@@ -878,7 +878,7 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
   (* Map  *)
   let body =
     match f.body with
-    | Some body ->
+    | Body body ->
         let new_locals = ref [] in
         let _, gen =
           LocalId.mk_stateful_generator_starting_at_id
@@ -1006,7 +1006,7 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
           | _ -> [ st ]
         in
         let body_body = map_statement decompose_in_statement body.body in
-        Some
+        Body
           {
             body with
             body = body_body;
@@ -1016,7 +1016,7 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
                 locals = body.locals.locals @ List.rev !new_locals;
               };
           }
-    | None -> None
+    | other -> other
   in
   { f with body }
 
@@ -1025,7 +1025,7 @@ let refresh_statement_ids (_ : crate) (f : fun_decl) : fun_decl =
   (* Map  *)
   let body =
     match f.body with
-    | Some body ->
+    | Body body ->
         let _, gen_id = StatementId.fresh_stateful_generator () in
 
         (* Visit the rvalue *)
@@ -1036,8 +1036,8 @@ let refresh_statement_ids (_ : crate) (f : fun_decl) : fun_decl =
           end
         in
 
-        Some { body with body = visitor#visit_block () body.body }
-    | None -> None
+        Body { body with body = visitor#visit_block () body.body }
+    | other -> other
   in
   { f with body }
 
@@ -1099,8 +1099,8 @@ let simplify_panics (crate : crate) (f : fun_decl) : fun_decl =
 
   let body =
     match f.body with
-    | None -> None
-    | Some body -> Some { body with body = visitor#visit_block () body.body }
+    | Body body -> Body { body with body = visitor#visit_block () body.body }
+    | other -> other
   in
   { f with body }
 
@@ -1126,8 +1126,7 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
   (* Map  *)
   let body =
     match f.body with
-    | None -> None
-    | Some body -> (
+    | Body body -> (
         let new_locals = ref [] in
         let _, gen =
           LocalId.mk_stateful_generator_starting_at_id
@@ -1230,7 +1229,7 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
         (* Visit all the statements and decompose the operands *)
         try
           let body_body = map_statement decompose_in_statement body.body in
-          Some
+          Body
             {
               body with
               body = body_body;
@@ -1263,7 +1262,8 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
           [%save_error_opt_span] error.span
             ("Failure when pre- processing: " ^ name
            ^ "; ignoring its body.\nName pattern: '" ^ name_pattern ^ "'");
-          None)
+          Opaque)
+    | other -> other
   in
   { f with body }
 
@@ -1339,8 +1339,7 @@ let replace_static (crate : crate) : crate =
     (* Update the uses of this definition *)
     let update (f : fun_decl) : fun_decl =
       match f.body with
-      | None -> f
-      | Some body ->
+      | Body body ->
           let visitor =
             object
               inherit [_] map_statement
@@ -1366,7 +1365,8 @@ let replace_static (crate : crate) : crate =
           in
 
           let body = { body with body = visitor#visit_block () body.body } in
-          { f with body = Some body }
+          { f with body = Body body }
+      | _ -> f
     in
     let fun_decls = FunDeclId.Map.map update crate.fun_decls in
     { crate with fun_decls }
@@ -1745,8 +1745,8 @@ let simplify_trait_calls (crate : crate) : crate =
     (fun _ (f : fun_decl) ->
       if f.item_meta.is_local then visitor#visit_fun_decl_id () f.def_id;
       match f.body with
-      | None -> ()
-      | Some body -> visitor#visit_block () body.body)
+      | Body body -> visitor#visit_block () body.body
+      | _ -> ())
     crate.fun_decls;
 
   GlobalDeclId.Map.iter
@@ -1889,7 +1889,7 @@ let apply_passes (crate : crate) : crate =
         "After applying [" ^ pass_name ^ "]:\n"
         ^ Print.Crate.crate_fun_decl_to_string crate f];
       f
-    with CFailure _ ->
+    with CFailure e ->
       (* The error was already registered, we don't need to register it twice.
          However, we replace the body of the function, and save an error to
          report to the user the fact that we will ignore the function body *)
@@ -1897,7 +1897,8 @@ let apply_passes (crate : crate) : crate =
       let name = Print.name_to_string fmt f.item_meta.name in
       [%save_error] f.item_meta.span
         ("Ignoring the body of '" ^ name ^ "' because of previous error");
-      { f with body = None }
+      let msg = Fmt.to_to_string pp_cfailure e in
+      { f with body = Error { span = f.item_meta.span; msg } }
   in
   let fun_decls : fun_decl FunDeclId.Map.t =
     let num_decls = FunDeclId.Map.cardinal crate.fun_decls in

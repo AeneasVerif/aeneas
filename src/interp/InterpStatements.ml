@@ -1386,11 +1386,13 @@ and eval_non_builtin_function_call_concrete (config : config) (span : Meta.span)
       (* We can evaluate the function call only if it is not opaque *)
       let body =
         match def.body with
-        | None ->
+        | Body body -> body
+        | other ->
             [%craise] span
-              ("Can't evaluate a call to an opaque function: "
-              ^ name_to_string ctx def.item_meta.name)
-        | Some body -> body
+              ("Can't evaluate a call to function: "
+              ^ name_to_string ctx def.item_meta.name
+              ^ ", it is "
+              ^ Charon.GAst.show_body Fmt.nop other)
       in
       (* TODO: we need to normalize the types if we want to correctly support traits *)
       [%cassert] body.span (generics.trait_refs = [])
@@ -1399,7 +1401,9 @@ and eval_non_builtin_function_call_concrete (config : config) (span : Meta.span)
         [%add_loc] Subst.make_subst_from_generics (Some span) def.generics
           generics Self
       in
-      let locals, body_st = Subst.fun_body_substitute_in_body subst body in
+      let locals, body_st =
+        Subst.fun_body_substitute_in_body subst (Body body)
+      in
 
       (* Evaluate the input operands *)
       [%sanity_check] body.span (List.length args = body.locals.arg_count);

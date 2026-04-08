@@ -1046,11 +1046,11 @@ and translate_fun_sig_from_decl_to_decomposed (decls_ctx : C.decls_ctx)
     (fdef : LlbcAst.fun_decl) : decomposed_fun_sig =
   let input_names =
     match fdef.body with
-    | None -> List.map (fun _ -> None) fdef.signature.inputs
-    | Some body ->
+    | Body body ->
         List.map
           (fun (v : LlbcAst.local) -> v.name)
           (LlbcAstUtils.fun_body_get_input_vars body)
+    | _ -> List.map (fun _ -> None) fdef.signature.inputs
   in
   let sg =
     translate_fun_sig_to_decomposed decls_ctx fdef.def_id
