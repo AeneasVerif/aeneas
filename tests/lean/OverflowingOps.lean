@@ -227,4 +227,76 @@ def isize_overflowing_mul
   (x : Std.Isize) (y : Std.Isize) : Result (Std.Isize × Bool) := do
   ok (core.num.Isize.overflowing_mul x y)
 
+/-- [overflowing_ops::u8_overflowing_div]:
+    Source: 'tests/src/overflowing-ops.rs', lines 45:0-45:74 -/
+def u8_overflowing_div
+  (x : Std.U8) (y : Std.U8) : Result (Std.U8 × Bool) := do
+  core.num.U8.overflowing_div x y
+
+/-- [overflowing_ops::u16_overflowing_div]:
+    Source: 'tests/src/overflowing-ops.rs', lines 46:0-46:78 -/
+def u16_overflowing_div
+  (x : Std.U16) (y : Std.U16) : Result (Std.U16 × Bool) := do
+  core.num.U16.overflowing_div x y
+
+/-- [overflowing_ops::u32_overflowing_div]:
+    Source: 'tests/src/overflowing-ops.rs', lines 47:0-47:78 -/
+def u32_overflowing_div
+  (x : Std.U32) (y : Std.U32) : Result (Std.U32 × Bool) := do
+  core.num.U32.overflowing_div x y
+
+/-- [overflowing_ops::u64_overflowing_div]:
+    Source: 'tests/src/overflowing-ops.rs', lines 48:0-48:78 -/
+def u64_overflowing_div
+  (x : Std.U64) (y : Std.U64) : Result (Std.U64 × Bool) := do
+  core.num.U64.overflowing_div x y
+
+/-- [overflowing_ops::u128_overflowing_div]:
+    Source: 'tests/src/overflowing-ops.rs', lines 49:0-49:82 -/
+def u128_overflowing_div
+  (x : Std.U128) (y : Std.U128) : Result (Std.U128 × Bool) := do
+  core.num.U128.overflowing_div x y
+
+/-- [overflowing_ops::usize_overflowing_div]:
+    Source: 'tests/src/overflowing-ops.rs', lines 50:0-50:86 -/
+def usize_overflowing_div
+  (x : Std.Usize) (y : Std.Usize) : Result (Std.Usize × Bool) := do
+  core.num.Usize.overflowing_div x y
+
+/-- [overflowing_ops::i8_overflowing_div]:
+    Source: 'tests/src/overflowing-ops.rs', lines 52:0-52:74 -/
+def i8_overflowing_div
+  (x : Std.I8) (y : Std.I8) : Result (Std.I8 × Bool) := do
+  core.num.I8.overflowing_div x y
+
+/-- [overflowing_ops::i16_overflowing_div]:
+    Source: 'tests/src/overflowing-ops.rs', lines 53:0-53:78 -/
+def i16_overflowing_div
+  (x : Std.I16) (y : Std.I16) : Result (Std.I16 × Bool) := do
+  core.num.I16.overflowing_div x y
+
+/-- [overflowing_ops::i32_overflowing_div]:
+    Source: 'tests/src/overflowing-ops.rs', lines 54:0-54:78 -/
+def i32_overflowing_div
+  (x : Std.I32) (y : Std.I32) : Result (Std.I32 × Bool) := do
+  core.num.I32.overflowing_div x y
+
+/-- [overflowing_ops::i64_overflowing_div]:
+    Source: 'tests/src/overflowing-ops.rs', lines 55:0-55:78 -/
+def i64_overflowing_div
+  (x : Std.I64) (y : Std.I64) : Result (Std.I64 × Bool) := do
+  core.num.I64.overflowing_div x y
+
+/-- [overflowing_ops::i128_overflowing_div]:
+    Source: 'tests/src/overflowing-ops.rs', lines 56:0-56:82 -/
+def i128_overflowing_div
+  (x : Std.I128) (y : Std.I128) : Result (Std.I128 × Bool) := do
+  core.num.I128.overflowing_div x y
+
+/-- [overflowing_ops::isize_overflowing_div]:
+    Source: 'tests/src/overflowing-ops.rs', lines 57:0-57:86 -/
+def isize_overflowing_div
+  (x : Std.Isize) (y : Std.Isize) : Result (Std.Isize × Bool) := do
+  core.num.Isize.overflowing_div x y
+
 end overflowing_ops
