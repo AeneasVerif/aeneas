@@ -496,6 +496,21 @@ theorem mapM_Result_length {α : Type w} {β : Type u} {f : α → Std.Result β
   have := hind l l' [] h
   simp [this]
 
+theorem mapM_Result_ok {α β} {l : List α} {l' : List β} {f : α → Std.Result β}
+    (hok : l.mapM f = .ok l') :
+    ∀ i (hi : i < l.length), f l[i] = .ok (l'[i]'(by have := List.mapM_Result_length hok; omega)) := by
+  induction l generalizing l' with
+  | nil => intro i hi; contradiction
+  | cons a t ih =>
+    intro i hi
+    simp only [List.mapM_cons] at hok
+    cases hfa : f a <;> simp [hfa, Bind.bind] at hok
+    cases hmapM : t.mapM f <;> simp [hmapM, Pure.pure] at hok
+    subst hok
+    cases i with
+    | zero => simpa using hfa
+    | succ n => simp only [List.getElem_cons_succ]; exact ih hmapM n (by simp at hi; omega)
+
 @[scalar_tac_simps, grind! ., agrind! .]
 theorem splitAt_length {α : Type u}  (n : Nat)  (l : List α) :
   (l.splitAt n).fst.length = min l.length n ∧ (l.splitAt n).snd.length = l.length - n := by

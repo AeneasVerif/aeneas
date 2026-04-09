@@ -1495,8 +1495,11 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
             other.value))
       "Unimplemented";
 
-    (* Join the inner value *)
-    let joined_value = match_rec shared_value other in
+    (* Join the inner value. *)
+    let joined_value =
+      if loan_is_left then match_rec shared_value other
+      else match_rec other shared_value
+    in
 
     (* We need to introduce a fresh shared loan. *)
     let rid = ctx0.fresh_region_id () in
