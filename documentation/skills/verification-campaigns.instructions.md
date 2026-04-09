@@ -169,6 +169,14 @@ one for Absorb, one for Squeeze+Variants). Each reviewer must check:
 7. **No existential quantifiers over non-propositions**: `∃ a, P a` where `a` is
    a value (not a proof) is banned. However, `∃ (_ : P), Q` where `P` is a
    proposition used for dependent typing is **allowed** — do not flag it.
+7b. **Conversion functions, not relations or predicates**: When a postcondition or
+   precondition uses a predicate or relation to assert correspondence between
+   runtime data and spec data, flag it — it should use a conversion function +
+   direct equality instead. (See `aeneas-lean-core` "Use conversion functions,
+   not relations (including predicates).") A predicate is a disguised relation
+   when its body mentions a spec-level value (as parameter or via existential).
+   Genuine structural invariants (e.g., coefficient bound checks that don't
+   reference spec types) are fine as predicates.
 8. **Factor repeated guards**: When multiple conjuncts share the same guard
    (e.g., `(¬wipe → A) ∧ (¬wipe → B)`), factor it out: `¬wipe → (A ∧ B)`.
    Applies to any predicate — implications, case splits, hypotheses.
@@ -217,10 +225,26 @@ one for Absorb, one for Squeeze+Variants). Each reviewer must check:
    that is part of the primitive being verified must have a corresponding `@[step]`
    theorem. Every axiom (in `Axioms/`) must have a corresponding `@[step]` lemma.
    Cross-check against the generated code — no function should be forgotten.
-8b. **External dependency audit**: Collect all external functions called
-   (directly or transitively) by the verified functions. For each one, verify
-   a `@[step]` spec exists. Any external axiom that is called but has no spec is a
-   **critical gap** — list it by full Lean name and the file(s) where it is called.
+8b. **External dependency audit** (must produce a table — see below): Collect
+   all external functions called (directly or transitively) by the verified
+   functions. For each one, verify a `@[step]` spec exists. Any external axiom
+   that is called but has no spec is a **critical gap** — list it by full Lean
+   name and the file(s) where it is called.
+
+   **Mandatory methodology:** This check must be grep-based, not memory-based.
+   The reviewer must:
+   1. Grep `FunsExternal.lean` to list all external axioms.
+   2. For each verified function, grep its body in `Funs.lean` and collect every
+      called function name (every `let ... ←` target).
+   3. Cross-reference: for each external axiom that appears in a call, search
+      the project's `Axioms/` and `Properties/` directories for a corresponding
+      `@[step]` theorem.
+   4. **Produce a table** in the review output:
+      ```
+      | External function | Called by | Has @[step] spec? | Spec location |
+      ```
+      Every row must show a concrete file path or "MISSING". A review that
+      omits this table is incomplete and must be rejected by the supervisor.
 9. **Axiom audit**: List every `axiom`, `sorry`, `native_decide` found. Sorry in
    proof bodies is expected (WIP); **sorry in definition bodies (bridge functions,
    spec helpers, conversion functions) is a critical issue** — every theorem
@@ -270,6 +294,12 @@ Once the loop converges, dispatch reviewers to **review everything from scratch*
 not just the changes from the last round. This catches issues that slipped through
 incremental reviews. Do NOT tell the reviewers what prior rounds found
 (anti-rubber-stamping rule).
+
+**The from-scratch review must re-run ALL mechanical checks from scratch**, including
+a fresh external dependency audit (rule 8b) with a new grep-based cross-check and
+table. Do not reuse tables from prior review rounds — they may be stale if files
+were added, removed, or restructured during fixes. The supervisor must verify that
+the reviewer's output includes the mandatory table before accepting the review.
 
 If the from-scratch review finds new issues, enter another fix-review loop until it
 converges again.
