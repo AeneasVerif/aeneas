@@ -533,12 +533,7 @@ abbrev UScalar.one {ty : UScalarTy} : UScalar ty := UScalar.ofNatCore 1 (
 abbrev IScalar.zero {ty : IScalarTy} : IScalar ty := IScalar.ofIntCore 0 (by simp)
 
 abbrev IScalar.one {ty : IScalarTy} : IScalar ty := IScalar.ofIntCore 1
-  (
-    by
-    refine bound_suffices ty 1 ?_
-    simp[cMin, rMin, I8.rMin, I16.rMin, I32.rMin, I64.rMin, I128.rMin, Isize.rMin, cMax, rMax, I8.rMax, I16.rMax, I32.rMax, I64.rMax, I128.rMax, Isize.rMax];
-    grind
-  )
+  (by cases ty <;> simp_bounds; grind[System.Platform.numBits])
 
 theorem UScalar.zero_bv {ty : UScalarTy}: UScalar.zero.bv = BitVec.ofNat ty.numBits 0 := by
   simp[UScalar.zero, UScalar.ofNatCore]
