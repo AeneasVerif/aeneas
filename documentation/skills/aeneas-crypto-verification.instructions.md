@@ -337,3 +337,37 @@ unrelated parts of the codebase.
 - ❌ Not decomposing large functions
 - ❌ SIMD axioms without reference documentation links
 - ❌ SIMD axioms that only assert partial properties (e.g., length but not values)
+
+## `congr` WHNF Explosion on Crypto Functions
+
+Crypto spec functions (sampling, encoding, transforms) typically contain loops
+iterated hundreds of times, recursive helpers, and dependent-type parameters.
+This makes them especially vulnerable to the `congr` WHNF explosion described
+in the `aeneas-lean-core` skill file (Pitfall #29): `congr N` uses default
+transparency, and when arguments don't match definitionally it WHNF-reduces
+the function body — causing deterministic timeout on these large functions.
+
+**Always use `fcongr N`** (reducible transparency — never unfolds function bodies).
+
+In crypto proofs, the typical trigger is `step*`-generated cast variables
+(e.g., `i : U32`, `i_post : ↑i = n`) that make arguments propositionally but
+not definitionally equal — enough for `congr` to attempt WHNF.
+
+```lean
+-- Goal: specFn V₁ = specFn V₂
+-- (V₁ and V₂ have propositionally-equal but not definitionally-equal types)
+
+-- BAD: congr tries to WHNF specFn's loop body → timeout
+congr 1
+
+-- GOOD: fcongr decomposes without unfolding
+fcongr 1
+· ...  -- argument equalities (may use HEq if types differ)
+```
+
+If `fcongr 1` produces `HEq` subgoals and you prefer plain `Eq`, try rewriting
+the cast variable away first:
+```lean
+simp only [i_post] at h ⊢  -- may fail with "motive not type correct"
+-- If simp fails, use fcongr and handle HEq
+```
