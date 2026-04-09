@@ -6,7 +6,7 @@ namespace Aeneas.Std
 open ScalarElab
 
 /-!
-## Overflowing Multiplication
+# Overflowing Multiplication
 -/
 
 def UScalar.overflowing_mul {ty} (x y : UScalar ty) : UScalar ty × Bool :=
@@ -16,11 +16,23 @@ def IScalar.overflowing_mul {ty} (x y : IScalar ty) : IScalar ty × Bool :=
   (⟨ x.bv * y.bv ⟩,
      ¬ (-2^(ty.numBits -1) ≤ x.val * y.val ∧ x.val * y.val < 2^(ty.numBits-1)))
 
-/- [core::num::{u8}::overflowing_mul] -/
-uscalar def core.num.«%S».overflowing_mul := @UScalar.overflowing_mul .«%S»
+uscalar @[step_pure_def]
+def «%S».overflowing_mul (x y : «%S») : «%S» × Bool := @UScalar.overflowing_mul .«%S» x y
 
-/- [core::num::{i8}::overflowing_mul] -/
-iscalar def core.num.«%S».overflowing_mul := @IScalar.overflowing_mul .«%S»
+iscalar @[step_pure_def]
+def «%S».overflowing_mul (x y : «%S») : «%S» × Bool := @IScalar.overflowing_mul .«%S» x y
+
+/- [core::num::{_}::overflowing_mul] -/
+uscalar @[step_pure_def]
+def core.num.«%S».overflowing_mul := @UScalar.overflowing_mul .«%S»
+
+/- [core::num::{_}::overflowing_mul] -/
+iscalar @[step_pure_def]
+def core.num.«%S».overflowing_mul := @IScalar.overflowing_mul .«%S»
+
+/-!
+## Spec Theorems
+-/
 
 theorem UScalar.overflowing_mul_eq {ty} (x y : UScalar ty) :
   let z := overflowing_mul x y
@@ -48,6 +60,10 @@ theorem core.num.«%S».overflowing_mul_eq (x y : «%S») :
   if x.val * y.val > UScalar.max .«%S» then z.fst.val = (x.val * y.val) % UScalar.size .«%S» ∧ z.snd = true
   else z.fst.val = x.val * y.val ∧ z.snd = false
   := UScalar.overflowing_mul_eq x y
+
+/-!
+## Additional Theorems
+-/
 
 theorem UScalar.overflowing_mul_comm {ty} (x y : UScalar ty) :
   overflowing_mul x y = overflowing_mul y x := by

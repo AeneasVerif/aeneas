@@ -6,7 +6,7 @@ namespace Aeneas.Std
 open ScalarElab
 
 /-!
-## Overflowing Addition
+# Overflowing Addition
 -/
 
 def UScalar.overflowing_add {ty} (x y : UScalar ty) : UScalar ty × Bool :=
@@ -16,13 +16,25 @@ def IScalar.overflowing_add {ty} (x y : IScalar ty) : IScalar ty × Bool :=
   (⟨ BitVec.ofInt _ (x.val + y.val) ⟩,
      ¬ (-2^(ty.numBits -1) ≤ x.val + y.val ∧ x.val + y.val < 2^(ty.numBits-1)))
 
-/- [core::num::{u8}::overflowing_add] -/
-uscalar def core.num.«%S».overflowing_add := @UScalar.overflowing_add .«%S»
+uscalar @[step_pure_def]
+def «%S».overflowing_add (x y : «%S») : «%S» × Bool := @UScalar.overflowing_add .«%S» x y
 
-/- [core::num::{i8}::overflowing_add] -/
-iscalar def core.num.«%S».overflowing_add := @IScalar.overflowing_add .«%S»
+iscalar @[step_pure_def]
+def «%S».overflowing_add (x y : «%S») : «%S» × Bool := @IScalar.overflowing_add .«%S» x y
+
+/- [core::num::{_}::overflowing_add] -/
+uscalar @[step_pure_def]
+def core.num.«%S».overflowing_add := @UScalar.overflowing_add .«%S»
+
+/- [core::num::{_}::overflowing_add] -/
+iscalar @[step_pure_def]
+def core.num.«%S».overflowing_add := @IScalar.overflowing_add .«%S»
 
 attribute [-simp] Bool.exists_bool
+
+/-!
+## Spec Theorems
+-/
 
 theorem UScalar.overflowing_add_eq {ty} (x y : UScalar ty) :
   let z := overflowing_add x y
@@ -60,6 +72,9 @@ theorem core.num.«%S».overflowing_add_eq (x y : «%S») :
   else z.fst.val = x.val + y.val ∧ z.snd = false
   := UScalar.overflowing_add_eq x y
 
+/-!
+## Additional Theorems
+-/
 
 theorem UScalar.overflowing_add_comm {ty} (x y : UScalar ty) :
   overflowing_add x y = overflowing_add y x := by

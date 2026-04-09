@@ -6,7 +6,7 @@ namespace Aeneas.Std
 open ScalarElab
 
 /-!
-## Overflowing Subtraction
+# Overflowing Subtraction
 -/
 
 def UScalar.overflowing_sub {ty} (x y : UScalar ty) : UScalar ty × Bool :=
@@ -16,11 +16,23 @@ def IScalar.overflowing_sub {ty} (x y : IScalar ty) : IScalar ty × Bool :=
   (⟨ x.bv - y.bv ⟩,
      ¬ (-2^(ty.numBits -1) ≤ x.val - y.val ∧ x.val - y.val < 2^(ty.numBits-1)))
 
-/- [core::num::{u8}::overflowing_sub] -/
-uscalar def core.num.«%S».overflowing_sub := @UScalar.overflowing_sub .«%S»
+uscalar @[step_pure_def]
+def «%S».overflowing_sub (x y : «%S») : «%S» × Bool := @UScalar.overflowing_sub .«%S» x y
 
-/- [core::num::{i8}::overflowing_sub] -/
-iscalar def core.num.«%S».overflowing_sub := @IScalar.overflowing_sub .«%S»
+iscalar @[step_pure_def]
+def «%S».overflowing_sub (x y : «%S») : «%S» × Bool := @IScalar.overflowing_sub .«%S» x y
+
+/- [core::num::{_}::overflowing_sub] -/
+uscalar @[step_pure_def]
+def core.num.«%S».overflowing_sub := @UScalar.overflowing_sub .«%S»
+
+/- [core::num::{_}::overflowing_sub] -/
+iscalar @[step_pure_def]
+def core.num.«%S».overflowing_sub := @IScalar.overflowing_sub .«%S»
+
+/-!
+## Spec Theorems
+-/
 
 theorem UScalar.overflowing_sub_eq {ty} (x y : UScalar ty) :
   let z := overflowing_sub x y
@@ -74,6 +86,9 @@ theorem core.num.«%S».overflowing_sub_eq (x y : «%S») :
   else  z.fst.val = x.val - y.val ∧ z.snd = false
   := UScalar.overflowing_sub_eq x y
 
+/-!
+## Additional Theorems
+-/
 
 @[simp]
 theorem UScalar.overflowing_sub_zero {ty} (x: UScalar ty) :
