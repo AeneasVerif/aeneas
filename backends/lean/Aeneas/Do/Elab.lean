@@ -6,8 +6,7 @@ open Lean Elab Parser Term Meta
 
 namespace Aeneas
 
-/-- Continuation monad transformer. `ContT r m a` represents a computation that
-    produces an `a` but can invoke a continuation `a → m r` to produce the final `m r`. -/
+/-- Continuation monad transformer -/
 def ContT (r : Type u) (m : Type u → Type v) (a : Type u) : Type (max u v) :=
   (a → m r) → m r
 
@@ -31,20 +30,12 @@ instance [MonadRef m] [Monad m] : MonadRef (ContT r m) where
 instance [AddErrorMessageContext m] [Monad m] : AddErrorMessageContext (ContT r m) where
   add stx msg := fun k => do let r ← AddErrorMessageContext.add stx msg; k r
 
-/-- Run a `ContT` computation with a final continuation. -/
 @[inline] def run (x : ContT r m a) (k : a → m r) : m r := x k
 
-/-- Run a `ContT` computation with `pure` as the final continuation. -/
 @[inline] def runPure [Monad m] (x : ContT r m r) : m r := x pure
 
-/-- Access the current continuation. -/
 @[inline] def callCC (f : (a → ContT r m b) → ContT r m a) : ContT r m a :=
   fun k => f (fun a _ => k a) k
-
-/-- Reify the current continuation as `k : a → m r`, allowing the caller to invoke it
-    (possibly zero or multiple times) to build the final result. This is the `shift`
-    operator from delimited continuations. -/
-@[inline] def shift (f : (a → m r) → m r) : ContT r m a := f
 
 end ContT
 
@@ -110,141 +101,243 @@ def ElabM.execute (x : ElabM Expr) (expectedType : Expr) : TermElabM Expr := do
   let ctx ← mkContext expectedType
   (x.run ctx).runPure
 
-/-- Run `body fvar` under a fresh local declaration `name : type`, threading the
-    `ElabM` continuation through `withLocalDecl`. This encapsulates the drop into
-    raw `ContT`/`TermElabM` needed because `ContT` can't implement `MonadControlT`. -/
+/-- Run `body fvar` under a fresh local declaration `name : type` -/
 def ElabM.withLocalDecl (name : Name) (bi : BinderInfo) (type : Expr)
     (body : Expr → ElabM Expr) : ElabM Expr := do
   let ctx ← read
-  (fun _ k => Meta.withLocalDecl name bi type fun fvar =>
+  fun _ k => Meta.withLocalDecl name bi type fun fvar =>
       (body fvar).run ctx |>.run k
-    : ElabM Expr)
 
-/-! ## Elaboration of `doSeq` and `doElem` -/
+/-- Run `body fvar` under a fresh let declaration `let name : type := value` -/
+def ElabM.withLetDecl (name : Name) (type : Expr) (value : Expr)
+    (body : Expr → ElabM Expr) : ElabM Expr := do
+  let ctx ← read
+  fun _ k => Meta.withLetDecl name type value fun fvar =>
+      (body fvar).run ctx |>.run k
 
-def getDoElems (doSeq : TSyntax ``doSeq) : ElabM (Array $ TSyntax `doElem) := do
+def getDoElems (doSeq : TSyntax ``doSeq) : ElabM (List $ TSyntax `doElem) := do
   match doSeq with
-  | `(doSeq| $[$elems $[;]?]*) => return elems
+  | `(doSeq| $[$elems $[;]?]*) => return elems.toList
   | _ => throwError "unexpected `doSeq` syntax {indentD doSeq}"
 
-/-! ## Individual `doElem` handlers-/
-mutual 
+partial def buildCurriedLambda (names : List Name) (types : List Expr)
+    (body : ElabM Expr) : ElabM Expr :=
+  match names, types with
+  | [], _ | _, [] => body
+  | [n], [t] =>
+    ElabM.withLocalDecl n .default t fun fvar => do
+      let bodyExpr ← body
+      mkLambdaFVars #[fvar] bodyExpr
+  | n :: ns, t :: ts =>
+    ElabM.withLocalDecl n .default t fun fvar => do
+      let inner ← buildCurriedLambda ns ts body
+      mkLambdaFVars #[fvar] inner
 
-/-- Call the right doElem elaborator -/
-partial def elabDoElem (elem : TSyntax `doElem) (isLast : Bool) (rest : ElabM Expr) : ElabM Expr := do
+partial def extractPatNames (pat : Syntax) : List Name :=
+  if pat.getKind == ``Term.tuple then
+    let items := pat[1]  -- null node: first_elem, comma, null(rest...)
+    let first := extractPatNames items[0]
+    let rest := extractRestNames items[2].getArgs.toList
+    first ++ rest
+  else if pat.isIdent then
+    [pat.getId]
+  else
+    [`_]
+where
+  extractRestNames : List Syntax → List Name
+    | [] => []
+    | [x] => extractPatNames x
+    | x :: _comma :: rest => extractPatNames x ++ extractRestNames rest
+
+partial def decomposeProductType (ty : Expr) (n : Nat) : MetaM (List Expr) := do
+  if n ≤ 1 then return [ty]
+  let ty ← whnf ty
+  match ty.app2? ``Prod with
+  | some (α, β) => return α :: (← decomposeProductType β (n - 1))
+  | none => throwError "expected a product type, got{indentExpr ty}"
+
+partial def mkUncurries (innerLam : Expr) (types : List Expr) : MetaM Expr := do
+  match types with
+  | [] | [_] => return innerLam
+  | [_, _] => mkAppM ``Function.uncurry #[innerLam]
+  | _ :: rest =>
+    match innerLam with
+    | Expr.lam name ty body bi =>
+      let wrappedBody ← mkUncurries body rest
+      let newLam := Expr.lam name ty wrappedBody bi
+      mkAppM ``Function.uncurry #[newLam]
+    | _ => throwError "mkUncurries: expected lambda, got{indentExpr innerLam}"
+
+/-! ## Individual `doElem` handlers-/
+mutual
+
+/-- Dispatch a single `doElem` to the appropriate handler -/
+partial def elabDoElem (elem : TSyntax `doElem) (rest : List (TSyntax `doElem)) : ElabM Expr := do
   match elem with
-  | `(doElem| let $x:ident $[: $ty?]? ← $rhs) => elabDoLetArrowId x ty? rhs isLast rest
-  -- | `(doElem| let $_:term ← $_)  => elabDoLetArrowPat elem isLast rest
-  -- | `(doElem| let $_:ident := $_) => elabDoLetId elem isLast rest
-  -- | `(doElem| let $_:term := $_)  => elabDoLetPat elem isLast rest
-  | `(doElem| $expr:term)            => elabDoExpr expr isLast rest
+  | `(doElem| let $x:ident $[: $ty?]? ← $rhs) => elabDoLetArrowId x ty? rhs rest
+  | `(doElem| let $pat:term ← $rhs)  => elabDoLetArrowPat pat rhs rest
+  | `(doElem| let $x:ident $[: $ty?]? := $rhs) => elabDoLetId x ty? rhs rest
+  | `(doElem| let $pat:term := $rhs)  => elabDoLetPat pat rhs rest
+  | `(doElem| if $cond then $thenSeq else $elseSeq) => elabDoIf cond ⟨thenSeq⟩ ⟨elseSeq⟩ rest
+  | `(doElem| $expr:term)            => elabDoExpr expr rest
   | _ =>
     match elem.raw.getKind with
-    -- | ``Term.doIf    => elabDoIf elem isLast rest
-    -- | ``Term.doMatch => elabDoMatch elem isLast rest
+    | ``Term.doMatch => elabDoMatch elem.raw rest
     | k => throwError "unsupported `do` element (kind: {k}){indentD elem}"
 
-partial def elabDoExpr (term : Syntax) (isLast : Bool) (rest : ElabM Expr) : ElabM Expr := do
-  if isLast then
+/- Elaborate a term in a `doSeq` position -/
+partial def elabDoExpr (term : Syntax) (rest : List (TSyntax `doElem)) : ElabM Expr := do
+  match rest with
+  | [] =>
     -- Terminal: elaborate as the monadic return value
     let expectedType ← ElabM.mkMonadicType (← mkFreshTypeMVar)
     elabTermEnsuringType term expectedType
-  else
+  | _ =>
     -- Non-terminal: elaborate as `m PUnit`, then `Bind.bind e (fun _ => rest)`
     let expectedType ← ElabM.mkMonadicType (mkConst ``PUnit)
     let e ← elabTermEnsuringType term expectedType
     ElabM.withLocalDecl `_ .default (mkConst ``PUnit) fun fvar => do
-      let restExpr ← rest
+      let restExpr ← elabDoSeqCore rest
       let body ← mkLambdaFVars #[fvar] restExpr
       ElabM.mkBind e body
 
-/-- Elaborate a monadic let-arrow with a simple identifier (`let x ← e` or `let x : ty ← e`).
-    Desugars to `Bind.bind e (fun x => rest)`.
-    The RHS may be a `doExpr` or a `doNested` (nested `do` block). -/
-partial def elabDoLetArrowId (x : TSyntax `ident) (ty? : Option Syntax) (rhs : Syntax) (isLast : Bool) (rest : ElabM Expr) : ElabM Expr := do
+/-- Elaborate a let-arrow with a simple identifier (`let x ← e` ← e`) -/
+partial def elabDoLetArrowId (x : TSyntax `ident) (ty? : Option Syntax) (rhs : Syntax)
+    (rest : List (TSyntax `doElem)) : ElabM Expr := do
   let name := x.getId
-  -- If a type annotation is given, elaborate it; otherwise use a fresh metavar
   let α ← match ty? with
     | some ty => elabType ty
     | none    => mkFreshTypeMVar
   let expectedType ← ElabM.mkMonadicType α
-  let e ← if rhs.getKind == ``Parser.Term.doNested then
+  let e ← match rhs.getKind with
+    | ``Parser.Term.doNested =>
       let elems ← getDoElems ⟨rhs[1]⟩
-      elabDoSeqCore elems 0
-    else
-      -- doExpr: the inner term is at rhs[0]
+      elabDoSeqCore elems
+    | ``Parser.Term.doExpr =>
       elabTermEnsuringType rhs[0] expectedType
-  -- Build `Bind.bind e (fun x => rest)`
+    | _ =>
+      -- The RHS is a do-element like doIf or doMatch — elaborate it as a singleton seq
+      elabDoElem ⟨rhs⟩ []
   let α ← instantiateMVars α
   ElabM.withLocalDecl name .default α fun fvar => do
-    let restExpr ← rest
+    let restExpr ← elabDoSeqCore rest
     let body ← mkLambdaFVars #[fvar] restExpr
     ElabM.mkBind e body
 
--- /-- Elaborate a monadic let-arrow with a pattern (`let (a, b) ← e`).
---     Desugars to `Bind.bind e (fun _x => match _x with | (a, b) => rest)`. -/
--- partial def elabDoLetArrowPat (stx : Syntax) (isLast : Bool) (rest : ElabM Expr) : ElabM Expr := do
---   sorry
+/-- Elaborate a monadic let-arrow with a pattern (`let (a, b) ← e`) -/
+partial def elabDoLetArrowPat (pat : Syntax) (rhs : Syntax) (rest : List (TSyntax `doElem)) : 
+    ElabM Expr := do
+  let names := extractPatNames pat
+  let α ← mkFreshTypeMVar
+  let expectedType ← ElabM.mkMonadicType α
+  let e ← match rhs.getKind with
+    | ``Parser.Term.doNested =>
+      let elems ← getDoElems ⟨rhs[1]⟩
+      elabDoSeqCore elems
+    | ``Parser.Term.doExpr =>
+      elabTermEnsuringType rhs[0] expectedType
+    | _ => elabDoElem ⟨rhs⟩ []
+  let α ← instantiateMVars α
+  let compTypes ← decomposeProductType α names.length
+  let curried ← buildCurriedLambda names compTypes (elabDoSeqCore rest)
+  synthesizeSyntheticMVarsNoPostponing
+  let k ← mkUncurries curried compTypes
+  ElabM.mkBind e k
 
--- /-- Elaborate a pure let binding with a simple identifier (`let x := e`).
---     Introduces a local definition and continues. -/
--- partial def elabDoLetId (stx : Syntax) (isLast : Bool) (rest : ElabM Expr) : ElabM Expr := do
---   sorry
+/-- Elaborate a pure let binding (`let x := e`) -/
+partial def elabDoLetId (x : TSyntax `ident) (ty? : Option Syntax) (rhs : Syntax)
+    (rest : List (TSyntax `doElem)) : ElabM Expr := do
+  let name := x.getId
+  let α ← match ty? with
+    | some ty => elabType ty
+    | none    => mkFreshTypeMVar
+  let val ← elabTermEnsuringType rhs α
+  let α ← instantiateMVars α
+  ElabM.withLetDecl name α val fun fvar => do
+    let restExpr ← elabDoSeqCore rest
+    mkLetFVars #[fvar] restExpr
 
--- /-- Elaborate a pure let binding with a pattern (`let (a, b) := e` or `let ⟨f⟩ := e`).
---     Desugars to a `match` or projections. -/
--- partial def elabDoLetPat (stx : Syntax) (isLast : Bool) (rest : ElabM Expr) : ElabM Expr := do
---   sorry
+/-- Elaborate a pure let binding with a pattern (`let (a, b) := e`) -/
+partial def elabDoLetPat (pat : Syntax) (rhs : Syntax)
+    (rest : List (TSyntax `doElem)) : ElabM Expr := do
+  let names := extractPatNames pat
+  let α ← mkFreshTypeMVar
+  let val ← elabTermEnsuringType rhs α
+  let α ← instantiateMVars α
+  let compTypes ← decomposeProductType α names.length
+  let curried ← buildCurriedLambda names compTypes (elabDoSeqCore rest)
+  synthesizeSyntheticMVarsNoPostponing
+  let k ← mkUncurries curried compTypes
+  return Expr.app k val
 
--- /-- Elaborate an if-then-else (`Lean.Parser.Term.doIf`).
---     Both branches are `doSeq`s that are elaborated independently. -/
--- partial def elabDoIf (stx : Syntax) (isLast : Bool) (rest : ElabM Expr) : ElabM Expr := do
---   sorry
+/-- Elaborate an if-then-else -/
+partial def elabDoIf (cond : Syntax) (thenSeq elseSeq : TSyntax ``doSeq)
+    (rest : List (TSyntax `doElem)) : ElabM Expr := do
+  -- TODO: look at this logic again, not sure if it's right
+  -- Append the rest of the do-block to both branches so the continuation
+  -- flows through the if/else without needing join points
+  let thenElems := (← getDoElems thenSeq) ++ rest
+  let elseElems := (← getDoElems elseSeq) ++ rest
+  let condExpr ← elabTerm cond none
+  let thenExpr ← elabDoSeqCore thenElems
+  let thenType ← inferType thenExpr
+  let elseExpr ← elabDoSeqCore elseElems
+  let elseExpr ← Term.ensureHasType (some thenType) elseExpr
+  -- Resolve pending metavariables and build @ite _ cond inst thenExpr elseExpr
+  synthesizeSyntheticMVarsNoPostponing
+  mkAppM ``ite #[← instantiateMVars condExpr, ← instantiateMVars thenExpr, ← instantiateMVars elseExpr]
 
--- /-- Elaborate a pattern match (`Lean.Parser.Term.doMatch`).
---     Each arm body is a `doSeq` elaborated independently. -/
--- partial def elabDoMatch (stx : Syntax) (isLast : Bool) (rest : ElabM Expr) : ElabM Expr := do
---   sorry
+/-- Elaborate a pattern match (`doMatch`) -/
+partial def elabDoMatch (stx : Syntax) (rest : List (TSyntax `doElem)) : ElabM Expr := do
+  -- doMatch: [0]="match", [1]=opt name, [2]=opt gen, [3]=discrs, [4]="with", [5]=matchAlts
+  let alts := stx[5][0]  
+  let mut newAlts := #[]
+  for i in [:alts.getNumArgs] do
+    let alt := alts[i]
+    let armDoSeq : TSyntax ``Term.doSeq := ⟨alt[3]⟩
+    let armElems ← getDoElems armDoSeq
+    let allElems := armElems ++ rest
+    -- Build doSeqItems from the elements
+    let doSeqItems := allElems.map fun elem =>
+      Syntax.node .none ``Term.doSeqItem #[elem.raw, mkNullNode #[]]
+    let newDoSeq := Syntax.node .none ``Term.doSeqIndent #[mkNullNode doSeqItems.toArray]
+    let doTerm := Syntax.node .none ``Term.do #[mkAtom "do", newDoSeq]
+    -- Replace the arm body with the `do` term
+    let newAlt := alt.setArg 3 doTerm
+    newAlts := newAlts.push newAlt
+  -- Rebuild the match as a term-level match
+  let newAltsNode := Syntax.node .none ``Term.matchAlts #[mkNullNode newAlts]
+  let termMatch := Syntax.node .none ``Term.match
+    #[stx[0], stx[1], stx[2], stx[3], stx[4], newAltsNode]
+  -- Elaborate as a term
+  let expectedType ← ElabM.mkMonadicType (← mkFreshTypeMVar)
+  elabTermEnsuringType termMatch expectedType
 
-/-- Walk an array of `doElem` nodes starting at index `i`, threading each element's
-    result into the next via the explicit `rest` thunk passed to each handler. -/
-partial def elabDoSeqCore (elems : Array $ TSyntax `doElem) (i : Nat) : ElabM Expr := do
-  if h : i < elems.size then
-    let isLast := i + 1 = elems.size
-    let rest : ElabM Expr :=
-      if isLast then throwError "internal error: requested rest after last element"
-      else elabDoSeqCore elems (i + 1)
-    elabDoElem elems[i] isLast rest
-  else
-    throwError "internal error: index out of bounds in `do` block elaboration"
+partial def elabDoSeqCore : List (TSyntax `doElem) → ElabM Expr
+  | [] => throwError "unexpected empty `do` block"
+  | [elem] => elabDoElem elem []
+  | elem :: rest => elabDoElem elem rest
 
 end
 
-/-- Elaborate a `doSeq` (the body of a `do` block): extract the `doElem`s and
-    process them left-to-right. Each element handler receives a thunk for
-    "elaborate the rest of the block" so it can build `Bind.bind` or `let` around it. -/
 def elabDoSeq (doSeq : TSyntax ``doSeq) : ElabM Expr := do
   let elems ← getDoElems doSeq
-  if elems.isEmpty then
-    throwError "unexpected empty `do` block"
-  else
-    elabDoSeqCore elems 0
+  elabDoSeqCore elems
 
 
 @[term_elab «do»]
 def elabDo : TermElab := fun stx expectedType? => do
-  if ← getBoolOption ``newDoElab then
-    let expectedType ← match expectedType? with
-      | some ty => instantiateMVars ty
-      | none => do
-        let α ← Meta.mkFreshTypeMVar
-        -- We'll only ever be using this elaborator on the extracted code, so the monad should
-        -- always be `Aeneas.Std.Result`
-        return mkApp (.const ``Aeneas.Std.Result [← Meta.getLevel α]) α 
+  let useNewElab ← (do
+    if !(← getBoolOption ``newDoElab) then return false
+    let some expectedType := expectedType? | return false
+    let expectedType ← whnf (← instantiateMVars expectedType)
+    match expectedType with
+    | Expr.app m _ => return m.isAppOf ``Aeneas.Std.Result
+    | _ => return false : TermElabM Bool)
+  if useNewElab then
+    logWarning "Using new do elaborator"
     let `(do $doSeq) := stx | throwUnsupportedSyntax
-    -- TODO: delete this
-    logWarning "Using the new `doSeq` elaborator!"
-    Do.ElabM.execute (Do.elabDoSeq doSeq) expectedType
+    Do.ElabM.execute (Do.elabDoSeq doSeq) expectedType?.get!
   else
     Term.elabDo stx expectedType?
 
@@ -270,8 +363,90 @@ def test4 : Result Nat := do
   let x : Nat ← ok 1
   ok (x + 1)
 
+def test5 : Result Nat := do
+  let x := 1
+  ok (x + 2)
+
+def test6 : Result Nat := do
+  let x : Nat := 1
+  let y ← ok 2
+  ok (x + y)
+
+def test7 : Result Nat := do
+  let x ← ok 1
+  if x > 0 then ok x else ok 0
+
+def test8 : Result Nat := do
+  let x ← ok 1
+  if x > 0 then ok 10 else ok 20
+
+def test9 : Result Nat := do
+  let x ← ok 2
+  let y ← do
+    if x > 1 then ok 1 else ok 0
+  ok y
+
+def test10 : Result Nat := do
+  let x ← ok 2
+  let y ← if x > 1 then ok 1 else ok 0
+  ok y
+
+def test11_body (max i : Nat) : Result (ControlFlow Nat Nat) :=
+  if i < max then ok (ControlFlow.cont (i + 1))
+  else ok (ControlFlow.done i)
+
+def test11 : Result Nat := do
+  let max ← ok 10
+  loop (test11_body max) 0
+
+def test12 : Result Nat := do
+  let (a, b) ← ok (1, 2)
+  ok (a + b)
+
+def test13 : Result Nat := do
+  let (_, b) ← ok (1, 2)
+  ok b
+
+structure Wrapper where
+  val : Nat
+
+set_option Aeneas.newDoElab false in
+def test14 : Result Nat := do
+  let ⟨a⟩ ← ok (Wrapper.mk 42)
+  ok a
+
+def test15 : Result Nat := do
+  let (a, b) := (1, 2)
+  ok (a + b)
+
+def test16 : Result Nat := do
+  let x ← ok 1
+  match x with
+  | 0 => ok 10
+  | _ => ok 20
+
+def test17 : Result Nat := do
+  let x ← ok 1
+  let y ← match x with
+    | 0 => ok 10
+    | _ => ok 20
+  ok (y + 1)
+
 set_option pp.notation false
 #print test1
 #print test2
 #print test3
 #print test4
+#print test5
+#print test6
+#print test7
+#print test8
+#print test9
+#print test10
+#print test11
+#print test12
+#print test13
+#print test14
+#print test15
+#print test16
+#print test17
