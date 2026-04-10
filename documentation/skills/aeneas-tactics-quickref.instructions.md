@@ -98,24 +98,6 @@ What does the goal look like?
 | `split_conjs` | Split nested ∧, then scaffold `· agrind` per sub-goal | `split_conjs`, `split_conjs at h` | — |
 | `step_array_spec` | Generate `@[step]` for constant array indexing | `step_array_spec (name := N) arr[i]! { x => P } by tac` | See `aeneas-lean-core` |
 
-**Inaccessible hypotheses — two solutions (see `aeneas-lean-core` for full details):**
-Many tactics (`step*`, `step` without `as`, `cases`, `intro`, pattern matching) produce
-hypotheses with inaccessible names (`_✝⁵⁵`, `h✝`) that cannot be referenced directly.
-
-**Solution 1 (up to ~10 hypotheses):** Use `‹expr›` type matching and/or `rename_i`:
-```lean
-have h := ‹_ = some i›   -- finds hypothesis by type shape (wildcards match inaccessible parts)
-rename_i ih_cbd          -- grabs the last inaccessible hypothesis
-```
-
-**Solution 2 (many hypotheses, `step*`-specific):** Use `step*?` → `let*` script:
-```lean
--- step*? generates (use lean_code_actions to retrieve):
-let* ⟨ x2, x2_post ⟩ ← U32.add_spec
-let* ⟨ x3, h_len, h_val ⟩ ← foo_spec    -- name each postcondition component
-...
-```
-
 See the `aeneas-lean-core` skill file for worked examples and disambiguation rules.
 
 ### Commonly Used Lean Builtins
@@ -355,18 +337,9 @@ theorem MY_CONST_val : MY_CONST.val = 42 := by decide
 | `simp_all` drops hyps / slow | Hypothesis gone or timeout | **Prefer `agrind`**. If you need simp, use `simp [*]` or `simp [h1,h2]` |
 | `grind` explodes | Timeout | Use `agrind` instead |
 | `agrind` fails | Goal unsolved | Try `simp [*]; agrind` |
-| Wrong step spec | Unexpected behavior | `step with specific_thm` |
-| Auto-param tactic loops | `maxRecDepth`/timeout at theorem statement | Make params explicit, no `:= by ...` in recursive theorems |
-| Dependent proof in `rw` | `simp only`/`rw` loops on term with proof arg | `fcongr 1` to separate value from proof (proof irrelevance) |
 | `step*` stuck on projection | No progress on `(Struct p).field args` | `simp only [step_simps]` before `step*`; add `@[simp, step_simps]` lemma |
 | Doc comment before `set_option` | Parse error "expected 'lemma'" | Use `/- ... -/` (regular comment), not `/-- ... -/` (doc comment) |
-| Concrete computation fails | `agrind`/`scalar_tac` fail on numeric literals | `decide` or `native_decide` — but **always time them** (see below) |
-| `decide`/`native_decide` slowness | Build takes minutes or heartbeat timeout | **Both `decide` and `native_decide` can be extremely slow** — they compile/interpret the full term, which can explode on large terms or inside proofs with big contexts. **Always measure the time** using `set_option profiler true` or `lean_profile_proof`. If slow, extract the fact as a standalone `theorem ... := by native_decide` outside the main proof so the context is minimal. Never use either inside a large proof body without profiling first. |
-| `scalar_tac` in spec_gen | Cascading `maxRecDepth` in loop proof | Mass-replace ALL `scalar_tac` → `agrind` in proof body |
-| Recurring index bounds slow | Same bound proved inline many times | Extract as solver-attributed lemma (`@[agrind =]`); see item 22 in `aeneas-lean-core` |
-| `(by ...)` in type signature | Kernel slowness on `apply`/`exact` of theorem | Use `get_elem_tactic` override with `agrind`; if that fails, use `(by agrind)` > `(by grind)` > `(by scalar_tac)` > standalone lemma. NEVER `cases p <;> simp_all <;> tactic`. See "Never embed (by ...) in type signatures" in `aeneas-lean-core` |
 | `first \| simp_all` swallows goals | `simp_all` partially simplifies, `first` considers it done | `(simp_all; done)` — forces full closure; applies to all `simp` variants |
-| `exact`/`apply` timeout or `maxRecDepth` | Value or proof args not syntactically matching goal | Use `lean_goal`, `rw` for values, pass exact hyp names for proofs. See "Unification pitfalls with `exact`/`apply`" in `aeneas-lean-core` |
 
 ## Debugging and Profiling Commands
 
@@ -426,49 +399,6 @@ theorem my_fn.spec ... := by
   bottleneck is kernel type-checking of the proof term the tactic produced. The fix
   is to use a tactic that produces simpler proof terms, or extract the sub-goal as
   an auxiliary lemma (which gets its own smaller proof term).
-
-### ⚠️ `maxHeartbeats` guidelines
-
-<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core item 13 ("Keep maxHeartbeats reasonable") -->
-
-**⛔ NEVER use `set_option ... in` inside a proof script.** For example:
-```lean
--- ⛔ BAD: breaks incrementality inside the proof
-theorem my_fn.spec ... := by
-  set_option maxHeartbeats 16000000 in
-  step* ...
-```
-The `in` scoping inside a tactic block makes everything below it a single elaboration
-unit — any edit forces full re-elaboration, destroying incremental feedback.
-
-Using `set_option ... in` **before** a theorem declaration is fine and standard practice:
-```lean
--- ✅ GOOD: set_option before the theorem declaration
-set_option maxHeartbeats 16000000 in
-theorem my_fn.spec ... := by ...
-```
-
-Lean's default `maxHeartbeats` (200K) is very low for Aeneas proofs. **Increase it to
-1M as a baseline** (`set_option maxHeartbeats 1000000`) — this is a reasonable default
-for most proofs.
-
-Well-structured proofs should stay **under 8M heartbeats** even for the biggest proofs.
-If you need to increase beyond that, it signals a problem with the proof — don't just
-bump the number, fix the root cause:
-
-1. **Decompose the function** — use fold theorems to split a large function into
-   smaller helpers (see "Function Decomposition" in the crypto verification skill file).
-   Smaller functions → smaller proof contexts → faster elaboration.
-2. **Minimize the context** — `clear` unused hypotheses before expensive tactics.
-   Large contexts make `simp`, `agrind`, and `grind` slower.
-3. **Use `step*?` instead of `step*`** — the expanded script gives you
-   control over each step and avoids the combinatorial blowup of repeated automation.
-4. **Avoid `grind` when `agrind` suffices** — `grind` is much more expensive.
-5. **Extract complex sub-goals as auxiliary lemmas** — a separate lemma gets a fresh,
-   minimal context, which is faster for tactics to process.
-6. **Check for tactic inefficiency** — if a single tactic call dominates the heartbeat
-   budget, consider whether a different tactic would be faster (e.g., `bv_tac` instead
-   of `agrind` for bitwise goals, `scalar_tac` instead of `agrind` for pure arithmetic).
 
 ### ⏱️ Wall-clock time target: < 60s — THIS IS IMPORTANT
 
@@ -531,142 +461,6 @@ If incremental edits are slow (several seconds), the proof structure is forcing
 re-elaboration of large chunks. See the `lean-lsp-mcp` skill file for guidance
 (avoid `by ...` blocks inside `apply`/`exact`/`refine` arguments, use `have` to create
 elaboration checkpoints).
-
-### ⛔ NEVER increase `maxRecDepth`
-
-### 🛑 When a file is too slow: the sorry/stop diagnostic strategy
-
-**⛔ NEVER bump `maxHeartbeats` until a slow file finally builds.** This can turn a
-10-minute build into a multi-hour build, and you learn nothing about the root cause.
-A proof that needs more heartbeats is a **broken proof** — treat it as such.
-
-**Strategy: disable all proofs with `stop`, then re-enable one by one.**
-
-1. **Disable all suspect proofs with `stop`.** Put `stop` at the top of every non-trivial
-   theorem in the file to deactivate the elaboration of the proof. The file should now
-   build in seconds. If it doesn't, there's an issue at the declaration level (e.g., a
-   slow `by ...` in an index bound proof - put `stop` in those too).
-
-2. **Re-enable proofs one by one.** Remove each stop one at a time, build, and measure the
-   time. This identifies which proof(s) are the culprits.
-
-3. **For each culprit: use the rolling stop technique.** Move `stop` down step by step,
-   using the MCP to replay the proof incrementally and find which one is slow:
-   ```lean
-   theorem my_fn.spec ... := by
-     step*
-     stop    -- does it build fast up to here?
-     cases x -- move stop down by one line (below this line), retry, etc.
-     have ...
-     ...   
-   ```
-
-4. **Fix the slow tactic.** Common fixes:
-   - Extract the sub-goal as an auxiliary lemma (smaller context)
-   - Replace `simp_all` with targeted `simp [h1, h2]` or `agrind`
-   - Replace `fin_cases x <;> simp_all` with more direct case analysis
-   - Replace `decide`/`native_decide` with a standalone pre-proved lemma
-   - Decompose the function with fold theorems (smaller proof terms)
-
-**Key principle:** A file should always build in reasonable time (< 2 minutes). If it
-doesn't, `stop` the slow parts, diagnose, and fix — don't wait hours hoping a
-heartbeat bump will work.
-
-<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core item 11 ("NEVER increase maxRecDepth") -->
-
-If you hit a `maxRecDepth` error, **do NOT increase it**. If calling any tactic
-triggers `maxRecDepth`, it almost certainly means **the tactic is looping internally**
-(typically via `simp`). The fix is never to raise the limit — it's to break the loop.
-
-**Root cause: simp loops.** A simp loop occurs when two or more simp lemmas rewrite
-back and forth (A → B → A → ...), or when a lemma rewrites to a term that reduces
-back to the original (e.g., `s[i]'h → s[i]!` but `s[i]!` unfolds back to something
-containing `s[i]'h`). This causes `simp` to recurse until it hits `maxRecDepth`.
-
-**How to diagnose:**
-1. The error says "maximum recursion depth has been reached" inside a `simp` call
-2. Use the LSP: comment out the failing `simp` call, add `sorry`, inspect the goal
-   with `lean_goal` to see what the `simp` was trying to simplify
-3. Identify which lemmas interact badly — try each lemma individually
-
-**How to fix (in order of preference):**
-1. **Split the `simp only` call**: If `simp only [A, B, C]` loops, try splitting into
-   sequential calls: `simp only [A]` then `simp only [B, C]`. The loop is often caused
-   by a specific pair of lemmas — separating them breaks the cycle.
-   ```lean
-   -- BAD: loops because A and B interact
-   simp only [A, B, C] at h ⊢
-   -- GOOD: separate the conflicting lemmas
-   simp only [A] at h ⊢
-   simp only [B, C] at h ⊢
-   ```
-2. **Use `rw` instead of `simp only`**: If you only need to apply a lemma once (not
-   repeatedly), `rw` is safer — it applies exactly once and doesn't loop.
-   ```lean
-   -- BAD: simp loops
-   simp only [Slice.Inhabited_getElem_eq_getElem!] at h
-   -- GOOD: apply once
-   rw [Slice.Inhabited_getElem_eq_getElem!] at h
-   ```
-3. **Reduce the lemma list**: Remove lemmas one by one until the loop stops. The last
-   lemma you removed is part of the loop — find its interaction partner.
-4. **Use `conv` for targeted rewriting**: When `simp` loops because it rewrites in
-   too many places, use `conv` to target a specific subterm.
-5. **`clear` offending hypotheses**: If a hypothesis triggers the loop (e.g., a
-   hypothesis whose type causes simp to loop when it tries to rewrite it), `clear` it
-   before calling `simp` — but only if the hypothesis is irrelevant to proving the goal.
-   Re-introduce it if needed.
-6. **For tactics that internally use `simp`** (`agrind`, `grind`, `scalar_tac`,
-   `simp_scalar`, `simp_lists`): the loop may be triggered by hypotheses in the context.
-   Try `clear`-ing suspicious hypotheses before calling the tactic — but only if the
-   hypothesis is irrelevant to proving the goal.
-
-**`scalar_tac`, `simp_scalar`, and `simp_lists` trigger `simp_all` internally.** This means they can
-cause `maxRecDepth` errors even though you didn't write a `simp` call yourself. The
-loop is typically triggered by a hypothesis in the context — often an equation whose
-LHS appears in its RHS (e.g., `h : x = f x y`), causing `simp_all` to rewrite
-endlessly.
-
-**Fixes for `scalar_tac`/`simp_scalar`/`simp_lists` maxRecDepth errors (in preference order):**
-1. **Use `agrind` or `grind` instead** — they don't call `simp_all` and are immune to
-   this class of loops. This is the safest fix.
-2. **Identify and modify the faulty hypothesis** — look for an equation in the context
-   whose LHS appears in its RHS. Reverse its direction with `rw [← h]` or `symm at h`
-   before calling `scalar_tac`. This is more technical but preserves the use of
-   `scalar_tac`.
-3. **`clear` the offending hypothesis** before calling `scalar_tac` — but only if the hypothesis is irrelevant to proving the goal.
-
-**Common simp loop patterns in Aeneas:**
-- `Slice.Inhabited_getElem_eq_getElem!` + `List.Inhabited_getElem_eq_getElem!`:
-  These can loop when used together in `simp only`, because rewriting a Slice getElem
-  may expose a List getElem that rewrites back. Split them into separate calls.
-- `getElem → getElem!` lemmas combined with lemmas that unfold `getElem!`: The
-  `Inhabited_getElem_eq_getElem!` lemma rewrites `s[i]'h` to `s[i]!`, but if another
-  lemma or reduction rule unfolds `s[i]!` back to a form containing `s[i]'h`, you
-  get a loop. Use `rw` instead of `simp` for these.
-
-**`congr` transparency issues.** `congr` (and `congr N`) uses default transparency,
-which can WHNF-unfold recursive/looping function bodies and hit `maxRecDepth`.
-**Always use `fcongr` (or `fcongr N`) instead** — it uses reducible transparency
-and produces the same subgoals without unfolding opaque definitions.
-
-**`exact`/`apply` unification issues.** Not all `maxRecDepth` or heartbeat
-timeout errors come from simp loops. `exact` and `apply` can trigger either
-`maxRecDepth` (value mismatches) or heartbeat timeouts (proof-term mismatches)
-when the supplied arguments are not syntactically equal to what the goal expects.
-See "Unification pitfalls with `exact`/`apply`" in `aeneas-lean-core` for the
-full pattern, examples, and diagnostic technique.
-
-**Diagnostic technique — rolling stop.** When `maxRecDepth` appears and the
-cause is unclear, insert `stop` at the top of the proof script and move it
-down one line at a time:
-1. Insert `stop` as the first tactic — the proof below stays untouched, Lean
-   ignores everything after `stop`
-2. Move `stop` down one tactic at a time (using the LSP for fast feedback)
-3. When the error appears, the tactic just above `stop` is the trigger
-4. Diagnose: is it a simp loop (fix per above), `congr` transparency (use
-   `fcongr`), or `exact`/`apply` unification
-   (see "Unification pitfalls" in `aeneas-lean-core`)?
 
 ### Report misbehaving tactics
 
