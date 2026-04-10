@@ -317,6 +317,13 @@ give the entire task to a single agent in one shot. Instead:
 
 ## Two-Phase Workflow: Statements First, Then Proofs
 
+<!-- ⚠️ SYNC RULE: For complete campaign planning (from-scratch verification or
+     major recovery, for instance following a major refactor of the Rust code that
+     breaks several proofs), see the `verification-campaigns` skill file, which provides
+     the full phased workflow including folder planning, informal proof standards, and
+     review convergence protocols. This section covers the statement-vs-proof ordering
+     within a campaign. -->
+
 **Never let agents write proofs before the theorem statements are validated.**
 Agents tend to prove trivially weak postconditions (e.g., just `res.length = n`)
 when the spec should express full functional correctness (e.g., relating the output
@@ -430,6 +437,12 @@ The postcondition must express FULL FUNCTIONAL CORRECTNESS as a direct equality:
 - Apply the VACUITY TEST: would this postcondition hold if the implementation returned
   arbitrary/zero data? If yes, it's too weak.
 
+THIS APPLIES TO ALL SPECS — including auxiliary functions, loop bodies, and fold
+helpers. If the function modifies a buffer, state, or array, the postcondition MUST
+say what the new values are (a spec-level equality), not just that indices/flags
+changed. Apply the COMPOSABILITY TEST: could the caller derive its own FC equality
+knowing only this postcondition? If not, it's too weak.
+
 ALWAYS sketch the proof strategy as a comment above the sorry. Include:
 - Main proof structure (unfold + step, case split, loop invariant, etc.)
 - Which existing specs are needed (by name)
@@ -439,7 +452,7 @@ ALWAYS sketch the proof strategy as a comment above the sorry. Include:
 If the function is > 30 lines of generated Lean code, assess whether it should
 be SPLIT using the fold/refolding technique. If yes:
 - Define the auxiliary functions (extracted subsequences of monadic operations)
-- Write their specs (theorem statements with sorry)
+- Write their specs (theorem statements with sorry) — EACH must have full FC
 - Indicate where fold theorems are needed
 - Include all of this in your output
 
@@ -506,6 +519,10 @@ until all statements are validated. Only then do proof agents launch.
 **Review checklist (for human or code-review agent):**
 
 - Is the postcondition strong enough? Does it express full functional correctness?
+  **This applies to ALL specs — not just top-level functions.** Auxiliary functions
+  (loops, sub-routines, fold helpers) must also say what they compute, not just what
+  metadata changed. A postcondition of "index advanced, flags preserved" without a
+  spec equality for the modified state/buffer is critically weak.
 - Does it relate to the pure specification function (not just structural properties)?
 - Are the preconditions reasonable? (not too strong, not missing necessary ones)
 - Are bridge definitions correct?
@@ -541,11 +558,20 @@ until all statements are validated. Only then do proof agents launch.
   are reused where applicable. A proof that closes >15 goals after `step*` without
   fold helpers should be flagged.
 <!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Every fold helper must have a step spec" -->
-- **Does every fold helper have a step spec?** A fold helper without a corresponding
-  `@[local step]` spec theorem is useless scaffolding — the parent proof can fold the
-  code but can't `step` through the helper. Every fold helper must have a spec with a
-  full functional-correctness postcondition (even if sorry'd). Flag any fold helper
-  that lacks a spec.
+- **Does every fold helper have a step spec with FC?** A fold helper without a
+  corresponding `@[local step]` spec theorem is useless scaffolding — the parent
+  proof can fold the code but can't `step` through the helper. Every fold helper
+  must have a spec with a full functional-correctness postcondition (even if sorry'd).
+  Flag any fold helper that lacks a spec.
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Structural-only fold helper postconditions are insufficient" -->
+- **Are fold helper postconditions FC, not just structural?** A postcondition that
+  only states structural properties (lengths, alignment, mode flags, index advancement)
+  WITHOUT specifying what the helper computed is **insufficient** — it makes the
+  parent's FC unprovable. Apply the **composability test**: for each fold helper,
+  ask "knowing only this postcondition, could the caller derive its own FC equality?"
+  If no, the postcondition needs strengthening. Common failure: a helper that modifies
+  a buffer or state has postconditions about indices and flags, but nothing about the
+  buffer/state values. Flag these as critically weak.
 <!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "Every function spec requires loop specs too" -->
 - **Are loop specs present for all loops?** When a function contains loops (translated
   as `_loop`, `_loop0`, `_loop1` auxiliary functions), the proof requires `@[step]`
@@ -758,6 +784,12 @@ its primary purpose. The review MUST:
    close it, not just document why it's hard
 4. **For genuinely blocked sorry's**: identify the specific blocker (missing stdlib spec,
    missing hash bridge lemma, etc.) and report it as a concrete action item
+5. **Verify blocker claims**: When an agent or prior review reports something as
+   "blocked" or "needs infrastructure," the reviewer must verify the claim — check
+   that the blocker cites an exact missing definition (name, file, expected type).
+   If the claim is vague (e.g., "needs iterator infrastructure"), search the Aeneas
+   stdlib and project code to check whether the "missing" piece actually exists.
+   Unverified blocker claims must be flagged.
 
 **Convergence = zero sorry's, or every remaining sorry is blocked by a specific,
 documented infrastructure gap** (missing Aeneas stdlib spec, missing external function
@@ -907,6 +939,13 @@ These cannot be reliably grepped — the reviewer must read the proof:
   map to the spec") Public Rust API functions and FFI/external functions should
   straightforwardly map to well-identified spec functions. Their postconditions should
   make this mapping explicit.
+
+<!-- ⚠️ SYNC RULE: source of truth is aeneas-lean-core "API coverage" -->
+- **Do preconditions cover all valid API usage patterns?** (Rule: "API coverage")
+  For every public-facing function, read the Rust trait/function docs and verify the
+  spec's preconditions don't exclude documented usage patterns. If a precondition
+  restricts to a subset (e.g., first call only), this is a **critical issue** — the
+  spec must be generalized. No exceptions.
 
 - **Are fold theorems non-vacuous?** (Rule: "Fold theorem vacuity check")
   For each fold theorem (typically named `fold_*` or `*_fold`), check that the LHS
