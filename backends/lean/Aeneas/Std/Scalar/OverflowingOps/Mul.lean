@@ -115,7 +115,7 @@ theorem IScalar.overflowing_mul_zero {ty} (x : IScalar ty) :
 
 uscalar @[simp]
 theorem core.num.«%S».overflowing_mul_zero(x : «%S») :
-  (UScalar.overflowing_mul x UScalar.zero) = (UScalar.zero, false) :=
+  (overflowing_mul x UScalar.zero) = (UScalar.zero, false) :=
   UScalar.overflowing_mul_zero x
 
 iscalar @[simp]
@@ -127,7 +127,7 @@ theorem core.num.«%S».overflowing_mul_zero(x : «%S») :
 @[simp]
 theorem UScalar.overflowing_mul_one {ty} (x: UScalar ty) :
   (overflowing_mul x UScalar.one) = (x, false) := by
-  simp [overflowing_mul, UScalar.one, hmax, one_bv];
+  simp [overflowing_mul, UScalar.one, hmax, one_bv]
 
 @[simp]
 theorem IScalar.overflowing_mul_one {ty} (x : IScalar ty) :
@@ -136,12 +136,10 @@ theorem IScalar.overflowing_mul_one {ty} (x : IScalar ty) :
 
 uscalar @[simp]
 theorem core.num.«%S».overflowing_mul_one(x : «%S») :
-  (UScalar.overflowing_mul x UScalar.one) = (x, false) :=
-  UScalar.overflowing_mul_one x
+  (overflowing_mul x UScalar.one) = (x, false) := UScalar.overflowing_mul_one x
 
 iscalar @[simp]
 theorem core.num.«%S».overflowing_mul_one(x : «%S») :
-  (overflowing_mul x IScalar.one) = (x, false) :=
-   IScalar.overflowing_mul_one x
+  (overflowing_mul x IScalar.one) = (x, false) := IScalar.overflowing_mul_one x
 
 end Aeneas.Std

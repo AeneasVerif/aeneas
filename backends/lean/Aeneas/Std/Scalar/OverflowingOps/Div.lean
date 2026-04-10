@@ -7,7 +7,7 @@ namespace Aeneas.Std
 open Result Error ScalarElab
 
 /-!
-# Overflowing Addition
+# Overflowing Division
 -/
 
 def UScalar.overflowing_div {ty} (x y : UScalar ty) : Result (UScalar ty × Bool) :=
@@ -44,7 +44,7 @@ theorem UScalar.overflowing_div_eq {ty} (x y : UScalar ty) :
   overflowing_div x y = (·, false) <$> UScalar.div x y
   := by
     simp[overflowing_div, UScalar.div]
-    rw [map_eq_bind_pure_comp];
+    rw [map_eq_bind_pure_comp]
     split<;>simp[pure]
 
 
@@ -68,7 +68,6 @@ theorem IScalar.overflowing_div_one {ty} (x : IScalar ty) :
   overflowing_div x one = .ok (x, false) := by
   simp[overflowing_div, one_bv]
 
-
 uscalar @[simp]
 theorem core.num.«%S».overflowing_div_one(x : «%S») :
   overflowing_div x UScalar.one = .ok (x, false) := UScalar.overflowing_div_one x
@@ -80,12 +79,12 @@ theorem core.num.«%S».overflowing_div_one(x : «%S») :
 
 @[simp]
 theorem UScalar.overflowing_div_zero {ty} (x : UScalar ty) :
-  overflowing_div x zero = .fail divisionByZero  := by
+  overflowing_div x zero = .fail divisionByZero := by
   simp[overflowing_div, zero_bv]
 
 @[simp]
 theorem IScalar.overflowing_div_zero {ty} (x : IScalar ty) :
-  overflowing_div x zero = .fail divisionByZero  := by
+  overflowing_div x zero = .fail divisionByZero := by
   simp[overflowing_div]
 
 uscalar @[simp]
@@ -99,24 +98,22 @@ theorem core.num.«%S».overflowing_div_zero(x : «%S») :
 
 @[simp]
 theorem UScalar.overflowing_div_self {ty} (x : UScalar ty) (h: x.bv ≠ 0) :
-  overflowing_div x x = .ok (one, false)  := by
+  overflowing_div x x = .ok (one, false) := by
   have h': x.bv ≠ 0#ty.numBits :=  by simp; exact Ne.intro h
   simp[overflowing_div, h']
   rw [←one_bv]
 
-
 @[simp]
 theorem IScalar.overflowing_div_self {ty} (x : IScalar ty) (h₁: x.bv ≠ 0) (h₂: x ≠ min ty) :
-  overflowing_div x x = .ok (one, false)  := by
-  have h': (x.bv ≠ 0#ty.numBits) :=  by simp; exact Ne.intro h₁
+  overflowing_div x x = .ok (one, false) := by
+  have h': (x.bv ≠ 0#ty.numBits) := by simp; exact Ne.intro h₁
   have h'': x.val ≠ 0 := by
-    simp only[val];
-    simp[BitVec.toInt];
+    simp only[val]
+    simp[BitVec.toInt]
     split
     · simp; refine Nat.ne_zero_iff_zero_lt.mpr ?_; grind
     · refine Int.neg_ne_zero.mp ?_; grind
   simp[overflowing_div, h'', h', h₂, ←one_bv]
-
 
 uscalar @[simp]
 theorem core.num.«%S».overflowing_div_self (x : «%S») (h : x.bv ≠ 0) :
