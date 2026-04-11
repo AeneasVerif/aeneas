@@ -34,9 +34,6 @@ instance [AddErrorMessageContext m] [Monad m] : AddErrorMessageContext (ContT r 
 
 @[inline] def runPure [Monad m] (x : ContT r m r) : m r := x pure
 
-@[inline] def callCC (f : (a → ContT r m b) → ContT r m a) : ContT r m a :=
-  fun k => f (fun a _ => k a) k
-
 end ContT
 
 namespace Do
@@ -68,10 +65,8 @@ def ElabM.mkBind (e k : Expr) : ElabM Expr := do
   -- We build `@Bind.bind.{u,v} m inst α β e k` manually.
   -- For Result.{u}, v = u, so we just need the level of α.
   -- α comes from the type of e: `m α`
-  let eType ← inferType e >>= instantiateMVars
-  let α ← match eType with
-    | Expr.app _ a => pure a
-    | _ => throwError "mkBind: expected monadic type, got{indentExpr eType}"
+  let eType ← instantiateMVars =<< inferType e
+  let .some (α : Expr) := eType.getAppArgs[0]? | throwError "expected monadic type, got{indentExpr eType}"
   -- β comes from k: it's a lambda `fun (x : α) => body`, body has type `m β`
   let kBody ← match k with
     | Expr.lam _ _ body _ => inferType body >>= instantiateMVars
@@ -83,18 +78,16 @@ def ElabM.mkBind (e k : Expr) : ElabM Expr := do
   -- Bind.bind.{u', v'} where α : Sort u' and m α : Sort v'
   -- For m : Type u → Type v, the sorts are Sort (u+1) and Sort (v+1)
   -- so u' = u and v' = v.
-  let mType ← inferType ctx.m >>= instantiateMVars
+  let mType ← instantiateMVars =<< inferType ctx.m 
   -- m : Type u → Type v means mType = Sort (u+1) → Sort (v+1)
   -- Bind.bind.{u, v} needs the raw u and v
   let (u, v) ← match mType with
     | Expr.forallE _ (Expr.sort (.succ u)) (Expr.sort (.succ v)) _ => pure (u, v)
     | _ => throwError "mkBind: unexpected monad type{indentExpr mType}"
-  return mkApp6 (.const ``Bind.bind [u, v]) ctx.m ctx.bindInst α β e k
-
-def ElabM.mkPure (e : Expr) : ElabM Expr := mkAppM ``Pure.pure #[e]
+  return mkApp6 (mkConst ``Bind.bind [u, v]) ctx.m ctx.bindInst α β e k
 
 /-- Build the expected monadic type `m α` for a sub-expression. -/
-def ElabM.mkMonadicType (α : Expr) : ElabM Expr := read >>= fun ctx => pure <| mkApp ctx.m α
+def ElabM.mkMonadicType (α : Expr) : ElabM Expr := read >>= fun ctx => pure (mkApp ctx.m α)
 
 /-- Run a `Do.ElabM` computation, given an expected type for the whole `do` block. -/
 def ElabM.execute (x : ElabM Expr) (expectedType : Expr) : TermElabM Expr := do
@@ -102,10 +95,9 @@ def ElabM.execute (x : ElabM Expr) (expectedType : Expr) : TermElabM Expr := do
   (x.run ctx).runPure
 
 /-- Run `body fvar` under a fresh local declaration `name : type` -/
-def ElabM.withLocalDecl (name : Name) (bi : BinderInfo) (type : Expr)
-    (body : Expr → ElabM Expr) : ElabM Expr := do
+def ElabM.withLocalDeclD (name : Name)  (type : Expr) (body : Expr → ElabM Expr) : ElabM Expr := do
   let ctx ← read
-  fun _ k => Meta.withLocalDecl name bi type fun fvar =>
+  fun _ k => Meta.withLocalDeclD name type fun fvar =>
       (body fvar).run ctx |>.run k
 
 /-- Run `body fvar` under a fresh let declaration `let name : type := value` -/
@@ -115,7 +107,9 @@ def ElabM.withLetDecl (name : Name) (type : Expr) (value : Expr)
   fun _ k => Meta.withLetDecl name type value fun fvar =>
       (body fvar).run ctx |>.run k
 
-def getDoElems (doSeq : TSyntax ``doSeq) : ElabM (List $ TSyntax `doElem) := do
+abbrev DoElem := TSyntax `doElem
+
+def getDoElems (doSeq : TSyntax ``doSeq) : ElabM (List DoElem) := do
   match doSeq with
   | `(doSeq| $[$elems $[;]?]*) => return elems.toList
   | _ => throwError "unexpected `doSeq` syntax {indentD doSeq}"
@@ -125,11 +119,11 @@ partial def buildCurriedLambda (names : List Name) (types : List Expr)
   match names, types with
   | [], _ | _, [] => body
   | [n], [t] =>
-    ElabM.withLocalDecl n .default t fun fvar => do
+    ElabM.withLocalDeclD n t fun fvar => do
       let bodyExpr ← body
       mkLambdaFVars #[fvar] bodyExpr
   | n :: ns, t :: ts =>
-    ElabM.withLocalDecl n .default t fun fvar => do
+    ElabM.withLocalDeclD n t fun fvar => do
       let inner ← buildCurriedLambda ns ts body
       mkLambdaFVars #[fvar] inner
 
@@ -139,6 +133,9 @@ partial def extractPatNames (pat : Syntax) : List Name :=
     let first := extractPatNames items[0]
     let rest := extractRestNames items[2].getArgs.toList
     first ++ rest
+  else if pat.getKind == ``Term.anonymousCtor then
+    -- ⟨a, b, ...⟩ — items at [1], same comma-separated layout
+    extractRestNames pat[1].getArgs.toList
   else if pat.isIdent then
     [pat.getId]
   else
@@ -156,7 +153,7 @@ partial def decomposeProductType (ty : Expr) (n : Nat) : MetaM (List Expr) := do
   | some (α, β) => return α :: (← decomposeProductType β (n - 1))
   | none => throwError "expected a product type, got{indentExpr ty}"
 
-partial def mkUncurries (innerLam : Expr) (types : List Expr) : MetaM Expr := do
+def mkUncurries (innerLam : Expr) (types : List Expr) : MetaM Expr := do
   match types with
   | [] | [_] => return innerLam
   | [_, _] => mkAppM ``Function.uncurry #[innerLam]
@@ -168,11 +165,14 @@ partial def mkUncurries (innerLam : Expr) (types : List Expr) : MetaM Expr := do
       mkAppM ``Function.uncurry #[newLam]
     | _ => throwError "mkUncurries: expected lambda, got{indentExpr innerLam}"
 
+#check doNested
+#check doExpr
+
 /-! ## Individual `doElem` handlers-/
 mutual
 
 /-- Dispatch a single `doElem` to the appropriate handler -/
-partial def elabDoElem (elem : TSyntax `doElem) (rest : List (TSyntax `doElem)) : ElabM Expr := do
+partial def elabDoElem (elem : TSyntax `doElem) (rest : List DoElem) : ElabM Expr := do
   match elem with
   | `(doElem| let $x:ident $[: $ty?]? ← $rhs) => elabDoLetArrowId x ty? rhs rest
   | `(doElem| let $pat:term ← $rhs)  => elabDoLetArrowPat pat rhs rest
@@ -180,13 +180,12 @@ partial def elabDoElem (elem : TSyntax `doElem) (rest : List (TSyntax `doElem)) 
   | `(doElem| let $pat:term := $rhs)  => elabDoLetPat pat rhs rest
   | `(doElem| if $cond then $thenSeq else $elseSeq) => elabDoIf cond ⟨thenSeq⟩ ⟨elseSeq⟩ rest
   | `(doElem| $expr:term)            => elabDoExpr expr rest
-  | _ =>
-    match elem.raw.getKind with
-    | ``Term.doMatch => elabDoMatch elem.raw rest
-    | k => throwError "unsupported `do` element (kind: {k}){indentD elem}"
+  | `(doElem| match $[(generalizing := $_gen?)]? $(_motive?)? $_discrs,* with $_alts:matchAlt*) =>
+    elabDoMatch elem.raw rest
+  | _ => throwError "unsupported `do` element (kind: {elem.raw.getKind}){indentD elem}"
 
 /- Elaborate a term in a `doSeq` position -/
-partial def elabDoExpr (term : Syntax) (rest : List (TSyntax `doElem)) : ElabM Expr := do
+partial def elabDoExpr (term : Syntax) (rest : List DoElem) : ElabM Expr := do
   match rest with
   | [] =>
     -- Terminal: elaborate as the monadic return value
@@ -196,30 +195,28 @@ partial def elabDoExpr (term : Syntax) (rest : List (TSyntax `doElem)) : ElabM E
     -- Non-terminal: elaborate as `m PUnit`, then `Bind.bind e (fun _ => rest)`
     let expectedType ← ElabM.mkMonadicType (mkConst ``PUnit)
     let e ← elabTermEnsuringType term expectedType
-    ElabM.withLocalDecl `_ .default (mkConst ``PUnit) fun fvar => do
+    ElabM.withLocalDeclD `_ (mkConst ``PUnit) fun fvar => do
       let restExpr ← elabDoSeqCore rest
       let body ← mkLambdaFVars #[fvar] restExpr
       ElabM.mkBind e body
 
-/-- Elaborate a let-arrow with a simple identifier (`let x ← e` ← e`) -/
-partial def elabDoLetArrowId (x : TSyntax `ident) (ty? : Option Syntax) (rhs : Syntax)
-    (rest : List (TSyntax `doElem)) : ElabM Expr := do
+/-- Elaborate a let-arrow with a simple identifier (`let x ← e`) -/
+partial def elabDoLetArrowId (x : Ident) (ty? : Option Term) (rhs : DoElem)
+    (rest : List DoElem) : ElabM Expr := do
   let name := x.getId
-  let α ← match ty? with
+  let ty ← instantiateMVars =<< match ty? with
     | some ty => elabType ty
     | none    => mkFreshTypeMVar
-  let expectedType ← ElabM.mkMonadicType α
-  let e ← match rhs.getKind with
-    | ``Parser.Term.doNested =>
-      let elems ← getDoElems ⟨rhs[1]⟩
+  let expectedType ← ElabM.mkMonadicType ty
+  let e ← match rhs with
+    | `(doElem| do $seq:doSeq) => 
+      let elems ← getDoElems seq
       elabDoSeqCore elems
-    | ``Parser.Term.doExpr =>
-      elabTermEnsuringType rhs[0] expectedType
+    | `(doElem| $expr:term) => elabTermEnsuringType expr expectedType
     | _ =>
       -- The RHS is a do-element like doIf or doMatch — elaborate it as a singleton seq
-      elabDoElem ⟨rhs⟩ []
-  let α ← instantiateMVars α
-  ElabM.withLocalDecl name .default α fun fvar => do
+      elabDoElem rhs []
+  ElabM.withLocalDeclD name ty fun fvar => do
     let restExpr ← elabDoSeqCore rest
     let body ← mkLambdaFVars #[fvar] restExpr
     ElabM.mkBind e body
@@ -315,27 +312,26 @@ partial def elabDoMatch (stx : Syntax) (rest : List (TSyntax `doElem)) : ElabM E
 
 partial def elabDoSeqCore : List (TSyntax `doElem) → ElabM Expr
   | [] => throwError "unexpected empty `do` block"
-  | [elem] => elabDoElem elem []
   | elem :: rest => elabDoElem elem rest
 
 end
 
-def elabDoSeq (doSeq : TSyntax ``doSeq) : ElabM Expr := do
-  let elems ← getDoElems doSeq
-  elabDoSeqCore elems
+def elabDoSeq (doSeq : TSyntax ``doSeq) : ElabM Expr :=
+  getDoElems doSeq >>= fun elems => elabDoSeqCore elems
 
-
+/--
+TODO: Add doc
+-/
 @[term_elab «do»]
 def elabDo : TermElab := fun stx expectedType? => do
-  let useNewElab ← (do
-    if !(← getBoolOption ``newDoElab) then return false
-    let some expectedType := expectedType? | return false
-    let expectedType ← whnf (← instantiateMVars expectedType)
-    match expectedType with
-    | Expr.app m _ => return m.isAppOf ``Aeneas.Std.Result
-    | _ => return false : TermElabM Bool)
+  let useNewElab ← do
+    let some expectedType := expectedType? | pure false
+    let expectedType ← instantiateMVars =<< whnf expectedType
+    match_expr expectedType with
+    | Aeneas.Std.Result _ => getBoolOption ``newDoElab
+    | _ => pure false
   if useNewElab then
-    logWarning "Using new do elaborator"
+    logInfo "Using new do elaborator"
     let `(do $doSeq) := stx | throwUnsupportedSyntax
     Do.ElabM.execute (Do.elabDoSeq doSeq) expectedType?.get!
   else
@@ -410,6 +406,7 @@ def test13 : Result Nat := do
 structure Wrapper where
   val : Nat
 
+-- Monadic ⟨⟩ destructuring isn't output by Aeneas; test with old elaborator
 set_option Aeneas.newDoElab false in
 def test14 : Result Nat := do
   let ⟨a⟩ ← ok (Wrapper.mk 42)
@@ -418,6 +415,14 @@ def test14 : Result Nat := do
 def test15 : Result Nat := do
   let (a, b) := (1, 2)
   ok (a + b)
+
+-- Pure anonymous constructor destructuring (what Aeneas outputs in Derive.lean)
+-- TODO: support ⟨⟩ patterns by decomposing struct types
+set_option Aeneas.newDoElab false in
+def test15b : Result Nat := do
+  let self := Wrapper.mk 42
+  let ⟨a⟩ := self
+  ok a
 
 def test16 : Result Nat := do
   let x ← ok 1
@@ -429,6 +434,17 @@ def test17 : Result Nat := do
   let x ← ok 1
   let y ← match x with
     | 0 => ok 10
+    | _ => ok 20
+  ok (y + 1)
+
+-- Aeneas never outputs explicit `do` inside match arms, so this is not supported
+set_option Aeneas.newDoElab false in
+def test18 : Result Nat := do
+  let x ← ok 1
+  let y ← match x with
+    | 0 => do
+      let z ← ok 1
+      ok z
     | _ => ok 20
   ok (y + 1)
 
