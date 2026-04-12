@@ -177,6 +177,32 @@ noncomputable instance : MonoBind Result where
     · exact FlatOrder.rel.refl
     · exact FlatOrder.rel.refl
 
+-- Allow `partial_fixpoint` to see through `Function.uncurry` in bind continuations.
+-- This is needed because the custom `do` elaborator generates
+--   `e >>= Function.uncurry fun a b => rest`
+-- for tuple-destructuring `let (a, b) ← e`.
+@[partial_fixpoint_monotone]
+theorem Function.monotone_uncurry
+    {α : Type u} {β : Type v} {φ : Sort w} [PartialOrder φ]
+    {γ : Sort z} [PartialOrder γ]
+    (f : γ → α → β → φ)
+    (hmono : monotone f) :
+    monotone (fun x => Function.uncurry (f x)) := by
+  intro x y hxy p
+  simp [Function.uncurry]
+  exact monotone_apply p.2 _ (monotone_apply p.1 _ hmono) x y hxy
+
+@[partial_fixpoint_monotone]
+theorem Function.monotone_uncurry_applied
+    {α : Type u} {β : Type v} {φ : Sort w} [PartialOrder φ]
+    {γ : Sort z} [PartialOrder γ]
+    (f : γ → α → β → φ) (p : α × β)
+    (hmono : monotone f) :
+    monotone (fun x => Function.uncurry (f x) p) := by
+  intro x y hxy
+  simp [Function.uncurry]
+  exact monotone_apply p.2 _ (monotone_apply p.1 _ hmono) x y hxy
+
 end Order
 
 /-!

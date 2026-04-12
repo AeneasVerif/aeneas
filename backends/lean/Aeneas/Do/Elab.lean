@@ -509,6 +509,23 @@ def universe_tuple_test {T : Type} (x y : T) :
       (back t1, back1 t2)
   ok ((a, b), back2)
 
+def get_and_update (xs : alloc.vec.Vec U32) (i : Usize) :
+  Result (U32 × (U32 → alloc.vec.Vec U32)) := do
+  let x ← alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice U32) xs i
+  ok (x, fun v => xs)
+
+def mono_loop_test (xs : alloc.vec.Vec U32) (i : Usize) :
+  Result (alloc.vec.Vec U32) := do
+  let i1 := alloc.vec.Vec.len xs
+  if i < i1
+  then
+    let (_, update_back) ← get_and_update xs i
+    let i2 ← i + 1#usize
+    let xs1 := update_back 0#u32
+    mono_loop_test xs1 i2
+  else ok xs
+partial_fixpoint
+
 
 set_option pp.notation false
 #print test1
@@ -534,3 +551,4 @@ set_option pp.notation false
 #print match_add_test
 #print universe_test
 #print universe_tuple_test
+#print mono_loop_test
