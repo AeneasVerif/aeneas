@@ -80,6 +80,51 @@ jobs:
           nix build -L .#${{ matrix.nix_attr }}
           cp result ${{ matrix.artifact_name }}.tar.gz
 
+      - name: Unpack Tarball for Post-Processing
+        run: |
+          set -eo pipefail
+
+          mkdir -p dist_staging
+          tar -xzf ${{ matrix.artifact_name }}.tar.gz -C dist_staging
+          # Nix preserves read-only permissions from the store, so we must make files writable.
+          chmod -R +w dist_staging
+
+      - name: Install elan (Lean toolchain manager)
+        run: |
+          set -eo pipefail
+
+          curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> $GITHUB_PATH
+
+      - name: Cache Lean dependencies
+        uses: actions/cache@v4
+        with:
+          path: dist_staging/backends/lean/.lake
+          key: ${{ matrix.os }}-lean-${{ hashFiles('dist_staging/backends/lean/lake-manifest.json') }}
+          restore-keys: |
+            ${{ matrix.os }}-lean-
+
+      - name: Pre-compile Lean Library
+        run: |
+          set -eo pipefail
+
+          cd dist_staging/backends/lean
+          cp ../../../backends/lean/lean-toolchain .
+          elan default $(cat lean-toolchain)
+
+          lake build
+          # Delete heavy dependency sources to keep the release archive small.
+          rm -rf .lake/packages
+
+      - name: Re-package Tarball
+        run: |
+          set -eo pipefail
+
+          cd dist_staging
+          # Remove existing archive to avoid overwrite failures on macOS
+          rm -f ../${{ matrix.artifact_name }}.tar.gz
+          tar -czf ../${{ matrix.artifact_name }}.tar.gz *
+
       # Verify the binary is functional.
       - name: Smoke Test
         run: |
