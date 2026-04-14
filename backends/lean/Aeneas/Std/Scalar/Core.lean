@@ -60,7 +60,7 @@ def IScalarTy.numBits (ty : IScalarTy) : Nat :=
   | I64 => 64
   | I128 => 128
 
-/-- Signed integer -/
+/-- Unsigned integer -/
 structure UScalar (ty : UScalarTy) where
   /- The internal representation is a bit-vector -/
   bv : BitVec ty.numBits
@@ -68,7 +68,7 @@ deriving Repr, BEq, DecidableEq
 
 def UScalar.val {ty} (x : UScalar ty) : ℕ := x.bv.toNat
 
-/-- Unsigned integer -/
+/-- Signed integer -/
 structure IScalar (ty : IScalarTy) where
   /- The internal representation is a bit-vector -/
   bv : BitVec ty.numBits
