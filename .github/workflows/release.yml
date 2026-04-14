@@ -109,10 +109,11 @@ jobs:
           set -eo pipefail
 
           cd dist_staging/backends/lean
+          cp ../../../backends/lean/lean-toolchain .
+          elan default $(cat lean-toolchain)
+
           lake build
           # Delete heavy dependency sources to keep the release archive small.
-          # We verified that Lake ignores these when Aeneas is used as a path
-          # dependency and will clone them into the user's project anyway.
           rm -rf .lake/packages
 
       - name: Re-package Tarball
@@ -120,6 +121,8 @@ jobs:
           set -eo pipefail
 
           cd dist_staging
+          # Remove existing archive to avoid overwrite failures on macOS
+          rm -f ../${{ matrix.artifact_name }}.tar.gz
           tar -czf ../${{ matrix.artifact_name }}.tar.gz *
 
       # Verify the binary is functional.
