@@ -913,6 +913,7 @@ let extract_type_decl_register_names (ctx : extraction_ctx) (def : type_decl) :
 let extract_type_decl_variant (span : Meta.span) (ctx : extraction_ctx)
     (fmt : F.formatter) (type_decl_group : TypeDeclId.Set.t)
     (type_name : string) (type_params : string list) (cg_params : string list)
+    (trait_clauses : string list) (explicit : Pure.explicit_info option)
     (cons_name : string) (fields : field list) : unit =
   F.pp_print_space fmt ();
   (* variant box *)
@@ -968,6 +969,31 @@ let extract_type_decl_variant (span : Meta.span) (ctx : extraction_ctx)
   [%sanity_check] span (cg_params = [] || backend () <> HOL4);
   (* Print the final type *)
   if backend () <> HOL4 then (
+    (* In the constructor return type, we must only list the *explicit*
+       parameters (implicit ones are inferred by the backend). We also
+       need to include the trait clause parameters, which are always
+       explicit. *)
+    let filter_explicit params explicits =
+      match explicits with
+      | None -> params
+      | Some explicits ->
+          List.filter_map
+            (fun (p, e) -> if e = Pure.Explicit then Some p else None)
+            (List.combine params explicits)
+    in
+    let explicit_type_params =
+      filter_explicit type_params
+        (Option.map (fun (e : Pure.explicit_info) -> e.explicit_types) explicit)
+    in
+    let explicit_cg_params =
+      filter_explicit cg_params
+        (Option.map
+           (fun (e : Pure.explicit_info) -> e.explicit_const_generics)
+           explicit)
+    in
+    let all_explicit_params =
+      List.concat [ explicit_type_params; explicit_cg_params; trait_clauses ]
+    in
     F.pp_print_space fmt ();
     F.pp_open_hovbox fmt 0;
     F.pp_print_string fmt type_name;
@@ -975,7 +1001,7 @@ let extract_type_decl_variant (span : Meta.span) (ctx : extraction_ctx)
       (fun p ->
         F.pp_print_space fmt ();
         F.pp_print_string fmt p)
-      (List.append type_params cg_params);
+      all_explicit_params;
     F.pp_close_box fmt ());
   (* Close the variant box *)
   F.pp_close_box fmt ()
@@ -984,6 +1010,7 @@ let extract_type_decl_variant (span : Meta.span) (ctx : extraction_ctx)
 let extract_type_decl_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
     (type_decl_group : TypeDeclId.Set.t) (def : type_decl) (def_name : string)
     (type_params : string list) (cg_params : string list)
+    (trait_clauses : string list) (explicit : Pure.explicit_info option)
     (variants : variant list) : unit =
   (* We want to generate a definition which looks like this (taking F* as example):
      {[
@@ -1023,7 +1050,7 @@ let extract_type_decl_enum_body (ctx : extraction_ctx) (fmt : F.formatter)
     let cons_name = ctx_compute_variant_name ctx def v in
     let fields = v.fields in
     extract_type_decl_variant def.item_meta.span ctx fmt type_decl_group
-      def_name type_params cg_params cons_name fields
+      def_name type_params cg_params trait_clauses explicit cons_name fields
   in
   (* Print the variants *)
   let variants = VariantId.mapi (fun vid v -> (vid, v)) variants in
@@ -1059,8 +1086,9 @@ let extract_type_decl_tuple_struct_body (span : Meta.span)
 
 let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
     (type_decl_group : TypeDeclId.Set.t) (kind : decl_kind) (def : type_decl)
-    (type_params : string list) (cg_params : string list) (fields : field list)
-    : unit =
+    (type_params : string list) (cg_params : string list)
+    (trait_clauses : string list) (explicit : Pure.explicit_info option)
+    (fields : field list) : unit =
   (* We want to generate a definition which looks like this (taking F* as example):
      {[
        type t = { x : int; y : bool; }
@@ -1190,7 +1218,7 @@ let extract_type_decl_struct_body (ctx : extraction_ctx) (fmt : F.formatter)
       in
       let def_name = ctx_get_local_type def.item_meta.span def.def_id ctx in
       extract_type_decl_variant def.item_meta.span ctx fmt type_decl_group
-        def_name type_params cg_params cons_name fields)
+        def_name type_params cg_params trait_clauses explicit cons_name fields)
   in
   ()
 
@@ -1627,10 +1655,10 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
            extract_type_decl_tuple_struct_body span ctx_body fmt fields
          else
            extract_type_decl_struct_body ctx_body fmt type_decl_group kind def
-             type_params cg_params fields
+             type_params cg_params trait_clauses (Some def.explicit_info) fields
      | Enum variants ->
          extract_type_decl_enum_body ctx_body fmt type_decl_group def def_name
-           type_params cg_params variants
+           type_params cg_params trait_clauses (Some def.explicit_info) variants
      | Opaque -> [%craise] span "Unreachable");
   (* Add the definition end delimiter *)
   if backend () = HOL4 && decl_is_not_last_from_group kind then (
