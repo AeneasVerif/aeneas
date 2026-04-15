@@ -478,6 +478,23 @@ theorem Result.of_wp {α} {x : Result α} (P : Result α → Prop) :
 end Aeneas.Std.WP
 
 namespace Aeneas.Std
+open Std.Do
+set_option mvcgen.warning false
+
+@[spec]
+theorem Result.ok_mvcgen {α : Type} {v : α} {Q : PostCond α (.except Error (.except PUnit .pure))}
+    (h : (Q.1 v).down) : ⦃ ⌜ True ⌝ ⦄ Result.ok v ⦃ Q ⦄ := by mvcgen
+
+@[spec]
+theorem Result.fail_mvcgen {α : Type} {e} {Q : PostCond α (.except Error (.except PUnit .pure))}
+    (h : (Q.2.1 e).down) : ⦃ ⌜ True ⌝ ⦄ Result.fail e ⦃ Q ⦄ := by mvcgen
+
+theorem Result.spec_of_mvcgen {p : α → Prop} {f : Result α} (h : ⦃ ⌜ True ⌝ ⦄ f ⦃ ⇓ v => ⌜ p v ⌝ ⦄) :
+  f ⦃ v => p v ⦄ := by cases f <;> simp_all [Triple, wp]
+
+end Aeneas.Std
+
+namespace Aeneas.Std
 
 /-!
 # Loops

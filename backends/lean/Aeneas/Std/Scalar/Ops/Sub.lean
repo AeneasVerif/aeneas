@@ -42,8 +42,8 @@ theorem UScalar.sub_equiv {ty} (x y : UScalar ty) :
     y.val ≤ x.val ∧
     x.val = z.val + y.val ∧
     z.bv = x.bv - y.bv
-  | fail _ => x.val < y.val
-  | _ => ⊥ := by
+  | fail .integerOverflow => x.val < y.val
+  | _ => False := by
   have : x - y = sub x y := by rfl
   simp [this, sub]
   dcases h : x.val < y.val <;> simp [h]
@@ -86,8 +86,8 @@ theorem IScalar.sub_equiv {ty} (x y : IScalar ty) :
     IScalar.inBounds ty (x.val - y.val) ∧
     z.val = x.val - y.val ∧
     z.bv = x.bv - y.bv
-  | fail _ => ¬ (IScalar.inBounds ty (x.val - y.val))
-  | _ => ⊥ := by
+  | fail .integerOverflow => ¬ (IScalar.inBounds ty (x.val - y.val))
+  | _ => False := by
   have : x - y = sub x y := by rfl
   simp [this, sub]
   have h := tryMk_eq ty (↑x - ↑y)
@@ -132,24 +132,62 @@ iscalar theorem «%S».sub_bv_spec {x y : «%S»}
 Theorems with a specification which only uses integers
 -/
 
+section mvcgen
+open Std.Do
+set_option mvcgen.warning false
+
+-- TODO: derive `step` lemma from `spec` lemma?
+
+/- Generic theorem - shouldn't be used much -/
+theorem UScalar.sub_mvcgen {ty} {x y : UScalar ty} {Q}
+  (hlt : x.val < y.val → (Q.2.1 .integerOverflow).down)
+  (h : ∀ z : UScalar ty, (↑z : Nat) = ↑x - ↑y → (Q.1 z).down) :
+  ⦃ ⌜ True ⌝ ⦄ (x - y) ⦃ Q ⦄ := by
+  have heq := @UScalar.sub_equiv _ x y
+  split at heq <;> try simp_all only []
+    <;> (mvcgen; grind)
+
+/- Generic theorem - shouldn't be used much -/
+theorem IScalar.sub_mvcgen {ty} {x y : IScalar ty} {Q}
+  (hmin : ↑x - ↑y < IScalar.min ty → (Q.2.1 .integerOverflow).down)
+  (hmax : IScalar.max ty < ↑x - ↑y → (Q.2.1 .integerOverflow).down)
+  (h : ∀ z : IScalar ty, (↑z : Int) = ↑x - ↑y → (Q.1 z).down) :
+  ⦃ ⌜ True ⌝ ⦄ (x - y) ⦃ Q ⦄ := by
+  have heq := @IScalar.sub_equiv _ x y
+  split at heq <;> try simp_all only [min, max]
+    <;> (mvcgen; grind)
+
+uscalar @[spec] theorem «%S».sub_mvcgen {Q} {x y : «%S»}
+  (hlt : x.val < y.val → (Q.2.1 .integerOverflow).down)
+  (h : ∀ z : «%S», (↑z : Nat) = ↑x - ↑y → (Q.1 z).down) :
+  ⦃ ⌜ True ⌝ ⦄ (x - y) ⦃ Q ⦄ :=
+  UScalar.sub_mvcgen (by scalar_tac) (fun _ _ => h _ (by scalar_tac))
+
+iscalar @[spec] theorem «%S».sub_mvcgen {Q} {x y : «%S»}
+  (hmin : ↑x - ↑y < «%S».min → (Q.2.1 .integerOverflow).down)
+  (hmax : «%S».max < ↑x - ↑y → (Q.2.1 .integerOverflow).down)
+  (h : ∀ z : «%S», (↑z : Int) = ↑x - ↑y → (Q.1 z).down) :
+  ⦃ ⌜ True ⌝ ⦄ (x - y) ⦃ Q ⦄ :=
+  IScalar.sub_mvcgen (by scalar_tac) (by scalar_tac) (fun _ _ => h _ (by scalar_tac))
+
+end mvcgen
+
+section step
+
 /- Generic theorem - shouldn't be used much -/
 @[step]
 theorem UScalar.sub_spec {ty} {x y : UScalar ty}
   (h : y.val ≤ x.val) :
-  x - y ⦃ z => z.val = x.val - y.val ∧ y.val ≤ x.val ⦄ := by
-  have h := @sub_equiv ty x y
-  split at h <;> simp_all
-  omega
+  x - y ⦃ z => z.val = x.val - y.val ∧ y.val ≤ x.val ⦄ :=
+  Result.spec_of_mvcgen (sub_mvcgen (by omega) (fun z hz => ⟨hz, h⟩))
 
 /- Generic theorem - shouldn't be used much -/
 @[step]
 theorem IScalar.sub_spec {ty} {x y : IScalar ty}
   (hmin : IScalar.min ty ≤ ↑x - ↑y)
   (hmax : ↑x - ↑y ≤ IScalar.max ty) :
-  x - y ⦃ z => (↑z : Int) = ↑x - ↑y ⦄ := by
-  have h := @sub_equiv ty x y
-  split at h <;> simp_all [min, max]
-  omega
+  x - y ⦃ z => (↑z : Int) = ↑x - ↑y ⦄ :=
+  Result.spec_of_mvcgen (sub_mvcgen (by omega) (by omega) (by simp))
 
 uscalar @[step] theorem «%S».sub_spec {x y : «%S»} (h : y.val ≤ x.val) :
   x - y ⦃ z => z.val = x.val - y.val ∧ y.val ≤ x.val ⦄ :=
@@ -159,5 +197,7 @@ iscalar @[step] theorem «%S».sub_spec {x y : «%S»}
   (hmin : «%S».min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ «%S».max) :
   x - y ⦃ z => (↑z : Int) = ↑x - ↑y ⦄ :=
   IScalar.sub_spec (by scalar_tac) (by scalar_tac)
+
+end step
 
 end Aeneas.Std
