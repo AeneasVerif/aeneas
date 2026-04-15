@@ -143,6 +143,67 @@ where
     | [x] => extractPatNames x
     | x :: _comma :: rest => extractPatNames x ++ extractRestNames rest
 
+/-- For a single-constructor inductive (not Prod), return its constructor name
+    and the field types instantiated with the type's parameters.
+    Returns `none` if the type is `Prod` or not a single-constructor inductive. -/
+def getCtorFieldTypes (ty : Expr) : MetaM (Option (Name × List Expr)) := do
+  let ty ← whnf ty
+  -- Don't handle Prod — that uses the existing decompose/uncurry path
+  if ty.isAppOf ``Prod then return none
+  let some indName := ty.getAppFn.constName? | return none
+  let env ← getEnv
+  let some (.inductInfo indVal) := env.find? indName | return none
+  let [ctorName] := indVal.ctors | return none
+  -- Get the constructor type with proper universe levels
+  let tyArgs := ty.getAppArgs
+  let lvls := ty.getAppFn.constLevels!
+  let ctorType ← inferType (mkConst ctorName lvls)
+  -- Skip the inductive parameters (they're already applied in `ty`)
+  let mut remaining := ctorType
+  for i in [:indVal.numParams] do
+    let .forallE _ _ body _ := remaining
+      | return none
+    remaining := body.instantiate1 tyArgs[i]!
+  -- Collect field types
+  let mut fieldTypes : List Expr := []
+  let mut rem := remaining
+  while true do
+    match rem with
+    | .forallE _ fieldTy body _ =>
+      fieldTypes := fieldTypes ++ [fieldTy]
+      -- Use a fresh metavar for potential dependent types
+      rem := body.instantiate1 (← mkFreshExprMVar fieldTy)
+    | _ => break
+  return some (ctorName, fieldTypes)
+
+/-- Build a `T.casesOn discr (fun field₁ ... fieldₙ => body)` application. -/
+def mkCasesOn (ty : Expr) (indName : Name) (discr : Expr)
+    (minor : Expr) (resultType : Expr) : MetaM Expr := do
+  let env ← getEnv
+  let some (.inductInfo indVal) := env.find? indName | throwError "not an inductive: {indName}"
+  let casesOnName := mkCasesOnName indName
+  let lvls := ty.getAppFn.constLevels!
+  -- casesOn universe levels: result universe first, then inductive's levels
+  let resultSort ← inferType resultType >>= whnf
+  let resultLevel := resultSort.sortLevel!
+  let casesOnLvls := resultLevel :: lvls
+  let casesOn := Lean.mkConst casesOnName casesOnLvls
+  -- Apply: @T.casesOn.{u, ...} params (motive := fun _ => resultType) discr minor
+  let tyArgs := ty.getAppArgs
+  let mut result := casesOn
+  -- Apply inductive parameters
+  for i in [:indVal.numParams] do
+    result := mkApp result tyArgs[i]!
+  -- Apply motive (non-dependent: fun _ => resultType)
+  let motive ← mkLambdaFVars #[] (← Meta.withLocalDeclD `_ ty fun _ => pure resultType)
+  let motive := Expr.lam `_ ty resultType .default
+  result := mkApp result motive
+  -- Apply discriminant
+  result := mkApp result discr
+  -- Apply minor premise (the curried lambda)
+  result := mkApp result minor
+  return result
+
 partial def decomposeProductType (ty : Expr) (n : Nat) : MetaM (List Expr) := do
   if n ≤ 1 then return [ty]
   let ty ← whnf ty
@@ -210,14 +271,15 @@ partial def elabDoLetArrowId (x : Ident) (ty? : Option Term) (rhs : DoElem)
     | some ty => elabType ty
     | none    => mkFreshTypeMVar
   let expectedType ← ElabM.mkMonadicType ty
-  let e ← match rhs with
+  let e ← withReader (fun ctx => { ctx with expectedAlpha := ty }) do
+    match rhs with
     | `(doElem| do $seq:doSeq) =>
       let elems ← getDoElems seq
       elabDoSeqCore elems
     | `(doElem| $expr:term) =>
       elabTermEnsuringType expr expectedType
     | _ => do
-      -- The RHS is a do-element like doIf or doMatch — elaborate it as a singleton seq
+      -- The RHS is a do-element like doIf or doMatch — elaborate it as a singleton seq.
       let e ← elabDoElem rhs []
       let eType ← instantiateMVars (← inferType e)
       if let some α := eType.getAppArgs[0]? then
@@ -234,19 +296,51 @@ partial def elabDoLetArrowPat (pat : Syntax) (rhs : Syntax) (rest : List DoElem)
   let names := extractPatNames pat
   let α ← mkFreshTypeMVar
   let expectedType ← ElabM.mkMonadicType α
-  let e ← match rhs.getKind with
+  let e ← withReader (fun ctx => { ctx with expectedAlpha := α }) do
+    match rhs.getKind with
     | ``Parser.Term.doNested =>
       let elems ← getDoElems ⟨rhs[1]⟩
       elabDoSeqCore elems
     | ``Parser.Term.doExpr =>
       elabTermEnsuringType rhs[0] expectedType
-    | _ => elabDoElem ⟨rhs⟩ []
+    | _ => do
+      let e ← elabDoElem ⟨rhs⟩ []
+      let eType ← instantiateMVars (← inferType e)
+      if let some a := eType.getAppArgs[0]? then
+        discard <| isDefEq α a
+      pure e
   let α ← instantiateMVars α
-  let compTypes ← decomposeProductType α names.length
-  let curried ← buildCurriedLambda names compTypes (elabDoSeqCore rest)
-  synthesizeSyntheticMVarsNoPostponing
-  let k ← mkUncurries curried compTypes
-  ElabM.mkBind e k
+  -- Check if this is an anonymous constructor pattern on a non-Prod inductive
+  let useCtorPath ← if pat.getKind == ``Term.anonymousCtor then
+    match ← getCtorFieldTypes α with
+    | some _ => pure true
+    | none => pure false
+  else pure false
+  if useCtorPath then
+    let some (_, fieldTypes) ← getCtorFieldTypes α | unreachable!
+    -- Non-Prod single-constructor inductive: use casesOn inside a lambda for mkBind
+    let curried ← buildCurriedLambda names fieldTypes (elabDoSeqCore rest)
+    synthesizeSyntheticMVarsNoPostponing
+    let restType ← do
+      let mut ty ← inferType curried
+      for ft in fieldTypes do
+        match ty with
+        | .forallE _ _ body _ => ty := body.instantiate1 (← mkFreshExprMVar ft)
+        | _ => break
+      pure ty
+    let indName := α.getAppFn.constName!
+    -- Build k = fun (x : α) => T.casesOn x (fun fields... => rest)
+    ElabM.withLocalDeclD `_x α fun xFvar => do
+      let body ← mkCasesOn α indName xFvar curried restType
+      let k ← mkLambdaFVars #[xFvar] body
+      ElabM.mkBind e k
+  else
+    -- Default Prod path
+    let compTypes ← decomposeProductType α names.length
+    let curried ← buildCurriedLambda names compTypes (elabDoSeqCore rest)
+    synthesizeSyntheticMVarsNoPostponing
+    let k ← mkUncurries curried compTypes
+    ElabM.mkBind e k
 
 /-- Elaborate a pure let binding (`let x := e`) -/
 partial def elabDoLetId (x : TSyntax `ident) (ty? : Option Syntax) (rhs : Syntax)
@@ -268,6 +362,24 @@ partial def elabDoLetPat (pat : Syntax) (rhs : Syntax)
   let α ← mkFreshTypeMVar
   let val ← elabTermEnsuringType rhs α
   let α ← instantiateMVars α
+  -- Check if this is an anonymous constructor pattern on a non-Prod inductive
+  if pat.getKind == ``Term.anonymousCtor then
+    if let some (_, fieldTypes) ← getCtorFieldTypes α then
+      -- Non-Prod single-constructor inductive: use casesOn
+      let curried ← buildCurriedLambda names fieldTypes (elabDoSeqCore rest)
+      synthesizeSyntheticMVarsNoPostponing
+      let resultType ← inferType (← ElabM.mkMonadicType (← mkFreshTypeMVar))
+      let indName := α.getAppFn.constName!
+      let result ← mkCasesOn α indName val curried (← inferType curried >>= fun t => do
+        -- Get the actual result type by applying the curried lambda to dummy args
+        let mut ty := t
+        for ft in fieldTypes do
+          match ty with
+          | .forallE _ _ body _ => ty := body.instantiate1 (← mkFreshExprMVar ft)
+          | _ => break
+        return ty)
+      return result
+  -- Default Prod path
   let compTypes ← decomposeProductType α names.length
   let curried ← buildCurriedLambda names compTypes (elabDoSeqCore rest)
   synthesizeSyntheticMVarsNoPostponing
@@ -291,7 +403,8 @@ partial def elabDoIf (cond : Syntax) (thenSeq elseSeq : TSyntax ``doSeq)
   -- Build `if cond then do ... else do ...` and let elabTerm handle it
   let cond : Term := ⟨cond⟩
   let ifStx ← `(if $cond then $(⟨thenTerm⟩) else $(⟨elseTerm⟩))
-  let expectedType ← ElabM.mkMonadicType (← mkFreshTypeMVar)
+  let ctx ← read
+  let expectedType ← ElabM.mkMonadicType ctx.expectedAlpha
   elabTermEnsuringType ifStx expectedType
 
 /-- Elaborate a pattern match (`doMatch`) -/
@@ -317,7 +430,8 @@ partial def elabDoMatch (stx : Syntax) (rest : List (TSyntax `doElem)) : ElabM E
   let termMatch := Syntax.node .none ``Term.match
     #[stx[0], stx[1], stx[2], stx[3], stx[4], newAltsNode]
   -- Elaborate as a term
-  let expectedType ← ElabM.mkMonadicType (← mkFreshTypeMVar)
+  let ctx ← read
+  let expectedType ← ElabM.mkMonadicType ctx.expectedAlpha
   elabTermEnsuringType termMatch expectedType
 
 partial def elabDoSeqCore : List (TSyntax `doElem) → ElabM Expr
@@ -552,3 +666,198 @@ set_option pp.notation false
 #print universe_test
 #print universe_tuple_test
 #print mono_loop_test
+
+/-! ## Minimal repro: "expected a product type, got ?m"
+
+  Root cause: `elabDoLetArrowPat` (line ~233) creates a fresh type metavar `α`
+  and expected type `Result α`. When the RHS is a `doIf` or `doMatch`, it
+  falls through to `elabDoElem ⟨rhs⟩ []` (line ~243), which does NOT pass
+  `expectedType`, so `α` is never unified. Then `decomposeProductType α n`
+  (line ~245) tries to decompose `α` as a product but it's still `?m`.
+
+  This is the same root cause as the earlier "unexpected bound variable #0"
+  bug in `elabDoLetArrowId` — the doIf/doMatch fallthrough doesn't constrain
+  the type metavar.
+
+  Triggering pattern:
+    `let (a, b) ← if cond then ok (...) else ok (...)`
+  i.e. tuple-destructuring bind where the RHS is doIf or doMatch.
+-/
+
+-- Works: RHS is a term expression, so `expectedType` is passed
+def works_pat_term (b : Bool) : Result (Nat × Nat) := do
+  let (x, y) ← ok (if b then (1, 2) else (3, 4))
+  ok (x, y)
+
+-- Fails: RHS is doIf, falls through without constraining α
+-- Expected error: "expected a product type, got ?m"
+def fails_pat_doIf (b : Bool) : Result (Nat × Nat) := do
+  let (x, y) ←
+    if b then ok (1, 2) else ok (3, 4)
+  ok (x, y)
+
+-- Fails: RHS is doMatch, same issue
+def fails_pat_doMatch (n : Nat) : Result (Nat × Nat) := do
+  let (x, y) ←
+    match n with
+    | 0 => ok (1, 2)
+    | _ => ok (3, 4)
+  ok (x, y)
+
+/-! ## Proposed fix for "expected a product type, got ?m"
+
+  Same fix as for `elabDoLetArrowId`: after `elabDoElem ⟨rhs⟩ []`, unify `α`
+  with the element type extracted from the elaborated expression's type.
+
+  In `elabDoLetArrowPat`, replace:
+  ```
+    | _ => elabDoElem ⟨rhs⟩ []
+  ```
+  with:
+  ```
+    | _ => do
+      let e ← elabDoElem ⟨rhs⟩ []
+      let eType ← instantiateMVars (← inferType e)
+      if let some a := eType.getAppArgs[0]? then
+        discard <| isDefEq α a
+      pure e
+  ```
+-/
+
+/-! ## Minimal repro: "Application type mismatch" from `elabDoIf`/`elabDoMatch`
+
+  Root cause: `elabDoIf` (line ~299) and `elabDoMatch` (line ~325) create a
+  fresh type metavar for the expected type of the branches:
+    `let expectedType ← ElabM.mkMonadicType (← mkFreshTypeMVar)`
+  instead of using `ctx.expectedAlpha` from the outer `do` block.
+
+  This means the outer return type is NOT propagated into if/match branches.
+  When branches contain existentially-typed constructors (like `Dyn.mk`) or
+  anonymous constructors with implicit arguments, the lack of expected type
+  causes Lean to infer wrong types.
+
+  Sub-pattern 1: existential types in if-branches (Dyn.lean)
+  Sub-pattern 2: anonymous constructor `⟨ x ⟩` on non-Prod inductive (Derive.lean)
+                 — `decomposeProductType` with n=1 returns the whole type instead
+                 of destructuring the single-constructor inductive's field
+-/
+
+-- Anonymous constructor destructuring on non-Prod inductive.
+-- `let ⟨ n ⟩ := w` should give `n : Nat` (the constructor field),
+-- but `decomposeProductType` with names.length=1 returns [Wrap],
+-- so n gets type Wrap instead of Nat.
+inductive Wrap where
+  | mk : Nat → Wrap
+
+-- Expected error: n gets type Wrap instead of Nat → HAdd Wrap Nat not found
+def fails_anon_ctor_destr (w : Wrap) : Result Nat := do
+  let ⟨ n ⟩ := w
+  ok (n + 1)
+
+-- Also fails with monadic bind variant
+def fails_anon_ctor_arrow (w : Wrap) : Result Nat := do
+  let ⟨ n ⟩ ← ok w
+  ok (n + 1)
+
+-- Works: tuple (Prod) destructuring is handled correctly
+def works_tuple_destr : Result Nat := do
+  let (a, b) ← ok (1, 2)
+  ok (a + b)
+
+/-! ## Proposed fix for "Application type mismatch" (anonymous constructor)
+
+  `elabDoLetPat` and `elabDoLetArrowPat` use `decomposeProductType` which
+  only understands `Prod`. For anonymous constructor patterns `⟨ x ⟩` on
+  non-Prod single-constructor inductives (e.g. `let ⟨ n ⟩ := w` where
+  `w : Wrap` and `Wrap.mk : Nat → Wrap`), `decomposeProductType` with n=1
+  returns `[Wrap]` (the whole type) instead of `[Nat]` (the field type).
+
+  Fix: when the pattern is `anonymousCtor` and the type is NOT `Prod`,
+  look up the inductive's single constructor and extract its field types.
+  It is important that we want to avoid using Lean's built-in match mechanisms if possible.
+-/
+
+/-! ## Minimal repro: "Application type mismatch" from `elabDoIf` expected type loss
+
+  Root cause: `elabDoIf` (line ~299) and `elabDoMatch` (line ~325) create a
+  FRESH type metavar for the expected type of branches:
+    `let expectedType ← ElabM.mkMonadicType (← mkFreshTypeMVar)`
+  instead of propagating the outer `ctx.expectedAlpha`.
+
+  When `elabDoIf` wraps branches in `do` blocks, each `do` re-enters `elabDo`
+  which creates a NEW context with `expectedAlpha = ?m_fresh`. The outer
+  return type is lost. This causes two sub-problems:
+
+  1. Existential/dependent constructors (Dyn.mk) with polymorphic type params
+     can't infer fields without the expected output type → wrong type for `self`
+  2. Anonymous struct constructors `{ x := ..., y := ... }` inside nested
+     if-branches can't resolve the struct type → "invalid {...} notation"
+     → cascading "Application type mismatch" on the continuation
+
+  Triggering pattern: `if/match` as the SOLE or TERMINAL element in a `do`
+  block, where branches construct values whose types depend on the overall
+  return type.
+-/
+
+-- Existential type: works with concrete types (both branches fully determined)
+open Aeneas.Std in
+structure ExBox (Inst : Type → Type) where
+  ty : Type
+  inst : Inst ty
+  val : ty
+
+structure MyTrait (Self : Type) where
+  get : Self → Result Nat
+
+def myTraitNat : MyTrait Nat := ⟨fun n => ok n⟩
+def myTraitBool : MyTrait Bool := ⟨fun _ => ok 0⟩
+
+-- Works: concrete types, inference succeeds without expected type
+def works_exbox_concrete (b : Bool) : Result (ExBox MyTrait) := do
+  if b
+  then ok ⟨Nat, myTraitNat, 42⟩
+  else ok ⟨Bool, myTraitBool, true⟩
+
+-- Also works: polymorphic with explicit type args
+def works_exbox_poly_explicit {T W : Type}
+    (tInst : MyTrait T) (wInst : MyTrait W)
+    (b : Bool) (x : T) (y : W) : Result (ExBox MyTrait) := do
+  if b
+  then ok ⟨T, tInst, x⟩
+  else ok ⟨W, wInst, y⟩
+
+-- Closer to Dyn.lean: uses `_` placeholder for existential type field
+-- and a two-param trait with lambda Inst parameter.
+-- The `_` in `ExBox.mk _` can't be inferred without the expected type
+-- because the lambda `(fun _dyn => Into2 _dyn V)` makes unification harder.
+structure Into2 (Self : Type) (T : Type) where
+  into : Self → Result T
+
+-- Expected error: "Application type mismatch" — `x : T` but expected `V`
+-- because `ty` field gets wrongly unified with `V` instead of `T`
+def fails_exbox_lambda_inst {V T W : Type}
+    (inst1 : Into2 T V) (inst2 : Into2 W V)
+    (b : Bool) (x : T) (y : W) :
+    Result (ExBox (fun _dyn => Into2 _dyn V)) := do
+  if b
+  then ok (ExBox.mk _ inst1 x)
+  else ok (ExBox.mk _ inst2 y)
+
+/-! ## Proposed fix for "Application type mismatch" (elabDoIf expected type)
+
+  `elabDoIf` (line ~404) and `elabDoMatch` (line ~430) create a FRESH type
+  metavar for the expected type of branches instead of propagating the outer
+  `ctx.expectedAlpha`. When branches are wrapped in `do` blocks that re-enter
+  `elabDo`, the new context gets `expectedAlpha = ?m_fresh`, losing the outer
+  return type. This prevents Lean from inferring existential/dependent fields.
+
+  In `elabDoIf` and `elabDoMatch`, replace:
+  ```
+  let expectedType ← ElabM.mkMonadicType (← mkFreshTypeMVar)
+  ```
+  with:
+  ```
+  let ctx ← read
+  let expectedType ← ElabM.mkMonadicType ctx.expectedAlpha
+  ```
+-/
