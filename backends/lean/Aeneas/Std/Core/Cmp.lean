@@ -36,10 +36,14 @@ attribute
 structure core.cmp.PartialOrd (Self : Type) (Rhs : Type) where
   partialEqInst : core.cmp.PartialEq Self Rhs
   partial_cmp : Self → Rhs → Result (Option Ordering)
-  lt : Self → Rhs → Result Bool
-  le : Self → Rhs → Result Bool
-  gt : Self → Rhs → Result Bool
-  ge : Self → Rhs → Result Bool
+  lt : Self → Rhs → Result Bool := fun x y => do
+    let cmp ← partial_cmp x y; ok (cmp = some .lt)
+  le : Self → Rhs → Result Bool := fun x y => do
+    let cmp ← partial_cmp x y; ok (cmp = some .lt ∨ cmp = some .eq)
+  gt : Self → Rhs → Result Bool := fun x y => do
+    let cmp ← partial_cmp x y; ok (cmp = some .gt)
+  ge : Self → Rhs → Result Bool := fun x y => do
+    let cmp ← partial_cmp x y; ok (cmp = some .gt ∨ cmp = some .eq)
 
 /- Default method -/
 @[rust_fun "core::cmp::PartialOrd::lt"]
@@ -78,9 +82,15 @@ structure core.cmp.Ord (Self : Type) where
   eqInst : core.cmp.Eq Self
   partialOrdInst : core.cmp.PartialOrd Self Self
   cmp : Self → Self → Result Ordering
-  max : Self → Self → Result Self
-  min : Self → Self → Result Self
-  clamp : Self → Self → Self → Result Self
+  max : Self → Self → Result Self := fun x y => do
+    if ← partialOrdInst.lt x y then ok y else ok x
+  min : Self → Self → Result Self := fun x y => do
+    if ← partialOrdInst.lt x y then ok x else ok y
+  clamp : Self → Self → Self → Result Self := fun self min max => do
+    massert (← partialOrdInst.le min max)
+    if ← partialOrdInst.lt self min then ok min
+    else if ← partialOrdInst.gt self max then ok max
+    else ok self
 
 /- Default method -/
 @[rust_fun "core::cmp::Ord::max"]
