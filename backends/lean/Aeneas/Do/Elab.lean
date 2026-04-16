@@ -242,8 +242,63 @@ partial def elabDoElem (elem : TSyntax `doElem) (rest : List DoElem) : ElabM Exp
     if elem.raw.isOfKind ``Term.doNested then
       let innerElems ← getDoElems ⟨elem.raw[1]⟩
       elabDoSeqCore (innerElems ++ rest)
+    -- Handle doIf with else-if chains: recursively decompose into nested if/then/else
+    else if elem.raw.isOfKind ``Term.doIf then
+      elabDoIfNode elem.raw rest
     else
       throwError "unsupported `do` element (kind: {elem.raw.getKind}){indentD elem}"
+
+/-- Elaborate a `Term.doIf` node, handling `else if` chains by extracting
+    the condition and branches and delegating to `elabDoIf`.
+    doIf structure: [0]="if" [1]=doIfCond [2]="then" [3]=doSeq
+                    [4]=many(elseIf groups) [5]=optional("else" doSeq) -/
+partial def elabDoIfNode (stx : Syntax) (rest : List DoElem) : ElabM Expr := do
+  -- Extract the condition from doIfCond (doIfProp: optional(ident ":") term)
+  let doIfCond := stx[1]
+  -- doIfCond is either doIfProp or doIfLet; for now handle doIfProp
+  -- doIfProp: [0]=optional(ident ":") [1]=term
+  let cond := if doIfCond.isOfKind ``Term.doIfProp then doIfCond[1]
+              else doIfCond  -- fallback
+  let thenSeq : TSyntax ``doSeq := ⟨stx[3]⟩
+  let elseIfAlts := stx[4]  -- many node: array of else-if groups
+  let elseOpt := stx[5]     -- optional node: "else" doSeq
+  if elseIfAlts.getNumArgs > 0 then
+    -- There are else-if chains. Build a nested doIf for the remaining chain
+    -- and elaborate it as the else branch.
+    -- Each else-if group: [0]="else if" [1]=doIfCond [2]="then" [3]=doSeq
+    let firstElseIf := elseIfAlts[0]!
+    let remainingElseIfs := elseIfAlts.getArgs[1:]
+    -- Build a new doIf node for the rest of the chain
+    let innerDoIf := Syntax.node .none ``Term.doIf #[
+      mkAtom "if",             -- [0]
+      firstElseIf[1]!,         -- [1] doIfCond
+      mkAtom "then",           -- [2]
+      firstElseIf[3]!,         -- [3] doSeq
+      Syntax.node .none nullKind remainingElseIfs, -- [4] remaining else-ifs
+      elseOpt                  -- [5] final else
+    ]
+    -- Elaborate: if cond then thenBranch++rest else (elabDoIfNode innerDoIf rest)
+    -- We reuse elabDoIf's approach: build syntax for both branches
+    let mkDoSeqSyntax (elems : List DoElem) : Syntax :=
+      let doSeqItems := elems.map fun elem =>
+        Syntax.node .none ``Term.doSeqItem #[elem.raw, mkNullNode #[]]
+      let doSeq := Syntax.node .none ``Term.doSeqIndent #[mkNullNode doSeqItems.toArray]
+      Syntax.node .none ``Term.do #[mkAtom "do", doSeq]
+    let thenTerm := mkDoSeqSyntax ((← getDoElems thenSeq) ++ rest)
+    -- For the else branch: wrap the inner doIf + rest in a do block
+    let innerDoIfElem : TSyntax `doElem := ⟨innerDoIf⟩
+    let elseTerm := mkDoSeqSyntax (innerDoIfElem :: rest)
+    let condTerm : Term := ⟨cond⟩
+    let ifStx ← `(if $condTerm then $(⟨thenTerm⟩) else $(⟨elseTerm⟩))
+    let ctx ← read
+    let expectedType ← ElabM.mkMonadicType ctx.expectedAlpha
+    elabTermEnsuringType ifStx expectedType
+  else if elseOpt.getNumArgs > 0 then
+    -- Simple if/else (no else-if chains)
+    let elseSeq : TSyntax ``doSeq := ⟨elseOpt[1]!⟩
+    elabDoIf cond thenSeq elseSeq rest
+  else
+    throwError "doIf without else clause is not supported in this do-elaborator"
 
 /- Elaborate a term in a `doSeq` position -/
 partial def elabDoExpr (term : Syntax) (rest : List DoElem) : ElabM Expr := do
@@ -456,11 +511,11 @@ def elabDo : TermElab := fun stx expectedType? => do
     | Aeneas.Std.Result _ => pure (Aeneas.newDoElab.get (← getOptions))
     | _ => pure false
   if useNewElab then
-    logInfo  m!"Using new do elaborator"
+    -- logInfo  m!"Using new do elaborator"
     let `(do $doSeq) := stx | throwUnsupportedSyntax
     Do.ElabM.execute (Do.elabDoSeq doSeq) expectedType?.get!
   else
-    logWarning m!"Using old do elaborator"
+    -- logWarning m!"Using old do elaborator"
     Term.elabDo stx expectedType?
 
 end Do
@@ -547,8 +602,6 @@ def test16 : Result Nat := do
     | _ => ok 20
   ok (y + 1)
 
-open Aeneas Std
-
 def massert_test : Result Unit := do
   let s ←
     lift (Array.to_slice
@@ -575,9 +628,6 @@ def bool_test (x : Bool) : Result Bool := do
 @[rust_fun "core::mem::drop"]
 axiom core.mem.drop {T : Type} : T → Result Unit
 
--- Simplified version to isolate metavar issue
--- TODO: metavar issue with `let _ ← if ... then do ... else ...`
-set_option Aeneas.newDoElab false in
 def do_nested_test (b1 : Bool) : Result Unit := do
   let _ ←
     if b1
@@ -626,7 +676,7 @@ def universe_tuple_test {T : Type} (x y : T) :
 def get_and_update (xs : alloc.vec.Vec U32) (i : Usize) :
   Result (U32 × (U32 → alloc.vec.Vec U32)) := do
   let x ← alloc.vec.Vec.index (core.slice.index.SliceIndexUsizeSlice U32) xs i
-  ok (x, fun v => xs)
+  ok (x, fun _v => xs)
 
 def mono_loop_test (xs : alloc.vec.Vec U32) (i : Usize) :
   Result (alloc.vec.Vec U32) := do
@@ -640,6 +690,51 @@ def mono_loop_test (xs : alloc.vec.Vec U32) (i : Usize) :
   else ok xs
 partial_fixpoint
 
+def doIf_pat_test (b : Bool) : Result (Nat × Nat) := do
+  let (x, y) ←
+    if b then ok (1, 2) else ok (3, 4)
+  ok (x, y)
+
+def match_pat_test (n : Nat) : Result (Nat × Nat) := do
+  let (x, y) ←
+    match n with
+    | 0 => ok (1, 2)
+    | _ => ok (3, 4)
+  ok (x, y)
+
+def else_if_test (x y : Nat) : Result Ordering := do
+  if x < y
+  then ok Ordering.lt
+  else if x = y
+  then ok Ordering.eq
+  else ok Ordering.gt
+
+inductive Wrap where
+  | mk : Nat → Wrap
+
+def anon_ctor_test (w : Wrap) : Result Nat := do
+  let ⟨ n ⟩ := w
+  ok (n + 1)
+
+def anon_ctor_monadic_test (w : Wrap) : Result Nat := do
+  let ⟨ n ⟩ ← ok w
+  ok (n + 1)
+
+structure ExBox (Inst : Type → Type) where
+  ty : Type
+  inst : Inst ty
+  val : ty
+
+structure Into2 (Self : Type) (T : Type) where
+  into : Self → Result T
+
+def exbox_lambda_test {V T W : Type}
+    (inst1 : Into2 T V) (inst2 : Into2 W V)
+    (b : Bool) (x : T) (y : W) :
+    Result (ExBox (fun _dyn => Into2 _dyn V)) := do
+  if b
+  then ok (ExBox.mk _ inst1 x)
+  else ok (ExBox.mk _ inst2 y)
 
 set_option pp.notation false
 #print test1
@@ -666,198 +761,9 @@ set_option pp.notation false
 #print universe_test
 #print universe_tuple_test
 #print mono_loop_test
-
-/-! ## Minimal repro: "expected a product type, got ?m"
-
-  Root cause: `elabDoLetArrowPat` (line ~233) creates a fresh type metavar `α`
-  and expected type `Result α`. When the RHS is a `doIf` or `doMatch`, it
-  falls through to `elabDoElem ⟨rhs⟩ []` (line ~243), which does NOT pass
-  `expectedType`, so `α` is never unified. Then `decomposeProductType α n`
-  (line ~245) tries to decompose `α` as a product but it's still `?m`.
-
-  This is the same root cause as the earlier "unexpected bound variable #0"
-  bug in `elabDoLetArrowId` — the doIf/doMatch fallthrough doesn't constrain
-  the type metavar.
-
-  Triggering pattern:
-    `let (a, b) ← if cond then ok (...) else ok (...)`
-  i.e. tuple-destructuring bind where the RHS is doIf or doMatch.
--/
-
--- Works: RHS is a term expression, so `expectedType` is passed
-def works_pat_term (b : Bool) : Result (Nat × Nat) := do
-  let (x, y) ← ok (if b then (1, 2) else (3, 4))
-  ok (x, y)
-
--- Fails: RHS is doIf, falls through without constraining α
--- Expected error: "expected a product type, got ?m"
-def fails_pat_doIf (b : Bool) : Result (Nat × Nat) := do
-  let (x, y) ←
-    if b then ok (1, 2) else ok (3, 4)
-  ok (x, y)
-
--- Fails: RHS is doMatch, same issue
-def fails_pat_doMatch (n : Nat) : Result (Nat × Nat) := do
-  let (x, y) ←
-    match n with
-    | 0 => ok (1, 2)
-    | _ => ok (3, 4)
-  ok (x, y)
-
-/-! ## Proposed fix for "expected a product type, got ?m"
-
-  Same fix as for `elabDoLetArrowId`: after `elabDoElem ⟨rhs⟩ []`, unify `α`
-  with the element type extracted from the elaborated expression's type.
-
-  In `elabDoLetArrowPat`, replace:
-  ```
-    | _ => elabDoElem ⟨rhs⟩ []
-  ```
-  with:
-  ```
-    | _ => do
-      let e ← elabDoElem ⟨rhs⟩ []
-      let eType ← instantiateMVars (← inferType e)
-      if let some a := eType.getAppArgs[0]? then
-        discard <| isDefEq α a
-      pure e
-  ```
--/
-
-/-! ## Minimal repro: "Application type mismatch" from `elabDoIf`/`elabDoMatch`
-
-  Root cause: `elabDoIf` (line ~299) and `elabDoMatch` (line ~325) create a
-  fresh type metavar for the expected type of the branches:
-    `let expectedType ← ElabM.mkMonadicType (← mkFreshTypeMVar)`
-  instead of using `ctx.expectedAlpha` from the outer `do` block.
-
-  This means the outer return type is NOT propagated into if/match branches.
-  When branches contain existentially-typed constructors (like `Dyn.mk`) or
-  anonymous constructors with implicit arguments, the lack of expected type
-  causes Lean to infer wrong types.
-
-  Sub-pattern 1: existential types in if-branches (Dyn.lean)
-  Sub-pattern 2: anonymous constructor `⟨ x ⟩` on non-Prod inductive (Derive.lean)
-                 — `decomposeProductType` with n=1 returns the whole type instead
-                 of destructuring the single-constructor inductive's field
--/
-
--- Anonymous constructor destructuring on non-Prod inductive.
--- `let ⟨ n ⟩ := w` should give `n : Nat` (the constructor field),
--- but `decomposeProductType` with names.length=1 returns [Wrap],
--- so n gets type Wrap instead of Nat.
-inductive Wrap where
-  | mk : Nat → Wrap
-
--- Expected error: n gets type Wrap instead of Nat → HAdd Wrap Nat not found
-def fails_anon_ctor_destr (w : Wrap) : Result Nat := do
-  let ⟨ n ⟩ := w
-  ok (n + 1)
-
--- Also fails with monadic bind variant
-def fails_anon_ctor_arrow (w : Wrap) : Result Nat := do
-  let ⟨ n ⟩ ← ok w
-  ok (n + 1)
-
--- Works: tuple (Prod) destructuring is handled correctly
-def works_tuple_destr : Result Nat := do
-  let (a, b) ← ok (1, 2)
-  ok (a + b)
-
-/-! ## Proposed fix for "Application type mismatch" (anonymous constructor)
-
-  `elabDoLetPat` and `elabDoLetArrowPat` use `decomposeProductType` which
-  only understands `Prod`. For anonymous constructor patterns `⟨ x ⟩` on
-  non-Prod single-constructor inductives (e.g. `let ⟨ n ⟩ := w` where
-  `w : Wrap` and `Wrap.mk : Nat → Wrap`), `decomposeProductType` with n=1
-  returns `[Wrap]` (the whole type) instead of `[Nat]` (the field type).
-
-  Fix: when the pattern is `anonymousCtor` and the type is NOT `Prod`,
-  look up the inductive's single constructor and extract its field types.
-  It is important that we want to avoid using Lean's built-in match mechanisms if possible.
--/
-
-/-! ## Minimal repro: "Application type mismatch" from `elabDoIf` expected type loss
-
-  Root cause: `elabDoIf` (line ~299) and `elabDoMatch` (line ~325) create a
-  FRESH type metavar for the expected type of branches:
-    `let expectedType ← ElabM.mkMonadicType (← mkFreshTypeMVar)`
-  instead of propagating the outer `ctx.expectedAlpha`.
-
-  When `elabDoIf` wraps branches in `do` blocks, each `do` re-enters `elabDo`
-  which creates a NEW context with `expectedAlpha = ?m_fresh`. The outer
-  return type is lost. This causes two sub-problems:
-
-  1. Existential/dependent constructors (Dyn.mk) with polymorphic type params
-     can't infer fields without the expected output type → wrong type for `self`
-  2. Anonymous struct constructors `{ x := ..., y := ... }` inside nested
-     if-branches can't resolve the struct type → "invalid {...} notation"
-     → cascading "Application type mismatch" on the continuation
-
-  Triggering pattern: `if/match` as the SOLE or TERMINAL element in a `do`
-  block, where branches construct values whose types depend on the overall
-  return type.
--/
-
--- Existential type: works with concrete types (both branches fully determined)
-open Aeneas.Std in
-structure ExBox (Inst : Type → Type) where
-  ty : Type
-  inst : Inst ty
-  val : ty
-
-structure MyTrait (Self : Type) where
-  get : Self → Result Nat
-
-def myTraitNat : MyTrait Nat := ⟨fun n => ok n⟩
-def myTraitBool : MyTrait Bool := ⟨fun _ => ok 0⟩
-
--- Works: concrete types, inference succeeds without expected type
-def works_exbox_concrete (b : Bool) : Result (ExBox MyTrait) := do
-  if b
-  then ok ⟨Nat, myTraitNat, 42⟩
-  else ok ⟨Bool, myTraitBool, true⟩
-
--- Also works: polymorphic with explicit type args
-def works_exbox_poly_explicit {T W : Type}
-    (tInst : MyTrait T) (wInst : MyTrait W)
-    (b : Bool) (x : T) (y : W) : Result (ExBox MyTrait) := do
-  if b
-  then ok ⟨T, tInst, x⟩
-  else ok ⟨W, wInst, y⟩
-
--- Closer to Dyn.lean: uses `_` placeholder for existential type field
--- and a two-param trait with lambda Inst parameter.
--- The `_` in `ExBox.mk _` can't be inferred without the expected type
--- because the lambda `(fun _dyn => Into2 _dyn V)` makes unification harder.
-structure Into2 (Self : Type) (T : Type) where
-  into : Self → Result T
-
--- Expected error: "Application type mismatch" — `x : T` but expected `V`
--- because `ty` field gets wrongly unified with `V` instead of `T`
-def fails_exbox_lambda_inst {V T W : Type}
-    (inst1 : Into2 T V) (inst2 : Into2 W V)
-    (b : Bool) (x : T) (y : W) :
-    Result (ExBox (fun _dyn => Into2 _dyn V)) := do
-  if b
-  then ok (ExBox.mk _ inst1 x)
-  else ok (ExBox.mk _ inst2 y)
-
-/-! ## Proposed fix for "Application type mismatch" (elabDoIf expected type)
-
-  `elabDoIf` (line ~404) and `elabDoMatch` (line ~430) create a FRESH type
-  metavar for the expected type of branches instead of propagating the outer
-  `ctx.expectedAlpha`. When branches are wrapped in `do` blocks that re-enter
-  `elabDo`, the new context gets `expectedAlpha = ?m_fresh`, losing the outer
-  return type. This prevents Lean from inferring existential/dependent fields.
-
-  In `elabDoIf` and `elabDoMatch`, replace:
-  ```
-  let expectedType ← ElabM.mkMonadicType (← mkFreshTypeMVar)
-  ```
-  with:
-  ```
-  let ctx ← read
-  let expectedType ← ElabM.mkMonadicType ctx.expectedAlpha
-  ```
--/
+#print doIf_pat_test
+#print match_pat_test
+#print else_if_test
+#print anon_ctor_test
+#print anon_ctor_monadic_test
+#print exbox_lambda_test
