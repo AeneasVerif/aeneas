@@ -205,6 +205,8 @@ theorem Function.monotone_uncurry_applied
 
 end Order
 
+attribute [simp, grind =] Function.uncurry_apply_pair
+
 /-!
 # Lift
 -/
