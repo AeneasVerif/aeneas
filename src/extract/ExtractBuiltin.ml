@@ -812,7 +812,7 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
             "core::cmp::impls::{core::cmp::PartialOrd<" ^ ty ^ "," ^ ty ^ ">}::"
             ^ fun_name)
           (fun ty fun_name ->
-            "core.cmp.impls.PartialCmp"
+            "core.cmp.impls.PartialOrd"
             ^ StringUtils.capitalize_first_letter ty
             ^ "." ^ fun_name)
           [
