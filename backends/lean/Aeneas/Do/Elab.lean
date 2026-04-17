@@ -523,51 +523,115 @@ end Aeneas
 
 section tests
 
-open Aeneas Aeneas.Std Result ControlFlow Error
+open Aeneas Std Result ControlFlow Error
+
+set_option pp.notation false
 
 def test1 : Result Nat := do
   ok 42
+/--
+info: def test1 : Result Nat :=
+ok 42
+-/
+#guard_msgs in
+#print test1
 
 def test2 : Result Nat := do
   let x ← ok 1
   ok x
+/--
+info: def test2 : Result Nat :=
+Bind.bind (ok 1) fun x => ok x
+-/
+#guard_msgs in
+#print test2
 
 def test3 : Result Nat := do
   let x ← ok 1
   let y ← ok 2
   ok (x + y)
+/--
+info: def test3 : Result Nat :=
+Bind.bind (ok 1) fun x => Bind.bind (ok 2) fun y => ok (HAdd.hAdd x y)
+-/
+#guard_msgs in
+#print test3
 
 def test4 : Result Nat := do
   let x : Nat ← ok 1
   ok (x + 1)
+/--
+info: def test4 : Result Nat :=
+Bind.bind (ok 1) fun x => ok (HAdd.hAdd x 1)
+-/
+#guard_msgs in
+#print test4
 
 def test5 : Result Nat := do
   let x := 1
   ok (x + 2)
+/--
+info: def test5 : Result Nat :=
+have x := 1;
+ok (HAdd.hAdd x 2)
+-/
+#guard_msgs in
+#print test5
 
 def test6 : Result Nat := do
   let x : Nat := 1
   let y ← ok 2
   ok (x + y)
+/--
+info: def test6 : Result Nat :=
+have x := 1;
+Bind.bind (ok 2) fun y => ok (HAdd.hAdd x y)
+-/
+#guard_msgs in
+#print test6
 
 def test7 : Result Nat := do
   let x ← ok 1
   if x > 0 then ok x else ok 0
+/--
+info: def test7 : Result Nat :=
+Bind.bind (ok 1) fun x => ite (GT.gt x 0) (ok x) (ok 0)
+-/
+#guard_msgs in
+#print test7
 
 def test8 : Result Nat := do
   let x ← ok 1
   if x > 0 then ok 10 else ok 20
+/--
+info: def test8 : Result Nat :=
+Bind.bind (ok 1) fun x => ite (GT.gt x 0) (ok 10) (ok 20)
+-/
+#guard_msgs in
+#print test8
 
 def test9 : Result Nat := do
   let x ← ok 2
   let y ← do
     if x > 1 then ok 1 else ok 0
   ok y
+/--
+info: def test9 : Result Nat :=
+Bind.bind (ok 2) fun x => Bind.bind (ite (GT.gt x 1) (ok 1) (ok 0)) fun y => ok y
+-/
+#guard_msgs in
+#print test9
 
 def test10 : Result Nat := do
   let x ← ok 2
   let y ← if x > 1 then ok 1 else ok 0
   ok y
+/--
+info: def test10 : Result Nat :=
+Bind.bind (ok 2) fun x => Bind.bind (ite (GT.gt x 1) (ok 1) (ok 0)) fun y => ok y
+-/
+#guard_msgs in
+#print test10
 
 def test11_body (max i : Nat) : Result (ControlFlow Nat Nat) :=
   if i < max then ok (ControlFlow.cont (i + 1))
@@ -576,24 +640,54 @@ def test11_body (max i : Nat) : Result (ControlFlow Nat Nat) :=
 def test11 : Result Nat := do
   let max ← ok 10
   loop (test11_body max) 0
+/--
+info: def test11 : Result Nat :=
+Bind.bind (ok 10) fun max => loop (test11_body max) 0
+-/
+#guard_msgs in
+#print test11
 
 def test12 : Result Nat := do
   let (a, b) ← ok (1, 2)
   ok (a + b)
+/--
+info: def test12 : Result Nat :=
+Bind.bind (ok (Prod.mk 1 2)) (Function.uncurry fun a b => ok (HAdd.hAdd a b))
+-/
+#guard_msgs in
+#print test12
 
 def test13 : Result Nat := do
   let (_, b) ← ok (1, 2)
   ok b
+/--
+info: def test13 : Result Nat :=
+Bind.bind (ok (Prod.mk 1 2)) (Function.uncurry fun _ b => ok b)
+-/
+#guard_msgs in
+#print test13
 
 def test14 : Result Nat := do
   let (a, b) := (1, 2)
   ok (a + b)
+/--
+info: def test14 : Result Nat :=
+Function.uncurry (fun a b => ok (HAdd.hAdd a b)) (Prod.mk 1 2)
+-/
+#guard_msgs in
+#print test14
 
 def test15 : Result Nat := do
   let x ← ok 1
   match x with
   | 0 => ok 10
   | _ => ok 20
+/--
+info: def test15 : Result Nat :=
+Bind.bind (ok 1) fun x => test15.match_1 (fun x => Result Nat) x (fun _ => ok 10) fun x => ok 20
+-/
+#guard_msgs in
+#print test15
 
 def test16 : Result Nat := do
   let x ← ok 1
@@ -601,6 +695,13 @@ def test16 : Result Nat := do
     | 0 => ok 10
     | _ => ok 20
   ok (y + 1)
+/--
+info: def test16 : Result Nat :=
+Bind.bind (ok 1) fun x =>
+  Bind.bind (test15.match_1 (fun x => Result Nat) x (fun _ => ok 10) fun x => ok 20) fun y => ok (HAdd.hAdd y 1)
+-/
+#guard_msgs in
+#print test16
 
 def massert_test : Result Unit := do
   let s ←
@@ -618,15 +719,46 @@ def massert_test : Result Unit := do
       (core.iter.traits.iterator.IteratorSliceIter Std.U32) it1
   let i2 ← core.option.Option.unwrap o1
   massert (i2 = 1#u32)
+/--
+info: def massert_test : Result Unit :=
+Bind.bind
+  (lift
+    (Array.make (Usize.ofNat 5 massert_test._proof_1)
+        (List.cons (U32.ofNat 0 massert_test._proof_2)
+          (List.cons (U32.ofNat 1 massert_test._proof_3)
+            (List.cons (U32.ofNat 2 massert_test._proof_4)
+              (List.cons (U32.ofNat 3 massert_test._proof_5)
+                (List.cons (U32.ofNat 4 massert_test._proof_6) List.nil)))))
+        massert_test._proof_7).to_slice)
+  fun s =>
+  Bind.bind (core.slice.Slice.iter s) fun i =>
+    Bind.bind (core.slice.iter.IteratorSliceIter.step_by i (Usize.ofNat 1 massert_test._proof_8)) fun it =>
+      Bind.bind (core.iter.adapters.step_by.IteratorStepBy.next (core.iter.traits.iterator.IteratorSliceIter U32) it)
+        (Function.uncurry fun o it1 =>
+          Bind.bind (core.option.Option.unwrap o) fun i1 =>
+            Bind.bind (massert (Eq i1 (U32.ofNat 0 massert_test._proof_2))) fun _ =>
+              Bind.bind
+                (core.iter.adapters.step_by.IteratorStepBy.next (core.iter.traits.iterator.IteratorSliceIter U32) it1)
+                (Function.uncurry fun o1 it2 =>
+                  Bind.bind (core.option.Option.unwrap o1) fun i2 =>
+                    massert (Eq i2 (U32.ofNat 1 massert_test._proof_3))))
+-/
+#guard_msgs in
+#print massert_test
 
 def bool_test (x : Bool) : Result Bool := do
   let b ← ok x
   if b
   then ok true
   else ok false
+/--
+info: def bool_test : Bool → Result Bool :=
+fun x => Bind.bind (ok x) fun b => ite (Eq b true) (ok true) (ok false)
+-/
+#guard_msgs in
+#print bool_test
 
-@[rust_fun "core::mem::drop"]
-axiom core.mem.drop {T : Type} : T → Result Unit
+opaque core.mem.drop {T : Type} : T → Result Unit
 
 def do_nested_test (b1 : Bool) : Result Unit := do
   let _ ←
@@ -634,10 +766,28 @@ def do_nested_test (b1 : Bool) : Result Unit := do
     then ok (true, 2#u32)
     else ok (false, 0#u32)
   ok ()
+/--
+info: def do_nested_test : Bool → Result Unit :=
+fun b1 =>
+  Bind.bind
+    (ite (Eq b1 true) (ok (Prod.mk true (U32.ofNat 2 massert_test._proof_4)))
+      (ok (Prod.mk false (U32.ofNat 0 massert_test._proof_2))))
+    fun _ => ok Unit.unit
+-/
+#guard_msgs in
+#print do_nested_test
 
 def if_then_add_test (b : Bool) (x : Std.U32) : Result Std.U32 := do
   let y ← if b then ok 1#u32 else ok 0#u32
   x + y
+/--
+info: def if_then_add_test : Bool → U32 → Result U32 :=
+fun b x =>
+  Bind.bind (ite (Eq b true) (ok (U32.ofNat 1 massert_test._proof_3)) (ok (U32.ofNat 0 massert_test._proof_2))) fun y =>
+    HAdd.hAdd x y
+-/
+#guard_msgs in
+#print if_then_add_test
 
 def match_add_test (a : Std.U32) (x : Std.U32) : Result Std.U32 := do
   let y ←
@@ -646,6 +796,17 @@ def match_add_test (a : Std.U32) (x : Std.U32) : Result Std.U32 := do
     | 1#uscalar => ok 1#u32
     | _ => ok 2#u32
   x + y
+/--
+info: def match_add_test : U32 → U32 → Result U32 :=
+fun a x =>
+  Bind.bind
+    (match_add_test.match_1 (fun a => Result (UScalar UScalarTy.U32)) a
+      (fun _ => ok (U32.ofNat 0 massert_test._proof_2)) (fun _ => ok (U32.ofNat 1 massert_test._proof_3)) fun x =>
+      ok (U32.ofNat 2 massert_test._proof_4))
+    fun y => HAdd.hAdd x y
+-/
+#guard_msgs in
+#print match_add_test
 
 structure Wrapper (T : Type) where
   x : T
@@ -659,6 +820,16 @@ def universe_test {T : Type} (w : Wrapper T) :
   let (inner, back) ← make_wrapper w.x
   let back2 := fun w1 => back { w with x := w1.x }
   ok (inner, back2)
+/--
+info: def universe_test : {T : Type} → Wrapper T → Result (Prod (Wrapper T) (Wrapper T → Wrapper T)) :=
+fun {T} w =>
+  Bind.bind (make_wrapper w.x)
+    (Function.uncurry fun inner back =>
+      have back2 := fun w1 => back { x := w1.x };
+      ok (Prod.mk inner back2))
+-/
+#guard_msgs in
+#print universe_test
 
 def make_pair {T : Type} (x y : T) :
   Result (T × T × (T → List T) × (T → List T)) := do
@@ -672,6 +843,19 @@ def universe_tuple_test {T : Type} (x y : T) :
       let (t1, t2) := p
       (back t1, back1 t2)
   ok ((a, b), back2)
+/--
+info: def universe_tuple_test : {T : Type} → T → T → Result (Prod (Prod T T) (Prod T T → Prod (List T) (List T))) :=
+fun {T} x y =>
+  Bind.bind (make_pair x y)
+    (Function.uncurry fun a =>
+      Function.uncurry fun b =>
+        Function.uncurry fun back back1 =>
+          have back2 := fun p =>
+            universe_tuple_test.match_1 (fun p => Prod (List T) (List T)) p fun t1 t2 => Prod.mk (back t1) (back1 t2);
+          ok (Prod.mk (Prod.mk a b) back2))
+-/
+#guard_msgs in
+#print universe_tuple_test
 
 def get_and_update (xs : alloc.vec.Vec U32) (i : Usize) :
   Result (U32 × (U32 → alloc.vec.Vec U32)) := do
@@ -689,11 +873,34 @@ def mono_loop_test (xs : alloc.vec.Vec U32) (i : Usize) :
     mono_loop_test xs1 i2
   else ok xs
 partial_fixpoint
+/--
+info: @[irreducible] def mono_loop_test : alloc.vec.Vec U32 → Usize → Result (alloc.vec.Vec U32) :=
+Order.fix
+  (fun f xs i =>
+    let i1 := xs.len;
+    ite (LT.lt i i1)
+      (Bind.bind (get_and_update xs i)
+        (Function.uncurry fun _ update_back =>
+          Bind.bind (HAdd.hAdd i (Usize.ofNat 1 massert_test._proof_8)) fun i2 =>
+            let xs1 := update_back (U32.ofNat 0 massert_test._proof_2);
+            f xs1 i2))
+      (ok xs))
+  mono_loop_test._proof_1
+-/
+#guard_msgs in
+#print mono_loop_test
 
 def doIf_pat_test (b : Bool) : Result (Nat × Nat) := do
   let (x, y) ←
     if b then ok (1, 2) else ok (3, 4)
   ok (x, y)
+/--
+info: def doIf_pat_test : Bool → Result (Prod Nat Nat) :=
+fun b =>
+  Bind.bind (ite (Eq b true) (ok (Prod.mk 1 2)) (ok (Prod.mk 3 4))) (Function.uncurry fun x y => ok (Prod.mk x y))
+-/
+#guard_msgs in
+#print doIf_pat_test
 
 def match_pat_test (n : Nat) : Result (Nat × Nat) := do
   let (x, y) ←
@@ -701,6 +908,14 @@ def match_pat_test (n : Nat) : Result (Nat × Nat) := do
     | 0 => ok (1, 2)
     | _ => ok (3, 4)
   ok (x, y)
+/--
+info: def match_pat_test : Nat → Result (Prod Nat Nat) :=
+fun n =>
+  Bind.bind (test15.match_1 (fun n => Result (Prod Nat Nat)) n (fun _ => ok (Prod.mk 1 2)) fun x => ok (Prod.mk 3 4))
+    (Function.uncurry fun x y => ok (Prod.mk x y))
+-/
+#guard_msgs in
+#print match_pat_test
 
 def else_if_test (x y : Nat) : Result Ordering := do
   if x < y
@@ -708,6 +923,12 @@ def else_if_test (x y : Nat) : Result Ordering := do
   else if x = y
   then ok Ordering.eq
   else ok Ordering.gt
+/--
+info: def else_if_test : Nat → Nat → Result Ordering :=
+fun x y => ite (LT.lt x y) (ok Ordering.lt) (ite (Eq x y) (ok Ordering.eq) (ok Ordering.gt))
+-/
+#guard_msgs in
+#print else_if_test
 
 inductive Wrap where
   | mk : Nat → Wrap
@@ -715,10 +936,22 @@ inductive Wrap where
 def anon_ctor_test (w : Wrap) : Result Nat := do
   let ⟨ n ⟩ := w
   ok (n + 1)
+/--
+info: def anon_ctor_test : Wrap → Result Nat :=
+fun w => Wrap.casesOn w fun n => ok (HAdd.hAdd n 1)
+-/
+#guard_msgs in
+#print anon_ctor_test
 
 def anon_ctor_monadic_test (w : Wrap) : Result Nat := do
   let ⟨ n ⟩ ← ok w
   ok (n + 1)
+/--
+info: def anon_ctor_monadic_test : Wrap → Result Nat :=
+fun w => Bind.bind (ok w) fun _x => Wrap.casesOn _x fun n => ok (HAdd.hAdd n 1)
+-/
+#guard_msgs in
+#print anon_ctor_monadic_test
 
 structure ExBox (Inst : Type → Type) where
   ty : Type
@@ -735,35 +968,13 @@ def exbox_lambda_test {V T W : Type}
   if b
   then ok (ExBox.mk _ inst1 x)
   else ok (ExBox.mk _ inst2 y)
-
-set_option pp.notation false
-#print test1
-#print test2
-#print test3
-#print test4
-#print test5
-#print test6
-#print test7
-#print test8
-#print test9
-#print test10
-#print test11
-#print test12
-#print test13
-#print test14
-#print test15
-#print test16
-#print massert_test
-#print bool_test
-#print do_nested_test
-#print if_then_add_test
-#print match_add_test
-#print universe_test
-#print universe_tuple_test
-#print mono_loop_test
-#print doIf_pat_test
-#print match_pat_test
-#print else_if_test
-#print anon_ctor_test
-#print anon_ctor_monadic_test
+/--
+info: def exbox_lambda_test : {V T W : Type} →
+  Into2 T V → Into2 W V → Bool → T → W → Result (ExBox fun _dyn => Into2 _dyn V) :=
+fun {V T W} inst1 inst2 b x y =>
+  ite (Eq b true) (ok { ty := T, inst := inst1, val := x }) (ok { ty := W, inst := inst2, val := y })
+-/
+#guard_msgs in
 #print exbox_lambda_test
+
+end tests
