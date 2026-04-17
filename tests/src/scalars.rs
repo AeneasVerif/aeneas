@@ -89,3 +89,11 @@ fn u32_as_i16(x: u32) -> i16 {
 fn i16_as_u32(x: i16) -> u32 {
     x as u32
 }
+
+pub fn u32_use_bits() -> u32 {
+    u32::BITS
+}
+
+pub fn i32_use_bits() -> u32 {
+    i32::BITS
+}
