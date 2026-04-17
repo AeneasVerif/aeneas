@@ -9,7 +9,26 @@ set_option linter.unusedVariables false
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
 
+/- You can remove the following line by using the CLI option `-all-computable`: -/
+noncomputable section
+
 namespace derive
+
+/-- [core::cmp::impls::{core::cmp::PartialEq<bool> for bool}::ne]:
+    Source: '/rustc/library/core/src/cmp.rs', lines 1872:16-1872:50
+    Name pattern: [core::cmp::impls::{core::cmp::PartialEq<bool, bool>}::ne]
+    Visibility: public -/
+@[rust_fun "core::cmp::impls::{core::cmp::PartialEq<bool, bool>}::ne"]
+axiom Bool.Insts.CoreCmpPartialEqBool.ne : Bool → Bool → Result Bool
+
+/-- [alloc::boxed::{core::cmp::PartialEq<alloc::boxed::Box<T>> for alloc::boxed::Box<T>}::ne]:
+    Source: '/rustc/library/alloc/src/boxed.rs', lines 2056:4-2056:38
+    Name pattern: [alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}::ne]
+    Visibility: public -/
+@[rust_fun "alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}::ne"]
+axiom Box.Insts.CoreCmpPartialEqBox.ne
+  {T : Type} (A : Type) (corecmpPartialEqInst : core.cmp.PartialEq T T) :
+  T → T → Result Bool
 
 /-- [derive::CopyEnumOneVariant]
     Source: 'tests/src/derive.rs', lines 4:0-6:1 -/
@@ -47,6 +66,12 @@ def CopyEnumOneVariant.Insts.CoreMarkerStructuralPartialEq :
   core.marker.StructuralPartialEq CopyEnumOneVariant := {
 }
 
+/-- [derive::{core::cmp::PartialEq<derive::CopyEnumOneVariant> for derive::CopyEnumOneVariant}::ne]:
+    Source: 'tests/src/derive.rs', lines 3:22-3:31
+    Visibility: public -/
+axiom CopyEnumOneVariant.Insts.CoreCmpPartialEqCopyEnumOneVariant.ne
+  : CopyEnumOneVariant → CopyEnumOneVariant → Result Bool
+
 /-- [derive::{core::cmp::PartialEq<derive::CopyEnumOneVariant> for derive::CopyEnumOneVariant}::eq]:
     Source: 'tests/src/derive.rs', lines 3:22-3:31
     Visibility: public -/
@@ -62,6 +87,7 @@ def CopyEnumOneVariant.Insts.CoreCmpPartialEqCopyEnumOneVariant.eq
 def CopyEnumOneVariant.Insts.CoreCmpPartialEqCopyEnumOneVariant :
   core.cmp.PartialEq CopyEnumOneVariant CopyEnumOneVariant := {
   eq := CopyEnumOneVariant.Insts.CoreCmpPartialEqCopyEnumOneVariant.eq
+  ne := CopyEnumOneVariant.Insts.CoreCmpPartialEqCopyEnumOneVariant.ne
 }
 
 /-- [derive::{core::cmp::Eq for derive::CopyEnumOneVariant}::assert_receiver_is_total_eq]:
@@ -136,6 +162,12 @@ def ScalarEnum.Insts.CoreMarkerStructuralPartialEq :
   core.marker.StructuralPartialEq ScalarEnum := {
 }
 
+/-- [derive::{core::cmp::PartialEq<derive::ScalarEnum> for derive::ScalarEnum}::ne]:
+    Source: 'tests/src/derive.rs', lines 8:22-8:31
+    Visibility: public -/
+axiom ScalarEnum.Insts.CoreCmpPartialEqScalarEnum.ne
+  : ScalarEnum → ScalarEnum → Result Bool
+
 /-- [derive::{core::cmp::PartialEq<derive::ScalarEnum> for derive::ScalarEnum}::eq]:
     Source: 'tests/src/derive.rs', lines 8:22-8:31
     Visibility: public -/
@@ -151,6 +183,7 @@ def ScalarEnum.Insts.CoreCmpPartialEqScalarEnum.eq
 def ScalarEnum.Insts.CoreCmpPartialEqScalarEnum : core.cmp.PartialEq ScalarEnum
   ScalarEnum := {
   eq := ScalarEnum.Insts.CoreCmpPartialEqScalarEnum.eq
+  ne := ScalarEnum.Insts.CoreCmpPartialEqScalarEnum.ne
 }
 
 /-- [derive::{core::cmp::Eq for derive::ScalarEnum}::assert_receiver_is_total_eq]:
@@ -240,6 +273,13 @@ def CopyEnum.Insts.CoreMarkerStructuralPartialEq (T : Type) :
   core.marker.StructuralPartialEq (CopyEnum T) := {
 }
 
+/-- [derive::{core::cmp::PartialEq<derive::CopyEnum<T>> for derive::CopyEnum<T>}::ne]:
+    Source: 'tests/src/derive.rs', lines 16:22-16:31
+    Visibility: public -/
+axiom CopyEnum.Insts.CoreCmpPartialEqCopyEnum.ne
+  {T : Type} (corecmpPartialEqInst : core.cmp.PartialEq T T) :
+  CopyEnum T → CopyEnum T → Result Bool
+
 /-- [derive::{core::cmp::PartialEq<derive::CopyEnum<T>> for derive::CopyEnum<T>}::eq]:
     Source: 'tests/src/derive.rs', lines 16:22-16:31
     Visibility: public -/
@@ -284,6 +324,7 @@ def CopyEnum.Insts.CoreCmpPartialEqCopyEnum.eq
 def CopyEnum.Insts.CoreCmpPartialEqCopyEnum {T : Type} (corecmpPartialEqInst :
   core.cmp.PartialEq T T) : core.cmp.PartialEq (CopyEnum T) (CopyEnum T) := {
   eq := CopyEnum.Insts.CoreCmpPartialEqCopyEnum.eq corecmpPartialEqInst
+  ne := CopyEnum.Insts.CoreCmpPartialEqCopyEnum.ne corecmpPartialEqInst
 }
 
 /-- [derive::{core::cmp::Eq for derive::CopyEnum<T>}::assert_receiver_is_total_eq]:
@@ -382,6 +423,13 @@ def Enum.Insts.CoreMarkerStructuralPartialEq (T : Type) :
   core.marker.StructuralPartialEq (Enum T) := {
 }
 
+/-- [derive::{core::cmp::PartialEq<derive::Enum<T>> for derive::Enum<T>}::ne]:
+    Source: 'tests/src/derive.rs', lines 24:16-24:25
+    Visibility: public -/
+axiom Enum.Insts.CoreCmpPartialEqEnum.ne
+  {T : Type} (corecmpPartialEqInst : core.cmp.PartialEq T T) :
+  Enum T → Enum T → Result Bool
+
 /-- [derive::{core::cmp::PartialEq<derive::Enum<T>> for derive::Enum<T>}::eq]:
     Source: 'tests/src/derive.rs', lines 24:16-24:25
     Visibility: public -/
@@ -438,6 +486,7 @@ def Enum.Insts.CoreCmpPartialEqEnum.eq
 def Enum.Insts.CoreCmpPartialEqEnum {T : Type} (corecmpPartialEqInst :
   core.cmp.PartialEq T T) : core.cmp.PartialEq (Enum T) (Enum T) := {
   eq := Enum.Insts.CoreCmpPartialEqEnum.eq corecmpPartialEqInst
+  ne := Enum.Insts.CoreCmpPartialEqEnum.ne corecmpPartialEqInst
 }
 
 /-- [derive::{core::cmp::Eq for derive::Enum<T>}::assert_receiver_is_total_eq]:
@@ -530,6 +579,13 @@ def List.Insts.CoreMarkerStructuralPartialEq (T : Type) :
   core.marker.StructuralPartialEq (List T) := {
 }
 
+/-- [derive::{core::cmp::PartialEq<derive::List<T>> for derive::List<T>}::ne]:
+    Source: 'tests/src/derive.rs', lines 34:16-34:25
+    Visibility: public -/
+axiom List.Insts.CoreCmpPartialEqList.ne
+  {T : Type} (corecmpPartialEqInst : core.cmp.PartialEq T T) :
+  List T → List T → Result Bool
+
 /-- [derive::{core::cmp::PartialEq<derive::List<T>> for derive::List<T>}::eq]:
     Source: 'tests/src/derive.rs', lines 34:16-34:25
     Visibility: public -/
@@ -565,6 +621,7 @@ partial_fixpoint
 def List.Insts.CoreCmpPartialEqList {T : Type} (corecmpPartialEqInst :
   core.cmp.PartialEq T T) : core.cmp.PartialEq (List T) (List T) := {
   eq := List.Insts.CoreCmpPartialEqList.eq corecmpPartialEqInst
+  ne := List.Insts.CoreCmpPartialEqList.ne corecmpPartialEqInst
 }
 
 /-- [derive::{core::cmp::Eq for derive::List<T>}::assert_receiver_is_total_eq]:
@@ -630,6 +687,13 @@ def CopyStruct.Insts.CoreMarkerStructuralPartialEq (T : Type) :
   core.marker.StructuralPartialEq (CopyStruct T) := {
 }
 
+/-- [derive::{core::cmp::PartialEq<derive::CopyStruct<T>> for derive::CopyStruct<T>}::ne]:
+    Source: 'tests/src/derive.rs', lines 41:22-41:31
+    Visibility: public -/
+axiom CopyStruct.Insts.CoreCmpPartialEqCopyStruct.ne
+  {T : Type} (corecmpPartialEqInst : core.cmp.PartialEq T T) :
+  CopyStruct T → CopyStruct T → Result Bool
+
 /-- [derive::{core::cmp::PartialEq<derive::CopyStruct<T>> for derive::CopyStruct<T>}::eq]:
     Source: 'tests/src/derive.rs', lines 41:22-41:31
     Visibility: public -/
@@ -656,6 +720,7 @@ def CopyStruct.Insts.CoreCmpPartialEqCopyStruct {T : Type}
   (corecmpPartialEqInst : core.cmp.PartialEq T T) : core.cmp.PartialEq
   (CopyStruct T) (CopyStruct T) := {
   eq := CopyStruct.Insts.CoreCmpPartialEqCopyStruct.eq corecmpPartialEqInst
+  ne := CopyStruct.Insts.CoreCmpPartialEqCopyStruct.ne corecmpPartialEqInst
 }
 
 /-- [derive::{core::cmp::Eq for derive::CopyStruct<T>}::assert_receiver_is_total_eq]:
@@ -731,6 +796,13 @@ def Struct.Insts.CoreMarkerStructuralPartialEq (T : Type) :
   core.marker.StructuralPartialEq (Struct T) := {
 }
 
+/-- [derive::{core::cmp::PartialEq<derive::Struct<T>> for derive::Struct<T>}::ne]:
+    Source: 'tests/src/derive.rs', lines 49:16-49:25
+    Visibility: public -/
+axiom Struct.Insts.CoreCmpPartialEqStruct.ne
+  {T : Type} (corecmpPartialEqInst : core.cmp.PartialEq T T) :
+  Struct T → Struct T → Result Bool
+
 /-- [derive::{core::cmp::PartialEq<derive::Struct<T>> for derive::Struct<T>}::eq]:
     Source: 'tests/src/derive.rs', lines 49:16-49:25
     Visibility: public -/
@@ -747,6 +819,7 @@ def Struct.Insts.CoreCmpPartialEqStruct.eq
 def Struct.Insts.CoreCmpPartialEqStruct {T : Type} (corecmpPartialEqInst :
   core.cmp.PartialEq T T) : core.cmp.PartialEq (Struct T) (Struct T) := {
   eq := Struct.Insts.CoreCmpPartialEqStruct.eq corecmpPartialEqInst
+  ne := Struct.Insts.CoreCmpPartialEqStruct.ne corecmpPartialEqInst
 }
 
 /-- [derive::{core::cmp::Eq for derive::Struct<T>}::assert_receiver_is_total_eq]:
@@ -828,6 +901,12 @@ def Struct6Fields.Insts.CoreMarkerStructuralPartialEq :
   core.marker.StructuralPartialEq Struct6Fields := {
 }
 
+/-- [derive::{core::cmp::PartialEq<derive::Struct6Fields> for derive::Struct6Fields}::ne]:
+    Source: 'tests/src/derive.rs', lines 54:16-54:25
+    Visibility: public -/
+axiom Struct6Fields.Insts.CoreCmpPartialEqStruct6Fields.ne
+  : Struct6Fields → Struct6Fields → Result Bool
+
 /-- [derive::{core::cmp::PartialEq<derive::Struct6Fields> for derive::Struct6Fields}::eq]:
     Source: 'tests/src/derive.rs', lines 54:16-54:25
     Visibility: public -/
@@ -854,6 +933,7 @@ def Struct6Fields.Insts.CoreCmpPartialEqStruct6Fields.eq
 def Struct6Fields.Insts.CoreCmpPartialEqStruct6Fields : core.cmp.PartialEq
   Struct6Fields Struct6Fields := {
   eq := Struct6Fields.Insts.CoreCmpPartialEqStruct6Fields.eq
+  ne := Struct6Fields.Insts.CoreCmpPartialEqStruct6Fields.ne
 }
 
 /-- [derive::{core::cmp::Eq for derive::Struct6Fields}::assert_receiver_is_total_eq]:
@@ -901,5 +981,18 @@ def Struct6Fields.Insts.CoreFmtDebug.fmt
 def Struct6Fields.Insts.CoreFmtDebug : core.fmt.Debug Struct6Fields := {
   fmt := Struct6Fields.Insts.CoreFmtDebug.fmt
 }
+
+/-- [derive::refs_ne]:
+    Source: 'tests/src/derive.rs', lines 68:0-70:1
+    Visibility: public -/
+def refs_ne (a : Struct6Fields) (b : Struct6Fields) : Result Bool := do
+  core.cmp.impls.PartialEqShared.ne
+    Struct6Fields.Insts.CoreCmpPartialEqStruct6Fields a b
+
+/-- [derive::refs_eq]:
+    Source: 'tests/src/derive.rs', lines 72:0-74:1
+    Visibility: public -/
+def refs_eq (a : Struct6Fields) (b : Struct6Fields) : Result Bool := do
+  Struct6Fields.Insts.CoreCmpPartialEqStruct6Fields.eq a b
 
 end derive
