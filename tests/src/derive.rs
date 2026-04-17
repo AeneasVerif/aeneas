@@ -61,10 +61,6 @@ pub struct Struct6Fields {
     f: u32,
 }
 
-// Regression test for Bug 5: `!=` between two `&T` values where `T: PartialEq`
-// dispatches through the blanket `PartialEq<&T, &T>` impl. Aeneas used to emit
-// a synthetic `Shared<N><L>.Insts.CoreCmpPartialEqShared<N><L>.ne` identifier
-// that did not exist in the Lean library.
 pub fn refs_ne(a: &Struct6Fields, b: &Struct6Fields) -> bool {
     a != b
 }
