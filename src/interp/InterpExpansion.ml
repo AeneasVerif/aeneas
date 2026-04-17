@@ -632,17 +632,37 @@ let expand_symbolic_adt (span : Meta.span) (sv : symbolic_value)
           (List.map (fun el -> Some el) seel) )
   | _ -> [%craise] span ("expand_symbolic_adt: unexpected type: " ^ show_rty rty)
 
-let expand_symbolic_int (span : Meta.span) (sv : symbolic_value)
-    (sv_place : SA.mplace option) (int_type : integer_type)
-    (tgts : scalar_value list) :
+let expand_symbolic_literal (span : Meta.span) (sv : symbolic_value)
+    (sv_place : SA.mplace option) (lit_ty : literal_type)
+    (tgts : literal list) :
     eval_ctx -> (eval_ctx list * eval_ctx) * (SA.expr list * SA.expr -> SA.expr)
     =
  fun ctx ->
-  (* Sanity check *)
-  (match int_type with
-  | Signed int_type -> [%sanity_check] span (sv.sv_ty = TLiteral (TInt int_type))
-  | Unsigned int_type ->
-      [%sanity_check] span (sv.sv_ty = TLiteral (TUInt int_type)));
+  (* Sanity check: the symbolic value type and all target literals must match lit_ty *)
+  (match lit_ty with
+  | TInt int_ty ->
+      [%sanity_check] span
+        (sv.sv_ty = TLiteral (TInt int_ty)
+        && List.for_all
+             (fun v ->
+               match v with
+               | VScalar (SignedScalar (ty, _)) -> ty = int_ty
+               | _ -> false)
+             tgts)
+  | TUInt int_ty ->
+      [%sanity_check] span
+        (sv.sv_ty = TLiteral (TUInt int_ty)
+        && List.for_all
+             (fun v ->
+               match v with
+               | VScalar (UnsignedScalar (ty, _)) -> ty = int_ty
+               | _ -> false)
+             tgts)
+  | TChar ->
+      [%sanity_check] span
+        (sv.sv_ty = TLiteral TChar
+        && List.for_all (fun v -> match v with VChar _ -> true | _ -> false) tgts)
+  | _ -> [%craise] span "Unsupported literal type in expand_symbolic_literal");
   (* For all the branches of the switch, we expand the symbolic value
    * to the value given by the branch and execute the branch statement.
    * For the otherwise branch, we leave the symbolic value as it is
@@ -650,7 +670,7 @@ let expand_symbolic_int (span : Meta.span) (sv : symbolic_value)
    * value of the scrutinee...) and simply execute the otherwise statement.
    *)
   (* Substitute the symbolic values to generate the contexts in the branches *)
-  let seel = List.map (fun v -> SeLiteral (VScalar v)) tgts in
+  let seel = List.map (fun v -> SeLiteral v) tgts in
   let ctx_branches =
     List.map (apply_symbolic_expansion_non_borrow span sv ctx) seel
   in

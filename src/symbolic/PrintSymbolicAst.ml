@@ -203,6 +203,17 @@ and expansion_to_string (env : fmt_env) (indent : string) (indent_incr : string)
       indent ^ "match " ^ scrut ^ " with\n"
       ^ String.concat "\n" (List.map branch_to_string branches)
       ^ "\n" ^ indent ^ "| _ ->\n" ^ otherwise
+  | ExpandChar (branches, otherwise) ->
+      let branch_to_string ((cv, branch) : char_value * expr) : string =
+        indent ^ "| '"
+        ^ Charon.Uchar.to_string cv
+        ^ "' ->\n"
+        ^ expr_to_string env indent1 indent_incr branch
+      in
+      let otherwise = expr_to_string env indent1 indent_incr otherwise in
+      indent ^ "match " ^ scrut ^ " with\n"
+      ^ String.concat "\n" (List.map branch_to_string branches)
+      ^ "\n" ^ indent ^ "| _ ->\n" ^ otherwise
 
 and loop_to_string (env : fmt_env) (indent : string) (indent_incr : string)
     (loop : loop) : string =
