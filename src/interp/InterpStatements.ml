@@ -1041,6 +1041,15 @@ and eval_switch_raw (config : config) (span : Meta.span) (switch : switch) :
             with
             | None -> eval_block config otherwise ctx
             | Some (_, tgt) -> eval_block config tgt ctx)
+        | VLiteral (VChar cv), TChar -> (
+            (* Find the branch *)
+            match
+              List.find_opt (fun (svl, _) -> List.mem (VChar cv) svl) stgts
+            with
+            | None -> eval_block config otherwise ctx
+            | Some (_, tgt) -> eval_block config tgt ctx)
+        | VSymbolic _, TChar ->
+            [%craise] span "Unsupported: matching on a symbolic char value"
         | VSymbolic sv, _ ->
             (* Several branches may be grouped together: every branch is described
                by a pair (list of values, branch expression).
