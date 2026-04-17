@@ -42,8 +42,8 @@ Theorems with a specification which use integers and bit-vectors
 theorem UScalar.mul_equiv {ty} (x y : UScalar ty) :
   match mul x y with
   | ok z => x.val * y.val ≤ UScalar.max ty ∧ (↑z : Nat) = ↑x * ↑y ∧ z.bv = x.bv * y.bv
-  | fail _ => UScalar.max ty < x.val * y.val
-  | .div => False := by
+  | fail .integerOverflow => UScalar.max ty < x.val * y.val
+  | _ => False := by
   simp only [mul]
   have := tryMk_eq ty (x.val * y.val)
   split <;> simp_all only [inBounds, true_and, not_lt, gt_iff_lt]
@@ -72,8 +72,8 @@ theorem UScalar.mul_bv_spec {ty} {x y : UScalar ty}
 theorem IScalar.mul_equiv {ty} (x y : IScalar ty) :
   match mul x y with
   | ok z => IScalar.min ty ≤ x.val * y.val ∧ x.val * y.val ≤ IScalar.max ty ∧ z.val = x.val * y.val ∧ z.bv = x.bv * y.bv
-  | fail _ => ¬(IScalar.min ty ≤ x.val * y.val ∧ x.val * y.val ≤ IScalar.max ty)
-  | .div => False := by
+  | fail .integerOverflow => ¬(IScalar.min ty ≤ x.val * y.val ∧ x.val * y.val ≤ IScalar.max ty)
+  | _ => False := by
   simp only [mul, not_and, not_le]
   have := tryMk_eq ty (x.val * y.val)
   split <;> simp_all only [inBounds, min, max, true_and, not_and, not_lt] <;>
@@ -133,22 +133,61 @@ iscalar theorem «%S».mul_bv_spec {x y : «%S»}
 Theorems with a specification which only use integers
 -/
 
+section mvcgen
+open Std.Do
+set_option mvcgen.warning false
+
+/-- Generic theorem - shouldn't be used much -/
+theorem UScalar.mul_mvcgen {ty} {x y : UScalar ty} {Q}
+  (hmax : UScalar.max ty < ↑x * ↑y → (Q.2.1 .integerOverflow).down)
+  (h : ∀ z : UScalar ty, (↑z : Nat) = ↑x * ↑y → (Q.1 z).down) :
+  ⦃ ⌜ True ⌝ ⦄ (x * y) ⦃ Q ⦄ := by
+  have heq := @UScalar.mul_equiv _ x y
+  simp only [show UScalar.mul x y = x * y from rfl] at heq
+  split at heq <;> try simp_all only []
+    <;> (mvcgen; grind)
+
+/-- Generic theorem - shouldn't be used much -/
+theorem IScalar.mul_mvcgen {ty} {x y : IScalar ty} {Q}
+  (hmin : ↑x * ↑y < IScalar.min ty → (Q.2.1 .integerOverflow).down)
+  (hmax : IScalar.max ty < ↑x * ↑y → (Q.2.1 .integerOverflow).down)
+  (h : ∀ z : IScalar ty, (↑z : Int) = ↑x * ↑y → (Q.1 z).down) :
+  ⦃ ⌜ True ⌝ ⦄ (x * y) ⦃ Q ⦄ := by
+  have heq := @IScalar.mul_equiv _ x y
+  simp only [show IScalar.mul x y = x * y from rfl] at heq
+  split at heq
+    <;> try simp_all only [min, max]
+    <;> (mvcgen; grind)
+
+uscalar @[spec] theorem «%S».mul_mvcgen {Q} {x y : «%S»}
+  (hmax : «%S».max < x.val * y.val → (Q.2.1 .integerOverflow).down)
+  (h : ∀ z : «%S», (↑z : Nat) = ↑x * ↑y → (Q.1 z).down) :
+  ⦃ ⌜ True ⌝ ⦄ (x * y) ⦃ Q ⦄ :=
+  UScalar.mul_mvcgen (by scalar_tac) (fun _ _ => h _ (by scalar_tac))
+
+iscalar @[spec] theorem «%S».mul_mvcgen {Q} {x y : «%S»}
+  (hmin : ↑x * ↑y < «%S».min → (Q.2.1 .integerOverflow).down)
+  (hmax : «%S».max < ↑x * ↑y → (Q.2.1 .integerOverflow).down)
+  (h : ∀ z : «%S», (↑z : Int) = ↑x * ↑y → (Q.1 z).down) :
+  ⦃ ⌜ True ⌝ ⦄ (x * y) ⦃ Q ⦄ :=
+  IScalar.mul_mvcgen (by scalar_tac) (by scalar_tac) (fun _ _ => h _ (by scalar_tac))
+
+end mvcgen
+
+section step
+
 /-- Generic theorem - shouldn't be used much -/
 theorem UScalar.mul_spec {ty} {x y : UScalar ty}
   (hmax : ↑x * ↑y ≤ UScalar.max ty) :
-  x * y ⦃ z => (↑z : Nat) = ↑x * ↑y ⦄ := by
-  apply spec_mono
-  apply mul_bv_spec hmax
-  grind
+  x * y ⦃ z => (↑z : Nat) = ↑x * ↑y ⦄ :=
+  Result.spec_of_mvcgen (mul_mvcgen (by omega) (by simp))
 
 /-- Generic theorem - shouldn't be used much -/
 theorem IScalar.mul_spec {ty} {x y : IScalar ty}
   (hmin : IScalar.min ty ≤ ↑x * ↑y)
   (hmax : ↑x * ↑y ≤ IScalar.max ty) :
-  x * y ⦃ z => (↑z : Int) = ↑x * ↑y ⦄ := by
-  apply spec_mono
-  apply @mul_bv_spec ty x y (by scalar_tac) (by scalar_tac)
-  grind
+  x * y ⦃ z => (↑z : Int) = ↑x * ↑y ⦄ :=
+  Result.spec_of_mvcgen (mul_mvcgen (by omega) (by omega) (by simp))
 
 uscalar @[step] theorem «%S».mul_spec {x y : «%S»} (hmax : x.val * y.val ≤ «%S».max) :
   x * y ⦃ z => (↑z : Nat) = ↑x * ↑y ⦄ :=
@@ -158,5 +197,7 @@ iscalar @[step] theorem «%S».mul_spec {x y : «%S»}
   (hmin : «%S».min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ «%S».max) :
   (x * y) ⦃ z => (↑z : Int) = ↑x * ↑y ⦄ :=
   IScalar.mul_spec (by scalar_tac) (by scalar_tac)
+
+end step
 
 end Aeneas.Std

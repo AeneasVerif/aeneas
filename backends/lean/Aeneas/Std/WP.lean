@@ -444,11 +444,13 @@ namespace Aeneas.Std.WP
 open Std Result
 open Std.Do
 
-instance Result.instWP : WP (Result) (.except Error .pure) where
-    wp
-        | .ok v => wp (pure v : Except Error _)
-        | .fail e => wp (throw e : Except Error _)
-        | .div => PredTrans.const ⌜False⌝
+instance Result.instWP : WP Result (.except Error (.except PUnit .pure)) where
+  wp x := {
+    apply Q := match x with | .ok a => Q.1 a | .fail e => Q.2.1 e | .div => Q.2.2.1 ()
+    conjunctive Q₁ Q₂ := by
+      apply SPred.bientails.of_eq
+      cases x <;> simp
+  }
 
 instance : LawfulMonad Result where
     map_const := by intros; rfl
@@ -461,24 +463,36 @@ instance : LawfulMonad Result where
     bind_map := by intros; rfl
     bind_assoc := by intros _ _ _ x _ _; cases x <;> rfl
 
-instance : WPMonad Result (.except Error .pure) where
-  wp_pure := by
-    intros
-    ext Q
-    simp [wp, PredTrans.pure, pure, Except.pure, Id.run]
-  wp_bind x f := by
-    simp only [Result.instWP]
-    ext Q
-    cases x <;> simp [PredTrans.const]
+instance Result.instWPMonad : WPMonad Result (.except Error (.except PUnit .pure)) where
+  wp_pure a := by ext; simp [wp]
+  wp_bind x f := by ext Q; cases x <;> simp [wp]
 
 theorem Result.of_wp {α} {x : Result α} (P : Result α → Prop) :
     (⊢ₛ wp⟦x⟧ post⟨fun a => ⌜P (.ok a)⌝,
-                  fun e => ⌜P (.fail e)⌝⟩) → P x := by
+                  fun e => ⌜P (.fail e)⌝,
+                  fun () => ⌜P .div⌝⟩) → P x := by
   intro hspec
   simp only [instWP] at hspec
   split at hspec <;> simp_all
 
 end Aeneas.Std.WP
+
+namespace Aeneas.Std
+open Std.Do
+set_option mvcgen.warning false
+
+@[spec]
+theorem Result.ok_mvcgen {α : Type} {v : α} {Q : PostCond α (.except Error (.except PUnit .pure))}
+    (h : (Q.1 v).down) : ⦃ ⌜ True ⌝ ⦄ Result.ok v ⦃ Q ⦄ := by mvcgen
+
+@[spec]
+theorem Result.fail_mvcgen {α : Type} {e} {Q : PostCond α (.except Error (.except PUnit .pure))}
+    (h : (Q.2.1 e).down) : ⦃ ⌜ True ⌝ ⦄ Result.fail e ⦃ Q ⦄ := by mvcgen
+
+theorem Result.spec_of_mvcgen {p : α → Prop} {f : Result α} (h : ⦃ ⌜ True ⌝ ⦄ f ⦃ ⇓ v => ⌜ p v ⌝ ⦄) :
+  f ⦃ v => p v ⦄ := by cases f <;> simp_all [Triple, wp]
+
+end Aeneas.Std
 
 namespace Aeneas.Std
 
