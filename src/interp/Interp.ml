@@ -292,7 +292,7 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx)
       inst_sg.abs_regions_hierarchy region_can_end compute_abs_avalues ctx
   in
   (* Split the variables between return var, inputs and remaining locals *)
-  let body = Option.get fdef.body in
+  let body = body_as_body_exn fdef.body in
   let ret_var = List.hd body.locals.locals in
   let input_vars, local_vars =
     Collections.List.split_at (List.tl body.locals.locals) body.locals.arg_count
@@ -536,9 +536,8 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
   (* Evaluate the function *)
   let symbolic =
     try
-      let ctx_resl, cc =
-        eval_function_body config (Option.get fdef.body).body ctx
-      in
+      let body = body_as_body_exn fdef.body in
+      let ctx_resl, cc = eval_function_body config body.body ctx in
       let el = List.map (fun (ctx, res) -> finish res ctx) ctx_resl in
       (* Finish synthesizing *)
       if synthesize then Some (cc el) else None
@@ -570,7 +569,7 @@ module Test = struct
       (fid : FunDeclId.id) : unit =
     (* Retrieve the function declaration *)
     let fdef = FunDeclId.Map.find fid crate.fun_decls in
-    let body = Option.get fdef.body in
+    let body = body_as_body_exn fdef.body in
     let span = fdef.item_meta.span in
 
     (* Debug *)
@@ -613,7 +612,7 @@ module Test = struct
   (** Small helper: return true if the function is a *transparent* unit function
       (no parameters, no arguments) - TODO: move *)
   let fun_decl_is_transparent_unit (def : fun_decl) : bool =
-    Option.is_some def.body
+    body_is_known def.body
     && def.generics = empty_generic_params
     && def.signature.inputs = []
 

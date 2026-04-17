@@ -15,6 +15,18 @@ end
 module FunIdMap = Collections.MakeMap (FunIdOrderedType)
 module FunIdSet = Collections.MakeSet (FunIdOrderedType)
 
+let body_as_body (f : fun_body) : block gexpr_body option =
+  match f with
+  | Body body -> Some body
+  | _ -> None
+
+let body_as_body_exn f = Option.get (body_as_body f)
+
+let body_is_known (f : fun_body) : bool =
+  match f with
+  | Body _ -> true
+  | _ -> false
+
 let lookup_fun_sig (fun_id : fun_id) (fun_decls : fun_decl FunDeclId.Map.t) :
     bound_fun_sig =
   match fun_id with
@@ -37,7 +49,7 @@ let crate_get_opaque_non_builtin_decls (k : crate) (filter_builtin : bool)
   let open ExtractBuiltin in
   let ctx = Charon.NameMatcher.ctx_from_crate k in
   let is_opaque_fun (d : fun_decl) : bool =
-    d.body = None
+    (not (body_is_known d.body))
     (* Something to pay attention to: we must ignore trait method *declarations*
        (which don't have a body but must not be considered as opaque) *)
     && (match d.src with
@@ -170,12 +182,13 @@ let compute_body_size (f : fun_body) : int =
         super#visit_block env st
     end
   in
-  visitor#visit_block () f.body;
+  let () =
+    match f with
+    | Body body -> visitor#visit_block () body.body
+    | _ -> ()
+  in
   !size
 
 (** Compute the size of a function - we count the number of statements and
     blocks *)
-let compute_fun_decl_size (f : fun_decl) : int =
-  match f.body with
-  | None -> 0
-  | Some body -> compute_body_size body
+let compute_fun_decl_size (f : fun_decl) : int = compute_body_size f.body
