@@ -861,6 +861,9 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
                    (false, "wrapping_sub");
                    (false, "wrapping_mul");
                    (false, "overflowing_add");
+                   (false, "overflowing_sub");
+                   (false, "overflowing_mul");
+                   (true, "overflowing_div");
                    (false, "rotate_left");
                    (false, "rotate_right");
                  ])
