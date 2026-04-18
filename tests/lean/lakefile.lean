@@ -70,11 +70,13 @@ package «tests» {}
 @[default_target] lean_lib NoNestedBorrows
 @[default_target] lean_lib Options
 @[default_target] lean_lib OptionMethods
+@[default_target] lean_lib OptionMethodsProofs
 @[default_target] lean_lib Order
 @[default_target] lean_lib Paper
 @[default_target] lean_lib PoloniusList
 @[default_target] lean_lib ProofHelpers
 @[default_target] lean_lib ResultMethods
+@[default_target] lean_lib ResultMethodsProofs
 @[default_target] lean_lib RustBorrowCheckIssues
 @[default_target] lean_lib Print
 @[default_target] lean_lib Range
@@ -95,3 +97,4 @@ package «tests» {}
 @[default_target] lean_lib Vec
 @[default_target] lean_lib VecDequeMethods
 @[default_target] lean_lib VecMethods
+@[default_target] lean_lib VecMethodsProofs
