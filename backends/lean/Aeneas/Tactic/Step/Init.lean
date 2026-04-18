@@ -770,13 +770,13 @@ structure StepPureSpecAttr where
    ```lean
    @[step_pure wrapping x y]
    theorem U32.wrapping_add_eq (x y : U32) :
-    (wrapping_add x y).bv = x.bv + y.bv
+    (wrapping_add x y).toBitVec = x.toBitVec + y.toBitVec
    ```
    `step_pure` performs operations which are equivalent to introducing the following lemma:
    ```lean
    @[step]
    theorem U32.wrapping_add_eq.step_spec (x y : U32) :
-    ↑(wrapping_add x y) ⦃ z => z.bv = x.bv + y.bv ⦄
+    ↑(wrapping_add x y) ⦃ z => z.toBitVec = x.toBitVec + y.toBitVec ⦄
    ```
 
    Note that it is possible to control how the output variable is decomposed in the generated lemma

@@ -150,7 +150,7 @@ example (x y : Int) (h : 0 ≤ x + y ∧ x + y ≤ 1000) : I32 := (x + y)#i32
 
 namespace Scalar.Examples
 
-  abbrev Array (a : Type) (len : U32) := { l : List a // l.length = len.val }
+  abbrev Array (a : Type) (len : U32) := { l : List a // l.length = len.toNat }
 
   -- Checking the syntax
   example : Array Int 0#u32 := ⟨ [], by simp ⟩

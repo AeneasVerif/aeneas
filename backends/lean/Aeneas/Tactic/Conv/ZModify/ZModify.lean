@@ -165,8 +165,8 @@ example (x y d : ℕ) (h0 : d > 0) (h1 : x <= y) (h2 : x % d <= y % d) (h3 : y -
   zmodify to d
 
 /-- Checking that unfolding of local declarations works properly -/
-example (x y : U32) (hx : x.val < 8) (hy : y.val < 8) :
-  let z := x.val + y.val
+example (x y : U32) (hx : x.toNat < 8) (hy : y.toNat < 8) :
+  let z := x.toNat + y.toNat
   z < 16 := by
   intro z
   zmodify [z]

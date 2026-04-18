@@ -91,7 +91,7 @@ def i32_default : Result Std.I32 := do
 /-- [scalars::match_usize]:
     Source: 'tests/src/scalars.rs', lines 63:0-68:1 -/
 def match_usize (x : Std.Usize) : Result Bool := do
-  match x.val with
+  match x.toNat with
   | 0 => ok true
   | 1 => ok true
   | 2 => ok true
@@ -100,7 +100,7 @@ def match_usize (x : Std.Usize) : Result Bool := do
 /-- [scalars::match_isize]:
     Source: 'tests/src/scalars.rs', lines 70:0-75:1 -/
 def match_isize (x : Std.Isize) : Result Std.Isize := do
-  match x.val with
+  match x.toInt with
   | 0 => ok 0#isize
   | -1 => ok 0#isize
   | 2 => ok 0#isize

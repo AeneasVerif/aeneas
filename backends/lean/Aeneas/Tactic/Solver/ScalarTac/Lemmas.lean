@@ -244,25 +244,25 @@ attribute [scalar_tac_simps]
   -- Int.subNatNat is very annoying - TODO: there is probably something more general thing to do
   Int.subNatNat_eq_coe
 
-@[scalar_tac x.val]
+@[scalar_tac x.toNat]
 theorem UScalar.bounds {ty : UScalarTy} (x : UScalar ty) :
-  x.val ≤ UScalar.max ty := by
+  x.toNat ≤ UScalar.max ty := by
   simp [UScalar.max]
   have := x.hBounds
   omega
 
-grind_pattern UScalar.bounds => UScalar.val x
-grind_pattern [agrind] UScalar.bounds => UScalar.val x
+grind_pattern UScalar.bounds => UScalar.toNat x
+grind_pattern [agrind] UScalar.bounds => UScalar.toNat x
 
-@[scalar_tac x.val]
+@[scalar_tac x.toInt]
 theorem IScalar.bounds {ty : IScalarTy} (x : IScalar ty) :
-  IScalar.min ty ≤ x.val ∧ x.val ≤ IScalar.max ty := by
+  IScalar.min ty ≤ x.toInt ∧ x.toInt ≤ IScalar.max ty := by
   simp [IScalar.max, IScalar.min]
   have := x.hBounds
   omega
 
-grind_pattern IScalar.bounds => IScalar.val x
-grind_pattern [agrind] IScalar.bounds => IScalar.val x
+grind_pattern IScalar.bounds => IScalar.toInt x
+grind_pattern [agrind] IScalar.bounds => IScalar.toInt x
 
 attribute [scalar_tac a.toNat] Int.toNat_eq_max
 
@@ -542,11 +542,11 @@ grind_pattern [agrind_nla] mod_lt => x % y
 -/
 
 /- Remark: we're omitting a similar theorem for `IScalar` because the theorem is a bit cumbersome
-   to use (it has to be expressed in terms of `x.bv.toNat`). -/
+   to use (it has to be expressed in terms of `x.toBitVec.toNat`). -/
 @[simp, scalar_tac_simps, grind =, agrind =]
-theorem UScalar.sizeOf {ty} (x : UScalar ty) : sizeOf x = x.val + 3 := by
+theorem UScalar.sizeOf {ty} (x : UScalar ty) : sizeOf x = x.toNat + 3 := by
   cases x; simp only [UScalar.mk.sizeOf_spec, BitVec.sizeOf, Fin.sizeOf, BitVec.val_toFin]
-  unfold UScalar.val
+  unfold UScalar.toNat
   simp only
   omega
 

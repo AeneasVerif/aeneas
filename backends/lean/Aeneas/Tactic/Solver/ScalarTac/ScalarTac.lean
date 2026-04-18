@@ -509,21 +509,21 @@ def scalarTac (config : Config) : TacticM Unit := do
     `scalar_tac`. For instance:
     ```
     @[scalar_tac_simps]
-    theorem UScalar.ofNat_val (x : UScalar ty) (hInBounds : x.val ≤ UScalar.cMax ty) :
+    theorem UScalar.ofNat_toNat (x : UScalar ty) (hInBounds : x.toNat ≤ UScalar.cMax ty) :
       UScalar.ofNat x hInBounds = x
     ```
-    allows reducing: `3#u32.val` to `3` during the preprocessing phase.
+    allows reducing: `3#u32.toNat` to `3` during the preprocessing phase.
   - `scalar_tac`: registers a lemma as a forward reasoning rule to be used during the preprocessing
     phase.
 
     Note that generally speaking it requires providing a pattern to guide the instantiations.
     For instance:
     ```
-    @[scalar_tac x.val]
-    theorem UScalar.bounds {ty : UScalarTy} (x : UScalar ty) : x.val ≤ UScalar.max ty := by
+    @[scalar_tac x.toNat]
+    theorem UScalar.bounds {ty : UScalarTy} (x : UScalar ty) : x.toNat ≤ UScalar.max ty := by
     ```
-    states that whenever we have an expression of the shape `x.val` in the context, we can
-    introduce the bound `x.val ≤ UScalar.max ty`.
+    states that whenever we have an expression of the shape `x.toNat` in the context, we can
+    introduce the bound `x.toNat ≤ UScalar.max ty`.
 
   **Decreasing proofs**:
   When proving that a termination measure decreases (i.e., a `decreasing_by` clause) you may want

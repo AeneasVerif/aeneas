@@ -52,7 +52,7 @@ abbrev Vec.len {α : Type u} (v : Vec α) : Usize :=
   Usize.ofNatCore v.val.length (by scalar_tac)
 
 @[simp, scalar_tac_simps]
-theorem Vec.len_val {α : Type u} (v : Vec α) : (Vec.len v).val = v.length :=
+theorem Vec.len_val {α : Type u} (v : Vec α) : (Vec.len v).toNat = v.length :=
   by simp
 
 grind_pattern Vec.len_val => v.length
@@ -72,32 +72,32 @@ theorem Vec.getElem?_Nat_eq {α : Type u} (v : Vec α) (i : Nat) : v[i]? = v.val
 theorem Vec.getElem!_Nat_eq {α : Type u} [Inhabited α] (v : Vec α) (i : Nat) : v[i]! = v.val[i]! := by rfl
 
 @[reducible] instance {α : Type u} : GetElem (Vec α) Usize α (fun a i => i < a.val.length) where
-  getElem a i h := getElem a.val i.val h
+  getElem a i h := getElem a.val i.toNat h
 
 @[reducible] instance {α : Type u} : GetElem? (Vec α) Usize α (fun a i => i < a.val.length) where
-  getElem? a i := getElem? a.val i.val
-  getElem! a i := getElem! a.val i.val
+  getElem? a i := getElem? a.val i.toNat
+  getElem! a i := getElem! a.val i.toNat
 
-@[simp, scalar_tac_simps, simp_lists_hyps_simps, grind =, agrind =] theorem Vec.getElem?_Usize_eq {α : Type u} (v : Vec α) (i : Usize) : v[i]? = v.val[i.val]? := by rfl
-@[simp, scalar_tac_simps, simp_lists_hyps_simps, grind =, agrind =] theorem Vec.getElem!_Usize_eq {α : Type u} [Inhabited α] (v : Vec α) (i : Usize) : v[i]! = v.val[i.val]! := by rfl
+@[simp, scalar_tac_simps, simp_lists_hyps_simps, grind =, agrind =] theorem Vec.getElem?_Usize_eq {α : Type u} (v : Vec α) (i : Usize) : v[i]? = v.val[i.toNat]? := by rfl
+@[simp, scalar_tac_simps, simp_lists_hyps_simps, grind =, agrind =] theorem Vec.getElem!_Usize_eq {α : Type u} [Inhabited α] (v : Vec α) (i : Usize) : v[i]! = v.val[i.toNat]! := by rfl
 
 @[simp, scalar_tac_simps, simp_lists_hyps_simps, grind, agrind] abbrev Vec.get? {α : Type u} (v : Vec α) (i : Nat) : Option α := getElem? v i
 @[simp, scalar_tac_simps, simp_lists_hyps_simps, grind, agrind] abbrev Vec.get! {α : Type u} [Inhabited α] (v : Vec α) (i : Nat) : α := getElem! v i
 
 def Vec.set {α : Type u} (v: Vec α) (i: Usize) (x: α) : Vec α :=
-  ⟨ v.val.set i.val x, by have := v.property; simp [*] ⟩
+  ⟨ v.val.set i.toNat x, by have := v.property; simp [*] ⟩
 
 def Vec.set_opt {α : Type u} (v: Vec α) (i: Usize) (x: Option α) : Vec α :=
-  ⟨ v.val.set_opt i.val x, by have := v.property; simp [*] ⟩
+  ⟨ v.val.set_opt i.toNat x, by have := v.property; simp [*] ⟩
 
 @[simp, scalar_tac_simps, simp_lists_hyps_simps, grind =, agrind =]
 theorem Vec.set_val_eq {α : Type u} (v: Vec α) (i: Usize) (x: α) :
-  (v.set i x) = v.val.set i.val x := by
+  (v.set i x) = v.val.set i.toNat x := by
   simp [set]
 
 @[simp, scalar_tac_simps, simp_lists_hyps_simps, grind =, agrind =]
 theorem Vec.set_opt_val_eq {α : Type u} (v: Vec α) (i: Usize) (x: Option α) :
-  (v.set_opt i x) = v.val.set_opt i.val x := by
+  (v.set_opt i x) = v.val.set_opt i.toNat x := by
   simp [set_opt]
 
 @[irreducible, rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::push" (keepParams := [true,false])]
@@ -117,39 +117,39 @@ theorem Vec.push_spec {α : Type u} (v : Vec α) (x : α) (h : v.val.length < Us
 
 @[rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::insert" (keepParams := [true, false])]
 def Vec.insert {α : Type u} (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
-  if i.val < v.length then
+  if i.toNat < v.length then
     ok ⟨ v.val.set i x, by have := v.property; simp [*] ⟩
   else
     fail arrayOutOfBounds
 
 @[step]
 theorem Vec.insert_spec {α : Type u} (v: Vec α) (i: Usize) (x: α)
-  (hbound : i.val < v.length) :
+  (hbound : i.toNat < v.length) :
   v.insert i x ⦃ nv => nv.val = v.val.set i x ⦄ := by
   simp [insert, *]
 
 def Vec.index_usize {α : Type u} (v: Vec α) (i: Usize) : Result α :=
-  match v[i.val]? with
+  match v[i.toNat]? with
   | none => fail .arrayOutOfBounds
   | some x => ok x
 
 @[step]
 theorem Vec.index_usize_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize)
-  (hbound : i.val < v.length) :
-  v.index_usize i ⦃ x => x = v.val[i.val]! ⦄ := by
+  (hbound : i.toNat < v.length) :
+  v.index_usize i ⦃ x => x = v.val[i.toNat]! ⦄ := by
   simp only [index_usize]
   simp at *
   simp [*]
 
 def Vec.update {α : Type u} (v: Vec α) (i: Usize) (x: α) : Result (Vec α) :=
-  match v.val[i.val]? with
+  match v.val[i.toNat]? with
   | none => fail .arrayOutOfBounds
   | some _ =>
     ok ⟨ v.val.set i x, by have := v.property; simp [*] ⟩
 
 @[step]
 theorem Vec.update_spec {α : Type u} (v: Vec α) (i: Usize) (x : α)
-  (hbound : i.val < v.length) :
+  (hbound : i.toNat < v.length) :
   v.update i x ⦃ nv => nv = v.set i x ⦄ := by
   simp only [update, set]
   simp at *
@@ -169,8 +169,8 @@ def Vec.index_mut_usize {α : Type u} (v: Vec α) (i: Usize) :
 
 @[step]
 theorem Vec.index_mut_usize_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize)
-  (hbound : i.val < v.length) :
-  v.index_mut_usize i ⦃ x y => x = v.val[i.val]! ∧ y = v.set i ⦄ := by
+  (hbound : i.toNat < v.length) :
+  v.index_mut_usize i ⦃ x y => x = v.val[i.toNat]! ∧ y = v.set i ⦄ := by
   simp only [index_mut_usize]
   have ⟨ x, h ⟩ := spec_imp_exists (index_usize_spec v i hbound)
   simp [h]
@@ -252,7 +252,7 @@ theorem Vec.index_RangeFrom_spec {α : Type} (v : Vec α) (r : core.ops.range.Ra
     Vec.index (core.slice.index.SliceIndexRangeFromUsizeSlice α) v r
     ⦃ s1 =>
       s1.val = v.val.drop r.start ∧
-      s1.length = v.length - r.start.val ⦄ := by
+      s1.length = v.length - r.start.toNat ⦄ := by
   simp only [Vec.index]
   have := core.slice.index.SliceIndexRangeFromUsizeSlice.index.step_spec r v h
   exact this
@@ -263,8 +263,8 @@ theorem Vec.index_mut_RangeFrom_spec {α : Type} (v : Vec α) (r : core.ops.rang
     Vec.index_mut (core.slice.index.SliceIndexRangeFromUsizeSlice α) v r
     ⦃ (s1, back) =>
       s1.val = v.val.drop r.start ∧
-      s1.length = v.length - r.start.val ∧
-      ∀ s', (back s').val = v.val.setSlice! r.start.val s'.val ⦄ := by
+      s1.length = v.length - r.start.toNat ∧
+      ∀ s', (back s').val = v.val.setSlice! r.start.toNat s'.val ⦄ := by
   simp only [Vec.index_mut]
   have := core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut.step_spec r v h
   exact this
@@ -289,7 +289,7 @@ theorem Vec.index_mut_Range_spec {α : Type} (v : Vec α) (r : core.ops.range.Ra
     ⦃ (s1, back) =>
       s1.val = v.val.slice r.start r.end ∧
       s1.length = r.end - r.start ∧
-      ∀ s2, back s2 = Slice.setSlice! v r.start.val s2 ⦄ := by
+      ∀ s2, back s2 = Slice.setSlice! v r.start.toNat s2 ⦄ := by
   simp only [Vec.index_mut]
   have := core.slice.index.SliceIndexRangeUsizeSlice.index_mut.step_spec r v h0 h1
   exact this
@@ -316,17 +316,17 @@ def alloc.slice.Slice.into_vec
 def alloc.vec.from_elem
   {T : Type} (cloneInst : core.clone.Clone T)
   (x : T) (n : Usize) : Result (alloc.vec.Vec T) := do
-  let l ← List.clone cloneInst.clone (List.replicate n.val x)
+  let l ← List.clone cloneInst.clone (List.replicate n.toNat x)
   ok ⟨ l.val, by have := l.property; scalar_tac ⟩
 
 @[step]
 theorem alloc.vec.from_elem_spec {T : Type} (cloneInst : core.clone.Clone T)
   (x : T) (n : Usize) (h : cloneInst.clone x = ok x) :
   alloc.vec.from_elem cloneInst x n ⦃ v =>
-  v.val = List.replicate n.val x ∧
-  v.length = n.val ⦄ := by
+  v.val = List.replicate n.toNat x ∧
+  v.length = n.toNat ⦄ := by
   unfold from_elem
-  have ⟨ l, h ⟩ := spec_imp_exists (@List.clone_spec _ cloneInst.clone (List.replicate n.val x) (by intros; simp_all))
+  have ⟨ l, h ⟩ := spec_imp_exists (@List.clone_spec _ cloneInst.clone (List.replicate n.toNat x) (by intros; simp_all))
   simp [h]
 
 @[rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::with_capacity" -canFail -lift]
@@ -369,7 +369,7 @@ def core.ops.deref.DerefMutVec {T : Type} :
 @[rust_fun "alloc::vec::{alloc::vec::Vec<@T>}::resize" (keepParams := [true,false])]
 def alloc.vec.Vec.resize {T : Type} (cloneInst : core.clone.Clone T)
   (v : alloc.vec.Vec T) (new_len : Usize) (value : T) : Result (alloc.vec.Vec T) := do
-  if new_len.val < v.length then
+  if new_len.toNat < v.length then
     ok ⟨ v.val.resize new_len value, by scalar_tac ⟩
   else
     let value ← cloneInst.clone value

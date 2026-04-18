@@ -30,16 +30,16 @@ Unsigned checked div
 -/
 theorem core.num.checked_div_UScalar_bv_spec {ty} (x y : UScalar ty) :
   match core.num.checked_div_UScalar x y with
-  | some z => y.val ≠ 0 ∧ z.val = x.val / y.val ∧ z.bv = x.bv / y.bv
-  | none => y.val = 0 := by
+  | some z => y.toNat ≠ 0 ∧ z.toNat = x.toNat / y.toNat ∧ z.toBitVec = x.toBitVec / y.toBitVec
+  | none => y.toNat = 0 := by
   simp [checked_div_UScalar, Option.ofResult, UScalar.div]
   split_ifs
   . zify at *
     simp_all
   . rename_i hnz
     simp
-    have hnz' : y.val ≠ 0 := by zify at *; simp_all
-    have ⟨ z, hz ⟩ := UScalar.div_bv_spec x hnz'
+    have hnz' : y.toNat ≠ 0 := by zify at *; simp_all
+    have ⟨ z, hz ⟩ := UScalar.div_toBitVec_spec x hnz'
     have : x / y = x.div y := by rfl
     simp [this, UScalar.div, hnz] at hz
     simp [hz, hnz']
@@ -47,10 +47,10 @@ theorem core.num.checked_div_UScalar_bv_spec {ty} (x y : UScalar ty) :
 uscalar @[step_pure «%S».checked_div x y]
 theorem «%S».checked_div_bv_spec (x y : «%S») :
   match «%S».checked_div x y with
-  | some z => y.val ≠ 0 ∧ z.val = x.val / y.val ∧ z.bv = x.bv / y.bv
-  | none => y.val = 0 := by
+  | some z => y.toNat ≠ 0 ∧ z.toNat = x.toNat / y.toNat ∧ z.toBitVec = x.toBitVec / y.toBitVec
+  | none => y.toNat = 0 := by
   have := core.num.checked_div_UScalar_bv_spec x y
-  simp_all [«%S».checked_div, «%S».bv]
+  simp_all [«%S».checked_div, «%S».toBitVec]
   cases h: core.num.checked_div_UScalar x y <;> simp_all
 
 /-!
@@ -58,16 +58,16 @@ Signed checked div
 -/
 theorem core.num.checked_div_IScalar_bv_spec {ty} (x y : IScalar ty) :
   match core.num.checked_div_IScalar x y with
-  | some z => y.val ≠ 0 ∧ ¬ (x.val = IScalar.min ty ∧ y.val = -1) ∧ z.val = Int.tdiv x.val y.val ∧ z.bv = BitVec.sdiv x.bv y.bv
-  | none => y.val = 0 ∨ (x.val = IScalar.min ty ∧ y.val = -1) := by
+  | some z => y.toInt ≠ 0 ∧ ¬ (x.toInt = IScalar.min ty ∧ y.toInt = -1) ∧ z.toInt = Int.tdiv x.toInt y.toInt ∧ z.toBitVec = BitVec.sdiv x.toBitVec y.toBitVec
+  | none => y.toInt = 0 ∨ (x.toInt = IScalar.min ty ∧ y.toInt = -1) := by
   simp [checked_div_IScalar, Option.ofResult, IScalar.div]
   split_ifs
   . zify at *
     simp_all
   . rename_i hnz hNoOverflow
     simp
-    have hnz' : y.val ≠ 0 := by zify at *; simp_all
-    have ⟨ z, hz ⟩ := @IScalar.div_bv_spec _ x y hnz' (by simp; tauto)
+    have hnz' : y.toInt ≠ 0 := by zify at *; simp_all
+    have ⟨ z, hz ⟩ := @IScalar.div_toBitVec_spec _ x y hnz' (by simp; tauto)
     have : x / y = x.div y := by rfl
     simp [this, IScalar.div, hnz] at hz
     split_ifs at hz
@@ -79,10 +79,10 @@ theorem core.num.checked_div_IScalar_bv_spec {ty} (x y : IScalar ty) :
 iscalar @[step_pure «%S».checked_div x y]
 theorem «%S».checked_div_bv_spec (x y : «%S») :
   match core.num.checked_div_IScalar x y with
-  | some z => y.val ≠ 0 ∧ ¬ (x.val = «%S».min ∧ y.val = -1) ∧ z.val = Int.tdiv x.val y.val ∧ z.bv = BitVec.sdiv x.bv y.bv
-  | none => y.val = 0 ∨ (x.val = «%S».min ∧ y.val = -1) := by
+  | some z => y.toInt ≠ 0 ∧ ¬ (x.toInt = «%S».min ∧ y.toInt = -1) ∧ z.toInt = Int.tdiv x.toInt y.toInt ∧ z.toBitVec = BitVec.sdiv x.toBitVec y.toBitVec
+  | none => y.toInt = 0 ∨ (x.toInt = «%S».min ∧ y.toInt = -1) := by
   have := core.num.checked_div_IScalar_bv_spec x y
-  simp_all only [«%S».bv, IScalar.min, «%S».min, «%S».numBits]
+  simp_all only [«%S».toBitVec, IScalar.min, «%S».min, «%S».numBits]
   cases h: core.num.checked_div_IScalar x y <;> simp_all only [ne_eq, not_false_eq_true, and_self]
 
 end Aeneas.Std

@@ -12,7 +12,7 @@ open Result Error Arith
 # Negation: Definitions
 -/
 @[step_pure_def]
-def IScalar.neg {ty : IScalarTy} (x : IScalar ty) : Result (IScalar ty) := IScalar.tryMk ty (- x.val)
+def IScalar.neg {ty : IScalarTy} (x : IScalar ty) : Result (IScalar ty) := IScalar.tryMk ty (- x.toInt)
 
 /--
 The notation typeclass for heterogeneous negation.

@@ -12,10 +12,10 @@ open Result Error Arith ScalarElab WP
 # Remainder: Definitions
 -/
 def UScalar.rem {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
-  if y.val != 0 then ok ⟨ BitVec.umod x.bv y.bv ⟩ else fail divisionByZero
+  if y.toNat != 0 then ok ⟨ BitVec.umod x.toBitVec y.toBitVec ⟩ else fail divisionByZero
 
 def IScalar.rem {ty : IScalarTy} (x y : IScalar ty) : Result (IScalar ty) :=
-  if y.val != 0 then ok ⟨ BitVec.srem x.bv y.bv ⟩
+  if y.toInt != 0 then ok ⟨ BitVec.srem x.toBitVec y.toBitVec ⟩
   else fail divisionByZero
 
 def UScalar.try_rem {ty : UScalarTy} (x y : UScalar ty) : Option (UScalar ty) :=
@@ -51,17 +51,17 @@ namespace Tests
   #assert Int.tmod (-7) (-3) = -1
 
   -- Checking that the signed operation over bit-vectors agrees with Rust
-  private def bv_srem (x y : Int) : Int :=
+  private def toBitVec_srem (x y : Int) : Int :=
     (BitVec.srem (BitVec.ofInt 32 x) (BitVec.ofInt 32 y)).toInt
 
-  #assert bv_srem 1 2 = 1
-  #assert bv_srem (-1) 2 = -1
-  #assert bv_srem 1 (-2) = 1
-  #assert bv_srem (-1) (-2) = -1
-  #assert bv_srem 7 3 = (1:Int)
-  #assert bv_srem (-7) 3 = -1
-  #assert bv_srem 7 (-3) = 1
-  #assert bv_srem (-7) (-3) = -1
+  #assert toBitVec_srem 1 2 = 1
+  #assert toBitVec_srem (-1) 2 = -1
+  #assert toBitVec_srem 1 (-2) = 1
+  #assert toBitVec_srem (-1) (-2) = -1
+  #assert toBitVec_srem 7 3 = (1:Int)
+  #assert toBitVec_srem (-7) 3 = -1
+  #assert toBitVec_srem 7 (-3) = 1
+  #assert toBitVec_srem (-7) (-3) = -1
 end Tests
 
 /-!
@@ -73,55 +73,55 @@ Theorems with a specification which uses integers and bit-vectors
 -/
 
 /-- Generic theorem - shouldn't be used much -/
-theorem UScalar.rem_bv_spec {ty} (x : UScalar ty) {y : UScalar ty} (hzero : y.val ≠ 0) :
-  x % y ⦃ z => (↑z : Nat) = ↑x % ↑y ∧ z.bv = x.bv % y.bv ⦄ := by
+theorem UScalar.rem_toBitVec_spec {ty} (x : UScalar ty) {y : UScalar ty} (hzero : y.toNat ≠ 0) :
+  x % y ⦃ z => (↑z : Nat) = ↑x % ↑y ∧ z.toBitVec = x.toBitVec % y.toBitVec ⦄ := by
   conv => arg 1; simp [HMod.hMod]
   simp [hzero, rem]
-  simp only [val]
+  simp only [toNat]
   simp
 
 /-- Generic theorem - shouldn't be used much -/
-theorem IScalar.rem_bv_spec {ty} (x : IScalar ty) {y : IScalar ty} (hzero : y.val ≠ 0) :
-  x % y ⦃ z => (↑z : Int) = Int.tmod ↑x ↑y ∧ z.bv = BitVec.srem x.bv y.bv ⦄ := by
+theorem IScalar.rem_toBitVec_spec {ty} (x : IScalar ty) {y : IScalar ty} (hzero : y.toInt ≠ 0) :
+  x % y ⦃ z => (↑z : Int) = Int.tmod ↑x ↑y ∧ z.toBitVec = BitVec.srem x.toBitVec y.toBitVec ⦄ := by
   conv => arg 1; simp [HMod.hMod]
   simp only [spec_ok, rem, bne_iff_ne, ne_eq, hzero, not_false_eq_true, ↓reduceIte]
-  simp only [val]
-  simp only [BitVec.toInt_srem, bv_toInt_eq, and_true]
+  simp only [toInt]
+  simp only [BitVec.toInt_srem, toBitVec_toInt_eq, and_true]
 
 
-uscalar theorem «%S».rem_bv_spec (x : «%S») {y : «%S»} (hnz : y.val ≠ 0) :
-  x % y ⦃ z => (↑z : Nat) = ↑x % ↑y ∧ z.bv = x.bv % y.bv ⦄ :=
-  UScalar.rem_bv_spec x hnz
+uscalar theorem «%S».rem_bv_spec (x : «%S») {y : «%S»} (hnz : y.toNat ≠ 0) :
+  x % y ⦃ z => (↑z : Nat) = ↑x % ↑y ∧ z.toBitVec = x.toBitVec % y.toBitVec ⦄ :=
+  UScalar.rem_toBitVec_spec x hnz
 
-iscalar theorem «%S».rem_bv_spec (x : «%S») {y : «%S»} (hnz : y.val ≠ 0) :
-  x % y ⦃ z => (↑z : Int) = Int.tmod ↑x ↑y ∧ z.bv = BitVec.srem x.bv y.bv ⦄ :=
-  IScalar.rem_bv_spec x hnz
+iscalar theorem «%S».rem_bv_spec (x : «%S») {y : «%S»} (hnz : y.toInt ≠ 0) :
+  x % y ⦃ z => (↑z : Int) = Int.tmod ↑x ↑y ∧ z.toBitVec = BitVec.srem x.toBitVec y.toBitVec ⦄ :=
+  IScalar.rem_toBitVec_spec x hnz
 
 /-!
 Theorems with a specification which only uses integers
 -/
 
 /-- Generic theorem - shouldn't be used much -/
-theorem UScalar.rem_spec {ty} (x : UScalar ty) {y : UScalar ty} (hzero : y.val ≠ 0) :
+theorem UScalar.rem_spec {ty} (x : UScalar ty) {y : UScalar ty} (hzero : y.toNat ≠ 0) :
   x % y ⦃ z => (↑z : Nat) = ↑x % ↑y ⦄ := by
   apply spec_mono
-  · apply rem_bv_spec x hzero
+  · apply UScalar.rem_toBitVec_spec x hzero
   · intros x' h
     exact h.1
 
 /-- Generic theorem - shouldn't be used much -/
-theorem IScalar.rem_spec {ty} (x : IScalar ty) {y : IScalar ty} (hzero : y.val ≠ 0) :
+theorem IScalar.rem_spec {ty} (x : IScalar ty) {y : IScalar ty} (hzero : y.toInt ≠ 0) :
   x % y ⦃ z => (↑z : Int) = Int.tmod ↑x ↑y ⦄ := by
   apply spec_mono
-  · apply rem_bv_spec x hzero
+  · apply IScalar.rem_toBitVec_spec x hzero
   · intros x' h
     exact h.1
 
-uscalar @[step] theorem «%S».rem_spec (x : «%S») {y : «%S»} (hnz : y.val ≠ 0) :
+uscalar @[step] theorem «%S».rem_spec (x : «%S») {y : «%S»} (hnz : y.toNat ≠ 0) :
   x % y ⦃ z => (↑z : Nat) = ↑x % ↑y ⦄ :=
   UScalar.rem_spec x hnz
 
-iscalar @[step] theorem «%S».rem_spec (x : «%S») {y : «%S»} (hnz : y.val ≠ 0) :
+iscalar @[step] theorem «%S».rem_spec (x : «%S») {y : «%S»} (hnz : y.toInt ≠ 0) :
   x % y ⦃ z => (↑z : Int) = Int.tmod ↑x ↑y ⦄ :=
   IScalar.rem_spec x hnz
 

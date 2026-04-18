@@ -72,7 +72,7 @@ attribute [natify] BitVec.toNat_eq BitVec.lt_def BitVec.le_def
                    BitVec.toNat_ofNat BitVec.toNat_and BitVec.toNat_or BitVec.toNat_xor
 attribute [natify] ZMod.eq_iff_mod ZMod.val_add ZMod.val_sub ZMod.val_mul ZMod.val_sub'
                    ZMod.val_natCast ZMod.natCast_val
-attribute [natify] U8.bv_toNat U16.bv_toNat U32.bv_toNat U64.bv_toNat U128.bv_toNat Usize.bv_toNat UScalar.bv_toNat
+attribute [natify] U8.toBitVec_toNat U16.toBitVec_toNat U32.toBitVec_toNat U64.toBitVec_toNat U128.toBitVec_toNat Usize.toBitVec_toNat UScalar.toBitVec_toNat
 attribute [natify] Nat.cast_ofNat
 
 example (x y : BitVec 32) (h : x.toNat = y.toNat) : x = y := by natify [h]

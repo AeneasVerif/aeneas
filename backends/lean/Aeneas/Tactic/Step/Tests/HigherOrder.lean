@@ -22,8 +22,8 @@ info: Try this:
     agrind
 -/
 #guard_msgs in
-example (a : U32) (h : a.val + 1 ≤ U32.max) :
-    applyF (fun x => x + 1#u32) a ⦃ y => y.val = a.val + 1 ⦄ := by
+example (a : U32) (h : a.toNat + 1 ≤ U32.max) :
+    applyF (fun x => x + 1#u32) a ⦃ y => y.toNat = a.toNat + 1 ⦄ := by
   step*? +inferPost
 
 -- Higher-order in 2 functions, operates on a pair of inputs/outputs
@@ -49,8 +49,8 @@ info: Try this:
     agrind
 -/
 #guard_msgs in
-example (x y : U32) (hx : x.val + 1 ≤ U32.max) (hy : y.val + 2 ≤ U32.max) :
-    callPair (fun a => a + 1#u32) (fun b => b + 2#u32) (x, y) ⦃ ab => ab.1.val = x.val + 1 ∧ ab.2.val = y.val + 2 ⦄ := by
+example (x y : U32) (hx : x.toNat + 1 ≤ U32.max) (hy : y.toNat + 2 ≤ U32.max) :
+    callPair (fun a => a + 1#u32) (fun b => b + 2#u32) (x, y) ⦃ ab => ab.1.toNat = x.toNat + 1 ∧ ab.2.toNat = y.toNat + 2 ⦄ := by
   step*? +inferPost
 
 -- Calls f then g in sequence
@@ -78,8 +78,8 @@ info: Try this:
     agrind
 -/
 #guard_msgs in
-example (x : U32) (h1 : x.val + 1 ≤ U32.max) (h2 : x.val + 2 ≤ U32.max) :
-    callFThenG (fun a => a + 1#u32) (fun b => b + 1#u32) x ⦃ y => y.val = x.val + 2 ⦄ := by
+example (x : U32) (h1 : x.toNat + 1 ≤ U32.max) (h2 : x.toNat + 2 ≤ U32.max) :
+    callFThenG (fun a => a + 1#u32) (fun b => b + 1#u32) x ⦃ y => y.toNat = x.toNat + 2 ⦄ := by
   step*? +inferPost
 
 def callSlicemapM (x : Slice U32) : Result (Slice U32) := do
@@ -99,7 +99,7 @@ info: Try this:
 example (s : Slice U32) (h : ∀ i (hi : i < s.len), s[i] < U32.max) :
   callSlicemapM s ⦃ s' =>
     s'.len = s.len ∧
-    ∀ i (hi₁ : i < s.len) (hi₂ : i < s'.len), s'[i].val = s[i].val + 1
+    ∀ i (hi₁ : i < s.len) (hi₂ : i < s'.len), s'[i].toNat = s[i].toNat + 1
     ⦄ := by
   unfold callSlicemapM
   step*? +inferPost
@@ -126,7 +126,7 @@ info: Try this:
 example (s : Slice U32) (h : ∀ i (hi : i < s.len), (s[i] + 1) * (s[i] + 1) ≤ U32.max) :
   callSlicemapMTwice s ⦃ s' =>
     s'.len = s.len ∧
-    ∀ i (hi₁ : i < s.len) (hi₂ : i < s'.len), s'[i].val = (s[i].val + 1) * (s[i].val + 1)
+    ∀ i (hi₁ : i < s.len) (hi₂ : i < s'.len), s'[i].toNat = (s[i].toNat + 1) * (s[i].toNat + 1)
     ⦄ := by
   unfold callSlicemapMTwice
   step*? +inferPost

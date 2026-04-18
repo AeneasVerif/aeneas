@@ -47,7 +47,7 @@ abbrev Slice.len {α : Type u} (v : Slice α) : Usize :=
   Usize.ofNatCore v.val.length (by scalar_tac)
 
 @[simp, scalar_tac_simps]
-theorem Slice.len_val {α : Type u} (v : Slice α) : (Slice.len v).val = v.length :=
+theorem Slice.len_toNat {α : Type u} (v : Slice α) : (Slice.len v).toNat = v.length :=
   by simp
 
 @[reducible] instance {α : Type u} : GetElem (Slice α) Nat α (fun a i => i < a.val.length) where
@@ -65,19 +65,21 @@ theorem Slice.getElem?_Nat_eq {α : Type u} (v : Slice α) (i : Nat) : v[i]? = v
 
 @[simp, scalar_tac_simps, simp_lists_hyps_simps]
 theorem Slice.getElem!_Nat_eq {α : Type u} [Inhabited α] (v : Slice α) (i : Nat) : v[i]! = v.val[i]! := by
-  simp only [instGetElem?SliceNatLtLengthValListLeMax, List.getElem!_eq_getElem?_getD]; split <;> simp_all
-  rfl
+  rw [List.getElem!_eq_getElem?_getD]
+  show (v[i]?).getD default = (v.val[i]?).getD default
+  congr 1
 
-@[reducible] instance {α : Type u} : GetElem (Slice α) Usize α (fun a i => i.val < a.val.length) where
-  getElem a i h := getElem a.val i.val h
+@[reducible] instance {α : Type u} : GetElem (Slice α) Usize α (fun a i => i.toNat < a.val.length) where
+  getElem a i h := getElem a.val i.toNat h
 
 @[reducible] instance {α : Type u} : GetElem? (Slice α) Usize α (fun a i => i < a.val.length) where
-  getElem? a i := getElem? a.val i.val
+  getElem? a i := getElem? a.val i.toNat
 
-@[simp, scalar_tac_simps, simp_lists_hyps_simps] theorem Slice.getElem?_Usize_eq {α : Type u} (v : Slice α) (i : Usize) : v[i]? = v.val[i.val]? := by rfl
-@[simp, scalar_tac_simps, simp_lists_hyps_simps] theorem Slice.getElem!_Usize_eq {α : Type u} [Inhabited α] (v : Slice α) (i : Usize) : v[i]! = v.val[i.val]! := by
-  simp only [instGetElem?SliceUsizeLtNatValLengthValListLeMax, List.getElem!_eq_getElem?_getD]; split <;> simp_all
-  rfl
+@[simp, scalar_tac_simps, simp_lists_hyps_simps] theorem Slice.getElem?_Usize_eq {α : Type u} (v : Slice α) (i : Usize) : v[i]? = v.val[i.toNat]? := by rfl
+@[simp, scalar_tac_simps, simp_lists_hyps_simps] theorem Slice.getElem!_Usize_eq {α : Type u} [Inhabited α] (v : Slice α) (i : Usize) : v[i]! = v.val[i.toNat]! := by
+  rw [List.getElem!_eq_getElem?_getD]
+  show (v[i]?).getD default = (v.val[i.toNat]?).getD default
+  congr 1
 
 @[simp, scalar_tac_simps, simp_lists_hyps_simps] abbrev Slice.get? {α : Type u} (v : Slice α) (i : Nat) : Option α := getElem? v i
 @[simp, scalar_tac_simps, simp_lists_hyps_simps] abbrev Slice.get! {α : Type u} [Inhabited α] (v : Slice α) (i : Nat) : α := getElem! v i
@@ -86,13 +88,13 @@ def Slice.setAtNat {α : Type u} (v: Slice α) (i: Nat) (x: α) : Slice α :=
   ⟨ v.val.set i x, by have := v.property; simp [*] ⟩
 
 def Slice.set {α : Type u} (v: Slice α) (i: Usize) (x: α) : Slice α :=
-  Slice.setAtNat v i.val x
+  Slice.setAtNat v i.toNat x
 
 def Slice.set_opt {α : Type u} (v: Slice α) (i: Usize) (x: Option α) : Slice α :=
-  ⟨ v.val.set_opt i.val x, by have := v.property; simp [*] ⟩
+  ⟨ v.val.set_opt i.toNat x, by have := v.property; simp [*] ⟩
 
 def Slice.drop {α} (s : Slice α) (i : Usize) : Slice α :=
-  ⟨ s.val.drop i.val, by scalar_tac ⟩
+  ⟨ s.val.drop i.toNat, by scalar_tac ⟩
 
 @[simp, simp_lists_safe]
 theorem Slice.getElem!_val_drop {T} (s : Slice T) (i : Usize) :
@@ -122,20 +124,20 @@ theorem core.slice.Slice.is_empty_spec {T : Type} (s : Slice T) :
 
 @[step]
 theorem Slice.index_usize_spec {α : Type u} [Inhabited α] (v: Slice α) (i: Usize)
-  (hbound : i.val < v.length) :
-  v.index_usize i ⦃ x => x = v.val[i.val]! ⦄ := by
+  (hbound : i.toNat < v.length) :
+  v.index_usize i ⦃ x => x = v.val[i.toNat]! ⦄ := by
   simp only [index_usize]
   simp only [length, getElem?_Usize_eq] at *
   simp only [List.getElem?_eq_getElem, List.getElem!_eq_getElem?_getD, Option.getD_some, hbound, spec_ok]
 
 @[simp, scalar_tac_simps, simp_lists_hyps_simps, grind =]
 theorem Slice.set_val_eq {α : Type u} (v: Slice α) (i: Usize) (x: α) :
-  (v.set i x) = v.val.set i.val x := by
+  (v.set i x) = v.val.set i.toNat x := by
   simp [set, setAtNat]
 
 @[simp, scalar_tac_simps, simp_lists_hyps_simps]
 theorem Slice.set_opt_val_eq {α : Type u} (v: Slice α) (i: Usize) (x: Option α) :
-  (v.set_opt i x) = v.val.set_opt i.val x := by
+  (v.set_opt i x) = v.val.set_opt i.toNat x := by
   simp [set_opt]
 
 
@@ -147,14 +149,14 @@ Otherwise we might lose a lot of time reordering the `set` expressions.
 @[simp↓, simp_lists_safe↓]
 theorem Slice.getElem!_Usize_set_ne
   {α : Type u} [Inhabited α] (a: Slice α) (i j : Usize) (x: α)
-  (h : i.val ≠ j.val) : (a.set i x)[j]! = a[j]!
+  (h : i.toNat ≠ j.toNat) : (a.set i x)[j]! = a[j]!
   := by
   simp only [getElem!_Usize_eq, set_val_eq]; grind
 
 @[simp↓, simp_lists_safe↓]
 theorem Slice.getElem!_Usize_set_eq
   {α : Type u} [Inhabited α] (a: Slice α) (i i' : Usize) (x: α)
-  (h : i = i' ∧ i'.val < a.length) : getElem! (a.set i x) i' = x
+  (h : i = i' ∧ i'.toNat < a.length) : getElem! (a.set i x) i' = x
   := by
   simp only [getElem!_Usize_eq, set_val_eq]; grind
 
@@ -166,13 +168,13 @@ Otherwise we might lose a lot of time reordering the `set` expressions.
 @[simp↓, simp_lists_safe↓]
 theorem Slice.getElem!_Nat_set_ne
   {α : Type u} [Inhabited α] (a: Slice α) (i : Usize) (j : Nat) (x: α)
-  (h : i.val ≠ j) : (a.set i x)[j]! = a[j]!
+  (h : i.toNat ≠ j) : (a.set i x)[j]! = a[j]!
   := by simp only [getElem!_Nat_eq, set_val_eq]; grind
 
 @[simp↓, simp_lists_safe↓]
 theorem Slice.getElem!_Nat_set_eq
   {α : Type u} [Inhabited α] (a: Slice α) (i : Usize) (i' : Nat) (x: α)
-  (h : i.val = i' ∧ i' < a.length) : getElem! (a.set i x) i' = x
+  (h : i.toNat = i' ∧ i' < a.length) : getElem! (a.set i x) i' = x
   := by simp only [getElem!_Nat_eq, set_val_eq]; grind
 
 @[simp_lists_safe]
@@ -193,14 +195,14 @@ theorem Slice.set_length {α : Type u} (v: Slice α) (i: Usize) (x: α) :
   (v.set i x).length = v.length := by simp
 
 def Slice.update {α : Type u} (v: Slice α) (i: Usize) (x: α) : Result (Slice α) :=
-  match v.val[i.val]? with
+  match v.val[i.toNat]? with
   | none => fail .arrayOutOfBounds
   | some _ =>
-    ok ⟨ v.val.set i.val x, by have := v.property; simp [*] ⟩
+    ok ⟨ v.val.set i.toNat x, by have := v.property; simp [*] ⟩
 
 @[step]
 theorem Slice.update_spec {α : Type u} (v: Slice α) (i: Usize) (x : α)
-  (hbound : i.val < v.length) :
+  (hbound : i.toNat < v.length) :
   v.update i x ⦃ nv => nv = v.set i x ⦄ := by
   simp only [update, set, setAtNat]
   simp at *
@@ -213,53 +215,53 @@ def Slice.index_mut_usize {α : Type u} (v: Slice α) (i: Usize) :
 
 @[step]
 theorem Slice.index_mut_usize_spec {α : Type u} [Inhabited α] (v: Slice α) (i: Usize)
-  (hbound : i.val < v.length) :
-  v.index_mut_usize i ⦃ p => p = (v.val[i.val]!, Slice.set v i) ⦄ := by
+  (hbound : i.toNat < v.length) :
+  v.index_mut_usize i ⦃ p => p = (v.val[i.toNat]!, Slice.set v i) ⦄ := by
   simp only [index_mut_usize, Bind.bind, bind]
   have ⟨ x, h ⟩ := spec_imp_exists (Slice.index_usize_spec v i hbound)
   simp [h]
 
 @[simp]
 theorem Slice.update_index_eq α [Inhabited α] (x : Slice α) (i : Usize) :
-  x.set i (x.val[i.val]!) = x := by
+  x.set i (x.val[i.toNat]!) = x := by
   simp only [Slice, Subtype.ext_iff, set_val_eq, List.set_getElem!]
 
 def Slice.subslice {α : Type u} (s : Slice α) (r : Range Usize) : Result (Slice α) :=
   -- TODO: not completely sure here
-  if r.start.val < r.end.val ∧ r.end.val ≤ s.length then
-    ok ⟨ s.val.slice r.start.val r.end.val,
+  if r.start.toNat < r.end.toNat ∧ r.end.toNat ≤ s.length then
+    ok ⟨ s.val.slice r.start.toNat r.end.toNat,
           by
-            have := s.val.slice_length_le r.start.val r.end.val
+            have := s.val.slice_length_le r.start.toNat r.end.toNat
             scalar_tac ⟩
   else
     fail panic
 
 @[step]
 theorem Slice.subslice_spec {α : Type u} [Inhabited α] (s : Slice α) (r : Range Usize)
-  (h0 : r.start.val < r.end.val) (h1 : r.end.val ≤ s.val.length) :
-  subslice s r ⦃ ns => ns.val = s.slice r.start.val r.end.val ∧
-  (∀ i, i + r.start.val < r.end.val → ns[i]! = s[r.start.val + i]!) ⦄
+  (h0 : r.start.toNat < r.end.toNat) (h1 : r.end.toNat ≤ s.val.length) :
+  subslice s r ⦃ ns => ns.val = s.slice r.start.toNat r.end.toNat ∧
+  (∀ i, i + r.start.toNat < r.end.toNat → ns[i]! = s[r.start.toNat + i]!) ⦄
   := by
   simp_all only [subslice, length, and_self, ite_true, slice, spec_ok, true_and]
   intro i _
-  have := List.getElem!_slice r.start.val r.end.val i s.val (by scalar_tac)
+  have := List.getElem!_slice r.start.toNat r.end.toNat i s.val (by scalar_tac)
   simp only [List.getElem!_eq_getElem?_getD, getElem!_Nat_eq] at *
   apply this
 
 def Slice.update_subslice {α : Type u} (s : Slice α) (r : Range Usize) (ss : Slice α) : Result (Slice α) :=
   -- TODO: not completely sure here
-  if h: r.start.val < r.end.val ∧ r.end.val ≤ s.length ∧ ss.val.length = r.end.val - r.start.val then
-    ok ⟨ s.val.setSlice! r.start.val ss.val, by scalar_tac ⟩
+  if h: r.start.toNat < r.end.toNat ∧ r.end.toNat ≤ s.length ∧ ss.val.length = r.end.toNat - r.start.toNat then
+    ok ⟨ s.val.setSlice! r.start.toNat ss.val, by scalar_tac ⟩
   else
     fail panic
 
 @[step]
 theorem Slice.update_subslice_spec {α : Type u} [Inhabited α] (a : Slice α) (r : Range Usize) (ss : Slice α)
-  (_ : r.start.val < r.end.val) (_ : r.end.val ≤ a.length) (_ : ss.length = r.end.val - r.start.val) :
+  (_ : r.start.toNat < r.end.toNat) (_ : r.end.toNat ≤ a.length) (_ : ss.length = r.end.toNat - r.start.toNat) :
   update_subslice a r ss ⦃ na =>
-    (∀ i, i < r.start.val → na[i]! = a[i]!) ∧
-    (∀ i, r.start.val ≤ i → i < r.end.val → na[i]! = ss[i - r.start.val]!) ∧
-    (∀ i, r.end.val ≤ i → i < a.length → na[i]! = a[i]!) ⦄ := by
+    (∀ i, i < r.start.toNat → na[i]! = a[i]!) ∧
+    (∀ i, r.start.toNat ≤ i → i < r.end.toNat → na[i]! = ss[i - r.start.toNat]!) ∧
+    (∀ i, r.end.toNat ≤ i → i < a.length → na[i]! = a[i]!) ⦄ := by
   simp only [update_subslice, length, and_self, ↓reduceDIte, getElem!_Nat_eq,
     spec_ok, *]
   simp_lists
@@ -518,7 +520,7 @@ def core.slice.index.SliceIndexUsizeSlice (T : Type) :
 
 @[step]
 theorem core.slice.Slice.get_unchecked_SliceIndexUsizeSlice_spec {T s i} [Inhabited T]
-  (h : i.val < s.length) :
+  (h : i.toNat < s.length) :
   core.slice.Slice.get_unchecked  (core.slice.index.SliceIndexUsizeSlice T) s i
   ⦃ x => x = s[i] ⦄ := by
   sorry
@@ -544,8 +546,8 @@ def core.slice.index.SliceIndexRangeFromUsizeSlice.get_mut
         fun s' => match s' with
         | none => s
         | some s' =>
-          if h: s'.length + s.length - r.start.val ≤ Usize.max then
-            ⟨ s'.val ++ s.val.drop r.start.val, by scalar_tac ⟩
+          if h: s'.length + s.length - r.start.toNat ≤ Usize.max then
+            ⟨ s'.val ++ s.val.drop r.start.toNat, by scalar_tac ⟩
           else s)
   else ok (none, fun _ => s)
 
@@ -564,7 +566,7 @@ def core.slice.index.SliceIndexRangeFromUsizeSlice.get_unchecked_mut {T : Type} 
 @[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFrom<usize>, [@T], [@T]>}::index"]
 def core.slice.index.SliceIndexRangeFromUsizeSlice.index {T : Type}
   (r : core.ops.range.RangeFrom Usize) (s : Slice T) : Result (Slice T) :=
-  if r.start.val ≤ s.length then
+  if r.start.toNat ≤ s.length then
     ok (s.drop r.start)
   else fail .undef
 
@@ -636,10 +638,10 @@ theorem Slice.clone_spec {T : Type} {clone : T → Result T} {s : Slice T} (h : 
 def core.slice.Slice.split_at {T : Type} (s : Slice T) (n : Usize) :
   Result ((Slice T) × (Slice T)) :=
   if h0 : n ≤ s.length then
-    let s0 := (s.val.splitAt n.val).fst
-    let s1 := (s.val.splitAt n.val).snd
-    let s0 : Slice T := ⟨ s0, by have := List.splitAt_length n.val s.val; have := s.property; simp +zetaDelta at *; omega  ⟩
-    let s1 : Slice T := ⟨ s1, by have := List.splitAt_length n.val s.val; have := s.property; simp +zetaDelta at *; omega  ⟩
+    let s0 := (s.val.splitAt n.toNat).fst
+    let s1 := (s.val.splitAt n.toNat).snd
+    let s0 : Slice T := ⟨ s0, by have := List.splitAt_length n.toNat s.val; have := s.property; simp +zetaDelta at *; omega  ⟩
+    let s1 : Slice T := ⟨ s1, by have := List.splitAt_length n.toNat s.val; have := s.property; simp +zetaDelta at *; omega  ⟩
     ok (s0, s1)
   else fail .panic
 
@@ -647,17 +649,17 @@ def core.slice.Slice.split_at {T : Type} (s : Slice T) (n : Usize) :
 def core.slice.Slice.split_at_mut {T : Type} (s : Slice T) (n : Usize) :
   Result (((Slice T) × (Slice T)) × (((Slice T) × (Slice T)) → Slice T)) :=
   if h0 : n ≤ s.length then
-    let s0 := (s.val.splitAt n.val).fst
-    let s1 := (s.val.splitAt n.val).snd
+    let s0 := (s.val.splitAt n.toNat).fst
+    let s1 := (s.val.splitAt n.toNat).snd
     let back (s' : Slice T × Slice T) : Slice T :=
       let s0' := s'.fst
       let s1' := s'.snd
       if h1 : s0'.length = s0.length ∧ s1'.length = s1.length then
         -- TODO: scalar_tac is super slow below
-        ⟨ s0'.val ++ s1'.val, by have := List.splitAt_length n.val s.val; have := s.property; simp +zetaDelta at *; omega ⟩
+        ⟨ s0'.val ++ s1'.val, by have := List.splitAt_length n.toNat s.val; have := s.property; simp +zetaDelta at *; omega ⟩
       else s
-    let s0 : Slice T := ⟨ s0, by have := List.splitAt_length n.val s.val; have := s.property; simp +zetaDelta at *; omega  ⟩
-    let s1 : Slice T := ⟨ s1, by have := List.splitAt_length n.val s.val; have := s.property; simp +zetaDelta at *; omega  ⟩
+    let s0 : Slice T := ⟨ s0, by have := List.splitAt_length n.toNat s.val; have := s.property; simp +zetaDelta at *; omega  ⟩
+    let s1 : Slice T := ⟨ s1, by have := List.splitAt_length n.toNat s.val; have := s.property; simp +zetaDelta at *; omega  ⟩
     ok ((s0, s1), back)
   else fail .panic
 
@@ -667,8 +669,8 @@ theorem core.slice.Slice.split_at.spec {T : Type} (s : Slice T) (n : Usize)
     (h : n ≤ s.length) :
     core.slice.Slice.split_at s n
       ⦃ (s0 : Slice T) (s1 : Slice T) =>
-        s0.length = n.val ∧ s1.length = s.length - n.val ∧
-        s0.val = s.val.take n.val ∧ s1.val = s.val.drop n.val ⦄ := by
+        s0.length = n.toNat ∧ s1.length = s.length - n.toNat ∧
+        s0.val = s.val.take n.toNat ∧ s1.val = s.val.drop n.toNat ⦄ := by
   unfold core.slice.Slice.split_at
   simp only [h, ↓reduceDIte, WP.spec_ok, predn_pair]
   refine ⟨?_, ?_, ?_, ?_⟩ <;>
@@ -685,9 +687,9 @@ theorem core.slice.Slice.split_at_mut.spec {T : Type} (s : Slice T) (n : Usize)
     (h : n ≤ s.length) :
     core.slice.Slice.split_at_mut s n
       ⦃ (res : Slice T × Slice T) (back : (Slice T × Slice T) → Slice T) =>
-        res.1.length = n.val ∧ res.2.length = s.length - n.val ∧
-        res.1.val = s.val.take n.val ∧ res.2.val = s.val.drop n.val ∧
-        (∀ s0' s1', s0'.length = n.val → s1'.length = s.length - n.val →
+        res.1.length = n.toNat ∧ res.2.length = s.length - n.toNat ∧
+        res.1.val = s.val.take n.toNat ∧ res.2.val = s.val.drop n.toNat ∧
+        (∀ s0' s1', s0'.length = n.toNat → s1'.length = s.length - n.toNat →
           (back (s0', s1')).val = s0'.val ++ s1'.val ∧
           (back (s0', s1')).length = s.length) ⦄ := by
   unfold core.slice.Slice.split_at_mut
@@ -712,21 +714,21 @@ def core.slice.Slice.swap {T : Type} (s : Slice T) (a b : Usize) : Result (Slice
 
 @[step]
 theorem core.slice.Slice.swap_spec {T : Type} [Inhabited T] (s : Slice T) (a b : Usize)
-    (ha : a.val < s.length) (hb : b.val < s.length) :
+    (ha : a.toNat < s.length) (hb : b.toNat < s.length) :
     core.slice.Slice.swap s a b ⦃ s' =>
       s'.length = s.length ∧
-      s'.val[a.val]! = s.val[b.val]! ∧
-      s'.val[b.val]! = s.val[a.val]! ∧
-      ∀ i, i ≠ a.val → i ≠ b.val → s'.val[i]! = s.val[i]! ⦄ := by
+      s'.val[a.toNat]! = s.val[b.toNat]! ∧
+      s'.val[b.toNat]! = s.val[a.toNat]! ∧
+      ∀ i, i ≠ a.toNat → i ≠ b.toNat → s'.val[i]! = s.val[i]! ⦄ := by
   simp only [core.slice.Slice.swap, Bind.bind, bind]
   have ⟨av, hav⟩ := spec_imp_exists (Slice.index_usize_spec s a ha)
   simp only [hav]
   have ⟨bv, hbv⟩ := spec_imp_exists (Slice.index_usize_spec s b hb)
   simp only [hbv]
-  have ⟨s1, hs1⟩ := spec_imp_exists (Slice.update_spec s a (s.val[b.val]!) ha)
+  have ⟨s1, hs1⟩ := spec_imp_exists (Slice.update_spec s a (s.val[b.toNat]!) ha)
   simp only [hs1]
-  have hlen1 : b.val < s1.length := by rw [hs1.2, Slice.set_length]; exact hb
-  have ⟨s', hs'⟩ := spec_imp_exists (Slice.update_spec s1 b (s.val[a.val]!) hlen1)
+  have hlen1 : b.toNat < s1.length := by rw [hs1.2, Slice.set_length]; exact hb
+  have ⟨s', hs'⟩ := spec_imp_exists (Slice.update_spec s1 b (s.val[a.toNat]!) hlen1)
   rw [hs1.2] at hs'
   simp only [hs', spec_ok]
   refine ⟨?_, ?_, ?_, ?_⟩
@@ -784,7 +786,7 @@ theorem core.slice.index.SliceIndexRangeUsizeSlice.index_mut.step_spec (r : core
   core.slice.index.SliceIndexRangeUsizeSlice.index_mut r s ⦃ (s1, index_mut_back) =>
   s1.val = s.val.slice r.start r.end ∧
   s1.length = r.end - r.start ∧
-  ∀ s2, index_mut_back s2 = s.setSlice! r.start.val s2 ⦄ := by
+  ∀ s2, index_mut_back s2 = s.setSlice! r.start.toNat s2 ⦄ := by
   simp only [index_mut, UScalar.le_equiv, Slice.length]
   split
   . simp only [spec_ok, true_and]
@@ -866,8 +868,8 @@ theorem core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut.step_spec
   core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut r s
     ⦃ (s1, back) =>
       s1.val = s.val.drop r.start ∧
-      s1.length = s.length - r.start.val ∧
-      ∀ s', (back s').val = s.val.setSlice! r.start.val s'.val ⦄ := by
+      s1.length = s.length - r.start.toNat ∧
+      ∀ s', (back s').val = s.val.setSlice! r.start.toNat s'.val ⦄ := by
   simp only [index_mut, Slice.drop]
   split
   · simp only [spec_ok]
@@ -882,7 +884,7 @@ theorem core.slice.index.SliceIndexRangeFromUsizeSlice.index.step_spec
   core.slice.index.SliceIndexRangeFromUsizeSlice.index r s
     ⦃ s1 =>
       s1.val = s.val.drop r.start ∧
-      s1.length = s.length - r.start.val ⦄ := by
+      s1.length = s.length - r.start.toNat ⦄ := by
   simp only [index]
   split
   · simp only [spec_ok, Slice.drop, true_and]
@@ -932,7 +934,7 @@ theorem Slice.mapM_spec {α β} {f : α → Result β} {s : Slice α} {post : Na
   obtain ⟨l', hl'⟩ := hmapM_ok
   split
   case h_1 xs heq =>
-    simp only [UScalar.lt_equiv, Usize.ofNatCore_val_eq, spec_ok]
+    simp only [UScalar.lt_equiv, Usize.ofNatCore_toNat_eq, spec_ok]
     refine ⟨by grind [List.mapM_Result_length], fun i hi => ?_⟩
     have hlen : i < s.len := by have := List.mapM_Result_length heq; simp [Slice.len] at *; omega
     have : f s[i] = ok xs[↑i] := List.mapM_Result_ok heq (↑i) (by scalar_tac)

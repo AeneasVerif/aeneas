@@ -88,7 +88,7 @@ it can be omitted.
 
 **Preprocessing**:
 `bv_tac` first preprocesses the goal (essentially by using `bvify`) to lift inequalities
-so that they use bit-vectors rather than `ℕ` or `ℤ`, before calling `bv_decide`.
+so that they use bit-vectors rather than `ℕ` or `ℤ`, before calling `toBitVec_decide`.
 This can sometimes fail as lifting those inequalities requires solving arithmetic proof
 obligations. For this reason, when `bv_tac` fails, we advise looking carefully at the goal
 to check if all the expected inequalities have been lifted to bit-vectors. If some could not
@@ -96,14 +96,14 @@ be lifted, one can try lifting them manually - see the documentation of `bvify` 
 and tricks.
 
 **Debugging**:
-Calling `bv_tac n` is (roughly) equivalent to: `bv_tac_preprocess n; bv_decide`,
-which is itself roughly equivalent to: `bvify n at *; simp_all only; bv_decide`.
+Calling `bv_tac n` is (roughly) equivalent to: `bv_tac_preprocess n; toBitVec_decide`,
+which is itself roughly equivalent to: `bvify n at *; simp_all only; toBitVec_decide`.
 
 Note that it often happens that `bv_tac` fails because `bvify` could not
-lift some assumptions to the subset `bv_decide` can reason about. For this
+lift some assumptions to the subset `toBitVec_decide` can reason about. For this
 reason, it is often useful to inspect the goal after calling `bvify` (or `bv_tac_preprocess`).
 Typically problematic terms are applications of `BitVec.ofNat` to complex expressions
-(for instance, `bv_decide` can generally not reason about `BitVec.ofNat n (a + b)`, which we
+(for instance, `toBitVec_decide` can generally not reason about `BitVec.ofNat n (a + b)`, which we
 want to simplify to `BitVec.ofNat n a + BitVec.ofNat n b`).
 -/
 elab "bv_tac" config:Parser.Tactic.optConfig n:(colGt term)? : tactic =>
@@ -115,7 +115,7 @@ elab "bv_tac" config:Parser.Tactic.optConfig n:(colGt term)? : tactic =>
   bvTacPreprocess config (← optElabTerm n)
   -- The preprocessing step may have proven the goal
   Utils.allGoals do
-  -- Call bv_decide
+  -- Call toBitVec_decide
   IO.FS.withTempFile fun _ lratFile => do
     let config := config.toBVDecideConfig
     let cfg ← BVDecide.Frontend.TacticContext.new lratFile config
@@ -127,40 +127,40 @@ elab "bv_tac" config:Parser.Tactic.optConfig n:(colGt term)? : tactic =>
 -/
 open Std
 
-example (x y : U8) (h : x.val ≤ y.val) : x.bv ≤ y.bv := by
+example (x y : U8) (h : x.toNat ≤ y.toNat) : x.toBitVec ≤ y.toBitVec := by
   bv_tac
 
-example (x : U32) (h : x.val < 3329) : x.bv % 3329#32 = x.bv := by
+example (x : U32) (h : x.toNat < 3329) : x.toBitVec % 3329#32 = x.toBitVec := by
   bv_tac
 
 /- Checking parsing -/
-example (x : U32) (h : x.val < 3329) : x.bv % 3329#32 = x.bv ∧ True := by
+example (x : U32) (h : x.toNat < 3329) : x.toBitVec % 3329#32 = x.toBitVec ∧ True := by
   constructor
   bv_tac
   simp
 
 /- Checking parsing -/
-example (x : U32) (h : x.val < 3329) : x.bv % 3329#32 = x.bv ∧ True := by
+example (x : U32) (h : x.toNat < 3329) : x.toBitVec % 3329#32 = x.toBitVec ∧ True := by
   constructor
   bv_tac 32
   simp
 
 /- Checking parsing -/
-example (x : U32) (h : x.val < 3329) : x.bv % 3329#32 = x.bv ∧ True := by
+example (x : U32) (h : x.toNat < 3329) : x.toBitVec % 3329#32 = x.toBitVec ∧ True := by
   constructor
   bv_tac 32; simp
 
 example
   (a : U32)
   (b : U32)
-  (ha : a.val < 3329)
-  (hb : b.val < 3329)
+  (ha : a.toNat < 3329)
+  (hb : b.toNat < 3329)
   (c1 : U32)
-  (_ : c1.bv = a.bv + b.bv)
+  (_ : c1.toBitVec = a.toBitVec + b.toBitVec)
   (c2 : U32)
   (hc2 : c2 = core.num.U32.wrapping_sub c1 3329#u32)
   (c3 : U32)
-  (hc3 : c3.bv = c2.bv >>> 16#i32.toNat)
+  (hc3 : c3.toBitVec = c2.toBitVec >>> 16#i32.toNat)
   (_ : ¬c3 = 0#u32) :
   c3 = 65535#u32
   := by
@@ -169,15 +169,15 @@ example
 example
   (a : U32)
   (b : U32)
-  (ha : a.val < 3329)
-  (hb : b.val < 3329)
+  (ha : a.toNat < 3329)
+  (hb : b.toNat < 3329)
   (c1 : U32)
-  (_ : c1.bv = a.bv + b.bv)
+  (_ : c1.toBitVec = a.toBitVec + b.toBitVec)
   (c2 : U32)
   (_ : c2 = core.num.U32.wrapping_sub c1 3329#u32)
   (c3 : U32)
-  (_ : c3.bv = c2.bv >>> 16#i32.toNat) :
-  (c1.bv - 3329#32 + (3329#32 &&& c3.bv)) % 3329#32 = (a.bv + b.bv) % 3329#32
+  (_ : c3.toBitVec = c2.toBitVec >>> 16#i32.toNat) :
+  (c1.toBitVec - 3329#32 + (3329#32 &&& c3.toBitVec)) % 3329#32 = (a.toBitVec + b.toBitVec) % 3329#32
   := by
   bv_tac
 
@@ -187,7 +187,7 @@ example
   (c1 : U32)
   (hc1 : c1 = core.num.U32.wrapping_sub a b)
   (c2 : U32)
-  (hc2 : c2.bv = c1.bv >>> 16#i32.toNat)
+  (hc2 : c2.toBitVec = c1.toBitVec >>> 16#i32.toNat)
   (h : (↑a : ℕ) < 6658 ∧ (↑b : ℕ) = 3329)
   (_ : ¬c2 = 0#u32) :
   c2 = 65535#u32
@@ -203,13 +203,13 @@ example
   (c1 : U32)
   (hc1 : c1 = core.num.U32.wrapping_sub a b)
   (c2 : U32)
-  (hc2 : c2.bv = c1.bv >>> 16)
+  (hc2 : c2.toBitVec = c1.toBitVec >>> 16)
   (c3 : U32)
   (hc3_1 : (↑c3 : ℕ) = (↑(3329#u32 &&& c2) : ℕ))
-  (_ : c3.bv = 3329#32 &&& c2.bv)
+  (_ : c3.toBitVec = 3329#32 &&& c2.toBitVec)
   (c4 : U32)
   (hc3 : c4 = core.num.U32.wrapping_add c1 c3) :
-  c4.bv % 3329#32 = (a.bv + 3329#32 - b.bv) % 3329#32 ∧ c4.bv < 3329#32
+  c4.toBitVec % 3329#32 = (a.toBitVec + 3329#32 - b.toBitVec) % 3329#32 ∧ c4.toBitVec < 3329#32
   := by
   bv_tac
 
@@ -220,11 +220,11 @@ example
   (hb : (↑b : ℕ) < 3329)
   (c1 : U32)
   (hc1 : (↑c1 : ℕ) = (↑a : ℕ) + (↑b : ℕ))
-  (_ : c1.bv = a.bv + b.bv)
+  (_ : c1.toBitVec = a.toBitVec + b.toBitVec)
   (c2 : U32)
   (hc2 : c2 = core.num.U32.wrapping_sub c1 3329#u32)
   (c3 : U32)
-  (hc3 : c3.bv = c2.bv >>> 16)
+  (hc3 : c3.toBitVec = c2.toBitVec >>> 16)
   (h : ¬c3 = 0#u32) :
   c3 = 65535#u32
   := by bv_tac
@@ -232,11 +232,11 @@ example
 example
   (a : U32)
   (b : U32)
-  (h : a.val < 3329 ∧ b.val < 3329 ∨ a.val < 6658 ∧ b.val = 3329)
+  (h : a.toNat < 3329 ∧ b.toNat < 3329 ∨ a.toNat < 6658 ∧ b.toNat = 3329)
   (c1 : U32)
   (hc1 : c1 = core.num.U32.wrapping_sub a b)
   (c2 : U32)
-  (hc2 : c2.bv = c1.bv >>> 16) :
+  (hc2 : c2.toBitVec = c1.toBitVec >>> 16) :
   (decide (c2 = 0#u32) || decide (c2 = 65535#u32)) = true
   := by
   bv_tac
@@ -244,17 +244,17 @@ example
 example
   (a : U32)
   (b : U32)
-  (h : a.val < 3329 ∧ b.val < 3329 ∨ a.val < 6658 ∧ b.val = 3329)
+  (h : a.toNat < 3329 ∧ b.toNat < 3329 ∨ a.toNat < 6658 ∧ b.toNat = 3329)
   (c1 : U32)
   (hc1 : c1 = core.num.U32.wrapping_sub a b)
   (c2 : U32)
-  (hc2 : c2.bv = c1.bv >>> 16)
+  (hc2 : c2.toBitVec = c1.toBitVec >>> 16)
   (c3 : U32)
-  (hc3_1 : c3.val = (3329#u32 &&& c2).val)
-  (_ : c3.bv = 3329#32 &&& c2.bv)
+  (hc3_1 : c3.toNat = (3329#u32 &&& c2).toNat)
+  (_ : c3.toBitVec = 3329#32 &&& c2.toBitVec)
   (c4 : U32)
   (hc3 : c4 = core.num.U32.wrapping_add c1 c3) :
-  (c4.val : ZMod 3329) = (a.val : ZMod 3329) - (b.val : ZMod 3329) ∧ c4.val < 3329
+  (c4.toNat : ZMod 3329) = (a.toNat : ZMod 3329) - (b.toNat : ZMod 3329) ∧ c4.toNat < 3329
   := by
   bv_tac 32
 

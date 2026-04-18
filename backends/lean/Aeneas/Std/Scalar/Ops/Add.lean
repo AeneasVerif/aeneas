@@ -12,10 +12,10 @@ open Result Error Arith ScalarElab WP
 # Addition: Definitions
 -/
 def UScalar.add {ty : UScalarTy} (x y : UScalar ty) : Result (UScalar ty) :=
-  UScalar.tryMk ty (x.val + y.val)
+  UScalar.tryMk ty (x.toNat + y.toNat)
 
 def IScalar.add {ty : IScalarTy} (x y : IScalar ty) : Result (IScalar ty) :=
-  IScalar.tryMk ty (x.val + y.val)
+  IScalar.tryMk ty (x.toInt + y.toInt)
 
 def UScalar.try_add {ty : UScalarTy} (x y : UScalar ty) : Option (UScalar ty) :=
   Option.ofResult (add x y)
@@ -36,10 +36,10 @@ instance {ty} : HAdd (IScalar ty) (IScalar ty) (Result (IScalar ty)) where
 
 theorem UScalar.add_equiv {ty} (x y : UScalar ty) :
   match x + y with
-  | ok z => x.val + y.val < 2^ty.numBits ∧
-    z.val = x.val + y.val ∧
-    z.bv = x.bv + y.bv
-  | fail _ => ¬ (UScalar.inBounds ty (x.val + y.val))
+  | ok z => x.toNat + y.toNat < 2^ty.numBits ∧
+    z.toNat = x.toNat + y.toNat ∧
+    z.toBitVec = x.toBitVec + y.toBitVec
+  | fail _ => ¬ (UScalar.inBounds ty (x.toNat + y.toNat))
   | _ => ⊥ := by
   have : x + y = add x y := by rfl
   rw [this]
@@ -49,16 +49,16 @@ theorem UScalar.add_equiv {ty} (x y : UScalar ty) :
   split at h <;> simp_all
   zify; simp
   zify at h
-  have := @Int.emod_eq_of_lt (x.val + y.val) (2^ty.numBits) (by omega) (by omega)
+  have := @Int.emod_eq_of_lt (x.toNat + y.toNat) (2^ty.numBits) (by omega) (by omega)
   simp [*]
 
 theorem IScalar.add_equiv {ty} (x y : IScalar ty) :
   match x + y with
   | ok z =>
-    IScalar.inBounds ty (x.val + y.val) ∧
-    z.val = x.val + y.val ∧
-    z.bv = x.bv + y.bv
-  | fail _ => ¬ (IScalar.inBounds ty (x.val + y.val))
+    IScalar.inBounds ty (x.toInt + y.toInt) ∧
+    z.toInt = x.toInt + y.toInt ∧
+    z.toBitVec = x.toBitVec + y.toBitVec
+  | fail _ => ¬ (IScalar.inBounds ty (x.toInt + y.toInt))
   | _ => ⊥ := by
   have : x + y = add x y := by rfl
   rw [this]
@@ -68,7 +68,7 @@ theorem IScalar.add_equiv {ty} (x y : IScalar ty) :
   split at h <;> simp_all
   apply BitVec.eq_of_toInt_eq
   simp
-  have := bmod_pow_numBits_eq_of_lt ty (x.val + y.val) (by omega) (by omega)
+  have := bmod_pow_numBits_eq_of_lt ty (x.toInt + y.toInt) (by omega) (by omega)
   simp [*]
 
 /-!
@@ -77,31 +77,31 @@ integers and bit-vectors.
 -/
 
 /-- Generic theorem - shouldn't be used much -/
-theorem UScalar.add_bv_spec {ty} {x y : UScalar ty}
+theorem UScalar.add_toBitVec_spec {ty} {x y : UScalar ty}
   (hmax : ↑x + ↑y ≤ UScalar.max ty) :
-  x + y ⦃ z => (↑z : Nat) = ↑x + ↑y ∧ z.bv = x.bv + y.bv ⦄ := by
+  x + y ⦃ z => (↑z : Nat) = ↑x + ↑y ∧ z.toBitVec = x.toBitVec + y.toBitVec ⦄ := by
   have h := @add_equiv ty x y
   split at h <;> simp_all [max]
   have : 0 < 2^ty.numBits := by simp
   omega
 
 /-- Generic theorem - shouldn't be used much -/
-theorem IScalar.add_bv_spec {ty}  {x y : IScalar ty}
+theorem IScalar.add_toBitVec_spec {ty}  {x y : IScalar ty}
   (hmin : IScalar.min ty ≤ ↑x + ↑y)
   (hmax : ↑x + ↑y ≤ IScalar.max ty) :
-  x + y ⦃ z => (↑z : Int) = ↑x + ↑y ∧ z.bv = x.bv + y.bv ⦄ := by
+  x + y ⦃ z => (↑z : Int) = ↑x + ↑y ∧ z.toBitVec = x.toBitVec + y.toBitVec ⦄ := by
   have h := @add_equiv ty x y
   split at h <;> simp_all [min, max]
   omega
 
-uscalar theorem «%S».add_bv_spec {x y : «%S»} (hmax : x.val + y.val ≤ «%S».max) :
-  x + y ⦃ z => (↑z : Nat) = ↑x + ↑y ∧ z.bv = x.bv + y.bv ⦄ :=
-  UScalar.add_bv_spec (by scalar_tac)
+uscalar theorem «%S».add_bv_spec {x y : «%S»} (hmax : x.toNat + y.toNat ≤ «%S».max) :
+  x + y ⦃ z => (↑z : Nat) = ↑x + ↑y ∧ z.toBitVec = x.toBitVec + y.toBitVec ⦄ :=
+  UScalar.add_toBitVec_spec (by scalar_tac)
 
 iscalar theorem «%S».add_bv_spec {x y : «%S»}
   (hmin : «%S».min ≤ ↑x + ↑y) (hmax : ↑x + ↑y ≤ «%S».max) :
-  x + y ⦃ z => (↑z : Int) = ↑x + ↑y ∧ z.bv = x.bv + y.bv ⦄ :=
-  IScalar.add_bv_spec (by scalar_tac) (by scalar_tac)
+  x + y ⦃ z => (↑z : Int) = ↑x + ↑y ∧ z.toBitVec = x.toBitVec + y.toBitVec ⦄ :=
+  IScalar.add_toBitVec_spec (by scalar_tac) (by scalar_tac)
 
 /-!
 Theorems about the addition, with a specification which uses
@@ -129,7 +129,7 @@ theorem IScalar.add_spec {ty} {x y : IScalar ty}
   split at h <;> simp_all [min, max]
   omega
 
-uscalar @[step] theorem «%S».add_spec {x y : «%S»} (hmax : x.val + y.val ≤ «%S».max) :
+uscalar @[step] theorem «%S».add_spec {x y : «%S»} (hmax : x.toNat + y.toNat ≤ «%S».max) :
   x + y ⦃ z => (↑z : Nat) = ↑x + ↑y ⦄ :=
   UScalar.add_spec (by scalar_tac)
 

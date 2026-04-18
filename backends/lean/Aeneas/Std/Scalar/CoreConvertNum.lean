@@ -58,55 +58,55 @@ def FromI64Bool.from (b : Bool) : I64 :=
 def FromI128Bool.from (b : Bool) : I128 :=
   if b then 1#i128 else 0#i128
 
-def FromUsizeU8.from (x : U8) : Usize := ⟨ x.bv.setWidth _ ⟩
-def FromUsizeU16.from (x : U16) : Usize := ⟨ x.bv.setWidth _ ⟩
-def FromUsizeU32.from (x : U32) : Usize := ⟨ x.bv.setWidth _ ⟩
-def FromUsizeUsize.from (x : Usize) : Usize := ⟨ x.bv.setWidth _ ⟩
+def FromUsizeU8.from (x : U8) : Usize := ⟨ x.toBitVec.setWidth _ ⟩
+def FromUsizeU16.from (x : U16) : Usize := ⟨ x.toBitVec.setWidth _ ⟩
+def FromUsizeU32.from (x : U32) : Usize := ⟨ x.toBitVec.setWidth _ ⟩
+def FromUsizeUsize.from (x : Usize) : Usize := ⟨ x.toBitVec.setWidth _ ⟩
 
-def FromU8U8.from (x : U8) : U8 := ⟨ x.bv.setWidth _ ⟩
+def FromU8U8.from (x : U8) : U8 := ⟨ x.toBitVec.setWidth _ ⟩
 
-def FromU16U8.from (x : U8) : U16 := ⟨ x.bv.setWidth _ ⟩
-def FromU16U16.from (x : U16) : U16 := ⟨ x.bv.setWidth _ ⟩
+def FromU16U8.from (x : U8) : U16 := ⟨ x.toBitVec.setWidth _ ⟩
+def FromU16U16.from (x : U16) : U16 := ⟨ x.toBitVec.setWidth _ ⟩
 
-def FromU32U8.from (x : U8) : U32 := ⟨ x.bv.setWidth _ ⟩
-def FromU32U16.from (x : U16) : U32 := ⟨ x.bv.setWidth _ ⟩
-def FromU32U32.from (x : U32) : U32 := ⟨ x.bv.setWidth _ ⟩
+def FromU32U8.from (x : U8) : U32 := ⟨ x.toBitVec.setWidth _ ⟩
+def FromU32U16.from (x : U16) : U32 := ⟨ x.toBitVec.setWidth _ ⟩
+def FromU32U32.from (x : U32) : U32 := ⟨ x.toBitVec.setWidth _ ⟩
 
-def FromU64U8.from (x : U8) : U64 := ⟨ x.bv.setWidth _ ⟩
-def FromU64U16.from (x : U16) : U64 := ⟨ x.bv.setWidth _ ⟩
-def FromU64U32.from (x : U32) : U64 := ⟨ x.bv.setWidth _ ⟩
-def FromU64U64.from (x : U64) : U64 := ⟨ x.bv.setWidth _ ⟩
+def FromU64U8.from (x : U8) : U64 := ⟨ x.toBitVec.setWidth _ ⟩
+def FromU64U16.from (x : U16) : U64 := ⟨ x.toBitVec.setWidth _ ⟩
+def FromU64U32.from (x : U32) : U64 := ⟨ x.toBitVec.setWidth _ ⟩
+def FromU64U64.from (x : U64) : U64 := ⟨ x.toBitVec.setWidth _ ⟩
 
-def FromU128U8.from (x : U8) : U128 := ⟨ x.bv.setWidth _ ⟩
-def FromU128U16.from (x : U16) : U128 := ⟨ x.bv.setWidth _ ⟩
-def FromU128U32.from (x : U32) : U128 := ⟨ x.bv.setWidth _ ⟩
-def FromU128U64.from (x : U64) : U128 := ⟨ x.bv.setWidth _ ⟩
-def FromU128U128.from (x : U128) : U128 := ⟨ x.bv.setWidth _ ⟩
+def FromU128U8.from (x : U8) : U128 := ⟨ x.toBitVec.setWidth _ ⟩
+def FromU128U16.from (x : U16) : U128 := ⟨ x.toBitVec.setWidth _ ⟩
+def FromU128U32.from (x : U32) : U128 := ⟨ x.toBitVec.setWidth _ ⟩
+def FromU128U64.from (x : U64) : U128 := ⟨ x.toBitVec.setWidth _ ⟩
+def FromU128U128.from (x : U128) : U128 := ⟨ x.toBitVec.setWidth _ ⟩
 
-def FromIsizeI8.from (x : I8) : Isize := ⟨ x.bv.signExtend _ ⟩
-def FromIsizeI16.from (x : I16) : Isize := ⟨ x.bv.signExtend _ ⟩
-def FromIsizeI32.from (x : I32) : Isize := ⟨ x.bv.signExtend _ ⟩
-def FromIsizeIsize.from (x : Isize) : Isize := ⟨ x.bv.signExtend _ ⟩
+def FromIsizeI8.from (x : I8) : Isize := ⟨ x.toBitVec.signExtend _ ⟩
+def FromIsizeI16.from (x : I16) : Isize := ⟨ x.toBitVec.signExtend _ ⟩
+def FromIsizeI32.from (x : I32) : Isize := ⟨ x.toBitVec.signExtend _ ⟩
+def FromIsizeIsize.from (x : Isize) : Isize := ⟨ x.toBitVec.signExtend _ ⟩
 
-def FromI8I8.from (x : I8) : I8 := ⟨ x.bv.signExtend _ ⟩
+def FromI8I8.from (x : I8) : I8 := ⟨ x.toBitVec.signExtend _ ⟩
 
-def FromI16I8.from (x : I8) : I16 := ⟨ x.bv.signExtend _ ⟩
-def FromI16I16.from (x : I16) : I16 := ⟨ x.bv.signExtend _ ⟩
+def FromI16I8.from (x : I8) : I16 := ⟨ x.toBitVec.signExtend _ ⟩
+def FromI16I16.from (x : I16) : I16 := ⟨ x.toBitVec.signExtend _ ⟩
 
-def FromI32I8.from (x : I8) : I32 := ⟨ x.bv.signExtend _ ⟩
-def FromI32I16.from (x : I16) : I32 := ⟨ x.bv.signExtend _ ⟩
-def FromI32I32.from (x : I32) : I32 := ⟨ x.bv.signExtend _ ⟩
+def FromI32I8.from (x : I8) : I32 := ⟨ x.toBitVec.signExtend _ ⟩
+def FromI32I16.from (x : I16) : I32 := ⟨ x.toBitVec.signExtend _ ⟩
+def FromI32I32.from (x : I32) : I32 := ⟨ x.toBitVec.signExtend _ ⟩
 
-def FromI64I8.from (x : I8) : I64 := ⟨ x.bv.signExtend _ ⟩
-def FromI64I16.from (x : I16) : I64 := ⟨ x.bv.signExtend _ ⟩
-def FromI64I32.from (x : I32) : I64 := ⟨ x.bv.signExtend _ ⟩
-def FromI64I64.from (x : I64) : I64 := ⟨ x.bv.signExtend _ ⟩
+def FromI64I8.from (x : I8) : I64 := ⟨ x.toBitVec.signExtend _ ⟩
+def FromI64I16.from (x : I16) : I64 := ⟨ x.toBitVec.signExtend _ ⟩
+def FromI64I32.from (x : I32) : I64 := ⟨ x.toBitVec.signExtend _ ⟩
+def FromI64I64.from (x : I64) : I64 := ⟨ x.toBitVec.signExtend _ ⟩
 
-def FromI128I8.from (x : I8) : I128 := ⟨ x.bv.signExtend _ ⟩
-def FromI128I16.from (x : I16) : I128 := ⟨ x.bv.signExtend _ ⟩
-def FromI128I32.from (x : I32) : I128 := ⟨ x.bv.signExtend _ ⟩
-def FromI128I64.from (x : I64) : I128 := ⟨ x.bv.signExtend _ ⟩
-def FromI128I128.from (x : I128) : I128 := ⟨ x.bv.signExtend _ ⟩
+def FromI128I8.from (x : I8) : I128 := ⟨ x.toBitVec.signExtend _ ⟩
+def FromI128I16.from (x : I16) : I128 := ⟨ x.toBitVec.signExtend _ ⟩
+def FromI128I32.from (x : I32) : I128 := ⟨ x.toBitVec.signExtend _ ⟩
+def FromI128I64.from (x : I64) : I128 := ⟨ x.toBitVec.signExtend _ ⟩
+def FromI128I128.from (x : I128) : I128 := ⟨ x.toBitVec.signExtend _ ⟩
 
 private theorem BitVec.setWidth_toNat_le (m : Nat) (x : BitVec n) (h : n ≤ m) :
   (x.setWidth m).toNat = x.toNat := by
@@ -117,122 +117,122 @@ private theorem BitVec.setWidth_toNat_le (m : Nat) (x : BitVec n) (h : n ≤ m) 
   omega
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromUsizeU8.from_val_eq (x : U8) : (FromUsizeU8.from x).val = x.val := by
+theorem FromUsizeU8.from_toNat_eq (x : U8) : (FromUsizeU8.from x).toNat = x.toNat := by
   simp only [FromUsizeU8.from]; apply BitVec.setWidth_toNat_le
   cases System.Platform.numBits_eq <;> simp [*]
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromUsizeU16.from_val_eq (x : U16) : (FromUsizeU16.from x).val = x.val := by
+theorem FromUsizeU16.from_toNat_eq (x : U16) : (FromUsizeU16.from x).toNat = x.toNat := by
   simp only [FromUsizeU16.from]; apply BitVec.setWidth_toNat_le
   cases System.Platform.numBits_eq <;> simp [*]
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromUsizeU32.from_val_eq (x : U32) : (FromUsizeU32.from x).val = x.val := by
+theorem FromUsizeU32.from_toNat_eq (x : U32) : (FromUsizeU32.from x).toNat = x.toNat := by
   simp only [FromUsizeU32.from]; apply BitVec.setWidth_toNat_le
   cases System.Platform.numBits_eq <;> simp [*]
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromUsizeUsize.from_val_eq (x : Usize) : (FromUsizeUsize.from x).val = x.val := by
+theorem FromUsizeUsize.from_toNat_eq (x : Usize) : (FromUsizeUsize.from x).toNat = x.toNat := by
   simp only [FromUsizeUsize.from]; apply BitVec.setWidth_toNat_le
   cases System.Platform.numBits_eq <;> simp [*]
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromU8U8.from_val_eq (x : U8) : (FromU8U8.from x).val = x.val := by
+theorem FromU8U8.from_toNat_eq (x : U8) : (FromU8U8.from x).toNat = x.toNat := by
   simp only [FromU8U8.from]; apply BitVec.setWidth_toNat_le; simp
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromU16U8.from_val_eq (x : U8) : (FromU16U8.from x).val = x.val := by
+theorem FromU16U8.from_toNat_eq (x : U8) : (FromU16U8.from x).toNat = x.toNat := by
   simp only [FromU16U8.from]; apply BitVec.setWidth_toNat_le; simp
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromU16U16.from_val_eq (x : U16) : (FromU16U16.from x).val = x.val := by
+theorem FromU16U16.from_toNat_eq (x : U16) : (FromU16U16.from x).toNat = x.toNat := by
   simp only [FromU16U16.from]; apply BitVec.setWidth_toNat_le; simp
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromU32U8.from_val_eq (x : U8) : (FromU32U8.from x).val = x.val := by
+theorem FromU32U8.from_toNat_eq (x : U8) : (FromU32U8.from x).toNat = x.toNat := by
   simp only [FromU32U8.from]; apply BitVec.setWidth_toNat_le; simp
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromU32U16.from_val_eq (x : U16) : (FromU32U16.from x).val = x.val := by
+theorem FromU32U16.from_toNat_eq (x : U16) : (FromU32U16.from x).toNat = x.toNat := by
   simp only [FromU32U16.from]; apply BitVec.setWidth_toNat_le; simp
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromU32U32.from_val_eq (x : U32) : (FromU32U32.from x).val = x.val := by
+theorem FromU32U32.from_toNat_eq (x : U32) : (FromU32U32.from x).toNat = x.toNat := by
   simp only [FromU32U32.from]; apply BitVec.setWidth_toNat_le; simp
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromU64U8.from_val_eq (x : U8) : (FromU64U8.from x).val = x.val := by
+theorem FromU64U8.from_toNat_eq (x : U8) : (FromU64U8.from x).toNat = x.toNat := by
   simp only [FromU64U8.from]; apply BitVec.setWidth_toNat_le; simp
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromU64U16.from_val_eq (x : U16) : (FromU64U16.from x).val = x.val := by
+theorem FromU64U16.from_toNat_eq (x : U16) : (FromU64U16.from x).toNat = x.toNat := by
   simp only [FromU64U16.from]; apply BitVec.setWidth_toNat_le; simp
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromU64U32.from_val_eq (x : U32) : (FromU64U32.from x).val = x.val := by
+theorem FromU64U32.from_toNat_eq (x : U32) : (FromU64U32.from x).toNat = x.toNat := by
   simp only [FromU64U32.from]; apply BitVec.setWidth_toNat_le; simp
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromU64U64.from_val_eq (x : U64) : (FromU64U64.from x).val = x.val := by
+theorem FromU64U64.from_toNat_eq (x : U64) : (FromU64U64.from x).toNat = x.toNat := by
   simp only [FromU64U64.from]; apply BitVec.setWidth_toNat_le; simp
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromU128U8.from_val_eq (x : U8) : (FromU128U8.from x).val = x.val := by
+theorem FromU128U8.from_toNat_eq (x : U8) : (FromU128U8.from x).toNat = x.toNat := by
   simp only [FromU128U8.from]; apply BitVec.setWidth_toNat_le; simp
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromU128U16.from_val_eq (x : U16) : (FromU128U16.from x).val = x.val := by
+theorem FromU128U16.from_toNat_eq (x : U16) : (FromU128U16.from x).toNat = x.toNat := by
   simp only [FromU128U16.from]; apply BitVec.setWidth_toNat_le; simp
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromU128U32.from_val_eq (x : U32) : (FromU128U32.from x).val = x.val := by
+theorem FromU128U32.from_toNat_eq (x : U32) : (FromU128U32.from x).toNat = x.toNat := by
   simp only [FromU128U32.from]; apply BitVec.setWidth_toNat_le; simp
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromU128U64.from_val_eq (x : U64) : (FromU128U64.from x).val = x.val := by
+theorem FromU128U64.from_toNat_eq (x : U64) : (FromU128U64.from x).toNat = x.toNat := by
   simp only [FromU128U64.from]; apply BitVec.setWidth_toNat_le; simp
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromU128U128.from_val_eq (x : U128) : (FromU128U128.from x).val = x.val := by
+theorem FromU128U128.from_toNat_eq (x : U128) : (FromU128U128.from x).toNat = x.toNat := by
   simp only [FromU128U128.from]; apply BitVec.setWidth_toNat_le; simp
 
-@[simp, bvify, grind =, agrind =] theorem FromUsizeU8.from_bv_eq (x : U8) : (FromUsizeU8.from x).bv = x.bv.setWidth _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromUsizeU8.from_toBitVec_eq (x : U8) : (FromUsizeU8.from x).toBitVec = x.toBitVec.setWidth _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromUsizeU16.from_bv_eq (x : U16) : (FromUsizeU16.from x).bv = x.bv.setWidth _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromUsizeU16.from_toBitVec_eq (x : U16) : (FromUsizeU16.from x).toBitVec = x.toBitVec.setWidth _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromUsizeU32.from_bv_eq (x : U32) : (FromUsizeU32.from x).bv = x.bv.setWidth _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromUsizeU32.from_toBitVec_eq (x : U32) : (FromUsizeU32.from x).toBitVec = x.toBitVec.setWidth _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromUsizeUsize.from_bv_eq (x : Usize) : (FromUsizeUsize.from x).bv = x.bv.setWidth _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromUsizeUsize.from_toBitVec_eq (x : Usize) : (FromUsizeUsize.from x).toBitVec = x.toBitVec.setWidth _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromU8U8.from_bv_eq (x : U8) : (FromU8U8.from x).bv = x.bv.setWidth _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromU8U8.from_toBitVec_eq (x : U8) : (FromU8U8.from x).toBitVec = x.toBitVec.setWidth _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromU16U8.from_bv_eq (x : U8) : (FromU16U8.from x).bv = x.bv.setWidth _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromU16U8.from_toBitVec_eq (x : U8) : (FromU16U8.from x).toBitVec = x.toBitVec.setWidth _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromU16U16.from_bv_eq (x : U16) : (FromU16U16.from x).bv = x.bv.setWidth _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromU16U16.from_toBitVec_eq (x : U16) : (FromU16U16.from x).toBitVec = x.toBitVec.setWidth _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromU32U8.from_bv_eq (x : U8) : (FromU32U8.from x).bv = x.bv.setWidth _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromU32U8.from_toBitVec_eq (x : U8) : (FromU32U8.from x).toBitVec = x.toBitVec.setWidth _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromU32U16.from_bv_eq (x : U16) : (FromU32U16.from x).bv = x.bv.setWidth _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromU32U16.from_toBitVec_eq (x : U16) : (FromU32U16.from x).toBitVec = x.toBitVec.setWidth _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromU32U32.from_bv_eq (x : U32) : (FromU32U32.from x).bv = x.bv.setWidth _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromU32U32.from_toBitVec_eq (x : U32) : (FromU32U32.from x).toBitVec = x.toBitVec.setWidth _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromU64U8.from_bv_eq (x : U8) : (FromU64U8.from x).bv = x.bv.setWidth _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromU64U8.from_toBitVec_eq (x : U8) : (FromU64U8.from x).toBitVec = x.toBitVec.setWidth _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromU64U16.from_bv_eq (x : U16) : (FromU64U16.from x).bv = x.bv.setWidth _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromU64U16.from_toBitVec_eq (x : U16) : (FromU64U16.from x).toBitVec = x.toBitVec.setWidth _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromU64U32.from_bv_eq (x : U32) : (FromU64U32.from x).bv = x.bv.setWidth _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromU64U32.from_toBitVec_eq (x : U32) : (FromU64U32.from x).toBitVec = x.toBitVec.setWidth _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromU64U64.from_bv_eq (x : U64) : (FromU64U64.from x).bv = x.bv.setWidth _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromU64U64.from_toBitVec_eq (x : U64) : (FromU64U64.from x).toBitVec = x.toBitVec.setWidth _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromU128U8.from_bv_eq (x : U8) : (FromU128U8.from x).bv = x.bv.setWidth _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromU128U8.from_toBitVec_eq (x : U8) : (FromU128U8.from x).toBitVec = x.toBitVec.setWidth _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromU128U16.from_bv_eq (x : U16) : (FromU128U16.from x).bv = x.bv.setWidth _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromU128U16.from_toBitVec_eq (x : U16) : (FromU128U16.from x).toBitVec = x.toBitVec.setWidth _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromU128U32.from_bv_eq (x : U32) : (FromU128U32.from x).bv = x.bv.setWidth _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromU128U32.from_toBitVec_eq (x : U32) : (FromU128U32.from x).toBitVec = x.toBitVec.setWidth _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromU128U64.from_bv_eq (x : U64) : (FromU128U64.from x).bv = x.bv.setWidth _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromU128U64.from_toBitVec_eq (x : U64) : (FromU128U64.from x).toBitVec = x.toBitVec.setWidth _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromU128U128.from_bv_eq (x : U128) : (FromU128U128.from x).bv = x.bv.setWidth _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromU128U128.from_toBitVec_eq (x : U128) : (FromU128U128.from x).toBitVec = x.toBitVec.setWidth _ := by rfl
 
 @[local simp] private theorem zero_lt_size_num_bits : 0 < System.Platform.numBits := by
   cases System.Platform.numBits_eq <;> simp [*]
@@ -245,135 +245,135 @@ private theorem bmod_pow2_eq_of_inBounds' (n : ℕ) (x : ℤ) (h : 0 < n ∧ -2 
   apply this
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromIsizeI8.from_val_eq (x : I8) : (FromIsizeI8.from x).val = x.val := by
+theorem FromIsizeI8.from_toInt_eq (x : I8) : (FromIsizeI8.from x).toInt = x.toInt := by
   cases System.Platform.numBits_eq <;>
-  simp only [FromIsizeI8.from, IScalar.val, BitVec.signExtend] <;> simp <;>
-  apply bmod_pow2_eq_of_inBounds' _ x.val (by scalar_tac)
+  simp only [FromIsizeI8.from, IScalar.toInt, BitVec.signExtend] <;> simp <;>
+  apply bmod_pow2_eq_of_inBounds' _ x.toInt (by scalar_tac)
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromIsizeI16.from_val_eq (x : I16) : (FromIsizeI16.from x).val = x.val := by
+theorem FromIsizeI16.from_toInt_eq (x : I16) : (FromIsizeI16.from x).toInt = x.toInt := by
   cases System.Platform.numBits_eq <;>
-  simp only [FromIsizeI16.from, IScalar.val, BitVec.signExtend] <;> simp <;>
-  apply bmod_pow2_eq_of_inBounds' _ x.val (by scalar_tac)
+  simp only [FromIsizeI16.from, IScalar.toInt, BitVec.signExtend] <;> simp <;>
+  apply bmod_pow2_eq_of_inBounds' _ x.toInt (by scalar_tac)
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromIsizeI32.from_val_eq (x : I32) : (FromIsizeI32.from x).val = x.val := by
+theorem FromIsizeI32.from_toInt_eq (x : I32) : (FromIsizeI32.from x).toInt = x.toInt := by
   cases System.Platform.numBits_eq <;>
-  simp only [FromIsizeI32.from, IScalar.val, BitVec.signExtend] <;> simp <;>
-  apply bmod_pow2_eq_of_inBounds' _ x.val (by scalar_tac)
+  simp only [FromIsizeI32.from, IScalar.toInt, BitVec.signExtend] <;> simp <;>
+  apply bmod_pow2_eq_of_inBounds' _ x.toInt (by scalar_tac)
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromIsizeIsize.from_val_eq (x : Isize) : (FromIsizeIsize.from x).val = x.val := by
+theorem FromIsizeIsize.from_toInt_eq (x : Isize) : (FromIsizeIsize.from x).toInt = x.toInt := by
   cases System.Platform.numBits_eq <;>
-  simp only [FromIsizeIsize.from, IScalar.val, BitVec.signExtend] <;> simp
+  simp only [FromIsizeIsize.from, IScalar.toInt, BitVec.signExtend] <;> simp
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromI8I8.from_val_eq (x : I8) : (FromI8I8.from x).val = x.val := by
-  simp only [FromI8I8.from, IScalar.val, BitVec.signExtend]; simp
+theorem FromI8I8.from_toInt_eq (x : I8) : (FromI8I8.from x).toInt = x.toInt := by
+  simp only [FromI8I8.from, IScalar.toInt, BitVec.signExtend]; simp
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromI16I8.from_val_eq (x : I8) : (FromI16I8.from x).val = x.val := by
-  simp only [FromI16I8.from, IScalar.val, BitVec.signExtend]; simp
-  apply bmod_pow2_eq_of_inBounds' 16 x.val (by scalar_tac)
+theorem FromI16I8.from_toInt_eq (x : I8) : (FromI16I8.from x).toInt = x.toInt := by
+  simp only [FromI16I8.from, IScalar.toInt, BitVec.signExtend]; simp
+  apply bmod_pow2_eq_of_inBounds' 16 x.toInt (by scalar_tac)
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromI16I16.from_val_eq (x : I16) : (FromI16I16.from x).val = x.val := by
-  simp only [FromI16I16.from, IScalar.val, BitVec.signExtend]; simp
+theorem FromI16I16.from_toInt_eq (x : I16) : (FromI16I16.from x).toInt = x.toInt := by
+  simp only [FromI16I16.from, IScalar.toInt, BitVec.signExtend]; simp
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromI32I8.from_val_eq (x : I8) : (FromI32I8.from x).val = x.val := by
-  simp only [FromI32I8.from, IScalar.val, BitVec.signExtend]; simp
-  apply bmod_pow2_eq_of_inBounds' 32 x.val (by scalar_tac)
+theorem FromI32I8.from_toInt_eq (x : I8) : (FromI32I8.from x).toInt = x.toInt := by
+  simp only [FromI32I8.from, IScalar.toInt, BitVec.signExtend]; simp
+  apply bmod_pow2_eq_of_inBounds' 32 x.toInt (by scalar_tac)
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromI32I16.from_val_eq (x : I16) : (FromI32I16.from x).val = x.val := by
-  simp only [FromI32I16.from, IScalar.val, BitVec.signExtend]; simp
-  apply bmod_pow2_eq_of_inBounds' 32 x.val (by scalar_tac)
+theorem FromI32I16.from_toInt_eq (x : I16) : (FromI32I16.from x).toInt = x.toInt := by
+  simp only [FromI32I16.from, IScalar.toInt, BitVec.signExtend]; simp
+  apply bmod_pow2_eq_of_inBounds' 32 x.toInt (by scalar_tac)
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromI32I32.from_val_eq (x : I32) : (FromI32I32.from x).val = x.val := by
-  simp only [FromI32I32.from, IScalar.val, BitVec.signExtend]; simp
+theorem FromI32I32.from_toInt_eq (x : I32) : (FromI32I32.from x).toInt = x.toInt := by
+  simp only [FromI32I32.from, IScalar.toInt, BitVec.signExtend]; simp
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromI64I8.from_val_eq (x : I8) : (FromI64I8.from x).val = x.val := by
-  simp only [FromI64I8.from, IScalar.val, BitVec.signExtend]; simp
-  apply bmod_pow2_eq_of_inBounds' 64 x.val (by scalar_tac)
+theorem FromI64I8.from_toInt_eq (x : I8) : (FromI64I8.from x).toInt = x.toInt := by
+  simp only [FromI64I8.from, IScalar.toInt, BitVec.signExtend]; simp
+  apply bmod_pow2_eq_of_inBounds' 64 x.toInt (by scalar_tac)
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromI64I16.from_val_eq (x : I16) : (FromI64I16.from x).val = x.val := by
-  simp only [FromI64I16.from, IScalar.val, BitVec.signExtend]; simp
-  apply bmod_pow2_eq_of_inBounds' 64 x.val (by scalar_tac)
+theorem FromI64I16.from_toInt_eq (x : I16) : (FromI64I16.from x).toInt = x.toInt := by
+  simp only [FromI64I16.from, IScalar.toInt, BitVec.signExtend]; simp
+  apply bmod_pow2_eq_of_inBounds' 64 x.toInt (by scalar_tac)
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromI64I32.from_val_eq (x : I32) : (FromI64I32.from x).val = x.val := by
-  simp only [FromI64I32.from, IScalar.val, BitVec.signExtend]; simp
-  apply bmod_pow2_eq_of_inBounds' 64 x.val (by scalar_tac)
+theorem FromI64I32.from_toInt_eq (x : I32) : (FromI64I32.from x).toInt = x.toInt := by
+  simp only [FromI64I32.from, IScalar.toInt, BitVec.signExtend]; simp
+  apply bmod_pow2_eq_of_inBounds' 64 x.toInt (by scalar_tac)
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromI64I64.from_val_eq (x : I64) : (FromI64I64.from x).val = x.val := by
-  simp only [FromI64I64.from, IScalar.val, BitVec.signExtend]; simp
+theorem FromI64I64.from_toInt_eq (x : I64) : (FromI64I64.from x).toInt = x.toInt := by
+  simp only [FromI64I64.from, IScalar.toInt, BitVec.signExtend]; simp
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromI128I8.from_val_eq (x : I8) : (FromI128I8.from x).val = x.val := by
-  simp only [FromI128I8.from, IScalar.val, BitVec.signExtend]; simp
-  apply bmod_pow2_eq_of_inBounds' 128 x.val (by scalar_tac)
+theorem FromI128I8.from_toInt_eq (x : I8) : (FromI128I8.from x).toInt = x.toInt := by
+  simp only [FromI128I8.from, IScalar.toInt, BitVec.signExtend]; simp
+  apply bmod_pow2_eq_of_inBounds' 128 x.toInt (by scalar_tac)
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromI128I16.from_val_eq (x : I16) : (FromI128I16.from x).val = x.val := by
-  simp only [FromI128I16.from, IScalar.val, BitVec.signExtend]; simp
-  apply bmod_pow2_eq_of_inBounds' 128 x.val (by scalar_tac)
+theorem FromI128I16.from_toInt_eq (x : I16) : (FromI128I16.from x).toInt = x.toInt := by
+  simp only [FromI128I16.from, IScalar.toInt, BitVec.signExtend]; simp
+  apply bmod_pow2_eq_of_inBounds' 128 x.toInt (by scalar_tac)
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromI128I32.from_val_eq (x : I32) : (FromI128I32.from x).val = x.val := by
-  simp only [FromI128I32.from, IScalar.val, BitVec.signExtend]; simp
-  apply bmod_pow2_eq_of_inBounds' 128 x.val (by scalar_tac)
+theorem FromI128I32.from_toInt_eq (x : I32) : (FromI128I32.from x).toInt = x.toInt := by
+  simp only [FromI128I32.from, IScalar.toInt, BitVec.signExtend]; simp
+  apply bmod_pow2_eq_of_inBounds' 128 x.toInt (by scalar_tac)
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromI128I64.from_val_eq (x : I64) : (FromI128I64.from x).val = x.val := by
-  simp only [FromI128I64.from, IScalar.val, BitVec.signExtend]; simp
-  apply bmod_pow2_eq_of_inBounds' 128 x.val (by scalar_tac)
+theorem FromI128I64.from_toInt_eq (x : I64) : (FromI128I64.from x).toInt = x.toInt := by
+  simp only [FromI128I64.from, IScalar.toInt, BitVec.signExtend]; simp
+  apply bmod_pow2_eq_of_inBounds' 128 x.toInt (by scalar_tac)
 
 @[simp, scalar_tac_simps, simp_scalar_safe, grind =, agrind =]
-theorem FromI128I128.from_val_eq (x : I128) : (FromI128I128.from x).val = x.val := by
-  simp only [FromI128I128.from, IScalar.val, BitVec.signExtend]; simp
+theorem FromI128I128.from_toInt_eq (x : I128) : (FromI128I128.from x).toInt = x.toInt := by
+  simp only [FromI128I128.from, IScalar.toInt, BitVec.signExtend]; simp
 
-@[simp, bvify, grind =, agrind =] theorem FromIsizeI8.from_bv_eq (x : I8) : (FromIsizeI8.from x).bv = x.bv.signExtend _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromIsizeI8.from_toBitVec_eq (x : I8) : (FromIsizeI8.from x).toBitVec = x.toBitVec.signExtend _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromIsizeI16.from_bv_eq (x : I16) : (FromIsizeI16.from x).bv = x.bv.signExtend _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromIsizeI16.from_toBitVec_eq (x : I16) : (FromIsizeI16.from x).toBitVec = x.toBitVec.signExtend _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromIsizeI32.from_bv_eq (x : I32) : (FromIsizeI32.from x).bv = x.bv.signExtend _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromIsizeI32.from_toBitVec_eq (x : I32) : (FromIsizeI32.from x).toBitVec = x.toBitVec.signExtend _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromIsizeIsize.from_bv_eq (x : Isize) : (FromIsizeIsize.from x).bv = x.bv.signExtend _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromIsizeIsize.from_toBitVec_eq (x : Isize) : (FromIsizeIsize.from x).toBitVec = x.toBitVec.signExtend _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromI8I8.from_bv_eq (x : I8) : (FromI8I8.from x).bv = x.bv.signExtend _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromI8I8.from_toBitVec_eq (x : I8) : (FromI8I8.from x).toBitVec = x.toBitVec.signExtend _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromI16I8.from_bv_eq (x : I8) : (FromI16I8.from x).bv = x.bv.signExtend _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromI16I8.from_toBitVec_eq (x : I8) : (FromI16I8.from x).toBitVec = x.toBitVec.signExtend _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromI16I16.from_bv_eq (x : I16) : (FromI16I16.from x).bv = x.bv.signExtend _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromI16I16.from_toBitVec_eq (x : I16) : (FromI16I16.from x).toBitVec = x.toBitVec.signExtend _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromI32I8.from_bv_eq (x : I8) : (FromI32I8.from x).bv = x.bv.signExtend _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromI32I8.from_toBitVec_eq (x : I8) : (FromI32I8.from x).toBitVec = x.toBitVec.signExtend _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromI32I16.from_bv_eq (x : I16) : (FromI32I16.from x).bv = x.bv.signExtend _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromI32I16.from_toBitVec_eq (x : I16) : (FromI32I16.from x).toBitVec = x.toBitVec.signExtend _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromI32I32.from_bv_eq (x : I32) : (FromI32I32.from x).bv = x.bv.signExtend _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromI32I32.from_toBitVec_eq (x : I32) : (FromI32I32.from x).toBitVec = x.toBitVec.signExtend _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromI64I8.from_bv_eq (x : I8) : (FromI64I8.from x).bv = x.bv.signExtend _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromI64I8.from_toBitVec_eq (x : I8) : (FromI64I8.from x).toBitVec = x.toBitVec.signExtend _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromI64I16.from_bv_eq (x : I16) : (FromI64I16.from x).bv = x.bv.signExtend _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromI64I16.from_toBitVec_eq (x : I16) : (FromI64I16.from x).toBitVec = x.toBitVec.signExtend _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromI64I32.from_bv_eq (x : I32) : (FromI64I32.from x).bv = x.bv.signExtend _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromI64I32.from_toBitVec_eq (x : I32) : (FromI64I32.from x).toBitVec = x.toBitVec.signExtend _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromI64I64.from_bv_eq (x : I64) : (FromI64I64.from x).bv = x.bv.signExtend _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromI64I64.from_toBitVec_eq (x : I64) : (FromI64I64.from x).toBitVec = x.toBitVec.signExtend _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromI128I8.from_bv_eq (x : I8) : (FromI128I8.from x).bv = x.bv.signExtend _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromI128I8.from_toBitVec_eq (x : I8) : (FromI128I8.from x).toBitVec = x.toBitVec.signExtend _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromI128I16.from_bv_eq (x : I16) : (FromI128I16.from x).bv = x.bv.signExtend _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromI128I16.from_toBitVec_eq (x : I16) : (FromI128I16.from x).toBitVec = x.toBitVec.signExtend _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromI128I32.from_bv_eq (x : I32) : (FromI128I32.from x).bv = x.bv.signExtend _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromI128I32.from_toBitVec_eq (x : I32) : (FromI128I32.from x).toBitVec = x.toBitVec.signExtend _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromI128I64.from_bv_eq (x : I64) : (FromI128I64.from x).bv = x.bv.signExtend _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromI128I64.from_toBitVec_eq (x : I64) : (FromI128I64.from x).toBitVec = x.toBitVec.signExtend _ := by rfl
 
-@[simp, bvify, grind =, agrind =] theorem FromI128I128.from_bv_eq (x : I128) : (FromI128I128.from x).bv = x.bv.signExtend _ := by rfl
+@[simp, bvify, grind =, agrind =] theorem FromI128I128.from_toBitVec_eq (x : I128) : (FromI128I128.from x).toBitVec = x.toBitVec.signExtend _ := by rfl
 
 
 end num -- core.convert.num
@@ -575,48 +575,48 @@ open ScalarElab
 /-!
 # To Little-Endian
 -/
-uscalar_no_usize def core.num.«%S».to_le_bytes (x : «%S») : Array U8 (%Size)#usize := ⟨ x.bv.toLEBytes.map UScalar.mk, by
-  simp only [List.length_map, UScalar.ofNatCore_val_eq, @BitVec.toLEBytes_length ((%Size) * 8)] ⟩
-iscalar_no_isize def core.num.«%S».to_le_bytes (x : «%S») : Array I8 (%Size)#usize := ⟨ x.bv.toLEBytes.map IScalar.mk, by
-  simp only [List.length_map, UScalar.ofNatCore_val_eq, @BitVec.toLEBytes_length ((%Size) * 8)] ⟩
+uscalar_no_usize def core.num.«%S».to_le_bytes (x : «%S») : Array U8 (%Size)#usize := ⟨ x.toBitVec.toLEBytes.map UScalar.mk, by
+  simp only [List.length_map, UScalar.ofNatCore_toNat_eq, @BitVec.toLEBytes_length ((%Size) * 8)] ⟩
+iscalar_no_isize def core.num.«%S».to_le_bytes (x : «%S») : Array I8 (%Size)#usize := ⟨ x.toBitVec.toLEBytes.map IScalar.mk, by
+  simp only [List.length_map, UScalar.ofNatCore_toNat_eq, @BitVec.toLEBytes_length ((%Size) * 8)] ⟩
 
 /-!
 # To Big-Endian
 -/
-uscalar_no_usize def core.num.«%S».to_be_bytes (x : «%S») : Array U8 (%Size)#usize := ⟨ x.bv.toBEBytes.map UScalar.mk, by
-  simp only [List.length_map, UScalar.ofNatCore_val_eq, @BitVec.toBEBytes_length ((%Size) * 8)] ⟩
-iscalar_no_isize def core.num.«%S».to_be_bytes (x : «%S») : Array I8 (%Size)#usize := ⟨ x.bv.toBEBytes.map IScalar.mk, by
-  simp only [List.length_map, UScalar.ofNatCore_val_eq, @BitVec.toBEBytes_length ((%Size) * 8)] ⟩
+uscalar_no_usize def core.num.«%S».to_be_bytes (x : «%S») : Array U8 (%Size)#usize := ⟨ x.toBitVec.toBEBytes.map UScalar.mk, by
+  simp only [List.length_map, UScalar.ofNatCore_toNat_eq, @BitVec.toBEBytes_length ((%Size) * 8)] ⟩
+iscalar_no_isize def core.num.«%S».to_be_bytes (x : «%S») : Array I8 (%Size)#usize := ⟨ x.toBitVec.toBEBytes.map IScalar.mk, by
+  simp only [List.length_map, UScalar.ofNatCore_toNat_eq, @BitVec.toBEBytes_length ((%Size) * 8)] ⟩
 
 /-!
 # From Little-Endian
 -/
 uscalar_no_usize def core.num.«%S».from_le_bytes (a : Array U8 (%Size)#usize) : «%S» :=
-  ⟨ (BitVec.fromLEBytes (List.map U8.bv a.val)).cast (by simp) ⟩
+  ⟨ (BitVec.fromLEBytes (List.map U8.toBitVec a.val)).cast (by simp) ⟩
 
 iscalar_no_isize def core.num.«%S».from_le_bytes (a : Array I8 (%Size)#usize) : «%S» :=
-  ⟨ (BitVec.fromLEBytes (List.map I8.bv a.val)).cast (by simp) ⟩
+  ⟨ (BitVec.fromLEBytes (List.map I8.toBitVec a.val)).cast (by simp) ⟩
 
 /-!
 # From Big-Endian
 -/
 uscalar_no_usize def core.num.«%S».from_be_bytes (a : Array U8 (%Size)#usize) : «%S» :=
-  ⟨ (BitVec.fromBEBytes (List.map U8.bv a.val)).cast (by simp) ⟩
+  ⟨ (BitVec.fromBEBytes (List.map U8.toBitVec a.val)).cast (by simp) ⟩
 
 iscalar_no_isize def core.num.«%S».from_be_bytes (a : Array I8 (%Size)#usize) : «%S» :=
-  ⟨ (BitVec.fromBEBytes (List.map I8.bv a.val)).cast (by simp) ⟩
+  ⟨ (BitVec.fromBEBytes (List.map I8.toBitVec a.val)).cast (by simp) ⟩
 
 /-!
 # Progress theorems: To Little-Endian
 -/
 uscalar_no_usize @[step]
 theorem core.num.«%S».to_le_bytes.step_spec (x : «%S») :
-  lift (core.num.«%S».to_le_bytes x) ⦃ y => y.val = x.bv.toLEBytes.map (@UScalar.mk UScalarTy.U8) ⦄ := by
+  lift (core.num.«%S».to_le_bytes x) ⦃ y => y.val = x.toBitVec.toLEBytes.map (@UScalar.mk UScalarTy.U8) ⦄ := by
   simp only [spec_ok, lift, to_le_bytes, UScalarTy.U8_numBits_eq]
 
 iscalar_no_isize @[step]
 theorem core.num.«%S».to_le_bytes.step_spec (x : «%S») :
-  lift (core.num.«%S».to_le_bytes x) ⦃ y => y.val = x.bv.toLEBytes.map (@IScalar.mk IScalarTy.I8) ⦄ := by
+  lift (core.num.«%S».to_le_bytes x) ⦃ y => y.val = x.toBitVec.toLEBytes.map (@IScalar.mk IScalarTy.I8) ⦄ := by
   simp only [spec_ok, lift, to_le_bytes, IScalarTy.I8_numBits_eq]
 
 /-!
@@ -624,12 +624,12 @@ theorem core.num.«%S».to_le_bytes.step_spec (x : «%S») :
 -/
 uscalar_no_usize @[step]
 theorem core.num.«%S».from_le_bytes.step_spec (x : Array U8 (%Size)#usize) :
-  lift (core.num.«%S».from_le_bytes x) ⦃ y => y.bv = (BitVec.fromLEBytes (x.val.map U8.bv)).cast (by simp) ⦄ := by
+  lift (core.num.«%S».from_le_bytes x) ⦃ y => y.toBitVec = (BitVec.fromLEBytes (x.val.map U8.toBitVec)).cast (by simp) ⦄ := by
   simp only [spec_ok, lift, from_le_bytes]
 
 iscalar_no_isize @[step]
 theorem core.num.«%S».from_le_bytes.step_spec (x : Array I8 (%Size)#usize) :
-  lift (core.num.«%S».from_le_bytes x) ⦃ y => y.bv = (BitVec.fromLEBytes (x.val.map I8.bv)).cast (by simp) ⦄  := by
+  lift (core.num.«%S».from_le_bytes x) ⦃ y => y.toBitVec = (BitVec.fromLEBytes (x.val.map I8.toBitVec)).cast (by simp) ⦄  := by
   simp only [spec_ok, lift, from_le_bytes]
 
 end Std

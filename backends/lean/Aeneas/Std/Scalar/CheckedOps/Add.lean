@@ -30,8 +30,8 @@ Unsigned checked add
 -/
 theorem core.num.checked_add_UScalar_bv_spec {ty} (x y : UScalar ty) :
   match core.num.checked_add_UScalar x y with
-  | some z => x.val + y.val ≤ UScalar.max ty ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
-  | none => UScalar.max ty < x.val + y.val := by
+  | some z => x.toNat + y.toNat ≤ UScalar.max ty ∧ z.toNat = x.toNat + y.toNat ∧ z.toBitVec = x.toBitVec + y.toBitVec
+  | none => UScalar.max ty < x.toNat + y.toNat := by
   have h := UScalar.add_equiv x y
   have hAdd : x + y = UScalar.add x y := by rfl
   rw [hAdd] at h
@@ -42,10 +42,10 @@ theorem core.num.checked_add_UScalar_bv_spec {ty} (x y : UScalar ty) :
 uscalar @[step_pure «%S».checked_add x y]
 theorem «%S».checked_add_bv_spec (x y : «%S») :
   match «%S».checked_add x y with
-  | some z => x.val + y.val ≤ «%S».max ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
-  | none => «%S».max < x.val + y.val := by
+  | some z => x.toNat + y.toNat ≤ «%S».max ∧ z.toNat = x.toNat + y.toNat ∧ z.toBitVec = x.toBitVec + y.toBitVec
+  | none => «%S».max < x.toNat + y.toNat := by
   have := core.num.checked_add_UScalar_bv_spec x y
-  simp_all [«%S».checked_add, UScalar.max, «%S».bv]
+  simp_all [«%S».checked_add, UScalar.max, «%S».toBitVec]
   cases h: core.num.checked_add_UScalar x y <;> simp_all [«%S».max, «%S».numBits]
 
 /-!
@@ -53,8 +53,8 @@ Signed checked add
 -/
 theorem core.num.checked_add_IScalar_bv_spec {ty} (x y : IScalar ty) :
   match core.num.checked_add_IScalar x y with
-  | some z => IScalar.min ty ≤ x.val + y.val ∧ x.val + y.val ≤ IScalar.max ty ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
-  | none => ¬ (IScalar.min ty ≤ x.val + y.val ∧ x.val + y.val ≤ IScalar.max ty) := by
+  | some z => IScalar.min ty ≤ x.toInt + y.toInt ∧ x.toInt + y.toInt ≤ IScalar.max ty ∧ z.toInt = x.toInt + y.toInt ∧ z.toBitVec = x.toBitVec + y.toBitVec
+  | none => ¬ (IScalar.min ty ≤ x.toInt + y.toInt ∧ x.toInt + y.toInt ≤ IScalar.max ty) := by
   have h := IScalar.add_equiv x y
   have hAdd : x + y = IScalar.add x y := by rfl
   rw [hAdd] at h
@@ -64,10 +64,10 @@ theorem core.num.checked_add_IScalar_bv_spec {ty} (x y : IScalar ty) :
 iscalar @[step_pure «%S».checked_add x y]
 theorem «%S».checked_add_bv_spec (x y : «%S») :
   match core.num.checked_add_IScalar x y with
-  | some z => «%S».min ≤ x.val + y.val ∧ x.val + y.val ≤ «%S».max ∧ z.val = x.val + y.val ∧ z.bv = x.bv + y.bv
-  | none => ¬ («%S».min ≤ x.val + y.val ∧ x.val + y.val ≤ «%S».max) := by
+  | some z => «%S».min ≤ x.toInt + y.toInt ∧ x.toInt + y.toInt ≤ «%S».max ∧ z.toInt = x.toInt + y.toInt ∧ z.toBitVec = x.toBitVec + y.toBitVec
+  | none => ¬ («%S».min ≤ x.toInt + y.toInt ∧ x.toInt + y.toInt ≤ «%S».max) := by
   have := core.num.checked_add_IScalar_bv_spec x y
-  simp_all only [IScalar.min, IScalar.max, «%S».bv, «%S».min, «%S».max, «%S».numBits]
+  simp_all only [IScalar.min, IScalar.max, «%S».toBitVec, «%S».min, «%S».max, «%S».numBits]
   cases h: core.num.checked_add_IScalar x y <;> simp_all only [] <;> simp
 
 end Aeneas.Std
