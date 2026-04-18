@@ -303,4 +303,38 @@ def core.default.DefaultArrayEmpty (T : Type) : core.default.Default (Array T (U
   default := core.default.DefaultArrayEmpty.default T
 }
 
+/-! ## `core::array::from_fn`
+
+`core::array::from_fn::<T, N, F>(cb: F) -> [T; N]` where `F: FnMut(usize) -> T`.
+
+- Docs: https://doc.rust-lang.org/core/array/fn.from_fn.html
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/array/mod.rs
+-/
+
+/-- Worker: build a list by calling the closure on indices `i, i+1, ..., n-1`. -/
+def core.array.from_fn.loop {T F : Type}
+    (FnMutInst : core.ops.function.FnMut F Usize T)
+    (cb : F) (i : Nat) (n : Usize) (acc : List T) :
+    Result (List T × F) :=
+  if h : i < n.val then do
+    let iu := Usize.ofNatCore i (by scalar_tac)
+    let (t, cb') ← FnMutInst.call_mut cb iu
+    core.array.from_fn.loop FnMutInst cb' (i + 1) n (acc ++ [t])
+  else
+    ok (acc, cb)
+  termination_by (n.val - i)
+  decreasing_by scalar_tac
+
+/-- `core::array::from_fn`: populate an array of length `N` by calling `cb` on
+each index `0, 1, ..., N-1`. -/
+@[rust_fun "core::array::from_fn"]
+def core.array.from_fn {T F : Type} (N : Usize)
+    (FnMutInst : core.ops.function.FnMut F Usize T)
+    (cb : F) : Result (Array T N) := do
+  let (l, _) ← core.array.from_fn.loop FnMutInst cb 0 N []
+  if h : l.length = N.val then
+    ok ⟨ l, h ⟩
+  else
+    fail panic
+
 end Aeneas.Std

@@ -36,7 +36,7 @@ For each ✅ row, a reviewer can chase the links:
 
 | Group | Count | Done |
 |---|---:|---:|
-| Foundation (cascade deps for other entries) | 3 | 1 |
+| Foundation (cascade deps for other entries) | 3 | 2 |
 | Option methods | 5 | 5 |
 | Result methods | 6 | 6 |
 | Vec methods | 8 | 8 |
@@ -44,12 +44,12 @@ For each ✅ row, a reviewer can chase the links:
 | Slice methods | 6 | 4 |
 | Range (RangeFull index, RangeFrom bounds, Range Iterator) | 7 | 5 |
 | Iterator adapters/collect/defaults | 8 | 1 |
-| Array (from_fn, PartialEq) | 2 | 0 |
+| Array (from_fn, PartialEq) | 2 | 1 |
 | i32 Iter::Step trait | 3 | 3 |
 | Cmp/Eq/Borrow traits | 3 | 3 |
 | Misc (black_box, TryFrom, TryFromIntError, to_owned) | 4 | 3 |
 | Deferred (fmt) | 2 | — |
-| **Total** | **61** | **42** |
+| **Total** | **61** | **44** |
 
 ---
 
@@ -60,7 +60,7 @@ are required so that verbatim docs examples of other items translate.
 
 | Rust item | Lean name | Docs | Source | Status | Needed by | Lean file | Test file | Proof |
 |---|---|---|---|---|---|---|---|---|
-| `char` (primitive) + `PartialEq<char> for char::eq` | `Char` + `Char.Insts.CoreCmpPartialEqChar.eq` | [docs](https://doc.rust-lang.org/core/primitive.char.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/cmp.rs) | ⬜ | `Iterator::enumerate` docs example | — | — | — |
+| `char` (primitive) + `PartialEq<char> for char::eq` | Lean native `Char` | [docs](https://doc.rust-lang.org/core/primitive.char.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/cmp.rs) | ✅ | — | built into Lean backend ([ExtractBase.ml](src/extract/ExtractBase.ml)) | [tests/src/char_methods.rs](tests/src/char_methods.rs) | — |
 | `core::array::iter::IntoIter<T, N>` + `Array::into_iter` + `Iterator for IntoIter` | `core.array.iter.IntoIter` + `Array::into_iter` + trait impl | [docs](https://doc.rust-lang.org/core/array/iter/struct.IntoIter.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/array/iter.rs) | ⬜ | `Iterator::enumerate` docs example | — | — | — |
 | `PartialEq<Option<T>> for Option<T>::eq` | `core.option.Option.Insts.CoreCmpPartialEqOption.eq` | [docs](https://doc.rust-lang.org/core/option/enum.Option.html#impl-PartialEq-for-Option%3CT%3E) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/option.rs) | ✅ | — | [Core/Core.lean](backends/lean/Aeneas/Std/Core/Core.lean) | [tests/src/option_methods.rs](tests/src/option_methods.rs) | — |
 
@@ -163,7 +163,7 @@ All `Vec` methods take `keepParams := [true, false]` to erase the allocator type
 
 | Rust item | Lean name | Docs | Source | Status | Deps | Lean file | Test file | Proof |
 |---|---|---|---|---|---|---|---|---|
-| `array::from_fn` | `core.array.from_fn` | [docs](https://doc.rust-lang.org/core/array/fn.from_fn.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/array/mod.rs) | ⬜ | — | — | — | — |
+| `array::from_fn` | `core.array.from_fn` | [docs](https://doc.rust-lang.org/core/array/fn.from_fn.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/array/mod.rs) | ✅ | FnMut | [Array/Array.lean](backends/lean/Aeneas/Std/Array/Array.lean) | [tests/src/array_from_fn.rs](tests/src/array_from_fn.rs) | — |
 
 ---
 

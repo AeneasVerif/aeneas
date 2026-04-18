@@ -7,6 +7,7 @@ package «tests» {}
 
 @[default_target] lean_lib Adt
 @[default_target] lean_lib AdtBorrows
+@[default_target] lean_lib ArrayFromFn
 @[default_target] lean_lib Arrays
 @[default_target] lean_lib ArraysDefs
 @[default_target] lean_lib ArraySliceIndex
@@ -16,6 +17,7 @@ package «tests» {}
 @[default_target] lean_lib Bitwise
 @[default_target] lean_lib BlanketImpl
 @[default_target] lean_lib Builtin
+@[default_target] lean_lib CharMethods
 @[default_target] lean_lib Issue804ClosureReturnRef
 @[default_target] lean_lib Closures
 @[default_target] lean_lib Constants

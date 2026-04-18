@@ -413,6 +413,8 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 332 *)
     mk_fun "core::array::equality::{core::cmp::PartialEq<[@T], [@U; @N]>}::ne"
       "core.array.equality.PartialEqSliceArray.ne";
+    (* file: "Aeneas/Std/Array/Array.lean", line: 330 *)
+    mk_fun "core::array::from_fn" "core.array.from_fn";
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 229 *)
     mk_fun "core::array::{[@T; @N]}::as_mut_slice"
       "core.array.Array.as_mut_slice";
