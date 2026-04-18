@@ -32,6 +32,40 @@ For each ✅ row, a reviewer can chase the links:
 
 ---
 
+## Proof coverage
+
+Every docs-example test in `tests/src/` has a machine-checked correctness
+theorem of the form `test_X_correct : test_X ⦃ _ => True ⦄` in a sibling
+`tests/lean/<Name>Proofs.lean` file. The postcondition `⦃ _ => True ⦄`
+asserts that the Aeneas-translated function returns `.ok` — equivalent in
+strength to the generated `#assert` line but producing an explicit,
+kernel-checked proof term.
+
+| Test file | Proof file | Theorems |
+|---|---|---:|
+| [tests/lean/ArrayFromFn.lean](tests/lean/ArrayFromFn.lean) | [tests/lean/ArrayFromFnProofs.lean](tests/lean/ArrayFromFnProofs.lean) | 1 |
+| [tests/lean/CharMethods.lean](tests/lean/CharMethods.lean) | [tests/lean/CharMethodsProofs.lean](tests/lean/CharMethodsProofs.lean) | 1 |
+| [tests/lean/ConvertTryfrom.lean](tests/lean/ConvertTryfrom.lean) | [tests/lean/ConvertTryfromProofs.lean](tests/lean/ConvertTryfromProofs.lean) | 3 |
+| [tests/lean/CoreMisc.lean](tests/lean/CoreMisc.lean) | [tests/lean/CoreMiscProofs.lean](tests/lean/CoreMiscProofs.lean) | 4 |
+| [tests/lean/Enumerate.lean](tests/lean/Enumerate.lean) | [tests/lean/EnumerateProofs.lean](tests/lean/EnumerateProofs.lean) | 4 (incl. 1 hand-driven WP) |
+| [tests/lean/IteratorCollect.lean](tests/lean/IteratorCollect.lean) | [tests/lean/IteratorCollectProofs.lean](tests/lean/IteratorCollectProofs.lean) | 1 |
+| [tests/lean/OptionMethods.lean](tests/lean/OptionMethods.lean) | [tests/lean/OptionMethodsProofs.lean](tests/lean/OptionMethodsProofs.lean) | 10 |
+| [tests/lean/ResultMethods.lean](tests/lean/ResultMethods.lean) | [tests/lean/ResultMethodsProofs.lean](tests/lean/ResultMethodsProofs.lean) | 10 |
+| [tests/lean/SliceConcat.lean](tests/lean/SliceConcat.lean) | [tests/lean/SliceConcatProofs.lean](tests/lean/SliceConcatProofs.lean) | 1 |
+| [tests/lean/SliceMethods.lean](tests/lean/SliceMethods.lean) | [tests/lean/SliceMethodsProofs.lean](tests/lean/SliceMethodsProofs.lean) | 3 |
+| [tests/lean/StepI32.lean](tests/lean/StepI32.lean) | [tests/lean/StepI32Proofs.lean](tests/lean/StepI32Proofs.lean) | 2 |
+| [tests/lean/StrToOwned.lean](tests/lean/StrToOwned.lean) | [tests/lean/StrToOwnedProofs.lean](tests/lean/StrToOwnedProofs.lean) | 1 |
+| [tests/lean/VecDequeMethods.lean](tests/lean/VecDequeMethods.lean) | [tests/lean/VecDequeMethodsProofs.lean](tests/lean/VecDequeMethodsProofs.lean) | 2 |
+| [tests/lean/VecMethods.lean](tests/lean/VecMethods.lean) | [tests/lean/VecMethodsProofs.lean](tests/lean/VecMethodsProofs.lean) | 10 |
+| **Total** | | **53** |
+
+Shared infrastructure: [tests/lean/ProofHelpers.lean](tests/lean/ProofHelpers.lean)
+provides `test_correct_of_native`, which lifts a decidable evaluation
+(`(f == ok ()) = true`, discharged by `native_decide`) into the WP
+correctness statement.
+
+---
+
 ## Summary
 
 | Group | Count | Done |
