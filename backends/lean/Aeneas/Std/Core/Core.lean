@@ -2,6 +2,9 @@ import Lean
 import Aeneas.Std.Primitives
 import Aeneas.Tactic.Step.Init
 import Aeneas.Std.Alloc
+import Aeneas.Std.Core.Cmp
+import Aeneas.Std.Core.Default
+import Aeneas.Std.Core.Result
 
 namespace Aeneas
 
@@ -110,6 +113,107 @@ def core.option.Option.take {T: Type} (self: Option T): Option T × Option T := 
 
 @[simp, step_simps, rust_fun "core::option::{core::option::Option<@T>}::is_none" -canFail -lift]
 def core.option.Option.is_none {T: Type} (self: Option T): Bool := self.isNone
+
+/-! ## `Option<T>` methods
+
+Pinned to Rust `1.85.0` (Charon pin `nightly-2026-02-07` — these methods are
+stable and unchanged across recent versions). -/
+
+/-- `Option::as_ref`: converts `&Option<T>` to `Option<&T>`. In Aeneas,
+references are erased, so this is the identity.
+
+- Docs: https://doc.rust-lang.org/core/option/enum.Option.html#method.as_ref
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/option.rs
+-/
+@[simp, step_simps, rust_fun "core::option::{core::option::Option<@T>}::as_ref" -canFail -lift]
+def core.option.Option.as_ref {T : Type} (self : Option T) : Option T := self
+
+/-- `Option::ok_or`: transforms `Option<T>` into `Result<T, E>` — `Some(v)` maps
+to `Ok(v)`, `None` maps to `Err(err)`.
+
+- Docs: https://doc.rust-lang.org/core/option/enum.Option.html#method.ok_or
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/option.rs
+-/
+@[rust_fun "core::option::{core::option::Option<@T>}::ok_or" -canFail -lift]
+def core.option.Option.ok_or {T : Type} {E : Type}
+    (self : Option T) (err : E) : core.result.Result T E :=
+  match self with
+  | some v => .Ok v
+  | none => .Err err
+
+@[simp] theorem core.option.Option.ok_or_some {T E : Type} (v : T) (err : E) :
+    core.option.Option.ok_or (some v) err = .Ok v := by rfl
+
+@[simp] theorem core.option.Option.ok_or_none {T E : Type} (err : E) :
+    core.option.Option.ok_or (none : Option T) err = .Err err := by rfl
+
+/-- `PartialEq for Option<T>::eq`: `true` iff both are `None`, or both are
+`Some` and their contents are equal under the provided `PartialEq<T>`.
+
+- Docs: https://doc.rust-lang.org/core/option/enum.Option.html#impl-PartialEq-for-Option%3CT%3E
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/option.rs
+-/
+@[rust_fun
+  "core::option::{core::cmp::PartialEq<core::option::Option<@T>, core::option::Option<@T>>}::eq"]
+def core.option.Option.Insts.CoreCmpPartialEqOption.eq {T : Type}
+    (PartialEqInst : core.cmp.PartialEq T T)
+    (self : Option T) (other : Option T) : Result Bool :=
+  match self, other with
+  | none, none => .ok true
+  | some a, some b => PartialEqInst.eq a b
+  | _, _ => .ok false
+
+@[reducible, rust_trait_impl
+  "core::cmp::PartialEq<core::option::Option<@T>, core::option::Option<@T>>"]
+def core.option.Option.Insts.CoreCmpPartialEqOption {T : Type}
+    (PartialEqInst : core.cmp.PartialEq T T) :
+    core.cmp.PartialEq (Option T) (Option T) := {
+  eq := core.option.Option.Insts.CoreCmpPartialEqOption.eq PartialEqInst
+}
+
+/-- `Default for Option<T>::default`: returns `None`.
+
+- Docs: https://doc.rust-lang.org/core/option/enum.Option.html#impl-Default-for-Option%3CT%3E
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/option.rs
+-/
+@[rust_fun
+  "core::option::{core::default::Default<core::option::Option<@T>>}::default"]
+def core.option.Option.Insts.CoreDefaultDefault.default (T : Type) :
+    Result (Option T) := .ok none
+
+@[reducible, rust_trait_impl
+  "core::default::Default<core::option::Option<@T>>"]
+def core.option.Option.Insts.CoreDefaultDefault (T : Type) :
+    core.default.Default (Option T) := {
+  default := core.option.Option.Insts.CoreDefaultDefault.default T
+}
+
+/-- `Clone for Option<T>::clone`: clones each variant. `None` clones to `None`;
+`Some(v)` clones to `Some(v')` where `v'` is the clone of `v` under the
+provided `Clone<T>`.
+
+- Docs: https://doc.rust-lang.org/core/option/enum.Option.html#impl-Clone-for-Option%3CT%3E
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/option.rs
+-/
+@[rust_fun
+  "core::option::{core::clone::Clone<core::option::Option<@T>>}::clone"]
+def core.option.Option.Insts.CoreCloneClone.clone {T : Type}
+    (CloneInst : core.clone.Clone T)
+    (self : Option T) : Result (Option T) :=
+  match self with
+  | none => .ok none
+  | some v => do
+    let v' ← CloneInst.clone v
+    .ok (some v')
+
+@[reducible, rust_trait_impl
+  "core::clone::Clone<core::option::Option<@T>>"]
+def core.option.Option.Insts.CoreCloneClone {T : Type}
+    (CloneInst : core.clone.Clone T) :
+    core.clone.Clone (Option T) := {
+  clone := core.option.Option.Insts.CoreCloneClone.clone CloneInst
+  clone_from := fun _ x => core.option.Option.Insts.CoreCloneClone.clone CloneInst x
+}
 
 @[rust_type "core::ops::range::RangeFrom"]
 structure core.ops.range.RangeFrom (Idx : Type) where

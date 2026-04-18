@@ -36,8 +36,8 @@ For each ✅ row, a reviewer can chase the links:
 
 | Group | Count | Done |
 |---|---:|---:|
-| Foundation (cascade deps for other entries) | 3 | 0 |
-| Option methods | 5 | 0 |
+| Foundation (cascade deps for other entries) | 3 | 1 |
+| Option methods | 5 | 5 |
 | Result methods | 5 | 0 |
 | Vec methods | 8 | 0 |
 | VecDeque (new type + methods) | 3 | 0 |
@@ -49,7 +49,7 @@ For each ✅ row, a reviewer can chase the links:
 | Cmp/Eq/Borrow traits | 3 | 0 |
 | Misc (black_box, TryFrom, to_owned) | 3 | 0 |
 | Deferred (fmt) | 2 | — |
-| **Total** | **58** | **1** |
+| **Total** | **58** | **6** |
 
 ---
 
@@ -62,7 +62,7 @@ are required so that verbatim docs examples of other items translate.
 |---|---|---|---|---|---|---|---|---|
 | `char` (primitive) + `PartialEq<char> for char::eq` | `Char` + `Char.Insts.CoreCmpPartialEqChar.eq` | [docs](https://doc.rust-lang.org/core/primitive.char.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/cmp.rs) | ⬜ | `Iterator::enumerate` docs example | — | — | — |
 | `core::array::iter::IntoIter<T, N>` + `Array::into_iter` + `Iterator for IntoIter` | `core.array.iter.IntoIter` + `Array::into_iter` + trait impl | [docs](https://doc.rust-lang.org/core/array/iter/struct.IntoIter.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/array/iter.rs) | ⬜ | `Iterator::enumerate` docs example | — | — | — |
-| `PartialEq<Option<T>> for Option<T>::eq` | `core.option.Option.Insts.CoreCmpPartialEqOption.eq` | [docs](https://doc.rust-lang.org/core/option/enum.Option.html#impl-PartialEq-for-Option%3CT%3E) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/option.rs) | ⬜ | `Iterator::enumerate` docs example (and Option methods) | — | — | — |
+| `PartialEq<Option<T>> for Option<T>::eq` | `core.option.Option.Insts.CoreCmpPartialEqOption.eq` | [docs](https://doc.rust-lang.org/core/option/enum.Option.html#impl-PartialEq-for-Option%3CT%3E) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/option.rs) | ✅ | — | [Core/Core.lean](backends/lean/Aeneas/Std/Core/Core.lean) | [tests/src/option_methods.rs](tests/src/option_methods.rs) | — |
 
 ---
 
@@ -70,11 +70,11 @@ are required so that verbatim docs examples of other items translate.
 
 | Rust item | Lean name | Docs | Source | Status | Deps | Lean file | Test file | Proof |
 |---|---|---|---|---|---|---|---|---|
-| `Option::as_ref` | `core.option.Option.as_ref` | [docs](https://doc.rust-lang.org/core/option/enum.Option.html#method.as_ref) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/option.rs) | ⬜ | — | — | — | — |
-| `Option::ok_or` | `core.option.Option.ok_or` | [docs](https://doc.rust-lang.org/core/option/enum.Option.html#method.ok_or) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/option.rs) | ⬜ | — | — | — | — |
-| `Clone for Option<T>::clone` | `core.option.Option.Insts.CoreCloneClone.clone` | [docs](https://doc.rust-lang.org/core/option/enum.Option.html#impl-Clone-for-Option%3CT%3E) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/option.rs) | ⬜ | — | — | — | — |
-| `Default for Option<T>::default` | `core.option.Option.Insts.CoreDefaultDefault.default` | [docs](https://doc.rust-lang.org/core/option/enum.Option.html#impl-Default-for-Option%3CT%3E) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/option.rs) | ⬜ | — | — | — | — |
-| `PartialEq for Option<T>::eq` | see Foundation | | | | | | | |
+| `Option::as_ref` | `core.option.Option.as_ref` | [docs](https://doc.rust-lang.org/core/option/enum.Option.html#method.as_ref) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/option.rs) | ✅ | — | [Core/Core.lean](backends/lean/Aeneas/Std/Core/Core.lean) | [tests/src/option_methods.rs](tests/src/option_methods.rs) | — |
+| `Option::ok_or` | `core.option.Option.ok_or` | [docs](https://doc.rust-lang.org/core/option/enum.Option.html#method.ok_or) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/option.rs) | ✅ | — | [Core/Core.lean](backends/lean/Aeneas/Std/Core/Core.lean) | [tests/src/option_methods.rs](tests/src/option_methods.rs) | — |
+| `Clone for Option<T>::clone` | `core.option.Option.Insts.CoreCloneClone.clone` | [docs](https://doc.rust-lang.org/core/option/enum.Option.html#impl-Clone-for-Option%3CT%3E) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/option.rs) | ✅ | — | [Core/Core.lean](backends/lean/Aeneas/Std/Core/Core.lean) | [tests/src/option_methods.rs](tests/src/option_methods.rs) | — |
+| `Default for Option<T>::default` | `core.option.Option.Insts.CoreDefaultDefault.default` | [docs](https://doc.rust-lang.org/core/option/enum.Option.html#impl-Default-for-Option%3CT%3E) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/option.rs) | ✅ | — | [Core/Core.lean](backends/lean/Aeneas/Std/Core/Core.lean) | [tests/src/option_methods.rs](tests/src/option_methods.rs) | — |
+| `PartialEq for Option<T>::eq` | `core.option.Option.Insts.CoreCmpPartialEqOption.eq` | [docs](https://doc.rust-lang.org/core/option/enum.Option.html#impl-PartialEq-for-Option%3CT%3E) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/option.rs) | ✅ | — | [Core/Core.lean](backends/lean/Aeneas/Std/Core/Core.lean) | [tests/src/option_methods.rs](tests/src/option_methods.rs) | — |
 
 ---
 

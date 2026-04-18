@@ -60,6 +60,7 @@ package «tests» {}
 @[default_target] lean_lib NestedBorrows
 @[default_target] lean_lib NoNestedBorrows
 @[default_target] lean_lib Options
+@[default_target] lean_lib OptionMethods
 @[default_target] lean_lib Order
 @[default_target] lean_lib Paper
 @[default_target] lean_lib PoloniusList
