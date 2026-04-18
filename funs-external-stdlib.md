@@ -41,28 +41,65 @@ asserts that the Aeneas-translated function returns `.ok` — equivalent in
 strength to the generated `#assert` line but producing an explicit,
 kernel-checked proof term.
 
-| Test file | Proof file | Theorems |
-|---|---|---:|
-| [tests/lean/ArrayFromFn.lean](tests/lean/ArrayFromFn.lean) | [tests/lean/ArrayFromFnProofs.lean](tests/lean/ArrayFromFnProofs.lean) | 1 |
-| [tests/lean/CharMethods.lean](tests/lean/CharMethods.lean) | [tests/lean/CharMethodsProofs.lean](tests/lean/CharMethodsProofs.lean) | 1 |
-| [tests/lean/ConvertTryfrom.lean](tests/lean/ConvertTryfrom.lean) | [tests/lean/ConvertTryfromProofs.lean](tests/lean/ConvertTryfromProofs.lean) | 3 |
-| [tests/lean/CoreMisc.lean](tests/lean/CoreMisc.lean) | [tests/lean/CoreMiscProofs.lean](tests/lean/CoreMiscProofs.lean) | 4 |
-| [tests/lean/Enumerate.lean](tests/lean/Enumerate.lean) | [tests/lean/EnumerateProofs.lean](tests/lean/EnumerateProofs.lean) | 4 (incl. 1 hand-driven WP) |
-| [tests/lean/IteratorCollect.lean](tests/lean/IteratorCollect.lean) | [tests/lean/IteratorCollectProofs.lean](tests/lean/IteratorCollectProofs.lean) | 1 |
-| [tests/lean/OptionMethods.lean](tests/lean/OptionMethods.lean) | [tests/lean/OptionMethodsProofs.lean](tests/lean/OptionMethodsProofs.lean) | 10 |
-| [tests/lean/ResultMethods.lean](tests/lean/ResultMethods.lean) | [tests/lean/ResultMethodsProofs.lean](tests/lean/ResultMethodsProofs.lean) | 10 |
-| [tests/lean/SliceConcat.lean](tests/lean/SliceConcat.lean) | [tests/lean/SliceConcatProofs.lean](tests/lean/SliceConcatProofs.lean) | 1 |
-| [tests/lean/SliceMethods.lean](tests/lean/SliceMethods.lean) | [tests/lean/SliceMethodsProofs.lean](tests/lean/SliceMethodsProofs.lean) | 3 |
-| [tests/lean/StepI32.lean](tests/lean/StepI32.lean) | [tests/lean/StepI32Proofs.lean](tests/lean/StepI32Proofs.lean) | 2 |
-| [tests/lean/StrToOwned.lean](tests/lean/StrToOwned.lean) | [tests/lean/StrToOwnedProofs.lean](tests/lean/StrToOwnedProofs.lean) | 1 |
-| [tests/lean/VecDequeMethods.lean](tests/lean/VecDequeMethods.lean) | [tests/lean/VecDequeMethodsProofs.lean](tests/lean/VecDequeMethodsProofs.lean) | 2 |
-| [tests/lean/VecMethods.lean](tests/lean/VecMethods.lean) | [tests/lean/VecMethodsProofs.lean](tests/lean/VecMethodsProofs.lean) | 10 |
-| **Total** | | **53** |
+Two proof styles are used, distinguished below:
 
-Shared infrastructure: [tests/lean/ProofHelpers.lean](tests/lean/ProofHelpers.lean)
+- **Structural (`simp`/`step*`)** — unfolds the called Aeneas models and
+  discharges goals via registered `@[simp]` / `@[step]` library lemmas.
+  This is the preferred style: it exercises the library spec theorems
+  and makes clear *why* the test succeeds under the model.
+- **Decidable evaluation (`test_correct_of_native`)** — lifts
+  `(f == ok ()) = true` (discharged by `native_decide`) to the WP
+  postcondition. Still a kernel-checked proof term; used where the
+  structural path would need a new library spec per method (e.g.
+  `Slice.clone_from_slice_spec`, `VecDeque.push_back_spec`).
+
+| Test file | Proof file | Theorems | Structural | `native_decide` |
+|---|---|---:|---:|---:|
+| [ArrayFromFn.lean](tests/lean/ArrayFromFn.lean) | [ArrayFromFnProofs.lean](tests/lean/ArrayFromFnProofs.lean) | 1 | 0 | 1 |
+| [CharMethods.lean](tests/lean/CharMethods.lean) | [CharMethodsProofs.lean](tests/lean/CharMethodsProofs.lean) | 1 | 1 | 0 |
+| [ConvertTryfrom.lean](tests/lean/ConvertTryfrom.lean) | [ConvertTryfromProofs.lean](tests/lean/ConvertTryfromProofs.lean) | 3 | 0 | 3 |
+| [CoreMisc.lean](tests/lean/CoreMisc.lean) | [CoreMiscProofs.lean](tests/lean/CoreMiscProofs.lean) | 4 | 4 | 0 |
+| [Enumerate.lean](tests/lean/Enumerate.lean) | [EnumerateProofs.lean](tests/lean/EnumerateProofs.lean) | 4 | 1 (hand-driven WP) | 3 |
+| [IteratorCollect.lean](tests/lean/IteratorCollect.lean) | [IteratorCollectProofs.lean](tests/lean/IteratorCollectProofs.lean) | 1 | 0 | 1 |
+| [OptionMethods.lean](tests/lean/OptionMethods.lean) | [OptionMethodsProofs.lean](tests/lean/OptionMethodsProofs.lean) | 10 | 10 | 0 |
+| [ResultMethods.lean](tests/lean/ResultMethods.lean) | [ResultMethodsProofs.lean](tests/lean/ResultMethodsProofs.lean) | 10 | 10 | 0 |
+| [SliceConcat.lean](tests/lean/SliceConcat.lean) | [SliceConcatProofs.lean](tests/lean/SliceConcatProofs.lean) | 1 | 0 | 1 |
+| [SliceMethods.lean](tests/lean/SliceMethods.lean) | [SliceMethodsProofs.lean](tests/lean/SliceMethodsProofs.lean) | 3 | 0 | 3 |
+| [StepI32.lean](tests/lean/StepI32.lean) | [StepI32Proofs.lean](tests/lean/StepI32Proofs.lean) | 2 | 0 | 2 |
+| [StrToOwned.lean](tests/lean/StrToOwned.lean) | [StrToOwnedProofs.lean](tests/lean/StrToOwnedProofs.lean) | 1 | 1 | 0 |
+| [VecDequeMethods.lean](tests/lean/VecDequeMethods.lean) | [VecDequeMethodsProofs.lean](tests/lean/VecDequeMethodsProofs.lean) | 2 | 0 | 2 |
+| [VecMethods.lean](tests/lean/VecMethods.lean) | [VecMethodsProofs.lean](tests/lean/VecMethodsProofs.lean) | 10 | 10 | 0 |
+| **Total** | | **53** | **37** | **16** |
+
+Shared infrastructure: [ProofHelpers.lean](tests/lean/ProofHelpers.lean)
 provides `test_correct_of_native`, which lifts a decidable evaluation
-(`(f == ok ()) = true`, discharged by `native_decide`) into the WP
-correctness statement.
+into the WP correctness statement.
+
+### Library specs that would unlock structural upgrades for the 16 remaining
+
+Adding these colocated `@[step]` or `@[simp]` lemmas would let the
+remaining files use `simp; step*` instead of `native_decide`:
+
+- `Slice.clone_from_slice_spec` — when `src.len = dst.len`, produces
+  a slice with `val = src.val` under Clone.
+- `Slice.copy_within_spec` — given in-range source and dest, produces
+  a slice with the range moved to `dest`.
+- `PartialEqSliceArray.eq_spec` — length-matching + elementwise eq.
+- `alloc.slice.Insts.AllocSliceConcatTVec.concat_spec` — flattened Vec.
+- `VecDeque.push_back_spec` / `VecDeque.pop_front_spec` — concrete-length
+  guard discharge.
+- `U32.Insts.CoreConvertTryFromU64TryFromIntError.try_from_overflow_spec`
+  and `_fits_spec` — with an explicit boundary on `value.val ≤ U32.max`.
+- `core.array.from_fn_list_spec` (with closure uniformity) — says
+  `from_fn N FnMut cb = ok ⟨List.ofFn (f · N), _⟩` when the closure
+  deterministically maps indices via `f`.
+- `core.iter.range.IteratorRange.collect_spec` — produces
+  `ok ⟨List.range' start (end - start), _⟩` for `(a..b).collect()`.
+- `for`-loop invariant lemmas for integer ranges (StepI32 tests).
+- `core.iter.adapters.enumerate.IteratorEnumerate.next_spec` on
+  `IteratorIntoIter` (for the 3 enumerate tests, paralleling the
+  existing `IteratorSliceIter` specialisations that power
+  `test_enumerate_docs_example_correct`).
 
 ---
 
