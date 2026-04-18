@@ -91,6 +91,7 @@ package «tests» {}
 @[default_target] lean_lib Static
 @[default_target] lean_lib StepBy
 @[default_target] lean_lib StepI32
+@[default_target] lean_lib StepI32Proofs
 @[default_target] lean_lib StringChars
 @[default_target] lean_lib StrToOwned
 @[default_target] lean_lib StrToOwnedProofs

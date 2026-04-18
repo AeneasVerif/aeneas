@@ -8,10 +8,27 @@
 -- can cite.
 
 import Enumerate
+import ProofHelpers
 
 open Aeneas Aeneas.Std Aeneas.Std.WP
 
 namespace enumerate
+
+/-- `[10, 20, 30].iter().enumerate()` yields `(0, &10), (1, &20), (2, &30)`
+then `None`. -/
+theorem test_enumerate_basic_correct :
+    test_enumerate_basic ⦃ _ => True ⦄ :=
+  test_correct_of_native (by native_decide)
+
+/-- `([] as [u32; 0]).iter().enumerate().next()` is `None`. -/
+theorem test_enumerate_empty_correct :
+    test_enumerate_empty ⦃ _ => True ⦄ :=
+  test_correct_of_native (by native_decide)
+
+/-- `[42].iter().enumerate().next()` is `Some((0, &42))`, then `None`. -/
+theorem test_enumerate_single_correct :
+    test_enumerate_single ⦃ _ => True ⦄ :=
+  test_correct_of_native (by native_decide)
 
 /-- The Rust docs example for `Iterator::enumerate`, translated through
 Aeneas, succeeds: enumerating `['a', 'b', 'c']` yields
