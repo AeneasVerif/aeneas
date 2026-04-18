@@ -301,4 +301,70 @@ theorem Array.index_mut_SliceIndexRangeFromUsizeSlice {T : Type} {N : Usize}
   · simp [Slice.length, List.length_drop]
   · intro s'; simp [Array.from_slice, Array.to_slice]
 
+/-! ## Cross-type slice/array comparisons
+
+Pinned to Rust `1.85.0` (Charon pin `nightly-2026-02-07`). -/
+
+/-- Helper: elementwise PartialEq over two equal-length lists. -/
+def core.array.equality.PartialEqSliceArray.eq_loop {T U : Type}
+    (partialEqInst : core.cmp.PartialEq T U)
+    (a : List T) (b : List U) : Result Bool :=
+  match a, b with
+  | [], [] => ok true
+  | x :: xs, y :: ys => do
+    let r ← partialEqInst.eq x y
+    if r then eq_loop partialEqInst xs ys else ok false
+  | _, _ => ok false
+
+/-- `PartialEq<[U; N]> for [T]::eq`: slice equals array elementwise.
+
+- Docs: https://doc.rust-lang.org/core/primitive.slice.html#impl-PartialEq-for-%5BT%5D
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/array/equality.rs
+-/
+@[rust_fun "core::array::equality::{core::cmp::PartialEq<[@T], [@U; @N]>}::eq"]
+def core.array.equality.PartialEqSliceArray.eq {T U : Type} {N : Usize}
+    (partialEqInst : core.cmp.PartialEq T U)
+    (s : Slice T) (a : Array U N) : Result Bool :=
+  if s.length = a.length then
+    core.array.equality.PartialEqSliceArray.eq_loop partialEqInst s.val a.val
+  else ok false
+
+@[rust_fun "core::array::equality::{core::cmp::PartialEq<[@T], [@U; @N]>}::ne"]
+def core.array.equality.PartialEqSliceArray.ne {T U : Type} {N : Usize}
+    (partialEqInst : core.cmp.PartialEq T U)
+    (s : Slice T) (a : Array U N) : Result Bool := do
+  let r ← core.array.equality.PartialEqSliceArray.eq partialEqInst s a
+  ok (¬ r)
+
+@[reducible, rust_trait_impl "core::cmp::PartialEq<[@T], [@U; @N]>"]
+def core.array.equality.PartialEqSliceArray {T U : Type} {N : Usize}
+    (partialEqInst : core.cmp.PartialEq T U) :
+    core.cmp.PartialEq (Slice T) (Array U N) := {
+  eq := core.array.equality.PartialEqSliceArray.eq partialEqInst
+  ne := core.array.equality.PartialEqSliceArray.ne partialEqInst
+}
+
+/-- Helper: lexicographic compare on lists. -/
+def core.slice.cmp.OrdSlice.cmp_loop {T : Type}
+    (ordInst : core.cmp.Ord T) (a b : List T) : Result Ordering :=
+  match a, b with
+  | [], [] => ok .eq
+  | [], _ :: _ => ok .lt
+  | _ :: _, [] => ok .gt
+  | x :: xs, y :: ys => do
+    let c ← ordInst.cmp x y
+    match c with
+    | .eq => cmp_loop ordInst xs ys
+    | other => ok other
+
+/-- `Ord for [T]::cmp`: lexicographic comparison over slices.
+
+- Docs: https://doc.rust-lang.org/core/primitive.slice.html#impl-Ord-for-%5BT%5D
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/slice/cmp.rs
+-/
+@[rust_fun "core::slice::cmp::{core::cmp::Ord<[@T]>}::cmp"]
+def core.slice.cmp.OrdSlice.cmp {T : Type}
+    (ordInst : core.cmp.Ord T) (s s' : Slice T) : Result Ordering :=
+  core.slice.cmp.OrdSlice.cmp_loop ordInst s.val s'.val
+
 end Aeneas.Std

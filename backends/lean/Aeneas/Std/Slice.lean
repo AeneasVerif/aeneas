@@ -4,6 +4,8 @@ import Aeneas.Std.Array.Core
 import Aeneas.Std.Range
 import Aeneas.Std.Core.Ops
 import Aeneas.Std.RawPtr
+import Aeneas.Std.Scalar.Notations
+import Aeneas.Std.Scalar.CheckedOps
 import Aeneas.Tactic.Simp.SimpScalar.SimpScalar
 
 namespace Aeneas.Std
@@ -901,5 +903,181 @@ theorem core.slice.Slice.copy_from_slice.step_spec (copyInst : core.marker.Copy 
 theorem Slice.setSlice!_length {α : Type u} (s : Slice α) (i : ℕ) (s' : List α) :
   (s.setSlice! i s').length = s.length := by
   simp only [Slice.length, Slice.setSlice!, List.length_setSlice!]
+
+/-! ## `RangeBounds<T>` trait + `Range<T>` / `RangeFrom<T>` impls
+
+Pinned to Rust `1.85.0` (Charon pin `nightly-2026-02-07`). -/
+
+/-- `core::ops::range::RangeBounds<T>` trait. -/
+@[rust_trait "core::ops::range::RangeBounds"]
+structure core.ops.range.RangeBounds (Self : Type) (T : Type) where
+  start_bound : Self → Result (core.ops.range.Bound T)
+  end_bound : Self → Result (core.ops.range.Bound T)
+
+/-- `RangeBounds<T> for Range<T>::start_bound`: returns `Bound::Included(start)`.
+
+- Docs: https://doc.rust-lang.org/core/ops/trait.RangeBounds.html#tymethod.start_bound
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/ops/range.rs
+-/
+@[simp, rust_fun
+  "core::ops::range::{core::ops::range::RangeBounds<core::ops::range::Range<@T>, @T>}::start_bound" -canFail]
+def core.ops.range.Range.RangeBounds.start_bound {T : Type}
+    (r : core.ops.range.Range T) : core.ops.range.Bound T :=
+  .Included r.start
+
+/-- `RangeBounds<T> for Range<T>::end_bound`: returns `Bound::Excluded(end)`.
+
+- Docs: https://doc.rust-lang.org/core/ops/trait.RangeBounds.html#tymethod.end_bound
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/ops/range.rs
+-/
+@[simp, rust_fun
+  "core::ops::range::{core::ops::range::RangeBounds<core::ops::range::Range<@T>, @T>}::end_bound" -canFail]
+def core.ops.range.Range.RangeBounds.end_bound {T : Type}
+    (r : core.ops.range.Range T) : core.ops.range.Bound T :=
+  .Excluded r.end
+
+@[reducible, rust_trait_impl
+  "core::ops::range::RangeBounds<core::ops::range::Range<@T>, @T>"]
+def core.ops.range.Range.RangeBounds (T : Type) :
+    core.ops.range.RangeBounds (core.ops.range.Range T) T := {
+  start_bound r := ok (core.ops.range.Range.RangeBounds.start_bound r)
+  end_bound r := ok (core.ops.range.Range.RangeBounds.end_bound r)
+}
+
+/-- `RangeBounds<T> for RangeFrom<T>::start_bound`. -/
+@[simp, rust_fun
+  "core::ops::range::{core::ops::range::RangeBounds<core::ops::range::RangeFrom<@T>, @T>}::start_bound" -canFail]
+def core.ops.range.RangeFrom.RangeBounds.start_bound {T : Type}
+    (r : core.ops.range.RangeFrom T) : core.ops.range.Bound T :=
+  .Included r.start
+
+/-- `RangeBounds<T> for RangeFrom<T>::end_bound`: always `Unbounded`. -/
+@[simp, rust_fun
+  "core::ops::range::{core::ops::range::RangeBounds<core::ops::range::RangeFrom<@T>, @T>}::end_bound" -canFail]
+def core.ops.range.RangeFrom.RangeBounds.end_bound {T : Type}
+    (_ : core.ops.range.RangeFrom T) : core.ops.range.Bound T :=
+  .Unbounded
+
+@[reducible, rust_trait_impl
+  "core::ops::range::RangeBounds<core::ops::range::RangeFrom<@T>, @T>"]
+def core.ops.range.RangeFrom.RangeBounds (T : Type) :
+    core.ops.range.RangeBounds (core.ops.range.RangeFrom T) T := {
+  start_bound r := ok (core.ops.range.RangeFrom.RangeBounds.start_bound r)
+  end_bound r := ok (core.ops.range.RangeFrom.RangeBounds.end_bound r)
+}
+
+/-! ## `SliceIndex<RangeFull, [T], [T]>` — the `..` index on slices
+
+The `..` full range just returns the slice unchanged.
+-/
+
+@[reducible, rust_trait_impl
+  "core::slice::index::private_slice_index::Sealed<core::ops::range::RangeFull>"]
+def core.slice.index.private_slice_index.SealedRangeFull :
+    core.slice.index.private_slice_index.Sealed core.ops.range.RangeFull := {}
+
+@[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFull, [@T], [@T]>}::get"]
+def core.slice.index.SliceIndexRangeFullSlice.get {T : Type}
+    (_ : core.ops.range.RangeFull) (s : Slice T) : Result (Option (Slice T)) :=
+  ok (some s)
+
+@[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFull, [@T], [@T]>}::get_mut"]
+def core.slice.index.SliceIndexRangeFullSlice.get_mut {T : Type}
+    (_ : core.ops.range.RangeFull) (s : Slice T) :
+    Result ((Option (Slice T)) × (Option (Slice T) → Slice T)) :=
+  ok (some s, fun s' => match s' with | some s' => s' | none => s)
+
+@[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFull, [@T], [@T]>}::get_unchecked"]
+def core.slice.index.SliceIndexRangeFullSlice.get_unchecked {T : Type} :
+    core.ops.range.RangeFull → ConstRawPtr (Slice T) →
+      Result (ConstRawPtr (Slice T)) :=
+  fun _ _ => fail .undef
+
+@[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFull, [@T], [@T]>}::get_unchecked_mut"]
+def core.slice.index.SliceIndexRangeFullSlice.get_unchecked_mut {T : Type} :
+    core.ops.range.RangeFull → MutRawPtr (Slice T) →
+      Result (MutRawPtr (Slice T)) :=
+  fun _ _ => fail .undef
+
+@[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFull, [@T], [@T]>}::index"]
+def core.slice.index.SliceIndexRangeFullSlice.index {T : Type}
+    (_ : core.ops.range.RangeFull) (s : Slice T) : Result (Slice T) :=
+  ok s
+
+@[rust_fun "core::slice::index::{core::slice::index::SliceIndex<core::ops::range::RangeFull, [@T], [@T]>}::index_mut"]
+def core.slice.index.SliceIndexRangeFullSlice.index_mut {T : Type}
+    (_ : core.ops.range.RangeFull) (s : Slice T) :
+    Result ((Slice T) × (Slice T → Slice T)) :=
+  ok (s, fun s' => s')
+
+@[reducible, rust_trait_impl
+  "core::slice::index::SliceIndex<core::ops::range::RangeFull, [@T], [@T]>"]
+def core.slice.index.SliceIndexRangeFullSlice (T : Type) :
+    core.slice.index.SliceIndex core.ops.range.RangeFull (Slice T) (Slice T) := {
+  sealedInst := core.slice.index.private_slice_index.SealedRangeFull
+  get := core.slice.index.SliceIndexRangeFullSlice.get
+  get_mut := core.slice.index.SliceIndexRangeFullSlice.get_mut
+  get_unchecked := core.slice.index.SliceIndexRangeFullSlice.get_unchecked
+  get_unchecked_mut := core.slice.index.SliceIndexRangeFullSlice.get_unchecked_mut
+  index := core.slice.index.SliceIndexRangeFullSlice.index
+  index_mut := core.slice.index.SliceIndexRangeFullSlice.index_mut
+}
+
+/-! ## More `[T]` methods
+
+Pinned to Rust `1.85.0` (Charon pin `nightly-2026-02-07`). -/
+
+/-- `[T]::clone_from_slice`: copies `src` into `self`, requiring the same
+length. Mirrors `copy_from_slice` but uses the `Clone` trait.
+
+- Docs: https://doc.rust-lang.org/core/primitive.slice.html#method.clone_from_slice
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/slice/mod.rs
+-/
+@[rust_fun "core::slice::{[@T]}::clone_from_slice"]
+def core.slice.Slice.clone_from_slice {T : Type}
+    (cloneInst : core.clone.Clone T)
+    (s : Slice T) (src : Slice T) : Result (Slice T) := do
+  if s.len = src.len then
+    Slice.clone cloneInst.clone src
+  else fail panic
+
+/-- Helper: resolve a `Bound<Usize>` start to a concrete index (defaulting
+to 0 for `Unbounded`). -/
+def core.slice.Slice.copy_within.resolveStart (b : core.ops.range.Bound Usize) :
+    Result Usize :=
+  match b with
+  | .Included i => ok i
+  | .Excluded i => do let r ← i + 1#usize; ok r
+  | .Unbounded => ok 0#usize
+
+/-- Helper: resolve a `Bound<Usize>` end to a concrete index (defaulting
+to `len` for `Unbounded`). -/
+def core.slice.Slice.copy_within.resolveEnd
+    (b : core.ops.range.Bound Usize) (len : Usize) : Result Usize :=
+  match b with
+  | .Included i => do let r ← i + 1#usize; ok r
+  | .Excluded i => ok i
+  | .Unbounded => ok len
+
+/-- `[T]::copy_within`: copies the elements at indices in `src` to the
+position starting at `dest`, within the same slice.
+
+- Docs: https://doc.rust-lang.org/core/primitive.slice.html#method.copy_within
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/slice/mod.rs
+-/
+@[rust_fun "core::slice::{[@T]}::copy_within"]
+def core.slice.Slice.copy_within {T R : Type}
+    (rbInst : core.ops.range.RangeBounds R Usize)
+    (_ : core.marker.Copy T)
+    (s : Slice T) (src : R) (dest : Usize) : Result (Slice T) := do
+  let sb ← rbInst.start_bound src
+  let eb ← rbInst.end_bound src
+  let start ← core.slice.Slice.copy_within.resolveStart sb
+  let end_ ← core.slice.Slice.copy_within.resolveEnd eb (Slice.len s)
+  if start.val ≤ end_.val ∧ end_.val ≤ s.length ∧
+     dest.val + (end_.val - start.val) ≤ s.length then
+    let chunk := (s.val.drop start.val).take (end_.val - start.val)
+    ok ⟨ s.val.setSlice! dest.val chunk, by scalar_tac ⟩
+  else fail panic
 
 end Aeneas.Std

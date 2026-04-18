@@ -41,15 +41,15 @@ For each ✅ row, a reviewer can chase the links:
 | Result methods | 6 | 6 |
 | Vec methods | 8 | 8 |
 | VecDeque (new type + methods) | 3 | 0 |
-| Slice methods | 6 | 0 |
-| Range (RangeFull index, RangeFrom bounds, Range Iterator) | 7 | 0 |
+| Slice methods | 6 | 4 |
+| Range (RangeFull index, RangeFrom bounds, Range Iterator) | 7 | 5 |
 | Iterator adapters/collect/defaults | 8 | 1 |
 | Array (from_fn, PartialEq) | 2 | 0 |
 | i32 Iter::Step trait | 3 | 3 |
 | Cmp/Eq/Borrow traits | 3 | 3 |
 | Misc (black_box, TryFrom, TryFromIntError, to_owned) | 4 | 3 |
 | Deferred (fmt) | 2 | — |
-| **Total** | **60** | **29** |
+| **Total** | **60** | **38** |
 
 ---
 
@@ -123,12 +123,12 @@ All `Vec` methods take `keepParams := [true, false]` to erase the allocator type
 
 | Rust item | Lean name | Docs | Source | Status | Deps | Lean file | Test file | Proof |
 |---|---|---|---|---|---|---|---|---|
-| `[T]::clone_from_slice` | `core.slice.Slice.clone_from_slice` | [docs](https://doc.rust-lang.org/core/primitive.slice.html#method.clone_from_slice) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/slice/mod.rs) | ⬜ | — | — | — | — |
-| `[T]::copy_within` | `core.slice.Slice.copy_within` | [docs](https://doc.rust-lang.org/core/primitive.slice.html#method.copy_within) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/slice/mod.rs) | ⬜ | — | — | — | — |
-| `Ord for [T]::cmp` | `Slice.Insts.CoreCmpOrd.cmp` | [docs](https://doc.rust-lang.org/core/primitive.slice.html#impl-Ord-for-%5BT%5D) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/slice/cmp.rs) | ⬜ | — | — | — | — |
+| `[T]::clone_from_slice` | `core.slice.Slice.clone_from_slice` | [docs](https://doc.rust-lang.org/core/primitive.slice.html#method.clone_from_slice) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/slice/mod.rs) | ✅ | — | [Slice.lean](backends/lean/Aeneas/Std/Slice.lean) | [tests/src/slice_methods.rs](tests/src/slice_methods.rs) | — |
+| `[T]::copy_within` | `core.slice.Slice.copy_within` | [docs](https://doc.rust-lang.org/core/primitive.slice.html#method.copy_within) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/slice/mod.rs) | ✅ | `RangeBounds`, `Bound<T>` | [Slice.lean](backends/lean/Aeneas/Std/Slice.lean) | [tests/src/slice_methods.rs](tests/src/slice_methods.rs) | — |
+| `Ord for [T]::cmp` | `core.slice.cmp.OrdSlice.cmp` | [docs](https://doc.rust-lang.org/core/primitive.slice.html#impl-Ord-for-%5BT%5D) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/slice/cmp.rs) | ✅ | — | [Array/ArraySlice.lean](backends/lean/Aeneas/Std/Array/ArraySlice.lean) | — | — |
 | `[T]::concat` (alloc slice) | `alloc.slice.Slice.concat` | [docs](https://doc.rust-lang.org/alloc/slice/trait.Concat.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/slice.rs) | ⬜ | `Concat for [V]::concat` | — | — | — |
 | `Concat<T, Vec<T>> for [V]::concat` | `Slice.Insts.AllocSliceConcatTVec.concat` | [docs](https://doc.rust-lang.org/alloc/slice/trait.Concat.html#tymethod.concat) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/slice.rs) | ⬜ | — | — | — | — |
-| `PartialEq<[U; N]> for [T]::eq` | `Slice.Insts.CoreCmpPartialEqArray.eq` | [docs](https://doc.rust-lang.org/core/primitive.slice.html#impl-PartialEq-for-%5BT%5D) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/array/equality.rs) | ⬜ | — | — | — | — |
+| `PartialEq<[U; N]> for [T]::eq` | `core.array.equality.PartialEqSliceArray.eq` | [docs](https://doc.rust-lang.org/core/primitive.slice.html#impl-PartialEq-for-%5BT%5D) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/array/equality.rs) | ✅ | `SliceIndex<RangeFull, [T], [T]>` | [Array/ArraySlice.lean](backends/lean/Aeneas/Std/Array/ArraySlice.lean) | [tests/src/slice_methods.rs](tests/src/slice_methods.rs) | — |
 
 ---
 
@@ -136,11 +136,11 @@ All `Vec` methods take `keepParams := [true, false]` to erase the allocator type
 
 | Rust item | Lean name | Docs | Source | Status | Deps | Lean file | Test file | Proof |
 |---|---|---|---|---|---|---|---|---|
-| `SliceIndex<[T], [T]> for RangeFull::index` | `core.ops.range.RangeFull.Insts.CoreSliceIndexSliceIndexSliceSlice.index` | [docs](https://doc.rust-lang.org/core/slice/trait.SliceIndex.html#tymethod.index) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/slice/index.rs) | ⬜ | — | — | — | — |
-| `SliceIndex for RangeFull::get` | `core.ops.range.RangeFull.Insts.CoreSliceIndexSliceIndexSliceSlice.get` | [docs](https://doc.rust-lang.org/core/slice/trait.SliceIndex.html#tymethod.get) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/slice/index.rs) | ⬜ | — | — | — | — |
-| `SliceIndex for RangeFull::get_mut` | `core.ops.range.RangeFull.Insts.CoreSliceIndexSliceIndexSliceSlice.get_mut` | [docs](https://doc.rust-lang.org/core/slice/trait.SliceIndex.html#tymethod.get_mut) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/slice/index.rs) | ⬜ | — | — | — | — |
-| `RangeBounds<T> for RangeFrom<T>::start_bound` | `core.ops.range.RangeFrom.Insts.CoreOpsRangeRangeBounds.start_bound` | [docs](https://doc.rust-lang.org/core/ops/trait.RangeBounds.html#tymethod.start_bound) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/ops/range.rs) | ⬜ | `Bound<T>` type | — | — | — |
-| `RangeBounds<T> for RangeFrom<T>::end_bound` | `core.ops.range.RangeFrom.Insts.CoreOpsRangeRangeBounds.end_bound` | [docs](https://doc.rust-lang.org/core/ops/trait.RangeBounds.html#tymethod.end_bound) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/ops/range.rs) | ⬜ | `Bound<T>` type | — | — | — |
+| `SliceIndex<[T], [T]> for RangeFull::index` | `core.slice.index.SliceIndexRangeFullSlice.index` | [docs](https://doc.rust-lang.org/core/slice/trait.SliceIndex.html#tymethod.index) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/slice/index.rs) | ✅ | `RangeFull` type | [Slice.lean](backends/lean/Aeneas/Std/Slice.lean) | [tests/src/slice_methods.rs](tests/src/slice_methods.rs) | — |
+| `SliceIndex for RangeFull::get` | `core.slice.index.SliceIndexRangeFullSlice.get` | [docs](https://doc.rust-lang.org/core/slice/trait.SliceIndex.html#tymethod.get) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/slice/index.rs) | ✅ | `RangeFull` type | [Slice.lean](backends/lean/Aeneas/Std/Slice.lean) | — | — |
+| `SliceIndex for RangeFull::get_mut` | `core.slice.index.SliceIndexRangeFullSlice.get_mut` | [docs](https://doc.rust-lang.org/core/slice/trait.SliceIndex.html#tymethod.get_mut) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/slice/index.rs) | ✅ | `RangeFull` type | [Slice.lean](backends/lean/Aeneas/Std/Slice.lean) | — | — |
+| `RangeBounds<T> for RangeFrom<T>::start_bound` | `core.ops.range.RangeFrom.RangeBounds.start_bound` | [docs](https://doc.rust-lang.org/core/ops/trait.RangeBounds.html#tymethod.start_bound) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/ops/range.rs) | ✅ | `Bound<T>` type | [Slice.lean](backends/lean/Aeneas/Std/Slice.lean) | — | — |
+| `RangeBounds<T> for RangeFrom<T>::end_bound` | `core.ops.range.RangeFrom.RangeBounds.end_bound` | [docs](https://doc.rust-lang.org/core/ops/trait.RangeBounds.html#tymethod.end_bound) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/ops/range.rs) | ✅ | `Bound<T>` type | [Slice.lean](backends/lean/Aeneas/Std/Slice.lean) | — | — |
 | `Iterator for Range<A>::collect` | `core.ops.range.Range.Insts.CoreIterTraitsIteratorIterator.collect` | [docs](https://doc.rust-lang.org/core/iter/trait.Iterator.html#method.collect) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/iter/range.rs) | ⬜ | — | — | — | — |
 | `Iterator for Range<A>::map` | `core.ops.range.Range.Insts.CoreIterTraitsIteratorIterator.map` | [docs](https://doc.rust-lang.org/core/iter/trait.Iterator.html#method.map) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/iter/range.rs) | ⬜ | — | — | — | — |
 
