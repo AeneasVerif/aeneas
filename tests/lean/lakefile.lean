@@ -44,6 +44,7 @@ package «tests» {}
 @[default_target] lean_lib Hashmap
 @[default_target] lean_lib Into
 @[default_target] lean_lib IteratorCollect
+@[default_target] lean_lib IteratorCollectProofs
 @[default_target] lean_lib Iterators
 @[default_target] lean_lib IteratorsArray
 @[default_target] lean_lib Issue134LoopSharedBorrows
@@ -83,7 +84,9 @@ package «tests» {}
 @[default_target] lean_lib RenameAttribute
 @[default_target] lean_lib Scalars
 @[default_target] lean_lib SliceConcat
+@[default_target] lean_lib SliceConcatProofs
 @[default_target] lean_lib SliceMethods
+@[default_target] lean_lib SliceMethodsProofs
 @[default_target] lean_lib Slices
 @[default_target] lean_lib Static
 @[default_target] lean_lib StepBy
@@ -96,5 +99,6 @@ package «tests» {}
 @[default_target] lean_lib Tutorial
 @[default_target] lean_lib Vec
 @[default_target] lean_lib VecDequeMethods
+@[default_target] lean_lib VecDequeMethodsProofs
 @[default_target] lean_lib VecMethods
 @[default_target] lean_lib VecMethodsProofs
