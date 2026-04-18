@@ -27,6 +27,11 @@ structure core.slice.iter.IterMut (T : Type) where
 def core.slice.Slice.iter {T : Type} (s : Slice T) : Result (core.slice.iter.Iter T) :=
   ok ⟨ s, 0 ⟩
 
+@[step]
+theorem core.slice.Slice.iter_spec {T : Type} (s : Slice T) :
+  core.slice.Slice.iter s ⦃ i => i.slice = s ∧ i.i = 0 ⦄ := by
+  unfold core.slice.Slice.iter; simp
+
 @[rust_fun "core::slice::{[@T]}::contains"]
 def core.slice.Slice.contains {T : Type} (partialEqInst : core.cmp.PartialEq T T)
   (s : Slice T) (x : T) : Result Bool :=
@@ -65,6 +70,17 @@ def core.slice.iter.IteratorSliceIter.next
     ok (some x, it)
   else ok (none, it)
 
+@[step]
+theorem core.slice.iter.IteratorSliceIter.next_spec
+  {T : Type} (it : core.slice.iter.Iter T) :
+  core.slice.iter.IteratorSliceIter.next it ⦃ r =>
+    if h : it.i < it.slice.len then
+      r.1 = some (it.slice[it.i]'h) ∧ r.2 = { it with i := it.i + 1 }
+    else
+      r.1 = none ∧ r.2 = it ⦄ := by
+  unfold core.slice.iter.IteratorSliceIter.next
+  split <;> simp
+
 @[rust_fun
   "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::step_by"]
 def core.slice.iter.IteratorSliceIter.step_by {T} (slice : core.slice.iter.Iter T) (steps : Usize) :
@@ -77,6 +93,13 @@ def core.slice.iter.IteratorSliceIter.step_by {T} (slice : core.slice.iter.Iter 
 def core.slice.iter.IteratorSliceIter.enumerate {T} (slice : core.slice.iter.Iter T) :
   Result (core.iter.adapters.enumerate.Enumerate (core.slice.iter.Iter T)) :=
   .ok { iter := slice, count := 0#usize }
+
+@[step]
+theorem core.slice.iter.IteratorSliceIter.enumerate_spec
+  {T : Type} (s : core.slice.iter.Iter T) :
+  core.slice.iter.IteratorSliceIter.enumerate s ⦃ e =>
+    e.iter = s ∧ e.count = 0#usize ⦄ := by
+  unfold core.slice.iter.IteratorSliceIter.enumerate; simp
 
 @[rust_fun
   "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::take"]
@@ -93,6 +116,56 @@ def core.iter.traits.iterator.IteratorSliceIter (T : Type) :
   enumerate := core.slice.iter.IteratorSliceIter.enumerate
   take := core.slice.iter.IteratorSliceIter.take
 }
+
+/-! ## Specialised `@[step]` specs for `IteratorEnumerate.next` on `IteratorSliceIter`
+
+These avoid the ghost-argument problem of the general
+`IteratorEnumerate.next_some_spec` / `next_none_spec`: here the inner iterator
+is fixed to `IteratorSliceIter T`, so `step` can auto-apply based on the
+conclusion's head without user-supplied `(item := ...)` / `(innerIter := ...)`
+arguments. -/
+
+/-- Specialised spec: applied manually when the inner `Iter` is known to be
+in bounds. Not `@[step]` because `step*` would otherwise apply it eagerly
+and strand the following `Result.ofOption`/`match` pattern (step does not
+auto-rewrite the `out.1 = some _` equation into the match). -/
+theorem core.iter.adapters.enumerate.IteratorEnumerate.next_SliceIter_some_spec
+  {T : Type}
+  (self : core.iter.adapters.enumerate.Enumerate (core.slice.iter.Iter T))
+  (hBounds : self.iter.i < self.iter.slice.len)
+  (hOverflow : self.count.val + 1 ≤ Usize.max) :
+  core.iter.adapters.enumerate.IteratorEnumerate.next
+      (core.iter.traits.iterator.IteratorSliceIter T) self ⦃ r =>
+    r.1 = some (self.count, self.iter.slice[self.iter.i]'hBounds) ∧
+    r.2.iter = { slice := self.iter.slice, i := self.iter.i + 1 } ∧
+    r.2.count.val = self.count.val + 1 ⦄ := by
+  apply core.iter.adapters.enumerate.IteratorEnumerate.next_some_spec
+      (IteratorInst := core.iter.traits.iterator.IteratorSliceIter T)
+      (self := self)
+      (item := self.iter.slice[self.iter.i]'hBounds)
+      (innerIter := { slice := self.iter.slice, i := self.iter.i + 1 })
+  · show core.slice.iter.IteratorSliceIter.next self.iter = _
+    unfold core.slice.iter.IteratorSliceIter.next
+    have : self.iter.i < self.iter.slice.val.length := by scalar_tac
+    simp [this]
+  · exact hOverflow
+
+/-- Applied manually for the case where the slice iterator is exhausted. -/
+theorem core.iter.adapters.enumerate.IteratorEnumerate.next_SliceIter_none_spec
+  {T : Type}
+  (self : core.iter.adapters.enumerate.Enumerate (core.slice.iter.Iter T))
+  (hExhausted : self.iter.slice.len ≤ self.iter.i) :
+  core.iter.adapters.enumerate.IteratorEnumerate.next
+      (core.iter.traits.iterator.IteratorSliceIter T) self ⦃ r =>
+    r.1 = none ∧ r.2.iter = self.iter ∧ r.2.count = self.count ⦄ := by
+  apply core.iter.adapters.enumerate.IteratorEnumerate.next_none_spec
+      (IteratorInst := core.iter.traits.iterator.IteratorSliceIter T)
+      (self := self)
+      (innerIter := self.iter)
+  show core.slice.iter.IteratorSliceIter.next self.iter = _
+  unfold core.slice.iter.IteratorSliceIter.next
+  have : ¬ self.iter.i < self.iter.slice.val.length := by scalar_tac
+  simp [this]
 
 @[rust_type "core::slice::iter::ChunksExact" (body := .opaque)]
 structure core.slice.iter.ChunksExact (T : Type) where

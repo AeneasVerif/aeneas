@@ -10,6 +10,7 @@ namespace Std
 open Result
 
 attribute [rust_type "core::option::Option" -prefixVariantNames] Option
+attribute [step_simps] Result.ofOption
 
 @[rust_fun "alloc::boxed::{core::convert::AsMut<Box<@T>, @T>}::as_mut" -canFail (keepParams := [true,false])]
 def alloc.boxed.AsMutBox.as_mut {T : Type} (x : T) : T × (T → T) :=

@@ -20,4 +20,6 @@ private def notCI : Bool := run_io
 /-- Generate the `.ml` file listing the definitions supported by the standard library. -/
 lean_exe extract where
   root := `AeneasExtract
-  supportInterpreter := false
+  -- Required: the extraction loads the compiled `Aeneas` module at runtime to
+  -- read its environment, which invokes extern functions like `UInt64.ofNatLT`.
+  supportInterpreter := true

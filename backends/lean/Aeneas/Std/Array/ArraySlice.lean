@@ -20,6 +20,21 @@ attribute [-simp] List.getElem!_eq_getElem?_getD
 def Array.to_slice {α : Type u} {n : Usize} (v : Array α n) : Slice α :=
   ⟨ v.val, by scalar_tac ⟩
 
+@[simp, scalar_tac_simps]
+theorem Array.to_slice_val {α : Type u} {n : Usize} (v : Array α n) :
+    v.to_slice.val = v.val := by rfl
+
+@[simp, scalar_tac_simps]
+theorem Array.to_slice_length {α : Type u} {n : Usize} (v : Array α n) :
+    v.to_slice.length = n.val := by simp [Slice.length, Array.to_slice]
+
+@[simp, scalar_tac_simps]
+theorem Array.to_slice_len {α : Type u} {n : Usize} (v : Array α n) :
+    v.to_slice.len = n := by
+  unfold Slice.len
+  simp [Array.to_slice]
+  scalar_tac
+
 def Array.from_slice {α : Type u} {n : Usize} (a : Array α n) (s : Slice α) : Array α n :=
   if h: s.val.length = n.val then
     ⟨ s.val, by simp [*] ⟩

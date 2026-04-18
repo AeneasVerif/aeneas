@@ -30,6 +30,8 @@ package «tests» {}
 @[default_target] lean_lib Drop
 @[default_target] lean_lib Dyn
 @[default_target] lean_lib DynamicSize
+@[default_target] lean_lib Enumerate
+@[default_target] lean_lib EnumerateProofs
 @[default_target] lean_lib FromTo
 @[default_target] lean_lib Hashmap
 @[default_target] lean_lib Into

@@ -131,6 +131,148 @@ def core.iter.traits.iterator.IteratorStepBy {I : Type} {Item : Type}
   take := core.iter.adapters.step_by.IteratorStepBy.take IteratorInst
 }
 
+/-! ## `Enumerate` adapter
+
+The `Enumerate` adapter struct is defined above (line 36). This section
+contains everything else for `enumerate`:
+- the `Iterator::enumerate` trait default (constructs an `Enumerate`),
+- the per-method implementations of `Iterator` for `Enumerate<I>`,
+- the trait instance gluing them together.
+
+- Docs (trait method): https://doc.rust-lang.org/core/iter/trait.Iterator.html#method.enumerate
+- Docs (adapter type): https://doc.rust-lang.org/core/iter/struct.Enumerate.html
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/iter/adapters/enumerate.rs
+  (Charon currently pins `nightly-2026-02-07`; `enumerate` is stable since
+  Rust 1.0 and unchanged across recent versions.)
+-/
+
+/-- `Iterator::enumerate`: default implementation. Wraps an iterator in an
+`Enumerate` adapter so that subsequent `.next()` calls yield `(index, item)`
+pairs, with `index` starting at `0` and incremented once per element. Cannot
+fail.
+-/
+@[rust_fun "core::iter::traits::iterator::Iterator::enumerate"]
+def core.iter.traits.iterator.Iterator.enumerate.default
+  {Self : Type} (self : Self) :
+  Result (core.iter.adapters.enumerate.Enumerate Self) :=
+  .ok { iter := self, count := 0#usize }
+
+@[step]
+theorem core.iter.traits.iterator.Iterator.enumerate.default_spec
+  {Self : Type} (self : Self) :
+  core.iter.traits.iterator.Iterator.enumerate.default self ⦃ e =>
+    e.iter = self ∧ e.count = 0#usize ⦄ := by
+  unfold core.iter.traits.iterator.Iterator.enumerate.default
+  simp
+
+/-- `Iterator::next` for `Enumerate<I>`: pulls the next element from the
+inner iterator, pairs it with the current `count`, and increments `count`.
+
+**Overflow behavior.** Rust's enumerate does not guard against overflow:
+enumerating more than `usize::MAX` elements either silently wraps (release
+mode) or panics (debug mode). This model is *strictly stronger*: the count
+increment uses Aeneas's checked `Usize` addition, which always returns
+`.fail .panic` on overflow. So our model rules out the silent-wrap branch
+and conservatively models the panic branch — a sound over-approximation
+suitable for verification.
+-/
+@[rust_fun
+  "core::iter::adapters::enumerate::{core::iter::traits::iterator::Iterator<core::iter::adapters::enumerate::Enumerate<@I>, (usize, @Clause0_Item)>}::next"]
+def core.iter.adapters.enumerate.IteratorEnumerate.next
+  {I : Type} {Item : Type}
+  (IteratorInst : core.iter.traits.iterator.Iterator I Item) :
+  core.iter.adapters.enumerate.Enumerate I →
+  Result ((Option (Usize × Item)) × (core.iter.adapters.enumerate.Enumerate I)) :=
+  fun self => do
+    let (opt, iter) ← IteratorInst.next self.iter
+    match opt with
+    | none => .ok (none, { self with iter })
+    | some item => do
+      let count' ← self.count + 1#usize
+      .ok (some (self.count, item), { iter, count := count' })
+
+/- A single parametric `@[step]` spec for `IteratorEnumerate.next` is awkward
+because the function's behaviour depends on the inner iterator's `next`
+outcome. Instead, we provide two case-split spec theorems below (for the
+`some`/`none` cases). Downstream proofs apply whichever matches after
+determining which branch was taken. -/
+
+/-- `IteratorEnumerate.next` when the inner iterator yields an item.
+The preconditions record the inner `.next()` outcome and that the `count`
+increment doesn't overflow `usize`. -/
+theorem core.iter.adapters.enumerate.IteratorEnumerate.next_some_spec
+  {I : Type} {Item : Type}
+  (IteratorInst : core.iter.traits.iterator.Iterator I Item)
+  (self : core.iter.adapters.enumerate.Enumerate I)
+  (item : Item) (innerIter : I)
+  (hInner : IteratorInst.next self.iter = .ok (some item, innerIter))
+  (hNoOverflow : self.count.val + 1 ≤ Usize.max) :
+  core.iter.adapters.enumerate.IteratorEnumerate.next IteratorInst self ⦃ r =>
+    r.1 = some (self.count, item) ∧
+    r.2.iter = innerIter ∧
+    r.2.count.val = self.count.val + 1 ⦄ := by
+  unfold core.iter.adapters.enumerate.IteratorEnumerate.next
+  simp [hInner]
+  have hAdd := @UScalar.add_spec .Usize self.count 1#usize (by scalar_tac)
+  generalize hEq : self.count + 1#usize = r at hAdd
+  cases r with
+  | ok count' => simp_all
+  | fail => exact hAdd
+  | div => exact hAdd
+
+/-- `IteratorEnumerate.next` when the inner iterator is exhausted. -/
+theorem core.iter.adapters.enumerate.IteratorEnumerate.next_none_spec
+  {I : Type} {Item : Type}
+  (IteratorInst : core.iter.traits.iterator.Iterator I Item)
+  (self : core.iter.adapters.enumerate.Enumerate I)
+  (innerIter : I)
+  (hInner : IteratorInst.next self.iter = .ok (none, innerIter)) :
+  core.iter.adapters.enumerate.IteratorEnumerate.next IteratorInst self ⦃ r =>
+    r.1 = none ∧ r.2.iter = innerIter ∧ r.2.count = self.count ⦄ := by
+  unfold core.iter.adapters.enumerate.IteratorEnumerate.next
+  simp [hInner]
+
+@[rust_fun
+  "core::iter::adapters::enumerate::{core::iter::traits::iterator::Iterator<core::iter::adapters::enumerate::Enumerate<@I>, (usize, @Clause0_Item)>}::step_by"]
+def core.iter.adapters.enumerate.IteratorEnumerate.step_by
+  {I : Type} {Item : Type}
+  (IteratorInst : core.iter.traits.iterator.Iterator I Item) :
+  core.iter.adapters.enumerate.Enumerate I → Std.Usize →
+  Result (core.iter.adapters.step_by.StepBy (core.iter.adapters.enumerate.Enumerate I)) :=
+  fun self steps =>
+    if steps.val = 0 then .fail .panic
+    else .ok ⟨ self, steps ⟩
+
+@[rust_fun
+  "core::iter::adapters::enumerate::{core::iter::traits::iterator::Iterator<core::iter::adapters::enumerate::Enumerate<@I>, (usize, @Clause0_Item)>}::enumerate"]
+def core.iter.adapters.enumerate.IteratorEnumerate.enumerate
+  {I : Type} {Item : Type}
+  (IteratorInst : core.iter.traits.iterator.Iterator I Item) :
+  core.iter.adapters.enumerate.Enumerate I →
+  Result (core.iter.adapters.enumerate.Enumerate (core.iter.adapters.enumerate.Enumerate I)) :=
+  fun self => .ok { iter := self, count := 0#usize }
+
+@[rust_fun
+  "core::iter::adapters::enumerate::{core::iter::traits::iterator::Iterator<core::iter::adapters::enumerate::Enumerate<@I>, (usize, @Clause0_Item)>}::take"]
+def core.iter.adapters.enumerate.IteratorEnumerate.take
+  {I : Type} {Item : Type}
+  (IteratorInst : core.iter.traits.iterator.Iterator I Item) :
+  core.iter.adapters.enumerate.Enumerate I → Std.Usize →
+  Result (core.iter.adapters.take.Take (core.iter.adapters.enumerate.Enumerate I)) :=
+  fun self n => .ok ⟨ self, n ⟩
+
+@[reducible, rust_trait_impl
+  "core::iter::traits::iterator::Iterator<core::iter::adapters::enumerate::Enumerate<@I>, (usize, @Clause0_Item)>"]
+def core.iter.traits.iterator.IteratorEnumerate {I : Type} {Item : Type}
+  (IteratorInst : core.iter.traits.iterator.Iterator I Item) :
+  core.iter.traits.iterator.Iterator
+    (core.iter.adapters.enumerate.Enumerate I) (Usize × Item) := {
+  next := core.iter.adapters.enumerate.IteratorEnumerate.next IteratorInst
+  step_by := core.iter.adapters.enumerate.IteratorEnumerate.step_by IteratorInst
+  enumerate := core.iter.adapters.enumerate.IteratorEnumerate.enumerate IteratorInst
+  take := core.iter.adapters.enumerate.IteratorEnumerate.take IteratorInst
+}
+
 @[rust_trait "core::iter::traits::accum::Sum"]
 structure core.iter.traits.accum.Sum (Self : Type) (A : Type) where
   sum : forall {I : Type} (_ : core.iter.traits.iterator.Iterator I A), I → Result Self
