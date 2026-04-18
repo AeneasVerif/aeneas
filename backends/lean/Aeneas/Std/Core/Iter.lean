@@ -366,6 +366,73 @@ def core.iter.range.StepUsize : core.iter.range.Step Usize := {
   backward_checked := core.iter.range.StepUsize.backward_checked
 }
 
+/-! ### `Step` trait for `i32`
+
+Pinned to Rust `1.85.0` (Charon pin `nightly-2026-02-07`). The Rust impl lives
+in the `step_integer_impls!` macro in [iter/range.rs][src].
+
+[src]: https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/iter/range.rs
+-/
+
+/-- `Step::steps_between` for `i32`: returns the number of steps between `start`
+and `end_`. If `start ≤ end_`, returns `(end_ - start, some (end_ - start))`;
+otherwise returns `(0, none)`.
+
+- Docs: https://doc.rust-lang.org/core/iter/trait.Step.html#tymethod.steps_between
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/iter/range.rs
+-/
+@[rust_fun
+  "core::iter::range::{core::iter::range::Step<i32>}::steps_between"]
+def core.iter.range.StepI32.steps_between
+  : I32 → I32 → Result (Usize × (Option Usize)) :=
+  λ start end_ =>
+    if h: start.val > end_.val then ok ⟨ 0#usize, none ⟩ else
+      let steps := Usize.ofNatCore (end_.val - start.val).toNat (by scalar_tac)
+      ok ⟨ steps, some steps ⟩
+
+/-- `Step::forward_checked` for `i32`: returns `start + n` if it fits in `i32`,
+else `none`.
+
+- Docs: https://doc.rust-lang.org/core/iter/trait.Step.html#tymethod.forward_checked
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/iter/range.rs
+-/
+@[rust_fun
+  "core::iter::range::{core::iter::range::Step<i32>}::forward_checked"]
+def core.iter.range.StepI32.forward_checked
+  : I32 → Usize → Result (Option I32) :=
+  λ start n =>
+    let sum : Int := start.val + n.val
+    if h : I32.min ≤ sum ∧ sum ≤ I32.max then
+      ok (some (I32.ofIntCore sum (by scalar_tac)))
+    else
+      ok none
+
+/-- `Step::backward_checked` for `i32`: returns `start - n` if it fits in `i32`,
+else `none`.
+
+- Docs: https://doc.rust-lang.org/core/iter/trait.Step.html#tymethod.backward_checked
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/iter/range.rs
+-/
+@[rust_fun
+  "core::iter::range::{core::iter::range::Step<i32>}::backward_checked"]
+def core.iter.range.StepI32.backward_checked
+  : I32 → Usize → Result (Option I32) :=
+  λ start n =>
+    let diff : Int := start.val - n.val
+    if h : I32.min ≤ diff ∧ diff ≤ I32.max then
+      ok (some (I32.ofIntCore diff (by scalar_tac)))
+    else
+      ok none
+
+@[reducible, rust_trait_impl "core::iter::range::Step<i32>"]
+def core.iter.range.StepI32 : core.iter.range.Step I32 := {
+  cloneInst := core.clone.CloneI32
+  partialOrdInst := core.cmp.PartialOrdI32
+  steps_between := core.iter.range.StepI32.steps_between
+  forward_checked := core.iter.range.StepI32.forward_checked
+  backward_checked := core.iter.range.StepI32.backward_checked
+}
+
 @[rust_fun
   "core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>}::next"]
 def core.iter.range.IteratorRange.next

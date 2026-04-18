@@ -45,11 +45,11 @@ For each ✅ row, a reviewer can chase the links:
 | Range (RangeFull index, RangeFrom bounds, Range Iterator) | 7 | 0 |
 | Iterator adapters/collect/defaults | 8 | 1 |
 | Array (from_fn, PartialEq) | 2 | 0 |
-| i32 Iter::Step trait | 3 | 0 |
+| i32 Iter::Step trait | 3 | 3 |
 | Cmp/Eq/Borrow traits | 3 | 3 |
 | Misc (black_box, TryFrom, TryFromIntError, to_owned) | 4 | 3 |
 | Deferred (fmt) | 2 | — |
-| **Total** | **60** | **26** |
+| **Total** | **60** | **29** |
 
 ---
 
@@ -171,9 +171,9 @@ All `Vec` methods take `keepParams := [true, false]` to erase the allocator type
 
 | Rust item | Lean name | Docs | Source | Status | Deps | Lean file | Test file | Proof |
 |---|---|---|---|---|---|---|---|---|
-| `Step for i32::forward_checked` | `I32.Insts.CoreIterRangeStep.forward_checked` | [docs](https://doc.rust-lang.org/core/iter/trait.Step.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/iter/range.rs) | ⬜ | — | — | — | — |
-| `Step for i32::backward_checked` | `I32.Insts.CoreIterRangeStep.backward_checked` | [docs](https://doc.rust-lang.org/core/iter/trait.Step.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/iter/range.rs) | ⬜ | — | — | — | — |
-| `Step for i32::steps_between` | `I32.Insts.CoreIterRangeStep.steps_between` | [docs](https://doc.rust-lang.org/core/iter/trait.Step.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/iter/range.rs) | ⬜ | — | — | — | — |
+| `Step for i32::forward_checked` | `core.iter.range.StepI32.forward_checked` | [docs](https://doc.rust-lang.org/core/iter/trait.Step.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/iter/range.rs) | ✅ | — | [Core/Iter.lean](backends/lean/Aeneas/Std/Core/Iter.lean) | [tests/src/step_i32.rs](tests/src/step_i32.rs) | — |
+| `Step for i32::backward_checked` | `core.iter.range.StepI32.backward_checked` | [docs](https://doc.rust-lang.org/core/iter/trait.Step.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/iter/range.rs) | ✅ | — | [Core/Iter.lean](backends/lean/Aeneas/Std/Core/Iter.lean) | [tests/src/step_i32.rs](tests/src/step_i32.rs) | — |
+| `Step for i32::steps_between` | `core.iter.range.StepI32.steps_between` | [docs](https://doc.rust-lang.org/core/iter/trait.Step.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/iter/range.rs) | ✅ | — | [Core/Iter.lean](backends/lean/Aeneas/Std/Core/Iter.lean) | [tests/src/step_i32.rs](tests/src/step_i32.rs) | — |
 
 ---
 
