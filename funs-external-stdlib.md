@@ -42,14 +42,14 @@ For each ✅ row, a reviewer can chase the links:
 | Vec methods | 8 | 8 |
 | VecDeque (new type + methods) | 4 | 4 |
 | Slice methods | 6 | 4 |
-| Range (RangeFull index, RangeFrom bounds, Range Iterator) | 7 | 5 |
-| Iterator adapters/collect/defaults | 8 | 2 |
+| Range (RangeFull index, RangeFrom bounds, Range Iterator) | 7 | 7 |
+| Iterator adapters/collect/defaults | 8 | 6 |
 | Array (from_fn, PartialEq) | 2 | 1 |
 | i32 Iter::Step trait | 3 | 3 |
 | Cmp/Eq/Borrow traits | 3 | 3 |
 | Misc (black_box, TryFrom, TryFromIntError, to_owned) | 4 | 3 |
 | Deferred (fmt) | 2 | — |
-| **Total** | **61** | **46** |
+| **Total** | **61** | **52** |
 
 ---
 
@@ -141,8 +141,8 @@ All `Vec` methods take `keepParams := [true, false]` to erase the allocator type
 | `SliceIndex for RangeFull::get_mut` | `core.slice.index.SliceIndexRangeFullSlice.get_mut` | [docs](https://doc.rust-lang.org/core/slice/trait.SliceIndex.html#tymethod.get_mut) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/slice/index.rs) | ✅ | `RangeFull` type | [Slice.lean](backends/lean/Aeneas/Std/Slice.lean) | — | — |
 | `RangeBounds<T> for RangeFrom<T>::start_bound` | `core.ops.range.RangeFrom.RangeBounds.start_bound` | [docs](https://doc.rust-lang.org/core/ops/trait.RangeBounds.html#tymethod.start_bound) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/ops/range.rs) | ✅ | `Bound<T>` type | [Slice.lean](backends/lean/Aeneas/Std/Slice.lean) | — | — |
 | `RangeBounds<T> for RangeFrom<T>::end_bound` | `core.ops.range.RangeFrom.RangeBounds.end_bound` | [docs](https://doc.rust-lang.org/core/ops/trait.RangeBounds.html#tymethod.end_bound) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/ops/range.rs) | ✅ | `Bound<T>` type | [Slice.lean](backends/lean/Aeneas/Std/Slice.lean) | — | — |
-| `Iterator for Range<A>::collect` | `core.ops.range.Range.Insts.CoreIterTraitsIteratorIterator.collect` | [docs](https://doc.rust-lang.org/core/iter/trait.Iterator.html#method.collect) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/iter/range.rs) | ⬜ | — | — | — | — |
-| `Iterator for Range<A>::map` | `core.ops.range.Range.Insts.CoreIterTraitsIteratorIterator.map` | [docs](https://doc.rust-lang.org/core/iter/trait.Iterator.html#method.map) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/iter/range.rs) | ⬜ | — | — | — | — |
+| `Iterator for Range<A>::collect` | `core.ops.range.Range.IteratorRange.collect` | [docs](https://doc.rust-lang.org/core/iter/trait.Iterator.html#method.collect) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/iter/range.rs) | ✅ | FromIterator | [Core/Iter.lean](backends/lean/Aeneas/Std/Core/Iter.lean) | [tests/src/iterator_collect.rs](tests/src/iterator_collect.rs) | — |
+| `Iterator for Range<A>::map` | `core.ops.range.Range.IteratorRange.map` | [docs](https://doc.rust-lang.org/core/iter/trait.Iterator.html#method.map) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/iter/range.rs) | ✅ | Map struct, FnMut | [Core/Iter.lean](backends/lean/Aeneas/Std/Core/Iter.lean) | — | — |
 
 ---
 
@@ -152,10 +152,10 @@ All `Vec` methods take `keepParams := [true, false]` to erase the allocator type
 |---|---|---|---|---|---|---|---|---|
 | `Iterator::enumerate` (default) | `core.iter.traits.iterator.Iterator.enumerate.default` | [docs](https://doc.rust-lang.org/core/iter/trait.Iterator.html#method.enumerate) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/iter/traits/iterator.rs) | ✅ | — | [Core/Iter.lean](backends/lean/Aeneas/Std/Core/Iter.lean) | [tests/src/enumerate.rs](tests/src/enumerate.rs) | [tests/lean/EnumerateProofs.lean](tests/lean/EnumerateProofs.lean) |
 | `Iterator::map` (default) + `Iterator for Map<I,F>::next` | `core.iter.traits.iterator.Iterator.map.default`, `core.iter.adapters.map.IteratorMap.next` | [docs](https://doc.rust-lang.org/core/iter/trait.Iterator.html#method.map) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/iter/adapters/map.rs) | ✅ | Map struct, FnMut | [Core/Iter.lean](backends/lean/Aeneas/Std/Core/Iter.lean) | — | — |
-| `Iterator<&T> for Iter<T>::collect` | `core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.collect` | [docs](https://doc.rust-lang.org/core/slice/struct.Iter.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/slice/iter/macros.rs) | ⬜ | — | — | — | — |
-| `Iterator<&T> for Iter<T>::map` | `core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.map` | [docs](https://doc.rust-lang.org/core/slice/struct.Iter.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/slice/iter/macros.rs) | ⬜ | — | — | — | — |
-| `Iterator<B> for Map<I, F>::collect` | `core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator.collect` | [docs](https://doc.rust-lang.org/core/iter/struct.Map.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/iter/adapters/map.rs) | ⬜ | — | — | — | — |
-| `Iterator<T> for IntoIter<T, A>::collect` | `alloc.vec.into_iter.IntoIter.Insts.CoreIterTraitsIteratorIterator.collect` | [docs](https://doc.rust-lang.org/alloc/vec/struct.IntoIter.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/vec/into_iter.rs) | ⬜ | — | — | — | — |
+| `Iterator<&T> for Iter<T>::collect` | `core.slice.iter.IteratorSliceIter.collect` | [docs](https://doc.rust-lang.org/core/slice/struct.Iter.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/slice/iter/macros.rs) | ✅ | FromIterator, collect.default | [SliceIter.lean](backends/lean/Aeneas/Std/SliceIter.lean) | — | — |
+| `Iterator<&T> for Iter<T>::map` | `core.slice.iter.IteratorSliceIter.map` | [docs](https://doc.rust-lang.org/core/slice/struct.Iter.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/slice/iter/macros.rs) | ✅ | Map struct, map.default | [SliceIter.lean](backends/lean/Aeneas/Std/SliceIter.lean) | — | — |
+| `Iterator<B> for Map<I, F>::collect` | `core.iter.adapters.map.IteratorMap.collect` | [docs](https://doc.rust-lang.org/core/iter/struct.Map.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/iter/adapters/map.rs) | ✅ | FromIterator | [Core/Iter.lean](backends/lean/Aeneas/Std/Core/Iter.lean) | — | — |
+| `Iterator<T> for IntoIter<T, A>::collect` | `alloc.vec.into_iter.IntoIter.Insts.CoreIterTraitsIteratorIterator.collect` | [docs](https://doc.rust-lang.org/alloc/vec/struct.IntoIter.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/vec/into_iter.rs) | ✅ | FromIterator | [VecIter.lean](backends/lean/Aeneas/Std/VecIter.lean) | — | — |
 
 ---
 

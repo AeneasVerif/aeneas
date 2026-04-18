@@ -519,3 +519,64 @@ def core.iter.adapters.map.IteratorMap.next
   | some x => do
     let (b, f') ← fnMutInst.call_mut self.f x
     ok (some b, { iter := iter', f := f' })
+
+/-! ## `Range::collect` and `Range::map` specialisations
+
+Rust emits concrete `collect`/`map` impls for `Range<A>` that forward to the
+trait defaults; we follow the same shape. -/
+
+@[rust_fun
+  "core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>}::collect"]
+def core.ops.range.Range.IteratorRange.collect
+    {A B : Type} (StepInst : core.iter.range.Step A)
+    (fromIterInst : core.iter.traits.collect.FromIterator B A) :
+    core.ops.range.Range A → Result B :=
+  core.iter.traits.iterator.Iterator.collect.default
+    (core.iter.traits.iterator.IteratorRange StepInst) fromIterInst
+
+@[rust_fun
+  "core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>}::map"]
+def core.ops.range.Range.IteratorRange.map
+    {A B F : Type} (StepInst : core.iter.range.Step A)
+    (fnMutInst : core.ops.function.FnMut F A B) :
+    core.ops.range.Range A → F →
+      Result (core.iter.adapters.map.Map (core.ops.range.Range A) F) :=
+  core.iter.traits.iterator.Iterator.map.default
+    (core.iter.traits.iterator.IteratorRange StepInst) fnMutInst
+
+/-! ## `Iterator<Map<I, F>, B>::collect` — specialised delegation -/
+
+/-- Iterator instance for `Map<I, F>`: uses the Map::next we defined and
+trivial adapter wrappers for step_by/enumerate/take. -/
+def core.iter.traits.iterator.IteratorMap
+    {I F Item B : Type}
+    (iterInst : core.iter.traits.iterator.Iterator I Item)
+    (fnMutInst : core.ops.function.FnMut F Item B) :
+    core.iter.traits.iterator.Iterator (core.iter.adapters.map.Map I F) B := {
+  next := core.iter.adapters.map.IteratorMap.next iterInst fnMutInst
+  step_by := fun m n => ok ⟨ m, n ⟩
+  enumerate := fun m => ok ⟨ m, 0#usize ⟩
+  take := fun m n => ok ⟨ m, n ⟩
+}
+
+@[rust_fun
+  "core::iter::adapters::map::{core::iter::traits::iterator::Iterator<core::iter::adapters::map::Map<@I, @F>, @B>}::collect"]
+def core.iter.adapters.map.IteratorMap.collect
+    {I F Item B C : Type}
+    (iterInst : core.iter.traits.iterator.Iterator I Item)
+    (fnMutInst : core.ops.function.FnMut F Item B)
+    (fromIterInst : core.iter.traits.collect.FromIterator C B) :
+    core.iter.adapters.map.Map I F → Result C :=
+  core.iter.traits.iterator.Iterator.collect.default
+    (core.iter.traits.iterator.IteratorMap iterInst fnMutInst) fromIterInst
+
+@[rust_fun
+  "core::iter::adapters::map::{core::iter::traits::iterator::Iterator<core::iter::adapters::map::Map<@I, @F>, @B>}::map"]
+def core.iter.adapters.map.IteratorMap.map
+    {I F Item B F2 C : Type}
+    (iterInst : core.iter.traits.iterator.Iterator I Item)
+    (fnMutInst : core.ops.function.FnMut F Item B)
+    (fnMut2Inst : core.ops.function.FnMut F2 B C) :
+    core.iter.adapters.map.Map I F → F2 →
+      Result (core.iter.adapters.map.Map (core.iter.adapters.map.Map I F) F2) :=
+  fun self f => ok { iter := self, f := f }

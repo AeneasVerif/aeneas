@@ -117,6 +117,27 @@ def core.iter.traits.iterator.IteratorSliceIter (T : Type) :
   take := core.slice.iter.IteratorSliceIter.take
 }
 
+/-- `Iterator<Iter<T>, &T>::collect` — delegates to the trait default. -/
+@[rust_fun
+  "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::collect"]
+def core.slice.iter.IteratorSliceIter.collect
+    {T B : Type}
+    (fromIterInst : core.iter.traits.collect.FromIterator B T) :
+    core.slice.iter.Iter T → Result B :=
+  core.iter.traits.iterator.Iterator.collect.default
+    (core.iter.traits.iterator.IteratorSliceIter T) fromIterInst
+
+/-- `Iterator<Iter<T>, &T>::map` — delegates to the trait default. -/
+@[rust_fun
+  "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::map"]
+def core.slice.iter.IteratorSliceIter.map
+    {T B F : Type}
+    (fnMutInst : core.ops.function.FnMut F T B) :
+    core.slice.iter.Iter T → F →
+      Result (core.iter.adapters.map.Map (core.slice.iter.Iter T) F) :=
+  core.iter.traits.iterator.Iterator.map.default
+    (core.iter.traits.iterator.IteratorSliceIter T) fnMutInst
+
 /-! ## Specialised `@[step]` specs for `IteratorEnumerate.next` on `IteratorSliceIter`
 
 These avoid the ghost-argument problem of the general

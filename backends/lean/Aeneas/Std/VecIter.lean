@@ -106,5 +106,15 @@ def alloc.vec.into_iter.IntoIter.Insts.CoreIterTraitsIteratorIterator.map
   Result (core.iter.adapters.map.Map (alloc.vec.into_iter.IntoIter T) F) :=
   fun it f => .ok ⟨ it, f ⟩
 
+/-- `Iterator<IntoIter<T>, T>::collect` — delegates to the trait default. -/
+@[rust_fun
+  "alloc::vec::into_iter::{core::iter::traits::iterator::Iterator<alloc::vec::into_iter::IntoIter<@T, @A>, @T>}::collect"]
+def alloc.vec.into_iter.IntoIter.Insts.CoreIterTraitsIteratorIterator.collect
+    {T B : Type}
+    (fromIterInst : core.iter.traits.collect.FromIterator B T) :
+    alloc.vec.into_iter.IntoIter T → Result B :=
+  core.iter.traits.iterator.Iterator.collect.default
+    (core.iter.traits.iterator.IteratorVecIntoIter T) fromIterInst
+
 
 end Aeneas.Std
