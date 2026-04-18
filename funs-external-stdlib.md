@@ -40,7 +40,7 @@ For each ✅ row, a reviewer can chase the links:
 | Option methods | 5 | 5 |
 | Result methods | 6 | 6 |
 | Vec methods | 8 | 8 |
-| VecDeque (new type + methods) | 3 | 0 |
+| VecDeque (new type + methods) | 4 | 4 |
 | Slice methods | 6 | 4 |
 | Range (RangeFull index, RangeFrom bounds, Range Iterator) | 7 | 5 |
 | Iterator adapters/collect/defaults | 8 | 1 |
@@ -49,7 +49,7 @@ For each ✅ row, a reviewer can chase the links:
 | Cmp/Eq/Borrow traits | 3 | 3 |
 | Misc (black_box, TryFrom, TryFromIntError, to_owned) | 4 | 3 |
 | Deferred (fmt) | 2 | — |
-| **Total** | **60** | **38** |
+| **Total** | **61** | **42** |
 
 ---
 
@@ -112,10 +112,10 @@ All `Vec` methods take `keepParams := [true, false]` to erase the allocator type
 
 | Rust item | Lean name | Docs | Source | Status | Deps | Lean file | Test file | Proof |
 |---|---|---|---|---|---|---|---|---|
-| `VecDeque<T>` (type) | `alloc.collections.vec_deque.VecDeque` | [docs](https://doc.rust-lang.org/alloc/collections/vec_deque/struct.VecDeque.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/collections/vec_deque/mod.rs) | ⬜ | — | — | — | — |
-| `VecDeque::len` | `alloc.collections.vec_deque.VecDeque.len` | [docs](https://doc.rust-lang.org/alloc/collections/vec_deque/struct.VecDeque.html#method.len) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/collections/vec_deque/mod.rs) | ⬜ | VecDeque | — | — | — |
-| `VecDeque::pop_front` | `alloc.collections.vec_deque.VecDeque.pop_front` | [docs](https://doc.rust-lang.org/alloc/collections/vec_deque/struct.VecDeque.html#method.pop_front) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/collections/vec_deque/mod.rs) | ⬜ | VecDeque | — | — | — |
-| `VecDeque::push_back` | `alloc.collections.vec_deque.VecDeque.push_back` | [docs](https://doc.rust-lang.org/alloc/collections/vec_deque/struct.VecDeque.html#method.push_back) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/collections/vec_deque/mod.rs) | ⬜ | VecDeque | — | — | — |
+| `VecDeque<T>` (type) | `alloc.collections.vec_deque.VecDeque` | [docs](https://doc.rust-lang.org/alloc/collections/vec_deque/struct.VecDeque.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/collections/vec_deque/mod.rs) | ✅ | — | [Vec.lean](backends/lean/Aeneas/Std/Vec.lean) | [tests/src/vec_deque_methods.rs](tests/src/vec_deque_methods.rs) | — |
+| `VecDeque::len` | `alloc.collections.vec_deque.VecDeque.len` | [docs](https://doc.rust-lang.org/alloc/collections/vec_deque/struct.VecDeque.html#method.len) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/collections/vec_deque/mod.rs) | ✅ | VecDeque | [Vec.lean](backends/lean/Aeneas/Std/Vec.lean) | [tests/src/vec_deque_methods.rs](tests/src/vec_deque_methods.rs) | — |
+| `VecDeque::pop_front` | `alloc.collections.vec_deque.VecDeque.pop_front` | [docs](https://doc.rust-lang.org/alloc/collections/vec_deque/struct.VecDeque.html#method.pop_front) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/collections/vec_deque/mod.rs) | ✅ | VecDeque | [Vec.lean](backends/lean/Aeneas/Std/Vec.lean) | [tests/src/vec_deque_methods.rs](tests/src/vec_deque_methods.rs) | — |
+| `VecDeque::push_back` | `alloc.collections.vec_deque.VecDeque.push_back` | [docs](https://doc.rust-lang.org/alloc/collections/vec_deque/struct.VecDeque.html#method.push_back) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/collections/vec_deque/mod.rs) | ✅ | VecDeque | [Vec.lean](backends/lean/Aeneas/Std/Vec.lean) | [tests/src/vec_deque_methods.rs](tests/src/vec_deque_methods.rs) | — |
 
 ---
 

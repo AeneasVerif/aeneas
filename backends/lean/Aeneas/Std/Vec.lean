@@ -706,6 +706,72 @@ namespace Tests
 
 end Tests
 
+/-! ## `VecDeque<T>`
+
+A minimal `VecDeque` model: same pure representation as `Vec`. The front/back
+distinction only affects constant-factor performance in Rust, not semantics.
+
+Pinned to Rust `1.85.0` (Charon pin `nightly-2026-02-07`). -/
+
+namespace alloc.collections.vec_deque
+
+/-- `alloc::collections::vec_deque::VecDeque<T>`: modeled as a bounded list,
+identical to `Vec` as a pure value. The allocator parameter is erased via
+`keepParams`. -/
+@[rust_type "alloc::collections::vec_deque::VecDeque" (keepParams := [true, false])]
+def VecDeque (α : Type u) := { l : List α // l.length ≤ Usize.max }
+
+instance (α : Type u) : CoeOut (VecDeque α) (List α) where
+  coe := λ v => v.val
+
+@[simp]
+abbrev VecDeque.length {α : Type u} (v : VecDeque α) : Nat := v.val.length
+
+@[simp]
+abbrev VecDeque.v {α : Type u} (v : VecDeque α) : List α := v.val
+
+/-- `VecDeque::new`: empty deque (with `Global` allocator). -/
+@[rust_fun "alloc::collections::vec_deque::{alloc::collections::vec_deque::VecDeque<@T, alloc::alloc::Global>}::new" -canFail -lift]
+abbrev VecDeque.new (α : Type u) : VecDeque α := ⟨ [], by simp ⟩
+
+instance (α : Type u) : Inhabited (VecDeque α) := ⟨ VecDeque.new α ⟩
+
+/-- `VecDeque::len`: number of elements.
+
+- Docs: https://doc.rust-lang.org/alloc/collections/vec_deque/struct.VecDeque.html#method.len
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/collections/vec_deque/mod.rs
+-/
+@[simp, rust_fun "alloc::collections::vec_deque::{alloc::collections::vec_deque::VecDeque<@T, @A>}::len" -canFail -lift (keepParams := [true, false])]
+abbrev VecDeque.len {α : Type u} (v : VecDeque α) : Usize :=
+  Usize.ofNatCore v.val.length (by scalar_tac)
+
+/-- `VecDeque::push_back`: append an element to the end. Fails if the new
+length would exceed `Usize.max`.
+
+- Docs: https://doc.rust-lang.org/alloc/collections/vec_deque/struct.VecDeque.html#method.push_back
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/collections/vec_deque/mod.rs
+-/
+@[rust_fun "alloc::collections::vec_deque::{alloc::collections::vec_deque::VecDeque<@T, @A>}::push_back" (keepParams := [true, false])]
+def VecDeque.push_back {α : Type u} (v : VecDeque α) (x : α) : Result (VecDeque α) :=
+  if h : v.val.length + 1 ≤ Usize.max then
+    ok ⟨ v.val ++ [x], by simp; scalar_tac ⟩
+  else
+    fail panic
+
+/-- `VecDeque::pop_front`: remove and return the first element, or `None` if
+empty.
+
+- Docs: https://doc.rust-lang.org/alloc/collections/vec_deque/struct.VecDeque.html#method.pop_front
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/collections/vec_deque/mod.rs
+-/
+@[rust_fun "alloc::collections::vec_deque::{alloc::collections::vec_deque::VecDeque<@T, @A>}::pop_front" (keepParams := [true, false])]
+def VecDeque.pop_front {α : Type u} (v : VecDeque α) : Result (Option α × VecDeque α) :=
+  match h : v.val with
+  | [] => ok (none, v)
+  | x :: xs => ok (some x, ⟨ xs, by have := v.property; rw [h] at this; simp at this; scalar_tac ⟩)
+
+end alloc.collections.vec_deque
+
 end Std
 
 end Aeneas

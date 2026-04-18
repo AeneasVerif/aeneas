@@ -5,6 +5,10 @@ let lean_builtin_types =
   [
     (* file: "Aeneas/Std/Alloc.lean", line: 16 *)
     mk_type "alloc::alloc::Global" "Global" ~kind:(KEnum [ ("Mk", Some "mk") ]);
+    (* file: "Aeneas/Std/Vec.lean", line: 721 *)
+    mk_type "alloc::collections::vec_deque::VecDeque"
+      "alloc.collections.vec_deque.VecDeque"
+      ~keep_params:(Some [ true; false ]);
     (* file: "Aeneas/Std/Alloc.lean", line: 11 *)
     mk_type "alloc::string::String" "String";
     (* file: "Aeneas/Std/Vec.lean", line: 18 *)
@@ -213,6 +217,30 @@ let lean_builtin_funs =
       "alloc.boxed.Box.deref_mut"
       ~keep_params:(Some [ true; false ])
       ~can_fail:false;
+    (* file: "Aeneas/Std/Vec.lean", line: 744 *)
+    mk_fun
+      "alloc::collections::vec_deque::{alloc::collections::vec_deque::VecDeque<@T, \
+       @A>}::len"
+      "alloc.collections.vec_deque.VecDeque.len"
+      ~keep_params:(Some [ true; false ])
+      ~can_fail:false ~lift:false;
+    (* file: "Aeneas/Std/Vec.lean", line: 767 *)
+    mk_fun
+      "alloc::collections::vec_deque::{alloc::collections::vec_deque::VecDeque<@T, \
+       @A>}::pop_front"
+      "alloc.collections.vec_deque.VecDeque.pop_front"
+      ~keep_params:(Some [ true; false ]);
+    (* file: "Aeneas/Std/Vec.lean", line: 754 *)
+    mk_fun
+      "alloc::collections::vec_deque::{alloc::collections::vec_deque::VecDeque<@T, \
+       @A>}::push_back"
+      "alloc.collections.vec_deque.VecDeque.push_back"
+      ~keep_params:(Some [ true; false ]);
+    (* file: "Aeneas/Std/Vec.lean", line: 734 *)
+    mk_fun
+      "alloc::collections::vec_deque::{alloc::collections::vec_deque::VecDeque<@T, \
+       alloc::alloc::Global>}::new"
+      "alloc.collections.vec_deque.VecDeque.new" ~can_fail:false ~lift:false;
     (* file: "Aeneas/Std/Vec.lean", line: 311 *)
     mk_fun "alloc::slice::{[@T]}::into_vec" "alloc.slice.Slice.into_vec"
       ~keep_params:(Some [ true; false ])
