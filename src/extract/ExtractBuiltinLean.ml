@@ -21,6 +21,9 @@ let lean_builtin_types =
       ~kind:(KStruct [ ("size", Some "size"); ("align", Some "align") ]);
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 130 *)
     mk_type "core::array::TryFromSliceError" "core.array.TryFromSliceError";
+    (* file: "Aeneas/Std/Array/Array.lean", line: 316 *)
+    mk_type "core::array::iter::IntoIter" "core.array.iter.IntoIter"
+      ~kind:(KStruct [ ("array", Some "array"); ("idx", Some "idx") ]);
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 31 *)
     mk_type "core::cmp::Ordering" "Ordering"
       ~kind:
@@ -413,13 +416,21 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 332 *)
     mk_fun "core::array::equality::{core::cmp::PartialEq<[@T], [@U; @N]>}::ne"
       "core.array.equality.PartialEqSliceArray.ne";
-    (* file: "Aeneas/Std/Array/Array.lean", line: 330 *)
+    (* file: "Aeneas/Std/Array/Array.lean", line: 368 *)
     mk_fun "core::array::from_fn" "core.array.from_fn";
+    (* file: "Aeneas/Std/Array/Array.lean", line: 332 *)
+    mk_fun
+      "core::array::iter::{core::iter::traits::iterator::Iterator<core::array::iter::IntoIter<@T, \
+       @N>, @T>}::next"
+      "core.array.iter.IteratorIntoIter.next";
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 229 *)
     mk_fun "core::array::{[@T; @N]}::as_mut_slice"
       "core.array.Array.as_mut_slice";
     (* file: "Aeneas/Std/Array/ArraySlice.lean", line: 225 *)
     mk_fun "core::array::{[@T; @N]}::as_slice" "core.array.Array.as_slice";
+    (* file: "Aeneas/Std/Array/Array.lean", line: 325 *)
+    mk_fun "core::array::{[@T; @N]}::into_iter" "core.array.Array.into_iter"
+      ~can_fail:false;
     (* file: "Aeneas/Std/Array/Array.lean", line: 223 *)
     mk_fun "core::array::{core::clone::Clone<[@T; @N]>}::clone"
       "core.array.CloneArray.clone";

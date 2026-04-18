@@ -36,28 +36,26 @@ pub fn test_enumerate_single() {
     assert!(it.next().is_none());
 }
 
-/// Example adapted from the Rust docs:
+/// Rust docs example:
 /// <https://doc.rust-lang.org/core/iter/trait.Iterator.html#method.enumerate>
 ///
-/// TODO: revert this to the verbatim docs example once Aeneas models the
-/// following stdlib items (tracked in `funs-external-stdlib.md`):
-///   - `char` (primitive type) + `Char::eq`
-///   - `Array::into_iter` + `core::array::iter::IntoIter` + Iterator impl
-///   - `Option::PartialEq::eq`
-///
-/// In the meantime: u32 codepoints for 'a'/'b'/'c' (97/98/99), `.iter()`
-/// instead of `.into_iter()`, and `.unwrap()` + field-wise comparison
-/// instead of `assert_eq!(it.next(), Some((i, x)))`. The `enumerate`
-/// semantics being verified are identical.
+/// ```ignore
+/// let a = ['a', 'b', 'c'];
+/// let mut iter = a.iter().enumerate();
+/// iter.next() == Some((0, &'a'));
+/// iter.next() == Some((1, &'b'));
+/// iter.next() == Some((2, &'c'));
+/// iter.next() == None;
+/// ```
 #[verify::test]
 pub fn test_enumerate_docs_example() {
-    let a: [u32; 3] = [97, 98, 99];
+    let a: [char; 3] = ['a', 'b', 'c'];
     let mut iter = a.iter().enumerate();
     let (i0, x0) = iter.next().unwrap();
-    assert!(i0 == 0 && *x0 == 97);
+    assert!(i0 == 0 && *x0 == 'a');
     let (i1, x1) = iter.next().unwrap();
-    assert!(i1 == 1 && *x1 == 98);
+    assert!(i1 == 1 && *x1 == 'b');
     let (i2, x2) = iter.next().unwrap();
-    assert!(i2 == 2 && *x2 == 99);
+    assert!(i2 == 2 && *x2 == 'c');
     assert!(iter.next().is_none());
 }

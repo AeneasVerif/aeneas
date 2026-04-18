@@ -14,8 +14,8 @@ open Aeneas Aeneas.Std Aeneas.Std.WP
 namespace enumerate
 
 /-- The Rust docs example for `Iterator::enumerate`, translated through
-Aeneas, succeeds: enumerating `[97, 98, 99]` yields the expected
-`(0, 97), (1, 98), (2, 99)` sequence followed by `none`.
+Aeneas, succeeds: enumerating `['a', 'b', 'c']` yields
+`(0, 'a'), (1, 'b'), (2, 'c')` followed by `none`.
 
 See: <https://doc.rust-lang.org/core/iter/trait.Iterator.html#method.enumerate>
 -/
@@ -23,10 +23,10 @@ theorem test_enumerate_docs_example_correct :
     test_enumerate_docs_example ⦃ _ => True ⦄ := by
   unfold test_enumerate_docs_example
   step*
-  -- 1st .next(): inner iter at i=0 yields some 97#u32; count 0 → 1
+  -- 1st .next(): inner iter at i=0 yields some 'a'; count 0 → 1
   step with core.iter.adapters.enumerate.IteratorEnumerate.next_some_spec
-      (item := 97#u32)
-      (innerIter := ({ slice := s, i := 1 } : core.slice.iter.Iter U32))
+      (item := 'a')
+      (innerIter := ({ slice := s, i := 1 } : core.slice.iter.Iter Char))
       as ⟨ out1, hOpt1, hIter1, hCount1 ⟩
   case hInner =>
     show core.slice.iter.IteratorSliceIter.next iter.iter = _
@@ -34,10 +34,10 @@ theorem test_enumerate_docs_example_correct :
     simp [iter_post1, i_post1, i_post2, s_post, Array.to_slice, Array.make]
   rw [hOpt1]
   simp [iter_post2]
-  -- 2nd .next(): inner iter at i=1 yields some 98#u32; count 1 → 2
+  -- 2nd .next(): inner iter at i=1 yields some 'b'; count 1 → 2
   step with core.iter.adapters.enumerate.IteratorEnumerate.next_some_spec
-      (item := 98#u32)
-      (innerIter := ({ slice := s, i := 2 } : core.slice.iter.Iter U32))
+      (item := 'b')
+      (innerIter := ({ slice := s, i := 2 } : core.slice.iter.Iter Char))
       as ⟨ out2, hOpt2, hIter2, hCount2 ⟩
   case hInner =>
     show core.slice.iter.IteratorSliceIter.next out1.2.iter = _
@@ -46,10 +46,10 @@ theorem test_enumerate_docs_example_correct :
   rw [hOpt2]
   have : out1.2.count = 1#usize := by scalar_tac
   simp [this]
-  -- 3rd .next(): inner iter at i=2 yields some 99#u32; count 2 → 3
+  -- 3rd .next(): inner iter at i=2 yields some 'c'; count 2 → 3
   step with core.iter.adapters.enumerate.IteratorEnumerate.next_some_spec
-      (item := 99#u32)
-      (innerIter := ({ slice := s, i := 3 } : core.slice.iter.Iter U32))
+      (item := 'c')
+      (innerIter := ({ slice := s, i := 3 } : core.slice.iter.Iter Char))
       as ⟨ out3, hOpt3, hIter3, hCount3 ⟩
   case hInner =>
     show core.slice.iter.IteratorSliceIter.next out2.2.iter = _
@@ -60,7 +60,7 @@ theorem test_enumerate_docs_example_correct :
   simp [this]
   -- 4th .next(): inner iter at i=3 ≥ len, yields none
   step with core.iter.adapters.enumerate.IteratorEnumerate.next_none_spec
-      (innerIter := ({ slice := s, i := 3 } : core.slice.iter.Iter U32))
+      (innerIter := ({ slice := s, i := 3 } : core.slice.iter.Iter Char))
       as ⟨ out4, hOpt4, hIter4, hCount4 ⟩
   case hInner =>
     show core.slice.iter.IteratorSliceIter.next out3.2.iter = _

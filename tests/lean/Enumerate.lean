@@ -82,33 +82,32 @@ def test_enumerate_single : Result Unit := do
 #assert (test_enumerate_single == ok ())
 
 /-- [enumerate::test_enumerate_docs_example]:
-    Source: 'tests/src/enumerate.rs', lines 46:0-56:1 -/
+    Source: 'tests/src/enumerate.rs', lines 51:0-61:1 -/
 def test_enumerate_docs_example : Result Unit := do
-  let s ←
-    lift (Array.to_slice (Array.make 3#usize [ 97#u32, 98#u32, 99#u32 ]))
+  let s ← lift (Array.to_slice (Array.make 3#usize [ 'a', 'b', 'c' ]))
   let i ← core.slice.Slice.iter s
   let iter ← core.slice.iter.IteratorSliceIter.enumerate i
   let (o, iter1) ←
     core.iter.adapters.enumerate.IteratorEnumerate.next
-      (core.iter.traits.iterator.IteratorSliceIter Std.U32) iter
+      (core.iter.traits.iterator.IteratorSliceIter Char) iter
   let (i0, x0) ← core.option.Option.unwrap o
   massert (i0 = 0#usize)
-  massert (x0 = 97#u32)
+  massert (x0 = 'a')
   let (o1, iter2) ←
     core.iter.adapters.enumerate.IteratorEnumerate.next
-      (core.iter.traits.iterator.IteratorSliceIter Std.U32) iter1
+      (core.iter.traits.iterator.IteratorSliceIter Char) iter1
   let (i1, x1) ← core.option.Option.unwrap o1
   massert (i1 = 1#usize)
-  massert (x1 = 98#u32)
+  massert (x1 = 'b')
   let (o2, iter3) ←
     core.iter.adapters.enumerate.IteratorEnumerate.next
-      (core.iter.traits.iterator.IteratorSliceIter Std.U32) iter2
+      (core.iter.traits.iterator.IteratorSliceIter Char) iter2
   let (i2, x2) ← core.option.Option.unwrap o2
   massert (i2 = 2#usize)
-  massert (x2 = 99#u32)
+  massert (x2 = 'c')
   let (o3, _) ←
     core.iter.adapters.enumerate.IteratorEnumerate.next
-      (core.iter.traits.iterator.IteratorSliceIter Std.U32) iter3
+      (core.iter.traits.iterator.IteratorSliceIter Char) iter3
   let b := core.option.Option.is_none o3
   massert b
 

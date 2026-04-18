@@ -303,6 +303,44 @@ def core.default.DefaultArrayEmpty (T : Type) : core.default.Default (Array T (U
   default := core.default.DefaultArrayEmpty.default T
 }
 
+/-! ## `core::array::iter::IntoIter<T, N>` + `Array::into_iter`
+
+The array IntoIter holds the array plus the current index. `Iterator::next`
+yields the element at the current index and advances the index.
+
+- Docs: https://doc.rust-lang.org/core/array/iter/struct.IntoIter.html
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/array/iter.rs
+-/
+
+/-- `core::array::iter::IntoIter<T, N>`: state for iterating an owned array. -/
+@[rust_type "core::array::iter::IntoIter"]
+structure core.array.iter.IntoIter (T : Type u) (N : Usize) where
+  mk ::
+  /-- The array being iterated. -/
+  array : Array T N
+  /-- Current index: `0 ≤ idx ≤ N`. -/
+  idx : Usize
+
+/-- `<[T; N]>::into_iter`: construct an `IntoIter` from an owned array. -/
+@[rust_fun "core::array::{[@T; @N]}::into_iter" -canFail]
+def core.array.Array.into_iter {T : Type} {N : Usize}
+    (a : Array T N) : core.array.iter.IntoIter T N :=
+  { array := a, idx := Usize.ofNat 0 }
+
+/-- `Iterator::next` for `IntoIter<T, N>`. Requires `T: Copy` or `Clone`;
+we take a `Clone T` instance and use it to hand out values. -/
+@[rust_fun "core::array::iter::{core::iter::traits::iterator::Iterator<core::array::iter::IntoIter<@T, @N>, @T>}::next"]
+def core.array.iter.IteratorIntoIter.next {T : Type} {N : Usize}
+    (a : core.array.iter.IntoIter T N) :
+    Result ((Option T) × core.array.iter.IntoIter T N) :=
+  if h : a.idx.val < a.array.val.length then
+    let x := a.array.val[a.idx.val]'h
+    let newIdx := Usize.ofNatCore (a.idx.val + 1) (by
+      have := a.array.property; scalar_tac)
+    ok (some x, { a with idx := newIdx })
+  else
+    ok (none, a)
+
 /-! ## `core::array::from_fn`
 
 `core::array::from_fn::<T, N, F>(cb: F) -> [T; N]` where `F: FnMut(usize) -> T`.
