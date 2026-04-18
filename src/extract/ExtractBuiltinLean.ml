@@ -56,7 +56,7 @@ let lean_builtin_types =
     (* file: "Aeneas/Std/Range.lean", line: 14 *)
     mk_type "core::ops::range::Range" "core.ops.range.Range"
       ~kind:(KStruct [ ("start", Some "start"); ("end", Some "«end»") ]);
-    (* file: "Aeneas/Std/Core/Core.lean", line: 218 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 264 *)
     mk_type "core::ops::range::RangeFrom" "core.ops.range.RangeFrom"
       ~kind:(KStruct [ ("start", Some "start") ]);
     (* file: "Aeneas/Std/Range.lean", line: 20 *)
@@ -68,7 +68,7 @@ let lean_builtin_types =
     (* file: "Aeneas/Std/Core/Panic.lean", line: 6 *)
     mk_type "core::panic::panic_info::PanicInfo"
       "core.panic.panic_info.PanicInfo";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 222 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 268 *)
     mk_type "core::panicking::AssertKind" "core.panicking.AssertKind"
       ~kind:
         (KEnum [ ("Eq", Some "Eq"); ("Ne", Some "Ne"); ("Match", Some "Match") ]);
@@ -411,7 +411,10 @@ let lean_builtin_funs =
     mk_fun
       "core::array::{core::ops::index::IndexMut<[@T; @N], @I, @O>}::index_mut"
       "core.array.Array.index_mut";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 228 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 121 *)
+    mk_fun "core::borrow::{core::borrow::Borrow<@T, @T>}::borrow"
+      "core.borrow.Borrow.Blanket.borrow" ~can_fail:false ~lift:false;
+    (* file: "Aeneas/Std/Core/Core.lean", line: 274 *)
     mk_fun "core::clone::impls::{core::clone::Clone<&'0 @T>}::clone"
       "core.clone.impls.CloneShared.clone";
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 18 *)
@@ -578,6 +581,9 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Fmt.lean", line: 64 *)
     mk_fun "core::fmt::{core::fmt::Formatter<'a>}::write_str"
       "core.fmt.Formatter.write_str";
+    (* file: "Aeneas/Std/Core/Core.lean", line: 95 *)
+    mk_fun "core::hint::black_box" "core.hint.black_box" ~can_fail:false
+      ~lift:false;
     (* file: "Aeneas/Std/Core/Discriminant.lean", line: 26 *)
     mk_fun "core::intrinsics::discriminant_value"
       "core.intrinsics.discriminant_value";
@@ -673,34 +679,34 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Scalar/Pow.lean", line: 7 *)
     mk_fun "core::num::{usize}::is_power_of_two"
       "core.num.Usize.is_power_of_two";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 198 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 244 *)
     mk_fun "core::option::{core::clone::Clone<core::option::Option<@T>>}::clone"
       "core.option.Option.Insts.CoreCloneClone.clone";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 156 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 202 *)
     mk_fun
       "core::option::{core::cmp::PartialEq<core::option::Option<@T>, \
        core::option::Option<@T>>}::eq"
       "core.option.Option.Insts.CoreCmpPartialEqOption.eq";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 179 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 225 *)
     mk_fun
       "core::option::{core::default::Default<core::option::Option<@T>>}::default"
       "core.option.Option.Insts.CoreDefaultDefault.default";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 128 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 174 *)
     mk_fun "core::option::{core::option::Option<@T>}::as_ref"
       "core.option.Option.as_ref" ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Core/Core.lean", line: 114 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 160 *)
     mk_fun "core::option::{core::option::Option<@T>}::is_none"
       "core.option.Option.is_none" ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Core/Core.lean", line: 137 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 183 *)
     mk_fun "core::option::{core::option::Option<@T>}::ok_or"
       "core.option.Option.ok_or" ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Core/Core.lean", line: 111 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 157 *)
     mk_fun "core::option::{core::option::Option<@T>}::take"
       "core.option.Option.take" ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Core/Core.lean", line: 95 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 141 *)
     mk_fun "core::option::{core::option::Option<@T>}::unwrap"
       "core.option.Option.unwrap";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 99 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 145 *)
     mk_fun "core::option::{core::option::Option<@T>}::unwrap_or"
       "core.option.Option.unwrap_or" ~can_fail:false;
     (* file: "Aeneas/Std/Core/Convert.lean", line: 112 *)
@@ -952,6 +958,9 @@ let lean_builtin_trait_decls =
     mk_trait_decl "core::alloc::global::GlobalAlloc"
       "core.alloc.global.GlobalAlloc"
       ~methods:[ ("alloc", "alloc"); ("dealloc", "dealloc") ];
+    (* file: "Aeneas/Std/Core/Core.lean", line: 103 *)
+    mk_trait_decl "core::borrow::Borrow" "core.borrow.Borrow"
+      ~methods:[ ("borrow", "borrow") ];
     (* file: "Aeneas/Std/Core/Core.lean", line: 28 *)
     mk_trait_decl "core::clone::Clone" "core.clone.Clone"
       ~methods:[ ("clone", "clone"); ("clone_from", "clone_from") ]
@@ -1145,6 +1154,8 @@ let lean_builtin_trait_decls =
 
 let lean_builtin_trait_impls =
   [
+    (* file: "Aeneas/Std/Core/Core.lean", line: 124 *)
+    mk_trait_impl "core::borrow::Borrow<@T, @T>" "core.borrow.Borrow.Blanket";
     (* file: "Aeneas/Std/Core/Core.lean", line: 57 *)
     mk_trait_impl "core::clone::Clone<Box<@T>>" "core.core.clone.CloneBox"
       ~keep_params:(Some [ true; false ])
@@ -1161,7 +1172,7 @@ let lean_builtin_trait_impls =
       ~keep_trait_clauses:(Some [ true; false ]);
     (* file: "Aeneas/Std/Core/Core.lean", line: 46 *)
     mk_trait_impl "core::clone::Clone<bool>" "core.clone.CloneBool";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 209 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 255 *)
     mk_trait_impl "core::clone::Clone<core::option::Option<@T>>"
       "core.option.Option.Insts.CoreCloneClone";
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 149 *)
@@ -1180,7 +1191,7 @@ let lean_builtin_trait_impls =
       ~keep_params:(Some [ true; true; false; false ]);
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 139 *)
     mk_trait_impl "core::cmp::PartialEq<bool, bool>" "core.cmp.PartialEqBool";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 166 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 212 *)
     mk_trait_impl
       "core::cmp::PartialEq<core::option::Option<@T>, core::option::Option<@T>>"
       "core.option.Option.Insts.CoreCmpPartialEqOption";
@@ -1216,7 +1227,7 @@ let lean_builtin_trait_impls =
     (* file: "Aeneas/Std/Vec.lean", line: 643 *)
     mk_trait_impl "core::default::Default<alloc::vec::Vec<@T>>"
       "alloc.vec.Vec.Insts.CoreDefaultDefault";
-    (* file: "Aeneas/Std/Core/Core.lean", line: 184 *)
+    (* file: "Aeneas/Std/Core/Core.lean", line: 230 *)
     mk_trait_impl "core::default::Default<core::option::Option<@T>>"
       "core.option.Option.Insts.CoreDefaultDefault";
     (* file: "Aeneas/Std/Core/Fmt.lean", line: 129 *)

@@ -46,10 +46,10 @@ For each ✅ row, a reviewer can chase the links:
 | Iterator adapters/collect/defaults | 8 | 1 |
 | Array (from_fn, PartialEq) | 2 | 0 |
 | i32 Iter::Step trait | 3 | 0 |
-| Cmp/Eq/Borrow traits | 3 | 0 |
-| Misc (black_box, TryFrom, to_owned) | 3 | 0 |
+| Cmp/Eq/Borrow traits | 3 | 3 |
+| Misc (black_box, TryFrom, to_owned) | 3 | 1 |
 | Deferred (fmt) | 2 | — |
-| **Total** | **58** | **19** |
+| **Total** | **58** | **23** |
 
 ---
 
@@ -180,9 +180,9 @@ All `Vec` methods take `keepParams := [true, false]` to erase the allocator type
 
 | Rust item | Lean name | Docs | Source | Status | Deps | Lean file | Test file | Proof |
 |---|---|---|---|---|---|---|---|---|
-| `Borrow<T> for &T::borrow` | `Shared0T.Insts.CoreBorrowBorrow.borrow` | [docs](https://doc.rust-lang.org/core/borrow/trait.Borrow.html#tymethod.borrow) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/borrow.rs) | ⬜ | — | — | — | — |
-| `Eq for u8::assert_receiver_is_total_eq` | `U8.Insts.CoreCmpEq.assert_receiver_is_total_eq` | [docs](https://doc.rust-lang.org/core/cmp/trait.Eq.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/cmp.rs) | ⬜ | — | — | — | — |
-| `Eq for usize::assert_receiver_is_total_eq` | `Usize.Insts.CoreCmpEq.assert_receiver_is_total_eq` | [docs](https://doc.rust-lang.org/core/cmp/trait.Eq.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/cmp.rs) | ⬜ | — | — | — | — |
+| `Borrow<T> for T::borrow` (identity blanket, subsumes `for &T`) | `core.borrow.Borrow.Blanket.borrow` | [docs](https://doc.rust-lang.org/core/borrow/trait.Borrow.html#tymethod.borrow) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/borrow.rs) | ✅ | — | [Core/Core.lean](backends/lean/Aeneas/Std/Core/Core.lean) | [tests/src/core_misc.rs](tests/src/core_misc.rs) | — |
+| `Eq for u8::assert_receiver_is_total_eq` | via `core.cmp.Eq.assert_receiver_is_total_eq.default` (trait default) | [docs](https://doc.rust-lang.org/core/cmp/trait.Eq.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/cmp.rs) | ✅ | — | [Core/Cmp.lean](backends/lean/Aeneas/Std/Core/Cmp.lean) | [tests/src/core_misc.rs](tests/src/core_misc.rs) | — |
+| `Eq for usize::assert_receiver_is_total_eq` | via `core.cmp.Eq.assert_receiver_is_total_eq.default` (trait default) | [docs](https://doc.rust-lang.org/core/cmp/trait.Eq.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/cmp.rs) | ✅ | — | [Core/Cmp.lean](backends/lean/Aeneas/Std/Core/Cmp.lean) | [tests/src/core_misc.rs](tests/src/core_misc.rs) | — |
 
 ---
 
@@ -190,7 +190,7 @@ All `Vec` methods take `keepParams := [true, false]` to erase the allocator type
 
 | Rust item | Lean name | Docs | Source | Status | Deps | Lean file | Test file | Proof |
 |---|---|---|---|---|---|---|---|---|
-| `hint::black_box` | `core.hint.black_box` | [docs](https://doc.rust-lang.org/core/hint/fn.black_box.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/hint.rs) | ⬜ | — | — | — | — |
+| `hint::black_box` | `core.hint.black_box` | [docs](https://doc.rust-lang.org/core/hint/fn.black_box.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/hint.rs) | ✅ | — | [Core/Core.lean](backends/lean/Aeneas/Std/Core/Core.lean) | [tests/src/core_misc.rs](tests/src/core_misc.rs) | — |
 | `TryFrom<u64, TryFromIntError> for u32::try_from` | `U32.Insts.CoreConvertTryFromU64TryFromIntError.try_from` | [docs](https://doc.rust-lang.org/core/convert/trait.TryFrom.html#tymethod.try_from) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/convert/num.rs) | ⬜ | `TryFromIntError` | — | — | — |
 | `ToOwned<String> for str::to_owned` | `Str.Insts.AllocBorrowToOwnedString.to_owned` | [docs](https://doc.rust-lang.org/core/borrow/trait.ToOwned.html#tymethod.to_owned) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/str.rs) | ⬜ | `String` | — | — | — |
 

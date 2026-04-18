@@ -81,6 +81,52 @@ def mem.replace {a : Type} (dst : a) (src : a) : a × a := (dst, src)
 @[simp, step_simps, rust_fun "core::mem::swap" (canFail := false) (lift := false)]
 def mem.swap {T : Type} (a b : T): T × T := (b, a)
 
+/-! ### `core::hint::black_box` and `core::borrow::Borrow`
+
+Pinned to Rust `1.85.0` (Charon pin `nightly-2026-02-07`). -/
+
+/-- `core::hint::black_box(x)`: opaque identity. In release builds, the Rust
+compiler is instructed not to optimise through it; semantically it returns
+its argument unchanged.
+
+- Docs: https://doc.rust-lang.org/core/hint/fn.black_box.html
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/hint.rs
+-/
+@[simp, step_simps, rust_fun "core::hint::black_box" -canFail -lift]
+def hint.black_box {T : Type} (x : T) : T := x
+
+/-- `core::borrow::Borrow<T>` trait.
+
+- Docs: https://doc.rust-lang.org/core/borrow/trait.Borrow.html
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/borrow.rs
+-/
+@[rust_trait "core::borrow::Borrow"]
+structure borrow.Borrow (Self : Type) (T : Type) where
+  borrow : Self → Result T
+
+/-- `Borrow<T> for T::borrow` (the identity blanket impl): identity.
+
+Rust defines two identity blanket impls:
+- `impl<T: ?Sized> Borrow<T> for T` — returns `self` as `&T`.
+- `impl<T: ?Sized> Borrow<T> for &T` — dereferences once to get `&T`.
+
+After Aeneas erases references, `&T` becomes `T`, so both collapse to
+identity at the value level. We therefore provide the `Borrow<T, T>`
+blanket, which Aeneas routes to from either Rust impl.
+
+- Docs: https://doc.rust-lang.org/core/borrow/trait.Borrow.html#tymethod.borrow
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/borrow.rs
+-/
+@[simp, step_simps,
+  rust_fun "core::borrow::{core::borrow::Borrow<@T, @T>}::borrow" -canFail -lift]
+def borrow.Borrow.Blanket.borrow {T : Type} (x : T) : T := x
+
+@[reducible, rust_trait_impl "core::borrow::Borrow<@T, @T>"]
+def borrow.Borrow.Blanket (T : Type) :
+    borrow.Borrow T T := {
+  borrow := fun x => ok (borrow.Borrow.Blanket.borrow x)
+}
+
 end core
 
 /-- Builtin clone implementation (used for some builtin types) -/
