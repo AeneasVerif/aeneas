@@ -12,12 +12,12 @@ set_option maxHeartbeats 1000000
 namespace iterator_collect
 
 /-- [iterator_collect::make_range]:
-    Source: 'tests/src/iterator_collect.rs', lines 6:0-6:51 -/
+    Source: 'tests/src/iterator_collect.rs', lines 6:0-8:1 -/
 def make_range : Result (core.ops.range.Range Std.Usize) := do
   ok { start := 0#usize, «end» := 3#usize }
 
 /-- [iterator_collect::test_range_collect_vec]:
-    Source: 'tests/src/iterator_collect.rs', lines 9:0-15:1 -/
+    Source: 'tests/src/iterator_collect.rs', lines 11:0-17:1 -/
 def test_range_collect_vec : Result Unit := do
   let r ← make_range
   let v ←

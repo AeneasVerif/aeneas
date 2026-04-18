@@ -3,7 +3,9 @@
 #![register_tool(verify)]
 //! Tests for `Iterator::collect` + `Iterator::map` over ranges, slices, vecs.
 
-fn make_range() -> core::ops::Range<usize> { 0..3 }
+fn make_range() -> core::ops::Range<usize> {
+    0..3
+}
 
 #[verify::test]
 pub fn test_range_collect_vec() {

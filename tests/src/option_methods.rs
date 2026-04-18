@@ -21,7 +21,9 @@ pub fn test_option_as_ref_some() {
     }
 }
 
-fn make_none_u32() -> Option<u32> { None }
+fn make_none_u32() -> Option<u32> {
+    None
+}
 
 #[verify::test]
 pub fn test_option_as_ref_none() {

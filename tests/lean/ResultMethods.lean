@@ -12,19 +12,19 @@ set_option maxHeartbeats 1000000
 namespace result_methods
 
 /-- [result_methods::make_err_u32]:
-    Source: 'tests/src/result_methods.rs', lines 6:0-6:54 -/
+    Source: 'tests/src/result_methods.rs', lines 6:0-8:1 -/
 def make_err_u32
   (e : Std.U32) : Result (core.result.Result Std.U32 Std.U32) := do
   ok (core.result.Result.Err e)
 
 /-- [result_methods::make_ok_u32]:
-    Source: 'tests/src/result_methods.rs', lines 7:0-7:52 -/
+    Source: 'tests/src/result_methods.rs', lines 9:0-11:1 -/
 def make_ok_u32
   (v : Std.U32) : Result (core.result.Result Std.U32 Std.U32) := do
   ok (core.result.Result.Ok v)
 
 /-- [result_methods::test_result_is_ok_ok]:
-    Source: 'tests/src/result_methods.rs', lines 20:0-23:1 -/
+    Source: 'tests/src/result_methods.rs', lines 24:0-27:1 -/
 def test_result_is_ok_ok : Result Unit := do
   let x ← make_ok_u32 97#u32
   let b := core.result.Result.is_ok x
@@ -34,7 +34,7 @@ def test_result_is_ok_ok : Result Unit := do
 #assert (test_result_is_ok_ok == ok ())
 
 /-- [result_methods::test_result_is_ok_err]:
-    Source: 'tests/src/result_methods.rs', lines 26:0-29:1 -/
+    Source: 'tests/src/result_methods.rs', lines 30:0-33:1 -/
 def test_result_is_ok_err : Result Unit := do
   let x ← make_err_u32 1#u32
   let b := core.result.Result.is_ok x
@@ -44,7 +44,7 @@ def test_result_is_ok_err : Result Unit := do
 #assert (test_result_is_ok_err == ok ())
 
 /-- [result_methods::test_result_unwrap_or_ok]:
-    Source: 'tests/src/result_methods.rs', lines 42:0-46:1 -/
+    Source: 'tests/src/result_methods.rs', lines 46:0-50:1 -/
 def test_result_unwrap_or_ok : Result Unit := do
   let x ← make_ok_u32 9#u32
   let i ← lift (core.result.Result.unwrap_or x 2#u32)
@@ -54,7 +54,7 @@ def test_result_unwrap_or_ok : Result Unit := do
 #assert (test_result_unwrap_or_ok == ok ())
 
 /-- [result_methods::test_result_unwrap_or_err]:
-    Source: 'tests/src/result_methods.rs', lines 49:0-53:1 -/
+    Source: 'tests/src/result_methods.rs', lines 53:0-57:1 -/
 def test_result_unwrap_or_err : Result Unit := do
   let x ← make_err_u32 7#u32
   let i ← lift (core.result.Result.unwrap_or x 2#u32)
@@ -64,12 +64,12 @@ def test_result_unwrap_or_err : Result Unit := do
 #assert (test_result_unwrap_or_err == ok ())
 
 /-- [result_methods::test_result_map_ok::closure]
-    Source: 'tests/src/result_methods.rs', lines 61:36-61:45 -/
+    Source: 'tests/src/result_methods.rs', lines 65:36-65:45 -/
 @[reducible]
 def test_result_map_ok.closure := Unit
 
 /-- [result_methods::test_result_map_ok::{core::ops::function::FnOnce<(u32), u32> for result_methods::test_result_map_ok::closure}::call_once]:
-    Source: 'tests/src/result_methods.rs', lines 61:36-61:45 -/
+    Source: 'tests/src/result_methods.rs', lines 65:36-65:45 -/
 def test_result_map_ok.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32.call_once
   (c : test_result_map_ok.closure) (tupled_args : Std.U32) :
   Result Std.U32
@@ -77,7 +77,7 @@ def test_result_map_ok.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32.call_once
   tupled_args * 2#u32
 
 /-- Trait implementation: [result_methods::test_result_map_ok::{core::ops::function::FnOnce<(u32), u32> for result_methods::test_result_map_ok::closure}]
-    Source: 'tests/src/result_methods.rs', lines 61:36-61:45 -/
+    Source: 'tests/src/result_methods.rs', lines 65:36-65:45 -/
 @[reducible]
 def test_result_map_ok.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32 :
   core.ops.function.FnOnce test_result_map_ok.closure Std.U32 Std.U32 := {
@@ -86,7 +86,7 @@ def test_result_map_ok.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32 :
 }
 
 /-- [result_methods::test_result_map_ok]:
-    Source: 'tests/src/result_methods.rs', lines 59:0-66:1 -/
+    Source: 'tests/src/result_methods.rs', lines 63:0-70:1 -/
 def test_result_map_ok : Result Unit := do
   let x ← make_ok_u32 5#u32
   let y ←
@@ -100,12 +100,12 @@ def test_result_map_ok : Result Unit := do
 #assert (test_result_map_ok == ok ())
 
 /-- [result_methods::test_result_map_err_passthrough::closure]
-    Source: 'tests/src/result_methods.rs', lines 71:36-71:45 -/
+    Source: 'tests/src/result_methods.rs', lines 75:36-75:45 -/
 @[reducible]
 def test_result_map_err_passthrough.closure := Unit
 
 /-- [result_methods::test_result_map_err_passthrough::{core::ops::function::FnOnce<(u32), u32> for result_methods::test_result_map_err_passthrough::closure}::call_once]:
-    Source: 'tests/src/result_methods.rs', lines 71:36-71:45 -/
+    Source: 'tests/src/result_methods.rs', lines 75:36-75:45 -/
 def
   test_result_map_err_passthrough.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32.call_once
   (c : test_result_map_err_passthrough.closure) (tupled_args : Std.U32) :
@@ -114,7 +114,7 @@ def
   tupled_args * 2#u32
 
 /-- Trait implementation: [result_methods::test_result_map_err_passthrough::{core::ops::function::FnOnce<(u32), u32> for result_methods::test_result_map_err_passthrough::closure}]
-    Source: 'tests/src/result_methods.rs', lines 71:36-71:45 -/
+    Source: 'tests/src/result_methods.rs', lines 75:36-75:45 -/
 @[reducible]
 def
   test_result_map_err_passthrough.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32
@@ -125,7 +125,7 @@ def
 }
 
 /-- [result_methods::test_result_map_err_passthrough]:
-    Source: 'tests/src/result_methods.rs', lines 69:0-76:1 -/
+    Source: 'tests/src/result_methods.rs', lines 73:0-80:1 -/
 def test_result_map_err_passthrough : Result Unit := do
   let x ← make_err_u32 3#u32
   let y ←
@@ -140,12 +140,12 @@ def test_result_map_err_passthrough : Result Unit := do
 #assert (test_result_map_err_passthrough == ok ())
 
 /-- [result_methods::test_result_map_err_ok_passthrough::closure]
-    Source: 'tests/src/result_methods.rs', lines 83:40-83:51 -/
+    Source: 'tests/src/result_methods.rs', lines 87:40-87:51 -/
 @[reducible]
 def test_result_map_err_ok_passthrough.closure := Unit
 
 /-- [result_methods::test_result_map_err_ok_passthrough::{core::ops::function::FnOnce<(u32), u32> for result_methods::test_result_map_err_ok_passthrough::closure}::call_once]:
-    Source: 'tests/src/result_methods.rs', lines 83:40-83:51 -/
+    Source: 'tests/src/result_methods.rs', lines 87:40-87:51 -/
 def
   test_result_map_err_ok_passthrough.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32.call_once
   (c : test_result_map_err_ok_passthrough.closure) (tupled_args : Std.U32) :
@@ -154,7 +154,7 @@ def
   tupled_args + 100#u32
 
 /-- Trait implementation: [result_methods::test_result_map_err_ok_passthrough::{core::ops::function::FnOnce<(u32), u32> for result_methods::test_result_map_err_ok_passthrough::closure}]
-    Source: 'tests/src/result_methods.rs', lines 83:40-83:51 -/
+    Source: 'tests/src/result_methods.rs', lines 87:40-87:51 -/
 @[reducible]
 def
   test_result_map_err_ok_passthrough.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32
@@ -165,7 +165,7 @@ def
 }
 
 /-- [result_methods::test_result_map_err_ok_passthrough]:
-    Source: 'tests/src/result_methods.rs', lines 81:0-88:1 -/
+    Source: 'tests/src/result_methods.rs', lines 85:0-92:1 -/
 def test_result_map_err_ok_passthrough : Result Unit := do
   let x ← make_ok_u32 2#u32
   let y ←
@@ -180,12 +180,12 @@ def test_result_map_err_ok_passthrough : Result Unit := do
 #assert (test_result_map_err_ok_passthrough == ok ())
 
 /-- [result_methods::test_result_map_err_err::closure]
-    Source: 'tests/src/result_methods.rs', lines 93:40-93:51 -/
+    Source: 'tests/src/result_methods.rs', lines 97:40-97:51 -/
 @[reducible]
 def test_result_map_err_err.closure := Unit
 
 /-- [result_methods::test_result_map_err_err::{core::ops::function::FnOnce<(u32), u32> for result_methods::test_result_map_err_err::closure}::call_once]:
-    Source: 'tests/src/result_methods.rs', lines 93:40-93:51 -/
+    Source: 'tests/src/result_methods.rs', lines 97:40-97:51 -/
 def
   test_result_map_err_err.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32.call_once
   (c : test_result_map_err_err.closure) (tupled_args : Std.U32) :
@@ -194,7 +194,7 @@ def
   tupled_args + 100#u32
 
 /-- Trait implementation: [result_methods::test_result_map_err_err::{core::ops::function::FnOnce<(u32), u32> for result_methods::test_result_map_err_err::closure}]
-    Source: 'tests/src/result_methods.rs', lines 93:40-93:51 -/
+    Source: 'tests/src/result_methods.rs', lines 97:40-97:51 -/
 @[reducible]
 def test_result_map_err_err.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32 :
   core.ops.function.FnOnce test_result_map_err_err.closure Std.U32 Std.U32 := {
@@ -203,7 +203,7 @@ def test_result_map_err_err.closure.Insts.CoreOpsFunctionFnOnceTupleU32U32 :
 }
 
 /-- [result_methods::test_result_map_err_err]:
-    Source: 'tests/src/result_methods.rs', lines 91:0-98:1 -/
+    Source: 'tests/src/result_methods.rs', lines 95:0-102:1 -/
 def test_result_map_err_err : Result Unit := do
   let x ← make_err_u32 13#u32
   let y ←
@@ -218,7 +218,7 @@ def test_result_map_err_err : Result Unit := do
 #assert (test_result_map_err_err == ok ())
 
 /-- [result_methods::try_branch_helper]:
-    Source: 'tests/src/result_methods.rs', lines 103:0-106:1 -/
+    Source: 'tests/src/result_methods.rs', lines 107:0-110:1 -/
 def try_branch_helper
   (x : core.result.Result Std.U32 Std.U32) :
   Result (core.result.Result Std.U32 Std.U32)
@@ -234,7 +234,7 @@ def try_branch_helper
       Std.U32 (core.convert.FromSame Std.U32) residual
 
 /-- [result_methods::test_result_try_branch_ok]:
-    Source: 'tests/src/result_methods.rs', lines 109:0-114:1 -/
+    Source: 'tests/src/result_methods.rs', lines 113:0-118:1 -/
 def test_result_try_branch_ok : Result Unit := do
   let r ← try_branch_helper (core.result.Result.Ok 10#u32)
   match r with
@@ -245,7 +245,7 @@ def test_result_try_branch_ok : Result Unit := do
 #assert (test_result_try_branch_ok == ok ())
 
 /-- [result_methods::test_result_try_branch_err]:
-    Source: 'tests/src/result_methods.rs', lines 117:0-122:1 -/
+    Source: 'tests/src/result_methods.rs', lines 121:0-126:1 -/
 def test_result_try_branch_err : Result Unit := do
   let r ← make_err_u32 99#u32
   let r1 ← try_branch_helper r

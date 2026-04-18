@@ -12,12 +12,12 @@ set_option maxHeartbeats 1000000
 namespace vec_methods
 
 /-- [vec_methods::make_empty]:
-    Source: 'tests/src/vec_methods.rs', lines 6:0-6:42 -/
+    Source: 'tests/src/vec_methods.rs', lines 6:0-8:1 -/
 def make_empty : Result (alloc.vec.Vec Std.U32) := do
   ok (alloc.vec.Vec.new Std.U32)
 
 /-- [vec_methods::test_vec_is_empty_new]:
-    Source: 'tests/src/vec_methods.rs', lines 17:0-20:1 -/
+    Source: 'tests/src/vec_methods.rs', lines 19:0-22:1 -/
 def test_vec_is_empty_new : Result Unit := do
   let v ← make_empty
   let b := alloc.vec.Vec.is_empty v
@@ -27,7 +27,7 @@ def test_vec_is_empty_new : Result Unit := do
 #assert (test_vec_is_empty_new == ok ())
 
 /-- [vec_methods::test_vec_is_empty_after_push]:
-    Source: 'tests/src/vec_methods.rs', lines 23:0-27:1 -/
+    Source: 'tests/src/vec_methods.rs', lines 25:0-29:1 -/
 def test_vec_is_empty_after_push : Result Unit := do
   let v ← make_empty
   let v1 ← alloc.vec.Vec.push v 1#u32
@@ -38,7 +38,7 @@ def test_vec_is_empty_after_push : Result Unit := do
 #assert (test_vec_is_empty_after_push == ok ())
 
 /-- [vec_methods::test_vec_clear]:
-    Source: 'tests/src/vec_methods.rs', lines 38:0-45:1 -/
+    Source: 'tests/src/vec_methods.rs', lines 40:0-47:1 -/
 def test_vec_clear : Result Unit := do
   let v := alloc.vec.Vec.with_capacity Std.U32 4#usize
   let v1 ← alloc.vec.Vec.push v 1#u32
@@ -52,7 +52,7 @@ def test_vec_clear : Result Unit := do
 #assert (test_vec_clear == ok ())
 
 /-- [vec_methods::test_vec_truncate_shortens]:
-    Source: 'tests/src/vec_methods.rs', lines 51:0-56:1 -/
+    Source: 'tests/src/vec_methods.rs', lines 53:0-62:1 -/
 def test_vec_truncate_shortens : Result Unit := do
   let v := alloc.vec.Vec.with_capacity Std.U32 5#usize
   let v1 ← alloc.vec.Vec.push v 1#u32
@@ -68,7 +68,7 @@ def test_vec_truncate_shortens : Result Unit := do
 #assert (test_vec_truncate_shortens == ok ())
 
 /-- [vec_methods::test_vec_truncate_noop_if_longer]:
-    Source: 'tests/src/vec_methods.rs', lines 59:0-64:1 -/
+    Source: 'tests/src/vec_methods.rs', lines 65:0-72:1 -/
 def test_vec_truncate_noop_if_longer : Result Unit := do
   let v := alloc.vec.Vec.with_capacity Std.U32 3#usize
   let v1 ← alloc.vec.Vec.push v 1#u32
@@ -82,7 +82,7 @@ def test_vec_truncate_noop_if_longer : Result Unit := do
 #assert (test_vec_truncate_noop_if_longer == ok ())
 
 /-- [vec_methods::test_vec_as_slice]:
-    Source: 'tests/src/vec_methods.rs', lines 73:0-78:1 -/
+    Source: 'tests/src/vec_methods.rs', lines 81:0-88:1 -/
 def test_vec_as_slice : Result Unit := do
   let v := alloc.vec.Vec.with_capacity Std.U32 3#usize
   let v1 ← alloc.vec.Vec.push v 10#u32
@@ -96,7 +96,7 @@ def test_vec_as_slice : Result Unit := do
 #assert (test_vec_as_slice == ok ())
 
 /-- [vec_methods::test_vec_remove_middle]:
-    Source: 'tests/src/vec_methods.rs', lines 88:0-94:1 -/
+    Source: 'tests/src/vec_methods.rs', lines 98:0-106:1 -/
 def test_vec_remove_middle : Result Unit := do
   let v := alloc.vec.Vec.with_capacity Std.U32 3#usize
   let v1 ← alloc.vec.Vec.push v 1#u32
@@ -111,7 +111,7 @@ def test_vec_remove_middle : Result Unit := do
 #assert (test_vec_remove_middle == ok ())
 
 /-- [vec_methods::test_vec_append]:
-    Source: 'tests/src/vec_methods.rs', lines 106:0-114:1 -/
+    Source: 'tests/src/vec_methods.rs', lines 118:0-130:1 -/
 def test_vec_append : Result Unit := do
   let v1 := alloc.vec.Vec.with_capacity Std.U32 3#usize
   let v11 ← alloc.vec.Vec.push v1 1#u32
@@ -131,7 +131,7 @@ def test_vec_append : Result Unit := do
 #assert (test_vec_append == ok ())
 
 /-- [vec_methods::test_vec_split_off]:
-    Source: 'tests/src/vec_methods.rs', lines 125:0-131:1 -/
+    Source: 'tests/src/vec_methods.rs', lines 141:0-149:1 -/
 def test_vec_split_off : Result Unit := do
   let v := alloc.vec.Vec.with_capacity Std.U32 3#usize
   let v1 ← alloc.vec.Vec.push v 1#u32
@@ -148,7 +148,7 @@ def test_vec_split_off : Result Unit := do
 #assert (test_vec_split_off == ok ())
 
 /-- [vec_methods::test_vec_default]:
-    Source: 'tests/src/vec_methods.rs', lines 140:0-143:1 -/
+    Source: 'tests/src/vec_methods.rs', lines 158:0-161:1 -/
 def test_vec_default : Result Unit := do
   let v ← alloc.vec.Vec.Insts.CoreDefaultDefault.default Std.U32
   let b := alloc.vec.Vec.is_empty v

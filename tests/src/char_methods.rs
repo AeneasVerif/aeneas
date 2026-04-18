@@ -3,8 +3,12 @@
 #![register_tool(verify)]
 //! Test for `char` primitive: comparison.
 
-fn make_a() -> char { 'a' }
-fn make_b() -> char { 'b' }
+fn make_a() -> char {
+    'a'
+}
+fn make_b() -> char {
+    'b'
+}
 
 #[verify::test]
 pub fn test_char_eq() {

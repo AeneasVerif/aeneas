@@ -34,10 +34,14 @@ pub fn test_borrow_ref() {
 /// containing the scalar. Here we trigger them by deriving `Eq` on a small
 /// struct. Rust's compile-time check invokes `assert_receiver_is_total_eq`.
 #[derive(PartialEq, Eq)]
-pub struct ByteHolder { b: u8 }
+pub struct ByteHolder {
+    b: u8,
+}
 
 #[derive(PartialEq, Eq)]
-pub struct SizeHolder { s: usize }
+pub struct SizeHolder {
+    s: usize,
+}
 
 #[verify::test]
 pub fn test_eq_u8_via_derive() {

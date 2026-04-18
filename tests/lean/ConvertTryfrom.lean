@@ -12,17 +12,17 @@ set_option maxHeartbeats 1000000
 namespace convert_tryfrom
 
 /-- [convert_tryfrom::make_big]:
-    Source: 'tests/src/convert_tryfrom.rs', lines 19:0-19:46 -/
+    Source: 'tests/src/convert_tryfrom.rs', lines 19:0-21:1 -/
 def make_big : Result Std.U64 := do
   ok 1000000000000#u64
 
 /-- [convert_tryfrom::make_small]:
-    Source: 'tests/src/convert_tryfrom.rs', lines 20:0-20:33 -/
+    Source: 'tests/src/convert_tryfrom.rs', lines 22:0-24:1 -/
 def make_small : Result Std.U64 := do
   ok 42#u64
 
 /-- [convert_tryfrom::test_u32_try_from_u64_overflow]:
-    Source: 'tests/src/convert_tryfrom.rs', lines 23:0-27:1 -/
+    Source: 'tests/src/convert_tryfrom.rs', lines 27:0-31:1 -/
 def test_u32_try_from_u64_overflow : Result Unit := do
   let big ← make_big
   let r ← U32.Insts.CoreConvertTryFromU64TryFromIntError.try_from big
@@ -33,7 +33,7 @@ def test_u32_try_from_u64_overflow : Result Unit := do
 #assert (test_u32_try_from_u64_overflow == ok ())
 
 /-- [convert_tryfrom::test_u32_try_from_u64_fits]:
-    Source: 'tests/src/convert_tryfrom.rs', lines 30:0-37:1 -/
+    Source: 'tests/src/convert_tryfrom.rs', lines 34:0-41:1 -/
 def test_u32_try_from_u64_fits : Result Unit := do
   let small ← make_small
   let r ← U32.Insts.CoreConvertTryFromU64TryFromIntError.try_from small
@@ -45,7 +45,7 @@ def test_u32_try_from_u64_fits : Result Unit := do
 #assert (test_u32_try_from_u64_fits == ok ())
 
 /-- [convert_tryfrom::test_u32_try_from_u64_max]:
-    Source: 'tests/src/convert_tryfrom.rs', lines 40:0-47:1 -/
+    Source: 'tests/src/convert_tryfrom.rs', lines 44:0-51:1 -/
 def test_u32_try_from_u64_max : Result Unit := do
   let v ← lift (UScalar.cast .U64 core.num.U32.MAX)
   let r ← U32.Insts.CoreConvertTryFromU64TryFromIntError.try_from v

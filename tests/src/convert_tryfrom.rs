@@ -16,8 +16,12 @@
 //! We adapt from `i64` to `u64` since the original list item is specifically
 //! `TryFrom<u64>` (not i64).
 
-fn make_big() -> u64 { 1_000_000_000_000_u64 }
-fn make_small() -> u64 { 42_u64 }
+fn make_big() -> u64 {
+    1_000_000_000_000_u64
+}
+fn make_small() -> u64 {
+    42_u64
+}
 
 #[verify::test]
 pub fn test_u32_try_from_u64_overflow() {

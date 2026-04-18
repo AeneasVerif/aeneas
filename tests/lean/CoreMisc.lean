@@ -30,7 +30,7 @@ def test_borrow_ref : Result Unit := do
 #assert (test_borrow_ref == ok ())
 
 /-- [core_misc::ByteHolder]
-    Source: 'tests/src/core_misc.rs', lines 37:0-37:31 -/
+    Source: 'tests/src/core_misc.rs', lines 37:0-39:1 -/
 structure ByteHolder where
   b : Std.U8
 
@@ -71,25 +71,25 @@ def ByteHolder.Insts.CoreCmpEq : core.cmp.Eq ByteHolder := {
 }
 
 /-- [core_misc::SizeHolder]
-    Source: 'tests/src/core_misc.rs', lines 40:0-40:34 -/
+    Source: 'tests/src/core_misc.rs', lines 42:0-44:1 -/
 structure SizeHolder where
   s : Std.Usize
 
 /-- Trait implementation: [core_misc::{core::marker::StructuralPartialEq for core_misc::SizeHolder}]
-    Source: 'tests/src/core_misc.rs', lines 39:9-39:18 -/
+    Source: 'tests/src/core_misc.rs', lines 41:9-41:18 -/
 @[reducible]
 def SizeHolder.Insts.CoreMarkerStructuralPartialEq :
   core.marker.StructuralPartialEq SizeHolder := {
 }
 
 /-- [core_misc::{core::cmp::PartialEq<core_misc::SizeHolder> for core_misc::SizeHolder}::eq]:
-    Source: 'tests/src/core_misc.rs', lines 39:9-39:18 -/
+    Source: 'tests/src/core_misc.rs', lines 41:9-41:18 -/
 def SizeHolder.Insts.CoreCmpPartialEqSizeHolder.eq
   (self : SizeHolder) (other : SizeHolder) : Result Bool := do
   ok (self.s = other.s)
 
 /-- Trait implementation: [core_misc::{core::cmp::PartialEq<core_misc::SizeHolder> for core_misc::SizeHolder}]
-    Source: 'tests/src/core_misc.rs', lines 39:9-39:18 -/
+    Source: 'tests/src/core_misc.rs', lines 41:9-41:18 -/
 @[reducible]
 def SizeHolder.Insts.CoreCmpPartialEqSizeHolder : core.cmp.PartialEq SizeHolder
   SizeHolder := {
@@ -97,13 +97,13 @@ def SizeHolder.Insts.CoreCmpPartialEqSizeHolder : core.cmp.PartialEq SizeHolder
 }
 
 /-- [core_misc::{core::cmp::Eq for core_misc::SizeHolder}::assert_receiver_is_total_eq]:
-    Source: 'tests/src/core_misc.rs', lines 39:20-39:22 -/
+    Source: 'tests/src/core_misc.rs', lines 41:20-41:22 -/
 def SizeHolder.Insts.CoreCmpEq.assert_receiver_is_total_eq
   (self : SizeHolder) : Result Unit := do
   ok ()
 
 /-- Trait implementation: [core_misc::{core::cmp::Eq for core_misc::SizeHolder}]
-    Source: 'tests/src/core_misc.rs', lines 39:20-39:22 -/
+    Source: 'tests/src/core_misc.rs', lines 41:20-41:22 -/
 @[reducible]
 def SizeHolder.Insts.CoreCmpEq : core.cmp.Eq SizeHolder := {
   partialEqInst := SizeHolder.Insts.CoreCmpPartialEqSizeHolder
@@ -112,7 +112,7 @@ def SizeHolder.Insts.CoreCmpEq : core.cmp.Eq SizeHolder := {
 }
 
 /-- [core_misc::test_eq_u8_via_derive]:
-    Source: 'tests/src/core_misc.rs', lines 43:0-47:1 -/
+    Source: 'tests/src/core_misc.rs', lines 47:0-51:1 -/
 def test_eq_u8_via_derive : Result Unit := do
   let b ←
     ByteHolder.Insts.CoreCmpPartialEqByteHolder.eq { b := 5#u8 } { b := 5#u8 }
@@ -122,7 +122,7 @@ def test_eq_u8_via_derive : Result Unit := do
 #assert (test_eq_u8_via_derive == ok ())
 
 /-- [core_misc::test_eq_usize_via_derive]:
-    Source: 'tests/src/core_misc.rs', lines 50:0-54:1 -/
+    Source: 'tests/src/core_misc.rs', lines 54:0-58:1 -/
 def test_eq_usize_via_derive : Result Unit := do
   let b ←
     SizeHolder.Insts.CoreCmpPartialEqSizeHolder.eq { s := 5#usize }

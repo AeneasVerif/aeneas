@@ -12,12 +12,12 @@ set_option maxHeartbeats 1000000
 namespace slice_methods
 
 /-- [slice_methods::make_src]:
-    Source: 'tests/src/slice_methods.rs', lines 8:0-8:46 -/
+    Source: 'tests/src/slice_methods.rs', lines 8:0-10:1 -/
 def make_src : Result (Array Std.U32 4#usize) := do
   ok (Array.make 4#usize [ 10#u32, 20#u32, 30#u32, 40#u32 ])
 
 /-- [slice_methods::test_clone_from_slice]:
-    Source: 'tests/src/slice_methods.rs', lines 11:0-18:1 -/
+    Source: 'tests/src/slice_methods.rs', lines 13:0-20:1 -/
 def test_clone_from_slice : Result Unit := do
   let src ← make_src
   let dst := Array.repeat 4#usize 0#u32
@@ -34,7 +34,7 @@ def test_clone_from_slice : Result Unit := do
 #assert (test_clone_from_slice == ok ())
 
 /-- [slice_methods::test_copy_within_basic]:
-    Source: 'tests/src/slice_methods.rs', lines 21:0-30:1 -/
+    Source: 'tests/src/slice_methods.rs', lines 23:0-32:1 -/
 def test_copy_within_basic : Result Unit := do
   let (s, to_slice_mut_back) ←
     lift (Array.to_slice_mut
@@ -56,7 +56,7 @@ def test_copy_within_basic : Result Unit := do
 #assert (test_copy_within_basic == ok ())
 
 /-- [slice_methods::test_partial_eq_slice_array]:
-    Source: 'tests/src/slice_methods.rs', lines 33:0-39:1 -/
+    Source: 'tests/src/slice_methods.rs', lines 35:0-41:1 -/
 def test_partial_eq_slice_array : Result Unit := do
   let s ←
     core.array.Array.index (core.ops.index.IndexSlice

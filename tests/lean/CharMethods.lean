@@ -12,17 +12,17 @@ set_option maxHeartbeats 1000000
 namespace char_methods
 
 /-- [char_methods::make_a]:
-    Source: 'tests/src/char_methods.rs', lines 6:0-6:27 -/
+    Source: 'tests/src/char_methods.rs', lines 6:0-8:1 -/
 def make_a : Result Char := do
   ok 'a'
 
 /-- [char_methods::make_b]:
-    Source: 'tests/src/char_methods.rs', lines 7:0-7:27 -/
+    Source: 'tests/src/char_methods.rs', lines 9:0-11:1 -/
 def make_b : Result Char := do
   ok 'b'
 
 /-- [char_methods::test_char_eq]:
-    Source: 'tests/src/char_methods.rs', lines 10:0-15:1 -/
+    Source: 'tests/src/char_methods.rs', lines 14:0-19:1 -/
 def test_char_eq : Result Unit := do
   let a ← make_a
   let b ← make_b

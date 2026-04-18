@@ -3,7 +3,9 @@
 #![register_tool(verify)]
 //! Tests for `Vec` methods, verifying the Aeneas models match Rust behavior.
 
-fn make_empty() -> Vec<u32> { Vec::new() }
+fn make_empty() -> Vec<u32> {
+    Vec::new()
+}
 
 /// `Vec::is_empty` — verbatim pattern from docs.
 ///
@@ -50,7 +52,11 @@ pub fn test_vec_clear() {
 #[verify::test]
 pub fn test_vec_truncate_shortens() {
     let mut v: Vec<u32> = Vec::with_capacity(5);
-    v.push(1); v.push(2); v.push(3); v.push(4); v.push(5);
+    v.push(1);
+    v.push(2);
+    v.push(3);
+    v.push(4);
+    v.push(5);
     v.truncate(2);
     assert!(v.len() == 2);
 }
@@ -58,7 +64,9 @@ pub fn test_vec_truncate_shortens() {
 #[verify::test]
 pub fn test_vec_truncate_noop_if_longer() {
     let mut v: Vec<u32> = Vec::with_capacity(3);
-    v.push(1); v.push(2); v.push(3);
+    v.push(1);
+    v.push(2);
+    v.push(3);
     v.truncate(8);
     assert!(v.len() == 3);
 }
@@ -72,7 +80,9 @@ pub fn test_vec_truncate_noop_if_longer() {
 #[verify::test]
 pub fn test_vec_as_slice() {
     let mut v: Vec<u32> = Vec::with_capacity(3);
-    v.push(10); v.push(20); v.push(30);
+    v.push(10);
+    v.push(20);
+    v.push(30);
     let s: &[u32] = v.as_slice();
     assert!(s.len() == 3);
 }
@@ -87,7 +97,9 @@ pub fn test_vec_as_slice() {
 #[verify::test]
 pub fn test_vec_remove_middle() {
     let mut v: Vec<u32> = Vec::with_capacity(3);
-    v.push(1); v.push(2); v.push(3);
+    v.push(1);
+    v.push(2);
+    v.push(3);
     let x = v.remove(1);
     assert!(x == 2);
     assert!(v.len() == 2);
@@ -105,9 +117,13 @@ pub fn test_vec_remove_middle() {
 #[verify::test]
 pub fn test_vec_append() {
     let mut v1: Vec<u32> = Vec::with_capacity(3);
-    v1.push(1); v1.push(2); v1.push(3);
+    v1.push(1);
+    v1.push(2);
+    v1.push(3);
     let mut v2: Vec<u32> = Vec::with_capacity(3);
-    v2.push(4); v2.push(5); v2.push(6);
+    v2.push(4);
+    v2.push(5);
+    v2.push(6);
     v1.append(&mut v2);
     assert!(v1.len() == 6);
     assert!(v2.is_empty());
@@ -124,7 +140,9 @@ pub fn test_vec_append() {
 #[verify::test]
 pub fn test_vec_split_off() {
     let mut v: Vec<u32> = Vec::with_capacity(3);
-    v.push(1); v.push(2); v.push(3);
+    v.push(1);
+    v.push(2);
+    v.push(3);
     let v2: Vec<u32> = v.split_off(1);
     assert!(v.len() == 1);
     assert!(v2.len() == 2);

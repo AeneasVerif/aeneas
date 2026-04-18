@@ -8,8 +8,12 @@
 //! exercise it through that surface syntax, which is the observable behaviour
 //! documented at <https://doc.rust-lang.org/core/iter/trait.Step.html>.
 
-fn make_start() -> i32 { -2 }
-fn make_end() -> i32 { 3 }
+fn make_start() -> i32 {
+    -2
+}
+fn make_end() -> i32 {
+    3
+}
 
 #[verify::test]
 pub fn test_i32_range_sum() {

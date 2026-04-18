@@ -5,7 +5,9 @@
 //! cross-type `PartialEq<[U; N]> for [T]` impl. Adapted from the Rust
 //! docs examples for each method.
 
-fn make_src() -> [u32; 4] { [10, 20, 30, 40] }
+fn make_src() -> [u32; 4] {
+    [10, 20, 30, 40]
+}
 
 #[verify::test]
 pub fn test_clone_from_slice() {

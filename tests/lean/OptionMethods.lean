@@ -23,12 +23,12 @@ def test_option_as_ref_some : Result Unit := do
 #assert (test_option_as_ref_some == ok ())
 
 /-- [option_methods::make_none_u32]:
-    Source: 'tests/src/option_methods.rs', lines 24:0-24:42 -/
+    Source: 'tests/src/option_methods.rs', lines 24:0-26:1 -/
 def make_none_u32 : Result (Option Std.U32) := do
   ok none
 
 /-- [option_methods::test_option_as_ref_none]:
-    Source: 'tests/src/option_methods.rs', lines 27:0-34:1 -/
+    Source: 'tests/src/option_methods.rs', lines 29:0-36:1 -/
 def test_option_as_ref_none : Result Unit := do
   let x ← make_none_u32
   let y := core.option.Option.as_ref x
@@ -40,7 +40,7 @@ def test_option_as_ref_none : Result Unit := do
 #assert (test_option_as_ref_none == ok ())
 
 /-- [option_methods::test_option_ok_or_some]:
-    Source: 'tests/src/option_methods.rs', lines 48:0-54:1 -/
+    Source: 'tests/src/option_methods.rs', lines 50:0-56:1 -/
 def test_option_ok_or_some : Result Unit := do
   let r := core.option.Option.ok_or (some 42#u32) 0#u32
   match r with
@@ -51,7 +51,7 @@ def test_option_ok_or_some : Result Unit := do
 #assert (test_option_ok_or_some == ok ())
 
 /-- [option_methods::test_option_ok_or_none]:
-    Source: 'tests/src/option_methods.rs', lines 57:0-64:1 -/
+    Source: 'tests/src/option_methods.rs', lines 59:0-66:1 -/
 def test_option_ok_or_none : Result Unit := do
   let x ← make_none_u32
   let r := core.option.Option.ok_or x 7#u32
@@ -63,7 +63,7 @@ def test_option_ok_or_none : Result Unit := do
 #assert (test_option_ok_or_none == ok ())
 
 /-- [option_methods::test_option_default]:
-    Source: 'tests/src/option_methods.rs', lines 73:0-76:1 -/
+    Source: 'tests/src/option_methods.rs', lines 75:0-78:1 -/
 def test_option_default : Result Unit := do
   let opt ← core.option.Option.Insts.CoreDefaultDefault.default Std.U32
   let b := core.option.Option.is_none opt
@@ -73,7 +73,7 @@ def test_option_default : Result Unit := do
 #assert (test_option_default == ok ())
 
 /-- [option_methods::test_option_partial_eq_some_some_eq]:
-    Source: 'tests/src/option_methods.rs', lines 94:0-98:1 -/
+    Source: 'tests/src/option_methods.rs', lines 96:0-100:1 -/
 def test_option_partial_eq_some_some_eq : Result Unit := do
   let b ←
     core.option.Option.Insts.CoreCmpPartialEqOption.eq core.cmp.PartialEqU32
@@ -84,7 +84,7 @@ def test_option_partial_eq_some_some_eq : Result Unit := do
 #assert (test_option_partial_eq_some_some_eq == ok ())
 
 /-- [option_methods::test_option_partial_eq_some_some_neq]:
-    Source: 'tests/src/option_methods.rs', lines 101:0-105:1 -/
+    Source: 'tests/src/option_methods.rs', lines 103:0-107:1 -/
 def test_option_partial_eq_some_some_neq : Result Unit := do
   let b ←
     core.option.Option.Insts.CoreCmpPartialEqOption.eq core.cmp.PartialEqU32
@@ -95,7 +95,7 @@ def test_option_partial_eq_some_some_neq : Result Unit := do
 #assert (test_option_partial_eq_some_some_neq == ok ())
 
 /-- [option_methods::test_option_partial_eq_none_some]:
-    Source: 'tests/src/option_methods.rs', lines 108:0-112:1 -/
+    Source: 'tests/src/option_methods.rs', lines 110:0-114:1 -/
 def test_option_partial_eq_none_some : Result Unit := do
   let x ← make_none_u32
   let b ←
@@ -107,7 +107,7 @@ def test_option_partial_eq_none_some : Result Unit := do
 #assert (test_option_partial_eq_none_some == ok ())
 
 /-- [option_methods::test_option_clone_some]:
-    Source: 'tests/src/option_methods.rs', lines 118:0-125:1 -/
+    Source: 'tests/src/option_methods.rs', lines 120:0-127:1 -/
 def test_option_clone_some : Result Unit := do
   let y ←
     core.option.Option.Insts.CoreCloneClone.clone core.clone.CloneU32 (some
@@ -120,7 +120,7 @@ def test_option_clone_some : Result Unit := do
 #assert (test_option_clone_some == ok ())
 
 /-- [option_methods::test_option_clone_none]:
-    Source: 'tests/src/option_methods.rs', lines 128:0-132:1 -/
+    Source: 'tests/src/option_methods.rs', lines 130:0-134:1 -/
 def test_option_clone_none : Result Unit := do
   let x ← make_none_u32
   let y ← core.option.Option.Insts.CoreCloneClone.clone core.clone.CloneU32 x

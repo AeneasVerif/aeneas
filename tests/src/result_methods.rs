@@ -3,8 +3,12 @@
 #![register_tool(verify)]
 //! Tests for `Result` methods, verifying the Aeneas models match Rust behavior.
 
-fn make_err_u32(e: u32) -> Result<u32, u32> { Err(e) }
-fn make_ok_u32(v: u32) -> Result<u32, u32> { Ok(v) }
+fn make_err_u32(e: u32) -> Result<u32, u32> {
+    Err(e)
+}
+fn make_ok_u32(v: u32) -> Result<u32, u32> {
+    Ok(v)
+}
 
 /// `Result::is_ok` — adapted from docs. Docs example uses `&str` error which
 /// isn't modelled yet; this test uses `u32` error and otherwise matches.

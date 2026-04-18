@@ -12,17 +12,17 @@ set_option maxHeartbeats 1000000
 namespace step_i32
 
 /-- [step_i32::make_start]:
-    Source: 'tests/src/step_i32.rs', lines 11:0-11:29 -/
+    Source: 'tests/src/step_i32.rs', lines 11:0-13:1 -/
 def make_start : Result Std.I32 := do
   ok (-2)#i32
 
 /-- [step_i32::make_end]:
-    Source: 'tests/src/step_i32.rs', lines 12:0-12:26 -/
+    Source: 'tests/src/step_i32.rs', lines 14:0-16:1 -/
 def make_end : Result Std.I32 := do
   ok 3#i32
 
 /-- [step_i32::test_i32_range_sum]: loop body 0:
-    Source: 'tests/src/step_i32.rs', lines 19:4-21:5 -/
+    Source: 'tests/src/step_i32.rs', lines 23:4-25:5 -/
 @[rust_loop_body]
 def test_i32_range_sum_loop.body
   (iter : core.ops.range.Range Std.I32) (total : Std.I32) :
@@ -36,7 +36,7 @@ def test_i32_range_sum_loop.body
               ok (cont (iter1, total1))
 
 /-- [step_i32::test_i32_range_sum]: loop 0:
-    Source: 'tests/src/step_i32.rs', lines 19:4-21:5 -/
+    Source: 'tests/src/step_i32.rs', lines 23:4-25:5 -/
 @[rust_loop]
 def test_i32_range_sum_loop
   (iter : core.ops.range.Range Std.I32) (total : Std.I32) :
@@ -47,7 +47,7 @@ def test_i32_range_sum_loop
     (iter, total)
 
 /-- [step_i32::test_i32_range_sum]:
-    Source: 'tests/src/step_i32.rs', lines 15:0-24:1 -/
+    Source: 'tests/src/step_i32.rs', lines 19:0-28:1 -/
 def test_i32_range_sum : Result Unit := do
   let s ← make_start
   let e ← make_end
@@ -58,7 +58,7 @@ def test_i32_range_sum : Result Unit := do
 #assert (test_i32_range_sum == ok ())
 
 /-- [step_i32::test_i32_range_count]: loop body 0:
-    Source: 'tests/src/step_i32.rs', lines 31:4-33:5 -/
+    Source: 'tests/src/step_i32.rs', lines 35:4-37:5 -/
 @[rust_loop_body]
 def test_i32_range_count_loop.body
   (iter : core.ops.range.Range Std.I32) (n : Std.I32) :
@@ -72,7 +72,7 @@ def test_i32_range_count_loop.body
               ok (cont (iter1, n1))
 
 /-- [step_i32::test_i32_range_count]: loop 0:
-    Source: 'tests/src/step_i32.rs', lines 31:4-33:5 -/
+    Source: 'tests/src/step_i32.rs', lines 35:4-37:5 -/
 @[rust_loop]
 def test_i32_range_count_loop
   (iter : core.ops.range.Range Std.I32) (n : Std.I32) : Result Std.I32 := do
@@ -81,7 +81,7 @@ def test_i32_range_count_loop
     (iter, n)
 
 /-- [step_i32::test_i32_range_count]:
-    Source: 'tests/src/step_i32.rs', lines 27:0-35:1 -/
+    Source: 'tests/src/step_i32.rs', lines 31:0-39:1 -/
 def test_i32_range_count : Result Unit := do
   let s ← make_start
   let e ← make_end
