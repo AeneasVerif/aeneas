@@ -8,6 +8,7 @@ package «tests» {}
 @[default_target] lean_lib Adt
 @[default_target] lean_lib AdtBorrows
 @[default_target] lean_lib ArrayFromFn
+@[default_target] lean_lib ArrayFromFnProofs
 @[default_target] lean_lib Arrays
 @[default_target] lean_lib ArraysDefs
 @[default_target] lean_lib ArraySliceIndex
@@ -18,12 +19,15 @@ package «tests» {}
 @[default_target] lean_lib BlanketImpl
 @[default_target] lean_lib Builtin
 @[default_target] lean_lib CharMethods
+@[default_target] lean_lib CharMethodsProofs
 @[default_target] lean_lib Issue804ClosureReturnRef
 @[default_target] lean_lib Closures
 @[default_target] lean_lib Constants
 @[default_target] lean_lib ConstantsLean
 @[default_target] lean_lib ConvertTryfrom
+@[default_target] lean_lib ConvertTryfromProofs
 @[default_target] lean_lib CoreMisc
+@[default_target] lean_lib CoreMiscProofs
 @[default_target] lean_lib Curve25519
 @[default_target] lean_lib Default
 @[default_target] lean_lib DefaultedMethod
@@ -69,6 +73,7 @@ package «tests» {}
 @[default_target] lean_lib Order
 @[default_target] lean_lib Paper
 @[default_target] lean_lib PoloniusList
+@[default_target] lean_lib ProofHelpers
 @[default_target] lean_lib ResultMethods
 @[default_target] lean_lib RustBorrowCheckIssues
 @[default_target] lean_lib Print
@@ -83,6 +88,7 @@ package «tests» {}
 @[default_target] lean_lib StepI32
 @[default_target] lean_lib StringChars
 @[default_target] lean_lib StrToOwned
+@[default_target] lean_lib StrToOwnedProofs
 @[default_target] lean_lib SwitchTest
 @[default_target] lean_lib Traits
 @[default_target] lean_lib Tutorial
