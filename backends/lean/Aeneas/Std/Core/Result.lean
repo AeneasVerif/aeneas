@@ -30,6 +30,19 @@ def core.result.Result.is_ok {T E : Type}
   | .Ok _ => true
   | .Err _ => false
 
+/-- `Result::is_err`: `true` when `self` is `Err`. Dual of `is_ok`.
+
+- Docs: https://doc.rust-lang.org/core/result/enum.Result.html#method.is_err
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/result.rs
+-/
+@[simp, step_simps,
+  rust_fun "core::result::{core::result::Result<@T, @E>}::is_err" -canFail -lift]
+def core.result.Result.is_err {T E : Type}
+    (self : core.result.Result T E) : Bool :=
+  match self with
+  | .Ok _ => false
+  | .Err _ => true
+
 /-- `Result::unwrap_or`: returns the contained `Ok` value, or a provided default.
 
 - Docs: https://doc.rust-lang.org/core/result/enum.Result.html#method.unwrap_or

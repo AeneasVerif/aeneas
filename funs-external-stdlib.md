@@ -38,7 +38,7 @@ For each ✅ row, a reviewer can chase the links:
 |---|---:|---:|
 | Foundation (cascade deps for other entries) | 3 | 1 |
 | Option methods | 5 | 5 |
-| Result methods | 5 | 5 |
+| Result methods | 6 | 6 |
 | Vec methods | 8 | 8 |
 | VecDeque (new type + methods) | 3 | 0 |
 | Slice methods | 6 | 0 |
@@ -47,9 +47,9 @@ For each ✅ row, a reviewer can chase the links:
 | Array (from_fn, PartialEq) | 2 | 0 |
 | i32 Iter::Step trait | 3 | 0 |
 | Cmp/Eq/Borrow traits | 3 | 3 |
-| Misc (black_box, TryFrom, to_owned) | 3 | 1 |
+| Misc (black_box, TryFrom, TryFromIntError, to_owned) | 4 | 3 |
 | Deferred (fmt) | 2 | — |
-| **Total** | **58** | **23** |
+| **Total** | **60** | **26** |
 
 ---
 
@@ -83,6 +83,7 @@ are required so that verbatim docs examples of other items translate.
 | Rust item | Lean name | Docs | Source | Status | Deps | Lean file | Test file | Proof |
 |---|---|---|---|---|---|---|---|---|
 | `Result::is_ok` | `core.result.Result.is_ok` | [docs](https://doc.rust-lang.org/core/result/enum.Result.html#method.is_ok) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/result.rs) | ✅ | — | [Core/Result.lean](backends/lean/Aeneas/Std/Core/Result.lean) | [tests/src/result_methods.rs](tests/src/result_methods.rs) | — |
+| `Result::is_err` | `core.result.Result.is_err` | [docs](https://doc.rust-lang.org/core/result/enum.Result.html#method.is_err) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/result.rs) | ✅ | — | [Core/Result.lean](backends/lean/Aeneas/Std/Core/Result.lean) | [tests/src/convert_tryfrom.rs](tests/src/convert_tryfrom.rs) | — |
 | `Result::map` | `core.result.Result.map` | [docs](https://doc.rust-lang.org/core/result/enum.Result.html#method.map) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/result.rs) | ✅ | FnOnce | [Core/Result.lean](backends/lean/Aeneas/Std/Core/Result.lean) | [tests/src/result_methods.rs](tests/src/result_methods.rs) | — |
 | `Result::map_err` | `core.result.Result.map_err` | [docs](https://doc.rust-lang.org/core/result/enum.Result.html#method.map_err) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/result.rs) | ✅ | FnOnce | [Core/Result.lean](backends/lean/Aeneas/Std/Core/Result.lean) | [tests/src/result_methods.rs](tests/src/result_methods.rs) | — |
 | `Result::unwrap_or` | `core.result.Result.unwrap_or` | [docs](https://doc.rust-lang.org/core/result/enum.Result.html#method.unwrap_or) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/result.rs) | ✅ | — | [Core/Result.lean](backends/lean/Aeneas/Std/Core/Result.lean) | [tests/src/result_methods.rs](tests/src/result_methods.rs) | — |
@@ -191,7 +192,8 @@ All `Vec` methods take `keepParams := [true, false]` to erase the allocator type
 | Rust item | Lean name | Docs | Source | Status | Deps | Lean file | Test file | Proof |
 |---|---|---|---|---|---|---|---|---|
 | `hint::black_box` | `core.hint.black_box` | [docs](https://doc.rust-lang.org/core/hint/fn.black_box.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/hint.rs) | ✅ | — | [Core/Core.lean](backends/lean/Aeneas/Std/Core/Core.lean) | [tests/src/core_misc.rs](tests/src/core_misc.rs) | — |
-| `TryFrom<u64, TryFromIntError> for u32::try_from` | `U32.Insts.CoreConvertTryFromU64TryFromIntError.try_from` | [docs](https://doc.rust-lang.org/core/convert/trait.TryFrom.html#tymethod.try_from) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/convert/num.rs) | ⬜ | `TryFromIntError` | — | — | — |
+| `TryFrom<u64, TryFromIntError> for u32::try_from` | `U32.Insts.CoreConvertTryFromU64TryFromIntError.try_from` | [docs](https://doc.rust-lang.org/core/convert/trait.TryFrom.html#tymethod.try_from) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/convert/num.rs) | ✅ | `TryFromIntError`, `Result::is_err` | [Scalar/CoreConvertNum.lean](backends/lean/Aeneas/Std/Scalar/CoreConvertNum.lean) | [tests/src/convert_tryfrom.rs](tests/src/convert_tryfrom.rs) | — |
+| `core::num::error::TryFromIntError` (type) | `core.num.error.TryFromIntError` | [docs](https://doc.rust-lang.org/core/num/struct.TryFromIntError.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/num/error.rs) | ✅ | — | [Core/Convert.lean](backends/lean/Aeneas/Std/Core/Convert.lean) | [tests/src/convert_tryfrom.rs](tests/src/convert_tryfrom.rs) | — |
 | `ToOwned<String> for str::to_owned` | `Str.Insts.AllocBorrowToOwnedString.to_owned` | [docs](https://doc.rust-lang.org/core/borrow/trait.ToOwned.html#tymethod.to_owned) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/str.rs) | ⬜ | `String` | — | — | — |
 
 ---

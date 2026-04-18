@@ -6,6 +6,7 @@ import Aeneas.Std.Scalar.Core
 import Aeneas.Std.Scalar.Notations
 import Aeneas.Std.Scalar.Elab
 import Aeneas.Std.Array.Array
+import Aeneas.Std.Core.Convert
 import Aeneas.Tactic.Solver.ScalarTac
 import Aeneas.Tactic.Step.Init
 import Aeneas.Tactic.Solver.Arith.Lemmas
@@ -631,6 +632,32 @@ iscalar_no_isize @[step]
 theorem core.num.«%S».from_le_bytes.step_spec (x : Array I8 (%Size)#usize) :
   lift (core.num.«%S».from_le_bytes x) ⦃ y => y.bv = (BitVec.fromLEBytes (x.val.map I8.bv)).cast (by simp) ⦄  := by
   simp only [spec_ok, lift, from_le_bytes]
+
+/-! ## `TryFrom<u64> for u32`
+
+Pinned to Rust `1.85.0` (Charon pin `nightly-2026-02-07`). -/
+
+/-- `TryFrom<u64, Error = TryFromIntError> for u32::try_from`: succeeds iff
+`value <= u32::MAX`; otherwise returns `Err(TryFromIntError)`.
+
+- Docs: https://doc.rust-lang.org/core/convert/trait.TryFrom.html#tymethod.try_from
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/convert/num.rs
+-/
+@[rust_fun
+  "core::convert::num::{core::convert::TryFrom<u32, u64, core::num::error::TryFromIntError>}::try_from"]
+def U32.Insts.CoreConvertTryFromU64TryFromIntError.try_from (value : U64) :
+    Result (core.result.Result U32 core.num.error.TryFromIntError) :=
+  if h : value.val ≤ U32.max then
+    ok (.Ok ⟨ value.val, by scalar_tac ⟩)
+  else
+    ok (.Err .mk)
+
+@[reducible, rust_trait_impl
+  "core::convert::TryFrom<u32, u64, core::num::error::TryFromIntError>"]
+def U32.Insts.CoreConvertTryFromU64TryFromIntError :
+    core.convert.TryFrom U32 U64 core.num.error.TryFromIntError := {
+  try_from := U32.Insts.CoreConvertTryFromU64TryFromIntError.try_from
+}
 
 end Std
 

@@ -49,6 +49,9 @@ let lean_builtin_types =
     (* file: "Aeneas/Std/Core/Iter.lean", line: 41 *)
     mk_type "core::iter::adapters::take::Take" "core.iter.adapters.take.Take"
       ~kind:(KStruct [ ("iter", Some "iter"); ("n", Some "n") ]);
+    (* file: "Aeneas/Std/Core/Convert.lean", line: 167 *)
+    mk_type "core::num::error::TryFromIntError" "core.num.error.TryFromIntError"
+      ~kind:(KEnum [ ("Mk", Some "mk") ]);
     (* file: "Aeneas/Std/Core/Ops.lean", line: 83 *)
     mk_type "core::ops::control_flow::ControlFlow"
       "core.ops.control_flow.ControlFlow"
@@ -458,6 +461,11 @@ let lean_builtin_funs =
     mk_fun "core::cmp::max" "core.cmp.max";
     (* file: "Aeneas/Std/Core/Cmp.lean", line: 106 *)
     mk_fun "core::cmp::min" "core.cmp.min";
+    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 646 *)
+    mk_fun
+      "core::convert::num::{core::convert::TryFrom<u32, u64, \
+       core::num::error::TryFromIntError>}::try_from"
+      "U32.Insts.CoreConvertTryFromU64TryFromIntError.try_from";
     (* file: "Aeneas/Std/Core/Convert.lean", line: 27 *)
     mk_fun "core::convert::{core::convert::From<@T, @T>}::from"
       "core.convert.FromSame.from_" ~can_fail:false;
@@ -723,19 +731,22 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Fmt.lean", line: 95 *)
     mk_fun "core::result::{core::result::Result<@T, @E>}::expect"
       "core.result.Result.expect";
+    (* file: "Aeneas/Std/Core/Result.lean", line: 39 *)
+    mk_fun "core::result::{core::result::Result<@T, @E>}::is_err"
+      "core.result.Result.is_err" ~can_fail:false ~lift:false;
     (* file: "Aeneas/Std/Core/Result.lean", line: 26 *)
     mk_fun "core::result::{core::result::Result<@T, @E>}::is_ok"
       "core.result.Result.is_ok" ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Core/Result.lean", line: 57 *)
+    (* file: "Aeneas/Std/Core/Result.lean", line: 70 *)
     mk_fun "core::result::{core::result::Result<@T, @E>}::map"
       "core.result.Result.map";
-    (* file: "Aeneas/Std/Core/Result.lean", line: 73 *)
+    (* file: "Aeneas/Std/Core/Result.lean", line: 86 *)
     mk_fun "core::result::{core::result::Result<@T, @E>}::map_err"
       "core.result.Result.map_err";
     (* file: "Aeneas/Std/Core/Fmt.lean", line: 19 *)
     mk_fun "core::result::{core::result::Result<@T, @E>}::unwrap"
       "core.result.Result.unwrap";
-    (* file: "Aeneas/Std/Core/Result.lean", line: 39 *)
+    (* file: "Aeneas/Std/Core/Result.lean", line: 52 *)
     mk_fun "core::result::{core::result::Result<@T, @E>}::unwrap_or"
       "core.result.Result.unwrap_or" ~can_fail:false;
     (* file: "Aeneas/Std/Slice.lean", line: 284 *)
@@ -1213,6 +1224,10 @@ let lean_builtin_trait_impls =
       "core::convert::TryFrom<&'a [@T; @N], &'a [@T], \
        core::array::TryFromSliceError>"
       "core.convert.TryFromSharedArraySliceTryFromSliceError";
+    (* file: "Aeneas/Std/Scalar/CoreConvertNum.lean", line: 655 *)
+    mk_trait_impl
+      "core::convert::TryFrom<u32, u64, core::num::error::TryFromIntError>"
+      "U32.Insts.CoreConvertTryFromU64TryFromIntError";
     (* file: "Aeneas/Std/Core/Convert.lean", line: 60 *)
     mk_trait_impl "core::convert::TryInto<@T, @U, @E>"
       "core.convert.TryInto.Blanket";

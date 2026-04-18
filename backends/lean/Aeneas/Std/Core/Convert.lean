@@ -151,4 +151,24 @@ def core.result.Result.Insts.CoreOpsTry_traitTryTResultInfallibleE
     core.result.Result.Insts.CoreOpsTry_traitTryTResultInfallibleE.branch
 }
 
+/-! ### `TryFromIntError` + `TryFrom<u64> for u32`
+
+Pinned to Rust `1.85.0` (Charon pin `nightly-2026-02-07`). -/
+
+/-- `core::num::error::TryFromIntError`: the error type for `TryFrom` between
+integer types. In Rust it's a unit struct `TryFromIntError(())`; we model
+it as an empty-constructor inductive. Rust re-exports this as
+`core::num::TryFromIntError` but the canonical path (used by Charon) is
+`core::num::error::TryFromIntError`.
+
+- Docs: https://doc.rust-lang.org/core/num/struct.TryFromIntError.html
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/num/error.rs
+-/
+@[rust_type "core::num::error::TryFromIntError"]
+inductive core.num.error.TryFromIntError where
+| mk
+
+-- `TryFrom<u64> for u32::try_from` impl lives in `Scalar/CoreConvertNum.lean`
+-- (which has `U32`/`U64` in scope).
+
 end Aeneas.Std
