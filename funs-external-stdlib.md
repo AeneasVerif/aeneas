@@ -47,9 +47,9 @@ For each ✅ row, a reviewer can chase the links:
 | Array (from_fn, PartialEq) | 2 | 1 |
 | i32 Iter::Step trait | 3 | 3 |
 | Cmp/Eq/Borrow traits | 3 | 3 |
-| Misc (black_box, TryFrom, TryFromIntError, to_owned) | 4 | 3 |
-| Deferred (fmt + str::to_owned) | 3 | — |
-| **Total** | **61** | **54** |
+| Misc (black_box, TryFrom, TryFromIntError, to_owned) | 4 | 4 |
+| Deferred (fmt) | 2 | — |
+| **Total** | **60** | **55** |
 
 ---
 
@@ -194,7 +194,7 @@ All `Vec` methods take `keepParams := [true, false]` to erase the allocator type
 | `hint::black_box` | `core.hint.black_box` | [docs](https://doc.rust-lang.org/core/hint/fn.black_box.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/hint.rs) | ✅ | — | [Core/Core.lean](backends/lean/Aeneas/Std/Core/Core.lean) | [tests/src/core_misc.rs](tests/src/core_misc.rs) | — |
 | `TryFrom<u64, TryFromIntError> for u32::try_from` | `U32.Insts.CoreConvertTryFromU64TryFromIntError.try_from` | [docs](https://doc.rust-lang.org/core/convert/trait.TryFrom.html#tymethod.try_from) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/convert/num.rs) | ✅ | `TryFromIntError`, `Result::is_err` | [Scalar/CoreConvertNum.lean](backends/lean/Aeneas/Std/Scalar/CoreConvertNum.lean) | [tests/src/convert_tryfrom.rs](tests/src/convert_tryfrom.rs) | — |
 | `core::num::error::TryFromIntError` (type) | `core.num.error.TryFromIntError` | [docs](https://doc.rust-lang.org/core/num/struct.TryFromIntError.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/num/error.rs) | ✅ | — | [Core/Convert.lean](backends/lean/Aeneas/Std/Core/Convert.lean) | [tests/src/convert_tryfrom.rs](tests/src/convert_tryfrom.rs) | — |
-| `ToOwned<String> for str::to_owned` | `Str.Insts.AllocBorrowToOwnedString.to_owned` | [docs](https://doc.rust-lang.org/core/borrow/trait.ToOwned.html#tymethod.to_owned) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/str.rs) | ⏸ | `String` infra; Aeneas currently fails to translate `&str -> String` returns | — | — | — |
+| `ToOwned<String> for str::to_owned` | `Str.Insts.AllocBorrowToOwnedString.to_owned` | [docs](https://doc.rust-lang.org/core/borrow/trait.ToOwned.html#tymethod.to_owned) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/str.rs) | ✅ | `Str := Slice U8`, native `String` | [String.lean](backends/lean/Aeneas/Std/String.lean) | [tests/src/str_to_owned.rs](tests/src/str_to_owned.rs) | — |
 
 ---
 
@@ -211,10 +211,13 @@ output to a `Formatter` sink). Keep as axioms until a downstream project
 | `Formatter::debug_struct_field2_finish` | `core.fmt.Formatter.debug_struct_field2_finish` | ⏸ Requires impure-effect story. |
 | `Display for &T::fmt` | `Shared0T.Insts.CoreFmtDisplay.fmt` | ⏸ Requires impure-effect story. |
 
-### `str::to_owned`
+### Known-bad test pattern (not a stdlib gap)
 
-Aeneas currently fails to translate `&str -> String` (the returned opaque
-`String` triggers a `place_not_available` error in `InterpExpressions`).
-The `String` type is already opaque in `Alloc.lean`; the blocker is compiler
-support for the cross-type value, not a stdlib model. Revisit once the
-Aeneas compiler handles opaque-typed returns through move semantics.
+A function that returns a string literal directly, like
+`fn make_str() -> &'static str { "hello" }`, triggers a "There should be
+no bottoms in the value" error in `interp/InterpExpressions.ml:55`
+(`read_place_check`) when the return value is moved at `pop_frame`.
+Workaround: bind the literal to a top-level `const HELLO: &str = "hello"`
+and return that. This is unrelated to `str::to_owned` itself — once
+the helper is rewritten with a `const`, the `to_owned` call translates
+and runs against the model above.

@@ -263,6 +263,11 @@ let lean_builtin_funs =
       "alloc.vec.Vec.Insts.CoreBorrowBorrowSlice.borrow"
       ~keep_params:(Some [ true; false ])
       ~can_fail:false;
+    (* file: "Aeneas/Std/String.lean", line: 28 *)
+    mk_fun
+      "alloc::str::{alloc::borrow::ToOwned<str, \
+       alloc::string::String>}::to_owned"
+      "Str.Insts.AllocBorrowToOwnedString.to_owned";
     (* file: "Aeneas/Std/Vec.lean", line: 316 *)
     mk_fun "alloc::vec::from_elem" "alloc.vec.from_elem";
     (* file: "Aeneas/Std/VecIter.lean", line: 110 *)

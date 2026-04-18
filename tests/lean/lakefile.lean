@@ -82,6 +82,7 @@ package «tests» {}
 @[default_target] lean_lib StepBy
 @[default_target] lean_lib StepI32
 @[default_target] lean_lib StringChars
+@[default_target] lean_lib StrToOwned
 @[default_target] lean_lib SwitchTest
 @[default_target] lean_lib Traits
 @[default_target] lean_lib Tutorial
