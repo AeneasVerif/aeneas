@@ -673,6 +673,11 @@ let lean_builtin_funs =
       "core::iter::adapters::enumerate::{core::iter::traits::iterator::Iterator<core::iter::adapters::enumerate::Enumerate<@I>, \
        (usize, @Clause0_Item)>}::take"
       "core.iter.adapters.enumerate.IteratorEnumerate.take";
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 509 *)
+    mk_fun
+      "core::iter::adapters::map::{core::iter::traits::iterator::Iterator<core::iter::adapters::map::Map<@I, \
+       @F>, @B>}::next"
+      "core.iter.adapters.map.IteratorMap.next";
     (* file: "Aeneas/Std/Core/Iter.lean", line: 105 *)
     mk_fun
       "core::iter::adapters::step_by::{core::iter::traits::iterator::Iterator<core::iter::adapters::step_by::StepBy<@I>, \
@@ -744,6 +749,9 @@ let lean_builtin_funs =
     (* file: "Aeneas/Std/Core/Iter.lean", line: 154 *)
     mk_fun "core::iter::traits::iterator::Iterator::enumerate"
       "core.iter.traits.iterator.Iterator.enumerate.default";
+    (* file: "Aeneas/Std/Core/Iter.lean", line: 499 *)
+    mk_fun "core::iter::traits::iterator::Iterator::map"
+      "core.iter.traits.iterator.Iterator.map.default";
     (* file: "Aeneas/Std/Core/Iter.lean", line: 60 *)
     mk_fun "core::iter::traits::iterator::Iterator::step_by"
       "core.iter.traits.iterator.Iterator.step_by.default";

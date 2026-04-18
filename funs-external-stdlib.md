@@ -36,20 +36,20 @@ For each ✅ row, a reviewer can chase the links:
 
 | Group | Count | Done |
 |---|---:|---:|
-| Foundation (cascade deps for other entries) | 3 | 2 |
+| Foundation (cascade deps for other entries) | 3 | 3 |
 | Option methods | 5 | 5 |
 | Result methods | 6 | 6 |
 | Vec methods | 8 | 8 |
 | VecDeque (new type + methods) | 4 | 4 |
 | Slice methods | 6 | 4 |
 | Range (RangeFull index, RangeFrom bounds, Range Iterator) | 7 | 5 |
-| Iterator adapters/collect/defaults | 8 | 1 |
+| Iterator adapters/collect/defaults | 8 | 2 |
 | Array (from_fn, PartialEq) | 2 | 1 |
 | i32 Iter::Step trait | 3 | 3 |
 | Cmp/Eq/Borrow traits | 3 | 3 |
 | Misc (black_box, TryFrom, TryFromIntError, to_owned) | 4 | 3 |
 | Deferred (fmt) | 2 | — |
-| **Total** | **61** | **44** |
+| **Total** | **61** | **46** |
 
 ---
 
@@ -61,7 +61,7 @@ are required so that verbatim docs examples of other items translate.
 | Rust item | Lean name | Docs | Source | Status | Needed by | Lean file | Test file | Proof |
 |---|---|---|---|---|---|---|---|---|
 | `char` (primitive) + `PartialEq<char> for char::eq` | Lean native `Char` | [docs](https://doc.rust-lang.org/core/primitive.char.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/cmp.rs) | ✅ | — | built into Lean backend ([ExtractBase.ml](src/extract/ExtractBase.ml)) | [tests/src/char_methods.rs](tests/src/char_methods.rs) | — |
-| `core::array::iter::IntoIter<T, N>` + `Array::into_iter` + `Iterator for IntoIter` | `core.array.iter.IntoIter` + `Array::into_iter` + trait impl | [docs](https://doc.rust-lang.org/core/array/iter/struct.IntoIter.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/array/iter.rs) | ⬜ | `Iterator::enumerate` docs example | — | — | — |
+| `core::array::iter::IntoIter<T, N>` + `Array::into_iter` + `Iterator for IntoIter` | `core.array.iter.IntoIter` + `core.array.Array.into_iter` + `core.array.iter.IteratorIntoIter.next` | [docs](https://doc.rust-lang.org/core/array/iter/struct.IntoIter.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/array/iter.rs) | ✅ | — | [Array/Array.lean](backends/lean/Aeneas/Std/Array/Array.lean) | — | — |
 | `PartialEq<Option<T>> for Option<T>::eq` | `core.option.Option.Insts.CoreCmpPartialEqOption.eq` | [docs](https://doc.rust-lang.org/core/option/enum.Option.html#impl-PartialEq-for-Option%3CT%3E) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/option.rs) | ✅ | — | [Core/Core.lean](backends/lean/Aeneas/Std/Core/Core.lean) | [tests/src/option_methods.rs](tests/src/option_methods.rs) | — |
 
 ---
@@ -150,8 +150,8 @@ All `Vec` methods take `keepParams := [true, false]` to erase the allocator type
 
 | Rust item | Lean name | Docs | Source | Status | Deps | Lean file | Test file | Proof |
 |---|---|---|---|---|---|---|---|---|
-| `Iterator::enumerate` (default) | `core.iter.traits.iterator.Iterator.enumerate.default` | [docs](https://doc.rust-lang.org/core/iter/trait.Iterator.html#method.enumerate) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/iter/traits/iterator.rs) | ✅ | char, Array::into_iter, Option::PartialEq::eq (test adapted while deps pending) | [Core/Iter.lean](backends/lean/Aeneas/Std/Core/Iter.lean) | [tests/src/enumerate.rs](tests/src/enumerate.rs) | [tests/lean/EnumerateProofs.lean](tests/lean/EnumerateProofs.lean) |
-| `Iterator::map` (default) | `core.iter.traits.iterator.Iterator.map.default` | [docs](https://doc.rust-lang.org/core/iter/trait.Iterator.html#method.map) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/iter/traits/iterator.rs) | ⬜ | — | — | — | — |
+| `Iterator::enumerate` (default) | `core.iter.traits.iterator.Iterator.enumerate.default` | [docs](https://doc.rust-lang.org/core/iter/trait.Iterator.html#method.enumerate) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/iter/traits/iterator.rs) | ✅ | — | [Core/Iter.lean](backends/lean/Aeneas/Std/Core/Iter.lean) | [tests/src/enumerate.rs](tests/src/enumerate.rs) | [tests/lean/EnumerateProofs.lean](tests/lean/EnumerateProofs.lean) |
+| `Iterator::map` (default) + `Iterator for Map<I,F>::next` | `core.iter.traits.iterator.Iterator.map.default`, `core.iter.adapters.map.IteratorMap.next` | [docs](https://doc.rust-lang.org/core/iter/trait.Iterator.html#method.map) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/iter/adapters/map.rs) | ✅ | Map struct, FnMut | [Core/Iter.lean](backends/lean/Aeneas/Std/Core/Iter.lean) | — | — |
 | `Iterator<&T> for Iter<T>::collect` | `core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.collect` | [docs](https://doc.rust-lang.org/core/slice/struct.Iter.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/slice/iter/macros.rs) | ⬜ | — | — | — | — |
 | `Iterator<&T> for Iter<T>::map` | `core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.map` | [docs](https://doc.rust-lang.org/core/slice/struct.Iter.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/slice/iter/macros.rs) | ⬜ | — | — | — | — |
 | `Iterator<B> for Map<I, F>::collect` | `core.iter.adapters.map.Map.Insts.CoreIterTraitsIteratorIterator.collect` | [docs](https://doc.rust-lang.org/core/iter/struct.Map.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/iter/adapters/map.rs) | ⬜ | — | — | — | — |

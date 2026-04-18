@@ -486,3 +486,36 @@ def core.iter.traits.iterator.IteratorRange {A : Type}
 structure core.iter.adapters.map.Map (I : Type u) (F : Type v) where
   iter : I
   f : F
+
+/-! ## `Iterator::map` (default) and `Iterator for Map<I, F>::next`
+
+Pinned to Rust `1.85.0` (Charon pin `nightly-2026-02-07`).
+
+- Docs: https://doc.rust-lang.org/core/iter/trait.Iterator.html#method.map
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/iter/adapters/map.rs
+-/
+
+/-- `Iterator::map` default: wraps `self` and `f` in a `Map` adapter. -/
+@[rust_fun "core::iter::traits::iterator::Iterator::map"]
+def core.iter.traits.iterator.Iterator.map.default
+    {Self Item F B : Type}
+    (_iterInst : core.iter.traits.iterator.Iterator Self Item)
+    (_fnMutInst : core.ops.function.FnMut F Item B)
+    (self : Self) (f : F) :
+    Result (core.iter.adapters.map.Map Self F) :=
+  ok { iter := self, f := f }
+
+/-- `Iterator::next` for `Map<I, F>`: pull the next item from `iter`, apply `f`. -/
+@[rust_fun "core::iter::adapters::map::{core::iter::traits::iterator::Iterator<core::iter::adapters::map::Map<@I, @F>, @B>}::next"]
+def core.iter.adapters.map.IteratorMap.next
+    {I F Item B : Type}
+    (iterInst : core.iter.traits.iterator.Iterator I Item)
+    (fnMutInst : core.ops.function.FnMut F Item B)
+    (self : core.iter.adapters.map.Map I F) :
+    Result ((Option B) × core.iter.adapters.map.Map I F) := do
+  let (opt, iter') ← iterInst.next self.iter
+  match opt with
+  | none => ok (none, { self with iter := iter' })
+  | some x => do
+    let (b, f') ← fnMutInst.call_mut self.f x
+    ok (some b, { iter := iter', f := f' })
