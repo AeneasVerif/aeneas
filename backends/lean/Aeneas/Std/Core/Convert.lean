@@ -1,5 +1,6 @@
 import Aeneas.Std.Core.Core
 import Aeneas.Std.Core.Result
+import Aeneas.Std.Core.Ops
 
 namespace Aeneas.Std
 
@@ -70,6 +71,84 @@ structure core.convert.AsMut (Self : Type) (T : Type) where
 @[reducible, rust_trait_impl "core::convert::AsMut<Box<@T>, @T>"]
 def core.convert.AsMutBox (T : Type) : core.convert.AsMut T T := {
   as_mut := fun x => ok (alloc.boxed.AsMutBox.as_mut x)
+}
+
+/-! ### `Try<T, Result<Infallible, E>> for Result<T, E>`
+
+The `?` operator on a `Result<T, E>` desugars to `Try::branch`, which returns
+`ControlFlow<Residual, Output>`. For `Result<T, E>`, the residual type is
+`Result<Infallible, E>` (it can only carry an error). This impl is defined
+here (not in `Core/Result.lean`) because it references `Infallible`, which is
+declared in this file — see the note at the end of `Core/Result.lean`.
+-/
+
+/-- `Try<Result<Infallible, E>>::branch` for `Result<T, E>`.
+
+- Docs: https://doc.rust-lang.org/std/ops/trait.Try.html#tymethod.branch
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/result.rs
+-/
+@[rust_fun
+  "core::result::{core::ops::try_trait::Try<core::result::Result<@T, @E>, @T, core::result::Result<core::convert::Infallible, @E>>}::branch"]
+def core.result.Result.Insts.CoreOpsTry_traitTryTResultInfallibleE.branch
+    {T E : Type} (self : core.result.Result T E) :
+    Aeneas.Std.Result (core.ops.control_flow.ControlFlow
+      (core.result.Result core.convert.Infallible E) T) :=
+  match self with
+  | .Ok v => .ok (.Continue v)
+  | .Err e => .ok (.Break (.Err e))
+
+/-- `Try::from_output` for `Result<T, E>`: wraps the output in `Ok`. -/
+def core.result.Result.Insts.CoreOpsTry_traitTryTResultInfallibleE.from_output
+    {T E : Type} (output : T) :
+    Aeneas.Std.Result (core.result.Result T E) :=
+  .ok (.Ok output)
+
+/-- `FromResidual` for `Result<T, F>` given residual `Result<Infallible, E>`
+via a `From<E> -> F` conversion. Rust impl:
+```text
+impl<T, E, F: From<E>> FromResidual<Result<Infallible, E>> for Result<T, F>
+```
+-/
+@[rust_fun
+  "core::result::{core::ops::try_trait::FromResidual<core::result::Result<@T, @F>, core::result::Result<core::convert::Infallible, @E>>}::from_residual"]
+def core.result.Result.Insts.CoreOpsTry_traitFromResidualResultInfallibleE.from_residual
+    (T : Type) {E F : Type}
+    (convertFromInst : core.convert.From F E)
+    (residual : core.result.Result core.convert.Infallible E) :
+    Aeneas.Std.Result (core.result.Result T F) :=
+  match residual with
+  | .Err e => do
+    let f ← convertFromInst.from_ e
+    .ok (.Err f)
+  -- Unreachable: `Infallible` has no inhabitants.
+  | .Ok v => nomatch v
+
+@[reducible, rust_trait_impl
+  "core::ops::try_trait::FromResidual<core::result::Result<@T, @F>, core::result::Result<core::convert::Infallible, @E>>"]
+def core.result.Result.Insts.CoreOpsTry_traitFromResidualResultInfallibleE
+    (T : Type) {E F : Type} (convertFromInst : core.convert.From F E) :
+    core.ops.try_trait.FromResidual
+      (core.result.Result T F)
+      (core.result.Result core.convert.Infallible E) := {
+  from_residual :=
+    core.result.Result.Insts.CoreOpsTry_traitFromResidualResultInfallibleE.from_residual T
+      convertFromInst
+}
+
+@[reducible, rust_trait_impl
+  "core::ops::try_trait::Try<core::result::Result<@T, @E>, @T, core::result::Result<core::convert::Infallible, @E>>"]
+def core.result.Result.Insts.CoreOpsTry_traitTryTResultInfallibleE
+    (T E : Type) :
+    core.ops.try_trait.Try
+      (core.result.Result T E) T
+      (core.result.Result core.convert.Infallible E) := {
+  FromResidualInst :=
+    core.result.Result.Insts.CoreOpsTry_traitFromResidualResultInfallibleE T
+      (core.convert.FromSame E)
+  from_output :=
+    core.result.Result.Insts.CoreOpsTry_traitTryTResultInfallibleE.from_output
+  branch :=
+    core.result.Result.Insts.CoreOpsTry_traitTryTResultInfallibleE.branch
 }
 
 end Aeneas.Std
