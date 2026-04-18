@@ -39,7 +39,7 @@ For each ✅ row, a reviewer can chase the links:
 | Foundation (cascade deps for other entries) | 3 | 1 |
 | Option methods | 5 | 5 |
 | Result methods | 5 | 5 |
-| Vec methods | 8 | 0 |
+| Vec methods | 8 | 8 |
 | VecDeque (new type + methods) | 3 | 0 |
 | Slice methods | 6 | 0 |
 | Range (RangeFull index, RangeFrom bounds, Range Iterator) | 7 | 0 |
@@ -49,7 +49,7 @@ For each ✅ row, a reviewer can chase the links:
 | Cmp/Eq/Borrow traits | 3 | 0 |
 | Misc (black_box, TryFrom, to_owned) | 3 | 0 |
 | Deferred (fmt) | 2 | — |
-| **Total** | **58** | **11** |
+| **Total** | **58** | **19** |
 
 ---
 
@@ -96,14 +96,14 @@ All `Vec` methods take `keepParams := [true, false]` to erase the allocator type
 
 | Rust item | Lean name | Docs | Source | Status | Deps | Lean file | Test file | Proof |
 |---|---|---|---|---|---|---|---|---|
-| `Vec::truncate` | `alloc.vec.Vec.truncate` | [docs](https://doc.rust-lang.org/alloc/vec/struct.Vec.html#method.truncate) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/vec/mod.rs) | ⬜ | — | — | — | — |
-| `Vec::as_slice` | `alloc.vec.Vec.as_slice` | [docs](https://doc.rust-lang.org/alloc/vec/struct.Vec.html#method.as_slice) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/vec/mod.rs) | ⬜ | — | — | — | — |
-| `Vec::remove` | `alloc.vec.Vec.remove` | [docs](https://doc.rust-lang.org/alloc/vec/struct.Vec.html#method.remove) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/vec/mod.rs) | ⬜ | — | — | — | — |
-| `Vec::append` | `alloc.vec.Vec.append` | [docs](https://doc.rust-lang.org/alloc/vec/struct.Vec.html#method.append) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/vec/mod.rs) | ⬜ | — | — | — | — |
-| `Vec::clear` | `alloc.vec.Vec.clear` | [docs](https://doc.rust-lang.org/alloc/vec/struct.Vec.html#method.clear) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/vec/mod.rs) | ⬜ | — | — | — | — |
-| `Vec::is_empty` | `alloc.vec.Vec.is_empty` | [docs](https://doc.rust-lang.org/alloc/vec/struct.Vec.html#method.is_empty) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/vec/mod.rs) | ⬜ | — | — | — | — |
-| `Vec::split_off` | `alloc.vec.Vec.split_off` | [docs](https://doc.rust-lang.org/alloc/vec/struct.Vec.html#method.split_off) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/vec/mod.rs) | ⬜ | — | — | — | — |
-| `Default for Vec<T>::default` | `alloc.vec.Vec.Insts.CoreDefaultDefault.default` | [docs](https://doc.rust-lang.org/alloc/vec/struct.Vec.html#impl-Default-for-Vec%3CT%3E) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/vec/mod.rs) | ⬜ | — | — | — | — |
+| `Vec::truncate` | `alloc.vec.Vec.truncate` | [docs](https://doc.rust-lang.org/alloc/vec/struct.Vec.html#method.truncate) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/vec/mod.rs) | ✅ | — | [Vec.lean](backends/lean/Aeneas/Std/Vec.lean) | [tests/src/vec_methods.rs](tests/src/vec_methods.rs) | — |
+| `Vec::as_slice` | `alloc.vec.Vec.as_slice` | [docs](https://doc.rust-lang.org/alloc/vec/struct.Vec.html#method.as_slice) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/vec/mod.rs) | ✅ | — | [Vec.lean](backends/lean/Aeneas/Std/Vec.lean) | [tests/src/vec_methods.rs](tests/src/vec_methods.rs) | — |
+| `Vec::remove` | `alloc.vec.Vec.remove` | [docs](https://doc.rust-lang.org/alloc/vec/struct.Vec.html#method.remove) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/vec/mod.rs) | ✅ | — | [Vec.lean](backends/lean/Aeneas/Std/Vec.lean) | [tests/src/vec_methods.rs](tests/src/vec_methods.rs) | — |
+| `Vec::append` | `alloc.vec.Vec.append` | [docs](https://doc.rust-lang.org/alloc/vec/struct.Vec.html#method.append) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/vec/mod.rs) | ✅ | — | [Vec.lean](backends/lean/Aeneas/Std/Vec.lean) | [tests/src/vec_methods.rs](tests/src/vec_methods.rs) | — |
+| `Vec::clear` | `alloc.vec.Vec.clear` | [docs](https://doc.rust-lang.org/alloc/vec/struct.Vec.html#method.clear) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/vec/mod.rs) | ✅ | — | [Vec.lean](backends/lean/Aeneas/Std/Vec.lean) | [tests/src/vec_methods.rs](tests/src/vec_methods.rs) | — |
+| `Vec::is_empty` | `alloc.vec.Vec.is_empty` | [docs](https://doc.rust-lang.org/alloc/vec/struct.Vec.html#method.is_empty) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/vec/mod.rs) | ✅ | — | [Vec.lean](backends/lean/Aeneas/Std/Vec.lean) | [tests/src/vec_methods.rs](tests/src/vec_methods.rs) | — |
+| `Vec::split_off` | `alloc.vec.Vec.split_off` | [docs](https://doc.rust-lang.org/alloc/vec/struct.Vec.html#method.split_off) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/vec/mod.rs) | ✅ | — | [Vec.lean](backends/lean/Aeneas/Std/Vec.lean) | [tests/src/vec_methods.rs](tests/src/vec_methods.rs) | — |
+| `Default for Vec<T>::default` | `alloc.vec.Vec.Insts.CoreDefaultDefault.default` | [docs](https://doc.rust-lang.org/alloc/vec/struct.Vec.html#impl-Default-for-Vec%3CT%3E) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/vec/mod.rs) | ✅ | — | [Vec.lean](backends/lean/Aeneas/Std/Vec.lean) | [tests/src/vec_methods.rs](tests/src/vec_methods.rs) | — |
 
 ---
 

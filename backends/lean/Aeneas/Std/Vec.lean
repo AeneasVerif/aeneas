@@ -504,6 +504,149 @@ def core.fmt.DebugVec {T : Type} (DebugInst : core.fmt.Debug
   fmt := alloc.vec.DebugVec.fmt DebugInst
 }
 
+/-! ## Additional `Vec` methods
+
+Pinned to Rust `1.85.0` (Charon pin `nightly-2026-02-07`). Every method below
+carries a `keepParams := [true, false]` to erase the allocator type parameter. -/
+
+/-- `Vec::is_empty`: `true` iff the vector has no elements.
+
+- Docs: https://doc.rust-lang.org/alloc/vec/struct.Vec.html#method.is_empty
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/vec/mod.rs
+-/
+@[simp, step_simps, rust_fun
+  "alloc::vec::{alloc::vec::Vec<@T>}::is_empty" -canFail -lift
+  (keepParams := [true, false])]
+def alloc.vec.Vec.is_empty {α : Type u} (v : alloc.vec.Vec α) : Bool :=
+  v.val.isEmpty
+
+/-- `Vec::clear`: empties the vector in place. All elements are dropped.
+
+- Docs: https://doc.rust-lang.org/alloc/vec/struct.Vec.html#method.clear
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/vec/mod.rs
+-/
+@[rust_fun
+  "alloc::vec::{alloc::vec::Vec<@T>}::clear" -canFail -lift
+  (keepParams := [true, false])]
+def alloc.vec.Vec.clear {α : Type u} (_v : alloc.vec.Vec α) : alloc.vec.Vec α :=
+  ⟨ [], by simp ⟩
+
+/-- `Vec::truncate`: shortens `self` to `len`. Does nothing if `len >= self.len()`.
+
+- Docs: https://doc.rust-lang.org/alloc/vec/struct.Vec.html#method.truncate
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/vec/mod.rs
+-/
+@[rust_fun
+  "alloc::vec::{alloc::vec::Vec<@T>}::truncate" -canFail -lift
+  (keepParams := [true, false])]
+def alloc.vec.Vec.truncate {α : Type u} (v : alloc.vec.Vec α) (len : Usize) :
+    alloc.vec.Vec α :=
+  ⟨ v.val.take len.val, by
+    have h1 : (v.val.take len.val).length ≤ v.val.length := by
+      simp [List.length_take]
+    have h2 := v.property
+    omega ⟩
+
+/-- `Vec::as_slice`: returns a slice view over the entire vector.
+
+- Docs: https://doc.rust-lang.org/alloc/vec/struct.Vec.html#method.as_slice
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/vec/mod.rs
+-/
+@[rust_fun
+  "alloc::vec::{alloc::vec::Vec<@T>}::as_slice" -canFail -lift
+  (keepParams := [true, false])]
+def alloc.vec.Vec.as_slice {α : Type u} (v : alloc.vec.Vec α) : Slice α :=
+  ⟨ v.val, v.property ⟩
+
+/-- `Vec::remove`: removes and returns the element at index `i`, shifting all
+elements after it to the left. Panics if `i >= self.len()`.
+
+- Docs: https://doc.rust-lang.org/alloc/vec/struct.Vec.html#method.remove
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/vec/mod.rs
+-/
+@[rust_fun
+  "alloc::vec::{alloc::vec::Vec<@T>}::remove" (keepParams := [true, false])]
+def alloc.vec.Vec.remove {α : Type u} [Inhabited α]
+    (v : alloc.vec.Vec α) (i : Usize) : Result (α × alloc.vec.Vec α) :=
+  if h : i.val < v.val.length then
+    let x := v.val[i.val]'h
+    let l' := v.val.eraseIdx i.val
+    ok (x, ⟨ l', by
+      have := v.property
+      have : l'.length ≤ v.val.length := by
+        simp [l', List.length_eraseIdx]; split <;> omega
+      omega ⟩)
+  else
+    fail arrayOutOfBounds
+
+/-- `Vec::append`: moves all elements of `other` into `self`, leaving `other`
+empty. In Rust this takes `&mut Vec<T>` for both; in Aeneas we return the
+modified pair `(self', other')`.
+
+- Docs: https://doc.rust-lang.org/alloc/vec/struct.Vec.html#method.append
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/vec/mod.rs
+-/
+@[rust_fun
+  "alloc::vec::{alloc::vec::Vec<@T>}::append" (keepParams := [true, false])]
+def alloc.vec.Vec.append {α : Type u}
+    (v : alloc.vec.Vec α) (other : alloc.vec.Vec α) :
+    Result (alloc.vec.Vec α × alloc.vec.Vec α) :=
+  let total := v.val.length + other.val.length
+  if h : total ≤ Usize.max then
+    let v' : alloc.vec.Vec α :=
+      ⟨ v.val ++ other.val, by simp [total] at h; simp; omega ⟩
+    let other' : alloc.vec.Vec α := ⟨ [], by simp ⟩
+    ok (v', other')
+  else
+    fail maximumSizeExceeded
+
+/-- `Vec::split_off`: splits `self` at index `at`. After the call, `self`
+contains `self[..at]` and the returned `Vec` contains `self[at..]`.
+Panics if `at > self.len()`.
+
+- Docs: https://doc.rust-lang.org/alloc/vec/struct.Vec.html#method.split_off
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/vec/mod.rs
+-/
+@[rust_fun
+  "alloc::vec::{alloc::vec::Vec<@T>}::split_off" (keepParams := [true, false])]
+def alloc.vec.Vec.split_off {α : Type u}
+    (_cloneGlobalInst : core.clone.Clone Global)
+    (v : alloc.vec.Vec α) (at_ : Usize) :
+    Result (alloc.vec.Vec α × alloc.vec.Vec α) :=
+  if at_.val ≤ v.val.length then
+    let left : alloc.vec.Vec α := ⟨ v.val.take at_.val, by
+      have hv := v.property
+      have : (v.val.take at_.val).length ≤ v.val.length := by
+        simp [List.length_take]
+      omega ⟩
+    let right : alloc.vec.Vec α := ⟨ v.val.drop at_.val, by
+      have hv := v.property
+      have : (v.val.drop at_.val).length ≤ v.val.length := by
+        simp [List.length_drop]
+      omega ⟩
+    -- Returns `(return value, new self)`. Rust's `split_off` returns the
+    -- second half (`right`) and mutates `self` to hold the first half (`left`).
+    ok (right, left)
+  else
+    fail arrayOutOfBounds
+
+/-- `Default for Vec<T>::default`: returns an empty `Vec`.
+
+- Docs: https://doc.rust-lang.org/alloc/vec/struct.Vec.html#impl-Default-for-Vec%3CT%3E
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/vec/mod.rs
+-/
+@[rust_fun
+  "alloc::vec::{core::default::Default<alloc::vec::Vec<@T>>}::default"]
+def alloc.vec.Vec.Insts.CoreDefaultDefault.default (T : Type) :
+    Result (alloc.vec.Vec T) := ok ⟨ [], by simp ⟩
+
+@[reducible, rust_trait_impl
+  "core::default::Default<alloc::vec::Vec<@T>>"]
+def alloc.vec.Vec.Insts.CoreDefaultDefault (T : Type) :
+    core.default.Default (alloc.vec.Vec T) := {
+  default := alloc.vec.Vec.Insts.CoreDefaultDefault.default T
+}
+
 namespace Tests
   example
     (α : Type)
