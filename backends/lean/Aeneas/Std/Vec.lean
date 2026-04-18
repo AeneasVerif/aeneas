@@ -707,6 +707,77 @@ namespace Tests
 
 end Tests
 
+/-! ## `alloc::slice::Concat` trait + `Concat<T> for [V]` + `[T]::concat` + `Borrow<[T]> for Vec<T>`
+
+Pinned to Rust `1.85.0` (Charon pin `nightly-2026-02-07`).
+
+- Docs: https://doc.rust-lang.org/alloc/slice/trait.Concat.html
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/slice.rs
+-/
+
+/-- `alloc::slice::Concat<Item>` trait with associated `Output` type. -/
+@[rust_trait "alloc::slice::Concat"]
+structure alloc.slice.Concat (Self Item Output : Type) where
+  concat : Self → Result Output
+
+/-- `<[T]>::concat`: method on `[T]` that requires a `Concat<Item>` impl. -/
+@[rust_fun "alloc::slice::{[@T]}::concat"]
+def alloc.slice.Slice.concat {T Item Output : Type}
+    (concatInst : alloc.slice.Concat (Slice T) Item Output)
+    (s : Slice T) : Result Output :=
+  concatInst.concat s
+
+/-- `Borrow<[T]> for Vec<T>::borrow`: the canonical slice view.
+
+- Docs: https://doc.rust-lang.org/alloc/slice/trait.Borrow.html
+- Source: https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/slice.rs
+-/
+@[rust_fun "alloc::slice::{core::borrow::Borrow<alloc::vec::Vec<@T>, [@T]>}::borrow" (keepParams := [true, false]) -canFail]
+def alloc.vec.Vec.Insts.CoreBorrowBorrowSlice.borrow {T : Type}
+    (v : alloc.vec.Vec T) : Slice T :=
+  ⟨ v.val, v.property ⟩
+
+@[reducible, rust_trait_impl
+  "core::borrow::Borrow<alloc::vec::Vec<@T>, [@T]>" (keepParams := [true, false])]
+def alloc.vec.Vec.Insts.CoreBorrowBorrowSlice (T : Type) :
+    core.borrow.Borrow (alloc.vec.Vec T) (Slice T) := {
+  borrow v := ok (alloc.vec.Vec.Insts.CoreBorrowBorrowSlice.borrow v)
+}
+
+/-- Helper: flatten a list of `V` values into a list of `T` via Borrow. -/
+def alloc.slice.Slice.concat_impl.flatten {T V : Type}
+    (_cloneInst : core.clone.Clone T)
+    (borrowInst : core.borrow.Borrow V (Slice T))
+    (xs : List V) (acc : List T) : Result (List T) :=
+  match xs with
+  | [] => ok acc
+  | v :: rest => do
+    let s ← borrowInst.borrow v
+    alloc.slice.Slice.concat_impl.flatten _cloneInst borrowInst rest (acc ++ s.val)
+
+/-- `Concat<[V], T, Vec<T>>::concat`: flattens each `V` (viewed as `[T]` via
+`Borrow`) and concatenates. -/
+@[rust_fun "alloc::slice::{alloc::slice::Concat<[@V], @T, alloc::vec::Vec<@T>>}::concat"]
+def alloc.slice.Insts.AllocSliceConcatTVec.concat
+    {T V : Type}
+    (cloneInst : core.clone.Clone T)
+    (borrowInst : core.borrow.Borrow V (Slice T)) :
+    Slice V → Result (alloc.vec.Vec T) :=
+  fun s => do
+    let l ← alloc.slice.Slice.concat_impl.flatten cloneInst borrowInst s.val []
+    if h : l.length ≤ Usize.max then
+      ok ⟨ l, h ⟩
+    else
+      fail panic
+
+@[reducible, rust_trait_impl "alloc::slice::Concat<[@V], @T, alloc::vec::Vec<@T>>"]
+def alloc.slice.Insts.AllocSliceConcatTVec {T V : Type}
+    (cloneInst : core.clone.Clone T)
+    (borrowInst : core.borrow.Borrow V (Slice T)) :
+    alloc.slice.Concat (Slice V) T (alloc.vec.Vec T) := {
+  concat := alloc.slice.Insts.AllocSliceConcatTVec.concat cloneInst borrowInst
+}
+
 /-! ## `VecDeque<T>`
 
 A minimal `VecDeque` model: same pure representation as `Vec`. The front/back

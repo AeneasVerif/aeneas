@@ -41,7 +41,7 @@ For each ✅ row, a reviewer can chase the links:
 | Result methods | 6 | 6 |
 | Vec methods | 8 | 8 |
 | VecDeque (new type + methods) | 4 | 4 |
-| Slice methods | 6 | 4 |
+| Slice methods | 6 | 6 |
 | Range (RangeFull index, RangeFrom bounds, Range Iterator) | 7 | 7 |
 | Iterator adapters/collect/defaults | 8 | 6 |
 | Array (from_fn, PartialEq) | 2 | 1 |
@@ -49,7 +49,7 @@ For each ✅ row, a reviewer can chase the links:
 | Cmp/Eq/Borrow traits | 3 | 3 |
 | Misc (black_box, TryFrom, TryFromIntError, to_owned) | 4 | 3 |
 | Deferred (fmt) | 2 | — |
-| **Total** | **61** | **52** |
+| **Total** | **61** | **54** |
 
 ---
 
@@ -126,8 +126,8 @@ All `Vec` methods take `keepParams := [true, false]` to erase the allocator type
 | `[T]::clone_from_slice` | `core.slice.Slice.clone_from_slice` | [docs](https://doc.rust-lang.org/core/primitive.slice.html#method.clone_from_slice) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/slice/mod.rs) | ✅ | — | [Slice.lean](backends/lean/Aeneas/Std/Slice.lean) | [tests/src/slice_methods.rs](tests/src/slice_methods.rs) | — |
 | `[T]::copy_within` | `core.slice.Slice.copy_within` | [docs](https://doc.rust-lang.org/core/primitive.slice.html#method.copy_within) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/slice/mod.rs) | ✅ | `RangeBounds`, `Bound<T>` | [Slice.lean](backends/lean/Aeneas/Std/Slice.lean) | [tests/src/slice_methods.rs](tests/src/slice_methods.rs) | — |
 | `Ord for [T]::cmp` | `core.slice.cmp.OrdSlice.cmp` | [docs](https://doc.rust-lang.org/core/primitive.slice.html#impl-Ord-for-%5BT%5D) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/slice/cmp.rs) | ✅ | — | [Array/ArraySlice.lean](backends/lean/Aeneas/Std/Array/ArraySlice.lean) | — | — |
-| `[T]::concat` (alloc slice) | `alloc.slice.Slice.concat` | [docs](https://doc.rust-lang.org/alloc/slice/trait.Concat.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/slice.rs) | ⬜ | `Concat for [V]::concat` | — | — | — |
-| `Concat<T, Vec<T>> for [V]::concat` | `Slice.Insts.AllocSliceConcatTVec.concat` | [docs](https://doc.rust-lang.org/alloc/slice/trait.Concat.html#tymethod.concat) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/slice.rs) | ⬜ | — | — | — | — |
+| `[T]::concat` (alloc slice) | `alloc.slice.Slice.concat` | [docs](https://doc.rust-lang.org/alloc/slice/trait.Concat.html) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/slice.rs) | ✅ | Concat trait, Borrow<Vec<T>,[T]> | [Vec.lean](backends/lean/Aeneas/Std/Vec.lean) | [tests/src/slice_concat.rs](tests/src/slice_concat.rs) | — |
+| `Concat<T, Vec<T>> for [V]::concat` | `alloc.slice.Insts.AllocSliceConcatTVec.concat` | [docs](https://doc.rust-lang.org/alloc/slice/trait.Concat.html#tymethod.concat) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/alloc/src/slice.rs) | ✅ | Clone, Borrow | [Vec.lean](backends/lean/Aeneas/Std/Vec.lean) | [tests/src/slice_concat.rs](tests/src/slice_concat.rs) | — |
 | `PartialEq<[U; N]> for [T]::eq` | `core.array.equality.PartialEqSliceArray.eq` | [docs](https://doc.rust-lang.org/core/primitive.slice.html#impl-PartialEq-for-%5BT%5D) | [source](https://github.com/rust-lang/rust/blob/1.85.0/library/core/src/array/equality.rs) | ✅ | `SliceIndex<RangeFull, [T], [T]>` | [Array/ArraySlice.lean](backends/lean/Aeneas/Std/Array/ArraySlice.lean) | [tests/src/slice_methods.rs](tests/src/slice_methods.rs) | — |
 
 ---

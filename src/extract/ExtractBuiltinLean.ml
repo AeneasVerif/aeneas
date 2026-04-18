@@ -5,7 +5,7 @@ let lean_builtin_types =
   [
     (* file: "Aeneas/Std/Alloc.lean", line: 16 *)
     mk_type "alloc::alloc::Global" "Global" ~kind:(KEnum [ ("Mk", Some "mk") ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 722 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 793 *)
     mk_type "alloc::collections::vec_deque::VecDeque"
       "alloc.collections.vec_deque.VecDeque"
       ~keep_params:(Some [ true; false ]);
@@ -220,36 +220,49 @@ let lean_builtin_funs =
       "alloc.boxed.Box.deref_mut"
       ~keep_params:(Some [ true; false ])
       ~can_fail:false;
-    (* file: "Aeneas/Std/Vec.lean", line: 745 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 816 *)
     mk_fun
       "alloc::collections::vec_deque::{alloc::collections::vec_deque::VecDeque<@T, \
        @A>}::len"
       "alloc.collections.vec_deque.VecDeque.len"
       ~keep_params:(Some [ true; false ])
       ~can_fail:false ~lift:false;
-    (* file: "Aeneas/Std/Vec.lean", line: 768 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 839 *)
     mk_fun
       "alloc::collections::vec_deque::{alloc::collections::vec_deque::VecDeque<@T, \
        @A>}::pop_front"
       "alloc.collections.vec_deque.VecDeque.pop_front"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 755 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 826 *)
     mk_fun
       "alloc::collections::vec_deque::{alloc::collections::vec_deque::VecDeque<@T, \
        @A>}::push_back"
       "alloc.collections.vec_deque.VecDeque.push_back"
       ~keep_params:(Some [ true; false ]);
-    (* file: "Aeneas/Std/Vec.lean", line: 735 *)
+    (* file: "Aeneas/Std/Vec.lean", line: 806 *)
     mk_fun
       "alloc::collections::vec_deque::{alloc::collections::vec_deque::VecDeque<@T, \
        alloc::alloc::Global>}::new"
       "alloc.collections.vec_deque.VecDeque.new" ~can_fail:false ~lift:false;
+    (* file: "Aeneas/Std/Vec.lean", line: 724 *)
+    mk_fun "alloc::slice::{[@T]}::concat" "alloc.slice.Slice.concat";
     (* file: "Aeneas/Std/Vec.lean", line: 312 *)
     mk_fun "alloc::slice::{[@T]}::into_vec" "alloc.slice.Slice.into_vec"
       ~keep_params:(Some [ true; false ])
       ~can_fail:false ~lift:false;
     (* file: "Aeneas/Std/Vec.lean", line: 300 *)
     mk_fun "alloc::slice::{[@T]}::to_vec" "alloc.slice.Slice.to_vec";
+    (* file: "Aeneas/Std/Vec.lean", line: 760 *)
+    mk_fun
+      "alloc::slice::{alloc::slice::Concat<[@V], @T, \
+       alloc::vec::Vec<@T>>}::concat"
+      "alloc.slice.Insts.AllocSliceConcatTVec.concat";
+    (* file: "Aeneas/Std/Vec.lean", line: 735 *)
+    mk_fun
+      "alloc::slice::{core::borrow::Borrow<alloc::vec::Vec<@T>, [@T]>}::borrow"
+      "alloc.vec.Vec.Insts.CoreBorrowBorrowSlice.borrow"
+      ~keep_params:(Some [ true; false ])
+      ~can_fail:false;
     (* file: "Aeneas/Std/Vec.lean", line: 316 *)
     mk_fun "alloc::vec::from_elem" "alloc.vec.from_elem";
     (* file: "Aeneas/Std/VecIter.lean", line: 110 *)
@@ -1133,6 +1146,9 @@ let lean_builtin_funs =
 
 let lean_builtin_trait_decls =
   [
+    (* file: "Aeneas/Std/Vec.lean", line: 719 *)
+    mk_trait_decl "alloc::slice::Concat" "alloc.slice.Concat"
+      ~methods:[ ("concat", "concat") ];
     (* file: "Aeneas/Std/Core/Ptr.lean", line: 83 *)
     mk_trait_decl "core::alloc::global::GlobalAlloc"
       "core.alloc.global.GlobalAlloc"
@@ -1336,8 +1352,15 @@ let lean_builtin_trait_decls =
 
 let lean_builtin_trait_impls =
   [
+    (* file: "Aeneas/Std/Vec.lean", line: 773 *)
+    mk_trait_impl "alloc::slice::Concat<[@V], @T, alloc::vec::Vec<@T>>"
+      "alloc.slice.Insts.AllocSliceConcatTVec";
     (* file: "Aeneas/Std/Core/Core.lean", line: 124 *)
     mk_trait_impl "core::borrow::Borrow<@T, @T>" "core.borrow.Borrow.Blanket";
+    (* file: "Aeneas/Std/Vec.lean", line: 740 *)
+    mk_trait_impl "core::borrow::Borrow<alloc::vec::Vec<@T>, [@T]>"
+      "alloc.vec.Vec.Insts.CoreBorrowBorrowSlice"
+      ~keep_params:(Some [ true; false ]);
     (* file: "Aeneas/Std/Core/Core.lean", line: 57 *)
     mk_trait_impl "core::clone::Clone<Box<@T>>" "core.core.clone.CloneBox"
       ~keep_params:(Some [ true; false ])

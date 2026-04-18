@@ -75,6 +75,7 @@ package «tests» {}
 @[default_target] lean_lib Range
 @[default_target] lean_lib RenameAttribute
 @[default_target] lean_lib Scalars
+@[default_target] lean_lib SliceConcat
 @[default_target] lean_lib SliceMethods
 @[default_target] lean_lib Slices
 @[default_target] lean_lib Static
