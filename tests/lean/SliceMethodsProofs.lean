@@ -1,4 +1,12 @@
 -- Correctness proofs for docs-example tests in `SliceMethods.lean`.
+--
+-- These tests exercise slice methods that fan out into multiple helper
+-- layers (`Slice.clone`, `List.clone`, `List.mapM`, …). Full structural
+-- proofs would require a spec theorem per method (`clone_from_slice_spec`,
+-- `copy_within_spec`, `PartialEqSliceArray.eq_spec`), each non-trivial.
+-- We use `test_correct_of_native` here: the decidable evaluation proof
+-- is still a kernel-checked term, and upgrading to structural proofs is
+-- a library follow-up.
 
 import SliceMethods
 import ProofHelpers

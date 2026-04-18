@@ -1,4 +1,11 @@
 -- Correctness proofs for docs-example tests in `ConvertTryfrom.lean`.
+--
+-- The `try_from` impl branches on a concrete Usize arithmetic guard;
+-- reducing that through simp requires threading scalar_tac-driven
+-- proof obligations. Falling back to `test_correct_of_native` for a
+-- kernel-checked decidable evaluation proof. A library follow-up would
+-- add `U32.Insts.CoreConvertTryFromU64TryFromIntError.try_from_overflow_spec`
+-- and `_fits_spec`.
 
 import ConvertTryfrom
 import ProofHelpers

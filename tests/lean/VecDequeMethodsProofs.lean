@@ -1,4 +1,10 @@
 -- Correctness proofs for docs-example tests in `VecDequeMethods.lean`.
+--
+-- VecDeque::push_back has a capacity guard that depends on concrete Usize
+-- arithmetic; rather than drag those proofs through simp manually we rely
+-- on `test_correct_of_native` for decidable evaluation. Upgrading to
+-- structural proofs would need `VecDeque.push_back_spec` and
+-- `VecDeque.pop_front_spec` with concrete-length preconditions.
 
 import VecDequeMethods
 import ProofHelpers
