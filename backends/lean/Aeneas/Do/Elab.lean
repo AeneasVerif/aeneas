@@ -1,62 +1,42 @@
 import Lean
+import Mathlib.Control.Monad.Cont
 import Aeneas.Std
 import Aeneas.Do.Init
 
 open Lean Elab Parser Term Meta
 
-namespace Aeneas
-
-/-- Continuation monad transformer -/
-def ContT (r : Type u) (m : Type u → Type v) (a : Type u) : Type (max u v) :=
-  (a → m r) → m r
-
-namespace ContT
-
-instance : Monad (ContT r m) where
-  pure a k := k a
-  bind x f k := x (fun a => f a k)
-
-instance [Monad m] : MonadLift m (ContT r m) where
-  monadLift x k := x >>= k
-
 instance [MonadExceptOf ε m] [Monad m] : MonadExceptOf ε (ContT r m) where
   throw e := fun _ => throw e
   tryCatch x h := fun k => tryCatch (x k) (fun e => h e k)
-
+--
 instance [MonadRef m] [Monad m] : MonadRef (ContT r m) where
   getRef := fun k => do let ref ← MonadRef.getRef; k ref
   withRef ref x := fun k => MonadRef.withRef ref (x k)
-
+--
 instance [AddErrorMessageContext m] [Monad m] : AddErrorMessageContext (ContT r m) where
   add stx msg := fun k => do let r ← AddErrorMessageContext.add stx msg; k r
-
+--
 instance [Monad m] [MonadQuotation m] : MonadQuotation (ContT r m) where
   getCurrMacroScope := fun k => do let s ← getCurrMacroScope; k s
   getContext := fun k => do let ctx ← MonadQuotation.getContext; k ctx
   withFreshMacroScope x := fun k => withFreshMacroScope (x k)
-  
 
-@[inline] def run (x : ContT r m a) (k : a → m r) : m r := x k
-
-@[inline] def runPure [Monad m] (x : ContT r m r) : m r := x pure
-
-end ContT
-
+namespace Aeneas
 namespace Do
 
 /-- Cached information about the monad extracted from the expected type of the `do` block.-/
 structure Context where
   m : Expr
+  /-- The expected element type `α` from the do-block's expected type `m α` -/
+  expectedAlpha : Expr
   /-- Cached `Bind m` instance -/
   bindInst : Expr
   /-- Cached `Pure m` instance -/
   pureInst : Expr
-  /-- The expected element type `α` from the do-block's expected type `m α` -/
-  expectedAlpha : Expr
 
 abbrev ElabM := ReaderT Context $ ContT Expr TermElabM
 
-/-- Extract the monad `m` from an expected type `m α` and synthesizes and caches the 
+/-- Extract the monad `m` from an expected type `m α` and synthesizes and caches the
     `Bind` and `Pure` instances for `m`. -/
 def mkContext (expectedType : Expr) : TermElabM Context := do
   let expectedType ← whnf expectedType
@@ -65,15 +45,14 @@ def mkContext (expectedType : Expr) : TermElabM Context := do
     | _ => throwError "expected a monadic type `m α`, got {indentExpr expectedType}"
   let bindInst ← synthInstance (← mkAppM ``Bind #[m])
   let pureInst ← synthInstance (← mkAppM ``Pure #[m])
-  return { m, bindInst, pureInst, expectedAlpha := α }
+  return { m, expectedAlpha := α, bindInst, pureInst }
 
--- TODO: clean this up
--- TODO: clean this up
+-- TODO: Clean this up
 def ElabM.mkBind (e k : Expr) : ElabM Expr := do
   let ctx ← read
   let eType ← instantiateMVars =<< inferType e
   let .some (α : Expr) := eType.getAppArgs[0]? | throwError "expected monadic type, got{indentExpr eType}"
-  let kBody ← inferType (Expr.app k (← mkFreshExprMVar α)) >>= instantiateMVars
+  let kBody ← instantiateMVars =<< inferType (Expr.app k (← mkFreshExprMVar α))
   let β ← match kBody with
     | Expr.app _ b => pure b
     | _ => throwError "mkBind: expected monadic return type, got{indentExpr kBody}"
@@ -89,7 +68,7 @@ def ElabM.mkMonadicType (α : Expr) : ElabM Expr := read >>= fun ctx => pure (mk
 /-- Run a `Do.ElabM` computation, given an expected type for the whole `do` block. -/
 def ElabM.execute (x : ElabM Expr) (expectedType : Expr) : TermElabM Expr := do
   let ctx ← mkContext expectedType
-  (x.run ctx).runPure
+  (x.run ctx).run pure
 
 /-- Run `body fvar` under a fresh local declaration `name : type` -/
 def ElabM.withLocalDeclD (name : Name) (type : Expr) (body : Expr → ElabM Expr) : ElabM Expr := do
@@ -110,38 +89,6 @@ def getDoElems (doSeq : TSyntax ``doSeq) : ElabM (List DoElem) := do
   match doSeq with
   | `(doSeq| $[$elems $[;]?]*) => return elems.toList
   | _ => throwError "unexpected `doSeq` syntax {indentD doSeq}"
-
-partial def buildCurriedLambda (names : List Name) (types : List Expr)
-    (body : ElabM Expr) : ElabM Expr :=
-  match names, types with
-  | [], _ | _, [] => body
-  | [n], [t] =>
-    ElabM.withLocalDeclD n t fun fvar => do
-      let bodyExpr ← body
-      mkLambdaFVars #[fvar] bodyExpr
-  | n :: ns, t :: ts =>
-    ElabM.withLocalDeclD n t fun fvar => do
-      let inner ← buildCurriedLambda ns ts body
-      mkLambdaFVars #[fvar] inner
-
-partial def extractPatNames (pat : Syntax) : List Name :=
-  if pat.getKind == ``Term.tuple then
-    let items := pat[1]  -- null node: first_elem, comma, null(rest...)
-    let first := extractPatNames items[0]
-    let rest := extractRestNames items[2].getArgs.toList
-    first ++ rest
-  else if pat.getKind == ``Term.anonymousCtor then
-    -- ⟨a, b, ...⟩ — items at [1], same comma-separated layout
-    extractRestNames pat[1].getArgs.toList
-  else if pat.isIdent then
-    [pat.getId]
-  else
-    [`_]
-where
-  extractRestNames : List Syntax → List Name
-    | [] => []
-    | [x] => extractPatNames x
-    | x :: _comma :: rest => extractPatNames x ++ extractRestNames rest
 
 /-- For a single-constructor inductive (not Prod), return its constructor name
     and the field types instantiated with the type's parameters.
@@ -195,7 +142,6 @@ def mkCasesOn (ty : Expr) (indName : Name) (discr : Expr)
   for i in [:indVal.numParams] do
     result := mkApp result tyArgs[i]!
   -- Apply motive (non-dependent: fun _ => resultType)
-  let motive ← mkLambdaFVars #[] (← Meta.withLocalDeclD `_ ty fun _ => pure resultType)
   let motive := Expr.lam `_ ty resultType .default
   result := mkApp result motive
   -- Apply discriminant
@@ -222,6 +168,159 @@ def mkUncurries (innerLam : Expr) (types : List Expr) : MetaM Expr := do
       let newLam := Expr.lam name ty wrappedBody bi
       mkAppM ``Function.uncurry #[newLam]
     | _ => throwError "mkUncurries: expected lambda, got{indentExpr innerLam}"
+
+/-! ## Pattern analysis and continuation building
+
+The `do` elaborator supports nested patterns like `((a, b), c)` and
+`⟨⟨x, y⟩, ⟨z, w⟩⟩`. We represent a pattern's tree shape as `PatShape`
+and then build the continuation — a function `ty → ρ` — by recursively
+emitting `Function.uncurry` for `Prod`-destructuring nodes and `T.casesOn`
+for single-constructor inductive nodes. -/
+
+/-- The tree shape of a supported destructuring pattern. Types are threaded
+    through the traversal and not stored here. -/
+inductive PatShape where
+  | leaf (name : Name)
+  | prod (subs : Array PatShape)
+  | ctor (indName : Name) (subs : Array PatShape)
+  deriving Inhabited
+
+/-- Drop every other element starting at index 1 — i.e., drop the commas
+    between comma-separated patterns. -/
+private partial def dropCommas : List Syntax → List Syntax
+  | [] => []
+  | [x] => [x]
+  | x :: _ :: rest => x :: dropCommas rest
+
+/-- Extract sub-patterns from a `Term.tuple` or `Term.anonymousCtor` node. -/
+def tupleSubPats (pat : Syntax) : Array Syntax :=
+  if pat.getKind == ``Term.tuple then
+    -- (p₁, p₂, …, pₙ) parses as tuple(`(`, null(p₁, `,`, null(p₂, `,`, …, pₙ)), `)`)
+    let items := pat[1]
+    let first := items[0]
+    let rest := dropCommas items[2].getArgs.toList
+    (first :: rest).toArray
+  else if pat.getKind == ``Term.anonymousCtor then
+    -- ⟨p₁, p₂, …, pₙ⟩ parses with pat[1] = null(p₁, `,`, p₂, `,`, …, pₙ)
+    (dropCommas pat[1].getArgs.toList).toArray
+  else
+    #[]
+
+/-- Walk the pattern syntax together with the expected type, building a
+    `PatShape`. Fails loudly on unsupported pattern kinds. -/
+partial def analyzePat (pat : Syntax) (ty : Expr) : ElabM PatShape := do
+  if pat.isIdent then
+    return .leaf pat.getId
+  else if pat.getKind == ``Term.hole then
+    return .leaf `_
+  else if pat.getKind == ``Term.tuple then
+    let subPats := tupleSubPats pat
+    let subTypes ← decomposeProductType ty subPats.size
+    let subShapes ← subPats.toList.zip subTypes |>.toArray.mapM fun (p, t) => analyzePat p t
+    return .prod subShapes
+  else if pat.getKind == ``Term.anonymousCtor then
+    let subPats := tupleSubPats pat
+    let ty ← whnf ty
+    if ty.isAppOf ``Prod then
+      let subTypes ← decomposeProductType ty subPats.size
+      let subShapes ← subPats.toList.zip subTypes |>.toArray.mapM fun (p, t) => analyzePat p t
+      return .prod subShapes
+    else
+      match ← getCtorFieldTypes ty with
+      | some (_, fieldTypes) =>
+        let some indName := ty.getAppFn.constName?
+          | throwError "analyzePat: cannot determine inductive name for{indentExpr ty}"
+        let subShapes ← subPats.toList.zip fieldTypes |>.toArray.mapM fun (p, t) => analyzePat p t
+        return .ctor indName subShapes
+      | none => throwError "analyzePat: unsupported anonymous-ctor pattern on type{indentExpr ty}"
+  else
+    throwError "analyzePat: unsupported pattern kind `{pat.getKind}`{indentD pat}"
+
+/-- Strip one `forallE` per field type from `curried`'s inferred type,
+    instantiating with fresh metavariables. Used to compute the `casesOn`
+    motive's result. -/
+def computeCasesOnResultType (curried : Expr) (fieldTypes : List Expr) : MetaM Expr := do
+  let mut ty ← inferType curried
+  for ft in fieldTypes do
+    match ty with
+    | .forallE _ _ body _ => ty := body.instantiate1 (← mkFreshExprMVar ft)
+    | _ => break
+  return ty
+
+mutual
+
+/-- Introduce one fresh fvar per `sub` (using the leaf name for `.leaf` subs,
+    `` `_x `` otherwise), then call `body` with the collected fvars as free
+    variables. Returns a curried lambda `T₁ → T₂ → … → Tₙ → ρ`. -/
+partial def mkCurriedLambda (subs : List PatShape) (types : List Expr)
+    (body : Array Expr → ElabM Expr) : ElabM Expr := do
+  match subs, types with
+  | [], _ | _, [] => body #[]
+  | sub :: restSubs, ty :: restTypes =>
+    let n := match sub with | .leaf n => n | _ => `_x
+    ElabM.withLocalDeclD n ty fun fv => do
+      let innerBody ← mkCurriedLambda restSubs restTypes fun fs => body (#[fv] ++ fs)
+      mkLambdaFVars #[fv] innerBody
+
+/-- Given parallel lists `subs`, `fvs`, `types` (one per sub-pattern),
+    recursively unpack each `fv` according to its `sub`, collecting the
+    leaf fvars, then call `body` with all collected leaves. Returns an
+    expression of the result type `ρ`. -/
+partial def unpackAll (subs : List PatShape) (fvs : List Expr) (types : List Expr)
+    (body : Array Expr → ElabM Expr) : ElabM Expr := do
+  match subs, fvs, types with
+  | [], _, _ | _, [], _ | _, _, [] => body #[]
+  | sub :: restSubs, fv :: restFvs, ty :: restTypes =>
+    unpackFvar sub fv ty fun extra =>
+      unpackAll restSubs restFvs restTypes fun more => body (extra ++ more)
+
+/-- Unpack `fv` (bound to have type `ty`) according to `sub`, calling `body`
+    with the collected leaf fvars. Emits `Function.uncurry` for `.prod` and
+    `T.casesOn` for `.ctor`. Returns an expression of the result type `ρ`. -/
+partial def unpackFvar (sub : PatShape) (fv : Expr) (ty : Expr)
+    (body : Array Expr → ElabM Expr) : ElabM Expr := do
+  match sub with
+  | .leaf _ => body #[fv]
+  | .prod subs =>
+    let subTypes ← decomposeProductType ty subs.size
+    let minor ← mkCurriedLambda subs.toList subTypes fun outerFvs =>
+      unpackAll subs.toList outerFvs.toList subTypes body
+    let uncurried ← mkUncurries minor subTypes
+    return mkApp uncurried fv
+  | .ctor indName subs =>
+    let some (_, fieldTypes) ← getCtorFieldTypes ty
+      | throwError "unpackFvar: expected single-ctor inductive, got{indentExpr ty}"
+    let minor ← mkCurriedLambda subs.toList fieldTypes fun outerFvs =>
+      unpackAll subs.toList outerFvs.toList fieldTypes body
+    let resultType ← computeCasesOnResultType minor fieldTypes
+    mkCasesOn ty indName fv minor resultType
+
+end
+
+/-- Build a continuation `k : ty → ρ` that destructures its argument
+    according to `shape` and calls `body` with the leaf fvars. Produces
+    `Function.uncurry …` for `.prod` (no outer lambda) and
+    `fun _x => T.casesOn _x …` for `.ctor`. -/
+partial def mkPatContinuation (shape : PatShape) (ty : Expr)
+    (body : Array Expr → ElabM Expr) : ElabM Expr := do
+  match shape with
+  | .leaf n =>
+    ElabM.withLocalDeclD n ty fun fv => do
+      mkLambdaFVars #[fv] (← body #[fv])
+  | .prod subs =>
+    let subTypes ← decomposeProductType ty subs.size
+    let minor ← mkCurriedLambda subs.toList subTypes fun outerFvs =>
+      unpackAll subs.toList outerFvs.toList subTypes body
+    mkUncurries minor subTypes
+  | .ctor indName subs =>
+    ElabM.withLocalDeclD `_x ty fun xFv => do
+      let some (_, fieldTypes) ← getCtorFieldTypes ty
+        | throwError "mkPatContinuation: expected single-ctor inductive, got{indentExpr ty}"
+      let minor ← mkCurriedLambda subs.toList fieldTypes fun outerFvs =>
+        unpackAll subs.toList outerFvs.toList fieldTypes body
+      let resultType ← computeCasesOnResultType minor fieldTypes
+      let casesExpr ← mkCasesOn ty indName xFv minor resultType
+      mkLambdaFVars #[xFv] casesExpr
 
 /-! ## Individual `doElem` handlers-/
 mutual
@@ -348,7 +447,6 @@ partial def elabDoLetArrowId (x : Ident) (ty? : Option Term) (rhs : DoElem)
 
 /-- Elaborate a monadic let-arrow with a pattern (`let (a, b) ← e`) -/
 partial def elabDoLetArrowPat (pat : Syntax) (rhs : Syntax) (rest : List DoElem) : ElabM Expr := do
-  let names := extractPatNames pat
   let α ← mkFreshTypeMVar
   let expectedType ← ElabM.mkMonadicType α
   let e ← withReader (fun ctx => { ctx with expectedAlpha := α }) do
@@ -365,37 +463,10 @@ partial def elabDoLetArrowPat (pat : Syntax) (rhs : Syntax) (rest : List DoElem)
         discard <| isDefEq α a
       pure e
   let α ← instantiateMVars α
-  -- Check if this is an anonymous constructor pattern on a non-Prod inductive
-  let useCtorPath ← if pat.getKind == ``Term.anonymousCtor then
-    match ← getCtorFieldTypes α with
-    | some _ => pure true
-    | none => pure false
-  else pure false
-  if useCtorPath then
-    let some (_, fieldTypes) ← getCtorFieldTypes α | unreachable!
-    -- Non-Prod single-constructor inductive: use casesOn inside a lambda for mkBind
-    let curried ← buildCurriedLambda names fieldTypes (elabDoSeqCore rest)
-    synthesizeSyntheticMVarsNoPostponing
-    let restType ← do
-      let mut ty ← inferType curried
-      for ft in fieldTypes do
-        match ty with
-        | .forallE _ _ body _ => ty := body.instantiate1 (← mkFreshExprMVar ft)
-        | _ => break
-      pure ty
-    let indName := α.getAppFn.constName!
-    -- Build k = fun (x : α) => T.casesOn x (fun fields... => rest)
-    ElabM.withLocalDeclD `_x α fun xFvar => do
-      let body ← mkCasesOn α indName xFvar curried restType
-      let k ← mkLambdaFVars #[xFvar] body
-      ElabM.mkBind e k
-  else
-    -- Default Prod path
-    let compTypes ← decomposeProductType α names.length
-    let curried ← buildCurriedLambda names compTypes (elabDoSeqCore rest)
-    synthesizeSyntheticMVarsNoPostponing
-    let k ← mkUncurries curried compTypes
-    ElabM.mkBind e k
+  let shape ← analyzePat pat α
+  let k ← mkPatContinuation shape α fun _ => elabDoSeqCore rest
+  synthesizeSyntheticMVarsNoPostponing
+  ElabM.mkBind e k
 
 /-- Elaborate a pure let binding (`let x := e`) -/
 partial def elabDoLetId (x : TSyntax `ident) (ty? : Option Syntax) (rhs : Syntax)
@@ -413,33 +484,17 @@ partial def elabDoLetId (x : TSyntax `ident) (ty? : Option Syntax) (rhs : Syntax
 /-- Elaborate a pure let binding with a pattern (`let (a, b) := e`) -/
 partial def elabDoLetPat (pat : Syntax) (rhs : Syntax)
     (rest : List (TSyntax `doElem)) : ElabM Expr := do
-  let names := extractPatNames pat
   let α ← mkFreshTypeMVar
   let val ← elabTermEnsuringType rhs α
   let α ← instantiateMVars α
-  -- Check if this is an anonymous constructor pattern on a non-Prod inductive
-  if pat.getKind == ``Term.anonymousCtor then
-    if let some (_, fieldTypes) ← getCtorFieldTypes α then
-      -- Non-Prod single-constructor inductive: use casesOn
-      let curried ← buildCurriedLambda names fieldTypes (elabDoSeqCore rest)
-      synthesizeSyntheticMVarsNoPostponing
-      let resultType ← inferType (← ElabM.mkMonadicType (← mkFreshTypeMVar))
-      let indName := α.getAppFn.constName!
-      let result ← mkCasesOn α indName val curried (← inferType curried >>= fun t => do
-        -- Get the actual result type by applying the curried lambda to dummy args
-        let mut ty := t
-        for ft in fieldTypes do
-          match ty with
-          | .forallE _ _ body _ => ty := body.instantiate1 (← mkFreshExprMVar ft)
-          | _ => break
-        return ty)
-      return result
-  -- Default Prod path
-  let compTypes ← decomposeProductType α names.length
-  let curried ← buildCurriedLambda names compTypes (elabDoSeqCore rest)
+  let shape ← analyzePat pat α
+  let k ← mkPatContinuation shape α fun _ => elabDoSeqCore rest
   synthesizeSyntheticMVarsNoPostponing
-  let k ← mkUncurries curried compTypes
-  return Expr.app k val
+  -- `mkPatContinuation` for `.ctor` produces `fun _x => T.casesOn _x …` —
+  -- head-beta reduces the application to the pre-refactor shape
+  -- `T.casesOn val …`. For `.prod` the head is `Function.uncurry`, not a
+  -- lambda, so `headBeta` is a no-op.
+  return (mkApp k val).headBeta
 
 /-- Elaborate an if-then-else.
     Appends `rest` to both branches, wraps them in `do` blocks, and constructs a
@@ -465,7 +520,7 @@ partial def elabDoIf (cond : Syntax) (thenSeq elseSeq : TSyntax ``doSeq)
 /-- Elaborate a pattern match (`doMatch`) -/
 partial def elabDoMatch (stx : Syntax) (rest : List (TSyntax `doElem)) : ElabM Expr := do
   -- doMatch: [0]="match", [1]=opt name, [2]=opt gen, [3]=discrs, [4]="with", [5]=matchAlts
-  let alts := stx[5][0]  
+  let alts := stx[5][0]
   let mut newAlts := #[]
   for i in [:alts.getNumArgs] do
     let alt := alts[i]
@@ -807,6 +862,77 @@ fun a x =>
 -/
 #guard_msgs in
 #print match_add_test
+
+def make2nats (x y : Nat) : Result (Nat × Nat) := do
+  ok (x, y)
+
+def make3nats (x y z : Nat) : Result ((Nat × Nat) × Nat) := do
+  ok ((x, y), z)
+
+def make4nats (x y z w : Nat) : Result ((Nat × Nat) × (Nat × Nat)) := do
+  ok ((x, y), z, w)
+
+def nested_pat_test : Result Nat := do
+  let (a, b) ← make2nats 1 2
+  let ((c, d), e) ← make3nats 3 4 5
+  let ((f, g), (h, i)) ← make4nats 6 7 8 9
+  ok (a + b + c + d + e + f + g + h + i)
+/--
+info: def nested_pat_test : Result Nat :=
+Bind.bind (make2nats 1 2)
+  (Function.uncurry fun a b =>
+    Bind.bind (make3nats 3 4 5)
+      (Function.uncurry fun _x e =>
+        Function.uncurry
+          (fun c d =>
+            Bind.bind (make4nats 6 7 8 9)
+              (Function.uncurry fun _x _x_1 =>
+                Function.uncurry
+                  (fun f g =>
+                    Function.uncurry
+                      (fun h i =>
+                        ok
+                          (HAdd.hAdd
+                            (HAdd.hAdd
+                              (HAdd.hAdd (HAdd.hAdd (HAdd.hAdd (HAdd.hAdd (HAdd.hAdd (HAdd.hAdd a b) c) d) e) f) g) h)
+                            i))
+                      _x_1)
+                  _x))
+          _x))
+-/
+#guard_msgs in
+#print nested_pat_test
+
+structure TwoNatsWrapped where
+  x : Nat
+  y : Nat
+
+structure FourNatsWrapped where
+  z : TwoNatsWrapped
+  w : TwoNatsWrapped
+
+def make2natswrapped (x y : Nat) : Result TwoNatsWrapped := do
+  ok { x, y }
+
+def make4natswrapped (w₁ w₂ : TwoNatsWrapped) : Result FourNatsWrapped := do
+  ok ⟨w₁, w₂⟩
+
+def nested_wrapped_pat_test : Result Nat := do
+  let w₁ ← make2natswrapped 1 2
+  let w₂ ← make2natswrapped 3 4
+  let ⟨⟨x, y⟩, ⟨z, w⟩⟩ ← make4natswrapped w₁ w₂
+  ok (x + y + z + w)
+/--
+info: def nested_wrapped_pat_test : Result Nat :=
+Bind.bind (make2natswrapped 1 2) fun w₁ =>
+  Bind.bind (make2natswrapped 3 4) fun w₂ =>
+    Bind.bind (make4natswrapped w₁ w₂) fun _x =>
+      FourNatsWrapped.casesOn _x fun _x _x_1 =>
+        TwoNatsWrapped.casesOn _x fun x y =>
+          TwoNatsWrapped.casesOn _x_1 fun z w => ok (HAdd.hAdd (HAdd.hAdd (HAdd.hAdd x y) z) w)
+-/
+#guard_msgs in
+#print nested_wrapped_pat_test
 
 structure Wrapper (T : Type) where
   x : T
