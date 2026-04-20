@@ -376,22 +376,21 @@ partial def elabDoIfNode (stx : Syntax) (rest : List DoElem) : ElabM Expr := do
       Syntax.node .none nullKind remainingElseIfs, -- [4] remaining else-ifs
       elseOpt                  -- [5] final else
     ]
-    -- Elaborate: if cond then thenBranch++rest else (elabDoIfNode innerDoIf rest)
-    -- We reuse elabDoIf's approach: build syntax for both branches
+    -- Elaborate: if cond then thenBranch else (innerDoIf-chain).
+    -- `rest` is bound once outside the whole chain by `elabMonadicAsDoElem`;
+    -- the inner `else if` nodes recursively hit this same code path with
+    -- `rest = []`, so they don't re-duplicate anything either.
     let mkDoSeqSyntax (elems : List DoElem) : Syntax :=
       let doSeqItems := elems.map fun elem =>
         Syntax.node .none ``Term.doSeqItem #[elem.raw, mkNullNode #[]]
       let doSeq := Syntax.node .none ``Term.doSeqIndent #[mkNullNode doSeqItems.toArray]
       Syntax.node .none ``Term.do #[mkAtom "do", doSeq]
-    let thenTerm := mkDoSeqSyntax ((← getDoElems thenSeq) ++ rest)
-    -- For the else branch: wrap the inner doIf + rest in a do block
+    let thenTerm := mkDoSeqSyntax (← getDoElems thenSeq)
     let innerDoIfElem : TSyntax `doElem := ⟨innerDoIf⟩
-    let elseTerm := mkDoSeqSyntax (innerDoIfElem :: rest)
+    let elseTerm := mkDoSeqSyntax [innerDoIfElem]
     let condTerm : Term := ⟨cond⟩
     let ifStx ← `(if $condTerm then $(⟨thenTerm⟩) else $(⟨elseTerm⟩))
-    let ctx ← read
-    let expectedType ← ElabM.mkMonadicType ctx.expectedAlpha
-    elabTermEnsuringType ifStx expectedType
+    elabMonadicAsDoElem (fun ty => elabTermEnsuringType ifStx ty) rest
   else if elseOpt.getNumArgs > 0 then
     -- Simple if/else (no else-if chains)
     let elseSeq : TSyntax ``doSeq := ⟨elseOpt[1]!⟩
@@ -399,23 +398,28 @@ partial def elabDoIfNode (stx : Syntax) (rest : List DoElem) : ElabM Expr := do
   else
     throwError "doIf without else clause is not supported in this do-elaborator"
 
-/- Elaborate a term in a `doSeq` position -/
-partial def elabDoExpr (term : Syntax) (rest : List DoElem) : ElabM Expr := do
+/-- If `rest` is empty, elaborate a monadic subterm against the do-block's
+    expected type `m α`. Otherwise elaborate it as `m Unit` and bind
+    `fun _ : Unit => <rest>` onto it. -/
+partial def elabMonadicAsDoElem
+    (elabAtType : Expr → ElabM Expr) (rest : List DoElem) : ElabM Expr := do
   match rest with
-  | [] => do
-    -- Terminal: elaborate as the monadic return value using the expected type
+  | [] =>
     let ctx ← read
     let expectedType ← ElabM.mkMonadicType ctx.expectedAlpha
-    elabTermEnsuringType term expectedType
+    elabAtType expectedType
   | _ =>
-    -- Non-terminal: elaborate as `m PUnit`, then `Bind.bind e (fun _ => rest)`
     let unitType ← mkConstWithFreshMVarLevels ``Unit
     let expectedType ← ElabM.mkMonadicType unitType
-    let e ← elabTermEnsuringType term expectedType
+    let e ← elabAtType expectedType
     ElabM.withLocalDeclD `_ unitType fun fvar => do
       let restExpr ← elabDoSeqCore rest
       let body ← mkLambdaFVars #[fvar] restExpr
       ElabM.mkBind e body
+
+/- Elaborate a term in a `doSeq` position -/
+partial def elabDoExpr (term : Syntax) (rest : List DoElem) : ElabM Expr :=
+  elabMonadicAsDoElem (fun ty => elabTermEnsuringType term ty) rest
 
 /-- Elaborate a let-arrow with a simple identifier (`let x ← e`) -/
 partial def elabDoLetArrowId (x : Ident) (ty? : Option Term) (rhs : DoElem)
@@ -497,52 +501,38 @@ partial def elabDoLetPat (pat : Syntax) (rhs : Syntax)
   return (mkApp k val).headBeta
 
 /-- Elaborate an if-then-else.
-    Appends `rest` to both branches, wraps them in `do` blocks, and constructs a
-    term-level `if/then/else` syntax that is delegated to `elabTerm`. This lets Lean's
-    standard `if` elaborator handle Bool vs Prop dispatch and Decidable synthesis. -/
+    Wraps each branch's original `doSeq` in `do` to get a term, builds a
+    term-level `if/then/else`, and delegates to `elabMonadicAsDoElem` so that
+    `rest` is bound once outside the `if` (instead of duplicated into both
+    branches). This lets Lean's standard `if` elaborator handle Bool vs Prop
+    dispatch and Decidable synthesis. -/
 partial def elabDoIf (cond : Syntax) (thenSeq elseSeq : TSyntax ``doSeq)
     (rest : List (TSyntax `doElem)) : ElabM Expr := do
-  let mkDoSeqSyntax (elems : List DoElem) : Syntax :=
-    let doSeqItems := elems.map fun elem =>
-      Syntax.node .none ``Term.doSeqItem #[elem.raw, mkNullNode #[]]
-    let doSeq := Syntax.node .none ``Term.doSeqIndent #[mkNullNode doSeqItems.toArray]
-    Syntax.node .none ``Term.do #[mkAtom "do", doSeq]
-  -- Append rest to both branches and wrap in `do`
-  let thenTerm := mkDoSeqSyntax ((← getDoElems thenSeq) ++ rest)
-  let elseTerm := mkDoSeqSyntax ((← getDoElems elseSeq) ++ rest)
-  -- Build `if cond then do ... else do ...` and let elabTerm handle it
+  let mkDoTerm (seq : TSyntax ``doSeq) : Syntax :=
+    Syntax.node .none ``Term.do #[mkAtom "do", seq.raw]
+  let thenTerm := mkDoTerm thenSeq
+  let elseTerm := mkDoTerm elseSeq
   let cond : Term := ⟨cond⟩
   let ifStx ← `(if $cond then $(⟨thenTerm⟩) else $(⟨elseTerm⟩))
-  let ctx ← read
-  let expectedType ← ElabM.mkMonadicType ctx.expectedAlpha
-  elabTermEnsuringType ifStx expectedType
+  elabMonadicAsDoElem (fun ty => elabTermEnsuringType ifStx ty) rest
 
-/-- Elaborate a pattern match (`doMatch`) -/
+/-- Elaborate a pattern match (`doMatch`). Wraps each arm's original `doSeq`
+    in `do` to get a term, builds a term-level `match`, and delegates to
+    `elabMonadicAsDoElem` so `rest` is bound once outside the match rather
+    than duplicated into every arm. -/
 partial def elabDoMatch (stx : Syntax) (rest : List (TSyntax `doElem)) : ElabM Expr := do
   -- doMatch: [0]="match", [1]=opt name, [2]=opt gen, [3]=discrs, [4]="with", [5]=matchAlts
   let alts := stx[5][0]
   let mut newAlts := #[]
   for i in [:alts.getNumArgs] do
     let alt := alts[i]
-    let armDoSeq : TSyntax ``Term.doSeq := ⟨alt[3]⟩
-    let armElems ← getDoElems armDoSeq
-    let allElems := armElems ++ rest
-    -- Build doSeqItems from the elements
-    let doSeqItems := allElems.map fun elem =>
-      Syntax.node .none ``Term.doSeqItem #[elem.raw, mkNullNode #[]]
-    let newDoSeq := Syntax.node .none ``Term.doSeqIndent #[mkNullNode doSeqItems.toArray]
-    let doTerm := Syntax.node .none ``Term.do #[mkAtom "do", newDoSeq]
-    -- Replace the arm body with the `do` term
-    let newAlt := alt.setArg 3 doTerm
-    newAlts := newAlts.push newAlt
-  -- Rebuild the match as a term-level match
+    let armDoSeq := alt[3]
+    let doTerm := Syntax.node .none ``Term.do #[mkAtom "do", armDoSeq]
+    newAlts := newAlts.push (alt.setArg 3 doTerm)
   let newAltsNode := Syntax.node .none ``Term.matchAlts #[mkNullNode newAlts]
   let termMatch := Syntax.node .none ``Term.match
     #[stx[0], stx[1], stx[2], stx[3], stx[4], newAltsNode]
-  -- Elaborate as a term
-  let ctx ← read
-  let expectedType ← ElabM.mkMonadicType ctx.expectedAlpha
-  elabTermEnsuringType termMatch expectedType
+  elabMonadicAsDoElem (fun ty => elabTermEnsuringType termMatch ty) rest
 
 partial def elabDoSeqCore : List (TSyntax `doElem) → ElabM Expr
   | [] => throwError "unexpected empty `do` block"
@@ -1102,5 +1092,56 @@ fun {V T W} inst1 inst2 b x y =>
 -/
 #guard_msgs in
 #print exbox_lambda_test
+
+-- This is helpful to see the repetition that our setup introduces
+set_option pp.notation true
+
+def do_if_rest_test : Result Nat := do
+  let b ← ok true
+  if b then ok () else ok ()
+  if b then ok () else ok ()
+  if b then ok () else ok ()
+  ok 1
+/--
+info: def do_if_rest_test : Result ℕ :=
+do
+  let b ← ok true
+  if b = true then ok () else ok ()
+  if b = true then ok () else ok ()
+  if b = true then ok () else ok ()
+  ok 1
+-/
+#guard_msgs in
+#print do_if_rest_test
+
+inductive MatchTest | A | B | C
+
+def do_match_rest_test (m : MatchTest) : Result Nat := do
+  let n ← ok 3
+  match m with
+  | .A => ok ()
+  | .B => ok ()
+  | .C => ok ()
+  match m with
+  | .A => ok ()
+  | .B => ok ()
+  | .C => ok ()
+  pure n
+/--
+info: def do_match_rest_test : MatchTest → Result ℕ :=
+fun m => do
+  let n ← ok 3
+  match m, n with
+    | MatchTest.A, n => ok ()
+    | MatchTest.B, n => ok ()
+    | MatchTest.C, n => ok ()
+  match m with
+    | MatchTest.A => ok ()
+    | MatchTest.B => ok ()
+    | MatchTest.C => ok ()
+  pure n
+-/
+#guard_msgs in
+#print do_match_rest_test
 
 end tests
