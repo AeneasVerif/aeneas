@@ -142,7 +142,7 @@ example {ty} (x : IScalar ty) : Bool :=
 -/
 
 -- Testing the notations
-example : Result Usize := 0#usize + 1#usize
+example : Result Usize := 0#usize +? 1#usize
 
 -- More complex expressions
 example (x y : Nat) (h : x + y ≤ 1000) : U32 := (x + y)#u32

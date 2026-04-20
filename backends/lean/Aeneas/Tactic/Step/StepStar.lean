@@ -923,9 +923,9 @@ example : True := by step*?
 open Std Result
 
 def add1 (x0 x1 : U32) : Std.Result U32 := do
-  let x2 ← x0 + x1
-  let x3 ← x2 + x2
-  x3 + 4#u32
+  let x2 ← x0 +? x1
+  let x3 ← x2 +? x2
+  x3 +? 4#u32
 
 /--
 info: Try this:
@@ -958,12 +958,12 @@ error: unsolved goals
 x y : U32
 h : 2 * ↑x + 2 * ↑y + 4 ≤ U32.max
 x2 : U32
-_✝ : [> let x2 ← x + y <]
+_✝ : [> let x2 ← x +? y <]
 x2_post : ↑x2 = ↑x + ↑y
 x3 : U32
-_ : [> let x3 ← x2 + x2 <]
+_ : [> let x3 ← x2 +? x2 <]
 x3_post : ↑x3 = ↑x2 + ↑x2
-⊢ x3 + 4#u32 ⦃ z => True ⦄
+⊢ x3 +? 4#u32 ⦃ z => True ⦄
 -/
 #guard_msgs in
 example (x y : U32) (h : 2 * x.toNat + 2 * y.toNat + 4 ≤ U32.max) :
@@ -981,12 +981,12 @@ error: unsolved goals
 x y : U32
 h : 2 * ↑x + 2 * ↑y + 4 ≤ U32.max
 x2 : U32
-_✝ : [> let x2 ← x + y <]
+_✝ : [> let x2 ← x +? y <]
 x2_post : ↑x2 = ↑x + ↑y
 x3 : U32
-_ : [> let x3 ← x2 + x2 <]
+_ : [> let x3 ← x2 +? x2 <]
 x3_post : ↑x3 = ↑x2 + ↑x2
-⊢ x3 + 4#u32 ⦃ z => True ⦄
+⊢ x3 +? 4#u32 ⦃ z => True ⦄
 -/
 #guard_msgs in
 example (x y : U32) (h : 2 * x.toNat + 2 * y.toNat + 4 ≤ U32.max) :
@@ -1012,12 +1012,12 @@ example (x y : U32) (h : 2 * x.toNat + 2 * y.toNat + 4 ≤ U32.max) :
 
 def add2 (b : Bool) (x0 x1 : U32) : Std.Result U32 := do
   if b then
-    let x2 ← x0 + x1
-    let x3 ← x2 + x2
-    x3 + 4#u32
+    let x2 ← x0 +? x1
+    let x3 ← x2 +? x2
+    x3 +? 4#u32
   else
-    let y ← x0 + x1
-    y + 2#u32
+    let y ← x0 +? x1
+    y +? 2#u32
 
 /--
 info: Try this:
@@ -1050,12 +1050,12 @@ x y : U32
 h : 2 * ↑x + 2 * ↑y + 4 ≤ U32.max
 h✝ : b = true
 x2 : U32
-_✝ : [> let x2 ← x + y <]
+_✝ : [> let x2 ← x +? y <]
 x2_post : ↑x2 = ↑x + ↑y
 x3 : U32
-_ : [> let x3 ← x2 + x2 <]
+_ : [> let x3 ← x2 +? x2 <]
 x3_post : ↑x3 = ↑x2 + ↑x2
-⊢ x3 + 4#u32 ⦃ z => True ⦄
+⊢ x3 +? 4#u32 ⦃ z => True ⦄
 -/
 #guard_msgs in
 example b (x y : U32) (h : 2 * x.toNat + 2 * y.toNat + 4 ≤ U32.max) :
@@ -1090,7 +1090,7 @@ b : Bool
 x y : U32
 h✝ : b = true
 x2 : U32
-_ : [> let x2 ← x + y <]
+_ : [> let x2 ← x +? y <]
 x2_post : ↑x2 = ↑x + ↑y
 ⊢ ↑x2 + ↑x2 ≤ U32.max
 
@@ -1099,10 +1099,10 @@ b : Bool
 x y : U32
 h✝ : b = true
 x2 : U32
-_✝ : [> let x2 ← x + y <]
+_✝ : [> let x2 ← x +? y <]
 x2_post : ↑x2 = ↑x + ↑y
 x3 : U32
-_ : [> let x3 ← x2 + x2 <]
+_ : [> let x3 ← x2 +? x2 <]
 x3_post : ↑x3 = ↑x2 + ↑x2
 ⊢ ↑x3 + ↑4#u32 ≤ U32.max
 
@@ -1117,7 +1117,7 @@ b : Bool
 x y✝ : U32
 h✝ : ¬b = true
 y : U32
-_ : [> let y ← x + y✝ <]
+_ : [> let y ← x +? y✝ <]
 y_post : ↑y = ↑x + ↑y✝
 ⊢ ↑y + ↑2#u32 ≤ U32.max
 -/
@@ -1141,13 +1141,13 @@ error: unsolved goals
 x y : U32
 h : 2 * ↑x + 2 * ↑y + 4 ≤ U32.max
 x2 : U32
-_✝² : [> let x2 ← x + y <]
+_✝² : [> let x2 ← x +? y <]
 x2_post : ↑x2 = ↑x + ↑y
 x3 : U32
-_✝¹ : [> let x3 ← x2 + x2 <]
+_✝¹ : [> let x3 ← x2 +? x2 <]
 x3_post : ↑x3 = ↑x2 + ↑x2
 x✝ : U32
-_ : [> let x✝ ← x3 + 4#u32 <]
+_ : [> let x✝ ← x3 +? 4#u32 <]
 _✝ : ↑x✝ = ↑x3 + 4
 ⊢ ↑x < 32
 -/
@@ -1159,8 +1159,8 @@ example (x y : U32) (h : 2 * x.toNat + 2 * y.toNat + 4 ≤ U32.max) :
 
 example (x y : U32) (h : x.toNat * y.toNat ≤ U32.max):
   (do
-    let z0 ← x * y
-    let z1 ← y * x
+    let z0 ← x *? y
+    let z1 ← y *? x
     massert (z1 == z0)) ⦃ _ => True ⦄ := by
     step*
 
@@ -1294,7 +1294,7 @@ example (x : U32) (h : x.toNat < 32) :
     the else branch). The fix uses a fresh mvar during internalization and
     closes the goal explicitly when a contradiction is found. -/
 private def grindContradictionFn (a b : U32) : Result U32 := do
-  if a = b then a + b
+  if a = b then a +? b
   else fail .panic
 
 /- Test that step* works (previously crashed with "No goals to be solved") -/
@@ -1351,7 +1351,7 @@ example (v : U32) (h : x = some v) :
     The contradiction is detected after the let-binding step introduces `c` and its
     postcondition, and then the if-split creates the contradicting branch. -/
 private def letBindContradictionFn (a b : U32) : Result U32 := do
-  let c ← a + b
+  let c ← a +? b
   if a = b then
     .ok c
   else

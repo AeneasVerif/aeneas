@@ -40,7 +40,7 @@ theorem core.num.checked_div_UScalar_bv_spec {ty} (x y : UScalar ty) :
     simp
     have hnz' : y.toNat ≠ 0 := by zify at *; simp_all
     have ⟨ z, hz ⟩ := UScalar.div_toBitVec_spec x hnz'
-    have : x / y = x.div y := by rfl
+    have : x /? y = x.div y := by rfl
     simp [this, UScalar.div, hnz] at hz
     simp [hz, hnz']
 
@@ -68,7 +68,7 @@ theorem core.num.checked_div_IScalar_bv_spec {ty} (x y : IScalar ty) :
     simp
     have hnz' : y.toInt ≠ 0 := by zify at *; simp_all
     have ⟨ z, hz ⟩ := @IScalar.div_toBitVec_spec _ x y hnz' (by simp; tauto)
-    have : x / y = x.div y := by rfl
+    have : x /? y = x.div y := by rfl
     simp [this, IScalar.div, hnz] at hz
     split_ifs at hz
     simp at hz

@@ -11,13 +11,13 @@ open Result Error Arith ScalarElab
 
 /- [core::num::{T}::checked_add] -/
 def core.num.checked_add_UScalar {ty} (x y : UScalar ty) : Option (UScalar ty) :=
-  Option.ofResult (x + y)
+  Option.ofResult (x +? y)
 
 uscalar def «%S».checked_add (x y : «%S») : Option «%S» := core.num.checked_add_UScalar x y
 
 /- [core::num::{T}::checked_add] -/
 def core.num.checked_add_IScalar {ty} (x y : IScalar ty) : Option (IScalar ty) :=
-  Option.ofResult (x + y)
+  Option.ofResult (x +? y)
 
 iscalar def «%S».checked_add (x y : «%S») : Option «%S» := core.num.checked_add_IScalar x y
 
@@ -33,7 +33,7 @@ theorem core.num.checked_add_UScalar_bv_spec {ty} (x y : UScalar ty) :
   | some z => x.toNat + y.toNat ≤ UScalar.max ty ∧ z.toNat = x.toNat + y.toNat ∧ z.toBitVec = x.toBitVec + y.toBitVec
   | none => UScalar.max ty < x.toNat + y.toNat := by
   have h := UScalar.add_equiv x y
-  have hAdd : x + y = UScalar.add x y := by rfl
+  have hAdd : x +? y = UScalar.add x y := by rfl
   rw [hAdd] at h
   cases hEq : UScalar.add x y <;> simp_all [Option.ofResult, checked_add_UScalar, UScalar.max] <;>
   (have : 0 < 2^ty.numBits := by simp) <;>
@@ -56,7 +56,7 @@ theorem core.num.checked_add_IScalar_bv_spec {ty} (x y : IScalar ty) :
   | some z => IScalar.min ty ≤ x.toInt + y.toInt ∧ x.toInt + y.toInt ≤ IScalar.max ty ∧ z.toInt = x.toInt + y.toInt ∧ z.toBitVec = x.toBitVec + y.toBitVec
   | none => ¬ (IScalar.min ty ≤ x.toInt + y.toInt ∧ x.toInt + y.toInt ≤ IScalar.max ty) := by
   have h := IScalar.add_equiv x y
-  have hAdd : x + y = IScalar.add x y := by rfl
+  have hAdd : x +? y = IScalar.add x y := by rfl
   rw [hAdd] at h
   cases hEq : IScalar.add x y <;> simp_all [Option.ofResult, checked_add_IScalar, IScalar.min, IScalar.max] <;>
   omega

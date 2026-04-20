@@ -25,11 +25,16 @@ def UScalar.try_mul {ty : UScalarTy} (x y : UScalar ty) : Option (UScalar ty) :=
 def IScalar.try_mul {ty : IScalarTy} (x y : IScalar ty) : Option (IScalar ty) :=
   Option.ofResult (mul x y)
 
-instance {ty} : HMul (UScalar ty) (UScalar ty) (Result (UScalar ty)) where
-  hMul x y := UScalar.mul x y
+class ResultMul (α : Type u) where
+  mul : α → α → Result α
 
-instance {ty} : HMul (IScalar ty) (IScalar ty) (Result (IScalar ty)) where
-  hMul x y := IScalar.mul x y
+infixl:71 " *? " => ResultMul.mul
+
+instance {ty} : ResultMul (UScalar ty) where
+  mul x y := UScalar.mul x y
+
+instance {ty} : ResultMul (IScalar ty) where
+  mul x y := IScalar.mul x y
 
 /-!
 # Multiplication: Theorems
@@ -63,8 +68,8 @@ theorem UScalar.mul_equiv {ty} (x y : UScalar ty) :
 /-- Generic theorem - shouldn't be used much -/
 theorem UScalar.mul_toBitVec_spec {ty} {x y : UScalar ty}
   (hmax : ↑x * ↑y ≤ UScalar.max ty) :
-  x * y ⦃ z => (↑z : Nat) = ↑x * ↑y ∧ z.toBitVec = x.toBitVec * y.toBitVec ⦄ := by
-  have : x * y = mul x y := by rfl
+  x *? y ⦃ z => (↑z : Nat) = ↑x * ↑y ∧ z.toBitVec = x.toBitVec * y.toBitVec ⦄ := by
+  have : x *? y = mul x y := by rfl
   have := mul_equiv x y
   split at this <;> simp_all [spec_ok, and_self, spec_fail]
   omega
@@ -115,18 +120,18 @@ theorem IScalar.mul_equiv {ty} (x y : IScalar ty) :
 theorem IScalar.mul_toBitVec_spec {ty} {x y : IScalar ty}
   (hmin : IScalar.min ty ≤ ↑x * ↑y)
   (hmax : ↑x * ↑y ≤ IScalar.max ty) :
-  x * y ⦃ z => (↑z : Int) = ↑x * ↑y ∧ z.toBitVec = x.toBitVec * y.toBitVec ⦄ := by
-  have : x * y = mul x y := by rfl
+  x *? y ⦃ z => (↑z : Int) = ↑x * ↑y ∧ z.toBitVec = x.toBitVec * y.toBitVec ⦄ := by
+  have : x *? y = mul x y := by rfl
   have := mul_equiv x y
   split at this <;> simp_all
 
 uscalar theorem «%S».mul_bv_spec {x y : «%S»} (hmax : x.toNat * y.toNat ≤ «%S».max) :
-  x * y ⦃ z => (↑z : Nat) = ↑x * ↑y ∧ z.toBitVec = x.toBitVec * y.toBitVec ⦄ :=
+  x *? y ⦃ z => (↑z : Nat) = ↑x * ↑y ∧ z.toBitVec = x.toBitVec * y.toBitVec ⦄ :=
   UScalar.mul_toBitVec_spec (by scalar_tac)
 
 iscalar theorem «%S».mul_bv_spec {x y : «%S»}
   (hmin : «%S».min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ «%S».max) :
-  x * y ⦃ z => (↑z : Int) = ↑x * ↑y ∧ z.toBitVec = x.toBitVec * y.toBitVec ⦄ :=
+  x *? y ⦃ z => (↑z : Int) = ↑x * ↑y ∧ z.toBitVec = x.toBitVec * y.toBitVec ⦄ :=
   IScalar.mul_toBitVec_spec (by scalar_tac) (by scalar_tac)
 
 /-!
@@ -136,7 +141,7 @@ Theorems with a specification which only use integers
 /-- Generic theorem - shouldn't be used much -/
 theorem UScalar.mul_spec {ty} {x y : UScalar ty}
   (hmax : ↑x * ↑y ≤ UScalar.max ty) :
-  x * y ⦃ z => (↑z : Nat) = ↑x * ↑y ⦄ := by
+  x *? y ⦃ z => (↑z : Nat) = ↑x * ↑y ⦄ := by
   apply spec_mono
   apply UScalar.mul_toBitVec_spec hmax
   grind
@@ -145,18 +150,18 @@ theorem UScalar.mul_spec {ty} {x y : UScalar ty}
 theorem IScalar.mul_spec {ty} {x y : IScalar ty}
   (hmin : IScalar.min ty ≤ ↑x * ↑y)
   (hmax : ↑x * ↑y ≤ IScalar.max ty) :
-  x * y ⦃ z => (↑z : Int) = ↑x * ↑y ⦄ := by
+  x *? y ⦃ z => (↑z : Int) = ↑x * ↑y ⦄ := by
   apply spec_mono
   apply @IScalar.mul_toBitVec_spec ty x y (by scalar_tac) (by scalar_tac)
   grind
 
 uscalar @[step] theorem «%S».mul_spec {x y : «%S»} (hmax : x.toNat * y.toNat ≤ «%S».max) :
-  x * y ⦃ z => (↑z : Nat) = ↑x * ↑y ⦄ :=
+  x *? y ⦃ z => (↑z : Nat) = ↑x * ↑y ⦄ :=
   UScalar.mul_spec (by scalar_tac)
 
 iscalar @[step] theorem «%S».mul_spec {x y : «%S»}
   (hmin : «%S».min ≤ ↑x * ↑y) (hmax : ↑x * ↑y ≤ «%S».max) :
-  (x * y) ⦃ z => (↑z : Int) = ↑x * ↑y ⦄ :=
+  (x *? y) ⦃ z => (↑z : Int) = ↑x * ↑y ⦄ :=
   IScalar.mul_spec (by scalar_tac) (by scalar_tac)
 
 end Aeneas.Std

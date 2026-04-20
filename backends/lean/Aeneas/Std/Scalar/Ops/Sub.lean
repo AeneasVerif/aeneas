@@ -25,11 +25,16 @@ def UScalar.try_sub {ty : UScalarTy} (x y : UScalar ty) : Option (UScalar ty) :=
 def IScalar.try_sub {ty : IScalarTy} (x y : IScalar ty) : Option (IScalar ty) :=
   Option.ofResult (sub x y)
 
-instance {ty} : HSub (UScalar ty) (UScalar ty) (Result (UScalar ty)) where
-  hSub x y := UScalar.sub x y
+class ResultSub (α : Type u) where
+  sub : α → α → Result α
 
-instance {ty} : HSub (IScalar ty) (IScalar ty) (Result (IScalar ty)) where
-  hSub x y := IScalar.sub x y
+infixl:65 " -? " => ResultSub.sub
+
+instance {ty} : ResultSub (UScalar ty) where
+  sub x y := UScalar.sub x y
+
+instance {ty} : ResultSub (IScalar ty) where
+  sub x y := IScalar.sub x y
 
 
 /-!
@@ -37,14 +42,14 @@ instance {ty} : HSub (IScalar ty) (IScalar ty) (Result (IScalar ty)) where
 -/
 
 theorem UScalar.sub_equiv {ty} (x y : UScalar ty) :
-  match x - y with
+  match x -? y with
   | ok z =>
     y.toNat ≤ x.toNat ∧
     x.toNat = z.toNat + y.toNat ∧
     z.toBitVec = x.toBitVec - y.toBitVec
   | fail _ => x.toNat < y.toNat
   | _ => ⊥ := by
-  have : x - y = sub x y := by rfl
+  have : x -? y = sub x y := by rfl
   simp [this, sub]
   dcases h : x.toNat < y.toNat <;> simp [h]
   simp_all
@@ -81,14 +86,14 @@ theorem UScalar.sub_equiv {ty} (x y : UScalar ty) :
     ring_nf
 
 theorem IScalar.sub_equiv {ty} (x y : IScalar ty) :
-  match x - y with
+  match x -? y with
   | ok z =>
     IScalar.inBounds ty (x.toInt - y.toInt) ∧
     z.toInt = x.toInt - y.toInt ∧
     z.toBitVec = x.toBitVec - y.toBitVec
   | fail _ => ¬ (IScalar.inBounds ty (x.toInt - y.toInt))
   | _ => ⊥ := by
-  have : x - y = sub x y := by rfl
+  have : x -? y = sub x y := by rfl
   simp [this, sub]
   have h := tryMk_eq ty (↑x - ↑y)
   simp [inBounds] at h
@@ -105,7 +110,7 @@ Theorems with a specification which uses integers and bit-vectors
 /- Generic theorem - shouldn't be used much -/
 theorem UScalar.sub_toBitVec_spec {ty} {x y : UScalar ty}
   (h : y.toNat ≤ x.toNat) :
-  x - y ⦃ z => z.toNat = x.toNat - y.toNat ∧ y.toNat ≤ x.toNat ∧ z.toBitVec = x.toBitVec - y.toBitVec ⦄ := by
+  x -? y ⦃ z => z.toNat = x.toNat - y.toNat ∧ y.toNat ≤ x.toNat ∧ z.toBitVec = x.toBitVec - y.toBitVec ⦄ := by
   have h := @sub_equiv ty x y
   split at h <;> simp_all
   omega
@@ -114,18 +119,18 @@ theorem UScalar.sub_toBitVec_spec {ty} {x y : UScalar ty}
 theorem IScalar.sub_toBitVec_spec {ty} {x y : IScalar ty}
   (hmin : IScalar.min ty ≤ ↑x - ↑y)
   (hmax : ↑x - ↑y ≤ IScalar.max ty) :
-  x - y ⦃ z => (↑z : Int) = ↑x - ↑y ∧ z.toBitVec = x.toBitVec - y.toBitVec ⦄ := by
+  x -? y ⦃ z => (↑z : Int) = ↑x - ↑y ∧ z.toBitVec = x.toBitVec - y.toBitVec ⦄ := by
   have h := @sub_equiv ty x y
   split at h <;> simp_all [min, max]
   omega
 
 uscalar theorem «%S».sub_bv_spec {x y : «%S»} (h : y.toNat ≤ x.toNat) :
-  x - y ⦃ z => z.toNat = x.toNat - y.toNat ∧ y.toNat ≤ x.toNat ∧ z.toBitVec = x.toBitVec - y.toBitVec ⦄ :=
+  x -? y ⦃ z => z.toNat = x.toNat - y.toNat ∧ y.toNat ≤ x.toNat ∧ z.toBitVec = x.toBitVec - y.toBitVec ⦄ :=
   UScalar.sub_toBitVec_spec h
 
 iscalar theorem «%S».sub_bv_spec {x y : «%S»}
   (hmin : «%S».min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ «%S».max) :
-  x - y ⦃ z => (↑z : Int) = ↑x - ↑y ∧ z.toBitVec = x.toBitVec - y.toBitVec ⦄ :=
+  x -? y ⦃ z => (↑z : Int) = ↑x - ↑y ∧ z.toBitVec = x.toBitVec - y.toBitVec ⦄ :=
   IScalar.sub_toBitVec_spec (by scalar_tac) (by scalar_tac)
 
 /-!
@@ -136,7 +141,7 @@ Theorems with a specification which only uses integers
 @[step]
 theorem UScalar.sub_spec {ty} {x y : UScalar ty}
   (h : y.toNat ≤ x.toNat) :
-  x - y ⦃ z => z.toNat = x.toNat - y.toNat ∧ y.toNat ≤ x.toNat ⦄ := by
+  x -? y ⦃ z => z.toNat = x.toNat - y.toNat ∧ y.toNat ≤ x.toNat ⦄ := by
   have h := @sub_equiv ty x y
   split at h <;> simp_all
   omega
@@ -146,18 +151,18 @@ theorem UScalar.sub_spec {ty} {x y : UScalar ty}
 theorem IScalar.sub_spec {ty} {x y : IScalar ty}
   (hmin : IScalar.min ty ≤ ↑x - ↑y)
   (hmax : ↑x - ↑y ≤ IScalar.max ty) :
-  x - y ⦃ z => (↑z : Int) = ↑x - ↑y ⦄ := by
+  x -? y ⦃ z => (↑z : Int) = ↑x - ↑y ⦄ := by
   have h := @sub_equiv ty x y
   split at h <;> simp_all [min, max]
   omega
 
 uscalar @[step] theorem «%S».sub_spec {x y : «%S»} (h : y.toNat ≤ x.toNat) :
-  x - y ⦃ z => z.toNat = x.toNat - y.toNat ∧ y.toNat ≤ x.toNat ⦄ :=
+  x -? y ⦃ z => z.toNat = x.toNat - y.toNat ∧ y.toNat ≤ x.toNat ⦄ :=
   UScalar.sub_spec h
 
 iscalar @[step] theorem «%S».sub_spec {x y : «%S»}
   (hmin : «%S».min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ «%S».max) :
-  x - y ⦃ z => (↑z : Int) = ↑x - ↑y ⦄ :=
+  x -? y ⦃ z => (↑z : Int) = ↑x - ↑y ⦄ :=
   IScalar.sub_spec (by scalar_tac) (by scalar_tac)
 
 end Aeneas.Std

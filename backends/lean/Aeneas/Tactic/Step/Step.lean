@@ -29,7 +29,7 @@ macro:max "[> " "let" y:term " ← " x:term " <]"   : term => `(prettyMonadEq $x
 @[app_unexpander prettyMonadEq]
 def unexpPrettyMonadEqofNat : Lean.PrettyPrinter.Unexpander | `($_ $x $y) => `([> let $y ← $x <]) | _ => throw ()
 
-example (x y z : Std.U32) (_ : [> let z ← x + y <]) : True := by simp
+example (x y z : Std.U32) (_ : [> let z ← x +? y <]) : True := by simp
 
 def eq_imp_prettyMonadEq {α : Type u} {β : Type v} (x : Std.Result α) (y : β) : prettyMonadEq x y := by
   unfold prettyMonadEq
@@ -1317,15 +1317,15 @@ x y : UScalar ty
   -/
   #guard_msgs in
   example {ty} {x y : UScalar ty} :
-    x + y ⦃ _ => True ⦄ := by
+    x +? y ⦃ _ => True ⦄ := by
     step as ⟨ z, h1 ⟩
 
   example {ty} {x y : UScalar ty} (h : x.toNat + y.toNat ≤ UScalar.max ty) :
-    x + y ⦃ _ => True ⦄ := by
+    x +? y ⦃ _ => True ⦄ := by
     step as ⟨ z, h1 ⟩
 
   example {ty} {x y : UScalar ty} (h : x.toNat + y.toNat ≤ UScalar.max ty) :
-    x + y ⦃ _ => True ⦄ := by
+    x +? y ⦃ _ => True ⦄ := by
     let* ⟨ z, h1 ⟩ ← *
 
   -- Checking that we properly handle tuple decomposition in post-conditions
@@ -1358,7 +1358,7 @@ _✝ : z1 = y + 2
   -/
   #guard_msgs in
   example {ty} {x y : UScalar ty} (h : x.toNat + y.toNat ≤ UScalar.max ty) :
-    x + y ⦃ _ => True ⦄ := by
+    x +? y ⦃ _ => True ⦄ := by
     let* ⟨ z, h1 ⟩ ← *?
 
   /--
@@ -1368,7 +1368,7 @@ info: example
   (y : UScalar ty)
   (h : ↑x + ↑y ≤ UScalar.max ty)
   (z : UScalar ty)
-  (_ : [> let z ← x + y <])
+  (_ : [> let z ← x +? y <])
   (h1 : ↑z = ↑x + ↑y) :
   ↑z = ↑x + ↑y
   := by sorry
@@ -1376,7 +1376,7 @@ info: example
   #guard_msgs in
   set_option linter.unusedTactic false in
   example {ty} {x y : UScalar ty} (h : x.toNat + y.toNat ≤ UScalar.max ty) :
-    x + y ⦃ z => z.toNat = x.toNat + y.toNat ⦄ := by
+    x +? y ⦃ z => z.toNat = x.toNat + y.toNat ⦄ := by
     let* ⟨ z, h1 ⟩ ← UScalar.add_spec
     extract_goal0
     scalar_tac
@@ -1388,10 +1388,10 @@ info: example
   (y : UScalar ty)
   (h : 2 * ↑x + ↑y ≤ UScalar.max ty)
   (z1 : UScalar ty)
-  (__1 : [> let z1 ← x + y <])
+  (__1 : [> let z1 ← x +? y <])
   (h1 : ↑z1 = ↑x + ↑y)
   (z2 : UScalar ty)
-  (_ : [> let z2 ← z1 + x <])
+  (_ : [> let z2 ← z1 +? x <])
   (h2 : ↑z2 = ↑z1 + ↑x) :
   ↑z2 = 2 * ↑x + ↑y
   := by sorry
@@ -1400,8 +1400,8 @@ info: example
   set_option linter.unusedTactic false in
   example {ty} {x y : UScalar ty} (h : 2 * x.toNat + y.toNat ≤ UScalar.max ty) :
     (do
-      let z1 ← x + y
-      z1 + x) ⦃ z => z.toNat = 2 * x.toNat + y.toNat ⦄ := by
+      let z1 ← x +? y
+      z1 +? x) ⦃ z => z.toNat = 2 * x.toNat + y.toNat ⦄ := by
     let* ⟨ z1, h1 ⟩ ← UScalar.add_spec
     let* ⟨ z2, h2 ⟩ ← UScalar.add_spec
     extract_goal0
@@ -1409,67 +1409,67 @@ info: example
 
   example {ty} {x y : UScalar ty} (h : 2 * x.toNat + y.toNat ≤ UScalar.max ty) :
     (do
-      let z1 ← x + y
-      z1 + x) ⦃ z => z.toNat = 2 * x.toNat + y.toNat ⦄ := by
+      let z1 ← x +? y
+      z1 +? x) ⦃ z => z.toNat = 2 * x.toNat + y.toNat ⦄ := by
     step with UScalar.add_spec as ⟨ z1, h1 ⟩
     step with UScalar.add_spec as ⟨ z2, h2 ⟩
     scalar_tac
 
   example {ty} {x y : UScalar ty}
     (hmax : x.toNat + y.toNat ≤ UScalar.max ty) :
-    x + y ⦃ z => z.toNat = x.toNat + y.toNat ⦄ := by
+    x +? y ⦃ z => z.toNat = x.toNat + y.toNat ⦄ := by
     step as ⟨ z, h1 ⟩
     scalar_tac
 
   example {ty} {x y : IScalar ty}
     (hmin : IScalar.min ty ≤ x.toInt + y.toInt)
     (hmax : x.toInt + y.toInt ≤ IScalar.max ty) :
-    x + y ⦃ z => z.toInt = x.toInt + y.toInt ⦄ := by
+    x +? y ⦃ z => z.toInt = x.toInt + y.toInt ⦄ := by
     step as ⟨ z, h1 ⟩
     scalar_tac
 
   example {ty} {x y : UScalar ty}
     (hmax : x.toNat + y.toNat ≤ UScalar.max ty) :
-    x + y ⦃ z => z.toNat = x.toNat + y.toNat ⦄ := by
+    x +? y ⦃ z => z.toNat = x.toNat + y.toNat ⦄ := by
     step? as ⟨ z, h1 ⟩ says step with UScalar.add_spec as ⟨ z, h1 ⟩
     scalar_tac
 
   example {ty} {x y : IScalar ty}
     (hmin : IScalar.min ty ≤ x.toInt + y.toInt)
     (hmax : x.toInt + y.toInt ≤ IScalar.max ty) :
-    x + y ⦃ z => z.toInt = x.toInt + y.toInt ⦄ := by
+    x +? y ⦃ z => z.toInt = x.toInt + y.toInt ⦄ := by
     step? as ⟨ z, h1 ⟩ says step with IScalar.add_spec as ⟨ z, h1 ⟩
     scalar_tac
 
   example {ty} {x y : UScalar ty}
     (hmax : x.toNat + y.toNat ≤ UScalar.max ty) :
-    x + y ⦃ z => z.toNat = x.toNat + y.toNat ⦄ := by
+    x +? y ⦃ z => z.toNat = x.toNat + y.toNat ⦄ := by
     step with UScalar.add_spec as ⟨ z ⟩
     scalar_tac
 
   example {ty} {x y : IScalar ty}
     (hmin : IScalar.min ty ≤ x.toInt + y.toInt)
     (hmax : x.toInt + y.toInt ≤ IScalar.max ty) :
-    x + y ⦃ z => z.toInt = x.toInt + y.toInt ⦄ := by
+    x +? y ⦃ z => z.toInt = x.toInt + y.toInt ⦄ := by
     step with IScalar.add_spec as ⟨ z ⟩
     scalar_tac
 
   example {x y : U32}
     (hmax : x.toNat + y.toNat ≤ U32.max) :
-    x + y ⦃ z => z.toNat = x.toNat + y.toNat ⦄ := by
+    x +? y ⦃ z => z.toNat = x.toNat + y.toNat ⦄ := by
     -- This spec theorem is suboptimal (compared to `U32.add_spec`), but it is good to check that it works
     step with UScalar.add_spec as ⟨ z, h1 ⟩
     scalar_tac
 
   example {x y : U32}
     (hmax : x.toNat + y.toNat ≤ U32.max) :
-    x + y ⦃ z => z.toNat = x.toNat + y.toNat ⦄ := by
+    x +? y ⦃ z => z.toNat = x.toNat + y.toNat ⦄ := by
     step with U32.add_spec as ⟨ z, h1 ⟩
     scalar_tac
 
   example {x y : U32}
     (hmax : x.toNat + y.toNat ≤ U32.max) :
-    x + y ⦃ z => z.toNat = x.toNat + y.toNat ⦄ := by
+    x +? y ⦃ z => z.toNat = x.toNat + y.toNat ⦄ := by
     step as ⟨ z, h1 ⟩
     scalar_tac
 
@@ -1515,7 +1515,7 @@ info: example
      need to instantiate (otherwise `step` gets stuck) -/
   example {ty} {x y : UScalar ty}
     (hmax : x.toNat + y.toNat ≤ UScalar.max ty) :
-    False ∨ x + y ⦃ z => z.toNat = x.toNat + y.toNat ⦄ := by
+    False ∨ x +? y ⦃ z => z.toNat = x.toNat + y.toNat ⦄ := by
     right
     step as ⟨ z, h1 ⟩
     scalar_tac
@@ -1523,7 +1523,7 @@ info: example
   example {ty} {x y : IScalar ty}
     (hmin : IScalar.min ty ≤ x.toInt + y.toInt)
     (hmax : x.toInt + y.toInt ≤ IScalar.max ty) :
-    False ∨ x + y ⦃ z => z.toInt = x.toInt + y.toInt ⦄ := by
+    False ∨ x +? y ⦃ z => z.toInt = x.toInt + y.toInt ⦄ := by
     right
     step? as ⟨ z, h1 ⟩ says step with IScalar.add_spec as ⟨ z, h1 ⟩
     scalar_tac
@@ -1592,21 +1592,21 @@ hf : ∀ (x y : U32), ↑x < 10 → ↑y < 10 → f x y ⦃ x✝ => True ⦄
   end
 
   -- Testing step on theorems containing local let-bindings
-  def add (x y : U32) : Std.Result U32 := x + y
+  def add (x y : U32) : Std.Result U32 := x +? y
 
   section
     /- Testing step on theorems containing local let-bindings as well as
        the `local` attribute kind -/
     @[local step] theorem add_spec' (x y : U32) (h : x.toNat + y.toNat ≤ U32.max) :
       let tot := x.toNat + y.toNat
-      x + y ⦃ z => z.toNat = tot ⦄ := by
+      x +? y ⦃ z => z.toNat = tot ⦄ := by
       simp
       step with U32.add_spec
       scalar_tac
 
     def add1 (x y : U32) : Std.Result U32 := do
-      let z ← x + y
-      z + z
+      let z ← x +? y
+      z +? z
 
     example (x y : U32) (h : 2 * x.toNat + 2 * y.toNat ≤ U32.max) :
       add1 x y ⦃ _ => True ⦄ := by
@@ -1702,7 +1702,7 @@ info: example
   #guard_msgs in
   example (c : U32) :
     (do
-          let c1 ← c >>> 16#i32
+          let c1 ← c >>>? 16#i32
           ok c1) ⦃ c' => c'.toBitVec = c.toBitVec >>> 16 ⦄
     := by
     step as ⟨ c', _, hc' ⟩ -- we have: `hc' : c'.toBitVec = c.toBitVec >>> 16`
@@ -1711,7 +1711,7 @@ info: example
 
   example (x y : U32) (h : x.toNat + y.toNat < U32.max) :
     (do
-      let z ← x + y
+      let z ← x +? y
       ok (x, y, z)) ⦃ x y z => z.toNat = x.toNat + y.toNat ⦄ := by
     step as ⟨ z ⟩
     scalar_tac
@@ -1753,7 +1753,7 @@ z_post : ↑z = ↑x + ↑y
 ⊢ ↑z = ↑x + ↑y
   -/
   #guard_msgs in
-  example (x y : U32) : x + y ⦃ z => z.toNat = x.toNat + y.toNat ⦄  := by
+  example (x y : U32) : x +? y ⦃ z => z.toNat = x.toNat + y.toNat ⦄  := by
     step
 
   /- When using a function call that outputs nothing, we need to ignore the name
@@ -1762,7 +1762,7 @@ z_post : ↑z = ↑x + ↑y
     (do
       massert (x < 32#u32)
       massert (x < 32#u32)
-      x + x) ⦃ _ => True ⦄ := by
+      x +? x) ⦃ _ => True ⦄ := by
       step
       step
       step

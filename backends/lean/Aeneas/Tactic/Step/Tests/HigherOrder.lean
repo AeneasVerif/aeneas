@@ -23,7 +23,7 @@ info: Try this:
 -/
 #guard_msgs in
 example (a : U32) (h : a.toNat + 1 ≤ U32.max) :
-    applyF (fun x => x + 1#u32) a ⦃ y => y.toNat = a.toNat + 1 ⦄ := by
+    applyF (fun x => x +? 1#u32) a ⦃ y => y.toNat = a.toNat + 1 ⦄ := by
   step*? +inferPost
 
 -- Higher-order in 2 functions, operates on a pair of inputs/outputs
@@ -50,7 +50,7 @@ info: Try this:
 -/
 #guard_msgs in
 example (x y : U32) (hx : x.toNat + 1 ≤ U32.max) (hy : y.toNat + 2 ≤ U32.max) :
-    callPair (fun a => a + 1#u32) (fun b => b + 2#u32) (x, y) ⦃ ab => ab.1.toNat = x.toNat + 1 ∧ ab.2.toNat = y.toNat + 2 ⦄ := by
+    callPair (fun a => a +? 1#u32) (fun b => b +? 2#u32) (x, y) ⦃ ab => ab.1.toNat = x.toNat + 1 ∧ ab.2.toNat = y.toNat + 2 ⦄ := by
   step*? +inferPost
 
 -- Calls f then g in sequence
@@ -79,11 +79,11 @@ info: Try this:
 -/
 #guard_msgs in
 example (x : U32) (h1 : x.toNat + 1 ≤ U32.max) (h2 : x.toNat + 2 ≤ U32.max) :
-    callFThenG (fun a => a + 1#u32) (fun b => b + 1#u32) x ⦃ y => y.toNat = x.toNat + 2 ⦄ := by
+    callFThenG (fun a => a +? 1#u32) (fun b => b +? 1#u32) x ⦃ y => y.toNat = x.toNat + 2 ⦄ := by
   step*? +inferPost
 
 def callSlicemapM (x : Slice U32) : Result (Slice U32) := do
-  let y ← x.mapM (fun x => x + 1#u32)
+  let y ← x.mapM (fun x => x +? 1#u32)
   return y
 
 /--
@@ -105,8 +105,8 @@ example (s : Slice U32) (h : ∀ i (hi : i < s.len), s[i] < U32.max) :
   step*? +inferPost
 
 def callSlicemapMTwice (x : Slice U32) : Result (Slice U32) := do
-  let y ← x.mapM (fun x => x + 1#u32)
-  let z ← y.mapM (fun x => x * x)
+  let y ← x.mapM (fun x => x +? 1#u32)
+  let z ← y.mapM (fun x => x *? x)
   return z
 
 /--
