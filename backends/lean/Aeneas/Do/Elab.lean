@@ -83,6 +83,33 @@ def ElabM.withLetDecl (name : Name) (type : Expr) (value : Expr)
   fun _ k => Meta.withLetDecl name type value fun fvar =>
       (body fvar).run ctx |>.run k
 
+/-- Given a match-arm expression of the form `fun x₁ ... xₙ => ?m x₁ ... xₙ` (or just `?m` when
+    the arm has no pattern variables), open the lambdas, elaborate `body` in the resulting context,
+    abstract the result over the opened fvars, and assign the value to `?m`. -/
+def ElabM.assignArmMVar (arm : Expr) (body : ElabM Expr) : ElabM Unit := do
+  let ctx ← read
+  fun _ k =>
+    Meta.lambdaTelescope arm fun fvars ebody => do
+      let .mvar mvarId := ebody.getAppFn
+        | throwError "elabDoMatch: expected metavariable arm body, got{indentExpr ebody}"
+      let armExpr ← (body.run ctx).run pure
+      -- Two shapes: body is just `?m` (mvar has the arm body type directly, with fvars in its
+      -- lctx), or body is `?m x₁ ... xₙ` (mvar has a function type, abstract over the args).
+      let value ←
+        if ebody.isMVar then
+          -- Some matchers expose extra telescope binders even when the arm body is a bare mvar.
+          -- Abstract only over the binders that the elaborated arm body actually depends on.
+          let usedFVars := fvars.filter fun fv =>
+            Option.isSome <| armExpr.find? fun
+              | .fvar id => id == fv.fvarId!
+              | _ => false
+          if usedFVars.isEmpty then pure armExpr
+          else Meta.mkLambdaFVars usedFVars armExpr
+        else
+          Meta.mkLambdaFVars fvars armExpr
+      mvarId.assign value
+      k ()
+
 abbrev DoElem := TSyntax `doElem
 
 def getDoElems (doSeq : TSyntax ``doSeq) : ElabM (List DoElem) := do
@@ -322,6 +349,31 @@ partial def mkPatContinuation (shape : PatShape) (ty : Expr)
       let casesExpr ← mkCasesOn ty indName xFv minor resultType
       mkLambdaFVars #[xFv] casesExpr
 
+/-! ## If-then-else construction helpers
+
+The `if` and `else-if` handlers avoid going through `Syntax → New Syntax → Expr`.
+Instead they elaborate each sub-term (condition, branches) directly to `Expr`
+and feed the results into a manually-built `ite` application. -/
+
+/-- Elaborate a condition syntax to a decidable `Prop`. Handles both `Bool`
+    (coerced to `cond = true`) and `Prop`. Forces pending synthetic mvars
+    so the resulting expression has a concrete type available for the
+    `Decidable` instance search that `mkIteExpr` will perform. -/
+def elabIfCondition (cond : Syntax) : ElabM Expr := do
+  let condExpr ← Lean.Elab.Term.elabTerm cond none
+  Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
+  let condExpr ← instantiateMVars condExpr
+  let condType ← whnf (← instantiateMVars (← inferType condExpr))
+  if condType.isConstOf ``Bool then
+    mkEq condExpr (mkConst ``Bool.true)
+  else
+    pure condExpr
+
+/-- Build `@ite α propExpr decInst thn els` from pre-elaborated sub-terms.
+    Synthesizes the `Decidable` instance. -/
+def mkIteExpr (propExpr thn els : Expr) : MetaM Expr := do
+  mkAppOptM ``ite #[none, some propExpr, none, some thn, some els]
+
 /-! ## Individual `doElem` handlers-/
 mutual
 
@@ -347,56 +399,28 @@ partial def elabDoElem (elem : TSyntax `doElem) (rest : List DoElem) : ElabM Exp
     else
       throwError "unsupported `do` element (kind: {elem.raw.getKind}){indentD elem}"
 
-/-- Elaborate a `Term.doIf` node, handling `else if` chains by extracting
-    the condition and branches and delegating to `elabDoIf`.
+/-- Elaborate a `Term.doIf` node, walking any `else if` chain structurally
+    (without constructing new syntax) and delegating to `elabDoIfChain`.
     doIf structure: [0]="if" [1]=doIfCond [2]="then" [3]=doSeq
-                    [4]=many(elseIf groups) [5]=optional("else" doSeq) -/
+                    [4]=many(elseIf groups) [5]=optional("else" doSeq)
+    Each else-if group: [0]="else if" [1]=doIfCond [2]="then" [3]=doSeq -/
 partial def elabDoIfNode (stx : Syntax) (rest : List DoElem) : ElabM Expr := do
-  -- Extract the condition from doIfCond (doIfProp: optional(ident ":") term)
-  let doIfCond := stx[1]
   -- doIfCond is either doIfProp or doIfLet; for now handle doIfProp
   -- doIfProp: [0]=optional(ident ":") [1]=term
-  let cond := if doIfCond.isOfKind ``Term.doIfProp then doIfCond[1]
-              else doIfCond  -- fallback
+  let extractCond (doIfCond : Syntax) : Syntax :=
+    if doIfCond.isOfKind ``Term.doIfProp then doIfCond[1] else doIfCond
+  let cond := extractCond stx[1]
   let thenSeq : TSyntax ``doSeq := ⟨stx[3]⟩
-  let elseIfAlts := stx[4]  -- many node: array of else-if groups
-  let elseOpt := stx[5]     -- optional node: "else" doSeq
-  if elseIfAlts.getNumArgs > 0 then
-    -- There are else-if chains. Build a nested doIf for the remaining chain
-    -- and elaborate it as the else branch.
-    -- Each else-if group: [0]="else if" [1]=doIfCond [2]="then" [3]=doSeq
-    let firstElseIf := elseIfAlts[0]!
-    let remainingElseIfs := elseIfAlts.getArgs[1:]
-    -- Build a new doIf node for the rest of the chain
-    let innerDoIf := Syntax.node .none ``Term.doIf #[
-      mkAtom "if",             -- [0]
-      firstElseIf[1]!,         -- [1] doIfCond
-      mkAtom "then",           -- [2]
-      firstElseIf[3]!,         -- [3] doSeq
-      Syntax.node .none nullKind remainingElseIfs, -- [4] remaining else-ifs
-      elseOpt                  -- [5] final else
-    ]
-    -- Elaborate: if cond then thenBranch else (innerDoIf-chain).
-    -- `rest` is bound once outside the whole chain by `elabMonadicAsDoElem`;
-    -- the inner `else if` nodes recursively hit this same code path with
-    -- `rest = []`, so they don't re-duplicate anything either.
-    let mkDoSeqSyntax (elems : List DoElem) : Syntax :=
-      let doSeqItems := elems.map fun elem =>
-        Syntax.node .none ``Term.doSeqItem #[elem.raw, mkNullNode #[]]
-      let doSeq := Syntax.node .none ``Term.doSeqIndent #[mkNullNode doSeqItems.toArray]
-      Syntax.node .none ``Term.do #[mkAtom "do", doSeq]
-    let thenTerm := mkDoSeqSyntax (← getDoElems thenSeq)
-    let innerDoIfElem : TSyntax `doElem := ⟨innerDoIf⟩
-    let elseTerm := mkDoSeqSyntax [innerDoIfElem]
-    let condTerm : Term := ⟨cond⟩
-    let ifStx ← `(if $condTerm then $(⟨thenTerm⟩) else $(⟨elseTerm⟩))
-    elabMonadicAsDoElem (fun ty => elabTermEnsuringType ifStx ty) rest
-  else if elseOpt.getNumArgs > 0 then
-    -- Simple if/else (no else-if chains)
-    let elseSeq : TSyntax ``doSeq := ⟨elseOpt[1]!⟩
-    elabDoIf cond thenSeq elseSeq rest
-  else
+  let elseIfAlts := stx[4]
+  let elseOpt := stx[5]
+  unless elseOpt.getNumArgs > 0 do
     throwError "doIf without else clause is not supported in this do-elaborator"
+  let elseSeq : TSyntax ``doSeq := ⟨elseOpt[1]!⟩
+  let mut branches : Array (Syntax × TSyntax ``doSeq) := #[(cond, thenSeq)]
+  for i in [:elseIfAlts.getNumArgs] do
+    let elseIf := elseIfAlts[i]!
+    branches := branches.push (extractCond elseIf[1], ⟨elseIf[3]⟩)
+  elabDoIfChain branches elseSeq rest
 
 /-- If `rest` is empty, elaborate a monadic subterm against the do-block's
     expected type `m α`. Otherwise elaborate it as `m Unit` and bind
@@ -410,11 +434,11 @@ partial def elabMonadicAsDoElem
     elabAtType expectedType
   | _ =>
     let unitType ← mkConstWithFreshMVarLevels ``Unit
-    let expectedType ← ElabM.mkMonadicType unitType
-    let e ← elabAtType expectedType
     ElabM.withLocalDeclD `_ unitType fun fvar => do
       let restExpr ← elabDoSeqCore rest
       let body ← mkLambdaFVars #[fvar] restExpr
+      let expectedType ← ElabM.mkMonadicType unitType
+      let e ← elabAtType expectedType
       ElabM.mkBind e body
 
 /- Elaborate a term in a `doSeq` position -/
@@ -500,39 +524,72 @@ partial def elabDoLetPat (pat : Syntax) (rhs : Syntax)
   -- lambda, so `headBeta` is a no-op.
   return (mkApp k val).headBeta
 
-/-- Elaborate an if-then-else.
-    Wraps each branch's original `doSeq` in `do` to get a term, builds a
-    term-level `if/then/else`, and delegates to `elabMonadicAsDoElem` so that
-    `rest` is bound once outside the `if` (instead of duplicated into both
-    branches). This lets Lean's standard `if` elaborator handle Bool vs Prop
-    dispatch and Decidable synthesis. -/
-partial def elabDoIf (cond : Syntax) (thenSeq elseSeq : TSyntax ``doSeq)
-    (rest : List (TSyntax `doElem)) : ElabM Expr := do
-  let mkDoTerm (seq : TSyntax ``doSeq) : Syntax :=
-    Syntax.node .none ``Term.do #[mkAtom "do", seq.raw]
-  let thenTerm := mkDoTerm thenSeq
-  let elseTerm := mkDoTerm elseSeq
-  let cond : Term := ⟨cond⟩
-  let ifStx ← `(if $cond then $(⟨thenTerm⟩) else $(⟨elseTerm⟩))
-  elabMonadicAsDoElem (fun ty => elabTermEnsuringType ifStx ty) rest
+/-- Elaborate a chain of if/else-if branches plus a final `else`.
+    Each `(cond, seq)` in `branches` contributes one `ite` layer wrapping
+    the result. Sub-terms (conditions and branches) are elaborated directly
+    to `Expr`; no new syntax is constructed. `rest` is bound once outside
+    the whole chain via `elabMonadicAsDoElem`. -/
+partial def elabDoIfChain (branches : Array (Syntax × TSyntax ``doSeq))
+    (elseSeq : TSyntax ``doSeq) (rest : List (TSyntax `doElem)) : ElabM Expr := do
+  let elabAtType (ty : Expr) : ElabM Expr := do
+    let some α := ty.getAppArgs[0]?
+      | throwError "elabDoIfChain: expected monadic type, got{indentExpr ty}"
+    withReader (fun ctx => { ctx with expectedAlpha := α }) do
+      let mut result ← elabDoSeqCore (← getDoElems elseSeq)
+      for (c, s) in branches.toList.reverse do
+        let thenExpr ← elabDoSeqCore (← getDoElems s)
+        let propExpr ← elabIfCondition c
+        result ← mkIteExpr propExpr thenExpr result
+      return result
+  elabMonadicAsDoElem elabAtType rest
 
-/-- Elaborate a pattern match (`doMatch`). Wraps each arm's original `doSeq`
-    in `do` to get a term, builds a term-level `match`, and delegates to
-    `elabMonadicAsDoElem` so `rest` is bound once outside the match rather
-    than duplicated into every arm. -/
+/-- Elaborate a simple if-then-else. Delegates to `elabDoIfChain` with a
+    single branch. -/
+partial def elabDoIf (cond : Syntax) (thenSeq elseSeq : TSyntax ``doSeq)
+    (rest : List (TSyntax `doElem)) : ElabM Expr :=
+  elabDoIfChain #[(cond, thenSeq)] elseSeq rest
+
+/-- Elaborate a pattern match (`doMatch`). Each arm's original `doSeq` is
+    treated as a sub-term: Lean's match elaborator is driven with `_` placeholders
+    in arm-body position, and the resulting per-arm metavariables are then filled
+    by elaborating each `doSeq` directly in the mvar's local context. No `do`
+    wrapping is introduced, so arm bodies never re-enter the do-elaborator via
+    a fresh syntax tree. `rest` is bound once outside the match. -/
 partial def elabDoMatch (stx : Syntax) (rest : List (TSyntax `doElem)) : ElabM Expr := do
   -- doMatch: [0]="match", [1]=opt name, [2]=opt gen, [3]=discrs, [4]="with", [5]=matchAlts
   let alts := stx[5][0]
+  let mut armSeqs : Array (TSyntax ``doSeq) := #[]
   let mut newAlts := #[]
   for i in [:alts.getNumArgs] do
     let alt := alts[i]
-    let armDoSeq := alt[3]
-    let doTerm := Syntax.node .none ``Term.do #[mkAtom "do", armDoSeq]
-    newAlts := newAlts.push (alt.setArg 3 doTerm)
+    armSeqs := armSeqs.push ⟨alt[3]⟩
+    newAlts := newAlts.push (alt.setArg 3 (Lean.mkHole alt[3]))
   let newAltsNode := Syntax.node .none ``Term.matchAlts #[mkNullNode newAlts]
   let termMatch := Syntax.node .none ``Term.match
     #[stx[0], stx[1], stx[2], stx[3], stx[4], newAltsNode]
-  elabMonadicAsDoElem (fun ty => elabTermEnsuringType termMatch ty) rest
+  let elabAtType (ty : Expr) : ElabM Expr := do
+    let some α := ty.getAppArgs[0]?
+      | throwError "elabDoMatch: expected monadic type, got{indentExpr ty}"
+    let matchExpr ← elabTermEnsuringType termMatch ty
+    Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
+    let matchExpr ← instantiateMVars matchExpr
+    Lean.logInfo m!"elabDoMatch: initial matchExpr = {matchExpr}"
+    let some fnName := matchExpr.getAppFn.constName?
+      | throwError "elabDoMatch: expected matcher application, got{indentExpr matchExpr}"
+    let some info ← getMatcherInfo? fnName
+      | throwError "elabDoMatch: `{fnName}` is not a matcher"
+    let args := matchExpr.getAppArgs
+    let firstAltIdx := info.getFirstAltPos
+    unless armSeqs.size == info.numAlts do
+      throwError "elabDoMatch: arm count mismatch (expected {info.numAlts}, got {armSeqs.size})"
+    withReader (fun ctx => { ctx with expectedAlpha := α }) do
+      for i in [:info.numAlts] do
+        let elems ← getDoElems armSeqs[i]!
+        ElabM.assignArmMVar args[firstAltIdx + i]! (elabDoSeqCore elems)
+    let finalMatchExpr ← instantiateMVars matchExpr
+    Lean.logInfo m!"elabDoMatch: final matchExpr = {finalMatchExpr}"
+    pure finalMatchExpr
+  elabMonadicAsDoElem elabAtType rest
 
 partial def elabDoSeqCore : List (TSyntax `doElem) → ElabM Expr
   | [] => throwError "unexpected empty `do` block"
@@ -1131,10 +1188,10 @@ def do_match_rest_test (m : MatchTest) : Result Nat := do
 info: def do_match_rest_test : MatchTest → Result ℕ :=
 fun m => do
   let n ← ok 3
-  match m, n with
-    | MatchTest.A, n => ok ()
-    | MatchTest.B, n => ok ()
-    | MatchTest.C, n => ok ()
+  match m with
+    | MatchTest.A => ok ()
+    | MatchTest.B => ok ()
+    | MatchTest.C => ok ()
   match m with
     | MatchTest.A => ok ()
     | MatchTest.B => ok ()
