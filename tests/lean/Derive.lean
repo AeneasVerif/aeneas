@@ -983,14 +983,14 @@ def Struct6Fields.Insts.CoreFmtDebug : core.fmt.Debug Struct6Fields := {
 }
 
 /-- [derive::refs_ne]:
-    Source: 'tests/src/derive.rs', lines 68:0-70:1
+    Source: 'tests/src/derive.rs', lines 64:0-66:1
     Visibility: public -/
 def refs_ne (a : Struct6Fields) (b : Struct6Fields) : Result Bool := do
   core.cmp.impls.PartialEqShared.ne
     Struct6Fields.Insts.CoreCmpPartialEqStruct6Fields a b
 
 /-- [derive::refs_eq]:
-    Source: 'tests/src/derive.rs', lines 72:0-74:1
+    Source: 'tests/src/derive.rs', lines 68:0-70:1
     Visibility: public -/
 def refs_eq (a : Struct6Fields) (b : Struct6Fields) : Result Bool := do
   Struct6Fields.Insts.CoreCmpPartialEqStruct6Fields.eq a b
