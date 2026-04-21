@@ -17,7 +17,7 @@ The reference semantics are here: https://doc.rust-lang.org/reference/expression
 @[step_pure_def]
 def UScalar.cast {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) : UScalar tgt_ty :=
   -- This truncates the integer if the numBits is smaller
-  ⟨ x.bv.zeroExtend tgt_ty.numBits ⟩
+  ⟨ x.toBitVec.zeroExtend tgt_ty.numBits ⟩
 
 /- Heterogeneous cast
 
@@ -26,12 +26,12 @@ def UScalar.cast {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) 
 @[step_pure_def]
 def UScalar.hcast {src_ty : UScalarTy} (tgt_ty : IScalarTy) (x : UScalar src_ty) : IScalar tgt_ty :=
   -- This truncates the integer if the numBits is smaller
-  ⟨ x.bv.zeroExtend tgt_ty.numBits ⟩
+  ⟨ x.toBitVec.zeroExtend tgt_ty.numBits ⟩
 
 /-- When casting between signed integers, we truncate or **sign**-extend. -/
 @[step_pure_def]
 def IScalar.cast {src_ty : IScalarTy} (tgt_ty : IScalarTy) (x : IScalar src_ty) : IScalar tgt_ty :=
-  ⟨ x.bv.signExtend tgt_ty.numBits ⟩
+  ⟨ x.toBitVec.signExtend tgt_ty.numBits ⟩
 
 /- Heterogeneous cast
 
@@ -39,7 +39,7 @@ def IScalar.cast {src_ty : IScalarTy} (tgt_ty : IScalarTy) (x : IScalar src_ty) 
 -/
 @[step_pure_def]
 def IScalar.hcast {src_ty : IScalarTy} (tgt_ty : UScalarTy) (x : IScalar src_ty) : UScalar tgt_ty :=
-  ⟨ x.bv.signExtend tgt_ty.numBits ⟩
+  ⟨ x.toBitVec.signExtend tgt_ty.numBits ⟩
 
 section
     /-! Checking that the semantics of casts are correct by using the examples given by the Rust reference. -/
@@ -106,21 +106,21 @@ def IScalar.cast_fromBool (ty : IScalarTy) (x : Bool) : IScalar ty :=
 
 /-- This theorem allows us not to use bit-vectors when reasoning about casts, if there are no overflows -/
 theorem UScalar.cast_inBounds_spec {src_ty : UScalarTy}
-  (tgt_ty : UScalarTy) (x : UScalar src_ty) (h : x.val ≤ UScalar.max tgt_ty) :
-  lift (UScalar.cast tgt_ty x) ⦃ y => y.val = x.val ⦄ := by
-  simp only [lift, cast, BitVec.truncate_eq_setWidth, WP.spec_ok, UScalar.val]
-  simp only [max, BitVec.toNat_setWidth, bv_toNat] at *
+  (tgt_ty : UScalarTy) (x : UScalar src_ty) (h : x.toNat ≤ UScalar.max tgt_ty) :
+  lift (UScalar.cast tgt_ty x) ⦃ y => y.toNat = x.toNat ⦄ := by
+  simp only [lift, cast, BitVec.truncate_eq_setWidth, WP.spec_ok, UScalar.toNat]
+  simp only [max, BitVec.toNat_setWidth, toBitVec_toNat] at *
   have : 0 < 2^tgt_ty.numBits := by simp
   apply Nat.mod_eq_of_lt; omega
 
 /-- This theorem allows us not to use bit-vectors when reasoning about casts, if there are no overflows -/
 def UScalar.hcast_inBounds_spec {src_ty : UScalarTy}
   (tgt_ty : IScalarTy) (x : UScalar src_ty)
-  (h : x.val ≤ IScalar.max tgt_ty) :
-  lift (UScalar.hcast tgt_ty x) ⦃ y => y.val = x.val ⦄ := by
+  (h : x.toNat ≤ IScalar.max tgt_ty) :
+  lift (UScalar.hcast tgt_ty x) ⦃ y => y.toInt = x.toNat ⦄ := by
   simp only [lift, hcast, BitVec.truncate_eq_setWidth, WP.spec_ok]
-  simp only [IScalar.val, UScalar.val]
-  simp only [IScalar.max, BitVec.toInt_setWidth, bv_toNat] at *
+  simp only [IScalar.toInt, UScalar.toNat]
+  simp only [IScalar.max, BitVec.toInt_setWidth, toBitVec_toNat] at *
   apply Int.bmod_pow2_eq_of_inBounds'
   . apply IScalarTy.numBits_nonzero
   . have : -2 ^ (tgt_ty.numBits - 1) ≤ 0 := by simp
@@ -129,12 +129,12 @@ def UScalar.hcast_inBounds_spec {src_ty : UScalarTy}
 
 /-- This theorem allows us not to use bit-vectors when reasoning about casts, if there are no overflows -/
 def IScalar.cast_inBounds_spec {src_ty : IScalarTy}
-  (tgt_ty : IScalarTy) (x : IScalar src_ty) (h : IScalar.min tgt_ty ≤ x.val ∧ x.val ≤ IScalar.max tgt_ty) :
-  lift (IScalar.cast tgt_ty x) ⦃ y => y.val = x.val ⦄
+  (tgt_ty : IScalarTy) (x : IScalar src_ty) (h : IScalar.min tgt_ty ≤ x.toInt ∧ x.toInt ≤ IScalar.max tgt_ty) :
+  lift (IScalar.cast tgt_ty x) ⦃ y => y.toInt = x.toInt ⦄
   := by
-  simp only [lift, cast, BitVec.signExtend, bv_toInt_eq, WP.spec_ok]
-  simp only [IScalar.val]
-  simp only [min, max, bv_toInt_eq, BitVec.toInt_ofInt] at *
+  simp only [lift, cast, BitVec.signExtend, toBitVec_toInt_eq, WP.spec_ok]
+  simp only [IScalar.toInt]
+  simp only [min, max, toBitVec_toInt_eq, BitVec.toInt_ofInt] at *
   apply Int.bmod_pow2_eq_of_inBounds'
   . apply IScalarTy.numBits_nonzero
   . scalar_tac
@@ -142,28 +142,28 @@ def IScalar.cast_inBounds_spec {src_ty : IScalarTy}
 
 /-- This theorem allows us not to use bit-vectors when reasoning about casts, if there are no overflows -/
 def IScalar.hcast_inBounds_spec {src_ty : IScalarTy}
-  (tgt_ty : UScalarTy) (x : IScalar src_ty) (h : 0 ≤ x.val ∧ x.val ≤ UScalar.max tgt_ty) :
-  lift (IScalar.hcast tgt_ty x) ⦃ y => y.val = x.val ⦄ := by
-  simp only [lift, hcast, BitVec.signExtend, bv_toInt_eq, WP.spec_ok]
-  simp only [IScalar.val, UScalar.val]
+  (tgt_ty : UScalarTy) (x : IScalar src_ty) (h : 0 ≤ x.toInt ∧ x.toInt ≤ UScalar.max tgt_ty) :
+  lift (IScalar.hcast tgt_ty x) ⦃ y => y.toNat = x.toInt ⦄ := by
+  simp only [lift, hcast, BitVec.signExtend, toBitVec_toInt_eq, WP.spec_ok]
+  simp only [IScalar.toInt, UScalar.toNat]
   simp only [UScalar.max, Nat.ofNat_pos, pow_pos, Nat.cast_pred, Nat.cast_pow, Nat.cast_ofNat,
-    bv_toInt_eq, BitVec.toNat_ofInt, Int.ofNat_toNat] at *
+    toBitVec_toInt_eq, BitVec.toNat_ofInt, Int.ofNat_toNat] at *
   have : 0 < 2^tgt_ty.numBits := by simp
-  have : x.val % 2^tgt_ty.numBits = x.val := by apply Int.emod_eq_of_lt <;> scalar_tac
+  have : x.toInt % 2^tgt_ty.numBits = x.toInt := by apply Int.emod_eq_of_lt <;> scalar_tac
   simp only [this, sup_eq_left, ge_iff_le]
   scalar_tac
 
 @[simp, step_pure cast_fromBool ty b]
-theorem UScalar.cast_fromBool_val_eq ty (b : Bool) : (UScalar.cast_fromBool ty b).val = b.toNat := by
+theorem UScalar.cast_fromBool_toNat_eq ty (b : Bool) : (UScalar.cast_fromBool ty b).toNat = b.toNat := by
   simp only [cast_fromBool]
-  split <;> simp only [val, *] <;> simp
+  split <;> simp only [toNat, *] <;> simp
   have := ty.numBits_nonzero
   omega
 
 @[simp, step_pure cast_fromBool ty b]
-theorem IScalar.cast_fromBool_val_eq ty (b : Bool) :(IScalar.cast_fromBool ty b).val = b.toInt := by
+theorem IScalar.cast_fromBool_toInt_eq ty (b : Bool) :(IScalar.cast_fromBool ty b).toInt = b.toInt := by
   simp only [cast_fromBool]
-  split <;> simp only [val, *] <;> simp
+  split <;> simp only [toInt, *] <;> simp
   cases ty <;> simp [BitVec.toInt]
   have := System.Platform.numBits_eq
   cases this <;>
@@ -171,21 +171,21 @@ theorem IScalar.cast_fromBool_val_eq ty (b : Bool) :(IScalar.cast_fromBool ty b)
   rw [h] <;> simp
 
 @[scalar_tac UScalar.cast_fromBool ty b]
-theorem UScalar.cast_fromBool_bound_eq ty (b : Bool) : (UScalar.cast_fromBool ty b).val ≤ 1 := by
+theorem UScalar.cast_fromBool_bound_eq ty (b : Bool) : (UScalar.cast_fromBool ty b).toNat ≤ 1 := by
   simp only [cast_fromBool]
-  split <;> simp only [val] <;> simp
+  split <;> simp only [toNat] <;> simp
   have := @Nat.mod_eq_of_lt 1 (2^ty.numBits) (by simp [ty.numBits_nonzero])
   rw [this]
 
 @[simp]
-theorem UScalar.cast_fromBool_bv_eq ty (b : Bool) : (UScalar.cast_fromBool ty b).bv = (BitVec.ofBool b).zeroExtend _ := by
+theorem UScalar.cast_fromBool_toBitVec_eq ty (b : Bool) : (UScalar.cast_fromBool ty b).toBitVec = (BitVec.ofBool b).zeroExtend _ := by
   simp only [cast_fromBool, BitVec.truncate_eq_setWidth]
   cases b <;> simp
   apply @BitVec.toNat_injective ty.numBits
   simp
 
 @[simp]
-theorem IScalar.cast_fromBool_bv_eq ty (b : Bool) :(IScalar.cast_fromBool ty b).bv = (BitVec.ofBool b).zeroExtend _ := by
+theorem IScalar.cast_fromBool_toBitVec_eq ty (b : Bool) :(IScalar.cast_fromBool ty b).toBitVec = (BitVec.ofBool b).zeroExtend _ := by
   simp only [cast_fromBool, BitVec.truncate_eq_setWidth]
   cases b <;> simp
   apply @BitVec.toNat_injective ty.numBits
@@ -193,9 +193,9 @@ theorem IScalar.cast_fromBool_bv_eq ty (b : Bool) :(IScalar.cast_fromBool ty b).
 
 @[scalar_tac IScalar.cast_fromBool ty b]
 theorem IScalar.cast_fromBool_bound_eq ty (b : Bool) :
-  0 ≤ (IScalar.cast_fromBool ty b).val ∧ (IScalar.cast_fromBool ty b).val ≤ 1 := by
+  0 ≤ (IScalar.cast_fromBool ty b).toInt ∧ (IScalar.cast_fromBool ty b).toInt ≤ 1 := by
   simp only [cast_fromBool]
-  split <;> simp only [val]
+  split <;> simp only [toInt]
   . have : (1#ty.numBits).toInt  = 1 := by
       simp [BitVec.toInt]
       cases ty <;> simp
@@ -203,69 +203,69 @@ theorem IScalar.cast_fromBool_bound_eq ty (b : Bool) :
     simp [this]
   . simp
 
-theorem UScalar.cast_val_eq {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) :
-  (cast tgt_ty x).val = x.val % 2^(tgt_ty.numBits) := by
-  simp only [cast, val]
-  simp only [BitVec.truncate_eq_setWidth, BitVec.toNat_setWidth, bv_toNat]
+theorem UScalar.cast_toNat_eq {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) :
+  (cast tgt_ty x).toNat = x.toNat % 2^(tgt_ty.numBits) := by
+  simp only [cast, toNat]
+  simp only [BitVec.truncate_eq_setWidth, BitVec.toNat_setWidth, toBitVec_toNat]
 
 -- TODO: factor our the casts
 
 @[simp, scalar_tac_simps, simp_scalar_safe]
-theorem U8.cast_U16_val_eq (x : U8) : (UScalar.cast .U16 x).val = x.val := by
-  simp [UScalar.cast_val_eq]; scalar_tac
+theorem U8.cast_U16_toNat_eq (x : U8) : (UScalar.cast .U16 x).toNat = x.toNat := by
+  simp [UScalar.cast_toNat_eq]; scalar_tac
 
 @[simp, scalar_tac_simps, simp_scalar_safe]
-theorem U8.cast_U32_val_eq (x : U8) : (UScalar.cast .U32 x).val = x.val := by
-  simp [UScalar.cast_val_eq]; scalar_tac
+theorem U8.cast_U32_toNat_eq (x : U8) : (UScalar.cast .U32 x).toNat = x.toNat := by
+  simp [UScalar.cast_toNat_eq]; scalar_tac
 
 @[simp, scalar_tac_simps, simp_scalar_safe]
-theorem U8.cast_U64_val_eq (x : U8) : (UScalar.cast .U64 x).val = x.val := by
-  simp [UScalar.cast_val_eq]; scalar_tac
+theorem U8.cast_U64_toNat_eq (x : U8) : (UScalar.cast .U64 x).toNat = x.toNat := by
+  simp [UScalar.cast_toNat_eq]; scalar_tac
 
 @[simp, scalar_tac_simps, simp_scalar_safe]
-theorem U8.cast_U128_val_eq (x : U8) : (UScalar.cast .U128 x).val = x.val := by
-  simp [UScalar.cast_val_eq]; scalar_tac
+theorem U8.cast_U128_toNat_eq (x : U8) : (UScalar.cast .U128 x).toNat = x.toNat := by
+  simp [UScalar.cast_toNat_eq]; scalar_tac
 
 @[simp, scalar_tac_simps, simp_scalar_safe]
-theorem U8.cast_Usize_val_eq (x : U8) : (UScalar.cast .Usize x).val = x.val := by
-  simp [UScalar.cast_val_eq]; cases System.Platform.numBits_eq <;> simp [*] <;> scalar_tac
+theorem U8.cast_Usize_toNat_eq (x : U8) : (UScalar.cast .Usize x).toNat = x.toNat := by
+  simp [UScalar.cast_toNat_eq]; cases System.Platform.numBits_eq <;> simp [*] <;> scalar_tac
 
 @[simp, scalar_tac_simps, simp_scalar_safe]
-theorem U16.cast_U32_val_eq (x : U16) : (UScalar.cast .U32 x).val = x.val := by
-  simp [UScalar.cast_val_eq]; scalar_tac
+theorem U16.cast_U32_toNat_eq (x : U16) : (UScalar.cast .U32 x).toNat = x.toNat := by
+  simp [UScalar.cast_toNat_eq]; scalar_tac
 
 @[simp, scalar_tac_simps, simp_scalar_safe]
-theorem U16.cast_U64_val_eq (x : U16) : (UScalar.cast .U64 x).val = x.val := by
-  simp [UScalar.cast_val_eq]; scalar_tac
+theorem U16.cast_U64_toNat_eq (x : U16) : (UScalar.cast .U64 x).toNat = x.toNat := by
+  simp [UScalar.cast_toNat_eq]; scalar_tac
 
 @[simp, scalar_tac_simps, simp_scalar_safe]
-theorem U16.cast_U128_val_eq (x : U16) : (UScalar.cast .U128 x).val = x.val := by
-  simp [UScalar.cast_val_eq]; scalar_tac
+theorem U16.cast_U128_toNat_eq (x : U16) : (UScalar.cast .U128 x).toNat = x.toNat := by
+  simp [UScalar.cast_toNat_eq]; scalar_tac
 
 @[simp, scalar_tac_simps, simp_scalar_safe]
-theorem U16.cast_Usize_val_eq (x : U16) : (UScalar.cast .Usize x).val = x.val := by
-  simp [UScalar.cast_val_eq]; cases System.Platform.numBits_eq <;> simp [*] <;> scalar_tac
+theorem U16.cast_Usize_toNat_eq (x : U16) : (UScalar.cast .Usize x).toNat = x.toNat := by
+  simp [UScalar.cast_toNat_eq]; cases System.Platform.numBits_eq <;> simp [*] <;> scalar_tac
 
 @[simp, scalar_tac_simps, simp_scalar_safe]
-theorem U32.cast_U64_val_eq (x : U32) : (UScalar.cast .U64 x).val = x.val := by
-  simp [UScalar.cast_val_eq]; scalar_tac
+theorem U32.cast_U64_toNat_eq (x : U32) : (UScalar.cast .U64 x).toNat = x.toNat := by
+  simp [UScalar.cast_toNat_eq]; scalar_tac
 
 @[simp, scalar_tac_simps, simp_scalar_safe]
-theorem U32.cast_U128_val_eq (x : U32) : (UScalar.cast .U128 x).val = x.val := by
-  simp [UScalar.cast_val_eq]; scalar_tac
+theorem U32.cast_U128_toNat_eq (x : U32) : (UScalar.cast .U128 x).toNat = x.toNat := by
+  simp [UScalar.cast_toNat_eq]; scalar_tac
 
 @[simp, scalar_tac_simps, simp_scalar_safe]
-theorem U32.cast_Usize_val_eq (x : U32) : (UScalar.cast .Usize x).val = x.val := by
-  simp [UScalar.cast_val_eq]; cases System.Platform.numBits_eq <;> simp [*] <;> scalar_tac
+theorem U32.cast_Usize_toNat_eq (x : U32) : (UScalar.cast .Usize x).toNat = x.toNat := by
+  simp [UScalar.cast_toNat_eq]; cases System.Platform.numBits_eq <;> simp [*] <;> scalar_tac
 
 @[simp, scalar_tac_simps, simp_scalar_safe]
-theorem U64.cast_U128_val_eq (x : U64) : (UScalar.cast .U128 x).val = x.val := by
-  simp [UScalar.cast_val_eq]; scalar_tac
+theorem U64.cast_U128_toNat_eq (x : U64) : (UScalar.cast .U128 x).toNat = x.toNat := by
+  simp [UScalar.cast_toNat_eq]; scalar_tac
 
 @[simp, scalar_tac_simps, simp_scalar_safe]
-theorem UScalar.cast_val_mod_pow_greater_numBits_eq {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) (h : src_ty.numBits ≤ tgt_ty.numBits) :
-  (cast tgt_ty x).val = x.val := by
-  simp [UScalar.cast_val_eq]
+theorem UScalar.cast_toNat_mod_pow_greater_numBits_eq {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) (h : src_ty.numBits ≤ tgt_ty.numBits) :
+  (cast tgt_ty x).toNat = x.toNat := by
+  simp [UScalar.cast_toNat_eq]
   have hBounds := x.hBounds
   apply Nat.mod_eq_of_lt
   have : 0 < 2^src_ty.numBits := by simp
@@ -273,29 +273,29 @@ theorem UScalar.cast_val_mod_pow_greater_numBits_eq {src_ty : UScalarTy} (tgt_ty
   omega
 
 @[simp]
-theorem UScalar.cast_val_mod_pow_of_inBounds_eq {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) (h : x.val < 2^tgt_ty.numBits) :
-  (cast tgt_ty x).val = x.val := by
-  simp [UScalar.cast_val_eq]
+theorem UScalar.cast_toNat_mod_pow_of_inBounds_eq {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) (h : x.toNat < 2^tgt_ty.numBits) :
+  (cast tgt_ty x).toNat = x.toNat := by
+  simp [UScalar.cast_toNat_eq]
   apply Nat.mod_eq_of_lt
   assumption
 
 @[simp]
-theorem UScalar.cast_bv_eq {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) :
-  (cast tgt_ty x).bv = x.bv.setWidth tgt_ty.numBits := by
+theorem UScalar.cast_toBitVec_eq {src_ty : UScalarTy} (tgt_ty : UScalarTy) (x : UScalar src_ty) :
+  (cast tgt_ty x).toBitVec = x.toBitVec.setWidth tgt_ty.numBits := by
   simp [UScalar.cast]
 
-example (x : U16) : (x.cast .U32).val = x.val := by simp
-example : ((U32.ofNat 42).cast .U16).val = 42 := by simp
+example (x : U16) : (x.cast .U32).toNat = x.toNat := by simp
+example : ((U32.ofNat 42).cast .U16).toNat = 42 := by simp
 
-theorem IScalar.cast_val_eq {src_ty : IScalarTy} (tgt_ty : IScalarTy) (x : IScalar src_ty) :
-  (cast tgt_ty x).val = Int.bmod x.val (2^(Min.min tgt_ty.numBits src_ty.numBits)) := by
-  simp only [cast, val]
+theorem IScalar.cast_toInt_eq {src_ty : IScalarTy} (tgt_ty : IScalarTy) (x : IScalar src_ty) :
+  (cast tgt_ty x).toInt = Int.bmod x.toInt (2^(Min.min tgt_ty.numBits src_ty.numBits)) := by
+  simp only [cast, toInt]
   simp only [BitVec.toInt_signExtend]
 
 @[simp]
-theorem IScalar.val_mod_pow_greater_numBits {src_ty : IScalarTy} (tgt_ty : IScalarTy) (x : IScalar src_ty) (h : src_ty.numBits ≤ tgt_ty.numBits) :
-  (cast tgt_ty x).val = x.val := by
-  simp [IScalar.cast_val_eq]
+theorem IScalar.toInt_mod_pow_greater_numBits {src_ty : IScalarTy} (tgt_ty : IScalarTy) (x : IScalar src_ty) (h : src_ty.numBits ≤ tgt_ty.numBits) :
+  (cast tgt_ty x).toInt = x.toInt := by
+  simp [IScalar.cast_toInt_eq]
   have hBounds := x.hBounds
   simp [h]
   have := src_ty.numBits_nonzero
@@ -304,17 +304,17 @@ theorem IScalar.val_mod_pow_greater_numBits {src_ty : IScalarTy} (tgt_ty : IScal
   apply Int.bmod_pow2_eq_of_inBounds <;> omega
 
 @[simp]
-theorem IScalar.val_mod_pow_inBounds {src_ty : IScalarTy} (tgt_ty : IScalarTy) (x : IScalar src_ty)
-  (hMin : -2^(tgt_ty.numBits - 1) ≤ x.val) (hMax : x.val < 2^(tgt_ty.numBits - 1)) :
-  (cast tgt_ty x).val = x.val := by
-  simp [IScalar.cast_val_eq]
+theorem IScalar.toInt_mod_pow_inBounds {src_ty : IScalarTy} (tgt_ty : IScalarTy) (x : IScalar src_ty)
+  (hMin : -2^(tgt_ty.numBits - 1) ≤ x.toInt) (hMax : x.toInt < 2^(tgt_ty.numBits - 1)) :
+  (cast tgt_ty x).toInt = x.toInt := by
+  simp [IScalar.cast_toInt_eq]
   have hBounds := x.hBounds
   have := src_ty.numBits_nonzero
   have := tgt_ty.numBits_nonzero
   have : tgt_ty.numBits ⊓ src_ty.numBits = tgt_ty.numBits ⊓ src_ty.numBits - 1 + 1 := by omega
   rw [this]
-  have : -2 ^ (tgt_ty.numBits ⊓ src_ty.numBits - 1) ≤ x.val ∧
-         x.val < 2 ^ (tgt_ty.numBits ⊓ src_ty.numBits - 1) := by
+  have : -2 ^ (tgt_ty.numBits ⊓ src_ty.numBits - 1) ≤ x.toInt ∧
+         x.toInt < 2 ^ (tgt_ty.numBits ⊓ src_ty.numBits - 1) := by
     have : tgt_ty.numBits ⊓ src_ty.numBits = tgt_ty.numBits ∨ tgt_ty.numBits ⊓ src_ty.numBits = src_ty.numBits := by
       rw [Nat.min_def]
       split <;> simp

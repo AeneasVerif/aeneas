@@ -7,26 +7,26 @@ open Aeneas Std Result
 namespace demo
 
 -- @[step]
-theorem mul2_add1.spec (x : U32) (h : 2 * x.val + 1 ≤ U32.max)
-  : mul2_add1 x ⦃ y => y.val = 2 * x.val + (1 : Nat) ⦄
+theorem mul2_add1.spec (x : U32) (h : 2 * x.toNat + 1 ≤ U32.max)
+  : mul2_add1 x ⦃ y => y.toNat = 2 * x.toNat + (1 : Nat) ⦄
   := by
   unfold mul2_add1
   step as ⟨ i ⟩
   step as ⟨ i' ⟩
   scalar_tac
 
-theorem use_mul2_add.spec (x : U32) (y : U32) (h : 2 * x.val + 1 + y.val ≤ U32.max) :
+theorem use_mul2_add.spec (x : U32) (y : U32) (h : 2 * x.toNat + 1 + y.toNat ≤ U32.max) :
   use_mul2_add1 x y ⦃ z => ↑z = 2 * ↑x + (1 : Nat) + ↑y ⦄ := by
   unfold use_mul2_add1
   step with mul2_add1.spec as ⟨ i ⟩
   step as ⟨ i' ⟩
   scalar_tac
 
-theorem mod_add.spec (x y : U32) (h : x.val < 3329 ∧ y.val < 3329) :
-  mod_add x y ⦃ z => z.val = (x.val + y.val) % 3329 ⦄ := by
+theorem mod_add.spec (x y : U32) (h : x.toNat < 3329 ∧ y.toNat < 3329) :
+  mod_add x y ⦃ z => z.toNat = (x.toNat + y.toNat) % 3329 ⦄ := by
   unfold mod_add
   step*
-  bv_tac 32
+  toBitVec_tac 32
 
 open CList
 
@@ -36,8 +36,8 @@ open CList
   | CCons hd tl => hd :: tl.toList
 
 theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
-  (h : i.val < l.toList.length) :
-  list_nth l i ⦃ x => x = l.toList[i.val]! ⦄
+  (h : i.toNat < l.toList.length) :
+  list_nth l i ⦃ x => x = l.toList[i.toNat]! ⦄
   := by
   unfold list_nth
   match l with
@@ -53,7 +53,7 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
       step as ⟨ x ⟩
       simp_lists [*]
 
-theorem i32_id_spec (n : I32) (h : 0 ≤ n.val) :
+theorem i32_id_spec (n : I32) (h : 0 ≤ n.toInt) :
   i32_id n ⦃ n' => n' = n ⦄ := by
   unfold i32_id
   split

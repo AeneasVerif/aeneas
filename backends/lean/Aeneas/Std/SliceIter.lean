@@ -69,7 +69,7 @@ def core.slice.iter.IteratorSliceIter.next
   "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::step_by"]
 def core.slice.iter.IteratorSliceIter.step_by {T} (slice : core.slice.iter.Iter T) (steps : Usize) :
   Result (core.iter.adapters.step_by.StepBy (core.slice.iter.Iter T)) :=
-  if steps.val = 0 then .fail .panic
+  if steps.toNat = 0 then .fail .panic
   else ok (⟨ slice, steps ⟩)
 
 @[rust_fun
@@ -112,7 +112,7 @@ def core.slice.iter.IteratorChunksExact.next
 def core.slice.iter.IteratorChunksExact.step_by
   {T : Type} (self : slice.iter.ChunksExact T) (steps : Usize) :
   Result (core.iter.adapters.step_by.StepBy (slice.iter.ChunksExact T)) :=
-  if steps.val = 0 then .fail .panic
+  if steps.toNat = 0 then .fail .panic
   else ok (⟨ self, steps ⟩)
 
 @[rust_fun
@@ -141,8 +141,8 @@ def core.iter.traits.iterator.IteratorChunksExact (T : Type) :
 @[rust_fun "core::slice::{[@T]}::chunks_exact"]
 def core.slice.Slice.chunks_exact {T : Type} (s : Slice T) (chunk_size : Std.Usize) :
   Result (core.slice.iter.ChunksExact T) :=
-  if chunk_size.val > 0 && s.len % chunk_size.val = 0 then
-    ok ⟨ List.map (fun s => ⟨ s, by sorry ⟩) (s.val.toChunks chunk_size.val) ⟩
+  if chunk_size.toNat > 0 && s.len % chunk_size.toNat = 0 then
+    ok ⟨ List.map (fun s => ⟨ s, by sorry ⟩) (s.val.toChunks chunk_size.toNat) ⟩
   else fail .panic
 
 

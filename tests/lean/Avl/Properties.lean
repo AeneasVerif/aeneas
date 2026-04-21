@@ -179,7 +179,7 @@ theorem Node.inv_right [LinearOrder T] {t: Node T}: t.inv -> Subtree.inv t.right
   cases t; simp_all
 
 theorem Node.inv_imp_balance_factor_eq [LinearOrder T] {t: Node T} (hInv : t.inv) :
-  t.balance_factor.val = t.balanceFactor := by
+  t.balance_factor.toInt = t.balanceFactor := by
   simp [inv, Node.forall, invAux] at hInv
   cases t; simp_all
 
@@ -283,9 +283,9 @@ theorem Node.rotate_left_spec
   -- Invariant for the complete tree (but without the bounds on the balancing operation)
   (hInvX : Node.invAuxNotBalanced ⟨ x, a, some ⟨ z, b, c, bf_z ⟩, bf_x ⟩)
   -- The tree is not balanced
-  (hBfX : bf_x.val = 2)
+  (hBfX : bf_x.toInt = 2)
   -- Z has a positive balance factor
-  (hBfZ : 0 ≤ bf_z.val)
+  (hBfZ : 0 ≤ bf_z.toInt)
   :
   rotate_left ⟨ x, a, none, bf_x ⟩ ⟨ z, b, c, bf_z ⟩
   ⦃ ntree =>
@@ -356,7 +356,7 @@ theorem Node.rotate_left_spec
     simp at *
     simp [*]
     simp_all
-    have : bf_z.val = 1 := by
+    have : bf_z.toInt = 1 := by
       simp [Node.invAux] at hInvZ
       omega
     clear hNotEq hBfZ
@@ -398,9 +398,9 @@ theorem Node.rotate_right_spec
   -- Invariant for the complete tree (but without the bounds on the balancing operation)
   (hInvX : Node.invAuxNotBalanced ⟨ x, some ⟨ z, a, b, bf_z ⟩, c, bf_x ⟩)
   -- The tree is not balanced
-  (hBfX : bf_x.val = -2)
+  (hBfX : bf_x.toInt = -2)
   -- Z has a positive balance factor
-  (hBfZ : bf_z.val ≤ 0)
+  (hBfZ : bf_z.toInt ≤ 0)
   :
   rotate_right ⟨ x, none, c, bf_x ⟩ ⟨ z, a, b, bf_z ⟩
   ⦃ ntree =>
@@ -469,7 +469,7 @@ theorem Node.rotate_right_spec
     simp at *
     simp [*]
     simp_all
-    have : bf_z.val = -1 := by
+    have : bf_z.toInt = -1 := by
       simp [Node.invAux] at hInvZ
       omega
     clear hNotEq hBfZ
@@ -511,9 +511,9 @@ theorem Node.rotate_left_right_spec
   (hInvZ : Node.inv ⟨ z, t0, some ⟨ y, a, b, bf_y ⟩, bf_z ⟩)
   (hInv1 : Subtree.inv t1)
   -- The tree is not balanced
-  (hBfX : bf_x.val = -2)
+  (hBfX : bf_x.toInt = -2)
   -- Z has a positive balance factor
-  (hBfZ : bf_z.val = 1)
+  (hBfZ : bf_z.toInt = 1)
   :
   let x_tree := ⟨ x, none, t1, bf_x ⟩
   let y_tree := ⟨ y, a, b, bf_y ⟩
@@ -537,7 +537,7 @@ theorem Node.rotate_left_right_spec
     simp [y_tree, z_tree, inv, invAux, balanceFactor] at *; omega
   have : Node.height y_tree = Subtree.height t0 + 1 := by
     simp [y_tree, z_tree, inv, invAux, balanceFactor] at *; omega
-  have : bf_y.val + Subtree.height a = Subtree.height b := by
+  have : bf_y.toInt + Subtree.height a = Subtree.height b := by
     simp [y_tree, z_tree, inv, invAux, balanceFactor] at *; omega
   simp [x_tree, y_tree, z_tree] at *
   -- TODO: automate the < proofs
@@ -600,7 +600,7 @@ theorem Node.rotate_left_right_spec
       scalar_tac
   . split <;> simp
     . -- BF(Y) < 0
-      have : bf_y.val = -1 := by simp [Node.invAux] at *; omega
+      have : bf_y.toInt = -1 := by simp [Node.invAux] at *; omega
       simp [balanceFactor] at *
       split_conjs <;> (try simp [Node.invAux, balanceFactor, *])
       . -- invAux for y
@@ -614,7 +614,7 @@ theorem Node.rotate_left_right_spec
       . -- Height
         scalar_tac
     . -- BF(Y) > 0
-      have : bf_y.val = 1 := by simp [Node.invAux] at *; omega
+      have : bf_y.toInt = 1 := by simp [Node.invAux] at *; omega
       split_conjs <;> (try simp [Node.invAux, balanceFactor, *])
       . -- invAux for y
         split_conjs <;> (try omega)
@@ -637,9 +637,9 @@ theorem Node.rotate_right_left_spec
   (hInvZ : Node.inv ⟨ z, some ⟨ y, b, a, bf_y ⟩, t0, bf_z ⟩)
   (hInv1 : Subtree.inv t1)
   -- The tree is not balanced
-  (hBfX : bf_x.val = 2)
+  (hBfX : bf_x.toInt = 2)
   -- Z has a negative balance factor
-  (hBfZ : bf_z.val = -1)
+  (hBfZ : bf_z.toInt = -1)
   :
   let x_tree := ⟨ x, t1, none, bf_x ⟩
   let y_tree := ⟨ y, b, a, bf_y ⟩
@@ -664,7 +664,7 @@ theorem Node.rotate_right_left_spec
     simp [y_tree, z_tree, inv, invAux, balanceFactor] at *; omega
   have : Node.height y_tree = Subtree.height t0 + 1 := by
     simp [y_tree, z_tree, inv, invAux, balanceFactor] at *; omega
-  have : bf_y.val + Subtree.height b = Subtree.height a := by
+  have : bf_y.toInt + Subtree.height b = Subtree.height a := by
     simp [y_tree, z_tree, inv, invAux, balanceFactor] at *; omega
   simp [x_tree, y_tree, z_tree] at *
   -- TODO: automate the < proofs
@@ -727,7 +727,7 @@ theorem Node.rotate_right_left_spec
       scalar_tac
   . split <;> simp
     . -- BF(Y) > 0
-      have : bf_y.val = 1 := by simp [Node.invAux] at *; omega
+      have : bf_y.toInt = 1 := by simp [Node.invAux] at *; omega
       simp [balanceFactor] at *
       split_conjs <;> (try simp [Node.invAux, balanceFactor, *])
       . -- invAux for y
@@ -741,7 +741,7 @@ theorem Node.rotate_right_left_spec
       . -- Height
         scalar_tac
     . -- BF(Y) < 0
-      have : bf_y.val = -1 := by simp [Node.invAux] at *; omega
+      have : bf_y.toInt = -1 := by simp [Node.invAux] at *; omega
       split_conjs <;> (try simp [Node.invAux, balanceFactor, *])
       . -- invAux for y
         split_conjs <;> (try omega)
@@ -869,7 +869,7 @@ theorem Node.insert_in_left_spec
               simp_all [Node.invAux, Node.balanceFactor]
               -- This assertion is not necessary for the proof, but it is important that it holds.
               -- We can prove it because of the post-conditions `b → node'.balanceFactor ≠ 0` (see above)
-              have : bf_z.val = -1 := by scalar_tac
+              have : bf_z.toInt = -1 := by scalar_tac
               scalar_tac
         . -- rotate_left_right
           simp
@@ -967,7 +967,7 @@ theorem Node.insert_in_right_spec
             . -- height
               simp_all [Node.invAux, Node.balanceFactor]
               -- Remark: here we have:
-              -- bf_z.val = -1
+              -- bf_z.toInt = -1
               scalar_tac
         . -- rotate_right_left
           cases node

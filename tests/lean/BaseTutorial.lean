@@ -98,13 +98,13 @@ theorem mul2_add1_spec
   /- The precondition (we give it the name "h" to be able to refer to it in the proof).
      We simply state that [2 * x + 1] must not overflow.
 
-     The `.val` notation is used to coerce values. Here, we coerce `x`, which is
+     The `.toNat` notation is used to coerce values. Here, we coerce `x`, which is
      a bounded machine integer, to an unbounded natural number, which is
      easier to work with. Note that it is also possible to use the `↑x` notation
      to tell Lean to apply a coercion, though Lean may not always be able to figure
-     out which coercion to apply (`x.val` is always more precise).
+     out which coercion to apply (`x.toNat` is always more precise).
    -/
-  (h : 2 * x.val + 1 ≤ U32.max)
+  (h : 2 * x.toNat + 1 ≤ U32.max)
   /- The postcondition -/
   : mul2_add1 x ⦃ y => -- The call succeeds
     ↑ y = 2 * ↑x + (1 : Nat) ⦄  -- The output has the expected value
@@ -153,7 +153,7 @@ theorem mul2_add1_spec
    attributes, meaning we don't need to tell [step] to use them.
  -/
 @[step] -- the [step] attribute saves the theorem in a database, for [step] to use it
-theorem mul2_add1_spec2 (x : U32) (h : 2 * x.val + 1 ≤ U32.max) :
+theorem mul2_add1_spec2 (x : U32) (h : 2 * x.toNat + 1 ≤ U32.max) :
   mul2_add1 x ⦃ y => ↑y = 2 * ↑x + (1 : Int) ⦄
   := by
   unfold mul2_add1
@@ -170,7 +170,7 @@ def use_mul2_add1 (x : U32) (y : U32) : Result U32 := do
   x1 + y
 
 @[step]
-theorem use_mul2_add1_spec (x : U32) (y : U32) (h : 2 * x.val + 1 + y.val ≤ U32.max) :
+theorem use_mul2_add1_spec (x : U32) (y : U32) (h : 2 * x.toNat + 1 + y.toNat ≤ U32.max) :
   use_mul2_add1 x y ⦃ z => ↑z = 2 * ↑x + (1 : Int) + ↑y ⦄
   := by
   unfold use_mul2_add1
@@ -262,11 +262,11 @@ def CList.toList {α : Type} (x : CList α) : List α :=
  -/
 theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
   -- Precondition: the index is in bounds
-  (h : i.val < l.toList.length)
+  (h : i.toNat < l.toList.length)
   -- Postcondition
   : list_nth T l i ⦃ x =>
       -- [x] is the ith element of [l] after conversion to [List]
-      x = l.toList[i.val] ⦄
+      x = l.toList[i.toNat] ⦄
   := by
   -- Here we have to be careful when unfolding the body of [list_nth]: we could
   -- use the [simp] tactic, but it will sometimes loop on recursive definitions.
@@ -302,16 +302,16 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
       simp [CList.toList] at h -- we need to simplify this inequality to prove the precondition
       step as ⟨ l1 ⟩
       -- Proving the postcondition
-      -- We need this to trigger the simplification of [index to.toList i.val]
+      -- We need this to trigger the simplification of [index to.toList i.toNat]
       --
       -- Among other things, the call to [simp] below will apply the theorem
-      -- [List.index_nzero_cons], which has the precondition [i.val ≠ 0]. [simp]
+      -- [List.index_nzero_cons], which has the precondition [i.toNat ≠ 0]. [simp]
       -- can automatically use the assumptions/theorems we give it to prove
       -- preconditions when applying rewriting lemmas. In the present case,
       -- by giving it [*] as argument, we tell [simp] to use all the assumptions
-      -- to perform rewritings. In particular, it will use [i.val ≠ 0] to
+      -- to perform rewritings. In particular, it will use [i.toNat ≠ 0] to
       -- apply [List.index_nzero_cons].
-      have : i.val ≠ 0 := by grind -- Remark: [simp at hi] also works
+      have : i.toNat ≠ 0 := by grind -- Remark: [simp at hi] also works
       simp_lists [*]
 
 /-#===========================================================================#
@@ -353,7 +353,7 @@ def i32_id (x : I32) : Result I32 :=
 partial_fixpoint
 
 /- We can easily prove that [i32_id] behaves like the identity on positive inputs -/
-theorem i32_id_spec (x : I32) (h : 0 ≤ x.val) :
+theorem i32_id_spec (x : I32) (h : 0 ≤ x.toInt) :
   i32_id x ⦃ x' => x' = x ⦄ := by
   unfold i32_id
   if hx : x = 0#i32 then
@@ -374,7 +374,7 @@ theorem i32_id_spec (x : I32) (h : 0 ≤ x.val) :
 --
 -- We first specify a decreasing value. Here, we state that [x], seen as a natural number,
 -- decreases at every recursive call.
-termination_by x.val.toNat
+termination_by x.toInt.toNat
 -- And we now have to prove that it indeed decreases - you can skip this for now.
 decreasing_by
   -- We first need to "massage" the goal (in practice, all the proofs of [decreasing_by]

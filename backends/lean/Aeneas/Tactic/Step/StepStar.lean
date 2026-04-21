@@ -923,9 +923,9 @@ example : True := by step*?
 open Std Result
 
 def add1 (x0 x1 : U32) : Std.Result U32 := do
-  let x2 ← x0 + x1
-  let x3 ← x2 + x2
-  x3 + 4#u32
+  let x2 ← x0 +? x1
+  let x3 ← x2 +? x2
+  x3 +? 4#u32
 
 /--
 info: Try this:
@@ -935,7 +935,7 @@ info: Try this:
     let* ⟨ ⟩ ← U32.add_spec
 -/
 #guard_msgs in
-example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
+example (x y : U32) (h : 2 * x.toNat + 2 * y.toNat + 4 ≤ U32.max) :
   add1 x y ⦃ _ => True ⦄ := by
   unfold add1
   step*?
@@ -948,7 +948,7 @@ info: Try this:
     let* ⟨ ⟩ ← [ +scalarTac -grind ] U32.add_spec
 -/
 #guard_msgs in
-example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
+example (x y : U32) (h : 2 * x.toNat + 2 * y.toNat + 4 ≤ U32.max) :
   add1 x y ⦃ _ => True ⦄ := by
   unfold add1
   step*? +scalarTac -grind
@@ -958,15 +958,15 @@ error: unsolved goals
 x y : U32
 h : 2 * ↑x + 2 * ↑y + 4 ≤ U32.max
 x2 : U32
-_✝ : [> let x2 ← x + y <]
+_✝ : [> let x2 ← x +? y <]
 x2_post : ↑x2 = ↑x + ↑y
 x3 : U32
-_ : [> let x3 ← x2 + x2 <]
+_ : [> let x3 ← x2 +? x2 <]
 x3_post : ↑x3 = ↑x2 + ↑x2
-⊢ x3 + 4#u32 ⦃ z => True ⦄
+⊢ x3 +? 4#u32 ⦃ z => True ⦄
 -/
 #guard_msgs in
-example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
+example (x y : U32) (h : 2 * x.toNat + 2 * y.toNat + 4 ≤ U32.max) :
   add1 x y ⦃ z => True ⦄ := by
   unfold add1
   step* 2
@@ -981,15 +981,15 @@ error: unsolved goals
 x y : U32
 h : 2 * ↑x + 2 * ↑y + 4 ≤ U32.max
 x2 : U32
-_✝ : [> let x2 ← x + y <]
+_✝ : [> let x2 ← x +? y <]
 x2_post : ↑x2 = ↑x + ↑y
 x3 : U32
-_ : [> let x3 ← x2 + x2 <]
+_ : [> let x3 ← x2 +? x2 <]
 x3_post : ↑x3 = ↑x2 + ↑x2
-⊢ x3 + 4#u32 ⦃ z => True ⦄
+⊢ x3 +? 4#u32 ⦃ z => True ⦄
 -/
 #guard_msgs in
-example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
+example (x y : U32) (h : 2 * x.toNat + 2 * y.toNat + 4 ≤ U32.max) :
   add1 x y ⦃ z => True ⦄ := by
   unfold add1
   step*? 2
@@ -1004,20 +1004,20 @@ info: Try this:
     agrind
 -/
 #guard_msgs in
-example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
-  let v := 2 * x.val + 2 * y.val + 4
-  add1 x y ⦃ z => z.val = v ⦄ := by
+example (x y : U32) (h : 2 * x.toNat + 2 * y.toNat + 4 ≤ U32.max) :
+  let v := 2 * x.toNat + 2 * y.toNat + 4
+  add1 x y ⦃ z => z.toNat = v ⦄ := by
   unfold add1
   step*?
 
 def add2 (b : Bool) (x0 x1 : U32) : Std.Result U32 := do
   if b then
-    let x2 ← x0 + x1
-    let x3 ← x2 + x2
-    x3 + 4#u32
+    let x2 ← x0 +? x1
+    let x3 ← x2 +? x2
+    x3 +? 4#u32
   else
-    let y ← x0 + x1
-    y + 2#u32
+    let y ← x0 +? x1
+    y +? 2#u32
 
 /--
 info: Try this:
@@ -1030,7 +1030,7 @@ info: Try this:
       let* ⟨ ⟩ ← U32.add_spec
 -/
 #guard_msgs in
-example b (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
+example b (x y : U32) (h : 2 * x.toNat + 2 * y.toNat + 4 ≤ U32.max) :
       add2 b x y ⦃ _ => True ⦄ := by
   unfold add2
   step*?
@@ -1050,15 +1050,15 @@ x y : U32
 h : 2 * ↑x + 2 * ↑y + 4 ≤ U32.max
 h✝ : b = true
 x2 : U32
-_✝ : [> let x2 ← x + y <]
+_✝ : [> let x2 ← x +? y <]
 x2_post : ↑x2 = ↑x + ↑y
 x3 : U32
-_ : [> let x3 ← x2 + x2 <]
+_ : [> let x3 ← x2 +? x2 <]
 x3_post : ↑x3 = ↑x2 + ↑x2
-⊢ x3 + 4#u32 ⦃ z => True ⦄
+⊢ x3 +? 4#u32 ⦃ z => True ⦄
 -/
 #guard_msgs in
-example b (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
+example b (x y : U32) (h : 2 * x.toNat + 2 * y.toNat + 4 ≤ U32.max) :
   add2 b x y ⦃ z => True ⦄ := by
   unfold add2
   step*? 3
@@ -1090,7 +1090,7 @@ b : Bool
 x y : U32
 h✝ : b = true
 x2 : U32
-_ : [> let x2 ← x + y <]
+_ : [> let x2 ← x +? y <]
 x2_post : ↑x2 = ↑x + ↑y
 ⊢ ↑x2 + ↑x2 ≤ U32.max
 
@@ -1099,10 +1099,10 @@ b : Bool
 x y : U32
 h✝ : b = true
 x2 : U32
-_✝ : [> let x2 ← x + y <]
+_✝ : [> let x2 ← x +? y <]
 x2_post : ↑x2 = ↑x + ↑y
 x3 : U32
-_ : [> let x3 ← x2 + x2 <]
+_ : [> let x3 ← x2 +? x2 <]
 x3_post : ↑x3 = ↑x2 + ↑x2
 ⊢ ↑x3 + ↑4#u32 ≤ U32.max
 
@@ -1117,7 +1117,7 @@ b : Bool
 x y✝ : U32
 h✝ : ¬b = true
 y : U32
-_ : [> let y ← x + y✝ <]
+_ : [> let y ← x +? y✝ <]
 y_post : ↑y = ↑x + ↑y✝
 ⊢ ↑y + ↑2#u32 ≤ U32.max
 -/
@@ -1141,26 +1141,26 @@ error: unsolved goals
 x y : U32
 h : 2 * ↑x + 2 * ↑y + 4 ≤ U32.max
 x2 : U32
-_✝² : [> let x2 ← x + y <]
+_✝² : [> let x2 ← x +? y <]
 x2_post : ↑x2 = ↑x + ↑y
 x3 : U32
-_✝¹ : [> let x3 ← x2 + x2 <]
+_✝¹ : [> let x3 ← x2 +? x2 <]
 x3_post : ↑x3 = ↑x2 + ↑x2
 x✝ : U32
-_ : [> let x✝ ← x3 + 4#u32 <]
+_ : [> let x✝ ← x3 +? 4#u32 <]
 _✝ : ↑x✝ = ↑x3 + 4
 ⊢ ↑x < 32
 -/
 #guard_msgs in
-example (x y : U32) (h : 2 * x.val + 2 * y.val + 4 ≤ U32.max) :
-      add1 x y ⦃ _ => x.val < 32 ⦄ := by
+example (x y : U32) (h : 2 * x.toNat + 2 * y.toNat + 4 ≤ U32.max) :
+      add1 x y ⦃ _ => x.toNat < 32 ⦄ := by
   unfold add1
   step*?
 
-example (x y : U32) (h : x.val * y.val ≤ U32.max):
+example (x y : U32) (h : x.toNat * y.toNat ≤ U32.max):
   (do
-    let z0 ← x * y
-    let z1 ← y * x
+    let z0 ← x *? y
+    let z1 ← y *? x
     massert (z1 == z0)) ⦃ _ => True ⦄ := by
     step*
 
@@ -1280,7 +1280,7 @@ example
     step*
 
 /-- Test with functions outputting nothing -/
-example (x : U32) (h : x.val < 32) :
+example (x : U32) (h : x.toNat < 32) :
   (do
     massert (x < 32#u32)
     massert (x < 32#u32)
@@ -1294,13 +1294,13 @@ example (x : U32) (h : x.val < 32) :
     the else branch). The fix uses a fresh mvar during internalization and
     closes the goal explicitly when a contradiction is found. -/
 private def grindContradictionFn (a b : U32) : Result U32 := do
-  if a = b then a + b
+  if a = b then a +? b
   else fail .panic
 
 /- Test that step* works (previously crashed with "No goals to be solved") -/
 set_option maxHeartbeats 800000 in
-example (a b : U32) (h : a = b) (hbnd : a.val + b.val ≤ U32.max) :
-    grindContradictionFn a b ⦃ c => c.val = a.val + b.val ⦄ := by
+example (a b : U32) (h : a = b) (hbnd : a.toNat + b.toNat ≤ U32.max) :
+    grindContradictionFn a b ⦃ c => c.toNat = a.toNat + b.toNat ⦄ := by
   unfold grindContradictionFn
   step*
 
@@ -1315,15 +1315,15 @@ info: Try this:
 -/
 #guard_msgs in
 set_option maxHeartbeats 800000 in
-example (a b : U32) (h : a = b) (hbnd : a.val + b.val ≤ U32.max) :
-    grindContradictionFn a b ⦃ c => c.val = a.val + b.val ⦄ := by
+example (a b : U32) (h : a = b) (hbnd : a.toNat + b.toNat ≤ U32.max) :
+    grindContradictionFn a b ⦃ c => c.toNat = a.toNat + b.toNat ⦄ := by
   unfold grindContradictionFn
   step*?
 
 /- Test that the script generated by step*? is valid -/
 set_option maxHeartbeats 800000 in
-example (a b : U32) (h : a = b) (hbnd : a.val + b.val ≤ U32.max) :
-    grindContradictionFn a b ⦃ c => c.val = a.val + b.val ⦄ := by
+example (a b : U32) (h : a = b) (hbnd : a.toNat + b.toNat ≤ U32.max) :
+    grindContradictionFn a b ⦃ c => c.toNat = a.toNat + b.toNat ⦄ := by
   unfold grindContradictionFn
   spec_split
   · let* ⟨ c, c_post ⟩ ← U32.add_spec
@@ -1345,21 +1345,21 @@ example (v : U32) (h : x = some v) :
   step*
 
 /-- Test: contradiction after a let-binding.
-    After the `add` step, the postcondition introduces `c.val = a.val + b.val`.
+    After the `add` step, the postcondition introduces `c.toNat = a.toNat + b.toNat`.
     The if-then-else checks `a = b`. In the `else` branch, we have `¬(a = b)` from
     the branch plus any accumulated facts. With `h : a = b` in scope, this contradicts.
     The contradiction is detected after the let-binding step introduces `c` and its
     postcondition, and then the if-split creates the contradicting branch. -/
 private def letBindContradictionFn (a b : U32) : Result U32 := do
-  let c ← a + b
+  let c ← a +? b
   if a = b then
     .ok c
   else
     fail .panic
 
 set_option maxHeartbeats 800000 in
-example (a b : U32) (h : a = b) (hbnd : a.val + b.val ≤ U32.max) :
-    letBindContradictionFn a b ⦃ r => r.val = a.val + b.val ⦄ := by
+example (a b : U32) (h : a = b) (hbnd : a.toNat + b.toNat ≤ U32.max) :
+    letBindContradictionFn a b ⦃ r => r.toNat = a.toNat + b.toNat ⦄ := by
   unfold letBindContradictionFn
   step*
 

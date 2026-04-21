@@ -12,7 +12,7 @@ open Result Error WP
 # Array
 -/
 
-def Array (α : Type u) (n : Usize) := { l : List α // l.length = n.val }
+def Array (α : Type u) (n : Usize) := { l : List α // l.length = n.toNat }
 
 /-- We need this to coerce arrays to lists without marking `Array` as reducible.
     Also not that we *do not* want to mark `Array` as reducible: it triggers issues.
@@ -28,7 +28,7 @@ def Array.empty (α : Type u) : Array α (Usize.ofNat 0) := ⟨ [], by simp ⟩
 
 /- Registering some theorems for `scalar_tac` -/
 @[scalar_tac_simps, grind =, agrind =]
-theorem Array.length_eq {α : Type u} {n : Usize} (a : Array α n) : a.val.length = n.val := by
+theorem Array.length_eq {α : Type u} {n : Usize} (a : Array α n) : a.val.length = n.toNat := by
   cases a; simp[*]
 
 @[simp, scalar_tac_simps, simp_scalar_safe, simp_lists_safe, grind, agrind]
@@ -40,7 +40,7 @@ abbrev Array.v {α : Type u} {n : Usize} (v : Array α n) : List α := v.val
 example {α: Type u} {n : Usize} (v : Array α n) : v.length ≤ Usize.max := by
   scalar_tac
 
-def Array.make {α : Type u} (n : Usize) (init : List α) (hl : init.length = n.val := by simp) :
+def Array.make {α : Type u} (n : Usize) (init : List α) (hl : init.length = n.toNat := by simp) :
   Array α n := ⟨ init, by apply hl ⟩
 
 example : Array Int (Usize.ofNat 2) := Array.make (Usize.ofNat 2) [0, 1] (by simp)
@@ -66,19 +66,21 @@ theorem Array.getElem?_Nat_eq {α : Type u} {n : Usize} (v : Array α n) (i : Na
 
 @[simp, scalar_tac_simps, simp_lists_hyps_simps, grind = _, agrind = _]
 theorem Array.getElem!_Nat_eq {α : Type u} [Inhabited α] {n : Usize} (v : Array α n) (i : Nat) : v[i]! = v.val[i]! := by
-  simp only [instGetElem?ArrayNatLtLengthValListEqVal, List.getElem!_eq_getElem?_getD]; split <;> simp_all
-  rfl
+  rw [List.getElem!_eq_getElem?_getD]
+  show (v[i]?).getD default = (v.val[i]?).getD default
+  congr 1
 
-@[reducible] instance {α : Type u} {n : Usize} : GetElem (Array α n) Usize α (fun a i => i.val < a.val.length) where
-  getElem a i h := getElem a.val i.val h
+@[reducible] instance {α : Type u} {n : Usize} : GetElem (Array α n) Usize α (fun a i => i.toNat < a.val.length) where
+  getElem a i h := getElem a.val i.toNat h
 
-@[reducible] instance {α : Type u} {n : Usize} : GetElem? (Array α n) Usize α (fun a i => i.val < a.val.length) where
-  getElem? a i := getElem? a.val i.val
+@[reducible] instance {α : Type u} {n : Usize} : GetElem? (Array α n) Usize α (fun a i => i.toNat < a.val.length) where
+  getElem? a i := getElem? a.val i.toNat
 
-@[simp, scalar_tac_simps, simp_lists_hyps_simps] theorem Array.getElem?_Usize_eq {α : Type u} {n : Usize} (v : Array α n) (i : Usize) : v[i]? = v.val[i.val]? := by rfl
-@[simp, scalar_tac_simps, simp_lists_hyps_simps] theorem Array.getElem!_Usize_eq {α : Type u} [Inhabited α] {n : Usize} (v : Array α n) (i : Usize) : v[i]! = v.val[i.val]! := by
-  simp [instGetElem?ArrayUsizeLtNatValLengthValListEq]; split <;> simp_all
-  rfl
+@[simp, scalar_tac_simps, simp_lists_hyps_simps] theorem Array.getElem?_Usize_eq {α : Type u} {n : Usize} (v : Array α n) (i : Usize) : v[i]? = v.val[i.toNat]? := by rfl
+@[simp, scalar_tac_simps, simp_lists_hyps_simps] theorem Array.getElem!_Usize_eq {α : Type u} [Inhabited α] {n : Usize} (v : Array α n) (i : Usize) : v[i]! = v.val[i.toNat]! := by
+  rw [List.getElem!_eq_getElem?_getD]
+  show (v[i]?).getD default = (v.val[i.toNat]?).getD default
+  congr 1
 
 @[simp, scalar_tac_simps, simp_lists_hyps_simps, grind, agrind] abbrev Array.get? {α : Type u} {n : Usize} (v : Array α n) (i : Nat) : Option α := getElem? v i
 @[simp, scalar_tac_simps, simp_lists_hyps_simps, grind, agrind] abbrev Array.get! {α : Type u} {n : Usize} [Inhabited α] (v : Array α n) (i : Nat) : α := getElem! v i
@@ -94,16 +96,16 @@ def Array.index_usize {α : Type u} {n : Usize} (v: Array α n) (i: Usize) : Res
 
 -- For initialization
 def Array.repeat {α : Type u} (n : Usize) (x : α) : Array α n :=
-  ⟨ List.replicate n.val x, by simp_all ⟩
+  ⟨ List.replicate n.toNat x, by simp_all ⟩
 
 @[simp]
-theorem Array.repeat_val (n : Usize) (x : α) : (Array.repeat n x).val = List.replicate n.val x := by
+theorem Array.repeat_val (n : Usize) (x : α) : (Array.repeat n x).val = List.replicate n.toNat x := by
   simp only [Array.repeat]
 
 @[step]
 theorem Array.index_usize_spec {α : Type u} {n : Usize} [Inhabited α] (v: Array α n) (i: Usize)
-  (hbound : i.val < v.length) :
-  (v.index_usize i) ⦃ x => x = v.val[i.val]! ⦄ := by
+  (hbound : i.toNat < v.length) :
+  (v.index_usize i) ⦃ x => x = v.val[i.toNat]! ⦄ := by
   simp only [index_usize]
   simp at *
   split <;> simp_all only [List.Vector.length_val, List.getElem?_eq_getElem, Option.some.injEq,
@@ -111,19 +113,19 @@ theorem Array.index_usize_spec {α : Type u} {n : Usize} [Inhabited α] (v: Arra
   simp
 
 def Array.set {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) : Array α n :=
-  ⟨ v.val.set i.val x, by have := v.property; simp [*] ⟩
+  ⟨ v.val.set i.toNat x, by have := v.property; simp [*] ⟩
 
 def Array.set_opt {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: Option α) : Array α n :=
-  ⟨ v.val.set_opt i.val x, by have := v.property; simp [*] ⟩
+  ⟨ v.val.set_opt i.toNat x, by have := v.property; simp [*] ⟩
 
 @[simp, scalar_tac_simps, simp_lists_hyps_simps, simp_lists_safe, grind =, agrind =]
 theorem Array.set_val_eq {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) :
-  (v.set i x).val = v.val.set i.val x := by
+  (v.set i x).val = v.val.set i.toNat x := by
   simp [set]
 
 @[simp, scalar_tac_simps, simp_lists_hyps_simps, simp_lists_safe, grind =, agrind =]
 theorem Array.set_opt_val_eq {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: Option α) :
-  (v.set_opt i x).val = v.val.set_opt i.val x := by
+  (v.set_opt i x).val = v.val.set_opt i.toNat x := by
   simp [set_opt]
 
 
@@ -135,14 +137,14 @@ Otherwise we might lose a lot of time reordering the `set` expressions.
 @[simp↓, simp_lists_safe↓]
 theorem Array.getElem!_Usize_set_ne
   {α : Type u} {N : Usize} [Inhabited α] (a: Array α N) (i j : Usize) (x: α)
-  (h : i.val ≠ j.val) : (a.set i x)[j]! = a[j]!
+  (h : i.toNat ≠ j.toNat) : (a.set i x)[j]! = a[j]!
   := by
   grind
 
 @[simp↓, simp_lists_safe↓]
 theorem Array.getElem!_Usize_set_eq
   {α : Type u} {N : Usize} [Inhabited α] (a: Array α N) (i i' : Usize) (x: α)
-  (h : i = i' ∧ i'.val < a.length) : getElem! (a.set i x) i' = x
+  (h : i = i' ∧ i'.toNat < a.length) : getElem! (a.set i x) i' = x
   := by
   grind
 
@@ -154,13 +156,13 @@ Otherwise we might lose a lot of time reordering the `set` expressions.
 @[simp↓, simp_lists_safe↓]
 theorem Array.getElem!_Nat_set_ne
   {α : Type u} {N : Usize} [Inhabited α] (a: Array α N) (i : Usize) (j : Nat) (x: α)
-  (h : i.val ≠ j) : (a.set i x)[j]! = a[j]!
+  (h : i.toNat ≠ j) : (a.set i x)[j]! = a[j]!
   := by grind
 
 @[simp↓, simp_lists_safe↓]
 theorem Array.getElem!_Nat_set_eq
   {α : Type u} {N : Usize} [Inhabited α] (a: Array α N) (i : Usize) (i' : Nat) (x: α)
-  (h : i.val = i' ∧ i' < a.length) : getElem! (a.set i x) i' = x
+  (h : i.toNat = i' ∧ i' < a.length) : getElem! (a.set i x) i' = x
   := by grind
 
 @[scalar_tac_simps, simp_lists_safe, grind =, agrind =]
@@ -171,11 +173,11 @@ def Array.update {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) : 
   match v[i]? with
   | none => fail .arrayOutOfBounds
   | some _ =>
-    ok ⟨ v.val.set i.val x, by have := v.property; simp [*] ⟩
+    ok ⟨ v.val.set i.toNat x, by have := v.property; simp [*] ⟩
 
 @[step]
 theorem Array.update_spec {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x : α)
-  (hbound : i.val < v.length) :
+  (hbound : i.toNat < v.length) :
   v.update i x ⦃ nv => nv = v.set i x ⦄
   := by
   simp only [update, set]
@@ -189,17 +191,17 @@ def Array.index_mut_usize {α : Type u} {n : Usize} (v: Array α n) (i: Usize) :
 
 @[step]
 theorem Array.index_mut_usize_spec {α : Type u} {n : Usize} [Inhabited α] (v: Array α n) (i: Usize)
-  (hbound : i.val < v.length) :
+  (hbound : i.toNat < v.length) :
   v.index_mut_usize i ⦃ x y => y = set v i ∧
-  x = v.val[i.val]! ⦄ := by
+  x = v.val[i.toNat]! ⦄ := by
   simp only [index_mut_usize, Bind.bind, bind]
   have ⟨ x, h ⟩ := spec_imp_exists (index_usize_spec v i hbound)
   simp [h]
 
 @[simp]
 theorem Array.set_getElem!_eq α n [Inhabited α] (x : Array α n) (i : Usize) :
-  x.set i (x.val[i.val]!) = x := by
-  have := @List.set_getElem_self _ x.val i.val
+  x.set i (x.val[i.toNat]!) = x := by
+  have := @List.set_getElem_self _ x.val i.toNat
   simp only [Array, Subtype.ext_iff, set_val_eq, List.set_getElem!]
 
 /-- Small helper (this function doesn't model a specific Rust function) -/

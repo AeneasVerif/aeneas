@@ -61,7 +61,7 @@ structure core.iter.traits.iterator.Iterator (Self : Type) (Self_Item : Type)
 def core.iter.traits.iterator.Iterator.step_by.default
   {Self : Type} (self: Self) (step_by : Std.Usize) :
   Result (core.iter.adapters.step_by.StepBy Self) :=
-  if step_by.val = 0 then .fail .panic
+  if step_by.toNat = 0 then .fail .panic
   else .ok ⟨ self, step_by ⟩
 
 /-- Skip up to `n` elements from an iterator -/
@@ -88,7 +88,7 @@ def core.iter.adapters.step_by.IteratorStepBy.next
     match opt with
     | none => .ok (none, { self with iter })
     | some item => do
-      let iter ← core.iter.adapters.step_by.skipN IteratorInst iter (self.step_by.val - 1)
+      let iter ← core.iter.adapters.step_by.skipN IteratorInst iter (self.step_by.toNat - 1)
       .ok (some item, { iter, step_by := self.step_by })
 
 @[rust_fun
@@ -99,7 +99,7 @@ def core.iter.adapters.step_by.IteratorStepBy.step_by
   core.iter.adapters.step_by.StepBy I → Std.Usize →
   Result (core.iter.adapters.step_by.StepBy (core.iter.adapters.step_by.StepBy I)) :=
   fun self steps =>
-    if steps.val = 0 then .fail .panic
+    if steps.toNat = 0 then .fail .panic
     else .ok ⟨ self, steps ⟩
 
 @[rust_fun
@@ -200,7 +200,7 @@ def core.iter.range.StepUsize.steps_between
   : Usize → Usize → Result (Usize × (Option Usize)) :=
   λ start end_ =>
     if h: start > end_ then ok ⟨ 0#usize, none ⟩ else
-      let steps := Usize.ofNatCore (end_.val - start.val) (by scalar_tac)
+      let steps := Usize.ofNatCore (end_.toNat - start.toNat) (by scalar_tac)
       ok ⟨ steps, some steps ⟩
 
 @[rust_fun
@@ -245,7 +245,7 @@ def core.iter.range.IteratorRange.step_by
    {A : Type} (_StepInst : core.iter.range.Step A) :
   core.ops.range.Range A → Usize → Result (adapters.step_by.StepBy (ops.range.Range A)) :=
   λ range step_by =>
-    if step_by.val = 0 then .fail .panic
+    if step_by.toNat = 0 then .fail .panic
     else .ok ⟨ range, step_by ⟩
 
 @[rust_fun

@@ -612,13 +612,13 @@ let extract_binop (span : Meta.span) (ctx : extraction_ctx)
         | Ne _ -> if backend () = Lean then "!=" else "<>"
         | Ge _ -> ">="
         | Gt _ -> ">"
-        | Div (OPanic, _) -> "/"
-        | Rem (OPanic, _) -> "%"
-        | Add (OPanic, _) -> "+"
-        | Sub (OPanic, _) -> "-"
-        | Mul (OPanic, _) -> "*"
-        | Shl (OPanic, _, _) -> "<<<"
-        | Shr (OPanic, _, _) -> ">>>"
+        | Div (OPanic, _) -> "/?"
+        | Rem (OPanic, _) -> "%?"
+        | Add (OPanic, _) -> "+?"
+        | Sub (OPanic, _) -> "-?"
+        | Mul (OPanic, _) -> "*?"
+        | Shl (OPanic, _, _) -> "<<<?"
+        | Shr (OPanic, _, _) -> ">>>?"
         | BitXor _ -> "^^^"
         | BitOr _ -> "|||"
         | BitAnd _ -> "&&&"
@@ -1212,13 +1212,18 @@ and extract_field_projector (span : Meta.span) (ctx : extraction_ctx)
       [%admit_raise] span "Unreachable" fmt
 
 and extract_scalar_val_projector (span : Meta.span) (ctx : extraction_ctx)
-    (fmt : F.formatter) ~(inside : bool) (_ : integer_type) (args : texpr list)
-    : unit =
+    (fmt : F.formatter) ~(inside : bool) (ity : integer_type)
+    (args : texpr list) : unit =
   match args with
   | [ arg ] ->
       if inside then F.pp_print_string fmt "(";
       extract_texpr span ctx fmt ~inside:true ~inside_do:false arg;
-      F.pp_print_string fmt ".val";
+      let proj =
+        match ity with
+        | Signed _ -> ".toInt"
+        | Unsigned _ -> ".toNat"
+      in
+      F.pp_print_string fmt proj;
       if inside then F.pp_print_string fmt ")"
   | _ -> [%internal_error] span
 

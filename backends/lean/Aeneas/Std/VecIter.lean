@@ -22,7 +22,7 @@ def alloc.vec.into_iter.IteratorIntoIter.next {T : Type} (it: alloc.vec.into_ite
   (keepParams := [true, false])]
 def alloc.vec.into_iter.IteratorIntoIter.step_by {T : Type} (it: alloc.vec.into_iter.IntoIter T) (steps : Usize) :
   Result (core.iter.adapters.step_by.StepBy (alloc.vec.into_iter.IntoIter T)) :=
-  if steps.val = 0 then .fail .panic
+  if steps.toNat = 0 then .fail .panic
   else .ok ⟨ it, steps ⟩
 
 @[rust_fun

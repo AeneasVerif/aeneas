@@ -37,43 +37,43 @@ attribute [bvify]
   Nat.dvd_iff_mod_eq_zero
   BitVec.ofNat_or BitVec.ofNat_and
 
-@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem U8.UScalar_bv (x : U8) : UScalar.bv x = x.bv := by simp
-@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem U16.UScalar_bv (x : U16) : UScalar.bv x = x.bv := by simp
-@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem U32.UScalar_bv (x : U32) : UScalar.bv x = x.bv := by simp
-@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem U64.UScalar_bv (x : U64) : UScalar.bv x = x.bv := by simp
-@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem U128.UScalar_bv (x : U128) : UScalar.bv x = x.bv := by simp
-@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem Usize.UScalar_bv (x : Usize) : UScalar.bv x = x.bv := by simp
+@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem U8.UScalar_toBitVec (x : U8) : UScalar.toBitVec x = x.toBitVec := by simp
+@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem U16.UScalar_toBitVec (x : U16) : UScalar.toBitVec x = x.toBitVec := by simp
+@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem U32.UScalar_toBitVec (x : U32) : UScalar.toBitVec x = x.toBitVec := by simp
+@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem U64.UScalar_toBitVec (x : U64) : UScalar.toBitVec x = x.toBitVec := by simp
+@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem U128.UScalar_toBitVec (x : U128) : UScalar.toBitVec x = x.toBitVec := by simp
+@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem Usize.UScalar_toBitVec (x : Usize) : UScalar.toBitVec x = x.toBitVec := by simp
 
-@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem I8.IScalar_bv (x : I8) : IScalar.bv x = x.bv := by simp
-@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem I16.IScalar_bv (x : I16) : IScalar.bv x = x.bv := by simp
-@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem I32.IScalar_bv (x : I32) : IScalar.bv x = x.bv := by simp
-@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem I64.IScalar_bv (x : I64) : IScalar.bv x = x.bv := by simp
-@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem I128.IScalar_bv (x : I128) : IScalar.bv x = x.bv := by simp
-@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem Isize.IScalar_bv (x : Isize) : IScalar.bv x = x.bv := by simp
-
-@[simp, simp_scalar_safe, bvify, grind =, agrind =]
-theorem UScalar.bv_setWidth (x : UScalar ty) : x.bv.setWidth ty.numBits = x.bv := by simp only [BitVec.setWidth_eq]
-
-@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem U8.bv_setWidth (x : U8) : x.bv.setWidth 8 = x.bv := UScalar.bv_setWidth x
-@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem U16.bv_setWidth (x : U16) : x.bv.setWidth 16 = x.bv := UScalar.bv_setWidth x
-@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem U32.bv_setWidth (x : U32) : x.bv.setWidth 32 = x.bv := UScalar.bv_setWidth x
-@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem U64.bv_setWidth (x : U64) : x.bv.setWidth 64 = x.bv := UScalar.bv_setWidth x
-@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem U128.bv_setWidth (x : U128) : x.bv.setWidth 128 = x.bv := UScalar.bv_setWidth x
-@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem Usize.bv_setWidth (x : Usize) : x.bv.setWidth System.Platform.numBits = x.bv := UScalar.bv_setWidth x
+@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem I8.IScalar_toBitVec (x : I8) : IScalar.toBitVec x = x.toBitVec := by simp
+@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem I16.IScalar_toBitVec (x : I16) : IScalar.toBitVec x = x.toBitVec := by simp
+@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem I32.IScalar_toBitVec (x : I32) : IScalar.toBitVec x = x.toBitVec := by simp
+@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem I64.IScalar_toBitVec (x : I64) : IScalar.toBitVec x = x.toBitVec := by simp
+@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem I128.IScalar_toBitVec (x : I128) : IScalar.toBitVec x = x.toBitVec := by simp
+@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem Isize.IScalar_toBitVec (x : Isize) : IScalar.toBitVec x = x.toBitVec := by simp
 
 @[simp, simp_scalar_safe, bvify, grind =, agrind =]
-theorem IScalar.bv_signExtend (x : IScalar ty) : x.bv.signExtend ty.numBits = x.bv := by
-  simp only [BitVec.signExtend, IScalar.bv_toInt_eq, IScalar.BitVec_ofInt_val]
+theorem UScalar.toBitVec_setWidth (x : UScalar ty) : x.toBitVec.setWidth ty.numBits = x.toBitVec := by simp only [BitVec.setWidth_eq]
 
-@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem I8.bv_signExtend (x : I8) : x.bv.signExtend 8 = x.bv := IScalar.bv_signExtend x
-@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem I16.bv_signExtend (x : I16) : x.bv.signExtend 16 = x.bv := IScalar.bv_signExtend x
-@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem I32.bv_signExtend (x : I32) : x.bv.signExtend 32 = x.bv := IScalar.bv_signExtend x
-@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem I64.bv_signExtend (x : I64) : x.bv.signExtend 64 = x.bv := IScalar.bv_signExtend x
-@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem I128.bv_signExtend (x : I128) : x.bv.signExtend 128 = x.bv := IScalar.bv_signExtend x
-@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem Isize.bv_signExtend (x : Isize) : x.bv.signExtend System.Platform.numBits = x.bv := IScalar.bv_signExtend x
+@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem U8.toBitVec_setWidth (x : U8) : x.toBitVec.setWidth 8 = x.toBitVec := UScalar.toBitVec_setWidth x
+@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem U16.toBitVec_setWidth (x : U16) : x.toBitVec.setWidth 16 = x.toBitVec := UScalar.toBitVec_setWidth x
+@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem U32.toBitVec_setWidth (x : U32) : x.toBitVec.setWidth 32 = x.toBitVec := UScalar.toBitVec_setWidth x
+@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem U64.toBitVec_setWidth (x : U64) : x.toBitVec.setWidth 64 = x.toBitVec := UScalar.toBitVec_setWidth x
+@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem U128.toBitVec_setWidth (x : U128) : x.toBitVec.setWidth 128 = x.toBitVec := UScalar.toBitVec_setWidth x
+@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem Usize.toBitVec_setWidth (x : Usize) : x.toBitVec.setWidth System.Platform.numBits = x.toBitVec := UScalar.toBitVec_setWidth x
 
 @[simp, simp_scalar_safe, bvify, grind =, agrind =]
-theorem UScalar.cast_bv (x : UScalar ty) : (UScalar.cast tgt x).bv = x.bv.setWidth tgt.numBits := by
+theorem IScalar.toBitVec_signExtend (x : IScalar ty) : x.toBitVec.signExtend ty.numBits = x.toBitVec := by
+  simp only [BitVec.signExtend, IScalar.toBitVec_toInt_eq, IScalar.BitVec_ofInt_toInt]
+
+@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem I8.toBitVec_signExtend (x : I8) : x.toBitVec.signExtend 8 = x.toBitVec := IScalar.toBitVec_signExtend x
+@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem I16.toBitVec_signExtend (x : I16) : x.toBitVec.signExtend 16 = x.toBitVec := IScalar.toBitVec_signExtend x
+@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem I32.toBitVec_signExtend (x : I32) : x.toBitVec.signExtend 32 = x.toBitVec := IScalar.toBitVec_signExtend x
+@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem I64.toBitVec_signExtend (x : I64) : x.toBitVec.signExtend 64 = x.toBitVec := IScalar.toBitVec_signExtend x
+@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem I128.toBitVec_signExtend (x : I128) : x.toBitVec.signExtend 128 = x.toBitVec := IScalar.toBitVec_signExtend x
+@[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem Isize.toBitVec_signExtend (x : Isize) : x.toBitVec.signExtend System.Platform.numBits = x.toBitVec := IScalar.toBitVec_signExtend x
+
+@[simp, simp_scalar_safe, bvify, grind =, agrind =]
+theorem UScalar.cast_toBitVec (x : UScalar ty) : (UScalar.cast tgt x).toBitVec = x.toBitVec.setWidth tgt.numBits := by
   simp
 
 theorem BitVec.lt_pow_ofNat_le {n : Nat} (a b : Nat) (h0 : b < 2^n) (h1 : a ≤ b) :
@@ -214,35 +214,35 @@ attribute [bvify] Nat.add_one_sub_one Nat.add_mod_mod Nat.mod_add_mod
 
 @[simp, simp_scalar_safe, bvify]
 theorem BitVec.ofNat_shift_UScalar_val (x : UScalar ty) (n : Nat) :
-  BitVec.ofNat ty.numBits (x.val >>> n) = x.bv >>> n := by
+  BitVec.ofNat ty.numBits (x.toNat >>> n) = x.toBitVec >>> n := by
   apply BitVec.eq_of_toNat_eq
-  simp only [BitVec.toNat_ofNat, BitVec.toNat_ushiftRight, UScalar.bv_toNat]
-  have : x.val >>> n ≤ x.val := by
+  simp only [BitVec.toNat_ofNat, BitVec.toNat_ushiftRight, UScalar.toBitVec_toNat]
+  have : x.toNat >>> n ≤ x.toNat := by
     simp [Nat.shiftRight_eq_div_pow]
     apply Nat.div_le_self
-  have : (x.val >>> n) % 2^ty.numBits = x.val >>> n := by
+  have : (x.toNat >>> n) % 2^ty.numBits = x.toNat >>> n := by
     apply Nat.mod_eq_of_lt
     have := x.hBounds
     scalar_tac
   rw [this]
 
 @[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem BitVec.ofNat_shift_U8_val (x : U8) (n : Nat) :
-  BitVec.ofNat 8 (x.val >>> n) = x.bv >>> n := BitVec.ofNat_shift_UScalar_val x n
+  BitVec.ofNat 8 (x.toNat >>> n) = x.toBitVec >>> n := BitVec.ofNat_shift_UScalar_val x n
 
 @[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem BitVec.ofNat_shift_U16_val (x : U16) (n : Nat) :
-  BitVec.ofNat 16 (x.val >>> n) = x.bv >>> n := BitVec.ofNat_shift_UScalar_val x n
+  BitVec.ofNat 16 (x.toNat >>> n) = x.toBitVec >>> n := BitVec.ofNat_shift_UScalar_val x n
 
 @[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem BitVec.ofNat_shift_U32_val (x : U32) (n : Nat) :
-  BitVec.ofNat 32 (x.val >>> n) = x.bv >>> n := BitVec.ofNat_shift_UScalar_val x n
+  BitVec.ofNat 32 (x.toNat >>> n) = x.toBitVec >>> n := BitVec.ofNat_shift_UScalar_val x n
 
 @[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem BitVec.ofNat_shift_U64_val (x : U64) (n : Nat) :
-  BitVec.ofNat 64 (x.val >>> n) = x.bv >>> n := BitVec.ofNat_shift_UScalar_val x n
+  BitVec.ofNat 64 (x.toNat >>> n) = x.toBitVec >>> n := BitVec.ofNat_shift_UScalar_val x n
 
 @[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem BitVec.ofNat_shift_U128_val (x : U128) (n : Nat) :
-  BitVec.ofNat 128 (x.val >>> n) = x.bv >>> n := BitVec.ofNat_shift_UScalar_val x n
+  BitVec.ofNat 128 (x.toNat >>> n) = x.toBitVec >>> n := BitVec.ofNat_shift_UScalar_val x n
 
 @[simp, simp_scalar_safe, bvify, grind =, agrind =] theorem BitVec.ofNat_shift_Usize_val (x : Usize) (n : Nat) :
-  BitVec.ofNat System.Platform.numBits (x.val >>> n) = x.bv >>> n := BitVec.ofNat_shift_UScalar_val x n
+  BitVec.ofNat System.Platform.numBits (x.toNat >>> n) = x.toBitVec >>> n := BitVec.ofNat_shift_UScalar_val x n
 
 /-!
 Simplification lemmas about `setWidth`
@@ -250,8 +250,8 @@ Simplification lemmas about `setWidth`
 attribute [bvify] BitVec.setWidth_eq
 
 @[simp, simp_scalar_safe, bvify, grind =, agrind =]
-theorem UScalar.BitVec_ofNat_setWidth (x : UScalar ty) : BitVec.ofNat n x.val = x.bv.setWidth n := by
-  simp only [UScalar.val, BitVec.toNat_eq]; simp
+theorem UScalar.BitVec_ofNat_setWidth (x : UScalar ty) : BitVec.ofNat n x.toNat = x.toBitVec.setWidth n := by
+  simp only [UScalar.toNat, BitVec.toNat_eq]; simp
 
 syntax (name := bvify_saturate) "bvify_saturate" colGe term : tactic
 
@@ -259,14 +259,14 @@ syntax (name := bvify_saturate) "bvify_saturate" colGe term : tactic
 Some theorems which automatically lift comparisons between machine scalars, without needing the number of bits to be provided by the user.
 -/
 
-attribute [bvify] UScalar.eq_equiv_bv_eq IScalar.eq_equiv_bv_eq
+attribute [bvify] UScalar.eq_equiv_toBitVec_eq IScalar.eq_equiv_toBitVec_eq
                         gt_iff_lt ge_iff_le true_and and_true
 
 @[bvify]
-theorem UScalar.lt_equiv_bv_lt {ty : UScalarTy} (x y : UScalar ty) : x < y ↔ x.bv < y.bv := by rfl
+theorem UScalar.lt_equiv_toBitVec_lt {ty : UScalarTy} (x y : UScalar ty) : x < y ↔ x.toBitVec < y.toBitVec := by rfl
 
 @[bvify]
-theorem UScalar.le_equiv_bv_le {ty : UScalarTy} (x y : UScalar ty) : x ≤ y ↔ x.bv ≤ y.bv := by rfl
+theorem UScalar.le_equiv_toBitVec_le {ty : UScalarTy} (x y : UScalar ty) : x ≤ y ↔ x.toBitVec ≤ y.toBitVec := by rfl
 
 def bvifyAddSimpThms (n : Expr) : TacticM (Array FVarId) := do
   let addThm (thName : Name) : TacticM FVarId := do
@@ -308,8 +308,8 @@ representation.
 
 **Example:**
 ```lean
-example (x y : U8) (h : x.val < y.val) : x.bv < y.bv := by
-  bvify 8 at h -- turns `h` into: `h : x.bv < y.bv`
+example (x y : U8) (h : x.toNat < y.toNat) : x.toBitVec < y.toBitVec := by
+  bvify 8 at h -- turns `h` into: `h : x.toBitVec < y.toBitVec`
   apply h
 ```
 
@@ -343,23 +343,23 @@ elab stx:bvify : tactic => do
   let (config, n, loc) ← parseBvify stx
   bvifyTac config n loc
 
-example (x y : U8) (h : x.val < y.val) : x.bv < y.bv := by
+example (x y : U8) (h : x.toNat < y.toNat) : x.toBitVec < y.toBitVec := by
   bvify 8 at h
   apply h
 
-example (x y : U8) (h : x.val < y.val) : x.bv < y.bv := by
+example (x y : U8) (h : x.toNat < y.toNat) : x.toBitVec < y.toBitVec := by
   bvify 8 at *
   bv_decide
 
-example (x : U8) (h : x.val < 32) : x.bv < 32#8 := by
+example (x : U8) (h : x.toNat < 32) : x.toBitVec < 32#8 := by
   bvify 8 at h
   apply h
 
-example (x : U8) (h : x.val < 32) : x.bv < 32#8 := by
+example (x : U8) (h : x.toNat < 32) : x.toBitVec < 32#8 := by
   bvify 8 at *
   apply h
 
-example (a : U32) (h : a.val = 3329) : a.bv = 3329#32 := by
+example (a : U32) (h : a.toNat = 3329) : a.toBitVec = 3329#32 := by
   bvify 32 at *
   apply h
 
@@ -368,14 +368,14 @@ info: example
   (a : U32)
   (b : U32)
   (c : U32)
-  (h0 : c.bv ≤ 3329#32)
-  (h1 : a.bv + b.bv ≤ 3329#32 + c.bv) :
-  a.bv + b.bv ≤ 3329#32 + c.bv
+  (h0 : c.toBitVec ≤ 3329#32)
+  (h1 : a.toBitVec + b.toBitVec ≤ 3329#32 + c.toBitVec) :
+  a.toBitVec + b.toBitVec ≤ 3329#32 + c.toBitVec
   := by sorry
 -/
 #guard_msgs in
 set_option linter.unusedTactic false in
-example (a b c : U32) (h0 : c.val ≤ 3329) (h1 : a.val + b.val ≤ 3329 + c.val) : a.bv + b.bv ≤ 3329#32 + c.bv := by
+example (a b c : U32) (h0 : c.toNat ≤ 3329) (h1 : a.toNat + b.toNat ≤ 3329 + c.toNat) : a.toBitVec + b.toBitVec ≤ 3329#32 + c.toBitVec := by
   bvify 32 at *
   extract_goal1
   assumption
@@ -389,16 +389,16 @@ info: example
   (a : U32)
   (b : U32)
   (c : U32)
-  (h : a.bv + b.bv < 32#32)
-  (hc : c.bv = a.bv + b.bv) :
-  c.bv % 32#32 = (a.bv + b.bv) % 32#32
+  (h : a.toBitVec + b.toBitVec < 32#32)
+  (hc : c.toBitVec = a.toBitVec + b.toBitVec) :
+  c.toBitVec % 32#32 = (a.toBitVec + b.toBitVec) % 32#32
   := by sorry
 -/
 #guard_msgs in
 set_option linter.unusedTactic false in
 example
-  (a b c : U32) (h : a.val + b.val < 32) (hc : c.val = a.val + b.val) :
-  (c.val : ZMod 32) = (a.val : ZMod 32) + (b.val : ZMod 32) := by
+  (a b c : U32) (h : a.toNat + b.toNat < 32) (hc : c.toNat = a.toNat + b.toNat) :
+  (c.toNat : ZMod 32) = (a.toNat : ZMod 32) + (b.toNat : ZMod 32) := by
   bvify 32 at *
   extract_goal1
   bv_decide
@@ -410,17 +410,17 @@ example
   (hb : (↑b : ℕ) < 3329)
   (c1 : U32)
   (hc1 : (↑c1 : ℕ) = (↑a : ℕ) + (↑b : ℕ))
-  (_ : c1.bv = a.bv + b.bv)
+  (_ : c1.toBitVec = a.toBitVec + b.toBitVec)
   (c2 : U32)
-  (hc2 : c2.bv = c1.bv - 3329#32)
+  (hc2 : c2.toBitVec = c1.toBitVec - 3329#32)
   (c3 : U32)
-  (hc3 : c3.bv = c2.bv >>> 16)
+  (hc3 : c3.toBitVec = c2.toBitVec >>> 16)
   (c4 : U32)
   (hc4 : (↑c4 : ℕ) = (↑(3329#u32 &&& c3) : ℕ))
-  (_ : c4.bv = 3329#32 &&& c3.bv)
+  (_ : c4.toBitVec = 3329#32 &&& c3.toBitVec)
   (c5 : U32)
-  (hc5 : c5.bv = c2.bv + c4.bv) :
-  (c5.val : ZMod 3329) = (a.val : ZMod 3329) + (b.val : ZMod 3329) ∧ c5.val < 3329
+  (hc5 : c5.toBitVec = c2.toBitVec + c4.toBitVec) :
+  (c5.toNat : ZMod 3329) = (a.toNat : ZMod 3329) + (b.toNat : ZMod 3329) ∧ c5.toNat < 3329
   := by
   bvify 32 at *
   simp_all only
@@ -429,41 +429,41 @@ example
 example
   (a : U32)
   (b : U32)
-  (_ : a.val ≤ 6658)
-  (ha : a.val < b.val + 3329)
-  (hb : b.val ≤ 3329)
+  (_ : a.toNat ≤ 6658)
+  (ha : a.toNat < b.toNat + 3329)
+  (hb : b.toNat ≤ 3329)
   (c1 : U32)
-  (hc1 : c1.bv = a.bv - b.bv)
+  (hc1 : c1.toBitVec = a.toBitVec - b.toBitVec)
   (c2 : U32)
-  (hc2 : c2.bv = c1.bv >>> 16)
+  (hc2 : c2.toBitVec = c1.toBitVec >>> 16)
   (c3 : U32)
-  (_ : c3.bv = 3329#32 &&& c2.bv)
+  (_ : c3.toBitVec = 3329#32 &&& c2.toBitVec)
   (c4 : U32)
-  (hc3 : c4 = c1.bv + c3.bv) :
-  (c4.val : ZMod 3329) = (a.val : ZMod 3329) - (b.val : ZMod 3329) ∧
-  c4.val < 3329
+  (hc3 : c4 = c1.toBitVec + c3.toBitVec) :
+  (c4.toNat : ZMod 3329) = (a.toNat : ZMod 3329) - (b.toNat : ZMod 3329) ∧
+  c4.toNat < 3329
   := by
   bvify 32 at *
   simp_all only
   bv_decide
 
 example
-  (x : U16) (_ : x.val < 3329)
+  (x : U16) (_ : x.toNat < 3329)
   (y : U32) (_ : y = core.convert.num.FromU32U16.from x) :
-  y.val = x.val
+  y.toNat = x.toNat
   := by
   bvify 32 at *
   bv_decide
 
 example
-  (x : U32) (_ : x.val < 3329)
+  (x : U32) (_ : x.toNat < 3329)
   (y : U16) (_ : y = UScalar.cast UScalarTy.U16 x) :
-  y.val = x.val
+  y.toNat = x.toNat
   := by
   bvify 16 at *
   bv_decide
 
-example (x : U64) : x.val >>> 31 < 2^33 := by
+example (x : U64) : x.toNat >>> 31 < 2^33 := by
   bvify 64
   bv_decide
 
@@ -472,18 +472,18 @@ info: example
   (x : U32)
   (a : U32)
   (b : U32)
-  (h : x.bv = a.bv + b.bv) :
-  x.bv % 3329#32 = (a.bv + b.bv) % 3329#32
+  (h : x.toBitVec = a.toBitVec + b.toBitVec) :
+  x.toBitVec % 3329#32 = (a.toBitVec + b.toBitVec) % 3329#32
   := by sorry
 -/
 #guard_msgs in
 set_option linter.unusedTactic false in
-example (x a b : U32) (h : x.val = a.val + b.val) : (x.val : ZMod 3329) = (a.val : ZMod 3329) + (b.val : ZMod 3329) := by
+example (x a b : U32) (h : x.toNat = a.toNat + b.toNat) : (x.toNat : ZMod 3329) = (a.toNat : ZMod 3329) + (b.toNat : ZMod 3329) := by
   bvify 32 at *
   extract_goal1
   simp [h]
 
-example (byte : U8) : 8 ∣ (byte &&& 16#u8).val := by
+example (byte : U8) : 8 ∣ (byte &&& 16#u8).toNat := by
   bvify 8; bv_decide
 
 end Aeneas.Bvify

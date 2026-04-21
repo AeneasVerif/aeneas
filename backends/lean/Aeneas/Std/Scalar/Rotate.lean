@@ -13,14 +13,14 @@ open ScalarElab
 ## Rotate Left
 -/
 def UScalar.rotate_left {ty} (x : UScalar ty) (shift : U32) : UScalar ty :=
-  ⟨ x.bv.rotateLeft shift.val ⟩
+  ⟨ x.toBitVec.rotateLeft shift.toNat ⟩
 
 /- [core::num::{u8}::rotate_left] -/
 uscalar @[step_pure_def]
 def core.num.«%S».rotate_left : «%S» → U32 → «%S» := @UScalar.rotate_left .«%S»
 
 def IScalar.rotate_left {ty} (x : IScalar ty) (shift : U32) : IScalar ty :=
-  ⟨ x.bv.rotateLeft shift.val ⟩
+  ⟨ x.toBitVec.rotateLeft shift.toNat ⟩
 
 /- [core::num::{u8}::rotate_left] -/
 iscalar @[step_pure_def]
@@ -30,14 +30,14 @@ def core.num.«%S».rotate_left : «%S» → U32 → «%S» := @IScalar.rotate_l
 ## Rotate Left
 -/
 def UScalar.rotate_right {ty} (x : UScalar ty) (shift : U32) : UScalar ty :=
-  ⟨ x.bv.rotateLeft shift.val ⟩
+  ⟨ x.toBitVec.rotateLeft shift.toNat ⟩
 
 /- [core::num::{u8}::rotate_right] -/
 uscalar @[step_pure_def]
 def core.num.«%S».rotate_right : «%S» → U32 → «%S» := @UScalar.rotate_right .«%S»
 
 def IScalar.rotate_right {ty} (x : IScalar ty) (shift : U32) : IScalar ty :=
-  ⟨ x.bv.rotateLeft shift.val ⟩
+  ⟨ x.toBitVec.rotateLeft shift.toNat ⟩
 
 /- [core::num::{u8}::rotate_right] -/
 iscalar @[step_pure_def]

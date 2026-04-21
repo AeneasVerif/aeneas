@@ -18,7 +18,7 @@ def mul2_add1 (x : U32) : Result U32 :=
 
 /-- Theorem about `mul2_add1`: with the `step` tactic -/
 -- @[step]
-theorem mul2_add1_spec (x : U32) (h : 2 * x.val + 1 ≤ U32.max)
+theorem mul2_add1_spec (x : U32) (h : 2 * x.toNat + 1 ≤ U32.max)
   : mul2_add1 x ⦃ y => ↑y = 2 * ↑x + (1 : Int) ∧ ↑y = 2 * ↑x + (1 : Int) ⦄
   := by
   unfold mul2_add1
@@ -34,7 +34,7 @@ def mul2_add1_add (x : U32) (y : U32) : Result U32 :=
   i + y
 
 /-- Theorem about `mul2_add1_add` -/
-theorem mul2_add1_add_spec (x : U32) (y : U32) (h : 2 * x.val + 1 + y.val ≤ U32.max) :
+theorem mul2_add1_add_spec (x : U32) (y : U32) (h : 2 * x.toNat + 1 + y.toNat ≤ U32.max) :
   mul2_add1_add x y ⦃ z => ↑z = 2 * ↑x + (1 : Int) + ↑y ⦄ := by
   unfold mul2_add1_add
   step with mul2_add1_spec as ⟨ x1 ⟩
@@ -74,8 +74,8 @@ partial_fixpoint
 
 /-- Theorem about `list_nth` -/
 theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
-  (h : i.val < l.toList.length) :
-  list_nth l i ⦃ x => x = l.toList[i.val]! ⦄
+  (h : i.toNat < l.toList.length) :
+  list_nth l i ⦃ x => x = l.toList[i.toNat]! ⦄
   := by
   unfold list_nth
   split
@@ -98,7 +98,7 @@ def i32_id (i : I32) : Result I32 :=
 partial_fixpoint
 
 /-- Theorem about `i32_id` -/
-theorem i32_id_spec (n : I32) (h : 0 ≤ n.val) :
+theorem i32_id_spec (n : I32) (h : 0 ≤ n.toInt) :
   i32_id n ⦃ n' => n' = n ⦄ := by
   unfold i32_id
   split
@@ -142,26 +142,26 @@ mutual
 
 /-- The proof about `even` -/
 theorem even_spec (n : U32) :
-  even n ⦃ b => b ↔ Even n.val ⦄ := by
+  even n ⦃ b => b ↔ Even n.toNat ⦄ := by
   unfold even
   split
   . simp [*]
   . step as ⟨ n' ⟩
     step as ⟨ b ⟩
     simp [Nat.odd_sub, *]
-termination_by n.val
+termination_by n.toNat
 decreasing_by scalar_decr_tac
 
 /-- The proof about `odd` -/
 theorem odd_spec (n : U32) :
-  odd n ⦃ b => (b ↔ Odd n.val) ⦄ := by
+  odd n ⦃ b => (b ↔ Odd n.toNat) ⦄ := by
   unfold odd
   split
   . simp [*]
   . step as ⟨ n' ⟩
     step as ⟨ b ⟩
     simp [Nat.even_sub, *]
-termination_by n.val
+termination_by n.toNat
 decreasing_by scalar_decr_tac
 
 end
@@ -323,7 +323,7 @@ example (x y z : Int) (h0 : x + y ≤ 3) (h1 : 2 * z ≤ 4) : x + y + z ≤ 5
   := by scalar_tac
 
 /- Note that `scalar_tac` is aware of the bounds of the machine integers -/
-example (x : U32) : 0 ≤ x.val ∧ x.val ≤ 2 ^ 32 - 1 := by scalar_tac
+example (x : U32) : 0 ≤ x.toNat ∧ x.toNat ≤ 2 ^ 32 - 1 := by scalar_tac
 
 /- Renaming: note that the variables which appear in grey are variables which you can't
    reference directly, either because Lean automatically introduced fresh names for them,
@@ -343,8 +343,8 @@ example α (p q r : α → Prop) (h : ∀ x, p x) (h : ∀ x, p x → q x) (h : 
 
 /- **Coercions**:
    The notation `↑` indicates a coercion. For instance:
-   - if `x` is a machine scalar, `↑x : Int` desugars to `x.val`
-   - if `v` is a vector (see exercises below), `↑v : List α` desugars to `v.val`
+   - if `x` is a machine scalar, `↑x : Int` desugars to `x.toNat`
+   - if `v` is a vector (see exercises below), `↑v : List α` desugars to `v.toNat`
 
    Note that if you don't know what a **notation** which appears in the goal is exactly, just
    put your mouse over it.
@@ -369,8 +369,8 @@ set_option pp.coercions true
 /- Example 1: indexing the first element of the list -/
 example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
   (hEq : i = 0#u32) :
-  (hd :: tl.toList)[i.val]! = hd := by
-  have hi : i.val = 0 := by scalar_tac
+  (hd :: tl.toList)[i.toNat]! = hd := by
+  have hi : i.toNat = 0 := by scalar_tac
   simp only [hi]
   --
   have hIndex := @List.getElem!_cons_zero _ hd _ tl.toList
@@ -379,9 +379,9 @@ example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
 /- Example 2: indexing in the tail -/
 example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
   (hEq : i ≠ 0#u32) :
-  (hd :: tl.toList)[i.val]! = tl.toList[i.val - 1]! := by
+  (hd :: tl.toList)[i.toNat]! = tl.toList[i.toNat - 1]! := by
   -- Note that `scalar_tac` is aware of `Arith.Nat.not_eq`
-  have hIndex := List.getElem!_cons_nzero hd tl.toList i.val (by scalar_tac)
+  have hIndex := List.getElem!_cons_nzero hd tl.toList i.toNat (by scalar_tac)
   simp only [hIndex]
 
 /- Note that `List.index_zero_cons` and `List.index_cons_nzero` have been
@@ -393,14 +393,14 @@ example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
    you expect. -/
 example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
   (hEq : i = 0#u32) :
-  (hd :: tl.toList)[i.val]! = hd := by
+  (hd :: tl.toList)[i.toNat]! = hd := by
   simp [hEq]
 
 /- Note that `simp_all` manages to automatically apply `List.index_cons_nzero` below,
    by using the fact that `i ≠ 0#u32`. -/
 example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
   (hEq : i ≠ 0#u32) :
-  (hd :: tl.toList)[i.val]! = tl.toList[i.val - 1]! := by
+  (hd :: tl.toList)[i.toNat]! = tl.toList[i.toNat - 1]! := by
   simp_all
 
 /- Below, you will need to reason about `List.update`.
@@ -433,11 +433,11 @@ example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
       development
  -/
 theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
-  (h : i.val < l.toList.length) :
+  (h : i.toNat < l.toList.length) :
   list_nth_mut1 l i ⦃ x back =>
-    x = l.toList[i.val]! ∧
+    x = l.toList[i.toNat]! ∧
     -- Specification of the backward function
-    ∀ x', (back x').toList = l.toList.set i.val x' ⦄ := by
+    ∀ x', (back x').toList = l.toList.set i.toNat x' ⦄ := by
   unfold list_nth_mut1 list_nth_mut1_loop
   sorry
 
@@ -572,11 +572,11 @@ def toInt (l : List U32) : ℤ :=
  -/
 @[step]
 theorem zero_loop_spec
-  (x : alloc.vec.Vec U32) (i : Usize) (h : i.val ≤ x.length) :
+  (x : alloc.vec.Vec U32) (i : Usize) (h : i.toNat ≤ x.length) :
   zero_loop x i ⦃ x' =>
     x'.length = x.length ∧
-    (∀ j, j < i.val → x'[j]! = x[j]!) ∧
-    (∀ j, i.val ≤ j → j < x.length → x'[j]! = 0#u32) ⦄ := by
+    (∀ j, j < i.toNat → x'[j]! = x[j]!) ∧
+    (∀ j, i.toNat ≤ j → j < x.length → x'[j]! = 0#u32) ⦄ := by
   unfold zero_loop
   simp
   sorry
@@ -687,10 +687,10 @@ theorem add_no_overflow_loop_spec
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (i : Usize)
   (hLength : x.length = y.length)
   -- No overflow occurs when we add the individual thunks
-  (hNoOverflow : ∀ (j : Nat), i.val ≤ j → j < x.length → x[j]!.val + y[j]!.val ≤ U32.max) :
+  (hNoOverflow : ∀ (j : Nat), i.toNat ≤ j → j < x.length → x[j]!.toNat + y[j]!.toNat ≤ U32.max) :
   add_no_overflow_loop x y i ⦃ x' =>
     x'.length = x.length ∧
-    toInt x' = toInt x + 2 ^ (32 * i.val) * toInt (y.val.drop i.val) ⦄ := by
+    toInt x' = toInt x + 2 ^ (32 * i.toNat) * toInt (y.toNat.drop i.toNat) ⦄ := by
   unfold add_no_overflow_loop
   simp
   sorry
@@ -706,7 +706,7 @@ def add_no_overflow
 /-- The proof about `add_no_overflow` -/
 theorem add_no_overflow_spec (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
   (hLength : x.length = y.length)
-  (hNoOverflow : ∀ (j : Nat), j < x.length → x[j]!.val + y[j]!.val ≤ U32.max) :
+  (hNoOverflow : ∀ (j : Nat), j < x.length → x[j]!.toNat + y[j]!.toNat ≤ U32.max) :
   add_no_overflow x y ⦃ x' =>
     x'.length = y.length ∧
     toInt x' = toInt x + toInt y ⦄ := by
@@ -749,13 +749,13 @@ partial_fixpoint
 theorem add_with_carry_loop_spec
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (c0 : U8) (i : Usize)
   (hLength : x.length = y.length)
-  (hi : i.val ≤ x.length)
-  (hCarryLe : c0.val ≤ 1) :
+  (hi : i.toNat ≤ x.length)
+  (hCarryLe : c0.toNat ≤ 1) :
   add_with_carry_loop x y c0 i ⦃ c1 x' =>
     x'.length = x.length ∧
-    c1.val ≤ 1 ∧
-    toInt x' + c1.val * 2 ^ (32 * x'.length) =
-      toInt x + 2 ^ (32 * i.val) * toInt (y.val.drop i.val) + c0.val * 2 ^ (32 * i.val) ⦄ := by
+    c1.toNat ≤ 1 ∧
+    toInt x' + c1.toNat * 2 ^ (32 * x'.length) =
+      toInt x + 2 ^ (32 * i.toNat) * toInt (y.toNat.drop i.toNat) + c0.toNat * 2 ^ (32 * i.toNat) ⦄ := by
   unfold add_with_carry_loop
   simp
   sorry
@@ -775,8 +775,8 @@ theorem add_with_carry_spec
   (hLength : x.length = y.length) :
   add_with_carry x y ⦃ c x' =>
     x'.length = x.length ∧
-    c.val ≤ 1 ∧
-    toInt x' + c.val * 2 ^ (32 * x'.length) = toInt x + toInt y ⦄ := by
+    c.toNat ≤ 1 ∧
+    toInt x' + c.toNat * 2 ^ (32 * x'.length) = toInt x + toInt y ⦄ := by
   unfold add_with_carry
   sorry
 

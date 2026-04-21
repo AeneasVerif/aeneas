@@ -21,12 +21,12 @@ def Array.to_slice {α : Type u} {n : Usize} (v : Array α n) : Slice α :=
   ⟨ v.val, by scalar_tac ⟩
 
 def Array.from_slice {α : Type u} {n : Usize} (a : Array α n) (s : Slice α) : Array α n :=
-  if h: s.val.length = n.val then
+  if h: s.val.length = n.toNat then
     ⟨ s.val, by simp [*] ⟩
   else a -- Unreachable case
 
 @[simp]
-theorem Array.from_slice_val {α : Type u} {n : Usize} (a : Array α n) (ns : Slice α) (h : ns.val.length = n.val) :
+theorem Array.from_slice_val {α : Type u} {n : Usize} (a : Array α n) (ns : Slice α) (h : ns.val.length = n.toNat) :
   (from_slice a ns).val = ns.val
   := by simp [from_slice, *]
 
@@ -37,46 +37,46 @@ def Array.to_slice_mut {α : Type u} {n : Usize} (a : Array α n) :
 
 def Array.subslice {α : Type u} {n : Usize} (a : Array α n) (r : Range Usize) : Result (Slice α) :=
   -- TODO: not completely sure here
-  if r.start.val < r.end.val ∧ r.end.val ≤ a.val.length then
-    ok ⟨ a.val.slice r.start.val r.end.val,
+  if r.start.toNat < r.end.toNat ∧ r.end.toNat ≤ a.val.length then
+    ok ⟨ a.val.slice r.start.toNat r.end.toNat,
           by
-            have := a.val.slice_length_le r.start.val r.end.val
+            have := a.val.slice_length_le r.start.toNat r.end.toNat
             scalar_tac ⟩
   else
     fail panic
 
 @[step]
 theorem Array.subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array α n) (r : Range Usize)
-  (h0 : r.start.val < r.end.val) (h1 : r.end.val ≤ a.val.length) :
+  (h0 : r.start.toNat < r.end.toNat) (h1 : r.end.toNat ≤ a.val.length) :
   subslice a r ⦃ s =>
-  s.val = a.val.slice r.start.val r.end.val ∧
-  (∀ i, i + r.start.val < r.end.val → s.val[i]! = a.val[r.start.val + i]!) ⦄
+  s.val = a.val.slice r.start.toNat r.end.toNat ∧
+  (∀ i, i + r.start.toNat < r.end.toNat → s.val[i]! = a.val[r.start.toNat + i]!) ⦄
   := by
   simp only [subslice, true_and, h0, h1, ↓reduceIte, spec_ok, true_and]
   intro i _
-  have := List.getElem!_slice r.start.val r.end.val i a.val (by scalar_tac)
+  have := List.getElem!_slice r.start.toNat r.end.toNat i a.val (by scalar_tac)
   simp only [this]
 
 
 def Array.update_subslice {α : Type u} {n : Usize} (a : Array α n) (r : Range Usize) (s : Slice α) : Result (Array α n) :=
   -- TODO: not completely sure here
-  if h: r.start.val < r.end.val ∧ r.end.val ≤ a.length ∧ s.val.length = r.end.val - r.start.val then
+  if h: r.start.toNat < r.end.toNat ∧ r.end.toNat ≤ a.length ∧ s.val.length = r.end.toNat - r.start.toNat then
     ok ⟨ a.val.setSlice! r.start s.val, by scalar_tac ⟩
   else
     fail panic
 
--- TODO: it is annoying to write `.val` everywhere. We could leverage coercions,
+-- TODO: it is annoying to write `.toNat` everywhere. We could leverage coercions,
 -- but: some symbols like `+` are already overloaded to be notations for monadic
 -- operations/
 -- We should introduce special symbols for the monadic arithmetic operations
 -- (the user will never write those symbols directly).
 @[step]
 theorem Array.update_subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array α n) (r : Range Usize) (s : Slice α)
-  (_ : r.start.val < r.end.val) (_ : r.end.val ≤ a.length) (_ : s.length = r.end.val - r.start.val) :
+  (_ : r.start.toNat < r.end.toNat) (_ : r.end.toNat ≤ a.length) (_ : s.length = r.end.toNat - r.start.toNat) :
   update_subslice a r s ⦃ na =>
-  (∀ i, i < r.start.val → na[i]! = a[i]!) ∧
-  (∀ i, r.start.val ≤ i → i < r.end.val → na[i]! = s[i - r.start.val]!) ∧
-  (∀ i, r.end.val ≤ i → i < n.val → na[i]! = a[i]!) ⦄ := by
+  (∀ i, i < r.start.toNat → na[i]! = a[i]!) ∧
+  (∀ i, r.start.toNat ≤ i → i < r.end.toNat → na[i]! = s[i - r.start.toNat]!) ∧
+  (∀ i, r.end.toNat ≤ i → i < n.toNat → na[i]! = a[i]!) ⦄ := by
   simp [update_subslice]
   split
   . simp [spec_ok]
@@ -244,7 +244,7 @@ theorem Array.index_mut_SliceIndexRangeToUsizeSlice {T : Type} {N : Usize}
       (core.slice.index.SliceIndexRangeToUsizeSlice T)) a r
     ⦃ (s, back) =>
       s.val = a.val.slice 0 r.end ∧
-      s.length = r.end.val ∧
+      s.length = r.end.toNat ∧
       ∀ s', (back s').val = a.val.setSlice! 0 s'.val ⦄ := by
   simp only [core.array.Array.index_mut, core.ops.index.IndexMutSlice,
     core.slice.index.Slice.index_mut]
@@ -273,8 +273,8 @@ theorem Array.index_mut_SliceIndexRangeFromUsizeSlice {T : Type} {N : Usize}
       (core.slice.index.SliceIndexRangeFromUsizeSlice T)) a r
     ⦃ (s, back) =>
       s.val = a.val.drop r.start ∧
-      s.length = N.val - r.start.val ∧
-      ∀ s', (back s').val = a.val.setSlice! r.start.val s'.val ⦄ := by
+      s.length = N.toNat - r.start.toNat ∧
+      ∀ s', (back s').val = a.val.setSlice! r.start.toNat s'.val ⦄ := by
   simp only [core.array.Array.index_mut, core.ops.index.IndexMutSlice,
     core.slice.index.Slice.index_mut]
   have hts : a.to_slice.length = N := by simp [Array.to_slice, Slice.length]
