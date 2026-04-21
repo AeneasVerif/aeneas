@@ -27,7 +27,7 @@ def u32_compare (x : Std.U32) (y : Std.U32) : Result Ordering := do
   ok (core.cmp.impls.OrdU32.cmp x y)
 
 /-- [order::u64_partial_cmp]:
-    Source: 'tests/src/order.rs', lines 16:0-18:1
+    Source: 'tests/src/order.rs', lines 13:0-15:1
     Visibility: public -/
 def u64_partial_cmp
   (x : Std.U64) (y : Std.U64) : Result (Option Ordering) := do
