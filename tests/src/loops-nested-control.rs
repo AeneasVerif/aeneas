@@ -1,6 +1,22 @@
 //@ [lean] known-failure
 //@ [!lean] skip
 
+pub fn return_after_inner_break_outer(flag: bool, value: u32) -> u32 {
+    'outer: loop {
+        let mut j = 0;
+        while j < 2 {
+            if flag && j == 0 {
+                break 'outer;
+            }
+            j += 1;
+        }
+
+        return value + j;
+    }
+
+    value
+}
+
 pub fn break_outer(max: u32) -> u32 {
     let mut i = 0;
     let mut s = 0;

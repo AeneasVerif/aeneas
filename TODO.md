@@ -209,6 +209,9 @@ Verification:
 
 - Run the known-failure tests and confirm errors move past pre-passes into loop
   synthesis or pure lowering.
+  - `loops-nested-control.rs` now reaches `InterpLoopsFixedPoint.ml` with
+    `Continues to outer loops not supported yet`; this confirms `PrePasses`
+    preserves the nested exit instead of rejecting it.
 - Run existing loop translations:
   - `make test-loops.rs`
   - `make test-loops-nested.rs`
@@ -220,6 +223,8 @@ Tests should assert:
   loop body.
 - A `continue 'outer` is still represented as `Continue 1` when evaluating the
   inner loop body.
+- A local return is not rewritten when the same loop can also be exited by an
+  inner `break 'outer` path.
 - Existing one-loop early-return examples still translate.
 
 Expected result:

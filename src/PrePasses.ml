@@ -370,13 +370,18 @@ let update_array_default (crate : crate) : crate =
 
 exception FoundStatement of statement
 
-(** Check that loops:
-    - do not contain early returns
-    - do not continue/break to outer loops
+(** Update local loop exits when this can be done without changing nested
+    control-flow semantics.
 
     We also attempt to update the loops so that they have the proper shape (for
     instance, if a loop has returns but no breaks, we replace the returns with
     breaks, and move the returns after the loop).
+
+    Break and continue depths are relative to the loop where they appear:
+    [Break 0] exits the current loop, [Break 1] exits the immediately enclosing
+    loop, and so on. This pass may only rewrite exits that target the loop it is
+    currently normalizing. Outer exits and nested returns are preserved so later
+    passes can encode them explicitly.
 
     We do the following transformations:
 
@@ -503,19 +508,46 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
                  - or there is already a break in the loop: we can apply transformation 2
                    (resp., 3) if the statements after the loop end with a return (resp., a panic)
               *)
-              let block_has_no_breaks (b : block) : bool =
+              let block_has_no_breaks_to_current_loop (b : block) : bool =
                 let visitor =
                   object
-                    inherit [_] iter_statement
-                    method! visit_Break _ _ = raise Found
+                    inherit [_] iter_statement as super
+                    method! visit_Loop depth loop =
+                      super#visit_Loop (depth + 1) loop
+
+                    method! visit_Break depth i =
+                      if i = depth then raise Found
                   end
                 in
                 try
-                  visitor#visit_block () b;
+                  visitor#visit_block 0 b;
                   true
                 with Found -> false
               in
-              if block_has_no_breaks loop then (* Transformation 1 *)
+              let block_has_nested_break_to_current_loop (b : block) : bool =
+                let visitor =
+                  object
+                    inherit [_] iter_statement as super
+                    method! visit_Loop depth loop =
+                      super#visit_Loop (depth + 1) loop
+
+                    method! visit_Break depth i =
+                      if depth > 0 && i = depth then raise Found
+                  end
+                in
+                try
+                  visitor#visit_block 0 b;
+                  false
+                with Found -> true
+              in
+              if block_has_nested_break_to_current_loop loop then
+                (* Rewriting a local return while an inner loop can break to the
+                   current loop would require moving [after] across a loop
+                   boundary and retargeting relative breaks. Preserve the loop
+                   shape for the later explicit exit encoding instead. *)
+                ([ { st with kind = Loop loop } ], after)
+              else if block_has_no_breaks_to_current_loop loop then
+                (* Transformation 1 *)
                 let block_replace (b : block) : block =
                   let visitor =
                     object
@@ -523,9 +555,10 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
                       method! visit_Loop i loop = super#visit_Loop (i + 1) loop
 
                       method! visit_Return i =
-                        [%sanity_check] span (i = 0);
-                        (* Replace the return with a break *)
-                        Break i
+                        if i = 0 then
+                          (* Replace only returns from the current loop. *)
+                          Break 0
+                        else Return
                     end
                   in
                   visitor#visit_block 0 b
@@ -567,10 +600,12 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
                       (* Replace the return with a break *)
                       [ { st with kind = Break 0 } ]
                   | Break i ->
-                      (* Move the statements [after] before the break *)
-                      [%cassert] span (i = 0)
-                        "Breaks to outer loops are not supported yet";
-                      after
+                      if i = 0 then
+                        (* Move the statements [after] before local breaks. *)
+                        after
+                      else
+                        (* Outer breaks must keep propagating outward. *)
+                        [ st ]
                   | _ -> [ st ]
                 in
 
@@ -614,18 +649,14 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
         { block with statements = update block.statements }
 
       method! visit_Break depth i =
-        [%cassert] span (i = 0) "Breaks to outer loops are not supported yet";
         super#visit_Break depth i
 
       method! visit_Continue depth i =
-        [%cassert] span (i = 0) "Continue to outer loops are not supported yet";
         super#visit_Continue depth i
 
       method! visit_statement depth st =
         match st.kind with
         | Return ->
-            [%cassert] span (depth <= 1)
-              "Returns inside of nested loops are not supported yet";
             (* If we are inside a loop we need to get rid of the return.
 
                Note that raising an exception containing the full return
