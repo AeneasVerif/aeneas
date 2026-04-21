@@ -90,14 +90,19 @@ Verification:
 - `make test-loops-nested-control.rs` reaches the current expected error.
 - The checked `.out` file names the unsupported nested return or outer
   break/continue limitation.
-- A direct or reduced concrete-execution check confirms `eval_loop_concrete`
-  decrements `Break i` / `Continue i` correctly when pre-passes do not reject the
-  input.
+- Because the known-failure run aborts on the first pre-pass error, inspect the
+  generated LLBC directly to confirm the nested-return examples still contain
+  `Return` statements.
+- Code inspection confirms `eval_loop_concrete` decrements `Break i` /
+  `Continue i` correctly. A direct or reduced concrete-execution check is
+  deferred until Milestone 3, when pre-passes no longer reject the nested exits
+  before concrete execution can observe them.
 
 Tests should assert:
 
 - Charon resolves `break 'outer` to depth `1` in the inner loop.
 - Charon resolves `continue 'outer` to depth `1` in the inner loop.
+- Charon preserves nested `return` as `Return` in the inner loop.
 - Current Aeneas failure happens before semantic support is present and is
   recorded as a known failure.
 

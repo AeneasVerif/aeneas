@@ -1,0 +1,5 @@
+[[92mInfo[39m ] Imported: tests/llbc/loops_nested_control.llbc
+[[91mError[39m] Breaks to outer loops are not supported yet
+Source: 'tests/src/loops-nested-control.rs', lines 4:0-21:1
+Compiler source: PrePasses.ml, line 617
+
