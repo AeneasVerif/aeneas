@@ -176,13 +176,16 @@ mutual
 
 /-- Build a curried lambda `fun x₁ … xₙ => body [x₁, …, xₙ]`, one fvar per sub-pattern. -/
 partial def mkCurriedLambda (subs : List PatShape) (types : List Expr)
-    (body : Array Expr → ElabM Expr) : ElabM Expr := do
+    (body : Array Expr → ElabM Expr) (idx : Nat := 0) : ElabM Expr := do
   match subs, types with
   | [], _ | _, [] => body #[]
   | sub :: restSubs, ty :: restTypes =>
-    let n := match sub with | .leaf n => n | _ => `_x
+    let n := match sub with
+      | .leaf n => n
+      | _ => Name.mkSimple s!"_x{idx}"
     ElabM.withLocalDeclD n ty fun fv => do
-      let innerBody ← mkCurriedLambda restSubs restTypes fun fs => body (#[fv] ++ fs)
+      let innerBody ← mkCurriedLambda restSubs restTypes
+        (fun fs => body (#[fv] ++ fs)) (idx + 1)
       mkLambdaFVars #[fv] innerBody
 
 /-- Recursively unpack each `fv` per its `sub`, calling `body` with the collected leaves. -/
@@ -471,6 +474,137 @@ def elabDo : TermElab := fun stx expectedType? => do
   else
     Term.elabDo stx expectedType?
 
+/-! ## Delaborators
+
+The elaborator emits `Function.uncurry`-wrapped continuations for pattern
+bindings. These delaborators turn them back into the expected `do let pat ← e`
+and `let pat := val` forms. -/
+
+open Lean PrettyPrinter Lean.PrettyPrinter.Delaborator SubExpr
+
+/-- `Function.uncurry (fun a b => body) val` → `let (a, b) := val; body`. -/
+@[delab app.Function.uncurry]
+def delabUncurryLet : Delab := do
+  let e ← getExpr
+  guard (e.getAppNumArgs == 5)
+  let f := e.getArg! 3
+  let .lam aName _ (.lam bName _ _ _) _ := f | failure
+  let valStx ← withAppArg delab
+  let bodyStx ← withAppFn (withAppArg (withBindingBody aName (withBindingBody bName delab)))
+  `(let ($(mkIdent aName), $(mkIdent bName)) := $valStx
+    $bodyStx)
+
+/-- Partially applied `Function.uncurry (fun a b => body)` → `fun (a, b) => body`. -/
+@[app_unexpander Function.uncurry]
+def unexpUncurry : Unexpander
+  | `($_ fun $a:ident $b:ident => $body) => `(fun ($a, $b) => $body)
+  | _ => throw ()
+
+/-- Extract binder names from a chain of `fun n₁ … nₖ => body`. -/
+private def extractLamBinders : Expr → List Name
+  | .lam n _ b _ => n :: extractLamBinders b
+  | _ => []
+
+/-- `T.casesOn val (fun f₁ … fₙ => body)` → `let ⟨f₁, …, fₙ⟩ := val; body`
+    for any single-constructor inductive `T` (other than `Prod`). -/
+@[delab app]
+def delabSingleCtorCasesOn : Delab := do
+  let e ← getExpr
+  let .const fnName _ := e.getAppFn | failure
+  let .str typeName "casesOn" := fnName | failure
+  guard (typeName != ``Prod)
+  let some (.inductInfo indInfo) := (← getEnv).find? typeName | failure
+  guard (indInfo.ctors.length == 1)
+  let args := e.getAppArgs
+  let numParams := indInfo.numParams
+  guard (args.size == numParams + 3)
+  let names := extractLamBinders args[numParams + 2]!
+  guard (!names.isEmpty)
+  let discrStx ← withNaryArg (numParams + 1) delab
+  let bodyStx ← withNaryArg (numParams + 2) <|
+    names.foldr (fun n d => withBindingBody n d) delab
+  let binders := names.toArray.map Lean.mkIdent
+  `(let ⟨$binders,*⟩ := $discrStx
+    $bodyStx)
+
+/-- Walk a `Bind.bind` chain collecting `doElem`s. Extends Lean's builtin
+    `delabDoElems` with two continuation shapes emitted by our elaborator:
+    `Function.uncurry (fun a b => body)` → `let (a, b) ← e`, and
+    `fun _x => T.casesOn _x (fun f₁ … fₙ => body)` → `let ⟨f₁, …, fₙ⟩ ← e`.
+    Without this, Lean's `delabDoElems` bails on the non-lambda continuation,
+    collapsing the whole chain back to `>>=` notation. -/
+partial def aeneasDelabDoElems : DelabM (List (TSyntax `doElem)) := do
+  let e ← getExpr
+  if e.isAppOfArity ``Bind.bind 6 then
+    let α := e.getAppArgs[2]!
+    let ma ← withAppFn <| withAppArg delab
+    let arg := e.appArg!
+    -- Tuple pattern: Function.uncurry (fun a b => body)
+    if arg.isAppOfArity ``Function.uncurry 4 then
+      if let .lam aName _ (.lam bName _ _ _) _ := arg.appArg! then
+        let rest ← withAppArg <| withAppArg <|
+          withBindingBody aName <| withBindingBody bName aeneasDelabDoElems
+        let elem ← `(doElem| let ($(mkIdent aName), $(mkIdent bName)) ← $ma:term)
+        return elem :: rest
+    -- Ctor pattern: fun _x => T.casesOn _x (fun f₁ … fₙ => body)
+    if let .lam xName _ xBody _ := arg then
+      if let .const fnName _ := xBody.getAppFn then
+        if let .str typeName "casesOn" := fnName then
+          if typeName != ``Prod then
+            if let some (.inductInfo indInfo) := (← getEnv).find? typeName then
+              if indInfo.ctors.length == 1 then
+                let xArgs := xBody.getAppArgs
+                let numParams := indInfo.numParams
+                if xArgs.size == numParams + 3 ∧ xArgs[numParams + 1]! == .bvar 0 then
+                  let names := extractLamBinders xArgs[numParams + 2]!
+                  if !names.isEmpty then
+                    let rest ← withAppArg <| withBindingBody xName <|
+                      withNaryArg (numParams + 2) <|
+                        names.foldr (fun n d => withBindingBody n d) aeneasDelabDoElems
+                    let binders := names.toArray.map Lean.mkIdent
+                    let elem ← `(doElem| let ⟨$binders,*⟩ ← $ma:term)
+                    return elem :: rest
+    -- Regular bind: fun n => body (mirrors Lean's delabDoElems)
+    withAppArg do
+      match (← getExpr) with
+      | .lam _ _ body _ =>
+        withBindingBodyUnusedName fun n => do
+          let nStx : TSyntax `term := ⟨n⟩
+          let rest ← aeneasDelabDoElems
+          if body.hasLooseBVars then
+            return (← `(doElem| let $nStx:term ← $ma:term)) :: rest
+          else if α.isConstOf ``Unit ∨ α.isConstOf ``PUnit then
+            return (← `(doElem| $ma:term)) :: rest
+          else
+            return (← `(doElem| let _ ← $ma:term)) :: rest
+      | _ => failure
+  else if e.isLet then
+    let .letE n t v b nondep ← getExpr | unreachable!
+    let n ← getUnusedName n b
+    let stxT ← descend t 0 delab
+    let stxV ← descend v 1 delab
+    Meta.withLetDecl n t v (nondep := nondep) fun fvar =>
+      let b := b.instantiate1 fvar
+      descend b 2 do
+        let rest ← aeneasDelabDoElems
+        if nondep then
+          return (← `(doElem| have $(mkIdent n) : $stxT := $stxV)) :: rest
+        else
+          return (← `(doElem| let $(mkIdent n) : $stxT := $stxV)) :: rest
+  else
+    let stx ← delab
+    return [← `(doElem| $stx:term)]
+
+/-- Top-level `do`-block delab. Walks a `Bind.bind` chain with
+    `aeneasDelabDoElems`, which understands tuple/ctor pattern continuations
+    and so doesn't bail on them the way Lean's builtin `delabDo` does. -/
+@[delab app.Bind.bind]
+def aeneasDelabDo : Delab := whenNotPPOption getPPExplicit <| whenPPOption getPPNotation do
+  guard <| (← getExpr).isAppOfArity ``Bind.bind 6
+  let elems ← aeneasDelabDoElems
+  let items ← elems.toArray.mapM (`(doSeqItem|$(·):doElem))
+  `(do $items:doSeqItem*)
+
 end Do
 end Aeneas
 
@@ -624,7 +758,9 @@ def test12 : Result Nat := do
   ok (a + b)
 /--
 info: def test12 : Result ℕ :=
-ok (1, 2) >>= Function.uncurry fun a b => ok (a + b)
+do
+  let (a, b) ← ok (1, 2)
+  ok (a + b)
 -/
 #guard_msgs in
 #print test12
@@ -634,7 +770,9 @@ def test13 : Result Nat := do
   ok b
 /--
 info: def test13 : Result ℕ :=
-ok (1, 2) >>= Function.uncurry fun _ b => ok b
+do
+  let (_, b) ← ok (1, 2)
+  ok b
 -/
 #guard_msgs in
 #print test13
@@ -644,7 +782,8 @@ def test14 : Result Nat := do
   ok (a + b)
 /--
 info: def test14 : Result ℕ :=
-Function.uncurry (fun a b => ok (a + b)) (1, 2)
+let (a, b) := (1, 2)
+ok (a + b)
 -/
 #guard_msgs in
 #print test14
@@ -702,17 +841,16 @@ def massert_test : Result Unit := do
   massert (i2 = 1#u32)
 /--
 info: def massert_test : Result Unit :=
-lift (Array.make 5#usize [0#u32, 1#u32, 2#u32, 3#u32, 4#u32] massert_test._proof_7).to_slice >>= fun s =>
-  core.slice.Slice.iter s >>= fun i =>
-    core.slice.iter.IteratorSliceIter.step_by i 1#usize >>= fun it =>
-      core.iter.adapters.step_by.IteratorStepBy.next (core.iter.traits.iterator.IteratorSliceIter U32) it >>=
-        Function.uncurry fun o it1 =>
-          core.option.Option.unwrap o >>= fun i1 =>
-            massert (i1 = 0#u32) >>= fun _ =>
-              core.iter.adapters.step_by.IteratorStepBy.next (core.iter.traits.iterator.IteratorSliceIter U32) it1 >>=
-                Function.uncurry fun o1 it2 => do
-                  let i2 ← core.option.Option.unwrap o1
-                  massert (i2 = 1#u32)
+do
+  let s ← lift (Array.make 5#usize [0#u32, 1#u32, 2#u32, 3#u32, 4#u32] massert_test._proof_7).to_slice
+  let i ← core.slice.Slice.iter s
+  let it ← core.slice.iter.IteratorSliceIter.step_by i 1#usize
+  let (o, it1) ← core.iter.adapters.step_by.IteratorStepBy.next (core.iter.traits.iterator.IteratorSliceIter U32) it
+  let i1 ← core.option.Option.unwrap o
+  massert (i1 = 0#u32)
+  let (o1, it2) ← core.iter.adapters.step_by.IteratorStepBy.next (core.iter.traits.iterator.IteratorSliceIter U32) it1
+  let i2 ← core.option.Option.unwrap o1
+  massert (i2 = 1#u32)
 -/
 #guard_msgs in
 #print massert_test
@@ -796,17 +934,15 @@ def nested_pat_test : Result Nat := do
   ok (a + b + c + d + e + f + g + h + i)
 /--
 info: def nested_pat_test : Result ℕ :=
-make2nats 1 2 >>=
-  Function.uncurry fun a b =>
-    make3nats 3 4 5 >>=
-      Function.uncurry fun _x e =>
-        Function.uncurry
-          (fun c d =>
-            make4nats 6 7 8 9 >>=
-              Function.uncurry fun _x _x_1 =>
-                Function.uncurry (fun f g => Function.uncurry (fun h i => ok (a + b + c + d + e + f + g + h + i)) _x_1)
-                  _x)
-          _x
+do
+  let (a, b) ← make2nats 1 2
+  let (_x0, e) ← make3nats 3 4 5
+  let (c, d) := _x0
+    do
+    let (_x0, _x1) ← make4nats 6 7 8 9
+    let (f, g) := _x0
+      let (h, i) := _x1
+      ok (a + b + c + d + e + f + g + h + i)
 -/
 #guard_msgs in
 #print nested_pat_test
@@ -835,9 +971,10 @@ info: def nested_wrapped_pat_test : Result ℕ :=
 do
   let w₁ ← make2natswrapped 1 2
   let w₂ ← make2natswrapped 3 4
-  let _x ← make4natswrapped w₁ w₂
-  FourNatsWrapped.casesOn _x fun _x _x_1 =>
-      TwoNatsWrapped.casesOn _x fun x y => TwoNatsWrapped.casesOn _x_1 fun z w => ok (x + y + z + w)
+  let ⟨_x0, _x1⟩ ← make4natswrapped w₁ w₂
+  let ⟨x, y⟩ := _x0
+    let ⟨z, w⟩ := _x1
+    ok (x + y + z + w)
 -/
 #guard_msgs in
 #print nested_wrapped_pat_test
@@ -856,11 +993,10 @@ def universe_test {T : Type} (w : Wrapper T) :
   ok (inner, back2)
 /--
 info: def universe_test : {T : Type} → Wrapper T → Result (Wrapper T × (Wrapper T → Wrapper T)) :=
-fun {T} w =>
-  make_wrapper w.x >>=
-    Function.uncurry fun inner back =>
-      have back2 := fun w1 => back { x := w1.x };
-      ok (inner, back2)
+fun {T} w => do
+  let (inner, back) ← make_wrapper w.x
+  have back2 : Wrapper T → Wrapper T := fun w1 => back { x := w1.x }
+  ok (inner, back2)
 -/
 #guard_msgs in
 #print universe_test
@@ -882,12 +1018,11 @@ info: def universe_tuple_test : {T : Type} → T → T → Result ((T × T) × (
 fun {T} x y =>
   make_pair x y >>=
     Function.uncurry fun a =>
-      Function.uncurry fun b =>
-        Function.uncurry fun back back1 =>
-          have back2 := fun p =>
-            match p with
-            | (t1, t2) => (back t1, back1 t2);
-          ok ((a, b), back2)
+      Function.uncurry fun b (back, back1) =>
+        have back2 := fun p =>
+          match p with
+          | (t1, t2) => (back t1, back1 t2);
+        ok ((a, b), back2)
 -/
 #guard_msgs in
 #print universe_tuple_test
@@ -913,12 +1048,11 @@ info: @[irreducible] def mono_loop_test : alloc.vec.Vec U32 → Usize → Result
 Order.fix
   (fun f xs i =>
     let i1 := xs.len;
-    if i < i1 then
-      get_and_update xs i >>=
-        Function.uncurry fun _ update_back => do
-          let i2 ← i + 1#usize
-          let xs1 : alloc.vec.Vec U32 := update_back 0#u32
-          f xs1 i2
+    if i < i1 then do
+      let (_, update_back) ← get_and_update xs i
+      let i2 ← i + 1#usize
+      let xs1 : alloc.vec.Vec U32 := update_back 0#u32
+      f xs1 i2
     else ok xs)
   mono_loop_test._proof_1
 -/
@@ -931,7 +1065,9 @@ def doIf_pat_test (b : Bool) : Result (Nat × Nat) := do
   ok (x, y)
 /--
 info: def doIf_pat_test : Bool → Result (ℕ × ℕ) :=
-fun b => (if b = true then ok (1, 2) else ok (3, 4)) >>= Function.uncurry fun x y => ok (x, y)
+fun b => do
+  let (x, y) ← if b = true then ok (1, 2) else ok (3, 4)
+  ok (x, y)
 -/
 #guard_msgs in
 #print doIf_pat_test
@@ -944,11 +1080,12 @@ def match_pat_test (n : Nat) : Result (Nat × Nat) := do
   ok (x, y)
 /--
 info: def match_pat_test : ℕ → Result (ℕ × ℕ) :=
-fun n =>
-  (match n with
-    | 0 => ok (1, 2)
-    | x => ok (3, 4)) >>=
-    Function.uncurry fun x y => ok (x, y)
+fun n => do
+  let (x, y) ←
+    match n with
+      | 0 => ok (1, 2)
+      | x => ok (3, 4)
+  ok (x, y)
 -/
 #guard_msgs in
 #print match_pat_test
@@ -974,7 +1111,9 @@ def anon_ctor_test (w : Wrap) : Result Nat := do
   ok (n + 1)
 /--
 info: def anon_ctor_test : Wrap → Result ℕ :=
-fun w => Wrap.casesOn w fun n => ok (n + 1)
+fun w =>
+  let ⟨n⟩ := w
+  ok (n + 1)
 -/
 #guard_msgs in
 #print anon_ctor_test
@@ -985,8 +1124,8 @@ def anon_ctor_monadic_test (w : Wrap) : Result Nat := do
 /--
 info: def anon_ctor_monadic_test : Wrap → Result ℕ :=
 fun w => do
-  let _x ← ok w
-  Wrap.casesOn _x fun n => ok (n + 1)
+  let ⟨n⟩ ← ok w
+  ok (n + 1)
 -/
 #guard_msgs in
 #print anon_ctor_monadic_test
@@ -1014,9 +1153,6 @@ fun {V T W} inst1 inst2 b x y =>
 -/
 #guard_msgs in
 #print exbox_lambda_test
-
--- This is helpful to see the repetition that our setup introduces
-set_option pp.notation true
 
 def do_if_rest_test : Result Nat := do
   let b ← ok true
