@@ -1081,6 +1081,46 @@ let mk_sum_right_texpr (span : span) (left : ty) (right : texpr) : texpr =
 let mk_loop_result_ty (continue : ty) (break : ty) : ty =
   TAdt (TBuiltin TLoopResult, mk_generic_args_from_types [ continue; break ])
 
+let mk_loop_exit_ty (normal_break : ty) (propagated_break : ty)
+    (propagated_continue : ty) (return : ty) : ty =
+  TAdt
+    ( TBuiltin TLoopExit,
+      mk_generic_args_from_types
+        [ normal_break; propagated_break; propagated_continue; return ] )
+
+let mk_loop_exit_normal_break_texpr (span : span) (normal_break : texpr)
+    (propagated_break : ty) (propagated_continue : ty) (return : ty) : texpr =
+  let ty =
+    mk_loop_exit_ty normal_break.ty propagated_break propagated_continue return
+  in
+  mk_adt_texpr span ty (Some loop_exit_normal_break_id) [ normal_break ]
+
+let mk_loop_exit_propagated_break_texpr (span : span) (normal_break : ty)
+    (propagated_break : texpr) (propagated_continue : ty) (return : ty) :
+    texpr =
+  let ty =
+    mk_loop_exit_ty normal_break propagated_break.ty propagated_continue return
+  in
+  mk_adt_texpr span ty (Some loop_exit_propagated_break_id)
+    [ propagated_break ]
+
+let mk_loop_exit_propagated_continue_texpr (span : span) (normal_break : ty)
+    (propagated_break : ty) (propagated_continue : texpr) (return : ty) :
+    texpr =
+  let ty =
+    mk_loop_exit_ty normal_break propagated_break propagated_continue.ty return
+  in
+  mk_adt_texpr span ty (Some loop_exit_propagated_continue_id)
+    [ propagated_continue ]
+
+let mk_loop_exit_propagated_return_texpr (span : span) (normal_break : ty)
+    (propagated_break : ty) (propagated_continue : ty) (return : texpr) :
+    texpr =
+  let ty =
+    mk_loop_exit_ty normal_break propagated_break propagated_continue return.ty
+  in
+  mk_adt_texpr span ty (Some loop_exit_propagated_return_id) [ return ]
+
 let mk_loop_result_fail_texpr (span : span) (continue : ty) (break : ty)
     (error : texpr) : texpr =
   let ty = mk_loop_result_ty continue break in

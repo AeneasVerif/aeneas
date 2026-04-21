@@ -155,6 +155,41 @@ Expected result:
 - Later milestones have a committed target shape for signatures, contexts, and
   extraction.
 
+Decision:
+
+- Keep `TLoopResult continue break` unchanged for ordinary loops whose only
+  structured exits are current-loop `continue` and current-loop `break`.
+- Add a dedicated pure builtin `TLoopExit normal_break propagated_break
+  propagated_continue propagated_return` for loops that may propagate an exit
+  beyond the current loop.
+- `NormalBreak normal_break` is the current loop's consumed break result.
+- `PropagatedBreak propagated_break` carries a decremented relative break depth
+  plus the value and abstraction-continuation payload required by the target
+  loop.
+- `PropagatedContinue propagated_continue` carries a decremented relative
+  continue depth plus the target loop re-entry payload.
+- `PropagatedReturn return` carries the function return payload and any
+  backward outputs needed at the function boundary.
+- Multiple branches reaching the same propagated target must be joined before
+  packaging the corresponding payload; Milestone 6 defines the context join, but
+  the pure exit type has one payload type per exit kind.
+- If an exit kind is unreachable in a particular loop, its type parameter is
+  `unit`. Type-shape examples:
+  - inner-only break: `TLoopResult continue_ty normal_break_ty`.
+  - normal break plus `break 'outer`: `TLoopExit normal_break_ty
+    outer_break_ty unit unit`.
+  - `continue 'outer`: `TLoopExit unit unit outer_continue_ty unit`.
+  - nested `return`: `TLoopExit unit unit unit propagated_return_ty`.
+- Backend names are generated as `LoopExit`/`loop_exit` with constructors
+  `normalBreak`/`NormalBreak`, `propagatedBreak`/`PropagatedBreak`,
+  `propagatedContinue`/`PropagatedContinue`, and
+  `propagatedReturn`/`PropagatedReturn`.
+- Panic remains on the existing `Result` error path and is not a `TLoopExit`
+  constructor.
+- `src/loop_exit_shape_test.ml` constructs and destructs all four `TLoopExit`
+  variants with distinct payload types to pin the representation before later
+  lowering emits it.
+
 ## Milestone 3: Make Pre-Passes Control-Flow Transparent
 
 Update `PrePasses.update_loops` so it no longer rejects control flow that later

@@ -55,6 +55,23 @@ let get_adt_field_types (span : Meta.span)
           else
             [%craise] span
               "Unreachable: improper variant id for loop result type"
+      | TLoopExit ->
+          let normal_break, propagated_break, propagated_continue, return =
+            match generics.types with
+            | [ normal_break; propagated_break; propagated_continue; return ] ->
+                (normal_break, propagated_break, propagated_continue, return)
+            | _ -> [%internal_error] span
+          in
+          let variant_id = Option.get variant_id in
+          if variant_id = loop_exit_normal_break_id then [ normal_break ]
+          else if variant_id = loop_exit_propagated_break_id then
+            [ propagated_break ]
+          else if variant_id = loop_exit_propagated_continue_id then
+            [ propagated_continue ]
+          else if variant_id = loop_exit_propagated_return_id then [ return ]
+          else
+            [%craise] span
+              "Unreachable: improper variant id for loop exit type"
       | TError ->
           [%sanity_check] span (generics = empty_generic_args);
           let variant_id = Option.get variant_id in

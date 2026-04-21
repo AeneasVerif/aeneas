@@ -1164,6 +1164,7 @@ let builtin_adts () : (builtin_ty * string) list =
       [
         (TResult, "Result");
         (TLoopResult, "ControlFlow");
+        (TLoopExit, "LoopExit");
         (TFuel, "Nat");
         (TArray, "Array");
         (TSlice, "Slice");
@@ -1175,6 +1176,7 @@ let builtin_adts () : (builtin_ty * string) list =
       [
         (TResult, "result");
         (TLoopResult, "control_flow");
+        (TLoopExit, "loop_exit");
         (TFuel, if backend () = HOL4 then "num" else "nat");
         (TArray, "array");
         (TSlice, "slice");
@@ -1198,6 +1200,10 @@ let builtin_variants () : (builtin_ty * VariantId.id * string) list =
         (TResult, result_fail_id, "Fail");
         (TLoopResult, loop_result_continue_id, "Cont");
         (TLoopResult, loop_result_break_id, "Done");
+        (TLoopExit, loop_exit_normal_break_id, "NormalBreak");
+        (TLoopExit, loop_exit_propagated_break_id, "PropagatedBreak");
+        (TLoopExit, loop_exit_propagated_continue_id, "PropagatedContinue");
+        (TLoopExit, loop_exit_propagated_return_id, "PropagatedReturn");
         (TError, error_failure_id, "Failure");
         (TError, error_out_of_fuel_id, "OutOfFuel");
         (* No Fuel::Zero on purpose *)
@@ -1209,6 +1215,10 @@ let builtin_variants () : (builtin_ty * VariantId.id * string) list =
         (TResult, result_fail_id, "Fail_");
         (TLoopResult, loop_result_continue_id, "Cont");
         (TLoopResult, loop_result_break_id, "Done");
+        (TLoopExit, loop_exit_normal_break_id, "NormalBreak");
+        (TLoopExit, loop_exit_propagated_break_id, "PropagatedBreak");
+        (TLoopExit, loop_exit_propagated_continue_id, "PropagatedContinue");
+        (TLoopExit, loop_exit_propagated_return_id, "PropagatedReturn");
         (TError, error_failure_id, "Failure");
         (TError, error_out_of_fuel_id, "OutOfFuel");
         (TFuel, fuel_zero_id, "O");
@@ -1221,6 +1231,10 @@ let builtin_variants () : (builtin_ty * VariantId.id * string) list =
         (TError, error_failure_id, "panic");
         (TLoopResult, loop_result_continue_id, "cont");
         (TLoopResult, loop_result_break_id, "done");
+        (TLoopExit, loop_exit_normal_break_id, "normalBreak");
+        (TLoopExit, loop_exit_propagated_break_id, "propagatedBreak");
+        (TLoopExit, loop_exit_propagated_continue_id, "propagatedContinue");
+        (TLoopExit, loop_exit_propagated_return_id, "propagatedReturn");
         (* No Fuel::Zero on purpose *)
         (* No Fuel::Succ on purpose *)
       ]
@@ -1230,6 +1244,10 @@ let builtin_variants () : (builtin_ty * VariantId.id * string) list =
         (TResult, result_fail_id, "Fail");
         (TLoopResult, loop_result_continue_id, "Cont");
         (TLoopResult, loop_result_break_id, "Done");
+        (TLoopExit, loop_exit_normal_break_id, "NormalBreak");
+        (TLoopExit, loop_exit_propagated_break_id, "PropagatedBreak");
+        (TLoopExit, loop_exit_propagated_continue_id, "PropagatedContinue");
+        (TLoopExit, loop_exit_propagated_return_id, "PropagatedReturn");
         (TError, error_failure_id, "Failure");
         (* No Fuel::Zero on purpose *)
         (* No Fuel::Succ on purpose *)
@@ -2046,6 +2064,7 @@ let ctx_compute_var_basename (span : Meta.span) (ctx : extraction_ctx)
           | TBuiltin TFuel -> ConstStrings.fuel_basename
           | TBuiltin TSum -> "s"
           | TBuiltin TLoopResult -> "r"
+          | TBuiltin TLoopExit -> "e"
           | TBuiltin TArray -> "a"
           | TBuiltin TSlice -> "s"
           | TBuiltin TStr -> "s"
