@@ -329,6 +329,27 @@ Expected result:
 - Fixed-point computation is local to the current loop but complete for enclosing
   loops.
 
+Implementation:
+
+- `InterpLoopsFixedPoint.classify_loop_entry_result` now classifies loop-body
+  results before fixed-point entry joining:
+  - `Continue 0` is the current loop's re-entry.
+  - `Continue i` for `i > 0` is a propagated continue with remaining depth
+    `i - 1`, not a re-entry for the current loop.
+  - `Break _`, `Return`, and `Panic` are non-re-entry exits.
+- `compute_loop_entry_fixed_point` no longer rejects direct outer continues.
+  It logs them as propagated exits and excludes them from the current loop's
+  fixed-point join.
+- `src/loop_fixed_point_entry_test.ml` pins the classifier contract, including
+  negative-depth rejection.
+- `tests/src/loops-nested-continue-control.rs` records the current end-to-end
+  state for continue-only nested-control examples: outer continues move past
+  fixed-point entry and now fail later in loop synthesis (`InterpLoops.ml`).
+  Break-containing nested-control examples still stop in break-context
+  collection until Milestone 6 handles propagated break exits. Full runtime
+  production and payload joining for propagated continues remain part of
+  Milestone 6's exit-context collection.
+
 ## Milestone 6: Collect And Join Exit Contexts Per Target
 
 Replace `compute_loop_break_context` with a function that collects all relevant

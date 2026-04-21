@@ -10,6 +10,27 @@ open InterpJoin
 (** The local logger *)
 let log = Logging.loops_fixed_point_log
 
+type loop_entry_result =
+  | CurrentLoopReentry
+  | PropagatedContinueToOuter of int
+  | NonReentryExit
+  | UnitResult
+
+(** Classify a loop-body result for fixed-point entry computation.
+
+    Only [Continue 0] is a re-entry of the loop currently being analyzed.
+    [Continue i] for [i > 0] exits this loop and targets an enclosing loop after
+    one depth decrement. If a nested loop has already propagated that exit to the
+    current loop as [Continue 0], this classifier treats it as a local re-entry. *)
+let classify_loop_entry_result (res : statement_eval_res) : loop_entry_result =
+  match res with
+  | Continue i ->
+      if i < 0 then invalid_arg "classify_loop_entry_result";
+      if i = 0 then CurrentLoopReentry
+      else PropagatedContinueToOuter (i - 1)
+  | Break _ | Return | Panic -> NonReentryExit
+  | Unit -> UnitResult
+
 (** Update the abstractions introduced by a loop with additional information,
     such as region group ids, continuation expressions, etc. *)
 let loop_abs_reorder_and_add_info (span : Meta.span) (fixed_ids : ids_sets)
@@ -164,17 +185,24 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
       (* Keep only the contexts which reached a `continue`. *)
       let keep_continue_ctx (ctx, res) =
         [%ltrace "register_continue_ctx"];
-        match res with
-        | Return | Panic | Break _ -> None
-        | Unit ->
+        match classify_loop_entry_result res with
+        | CurrentLoopReentry -> Some ctx
+        | PropagatedContinueToOuter depth ->
+            [%ltrace
+              "propagating continue to outer loop at remaining depth "
+              ^ string_of_int depth];
+            None
+        | NonReentryExit -> None
+        | UnitResult ->
             (* See the comment in {!eval_loop} *)
             [%craise] span "Unreachable"
-        | Continue i ->
-            (* For now we don't support continues to outer loops *)
-            [%cassert] span (i = 0) "Continues to outer loops not supported yet";
-            Some ctx
       in
       let continue_ctxs = List.filter_map keep_continue_ctx ctx_resl in
+      if continue_ctxs = [] then
+        [%ltrace
+          "no local continue contexts reached this loop entry; propagated \
+           continues, breaks, returns, and panics are excluded from the current \
+           fixed point"];
 
       [%ltrace
         "about to join with continue_ctx" ^ "\n\n- ctx0:\n"
@@ -279,8 +307,7 @@ let compute_loop_break_context (config : config) (span : Meta.span)
         [%craise] span "Unreachable"
     | Break i ->
         (* We don't support breaks to outer loops *)
-        (* For now we don't support continues to outer loops *)
-        [%cassert] span (i = 0) "Continues to outer loops not supported yet";
+        [%cassert] span (i = 0) "Breaks to outer loops not supported yet";
         Some ctx
   in
   let break_ctxs = List.filter_map keep_break_ctx ctx_resl in

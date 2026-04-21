@@ -3,6 +3,16 @@ open Cps
 open Contexts
 open InterpUtils
 
+type loop_entry_result =
+  | CurrentLoopReentry
+  | PropagatedContinueToOuter of int
+  | NonReentryExit
+  | UnitResult
+
+(** Exposed for focused regression tests and for later exit-propagation code to
+    reuse the same fixed-point entry classification. *)
+val classify_loop_entry_result : statement_eval_res -> loop_entry_result
+
 (** Compute a fixed-point for the context at the entry of the loop. We also
     return:
     - the sets of fixed ids
