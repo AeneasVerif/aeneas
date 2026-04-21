@@ -36,6 +36,7 @@ let builtin_globals () : Pure.builtin_global_info list =
     ([
        mk_ints_globals "MIN";
        mk_ints_globals "MAX";
+       mk_ints_globals "BITS";
        [
          (* UNIT_METADATA should be eliminated through a micro-pass and should
             never appear in the code. *)
