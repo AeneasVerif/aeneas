@@ -210,8 +210,11 @@ let rec translate_expr (e : S.expr) (ctx : bs_ctx) : texpr =
       translate_continue_break ctx ~continue:true ectx loop_id input_values
         input_abs
   | LoopBreak (ectx, loop_id, input_values, input_abs) ->
+      (* Legacy migration path: loop synthesis now emits [LoopExit NormalBreak]. *)
       translate_continue_break ctx ~continue:false ectx loop_id input_values
         input_abs
+  | LoopExit (ectx, loop_id, exit_kind, input_values, input_abs) ->
+      translate_loop_exit ctx ectx loop_id exit_kind input_values input_abs
   | Let lete -> translate_let ctx lete
   | Join (ectx, input_values, input_abs) ->
       translate_join ctx ectx input_values input_abs
@@ -1906,6 +1909,18 @@ and translate_continue_break (ctx : bs_ctx) ~(continue : bool)
   in
   let output = mk_simpl_tuple_texpr ctx.span outputs in
   Option.get mk ctx output
+
+and translate_loop_exit (ctx : bs_ctx) (ectx : C.eval_ctx)
+    (loop_id : V.loop_id) (exit_kind : S.loop_exit_kind)
+    (input_values : V.tvalue list) (input_abs : V.abs list) : texpr =
+  match exit_kind with
+  | S.NormalBreak ->
+      translate_continue_break ctx ~continue:false ectx loop_id input_values
+        input_abs
+  | S.PropagatedBreak _ | S.PropagatedContinue _ | S.PropagatedReturn ->
+      [%craise] ctx.span
+        ("Propagated loop exits are not lowered to pure yet: "
+        ^ PrintSymbolicAst.loop_exit_kind_to_string exit_kind)
 
 and translate_let (ctx0 : bs_ctx) (lete : S.let_expr) : texpr =
   let ctx = ctx0 in

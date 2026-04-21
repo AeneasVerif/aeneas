@@ -222,6 +222,11 @@ type expr =
   | LoopContinue of
       (Contexts.eval_ctx[@opaque]) * loop_id * tvalue list * abs list
   | LoopBreak of (Contexts.eval_ctx[@opaque]) * loop_id * tvalue list * abs list
+      (** Legacy current-loop break node. New loop synthesis should use
+          {!LoopExit} with {!NormalBreak}; the pure lowering still accepts this
+          form while migration is incremental. *)
+  | LoopExit of
+      (Contexts.eval_ctx[@opaque]) * loop_id * loop_exit_kind * tvalue list * abs list
   | Loop of loop  (** Loop: call to a loop *)
   | Let of let_expr  (** A let binding. See the comments for [let_expr]. *)
   | Join of (Contexts.eval_ctx[@opaque]) * tvalue list * abs list
@@ -275,9 +280,31 @@ and loop = {
   break_abs : abs list;
       (** The abstractions introduced in the break environment (those are output
           by the loop) *)
+  loop_exits : loop_exit list;
+      (** Per-exit output descriptions.
+
+          During the migration, ordinary current-loop breaks are still mirrored
+          in [break_svalues] and [break_abs] because the pure lowering consumes
+          those fields. The interpreter currently initializes this list with
+          the same normal-break channel. Later milestones populate propagated
+          entries here so consumers can keep their target kind and decremented
+          depth instead of collapsing everything into the current loop's normal
+          break channel. *)
   loop_expr : expr;  (** The symbolically executed loop body *)
   next_expr : expr;  (** The expression for *after* the loop call *)
   span : Meta.span;  (** Information about the origin of the loop body *)
+}
+
+and loop_exit_kind =
+  | NormalBreak
+  | PropagatedBreak of int
+  | PropagatedContinue of int
+  | PropagatedReturn
+
+and loop_exit = {
+  exit_kind : loop_exit_kind;
+  exit_svalues : symbolic_value list;
+  exit_abs : abs list;
 }
 
 (** A let-binding.
@@ -338,3 +365,11 @@ and value_aggregate =
       concrete = true;
       polymorphic = false;
     }]
+
+let loop_exit_kind_from_break_depth (depth : int) : loop_exit_kind =
+  if depth < 0 then invalid_arg "loop_exit_kind_from_break_depth";
+  if depth = 0 then NormalBreak else PropagatedBreak (depth - 1)
+
+let loop_exit_kind_from_continue_depth (depth : int) : loop_exit_kind =
+  if depth <= 0 then invalid_arg "loop_exit_kind_from_continue_depth";
+  PropagatedContinue (depth - 1)

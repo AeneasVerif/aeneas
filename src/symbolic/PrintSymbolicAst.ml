@@ -41,6 +41,13 @@ let value_aggregate_to_string (env : fmt_env) (v : value_aggregate) : string =
       ^ ", " ^ trait_ref_to_string env tr ^ ")"
   | VaFnDef fn_ptr -> "@fn_def(" ^ fn_ptr_to_string env fn_ptr ^ ")"
 
+let loop_exit_kind_to_string (kind : loop_exit_kind) : string =
+  match kind with
+  | NormalBreak -> "NormalBreak"
+  | PropagatedBreak depth -> "PropagatedBreak " ^ string_of_int depth
+  | PropagatedContinue depth -> "PropagatedContinue " ^ string_of_int depth
+  | PropagatedReturn -> "PropagatedReturn"
+
 let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
     (e : expr) : string =
   match e with
@@ -113,6 +120,9 @@ let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
   | LoopBreak (ectx, loop_id, values, abs) ->
       loop_continue_break_to_string env indent indent_incr ~is_continue:false
         ectx loop_id values abs
+  | LoopExit (ectx, loop_id, exit_kind, values, abs) ->
+      loop_exit_expr_to_string env indent indent_incr ectx loop_id exit_kind
+        values abs
   | Join (ectx, values, abs) ->
       join_to_string env indent indent_incr ectx values abs
   | Let lete -> let_expr_to_string env indent indent_incr lete
@@ -142,6 +152,32 @@ and loop_continue_break_to_string (env : fmt_env) (indent : string)
   indent ^ keyword ^ " {\n" ^ indent1 ^ loop_id ^ ",\n" ^ indent1
   ^ "values = [\n" ^ String.concat "" values ^ indent1 ^ "]\n\n" ^ indent1
   ^ "abs = [\n" ^ String.concat "" abs ^ indent1 ^ "]\n" ^ indent ^ "}"
+
+and loop_exit_expr_to_string (env : fmt_env) (indent : string)
+    (indent_incr : string) _ctx (loop_id : loop_id)
+    (exit_kind : loop_exit_kind) (values : tvalue list) (abs : abs list) :
+    string =
+  let indent1 = indent ^ indent_incr in
+  let indent2 = indent1 ^ indent_incr in
+  let loop_id = "loop_id@" ^ LoopId.to_string loop_id in
+  let exit_kind = loop_exit_kind_to_string exit_kind in
+  let values =
+    List.map
+      (fun v -> indent2 ^ Print.Values.tvalue_to_string env v ^ ",\n")
+      values
+  in
+  let abs =
+    List.map
+      (fun a ->
+        Print.Values.abs_to_string ~with_ended:true env true indent2 indent_incr
+          a
+        ^ ",\n")
+      abs
+  in
+  indent ^ "@loop_exit {\n" ^ indent1 ^ loop_id ^ ",\n" ^ indent1
+  ^ "exit_kind = " ^ exit_kind ^ ",\n" ^ indent1 ^ "values = [\n"
+  ^ String.concat "" values ^ indent1 ^ "]\n\n" ^ indent1 ^ "abs = [\n"
+  ^ String.concat "" abs ^ indent1 ^ "]\n" ^ indent ^ "}"
 
 and join_to_string (env : fmt_env) (indent : string) (indent_incr : string) _ctx
     (values : tvalue list) (abs : abs list) : string =
@@ -230,8 +266,28 @@ and loop_to_string (env : fmt_env) (indent : string) (indent_incr : string)
   ^ Print.list_to_string ~sep:", "
       (fun (a : abs) -> AbsId.to_string a.abs_id)
       loop.break_abs
+  ^ "\n" ^ indent1 ^ "loop_exits= [\n"
+  ^ String.concat ""
+      (List.map (loop_exit_to_string env indent2 indent_incr) loop.loop_exits)
+  ^ indent1 ^ "]"
   ^ "\n" ^ indent1 ^ "loop_expr=\n" ^ loop_expr ^ "\n\n" ^ indent1
   ^ "next_expr=\n" ^ next_expr ^ "\n" ^ indent ^ "}"
+
+and loop_exit_to_string (_env : fmt_env) (indent : string)
+    (_indent_incr : string) (exit : loop_exit) : string =
+  let svalues =
+    Print.list_to_string ~sep:", "
+      (fun (v : symbolic_value) -> SymbolicValueId.to_string v.sv_id)
+      exit.exit_svalues
+  in
+  let abs =
+    Print.list_to_string ~sep:", "
+      (fun (a : abs) -> AbsId.to_string a.abs_id)
+      exit.exit_abs
+  in
+  indent ^ "{ exit_kind = "
+  ^ loop_exit_kind_to_string exit.exit_kind
+  ^ "; exit_svalues = [" ^ svalues ^ "]; exit_abs = [" ^ abs ^ "] }\n"
 
 and let_expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
     (lete : let_expr) : string =

@@ -268,7 +268,13 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
             let break_values =
               List.map ValuesUtils.mk_tvalue_from_symbolic_value output_svalues
             in
-            cc (SA.LoopBreak (output_ctx, loop_id, break_values, break_abs))
+            cc
+              (SA.LoopExit
+                 ( output_ctx,
+                   loop_id,
+                   SA.loop_exit_kind_from_break_depth i,
+                   break_values,
+                   break_abs ))
         | Some (break_ctx, break_input_abs, break_input_svalues) ->
             (* Join with the break context *)
             [%ltrace
@@ -300,7 +306,13 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
             in
             let input_abs = reorder_input_abs input_abs break_input_abs in
             (* Create the symbolic expression *)
-            cc (SA.LoopBreak (tgt_ctx, loop_id, input_values, input_abs)))
+            cc
+              (SA.LoopExit
+                 ( tgt_ctx,
+                   loop_id,
+                   SA.loop_exit_kind_from_break_depth i,
+                   input_values,
+                   input_abs )))
     | Continue i ->
         (* We don't support nested loops for now *)
         [%cassert] span (i = 0) "Nested loops are not supported yet";
@@ -490,6 +502,14 @@ let eval_loop_symbolic (config : config) (span : span)
           input_abs_to_abs = input_abs;
           break_svalues = break_input_svalues;
           break_abs;
+          loop_exits =
+            [
+              {
+                exit_kind = SA.NormalBreak;
+                exit_svalues = break_input_svalues;
+                exit_abs = break_abs;
+              };
+            ];
           loop_expr = loop_body;
           next_expr;
           span;

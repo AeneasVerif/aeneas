@@ -266,6 +266,29 @@ Expected result:
 
 - Symbolic AST has enough structure to represent all loop exits precisely.
 
+Implementation:
+
+- `src/symbolic/SymbolicAst.ml` now has explicit symbolic loop exit kinds:
+  `NormalBreak`, `PropagatedBreak of int`, `PropagatedContinue of int`, and
+  `PropagatedReturn`.
+- `LoopExit` represents loop exits with their kind and payload. `LoopBreak`
+  remains as a legacy current-loop break node while pure lowering migrates.
+- `loop.loop_exits` records per-exit output descriptions. Current-loop break
+  outputs are mirrored in the old `break_svalues` / `break_abs` fields so
+  existing pure lowering remains stable.
+- Symbolic loop synthesis now emits `LoopExit NormalBreak` for current-loop
+  breaks.
+- `PrintSymbolicAst.ml` prints `LoopExit` expressions and loop-level
+  `loop_exits`.
+- `src/symbolic_loop_exit_shape_test.ml` pins the relative-depth mapping:
+  `Break 0 -> NormalBreak`, `Break 1 -> PropagatedBreak 0`,
+  `Continue 1 -> PropagatedContinue 0`, and nested returns are represented by
+  `PropagatedReturn`.
+- Because fixed-point computation still rejects propagated exits before loop
+  synthesis can emit them, these are representation and helper-contract checks.
+  Runtime production of propagated break/continue/return entries moves to
+  Milestones 5 and 6.
+
 ## Milestone 5: Generalize Fixed-Point Entry And Outer Continue Consumption
 
 Design fixed-point computation together with propagated continue consumption.
