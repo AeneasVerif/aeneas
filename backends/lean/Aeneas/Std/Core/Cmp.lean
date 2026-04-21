@@ -183,10 +183,16 @@ def core.cmp.impls.PartialEqShared.eq {A : Type} {B : Type} (PartialEqInst : cor
   (x : A) (y : B) : Result Bool :=
   PartialEqInst.eq x y
 
+@[simp, rust_fun "core::cmp::impls::{core::cmp::PartialEq<&'a @A, &'b @B>}::ne"]
+def core.cmp.impls.PartialEqShared.ne {A : Type} {B : Type} (PartialEqInst : core.cmp.PartialEq A B)
+  (x : A) (y : B) : Result Bool :=
+  PartialEqInst.ne x y
+
 @[reducible, rust_trait_impl "core::cmp::PartialEq<&'a @A, &'b @B>"]
 def core.cmp.PartialEqShared {A : Type} {B : Type}
   (PartialEqInst : core.cmp.PartialEq A B) : core.cmp.PartialEq A B := {
   eq := core.cmp.impls.PartialEqShared.eq PartialEqInst
+  ne := core.cmp.impls.PartialEqShared.ne PartialEqInst
 }
 
 @[rust_fun "alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}::eq" (keepParams := [true, false])]
