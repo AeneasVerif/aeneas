@@ -6,15 +6,19 @@ This plan tracks full support for:
 - `break` to an outer loop, for example `break 'outer`.
 - `continue` to an outer loop, for example `continue 'outer`.
 
-The goal is not to remove assertions locally. The goal is to preserve Rust
-control flow through pre-passes, symbolic execution, pure AST translation,
-micro-passes, extraction, and backend verification.
+The goal is not to remove local assertions. The goal is to preserve Rust control
+flow through Charon/LLBC input, pre-passes, symbolic execution, borrow and
+abstraction reconciliation, pure AST translation, loop micro-passes, extraction,
+and backend verification.
+
+Panic stays orthogonal to this work: it should continue to use the existing
+`Result` error path, not the new loop-exit payload.
 
 ## Current Known Blockers
 
 - `src/PrePasses.ml` rejects `Break i` and `Continue i` when `i <> 0`.
 - `src/PrePasses.ml` rejects `Return` when loop depth is greater than one.
-- `src/interp/InterpLoopsFixedPoint.ml` assumes loop fixed-point computation only
+- `src/interp/InterpLoopsFixedPoint.ml` assumes fixed-point computation only
   sees `Continue 0` for re-entry and `Break 0` for loop exit.
 - `src/interp/InterpLoops.ml` assumes symbolic loop body synthesis only needs to
   emit the current loop's `LoopContinue` and `LoopBreak`.
@@ -24,36 +28,51 @@ micro-passes, extraction, and backend verification.
 - `src/pure/Pure.ml` has a `TLoopResult` type with only current-loop
   `continue`, current-loop `break`, and failure. There is no pure-level
   representation for propagated `return`, outer `break`, or outer `continue`.
+- The concrete loop evaluator in `src/interp/InterpLoops.ml` already decrements
+  relative `Break i` / `Continue i`, but the pre-pass currently prevents most
+  nested-control cases from reaching it. This must be verified with tests rather
+  than assumed.
 
 ## Design Invariants
 
+- Charon labels must be resolved to relative `Break i` / `Continue i` depths
+  before Aeneas relies on this representation.
 - Concrete and symbolic control-flow semantics must agree: `Break i` and
   `Continue i` are relative depths, consumed one loop at a time.
 - Current-loop exits stay local: `Continue 0` drives fixed-point re-entry and
   `Break 0` drives the normal loop result.
-- Outer-loop exits are propagated through inner loops without joining them into
-  the inner loop's normal break context.
+- Propagated exits are consumed by each enclosing loop. After an inner loop turns
+  `Continue 1` into `Continue 0`, the enclosing loop must treat it as one of its
+  own fixed-point re-entry contexts.
+- Inner-loop abstractions must not leak across loop boundaries. Before an exit is
+  propagated, the inner loop must end, consume, or translate abstractions it
+  owns into a context compatible with the target loop.
+- Context joins for propagated exits must align borrow, loan, abstraction,
+  symbolic value, dummy variable, and backward-function structure. They are not
+  just value joins.
 - `return` from any nested loop is propagated as a function return, not encoded
-  as an unrelated current-loop break unless this is a proven, semantics-preserving
-  final lowering.
-- Loop output contexts must remain precise enough for borrows, abstractions,
-  symbolic values, and backward functions.
+  as an unrelated current-loop break unless a later lowering proves that rewrite
+  semantics-preserving.
 - Generated pure code must make propagated control flow explicit and typed.
 - Existing generated code for ordinary loops should remain stable as much as
   possible.
 
-## Milestone 1: Add Focused Known-Failure Tests
+## Milestone 1: Baseline Inputs And Current Failures
 
-Add minimal tests before changing behavior.
+Add minimal tests and verify assumptions before changing behavior.
 
+- Confirm the test harness supports `//@ known-failure` by checking
+  `tests/test_runner/Input.ml` and the behavior documented in `tests/README.md`.
 - Add `tests/src/loops-nested-control.rs`.
 - Mark it as `known-failure` initially if needed.
 - Include plain scalar examples:
   - `break_outer`: inner loop executes `break 'outer`.
   - `continue_outer`: inner loop executes `continue 'outer`.
   - `return_nested`: inner loop executes `return value`.
-  - `break_outer_with_value_flow`: outer loop mutates a value before and after
-    the inner loop so the expected output depends on correct propagation.
+  - `normal_and_outer_break`: inner loop has both a local break and an outer
+    break.
+  - `outer_continue_feeds_fixed_point`: inner loop executes `continue 'outer`
+    after mutating the outer loop's state.
 - Include borrow-sensitive examples:
   - `break_outer_array_update`: update an array in the inner loop, then break
     the outer loop.
@@ -61,37 +80,95 @@ Add minimal tests before changing behavior.
     loop.
   - `return_nested_mut_borrow`: return from a branch that has active local
     mutable borrow structure, if accepted by Rust.
+- Inspect Charon LLBC output for `break 'outer` and `continue 'outer`.
 
 Verification:
 
+- `rustc` accepts all new Rust examples.
+- Charon emits relative `Break i` / `Continue i` depths, or the plan is revised
+  before implementation continues.
 - `make test-loops-nested-control.rs` reaches the current expected error.
 - The checked `.out` file names the unsupported nested return or outer
   break/continue limitation.
-- `rustc` accepts the Rust examples.
+- A direct or reduced concrete-execution check confirms `eval_loop_concrete`
+  decrements `Break i` / `Continue i` correctly when pre-passes do not reject the
+  input.
+
+Tests should assert:
+
+- Charon resolves `break 'outer` to depth `1` in the inner loop.
+- Charon resolves `continue 'outer` to depth `1` in the inner loop.
+- Current Aeneas failure happens before semantic support is present and is
+  recorded as a known failure.
 
 Expected result:
 
 - No functional support yet.
-- The failing surface is recorded and small enough to use while developing.
+- The frontend and harness assumptions are explicit and verified.
 
-## Milestone 2: Make Pre-Passes Control-Flow Transparent
+## Milestone 2: Commit To A Pure Exit Encoding
 
-Update `PrePasses.update_loops` so it no longer rejects control flow that the
-symbolic interpreter can represent.
+Choose the representation before changing lowering and micro-passes.
 
-- Remove the blanket `i = 0` assertions for `Break i` and `Continue i`.
-- Replace the `depth <= 1` assertion for `Return` with a transformation strategy
-  that only rewrites returns when the rewrite is local and proven safe.
-- Keep the current return-to-break rewrites for simple one-loop cases if they are
-  still useful, but do not apply them across nested loop boundaries.
-- Ensure any transformation that moves `after` statements into a loop only applies
-  to exits targeting that same loop.
-- Add comments that state the relative-depth convention.
+- Define a pure-level loop-exit shape. Prefer a dedicated ADT over ad hoc nested
+  sums if it keeps extraction and micro-passes readable.
+- Required constructors:
+  - normal loop break, carrying the loop's normal break payload.
+  - propagated break, carrying the decremented depth and payload needed by the
+    target loop.
+  - propagated continue, carrying the decremented depth and payload needed by
+    the target loop.
+  - propagated return, carrying the function return payload and any backward
+    outputs needed by the function boundary.
+- Decide whether simple loops continue to use `TLoopResult` unchanged, and only
+  loops with propagated exits use the new ADT.
+- Decide how exit payloads are typed when different exits carry different value
+  and abstraction-continuation sets.
+- Decide how backend names will be generated for the new type or reused sum
+  encoding.
 
 Verification:
 
-- Add unit-shaped expectations by running the known-failure tests and confirming
-  errors move past pre-passes into loop synthesis.
+- Write a short design note in this file or an implementation comment near the
+  new type.
+- Add type-shape examples for:
+  - inner loop with only normal break.
+  - inner loop with normal break plus `break 'outer`.
+  - inner loop with `continue 'outer`.
+  - inner loop with nested `return`.
+- `cd src && dune build` after adding type definitions, if this milestone
+  introduces code.
+
+Tests should assert:
+
+- The chosen type can represent all reachable exit targets without relying on
+  source labels.
+- Panic is not represented as one of the new exit constructors.
+
+Expected result:
+
+- Later milestones have a committed target shape for signatures, contexts, and
+  extraction.
+
+## Milestone 3: Make Pre-Passes Control-Flow Transparent
+
+Update `PrePasses.update_loops` so it no longer rejects control flow that later
+passes can represent.
+
+- Remove the blanket `i = 0` assertions for `Break i` and `Continue i`.
+- Replace the `depth <= 1` assertion for `Return` with a strategy that only
+  rewrites returns when the rewrite is local and proven safe.
+- Keep current one-loop return-to-break rewrites if useful, but do not apply
+  them across nested loop boundaries.
+- Ensure any transformation that moves `after` statements into a loop only
+  applies to exits targeting that same loop.
+- Add comments that state the relative-depth convention and explain why outer
+  exits are preserved.
+
+Verification:
+
+- Run the known-failure tests and confirm errors move past pre-passes into loop
+  synthesis or pure lowering.
 - Run existing loop translations:
   - `make test-loops.rs`
   - `make test-loops-nested.rs`
@@ -110,16 +187,16 @@ Expected result:
 - Pre-passes preserve nested exits instead of rejecting them.
 - Symbolic loop code becomes the next failure point.
 
-## Milestone 3: Introduce Explicit Symbolic Loop Exit Kinds
+## Milestone 4: Introduce Explicit Symbolic Loop Exit Kinds
 
-Extend the symbolic AST so loop exits are not all forced into the current loop's
+Extend the symbolic AST so loop exits are not forced into the current loop's
 normal break channel.
 
-- Add a symbolic loop exit kind, for example:
-  - `NormalBreak`
-  - `PropagatedBreak of int`
-  - `PropagatedContinue of int`
-  - `PropagatedReturn`
+- Add a symbolic loop exit kind:
+  - `NormalBreak`.
+  - `PropagatedBreak of int`.
+  - `PropagatedContinue of int`.
+  - `PropagatedReturn`.
 - Replace or supplement `break_svalues` / `break_abs` in `SymbolicAst.loop` with
   per-exit output descriptions.
 - Keep `LoopContinue` for current-loop re-entry.
@@ -144,22 +221,29 @@ Expected result:
 
 - Symbolic AST has enough structure to represent all loop exits precisely.
 
-## Milestone 4: Generalize Loop Fixed-Point Entry Computation
+## Milestone 5: Generalize Fixed-Point Entry And Outer Continue Consumption
 
-Update `compute_loop_entry_fixed_point` to ignore only propagated exits while
-still using current-loop continues for fixed-point iteration.
+Design fixed-point computation together with propagated continue consumption.
 
-- Treat `Continue 0` as a re-entry context.
-- Treat `Continue i` for `i > 0` as a propagated exit, not as a fixed-point
-  re-entry.
-- Treat `Break _`, `Return`, and `Panic` as non-re-entry exits.
+- For the loop currently being analyzed, treat direct `Continue 0` as a re-entry
+  context.
+- Treat direct `Continue i` for `i > 0` as a propagated exit from the current
+  loop.
+- When an inner loop returns propagated `Continue 0` to an enclosing loop, the
+  enclosing loop must include that context in its own fixed-point re-entry set.
+- Fixed-point inputs for an outer loop are:
+  - direct continues in the outer loop body.
+  - propagated continues from inner loops after one depth decrement.
+- Treat `Break _`, `Return`, and `Panic` as non-re-entry exits for the current
+  loop.
 - Preserve current behavior for loops with only local continue/break.
 
 Verification:
 
-- Run focused tests where the inner loop has both:
-  - a local `continue`, and
-  - an outer `continue`.
+- Run focused tests where the inner loop has both a local `continue` and an
+  outer `continue`.
+- Run a test where the outer loop fixed point changes only because of a
+  propagated continue from the inner loop.
 - Run existing nested loop tests to ensure ordinary inner loops still compute
   fixed points.
 - Run `cd src && dune build`.
@@ -168,26 +252,27 @@ Tests should assert:
 
 - Fixed-point inputs for an inner loop are computed only from local re-entry
   paths.
-- An outer `continue` path does not pollute the inner loop's fixed-point state.
+- Propagated outer continues do not pollute the inner loop's fixed point.
+- Once consumed by the outer loop, propagated continues do contribute to the
+  outer loop's fixed point.
 
 Expected result:
 
-- Loop fixed points remain local to the loop being analyzed.
+- Fixed-point computation is local to the current loop but complete for enclosing
+  loops.
 
-## Milestone 5: Generalize Loop Exit Context Collection
+## Milestone 6: Collect And Join Exit Contexts Per Target
 
 Replace `compute_loop_break_context` with a function that collects all relevant
 exit contexts for the current loop.
 
 - For `Break 0`, compute the normal loop break context as today.
 - For `Break i` with `i > 0`, collect a propagated break context with depth
-  `i - 1` after the current loop consumes one level.
+  `i - 1`.
 - For `Continue i` with `i > 0`, collect a propagated continue context with
   depth `i - 1`.
 - For `Return`, collect a propagated return context.
-- Keep `Panic` behavior unchanged unless panic propagation also needs explicit
-  typing in the same mechanism.
-- Join contexts per exit kind, not all together.
+- Join contexts per exit kind and per remaining depth, not all together.
 - Preserve the single-break fast path for the normal break case.
 
 Verification:
@@ -207,9 +292,57 @@ Tests should assert:
 
 Expected result:
 
-- The symbolic interpreter can compute output contexts for every loop exit kind.
+- The symbolic interpreter can identify every loop exit target independently.
 
-## Milestone 6: Return Multiple Results From Symbolic Loop Evaluation
+## Milestone 7: Reconcile Borrows And Abstractions Across Loop Boundaries
+
+Make the risky context-boundary behavior explicit before returning multiple
+symbolic loop results.
+
+- Define which loop owns each abstraction introduced during fixed-point
+  computation.
+- When an inner loop propagates an exit, end or consume the inner loop's own
+  abstractions before handing the context to the enclosing loop.
+- Translate inner-loop output abstractions into values/backward continuations
+  expected by the target loop, or prove they are not visible outside the inner
+  loop.
+- Reuse `loop_match_break_ctx_with_target` / `match_ctx_with_target` patterns
+  where possible, but make the target abstraction set explicit.
+- For propagated `break`, reconcile the context with the target loop's break
+  abstraction set.
+- For propagated `continue`, reconcile the context with the target loop's
+  fixed-point abstraction set.
+- For propagated `return`, reconcile the context with the function return /
+  backward-function boundary.
+- Ensure fresh abstraction ordering is stable after reconciliation.
+- Ensure dummy variables and symbolic values introduced by the inner loop do not
+  escape unless they are part of the target payload.
+
+Verification:
+
+- Add borrow-sensitive tests for propagated `break`, propagated `continue`, and
+  propagated `return`.
+- Add a test where an inner loop creates fresh abstractions that should not be
+  visible after a propagated outer break.
+- Run with sanity checks where available:
+  - `AENEAS_OPTIONS=-checks make test-loops-nested-control.rs`
+  - `AENEAS_OPTIONS=-checks make test-loops-nested.rs`
+- Run `cd src && dune build`.
+
+Tests should assert:
+
+- Borrow/loan/abstraction invariants hold after each propagated exit.
+- Propagated break contexts can join with direct outer break contexts.
+- Propagated continue contexts can join with direct outer continue contexts.
+- No inner-loop-owned abstraction id appears in the outer context unless it has
+  been intentionally translated into the target payload.
+
+Expected result:
+
+- Propagated exits carry contexts that are shape-compatible with their target
+  loop or function boundary.
+
+## Milestone 8: Return Multiple Results From Symbolic Loop Evaluation
 
 Update `eval_loop_symbolic` so a loop can evaluate to more than one statement
 result.
@@ -222,12 +355,15 @@ result.
   - `(ctx, Return)` for propagated returns.
 - Adapt `eval_loop` and callers so the loop continuation composes multiple exit
   expressions correctly.
-- Preserve the concrete evaluator's existing depth-decrement behavior.
+- Verify concrete execution after pre-pass changes. The concrete loop evaluator
+  should not need semantic changes if relative depths are preserved.
 
 Verification:
 
 - Run existing switch/branch tests that produce multiple contexts.
 - Run focused tests where after-loop code must execute only for normal break.
+- Run concrete-execution tests or `-test-trans-units` checks that exercise
+  nested `break`/`continue` after pre-pass support.
 - Run `cd src && dune build`.
 
 Tests should assert:
@@ -236,12 +372,13 @@ Tests should assert:
 - Statements after the inner loop do not execute on propagated outer break,
   propagated outer continue, or propagated return.
 - Statements after the outer loop execute only for normal outer break.
+- Concrete and symbolic statement results agree on depth decrement.
 
 Expected result:
 
 - Symbolic statement sequencing sees loop exits just like it sees branch exits.
 
-## Milestone 7: Lower Symbolic Loop Exits To Typed Pure Control Flow
+## Milestone 9: Lower Symbolic Loop Exits To Typed Pure Control Flow
 
 Update `SymbolicToPureExpressions.translate_loop` and related context helpers.
 
@@ -249,17 +386,12 @@ Update `SymbolicToPureExpressions.translate_loop` and related context helpers.
 - Replace the single active `mk_continue` / `mk_break` pair with target-aware
   loop-control callbacks, or lower all non-current exits through explicit loop
   result payloads before translation.
-- Define a typed encoding for loop exits. Candidate shape:
-  - current `ControlFlow continue break` remains the loop-body result for simple
-    loops;
-  - loops with propagated exits use a sum type around normal break and
-    propagated control;
-  - propagated return carries the function return payload and backward outputs.
-- Generate a `match` after each loop call that dispatches:
-  - normal break payload to `next_expr`;
-  - propagated break payload to the outer loop's break callback;
-  - propagated continue payload to the outer loop's continue callback;
-  - propagated return payload to the function return callback.
+- Use the committed exit encoding from Milestone 2.
+- Generate an after-loop dispatch:
+  - normal break payload goes to `next_expr`.
+  - propagated break payload goes to the enclosing loop's break callback.
+  - propagated continue payload goes to the enclosing loop's continue callback.
+  - propagated return payload goes to the function return callback.
 - Ensure panic/failure still maps to the result error path.
 
 Verification:
@@ -282,18 +414,51 @@ Expected result:
 
 - Pure expressions become well typed for nested exits.
 
-## Milestone 8: Update Pure Loop Micro-Passes
+## Milestone 10: Design And Implement Backward Functions For Multi-Exit Loops
+
+Handle loop-generated backward functions explicitly.
+
+- Determine the backward signature for a loop with multiple exit kinds.
+- The backward input must include which exit happened and the exit payload, or an
+  equivalent typed value derived from the committed exit encoding.
+- For each exit kind, generate the backward behavior that consumes that exit's
+  payload and produces the consumed-borrow results expected by loop inputs.
+- Ensure propagated `return` carries enough information for function-level
+  backward functions.
+- Ensure propagated `break` and `continue` carry enough information for target
+  loop backward functions.
+- Update naming and pretty-printing so generated backward functions remain
+  inspectable.
+
+Verification:
+
+- Add tests with mutable borrows and multiple exit kinds from one inner loop.
+- Add a test where different exit kinds consume different borrows.
+- Generate backend code and inspect the loop backward function signatures.
+- Run `cd src && dune build`.
+
+Tests should assert:
+
+- Backward function inputs include exit discrimination.
+- Each exit branch returns consumed-borrow results of the expected type.
+- Existing simple-loop backward signatures remain unchanged when no propagated
+  exits are present.
+
+Expected result:
+
+- Multi-exit loops are sound for forward and backward translation.
+
+## Milestone 11: Update Pure Loop Micro-Passes
 
 Audit and update `src/pure/PureMicroPassesLoops.ml`.
 
 - Update passes that inspect `TLoopResult` constructors so they understand the
-  new exit encoding.
+  committed exit encoding.
 - Preserve simplifications for ordinary loops.
-- Update loop input/output filtering to account for propagated-exit payloads.
-- Update recursive-loop conversion if nested exits interact with
-  `RecLoopCall`.
+- Update loop input/output filtering to account for all exit payloads.
+- Update recursive-loop conversion if nested exits interact with `RecLoopCall`.
 - Update loop decomposition so generated auxiliary loop definitions expose the
-  right output type.
+  right output type and backward signature.
 
 Verification:
 
@@ -307,20 +472,20 @@ Verification:
 
 Tests should assert:
 
-- Useless loop input/output filtering does not remove values needed by
-  propagated exits.
+- Useless loop input/output filtering does not remove values needed by any exit
+  payload.
 - Recursive-loop extraction still works for ordinary nested loops.
 - If recursive-loop extraction cannot support propagated exits initially, it
-  should fail with a targeted error and the non-recursive loop path should pass.
+  fails with a targeted error and the non-recursive loop path passes.
 
 Expected result:
 
 - Pure micro-passes preserve and simplify nested-exit control flow correctly.
 
-## Milestone 9: Update Extraction Backends
+## Milestone 12: Update Extraction Backends
 
-Update extraction code and backend primitives only if the chosen pure encoding
-requires it.
+Update extraction code and backend primitives as required by the committed exit
+encoding.
 
 - Check Lean, F*, Coq, and HOL4 naming for any new control-flow type or variant.
 - Prefer reusing existing sum/result/control-flow encodings where possible.
@@ -348,7 +513,7 @@ Expected result:
 
 - Nested exits are representable in emitted proof code.
 
-## Milestone 10: Remove Known-Failure Status And Update Documentation
+## Milestone 13: Remove Known-Failure Status And Update Documentation
 
 Once support is complete, update tests and docs.
 
@@ -356,6 +521,8 @@ Once support is complete, update tests and docs.
 - Commit generated backend outputs.
 - Update `README.md` to remove the loop limitation.
 - Update `docs/user/src/README.md` if it still mentions no nested loops.
+- Check `documentation/getting-started.md` and `documentation/skills/*.md` for
+  any stale limitation text.
 - Add a short note to tests or docs explaining supported loop-control forms.
 
 Verification:
@@ -364,7 +531,7 @@ Verification:
   - `make test-loops-nested-control.rs`
   - `make test`
   - relevant `make verify-*` targets.
-- Confirm README no longer claims unsupported nested loop exits.
+- Confirm documentation no longer claims unsupported nested loop exits.
 
 Tests should assert:
 
@@ -378,11 +545,16 @@ Expected result:
 
 ## Final Acceptance Criteria
 
+- Charon relative-depth assumptions are verified.
 - `break 'outer` works from nested loops.
 - `continue 'outer` works from nested loops.
 - `return` works from nested loops.
-- Support works for scalar-only code and code with mutable state that affects
-  loop output contexts.
+- Propagated continues feed the target loop fixed point after depth decrement.
+- Support works for scalar-only code and mutable-state code that affects loop
+  output contexts.
+- Borrow, loan, abstraction, symbolic value, and dummy-variable invariants hold
+  across propagated loop exits.
+- Loop backward functions are sound for multi-exit loops.
 - Existing loop tests continue to pass.
 - Generated pure code is typed and backend output verifies for supported
   backends.
