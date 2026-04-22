@@ -523,6 +523,7 @@ let eval_loop_symbolic (config : config) (span : span)
               symbolic_exit_kind_of_propagated_exit_kind exit.exit_kind;
             exit_svalues;
             exit_abs = exit.exit_abs;
+            exit_expr = None;
           } ))
       loop_exit_contexts.propagated_exits
   in
@@ -613,7 +614,14 @@ let eval_loop_symbolic (config : config) (span : span)
     ^ "\n"];
 
   (* Put everything together *)
-  let cc (next_expr : SA.expr) : SA.expr =
+  let cc (next_expr : SA.expr) (propagated_exit_exprs : SA.expr list) : SA.expr =
+    [%sanity_check] span
+      (List.length propagated_loop_exits = List.length propagated_exit_exprs);
+    let propagated_loop_exits =
+      List.map2
+        (fun exit exit_expr -> { exit with SA.exit_expr = Some exit_expr })
+        propagated_loop_exits propagated_exit_exprs
+    in
     let loop_expr =
       SymbolicAst.Loop
         {
@@ -630,6 +638,7 @@ let eval_loop_symbolic (config : config) (span : span)
                 SA.exit_kind = SA.NormalBreak;
                 exit_svalues = break_input_svalues;
                 exit_abs = break_abs;
+                exit_expr = None;
               };
             ]
             @ propagated_loop_exits;
@@ -654,13 +663,7 @@ let eval_loop_symbolic (config : config) (span : span)
     [%sanity_check] span (List.length el = expected_expr_count);
     match el with
     | next_expr :: propagated_exit_exprs ->
-        (* Only the normal-break continuation becomes [loop.next_expr].
-           Propagated exits are already represented inside [loop.loop_expr] as
-           [LoopExit Propagated*] nodes; Milestone 9 lowers them to target-aware
-           pure control flow. Until then, statement sequencing must only thread
-           identity expressions for propagated branches. *)
-        ignore propagated_exit_exprs;
-        cc next_expr
+        cc next_expr propagated_exit_exprs
     | [] -> [%internal_error] span
   in
   (ctx_resl, cf)

@@ -273,8 +273,8 @@ and loop_to_string (env : fmt_env) (indent : string) (indent_incr : string)
   ^ "\n" ^ indent1 ^ "loop_expr=\n" ^ loop_expr ^ "\n\n" ^ indent1
   ^ "next_expr=\n" ^ next_expr ^ "\n" ^ indent ^ "}"
 
-and loop_exit_to_string (_env : fmt_env) (indent : string)
-    (_indent_incr : string) (exit : loop_exit) : string =
+and loop_exit_to_string (env : fmt_env) (indent : string)
+    (indent_incr : string) (exit : loop_exit) : string =
   let svalues =
     Print.list_to_string ~sep:", "
       (fun (v : symbolic_value) -> SymbolicValueId.to_string v.sv_id)
@@ -285,9 +285,17 @@ and loop_exit_to_string (_env : fmt_env) (indent : string)
       (fun (a : abs) -> AbsId.to_string a.abs_id)
       exit.exit_abs
   in
+  let exit_expr =
+    match exit.exit_expr with
+    | None -> ""
+    | Some expr ->
+        "; exit_expr =\n"
+        ^ expr_to_string env (indent ^ indent_incr) indent_incr expr
+  in
   indent ^ "{ exit_kind = "
   ^ loop_exit_kind_to_string exit.exit_kind
-  ^ "; exit_svalues = [" ^ svalues ^ "]; exit_abs = [" ^ abs ^ "] }\n"
+  ^ "; exit_svalues = [" ^ svalues ^ "]; exit_abs = [" ^ abs ^ "]"
+  ^ exit_expr ^ " }\n"
 
 and let_expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
     (lete : let_expr) : string =

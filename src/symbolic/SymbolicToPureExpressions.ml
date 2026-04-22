@@ -2001,11 +2001,19 @@ and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
         error_failure_id
     in
     let mk_continue ctx (output : texpr) =
-      [%sanity_check] ctx.span (output.ty = continue_ty);
+      [%cassert] ctx.span (output.ty = continue_ty)
+        ("Loop continue payload type mismatch:\nexpected: "
+        ^ pure_ty_to_string ctx continue_ty
+        ^ "\nactual: "
+        ^ pure_ty_to_string ctx output.ty);
       mk_continue_texpr ctx.span output break_ty
     in
     let mk_break ctx (output : texpr) =
-      [%sanity_check] ctx.span (output.ty = break_ty);
+      [%cassert] ctx.span (output.ty = break_ty)
+        ("Loop break payload type mismatch:\nexpected: "
+        ^ pure_ty_to_string ctx break_ty
+        ^ "\nactual: "
+        ^ pure_ty_to_string ctx output.ty);
       mk_break_texpr ctx.span continue_ty output
     in
     let mk_return =
@@ -2093,61 +2101,27 @@ and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
       in
       close_branch ctx.span pat panic
     in
-    let branch_for_exit exits exit variant_id branch =
-      let ctx, payload_pat, payload = bind_payload ctx exit in
+    let branch_for_exit exits exit variant_id =
+      let ctx, payload_pat, _payload = bind_payload ctx exit in
       let payload_pat =
         encode_payload_pat exits exit.exit_kind payload_pat
       in
       let pat = mk_exit_pat variant_id payload_pat in
-      close_branch ctx.span pat (branch ctx exit.exit_kind payload)
+      let branch_body =
+        match exit.exit_expr with
+        | Some exit_expr -> translate_expr exit_expr ctx
+        | None ->
+            [%craise] ctx.span "Propagated loop exit without branch expression"
+      in
+      close_branch ctx.span pat branch_body
     in
-    let branches_for_exits exits payload_ty variant_id branch =
+    let branches_for_exits exits payload_ty variant_id =
       match exits with
       | [] -> [ panic_branch payload_ty variant_id ]
       | exits ->
           List.map
-            (fun exit -> branch_for_exit exits exit variant_id branch)
+            (fun exit -> branch_for_exit exits exit variant_id)
             exits
-    in
-    let propagate_or_dispatch_break ctx exit_kind payload =
-      match exit_kind with
-      | S.PropagatedBreak 0 ->
-          let payload =
-            match ctx.mk_loop_exit with
-            | Some mk_loop_exit -> mk_loop_exit ctx S.NormalBreak payload
-            | None -> payload
-          in
-          (Option.get ctx.mk_break) ctx payload
-      | S.PropagatedBreak depth ->
-          let payload =
-            (Option.get ctx.mk_loop_exit) ctx
-              (S.PropagatedBreak (depth - 1))
-              payload
-          in
-          (Option.get ctx.mk_break) ctx payload
-      | _ -> [%internal_error] ctx.span
-    in
-    let propagate_or_dispatch_continue ctx exit_kind payload =
-      match exit_kind with
-      | S.PropagatedContinue 0 -> (Option.get ctx.mk_continue) ctx payload
-      | S.PropagatedContinue depth ->
-          let payload =
-            (Option.get ctx.mk_loop_exit) ctx
-              (S.PropagatedContinue (depth - 1))
-              payload
-          in
-          (Option.get ctx.mk_break) ctx payload
-      | _ -> [%internal_error] ctx.span
-    in
-    let propagate_or_dispatch_return ctx exit_kind payload =
-      match exit_kind with
-      | S.PropagatedReturn -> (
-          match ctx.mk_loop_exit with
-          | Some mk_loop_exit ->
-              (Option.get ctx.mk_break) ctx
-                (mk_loop_exit ctx S.PropagatedReturn payload)
-          | None -> (Option.get ctx.mk_return) ctx (Some payload))
-      | _ -> [%internal_error] ctx.span
     in
     let normal_branch =
       let pat = mk_exit_pat loop_exit_normal_break_id output in
@@ -2155,17 +2129,16 @@ and translate_loop (loop : S.loop) (ctx0 : bs_ctx) : texpr =
     in
     let propagated_break_branches =
       branches_for_exits propagated_break_exits propagated_break_ty
-        loop_exit_propagated_break_id propagate_or_dispatch_break
+        loop_exit_propagated_break_id
     in
     let propagated_continue_branches =
       branches_for_exits propagated_continue_exits propagated_continue_ty
-        loop_exit_propagated_continue_id propagate_or_dispatch_continue
+        loop_exit_propagated_continue_id
     in
     let propagated_return_branch =
       match propagated_return_exit with
       | Some exit ->
           branch_for_exit [ exit ] exit loop_exit_propagated_return_id
-            propagate_or_dispatch_return
       | None ->
           panic_branch propagated_return_ty loop_exit_propagated_return_id
     in
@@ -2213,13 +2186,10 @@ and translate_loop_exit (ctx : bs_ctx) (ectx : C.eval_ctx)
     (loop_id : V.loop_id) (exit_kind : S.loop_exit_kind)
     (input_values : V.tvalue list) (input_abs : V.abs list) : texpr =
   check_active_loop_id ctx loop_id;
-  (match exit_kind with
-  | S.NormalBreak -> ()
-  | S.PropagatedBreak _ | S.PropagatedContinue _ | S.PropagatedReturn ->
-      if input_abs <> [] then
-        [%craise] ctx.span
-          ("Propagated loop exits with abstraction continuations need "
-         ^ "multi-exit loop backward lowering"));
+  (* Propagated exits carry branch-specific backward continuations in their
+     [TLoopExit] payload. The after-loop dispatch binds this payload, then
+     translates the branch expression attached to the matching loop-exit
+     descriptor. *)
   [%ldebug
     "- loop exit kind: "
     ^ PrintSymbolicAst.loop_exit_kind_to_string exit_kind

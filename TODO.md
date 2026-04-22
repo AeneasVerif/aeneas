@@ -626,6 +626,21 @@ Expected result:
 
 - Multi-exit loops are sound for forward and backward translation.
 
+Implementation:
+
+- `SymbolicAst.loop_exit` now carries an optional per-exit branch expression.
+  Symbolic loop evaluation attaches the statement-sequencing expression for each
+  propagated exit to the matching exit descriptor.
+- Pure lowering binds the `TLoopExit` payload first, then translates the attached
+  propagated-exit branch body in that payload context. This lets the existing
+  context-matching synthesis produce the enclosing loop break/continue or
+  function return payload, including branch-specific backward continuations.
+- Propagated exits with abstraction continuations no longer stop at the
+  Milestone 9 guard. Their `TLoopExit` payloads include the exit discriminator
+  and any backward functions needed by that branch.
+- The borrow-sensitive break, continue, return, and combined nested-control
+  fixtures now generate Lean instead of known-failure outputs.
+
 ## Milestone 11: Update Pure Loop Micro-Passes
 
 Audit and update `src/pure/PureMicroPassesLoops.ml`.

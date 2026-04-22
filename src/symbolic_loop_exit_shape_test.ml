@@ -24,11 +24,13 @@ let check_invalid_continue_depth depth =
 
 let check_empty_exit kind =
   let exit =
-    SymbolicAst.{ exit_kind = kind; exit_svalues = []; exit_abs = [] }
+    SymbolicAst.
+      { exit_kind = kind; exit_svalues = []; exit_abs = []; exit_expr = None }
   in
   check "empty exit kind" kind exit.exit_kind;
   if exit.exit_svalues <> [] then failwith "unexpected exit symbolic values";
-  if exit.exit_abs <> [] then failwith "unexpected exit abstractions"
+  if exit.exit_abs <> [] then failwith "unexpected exit abstractions";
+  if exit.exit_expr <> None then failwith "unexpected exit expression"
 
 let () =
   check "break depth 0" SymbolicAst.NormalBreak

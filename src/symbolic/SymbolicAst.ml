@@ -305,6 +305,13 @@ and loop_exit = {
   exit_kind : loop_exit_kind;
   exit_svalues : symbolic_value list;
   exit_abs : abs list;
+  exit_expr : expr option;
+      (** Branch body to use after this exit is unpacked from the loop result.
+
+          Propagated exits need this because statement sequencing may have
+          reconciled the branch context with an enclosing loop break/continue or
+          function return. [None] is used for the normal break channel, whose
+          branch body is stored in [loop.next_expr]. *)
 }
 
 (** A let-binding.

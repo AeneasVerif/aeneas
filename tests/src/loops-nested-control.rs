@@ -1,4 +1,3 @@
-//@ [lean] known-failure
 //@ [lean] aeneas-args=-test-units
 //@ [!lean] skip
 

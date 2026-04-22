@@ -262,7 +262,7 @@ def return_nested (max : Std.U32) : Result Std.U32 := do
   | normalBreak (max1, _) => ok max1
   | propagatedBreak _ => fail panic
   | propagatedContinue _ => fail panic
-  | propagatedReturn (i, i1) => ok (i, i1)
+  | propagatedReturn (i, _) => ok i
 
 /-- [loops_nested_control_scalar::normal_and_outer_break]: loop body 1:
     Source: 'tests/src/loops-nested-control-scalar.rs', lines 1:0-94:5
@@ -589,7 +589,7 @@ def return_two_levels (max : Std.U32) : Result Std.U32 := do
   | normalBreak (max1, _) => ok max1
   | propagatedBreak _ => fail panic
   | propagatedContinue _ => fail panic
-  | propagatedReturn (i, i1) => ok (i, i1)
+  | propagatedReturn (i, _) => ok i
 
 /-- [loops_nested_control_scalar::break_two_depths_same_loop]: loop body 2:
     Source: 'tests/src/loops-nested-control-scalar.rs', lines 1:0-187:5

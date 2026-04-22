@@ -1,4 +1,3 @@
-//@ [lean] known-failure
 //@ [!lean] skip
 
 // Isolated from loops-nested-control.rs so this borrow-sensitive propagated
