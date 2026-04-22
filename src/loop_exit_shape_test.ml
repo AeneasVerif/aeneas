@@ -90,7 +90,7 @@ let check_extract_names () =
       ("lean", "AeneasSum.left", "AeneasSum.right");
       ("fstar", "Left", "Right");
       ("coq", "Left", "Right");
-      ("hol4", "Left", "Right");
+      ("hol4", "INL", "INR");
     ];
   List.iter
     (fun (backend_name, normal_break, propagated_break, propagated_continue,

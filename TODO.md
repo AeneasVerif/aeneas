@@ -774,7 +774,9 @@ Implementation:
   full regression testing, user-level `sum` declarations collided with the
   builtin propagated-exit sum in Lean, Coq, and F*. The generated builtin is now
   named `AeneasSum` for Lean and `aeneas_sum` for Coq/F*, while HOL4 keeps
-  `sum`.
+  `sum` and emits HOL4's native `INL`/`INR` constructors.
+- Coq and F* primitives now include the generated loop-control ADTs and a
+  fuel-backed `loop` primitive needed by the nested-control backend fixture.
 - Added extraction-name coverage for the backend-specific propagated-exit sum
   type and variant names.
 - `make test`, `make test-loops-nested-control.rs`,

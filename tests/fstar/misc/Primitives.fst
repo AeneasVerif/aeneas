@@ -30,6 +30,32 @@ type aeneas_sum (a b : Type0) : Type0 =
 | Left : v:a -> aeneas_sum a b
 | Right : v:b -> aeneas_sum a b
 
+type control_flow (a b : Type0) : Type0 =
+| Cont : v:a -> control_flow a b
+| Done : v:b -> control_flow a b
+
+type loop_exit (a b c d : Type0) : Type0 =
+| NormalBreak : v:a -> loop_exit a b c d
+| PropagatedBreak : v:b -> loop_exit a b c d
+| PropagatedContinue : v:c -> loop_exit a b c d
+| PropagatedReturn : v:d -> loop_exit a b c d
+
+#push-options "--fuel 1"
+let rec loop_fuel (#a #b : Type0) (fuel : nat)
+  (body : a -> result (control_flow a b)) (x : a) :
+  Tot (result b) (decreases fuel) =
+  if fuel = 0 then Fail OutOfFuel
+  else
+    match body x with
+    | Fail e -> Fail e
+    | Ok (Cont x') -> loop_fuel (fuel - 1) body x'
+    | Ok (Done y) -> Ok y
+#pop-options
+
+let loop (#a #b : Type0) (body : a -> result (control_flow a b)) (x : a) :
+  result b =
+  loop_fuel 1024 body x
+
 // Monadic return operator
 unfold let return (#a : Type0) (x : a) : result a = Ok x
 

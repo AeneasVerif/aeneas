@@ -26,10 +26,44 @@ Inductive aeneas_sum A B :=
   | Left : A -> aeneas_sum A B
   | Right : B -> aeneas_sum A B.
 
+Inductive control_flow A B :=
+  | Cont : A -> control_flow A B
+  | Done : B -> control_flow A B.
+
+Inductive loop_exit A B C D :=
+  | NormalBreak : A -> loop_exit A B C D
+  | PropagatedBreak : B -> loop_exit A B C D
+  | PropagatedContinue : C -> loop_exit A B C D
+  | PropagatedReturn : D -> loop_exit A B C D.
+
 Arguments Ok {_} a.
 Arguments Fail_ {_}.
 Arguments Left {_ _} a.
 Arguments Right {_ _} b.
+Arguments Cont {_ _} a.
+Arguments Done {_ _} b.
+Arguments NormalBreak {_ _ _ _} a.
+Arguments PropagatedBreak {_ _ _ _} b.
+Arguments PropagatedContinue {_ _ _ _} c.
+Arguments PropagatedReturn {_ _ _ _} d.
+
+Fixpoint loop_fuel {A B : Type} (fuel : nat)
+  (body : A -> result (control_flow A B)) (x : A) : result B :=
+  match fuel with
+  | O => Fail_ OutOfFuel
+  | S fuel' =>
+    match body x with
+    | Fail_ e => Fail_ e
+    | Ok (Cont x') => loop_fuel fuel' body x'
+    | Ok (Done y) => Ok y
+    end
+  end.
+
+Definition loop_fuel_default : nat := 1024.
+
+Definition loop {A B : Type} (body : A -> result (control_flow A B)) (x : A) :
+  result B :=
+  loop_fuel loop_fuel_default body x.
 
 Definition bind {A B} (m: result A) (f: A -> result B) : result B :=
   match m with
