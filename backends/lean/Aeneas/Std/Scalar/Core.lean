@@ -60,7 +60,7 @@ def IScalarTy.numBits (ty : IScalarTy) : Nat :=
   | I64 => 64
   | I128 => 128
 
-/-- Signed integer -/
+/-- Unsigned integer -/
 structure UScalar (ty : UScalarTy) where
   /- The internal representation is a bit-vector -/
   bv : BitVec ty.numBits
@@ -68,7 +68,7 @@ deriving Repr, BEq, DecidableEq
 
 def UScalar.val {ty} (x : UScalar ty) : ℕ := x.bv.toNat
 
-/-- Unsigned integer -/
+/-- Signed integer -/
 structure IScalar (ty : IScalarTy) where
   /- The internal representation is a bit-vector -/
   bv : BitVec ty.numBits
@@ -835,6 +835,18 @@ theorem IScalar.min_le_max (ty : IScalarTy) : IScalar.min ty ≤ IScalar.max ty 
 @[reducible] def core.num.Isize.MIN : Isize := IScalar.ofIntCore Isize.min (by simp [Isize.min, Isize.numBits])
 @[reducible] def core.num.Isize.MAX : Isize := IScalar.ofIntCore Isize.max (by simp [Isize.max, Isize.numBits]; (have : (0 : Int) < 2 ^ (System.Platform.numBits - 1) := by simp); omega)
 
+@[reducible] def core.num.U8.BITS : U32 := UScalar.ofNat (UScalarTy.numBits .U8)
+@[reducible] def core.num.U16.BITS : U32 := UScalar.ofNat (UScalarTy.numBits .U16)
+@[reducible] def core.num.U32.BITS : U32 := UScalar.ofNat (UScalarTy.numBits .U32)
+@[reducible] def core.num.U64.BITS : U32 := UScalar.ofNat (UScalarTy.numBits .U64)
+@[reducible] def core.num.U128.BITS : U32 := UScalar.ofNat (UScalarTy.numBits .U128)
+@[reducible] def core.num.Usize.BITS : U32 := UScalar.ofNat (UScalarTy.numBits .Usize) (by grind[UScalar.cMax, UScalar.rMax, U32.rMax, System.Platform.numBits])
+@[reducible] def core.num.I8.BITS : U32 := UScalar.ofNat (IScalarTy.numBits .I8)
+@[reducible] def core.num.I16.BITS : U32 := UScalar.ofNat (IScalarTy.numBits .I16)
+@[reducible] def core.num.I32.BITS : U32 := UScalar.ofNat (IScalarTy.numBits .I32)
+@[reducible] def core.num.I64.BITS : U32 := UScalar.ofNat (IScalarTy.numBits .I64)
+@[reducible] def core.num.I128.BITS : U32 := UScalar.ofNat (IScalarTy.numBits .I128)
+@[reducible] def core.num.Isize.BITS : U32 := UScalar.ofNat (IScalarTy.numBits .Isize) (by grind[UScalar.cMax, UScalar.rMax, U32.rMax, System.Platform.numBits])
 
 /-! # Comparisons -/
 instance {ty} : LT (UScalar ty) where
