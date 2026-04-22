@@ -456,7 +456,6 @@ end
 def elabDoSeq (doSeq : TSyntax ``doSeq) : ElabM Expr :=
   getDoElems doSeq >>= fun elems => elabDoSeqCore elems
 
-
 /-- `do`-notation elaborator. Dispatches to the new `ElabM`-based elaborator for
     `Aeneas.Std.Result _` blocks when `Aeneas.newDoElab` is set; otherwise falls
     back to Lean's default. -/
@@ -482,18 +481,6 @@ and `let pat := val` forms. -/
 
 open Lean PrettyPrinter Lean.PrettyPrinter.Delaborator SubExpr
 
-/-- `Function.uncurry (fun a b => body) val` → `let (a, b) := val; body`. -/
-@[delab app.Function.uncurry]
-def delabUncurryLet : Delab := do
-  let e ← getExpr
-  guard (e.getAppNumArgs == 5)
-  let f := e.getArg! 3
-  let .lam aName _ (.lam bName _ _ _) _ := f | failure
-  let valStx ← withAppArg delab
-  let bodyStx ← withAppFn (withAppArg (withBindingBody aName (withBindingBody bName delab)))
-  `(let ($(mkIdent aName), $(mkIdent bName)) := $valStx
-    $bodyStx)
-
 /-- Partially applied `Function.uncurry (fun a b => body)` → `fun (a, b) => body`. -/
 @[app_unexpander Function.uncurry]
 def unexpUncurry : Unexpander
@@ -504,6 +491,113 @@ def unexpUncurry : Unexpander
 private def extractLamBinders : Expr → List Name
   | .lam n _ b _ => n :: extractLamBinders b
   | _ => []
+
+/-- Enter `names.size` consecutive `fun` binders via `withBindingBody'`,
+    collecting the corresponding `(fvarId, name)` pairs, then invoke `k`. -/
+private partial def enterLamsAux (names : List Name)
+    (acc : Array (FVarId × Name))
+    (k : Array (FVarId × Name) → DelabM α) : DelabM α := do
+  match names with
+  | [] => k acc
+  | n :: rest =>
+    withBindingBody' n pure fun fv =>
+      enterLamsAux rest (acc.push (fv.fvarId!, n)) k
+
+/-- Walk past outer `fun` binders and chained 4-arg `Function.uncurry`s (the
+    encoding emitted for flat `N`-tuples by `mkUncurries`), collecting each
+    lambda binder as `(fvarId, name)`. Leaves SubExpr at the innermost body. -/
+private partial def enterUncurryChain (acc : Array (FVarId × Name))
+    (k : Array (FVarId × Name) → DelabM α) : DelabM α := do
+  let e ← getExpr
+  match e with
+  | .lam n _ _ _ =>
+    withBindingBody' n pure fun fv =>
+      enterUncurryChain (acc.push (fv.fvarId!, n)) k
+  | _ =>
+    if e.isAppOfArity ``Function.uncurry 4 then
+      withAppArg <| enterUncurryChain acc k
+    else
+      k acc
+
+/-- Build a tuple term `(p₀, p₁, …, pₙ)` from `pats`. Requires `pats.size ≥ 2`. -/
+private def buildTupleTerm (pats : Array (TSyntax `term)) : DelabM (TSyntax `term) := do
+  guard (pats.size >= 2)
+  let head := pats[0]!
+  let tail : Array (TSyntax `term) := pats.extract 1 pats.size
+  `(($head, $tail,*))
+
+/-- Given a list of outer binders `(fv, name)`, build a `TSyntax \`term` pattern
+    for each. At each step, check whether the current body starts with a
+    destructuring of `fv` (either a `Function.uncurry … fv` chain or a
+    `T.casesOn fv …`); if so, enter the destructuring, recurse on inner
+    binders, and build a nested `(…, …, …)` or `⟨…⟩` pattern. Otherwise treat
+    it as a leaf named `name`. After all binders are handled, `k` runs at the
+    fully-advanced body and its result comes back alongside the patterns.
+
+    Polymorphic over the body-action's return type so it serves both the
+    monadic (`aeneasDelabDoElems` returning `doElem`s) and non-monadic
+    (`delabUncurryLet` returning a term) callers. -/
+partial def delabBinders (binders : List (FVarId × Name)) (k : DelabM α)
+    : DelabM (Array (TSyntax `term) × α) := do
+  match binders with
+  | [] =>
+    let a ← k
+    return (#[], a)
+  | (fv, name) :: rest =>
+    let e ← getExpr
+    -- Tuple destructuring: `Function.uncurry … fv` (possibly a nested chain).
+    if e.isAppOfArity ``Function.uncurry 5 then
+      let val := e.appArg!
+      if val.isFVar ∧ val.fvarId! == fv then
+        return ← withAppFn <| withAppArg <|
+          enterUncurryChain #[] fun innerBinders => do
+            guard (innerBinders.size >= 2)
+            let (allPats, a) ← delabBinders (innerBinders.toList ++ rest) k
+            let innerCount := innerBinders.size
+            let innerPats := allPats.extract 0 innerCount
+            let restPats := allPats.extract innerCount allPats.size
+            let fvPat ← buildTupleTerm innerPats
+            return (#[fvPat] ++ restPats, a)
+    -- Ctor destructuring: `T.casesOn fv (fun f₁ … fₙ => …)`
+    if let .const fnName _ := e.getAppFn then
+      if let .str typeName "casesOn" := fnName then
+        if typeName != ``Prod then
+          if let some (.inductInfo indInfo) := (← getEnv).find? typeName then
+            if indInfo.ctors.length == 1 then
+              let args := e.getAppArgs
+              let numParams := indInfo.numParams
+              if args.size == numParams + 3 then
+                let discr := args[numParams + 1]!
+                if discr.isFVar ∧ discr.fvarId! == fv then
+                  let names := extractLamBinders args[numParams + 2]!
+                  if !names.isEmpty then
+                    return ← withNaryArg (numParams + 2) <|
+                      enterLamsAux names #[] fun ctorBinders => do
+                        let (allPats, a) ← delabBinders (ctorBinders.toList ++ rest) k
+                        let ctorCount := ctorBinders.size
+                        let ctorPats := allPats.extract 0 ctorCount
+                        let restPats := allPats.extract ctorCount allPats.size
+                        let fvPat ← `(⟨$ctorPats,*⟩)
+                        return (#[fvPat] ++ restPats, a)
+    -- Leaf
+    let leafPat : TSyntax `term := ⟨Lean.mkIdent name⟩
+    let (restPats, a) ← delabBinders rest k
+    return (#[leafPat] ++ restPats, a)
+
+/-- `Function.uncurry (fun x₁ … xₙ => body) val` → `let (x₁, …, xₙ) := val; body`,
+    including nested chain encodings of `N`-tuples (`N ≥ 2`). -/
+@[delab app.Function.uncurry]
+def delabUncurryLet : Delab := do
+  let e ← getExpr
+  guard (e.getAppNumArgs == 5)
+  let valStx ← withAppArg delab
+  let (pats, bodyStx) ← withAppFn <| withAppArg <|
+    enterUncurryChain #[] fun outerBinders => do
+      guard (outerBinders.size >= 2)
+      delabBinders outerBinders.toList delab
+  let tupleStx ← buildTupleTerm pats
+  `(let $tupleStx:term := $valStx
+    $bodyStx)
 
 /-- `T.casesOn val (fun f₁ … fₙ => body)` → `let ⟨f₁, …, fₙ⟩ := val; body`
     for any single-constructor inductive `T` (other than `Prod`). -/
@@ -531,22 +625,23 @@ def delabSingleCtorCasesOn : Delab := do
     `delabDoElems` with two continuation shapes emitted by our elaborator:
     `Function.uncurry (fun a b => body)` → `let (a, b) ← e`, and
     `fun _x => T.casesOn _x (fun f₁ … fₙ => body)` → `let ⟨f₁, …, fₙ⟩ ← e`.
-    Without this, Lean's `delabDoElems` bails on the non-lambda continuation,
-    collapsing the whole chain back to `>>=` notation. -/
+    Nested destructurings of the bound values are folded into nested patterns
+    via `delabBinders`. -/
 partial def aeneasDelabDoElems : DelabM (List (TSyntax `doElem)) := do
   let e ← getExpr
   if e.isAppOfArity ``Bind.bind 6 then
     let α := e.getAppArgs[2]!
     let ma ← withAppFn <| withAppArg delab
     let arg := e.appArg!
-    -- Tuple pattern: Function.uncurry (fun a b => body)
+    -- Tuple pattern: `Function.uncurry …` (possibly a chain for flat N-tuples).
     if arg.isAppOfArity ``Function.uncurry 4 then
-      if let .lam aName _ (.lam bName _ _ _) _ := arg.appArg! then
-        let rest ← withAppArg <| withAppArg <|
-          withBindingBody aName <| withBindingBody bName aeneasDelabDoElems
-        let elem ← `(doElem| let ($(mkIdent aName), $(mkIdent bName)) ← $ma:term)
-        return elem :: rest
-    -- Ctor pattern: fun _x => T.casesOn _x (fun f₁ … fₙ => body)
+      let (pats, rest) ← withAppArg <|
+        enterUncurryChain #[] fun outerBinders => do
+          guard (outerBinders.size >= 2)
+          delabBinders outerBinders.toList aeneasDelabDoElems
+      let tupleStx ← buildTupleTerm pats
+      return (← `(doElem| let $tupleStx:term ← $ma:term)) :: rest
+    -- Ctor pattern: `fun _x => T.casesOn _x (fun f₁ … fₙ => body)`
     if let .lam xName _ xBody _ := arg then
       if let .const fnName _ := xBody.getAppFn then
         if let .str typeName "casesOn" := fnName then
@@ -558,11 +653,11 @@ partial def aeneasDelabDoElems : DelabM (List (TSyntax `doElem)) := do
                 if xArgs.size == numParams + 3 ∧ xArgs[numParams + 1]! == .bvar 0 then
                   let names := extractLamBinders xArgs[numParams + 2]!
                   if !names.isEmpty then
-                    let rest ← withAppArg <| withBindingBody xName <|
+                    let (pats, rest) ← withAppArg <| withBindingBody xName <|
                       withNaryArg (numParams + 2) <|
-                        names.foldr (fun n d => withBindingBody n d) aeneasDelabDoElems
-                    let binders := names.toArray.map Lean.mkIdent
-                    let elem ← `(doElem| let ⟨$binders,*⟩ ← $ma:term)
+                        enterLamsAux names #[] fun ctorBinders =>
+                          delabBinders ctorBinders.toList aeneasDelabDoElems
+                    let elem ← `(doElem| let ⟨$pats,*⟩ ← $ma:term)
                     return elem :: rest
     -- Regular bind: fun n => body (mirrors Lean's delabDoElems)
     withAppArg do
@@ -936,13 +1031,9 @@ def nested_pat_test : Result Nat := do
 info: def nested_pat_test : Result ℕ :=
 do
   let (a, b) ← make2nats 1 2
-  let (_x0, e) ← make3nats 3 4 5
-  let (c, d) := _x0
-    do
-    let (_x0, _x1) ← make4nats 6 7 8 9
-    let (f, g) := _x0
-      let (h, i) := _x1
-      ok (a + b + c + d + e + f + g + h + i)
+  let ((c, d), e) ← make3nats 3 4 5
+  let ((f, g), (h, i)) ← make4nats 6 7 8 9
+  ok (a + b + c + d + e + f + g + h + i)
 -/
 #guard_msgs in
 #print nested_pat_test
@@ -971,13 +1062,25 @@ info: def nested_wrapped_pat_test : Result ℕ :=
 do
   let w₁ ← make2natswrapped 1 2
   let w₂ ← make2natswrapped 3 4
-  let ⟨_x0, _x1⟩ ← make4natswrapped w₁ w₂
-  let ⟨x, y⟩ := _x0
-    let ⟨z, w⟩ := _x1
-    ok (x + y + z + w)
+  let ⟨⟨x, y⟩, ⟨z, w⟩⟩ ← make4natswrapped w₁ w₂
+  ok (x + y + z + w)
 -/
 #guard_msgs in
 #print nested_wrapped_pat_test
+
+def big_pat_test : Result Nat := do
+  let (x, y, z, w) := (1,2,3,4)
+  let (a, b, c, d) ← ok (5, 6, 7, 8)
+  ok (x + y + z + w + a + b + c + d)
+/--
+info: def big_pat_test : Result ℕ :=
+let (x, y, z, w) := (1, 2, 3, 4)
+do
+let (a, b, c, d) ← ok (5, 6, 7, 8)
+ok (x + y + z + w + a + b + c + d)
+-/
+#guard_msgs in
+#print big_pat_test
 
 structure Wrapper (T : Type) where
   x : T
@@ -1015,14 +1118,12 @@ def universe_tuple_test {T : Type} (x y : T) :
   ok ((a, b), back2)
 /--
 info: def universe_tuple_test : {T : Type} → T → T → Result ((T × T) × (T × T → List T × List T)) :=
-fun {T} x y =>
-  make_pair x y >>=
-    Function.uncurry fun a =>
-      Function.uncurry fun b (back, back1) =>
-        have back2 := fun p =>
-          match p with
-          | (t1, t2) => (back t1, back1 t2);
-        ok ((a, b), back2)
+fun {T} x y => do
+  let (a, b, back, back1) ← make_pair x y
+  have back2 : T × T → List T × List T := fun p =>
+    match p with
+    | (t1, t2) => (back t1, back1 t2)
+  ok ((a, b), back2)
 -/
 #guard_msgs in
 #print universe_tuple_test
