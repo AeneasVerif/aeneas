@@ -724,10 +724,10 @@ Implementation:
   Coq, and F* syntax for propagated break, continue, return, and multiple
   propagated break depths.
 - Added `loops-nested-control-backends.rs` and committed the generated
-  backend outputs. Coq and F* misc primitives now include the copied `sum`
-  encoding required by nested propagated-exit payloads; Lean uses the existing
-  `Sum` and `LoopExit` primitives and the lakefile lists the new nested-control
-  modules.
+  backend outputs. Coq and F* misc primitives now include the copied
+  `aeneas_sum` encoding required by nested propagated-exit payloads; Lean uses
+  the existing `AeneasSum` and `LoopExit` primitives and the lakefile lists the
+  new nested-control modules.
 - Backend generation passes for `loops-nested-control-backends.rs`,
   `loops-nested-control.rs`, and `loops-nested.rs`. Backend verification was
   attempted, but the local environment is missing `lake`, `coq_makefile`, and
@@ -762,6 +762,28 @@ Tests should assert:
 Expected result:
 
 - The safe subset officially supports nested returns and outer break/continue.
+
+Implementation:
+
+- Removed the stale nested-loop limitation from the public README and user
+  guide. `documentation/getting-started.md` and `documentation/skills/*.md`
+  contain no stale nested-loop limitation text.
+- Removed the remaining known-failure-boundary comments from the isolated
+  borrow-sensitive nested-control fixtures.
+- Regenerated backend outputs after the final nested-control changes. During
+  full regression testing, user-level `sum` declarations collided with the
+  builtin propagated-exit sum in Lean, Coq, and F*. The generated builtin is now
+  named `AeneasSum` for Lean and `aeneas_sum` for Coq/F*, while HOL4 keeps
+  `sum`.
+- Added extraction-name coverage for the backend-specific propagated-exit sum
+  type and variant names.
+- `make test`, `make test-loops-nested-control.rs`,
+  `make test-loops-nested-control-scalar.rs`,
+  `make test-loops-nested-control-backends.rs`, `make test-arrays.rs`,
+  `make test-no_nested_borrows.rs`, `dune build`, and
+  `dune runtest ./loop_exit_shape_test.exe` pass locally. Backend verification
+  was attempted, but the local environment is missing `lake`, `coq_makefile`,
+  and `fstar.exe`.
 
 ## Final Acceptance Criteria
 

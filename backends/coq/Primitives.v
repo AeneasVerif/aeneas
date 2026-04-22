@@ -22,9 +22,9 @@ Inductive result A :=
   | Ok : A -> result A
   | Fail_ : error -> result A.
 
-Inductive sum A B :=
-  | Left : A -> sum A B
-  | Right : B -> sum A B.
+Inductive aeneas_sum A B :=
+  | Left : A -> aeneas_sum A B
+  | Right : B -> aeneas_sum A B.
 
 Arguments Ok {_} a.
 Arguments Fail_ {_}.

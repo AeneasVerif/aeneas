@@ -5,10 +5,11 @@ Aeneas is a verification toolchain for Rust programs aiming to embed purely func
 ## What it can do?
 
 Aeneas aims to provide verification facilities for **safe** Rust with some caveats described in the next section.
+It supports ordinary loops and nested loops, including `return` from inside
+nested loops and labelled `break`/`continue` to outer loops.
 
 ## What it cannot do?
 
-- loops: no nested loops for now. We are working on lifting this limitation.
 - no functions pointers/closures: ongoing work. We have support for traits and will have support for function pointers and closures soon.
 - limited type parametricity: it is not possible for now to instantiate a type parameter with a type containing a borrow. This is mostly an engineering issue.
 - no nested borrows in function signatures: ongoing work.

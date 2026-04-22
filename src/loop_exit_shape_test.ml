@@ -52,28 +52,56 @@ let check_constructor variant (value : Pure.texpr) (expr : Pure.texpr) =
     -> ()
   | _ -> failwith "unexpected LoopExit constructor shape"
 
-let check_extract_variant_name backend_name variant expected_name =
+let check_extract_variant_name backend_name builtin_ty variant expected_name =
   Config.set_backend backend_name;
   let matches =
     List.exists
       (fun (ty, actual_variant, actual_name) ->
-        ty = Pure.TLoopExit && actual_variant = variant
+        ty = builtin_ty && actual_variant = variant
         && actual_name = expected_name)
       (ExtractBase.builtin_variants ())
   in
-  if not matches then failwith "missing LoopExit extraction variant name"
+  if not matches then failwith "missing builtin extraction variant name"
+
+let check_extract_adt_name backend_name builtin_ty expected_name =
+  Config.set_backend backend_name;
+  let matches =
+    List.exists
+      (fun (ty, actual_name) -> ty = builtin_ty && actual_name = expected_name)
+      (ExtractBase.builtin_adts ())
+  in
+  if not matches then failwith "missing builtin ADT extraction name"
 
 let check_extract_names () =
   List.iter
+    (fun (backend_name, expected_name) ->
+      check_extract_adt_name backend_name Pure.TSum expected_name)
+    [
+      ("lean", "AeneasSum");
+      ("fstar", "aeneas_sum");
+      ("coq", "aeneas_sum");
+      ("hol4", "sum");
+    ];
+  List.iter
+    (fun (backend_name, left, right) ->
+      check_extract_variant_name backend_name Pure.TSum Pure.sum_left_id left;
+      check_extract_variant_name backend_name Pure.TSum Pure.sum_right_id right)
+    [
+      ("lean", "AeneasSum.left", "AeneasSum.right");
+      ("fstar", "Left", "Right");
+      ("coq", "Left", "Right");
+      ("hol4", "Left", "Right");
+    ];
+  List.iter
     (fun (backend_name, normal_break, propagated_break, propagated_continue,
           propagated_return) ->
-      check_extract_variant_name backend_name Pure.loop_exit_normal_break_id
-        normal_break;
-      check_extract_variant_name backend_name Pure.loop_exit_propagated_break_id
-        propagated_break;
-      check_extract_variant_name backend_name
+      check_extract_variant_name backend_name Pure.TLoopExit
+        Pure.loop_exit_normal_break_id normal_break;
+      check_extract_variant_name backend_name Pure.TLoopExit
+        Pure.loop_exit_propagated_break_id propagated_break;
+      check_extract_variant_name backend_name Pure.TLoopExit
         Pure.loop_exit_propagated_continue_id propagated_continue;
-      check_extract_variant_name backend_name
+      check_extract_variant_name backend_name Pure.TLoopExit
         Pure.loop_exit_propagated_return_id propagated_return)
     [
       ( "lean",

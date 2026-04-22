@@ -1163,7 +1163,7 @@ let builtin_adts () : (builtin_ty * string) list =
   | Lean ->
       [
         (TResult, "Result");
-        (TSum, "Sum");
+        (TSum, "AeneasSum");
         (TLoopResult, "ControlFlow");
         (TLoopExit, "LoopExit");
         (TFuel, "Nat");
@@ -1173,13 +1173,30 @@ let builtin_adts () : (builtin_ty * string) list =
         (TRawPtr Mut, "MutRawPtr");
         (TRawPtr Const, "ConstRawPtr");
       ]
-  | Coq | FStar | HOL4 ->
+  | Coq | FStar ->
+      [
+        (TResult, "result");
+        (TSum, "aeneas_sum");
+        (TLoopResult, "control_flow");
+        (TLoopExit, "loop_exit");
+        (TFuel, "nat");
+        (TArray, "array");
+        (TSlice, "slice");
+        (TStr, "str");
+        (TRawPtr Mut, "mut_raw_ptr");
+        (TRawPtr Const, "const_raw_ptr");
+      ]
+  | HOL4 ->
+      (* HOL4 uses the prover's native sum type and sumSyntax tooling for this
+         builtin. Generated Rust type declarations receive a [_t] suffix, so
+         user-level [sum] types don't collide with the primitive sum type here
+         the way they do in Lean/Coq/F*. *)
       [
         (TResult, "result");
         (TSum, "sum");
         (TLoopResult, "control_flow");
         (TLoopExit, "loop_exit");
-        (TFuel, if backend () = HOL4 then "num" else "nat");
+        (TFuel, "num");
         (TArray, "array");
         (TSlice, "slice");
         (TStr, "str");
@@ -1235,8 +1252,8 @@ let builtin_variants () : (builtin_ty * VariantId.id * string) list =
         (TResult, result_ok_id, "ok");
         (TResult, result_fail_id, "fail");
         (TError, error_failure_id, "panic");
-        (TSum, sum_left_id, "Sum.left");
-        (TSum, sum_right_id, "Sum.right");
+        (TSum, sum_left_id, "AeneasSum.left");
+        (TSum, sum_right_id, "AeneasSum.right");
         (TLoopResult, loop_result_continue_id, "cont");
         (TLoopResult, loop_result_break_id, "done");
         (TLoopExit, loop_exit_normal_break_id, "normalBreak");

@@ -1,7 +1,7 @@
 //@ [!lean] skip
 
-// Isolated from loops-nested-control.rs so this borrow-sensitive propagated
-// return case has its own known-failure boundary.
+// Isolated from loops-nested-control.rs to keep this borrow-sensitive
+// propagated return case easy to regenerate independently.
 pub fn return_nested_mut_borrow(value: &mut u32, max: u32) -> u32 {
     let mut i = 0;
 

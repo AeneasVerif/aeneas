@@ -1,7 +1,7 @@
 //@ [!lean] skip
 
-// Isolated from loops-nested-control.rs so this borrow-sensitive propagated
-// continue case has its own known-failure boundary.
+// Isolated from loops-nested-control.rs to keep this borrow-sensitive
+// propagated continue case easy to regenerate independently.
 pub fn continue_outer_array_update(mut values: [usize; 4]) -> [usize; 4] {
     let mut i = 0;
 

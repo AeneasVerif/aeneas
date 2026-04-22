@@ -231,16 +231,16 @@ def backend_return_nested (max : Std.U32) : Result Std.U32 := do
 def backend_break_two_depths_loop0_loop0_loop0.body
   (max : Std.U32) (i : Std.U32) (j : Std.U32) (s : Std.U32) (k : Std.U32) :
   Result (ControlFlow (Std.U32 × Std.U32) (LoopExit (Std.U32 × Std.U32 ×
-    Std.U32 × Std.U32 × Std.U32) (Sum (Std.U32 × Std.U32 × Std.U32 × Std.U32)
-    (Std.U32 × Std.U32 × Std.U32)) Unit Unit))
+    Std.U32 × Std.U32 × Std.U32) (AeneasSum (Std.U32 × Std.U32 × Std.U32 ×
+    Std.U32) (Std.U32 × Std.U32 × Std.U32)) Unit Unit))
   := do
   if k < 3#u32
   then
     if max = 0#u32
-    then ok (done (propagatedBreak (Sum.left (max, i, s, j))))
+    then ok (done (propagatedBreak (AeneasSum.left (max, i, s, j))))
     else
       if max = 1#u32
-      then ok (done (propagatedBreak (Sum.right (max, i, s))))
+      then ok (done (propagatedBreak (AeneasSum.right (max, i, s))))
       else
         let i1 ← i + j
         let i2 ← i1 + k
@@ -255,7 +255,7 @@ def backend_break_two_depths_loop0_loop0_loop0.body
 @[rust_loop]
 def backend_break_two_depths_loop0_loop0_loop0
   (max : Std.U32) (i : Std.U32) (s : Std.U32) (j : Std.U32) (k : Std.U32) :
-  Result (LoopExit (Std.U32 × Std.U32 × Std.U32 × Std.U32 × Std.U32) (Sum
+  Result (LoopExit (Std.U32 × Std.U32 × Std.U32 × Std.U32 × Std.U32) (AeneasSum
     (Std.U32 × Std.U32 × Std.U32 × Std.U32) (Std.U32 × Std.U32 × Std.U32)) Unit
     Unit)
   := do
@@ -281,9 +281,9 @@ def backend_break_two_depths_loop0_loop0.body
     | normalBreak (max1, i1, s1, j1, _) =>
       let j2 ← j1 + 1#u32
       ok (cont (max1, i1, s1, j2))
-    | propagatedBreak (Sum.left (i1, i2, i3, i4)) =>
+    | propagatedBreak (AeneasSum.left (i1, i2, i3, i4)) =>
       ok (done (normalBreak (i1, i2, i3, i4)))
-    | propagatedBreak (Sum.right (i1, i2, i3)) =>
+    | propagatedBreak (AeneasSum.right (i1, i2, i3)) =>
       ok (done (propagatedBreak (i1, i2, i3)))
     | propagatedContinue _ => fail panic
     | propagatedReturn _ => fail panic

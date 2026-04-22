@@ -227,7 +227,7 @@ Definition backend_return_nested (max : u32) : result u32 :=
 Definition backend_break_two_depths_loop0_loop0_loop0_body
   (max : u32) (i : u32) (j : u32) (s : u32) (k : u32) :
   result (control_flow (u32 * u32) (loop_exit (u32 * u32 * u32 * u32 * u32)
-    (sum (u32 * u32 * u32 * u32) (u32 * u32 * u32)) unit unit))
+    (aeneas_sum (u32 * u32 * u32 * u32) (u32 * u32 * u32)) unit unit))
   :=
   if k s< 3%u32
   then
@@ -250,8 +250,8 @@ Definition backend_break_two_depths_loop0_loop0_loop0_body
     Visibility: public *)
 Definition backend_break_two_depths_loop0_loop0_loop0
   (max : u32) (i : u32) (s : u32) (j : u32) (k : u32) :
-  result (loop_exit (u32 * u32 * u32 * u32 * u32) (sum (u32 * u32 * u32 * u32)
-    (u32 * u32 * u32)) unit unit)
+  result (loop_exit (u32 * u32 * u32 * u32 * u32) (aeneas_sum (u32 * u32 * u32
+    * u32) (u32 * u32 * u32)) unit unit)
   :=
   loop
     (fun ((s1, k1) : (u32 * u32)) =>

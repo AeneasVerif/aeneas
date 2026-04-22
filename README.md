@@ -119,12 +119,9 @@ Aeneas currently functionalizes a subset of safe Rust, and we are in the process
 of extending the functional model with reasoning based on separation logic to
 support unsafe code and concurrent code.
 
-We currently have the following limitations on the *safe* subset, that we plan to address
-one by one:
-- **loops**: `return` inside *nested* loops, or `break`/`continue` to *outer* loops
-  are not supported yet (e.g., `'a : loop { loop { break 'a; } } `). This is a
-  technical limitation, not a fundamental issue, that we plan to address in the
-  near future and that we can prioritize depending on our users' needs.
+Aeneas supports ordinary loops and nested loops in the safe subset, including
+`return` from inside nested loops and labelled `break`/`continue` to outer
+loops.
 
 The following limitations will be lifted by the ongoing work on separation logic:
 - **unsafe code**

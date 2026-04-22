@@ -206,7 +206,7 @@ def lift {α : Type u} (x : α) : Result α := Result.ok x
 # Loops
 -/
 
-inductive Sum (α : Type u) (β : Type v) where
+inductive AeneasSum (α : Type u) (β : Type v) where
   | left (v : α)
   | right (v : β)
 deriving Repr, BEq
