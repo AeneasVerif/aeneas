@@ -453,6 +453,31 @@ Expected result:
 - Propagated exits carry contexts that are shape-compatible with their target
   loop or function boundary.
 
+Implementation:
+
+- Loop-body synthesis now reconciles direct `Break i` / `Continue i` for
+  `i > 0` and `Return` against the propagated exit contexts collected by
+  `compute_loop_exit_contexts`.
+- Each propagated branch is matched against its per-kind/per-depth joined exit
+  context with the same `loop_match_break_ctx_with_target` path used for normal
+  joined breaks. This keeps borrow, loan, abstraction, symbolic value, and dummy
+  variable reconciliation explicit.
+- Synthesized symbolic bodies now emit `LoopExit (PropagatedBreak depth)`,
+  `LoopExit (PropagatedContinue depth)`, and `LoopExit PropagatedReturn` for
+  those branches. Normal `Break 0` and `Continue 0` behavior is unchanged.
+- `same_propagated_exit_kind` is exported from `InterpLoopsFixedPoint` so
+  synthesis and exit-context grouping use the same target equality.
+- Added focused borrow-sensitive known-failure fixtures for propagated break,
+  propagated continue, and propagated return. They now reach the expected pure
+  lowering boundary instead of failing in symbolic loop synthesis.
+- Added a three-level nested-break known-failure fixture to pin the synthesis
+  depth decrement with `PropagatedBreak 1`.
+- Propagated-exit synthesis now checks that collected exit targets are unique
+  and reports the missing or duplicate target kind if the collector/synthesizer
+  invariant is violated.
+- Returning multiple symbolic statement results is still Milestone 8, and pure
+  lowering of propagated loop exits remains Milestone 9.
+
 ## Milestone 8: Return Multiple Results From Symbolic Loop Evaluation
 
 Update `eval_loop_symbolic` so a loop can evaluate to more than one statement

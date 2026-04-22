@@ -1,0 +1,4 @@
+[[92mInfo[39m ] Imported: tests/llbc/loops_nested_return_borrow_control.llbc
+[[91mError[39m] Propagated loop exits are not lowered to pure yet: PropagatedReturn
+Source: 'tests/src/loops-nested-return-borrow-control.rs', lines 6:0-29:1
+Compiler source: symbolic/SymbolicToPureExpressions.ml, line 1921

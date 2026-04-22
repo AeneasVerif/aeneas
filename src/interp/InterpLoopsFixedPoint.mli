@@ -72,6 +72,11 @@ type loop_exit_contexts = {
   propagated_exits : propagated_exit_ctx list;
 }
 
+(** Shared equality for propagated exit targets. Break and continue exits are
+    equal only when both the kind and remaining relative depth match. *)
+val same_propagated_exit_kind :
+  propagated_exit_kind -> propagated_exit_kind -> bool
+
 (** Exposed for focused regression tests and for callers that need the same
     per-kind/per-depth partitioning as [compute_loop_exit_contexts]. *)
 val group_by_propagated_exit_kind :
