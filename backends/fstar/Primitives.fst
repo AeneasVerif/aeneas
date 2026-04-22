@@ -26,6 +26,10 @@ type result (a : Type0) : Type0 =
 | Ok : v:a -> result a
 | Fail : e:error -> result a
 
+type sum (a b : Type0) : Type0 =
+| Left : v:a -> sum a b
+| Right : v:b -> sum a b
+
 // Monadic return operator
 unfold let return (#a : Type0) (x : a) : result a = Ok x
 

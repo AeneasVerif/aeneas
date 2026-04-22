@@ -95,11 +95,10 @@ type builtin_ty =
           - [propagated_return]: payload for a function return from inside the
             loop.
 
-          The propagated-break/continue payload types are responsible for
-          carrying the decremented relative depth together with the value and
-          abstraction-continuation data required by the target loop. Encoding
-          the depth in the payload, rather than as a type-level integer, keeps
-          the type usable by all backends.
+          If several propagated break/continue depths reach the same loop, the
+          corresponding payload type may be a sum whose branches identify the
+          decremented relative depth and carry the value and
+          abstraction-continuation data required by that target.
 
           Shape examples:
 

@@ -1,4 +1,0 @@
-[[92mInfo[39m ] Imported: tests/llbc/loops_nested_depth_break_control.llbc
-[[91mError[39m] Propagated loop exits are not lowered to pure yet: PropagatedBreak 1
-Source: 'tests/src/loops-nested-depth-break-control.rs', lines 6:0-27:1
-Compiler source: symbolic/SymbolicToPureExpressions.ml, line 1921

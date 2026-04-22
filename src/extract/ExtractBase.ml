@@ -1163,6 +1163,7 @@ let builtin_adts () : (builtin_ty * string) list =
   | Lean ->
       [
         (TResult, "Result");
+        (TSum, "Sum");
         (TLoopResult, "ControlFlow");
         (TLoopExit, "LoopExit");
         (TFuel, "Nat");
@@ -1175,6 +1176,7 @@ let builtin_adts () : (builtin_ty * string) list =
   | Coq | FStar | HOL4 ->
       [
         (TResult, "result");
+        (TSum, "sum");
         (TLoopResult, "control_flow");
         (TLoopExit, "loop_exit");
         (TFuel, if backend () = HOL4 then "num" else "nat");
@@ -1198,6 +1200,8 @@ let builtin_variants () : (builtin_ty * VariantId.id * string) list =
       [
         (TResult, result_ok_id, "Ok");
         (TResult, result_fail_id, "Fail");
+        (TSum, sum_left_id, "Left");
+        (TSum, sum_right_id, "Right");
         (TLoopResult, loop_result_continue_id, "Cont");
         (TLoopResult, loop_result_break_id, "Done");
         (TLoopExit, loop_exit_normal_break_id, "NormalBreak");
@@ -1213,6 +1217,8 @@ let builtin_variants () : (builtin_ty * VariantId.id * string) list =
       [
         (TResult, result_ok_id, "Ok");
         (TResult, result_fail_id, "Fail_");
+        (TSum, sum_left_id, "Left");
+        (TSum, sum_right_id, "Right");
         (TLoopResult, loop_result_continue_id, "Cont");
         (TLoopResult, loop_result_break_id, "Done");
         (TLoopExit, loop_exit_normal_break_id, "NormalBreak");
@@ -1229,6 +1235,8 @@ let builtin_variants () : (builtin_ty * VariantId.id * string) list =
         (TResult, result_ok_id, "ok");
         (TResult, result_fail_id, "fail");
         (TError, error_failure_id, "panic");
+        (TSum, sum_left_id, "Sum.left");
+        (TSum, sum_right_id, "Sum.right");
         (TLoopResult, loop_result_continue_id, "cont");
         (TLoopResult, loop_result_break_id, "done");
         (TLoopExit, loop_exit_normal_break_id, "normalBreak");
@@ -1242,6 +1250,8 @@ let builtin_variants () : (builtin_ty * VariantId.id * string) list =
       [
         (TResult, result_ok_id, "Ok");
         (TResult, result_fail_id, "Fail");
+        (TSum, sum_left_id, "Left");
+        (TSum, sum_right_id, "Right");
         (TLoopResult, loop_result_continue_id, "Cont");
         (TLoopResult, loop_result_break_id, "Done");
         (TLoopExit, loop_exit_normal_break_id, "NormalBreak");

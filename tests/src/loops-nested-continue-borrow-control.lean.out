@@ -1,4 +1,4 @@
 [[92mInfo[39m ] Imported: tests/llbc/loops_nested_continue_borrow_control.llbc
-[[91mError[39m] Propagated loop exits are not lowered to pure yet: PropagatedContinue 0
+[[91mError[39m] Propagated loop exits with abstraction continuations need multi-exit loop backward lowering
 Source: 'tests/src/loops-nested-continue-borrow-control.rs', lines 6:0-26:1
-Compiler source: symbolic/SymbolicToPureExpressions.ml, line 1921
+Compiler source: symbolic/SymbolicToPureExpressions.ml, line 2220

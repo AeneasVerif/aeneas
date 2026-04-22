@@ -217,6 +217,11 @@ type bs_ctx = {
   calls : S.call V.FunCallId.Map.t;
       (** The function calls we encountered so far *)
   loop_ids_map : LoopId.id V.LoopId.Map.t;  (** Ids to use for the loops *)
+  active_loop_id : V.loop_id option;
+      (** Source loop id whose body is currently being translated. Loop control
+          nodes carry their source loop id; checking it here prevents an inner
+          loop exit from being accidentally lowered through the wrong active
+          callbacks. *)
   mk_return : (bs_ctx -> texpr option -> texpr) option;
       (** Small helper: translate a [return] expression, given a value to
           "return". The translation of [return] depends on the context, and in
@@ -234,6 +239,7 @@ type bs_ctx = {
           We initialize this at [None]. *)
   mk_continue : (bs_ctx -> texpr -> texpr) option;
   mk_break : (bs_ctx -> texpr -> texpr) option;
+  mk_loop_exit : (bs_ctx -> S.loop_exit_kind -> texpr -> texpr) option;
   mut_borrow_to_consumed : texpr V.BorrowId.Map.t;
       (** A map from mutable borrows consumed by region abstractions to consumed
           values.

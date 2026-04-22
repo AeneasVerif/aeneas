@@ -1,4 +1,3 @@
-//@ [lean] known-failure
 //@ [!lean] skip
 
 pub fn continue_outer_only(max: u32) -> u32 {

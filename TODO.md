@@ -573,6 +573,25 @@ Expected result:
 
 - Pure expressions become well typed for nested exits.
 
+Implementation:
+
+- `SymbolicToPureExpressions.translate_loop` now lowers loops with propagated
+  scalar exits to `TLoopExit` payloads carried by the loop's break result.
+- Multiple propagated break or continue depths from the same loop are encoded
+  with nested `TSum` payloads under the corresponding `TLoopExit` constructor.
+- After-loop dispatch matches on `NormalBreak`, `PropagatedBreak`,
+  `PropagatedContinue`, and `PropagatedReturn` and forwards each scalar
+  propagated exit to the enclosing break, continue, or return callback.
+- `translate_continue_break` and `translate_loop_exit` validate the source loop
+  id against the currently active loop body before lowering the control node.
+- Propagated exits that carry abstraction continuations now stop at an explicit
+  Milestone 10 boundary instead of flowing into an incorrectly typed outer-loop
+  break payload.
+- `loops-nested-control-scalar.rs`,
+  `loops-nested-continue-control.rs`, and
+  `loops-nested-depth-break-control.rs` generate Lean with explicit `LoopExit`
+  dispatch.
+
 ## Milestone 10: Design And Implement Backward Functions For Multi-Exit Loops
 
 Handle loop-generated backward functions explicitly.

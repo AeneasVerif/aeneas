@@ -1,4 +1,3 @@
-//@ [lean] known-failure
 //@ [!lean] skip
 
 // Three-level nest for focused depth-arithmetic coverage: the innermost loop

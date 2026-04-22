@@ -195,10 +195,12 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
       (* Empty for now *)
       calls;
       loop_ids_map;
+      active_loop_id = None;
       mk_return = None;
       mk_panic = None;
       mk_continue = None;
       mk_break = None;
+      mk_loop_exit = None;
       mut_borrow_to_consumed = BorrowId.Map.empty;
       var_id_to_default = Pure.FVarId.Map.empty;
       abs_id_to_info = AbsId.Map.empty;
