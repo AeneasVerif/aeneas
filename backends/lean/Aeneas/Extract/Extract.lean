@@ -604,14 +604,15 @@ def processTraitDecl (declName : Name) (_pat : String) (info : TraitDecl) : Attr
     let userTypes := Std.HashMap.ofList (info.typesInfo.map (fun x => (x.extract, x)))
     let userMethods := Std.HashMap.ofList (info.methodsInfo.map (fun x => (x.extract, x)))
 
-    -- Go through all the fields
     let mut parentClauses := #[]
     let mut consts := #[]
     let mut types := #[]
     let mut methods := #[]
     let fields := structInfo.fieldNames.toList
+    let mut fieldRustNames : Std.HashSet String := ∅
     for field in fields do
       let rustField ← fieldNameToString false field
+      fieldRustNames := fieldRustNames.insert rustField
       if let some info := userParentClauses.get? rustField then
         parentClauses := parentClauses.push info
       else if let some info := userConsts.get? rustField then
@@ -622,6 +623,25 @@ def processTraitDecl (declName : Name) (_pat : String) (info : TraitDecl) : Attr
         methods := methods.push info
       else
         methods := methods.push ⟨ rustField, ← fieldNameToString true field ⟩
+
+    -- Add the user information which was not matched with a field
+    -- Parent clauses
+    for rustField in info.parentClauses do
+      if ¬ fieldRustNames.contains rustField then
+        parentClauses := parentClauses.push rustField
+    -- Constants
+    for info in info.constsInfo do
+      if ¬ fieldRustNames.contains info.extract then
+        consts := consts.push info
+    -- Types
+    for info in info.typesInfo do
+      if ¬ fieldRustNames.contains info.extract then
+        types := types.push info
+    -- Methods
+    for info in info.methodsInfo do
+      if ¬ fieldRustNames.contains info.extract then
+        methods := methods.push info
+
     pure { info with parentClauses := parentClauses.toList,
                      constsInfo := consts.toList,
                      typesInfo := types.toList,

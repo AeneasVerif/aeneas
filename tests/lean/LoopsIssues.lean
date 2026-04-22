@@ -44,7 +44,7 @@ axiom I32.Insts.CoreIterRangeStep.steps_between
     Source: '/rustc/library/core/src/iter/range.rs', lines 299:12-299:37
     Name pattern: [core::iter::range::Step<i32>] -/
 @[reducible, rust_trait_impl "core::iter::range::Step<i32>"]
-def I32.Insts.CoreIterRangeStep : core.iter.range.Step Std.I32 := {
+impl_def I32.Insts.CoreIterRangeStep : core.iter.range.Step Std.I32 := {
   cloneInst := core.clone.CloneI32
   partialOrdInst := core.cmp.PartialOrdI32
   steps_between := I32.Insts.CoreIterRangeStep.steps_between

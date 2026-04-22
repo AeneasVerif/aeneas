@@ -1074,6 +1074,55 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
             | TraitDeclItem (_, _, false) -> ()
             (* Global initializers are translated along with the global definition *)
             | _ when pure_fun.f.is_global_decl_body -> ()
+            | TraitImplItem (_, trait_decl_ref, item_name, _)
+              when Config.backend () = Lean ->
+                (* Check if it's an opaque default method *)
+                let trait_decl =
+                  TraitDeclId.Map.find_opt trait_decl_ref.id
+                    ctx.trans_trait_decls
+                in
+                let is_opaque = pure_fun.f.body = None in
+                let has_library_default =
+                  match trait_decl with
+                  | Some trait_decl -> (
+                      match trait_decl.builtin_info with
+                      | None -> false
+                      | Some info -> (
+                          match
+                            List.find_opt
+                              (fun (m, _) -> m = item_name)
+                              info.methods
+                          with
+                          | Some (_, fun_info) -> fun_info.has_default
+                          | None -> false))
+                  | None -> (
+                      (* The trait declaration is not in the pure declarations:
+                         it must be an external trait. Check the builtin trait
+                         declarations. *)
+                      let trait_decl =
+                        TraitDeclId.Map.find trait_decl_ref.id
+                          ctx.crate.trait_decls
+                      in
+                      let builtin_trait_decls =
+                        ExtractBuiltin.builtin_trait_decls_map ()
+                      in
+                      let builtin_info =
+                        match_name_find_opt ctx.trans_ctx
+                          trait_decl.item_meta.name builtin_trait_decls
+                      in
+                      match builtin_info with
+                      | None -> false
+                      | Some info -> (
+                          match
+                            List.find_opt
+                              (fun (m, _) -> m = item_name)
+                              info.methods
+                          with
+                          | Some (_, fun_info) -> fun_info.has_default
+                          | None -> false))
+                in
+                if is_opaque && has_library_default then ()
+                else export_functions_group [ pure_fun ]
             | _ ->
                 (* Translate *)
                 export_functions_group [ pure_fun ])
@@ -1086,7 +1135,64 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
             (fun id -> FunDeclId.Map.find_opt id ctx.trans_funs)
             ids
         in
-        if List.exists (fun pf -> pf.f.is_global_decl_body) pure_funs then
+        (* Special case for Lean: filter out opaque default methods *)
+        let pure_funs =
+          if Config.backend () = Lean then
+            List.filter
+              (fun pure_fun ->
+                if pure_fun.f.is_global_decl_body then true
+                else
+                  match pure_fun.f.Pure.src with
+                  | TraitImplItem (_, trait_decl_ref, item_name, _) ->
+                      let trait_decl =
+                        TraitDeclId.Map.find_opt trait_decl_ref.id
+                          ctx.trans_trait_decls
+                      in
+                      let is_opaque = pure_fun.f.body = None in
+                      let has_library_default =
+                        match trait_decl with
+                        | Some trait_decl -> (
+                            match trait_decl.builtin_info with
+                            | None -> false
+                            | Some info -> (
+                                match
+                                  List.find_opt
+                                    (fun (m, _) -> m = item_name)
+                                    info.methods
+                                with
+                                | Some (_, fun_info) -> fun_info.has_default
+                                | None -> false))
+                        | None -> (
+                            (* External trait *)
+                            let trait_decl =
+                              TraitDeclId.Map.find trait_decl_ref.id
+                                ctx.crate.trait_decls
+                            in
+                            let builtin_trait_decls =
+                              ExtractBuiltin.builtin_trait_decls_map ()
+                            in
+                            let builtin_info =
+                              match_name_find_opt ctx.trans_ctx
+                                trait_decl.item_meta.name builtin_trait_decls
+                            in
+                            match builtin_info with
+                            | None -> false
+                            | Some info -> (
+                                match
+                                  List.find_opt
+                                    (fun (m, _) -> m = item_name)
+                                    info.methods
+                                with
+                                | Some (_, fun_info) -> fun_info.has_default
+                                | None -> false))
+                      in
+                      not (is_opaque && has_library_default)
+                  | _ -> true)
+              pure_funs
+          else pure_funs
+        in
+        if pure_funs = [] then ()
+        else if List.exists (fun pf -> pf.f.is_global_decl_body) pure_funs then
           [%craise_opt_span] None "Mutually recursive globals are not supported"
         else (* Translate *)
           export_functions_group pure_funs

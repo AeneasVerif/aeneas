@@ -33,7 +33,7 @@ def Trait2.Blanket.foo {T : Type} (Trait1Inst : Trait1 T) : Result Unit := do
 /-- Trait implementation: [blanket_impl::{blanket_impl::Trait2 for T}]
     Source: 'tests/src/blanket_impl.rs', lines 9:0-9:31 -/
 @[reducible]
-def Trait2.Blanket {T : Type} (Trait1Inst : Trait1 T) : Trait2 T := {
+impl_def Trait2.Blanket {T : Type} (Trait1Inst : Trait1 T) : Trait2 T := {
   foo := Trait2.Blanket.foo Trait1Inst
 }
 

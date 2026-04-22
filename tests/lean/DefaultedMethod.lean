@@ -43,7 +43,7 @@ def NoOverride.Insts.Defaulted_methodTrait.provided_method
 /-- Trait implementation: [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}]
     Source: 'tests/src/defaulted_method.rs', lines 10:0-17:1 -/
 @[reducible]
-def NoOverride.Insts.Defaulted_methodTrait : Trait NoOverride := {
+impl_def NoOverride.Insts.Defaulted_methodTrait : Trait NoOverride := {
   provided_method := NoOverride.Insts.Defaulted_methodTrait.provided_method
   required_method := NoOverride.Insts.Defaulted_methodTrait.required_method
 }
@@ -68,7 +68,7 @@ def YesOverride.Insts.Defaulted_methodTrait.provided_method
 /-- Trait implementation: [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}]
     Source: 'tests/src/defaulted_method.rs', lines 20:0-24:1 -/
 @[reducible]
-def YesOverride.Insts.Defaulted_methodTrait : Trait YesOverride := {
+impl_def YesOverride.Insts.Defaulted_methodTrait : Trait YesOverride := {
   provided_method := YesOverride.Insts.Defaulted_methodTrait.provided_method
   required_method := YesOverride.Insts.Defaulted_methodTrait.required_method
 }

@@ -27,8 +27,8 @@ def Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index
 /-- Trait implementation: [curve25519::{core::ops::index::Index<usize, u64> for curve25519::Scalar52}]
     Source: 'tests/src/curve25519.rs', lines 9:0-14:1 -/
 @[reducible]
-def Scalar52.Insts.CoreOpsIndexIndexUsizeU64 : core.ops.index.Index Scalar52
-  Std.Usize Std.U64 := {
+impl_def Scalar52.Insts.CoreOpsIndexIndexUsizeU64 : core.ops.index.Index
+  Scalar52 Std.Usize Std.U64 := {
   index := Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index
 }
 

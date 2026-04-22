@@ -27,7 +27,7 @@ inductive AlertLevel where
 /-- Trait implementation: [discriminant::{core::marker::StructuralPartialEq for discriminant::AlertLevel}]
     Source: 'tests/src/discriminant.rs', lines 6:9-6:18 -/
 @[reducible]
-def AlertLevel.Insts.CoreMarkerStructuralPartialEq :
+impl_def AlertLevel.Insts.CoreMarkerStructuralPartialEq :
   core.marker.StructuralPartialEq AlertLevel := {
 }
 
@@ -43,8 +43,8 @@ def AlertLevel.Insts.CoreCmpPartialEqAlertLevel.eq
 /-- Trait implementation: [discriminant::{core::cmp::PartialEq<discriminant::AlertLevel> for discriminant::AlertLevel}]
     Source: 'tests/src/discriminant.rs', lines 6:9-6:18 -/
 @[reducible]
-def AlertLevel.Insts.CoreCmpPartialEqAlertLevel : core.cmp.PartialEq AlertLevel
-  AlertLevel := {
+impl_def AlertLevel.Insts.CoreCmpPartialEqAlertLevel : core.cmp.PartialEq
+  AlertLevel AlertLevel := {
   eq := AlertLevel.Insts.CoreCmpPartialEqAlertLevel.eq
 }
 
@@ -59,7 +59,7 @@ inductive AlertLevelU8 where
 /-- Trait implementation: [discriminant::{core::marker::StructuralPartialEq for discriminant::AlertLevelU8}]
     Source: 'tests/src/discriminant.rs', lines 12:9-12:18 -/
 @[reducible]
-def AlertLevelU8.Insts.CoreMarkerStructuralPartialEq :
+impl_def AlertLevelU8.Insts.CoreMarkerStructuralPartialEq :
   core.marker.StructuralPartialEq AlertLevelU8 := {
 }
 
@@ -75,7 +75,7 @@ def AlertLevelU8.Insts.CoreCmpPartialEqAlertLevelU8.eq
 /-- Trait implementation: [discriminant::{core::cmp::PartialEq<discriminant::AlertLevelU8> for discriminant::AlertLevelU8}]
     Source: 'tests/src/discriminant.rs', lines 12:9-12:18 -/
 @[reducible]
-def AlertLevelU8.Insts.CoreCmpPartialEqAlertLevelU8 : core.cmp.PartialEq
+impl_def AlertLevelU8.Insts.CoreCmpPartialEqAlertLevelU8 : core.cmp.PartialEq
   AlertLevelU8 AlertLevelU8 := {
   eq := AlertLevelU8.Insts.CoreCmpPartialEqAlertLevelU8.eq
 }

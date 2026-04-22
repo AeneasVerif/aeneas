@@ -35,7 +35,7 @@ def Fraction.Insts.CoreCloneClone.clone_from
 /-- Trait implementation: [hashmap::{core::clone::Clone for hashmap::Fraction}]
     Source: 'tests/src/hashmap.rs', lines 43:9-43:14 -/
 @[reducible]
-def Fraction.Insts.CoreCloneClone : core.clone.Clone Fraction := {
+impl_def Fraction.Insts.CoreCloneClone : core.clone.Clone Fraction := {
   clone := Fraction.Insts.CoreCloneClone.clone
   clone_from := Fraction.Insts.CoreCloneClone.clone_from
 }
@@ -43,7 +43,7 @@ def Fraction.Insts.CoreCloneClone : core.clone.Clone Fraction := {
 /-- Trait implementation: [hashmap::{core::marker::Copy for hashmap::Fraction}]
     Source: 'tests/src/hashmap.rs', lines 43:16-43:20 -/
 @[reducible]
-def Fraction.Insts.CoreMarkerCopy : core.marker.Copy Fraction := {
+impl_def Fraction.Insts.CoreMarkerCopy : core.marker.Copy Fraction := {
   cloneInst := Fraction.Insts.CoreCloneClone
 }
 

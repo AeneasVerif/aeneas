@@ -2,6 +2,7 @@ import Lean
 import Aeneas.Std.Primitives
 import Aeneas.Tactic.Step.Init
 import Aeneas.Std.Alloc
+import Aeneas.Tactic.Elab.TraitDefault
 
 namespace Aeneas
 
@@ -26,6 +27,7 @@ structure clone.Clone (Self : Type) where
   clone : Self → Result Self
   clone_from : Self → Self → Result Self := fun _ => clone
 
+@[trait_default]
 def clone.Clone.from_from.default {Self : Type} (clone : Self → Result Self)
   (_self source : Self) : Result Self :=
   clone source

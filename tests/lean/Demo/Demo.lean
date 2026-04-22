@@ -154,7 +154,7 @@ def Usize.Insts.DemoCounter.incr
 /-- Trait implementation: [demo::{demo::Counter for usize}]
     Source: 'tests/src/demo.rs', lines 104:0-110:1 -/
 @[reducible]
-def Usize.Insts.DemoCounter : Counter Std.Usize := {
+impl_def Usize.Insts.DemoCounter : Counter Std.Usize := {
   incr := Usize.Insts.DemoCounter.incr
 }
 

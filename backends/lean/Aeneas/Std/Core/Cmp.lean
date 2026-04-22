@@ -1,27 +1,28 @@
 import Aeneas.Extract
 import Aeneas.Std.Primitives
+import Aeneas.Tactic.Elab.TraitDefault
 
 namespace Aeneas.Std
 
 open Result
 
-@[rust_trait "core::cmp::PartialEq"]
+@[rust_trait "core::cmp::PartialEq" (defaultMethods := ["ne"])]
 structure core.cmp.PartialEq (Self : Type) (Rhs : Type) where
   eq : Self → Rhs → Result Bool
   ne : Self → Rhs → Result Bool := fun self other => do ok (not (← eq self other))
 
-@[rust_trait "core::cmp::Eq" (parentClauses := ["partialEqInst"])]
+@[rust_trait "core::cmp::Eq" (parentClauses := ["partialEqInst"]) (defaultMethods := ["assert_receiver_is_total_eq"])]
 structure core.cmp.Eq (Self : Type) where
   partialEqInst : core.cmp.PartialEq Self Self
   assert_receiver_is_total_eq (_ : Self) : Result Unit := .ok ()
 
-@[simp, rust_fun "core::cmp::Eq::assert_receiver_is_total_eq"]
+@[simp, trait_default]
 def core.cmp.Eq.assert_receiver_is_total_eq.default
   {Self : Type} (EqInst : core.cmp.Eq Self) (x : Self) : Result Unit :=
   EqInst.assert_receiver_is_total_eq x
 
 /- Default method -/
-@[rust_fun "core::cmp::PartialEq::ne"]
+@[trait_default]
 def core.cmp.PartialEq.ne.default {Self Rhs : Type} (eq : Self → Rhs → Result Bool)
   (self : Self) (other : Rhs) : Result Bool := do
   ok (¬ (← eq self other))
@@ -57,7 +58,7 @@ def core.cmp.PartialOrd.ge_body {Self Rhs : Type}
   let cmp ← partial_cmp x y
   ok (cmp = some .gt ∨ cmp = some .eq)
 
-@[rust_trait "core::cmp::PartialOrd" (parentClauses := ["partialEqInst"])]
+@[rust_trait "core::cmp::PartialOrd" (parentClauses := ["partialEqInst"]) (defaultMethods := ["lt", "le", "gt", "ge"])]
 structure core.cmp.PartialOrd (Self : Type) (Rhs : Type) where
   partialEqInst : core.cmp.PartialEq Self Rhs
   partial_cmp : Self → Rhs → Result (Option Ordering)
@@ -67,28 +68,28 @@ structure core.cmp.PartialOrd (Self : Type) (Rhs : Type) where
   ge : Self → Rhs → Result Bool := core.cmp.PartialOrd.ge_body partial_cmp
 
 /- Default method -/
-@[rust_fun "core::cmp::PartialOrd::lt"]
+@[trait_default]
 def core.cmp.PartialOrd.lt.default {Self Rhs : Type}
   (partial_cmp : Self → Rhs → Result (Option Ordering))
   (x : Self) (y : Rhs) : Result Bool :=
   core.cmp.PartialOrd.lt_body partial_cmp x y
 
 /- Default method -/
-@[rust_fun "core::cmp::PartialOrd::le"]
+@[trait_default]
 def core.cmp.PartialOrd.le.default {Self Rhs : Type}
   (partial_cmp : Self → Rhs → Result (Option Ordering))
   (x : Self) (y : Rhs) : Result Bool :=
   core.cmp.PartialOrd.le_body partial_cmp x y
 
 /- Default method -/
-@[rust_fun "core::cmp::PartialOrd::gt"]
+@[trait_default]
 def core.cmp.PartialOrd.gt.default {Self Rhs : Type}
   (partial_cmp : Self → Rhs → Result (Option Ordering))
   (x : Self) (y : Rhs) : Result Bool :=
   core.cmp.PartialOrd.gt_body partial_cmp x y
 
 /- Default method -/
-@[rust_fun "core::cmp::PartialOrd::ge"]
+@[trait_default]
 def core.cmp.PartialOrd.ge.default {Self Rhs : Type}
   (partial_cmp : Self → Rhs → Result (Option Ordering))
   (x : Self) (y : Rhs) : Result Bool :=
@@ -110,7 +111,7 @@ def core.cmp.Ord.clamp_body {Self : Type} (le lt gt : Self → Self → Result B
   else if ← gt self max then ok max
   else ok self
 
-@[rust_trait "core::cmp::Ord" (parentClauses := ["eqInst", "partialOrdInst"])]
+@[rust_trait "core::cmp::Ord" (parentClauses := ["eqInst", "partialOrdInst"]) (defaultMethods := ["max", "min", "clamp"])]
 structure core.cmp.Ord (Self : Type) where
   eqInst : core.cmp.Eq Self
   partialOrdInst : core.cmp.PartialOrd Self Self
@@ -123,19 +124,19 @@ structure core.cmp.Ord (Self : Type) where
     core.cmp.Ord.clamp_body partialOrdInst.le partialOrdInst.lt partialOrdInst.gt
 
 /- Default method -/
-@[rust_fun "core::cmp::Ord::max"]
+@[trait_default]
 def core.cmp.Ord.max.default {Self : Type} (lt : Self → Self → Result Bool)
   (x y : Self) : Result Self :=
   core.cmp.Ord.max_body lt x y
 
 /- Default method -/
-@[rust_fun "core::cmp::Ord::min"]
+@[trait_default]
 def core.cmp.Ord.min.default {Self : Type} (lt : Self → Self → Result Bool)
   (x y : Self) : Result Self :=
   core.cmp.Ord.min_body lt x y
 
 /- Default method -/
-@[rust_fun "core::cmp::Ord::clamp"]
+@[trait_default]
 def core.cmp.Ord.clamp.default {Self : Type} (le lt gt : Self → Self → Result Bool)
   (self min max : Self) : Result Self :=
   core.cmp.Ord.clamp_body le lt gt self min max
