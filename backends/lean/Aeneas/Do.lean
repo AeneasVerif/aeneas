@@ -1,2 +1,3 @@
+import Aeneas.Do.Delab
 import Aeneas.Do.Elab
-import Aeneas.Do.Init
+import Aeneas.Do.Tests
