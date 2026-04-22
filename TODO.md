@@ -475,8 +475,8 @@ Implementation:
 - Propagated-exit synthesis now checks that collected exit targets are unique
   and reports the missing or duplicate target kind if the collector/synthesizer
   invariant is violated.
-- Returning multiple symbolic statement results is still Milestone 8, and pure
-  lowering of propagated loop exits remains Milestone 9.
+- Returning multiple symbolic statement results is handled by Milestone 8, and
+  pure lowering of propagated loop exits remains Milestone 9.
 
 ## Milestone 8: Return Multiple Results From Symbolic Loop Evaluation
 
@@ -513,6 +513,29 @@ Tests should assert:
 Expected result:
 
 - Symbolic statement sequencing sees loop exits just like it sees branch exits.
+
+Implementation:
+
+- `eval_loop_symbolic` now returns a statement-result list. The normal loop
+  completion path is `(break_ctx, Unit)`, and each collected propagated exit
+  contributes its reconciled context paired with `Break depth`,
+  `Continue depth`, or `Return`.
+- `eval_loop` in symbolic mode now forwards the loop result list directly to
+  statement sequencing instead of collapsing it back to a singleton result.
+- The loop expression continuation still consumes only the normal-break
+  `next_expr`; propagated exits are already represented in the loop body as
+  `LoopExit Propagated*` nodes and remain blocked at pure lowering until
+  Milestone 9. The discarded propagated expression tail is explicit in the code
+  and relies on statement sequencing threading only identity expressions for
+  those propagated branches until Milestone 9 rewires pure lowering.
+- The function-boundary `Return` path already consumes the propagated return
+  result through the same `eval_function_body` / `evaluate_function_symbolic`
+  finish path as natural returns: the reconciled exit context is paired with
+  `Return`, then the caller pops the return value and synthesizes forward and
+  backward endings normally.
+- Verified that ordinary loop translations still pass after the pre-pass
+  changes. Added concrete `-test-units` checks for nested `break 'outer` and
+  `continue 'outer`; no concrete loop evaluator changes were needed.
 
 ## Milestone 9: Lower Symbolic Loop Exits To Typed Pure Control Flow
 

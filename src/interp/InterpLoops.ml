@@ -25,6 +25,13 @@ let symbolic_exit_kind_of_propagated_exit_kind (kind : propagated_exit_kind) :
   | PropagatedContinueExit depth -> SA.PropagatedContinue depth
   | PropagatedReturnExit -> SA.PropagatedReturn
 
+let statement_result_of_propagated_exit_kind (kind : propagated_exit_kind) :
+    statement_eval_res =
+  match kind with
+  | PropagatedBreakExit depth -> Break depth
+  | PropagatedContinueExit depth -> Continue depth
+  | PropagatedReturnExit -> Return
+
 (** Evaluate a loop in concrete mode *)
 let eval_loop_concrete (span : Meta.span) (eval_loop_body : stl_cm_fun) :
     stl_cm_fun =
@@ -426,7 +433,7 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
 
 (** Evaluate a loop in symbolic mode *)
 let eval_loop_symbolic (config : config) (span : span)
-    (eval_loop_body : stl_cm_fun) : st_cm_fun =
+    (eval_loop_body : stl_cm_fun) : stl_cm_fun =
  fun ctx ->
   (* Debug *)
   [%ltrace "Context:\n" ^ eval_ctx_to_string ~span:(Some span) ctx ^ "\n"];
@@ -634,7 +641,29 @@ let eval_loop_symbolic (config : config) (span : span)
     in
     cf_before_loop loop_expr
   in
-  ((break_ctx, Unit), cc)
+  let ctx_resl =
+    (break_ctx, Unit)
+    :: List.map
+         (fun (exit : propagated_exit_ctx) ->
+           ( exit.exit_ctx,
+             statement_result_of_propagated_exit_kind exit.exit_kind ))
+         loop_exit_contexts.propagated_exits
+  in
+  let expected_expr_count = List.length ctx_resl in
+  let cf el =
+    [%sanity_check] span (List.length el = expected_expr_count);
+    match el with
+    | next_expr :: propagated_exit_exprs ->
+        (* Only the normal-break continuation becomes [loop.next_expr].
+           Propagated exits are already represented inside [loop.loop_expr] as
+           [LoopExit Propagated*] nodes; Milestone 9 lowers them to target-aware
+           pure control flow. Until then, statement sequencing must only thread
+           identity expressions for propagated branches. *)
+        ignore propagated_exit_exprs;
+        cc next_expr
+    | [] -> [%internal_error] span
+  in
+  (ctx_resl, cf)
 
 let eval_loop (config : config) (span : span) (eval_loop_body : stl_cm_fun) :
     stl_cm_fun =
@@ -671,12 +700,7 @@ let eval_loop (config : config) (span : span) (eval_loop_body : stl_cm_fun) :
           (reborrow_ashared_loans_symbolic_borrows span None
              ~with_abs_conts:true ctx)
       in
-      let (ctx, res), cc =
+      let ctx_resl, cc =
         comp cc (eval_loop_symbolic config span eval_loop_body ctx)
       in
-      let cf (el : SymbolicAst.expr list) : SymbolicAst.expr =
-        match el with
-        | [ e ] -> cc e
-        | _ -> [%internal_error] span
-      in
-      ([ (ctx, res) ], cf)
+      (ctx_resl, cc)

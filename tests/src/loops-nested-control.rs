@@ -1,4 +1,5 @@
 //@ [lean] known-failure
+//@ [lean] aeneas-args=-test-units
 //@ [!lean] skip
 
 pub fn return_after_inner_break_outer(flag: bool, value: u32) -> u32 {
@@ -178,4 +179,47 @@ pub fn return_nested_mut_borrow(value: &mut u32, max: u32) -> u32 {
     }
 
     *value
+}
+
+pub fn concrete_break_outer_unit() {
+    let mut i = 0;
+    let mut s = 0;
+
+    'outer: while i < 3 {
+        let mut j = 0;
+        while j < 3 {
+            s += 1;
+            if j == 1 {
+                break 'outer;
+            }
+            j += 1;
+        }
+        i += 1;
+    }
+
+    assert!(i == 0);
+    assert!(s == 2);
+}
+
+pub fn concrete_continue_outer_unit() {
+    let mut i = 0;
+    let mut s = 0;
+
+    'outer: while i < 3 {
+        i += 1;
+
+        let mut j = 0;
+        while j < 2 {
+            j += 1;
+            if j == 1 {
+                continue 'outer;
+            }
+            s += 100;
+        }
+
+        s += 10;
+    }
+
+    assert!(i == 3);
+    assert!(s == 0);
 }
