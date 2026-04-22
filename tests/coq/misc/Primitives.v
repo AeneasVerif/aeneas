@@ -22,8 +22,14 @@ Inductive result A :=
   | Ok : A -> result A
   | Fail_ : error -> result A.
 
+Inductive sum A B :=
+  | Left : A -> sum A B
+  | Right : B -> sum A B.
+
 Arguments Ok {_} a.
 Arguments Fail_ {_}.
+Arguments Left {_ _} a.
+Arguments Right {_ _} b.
 
 Definition bind {A B} (m: result A) (f: A -> result B) : result B :=
   match m with

@@ -717,6 +717,22 @@ Expected result:
 
 - Nested exits are representable in emitted proof code.
 
+Implementation:
+
+- The existing shared builtin mappings cover `TLoopExit` and `TSum` names for
+  Lean, Coq, F*, and HOL4. The backend fixture now pins the emitted Lean,
+  Coq, and F* syntax for propagated break, continue, return, and multiple
+  propagated break depths.
+- Added `loops-nested-control-backends.rs` and committed the generated
+  backend outputs. Coq and F* misc primitives now include the copied `sum`
+  encoding required by nested propagated-exit payloads; Lean uses the existing
+  `Sum` and `LoopExit` primitives and the lakefile lists the new nested-control
+  modules.
+- Backend generation passes for `loops-nested-control-backends.rs`,
+  `loops-nested-control.rs`, and `loops-nested.rs`. Backend verification was
+  attempted, but the local environment is missing `lake`, `coq_makefile`, and
+  `fstar.exe`.
+
 ## Milestone 13: Remove Known-Failure Status And Update Documentation
 
 Once support is complete, update tests and docs.
