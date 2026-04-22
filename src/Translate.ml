@@ -27,8 +27,7 @@ let translate_function_to_symbolics (trans_ctx : trans_ctx)
   [%ltrace name_to_string trans_ctx fdef.item_meta.name];
 
   match fdef.body with
-  | None -> None
-  | Some _ ->
+  | Body _ ->
       (* Evaluate - note that [evaluate_function_symbolic synthesize] catches
          exceptions to at least generate a dummy body if we do not abort on failure. *)
       let synthesize = true in
@@ -36,6 +35,7 @@ let translate_function_to_symbolics (trans_ctx : trans_ctx)
         evaluate_function_symbolic synthesize trans_ctx marked_ids fdef
       in
       Some (inputs, Option.get symb)
+  | _ -> None
 
 (** Sanity check helper.
 
@@ -211,7 +211,7 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
      function)
   *)
   let ctx =
-    match (fdef.body, symbolic_trans) with
+    match (LlbcAstUtils.body_as_body fdef.body, symbolic_trans) with
     | None, None -> ctx
     | Some body, Some (input_svs, _) ->
         let forward_input_vars = LlbcAstUtils.fun_body_get_input_vars body in
@@ -394,7 +394,9 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
     let funs = FunDeclId.Map.values trans_ctx.fun_ctx.to_extract in
     (* Split between opaque and transparent *)
     let opaque, transparent =
-      List.partition (fun (d : fun_decl) -> Option.is_none d.body) funs
+      List.partition
+        (fun (d : fun_decl) -> not (LlbcAstUtils.body_is_known d.body))
+        funs
     in
 
     (* Reorder the transparent functions to have the biggest first:
@@ -1655,7 +1657,7 @@ let extract_translated_crate (filename : string) (dest_dir : string)
            If the backend is Lean the module names depends on the path,
            so we generate names of the shape [Types.lean], [Funs.lean], etc.
            because those files should be placed in the proper sub-folder.
-           
+
            Otherwise, we prepend the crate name to generate, e.g.,
            [Foo_Types.fst], [Foo_Funs.fst], etc.
          *)

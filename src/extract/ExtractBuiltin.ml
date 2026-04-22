@@ -36,6 +36,7 @@ let builtin_globals () : Pure.builtin_global_info list =
     ([
        mk_ints_globals "MIN";
        mk_ints_globals "MAX";
+       mk_ints_globals "BITS";
        [
          (* UNIT_METADATA should be eliminated through a micro-pass and should
             never appear in the code. *)
@@ -812,7 +813,7 @@ let mk_builtin_funs () : (pattern * Pure.builtin_fun_info) list =
             "core::cmp::impls::{core::cmp::PartialOrd<" ^ ty ^ "," ^ ty ^ ">}::"
             ^ fun_name)
           (fun ty fun_name ->
-            "core.cmp.impls.PartialCmp"
+            "core.cmp.impls.PartialOrd"
             ^ StringUtils.capitalize_first_letter ty
             ^ "." ^ fun_name)
           [

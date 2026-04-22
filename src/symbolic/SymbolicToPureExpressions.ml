@@ -911,7 +911,11 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
     (ctx : bs_ctx) : texpr =
   [%ltrace
     "abs (level: " ^ string_of_int abs_level ^ "):\n" ^ abs_to_string ctx abs];
-  let call = V.FunCallId.Map.find call_id ctx.calls in
+  let call =
+    [%unwrap_with_span] ctx.span
+      (V.FunCallId.Map.find_opt call_id ctx.calls)
+      "Internal error: please file an issue"
+  in
   let info = V.AbsId.Map.find_opt abs.abs_id ctx.abs_id_to_info in
   (* For now we do not support sub-abstractions giving back values.
 
