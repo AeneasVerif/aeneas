@@ -13,6 +13,18 @@ type loop_entry_result =
     reuse the same fixed-point entry classification. *)
 val classify_loop_entry_result : statement_eval_res -> loop_entry_result
 
+type loop_exit_result =
+  | CurrentLoopBreak
+  | PropagatedLoopBreak of int
+  | PropagatedLoopContinue of int
+  | PropagatedLoopReturn
+  | NotLoopExit
+  | UnitLoopResult
+
+(** Exposed for focused regression tests and for later exit-context collection
+    code to reuse the same relative-depth classification. *)
+val classify_loop_exit_result : statement_eval_res -> loop_exit_result
+
 (** Compute a fixed-point for the context at the entry of the loop. We also
     return:
     - the sets of fixed ids
@@ -44,7 +56,28 @@ type break_ctx =
       *)
   | Multiple of (eval_ctx * abs list)  (** We joined multiple break contexts *)
 
-val compute_loop_break_context :
+type propagated_exit_kind =
+  | PropagatedBreakExit of int
+  | PropagatedContinueExit of int
+  | PropagatedReturnExit
+
+type propagated_exit_ctx = {
+  exit_kind : propagated_exit_kind;
+  exit_ctx : eval_ctx;
+  exit_abs : abs list;
+}
+
+type loop_exit_contexts = {
+  normal_break : break_ctx;
+  propagated_exits : propagated_exit_ctx list;
+}
+
+(** Exposed for focused regression tests and for callers that need the same
+    per-kind/per-depth partitioning as [compute_loop_exit_contexts]. *)
+val group_by_propagated_exit_kind :
+  (propagated_exit_kind * 'a) list -> (propagated_exit_kind * 'a list) list
+
+val compute_loop_exit_contexts :
   config ->
   Meta.span ->
   LoopId.id ->
@@ -52,4 +85,4 @@ val compute_loop_break_context :
   eval_ctx ->
   AbsId.Set.t ->
   DummyVarId.Set.t ->
-  break_ctx
+  loop_exit_contexts

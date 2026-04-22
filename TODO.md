@@ -383,6 +383,28 @@ Expected result:
 
 - The symbolic interpreter can identify every loop exit target independently.
 
+Implementation:
+
+- `InterpLoopsFixedPoint.classify_loop_exit_result` now classifies loop-body
+  results for exit collection:
+  - `Break 0` is the current loop's normal break.
+  - `Break i` for `i > 0` is a propagated break with remaining depth `i - 1`.
+  - `Continue i` for `i > 0` is a propagated continue with remaining depth
+    `i - 1`.
+  - `Return` is a propagated return.
+  - `Continue 0` and `Panic` are not break-exit contexts for this pass.
+- `compute_loop_exit_contexts` replaces the old single-purpose break collector.
+  It preserves the normal-break fast path and groups propagated exits by kind
+  and remaining depth before joining each group independently.
+- Symbolic loop metadata now includes propagated exit output descriptions in
+  `loop.loop_exits` alongside the normal-break mirror.
+- Current loop-body synthesis still rejects propagated exits, so the known
+  failures now move past fixed-point exit collection and stop in `InterpLoops.ml`.
+  Consuming those collected exits in synthesized loop bodies remains the next
+  milestone.
+- `src/loop_exit_contexts_test.ml` pins the exit classification and propagated
+  exit grouping contracts.
+
 ## Milestone 7: Reconcile Borrows And Abstractions Across Loop Boundaries
 
 Make the risky context-boundary behavior explicit before returning multiple

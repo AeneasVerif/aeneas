@@ -1,5 +1,5 @@
 [[92mInfo[39m ] Imported: tests/llbc/loops_nested_control.llbc
-[[91mError[39m] Breaks to outer loops not supported yet
+[[91mError[39m] Nested loops are not supported yet
 Source: 'tests/src/loops-nested-control.rs', lines 1:0-34:5
-Compiler source: interp/InterpLoopsFixedPoint.ml, line 310
+Compiler source: interp/InterpLoops.ml, line 182
 

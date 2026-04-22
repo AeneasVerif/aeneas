@@ -383,10 +383,11 @@ let eval_loop_symbolic (config : config) (span : span)
   (* Compute the context at the breaks *)
   let fixed_aids = InterpJoinCore.compute_fixed_abs_ids ctx fp_ctx in
   let fixed_dids = ctx_get_dummy_var_ids ctx in
-  let break_info =
-    compute_loop_break_context config span loop_id eval_loop_body fp_ctx
+  let loop_exit_contexts =
+    compute_loop_exit_contexts config span loop_id eval_loop_body fp_ctx
       fixed_aids fixed_dids
   in
+  let break_info = loop_exit_contexts.normal_break in
   (* Debug *)
   [%ltrace
     "- Initial context:\n"
@@ -413,11 +414,37 @@ let eval_loop_symbolic (config : config) (span : span)
     ^ String.concat ", "
         (List.map (symbolic_value_to_string ctx) fp_input_svalues)];
 
+  let propagated_loop_exits =
+    let symbolic_exit_kind (kind : propagated_exit_kind) : SA.loop_exit_kind =
+      match kind with
+      | PropagatedBreakExit depth -> SA.PropagatedBreak depth
+      | PropagatedContinueExit depth -> SA.PropagatedContinue depth
+      | PropagatedReturnExit -> SA.PropagatedReturn
+    in
+    List.map
+      (fun (exit : propagated_exit_ctx) ->
+        let exit_svalues =
+          compute_ctx_fresh_ordered_symbolic_values span
+            ~only_modified_svalues:false ctx exit.exit_ctx
+        in
+        {
+          SA.exit_kind = symbolic_exit_kind exit.exit_kind;
+          exit_svalues;
+          exit_abs = exit.exit_abs;
+        })
+      loop_exit_contexts.propagated_exits
+  in
+
   let break_info, break_abs_values =
     match break_info with
     | NoBreak ->
-        [%craise] span
-          "(Infinite) loops which do not contain breaks are not supported yet"
+        if propagated_loop_exits = [] then
+          [%craise] span
+            "(Infinite) loops which do not contain breaks are not supported yet"
+        else
+          [%craise] span
+            "Loops with propagated exits and no normal break are not supported \
+             yet"
     | Single ->
         [%ltrace "Single break"];
         (None, None)
@@ -505,11 +532,12 @@ let eval_loop_symbolic (config : config) (span : span)
           loop_exits =
             [
               {
-                exit_kind = SA.NormalBreak;
+                SA.exit_kind = SA.NormalBreak;
                 exit_svalues = break_input_svalues;
                 exit_abs = break_abs;
               };
-            ];
+            ]
+            @ propagated_loop_exits;
           loop_expr = loop_body;
           next_expr;
           span;
