@@ -675,6 +675,17 @@ Expected result:
 
 - Pure micro-passes preserve and simplify nested-exit control flow correctly.
 
+Implementation:
+
+- Audited `PureMicroPassesLoops.ml` after Milestone 10. The existing loop
+  decomposition and recursive-loop conversion paths already treat a propagated
+  `TLoopExit` result as an ordinary single loop output, while continuing to use
+  `TLoopResult` only for loop-body continue/break/failure conversion.
+- Added `loops-nested-control-rec.rs` to pin recursive-loop extraction for
+  propagated break, propagated continue, propagated return, and a borrow-backed
+  propagated break payload. The generated Lean contains recursive loop
+  definitions whose `LoopExit` payloads preserve the needed backward function.
+
 ## Milestone 12: Update Extraction Backends
 
 Update extraction code and backend primitives as required by the committed exit
