@@ -3657,7 +3657,18 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     (* The methods *)
     List.iter
       (fun (name, bound_fn) ->
-        extract_trait_impl_method_items ctx fmt impl name bound_fn)
+        (* Skip methods whose function is a builtin: their def is not emitted,
+           so referencing them in the struct literal would create a dangling
+           self-reference.  The Lean library provides default field values for
+           these methods (e.g. PartialOrd.lt, Ord.max, PartialEq.ne). *)
+        let dominated_by_builtin =
+          let method_decl_id = bound_fn.binder_value.fun_id in
+          match A.FunDeclId.Map.find_opt method_decl_id ctx.trans_funs with
+          | Some trans -> Option.is_some trans.f.builtin_info
+          | None -> false
+        in
+        if not dominated_by_builtin then
+          extract_trait_impl_method_items ctx fmt impl name bound_fn)
       impl.methods;
 
     (* Close the outer boxes for the definition, as well as the brackets *)

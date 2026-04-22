@@ -9,6 +9,9 @@ set_option linter.unusedVariables false
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
 
+/- You can remove the following line by using the CLI option `-all-computable`: -/
+noncomputable section
+
 namespace order
 
 /-- [order::compare]:
@@ -76,6 +79,11 @@ def Wrap.Insts.CoreCmpEq : core.cmp.Eq Wrap := {
     Wrap.Insts.CoreCmpEq.assert_receiver_is_total_eq
 }
 
+/-- [order::{core::cmp::PartialOrd<order::Wrap> for order::Wrap}::lt]:
+    Source: 'tests/src/order.rs', lines 21:24-21:34
+    Visibility: public -/
+axiom Wrap.Insts.CoreCmpPartialOrdWrap.lt : Wrap → Wrap → Result Bool
+
 /-- [order::{core::cmp::PartialOrd<order::Wrap> for order::Wrap}::partial_cmp]:
     Source: 'tests/src/order.rs', lines 21:24-21:34
     Visibility: public -/
@@ -89,6 +97,7 @@ def Wrap.Insts.CoreCmpPartialOrdWrap.partial_cmp
 def Wrap.Insts.CoreCmpPartialOrdWrap : core.cmp.PartialOrd Wrap Wrap := {
   partialEqInst := Wrap.Insts.CoreCmpPartialEqWrap
   partial_cmp := Wrap.Insts.CoreCmpPartialOrdWrap.partial_cmp
+  lt := Wrap.Insts.CoreCmpPartialOrdWrap.lt
 }
 
 /-- [order::{core::cmp::Ord for order::Wrap}::cmp]:
@@ -118,5 +127,11 @@ def wrap_partial_cmp (x : Wrap) (y : Wrap) : Result (Option Ordering) := do
     Visibility: public -/
 def wrap_cmp (x : Wrap) (y : Wrap) : Result Ordering := do
   Wrap.Insts.CoreCmpOrd.cmp x y
+
+/-- [order::wrap_lt]:
+    Source: 'tests/src/order.rs', lines 35:0-37:1
+    Visibility: public -/
+def wrap_lt (x : Wrap) (y : Wrap) : Result Bool := do
+  Wrap.Insts.CoreCmpPartialOrdWrap.lt x y
 
 end order
