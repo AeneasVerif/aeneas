@@ -7,227 +7,191 @@ open Lean PrettyPrinter Delaborator SubExpr
 
 namespace Aeneas
 namespace Do
+namespace Delab
 
-/-- Partially applied `Function.uncurry (fun a b => body)` → `fun (a, b) => body`. -/
-@[app_unexpander Function.uncurry]
-def unexpUncurry : Unexpander
-  | `($_ fun $a:ident $b:ident => $body) => `(fun ($a, $b) => $body)
-  | _ => throw ()
-
-/-- Extract binder names from a chain of `fun n₁ … nₖ => body`. -/
-private def extractLamBinders : Expr → List Name
-  | .lam n _ b _ => n :: extractLamBinders b
-  | _ => []
-
-/-- Enter `names.size` consecutive `fun` binders via `withBindingBody'`,
-    collecting the corresponding `(fvarId, name)` pairs, then invoke `k`. -/
-private partial def enterLamsAux (names : List Name)
-    (acc : Array (FVarId × Name))
+/-- Enter leading `fun` binders, collecting `(fvarId, name)` for each. -/
+partial def enterLams (acc : Array (FVarId × Name))
     (k : Array (FVarId × Name) → DelabM α) : DelabM α := do
-  match names with
-  | [] => k acc
-  | n :: rest =>
-    withBindingBody' n pure fun fv =>
-      enterLamsAux rest (acc.push (fv.fvarId!, n)) k
-
-/-- Walk past outer `fun` binders and chained 4-arg `Function.uncurry`s (the
-    encoding emitted for flat `N`-tuples by `mkUncurries`), collecting each
-    lambda binder as `(fvarId, name)`. Leaves SubExpr at the innermost body. -/
-private partial def enterUncurryChain (acc : Array (FVarId × Name))
-    (k : Array (FVarId × Name) → DelabM α) : DelabM α := do
-  let e ← getExpr
-  match e with
+  match (← getExpr) with
   | .lam n _ _ _ =>
     withBindingBody' n pure fun fv =>
-      enterUncurryChain (acc.push (fv.fvarId!, n)) k
-  | _ =>
-    if e.isAppOfArity ``Function.uncurry 4 then
-      withAppArg <| enterUncurryChain acc k
-    else
-      k acc
+      enterLams (acc.push (fv.fvarId!, n)) k
+  | _ => k acc
 
-/-- Build a tuple term `(p₀, p₁, …, pₙ)` from `pats`. Requires `pats.size ≥ 2`. -/
-private def buildTupleTerm (pats : Array (TSyntax `term)) : DelabM (TSyntax `term) := do
-  guard (pats.size >= 2)
+/-- Enter outer `fun` binders and chained `Function.uncurry`s for flat tuples. -/
+partial def enterUncurryChain (acc : Array (FVarId × Name))
+    (k : Array (FVarId × Name) → DelabM α) : DelabM α :=
+  enterLams acc fun acc' => do
+    if (← getExpr).isAppOfArity ``Function.uncurry 4 then
+      withAppArg <| enterUncurryChain acc' k
+    else
+      k acc'
+
+def buildTupleTerm (pats : Array Term) : DelabM Term := do
   let head := pats[0]!
-  let tail : Array (TSyntax `term) := pats.extract 1 pats.size
+  let tail := pats.extract 1 pats.size
   `(($head, $tail,*))
 
-/-- Given a list of outer binders `(fv, name)`, build a `TSyntax \`term` pattern
-    for each. At each step, check whether the current body starts with a
-    destructuring of `fv` (either a `Function.uncurry … fv` chain or a
-    `T.casesOn fv …`); if so, enter the destructuring, recurse on inner
-    binders, and build a nested `(…, …, …)` or `⟨…⟩` pattern. Otherwise treat
-    it as a leaf named `name`. After all binders are handled, `k` runs at the
-    fully-advanced body and its result comes back alongside the patterns.
-
-    Polymorphic over the body-action's return type so it serves both the
-    monadic (`aeneasDelabDoElems` returning `doElem`s) and non-monadic
-    (`delabUncurryLet` returning a term) callers. -/
-partial def delabBinders (binders : List (FVarId × Name)) (k : DelabM α)
-    : DelabM (Array (TSyntax `term) × α) := do
+/-- Build a pattern for each binder, folding any immediate destructuring of
+    `fv` (tuple via `Function.uncurry`, or ctor via `T.casesOn`) into a nested
+    pattern. `k` runs on the resulting body. -/
+partial def delabBinders (binders : List (FVarId × Name)) (k : DelabM α) :
+    DelabM (Array Term × α) := do
   match binders with
-  | [] =>
-    let a ← k
-    return (#[], a)
+  | [] => return (#[], ← k)
   | (fv, name) :: rest =>
+    if let some r ← tupleBind? fv rest then return r
+    if let some r ← ctorBind? fv rest then return r
+    leafBind name rest
+where
+  splitRec (inner : Array (FVarId × Name)) (rest : List (FVarId × Name)) :
+      DelabM (Array Term × Array Term × α) := do
+    let (all, a) ← delabBinders (inner.toList ++ rest) k
+    let n := inner.size
+    return (all.extract 0 n, all.extract n all.size, a)
+  /-- Tuple destructuring via `Function.uncurry`. -/
+  tupleBind? (fv : FVarId) (rest : List (FVarId × Name)) :
+      DelabM (Option (Array Term × α)) := do
     let e ← getExpr
-    -- Tuple destructuring: `Function.uncurry … fv` (possibly a nested chain).
-    if e.isAppOfArity ``Function.uncurry 5 then
-      let val := e.appArg!
-      if val.isFVar ∧ val.fvarId! == fv then
-        return ← withAppFn <| withAppArg <|
-          enterUncurryChain #[] fun innerBinders => do
-            guard (innerBinders.size >= 2)
-            let (allPats, a) ← delabBinders (innerBinders.toList ++ rest) k
-            let innerCount := innerBinders.size
-            let innerPats := allPats.extract 0 innerCount
-            let restPats := allPats.extract innerCount allPats.size
-            let fvPat ← buildTupleTerm innerPats
-            return (#[fvPat] ++ restPats, a)
-    -- Ctor destructuring: `T.casesOn fv (fun f₁ … fₙ => …)`
-    if let .const fnName _ := e.getAppFn then
-      if let .str typeName "casesOn" := fnName then
-        if typeName != ``Prod then
-          if let some (.inductInfo indInfo) := (← getEnv).find? typeName then
-            if indInfo.ctors.length == 1 then
-              let args := e.getAppArgs
-              let numParams := indInfo.numParams
-              if args.size == numParams + 3 then
-                let discr := args[numParams + 1]!
-                if discr.isFVar ∧ discr.fvarId! == fv then
-                  let names := extractLamBinders args[numParams + 2]!
-                  if !names.isEmpty then
-                    return ← withNaryArg (numParams + 2) <|
-                      enterLamsAux names #[] fun ctorBinders => do
-                        let (allPats, a) ← delabBinders (ctorBinders.toList ++ rest) k
-                        let ctorCount := ctorBinders.size
-                        let ctorPats := allPats.extract 0 ctorCount
-                        let restPats := allPats.extract ctorCount allPats.size
-                        let fvPat ← `(⟨$ctorPats,*⟩)
-                        return (#[fvPat] ++ restPats, a)
-    -- Leaf
+    unless e.isAppOfArity ``Function.uncurry 5 do return none
+    let val := e.appArg!
+    unless val.isFVar ∧ val.fvarId! == fv do return none
+    withAppFn <| withAppArg <| enterUncurryChain #[] fun inner => do
+      let (innerPats, restPats, a) ← splitRec inner rest
+      let fvPat ← buildTupleTerm innerPats
+      return some (#[fvPat] ++ restPats, a)
+  /-- Ctor destructuring via single-ctor `T.casesOn` (excluding `Prod`). -/
+  ctorBind? (fv : FVarId) (rest : List (FVarId × Name)) :
+      DelabM (Option (Array Term × α)) := do
+    let e ← getExpr
+    let .const (.str typeName "casesOn") _ := e.getAppFn | return none
+    if typeName == ``Prod then return none
+    let some (.inductInfo { ctors := [_], numParams, .. }) := (← getEnv).find? typeName
+      | return none
+    let args := e.getAppArgs
+    unless args.size == numParams + 3 do return none
+    let discr := args[numParams + 1]!
+    unless discr.isFVar ∧ discr.fvarId! == fv do return none
+    unless args[numParams + 2]!.isLambda do return none
+    withNaryArg (numParams + 2) <| enterLams #[] fun ctorBinders => do
+      let (ctorPats, restPats, a) ← splitRec ctorBinders rest
+      let fvPat ← `(⟨$ctorPats,*⟩)
+      return some (#[fvPat] ++ restPats, a)
+  /-- No destructuring, bind `name` directly. -/
+  leafBind (name : Name) (rest : List (FVarId × Name)) : DelabM (Array Term × α) := do
     let leafPat : TSyntax `term := ⟨Lean.mkIdent name⟩
     let (restPats, a) ← delabBinders rest k
     return (#[leafPat] ++ restPats, a)
 
-/-- `Function.uncurry (fun x₁ … xₙ => body) val` → `let (x₁, …, xₙ) := val; body`,
-    including nested chain encodings of `N`-tuples (`N ≥ 2`). -/
+/-- `Function.uncurry (fun x₁ … xₙ => body) val` → `let (x₁, …, xₙ) := val; body` -/
 @[delab app.Function.uncurry]
 def delabUncurryLet : Delab := do
-  let e ← getExpr
-  guard (e.getAppNumArgs == 5)
   let valStx ← withAppArg delab
   let (pats, bodyStx) ← withAppFn <| withAppArg <|
     enterUncurryChain #[] fun outerBinders => do
-      guard (outerBinders.size >= 2)
       delabBinders outerBinders.toList delab
   let tupleStx ← buildTupleTerm pats
   `(let $tupleStx:term := $valStx
     $bodyStx)
 
-/-- `T.casesOn val (fun f₁ … fₙ => body)` → `let ⟨f₁, …, fₙ⟩ := val; body`
-    for any single-constructor inductive `T` (other than `Prod`). -/
+/-- `T.casesOn val (fun f₁ … fₙ => body)` → `let ⟨f₁, …, fₙ⟩ := val; body` -/
 @[delab app]
 def delabSingleCtorCasesOn : Delab := do
   let e ← getExpr
-  let .const fnName _ := e.getAppFn | failure
-  let .str typeName "casesOn" := fnName | failure
-  guard (typeName != ``Prod)
-  let some (.inductInfo indInfo) := (← getEnv).find? typeName | failure
-  guard (indInfo.ctors.length == 1)
-  let args := e.getAppArgs
-  let numParams := indInfo.numParams
-  guard (args.size == numParams + 3)
-  let names := extractLamBinders args[numParams + 2]!
-  guard (!names.isEmpty)
+  let .const (.str typeName "casesOn") _ := e.getAppFn | failure
+  let some (.inductInfo { ctors := [_], numParams, .. }) := (← getEnv).find? typeName | failure
   let discrStx ← withNaryArg (numParams + 1) delab
-  let bodyStx ← withNaryArg (numParams + 2) <|
-    names.foldr (fun n d => withBindingBody n d) delab
-  let binders := names.toArray.map Lean.mkIdent
+  let (binders, bodyStx) ← withNaryArg (numParams + 2) <|
+    enterLams #[] fun bs => do return (bs.map fun (_, b) => (Lean.mkIdent b), ← delab)
   `(let ⟨$binders,*⟩ := $discrStx
     $bodyStx)
 
-/-- Walk a `Bind.bind` chain collecting `doElem`s. Extends Lean's builtin
-    `delabDoElems` with two continuation shapes emitted by our elaborator:
-    `Function.uncurry (fun a b => body)` → `let (a, b) ← e`, and
-    `fun _x => T.casesOn _x (fun f₁ … fₙ => body)` → `let ⟨f₁, …, fₙ⟩ ← e`.
-    Nested destructurings of the bound values are folded into nested patterns
-    via `delabBinders`. -/
-partial def aeneasDelabDoElems : DelabM (List (TSyntax `doElem)) := do
+private structure CtorBindShape where
+  xName : Name
+  numParams : Nat
+
+/-- Recognise `fun _x => T.casesOn _x …` for single-ctor `T ≠ Prod`. -/
+private def parseCtorBind? (arg : Expr) : DelabM CtorBindShape := do
+  let .lam xName _ body _ := arg | failure
+  let .const (.str typeName "casesOn") _ := body.getAppFn | failure
+  let some (.inductInfo { ctors := [_], numParams, .. }) := (← getEnv).find? typeName
+    | failure
+  return { xName, numParams }
+
+/-- Walk a `Bind.bind` chain into `doElem`s, recognising tuple and ctor
+    destructuring continuations in addition to plain binds and lets. -/
+partial def aeneasDelabDoElems : DelabM (List DoElem) := do
   let e ← getExpr
   if e.isAppOfArity ``Bind.bind 6 then
     let α := e.getAppArgs[2]!
     let ma ← withAppFn <| withAppArg delab
     let arg := e.appArg!
-    -- Tuple pattern: `Function.uncurry …` (possibly a chain for flat N-tuples).
     if arg.isAppOfArity ``Function.uncurry 4 then
-      let (pats, rest) ← withAppArg <|
-        enterUncurryChain #[] fun outerBinders => do
-          guard (outerBinders.size >= 2)
-          delabBinders outerBinders.toList aeneasDelabDoElems
-      let tupleStx ← buildTupleTerm pats
-      return (← `(doElem| let $tupleStx:term ← $ma:term)) :: rest
-    -- Ctor pattern: `fun _x => T.casesOn _x (fun f₁ … fₙ => body)`
-    if let .lam xName _ xBody _ := arg then
-      if let .const fnName _ := xBody.getAppFn then
-        if let .str typeName "casesOn" := fnName then
-          if typeName != ``Prod then
-            if let some (.inductInfo indInfo) := (← getEnv).find? typeName then
-              if indInfo.ctors.length == 1 then
-                let xArgs := xBody.getAppArgs
-                let numParams := indInfo.numParams
-                if xArgs.size == numParams + 3 ∧ xArgs[numParams + 1]! == .bvar 0 then
-                  let names := extractLamBinders xArgs[numParams + 2]!
-                  if !names.isEmpty then
-                    let (pats, rest) ← withAppArg <| withBindingBody xName <|
-                      withNaryArg (numParams + 2) <|
-                        enterLamsAux names #[] fun ctorBinders =>
-                          delabBinders ctorBinders.toList aeneasDelabDoElems
-                    let elem ← `(doElem| let ⟨$pats,*⟩ ← $ma:term)
-                    return elem :: rest
-    -- Regular bind: fun n => body (mirrors Lean's delabDoElems)
-    withAppArg do
-      match (← getExpr) with
-      | .lam _ _ body _ =>
-        withBindingBodyUnusedName fun n => do
-          let nStx : TSyntax `term := ⟨n⟩
-          let rest ← aeneasDelabDoElems
-          if body.hasLooseBVars then
-            return (← `(doElem| let $nStx:term ← $ma:term)) :: rest
-          else if α.isConstOf ``Unit ∨ α.isConstOf ``PUnit then
-            return (← `(doElem| $ma:term)) :: rest
-          else
-            return (← `(doElem| let _ ← $ma:term)) :: rest
-      | _ => failure
+      tupleBind ma
+    else 
+      try 
+        let ctor ← parseCtorBind? arg 
+        ctorBind ctor ma
+      catch _ =>
+        plainBind α ma
   else if e.isLet then
-    let .letE n t v b nondep ← getExpr | unreachable!
+    letBind
+  else
+    return [← `(doElem| $(← delab):term)]
+where
+  /-- `let (x₁, …, xₙ) ← e` -/
+  tupleBind (ma : Term) : DelabM (List DoElem) := do
+    let (pats, rest) ← withAppArg <|
+      enterUncurryChain #[] fun outerBinders =>
+        delabBinders outerBinders.toList aeneasDelabDoElems
+    let tupleStx ← buildTupleTerm pats
+    return (← `(doElem| let $tupleStx:term ← $ma:term)) :: rest
+  /-- `let ⟨f₁, …, fₙ⟩ ← e` -/
+  ctorBind (ctor : CtorBindShape) (ma : Term) : DelabM (List DoElem) := do
+    let (pats, rest) ← withAppArg <| withBindingBody ctor.xName <|
+      withNaryArg (ctor.numParams + 2) <|
+        enterLams #[] fun ctorBinders =>
+          delabBinders ctorBinders.toList aeneasDelabDoElems
+    return (← `(doElem| let ⟨$pats,*⟩ ← $ma:term)) :: rest
+  /-- `let n ← e` (or bare `e` when the result is unused/`Unit`) -/
+  plainBind (α : Expr) (ma : Term) : DelabM (List DoElem) :=
+    withAppArg do
+      let .lam _ _ body _ ← getExpr | failure
+      withBindingBodyUnusedName fun n => do
+        let rest ← aeneasDelabDoElems
+        let nStx : Term := ⟨n⟩
+        let item ←
+          if body.hasLooseBVars then `(doElem| let $nStx:term ← $ma:term)
+          else if α.isConstOf ``Unit ∨ α.isConstOf ``PUnit then `(doElem| $ma:term)
+          else `(doElem| let _ ← $ma:term)
+        return item :: rest
+  /-- `let n : T := v` / `have n : T := v` -/
+  letBind : DelabM (List DoElem) := do
+    let .letE n t v b nondep ← getExpr | failure
     let n ← getUnusedName n b
     let stxT ← descend t 0 delab
     let stxV ← descend v 1 delab
     Meta.withLetDecl n t v (nondep := nondep) fun fvar =>
-      let b := b.instantiate1 fvar
-      descend b 2 do
+      descend (b.instantiate1 fvar) 2 do
         let rest ← aeneasDelabDoElems
-        if nondep then
-          return (← `(doElem| have $(mkIdent n) : $stxT := $stxV)) :: rest
-        else
-          return (← `(doElem| let $(mkIdent n) : $stxT := $stxV)) :: rest
-  else
-    let stx ← delab
-    return [← `(doElem| $stx:term)]
+        let item ←
+          if nondep then `(doElem| have $(mkIdent n) : $stxT := $stxV)
+          else `(doElem| let $(mkIdent n) : $stxT := $stxV)
+        return item :: rest
 
 open Parser Term
 
-/-- Top-level `do`-block delab. Walks a `Bind.bind` chain with
-    `aeneasDelabDoElems`, which understands tuple/ctor pattern continuations
-    and so doesn't bail on them the way Lean's builtin `delabDo` does. -/
+/-- Top-level `do`-block delab, restricted to the `Std.Result` monad. -/
 @[delab app.Bind.bind]
 def aeneasDelabDo : Delab := whenNotPPOption getPPExplicit <| whenPPOption getPPNotation do
-  guard <| (← getExpr).isAppOfArity ``Bind.bind 6
+  let e ← getExpr
+  -- only use the new `do` delaborator for `Result _` do blocks
+  unless e.isAppOfArity ``Bind.bind 6 do failure
+  unless e.getAppArgs[0]!.isConstOf ``Aeneas.Std.Result do failure
   let elems ← aeneasDelabDoElems
   let items ← elems.toArray.mapM (`(doSeqItem|$(·):doElem))
   `(do $items:doSeqItem*)
 
+end Delab
 end Do
 end Aeneas
