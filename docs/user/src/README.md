@@ -5,8 +5,6 @@ Aeneas is a verification toolchain for Rust programs aiming to embed purely func
 ## What it can do?
 
 Aeneas aims to provide verification facilities for **safe** Rust with some caveats described in the next section.
-It supports ordinary loops and nested loops, including `return` from inside
-nested loops and labelled `break`/`continue` to outer loops.
 
 ## What it cannot do?
 
