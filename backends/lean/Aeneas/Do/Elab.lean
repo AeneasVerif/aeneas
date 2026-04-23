@@ -258,7 +258,7 @@ partial def mkPatContinuation (shape : PatShape) (ty : Expr)
     Synthetic mvars are forced so `Decidable` can be inferred downstream. -/
 def elabIfCondition (cond : Term) : ElabM Expr := do
   let condExpr ← Lean.Elab.Term.elabTerm cond none
-  Lean.Elab.Term.synthesizeSyntheticMVarsNoPostponing
+  synthesizeSyntheticMVarsNoPostponing
   let condExpr ← instantiateMVars condExpr
   let condType ← whnf (← instantiateMVars (← inferType condExpr))
   if condType.isConstOf ``Bool then
@@ -282,7 +282,7 @@ def getDoElems (doSeq : TSyntax ``doSeq) : ElabM (List DoElem) := do
 mutual
 
 /-- Dispatch a `doElem` to its handler. -/
-partial def elabDoElem (elem : TSyntax `doElem) (rest : List DoElem) : ElabM Expr := do
+partial def elabDoElem (elem : DoElem) (rest : List DoElem) : ElabM Expr := do
   match elem with
   | `(doElem| let $x:ident $[: $ty?]? ← $rhs) => elabDoLetArrowId x ty? rhs rest
   | `(doElem| let $pat:term ← $rhs)  => elabDoLetArrowPat pat rhs rest
@@ -405,7 +405,7 @@ partial def elabDoLetPat (pat : Term) (rhs : Term)
 /-- Elaborate an `if/else-if/…/else` chain as nested `ite`s. `rest` is bound
     once outside the chain. -/
 partial def elabDoIfChain (branches : Array (Term × TSyntax ``doSeq))
-    (elseSeq : TSyntax ``doSeq) (rest : List (TSyntax `doElem)) : ElabM Expr := do
+    (elseSeq : TSyntax ``doSeq) (rest : List DoElem) : ElabM Expr := do
   let elabAtType (ty : Expr) : ElabM Expr := do
     let some α := ty.getAppArgs[0]?
       | throwError "elabDoIfChain: expected monadic type, got{indentExpr ty}"
@@ -456,7 +456,7 @@ partial def elabDoMatch
     instantiateMVars matchExpr
   elabMonadicAsDoElem elabAtType rest
 
-partial def elabDoSeqCore : List (TSyntax `doElem) → ElabM Expr
+partial def elabDoSeqCore : List DoElem → ElabM Expr
   | [] => throwError "unexpected empty `do` block"
   | elem :: rest => elabDoElem elem rest
 
