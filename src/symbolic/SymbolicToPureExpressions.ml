@@ -466,7 +466,7 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
                     [%craise] ctx.span
                       ("Raw ptr casts are only supported between pointers to \
                         literal types; found: "
-                      ^ Charon.PrintExpressions.cast_kind_to_string env kind)
+                      ^ Charon.Print.cast_kind_to_string env kind)
               in
               let src_ty, src_mut = get_ty src_ty in
               let tgt_ty, tgt_mut = get_ty tgt_ty in

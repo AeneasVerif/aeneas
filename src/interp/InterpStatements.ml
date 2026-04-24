@@ -1386,13 +1386,13 @@ and eval_non_builtin_function_call_concrete (config : config) (span : Meta.span)
       (* We can evaluate the function call only if it is not opaque *)
       let body =
         match def.body with
-        | Body body -> body
+        | StructuredBody body -> body
         | other ->
             [%craise] span
               ("Can't evaluate a call to function: "
               ^ name_to_string ctx def.item_meta.name
               ^ ", it is "
-              ^ Charon.GAst.show_body Fmt.nop other)
+              ^ Charon.GAst.show_body other)
       in
       (* TODO: we need to normalize the types if we want to correctly support traits *)
       [%cassert] body.span (generics.trait_refs = [])

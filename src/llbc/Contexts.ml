@@ -3,7 +3,7 @@ open Expressions
 open Values
 open LlbcAst
 open ValuesUtils
-open Charon.PrintTypes
+open Charon.Print
 open PrintBase.Values
 include ContextsBase
 
@@ -300,10 +300,10 @@ let ctx_push_var (span : Meta.span) (ctx : eval_ctx) (var : local) (v : tvalue)
     is important). *)
 let ctx_push_vars (span : Meta.span) (ctx : eval_ctx)
     (vars : (local * tvalue) list) : eval_ctx =
-  let fmt = Charon.PrintLlbcAst.Crate.crate_to_fmt_env ctx.crate in
+  let fmt = Charon.Print.crate_to_fmt_env ctx.crate in
   let var_value_to_string (var, value) =
     "("
-    ^ Charon.PrintExpressions.local_to_string var
+    ^ Charon.Print.local_to_string var
     ^ " : "
     ^ ty_to_string fmt var.local_ty
     ^ ")" ^ " -> " ^ tvalue_to_string fmt value

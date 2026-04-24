@@ -27,7 +27,7 @@ let translate_function_to_symbolics (trans_ctx : trans_ctx)
   [%ltrace name_to_string trans_ctx fdef.item_meta.name];
 
   match fdef.body with
-  | Body _ ->
+  | StructuredBody _ ->
       (* Evaluate - note that [evaluate_function_symbolic synthesize] catches
          exceptions to at least generate a dummy body if we do not abort on failure. *)
       let synthesize = true in

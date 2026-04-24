@@ -190,7 +190,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
   let opt_span = Some span in
   let translate_ty = translate_fwd_ty opt_span ctx in
   let name =
-    Print.Types.name_to_string
+    Print.name_to_string
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
       item_meta.name
   in
@@ -259,7 +259,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
   [%ltrace
     let ctx = Print.Contexts.decls_ctx_to_fmt_env ctx in
     "- trait impl: implemented trait: "
-    ^ Print.Types.trait_decl_ref_to_string ctx trait_impl.impl_trait];
+    ^ Print.trait_decl_ref_to_string ctx trait_impl.impl_trait];
   let {
     A.def_id;
     item_meta;
@@ -279,7 +279,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
     (translate_trait_decl_ref span translate_ty) llbc_impl_trait
   in
   let name =
-    Print.Types.name_to_string
+    Print.name_to_string
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
       item_meta.name
   in
@@ -345,7 +345,7 @@ let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
     decl
   in
   let name =
-    Print.Types.name_to_string
+    Print.name_to_string
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
       item_meta.name
   in
