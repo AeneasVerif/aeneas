@@ -55,6 +55,14 @@ def core.iter.traits.iterator.Iterator.step_by.default
   if step_by.val = 0 then .fail .panic
   else .ok ⟨ self, step_by ⟩
 
+/- `methods := ["collect"]` registers `collect` in the trait's metadata even
+   though it is *not* a field of the structure. Making `collect` an actual
+   field would force a circular dependency between `Iterator` and
+   `FromIterator` (since `collect.default` calls `from_iter` via the
+   `IntoIterator` blanket impl), so the field is omitted and the library
+   default `core.iter.traits.iterator.Iterator.collect.default` (defined
+   below, attributed `@[trait_default]`) is supplied directly to opaque
+   `collect` impls during extraction. -/
 @[rust_trait "core::iter::traits::iterator::Iterator"
   (methods := ["collect"])
   (defaultMethods := ["step_by", "enumerate", "take", "collect"])]

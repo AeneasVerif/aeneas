@@ -28,7 +28,7 @@ structure clone.Clone (Self : Type) where
   clone_from : Self → Self → Result Self := fun _ => clone
 
 @[trait_default]
-def clone.Clone.from_from.default {Self : Type} (clone : Self → Result Self)
+def clone.Clone.clone_from.default {Self : Type} (clone : Self → Result Self)
   (_self source : Self) : Result Self :=
   clone source
 
