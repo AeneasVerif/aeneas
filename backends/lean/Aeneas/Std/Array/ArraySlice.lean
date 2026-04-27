@@ -30,10 +30,18 @@ theorem Array.from_slice_val {α : Type u} {n : Usize} (a : Array α n) (ns : Sl
   (from_slice a ns).val = ns.val
   := by simp [from_slice, *]
 
-@[step_pure_def]
 def Array.to_slice_mut {α : Type u} {n : Usize} (a : Array α n) :
   Slice α × (Slice α → Array α n) :=
   (Array.to_slice a, Array.from_slice a)
+
+/-- Step theorem for `lift (Array.to_slice_mut a)` with curried postcondition.
+    Handles the new Aeneas translation pattern `let (s, back) ← lift (to_slice_mut a)`. -/
+@[step]
+theorem Array.to_slice_mut_spec {α : Type u} {n : Usize} (a : Array α n) :
+  (lift (Array.to_slice_mut a))
+  ⦃ (s : Slice α) (back : Slice α → Array α n) =>
+    s.val = a.val ∧ back = Array.from_slice a ⦄ := by
+  simp [lift, to_slice_mut, to_slice, WP.spec_ok]
 
 def Array.subslice {α : Type u} {n : Usize} (a : Array α n) (r : Range Usize) : Result (Slice α) :=
   -- TODO: not completely sure here
