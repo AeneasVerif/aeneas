@@ -604,4 +604,53 @@ fun m => do
 #print do_match_rest_test
 
 end Tests
+
+/- ## Regression tests for `elabDoMatch` with unresolved discriminant type metavars.
+
+When a polymorphic function has implicit type parameters resolved through an explicit
+structure argument (e.g., `{Item : Type} (inst : Iter I Item)`), the discriminant of a
+subsequent `match` on `Option` may carry unresolved metavars.  The holed match
+`match o with | none => _ | some p => _` needs those metavars resolved so that the
+pattern `none` can be elaborated. -/
+namespace MetavarTests
+
+open Aeneas Std Result ControlFlow Error
+
+structure TestIter (I : Type) (Item : Type) where
+  next : I → Result (Option Item × I)
+  extra : I → Nat
+  deriving Nonempty
+
+noncomputable opaque testEnumNext
+  {I : Type} {Item : Type} (inst : TestIter I Item) (e : Nat) :
+  Result (Option (Nat × Item) × Nat)
+
+noncomputable opaque testIterInst : TestIter (List Nat) Nat
+
+set_option linter.unusedVariables false in
+noncomputable def option_match_metavar_test
+  (e : Nat) (acc : Nat) : Result Nat := do
+  let (o, _e1) ← testEnumNext testIterInst e
+  match o with
+  | none => ok acc
+  | some p =>
+    let (_i, x) := p
+    ok (acc + x)
+
+set_option linter.unusedVariables false in
+noncomputable def option_match_metavar_loop_test
+  (e : Nat) (acc : Nat) : Result Nat := do
+  let (o, e1) ← testEnumNext testIterInst e
+  match o with
+  | none => ok acc
+  | some p =>
+    let (_i, x) := p
+    option_match_metavar_loop_test e1 (acc + x)
+partial_fixpoint
+
+#check @option_match_metavar_test
+#check @option_match_metavar_loop_test
+
+end MetavarTests
+
 end Do

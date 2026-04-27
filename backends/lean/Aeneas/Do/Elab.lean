@@ -438,6 +438,11 @@ partial def elabDoMatch
   let elabAtType (ty : Expr) : ElabM Expr := do
     let some α := ty.getAppArgs[0]?
       | throwError "elabDoMatch: expected monadic type, got{indentExpr ty}"
+    /- Synthesize pending metavariables before match elaboration.
+       The holed match `match d with | pat => _ | ...` needs fully resolved
+       discriminant types to elaborate patterns (e.g., `none` needs `Option ?α`
+       to have `?α` assigned). -/
+    synthesizeSyntheticMVarsNoPostponing
     let matchExpr ← elabTermEnsuringType termMatch ty
     synthesizeSyntheticMVarsNoPostponing
     let matchExpr ← instantiateMVars matchExpr
