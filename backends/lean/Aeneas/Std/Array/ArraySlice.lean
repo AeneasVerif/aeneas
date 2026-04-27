@@ -250,7 +250,7 @@ theorem Array.index_mut_SliceIndexRangeToUsizeSlice {T : Type} {N : Usize}
     (h : r.end ≤ N) :
     core.array.Array.index_mut (core.ops.index.IndexMutSlice
       (core.slice.index.SliceIndexRangeToUsizeSlice T)) a r
-    ⦃ (s, back) =>
+    ⦃ (s : Slice T) (back : Slice T → Array T N) =>
       s.val = a.val.slice 0 r.end ∧
       s.length = r.end.val ∧
       ∀ s', (back s').val = a.val.setSlice! 0 s'.val ⦄ := by
@@ -279,7 +279,7 @@ theorem Array.index_mut_SliceIndexRangeFromUsizeSlice {T : Type} {N : Usize}
     (h : r.start ≤ N) :
     core.array.Array.index_mut (core.ops.index.IndexMutSlice
       (core.slice.index.SliceIndexRangeFromUsizeSlice T)) a r
-    ⦃ (s, back) =>
+    ⦃ (s : Slice T) (back : Slice T → Array T N) =>
       s.val = a.val.drop r.start ∧
       s.length = N.val - r.start.val ∧
       ∀ s', (back s').val = a.val.setSlice! r.start.val s'.val ⦄ := by
