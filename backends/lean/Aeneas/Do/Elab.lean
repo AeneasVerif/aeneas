@@ -6,8 +6,11 @@ import Aeneas.Std
 
 The goal for this elaborator is to construct easier Lean terms to reason about.
 
+In particular, we do not introduce join points when a monadic let-binding contains
+an `if then else`.
+
 The Aeneas extracted `do` syntax is a proper subset of the Lean `do` syntax,
-with no early returns, so the new elaborator can avoid the use of jumps. 
+with no early returns, so the new elaborator can avoid the use of jumps.
 
 We also change the elaboration of pattern matched let bindings to avoid using
 the builtin match-based pattern matching.
@@ -41,7 +44,9 @@ structure Context where
   m : Expr
   /-- The element type `α`. -/
   expectedAlpha : Expr
+  /-- Instance of `Bind m` -/
   bindInst : Expr
+  /-- Instance of `Pure m` -/
   pureInst : Expr
 
 abbrev ElabM := ReaderT Context $ ContT Expr TermElabM
@@ -99,7 +104,6 @@ def ElabM.assignArmMVar (arm : Expr) (body : ElabM Expr) : ElabM Unit := do
           mkLambdaFVars fvars armExpr
       mvarId.assign value
       k ()
-
 
 /-- For a single-constructor inductive (other than `Prod`), return the constructor
     name and field types instantiated at the type's parameters. `none` otherwise. -/

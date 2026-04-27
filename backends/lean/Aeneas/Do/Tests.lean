@@ -636,6 +636,18 @@ noncomputable def option_match_metavar_test
   | some p =>
     let (_i, x) := p
     ok (acc + x)
+/--
+info: def Do.MetavarTests.option_match_metavar_test : ℕ → ℕ → Result ℕ :=
+fun e acc => do
+  let (o, _e1) ← testEnumNext testIterInst e
+  match o with
+    | none => ok acc
+    | some p =>
+      let (_i, x) := p
+      ok (acc + x)
+-/
+#guard_msgs in
+#print option_match_metavar_test
 
 set_option linter.unusedVariables false in
 noncomputable def option_match_metavar_loop_test
@@ -647,9 +659,20 @@ noncomputable def option_match_metavar_loop_test
     let (_i, x) := p
     option_match_metavar_loop_test e1 (acc + x)
 partial_fixpoint
-
-#check @option_match_metavar_test
-#check @option_match_metavar_loop_test
+/--
+info: @[irreducible] def Do.MetavarTests.option_match_metavar_loop_test : ℕ → ℕ → Result ℕ :=
+Lean.Order.fix
+  (fun f e acc => do
+    let (o, e1) ← testEnumNext testIterInst e
+    match o with
+      | none => ok acc
+      | some p =>
+        let (_i, x) := p
+        f e1 (acc + x))
+  option_match_metavar_loop_test._proof_1
+-/
+#guard_msgs in
+#print option_match_metavar_loop_test
 
 end MetavarTests
 
