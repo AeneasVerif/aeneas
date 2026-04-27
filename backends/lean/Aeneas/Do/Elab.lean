@@ -471,7 +471,7 @@ def elabDoSeq (doSeq : TSyntax ``doSeq) : ElabM Expr :=
   getDoElems doSeq >>= fun elems => elabDoSeqCore elems
 
 /-- Option to toggle the new Aeneas `do` elaborator -/
-register_option Aeneas.newDoElab : Bool := {
+register_option Aeneas.customDoElab : Bool := {
     defValue := true
     descr  := "Use the custom Aeneas `do` elaborator"
   }
@@ -485,7 +485,7 @@ def elabDo : TermElab := fun stx expectedType? => do
     let some expectedType := expectedType? | pure false
     let expectedType ← instantiateMVars =<< whnf expectedType
     match_expr expectedType with
-    | Aeneas.Std.Result _ => pure (Aeneas.newDoElab.get (← getOptions))
+    | Aeneas.Std.Result _ => pure (Aeneas.customDoElab.get (← getOptions))
     | _ => pure false
   if useNewElab then
     let `(do $doSeq) := stx | throwUnsupportedSyntax
