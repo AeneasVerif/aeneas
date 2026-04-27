@@ -102,7 +102,7 @@ let initialize_type_decl_info (span : Meta.span option) (crate : crate)
     !Config.use_tuple_structs && (not is_rec) && type_decl_is_tuple_struct def
   in
   let has_regions = List.length def.generics.regions > 0 in
-  let name_matcher_ctx : LlbcAst.block Charon.NameMatcher.ctx =
+  let name_matcher_ctx : Charon.NameMatcher.ctx =
     Charon.NameMatcher.ctx_from_crate crate
   in
   (* We have some specialized knowledge of some library types; we don't
@@ -115,7 +115,8 @@ let initialize_type_decl_info (span : Meta.span option) (crate : crate)
       (builtin_types_map ())
   in
   let name_to_string () =
-    Charon.PrintLlbcAst.Crate.crate_name_to_string crate def.item_meta.name
+    let env = Charon.Print.crate_to_fmt_env crate in
+    Charon.Print.name_to_string env def.item_meta.name
   in
 
   (* We initialize the mutable regions differently depending on whether the

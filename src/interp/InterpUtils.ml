@@ -45,7 +45,7 @@ let inst_fun_sig_to_string = Print.EvalCtx.inst_fun_sig_to_string
 let ty_to_string = Print.EvalCtx.ty_to_string
 let constant_expr_to_string = Print.EvalCtx.constant_expr_to_string
 let unop_to_string = Print.EvalCtx.unop_to_string
-let binop_to_string = Print.Expressions.binop_to_string
+let binop_to_string = Print.binop_to_string
 let generic_args_to_string = Print.EvalCtx.generic_args_to_string
 let trait_ref_to_string = Print.EvalCtx.trait_ref_to_string
 let trait_impl_ref_to_string = Print.EvalCtx.trait_impl_ref_to_string
@@ -62,7 +62,7 @@ let check_ty_is_supported file line (span : Meta.span) (ctx : eval_ctx)
 
 let fn_ptr_to_string (ctx : eval_ctx) (fn_ptr : fn_ptr) : string =
   let env = Print.Contexts.eval_ctx_to_fmt_env ctx in
-  Print.Types.fn_ptr_to_string env fn_ptr
+  Print.fn_ptr_to_string env fn_ptr
 
 let trait_decl_ref_region_binder_to_string =
   Print.EvalCtx.trait_decl_ref_region_binder_to_string

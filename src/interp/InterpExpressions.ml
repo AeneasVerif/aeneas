@@ -97,7 +97,7 @@ let literal_to_tvalue (span : Meta.span) (ty : literal_type) (cv : literal)
     (ctx : eval_ctx) : tvalue =
   (* Check the type while converting - we actually need some information
    * contained in the type *)
-  [%ltrace "- cv: " ^ Print.Values.literal_to_string cv];
+  [%ltrace "- cv: " ^ Print.literal_to_string cv];
   let ptr_size = (get_target_information ctx.crate).target_pointer_size in
   match (ty, cv) with
   (* Scalar, boolean... *)

@@ -30,9 +30,7 @@ let analyze_type_declarations (crate : crate)
     (fun infos decl ->
       try analyze_type_declaration_group None crate infos decl
       with CFailure error ->
-        let fmt_env : Print.fmt_env =
-          Charon.PrintLlbcAst.Crate.crate_to_fmt_env crate
-        in
+        let fmt_env : Print.fmt_env = Charon.Print.crate_to_fmt_env crate in
         let decls = Charon.GAstUtils.g_declaration_group_to_list decl in
         let decl_id_to_string (id : TypeDeclId.id) : string =
           match TypeDeclId.Map.find_opt id crate.type_decls with
@@ -54,9 +52,7 @@ let analyze_type_declarations (crate : crate)
 let compute_contexts (crate : crate) : decls_ctx =
   let crate_graph = Deps.compute_graph_of_uses crate in
   let type_decls_list, _, _, _, _, _ = split_declarations crate.declarations in
-  let fmt_env : Print.fmt_env =
-    Charon.PrintLlbcAst.Crate.crate_to_fmt_env crate
-  in
+  let fmt_env : Print.fmt_env = Charon.Print.crate_to_fmt_env crate in
 
   (* Split the declaration groups between the declaration kinds (types, functions, etc.) *)
   let type_decls_groups, _, _, _, _, mixed_groups =
@@ -447,7 +443,7 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
   (* Debug *)
   let span = fdef.item_meta.span in
   let name_to_string () =
-    Print.Types.name_to_string
+    Print.name_to_string
       (Print.Contexts.decls_ctx_to_fmt_env decls_ctx)
       fdef.item_meta.name
   in
@@ -574,7 +570,7 @@ module Test = struct
 
     (* Debug *)
     [%ltrace
-      Print.Types.name_to_string
+      Print.name_to_string
         (Print.Contexts.decls_ctx_to_fmt_env decls_ctx)
         fdef.item_meta.name];
 
@@ -600,7 +596,7 @@ module Test = struct
       | _ ->
           [%craise] span
             ("Unit test failed (concrete execution) on: "
-            ^ Print.Types.name_to_string
+            ^ Print.name_to_string
                 (Print.Contexts.decls_ctx_to_fmt_env decls_ctx)
                 fdef.item_meta.name)
     in

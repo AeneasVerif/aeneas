@@ -15,20 +15,14 @@ end
 module FunIdMap = Collections.MakeMap (FunIdOrderedType)
 module FunIdSet = Collections.MakeSet (FunIdOrderedType)
 
-let body_as_body (f : fun_body) : block gexpr_body option =
-  match f with
-  | Body body -> Some body
-  | _ -> None
+let body_as_body = Charon.LlbcAstUtils.body_as_structured
 
 let body_as_body_exn file line f =
   match body_as_body f with
   | Some body -> body
   | None -> Errors.craise_opt_span file line None "Not a LLBC body"
 
-let body_is_known (f : fun_body) : bool =
-  match f with
-  | Body _ -> true
-  | _ -> false
+let body_is_known (b : body) : bool = Option.is_some (body_as_body b)
 
 let lookup_fun_sig (fun_id : fun_id) (fun_decls : fun_decl FunDeclId.Map.t) :
     bound_fun_sig =
@@ -81,7 +75,7 @@ let crate_has_opaque_non_builtin_decls (k : crate) (filter_builtin : bool)
   crate_get_opaque_non_builtin_decls k filter_builtin type_decls fun_decls
   <> ([], [])
 
-let name_to_pattern (span : Meta.span option) (ctx : 'a Charon.NameMatcher.ctx)
+let name_to_pattern (span : Meta.span option) (ctx : Charon.NameMatcher.ctx)
     (c : Charon.NameMatcher.to_pat_config) (n : name) =
   if !Config.fail_hard then Charon.NameMatcher.name_to_pattern ctx c n
   else
@@ -104,7 +98,7 @@ let name_with_crate_to_pattern_string (span : Meta.span option)
   Charon.NameMatcher.pattern_to_string { tgt = TkPattern } pat
 
 let name_with_generics_to_pattern (span : Meta.span option)
-    (ctx : 'a Charon.NameMatcher.ctx) (c : Charon.NameMatcher.to_pat_config)
+    (ctx : Charon.NameMatcher.ctx) (c : Charon.NameMatcher.to_pat_config)
     (params : generic_params) (n : Charon.Types.name) (args : generic_args) =
   if !Config.fail_hard then
     Charon.NameMatcher.name_with_generics_to_pattern ctx c params n args
@@ -169,7 +163,7 @@ let block_has_break_continue_return (st : block) : bool =
 
 (** Compute the size of a function body - we count the number of statements and
     blocks *)
-let compute_body_size (f : fun_body) : int =
+let compute_body_size (b : body) : int =
   let size = ref 0 in
   let incr () = size := !size + 1 in
   let visitor =
@@ -186,8 +180,8 @@ let compute_body_size (f : fun_body) : int =
     end
   in
   let () =
-    match f with
-    | Body body -> visitor#visit_block () body.body
+    match b with
+    | StructuredBody body -> visitor#visit_block () body.body
     | _ -> ()
   in
   !size
