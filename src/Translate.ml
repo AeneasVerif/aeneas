@@ -195,10 +195,12 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
       (* Empty for now *)
       calls;
       loop_ids_map;
+      active_loop_id = None;
       mk_return = None;
       mk_panic = None;
       mk_continue = None;
       mk_break = None;
+      mk_loop_exit = None;
       mut_borrow_to_consumed = BorrowId.Map.empty;
       var_id_to_default = Pure.FVarId.Map.empty;
       abs_id_to_info = AbsId.Map.empty;
@@ -1287,7 +1289,8 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
       (* Add the custom includes *)
       List.iter (fun m -> Printf.fprintf out "import %s\n" m) fi.custom_includes;
       (* Always open the Primitives namespace *)
-      Printf.fprintf out "open Aeneas Aeneas.Std Result ControlFlow Error\n";
+      Printf.fprintf out
+        "open Aeneas Aeneas.Std Result ControlFlow LoopExit Error\n";
       (* It happens that we generate duplicated namespaces, like `betree.betree`.
          We deactivate the linter for this, because otherwise it leads to too much
          noise. *)

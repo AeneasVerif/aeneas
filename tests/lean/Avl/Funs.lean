@@ -2,7 +2,7 @@
 -- [avl]: function definitions
 import Aeneas
 import Avl.Types
-open Aeneas Aeneas.Std Result ControlFlow Error
+open Aeneas Aeneas.Std Result ControlFlow LoopExit Error
 set_option linter.dupNamespace false
 set_option linter.hashCommand false
 set_option linter.unusedVariables false
@@ -128,8 +128,7 @@ def Node.insert_in_left
       let left ← core.option.Option.unwrap o1
       if left.balance_factor <= 0#i8
       then
-        let node1 ←
-          Node.rotate_right (Node.mk node.value o2 node.right i) left
+        let node1 ← Node.rotate_right (Node.mk node.value o2 node.right i) left
         ok (false, node1)
       else
         let node1 ←
@@ -155,8 +154,7 @@ def Node.insert_in_right
       let right ← core.option.Option.unwrap o1
       if right.balance_factor >= 0#i8
       then
-        let node1 ←
-          Node.rotate_left (Node.mk node.value node.left o2 i) right
+        let node1 ← Node.rotate_left (Node.mk node.value node.left o2 i) right
         ok (false, node1)
       else
         let node1 ←

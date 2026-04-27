@@ -10,6 +10,52 @@ open InterpJoin
 (** The local logger *)
 let log = Logging.loops_fixed_point_log
 
+type loop_entry_result =
+  | CurrentLoopReentry
+  | PropagatedContinueToOuter of int
+  | NonReentryExit
+  | UnitResult
+
+(** Classify a loop-body result for fixed-point entry computation.
+
+    Only [Continue 0] is a re-entry of the loop currently being analyzed.
+    [Continue i] for [i > 0] exits this loop and targets an enclosing loop after
+    one depth decrement. If a nested loop has already propagated that exit to the
+    current loop as [Continue 0], this classifier treats it as a local re-entry. *)
+let classify_loop_entry_result (res : statement_eval_res) : loop_entry_result =
+  match res with
+  | Continue i ->
+      if i < 0 then invalid_arg "classify_loop_entry_result";
+      if i = 0 then CurrentLoopReentry
+      else PropagatedContinueToOuter (i - 1)
+  | Break _ | Return | Panic -> NonReentryExit
+  | Unit -> UnitResult
+
+type loop_exit_result =
+  | CurrentLoopBreak
+  | PropagatedLoopBreak of int
+  | PropagatedLoopContinue of int
+  | PropagatedLoopReturn
+  | NotLoopExit
+  | UnitLoopResult
+
+(** Classify a loop-body result for exit-context collection.
+
+    [Break 0] is the normal break consumed by the current loop. Other structured
+    exits leave the current loop and carry one fewer relative depth if they
+    target an enclosing loop. *)
+let classify_loop_exit_result (res : statement_eval_res) : loop_exit_result =
+  match res with
+  | Break i ->
+      if i < 0 then invalid_arg "classify_loop_exit_result";
+      if i = 0 then CurrentLoopBreak else PropagatedLoopBreak (i - 1)
+  | Continue i ->
+      if i < 0 then invalid_arg "classify_loop_exit_result";
+      if i = 0 then NotLoopExit else PropagatedLoopContinue (i - 1)
+  | Return -> PropagatedLoopReturn
+  | Panic -> NotLoopExit
+  | Unit -> UnitLoopResult
+
 (** Update the abstractions introduced by a loop with additional information,
     such as region group ids, continuation expressions, etc. *)
 let loop_abs_reorder_and_add_info (span : Meta.span) (fixed_ids : ids_sets)
@@ -164,17 +210,24 @@ let compute_loop_entry_fixed_point (config : config) (span : Meta.span)
       (* Keep only the contexts which reached a `continue`. *)
       let keep_continue_ctx (ctx, res) =
         [%ltrace "register_continue_ctx"];
-        match res with
-        | Return | Panic | Break _ -> None
-        | Unit ->
+        match classify_loop_entry_result res with
+        | CurrentLoopReentry -> Some ctx
+        | PropagatedContinueToOuter depth ->
+            [%ltrace
+              "propagating continue to outer loop at remaining depth "
+              ^ string_of_int depth];
+            None
+        | NonReentryExit -> None
+        | UnitResult ->
             (* See the comment in {!eval_loop} *)
             [%craise] span "Unreachable"
-        | Continue i ->
-            (* For now we don't support continues to outer loops *)
-            [%cassert] span (i = 0) "Continues to outer loops not supported yet";
-            Some ctx
       in
       let continue_ctxs = List.filter_map keep_continue_ctx ctx_resl in
+      if continue_ctxs = [] then
+        [%ltrace
+          "no local continue contexts reached this loop entry; propagated \
+           continues, breaks, returns, and panics are excluded from the current \
+           fixed point"];
 
       [%ltrace
         "about to join with continue_ctx" ^ "\n\n- ctx0:\n"
@@ -243,9 +296,95 @@ type break_ctx =
       *)
   | Multiple of (eval_ctx * abs list)  (** We joined multiple break contexts *)
 
-let compute_loop_break_context (config : config) (span : Meta.span)
+type propagated_exit_kind =
+  | PropagatedBreakExit of int
+  | PropagatedContinueExit of int
+  | PropagatedReturnExit
+
+type propagated_exit_ctx = {
+  exit_kind : propagated_exit_kind;
+  exit_ctx : eval_ctx;
+  exit_abs : abs list;
+}
+
+type loop_exit_contexts = {
+  normal_break : break_ctx;
+  propagated_exits : propagated_exit_ctx list;
+}
+
+let same_propagated_exit_kind (kind0 : propagated_exit_kind)
+    (kind1 : propagated_exit_kind) : bool =
+  match (kind0, kind1) with
+  | PropagatedBreakExit d0, PropagatedBreakExit d1
+  | PropagatedContinueExit d0, PropagatedContinueExit d1 ->
+      d0 = d1
+  | PropagatedReturnExit, PropagatedReturnExit -> true
+  | _ -> false
+
+let group_by_propagated_exit_kind
+    (items : (propagated_exit_kind * 'a) list) :
+    (propagated_exit_kind * 'a list) list =
+  let add_group groups (kind, item) =
+    let rec add = function
+      | [] -> [ (kind, [ item ]) ]
+      | (group_kind, group_items) :: groups ->
+          if same_propagated_exit_kind kind group_kind then
+            (group_kind, item :: group_items) :: groups
+          else (group_kind, group_items) :: add groups
+    in
+    add groups
+  in
+  List.map
+    (fun (kind, items) -> (kind, List.rev items))
+    (List.fold_left add_group [] items)
+
+let finalize_loop_exit_ctx (config : config) (span : Meta.span)
+    (loop_id : LoopId.id) (fixed_aids : AbsId.Set.t)
+    (fixed_dids : DummyVarId.Set.t) (ctx : eval_ctx) : eval_ctx * abs list =
+  let ctx =
+    InterpReduceCollapse.reduce_ctx config span ~with_abs_conts:true
+      (Loop loop_id) fixed_aids fixed_dids ctx
+  in
+  [%ltrace "exit ctx after reduce:\n" ^ eval_ctx_to_string ~span:(Some span) ctx];
+  if !Config.sanity_checks then Invariants.check_invariants span ctx;
+
+  let ctx = reorder_fresh_abs span false fixed_aids ctx in
+
+  let add_abs_cont_to_abs (abs : abs) (loop_id : loop_id) : abs =
+    InterpAbs.add_abs_cont_to_abs span ctx abs (ELoop (abs.abs_id, loop_id))
+  in
+  let add_abs_conts ctx =
+    let visitor =
+      object
+        inherit [_] map_eval_ctx
+
+        method! visit_abs _ abs =
+          match abs.kind with
+          | Loop loop_id ->
+              let abs = add_abs_cont_to_abs abs loop_id in
+              InterpBorrows.destructure_abs span abs.kind ~can_end:true
+                ~destructure_shared_values:true ctx abs
+          | _ -> abs
+      end
+    in
+    visitor#visit_eval_ctx () ctx
+  in
+  let ctx = add_abs_conts ctx in
+
+  let get_fresh_abs (e : env_elem) : abs option =
+    match e with
+    | EAbs abs ->
+        if not (AbsId.Set.mem abs.abs_id fixed_aids) then Some abs else None
+    | EBinding _ | EFrame -> None
+  in
+  (* Pay attention to the fact that the elements are stored in reverse order *)
+  let abs = List.rev (List.filter_map get_fresh_abs ctx.env) in
+  (ctx, abs)
+
+let compute_loop_exit_contexts (config : config) (span : Meta.span)
     (loop_id : LoopId.id) (eval_loop_body : stl_cm_fun) (fp_ctx : eval_ctx)
-    (fixed_aids : AbsId.Set.t) (fixed_dids : DummyVarId.Set.t) : break_ctx =
+    (fixed_aids : AbsId.Set.t) (fixed_dids : DummyVarId.Set.t) :
+    loop_exit_contexts =
   [%ltrace
     "Initial fixed-point context:\n"
     ^ eval_ctx_to_string ~span:(Some span) ~filter:false fp_ctx];
@@ -267,23 +406,36 @@ let compute_loop_break_context (config : config) (span : Meta.span)
     { fp_ctx with env = List.map update fp_ctx.env }
   in
 
-  (* Evaluate the loop body to register the different contexts upon reentry *)
+  (* Evaluate the loop body to register the different exit contexts. *)
   let ctx_resl, _ = eval_loop_body fp_ctx in
-  (* Keep only the contexts which reached a `continue`. *)
-  let keep_break_ctx (ctx, res) : eval_ctx option =
-    [%ltrace "register_continue_ctx"];
-    match res with
-    | Return | Panic | Continue _ -> None
-    | Unit ->
+  let classify_exit_ctx (ctx, res) :
+      [ `NormalBreak of eval_ctx
+      | `PropagatedExit of propagated_exit_kind * eval_ctx
+      | `Ignore ] =
+    [%ltrace "register_exit_ctx"];
+    match classify_loop_exit_result res with
+    | CurrentLoopBreak -> `NormalBreak ctx
+    | PropagatedLoopBreak depth ->
+        `PropagatedExit (PropagatedBreakExit depth, ctx)
+    | PropagatedLoopContinue depth ->
+        `PropagatedExit (PropagatedContinueExit depth, ctx)
+    | PropagatedLoopReturn -> `PropagatedExit (PropagatedReturnExit, ctx)
+    | NotLoopExit -> `Ignore
+    | UnitLoopResult ->
         (* See the comment in {!eval_loop} *)
         [%craise] span "Unreachable"
-    | Break i ->
-        (* We don't support breaks to outer loops *)
-        (* For now we don't support continues to outer loops *)
-        [%cassert] span (i = 0) "Continues to outer loops not supported yet";
-        Some ctx
   in
-  let break_ctxs = List.filter_map keep_break_ctx ctx_resl in
+  let normal_break_ctxs = ref [] in
+  let propagated_exit_ctxs = ref [] in
+  List.iter
+    (fun ctx_res ->
+      match classify_exit_ctx ctx_res with
+      | `NormalBreak ctx -> normal_break_ctxs := ctx :: !normal_break_ctxs
+      | `PropagatedExit exit -> propagated_exit_ctxs := exit :: !propagated_exit_ctxs
+      | `Ignore -> ())
+    ctx_resl;
+  let break_ctxs = List.rev !normal_break_ctxs in
+  let propagated_exit_ctxs = List.rev !propagated_exit_ctxs in
 
   [%ltrace
     "about to join the contexts at the breaks:\n"
@@ -296,67 +448,48 @@ let compute_loop_break_context (config : config) (span : Meta.span)
     ^ "\n"];
 
   (* Compute the join *)
-  match break_ctxs with
-  | [] ->
-      (* There is no break! *)
-      NoBreak
-  | [ _ ] ->
-      (* Single break context *)
-      Single
-  | ctxs ->
-      (* Join the contexts *)
-      let break_ctx =
-        loop_join_break_ctxs config span loop_id fixed_aids fixed_dids ctxs
-      in
-      (* Debug *)
-      [%ltrace
-        "after joining break ctxs" ^ "\n\n- ctx0:\n"
-        ^ eval_ctx_to_string ~span:(Some span) ~filter:false break_ctx];
-
-      (* Reduce the context - TODO: generalize so that we don't have to do this *)
-      let break_ctx =
-        InterpReduceCollapse.reduce_ctx config span ~with_abs_conts:true
-          (Loop loop_id) fixed_aids fixed_dids break_ctx
-      in
-      [%ltrace
-        "break_ctx after reduce:\n"
-        ^ eval_ctx_to_string ~span:(Some span) break_ctx];
-      (* Sanity check *)
-      if !Config.sanity_checks then Invariants.check_invariants span break_ctx;
-
-      (* Reorder the fresh abstractions *)
-      let break_ctx = reorder_fresh_abs span false fixed_aids break_ctx in
-
-      (* Introduce continuation expressions and destructure the region abstractions. *)
-      let add_abs_cont_to_abs (abs : abs) (loop_id : loop_id) : abs =
-        InterpAbs.add_abs_cont_to_abs span break_ctx abs
-          (ELoop (abs.abs_id, loop_id))
-      in
-      let add_abs_conts ctx =
-        let visitor =
-          object
-            inherit [_] map_eval_ctx
-
-            method! visit_abs _ abs =
-              match abs.kind with
-              | Loop loop_id ->
-                  let abs = add_abs_cont_to_abs abs loop_id in
-                  InterpBorrows.destructure_abs span abs.kind ~can_end:true
-                    ~destructure_shared_values:true ctx abs
-              | _ -> abs
-          end
+  let normal_break =
+    match break_ctxs with
+    | [] ->
+        (* There is no break! *)
+        NoBreak
+    | [ _ ] ->
+        (* Single break context *)
+        Single
+    | ctxs ->
+        (* Join the contexts *)
+        let break_ctx =
+          loop_join_break_ctxs config span loop_id fixed_aids fixed_dids ctxs
         in
-        visitor#visit_eval_ctx () ctx
-      in
-      let break_ctx = add_abs_conts break_ctx in
+        (* Debug *)
+        [%ltrace
+          "after joining break ctxs" ^ "\n\n- ctx0:\n"
+          ^ eval_ctx_to_string ~span:(Some span) ~filter:false break_ctx];
 
-      let get_fresh_abs (e : env_elem) : abs option =
-        match e with
-        | EAbs abs ->
-            if not (AbsId.Set.mem abs.abs_id fixed_aids) then Some abs else None
-        | EBinding _ | EFrame -> None
-      in
-      (* Pay attention to the fact that the elements are stored in reverse order *)
-      let abs = List.rev (List.filter_map get_fresh_abs break_ctx.env) in
+        let break_ctx, abs =
+          finalize_loop_exit_ctx config span loop_id fixed_aids fixed_dids
+            break_ctx
+        in
+        Multiple (break_ctx, abs)
+  in
 
-      Multiple (break_ctx, abs)
+  let join_propagated_exit_ctxs (kind, ctxs) : propagated_exit_ctx =
+    (* Propagated exits always use the joined/finalized path, including
+       singleton groups: unlike normal breaks, synthesis cannot reconstruct a
+       legacy Single fast path for them. *)
+    let ctx =
+      loop_join_break_ctxs config span loop_id fixed_aids fixed_dids ctxs
+    in
+    [%ltrace
+      "after joining propagated exit ctxs" ^ "\n\n- ctx0:\n"
+      ^ eval_ctx_to_string ~span:(Some span) ~filter:false ctx];
+    let ctx, abs =
+      finalize_loop_exit_ctx config span loop_id fixed_aids fixed_dids ctx
+    in
+    { exit_kind = kind; exit_ctx = ctx; exit_abs = abs }
+  in
+  let propagated_exits =
+    List.map join_propagated_exit_ctxs
+      (group_by_propagated_exit_kind propagated_exit_ctxs)
+  in
+  { normal_break; propagated_exits }

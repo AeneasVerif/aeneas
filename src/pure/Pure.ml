@@ -79,6 +79,40 @@ type builtin_ty =
   | TResult
   | TSum  (** sum type with two variants: left and right *)
   | TLoopResult  (** A continue or a break. TODO: rename to TControlFlow *)
+  | TLoopExit
+      (** Exit result for loops that may propagate control flow beyond the
+          current loop.
+
+          [TLoopResult] stays the compact encoding for ordinary loops whose
+          exits are only current-loop continue/break/failure. [TLoopExit] is
+          reserved for loops with propagated exits and has four type
+          parameters:
+
+          - [normal_break]: payload for a break consumed by the current loop.
+          - [propagated_break]: payload for a break targeting an outer loop.
+          - [propagated_continue]: payload for a continue targeting an outer
+            loop.
+          - [propagated_return]: payload for a function return from inside the
+            loop.
+
+          If several propagated break/continue depths reach the same loop, the
+          corresponding payload type may be a sum whose branches identify the
+          decremented relative depth and carry the value and
+          abstraction-continuation data required by that target.
+
+          Shape examples:
+
+          - Inner loop with only normal break:
+            [TLoopResult continue_ty normal_break_ty].
+          - Normal break plus [break 'outer]:
+            [TLoopExit normal_break_ty outer_break_ty unit_ty unit_ty].
+          - [continue 'outer]:
+            [TLoopExit unit_ty unit_ty outer_continue_ty unit_ty].
+          - Nested [return]:
+            [TLoopExit unit_ty unit_ty unit_ty return_ty].
+
+          Panic/failure remains represented through the existing [Result] error
+          path, not as a [TLoopExit] constructor. *)
   | TError
   | TFuel  (** TODO: move this to Literal? *)
   | TArray
@@ -232,6 +266,10 @@ let sum_right_id = VariantId.of_int 1
 let loop_result_continue_id = VariantId.of_int 0
 let loop_result_break_id = VariantId.of_int 1
 let loop_result_fail_id = VariantId.of_int 2
+let loop_exit_normal_break_id = VariantId.of_int 0
+let loop_exit_propagated_break_id = VariantId.of_int 1
+let loop_exit_propagated_continue_id = VariantId.of_int 2
+let loop_exit_propagated_return_id = VariantId.of_int 3
 let error_failure_id = VariantId.of_int 0
 let error_out_of_fuel_id = VariantId.of_int 1
 

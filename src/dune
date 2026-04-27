@@ -117,6 +117,26 @@
   Values
   ValuesUtils))
 
+(test
+ (name loop_exit_shape_test)
+ (modules Loop_exit_shape_test)
+ (libraries aeneas))
+
+(test
+ (name symbolic_loop_exit_shape_test)
+ (modules Symbolic_loop_exit_shape_test)
+ (libraries aeneas))
+
+(test
+ (name loop_fixed_point_entry_test)
+ (modules Loop_fixed_point_entry_test)
+ (libraries aeneas))
+
+(test
+ (name loop_exit_contexts_test)
+ (modules Loop_exit_contexts_test)
+ (libraries aeneas))
+
 ;; Embed the git commit into the binary so that `aeneas -version` can report it.
 ;; Follows the same pattern as opam (see https://github.com/ocaml/opam/blob/master/src/client/dune).
 ;; Step 1: capture the git description (commit hash, with -dirty suffix if needed).

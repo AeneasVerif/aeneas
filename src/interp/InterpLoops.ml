@@ -12,6 +12,26 @@ open InterpLoopsFixedPoint
 (** The local logger *)
 let log = Logging.loops_log
 
+type loop_exit_match_info = {
+  exit_ctx : eval_ctx;
+  exit_input_abs_ids : AbsId.id list;
+  exit_input_svalue_ids : SymbolicValueId.id list;
+}
+
+let symbolic_exit_kind_of_propagated_exit_kind (kind : propagated_exit_kind) :
+    SA.loop_exit_kind =
+  match kind with
+  | PropagatedBreakExit depth -> SA.PropagatedBreak depth
+  | PropagatedContinueExit depth -> SA.PropagatedContinue depth
+  | PropagatedReturnExit -> SA.PropagatedReturn
+
+let statement_result_of_propagated_exit_kind (kind : propagated_exit_kind) :
+    statement_eval_res =
+  match kind with
+  | PropagatedBreakExit depth -> Break depth
+  | PropagatedContinueExit depth -> Continue depth
+  | PropagatedReturnExit -> Return
+
 (** Evaluate a loop in concrete mode *)
 let eval_loop_concrete (span : Meta.span) (eval_loop_body : stl_cm_fun) :
     stl_cm_fun =
@@ -135,7 +155,9 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
     (eval_loop_body : stl_cm_fun) (loop_id : LoopId.id) (fp_ctx : eval_ctx)
     (fp_input_abs : AbsId.id list) (fp_input_svalues : SymbolicValueId.id list)
     (fixed_aids : AbsId.Set.t) (fixed_dids : DummyVarId.Set.t)
-    (break_info : (eval_ctx * AbsId.id list * SymbolicValueId.id list) option) :
+    (break_info : (eval_ctx * AbsId.id list * SymbolicValueId.id list) option)
+    (propagated_exit_infos :
+      (propagated_exit_kind * loop_exit_match_info) list) :
     (eval_ctx * abs list * symbolic_value list) option * SA.expr =
   [%ldebug "fp_ctx:\n" ^ eval_ctx_to_string fp_ctx];
 
@@ -157,16 +179,74 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
   in
 
   let ctx_info_at_break = ref None in
+  let find_propagated_exit_info (kind : propagated_exit_kind) :
+      loop_exit_match_info =
+    match
+      List.find_opt
+        (fun (exit_kind, _) -> same_propagated_exit_kind exit_kind kind)
+        propagated_exit_infos
+    with
+    | Some (_, info) -> info
+    | None ->
+        [%craise] span
+          ("Missing propagated exit context for kind: "
+          ^ PrintSymbolicAst.loop_exit_kind_to_string
+              (symbolic_exit_kind_of_propagated_exit_kind kind))
+  in
 
-  (* Then, do a special treatment of the break and continue cases.
-     For now, we forbid having breaks in loops (and eliminate breaks
-     in the prepasses) *)
+  let check_unique_propagated_exit_infos =
+    let rec check seen = function
+      | [] -> ()
+      | (kind, _) :: infos ->
+          if List.exists (same_propagated_exit_kind kind) seen then
+            [%craise] span
+              ("Duplicate propagated exit context for kind: "
+              ^ PrintSymbolicAst.loop_exit_kind_to_string
+                  (symbolic_exit_kind_of_propagated_exit_kind kind));
+          check (kind :: seen) infos
+    in
+    check [] propagated_exit_infos
+  in
+  check_unique_propagated_exit_infos;
+
+  let synthesize_propagated_loop_exit (kind : propagated_exit_kind)
+      (ctx : eval_ctx) : SA.expr =
+    let { exit_ctx; exit_input_abs_ids; exit_input_svalue_ids } =
+      find_propagated_exit_info kind
+    in
+    [%ltrace
+      "about to match the propagated exit context with the context at an exit:\n\
+       - exit kind: "
+      ^ PrintSymbolicAst.loop_exit_kind_to_string
+          (symbolic_exit_kind_of_propagated_exit_kind kind)
+      ^ "\n- src ctx (joined exit ctx):\n"
+      ^ eval_ctx_to_string ~span:(Some span) exit_ctx
+      ^ "\n\n-tgt ctx (ctx at this exit):\n"
+      ^ eval_ctx_to_string ~span:(Some span) ctx];
+
+    let (_ctx, tgt_ctx, input_values, input_abs), cc =
+      loop_match_break_ctx_with_target config span loop_id fixed_aids
+        fixed_dids exit_input_abs_ids exit_input_svalue_ids exit_ctx ctx
+    in
+    let input_values =
+      reorder_input_values input_values exit_input_svalue_ids
+    in
+    let input_abs = reorder_input_abs input_abs exit_input_abs_ids in
+    cc
+      (SA.LoopExit
+         ( tgt_ctx,
+           loop_id,
+           symbolic_exit_kind_of_propagated_exit_kind kind,
+           input_values,
+           input_abs ))
+  in
+
+  (* Then, do a special treatment of current-loop and propagated loop exits. *)
   let eval_after_loop_iter (ctx, res) : SA.expr =
     [%ltrace ""];
     match res with
     | Return ->
-        (* We don't support early returns *)
-        [%craise] span "Unexpected return"
+        synthesize_propagated_loop_exit PropagatedReturnExit ctx
     | Panic -> SA.Panic
     | Break i -> (
         [%ltrace
@@ -178,12 +258,12 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
           ^ "\n\n-tgt ctx (ctx at break):\n"
           ^ eval_ctx_to_string ~span:(Some span) ctx];
 
-        (* We don't support nested loops for now *)
-        [%cassert] span (i = 0) "Nested loops are not supported yet";
-
-        (* Case disjunction depending on whether we need to join or not *)
-        match break_info with
-        | None ->
+        if i > 0 then
+          synthesize_propagated_loop_exit (PropagatedBreakExit (i - 1)) ctx
+        else
+          (* Case disjunction depending on whether we need to join or not *)
+          match break_info with
+          | None ->
             (* There is a single context: we perform no join *)
             [%sanity_check] span (!ctx_info_at_break = None);
 
@@ -268,8 +348,14 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
             let break_values =
               List.map ValuesUtils.mk_tvalue_from_symbolic_value output_svalues
             in
-            cc (SA.LoopBreak (output_ctx, loop_id, break_values, break_abs))
-        | Some (break_ctx, break_input_abs, break_input_svalues) ->
+            cc
+              (SA.LoopExit
+                 ( output_ctx,
+                   loop_id,
+                   SA.loop_exit_kind_from_break_depth i,
+                   break_values,
+                   break_abs ))
+          | Some (break_ctx, break_input_abs, break_input_svalues) ->
             (* Join with the break context *)
             [%ltrace
               "about to match the break context with the context at a break:\n\
@@ -300,32 +386,41 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
             in
             let input_abs = reorder_input_abs input_abs break_input_abs in
             (* Create the symbolic expression *)
-            cc (SA.LoopBreak (tgt_ctx, loop_id, input_values, input_abs)))
+            cc
+              (SA.LoopExit
+                 ( tgt_ctx,
+                   loop_id,
+                   SA.loop_exit_kind_from_break_depth i,
+                   input_values,
+                   input_abs )))
     | Continue i ->
-        (* We don't support nested loops for now *)
-        [%cassert] span (i = 0) "Nested loops are not supported yet";
-        [%ltrace
-          "about to match the fixed-point context with the context at a \
-           continue:" ^ "\n- fixed_aids: "
-          ^ AbsId.Set.to_string None fixed_aids
-          ^ "\n- src ctx (fixed-point ctx):\n"
-          ^ eval_ctx_to_string ~span:(Some span) fp_ctx
-          ^ "\n\n-tgt ctx (ctx at continue):\n"
-          ^ eval_ctx_to_string ~span:(Some span) ctx];
+        if i > 0 then
+          synthesize_propagated_loop_exit (PropagatedContinueExit (i - 1)) ctx
+        else (
+          [%ltrace
+            "about to match the fixed-point context with the context at a \
+             continue:" ^ "\n- fixed_aids: "
+            ^ AbsId.Set.to_string None fixed_aids
+            ^ "\n- src ctx (fixed-point ctx):\n"
+            ^ eval_ctx_to_string ~span:(Some span) fp_ctx
+            ^ "\n\n-tgt ctx (ctx at continue):\n"
+            ^ eval_ctx_to_string ~span:(Some span) ctx];
 
-        let (_ctx, tgt_ctx, input_values, input_abs), cc =
-          match_ctx_with_target config span WithCont fixed_aids fixed_dids
-            fp_input_abs fp_input_svalues fp_ctx ~recoverable:false ctx
-        in
-        let input_values = reorder_input_values input_values fp_input_svalues in
-        let input_abs = reorder_input_abs input_abs fp_input_abs in
-        let e =
-          cc (SA.LoopContinue (tgt_ctx, loop_id, input_values, input_abs))
-        in
-        [%ldebug
-          let ctx = Print.Contexts.eval_ctx_to_fmt_env ctx in
-          PrintSymbolicAst.expr_to_string ctx "" "  " e];
-        e
+          let (_ctx, tgt_ctx, input_values, input_abs), cc =
+            match_ctx_with_target config span WithCont fixed_aids fixed_dids
+              fp_input_abs fp_input_svalues fp_ctx ~recoverable:false ctx
+          in
+          let input_values =
+            reorder_input_values input_values fp_input_svalues
+          in
+          let input_abs = reorder_input_abs input_abs fp_input_abs in
+          let e =
+            cc (SA.LoopContinue (tgt_ctx, loop_id, input_values, input_abs))
+          in
+          [%ldebug
+            let ctx = Print.Contexts.eval_ctx_to_fmt_env ctx in
+            PrintSymbolicAst.expr_to_string ctx "" "  " e];
+          e)
     | Unit ->
         (* For why we can't get [Unit], see the comments inside {!eval_loop_concrete}. *)
         [%craise] span "Unreachable"
@@ -338,7 +433,7 @@ let eval_loop_symbolic_synthesize_loop_body (config : config) (span : span)
 
 (** Evaluate a loop in symbolic mode *)
 let eval_loop_symbolic (config : config) (span : span)
-    (eval_loop_body : stl_cm_fun) : st_cm_fun =
+    (eval_loop_body : stl_cm_fun) : stl_cm_fun =
  fun ctx ->
   (* Debug *)
   [%ltrace "Context:\n" ^ eval_ctx_to_string ~span:(Some span) ctx ^ "\n"];
@@ -371,10 +466,11 @@ let eval_loop_symbolic (config : config) (span : span)
   (* Compute the context at the breaks *)
   let fixed_aids = InterpJoinCore.compute_fixed_abs_ids ctx fp_ctx in
   let fixed_dids = ctx_get_dummy_var_ids ctx in
-  let break_info =
-    compute_loop_break_context config span loop_id eval_loop_body fp_ctx
+  let loop_exit_contexts =
+    compute_loop_exit_contexts config span loop_id eval_loop_body fp_ctx
       fixed_aids fixed_dids
   in
+  let break_info = loop_exit_contexts.normal_break in
   (* Debug *)
   [%ltrace
     "- Initial context:\n"
@@ -401,11 +497,50 @@ let eval_loop_symbolic (config : config) (span : span)
     ^ String.concat ", "
         (List.map (symbolic_value_to_string ctx) fp_input_svalues)];
 
+  (* Build both the synthesis-side lookup payloads and the SymbolicAst metadata
+     from the same ordered exit list so their target kinds stay in sync. *)
+  let propagated_exits =
+    List.map
+      (fun (exit : propagated_exit_ctx) ->
+        let exit_svalues =
+          compute_ctx_fresh_ordered_symbolic_values span
+            ~only_modified_svalues:false ctx exit.exit_ctx
+        in
+        let exit_input_svalue_ids =
+          List.map (fun (sv : symbolic_value) -> sv.sv_id) exit_svalues
+        in
+        let exit_input_abs_ids =
+          List.map (fun (abs : abs) -> abs.abs_id) exit.exit_abs
+        in
+        ( ( exit.exit_kind,
+            {
+              exit_ctx = exit.exit_ctx;
+              exit_input_abs_ids;
+              exit_input_svalue_ids;
+            } ),
+          {
+            SA.exit_kind =
+              symbolic_exit_kind_of_propagated_exit_kind exit.exit_kind;
+            exit_svalues;
+            exit_abs = exit.exit_abs;
+            exit_expr = None;
+          } ))
+      loop_exit_contexts.propagated_exits
+  in
+  let propagated_exit_infos, propagated_loop_exits =
+    List.split propagated_exits
+  in
+
   let break_info, break_abs_values =
     match break_info with
     | NoBreak ->
-        [%craise] span
-          "(Infinite) loops which do not contain breaks are not supported yet"
+        if propagated_loop_exits = [] then
+          [%craise] span
+            "(Infinite) loops which do not contain breaks are not supported yet"
+        else
+          [%craise] span
+            "Loops with propagated exits and no normal break are not supported \
+             yet"
     | Single ->
         [%ltrace "Single break"];
         (None, None)
@@ -445,7 +580,7 @@ let eval_loop_symbolic (config : config) (span : span)
     let fixed_dids = ctx_get_dummy_var_ids ctx in
     eval_loop_symbolic_synthesize_loop_body config span eval_loop_body loop_id
       fp_ctx input_abs_ids_list fp_input_svalue_ids fixed_aids fixed_dids
-      break_info
+      break_info propagated_exit_infos
   in
 
   let break_ctx, break_abs, break_input_svalues =
@@ -479,7 +614,14 @@ let eval_loop_symbolic (config : config) (span : span)
     ^ "\n"];
 
   (* Put everything together *)
-  let cc (next_expr : SA.expr) : SA.expr =
+  let cc (next_expr : SA.expr) (propagated_exit_exprs : SA.expr list) : SA.expr =
+    [%sanity_check] span
+      (List.length propagated_loop_exits = List.length propagated_exit_exprs);
+    let propagated_loop_exits =
+      List.map2
+        (fun exit exit_expr -> { exit with SA.exit_expr = Some exit_expr })
+        propagated_loop_exits propagated_exit_exprs
+    in
     let loop_expr =
       SymbolicAst.Loop
         {
@@ -490,6 +632,16 @@ let eval_loop_symbolic (config : config) (span : span)
           input_abs_to_abs = input_abs;
           break_svalues = break_input_svalues;
           break_abs;
+          loop_exits =
+            [
+              {
+                SA.exit_kind = SA.NormalBreak;
+                exit_svalues = break_input_svalues;
+                exit_abs = break_abs;
+                exit_expr = None;
+              };
+            ]
+            @ propagated_loop_exits;
           loop_expr = loop_body;
           next_expr;
           span;
@@ -498,7 +650,23 @@ let eval_loop_symbolic (config : config) (span : span)
     in
     cf_before_loop loop_expr
   in
-  ((break_ctx, Unit), cc)
+  let ctx_resl =
+    (break_ctx, Unit)
+    :: List.map
+         (fun (exit : propagated_exit_ctx) ->
+           ( exit.exit_ctx,
+             statement_result_of_propagated_exit_kind exit.exit_kind ))
+         loop_exit_contexts.propagated_exits
+  in
+  let expected_expr_count = List.length ctx_resl in
+  let cf el =
+    [%sanity_check] span (List.length el = expected_expr_count);
+    match el with
+    | next_expr :: propagated_exit_exprs ->
+        cc next_expr propagated_exit_exprs
+    | [] -> [%internal_error] span
+  in
+  (ctx_resl, cf)
 
 let eval_loop (config : config) (span : span) (eval_loop_body : stl_cm_fun) :
     stl_cm_fun =
@@ -535,12 +703,7 @@ let eval_loop (config : config) (span : span) (eval_loop_body : stl_cm_fun) :
           (reborrow_ashared_loans_symbolic_borrows span None
              ~with_abs_conts:true ctx)
       in
-      let (ctx, res), cc =
+      let ctx_resl, cc =
         comp cc (eval_loop_symbolic config span eval_loop_body ctx)
       in
-      let cf (el : SymbolicAst.expr list) : SymbolicAst.expr =
-        match el with
-        | [ e ] -> cc e
-        | _ -> [%internal_error] span
-      in
-      ([ (ctx, res) ], cf)
+      (ctx_resl, cc)

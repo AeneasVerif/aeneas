@@ -55,7 +55,16 @@ package «tests» {}
 @[default_target] lean_lib LoopsAdts
 @[default_target] lean_lib LoopsIssues
 @[default_target] lean_lib LoopsNested
+@[default_target] lean_lib LoopsNestedBreakBorrowControl
+@[default_target] lean_lib LoopsNestedContinueBorrowControl
+@[default_target] lean_lib LoopsNestedContinueControl
+@[default_target] lean_lib LoopsNestedControl
+@[default_target] lean_lib LoopsNestedControlBackends
+@[default_target] lean_lib LoopsNestedControlRec
+@[default_target] lean_lib LoopsNestedControlScalar
+@[default_target] lean_lib LoopsNestedDepthBreakControl
 @[default_target] lean_lib LoopsNestedRec
+@[default_target] lean_lib LoopsNestedReturnBorrowControl
 @[default_target] lean_lib LoopsSequences
 @[default_target] lean_lib MiniTree
 @[default_target] lean_lib MutBorrowInSharedBorrow

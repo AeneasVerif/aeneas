@@ -273,6 +273,7 @@ let builtin_ty_to_string (aty : builtin_ty) : string =
   | TResult -> "Result"
   | TSum -> "Sum"
   | TLoopResult -> "LoopResult"
+  | TLoopExit -> "LoopExit"
   | TError -> "Error"
   | TFuel -> "Fuel"
   | TArray -> "Array"
@@ -535,7 +536,20 @@ let adt_variant_to_string ?(span = None) (env : fmt_env) (adt_id : type_id)
           else if variant_id = loop_result_fail_id then "@Fail"
           else
             [%craise_opt_span] span
-              "Unreachable: improper variant id for error type"
+              "Unreachable: improper variant id for loop result type"
+      | TLoopExit ->
+          let variant_id = Option.get variant_id in
+          if variant_id = loop_exit_normal_break_id then
+            "@LoopExit::NormalBreak"
+          else if variant_id = loop_exit_propagated_break_id then
+            "@LoopExit::PropagatedBreak"
+          else if variant_id = loop_exit_propagated_continue_id then
+            "@LoopExit::PropagatedContinue"
+          else if variant_id = loop_exit_propagated_return_id then
+            "@LoopExit::PropagatedReturn"
+          else
+            [%craise_opt_span] span
+              "Unreachable: improper variant id for loop exit type"
       | TFuel ->
           let variant_id = Option.get variant_id in
           if variant_id = fuel_zero_id then "@Fuel::Zero"
@@ -560,7 +574,7 @@ let adt_field_to_string ?(span = None) (env : fmt_env) (adt_id : type_id)
       | TFuel | TArray | TSlice | TStr ->
           (* Opaque types: we can't get there *)
           [%craise_opt_span] span "Unreachable"
-      | TResult | TError | TSum | TLoopResult | TRawPtr _ ->
+      | TResult | TError | TSum | TLoopResult | TLoopExit | TRawPtr _ ->
           (* Enumerations: we can't get there *)
           [%craise_opt_span] span "Unreachable")
 
@@ -685,7 +699,27 @@ and adt_pat_to_string_core (span : Meta.span option) (env : fmt_env)
             else if variant_id = loop_result_fail_id then "@Fail" ^ v
             else
               [%craise_opt_span] span
-                "Unreachable: improper variant id for error type"
+                "Unreachable: improper variant id for loop result type"
+        | TLoopExit ->
+            let variant_id = Option.get variant_id in
+            let v =
+              match fields with
+              | [ v ] -> " " ^ v
+              | _ ->
+                  [%craise_opt_span] span
+                    "The LoopExit variants takes exactly one value"
+            in
+            if variant_id = loop_exit_normal_break_id then
+              "@LoopExit::NormalBreak" ^ v
+            else if variant_id = loop_exit_propagated_break_id then
+              "@LoopExit::PropagatedBreak" ^ v
+            else if variant_id = loop_exit_propagated_continue_id then
+              "@LoopExit::PropagatedContinue" ^ v
+            else if variant_id = loop_exit_propagated_return_id then
+              "@LoopExit::PropagatedReturn" ^ v
+            else
+              [%craise_opt_span] span
+                "Unreachable: improper variant id for loop exit type"
         | TFuel ->
             let variant_id = Option.get variant_id in
             if variant_id = fuel_zero_id then (

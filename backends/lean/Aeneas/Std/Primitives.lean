@@ -234,9 +234,22 @@ def lift {α : Type u} (x : α) : Result α := Result.ok x
 # Loops
 -/
 
+inductive AeneasSum (α : Type u) (β : Type v) where
+  | left (v : α)
+  | right (v : β)
+deriving Repr, BEq
+
 inductive ControlFlow (α : Type u) (β : Type v) where
   | cont (v : α) -- continue
   | done (v : β) -- break
+deriving Repr, BEq
+
+inductive LoopExit (normalBreakTy : Type u) (propagatedBreakTy : Type v)
+    (propagatedContinueTy : Type w) (propagatedReturnTy : Type x) where
+  | normalBreak (v : normalBreakTy)
+  | propagatedBreak (v : propagatedBreakTy)
+  | propagatedContinue (v : propagatedContinueTy)
+  | propagatedReturn (v : propagatedReturnTy)
 deriving Repr, BEq
 
 def loop {α : Type u} {β : Type v} (body : α → Result (ControlFlow α β)) (x : α) : Result β := do
