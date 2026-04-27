@@ -375,9 +375,6 @@ partial def Script.toSyntax (script : Script) : MetaM (Array Syntax.Tactic) := d
     let s1 ← toSyntax s1
     pure (s0 ++ s1)
 
-attribute [step_simps] Aeneas.Std.bind_assoc_eq
-attribute [step_simps] Function.uncurry_apply_pair
-
 inductive TargetKind where
 | bind (fn : Name)
 | switch (info : Bifurcation.Info)
