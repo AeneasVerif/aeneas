@@ -236,7 +236,7 @@ theorem Vec.index_RangeTo_spec {α : Type} (v : Vec α) (r : core.ops.range.Rang
 theorem Vec.index_mut_RangeTo_spec {α : Type} (v : Vec α) (r : core.ops.range.RangeTo Usize)
     (h : r.end ≤ v.length) :
     Vec.index_mut (core.slice.index.SliceIndexRangeToUsizeSlice α) v r
-    ⦃ (s1, back) =>
+    ⦃ (s1 : Slice α) (back : Slice α → Vec α) =>
       s1.val = v.val.slice 0 r.end ∧
       s1.length = r.«end» ∧
       ∀ s', (back s').val = v.val.setSlice! 0 s'.val ⦄ := by
@@ -261,7 +261,7 @@ theorem Vec.index_RangeFrom_spec {α : Type} (v : Vec α) (r : core.ops.range.Ra
 theorem Vec.index_mut_RangeFrom_spec {α : Type} (v : Vec α) (r : core.ops.range.RangeFrom Usize)
     (h : r.start ≤ v.length) :
     Vec.index_mut (core.slice.index.SliceIndexRangeFromUsizeSlice α) v r
-    ⦃ (s1, back) =>
+    ⦃ (s1 : Slice α) (back : Slice α → Vec α) =>
       s1.val = v.val.drop r.start ∧
       s1.length = v.length - r.start.val ∧
       ∀ s', (back s').val = v.val.setSlice! r.start.val s'.val ⦄ := by
@@ -286,7 +286,7 @@ theorem Vec.index_Range_spec {α : Type} (v : Vec α) (r : core.ops.range.Range 
 theorem Vec.index_mut_Range_spec {α : Type} (v : Vec α) (r : core.ops.range.Range Usize)
     (h0 : r.start ≤ r.end) (h1 : r.end ≤ v.length) :
     Vec.index_mut (core.slice.index.SliceIndexRangeUsizeSlice α) v r
-    ⦃ (s1, back) =>
+    ⦃ (s1 : Slice α) (back : Slice α → Vec α) =>
       s1.val = v.val.slice r.start r.end ∧
       s1.length = r.end - r.start ∧
       ∀ s2, back s2 = Slice.setSlice! v r.start.val s2 ⦄ := by
