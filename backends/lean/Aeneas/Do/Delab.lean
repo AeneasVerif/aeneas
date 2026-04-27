@@ -86,6 +86,7 @@ where
 /-- `Function.uncurry (fun x₁ … xₙ => body) val` → `let (x₁, …, xₙ) := val; body` -/
 @[delab app.Function.uncurry]
 def delabUncurryLet : Delab := do
+  unless Aeneas.customDoElab.get (← getOptions) do failure
   let valStx ← withAppArg delab
   let (pats, bodyStx) ← withAppFn <| withAppArg <|
     enterUncurryChain #[] fun outerBinders => do
@@ -97,6 +98,7 @@ def delabUncurryLet : Delab := do
 /-- `T.casesOn val (fun f₁ … fₙ => body)` → `let ⟨f₁, …, fₙ⟩ := val; body` -/
 @[delab app]
 def delabSingleCtorCasesOn : Delab := do
+  unless Aeneas.customDoElab.get (← getOptions) do failure
   let e ← getExpr
   let .const (.str typeName "casesOn") _ := e.getAppFn | failure
   let some (.inductInfo { ctors := [_], numParams, .. }) := (← getEnv).find? typeName | failure
@@ -184,6 +186,7 @@ open Parser Term
 /-- Top-level `do`-block delab, restricted to the `Std.Result` monad. -/
 @[delab app.Bind.bind]
 def aeneasDelabDo : Delab := whenNotPPOption getPPExplicit <| whenPPOption getPPNotation do
+  unless Aeneas.customDoElab.get (← getOptions) do failure
   let e ← getExpr
   -- only use the new `do` delaborator for `Result _` do blocks
   unless e.isAppOfArity ``Bind.bind 6 do failure
