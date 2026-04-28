@@ -165,12 +165,23 @@ let generic_args_of_params_erase_regions (span : Meta.span option)
   (* Note that put aside erasing the regions, we don't need to perform any susbtitutions
      actually, and we only need to erase the regions inside the trait clauses. *)
   let regions = List.map (fun _ -> RErased) generics.regions in
-  (* Erase the regions in the trait clauses. *)
+  (* Erase the regions in the trait clauses.
+
+     Note that the [trait_decl_ref] of a trait clause may have higher-rank
+     regions (HRTBs), e.g. [P : Fn(&usize)] which is sugar for
+     [P : for<'a> Fn(&'a usize)]. Erasing all regions inside the binder makes
+     those bound regions unreferenced, so we can drop the [binder_regions]
+     list afterwards. *)
   let trait_refs =
     List.map
       (fun (tref : trait_ref) ->
-        [%sanity_check_opt_span] span (tref.trait_decl_ref.binder_regions = []);
-        st_substitute_visitor#visit_trait_ref erase_regions_subst tref)
+        let tref =
+          st_substitute_visitor#visit_trait_ref erase_regions_subst tref
+        in
+        let trait_decl_ref =
+          { tref.trait_decl_ref with binder_regions = [] }
+        in
+        { tref with trait_decl_ref })
       generics.trait_refs
   in
   { generics with regions; trait_refs }
