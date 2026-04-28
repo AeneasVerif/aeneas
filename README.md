@@ -113,6 +113,144 @@ to display a detailed documentation.
 >     rev = "COMMIT_HASH_HERE"
 >     ```
 
+## Visualization Tool
+
+Aeneas includes a visualization tool that generates static HTML documentation
+for Rust crates verified with Aeneas. It shows which functions have been
+formally verified, their Lean specifications with clickable identifiers,
+source code, dependency graphs, and verification statistics.
+
+### Verification Statuses
+
+The tool classifies each Rust function into one of the following categories:
+
+| Status | Meaning |
+|--------|---------|
+| **Verified** | Has a `@[step]` theorem with a complete proof (no `sorry`) |
+| **Verified (unverified deps)** | Verified, but transitively depends on a function that is not fully verified |
+| **Partially verified** | Has a `@[step]` theorem whose proof contains some `sorry` |
+| **Specified** | Has a `@[step]` theorem, but the proof is entirely `sorry` |
+| **Axiomatized** | External/opaque function (no body in the Rust source) |
+| **Not verified** | No `@[step]` theorem found |
+
+### Prerequisites
+
+- **Python 3.8+** (no additional packages required — the generator uses only the
+  standard library)
+- **Aeneas** built from this repository (`make` in the top directory)
+- A Lean project that depends on the `aeneas` Lake package
+
+### Setup
+
+The tool combines information from two extraction passes:
+
+1. **Aeneas doc-info extraction** — extracts function metadata (names, visibility,
+   opacity, call graph, source spans) from the LLBC file produced by Charon.
+2. **Lean doc extraction** — extracts `@[step]` theorem metadata (theorem statements,
+   sorry status, annotated identifiers) from the compiled Lean environment.
+
+#### Step 1: Generate the LLBC file
+
+From inside your Rust crate, run Charon with the Aeneas preset:
+
+```bash
+charon cargo --preset=aeneas
+```
+
+This produces a `.llbc` file (e.g., `my_crate.llbc`). If your project uses custom
+`cfg` flags for extraction, pass them here.
+
+#### Step 2: Extract doc-info from LLBC
+
+```bash
+aeneas -doc-info -doc-info-dest doc-info.json my_crate.llbc
+```
+
+This produces a JSON file containing the list of all functions, their visibility,
+opacity, source spans, and call graph.
+
+#### Step 3: Extract Lean verification metadata
+
+From your Lean project root (where `lakefile.lean` / `lakefile.toml` lives):
+
+```bash
+lake env lean --run <path-to-aeneas>/backends/lean/AeneasDocExtract.lean \
+  <ModuleName> lean-doc.json
+```
+
+Where `<ModuleName>` is the root Lean module that imports all your proof files
+(e.g., `MyProject.Properties` or `MyProject`). This loads the Lean environment
+and extracts all `@[step]` theorems with their statements, sorry status, and
+annotated identifiers.
+
+> **Note:** The module must import (directly or transitively) all files containing
+> `@[step]` theorems you want to appear in the documentation. If your project has
+> a top-level module that re-exports everything, use that.
+
+#### Step 4: Generate the HTML documentation
+
+```bash
+python3 -m scripts.aeneas_doc generate \
+  --doc-info doc-info.json \
+  --lean-doc lean-doc.json \
+  --rust-src path/to/rust/src/ \
+  --lean-src path/to/lean/project/ \
+  --output output-dir/ \
+  --title "My Crate" \
+  --open
+```
+
+| Flag | Required | Description |
+|------|----------|-------------|
+| `--doc-info` | Yes | Path to the doc-info JSON from Step 2 |
+| `--lean-doc` | No | Path to the Lean doc JSON from Step 3 |
+| `--rust-src` | No | Path to the Rust source directory (enables "Source" links) |
+| `--lean-src` | No | Path to the Lean project root (enables Lean "Source" links) |
+| `--output` | Yes | Output directory for the generated HTML |
+| `--title` | No | Title shown in the documentation (defaults to the crate name) |
+| `--open` | No | Open the generated docs in a browser after generation |
+
+The generated documentation is fully static HTML — no server required. Open
+`output-dir/index.html` in any browser.
+
+### Complete Example (demo crate)
+
+Using the demo crate included in the Aeneas test suite:
+
+```bash
+# 1. Extract doc-info from the pre-built LLBC file
+bin/aeneas -doc-info -doc-info-dest /tmp/demo-doc-info.json tests/llbc/demo.llbc
+
+# 2. Extract Lean verification metadata
+cd tests/lean
+lake env lean --run ../../backends/lean/AeneasDocExtract.lean \
+  Demo.Properties /tmp/demo-lean-doc.json
+cd ../..
+
+# 3. Generate the HTML documentation
+python3 -m scripts.aeneas_doc generate \
+  --doc-info /tmp/demo-doc-info.json \
+  --lean-doc /tmp/demo-lean-doc.json \
+  --rust-src tests/src \
+  --lean-src tests/lean \
+  --output /tmp/demo-docs/ \
+  --title "Demo Crate" \
+  --open
+```
+
+### What the Documentation Contains
+
+- **Index page** — overview with verification statistics (counts and percentages),
+  a progress bar, and a table of all public functions with their verification status
+- **Module pages** — per-module function listings with status badges
+- **Function pages** — for each Rust function: its source code, Lean model name(s),
+  `@[step]` theorem statement(s) with clickable Lean identifiers, and source links
+- **External functions page** — lists all axiomatized (opaque) functions and their specs
+- **Lean definition pages** — for each Lean definition: type signature, body, and source
+- **Source pages** — syntax-highlighted source viewers for both Rust and Lean files
+- **Dependency graph** — interactive D3.js visualization of the function call graph,
+  color-coded by verification status
+
 ## Targeted Subset And Current Limitations
 
 Aeneas currently functionalizes a subset of safe Rust, and we are in the process

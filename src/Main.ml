@@ -70,6 +70,10 @@ let () =
   (* Print the imported llbc *)
   let print_llbc = ref false in
 
+  (* Doc-info mode: dump JSON with documentation metadata *)
+  let doc_info = ref false in
+  let doc_info_dest = ref "" in
+
   let set_max_heartbeats = ref false in
 
   let spec_ls =
@@ -136,6 +140,13 @@ let () =
         Arg.Clear lean_gen_lakefile,
         " Generate a default lakefile.lean (Lean only)" );
       ("-print-llbc", Arg.Set print_llbc, " Print the imported LLBC");
+      ( "-doc-info",
+        Arg.Set doc_info,
+        " Dump documentation metadata as JSON (function names, spans, \
+         visibility, opacity, etc.) and exit" );
+      ( "-doc-info-dest",
+        Arg.Set_string doc_info_dest,
+        " Output file for -doc-info (default: stdout)" );
       ( "-abort-on-error",
         Arg.Set fail_hard,
         " Abort on the first encountered error" );
@@ -475,7 +486,8 @@ let () =
         check_not !borrow_check
           "Arguments `-backend` and `-borrow-check` are not compatible"
     | None ->
-        check !borrow_check "Missing `-backend` or `-borrow-check` argument"
+        if not !doc_info then
+          check !borrow_check "Missing `-backend` or `-borrow-check` argument"
   in
 
   (* Set some options depending on the backend *)
@@ -576,6 +588,11 @@ let () =
            decreasing_by/termination_by clauses with mutually recursive \
            definitions";
         fail true);
+
+      (* Doc-info mode: dump JSON and exit *)
+      if !doc_info then (
+        Aeneas.DocInfo.dump_doc_info m !doc_info_dest;
+        exit 0);
 
       (* Print the external definitions which are not listed in the builtin functions *)
       if !print_unknown_externals then (
