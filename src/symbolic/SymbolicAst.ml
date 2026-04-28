@@ -310,6 +310,9 @@ and expansion =
   | ExpandInt of integer_type * (scalar_value * expr) list * expr
       (** An integer expansion (i.e, a switch over an integer). The last
           expression is for the "otherwise" branch. *)
+  | ExpandChar of (char_value * expr) list * expr
+      (** A char expansion (i.e, a switch over a char). The last
+          expression is for the "otherwise" branch. *)
 
 (* Remark: this type doesn't have to be mutually recursive with the other
    types, but it makes it easy to generate the visitors *)
