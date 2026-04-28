@@ -28,3 +28,10 @@ pub fn wrap_partial_cmp(x: &Wrap, y: &Wrap) -> Option<Ordering> {
 pub fn wrap_cmp(x: &Wrap, y: &Wrap) -> Ordering {
     x.cmp(y)
 }
+
+/// Exercises the `lt` method of the derived PartialOrd.
+/// When Charon includes `lt` in the trait impl's method list, Aeneas must not
+/// emit a dangling self-reference in the struct literal.
+pub fn wrap_lt(x: Wrap, y: Wrap) -> bool {
+    x < y
+}
