@@ -3499,8 +3499,11 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   (* `let (....) : Trait ... =` *)
   (* Open the box for the name + generics *)
   F.pp_open_hovbox fmt ctx.indent_incr;
-  (* Lean only: we have a special elaboration if the impl is recursive *)
-  (if is_rec then (
+  (* Lean only: we have a special elaboration for trait implementations *)
+  (if backend () = Lean then (
+     F.pp_print_string fmt "impl_def";
+     F.pp_print_space fmt ())
+   else if is_rec then (
      F.pp_print_string fmt "impl_def";
      F.pp_print_space fmt ())
    else
@@ -3517,23 +3520,26 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   (* First, reserve the trait decl field names (constants, types, methods, parent
      clauses) so that generic parameter names are made fresh w.r.t. them.
      See the comment in {!extract_trait_decl}. *)
+  let pure_trait_decl =
+    let decl_id = impl.impl_trait.trait_decl_id in
+    TraitDeclId.Map.find decl_id ctx.trans_trait_decls
+  in
   let ctx =
     let decl_id = impl.impl_trait.trait_decl_id in
-    let trait_decl = TraitDeclId.Map.find decl_id ctx.trans_trait_decls in
     let field_names =
       List.map
         (fun (name, _) -> ctx_get_trait_const span decl_id name ctx)
-        trait_decl.consts
+        pure_trait_decl.consts
       @ List.map
           (fun name -> ctx_get_trait_type span decl_id name ctx)
-          trait_decl.types
+          pure_trait_decl.types
       @ List.map
           (fun (name, _) -> ctx_get_trait_method span decl_id name ctx)
-          trait_decl.methods
+          pure_trait_decl.methods
       @ List.map
           (fun (clause : trait_param) ->
             ctx_get_trait_parent_clause span decl_id clause.clause_id ctx)
-          trait_decl.parent_clauses
+          pure_trait_decl.parent_clauses
     in
     ctx_reserve_names field_names ctx
   in
@@ -3657,7 +3663,40 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     (* The methods *)
     List.iter
       (fun (name, bound_fn) ->
-        extract_trait_impl_method_items ctx fmt impl name bound_fn)
+        let method_decl_id = bound_fn.binder_value.fun_id in
+        let trans_fun =
+          A.FunDeclId.Map.find_opt method_decl_id ctx.trans_funs
+        in
+        (* Skip methods whose function is a builtin: their def is not emitted,
+           so referencing them in the struct literal would create a dangling
+           self-reference. *)
+        let is_builtin =
+          match trans_fun with
+          | Some trans -> Option.is_some trans.f.builtin_info
+          | None -> false
+        in
+        (* We also skip methods that have a library default if they are opaque
+           (i.e., they have no body).
+           The Lean library provides default field values for these methods
+           (e.g. PartialOrd.lt, Ord.max, PartialEq.ne). *)
+        let has_library_default =
+          match pure_trait_decl.builtin_info with
+          | None -> false
+          | Some info -> (
+              match List.find_opt (fun (m, _) -> m = name) info.methods with
+              | Some (_, fun_info) -> fun_info.has_default
+              | None -> false)
+        in
+        let is_opaque =
+          match trans_fun with
+          | Some trans -> trans.f.body = None
+          | None -> true
+        in
+        let skip =
+          is_builtin || (backend () = Lean && has_library_default && is_opaque)
+        in
+        if not skip then
+          extract_trait_impl_method_items ctx fmt impl name bound_fn)
       impl.methods;
 
     (* Close the outer boxes for the definition, as well as the brackets *)

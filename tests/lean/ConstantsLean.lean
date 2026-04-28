@@ -63,8 +63,8 @@ def Wrapper.Insts.Constants_leanTrait.NM (N1 : Std.Usize) (M1 : Std.Usize)
 /-- Trait implementation: [constants_lean::{constants_lean::Trait for constants_lean::Wrapper<N, M>}]
     Source: 'tests/src/constants-lean.rs', lines 26:0-28:1 -/
 @[reducible]
-def Wrapper.Insts.Constants_leanTrait (N1 : Std.Usize) (M1 : Std.Usize) : Trait
-  (Wrapper N1 M1) := {
+impl_def Wrapper.Insts.Constants_leanTrait (N1 : Std.Usize) (M1 : Std.Usize) :
+  Trait (Wrapper N1 M1) := {
   NM := Wrapper.Insts.Constants_leanTrait.NM N1 M1
 }
 

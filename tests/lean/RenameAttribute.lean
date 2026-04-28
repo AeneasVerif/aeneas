@@ -39,7 +39,7 @@ def BoolImpl.retTest (self : Bool) : Result Bool := do
 /-- Trait implementation: [rename_attribute::{rename_attribute::BoolTrait for bool}]
     Source: 'tests/src/rename_attribute.rs', lines 23:0-27:1 -/
 @[reducible]
-def BoolImpl : BoolTest Bool := {
+impl_def BoolImpl : BoolTest Bool := {
   getTest := BoolImpl.getTest
   retTest := BoolImpl.retTest
 }

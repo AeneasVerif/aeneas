@@ -36,7 +36,7 @@ def Foo.Insts.Const_shadowHasConst4.N : Std.Usize := 42#usize
 /-- Trait implementation: [const_shadow::{const_shadow::HasConst<4usize> for const_shadow::Foo}]
     Source: 'tests/src/const-shadow.rs', lines 20:0-26:1 -/
 @[reducible]
-def Foo.Insts.Const_shadowHasConst4 : HasConst Foo 4#usize := {
+impl_def Foo.Insts.Const_shadowHasConst4 : HasConst Foo 4#usize := {
   N := ok Foo.Insts.Const_shadowHasConst4.N
   get := Foo.Insts.Const_shadowHasConst4.get
 }

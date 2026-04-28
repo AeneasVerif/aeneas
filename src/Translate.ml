@@ -1005,6 +1005,49 @@ let trait_impl_is_builtin (ctx : gen_ctx) (id : Pure.trait_impl_id) : bool =
   in
   Option.is_some builtin_info
 
+(** Lean only: check whether a [pure_fun_translation] is an opaque trait impl
+    method whose Lean library counterpart already provides a default body.
+
+    When this holds we must not emit any code for the method:
+    - emitting an axiom would shadow the library default;
+    - emitting a definition is impossible since the LLBC body is missing;
+    - referencing it from the trait impl struct literal would create a dangling
+      self-reference.
+
+    The trait declaration is looked up first in the translated trait decls and,
+    if absent (external trait), in the builtin trait decls map. *)
+let trait_impl_method_has_lean_library_default (ctx : gen_ctx)
+    (pure_fun : pure_fun_translation) : bool =
+  Config.backend () = Lean
+  && pure_fun.f.body = None
+  &&
+  match pure_fun.f.Pure.src with
+  | TraitImplItem (_, trait_decl_ref, item_name, _) -> (
+      let builtin_info =
+        match
+          TraitDeclId.Map.find_opt trait_decl_ref.id ctx.trans_trait_decls
+        with
+        | Some trait_decl -> trait_decl.builtin_info
+        | None ->
+            (* External trait: not in the pure declarations. Look up the
+               builtin trait decls map directly from the crate trait decls. *)
+            let trait_decl =
+              TraitDeclId.Map.find trait_decl_ref.id ctx.crate.trait_decls
+            in
+            let builtin_trait_decls =
+              ExtractBuiltin.builtin_trait_decls_map ()
+            in
+            match_name_find_opt ctx.trans_ctx trait_decl.item_meta.name
+              builtin_trait_decls
+      in
+      match builtin_info with
+      | None -> false
+      | Some info -> (
+          match List.find_opt (fun (m, _) -> m = item_name) info.methods with
+          | Some (_, fun_info) -> fun_info.has_default
+          | None -> false))
+  | _ -> false
+
 (** Export a trait declaration. *)
 let export_trait_decl (fmt : Format.formatter) (_config : gen_config)
     (ctx : gen_ctx) (trait_decl_id : Pure.trait_decl_id) (extract_decl : bool)
@@ -1074,6 +1117,9 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
             | TraitDeclItem (_, _, false) -> ()
             (* Global initializers are translated along with the global definition *)
             | _ when pure_fun.f.is_global_decl_body -> ()
+            (* Skip opaque trait methods that have a Lean library default *)
+            | _ when trait_impl_method_has_lean_library_default ctx pure_fun ->
+                ()
             | _ ->
                 (* Translate *)
                 export_functions_group [ pure_fun ])
@@ -1086,7 +1132,16 @@ let extract_definitions (fmt : Format.formatter) (config : gen_config)
             (fun id -> FunDeclId.Map.find_opt id ctx.trans_funs)
             ids
         in
-        if List.exists (fun pf -> pf.f.is_global_decl_body) pure_funs then
+        (* Filter out opaque trait methods that have a Lean library default *)
+        let pure_funs =
+          List.filter
+            (fun pure_fun ->
+              pure_fun.f.is_global_decl_body
+              || not (trait_impl_method_has_lean_library_default ctx pure_fun))
+            pure_funs
+        in
+        if pure_funs = [] then ()
+        else if List.exists (fun pf -> pf.f.is_global_decl_body) pure_funs then
           [%craise_opt_span] None "Mutually recursive globals are not supported"
         else (* Translate *)
           export_functions_group pure_funs

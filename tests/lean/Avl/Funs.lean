@@ -26,7 +26,7 @@ def I32.Insts.AvlOrd.cmp
 /-- Trait implementation: [avl::{avl::Ord for i32}]
     Source: 'src/avl.rs', lines 6:0-16:1 -/
 @[reducible]
-def I32.Insts.AvlOrd : Ord Std.I32 := {
+impl_def I32.Insts.AvlOrd : Ord Std.I32 := {
   cmp := I32.Insts.AvlOrd.cmp
 }
 

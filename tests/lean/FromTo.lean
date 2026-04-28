@@ -29,7 +29,7 @@ def U32.Insts.From_toFromU32.from (x : Std.U32) : Result Std.U32 := do
 /-- Trait implementation: [from_to::{from_to::From<u32> for u32}]
     Source: 'tests/src/from_to.rs', lines 13:0-17:1 -/
 @[reducible]
-def U32.Insts.From_toFromU32 : From Std.U32 Std.U32 := {
+impl_def U32.Insts.From_toFromU32 : From Std.U32 Std.U32 := {
   «from» := U32.Insts.From_toFromU32.from
 }
 
@@ -42,7 +42,7 @@ def U32.Insts.From_toTo.to
 /-- Trait implementation: [from_to::{from_to::To for u32}]
     Source: 'tests/src/from_to.rs', lines 19:0-23:1 -/
 @[reducible]
-def U32.Insts.From_toTo : To Std.U32 := {
+impl_def U32.Insts.From_toTo : To Std.U32 := {
   «to» := fun {T : Type} (FromPU32Inst : From T Std.U32) =>
     U32.Insts.From_toTo.to FromPU32Inst
 }

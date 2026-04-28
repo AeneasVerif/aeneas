@@ -49,7 +49,7 @@ def each_ref.closure.Insts.CoreOpsFunctionFnOnceTupleUsizeSharedU8.call_once
 /-- Trait implementation: [issue_804_closure_return_ref::each_ref::{core::ops::function::FnOnce<(usize), &'_ (u8)> for issue_804_closure_return_ref::each_ref::closure<0>}]
     Source: 'tests/src/issue-804-closure-return-ref.rs', lines 6:24-6:33 -/
 @[reducible]
-def each_ref.closure.Insts.CoreOpsFunctionFnOnceTupleUsizeSharedU8 :
+impl_def each_ref.closure.Insts.CoreOpsFunctionFnOnceTupleUsizeSharedU8 :
   core.ops.function.FnOnce each_ref.closure Std.Usize Std.U8 := {
   call_once :=
     each_ref.closure.Insts.CoreOpsFunctionFnOnceTupleUsizeSharedU8.call_once
@@ -58,7 +58,7 @@ def each_ref.closure.Insts.CoreOpsFunctionFnOnceTupleUsizeSharedU8 :
 /-- Trait implementation: [issue_804_closure_return_ref::each_ref::{core::ops::function::FnMut<(usize), &'_ (u8)> for issue_804_closure_return_ref::each_ref::closure<0>}]
     Source: 'tests/src/issue-804-closure-return-ref.rs', lines 6:24-6:33 -/
 @[reducible]
-def each_ref.closure.Insts.CoreOpsFunctionFnMutTupleUsizeSharedU8 :
+impl_def each_ref.closure.Insts.CoreOpsFunctionFnMutTupleUsizeSharedU8 :
   core.ops.function.FnMut each_ref.closure Std.Usize Std.U8 := {
   FnOnceInst := each_ref.closure.Insts.CoreOpsFunctionFnOnceTupleUsizeSharedU8
   call_mut :=

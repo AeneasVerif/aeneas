@@ -164,7 +164,7 @@ def Usize.Insts.TutorialCounter.incr
 /-- Trait implementation: [tutorial::{tutorial::Counter for usize}]
     Source: 'src/lib.rs', lines 109:0-115:1 -/
 @[reducible]
-def Usize.Insts.TutorialCounter : Counter Std.Usize := {
+impl_def Usize.Insts.TutorialCounter : Counter Std.Usize := {
   incr := Usize.Insts.TutorialCounter.incr
 }
 

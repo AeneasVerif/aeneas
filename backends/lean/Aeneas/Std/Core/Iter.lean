@@ -7,6 +7,7 @@ import Aeneas.Std.Scalar.CloneCopy
 import Aeneas.Std.Scalar.EqOrd
 import Aeneas.Std.Scalar.CheckedOps
 import Aeneas.Std.Core.Core
+import Aeneas.Tactic.Elab.TraitDefault
 
 namespace Aeneas.Std
 
@@ -47,22 +48,33 @@ structure core.iter.adapters.take.Take (I : Type u) where
 structure core.iter.adapters.rev.Rev (T : Type u) where
   iter : T
 
-@[rust_trait "core::iter::traits::iterator::Iterator"]
-structure core.iter.traits.iterator.Iterator (Self : Type) (Self_Item : Type)
-  where
-  next : Self → Result ((Option Self_Item) × Self)
-  step_by : Self → Usize → Result (core.iter.adapters.step_by.StepBy Self)
-  enumerate : Self → Result (core.iter.adapters.enumerate.Enumerate Self)
-  take : Self → Usize → Result (core.iter.adapters.take.Take Self)
-  -- rev : Self → Result (core.iter.adapters.rev.Rev Self) -- requires DoubleEndedIterator, leading to circularity
-  -- TODO: collect
-
-@[rust_fun "core::iter::traits::iterator::Iterator::step_by"]
+@[trait_default]
 def core.iter.traits.iterator.Iterator.step_by.default
   {Self : Type} (self: Self) (step_by : Std.Usize) :
   Result (core.iter.adapters.step_by.StepBy Self) :=
   if step_by.val = 0 then .fail .panic
   else .ok ⟨ self, step_by ⟩
+
+/- `methods := ["collect"]` registers `collect` in the trait's metadata even
+   though it is *not* a field of the structure. Making `collect` an actual
+   field would force a circular dependency between `Iterator` and
+   `FromIterator` (since `collect.default` calls `from_iter` via the
+   `IntoIterator` blanket impl), so the field is omitted and the library
+   default `core.iter.traits.iterator.Iterator.collect.default` (defined
+   below, attributed `@[trait_default]`) is supplied directly to opaque
+   `collect` impls during extraction. -/
+@[rust_trait "core::iter::traits::iterator::Iterator"
+  (methods := ["collect"])
+  (defaultMethods := ["step_by", "enumerate", "take", "collect"])]
+structure core.iter.traits.iterator.Iterator (Self : Type) (Self_Item : Type)
+  where
+  next : Self → Result ((Option Self_Item) × Self)
+  step_by : Self → Usize → Result (core.iter.adapters.step_by.StepBy Self) :=
+    core.iter.traits.iterator.Iterator.step_by.default
+  enumerate : Self → Result (core.iter.adapters.enumerate.Enumerate Self) :=
+    fun self => .ok { iter := self, count := 0#usize }
+  take : Self → Usize → Result (core.iter.adapters.take.Take Self) :=
+    fun self n => .ok { iter := self, n := n }
 
 /-- Skip up to `n` elements from an iterator -/
 def core.iter.adapters.step_by.skipN
@@ -169,7 +181,7 @@ def core.iter.traits.collect.IntoIterator.Blanket {I : Type} {Item : Type}
   into_iter := core.iter.traits.collect.IntoIterator.Blanket.into_iter IteratorInst
 }
 
-@[rust_fun "core::iter::traits::iterator::Iterator::collect"]
+@[trait_default]
 def core.iter.traits.iterator.Iterator.collect.default
   {Self : Type} {B : Type} {Item : Type} (IteratorInst :
   core.iter.traits.iterator.Iterator Self Item)
