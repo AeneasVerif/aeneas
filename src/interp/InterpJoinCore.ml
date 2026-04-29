@@ -491,6 +491,37 @@ module type PrimMatcher = sig
     rty ->
     tavalue
 
+  (** Match two ended borrow projectors. Same parameter conventions as
+      {!match_aproj_borrows}, but with no [proj_ty] (the projection has ended,
+      so its type is no longer carried in the value). *)
+  val match_aended_proj_borrows :
+    tvalue_matcher ->
+    eval_ctx ->
+    eval_ctx ->
+    rty ->
+    proj_marker ->
+    aended_proj_borrows ->
+    rty ->
+    proj_marker ->
+    aended_proj_borrows ->
+    rty ->
+    tavalue
+
+  (** Match two ended loan projectors. Same parameter conventions as
+      {!match_aproj_loans}, but with no [proj_ty] (the projection has ended). *)
+  val match_aended_proj_loans :
+    tvalue_matcher ->
+    eval_ctx ->
+    eval_ctx ->
+    rty ->
+    proj_marker ->
+    aended_proj_loans ->
+    rty ->
+    proj_marker ->
+    aended_proj_loans ->
+    rty ->
+    tavalue
+
   (** Match two arbitrary avalues whose constructors don't match (this function
       is typically used to raise the proper exception). *)
   val match_avalues :

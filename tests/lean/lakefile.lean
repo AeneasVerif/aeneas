@@ -46,6 +46,7 @@ package «tests» {}
 @[default_target] lean_lib Issue803SelfInArray
 @[default_target] lean_lib Issue807MissingSymbolicValue
 @[default_target] lean_lib Issue815GlobalReferencingFallibleGlobal
+@[default_target] lean_lib Issue930EndedProjMatch
 @[default_target] lean_lib Joins
 @[default_target] lean_lib JoinDuplicate
 @[default_target] lean_lib ListBorrows
