@@ -123,13 +123,31 @@ theorem core.num.«%S».overflowing_mul_zero(x : «%S») :
   (overflowing_mul x IScalar.zero) = (IScalar.zero, false) :=
    IScalar.overflowing_mul_zero x
 
+@[simp]
+theorem UScalar.overflowing_zero_mul {ty} (x: UScalar ty) :
+  (overflowing_mul UScalar.zero x) = (zero, false) := by
+  simp [overflowing_mul_comm]
+
+@[simp]
+theorem IScalar.overflowing_zero_mul {ty} (x : IScalar ty) :
+  (overflowing_mul IScalar.zero x) = (zero, false) := by
+  simp [overflowing_mul_comm]
+
+uscalar @[simp]
+theorem core.num.«%S».overflowing_zero_mul(x : «%S») :
+  (overflowing_mul UScalar.zero x) = (UScalar.zero, false) :=
+  UScalar.overflowing_zero_mul x
+
+iscalar @[simp]
+theorem core.num.«%S».overflowing_zero_mul(x : «%S») :
+  (overflowing_mul IScalar.zero x) = (IScalar.zero, false) :=
+   IScalar.overflowing_zero_mul x
 
 @[simp]
 theorem UScalar.overflowing_mul_one {ty} (x: UScalar ty) :
   (overflowing_mul x UScalar.one) = (x, false) := by
   simp [overflowing_mul, UScalar.one, BitVec.umulOverflow, one_bv]
   grind[Nat.one_mod_two_pow, x.hBounds]
-
 
 @[simp]
 theorem IScalar.overflowing_mul_one {ty} (x : IScalar ty) :
@@ -139,8 +157,6 @@ theorem IScalar.overflowing_mul_one {ty} (x : IScalar ty) :
   simp [overflowing_mul, IScalar.one, BitVec.smulOverflow, one_bv]
   grind[x.hBounds]
 
-
-
 uscalar @[simp]
 theorem core.num.«%S».overflowing_mul_one(x : «%S») :
   (overflowing_mul x UScalar.one) = (x, false) := UScalar.overflowing_mul_one x
@@ -148,5 +164,23 @@ theorem core.num.«%S».overflowing_mul_one(x : «%S») :
 iscalar @[simp]
 theorem core.num.«%S».overflowing_mul_one(x : «%S») :
   (overflowing_mul x IScalar.one) = (x, false) := IScalar.overflowing_mul_one x
+
+@[simp]
+theorem UScalar.overflowing_one_mul {ty} (x: UScalar ty) :
+  (overflowing_mul UScalar.one x) = (x, false) := by
+  simp [overflowing_mul_comm]
+
+@[simp]
+theorem IScalar.overflowing_one_mul {ty} (x : IScalar ty) :
+  (overflowing_mul IScalar.one x) = (x, false) := by
+  simp [overflowing_mul_comm]
+
+uscalar @[simp]
+theorem core.num.«%S».overflowing_one_mul(x : «%S») :
+  (overflowing_mul UScalar.one x) = (x, false) := UScalar.overflowing_one_mul x
+
+iscalar @[simp]
+theorem core.num.«%S».overflowing_one_mul(x : «%S») :
+  (overflowing_mul IScalar.one x) = (x, false) := IScalar.overflowing_one_mul x
 
 end Aeneas.Std
