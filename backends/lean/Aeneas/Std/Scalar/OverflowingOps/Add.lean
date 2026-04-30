@@ -1,5 +1,6 @@
 import Aeneas.Std.Scalar.Core
 import Aeneas.Std.Scalar.Elab
+import Aeneas.Std.Scalar.Notations
 
 namespace Aeneas.Std
 
@@ -151,5 +152,16 @@ iscalar @[simp]
 theorem core.num.«%S».overflowing_zero_add(x : «%S») :
   (overflowing_add IScalar.zero x) = (x, false) :=
    IScalar.overflowing_zero_add x
+
+/-!
+## Tests
+
+The examples below check that the `@[simp]` lemmas above trigger.
+-/
+
+example (x : U32) : core.num.U32.overflowing_add x 0#u32 = (x, false) := by simp
+example (x : U32) : core.num.U32.overflowing_add 0#u32 x = (x, false) := by simp
+example (x : I32) : core.num.I32.overflowing_add x 0#i32 = (x, false) := by simp
+example (x : I32) : core.num.I32.overflowing_add 0#i32 x = (x, false) := by simp
 
 end Aeneas.Std

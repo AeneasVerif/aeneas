@@ -1,5 +1,6 @@
 import Aeneas.Std.Scalar.Core
 import Aeneas.Std.Scalar.Elab
+import Aeneas.Std.Scalar.Notations
 
 namespace Aeneas.Std
 
@@ -124,7 +125,8 @@ theorem IScalar.overflowing_zero_sub (x : IScalar ty) :
   have h2pos : (0:Int) < 2^(ty.numBits - 1) := by simp
   have hmin : ((↑(-(2:Int)^(ty.numBits - 1)) : BitVec ty.numBits)).toInt = -2^(ty.numBits - 1) := by
     exact BitVec.toInt_ofInt_eq_self hnb (Int.le_refl _) (by omega)
-  simp [overflowing_sub, zero_bv, BitVec.ssubOverflow, IScalar.min]
+  simp [overflowing_sub, zero_bv, BitVec.ssubOverflow, IScalar.min,
+    -Int.cast_pow, -Int.cast_neg] -- these were introduced by importing .Notations
   rw [Bool.eq_iff_iff, beq_iff_eq, ← BitVec.toInt_inj, hmin]
   simp
   grind
@@ -139,5 +141,21 @@ theorem core.num.«%S».overflowing_zero_sub(x : «%S») :
   (overflowing_sub IScalar.zero x) = (⟨-x.bv⟩, x.bv == IScalar.min .«%S») :=
    IScalar.overflowing_zero_sub x
 
+/-!
+## Tests
+
+The examples below check that the `@[simp]` lemmas above trigger.
+-/
+
+example (x : U32) : core.num.U32.overflowing_sub x 0#u32 = (x, false) := by simp
+example (x : I32) : core.num.I32.overflowing_sub x 0#i32 = (x, false) := by simp
+
+example (x : U32) :
+    core.num.U32.overflowing_sub 0#u32 x = (⟨-x.bv⟩, x.val != 0) := by
+  simp only [core.num.U32.overflowing_zero_sub]
+
+example (x : I32) :
+    core.num.I32.overflowing_sub 0#i32 x = (⟨-x.bv⟩, x.bv == IScalar.min .I32) := by
+  simp only [core.num.I32.overflowing_zero_sub]
 
 end Aeneas.Std

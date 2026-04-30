@@ -1,5 +1,6 @@
 import Aeneas.Std.Scalar.Core
 import Aeneas.Std.Scalar.Elab
+import Aeneas.Std.Scalar.Notations
 
 namespace Aeneas.Std
 
@@ -182,5 +183,21 @@ theorem core.num.«%S».overflowing_one_mul(x : «%S») :
 iscalar @[simp]
 theorem core.num.«%S».overflowing_one_mul(x : «%S») :
   (overflowing_mul IScalar.one x) = (x, false) := IScalar.overflowing_one_mul x
+
+/-!
+## Tests
+
+The examples below check that the `@[simp]` lemmas above trigger.
+-/
+
+example (x : U32) : core.num.U32.overflowing_mul x 0#u32 = (0#u32, false) := by simp
+example (x : U32) : core.num.U32.overflowing_mul 0#u32 x = (0#u32, false) := by simp
+example (x : I32) : core.num.I32.overflowing_mul x 0#i32 = (0#i32, false) := by simp
+example (x : I32) : core.num.I32.overflowing_mul 0#i32 x = (0#i32, false) := by simp
+
+example (x : U32) : core.num.U32.overflowing_mul x 1#u32 = (x, false) := by simp
+example (x : U32) : core.num.U32.overflowing_mul 1#u32 x = (x, false) := by simp
+example (x : I32) : core.num.I32.overflowing_mul x 1#i32 = (x, false) := by simp
+example (x : I32) : core.num.I32.overflowing_mul 1#i32 x = (x, false) := by simp
 
 end Aeneas.Std
