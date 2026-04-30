@@ -10,11 +10,10 @@ open ScalarElab
 -/
 
 def UScalar.overflowing_sub {ty} (x y : UScalar ty) : UScalar ty × Bool :=
-  (⟨ x.bv - y.bv ⟩, x.val < y.val)
+  (⟨ x.bv - y.bv ⟩, BitVec.usubOverflow x.bv y.bv)
 
 def IScalar.overflowing_sub {ty} (x y : IScalar ty) : IScalar ty × Bool :=
-  (⟨ x.bv - y.bv ⟩,
-     ¬ (-2^(ty.numBits -1) ≤ x.val - y.val ∧ x.val - y.val < 2^(ty.numBits-1)))
+  (⟨ x.bv - y.bv ⟩, BitVec.ssubOverflow x.bv y.bv)
 
 uscalar @[step_pure_def]
 def «%S».overflowing_sub (x y : «%S») : «%S» × Bool := @UScalar.overflowing_sub .«%S» x y
@@ -43,7 +42,7 @@ theorem UScalar.overflowing_sub_eq {ty} (x y : UScalar ty) :
     z.fst.val = x.val - y.val ∧
     z.snd = false
   := by
-  simp [overflowing_sub]
+  simp [overflowing_sub, BitVec.usubOverflow]
   have hsub_toNat : (x.bv - y.bv).toNat =
       (x.val + (2 ^ ty.numBits - y.val)) % 2 ^ ty.numBits := by
     simp [BitVec.toNat_sub, bv_toNat, Nat.add_comm]
@@ -93,13 +92,13 @@ theorem core.num.«%S».overflowing_sub_eq (x y : «%S») :
 @[simp]
 theorem UScalar.overflowing_sub_zero {ty} (x: UScalar ty) :
   (overflowing_sub x UScalar.zero) = (x, false) := by
-  simp [overflowing_sub, UScalar.zero, zero_bv]
+  simp [overflowing_sub, UScalar.zero, zero_bv, BitVec.usubOverflow]
 
 
 @[simp]
 theorem IScalar.overflowing_sub_zero {ty} (x : IScalar ty) :
   (overflowing_sub x IScalar.zero) = (x, false) := by
-  simp [overflowing_sub, hmax, hmin, zero_bv]
+  simp [overflowing_sub, hmax, hmin, zero_bv, BitVec.ssubOverflow]
 
 uscalar @[simp]
 theorem core.num.«%S».overflowing_sub_zero(x : «%S») :
