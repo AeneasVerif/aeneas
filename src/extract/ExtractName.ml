@@ -122,7 +122,10 @@ let pattern_to_extract_name (_span : Meta.span option) (name : pattern) :
   let c = { tgt = TkName } in
   let visitor = pattern_to_extract_name_visitor in
   let name = visitor#visit_pattern () name in
-  List.map (pattern_elem_to_string c) name
+  let names = List.map (pattern_elem_to_string c) name in
+  match names with
+  | "core" :: rest when !Config.core_models_lib -> "core_models" :: rest
+  | _ -> names
 
 let name_matcher_expr_to_extract_name (_span : Meta.span option) (name : expr) :
     string =
