@@ -10,11 +10,10 @@ open ScalarElab
 -/
 
 def UScalar.overflowing_mul {ty} (x y : UScalar ty) : UScalar ty × Bool :=
-  (⟨ x.bv * y.bv ⟩, 2^ty.numBits ≤ x.val * y.val)
+  (⟨ x.bv * y.bv ⟩, BitVec.umulOverflow x.bv y.bv)
 
 def IScalar.overflowing_mul {ty} (x y : IScalar ty) : IScalar ty × Bool :=
-  (⟨ x.bv * y.bv ⟩,
-     ¬ (-2^(ty.numBits -1) ≤ x.val * y.val ∧ x.val * y.val < 2^(ty.numBits-1)))
+  (⟨ x.bv * y.bv ⟩, BitVec.smulOverflow x.bv y.bv)
 
 uscalar @[step_pure_def]
 def «%S».overflowing_mul (x y : «%S») : «%S» × Bool := @UScalar.overflowing_mul .«%S» x y
@@ -43,7 +42,7 @@ theorem UScalar.overflowing_mul_eq {ty} (x y : UScalar ty) :
     z.fst.val = x.val * y.val ∧
     z.snd = false
   := by
-  simp [overflowing_mul]
+  simp [overflowing_mul, BitVec.umulOverflow]
   simp only [val, BitVec.toNat_mul, max]
   split <;> rename_i hLt
   · split_conjs
@@ -67,12 +66,12 @@ theorem core.num.«%S».overflowing_mul_eq (x y : «%S») :
 
 theorem UScalar.overflowing_mul_comm {ty} (x y : UScalar ty) :
   overflowing_mul x y = overflowing_mul y x := by
-  simp [overflowing_mul, Nat.mul_comm]
+  simp [overflowing_mul, BitVec.umulOverflow, Nat.mul_comm]
   exact BitVec.mul_comm x.bv y.bv
 
 theorem IScalar.overflowing_mul_comm {ty} (x y : IScalar ty) :
   overflowing_mul x y = overflowing_mul y x := by
-  simp [IScalar.overflowing_mul, Int.mul_comm]
+  simp [IScalar.overflowing_mul, BitVec.smulOverflow, Int.mul_comm]
   exact BitVec.mul_comm x.bv y.bv
 
 uscalar
@@ -106,12 +105,13 @@ theorem core.num.«%S».overflowing_mul_assoc (x y z : «%S») :
 @[simp]
 theorem UScalar.overflowing_mul_zero {ty} (x: UScalar ty) :
   (overflowing_mul x UScalar.zero) = (zero, false) := by
-  simp [overflowing_mul, UScalar.zero, zero_bv];rfl
+  simp [overflowing_mul, BitVec.umulOverflow,  UScalar.zero, zero_bv]
+  rfl
 
 @[simp]
 theorem IScalar.overflowing_mul_zero {ty} (x : IScalar ty) :
   (overflowing_mul x IScalar.zero) = (zero, false) := by
-  simp [overflowing_mul, IScalar.zero, zero_bv]; rfl
+  simp [overflowing_mul, IScalar.zero, BitVec.smulOverflow, zero_bv]; rfl
 
 uscalar @[simp]
 theorem core.num.«%S».overflowing_mul_zero(x : «%S») :
@@ -127,12 +127,19 @@ theorem core.num.«%S».overflowing_mul_zero(x : «%S») :
 @[simp]
 theorem UScalar.overflowing_mul_one {ty} (x: UScalar ty) :
   (overflowing_mul x UScalar.one) = (x, false) := by
-  simp [overflowing_mul, UScalar.one, hmax, one_bv]
+  simp [overflowing_mul, UScalar.one, BitVec.umulOverflow, one_bv]
+  grind[Nat.one_mod_two_pow, x.hBounds]
+
 
 @[simp]
 theorem IScalar.overflowing_mul_one {ty} (x : IScalar ty) :
   (overflowing_mul x IScalar.one) = (x, false) := by
-  simp [overflowing_mul, IScalar.one, hmax, hmin, one_bv]
+  have hw : 1 < ty.numBits := by
+    simp[IScalarTy.numBits]; grind[System.Platform.numBits_eq]
+  simp [overflowing_mul, IScalar.one, BitVec.smulOverflow, one_bv]
+  grind[x.hBounds]
+
+
 
 uscalar @[simp]
 theorem core.num.«%S».overflowing_mul_one(x : «%S») :
