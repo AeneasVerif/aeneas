@@ -395,10 +395,25 @@ def analyzeTarget : TacticM TargetKind := do
       let e ← Utils.normalizeLetBindings program
       if let .const ``Bind.bind .. := e.getAppFn then
         let #[_m, _self, _α, _β, _value, cont] := e.getAppArgs
-          | throwError "Expected bind to have 4 arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
-        Utils.lambdaOne cont fun x _ => do
-          let name ← x.fvarId!.getUserName
-          pure (.bind name)
+          | throwError "Expected bind to have 6 arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
+        -- Peel a `Function.uncurry (fun x₁ … xₙ => body)` wrapper, if present,
+        -- before looking at the binder name. The new `do` elaborator
+        -- (`Aeneas/Do/Elab.lean`) wraps tuple-destructuring continuations in
+        -- `Function.uncurry`, so the bind continuation is `App`-headed rather
+        -- than `Lambda`-headed in that case. Accept both arity-4 (unapplied)
+        -- and arity-5 (already applied to a pair) shapes defensively.
+        let inner :=
+          if cont.isAppOfArity ``Function.uncurry 4 then cont.appArg!
+          else if cont.isAppOfArity ``Function.uncurry 5 then cont.appFn!.appArg!
+          else cont
+        if inner.isLambda then
+          Utils.lambdaOne inner fun x _ => do
+            let name ← x.fvarId!.getUserName
+            pure (.bind name)
+        else
+          -- Couldn't peek at a binder name; the real name will be recovered
+          -- by `tryStep`/`getFirstBind` during the actual step.
+          pure (.bind .anonymous)
       else if let .some bfInfo ← Bifurcation.Info.ofExpr e then
         pure (.switch bfInfo)
       else
