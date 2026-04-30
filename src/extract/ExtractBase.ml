@@ -635,10 +635,10 @@ let trait_ref_to_string (ctx : extraction_ctx) =
   PrintPure.trait_ref_to_string (extraction_ctx_to_fmt_env ctx) false
 
 let llbc_generic_params_to_strings (ctx : extraction_ctx) =
-  Print.Types.generic_params_to_strings (extraction_ctx_to_llbc_fmt_env ctx)
+  Print.generic_params_to_strings (extraction_ctx_to_llbc_fmt_env ctx)
 
 let llbc_generic_args_to_strings (ctx : extraction_ctx) =
-  Print.Types.generic_args_to_strings (extraction_ctx_to_llbc_fmt_env ctx)
+  Print.generic_args_to_strings (extraction_ctx_to_llbc_fmt_env ctx)
 
 let dyn_predicate_to_string (ctx : extraction_ctx) =
   PrintPure.dyn_predicate_to_string (extraction_ctx_to_fmt_env ctx)
@@ -1818,7 +1818,7 @@ let ctx_compute_trait_impl_name_raw (ctx : extraction_ctx)
                   [%internal_error] span
             in
             [%ldebug
-              let fmt = Print.Crate.crate_to_fmt_env ctx.crate in
+              let fmt = Print.crate_to_fmt_env ctx.crate in
               "- self type:\n"
               ^ Print.ty_to_string fmt self
               ^ "\n- args without self type:\n"

@@ -71,6 +71,9 @@ attribute [step_simps]
   -- This one gets only applied to full applications of `predn`, which are typically revealed after applying `spec_ok`
   Std.WP.predn_eq
 
+attribute [step_simps] Aeneas.Std.bind_assoc_eq
+attribute [step_simps] Function.uncurry_apply_pair
+
 attribute [step_post_simps]
   -- We often see expressions like `Int.ofNat 3`
   Int.reduceToNat

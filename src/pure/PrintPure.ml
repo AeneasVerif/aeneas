@@ -145,7 +145,7 @@ let type_db_var_to_string (env : fmt_env) (var : type_var_id de_bruijn_var) :
     List.find_opt (fun (v : type_param) -> v.index = varid) generics.types
   in
   match lookup_var_in_env env find var with
-  | None -> Print.Types.type_db_var_to_pretty_string var
+  | None -> Print.type_db_var_to_pretty_string var
   | Some x -> type_param_to_string x
 
 let const_generic_param_to_string (v : const_generic_param) : string = v.name
@@ -158,7 +158,7 @@ let const_generic_db_var_to_string (env : fmt_env)
       generics.const_generics
   in
   match lookup_var_in_env env find var with
-  | None -> Print.Types.const_generic_db_var_to_pretty_string var
+  | None -> Print.const_generic_db_var_to_pretty_string var
   | Some x -> const_generic_param_to_string x
 
 let bvar_to_pretty_string (v : bvar) : string =
@@ -191,10 +191,10 @@ let fvar_to_string (env : fmt_env) (v : fvar) : string =
   | None -> fvar_id_to_string env v.id
   | Some name -> name ^ fvar_id_to_pretty_string v.id
 
-let trait_clause_id_to_string = Print.Types.trait_clause_id_to_string
+let trait_clause_id_to_string = Print.trait_clause_id_to_string
 
 let fmt_env_to_llbc_fmt_env (env : fmt_env) : Print.fmt_env =
-  Charon.PrintLlbcAst.Crate.crate_to_fmt_env env.crate
+  Print.crate_to_fmt_env env.crate
 
 let decls_ctx_to_fmt_env (ctx : Contexts.decls_ctx) : fmt_env =
   {
@@ -208,35 +208,35 @@ let decls_ctx_to_fmt_env (ctx : Contexts.decls_ctx) : fmt_env =
   }
 
 let name_to_string (env : fmt_env) =
-  Print.Types.name_to_string (fmt_env_to_llbc_fmt_env env)
+  Print.name_to_string (fmt_env_to_llbc_fmt_env env)
 
 let type_decl_id_to_string (env : fmt_env) =
-  Print.Types.type_decl_id_to_string (fmt_env_to_llbc_fmt_env env)
+  Print.type_decl_id_to_string (fmt_env_to_llbc_fmt_env env)
 
 let global_decl_id_to_string (env : fmt_env) =
-  Print.Types.global_decl_id_to_string (fmt_env_to_llbc_fmt_env env)
+  Print.global_decl_id_to_string (fmt_env_to_llbc_fmt_env env)
 
 let fun_decl_id_to_string (env : fmt_env) =
-  Print.Expressions.fun_decl_id_to_string (fmt_env_to_llbc_fmt_env env)
+  Print.fun_decl_id_to_string (fmt_env_to_llbc_fmt_env env)
 
 let trait_decl_id_to_string (env : fmt_env) =
-  Print.Types.trait_decl_id_to_string (fmt_env_to_llbc_fmt_env env)
+  Print.trait_decl_id_to_string (fmt_env_to_llbc_fmt_env env)
 
 let trait_impl_id_to_string (env : fmt_env) =
-  Print.Types.trait_impl_id_to_string (fmt_env_to_llbc_fmt_env env)
+  Print.trait_impl_id_to_string (fmt_env_to_llbc_fmt_env env)
 
 let adt_field_to_string (env : fmt_env) =
-  Print.Types.adt_field_to_string (fmt_env_to_llbc_fmt_env env)
+  Print.adt_field_to_string (fmt_env_to_llbc_fmt_env env)
 
 let adt_variant_from_type_decl_id_to_string (env : fmt_env) =
-  Print.Types.adt_variant_to_string (fmt_env_to_llbc_fmt_env env)
+  Print.adt_variant_to_string (fmt_env_to_llbc_fmt_env env)
 
 let adt_field_names (env : fmt_env) =
-  Print.Types.adt_field_names (fmt_env_to_llbc_fmt_env env)
+  Print.adt_field_names (fmt_env_to_llbc_fmt_env env)
 
 let option_to_string = Print.option_to_string
-let integer_type_to_string = Print.Values.integer_type_to_string
-let float_type_to_string = Print.Values.float_type_to_string
+let integer_type_to_string = Print.integer_type_to_string
+let float_type_to_string = Print.float_type_to_string
 
 let literal_type_to_string (ty : literal_type) : string =
   match ty with
@@ -253,9 +253,9 @@ let type_var_to_string (v : type_param) = "(" ^ v.name ^ ": Type)"
 let const_generic_var_to_string (v : const_generic_param) =
   "(" ^ v.name ^ " : " ^ literal_type_to_string v.ty ^ ")"
 
-let integer_type_to_string = Print.Values.integer_type_to_string
-let scalar_value_to_string = Print.Values.scalar_value_to_string
-let float_value_to_string = Print.Values.float_value_to_string
+let integer_type_to_string = Print.integer_type_to_string
+let scalar_value_to_string = Print.scalar_value_to_string
+let float_value_to_string = Print.float_value_to_string
 
 let literal_to_string (lit : literal) : string =
   match lit with
@@ -379,7 +379,7 @@ and trait_instance_id_to_string (env : fmt_env) (id : trait_instance_id) :
       let generics = generic_args_to_string env generics in
       let impl_id = trait_impl_id_to_string env impl_id in
       impl_id ^ generics
-  | Clause var -> Print.Types.trait_db_var_to_pretty_string var
+  | Clause var -> Print.trait_db_var_to_pretty_string var
   | ParentClause (inst_id, _decl_id, clause_id) ->
       let inst_id = trait_instance_id_to_string env inst_id in
       let clause_id = trait_clause_id_to_string env clause_id in
@@ -792,7 +792,7 @@ let decomposed_fun_sig_to_string (env : fmt_env) (sg : decomposed_fun_sig) :
     string =
   let { generics; llbc_generics; preds; fun_ty } = sg in
   let llbc_generics =
-    let env : _ Charon.PrintUtils.fmt_env =
+    let env : Charon.PrintUtils.fmt_env =
       { crate = env.crate; generics = []; locals = [] }
     in
     let l0, l1 = Print.generic_params_to_strings env llbc_generics in
@@ -830,7 +830,7 @@ let fun_suffix (lp_id : (LoopId.id * bool) option) : string =
   lp_suff
 
 let llbc_builtin_fun_id_to_string (fid : A.builtin_fun_id) : string =
-  Charon.PrintTypes.builtin_fun_id_to_string fid
+  Charon.Print.builtin_fun_id_to_string fid
 
 let llbc_fun_id_to_string (env : fmt_env) (fid : A.fun_id) : string =
   match fid with
@@ -893,7 +893,6 @@ let unop_to_string (env : fmt_env) (unop : unop) : string =
   | ArrayToSlice -> "array_to_slice"
 
 let binop_to_string (env : fmt_env) (binop : binop) =
-  let open Print.Expressions in
   let int_ty_to_string int_ty = "::<" ^ integer_type_to_string int_ty ^ ">" in
   let int_tys_to_string int_ty0 int_ty1 =
     "::<"
@@ -913,19 +912,23 @@ let binop_to_string (env : fmt_env) (binop : binop) =
   | Ge int_ty -> ">=" ^ int_ty_to_string int_ty
   | Gt int_ty -> ">" ^ int_ty_to_string int_ty
   | Div (om, int_ty) ->
-      overflow_mode_to_string om ^ "./" ^ int_ty_to_string int_ty
+      Print.overflow_mode_to_string om ^ "./" ^ int_ty_to_string int_ty
   | Rem (om, int_ty) ->
-      overflow_mode_to_string om ^ ".%" ^ int_ty_to_string int_ty
+      Print.overflow_mode_to_string om ^ ".%" ^ int_ty_to_string int_ty
   | Add (om, int_ty) ->
-      overflow_mode_to_string om ^ ".+" ^ int_ty_to_string int_ty
+      Print.overflow_mode_to_string om ^ ".+" ^ int_ty_to_string int_ty
   | Sub (om, int_ty) ->
-      overflow_mode_to_string om ^ ".-" ^ int_ty_to_string int_ty
+      Print.overflow_mode_to_string om ^ ".-" ^ int_ty_to_string int_ty
   | Mul (om, int_ty) ->
-      overflow_mode_to_string om ^ ".*" ^ int_ty_to_string int_ty
+      Print.overflow_mode_to_string om ^ ".*" ^ int_ty_to_string int_ty
   | Shl (om, int_ty0, int_ty1) ->
-      overflow_mode_to_string om ^ ".<<" ^ int_tys_to_string int_ty0 int_ty1
+      Print.overflow_mode_to_string om
+      ^ ".<<"
+      ^ int_tys_to_string int_ty0 int_ty1
   | Shr (om, int_ty0, int_ty1) ->
-      overflow_mode_to_string om ^ ".>>" ^ int_tys_to_string int_ty0 int_ty1
+      Print.overflow_mode_to_string om
+      ^ ".>>"
+      ^ int_tys_to_string int_ty0 int_ty1
   | AddChecked int_ty -> "checked.+" ^ int_ty_to_string int_ty
   | SubChecked int_ty -> "checked.-" ^ int_ty_to_string int_ty
   | MulChecked int_ty -> "checked.*" ^ int_ty_to_string int_ty
