@@ -14,10 +14,7 @@ def UScalar.overflowing_div {ty} (x y : UScalar ty) : Result (UScalar ty × Bool
   if y.bv != 0 then ok (⟨ BitVec.udiv x.bv y.bv ⟩, false) else fail divisionByZero
 
 def IScalar.overflowing_div {ty} (x y : IScalar ty) : Result (IScalar ty × Bool) :=
-  if y.val != 0 then
-    -- There can be an overflow if `x` is equal to the lower bound and `y` to `-1`
-    if ¬(x.val = IScalar.min ty && y.val = -1) then ok (⟨ BitVec.sdiv x.bv y.bv ⟩, false)
-    else ok (x, true)
+  if y.val != 0 then ok (⟨ BitVec.sdiv x.bv y.bv ⟩, BitVec.sdivOverflow x.bv y.bv)
   else fail divisionByZero
 
 uscalar @[step_pure_def]
@@ -63,10 +60,15 @@ theorem UScalar.overflowing_div_one {ty} (x : UScalar ty) :
   simp[overflowing_div, one_bv]
   exact UScalarTy.numBits_nonzero ty
 
+
 @[simp]
 theorem IScalar.overflowing_div_one {ty} (x : IScalar ty) :
   overflowing_div x one = .ok (x, false) := by
-  simp[overflowing_div, one_bv]
+  simp [overflowing_div, BitVec.sdiv_one, one_bv, BitVec.sdivOverflow_eq, BitVec.sdivOverflow_eq]
+  intro _ _
+  cases ty <;> try simp
+  cases System.Platform.numBits_eq<;>rename_i h<;>rw[h]<;>grind
+
 
 uscalar @[simp]
 theorem core.num.«%S».overflowing_div_one(x : «%S») :
@@ -106,14 +108,15 @@ theorem UScalar.overflowing_div_self {ty} (x : UScalar ty) (h: x.bv ≠ 0) :
 @[simp]
 theorem IScalar.overflowing_div_self {ty} (x : IScalar ty) (h₁: x.bv ≠ 0) (h₂: x ≠ min ty) :
   overflowing_div x x = .ok (one, false) := by
-  have h': (x.bv ≠ 0#ty.numBits) := by simp; exact Ne.intro h₁
-  have h'': x.val ≠ 0 := by
-    simp only[val]
-    simp[BitVec.toInt]
-    split
-    · simp; refine Nat.ne_zero_iff_zero_lt.mpr ?_; grind
-    · refine Int.neg_ne_zero.mp ?_; grind
-  simp[overflowing_div, h'', h', h₂, ←one_bv]
+  have h₄: x.bv ≠ 0#ty.numBits := by grind;
+  have h₃: x.val ≠ 0 := by
+    simp only [val, ← BitVec.toInt_zero (w := ty.numBits), Ne, BitVec.toInt_inj]
+    exact h₄
+  simp[overflowing_div, BitVec.sdivOverflow, h₃, h₄]
+  simp[←one_bv]
+  cases ty <;> try simp
+  cases System.Platform.numBits_eq <;> rename_i h <;> rw [h] <;> simp
+
 
 uscalar @[simp]
 theorem core.num.«%S».overflowing_div_self (x : «%S») (h : x.bv ≠ 0) :
