@@ -1,0 +1,161 @@
+import Aeneas.Std.Scalar.Core
+import Aeneas.Std.Scalar.Elab
+import Aeneas.Std.Scalar.Notations
+
+namespace Aeneas.Std
+
+open ScalarElab
+
+/-!
+# Overflowing Subtraction
+-/
+
+def UScalar.overflowing_sub {ty} (x y : UScalar ty) : UScalar ty × Bool :=
+  (⟨ x.bv - y.bv ⟩, BitVec.usubOverflow x.bv y.bv)
+
+def IScalar.overflowing_sub {ty} (x y : IScalar ty) : IScalar ty × Bool :=
+  (⟨ x.bv - y.bv ⟩, BitVec.ssubOverflow x.bv y.bv)
+
+uscalar @[step_pure_def]
+def «%S».overflowing_sub (x y : «%S») : «%S» × Bool := @UScalar.overflowing_sub .«%S» x y
+
+iscalar @[step_pure_def]
+def «%S».overflowing_sub (x y : «%S») : «%S» × Bool := @IScalar.overflowing_sub .«%S» x y
+
+/- [core::num::{_}::overflowing_sub] -/
+uscalar @[step_pure_def]
+def core.num.«%S».overflowing_sub := @UScalar.overflowing_sub .«%S»
+
+/- [core::num::{_}::overflowing_sub] -/
+iscalar @[step_pure_def]
+def core.num.«%S».overflowing_sub := @IScalar.overflowing_sub .«%S»
+
+/-!
+## Spec Theorems
+-/
+
+theorem UScalar.overflowing_sub_eq {ty} (x y : UScalar ty) :
+  let z := overflowing_sub x y
+  if x.val < y.val then
+    z.fst.val + y.val = x.val + UScalar.size ty ∧
+    z.snd = true
+  else
+    z.fst.val = x.val - y.val ∧
+    z.snd = false
+  := by
+  simp [overflowing_sub, BitVec.usubOverflow]
+  have hsub_toNat : (x.bv - y.bv).toNat =
+      (x.val + (2 ^ ty.numBits - y.val)) % 2 ^ ty.numBits := by
+    simp [BitVec.toNat_sub, bv_toNat, Nat.add_comm]
+  have hsubval : (↑({ bv := x.bv - y.bv } : UScalar ty) : Nat) =
+      (x.val + (2 ^ ty.numBits - y.val)) % 2 ^ ty.numBits := by
+    exact hsub_toNat
+  split
+  case isTrue ht =>
+    apply And.intro
+    · rw [hsubval]
+      have hmod :
+          (x.val + (2 ^ ty.numBits - y.val)) % 2 ^ ty.numBits =
+            x.val + (2 ^ ty.numBits - y.val) := by
+        apply Nat.mod_eq_of_lt
+        grind
+      rw [hmod]
+      rw [UScalar.size]
+      grind
+    · simp [ht]
+  case isFalse hf =>
+    apply And.intro
+    · have hxy : y.val ≤ x.val := Nat.le_of_not_gt hf
+      rw [hsubval]
+      have hsubmod :
+          (x.val + (2 ^ ty.numBits - y.val)) % 2 ^ ty.numBits =
+            (x.val + (2 ^ ty.numBits - y.val) - 2 ^ ty.numBits) % 2 ^ ty.numBits := by
+        rw [Nat.mod_eq_sub_mod]
+        omega
+      rw [hsubmod]
+      have hsub : x.val + (2 ^ ty.numBits - y.val) - 2 ^ ty.numBits = x.val - y.val := by grind
+      rw [hsub]
+      apply Nat.mod_eq_of_lt
+      grind
+    · grind
+
+uscalar @[step_pure overflowing_sub x y]
+theorem core.num.«%S».overflowing_sub_eq (x y : «%S») :
+  let z := overflowing_sub x y
+  if x.val < y.val then z.fst.val + y.val = x.val + UScalar.size .«%S» ∧ z.snd = true
+  else  z.fst.val = x.val - y.val ∧ z.snd = false
+  := UScalar.overflowing_sub_eq x y
+
+/-!
+## Additional Theorems
+-/
+
+@[simp]
+theorem UScalar.overflowing_sub_zero {ty} (x: UScalar ty) :
+  (overflowing_sub x UScalar.zero) = (x, false) := by
+  simp [overflowing_sub, UScalar.zero, zero_bv, BitVec.usubOverflow]
+
+
+@[simp]
+theorem IScalar.overflowing_sub_zero {ty} (x : IScalar ty) :
+  (overflowing_sub x IScalar.zero) = (x, false) := by
+  simp [overflowing_sub, hmax, hmin, zero_bv, BitVec.ssubOverflow]
+
+uscalar @[simp]
+theorem core.num.«%S».overflowing_sub_zero(x : «%S») :
+  (overflowing_sub x UScalar.zero) = (x, false) :=
+  UScalar.overflowing_sub_zero x
+
+iscalar @[simp]
+theorem core.num.«%S».overflowing_sub_zero(x : «%S») :
+  (overflowing_sub x IScalar.zero) = (x, false) :=
+   IScalar.overflowing_sub_zero x
+
+
+theorem UScalar.overflowing_zero_sub (x : UScalar ty) :
+  overflowing_sub UScalar.zero x = (⟨-x.bv⟩, x.val != 0) := by
+  simp[overflowing_sub, zero_bv, BitVec.usubOverflow]
+  grind
+
+theorem IScalar.overflowing_zero_sub (x : IScalar ty) :
+  (overflowing_sub IScalar.zero x) = (⟨-x.bv⟩, x.bv == IScalar.min ty) := by
+  have hnb : 0 < ty.numBits := by simp[Nat.pos_of_ne_zero, ty.numBits_nonzero]
+  have hhi : x.bv.toInt < 2^(ty.numBits - 1) := by exact BitVec.toInt_lt;
+  have hlo : -(2:Int)^(ty.numBits - 1) ≤ x.bv.toInt := by exact BitVec.le_toInt x.bv
+  have h2pos : (0:Int) < 2^(ty.numBits - 1) := by simp
+  have hmin : ((↑(-(2:Int)^(ty.numBits - 1)) : BitVec ty.numBits)).toInt = -2^(ty.numBits - 1) := by
+    exact BitVec.toInt_ofInt_eq_self hnb (Int.le_refl _) (by omega)
+  simp [overflowing_sub, zero_bv, BitVec.ssubOverflow, IScalar.min,
+    -Int.cast_pow, -Int.cast_neg] -- these were introduced by importing .Notations
+  rw [Bool.eq_iff_iff, beq_iff_eq, ← BitVec.toInt_inj, hmin]
+  simp
+  grind
+
+uscalar @[simp]
+theorem core.num.«%S».overflowing_zero_sub(x : «%S») :
+  (overflowing_sub UScalar.zero x) = (⟨-x.bv⟩, x.val != 0) :=
+  UScalar.overflowing_zero_sub x
+
+iscalar @[simp]
+theorem core.num.«%S».overflowing_zero_sub(x : «%S») :
+  (overflowing_sub IScalar.zero x) = (⟨-x.bv⟩, x.bv == IScalar.min .«%S») :=
+   IScalar.overflowing_zero_sub x
+
+/-!
+## Tests
+
+The examples below check that the `@[simp]` lemmas above trigger.
+-/
+
+example (x : U32) : core.num.U32.overflowing_sub x 0#u32 = (x, false) := by simp
+example (x : I32) : core.num.I32.overflowing_sub x 0#i32 = (x, false) := by simp
+
+example (x : U32) :
+    core.num.U32.overflowing_sub 0#u32 x = (⟨-x.bv⟩, x.val != 0) := by
+  simp only [core.num.U32.overflowing_zero_sub]
+
+example (x : I32) :
+    core.num.I32.overflowing_sub 0#i32 x = (⟨-x.bv⟩, x.bv == IScalar.min .I32) := by
+  simp only [core.num.I32.overflowing_zero_sub]
+
+end Aeneas.Std

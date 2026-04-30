@@ -520,6 +520,34 @@ def IScalar.ofIntCore {ty : IScalarTy} (x : Int) (_ : -2^(ty.numBits-1) ≤ x �
   (hInBounds : IScalar.cMin ty ≤ x ∧ x ≤ IScalar.cMax ty := by decide) : IScalar ty :=
   IScalar.ofIntCore x (IScalar.bound_suffices ty x hInBounds)
 
+/-!
+## Canonical zero and one
+-/
+
+abbrev UScalar.zero {ty : UScalarTy} : UScalar ty := UScalar.ofNatCore 0 (by simp)
+
+abbrev UScalar.one {ty : UScalarTy} : UScalar ty := UScalar.ofNatCore 1 (
+    by simp[UScalarTy.numBits_nonzero]
+  )
+
+abbrev IScalar.zero {ty : IScalarTy} : IScalar ty := IScalar.ofIntCore 0 (by simp)
+
+abbrev IScalar.one {ty : IScalarTy} : IScalar ty := IScalar.ofIntCore 1
+  (by cases ty <;> simp_bounds; grind[System.Platform.numBits])
+
+theorem UScalar.zero_bv {ty : UScalarTy}: UScalar.zero.bv = BitVec.ofNat ty.numBits 0 := by
+  simp[UScalar.zero, UScalar.ofNatCore]
+
+theorem IScalar.zero_bv {ty : IScalarTy}: IScalar.zero.bv = BitVec.ofNat ty.numBits 0 := by
+  simp[IScalar.zero, IScalar.ofIntCore]
+
+theorem UScalar.one_bv {ty : UScalarTy}: UScalar.one.bv = BitVec.ofNat ty.numBits 1 := by
+  simp[UScalar.one, UScalar.ofNatCore, BitVec.ofFin_eq_ofNat];
+
+theorem IScalar.one_bv {ty : IScalarTy}: IScalar.one.bv = BitVec.ofNat ty.numBits 1 := by
+  simp[IScalar.one, IScalar.ofIntCore]
+  exact Eq.symm (BitVec.eq_of_toNat_eq rfl)
+
 @[simp] abbrev UScalar.inBounds (ty : UScalarTy) (x : Nat) : Prop :=
   x < 2^ty.numBits
 
