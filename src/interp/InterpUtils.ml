@@ -850,6 +850,17 @@ let instantiate_fun_sig (span : Meta.span option) (ctx : eval_ctx)
         RVar (Free nrid)
 
       method! visit_RBody _ rid = RVar (Free (get_body_region rid))
+
+      (** Region parameters appear inside [region_binder.binder_regions] and
+          carry an [index : region_id] field naming a *bound* region — local to
+          the binder, not part of the function's region pool. We must not run
+          them through [get_free_region] / [get_body_region], which would
+          either invent a fresh free region or look up an unrelated body
+          region. The bound region's identity is irrelevant once region
+          variables inside [binder_value] have been substituted (we already
+          leave [RVar (Bound _)] untouched in [visit_RVar]), so we leave the
+          [region_param] untouched here. *)
+      method! visit_region_param _ rp = rp
     end
   in
   let generic_args = visitor#visit_generic_args () generic_args in
