@@ -32,6 +32,35 @@ fn i32_use_shift_left(x: i32) -> i32 {
     x << 2
 }
 
+fn u32_use_wrapping_shl(x: u32, s: u32) -> u32 {
+    x.wrapping_shl(s)
+}
+
+fn i32_use_wrapping_shl(x: i32, s: u32) -> i32 {
+    x.wrapping_shl(s)
+}
+
+fn u32_use_wrapping_shr(x: u32, s: u32) -> u32 {
+    x.wrapping_shr(s)
+}
+
+fn i32_use_wrapping_shr(x: i32, s: u32) -> i32 {
+    x.wrapping_shr(s)
+}
+
+/// Regression test for issue #816: shifts assigned through a dereferenced pointer
+/// (here via `IndexMut`) reach Aeneas with overflow mode `OWrap` (Charon issue
+/// #1041), so the Lean extraction must route them through `Std.U64.wrapping_shr`
+/// rather than the undefined `U64.shr`.
+fn shr_into_index_mut(x: u64, out: &mut [u64; 2]) {
+    out[0] = x >> 20;
+}
+
+/// Counterpart to `shr_into_index_mut` for `<<`.
+fn shl_into_index_mut(x: u64, out: &mut [u64; 2]) {
+    out[0] = x << 20;
+}
+
 fn add_and(a: u32, b: u32) -> u32 {
     (b & a) + (b & a)
 }

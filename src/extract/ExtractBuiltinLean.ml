@@ -618,9 +618,57 @@ let lean_builtin_funs =
     mk_fun "core::mem::replace" "core.mem.replace" ~can_fail:false ~lift:false;
     (* file: "Aeneas/Std/Core/Core.lean", line: 77 *)
     mk_fun "core::mem::swap" "core.mem.swap" ~can_fail:false ~lift:false;
+    (* file: "Aeneas/Std/Scalar/WrappingOps/Shl.lean", line: 44 *)
+    mk_fun "core::num::{i128}::wrapping_shl" "core.num.I128.wrapping_shl";
+    (* file: "Aeneas/Std/Scalar/WrappingOps/Shr.lean", line: 45 *)
+    mk_fun "core::num::{i128}::wrapping_shr" "core.num.I128.wrapping_shr";
+    (* file: "Aeneas/Std/Scalar/WrappingOps/Shl.lean", line: 41 *)
+    mk_fun "core::num::{i16}::wrapping_shl" "core.num.I16.wrapping_shl";
+    (* file: "Aeneas/Std/Scalar/WrappingOps/Shr.lean", line: 42 *)
+    mk_fun "core::num::{i16}::wrapping_shr" "core.num.I16.wrapping_shr";
+    (* file: "Aeneas/Std/Scalar/WrappingOps/Shl.lean", line: 42 *)
+    mk_fun "core::num::{i32}::wrapping_shl" "core.num.I32.wrapping_shl";
+    (* file: "Aeneas/Std/Scalar/WrappingOps/Shr.lean", line: 43 *)
+    mk_fun "core::num::{i32}::wrapping_shr" "core.num.I32.wrapping_shr";
+    (* file: "Aeneas/Std/Scalar/WrappingOps/Shl.lean", line: 43 *)
+    mk_fun "core::num::{i64}::wrapping_shl" "core.num.I64.wrapping_shl";
+    (* file: "Aeneas/Std/Scalar/WrappingOps/Shr.lean", line: 44 *)
+    mk_fun "core::num::{i64}::wrapping_shr" "core.num.I64.wrapping_shr";
+    (* file: "Aeneas/Std/Scalar/WrappingOps/Shl.lean", line: 40 *)
+    mk_fun "core::num::{i8}::wrapping_shl" "core.num.I8.wrapping_shl";
+    (* file: "Aeneas/Std/Scalar/WrappingOps/Shr.lean", line: 41 *)
+    mk_fun "core::num::{i8}::wrapping_shr" "core.num.I8.wrapping_shr";
+    (* file: "Aeneas/Std/Scalar/WrappingOps/Shl.lean", line: 45 *)
+    mk_fun "core::num::{isize}::wrapping_shl" "core.num.Isize.wrapping_shl";
+    (* file: "Aeneas/Std/Scalar/WrappingOps/Shr.lean", line: 46 *)
+    mk_fun "core::num::{isize}::wrapping_shr" "core.num.Isize.wrapping_shr";
+    (* file: "Aeneas/Std/Scalar/WrappingOps/Shl.lean", line: 38 *)
+    mk_fun "core::num::{u128}::wrapping_shl" "core.num.U128.wrapping_shl";
+    (* file: "Aeneas/Std/Scalar/WrappingOps/Shr.lean", line: 39 *)
+    mk_fun "core::num::{u128}::wrapping_shr" "core.num.U128.wrapping_shr";
+    (* file: "Aeneas/Std/Scalar/WrappingOps/Shl.lean", line: 35 *)
+    mk_fun "core::num::{u16}::wrapping_shl" "core.num.U16.wrapping_shl";
+    (* file: "Aeneas/Std/Scalar/WrappingOps/Shr.lean", line: 36 *)
+    mk_fun "core::num::{u16}::wrapping_shr" "core.num.U16.wrapping_shr";
+    (* file: "Aeneas/Std/Scalar/WrappingOps/Shl.lean", line: 36 *)
+    mk_fun "core::num::{u32}::wrapping_shl" "core.num.U32.wrapping_shl";
+    (* file: "Aeneas/Std/Scalar/WrappingOps/Shr.lean", line: 37 *)
+    mk_fun "core::num::{u32}::wrapping_shr" "core.num.U32.wrapping_shr";
+    (* file: "Aeneas/Std/Scalar/WrappingOps/Shl.lean", line: 37 *)
+    mk_fun "core::num::{u64}::wrapping_shl" "core.num.U64.wrapping_shl";
+    (* file: "Aeneas/Std/Scalar/WrappingOps/Shr.lean", line: 38 *)
+    mk_fun "core::num::{u64}::wrapping_shr" "core.num.U64.wrapping_shr";
+    (* file: "Aeneas/Std/Scalar/WrappingOps/Shl.lean", line: 34 *)
+    mk_fun "core::num::{u8}::wrapping_shl" "core.num.U8.wrapping_shl";
+    (* file: "Aeneas/Std/Scalar/WrappingOps/Shr.lean", line: 35 *)
+    mk_fun "core::num::{u8}::wrapping_shr" "core.num.U8.wrapping_shr";
     (* file: "Aeneas/Std/Scalar/Pow.lean", line: 7 *)
     mk_fun "core::num::{usize}::is_power_of_two"
       "core.num.Usize.is_power_of_two";
+    (* file: "Aeneas/Std/Scalar/WrappingOps/Shl.lean", line: 39 *)
+    mk_fun "core::num::{usize}::wrapping_shl" "core.num.Usize.wrapping_shl";
+    (* file: "Aeneas/Std/Scalar/WrappingOps/Shr.lean", line: 40 *)
+    mk_fun "core::num::{usize}::wrapping_shr" "core.num.Usize.wrapping_shr";
     (* file: "Aeneas/Std/Core/CoreOption.lean", line: 8 *)
     mk_fun "core::option::{core::option::Option<@T>}::expect"
       "core.option.Option.expect";
