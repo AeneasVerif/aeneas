@@ -636,8 +636,13 @@ let extract_binop (span : Meta.span) (ctx : extraction_ctx)
       F.pp_print_string fmt binop;
       F.pp_print_space fmt ();
       extract_expr ~inside:true arg1
-  | Lean, (Add (OWrap, _) | Sub (OWrap, _) | Mul (OWrap, _) | Div (OWrap, _)
-          | Shl (OWrap, _, _) | Shr (OWrap, _, _)) ->
+  | ( Lean,
+      ( Add (OWrap, _)
+      | Sub (OWrap, _)
+      | Mul (OWrap, _)
+      | Div (OWrap, _)
+      | Shl (OWrap, _, _)
+      | Shr (OWrap, _, _) ) ) ->
       let binop =
         match binop with
         | Add _ -> "add"
