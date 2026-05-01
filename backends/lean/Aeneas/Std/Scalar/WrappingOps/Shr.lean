@@ -32,6 +32,19 @@ def core.num.«%S».wrapping_shr : «%S» → Nat → «%S» := @UScalar.wrappin
 iscalar @[step_pure_def]
 def core.num.«%S».wrapping_shr : «%S» → Nat → «%S» := @IScalar.wrapping_shr IScalarTy.«%S»
 
+attribute [rust_fun "core::num::{u8}::wrapping_shr"] core.num.U8.wrapping_shr
+attribute [rust_fun "core::num::{u16}::wrapping_shr"] core.num.U16.wrapping_shr
+attribute [rust_fun "core::num::{u32}::wrapping_shr"] core.num.U32.wrapping_shr
+attribute [rust_fun "core::num::{u64}::wrapping_shr"] core.num.U64.wrapping_shr
+attribute [rust_fun "core::num::{u128}::wrapping_shr"] core.num.U128.wrapping_shr
+attribute [rust_fun "core::num::{usize}::wrapping_shr"] core.num.Usize.wrapping_shr
+attribute [rust_fun "core::num::{i8}::wrapping_shr"] core.num.I8.wrapping_shr
+attribute [rust_fun "core::num::{i16}::wrapping_shr"] core.num.I16.wrapping_shr
+attribute [rust_fun "core::num::{i32}::wrapping_shr"] core.num.I32.wrapping_shr
+attribute [rust_fun "core::num::{i64}::wrapping_shr"] core.num.I64.wrapping_shr
+attribute [rust_fun "core::num::{i128}::wrapping_shr"] core.num.I128.wrapping_shr
+attribute [rust_fun "core::num::{isize}::wrapping_shr"] core.num.Isize.wrapping_shr
+
 @[simp, bvify] theorem UScalar.wrapping_shr_bv_eq {ty} (x : UScalar ty) (s : Nat) :
   (wrapping_shr x s).bv = x.bv.ushiftRight (s % ty.numBits) := by
   simp only [wrapping_shr]
