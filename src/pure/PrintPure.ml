@@ -879,7 +879,7 @@ let cast_kind_to_string (env : fmt_env) (kind : cast_kind) : string =
           ty_to_string env false
             (TAdt
                ( TBuiltin (TRawPtr mut),
-                 mk_generic_args_from_types [ TLiteral ty ] ))
+                 mk_generic_args_from_types [ ty ] ))
         in
         (mk src src_mut, mk tgt tgt_mut)
   in

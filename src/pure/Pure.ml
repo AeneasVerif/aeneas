@@ -1162,9 +1162,14 @@ type unop =
 
 and cast_kind =
   | CastLit of literal_type * literal_type
-  | CastRawPtr of (literal_type * mutability) * (literal_type * mutability)
-      (** When casting between raw pointers, we only support a subset of casts
-      *)
+  | CastRawPtr of (ty * mutability) * (ty * mutability)
+      (** Cast between raw pointers: the source and target pointee types may
+          be arbitrary [ty]s (literal scalars, ADTs, or opaque builtin types
+          such as [core::core_arch::x86::__m128i] / [__m256i]).
+
+          On the Lean backend this is emitted as a generic [RawPtr.cast]
+          which simply rebrands the pointer's type parameter; on other
+          backends we still restrict to literal scalar types. *)
 
 and fn_ptr_kind =
   | FunId of llbc_fun_id

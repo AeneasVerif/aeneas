@@ -30,4 +30,20 @@ def RawPtr.cast_scalar {T} {M} (T' : Type) (M' : Mutability) [IsScalar T] [IsSca
   Result (RawPtr T' M') :=
   .fail .undef
 
+/-- Generic raw-pointer cast.
+
+Used to lower Rust raw-pointer casts whose pointee is not a scalar type
+(for example casts of the form `*const u8 as *const __m128i`, which are
+ubiquitous in SIMD intrinsics code). The source and target pointee
+types are left implicit and inferred by Lean from the surrounding
+context; only the target mutability is provided explicitly because it
+cannot in general be deduced from the use site.
+
+Like [RawPtr.cast_scalar], this is a placeholder: it always returns
+[.fail .undef]. We can give it a meaningful definition once we have
+separation logic. -/
+def RawPtr.cast {T T' : Type} {M : Mutability} (M' : Mutability) (_ : RawPtr T M) :
+  Result (RawPtr T' M') :=
+  .fail .undef
+
 end Aeneas.Std
