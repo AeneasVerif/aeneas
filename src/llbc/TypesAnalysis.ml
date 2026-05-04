@@ -692,7 +692,7 @@ let compute_outlive_proj_ty (span : Meta.span option)
         (* Sanity check *)
         let add =
           match r with
-          | RErased -> [%craise_opt_span] span "Expected a type with regions"
+          | RErased -> false
           | RVar (Free rid) -> RegionId.Set.mem rid regions
           | RVar (Bound _) -> [%craise_opt_span] span "Not handled yet"
           | RStatic -> false
