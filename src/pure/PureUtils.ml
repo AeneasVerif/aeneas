@@ -2733,7 +2733,8 @@ let binop_can_fail : binop -> bool = function
   | Mul (OWrap, _)
   | Shl (OWrap, _, _)
   | Shr (OWrap, _, _)
-  | AddChecked _ | SubChecked _ | MulChecked _ | BoolOr | Cmp _ -> false
+  | AddChecked _ | SubChecked _ | MulChecked _ | BoolAnd | BoolOr | BoolXor
+  | Cmp _ -> false
   | Div _ | Rem _ | Add _ | Sub _ | Mul _ | Shl _ | Shr _ -> true
 
 let mk_bool_not (b : texpr) : texpr =
