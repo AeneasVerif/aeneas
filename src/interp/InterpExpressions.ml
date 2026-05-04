@@ -1008,7 +1008,7 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
        (booleans are ordered: [false < true]). *)
     match (v1.value, v2.value) with
     | VLiteral (VBool b1), VLiteral (VBool b2) -> begin
-        (* Booleans only support the comparison operations *)
+        (* Booleans only support the comparison operations and bitwise operators (&, |, ^) *)
         match binop with
         | Lt | Le | Ge | Gt ->
             let b =
@@ -1017,6 +1017,9 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
               | Le -> (not b1) || b2
               | Ge -> b1 || not b2
               | Gt -> b1 && not b2
+              | BitAnd -> b1 && b2
+              | BitOr -> b1 || b2
+              | BitXor -> b1 <> b2
               | _ -> [%craise] span "Unreachable"
             in
             Ok ({ value = VLiteral (VBool b); ty = TLiteral TBool } : tvalue)
@@ -1124,12 +1127,13 @@ let eval_binary_op_symbolic (config : config) (span : Meta.span) (binop : binop)
         "The type is not primitively copyable";
       TLiteral TBool)
     else
-      (* Other operations: input types are integers, with the exception of the
-         comparison operations which also accept booleans (booleans are ordered:
-         [false < true]). *)
+      (* Other operations: input types can be booleans for comparison operators
+       (booleans are ordered: [false < true]), or bitwise operators (&, |, ^).
+       In the other cases, input types are integers *)
       match (v1.ty, v2.ty) with
       | TLiteral TBool, TLiteral TBool
-        when binop = Lt || binop = Le || binop = Ge || binop = Gt ->
+        when binop = Lt || binop = Le || binop = Ge || binop = Gt
+             || binop = BitAnd || binop = BitOr || binop = BitXor ->
           TLiteral TBool
       | TLiteral lty1, TLiteral lty2
         when literal_type_is_integer lty1 && literal_type_is_integer lty2 -> (
