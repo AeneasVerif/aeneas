@@ -266,4 +266,61 @@ private def collectNestedStepBy
     (core.iter.traits.iterator.IteratorSliceIter Nat) sbi 2#usize
   collectNestedStepBy sbi2) == .ok [0, 4]
 
+/-! ## Slice iterator loop ↔ `List.foldl`
+
+Aeneas translates `for b in slice { state = action(state, b); }` into a
+`loop` that calls `IteratorSliceIter.next` and threads `state` through.
+The lemma `slice_iter_loop_eq_foldl` collapses such a loop to a pure
+`slice.val.foldl f init`, given a per-element spec for `action`. -/
+
+theorem slice_iter_loop_eq_foldl
+    {T α : Type} [Inhabited α]
+    (slice₀ : Slice T) (init : α) (f : α → T → α)
+    (action : T → α → Result α)
+    (haction : ∀ b s, action b s ⦃ s' => s' = f s b ⦄) :
+    loop (fun (p : core.slice.iter.Iter T × α) =>
+      do let (o, it') ← core.slice.iter.IteratorSliceIter.next p.1
+         match o with
+         | none => ok (.done p.2)
+         | some b => do let st' ← action b p.2; ok (.cont (it', st')))
+      (({ slice := slice₀, i := 0 } : core.slice.iter.Iter T), init)
+    ⦃ result => result = slice₀.val.foldl f init ⦄ := by
+  apply loop.spec_decr_nat
+    (measure := fun (p : core.slice.iter.Iter T × α) =>
+      slice₀.val.length + 1 - p.1.i)
+    (inv := fun (p : core.slice.iter.Iter T × α) =>
+      p.1.slice = slice₀ ∧ p.1.i ≤ slice₀.val.length ∧
+      p.2 = (slice₀.val.take p.1.i).foldl f init)
+  · rintro ⟨it, st⟩ ⟨hslice, hi, hst⟩
+    simp only at hslice hi hst
+    simp only [core.slice.iter.IteratorSliceIter.next]
+    by_cases hlt : it.i < it.slice.len.val
+    · have hlt' : it.i < slice₀.val.length := by
+        have : it.slice.len.val = slice₀.val.length := by rw [hslice]; simp
+        omega
+      have hslice_get : it.slice[it.i] = slice₀.val[it.i]'hlt' := by
+        subst hslice; rfl
+      simp only [hlt, ↓reduceDIte, bind_tc_ok, hslice_get]
+      apply spec_bind (haction (slice₀.val[it.i]'hlt') st)
+      intro st' hst'
+      simp only [spec_ok]
+      refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
+      · exact hslice
+      · simp; omega
+      · rw [hst', hst]
+        have htake : slice₀.val.take (it.i + 1) =
+                     slice₀.val.take it.i ++ [slice₀.val[it.i]'hlt'] := by
+          rw [List.take_add_one]
+          simp [List.getElem?_eq_getElem hlt']
+        rw [htake, List.foldl_append]
+        simp
+      · simp; omega
+    · have hlen : it.slice.len.val = slice₀.val.length := by rw [hslice]; simp
+      have hge : it.i ≥ slice₀.val.length := by omega
+      simp only [hlt, ↓reduceDIte, bind_tc_ok, spec_ok]
+      rw [hst, List.take_of_length_le (by omega)]
+  · refine ⟨rfl, ?_, ?_⟩
+    · simp
+    · simp
+
 end Aeneas.Std
