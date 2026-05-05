@@ -190,6 +190,15 @@ uscalar @[step] theorem «%S».ShiftRight_IScalar_spec {ty1} (x : «%S») (y : I
   (x >>> y) ⦃ z => z.val = x.val >>> y.toNat ∧ z.bv = x.bv >>> y.toNat ⦄
   := by apply UScalar.ShiftRight_IScalar_spec <;> simp [*]
 
+/-- Arithmetic form of `ShiftRight_IScalar_spec`: `x >>> y` divides by `2 ^ y.toNat`.
+Convenient when reasoning about right-shift as integer division. -/
+theorem UScalar.ShiftRight_IScalar_div_spec {ty0 ty1} (x : UScalar ty0) (y : IScalar ty1)
+  (hy0 : 0 ≤ y.val) (hy1 : y.val < ty0.numBits) :
+  (x >>> y) ⦃ z => z.val = x.val / 2 ^ y.toNat ⦄ := by
+  apply WP.spec_mono (UScalar.ShiftRight_IScalar_spec x y hy0 hy1)
+  intro z ⟨hval, _⟩
+  rw [hval, Nat.shiftRight_eq_div_pow]
+
 theorem UScalar.ShiftLeft_spec {ty0 ty1} (x : UScalar ty0) (y : UScalar ty1) (size : Nat)
   (hy : y.val < ty0.numBits) (hsize : size = UScalar.size ty0) :
   (x <<< y) ⦃ z =>
@@ -283,5 +292,18 @@ theorem IScalar.not_spec {ty} (x : IScalar ty) :
 @[simp, scalar_tac_simps, grind =, agrind =] theorem UScalar.val_and {ty} (x y : UScalar ty) : (x &&& y).val = x.val &&& y.val := by rfl
 @[simp, scalar_tac_simps, grind =, agrind =] theorem UScalar.val_or {ty} (x y : UScalar ty) : (x ||| y).val = x.val ||| y.val := by rfl
 @[simp, scalar_tac_simps, grind =, agrind =] theorem UScalar.val_xor {ty} (x y : UScalar ty) : (x ^^^ y).val = x.val ^^^ y.val := by rfl
+
+/-- `x &&& mask` with `mask.val = 2^n − 1` gives `x.val % (mask.val + 1)`.
+Works for any concrete power-of-two-minus-one mask (`& 7`, `& 15`, `& 63`, …).
+Not registered as `@[step]` because it conflicts with the generic `and_spec` —
+clients should add `attribute [local step] UScalar.and_pow2_sub_one_spec` in the
+files that need it. -/
+theorem UScalar.and_pow2_sub_one_spec {ty} (x : UScalar ty) (n : Nat) (mask : UScalar ty)
+  (hmask : mask.val = 2 ^ n - 1) :
+  lift (x &&& mask) ⦃ z => z.val = x.val % (mask.val + 1) ⦄ := by
+  simp only [lift, spec_ok, UScalar.val_and]
+  rw [hmask, Nat.and_two_pow_sub_one_eq_mod]
+  congr 1
+  exact (Nat.sub_add_cancel Nat.one_le_two_pow).symm
 
 end Aeneas.Std
