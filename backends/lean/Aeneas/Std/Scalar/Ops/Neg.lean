@@ -21,7 +21,7 @@ theorem IScalar.neg_step {ty} (x: IScalar ty) (h: x ≠ IScalar.min ty): IScalar
   split at h <;> simp_all
   have := IScalar.hBounds x
   simp [IScalar.min] at *
-  scalar_tac
+  grind
 
 /--
 The notation typeclass for heterogeneous negation.
