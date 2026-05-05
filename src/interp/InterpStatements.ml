@@ -1025,16 +1025,16 @@ and eval_switch_raw (config : config) (span : Meta.span) (switch : switch) :
       in
       (* Compose *)
       (ctx_resl, cc_comp cf_eval_op cf_if)
-  | SwitchInt (op, (int_ty : literal_type), stgts, otherwise) ->
+  | SwitchInt (op, (lit_ty : literal_type), stgts, otherwise) ->
       (* Evaluate the operand *)
       let op_v, ctx, cf_eval_op = eval_operand config span op ctx in
       let ctx0 = ctx in
       (* Switch on the value *)
       let ctx_resl, cf_switch =
-        match (op_v.value, int_ty) with
+        match (op_v.value, lit_ty) with
         | VLiteral (VScalar sv), (TInt _ | TUInt _) -> (
             (* Sanity check *)
-            [%sanity_check] span (Scalars.get_ty sv = literal_as_integer int_ty);
+            [%sanity_check] span (Scalars.get_ty sv = literal_as_integer lit_ty);
             (* Find the branch *)
             match
               List.find_opt (fun (svl, _) -> List.mem (VScalar sv) svl) stgts
@@ -1064,7 +1064,7 @@ and eval_switch_raw (config : config) (span : Meta.span) (switch : switch) :
             let (ctx_branches, ctx_otherwise), cf_int =
               expand_symbolic_literal span sv
                 (S.mk_opt_place_from_op span op ctx)
-                int_ty values ctx
+                lit_ty values ctx
             in
             (* Evaluate the branches: first the "regular" branches *)
             let resl_branches =
