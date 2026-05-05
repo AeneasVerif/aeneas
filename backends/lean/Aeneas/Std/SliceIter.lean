@@ -138,11 +138,58 @@ def core.iter.traits.iterator.IteratorChunksExact (T : Type) :
   take := core.slice.iter.IteratorChunksExact.take
 }
 
+/-- Auxiliary: every chunk in `List.toChunks.go n xs acc1 acc2` has length ≤ n,
+    given the obvious accumulator preconditions. -/
+private theorem List.toChunks.go_length_le {α} (n : Nat) (hn : 0 < n) :
+    ∀ (xs : List α) (acc1 : Array α) (acc2 : Array (List α)),
+      acc1.size ≤ n →
+      (∀ c ∈ acc2, c.length ≤ n) →
+      ∀ c ∈ List.toChunks.go n xs acc1 acc2, c.length ≤ n := by
+  intro xs
+  induction xs with
+  | nil =>
+    intro acc1 acc2 hsz hacc2 c hc
+    change c ∈ (acc2.push acc1.toList).toList at hc
+    simp at hc
+    rcases hc with hc | hc
+    · exact hacc2 c hc
+    · subst hc; simpa using hsz
+  | cons x xs ih =>
+    intro acc1 acc2 hsz hacc2 c hc
+    change c ∈ (if (acc1.size == n) = true then
+                  List.toChunks.go n xs ((Array.mkEmpty n).push x) (acc2.push acc1.toList)
+                else List.toChunks.go n xs (acc1.push x) acc2) at hc
+    by_cases hf : acc1.size = n
+    · simp [hf] at hc
+      apply ih ((Array.mkEmpty n).push x) (acc2.push acc1.toList) (by simp; omega) ?_ c hc
+      intro d hd
+      simp at hd
+      rcases hd with hd | hd
+      · exact hacc2 d hd
+      · subst hd; simp; omega
+    · simp [hf] at hc
+      apply ih (acc1.push x) acc2 (by simp; omega) hacc2 c hc
+
+/-- Every chunk produced by `List.toChunks n l` has length ≤ n (when n > 0). -/
+theorem _root_.List.toChunks_length_le {α} (n : Nat) (hn : 0 < n) (l : List α) :
+    ∀ c ∈ l.toChunks n, c.length ≤ n := by
+  match n, l, hn with
+  | _, [], _ => simp [List.toChunks]
+  | k+1, x :: xs, _ =>
+    intro c hc
+    change c ∈ List.toChunks.go (k+1) xs #[x] #[] at hc
+    apply List.toChunks.go_length_le (k+1) (by omega) xs #[x] #[] (by simp) (by simp) c hc
+
 @[rust_fun "core::slice::{[@T]}::chunks_exact"]
 def core.slice.Slice.chunks_exact {T : Type} (s : Slice T) (chunk_size : Std.Usize) :
   Result (core.slice.iter.ChunksExact T) :=
-  if chunk_size.val > 0 && s.len % chunk_size.val = 0 then
-    ok ⟨ List.map (fun s => ⟨ s, by sorry ⟩) (s.val.toChunks chunk_size.val) ⟩
+  if hcs : chunk_size.val > 0 then
+    ok ⟨ (s.val.toChunks chunk_size.val).attach.map
+            (fun ⟨c, hc⟩ => ⟨c, by
+              have h1 : c.length ≤ chunk_size.val :=
+                List.toChunks_length_le chunk_size.val hcs s.val c hc
+              have h2 : chunk_size.val ≤ Std.Usize.max := by scalar_tac
+              omega⟩) ⟩
   else fail .panic
 
 
