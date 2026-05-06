@@ -8,6 +8,8 @@ namespace Aeneas.Command.Decompose
 
 open Lean Elab Term Meta Command
 
+initialize registerTraceClass `Decompose
+
 -- ============================================================================
 -- Pattern representation
 -- ============================================================================
@@ -710,7 +712,7 @@ def elabDecompose : CommandElab := fun stx => do
           value       := composedProof
         })
 
-        logInfo m!"#decompose: created {parsedClauses.size} definition(s) and theorem '{eqName}'"
+        trace[Decompose] "#decompose: created {parsedClauses.size} definition(s) and theorem '{eqName}'"
   | _ => throwError "Invalid #decompose syntax"
 
 end Aeneas.Command.Decompose
