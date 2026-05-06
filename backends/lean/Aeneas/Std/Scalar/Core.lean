@@ -996,12 +996,12 @@ instance (ty: IScalarTy) : PartialOrder (IScalar ty) where
     IScalar.eq_imp _ _ ((@le_antisymm Int _ _ _ ((IScalar.le_equiv a b).1 Hab) ((IScalar.le_equiv b a).1 Hba)))
 
 instance UScalarDecidableLE (ty: UScalarTy) : DecidableRel (· ≤ · : UScalar ty -> UScalar ty -> Prop) := by
-  simp [instLEUScalar]
+  unfold instLEUScalar
   -- Lift this to the decidability of the Int version.
   infer_instance
 
 instance IScalarDecidableLE (ty: IScalarTy) : DecidableRel (· ≤ · : IScalar ty -> IScalar ty -> Prop) := by
-  simp [instLEIScalar]
+  unfold instLEIScalar
   -- Lift this to the decidability of the Int version.
   infer_instance
 
