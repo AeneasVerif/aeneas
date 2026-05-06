@@ -6,7 +6,7 @@ open Aeneas.Std
 
 -- TODO: move
 instance UScalarDecidableLE {ty} : DecidableRel (· ≤ · : UScalar ty -> UScalar ty -> Prop) := by
-  simp [instLEUScalar]
+  unfold instLEUScalar
   -- Lift this to the decidability of the Int version.
   infer_instance
 
