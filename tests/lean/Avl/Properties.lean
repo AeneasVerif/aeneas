@@ -209,7 +209,7 @@ theorem Node.value_not_in_right [LinearOrder T] (node : Node T) (hInv : node.inv
   have ⟨ _, _, h, _ ⟩ := Node.inv_imp_current hInv
   intro hIn
   have := h node.value hIn
-  have := ne_of_lt this
+  have := _root_.ne_of_lt this
   tauto
 
 @[simp]
@@ -218,7 +218,7 @@ theorem Node.value_not_in_left [LinearOrder T] (node : Node T) (hInv : node.inv)
   have ⟨ _, h, _, _ ⟩ := Node.inv_imp_current hInv
   intro hIn
   have := h node.value hIn
-  have := ne_of_lt this
+  have := _root_.ne_of_lt this
   tauto
 
 attribute [scalar_tac_simps]

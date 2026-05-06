@@ -146,54 +146,54 @@ theorem U128.val_mod_size (x : U128) : x.val % 340282366920938463463374607431768
 -- ============================================================================
 
 @[simp, simp_scalar_safe, bvify, grind =, agrind =]
-theorem U8.and_zero (x : U8) : x &&& 0#u8 = 0#u8 := by rw [UScalar.eq_equiv_bv_eq]; simp
+theorem U8.and_zero (x : U8) : x &&& 0#u8 = 0#u8 := by rw [UScalar.eq_equiv_bv_eq]; exact BitVec.and_zero
 @[simp, simp_scalar_safe, bvify, grind =, agrind =]
-theorem U16.and_zero (x : U16) : x &&& 0#u16 = 0#u16 := by rw [UScalar.eq_equiv_bv_eq]; simp
+theorem U16.and_zero (x : U16) : x &&& 0#u16 = 0#u16 := by rw [UScalar.eq_equiv_bv_eq]; exact BitVec.and_zero
 @[simp, simp_scalar_safe, bvify, grind =, agrind =]
-theorem U32.and_zero (x : U32) : x &&& 0#u32 = 0#u32 := by rw [UScalar.eq_equiv_bv_eq]; simp
+theorem U32.and_zero (x : U32) : x &&& 0#u32 = 0#u32 := by rw [UScalar.eq_equiv_bv_eq]; exact BitVec.and_zero
 @[simp, simp_scalar_safe, bvify, grind =, agrind =]
-theorem U64.and_zero (x : U64) : x &&& 0#u64 = 0#u64 := by rw [UScalar.eq_equiv_bv_eq]; simp
+theorem U64.and_zero (x : U64) : x &&& 0#u64 = 0#u64 := by rw [UScalar.eq_equiv_bv_eq]; exact BitVec.and_zero
 @[simp, simp_scalar_safe, bvify, grind =, agrind =]
-theorem U128.and_zero (x : U128) : x &&& 0#u128 = 0#u128 := by rw [UScalar.eq_equiv_bv_eq]; simp
+theorem U128.and_zero (x : U128) : x &&& 0#u128 = 0#u128 := by rw [UScalar.eq_equiv_bv_eq]; exact BitVec.and_zero
 
 -- 0 &&& x = 0
 @[simp, simp_scalar_safe, bvify, grind =, agrind =]
-theorem U8.zero_and (x : U8) : 0#u8 &&& x = 0#u8 := by rw [UScalar.eq_equiv_bv_eq]; simp
+theorem U8.zero_and (x : U8) : 0#u8 &&& x = 0#u8 := by rw [UScalar.eq_equiv_bv_eq]; exact BitVec.zero_and
 @[simp, simp_scalar_safe, bvify, grind =, agrind =]
-theorem U16.zero_and (x : U16) : 0#u16 &&& x = 0#u16 := by rw [UScalar.eq_equiv_bv_eq]; simp
+theorem U16.zero_and (x : U16) : 0#u16 &&& x = 0#u16 := by rw [UScalar.eq_equiv_bv_eq]; exact BitVec.zero_and
 @[simp, simp_scalar_safe, bvify, grind =, agrind =]
-theorem U32.zero_and (x : U32) : 0#u32 &&& x = 0#u32 := by rw [UScalar.eq_equiv_bv_eq]; simp
+theorem U32.zero_and (x : U32) : 0#u32 &&& x = 0#u32 := by rw [UScalar.eq_equiv_bv_eq]; exact BitVec.zero_and
 @[simp, simp_scalar_safe, bvify, grind =, agrind =]
-theorem U64.zero_and (x : U64) : 0#u64 &&& x = 0#u64 := by rw [UScalar.eq_equiv_bv_eq]; simp
+theorem U64.zero_and (x : U64) : 0#u64 &&& x = 0#u64 := by rw [UScalar.eq_equiv_bv_eq]; exact BitVec.zero_and
 @[simp, simp_scalar_safe, bvify, grind =, agrind =]
-theorem U128.zero_and (x : U128) : 0#u128 &&& x = 0#u128 := by rw [UScalar.eq_equiv_bv_eq]; simp
+theorem U128.zero_and (x : U128) : 0#u128 &&& x = 0#u128 := by rw [UScalar.eq_equiv_bv_eq]; exact BitVec.zero_and
 
 -- ============================================================================
 -- x ||| 0 = x  (scalar level)
 -- ============================================================================
 
 @[simp, simp_scalar_safe, bvify, grind =, agrind =]
-theorem U8.or_zero (x : U8) : x ||| 0#u8 = x := by rw [UScalar.eq_equiv_bv_eq]; simp
+theorem U8.or_zero (x : U8) : x ||| 0#u8 = x := by rw [UScalar.eq_equiv_bv_eq]; exact BitVec.or_zero
 @[simp, simp_scalar_safe, bvify, grind =, agrind =]
-theorem U16.or_zero (x : U16) : x ||| 0#u16 = x := by rw [UScalar.eq_equiv_bv_eq]; simp
+theorem U16.or_zero (x : U16) : x ||| 0#u16 = x := by rw [UScalar.eq_equiv_bv_eq]; exact BitVec.or_zero
 @[simp, simp_scalar_safe, bvify, grind =, agrind =]
-theorem U32.or_zero (x : U32) : x ||| 0#u32 = x := by rw [UScalar.eq_equiv_bv_eq]; simp
+theorem U32.or_zero (x : U32) : x ||| 0#u32 = x := by rw [UScalar.eq_equiv_bv_eq]; exact BitVec.or_zero
 @[simp, simp_scalar_safe, bvify, grind =, agrind =]
-theorem U64.or_zero (x : U64) : x ||| 0#u64 = x := by rw [UScalar.eq_equiv_bv_eq]; simp
+theorem U64.or_zero (x : U64) : x ||| 0#u64 = x := by rw [UScalar.eq_equiv_bv_eq]; exact BitVec.or_zero
 @[simp, simp_scalar_safe, bvify, grind =, agrind =]
-theorem U128.or_zero (x : U128) : x ||| 0#u128 = x := by rw [UScalar.eq_equiv_bv_eq]; simp
+theorem U128.or_zero (x : U128) : x ||| 0#u128 = x := by rw [UScalar.eq_equiv_bv_eq]; exact BitVec.or_zero
 
 -- 0 ||| x = x
 @[simp, simp_scalar_safe, bvify, grind =, agrind =]
-theorem U8.zero_or (x : U8) : 0#u8 ||| x = x := by rw [UScalar.eq_equiv_bv_eq]; simp
+theorem U8.zero_or (x : U8) : 0#u8 ||| x = x := by rw [UScalar.eq_equiv_bv_eq]; exact BitVec.zero_or
 @[simp, simp_scalar_safe, bvify, grind =, agrind =]
-theorem U16.zero_or (x : U16) : 0#u16 ||| x = x := by rw [UScalar.eq_equiv_bv_eq]; simp
+theorem U16.zero_or (x : U16) : 0#u16 ||| x = x := by rw [UScalar.eq_equiv_bv_eq]; exact BitVec.zero_or
 @[simp, simp_scalar_safe, bvify, grind =, agrind =]
-theorem U32.zero_or (x : U32) : 0#u32 ||| x = x := by rw [UScalar.eq_equiv_bv_eq]; simp
+theorem U32.zero_or (x : U32) : 0#u32 ||| x = x := by rw [UScalar.eq_equiv_bv_eq]; exact BitVec.zero_or
 @[simp, simp_scalar_safe, bvify, grind =, agrind =]
-theorem U64.zero_or (x : U64) : 0#u64 ||| x = x := by rw [UScalar.eq_equiv_bv_eq]; simp
+theorem U64.zero_or (x : U64) : 0#u64 ||| x = x := by rw [UScalar.eq_equiv_bv_eq]; exact BitVec.zero_or
 @[simp, simp_scalar_safe, bvify, grind =, agrind =]
-theorem U128.zero_or (x : U128) : 0#u128 ||| x = x := by rw [UScalar.eq_equiv_bv_eq]; simp
+theorem U128.zero_or (x : U128) : 0#u128 ||| x = x := by rw [UScalar.eq_equiv_bv_eq]; exact BitVec.zero_or
 
 -- ============================================================================
 -- a ^^^ b = 0 ↔ a = b  (scalar level)
