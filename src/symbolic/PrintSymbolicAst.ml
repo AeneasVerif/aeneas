@@ -8,14 +8,14 @@ type fmt_env = Print.fmt_env
 let call_id_to_string (env : fmt_env) (call_id : call_id) : string =
   match call_id with
   | Fun (fid, call_id) ->
-      Types.fn_ptr_kind_to_string env fid ^ "@" ^ FunCallId.to_string call_id
-  | Unop unop -> Expressions.unop_to_string env unop
-  | Binop binop -> Expressions.binop_to_string binop
+      fn_ptr_kind_to_string env fid ^ "@" ^ FunCallId.to_string call_id
+  | Unop unop -> unop_to_string env unop
+  | Binop binop -> binop_to_string binop
 
 let call_to_string (env : fmt_env) (indent : string) (call : call) : string =
   let dest = Values.symbolic_value_to_string env call.dest in
   let call_id = call_id_to_string env call.call_id in
-  let generics = Types.generic_args_to_string env call.generics in
+  let generics = generic_args_to_string env call.generics in
   let args =
     if call.args = [] then ""
     else
@@ -194,9 +194,7 @@ and expansion_to_string (env : fmt_env) (indent : string) (indent_incr : string)
       indent ^ "if " ^ scrut ^ " then\n" ^ e0 ^ "\n" ^ indent ^ "else\n" ^ e1
   | ExpandInt (_, branches, otherwise) ->
       let branch_to_string ((sv, branch) : scalar_value * expr) : string =
-        indent ^ "| "
-        ^ Values.scalar_value_to_string sv
-        ^ " ->\n"
+        indent ^ "| " ^ scalar_value_to_string sv ^ " ->\n"
         ^ expr_to_string env indent1 indent_incr branch
       in
       let otherwise = expr_to_string env indent1 indent_incr otherwise in

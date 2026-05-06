@@ -24,6 +24,9 @@ instance [BEq α] : BEq (Array α n) := SubtypeBEq _
 
 instance [BEq α] [LawfulBEq α] : LawfulBEq (Array α n) := SubtypeLawfulBEq _
 
+instance {α : Type u} {n : Usize} [Inhabited α] : Inhabited (Array α n) :=
+  ⟨ ⟨ List.replicate n.val default, by simp ⟩ ⟩
+
 def Array.empty (α : Type u) : Array α (Usize.ofNat 0) := ⟨ [], by simp ⟩
 
 /- Registering some theorems for `scalar_tac` -/
@@ -66,8 +69,7 @@ theorem Array.getElem?_Nat_eq {α : Type u} {n : Usize} (v : Array α n) (i : Na
 
 @[simp, scalar_tac_simps, simp_lists_hyps_simps, grind = _, agrind = _]
 theorem Array.getElem!_Nat_eq {α : Type u} [Inhabited α] {n : Usize} (v : Array α n) (i : Nat) : v[i]! = v.val[i]! := by
-  simp only [instGetElem?ArrayNatLtLengthValListEqVal, List.getElem!_eq_getElem?_getD]; split <;> simp_all
-  rfl
+  simp only [getElem!]; split <;> (simp_all; try rfl)
 
 @[reducible] instance {α : Type u} {n : Usize} : GetElem (Array α n) Usize α (fun a i => i.val < a.val.length) where
   getElem a i h := getElem a.val i.val h
@@ -77,8 +79,7 @@ theorem Array.getElem!_Nat_eq {α : Type u} [Inhabited α] {n : Usize} (v : Arra
 
 @[simp, scalar_tac_simps, simp_lists_hyps_simps] theorem Array.getElem?_Usize_eq {α : Type u} {n : Usize} (v : Array α n) (i : Usize) : v[i]? = v.val[i.val]? := by rfl
 @[simp, scalar_tac_simps, simp_lists_hyps_simps] theorem Array.getElem!_Usize_eq {α : Type u} [Inhabited α] {n : Usize} (v : Array α n) (i : Usize) : v[i]! = v.val[i.val]! := by
-  simp [instGetElem?ArrayUsizeLtNatValLengthValListEq]; split <;> simp_all
-  rfl
+  simp only [getElem!]; split <;> (simp_all; try rfl)
 
 @[simp, scalar_tac_simps, simp_lists_hyps_simps, grind, agrind] abbrev Array.get? {α : Type u} {n : Usize} (v : Array α n) (i : Nat) : Option α := getElem? v i
 @[simp, scalar_tac_simps, simp_lists_hyps_simps, grind, agrind] abbrev Array.get! {α : Type u} {n : Usize} [Inhabited α] (v : Array α n) (i : Nat) : α := getElem! v i

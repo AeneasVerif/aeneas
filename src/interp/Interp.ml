@@ -30,9 +30,7 @@ let analyze_type_declarations (crate : crate)
     (fun infos decl ->
       try analyze_type_declaration_group None crate infos decl
       with CFailure error ->
-        let fmt_env : Print.fmt_env =
-          Charon.PrintLlbcAst.Crate.crate_to_fmt_env crate
-        in
+        let fmt_env : Print.fmt_env = Charon.Print.crate_to_fmt_env crate in
         let decls = Charon.GAstUtils.g_declaration_group_to_list decl in
         let decl_id_to_string (id : TypeDeclId.id) : string =
           match TypeDeclId.Map.find_opt id crate.type_decls with
@@ -54,9 +52,7 @@ let analyze_type_declarations (crate : crate)
 let compute_contexts (crate : crate) : decls_ctx =
   let crate_graph = Deps.compute_graph_of_uses crate in
   let type_decls_list, _, _, _, _, _ = split_declarations crate.declarations in
-  let fmt_env : Print.fmt_env =
-    Charon.PrintLlbcAst.Crate.crate_to_fmt_env crate
-  in
+  let fmt_env : Print.fmt_env = Charon.Print.crate_to_fmt_env crate in
 
   (* Split the declaration groups between the declaration kinds (types, functions, etc.) *)
   let type_decls_groups, _, _, _, _, mixed_groups =
@@ -292,7 +288,7 @@ let initialize_symbolic_context_for_fun (ctx : decls_ctx)
       inst_sg.abs_regions_hierarchy region_can_end compute_abs_avalues ctx
   in
   (* Split the variables between return var, inputs and remaining locals *)
-  let body = Option.get fdef.body in
+  let body = [%add_loc] body_as_body_exn fdef.body in
   let ret_var = List.hd body.locals.locals in
   let input_vars, local_vars =
     Collections.List.split_at (List.tl body.locals.locals) body.locals.arg_count
@@ -447,7 +443,7 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
   (* Debug *)
   let span = fdef.item_meta.span in
   let name_to_string () =
-    Print.Types.name_to_string
+    Print.name_to_string
       (Print.Contexts.decls_ctx_to_fmt_env decls_ctx)
       fdef.item_meta.name
   in
@@ -536,9 +532,8 @@ let evaluate_function_symbolic (synthesize : bool) (decls_ctx : decls_ctx)
   (* Evaluate the function *)
   let symbolic =
     try
-      let ctx_resl, cc =
-        eval_function_body config (Option.get fdef.body).body ctx
-      in
+      let body = [%add_loc] body_as_body_exn fdef.body in
+      let ctx_resl, cc = eval_function_body config body.body ctx in
       let el = List.map (fun (ctx, res) -> finish res ctx) ctx_resl in
       (* Finish synthesizing *)
       if synthesize then Some (cc el) else None
@@ -570,12 +565,12 @@ module Test = struct
       (fid : FunDeclId.id) : unit =
     (* Retrieve the function declaration *)
     let fdef = FunDeclId.Map.find fid crate.fun_decls in
-    let body = Option.get fdef.body in
+    let body = [%add_loc] body_as_body_exn fdef.body in
     let span = fdef.item_meta.span in
 
     (* Debug *)
     [%ltrace
-      Print.Types.name_to_string
+      Print.name_to_string
         (Print.Contexts.decls_ctx_to_fmt_env decls_ctx)
         fdef.item_meta.name];
 
@@ -601,7 +596,7 @@ module Test = struct
       | _ ->
           [%craise] span
             ("Unit test failed (concrete execution) on: "
-            ^ Print.Types.name_to_string
+            ^ Print.name_to_string
                 (Print.Contexts.decls_ctx_to_fmt_env decls_ctx)
                 fdef.item_meta.name)
     in
@@ -613,7 +608,7 @@ module Test = struct
   (** Small helper: return true if the function is a *transparent* unit function
       (no parameters, no arguments) - TODO: move *)
   let fun_decl_is_transparent_unit (def : fun_decl) : bool =
-    Option.is_some def.body
+    body_is_known def.body
     && def.generics = empty_generic_params
     && def.signature.inputs = []
 

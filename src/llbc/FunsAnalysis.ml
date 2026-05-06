@@ -37,7 +37,7 @@ type modules_funs_info = fun_info FunDeclId.Map.t
 
 let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
     modules_funs_info =
-  let fmt_env = Charon.PrintLlbcAst.Crate.crate_to_fmt_env m in
+  let fmt_env = Charon.Print.crate_to_fmt_env m in
   let infos = ref FunDeclId.Map.empty in
   let register_info (id : FunDeclId.id) (info : fun_info) : unit =
     assert (not (FunDeclId.Map.mem id !infos));
@@ -60,7 +60,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
     let can_diverge = ref false in
     let is_rec = ref false in
     let group_has_builtin_info = ref false in
-    let name_matcher_ctx : LlbcAst.block Charon.NameMatcher.ctx =
+    let name_matcher_ctx : Charon.NameMatcher.ctx =
       Charon.NameMatcher.ctx_from_crate m
     in
 
@@ -79,7 +79,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
     let visit_fun (f : fun_decl) : unit =
       [%ltrace
         "Analyzing fun:\n"
-        ^ Charon.PrintTypes.name_to_string fmt_env f.item_meta.name];
+        ^ Charon.Print.name_to_string fmt_env f.item_meta.name];
       let obj =
         object (self)
           inherit [_] iter_statement as super
@@ -176,14 +176,14 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
       let has_builtin_info = builtin_info <> None in
       group_has_builtin_info := !group_has_builtin_info || has_builtin_info;
       match f.body with
-      | None ->
+      | StructuredBody body -> obj#visit_block body.body.span body.body
+      | _ ->
           let info_can_fail =
             match builtin_info with
             | None -> true
             | Some { can_fail } -> can_fail
           in
           obj#may_fail info_can_fail
-      | Some body -> obj#visit_block body.body.span body.body
     in
     List.iter visit_fun d;
     (* We need to know if the declaration group contains a global - note that
@@ -238,13 +238,13 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
     | FunGroup decl :: decls' ->
         (try analyze_fun_decl_group (g_declaration_group_to_list decl)
          with CFailure error ->
-           let fmt_env = Charon.PrintLlbcAst.Crate.crate_to_fmt_env m in
+           let fmt_env = Charon.Print.crate_to_fmt_env m in
            let decls = Charon.GAstUtils.g_declaration_group_to_list decl in
            let decl_id_to_string (id : FunDeclId.id) : string =
              match FunDeclId.Map.find_opt id m.fun_decls with
              | None -> show_fun_decl_id id
              | Some d ->
-                 Charon.PrintTypes.name_to_string fmt_env d.item_meta.name
+                 Charon.Print.name_to_string fmt_env d.item_meta.name
                  ^ " ("
                  ^ span_to_string d.item_meta.span
                  ^ ")"
@@ -262,7 +262,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
             declarations or functions and traits, for instance) are not \
             supported yet: ["
           ^ String.concat ", "
-              (List.map Charon.PrintGAst.item_id_to_string
+              (List.map Charon.Print.item_id_to_string
                  (Charon.GAstUtils.g_declaration_group_to_list ids))
           ^ "]")
   in

@@ -126,4 +126,16 @@ def u32_as_i16 (x : Std.U32) : Result Std.I16 := do
 def i16_as_u32 (x : Std.I16) : Result Std.U32 := do
   ok (IScalar.hcast .U32 x)
 
+/-- [scalars::u32_use_bits]:
+    Source: 'tests/src/scalars.rs', lines 93:0-95:1
+    Visibility: public -/
+def u32_use_bits : Result Std.U32 := do
+  ok core.num.U32.BITS
+
+/-- [scalars::i32_use_bits]:
+    Source: 'tests/src/scalars.rs', lines 97:0-99:1
+    Visibility: public -/
+def i32_use_bits : Result Std.U32 := do
+  ok core.num.I32.BITS
+
 end scalars

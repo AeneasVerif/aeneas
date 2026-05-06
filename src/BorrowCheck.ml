@@ -19,12 +19,12 @@ let borrow_check_crate (crate : crate) (marked_ids : Contexts.marked_ids) : unit
   (* Borrow-check *)
   let borrow_check_fun (fdef : fun_decl) : unit =
     match fdef.body with
-    | None -> ()
-    | Some _ ->
+    | StructuredBody _ ->
         let synthesize = false in
         let _ =
           evaluate_function_symbolic synthesize trans_ctx marked_ids fdef
         in
         ()
+    | _ -> ()
   in
   List.iter borrow_check_fun (FunDeclId.Map.values crate.fun_decls)

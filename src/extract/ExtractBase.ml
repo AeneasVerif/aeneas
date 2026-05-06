@@ -635,10 +635,10 @@ let trait_ref_to_string (ctx : extraction_ctx) =
   PrintPure.trait_ref_to_string (extraction_ctx_to_fmt_env ctx) false
 
 let llbc_generic_params_to_strings (ctx : extraction_ctx) =
-  Print.Types.generic_params_to_strings (extraction_ctx_to_llbc_fmt_env ctx)
+  Print.generic_params_to_strings (extraction_ctx_to_llbc_fmt_env ctx)
 
 let llbc_generic_args_to_strings (ctx : extraction_ctx) =
-  Print.Types.generic_args_to_strings (extraction_ctx_to_llbc_fmt_env ctx)
+  Print.generic_args_to_strings (extraction_ctx_to_llbc_fmt_env ctx)
 
 let dyn_predicate_to_string (ctx : extraction_ctx) =
   PrintPure.dyn_predicate_to_string (extraction_ctx_to_fmt_env ctx)
@@ -1818,7 +1818,7 @@ let ctx_compute_trait_impl_name_raw (ctx : extraction_ctx)
                   [%internal_error] span
             in
             [%ldebug
-              let fmt = Print.Crate.crate_to_fmt_env ctx.crate in
+              let fmt = Print.crate_to_fmt_env ctx.crate in
               "- self type:\n"
               ^ Print.ty_to_string fmt self
               ^ "\n- args without self type:\n"
@@ -2248,6 +2248,23 @@ let ctx_add_generic_params (span : Meta.span) (current_def_name : Types.name)
       trait_clauses ctx
   in
   (ctx, tys, cgs, tcs)
+
+(** Reserve a set of names in the names map so that {!basename_to_unique} will
+    avoid them when generating fresh names.
+
+    This is used to prevent generic parameter names from clashing with trait
+    field names: we reserve the field names before generating parameter names.
+*)
+let ctx_reserve_names (names : string list) (ctx : extraction_ctx) :
+    extraction_ctx =
+  let names_map = ctx.names_maps.names_map in
+  let names_set =
+    List.fold_left
+      (fun s name -> StringSet.add name s)
+      names_map.names_set names
+  in
+  let names_map = { names_map with names_set } in
+  { ctx with names_maps = { ctx.names_maps with names_map } }
 
 let ctx_add_adt_projector_names (decl_name : string) (field_names : string list)
     (ctx : extraction_ctx) : extraction_ctx =

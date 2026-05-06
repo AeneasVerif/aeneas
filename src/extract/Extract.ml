@@ -3177,6 +3177,32 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
   let generics = decl.generics in
   (* Add the type and const generic params - note that we need those bindings only for the
    * body translation (they are not top-level) *)
+  (* First, reserve the trait field names (constants, types, methods, parent
+     clauses) so that generic parameter names are made fresh w.r.t. them.
+     This prevents e.g. a const generic parameter [N] from keeping its name
+     when the trait also has a field named [N]. *)
+  let ctx =
+    let field_names =
+      List.map
+        (fun (name, _) ->
+          ctx_get_trait_const decl.item_meta.span decl.def_id name ctx)
+        decl.consts
+      @ List.map
+          (fun name ->
+            ctx_get_trait_type decl.item_meta.span decl.def_id name ctx)
+          decl.types
+      @ List.map
+          (fun (name, _) ->
+            ctx_get_trait_method decl.item_meta.span decl.def_id name ctx)
+          decl.methods
+      @ List.map
+          (fun (clause : trait_param) ->
+            ctx_get_trait_parent_clause decl.item_meta.span decl.def_id
+              clause.clause_id ctx)
+          decl.parent_clauses
+    in
+    ctx_reserve_names field_names ctx
+  in
   let ctx, type_params, cg_params, trait_clauses =
     ctx_add_generic_params decl.item_meta.span decl.item_meta.name Item
       decl.llbc_generics generics ctx
@@ -3488,6 +3514,29 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
   (* Print the generics *)
   (* Add the type and const generic params - note that we need those bindings only for the
    * body translation (they are not top-level) *)
+  (* First, reserve the trait decl field names (constants, types, methods, parent
+     clauses) so that generic parameter names are made fresh w.r.t. them.
+     See the comment in {!extract_trait_decl}. *)
+  let ctx =
+    let decl_id = impl.impl_trait.trait_decl_id in
+    let trait_decl = TraitDeclId.Map.find decl_id ctx.trans_trait_decls in
+    let field_names =
+      List.map
+        (fun (name, _) -> ctx_get_trait_const span decl_id name ctx)
+        trait_decl.consts
+      @ List.map
+          (fun name -> ctx_get_trait_type span decl_id name ctx)
+          trait_decl.types
+      @ List.map
+          (fun (name, _) -> ctx_get_trait_method span decl_id name ctx)
+          trait_decl.methods
+      @ List.map
+          (fun (clause : trait_param) ->
+            ctx_get_trait_parent_clause span decl_id clause.clause_id ctx)
+          trait_decl.parent_clauses
+    in
+    ctx_reserve_names field_names ctx
+  in
   let ctx, type_params, cg_params, trait_clauses =
     ctx_add_generic_params span impl.item_meta.name Item impl.llbc_generics
       impl.generics ctx

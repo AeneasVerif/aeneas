@@ -12,27 +12,25 @@ open Errors
 let log = Logging.pre_passes_log
 
 let statement_to_string (crate : crate) =
-  let fmt_env = Print.Crate.crate_to_fmt_env crate in
-  Print.Ast.statement_to_string fmt_env "" "  "
+  let fmt_env = Print.crate_to_fmt_env crate in
+  Print.statement_to_string fmt_env "" "  "
 
 let call_to_string (crate : crate) =
-  let fmt_env = Print.Crate.crate_to_fmt_env crate in
-  Print.Ast.call_to_string fmt_env "  "
+  let fmt_env = Print.crate_to_fmt_env crate in
+  Print.call_to_string fmt_env "  "
 
 let fun_decl_ref_to_string (crate : crate) =
-  let fmt_env = Print.Crate.crate_to_fmt_env crate in
+  let fmt_env = Print.crate_to_fmt_env crate in
   Print.fun_decl_ref_to_string fmt_env
 
 let generic_args_to_string (crate : crate) (generics : generic_args) =
-  let fmt_env = Print.Crate.crate_to_fmt_env crate in
-  let generics, traits = Print.Types.generic_args_to_strings fmt_env generics in
+  let fmt_env = Print.crate_to_fmt_env crate in
+  let generics, traits = Print.generic_args_to_strings fmt_env generics in
   "<" ^ String.concat ", " (generics @ traits) ^ ">"
 
 let generic_params_to_string (crate : crate) (generics : generic_params) =
-  let fmt_env = Print.Crate.crate_to_fmt_env crate in
-  let generics, traits =
-    Print.Types.generic_params_to_strings fmt_env generics
-  in
+  let fmt_env = Print.crate_to_fmt_env crate in
+  let generics, traits = Print.generic_params_to_strings fmt_env generics in
   "<" ^ String.concat ", " (generics @ traits) ^ ">"
 
 (** Erase the useless body regions.
@@ -62,7 +60,7 @@ let erase_body_regions (crate : crate) (f : fun_decl) : fun_decl =
   (* Map  *)
   let body =
     match f.body with
-    | Some body ->
+    | StructuredBody body ->
         let body =
           {
             body with
@@ -74,16 +72,18 @@ let erase_body_regions (crate : crate) (f : fun_decl) : fun_decl =
               };
           }
         in
-        Some { body with body = erase_visitor#visit_block 0 body.body }
-    | None -> None
+        StructuredBody
+          { body with body = erase_visitor#visit_block 0 body.body }
+    | other -> other
   in
 
   let f : fun_decl = { f with body } in
   [%ldebug
+    let env = Print.crate_to_fmt_env crate in
     "Before/after [erase_body_regions]:\n"
-    ^ Print.Crate.crate_fun_decl_to_string crate f0
+    ^ Print.fun_decl_to_string env "" "  " f0
     ^ "\n\n"
-    ^ Print.Crate.crate_fun_decl_to_string crate f];
+    ^ Print.fun_decl_to_string env "" "  " f];
   f
 
 (** Replace the occurrences of [core::intrinsics::unreachable] with
@@ -135,10 +135,10 @@ let remove_unreachable (crate : crate) (f : fun_decl) : fun_decl =
     end
   in
   match f.body with
-  | None -> f
-  | Some body ->
+  | StructuredBody body ->
       let body = { body with body = visitor#visit_block () body.body } in
-      { f with body = Some body }
+      { f with body = StructuredBody body }
+  | _ -> f
 
 (** The Rust compiler generates a unique implementation of [Default] for arrays
     for every choice of length. For instance, if we write:
@@ -159,7 +159,7 @@ let remove_unreachable (crate : crate) (f : fun_decl) : fun_decl =
     generic in the length of the array, and replace all the other ones with this
     implementation. We also remove the useless implementations. *)
 let update_array_default (crate : crate) : crate =
-  let pctx = Print.Crate.crate_to_fmt_env crate in
+  let pctx = Print.crate_to_fmt_env crate in
   let impl_pat = NameMatcher.parse_pattern "core::default::Default" in
   let mctx = NameMatcher.ctx_from_crate crate in
   let match_name =
@@ -642,16 +642,18 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
   (* Map  *)
   let body =
     match f.body with
-    | Some body -> Some { body with body = visitor#visit_block 0 body.body }
-    | None -> None
+    | StructuredBody body ->
+        StructuredBody { body with body = visitor#visit_block 0 body.body }
+    | other -> other
   in
 
   let f : fun_decl = { f with body } in
   [%ldebug
+    let env = Print.crate_to_fmt_env crate in
     "Before/after [update_loops]:\n"
-    ^ Print.Crate.crate_fun_decl_to_string crate f0
+    ^ Print.fun_decl_to_string env "" " " f0
     ^ "\n\n"
-    ^ Print.Crate.crate_fun_decl_to_string crate f];
+    ^ Print.fun_decl_to_string env "" " " f];
   f
 
 (** Inline what comes after an [if then else], a [switch] or a [match], etc.
@@ -726,16 +728,18 @@ let remove_useless_joins (crate : crate) (f : fun_decl) : fun_decl =
 
   let body =
     match f.body with
-    | Some body -> Some { body with body = snd (update_block [] body.body) }
-    | None -> None
+    | StructuredBody body ->
+        StructuredBody { body with body = snd (update_block [] body.body) }
+    | other -> other
   in
 
   let f : fun_decl = { f with body } in
   [%ldebug
+    let env = Print.crate_to_fmt_env crate in
     "Before/after [remove_useless_joins]:\n"
-    ^ Print.Crate.crate_fun_decl_to_string crate f0
+    ^ Print.fun_decl_to_string env "" " " f0
     ^ "\n\n"
-    ^ Print.Crate.crate_fun_decl_to_string crate f];
+    ^ Print.fun_decl_to_string env "" " " f];
   f
 
 (** Remove the use of shallow borrows and the storage live/dead instructions.
@@ -818,15 +822,17 @@ let remove_shallow_borrows_storage_live_dead (crate : crate) (f : fun_decl) :
 
   let body =
     match f.body with
-    | None -> None
-    | Some body -> Some { body with body = filter_in_body body.body }
+    | StructuredBody body ->
+        StructuredBody { body with body = filter_in_body body.body }
+    | other -> other
   in
   let f = { f with body } in
   [%ldebug
+    let env = Print.crate_to_fmt_env crate in
     "Before/after [remove_shallow_borrows]:\n"
-    ^ Print.Crate.crate_fun_decl_to_string crate f0
+    ^ Print.fun_decl_to_string env "" " " f0
     ^ "\n\n"
-    ^ Print.Crate.crate_fun_decl_to_string crate f];
+    ^ Print.fun_decl_to_string env "" " " f];
   f
 
 (* Remove the type aliases from the type declarations and declaration groups *)
@@ -878,7 +884,7 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
   (* Map  *)
   let body =
     match f.body with
-    | Some body ->
+    | StructuredBody body ->
         let new_locals = ref [] in
         let _, gen =
           LocalId.mk_stateful_generator_starting_at_id
@@ -1006,7 +1012,7 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
           | _ -> [ st ]
         in
         let body_body = map_statement decompose_in_statement body.body in
-        Some
+        StructuredBody
           {
             body with
             body = body_body;
@@ -1016,7 +1022,7 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
                 locals = body.locals.locals @ List.rev !new_locals;
               };
           }
-    | None -> None
+    | other -> other
   in
   { f with body }
 
@@ -1025,7 +1031,7 @@ let refresh_statement_ids (_ : crate) (f : fun_decl) : fun_decl =
   (* Map  *)
   let body =
     match f.body with
-    | Some body ->
+    | StructuredBody body ->
         let _, gen_id = StatementId.fresh_stateful_generator () in
 
         (* Visit the rvalue *)
@@ -1036,8 +1042,8 @@ let refresh_statement_ids (_ : crate) (f : fun_decl) : fun_decl =
           end
         in
 
-        Some { body with body = visitor#visit_block () body.body }
-    | None -> None
+        StructuredBody { body with body = visitor#visit_block () body.body }
+    | other -> other
   in
   { f with body }
 
@@ -1099,8 +1105,9 @@ let simplify_panics (crate : crate) (f : fun_decl) : fun_decl =
 
   let body =
     match f.body with
-    | None -> None
-    | Some body -> Some { body with body = visitor#visit_block () body.body }
+    | StructuredBody body ->
+        StructuredBody { body with body = visitor#visit_block () body.body }
+    | other -> other
   in
   { f with body }
 
@@ -1126,8 +1133,7 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
   (* Map  *)
   let body =
     match f.body with
-    | None -> None
-    | Some body -> (
+    | StructuredBody body -> (
         let new_locals = ref [] in
         let _, gen =
           LocalId.mk_stateful_generator_starting_at_id
@@ -1230,7 +1236,7 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
         (* Visit all the statements and decompose the operands *)
         try
           let body_body = map_statement decompose_in_statement body.body in
-          Some
+          StructuredBody
             {
               body with
               body = body_body;
@@ -1242,8 +1248,8 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
             }
         with CFailure error ->
           let mctx = Charon.NameMatcher.ctx_from_crate crate in
-          let fmt_env = Print.Crate.crate_to_fmt_env crate in
-          let name = Print.Types.name_to_string fmt_env f.item_meta.name in
+          let fmt_env = Print.crate_to_fmt_env crate in
+          let name = Print.name_to_string fmt_env f.item_meta.name in
           let name_pattern =
             try
               let c : Charon.NameMatcher.to_pat_config =
@@ -1263,7 +1269,8 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
           [%save_error_opt_span] error.span
             ("Failure when pre- processing: " ^ name
            ^ "; ignoring its body.\nName pattern: '" ^ name_pattern ^ "'");
-          None)
+          OpaqueBody)
+    | other -> other
   in
   { f with body }
 
@@ -1331,7 +1338,8 @@ let replace_static (crate : crate) : crate =
 
     let d = { d with generics; signature } in
     [%ltrace
-      "Updated declaration:\n" ^ Print.Crate.crate_fun_decl_to_string crate d];
+      let env = Print.crate_to_fmt_env crate in
+      "Updated declaration:\n" ^ Print.fun_decl_to_string env "" " " d];
     let crate =
       { crate with fun_decls = FunDeclId.Map.add d.def_id d crate.fun_decls }
     in
@@ -1339,8 +1347,7 @@ let replace_static (crate : crate) : crate =
     (* Update the uses of this definition *)
     let update (f : fun_decl) : fun_decl =
       match f.body with
-      | None -> f
-      | Some body ->
+      | StructuredBody body ->
           let visitor =
             object
               inherit [_] map_statement
@@ -1366,7 +1373,8 @@ let replace_static (crate : crate) : crate =
           in
 
           let body = { body with body = visitor#visit_block () body.body } in
-          { f with body = Some body }
+          { f with body = StructuredBody body }
+      | _ -> f
     in
     let fun_decls = FunDeclId.Map.map update crate.fun_decls in
     { crate with fun_decls }
@@ -1745,8 +1753,8 @@ let simplify_trait_calls (crate : crate) : crate =
     (fun _ (f : fun_decl) ->
       if f.item_meta.is_local then visitor#visit_fun_decl_id () f.def_id;
       match f.body with
-      | None -> ()
-      | Some body -> visitor#visit_block () body.body)
+      | StructuredBody body -> visitor#visit_block () body.body
+      | _ -> ())
     crate.fun_decls;
 
   GlobalDeclId.Map.iter
@@ -1857,7 +1865,9 @@ let fix_closure_lifetimes (crate : crate) (f : fun_decl) : fun_decl =
              parameters *)
           let signature = { f.signature with output } in
           let f = { f with signature } in
-          [%ltrace "Updated: " ^ Print.Crate.crate_fun_decl_to_string crate f];
+          [%ltrace
+            let env = Print.crate_to_fmt_env crate in
+            "Updated: " ^ Print.fun_decl_to_string env "" " " f];
           f
       | _, _ -> f)
 
@@ -1886,18 +1896,22 @@ let apply_passes (crate : crate) : crate =
     try
       let f = pass crate f in
       [%ltrace
+        let env = Print.crate_to_fmt_env crate in
         "After applying [" ^ pass_name ^ "]:\n"
-        ^ Print.Crate.crate_fun_decl_to_string crate f];
+        ^ Print.fun_decl_to_string env "" " " f];
       f
-    with CFailure _ ->
+    with CFailure e ->
       (* The error was already registered, we don't need to register it twice.
          However, we replace the body of the function, and save an error to
          report to the user the fact that we will ignore the function body *)
-      let fmt = Print.Crate.crate_to_fmt_env crate in
+      let fmt = Print.crate_to_fmt_env crate in
       let name = Print.name_to_string fmt f.item_meta.name in
       [%save_error] f.item_meta.span
         ("Ignoring the body of '" ^ name ^ "' because of previous error");
-      { f with body = None }
+      let msg =
+        Errors.format_error_message_with_file_line e.file e.line e.span e.msg
+      in
+      { f with body = ErrorBody { span = f.item_meta.span; msg } }
   in
   let fun_decls : fun_decl FunDeclId.Map.t =
     let num_decls = FunDeclId.Map.cardinal crate.fun_decls in
@@ -1905,8 +1919,9 @@ let apply_passes (crate : crate) : crate =
         FunDeclId.Map.map
           (fun f ->
             [%ltrace
+              let env = Print.crate_to_fmt_env crate in
               "Before applying the prepasses:\n"
-              ^ Print.Crate.crate_fun_decl_to_string crate f];
+              ^ Print.fun_decl_to_string env "" " " f];
             let f : fun_decl =
               List.fold_left
                 (fun f (name, pass) -> apply_function_pass name pass f)
@@ -1922,5 +1937,5 @@ let apply_passes (crate : crate) : crate =
   let crate = remove_vtables crate in
   let crate = rename_type_vars crate in
   let crate = simplify_trait_calls crate in
-  [%ltrace "After pre-passes:\n" ^ Print.Crate.crate_to_string crate ^ "\n"];
+  [%ltrace "After pre-passes:\n" ^ Print.crate_to_string crate ^ "\n"];
   crate

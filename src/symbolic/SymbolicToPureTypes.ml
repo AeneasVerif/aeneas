@@ -200,7 +200,7 @@ let translate_strait_decl_ref (span : Meta.span option) (tr : T.trait_decl_ref)
 
 let translate_trait_clause (span : Meta.span option) (clause : T.trait_param) :
     trait_param =
-  let { T.clause_id; span = _; trait } = clause in
+  let { T.clause_id; span = _; origin = _; trait } = clause in
   let trait = translate_region_binder (translate_strait_decl_ref span) trait in
   { clause_id; trait_id = trait.trait_decl_id; generics = trait.decl_generics }
 
@@ -283,10 +283,10 @@ let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
     type_decl =
   [%ltrace
     let ctx = Print.Contexts.decls_ctx_to_fmt_env ctx in
-    "\n" ^ Print.Types.type_decl_to_string ctx def];
+    "\n" ^ Print.type_decl_to_string ctx def];
   let env = Print.Contexts.decls_ctx_to_fmt_env ctx in
   let def_id = def.T.def_id in
-  let name = Print.Types.name_to_string env def.item_meta.name in
+  let name = Print.name_to_string env def.item_meta.name in
   let span = def.item_meta.span in
   (* Can't translate types with nested borrows for now *)
   [%cassert] span
@@ -457,9 +457,7 @@ and compute_back_ty_num_levels (span : Meta.span option)
       let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
       "Exploring (group id: "
       ^ T.RegionGroupId.to_string gid
-      ^ "): "
-      ^ Print.Types.ty_to_string ctx ty
-      ^ "\n- outer_regions: "
+      ^ "): " ^ Print.ty_to_string ctx ty ^ "\n- outer_regions: "
       ^ T.RegionGroupId.Set.to_string None outer_regions];
     match ty with
     | T.TAdt { id; generics } -> (
@@ -589,9 +587,7 @@ and translate_back_ty_aux (span : Meta.span option) (decls_ctx : C.decls_ctx)
       ty option =
     [%ldebug
       let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
-      "Exploring: "
-      ^ Print.Types.ty_to_string ctx ty
-      ^ "\n- outer_regions: "
+      "Exploring: " ^ Print.ty_to_string ctx ty ^ "\n- outer_regions: "
       ^ T.RegionGroupId.Set.to_string None outer_regions];
     match ty with
     | T.TAdt { id = TTuple; generics } -> (
@@ -792,7 +788,7 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
     | RVar (Bound _ as var) ->
         [%craise_opt_span] span
           ("Unexpected bound region: "
-          ^ Charon.PrintTypes.region_db_var_to_pretty_string var)
+          ^ Charon.Print.region_db_var_to_pretty_string var)
     | RBody _ -> [%craise_opt_span] None "unsupported: Body region"
     | RVar (Free rid) -> (
         match T.RegionId.Map.find_opt rid rg_to_gr_id with
@@ -865,7 +861,7 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
     [%ltrace
       let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
       let pctx = PrintPure.decls_ctx_to_fmt_env decls_ctx in
-      let output = Print.Types.ty_to_string ctx sg.output in
+      let output = Print.ty_to_string ctx sg.output in
       let inputs =
         Print.list_to_string
           (fun (lvl, ty) ->
@@ -876,7 +872,7 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
           inputs
       in
       "translate_back_inputs_for_gid:" ^ "\n- function:"
-      ^ Charon.PrintTypes.fn_ptr_kind_to_string ctx fun_id
+      ^ Charon.Print.fn_ptr_kind_to_string ctx fun_id
       ^ "\n- gid: "
       ^ RegionGroupId.to_string gid
       ^ "\n- output: " ^ output ^ "\n- back inputs: " ^ inputs];
@@ -899,9 +895,7 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
     [%ltrace
       let ctx = Print.Contexts.decls_ctx_to_fmt_env decls_ctx in
       let pctx = PrintPure.decls_ctx_to_fmt_env decls_ctx in
-      let inputs =
-        Print.list_to_string (Print.Types.ty_to_string ctx) sg.inputs
-      in
+      let inputs = Print.list_to_string (Print.ty_to_string ctx) sg.inputs in
       let outputs =
         Print.list_to_string
           (fun (lvl, ty) ->
@@ -912,7 +906,7 @@ and translate_inst_fun_sig_to_decomposed_fun_type (span : Meta.span option)
           outputs
       in
       "compute_back_outputs_for_gid:" ^ "\n- function:"
-      ^ Charon.PrintTypes.fn_ptr_kind_to_string ctx fun_id
+      ^ Charon.Print.fn_ptr_kind_to_string ctx fun_id
       ^ "\n- gid: "
       ^ RegionGroupId.to_string gid
       ^ "\n- inputs: " ^ inputs ^ "\n- back outputs: " ^ outputs];
@@ -1046,11 +1040,11 @@ and translate_fun_sig_from_decl_to_decomposed (decls_ctx : C.decls_ctx)
     (fdef : LlbcAst.fun_decl) : decomposed_fun_sig =
   let input_names =
     match fdef.body with
-    | None -> List.map (fun _ -> None) fdef.signature.inputs
-    | Some body ->
+    | StructuredBody body ->
         List.map
           (fun (v : LlbcAst.local) -> v.name)
           (LlbcAstUtils.fun_body_get_input_vars body)
+    | _ -> List.map (fun _ -> None) fdef.signature.inputs
   in
   let sg =
     translate_fun_sig_to_decomposed decls_ctx fdef.def_id

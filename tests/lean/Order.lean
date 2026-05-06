@@ -26,4 +26,97 @@ def compare
 def u32_compare (x : Std.U32) (y : Std.U32) : Result Ordering := do
   ok (core.cmp.impls.OrdU32.cmp x y)
 
+/-- [order::u64_partial_cmp]:
+    Source: 'tests/src/order.rs', lines 13:0-15:1
+    Visibility: public -/
+def u64_partial_cmp
+  (x : Std.U64) (y : Std.U64) : Result (Option Ordering) := do
+  ok (core.cmp.impls.PartialOrdU64.partial_cmp x y)
+
+/-- [order::Wrap]
+    Source: 'tests/src/order.rs', lines 22:0-22:21
+    Visibility: public -/
+@[reducible]
+def Wrap := Std.U64
+
+/-- Trait implementation: [order::{core::marker::StructuralPartialEq for order::Wrap}]
+    Source: 'tests/src/order.rs', lines 21:9-21:18 -/
+@[reducible]
+def Wrap.Insts.CoreMarkerStructuralPartialEq : core.marker.StructuralPartialEq
+  Wrap := {
+}
+
+/-- [order::{core::cmp::PartialEq<order::Wrap> for order::Wrap}::eq]:
+    Source: 'tests/src/order.rs', lines 21:9-21:18
+    Visibility: public -/
+def Wrap.Insts.CoreCmpPartialEqWrap.eq
+  (self : Wrap) (other : Wrap) : Result Bool := do
+  ok (self = other)
+
+/-- Trait implementation: [order::{core::cmp::PartialEq<order::Wrap> for order::Wrap}]
+    Source: 'tests/src/order.rs', lines 21:9-21:18 -/
+@[reducible]
+def Wrap.Insts.CoreCmpPartialEqWrap : core.cmp.PartialEq Wrap Wrap := {
+  eq := Wrap.Insts.CoreCmpPartialEqWrap.eq
+}
+
+/-- [order::{core::cmp::Eq for order::Wrap}::assert_receiver_is_total_eq]:
+    Source: 'tests/src/order.rs', lines 21:20-21:22
+    Visibility: public -/
+def Wrap.Insts.CoreCmpEq.assert_receiver_is_total_eq
+  (self : Wrap) : Result Unit := do
+  ok ()
+
+/-- Trait implementation: [order::{core::cmp::Eq for order::Wrap}]
+    Source: 'tests/src/order.rs', lines 21:20-21:22 -/
+@[reducible]
+def Wrap.Insts.CoreCmpEq : core.cmp.Eq Wrap := {
+  partialEqInst := Wrap.Insts.CoreCmpPartialEqWrap
+  assert_receiver_is_total_eq :=
+    Wrap.Insts.CoreCmpEq.assert_receiver_is_total_eq
+}
+
+/-- [order::{core::cmp::PartialOrd<order::Wrap> for order::Wrap}::partial_cmp]:
+    Source: 'tests/src/order.rs', lines 21:24-21:34
+    Visibility: public -/
+def Wrap.Insts.CoreCmpPartialOrdWrap.partial_cmp
+  (self : Wrap) (other : Wrap) : Result (Option Ordering) := do
+  ok (core.cmp.impls.PartialOrdU64.partial_cmp self other)
+
+/-- Trait implementation: [order::{core::cmp::PartialOrd<order::Wrap> for order::Wrap}]
+    Source: 'tests/src/order.rs', lines 21:24-21:34 -/
+@[reducible]
+def Wrap.Insts.CoreCmpPartialOrdWrap : core.cmp.PartialOrd Wrap Wrap := {
+  partialEqInst := Wrap.Insts.CoreCmpPartialEqWrap
+  partial_cmp := Wrap.Insts.CoreCmpPartialOrdWrap.partial_cmp
+}
+
+/-- [order::{core::cmp::Ord for order::Wrap}::cmp]:
+    Source: 'tests/src/order.rs', lines 21:36-21:39
+    Visibility: public -/
+def Wrap.Insts.CoreCmpOrd.cmp
+  (self : Wrap) (other : Wrap) : Result Ordering := do
+  ok (core.cmp.impls.OrdU64.cmp self other)
+
+/-- Trait implementation: [order::{core::cmp::Ord for order::Wrap}]
+    Source: 'tests/src/order.rs', lines 21:36-21:39 -/
+@[reducible]
+def Wrap.Insts.CoreCmpOrd : core.cmp.Ord Wrap := {
+  eqInst := Wrap.Insts.CoreCmpEq
+  partialOrdInst := Wrap.Insts.CoreCmpPartialOrdWrap
+  cmp := Wrap.Insts.CoreCmpOrd.cmp
+}
+
+/-- [order::wrap_partial_cmp]:
+    Source: 'tests/src/order.rs', lines 24:0-26:1
+    Visibility: public -/
+def wrap_partial_cmp (x : Wrap) (y : Wrap) : Result (Option Ordering) := do
+  Wrap.Insts.CoreCmpPartialOrdWrap.partial_cmp x y
+
+/-- [order::wrap_cmp]:
+    Source: 'tests/src/order.rs', lines 28:0-30:1
+    Visibility: public -/
+def wrap_cmp (x : Wrap) (y : Wrap) : Result Ordering := do
+  Wrap.Insts.CoreCmpOrd.cmp x y
+
 end order

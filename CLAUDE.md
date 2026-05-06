@@ -16,6 +16,7 @@ Copilot) and `.claude/skills/` (for Claude Code). **Always edit files in
 | `aeneas-tactics-quickref` | Tactic decision tree, banned tactics, combinations |
 | `lean-lsp-mcp` | lean-lsp-mcp MCP tools for interactive proof development |
 | `launching-proof-agents` | Multi-agent proof orchestration, review gates |
+| `verification-campaigns` | Planning and executing large verification campaigns |
 | `proof-patterns` | Worked proof examples (loops, dot products, comparisons) |
 | `aeneas-crypto-verification` | Crypto-specific proof strategies (Montgomery, NTT, etc.) |
 

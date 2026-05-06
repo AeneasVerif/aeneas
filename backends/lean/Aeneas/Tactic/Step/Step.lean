@@ -6,6 +6,7 @@ import Aeneas.Std
 import Aeneas.Tactic.Simp.SimpLemmas
 import AeneasMeta.Async
 import Aeneas.Tactic.Solver.Grind.Init
+import Aeneas.Tactic.Step.InferPost
 
 namespace Aeneas
 
@@ -34,7 +35,6 @@ def eq_imp_prettyMonadEq {α : Type u} {β : Type v} (x : Std.Result α) (y : β
   unfold prettyMonadEq
   constructor
 
-def traceGoalWithNode (msg : String) : TacticM Unit := Utils.traceGoalWithNode `Step msg
 
 -- TODO: the scalar types annoyingly often get reduced when we use the step
 -- tactic. We should find a way of controling reduction. For now we use rewriting
@@ -70,6 +70,9 @@ attribute [step_simps]
   Std.WP.spec_ok
   -- This one gets only applied to full applications of `predn`, which are typically revealed after applying `spec_ok`
   Std.WP.predn_eq
+
+attribute [step_simps] Aeneas.Std.bind_assoc_eq
+attribute [step_simps] Function.uncurry_apply_pair
 
 attribute [step_post_simps]
   -- We often see expressions like `Int.ofNat 3`
@@ -182,6 +185,9 @@ structure Args where
   /-- Attempt to infer ghost variables by matching preconditions with meta-variables against
   local assumptions -/
   inferGhostVars : Bool
+  /-- If the main goal after progress is of the form `?post args...`, use `inferPost` to
+      synthesize and assign the metavariable and attempt to close the goal with `agrind` -/
+  inferPost : Bool
   /-- Introduce a dummy variable in the environment, which gets pretty-printed to something
   of the following shape:
   `[> let z ← x + y <]`
@@ -727,6 +733,26 @@ def stepWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
     withTraceNode `Step
       (fun _ => pure m!"Main goal after simplifying the post-conditions and the target") do
       trace[Step] "{mainGoal.goal}"
+  -- If inferPost is enabled, try to infer the postcondition
+  let mainGoal ← do
+    if args.inferPost then
+      if let some mg := mainGoal then
+        let goalTy ← instantiateMVars (← mg.goal.getType)
+        let (head, _) := goalTy.withApp fun f a => (f, a)
+        if head.isMVar then
+          let mainGoal ← commitIfNoEx do
+            let goal ← inferPost mg.goal (eliminate := fun decl => decl.type.isAppOf ``prettyMonadEq)
+            pure (some { mg with goal := goal })
+          -- Try to solve the inferred postcondition
+          if let some mg := mainGoal then
+            setGoals [mg.goal]
+            args.solvePreconditionTac args.stepState.grindState?
+            if ← mg.goal.isAssigned then pure none
+            else pure mainGoal
+          else pure none
+        else pure mainGoal
+      else pure mainGoal
+    else pure mainGoal
   /- Put everything together -/
   let newNonPropGoals ← newNonPropGoals.filterM fun mvar => not <$> mvar.isAssigned
   pure ({ unassignedVars := newNonPropGoals.toArray, preconditions := newPropGoals.toArray, mainGoal })
@@ -1053,6 +1079,7 @@ def evalStepCore (config : Config) (keepPretty : Option Name) (withArg : Option 
   let args : Args := {
     async := config.async,
     inferGhostVars := config.inferGhostVars,
+    inferPost := config.inferPost,
     keepPretty, ids, idsUserProvided, postsBasename, assumTac := customAssumTac,
     solvePreconditionTac,
     config,

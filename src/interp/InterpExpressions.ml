@@ -97,8 +97,8 @@ let literal_to_tvalue (span : Meta.span) (ty : literal_type) (cv : literal)
     (ctx : eval_ctx) : tvalue =
   (* Check the type while converting - we actually need some information
    * contained in the type *)
-  [%ltrace "- cv: " ^ Print.Values.literal_to_string cv];
-  let ptr_size = ctx.crate.target_information.target_pointer_size in
+  [%ltrace "- cv: " ^ Print.literal_to_string cv];
+  let ptr_size = (get_target_information ctx.crate).target_pointer_size in
   match (ty, cv) with
   (* Scalar, boolean... *)
   | TBool, VBool v -> { value = VLiteral (VBool v); ty = TLiteral ty }
@@ -617,7 +617,7 @@ let eval_unary_op_concrete (config : config) (span : Meta.span) (unop : unop)
     * (SymbolicAst.expr -> SymbolicAst.expr) =
   (* Evaluate the operand *)
   let v, ctx, cc = eval_operand config span op ctx in
-  let ptr_size = ctx.crate.target_information.target_pointer_size in
+  let ptr_size = (get_target_information ctx.crate).target_pointer_size in
   (* Apply the unop *)
   let r =
     match (unop, v.value) with
@@ -1002,7 +1002,7 @@ let eval_binary_op_concrete_compute (span : Meta.span) (binop : binop)
     (* For the non-equality operations, the input values are necessarily scalars *)
     match (v1.value, v2.value) with
     | VLiteral (VScalar sv1), VLiteral (VScalar sv2) -> begin
-        let ptr_size = ctx.crate.target_information.target_pointer_size in
+        let ptr_size = (get_target_information ctx.crate).target_pointer_size in
         let sv1_value, sv2_value = (get_val sv1, get_val sv2) in
         let sv1_int_ty, sv2_int_ty = (get_ty sv1, get_ty sv2) in
         (* There are binops which require the two operands to have the same
