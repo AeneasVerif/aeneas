@@ -632,6 +632,32 @@ theorem core.num.«%S».from_le_bytes.step_spec (x : Array I8 (%Size)#usize) :
   lift (core.num.«%S».from_le_bytes x) ⦃ y => y.bv = (BitVec.fromLEBytes (x.val.map I8.bv)).cast (by simp) ⦄  := by
   simp only [spec_ok, lift, from_le_bytes]; rfl
 
+/-!
+# Progress theorems: To Big-Endian
+-/
+uscalar_no_usize @[step]
+theorem core.num.«%S».to_be_bytes.step_spec (x : «%S») :
+  lift (core.num.«%S».to_be_bytes x) ⦃ y => y.val = x.bv.toBEBytes.map (@UScalar.mk UScalarTy.U8) ⦄ := by
+  simp only [spec_ok, lift, to_be_bytes, UScalarTy.U8_numBits_eq]
+
+iscalar_no_isize @[step]
+theorem core.num.«%S».to_be_bytes.step_spec (x : «%S») :
+  lift (core.num.«%S».to_be_bytes x) ⦃ y => y.val = x.bv.toBEBytes.map (@IScalar.mk IScalarTy.I8) ⦄ := by
+  simp only [spec_ok, lift, to_be_bytes, IScalarTy.I8_numBits_eq]
+
+/-!
+# Progress theorems: From Big-Endian
+-/
+uscalar_no_usize @[step]
+theorem core.num.«%S».from_be_bytes.step_spec (x : Array U8 (%Size)#usize) :
+  lift (core.num.«%S».from_be_bytes x) ⦃ y => y.bv = (BitVec.fromBEBytes (x.val.map U8.bv)).cast (by simp) ⦄ := by
+  simp only [spec_ok, lift, from_be_bytes]; rfl
+
+iscalar_no_isize @[step]
+theorem core.num.«%S».from_be_bytes.step_spec (x : Array I8 (%Size)#usize) :
+  lift (core.num.«%S».from_be_bytes x) ⦃ y => y.bv = (BitVec.fromBEBytes (x.val.map I8.bv)).cast (by simp) ⦄  := by
+  simp only [spec_ok, lift, from_be_bytes]; rfl
+
 end Std
 
 end Aeneas
