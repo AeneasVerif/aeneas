@@ -3,10 +3,14 @@ Copyright (c) 2025. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lean
+import Aeneas.Std.Primitives
+import AeneasMeta.Simp.Simp
+import AeneasMeta.Utils
 
 namespace Aeneas.Command.Decompose
 
 open Lean Elab Term Meta Command
+open Aeneas.Simp (mkSimpCtx SimpArgs)
 
 initialize registerTraceClass `Decompose
 
@@ -159,24 +163,6 @@ def rebuildBindings (bindings : Array BindingEntry) (terminal : Expr)
 -- ============================================================================
 -- Tuple helpers
 -- ============================================================================
-
-/-- Nested product type `T₁ × T₂ × ⋯ × Tₖ` (right-associated). -/
-def mkProdType (types : Array Expr) : MetaM Expr := do
-  if types.size == 0 then throwError "mkProdType: empty"
-  if types.size == 1 then return types[0]!
-  let mut r := types.back!
-  for i in (List.range (types.size - 1)).reverse do
-    r ← mkAppM ``Prod #[types[i]!, r]
-  return r
-
-/-- Nested tuple `(v₁, (v₂, (…, vₖ)))`. -/
-def mkTuple (values : Array Expr) : MetaM Expr := do
-  if values.size == 0 then throwError "mkTuple: empty"
-  if values.size == 1 then return values[0]!
-  let mut r := values.back!
-  for i in (List.range (values.size - 1)).reverse do
-    r ← mkAppM ``Prod.mk #[values[i]!, r]
-  return r
 
 /-- Project element `idx` from a nested tuple of `totalSize` components. -/
 partial def mkProjection (tuple : Expr) (totalSize idx : Nat) : MetaM Expr := do
@@ -370,8 +356,7 @@ def extractLetRange (bindings : Array BindingEntry) (terminal : Expr)
 
     else
       -- ── General: multiple variables needed → tuple return ────────────
-      let neededTypes ← neededFVars.mapM (inferType ·)
-      let tupleVal ← mkTuple neededFVars
+      let tupleVal ← Utils.mkProdsVal neededFVars.toList
       let returnExpr ← if hasMonadic then do
         -- Build: pure (v1, v2, ..., vk) using the monad from bindings
         let some monadExpr ← getMonadExpr | throwError "letRange: no monad found for pure"
@@ -382,7 +367,7 @@ def extractLetRange (bindings : Array BindingEntry) (terminal : Expr)
       let callExpr ← addDef extractedBody
 
       -- Build the destructuring replacement
-      let tupleType ← mkProdType neededTypes
+      let tupleType ← Utils.mkProdsType neededFVars.toList
 
       -- Helper: create let-bindings for tuple projections
       --   let v1 := _tup.1; let v2 := _tup.2; ...; contExpr
@@ -575,59 +560,50 @@ partial def applyClause (body : Expr) (pat : DecomposePattern) (newName : Name)
 -- Proof generation
 -- ============================================================================
 
-/-- Look up a lemma name in the environment, trying multiple candidates. -/
-private def findLemma (candidates : Array Name) : MetaM (Option Name) := do
-  let env ← getEnv
-  for candidate in candidates do
-    if env.contains candidate then return some candidate
-  return none
+/-- Run `simp only` with the given theorems on the goal's target. Returns `none`
+    if the goal was closed, `some mvarId` otherwise. -/
+private def simpOnlyTarget (mvarId : MVarId) (declsToUnfold : Array Name)
+    (addSimpThms : Array Name) : MetaM (Option MVarId) := do
+  let args : SimpArgs := { declsToUnfold, addSimpThms }
+  let (ctx, simprocs) ← mkSimpCtx (simpOnly := true) {} .simp args
+  let (result?, _) ← Meta.simpGoal mvarId ctx (simprocs := simprocs)
+  match result? with
+  | none => return none
+  | some (_, mvarId') => return some mvarId'
 
 /-- Prove a single step: `∀ params, body_before = body_after`.
-    Uses `rfl`, then `simp only [newFnName, bind_assoc_eq]`, then
-    `simp [newFnName, bind_assoc_eq]` (with global @[simp] set).
-    Raises an error if the proof fails. -/
+    Strategy 1: `rfl`.
+    Strategy 2: `simp only [newFnName, bind_assoc_eq, pure_bind]`.
+    Strategy 3: `unfold newFnName; simp only [bind_assoc_eq, pure_bind]`
+                (for noncomputable defs where simp can't unfold directly).
+    Raises an error if all strategies fail. -/
 def proveStep (goalType : Expr) (newFnName : Name) : TermElabM Expr := do
   let mvar ← mkFreshExprMVar goalType
   let mvarId := mvar.mvarId!
   let (_, mvarId) ← mvarId.intros
-  -- Try rfl
+  let simpThms := #[``Aeneas.Std.bind_assoc_eq, ``LawfulMonad.pure_bind]
+  -- Strategy 1: rfl
   try
     mvarId.refl
     return ← instantiateMVars mvar
   catch _ => pure ()
-  -- Build simp lemma names
-  let mut simpNames : Array Name := #[newFnName]
-  if let some baEq ← findLemma #[`Aeneas.Std.bind_assoc_eq, `bind_assoc_eq] then
-    simpNames := simpNames.push baEq
-  if let some pb ← findLemma #[`LawfulMonad.pure_bind, `pure_bind] then
-    simpNames := simpNames.push pb
-  -- Strategy 1: simp only [f_i, bind_assoc_eq, pure_bind]
+  -- Strategy 2: simp only [newFnName, bind_assoc_eq, pure_bind]
   try
-    let remaining ← Lean.Elab.Tactic.run mvarId do
-      let lemmas ← simpNames.mapM fun n =>
-        `(Lean.Parser.Tactic.simpLemma| $(mkIdent n):term)
-      Lean.Elab.Tactic.evalTactic (← `(tactic| simp only [$[$lemmas],*]))
-    if remaining.isEmpty then
+    if (← simpOnlyTarget mvarId #[newFnName] simpThms).isNone then
       return ← instantiateMVars mvar
   catch _ => pure ()
-  -- Strategy 2: unfold + simp (for noncomputable defs where simp only fails)
+  -- Strategy 3: unfold newFnName, then simp only [bind_assoc_eq, pure_bind]
+  --   (for noncomputable defs where simp can't unfold directly)
   try
-    let remaining ← Lean.Elab.Tactic.run mvarId do
-      Lean.Elab.Tactic.evalTactic
-        (← `(tactic| unfold $(mkIdent newFnName)))
-      let lemmas ← simpNames.filterMapM fun n => do
-        if n != newFnName then
-          some <$> `(Lean.Parser.Tactic.simpLemma| $(mkIdent n):term)
-        else pure none
-      if lemmas.isEmpty then
-        Lean.Elab.Tactic.evalTactic (← `(tactic| rfl))
-      else
-        Lean.Elab.Tactic.evalTactic (← `(tactic| simp only [$[$lemmas],*]))
-    if remaining.isEmpty then
-      return ← instantiateMVars mvar
+    let mvarId' ← mvarId.deltaTarget (· == newFnName)
+    match ← simpOnlyTarget mvarId' #[] simpThms with
+    | none => return ← instantiateMVars mvar
+    | some mvarId'' =>
+      -- The simp didn't close it; try rfl after delta
+      if (← observing? mvarId''.refl).isSome then
+        return ← instantiateMVars mvar
   catch _ => pure ()
-  throwError "#decompose: could not prove decomposition step for '{newFnName}' \
-    with simp only [{simpNames.toList}]"
+  throwError "#decompose: could not prove decomposition step for '{newFnName}'"
 
 -- ============================================================================
 -- Main command elaboration
