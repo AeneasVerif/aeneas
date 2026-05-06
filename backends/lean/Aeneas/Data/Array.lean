@@ -10,11 +10,13 @@ attribute [scalar_tac_simps, simp_lists_safe] Array.size
 def setSlice! {α} (a : Array α) (i : ℕ) (s : List α) : Array α :=
   ⟨ a.toList.setSlice! i s⟩
 
+-- TODO: this is `Array.getElem!_toList` but reverse direction
 @[local simp]
 theorem getElem!_eq_toList_getElem! {α} [Inhabited α] (s : Array α) (i : ℕ) :
   s[i]! = s.toList[i]! := by
   cases s; simp
 
+-- TODO: this is `Array.getElem_toList` but reverse direction
 @[local simp]
 theorem getElem_eq_toList_getElem {α} [Inhabited α] (s : Array α) (i : ℕ) (hi : i < s.size) :
   s[i] = s.toList[i] := by
