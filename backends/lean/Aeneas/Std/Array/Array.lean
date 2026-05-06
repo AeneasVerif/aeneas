@@ -24,6 +24,9 @@ instance [BEq α] : BEq (Array α n) := SubtypeBEq _
 
 instance [BEq α] [LawfulBEq α] : LawfulBEq (Array α n) := SubtypeLawfulBEq _
 
+instance {α : Type u} {n : Usize} [Inhabited α] : Inhabited (Array α n) :=
+  ⟨ ⟨ List.replicate n.val default, by simp ⟩ ⟩
+
 def Array.empty (α : Type u) : Array α (Usize.ofNat 0) := ⟨ [], by simp ⟩
 
 /- Registering some theorems for `scalar_tac` -/
