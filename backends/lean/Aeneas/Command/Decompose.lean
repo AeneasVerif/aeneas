@@ -102,12 +102,14 @@ def matchBind? (e : Expr) : Option (Expr × Expr × Expr × Expr × Expr × Expr
   guard ((fn.isConstOf ``Bind.bind || fn.isConstOf ``bind) && args.size == 6)
   return (args[0]!, args[1]!, args[2]!, args[3]!, args[4]!, args[5]!)
 
+/-- Match `@ite α cond inst thenBranch elseBranch`. -/
 def matchIte? (e : Expr) : Option (Expr × Expr × Expr × Expr × Expr) := do
   let fn := e.getAppFn
   let args := e.getAppArgs
   guard (fn.isConstOf ``ite && args.size == 5)
   return (args[0]!, args[1]!, args[2]!, args[3]!, args[4]!)
 
+/-- Match `@dite α cond inst thenBranch elseBranch`. -/
 def matchDite? (e : Expr) : Option (Expr × Expr × Expr × Expr × Expr) := do
   let fn := e.getAppFn
   let args := e.getAppArgs
@@ -181,13 +183,35 @@ def filterRelevantFVars (e : Expr) (available : Array Expr) : MetaM (Array Expr)
   available.filterM fun fv => pure (e.containsFVar fv.fvarId!)
 
 /-- Collect all non-implementation-detail fvars from the local context that appear
-    free in `e`, in context order. This captures fvars from function parameters,
-    binding fvars opened by navigation patterns (`letAt`, `branch`, `lam`), etc. -/
+    free in `e` or in the types of collected fvars (dependency closure).
+    This ensures extracted definitions include all necessary type parameters.
+    Returns fvars in context order. -/
 def collectFreeLocalFVars (e : Expr) : MetaM (Array Expr) := do
   let lctx ← getLCtx
-  let mut result : Array Expr := #[]
+  -- Collect fvar IDs that we need (iteratively, until fixpoint)
+  let mut needed : Std.HashSet FVarId := {}
+  -- Seed: fvars directly appearing in the expression
   for decl in lctx do
     if !decl.isImplementationDetail && e.containsFVar decl.fvarId then
+      needed := needed.insert decl.fvarId
+  -- Closure: also include fvars appearing in the types of needed fvars
+  let mut changed := true
+  while changed do
+    changed := false
+    for decl in lctx do
+      if !decl.isImplementationDetail && !needed.contains decl.fvarId then
+        -- Check if any already-needed fvar has a type referencing this one
+        let isDepOf := needed.any fun neededId =>
+          match lctx.find? neededId with
+          | some neededDecl => neededDecl.type.containsFVar decl.fvarId
+          | none => false
+        if isDepOf then
+          needed := needed.insert decl.fvarId
+          changed := true
+  -- Return in context order
+  let mut result : Array Expr := #[]
+  for decl in lctx do
+    if needed.contains decl.fvarId then
       result := result.push (mkFVar decl.fvarId)
   return result
 
@@ -401,8 +425,11 @@ def extractLetRange (bindings : Array BindingEntry) (terminal : Expr)
 -- Navigation helpers (for composite patterns)
 -- ============================================================================
 
-/-- Open `n` nested lambda binders, apply `action` to the innermost body, close them back. -/
-private def modifyUnderAllLambdas (e : Expr) (n : Nat) (action : Expr → MetaM Expr) : MetaM Expr := do
+/-- Open `n` nested lambda binders, apply `action` to the innermost body, close them back.
+    If `strict`, throws an error when fewer than `n` lambdas are found.
+    If not strict, applies `action` to whatever expression remains. -/
+private def modifyUnderLambdasCore (strict : Bool) (e : Expr) (n : Nat)
+    (action : Expr → MetaM Expr) : MetaM Expr := do
   match n with
   | 0 => action e
   | n + 1 =>
@@ -410,31 +437,47 @@ private def modifyUnderAllLambdas (e : Expr) (n : Nat) (action : Expr → MetaM 
     | .lam name type body binfo =>
       withLocalDecl name binfo type fun fvar => do
         let body' := body.instantiate1 fvar
-        let modifiedBody ← modifyUnderAllLambdas body' n action
+        let modifiedBody ← modifyUnderLambdasCore strict body' n action
         mkLambdaFVars #[fvar] modifiedBody
-    | _ => action e -- fewer lambdas than expected: apply to what's there
+    | _ =>
+      if strict then
+        throwError "lam: expected {n + 1} more lambda binder(s), got {← ppExpr e}"
+      else
+        action e
+
+/-- Open up to `n` lambda binders (permissive: applies action even if fewer lambdas exist).
+    Used for match/dite branches where Lean may compile away some binders. -/
+private def modifyUnderLambdasPermissive (e : Expr) (n : Nat)
+    (action : Expr → MetaM Expr) : MetaM Expr :=
+  modifyUnderLambdasCore (strict := false) e n action
+
+/-- Open exactly `n` lambda binders (strict: throws if fewer exist).
+    Used for the `lam` navigation pattern. -/
+def modifyUnderLambdas (e : Expr) (n : Nat)
+    (action : Expr → MetaM Expr) : MetaM Expr :=
+  modifyUnderLambdasCore (strict := true) e n action
 
 /-- Modify branch `idx` of an ite/dite/match expression.
     Calls `action` on the branch body (under all pattern-variable lambdas);
     returns the reconstructed expression. -/
 def modifyBranch (e : Expr) (idx : Nat) (action : Expr → MetaM Expr) : MetaM Expr := do
   -- Try ite
-  if let some (α, inst, cond, thenB, elseB) := matchIte? e then
+  if let some (α, cond, inst, thenB, elseB) := matchIte? e then
     if idx == 0 then
       let thenB' ← action thenB
-      return mkApp5 (mkConst ``ite e.getAppFn.constLevels!) α inst cond thenB' elseB
+      return mkApp5 (mkConst ``ite e.getAppFn.constLevels!) α cond inst thenB' elseB
     else if idx == 1 then
       let elseB' ← action elseB
-      return mkApp5 (mkConst ``ite e.getAppFn.constLevels!) α inst cond thenB elseB'
+      return mkApp5 (mkConst ``ite e.getAppFn.constLevels!) α cond inst thenB elseB'
     else throwError "branch {idx}: ite has only branches 0 (then) and 1 (else)"
   -- Try dite
-  if let some (α, inst, cond, thenB, elseB) := matchDite? e then
+  if let some (α, cond, inst, thenB, elseB) := matchDite? e then
     if idx == 0 then
-      let thenB' ← modifyUnderAllLambdas thenB 1 action
-      return mkApp5 (mkConst ``dite e.getAppFn.constLevels!) α inst cond thenB' elseB
+      let thenB' ← modifyUnderLambdasPermissive thenB 1 action
+      return mkApp5 (mkConst ``dite e.getAppFn.constLevels!) α cond inst thenB' elseB
     else if idx == 1 then
-      let elseB' ← modifyUnderAllLambdas elseB 1 action
-      return mkApp5 (mkConst ``dite e.getAppFn.constLevels!) α inst cond thenB elseB'
+      let elseB' ← modifyUnderLambdasPermissive elseB 1 action
+      return mkApp5 (mkConst ``dite e.getAppFn.constLevels!) α cond inst thenB elseB'
     else throwError "branch {idx}: dite has only branches 0 (then) and 1 (else)"
   -- Try match (detected via matchMatcherApp?)
   if let some mApp ← matchMatcherApp? e then
@@ -443,23 +486,12 @@ def modifyBranch (e : Expr) (idx : Nat) (action : Expr → MetaM Expr) : MetaM E
         | throwError "branch {idx}: could not get matcher info for '{mApp.matcherName}'"
       let numLambdas := info.altNumParams[idx]?.getD 0
       let alt := mApp.alts[idx]
-      let alt' ← modifyUnderAllLambdas alt numLambdas action
+      let alt' ← modifyUnderLambdasPermissive alt numLambdas action
       let mApp' := { mApp with alts := mApp.alts.set idx alt' }
       return mApp'.toExpr
     else
       throwError "branch {idx}: match has only {mApp.alts.size} alternative(s) (0-indexed)"
   throwError "branch {idx}: expression is not an ite, dite, or match"
-
-/-- Open `n` lambda binders, apply `action` to the inner body, close back. -/
-partial def modifyUnderLambdas (e : Expr) (n : Nat) (action : Expr → MetaM Expr) : MetaM Expr := do
-  if n == 0 then action e
-  else match e with
-  | .lam name type body binfo =>
-    withLocalDecl name binfo type fun fvar => do
-      let body' := body.instantiate1 fvar
-      let modifiedBody ← modifyUnderLambdas body' (n - 1) action
-      mkLambdaFVars #[fvar] modifiedBody
-  | _ => throwError "lam {n}: expected lambda, got {← ppExpr e}"
 
 /-- Modify the function part of an application. -/
 def modifyAppFun (e : Expr) (action : Expr → MetaM Expr) : MetaM Expr := do
@@ -578,31 +610,33 @@ private def simpOnlyTarget (mvarId : MVarId) (declsToUnfold : Array Name)
                 (for noncomputable defs where simp can't unfold directly).
     Raises an error if all strategies fail. -/
 def proveStep (goalType : Expr) (newFnName : Name) : TermElabM Expr := do
-  let mvar ← mkFreshExprMVar goalType
-  let mvarId := mvar.mvarId!
-  let (_, mvarId) ← mvarId.intros
   let simpThms := #[``Aeneas.Std.bind_assoc_eq, ``LawfulMonad.pure_bind]
   -- Strategy 1: rfl
-  try
+  if let some proof ← observing? do
+    let mvar ← mkFreshExprMVar goalType
+    let (_, mvarId) ← mvar.mvarId!.intros
     mvarId.refl
-    return ← instantiateMVars mvar
-  catch _ => pure ()
+    instantiateMVars mvar
+  then return proof
   -- Strategy 2: simp only [newFnName, bind_assoc_eq, pure_bind]
-  try
+  if let some proof ← observing? do
+    let mvar ← mkFreshExprMVar goalType
+    let (_, mvarId) ← mvar.mvarId!.intros
     if (← simpOnlyTarget mvarId #[newFnName] simpThms).isNone then
       return ← instantiateMVars mvar
-  catch _ => pure ()
+    throwError "simp did not close the goal"
+  then return proof
   -- Strategy 3: unfold newFnName, then simp only [bind_assoc_eq, pure_bind]
-  --   (for noncomputable defs where simp can't unfold directly)
-  try
+  if let some proof ← observing? do
+    let mvar ← mkFreshExprMVar goalType
+    let (_, mvarId) ← mvar.mvarId!.intros
     let mvarId' ← mvarId.deltaTarget (· == newFnName)
     match ← simpOnlyTarget mvarId' #[] simpThms with
     | none => return ← instantiateMVars mvar
     | some mvarId'' =>
-      -- The simp didn't close it; try rfl after delta
-      if (← observing? mvarId''.refl).isSome then
-        return ← instantiateMVars mvar
-  catch _ => pure ()
+      mvarId''.refl
+      return ← instantiateMVars mvar
+  then return proof
   throwError "#decompose: could not prove decomposition step for '{newFnName}'"
 
 -- ============================================================================
@@ -615,8 +649,10 @@ def elabDecompose : CommandElab := fun stx => do
   | `(command| #decompose $fnId $eqId $[$clauses]*) => do
     liftTermElabM do
       -- Resolve the function name
-      let some fnConst ← Term.resolveId? fnId | throwError "Unknown: {fnId}"
-      let fnName := fnConst.constName!
+      let fnName ← match ← Term.resolveId? fnId with
+        | some (.const name _) => pure name
+        | some e => throwError "{fnId} resolved to non-constant expression: {e}"
+        | none => throwError "Unknown: {fnId}"
       let env ← getEnv
       let some info := env.find? fnName | throwError "No declaration: {fnName}"
       let fnValue ← match info with
