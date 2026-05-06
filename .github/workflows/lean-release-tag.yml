@@ -1,0 +1,73 @@
+name: Lean release tag
+
+# Whenever `backends/lean/lean-toolchain` changes on `main`, create a Git tag
+# named after the new Lean version (e.g. `v4.30.0-rc2`) on the commit that
+# introduced it. Equivalent to the `leanprover-community/lean-release-tag@v1`
+# action. https://github.com/leanprover-community/lean-release-tag
+# Here we inline the code since the action hard-codes the path to `lean-toolchain`
+# but in this repo the lean project is in a subfolder.
+# TODO: https://github.com/leanprover-community/lean-release-tag/issues/3
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backends/lean/lean-toolchain'
+  workflow_dispatch:
+
+jobs:
+  tag:
+    name: Add Lean release tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Tag new Lean toolchain version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.event.after }}
+        run: |
+          set -euo pipefail
+          TOOLCHAIN_FILE="backends/lean/lean-toolchain"
+
+          # Commits between BEFORE (exclusive) and AFTER (inclusive) that
+          # touched the toolchain, oldest first. On the initial push to a
+          # fresh branch, BEFORE is the null SHA.
+          if [[ "$BEFORE" == "0000000000000000000000000000000000000000" ]]; then
+            commits=$(git log --reverse --pretty=format:"%H" "$AFTER" -- "$TOOLCHAIN_FILE")
+          else
+            commits=$(git log --reverse --pretty=format:"%H" "$BEFORE..$AFTER" -- "$TOOLCHAIN_FILE")
+          fi
+
+          for commit in $commits; do
+            toolchain=$(git show "$commit:$TOOLCHAIN_FILE") || {
+              echo "WARNING: could not read $TOOLCHAIN_FILE at $commit"
+              continue
+            }
+            if [[ "$toolchain" =~ ^leanprover/lean4:(.*)$ ]]; then
+              tag="${BASH_REMATCH[1]}"
+            else
+              echo "INFO: not on leanprover/lean4 at $commit ($toolchain); skipping"
+              continue
+            fi
+
+            if git ls-remote --tags --exit-code origin "$tag" >/dev/null; then
+              echo "INFO: tag $tag already exists; skipping commit $commit"
+              continue
+            fi
+
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag -a "$tag" -m "Lean toolchain $tag" "$commit"
+            git push origin "$tag"
+            gh release create "$tag" \
+              --title "$tag" \
+              --notes "Automated release for Lean version $tag"
+            echo "Tagged $commit as $tag and created release"
+          done
