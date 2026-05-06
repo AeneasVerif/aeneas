@@ -529,8 +529,10 @@ and aloan_content_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
           (* Is this unreachable? *)
           [%craise] ctx.span "Unimplemented")
   | AIgnoredSharedLoan _ ->
-      (* This case happens with nested borrows *)
-      [%craise] ctx.span "Unimplemented"
+      (* An ignored shared loan: this doesn't consume anything. Note that
+         there might be mutable borrows inside the shared value, but those
+         are frozen (immutable) under the shared context. *)
+      None
 
 and aborrow_content_to_consumed_aux ~(filter : bool) (ctx : bs_ctx)
     (ectx : C.eval_ctx) (abs_regions : T.RegionId.Set.t) (abs_level : abs_level)

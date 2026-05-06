@@ -600,27 +600,111 @@ bounds (array/vector index proofs). Guidelines:
   1. `agrind` — first choice; handles most arithmetic goals
   2. `grind` — fallback when `agrind` doesn't close the goal
   3. `scalar_tac` — last resort for simple linear arithmetic on scalars
-- **Always override `get_elem_tactic` with `agrind`** so that `a[i]` auto-discharges
-  bounds without explicit `(by ...)` blocks:
+- **Always override `get_elem_tactic` with `grind`** so that `a[i]` auto-discharges
+  bounds without explicit `(by ...)` blocks. Use `grind` (not `agrind`) because
+  `grind` picks up `grind_pattern` lemmas which are needed for combining range
+  memberships:
   ```lean
   scoped macro_rules
-  | `(tactic| get_elem_tactic) => `(tactic| agrind)
+  | `(tactic| get_elem_tactic) => `(tactic| grind)
   ```
   The override must be either **`scoped`** (in a namespace — open the scope where
   needed) or **`local`**. With this override, `a[i]` notation works without explicit
   bound proofs everywhere in scope. This is important not just for convenience but
   for performance: `(by ...)` blocks in type signatures cause severe kernel
   type-checking slowness (see the `aeneas-lean-core` skill file for details).
+
+- **Eliminate explicit `by ...` bounds proofs from algorithm bodies.** Algorithm
+  bodies should read like the RFC pseudocode — explicit `have hBound : i < 256 :=
+  by agrind` lines are proof noise that clutters the specification. The goal is to
+  have `grind` (via `get_elem_tactic`) discharge ALL bounds automatically, with
+  ZERO explicit proof lines in the algorithm body.
+
+  To achieve this, introduce **auxiliary lemmas** in a utilities file (e.g.,
+  `Utils.lean`) **inside a dedicated namespace** (e.g., `namespace MLKEM.Bounds`
+  or `namespace FrodoKEM.Bounds`). These lemmas can be very ad-hoc — specific
+  to the loop structures and index patterns of one algorithm — so they MUST be
+  scoped to avoid polluting other proof contexts. Use **`scoped`** on all
+  attributes — a bare `@[simp]` or `@[grind =]` is global even inside a
+  namespace; only `@[scoped simp]`, `@[scoped grind =]`, etc. make them active
+  only when the namespace is opened. The spec file then opens the namespace at
+  the top:
+  ```lean
+  -- In Utils.lean (or a dedicated BoundsLemmas.lean)
+  namespace MLKEM.Bounds
+
+  open Aeneas in
+  @[scoped simp, scoped scalar_tac_simps, scoped grind =, scoped agrind =]
+  theorem mem_srrange_step_one ... := by ...
+
+  scoped grind_pattern div_range_in_bounds_mem => ...
+
+  end MLKEM.Bounds
+
+  -- In MLKEM.lean
+  open MLKEM.Bounds
+  ```
+  This way the lemmas and `grind_pattern`s are active only where needed —
+  `open MLKEM.Bounds` activates them, closing the scope deactivates them.
+
+  **Categories of auxiliary lemmas to introduce:**
+
+  1. **Range membership equivalences** of the form `i ∈ SRRange(...) ↔ ...`.
+     Register these with **scoped** attributes so that `agrind` automatically
+     unfolds range membership into `i < stop` bounds:
+     ```lean
+     namespace MLKEM.Bounds
+     open Aeneas in
+     @[scoped simp, scoped scalar_tac_simps, scoped grind =, scoped agrind =]
+     theorem mem_srrange_step_one {i start stop : Nat} {h : 0 < 1} :
+         i ∈ ({ start, stop, step := 1, step_pos := h } : SRRange) ↔
+         start ≤ i ∧ i < stop := by ...
+     end MLKEM.Bounds
+     ```
+     With this lemma active (via `open MLKEM.Bounds`),
+     `for h : i in [0:256] do ... a[i]` will auto-discharge: `agrind` sees
+     `h : i ∈ SRRange(...)`, rewrites via `mem_srrange_step_one` to get
+     `i < 256`, and closes the goal.
+
+  2. **Implication lemmas with `scoped grind_pattern`** for facts that are not
+     equivalences (e.g., combining two range memberships to derive a bound):
+     ```lean
+     theorem div_range_in_bounds_mem (h0 : len ∈ DivRange(...))
+         (h1 : start ∈ SRRange(...)) : start + 2 * len ≤ 256 := by ...
+
+     scoped grind_pattern div_range_in_bounds_mem =>
+       len ∈ DivRange(...), start ∈ SRRange(...)
+     ```
+     The `grind_pattern` tells `grind` to apply this lemma whenever
+     both membership hypotheses are in context.
+
+  3. **Nonlinear index helpers** for patterns like `i * d + j < n * d` that
+     `agrind` can't solve (nonlinear multiplication). Register as **backward
+     chaining** lemmas with `@[scoped grind ←]` — grind will apply these
+     when the *goal* matches, rather than when hypotheses match. This is
+     critical for nonlinear lemmas: a forward pattern like `i < n, j < d`
+     would fire on every pair of inequalities and quickly saturate the
+     context, while backward chaining only triggers when the goal has the
+     specific shape `_ * _ + _ < _ * _`:
+     ```lean
+     @[scoped grind ←]
+     theorem idx_mul_add_lt (i d j n : Nat) (hi : i < n) (hj : j < d) :
+         i * d + j < n * d := by ...
+     ```
+
+  **The test:** an algorithm body should have NO `have ... := by ...` lines for
+  bounds. If `agrind` can't discharge a bound automatically, the fix is to add
+  or improve an auxiliary lemma in the bounds namespace — NOT to add an inline
+  proof in the algorithm body.
+
 - For parameter-dependent bounds (e.g., array sizes that depend on the parameter
   set), see the "Avoid early case splits on parameters" section in
   the `aeneas-lean-core` skill file — prefer `attribute [local agrind]` or
   local auxiliary lemmas over top-level `cases p`.
-- Keep proofs minimal — they should not distract from the specification. If a
-  bound proof requires more than 2-3 lines, extract it as an auxiliary lemma.
 - **⛔ NEVER use `cases p <;> simp_all [...] <;> tactic` for `getElem` bounds** in
   definition or theorem type signatures — this produces massive proof terms that cause
   kernel slowness (see the `aeneas-lean-core` skill file for the full rationale and
-  accepted tactic list). If `agrind` via `get_elem_tactic` cannot discharge a bound,
+  accepted tactic list). If `grind` via `get_elem_tactic` cannot discharge a bound,
   extract it as a standalone lemma registered with `@[agrind =]`.
 
 ### Interactive development
@@ -783,7 +867,29 @@ This agent checks everything EXCEPT syntactic fidelity (that's Agent A's job):
      loop variables? If both yes, flag: should use `Vector.replicate` + `.set`.
    The correct fix for all of these is bounds-checked access with `by sorry`.
 10. **File builds cleanly**: `lake build <module>` — 0 errors.
-11. **Conversion style** — flag any of:
+11. **No explicit bound proofs in algorithm bodies** — flag ANY `have ... := by ...`
+    line inside a `def` body that proves an index bound (e.g.,
+    `have hi : i < 256 := by agrind`, `have hidx : i * d + j < ... := by ...`).
+    These are proof noise that clutters the specification. The fix is NEVER to
+    add inline proofs — instead, add or improve auxiliary lemmas in a dedicated
+    bounds namespace (e.g., `MLKEM.Bounds`) with **scoped** attributes
+    (`scoped attribute [simp, grind =, agrind =]` or `scoped grind_pattern`)
+    so that `grind` (via `get_elem_tactic`) discharges bounds automatically
+    when the namespace is opened. Count and report the total number of explicit
+    bound `have` lines — the target is ZERO.
+    Also flag any non-scoped `@[simp]`, `@[grind =]`, or `@[agrind =]` on
+    ad-hoc bounds lemmas — these pollute the global context. All such attributes
+    on algorithm-specific bounds lemmas must be `scoped`.
+    Note: `have` lines that are NOT bound proofs (e.g., `have := p.dᵤ_lt`) are
+    fine — only flag arithmetic bound obligations like `i < n`, `i + j < n`,
+    `i / k < n`, `i % k < n`, `i * d + j < n * d`.
+12. **Zero-initialization noise** — flag any `Vector.replicate ... (Vector.replicate ... 0)`
+   (nested replicate) or any `Vector.replicate n 0` that appears in more than one
+   function. These should use `zero` helpers on type abbreviations (e.g.,
+   `Poly.zero`, `PolyVec.zero`). In particular, a triple-nested replicate like
+   `Vector.replicate k (Vector.replicate k (Vector.replicate n 0))` is a strong
+   signal that `Poly.zero` and `PolyVec.zero` (or a matrix zero) are missing.
+12. **Conversion style** — flag any of:
    - Multiple `.toByteArray` calls in a single expression feeding into `++`
      (conversions should be consolidated — one conversion at the boundary)
    - `for` loops with mutable `ByteArray` accumulators that only concatenate

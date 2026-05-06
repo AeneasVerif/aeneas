@@ -1,8 +1,6 @@
 include Charon.PrintUtils
-include Charon.PrintTypes
-include Charon.PrintLlbcAst
-open Charon.PrintTypes
-open Charon.PrintExpressions
+include Charon.Print
+include Charon.Print.Llbc
 open Types
 open Values
 open ValuesUtils
@@ -123,8 +121,6 @@ let bool_to_string (b : bool) : string = if b then "true" else "false"
 
 (** Pretty-printing for values *)
 module Values = struct
-  include Charon.PrintValues
-
   let symbolic_value_id_to_pretty_string (id : SymbolicValueId.id) : string =
     "s@" ^ SymbolicValueId.to_string id
 

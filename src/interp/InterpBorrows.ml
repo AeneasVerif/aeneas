@@ -1786,6 +1786,66 @@ let replace_reserved_borrow_with_mut_borrow (span : Meta.span) (l : BorrowId.id)
         "Can't promote a shared borrow to a mutable borrow if the borrow is \
          inside a region abstraction"
 
+(** Helper: check if a loan_id appears anywhere inside a value (traverses all
+    nested structures including shared loans). *)
+let loan_id_in_value (target : BorrowId.id) (v : tvalue) : bool =
+  try
+    (object
+       inherit [_] iter_tvalue as super
+
+       method! visit_loan_content env lc =
+         (match lc with
+         | VSharedLoan (lid, _) when lid = target -> raise Found
+         | VMutLoan lid when lid = target -> raise Found
+         | _ -> ());
+         super#visit_loan_content env lc
+    end)
+      #visit_tvalue
+      () v;
+    false
+  with Found -> true
+
+(** Find the outermost shared loan in the environment that contains the given
+    loan id in its value. This is used when {!promote_reserved_mut_borrow} can't
+    find a loan because it's nested inside an outer shared loan (which can
+    happen when a two-phase borrow is created on a struct field, and then shared
+    borrows are taken on the whole struct for argument evaluation).
+
+    Traverses the environment entering mut borrows but NOT entering shared loans
+    (same exploration as the narrow [ek] in {!promote_reserved_mut_borrow}).
+    When a shared loan is encountered, checks if its value contains the target
+    loan. Returns the id of the first such outer shared loan. *)
+let find_outer_shared_loan_containing_loan (span : Meta.span) (l : BorrowId.id)
+    (ctx : eval_ctx) : loan_id =
+  try
+    (object
+       inherit [_] iter_eval_ctx as super
+
+       method! visit_borrow_content env bc =
+         match bc with
+         | VMutBorrow (_, mv) -> super#visit_tvalue env mv
+         | VSharedBorrow _ | VReservedMutBorrow _ -> ()
+
+       method! visit_loan_content _env lc =
+         match lc with
+         | VSharedLoan (lid, sv) ->
+             (* Don't enter this shared loan for the outer traversal,
+                but check if the target loan is somewhere inside *)
+             if loan_id_in_value l sv then raise (FoundLoanId lid)
+         | VMutLoan _ -> ()
+
+       method! visit_EAbs _ _ =
+         (* We shouldn't be able to create reserved borrows pointing inside
+            region abstractions *)
+         ()
+    end)
+      #visit_env
+      () ctx.env;
+    [%craise] span
+      ("Could not find an outer shared loan containing loan "
+     ^ BorrowId.to_string l)
+  with FoundLoanId lid -> lid
+
 (** Promote a reserved mut borrow to a mut borrow. *)
 let rec promote_reserved_mut_borrow (config : config) (span : Meta.span)
     (l : BorrowId.id) (rid : SharedBorrowId.id) : cm_fun =
@@ -1794,9 +1854,28 @@ let rec promote_reserved_mut_borrow (config : config) (span : Meta.span)
   let ek =
     { enter_shared_loans = false; enter_mut_borrows = true; enter_abs = false }
   in
-  match ctx_lookup_loan span ek l ctx with
-  | _, Concrete (VMutLoan _) -> [%craise] span "Unreachable"
-  | _, Concrete (VSharedLoan (_, sv)) -> (
+  match ctx_lookup_loan_opt span ek l ctx with
+  | None ->
+      (* The loan was not found with the narrow exploration kind. This can
+         happen if the loan is inside an outer shared loan that we can't enter.
+         For instance, when a two-phase borrow is taken on a struct field and
+         then shared borrows are taken on the whole struct (e.g., for argument
+         evaluation), the target loan ends up nested inside the outer shared
+         loan.
+
+         Strategy: find and end the outer shared loan, then retry. *)
+      [%ltrace
+        "promote_reserved_mut_borrow: loan " ^ BorrowId.to_string l
+        ^ " not found (likely behind a shared loan), looking for outer shared \
+           loan"];
+      let outer_lid = find_outer_shared_loan_containing_loan span l ctx in
+      [%ltrace
+        "promote_reserved_mut_borrow: ending outer shared loan "
+        ^ BorrowId.to_string outer_lid];
+      let ctx, cc = end_loan config span outer_lid ctx in
+      comp cc (promote_reserved_mut_borrow config span l rid ctx)
+  | Some (_, Concrete (VMutLoan _)) -> [%craise] span "Unreachable"
+  | Some (_, Concrete (VSharedLoan (_, sv))) -> (
       (* If there are loans inside the value, end them. Note that there can't be
          reserved borrows inside the value.
          If we perform an update, do a recursive call to lookup the updated value *)
@@ -1840,7 +1919,7 @@ let rec promote_reserved_mut_borrow (config : config) (span : Meta.span)
           let ctx = replace_reserved_borrow_with_mut_borrow span l rid v ctx in
           (* Return *)
           (ctx, cc))
-  | _, Abstract _ ->
+  | Some (_, Abstract _) ->
       (* I don't think it is possible to have two-phase borrows involving borrows
        * returned by abstractions. I'm not sure how we could handle that anyway. *)
       [%craise] span

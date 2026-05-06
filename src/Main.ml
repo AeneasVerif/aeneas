@@ -552,8 +552,8 @@ let () =
       (* Logging *)
       log#linfo (lazy ("Imported: " ^ filename));
       if !print_llbc then
-        log#linfo (lazy ("\n" ^ Print.Crate.crate_to_string m ^ "\n"))
-      else log#ldebug (lazy ("\n" ^ Print.Crate.crate_to_string m ^ "\n"));
+        log#linfo (lazy ("\n" ^ Print.crate_to_string m ^ "\n"))
+      else log#ldebug (lazy ("\n" ^ Print.crate_to_string m ^ "\n"));
 
       (* Check that Charon was called with the `--preset=aeneas` option *)
       check_no_doc
@@ -641,7 +641,7 @@ let () =
             (LlbcAst.TraitImplId.Map.values trait_impls)
         in
         (* Print *)
-        let fmt_env = Print.Crate.crate_to_fmt_env m in
+        let fmt_env = Print.crate_to_fmt_env m in
         let type_decls =
           List.map
             (fun (d : Types.type_decl) ->
@@ -666,7 +666,7 @@ let () =
                    index is sometimes out of bounds).
                    See: https://github.com/AeneasVerif/charon/issues/482
                 *)
-                try Print.Ast.fun_decl_to_string fmt_env "" "  " d
+                try Print.fun_decl_to_string fmt_env "" "  " d
                 with _ -> "UNKNOWN"
               in
               "Fun decl (pattern: [" ^ pattern ^ "]]):\n" ^ d)
@@ -680,7 +680,7 @@ let () =
                   (Some d.item_meta.span) m d.item_meta.name
               in
               "Global decl (pattern: [" ^ pattern ^ "]]):\n"
-              ^ Print.Ast.global_decl_to_string fmt_env "" "  " d)
+              ^ Print.global_decl_to_string fmt_env "" "  " d)
             (LlbcAst.GlobalDeclId.Map.values global_decls)
         in
         let trait_decls =
@@ -691,7 +691,7 @@ let () =
                   (Some d.item_meta.span) m d.item_meta.name
               in
               "Trait decl (pattern: [" ^ pattern ^ "]]):\n"
-              ^ Print.Ast.trait_decl_to_string fmt_env "" "  " d)
+              ^ Print.trait_decl_to_string fmt_env "" "  " d)
             (LlbcAst.TraitDeclId.Map.values trait_decls)
         in
         let trait_impls =
@@ -702,7 +702,7 @@ let () =
                   (Some d.item_meta.span) m trait_decl d
               in
               "Trait impl (pattern: [" ^ pattern ^ "]]):\n"
-              ^ Print.Ast.trait_impl_to_string fmt_env "" "  " d)
+              ^ Print.trait_impl_to_string fmt_env "" "  " d)
             trait_impls
         in
 

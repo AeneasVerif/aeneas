@@ -440,6 +440,32 @@ let apply_passes_to_pure_fun_translations (crate : LlbcAst.crate)
         ("simplify_let_then_ok (final pass)", Unix.gettimeofday () -. t0)
         :: !post_timings;
 
+    (* Introduce [massert] again: the loop transformations above converted
+       [LoopResult.Fail] to [Result.Fail], exposing new
+       [if cond then ... else fail panic] patterns that [intro_massert]
+       can now simplify. *)
+    let t0 = if collect_detailed then Unix.gettimeofday () else 0.0 in
+    let intro_massert f =
+      if !Config.intro_massert then (
+        [%ltrace
+          "About to apply: 'intro_massert (post-loop pass)':\n"
+          ^ fun_decl_to_string ctx f];
+        refresh_fvar_id_generator ();
+        let f = intro_massert ctx f in
+        [%ltrace
+          "After applying 'intro_massert (post-loop pass)':\n"
+          ^ fun_decl_to_string ctx f];
+        f)
+      else f
+    in
+    let f = intro_massert f in
+    let loops = List.map intro_massert loops in
+    let bodies = List.map intro_massert bodies in
+    if collect_detailed then
+      post_timings :=
+        ("intro_massert (post-loop pass)", Unix.gettimeofday () -. t0)
+        :: !post_timings;
+
     [%ltrace
       let funs = (f :: loops) @ bodies in
       "After decomposing loops:\n\n"
