@@ -151,6 +151,7 @@
           cp ${charon-portable}/bin/charon ${charon-portable}/bin/charon-driver .
           cp ${aeneas}/bin/aeneas .
           cp -r ${./backends} backends
+          cp ${inputs.charon}/rust-toolchain .
 
           ${pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
             # Make the binary writable so macdylibbundler can modify its load paths

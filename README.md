@@ -17,7 +17,12 @@ internal language to a pure lamdba calculus.  It is intended to be used in combi
 representation called LLBC. It currently has backends for [F\*](https://www.fstar-lang.org),
 [Coq](https://coq.inria.fr/), [HOL4](https://hol-theorem-prover.org/) and [LEAN](https://leanprover.github.io/).
 
-If you want to contribute or ask questions, we strongly encourage you to join the [Zulip](https://aeneas-verif.zulipchat.com/).
+If you want to contribute or ask questions, we strongly encourage you to join the
+[Zulip](https://aeneas-verif.zulipchat.com/). In particular, we welcome external
+contributions but ask contributors to engage with us before making deep modifications of
+the code or implementing non trivial features, as these require in-depth design
+discussions and careful reviews. If you want to contribute a new feature you should either
+discuss it on the Zulip or open the corresponding issue on github.
 
 ## Project Structure
 
