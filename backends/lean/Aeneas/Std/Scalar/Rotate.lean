@@ -27,17 +27,17 @@ iscalar @[step_pure_def]
 def core.num.«%S».rotate_left : «%S» → U32 → «%S» := @IScalar.rotate_left .«%S»
 
 /-!
-## Rotate Left
+## Rotate Right
 -/
 def UScalar.rotate_right {ty} (x : UScalar ty) (shift : U32) : UScalar ty :=
-  ⟨ x.bv.rotateLeft shift.val ⟩
+  ⟨ x.bv.rotateRight shift.val ⟩
 
 /- [core::num::{u8}::rotate_right] -/
 uscalar @[step_pure_def]
 def core.num.«%S».rotate_right : «%S» → U32 → «%S» := @UScalar.rotate_right .«%S»
 
 def IScalar.rotate_right {ty} (x : IScalar ty) (shift : U32) : IScalar ty :=
-  ⟨ x.bv.rotateLeft shift.val ⟩
+  ⟨ x.bv.rotateRight shift.val ⟩
 
 /- [core::num::{u8}::rotate_right] -/
 iscalar @[step_pure_def]
