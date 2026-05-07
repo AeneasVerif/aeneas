@@ -7,6 +7,128 @@ import Aeneas.Std.Primitives
 import AeneasMeta.Simp.Simp
 import AeneasMeta.Utils
 
+/-!
+# The `#decompose` command
+
+`#decompose` extracts sub-expressions from a function body into auxiliary definitions,
+producing a correctness theorem that rewrites the original function in terms of the
+new helpers. This is useful for breaking large monadic functions into smaller pieces
+that can be verified independently.
+
+## Basic usage
+
+```
+#decompose originalFn eqThm
+  pattern₁ => auxName₁
+  pattern₂ => auxName₂
+  ...
+```
+
+This creates auxiliary definitions `auxName₁`, `auxName₂`, ... and a theorem `eqThm`
+proving `originalFn args = <body rewritten using the auxiliaries>`. The clauses are
+applied sequentially: each clause sees the body as modified by previous clauses.
+
+## Patterns
+
+### `letRange start count`
+Extract `count` consecutive let-bindings starting at index `start` (0-indexed).
+Works for both pure (`let x := ...`) and monadic (`let x ← ...`) bindings.
+When the continuation needs multiple variables from the range, the auxiliary
+function returns a tuple.
+
+```
+def f (x : U32) : Result U32 := do
+  let a ← x + 1#u32       -- binding 0
+  let b ← a + 1#u32       -- binding 1
+  let c ← b + 1#u32       -- binding 2
+  c + 10#u32               -- terminal (position 3)
+
+#decompose f f_eq
+  letRange 0 3 => f_prefix  -- extracts bindings 0,1,2
+-- f_prefix : U32 → Result U32
+-- f_eq : f x = f_prefix x >>= fun c => c + 10#u32
+```
+
+### `full`
+Extract the entire expression at the current position as a new definition.
+
+```
+#decompose f f_eq
+  full => f_body
+-- f_body x = <entire body of f>
+-- f_eq : f x = f_body x
+```
+
+### `branch idx inner`
+Navigate into branch `idx` of an `if-then-else`, `dite`, or `match`, then apply `inner`.
+Branch 0 is `then`/first alternative, branch 1 is `else`/second alternative, etc.
+For matches, automatically opens the pattern-variable lambdas.
+
+```
+def g (b : Bool) (x : U32) : Result U32 := do
+  if b then
+    let a ← x + 1#u32
+    a + 2#u32
+  else
+    x + 10#u32
+
+#decompose g g_eq
+  branch 0 (letRange 0 2) => g_then  -- extract from the then-branch
+```
+
+### `letAt idx inner`
+Navigate to the value of the `idx`-th binding, then apply `inner` to it.
+
+### `lam n inner`
+Open `n` lambda binders, then apply `inner` to the body.
+
+### `appFun inner` / `argArg idx inner`
+Navigate into the function or the `idx`-th argument of an application.
+
+## Name reuse
+
+When the same name appears in multiple clauses, `#decompose` checks whether the
+new extraction is definitionally equal to the existing definition (at reducible
+transparency). If equal, the existing definition is reused — no new definition
+is created.
+
+This is useful when the same operation appears at multiple positions:
+
+```
+def f (x y : U32) : Result U32 := do
+  let x1 ← x + 1#u32
+  let x2 ← x1 + 1#u32
+  let x3 ← x2 + 1#u32
+  let y1 ← y + 1#u32
+  let y2 ← y1 + 1#u32
+  let y3 ← y2 + 1#u32
+  x3 + y3
+
+#decompose f f_eq
+  letRange 0 3 => add3    -- creates `add3`
+  letRange 1 3 => add3    -- reuses `add3` (same body)
+-- f_eq : f x y = do
+--   let x3 ← add3 x
+--   let y3 ← add3 y
+--   x3 + y3
+```
+
+If the bodies differ, an error is raised with a detailed message showing both bodies.
+
+A warning is emitted when two clauses produce identical definitions under different
+names, suggesting to reuse the same name instead.
+
+## Using existing definitions
+
+Name reuse also works with definitions that already exist in the environment (e.g.,
+from a previous `#decompose` call or manually written). If the name resolves to an
+existing definition whose value matches the extraction, it is reused.
+
+## Tracing
+
+Enable `set_option trace.Decompose true` to see a summary of created definitions.
+-/
+
 namespace Aeneas.Command.Decompose
 
 open Lean Elab Term Meta Command
