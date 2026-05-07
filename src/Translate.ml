@@ -794,6 +794,83 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     let global = GlobalDeclId.Map.find_opt id ctx.trans_globals in
     Extract.extract_global_decl ctx fmt global body config.interface
 
+(** Build a [Manifest.entry] for the [Pure.fun_decl] that has just been emitted
+    to the current Lean file, and prepend it to the manifest accumulator carried
+    by [ctx]. The entry is built using only data already present in [def] and
+    the surrounding context — we do not re-traverse the body. No-op when
+    [-emit-manifest] is off. *)
+let record_manifest_entry (ctx : gen_ctx) (def : Pure.fun_decl) : unit =
+  if not !Config.emit_manifest then ()
+  else
+    let span = def.item_meta.span in
+    let qualify (basename : string) : string =
+      let ns = !(ctx.current_lean_namespace) in
+      if ns = "" then basename else ns ^ "." ^ basename
+    in
+    let lean_basename =
+      ExtractBase.ctx_get_local_function span def.def_id def.loop_id ctx
+    in
+    let lean_id = qualify lean_basename in
+    let parent_lean_id =
+      match def.loop_id with
+      | None -> None
+      | Some _ ->
+          let parent_basename =
+            ExtractBase.ctx_get_local_function span def.def_id None ctx
+          in
+          Some (qualify parent_basename)
+    in
+    let rust_pattern =
+      try
+        TranslateCore.name_to_pattern_string (Some span) ctx.trans_ctx
+          def.item_meta.name
+      with CFailure _ -> ""
+    in
+    let loop_info : Manifest.loop_info option =
+      match def.loop_id with
+      | None -> None
+      | Some (lid, is_body) ->
+          Some
+            {
+              loop_id_idx = Pure.LoopId.to_int lid;
+              loop_pos = def.loop_pos;
+              is_body;
+            }
+    in
+    let num_loops =
+      match def.loop_id with
+      | None when def.num_loops > 0 -> Some def.num_loops
+      | _ -> None
+    in
+    let lookup_trait_pattern (id : Pure.trait_decl_id) : string =
+      match Pure.TraitDeclId.Map.find_opt id ctx.trans_trait_decls with
+      | None -> ""
+      | Some d -> (
+          try
+            TranslateCore.name_to_pattern_string (Some d.item_meta.span)
+              ctx.trans_ctx d.item_meta.name
+          with CFailure _ -> "")
+    in
+    let entry : Manifest.entry =
+      {
+        lean_id;
+        rust_pattern;
+        is_local = def.item_meta.is_local;
+        is_public = def.item_meta.attr_info.public;
+        kind = Manifest.kind_of_def def;
+        is_global_initializer = def.is_global_decl_body;
+        loop_info;
+        parent_lean_id;
+        num_loops;
+        lean_file = !(ctx.current_lean_file);
+        source = Manifest.span_to_source span;
+        attrs = Manifest.attr_info_to_strings def.item_meta.attr_info;
+        lang_item = def.item_meta.lang_item;
+        trait_info = Manifest.trait_info_of_src lookup_trait_pattern def.src;
+      }
+    in
+    ctx.manifest_entries := entry :: !(ctx.manifest_entries)
+
 (** Utility.
 
     Export a group of functions, used by {!export_functions_group}.
@@ -873,7 +950,8 @@ let export_functions_group_scc (fmt : Format.formatter) (config : gen_config)
         then
           Some
             (fun () ->
-              Extract.extract_fun_decl ctx fmt kind has_decr_clause def)
+              Extract.extract_fun_decl ctx fmt kind has_decr_clause def;
+              record_manifest_entry ctx def)
         else None)
       decls
   in
@@ -1218,6 +1296,27 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
   let out = open_out fi.filename in
   let fmt = Format.formatter_of_out_channel out in
 
+  (* Record the file we're about to write into and the namespace it places its
+     declarations under, so that any [Pure.fun_decl] emitted while we walk
+     [extract_definitions] can be recorded in the manifest accumulator with
+     the right attribution. We use a path relative to [-dest] so the manifest
+     can be relocated alongside the generated tree. Skipped entirely when
+     [-emit-manifest] is off. *)
+  if !Config.emit_manifest then begin
+    let dest_dir = !(ctx.manifest_dest_dir) in
+    let rel_lean_file =
+      let dest = Filename.concat dest_dir "" in
+      let plen = String.length dest in
+      let fname = fi.filename in
+      if String.length fname >= plen && String.sub fname 0 plen = dest then
+        String.sub fname plen (String.length fname - plen)
+      else Filename.basename fname
+    in
+    ctx.current_lean_file := rel_lean_file;
+    ctx.current_lean_namespace := fi.namespace;
+    ctx.manifest_lean_files := rel_lean_file :: !(ctx.manifest_lean_files)
+  end;
+
   (* Print the headers.
    * Note that we don't use the OCaml formatter for purpose: we want to control
    * line insertion (we have to make sure that some instructions like [open MODULE]
@@ -1459,6 +1558,11 @@ let extract_translated_crate (filename : string) (dest_dir : string)
       trait_impls_filter_type_args_map = Pure.TraitImplId.Map.empty;
       trait_impls_filter_trait_clauses_map = Pure.TraitImplId.Map.empty;
       extracted_opaque;
+      manifest_entries = ref [];
+      current_lean_file = ref "";
+      current_lean_namespace = ref "";
+      manifest_lean_files = ref [];
+      manifest_dest_dir = ref dest_dir;
     }
   in
 
@@ -2036,6 +2140,36 @@ let extract_translated_crate (filename : string) (dest_dir : string)
        }
      in
      extract_file gen_config ctx file_info);
+
+  (* Emit the [manifest.json] sidecar listing every Lean function declaration
+     we just wrote, but only when explicitly requested via [-emit-manifest].
+     The file lands next to the backend output, inside [dest_dir]. *)
+  if !Config.emit_manifest then begin
+    let manifest_path = Filename.concat dest_dir "manifest.json" in
+    let aeneas_version =
+      match GitVersion.commit with
+      | Some h -> h
+      | None -> "unknown"
+    in
+    let output_info : Manifest.output_info =
+      {
+        dest_dir;
+        subdir;
+        llbc_file = filename;
+        lean_files = List.rev !(ctx.manifest_lean_files);
+      }
+    in
+    let manifest : Manifest.envelope =
+      {
+        aeneas_version;
+        crate_name = crate.name;
+        output = output_info;
+        functions = List.rev !(ctx.manifest_entries);
+      }
+    in
+    Manifest.write manifest_path manifest;
+    log#linfo (lazy ("Generated: " ^ manifest_path))
+  end;
 
   (* Generate the build file *)
   match Config.backend () with

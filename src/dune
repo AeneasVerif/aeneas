@@ -75,6 +75,7 @@
   LlbcAstUtils
   LlbcOfJson
   Logging
+  Manifest
   Meta
   NameMatcher
   Parallel

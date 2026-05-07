@@ -136,6 +136,11 @@ let () =
       ( "-lean-default-lakefile",
         Arg.Clear lean_gen_lakefile,
         " Generate a default lakefile.lean (Lean only)" );
+      ( "-emit-manifest",
+        Arg.Set emit_manifest,
+        " Emit a manifest.json file alongside the generated backend files, \
+         listing every translated function with metadata (Rust pattern, source \
+         span, Lean identifier, etc.)" );
       ("-print-llbc", Arg.Set print_llbc, " Print the imported LLBC");
       ( "-abort-on-error",
         Arg.Set fail_hard,
