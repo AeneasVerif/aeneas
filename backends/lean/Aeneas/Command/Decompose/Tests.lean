@@ -2627,3 +2627,93 @@ warning: #decompose: 'test54_add3b' has the same definition as 'test54_add3a' (c
 #decompose test54 test54_eq
   letRange 0 3 => test54_add3a
   letRange 1 3 => test54_add3b
+
+
+-- ============================================================================
+-- Test 55: Performance — 100 let bindings, 25 decompositions reusing one name
+-- ============================================================================
+
+def test55 (v1 : U32) (v2 : U32) (v3 : U32) (v4 : U32) (v5 : U32) (v6 : U32) (v7 : U32) (v8 : U32) (v9 : U32) (v10 : U32) (v11 : U32) (v12 : U32) (v13 : U32) (v14 : U32) (v15 : U32) (v16 : U32) (v17 : U32) (v18 : U32) (v19 : U32) (v20 : U32) (v21 : U32) (v22 : U32) (v23 : U32) (v24 : U32) (v25 : U32) : Result U32 := do
+  let v1_1 ← v1 + 1#u32; let v1_2 ← v1_1 + 1#u32; let v1_3 ← v1_2 + 1#u32; let v1_4 ← v1_3 + 1#u32
+  let v2_1 ← v2 + 1#u32; let v2_2 ← v2_1 + 1#u32; let v2_3 ← v2_2 + 1#u32; let v2_4 ← v2_3 + 1#u32
+  let v3_1 ← v3 + 1#u32; let v3_2 ← v3_1 + 1#u32; let v3_3 ← v3_2 + 1#u32; let v3_4 ← v3_3 + 1#u32
+  let v4_1 ← v4 + 1#u32; let v4_2 ← v4_1 + 1#u32; let v4_3 ← v4_2 + 1#u32; let v4_4 ← v4_3 + 1#u32
+  let v5_1 ← v5 + 1#u32; let v5_2 ← v5_1 + 1#u32; let v5_3 ← v5_2 + 1#u32; let v5_4 ← v5_3 + 1#u32
+  let v6_1 ← v6 + 1#u32; let v6_2 ← v6_1 + 1#u32; let v6_3 ← v6_2 + 1#u32; let v6_4 ← v6_3 + 1#u32
+  let v7_1 ← v7 + 1#u32; let v7_2 ← v7_1 + 1#u32; let v7_3 ← v7_2 + 1#u32; let v7_4 ← v7_3 + 1#u32
+  let v8_1 ← v8 + 1#u32; let v8_2 ← v8_1 + 1#u32; let v8_3 ← v8_2 + 1#u32; let v8_4 ← v8_3 + 1#u32
+  let v9_1 ← v9 + 1#u32; let v9_2 ← v9_1 + 1#u32; let v9_3 ← v9_2 + 1#u32; let v9_4 ← v9_3 + 1#u32
+  let v10_1 ← v10 + 1#u32; let v10_2 ← v10_1 + 1#u32; let v10_3 ← v10_2 + 1#u32; let v10_4 ← v10_3 + 1#u32
+  let v11_1 ← v11 + 1#u32; let v11_2 ← v11_1 + 1#u32; let v11_3 ← v11_2 + 1#u32; let v11_4 ← v11_3 + 1#u32
+  let v12_1 ← v12 + 1#u32; let v12_2 ← v12_1 + 1#u32; let v12_3 ← v12_2 + 1#u32; let v12_4 ← v12_3 + 1#u32
+  let v13_1 ← v13 + 1#u32; let v13_2 ← v13_1 + 1#u32; let v13_3 ← v13_2 + 1#u32; let v13_4 ← v13_3 + 1#u32
+  let v14_1 ← v14 + 1#u32; let v14_2 ← v14_1 + 1#u32; let v14_3 ← v14_2 + 1#u32; let v14_4 ← v14_3 + 1#u32
+  let v15_1 ← v15 + 1#u32; let v15_2 ← v15_1 + 1#u32; let v15_3 ← v15_2 + 1#u32; let v15_4 ← v15_3 + 1#u32
+  let v16_1 ← v16 + 1#u32; let v16_2 ← v16_1 + 1#u32; let v16_3 ← v16_2 + 1#u32; let v16_4 ← v16_3 + 1#u32
+  let v17_1 ← v17 + 1#u32; let v17_2 ← v17_1 + 1#u32; let v17_3 ← v17_2 + 1#u32; let v17_4 ← v17_3 + 1#u32
+  let v18_1 ← v18 + 1#u32; let v18_2 ← v18_1 + 1#u32; let v18_3 ← v18_2 + 1#u32; let v18_4 ← v18_3 + 1#u32
+  let v19_1 ← v19 + 1#u32; let v19_2 ← v19_1 + 1#u32; let v19_3 ← v19_2 + 1#u32; let v19_4 ← v19_3 + 1#u32
+  let v20_1 ← v20 + 1#u32; let v20_2 ← v20_1 + 1#u32; let v20_3 ← v20_2 + 1#u32; let v20_4 ← v20_3 + 1#u32
+  let v21_1 ← v21 + 1#u32; let v21_2 ← v21_1 + 1#u32; let v21_3 ← v21_2 + 1#u32; let v21_4 ← v21_3 + 1#u32
+  let v22_1 ← v22 + 1#u32; let v22_2 ← v22_1 + 1#u32; let v22_3 ← v22_2 + 1#u32; let v22_4 ← v22_3 + 1#u32
+  let v23_1 ← v23 + 1#u32; let v23_2 ← v23_1 + 1#u32; let v23_3 ← v23_2 + 1#u32; let v23_4 ← v23_3 + 1#u32
+  let v24_1 ← v24 + 1#u32; let v24_2 ← v24_1 + 1#u32; let v24_3 ← v24_2 + 1#u32; let v24_4 ← v24_3 + 1#u32
+  let v25_1 ← v25 + 1#u32; let v25_2 ← v25_1 + 1#u32; let v25_3 ← v25_2 + 1#u32; let v25_4 ← v25_3 + 1#u32
+  let s1 ← v1_4 + v2_4
+  let s2 ← s1 + v3_4
+  let s3 ← s2 + v4_4
+  let s4 ← s3 + v5_4
+  let s5 ← s4 + v6_4
+  let s6 ← s5 + v7_4
+  let s7 ← s6 + v8_4
+  let s8 ← s7 + v9_4
+  let s9 ← s8 + v10_4
+  let s10 ← s9 + v11_4
+  let s11 ← s10 + v12_4
+  let s12 ← s11 + v13_4
+  let s13 ← s12 + v14_4
+  let s14 ← s13 + v15_4
+  let s15 ← s14 + v16_4
+  let s16 ← s15 + v17_4
+  let s17 ← s16 + v18_4
+  let s18 ← s17 + v19_4
+  let s19 ← s18 + v20_4
+  let s20 ← s19 + v21_4
+  let s21 ← s20 + v22_4
+  let s22 ← s21 + v23_4
+  let s23 ← s22 + v24_4
+  let s24 ← s23 + v25_4
+  pure s24
+
+#decompose test55 test55_eq
+  letRange 0 4 => test55_add4
+  letRange 1 4 => test55_add4
+  letRange 2 4 => test55_add4
+  letRange 3 4 => test55_add4
+  letRange 4 4 => test55_add4
+  letRange 5 4 => test55_add4
+  letRange 6 4 => test55_add4
+  letRange 7 4 => test55_add4
+  letRange 8 4 => test55_add4
+  letRange 9 4 => test55_add4
+  letRange 10 4 => test55_add4
+  letRange 11 4 => test55_add4
+  letRange 12 4 => test55_add4
+  letRange 13 4 => test55_add4
+  letRange 14 4 => test55_add4
+  letRange 15 4 => test55_add4
+  letRange 16 4 => test55_add4
+  letRange 17 4 => test55_add4
+  letRange 18 4 => test55_add4
+  letRange 19 4 => test55_add4
+  letRange 20 4 => test55_add4
+  letRange 21 4 => test55_add4
+  letRange 22 4 => test55_add4
+  letRange 23 4 => test55_add4
+  letRange 24 4 => test55_add4
+
+/--
+info: 'test55_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms test55_eq

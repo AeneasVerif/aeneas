@@ -901,19 +901,22 @@ partial def applyClause (body : Expr) (pat : DecomposePattern) (newName : Name)
 private def simpOnlyTarget (mvarId : MVarId) (declsToUnfold : Array Name)
     (addSimpThms : Array Name) : MetaM (Option MVarId) := do
   let args : SimpArgs := { declsToUnfold, addSimpThms }
-  let (ctx, simprocs) ← mkSimpCtx (simpOnly := true) {} .simp args
-  let (result?, _) ← Meta.simpGoal mvarId ctx (simprocs := simprocs)
-  match result? with
-  | none => return none
-  | some (_, mvarId') => return some mvarId'
+  let (ctx, simprocs) ← mkSimpCtx (simpOnly := true) { singlePass := true, maxSteps := 100000 } .simp args
+  -- Increase maxRecDepth for large decompositions
+  withTheReader Core.Context (fun ctx => { ctx with maxRecDepth := 2048 }) do
+    let (result?, _) ← Meta.simpGoal mvarId ctx (simprocs := simprocs)
+    match result? with
+    | none => return none
+    | some (_, mvarId') => return some mvarId'
 
-/-- Prove a single step: `∀ params, body_before = body_after`.
+/-- Prove the decomposition equality: `∀ params, body_original = body_decomposed`.
+    `defNames` are the names of all auxiliary definitions introduced.
     Strategy 1: `rfl`.
-    Strategy 2: `simp only [newFnName, bind_assoc_eq, pure_bind]`.
-    Strategy 3: `unfold newFnName; simp only [bind_assoc_eq, pure_bind]`
+    Strategy 2: `simp only [defNames..., bind_assoc_eq, pure_bind]`.
+    Strategy 3: `unfold defNames; simp only [bind_assoc_eq, pure_bind]`
                 (for noncomputable defs where simp can't unfold directly).
     Raises an error if all strategies fail. -/
-def proveStep (goalType : Expr) (newFnName : Name) : TermElabM Expr := do
+def proveStep (goalType : Expr) (defNames : Array Name) : TermElabM Expr := do
   let simpThms := #[``Aeneas.Std.bind_assoc_eq, ``LawfulMonad.pure_bind]
   -- Strategy 1: rfl
   if let some proof ← observing? do
@@ -922,26 +925,26 @@ def proveStep (goalType : Expr) (newFnName : Name) : TermElabM Expr := do
     mvarId.refl
     instantiateMVars mvar
   then return proof
-  -- Strategy 2: simp only [newFnName, bind_assoc_eq, pure_bind]
+  -- Strategy 2: simp only [defNames..., bind_assoc_eq, pure_bind]
   if let some proof ← observing? do
     let mvar ← mkFreshExprMVar goalType
     let (_, mvarId) ← mvar.mvarId!.intros
-    if (← simpOnlyTarget mvarId #[newFnName] simpThms).isNone then
+    if (← simpOnlyTarget mvarId defNames simpThms).isNone then
       return ← instantiateMVars mvar
     throwError "simp did not close the goal"
   then return proof
-  -- Strategy 3: unfold newFnName, then simp only [bind_assoc_eq, pure_bind]
+  -- Strategy 3: unfold defNames, then simp only [bind_assoc_eq, pure_bind]
   if let some proof ← observing? do
     let mvar ← mkFreshExprMVar goalType
     let (_, mvarId) ← mvar.mvarId!.intros
-    let mvarId' ← mvarId.deltaTarget (· == newFnName)
+    let mvarId' ← mvarId.deltaTarget (defNames.contains ·)
     match ← simpOnlyTarget mvarId' #[] simpThms with
     | none => return ← instantiateMVars mvar
     | some mvarId'' =>
       mvarId''.refl
       return ← instantiateMVars mvar
   then return proof
-  throwError "#decompose: could not prove decomposition step for '{newFnName}'"
+  throwError "#decompose: could not prove decomposition equality"
 
 -- ============================================================================
 -- Main command elaboration
@@ -982,45 +985,26 @@ def elabDecompose : CommandElab := fun stx => do
 
       -- Open the function parameters
       lambdaTelescope fnValue fun params body => do
-        -- Apply each clause sequentially; prove each step
         -- Apply each clause sequentially (in DecomposeM to track introduced defs)
-        let (allBodies, _) ←
+        -- Collect the names of all definitions introduced
+        let ((currentBody, introNames), _) ←
           (do
             let mut currentBody := body
-            let mut allBodies : Array Expr := #[body]  -- body_0 = original body
+            let mut introNames : Array Name := #[]
             for (pat, newName) in parsedClauses do
               currentBody ← applyClause currentBody pat newName levelParams srcIsNoncomputable
-              allBodies := allBodies.push currentBody
-            return allBodies : DecomposeM _).run {}
-        -- allBodies = [body_0, body_1, ..., body_n] where body_i is after applying clause i
-        let currentBody := allBodies.back!
+              if !introNames.contains newName then
+                introNames := introNames.push newName
+            return (currentBody, introNames) : DecomposeM _).run {}
 
-        -- Prove each step: ∀ params, body_i = body_{i+1}
-        let mut stepProofs : Array Expr := #[]
-        for i in List.range parsedClauses.size do
-          let stepEqType ← mkForallFVars params (← mkEq allBodies[i]! allBodies[i + 1]!)
-          let stepProof ← proveStep stepEqType parsedClauses[i]!.2
-          stepProofs := stepProofs.push stepProof
+        -- Prove the single equality: ∀ params, body = currentBody
+        -- using simp with all introduced definition names + bind_assoc_eq
+        let eqType ← mkForallFVars params (← mkEq body currentBody)
+        let proof ← proveStep eqType introNames
 
-        -- Compose step proofs into the final theorem: ∀ params, f params = currentBody
-        -- Since f params ≡ body (definitionally), and step_0 proves body = body_1,
-        -- we can chain: step_0.trans step_1.trans ... step_n
-        let composedProof ←
-          if stepProofs.isEmpty then
-            -- No clauses: f params = body by rfl
-            let rflProof ← mkAppM ``Eq.refl #[mkAppN (mkConst fnName (levelParams.map Level.param)) params]
-            mkLambdaFVars params rflProof
-          else
-            -- Apply each step proof to params, then chain with Eq.trans
-            let mut proof := mkAppN stepProofs[0]! params
-            for i in List.range (stepProofs.size - 1) do
-              let nextStep := mkAppN stepProofs[i + 1]! params
-              proof ← mkAppM ``Eq.trans #[proof, nextStep]
-            mkLambdaFVars params proof
-
+        -- Build the theorem type: ∀ params, f params = currentBody
         let lhs := mkAppN (mkConst fnName (levelParams.map Level.param)) params
-        let eqType ← mkEq lhs currentBody
-        let eqTypeForall ← mkForallFVars params eqType
+        let thmTypeForall ← mkForallFVars params (← mkEq lhs currentBody)
 
         let eqName ← do
           let ns ← getCurrNamespace
@@ -1031,8 +1015,8 @@ def elabDecompose : CommandElab := fun stx => do
         addDecl (.thmDecl {
           name        := eqName
           levelParams := levelParams
-          type        := eqTypeForall
-          value       := composedProof
+          type        := thmTypeForall
+          value       := proof
         })
 
         trace[Decompose] "#decompose: created {parsedClauses.size} definition(s) and theorem '{eqName}'"
