@@ -124,6 +124,17 @@ Name reuse also works with definitions that already exist in the environment (e.
 from a previous `#decompose` call or manually written). If the name resolves to an
 existing definition whose value matches the extraction, it is reused.
 
+## Options
+
+- `set_option Aeneas.Decompose.checkDuplicate false` — disable the warning when two
+  clauses in the same `#decompose` call produce definitionally equal definitions
+  under different names. Enabled by default.
+
+- `set_option Aeneas.Decompose.useExisting false` — disable reuse of definitions
+  that already exist in the environment. When false, only definitions introduced
+  by the *current* `#decompose` call can be reused (by repeating the same name).
+  Enabled by default.
+
 ## Tracing
 
 Enable `set_option trace.Decompose true` to see a summary of created definitions.
@@ -135,6 +146,21 @@ open Lean Elab Term Meta Command
 open Aeneas.Simp (mkSimpCtx SimpArgs)
 
 initialize registerTraceClass `Decompose
+
+/-- If true (default), warn when two clauses in the same `#decompose` call produce
+    definitionally equal definitions under different names. -/
+register_option Aeneas.Decompose.checkDuplicate : Bool := {
+  defValue := true
+  descr := "Warn when two decomposition clauses produce identical definitions with different names"
+}
+
+/-- If true (default), when a clause uses a name that already exists in the environment,
+    check that the existing definition is definitionally equal and reuse it.
+    If false, only look at definitions introduced by the current `#decompose` call. -/
+register_option Aeneas.Decompose.useExisting : Bool := {
+  defValue := true
+  descr := "Allow reusing definitions that already exist in the environment"
+}
 
 /-- State for the decompose command: tracks definitions introduced so far. -/
 structure DecomposeState where
@@ -458,9 +484,16 @@ private def hasNoncomputableDep (env : Environment) (e : Expr) : Bool :=
     | some (.opaqueInfo _) => true
     | _ => false
 
-/-- Add a definition, or reuse an existing one if a definition with the same name
-    already exists and has a definitionally equal value (checked at reducible
-    transparency to avoid expensive unfolding).
+/-- Add a definition, or reuse an existing one if the name already exists.
+
+    Behavior depends on options:
+    - `Aeneas.Decompose.useExisting` (default: true): when the name already exists
+      in the environment, check definitional equality and reuse if equal.
+      When false, only definitions introduced by the current `#decompose` call
+      can be reused via name matching.
+    - `Aeneas.Decompose.checkDuplicate` (default: true): after adding a new definition,
+      warn if a previously introduced definition (in the same call) has the same body.
+
     Uses `addAndCompile` + realizations when possible (for simp unfolding).
     Falls back to `addDecl` + noncomputable tag when the value depends on
     noncomputable or opaque constants (which cause deferred IR errors).
@@ -470,20 +503,39 @@ private def addDefinition (name : Name) (levelParams : List Name)
     (type value : Expr) (srcIsNoncomputable : Bool)
     (clauseDesc : MessageData := "decomposition clause") : DecomposeM Unit := do
   let env ← getEnv
-  -- Check if a definition with this name already exists
-  if let some existingInfo := env.find? name then
-    match existingInfo with
-    | .defnInfo existingVal =>
-      let isEq ← withReducible do isDefEq value existingVal.value
+  let useExisting := Aeneas.Decompose.useExisting.get (← getOptions)
+  let checkDuplicate := Aeneas.Decompose.checkDuplicate.get (← getOptions)
+  -- Check if a definition with this name was already introduced in this sequence
+  let introduced := (← get).introduced
+  for (prevName, prevValue) in introduced do
+    if prevName == name then
+      let isEq ← withReducible do isDefEq value prevValue
       if isEq then
-        return  -- Reuse existing definition
+        return  -- Reuse definition from this sequence
       else
         throwError "#decompose: cannot apply {clauseDesc}: definition '{name}' already \
-          exists with body{indentExpr existingVal.value}\nbut the new extraction \
+          exists with body{indentExpr prevValue}\nbut the new extraction \
           produced{indentExpr value}\nwhich is not definitionally equal (at reducible transparency)"
-    | _ =>
-      throwError "#decompose: cannot apply {clauseDesc}: '{name}' already exists \
-        but is not a definition"
+  -- Check if the name already exists in the environment
+  if let some existingInfo := env.find? name then
+    if useExisting then
+      match existingInfo with
+      | .defnInfo existingVal =>
+        let isEq ← withReducible do isDefEq value existingVal.value
+        if isEq then
+          -- Track it so we can detect duplicates against it too
+          modify fun s => { s with introduced := s.introduced.push (name, value) }
+          return  -- Reuse existing definition
+        else
+          throwError "#decompose: cannot apply {clauseDesc}: definition '{name}' already \
+            exists with body{indentExpr existingVal.value}\nbut the new extraction \
+            produced{indentExpr value}\nwhich is not definitionally equal (at reducible transparency)"
+      | _ =>
+        throwError "#decompose: cannot apply {clauseDesc}: '{name}' already exists \
+          but is not a definition"
+    else
+      throwError "#decompose: cannot apply {clauseDesc}: '{name}' already exists in the \
+        environment (set `Aeneas.Decompose.useExisting` to true to allow reuse)"
   -- Add new definition
   let decl : DefinitionVal := {
     name, levelParams, type, value,
@@ -498,13 +550,13 @@ private def addDefinition (name : Name) (levelParams : List Name)
     addAndCompile (.defnDecl decl)
     Lean.enableRealizationsForConst name
   -- Check for duplicate values among previously introduced definitions
-  let prev := (← get).introduced
-  for (prevName, prevValue) in prev do
-    let isDup ← withReducible do isDefEq value prevValue
-    if isDup then
-      logWarning m!"#decompose: '{name}' has the same definition as '{prevName}' \
-        (consider reusing the same name)"
-      break
+  if checkDuplicate then
+    for (prevName, prevValue) in introduced do
+      let isDup ← withReducible do isDefEq value prevValue
+      if isDup then
+        logWarning m!"#decompose: '{name}' has the same definition as '{prevName}' \
+          (consider reusing the same name)"
+        break
   modify fun s => { s with introduced := s.introduced.push (name, value) }
 
 -- ============================================================================
