@@ -2717,3 +2717,124 @@ info: 'test55_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test55_eq
+
+-- ============================================================================
+-- Test 56: Performance — if-then-else with 50 let-bindings per branch
+-- ============================================================================
+
+def test56 (b : Bool) (x y : U32) : Result U32 := do
+  if b then
+    let a1 ← x + 1#u32
+    let a2 ← a1 + 1#u32
+    let a3 ← a2 + 1#u32
+    let a4 ← a3 + 1#u32
+    let a5 ← a4 + 1#u32
+    let a6 ← a5 + 1#u32
+    let a7 ← a6 + 1#u32
+    let a8 ← a7 + 1#u32
+    let a9 ← a8 + 1#u32
+    let a10 ← a9 + 1#u32
+    let a11 ← a10 + 1#u32
+    let a12 ← a11 + 1#u32
+    let a13 ← a12 + 1#u32
+    let a14 ← a13 + 1#u32
+    let a15 ← a14 + 1#u32
+    let a16 ← a15 + 1#u32
+    let a17 ← a16 + 1#u32
+    let a18 ← a17 + 1#u32
+    let a19 ← a18 + 1#u32
+    let a20 ← a19 + 1#u32
+    let a21 ← a20 + 1#u32
+    let a22 ← a21 + 1#u32
+    let a23 ← a22 + 1#u32
+    let a24 ← a23 + 1#u32
+    let a25 ← a24 + 1#u32
+    let a26 ← a25 + 1#u32
+    let a27 ← a26 + 1#u32
+    let a28 ← a27 + 1#u32
+    let a29 ← a28 + 1#u32
+    let a30 ← a29 + 1#u32
+    let a31 ← a30 + 1#u32
+    let a32 ← a31 + 1#u32
+    let a33 ← a32 + 1#u32
+    let a34 ← a33 + 1#u32
+    let a35 ← a34 + 1#u32
+    let a36 ← a35 + 1#u32
+    let a37 ← a36 + 1#u32
+    let a38 ← a37 + 1#u32
+    let a39 ← a38 + 1#u32
+    let a40 ← a39 + 1#u32
+    let a41 ← a40 + 1#u32
+    let a42 ← a41 + 1#u32
+    let a43 ← a42 + 1#u32
+    let a44 ← a43 + 1#u32
+    let a45 ← a44 + 1#u32
+    let a46 ← a45 + 1#u32
+    let a47 ← a46 + 1#u32
+    let a48 ← a47 + 1#u32
+    let a49 ← a48 + 1#u32
+    let a50 ← a49 + 1#u32
+    pure a50
+  else
+    let b1 ← y + 2#u32
+    let b2 ← b1 + 2#u32
+    let b3 ← b2 + 2#u32
+    let b4 ← b3 + 2#u32
+    let b5 ← b4 + 2#u32
+    let b6 ← b5 + 2#u32
+    let b7 ← b6 + 2#u32
+    let b8 ← b7 + 2#u32
+    let b9 ← b8 + 2#u32
+    let b10 ← b9 + 2#u32
+    let b11 ← b10 + 2#u32
+    let b12 ← b11 + 2#u32
+    let b13 ← b12 + 2#u32
+    let b14 ← b13 + 2#u32
+    let b15 ← b14 + 2#u32
+    let b16 ← b15 + 2#u32
+    let b17 ← b16 + 2#u32
+    let b18 ← b17 + 2#u32
+    let b19 ← b18 + 2#u32
+    let b20 ← b19 + 2#u32
+    let b21 ← b20 + 2#u32
+    let b22 ← b21 + 2#u32
+    let b23 ← b22 + 2#u32
+    let b24 ← b23 + 2#u32
+    let b25 ← b24 + 2#u32
+    let b26 ← b25 + 2#u32
+    let b27 ← b26 + 2#u32
+    let b28 ← b27 + 2#u32
+    let b29 ← b28 + 2#u32
+    let b30 ← b29 + 2#u32
+    let b31 ← b30 + 2#u32
+    let b32 ← b31 + 2#u32
+    let b33 ← b32 + 2#u32
+    let b34 ← b33 + 2#u32
+    let b35 ← b34 + 2#u32
+    let b36 ← b35 + 2#u32
+    let b37 ← b36 + 2#u32
+    let b38 ← b37 + 2#u32
+    let b39 ← b38 + 2#u32
+    let b40 ← b39 + 2#u32
+    let b41 ← b40 + 2#u32
+    let b42 ← b41 + 2#u32
+    let b43 ← b42 + 2#u32
+    let b44 ← b43 + 2#u32
+    let b45 ← b44 + 2#u32
+    let b46 ← b45 + 2#u32
+    let b47 ← b46 + 2#u32
+    let b48 ← b47 + 2#u32
+    let b49 ← b48 + 2#u32
+    let b50 ← b49 + 2#u32
+    pure b50
+
+set_option profiler true in
+#decompose test56 test56_eq
+  branch 0 full => test56_then
+  branch 1 full => test56_else
+
+/--
+info: 'test56_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms test56_eq
