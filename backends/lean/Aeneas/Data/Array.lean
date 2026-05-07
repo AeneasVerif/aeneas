@@ -10,6 +10,14 @@ attribute [scalar_tac_simps, simp_lists_safe] Array.size
 def setSlice! {α} (a : Array α) (i : ℕ) (s : List α) : Array α :=
   ⟨ a.toList.setSlice! i s⟩
 
+@[deprecated "Use `← getElem!_toList` instead." (since := "2026-05-07")]
+theorem getElem!_eq_toList_getElem! {α} [Inhabited α] (s : Array α) (i : ℕ) :
+  s[i]! = s.toList[i]! := Array.getElem!_toList.symm
+
+@[deprecated "Use `← getElem_toList` instead." (since := "2026-05-07")]
+theorem getElem_eq_toList_getElem {α} [Inhabited α] (s : Array α) (i : ℕ) (hi : i < s.size) :
+  s[i] = s.toList[i] := (Array.getElem_toList hi).symm
+
 @[simp, simp_lists_safe]
 theorem getElem!_default [Inhabited α] (ls : Array α) (i : ℕ)
   (h : ls.size ≤ i) : ls[i]! = default := by
