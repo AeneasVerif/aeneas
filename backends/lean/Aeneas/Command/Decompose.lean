@@ -80,12 +80,14 @@ syntax (name := decomposeCmd) "#decompose " ident ident (ppLine decompose_clause
 -- Binding representation
 -- ============================================================================
 
-/-- A single let-binding (pure or monadic) in a flattened binding sequence. -/
+/-- A single let-binding (pure or monadic) in a flattened binding sequence.
+    For simple binds, `fvars` has one element. For tuple-destructuring binds
+    (`let (a, b, c) ← comp`), `fvars` has one element per component. -/
 structure BindingEntry where
   name : Name
   type : Expr
   value : Expr       -- pure: the value; monadic: the computation
-  fvar : Expr
+  fvars : Array Expr -- bound variables (1 for simple, N for tuple destructuring)
   isMonadic : Bool
   monadExpr : Option Expr := none  -- the monad `m` (for monadic bindings)
   deriving Inhabited
@@ -121,7 +123,8 @@ def matchDite? (e : Expr) : Option (Expr × Expr × Expr × Expr × Expr) := do
 -- ============================================================================
 
 /-- CPS-style parser: opens all pure/monadic let-binders, introduces fvars,
-    then calls `k` with the accumulated entries and the terminal expression. -/
+    then calls `k` with the accumulated entries and the terminal expression.
+    Handles `Function.uncurry` continuations from tuple-destructuring binds. -/
 partial def withParsedBindings (e : Expr) (acc : Array BindingEntry)
     (k : Array BindingEntry → Expr → MetaM α) : MetaM α := do
   -- Pure let
@@ -129,25 +132,114 @@ partial def withParsedBindings (e : Expr) (acc : Array BindingEntry)
   | .letE name type value body _nonDep =>
     withLetDecl name type value fun fvar => do
       let body' := body.instantiate1 fvar
-      withParsedBindings body' (acc.push ⟨name, type, value, fvar, false, none⟩) k
+      withParsedBindings body' (acc.push ⟨name, type, value, #[fvar], false, none⟩) k
   | _ =>
     -- Monadic bind
     match matchBind? e with
     | some (m, _inst, _α, _β, computation, continuation) =>
-      match continuation with
+      -- Open the continuation, handling Function.uncurry for tuple binds
+      openBindContinuation m computation continuation acc k
+    | none => k acc e
+where
+  /-- Unwrap nested `Function.uncurry` applications, collecting the lambda binders.
+      Returns the flattened array of (name, type, binderInfo) and the innermost body. -/
+  openUncurryLambdas (cont : Expr) (binders : Array (Name × Expr × BinderInfo)) :
+      MetaM (Array (Name × Expr × BinderInfo) × Expr) := do
+    -- Check for Function.uncurry: @Function.uncurry α β γ f
+    if cont.isAppOfArity ``Function.uncurry 4 then
+      let f := cont.getAppArgs[3]!
+      match f with
+      | .lam lname ltype _lbody lbinfo =>
+        let binders := binders.push (lname, ltype, lbinfo)
+        -- The body may contain another uncurry or be the innermost lambda
+        -- We need to enter the lambda first to see the body
+        withLocalDecl lname lbinfo ltype fun _fvar => do
+          let lbody := _lbody.instantiate1 _fvar
+          openUncurryLambdas lbody binders
+      | _ => return (binders, cont)
+    else
+      -- Not an uncurry — check if it's a final lambda (innermost of the chain)
+      match cont with
+      | .lam lname ltype _lbody lbinfo =>
+        return (binders.push (lname, ltype, lbinfo), cont)
+      | _ => return (binders, cont)
+  /-- Open a bind continuation. Detects `Function.uncurry` chains for tuple
+      destructuring and creates a single BindingEntry with all component fvars. -/
+  openBindContinuation (m computation : Expr) (cont : Expr)
+      (acc : Array BindingEntry) (k : Array BindingEntry → Expr → MetaM α) :
+      MetaM α := do
+    -- First, probe the structure to see if it's an uncurry chain
+    let (binders, _) ← openUncurryLambdas cont #[]
+    if binders.size > 1 then
+      -- Tuple bind: open all binders, record a single entry with extraFVars
+      openUncurryFVars m computation cont #[] acc k
+    else
+      -- Simple bind: single lambda
+      match cont with
       | .lam lname ltype lbody lbinfo =>
         withLocalDecl lname lbinfo ltype fun fvar => do
           let lbody' := lbody.instantiate1 fvar
-          withParsedBindings lbody' (acc.push ⟨lname, ltype, computation, fvar, true, some m⟩) k
+          withParsedBindings lbody' (acc.push ⟨lname, ltype, computation, #[fvar], true, some m⟩) k
       | _ => k acc e
-    | none => k acc e
+  /-- Recursively open uncurry+lambda chains, collecting fvars into an array.
+      When all binders are opened, creates a single BindingEntry and continues parsing. -/
+  openUncurryFVars (m computation : Expr) (cont : Expr) (fvars : Array Expr)
+      (acc : Array BindingEntry) (k : Array BindingEntry → Expr → MetaM α) :
+      MetaM α := do
+    if cont.isAppOfArity ``Function.uncurry 4 then
+      let f := cont.getAppArgs[3]!
+      match f with
+      | .lam lname ltype lbody lbinfo =>
+        withLocalDecl lname lbinfo ltype fun fvar => do
+          let lbody' := lbody.instantiate1 fvar
+          openUncurryFVars m computation lbody' (fvars.push fvar) acc k
+      | _ => k acc e
+    else
+      -- Innermost part: should be a lambda
+      match cont with
+      | .lam lname ltype lbody lbinfo =>
+        withLocalDecl lname lbinfo ltype fun fvar => do
+          let lbody' := lbody.instantiate1 fvar
+          let allFVars := fvars.push fvar
+          let mainName := (← allFVars[0]!.fvarId!.getDecl).userName
+          let mainType ← inferType allFVars[0]!
+          let entry : BindingEntry := ⟨mainName, mainType, computation, allFVars, true, some m⟩
+          withParsedBindings lbody' (acc.push entry) k
+      | _ => k acc e
+
+/-- Abstract over `fvars`, always creating lambda binders (even for let-decl fvars).
+    Standard `mkLambdaFVars` creates let-bindings for let-decl fvars, which is wrong
+    when building extracted function definitions that should take parameters. -/
+private def mkLamAbstract (fvars : Array Expr) (body : Expr) : MetaM Expr := do
+  let mut result := body
+  for fv in fvars.reverse do
+    let decl ← fv.fvarId!.getDecl
+    result := .lam decl.userName decl.type (result.abstract #[fv]) decl.binderInfo
+  return result
+
+/-- Abstract over `fvars`, always creating forall binders (even for let-decl fvars).
+    Standard `mkForallFVars` creates let-types for let-decl fvars, which is wrong
+    when building extracted function type signatures. -/
+private def mkForallAbstract (fvars : Array Expr) (body : Expr) : MetaM Expr := do
+  let mut result := body
+  for fv in fvars.reverse do
+    let decl ← fv.fvarId!.getDecl
+    result := .forallE decl.userName decl.type (result.abstract #[fv]) decl.binderInfo
+  return result
 
 -- ============================================================================
 -- Reconstruction: binding entries → Expr
 -- ============================================================================
 
+/-- Build `Function.uncurry (fun x => body)` for a single pair layer.
+    Always creates a lambda (not a let-binding), even for let-decl fvars. -/
+private def mkUncurry (fvar : Expr) (body : Expr) : MetaM Expr := do
+  let fn ← mkLamAbstract #[fvar] body
+  mkAppM ``Function.uncurry #[fn]
+
 /-- Rebuild an expression from `bindings[startIdx .. endIdx-1]` followed by `terminal`.
-    Abstracts fvars bottom-up using `mkLambdaFVars` / `mkLetFVars`. -/
+    Abstracts fvars bottom-up using `mkLambdaFVars` / `mkLetFVars`.
+    Handles tuple-destructuring binds by reconstructing `Function.uncurry` chains. -/
 def rebuildBindings (bindings : Array BindingEntry) (terminal : Expr)
     (startIdx endIdx : Nat) : MetaM Expr := do
   let mut result := terminal
@@ -156,10 +248,19 @@ def rebuildBindings (bindings : Array BindingEntry) (terminal : Expr)
     i := i - 1
     let entry := bindings[i]!
     if entry.isMonadic then
-      let cont ← mkLambdaFVars #[entry.fvar] result
-      result ← mkAppM ``Bind.bind #[entry.value, cont]
+      if entry.fvars.size > 1 then
+        -- Tuple bind: rebuild Function.uncurry chain
+        -- Build from inside out: last fvar first
+        let mut cont ← mkLambdaFVars #[entry.fvars.back!] result
+        -- Wrap each remaining fvar with uncurry (from second-to-last back to first)
+        for j in (List.range (entry.fvars.size - 1)).reverse do
+          cont ← mkUncurry entry.fvars[j]! cont
+        result ← mkAppM ``Bind.bind #[entry.value, cont]
+      else
+        let cont ← mkLambdaFVars #[entry.fvars[0]!] result
+        result ← mkAppM ``Bind.bind #[entry.value, cont]
     else
-      result ← mkLetFVars #[entry.fvar] result
+      result ← mkLetFVars #[entry.fvars[0]!] result
   return result
 
 -- ============================================================================
@@ -213,26 +314,6 @@ def collectFreeLocalFVars (e : Expr) : MetaM (Array Expr) := do
   for decl in lctx do
     if needed.contains decl.fvarId then
       result := result.push (mkFVar decl.fvarId)
-  return result
-
-/-- Abstract over `fvars`, always creating lambda binders (even for let-decl fvars).
-    Standard `mkLambdaFVars` creates let-bindings for let-decl fvars, which is wrong
-    when building extracted function definitions that should take parameters. -/
-private def mkLamAbstract (fvars : Array Expr) (body : Expr) : MetaM Expr := do
-  let mut result := body
-  for fv in fvars.reverse do
-    let decl ← fv.fvarId!.getDecl
-    result := .lam decl.userName decl.type (result.abstract #[fv]) decl.binderInfo
-  return result
-
-/-- Abstract over `fvars`, always creating forall binders (even for let-decl fvars).
-    Standard `mkForallFVars` creates let-types for let-decl fvars, which is wrong
-    when building extracted function type signatures. -/
-private def mkForallAbstract (fvars : Array Expr) (body : Expr) : MetaM Expr := do
-  let mut result := body
-  for fv in fvars.reverse do
-    let decl ← fv.fvarId!.getDecl
-    result := .forallE decl.userName decl.type (result.abstract #[fv]) decl.binderInfo
   return result
 
 -- ============================================================================
@@ -326,11 +407,11 @@ def extractLetRange (bindings : Array BindingEntry) (terminal : Expr)
   else
     -- ── Case B: range does NOT include terminal ────────────────────────
     let contExpr ← rebuildBindings bindings terminal endPos n
-    let extractedFVars := rangeBindings.map (·.fvar)
+    let extractedFVars := rangeBindings.foldl (fun acc e => acc ++ e.fvars) #[]
     let neededFVars ← filterRelevantFVars contExpr extractedFVars
     let lastEntry := bindings[start + count - 1]!
 
-    if neededFVars.size == 1 && neededFVars[0]!.fvarId! == lastEntry.fvar.fvarId! then
+    if neededFVars.size == 1 && neededFVars[0]!.fvarId! == lastEntry.fvars[0]!.fvarId! then
       -- ── Optimized: only the last variable is needed ──────────────────
       -- Build the extracted body: all bindings in [start, endPos-1], with
       -- the last binding's value as the terminal. If the last binding is
@@ -344,15 +425,15 @@ def extractLetRange (bindings : Array BindingEntry) (terminal : Expr)
       let extractedBody ← rebuildBindings bindings extractedTerminal start (endPos - 1)
       let callExpr ← addDef extractedBody
       if hasMonadic then
-        -- Use mkLamAbstract to create a proper lambda even if lastEntry.fvar
+        -- Use mkLamAbstract to create a proper lambda even if the fvar
         -- is a let-decl (from a pure binding in a mixed-mode range)
-        let cont ← mkLamAbstract #[lastEntry.fvar] contExpr
+        let cont ← mkLamAbstract #[lastEntry.fvars[0]!] contExpr
         let replacement ← mkAppM ``Bind.bind #[callExpr, cont]
         rebuildBindings bindings replacement 0 start
       else
         -- Pure: use a let-binding for the replacement
-        withLetDecl lastEntry.name (← inferType lastEntry.fvar) callExpr fun newFvar => do
-          let contExprSubst := contExpr.replaceFVar lastEntry.fvar newFvar
+        withLetDecl lastEntry.name (← inferType lastEntry.fvars[0]!) callExpr fun newFvar => do
+          let contExprSubst := contExpr.replaceFVar lastEntry.fvars[0]! newFvar
           let replacement ← mkLetFVars #[newFvar] contExprSubst
           rebuildBindings bindings replacement 0 start
 
@@ -368,7 +449,7 @@ def extractLetRange (bindings : Array BindingEntry) (terminal : Expr)
         let extractedBody ← rebuildBindings bindings pureUnit start endPos
         let callExpr ← addDef extractedBody
         -- The extracted function returns `m Unit`. Create a fresh Unit-typed
-        -- fvar for the continuation (not lastEntry.fvar which has the wrong type).
+        -- fvar for the continuation (not lastEntry's fvar which has the wrong type).
         withLocalDeclD `_ (mkConst ``Unit) fun unitFvar => do
           let cont ← mkLambdaFVars #[unitFvar] contExpr
           let replacement ← mkAppM ``Bind.bind #[callExpr, cont]
@@ -390,31 +471,27 @@ def extractLetRange (bindings : Array BindingEntry) (terminal : Expr)
       let extractedBody ← rebuildBindings bindings returnExpr start endPos
       let callExpr ← addDef extractedBody
 
-      -- Build the destructuring replacement
-      let tupleType ← Utils.mkProdsType neededFVars.toList
-
-      -- Helper: create let-bindings for tuple projections
-      --   let v1 := _tup.1; let v2 := _tup.2; ...; contExpr
-      let mkTupleDestructBindings (tupFVar : Expr) (body : Expr) : MetaM Expr := do
-        let mut result := body
-        for i in (List.range neededFVars.size).reverse do
-          let fv := neededFVars[i]!
-          let proj ← mkProjection tupFVar neededFVars.size i
-          let fvType ← inferType fv
-          let fvName ← fv.fvarId!.getUserName
-          -- Abstract fv out of result: use Expr.abstract directly to avoid
-          -- mkLambdaFVars creating let-bindings for let-decl fvars
-          result := .letE fvName fvType proj (result.abstract #[fv]) false
-        return result
-
+      -- Build the destructuring continuation using Function.uncurry
       if hasMonadic then do
-        withLocalDeclD `_tup tupleType fun tupFVar => do
-          let innerBody ← mkTupleDestructBindings tupFVar contExpr
-          let innerCont ← mkLambdaFVars #[tupFVar] innerBody
-          let replacement ← mkAppM ``Bind.bind #[callExpr, innerCont]
-          rebuildBindings bindings replacement 0 start
+        -- Build: callExpr >>= Function.uncurry (fun v1 => Function.uncurry (fun v2 v3 => contExpr))
+        -- Start from the innermost lambda (last fvar), then wrap with uncurry from inside out
+        let mut cont ← mkLamAbstract #[neededFVars.back!] contExpr
+        for j in (List.range (neededFVars.size - 1)).reverse do
+          cont ← mkUncurry neededFVars[j]! cont
+        let replacement ← mkAppM ``Bind.bind #[callExpr, cont]
+        rebuildBindings bindings replacement 0 start
       else do
-        -- Pure tuple destructuring
+        -- Pure tuple destructuring: use let-bindings with projections
+        let tupleType ← Utils.mkProdsType neededFVars.toList
+        let mkTupleDestructBindings (tupFVar : Expr) (body : Expr) : MetaM Expr := do
+          let mut result := body
+          for i in (List.range neededFVars.size).reverse do
+            let fv := neededFVars[i]!
+            let proj ← mkProjection tupFVar neededFVars.size i
+            let fvType ← inferType fv
+            let fvName ← fv.fvarId!.getUserName
+            result := .letE fvName fvType proj (result.abstract #[fv]) false
+          return result
         withLocalDeclD `_tup tupleType fun tupFVar => do
           let innerBody ← mkTupleDestructBindings tupFVar contExpr
           let contBody ← mkLambdaFVars #[tupFVar] innerBody

@@ -3,6 +3,8 @@ Tests for the #decompose command
 -/
 import Aeneas.Command.Decompose
 import Aeneas.Std
+import Aeneas.Do.Elab
+import Aeneas.Do.Delab
 
 open Aeneas.Std
 open Aeneas.Command.Decompose
@@ -81,9 +83,7 @@ fun x => do
 /--
 info: test2_eq : ∀ (x : U32),
   test2 x = do
-    let _tup ← test2_aux x
-    let a : UScalar UScalarTy.U32 := _tup.1
-    let b : UScalar UScalarTy.U32 := _tup.2
+    let (a, b) ← test2_aux x
     a + b
 -/
 #guard_msgs in
@@ -165,7 +165,7 @@ def test4 (x y : U32) : Result U32 := do
   full => test4_body
 
 /--
-info: def test4_body : U32 → U32 → Result U32 :=
+info: def test4_body : U32 → U32 → Result (UScalar UScalarTy.U32) :=
 fun x y => do
   let z ← x + y
   z + 1#u32
@@ -289,9 +289,10 @@ noncomputable def test8 (x y : U32) : Result U32 := do
   letRange 0 2 => test8_effects
 
 /--
-info: def test8_effects : U32 → Result Unit :=
-fun x => do
+info: def test8_effects : U32 → U32 → Result Unit :=
+fun x y => do
   sideEffect1 x
+  sideEffect2 y
   pure ()
 -/
 #guard_msgs in
@@ -299,8 +300,7 @@ fun x => do
 /--
 info: test8_eq : ∀ (x y : U32),
   test8 x y = do
-    test8_effects x
-    sideEffect2 y
+    test8_effects x y
     pure 42#u32
 -/
 #guard_msgs in
@@ -372,10 +372,7 @@ fun x => do
 /--
 info: test10_eq : ∀ (x : U32),
   test10 x = do
-    let _tup ← test10_triple x
-    let a : UScalar UScalarTy.U32 := _tup.1
-    let b : UScalar UScalarTy.U32 := _tup.2.1
-    let c : UScalar UScalarTy.U32 := _tup.2.2
+    let (a, b, c) ← test10_triple x
     let sum ← a + b
     sum + c
 -/
@@ -418,11 +415,7 @@ fun x => do
 /--
 info: test11_eq : ∀ (x : U32),
   test11 x = do
-    let _tup ← test11_quad x
-    let a : UScalar UScalarTy.U32 := _tup.1
-    let b : UScalar UScalarTy.U32 := _tup.2.1
-    let c : UScalar UScalarTy.U32 := _tup.2.2.1
-    let d : UScalar UScalarTy.U32 := _tup.2.2.2
+    let (a, b, c, d) ← test11_quad x
     let s1 ← a + b
     let s2 ← c + d
     s1 + s2
@@ -462,22 +455,20 @@ fun x =>
 #guard_msgs in
 #print test12_mixed1
 /--
-info: def test12_mixed2 : ℕ × UScalar UScalarTy.U32 → ℕ × UScalar UScalarTy.U32 :=
-fun _tup =>
-  let a := _tup.1;
-  let b := _tup.2;
-  (a, b)
+info: def test12_mixed2 : ℕ → UScalar UScalarTy.U32 → Result (ℕ × UScalar UScalarTy.U32) :=
+fun a b =>
+  let c := a + 1;
+  do
+  let d ← b + 2#u32
+  pure (c, d)
 -/
 #guard_msgs in
 #print test12_mixed2
 /--
 info: test12_eq : ∀ (x : U32),
   test12 x = do
-    let _tup ← test12_mixed1 x
-    let a : ℕ := (test12_mixed2 _tup).1
-    let b : UScalar UScalarTy.U32 := (test12_mixed2 _tup).2
-    let c : ℕ := a + 1
-    let d ← b + 2#u32
+    let (a, b) ← test12_mixed1 x
+    let (c, d) ← test12_mixed2 a b
     if c > 0 then pure d else d + 1#u32
 -/
 #guard_msgs in
@@ -840,7 +831,7 @@ def test20 (x : U32) : Result U32 :=
   argArg 0 (lam 1 full) => test20_body
 
 /--
-info: def test20_body : U32 → U32 → Result U32 :=
+info: def test20_body : U32 → U32 → Result (UScalar UScalarTy.U32) :=
 fun x y => do
   let z ← y + x
   z + 1#u32
@@ -929,6 +920,7 @@ noncomputable def test22 (x : U32) : Result U32 := do
 info: def test22_prefix : Result Unit :=
 do
   log "start"
+  log "middle"
   pure ()
 -/
 #guard_msgs in
@@ -937,7 +929,6 @@ do
 info: test22_eq : ∀ (x : U32),
   test22 x = do
     test22_prefix
-    log "middle"
     x + 1#u32
 -/
 #guard_msgs in
@@ -962,27 +953,20 @@ def test23 (n : Nat) (x : U32) (s : Slice U8) (b : Bool) : Result U32 := do
   letRange 0 3 => test23_prefix
 
 /--
-info: def test23_prefix : ℕ → U32 → Slice U8 → Result (UScalar UScalarTy.U32 × (UScalar UScalarTy.U32 → Result U32)) :=
-fun n x s => do
+info: def test23_prefix : U32 → Slice U8 → Bool → Result (ℕ × UScalar UScalarTy.U32) :=
+fun x s b => do
   let a ← x + 1#u32
   let len : ℕ := (↑s).length
-  let __do_jp : UScalar UScalarTy.U32 → Result U32 := fun c => if len > n then c + 1#u32 else pure c
-  pure (a, __do_jp)
+  let c ← if b = true then x + 2#u32 else pure a
+  pure (len, c)
 -/
 #guard_msgs in
 #print test23_prefix
 /--
 info: test23_eq : ∀ (n : ℕ) (x : U32) (s : Slice U8) (b : Bool),
   test23 n x s b = do
-    let _tup ← test23_prefix n x s
-    let a : UScalar UScalarTy.U32 := _tup.1
-    let __do_jp : UScalar UScalarTy.U32 → Result U32 := _tup.2
-    if b = true then do
-        let y ← x + 2#u32
-        __do_jp y
-      else do
-        let y ← pure a
-        __do_jp y
+    let (len, c) ← test23_prefix x s b
+    if len > n then c + 1#u32 else pure c
 -/
 #guard_msgs in
 #check @test23_eq
@@ -1250,8 +1234,8 @@ info: 'test29_eq' does not depend on any axioms
 def test30 (b : Bool) (x y : U32) : Result U32 := do
   if b then
     let a ← x + 1#u32
-    let b ← a + 2#u32
-    b + y
+    let r ← a + 2#u32
+    r + y
   else
     let c ← y + 10#u32
     let d ← c + 20#u32
@@ -1281,8 +1265,8 @@ fun y => do
 info: test30_eq : ∀ (b : Bool) (x y : U32),
   test30 b x y =
     if b = true then do
-      let b ← test30_then_prefix x
-      b + y
+      let r ← test30_then_prefix x
+      r + y
     else do
       let d ← test30_else_prefix y
       d + x
@@ -1507,11 +1491,7 @@ fun x y z w => do
 /--
 info: def test32_tt : U32 → U32 → U32 → U32 → Result (UScalar UScalarTy.U32) :=
 fun x y z w => do
-  let _tup ← test32_tt_comp x y z w
-  let c0 : UScalar UScalarTy.U32 := _tup.1
-  let c3 : UScalar UScalarTy.U32 := _tup.2.1
-  let c6 : UScalar UScalarTy.U32 := _tup.2.2.1
-  let c9 : UScalar UScalarTy.U32 := _tup.2.2.2
+  let (c0, c3, c6, c9) ← test32_tt_comp x y z w
   let r0 ← c0 + c3
   let r1 ← r0 + c6
   let r2 ← r1 + c9
@@ -1522,11 +1502,7 @@ fun x y z w => do
 /--
 info: def test32_te : U32 → U32 → U32 → U32 → Result (UScalar UScalarTy.U32) :=
 fun x y z w => do
-  let _tup ← test32_te_comp x y z w
-  let d0 : UScalar UScalarTy.U32 := _tup.1
-  let d4 : UScalar UScalarTy.U32 := _tup.2.1
-  let d7 : UScalar UScalarTy.U32 := _tup.2.2.1
-  let d9 : UScalar UScalarTy.U32 := _tup.2.2.2
+  let (d0, d4, d7, d9) ← test32_te_comp x y z w
   let s0 ← d0 + d4
   let s1 ← s0 + d7
   let s2 ← s1 + d9
@@ -1537,11 +1513,7 @@ fun x y z w => do
 /--
 info: def test32_et : U32 → U32 → U32 → U32 → Result (UScalar UScalarTy.U32) :=
 fun x y z w => do
-  let _tup ← test32_et_comp x y z w
-  let e0 : UScalar UScalarTy.U32 := _tup.1
-  let e3 : UScalar UScalarTy.U32 := _tup.2.1
-  let e6 : UScalar UScalarTy.U32 := _tup.2.2.1
-  let e9 : UScalar UScalarTy.U32 := _tup.2.2.2
+  let (e0, e3, e6, e9) ← test32_et_comp x y z w
   let t0 ← e0 + e3
   let t1 ← t0 + e6
   let t2 ← t1 + e9
@@ -1552,11 +1524,7 @@ fun x y z w => do
 /--
 info: def test32_ee : U32 → U32 → U32 → U32 → Result (UScalar UScalarTy.U32) :=
 fun x y z w => do
-  let _tup ← test32_ee_comp x y z w
-  let f0 : UScalar UScalarTy.U32 := _tup.1
-  let f4 : UScalar UScalarTy.U32 := _tup.2.1
-  let f7 : UScalar UScalarTy.U32 := _tup.2.2.1
-  let f9 : UScalar UScalarTy.U32 := _tup.2.2.2
+  let (f0, f4, f7, f9) ← test32_ee_comp x y z w
   let u0 ← f0 + f4
   let u1 ← u0 + f7
   let u2 ← u1 + f9
@@ -1565,13 +1533,13 @@ fun x y z w => do
 #guard_msgs in
 #print test32_ee
 /--
-info: def test32_then : Bool → U32 → U32 → U32 → U32 → Result U32 :=
+info: def test32_then : Bool → U32 → U32 → U32 → U32 → Result (UScalar UScalarTy.U32) :=
 fun flag x y z w => if flag = true then test32_tt x y z w else test32_te x y z w
 -/
 #guard_msgs in
 #print test32_then
 /--
-info: def test32_else : Bool → U32 → U32 → U32 → U32 → Result U32 :=
+info: def test32_else : Bool → U32 → U32 → U32 → U32 → Result (UScalar UScalarTy.U32) :=
 fun flag x y z w => if flag = true then test32_et x y z w else test32_ee x y z w
 -/
 #guard_msgs in
@@ -1924,6 +1892,7 @@ info: 'test38_eq' does not depend on any axioms
 -- Test 39: Monadic match — match in the Result monad
 -- ============================================================================
 
+set_option linter.unusedVariables false in
 def test39 (n : Nat) : Result Nat := do
   match n with
   | 0 => .ok 42
@@ -2374,3 +2343,185 @@ info: 'test46_eq' does not depend on any axioms
 -/
 #guard_msgs in
 #print axioms test46_eq
+
+-- ============================================================================
+-- Test 47: Tuple bind with Aeneas do — pair destructuring (Function.uncurry)
+-- ============================================================================
+
+
+def test47 (x : U32) : Result U32 := do
+  let a ← x + 1#u32
+  let (b, c) ← Result.ok (a, a)
+  b + c
+
+#decompose test47 test47_eq
+  letRange 0 1 => test47_prefix
+
+/--
+info: def test47_prefix : U32 → Result (UScalar UScalarTy.U32) :=
+fun x => x + 1#u32
+-/
+#guard_msgs in
+#print test47_prefix
+/--
+info: test47_eq : ∀ (x : U32),
+  test47 x = do
+    let a ← test47_prefix x
+    let (b, c) ← Result.ok (a, a)
+    b + c
+-/
+#guard_msgs in
+#check @test47_eq
+/--
+info: 'test47_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms test47_eq
+
+-- ============================================================================
+-- Test 48: Tuple bind — extracting the range AFTER the tuple bind
+-- ============================================================================
+
+def test48 (x : U32) : Result U32 := do
+  let (a, b) ← Result.ok (x, x)
+  let c ← a + 1#u32
+  let d ← b + 2#u32
+  c + d
+
+#decompose test48 test48_eq
+  letRange 1 3 => test48_suffix
+
+/--
+info: def test48_suffix : U32 → U32 → Result (UScalar UScalarTy.U32) :=
+fun a b => do
+  let c ← a + 1#u32
+  let d ← b + 2#u32
+  c + d
+-/
+#guard_msgs in
+#print test48_suffix
+/--
+info: test48_eq : ∀ (x : U32),
+  test48 x = do
+    let (a, b) ← Result.ok (x, x)
+    test48_suffix a b
+-/
+#guard_msgs in
+#check @test48_eq
+/--
+info: 'test48_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms test48_eq
+
+-- ============================================================================
+-- Test 49: Triple tuple bind — 3-component destructuring
+-- ============================================================================
+
+def test49 (x : U32) : Result U32 := do
+  let a ← x + 1#u32
+  let (b, c, d) ← Result.ok (a, a, a)
+  let r ← b + c
+  r + d
+
+#decompose test49 test49_eq
+  letRange 0 1 => test49_prefix
+
+/--
+info: def test49_prefix : U32 → Result (UScalar UScalarTy.U32) :=
+fun x => x + 1#u32
+-/
+#guard_msgs in
+#print test49_prefix
+/--
+info: test49_eq : ∀ (x : U32),
+  test49 x = do
+    let a ← test49_prefix x
+    let (b, c, d) ← Result.ok (a, a, a)
+    let r ← b + c
+    r + d
+-/
+#guard_msgs in
+#check @test49_eq
+/--
+info: 'test49_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms test49_eq
+
+-- ============================================================================
+-- Test 50: Tuple bind — extracting including the tuple bind itself
+-- ============================================================================
+
+def test50 (x : U32) : Result U32 := do
+  let a ← x + 1#u32
+  let (b, c) ← Result.ok (a, a)
+  let r ← b + c
+  r + 1#u32
+
+-- Extract the first 2 bindings: a ← ..., (b, c) ← ...
+#decompose test50 test50_eq
+  letRange 0 2 => test50_prefix
+
+/--
+info: def test50_prefix : U32 → Result (UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
+fun x => do
+  let a ← x + 1#u32
+  let (b, c) ← Result.ok (a, a)
+  pure (b, c)
+-/
+#guard_msgs in
+#print test50_prefix
+/--
+info: test50_eq : ∀ (x : U32),
+  test50 x = do
+    let (b, c) ← test50_prefix x
+    let r ← b + c
+    r + 1#u32
+-/
+#guard_msgs in
+#check @test50_eq
+/--
+info: 'test50_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms test50_eq
+
+-- ============================================================================
+-- Test 51: Tuple bind with subsequent extraction — both before and after
+-- ============================================================================
+
+def test51 (x y : U32) : Result U32 := do
+  let a ← x + 1#u32
+  let (b, c) ← Result.ok (a, y)
+  let d ← b + c
+  let e ← d + 1#u32
+  e + 2#u32
+
+-- Extract only the suffix (d, e, terminal)
+#decompose test51 test51_eq
+  letRange 2 3 => test51_suffix
+
+/--
+info: def test51_suffix : UScalar UScalarTy.U32 → U32 → Result (UScalar UScalarTy.U32) :=
+fun b c => do
+  let d ← b + c
+  let e ← d + 1#u32
+  e + 2#u32
+-/
+#guard_msgs in
+#print test51_suffix
+/--
+info: test51_eq : ∀ (x y : U32),
+  test51 x y = do
+    let a ← x + 1#u32
+    let (b, c) ← Result.ok (a, y)
+    test51_suffix b c
+-/
+#guard_msgs in
+#check @test51_eq
+/--
+info: 'test51_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms test51_eq
