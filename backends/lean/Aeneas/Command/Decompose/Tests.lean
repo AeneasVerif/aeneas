@@ -2828,7 +2828,6 @@ def test56 (b : Bool) (x y : U32) : Result U32 := do
     let b50 ← b49 + 2#u32
     pure b50
 
-set_option profiler true in
 #decompose test56 test56_eq
   branch 0 full => test56_then
   branch 1 full => test56_else
