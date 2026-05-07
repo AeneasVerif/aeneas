@@ -253,6 +253,15 @@ type expr =
           ]} *)
   | Meta of (emeta[@opaque]) * expr  (** Meta information *)
   | Error of Meta.span option * string
+  | TargetDispatch of symbolic_value list * (string * Types.fun_decl_ref) list
+      (** Multi-target dispatch: the function body dispatches to one of several
+          per-target implementations.
+
+          The first field is the list of input symbolic values (the function
+          arguments to forward to each target).
+
+          Each element of the second list is [(target_name, fun_ref)] where
+          [fun_ref] identifies the per-target function to call. *)
 
 and loop = {
   ctx : (Contexts.eval_ctx[@opaque]);

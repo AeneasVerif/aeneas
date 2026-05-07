@@ -1300,6 +1300,7 @@ let builtin_pure_functions () : (pure_builtin_fun_id * string) list =
         (UpdateAtIndex Array, "Array.update");
         (ToResult, "lift");
         (ResultUnwrapMut, "core.result.Result.unwrap.mut");
+        (GetTarget, "get_target");
       ]
   | HOL4 ->
       (* We don't provide [FuelDecrease] and [FuelEqZero] on purpose *)
@@ -1643,6 +1644,15 @@ let ctx_compute_struct_constructor (def : type_decl) (ctx : extraction_ctx)
     function. *)
 let ctx_fun_global_name_to_extract_string (meta : T.item_meta)
     (ctx : extraction_ctx) (fname : llbc_name) : string =
+  (* Check if the name ends with a target element (from multi-target
+     extraction) and extract it as a suffix *)
+  let fname, target_suffix =
+    match Collections.List.last fname with
+    | T.PeTarget target ->
+        let target = String.concat "_" (String.split_on_char '-' target) in
+        (Collections.List.prefix (List.length fname - 1) fname, Some target)
+    | _ -> (fname, None)
+  in
   (* Check if the function is a method implementation for a blanket impl.
      If it is the case, add a path element to avoid name collisions *)
   let rec is_blanket_method (name : llbc_name) : bool =
@@ -1674,6 +1684,11 @@ let ctx_fun_global_name_to_extract_string (meta : T.item_meta)
   in
   (* TODO: don't convert to snake case for Coq, HOL4, F* *)
   let fname = flatten_name fname in
+  let fname =
+    match target_suffix with
+    | None -> fname
+    | Some target -> fname ^ "_" ^ target
+  in
   match backend () with
   | FStar | Coq | HOL4 -> StringUtils.lowercase_first_letter fname
   | Lean -> fname

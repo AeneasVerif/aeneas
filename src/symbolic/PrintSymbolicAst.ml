@@ -118,6 +118,24 @@ let rec expr_to_string (env : fmt_env) (indent : string) (indent_incr : string)
   | Let lete -> let_expr_to_string env indent indent_incr lete
   | Meta (_, next) -> expr_to_string env indent indent_incr next
   | Error (_, error) -> indent ^ "ERROR(" ^ error ^ ")"
+  | TargetDispatch (input_svs, targets) ->
+      let inputs =
+        String.concat " "
+          (List.map
+             (fun (sv : symbolic_value) ->
+               Values.symbolic_value_to_string env sv)
+             input_svs)
+      in
+      let targets =
+        List.map
+          (fun (target, (fdr : Types.fun_decl_ref)) ->
+            indent ^ "  " ^ target ^ " => "
+            ^ Print.fun_decl_ref_to_string env fdr
+            ^ " " ^ inputs)
+          targets
+      in
+      indent ^ "TargetDispatch {\n" ^ String.concat "\n" targets ^ "\n" ^ indent
+      ^ "}"
 
 and loop_continue_break_to_string (env : fmt_env) (indent : string)
     (indent_incr : string) ~(is_continue : bool) _ctx (loop_id : loop_id)

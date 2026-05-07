@@ -24,6 +24,20 @@ let body_as_body_exn file line f =
 
 let body_is_known (b : body) : bool = Option.is_some (body_as_body b)
 
+let body_as_target_dispatch (b : body) :
+    (string * Types.fun_decl_ref) list option =
+  match b with
+  | TargetDispatchBody targets -> Some targets
+  | _ -> None
+
+let body_is_target_dispatch (b : body) : bool =
+  Option.is_some (body_as_target_dispatch b)
+
+(** A function body is translatable if it is either a structured body (normal
+    case) or a target dispatch body (multi-target). *)
+let body_is_translatable (b : body) : bool =
+  body_is_known b || body_is_target_dispatch b
+
 let lookup_fun_sig (fun_id : fun_id) (fun_decls : fun_decl FunDeclId.Map.t) :
     bound_fun_sig =
   match fun_id with
@@ -75,8 +89,20 @@ let crate_has_opaque_non_builtin_decls (k : crate) (filter_builtin : bool)
   crate_get_opaque_non_builtin_decls k filter_builtin type_decls fun_decls
   <> ([], [])
 
+(** Strip trailing [PeTarget] elements from a name.
+
+    Multi-target extraction appends [PeTarget] to per-target function names.
+    This element doesn't participate in pattern matching (the pattern generator
+    skips it), so we strip it before calling [name_to_pattern] to avoid
+    triggering its roundtrip assertion. *)
+let strip_target_suffix (n : name) : name =
+  match List.rev n with
+  | Types.PeTarget _ :: rest -> List.rev rest
+  | _ -> n
+
 let name_to_pattern (span : Meta.span option) (ctx : Charon.NameMatcher.ctx)
     (c : Charon.NameMatcher.to_pat_config) (n : name) =
+  let n = strip_target_suffix n in
   if !Config.fail_hard then Charon.NameMatcher.name_to_pattern ctx c n
   else
     try Charon.NameMatcher.name_to_pattern ctx c n

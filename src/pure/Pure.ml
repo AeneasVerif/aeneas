@@ -131,6 +131,13 @@ type pure_builtin_fun_id =
       (** Temporary fix: the
           [core::result::{core::result::Result<@T, @E>}::unwrap] instantiated
           with mutable borrows - TODO: remove *)
+  | GetTarget
+      (** Returns the compilation target as a string.
+
+          Used to translate multi-target dispatch bodies: [TargetDispatchBody]
+          bodies generate a call to [get_target] and dispatch on the result. The
+          function is fallible and axiomatized; nothing can be deduced from its
+          output. *)
 [@@deriving show, ord]
 
 (* Builtin declarations coming from external libraries.

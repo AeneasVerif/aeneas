@@ -17,4 +17,13 @@ def toStr (s : String) (h : s.toByteArray.size ≤ U32.max := by decide +native)
 
 example : Str := toStr "hello"
 
+/-- Returns the compilation target as a string.
+
+    Used by multi-target dispatch: nothing meaningful can be deduced from
+    its output. -/
+axiom get_target : Result Str
+
+@[step]
+axiom get_target.spec : get_target ⦃ fun _ => True ⦄
+
 end Aeneas.Std
