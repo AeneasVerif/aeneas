@@ -14,6 +14,14 @@ open Aeneas.Simp (mkSimpCtx SimpArgs)
 
 initialize registerTraceClass `Decompose
 
+/-- State for the decompose command: tracks definitions introduced so far. -/
+structure DecomposeState where
+  introduced : Array (Name × Expr) := #[]
+
+/-- Monad for the decompose command: `MetaM` with additional state tracking
+    which definitions have been introduced in the current `#decompose` sequence. -/
+abbrev DecomposeM := StateRefT DecomposeState MetaM
+
 -- ============================================================================
 -- Pattern representation
 -- ============================================================================
@@ -126,7 +134,7 @@ def matchDite? (e : Expr) : Option (Expr × Expr × Expr × Expr × Expr) := do
     then calls `k` with the accumulated entries and the terminal expression.
     Handles `Function.uncurry` continuations from tuple-destructuring binds. -/
 partial def withParsedBindings (e : Expr) (acc : Array BindingEntry)
-    (k : Array BindingEntry → Expr → MetaM α) : MetaM α := do
+    (k : Array BindingEntry → Expr → DecomposeM α) : DecomposeM α := do
   -- Pure let
   match e with
   | .letE name type value body _nonDep =>
@@ -166,8 +174,8 @@ where
   /-- Open a bind continuation. Detects `Function.uncurry` chains for tuple
       destructuring and creates a single BindingEntry with all component fvars. -/
   openBindContinuation (m computation : Expr) (cont : Expr)
-      (acc : Array BindingEntry) (k : Array BindingEntry → Expr → MetaM α) :
-      MetaM α := do
+      (acc : Array BindingEntry) (k : Array BindingEntry → Expr → DecomposeM α) :
+      DecomposeM α := do
     -- First, probe the structure to see if it's an uncurry chain
     let (binders, _) ← openUncurryLambdas cont #[]
     if binders.size > 1 then
@@ -184,8 +192,8 @@ where
   /-- Recursively open uncurry+lambda chains, collecting fvars into an array.
       When all binders are opened, creates a single BindingEntry and continues parsing. -/
   openUncurryFVars (m computation : Expr) (cont : Expr) (fvars : Array Expr)
-      (acc : Array BindingEntry) (k : Array BindingEntry → Expr → MetaM α) :
-      MetaM α := do
+      (acc : Array BindingEntry) (k : Array BindingEntry → Expr → DecomposeM α) :
+      DecomposeM α := do
     if cont.isAppOfArity ``Function.uncurry 4 then
       let f := cont.getAppArgs[3]!
       match f with
@@ -338,13 +346,12 @@ private def hasNoncomputableDep (env : Environment) (e : Expr) : Bool :=
     triggered the conflict. -/
 private def addDefinition (name : Name) (levelParams : List Name)
     (type value : Expr) (srcIsNoncomputable : Bool)
-    (clauseDesc : MessageData := "decomposition clause") : MetaM Unit := do
+    (clauseDesc : MessageData := "decomposition clause") : DecomposeM Unit := do
   let env ← getEnv
   -- Check if a definition with this name already exists
   if let some existingInfo := env.find? name then
     match existingInfo with
     | .defnInfo existingVal =>
-      -- Compare values at reducible transparency (cheap, mostly syntactic)
       let isEq ← withReducible do isDefEq value existingVal.value
       if isEq then
         return  -- Reuse existing definition
@@ -368,6 +375,15 @@ private def addDefinition (name : Name) (levelParams : List Name)
   else
     addAndCompile (.defnDecl decl)
     Lean.enableRealizationsForConst name
+  -- Check for duplicate values among previously introduced definitions
+  let prev := (← get).introduced
+  for (prevName, prevValue) in prev do
+    let isDup ← withReducible do isDefEq value prevValue
+    if isDup then
+      logWarning m!"#decompose: '{name}' has the same definition as '{prevName}' \
+        (consider reusing the same name)"
+      break
+  modify fun s => { s with introduced := s.introduced.push (name, value) }
 
 -- ============================================================================
 -- Core extraction: `full`
@@ -377,7 +393,7 @@ private def addDefinition (name : Name) (levelParams : List Name)
     Returns the call expression that replaces it. -/
 def extractFull (body : Expr) (newName : Name)
     (levelParams : List Name) (srcIsNoncomputable : Bool)
-    (clauseDesc : MessageData) : MetaM Expr := do
+    (clauseDesc : MessageData) : DecomposeM Expr := do
   let relevantFVars ← collectFreeLocalFVars body
   let fnValue ← mkLamAbstract relevantFVars body
   let fnType  ← mkForallAbstract relevantFVars (← inferType body)
@@ -393,7 +409,7 @@ def extractFull (body : Expr) (newName : Name)
 def extractLetRange (bindings : Array BindingEntry) (terminal : Expr)
     (start count : Nat) (newName : Name)
     (levelParams : List Name) (srcIsNoncomputable : Bool)
-    (clauseDesc : MessageData) : MetaM Expr := do
+    (clauseDesc : MessageData) : DecomposeM Expr := do
   let n := bindings.size            -- number of actual bindings
   let totalPositions := n + 1       -- bindings + terminal
   let endPos := start + count
@@ -415,7 +431,7 @@ def extractLetRange (bindings : Array BindingEntry) (terminal : Expr)
   -- Helper: add the definition and build the call expression.
   -- Uses `collectFreeLocalFVars` to capture all relevant fvars from the local
   -- context (function params, navigation fvars from letAt/branch/lam, etc.).
-  let addDef (fnValue : Expr) : MetaM Expr := do
+  let addDef (fnValue : Expr) : DecomposeM Expr := do
     let relevantFVars ← collectFreeLocalFVars fnValue
     let fnValueClosed ← mkLamAbstract relevantFVars fnValue
     let fnTypeClosed  ← mkForallAbstract relevantFVars (← inferType fnValue)
@@ -530,7 +546,7 @@ def extractLetRange (bindings : Array BindingEntry) (terminal : Expr)
     If `strict`, throws an error when fewer than `n` lambdas are found.
     If not strict, applies `action` to whatever expression remains. -/
 private def modifyUnderLambdasCore (strict : Bool) (e : Expr) (n : Nat)
-    (action : Expr → MetaM Expr) : MetaM Expr := do
+    (action : Expr → DecomposeM Expr) : DecomposeM Expr := do
   match n with
   | 0 => action e
   | n + 1 =>
@@ -549,19 +565,19 @@ private def modifyUnderLambdasCore (strict : Bool) (e : Expr) (n : Nat)
 /-- Open up to `n` lambda binders (permissive: applies action even if fewer lambdas exist).
     Used for match/dite branches where Lean may compile away some binders. -/
 private def modifyUnderLambdasPermissive (e : Expr) (n : Nat)
-    (action : Expr → MetaM Expr) : MetaM Expr :=
+    (action : Expr → DecomposeM Expr) : DecomposeM Expr :=
   modifyUnderLambdasCore (strict := false) e n action
 
 /-- Open exactly `n` lambda binders (strict: throws if fewer exist).
     Used for the `lam` navigation pattern. -/
 def modifyUnderLambdas (e : Expr) (n : Nat)
-    (action : Expr → MetaM Expr) : MetaM Expr :=
+    (action : Expr → DecomposeM Expr) : DecomposeM Expr :=
   modifyUnderLambdasCore (strict := true) e n action
 
 /-- Modify branch `idx` of an ite/dite/match expression.
     Calls `action` on the branch body (under all pattern-variable lambdas);
     returns the reconstructed expression. -/
-def modifyBranch (e : Expr) (idx : Nat) (action : Expr → MetaM Expr) : MetaM Expr := do
+def modifyBranch (e : Expr) (idx : Nat) (action : Expr → DecomposeM Expr) : DecomposeM Expr := do
   -- Try ite
   if let some (α, cond, inst, thenB, elseB) := matchIte? e then
     if idx == 0 then
@@ -595,7 +611,7 @@ def modifyBranch (e : Expr) (idx : Nat) (action : Expr → MetaM Expr) : MetaM E
   throwError "branch {idx}: expression is not an ite, dite, or match"
 
 /-- Modify the function part of an application. -/
-def modifyAppFun (e : Expr) (action : Expr → MetaM Expr) : MetaM Expr := do
+def modifyAppFun (e : Expr) (action : Expr → DecomposeM Expr) : DecomposeM Expr := do
   let fn := e.getAppFn
   let args := e.getAppArgs
   if args.size == 0 then throwError "appFun: expression is not an application"
@@ -603,7 +619,7 @@ def modifyAppFun (e : Expr) (action : Expr → MetaM Expr) : MetaM Expr := do
   return mkAppN fn' args
 
 /-- Modify argument `idx` of an application (0-indexed, explicit args). -/
-def modifyAppArg (e : Expr) (idx : Nat) (action : Expr → MetaM Expr) : MetaM Expr := do
+def modifyAppArg (e : Expr) (idx : Nat) (action : Expr → DecomposeM Expr) : DecomposeM Expr := do
   let fn := e.getAppFn
   let args := e.getAppArgs
   if idx >= args.size then
@@ -618,7 +634,7 @@ def modifyAppArg (e : Expr) (idx : Nat) (action : Expr → MetaM Expr) : MetaM E
 /-- Navigate to the value of the `idx`-th binding and apply `action` to it.
     Returns the modified full expression. -/
 partial def modifyBindingValue (e : Expr) (idx : Nat)
-    (action : Expr → MetaM Expr) : MetaM Expr := do
+    (action : Expr → DecomposeM Expr) : DecomposeM Expr := do
   if idx == 0 then
     -- Modify the current binding's value
     match e with
@@ -672,7 +688,7 @@ private def formatClause (pat : DecomposePattern) (name : Name) : MessageData :=
     Returns the modified function body. -/
 partial def applyClause (body : Expr) (pat : DecomposePattern) (newName : Name)
     (levelParams : List Name)
-    (srcIsNoncomputable : Bool) : MetaM Expr := do
+    (srcIsNoncomputable : Bool) : DecomposeM Expr := do
   let clauseDesc := formatClause pat newName
   match pat with
   | .full =>
@@ -792,17 +808,24 @@ def elabDecompose : CommandElab := fun stx => do
 
       -- Open the function parameters
       lambdaTelescope fnValue fun params body => do
-        let mut currentBody := body
-        let mut stepProofs : Array Expr := #[]  -- closed proof terms (∀ params, ...)
-
         -- Apply each clause sequentially; prove each step
-        for (pat, newName) in parsedClauses do
-          let prevBody := currentBody
-          currentBody ← applyClause currentBody pat newName levelParams srcIsNoncomputable
+        -- Apply each clause sequentially (in DecomposeM to track introduced defs)
+        let (allBodies, _) ←
+          (do
+            let mut currentBody := body
+            let mut allBodies : Array Expr := #[body]  -- body_0 = original body
+            for (pat, newName) in parsedClauses do
+              currentBody ← applyClause currentBody pat newName levelParams srcIsNoncomputable
+              allBodies := allBodies.push currentBody
+            return allBodies : DecomposeM _).run {}
+        -- allBodies = [body_0, body_1, ..., body_n] where body_i is after applying clause i
+        let currentBody := allBodies.back!
 
-          -- Prove: ∀ params, prevBody = currentBody
-          let stepEqType ← mkForallFVars params (← mkEq prevBody currentBody)
-          let stepProof ← proveStep stepEqType newName
+        -- Prove each step: ∀ params, body_i = body_{i+1}
+        let mut stepProofs : Array Expr := #[]
+        for i in List.range parsedClauses.size do
+          let stepEqType ← mkForallFVars params (← mkEq allBodies[i]! allBodies[i + 1]!)
+          let stepProof ← proveStep stepEqType parsedClauses[i]!.2
           stepProofs := stepProofs.push stepProof
 
         -- Compose step proofs into the final theorem: ∀ params, f params = currentBody

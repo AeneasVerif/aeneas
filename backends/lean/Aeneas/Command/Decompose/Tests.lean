@@ -22,6 +22,10 @@ def test1 (x y : U32) : Result U32 := do
   let y3 ← y2 + 1#u32
   x3 + y3
 
+/--
+warning: #decompose: 'test1_y' has the same definition as 'test1_x' (consider reusing the same name)
+-/
+#guard_msgs in
 #decompose test1 test1_eq
   letRange 0 3 => test1_x
   letRange 1 3 => test1_y
@@ -110,6 +114,10 @@ def test3 (b : Bool) (x y : U32) : Result U32 := do
   else
     x + y
 
+/--
+warning: #decompose: 'test3_y' has the same definition as 'test3_x' (consider reusing the same name)
+-/
+#guard_msgs in
 #decompose test3 test3_eq
   branch 0 (letRange 0 3) => test3_x
   branch 0 (letRange 1 3) => test3_y
@@ -508,6 +516,10 @@ def test13 (x : U32) : Result U32 := do
   a19 + x
 
 -- Four sequential letRange decompositions splitting the chain into 5-binding chunks
+/--
+warning: #decompose: 'test13_chunk2' has the same definition as 'test13_chunk1' (consider reusing the same name)
+-/
+#guard_msgs in
 #decompose test13 test13_eq
   letRange 0 5 => test13_chunk1
   letRange 1 5 => test13_chunk2
@@ -603,6 +615,10 @@ def test14 (x : Nat) : Nat :=
   a19 + x
 
 -- Split into 4 chunks
+/--
+warning: #decompose: 'test14_chunk2' has the same definition as 'test14_chunk1' (consider reusing the same name)
+-/
+#guard_msgs in
 #decompose test14 test14_eq
   letRange 0 5 => test14_chunk1
   letRange 1 5 => test14_chunk2
@@ -1014,6 +1030,10 @@ def test24 (x : U32) : Result U32 := do
   a29 + x
 
 -- 6 sequential decompositions, each extracting 5 bindings
+/--
+warning: #decompose: 'test24_chunk2' has the same definition as 'test24_chunk1' (consider reusing the same name)
+-/
+#guard_msgs in
 #decompose test24 test24_eq
   letRange 0 5 => test24_chunk1
   letRange 1 5 => test24_chunk2
@@ -1316,7 +1336,6 @@ info: 'test31_eq' does not depend on any axioms
 -- ============================================================================
 -- Test 32: Big monadic function (66 lines) with nested if-then-else
 -- Stress test: decomposed into 10 auxiliary functions, from leaves to root.
--- Profile the #decompose command to verify it is almost instant.
 -- ============================================================================
 
 def test32 (mode : Bool) (flag : Bool) (x y z w : U32) : Result U32 := do
@@ -1391,7 +1410,6 @@ def test32 (mode : Bool) (flag : Bool) (x y z w : U32) : Result U32 := do
       let u2 ← u1 + f9
       u2 + z
 
-set_option profiler true in
 #decompose test32 test32_eq
   -- 1-4: Extract 10 heavy bindings from each inner branch
   branch 0 (branch 0 (letRange 0 10)) => test32_tt_comp
@@ -2157,7 +2175,6 @@ def test44 (d : Weekday) : Nat :=
   | .sun =>
     let a := 1000000; let b := a + 2000000; let c := b + 3000000; let d := c + 4000000; let e := d + 5000000; e
 
-set_option profiler true in
 #decompose test44 test44_eq
   branch 0 (letRange 0 5) => test44_mon
   branch 1 (letRange 0 5) => test44_tue
@@ -2588,3 +2605,25 @@ which is not definitionally equal (at reducible transparency)
 #decompose test53 test53_eq
   letRange 0 1 => test53_aux
   letRange 1 1 => test53_aux
+
+-- ============================================================================
+-- Test 54: Duplicate definition warning — different names, same body
+-- ============================================================================
+
+def test54 (x y : U32) : Result U32 := do
+  let x1 ← x + 1#u32
+  let x2 ← x1 + 1#u32
+  let x3 ← x2 + 1#u32
+  let y1 ← y + 1#u32
+  let y2 ← y1 + 1#u32
+  let y3 ← y2 + 1#u32
+  x3 + y3
+
+-- Same body extracted with different names → should warn
+/--
+warning: #decompose: 'test54_add3b' has the same definition as 'test54_add3a' (consider reusing the same name)
+-/
+#guard_msgs in
+#decompose test54 test54_eq
+  letRange 0 3 => test54_add3a
+  letRange 1 3 => test54_add3b
