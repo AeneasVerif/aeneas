@@ -227,6 +227,26 @@ theorem Array.index_SliceIndexRangeUsizeSlice {T : Type} {N : Usize}
       (core.slice.index.SliceIndexRangeUsizeSlice T)) a r =
     core.slice.index.SliceIndexRangeUsizeSlice.index r a.to_slice := by rfl
 
+@[step]
+theorem Array.index_mut_SliceIndexRangeUsizeSlice {T : Type} {N : Usize}
+    (a : Array T N) (r : core.ops.range.Range Usize)
+    (h0 : r.start ≤ r.end) (h1 : r.end ≤ N) :
+    core.array.Array.index_mut (core.ops.index.IndexMutSlice
+      (core.slice.index.SliceIndexRangeUsizeSlice T)) a r
+    ⦃ (s, back) =>
+      s.val = a.val.slice r.start r.end ∧
+      s.length = r.end.val - r.start.val ∧
+      ∀ s', (back s').val = a.val.setSlice! r.start.val s'.val ⦄ := by
+  simp only [core.array.Array.index_mut, core.ops.index.IndexMutSlice,
+    core.slice.index.Slice.index_mut]
+  have hts : a.to_slice.length = N := by simp [Array.to_slice, Slice.length]
+  simp only [core.slice.index.SliceIndexRangeUsizeSlice.index_mut,
+    show r.start ≤ r.end ∧ (r.end : Usize) ≤ a.to_slice.length from ⟨h0, by scalar_tac⟩]
+  refine ⟨?_, ?_, ?_⟩
+  · simp [Array.to_slice]
+  · simp [Slice.length, List.slice_length]; scalar_tac
+  · intro s'; simp [Array.from_slice, Array.to_slice]
+
 -- Array index/index_mut with RangeTo
 
 @[simp, step_simps]
