@@ -1910,7 +1910,6 @@ info: 'test38_eq' does not depend on any axioms
 -- Test 39: Monadic match — match in the Result monad
 -- ============================================================================
 
-set_option linter.unusedVariables false in
 def test39 (n : Nat) : Result Nat := do
   match n with
   | 0 => .ok 42
