@@ -58,4 +58,10 @@ attribute [match_pattern] HNeg.hNeg
 
 instance {ty} : HNeg (IScalar ty) (Result (IScalar ty)) where hNeg x := IScalar.neg x
 
+@[step]
+theorem HNeg.hNeg.step {ty} (x: IScalar ty) (h: x ≠ IScalar.min ty): HNeg.hNeg x ⦃ r => r = -x.val ⦄ := by
+  simp [HNeg.hNeg]
+  apply IScalar.neg_step
+  grind
+
 end Aeneas.Std
