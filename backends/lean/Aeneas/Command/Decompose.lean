@@ -328,16 +328,38 @@ private def hasNoncomputableDep (env : Environment) (e : Expr) : Bool :=
     | some (.opaqueInfo _) => true
     | _ => false
 
-/-- Add a definition. Uses `addAndCompile` + realizations when possible (for simp
-    unfolding). Falls back to `addDecl` + noncomputable tag when the value depends
-    on noncomputable or opaque constants (which cause deferred IR errors). -/
+/-- Add a definition, or reuse an existing one if a definition with the same name
+    already exists and has a definitionally equal value (checked at reducible
+    transparency to avoid expensive unfolding).
+    Uses `addAndCompile` + realizations when possible (for simp unfolding).
+    Falls back to `addDecl` + noncomputable tag when the value depends on
+    noncomputable or opaque constants (which cause deferred IR errors).
+    `clauseDesc` is used in error messages to identify which decomposition clause
+    triggered the conflict. -/
 private def addDefinition (name : Name) (levelParams : List Name)
-    (type value : Expr) (srcIsNoncomputable : Bool) : MetaM Unit := do
+    (type value : Expr) (srcIsNoncomputable : Bool)
+    (clauseDesc : MessageData := "decomposition clause") : MetaM Unit := do
+  let env ← getEnv
+  -- Check if a definition with this name already exists
+  if let some existingInfo := env.find? name then
+    match existingInfo with
+    | .defnInfo existingVal =>
+      -- Compare values at reducible transparency (cheap, mostly syntactic)
+      let isEq ← withReducible do isDefEq value existingVal.value
+      if isEq then
+        return  -- Reuse existing definition
+      else
+        throwError "#decompose: cannot apply {clauseDesc}: definition '{name}' already \
+          exists with body{indentExpr existingVal.value}\nbut the new extraction \
+          produced{indentExpr value}\nwhich is not definitionally equal (at reducible transparency)"
+    | _ =>
+      throwError "#decompose: cannot apply {clauseDesc}: '{name}' already exists \
+        but is not a definition"
+  -- Add new definition
   let decl : DefinitionVal := {
     name, levelParams, type, value,
     hints := .abbrev, safety := .safe, all := [name]
   }
-  let env ← getEnv
   let isNC := srcIsNoncomputable || hasNoncomputableDep env value
   if isNC then
     addDecl (.defnDecl decl)
@@ -354,11 +376,12 @@ private def addDefinition (name : Name) (levelParams : List Name)
 /-- Extract the whole expression as a new definition.
     Returns the call expression that replaces it. -/
 def extractFull (body : Expr) (newName : Name)
-    (levelParams : List Name) (srcIsNoncomputable : Bool) : MetaM Expr := do
+    (levelParams : List Name) (srcIsNoncomputable : Bool)
+    (clauseDesc : MessageData) : MetaM Expr := do
   let relevantFVars ← collectFreeLocalFVars body
   let fnValue ← mkLamAbstract relevantFVars body
   let fnType  ← mkForallAbstract relevantFVars (← inferType body)
-  addDefinition newName levelParams fnType fnValue srcIsNoncomputable
+  addDefinition newName levelParams fnType fnValue srcIsNoncomputable clauseDesc
   return mkAppN (mkConst newName (levelParams.map Level.param)) relevantFVars
 
 -- ============================================================================
@@ -369,7 +392,8 @@ def extractFull (body : Expr) (newName : Name)
     Returns the **full** modified body (wrapping bindings before the range too). -/
 def extractLetRange (bindings : Array BindingEntry) (terminal : Expr)
     (start count : Nat) (newName : Name)
-    (levelParams : List Name) (srcIsNoncomputable : Bool) : MetaM Expr := do
+    (levelParams : List Name) (srcIsNoncomputable : Bool)
+    (clauseDesc : MessageData) : MetaM Expr := do
   let n := bindings.size            -- number of actual bindings
   let totalPositions := n + 1       -- bindings + terminal
   let endPos := start + count
@@ -395,7 +419,7 @@ def extractLetRange (bindings : Array BindingEntry) (terminal : Expr)
     let relevantFVars ← collectFreeLocalFVars fnValue
     let fnValueClosed ← mkLamAbstract relevantFVars fnValue
     let fnTypeClosed  ← mkForallAbstract relevantFVars (← inferType fnValue)
-    addDefinition newName levelParams fnTypeClosed fnValueClosed srcIsNoncomputable
+    addDefinition newName levelParams fnTypeClosed fnValueClosed srcIsNoncomputable clauseDesc
     return mkAppN (mkConst newName (levelParams.map Level.param)) relevantFVars
 
   if includesTerminal then
@@ -632,18 +656,31 @@ partial def modifyBindingValue (e : Expr) (idx : Nat)
 -- Apply a single clause (pattern + name) to the current body
 -- ============================================================================
 
+/-- Format a decompose clause for error messages. -/
+private def formatClause (pat : DecomposePattern) (name : Name) : MessageData :=
+  let rec go : DecomposePattern → String
+    | .letRange s c => s!"letRange {s} {c}"
+    | .letAt i inner => s!"letAt {i} ({go inner})"
+    | .full => "full"
+    | .branch i inner => s!"branch {i} ({go inner})"
+    | .lam n inner => s!"lam {n} ({go inner})"
+    | .appFun inner => s!"appFun ({go inner})"
+    | .argArg i inner => s!"argArg {i} ({go inner})"
+  m!"{go pat} => {name}"
+
 /-- Apply one decompose clause: navigate with the pattern, extract, replace.
     Returns the modified function body. -/
 partial def applyClause (body : Expr) (pat : DecomposePattern) (newName : Name)
     (levelParams : List Name)
     (srcIsNoncomputable : Bool) : MetaM Expr := do
+  let clauseDesc := formatClause pat newName
   match pat with
   | .full =>
-    extractFull body newName levelParams srcIsNoncomputable
+    extractFull body newName levelParams srcIsNoncomputable clauseDesc
 
   | .letRange start count =>
     withParsedBindings body #[] fun bindings terminal => do
-      extractLetRange bindings terminal start count newName levelParams srcIsNoncomputable
+      extractLetRange bindings terminal start count newName levelParams srcIsNoncomputable clauseDesc
 
   | .letAt idx inner =>
     modifyBindingValue body idx fun value => do

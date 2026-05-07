@@ -2525,3 +2525,66 @@ info: 'test51_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test51_eq
+
+-- ============================================================================
+-- Test 52: Name reuse — same extraction applied to two symmetric ranges
+-- ============================================================================
+
+def test52 (x y : U32) : Result U32 := do
+  let x1 ← x + 1#u32
+  let x2 ← x1 + 1#u32
+  let x3 ← x2 + 1#u32
+  let y1 ← y + 1#u32
+  let y2 ← y1 + 1#u32
+  let y3 ← y2 + 1#u32
+  x3 + y3
+
+-- Both ranges extract the same function (add 3 to input), so name reuse should work
+#decompose test52 test52_eq
+  letRange 0 3 => test52_add3
+  letRange 1 3 => test52_add3
+
+/--
+info: def test52_add3 : U32 → Result (UScalar UScalarTy.U32) :=
+fun x => do
+  let x1 ← x + 1#u32
+  let x2 ← x1 + 1#u32
+  x2 + 1#u32
+-/
+#guard_msgs in
+#print test52_add3
+/--
+info: test52_eq : ∀ (x y : U32),
+  test52 x y = do
+    let x3 ← test52_add3 x
+    let y3 ← test52_add3 y
+    x3 + y3
+-/
+#guard_msgs in
+#check @test52_eq
+/--
+info: 'test52_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms test52_eq
+
+-- ============================================================================
+-- Test 53: Name reuse failure — different extractions with same name should error
+-- ============================================================================
+
+def test53 (x y : U32) : Result U32 := do
+  let x1 ← x + 1#u32
+  let y1 ← y + 2#u32
+  x1 + y1
+
+/--
+error: #decompose: cannot apply letRange 1 1 => test53_aux: definition 'test53_aux' already exists with body
+  fun x => x + 1#u32
+but the new extraction produced
+  fun y => y + 2#u32
+which is not definitionally equal (at reducible transparency)
+-/
+#guard_msgs in
+#decompose test53 test53_eq
+  letRange 0 1 => test53_aux
+  letRange 1 1 => test53_aux
