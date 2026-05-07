@@ -71,6 +71,7 @@ let () =
   let print_llbc = ref false in
 
   let set_max_heartbeats = ref false in
+  let set_max_recdepth = ref false in
 
   let spec_ls =
     [
@@ -224,6 +225,13 @@ let () =
             set_max_heartbeats := true;
             max_heartbeats := x),
         "For Lean: set the value of the `set_option maxHeartBeats ...` command \
+         at the top of the generated files" );
+      ( "-max-recdepth",
+        Arg.Int
+          (fun x ->
+            set_max_recdepth := true;
+            max_recdepth := x),
+        "For Lean: set the value of the `set_option maxRecDepth ...` command \
          at the top of the generated files" );
       ( "-eval-drops",
         Arg.Clear drop_as_no_op,
@@ -449,6 +457,9 @@ let () =
   if !set_max_heartbeats && not (backend () = Lean) then
     fail_with_error
       "The -max-heartbeats option is valid only for the Lean backend";
+  if !set_max_recdepth && not (backend () = Lean) then
+    fail_with_error
+      "The -max-recdepth option is valid only for the Lean backend";
 
   check_arg_implies !diagnose_detailed "-diagnose-detailed"
     !diagnose_micro_passes "-diagnose-micro-passes";

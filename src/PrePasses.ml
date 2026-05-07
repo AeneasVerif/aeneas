@@ -4,6 +4,7 @@
 open Types
 open TypesUtils
 open Expressions
+open ExpressionsUtils
 open LlbcAst
 open Utils
 open LlbcAstUtils
@@ -1170,13 +1171,7 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
                 (* Introduce the intermediate reference *)
                 let local_id =
                   let local_id = fresh_local ref_ty in
-                  let metadata =
-                    Copy
-                      {
-                        kind = PlaceGlobal crate.unit_metadata;
-                        ty = mk_unit_ty;
-                      }
-                  in
+                  let metadata = Constant mk_unit_const in
                   let st =
                     {
                       span;
