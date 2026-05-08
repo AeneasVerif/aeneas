@@ -463,6 +463,9 @@ let () =
   if !set_max_recdepth && not (backend () = Lean) then
     fail_with_error
       "The -max-recdepth option is valid only for the Lean backend";
+  if !emit_manifest && not (backend () = Lean) then
+    fail_with_error
+      "The -emit-manifest option is valid only for the Lean backend";
 
   check_arg_implies !diagnose_detailed "-diagnose-detailed"
     !diagnose_micro_passes "-diagnose-micro-passes";
