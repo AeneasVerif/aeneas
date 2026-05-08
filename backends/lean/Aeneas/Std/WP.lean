@@ -224,13 +224,14 @@ open Lean PrettyPrinter
 /-- Build a `Function.uncurry` chain wrapping a curried lambda over `xs`. -/
 partial def buildUncurryLam (xs : List (TSyntax `term)) (body : TSyntax `term) :
     MacroM (TSyntax `term) := do
+  let uncurryIdent := mkIdent ``Function.uncurry
   match xs with
   | [] => pure body
   | [x] => `(fun $x => $body)
-  | [a, b] => `(Function.uncurry (fun $a $b => $body))
+  | [a, b] => `($uncurryIdent (fun $a $b => $body))
   | a :: rest =>
     let inner ← buildUncurryLam rest body
-    `(Function.uncurry (fun $a => $inner))
+    `($uncurryIdent (fun $a => $inner))
 
 partial def mkBinderFun (depth : Nat) (binder : Term) (body : Term) : MacroM Term := do
   match binder with
@@ -287,43 +288,55 @@ def delabSubExpr (e : SubExpr) : Delab := withTheReader SubExpr (fun _ => e) del
 /-- A post-condition binder slot, as collected by `telescopePredn` -/
 inductive PostBinder where
   | single (e : SubExpr)
-  | tuple (subs : Array PostBinder)
+  | tuple (left right : PostBinder)
 deriving Inhabited
 
 /-- Render a `PostBinder` as a `Term`. Single binders delab through
   `elabSubExpr` while tuple binders combine into a tuple syntax. -/
 partial def PostBinder.toTerm : PostBinder → Delab
   | .single e => delabSubExpr e
-  | .tuple subs => do
-    let ts ← subs.mapM PostBinder.toTerm
-    if h : ts.size = 1 then return ts[0]
-    let head := ts[0]!
-    let tail := ts.extract 1 ts.size
-    `(($head, $tail,*))
+  | .tuple l r => do
+    let tl ← l.toTerm
+    let tr ← r.toTerm
+    `(($tl, $tr))
 
 mutual
 
 /-- If any leaf `single` slot in `slot` matches the fvar `fv`, replace it with
-`tuple newSubs` and return the updated tree. Otherwise return `none` when `fv`
+`tuple l r` and return the updated tree. Otherwise return `none` when `fv`
 is not present anywhere under `slot`. -/
 partial def PostBinder.tryDestructure (slot : PostBinder) (fv : Expr)
-    (newSubs : Array PostBinder) : Option PostBinder :=
+    (l r : PostBinder) : Option PostBinder :=
   match slot with
   | .single e =>
-    if e.expr == fv then some (.tuple newSubs) else none
-  | .tuple subs =>
-    tryDestructureSlots subs fv newSubs |>.map .tuple
+    if e.expr == fv then some (.tuple l r) else none
+  | .tuple left right =>
+    if let some left' := left.tryDestructure fv l r then
+      some (.tuple left' right)
+    else if let some right' := right.tryDestructure fv l r then
+      some (.tuple left right')
+    else none
 
 /-- Try to find a leaf `single` slot whose underlying fvar is `fv` in `slots`
-and destructure it into `tuple newSubs`. Returns `none` when `fv` is absent. -/
+and destructure it into `tuple l r`. Returns `none` when `fv` is absent. -/
 private partial def tryDestructureSlots (slots : Array PostBinder) (fv : Expr)
-    (newSubs : Array PostBinder) : Option (Array PostBinder) := do
+    (l r : PostBinder) : Option (Array PostBinder) := do
   for (slot, idx) in slots.zipIdx do
-    if let some slot' := slot.tryDestructure fv newSubs then
+    if let some slot' := slot.tryDestructure fv l r then
       return slots.set! idx slot'
   none
 
 end
+
+/-- Helper to match uncurry binders, handling eta-reduction. -/
+private def matchUncurryBinders (f : Expr) (k : Expr → Expr → Expr → Delab)
+    (fallback : Array Expr → Expr → Delab) : Delab :=
+  Meta.lambdaBoundedTelescope f 2 fun args body => do
+    if args.size == 2 then k args[0]! args[1]! body
+    else if args.size == 1 then
+      let p2 := Expr.fvar (← Lean.mkFreshFVarId)
+      k args[0]! p2 (Expr.app body p2)
+    else fallback args body
 
 /-- Peel `Function.uncurry` apps threading the new sub-binders back into the
 `slots` tree, and yield the final body via `k`. -/
@@ -334,14 +347,13 @@ partial def destructureUncurryChain (slots : Array PostBinder) (body : Expr)
   | Function.uncurry _ _ _ f x =>
     let x := x.consumeMData
     if x.isFVar then
-      Meta.lambdaBoundedTelescope f 2 fun args body => do
-        if args.size = 2 then
-          let subs := #[.single { expr := args[0]!, pos := .root },
-                        .single { expr := args[1]!, pos := .root }]
-          if let some slots' := tryDestructureSlots slots x subs then
-            destructureUncurryChain slots' body k
-          else k slots body'
+      matchUncurryBinders f (fun x1 x2 body => do
+        let s1 := .single { expr := x1, pos := .root }
+        let s2 := .single { expr := x2, pos := .root }
+        if let some slots' := tryDestructureSlots slots x s1 s2 then
+          destructureUncurryChain slots' body k
         else k slots body'
+      ) (fun _ _ => k slots body')
     else k slots body'
   | _ => k slots body'
 
@@ -356,15 +368,13 @@ partial def telescopePredn (vars : Array PostBinder) (e : SubExpr)
     k (vars ++ args.map mkSingle) { expr := body, pos }
   match_expr expr with
   | Function.uncurry _ _ _ f =>
-    Meta.lambdaBoundedTelescope f.consumeMData 2 fun args body => do
-      if args.size = 2 then
-        -- Walk the body, absorbing any `Function.uncurry _ slot` applications
-        -- that destructure the slots.
-        let outerSlots := #[PostBinder.tuple (args.map mkSingle)]
-        destructureUncurryChain outerSlots body fun newSlots newBody =>
-          telescopePredn (vars ++ newSlots) { expr := newBody, pos } k
-      else
-        finish vars args body
+    matchUncurryBinders f.consumeMData (fun x1 x2 body => do
+      -- Walk the body, absorbing any `Function.uncurry _ slot` applications
+      -- that destructure the slots.
+      let outerSlots := #[PostBinder.tuple (mkSingle x1) (mkSingle x2)]
+      destructureUncurryChain outerSlots body fun newSlots newBody =>
+        telescopePredn (vars ++ newSlots) { expr := newBody, pos } k
+    ) (finish vars · ·)
   | predn _ _ p =>
     telescopePredn vars { expr := p, pos := (pos.push 1).push 2 } k
   | _ =>
@@ -445,8 +455,8 @@ example : ok ((0, 1), 2) ⦃ (a, b) c =>
 example : ok ((0, 1), (2, 3)) ⦃ (a, b) (c, d) =>
     a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ := by simp
 
-example : ok (0, (1, 2), ((3, 4), 5)) ⦃ a (b, c) ((d, e), f) =>
-    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ∧ e = 4 ∧ f = 5 ⦄ := by simp
+example : ok (0, (1, 2), ((3, 4, 5), 6)) ⦃ a (b, c) ((d, e, f), g) =>
+    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ∧ e = 4 ∧ f = 5 ∧ g = 6 ⦄ := by simp
 
 end Aeneas
 
