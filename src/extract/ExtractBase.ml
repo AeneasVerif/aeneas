@@ -612,23 +612,11 @@ type extraction_ctx = {
       (** Set to true if at some point we extract a definition which is opaque,
           meaning we generate an axiom. If yes, and in case the user does not
           use the option [-split-files] we suggest it to the user. *)
-  manifest_entries : Manifest.entry list ref;
-      (** Accumulator for the [manifest.json] sidecar. Each [Pure.fun_decl] that
-          gets emitted to a Lean file appends one entry here. *)
-  current_lean_file : string ref;
-      (** Path of the Lean file currently being written, relative to the
-          user-supplied [-dest] directory. Used to attribute manifest entries to
-          the correct output file in [-split-files] mode. *)
-  current_lean_namespace : string ref;
-      (** Namespace under which the file currently being written places its
-          declarations. Used to build fully-qualified [lean_id] values. *)
-  manifest_lean_files : string list ref;
-      (** All Lean files that have been written, in emission order, as paths
-          relative to [-dest]. Recorded once at the bottom of [extract_file] so
-          the manifest can list every output produced by this run. *)
-  manifest_dest_dir : string ref;
-      (** The directory passed via [-dest], used to make manifest paths relative
-          to it (and recorded in the manifest envelope). *)
+  manifest_state : Manifest.state;
+      (** Accumulator for the [manifest.json] sidecar (only meaningful when
+          [-emit-manifest] is on). The fields are mutable; [extract_file]
+          updates the per-file fields and [record_manifest_*] helpers prepend to
+          the per-kind entry lists. *)
 }
 
 let extraction_ctx_to_fmt_env (ctx : extraction_ctx) : PrintPure.fmt_env =
