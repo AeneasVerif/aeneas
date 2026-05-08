@@ -1910,7 +1910,6 @@ info: 'test38_eq' does not depend on any axioms
 -- Test 39: Monadic match — match in the Result monad
 -- ============================================================================
 
-set_option linter.unusedVariables false in
 def test39 (n : Nat) : Result Nat := do
   match n with
   | 0 => .ok 42
@@ -2828,7 +2827,6 @@ def test56 (b : Bool) (x y : U32) : Result U32 := do
     let b50 ← b49 + 2#u32
     pure b50
 
-set_option profiler true in
 #decompose test56 test56_eq
   branch 0 full => test56_then
   branch 1 full => test56_else
