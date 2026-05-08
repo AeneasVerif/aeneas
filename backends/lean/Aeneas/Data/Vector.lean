@@ -3,10 +3,9 @@ import Aeneas.Data.Array
 namespace Vector
 
 attribute [-simp] List.getElem!_eq_getElem?_getD getElem!_pos
-attribute [local simp] Array.getElem!_eq_toList_getElem! Array.getElem_eq_toList_getElem
 attribute [scalar_tac self.toArray] Vector.size_toArray
-
 attribute [-simp] Array.getElem!_toList
+attribute [local simp ←] Array.getElem!_toList
 
 @[scalar_tac xs.toList]
 theorem toList_length {α : Type u} {n : ℕ} (xs : Vector α n) :
@@ -23,7 +22,7 @@ theorem getElem!_eq_toArray_getElem! {α} {n} [Inhabited α] (s : Vector α n) (
   s[i]! = s.toArray[i]! := by
   cases s; simp
   unfold instGetElem?OfGetElemOfDecidable decidableGetElem?
-  simp only [getElem_mk, Array.getElem_eq_toList_getElem, List.Inhabited_getElem_eq_getElem!,
+  simp only [getElem_mk, ← Array.getElem_toList, List.Inhabited_getElem_eq_getElem!,
     dite_eq_ite]; split <;> simp_all only [Option.ite_none_right_eq_some, Option.some.injEq, ite_eq_right_iff]
   simp only [reduceCtorEq, imp_false, not_lt] at *
   simp only [outOfBounds, Std.DHashMap.Internal.AssocList.panicWithPosWithDecl_eq,
@@ -33,7 +32,7 @@ theorem getElem!_eq_toArray_getElem! {α} {n} [Inhabited α] (s : Vector α n) (
 theorem getElem!_default [Inhabited α] (ls : Vector α n) (i : ℕ)
   (h : n ≤ i) : ls[i]! = default := by
   have : ls.toArray.size ≤ i := by scalar_tac
-  simp only [getElem!_eq_toArray_getElem!, Array.getElem!_eq_toList_getElem!]; simp_lists
+  simp only [getElem!_eq_toArray_getElem!, ← Array.getElem!_toList]; simp_lists
 
 @[local simp]
 theorem getElem_eq_toArray_getElem {α} {n} [Inhabited α] (s : Vector α n) (i : ℕ) (hi : i < n) :
@@ -89,7 +88,7 @@ theorem getElem!_set! {α : Type u}
   (xs.set! i x)[j]! = x := by
   have : i < xs.toArray.size := by scalar_tac
   simp only [getElem!_eq_toArray_getElem!, toArray_set!, Array.set!_eq_setIfInBounds,
-    Array.getElem!_eq_toList_getElem!, Array.toList_setIfInBounds]
+    ← Array.getElem!_toList, Array.toList_setIfInBounds]
   simp_lists
 
 @[simp, simp_lists_safe]
@@ -111,18 +110,18 @@ theorem getElem!_replicate {α : Type u} [Inhabited α] {i n : ℕ} {a : α} (h 
 @[simp, simp_lists_safe]
 theorem getElem!_cast {n m : ℕ} {α : Type u_1} [Inhabited α] (h: n = m) (v : Vector α n) (i : ℕ):
   (Vector.cast h v)[i]! = v[i]! := by
-  simp only [getElem!_eq_toArray_getElem!, toArray_cast, Array.getElem!_eq_toList_getElem!]
+  simp only [getElem!_eq_toArray_getElem!, toArray_cast, ← Array.getElem!_toList]
 
 theorem eq_iff_forall_eq_getElem! {α} {n} [Inhabited α] (l0 l1 : Vector α n) :
   l0 = l1 ↔ (∀ i < n, l0[i]! = l1[i]!) := by
   cases l0; cases l1; simp only [eq_mk, Array.eq_iff_forall_eq_getElem!,
-    Array.getElem!_eq_toList_getElem!, true_and, getElem!_eq_toArray_getElem!, *]
+    ← Array.getElem!_toList, true_and, getElem!_eq_toArray_getElem!, *]
 
 @[simp_lists_safe]
 theorem getElem!_map_eq {α β} [Inhabited α] [Inhabited β] {n} (f : α → β) (x : Vector α n) (i : ℕ) (hi : i < n) :
   (x.map f)[i]! = f x[i]! := by
   have : i < x.size := by scalar_tac
-  simp only [getElem!_eq_toArray_getElem!, toArray_map, Array.getElem!_eq_toList_getElem!,
+  simp only [getElem!_eq_toArray_getElem!, toArray_map, ← Array.getElem!_toList,
     Array.toList_map]
   simp_lists
 
@@ -130,13 +129,13 @@ theorem getElem!_map_eq {α β} [Inhabited α] [Inhabited β] {n} (f : α → β
 theorem getElem!_map_eq_default {α β} [Inhabited α] [Inhabited β] {n} (f : α → β) (x : Vector α n) (i : ℕ) (hi : n ≤ i) :
   (x.map f)[i]! = default := by
   have : x.size ≤ i := by scalar_tac
-  simp only [getElem!_eq_toArray_getElem!, toArray_map, Array.getElem!_eq_toList_getElem!,
+  simp only [getElem!_eq_toArray_getElem!, toArray_map, ← Array.getElem!_toList,
     Array.toList_map]
   simp_lists
 
 @[simp_lists_safe]
 theorem getElem!_range_of_lt {n i : Nat}  (hi : i < n) : (Vector.range n)[i]! = i := by
-  simp only [getElem!_eq_toArray_getElem!, toArray_range, Array.getElem!_eq_toList_getElem!,
+  simp only [getElem!_eq_toArray_getElem!, toArray_range, ← Array.getElem!_toList,
     Array.toList_range]
   simp_lists
 
@@ -151,17 +150,17 @@ theorem set!_comm' {α} {i j : Nat} (h : j < i)
 @[simp_lists_safe]
 theorem getElem!_ofFn {n : ℕ} {α : Type u} [Inhabited α] (f : Fin n → α) (i : ℕ) (hi : i < n) :
   (Vector.ofFn f)[i]! = f ⟨ i, hi ⟩ := by
-  simp only [ofFn, getElem!_eq_toArray_getElem!, Array.getElem!_eq_toList_getElem!,
+  simp only [ofFn, getElem!_eq_toArray_getElem!, ← Array.getElem!_toList,
     Array.toList_ofFn, List.getElem!_ofFn, hi]
 
 @[simp, simp_lists_safe]
 theorem getElem!_toList {α} {n} [Inhabited α] (v : Vector α n) (i : ℕ) :
   v.toList[i]! = v[i]! := by
-  simp only [toList, getElem!_eq_toArray_getElem!, Array.getElem!_eq_toList_getElem!]
+  simp only [toList, getElem!_eq_toArray_getElem!, ← Array.getElem!_toList]
 
 @[simp, simp_lists_safe]
 theorem getElem!_toArray {α} {n} [Inhabited α] (v : Vector α n) (i : ℕ) :
   v.toArray[i]! = v[i]! := by
-  simp only [Vector.getElem!_eq_toArray_getElem!, Array.getElem!_eq_toList_getElem!]
+  simp only [Vector.getElem!_eq_toArray_getElem!, ← Array.getElem!_toList]
 
 end Vector

@@ -315,7 +315,11 @@ partial def elabMonadicAsDoElem
   | [] =>
     let ctx ← read
     let expectedType ← ElabM.mkMonadicType ctx.expectedAlpha
-    elabAtType expectedType
+    let result ← elabAtType expectedType
+    /- Force pending synthetic mvars to resolve while any enclosing fvars are still in
+       scope. -/
+    synthesizeSyntheticMVarsNoPostponing
+    pure result
   | _ =>
     let unitType ← mkConstWithFreshMVarLevels ``Unit
     ElabM.withLocalDeclD `_ unitType fun fvar => do

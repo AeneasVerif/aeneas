@@ -576,17 +576,17 @@ open ScalarElab
 # To Little-Endian
 -/
 uscalar_no_usize def core.num.«%S».to_le_bytes (x : «%S») : Array U8 (%Size)#usize := ⟨ x.bv.toLEBytes.map UScalar.mk, by
-  simp only [List.length_map, UScalar.ofNatCore_val_eq, @BitVec.toLEBytes_length ((%Size) * 8)] ⟩
+  simp [BitVec.toLEBytes_length] ⟩
 iscalar_no_isize def core.num.«%S».to_le_bytes (x : «%S») : Array I8 (%Size)#usize := ⟨ x.bv.toLEBytes.map IScalar.mk, by
-  simp only [List.length_map, UScalar.ofNatCore_val_eq, @BitVec.toLEBytes_length ((%Size) * 8)] ⟩
+  simp [BitVec.toLEBytes_length] ⟩
 
 /-!
 # To Big-Endian
 -/
 uscalar_no_usize def core.num.«%S».to_be_bytes (x : «%S») : Array U8 (%Size)#usize := ⟨ x.bv.toBEBytes.map UScalar.mk, by
-  simp only [List.length_map, UScalar.ofNatCore_val_eq, @BitVec.toBEBytes_length ((%Size) * 8)] ⟩
+  simp [BitVec.toBEBytes_length] ⟩
 iscalar_no_isize def core.num.«%S».to_be_bytes (x : «%S») : Array I8 (%Size)#usize := ⟨ x.bv.toBEBytes.map IScalar.mk, by
-  simp only [List.length_map, UScalar.ofNatCore_val_eq, @BitVec.toBEBytes_length ((%Size) * 8)] ⟩
+  simp [BitVec.toBEBytes_length] ⟩
 
 /-!
 # From Little-Endian
@@ -625,12 +625,38 @@ theorem core.num.«%S».to_le_bytes.step_spec (x : «%S») :
 uscalar_no_usize @[step]
 theorem core.num.«%S».from_le_bytes.step_spec (x : Array U8 (%Size)#usize) :
   lift (core.num.«%S».from_le_bytes x) ⦃ y => y.bv = (BitVec.fromLEBytes (x.val.map U8.bv)).cast (by simp) ⦄ := by
-  simp only [spec_ok, lift, from_le_bytes]
+  simp only [spec_ok, lift, from_le_bytes]; rfl
 
 iscalar_no_isize @[step]
 theorem core.num.«%S».from_le_bytes.step_spec (x : Array I8 (%Size)#usize) :
   lift (core.num.«%S».from_le_bytes x) ⦃ y => y.bv = (BitVec.fromLEBytes (x.val.map I8.bv)).cast (by simp) ⦄  := by
-  simp only [spec_ok, lift, from_le_bytes]
+  simp only [spec_ok, lift, from_le_bytes]; rfl
+
+/-!
+# Progress theorems: To Big-Endian
+-/
+uscalar_no_usize @[step]
+theorem core.num.«%S».to_be_bytes.step_spec (x : «%S») :
+  lift (core.num.«%S».to_be_bytes x) ⦃ y => y.val = x.bv.toBEBytes.map (@UScalar.mk UScalarTy.U8) ⦄ := by
+  simp only [spec_ok, lift, to_be_bytes, UScalarTy.U8_numBits_eq]
+
+iscalar_no_isize @[step]
+theorem core.num.«%S».to_be_bytes.step_spec (x : «%S») :
+  lift (core.num.«%S».to_be_bytes x) ⦃ y => y.val = x.bv.toBEBytes.map (@IScalar.mk IScalarTy.I8) ⦄ := by
+  simp only [spec_ok, lift, to_be_bytes, IScalarTy.I8_numBits_eq]
+
+/-!
+# Progress theorems: From Big-Endian
+-/
+uscalar_no_usize @[step]
+theorem core.num.«%S».from_be_bytes.step_spec (x : Array U8 (%Size)#usize) :
+  lift (core.num.«%S».from_be_bytes x) ⦃ y => y.bv = (BitVec.fromBEBytes (x.val.map U8.bv)).cast (by simp) ⦄ := by
+  simp only [spec_ok, lift, from_be_bytes]; rfl
+
+iscalar_no_isize @[step]
+theorem core.num.«%S».from_be_bytes.step_spec (x : Array I8 (%Size)#usize) :
+  lift (core.num.«%S».from_be_bytes x) ⦃ y => y.bv = (BitVec.fromBEBytes (x.val.map I8.bv)).cast (by simp) ⦄  := by
+  simp only [spec_ok, lift, from_be_bytes]; rfl
 
 end Std
 

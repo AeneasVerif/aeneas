@@ -436,26 +436,26 @@ theorem BitVec.fromLEBytes_getElem! (v : List Byte) (j : ℕ) :
   (BitVec.fromLEBytes v)[j]! = v[j / 8]!.testBit (j % 8) := by
   unfold BitVec.fromLEBytes
   match hv: v with
-  | [] => simp only [List.length_nil, Nat.mul_zero, zero_le, getElem!_eq_false,
-    List.getElem!_default, Byte.testBit_default]
+  | [] => simp only [List.length_nil, Nat.mul_zero, zero_le,
+    List.getElem!_default, Byte.testBit_default]; erw [getElem!_eq_false _ _ (Nat.zero_le _)]
   | x :: v' =>
-    simp only [List.length_cons, getElem!_or]
+    simp only [List.length_cons]; erw [getElem!_or]
     by_cases hj: j < 8
     . have : j < 8 * (v'.length + 1) := by scalar_tac
       simp_lists
-      simp only [getElem!_eq_testBit_toNat, toNat_setWidth, Nat.testBit_mod_two_pow, decide_true,
-        Bool.true_and, this]
+      erw [getElem!_eq_testBit_toNat]
       have : j % 8 = j := by apply Nat.mod_eq_of_lt; omega
-      simp only [this]
+      simp [*]
     . have : 0 < j / 8 := by scalar_tac +nonLin
       simp_lists
-      simp only [getElem!_eq_testBit_toNat, toNat_setWidth, Nat.testBit_mod_two_pow,
-        toNat_shiftLeft, Nat.ofNat_pos, mul_lt_mul_iff_right₀, lt_add_iff_pos_right, Nat.lt_one_iff,
+      erw [getElem!_eq_testBit_toNat, getElem!_eq_testBit_toNat, BitVec.toNat_shiftLeft]
+      simp only [toNat_setWidth, Nat.testBit_mod_two_pow,
+        Nat.ofNat_pos, mul_lt_mul_iff_right₀, lt_add_iff_pos_right, Nat.lt_one_iff,
         pos_of_gt, toNat_mod_cancel_of_lt, Nat.testBit_shiftLeft, ge_iff_le]
       have : 8 ≤ j := by omega
-      simp only [this, decide_true, Bool.true_and]
+      simp [*]
       have := BitVec.fromLEBytes_getElem! v' (j - 8)
-      simp only [getElem!_eq_testBit_toNat] at this
+      erw [getElem!_eq_testBit_toNat] at this
       simp only [this]
       simp_lists
       by_cases hj': j < 8 * (v'.length + 1)

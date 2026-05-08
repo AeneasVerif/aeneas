@@ -97,6 +97,13 @@ def core.iter.traits.iterator.IteratorSliceIter (T : Type) :
 @[rust_type "core::slice::iter::ChunksExact" (body := .opaque)]
 structure core.slice.iter.ChunksExact (T : Type) where
   chunks : List (Slice T)
+  remainder : Slice T
+
+@[rust_fun
+  "core::slice::iter::{core::slice::iter::ChunksExact<'a, @T>}::remainder"]
+def core.slice.iter.ChunksExact.getRemainder
+  {T : Type} (self : core.slice.iter.ChunksExact T) : Result (Slice T) :=
+  ok self.remainder
 
 @[rust_fun
   "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::ChunksExact<'a, @T>, &'a [@T]>}::next"]
@@ -105,7 +112,7 @@ def core.slice.iter.IteratorChunksExact.next
   Result ((Option (Slice T)) × (core.slice.iter.ChunksExact T)) :=
   match self.chunks with
   | [] => ok (none, self)
-  | chunk :: chunks => ok (some chunk, { chunks })
+  | chunk :: chunks => ok (some chunk, { chunks, remainder := self.remainder })
 
 @[rust_fun
   "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::ChunksExact<'a, @T>, &'a [@T]>}::step_by"]
@@ -138,11 +145,56 @@ def core.iter.traits.iterator.IteratorChunksExact (T : Type) :
   take := core.slice.iter.IteratorChunksExact.take
 }
 
+/-- Split a list into non-overlapping chunks of exactly size `n`, returning the
+    full-sized chunks and the trailing remainder (which has fewer than `n` elements). -/
+def List.toChunksExact (n : Nat) (hn : 0 < n) (l : List α) :
+    List (List α) × List α :=
+  if _h : l.length < n then ([], l)
+  else
+    let (chunks, rem) := toChunksExact n hn (l.drop n)
+    (l.take n :: chunks, rem)
+termination_by l.length
+decreasing_by simp [List.length_drop]; omega
+
+theorem List.toChunksExact_chunk_length
+    {n : Nat} (hn : 0 < n) (l : List α) :
+    ∀ c ∈ (List.toChunksExact n hn l).1, c.length ≤ n := by
+  unfold toChunksExact
+  split
+  · simp
+  · simp only [List.mem_cons]
+    intro c hc
+    rcases hc with rfl | hc
+    · simp [List.length_take]
+    · exact toChunksExact_chunk_length hn _ c hc
+termination_by l.length
+decreasing_by simp [List.length_drop]; omega
+
+theorem List.toChunksExact_remainder_length
+    {n : Nat} (hn : 0 < n) (l : List α) :
+    (List.toChunksExact n hn l).2.length ≤ l.length := by
+  unfold toChunksExact
+  split
+  · simp
+  · simp only []
+    have := toChunksExact_remainder_length hn (l.drop n)
+    simp [List.length_drop] at this
+    omega
+termination_by l.length
+decreasing_by simp [List.length_drop]; omega
+
 @[rust_fun "core::slice::{[@T]}::chunks_exact"]
 def core.slice.Slice.chunks_exact {T : Type} (s : Slice T) (chunk_size : Std.Usize) :
   Result (core.slice.iter.ChunksExact T) :=
-  if chunk_size.val > 0 && s.len % chunk_size.val = 0 then
-    ok ⟨ List.map (fun s => ⟨ s, by sorry ⟩) (s.val.toChunks chunk_size.val) ⟩
+  if hcs : chunk_size.val > 0 then
+    let result := List.toChunksExact chunk_size.val hcs s.val
+    let sliceChunks := result.1.attach.map fun ⟨c, hc⟩ => ⟨c, by
+        have := List.toChunksExact_chunk_length hcs s.val c hc
+        scalar_tac⟩
+    ok { chunks := sliceChunks,
+         remainder := ⟨result.2, by
+           have := List.toChunksExact_remainder_length hcs s.val
+           scalar_tac⟩ }
   else fail .panic
 
 

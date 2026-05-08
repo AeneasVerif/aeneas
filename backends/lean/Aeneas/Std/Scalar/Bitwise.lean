@@ -183,8 +183,8 @@ theorem UScalar.ShiftRight_IScalar_spec {ty0 ty1} (x : UScalar ty0) (y : IScalar
   := by
   have hy1 : y.toNat < ty0.numBits := by scalar_tac
   simp only [spec_ok, HShiftRight.hShiftRight, shiftRight_IScalar, hy0, shiftRight, hy1, reduceIte]
-  simp only [BitVec.ushiftRight_eq, val, Nat.instShiftRight]
-  simp only [IScalar.toNat, BitVec.toNat_ushiftRight, bv_toNat, Nat.shiftRight_eq, and_self]
+  simp only [BitVec.ushiftRight_eq, val]
+  simp only [IScalar.toNat, BitVec.toNat_ushiftRight, bv_toNat, and_true]; rfl
 
 uscalar @[step] theorem «%S».ShiftRight_IScalar_spec {ty1} (x : «%S») (y : IScalar ty1) (hy0 : 0 ≤ y.val) (hy : y.val < %BitWidth) :
   (x >>> y) ⦃ z => z.val = x.val >>> y.toNat ∧ z.bv = x.bv >>> y.toNat ⦄
