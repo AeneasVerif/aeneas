@@ -262,11 +262,27 @@ Some theorems which automatically lift comparisons between machine scalars, with
 attribute [bvify] UScalar.eq_equiv_bv_eq IScalar.eq_equiv_bv_eq
                         gt_iff_lt ge_iff_le true_and and_true
 
-@[bvify]
 theorem UScalar.lt_equiv_bv_lt {ty : UScalarTy} (x y : UScalar ty) : x < y ↔ x.bv < y.bv := by rfl
-
-@[bvify]
 theorem UScalar.le_equiv_bv_le {ty : UScalarTy} (x y : UScalar ty) : x ≤ y ↔ x.bv ≤ y.bv := by rfl
+
+/- We mark specialized (per scalar type) versions of `lt_equiv_bv_lt` and `le_equiv_bv_le`
+   with `@[bvify]` instead of the generic versions above. The reason is that the generic
+   versions produce `@instLTBitVec (UScalarTy.numBits ty)` where the bitwidth is
+   `UScalarTy.numBits ty` — an un-reduced match expression. `simp` cannot rewrite inside
+   typeclass instance arguments, so `bv_decide` sees the LT instance as opaque and fails
+   with "spurious counterexample". The specialized versions directly produce concrete
+   bitwidths (e.g., `@instLTBitVec 32` for U32), avoiding this issue. -/
+@[bvify] theorem U8.lt_bv  (x y : U8)  : x < y ↔ x.bv < y.bv := by rfl
+@[bvify] theorem U16.lt_bv (x y : U16) : x < y ↔ x.bv < y.bv := by rfl
+@[bvify] theorem U32.lt_bv (x y : U32) : x < y ↔ x.bv < y.bv := by rfl
+@[bvify] theorem U64.lt_bv (x y : U64) : x < y ↔ x.bv < y.bv := by rfl
+@[bvify] theorem U128.lt_bv (x y : U128) : x < y ↔ x.bv < y.bv := by rfl
+
+@[bvify] theorem U8.le_bv  (x y : U8)  : x ≤ y ↔ x.bv ≤ y.bv := by rfl
+@[bvify] theorem U16.le_bv (x y : U16) : x ≤ y ↔ x.bv ≤ y.bv := by rfl
+@[bvify] theorem U32.le_bv (x y : U32) : x ≤ y ↔ x.bv ≤ y.bv := by rfl
+@[bvify] theorem U64.le_bv (x y : U64) : x ≤ y ↔ x.bv ≤ y.bv := by rfl
+@[bvify] theorem U128.le_bv (x y : U128) : x ≤ y ↔ x.bv ≤ y.bv := by rfl
 
 def bvifyAddSimpThms (n : Expr) : TacticM (Array FVarId) := do
   let addThm (thName : Name) : TacticM FVarId := do

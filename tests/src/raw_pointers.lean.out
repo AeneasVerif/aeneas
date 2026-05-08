@@ -1,0 +1,5 @@
+[[92mInfo[39m ] Imported: tests/llbc/raw_pointers.llbc
+[[91mError[39m] Unsupported: raw pointer dereference. Aeneas does not yet support dereferencing raw pointers (this would require separation logic support)
+Source: 'tests/src/raw_pointers.rs', lines 7:8-7:19
+Compiler source: interp/InterpPaths.ml, line 116
+
