@@ -376,7 +376,7 @@ partial def Script.toSyntax (script : Script) : MetaM (Array Syntax.Tactic) := d
     pure (s0 ++ s1)
 
 inductive TargetKind where
-| bind (names : Array Name)
+| bind (names : Array (Option Name))
 | switch (info : Bifurcation.Info)
 | result
 | unknown
@@ -397,20 +397,23 @@ def analyzeTarget : TacticM TargetKind := do
         let #[_m, _self, _α, _β, _value, cont] := e.getAppArgs
           | throwError "Expected bind to have 6 arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
         -- Peel a `Function.uncurry (fun x₁ … xₙ => body)` wrapper, if present,
-        -- before looking at the binder names. 
+        -- before looking at the binder names.
         let inner :=
-          if cont.isAppOfArity ``Function.uncurry 4 then cont.appArg!
-          else if cont.isAppOfArity ``Function.uncurry 5 then cont.appFn!.appArg!
-          else cont
+          match_expr cont with
+          | Function.uncurry _ _ _ f => f
+          | Function.uncurry _ _ _ f _ => f
+          | _ => cont
         if inner.isLambda then
-          -- Collect ALL binders so multi-binder continuations like
-          -- `Function.uncurry (fun a b => …)` propagate every user name.
+          -- The do elaborator gives nested-tuple binders a real leaf name
+          -- (`((a, b), (c, d))` produces `fun a c => …`), so reading off the
+          -- user names here is enough.
           Lean.Meta.lambdaTelescope inner fun xs _ => do
-            let names ← xs.mapM (·.fvarId!.getUserName)
+            let names ← xs.mapM fun x => do
+              let n ← x.fvarId!.getUserName
+              if n.hasMacroScopes ∨ Step.Name.isElabSynthesized n then pure none
+              else pure (some n)
             pure (.bind names)
         else
-          -- Couldn't peek at binder names; the real names will be recovered
-          -- by `tryStep`/`getFirstBind` during the actual step.
           pure (.bind #[])
       else if let .some bfInfo ← Bifurcation.Info.ofExpr e then
         pure (.switch bfInfo)
@@ -507,14 +510,8 @@ where
     let targetKind ← analyzeTarget
     match targetKind with
     | .bind varNames => do
-      -- A binder name shouldn't be used if it is either macro-scoped or synthesized.
-      -- We fall back to post-condition names for unusable names if every name is unusable.
-      -- Otherwise we emit one slot per binder, with `none` for the unusable ones.
-      let unusable (n : Name) : Bool :=
-        n.hasMacroScopes || Step.Name.isElabSynthesized n
-      let names :=
-        if varNames.isEmpty || varNames.all unusable then #[]
-        else varNames.map fun n => if unusable n then none else some n
+      -- Fall back to post-condition names if every binder slot is `none`.
+      let names := if varNames.all Option.isNone then #[] else varNames
       let (info, mainGoalAndState) ← onBind cfg names ss
       /- Continue, if necessary -/
       match mainGoalAndState with

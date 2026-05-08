@@ -157,6 +157,14 @@ inductive PatShape where
   | ctor (indName : Name) (subs : Array PatShape)
   deriving Inhabited
 
+/-- First non-anonymous leaf name in the pattern, if any. Used to give
+    nested-tuple binders a meaningful name (e.g. `(a, b)` reuses `a`) so the
+    name survives `Function.uncurry_apply_eq` reduction in `step*` analysis. -/
+partial def PatShape.firstLeafName? : PatShape → Option Name
+  | .leaf n => if n == `_ then none else some n
+  | .prod subs => subs.findSome? firstLeafName?
+  | .ctor _ subs => subs.findSome? firstLeafName?
+
 /-- Walk `pat` alongside its expected `ty`, producing a `PatShape`. -/
 partial def analyzePat (pat : Term) (ty : Expr) : ElabM PatShape := do
   let analyzeSubs (subPats : Array Term) (subTypes : List Expr) : ElabM (Array PatShape) :=
@@ -198,7 +206,7 @@ partial def mkCurriedLambda (subs : List PatShape) (types : List Expr)
   | sub :: restSubs, ty :: restTypes =>
     let n := match sub with
       | .leaf n => n
-      | _ => Name.mkSimple s!"_x{idx}"
+      | _ => (sub.firstLeafName?).getD (Name.mkSimple s!"_x{idx}")
     ElabM.withLocalDeclD n ty fun fv => do
       let innerBody ← mkCurriedLambda restSubs restTypes
         (fun fs => body (#[fv] ++ fs)) (idx + 1)

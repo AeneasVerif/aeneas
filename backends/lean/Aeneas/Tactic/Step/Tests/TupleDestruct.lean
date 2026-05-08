@@ -46,11 +46,11 @@ info: Try this:
   [apply]     simp only [step_simps]
     let* ⟨ a, b, a_post1, a_post2 ⟩ ← twoNats_spec
     let* ⟨ c, d, c_post1, c_post2 ⟩ ← twoNats_spec
-    let* ⟨ _, _, _ ⟩ ← fourNats_spec
-    let* ⟨ _, _, _ ⟩ ← fourNats_spec
+    let* ⟨ a, c, a_post ⟩ ← fourNats_spec
+    let* ⟨ e, g, e_post ⟩ ← fourNats_spec
     agrind
 -/
-#guard_msgs in 
+#guard_msgs in
 example : testTuples ⦃ res => res = 18⦄ := by
   unfold testTuples
   step*?

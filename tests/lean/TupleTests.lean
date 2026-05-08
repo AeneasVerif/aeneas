@@ -31,8 +31,8 @@ example : baz ⦃ res => res = 18⦄ := by
   simp only [step_simps]
   let* ⟨ a, b, a_post1, a_post2 ⟩ ← foo_spec
   let* ⟨ c, d, c_post1, c_post2 ⟩ ← foo_spec
-  let* ⟨ _, _, _ ⟩ ← bar_spec
-  let* ⟨ _, _, _ ⟩ ← bar_spec
+  let* ⟨ a, c, a_post ⟩ ← bar_spec
+  let* ⟨ e, g, e_post ⟩ ← bar_spec
   agrind
 
 def mkTriple (x : Nat) : Result ((Nat × Nat) × Nat) :=

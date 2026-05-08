@@ -241,36 +241,38 @@ def getFirstBind (goalTy : Expr) : MetaM (Bool × Expr) := do
   then pure (true, args[4])
   else pure (false, compTy)
 
+/-- Names introduced by the `do` elaborator's `mkPatContinuation` as a
+    fallback (`_xN`) when no leaf name is available — e.g. all leaves are
+    `_`. These get filtered out so we fall back to spec post-condition names. -/
+def Name.isElabSynthesized : Name → Bool
+  | .str .anonymous s => s.startsWith "_x" && s.length > 2 && (s.drop 2).all Char.isDigit
+  | _ => false
+
 /-- Extract the variable names from the bind continuation in the current goal.
-    Returns an empty array if the goal is not a bind, or if the continuation
-    has no extractable lambda binders. The array contains `some name` for
-    user-supplied names and `none` for compiler-generated (macro-scoped) ones. -/
+    The do elaborator already gives nested-tuple binders a real leaf name
+    (e.g. `((a, b), (c, d))` produces `fun a c => …`), so we just
+    `lambdaTelescope` the continuation and read off the user names. -/
 def getBindVarNames : TacticM (Array (Option Name)) := do
   try
     withMainContext do
     let goalTy ← (← getMainGoal).getType
     let goalTy ← instantiateMVars goalTy
     forallTelescope goalTy fun _ goalTy => do
-    let (spec?, args) := goalTy.consumeMData.withApp (fun f args => (f, args))
-    if h : spec?.isConstOf ``Std.WP.spec ∧ args.size = 3 then
-      let e := args[1]
-      let bargs := e.getAppArgs
-      let fn := e.getAppFn
-      if h2 : (fn.isConstOf ``Bind.bind ∨ fn.isConstOf ``bind) ∧ bargs.size = 6 then
-        let cont := bargs[5]
-        -- Peel `Function.uncurry (fun a b … => …)` (arity 4 = unapplied,
-        -- arity 5 = applied to a value) so we can see the inner lambda.
-        let inner :=
-          if cont.isAppOfArity ``Function.uncurry 4 then cont.appArg!
-          else if cont.isAppOfArity ``Function.uncurry 5 then cont.appFn!.appArg!
-          else cont
-        if inner.isLambda then
-          lambdaTelescope inner fun xs _ => do
-            xs.mapM fun x => do
-              let rawName ← x.fvarId!.getUserName
-              if rawName.hasMacroScopes then pure none else pure (some rawName)
-        else return #[]
-      else return #[]
+    let_expr Std.WP.spec _ m _ := goalTy | return #[]
+    let_expr Bind.bind _ _ _ _ _ cont := m | return #[]
+    -- Peel `Function.uncurry (fun a b … => …)` (unapplied, or applied to a
+    -- value) so we can see the inner lambda.
+    let inner :=
+      match_expr cont with
+      | Function.uncurry _ _ _ f => f
+      | Function.uncurry _ _ _ f _ => f
+      | _ => cont
+    if inner.isLambda then
+      lambdaTelescope inner fun xs _ => do
+        xs.mapM fun x => do
+          let n ← x.fvarId!.getUserName
+          if n.hasMacroScopes ∨ Name.isElabSynthesized n then pure none
+          else pure (some n)
     else return #[]
   catch _ => pure #[]
 
@@ -294,21 +296,12 @@ partial def getPostNames (e : Expr) : MetaM (Array (Option Name)) := do
         if name.hasMacroScopes then pure (some none) else pure (some (some name))
       let rest ← getPostNames body
       pure (vars ++ rest)
-  else if e.isAppOf ``Std.WP.curry then
-    -- WP.curry {α β γ} (f : α × β → γ) : α → β → γ
-    let args := e.getAppArgs
-    if h: args.size = 4 then
-      getPostNames args[3]
-    else pure #[]
-  else if e.isAppOfArity ``Std.WP.predn 3 then
-    -- predn {α β} (p : α → β → Prop) : α × β → Prop
-    -- The inner predicate is the third (and last) explicit argument.
-    getPostNames e.getAppArgs[2]!
-  else if e.isAppOfArity ``Function.uncurry 4 then
-    -- Function.uncurry {α β γ} (f : α → β → γ) : α × β → γ
-    -- The (curried) lambda is the fourth (and last) argument.
-    getPostNames e.getAppArgs[3]!
-  else pure #[]
+  else
+    match_expr e with
+    | Std.WP.curry _ _ _ f => getPostNames f
+    | Std.WP.predn _ _ p => getPostNames p
+    | Function.uncurry _ _ _ f => getPostNames f
+    | _ => pure #[]
 
 /-- Extract the names used in the post-condition of the current goal.
     The goal should have the shape `spec program post`. -/
@@ -322,21 +315,11 @@ def getPostNamesFromGoal : TacticM (Array (Option Name)) := do
     else pure #[]
   catch _ => pure #[]
 
-/-- Names introduced by the `do` elaborator's `mkPatContinuation` for
-    non-leaf tuple/ctor binders. These should be replaced by post-condition
-    names when possible. -/
-def Name.isElabSynthesized : Name → Bool
-  | .str .anonymous s => s.startsWith "_x" && s.length > 2 && (s.drop 2).all Char.isDigit
-  | _ => false
-
 /-- Extract variable names from the current goal for naming `step` outputs.
     If the goal is a bind (`let x ← ...` or `let (a, b, …) ← …`), extracts the
-    binding names. Synthesized are dropped. -/
+    binding names; otherwise falls back to the spec's post-condition. -/
 def getVarNamesFromGoal : TacticM (Array (Option Name) × Option Name) := do
   let bindNames ← getBindVarNames
-  let bindNames := bindNames.map fun n? => match n? with
-    | some n => if Name.isElabSynthesized n then none else some n
-    | none => none
   if bindNames.any Option.isSome then
     pure (bindNames, bindNames.findSome? id)
   else
