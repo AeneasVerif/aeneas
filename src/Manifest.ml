@@ -1,21 +1,11 @@
-(** Emit a [manifest.json] file alongside the extracted backend output.
+(** Emit a [manifest.json] file alongside the extracted Lean files.
 
-    The manifest is a sidecar of *Aeneas-only* facts about each emitted
-    declaration. By design it does NOT duplicate any data already present in
-    the input [.llbc] file: things like the Rust name, source span,
-    visibility, lang-item tag, attributes, item-source kind, etc. are all
-    available on the LLBC side via [crate.fun_decls] / [crate.type_decls] /
-    [crate.global_decls] and consumers should look there.
+    The manifest contains the Aeneas-only data which connects the Lean translation
+    to the orginal Rust code. It does NOT duplicate any data already present in 
+    the input [.llbc] file.
 
-    The single field shared with the LLBC is [def_id], kept solely as the
-    join key linking each manifest entry back to its source declaration in
-    the LLBC.
-
-    What lives here, then, is the post-translation choices Aeneas made
-    (Lean identifiers, output file routing) and analyses Aeneas computed
-    (effect/divergence, loop decomposition, reducibility, opacity).
-
-    Trait declarations are out of scope for this version. *)
+    The [manifest.json] and the LLBC share the [def_id] field, as the join key 
+    linking each manifest entry back to its source declaration in the LLBC. *)
 
 (* ------------------------------------------------------------------------ *)
 (* Schema                                                                   *)
