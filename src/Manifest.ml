@@ -119,12 +119,15 @@ type envelope = {
 
 (* ------------------------------------------------------------------------ *)
 (* Mutable accumulator state                                                *)
+(*                                                                          *)
+(* The state lives as a module-local ref rather than as a field on          *)
+(* [extraction_ctx], so this feature touches no upstream record types. One  *)
+(* aeneas process translates one crate, so a singleton is appropriate.      *)
+(* Lifecycle: [init] at the start of [extract_translated_crate],            *)
+(* [begin_file] at the top of every [extract_file], [record_*] called from  *)
+(* the export-* hooks, [write_if_enabled] once at the end.                  *)
 (* ------------------------------------------------------------------------ *)
 
-(** Accumulator carried by [extraction_ctx] throughout extraction. Each
-    [extract_file] call updates the per-file fields; each emitted declaration
-    appends to the per-kind list. The fields are stored in reverse order (newest
-    first) and reversed at envelope-build time. *)
 type state = {
   mutable function_entries : entry list;
   mutable type_entries : type_entry list;
@@ -132,10 +135,10 @@ type state = {
   mutable lean_files : string list;
   mutable current_lean_file : string;
   mutable current_lean_namespace : string;
-  dest_dir : string;
+  mutable dest_dir : string;
 }
 
-let make_state ~(dest_dir : string) : state =
+let make_state () : state =
   {
     function_entries = [];
     type_entries = [];
@@ -143,8 +146,21 @@ let make_state ~(dest_dir : string) : state =
     lean_files = [];
     current_lean_file = "";
     current_lean_namespace = "";
-    dest_dir;
+    dest_dir = "";
   }
+
+(** The singleton accumulator. Reset at the top of [extract_translated_crate]
+    via [init]; mutated through [begin_file] and the [record_*] helpers. *)
+let state : state = make_state ()
+
+let init ~(dest_dir : string) : unit =
+  state.function_entries <- [];
+  state.type_entries <- [];
+  state.global_entries <- [];
+  state.lean_files <- [];
+  state.current_lean_file <- "";
+  state.current_lean_namespace <- "";
+  state.dest_dir <- dest_dir
 
 (* ------------------------------------------------------------------------ *)
 (* Schema-level helpers                                                     *)
@@ -357,24 +373,172 @@ let envelope_to_json (env : envelope) : Yojson.Basic.t =
     ]
 
 (* ------------------------------------------------------------------------ *)
+(* Entry construction (depends on ExtractBase / TranslateCore)              *)
+(* ------------------------------------------------------------------------ *)
+
+(** Try to compute a name's [rust_pattern]. Returns [None] when the pattern
+    computation raises [CFailure], so callers can omit the field rather than
+    emit an empty-string fallback. *)
+let try_name_to_pattern_string (span : Charon.Meta.span option)
+    (trans_ctx : TranslateCore.trans_ctx) (name : Charon.Types.name) :
+    string option =
+  try Some (TranslateCore.name_to_pattern_string span trans_ctx name)
+  with Errors.CFailure _ -> None
+
+let qualify (basename : string) : string =
+  if state.current_lean_namespace = "" then basename
+  else state.current_lean_namespace ^ "." ^ basename
+
+let entry_of_fun_decl (ctx : ExtractBase.extraction_ctx) (def : Pure.fun_decl) :
+    entry =
+  let span = def.item_meta.span in
+  let lean_id =
+    qualify (ExtractBase.ctx_get_local_function span def.def_id def.loop_id ctx)
+  in
+  let parent_lean_id =
+    match def.loop_id with
+    | None -> None
+    | Some _ ->
+        Some
+          (qualify
+             (ExtractBase.ctx_get_local_function span def.def_id None ctx))
+  in
+  let rust_pattern =
+    try_name_to_pattern_string (Some span) ctx.trans_ctx def.item_meta.name
+  in
+  let loop_info : loop_info option =
+    match def.loop_id with
+    | None -> None
+    | Some (lid, is_body) ->
+        Some
+          {
+            loop_id_idx = Pure.LoopId.to_int lid;
+            loop_pos = def.loop_pos;
+            is_body;
+          }
+  in
+  let num_loops =
+    match def.loop_id with
+    | None -> Some def.num_loops
+    | Some _ -> None
+  in
+  let lookup_trait_pattern (id : Pure.trait_decl_id) : string option =
+    match Pure.TraitDeclId.Map.find_opt id ctx.trans_trait_decls with
+    | None -> None
+    | Some d ->
+        try_name_to_pattern_string (Some d.item_meta.span) ctx.trans_ctx
+          d.item_meta.name
+  in
+  {
+    def_id = Pure.FunDeclId.to_int def.def_id;
+    lean_id;
+    rust_pattern;
+    is_local = def.item_meta.is_local;
+    is_public = def.item_meta.attr_info.public;
+    has_body = Option.is_some def.body;
+    is_opaque = Option.is_none def.body;
+    kind = kind_of_def def;
+    is_global_initializer = def.is_global_decl_body;
+    loop_info;
+    parent_lean_id;
+    num_loops;
+    lean_file = state.current_lean_file;
+    source = span_to_source span;
+    attrs = attr_info_to_strings def.item_meta.attr_info;
+    lang_item = def.item_meta.lang_item;
+    trait_info = trait_info_of_src lookup_trait_pattern def.src;
+  }
+
+let type_entry_of_type_decl (ctx : ExtractBase.extraction_ctx)
+    (def : Pure.type_decl) : type_entry =
+  let span = def.item_meta.span in
+  {
+    def_id = Pure.TypeDeclId.to_int def.def_id;
+    lean_id = qualify (ExtractBase.ctx_get_local_type span def.def_id ctx);
+    rust_pattern =
+      try_name_to_pattern_string (Some span) ctx.trans_ctx def.item_meta.name;
+    is_local = def.item_meta.is_local;
+    is_public = def.item_meta.attr_info.public;
+    kind = kind_of_type_decl def;
+    lean_file = state.current_lean_file;
+    source = span_to_source span;
+    attrs = attr_info_to_strings def.item_meta.attr_info;
+    lang_item = def.item_meta.lang_item;
+  }
+
+let global_entry_of_global_decl (ctx : ExtractBase.extraction_ctx)
+    (def : Pure.global_decl) : global_entry =
+  let span = def.item_meta.span in
+  {
+    def_id = Pure.GlobalDeclId.to_int def.def_id;
+    lean_id = qualify (ExtractBase.ctx_get_global span def.def_id ctx);
+    rust_pattern =
+      try_name_to_pattern_string (Some span) ctx.trans_ctx def.item_meta.name;
+    is_local = def.item_meta.is_local;
+    is_public = def.item_meta.attr_info.public;
+    init_def_id = Pure.FunDeclId.to_int def.body_id;
+    lean_file = state.current_lean_file;
+    source = span_to_source span;
+    attrs = attr_info_to_strings def.item_meta.attr_info;
+    lang_item = def.item_meta.lang_item;
+  }
+
+(* ------------------------------------------------------------------------ *)
+(* Pipeline hooks (no-ops when [-emit-manifest] is off)                     *)
+(* ------------------------------------------------------------------------ *)
+
+(** Record the file and namespace [extract_file] is about to write into. The
+    [filename] should be the full path; we strip [state.dest_dir] to make
+    [state.current_lean_file] relative. *)
+let begin_file ~(filename : string) ~(namespace : string) : unit =
+  if !Config.emit_manifest then begin
+    let rel_lean_file =
+      let dest = Filename.concat state.dest_dir "" in
+      let plen = String.length dest in
+      if String.length filename >= plen && String.sub filename 0 plen = dest
+      then String.sub filename plen (String.length filename - plen)
+      else Filename.basename filename
+    in
+    state.current_lean_file <- rel_lean_file;
+    state.current_lean_namespace <- namespace;
+    state.lean_files <- rel_lean_file :: state.lean_files
+  end
+
+let record_fun (ctx : ExtractBase.extraction_ctx) (def : Pure.fun_decl) : unit =
+  if !Config.emit_manifest then
+    state.function_entries <-
+      entry_of_fun_decl ctx def :: state.function_entries
+
+let record_type (ctx : ExtractBase.extraction_ctx) (def : Pure.type_decl) : unit
+    =
+  if !Config.emit_manifest then
+    state.type_entries <- type_entry_of_type_decl ctx def :: state.type_entries
+
+let record_global (ctx : ExtractBase.extraction_ctx) (def : Pure.global_decl) :
+    unit =
+  if !Config.emit_manifest then
+    state.global_entries <-
+      global_entry_of_global_decl ctx def :: state.global_entries
+
+(* ------------------------------------------------------------------------ *)
 (* Writing                                                                  *)
 (* ------------------------------------------------------------------------ *)
 
 let envelope_of_state ~(aeneas_version : string) ~(crate_name : string)
-    ~(subdir : string option) ~(llbc_file : string) (s : state) : envelope =
+    ~(subdir : string option) ~(llbc_file : string) : envelope =
   {
     aeneas_version;
     crate_name;
     output =
       {
-        dest_dir = s.dest_dir;
+        dest_dir = state.dest_dir;
         subdir;
         llbc_file;
-        lean_files = List.rev s.lean_files;
+        lean_files = List.rev state.lean_files;
       };
-    functions = List.rev s.function_entries;
-    types = List.rev s.type_entries;
-    globals = List.rev s.global_entries;
+    functions = List.rev state.function_entries;
+    types = List.rev state.type_entries;
+    globals = List.rev state.global_entries;
   }
 
 let write (path : string) (env : envelope) : unit =
@@ -382,3 +546,15 @@ let write (path : string) (env : envelope) : unit =
   Yojson.Basic.pretty_to_channel out (envelope_to_json env);
   output_char out '\n';
   close_out out
+
+(** Convenience: write [<dest_dir>/manifest.json] (using [state.dest_dir]) only
+    if [-emit-manifest] is on. *)
+let write_if_enabled ~(aeneas_version : string) ~(crate_name : string)
+    ~(subdir : string option) ~(llbc_file : string) : string option =
+  if !Config.emit_manifest then begin
+    let path = Filename.concat state.dest_dir "manifest.json" in
+    write path
+      (envelope_of_state ~aeneas_version ~crate_name ~subdir ~llbc_file);
+    Some path
+  end
+  else None

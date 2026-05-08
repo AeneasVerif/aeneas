@@ -612,11 +612,6 @@ type extraction_ctx = {
       (** Set to true if at some point we extract a definition which is opaque,
           meaning we generate an axiom. If yes, and in case the user does not
           use the option [-split-files] we suggest it to the user. *)
-  manifest_state : Manifest.state;
-      (** Accumulator for the [manifest.json] sidecar (only meaningful when
-          [-emit-manifest] is on). The fields are mutable; [extract_file]
-          updates the per-file fields and [record_manifest_*] helpers prepend to
-          the per-kind entry lists. *)
 }
 
 let extraction_ctx_to_fmt_env (ctx : extraction_ctx) : PrintPure.fmt_env =

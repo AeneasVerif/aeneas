@@ -615,162 +615,6 @@ let crate_has_opaque_non_builtin_decls (ctx : gen_ctx) (filter_builtin : bool) :
            funs)];
   (types <> [], funs <> [])
 
-(* ------------------------------------------------------------------------ *)
-(* Manifest entry construction                                              *)
-(*                                                                          *)
-(* These helpers turn [Pure.fun_decl]/[Pure.type_decl]/[Pure.global_decl]   *)
-(* values into [Manifest.entry] / [Manifest.type_entry] / [Manifest.       *)
-(* global_entry] records, then push them onto the accumulator carried by   *)
-(* [ctx.manifest_state]. The [entry_of_*] builders are pure (no mutation)  *)
-(* so the data shaping is testable in isolation; the [record_manifest_*]   *)
-(* recorders perform the single-line mutation and are no-ops when          *)
-(* [-emit-manifest] is off. They live here (rather than in [Manifest.ml])  *)
-(* because they depend on [ExtractBase] / [TranslateCore] lookups, while   *)
-(* [ExtractBase] in turn references [Manifest.state] — moving them down    *)
-(* would create a module cycle.                                             *)
-(* ------------------------------------------------------------------------ *)
-
-(** Try to compute a name's [rust_pattern]. Returns [None] when the pattern
-    computation raises a [CFailure] — happens when the name is malformed in some
-    way — so callers can omit the field instead of emitting a vacuous empty
-    string. *)
-let try_name_to_pattern_string (span : Meta.span option) (trans_ctx : trans_ctx)
-    (name : Types.name) : string option =
-  try Some (TranslateCore.name_to_pattern_string span trans_ctx name)
-  with CFailure _ -> None
-
-(** Build a [Manifest.entry] for [def]. Pure: no mutation. *)
-let entry_of_fun_decl (ctx : gen_ctx) (def : Pure.fun_decl) : Manifest.entry =
-  let span = def.item_meta.span in
-  let s = ctx.manifest_state in
-  let qualify (basename : string) : string =
-    if s.current_lean_namespace = "" then basename
-    else s.current_lean_namespace ^ "." ^ basename
-  in
-  let lean_basename =
-    ExtractBase.ctx_get_local_function span def.def_id def.loop_id ctx
-  in
-  let lean_id = qualify lean_basename in
-  let parent_lean_id =
-    match def.loop_id with
-    | None -> None
-    | Some _ ->
-        let parent_basename =
-          ExtractBase.ctx_get_local_function span def.def_id None ctx
-        in
-        Some (qualify parent_basename)
-  in
-  let rust_pattern =
-    try_name_to_pattern_string (Some span) ctx.trans_ctx def.item_meta.name
-  in
-  let loop_info : Manifest.loop_info option =
-    match def.loop_id with
-    | None -> None
-    | Some (lid, is_body) ->
-        Some
-          {
-            loop_id_idx = Pure.LoopId.to_int lid;
-            loop_pos = def.loop_pos;
-            is_body;
-          }
-  in
-  let num_loops =
-    match def.loop_id with
-    | None -> Some def.num_loops
-    | Some _ -> None
-  in
-  let lookup_trait_pattern (id : Pure.trait_decl_id) : string option =
-    match Pure.TraitDeclId.Map.find_opt id ctx.trans_trait_decls with
-    | None -> None
-    | Some d ->
-        try_name_to_pattern_string (Some d.item_meta.span) ctx.trans_ctx
-          d.item_meta.name
-  in
-  {
-    def_id = Pure.FunDeclId.to_int def.def_id;
-    lean_id;
-    rust_pattern;
-    is_local = def.item_meta.is_local;
-    is_public = def.item_meta.attr_info.public;
-    has_body = Option.is_some def.body;
-    is_opaque = Option.is_none def.body;
-    kind = Manifest.kind_of_def def;
-    is_global_initializer = def.is_global_decl_body;
-    loop_info;
-    parent_lean_id;
-    num_loops;
-    lean_file = s.current_lean_file;
-    source = Manifest.span_to_source span;
-    attrs = Manifest.attr_info_to_strings def.item_meta.attr_info;
-    lang_item = def.item_meta.lang_item;
-    trait_info = Manifest.trait_info_of_src lookup_trait_pattern def.src;
-  }
-
-(** Build a [Manifest.type_entry] for [def]. Pure: no mutation. *)
-let type_entry_of_type_decl (ctx : gen_ctx) (def : Pure.type_decl) :
-    Manifest.type_entry =
-  let span = def.item_meta.span in
-  let s = ctx.manifest_state in
-  let qualify (basename : string) : string =
-    if s.current_lean_namespace = "" then basename
-    else s.current_lean_namespace ^ "." ^ basename
-  in
-  let lean_basename = ExtractBase.ctx_get_local_type span def.def_id ctx in
-  {
-    def_id = Pure.TypeDeclId.to_int def.def_id;
-    lean_id = qualify lean_basename;
-    rust_pattern =
-      try_name_to_pattern_string (Some span) ctx.trans_ctx def.item_meta.name;
-    is_local = def.item_meta.is_local;
-    is_public = def.item_meta.attr_info.public;
-    kind = Manifest.kind_of_type_decl def;
-    lean_file = s.current_lean_file;
-    source = Manifest.span_to_source span;
-    attrs = Manifest.attr_info_to_strings def.item_meta.attr_info;
-    lang_item = def.item_meta.lang_item;
-  }
-
-(** Build a [Manifest.global_entry] for [def]. Pure: no mutation. *)
-let global_entry_of_global_decl (ctx : gen_ctx) (def : Pure.global_decl) :
-    Manifest.global_entry =
-  let span = def.item_meta.span in
-  let s = ctx.manifest_state in
-  let qualify (basename : string) : string =
-    if s.current_lean_namespace = "" then basename
-    else s.current_lean_namespace ^ "." ^ basename
-  in
-  let lean_basename = ExtractBase.ctx_get_global span def.def_id ctx in
-  {
-    def_id = Pure.GlobalDeclId.to_int def.def_id;
-    lean_id = qualify lean_basename;
-    rust_pattern =
-      try_name_to_pattern_string (Some span) ctx.trans_ctx def.item_meta.name;
-    is_local = def.item_meta.is_local;
-    is_public = def.item_meta.attr_info.public;
-    init_def_id = Pure.FunDeclId.to_int def.body_id;
-    lean_file = s.current_lean_file;
-    source = Manifest.span_to_source span;
-    attrs = Manifest.attr_info_to_strings def.item_meta.attr_info;
-    lang_item = def.item_meta.lang_item;
-  }
-
-(** Side-effecting recorders. No-ops when [-emit-manifest] is off. *)
-let record_manifest_entry (ctx : gen_ctx) (def : Pure.fun_decl) : unit =
-  if !Config.emit_manifest then
-    let s = ctx.manifest_state in
-    s.function_entries <- entry_of_fun_decl ctx def :: s.function_entries
-
-let record_manifest_type_entry (ctx : gen_ctx) (def : Pure.type_decl) : unit =
-  if !Config.emit_manifest then
-    let s = ctx.manifest_state in
-    s.type_entries <- type_entry_of_type_decl ctx def :: s.type_entries
-
-let record_manifest_global_entry (ctx : gen_ctx) (def : Pure.global_decl) : unit
-    =
-  if !Config.emit_manifest then
-    let s = ctx.manifest_state in
-    s.global_entries <- global_entry_of_global_decl ctx def :: s.global_entries
-
 (** Export a type declaration.
 
     It may happen that we have to extract extra information/instructions. For
@@ -805,7 +649,7 @@ let export_type (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
   if extract then (
     if extract_decl then (
       Extract.extract_type_decl ctx fmt type_decl_group kind def;
-      record_manifest_type_entry ctx def);
+      Manifest.record_type ctx def);
     if extract_extra_info then
       Extract.extract_type_decl_extra_info ctx fmt kind def)
 
@@ -951,11 +795,11 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     let global_pure = GlobalDeclId.Map.find_opt id ctx.trans_globals in
     Extract.extract_global_decl ctx fmt global_pure body config.interface;
     (* Record the global, plus its synthetic init body fn (which would not
-       otherwise reach [record_manifest_entry] because [extract_definitions]
+       otherwise reach [Manifest.record_fun] because [extract_definitions]
        skips global-init [FunGroup]s — they're written here instead). *)
-    record_manifest_entry ctx body;
+    Manifest.record_fun ctx body;
     match global_pure with
-    | Some g -> record_manifest_global_entry ctx g
+    | Some g -> Manifest.record_global ctx g
     | None -> ())
 
 (** Utility.
@@ -1038,7 +882,7 @@ let export_functions_group_scc (fmt : Format.formatter) (config : gen_config)
           Some
             (fun () ->
               Extract.extract_fun_decl ctx fmt kind has_decr_clause def;
-              record_manifest_entry ctx def)
+              Manifest.record_fun ctx def)
         else None)
       decls
   in
@@ -1383,26 +1227,9 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
   let out = open_out fi.filename in
   let fmt = Format.formatter_of_out_channel out in
 
-  (* Record the file we're about to write into and the namespace it places its
-     declarations under, so that any [Pure.fun_decl] emitted while we walk
-     [extract_definitions] can be recorded in the manifest accumulator with
-     the right attribution. We use a path relative to [-dest] so the manifest
-     can be relocated alongside the generated tree. Skipped entirely when
-     [-emit-manifest] is off. *)
-  if !Config.emit_manifest then begin
-    let s = ctx.manifest_state in
-    let rel_lean_file =
-      let dest = Filename.concat s.dest_dir "" in
-      let plen = String.length dest in
-      let fname = fi.filename in
-      if String.length fname >= plen && String.sub fname 0 plen = dest then
-        String.sub fname plen (String.length fname - plen)
-      else Filename.basename fname
-    in
-    s.current_lean_file <- rel_lean_file;
-    s.current_lean_namespace <- fi.namespace;
-    s.lean_files <- rel_lean_file :: s.lean_files
-  end;
+  (* Tell the manifest accumulator which file/namespace the upcoming
+     declarations will be attributed to. No-op when [-emit-manifest] is off. *)
+  Manifest.begin_file ~filename:fi.filename ~namespace:fi.namespace;
 
   (* Print the headers.
    * Note that we don't use the OCaml formatter for purpose: we want to control
@@ -1645,9 +1472,11 @@ let extract_translated_crate (filename : string) (dest_dir : string)
       trait_impls_filter_type_args_map = Pure.TraitImplId.Map.empty;
       trait_impls_filter_trait_clauses_map = Pure.TraitImplId.Map.empty;
       extracted_opaque;
-      manifest_state = Manifest.make_state ~dest_dir;
     }
   in
+  (* Initialize the manifest accumulator (a module-local singleton). Cheap
+     even when [-emit-manifest] is off — just resets a few empty fields. *)
+  Manifest.init ~dest_dir;
 
   (* Register unique names for all the top-level types, globals, functions...
 
@@ -2225,22 +2054,18 @@ let extract_translated_crate (filename : string) (dest_dir : string)
      extract_file gen_config ctx file_info);
 
   (* Emit the [manifest.json] sidecar listing every Lean function declaration
-     we just wrote, but only when explicitly requested via [-emit-manifest].
-     The file lands next to the backend output, inside [dest_dir]. *)
-  if !Config.emit_manifest then begin
-    let manifest_path = Filename.concat dest_dir "manifest.json" in
-    let aeneas_version =
-      match GitVersion.commit with
-      | Some h -> h
-      | None -> "unknown"
-    in
-    let envelope =
-      Manifest.envelope_of_state ~aeneas_version ~crate_name:crate.name ~subdir
-        ~llbc_file:filename ctx.manifest_state
-    in
-    Manifest.write manifest_path envelope;
-    log#linfo (lazy ("Generated: " ^ manifest_path))
-  end;
+     we just wrote, when [-emit-manifest] is on. No-op otherwise. *)
+  let aeneas_version =
+    match GitVersion.commit with
+    | Some h -> h
+    | None -> "unknown"
+  in
+  (match
+     Manifest.write_if_enabled ~aeneas_version ~crate_name:crate.name ~subdir
+       ~llbc_file:filename
+   with
+  | Some path -> log#linfo (lazy ("Generated: " ^ path))
+  | None -> ());
 
   (* Generate the build file *)
   match Config.backend () with
