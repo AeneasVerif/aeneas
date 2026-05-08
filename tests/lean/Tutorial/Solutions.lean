@@ -302,7 +302,6 @@ theorem toInt_update (l : List U32) (i : Nat) (x : U32) (h0 : i < l.length) :
     . have := toInt_update tl (i - 1) x (by scalar_tac)
       simp_all
       ring_nf at *
-      ring_eq_nf
       /- Note that we coerce the righ-hand side (also works with the left-hand side) so that
          it gets interpreted as an ℤ and not a ℕ. It is important: `(2 : ℕ) ^ ...` is not (at all)
          the same as `2 : ℤ`.
