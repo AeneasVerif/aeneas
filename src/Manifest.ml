@@ -1,23 +1,25 @@
 (** Emit a [manifest.json] file alongside the extracted backend output.
 
-    The manifest lists every Lean function, type and global declaration produced
-    by Aeneas with metadata mapping each item back to the original Rust source.
-    It is a sidecar contract for downstream tooling (proof harnesses, audit
-    dashboards, IDE plugins) that would otherwise have to reparse the generated
-    Lean to recover information already on hand at extraction time.
+    The manifest is a sidecar of *Aeneas-only* facts about each emitted
+    declaration. By design it does NOT duplicate any data already present in
+    the input [.llbc] file: things like the Rust name, source span,
+    visibility, lang-item tag, attributes, item-source kind, etc. are all
+    available on the LLBC side via [crate.fun_decls] / [crate.type_decls] /
+    [crate.global_decls] and consumers should look there.
 
-    Trait declarations are deliberately out of scope for this version (their
-    schema requires more design due to generics, parent bounds and associated
-    items). The schema can be extended without breaking existing consumers. *)
+    The single field shared with the LLBC is [def_id], kept solely as the
+    join key linking each manifest entry back to its source declaration in
+    the LLBC.
 
-module Meta = Charon.Meta
+    What lives here, then, is the post-translation choices Aeneas made
+    (Lean identifiers, output file routing) and analyses Aeneas computed
+    (effect/divergence, loop decomposition, reducibility, opacity).
+
+    Trait declarations are out of scope for this version. *)
 
 (* ------------------------------------------------------------------------ *)
 (* Schema                                                                   *)
 (* ------------------------------------------------------------------------ *)
-
-type loc = { line : int; col : int }
-type source_loc = { file : string; begin_loc : loc; end_loc : loc }
 
 type loop_info = {
   loop_id_idx : int;  (** [LoopId.id] reified to a plain int *)
@@ -25,92 +27,76 @@ type loop_info = {
   is_body : bool;
 }
 
-type trait_info = {
-  trait_pattern : string option;
-      (** [None] when the pattern computation failed. *)
-  method_name : string;
-  has_default : bool option;
-}
-
 (** One emitted Lean function declaration.
 
     Field omission convention on the JSON side:
-    - [is_global_initializer]: emitted only when [true]
-    - [loop_info], [parent_lean_id], [trait_info]: emitted only when [Some]
+    - [loop_info], [parent_lean_id]: emitted only when [Some] (i.e. on
+      loop-wrapper / loop-body entries — they identify each other)
     - [num_loops]: emitted only on non-loop entries
-    - [attrs]: emitted only when non-empty
-    - [lang_item], [rust_pattern]: emitted only when [Some]
-    - all other fields are always emitted
-
-    Consumers should treat absence as the corresponding default. *)
+    - all other fields are always emitted *)
 type entry = {
   def_id : int;
+      (** Charon [FunDeclId] reified to a plain int. The single LLBC-derived
+          field, kept as a join key. Several manifest entries can share the
+          same [def_id]: a Rust fn with N loops produces 1 + 2N entries
+          (the parent, plus a wrapper and body for each loop) all sharing
+          the parent's [def_id]; their [lean_id] / [loop_info] disambiguate. *)
   lean_id : string;
-  rust_pattern : string option;
-  is_local : bool;
-  is_public : bool;
-  has_body : bool;
+  lean_file : string;
   is_opaque : bool;
-  kind : string;
-  is_global_initializer : bool;
+      (** [true] when Aeneas extracted the declaration as an axiom (no body
+          in the Pure AST). LLBC always carries a body field, so the
+          opaque/non-opaque distinction is post-translation. *)
+  can_fail : bool;
+      (** [true] when the function's return type is wrapped in [Result] —
+          i.e. the function can panic. Computed by the symbolic interpreter,
+          not present in LLBC. *)
+  can_diverge : bool;
+      (** [true] when the function may not terminate (recursive, contains a
+          loop, or transitively calls a divergent function). *)
+  is_rec : bool;
+      (** [true] when the function is part of a (mutually) recursive group. *)
+  reducible : bool;
+      (** [true] when Aeneas marks the Lean def with [@[reducible]] (set by
+          [PureMicroPasses.compute_reducible] for trivial wrapper bodies). *)
   loop_info : loop_info option;
   parent_lean_id : string option;
   num_loops : int option;
-  lean_file : string;
-  source : source_loc;
-  attrs : string list;
-  lang_item : string option;
-  trait_info : trait_info option;
 }
 
-(** One emitted Lean type declaration. *)
-type type_entry = {
-  def_id : int;
-  lean_id : string;
-  rust_pattern : string option;
-  is_local : bool;
-  is_public : bool;
-  kind : string;  (** "struct" | "enum" | "opaque" *)
-  lean_file : string;
-  source : source_loc;
-  attrs : string list;
-  lang_item : string option;
-}
+(** One emitted Lean type declaration. The LLBC carries every fact about a
+    type Aeneas needs, so the manifest only records the join key, the
+    chosen Lean name, and the file it was written into. *)
+type type_entry = { def_id : int; lean_id : string; lean_file : string }
 
-(** One emitted Lean global declaration. *)
+(** One emitted Lean global declaration. [can_fail] is the only
+    Aeneas-derived semantic fact (mirrors [Pure.global_decl.can_fail]). *)
 type global_entry = {
   def_id : int;
   lean_id : string;
-  rust_pattern : string option;
-  is_local : bool;
-  is_public : bool;
-  init_def_id : int;
-      (** [FunDeclId] of the synthetic initializer function (also present in
-          [functions[]] with [is_global_initializer = true]). *)
   lean_file : string;
-  source : source_loc;
-  attrs : string list;
-  lang_item : string option;
+  can_fail : bool;
 }
 
-(** Describes where the generated backend files landed and how that location
-    relates to the Rust crate they came from. *)
+(** Output-routing info: where the manifest itself sits and which backend
+    files Aeneas wrote, all chosen by Aeneas based on CLI flags. *)
 type output_info = {
   dest_dir : string;
-      (** Path to the directory the user passed to [-dest]. Each [lean_file]
-          field is relative to this. *)
   subdir : string option;
-      (** Value of the [-subdir] option, if any. When set, the backend files
-          actually live under [dest_dir/subdir/]. *)
   lean_files : string list;
-      (** Every backend file that was written, in emission order, as paths
-          relative to [dest_dir]. *)
-  llbc_file : string;  (** Path to the [.llbc] input that was given to Aeneas. *)
+  llbc_file : string;  (** Path to the [.llbc] input — the join target. *)
 }
 
 type envelope = {
   aeneas_version : string;
+  charon_version : string;
+      (** The version of charon that emitted the [.llbc] input. Aeneas only
+          accepts an [.llbc] whose stamp matches the charon-ml version it
+          was built against, so this is also the charon-ml version. *)
   crate_name : string;
+      (** Identifier of the source Rust crate. Surfaces the LLBC's
+          [crate.name] at the envelope level so the manifest is
+          self-describing without requiring access to the [.llbc]. *)
   output : output_info;
   functions : entry list;
   types : type_entry list;
@@ -120,8 +106,8 @@ type envelope = {
 (* ------------------------------------------------------------------------ *)
 (* Mutable accumulator state                                                *)
 (*                                                                          *)
-(* The state lives as a module-local ref rather than as a field on          *)
-(* [extraction_ctx], so this feature touches no upstream record types. One  *)
+(* The state lives as a module-local singleton rather than as a field on    *)
+(* [extraction_ctx] so this feature touches no upstream record types. One   *)
 (* aeneas process translates one crate, so a singleton is appropriate.      *)
 (* Lifecycle: [init] at the start of [extract_translated_crate],            *)
 (* [begin_file] at the top of every [extract_file], [record_*] called from  *)
@@ -149,8 +135,6 @@ let make_state () : state =
     dest_dir = "";
   }
 
-(** The singleton accumulator. Reset at the top of [extract_translated_crate]
-    via [init]; mutated through [begin_file] and the [record_*] helpers. *)
 let state : state = make_state ()
 
 let init ~(dest_dir : string) : unit =
@@ -163,97 +147,8 @@ let init ~(dest_dir : string) : unit =
   state.dest_dir <- dest_dir
 
 (* ------------------------------------------------------------------------ *)
-(* Schema-level helpers                                                     *)
-(* ------------------------------------------------------------------------ *)
-
-let file_name_to_string (fn : Meta.file_name) : string =
-  match fn with
-  | Virtual s | Local s | NotReal s -> s
-
-let span_to_source (span : Meta.span) : source_loc =
-  let d = span.data in
-  {
-    file = file_name_to_string d.file.name;
-    begin_loc = { line = d.beg_loc.line; col = d.beg_loc.col };
-    end_loc = { line = d.end_loc.line; col = d.end_loc.col };
-  }
-
-let attr_info_to_strings (ai : Meta.attr_info) : string list =
-  let attr_to_string (a : Meta.attribute) : string option =
-    match a with
-    | AttrOpaque -> Some "charon::opaque"
-    | AttrExclude -> Some "charon::exclude"
-    | AttrRename s -> Some ("charon::rename(" ^ s ^ ")")
-    | AttrVariantsPrefix s -> Some ("charon::variants_prefix(" ^ s ^ ")")
-    | AttrVariantsSuffix s -> Some ("charon::variants_suffix(" ^ s ^ ")")
-    | AttrDocComment _ -> None
-    | AttrUnknown { path; args = None } -> Some path
-    | AttrUnknown { path; args = Some a } -> Some (path ^ "(" ^ a ^ ")")
-  in
-  List.filter_map attr_to_string ai.attributes
-
-(** Derive the [kind] string for a [Pure.fun_decl] entry. Loop wrappers and
-    bodies (where [loop_id <> None]) override the [src]-derived kind.
-
-    PrePasses' [remove_vtables] strips three of the five VTable variants before
-    extraction; the remaining two ([VTableInstanceMonoItem],
-    [VTableMethodPreShimItem]) are kept defensively. *)
-let kind_of_def (def : Pure.fun_decl) : string =
-  match def.loop_id with
-  | Some (_, true) -> "loop_body"
-  | Some (_, false) -> "loop"
-  | None -> (
-      match def.src with
-      | TopLevelItem -> "top_level"
-      | ClosureItem _ -> "closure"
-      | TraitDeclItem _ -> "trait_decl_method"
-      | TraitImplItem _ -> "trait_impl_method"
-      | VTableTyItem _ -> "vtable_ty"
-      | VTableInstanceItem _ -> "vtable_instance"
-      | VTableMethodShimItem -> "vtable_method_shim"
-      | VTableInstanceMonoItem -> "vtable_instance_mono"
-      | VTableMethodPreShimItem _ -> "vtable_method_pre_shim")
-
-let kind_of_type_decl (def : Pure.type_decl) : string =
-  match def.kind with
-  | Struct _ -> "struct"
-  | Enum _ -> "enum"
-  | Opaque -> "opaque"
-
-let trait_info_of_src
-    (lookup_trait_pattern : Pure.trait_decl_id -> string option)
-    (src : Pure.item_source) : trait_info option =
-  match src with
-  | TraitDeclItem (tref, name, has_default) ->
-      Some
-        {
-          trait_pattern = lookup_trait_pattern tref.id;
-          method_name = name;
-          has_default = Some has_default;
-        }
-  | TraitImplItem (_, tref, name, _) ->
-      Some
-        {
-          trait_pattern = lookup_trait_pattern tref.id;
-          method_name = name;
-          has_default = None;
-        }
-  | _ -> None
-
-(* ------------------------------------------------------------------------ *)
 (* Conversions to JSON                                                      *)
 (* ------------------------------------------------------------------------ *)
-
-let loc_to_json (l : loc) : Yojson.Basic.t =
-  `Assoc [ ("line", `Int l.line); ("col", `Int l.col) ]
-
-let source_to_json (s : source_loc) : Yojson.Basic.t =
-  `Assoc
-    [
-      ("file", `String s.file);
-      ("begin", loc_to_json s.begin_loc);
-      ("end", loc_to_json s.end_loc);
-    ]
 
 let loop_to_json (li : loop_info) : Yojson.Basic.t =
   `Assoc
@@ -263,32 +158,17 @@ let loop_to_json (li : loop_info) : Yojson.Basic.t =
       ("is_body", `Bool li.is_body);
     ]
 
-let trait_to_json (ti : trait_info) : Yojson.Basic.t =
-  let fields = ref [] in
-  let push k v = fields := (k, v) :: !fields in
-  (match ti.trait_pattern with
-  | None -> ()
-  | Some s -> push "trait_pattern" (`String s));
-  push "method" (`String ti.method_name);
-  (match ti.has_default with
-  | None -> ()
-  | Some b -> push "has_default" (`Bool b));
-  `Assoc (List.rev !fields)
-
 let entry_to_json (e : entry) : Yojson.Basic.t =
   let fields = ref [] in
   let push k v = fields := (k, v) :: !fields in
   push "def_id" (`Int e.def_id);
   push "lean_id" (`String e.lean_id);
-  (match e.rust_pattern with
-  | None -> ()
-  | Some s -> push "rust_pattern" (`String s));
-  push "is_local" (`Bool e.is_local);
-  push "is_public" (`Bool e.is_public);
-  push "has_body" (`Bool e.has_body);
+  push "lean_file" (`String e.lean_file);
   push "is_opaque" (`Bool e.is_opaque);
-  push "kind" (`String e.kind);
-  if e.is_global_initializer then push "is_global_initializer" (`Bool true);
+  push "can_fail" (`Bool e.can_fail);
+  push "can_diverge" (`Bool e.can_diverge);
+  push "is_rec" (`Bool e.is_rec);
+  push "reducible" (`Bool e.reducible);
   (match e.loop_info with
   | None -> ()
   | Some li -> push "loop" (loop_to_json li));
@@ -298,57 +178,24 @@ let entry_to_json (e : entry) : Yojson.Basic.t =
   (match e.num_loops with
   | None -> ()
   | Some n -> push "num_loops" (`Int n));
-  push "lean_file" (`String e.lean_file);
-  push "source" (source_to_json e.source);
-  if e.attrs <> [] then
-    push "attrs" (`List (List.map (fun s -> `String s) e.attrs));
-  (match e.lang_item with
-  | None -> ()
-  | Some s -> push "lang_item" (`String s));
-  (match e.trait_info with
-  | None -> ()
-  | Some ti -> push "trait" (trait_to_json ti));
   `Assoc (List.rev !fields)
 
 let type_entry_to_json (e : type_entry) : Yojson.Basic.t =
-  let fields = ref [] in
-  let push k v = fields := (k, v) :: !fields in
-  push "def_id" (`Int e.def_id);
-  push "lean_id" (`String e.lean_id);
-  (match e.rust_pattern with
-  | None -> ()
-  | Some s -> push "rust_pattern" (`String s));
-  push "is_local" (`Bool e.is_local);
-  push "is_public" (`Bool e.is_public);
-  push "kind" (`String e.kind);
-  push "lean_file" (`String e.lean_file);
-  push "source" (source_to_json e.source);
-  if e.attrs <> [] then
-    push "attrs" (`List (List.map (fun s -> `String s) e.attrs));
-  (match e.lang_item with
-  | None -> ()
-  | Some s -> push "lang_item" (`String s));
-  `Assoc (List.rev !fields)
+  `Assoc
+    [
+      ("def_id", `Int e.def_id);
+      ("lean_id", `String e.lean_id);
+      ("lean_file", `String e.lean_file);
+    ]
 
 let global_entry_to_json (e : global_entry) : Yojson.Basic.t =
-  let fields = ref [] in
-  let push k v = fields := (k, v) :: !fields in
-  push "def_id" (`Int e.def_id);
-  push "lean_id" (`String e.lean_id);
-  (match e.rust_pattern with
-  | None -> ()
-  | Some s -> push "rust_pattern" (`String s));
-  push "is_local" (`Bool e.is_local);
-  push "is_public" (`Bool e.is_public);
-  push "init_def_id" (`Int e.init_def_id);
-  push "lean_file" (`String e.lean_file);
-  push "source" (source_to_json e.source);
-  if e.attrs <> [] then
-    push "attrs" (`List (List.map (fun s -> `String s) e.attrs));
-  (match e.lang_item with
-  | None -> ()
-  | Some s -> push "lang_item" (`String s));
-  `Assoc (List.rev !fields)
+  `Assoc
+    [
+      ("def_id", `Int e.def_id);
+      ("lean_id", `String e.lean_id);
+      ("lean_file", `String e.lean_file);
+      ("can_fail", `Bool e.can_fail);
+    ]
 
 let output_to_json (o : output_info) : Yojson.Basic.t =
   let fields = ref [] in
@@ -365,6 +212,7 @@ let envelope_to_json (env : envelope) : Yojson.Basic.t =
   `Assoc
     [
       ("aeneas_version", `String env.aeneas_version);
+      ("charon_version", `String env.charon_version);
       ("crate", `String env.crate_name);
       ("output", output_to_json env.output);
       ("functions", `List (List.map entry_to_json env.functions));
@@ -373,17 +221,8 @@ let envelope_to_json (env : envelope) : Yojson.Basic.t =
     ]
 
 (* ------------------------------------------------------------------------ *)
-(* Entry construction (depends on ExtractBase / TranslateCore)              *)
+(* Entry construction (depends on ExtractBase)                              *)
 (* ------------------------------------------------------------------------ *)
-
-(** Try to compute a name's [rust_pattern]. Returns [None] when the pattern
-    computation raises [CFailure], so callers can omit the field rather than
-    emit an empty-string fallback. *)
-let try_name_to_pattern_string (span : Charon.Meta.span option)
-    (trans_ctx : TranslateCore.trans_ctx) (name : Charon.Types.name) :
-    string option =
-  try Some (TranslateCore.name_to_pattern_string span trans_ctx name)
-  with Errors.CFailure _ -> None
 
 let qualify (basename : string) : string =
   if state.current_lean_namespace = "" then basename
@@ -403,9 +242,6 @@ let entry_of_fun_decl (ctx : ExtractBase.extraction_ctx) (def : Pure.fun_decl) :
           (qualify
              (ExtractBase.ctx_get_local_function span def.def_id None ctx))
   in
-  let rust_pattern =
-    try_name_to_pattern_string (Some span) ctx.trans_ctx def.item_meta.name
-  in
   let loop_info : loop_info option =
     match def.loop_id with
     | None -> None
@@ -422,31 +258,19 @@ let entry_of_fun_decl (ctx : ExtractBase.extraction_ctx) (def : Pure.fun_decl) :
     | None -> Some def.num_loops
     | Some _ -> None
   in
-  let lookup_trait_pattern (id : Pure.trait_decl_id) : string option =
-    match Pure.TraitDeclId.Map.find_opt id ctx.trans_trait_decls with
-    | None -> None
-    | Some d ->
-        try_name_to_pattern_string (Some d.item_meta.span) ctx.trans_ctx
-          d.item_meta.name
-  in
+  let eff = def.signature.fwd_info.effect_info in
   {
     def_id = Pure.FunDeclId.to_int def.def_id;
     lean_id;
-    rust_pattern;
-    is_local = def.item_meta.is_local;
-    is_public = def.item_meta.attr_info.public;
-    has_body = Option.is_some def.body;
+    lean_file = state.current_lean_file;
     is_opaque = Option.is_none def.body;
-    kind = kind_of_def def;
-    is_global_initializer = def.is_global_decl_body;
+    can_fail = eff.can_fail;
+    can_diverge = eff.can_diverge;
+    is_rec = eff.is_rec;
+    reducible = def.backend_attributes.reducible;
     loop_info;
     parent_lean_id;
     num_loops;
-    lean_file = state.current_lean_file;
-    source = span_to_source span;
-    attrs = attr_info_to_strings def.item_meta.attr_info;
-    lang_item = def.item_meta.lang_item;
-    trait_info = trait_info_of_src lookup_trait_pattern def.src;
   }
 
 let type_entry_of_type_decl (ctx : ExtractBase.extraction_ctx)
@@ -455,15 +279,7 @@ let type_entry_of_type_decl (ctx : ExtractBase.extraction_ctx)
   {
     def_id = Pure.TypeDeclId.to_int def.def_id;
     lean_id = qualify (ExtractBase.ctx_get_local_type span def.def_id ctx);
-    rust_pattern =
-      try_name_to_pattern_string (Some span) ctx.trans_ctx def.item_meta.name;
-    is_local = def.item_meta.is_local;
-    is_public = def.item_meta.attr_info.public;
-    kind = kind_of_type_decl def;
     lean_file = state.current_lean_file;
-    source = span_to_source span;
-    attrs = attr_info_to_strings def.item_meta.attr_info;
-    lang_item = def.item_meta.lang_item;
   }
 
 let global_entry_of_global_decl (ctx : ExtractBase.extraction_ctx)
@@ -472,24 +288,14 @@ let global_entry_of_global_decl (ctx : ExtractBase.extraction_ctx)
   {
     def_id = Pure.GlobalDeclId.to_int def.def_id;
     lean_id = qualify (ExtractBase.ctx_get_global span def.def_id ctx);
-    rust_pattern =
-      try_name_to_pattern_string (Some span) ctx.trans_ctx def.item_meta.name;
-    is_local = def.item_meta.is_local;
-    is_public = def.item_meta.attr_info.public;
-    init_def_id = Pure.FunDeclId.to_int def.body_id;
     lean_file = state.current_lean_file;
-    source = span_to_source span;
-    attrs = attr_info_to_strings def.item_meta.attr_info;
-    lang_item = def.item_meta.lang_item;
+    can_fail = def.can_fail;
   }
 
 (* ------------------------------------------------------------------------ *)
 (* Pipeline hooks (no-ops when [-emit-manifest] is off)                     *)
 (* ------------------------------------------------------------------------ *)
 
-(** Record the file and namespace [extract_file] is about to write into. The
-    [filename] should be the full path; we strip [state.dest_dir] to make
-    [state.current_lean_file] relative. *)
 let begin_file ~(filename : string) ~(namespace : string) : unit =
   if !Config.emit_manifest then begin
     let rel_lean_file =
@@ -509,8 +315,8 @@ let record_fun (ctx : ExtractBase.extraction_ctx) (def : Pure.fun_decl) : unit =
     state.function_entries <-
       entry_of_fun_decl ctx def :: state.function_entries
 
-let record_type (ctx : ExtractBase.extraction_ctx) (def : Pure.type_decl) : unit
-    =
+let record_type (ctx : ExtractBase.extraction_ctx) (def : Pure.type_decl) :
+    unit =
   if !Config.emit_manifest then
     state.type_entries <- type_entry_of_type_decl ctx def :: state.type_entries
 
@@ -528,6 +334,7 @@ let envelope_of_state ~(aeneas_version : string) ~(crate_name : string)
     ~(subdir : string option) ~(llbc_file : string) : envelope =
   {
     aeneas_version;
+    charon_version = Charon.CharonVersion.supported_charon_version;
     crate_name;
     output =
       {
@@ -547,8 +354,6 @@ let write (path : string) (env : envelope) : unit =
   output_char out '\n';
   close_out out
 
-(** Convenience: write [<dest_dir>/manifest.json] (using [state.dest_dir]) only
-    if [-emit-manifest] is on. *)
 let write_if_enabled ~(aeneas_version : string) ~(crate_name : string)
     ~(subdir : string option) ~(llbc_file : string) : string option =
   if !Config.emit_manifest then begin
