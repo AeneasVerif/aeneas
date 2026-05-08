@@ -221,8 +221,8 @@ scoped syntax:54 term:55 " ⦃ " term " ⦄" : term
 
 open Lean PrettyPrinter
 
-/-- Build a `Function.uncurry`-chain wrapping a curried lambda over `xs`. -/
-private partial def buildUncurryLam (xs : List (TSyntax `term)) (body : TSyntax `term) :
+/-- Build a `Function.uncurry` chain wrapping a curried lambda over `xs`. -/
+partial def buildUncurryLam (xs : List (TSyntax `term)) (body : TSyntax `term) :
     MacroM (TSyntax `term) := do
   match xs with
   | [] => pure body
@@ -232,35 +232,44 @@ private partial def buildUncurryLam (xs : List (TSyntax `term)) (body : TSyntax 
     let inner ← buildUncurryLam rest body
     `(Function.uncurry (fun $a => $inner))
 
-/-- Build a function from a single (possibly tuple-patterned) binder. For a
-flat tuple pattern `(a, b, …)` we emit a `Function.uncurry` chain.  -/
-private def mkBinderFun (binder : TSyntax `term) (body : TSyntax `term) :
-    MacroM (TSyntax `term) := do
+partial def mkBinderFun (depth : Nat) (binder : Term) (body : Term) : MacroM Term := do
   match binder with
   | `( ($a, $bs,*) ) =>
-    let xs : List (TSyntax `term) := a :: bs.getElems.toList
-    buildUncurryLam xs body
+    let xs : List Term := a :: bs.getElems.toList
+    let mut leafIdents : List Term := []
+    let mut wrappedBody := body
+    for (x, idx) in xs.zipIdx.reverse do
+      match x with
+      | `( ($_, $_,*) ) =>
+        -- Fresh identifier from depth + index 
+        let freshIdent := mkIdent $ .mkSimple s!"_p_{depth}_{idx}"
+        let inner ← mkBinderFun (depth + 1) x wrappedBody
+        wrappedBody ← `($inner $freshIdent)
+        leafIdents := freshIdent :: leafIdents
+      | _ =>
+        leafIdents := x :: leafIdents
+    buildUncurryLam leafIdents wrappedBody
   | _ => `(fun $binder => $body)
 
 /-- Macro expansion for a single element -/
 macro_rules
   | `($e ⦃ $x => $p ⦄) => do
-    let post ← mkBinderFun x p
-    `(_root_.Aeneas.Std.WP.spec $e $post)
+    let post ← mkBinderFun 0 x p
+    `(Aeneas.Std.WP.spec $e $post)
 
 /-- Macro expansion for multiple elements -/
 macro_rules
   | `($e ⦃ $x $xs:term* => $p ⦄) => do
-    let xs : List (TSyntax `term) := x :: xs.toList
-    let rec run (xs : List (TSyntax `term)) : MacroM (TSyntax `term) := do
+    let xs := x :: xs.toList
+    let rec run (depth : Nat) (xs : List Term) : MacroM Term := do
       match xs with
       | [] => `($p)
-      | [x] => mkBinderFun x p
+      | [x] => mkBinderFun depth x p
       | x :: xs =>
-        let xs ← run xs
-        let inner ← mkBinderFun x xs
-        `(_root_.Aeneas.Std.WP.predn $inner)
-    let post ← run xs
+        let xs ← run (depth + 1) xs
+        let inner ← mkBinderFun depth x xs
+        `(Aeneas.Std.WP.predn $inner)
+    let post ← run 0 xs
     `(Aeneas.Std.WP.spec $e $post)
 
 /-- Macro expansion for predicate with no arrow -/
@@ -273,65 +282,102 @@ macro_rules
 
 open Delaborator SubExpr
 
-def elabSubExpr (e : SubExpr) : Delab := withTheReader SubExpr (fun _ => e) delab
+def delabSubExpr (e : SubExpr) : Delab := withTheReader SubExpr (fun _ => e) delab
 
-/-- A post-condition binder slot, as collected by `telescopePredn`. -/
+/-- A post-condition binder slot, as collected by `telescopePredn` -/
 inductive PostBinder where
   | single (e : SubExpr)
-  | tuple (es : Array SubExpr)
+  | tuple (subs : Array PostBinder)
+deriving Inhabited
 
-/-- Render a `PostBinder` as a `Term`, delabbing each underlying `SubExpr` so
-that variable names line up with how they appear inside the post body. -/
-def PostBinder.toTerm : PostBinder → Delab
-  | .single e => elabSubExpr e
-  | .tuple es => do
-    let ts ← es.mapM elabSubExpr
+/-- Render a `PostBinder` as a `Term`. Single binders delab through
+  `elabSubExpr` while tuple binders combine into a tuple syntax. -/
+partial def PostBinder.toTerm : PostBinder → Delab
+  | .single e => delabSubExpr e
+  | .tuple subs => do
+    let ts ← subs.mapM PostBinder.toTerm
     if h : ts.size = 1 then return ts[0]
     let head := ts[0]!
     let tail := ts.extract 1 ts.size
     `(($head, $tail,*))
 
+mutual
+
+/-- If any leaf `single` slot in `slot` matches the fvar `fv`, replace it with
+`tuple newSubs` and return the updated tree. Otherwise return `none` when `fv`
+is not present anywhere under `slot`. -/
+partial def PostBinder.tryDestructure (slot : PostBinder) (fv : Expr)
+    (newSubs : Array PostBinder) : Option PostBinder :=
+  match slot with
+  | .single e =>
+    if e.expr == fv then some (.tuple newSubs) else none
+  | .tuple subs =>
+    tryDestructureSlots subs fv newSubs |>.map .tuple
+
+/-- Try to find a leaf `single` slot whose underlying fvar is `fv` in `slots`
+and destructure it into `tuple newSubs`. Returns `none` when `fv` is absent. -/
+private partial def tryDestructureSlots (slots : Array PostBinder) (fv : Expr)
+    (newSubs : Array PostBinder) : Option (Array PostBinder) := do
+  for (slot, idx) in slots.zipIdx do
+    if let some slot' := slot.tryDestructure fv newSubs then
+      return slots.set! idx slot'
+  none
+
+end
+
+/-- Peel `Function.uncurry` apps threading the new sub-binders back into the
+`slots` tree, and yield the final body via `k`. -/
+partial def destructureUncurryChain (slots : Array PostBinder) (body : Expr)
+    (k : Array PostBinder → Expr → Delab) : Delab := do
+  let body' := body.consumeMData
+  match_expr body' with
+  | Function.uncurry _ _ _ f x =>
+    let x := x.consumeMData
+    if x.isFVar then
+      Meta.lambdaBoundedTelescope f 2 fun args body => do
+        if args.size = 2 then
+          let subs := #[.single { expr := args[0]!, pos := .root },
+                        .single { expr := args[1]!, pos := .root }]
+          if let some slots' := tryDestructureSlots slots x subs then
+            destructureUncurryChain slots' body k
+          else k slots body'
+        else k slots body'
+    else k slots body'
+  | _ => k slots body'
+
 /-- Strip `predn` and `Function.uncurry` wrappers from a post-condition expression,
-collecting the bound names as `PostBinder` slots. -/
+collecting the bound names as (possibly nested) `PostBinder` slots. -/
 partial def telescopePredn (vars : Array PostBinder) (e : SubExpr)
     (k : Array PostBinder → SubExpr → Delab) : Delab := do
   let expr := e.expr.consumeMData
-  -- Peel `Function.uncurry (fun a b => body)` into a tuple binder `(a, b)`.
-  if expr.isAppOfArity ``Function.uncurry 4 then
-    let lam := expr.appArg!.consumeMData
-    Meta.lambdaBoundedTelescope lam 2 fun lamArgs lamBody => do
-      if lamArgs.size = 2 then
-        let pos := e.pos
-        let es : Array SubExpr := #[
-          { expr := lamArgs[0]!, pos },
-          { expr := lamArgs[1]!, pos }
-        ]
-        telescopePredn (vars.push (.tuple es)) { expr := lamBody, pos } k
+  let pos := e.pos
+  let mkSingle (arg : Expr) : PostBinder := .single { expr := arg, pos }
+  let finish (vars : Array PostBinder) (args : Array Expr) (body : Expr) : Delab :=
+    k (vars ++ args.map mkSingle) { expr := body, pos }
+  match_expr expr with
+  | Function.uncurry _ _ _ f =>
+    Meta.lambdaBoundedTelescope f.consumeMData 2 fun args body => do
+      if args.size = 2 then
+        -- Walk the body, absorbing any `Function.uncurry _ slot` applications
+        -- that destructure the slots.
+        let outerSlots := #[PostBinder.tuple (args.map mkSingle)]
+        destructureUncurryChain outerSlots body fun newSlots newBody =>
+          telescopePredn (vars ++ newSlots) { expr := newBody, pos } k
       else
-        -- Couldn't peel a binary lambda; treat as terminal.
-        let mut vars := vars
-        for arg in lamArgs do
-          vars := vars.push (.single { expr := arg, pos := e.pos })
-        k vars { expr := lamBody, pos := e.pos }
-  -- Peel `predn (...)`: descend into the inner predicate.
-  else if expr.isAppOfArity ``predn 3 then
-    let pred := expr.getAppArgs[2]!
-    telescopePredn vars { expr := pred, pos := (e.pos.push 1).push 2 } k
-  else
-    Meta.lambdaTelescope expr fun lamArgs lamBody => do
-      let pos := e.pos
-      -- Single-binder lambda whose body re-enters the binder telescope
-      -- (`predn (…)` or `Function.uncurry (…)`)
-      if lamArgs.size = 1
-         ∧ (lamBody.isAppOfArity ``predn 3 ∨ lamBody.isAppOfArity ``Function.uncurry 4) then
-        let arg := lamArgs[0]!
-        telescopePredn (vars.push (.single { expr := arg, pos }))
-          { expr := lamBody, pos } k
+        finish vars args body
+  | predn _ _ p =>
+    telescopePredn vars { expr := p, pos := (pos.push 1).push 2 } k
+  | _ =>
+    Meta.lambdaTelescope expr fun args body => do
+      let body' := body.consumeMData
+      let isWrapper := match_expr body' with
+        | predn _ _ _ => true
+        | Function.uncurry _ _ _ _ => true
+        | _ => false
+      if args.size == 1 && isWrapper then
+        telescopePredn (vars.push (mkSingle args[0]!)) { expr := body, pos } k
       else
-        let mut vars := vars
-        for arg in lamArgs do
-          vars := vars.push (.single { expr := arg, pos })
-        k vars { expr := lamBody, pos }
+        finish vars args body
 
 @[scoped delab app.Aeneas.Std.WP.spec]
 def delabSpec : Delab := do
@@ -339,10 +385,10 @@ def delabSpec : Delab := do
   let pos ← getPos
   guard $ e.isAppOfArity' ``spec 3 -- only delab full applications this way
   let args := e.getAppArgs
-  let monadExpr ← elabSubExpr { expr := args[1]!, pos := (pos.push 0).push 1 }
+  let monadExpr ← delabSubExpr { expr := args[1]!, pos := (pos.push 0).push 1 }
   let post : SubExpr := { expr := args[2]!, pos := pos.push 1 }
   telescopePredn #[] post fun vars post => do
-  let post ← elabSubExpr post
+  let post ← delabSubExpr post
   if vars.size = 0 then
     -- This is the case where the post-condition doesn't have a lambda
     `($monadExpr ⦃ $post ⦄)
@@ -365,6 +411,42 @@ example : ok (0, 1) ⦃ x y => x = 0 ∧ y = 1 ⦄ := by simp
 example : ok (0, 1, 2) ⦃ x y z => x = 0 ∧ y = 1 ∧ z = 2 ⦄ := by simp
 example : ok (0, 1, true) ⦃ x y z => x = 0 ∧ y = 1 ∧ z ⦄ := by simp
 example : let P (x : Nat) := x = 0; ok 0 ⦃ P ⦄ := by simp
+
+/-! ### Mixed tuple / scalar binders -/
+
+-- Tuple followed by scalar
+example : ok ((0, 1), 2) ⦃ (a, b) c => a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by simp
+
+-- Scalar followed by tuple
+example : ok (0, (1, 2)) ⦃ a (b, c) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by simp
+
+-- Two tuples in sequence
+example : ok ((0, 1), (2, 3)) ⦃ (a, b) (c, d) =>
+    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ := by simp
+
+-- A single nested tuple
+example : ok ((0, 1), 2) ⦃ ((a, b), c) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by simp
+
+-- Two nested tuples
+example : ok ((0, 1), (2, 3)) ⦃ ((a, b), (c, d)) =>
+    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ := by simp
+
+-- Scalar, tuple, nested tuple
+example : ok (0, (1, 2), (3, (4, 5))) ⦃ a (b, c) (d, (e, f)) =>
+    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ∧ e = 4 ∧ f = 5 ⦄ := by simp
+
+/-! ### Pretty-printing round-trip checks -/
+
+example : ok (0, 1, 2) ⦃ x y z => x = 0 ∧ y = 1 ∧ z = 2 ⦄ := by simp
+
+example : ok ((0, 1), 2) ⦃ (a, b) c =>
+    a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by simp
+
+example : ok ((0, 1), (2, 3)) ⦃ (a, b) (c, d) =>
+    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ := by simp
+
+example : ok (0, (1, 2), ((3, 4), 5)) ⦃ a (b, c) ((d, e), f) =>
+    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ∧ e = 4 ∧ f = 5 ⦄ := by simp
 
 end Aeneas
 
