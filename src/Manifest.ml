@@ -1,10 +1,10 @@
 (** Emit a [manifest.json] file alongside the extracted Lean files.
 
-    The manifest contains the Aeneas-only data which connects the Lean translation
-    to the orginal Rust code. It does NOT duplicate any data already present in 
-    the input [.llbc] file.
+    The manifest contains the Aeneas-only data which connects the Lean
+    translation to the orginal Rust code. It does NOT duplicate any data already
+    present in the input [.llbc] file.
 
-    The [manifest.json] and the LLBC share the [def_id] field, as the join key 
+    The [manifest.json] and the LLBC share the [def_id] field, as the join key
     linking each manifest entry back to its source declaration in the LLBC. *)
 
 (* ------------------------------------------------------------------------ *)
@@ -27,20 +27,20 @@ type loop_info = {
 type entry = {
   def_id : int;
       (** Charon [FunDeclId] reified to a plain int. The single LLBC-derived
-          field, kept as a join key. Several manifest entries can share the
-          same [def_id]: a Rust fn with N loops produces 1 + 2N entries
-          (the parent, plus a wrapper and body for each loop) all sharing
-          the parent's [def_id]; their [lean_id] / [loop_info] disambiguate. *)
+          field, kept as a join key. Several manifest entries can share the same
+          [def_id]: a Rust fn with N loops produces 1 + 2N entries (the parent,
+          plus a wrapper and body for each loop) all sharing the parent's
+          [def_id]; their [lean_id] / [loop_info] disambiguate. *)
   lean_id : string;
   lean_file : string;
   is_opaque : bool;
-      (** [true] when Aeneas extracted the declaration as an axiom (no body
-          in the Pure AST). LLBC always carries a body field, so the
+      (** [true] when Aeneas extracted the declaration as an axiom (no body in
+          the Pure AST). LLBC always carries a body field, so the
           opaque/non-opaque distinction is post-translation. *)
   can_fail : bool;
-      (** [true] when the function's return type is wrapped in [Result] —
-          i.e. the function can panic. Computed by the symbolic interpreter,
-          not present in LLBC. *)
+      (** [true] when the function's return type is wrapped in [Result] — i.e.
+          the function can panic. Computed by the symbolic interpreter, not
+          present in LLBC. *)
   can_diverge : bool;
       (** [true] when the function may not terminate (recursive, contains a
           loop, or transitively calls a divergent function). *)
@@ -54,13 +54,13 @@ type entry = {
   num_loops : int option;
 }
 
-(** One emitted Lean type declaration. The LLBC carries every fact about a
-    type Aeneas needs, so the manifest only records the join key, the
-    chosen Lean name, and the file it was written into. *)
+(** One emitted Lean type declaration. The LLBC carries every fact about a type
+    Aeneas needs, so the manifest only records the join key, the chosen Lean
+    name, and the file it was written into. *)
 type type_entry = { def_id : int; lean_id : string; lean_file : string }
 
-(** One emitted Lean global declaration. [can_fail] is the only
-    Aeneas-derived semantic fact (mirrors [Pure.global_decl.can_fail]). *)
+(** One emitted Lean global declaration. [can_fail] is the only Aeneas-derived
+    semantic fact (mirrors [Pure.global_decl.can_fail]). *)
 type global_entry = {
   def_id : int;
   lean_id : string;
@@ -68,8 +68,8 @@ type global_entry = {
   can_fail : bool;
 }
 
-(** Output-routing info: where the manifest itself sits and which backend
-    files Aeneas wrote, all chosen by Aeneas based on CLI flags. *)
+(** Output-routing info: where the manifest itself sits and which backend files
+    Aeneas wrote, all chosen by Aeneas based on CLI flags. *)
 type output_info = {
   dest_dir : string;
   subdir : string option;
@@ -81,12 +81,12 @@ type envelope = {
   aeneas_version : string;
   charon_version : string;
       (** The version of charon that emitted the [.llbc] input. Aeneas only
-          accepts an [.llbc] whose stamp matches the charon-ml version it
-          was built against, so this is also the charon-ml version. *)
+          accepts an [.llbc] whose stamp matches the charon-ml version it was
+          built against, so this is also the charon-ml version. *)
   crate_name : string;
-      (** Identifier of the source Rust crate. Surfaces the LLBC's
-          [crate.name] at the envelope level so the manifest is
-          self-describing without requiring access to the [.llbc]. *)
+      (** Identifier of the source Rust crate. Surfaces the LLBC's [crate.name]
+          at the envelope level so the manifest is self-describing without
+          requiring access to the [.llbc]. *)
   output : output_info;
   functions : entry list;
   types : type_entry list;
@@ -305,8 +305,8 @@ let record_fun (ctx : ExtractBase.extraction_ctx) (def : Pure.fun_decl) : unit =
     state.function_entries <-
       entry_of_fun_decl ctx def :: state.function_entries
 
-let record_type (ctx : ExtractBase.extraction_ctx) (def : Pure.type_decl) :
-    unit =
+let record_type (ctx : ExtractBase.extraction_ctx) (def : Pure.type_decl) : unit
+    =
   if !Config.emit_manifest then
     state.type_entries <- type_entry_of_type_decl ctx def :: state.type_entries
 
