@@ -107,6 +107,16 @@ let rec project_value (span : Meta.span) (access : projection_access)
       (* If we reach Bottom, it may mean we need to expand an uninitialized
        * enumeration value *)
       Error (FailBottom (current_place, pe))
+  (* Raw pointer dereference: not supported yet.
+
+     It is important that this appears before the symbolic value case, otherwise
+     we would be tempted to expand a raw pointer symbolic value (which we can't,
+     and would lead to an obscure error from the user point of view). *)
+  | Deref, _, TRawPtr _ ->
+      [%craise] span
+        "Unsupported: raw pointer dereference. Aeneas does not yet support \
+         dereferencing raw pointers (this would require separation logic \
+         support)"
   (* Symbolic value: needs to be expanded *)
   | _, VSymbolic sp, _ ->
       (* Expand the symbolic value *)
