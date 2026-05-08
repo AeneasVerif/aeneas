@@ -9,6 +9,9 @@ set_option linter.unusedVariables false
 /- You can set the `maxHeartbeats` value with the `-max-heartbeats` CLI option -/
 set_option maxHeartbeats 1000000
 
+/- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
+set_option maxRecDepth 2048
+
 namespace overflowing_ops
 
 /-- [overflowing_ops::u8_overflowing_add]:
