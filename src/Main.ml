@@ -138,9 +138,7 @@ let () =
         " Generate a default lakefile.lean (Lean only)" );
       ( "-emit-manifest",
         Arg.Set emit_manifest,
-        " Emit a manifest.json file alongside the generated backend files, \
-         listing every translated function with metadata (Rust pattern, source \
-         span, Lean identifier, etc.)" );
+        " Emit a manifest.json file alongside the Lean files (Lean only)" );
       ("-print-llbc", Arg.Set print_llbc, " Print the imported LLBC");
       ( "-abort-on-error",
         Arg.Set fail_hard,

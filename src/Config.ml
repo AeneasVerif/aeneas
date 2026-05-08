@@ -228,9 +228,8 @@ let generate_lib_entry_point = ref false
 (** For Lean, controls whether we generate a lakefile or not. *)
 let lean_gen_lakefile = ref false
 
-(** Whether to emit a [manifest.json] file alongside the extracted backend
-    files. The manifest lists every Lean function declaration produced by Aeneas
-    with metadata mapping it back to the original Rust item. *)
+(** Only for Lean: emit a manifest file alongside the Lean files. The manifest is a 
+    dictionary which connects the Lean defs produced by Aeneas to the original Rust. *)
 let emit_manifest = ref false
 
 (** If true, treat the unit functions (function taking no inputs and returning
