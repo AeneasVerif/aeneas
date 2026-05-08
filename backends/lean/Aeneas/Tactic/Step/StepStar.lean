@@ -396,25 +396,8 @@ def analyzeTarget : TacticM TargetKind := do
       if let .const ``Bind.bind .. := e.getAppFn then
         let #[_m, _self, _α, _β, _value, cont] := e.getAppArgs
           | throwError "Expected bind to have 6 arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
-        -- Peel a `Function.uncurry (fun x₁ … xₙ => body)` wrapper, if present,
-        -- before looking at the binder names.
-        let inner :=
-          match_expr cont with
-          | Function.uncurry _ _ _ f => f
-          | Function.uncurry _ _ _ f _ => f
-          | _ => cont
-        if inner.isLambda then
-          -- The do elaborator gives nested-tuple binders a real leaf name
-          -- (`((a, b), (c, d))` produces `fun a c => …`), so reading off the
-          -- user names here is enough.
-          Lean.Meta.lambdaTelescope inner fun xs _ => do
-            let names ← xs.mapM fun x => do
-              let n ← x.fvarId!.getUserName
-              if n.hasMacroScopes ∨ Step.Name.isElabSynthesized n then pure none
-              else pure (some n)
-            pure (.bind names)
-        else
-          pure (.bind #[])
+        let names ← Step.getPostNames cont
+        pure (.bind names)
       else if let .some bfInfo ← Bifurcation.Info.ofExpr e then
         pure (.switch bfInfo)
       else

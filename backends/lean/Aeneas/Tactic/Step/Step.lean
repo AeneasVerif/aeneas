@@ -248,10 +248,34 @@ def Name.isElabSynthesized : Name → Bool
   | .str .anonymous s => s.startsWith "_x" && s.length > 2 && (s.drop 2).all Char.isDigit
   | _ => false
 
+/-- Extract names from a post-condition or bind-continuation expression by
+    recursively peeling lambdas and wrappers (`WP.curry`, `WP.predn`,
+    `Function.uncurry`). Returns `some name` for user-provided names and
+    `none` for macro-scoped or auto-synthesized (`_xN`) ones. -/
+partial def getPostNames (e : Expr) : MetaM (Array (Option Name)) := do
+  let e := e.consumeMData
+  if e.isLambda then
+    lambdaTelescope e fun vars body => do
+      let vars ← vars.filterMapM fun x => do
+        let ty ← x.fvarId!.getType
+        if ty.isConstOf ``Unit || ty.isConstOf ``PUnit then return none
+        let name ← x.fvarId!.getUserName
+        if name.hasMacroScopes ∨ Name.isElabSynthesized name then pure (some none)
+        else pure (some (some name))
+      let rest ← getPostNames body
+      pure (vars ++ rest)
+  else
+    match_expr e with
+    | Std.WP.curry _ _ _ f => getPostNames f
+    | Std.WP.predn _ _ p => getPostNames p
+    | Function.uncurry _ _ _ f => getPostNames f
+    | Function.uncurry _ _ _ f _ => getPostNames f
+    | _ => pure #[]
+
 /-- Extract the variable names from the bind continuation in the current goal.
-    The do elaborator already gives nested-tuple binders a real leaf name
-    (e.g. `((a, b), (c, d))` produces `fun a c => …`), so we just
-    `lambdaTelescope` the continuation and read off the user names. -/
+    Returns an empty array if the goal is not a bind. Reuses `getPostNames`
+    since the bind continuation has the same `Function.uncurry`-wrapped lambda
+    shape as a post-condition. -/
 def getBindVarNames : TacticM (Array (Option Name)) := do
   try
     withMainContext do
@@ -260,48 +284,8 @@ def getBindVarNames : TacticM (Array (Option Name)) := do
     forallTelescope goalTy fun _ goalTy => do
     let_expr Std.WP.spec _ m _ := goalTy | return #[]
     let_expr Bind.bind _ _ _ _ _ cont := m | return #[]
-    -- Peel `Function.uncurry (fun a b … => …)` (unapplied, or applied to a
-    -- value) so we can see the inner lambda.
-    let inner :=
-      match_expr cont with
-      | Function.uncurry _ _ _ f => f
-      | Function.uncurry _ _ _ f _ => f
-      | _ => cont
-    if inner.isLambda then
-      lambdaTelescope inner fun xs _ => do
-        xs.mapM fun x => do
-          let n ← x.fvarId!.getUserName
-          if n.hasMacroScopes ∨ Name.isElabSynthesized n then pure none
-          else pure (some n)
-    else return #[]
+    getPostNames cont
   catch _ => pure #[]
-
-/-- Extract names from a post-condition expression by recursively decomposing lambdas
-    and various wrappers (`WP.curry`, `WP.predn`, `Function.uncurry`).
-    Returns `some name` for user-provided names and `none` for anonymous/compiler-generated ones.
-
-    For instance, given: `e ⦃ x _ y z => ... ⦄`, this function outputs: `[some x, none, some y, some z]`.
-
-    For `e ⦃ (a, b) c => ... ⦄`, emits `predn (Function.uncurry (fun a b => fun c => …))`,
-    so the recursion peels both wrappers and yields `[some a, some b, some c]`. -/
-partial def getPostNames (e : Expr) : MetaM (Array (Option Name)) := do
-  let e := e.consumeMData
-  if e.isLambda then
-    lambdaTelescope e fun vars body => do
-      let vars ← vars.filterMapM fun x => do
-        let ty ← x.fvarId!.getType
-        -- Filter `Unit`/`PUnit` types (no meaningful output)
-        if ty.isConstOf ``Unit || ty.isConstOf ``PUnit then return none
-        let name ← x.fvarId!.getUserName
-        if name.hasMacroScopes then pure (some none) else pure (some (some name))
-      let rest ← getPostNames body
-      pure (vars ++ rest)
-  else
-    match_expr e with
-    | Std.WP.curry _ _ _ f => getPostNames f
-    | Std.WP.predn _ _ p => getPostNames p
-    | Function.uncurry _ _ _ f => getPostNames f
-    | _ => pure #[]
 
 /-- Extract the names used in the post-condition of the current goal.
     The goal should have the shape `spec program post`. -/
