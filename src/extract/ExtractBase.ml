@@ -1511,6 +1511,7 @@ let type_keyword (span : Meta.span) =
 
 (** Helper *)
 let name_last_elem_as_ident (span : Meta.span) (n : llbc_name) : string =
+  let n = LlbcAstUtils.strip_target_suffix n in
   match Collections.List.last n with
   | PeIdent (s, _) -> s
   | _ -> [%craise] span "Unexpected"
@@ -2072,9 +2073,10 @@ let ctx_compute_var_basename (span : Meta.span) (ctx : extraction_ctx)
               (* Derive the var name from the last ident of the type name
                  Ex.: ["hashmap"; "HashMap"] ~~> "HashMap" -> "hash_map" -> "hm"
               *)
-              (* The name shouldn't be empty, and its last element should
-               * be an ident *)
-              let cl = Collections.List.last def.item_meta.name in
+              (* The name shouldn't be empty, and its last element (after we remove
+                 the target architecture suffix) should be an ident *)
+              let name = LlbcAstUtils.strip_target_suffix def.item_meta.name in
+              let cl = Collections.List.last name in
               name_from_type_ident (TypesUtils.as_ident cl))
       | TVar _ -> (
           (* TODO: use "t" also for F* *)
