@@ -836,6 +836,188 @@ let remove_shallow_borrows_storage_live_dead (crate : crate) (f : fun_decl) :
     ^ Print.fun_decl_to_string env "" " " f];
   f
 
+(** Remove all occurrences of certain compiler-internal marker traits.
+
+    These traits have no semantic content relevant to verification:
+    - [Pointee], [Thin]: pointer metadata plumbing
+    - [Send], [Sync]: thread-safety markers
+    - [Unpin]: pin-projection marker
+
+    When we will actually need to reason about these, we will capture their
+    semantic content through separation logic predicates.
+
+    We filter out the trait declarations, their impls, and all references (trait
+    refs, clauses, type constraints, parent clauses). *)
+let filter_marker_traits (crate : crate) : crate =
+  let mctx = NameMatcher.ctx_from_crate crate in
+  let pats =
+    List.map NameMatcher.parse_pattern
+      [
+        "core::ptr::metadata::Pointee";
+        "core::ptr::metadata::Thin";
+        "core::marker::Send";
+        "core::marker::Sync";
+        "core::marker::Unpin";
+      ]
+  in
+  let match_config =
+    {
+      NameMatcher.map_vars_to_vars = true;
+      match_with_trait_decl_refs = Config.match_patterns_with_trait_decl_refs;
+    }
+  in
+  (* Collect the trait decl ids to filter *)
+  let filtered_ids =
+    TraitDeclId.Map.fold
+      (fun id (decl : trait_decl) acc ->
+        if
+          List.exists
+            (fun pat ->
+              NameMatcher.match_name mctx match_config pat decl.item_meta.name)
+            pats
+        then TraitDeclId.Set.add id acc
+        else acc)
+      crate.trait_decls TraitDeclId.Set.empty
+  in
+  if TraitDeclId.Set.is_empty filtered_ids then crate
+  else
+    let is_filtered_id id = TraitDeclId.Set.mem id filtered_ids in
+    let is_filtered_ref (tr : trait_ref) : bool =
+      is_filtered_id tr.trait_decl_ref.binder_value.id
+    in
+    let is_filtered_clause (clause : trait_param) : bool =
+      is_filtered_id clause.trait.binder_value.id
+    in
+    let check_not_filtered_type_constraint
+        (c : trait_type_constraint region_binder) : unit =
+      if is_filtered_id c.binder_value.trait_ref.trait_decl_ref.binder_value.id
+      then
+        let span = c.binder_value.trait_ref.trait_decl_ref.binder_value in
+        [%craise_opt_span] None
+          ("Unexpected trait type constraint referencing a filtered marker \
+            trait (id: "
+          ^ TraitDeclId.to_string span.id
+          ^ ")")
+    in
+    (* Remove the trait decls and their impls from declarations and maps *)
+    let filtered_impl_ids =
+      TraitImplId.Map.fold
+        (fun id (impl : trait_impl) acc ->
+          if is_filtered_id impl.impl_trait.id then TraitImplId.Set.add id acc
+          else acc)
+        crate.trait_impls TraitImplId.Set.empty
+    in
+    let declarations =
+      List.filter_map
+        (fun (g : declaration_group) ->
+          match g with
+          | TraitDeclGroup (NonRecGroup id) ->
+              if is_filtered_id id then None else Some g
+          | TraitDeclGroup (RecGroup ids) ->
+              let ids = List.filter (fun id -> not (is_filtered_id id)) ids in
+              if ids <> [] then Some (TraitDeclGroup (RecGroup ids)) else None
+          | TraitImplGroup (NonRecGroup id) ->
+              if TraitImplId.Set.mem id filtered_impl_ids then None else Some g
+          | TraitImplGroup (RecGroup ids) ->
+              let ids =
+                List.filter
+                  (fun id -> not (TraitImplId.Set.mem id filtered_impl_ids))
+                  ids
+              in
+              if ids <> [] then Some (TraitImplGroup (RecGroup ids)) else None
+          | MixedGroup g -> (
+              let is_filtered_item (id : item_id) =
+                match id with
+                | IdTraitDecl id -> is_filtered_id id
+                | IdTraitImpl id -> TraitImplId.Set.mem id filtered_impl_ids
+                | _ -> false
+              in
+              match g with
+              | NonRecGroup id ->
+                  if is_filtered_item id then None else Some (MixedGroup g)
+              | RecGroup ids ->
+                  let ids =
+                    List.filter (fun id -> not (is_filtered_item id)) ids
+                  in
+                  if ids <> [] then Some (MixedGroup (RecGroup ids)) else None)
+          | _ -> Some g)
+        crate.declarations
+    in
+    let trait_decls =
+      TraitDeclId.Map.filter
+        (fun id _ -> not (is_filtered_id id))
+        crate.trait_decls
+    in
+    let trait_impls =
+      TraitImplId.Map.filter
+        (fun id _ -> not (TraitImplId.Set.mem id filtered_impl_ids))
+        crate.trait_impls
+    in
+    let crate = { crate with declarations; trait_decls; trait_impls } in
+    let visitor =
+      object (self)
+        inherit [_] map_crate as super
+
+        method! visit_generic_args env (args : generic_args) =
+          let args = super#visit_generic_args env args in
+          {
+            args with
+            trait_refs =
+              List.filter (fun tr -> not (is_filtered_ref tr)) args.trait_refs;
+          }
+
+        method! visit_generic_params env (params : generic_params) =
+          let params = super#visit_generic_params env params in
+          List.iter check_not_filtered_type_constraint
+            params.trait_type_constraints;
+          {
+            params with
+            trait_clauses =
+              List.filter
+                (fun c -> not (is_filtered_clause c))
+                params.trait_clauses;
+          }
+
+        method! visit_trait_ref_kind env (kind : trait_ref_kind) =
+          match kind with
+          | BuiltinOrAuto (data, parent_refs, types) ->
+              let parent_refs =
+                List.filter (fun tr -> not (is_filtered_ref tr)) parent_refs
+              in
+              let parent_refs =
+                List.map (self#visit_trait_ref env) parent_refs
+              in
+              let types =
+                List.map
+                  (fun (n, t) -> (n, self#visit_trait_assoc_ty_impl env t))
+                  types
+              in
+              BuiltinOrAuto (data, parent_refs, types)
+          | _ -> super#visit_trait_ref_kind env kind
+
+        method! visit_trait_decl env (decl : trait_decl) =
+          let decl = super#visit_trait_decl env decl in
+          {
+            decl with
+            implied_clauses =
+              List.filter
+                (fun c -> not (is_filtered_clause c))
+                decl.implied_clauses;
+          }
+
+        method! visit_trait_impl env (impl_ : trait_impl) =
+          let impl_ = super#visit_trait_impl env impl_ in
+          {
+            impl_ with
+            implied_trait_refs =
+              List.filter
+                (fun tr -> not (is_filtered_ref tr))
+                impl_.implied_trait_refs;
+          }
+      end
+    in
+    visitor#visit_crate () crate
+
 (* Remove the type aliases from the type declarations and declaration groups *)
 let filter_type_aliases (crate : crate) : crate =
   let type_decl_is_alias (ty : type_decl) =
@@ -1927,6 +2109,7 @@ let apply_passes (crate : crate) : crate =
           crate.fun_decls)
   in
   let crate = { crate with fun_decls } in
+  let crate = filter_marker_traits crate in
   let crate = filter_type_aliases crate in
   let crate = replace_static crate in
   let crate = remove_vtables crate in

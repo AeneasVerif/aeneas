@@ -236,9 +236,35 @@ syntax (name := decomposeCmd) "#decompose " ident ident (ppLine decompose_clause
 -- Binding representation
 -- ============================================================================
 
+/-- Tree structure representing the nesting of tuple-destructuring bind variables.
+    For a simple bind `let x ← ...`, this is `leaf x`.
+    For `let (a, b) ← ...`, this is `pair (leaf a) (leaf b)`.
+    For `let ((a, b), (c, d)) ← ...`, this is
+      `pair (pair (leaf a) (leaf b)) (pair (leaf c) (leaf d))`. -/
+inductive FVarTree where
+  | leaf : Expr → FVarTree
+  | pair : FVarTree → FVarTree → FVarTree
+
+instance : Inhabited FVarTree where
+  default := .leaf default
+
+/-- Collect all leaf fvars from a tree into a flat array. -/
+def FVarTree.fvars : FVarTree → Array Expr
+  | .leaf fv => #[fv]
+  | .pair l r => l.fvars ++ r.fvars
+
+/-- Build a right-nested tree from a list of sub-trees.
+    `[t0, t1]` → `pair t0 t1`
+    `[t0, t1, t2]` → `pair t0 (pair t1 t2)` -/
+def buildTreeFromList [Monad m] [MonadError m] : List FVarTree → m FVarTree
+  | [] => throwError "buildTreeFromList: empty list (internal error)"
+  | [t] => return t
+  | t :: ts => return .pair t (← buildTreeFromList ts)
+
 /-- A single let-binding (pure or monadic) in a flattened binding sequence.
     For simple binds, `fvars` has one element. For tuple-destructuring binds
     (`let (a, b, c) ← comp`), `fvars` has one element per component. -/
+
 structure BindingEntry where
   name : Name
   type : Expr
@@ -246,6 +272,7 @@ structure BindingEntry where
   fvars : Array Expr -- bound variables (1 for simple, N for tuple destructuring)
   isMonadic : Bool
   monadExpr : Option Expr := none  -- the monad `m` (for monadic bindings)
+  fvarTree : FVarTree  -- nesting structure (leaf for simple, tree for tuple destructuring)
   deriving Inhabited
 
 -- ============================================================================
@@ -275,20 +302,37 @@ def matchDite? (e : Expr) : Option (Expr × Expr × Expr × Expr × Expr) := do
   return (args[0]!, args[1]!, args[2]!, args[3]!, args[4]!)
 
 -- ============================================================================
--- Parsing: expression → flat binding sequence + terminal
+-- Traversal: expression → flat binding sequence + terminal
 -- ============================================================================
 
-/-- CPS-style parser: opens all pure/monadic let-binders, introduces fvars,
-    then calls `k` with the accumulated entries and the terminal expression.
-    Handles `Function.uncurry` continuations from tuple-destructuring binds. -/
-partial def withParsedBindings (e : Expr) (acc : Array BindingEntry)
+/-- Decompose a monadic/pure expression into a flat sequence of let-bindings plus a
+    terminal expression. Works in CPS: opens each binder with `withLocalDecl`, introduces
+    fvars, records a `BindingEntry` per binding, then calls `k` with the accumulated
+    entries and the remaining (non-binding) terminal.
+
+    For example, given the Lean expression corresponding to:
+    ```
+    do let a ← f x
+       let b := a + 1
+       let (c, d) ← g a b
+       c + d
+    ```
+    this function calls `k` with:
+    - `bindings = #[⟨a, ..., isMonadic=true⟩, ⟨b, ..., isMonadic=false⟩, ⟨(c,d), ..., isMonadic=true⟩]`
+    - `terminal` = the expression `c + d` (with `a`, `b`, `c`, `d` as fvars in scope)
+
+    For tuple-destructuring binds like `let (c, d) ← ...`, the `BindingEntry` has
+    multiple fvars `#[c, d]` and an `FVarTree` recording the nesting structure.
+    Nested tuples like `let ((a, b), (c, d)) ← ...` are fully opened to their
+    leaf components. -/
+partial def withBindings (e : Expr) (acc : Array BindingEntry)
     (k : Array BindingEntry → Expr → DecomposeM α) : DecomposeM α := do
   -- Pure let
   match e with
   | .letE name type value body _nonDep =>
     withLetDecl name type value fun fvar => do
       let body' := body.instantiate1 fvar
-      withParsedBindings body' (acc.push ⟨name, type, value, #[fvar], false, none⟩) k
+      withBindings body' (acc.push { name, type, value, fvars := #[fvar], isMonadic := false, fvarTree := .leaf fvar }) k
   | _ =>
     -- Monadic bind
     match matchBind? e with
@@ -335,10 +379,22 @@ where
       | .lam lname ltype lbody lbinfo =>
         withLocalDecl lname lbinfo ltype fun fvar => do
           let lbody' := lbody.instantiate1 fvar
-          withParsedBindings lbody' (acc.push ⟨lname, ltype, computation, #[fvar], true, some m⟩) k
+          withBindings lbody' (acc.push { name := lname, type := ltype, value := computation, fvars := #[fvar], isMonadic := true, monadExpr := some m, fvarTree := .leaf fvar }) k
       | _ => k acc e
-  /-- Recursively open uncurry+lambda chains, collecting fvars into an array.
-      When all binders are opened, creates a single BindingEntry and continues parsing. -/
+  /-- Open the `Function.uncurry` chain that forms the continuation of a tuple-
+      destructuring `Bind.bind`. Introduces fvars for each component and creates a
+      single `BindingEntry` for the whole tuple bind.
+
+      For `let (a, b) ← comp`, the continuation in the elaborated term is:
+      ```
+      Bind.bind comp (Function.uncurry (fun a b => body))
+      ```
+      This function opens the uncurry's lambdas, introducing `a` and `b` as fvars.
+      It then delegates to `buildFVarTree` to handle nested tuples (where the opened
+      fvars have pair types and the body destructures them further).
+
+      After all fvars are collected, creates a `BindingEntry` with the flat fvar array
+      and the `FVarTree`, then continues traversal on the remaining body. -/
   openUncurryFVars (m computation : Expr) (cont : Expr) (fvars : Array Expr)
       (acc : Array BindingEntry) (k : Array BindingEntry → Expr → DecomposeM α) :
       DecomposeM α := do
@@ -357,11 +413,86 @@ where
         withLocalDecl lname lbinfo ltype fun fvar => do
           let lbody' := lbody.instantiate1 fvar
           let allFVars := fvars.push fvar
-          let mainName := (← allFVars[0]!.fvarId!.getDecl).userName
-          let mainType ← inferType allFVars[0]!
-          let entry : BindingEntry := ⟨mainName, mainType, computation, allFVars, true, some m⟩
-          withParsedBindings lbody' (acc.push entry) k
+          -- Build the FVarTree, opening any fully-applied uncurries for nested tuples
+          buildFVarTree allFVars 0 lbody' fun tree finalBody => do
+            let leafFVars := tree.fvars
+            let mainName := (← leafFVars[0]!.fvarId!.getDecl).userName
+            let mainType ← inferType leafFVars[0]!
+            let entry : BindingEntry :=
+              { name := mainName, type := mainType, value := computation
+                fvars := leafFVars, isMonadic := true, monadExpr := some m
+                fvarTree := tree }
+            withBindings finalBody (acc.push entry) k
       | _ => k acc e
+  /-- Given an array of fvars (from opening an uncurry chain) and the body expression
+      that follows, build an `FVarTree` that reflects the original nesting structure
+      of the tuple destructuring.
+
+      For a simple tuple bind `let (a, b) ← ...`, the fvars are `#[a, b]` with scalar
+      types, and the body doesn't contain further uncurries for these fvars. The result
+      is `pair (leaf a) (leaf b)`.
+
+      For a nested tuple bind `let ((a, b), (c, d)) ← ...`, the fvars from the outer
+      uncurry chain are `#[_x0 : A × B, _x1 : C × D]` (pair-typed intermediates).
+      The body starts with fully-applied uncurries that destructure them:
+      `Function.uncurry (fun a b => Function.uncurry (fun c d => realBody) _x1) _x0`.
+      This function detects these, opens the inner uncurries to introduce `a, b, c, d`,
+      and builds `pair (pair (leaf a) (leaf b)) (pair (leaf c) (leaf d))`.
+
+      CPS-based: calls `k` with the completed tree and the final body (after all
+      destructurings have been opened). -/
+  buildFVarTree (fvars : Array Expr) (idx : Nat) (body : Expr)
+      (k : FVarTree → Expr → DecomposeM α) : DecomposeM α := do
+    -- Build a tree for each fvar, then combine them
+    buildFVarTreeAux fvars idx body #[] fun trees finalBody => do
+      let tree ← buildTreeFromList trees.toList
+      k tree finalBody
+  /-- Process fvars one by one. For pair-typed fvars with matching fully-applied
+      uncurries, open the uncurry to get component fvars and recurse. -/
+  buildFVarTreeAux (fvars : Array Expr) (idx : Nat) (body : Expr)
+      (trees : Array FVarTree) (k : Array FVarTree → Expr → DecomposeM α) :
+      DecomposeM α := do
+    if h : idx < fvars.size then
+      let fvar := fvars[idx]
+      let fvarType ← inferType fvar
+      -- Check if pair-typed and destructured by an uncurry in the body
+      if fvarType.isAppOfArity ``Prod 2 then
+        let fn := body.getAppFn
+        let args := body.getAppArgs
+        if fn.isConstOf ``Function.uncurry && args.size ≥ 5 && args[4]! == fvar then
+          let f := args[3]!
+          let extraArgs := args.extract 5 args.size
+          -- Open the uncurry's lambdas (CPS)
+          openUncurryLambdasCPS f fun compFVars innerLamBody => do
+            let innerBody := if extraArgs.isEmpty then innerLamBody
+                             else mkAppN innerLamBody extraArgs
+            -- Recursively build sub-tree for the component fvars
+            buildFVarTree compFVars 0 innerBody fun subTree subBody => do
+              buildFVarTreeAux fvars (idx + 1) subBody (trees.push subTree) k
+        else
+          buildFVarTreeAux fvars (idx + 1) body (trees.push (.leaf fvar)) k
+      else
+        buildFVarTreeAux fvars (idx + 1) body (trees.push (.leaf fvar)) k
+    else
+      k trees body
+  /-- Open the lambda telescope inside a `Function.uncurry`'s function argument.
+      CPS-based so that the introduced fvars remain in scope for the continuation.
+
+      For example, given the expression `fun a => fun b => body` (the 4th argument
+      of a `Function.uncurry`), this introduces fvars `a` and `b` via `withLocalDecl`
+      and calls `k #[a_fvar, b_fvar] body'` (where `body'` has the fvars substituted
+      in). -/
+  openUncurryLambdasCPS (f : Expr)
+      (k : Array Expr → Expr → DecomposeM α) : DecomposeM α := do
+    openUncurryLambdasCPSAux f #[] k
+  openUncurryLambdasCPSAux (f : Expr) (fvars : Array Expr)
+      (k : Array Expr → Expr → DecomposeM α) : DecomposeM α := do
+    match f with
+    | .lam lname ltype lbody lbinfo =>
+      withLocalDecl lname lbinfo ltype fun fvar => do
+        let lbody' := lbody.instantiate1 fvar
+        openUncurryLambdasCPSAux lbody' (fvars.push fvar) k
+    | _ => k fvars f
 
 /-- Abstract over `fvars`, always creating lambda binders (even for let-decl fvars).
     Standard `mkLambdaFVars` creates let-bindings for let-decl fvars, which is wrong
@@ -393,6 +524,17 @@ private def mkUncurry (fvar : Expr) (body : Expr) : MetaM Expr := do
   let fn ← mkLamAbstract #[fvar] body
   mkAppM ``Function.uncurry #[fn]
 
+/-- Rebuild a `Function.uncurry` chain from an `FVarTree`.
+    For `pair (pair (leaf a) (leaf b)) (pair (leaf c) (leaf d))` and body,
+    produces `uncurry (uncurry (fun a b => uncurry (fun c d => body)))`. -/
+private partial def rebuildUncurryFromTree (tree : FVarTree) (body : Expr) : MetaM Expr := do
+  match tree with
+  | .leaf fvar => mkLamAbstract #[fvar] body
+  | .pair left right =>
+    let rightCont ← rebuildUncurryFromTree right body
+    let leftCont ← rebuildUncurryFromTree left rightCont
+    mkAppM ``Function.uncurry #[leftCont]
+
 /-- Rebuild an expression from `bindings[startIdx .. endIdx-1]` followed by `terminal`.
     Abstracts fvars bottom-up using `mkLambdaFVars` / `mkLetFVars`.
     Handles tuple-destructuring binds by reconstructing `Function.uncurry` chains. -/
@@ -405,12 +547,8 @@ def rebuildBindings (bindings : Array BindingEntry) (terminal : Expr)
     let entry := bindings[i]!
     if entry.isMonadic then
       if entry.fvars.size > 1 then
-        -- Tuple bind: rebuild Function.uncurry chain
-        -- Build from inside out: last fvar first
-        let mut cont ← mkLambdaFVars #[entry.fvars.back!] result
-        -- Wrap each remaining fvar with uncurry (from second-to-last back to first)
-        for j in (List.range (entry.fvars.size - 1)).reverse do
-          cont ← mkUncurry entry.fvars[j]! cont
+        -- Tuple bind: rebuild Function.uncurry chain using tree structure
+        let cont ← rebuildUncurryFromTree entry.fvarTree result
         result ← mkAppM ``Bind.bind #[entry.value, cont]
       else
         let cont ← mkLambdaFVars #[entry.fvars[0]!] result
@@ -832,15 +970,54 @@ partial def modifyBindingValue (e : Expr) (idx : Nat)
     | _ =>
       match matchBind? e with
       | some (m, inst, α, β, computation, continuation) =>
-        match continuation with
-        | .lam lname ltype lbody lbinfo =>
-          withLocalDecl lname lbinfo ltype fun fvar => do
-            let lbody' := lbody.instantiate1 fvar
-            let modifiedBody ← modifyBindingValue lbody' (idx - 1) action
-            let newCont ← mkLambdaFVars #[fvar] modifiedBody
-            return mkApp6 (mkConst ``Bind.bind (e.getAppFn.constLevels!)) m inst α β computation newCont
-        | _ => throwError "letAt: bind continuation is not a lambda"
+        -- Open the continuation, handling Function.uncurry for tuple-destructuring binds
+        let newCont ← openBindCont continuation (idx - 1) action
+        return mkApp6 (mkConst ``Bind.bind (e.getAppFn.constLevels!)) m inst α β computation newCont
       | none => throwError "letAt {idx}: reached terminal before binding"
+where
+  /-- Open a bind continuation (which may be a plain lambda or a `Function.uncurry`
+      chain for tuple-destructuring binds), apply `modifyBindingValue` to the
+      innermost body, then reconstruct the continuation using `mkUncurry`.
+      This mirrors the structure of `openUncurryFVars` in `withBindings`. -/
+  openBindCont (cont : Expr) (idx : Nat) (action : Expr → DecomposeM Expr) :
+      DecomposeM Expr := do
+    openBindContAux cont idx action #[]
+  /-- Auxiliary for `openBindCont`: recursively opens uncurry+lambda layers,
+      collects fvars, then modifies the innermost body and rebuilds. -/
+  openBindContAux (cont : Expr) (idx : Nat) (action : Expr → DecomposeM Expr)
+      (fvars : Array Expr) : DecomposeM Expr := do
+    if cont.isAppOfArity ``Function.uncurry 4 then
+      let f := cont.getAppArgs[3]!
+      match f with
+      | .lam lname ltype lbody lbinfo =>
+        withLocalDecl lname lbinfo ltype fun fvar => do
+          let lbody' := lbody.instantiate1 fvar
+          openBindContAux lbody' idx action (fvars.push fvar)
+      | _ =>
+        -- f is itself an uncurry (nested tuple like ((a,b),(c,d))): recurse into it
+        openBindContAux f idx action fvars
+    else
+      match cont with
+      | .lam lname ltype lbody lbinfo =>
+        withLocalDecl lname lbinfo ltype fun fvar => do
+          let lbody' := lbody.instantiate1 fvar
+          let allFVars := fvars.push fvar
+          let modifiedBody ← modifyBindingValue lbody' idx action
+          -- Rebuild: innermost lambda first, then uncurry layers from inside out
+          let mut result ← mkLambdaFVars #[allFVars.back!] modifiedBody
+          for j in (List.range (allFVars.size - 1)).reverse do
+            result ← mkUncurry allFVars[j]! result
+          return result
+      | _ =>
+        if fvars.isEmpty then
+          throwError "letAt: bind continuation is not a lambda"
+        else
+          -- No more lambdas but we have fvars: the body is the innermost expression
+          let modifiedBody ← modifyBindingValue cont idx action
+          let mut result ← mkLambdaFVars #[fvars.back!] modifiedBody
+          for j in (List.range (fvars.size - 1)).reverse do
+            result ← mkUncurry fvars[j]! result
+          return result
 
 -- ============================================================================
 -- Apply a single clause (pattern + name) to the current body
@@ -869,7 +1046,7 @@ partial def applyClause (body : Expr) (pat : DecomposePattern) (newName : Name)
     extractFull body newName levelParams srcIsNoncomputable clauseDesc
 
   | .letRange start count =>
-    withParsedBindings body #[] fun bindings terminal => do
+    withBindings body #[] fun bindings terminal => do
       extractLetRange bindings terminal start count newName levelParams srcIsNoncomputable clauseDesc
 
   | .letAt idx inner =>
