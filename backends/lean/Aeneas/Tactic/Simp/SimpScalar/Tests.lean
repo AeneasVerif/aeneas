@@ -91,6 +91,7 @@ example (x : BitVec 8) (j : ℕ) (hj : j ≥ 8) : x.toNat < 2 ^ j := by
 
 example (j j' : ℕ) (hj : j < 8) (hj' : j ≤ j') (hj'' : j' < 8) :
     ((2 ^ j) >>> j).testBit (j' - j) = (2 ^ j).testBit j' := by
-/-- Pow mod pow: `2 ^ n % 2 ^ m = 2 ^ n` when `n < m` -/
+  simp_scalar
+
 example (n m : ℕ) (h : n < m) : 2 ^ n % 2 ^ m = 2 ^ n := by
   simp_scalar
