@@ -100,6 +100,21 @@ let strip_target_suffix (n : name) : name =
   | Types.PeTarget _ :: rest -> List.rev rest
   | _ -> n
 
+(** Extract and strip any trailing [PeTarget] element from a name, returning the
+    cleaned name and an optional target suffix string (with [-] replaced by
+    [_]). *)
+let extract_target_suffix (name : name) : name * string option =
+  match Collections.List.last name with
+  | PeTarget target ->
+      let target = String.concat "_" (String.split_on_char '-' target) in
+      (Collections.List.prefix (List.length name - 1) name, Some target)
+  | _ -> (name, None)
+
+let add_target_suffix (name : name) (target_suffix : string option) : name =
+  match target_suffix with
+  | None -> name
+  | Some target -> name @ [ PeTarget target ]
+
 let name_to_pattern (span : Meta.span option) (ctx : Charon.NameMatcher.ctx)
     (c : Charon.NameMatcher.to_pat_config) (n : name) =
   let n = strip_target_suffix n in

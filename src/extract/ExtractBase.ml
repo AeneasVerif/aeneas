@@ -213,8 +213,14 @@ let empty_names_map : names_map =
 
 (** Small helper to update an LLBC name by using a rename attribute *)
 let rename_llbc_name (rename : string) (llbc_name : llbc_name) : llbc_name =
-  let name_prefix = List.tl (List.rev llbc_name) in
-  List.rev (T.PeIdent (rename, Disambiguator.zero) :: name_prefix)
+  let rname = List.rev llbc_name in
+  let rname, target =
+    match rname with
+    | PeTarget tgt :: rest -> (rest, [ T.PeTarget tgt ])
+    | _ -> (rname, [])
+  in
+  let name_prefix = List.tl rname in
+  List.rev (target @ (T.PeIdent (rename, Disambiguator.zero) :: name_prefix))
 
 (** Small helper to update an LLBC name if the rename attribute has been set *)
 let opt_rename_llbc_name (attr_info : Meta.attr_info) (llbc_name : llbc_name) :
@@ -1519,6 +1525,13 @@ let name_last_elem_as_ident (span : Meta.span) (n : llbc_name) : string =
   | PeIdent (s, _) -> s
   | _ -> [%craise] span "Unexpected"
 
+(** Append the target suffix (if any) to a name string. *)
+let append_target_suffix (name : string) (target_suffix : string option) :
+    string =
+  match target_suffix with
+  | None -> name
+  | Some target -> name ^ "_" ^ target
+
 (** Helper
 
     Prepare a name. The first id elem is always the crate: if it is the local
@@ -1648,15 +1661,6 @@ let ctx_compute_struct_constructor (def : type_decl) (ctx : extraction_ctx)
     function. *)
 let ctx_fun_global_name_to_extract_string (meta : T.item_meta)
     (ctx : extraction_ctx) (fname : llbc_name) : string =
-  (* Check if the name ends with a target element (from multi-target
-     extraction) and extract it as a suffix *)
-  let fname, target_suffix =
-    match Collections.List.last fname with
-    | T.PeTarget target ->
-        let target = String.concat "_" (String.split_on_char '-' target) in
-        (Collections.List.prefix (List.length fname - 1) fname, Some target)
-    | _ -> (fname, None)
-  in
   (* Check if the function is a method implementation for a blanket impl.
      If it is the case, add a path element to avoid name collisions *)
   let rec is_blanket_method (name : llbc_name) : bool =
@@ -1676,7 +1680,7 @@ let ctx_fun_global_name_to_extract_string (meta : T.item_meta)
         end
     | _ :: name -> is_blanket_method name
   in
-  let is_blanket = is_blanket_method fname in
+  let is_blanket = is_blanket_method (LlbcAstUtils.strip_target_suffix fname) in
   [%ldebug "fname: " ^ name_to_string ctx fname];
   let fname = ctx_compute_simple_name meta ctx fname in
   (* Add the blanket path elem if the method is a blanket method *)
@@ -1686,13 +1690,7 @@ let ctx_fun_global_name_to_extract_string (meta : T.item_meta)
       fname @ [ "Blanket"; last ]
     else fname
   in
-  (* TODO: don't convert to snake case for Coq, HOL4, F* *)
   let fname = flatten_name fname in
-  let fname =
-    match target_suffix with
-    | None -> fname
-    | Some target -> fname ^ "_" ^ target
-  in
   match backend () with
   | FStar | Coq | HOL4 -> StringUtils.lowercase_first_letter fname
   | Lean -> fname
@@ -2315,6 +2313,8 @@ let ctx_compute_fun_global_name_no_suffix (item_meta : T.item_meta)
     (src : item_source) ~(is_trait_decl_field : bool) ~(is_fun : bool)
     (ctx : extraction_ctx) : string =
   let span = item_meta.span in
+  (* Extract target suffix from the function's own name before any overriding *)
+  let _, target_suffix = LlbcAstUtils.extract_target_suffix item_meta.name in
   (* Rename the declaration if the user added a [rename] attribute.
 
      We have to do something peculiar for the implementation of trait
@@ -2379,7 +2379,9 @@ let ctx_compute_fun_global_name_no_suffix (item_meta : T.item_meta)
       let trait_impl_name =
         ctx_compute_trait_impl_name_aux ctx trait_impl_ref.id
       in
-      flatten_name [ trait_impl_name; item_name ]
+      let name = flatten_name [ trait_impl_name; item_name ] in
+      (* Append target suffix if this is a per-target method *)
+      append_target_suffix name target_suffix
   | _ ->
       let llbc_name = opt_rename_llbc_name item_meta.attr_info item_meta.name in
       [%ldebug "llbc_name after renaming: " ^ name_to_string ctx llbc_name];
@@ -2390,7 +2392,7 @@ let ctx_compute_fun_global_name_no_suffix (item_meta : T.item_meta)
          adding the "default" suffix.
       *)
       let llbc_name =
-        (* A default implementation is a declaration that does not defin a trait decl field
+        (* A default implementation is a declaration that does not define a trait decl field
            (remember that we use opaque fun declarations for the method of trait declarations)
            and yet belongs to a trait *decl* block. *)
         if is_trait_decl_field then llbc_name
