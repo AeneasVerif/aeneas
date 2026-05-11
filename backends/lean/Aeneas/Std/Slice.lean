@@ -795,13 +795,13 @@ theorem Slice.setSlice!_val (s : Slice α) (i : ℕ) (s' : List α) :
 @[step]
 theorem core.slice.index.SliceIndexRangeUsizeSlice.index_mut.step_spec (r : core.ops.range.Range Usize) (s : Slice α)
   (h0 : r.start ≤ r.end) (h1 : r.end ≤ s.length) :
-  core.slice.index.SliceIndexRangeUsizeSlice.index_mut r s ⦃ (s1, index_mut_back) =>
+  core.slice.index.SliceIndexRangeUsizeSlice.index_mut r s ⦃ (s1 : Slice α) (index_mut_back : Slice α → Slice α) =>
   s1.val = s.val.slice r.start r.end ∧
   s1.length = r.end - r.start ∧
   ∀ s2, index_mut_back s2 = s.setSlice! r.start.val s2 ⦄ := by
   simp only [index_mut, UScalar.le_equiv, Slice.length]
   split
-  . simp only [spec_ok, true_and]
+  . simp only [spec_ok, WP.predn, true_and]
     simp_lists
     simp_scalar
     simp_lists [Slice.eq_iff]
@@ -837,13 +837,13 @@ theorem Slice.index_SliceIndexRangeToUsizeSliceInst (s : Slice α) (r : core.ops
 theorem core.slice.index.SliceIndexRangeToUsizeSlice.index_mut.step_spec
     (r : core.ops.range.RangeTo Usize) (s : Slice α) (h : r.end ≤ s.length) :
   core.slice.index.SliceIndexRangeToUsizeSlice.index_mut r s
-    ⦃ (s1, back) =>
+    ⦃ (s1 : Slice α) (back : Slice α → Slice α) =>
       s1.val = s.val.slice 0 r.end ∧
       s1.length = r.«end» ∧
       ∀ s', (back s').val = s.val.setSlice! 0 s'.val ⦄ := by
   simp only [index_mut]
   split
-  · simp only [spec_ok]
+  · simp only [spec_ok, WP.predn]
     refine ⟨trivial, ?_, ?_⟩
     · simp [Slice.length]; scalar_tac
     · intro s'; simp
@@ -878,13 +878,13 @@ theorem Slice.index_SliceIndexRangeFromUsizeSliceInst (s : Slice α) (r : core.o
 theorem core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut.step_spec
     (r : core.ops.range.RangeFrom Usize) (s : Slice α) (h : r.start ≤ s.length) :
   core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut r s
-    ⦃ (s1, back) =>
+    ⦃ (s1 : Slice α) (back : Slice α → Slice α) =>
       s1.val = s.val.drop r.start ∧
       s1.length = s.length - r.start.val ∧
       ∀ s', (back s').val = s.val.setSlice! r.start.val s'.val ⦄ := by
   simp only [index_mut, Slice.drop]
   split
-  · simp only [spec_ok]
+  · simp only [spec_ok, WP.predn]
     refine ⟨trivial, ?_, ?_⟩
     · simp [Slice.length, List.length_drop]
     · intro s'; simp
