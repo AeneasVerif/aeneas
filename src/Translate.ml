@@ -1303,6 +1303,12 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
          /- You can set the `maxHeartbeats` value with the `-max-heartbeats` \
          CLI option -/\n";
       Printf.fprintf out "set_option maxHeartbeats %d\n" !Config.max_heartbeats;
+      (* Max rec depth *)
+      Printf.fprintf out
+        "\n\
+         /- You can set the `maxRecDepth` value with the `-max-recdepth` CLI \
+         option -/\n";
+      Printf.fprintf out "set_option maxRecDepth %d\n" !Config.max_recdepth;
       (* Declare the definitions as being noncomputable if needs be *)
       if fi.noncomputable then
         Printf.fprintf out
