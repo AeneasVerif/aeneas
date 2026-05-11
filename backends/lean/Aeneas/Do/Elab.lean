@@ -159,7 +159,7 @@ inductive PatShape where
 
 /-- First non-anonymous leaf name in the pattern, if any. Used to give
     nested-tuple binders a meaningful name (e.g. `(a, b)` reuses `a`) so the
-    name survives `Function.uncurry_apply_eq` reduction in `step*` analysis. -/
+    name survives `Function.uncurry`-reduction in `step*` analysis. -/
 partial def PatShape.firstLeafName? : PatShape → Option Name
   | .leaf n => if n == `_ then none else some n
   | .prod subs => subs.findSome? firstLeafName?

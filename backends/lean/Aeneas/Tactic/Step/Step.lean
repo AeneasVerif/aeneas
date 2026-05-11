@@ -73,7 +73,6 @@ attribute [step_simps]
 
 attribute [step_simps] Aeneas.Std.bind_assoc_eq
 attribute [step_simps] Function.uncurry_apply_pair
-attribute [step_simps] Function.uncurry_apply_eq
 
 attribute [step_post_simps]
   -- We often see expressions like `Int.ofNat 3`
@@ -247,6 +246,43 @@ def getFirstBind (goalTy : Expr) : MetaM (Bool × Expr) := do
 def Name.isElabSynthesized : Name → Bool
   | .str .anonymous s => s.startsWith "_x" && s.length > 2 && (s.drop 2).all Char.isDigit
   | _ => false
+
+/-- Convert an fvar's user name into the `Option Name` slot used by `step*`.
+    Returns `none` for macro-scoped names and `_xN` placeholders. -/
+def fvarNameSlot (fv : Expr) : MetaM (Option Name) := do
+  let n ← fv.fvarId!.getUserName
+  pure (if n.hasMacroScopes ∨ Name.isElabSynthesized n then none else some n)
+
+/-- Used to name post-condition hypotheses introduced by `step`. -/
+def postName (base : Name) (suffix : String) : Name :=
+  base.getPrefix ++ .mkSimple (base.getString! ++ "_post" ++ suffix)
+
+/-- Leaf names of a bind continuation's pattern, in source order — one slot per
+    leaf of the user's `let pat ← …`. -/
+partial def getLeafNamesFromCont (cont : Expr) : MetaM (Array (Option Name)) := do
+  let cont := cont.consumeMData
+  let lam := match_expr cont with
+    | Function.uncurry _ _ _ f => f.consumeMData
+    | _ => cont
+  Prod.fst <$> ofLambda lam
+where
+  /-- Telescope a (possibly curried) lambda, recursing into each binder. -/
+  ofLambda (lam : Expr) : MetaM (Array (Option Name) × Expr) := do
+    unless lam.isLambda do return (#[], lam)
+    Meta.lambdaTelescope lam fun vars body =>
+      vars.foldlM (init := (#[], body)) fun (acc, body) var => do
+        let (sub, body) ← ofBinder var body
+        pure (acc ++ sub, body)
+  /-- Leaves reachable from `var`, following any `Function.uncurry … var`
+      destructuring in `body`. -/
+  ofBinder (var : Expr) (body : Expr) : MetaM (Array (Option Name) × Expr) := do
+    let body := body.consumeMData
+    match_expr body with
+    | Function.uncurry _ _ _ f arg =>
+      let f := f.consumeMData
+      unless arg.consumeMData == var ∧ f.isLambda do return (#[← fvarNameSlot var], body)
+      ofLambda f
+    | _ => return (#[← fvarNameSlot var], body)
 
 /-- Extract names from a post-condition or bind-continuation expression by
     recursively peeling lambdas and wrappers (`WP.curry`, `WP.predn`,
@@ -472,19 +508,26 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
                 #[``Std.WP.qimp_spec_predn, ``Std.WP.qimp_spec_unit,
                   ``Std.WP.qimp_predn, ``Std.WP.qimp_unit,
                   ``Std.WP.qimp_spec_exists, ``Std.WP.qimp_exists,
+                  -- `Prod.forall`/`Prod.exists` split `∀ x : α × β, p x` into
+                  -- `∀ a b, p (a, b)`, so a tuple post-binder produces one
+                  -- output per leaf rather than a single pair.
+                  ``Prod.forall, ``Prod.exists,
                   ``forall_unit, ``true_imp_iff] }
             (.targets #[] true)
     | trace[Step] "The main goal was solved!"; return none
   traceGoalWithNode "goal after decomposing the nested `predn`"
 
   /- Eliminate `qimp_spec`/`qimp` to reveal `imp` and decompose the post-condition into a sequence
-     of implications -/
+     of implications. `Prod.forall` splits any leftover tuple-typed quantifier into separate
+     binders; `Function.uncurry_apply_pair` then reduces the now-syntactic-pair argument. -/
   let some _ ← withTraceNode `Step (fun _ => pure m!"simpAt: eliminating `qimp_spec` and `qimp`") do
     Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
             { declsToUnfold := #[``Std.WP.curry, ``Std.WP.predn]
               addSimpThms :=
                 #[``Std.WP.qimp_spec_iff, ``Std.WP.qimp_iff,
-                  ``Std.WP.imp_and_iff, ``forall_unit, ``true_imp_iff] }
+                  ``Std.WP.imp_and_iff,
+                  ``Prod.forall, ``Prod.exists, ``Function.uncurry_apply_pair,
+                  ``forall_unit, ``true_imp_iff] }
             (.targets #[] true)
     | trace[Step] "The main goal was solved!"; return none
   traceGoalWithNode "goal after aliminating `qimp_spec` and `qimp` and decomposing the post-condition"
@@ -543,17 +586,15 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
         -- Generate a name for an output var
         mkFreshUserName `x
       else
-        -- Generate a name for a post-condition
-        match args.postsBasename with
-        | none => mkFreshAnonPropUserName
-        | some baseName =>
-          let (root, baseStr) := match baseName with
-            | .str root s => (root, s ++ "_post")
-            | _ => (.anonymous, "_post")
-          let postIdx :=
-            if totalNumProps = 1 then ""
-            else s!"{nPropsBefore + 1}"
-          pure (Name.str root s!"{baseStr}{postIdx}")
+        -- Generate a name for a post-condition. Prefer pairing each post with
+        -- the corresponding output's name (e.g. `a_post`); otherwise fall
+        -- back to `<basename>_post<idx>`.
+        if let some (some n) := args.ids[nPropsBefore]? then
+          if !n.hasMacroScopes then return postName n ""
+        if let some baseName := args.postsBasename then
+          let idx := if totalNumProps = 1 then "" else s!"{nPropsBefore + 1}"
+          return postName baseName idx
+        mkFreshAnonPropUserName
   let mut ids := #[]
   let mut nPropsBefore := 0
   for h : i in [0:outputIsProp.size] do
@@ -579,19 +620,6 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
   let (posts, goal) ← goal.introN postFixLength postsIds
   setGoals [goal]
   traceGoalWithNode "goal after introducing the post-conditions"
-
-  /- Reduce any leftover `Function.uncurry _ fvar` in the freshly-introduced
-     post hypotheses. The earlier simp passes target the *goal*, so after
-     `introN` produces fresh hypotheses we have to give the step_simps lemmas
-     (notably `Function.uncurry_apply_eq`) a chance to fire on them. Without
-     this, nested-tuple posts like `(a, b) (c, d) => …` leave the inner
-     `Function.uncurry (fun c d => …) x_n` un-reduced. -/
-  if posts.size > 0 then
-    withTraceNode `Step (fun _ => pure m!"simpAt: reducing Function.uncurry in posts") do
-    let _ ← Simp.simpAt (simpOnly := true)
-      { maxDischargeDepth := 1, failIfUnchanged := false, iota := false }
-      { simpThms := #[← stepSimpExt.getTheorems] }
-      (.targets posts false)
 
   -- Build the Output information
   let mkName? (n : Name) : Option Name :=
@@ -1352,10 +1380,10 @@ error: unsolved goals
 case a
 x y z : ℕ
 h : y = x + 1
-_✝¹ : z = x + 2
+z_post : z = x + 2
 y1 z1 : ℕ
 h1 : y1 = y + 1
-_✝ : z1 = y + 2
+z1_post : z1 = y + 2
 ⊢ y1 = x + 2
   -/
   #guard_msgs in
@@ -1739,8 +1767,8 @@ f : U32 → Result U32
 h : ∀ (x : U32), f x ⦃ y => ∃ z > 0, ↑y = ↑x + z ⦄
 y : ℕ
 z : U32
-_✝¹ : y > 0
-_✝ : ↑z = ↑x + y
+y_post : y > 0
+z_post : ↑z = ↑x + y
 ⊢ ↑z > ↑x
   -/
   #guard_msgs in

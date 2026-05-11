@@ -32,14 +32,14 @@ def prog (xs : List Nat) : Result (List Nat × Nat) := do
   let d ← readSingle (setC c) 3
   ok (setC c, a + b + c + d)
 
--- `step*` should finish this proof off 
+-- `step*` should finish this proof off
 example (xs : List Nat) :
     prog xs ⦃ _ => True ⦄ := by
   unfold prog
   step*
 
-/-- Nested-tuple bind followed by another bind. Check
-  `Function.uncurry_apply_eq` is firing correctly in `step_simps` -/
+/-- Nested-tuple bind followed by another bind. Checks that `introOutputs`
+  properly reduces a nested `Function.uncurry` chain. -/
 def readNested (xs : List Nat) : Result ((Nat × Nat) × Nat) :=
   ok ((xs.getD 0 0, xs.getD 1 0), xs.getD 2 0)
 
@@ -64,7 +64,7 @@ example (xs : List Nat) :
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, setA, a_post1, a_post2 ⟩ ← readPair_spec
+  [apply]     let* ⟨ a, setA, a_post, setA_post ⟩ ← readPair_spec
     let* ⟨ b, b_post ⟩ ← readSingle_spec
     agrind
 -/

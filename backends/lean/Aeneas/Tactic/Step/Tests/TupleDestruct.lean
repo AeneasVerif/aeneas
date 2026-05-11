@@ -29,11 +29,10 @@ def testTuples : Result Nat := do
 /--
 info: Try this:
 
-  [apply]     simp only [step_simps]
-    let* ⟨ a, b, a_post1, a_post2 ⟩ ← twoNats_spec
-    let* ⟨ c, d, c_post1, c_post2 ⟩ ← twoNats_spec
-    let* ⟨ a, c, a_post ⟩ ← fourNats_spec
-    let* ⟨ e, g, e_post ⟩ ← fourNats_spec
+  [apply]     let* ⟨ a, b, a_post, b_post ⟩ ← twoNats_spec
+    let* ⟨ c, d, c_post, d_post ⟩ ← twoNats_spec
+    let* ⟨ a, b, c, d, a_post, b_post, c_post, d_post ⟩ ← fourNats_spec
+    let* ⟨ e, f, g, h, e_post, f_post, g_post, h_post ⟩ ← fourNats_spec
     agrind
 -/
 #guard_msgs in

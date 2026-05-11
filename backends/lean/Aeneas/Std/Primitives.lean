@@ -208,10 +208,6 @@ end Order
 
 attribute [simp, grind =] Function.uncurry_apply_pair
 
-/-- A `step_simps` lemma for simplifying postconditions -/
-theorem _root_.Function.uncurry_apply_eq {α β γ} (f : α → β → γ) (x : α × β) :
-    Function.uncurry f x = f x.fst x.snd := rfl
-
 /-!
 # Lift
 -/
