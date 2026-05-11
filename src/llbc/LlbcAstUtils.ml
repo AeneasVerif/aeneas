@@ -106,7 +106,7 @@ let name_to_pattern (span : Meta.span option) (ctx : Charon.NameMatcher.ctx)
   if !Config.fail_hard then Charon.NameMatcher.name_to_pattern ctx c n
   else
     try Charon.NameMatcher.name_to_pattern ctx c n
-    with Not_found ->
+    with Not_found | Assert_failure _ ->
       [%craise_opt_span] span
         "Could not convert the name to a pattern because of missing \
          definition(s)"
@@ -130,7 +130,7 @@ let name_with_generics_to_pattern (span : Meta.span option)
     Charon.NameMatcher.name_with_generics_to_pattern ctx c params n args
   else
     try Charon.NameMatcher.name_with_generics_to_pattern ctx c params n args
-    with Not_found ->
+    with Not_found | Assert_failure _ ->
       [%craise_opt_span] span
         "Could not convert the name to a pattern because of missing \
          definition(s)"
