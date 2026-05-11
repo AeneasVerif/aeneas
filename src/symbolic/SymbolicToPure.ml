@@ -182,6 +182,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     consts;
     types;
     methods;
+    method_names = _;
     vtable = _;
   } : A.trait_decl =
     trait_decl
@@ -234,9 +235,11 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
   in
   let methods =
     List.map
-      (fun (m : A.trait_method T.binder) ->
-        (m.binder_value.name, translate_trait_method opt_span translate_ty m))
-      methods
+      (fun ((method_id, m) : TraitMethodId.id * A.trait_method T.binder) ->
+        ( method_id,
+          m.binder_value.name,
+          translate_trait_method opt_span translate_ty m ))
+      (TraitMethodId.Map.to_list methods)
   in
   {
     def_id;
@@ -298,10 +301,15 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
   let types = [] in
   let methods =
     List.map
-      (fun ((name, m) : string * T.fun_decl_ref T.binder) ->
-        ( name,
+      (fun ((method_id, m) : TraitMethodId.id * T.fun_decl_ref T.binder) ->
+        let name =
+          Charon.GAstUtils.format_method_name ctx.crate trait_impl.impl_trait.id
+            method_id
+        in
+        ( method_id,
+          name,
           translate_binder span (translate_fun_decl_ref span translate_ty) m ))
-      methods
+      (TraitMethodId.Map.to_list methods)
   in
   (* Lookup the builtin information, if there is *)
   let builtin_info =

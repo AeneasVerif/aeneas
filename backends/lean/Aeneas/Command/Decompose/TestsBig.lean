@@ -159,7 +159,7 @@ info: test14_eq : ∀ (x : ℕ),
 #guard_msgs in
 #check @test14_eq
 /--
-info: 'test14_eq' does not depend on any axioms
+info: 'test14_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test14_eq
@@ -538,7 +538,7 @@ info: test44_eq : ∀ (d : Weekday),
 #guard_msgs in
 #check @test44_eq
 /--
-info: 'test44_eq' does not depend on any axioms
+info: 'test44_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test44_eq

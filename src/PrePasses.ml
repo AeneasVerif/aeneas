@@ -214,8 +214,8 @@ let update_array_default (crate : crate) : crate =
         when Z.to_int nv != 0 -> begin
           (* Save the implementation and the method *)
           impls := TraitImplId.Map.add impl.def_id n !impls;
-          assert (List.length impl.methods = 1);
-          let meth = snd (List.hd impl.methods) in
+          assert (TraitMethodId.Map.cardinal impl.methods = 1);
+          let meth = List.hd (TraitMethodId.Map.values impl.methods) in
           assert (meth.binder_params = empty_generic_params);
           let method_id = meth.binder_value.id in
           methods := FunDeclId.Map.add method_id n !methods;
@@ -1835,13 +1835,13 @@ let simplify_trait_calls (crate : crate) : crate =
                           (TraitImplId.Map.find_opt impl_id crate.trait_impls)
                           "Internal error"
                       in
+                      (* The TryFrom trait has a single method (try_from) *)
                       let method_ref =
-                        snd
-                          ([%unwrap_with_span] span
-                             (List.find_opt
-                                (fun (name, _) -> name = "try_from")
-                                impl.methods)
-                             "Internal error")
+                        [%unwrap_with_span] span
+                          (List.nth_opt
+                             (TraitMethodId.Map.values impl.methods)
+                             0)
+                          "Internal error"
                       in
 
                       [%sanity_check] span
@@ -1940,8 +1940,8 @@ let simplify_trait_calls (crate : crate) : crate =
 
   TraitDeclId.Map.iter
     (fun _ (d : trait_decl) ->
-      List.iter
-        (fun (d : trait_method binder) ->
+      TraitMethodId.Map.iter
+        (fun _ (d : trait_method binder) ->
           visitor#visit_fun_decl_id () d.binder_value.item.id)
         d.methods)
     crate.trait_decls;
@@ -1960,8 +1960,8 @@ let simplify_trait_calls (crate : crate) : crate =
     | None -> ()
     | Some impl ->
         List.iter (visitor#visit_trait_ref ()) impl.implied_trait_refs;
-        List.iter
-          (fun ((_, x) : _ * fun_decl_ref binder) ->
+        TraitMethodId.Map.iter
+          (fun _ (x : fun_decl_ref binder) ->
             visitor#visit_fun_decl_id () x.binder_value.id)
           impl.methods
   done;

@@ -863,7 +863,11 @@ let regular_fun_id_to_string (env : fmt_env) (fun_id : fun_id) : string =
         match fid with
         | FunId (FRegular fid) -> fun_decl_id_to_string env fid
         | FunId (FBuiltin fid) -> llbc_builtin_fun_id_to_string fid
-        | TraitMethod (trait_ref, method_name, _) ->
+        | TraitMethod (trait_ref, method_id, _) ->
+            let method_name =
+              Charon.GAstUtils.format_method_name env.crate
+                trait_ref.trait_decl_ref.trait_decl_id method_id
+            in
             trait_ref_to_string env true trait_ref ^ "." ^ method_name
       in
       f ^ fun_suffix lp_id

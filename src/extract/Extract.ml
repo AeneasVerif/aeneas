@@ -2799,7 +2799,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
   let methods = trait_decl.methods in
   (* Small helper *)
   let compute_item_name (item_name : string) (id : fun_decl_id) :
-      string * FunDeclId.id option * string =
+      FunDeclId.id option * string =
     [%ldebug "(" ^ trait_decl.name ^ "): compute_item_name: " ^ item_name];
     let trans : pure_fun_translation =
       match FunDeclId.Map.find_opt id ctx.trans_funs with
@@ -2827,7 +2827,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
       if !record_fields_short_names then name
       else ctx_compute_trait_decl_name ctx trait_decl ^ "_" ^ name
     in
-    (item_name, None, name)
+    (None, name)
   in
   (* Compute the names *)
   let method_names =
@@ -2835,14 +2835,17 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
     | None ->
         (* Not a builtin function *)
         List.map
-          (fun (name, bound_fn) ->
-            compute_item_name name bound_fn.binder_value.fun_id)
+          (fun (method_id, name, bound_fn) ->
+            let default_id, fun_name =
+              compute_item_name name bound_fn.binder_value.fun_id
+            in
+            (method_id, default_id, fun_name))
           methods
     | Some info ->
         (* This is a builtin *)
         let funs_map = StringMap.of_list info.methods in
         List.map
-          (fun (item_name, fun_binder) ->
+          (fun (method_id, item_name, fun_binder) ->
             match StringMap.find_opt item_name funs_map with
             | None ->
                 [%warn] trait_decl.item_meta.span
@@ -2852,19 +2855,22 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
                  ^ "'. The model defined in the " ^ Config.backend_name ()
                  ^ " library seems to be missing the corresponding field.");
                 (* Use the LLBC definition to compute the name *)
-                compute_item_name item_name fun_binder.binder_value.fun_id
+                let default_id, fun_name =
+                  compute_item_name item_name fun_binder.binder_value.fun_id
+                in
+                (method_id, default_id, fun_name)
             | Some info ->
                 let fun_name = info.extract_name in
                 let default_id =
                   if info.has_default then Some fun_binder.binder_value.fun_id
                   else None
                 in
-                (item_name, default_id, fun_name))
+                (method_id, default_id, fun_name))
           methods
   in
   (* Register the names *)
   List.fold_left
-    (fun ctx (item_name, default_id, fun_name) ->
+    (fun ctx (method_id, default_id, fun_name) ->
       (* Register the method name.
 
           Similarly as with structure fields, in the case of Lean check
@@ -2878,7 +2884,7 @@ let extract_trait_decl_method_names (ctx : extraction_ctx)
       in
       let ctx =
         ctx_add trait_decl.item_meta.span
-          (TraitMethodId (trait_decl.def_id, item_name))
+          (TraitMethodId (trait_decl.def_id, method_id))
           fun_name ctx
       in
       (* Also register the default implementation if there is *)
@@ -3030,7 +3036,7 @@ let explicit_info_drop_prefix (g1 : generic_params) (g2 : explicit_info) :
 
     Extract the items for a method in a trait decl. *)
 let extract_trait_decl_method_items_aux (ctx : extraction_ctx)
-    (fmt : F.formatter) (decl : trait_decl) (item_name : string)
+    (fmt : F.formatter) (decl : trait_decl) (method_id : trait_method_id)
     (fn : fun_decl_ref binder) : unit =
   (* Lookup the definition *)
   let fun_decl_id = fn.binder_value.fun_id in
@@ -3040,7 +3046,7 @@ let extract_trait_decl_method_items_aux (ctx : extraction_ctx)
   in
   let span = trans.f.item_meta.span in
   (* Extract the items *)
-  let fun_name = ctx_get_trait_method span decl.def_id item_name ctx in
+  let fun_name = ctx_get_trait_method span decl.def_id method_id ctx in
   let ty () =
     let method_llbc_generics = fn.binder_llbc_generics in
     let method_generics = fn.binder_generics in
@@ -3080,8 +3086,9 @@ let extract_trait_decl_method_items_aux (ctx : extraction_ctx)
   extract_trait_decl_item ctx fmt fun_name ty
 
 let extract_trait_decl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
-    (decl : trait_decl) (item_name : string) (fn : fun_decl_ref binder) : unit =
-  try extract_trait_decl_method_items_aux ctx fmt decl item_name fn
+    (decl : trait_decl) (method_id : trait_method_id) (fn : fun_decl_ref binder)
+    : unit =
+  try extract_trait_decl_method_items_aux ctx fmt decl method_id fn
   with CFailure _ ->
     F.pp_print_space fmt ();
     extract_admit fmt
@@ -3192,8 +3199,8 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
             ctx_get_trait_type decl.item_meta.span decl.def_id name ctx)
           decl.types
       @ List.map
-          (fun (name, _) ->
-            ctx_get_trait_method decl.item_meta.span decl.def_id name ctx)
+          (fun (method_id, _, _) ->
+            ctx_get_trait_method decl.item_meta.span decl.def_id method_id ctx)
           decl.methods
       @ List.map
           (fun (clause : trait_param) ->
@@ -3286,7 +3293,8 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
 
     (* The methods *)
     List.iter
-      (fun (name, fn) -> extract_trait_decl_method_items ctx fmt decl name fn)
+      (fun (method_id, _name, fn) ->
+        extract_trait_decl_method_items ctx fmt decl method_id fn)
       decl.methods;
 
     (* Close the outer boxes for the definition *)
@@ -3351,7 +3359,7 @@ let extract_trait_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
     decl.parent_clauses;
   (* The  methods *)
   List.iter
-    (fun (item_name, bound_fn) ->
+    (fun (method_id, _item_name, bound_fn) ->
       let explicit_info = bound_fn.binder_explicit_info in
       (* TODO: this looks incorrect, we should instantiate the binder properly *)
       let params =
@@ -3364,7 +3372,7 @@ let extract_trait_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
       in
       (* Extract *)
       let item_name =
-        ctx_get_trait_method decl.item_meta.span decl.def_id item_name ctx
+        ctx_get_trait_method decl.item_meta.span decl.def_id method_id ctx
       in
       extract_coq_arguments_instruction ctx fmt item_name params)
     decl.methods;
@@ -3382,7 +3390,7 @@ let extract_trait_decl_extra_info (ctx : extraction_ctx) (fmt : F.formatter)
 
     Extract the items for a method in a trait impl. *)
 let extract_trait_impl_method_items_aux (ctx : extraction_ctx)
-    (fmt : F.formatter) (impl : trait_impl) (item_name : string)
+    (fmt : F.formatter) (impl : trait_impl) (method_id : trait_method_id)
     (fn : fun_decl_ref binder) : unit =
   let span = impl.item_meta.span in
   let trait_decl_id = impl.impl_trait.trait_decl_id in
@@ -3395,7 +3403,7 @@ let extract_trait_impl_method_items_aux (ctx : extraction_ctx)
        which happened before"
   in
   (* Extract the items *)
-  let fun_name = ctx_get_trait_method span trait_decl_id item_name ctx in
+  let fun_name = ctx_get_trait_method span trait_decl_id method_id ctx in
   let ty () =
     (* Extract the generics - we need to quantify over the generics which
        are specific to the method, and call it will all the generics
@@ -3427,8 +3435,9 @@ let extract_trait_impl_method_items_aux (ctx : extraction_ctx)
   extract_trait_impl_item ctx fmt fun_name ty
 
 let extract_trait_impl_method_items (ctx : extraction_ctx) (fmt : F.formatter)
-    (impl : trait_impl) (item_name : string) (fn : fun_decl_ref binder) : unit =
-  try extract_trait_impl_method_items_aux ctx fmt impl item_name fn
+    (impl : trait_impl) (method_id : trait_method_id) (fn : fun_decl_ref binder)
+    : unit =
+  try extract_trait_impl_method_items_aux ctx fmt impl method_id fn
   with CFailure _ ->
     F.pp_print_space fmt ();
     extract_admit fmt
@@ -3528,7 +3537,8 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
           (fun name -> ctx_get_trait_type span decl_id name ctx)
           trait_decl.types
       @ List.map
-          (fun (name, _) -> ctx_get_trait_method span decl_id name ctx)
+          (fun (method_id, _, _) ->
+            ctx_get_trait_method span decl_id method_id ctx)
           trait_decl.methods
       @ List.map
           (fun (clause : trait_param) ->
@@ -3656,8 +3666,8 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
 
     (* The methods *)
     List.iter
-      (fun (name, bound_fn) ->
-        extract_trait_impl_method_items ctx fmt impl name bound_fn)
+      (fun (method_id, _name, bound_fn) ->
+        extract_trait_impl_method_items ctx fmt impl method_id bound_fn)
       impl.methods;
 
     (* Close the outer boxes for the definition, as well as the brackets *)

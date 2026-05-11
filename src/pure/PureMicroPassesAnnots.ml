@@ -212,15 +212,18 @@ let add_type_annotations_to_fun_decl (trans_ctx : trans_ctx)
                 in
                 [%ldebug "function name: " ^ trans_fun.name];
                 trans_fun.signature
-            | TraitMethod (tref, method_name, method_decl_id) ->
-                [%ldebug "method name: " ^ method_name];
+            | TraitMethod (tref, method_id, method_decl_id) ->
+                [%ldebug
+                  "method name: "
+                  ^ Charon.GAstUtils.format_method_name trans_ctx.crate
+                      tref.trait_decl_ref.trait_decl_id method_id];
                 if Option.is_some lp_id then
                   [%craise] span
                     "Trying to get a loop subfunction from a method call";
                 let method_sig =
                   [%silent_unwrap] span
                     (Charon.Substitute.lookup_flat_method_sig trans_ctx.crate
-                       tref.trait_decl_ref.trait_decl_id method_name)
+                       tref.trait_decl_ref.trait_decl_id method_id)
                 in
                 (* TODO: we shouldn't call `SymbolicToPure` here, there should
                    be a way to translate these signatures earlier. *)
