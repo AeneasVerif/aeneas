@@ -63,6 +63,16 @@ info: 'test1_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 #guard_msgs in
 #print axioms test1_eq
 
+-- Verify LSP info: declaration ranges are registered (hover + go-to-definition)
+/-- info: true -/
+#guard_msgs in
+#eval show Lean.MetaM Bool from do
+  return (← Lean.findDeclarationRanges? `test1_eq).isSome
+/-- info: true -/
+#guard_msgs in
+#eval show Lean.MetaM Bool from do
+  return (← Lean.findDeclarationRanges? `test1_x).isSome
+
 -- ============================================================================
 -- Test 2: Tuple return — continuation needs multiple variables
 -- ============================================================================
