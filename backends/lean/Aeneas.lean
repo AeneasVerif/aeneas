@@ -1,3 +1,4 @@
+import Aeneas.Command
 import Aeneas.Data
 import Aeneas.Do
 import Aeneas.Extract

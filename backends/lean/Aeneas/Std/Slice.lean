@@ -190,6 +190,22 @@ theorem Slice.ext_getElem {α} {s1 s2 : Slice α}
 theorem Slice.set_length {α : Type u} (v: Slice α) (i: Usize) (x: α) :
   (v.set i x).length = v.length := by simp
 
+@[simp, scalar_tac_simps, simp_lists_safe, grind =, agrind =]
+theorem Slice.setAtNat_length {α : Type u} (v: Slice α) (i: Nat) (x: α) :
+  (v.setAtNat i x).length = v.length := by simp [setAtNat, Slice.length]
+
+@[simp↓, simp_lists_safe↓]
+theorem Slice.getElem!_Nat_setAtNat_eq
+  {α : Type u} [Inhabited α] (v: Slice α) (i: Nat) (x: α)
+  (h : i < v.length) : (v.setAtNat i x).val[i]! = x := by
+  simp only [setAtNat]; grind
+
+@[simp↓, simp_lists_safe↓]
+theorem Slice.getElem!_Nat_setAtNat_ne
+  {α : Type u} [Inhabited α] (v: Slice α) (i j: Nat) (x: α)
+  (h : i ≠ j) : (v.setAtNat i x).val[j]! = v.val[j]! := by
+  simp only [setAtNat]; grind
+
 def Slice.update {α : Type u} (v: Slice α) (i: Usize) (x: α) : Result (Slice α) :=
   match v.val[i.val]? with
   | none => fail .arrayOutOfBounds
@@ -890,7 +906,7 @@ theorem core.slice.index.SliceIndexRangeFromUsizeSlice.index.step_spec
 @[step]
 theorem core.slice.Slice.copy_from_slice.step_spec (copyInst : core.marker.Copy α) (s0 s1 : Slice α)
   (h : s0.length = s1.length) :
-  core.slice.Slice.copy_from_slice copyInst s0 s1 ⦃ s1' => s1 = s1' ⦄ := by
+  core.slice.Slice.copy_from_slice copyInst s0 s1 ⦃ s1' => s1' = s1 ⦄ := by
   simp only [copy_from_slice]
   simp at h
   simp only [Slice.len]
