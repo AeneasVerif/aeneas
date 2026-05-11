@@ -1,6 +1,6 @@
 [[91mError[39m] Can not apply a projection to the ⊥ value
 Source: 'tests/src/borrow-check-negative.rs', lines 25:12-25:14
-Compiler source: interp/InterpPaths.ml, line 234
+Compiler source: interp/InterpPaths.ml, line 231
 [[93mWarn[39m ] Could not borrow-check the body of function 'borrow_check_negative::choose_test because of previous error
 Name pattern: 'borrow_check_negative::choose_test'
 Definition span: 'tests/src/borrow-check-negative.rs', lines 16:0-26:1
@@ -18,7 +18,7 @@ Compiler source: interp/Interp.ml, line 550
 
 [[91mError[39m] Can not apply a projection to the ⊥ value
 Source: 'tests/src/borrow-check-negative.rs', lines 42:4-42:11
-Compiler source: interp/InterpPaths.ml, line 234
+Compiler source: interp/InterpPaths.ml, line 231
 [[93mWarn[39m ] Could not borrow-check the body of function 'borrow_check_negative::test_mut1 because of previous error
 Name pattern: 'borrow_check_negative::test_mut1'
 Definition span: 'tests/src/borrow-check-negative.rs', lines 36:0-43:1
@@ -27,7 +27,7 @@ Compiler source: interp/Interp.ml, line 550
 
 [[91mError[39m] Can not apply a projection to the ⊥ value
 Source: 'tests/src/borrow-check-negative.rs', lines 51:12-51:14
-Compiler source: interp/InterpPaths.ml, line 234
+Compiler source: interp/InterpPaths.ml, line 231
 [[93mWarn[39m ] Could not borrow-check the body of function 'borrow_check_negative::test_mut2 because of previous error
 Name pattern: 'borrow_check_negative::test_mut2'
 Definition span: 'tests/src/borrow-check-negative.rs', lines 46:0-52:1
@@ -36,7 +36,7 @@ Compiler source: interp/Interp.ml, line 550
 
 [[91mError[39m] Can not apply a projection to the ⊥ value
 Source: 'tests/src/borrow-check-negative.rs', lines 65:12-65:17
-Compiler source: interp/InterpPaths.ml, line 234
+Compiler source: interp/InterpPaths.ml, line 231
 [[93mWarn[39m ] Could not borrow-check the body of function 'borrow_check_negative::refs_test1 because of previous error
 Name pattern: 'borrow_check_negative::refs_test1'
 Definition span: 'tests/src/borrow-check-negative.rs', lines 59:0-66:1
@@ -45,7 +45,7 @@ Compiler source: interp/Interp.ml, line 550
 
 [[91mError[39m] Can not apply a projection to the ⊥ value
 Source: 'tests/src/borrow-check-negative.rs', lines 80:12-80:17
-Compiler source: interp/InterpPaths.ml, line 234
+Compiler source: interp/InterpPaths.ml, line 231
 [[93mWarn[39m ] Could not borrow-check the body of function 'borrow_check_negative::refs_test2 because of previous error
 Name pattern: 'borrow_check_negative::refs_test2'
 Definition span: 'tests/src/borrow-check-negative.rs', lines 68:0-81:1
@@ -54,7 +54,7 @@ Compiler source: interp/Interp.ml, line 550
 
 [[91mError[39m] Can not apply a projection to the ⊥ value
 Source: 'tests/src/borrow-check-negative.rs', lines 91:12-91:15
-Compiler source: interp/InterpPaths.ml, line 234
+Compiler source: interp/InterpPaths.ml, line 231
 [[93mWarn[39m ] Could not borrow-check the body of function 'borrow_check_negative::test_box1 because of previous error
 Name pattern: 'borrow_check_negative::test_box1'
 Definition span: 'tests/src/borrow-check-negative.rs', lines 83:0-92:1

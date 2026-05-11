@@ -23,6 +23,17 @@ def core.result.Result.unwrap {T E : Type}
   | .Ok x => .ok x
   | .Err _ => .fail .panic
 
+@[step]
+theorem core.result.Result.unwrap.step_spec
+    {T E : Type} (inst : core.fmt.Debug E)
+    (r : core.result.Result T E)
+    (h : ∃ v, r = core.result.Result.Ok v) :
+    core.result.Result.unwrap inst r
+    ⦃ (result : T) => r = core.result.Result.Ok result ⦄ := by
+  match r, h with
+  | .Ok v, ⟨_, rfl⟩ =>
+    simp [core.result.Result.unwrap, WP.spec_ok]
+
 -- TODO: add pattern once we support partial monomorphization
 def core.result.Result.unwrap.mut {T E : Type}
   (_ : core.fmt.Debug E) (e : core.result.Result T E) : Std.Result (T × (T → core.result.Result T E)) :=

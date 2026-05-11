@@ -633,10 +633,13 @@ let eval_non_builtin_function_call_symbolic_inst (span : Meta.span)
         | FunId (FBuiltin _) ->
             (* Unreachable: must be a transparent function *)
             [%craise] span "Unreachable"
-        | TraitMethod (trait_ref, method_name, _) ->
+        | TraitMethod (trait_ref, method_id, _) ->
             [%ltrace
               "trait method call:\n- call: " ^ call_to_string ctx call
-              ^ "\n- method name: " ^ method_name ^ "\n- call.generics:\n"
+              ^ "\n- method name: "
+              ^ Charon.GAstUtils.format_method_name ctx.crate
+                  trait_ref.trait_decl_ref.binder_value.id method_id
+              ^ "\n- call.generics:\n"
               ^ generic_args_to_string ctx func.generics
               ^ "\n- trait_ref.trait_decl_ref: "
               ^ trait_decl_ref_region_binder_to_string ctx
@@ -658,7 +661,7 @@ let eval_non_builtin_function_call_symbolic_inst (span : Meta.span)
             let fn_ref =
               Option.get
                 (Substitute.lookup_and_subst_trait_decl_method trait_decl
-                   method_name trait_ref func.generics)
+                   method_id trait_ref func.generics)
             in
             (* *)
             let tr_self = trait_ref.kind in

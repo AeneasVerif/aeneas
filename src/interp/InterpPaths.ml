@@ -113,10 +113,7 @@ let rec project_value (span : Meta.span) (access : projection_access)
      we would be tempted to expand a raw pointer symbolic value (which we can't,
      and would lead to an obscure error from the user point of view). *)
   | Deref, _, TRawPtr _ ->
-      [%craise] span
-        "Unsupported: raw pointer dereference. Aeneas does not yet support \
-         dereferencing raw pointers (this would require separation logic \
-         support)"
+      [%craise] span "Aeneas does not yet support dereferencing raw pointers."
   (* Symbolic value: needs to be expanded *)
   | _, VSymbolic sp, _ ->
       (* Expand the symbolic value *)
