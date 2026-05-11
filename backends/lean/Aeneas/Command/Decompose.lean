@@ -1078,7 +1078,7 @@ partial def applyClause (body : Expr) (pat : DecomposePattern) (newName : Name)
 private def simpOnlyTarget (mvarId : MVarId) (declsToUnfold : Array Name)
     (addSimpThms : Array Name) : MetaM (Option MVarId) := do
   let args : SimpArgs := { declsToUnfold, addSimpThms }
-  let (ctx, simprocs) ← mkSimpCtx (simpOnly := true) { singlePass := true, maxSteps := 100000 } .simp args
+  let (ctx, simprocs) ← mkSimpCtx (simpOnly := true) { maxSteps := 100000 } .simp args
   -- Increase maxRecDepth for large decompositions
   withTheReader Core.Context (fun ctx => { ctx with maxRecDepth := 2048 }) do
     let (result?, _) ← Meta.simpGoal mvarId ctx (simprocs := simprocs)
@@ -1087,41 +1087,18 @@ private def simpOnlyTarget (mvarId : MVarId) (declsToUnfold : Array Name)
     | some (_, mvarId') => return some mvarId'
 
 /-- Prove the decomposition equality: `∀ params, body_original = body_decomposed`.
-    `defNames` are the names of all auxiliary definitions introduced.
-    Strategy 1: `rfl`.
-    Strategy 2: `simp only [defNames..., bind_assoc_eq, pure_bind]`.
-    Strategy 3: `unfold defNames; simp only [bind_assoc_eq, pure_bind]`
-                (for noncomputable defs where simp can't unfold directly).
-    Raises an error if all strategies fail. -/
+    `defNames` are the names of all auxiliary definitions introduced. -/
 def proveStep (goalType : Expr) (defNames : Array Name) : TermElabM Expr := do
   let simpThms := #[``Aeneas.Std.bind_assoc_eq, ``LawfulMonad.pure_bind]
-  -- Strategy 1: rfl
-  if let some proof ← observing? do
-    let mvar ← mkFreshExprMVar goalType
-    let (_, mvarId) ← mvar.mvarId!.intros
-    mvarId.refl
-    instantiateMVars mvar
-  then return proof
-  -- Strategy 2: simp only [defNames..., bind_assoc_eq, pure_bind]
-  if let some proof ← observing? do
-    let mvar ← mkFreshExprMVar goalType
-    let (_, mvarId) ← mvar.mvarId!.intros
-    if (← simpOnlyTarget mvarId defNames simpThms).isNone then
-      return ← instantiateMVars mvar
-    throwError "simp did not close the goal"
-  then return proof
-  -- Strategy 3: unfold defNames, then simp only [bind_assoc_eq, pure_bind]
-  if let some proof ← observing? do
-    let mvar ← mkFreshExprMVar goalType
-    let (_, mvarId) ← mvar.mvarId!.intros
-    let mvarId' ← mvarId.deltaTarget (defNames.contains ·)
-    match ← simpOnlyTarget mvarId' #[] simpThms with
-    | none => return ← instantiateMVars mvar
-    | some mvarId'' =>
-      mvarId''.refl
-      return ← instantiateMVars mvar
-  then return proof
-  throwError "#decompose: could not prove decomposition equality"
+  let mvar ← mkFreshExprMVar goalType
+  let (_, mvarId) ← mvar.mvarId!.intros
+  let unfoldNames := defNames ++ #[``Function.uncurry]
+  let mvarId' ← mvarId.deltaTarget (unfoldNames.contains ·)
+  match ← simpOnlyTarget mvarId' #[] simpThms with
+  | none => return ← instantiateMVars mvar
+  | some mvarId'' =>
+    mvarId''.refl
+    return ← instantiateMVars mvar
 
 -- ============================================================================
 -- Main command elaboration

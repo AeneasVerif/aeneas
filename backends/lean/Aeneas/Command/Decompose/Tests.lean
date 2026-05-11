@@ -264,7 +264,7 @@ info: test6_eq : ∀ (x : ℕ),
 #guard_msgs in
 #check @test6_eq
 /--
-info: 'test6_eq' does not depend on any axioms
+info: 'test6_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test6_eq
@@ -574,7 +574,7 @@ info: test16_eq : ∀ (x : ℕ),
 #guard_msgs in
 #check @test16_eq
 /--
-info: 'test16_eq' does not depend on any axioms
+info: 'test16_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test16_eq
@@ -644,7 +644,7 @@ info: test18_eq : ∀ (n : ℕ), test18 n = if _h : n > 0 then test18_then n els
 #guard_msgs in
 #check @test18_eq
 /--
-info: 'test18_eq' does not depend on any axioms
+info: 'test18_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test18_eq
@@ -767,7 +767,7 @@ info: test21_eq : ∀ (n : ℕ),
 #guard_msgs in
 #check @test21_eq
 /--
-info: 'test21_eq' does not depend on any axioms
+info: 'test21_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test21_eq
@@ -1031,7 +1031,7 @@ info: test27_eq : ∀ (b : Bool) (x : ℕ), test27 b x = if b = true then test27
 #guard_msgs in
 #check @test27_eq
 /--
-info: 'test27_eq' does not depend on any axioms
+info: 'test27_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test27_eq
@@ -1062,7 +1062,7 @@ info: test28_eq : ∀ (x : ℕ), test28 x = x + 3
 #guard_msgs in
 #check @test28_eq
 /--
-info: 'test28_eq' does not depend on any axioms
+info: 'test28_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test28_eq
@@ -1097,7 +1097,7 @@ info: @test29_eq : ∀ {α : Type u_1} (x : α),
 #guard_msgs in
 #check @test29_eq
 /--
-info: 'test29_eq' does not depend on any axioms
+info: 'test29_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test29_eq
@@ -1183,7 +1183,7 @@ info: @test31_eq : ∀ {n : ℕ} (x : Fin n),
 #guard_msgs in
 #check @test31_eq
 /--
-info: 'test31_eq' does not depend on any axioms
+info: 'test31_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test31_eq
@@ -1226,7 +1226,7 @@ info: test33_eq : ∀ (n : ℕ),
 #guard_msgs in
 #check @test33_eq
 /--
-info: 'test33_eq' does not depend on any axioms
+info: 'test33_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test33_eq
@@ -1279,7 +1279,7 @@ info: test34_eq : ∀ (b : Bool),
 #guard_msgs in
 #check @test34_eq
 /--
-info: 'test34_eq' does not depend on any axioms
+info: 'test34_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test34_eq
@@ -1328,7 +1328,7 @@ info: test35_eq : ∀ (o : Option ℕ),
 #guard_msgs in
 #check @test35_eq
 /--
-info: 'test35_eq' does not depend on any axioms
+info: 'test35_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test35_eq
@@ -1414,7 +1414,7 @@ info: test36_eq : ∀ (c : Color),
 #guard_msgs in
 #check @test36_eq
 /--
-info: 'test36_eq' does not depend on any axioms
+info: 'test36_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test36_eq
@@ -1454,7 +1454,7 @@ info: test37_eq : ∀ (n : ℕ),
 #guard_msgs in
 #check @test37_eq
 /--
-info: 'test37_eq' does not depend on any axioms
+info: 'test37_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test37_eq
@@ -1515,7 +1515,7 @@ info: test38_eq : ∀ (n : ℕ) (b : Bool),
 #guard_msgs in
 #check @test38_eq
 /--
-info: 'test38_eq' does not depend on any axioms
+info: 'test38_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test38_eq
@@ -1556,7 +1556,7 @@ info: test39_eq : ∀ (n : ℕ),
 #guard_msgs in
 #check @test39_eq
 /--
-info: 'test39_eq' does not depend on any axioms
+info: 'test39_eq' depends on axioms: [propext, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test39_eq
@@ -1601,7 +1601,7 @@ info: test40_eq : ∀ (p : Point),
 #guard_msgs in
 #check @test40_eq
 /--
-info: 'test40_eq' does not depend on any axioms
+info: 'test40_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test40_eq
@@ -1656,7 +1656,7 @@ info: test41_eq : ∀ (s : ℕ ⊕ Bool),
 #guard_msgs in
 #check @test41_eq
 /--
-info: 'test41_eq' does not depend on any axioms
+info: 'test41_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test41_eq
@@ -1715,7 +1715,7 @@ info: test42_eq : ∀ (n : ℕ) (flag : Bool),
 #guard_msgs in
 #check @test42_eq
 /--
-info: 'test42_eq' does not depend on any axioms
+info: 'test42_eq' depends on axioms: [propext, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test42_eq
@@ -1759,7 +1759,7 @@ info: test43_eq : ∀ (n : ℕ),
 #guard_msgs in
 #check @test43_eq
 /--
-info: 'test43_eq' does not depend on any axioms
+info: 'test43_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test43_eq
@@ -1832,7 +1832,7 @@ info: test46_eq : ∀ (l : List ℕ),
 #guard_msgs in
 #check @test46_eq
 /--
-info: 'test46_eq' does not depend on any axioms
+info: 'test46_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test46_eq
@@ -2105,11 +2105,50 @@ warning: #decompose: 'test54_add3b' has the same definition as 'test54_add3a' (c
   letRange 1 3 => test54_add3b
 
 -- ============================================================================
--- Test 55: Tuple-destructuring bind with letAt — regression test
--- letAt N for N > 0 should work when an earlier bind uses tuple destructuring
+-- Test 55: letRange spanning past a tuple-destructuring bind — regression test
+-- Exercises bind_uncurry_assoc_eq in the proof.
 -- ============================================================================
 
 namespace test55_ns
+open Aeneas Aeneas.Std Result
+
+def loop (o : Option Usize)
+    (pa_src : Array U32 256#usize)
+    (pe_dst : Array U16 256#usize) :
+    Result (Array U32 256#usize × Array U16 256#usize) :=
+  match o with
+  | none => ok (pa_src, pe_dst)
+  | some i => do
+      let a   ← Array.index_usize pa_src i
+      let i1  ← (5#u32 + 0#u32 : Result U32)
+      let i2  ← (5#u32 + 0#u32 : Result U32)
+      let i3  ← i1 + i2
+      let i4  ← 4#u32 * i3
+      massert (a ≤ i4)
+      let (_, index_mut_back) ← Array.index_mut_usize pa_src i
+      let i5  ← Array.index_usize pe_dst i
+      let c   ← core.convert.IntoFrom.into core.convert.FromU32U16 i5
+      let pe_dst' ← Array.update pe_dst i (UScalar.cast UScalarTy.U16 c)
+      ok (index_mut_back 0#u32, pe_dst')
+
+-- letRange 0 8: spans past the tuple bind (binding 6 is `let (_, index_mut_back) ← ...`)
+#decompose loop loop_eq_8
+  branch 1 (letRange 0 8) => loop.body_8
+
+/--
+info: 'test55_ns.loop_eq_8' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms loop_eq_8
+
+end test55_ns
+
+-- ============================================================================
+-- Test 56: Tuple-destructuring bind with letAt — regression test
+-- letAt N for N > 0 should work when an earlier bind uses tuple destructuring
+-- ============================================================================
+
+namespace test56_ns
 open Aeneas Aeneas.Std Result
 
 /-- A function with a tuple-destructuring monadic bind. -/
@@ -2132,7 +2171,7 @@ info: f_prefix_eq : ∀ (x : U32),
 #guard_msgs in
 #check @f_prefix_eq
 /--
-info: def test55_ns.f_prefix : U32 → Result (UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
+info: def test56_ns.f_prefix : U32 → Result (UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
 fun x => do
   let (a, b) ←
     do
@@ -2161,19 +2200,19 @@ info: f_letat1_eq : ∀ (x : U32),
 #guard_msgs in
 #check @f_letat1_eq
 /--
-info: def test55_ns.f_second_value : UScalar UScalarTy.U32 → Result (UScalar UScalarTy.U32) :=
+info: def test56_ns.f_second_value : UScalar UScalarTy.U32 → Result (UScalar UScalarTy.U32) :=
 fun b => b + 1#u32
 -/
 #guard_msgs in
 #print f_second_value
 
-end test55_ns
+end test56_ns
 
 -- ============================================================================
--- Test 56: Nested tuple-destructuring bind with letRange — regression test
+-- Test 57: Nested tuple-destructuring bind with letRange — regression test
 -- ============================================================================
 
-namespace test56_ns
+namespace test57_ns
 open Aeneas Aeneas.Std Result
 
 /-- A function with a nested tuple-destructuring monadic bind. -/
@@ -2201,7 +2240,7 @@ info: g_prefix_eq : ∀ (x : U32),
 #guard_msgs in
 #check @g_prefix_eq
 /--
-info: def test56_ns.g_prefix : U32 →
+info: def test57_ns.g_prefix : U32 →
   Result (UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
 fun x => do
   let (a, b, c, d) ←
@@ -2214,4 +2253,4 @@ fun x => do
 #guard_msgs in
 #print g_prefix
 
-end test56_ns
+end test57_ns
