@@ -16,6 +16,7 @@ package «tests» {}
 @[default_target] lean_lib BaseTutorial
 @[default_target] lean_lib Bitwise
 @[default_target] lean_lib BlanketImpl
+@[default_target] lean_lib Bst
 @[default_target] lean_lib Builtin
 @[default_target] lean_lib BuiltinAuto
 @[default_target] lean_lib ChunksExact
