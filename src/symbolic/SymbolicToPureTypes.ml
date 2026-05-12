@@ -206,10 +206,10 @@ let translate_trait_clause (span : Meta.span option) (clause : T.trait_param) :
 
 let translate_strait_type_constraint (span : Meta.span option)
     (ttc : T.trait_type_constraint) : trait_type_constraint =
-  let { T.trait_ref; type_name; ty } = ttc in
+  let { T.trait_ref; type_id; ty } = ttc in
   let trait_ref = translate_strait_ref span trait_ref in
   let ty = translate_sty span ty in
-  { trait_ref; type_name; ty }
+  { trait_ref; type_id; ty }
 
 let translate_type_param (p : T.type_param) : type_param =
   let { index; name } : T.type_param = p in

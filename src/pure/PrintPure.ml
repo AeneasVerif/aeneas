@@ -317,7 +317,11 @@ let rec ty_to_string (env : fmt_env) (inside : bool) (ty : ty) : string =
         ty_to_string env true arg_ty ^ " -> " ^ ty_to_string env false ret_ty
       in
       if inside then "(" ^ ty ^ ")" else ty
-  | TTraitType (trait_ref, type_name) ->
+  | TTraitType (trait_ref, type_id) ->
+      let type_name =
+        Charon.GAstUtils.get_assoc_type_name env.crate
+          trait_ref.trait_decl_ref.trait_decl_id type_id
+      in
       let trait_ref = trait_ref_to_string env false trait_ref in
       let s = trait_ref ^ "::" ^ type_name in
       if inside then "(" ^ s ^ ")" else s
@@ -779,7 +783,11 @@ let decomposed_fun_type_to_string (env : fmt_env) (sg : decomposed_fun_type) :
 
 let trait_type_constraint_to_string (env : fmt_env) (c : trait_type_constraint)
     : string =
-  let { trait_ref; type_name; ty } = c in
+  let { trait_ref; type_id; ty } = c in
+  let type_name =
+    Charon.GAstUtils.get_assoc_type_name env.crate
+      trait_ref.trait_decl_ref.trait_decl_id type_id
+  in
   trait_ref_to_string env false trait_ref
   ^ "." ^ type_name ^ " = " ^ ty_to_string env false ty
 
@@ -865,7 +873,7 @@ let regular_fun_id_to_string (env : fmt_env) (fun_id : fun_id) : string =
         | FunId (FBuiltin fid) -> llbc_builtin_fun_id_to_string fid
         | TraitMethod (trait_ref, method_id, _) ->
             let method_name =
-              Charon.GAstUtils.format_method_name env.crate
+              Charon.GAstUtils.get_method_name env.crate
                 trait_ref.trait_decl_ref.trait_decl_id method_id
             in
             trait_ref_to_string env true trait_ref ^ "." ^ method_name
@@ -1057,7 +1065,11 @@ and app_to_string ?(span : Meta.span option = None) (env : fmt_env)
                 false )
           | ScalarValProj (Signed _) -> ("IScalar.val", [], false)
           | ScalarValProj (Unsigned _) -> ("UScalar.val", [], false)
-          | TraitConst (trait_ref, const_name) ->
+          | TraitConst (trait_ref, const_id) ->
+              let const_name =
+                Charon.GAstUtils.get_assoc_const_name env.crate
+                  trait_ref.trait_decl_ref.trait_decl_id const_id
+              in
               let trait_ref = trait_ref_to_string env true trait_ref in
               let qualif = trait_ref ^ "." ^ const_name in
               (qualif, [], false)

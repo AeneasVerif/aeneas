@@ -465,12 +465,12 @@ let rec extract_ty (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
       F.pp_print_space fmt ();
       extract_rec ~inside:false ret_ty;
       if inside then F.pp_print_string fmt ")"
-  | TTraitType (trait_ref, type_name) -> (
+  | TTraitType (trait_ref, type_id) -> (
       if !parameterize_trait_types then [%admit_raise] span "Unimplemented" fmt
       else
         let type_name =
-          ctx_get_trait_type span trait_ref.trait_decl_ref.trait_decl_id
-            type_name ctx
+          ctx_get_trait_type span trait_ref.trait_decl_ref.trait_decl_id type_id
+            ctx
         in
         let add_brackets (s : string) =
           if backend () = Coq then "(" ^ s ^ ")" else s
