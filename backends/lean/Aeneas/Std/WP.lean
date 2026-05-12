@@ -329,11 +329,7 @@ private def isPostBinderWrapper (e : Expr) : Bool :=
 
 /-- Walk the postcondition expression, peeling `uncurry'`/`uncurry`/lambda layers.
 Returns `(binders, bodyTerm)` where each binder is a `Term` (either a plain
-name like `x` or a tuple pattern like `(a, b)`).
-
-- `uncurry'` at the top: peel one binder (tuple or scalar), recurse
-- `uncurry` at the top: single tuple binder via `enterUncurryChain` + `delabBinders`
-- Lambda at the top: scalar binders via `enterLams` + `delabBinders`
+name like `x` or a (potentially nested) tuple pattern like `(a, b)`).
 -/
 private partial def delabPostBinders : DelabM (Array Term × Term) := do
   match_expr (← getExpr).consumeMData with
