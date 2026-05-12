@@ -505,33 +505,17 @@ let extract_cast_kind_gen (span : Meta.span)
       F.pp_print_space fmt ();
       extract_expr ~inside:true arg;
       if inside then F.pp_print_string fmt ")"
-  | CastRawPtr ((_, _), (tgt_ty, tgt_mut)) ->
+  | CastRawPtr ((_, _), (_, tgt_mut)) ->
       [%cassert] span
         (backend () = Lean)
         "Casts between raw pointers are only supported in the Lean backend";
       if inside then F.pp_print_string fmt "(";
-      (* Print the name of the function *)
-      F.pp_print_string fmt "RawPtr.cast_scalar";
-      (* Print the target type argument and mutability *)
-      let tgt_ty : integer_type =
-        match tgt_ty with
-        | TInt ty -> Signed ty
-        | TUInt ty -> Unsigned ty
-        | _ ->
-            [%craise] span "Can only generate code for casts between integers"
-      in
-      let integer_type_to_string (ty : integer_type) : string =
-        if backend () = Lean then
-          match ty with
-          | Unsigned _ -> "Std." ^ int_name ty
-          | Signed _ -> "Std." ^ int_name ty
-        else
-          StringUtils.capitalize_first_letter
-            (PrintPure.integer_type_to_string ty)
-      in
-      let tgt = integer_type_to_string tgt_ty in
-      F.pp_print_space fmt ();
-      F.pp_print_string fmt tgt;
+      (* Emit a generic cast which leaves the source and target pointee
+         types implicit — Lean infers them from the surrounding context.
+         This lets us handle casts whose pointee is an opaque builtin
+         type such as [core::core_arch::x86::__m128i] without having to
+         print the type from OCaml here. *)
+      F.pp_print_string fmt "RawPtr.cast";
       let tgt_mut =
         match tgt_mut with
         | Mut -> ".Mut"
