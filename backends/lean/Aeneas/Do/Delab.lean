@@ -34,7 +34,7 @@ def delabSingleCtorCasesOn : Delab := do
   let some (.inductInfo { ctors := [_], numParams, .. }) := (← getEnv).find? typeName | failure
   let discrStx ← withNaryArg (numParams + 1) delab
   let (binders, bodyStx) ← withNaryArg (numParams + 2) <|
-    enterLams #[] fun bs => do return (bs.map fun (_, b) => (Lean.mkIdent b), ← delab)
+    enterLams #[] fun bs => do return (bs.map fun (_, b, _) => (Lean.mkIdent b), ← delab)
   `(let ⟨$binders,*⟩ := $discrStx
     $bodyStx)
 

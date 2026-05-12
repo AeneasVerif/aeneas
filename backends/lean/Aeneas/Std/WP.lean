@@ -308,12 +308,13 @@ so the continuation lambdas are left untouched.
 
 Example: on `fun a b => fun c => body`, collects `[a, b]` and leaves the reader
 at `fun c => body`. -/
-private partial def enterUncurryOnce (acc : Array (FVarId × Name))
-    (k : Array (FVarId × Name) → DelabM α) : DelabM α := do
+private partial def enterUncurryOnce (acc : Array Std.Delab.BinderEntry)
+    (k : Array Std.Delab.BinderEntry → DelabM α) : DelabM α := do
   match (← getExpr) with
   | .lam n _ _ _ =>
+    let pos ← getPos
     withBindingBody' n pure fun fv => do
-      let acc' := acc.push (fv.fvarId!, n)
+      let acc' := acc.push (fv.fvarId!, n, pos)
       if acc'.size >= 2 then k acc'
       else if (← getExpr).isAppOfArity ``uncurry 4 then
         withAppArg <| enterUncurryOnce acc' k
@@ -348,8 +349,11 @@ private partial def delabPostBinders : DelabM (Array Term × Term) := do
       | _ => delabLamsThenRecurse
   | uncurry _ _ _ _ =>
     /- Single tuple binder `(a, b) => body` (no `uncurry'` wrapper). -/
+    let tuplePos ← getPos
     withAppArg do
       let (tupleTerm, body) ← delabUncurryAsTuple delab
+      let tupleTerm : Term := annotatePos tuplePos tupleTerm
+      addTermInfo tuplePos tupleTerm.raw (← getExpr) (isBinder := true)
       return (#[tupleTerm], body)
   | _ => delabLamsThenRecurse
 where
