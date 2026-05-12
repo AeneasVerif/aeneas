@@ -39,7 +39,7 @@ example (xs : List Nat) :
   step*
 
 /-- Nested-tuple bind followed by another bind. Checks that `introOutputs`
-  properly reduces a nested `Function.uncurry` chain. -/
+  properly reduces a nested `WP.uncurry` chain. -/
 def readNested (xs : List Nat) : Result ((Nat × Nat) × Nat) :=
   ok ((xs.getD 0 0, xs.getD 1 0), xs.getD 2 0)
 

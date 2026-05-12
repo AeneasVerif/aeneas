@@ -18,11 +18,11 @@ partial def enterLams (acc : Array (FVarId × Name))
       enterLams (acc.push (fv.fvarId!, n)) k
   | _ => k acc
 
-/-- Enter outer `fun` binders and chained `Function.uncurry`s for flat tuples. -/
+/-- Enter outer `fun` binders and chained `WP.uncurry`s for flat tuples. -/
 partial def enterUncurryChain (acc : Array (FVarId × Name))
     (k : Array (FVarId × Name) → DelabM α) : DelabM α :=
   enterLams acc fun acc' => do
-    if (← getExpr).isAppOfArity ``Function.uncurry 4 then
+    if (← getExpr).isAppOfArity ``_root_.Aeneas.Std.WP.uncurry 4 then
       withAppArg <| enterUncurryChain acc' k
     else
       k acc'
@@ -33,7 +33,7 @@ def buildTupleTerm (pats : Array Term) : DelabM Term := do
   `(($head, $tail,*))
 
 /-- Build a pattern for each binder, folding any immediate destructuring of
-    `fv` (tuple via `Function.uncurry`, or ctor via `T.casesOn`) into a nested
+    `fv` (tuple via `WP.uncurry`, or ctor via `T.casesOn`) into a nested
     pattern. `k` runs on the resulting body. -/
 partial def delabBinders (binders : List (FVarId × Name)) (k : DelabM α) :
     DelabM (Array Term × α) := do
@@ -49,11 +49,11 @@ where
     let (all, a) ← delabBinders (inner.toList ++ rest) k
     let n := inner.size
     return (all.extract 0 n, all.extract n all.size, a)
-  /-- Tuple destructuring via `Function.uncurry`. -/
+  /-- Tuple destructuring via `WP.uncurry`. -/
   tupleBind? (fv : FVarId) (rest : List (FVarId × Name)) :
       DelabM (Option (Array Term × α)) := do
     let e ← getExpr
-    unless e.isAppOfArity ``Function.uncurry 5 do return none
+    unless e.isAppOfArity ``_root_.Aeneas.Std.WP.uncurry 5 do return none
     let val := e.appArg!
     unless val.isFVar ∧ val.fvarId! == fv do return none
     withAppFn <| withAppArg <| enterUncurryChain #[] fun inner => do
@@ -83,12 +83,12 @@ where
     let (restPats, a) ← delabBinders rest k
     return (#[leafPat] ++ restPats, a)
 
-/-- `Function.uncurry (fun x₁ … xₙ => body) val` → `let (x₁, …, xₙ) := val; body`. -/
-@[delab app.Function.uncurry]
+/-- `Std.WP.uncurry (fun x₁ … xₙ => body) val` → `let (x₁, …, xₙ) := val; body`. -/
+@[delab app.Aeneas.Std.WP.uncurry]
 def delabUncurryLet : Delab := do
   unless Aeneas.customDoElab.get (← getOptions) do failure
   -- only fire when fully applied
-  unless (← getExpr).isAppOfArity ``Function.uncurry 5 do failure
+  unless (← getExpr).isAppOfArity ``_root_.Aeneas.Std.WP.uncurry 5 do failure
   let valStx ← withAppArg delab
   let (pats, bodyStx) ← withAppFn <| withAppArg <|
     enterUncurryChain #[] fun outerBinders => do
@@ -130,7 +130,7 @@ partial def aeneasDelabDoElems : DelabM (List DoElem) := do
     let α := e.getAppArgs[2]!
     let ma ← withAppFn <| withAppArg delab
     let arg := e.appArg!
-    if arg.isAppOfArity ``Function.uncurry 4 then
+    if arg.isAppOfArity ``_root_.Aeneas.Std.WP.uncurry 4 then
       tupleBind ma
     else 
       try 

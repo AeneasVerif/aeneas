@@ -1838,7 +1838,7 @@ info: 'test46_eq' depends on axioms: [propext]
 #print axioms test46_eq
 
 -- ============================================================================
--- Test 47: Tuple bind with Aeneas do — pair destructuring (Function.uncurry)
+-- Test 47: Tuple bind with Aeneas do — pair destructuring (Std.WP.uncurry)
 -- ============================================================================
 
 

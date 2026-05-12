@@ -34,11 +34,54 @@ def spec_general (x:Result α) (p:Post α) :=
 def spec {α} (x:Result α) (p:Post α) :=
   theta x p
 
-/-- Variant of `Function.uncurry` used to decompose tuples in post-conditions.
+/-- Aeneas-internal version of `Function.uncurry` for tuple destructuring in bind
+continuations. We use our own copy so that none of the `simp`/`step` attribute
+manipulations we perform on it (e.g., inside the `step` tactic) impact user-written
+specs that use `Function.uncurry` directly.
 
-Similar to `Function.uncurry` but specialized for `Prop` and delaborated differently:
+`WP.uncurry` is purely internal to Aeneas' elaboration pipeline and should never
+be directly manipulated by the user. -/
+@[inline] def uncurry {α β γ} (f : α → β → γ) : α × β → γ :=
+  fun (a, b) => f a b
+
+@[simp, grind =] theorem uncurry_apply_pair {α β γ} (f : α → β → γ) (a : α) (b : β) :
+    uncurry f (a, b) = f a b := rfl
+
+/- Allow `partial_fixpoint` to see through `WP.uncurry` in bind continuations.
+This is needed because the custom `do` elaborator generates
+`e >>= WP.uncurry fun a b => rest` for tuple-destructuring `let (a, b) ← e`. -/
+section
+open Lean.Order
+
+@[partial_fixpoint_monotone]
+theorem monotone_uncurry
+    {α : Type u} {β : Type v} {φ : Sort w} [PartialOrder φ]
+    {γ : Sort z} [PartialOrder γ]
+    (f : γ → α → β → φ)
+    (hmono : monotone f) :
+    monotone (fun x => uncurry (f x)) := by
+  intro x y hxy p
+  simp [uncurry]
+  exact monotone_apply p.2 _ (monotone_apply p.1 _ hmono) x y hxy
+
+@[partial_fixpoint_monotone]
+theorem monotone_uncurry_applied
+    {α : Type u} {β : Type v} {φ : Sort w} [PartialOrder φ]
+    {γ : Sort z} [PartialOrder γ]
+    (f : γ → α → β → φ) (p : α × β)
+    (hmono : monotone f) :
+    monotone (fun x => uncurry (f x) p) := by
+  intro x y hxy
+  simp [uncurry]
+  exact monotone_apply p.2 _ (monotone_apply p.1 _ hmono) x y hxy
+
+end
+
+/-- Variant of `uncurry` used to decompose tuples in post-conditions.
+
+Similar to `uncurry` but specialized for `Prop` and delaborated differently:
 `uncurry'` is delaborated as `x y => ...` (separate binders), while
-`Function.uncurry` is delaborated as `(x, y) => ...` (tuple binder).
+`uncurry` is delaborated as `(x, y) => ...` (tuple binder).
 We use this in the Hoare triple notation `⦃ ⦄`.
 
 Example: `f 0 ⦃ x y z => ... ⦄` desugars to
@@ -65,16 +108,16 @@ Needed now with the new `uncurry`-based pattern matching. -/
 
 @[simp, grind =, agrind =]
 theorem spec_ok_pair {α β} (a : α) (b : β) (f : α → β → Prop) :
-    spec (ok (a, b)) (Function.uncurry f) ↔ f a b := by
-  simp [spec_ok, Function.uncurry_apply_pair]
+    spec (ok (a, b)) (uncurry f) ↔ f a b := by
+  simp [spec_ok]
 
 @[simp, grind =, agrind =]
 theorem spec_fail_pair (e : Error) (f : α → β → Prop) :
-    spec (fail e) (Function.uncurry f) ↔ False := by simp
+    spec (fail e) (uncurry f) ↔ False := by simp
 
 @[simp, grind =, agrind =]
 theorem spec_div_pair (f : α → β → Prop) :
-    spec div (Function.uncurry f) ↔ False := by simp
+    spec div (uncurry f) ↔ False := by simp
 
 theorem spec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : spec m P₀):
   (∀ x, P₀ x → P₁ x) → spec m P₁ := by
@@ -207,13 +250,13 @@ scoped syntax:54 term:55 " ⦃ " term " ⦄" : term
 
 open Lean PrettyPrinter
 
-/-- Build a `Function.uncurry` chain wrapping a curried lambda over `xs`.
+/-- Build a `WP.uncurry` chain wrapping a curried lambda over `xs`.
 
 Given `x0`, ..., `xn` and `body`, generates the (syntactic) term `fun (x0, ..., xn) => body`.
 -/
 partial def buildUncurryLam (xs : List (TSyntax `term)) (body : TSyntax `term) :
     MacroM (TSyntax `term) := do
-  let uncurryIdent := mkIdent ``Function.uncurry
+  let uncurryIdent := mkIdent ``Aeneas.Std.WP.uncurry
   match xs with
   | [] => pure body
   | [x] => `(fun $x => $body)
@@ -328,13 +371,13 @@ private def matchUncurryBinders (f : Expr) (k : Expr → Expr → Expr → Delab
       k args[0]! p2 (Expr.app body p2)
     else fallback args body
 
-/-- Peel `Function.uncurry` apps threading the new sub-binders back into the
+/-- Peel `WP.uncurry` apps threading the new sub-binders back into the
 `slots` tree, and yield the final body via `k`. -/
 partial def destructureUncurryChain (slots : Array PostBinder) (body : Expr)
     (k : Array PostBinder → Expr → Delab) : Delab := do
   let body' := body.consumeMData
   match_expr body' with
-  | Function.uncurry _ _ _ f x =>
+  | Aeneas.Std.WP.uncurry _ _ _ f x =>
     let x := x.consumeMData
     if x.isFVar then
       matchUncurryBinders f (fun x1 x2 body => do
@@ -347,7 +390,7 @@ partial def destructureUncurryChain (slots : Array PostBinder) (body : Expr)
     else k slots body'
   | _ => k slots body'
 
-/-- Strip `uncurry'` and `Function.uncurry` wrappers from a post-condition expression,
+/-- Strip `uncurry'` and `uncurry` wrappers from a post-condition expression,
 collecting the bound names as (possibly nested) `PostBinder` slots. -/
 partial def telescopeUncurry (vars : Array PostBinder) (e : SubExpr)
     (k : Array PostBinder → SubExpr → Delab) : Delab := do
@@ -357,9 +400,9 @@ partial def telescopeUncurry (vars : Array PostBinder) (e : SubExpr)
   let finish (vars : Array PostBinder) (args : Array Expr) (body : Expr) : Delab :=
     k (vars ++ args.map mkSingle) { expr := body, pos }
   match_expr expr with
-  | Function.uncurry _ _ _ f =>
+  | Aeneas.Std.WP.uncurry _ _ _ f =>
     matchUncurryBinders f.consumeMData (fun x1 x2 body => do
-      -- Walk the body, absorbing any `Function.uncurry _ slot` applications
+      -- Walk the body, absorbing any `WP.uncurry _ slot` applications
       -- that destructure the slots.
       let outerSlots := #[PostBinder.tuple (mkSingle x1) (mkSingle x2)]
       destructureUncurryChain outerSlots body fun newSlots newBody =>
@@ -372,7 +415,7 @@ partial def telescopeUncurry (vars : Array PostBinder) (e : SubExpr)
       let body' := body.consumeMData
       let isWrapper := match_expr body' with
         | uncurry' _ _ _ => true
-        | Function.uncurry _ _ _ _ => true
+        | Aeneas.Std.WP.uncurry _ _ _ _ => true
         | _ => false
       if args.size == 1 && isWrapper then
         telescopeUncurry (vars.push (mkSingle args[0]!)) { expr := body, pos } k
