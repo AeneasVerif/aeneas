@@ -398,65 +398,114 @@ def delabSpec : Delab := do
 # Tests
 -/
 
-example : ok 0 ⦃ r => r = 0 ⦄ := by simp
-example : spec (ok 0) fun _ => True := by simp
-example : ok 0 ⦃ _ => True ⦄ := by simp
-example : spec (ok (0, 1)) fun (x, y) => x = 0 ∧ y = 1 := by simp
-example : ok (0, 1) ⦃ (x, y) => x = 0 ∧ y = 1 ⦄ := by simp
-example : ok (0, 1) ⦃ x y => x = 0 ∧ y = 1 ⦄ := by simp
-example : ok (0, 1, 2) ⦃ x y z => x = 0 ∧ y = 1 ∧ z = 2 ⦄ := by simp
-example : ok (0, 1, true) ⦃ x y z => x = 0 ∧ y = 1 ∧ z ⦄ := by simp
-example : let P (x : Nat) := x = 0; ok 0 ⦃ P ⦄ := by simp
+/-- error: unsolved goals
+⊢ ok 0 ⦃ r => r = 0 ⦄ -/
+#guard_msgs in example : ok 0 ⦃ r => r = 0 ⦄ := by done
+/-- error: unsolved goals
+⊢ ok 0 ⦃ x✝ => True ⦄ -/
+#guard_msgs in example : spec (ok 0) fun _ => True := by done
+/-- error: unsolved goals
+⊢ ok 0 ⦃ x✝ => True ⦄ -/
+#guard_msgs in example : ok 0 ⦃ _ => True ⦄ := by done
+/-- error: unsolved goals
+⊢ ok (0, 1) ⦃ x✝ =>
+    match x✝ with
+    | (x, y) => x = 0 ∧ y = 1 ⦄ -/
+#guard_msgs in example : spec (ok (0, 1)) fun (x, y) => x = 0 ∧ y = 1 := by done
+/-- error: unsolved goals
+⊢ ok (0, 1) ⦃ (x, y) => x = 0 ∧ y = 1 ⦄ -/
+#guard_msgs in example : ok (0, 1) ⦃ (x, y) => x = 0 ∧ y = 1 ⦄ := by done
+/-- error: unsolved goals
+⊢ ok (0, 1) ⦃ x y => x = 0 ∧ y = 1 ⦄ -/
+#guard_msgs in example : ok (0, 1) ⦃ x y => x = 0 ∧ y = 1 ⦄ := by done
+/-- error: unsolved goals
+⊢ ok (0, 1, 2) ⦃ x y z => x = 0 ∧ y = 1 ∧ z = 2 ⦄ -/
+#guard_msgs in example : ok (0, 1, 2) ⦃ x y z => x = 0 ∧ y = 1 ∧ z = 2 ⦄ := by done
+/-- error: unsolved goals
+⊢ ok (0, 1, true) ⦃ x y z => x = 0 ∧ y = 1 ∧ z = true ⦄ -/
+#guard_msgs in example : ok (0, 1, true) ⦃ x y z => x = 0 ∧ y = 1 ∧ z ⦄ := by done
+/-- error: unsolved goals
+⊢ let P := fun x => x = 0;
+  ok 0 ⦃ P ⦄ -/
+#guard_msgs in example : let P (x : Nat) := x = 0; ok 0 ⦃ P ⦄ := by done
 
 /-! ### Mixed tuple / scalar binders -/
 
--- Tuple followed by scalar
-example : ok ((0, 1), 2) ⦃ (a, b) c => a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by simp
+/-- error: unsolved goals
+⊢ ok ((0, 1), 2) ⦃ (a, b) c => a = 0 ∧ b = 1 ∧ c = 2 ⦄ -/
+#guard_msgs in -- Tuple followed by scalar
+example : ok ((0, 1), 2) ⦃ (a, b) c => a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by done
 
--- Same but with nesting
-example : ok ((0, 1), 2) ⦃ ((a, b), c) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by simp
+/-- error: unsolved goals
+⊢ ok ((0, 1), 2) ⦃ ((a, b), c) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ -/
+#guard_msgs in -- Same but with nesting
+example : ok ((0, 1), 2) ⦃ ((a, b), c) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by done
 
--- Scalar followed by tuple
-example : ok (0, (1, 2)) ⦃ a (b, c) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by simp
+/-- error: unsolved goals
+⊢ ok (0, 1, 2) ⦃ a (b, c) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ -/
+#guard_msgs in -- Scalar followed by tuple
+example : ok (0, (1, 2)) ⦃ a (b, c) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by done
 
--- Same but with nesting
-example : ok (0, (1, 2)) ⦃ (a, (b, c)) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by simp
+/-- error: unsolved goals
+⊢ ok (0, 1, 2) ⦃ (a, (b, c)) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ -/
+#guard_msgs in -- Same but with nesting
+example : ok (0, (1, 2)) ⦃ (a, (b, c)) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by done
 
--- Two tuples in sequence
+/-- error: unsolved goals
+⊢ ok ((0, 1), 2, 3) ⦃ (a, b) (c, d) => a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ -/
+#guard_msgs in -- Two tuples in sequence
 example : ok ((0, 1), (2, 3)) ⦃ (a, b) (c, d) =>
-    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ := by simp
+    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ := by done
 
--- Same but with nesting
+/-- error: unsolved goals
+⊢ ok ((0, 1), 2, 3) ⦃ ((a, b), (c, d)) => a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ -/
+#guard_msgs in -- Same but with nesting
 example : ok ((0, 1), (2, 3)) ⦃ ((a, b), (c, d)) =>
-    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ := by simp
+    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ := by done
 
--- A single nested tuple
-example : ok ((0, 1), 2) ⦃ ((a, b), c) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by simp
+/-- error: unsolved goals
+⊢ ok ((0, 1), 2) ⦃ ((a, b), c) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ -/
+#guard_msgs in -- A single nested tuple
+example : ok ((0, 1), 2) ⦃ ((a, b), c) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by done
 
--- Two nested tuples
+/-- error: unsolved goals
+⊢ ok ((0, 1), 2, 3) ⦃ ((a, b), (c, d)) => a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ -/
+#guard_msgs in -- Two nested tuples
 example : ok ((0, 1), (2, 3)) ⦃ ((a, b), (c, d)) =>
-    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ := by simp
+    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ := by done
 
--- Scalar, tuple, nested tuple
+/-- error: unsolved goals
+⊢ ok (0, (1, 2), 3, 4, 5) ⦃ a (b, c) (d, (e, f)) => a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ∧ e = 4 ∧ f = 5 ⦄ -/
+#guard_msgs in -- Scalar, tuple, nested tuple
 example : ok (0, (1, 2), (3, (4, 5))) ⦃ a (b, c) (d, (e, f)) =>
-    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ∧ e = 4 ∧ f = 5 ⦄ := by simp
+    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ∧ e = 4 ∧ f = 5 ⦄ := by done
 
--- More nesting
+/-- error: unsolved goals
+⊢ ok ((0, 1, 2, 3), 4) ⦃ ((a, (b, (c, d))), e) => a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ∧ e = 4 ⦄ -/
+#guard_msgs in -- More nesting
 example : ok ((0, (1, (2, 3))), 4) ⦃ ((a, (b, (c, d))), e) => a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ∧ e = 4 ⦄
-  := by simp
+  := by done
 
 /-! ### Pretty-printing round-trip checks -/
 
-example : ok (0, 1, 2) ⦃ x y z => x = 0 ∧ y = 1 ∧ z = 2 ⦄ := by simp
+/-- error: unsolved goals
+⊢ ok (0, 1, 2) ⦃ x y z => x = 0 ∧ y = 1 ∧ z = 2 ⦄ -/
+#guard_msgs in example : ok (0, 1, 2) ⦃ x y z => x = 0 ∧ y = 1 ∧ z = 2 ⦄ := by done
 
-example : ok ((0, 1), 2) ⦃ (a, b) c =>
-    a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by simp
+/-- error: unsolved goals
+⊢ ok ((0, 1), 2) ⦃ (a, b) c => a = 0 ∧ b = 1 ∧ c = 2 ⦄ -/
+#guard_msgs in example : ok ((0, 1), 2) ⦃ (a, b) c =>
+    a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by done
 
-example : ok ((0, 1), (2, 3)) ⦃ (a, b) (c, d) =>
-    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ := by simp
+/-- error: unsolved goals
+⊢ ok ((0, 1), 2, 3) ⦃ (a, b) (c, d) => a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ -/
+#guard_msgs in example : ok ((0, 1), (2, 3)) ⦃ (a, b) (c, d) =>
+    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ := by done
 
-example : ok (0, (1, 2), ((3, 4, 5), 6)) ⦃ a (b, c) ((d, e, f), g) =>
-    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ∧ e = 4 ∧ f = 5 ∧ g = 6 ⦄ := by simp
+/-- error: unsolved goals
+⊢ ok (0, (1, 2), (3, 4, 5), 6) ⦃ a (b, c) ((d, e, f), g) => a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ∧ e = 4 ∧ f = 5 ∧ g = 6 ⦄ -/
+#guard_msgs in example : ok (0, (1, 2), ((3, 4, 5), 6)) ⦃ a (b, c) ((d, e, f), g) =>
+    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ∧ e = 4 ∧ f = 5 ∧ g = 6 ⦄ := by done
 
 end Aeneas
 
