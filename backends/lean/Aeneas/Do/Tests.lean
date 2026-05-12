@@ -676,4 +676,74 @@ Lean.Order.fix
 
 end MetavarTests
 
+namespace CapturedSynthMVarTests
+
+open Aeneas Std Result ControlFlow Error
+
+/-! Regression tests for synthetic mvars captured across `do` binders.
+
+The `25#usize` literal expands to `Usize.ofNat 25 ?proof`, where `?proof` is a
+synthetic mvar discharged by tactics. If the literal is elaborated under a
+`withLocalDeclD c …` and we abstract over `c` *before* synthesizing, `?proof`
+gets captured as `?proof c`, making the bind continuation's body type
+syntactically depend on `c` and breaking `Bind.bind` unification. -/
+
+opaque f_dep (N : Usize) : Result (Std.Array U64 N)
+
+/-- `let _ : Type ← _`: the originally reported regression. -/
+def dep_return_let_arrow_id : Result (Std.Array U64 25#usize) := do
+  let _c : Usize ← pure 0#usize
+  f_dep 25#usize
+
+/-- `let _ : _ := _`. -/
+def dep_return_let_id : Result (Std.Array U64 25#usize) := do
+  let _c : Usize := 0#usize
+  f_dep 25#usize
+
+/-- `let pat ← _` (pattern, monadic). -/
+def dep_return_let_arrow_pat : Result (Std.Array U64 25#usize) := do
+  let (_a, _b) ← (pure (0, 0) : Result (Nat × Nat))
+  f_dep 25#usize
+
+/-- `let pat := _` (pattern, pure). -/
+def dep_return_let_pat : Result (Std.Array U64 25#usize) := do
+  let (_a, _b) := ((0, 0) : Nat × Nat)
+  f_dep 25#usize
+
+/-- Stacked bindings exercising every let form. -/
+def dep_return_stacked : Result (Std.Array U64 25#usize) := do
+  let _x : Usize ← pure 0#usize
+  let _y : Nat := 0
+  let (_a, _b) ← (pure (1, 2) : Result (Nat × Nat))
+  f_dep 25#usize
+
+/-- Match arm body returning a dependent type (`assignArmMVar` path). -/
+def dep_return_match (b : Bool) : Result (Std.Array U64 25#usize) := do
+  match b with
+  | true => f_dep 25#usize
+  | false => f_dep 25#usize
+
+/-- Match with pattern-bound fvars in the arm context (non-trivial
+    `assignArmMVar` path). -/
+def dep_return_match_pat (o : Option Nat) : Result (Std.Array U64 25#usize) := do
+  match o with
+  | some _x => f_dep 25#usize
+  | none => f_dep 25#usize
+
+/-- If branches with rest = [] (`elabMonadicAsDoElem` leaf path). -/
+def dep_return_if (b : Bool) : Result (Std.Array U64 25#usize) := do
+  if b then
+    f_dep 25#usize
+  else
+    f_dep 25#usize
+
+/-- Non-bound monadic statement before a dependent return
+    (`elabMonadicAsDoElem` rest ≠ [] path). -/
+def dep_return_seq : Result (Std.Array U64 25#usize) := do
+  let _x : Usize ← pure 0#usize
+  pure ()
+  f_dep 25#usize
+
+end CapturedSynthMVarTests
+
 end Do

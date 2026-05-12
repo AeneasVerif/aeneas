@@ -16,6 +16,7 @@ module TraitDeclId = T.TraitDeclId
 module TraitImplId = T.TraitImplId
 module TraitClauseId = T.TraitClauseId
 module Disambiguator = T.Disambiguator
+module TraitMethodId = T.TraitMethodId
 
 (** We redefine identifiers for loop: in {!Values}, the identifiers are global
     (they monotonically increase across functions) while in {!module:Pure} we
@@ -38,6 +39,7 @@ type float_type = T.float_type [@@deriving show, ord]
 type const_generic_var_id = T.const_generic_var_id [@@deriving show, ord]
 type trait_decl_id = T.trait_decl_id [@@deriving show, ord]
 type trait_impl_id = T.trait_impl_id [@@deriving show, ord]
+type trait_method_id = T.trait_method_id [@@deriving show, ord]
 type trait_clause_id = T.trait_clause_id [@@deriving show, ord]
 type trait_item_name = T.trait_item_name [@@deriving show, ord]
 type global_decl_id = T.global_decl_id [@@deriving show, ord]
@@ -277,6 +279,9 @@ class ['self] iter_ty_base =
     method visit_trait_decl_id : 'env -> trait_decl_id -> unit = fun _ _ -> ()
     method visit_trait_impl_id : 'env -> trait_impl_id -> unit = fun _ _ -> ()
 
+    method visit_trait_method_id : 'env -> trait_method_id -> unit =
+      fun _ _ -> ()
+
     method visit_trait_clause_id : 'env -> trait_clause_id -> unit =
       fun _ _ -> ()
 
@@ -336,6 +341,9 @@ class ['self] map_ty_base =
       fun _ x -> x
 
     method visit_trait_impl_id : 'env -> trait_impl_id -> trait_impl_id =
+      fun _ x -> x
+
+    method visit_trait_method_id : 'env -> trait_method_id -> trait_method_id =
       fun _ x -> x
 
     method visit_trait_clause_id : 'env -> trait_clause_id -> trait_clause_id =
@@ -399,6 +407,9 @@ class virtual ['self] reduce_ty_base =
       fun _ _ -> self#zero
 
     method visit_trait_impl_id : 'env -> trait_impl_id -> 'a =
+      fun _ _ -> self#zero
+
+    method visit_trait_method_id : 'env -> trait_method_id -> 'a =
       fun _ _ -> self#zero
 
     method visit_trait_clause_id : 'env -> trait_clause_id -> 'a =
@@ -479,6 +490,10 @@ class virtual ['self] mapreduce_ty_base =
       fun _ x -> (x, self#zero)
 
     method visit_trait_impl_id : 'env -> trait_impl_id -> trait_impl_id * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_trait_method_id :
+        'env -> trait_method_id -> trait_method_id * 'a =
       fun _ x -> (x, self#zero)
 
     method visit_trait_clause_id :
@@ -1168,7 +1183,7 @@ and cast_kind =
 
 and fn_ptr_kind =
   | FunId of llbc_fun_id
-  | TraitMethod of trait_ref * string * fun_decl_id
+  | TraitMethod of trait_ref * trait_method_id * fun_decl_id
       (** The fun decl id is not really needed and only provided for convenience
           purposes *)
 
@@ -1844,7 +1859,7 @@ type trait_decl = {
   llbc_parent_clauses : Types.trait_param list;
   consts : (trait_item_name * ty) list;
   types : trait_item_name list;
-  methods : (trait_item_name * fun_decl_ref binder) list;
+  methods : (trait_method_id * trait_item_name * fun_decl_ref binder) list;
 }
 [@@deriving show]
 
@@ -1869,6 +1884,6 @@ type trait_impl = {
   parent_trait_refs : trait_ref list;
   consts : (trait_item_name * global_decl_ref) list;
   types : (trait_item_name * ty) list;
-  methods : (trait_item_name * fun_decl_ref binder) list;
+  methods : (trait_method_id * trait_item_name * fun_decl_ref binder) list;
 }
 [@@deriving show]

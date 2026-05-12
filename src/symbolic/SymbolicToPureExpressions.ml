@@ -12,11 +12,11 @@ let log = Logging.symbolic_to_pure_expressions_log
 let translate_fn_ptr_kind (ctx : bs_ctx) (id : A.fn_ptr_kind) : fn_ptr_kind =
   match id with
   | FunId fun_id -> FunId fun_id
-  | TraitMethod (trait_ref, method_name, fun_decl_id) ->
+  | TraitMethod (trait_ref, method_id, fun_decl_id) ->
       let trait_ref =
         translate_fwd_trait_ref (Some ctx.span) ctx.decls_ctx trait_ref
       in
-      TraitMethod (trait_ref, method_name, fun_decl_id)
+      TraitMethod (trait_ref, method_id, fun_decl_id)
 
 (* Introduce variables for the backward functions.
 

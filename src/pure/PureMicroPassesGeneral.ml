@@ -2265,13 +2265,12 @@ let simplify_trait_calls_visitor (ctx : ctx) (def : fun_decl) =
                               (TraitImplId.Map.find_opt impl_id ctx.trait_impls)
                               "Internal error"
                           in
-                          let method_decl =
-                            snd
-                              ([%unwrap_with_span] span
-                                 (List.find_opt
-                                    (fun (name, _) -> name = method_name)
-                                    impl.methods)
-                                 "Internal error")
+                          let _method_id, _method_name, method_decl =
+                            [%unwrap_with_span] span
+                              (List.find_opt
+                                 (fun (_, name, _) -> name = method_name)
+                                 impl.methods)
+                              "Internal error"
                           in
 
                           (* Create a call to the method *)
