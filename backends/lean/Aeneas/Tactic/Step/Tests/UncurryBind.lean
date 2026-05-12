@@ -38,6 +38,20 @@ example (xs : List Nat) :
   unfold prog
   step*
 
+/--
+info: Try this:
+
+  [apply]     let* ⟨ a, setA, a_post, setA_post ⟩ ← readPair_spec
+    let* ⟨ b, b_post ⟩ ← readSingle_spec
+    let* ⟨ c, setC, c_post, setC_post ⟩ ← readPair_spec
+    let* ⟨ ⟩ ← readSingle_spec
+-/
+#guard_msgs in
+example (xs : List Nat) :
+    prog xs ⦃ _ => True ⦄ := by
+  unfold prog
+  step*?
+
 /-- Nested-tuple bind followed by another bind. Checks that `introOutputs`
   properly reduces a nested `Std.uncurry` chain. -/
 def readNested (xs : List Nat) : Result ((Nat × Nat) × Nat) :=
@@ -58,6 +72,17 @@ example (xs : List Nat) :
   unfold progNested
   step*
 
+/--
+info: Try this:
+
+  [apply]     let* ⟨ a, b, c, a_post ⟩ ← readNested_spec
+    let* ⟨ ⟩ ← readSingle_spec
+-/
+#guard_msgs in
+example (xs : List Nat) :
+    progNested xs ⦃ _ => True ⦄ := by
+  unfold progNested
+  step*?
 
 /- Checking we're getting the right names in step*?-/
 
