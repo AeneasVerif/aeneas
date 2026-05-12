@@ -4,7 +4,7 @@ import Aeneas.Std.Primitives
 /-! # Shared delaboration helpers for uncurry chains
 
 These helpers are used by both the `⦃ ⦄` postcondition delaborator (`WP.lean`)
-and the `do`-notation delaborator (`Do/Delab.lean`) to walk `WP.uncurry` chains
+and the `do`-notation delaborator (`Do/Delab.lean`) to walk `Std.uncurry` chains
 and produce binder patterns. -/
 
 open Lean PrettyPrinter Delaborator SubExpr
@@ -30,14 +30,14 @@ partial def enterLams (acc : Array BinderEntry)
       enterLams (acc.push (fv.fvarId!, n, pos)) k
   | _ => k acc
 
-/-- Enter `fun` binders and chained `WP.uncurry`s, flattening all leaves.
+/-- Enter `fun` binders and chained `Std.uncurry`s, flattening all leaves.
 
 Example: on `uncurry (fun a => uncurry (fun b c => body))`, collects `[a, b, c]`
 and leaves the reader at `body`. -/
 partial def enterUncurryChain (acc : Array BinderEntry)
     (k : Array BinderEntry → DelabM α) : DelabM α :=
   enterLams acc fun acc' => do
-    if (← getExpr).isAppOfArity ``_root_.Aeneas.Std.WP.uncurry 4 then
+    if (← getExpr).isAppOfArity ``_root_.Aeneas.Std.uncurry 4 then
       withAppArg <| enterUncurryChain acc' k
     else
       k acc'
@@ -49,7 +49,7 @@ def buildTupleTerm (pats : Array Term) : DelabM Term := do
   `(($head, $tail,*))
 
 /-- Build a pattern for each binder, folding any immediate destructuring of
-    `fv` (tuple via `WP.uncurry`, or ctor via `T.casesOn`) into a nested
+    `fv` (tuple via `Std.uncurry`, or ctor via `T.casesOn`) into a nested
     pattern. `k` runs on the resulting body. -/
 partial def delabBinders (binders : List BinderEntry) (k : DelabM α) :
     DelabM (Array Term × α) := do
@@ -65,11 +65,11 @@ where
     let (all, a) ← delabBinders (inner.toList ++ rest) k
     let n := inner.size
     return (all.extract 0 n, all.extract n all.size, a)
-  /-- Tuple destructuring via `WP.uncurry`. -/
+  /-- Tuple destructuring via `Std.uncurry`. -/
   tupleBind? (fv : FVarId) (tuplePos : Pos) (rest : List BinderEntry) :
       DelabM (Option (Array Term × α)) := do
     let e ← getExpr
-    unless e.isAppOfArity ``_root_.Aeneas.Std.WP.uncurry 5 do return none
+    unless e.isAppOfArity ``_root_.Aeneas.Std.uncurry 5 do return none
     let val := e.appArg!
     unless val.isFVar ∧ val.fvarId! == fv do return none
     withAppFn <| withAppArg <| enterUncurryChain #[] fun inner => do

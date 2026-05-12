@@ -180,14 +180,12 @@ noncomputable instance : MonoBind Result where
 
 end Order
 
-namespace WP
-
 /-- Aeneas-internal version of `Function.uncurry` for tuple destructuring in bind
 continuations. We use our own copy so that none of the `simp`/`step` attribute
 manipulations we perform on it impact user-written specs that use `Function.uncurry`
 directly.
 
-`WP.uncurry` is purely internal to Aeneas' elaboration pipeline and should never
+`uncurry` is purely internal to Aeneas' elaboration pipeline and should never
 be directly manipulated by the user. -/
 @[inline] def uncurry {α β γ} (f : α → β → γ) : α × β → γ :=
   fun (a, b) => f a b
@@ -195,9 +193,9 @@ be directly manipulated by the user. -/
 @[simp, grind =] theorem uncurry_apply_pair {α β γ} (f : α → β → γ) (a : α) (b : β) :
     uncurry f (a, b) = f a b := rfl
 
-/- Allow `partial_fixpoint` to see through `WP.uncurry` in bind continuations.
+/- Allow `partial_fixpoint` to see through `uncurry` in bind continuations.
 This is needed because the custom `do` elaborator generates
-`e >>= WP.uncurry fun a b => rest` for tuple-destructuring `let (a, b) ← e`. -/
+`e >>= uncurry fun a b => rest` for tuple-destructuring `let (a, b) ← e`. -/
 section
 open Lean.Order
 
@@ -224,8 +222,6 @@ theorem monotone_uncurry_applied
   exact monotone_apply p.2 _ (monotone_apply p.1 _ hmono) x y hxy
 
 end
-
-end WP
 
 attribute [simp, grind =] Function.uncurry_apply_pair
 

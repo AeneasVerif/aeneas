@@ -208,13 +208,13 @@ scoped syntax:54 term:55 " ⦃ " term " ⦄" : term
 
 open Lean PrettyPrinter
 
-/-- Build a `WP.uncurry` chain wrapping a curried lambda over `xs`.
+/-- Build a `Std.uncurry` chain wrapping a curried lambda over `xs`.
 
 Given `x0`, ..., `xn` and `body`, generates the (syntactic) term `fun (x0, ..., xn) => body`.
 -/
 partial def buildUncurryLam (xs : List (TSyntax `term)) (body : TSyntax `term) :
     MacroM (TSyntax `term) := do
-  let uncurryIdent := mkIdent ``uncurry
+  let uncurryIdent := mkIdent ``Std.uncurry
   match xs with
   | [] => pure body
   | [x] => `(fun $x => $body)
@@ -316,7 +316,7 @@ private partial def enterUncurryOnce (acc : Array Std.Delab.BinderEntry)
     withBindingBody' n pure fun fv => do
       let acc' := acc.push (fv.fvarId!, n, pos)
       if acc'.size >= 2 then k acc'
-      else if (← getExpr).isAppOfArity ``uncurry 4 then
+      else if (← getExpr).isAppOfArity ``Std.uncurry 4 then
         withAppArg <| enterUncurryOnce acc' k
       else enterUncurryOnce acc' k
   | _ => k acc

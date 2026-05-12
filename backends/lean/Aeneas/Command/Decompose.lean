@@ -338,16 +338,16 @@ partial def withBindings (e : Expr) (acc : Array BindingEntry)
     -- Monadic bind
     match matchBind? e with
     | some (m, _inst, _α, _β, computation, continuation) =>
-      -- Open the continuation, handling Std.WP.uncurry for tuple binds
+      -- Open the continuation, handling Std.uncurry for tuple binds
       openBindContinuation m computation continuation acc k
     | none => k acc e
 where
-  /-- Unwrap nested `WP.uncurry` applications, collecting the lambda binders.
+  /-- Unwrap nested `Std.uncurry` applications, collecting the lambda binders.
       Returns the flattened array of (name, type, binderInfo) and the innermost body. -/
   openUncurryLambdas (cont : Expr) (binders : Array (Name × Expr × BinderInfo)) :
       MetaM (Array (Name × Expr × BinderInfo) × Expr) := do
-    -- Check for Std.WP.uncurry: @Std.WP.uncurry α β γ f
-    if cont.isAppOfArity ``_root_.Aeneas.Std.WP.uncurry 4 then
+    -- Check for Std.uncurry: @Std.uncurry α β γ f
+    if cont.isAppOfArity ``_root_.Aeneas.Std.uncurry 4 then
       let f := cont.getAppArgs[3]!
       match f with
       | .lam lname ltype _lbody lbinfo =>
@@ -364,7 +364,7 @@ where
       | .lam lname ltype _lbody lbinfo =>
         return (binders.push (lname, ltype, lbinfo), cont)
       | _ => return (binders, cont)
-  /-- Open a bind continuation. Detects `WP.uncurry` chains for tuple
+  /-- Open a bind continuation. Detects `Std.uncurry` chains for tuple
       destructuring and creates a single BindingEntry with all component fvars. -/
   openBindContinuation (m computation : Expr) (cont : Expr)
       (acc : Array BindingEntry) (k : Array BindingEntry → Expr → DecomposeM α) :
@@ -382,13 +382,13 @@ where
           let lbody' := lbody.instantiate1 fvar
           withBindings lbody' (acc.push { name := lname, type := ltype, value := computation, fvars := #[fvar], isMonadic := true, monadExpr := some m, fvarTree := .leaf fvar }) k
       | _ => k acc e
-  /-- Open the `WP.uncurry` chain that forms the continuation of a tuple-
+  /-- Open the `Std.uncurry` chain that forms the continuation of a tuple-
       destructuring `Bind.bind`. Introduces fvars for each component and creates a
       single `BindingEntry` for the whole tuple bind.
 
       For `let (a, b) ← comp`, the continuation in the elaborated term is:
       ```
-      Bind.bind comp (Std.WP.uncurry (fun a b => body))
+      Bind.bind comp (Std.uncurry (fun a b => body))
       ```
       This function opens the uncurry's lambdas, introducing `a` and `b` as fvars.
       It then delegates to `buildFVarTree` to handle nested tuples (where the opened
@@ -399,7 +399,7 @@ where
   openUncurryFVars (m computation : Expr) (cont : Expr) (fvars : Array Expr)
       (acc : Array BindingEntry) (k : Array BindingEntry → Expr → DecomposeM α) :
       DecomposeM α := do
-    if cont.isAppOfArity ``_root_.Aeneas.Std.WP.uncurry 4 then
+    if cont.isAppOfArity ``_root_.Aeneas.Std.uncurry 4 then
       let f := cont.getAppArgs[3]!
       match f with
       | .lam lname ltype lbody lbinfo =>
@@ -436,7 +436,7 @@ where
       For a nested tuple bind `let ((a, b), (c, d)) ← ...`, the fvars from the outer
       uncurry chain are `#[_x0 : A × B, _x1 : C × D]` (pair-typed intermediates).
       The body starts with fully-applied uncurries that destructure them:
-      `Std.WP.uncurry (fun a b => Std.WP.uncurry (fun c d => realBody) _x1) _x0`.
+      `Std.uncurry (fun a b => Std.uncurry (fun c d => realBody) _x1) _x0`.
       This function detects these, opens the inner uncurries to introduce `a, b, c, d`,
       and builds `pair (pair (leaf a) (leaf b)) (pair (leaf c) (leaf d))`.
 
@@ -460,7 +460,7 @@ where
       if fvarType.isAppOfArity ``Prod 2 then
         let fn := body.getAppFn
         let args := body.getAppArgs
-        if fn.isConstOf ``_root_.Aeneas.Std.WP.uncurry && args.size ≥ 5 && args[4]! == fvar then
+        if fn.isConstOf ``_root_.Aeneas.Std.uncurry && args.size ≥ 5 && args[4]! == fvar then
           let f := args[3]!
           let extraArgs := args.extract 5 args.size
           -- Open the uncurry's lambdas (CPS)
@@ -476,11 +476,11 @@ where
         buildFVarTreeAux fvars (idx + 1) body (trees.push (.leaf fvar)) k
     else
       k trees body
-  /-- Open the lambda telescope inside a `WP.uncurry`'s function argument.
+  /-- Open the lambda telescope inside a `Std.uncurry`'s function argument.
       CPS-based so that the introduced fvars remain in scope for the continuation.
 
       For example, given the expression `fun a => fun b => body` (the 4th argument
-      of a `WP.uncurry`), this introduces fvars `a` and `b` via `withLocalDecl`
+      of a `Std.uncurry`), this introduces fvars `a` and `b` via `withLocalDecl`
       and calls `k #[a_fvar, b_fvar] body'` (where `body'` has the fvars substituted
       in). -/
   openUncurryLambdasCPS (f : Expr)
@@ -519,13 +519,13 @@ private def mkForallAbstract (fvars : Array Expr) (body : Expr) : MetaM Expr := 
 -- Reconstruction: binding entries → Expr
 -- ============================================================================
 
-/-- Build `Std.WP.uncurry (fun x => body)` for a single pair layer.
+/-- Build `Std.uncurry (fun x => body)` for a single pair layer.
     Always creates a lambda (not a let-binding), even for let-decl fvars. -/
 private def mkUncurry (fvar : Expr) (body : Expr) : MetaM Expr := do
   let fn ← mkLamAbstract #[fvar] body
-  mkAppM ``_root_.Aeneas.Std.WP.uncurry #[fn]
+  mkAppM ``_root_.Aeneas.Std.uncurry #[fn]
 
-/-- Rebuild a `WP.uncurry` chain from an `FVarTree`.
+/-- Rebuild a `Std.uncurry` chain from an `FVarTree`.
     For `pair (pair (leaf a) (leaf b)) (pair (leaf c) (leaf d))` and body,
     produces `uncurry (uncurry (fun a b => uncurry (fun c d => body)))`. -/
 private partial def rebuildUncurryFromTree (tree : FVarTree) (body : Expr) : MetaM Expr := do
@@ -534,11 +534,11 @@ private partial def rebuildUncurryFromTree (tree : FVarTree) (body : Expr) : Met
   | .pair left right =>
     let rightCont ← rebuildUncurryFromTree right body
     let leftCont ← rebuildUncurryFromTree left rightCont
-    mkAppM ``_root_.Aeneas.Std.WP.uncurry #[leftCont]
+    mkAppM ``_root_.Aeneas.Std.uncurry #[leftCont]
 
 /-- Rebuild an expression from `bindings[startIdx .. endIdx-1]` followed by `terminal`.
     Abstracts fvars bottom-up using `mkLambdaFVars` / `mkLetFVars`.
-    Handles tuple-destructuring binds by reconstructing `WP.uncurry` chains. -/
+    Handles tuple-destructuring binds by reconstructing `Std.uncurry` chains. -/
 def rebuildBindings (bindings : Array BindingEntry) (terminal : Expr)
     (startIdx endIdx : Nat) : MetaM Expr := do
   let mut result := terminal
@@ -548,7 +548,7 @@ def rebuildBindings (bindings : Array BindingEntry) (terminal : Expr)
     let entry := bindings[i]!
     if entry.isMonadic then
       if entry.fvars.size > 1 then
-        -- Tuple bind: rebuild Std.WP.uncurry chain using tree structure
+        -- Tuple bind: rebuild Std.uncurry chain using tree structure
         let cont ← rebuildUncurryFromTree entry.fvarTree result
         result ← mkAppM ``Bind.bind #[entry.value, cont]
       else
@@ -824,9 +824,9 @@ def extractLetRange (bindings : Array BindingEntry) (terminal : Expr)
       let extractedBody ← rebuildBindings bindings returnExpr start endPos
       let callExpr ← addDef extractedBody
 
-      -- Build the destructuring continuation using Std.WP.uncurry
+      -- Build the destructuring continuation using Std.uncurry
       if hasMonadic then do
-        -- Build: callExpr >>= Std.WP.uncurry (fun v1 => Std.WP.uncurry (fun v2 v3 => contExpr))
+        -- Build: callExpr >>= Std.uncurry (fun v1 => Std.uncurry (fun v2 v3 => contExpr))
         -- Start from the innermost lambda (last fvar), then wrap with uncurry from inside out
         let mut cont ← mkLamAbstract #[neededFVars.back!] contExpr
         for j in (List.range (neededFVars.size - 1)).reverse do
@@ -971,12 +971,12 @@ partial def modifyBindingValue (e : Expr) (idx : Nat)
     | _ =>
       match matchBind? e with
       | some (m, inst, α, β, computation, continuation) =>
-        -- Open the continuation, handling Std.WP.uncurry for tuple-destructuring binds
+        -- Open the continuation, handling Std.uncurry for tuple-destructuring binds
         let newCont ← openBindCont continuation (idx - 1) action
         return mkApp6 (mkConst ``Bind.bind (e.getAppFn.constLevels!)) m inst α β computation newCont
       | none => throwError "letAt {idx}: reached terminal before binding"
 where
-  /-- Open a bind continuation (which may be a plain lambda or a `WP.uncurry`
+  /-- Open a bind continuation (which may be a plain lambda or a `Std.uncurry`
       chain for tuple-destructuring binds), apply `modifyBindingValue` to the
       innermost body, then reconstruct the continuation using `mkUncurry`.
       This mirrors the structure of `openUncurryFVars` in `withBindings`. -/
@@ -987,7 +987,7 @@ where
       collects fvars, then modifies the innermost body and rebuilds. -/
   openBindContAux (cont : Expr) (idx : Nat) (action : Expr → DecomposeM Expr)
       (fvars : Array Expr) : DecomposeM Expr := do
-    if cont.isAppOfArity ``_root_.Aeneas.Std.WP.uncurry 4 then
+    if cont.isAppOfArity ``_root_.Aeneas.Std.uncurry 4 then
       let f := cont.getAppArgs[3]!
       match f with
       | .lam lname ltype lbody lbinfo =>
@@ -1093,7 +1093,7 @@ def proveStep (goalType : Expr) (defNames : Array Name) : TermElabM Expr := do
   let simpThms := #[``Aeneas.Std.bind_assoc_eq, ``LawfulMonad.pure_bind]
   let mvar ← mkFreshExprMVar goalType
   let (_, mvarId) ← mvar.mvarId!.intros
-  let unfoldNames := defNames ++ #[``_root_.Aeneas.Std.WP.uncurry]
+  let unfoldNames := defNames ++ #[``_root_.Aeneas.Std.uncurry]
   let mvarId' ← mvarId.deltaTarget (unfoldNames.contains ·)
   match ← simpOnlyTarget mvarId' #[] simpThms with
   | none => return ← instantiateMVars mvar

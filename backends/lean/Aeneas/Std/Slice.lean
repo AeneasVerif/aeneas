@@ -801,7 +801,7 @@ theorem core.slice.index.SliceIndexRangeUsizeSlice.index_mut.step_spec (r : core
   ∀ s2, index_mut_back s2 = s.setSlice! r.start.val s2 ⦄ := by
   simp only [index_mut, UScalar.le_equiv, Slice.length]
   split
-  . simp only [spec_ok, WP.uncurry', true_and]
+  . simp only [spec_ok, Std.WP.uncurry', true_and]
     simp_lists
     simp_scalar
     simp_lists [Slice.eq_iff]
@@ -843,7 +843,7 @@ theorem core.slice.index.SliceIndexRangeToUsizeSlice.index_mut.step_spec
       ∀ s', (back s').val = s.val.setSlice! 0 s'.val ⦄ := by
   simp only [index_mut]
   split
-  · simp only [spec_ok, WP.uncurry']
+  · simp only [spec_ok, Std.WP.uncurry']
     refine ⟨trivial, ?_, ?_⟩
     · simp [Slice.length]; scalar_tac
     · intro s'; simp
@@ -884,7 +884,7 @@ theorem core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut.step_spec
       ∀ s', (back s').val = s.val.setSlice! r.start.val s'.val ⦄ := by
   simp only [index_mut, Slice.drop]
   split
-  · simp only [spec_ok, WP.uncurry']
+  · simp only [spec_ok, Std.WP.uncurry']
     refine ⟨trivial, ?_, ?_⟩
     · simp [Slice.length, List.length_drop]
     · intro s'; simp

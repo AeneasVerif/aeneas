@@ -14,7 +14,7 @@ def readPair (xs : List Nat) (i : Nat) : Result (Nat × (Nat → List Nat)) :=
 @[step]
 theorem readPair_spec (xs : List Nat) (i : Nat) :
     readPair xs i ⦃ x y => x = xs.getD i 0 ∧ y = (fun y => xs.set i y) ⦄ := by
-  unfold readPair; simp [WP.spec_ok, WP.uncurry']
+  unfold readPair; simp [WP.spec_ok, Std.WP.uncurry']
 
 def readSingle (xs : List Nat) (i : Nat) : Result Nat :=
   ok (xs.getD i 0)
@@ -39,7 +39,7 @@ example (xs : List Nat) :
   step*
 
 /-- Nested-tuple bind followed by another bind. Checks that `introOutputs`
-  properly reduces a nested `WP.uncurry` chain. -/
+  properly reduces a nested `Std.uncurry` chain. -/
 def readNested (xs : List Nat) : Result ((Nat × Nat) × Nat) :=
   ok ((xs.getD 0 0, xs.getD 1 0), xs.getD 2 0)
 

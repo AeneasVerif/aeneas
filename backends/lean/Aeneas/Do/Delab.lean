@@ -11,12 +11,12 @@ namespace Aeneas
 namespace Do
 namespace Delab
 
-/-- `Std.WP.uncurry (fun x₁ … xₙ => body) val` → `let (x₁, …, xₙ) := val; body`. -/
-@[delab app.Aeneas.Std.WP.uncurry]
+/-- `Std.uncurry (fun x₁ … xₙ => body) val` → `let (x₁, …, xₙ) := val; body`. -/
+@[delab app.Aeneas.Std.uncurry]
 def delabUncurryLet : Delab := do
   unless Aeneas.customDoElab.get (← getOptions) do failure
   -- only fire when fully applied
-  unless (← getExpr).isAppOfArity ``_root_.Aeneas.Std.WP.uncurry 5 do failure
+  unless (← getExpr).isAppOfArity ``_root_.Aeneas.Std.uncurry 5 do failure
   let valStx ← withAppArg delab
   let (pats, bodyStx) ← withAppFn <| withAppArg <|
     enterUncurryChain #[] fun outerBinders => do
@@ -58,7 +58,7 @@ partial def aeneasDelabDoElems : DelabM (List DoElem) := do
     let α := e.getAppArgs[2]!
     let ma ← withAppFn <| withAppArg delab
     let arg := e.appArg!
-    if arg.isAppOfArity ``_root_.Aeneas.Std.WP.uncurry 4 then
+    if arg.isAppOfArity ``_root_.Aeneas.Std.uncurry 4 then
       tupleBind ma
     else 
       try 

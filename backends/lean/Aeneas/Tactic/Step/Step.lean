@@ -72,7 +72,7 @@ attribute [step_simps]
   Std.WP.uncurry'_eq
 
 attribute [step_simps] Aeneas.Std.bind_assoc_eq
-attribute [step_simps] Aeneas.Std.WP.uncurry_apply_pair
+attribute [step_simps] Aeneas.Std.uncurry_apply_pair
 
 attribute [step_post_simps]
   -- We often see expressions like `Int.ofNat 3`
@@ -262,7 +262,7 @@ def postName (base : Name) (suffix : String) : Name :=
 partial def getLeafNamesFromCont (cont : Expr) : MetaM (Array (Option Name)) := do
   let cont := cont.consumeMData
   let lam := match_expr cont with
-    | Std.WP.uncurry _ _ _ f => f.consumeMData
+    | Std.uncurry _ _ _ f => f.consumeMData
     | _ => cont
   Prod.fst <$> ofLambda lam
 where
@@ -273,20 +273,20 @@ where
       vars.foldlM (init := (#[], body)) fun (acc, body) var => do
         let (sub, body) ← ofBinder var body
         pure (acc ++ sub, body)
-  /-- Leaves reachable from `var`, following any `WP.uncurry … var`
+  /-- Leaves reachable from `var`, following any `Std.uncurry … var`
       destructuring in `body`. -/
   ofBinder (var : Expr) (body : Expr) : MetaM (Array (Option Name) × Expr) := do
     let body := body.consumeMData
     match_expr body with
-    | Std.WP.uncurry _ _ _ f arg =>
+    | Std.uncurry _ _ _ f arg =>
       let f := f.consumeMData
       unless arg.consumeMData == var ∧ f.isLambda do return (#[← fvarNameSlot var], body)
       ofLambda f
     | _ => return (#[← fvarNameSlot var], body)
 
 /-- Extract names from a post-condition or bind-continuation expression by
-    recursively peeling lambdas and wrappers (`WP.curry`, `WP.uncurry'`,
-    `WP.uncurry`). Returns `some name` for user-provided names and
+    recursively peeling lambdas and wrappers (`WP.curry`, `Std.WP.uncurry'`,
+    `Std.uncurry`). Returns `some name` for user-provided names and
     `none` for macro-scoped or auto-synthesized (`_xN`) ones. -/
 partial def getPostNames (e : Expr) : MetaM (Array (Option Name)) := do
   let e := e.consumeMData
@@ -304,13 +304,13 @@ partial def getPostNames (e : Expr) : MetaM (Array (Option Name)) := do
     match_expr e with
     | Std.WP.curry _ _ _ f => getPostNames f
     | Std.WP.uncurry' _ _ p => getPostNames p
-    | Std.WP.uncurry _ _ _ f => getPostNames f
-    | Std.WP.uncurry _ _ _ f _ => getPostNames f
+    | Std.uncurry _ _ _ f => getPostNames f
+    | Std.uncurry _ _ _ f _ => getPostNames f
     | _ => pure #[]
 
 /-- Extract the variable names from the bind continuation in the current goal.
     Returns an empty array if the goal is not a bind. Reuses `getPostNames`
-    since the bind continuation has the same `WP.uncurry`-wrapped lambda
+    since the bind continuation has the same `Std.uncurry`-wrapped lambda
     shape as a post-condition. -/
 def getBindVarNames : TacticM (Array (Option Name)) := do
   try
@@ -519,14 +519,14 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
 
   /- Eliminate `qimp_spec`/`qimp` to reveal `imp` and decompose the post-condition into a sequence
      of implications. `Prod.forall` splits any leftover tuple-typed quantifier into separate
-     binders; `WP.uncurry_apply_pair` then reduces the now-syntactic-pair argument. -/
+     binders; `Std.uncurry_apply_pair` then reduces the now-syntactic-pair argument. -/
   let some _ ← withTraceNode `Step (fun _ => pure m!"simpAt: eliminating `qimp_spec` and `qimp`") do
     Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
             { declsToUnfold := #[``Std.WP.curry, ``Std.WP.uncurry']
               addSimpThms :=
                 #[``Std.WP.qimp_spec_iff, ``Std.WP.qimp_iff,
                   ``Std.WP.imp_and_iff,
-                  ``Prod.forall, ``Prod.exists, ``Std.WP.uncurry_apply_pair,
+                  ``Prod.forall, ``Prod.exists, ``Std.uncurry_apply_pair,
                   ``forall_unit, ``true_imp_iff] }
             (.targets #[] true)
     | trace[Step] "The main goal was solved!"; return none
