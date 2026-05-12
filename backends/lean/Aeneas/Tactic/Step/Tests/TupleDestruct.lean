@@ -9,8 +9,14 @@ namespace step_tuple_destruct
 def twoNats : Result (Nat × Nat) :=
   ok (1, 2)
 
+def threeNats : Result (Nat × Nat × Nat) :=
+  ok (1, 2, 3)
+
 @[step]
 theorem twoNats_spec : twoNats ⦃ a b => a = 1 ∧ b = 2⦄ := by unfold twoNats; step*
+
+@[step]
+def threeNats_spec : threeNats ⦃ a b c => a = 1 ∧ b = 2 ∧ c = 3⦄ := by unfold threeNats; step*
 
 def fourNats : Result ((Nat × Nat) × (Nat × Nat)) :=
   ok ((3, 4), (5, 6))
@@ -18,6 +24,13 @@ def fourNats : Result ((Nat × Nat) × (Nat × Nat)) :=
 @[step]
 theorem fourNats_spec : fourNats ⦃ (a, b) (c,d) => a = 3 ∧ b = 4 ∧ c = 5 ∧ d = 6⦄ := by
   unfold fourNats; step*
+
+def sixNats : Result (((Nat × Nat) × Nat) × ((Nat × Nat) × Nat)) :=
+  ok (((3, 4), 5), ((6, 7), 8))
+
+@[step]
+theorem sixNats_spec : sixNats ⦃ ((a, b), c) ((d, e), f) => a = 3 ∧ b = 4 ∧ c = 5 ∧ d = 6 ∧ e = 7 ∧ f = 8⦄ := by
+  unfold sixNats; step*
 
 def testTuples : Result Nat := do
   let (a, b) ← twoNats
@@ -38,6 +51,39 @@ info: Try this:
 #guard_msgs in
 example : testTuples ⦃ res => res = 18⦄ := by
   unfold testTuples
+  step*?
+
+def testTuples1 : Result Nat := do
+  let (a, b, c) ← threeNats
+  let (e, f, g) ← threeNats
+  ok (a + b + c + e + f + g)
+
+-- TODO: the generated script is not correct (several outputs are missing)
+/--
+info: Try this:
+
+  [apply]     let* ⟨ a, _, _, a_post, a_post2, a_post3 ⟩ ← threeNats_spec
+    let* ⟨ e, _, _, e_post, e_post2, e_post3 ⟩ ← threeNats_spec
+    agrind
+-/
+#guard_msgs in
+example : testTuples1 ⦃ res => res = 12⦄ := by
+  unfold testTuples1
+  step*?
+
+def testTuples2 : Result Nat := do
+  let (((a, b), c), ((d, e), f)) ← sixNats
+  ok (a + b + c + d + e + f)
+
+/--
+info: Try this:
+
+  [apply]     let* ⟨ a, b, c, d, e, f, a_post, b_post, c_post, d_post, e_post, f_post ⟩ ← sixNats_spec
+    agrind
+-/
+#guard_msgs in
+example : testTuples2 ⦃ res => res = 33⦄ := by
+  unfold testTuples2
   step*?
 
 end step_tuple_destruct

@@ -40,6 +40,8 @@ theorem callPair_spec (f g : U32 → Result U32) (xy : U32 × U32)
   unfold callPair
   step*
 
+-- TODO: fix the output of step*? below (it shouldn't decompose the pair into `ab` and `_`)
+-- TODO: the generated script is actually not correct (there misses calls to `agrind` in the cases `hf` and `hg`)
 /--
 info: Try this:
 
