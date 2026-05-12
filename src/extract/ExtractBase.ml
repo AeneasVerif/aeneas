@@ -167,7 +167,7 @@ and id =
   | ConstGenericVarId of generic_origin * ConstGenericVarId.id
   | LocalTraitClauseId of generic_origin * TraitClauseId.id
   | TraitDeclConstructorId of TraitDeclId.id
-  | TraitMethodId of TraitDeclId.id * string
+  | TraitMethodId of TraitDeclId.id * trait_method_id
   | TraitItemId of TraitDeclId.id * string
       (** A trait associated item which is not a method *)
   | TraitParentClauseId of TraitDeclId.id * TraitClauseId.id
@@ -732,8 +732,11 @@ let id_to_string (span : Meta.span option) (id : id) (ctx : extraction_ctx) :
       ^ TraitClauseId.to_string clause_id
   | TraitItemId (id, name) ->
       "trait_item_id: " ^ trait_decl_id_to_string id ^ ", type name: " ^ name
-  | TraitMethodId (trait_decl_id, fun_name) ->
-      trait_decl_id_to_string trait_decl_id ^ ", method name: " ^ fun_name
+  | TraitMethodId (trait_decl_id, method_id) ->
+      let method_name =
+        Charon.GAstUtils.format_method_name ctx.crate trait_decl_id method_id
+      in
+      trait_decl_id_to_string trait_decl_id ^ ", method name: " ^ method_name
 
 let ctx_add (span : Meta.span) (id : id) (name : string) (ctx : extraction_ctx)
     : extraction_ctx =
@@ -798,8 +801,8 @@ let ctx_get_trait_type (span : Meta.span) (id : trait_decl_id)
   ctx_get_trait_item span id item_name ctx
 
 let ctx_get_trait_method (span : Meta.span) (id : trait_decl_id)
-    (item_name : string) (ctx : extraction_ctx) : string =
-  ctx_get (Some span) (TraitMethodId (id, item_name)) ctx
+    (method_id : trait_method_id) (ctx : extraction_ctx) : string =
+  ctx_get (Some span) (TraitMethodId (id, method_id)) ctx
 
 let ctx_get_trait_parent_clause (span : Meta.span) (id : trait_decl_id)
     (clause : trait_clause_id) (ctx : extraction_ctx) : string =
@@ -1987,9 +1990,9 @@ let ctx_compute_trait_const_name (ctx : extraction_ctx)
   | Coq | Lean | HOL4 -> name
 
 let ctx_compute_trait_method_name (ctx : extraction_ctx)
-    (trait_decl : trait_decl) (item : string) : string =
-  if !Config.record_fields_short_names then item
-  else ctx_compute_trait_decl_name ctx trait_decl ^ "_" ^ item
+    (trait_decl : trait_decl) (item_name : string) : string =
+  if !Config.record_fields_short_names then item_name
+  else ctx_compute_trait_decl_name ctx trait_decl ^ "_" ^ item_name
 
 let ctx_compute_trait_type_clause_name (ctx : extraction_ctx)
     (trait_decl : trait_decl) (item : string) (clause : trait_param) : string =
@@ -2325,11 +2328,11 @@ let ctx_compute_fun_global_name_no_suffix (item_meta : T.item_meta)
                 (* Lookup the method in the trait items *)
                 match
                   List.find_opt
-                    (fun (name, _) -> name = item_name)
+                    (fun (_, name, _) -> name = item_name)
                     trait_decl.methods
                 with
                 | None -> item_meta
-                | Some (_, bound_fn) ->
+                | Some (_, _, bound_fn) ->
                     Option.value
                       (Option.map
                          (fun (def : A.fun_decl) -> def.item_meta)
