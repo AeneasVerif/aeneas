@@ -68,8 +68,8 @@ attribute [step_simps]
   and_assoc Std.Result.ok.injEq Prod.mk.injEq
   exists_eq_left exists_eq_left' exists_eq_right exists_eq_right' exists_eq exists_eq' true_and and_true
   Std.WP.spec_ok
-  -- This one gets only applied to full applications of `predn`, which are typically revealed after applying `spec_ok`
-  Std.WP.predn_eq
+  -- This one gets only applied to full applications of `uncurry'`, which are typically revealed after applying `spec_ok`
+  Std.WP.uncurry'_eq
 
 attribute [step_simps] Aeneas.Std.bind_assoc_eq
 attribute [step_simps] Function.uncurry_apply_pair
@@ -285,7 +285,7 @@ where
     | _ => return (#[← fvarNameSlot var], body)
 
 /-- Extract names from a post-condition or bind-continuation expression by
-    recursively peeling lambdas and wrappers (`WP.curry`, `WP.predn`,
+    recursively peeling lambdas and wrappers (`WP.curry`, `WP.uncurry'`,
     `Function.uncurry`). Returns `some name` for user-provided names and
     `none` for macro-scoped or auto-synthesized (`_xN`) ones. -/
 partial def getPostNames (e : Expr) : MetaM (Array (Option Name)) := do
@@ -303,7 +303,7 @@ partial def getPostNames (e : Expr) : MetaM (Array (Option Name)) := do
   else
     match_expr e with
     | Std.WP.curry _ _ _ f => getPostNames f
-    | Std.WP.predn _ _ p => getPostNames p
+    | Std.WP.uncurry' _ _ p => getPostNames p
     | Function.uncurry _ _ _ f => getPostNames f
     | Function.uncurry _ _ _ f _ => getPostNames f
     | _ => pure #[]
@@ -498,15 +498,15 @@ def introPrettyEquality (args : Args) (fExpr : Expr) (outputFVars : Array Expr) 
 def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
   TacticM (Option MainGoal) := do
   withTraceNode `Step (fun _ => pure m!"introOutputs") do
-  /- Decompose nested uses of `predn` to introduce a sequence of universal quantifiers.
+  /- Decompose nested uses of `uncurry'` to introduce a sequence of universal quantifiers.
      Note that at the same time we simplify the (monadic) continuation by using
      some monad simp theorems. -/
-  let some _ ← withTraceNode `Step (fun _ => pure m!"simpAt: decomposing nested uses of `predn`") do
+  let some _ ← withTraceNode `Step (fun _ => pure m!"simpAt: decomposing nested uses of `uncurry'`") do
     Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
             { simpThms := #[← stepSimpExt.getTheorems],
               addSimpThms :=
-                #[``Std.WP.qimp_spec_predn, ``Std.WP.qimp_spec_unit,
-                  ``Std.WP.qimp_predn, ``Std.WP.qimp_unit,
+                #[``Std.WP.qimp_spec_uncurry', ``Std.WP.qimp_spec_unit,
+                  ``Std.WP.qimp_uncurry', ``Std.WP.qimp_unit,
                   ``Std.WP.qimp_spec_exists, ``Std.WP.qimp_exists,
                   -- `Prod.forall`/`Prod.exists` split `∀ x : α × β, p x` into
                   -- `∀ a b, p (a, b)`, so a tuple post-binder produces one
@@ -515,14 +515,14 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
                   ``forall_unit, ``true_imp_iff] }
             (.targets #[] true)
     | trace[Step] "The main goal was solved!"; return none
-  traceGoalWithNode "goal after decomposing the nested `predn`"
+  traceGoalWithNode "goal after decomposing the nested `uncurry'`"
 
   /- Eliminate `qimp_spec`/`qimp` to reveal `imp` and decompose the post-condition into a sequence
      of implications. `Prod.forall` splits any leftover tuple-typed quantifier into separate
      binders; `Function.uncurry_apply_pair` then reduces the now-syntactic-pair argument. -/
   let some _ ← withTraceNode `Step (fun _ => pure m!"simpAt: eliminating `qimp_spec` and `qimp`") do
     Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
-            { declsToUnfold := #[``Std.WP.curry, ``Std.WP.predn]
+            { declsToUnfold := #[``Std.WP.curry, ``Std.WP.uncurry']
               addSimpThms :=
                 #[``Std.WP.qimp_spec_iff, ``Std.WP.qimp_iff,
                   ``Std.WP.imp_and_iff,

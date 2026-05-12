@@ -14,7 +14,7 @@ def readPair (xs : List Nat) (i : Nat) : Result (Nat × (Nat → List Nat)) :=
 @[step]
 theorem readPair_spec (xs : List Nat) (i : Nat) :
     readPair xs i ⦃ x y => x = xs.getD i 0 ∧ y = (fun y => xs.set i y) ⦄ := by
-  unfold readPair; simp [WP.spec_ok, WP.predn]
+  unfold readPair; simp [WP.spec_ok, WP.uncurry']
 
 def readSingle (xs : List Nat) (i : Nat) : Result Nat :=
   ok (xs.getD i 0)

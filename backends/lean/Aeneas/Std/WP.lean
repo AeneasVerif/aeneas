@@ -34,38 +34,21 @@ def spec_general (x:Result α) (p:Post α) :=
 def spec {α} (x:Result α) (p:Post α) :=
   theta x p
 
-/-- Auxiliary helper that we use to decompose tuples in post-conditions.
+/-- Variant of `Function.uncurry` used to decompose tuples in post-conditions.
 
-Example: `f 0 ⦃ x y z => ... ⦄` desugars to `spec (f 0) (predn fun x => predn fun y z => ...)`.
+Similar to `Function.uncurry` but specialized for `Prop` and delaborated differently:
+`uncurry'` is delaborated as `x y => ...` (separate binders), while
+`Function.uncurry` is delaborated as `(x, y) => ...` (tuple binder).
+We use this in the Hoare triple notation `⦃ ⦄`.
 
-**Remark:** an alternative would be to parameterize `predn` with a list of types, e.g.:
-```lean
-def prednTy (tys : List α) : Type :=
-  match tys with
-  | [] => Prop
-  | ty :: tys => ty → prednTy tys
-
-def prodTy (tys : List α) : Type :=
-  match tys with
-  | [] => ()
-  | [x] => x
-  | ty :: tys => (ty, prodTy tys)
-
-def predn {tys : List α} (p : prednTy tys) : prodTy tys → Prop
-```
-but there are two issues:
-- this kind of dependent types is hard to work with
-- it forces all the types to live in the same universe, which is especially cumbersome as we do not have
-  universe cumulativity
-
-**Remark:** this is the same as `Function.uncurry`, but specialized for `Prop` and delaborated
-differently (we delaborate `predn` to `x y => ...` and `uncurry` to `(x, y) => ...`).
+Example: `f 0 ⦃ x y z => ... ⦄` desugars to
+`spec (f 0) (uncurry' fun x => uncurry' fun y z => ...)`.
 -/
-def predn {α β} (p : α → β → Prop) : α × β → Prop :=
+def uncurry' {α β} (p : α → β → Prop) : α × β → Prop :=
   fun (x, y) => p x y
 
-@[simp] theorem predn_pair x y (p : α → β → Prop) : predn p (x, y) = p x y := by simp [predn]
-@[defeq] theorem predn_eq x (p : α → β → Prop) : predn p x = p x.fst x.snd := by simp [predn]
+@[simp] theorem uncurry'_pair x y (p : α → β → Prop) : uncurry' p (x, y) = p x y := by simp [uncurry']
+@[defeq] theorem uncurry'_eq x (p : α → β → Prop) : uncurry' p x = p x.fst x.snd := by simp [uncurry']
 
 @[simp, grind =, agrind =]
 theorem spec_ok (x : α) : spec (ok x) p ↔ p x := by simp [spec, theta, wp_return]
@@ -126,13 +109,13 @@ theorem imp_and_iff (P0 P1 Q : Prop) : imp (P0 ∧ P1) Q ↔ P0 → imp P1 Q := 
 /-- Implication with quantifier -/
 def qimp {α} (P₀ P₁ : Post α) : Prop := ∀ x, P₀ x → P₁ x
 
-/-- We use this lemma to decompose nested `predn` predicates into a sequence of universal quantifiers. -/
+/-- We use this lemma to decompose nested `uncurry'` predicates into a sequence of universal quantifiers. -/
 @[simp]
-def qimp_predn {α₀ α₁} (P : α₀ → α₁ → Prop) (Q : α₀ × α₁ → Prop) :
-  qimp (predn P) Q ↔ ∀ x, qimp (P x) (curry Q x) := by
+def qimp_uncurry' {α₀ α₁} (P : α₀ → α₁ → Prop) (Q : α₀ × α₁ → Prop) :
+  qimp (uncurry' P) Q ↔ ∀ x, qimp (P x) (curry Q x) := by
   simp [qimp, curry]
 
-/-- We use this lemma to eliminate `imp` after we decomposed the nested `predn` -/
+/-- We use this lemma to eliminate `imp` after we decomposed the nested `uncurry'` -/
 theorem qimp_iff {α} (P₀ P₁ : Post α) : qimp P₀ P₁ ↔ ∀ x, imp (P₀ x) (P₁ x) := by simp [qimp, imp]
 
 /-- Alternative to `spec_mono`: we control the introduction of universal quantifiers by introducing `imp`. -/
@@ -162,13 +145,13 @@ theorem spec_bind' {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α
   · simp
     apply Hm
 
-/-- We use this lemma to decompose nested `predn` predicates into a sequence of universal quantifiers. -/
+/-- We use this lemma to decompose nested `uncurry'` predicates into a sequence of universal quantifiers. -/
 @[simp]
-def qimp_spec_predn {α₀ α₁ β} (P : α₀ → α₁ → Prop) (k : α₀ × α₁ → Result β) (Q : β → Prop) :
-  qimp_spec (predn P) k Q ↔ ∀ x, qimp_spec (P x) (curry k x) Q := by
+def qimp_spec_uncurry' {α₀ α₁ β} (P : α₀ → α₁ → Prop) (k : α₀ × α₁ → Result β) (Q : β → Prop) :
+  qimp_spec (uncurry' P) k Q ↔ ∀ x, qimp_spec (P x) (curry k x) Q := by
   simp [qimp_spec, curry]
 
-/-- We use this lemma to eliminate `imp_spec` after we decomposed the nested `predn` -/
+/-- We use this lemma to eliminate `imp_spec` after we decomposed the nested `uncurry'` -/
 def qimp_spec_iff {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) :
   qimp_spec P k Q ↔ ∀ x, imp (P x) (spec (k x) Q) := by
   simp [qimp_spec, imp]
@@ -178,7 +161,7 @@ error: unsolved goals
 ⊢ ∀ (x : Nat), qimp_spec (fun y => 0 < x + y) (curry (fun x => ok (x.fst + x.snd)) x) fun z => 0 < z
 -/
 #guard_msgs in
-example : qimp_spec (predn fun x y => x + y > 0) (fun (x, y) => .ok (x + y)) (fun z => z > 0) := by
+example : qimp_spec (uncurry' fun x y => x + y > 0) (fun (x, y) => .ok (x + y)) (fun z => z > 0) := by
   simp
 
 @[simp]
@@ -276,7 +259,7 @@ macro_rules
       | x :: xs =>
         let xs ← run (depth + 1) xs
         let inner ← mkBinderFun depth x xs
-        `(Aeneas.Std.WP.predn $inner)
+        `(Aeneas.Std.WP.uncurry' $inner)
     let post ← run 0 xs
     `(Aeneas.Std.WP.spec $e $post)
 
@@ -364,9 +347,9 @@ partial def destructureUncurryChain (slots : Array PostBinder) (body : Expr)
     else k slots body'
   | _ => k slots body'
 
-/-- Strip `predn` and `Function.uncurry` wrappers from a post-condition expression,
+/-- Strip `uncurry'` and `Function.uncurry` wrappers from a post-condition expression,
 collecting the bound names as (possibly nested) `PostBinder` slots. -/
-partial def telescopePrednUncurry (vars : Array PostBinder) (e : SubExpr)
+partial def telescopeUncurry (vars : Array PostBinder) (e : SubExpr)
     (k : Array PostBinder → SubExpr → Delab) : Delab := do
   let expr := e.expr.consumeMData
   let pos := e.pos
@@ -380,19 +363,19 @@ partial def telescopePrednUncurry (vars : Array PostBinder) (e : SubExpr)
       -- that destructure the slots.
       let outerSlots := #[PostBinder.tuple (mkSingle x1) (mkSingle x2)]
       destructureUncurryChain outerSlots body fun newSlots newBody =>
-        telescopePrednUncurry (vars ++ newSlots) { expr := newBody, pos } k
+        telescopeUncurry (vars ++ newSlots) { expr := newBody, pos } k
     ) (finish vars · ·)
-  | predn _ _ p =>
-    telescopePrednUncurry vars { expr := p, pos := (pos.push 1).push 2 } k
+  | uncurry' _ _ p =>
+    telescopeUncurry vars { expr := p, pos := (pos.push 1).push 2 } k
   | _ =>
     Meta.lambdaTelescope expr fun args body => do
       let body' := body.consumeMData
       let isWrapper := match_expr body' with
-        | predn _ _ _ => true
+        | uncurry' _ _ _ => true
         | Function.uncurry _ _ _ _ => true
         | _ => false
       if args.size == 1 && isWrapper then
-        telescopePrednUncurry (vars.push (mkSingle args[0]!)) { expr := body, pos } k
+        telescopeUncurry (vars.push (mkSingle args[0]!)) { expr := body, pos } k
       else
         finish vars args body
 
@@ -405,7 +388,7 @@ def delabSpec : Delab := do
   let monadExpr ← delabSubExpr { expr := args[1]!, pos := (pos.push 0).push 1 }
   let post : SubExpr := { expr := args[2]!, pos := pos.push 1 }
   -- Decompose the post-condition by stripping the (uncurried) binders
-  telescopePrednUncurry #[] post fun vars post => do
+  telescopeUncurry #[] post fun vars post => do
   let post ← delabSubExpr post
   if vars.size = 0 then
     -- This is the case where the post-condition doesn't have a lambda
@@ -564,15 +547,15 @@ example (x : Nat) :
     -- step as ⟨ y, z ⟩
     apply spec_bind'
     . apply add2_spec'
-    simp -failIfUnchanged only [qimp_spec_predn] -- introduce the quantifiers
+    simp -failIfUnchanged only [qimp_spec_uncurry'] -- introduce the quantifiers
     simp only [qimp_spec_iff, curry] -- eliminate `qimp_spec` and `curry`
     simp only [imp] -- eliminate `imp`
     intro y z h0
     -- step as ⟨ y1, z1⟩
     apply spec_mono'
     . apply add2_spec'
-    simp -failIfUnchanged only [qimp_predn] -- introduce the quantifiers
-    simp only [qimp_iff, curry, predn] -- eliminate `qimp_spec` and `curry`
+    simp -failIfUnchanged only [qimp_uncurry'] -- introduce the quantifiers
+    simp only [qimp_iff, curry, uncurry'] -- eliminate `qimp_spec` and `curry`
     simp only [imp]
     intros y z h
     --
