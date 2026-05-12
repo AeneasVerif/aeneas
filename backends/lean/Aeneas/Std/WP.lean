@@ -57,6 +57,9 @@ but there are two issues:
 - this kind of dependent types is hard to work with
 - it forces all the types to live in the same universe, which is especially cumbersome as we do not have
   universe cumulativity
+
+**Remark:** this is the same as `Function.uncurry`, but specialized for `Prop` and delaborated
+differently (we delaborate `predn` to `x y => ...` and `uncurry` to `(x, y) => ...`).
 -/
 def predn {α β} (p : α → β → Prop) : α × β → Prop :=
   fun (x, y) => p x y
@@ -221,7 +224,10 @@ scoped syntax:54 term:55 " ⦃ " term " ⦄" : term
 
 open Lean PrettyPrinter
 
-/-- Build a `Function.uncurry` chain wrapping a curried lambda over `xs`. -/
+/-- Build a `Function.uncurry` chain wrapping a curried lambda over `xs`.
+
+Given `x0`, ..., `xn` and `body`, generates the (syntactic) term `fun (x0, ..., xn) => body`.
+-/
 partial def buildUncurryLam (xs : List (TSyntax `term)) (body : TSyntax `term) :
     MacroM (TSyntax `term) := do
   let uncurryIdent := mkIdent ``Function.uncurry
@@ -233,6 +239,7 @@ partial def buildUncurryLam (xs : List (TSyntax `term)) (body : TSyntax `term) :
     let inner ← buildUncurryLam rest body
     `($uncurryIdent (fun $a => $inner))
 
+/-- Helper to elaborate `binder => body` when binder is a tuple - this supports nested tuples. -/
 partial def mkBinderFun (depth : Nat) (binder : Term) (body : Term) : MacroM Term := do
   match binder with
   | `( ($a, $bs,*) ) =>
@@ -242,7 +249,7 @@ partial def mkBinderFun (depth : Nat) (binder : Term) (body : Term) : MacroM Ter
     for (x, idx) in xs.zipIdx.reverse do
       match x with
       | `( ($_, $_,*) ) =>
-        -- Fresh identifier from depth + index 
+        -- Fresh identifier from depth + index
         let freshIdent := mkIdent $ .mkSimple s!"_p_{depth}_{idx}"
         let inner ← mkBinderFun (depth + 1) x wrappedBody
         wrappedBody ← `($inner $freshIdent)
@@ -359,7 +366,7 @@ partial def destructureUncurryChain (slots : Array PostBinder) (body : Expr)
 
 /-- Strip `predn` and `Function.uncurry` wrappers from a post-condition expression,
 collecting the bound names as (possibly nested) `PostBinder` slots. -/
-partial def telescopePredn (vars : Array PostBinder) (e : SubExpr)
+partial def telescopePrednUncurry (vars : Array PostBinder) (e : SubExpr)
     (k : Array PostBinder → SubExpr → Delab) : Delab := do
   let expr := e.expr.consumeMData
   let pos := e.pos
@@ -373,10 +380,10 @@ partial def telescopePredn (vars : Array PostBinder) (e : SubExpr)
       -- that destructure the slots.
       let outerSlots := #[PostBinder.tuple (mkSingle x1) (mkSingle x2)]
       destructureUncurryChain outerSlots body fun newSlots newBody =>
-        telescopePredn (vars ++ newSlots) { expr := newBody, pos } k
+        telescopePrednUncurry (vars ++ newSlots) { expr := newBody, pos } k
     ) (finish vars · ·)
   | predn _ _ p =>
-    telescopePredn vars { expr := p, pos := (pos.push 1).push 2 } k
+    telescopePrednUncurry vars { expr := p, pos := (pos.push 1).push 2 } k
   | _ =>
     Meta.lambdaTelescope expr fun args body => do
       let body' := body.consumeMData
@@ -385,7 +392,7 @@ partial def telescopePredn (vars : Array PostBinder) (e : SubExpr)
         | Function.uncurry _ _ _ _ => true
         | _ => false
       if args.size == 1 && isWrapper then
-        telescopePredn (vars.push (mkSingle args[0]!)) { expr := body, pos } k
+        telescopePrednUncurry (vars.push (mkSingle args[0]!)) { expr := body, pos } k
       else
         finish vars args body
 
@@ -397,7 +404,8 @@ def delabSpec : Delab := do
   let args := e.getAppArgs
   let monadExpr ← delabSubExpr { expr := args[1]!, pos := (pos.push 0).push 1 }
   let post : SubExpr := { expr := args[2]!, pos := pos.push 1 }
-  telescopePredn #[] post fun vars post => do
+  -- Decompose the post-condition by stripping the (uncurried) binders
+  telescopePrednUncurry #[] post fun vars post => do
   let post ← delabSubExpr post
   if vars.size = 0 then
     -- This is the case where the post-condition doesn't have a lambda
@@ -427,11 +435,21 @@ example : let P (x : Nat) := x = 0; ok 0 ⦃ P ⦄ := by simp
 -- Tuple followed by scalar
 example : ok ((0, 1), 2) ⦃ (a, b) c => a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by simp
 
+-- Same but with nesting
+example : ok ((0, 1), 2) ⦃ ((a, b), c) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by simp
+
 -- Scalar followed by tuple
 example : ok (0, (1, 2)) ⦃ a (b, c) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by simp
 
+-- Same but with nesting
+example : ok (0, (1, 2)) ⦃ (a, (b, c)) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by simp
+
 -- Two tuples in sequence
 example : ok ((0, 1), (2, 3)) ⦃ (a, b) (c, d) =>
+    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ := by simp
+
+-- Same but with nesting
+example : ok ((0, 1), (2, 3)) ⦃ ((a, b), (c, d)) =>
     a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ := by simp
 
 -- A single nested tuple
