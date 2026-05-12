@@ -1,4 +1,5 @@
 import Aeneas.Std.Primitives
+import Aeneas.Std.Delab
 import Std.Do
 import Aeneas.Tactic.Solver.Grind.Init
 
@@ -33,49 +34,6 @@ def spec_general (x:Result α) (p:Post α) :=
 
 def spec {α} (x:Result α) (p:Post α) :=
   theta x p
-
-/-- Aeneas-internal version of `Function.uncurry` for tuple destructuring in bind
-continuations. We use our own copy so that none of the `simp`/`step` attribute
-manipulations we perform on it (e.g., inside the `step` tactic) impact user-written
-specs that use `Function.uncurry` directly.
-
-`WP.uncurry` is purely internal to Aeneas' elaboration pipeline and should never
-be directly manipulated by the user. -/
-@[inline] def uncurry {α β γ} (f : α → β → γ) : α × β → γ :=
-  fun (a, b) => f a b
-
-@[simp, grind =] theorem uncurry_apply_pair {α β γ} (f : α → β → γ) (a : α) (b : β) :
-    uncurry f (a, b) = f a b := rfl
-
-/- Allow `partial_fixpoint` to see through `WP.uncurry` in bind continuations.
-This is needed because the custom `do` elaborator generates
-`e >>= WP.uncurry fun a b => rest` for tuple-destructuring `let (a, b) ← e`. -/
-section
-open Lean.Order
-
-@[partial_fixpoint_monotone]
-theorem monotone_uncurry
-    {α : Type u} {β : Type v} {φ : Sort w} [PartialOrder φ]
-    {γ : Sort z} [PartialOrder γ]
-    (f : γ → α → β → φ)
-    (hmono : monotone f) :
-    monotone (fun x => uncurry (f x)) := by
-  intro x y hxy p
-  simp [uncurry]
-  exact monotone_apply p.2 _ (monotone_apply p.1 _ hmono) x y hxy
-
-@[partial_fixpoint_monotone]
-theorem monotone_uncurry_applied
-    {α : Type u} {β : Type v} {φ : Sort w} [PartialOrder φ]
-    {γ : Sort z} [PartialOrder γ]
-    (f : γ → α → β → φ) (p : α × β)
-    (hmono : monotone f) :
-    monotone (fun x => uncurry (f x) p) := by
-  intro x y hxy
-  simp [uncurry]
-  exact monotone_apply p.2 _ (monotone_apply p.1 _ hmono) x y hxy
-
-end
 
 /-- Variant of `uncurry` used to decompose tuples in post-conditions.
 
@@ -256,7 +214,7 @@ Given `x0`, ..., `xn` and `body`, generates the (syntactic) term `fun (x0, ..., 
 -/
 partial def buildUncurryLam (xs : List (TSyntax `term)) (body : TSyntax `term) :
     MacroM (TSyntax `term) := do
-  let uncurryIdent := mkIdent ``Aeneas.Std.WP.uncurry
+  let uncurryIdent := mkIdent ``uncurry
   match xs with
   | [] => pure body
   | [x] => `(fun $x => $body)
@@ -302,7 +260,7 @@ macro_rules
       | x :: xs =>
         let xs ← run (depth + 1) xs
         let inner ← mkBinderFun depth x xs
-        `(Aeneas.Std.WP.uncurry' $inner)
+        `(uncurry' $inner)
     let post ← run 0 xs
     `(Aeneas.Std.WP.spec $e $post)
 
@@ -312,135 +270,129 @@ macro_rules
 
 /-!
 # Pretty-printing
+
+The `⦃ ⦄` macro produces postconditions using three wrappers:
+- `uncurry' (fun x => ...)` — separate binders, printed as `x y z => ...`
+- `uncurry (fun a b => ...)` — tuple binder, printed as `(a, b) => ...`
+- Plain `fun x => ...` — scalar binder
+
+`uncurry'` is never nested: it only appears at the outermost level to separate
+top-level product components. `uncurry` can be nested inside `uncurry'` or other
+`uncurry` applications (for sub-tuples like `((a, b), c)`).
+
+**Examples of elaborated postconditions:**
+
+| Source | Elaborated form |
+|---|---|
+| `⦃ r => body ⦄` | `fun r => body` |
+| `⦃ (a, b) => body ⦄` | `uncurry (fun a b => body)` |
+| `⦃ x y z => body ⦄` | `uncurry' (fun x => uncurry' (fun y z => body))` |
+| `⦃ (a, b) c => body ⦄` | `uncurry' (uncurry (fun a b => fun c => body))` |
+| `⦃ a (b, c) => body ⦄` | `uncurry' (fun a => uncurry (fun b c => body))` |
+| `⦃ ((a,b), c) => body ⦄` | `uncurry (fun _p c => (uncurry (fun a b => body)) _p)` |
+
+The delaborator reverses this: given a `spec e post` expression, it peels the
+wrapper layers to recover the binder patterns and body, producing `⦃ ... => ... ⦄`.
+
+The `uncurry`/lambda machinery (`enterLams`, `enterUncurryChain`, `delabBinders`)
+is reused from `Do.Delab` (which handles the same `uncurry` chains in `do`-notation).
+The only WP-specific logic is the `uncurry'`-peeling loop on top.
 -/
 
 open Delaborator SubExpr
+open Std.Delab (enterLams enterUncurryChain delabBinders buildTupleTerm delabUncurryAsTuple)
 
-def delabSubExpr (e : SubExpr) : Delab := withTheReader SubExpr (fun _ => e) delab
+/-- Enter exactly the binders of a single `uncurry` level (up to 2).
+Unlike `enterUncurryChain` (which flattens everything), this stops after 2 binders
+so the continuation lambdas are left untouched.
 
-/-- A post-condition binder slot, as collected by `telescopePredn` -/
-inductive PostBinder where
-  | single (e : SubExpr)
-  | tuple (left right : PostBinder)
-deriving Inhabited
+Example: on `fun a b => fun c => body`, collects `[a, b]` and leaves the reader
+at `fun c => body`. -/
+private partial def enterUncurryOnce (acc : Array (FVarId × Name))
+    (k : Array (FVarId × Name) → DelabM α) : DelabM α := do
+  match (← getExpr) with
+  | .lam n _ _ _ =>
+    withBindingBody' n pure fun fv => do
+      let acc' := acc.push (fv.fvarId!, n)
+      if acc'.size >= 2 then k acc'
+      else if (← getExpr).isAppOfArity ``uncurry 4 then
+        withAppArg <| enterUncurryOnce acc' k
+      else enterUncurryOnce acc' k
+  | _ => k acc
 
-/-- Render a `PostBinder` as a `Term`. Single binders delab through
-  `elabSubExpr` while tuple binders combine into a tuple syntax. -/
-partial def PostBinder.toTerm : PostBinder → Delab
-  | .single e => delabSubExpr e
-  | .tuple l r => do
-    let tl ← l.toTerm
-    let tr ← r.toTerm
-    `(($tl, $tr))
+/-- Is the expression an `uncurry'` or `uncurry` wrapper? -/
+private def isPostBinderWrapper (e : Expr) : Bool :=
+  match_expr e.consumeMData with
+  | uncurry' _ _ _ => true
+  | uncurry _ _ _ _ => true
+  | _ => false
 
-mutual
+/-- Walk the postcondition expression, peeling `uncurry'`/`uncurry`/lambda layers.
+Returns `(binders, bodyTerm)` where each binder is a `Term` (either a plain
+name like `x` or a tuple pattern like `(a, b)`).
 
-/-- If any leaf `single` slot in `slot` matches the fvar `fv`, replace it with
-`tuple l r` and return the updated tree. Otherwise return `none` when `fv`
-is not present anywhere under `slot`. -/
-partial def PostBinder.tryDestructure (slot : PostBinder) (fv : Expr)
-    (l r : PostBinder) : Option PostBinder :=
-  match slot with
-  | .single e =>
-    if e.expr == fv then some (.tuple l r) else none
-  | .tuple left right =>
-    if let some left' := left.tryDestructure fv l r then
-      some (.tuple left' right)
-    else if let some right' := right.tryDestructure fv l r then
-      some (.tuple left right')
-    else none
+- `uncurry'` at the top: peel one binder (tuple or scalar), recurse
+- `uncurry` at the top: single tuple binder via `enterUncurryChain` + `delabBinders`
+- Lambda at the top: scalar binders via `enterLams` + `delabBinders`
+-/
+private partial def delabPostBinders : DelabM (Array Term × Term) := do
+  match_expr (← getExpr).consumeMData with
+  | uncurry' _ _ _ =>
+    /- `uncurry' f`: dive into `f` (arg 2) and peel one binder.
+       If `f = uncurry g`, the binder is a tuple `(a, b)`.
+       If `f = fun x => rest`, the binder is scalar `x`. -/
+    withNaryArg 2 do
+      match_expr (← getExpr).consumeMData with
+      | uncurry _ _ _ _ =>
+        -- Tuple binder: peel one uncurry level, then recurse for more binders
+        withAppArg <| enterUncurryOnce #[] fun tupleBinders => do
+          let (pats, (moreBinders, body)) ← delabBinders tupleBinders.toList delabPostBinders
+          let tupleTerm ← buildTupleTerm pats
+          return (#[tupleTerm] ++ moreBinders, body)
+      | _ => delabLamsThenRecurse
+  | uncurry _ _ _ _ =>
+    /- Single tuple binder `(a, b) => body` (no `uncurry'` wrapper). -/
+    withAppArg do
+      let (tupleTerm, body) ← delabUncurryAsTuple delab
+      return (#[tupleTerm], body)
+  | _ => delabLamsThenRecurse
+where
+  /-- Peel plain lambda binders, then either recurse or terminate.
 
-/-- Try to find a leaf `single` slot whose underlying fvar is `fv` in `slots`
-and destructure it into `tuple l r`. Returns `none` when `fv` is absent. -/
-private partial def tryDestructureSlots (slots : Array PostBinder) (fv : Expr)
-    (l r : PostBinder) : Option (Array PostBinder) := do
-  for (slot, idx) in slots.zipIdx do
-    if let some slot' := slot.tryDestructure fv l r then
-      return slots.set! idx slot'
-  none
+  This is used in two situations:
+  - Inside `uncurry'`, when the argument is a plain lambda (not `uncurry`):
+    e.g., `uncurry' (fun x => uncurry' (fun y z => body))` — after entering
+    `fun x =>`, the body starts with another `uncurry'`, so we recurse.
+  - At the top level, when the postcondition is a plain lambda without any
+    `uncurry'`/`uncurry` wrapper: e.g., `fun r => body`.
 
-end
+  The key logic: if `enterLams` peels exactly one lambda and the body is a
+  wrapper (`uncurry'` or `uncurry`), this lambda is a scalar binder in a
+  multi-binder postcondition — recurse via `delabPostBinders` to peel more.
+  Otherwise these are terminal binders (e.g., `fun y z => body` at the last
+  `uncurry'` level) — delab the body directly. -/
+  delabLamsThenRecurse : DelabM (Array Term × Term) := do
+    if (← getExpr).consumeMData.isLambda then
+      enterLams #[] fun binders => do
+        if binders.size == 1 && isPostBinderWrapper (← getExpr) then
+          let (pats, (moreBinders, body)) ← delabBinders binders.toList delabPostBinders
+          return (pats ++ moreBinders, body)
+        else
+          let (pats, body) ← delabBinders binders.toList delab
+          return (pats, body)
+    else
+      return (#[], ← delab)
 
-/-- Helper to match uncurry binders, handling eta-reduction. -/
-private def matchUncurryBinders (f : Expr) (k : Expr → Expr → Expr → Delab)
-    (fallback : Array Expr → Expr → Delab) : Delab :=
-  Meta.lambdaBoundedTelescope f 2 fun args body => do
-    if args.size == 2 then k args[0]! args[1]! body
-    else if args.size == 1 then
-      let p2 := Expr.fvar (← Lean.mkFreshFVarId)
-      k args[0]! p2 (Expr.app body p2)
-    else fallback args body
-
-/-- Peel `WP.uncurry` apps threading the new sub-binders back into the
-`slots` tree, and yield the final body via `k`. -/
-partial def destructureUncurryChain (slots : Array PostBinder) (body : Expr)
-    (k : Array PostBinder → Expr → Delab) : Delab := do
-  let body' := body.consumeMData
-  match_expr body' with
-  | Aeneas.Std.WP.uncurry _ _ _ f x =>
-    let x := x.consumeMData
-    if x.isFVar then
-      matchUncurryBinders f (fun x1 x2 body => do
-        let s1 := .single { expr := x1, pos := .root }
-        let s2 := .single { expr := x2, pos := .root }
-        if let some slots' := tryDestructureSlots slots x s1 s2 then
-          destructureUncurryChain slots' body k
-        else k slots body'
-      ) (fun _ _ => k slots body')
-    else k slots body'
-  | _ => k slots body'
-
-/-- Strip `uncurry'` and `uncurry` wrappers from a post-condition expression,
-collecting the bound names as (possibly nested) `PostBinder` slots. -/
-partial def telescopeUncurry (vars : Array PostBinder) (e : SubExpr)
-    (k : Array PostBinder → SubExpr → Delab) : Delab := do
-  let expr := e.expr.consumeMData
-  let pos := e.pos
-  let mkSingle (arg : Expr) : PostBinder := .single { expr := arg, pos }
-  let finish (vars : Array PostBinder) (args : Array Expr) (body : Expr) : Delab :=
-    k (vars ++ args.map mkSingle) { expr := body, pos }
-  match_expr expr with
-  | Aeneas.Std.WP.uncurry _ _ _ f =>
-    matchUncurryBinders f.consumeMData (fun x1 x2 body => do
-      -- Walk the body, absorbing any `WP.uncurry _ slot` applications
-      -- that destructure the slots.
-      let outerSlots := #[PostBinder.tuple (mkSingle x1) (mkSingle x2)]
-      destructureUncurryChain outerSlots body fun newSlots newBody =>
-        telescopeUncurry (vars ++ newSlots) { expr := newBody, pos } k
-    ) (finish vars · ·)
-  | uncurry' _ _ p =>
-    telescopeUncurry vars { expr := p, pos := (pos.push 1).push 2 } k
-  | _ =>
-    Meta.lambdaTelescope expr fun args body => do
-      let body' := body.consumeMData
-      let isWrapper := match_expr body' with
-        | uncurry' _ _ _ => true
-        | Aeneas.Std.WP.uncurry _ _ _ _ => true
-        | _ => false
-      if args.size == 1 && isWrapper then
-        telescopeUncurry (vars.push (mkSingle args[0]!)) { expr := body, pos } k
-      else
-        finish vars args body
-
+/-- Delaborator for `WP.spec e post` → `e ⦃ binders => body ⦄`. -/
 @[scoped delab app.Aeneas.Std.WP.spec]
 def delabSpec : Delab := do
-  let e ← getExpr
-  let pos ← getPos
-  guard $ e.isAppOfArity' ``spec 3 -- only delab full applications this way
-  let args := e.getAppArgs
-  let monadExpr ← delabSubExpr { expr := args[1]!, pos := (pos.push 0).push 1 }
-  let post : SubExpr := { expr := args[2]!, pos := pos.push 1 }
-  -- Decompose the post-condition by stripping the (uncurried) binders
-  telescopeUncurry #[] post fun vars post => do
-  let post ← delabSubExpr post
-  if vars.size = 0 then
-    -- This is the case where the post-condition doesn't have a lambda
-    `($monadExpr ⦃ $post ⦄)
+  guard $ (← getExpr).isAppOfArity' ``spec 3
+  let monadExpr ← withNaryArg 1 delab
+  let (binders, bodyTerm) ← withNaryArg 2 delabPostBinders
+  if binders.size == 0 then
+    `($monadExpr ⦃ $bodyTerm ⦄)
   else
-    let varTerms ← vars.mapM PostBinder.toTerm
-    let var := varTerms[0]!
-    let varTail := varTerms.drop 1
-    `($monadExpr ⦃ $var $varTail* => $post ⦄)
+    `($monadExpr ⦃ $(binders[0]!) $(binders.drop 1)* => $bodyTerm ⦄)
 
 /-!
 # Tests
@@ -488,6 +440,10 @@ example : ok ((0, 1), (2, 3)) ⦃ ((a, b), (c, d)) =>
 -- Scalar, tuple, nested tuple
 example : ok (0, (1, 2), (3, (4, 5))) ⦃ a (b, c) (d, (e, f)) =>
     a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ∧ e = 4 ∧ f = 5 ⦄ := by simp
+
+-- More nesting
+example : ok ((0, (1, (2, 3))), 4) ⦃ ((a, (b, (c, d))), e) => a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ∧ e = 4 ⦄
+  := by simp
 
 /-! ### Pretty-printing round-trip checks -/
 
