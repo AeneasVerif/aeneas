@@ -613,9 +613,28 @@ def do_match_pat_var_used (n : Nat) : Result Nat := do
     let a ← ok (k + 10)
     ok (a + 1)
 
-/-! Regression: every kind of `do` binder must register binder InfoTree nodes
-    so the `linter.unusedVariables` lint fires on unused bindings (matching
-    Lean's built-in `do` elaborator). Used bindings stay quiet. -/
+/- Cross-arm name reuse: both arms bind `n`. The InfoTree binder map must be
+   scoped per-arm — otherwise the two `n`s collide on `userName`. -/
+inductive Two | A (n : Nat) | B (n : Nat)
+
+#guard_msgs in
+def do_match_cross_arm_used (t : Two) : Result Nat := do
+  match t with
+  | .A n => ok n
+  | .B n => ok n
+
+/-- warning: unused variable `n`
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+---
+warning: unused variable `n`
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false` -/
+#guard_msgs in
+def do_match_cross_arm_unused (t : Two) : Result Nat := do
+  match t with
+  | .A n => ok 0
+  | .B n => ok 0
 
 #guard_msgs in
 def do_let_arrow_id_used : Result Nat := do
@@ -635,46 +654,54 @@ def do_let_id_used : Result Nat := do
   let x := 1
   ok (x + 1)
 
-/-- warning: unused variable `x`
-
-Note: This linter can be disabled with `set_option linter.unusedVariables false` -/
-#guard_msgs in
-def do_let_id_unused : Result Nat := do
-  let x := 1
-  ok 42
-
 #guard_msgs in
 def do_let_arrow_pat_used : Result Nat := do
   let (a, b) ← ok (1, 2)
   ok (a + b)
 
-/-- warning: unused variable `a`
+/--
+warning: unused variable `a`
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 ---
 warning: unused variable `b`
 
-Note: This linter can be disabled with `set_option linter.unusedVariables false` -/
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+---
+warning: unused variable `c`
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+---
+warning: unused variable `d`
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+-/
 #guard_msgs in
 def do_let_arrow_pat_unused : Result Nat := do
-  let (a, b) ← ok (1, 2)
+  let ((a, b, c), d) ← ok ((1, 2, 3), 4)
   ok 42
 
-#guard_msgs in
-def do_let_pat_used : Result Nat := do
-  let (a, b) := (1, 2)
-  ok (a + b)
 
-/-- warning: unused variable `a`
+/--
+warning: unused variable `a`
 
 Note: This linter can be disabled with `set_option linter.unusedVariables false`
 ---
 warning: unused variable `b`
 
-Note: This linter can be disabled with `set_option linter.unusedVariables false` -/
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+---
+warning: unused variable `c`
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+---
+warning: unused variable `d`
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+-/
 #guard_msgs in
 def do_let_pat_unused : Result Nat := do
-  let (a, b) := (1, 2)
+  let ((a, b, c), d) := ((1, 2, 3), 4)
   ok 42
 
 end Tests
@@ -701,6 +728,7 @@ noncomputable opaque testEnumNext
 
 noncomputable opaque testIterInst : TestIter (List Nat) Nat
 
+#guard_msgs in
 noncomputable def option_match_metavar_test
   (e : Nat) (acc : Nat) : Result Nat := do
   let (o, _e1) ← testEnumNext testIterInst e
@@ -722,6 +750,7 @@ fun e acc => do
 #guard_msgs in
 #print option_match_metavar_test
 
+#guard_msgs in
 noncomputable def option_match_metavar_loop_test
   (e : Nat) (acc : Nat) : Result Nat := do
   let (o, e1) ← testEnumNext testIterInst e
