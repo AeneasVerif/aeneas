@@ -168,8 +168,10 @@ and id =
   | LocalTraitClauseId of generic_origin * TraitClauseId.id
   | TraitDeclConstructorId of TraitDeclId.id
   | TraitMethodId of TraitDeclId.id * trait_method_id
-  | TraitItemId of TraitDeclId.id * string
-      (** A trait associated item which is not a method *)
+  | TraitTypeId of TraitDeclId.id * assoc_type_id
+      (** A trait associated type *)
+  | TraitConstId of TraitDeclId.id * assoc_const_id
+      (** A trait associated constant *)
   | TraitParentClauseId of TraitDeclId.id * TraitClauseId.id
   | KeywordId
       (** Used for stored various strings like keywords, definitions which
@@ -394,8 +396,11 @@ let strict_collisions (id : id) : bool =
 *)
 let allow_collisions (id : id) : bool =
   match id with
-  | FieldId _ | TraitParentClauseId _ | TraitItemId _ | TraitMethodId _ ->
-      !Config.record_fields_short_names
+  | FieldId _
+  | TraitParentClauseId _
+  | TraitTypeId _
+  | TraitConstId _
+  | TraitMethodId _ -> !Config.record_fields_short_names
   | FunId (Pure _ | FromLlbc (FunId (FBuiltin _), _)) ->
       (* We map several builtin functions to the same id *)
       true
@@ -730,11 +735,21 @@ let id_to_string (span : Meta.span option) (id : id) (ctx : extraction_ctx) :
   | TraitParentClauseId (id, clause_id) ->
       "trait_parent_clause_id: " ^ trait_decl_id_to_string id ^ ", clause_id: "
       ^ TraitClauseId.to_string clause_id
-  | TraitItemId (id, name) ->
-      "trait_item_id: " ^ trait_decl_id_to_string id ^ ", type name: " ^ name
+  | TraitTypeId (id, type_id) ->
+      let type_name =
+        Charon.GAstUtils.get_assoc_type_name ctx.crate id type_id
+      in
+      "trait_type_id: " ^ trait_decl_id_to_string id ^ ", type name: "
+      ^ type_name
+  | TraitConstId (id, const_id) ->
+      let const_name =
+        Charon.GAstUtils.get_assoc_const_name ctx.crate id const_id
+      in
+      "trait_const_id: " ^ trait_decl_id_to_string id ^ ", const name: "
+      ^ const_name
   | TraitMethodId (trait_decl_id, method_id) ->
       let method_name =
-        Charon.GAstUtils.format_method_name ctx.crate trait_decl_id method_id
+        Charon.GAstUtils.get_method_name ctx.crate trait_decl_id method_id
       in
       trait_decl_id_to_string trait_decl_id ^ ", method name: " ^ method_name
 
@@ -788,17 +803,13 @@ let ctx_get_trait_impl (span : Meta.span) (id : trait_impl_id)
     (ctx : extraction_ctx) : string =
   ctx_get (Some span) (TraitImplId id) ctx
 
-let ctx_get_trait_item (span : Meta.span) (id : trait_decl_id)
-    (item_name : string) (ctx : extraction_ctx) : string =
-  ctx_get (Some span) (TraitItemId (id, item_name)) ctx
-
 let ctx_get_trait_const (span : Meta.span) (id : trait_decl_id)
-    (item_name : string) (ctx : extraction_ctx) : string =
-  ctx_get_trait_item span id item_name ctx
+    (const_id : assoc_const_id) (ctx : extraction_ctx) : string =
+  ctx_get (Some span) (TraitConstId (id, const_id)) ctx
 
 let ctx_get_trait_type (span : Meta.span) (id : trait_decl_id)
-    (item_name : string) (ctx : extraction_ctx) : string =
-  ctx_get_trait_item span id item_name ctx
+    (type_id : assoc_type_id) (ctx : extraction_ctx) : string =
+  ctx_get (Some span) (TraitTypeId (id, type_id)) ctx
 
 let ctx_get_trait_method (span : Meta.span) (id : trait_decl_id)
     (method_id : trait_method_id) (ctx : extraction_ctx) : string =
@@ -2078,7 +2089,12 @@ let ctx_compute_var_basename (span : Meta.span) (ctx : extraction_ctx)
           | TPureNat -> "n"
           | TPureInt -> "i")
       | TArrow _ -> "f"
-      | TTraitType (_, name) -> name_from_type_ident name
+      | TTraitType (trait_ref, type_id) ->
+          let name =
+            Charon.GAstUtils.get_assoc_type_name ctx.crate
+              trait_ref.trait_decl_ref.trait_decl_id type_id
+          in
+          name_from_type_ident name
       | TNever | TError -> "x"
       | TDynTrait _ -> "dyn")
 
@@ -2291,12 +2307,10 @@ let ctx_add_adt_projector_names (decl_name : string) (field_names : string list)
 
     - [is_trait_decl_field]: [true] if we are computing the name of a field in a
       trait declaration, [false] if we are computing the name of a function
-      declaration.
-    - [is_fun]: [true] if we're computing the name of a function, [false] if
-      we're computing the name of a const. *)
+      declaration. *)
 let ctx_compute_fun_global_name_no_suffix (item_meta : T.item_meta)
-    (src : item_source) ~(is_trait_decl_field : bool) ~(is_fun : bool)
-    (ctx : extraction_ctx) : string =
+    (src : item_source) ~(is_trait_decl_field : bool) (ctx : extraction_ctx) :
+    string =
   let span = item_meta.span in
   (* Rename the declaration if the user added a [rename] attribute.
 
@@ -2311,51 +2325,45 @@ let ctx_compute_fun_global_name_no_suffix (item_meta : T.item_meta)
      we keep this one.
   *)
   match src with
-  | TraitImplItem (trait_impl_ref, trait_decl_ref, item_name, _) ->
+  | TraitImplItem (trait_impl_ref, trait_decl_ref, item_id, _) ->
       let item_meta =
         if Option.is_some item_meta.attr_info.rename then item_meta
         else
-          (* Lookup the trait declaration. TODO: the trait item impl info
-             should directly give us the id of the method declaration. *)
-          match
-            TraitDeclId.Map.find_opt trait_decl_ref.id ctx.trans_trait_decls
-          with
-          | None ->
-              (* This shouldn't happen - we use the decl meta info as a default value *)
-              item_meta
-          | Some trait_decl -> (
-              if is_fun then
-                (* Lookup the method in the trait items *)
-                match
-                  List.find_opt
-                    (fun (_, name, _) -> name = item_name)
-                    trait_decl.methods
-                with
-                | None -> item_meta
-                | Some (_, _, bound_fn) ->
-                    Option.value
-                      (Option.map
-                         (fun (def : A.fun_decl) -> def.item_meta)
-                         (FunDeclId.Map.find_opt bound_fn.binder_value.fun_id
-                            ctx.trans_ctx.fun_ctx.fun_decls))
-                      ~default:item_meta
-              else
-                (* Lookup the const in the trait items *)
-                match
-                  List.find_opt
-                    (fun (name, _) -> name = item_name)
-                    trait_decl.consts
-                with
-                | None -> item_meta
-                | Some _ ->
+          (* Lookup the trait declaration to find the method/const declaration's
+             meta info (where the [rename] attribute lives). *)
+          Option.value
+            (match
+               TraitDeclId.Map.find_opt trait_decl_ref.id ctx.trans_trait_decls
+             with
+            | None -> None
+            | Some trait_decl -> (
+                match item_id with
+                | AssocIdMethod method_id -> (
+                    match
+                      List.find_opt
+                        (fun (mid, _, _) -> mid = method_id)
+                        trait_decl.methods
+                    with
+                    | None -> None
+                    | Some (_, _, bound_fn) ->
+                        Option.map
+                          (fun (def : A.fun_decl) -> def.item_meta)
+                          (FunDeclId.Map.find_opt bound_fn.binder_value.fun_id
+                             ctx.trans_ctx.fun_ctx.fun_decls))
+                | AssocIdConst _ ->
                     (* TODO: missing item meta information *)
-                    item_meta)
+                    None
+                | AssocIdType _ -> None))
+            (* We use the decl meta info as a default value *)
+            ~default:item_meta
       in
       let rename = item_meta.attr_info.rename in
       let item_name =
         match rename with
         | Some name -> name
-        | None -> item_name
+        | None ->
+            Charon.GAstUtils.get_assoc_item_name ctx.crate trait_decl_ref.id
+              item_id
       in
 
       (* Use the trait impl name *)
@@ -2417,7 +2425,7 @@ let ctx_add_global_decl_and_body (def : global_decl) (ctx : extraction_ctx) :
     extraction_ctx =
   let name =
     ctx_compute_fun_global_name_no_suffix def.item_meta def.src ctx
-      ~is_trait_decl_field:false ~is_fun:false
+      ~is_trait_decl_field:false
   in
   ctx_add def.item_meta.span (GlobalId def.def_id) name ctx
 
@@ -2425,7 +2433,7 @@ let ctx_compute_fun_name (def : fun_decl) (is_trait_decl_field : bool)
     (ctx : extraction_ctx) : string =
   let fname =
     ctx_compute_fun_global_name_no_suffix def.item_meta def.src
-      ~is_trait_decl_field ~is_fun:true ctx
+      ~is_trait_decl_field ctx
   in
   (* Compute the suffix *)
   let suffix = default_fun_suffix def.num_loops def.loop_id def.loop_pos in
@@ -2449,7 +2457,7 @@ let ctx_compute_termination_measure_name (decl : fun_decl)
     (ctx : extraction_ctx) : string =
   let fname =
     ctx_compute_fun_global_name_no_suffix decl.item_meta decl.src
-      ~is_trait_decl_field:false ~is_fun:true ctx
+      ~is_trait_decl_field:false ctx
   in
   let lp_suffix =
     default_fun_suffix decl.num_loops decl.loop_id decl.loop_pos
@@ -2481,7 +2489,7 @@ let ctx_compute_decreases_proof_name (decl : fun_decl) (ctx : extraction_ctx) :
     string =
   let fname =
     ctx_compute_fun_global_name_no_suffix decl.item_meta decl.src
-      ~is_trait_decl_field:false ~is_fun:true ctx
+      ~is_trait_decl_field:false ctx
   in
   let lp_suffix =
     default_fun_suffix decl.num_loops decl.loop_id decl.loop_pos

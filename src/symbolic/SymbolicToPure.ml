@@ -182,7 +182,6 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     consts;
     types;
     methods;
-    method_names = _;
     vtable = _;
   } : A.trait_decl =
     trait_decl
@@ -205,7 +204,7 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
     match_name_find_opt ctx trait_decl.item_meta.name
       (ExtractBuiltin.builtin_trait_decls_map ())
   in
-  if types <> [] && builtin_info = None then
+  if (not (T.AssocTypeId.Map.is_empty types)) && builtin_info = None then
     (* Most associated types are removed by Charon's `--remove-associated-types`. *)
     [%warn] span
       ("Found an associated type in a trait declaration; trait associated \
@@ -218,20 +217,21 @@ let translate_trait_decl (ctx : Contexts.decls_ctx) (trait_decl : A.trait_decl)
           (IdTraitDecl trait_decl.def_id));
   let types =
     List.map
-      (fun (t : A.trait_assoc_ty T.binder) ->
+      (fun ((type_id, t) : T.AssocTypeId.id * A.trait_assoc_ty T.binder) ->
         [%cassert] span
           (t.binder_params = TypesUtils.empty_generic_params)
           "Can not extract trait associated types with parameters";
         let t = t.binder_value in
         [%cassert] span (t.implied_clauses = [])
           "Can not extract trait associated types with implied trait clauses";
-        t.name)
-      types
+        (type_id, t.name))
+      (T.AssocTypeId.Map.to_list types)
   in
   let consts =
     List.map
-      (fun (c : A.trait_assoc_const) -> (c.name, translate_ty c.ty))
-      consts
+      (fun ((const_id, c) : T.AssocConstId.id * A.trait_assoc_const) ->
+        (const_id, c.name, translate_ty c.ty))
+      (T.AssocConstId.Map.to_list consts)
   in
   let methods =
     List.map
@@ -293,9 +293,13 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
   in
   let consts =
     List.map
-      (fun (name, gref) ->
-        (name, translate_global_decl_ref span translate_ty gref))
-      consts
+      (fun ((const_id, gref) : T.AssocConstId.id * _) ->
+        let name =
+          Charon.GAstUtils.get_assoc_const_name ctx.crate
+            trait_impl.impl_trait.id const_id
+        in
+        (const_id, name, translate_global_decl_ref span translate_ty gref))
+      (T.AssocConstId.Map.to_list consts)
   in
   (* We checked that there were no types in the trait declaration already. *)
   let types = [] in
@@ -303,7 +307,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
     List.map
       (fun ((method_id, m) : TraitMethodId.id * T.fun_decl_ref T.binder) ->
         let name =
-          Charon.GAstUtils.format_method_name ctx.crate trait_impl.impl_trait.id
+          Charon.GAstUtils.get_method_name ctx.crate trait_impl.impl_trait.id
             method_id
         in
         ( method_id,

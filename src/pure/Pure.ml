@@ -40,8 +40,10 @@ type const_generic_var_id = T.const_generic_var_id [@@deriving show, ord]
 type trait_decl_id = T.trait_decl_id [@@deriving show, ord]
 type trait_impl_id = T.trait_impl_id [@@deriving show, ord]
 type trait_method_id = T.trait_method_id [@@deriving show, ord]
+type assoc_type_id = T.assoc_type_id [@@deriving show, ord]
+type assoc_const_id = T.assoc_const_id [@@deriving show, ord]
 type trait_clause_id = T.trait_clause_id [@@deriving show, ord]
-type trait_item_name = T.trait_item_name [@@deriving show, ord]
+type trait_item_name = A.trait_item_name [@@deriving show, ord]
 type global_decl_id = T.global_decl_id [@@deriving show, ord]
 type type_decl_id = TypeDeclId.id [@@deriving show, ord]
 type fun_decl_id = A.fun_decl_id [@@deriving show, ord]
@@ -282,6 +284,9 @@ class ['self] iter_ty_base =
     method visit_trait_method_id : 'env -> trait_method_id -> unit =
       fun _ _ -> ()
 
+    method visit_assoc_type_id : 'env -> assoc_type_id -> unit = fun _ _ -> ()
+    method visit_assoc_const_id : 'env -> assoc_const_id -> unit = fun _ _ -> ()
+
     method visit_trait_clause_id : 'env -> trait_clause_id -> unit =
       fun _ _ -> ()
 
@@ -344,6 +349,12 @@ class ['self] map_ty_base =
       fun _ x -> x
 
     method visit_trait_method_id : 'env -> trait_method_id -> trait_method_id =
+      fun _ x -> x
+
+    method visit_assoc_type_id : 'env -> assoc_type_id -> assoc_type_id =
+      fun _ x -> x
+
+    method visit_assoc_const_id : 'env -> assoc_const_id -> assoc_const_id =
       fun _ x -> x
 
     method visit_trait_clause_id : 'env -> trait_clause_id -> trait_clause_id =
@@ -410,6 +421,12 @@ class virtual ['self] reduce_ty_base =
       fun _ _ -> self#zero
 
     method visit_trait_method_id : 'env -> trait_method_id -> 'a =
+      fun _ _ -> self#zero
+
+    method visit_assoc_type_id : 'env -> assoc_type_id -> 'a =
+      fun _ _ -> self#zero
+
+    method visit_assoc_const_id : 'env -> assoc_const_id -> 'a =
       fun _ _ -> self#zero
 
     method visit_trait_clause_id : 'env -> trait_clause_id -> 'a =
@@ -496,6 +513,13 @@ class virtual ['self] mapreduce_ty_base =
         'env -> trait_method_id -> trait_method_id * 'a =
       fun _ x -> (x, self#zero)
 
+    method visit_assoc_type_id : 'env -> assoc_type_id -> assoc_type_id * 'a =
+      fun _ x -> (x, self#zero)
+
+    method visit_assoc_const_id : 'env -> assoc_const_id -> assoc_const_id * 'a
+        =
+      fun _ x -> (x, self#zero)
+
     method visit_trait_clause_id :
         'env -> trait_clause_id -> trait_clause_id * 'a =
       fun _ x -> (x, self#zero)
@@ -536,8 +560,7 @@ type ty =
     (* Note: the `de_bruijn_id`s are incorrect, see comment on `translate_region_binder` *)
   | TLiteral of literal_type
   | TArrow of ty * ty
-  | TTraitType of trait_ref * string
-      (** The string is for the name of the associated type *)
+  | TTraitType of trait_ref * assoc_type_id
   | TNever
   | TDynTrait of dyn_predicate
   | TError
@@ -584,7 +607,7 @@ and generic_params = {
 
 and trait_type_constraint = {
   trait_ref : trait_ref;
-  type_name : trait_item_name;
+  type_id : assoc_type_id;
   ty : ty;
 }
 
@@ -1225,7 +1248,7 @@ and qualif_id =
   | ScalarValProj of integer_type
       (** Projector to the mathematical integer value of a scalar type (e.g.,
           [UScalar.val : UScalar ty -> Nat]) *)
-  | TraitConst of trait_ref * string  (** A trait associated constant *)
+  | TraitConst of trait_ref * assoc_const_id  (** A trait associated constant *)
   | MkDynTrait of trait_ref  (** Dyn trait constructor *)
   | LoopOp  (** Loop fixed-point operator *)
 
@@ -1857,8 +1880,8 @@ type trait_decl = {
   preds : predicates;
   parent_clauses : trait_param list;
   llbc_parent_clauses : Types.trait_param list;
-  consts : (trait_item_name * ty) list;
-  types : trait_item_name list;
+  consts : (assoc_const_id * trait_item_name * ty) list;
+  types : (assoc_type_id * trait_item_name) list;
   methods : (trait_method_id * trait_item_name * fun_decl_ref binder) list;
 }
 [@@deriving show]
@@ -1882,8 +1905,8 @@ type trait_impl = {
           simplification of types like boxes and references. *)
   preds : predicates;
   parent_trait_refs : trait_ref list;
-  consts : (trait_item_name * global_decl_ref) list;
-  types : (trait_item_name * ty) list;
+  consts : (assoc_const_id * trait_item_name * global_decl_ref) list;
+  types : (assoc_type_id * trait_item_name * ty) list;
   methods : (trait_method_id * trait_item_name * fun_decl_ref binder) list;
 }
 [@@deriving show]

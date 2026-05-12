@@ -1439,11 +1439,11 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
         in
         ({ e = StructUpdate su; ty = var.ty }, false)
     | VaCgValue cg_id -> ({ e = CVar cg_id; ty = var.ty }, false)
-    | VaTraitConstValue (trait_ref, const_name) ->
+    | VaTraitConstValue (trait_ref, const_id) ->
         let trait_ref =
           translate_fwd_trait_ref (Some ctx.span) ctx.decls_ctx trait_ref
         in
-        let qualif_id = TraitConst (trait_ref, const_name) in
+        let qualif_id = TraitConst (trait_ref, const_id) in
         let qualif = { id = qualif_id; generics = empty_generic_args } in
         let ty = mk_result_ty var.ty in
         ({ e = Qualif qualif; ty }, true)

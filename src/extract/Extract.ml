@@ -762,12 +762,12 @@ and extract_App (span : Meta.span) (ctx : extraction_ctx) (fmt : F.formatter)
             qualif.generics args out_ty
       | ScalarValProj ty, _ ->
           extract_scalar_val_projector span ctx fmt ~inside ty args
-      | TraitConst (trait_ref, const_name), _ ->
+      | TraitConst (trait_ref, const_id), _ ->
           extract_trait_ref span ctx fmt TypeDeclId.Set.empty ~inside:true
             trait_ref;
           let name =
             ctx_get_trait_const span trait_ref.trait_decl_ref.trait_decl_id
-              const_name ctx
+              const_id ctx
           in
           let add_brackets (s : string) =
             if backend () = Coq then "(" ^ s ^ ")" else s
@@ -2722,27 +2722,27 @@ let extract_trait_decl_register_constant_names (ctx : extraction_ctx)
     match builtin_info with
     | None ->
         List.map
-          (fun (item_name, _) ->
+          (fun (const_id, item_name, _) ->
             let name = ctx_compute_trait_const_name ctx trait_decl item_name in
             (* Add a prefix if necessary *)
             let name =
               if !record_fields_short_names then name
               else ctx_compute_trait_decl_name ctx trait_decl ^ name
             in
-            (item_name, name))
+            (const_id, name))
           consts
     | Some info ->
         let const_map = StringMap.of_list info.consts in
         List.map
-          (fun (item_name, _) ->
-            (item_name, StringMap.find item_name const_map))
+          (fun (const_id, item_name, _) ->
+            (const_id, StringMap.find item_name const_map))
           consts
   in
   (* Register the names *)
   List.fold_left
-    (fun ctx (item_name, name) ->
+    (fun ctx (const_id, name) ->
       ctx_add trait_decl.item_meta.span
-        (TraitItemId (trait_decl.def_id, item_name))
+        (TraitConstId (trait_decl.def_id, const_id))
         name ctx)
     ctx constant_names
 
@@ -2763,17 +2763,17 @@ let extract_trait_decl_type_names (ctx : extraction_ctx)
           else ctx_compute_trait_decl_name ctx trait_decl ^ type_name
         in
         List.map
-          (fun item_name ->
+          (fun (type_id, item_name) ->
             (* Type name *)
             let type_name = compute_type_name item_name in
-            (item_name, type_name))
+            (type_id, type_name))
           types
     | Some info ->
         let type_map = StringMap.of_list info.types in
         List.map
-          (fun item_name ->
+          (fun (type_id, item_name) ->
             match StringMap.find_opt item_name type_map with
-            | Some type_name -> (item_name, type_name)
+            | Some type_name -> (type_id, type_name)
             | None ->
                 [%craise] trait_decl.item_meta.span
                   ("Unexpected error: could not find the information for the \
@@ -2785,9 +2785,9 @@ let extract_trait_decl_type_names (ctx : extraction_ctx)
   in
   (* Register the names *)
   List.fold_left
-    (fun ctx (item_name, type_name) ->
+    (fun ctx (type_id, type_name) ->
       ctx_add trait_decl.item_meta.span
-        (TraitItemId (trait_decl.def_id, item_name))
+        (TraitTypeId (trait_decl.def_id, type_id))
         type_name ctx)
     ctx type_names
 
@@ -3117,7 +3117,8 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
    in
    let types =
      List.map
-       (fun name -> ctx_get_trait_type decl.item_meta.span decl.def_id name ctx)
+       (fun (type_id, _) ->
+         ctx_get_trait_type decl.item_meta.span decl.def_id type_id ctx)
        decl.types
    in
    let types =
@@ -3142,8 +3143,8 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
    in
    let consts =
      List.map
-       (fun (name, _) ->
-         ctx_get_trait_const decl.item_meta.span decl.def_id name ctx)
+       (fun (const_id, _, _) ->
+         ctx_get_trait_const decl.item_meta.span decl.def_id const_id ctx)
        decl.consts
    in
    let consts =
@@ -3191,12 +3192,12 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
   let ctx =
     let field_names =
       List.map
-        (fun (name, _) ->
-          ctx_get_trait_const decl.item_meta.span decl.def_id name ctx)
+        (fun (const_id, _, _) ->
+          ctx_get_trait_const decl.item_meta.span decl.def_id const_id ctx)
         decl.consts
       @ List.map
-          (fun name ->
-            ctx_get_trait_type decl.item_meta.span decl.def_id name ctx)
+          (fun (type_id, _) ->
+            ctx_get_trait_type decl.item_meta.span decl.def_id type_id ctx)
           decl.types
       @ List.map
           (fun (method_id, _, _) ->
@@ -3248,9 +3249,9 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
 
     (* The constants *)
     List.iter
-      (fun (name, ty) ->
+      (fun (const_id, _, ty) ->
         let item_name =
-          ctx_get_trait_const decl.item_meta.span decl.def_id name ctx
+          ctx_get_trait_const decl.item_meta.span decl.def_id const_id ctx
         in
         let ty () =
           let inside = false in
@@ -3263,10 +3264,10 @@ let extract_trait_decl (ctx : extraction_ctx) (fmt : F.formatter)
 
     (* The types *)
     List.iter
-      (fun name ->
+      (fun (type_id, _) ->
         (* Extract the type *)
         let item_name =
-          ctx_get_trait_type decl.item_meta.span decl.def_id name ctx
+          ctx_get_trait_type decl.item_meta.span decl.def_id type_id ctx
         in
         let ty () =
           F.pp_print_space fmt ();
@@ -3333,18 +3334,18 @@ let extract_trait_decl_coq_arguments (ctx : extraction_ctx) (fmt : F.formatter)
   let params = params @ [ Explicit ] in
   (* The constants *)
   List.iter
-    (fun (name, _) ->
+    (fun (const_id, _, _) ->
       let item_name =
-        ctx_get_trait_const decl.item_meta.span decl.def_id name ctx
+        ctx_get_trait_const decl.item_meta.span decl.def_id const_id ctx
       in
       extract_coq_arguments_instruction ctx fmt item_name params)
     decl.consts;
   (* The types *)
   List.iter
-    (fun name ->
+    (fun (type_id, _) ->
       (* The type *)
       let item_name =
-        ctx_get_trait_type decl.item_meta.span decl.def_id name ctx
+        ctx_get_trait_type decl.item_meta.span decl.def_id type_id ctx
       in
       extract_coq_arguments_instruction ctx fmt item_name params)
     decl.types;
@@ -3531,10 +3532,10 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
     let trait_decl = TraitDeclId.Map.find decl_id ctx.trans_trait_decls in
     let field_names =
       List.map
-        (fun (name, _) -> ctx_get_trait_const span decl_id name ctx)
+        (fun (const_id, _, _) -> ctx_get_trait_const span decl_id const_id ctx)
         trait_decl.consts
       @ List.map
-          (fun name -> ctx_get_trait_type span decl_id name ctx)
+          (fun (type_id, _) -> ctx_get_trait_type span decl_id type_id ctx)
           trait_decl.types
       @ List.map
           (fun (method_id, _, _) ->
@@ -3592,8 +3593,8 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
 
     (* The constants *)
     List.iter
-      (fun (name, gref) ->
-        let item_name = ctx_get_trait_const span trait_decl_id name ctx in
+      (fun (const_id, _, gref) ->
+        let item_name = ctx_get_trait_const span trait_decl_id const_id ctx in
         (* Lookup the information about the explicit/implicit parameters *)
         let explicit =
           match GlobalDeclId.Map.find_opt gref.global_id ctx.trans_globals with
@@ -3640,9 +3641,9 @@ let extract_trait_impl (ctx : extraction_ctx) (fmt : F.formatter)
 
     (* The types *)
     List.iter
-      (fun (name, ty) ->
+      (fun (type_id, _, ty) ->
         (* Extract the type *)
-        let item_name = ctx_get_trait_type span trait_decl_id name ctx in
+        let item_name = ctx_get_trait_type span trait_decl_id type_id ctx in
         let ty () =
           F.pp_print_space fmt ();
           extract_ty span ctx fmt TypeDeclId.Set.empty ~inside:false ty
