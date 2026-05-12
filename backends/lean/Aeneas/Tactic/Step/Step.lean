@@ -498,6 +498,7 @@ def introPrettyEquality (args : Args) (fExpr : Expr) (outputFVars : Array Expr) 
 def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
   TacticM (Option MainGoal) := do
   withTraceNode `Step (fun _ => pure m!"introOutputs") do
+  traceGoalWithNode "Initial goal"
   /- Decompose nested uses of `uncurry'` to introduce a sequence of universal quantifiers.
      Note that at the same time we simplify the (monadic) continuation by using
      some monad simp theorems. -/
