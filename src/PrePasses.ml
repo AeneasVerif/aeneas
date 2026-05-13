@@ -850,50 +850,69 @@ let remove_shallow_borrows_storage_live_dead (crate : crate) (f : fun_decl) :
     [PeTarget] suffix) if a type has a suffix but its base name only appears
     once, it means there is no collision and the suffix is unnecessary. *)
 let strip_unnecessary_target_suffixes (crate : crate) : crate =
-  (* --- Functions: strip PeTarget when not behind a dispatch --- *)
+  let module NameMap = Map.Make (struct
+    type t = Types.name
+
+    let compare = Types.compare_name
+  end) in
+  let add_name acc name =
+    let base = strip_target_suffix name in
+    let count =
+      match NameMap.find_opt base acc with
+      | Some n -> n
+      | None -> 0
+    in
+    NameMap.add base (count + 1) acc
+  in
+  let get_name base_counts name =
+    let base = strip_target_suffix name in
+    if base = name then name
+    else
+      let count =
+        match NameMap.find_opt base base_counts with
+        | Some n -> n
+        | None -> 0
+      in
+      if count <= 1 then base else name
+  in
+  (* --- Functions --- *)
+  (* We also count how many non-dispatch functions share a base name.
+
+     We shouldn't need to do this, but have to do it because of:
+     https://github.com/AeneasVerif/charon/issues/1158
+
+     Generally speaking it's a good way of being defensive against Charon's
+     deduplication bugs.
+  *)
+  let fun_base_counts =
+    FunDeclId.Map.fold
+      (fun _ (f : fun_decl) acc ->
+        match f.src with
+        | TargetDependentItem _ -> acc
+        | _ -> add_name acc f.item_meta.name)
+      crate.fun_decls NameMap.empty
+  in
   let fun_decls =
     FunDeclId.Map.map
       (fun (f : fun_decl) ->
         match f.src with
         | TargetDependentItem _ -> f
         | _ ->
-            let name = strip_target_suffix f.item_meta.name in
+            let name = get_name fun_base_counts f.item_meta.name in
             { f with item_meta = { f.item_meta with name } })
       crate.fun_decls
   in
   (* --- Types: strip PeTarget when the base name is unique --- *)
-  (* Count how many type decls share the same base name (name without PeTarget) *)
-  let module NameMap = Map.Make (struct
-    type t = Types.name
-
-    let compare = Types.compare_name
-  end) in
-  let base_name_counts =
+  let type_base_counts =
     TypeDeclId.Map.fold
-      (fun _ (td : type_decl) acc ->
-        let base = strip_target_suffix td.item_meta.name in
-        let count =
-          match NameMap.find_opt base acc with
-          | Some n -> n
-          | None -> 0
-        in
-        NameMap.add base (count + 1) acc)
+      (fun _ (td : type_decl) acc -> add_name acc td.item_meta.name)
       crate.type_decls NameMap.empty
   in
   let type_decls =
     TypeDeclId.Map.map
       (fun (td : type_decl) ->
-        let base = strip_target_suffix td.item_meta.name in
-        if base = td.item_meta.name then td
-        else
-          let count =
-            match NameMap.find_opt base base_name_counts with
-            | Some n -> n
-            | None -> 0
-          in
-          if count <= 1 then
-            { td with item_meta = { td.item_meta with name = base } }
-          else td)
+        let name = get_name type_base_counts td.item_meta.name in
+        { td with item_meta = { td.item_meta with name } })
       crate.type_decls
   in
   { crate with fun_decls; type_decls }
