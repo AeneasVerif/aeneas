@@ -42,10 +42,10 @@ def testTuples : Result Nat := do
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, b, a_post, b_post ⟩ ← twoNats_spec
-    let* ⟨ c, d, c_post, d_post ⟩ ← twoNats_spec
-    let* ⟨ a, b, c, d, a_post, b_post, c_post, d_post ⟩ ← fourNats_spec
-    let* ⟨ e, f, g, h, e_post, f_post, g_post, h_post ⟩ ← fourNats_spec
+  [apply]     let* ⟨ a, b, a_post1, a_post2 ⟩ ← twoNats_spec
+    let* ⟨ c, d, c_post1, c_post2 ⟩ ← twoNats_spec
+    let* ⟨ a, b, c, d, a_post1, a_post2, a_post3, a_post4 ⟩ ← fourNats_spec
+    let* ⟨ e, f, g, h, e_post1, e_post2, e_post3, e_post4 ⟩ ← fourNats_spec
     agrind
 -/
 #guard_msgs in
@@ -61,8 +61,8 @@ def testTuples1 : Result Nat := do
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, b, c, a_post, b_post, c_post ⟩ ← threeNats_spec
-    let* ⟨ e, f, g, e_post, f_post, g_post ⟩ ← threeNats_spec
+  [apply]     let* ⟨ a, b, c, a_post1, a_post2, a_post3 ⟩ ← threeNats_spec
+    let* ⟨ e, f, g, e_post1, e_post2, e_post3 ⟩ ← threeNats_spec
     agrind
 -/
 #guard_msgs in
@@ -77,7 +77,7 @@ def testTuples2 : Result Nat := do
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, b, c, d, e, f, a_post, b_post, c_post, d_post, e_post, f_post ⟩ ← sixNats_spec
+  [apply]     let* ⟨ a, b, c, d, e, f, a_post1, a_post2, a_post3, a_post4, a_post5, a_post6 ⟩ ← sixNats_spec
     agrind
 -/
 #guard_msgs in
