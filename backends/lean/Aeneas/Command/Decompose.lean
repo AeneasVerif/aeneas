@@ -622,6 +622,7 @@ private def hasNoncomputableDep (env : Environment) (e : Expr) : Bool :=
     acc || isNoncomputable env n ||
     match env.find? n with
     | some (.opaqueInfo _) => true
+    | some (.axiomInfo _) => true
     | _ => false
 
 /-- Add a definition, or reuse an existing one if the name already exists.
