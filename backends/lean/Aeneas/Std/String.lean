@@ -5,6 +5,8 @@ namespace Aeneas.Std
 
 def Str := Slice U8
 
+instance : DecidableEq Str := inferInstanceAs (DecidableEq (Slice U8))
+
 /-- TODO: we shouldn't use `decide +native` but it seems we can't reduce it otherwise. -/
 def toStr (s : String) (h : s.toByteArray.size ≤ U32.max := by decide +native) : Str :=
   ⟨ s.toByteArray.toList.map

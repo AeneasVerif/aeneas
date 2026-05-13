@@ -28,6 +28,8 @@ instance [BEq α] : BEq (Slice α) := SubtypeBEq _
 
 instance [BEq α] [LawfulBEq α] : LawfulBEq (Slice α) := SubtypeLawfulBEq _
 
+instance [DecidableEq α] : DecidableEq (Slice α) := inferInstanceAs (DecidableEq { l : List α // _ })
+
 theorem Slice.length_ineq {α : Type u} (s : Slice α) : s.val.length ≤ Usize.max := by
   cases s; simp[*]
 
