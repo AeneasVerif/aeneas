@@ -1357,6 +1357,15 @@ example (a b : U32) (h : a = b) (hbnd : a.val + b.val ≤ U32.max) :
   unfold letBindContradictionFn
   step*
 
+/- This is a regression test: at some point `step*` would get stuck on `match p with | (o, k) => match o with ...` -/
+example (f : Usize → Result Unit) (p : Option Usize × Usize) (h : p.1 = some 0#usize)
+    (hf : ∀ j, f j ⦃ _ => True ⦄) :
+    (let (o, _) := p
+     match o with
+     | none => ok ()
+     | some j => f j) ⦃ _ => True ⦄ := by
+  step*
+
 end Examples
 
 end Aeneas
