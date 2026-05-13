@@ -290,6 +290,7 @@ top-level product components. `uncurry` can be nested inside `uncurry'` or other
 | `⦃ (a, b) c => body ⦄` | `uncurry' (uncurry (fun a b => fun c => body))` |
 | `⦃ a (b, c) => body ⦄` | `uncurry' (fun a => uncurry (fun b c => body))` |
 | `⦃ ((a,b), c) => body ⦄` | `uncurry (fun _p c => (uncurry (fun a b => body)) _p)` |
+| `⦃ ((a,b), (c,d)) => body ⦄` | `uncurry (fun _p₀ _p₁ => (uncurry (fun a b => (uncurry (fun c d => body)) _p₁)) _p₀)` |
 
 The delaborator reverses this: given a `spec e post` expression, it peels the
 wrapper layers to recover the binder patterns and body, producing `⦃ ... => ... ⦄`.
