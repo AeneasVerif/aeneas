@@ -1306,6 +1306,8 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
       Printf.fprintf out "Module %s.\n" fi.module_name
   | Lean ->
       Printf.fprintf out "import Aeneas\n";
+      if !Config.core_models_lib then
+        Printf.fprintf out "import CoreModels\n";
       (* Add the custom imports *)
       List.iter (fun m -> Printf.fprintf out "import %s\n" m) fi.custom_imports;
       (* Add the custom includes *)
