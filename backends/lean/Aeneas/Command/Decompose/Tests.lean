@@ -10,6 +10,16 @@ open Aeneas.Std
 open Aeneas.Command.Decompose
 
 -- ============================================================================
+-- Test 0: "branch", "lam", etc. can be used as identifiers
+-- (regression test for https://github.com/AeneasVerif/aeneas/issues/1023)
+-- ============================================================================
+
+def test0 (branch : U32) (full : U32) : Result U32 := do
+  let x ← branch + 1#u32
+  let y ← full + 1#u32
+  x + y
+
+-- ============================================================================
 -- Test 1: Simple letRange — extract first 3 bindings
 -- ============================================================================
 
@@ -1838,7 +1848,7 @@ info: 'test46_eq' depends on axioms: [propext]
 #print axioms test46_eq
 
 -- ============================================================================
--- Test 47: Tuple bind with Aeneas do — pair destructuring (Function.uncurry)
+-- Test 47: Tuple bind with Aeneas do — pair destructuring (Std.uncurry)
 -- ============================================================================
 
 

@@ -1,4 +1,5 @@
 import Aeneas.Std.Primitives
+import Aeneas.Std.Delab
 import Std.Do
 import Aeneas.Tactic.Solver.Grind.Init
 
@@ -34,35 +35,21 @@ def spec_general (x:Result α) (p:Post α) :=
 def spec {α} (x:Result α) (p:Post α) :=
   theta x p
 
-/-- Auxiliary helper that we use to decompose tuples in post-conditions.
+/-- Variant of `uncurry` used to decompose tuples in post-conditions.
 
-Example: `f 0 ⦃ x y z => ... ⦄` desugars to `spec (f 0) (predn fun x => predn fun y z => ...)`.
+Similar to `uncurry` but specialized for `Prop` and delaborated differently:
+`uncurry'` is delaborated as `x y => ...` (separate binders), while
+`uncurry` is delaborated as `(x, y) => ...` (tuple binder).
+We use this in the Hoare triple notation `⦃ ⦄`.
 
-**Remark:** an alternative would be to parameterize `predn` with a list of types, e.g.:
-```lean
-def prednTy (tys : List α) : Type :=
-  match tys with
-  | [] => Prop
-  | ty :: tys => ty → prednTy tys
-
-def prodTy (tys : List α) : Type :=
-  match tys with
-  | [] => ()
-  | [x] => x
-  | ty :: tys => (ty, prodTy tys)
-
-def predn {tys : List α} (p : prednTy tys) : prodTy tys → Prop
-```
-but there are two issues:
-- this kind of dependent types is hard to work with
-- it forces all the types to live in the same universe, which is especially cumbersome as we do not have
-  universe cumulativity
+Example: `f 0 ⦃ x y z => ... ⦄` desugars to
+`spec (f 0) (uncurry' fun x => uncurry' fun y z => ...)`.
 -/
-def predn {α β} (p : α → β → Prop) : α × β → Prop :=
+def uncurry' {α β} (p : α → β → Prop) : α × β → Prop :=
   fun (x, y) => p x y
 
-@[simp] theorem predn_pair x y (p : α → β → Prop) : predn p (x, y) = p x y := by simp [predn]
-@[defeq] theorem predn_eq x (p : α → β → Prop) : predn p x = p x.fst x.snd := by simp [predn]
+@[simp] theorem uncurry'_pair x y (p : α → β → Prop) : uncurry' p (x, y) = p x y := by simp [uncurry']
+@[defeq] theorem uncurry'_eq x (p : α → β → Prop) : uncurry' p x = p x.fst x.snd := by simp [uncurry']
 
 @[simp, grind =, agrind =]
 theorem spec_ok (x : α) : spec (ok x) p ↔ p x := by simp [spec, theta, wp_return]
@@ -72,6 +59,23 @@ theorem spec_fail (e : Error) : spec (fail e) p ↔ False := by simp [spec, thet
 
 @[simp, grind =, agrind =]
 theorem spec_div : spec div p ↔ False := by simp [spec, theta]
+
+/-! ### `spec_*` for tuple posts
+
+Needed now with the new `uncurry`-based pattern matching. -/
+
+@[simp, grind =, agrind =]
+theorem spec_ok_pair {α β} (a : α) (b : β) (f : α → β → Prop) :
+    spec (ok (a, b)) (uncurry f) ↔ f a b := by
+  simp [spec_ok]
+
+@[simp, grind =, agrind =]
+theorem spec_fail_pair (e : Error) (f : α → β → Prop) :
+    spec (fail e) (uncurry f) ↔ False := by simp
+
+@[simp, grind =, agrind =]
+theorem spec_div_pair (f : α → β → Prop) :
+    spec div (uncurry f) ↔ False := by simp
 
 theorem spec_mono {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : spec m P₀):
   (∀ x, P₀ x → P₁ x) → spec m P₁ := by
@@ -106,13 +110,13 @@ theorem imp_and_iff (P0 P1 Q : Prop) : imp (P0 ∧ P1) Q ↔ P0 → imp P1 Q := 
 /-- Implication with quantifier -/
 def qimp {α} (P₀ P₁ : Post α) : Prop := ∀ x, P₀ x → P₁ x
 
-/-- We use this lemma to decompose nested `predn` predicates into a sequence of universal quantifiers. -/
+/-- We use this lemma to decompose nested `uncurry'` predicates into a sequence of universal quantifiers. -/
 @[simp]
-def qimp_predn {α₀ α₁} (P : α₀ → α₁ → Prop) (Q : α₀ × α₁ → Prop) :
-  qimp (predn P) Q ↔ ∀ x, qimp (P x) (curry Q x) := by
+def qimp_uncurry' {α₀ α₁} (P : α₀ → α₁ → Prop) (Q : α₀ × α₁ → Prop) :
+  qimp (uncurry' P) Q ↔ ∀ x, qimp (P x) (curry Q x) := by
   simp [qimp, curry]
 
-/-- We use this lemma to eliminate `imp` after we decomposed the nested `predn` -/
+/-- We use this lemma to eliminate `imp` after we decomposed the nested `uncurry'` -/
 theorem qimp_iff {α} (P₀ P₁ : Post α) : qimp P₀ P₁ ↔ ∀ x, imp (P₀ x) (P₁ x) := by simp [qimp, imp]
 
 /-- Alternative to `spec_mono`: we control the introduction of universal quantifiers by introducing `imp`. -/
@@ -142,13 +146,13 @@ theorem spec_bind' {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α
   · simp
     apply Hm
 
-/-- We use this lemma to decompose nested `predn` predicates into a sequence of universal quantifiers. -/
+/-- We use this lemma to decompose nested `uncurry'` predicates into a sequence of universal quantifiers. -/
 @[simp]
-def qimp_spec_predn {α₀ α₁ β} (P : α₀ → α₁ → Prop) (k : α₀ × α₁ → Result β) (Q : β → Prop) :
-  qimp_spec (predn P) k Q ↔ ∀ x, qimp_spec (P x) (curry k x) Q := by
+def qimp_spec_uncurry' {α₀ α₁ β} (P : α₀ → α₁ → Prop) (k : α₀ × α₁ → Result β) (Q : β → Prop) :
+  qimp_spec (uncurry' P) k Q ↔ ∀ x, qimp_spec (P x) (curry k x) Q := by
   simp [qimp_spec, curry]
 
-/-- We use this lemma to eliminate `imp_spec` after we decomposed the nested `predn` -/
+/-- We use this lemma to eliminate `imp_spec` after we decomposed the nested `uncurry'` -/
 def qimp_spec_iff {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) :
   qimp_spec P k Q ↔ ∀ x, imp (P x) (spec (k x) Q) := by
   simp [qimp_spec, imp]
@@ -158,7 +162,7 @@ error: unsolved goals
 ⊢ ∀ (x : Nat), qimp_spec (fun y => 0 < x + y) (curry (fun x => ok (x.fst + x.snd)) x) fun z => 0 < z
 -/
 #guard_msgs in
-example : qimp_spec (predn fun x y => x + y > 0) (fun (x, y) => .ok (x + y)) (fun z => z > 0) := by
+example : qimp_spec (uncurry' fun x y => x + y > 0) (fun (x, y) => .ok (x + y)) (fun z => z > 0) := by
   simp
 
 @[simp]
@@ -204,22 +208,60 @@ scoped syntax:54 term:55 " ⦃ " term " ⦄" : term
 
 open Lean PrettyPrinter
 
+/-- Build a `Std.uncurry` chain wrapping a curried lambda over `xs`.
+
+Given `x0`, ..., `xn` and `body`, generates the (syntactic) term `fun (x0, ..., xn) => body`.
+-/
+partial def buildUncurryLam (xs : List (TSyntax `term)) (body : TSyntax `term) :
+    MacroM (TSyntax `term) := do
+  let uncurryIdent := mkIdent ``Std.uncurry
+  match xs with
+  | [] => pure body
+  | [x] => `(fun $x => $body)
+  | [a, b] => `($uncurryIdent (fun $a $b => $body))
+  | a :: rest =>
+    let inner ← buildUncurryLam rest body
+    `($uncurryIdent (fun $a => $inner))
+
+/-- Helper to elaborate `binder => body` when binder is a tuple - this supports nested tuples. -/
+partial def mkBinderFun (depth : Nat) (binder : Term) (body : Term) : MacroM Term := do
+  match binder with
+  | `( ($a, $bs,*) ) =>
+    let xs : List Term := a :: bs.getElems.toList
+    let mut leafIdents : List Term := []
+    let mut wrappedBody := body
+    for (x, idx) in xs.zipIdx.reverse do
+      match x with
+      | `( ($_, $_,*) ) =>
+        -- Fresh identifier from depth + index
+        let freshIdent := mkIdent $ .mkSimple s!"_p_{depth}_{idx}"
+        let inner ← mkBinderFun (depth + 1) x wrappedBody
+        wrappedBody ← `($inner $freshIdent)
+        leafIdents := freshIdent :: leafIdents
+      | _ =>
+        leafIdents := x :: leafIdents
+    buildUncurryLam leafIdents wrappedBody
+  | _ => `(fun $binder => $body)
+
 /-- Macro expansion for a single element -/
 macro_rules
-  | `($e ⦃ $x => $p ⦄) => do `(_root_.Aeneas.Std.WP.spec $e fun $x => $p)
+  | `($e ⦃ $x => $p ⦄) => do
+    let post ← mkBinderFun 0 x p
+    `(Aeneas.Std.WP.spec $e $post)
 
 /-- Macro expansion for multiple elements -/
 macro_rules
   | `($e ⦃ $x $xs:term* => $p ⦄) => do
-    let mut xs : List (TSyntax `term) := x :: xs.toList
-    let rec run (xs : List (TSyntax `term)) : MacroM (TSyntax `term) := do
+    let xs := x :: xs.toList
+    let rec run (depth : Nat) (xs : List Term) : MacroM Term := do
       match xs with
       | [] => `($p)
-      | [x] => `(fun $x => $p)
+      | [x] => mkBinderFun depth x p
       | x :: xs =>
-        let xs ← run xs
-        `(_root_.Aeneas.Std.WP.predn fun $x => $xs)
-    let post ← run xs
+        let xs ← run (depth + 1) xs
+        let inner ← mkBinderFun depth x xs
+        `(uncurry' $inner)
+    let post ← run 0 xs
     `(Aeneas.Std.WP.spec $e $post)
 
 /-- Macro expansion for predicate with no arrow -/
@@ -228,73 +270,243 @@ macro_rules
 
 /-!
 # Pretty-printing
+
+The `⦃ ⦄` macro produces postconditions using three wrappers:
+- `uncurry' (fun x => ...)` — separate binders, printed as `x y z => ...`
+- `uncurry (fun a b => ...)` — tuple binder, printed as `(a, b) => ...`
+- Plain `fun x => ...` — scalar binder
+
+`uncurry'` is never nested: it only appears at the outermost level to separate
+top-level product components. `uncurry` can be nested inside `uncurry'` or other
+`uncurry` applications (for sub-tuples like `((a, b), c)`).
+
+**Examples of elaborated postconditions:**
+
+| Source | Elaborated form |
+|---|---|
+| `⦃ r => body ⦄` | `fun r => body` |
+| `⦃ (a, b) => body ⦄` | `uncurry (fun a b => body)` |
+| `⦃ x y z => body ⦄` | `uncurry' (fun x => uncurry' (fun y z => body))` |
+| `⦃ (a, b) c => body ⦄` | `uncurry' (uncurry (fun a b => fun c => body))` |
+| `⦃ a (b, c) => body ⦄` | `uncurry' (fun a => uncurry (fun b c => body))` |
+| `⦃ ((a,b), c) => body ⦄` | `uncurry (fun _p c => (uncurry (fun a b => body)) _p)` |
+| `⦃ ((a,b), (c,d)) => body ⦄` | `uncurry (fun _p₀ _p₁ => (uncurry (fun a b => (uncurry (fun c d => body)) _p₁)) _p₀)` |
+
+The delaborator reverses this: given a `spec e post` expression, it peels the
+wrapper layers to recover the binder patterns and body, producing `⦃ ... => ... ⦄`.
+
+The `uncurry`/lambda machinery (`enterLams`, `enterUncurryChain`, `delabBinders`)
+is reused from `Do.Delab` (which handles the same `uncurry` chains in `do`-notation).
+The only WP-specific logic is the `uncurry'`-peeling loop on top.
 -/
 
 open Delaborator SubExpr
+open Std.Delab (enterLams enterUncurryChain delabBinders buildTupleTerm delabUncurryAsTuple)
 
-/--
-Small helper to decompose nested `predn`s: we strip all the variables bound in a lambda inside the `predn`s.
+/-- Enter exactly the binders of a single `uncurry` level (up to 2).
+Unlike `enterUncurryChain` (which flattens everything), this stops after 2 binders
+so the continuation lambdas are left untouched.
+
+Example: on `fun a b => fun c => body`, collects `[a, b]` and leaves the reader
+at `fun c => body`. -/
+private partial def enterUncurryOnce (acc : Array Std.Delab.BinderEntry)
+    (k : Array Std.Delab.BinderEntry → DelabM α) : DelabM α := do
+  match (← getExpr) with
+  | .lam n _ _ _ =>
+    let pos ← getPos
+    withBindingBody' n pure fun fv => do
+      let acc' := acc.push (fv.fvarId!, n, pos)
+      if acc'.size >= 2 then k acc'
+      else if (← getExpr).isAppOfArity ``Std.uncurry 4 then
+        withAppArg <| enterUncurryOnce acc' k
+      else enterUncurryOnce acc' k
+  | _ => k acc
+
+/-- Is the expression an `uncurry'` or `uncurry` wrapper? -/
+private def isPostBinderWrapper (e : Expr) : Bool :=
+  match_expr e.consumeMData with
+  | uncurry' _ _ _ => true
+  | uncurry _ _ _ _ => true
+  | _ => false
+
+/-- Walk the postcondition expression, peeling `uncurry'`/`uncurry`/lambda layers.
+Returns `(binders, bodyTerm)` where each binder is a `Term` (either a plain
+name like `x` or a (potentially nested) tuple pattern like `(a, b)`).
 -/
-partial def telescopePredn (vars : Array SubExpr) (e : SubExpr) (k : Array SubExpr → SubExpr → Delab) : Delab :=
-  e.expr.consumeMData.withApp fun app args => do
-  if h: app.isConstOf ``predn ∧ args.size = 3 then
-    let pred := args[2]
-    Meta.lambdaTelescope pred.consumeMData fun args body => do
-    let pos := e.pos.push 1
-    if h: args.size = 1 ∧ body.isAppOf ``predn then
-      let vars := vars.push { expr := args[0], pos := pos.push 0 }
-      telescopePredn vars { expr := body, pos := pos.push 1} k
+private partial def delabPostBinders : DelabM (Array Term × Term) := do
+  match_expr (← getExpr).consumeMData with
+  | uncurry' _ _ _ =>
+    /- `uncurry' f`: dive into `f` (arg 2) and peel one binder.
+       If `f = uncurry g`, the binder is a tuple `(a, b)`.
+       If `f = fun x => rest`, the binder is scalar `x`. -/
+    withNaryArg 2 do
+      match_expr (← getExpr).consumeMData with
+      | uncurry _ _ _ _ =>
+        -- Tuple binder: peel one uncurry level, then recurse for more binders
+        withAppArg <| enterUncurryOnce #[] fun tupleBinders => do
+          let (pats, (moreBinders, body)) ← delabBinders tupleBinders.toList delabPostBinders
+          let tupleTerm ← buildTupleTerm pats
+          return (#[tupleTerm] ++ moreBinders, body)
+      | _ => delabLamsThenRecurse
+  | uncurry _ _ _ _ =>
+    /- Single tuple binder `(a, b) => body` (no `uncurry'` wrapper). -/
+    let tuplePos ← getPos
+    withAppArg do
+      let (tupleTerm, body) ← delabUncurryAsTuple delab
+      let tupleTerm : Term := annotatePos tuplePos tupleTerm
+      addTermInfo tuplePos tupleTerm.raw (← getExpr) (isBinder := true)
+      return (#[tupleTerm], body)
+  | _ => delabLamsThenRecurse
+where
+  /-- Peel plain lambda binders, then either recurse or terminate.
+
+  This is used in two situations:
+  - Inside `uncurry'`, when the argument is a plain lambda (not `uncurry`):
+    e.g., `uncurry' (fun x => uncurry' (fun y z => body))` — after entering
+    `fun x =>`, the body starts with another `uncurry'`, so we recurse.
+  - At the top level, when the postcondition is a plain lambda without any
+    `uncurry'`/`uncurry` wrapper: e.g., `fun r => body`.
+
+  The key logic: if `enterLams` peels exactly one lambda and the body is a
+  wrapper (`uncurry'` or `uncurry`), this lambda is a scalar binder in a
+  multi-binder postcondition — recurse via `delabPostBinders` to peel more.
+  Otherwise these are terminal binders (e.g., `fun y z => body` at the last
+  `uncurry'` level) — delab the body directly. -/
+  delabLamsThenRecurse : DelabM (Array Term × Term) := do
+    if (← getExpr).consumeMData.isLambda then
+      enterLams #[] fun binders => do
+        if binders.size == 1 && isPostBinderWrapper (← getExpr) then
+          let (pats, (moreBinders, body)) ← delabBinders binders.toList delabPostBinders
+          return (pats ++ moreBinders, body)
+        else
+          let (pats, body) ← delabBinders binders.toList delab
+          return (pats, body)
     else
-      let mut vars := vars
-      let mut pos := e.pos
-      for arg in args do
-        vars := vars.push { expr := arg, pos := pos.push 0 }
-        pos := pos.push 1
-      k vars { expr := body, pos }
-  else do
-    Meta.lambdaTelescope e.expr.consumeMData fun args body => do
-    let mut vars := vars
-    let mut pos := e.pos
-    for arg in args do
-      vars := vars.push { expr := arg, pos := pos.push 0 }
-      pos := pos.push 1
-    k vars { expr := body, pos }
+      return (#[], ← delab)
 
-def elabSubExpr (e : SubExpr) : Delab := withTheReader SubExpr (fun _ => e) delab
-
+/-- Delaborator for `WP.spec e post` → `e ⦃ binders => body ⦄`. -/
 @[scoped delab app.Aeneas.Std.WP.spec]
 def delabSpec : Delab := do
-  let e ← getExpr
-  let pos ← getPos
-  guard $ e.isAppOfArity' ``spec 3 -- only delab full applications this way
-  let args := e.getAppArgs
-  let monadExpr ← elabSubExpr { expr := args[1]!, pos := (pos.push 0).push 1 }
-  let post : SubExpr := { expr := args[2]!, pos := pos.push 1 }
-  telescopePredn #[] post fun vars post => do
-  let vars ← vars.mapM elabSubExpr
-  let post ← elabSubExpr post
-  if vars.size = 0 then
-    -- This is the case where the post-condition doesn't have a lambda
-    `($monadExpr ⦃ $post ⦄)
+  guard $ (← getExpr).isAppOfArity' ``spec 3
+  let monadExpr ← withNaryArg 1 delab
+  let (binders, bodyTerm) ← withNaryArg 2 delabPostBinders
+  if binders.size == 0 then
+    `($monadExpr ⦃ $bodyTerm ⦄)
   else
-    --
-    let var := vars[0]!
-    let vars := vars.drop 1
-    `($monadExpr ⦃ $var $vars* => $post ⦄)
+    `($monadExpr ⦃ $(binders[0]!) $(binders.drop 1)* => $bodyTerm ⦄)
 
 /-!
 # Tests
 -/
 
-example : ok 0 ⦃ r => r = 0 ⦄ := by simp
-example : spec (ok 0) fun _ => True := by simp
-example : ok 0 ⦃ _ => True ⦄ := by simp
-example : spec (ok (0, 1)) fun (x, y) => x = 0 ∧ y = 1 := by simp
-example : ok (0, 1) ⦃ (x, y) => x = 0 ∧ y = 1 ⦄ := by simp
-example : ok (0, 1) ⦃ x y => x = 0 ∧ y = 1 ⦄ := by simp
-example : ok (0, 1, 2) ⦃ x y z => x = 0 ∧ y = 1 ∧ z = 2 ⦄ := by simp
-example : ok (0, 1, true) ⦃ x y z => x = 0 ∧ y = 1 ∧ z ⦄ := by simp
-example : let P (x : Nat) := x = 0; ok 0 ⦃ P ⦄ := by simp
+/-- error: unsolved goals
+⊢ ok 0 ⦃ r => r = 0 ⦄ -/
+#guard_msgs in example : ok 0 ⦃ r => r = 0 ⦄ := by done
+/-- error: unsolved goals
+⊢ ok 0 ⦃ x✝ => True ⦄ -/
+#guard_msgs in example : spec (ok 0) fun _ => True := by done
+/-- error: unsolved goals
+⊢ ok 0 ⦃ x✝ => True ⦄ -/
+#guard_msgs in example : ok 0 ⦃ _ => True ⦄ := by done
+/-- error: unsolved goals
+⊢ ok (0, 1) ⦃ x✝ =>
+    match x✝ with
+    | (x, y) => x = 0 ∧ y = 1 ⦄ -/
+#guard_msgs in example : spec (ok (0, 1)) fun (x, y) => x = 0 ∧ y = 1 := by done
+/-- error: unsolved goals
+⊢ ok (0, 1) ⦃ (x, y) => x = 0 ∧ y = 1 ⦄ -/
+#guard_msgs in example : ok (0, 1) ⦃ (x, y) => x = 0 ∧ y = 1 ⦄ := by done
+/-- error: unsolved goals
+⊢ ok (0, 1) ⦃ x y => x = 0 ∧ y = 1 ⦄ -/
+#guard_msgs in example : ok (0, 1) ⦃ x y => x = 0 ∧ y = 1 ⦄ := by done
+/-- error: unsolved goals
+⊢ ok (0, 1, 2) ⦃ x y z => x = 0 ∧ y = 1 ∧ z = 2 ⦄ -/
+#guard_msgs in example : ok (0, 1, 2) ⦃ x y z => x = 0 ∧ y = 1 ∧ z = 2 ⦄ := by done
+/-- error: unsolved goals
+⊢ ok (0, 1, true) ⦃ x y z => x = 0 ∧ y = 1 ∧ z = true ⦄ -/
+#guard_msgs in example : ok (0, 1, true) ⦃ x y z => x = 0 ∧ y = 1 ∧ z ⦄ := by done
+/-- error: unsolved goals
+⊢ let P := fun x => x = 0;
+  ok 0 ⦃ P ⦄ -/
+#guard_msgs in example : let P (x : Nat) := x = 0; ok 0 ⦃ P ⦄ := by done
+
+/-! ### Mixed tuple / scalar binders -/
+
+/-- error: unsolved goals
+⊢ ok ((0, 1), 2) ⦃ (a, b) c => a = 0 ∧ b = 1 ∧ c = 2 ⦄ -/
+#guard_msgs in -- Tuple followed by scalar
+example : ok ((0, 1), 2) ⦃ (a, b) c => a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by done
+
+/-- error: unsolved goals
+⊢ ok ((0, 1), 2) ⦃ ((a, b), c) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ -/
+#guard_msgs in -- Same but with nesting
+example : ok ((0, 1), 2) ⦃ ((a, b), c) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by done
+
+/-- error: unsolved goals
+⊢ ok (0, 1, 2) ⦃ a (b, c) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ -/
+#guard_msgs in -- Scalar followed by tuple
+example : ok (0, (1, 2)) ⦃ a (b, c) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by done
+
+/-- error: unsolved goals
+⊢ ok (0, 1, 2) ⦃ (a, (b, c)) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ -/
+#guard_msgs in -- Same but with nesting
+example : ok (0, (1, 2)) ⦃ (a, (b, c)) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by done
+
+/-- error: unsolved goals
+⊢ ok ((0, 1), 2, 3) ⦃ (a, b) (c, d) => a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ -/
+#guard_msgs in -- Two tuples in sequence
+example : ok ((0, 1), (2, 3)) ⦃ (a, b) (c, d) =>
+    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ := by done
+
+/-- error: unsolved goals
+⊢ ok ((0, 1), 2, 3) ⦃ ((a, b), (c, d)) => a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ -/
+#guard_msgs in -- Same but with nesting
+example : ok ((0, 1), (2, 3)) ⦃ ((a, b), (c, d)) =>
+    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ := by done
+
+/-- error: unsolved goals
+⊢ ok ((0, 1), 2) ⦃ ((a, b), c) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ -/
+#guard_msgs in -- A single nested tuple
+example : ok ((0, 1), 2) ⦃ ((a, b), c) => a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by done
+
+/-- error: unsolved goals
+⊢ ok ((0, 1), 2, 3) ⦃ ((a, b), (c, d)) => a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ -/
+#guard_msgs in -- Two nested tuples
+example : ok ((0, 1), (2, 3)) ⦃ ((a, b), (c, d)) =>
+    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ := by done
+
+/-- error: unsolved goals
+⊢ ok (0, (1, 2), 3, 4, 5) ⦃ a (b, c) (d, (e, f)) => a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ∧ e = 4 ∧ f = 5 ⦄ -/
+#guard_msgs in -- Scalar, tuple, nested tuple
+example : ok (0, (1, 2), (3, (4, 5))) ⦃ a (b, c) (d, (e, f)) =>
+    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ∧ e = 4 ∧ f = 5 ⦄ := by done
+
+/-- error: unsolved goals
+⊢ ok ((0, 1, 2, 3), 4) ⦃ ((a, (b, (c, d))), e) => a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ∧ e = 4 ⦄ -/
+#guard_msgs in -- More nesting
+example : ok ((0, (1, (2, 3))), 4) ⦃ ((a, (b, (c, d))), e) => a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ∧ e = 4 ⦄
+  := by done
+
+/-! ### Pretty-printing round-trip checks -/
+
+/-- error: unsolved goals
+⊢ ok (0, 1, 2) ⦃ x y z => x = 0 ∧ y = 1 ∧ z = 2 ⦄ -/
+#guard_msgs in example : ok (0, 1, 2) ⦃ x y z => x = 0 ∧ y = 1 ∧ z = 2 ⦄ := by done
+
+/-- error: unsolved goals
+⊢ ok ((0, 1), 2) ⦃ (a, b) c => a = 0 ∧ b = 1 ∧ c = 2 ⦄ -/
+#guard_msgs in example : ok ((0, 1), 2) ⦃ (a, b) c =>
+    a = 0 ∧ b = 1 ∧ c = 2 ⦄ := by done
+
+/-- error: unsolved goals
+⊢ ok ((0, 1), 2, 3) ⦃ (a, b) (c, d) => a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ -/
+#guard_msgs in example : ok ((0, 1), (2, 3)) ⦃ (a, b) (c, d) =>
+    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ⦄ := by done
+
+/-- error: unsolved goals
+⊢ ok (0, (1, 2), (3, 4, 5), 6) ⦃ a (b, c) ((d, e, f), g) => a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ∧ e = 4 ∧ f = 5 ∧ g = 6 ⦄ -/
+#guard_msgs in example : ok (0, (1, 2), ((3, 4, 5), 6)) ⦃ a (b, c) ((d, e, f), g) =>
+    a = 0 ∧ b = 1 ∧ c = 2 ∧ d = 3 ∧ e = 4 ∧ f = 5 ∧ g = 6 ⦄ := by done
 
 end Aeneas
 
@@ -364,18 +576,13 @@ example (x : Nat) :
     -- step as ⟨ y, z ⟩
     apply spec_bind
     . apply add2_spec
-    intro tmp h
-    split at h
-    rename_i tmp y z
-    clear tmp
+    rintro ⟨y, z⟩ h
+    simp at h
     -- step as ⟨ y1, z1⟩
     apply spec_mono
     . apply add2_spec
-    intro tmp h
-    split at h
-    rename_i tmp y1 z1
-    clear tmp
-    --
+    rintro ⟨y1, z1⟩ h
+    simp at h
     grind
 
 theorem  add2_spec' (x : Nat) : add2 x ⦃ y z => y = x + 1 ∧ z = x + 2⦄ :=
@@ -389,15 +596,15 @@ example (x : Nat) :
     -- step as ⟨ y, z ⟩
     apply spec_bind'
     . apply add2_spec'
-    simp -failIfUnchanged only [qimp_spec_predn] -- introduce the quantifiers
+    simp -failIfUnchanged only [qimp_spec_uncurry'] -- introduce the quantifiers
     simp only [qimp_spec_iff, curry] -- eliminate `qimp_spec` and `curry`
     simp only [imp] -- eliminate `imp`
     intro y z h0
     -- step as ⟨ y1, z1⟩
     apply spec_mono'
     . apply add2_spec'
-    simp -failIfUnchanged only [qimp_predn] -- introduce the quantifiers
-    simp only [qimp_iff, curry, predn] -- eliminate `qimp_spec` and `curry`
+    simp -failIfUnchanged only [qimp_uncurry'] -- introduce the quantifiers
+    simp only [qimp_iff, curry, uncurry'] -- eliminate `qimp_spec` and `curry`
     simp only [imp]
     intros y z h
     --

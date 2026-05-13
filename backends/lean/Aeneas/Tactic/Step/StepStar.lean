@@ -376,7 +376,7 @@ partial def Script.toSyntax (script : Script) : MetaM (Array Syntax.Tactic) := d
     pure (s0 ++ s1)
 
 inductive TargetKind where
-| bind (fn : Name)
+| bind (names : Array (Option Name))
 | switch (info : Bifurcation.Info)
 | result
 | unknown
@@ -395,10 +395,9 @@ def analyzeTarget : TacticM TargetKind := do
       let e ← Utils.normalizeLetBindings program
       if let .const ``Bind.bind .. := e.getAppFn then
         let #[_m, _self, _α, _β, _value, cont] := e.getAppArgs
-          | throwError "Expected bind to have 4 arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
-        Utils.lambdaOne cont fun x _ => do
-          let name ← x.fvarId!.getUserName
-          pure (.bind name)
+          | throwError "Expected bind to have 6 arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
+        let names ← Step.getPostNames cont
+        pure (.bind names)
       else if let .some bfInfo ← Bifurcation.Info.ofExpr e then
         pure (.switch bfInfo)
       else
@@ -493,8 +492,7 @@ where
         else pure (some (fuel - 1))
     let targetKind ← analyzeTarget
     match targetKind with
-    | .bind varName => do
-      let names := if varName.hasMacroScopes then #[] else #[some varName]
+    | .bind names => do
       let (info, mainGoalAndState) ← onBind cfg names ss
       /- Continue, if necessary -/
       match mainGoalAndState with
@@ -1206,8 +1204,7 @@ example (l : List Nat) :
 /--
 info: Try this:
 
-  [apply]     simp only [step_simps]
-    let* ⟨ ⟩ ← core.num.U32.overflowing_add_eq.step_spec
+  [apply]   let* ⟨ ⟩ ← core.num.U32.overflowing_add_eq.step_spec
 -/
 #guard_msgs in
 example (x y : U32) :
@@ -1225,7 +1222,6 @@ _✝ : if ↑x + ↑y > UScalar.max UScalarTy.U32 then ↑x✝¹ + U32.size = �
 #guard_msgs in
 example (x y : U32) :
   (lift (core.num.U32.overflowing_add x y)) ⦃ (_, _) => False ⦄ := by
-  simp only [step_simps]
   step*
 
 /--
@@ -1359,6 +1355,15 @@ set_option maxHeartbeats 800000 in
 example (a b : U32) (h : a = b) (hbnd : a.val + b.val ≤ U32.max) :
     letBindContradictionFn a b ⦃ r => r.val = a.val + b.val ⦄ := by
   unfold letBindContradictionFn
+  step*
+
+/- This is a regression test: at some point `step*` would get stuck on `match p with | (o, k) => match o with ...` -/
+example (f : Usize → Result Unit) (p : Option Usize × Usize) (h : p.1 = some 0#usize)
+    (hf : ∀ j, f j ⦃ _ => True ⦄) :
+    (let (o, _) := p
+     match o with
+     | none => ok ()
+     | some j => f j) ⦃ _ => True ⦄ := by
   step*
 
 end Examples

@@ -142,12 +142,12 @@ partial def decomposeProductType (ty : Expr) (n : Nat) : MetaM (List Expr) := do
 partial def mkUncurries (innerLam : Expr) (types : List Expr) : MetaM Expr := do
   match types with
   | [] | [_] => return innerLam
-  | [_, _] => mkAppM ``Function.uncurry #[innerLam]
+  | [_, _] => mkAppM ``_root_.Aeneas.Std.uncurry #[innerLam]
   | _ :: rest =>
     lambdaBoundedTelescope innerLam 1 fun fvars body => do
       let wrappedBody ← mkUncurries body rest
       let newLam ← mkLambdaFVars fvars wrappedBody
-      mkAppM ``Function.uncurry #[newLam]
+      mkAppM ``_root_.Aeneas.Std.uncurry #[newLam]
 
 /-! ## Pattern analysis and continuation building -/
 
@@ -156,6 +156,14 @@ inductive PatShape where
   | prod (subs : Array PatShape)
   | ctor (indName : Name) (subs : Array PatShape)
   deriving Inhabited
+
+/-- First non-anonymous leaf name in the pattern, if any. Used to give
+    nested-tuple binders a meaningful name (e.g. `(a, b)` reuses `a`) so the
+    name survives `Std.uncurry`-reduction in `step*` analysis. -/
+partial def PatShape.firstLeafName? : PatShape → Option Name
+  | .leaf n => if n == `_ then none else some n
+  | .prod subs => subs.findSome? firstLeafName?
+  | .ctor _ subs => subs.findSome? firstLeafName?
 
 /-- Walk `pat` alongside its expected `ty`, producing a `PatShape`. -/
 partial def analyzePat (pat : Term) (ty : Expr) : ElabM PatShape := do
@@ -198,7 +206,7 @@ partial def mkCurriedLambda (subs : List PatShape) (types : List Expr)
   | sub :: restSubs, ty :: restTypes =>
     let n := match sub with
       | .leaf n => n
-      | _ => Name.mkSimple s!"_x{idx}"
+      | _ => (sub.firstLeafName?).getD (Name.mkSimple s!"_x{idx}")
     ElabM.withLocalDeclD n ty fun fv => do
       let innerBody ← mkCurriedLambda restSubs restTypes
         (fun fs => body (#[fv] ++ fs)) (idx + 1)
@@ -214,7 +222,7 @@ partial def unpackAll (subs : List PatShape) (fvs : List Expr) (types : List Exp
       unpackAll restSubs restFvs restTypes fun more => body (extra ++ more)
 
 /-- Unpack `fv : ty` per `sub`, calling `body` with the leaves. Emits
-    `Function.uncurry` for `.prod` and `T.casesOn` for `.ctor`. -/
+    `Std.uncurry` for `.prod` and `T.casesOn` for `.ctor`. -/
 partial def unpackFvar (sub : PatShape) (fv : Expr) (ty : Expr)
     (body : Array Expr → ElabM Expr) : ElabM Expr := do
   match sub with
@@ -407,7 +415,7 @@ partial def elabDoLetPat (pat : Term) (rhs : Term)
   let k ← mkPatContinuation shape α fun _ => elabDoSeqCore rest
   synthesizeSyntheticMVarsNoPostponing
   -- For `.ctor`, `k` is `fun _x => T.casesOn _x …`; headBeta gives `T.casesOn val …`.
-  -- For `.prod` the head is `Function.uncurry`, so `headBeta` is a no-op.
+  -- For `.prod` the head is `Std.uncurry`, so `headBeta` is a no-op.
   return (mkApp k val).headBeta
 
 /-- Elaborate an `if/else-if/…/else` chain as nested `ite`s. `rest` is bound
