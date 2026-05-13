@@ -684,14 +684,14 @@ theorem core.slice.Slice.split_at.spec {T : Type} (s : Slice T) (n : Usize)
         s0.length = n.val ∧ s1.length = s.length - n.val ∧
         s0.val = s.val.take n.val ∧ s1.val = s.val.drop n.val ⦄ := by
   unfold core.slice.Slice.split_at
-  simp only [h, ↓reduceDIte, WP.spec_ok, predn_pair]
+  simp only [h, ↓reduceDIte, WP.spec_ok, uncurry'_pair]
   refine ⟨?_, ?_, ?_, ?_⟩ <;>
   simp only [Slice.length, List.splitAt_eq, List.length_take, inf_eq_left, List.length_drop, *]
 
 /-- **Spec theorem for `core::slice::{[@T]}::split_at_mut`** -/
 -- TODO: ideally the postcondition binder would decompose the result pair as
 -- `(s0 : Slice T) (s1 : Slice T) (back : ...)`, but the `⦃ ⦄` notation's
--- `predn` only handles right-associated products, so the left-associated
+-- `uncurry'` only handles right-associated products, so the left-associated
 -- `((Slice T × Slice T) × BackFn)` return type cannot be split into three
 -- separate binders. We keep projectors for now.
 @[step]
@@ -705,7 +705,7 @@ theorem core.slice.Slice.split_at_mut.spec {T : Type} (s : Slice T) (n : Usize)
           (back (s0', s1')).val = s0'.val ++ s1'.val ∧
           (back (s0', s1')).length = s.length) ⦄ := by
   unfold core.slice.Slice.split_at_mut
-  simp only [h, ↓reduceDIte, WP.spec_ok, predn_pair]
+  simp only [h, ↓reduceDIte, WP.spec_ok, uncurry'_pair]
   refine ⟨?_, ?_, ?_, ?_, fun s0' s1' hs0' hs1' => ?_⟩
   · simp [Slice.length, List.splitAt_eq]; scalar_tac
   · simp [Slice.length, List.splitAt_eq]
@@ -801,7 +801,7 @@ theorem core.slice.index.SliceIndexRangeUsizeSlice.index_mut.step_spec (r : core
   ∀ s2, index_mut_back s2 = s.setSlice! r.start.val s2 ⦄ := by
   simp only [index_mut, UScalar.le_equiv, Slice.length]
   split
-  . simp only [spec_ok, WP.predn, true_and]
+  . simp only [spec_ok, Std.WP.uncurry', true_and]
     simp_lists
     simp_scalar
     simp_lists [Slice.eq_iff]
@@ -843,7 +843,7 @@ theorem core.slice.index.SliceIndexRangeToUsizeSlice.index_mut.step_spec
       ∀ s', (back s').val = s.val.setSlice! 0 s'.val ⦄ := by
   simp only [index_mut]
   split
-  · simp only [spec_ok, WP.predn]
+  · simp only [spec_ok, Std.WP.uncurry']
     refine ⟨trivial, ?_, ?_⟩
     · simp [Slice.length]; scalar_tac
     · intro s'; simp
@@ -884,7 +884,7 @@ theorem core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut.step_spec
       ∀ s', (back s').val = s.val.setSlice! r.start.val s'.val ⦄ := by
   simp only [index_mut, Slice.drop]
   split
-  · simp only [spec_ok, WP.predn]
+  · simp only [spec_ok, Std.WP.uncurry']
     refine ⟨trivial, ?_, ?_⟩
     · simp [Slice.length, List.length_drop]
     · intro s'; simp

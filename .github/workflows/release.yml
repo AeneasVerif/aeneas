@@ -1,8 +1,7 @@
 name: Release
 on:
-  push:
-    branches:
-      - main
+  schedule:
+    - cron: '0 4 * * *' # Nightly at 04:00 UTC
   workflow_dispatch:
 
 jobs:
@@ -20,9 +19,7 @@ jobs:
         run: |
           set -eo pipefail
 
-          # Generates a sortable timestamp: YYYY.MM.DD.HHMMSS. We append the SHA
-          # for uniqueness.
-          TAG_NAME="build-$(date +'%Y.%m.%d.%H%M%S')-${{ github.sha }}"
+          TAG_NAME="nightly-$(date +'%Y.%m.%d')"
           echo "tag_name=${TAG_NAME}" >> $GITHUB_OUTPUT
 
       - name: Create Release

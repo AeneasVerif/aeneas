@@ -988,8 +988,8 @@ let filter_marker_traits (crate : crate) : crate =
                 List.map (self#visit_trait_ref env) parent_refs
               in
               let types =
-                List.map
-                  (fun (n, t) -> (n, self#visit_trait_assoc_ty_impl env t))
+                AssocTypeId.Map.map
+                  (fun t -> self#visit_trait_assoc_ty_impl env t)
                   types
               in
               BuiltinOrAuto (data, parent_refs, types)

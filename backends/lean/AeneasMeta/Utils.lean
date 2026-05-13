@@ -1244,12 +1244,12 @@ def extractGoal (ref : Syntax) (fullGoal : Bool) : TacticM Unit := do
   let msg := "example" ++ assumptions ++ " :\n  " ++ goal.fmt ++ "\n  := by sorry"
   logInfoAt ref m!"{msg}"
 
-elab ref:"extract_goal0" full:"full"? : tactic => do
+elab ref:"extract_goal0" full:(&"full")? : tactic => do
   withMainContext do
   extractGoal ref full.isSome
 
 -- TODO: actually there already exists `extract_goal` in the standard library
-syntax "extract_goal1" ("full")? : tactic
+syntax "extract_goal1" (&"full")? : tactic
 
 macro_rules
 | `(tactic|extract_goal1) =>

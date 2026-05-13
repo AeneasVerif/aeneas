@@ -420,7 +420,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
                 ("Encountered an unsupported constant: "
                 ^ constant_expr_to_string ctx cv
                 ^ " : " ^ ty_to_string ctx cv.ty))
-      | CTraitConst (trait_ref, const_name) -> (
+      | CTraitConst (trait_ref, const_id) -> (
           [%ldebug "trait constant"];
           let ctx0 = ctx in
           (* Simply introduce a fresh symbolic value.
@@ -463,7 +463,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
                   ( ctx0,
                     None,
                     value_as_symbolic span sval.value,
-                    SymbolicAst.VaTraitConstValue (trait_ref, const_name),
+                    SymbolicAst.VaTraitConstValue (trait_ref, const_id),
                     e )
               in
               (borrow, ctx, cf)
@@ -476,7 +476,7 @@ let eval_operand_no_reorganize (config : config) (span : Meta.span)
                   ( ctx0,
                     None,
                     value_as_symbolic span v.value,
-                    SymbolicAst.VaTraitConstValue (trait_ref, const_name),
+                    SymbolicAst.VaTraitConstValue (trait_ref, const_id),
                     e )
               in
               (v, ctx, cf))

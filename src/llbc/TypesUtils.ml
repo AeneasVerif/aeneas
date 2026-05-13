@@ -401,7 +401,7 @@ let generic_args_no_regions (x : generic_args) : bool =
     (including erased regions) *)
 let trait_type_constraint_no_regions (x : trait_type_constraint) : bool =
   try
-    let { trait_ref; type_name = _; ty } = x in
+    let { trait_ref; type_id = _; ty } = x in
     raise_if_region_ty_visitor#visit_trait_ref () trait_ref;
     raise_if_region_ty_visitor#visit_ty () ty;
     true
