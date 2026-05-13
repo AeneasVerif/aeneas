@@ -258,7 +258,7 @@ def postName (base : Name) (suffix : String) : Name :=
   base.getPrefix ++ .mkSimple (base.getString! ++ "_post" ++ suffix)
 
 /-- A tree of fvars reflecting the decomposition structure of a continuation's input.
-See `uncurryTelescope` for the full specification. -/
+See `uncurryTelescope`. -/
 inductive FVarTree where
   | leaf (fvar : Expr)
   | pair (left right : FVarTree)
@@ -670,15 +670,17 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
         -- Generate a name for an output var
         mkFreshUserName `x
       else
-        -- Generate a name for a post-condition. Prefer pairing each post with
-        -- the corresponding output's name (e.g. `a_post`); otherwise fall
-        -- back to `<basename>_post<idx>`.
-        if let some (some n) := args.ids[nPropsBefore]? then
-          if !n.hasMacroScopes then return postName n ""
-        if let some baseName := args.postsBasename then
-          let idx := if totalNumProps = 1 then "" else s!"{nPropsBefore + 1}"
-          return postName baseName idx
-        mkFreshAnonPropUserName
+        -- Generate a name for a post-condition
+        match args.postsBasename with
+        | none => mkFreshAnonPropUserName
+        | some baseName =>
+          let (root, baseStr) := match baseName with
+            | .str root s => (root, s ++ "_post")
+            | _ => (.anonymous, "_post")
+          let postIdx :=
+            if totalNumProps = 1 then ""
+            else s!"{nPropsBefore + 1}"
+          pure (Name.str root s!"{baseStr}{postIdx}")
   let mut ids := #[]
   let mut nPropsBefore := 0
   for h : i in [0:outputIsProp.size] do
@@ -1464,10 +1466,10 @@ error: unsolved goals
 case a
 x y z : ℕ
 h : y = x + 1
-z_post : z = x + 2
+_✝¹ : z = x + 2
 y1 z1 : ℕ
 h1 : y1 = y + 1
-z1_post : z1 = y + 2
+_✝ : z1 = y + 2
 ⊢ y1 = x + 2
   -/
   #guard_msgs in
@@ -1851,8 +1853,8 @@ f : U32 → Result U32
 h : ∀ (x : U32), f x ⦃ y => ∃ z > 0, ↑y = ↑x + z ⦄
 y : ℕ
 z : U32
-y_post : y > 0
-z_post : ↑z = ↑x + y
+_✝¹ : y > 0
+_✝ : ↑z = ↑x + y
 ⊢ ↑z > ↑x
   -/
   #guard_msgs in
