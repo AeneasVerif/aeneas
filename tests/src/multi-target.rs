@@ -68,3 +68,17 @@ fn dispatch_add(a: u128, b: u128) -> u128 {
         }
     }
 }
+
+#[cfg(target_arch = "x86_64")]
+pub struct Foo {
+    pub data: [u16; 8],
+}
+
+#[cfg(target_arch = "aarch64")]
+pub struct Foo {
+    pub data: [u16; 4],
+}
+
+impl Foo {
+    fn f(&self) {}
+}

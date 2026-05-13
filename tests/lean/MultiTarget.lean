@@ -23,19 +23,19 @@ structure SimdTrait (Self : Type) (Self_Vec : Type) where
   coremarkerCopyInst : core.marker.Copy Self_Vec
   add : Self_Vec → Self_Vec → Result Self_Vec
 
-/-- [multi_target::x86::Sse2::x86_64-apple-darwin]
+/-- [multi_target::x86::Sse2]
     Source: 'tests/src/multi-target.rs', lines 14:4-14:20
     Visibility: public -/
 @[reducible]
 def x86.Sse2 := Unit
 
-/-- [multi_target::x86::{multi_target::SimdTrait<u128> for multi_target::x86::Sse2::x86_64-apple-darwin}::add::x86_64-apple-darwin]:
+/-- [multi_target::x86::{multi_target::SimdTrait<u128> for multi_target::x86::Sse2}::add]:
     Source: 'tests/src/multi-target.rs', lines 19:8-21:9 -/
 def x86.Sse2.Insts.Multi_targetSimdTraitU128.add
   (a : Std.U128) (b : Std.U128) : Result Std.U128 := do
   ok (core.num.U128.wrapping_add a b)
 
-/-- Trait implementation: [multi_target::x86::{multi_target::SimdTrait<u128> for multi_target::x86::Sse2::x86_64-apple-darwin}::x86_64-apple-darwin]
+/-- Trait implementation: [multi_target::x86::{multi_target::SimdTrait<u128> for multi_target::x86::Sse2}::x86_64-apple-darwin]
     Source: 'tests/src/multi-target.rs', lines 16:4-22:5 -/
 @[reducible]
 def x86.Sse2.Insts.Multi_targetSimdTraitU128 : SimdTrait x86.Sse2 Std.U128 := {
@@ -43,19 +43,19 @@ def x86.Sse2.Insts.Multi_targetSimdTraitU128 : SimdTrait x86.Sse2 Std.U128 := {
   add := x86.Sse2.Insts.Multi_targetSimdTraitU128.add
 }
 
-/-- [multi_target::arm::Neon::aarch64-apple-darwin]
+/-- [multi_target::arm::Neon]
     Source: 'tests/src/multi-target.rs', lines 29:4-29:20
     Visibility: public -/
 @[reducible]
 def arm.Neon := Unit
 
-/-- [multi_target::arm::{multi_target::SimdTrait<u128> for multi_target::arm::Neon::aarch64-apple-darwin}::add::aarch64-apple-darwin]:
+/-- [multi_target::arm::{multi_target::SimdTrait<u128> for multi_target::arm::Neon}::add]:
     Source: 'tests/src/multi-target.rs', lines 34:8-36:9 -/
 def arm.Neon.Insts.Multi_targetSimdTraitU128.add
   (a : Std.U128) (b : Std.U128) : Result Std.U128 := do
   ok (core.num.U128.wrapping_add a b)
 
-/-- Trait implementation: [multi_target::arm::{multi_target::SimdTrait<u128> for multi_target::arm::Neon::aarch64-apple-darwin}::aarch64-apple-darwin]
+/-- Trait implementation: [multi_target::arm::{multi_target::SimdTrait<u128> for multi_target::arm::Neon}::aarch64-apple-darwin]
     Source: 'tests/src/multi-target.rs', lines 31:4-37:5 -/
 @[reducible]
 def arm.Neon.Insts.Multi_targetSimdTraitU128 : SimdTrait arm.Neon Std.U128 := {
@@ -84,7 +84,7 @@ def cpu_features_present (_mask : Std.U32) : Result Bool := do
 
 /-- [multi_target::dispatch_add::x86_64-apple-darwin]:
     Source: 'tests/src/multi-target.rs', lines 52:0-70:1 -/
-def dispatch_add_x86_64_apple_darwin
+def dispatch_add.«x86_64-apple-darwin»
   (a : Std.U128) (b : Std.U128) : Result Std.U128 := do
   let b1 ← cpu_features_present 1#u32
   if b1
@@ -93,7 +93,7 @@ def dispatch_add_x86_64_apple_darwin
 
 /-- [multi_target::dispatch_add::aarch64-apple-darwin]:
     Source: 'tests/src/multi-target.rs', lines 52:0-70:1 -/
-def dispatch_add_aarch64_apple_darwin
+def dispatch_add.«aarch64-apple-darwin»
   (a : Std.U128) (b : Std.U128) : Result Std.U128 := do
   let b1 ← cpu_features_present 2#u32
   if b1
@@ -105,7 +105,31 @@ def dispatch_add_aarch64_apple_darwin
 def dispatch_add (i : Std.U128) (i1 : Std.U128) : Result Std.U128 := do
   let tgt ← get_target
   if tgt = (toStr "x86_64-apple-darwin")
-  then dispatch_add_x86_64_apple_darwin i i1
-  else dispatch_add_aarch64_apple_darwin i i1
+  then dispatch_add.«x86_64-apple-darwin» i i1
+  else dispatch_add.«aarch64-apple-darwin» i i1
+
+/-- [multi_target::Foo::x86_64-apple-darwin]
+    Source: 'tests/src/multi-target.rs', lines 73:0-75:1
+    Visibility: public -/
+structure Foo.«x86_64-apple-darwin» where
+  data : Array Std.U16 8#usize
+
+/-- [multi_target::Foo::aarch64-apple-darwin]
+    Source: 'tests/src/multi-target.rs', lines 78:0-80:1
+    Visibility: public -/
+structure Foo.«aarch64-apple-darwin» where
+  data : Array Std.U16 4#usize
+
+/-- [multi_target::{multi_target::Foo::x86_64-apple-darwin}::f]:
+    Source: 'tests/src/multi-target.rs', lines 83:4-83:18 -/
+def «x86_64-apple-darwin».f
+  (self : Foo.«x86_64-apple-darwin») : Result Unit := do
+  ok ()
+
+/-- [multi_target::{multi_target::Foo::aarch64-apple-darwin}::f]:
+    Source: 'tests/src/multi-target.rs', lines 83:4-83:18 -/
+def «aarch64-apple-darwin».f
+  (self : Foo.«aarch64-apple-darwin») : Result Unit := do
+  ok ()
 
 end multi_target

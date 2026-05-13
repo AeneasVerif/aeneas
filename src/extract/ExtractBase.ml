@@ -761,6 +761,29 @@ let id_to_string (span : Meta.span option) (id : id) (ctx : extraction_ctx) :
 
 let ctx_add (span : Meta.span) (id : id) (name : string) (ctx : extraction_ctx)
     : extraction_ctx =
+  (* In Lean, identifiers cannot contain "-". We wrap any dot-separated
+     component that contains a hyphen in French quotes (« ... »). *)
+  let name =
+    match backend () with
+    | Lean ->
+        let parts = String.split_on_char '.' name in
+        let parts =
+          List.map
+            (fun s ->
+              let len = String.length s in
+              let already_quoted =
+                len >= 4
+                && String.sub s 0 2 = "«"
+                && String.sub s (len - 2) 2 = "»"
+              in
+              if String.contains s '-' && not already_quoted then "«" ^ s ^ "»"
+              else s)
+            parts
+        in
+        String.concat "." parts
+    | _ -> name
+  in
+  (* Actually add the name *)
   let id_to_string (id : id) : string = id_to_string (Some span) id ctx in
   let names_maps =
     names_maps_add id_to_string id (Some span) name ctx.names_maps
