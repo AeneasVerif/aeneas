@@ -396,7 +396,7 @@ def analyzeTarget : TacticM TargetKind := do
       if let .const ``Bind.bind .. := e.getAppFn then
         let #[_m, _self, _α, _β, _value, cont] := e.getAppArgs
           | throwError "Expected bind to have 6 arguments, found {← e.getAppArgs.mapM (liftM ∘ ppExpr)}"
-        let names ← Step.getLeafNamesFromCont cont
+        let names ← Step.getPostNames cont
         pure (.bind names)
       else if let .some bfInfo ← Bifurcation.Info.ofExpr e then
         pure (.switch bfInfo)

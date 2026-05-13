@@ -58,12 +58,11 @@ def testTuples1 : Result Nat := do
   let (e, f, g) ← threeNats
   ok (a + b + c + e + f + g)
 
--- TODO: the generated script is not correct (several outputs are missing)
 /--
 info: Try this:
 
-  [apply]     let* ⟨ a, _, _, a_post, a_post2, a_post3 ⟩ ← threeNats_spec
-    let* ⟨ e, _, _, e_post, e_post2, e_post3 ⟩ ← threeNats_spec
+  [apply]     let* ⟨ a, b, c, a_post, b_post, c_post ⟩ ← threeNats_spec
+    let* ⟨ e, f, g, e_post, f_post, g_post ⟩ ← threeNats_spec
     agrind
 -/
 #guard_msgs in

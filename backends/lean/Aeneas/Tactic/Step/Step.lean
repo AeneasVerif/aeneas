@@ -257,61 +257,144 @@ def fvarNameSlot (fv : Expr) : MetaM (Option Name) := do
 def postName (base : Name) (suffix : String) : Name :=
   base.getPrefix ++ .mkSimple (base.getString! ++ "_post" ++ suffix)
 
-/-- Leaf names of a bind continuation's pattern, in source order — one slot per
-    leaf of the user's `let pat ← …`. -/
-partial def getLeafNamesFromCont (cont : Expr) : MetaM (Array (Option Name)) := do
-  let cont := cont.consumeMData
-  let lam := match_expr cont with
-    | Std.uncurry _ _ _ f => f.consumeMData
-    | _ => cont
-  Prod.fst <$> ofLambda lam
+/-- A tree of fvars reflecting the decomposition structure of a continuation's input.
+See `uncurryTelescope` for the full specification. -/
+inductive FVarTree where
+  | leaf (fvar : Expr)
+  | pair (left right : FVarTree)
+deriving Inhabited
+
+/-- A tree of binder names, obtained from an `FVarTree`. -/
+inductive NameTree where
+  | leaf (name : Option Name)
+  | pair (left right : NameTree)
+deriving Inhabited, Repr
+
+/-- Flatten a `NameTree` into a left-to-right array of leaf names. -/
+def NameTree.flatten : NameTree → Array (Option Name)
+  | .leaf n => #[n]
+  | .pair l r => l.flatten ++ r.flatten
+
+/-- Convert an `FVarTree` to a `NameTree` by reading each fvar's user name. -/
+def FVarTree.toNameTree : FVarTree → MetaM NameTree
+  | .leaf fv => return .leaf (← fvarNameSlot fv)
+  | .pair l r => return .pair (← l.toNameTree) (← r.toNameTree)
+
+/-- Peel `uncurry`/`uncurry'`/lambda wrappers from a continuation expression,
+introducing fvars into the local context, and call `k` with the resulting
+`FVarTree` and remaining body. `k` receives `none` when no binder structure
+is found.
+
+See the examples and state descriptions below for the full specification.
+
+## States
+
+- **A** (`uncurryTelescope`): entry — dispatch on `uncurry`/`uncurry'`/lambda/other
+- **B** (`intoUncurry`): inside uncurry — peel up to 2 lambdas from `f`
+- **C** (`decomposeFVar`): check if an fvar is destructured by applied `uncurry` in body -/
+partial def uncurryTelescope (e : Expr) (k : Option FVarTree → Expr → MetaM α) : MetaM α := do
+  /- ## State A: Entry
+     - `e = uncurry f` or `e = uncurry' f`: go to B(f, ...).
+     - `e = fun x => body`: plain lambda, introduce fvar, call k.
+     - Otherwise: call k none e. -/
+  let e := e.consumeMData
+  match_expr e with
+  | Std.WP.uncurry' _ _ f =>
+    intoUncurry f.consumeMData (fun tree body => k (some tree) body)
+  | Std.uncurry _ _ _ f =>
+    intoUncurry f.consumeMData (fun tree body => k (some tree) body)
+  | _ =>
+    if e.isLambda then
+      Meta.lambdaBoundedTelescope e 1 fun args body => do
+        if args.size == 0 then return ← k none e
+        let x := args[0]!
+        let ty ← x.fvarId!.getType
+        if ty.isConstOf ``Unit || ty.isConstOf ``PUnit then
+          k none body
+        else
+          k (some (.leaf x)) body
+    else
+      k none e
 where
-  /-- Telescope a (possibly curried) lambda, recursing into each binder. -/
-  ofLambda (lam : Expr) : MetaM (Array (Option Name) × Expr) := do
-    unless lam.isLambda do return (#[], lam)
-    Meta.lambdaTelescope lam fun vars body =>
-      vars.foldlM (init := (#[], body)) fun (acc, body) var => do
-        let (sub, body) ← ofBinder var body
-        pure (acc ++ sub, body)
-  /-- Leaves reachable from `var`, following any `Std.uncurry … var`
-      destructuring in `body`. -/
-  ofBinder (var : Expr) (body : Expr) : MetaM (Array (Option Name) × Expr) := do
+  /- ## State B: Peel uncurry — enter the lambda telescope
+     Input: `f` is the function inside `uncurry`/`uncurry'`. After stripping,
+     `f` is one of:
+       | 2 | `fun a b => body`
+       | 3 | `fun x => uncurry' (fun y z => body)`
+       | 4 | `uncurry (fun a b c => body)`
+       | 5 | `fun a => uncurry (fun b c => body)`
+       | 6 | `fun _p c => (uncurry (fun a b => body)) _p`
+       | 7 | `fun _p₀ _p₁ => (uncurry (fun a b => (uncurry (fun c d => body)) _p₁)) _p₀`
+       | 8 | `fun _p d => (uncurry (fun _q c => (uncurry (fun a b => body)) _q)) _p`
+  -/
+  intoUncurry (f : Expr) (k : FVarTree → Expr → MetaM α) : MetaM α := do
+    let f := f.consumeMData
+    if f.isLambda then
+      Meta.lambdaBoundedTelescope f 2 fun args body => do
+        if args.size == 2 then
+          /- 2 lambdas (cases 2, 6, 7, 8): resolve each fvar via C. -/
+          decomposeFVar args[0]! body fun left body' =>
+            decomposeFVar args[1]! body' fun right body'' =>
+              k (.pair left right) body''
+        else if args.size == 1 then
+          /- 1 lambda (cases 3, 5): x₀ is the first element. The body starts
+             with uncurry'/uncurry (Lean didn't eta-expand). Go to A on body
+             to get the second subtree. -/
+          let x₀ := args[0]!
+          uncurryTelescope body fun optRight body' =>
+            match optRight with
+            | some right => k (.pair (.leaf x₀) right) body'
+            | none => k (.leaf x₀) body'
+        else
+          do k (.leaf (.fvar (← Lean.mkFreshFVarId))) f
+    else
+      /- No lambdas — must be a nested uncurry (case 4: `f = uncurry g`).
+         Go to A(f) to decompose the first element, then A(rest) for the
+         second element. -/
+      uncurryTelescope f fun optLeft rest =>
+        uncurryTelescope rest fun optRight body' =>
+          match optLeft, optRight with
+          | some left, some right => k (.pair left right) body'
+          | some left, none => k left body'
+          | none, some right => k right body'
+          | none, none => k (.leaf (.fvar default)) body'
+  /- ## State C: Decompose one fvar
+     Check if `x` is destructured by `uncurry g x` (5-arg applied uncurry)
+     in `body`. If so, strip `x`, go to A(uncurry g) to decompose it.
+     Otherwise return `leaf x`. -/
+  decomposeFVar (x : Expr) (body : Expr) (k : FVarTree → Expr → MetaM α) : MetaM α := do
     let body := body.consumeMData
     match_expr body with
-    | Std.uncurry _ _ _ f arg =>
-      let f := f.consumeMData
-      unless arg.consumeMData == var ∧ f.isLambda do return (#[← fvarNameSlot var], body)
-      ofLambda f
-    | _ => return (#[← fvarNameSlot var], body)
+    | Std.uncurry _ _ _ _f arg =>
+      let arg := arg.consumeMData
+      if arg.isFVar && arg == x then
+        /- `body = uncurry g x`: strip x to get `uncurry g` (4-arg app).
+           Go to A to fully decompose. -/
+        let uncurryG := body.appFn!
+        uncurryTelescope uncurryG fun optTree body' =>
+          match optTree with
+          | some tree => k tree body'
+          | none => k (.leaf x) body'
+      else
+        k (.leaf x) body
+    | _ =>
+      k (.leaf x) body
 
-/-- Extract names from a post-condition or bind-continuation expression by
-    recursively peeling lambdas and wrappers (`WP.curry`, `Std.WP.uncurry'`,
-    `Std.uncurry`). Returns `some name` for user-provided names and
-    `none` for macro-scoped or auto-synthesized (`_xN`) ones. -/
-partial def getPostNames (e : Expr) : MetaM (Array (Option Name)) := do
-  let e := e.consumeMData
-  if e.isLambda then
-    lambdaTelescope e fun vars body => do
-      let vars ← vars.filterMapM fun x => do
-        let ty ← x.fvarId!.getType
-        if ty.isConstOf ``Unit || ty.isConstOf ``PUnit then return none
-        let name ← x.fvarId!.getUserName
-        if name.hasMacroScopes ∨ Name.isElabSynthesized name then pure (some none)
-        else pure (some (some name))
-      let rest ← getPostNames body
-      pure (vars ++ rest)
-  else
-    match_expr e with
-    | Std.WP.curry _ _ _ f => getPostNames f
-    | Std.WP.uncurry' _ _ p => getPostNames p
-    | Std.uncurry _ _ _ f => getPostNames f
-    | Std.uncurry _ _ _ f _ => getPostNames f
-    | _ => pure #[]
+/-- Analyze a continuation expression to compute a `NameTree`.
+Wrapper around `uncurryTelescope` that extracts names from the `FVarTree`. -/
+def getContInput (e : Expr) : MetaM NameTree := do
+  uncurryTelescope e fun optTree _body => do
+    match optTree with
+    | some tree => tree.toNameTree
+    | none => return .leaf none
+
+/-- Extract names from a post-condition or bind-continuation expression. -/
+def getPostNames (e : Expr) : MetaM (Array (Option Name)) := do
+  return (← getContInput e).flatten
+
 
 /-- Extract the variable names from the bind continuation in the current goal.
-    Returns an empty array if the goal is not a bind. Reuses `getPostNames`
-    since the bind continuation has the same `Std.uncurry`-wrapped lambda
-    shape as a post-condition. -/
+    Returns an empty array if the goal is not a bind. -/
 def getBindVarNames : TacticM (Array (Option Name)) := do
   try
     withMainContext do
