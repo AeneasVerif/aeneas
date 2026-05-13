@@ -12,6 +12,42 @@ open ValuesUtils
 (** The local logger *)
 let log = Logging.interp_log
 
+(** Wrapper around {!Charon.GAstUtils.get_target_information} that handles
+    multi-layout crates by raising a recoverable [CFailure] instead of an
+    uncaught [Failure]. *)
+let get_target_information (span : Meta.span) (crate : LlbcAst.crate) =
+  try Charon.GAstUtils.get_target_information crate
+  with Failure _ ->
+    [%craise] span
+      "Multi-target crate with different layouts (e.g., mixed 32-bit and \
+       64-bit targets): cannot determine a unique target pointer size"
+
+let get_target_min_ptr_size (crate : LlbcAst.crate) : int =
+  match crate.target_information with
+  | (_, info) :: infos ->
+      let min = ref info.target_pointer_size in
+      List.iter
+        (fun (_, info) ->
+          if info.target_pointer_size < !min then
+            min := info.target_pointer_size)
+        infos;
+      !min
+  | _ -> [%craise_opt_span] None "Unexpected"
+
+let get_target_ptr_size (span : Meta.span) (crate : LlbcAst.crate) =
+  match crate.target_information with
+  | [ (_, info) ] -> info.target_pointer_size
+  | (_, info) :: rest
+    when List.for_all
+           (fun (_, i) -> i.target_pointer_size = info.target_pointer_size)
+           rest ->
+      (* All targets agree on the layout — safe to use any one. *)
+      info.target_pointer_size
+  | _ ->
+      [%craise] span
+        "Multi-target crate with different pointer sizes (e.g., mixed 32-bit \
+         and 64-bit targets): cannot determine a unique target pointer size"
+
 (** Some utilities *)
 
 let eval_ctx_to_string = Print.Contexts.eval_ctx_to_string
