@@ -45,7 +45,7 @@ theorem callPair_spec (f g : U32 → Result U32) (xy : U32 × U32)
 /--
 info: Try this:
 
-  [apply]     let* ⟨ ab, _, ab_post, ab_post2 ⟩ ← [ +inferPost ] callPair_spec
+  [apply]     let* ⟨ ab, _, ab_post1, ab_post2 ⟩ ← [ +inferPost ] callPair_spec
     case hf => let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
     case hg => let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
     agrind
@@ -91,7 +91,7 @@ def callSlicemapM (x : Slice U32) : Result (Slice U32) := do
 /--
 info: Try this:
 
-  [apply]     let* ⟨ y, y_post, y_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec
+  [apply]     let* ⟨ y, y_post1, y_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec
     case hf =>
       intros i hi
       let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
@@ -114,11 +114,11 @@ def callSlicemapMTwice (x : Slice U32) : Result (Slice U32) := do
 /--
 info: Try this:
 
-  [apply]     let* ⟨ y, y_post, y_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec
+  [apply]     let* ⟨ y, y_post1, y_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec
     case hf =>
       intros i hi
       let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
-    let* ⟨ z, z_post, z_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec
+    let* ⟨ z, z_post1, z_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec
     case hf =>
       intros i hi
       let* ⟨ ⟩ ← [ +inferPost ] U32.mul_spec
