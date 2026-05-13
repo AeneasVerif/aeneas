@@ -492,9 +492,7 @@ where
         else pure (some (fuel - 1))
     let targetKind ← analyzeTarget
     match targetKind with
-    | .bind varNames => do
-      -- Fall back to post-condition names if every binder slot is `none`.
-      let names := if varNames.all Option.isNone then #[] else varNames
+    | .bind names => do
       let (info, mainGoalAndState) ← onBind cfg names ss
       /- Continue, if necessary -/
       match mainGoalAndState with
