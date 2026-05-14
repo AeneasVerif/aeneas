@@ -68,11 +68,11 @@ attribute [step_simps]
   and_assoc Std.Result.ok.injEq Prod.mk.injEq
   exists_eq_left exists_eq_left' exists_eq_right exists_eq_right' exists_eq exists_eq' true_and and_true
   Std.WP.spec_ok
-  -- This one gets only applied to full applications of `predn`, which are typically revealed after applying `spec_ok`
-  Std.WP.predn_eq
+  -- This one gets only applied to full applications of `uncurry'`, which are typically revealed after applying `spec_ok`
+  Std.WP.uncurry'_eq
 
 attribute [step_simps] Aeneas.Std.bind_assoc_eq
-attribute [step_simps] Function.uncurry_apply_pair
+attribute [step_simps] Aeneas.Std.uncurry_apply_pair
 
 attribute [step_post_simps]
   -- We often see expressions like `Int.ofNat 3`
@@ -240,55 +240,171 @@ def getFirstBind (goalTy : Expr) : MetaM (Bool × Expr) := do
   then pure (true, args[4])
   else pure (false, compTy)
 
-/-- Extract the variable name from the let-binding in the current goal.
-    Returns `none` if the goal if we can't extract the name (the goal is not
-    a bind for instance) or if the name is compiler-generated. -/
-def getBindVarName : TacticM (Option Name) := do
+/-- Names introduced by the `do` elaborator's `mkPatContinuation` as a
+    fallback (`_xN`) when no leaf name is available — e.g. all leaves are
+    `_`. These get filtered out so we fall back to spec post-condition names. -/
+def Name.isElabSynthesized : Name → Bool
+  | .str .anonymous s => s.startsWith "_x" && s.length > 2 && (s.drop 2).all Char.isDigit
+  | _ => false
+
+/-- Convert an fvar's user name into the `Option Name` slot used by `step*`.
+    Returns `none` for macro-scoped names and `_xN` placeholders. -/
+def fvarNameSlot (fv : Expr) : MetaM (Option Name) := do
+  let n ← fv.fvarId!.getUserName
+  pure (if n.hasMacroScopes ∨ Name.isElabSynthesized n then none else some n)
+
+/-- Used to name post-condition hypotheses introduced by `step`. -/
+def postName (base : Name) (suffix : String) : Name :=
+  base.getPrefix ++ .mkSimple (base.getString! ++ "_post" ++ suffix)
+
+/-- A tree of fvars reflecting the decomposition structure of a continuation's input.
+See `uncurryTelescope`. -/
+inductive FVarTree where
+  | leaf (fvar : Expr)
+  | pair (left right : FVarTree)
+deriving Inhabited
+
+/-- A tree of binder names, obtained from an `FVarTree`. -/
+inductive NameTree where
+  | leaf (name : Option Name)
+  | pair (left right : NameTree)
+deriving Inhabited, Repr
+
+/-- Flatten a `NameTree` into a left-to-right array of leaf names. -/
+def NameTree.flatten : NameTree → Array (Option Name)
+  | .leaf n => #[n]
+  | .pair l r => l.flatten ++ r.flatten
+
+/-- Convert an `FVarTree` to a `NameTree` by reading each fvar's user name. -/
+def FVarTree.toNameTree : FVarTree → MetaM NameTree
+  | .leaf fv => return .leaf (← fvarNameSlot fv)
+  | .pair l r => return .pair (← l.toNameTree) (← r.toNameTree)
+
+/-- Peel `uncurry`/`uncurry'`/lambda wrappers from a continuation expression,
+introducing fvars into the local context, and call `k` with the resulting
+`FVarTree` and remaining body. `k` receives `none` when no binder structure
+is found.
+
+See the examples and state descriptions below for the full specification.
+
+## States
+
+- **A** (`uncurryTelescope`): entry — dispatch on `uncurry`/`uncurry'`/lambda/other
+- **B** (`intoUncurry`): inside uncurry — peel up to 2 lambdas from `f`
+- **C** (`decomposeFVar`): check if an fvar is destructured by applied `uncurry` in body -/
+partial def uncurryTelescope (e : Expr) (k : Option FVarTree → Expr → MetaM α) : MetaM α := do
+  /- ## State A: Entry
+     - `e = uncurry f` or `e = uncurry' f`: go to B(f, ...).
+     - `e = fun x => body`: plain lambda, introduce fvar, call k.
+     - Otherwise: call k none e. -/
+  let e := e.consumeMData
+  match_expr e with
+  | Std.WP.uncurry' _ _ f =>
+    intoUncurry f.consumeMData (fun tree body => k (some tree) body)
+  | Std.uncurry _ _ _ f =>
+    intoUncurry f.consumeMData (fun tree body => k (some tree) body)
+  | _ =>
+    if e.isLambda then
+      Meta.lambdaBoundedTelescope e 1 fun args body => do
+        if args.size == 0 then return ← k none e
+        let x := args[0]!
+        let ty ← x.fvarId!.getType
+        if ty.isConstOf ``Unit || ty.isConstOf ``PUnit then
+          k none body
+        else
+          k (some (.leaf x)) body
+    else
+      k none e
+where
+  /- ## State B: Peel uncurry — enter the lambda telescope
+     Input: `f` is the function inside `uncurry`/`uncurry'`. After stripping,
+     `f` is one of:
+       | 2 | `fun a b => body`
+       | 3 | `fun x => uncurry' (fun y z => body)`
+       | 4 | `uncurry (fun a b c => body)`
+       | 5 | `fun a => uncurry (fun b c => body)`
+       | 6 | `fun _p c => (uncurry (fun a b => body)) _p`
+       | 7 | `fun _p₀ _p₁ => (uncurry (fun a b => (uncurry (fun c d => body)) _p₁)) _p₀`
+       | 8 | `fun _p d => (uncurry (fun _q c => (uncurry (fun a b => body)) _q)) _p`
+  -/
+  intoUncurry (f : Expr) (k : FVarTree → Expr → MetaM α) : MetaM α := do
+    let f := f.consumeMData
+    if f.isLambda then
+      Meta.lambdaBoundedTelescope f 2 fun args body => do
+        if args.size == 2 then
+          /- 2 lambdas (cases 2, 6, 7, 8): resolve each fvar via C. -/
+          decomposeFVar args[0]! body fun left body' =>
+            decomposeFVar args[1]! body' fun right body'' =>
+              k (.pair left right) body''
+        else if args.size == 1 then
+          /- 1 lambda (cases 3, 5): x₀ is the first element. The body starts
+             with uncurry'/uncurry (Lean didn't eta-expand). Go to A on body
+             to get the second subtree. -/
+          let x₀ := args[0]!
+          uncurryTelescope body fun optRight body' =>
+            match optRight with
+            | some right => k (.pair (.leaf x₀) right) body'
+            | none => k (.leaf x₀) body'
+        else
+          do k (.leaf (.fvar (← Lean.mkFreshFVarId))) f
+    else
+      /- No lambdas — must be a nested uncurry (case 4: `f = uncurry g`).
+         Go to A(f) to decompose the first element, then A(rest) for the
+         second element. -/
+      uncurryTelescope f fun optLeft rest =>
+        uncurryTelescope rest fun optRight body' =>
+          match optLeft, optRight with
+          | some left, some right => k (.pair left right) body'
+          | some left, none => k left body'
+          | none, some right => k right body'
+          | none, none => k (.leaf (.fvar default)) body'
+  /- ## State C: Decompose one fvar
+     Check if `x` is destructured by `uncurry g x` (5-arg applied uncurry)
+     in `body`. If so, strip `x`, go to A(uncurry g) to decompose it.
+     Otherwise return `leaf x`. -/
+  decomposeFVar (x : Expr) (body : Expr) (k : FVarTree → Expr → MetaM α) : MetaM α := do
+    let body := body.consumeMData
+    match_expr body with
+    | Std.uncurry _ _ _ _f arg =>
+      let arg := arg.consumeMData
+      if arg.isFVar && arg == x then
+        /- `body = uncurry g x`: strip x to get `uncurry g` (4-arg app).
+           Go to A to fully decompose. -/
+        let uncurryG := body.appFn!
+        uncurryTelescope uncurryG fun optTree body' =>
+          match optTree with
+          | some tree => k tree body'
+          | none => k (.leaf x) body'
+      else
+        k (.leaf x) body
+    | _ =>
+      k (.leaf x) body
+
+/-- Analyze a continuation expression to compute a `NameTree`.
+Wrapper around `uncurryTelescope` that extracts names from the `FVarTree`. -/
+def getContInput (e : Expr) : MetaM NameTree := do
+  uncurryTelescope e fun optTree _body => do
+    match optTree with
+    | some tree => tree.toNameTree
+    | none => return .leaf none
+
+/-- Extract names from a post-condition or bind-continuation expression. -/
+def getPostNames (e : Expr) : MetaM (Array (Option Name)) := do
+  return (← getContInput e).flatten
+
+
+/-- Extract the variable names from the bind continuation in the current goal.
+    Returns an empty array if the goal is not a bind. -/
+def getBindVarNames : TacticM (Array (Option Name)) := do
   try
     withMainContext do
     let goalTy ← (← getMainGoal).getType
     let goalTy ← instantiateMVars goalTy
     forallTelescope goalTy fun _ goalTy => do
-    let (spec?, args) := goalTy.consumeMData.withApp (fun f args => (f, args))
-    if h : spec?.isConstOf ``Std.WP.spec ∧ args.size = 3 then
-      let e := args[1]
-      let bargs := e.getAppArgs
-      let fn := e.getAppFn
-      if h2 : (fn.isConstOf ``Bind.bind ∨ fn.isConstOf ``bind) ∧ bargs.size = 6 then
-        let cont := bargs[5]
-        lambdaOne cont fun x _ => do
-          let rawName ← x.fvarId!.getUserName
-          -- Skip compiler-generated names (e.g., `__discr` from pattern matching)
-          if rawName.hasMacroScopes then return none
-          else pure (some rawName)
-      else return none
-    else return none
-  catch _ => pure none
-
-/-- Extract names from a post-condition expression by recursively decomposing lambdas and `WP.curry`.
-    Returns `some name` for user-provided names and `none` for anonymous/compiler-generated ones.
-
-    For instance, given: `e ⦃ x _ y z => ... ⦄`, this function outputs: `[some x, none, some y, some z]`.
--/
-partial def getPostNames (e : Expr) : MetaM (Array (Option Name)) := do
-  let e := e.consumeMData
-  if e.isLambda then
-    lambdaTelescope e fun vars body => do
-      let vars ← vars.filterMapM fun x => do
-        let ty ← x.fvarId!.getType
-        -- Filter `Unit`/`PUnit` types (no meaningful output)
-        if ty.isConstOf ``Unit || ty.isConstOf ``PUnit then return none
-        let name ← x.fvarId!.getUserName
-        if name.hasMacroScopes then pure (some none) else pure (some (some name))
-      let rest ← getPostNames body
-      pure (vars ++ rest)
-  else if e.isAppOf ``Std.WP.curry then
-    -- WP.curry {α β γ} (f : α × β → γ) : α → β → γ
-    let args := e.getAppArgs
-    if h: args.size = 4 then
-      getPostNames args[3]
-    else pure #[]
-  else pure #[]
+    let_expr Std.WP.spec _ m _ := goalTy | return #[]
+    let_expr Bind.bind _ _ _ _ _ cont := m | return #[]
+    getPostNames cont
+  catch _ => pure #[]
 
 /-- Extract the names used in the post-condition of the current goal.
     The goal should have the shape `spec program post`. -/
@@ -303,12 +419,13 @@ def getPostNamesFromGoal : TacticM (Array (Option Name)) := do
   catch _ => pure #[]
 
 /-- Extract variable names from the current goal for naming `step` outputs.
-    If the goal is a bind (`let x ← ...`), extracts the binding name.
-    Otherwise, extracts names from the post-condition. -/
+    If the goal is a bind (`let x ← ...` or `let (a, b, …) ← …`), extracts the
+    binding names; otherwise falls back to the spec's post-condition. -/
 def getVarNamesFromGoal : TacticM (Array (Option Name) × Option Name) := do
-  match ← getBindVarName with
-  | some name => pure (#[some name], some name)
-  | none =>
+  let bindNames ← getBindVarNames
+  if bindNames.any Option.isSome then
+    pure (bindNames, bindNames.findSome? id)
+  else
     let names ← getPostNamesFromGoal
     pure (names, names[0]?.join)
 
@@ -464,29 +581,37 @@ def introPrettyEquality (args : Args) (fExpr : Expr) (outputFVars : Array Expr) 
 def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
   TacticM (Option MainGoal) := do
   withTraceNode `Step (fun _ => pure m!"introOutputs") do
-  /- Decompose nested uses of `predn` to introduce a sequence of universal quantifiers.
+  traceGoalWithNode "Initial goal"
+  /- Decompose nested uses of `uncurry'` to introduce a sequence of universal quantifiers.
      Note that at the same time we simplify the (monadic) continuation by using
      some monad simp theorems. -/
-  let some _ ← withTraceNode `Step (fun _ => pure m!"simpAt: decomposing nested uses of `predn`") do
+  let some _ ← withTraceNode `Step (fun _ => pure m!"simpAt: decomposing nested uses of `uncurry'`") do
     Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
             { simpThms := #[← stepSimpExt.getTheorems],
               addSimpThms :=
-                #[``Std.WP.qimp_spec_predn, ``Std.WP.qimp_spec_unit,
-                  ``Std.WP.qimp_predn, ``Std.WP.qimp_unit,
+                #[``Std.WP.qimp_spec_uncurry', ``Std.WP.qimp_spec_unit,
+                  ``Std.WP.qimp_uncurry', ``Std.WP.qimp_unit,
                   ``Std.WP.qimp_spec_exists, ``Std.WP.qimp_exists,
+                  -- `Prod.forall`/`Prod.exists` split `∀ x : α × β, p x` into
+                  -- `∀ a b, p (a, b)`, so a tuple post-binder produces one
+                  -- output per leaf rather than a single pair.
+                  ``Prod.forall, ``Prod.exists,
                   ``forall_unit, ``true_imp_iff] }
             (.targets #[] true)
     | trace[Step] "The main goal was solved!"; return none
-  traceGoalWithNode "goal after decomposing the nested `predn`"
+  traceGoalWithNode "goal after decomposing the nested `uncurry'`"
 
   /- Eliminate `qimp_spec`/`qimp` to reveal `imp` and decompose the post-condition into a sequence
-     of implications -/
+     of implications. `Prod.forall` splits any leftover tuple-typed quantifier into separate
+     binders; `Std.uncurry_apply_pair` then reduces the now-syntactic-pair argument. -/
   let some _ ← withTraceNode `Step (fun _ => pure m!"simpAt: eliminating `qimp_spec` and `qimp`") do
     Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
-            { declsToUnfold := #[``Std.WP.curry, ``Std.WP.predn]
+            { declsToUnfold := #[``Std.WP.curry, ``Std.WP.uncurry']
               addSimpThms :=
                 #[``Std.WP.qimp_spec_iff, ``Std.WP.qimp_iff,
-                  ``Std.WP.imp_and_iff, ``forall_unit, ``true_imp_iff] }
+                  ``Std.WP.imp_and_iff,
+                  ``Prod.forall, ``Prod.exists, ``Std.uncurry_apply_pair,
+                  ``forall_unit, ``true_imp_iff] }
             (.targets #[] true)
     | trace[Step] "The main goal was solved!"; return none
   traceGoalWithNode "goal after aliminating `qimp_spec` and `qimp` and decomposing the post-condition"

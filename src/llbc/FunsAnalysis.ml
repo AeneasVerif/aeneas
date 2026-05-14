@@ -177,6 +177,14 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
       group_has_builtin_info := !group_has_builtin_info || has_builtin_info;
       match f.body with
       | StructuredBody body -> obj#visit_block body.body.span body.body
+      | TargetDispatchBody targets ->
+          (* get_target can fail, and so can each target function *)
+          obj#may_fail true;
+          (* Also propagate effects from the target implementations *)
+          List.iter
+            (fun ((_target_name : string), (fdr : Types.fun_decl_ref)) ->
+              obj#visit_fid f.item_meta.span fdr.id)
+            targets
       | _ ->
           let info_can_fail =
             match builtin_info with
