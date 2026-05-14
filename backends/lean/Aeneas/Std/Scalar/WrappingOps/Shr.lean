@@ -57,7 +57,7 @@ uscalar @[simp, bvify, grind =, agrind =] theorem core.num.«%S».wrapping_shr_b
   (core.num.«%S».wrapping_shr x s).bv = x.bv.ushiftRight (s.val % %BitWidth) := by
   simp [core.num.«%S».wrapping_shr]
 
-@[simp, bvify] theorem IScalar.wrapping_shr_bv_eq {ty} (x : IScalar ty) (s : U32) :
+@[simp, bvify, grind =, agrind =] theorem IScalar.wrapping_shr_bv_eq {ty} (x : IScalar ty) (s : U32) :
   (wrapping_shr x s).bv = x.bv.sshiftRight (s.val % ty.numBits) := by
   simp only [wrapping_shr]
 
