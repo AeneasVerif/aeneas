@@ -42,6 +42,7 @@ inductive IScalarTy where
 | I64
 | I128
 
+@[implicit_reducible]
 def UScalarTy.numBits (ty : UScalarTy) : Nat :=
   match ty with
   | Usize => System.Platform.numBits
@@ -51,6 +52,7 @@ def UScalarTy.numBits (ty : UScalarTy) : Nat :=
   | U64 => 64
   | U128 => 128
 
+@[implicit_reducible]
 def IScalarTy.numBits (ty : IScalarTy) : Nat :=
   match ty with
   | Isize => System.Platform.numBits
