@@ -58,10 +58,10 @@ theorem Vec.len_val {α : Type u} (v : Vec α) : (Vec.len v).val = v.length :=
 grind_pattern Vec.len_val => v.length
 grind_pattern [agrind] Vec.len_val => v.length
 
-@[reducible] instance {α : Type u} : GetElem (Vec α) Nat α (fun a i => i < a.val.length) where
+instance {α : Type u} : GetElem (Vec α) Nat α (fun a i => i < a.val.length) where
   getElem a i h := getElem a.val i h
 
-@[reducible] instance {α : Type u} : GetElem? (Vec α) Nat α (fun a i => i < a.val.length) where
+instance {α : Type u} : GetElem? (Vec α) Nat α (fun a i => i < a.val.length) where
   getElem? a i := getElem? a.val i
   getElem! a i := getElem! a.val i
 
@@ -71,10 +71,10 @@ theorem Vec.getElem?_Nat_eq {α : Type u} (v : Vec α) (i : Nat) : v[i]? = v.val
 @[simp, scalar_tac_simps, simp_lists_hyps_simps, grind =, agrind =]
 theorem Vec.getElem!_Nat_eq {α : Type u} [Inhabited α] (v : Vec α) (i : Nat) : v[i]! = v.val[i]! := by rfl
 
-@[reducible] instance {α : Type u} : GetElem (Vec α) Usize α (fun a i => i < a.val.length) where
+instance {α : Type u} : GetElem (Vec α) Usize α (fun a i => i < a.val.length) where
   getElem a i h := getElem a.val i.val h
 
-@[reducible] instance {α : Type u} : GetElem? (Vec α) Usize α (fun a i => i < a.val.length) where
+instance {α : Type u} : GetElem? (Vec α) Usize α (fun a i => i < a.val.length) where
   getElem? a i := getElem? a.val i.val
   getElem! a i := getElem! a.val i.val
 

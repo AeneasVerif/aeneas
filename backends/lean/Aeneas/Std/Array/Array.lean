@@ -58,10 +58,10 @@ example : Result (Array Int (Usize.ofNat 2)) := do
   let y ← ok 1
   ok (Array.make (Usize.ofNat 2) [x, y])
 
-@[reducible] instance {α : Type u} {n : Usize} : GetElem (Array α n) Nat α (fun a i => i < a.val.length) where
+instance {α : Type u} {n : Usize} : GetElem (Array α n) Nat α (fun a i => i < a.val.length) where
   getElem a i h := getElem a.val i h
 
-@[reducible] instance {α : Type u} {n : Usize} : GetElem? (Array α n) Nat α (fun a i => i < a.val.length) where
+instance {α : Type u} {n : Usize} : GetElem? (Array α n) Nat α (fun a i => i < a.val.length) where
   getElem? a i := getElem? a.val i
 
 @[simp, scalar_tac_simps, simp_lists_hyps_simps, grind =, agrind =]
@@ -71,10 +71,10 @@ theorem Array.getElem?_Nat_eq {α : Type u} {n : Usize} (v : Array α n) (i : Na
 theorem Array.getElem!_Nat_eq {α : Type u} [Inhabited α] {n : Usize} (v : Array α n) (i : Nat) : v[i]! = v.val[i]! := by
   simp only [getElem!]; split <;> (simp_all; try rfl)
 
-@[reducible] instance {α : Type u} {n : Usize} : GetElem (Array α n) Usize α (fun a i => i.val < a.val.length) where
+instance {α : Type u} {n : Usize} : GetElem (Array α n) Usize α (fun a i => i.val < a.val.length) where
   getElem a i h := getElem a.val i.val h
 
-@[reducible] instance {α : Type u} {n : Usize} : GetElem? (Array α n) Usize α (fun a i => i.val < a.val.length) where
+instance {α : Type u} {n : Usize} : GetElem? (Array α n) Usize α (fun a i => i.val < a.val.length) where
   getElem? a i := getElem? a.val i.val
 
 @[simp, scalar_tac_simps, simp_lists_hyps_simps] theorem Array.getElem?_Usize_eq {α : Type u} {n : Usize} (v : Array α n) (i : Usize) : v[i]? = v.val[i.val]? := by rfl
