@@ -836,6 +836,87 @@ let remove_shallow_borrows_storage_live_dead (crate : crate) (f : fun_decl) :
     ^ Print.fun_decl_to_string env "" " " f];
   f
 
+(** Strip unnecessary [PeTarget] suffixes from function and type names.
+
+    Multi-target extraction appends [PeTarget] to per-target item names to
+    disambiguate items that exist for multiple targets.
+
+    For functions: if the function is not behind a target dispatch (its [src] is
+    NOT [TargetDependentItem]), there is no ambiguity (the function is not used
+    for several targets), so we remove the suffix.
+
+    For types there is no notion of dispatch, meaning we can't use the item
+    source. Instead, we compute a multi-set of base names (names without the
+    [PeTarget] suffix) if a type has a suffix but its base name only appears
+    once, it means there is no collision and the suffix is unnecessary. *)
+let strip_unnecessary_target_suffixes (crate : crate) : crate =
+  let module NameMap = Map.Make (struct
+    type t = Types.name
+
+    let compare = Types.compare_name
+  end) in
+  let add_name acc name =
+    let base = strip_target_suffix name in
+    let count =
+      match NameMap.find_opt base acc with
+      | Some n -> n
+      | None -> 0
+    in
+    NameMap.add base (count + 1) acc
+  in
+  let get_name base_counts name =
+    let base = strip_target_suffix name in
+    if base = name then name
+    else
+      let count =
+        match NameMap.find_opt base base_counts with
+        | Some n -> n
+        | None -> 0
+      in
+      if count <= 1 then base else name
+  in
+  (* --- Functions --- *)
+  (* We also count how many non-dispatch functions share a base name.
+
+     We shouldn't need to do this, but have to do it because of:
+     https://github.com/AeneasVerif/charon/issues/1158
+
+     Generally speaking it's a good way of being defensive against Charon's
+     deduplication bugs.
+  *)
+  let fun_base_counts =
+    FunDeclId.Map.fold
+      (fun _ (f : fun_decl) acc ->
+        match f.src with
+        | TargetDependentItem _ -> acc
+        | _ -> add_name acc f.item_meta.name)
+      crate.fun_decls NameMap.empty
+  in
+  let fun_decls =
+    FunDeclId.Map.map
+      (fun (f : fun_decl) ->
+        match f.src with
+        | TargetDependentItem _ -> f
+        | _ ->
+            let name = get_name fun_base_counts f.item_meta.name in
+            { f with item_meta = { f.item_meta with name } })
+      crate.fun_decls
+  in
+  (* --- Types: strip PeTarget when the base name is unique --- *)
+  let type_base_counts =
+    TypeDeclId.Map.fold
+      (fun _ (td : type_decl) acc -> add_name acc td.item_meta.name)
+      crate.type_decls NameMap.empty
+  in
+  let type_decls =
+    TypeDeclId.Map.map
+      (fun (td : type_decl) ->
+        let name = get_name type_base_counts td.item_meta.name in
+        { td with item_meta = { td.item_meta with name } })
+      crate.type_decls
+  in
+  { crate with fun_decls; type_decls }
+
 (** Remove all occurrences of certain compiler-internal marker traits.
 
     These traits have no semantic content relevant to verification:
@@ -2109,6 +2190,7 @@ let apply_passes (crate : crate) : crate =
           crate.fun_decls)
   in
   let crate = { crate with fun_decls } in
+  let crate = strip_unnecessary_target_suffixes crate in
   let crate = filter_marker_traits crate in
   let crate = filter_type_aliases crate in
   let crate = replace_static crate in
