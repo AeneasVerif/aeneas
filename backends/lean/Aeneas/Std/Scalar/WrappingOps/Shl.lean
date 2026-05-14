@@ -44,7 +44,7 @@ attribute [rust_fun "core::num::{i64}::wrapping_shl" -canFail] core.num.I64.wrap
 attribute [rust_fun "core::num::{i128}::wrapping_shl" -canFail] core.num.I128.wrapping_shl
 attribute [rust_fun "core::num::{isize}::wrapping_shl" -canFail] core.num.Isize.wrapping_shl
 
-@[simp, bvify] theorem UScalar.wrapping_shl_bv_eq {ty} (x : UScalar ty) (s : U32) :
+@[simp, bvify, grind =, agrind =] theorem UScalar.wrapping_shl_bv_eq {ty} (x : UScalar ty) (s : U32) :
   (wrapping_shl x s).bv = x.bv.shiftLeft (s.val % ty.numBits) := by
   simp only [wrapping_shl]
 
