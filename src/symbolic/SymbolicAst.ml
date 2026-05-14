@@ -253,6 +253,15 @@ type expr =
           ]} *)
   | Meta of (emeta[@opaque]) * expr  (** Meta information *)
   | Error of Meta.span option * string
+  | TargetDispatch of symbolic_value list * (string * Types.fun_decl_ref) list
+      (** Multi-target dispatch: the function body dispatches to one of several
+          per-target implementations.
+
+          The first field is the list of input symbolic values (the function
+          arguments to forward to each target).
+
+          Each element of the second list is [(target_name, fun_ref)] where
+          [fun_ref] identifies the per-target function to call. *)
 
 and loop = {
   ctx : (Contexts.eval_ctx[@opaque]);
@@ -320,7 +329,8 @@ and value_aggregate =
   | VaCgValue of const_generic_var_id
       (** This is used when evaluating a const generic value: in the
           interpreter, we introduce a fresh symbolic value. *)
-  | VaTraitConstValue of trait_ref * string  (** A trait constant value *)
+  | VaTraitConstValue of trait_ref * assoc_const_id
+      (** A trait constant value *)
   | VaDiscriminant of symbolic_value  (** A discriminant read *)
   | VaDynTrait of tvalue * trait_ref
       (** A dynamic trait. This gets inserted when we convert a box of an

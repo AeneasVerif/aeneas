@@ -637,7 +637,7 @@ let eval_non_builtin_function_call_symbolic_inst (span : Meta.span)
             [%ltrace
               "trait method call:\n- call: " ^ call_to_string ctx call
               ^ "\n- method name: "
-              ^ Charon.GAstUtils.format_method_name ctx.crate
+              ^ Charon.GAstUtils.get_method_name ctx.crate
                   trait_ref.trait_decl_ref.binder_value.id method_id
               ^ "\n- call.generics:\n"
               ^ generic_args_to_string ctx func.generics

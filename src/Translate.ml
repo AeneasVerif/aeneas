@@ -35,6 +35,20 @@ let translate_function_to_symbolics (trans_ctx : trans_ctx)
         evaluate_function_symbolic synthesize trans_ctx marked_ids fdef
       in
       Some (inputs, Option.get symb)
+  | TargetDispatchBody targets ->
+      (* Multi-target dispatch: we don't run the symbolic interpreter, we
+         directly build a [TargetDispatch] node. We still need dummy symbolic
+         values for the inputs so that {!translate_function_to_pure_aux} can
+         create the pure input variables. *)
+      let _, fresh_sv_id = SymbolicValueId.fresh_stateful_generator () in
+      let input_svs =
+        List.map
+          (fun ty ->
+            let sv_id = fresh_sv_id () in
+            { sv_id; sv_ty = ty })
+          fdef.signature.inputs
+      in
+      Some (input_svs, SA.TargetDispatch (input_svs, targets))
   | _ -> None
 
 (** Sanity check helper.
@@ -224,6 +238,15 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
             ctx
         in
         { ctx with forward_inputs }
+    | None, Some (input_svs, _) ->
+        (* TargetDispatchBody: no structured body, but we have symbolic inputs.
+           Use [None] names since we don't have local variable names. *)
+        let input_svs = List.map (fun sv -> (None, sv)) input_svs in
+        let ctx, forward_inputs =
+          SymbolicToPureValues.fresh_named_vars_for_symbolic_values input_svs
+            ctx
+        in
+        { ctx with forward_inputs }
     | _ -> [%craise] fdef.item_meta.span "Unreachable"
   in
 
@@ -395,7 +418,7 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
     (* Split between opaque and transparent *)
     let opaque, transparent =
       List.partition
-        (fun (d : fun_decl) -> not (LlbcAstUtils.body_is_known d.body))
+        (fun (d : fun_decl) -> not (LlbcAstUtils.body_is_translatable d.body))
         funs
     in
 
