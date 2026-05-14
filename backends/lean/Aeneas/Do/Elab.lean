@@ -200,14 +200,6 @@ inductive PatShape where
   | ctor (indName : Name) (subs : Array PatShape)
   deriving Inhabited
 
-/-- First non-anonymous leaf name in the pattern, if any. Used to give
-    nested-tuple binders a meaningful name (e.g. `(a, b)` reuses `a`) so the
-    name survives `Std.uncurry`-reduction in `step*` analysis. -/
-partial def PatShape.firstLeafName? : PatShape → Option Name
-  | .leaf n => if n == `_ then none else some n
-  | .prod subs => subs.findSome? firstLeafName?
-  | .ctor _ subs => subs.findSome? firstLeafName?
-
 /-- Walk `pat` alongside its expected `ty`, producing a `PatShape`. -/
 partial def analyzePat (pat : Term) (ty : Expr) : ElabM PatShape := do
   let analyzeSubs (subPats : Array Term) (subTypes : List Expr) : ElabM (Array PatShape) :=
