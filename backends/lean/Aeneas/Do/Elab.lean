@@ -493,13 +493,14 @@ partial def elabDoMatch
     match alt with
     | `(matchAltExpr| | $pats,* => $body) =>
       let elems := pats.getElems
-      let some firstR := elems[0]!.raw.getRange?
-        | throwError "elabDoMatch: missing source range for pattern{indentD alt}"
-      let some lastR := elems.back!.raw.getRange?
-        | throwError "elabDoMatch: missing source range for pattern{indentD alt}"
-      armSeqs := armSeqs.push ⟨body.raw⟩
-      armPatRanges := armPatRanges.push ⟨firstR.start, lastR.stop⟩
-      holedAlts := holedAlts.push (← `(matchAltExpr| | $pats,* => _))
+      if _ : elems.size > 0 then
+        let some [firstR, lastR] := [elems[0], elems.back].mapM (·.raw.getRange?)
+          | throwError "elabDoMatch: missing source range for pattern{indentD alt}"
+        armSeqs := armSeqs.push ⟨body.raw⟩
+        armPatRanges := armPatRanges.push ⟨firstR.start, lastR.stop⟩
+        holedAlts := holedAlts.push (← `(matchAltExpr| | $pats,* => _))
+      else
+        throwError "elabDoMatch: unsupported pattern in{indentD alt}"
     | _ => throwError "elabDoMatch: unexpected match arm syntax{indentD alt}"
   let termMatch ← `(match $[(generalizing := $gen?)]? $[$motive?]? $[$discrs],* with $holedAlts:matchAlt*)
   let elabAtType (ty : Expr) : ElabM Expr := do
