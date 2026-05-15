@@ -25,7 +25,7 @@ namespace derive
 axiom Bool.Insts.CoreCmpPartialEqBool.ne : Bool → Bool → Result Bool
 
 /-- [alloc::boxed::{core::cmp::PartialEq<alloc::boxed::Box<T>> for alloc::boxed::Box<T>}::ne]:
-    Source: '/rustc/library/alloc/src/boxed.rs', lines 2056:4-2056:38
+    Source: '/rustc/library/alloc/src/boxed.rs', lines 2100:4-2100:38
     Name pattern: [alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}::ne]
     Visibility: public -/
 @[rust_fun "alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}::ne"]

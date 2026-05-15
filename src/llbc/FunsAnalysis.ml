@@ -120,8 +120,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
             | Len _
             | NullaryOp _
             | RawPtr _
-            | Repeat _
-            | ShallowInitBox _ -> ()
+            | Repeat _ -> ()
             | RvRef ({ kind = PlaceGlobal gref; _ }, _, _) -> (
                 (* A reference to a global: propagate can_fail.
 

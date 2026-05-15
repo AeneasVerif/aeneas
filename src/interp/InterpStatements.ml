@@ -463,6 +463,8 @@ let eval_builtin_function_call_concrete (config : config) (span : Meta.span)
       let ctx, cf_eval_body =
         match fid with
         | BoxNew -> eval_box_new_concrete config span generics ctx
+        | BoxWrite
+        | SliceIntoVec
         | Index _
         | ArrayToSliceShared
         | ArrayToSliceMut
@@ -847,9 +849,6 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
                 | Repeat _ ->
                     [%craise] st.span
                       "Repeat should have been removed in a micropass"
-                | ShallowInitBox _ ->
-                    [%craise] st.span
-                      "ShallowInitBox should have been removed in a micropass"
                 | Use _
                 | RvRef
                     ( _,

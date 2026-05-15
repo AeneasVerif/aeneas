@@ -2184,6 +2184,8 @@ let eliminate_box_functions_visitor (_ctx : ctx) (def : fun_decl) =
               | BoxNew ->
                   let arg, args = Collections.List.pop args in
                   [%add_loc] mk_apps span arg args
+              | BoxWrite
+              | SliceIntoVec
               | Index _
               | ArrayToSliceShared
               | ArrayToSliceMut

@@ -401,6 +401,8 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
               | FunId (FBuiltin fid) -> begin
                   match fid with
                   | BoxNew -> "box_new"
+                  | BoxWrite -> "box_write"
+                  | SliceIntoVec -> "slice_into_vec"
                   | ArrayRepeat -> "array_repeat"
                   | ArrayToSliceShared -> "to_slice_shared"
                   | ArrayToSliceMut -> "to_slice_mut"
