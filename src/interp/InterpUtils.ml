@@ -447,8 +447,7 @@ let rvalue_get_place (rv : rvalue) : place option =
   | BinaryOp _
   | Discriminant _
   | Aggregate _
-  | Repeat _
-  | ShallowInitBox _ -> None
+  | Repeat _ -> None
 
 (** See {!ValuesUtils.symbolic_value_has_borrows} *)
 let symbolic_value_has_borrows span (ctx : eval_ctx) (sv : symbolic_value) :

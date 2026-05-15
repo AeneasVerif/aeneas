@@ -847,9 +847,6 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
                 | Repeat _ ->
                     [%craise] st.span
                       "Repeat should have been removed in a micropass"
-                | ShallowInitBox _ ->
-                    [%craise] st.span
-                      "ShallowInitBox should have been removed in a micropass"
                 | Use _
                 | RvRef
                     ( _,
