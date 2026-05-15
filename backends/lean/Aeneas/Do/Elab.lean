@@ -74,36 +74,79 @@ def ElabM.execute (x : ElabM Expr) (expectedType : Expr) : TermElabM Expr := do
   (x.run ctx).run pure
 
 /-- `Meta.withLocalDeclD` lifted to `ElabM`. -/
-def ElabM.withLocalDeclD (name : Name) (type : Expr) (body : Expr → ElabM Expr) : ElabM Expr := do
-  let ctx ← read
-  fun _ k => Meta.withLocalDeclD name type fun fvar =>
-      (body fvar).run ctx |>.run k
+def ElabM.withLocalDeclD (name : Name) (type : Expr) (body : Expr → ElabM Expr) : ElabM Expr :=
+  fun ctx k => Meta.withLocalDeclD name type fun fvar =>
+    (body fvar).run ctx |>.run k
 
 /-- `Meta.withLetDecl` lifted to `ElabM`. -/
 def ElabM.withLetDecl (name : Name) (type : Expr) (value : Expr)
-    (body : Expr → ElabM Expr) : ElabM Expr := do
-  let ctx ← read
-  fun _ k => Meta.withLetDecl name type value fun fvar =>
-      (body fvar).run ctx |>.run k
+    (body : Expr → ElabM Expr) : ElabM Expr :=
+  fun ctx k => Meta.withLetDecl name type value fun fvar =>
+    (body fvar).run ctx |>.run k
+
+/-- Our own `foldInfo` since InfoTree.foldInfo` requires a `ContextInfo` to be set which isn't
+  available while we're in `termElab`. -/
+partial def foldInfoNoCtx {α : Type u} (f : Info → α → α) (init : α) : InfoTree → α
+  | .context _ t => foldInfoNoCtx f init t
+  | .node i ts   => ts.foldl (init := f i init) (foldInfoNoCtx f)
+  | .hole _      => init
+
+def inRange (r : Syntax.Range) (s : Syntax) : Bool :=
+  s.getRange?.any fun inner => r.start ≤ inner.start && inner.stop ≤ r.stop
+
+/-- Extract the `(userName, syntax)` binder entry from `info` when it's a
+    binder `TermInfo` -/
+def binderEntry? (patRange : Syntax.Range) (info : Info) : Option (Name × Syntax) := do
+  let .ofTermInfo ti := info | none
+  let .fvar fid := ti.expr | none
+  if ti.isBinder && inRange patRange ti.stx then
+    let decl ← ti.lctx.find? fid
+    (decl.userName, ti.stx)
+  else
+    none
+
+/-- `foldInfoNoCtx` callback: prepend a pattern-binder entry from `info` onto
+    `acc` when `info` describes one. -/
+def collectBinder (patRange : Syntax.Range) (info : Info)
+    (acc : List (Name × Syntax)) : List (Name × Syntax) :=
+  match binderEntry? patRange info with
+  | some entry => entry :: acc
+  | none       => acc
+
+/-- Walk the current InfoTrees and collect a `userName → Syntax` map for every
+    binder `TermInfo` entry whose syntax falls inside `patRange`. Throws on
+    duplicate `userName`s, which will be a Lean error anyway. -/
+def buildArmBinderMap (patRange : Syntax.Range) : ElabM (NameMap Syntax) := do
+  let trees ← getInfoTrees
+  let entries := trees.foldl (init := []) (foldInfoNoCtx (collectBinder patRange))
+  let mut m : NameMap Syntax := ∅
+  for (name, stx) in entries do
+    if m.contains name then
+      throwError "elabDoMatch: duplicate binder `{name}` in pattern{indentD stx}"
+    m := m.insert name stx
+  return m
 
 /-- Fill a match arm's `?m` by elaborating `body` under the arm's pattern binders
     and assigning the abstracted result to the mvar. -/
-def ElabM.assignArmMVar (arm : Expr) (body : ElabM Expr) : ElabM Unit := do
-  let ctx ← read
-  fun _ k =>
-    Meta.lambdaTelescope arm fun fvars ebody => do
-      let .mvar mvarId := ebody.getAppFn
-        | throwError "elabDoMatch: expected metavariable arm body, got{indentExpr ebody}"
-      let armExpr ← (body.run ctx).run pure
-      let value ←
-        if ebody.isMVar then
-          let usedFVars := fvars.filter (armExpr.occurs ·)
-          if usedFVars.isEmpty then pure armExpr
-          else mkLambdaFVars usedFVars armExpr
-        else
-          mkLambdaFVars fvars armExpr
-      mvarId.assign value
-      k ()
+def ElabM.assignArmMVar (arm : Expr) (binderMap : NameMap Syntax) (body : ElabM Expr) :
+    ElabM Unit :=
+  fun ctx k => Meta.lambdaTelescope arm fun fvars ebody => do
+    let .mvar mvarId := ebody.getAppFn
+      | throwError "elabDoMatch: expected metavariable arm body, got{indentExpr ebody}"
+    for fvar in fvars do
+      let userName ← fvar.fvarId!.getUserName
+      if let some idStx := binderMap.find? userName then
+        Term.addLocalVarInfo idStx fvar
+    let armExpr ← (body.run ctx).run pure
+    let value ←
+      if ebody.isMVar then
+        let usedFVars := fvars.filter (armExpr.occurs ·)
+        if usedFVars.isEmpty then pure armExpr
+        else mkLambdaFVars usedFVars armExpr
+      else
+        mkLambdaFVars fvars armExpr
+    mvarId.assign value
+    k ()
 
 /-- For a single-constructor inductive (other than `Prod`), return the constructor
     name and field types instantiated at the type's parameters. `none` otherwise. -/
@@ -152,26 +195,18 @@ partial def mkUncurries (innerLam : Expr) (types : List Expr) : MetaM Expr := do
 /-! ## Pattern analysis and continuation building -/
 
 inductive PatShape where
-  | leaf (name : Name)
+  | leaf (id? : Option Ident)
   | prod (subs : Array PatShape)
   | ctor (indName : Name) (subs : Array PatShape)
   deriving Inhabited
-
-/-- First non-anonymous leaf name in the pattern, if any. Used to give
-    nested-tuple binders a meaningful name (e.g. `(a, b)` reuses `a`) so the
-    name survives `Std.uncurry`-reduction in `step*` analysis. -/
-partial def PatShape.firstLeafName? : PatShape → Option Name
-  | .leaf n => if n == `_ then none else some n
-  | .prod subs => subs.findSome? firstLeafName?
-  | .ctor _ subs => subs.findSome? firstLeafName?
 
 /-- Walk `pat` alongside its expected `ty`, producing a `PatShape`. -/
 partial def analyzePat (pat : Term) (ty : Expr) : ElabM PatShape := do
   let analyzeSubs (subPats : Array Term) (subTypes : List Expr) : ElabM (Array PatShape) :=
     subPats.toList.zip subTypes |>.toArray.mapM fun (p, t) => analyzePat p t
   match pat with
-  | `(_) => return .leaf `_
-  | `($id:ident) => return .leaf id.getId
+  | `(_) => return .leaf none
+  | `($id:ident) => return .leaf (some id)
   | `(($x, $xs,*)) =>
     let subPats : Array Term := #[x] ++ xs.getElems
     let subTypes ← decomposeProductType ty subPats.size
@@ -196,6 +231,17 @@ partial def analyzePat (pat : Term) (ty : Expr) : ElabM PatShape := do
 def computeCasesOnResultType (curried : Expr) (fieldTypes : List Expr) : MetaM Expr := do
   forallBoundedTelescope (← inferType curried) fieldTypes.length fun _ body => return body
 
+/-- Introduce a fresh fvar for `sub` and register a binder InfoTree node when the
+    sub-pattern is a named leaf. Non-leaf sub-patterns get a synthetic `_xN` name. -/
+def withSubPatFVar (sub : PatShape) (ty : Expr) (idx : Nat) (k : Expr → ElabM Expr) : ElabM Expr :=
+  let (n, id?) := match sub with
+    | .leaf (some id) => (id.getId, some id)
+    | .leaf none      => (`_, none)
+    | _               => (Name.mkSimple s!"_x{idx}", none)
+  ElabM.withLocalDeclD n ty fun fv => do
+    if let some id := id? then Lean.Elab.Term.addLocalVarInfo id fv
+    k fv
+
 mutual
 
 /-- Build a curried lambda `fun x₁ … xₙ => body [x₁, …, xₙ]`, one fvar per sub-pattern. -/
@@ -204,10 +250,7 @@ partial def mkCurriedLambda (subs : List PatShape) (types : List Expr)
   match subs, types with
   | [], _ | _, [] => body #[]
   | sub :: restSubs, ty :: restTypes =>
-    let n := match sub with
-      | .leaf n => n
-      | _ => (sub.firstLeafName?).getD (Name.mkSimple s!"_x{idx}")
-    ElabM.withLocalDeclD n ty fun fv => do
+    withSubPatFVar sub ty idx fun fv => do
       let innerBody ← mkCurriedLambda restSubs restTypes
         (fun fs => body (#[fv] ++ fs)) (idx + 1)
       mkLambdaFVars #[fv] innerBody
@@ -248,8 +291,7 @@ end
 partial def mkPatContinuation (shape : PatShape) (ty : Expr)
     (body : Array Expr → ElabM Expr) : ElabM Expr := do
   match shape with
-  | .leaf n =>
-    ElabM.withLocalDeclD n ty fun fv => do
+  | .leaf _ => withSubPatFVar shape ty 0 fun fv => do
       mkLambdaFVars #[fv] (← body #[fv])
   | .prod subs =>
     let subTypes ← decomposeProductType ty subs.size
@@ -365,6 +407,7 @@ partial def elabDoLetArrowId (x : Ident) (ty? : Option Term) (rhs : DoElem)
       pure e
   let ty ← instantiateMVars ty
   ElabM.withLocalDeclD name ty fun fvar => do
+    Term.addLocalVarInfo x fvar
     let restExpr ← elabDoSeqCore rest
     let body ← mkLambdaFVars #[fvar] restExpr
     ElabM.mkBind e body
@@ -402,6 +445,7 @@ partial def elabDoLetId (x : Ident) (ty? : Option Term) (rhs : Term)
   let val ← elabTermEnsuringType rhs α
   let α ← instantiateMVars α
   ElabM.withLetDecl name α val fun fvar => do
+    Term.addLocalVarInfo x fvar
     let restExpr ← elabDoSeqCore rest
     mkLetFVars #[fvar] restExpr
 
@@ -443,12 +487,20 @@ partial def elabDoMatch
     (discrs : Array (TSyntax ``Term.matchDiscr))
     (alts : Array (TSyntax ``Term.matchAlt)) (rest : List DoElem) : ElabM Expr := do
   let mut armSeqs : Array (TSyntax ``doSeq) := #[]
+  let mut armPatRanges : Array Syntax.Range := #[]
   let mut holedAlts : Array (TSyntax ``Term.matchAlt) := #[]
   for alt in alts do
     match alt with
     | `(matchAltExpr| | $pats,* => $body) =>
-      armSeqs := armSeqs.push ⟨body.raw⟩
-      holedAlts := holedAlts.push (← `(matchAltExpr| | $pats,* => _))
+      let elems := pats.getElems
+      if _ : elems.size > 0 then
+        let some [firstR, lastR] := [elems[0], elems.back].mapM (·.raw.getRange?)
+          | throwError "elabDoMatch: missing source range for pattern{indentD alt}"
+        armSeqs := armSeqs.push ⟨body.raw⟩
+        armPatRanges := armPatRanges.push ⟨firstR.start, lastR.stop⟩
+        holedAlts := holedAlts.push (← `(matchAltExpr| | $pats,* => _))
+      else
+        throwError "elabDoMatch: unsupported pattern in{indentD alt}"
     | _ => throwError "elabDoMatch: unexpected match arm syntax{indentD alt}"
   let termMatch ← `(match $[(generalizing := $gen?)]? $[$motive?]? $[$discrs],* with $holedAlts:matchAlt*)
   let elabAtType (ty : Expr) : ElabM Expr := do
@@ -470,10 +522,11 @@ partial def elabDoMatch
     let firstAltIdx := info.getFirstAltPos
     unless armSeqs.size == info.numAlts do
       throwError "elabDoMatch: arm count mismatch (expected {info.numAlts}, got {armSeqs.size})"
+    let armBinderMaps ← armPatRanges.mapM buildArmBinderMap
     withReader (fun ctx => { ctx with expectedAlpha := α }) do
       for i in [:info.numAlts] do
         let elems ← getDoElems armSeqs[i]!
-        ElabM.assignArmMVar args[firstAltIdx + i]! (elabDoSeqCore elems)
+        ElabM.assignArmMVar args[firstAltIdx + i]! armBinderMaps[i]! (elabDoSeqCore elems)
     instantiateMVars matchExpr
   elabMonadicAsDoElem elabAtType rest
 
