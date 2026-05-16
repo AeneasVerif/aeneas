@@ -32,6 +32,40 @@ def sixNats : Result (((Nat × Nat) × Nat) × ((Nat × Nat) × Nat)) :=
 theorem sixNats_spec : sixNats ⦃ ((a, b), c) ((d, e), f) => a = 3 ∧ b = 4 ∧ c = 5 ∧ d = 6 ∧ e = 7 ∧ f = 8⦄ := by
   unfold sixNats; step*
 
+/--
+warning: unused variable `a`
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+---
+warning: unused variable `b`
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+---
+warning: unused variable `c`
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+---
+warning: unused variable `d`
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+---
+warning: unused variable `b`
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+---
+warning: unused variable `c`
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+---
+warning: unused variable `e`
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+---
+warning: unused variable `h`
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+-/
+#guard_msgs in
 def testTuples : Result Nat := do
   let (a, b) ← twoNats
   let (c, d) ← twoNats
