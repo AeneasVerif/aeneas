@@ -20,9 +20,8 @@ type loop_info = {
 (** One emitted Lean function declaration.
 
     Field omission convention on the JSON side:
-    - [loop_info], [parent_lean_id]: emitted only when [Some] (i.e. on
-      loop-wrapper / loop-body entries — they identify each other)
-    - [num_loops]: emitted only on non-loop entries
+    - [loop_info], [parent_lean_id]: emitted only when [Some] (i.e. only on
+      loop-wrapper / loop-body entries)
     - all other fields are always emitted *)
 type entry = {
   def_id : int;
@@ -51,7 +50,6 @@ type entry = {
           [PureMicroPasses.compute_reducible] for trivial wrapper bodies). *)
   loop_info : loop_info option;
   parent_lean_id : string option;
-  num_loops : int option;
 }
 
 (** One emitted Lean type declaration. The LLBC carries every fact about a type
@@ -165,9 +163,6 @@ let entry_to_json (e : entry) : Yojson.Basic.t =
   (match e.parent_lean_id with
   | None -> ()
   | Some p -> push "parent_lean_id" (`String p));
-  (match e.num_loops with
-  | None -> ()
-  | Some n -> push "num_loops" (`Int n));
   `Assoc (List.rev !fields)
 
 let type_entry_to_json (e : type_entry) : Yojson.Basic.t =
@@ -243,11 +238,6 @@ let entry_of_fun_decl (ctx : ExtractBase.extraction_ctx) (def : Pure.fun_decl) :
             is_body;
           }
   in
-  let num_loops =
-    match def.loop_id with
-    | None -> Some def.num_loops
-    | Some _ -> None
-  in
   let eff = def.signature.fwd_info.effect_info in
   {
     def_id = Pure.FunDeclId.to_int def.def_id;
@@ -260,7 +250,6 @@ let entry_of_fun_decl (ctx : ExtractBase.extraction_ctx) (def : Pure.fun_decl) :
     reducible = def.backend_attributes.reducible;
     loop_info;
     parent_lean_id;
-    num_loops;
   }
 
 let type_entry_of_type_decl (ctx : ExtractBase.extraction_ctx)
