@@ -9,6 +9,8 @@ import Aeneas.Do.Delab
 open Aeneas.Std
 open Aeneas.Command.Decompose
 
+namespace Aeneas.Command.Decompose.Tests
+
 -- ============================================================================
 -- Test 0: "branch", "lam", etc. can be used as identifiers
 -- (regression test for https://github.com/AeneasVerif/aeneas/issues/1023)
@@ -33,7 +35,7 @@ def test1 (x y : U32) : Result U32 := do
   x3 + y3
 
 /--
-warning: #decompose: 'test1_y' has the same definition as 'test1_x' (consider reusing the same name)
+warning: #decompose: 'Aeneas.Command.Decompose.Tests.test1_y' has the same definition as 'Aeneas.Command.Decompose.Tests.test1_x' (consider reusing the same name)
 -/
 #guard_msgs in
 #decompose test1 test1_eq
@@ -41,7 +43,7 @@ warning: #decompose: 'test1_y' has the same definition as 'test1_x' (consider re
   letRange 1 3 => test1_y
 
 /--
-info: def test1_x : U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test1_x : U32 → Result (UScalar UScalarTy.U32) :=
 fun x => do
   let x1 ← x + 1#u32
   let x2 ← x1 + 1#u32
@@ -50,7 +52,7 @@ fun x => do
 #guard_msgs in
 #print test1_x
 /--
-info: def test1_y : U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test1_y : U32 → Result (UScalar UScalarTy.U32) :=
 fun y => do
   let y1 ← y + 1#u32
   let y2 ← y1 + 1#u32
@@ -68,7 +70,7 @@ info: test1_eq : ∀ (x y : U32),
 #guard_msgs in
 #check @test1_eq
 /--
-info: 'test1_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.Tests.test1_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test1_eq
@@ -77,11 +79,11 @@ info: 'test1_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 /-- info: true -/
 #guard_msgs in
 #eval show Lean.MetaM Bool from do
-  return (← Lean.findDeclarationRanges? `test1_eq).isSome
+  return (← Lean.findDeclarationRanges? `Aeneas.Command.Decompose.Tests.test1_eq).isSome
 /-- info: true -/
 #guard_msgs in
 #eval show Lean.MetaM Bool from do
-  return (← Lean.findDeclarationRanges? `test1_x).isSome
+  return (← Lean.findDeclarationRanges? `Aeneas.Command.Decompose.Tests.test1_x).isSome
 
 -- ============================================================================
 -- Test 2: Tuple return — continuation needs multiple variables
@@ -96,7 +98,7 @@ def test2 (x : U32) : Result U32 := do
   letRange 0 2 => test2_aux
 
 /--
-info: def test2_aux : U32 → Result (UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test2_aux : U32 → Result (UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
 fun x => do
   let a ← x + 1#u32
   let b ← 2#u32 * x
@@ -113,7 +115,7 @@ info: test2_eq : ∀ (x : U32),
 #guard_msgs in
 #check @test2_eq
 /--
-info: 'test2_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.Tests.test2_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test2_eq
@@ -135,7 +137,7 @@ def test3 (b : Bool) (x y : U32) : Result U32 := do
     x + y
 
 /--
-warning: #decompose: 'test3_y' has the same definition as 'test3_x' (consider reusing the same name)
+warning: #decompose: 'Aeneas.Command.Decompose.Tests.test3_y' has the same definition as 'Aeneas.Command.Decompose.Tests.test3_x' (consider reusing the same name)
 -/
 #guard_msgs in
 #decompose test3 test3_eq
@@ -144,7 +146,7 @@ warning: #decompose: 'test3_y' has the same definition as 'test3_x' (consider re
   branch 0 full => test3_then
 
 /--
-info: def test3_x : U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test3_x : U32 → Result (UScalar UScalarTy.U32) :=
 fun x => do
   let x1 ← x + 1#u32
   let x2 ← x1 + 1#u32
@@ -153,7 +155,7 @@ fun x => do
 #guard_msgs in
 #print test3_x
 /--
-info: def test3_y : U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test3_y : U32 → Result (UScalar UScalarTy.U32) :=
 fun y => do
   let y1 ← y + 1#u32
   let y2 ← y1 + 1#u32
@@ -162,7 +164,7 @@ fun y => do
 #guard_msgs in
 #print test3_y
 /--
-info: def test3_then : U32 → U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test3_then : U32 → U32 → Result (UScalar UScalarTy.U32) :=
 fun x y => do
   let x3 ← test3_x x
   let y3 ← test3_y y
@@ -176,7 +178,7 @@ info: test3_eq : ∀ (b : Bool) (x y : U32), test3 b x y = if b = true then test
 #guard_msgs in
 #check @test3_eq
 /--
-info: 'test3_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.Tests.test3_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test3_eq
@@ -193,7 +195,7 @@ def test4 (x y : U32) : Result U32 := do
   full => test4_body
 
 /--
-info: def test4_body : U32 → U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test4_body : U32 → U32 → Result (UScalar UScalarTy.U32) :=
 fun x y => do
   let z ← x + y
   z + 1#u32
@@ -206,7 +208,7 @@ info: test4_eq : ∀ (x y : U32), test4 x y = test4_body x y
 #guard_msgs in
 #check @test4_eq
 /--
-info: 'test4_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.Tests.test4_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test4_eq
@@ -224,7 +226,7 @@ def test5 (x : U32) : Result U32 := do
   letRange 0 3 => test5_all
 
 /--
-info: def test5_all : U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test5_all : U32 → Result (UScalar UScalarTy.U32) :=
 fun x => do
   let a ← x + 1#u32
   let b ← a + 1#u32
@@ -238,7 +240,7 @@ info: test5_eq : ∀ (x : U32), test5 x = test5_all x
 #guard_msgs in
 #check @test5_eq
 /--
-info: 'test5_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.Tests.test5_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test5_eq
@@ -257,7 +259,7 @@ def test6 (x : Nat) : Nat :=
   letRange 0 3 => test6_aux
 
 /--
-info: def test6_aux : ℕ → ℕ :=
+info: def Aeneas.Command.Decompose.Tests.test6_aux : ℕ → ℕ :=
 fun x =>
   let a := x + 1;
   let b := a + 2;
@@ -274,7 +276,7 @@ info: test6_eq : ∀ (x : ℕ),
 #guard_msgs in
 #check @test6_eq
 /--
-info: 'test6_eq' depends on axioms: [propext]
+info: 'Aeneas.Command.Decompose.Tests.test6_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test6_eq
@@ -295,7 +297,7 @@ full => test7_body
 
 -- Verify
 /--
-info: 'test7_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.Tests.test7_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test7_eq
@@ -317,7 +319,7 @@ noncomputable def test8 (x y : U32) : Result U32 := do
   letRange 0 2 => test8_effects
 
 /--
-info: def test8_effects : U32 → U32 → Result Unit :=
+info: def Aeneas.Command.Decompose.Tests.test8_effects : U32 → U32 → Result Unit :=
 fun x y => do
   sideEffect1 x
   sideEffect2 y
@@ -334,7 +336,7 @@ info: test8_eq : ∀ (x y : U32),
 #guard_msgs in
 #check @test8_eq
 /--
-info: 'test8_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.Tests.test8_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test8_eq
@@ -353,7 +355,7 @@ def test9 (x y : U32) : Result U32 := do
   letRange 0 1 => test9_first
 
 /--
-info: def test9_first : U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test9_first : U32 → Result (UScalar UScalarTy.U32) :=
 fun x => x + 1#u32
 -/
 #guard_msgs in
@@ -368,7 +370,7 @@ info: test9_eq : ∀ (x y : U32),
 #guard_msgs in
 #check @test9_eq
 /--
-info: 'test9_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.Tests.test9_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test9_eq
@@ -388,7 +390,8 @@ def test10 (x : U32) : Result U32 := do
   letRange 0 3 => test10_triple
 
 /--
-info: def test10_triple : U32 → Result (UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test10_triple : U32 →
+  Result (UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
 fun x => do
   let a ← x + 1#u32
   let b ← x + 2#u32
@@ -407,7 +410,7 @@ info: test10_eq : ∀ (x : U32),
 #guard_msgs in
 #check @test10_eq
 /--
-info: 'test10_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.Tests.test10_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test10_eq
@@ -429,7 +432,7 @@ def test11 (x : U32) : Result U32 := do
   letRange 0 4 => test11_quad
 
 /--
-info: def test11_quad : U32 →
+info: def Aeneas.Command.Decompose.Tests.test11_quad : U32 →
   Result (UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
 fun x => do
   let a ← x + 1#u32
@@ -451,7 +454,7 @@ info: test11_eq : ∀ (x : U32),
 #guard_msgs in
 #check @test11_eq
 /--
-info: 'test11_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.Tests.test11_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test11_eq
@@ -473,7 +476,7 @@ def test12 (x : U32) : Result U32 := do
   letRange 1 2 => test12_mixed2
 
 /--
-info: def test12_mixed1 : U32 → Result (ℕ × UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test12_mixed1 : U32 → Result (ℕ × UScalar UScalarTy.U32) :=
 fun x =>
   let a := ↑x;
   do
@@ -483,7 +486,7 @@ fun x =>
 #guard_msgs in
 #print test12_mixed1
 /--
-info: def test12_mixed2 : ℕ → UScalar UScalarTy.U32 → Result (ℕ × UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test12_mixed2 : ℕ → UScalar UScalarTy.U32 → Result (ℕ × UScalar UScalarTy.U32) :=
 fun a b =>
   let c := a + 1;
   do
@@ -502,7 +505,7 @@ info: test12_eq : ∀ (x : U32),
 #guard_msgs in
 #check @test12_eq
 /--
-info: 'test12_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.Tests.test12_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test12_eq
@@ -527,7 +530,7 @@ def test15 (b1 b2 : Bool) (x : U32) : Result U32 := do
   branch 0 (branch 0 (letRange 0 3)) => test15_inner
 
 /--
-info: def test15_inner : U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test15_inner : U32 → Result (UScalar UScalarTy.U32) :=
 fun x => do
   let a ← x + 1#u32
   let b ← a + 2#u32
@@ -548,7 +551,7 @@ info: test15_eq : ∀ (b1 b2 : Bool) (x : U32),
 #guard_msgs in
 #check @test15_eq
 /--
-info: 'test15_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.Tests.test15_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test15_eq
@@ -566,7 +569,7 @@ def test16 (x : Nat) : Nat :=
   letRange 0 2 => test16_pair
 
 /--
-info: def test16_pair : ℕ → ℕ × ℕ :=
+info: def Aeneas.Command.Decompose.Tests.test16_pair : ℕ → ℕ × ℕ :=
 fun x =>
   let a := x + 1;
   let b := x + 2;
@@ -584,7 +587,7 @@ info: test16_eq : ∀ (x : ℕ),
 #guard_msgs in
 #check @test16_eq
 /--
-info: 'test16_eq' depends on axioms: [propext]
+info: 'Aeneas.Command.Decompose.Tests.test16_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test16_eq
@@ -609,7 +612,7 @@ def test17 (x y : U32) : Result U32 := do
   letAt 0 (full) => test17_inner
 
 /--
-info: def test17_inner : U32 → Result U32 :=
+info: def Aeneas.Command.Decompose.Tests.test17_inner : U32 → Result U32 :=
 fun x => test17_helper x
 -/
 #guard_msgs in
@@ -624,7 +627,7 @@ info: test17_eq : ∀ (x y : U32),
 #guard_msgs in
 #check @test17_eq
 /--
-info: 'test17_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.Tests.test17_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test17_eq
@@ -643,7 +646,7 @@ def test18 (n : Nat) : Nat :=
   branch 0 full => test18_then
 
 /--
-info: def test18_then : ℕ → ℕ :=
+info: def Aeneas.Command.Decompose.Tests.test18_then : ℕ → ℕ :=
 fun n => n + 1
 -/
 #guard_msgs in
@@ -654,7 +657,7 @@ info: test18_eq : ∀ (n : ℕ), test18 n = if _h : n > 0 then test18_then n els
 #guard_msgs in
 #check @test18_eq
 /--
-info: 'test18_eq' depends on axioms: [propext]
+info: 'Aeneas.Command.Decompose.Tests.test18_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test18_eq
@@ -681,7 +684,7 @@ def test19 (x : U32) : Result U32 :=
   argArg 0 full => test19_extracted
 
 /--
-info: def test19_extracted : U32 → Result U32 :=
+info: def Aeneas.Command.Decompose.Tests.test19_extracted : U32 → Result U32 :=
 test19_inner
 -/
 #guard_msgs in
@@ -692,7 +695,7 @@ info: test19_eq : ∀ (x : U32), test19 x = test19_fn test19_extracted x
 #guard_msgs in
 #check @test19_eq
 /--
-info: 'test19_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.Tests.test19_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test19_eq
@@ -712,7 +715,7 @@ def test20 (x : U32) : Result U32 :=
   argArg 0 (lam 1 full) => test20_body
 
 /--
-info: def test20_body : U32 → U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test20_body : U32 → U32 → Result (UScalar UScalarTy.U32) :=
 fun x y => do
   let z ← y + x
   z + 1#u32
@@ -725,7 +728,7 @@ info: test20_eq : ∀ (x : U32), test20 x = test20_apply (fun y => test20_body x
 #guard_msgs in
 #check @test20_eq
 /--
-info: 'test20_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.Tests.test20_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test20_eq
@@ -757,7 +760,7 @@ def test21 (n : Nat) : Nat :=
   argArg 3 (lam 1 (letRange 0 3)) => test21_compute
 
 /--
-info: def test21_compute : ℕ → ℕ :=
+info: def Aeneas.Command.Decompose.Tests.test21_compute : ℕ → ℕ :=
 fun k =>
   let a := k + 1;
   let b := a + 1;
@@ -777,7 +780,7 @@ info: test21_eq : ∀ (n : ℕ),
 #guard_msgs in
 #check @test21_eq
 /--
-info: 'test21_eq' depends on axioms: [propext]
+info: 'Aeneas.Command.Decompose.Tests.test21_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test21_eq
@@ -798,7 +801,7 @@ noncomputable def test22 (x : U32) : Result U32 := do
   letRange 0 2 => test22_prefix
 
 /--
-info: def test22_prefix : Result Unit :=
+info: def Aeneas.Command.Decompose.Tests.test22_prefix : Result Unit :=
 do
   log "start"
   log "middle"
@@ -815,7 +818,7 @@ info: test22_eq : ∀ (x : U32),
 #guard_msgs in
 #check @test22_eq
 /--
-info: 'test22_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.Tests.test22_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test22_eq
@@ -834,7 +837,7 @@ def test23 (n : Nat) (x : U32) (s : Slice U8) (b : Bool) : Result U32 := do
   letRange 0 3 => test23_prefix
 
 /--
-info: def test23_prefix : U32 → Slice U8 → Bool → Result (ℕ × UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test23_prefix : U32 → Slice U8 → Bool → Result (ℕ × UScalar UScalarTy.U32) :=
 fun x s b => do
   let a ← x + 1#u32
   let len : ℕ := (↑s).length
@@ -852,7 +855,7 @@ info: test23_eq : ∀ (n : ℕ) (x : U32) (s : Slice U8) (b : Bool),
 #guard_msgs in
 #check @test23_eq
 /--
-info: 'test23_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.Tests.test23_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test23_eq
@@ -896,7 +899,7 @@ def test24 (x : U32) : Result U32 := do
 
 -- 6 sequential decompositions, each extracting 5 bindings
 /--
-warning: #decompose: 'test24_chunk2' has the same definition as 'test24_chunk1' (consider reusing the same name)
+warning: #decompose: 'Aeneas.Command.Decompose.Tests.test24_chunk2' has the same definition as 'Aeneas.Command.Decompose.Tests.test24_chunk1' (consider reusing the same name)
 -/
 #guard_msgs in
 #decompose test24 test24_eq
@@ -921,7 +924,7 @@ info: test24_eq : ∀ (x : U32),
 #guard_msgs in
 #check @test24_eq
 /--
-info: 'test24_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.Tests.test24_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test24_eq
@@ -943,7 +946,8 @@ def test25 (x : U32) : Result U32 := do
   letRange 2 3 => test25_middle
 
 /--
-info: def test25_middle : UScalar UScalarTy.U32 → UScalar UScalarTy.U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test25_middle : UScalar UScalarTy.U32 →
+  UScalar UScalarTy.U32 → Result (UScalar UScalarTy.U32) :=
 fun a b => do
   let c ← b + 3#u32
   let d ← c + a
@@ -962,7 +966,7 @@ info: test25_eq : ∀ (x : U32),
 #guard_msgs in
 #check @test25_eq
 /--
-info: 'test25_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.Tests.test25_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test25_eq
@@ -989,7 +993,7 @@ def test26 (x y : U32) : Result U32 := do
   letAt 1 (full) => test26_extracted
 
 /--
-info: def test26_extracted : U32 → Result U32 :=
+info: def Aeneas.Command.Decompose.Tests.test26_extracted : U32 → Result U32 :=
 fun y => test26_aux2 y
 -/
 #guard_msgs in
@@ -1004,7 +1008,7 @@ info: test26_eq : ∀ (x y : U32),
 #guard_msgs in
 #check @test26_eq
 /--
-info: 'test26_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.Tests.test26_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test26_eq
@@ -1026,7 +1030,7 @@ def test27 (b : Bool) (x : Nat) : Nat :=
   branch 0 full => test27_then
 
 /--
-info: def test27_then : ℕ → ℕ :=
+info: def Aeneas.Command.Decompose.Tests.test27_then : ℕ → ℕ :=
 fun x =>
   have a := x + 1;
   have b := a + 2;
@@ -1041,7 +1045,7 @@ info: test27_eq : ∀ (b : Bool) (x : ℕ), test27 b x = if b = true then test27
 #guard_msgs in
 #check @test27_eq
 /--
-info: 'test27_eq' depends on axioms: [propext]
+info: 'Aeneas.Command.Decompose.Tests.test27_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test27_eq
@@ -1061,7 +1065,7 @@ def test28 (x : Nat) : Nat :=
   letRange 0 2 => test28_unused
 
 /--
-info: def test28_unused : ℕ → ℕ :=
+info: def Aeneas.Command.Decompose.Tests.test28_unused : ℕ → ℕ :=
 fun x => x + 2
 -/
 #guard_msgs in
@@ -1072,7 +1076,7 @@ info: test28_eq : ∀ (x : ℕ), test28 x = x + 3
 #guard_msgs in
 #check @test28_eq
 /--
-info: 'test28_eq' depends on axioms: [propext]
+info: 'Aeneas.Command.Decompose.Tests.test28_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test28_eq
@@ -1091,7 +1095,7 @@ def test29 {α : Type u} (x : α) : α :=
   letRange 0 2 => test29_aux
 
 /--
-info: def test29_aux.{u} : {α : Type u} → α → α :=
+info: def Aeneas.Command.Decompose.Tests.test29_aux.{u} : {α : Type u} → α → α :=
 fun {α} x =>
   let a := x;
   a
@@ -1107,7 +1111,7 @@ info: @test29_eq : ∀ {α : Type u_1} (x : α),
 #guard_msgs in
 #check @test29_eq
 /--
-info: 'test29_eq' depends on axioms: [propext]
+info: 'Aeneas.Command.Decompose.Tests.test29_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test29_eq
@@ -1131,7 +1135,7 @@ def test30 (b : Bool) (x y : U32) : Result U32 := do
   branch 1 (letRange 0 2) => test30_else_prefix
 
 /--
-info: def test30_then_prefix : U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test30_then_prefix : U32 → Result (UScalar UScalarTy.U32) :=
 fun x => do
   let a ← x + 1#u32
   a + 2#u32
@@ -1139,7 +1143,7 @@ fun x => do
 #guard_msgs in
 #print test30_then_prefix
 /--
-info: def test30_else_prefix : U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test30_else_prefix : U32 → Result (UScalar UScalarTy.U32) :=
 fun y => do
   let c ← y + 10#u32
   c + 20#u32
@@ -1159,7 +1163,7 @@ info: test30_eq : ∀ (b : Bool) (x y : U32),
 #guard_msgs in
 #check @test30_eq
 /--
-info: 'test30_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.Tests.test30_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test30_eq
@@ -1177,7 +1181,7 @@ def test31 {n : Nat} (x : Fin n) : Nat :=
   letRange 0 2 => test31_aux
 
 /--
-info: def test31_aux : {n : ℕ} → Fin n → ℕ :=
+info: def Aeneas.Command.Decompose.Tests.test31_aux : {n : ℕ} → Fin n → ℕ :=
 fun {n} x =>
   let a := ↑x + 1;
   a + n
@@ -1193,7 +1197,7 @@ info: @test31_eq : ∀ {n : ℕ} (x : Fin n),
 #guard_msgs in
 #check @test31_eq
 /--
-info: 'test31_eq' depends on axioms: [propext]
+info: 'Aeneas.Command.Decompose.Tests.test31_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test31_eq
@@ -1216,7 +1220,7 @@ def test33 (n : Nat) : Nat :=
   branch 1 (letRange 0 3) => test33_succ_comp
 
 /--
-info: def test33_succ_comp : ℕ → ℕ :=
+info: def Aeneas.Command.Decompose.Tests.test33_succ_comp : ℕ → ℕ :=
 fun k =>
   let a := k + 1;
   let b := a + 1;
@@ -1236,7 +1240,7 @@ info: test33_eq : ∀ (n : ℕ),
 #guard_msgs in
 #check @test33_eq
 /--
-info: 'test33_eq' depends on axioms: [propext]
+info: 'Aeneas.Command.Decompose.Tests.test33_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test33_eq
@@ -1262,14 +1266,14 @@ def test34 (b : Bool) : Nat :=
   branch 1 (letRange 0 2) => test34_false_comp
 
 /--
-info: def test34_true_comp : ℕ :=
+info: def Aeneas.Command.Decompose.Tests.test34_true_comp : ℕ :=
 let x := 100;
 x + 200
 -/
 #guard_msgs in
 #print test34_true_comp
 /--
-info: def test34_false_comp : ℕ :=
+info: def Aeneas.Command.Decompose.Tests.test34_false_comp : ℕ :=
 let x := 300;
 x + 400
 -/
@@ -1289,7 +1293,7 @@ info: test34_eq : ∀ (b : Bool),
 #guard_msgs in
 #check @test34_eq
 /--
-info: 'test34_eq' depends on axioms: [propext]
+info: 'Aeneas.Command.Decompose.Tests.test34_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test34_eq
@@ -1315,7 +1319,7 @@ def test35 (o : Option Nat) : Nat :=
   branch 1 (letRange 0 3) => test35_some_comp
 
 /--
-info: def test35_some_comp : ℕ → ℕ :=
+info: def Aeneas.Command.Decompose.Tests.test35_some_comp : ℕ → ℕ :=
 fun v =>
   let a := v + 10;
   let b := a + 20;
@@ -1338,7 +1342,7 @@ info: test35_eq : ∀ (o : Option ℕ),
 #guard_msgs in
 #check @test35_eq
 /--
-info: 'test35_eq' depends on axioms: [propext]
+info: 'Aeneas.Command.Decompose.Tests.test35_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test35_eq
@@ -1377,28 +1381,28 @@ def test36 (c : Color) : Nat :=
   branch 3 (letRange 0 2) => test36_yellow
 
 /--
-info: def test36_red : ℕ :=
+info: def Aeneas.Command.Decompose.Tests.test36_red : ℕ :=
 let a := 1;
 a + 2
 -/
 #guard_msgs in
 #print test36_red
 /--
-info: def test36_green : ℕ :=
+info: def Aeneas.Command.Decompose.Tests.test36_green : ℕ :=
 let a := 3;
 a + 4
 -/
 #guard_msgs in
 #print test36_green
 /--
-info: def test36_blue : ℕ :=
+info: def Aeneas.Command.Decompose.Tests.test36_blue : ℕ :=
 let a := 5;
 a + 6
 -/
 #guard_msgs in
 #print test36_blue
 /--
-info: def test36_yellow : ℕ :=
+info: def Aeneas.Command.Decompose.Tests.test36_yellow : ℕ :=
 let a := 7;
 a + 8
 -/
@@ -1424,7 +1428,7 @@ info: test36_eq : ∀ (c : Color),
 #guard_msgs in
 #check @test36_eq
 /--
-info: 'test36_eq' depends on axioms: [propext]
+info: 'Aeneas.Command.Decompose.Tests.test36_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test36_eq
@@ -1446,7 +1450,7 @@ def test37 (n : Nat) : Nat :=
   branch 1 full => test37_succ
 
 /--
-info: def test37_succ : ℕ → ℕ :=
+info: def Aeneas.Command.Decompose.Tests.test37_succ : ℕ → ℕ :=
 fun k =>
   have a := k * 2;
   have b := a + 3;
@@ -1464,7 +1468,7 @@ info: test37_eq : ∀ (n : ℕ),
 #guard_msgs in
 #check @test37_eq
 /--
-info: 'test37_eq' depends on axioms: [propext]
+info: 'Aeneas.Command.Decompose.Tests.test37_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test37_eq
@@ -1493,7 +1497,7 @@ def test38 (n : Nat) (b : Bool) : Nat :=
   branch 1 (branch 1 (letRange 0 2)) => test38_succ_false_comp
 
 /--
-info: def test38_succ_true_comp : ℕ → ℕ :=
+info: def Aeneas.Command.Decompose.Tests.test38_succ_true_comp : ℕ → ℕ :=
 fun k =>
   let a := k + 100;
   a + 200
@@ -1501,7 +1505,7 @@ fun k =>
 #guard_msgs in
 #print test38_succ_true_comp
 /--
-info: def test38_succ_false_comp : ℕ → ℕ :=
+info: def Aeneas.Command.Decompose.Tests.test38_succ_false_comp : ℕ → ℕ :=
 fun k =>
   let a := k + 300;
   a + 400
@@ -1525,7 +1529,7 @@ info: test38_eq : ∀ (n : ℕ) (b : Bool),
 #guard_msgs in
 #check @test38_eq
 /--
-info: 'test38_eq' depends on axioms: [propext]
+info: 'Aeneas.Command.Decompose.Tests.test38_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test38_eq
@@ -1547,7 +1551,7 @@ def test39 (n : Nat) : Result Nat := do
   branch 1 (letRange 0 2) => test39_succ_comp
 
 /--
-info: def test39_succ_comp : ℕ → Result ℕ :=
+info: def Aeneas.Command.Decompose.Tests.test39_succ_comp : ℕ → Result ℕ :=
 fun k => do
   let a ← Result.ok (k + 10)
   Result.ok (a + 1)
@@ -1566,7 +1570,7 @@ info: test39_eq : ∀ (n : ℕ),
 #guard_msgs in
 #check @test39_eq
 /--
-info: 'test39_eq' depends on axioms: [propext, Quot.sound]
+info: 'Aeneas.Command.Decompose.Tests.test39_eq' depends on axioms: [propext, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test39_eq
@@ -1592,7 +1596,7 @@ def test40 (p : Point) : Nat :=
   branch 0 (letRange 0 3) => test40_comp
 
 /--
-info: def test40_comp : ℕ → ℕ → ℕ :=
+info: def Aeneas.Command.Decompose.Tests.test40_comp : ℕ → ℕ → ℕ :=
 fun x y =>
   let a := x + y;
   let b := a * 2;
@@ -1611,7 +1615,7 @@ info: test40_eq : ∀ (p : Point),
 #guard_msgs in
 #check @test40_eq
 /--
-info: 'test40_eq' depends on axioms: [propext]
+info: 'Aeneas.Command.Decompose.Tests.test40_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test40_eq
@@ -1637,7 +1641,7 @@ def test41 (s : Nat ⊕ Bool) : Nat :=
   branch 1 (letRange 0 2) => test41_inr_comp
 
 /--
-info: def test41_inl_comp : ℕ → ℕ :=
+info: def Aeneas.Command.Decompose.Tests.test41_inl_comp : ℕ → ℕ :=
 fun n =>
   let a := n + 1;
   a + 2
@@ -1645,7 +1649,7 @@ fun n =>
 #guard_msgs in
 #print test41_inl_comp
 /--
-info: def test41_inr_comp : Bool → ℕ :=
+info: def Aeneas.Command.Decompose.Tests.test41_inr_comp : Bool → ℕ :=
 fun b =>
   let x := if b = true then 100 else 200;
   x + 3
@@ -1666,7 +1670,7 @@ info: test41_eq : ∀ (s : ℕ ⊕ Bool),
 #guard_msgs in
 #check @test41_eq
 /--
-info: 'test41_eq' depends on axioms: [propext]
+info: 'Aeneas.Command.Decompose.Tests.test41_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test41_eq
@@ -1694,7 +1698,7 @@ def test42 (n : Nat) (flag : Bool) : Nat :=
   branch 1 (branch 1 (letRange 0 2)) => test42_succ_else_comp
 
 /--
-info: def test42_succ_then_comp : ℕ → ℕ :=
+info: def Aeneas.Command.Decompose.Tests.test42_succ_then_comp : ℕ → ℕ :=
 fun k =>
   let a := k + 10;
   a + 20
@@ -1702,7 +1706,7 @@ fun k =>
 #guard_msgs in
 #print test42_succ_then_comp
 /--
-info: def test42_succ_else_comp : ℕ → ℕ :=
+info: def Aeneas.Command.Decompose.Tests.test42_succ_else_comp : ℕ → ℕ :=
 fun k =>
   let a := k + 30;
   a + 40
@@ -1725,7 +1729,7 @@ info: test42_eq : ∀ (n : ℕ) (flag : Bool),
 #guard_msgs in
 #check @test42_eq
 /--
-info: 'test42_eq' depends on axioms: [propext, Quot.sound]
+info: 'Aeneas.Command.Decompose.Tests.test42_eq' depends on axioms: [propext, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test42_eq
@@ -1749,7 +1753,7 @@ def test43 (n : Nat) : Nat :=
 
 -- Verify this produces the same result as test21 did with argArg
 /--
-info: def test43_compute : ℕ → ℕ :=
+info: def Aeneas.Command.Decompose.Tests.test43_compute : ℕ → ℕ :=
 fun k =>
   let a := k + 1;
   let b := a + 1;
@@ -1769,7 +1773,7 @@ info: test43_eq : ∀ (n : ℕ),
 #guard_msgs in
 #check @test43_eq
 /--
-info: 'test43_eq' depends on axioms: [propext]
+info: 'Aeneas.Command.Decompose.Tests.test43_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test43_eq
@@ -1813,14 +1817,14 @@ def test46 (l : List Nat) : Nat :=
   branch 1 (letRange 0 3) => test46_cons_comp
 
 /--
-info: def test46_nil_comp : ℕ :=
+info: def Aeneas.Command.Decompose.Tests.test46_nil_comp : ℕ :=
 let a := 0;
 a + 1
 -/
 #guard_msgs in
 #print test46_nil_comp
 /--
-info: def test46_cons_comp : ℕ → List ℕ → ℕ :=
+info: def Aeneas.Command.Decompose.Tests.test46_cons_comp : ℕ → List ℕ → ℕ :=
 fun hd tl =>
   let a := hd + tl.length;
   let b := a + 100;
@@ -1842,7 +1846,7 @@ info: test46_eq : ∀ (l : List ℕ),
 #guard_msgs in
 #check @test46_eq
 /--
-info: 'test46_eq' depends on axioms: [propext]
+info: 'Aeneas.Command.Decompose.Tests.test46_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test46_eq
@@ -1861,7 +1865,7 @@ def test47 (x : U32) : Result U32 := do
   letRange 0 1 => test47_prefix
 
 /--
-info: def test47_prefix : U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test47_prefix : U32 → Result (UScalar UScalarTy.U32) :=
 fun x => x + 1#u32
 -/
 #guard_msgs in
@@ -1876,7 +1880,7 @@ info: test47_eq : ∀ (x : U32),
 #guard_msgs in
 #check @test47_eq
 /--
-info: 'test47_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.Tests.test47_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test47_eq
@@ -1895,7 +1899,7 @@ def test48 (x : U32) : Result U32 := do
   letRange 1 3 => test48_suffix
 
 /--
-info: def test48_suffix : U32 → U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test48_suffix : U32 → U32 → Result (UScalar UScalarTy.U32) :=
 fun a b => do
   let c ← a + 1#u32
   let d ← b + 2#u32
@@ -1912,7 +1916,7 @@ info: test48_eq : ∀ (x : U32),
 #guard_msgs in
 #check @test48_eq
 /--
-info: 'test48_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.Tests.test48_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test48_eq
@@ -1931,7 +1935,7 @@ def test49 (x : U32) : Result U32 := do
   letRange 0 1 => test49_prefix
 
 /--
-info: def test49_prefix : U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test49_prefix : U32 → Result (UScalar UScalarTy.U32) :=
 fun x => x + 1#u32
 -/
 #guard_msgs in
@@ -1947,7 +1951,7 @@ info: test49_eq : ∀ (x : U32),
 #guard_msgs in
 #check @test49_eq
 /--
-info: 'test49_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.Tests.test49_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test49_eq
@@ -1967,7 +1971,7 @@ def test50 (x : U32) : Result U32 := do
   letRange 0 2 => test50_prefix
 
 /--
-info: def test50_prefix : U32 → Result (UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test50_prefix : U32 → Result (UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
 fun x => do
   let a ← x + 1#u32
   let (b, c) ← Result.ok (a, a)
@@ -1985,7 +1989,7 @@ info: test50_eq : ∀ (x : U32),
 #guard_msgs in
 #check @test50_eq
 /--
-info: 'test50_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.Tests.test50_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test50_eq
@@ -2006,7 +2010,7 @@ def test51 (x y : U32) : Result U32 := do
   letRange 2 3 => test51_suffix
 
 /--
-info: def test51_suffix : UScalar UScalarTy.U32 → U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test51_suffix : UScalar UScalarTy.U32 → U32 → Result (UScalar UScalarTy.U32) :=
 fun b c => do
   let d ← b + c
   let e ← d + 1#u32
@@ -2024,7 +2028,7 @@ info: test51_eq : ∀ (x y : U32),
 #guard_msgs in
 #check @test51_eq
 /--
-info: 'test51_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.Tests.test51_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test51_eq
@@ -2048,7 +2052,7 @@ def test52 (x y : U32) : Result U32 := do
   letRange 1 3 => test52_add3
 
 /--
-info: def test52_add3 : U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test52_add3 : U32 → Result (UScalar UScalarTy.U32) :=
 fun x => do
   let x1 ← x + 1#u32
   let x2 ← x1 + 1#u32
@@ -2066,7 +2070,7 @@ info: test52_eq : ∀ (x y : U32),
 #guard_msgs in
 #check @test52_eq
 /--
-info: 'test52_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.Tests.test52_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test52_eq
@@ -2081,7 +2085,7 @@ def test53 (x y : U32) : Result U32 := do
   x1 + y1
 
 /--
-error: #decompose: cannot apply letRange 1 1 => test53_aux: definition 'test53_aux' already exists with body
+error: #decompose: cannot apply letRange 1 1 => Aeneas.Command.Decompose.Tests.test53_aux: definition 'Aeneas.Command.Decompose.Tests.test53_aux' already exists with body
   fun x => x + 1#u32
 but the new extraction produced
   fun y => y + 2#u32
@@ -2107,7 +2111,7 @@ def test54 (x y : U32) : Result U32 := do
 
 -- Same body extracted with different names → should warn
 /--
-warning: #decompose: 'test54_add3b' has the same definition as 'test54_add3a' (consider reusing the same name)
+warning: #decompose: 'Aeneas.Command.Decompose.Tests.test54_add3b' has the same definition as 'Aeneas.Command.Decompose.Tests.test54_add3a' (consider reusing the same name)
 -/
 #guard_msgs in
 #decompose test54 test54_eq
@@ -2146,7 +2150,7 @@ def loop (o : Option Usize)
   branch 1 (letRange 0 8) => loop.body_8
 
 /--
-info: 'test55_ns.loop_eq_8' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.Tests.test55_ns.loop_eq_8' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms loop_eq_8
@@ -2181,7 +2185,7 @@ info: f_prefix_eq : ∀ (x : U32),
 #guard_msgs in
 #check @f_prefix_eq
 /--
-info: def test56_ns.f_prefix : U32 → Result (UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test56_ns.f_prefix : U32 → Result (UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
 fun x => do
   let (a, b) ←
     do
@@ -2210,7 +2214,7 @@ info: f_letat1_eq : ∀ (x : U32),
 #guard_msgs in
 #check @f_letat1_eq
 /--
-info: def test56_ns.f_second_value : UScalar UScalarTy.U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.Tests.test56_ns.f_second_value : UScalar UScalarTy.U32 → Result (UScalar UScalarTy.U32) :=
 fun b => b + 1#u32
 -/
 #guard_msgs in
@@ -2250,7 +2254,7 @@ info: g_prefix_eq : ∀ (x : U32),
 #guard_msgs in
 #check @g_prefix_eq
 /--
-info: def test57_ns.g_prefix : U32 →
+info: def Aeneas.Command.Decompose.Tests.test57_ns.g_prefix : U32 →
   Result (UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
 fun x => do
   let (a, b, c, d) ←
@@ -2264,3 +2268,24 @@ fun x => do
 #print g_prefix
 
 end test57_ns
+
+namespace test58
+open Aeneas Aeneas.Std Result
+
+def nested_return (x : U32) : Result ((U32 × U32 × U32) × U32) :=
+  ok ((x, x, x), x)
+
+def caller (x : U32) : Result U32 := do
+  let y ← x + 1#u32
+  let (t, fn) ← nested_return y
+  let (a, b, c) := t
+  let r ← a + b
+  let s ← r + c
+  s + fn
+
+#decompose caller caller.fold
+  letRange 0 1 => caller_prefix
+
+end test58
+
+end Aeneas.Command.Decompose.Tests
