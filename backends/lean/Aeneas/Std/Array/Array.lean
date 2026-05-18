@@ -58,27 +58,38 @@ example : Result (Array Int (Usize.ofNat 2)) := do
   let y ← ok 1
   ok (Array.make (Usize.ofNat 2) [x, y])
 
-@[reducible] instance {α : Type u} {n : Usize} : GetElem (Array α n) Nat α (fun a i => i < a.val.length) where
+instance {α : Type u} {n : Usize} : GetElem (Array α n) Nat α (fun a i => i < a.val.length) where
   getElem a i h := getElem a.val i h
 
-@[reducible] instance {α : Type u} {n : Usize} : GetElem? (Array α n) Nat α (fun a i => i < a.val.length) where
+@[simp, grind =, agrind =, simp_lists_safe, simp_lists_hyps_simps]
+theorem Array.getElem_Nat_eq {α : Type u} {n : Usize} (v : Array α n) (i : Nat) (h : i < v.val.length) :
+    v[i] = v.val[i] := rfl
+
+instance {α : Type u} {n : Usize} : GetElem? (Array α n) Nat α (fun a i => i < a.val.length) where
   getElem? a i := getElem? a.val i
 
-@[simp, scalar_tac_simps, simp_lists_hyps_simps, grind =, agrind =]
+@[simp, scalar_tac_simps, simp_lists_hyps_simps, simp_lists_safe, grind =, agrind =]
 theorem Array.getElem?_Nat_eq {α : Type u} {n : Usize} (v : Array α n) (i : Nat) : v[i]? = v.val[i]? := by rfl
 
-@[simp, scalar_tac_simps, simp_lists_hyps_simps, grind = _, agrind = _]
+@[simp, scalar_tac_simps, simp_lists_hyps_simps, simp_lists_safe, grind = _, agrind = _]
 theorem Array.getElem!_Nat_eq {α : Type u} [Inhabited α] {n : Usize} (v : Array α n) (i : Nat) : v[i]! = v.val[i]! := by
   simp only [getElem!]; split <;> (simp_all; try rfl)
 
-@[reducible] instance {α : Type u} {n : Usize} : GetElem (Array α n) Usize α (fun a i => i.val < a.val.length) where
+instance {α : Type u} {n : Usize} : GetElem (Array α n) Usize α (fun a i => i.val < a.val.length) where
   getElem a i h := getElem a.val i.val h
 
-@[reducible] instance {α : Type u} {n : Usize} : GetElem? (Array α n) Usize α (fun a i => i.val < a.val.length) where
+@[simp, grind =, agrind =, simp_lists_safe, simp_lists_hyps_simps]
+theorem Array.getElem_Usize_eq {α : Type u} {n : Usize} (v : Array α n) (i : Usize) (h : i.val < v.val.length) :
+    v[i] = v.val[i.val] := rfl
+
+instance {α : Type u} {n : Usize} : GetElem? (Array α n) Usize α (fun a i => i.val < a.val.length) where
   getElem? a i := getElem? a.val i.val
 
-@[simp, scalar_tac_simps, simp_lists_hyps_simps] theorem Array.getElem?_Usize_eq {α : Type u} {n : Usize} (v : Array α n) (i : Usize) : v[i]? = v.val[i.val]? := by rfl
-@[simp, scalar_tac_simps, simp_lists_hyps_simps] theorem Array.getElem!_Usize_eq {α : Type u} [Inhabited α] {n : Usize} (v : Array α n) (i : Usize) : v[i]! = v.val[i.val]! := by
+@[simp, scalar_tac_simps, simp_lists_hyps_simps, simp_lists_safe, grind =, agrind =]
+theorem Array.getElem?_Usize_eq {α : Type u} {n : Usize} (v : Array α n) (i : Usize) : v[i]? = v.val[i.val]? := by rfl
+
+@[simp, scalar_tac_simps, simp_lists_hyps_simps, simp_lists_safe, grind = _, agrind = _]
+theorem Array.getElem!_Usize_eq {α : Type u} [Inhabited α] {n : Usize} (v : Array α n) (i : Usize) : v[i]! = v.val[i.val]! := by
   simp only [getElem!]; split <;> (simp_all; try rfl)
 
 @[simp, scalar_tac_simps, simp_lists_hyps_simps, grind, agrind] abbrev Array.get? {α : Type u} {n : Usize} (v : Array α n) (i : Nat) : Option α := getElem? v i
@@ -138,14 +149,14 @@ theorem Array.getElem!_Usize_set_ne
   {α : Type u} {N : Usize} [Inhabited α] (a: Array α N) (i j : Usize) (x: α)
   (h : i.val ≠ j.val) : (a.set i x)[j]! = a[j]!
   := by
-  grind
+  simp only [getElem!_Usize_eq, set_val_eq]; grind
 
 @[simp↓, simp_lists_safe↓]
 theorem Array.getElem!_Usize_set_eq
   {α : Type u} {N : Usize} [Inhabited α] (a: Array α N) (i i' : Usize) (x: α)
   (h : i = i' ∧ i'.val < a.length) : getElem! (a.set i x) i' = x
   := by
-  grind
+  simp only [getElem!_Usize_eq, set_val_eq]; grind
 
 /-- Using `↓` to eagerly simplify combinations of `set` and `getElem!` in expressions like:
 `(((l.set i0 x0) ...).set in xn)[j]!`
@@ -156,13 +167,13 @@ Otherwise we might lose a lot of time reordering the `set` expressions.
 theorem Array.getElem!_Nat_set_ne
   {α : Type u} {N : Usize} [Inhabited α] (a: Array α N) (i : Usize) (j : Nat) (x: α)
   (h : i.val ≠ j) : (a.set i x)[j]! = a[j]!
-  := by grind
+  := by simp only [getElem!_Nat_eq, set_val_eq]; grind
 
 @[simp↓, simp_lists_safe↓]
 theorem Array.getElem!_Nat_set_eq
   {α : Type u} {N : Usize} [Inhabited α] (a: Array α N) (i : Usize) (i' : Nat) (x: α)
   (h : i.val = i' ∧ i' < a.length) : getElem! (a.set i x) i' = x
-  := by grind
+  := by simp only [getElem!_Nat_eq, set_val_eq]; grind
 
 @[scalar_tac_simps, simp_lists_safe, grind =, agrind =]
 theorem Array.set_length {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) :

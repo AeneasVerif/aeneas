@@ -52,31 +52,38 @@ abbrev Slice.len {α : Type u} (v : Slice α) : Usize :=
 theorem Slice.len_val {α : Type u} (v : Slice α) : (Slice.len v).val = v.length :=
   by simp
 
-@[reducible] instance {α : Type u} : GetElem (Slice α) Nat α (fun a i => i < a.val.length) where
+instance {α : Type u} : GetElem (Slice α) Nat α (fun a i => i < a.val.length) where
   getElem a i h := getElem a.val i h
 
-@[simp, grind =, simp_lists_safe]
+@[simp, grind =, agrind =, simp_lists_safe, simp_lists_hyps_simps]
 theorem Slice.getElem_Nat_eq {α : Type u} (v : Slice α) (i : Nat) (h : i < v.val.length) :
     v[i] = v.val[i] := rfl
 
-@[reducible] instance {α : Type u} : GetElem? (Slice α) Nat α (fun a i => i < a.val.length) where
+instance {α : Type u} : GetElem? (Slice α) Nat α (fun a i => i < a.val.length) where
   getElem? a i := getElem? a.val i
 
-@[simp, scalar_tac_simps, simp_lists_hyps_simps]
+@[simp, scalar_tac_simps, simp_lists_hyps_simps, simp_lists_safe, grind =, agrind =]
 theorem Slice.getElem?_Nat_eq {α : Type u} (v : Slice α) (i : Nat) : v[i]? = v.val[i]? := by rfl
 
-@[simp, scalar_tac_simps, simp_lists_hyps_simps]
+@[simp, scalar_tac_simps, simp_lists_hyps_simps, simp_lists_safe, grind = _, agrind = _]
 theorem Slice.getElem!_Nat_eq {α : Type u} [Inhabited α] (v : Slice α) (i : Nat) : v[i]! = v.val[i]! := by
   simp only [getElem!]; split <;> (simp_all [List.getElem!_eq_getElem?_getD]; try rfl)
 
-@[reducible] instance {α : Type u} : GetElem (Slice α) Usize α (fun a i => i.val < a.val.length) where
+instance {α : Type u} : GetElem (Slice α) Usize α (fun a i => i.val < a.val.length) where
   getElem a i h := getElem a.val i.val h
 
-@[reducible] instance {α : Type u} : GetElem? (Slice α) Usize α (fun a i => i < a.val.length) where
+@[simp, grind =, agrind =, simp_lists_safe, simp_lists_hyps_simps]
+theorem Slice.getElem_Usize_eq {α : Type u} (v : Slice α) (i : Usize) (h : i.val < v.val.length) :
+    v[i] = v.val[i.val] := rfl
+
+instance {α : Type u} : GetElem? (Slice α) Usize α (fun a i => i < a.val.length) where
   getElem? a i := getElem? a.val i.val
 
-@[simp, scalar_tac_simps, simp_lists_hyps_simps] theorem Slice.getElem?_Usize_eq {α : Type u} (v : Slice α) (i : Usize) : v[i]? = v.val[i.val]? := by rfl
-@[simp, scalar_tac_simps, simp_lists_hyps_simps] theorem Slice.getElem!_Usize_eq {α : Type u} [Inhabited α] (v : Slice α) (i : Usize) : v[i]! = v.val[i.val]! := by
+@[simp, scalar_tac_simps, simp_lists_hyps_simps, simp_lists_safe, grind =, agrind =]
+theorem Slice.getElem?_Usize_eq {α : Type u} (v : Slice α) (i : Usize) : v[i]? = v.val[i.val]? := by rfl
+
+@[simp, scalar_tac_simps, simp_lists_hyps_simps, simp_lists_safe, grind = _, agrind = _]
+theorem Slice.getElem!_Usize_eq {α : Type u} [Inhabited α] (v : Slice α) (i : Usize) : v[i]! = v.val[i.val]! := by
   simp only [getElem!]; split <;> (simp_all [List.getElem!_eq_getElem?_getD]; try rfl)
 
 @[simp, scalar_tac_simps, simp_lists_hyps_simps] abbrev Slice.get? {α : Type u} (v : Slice α) (i : Nat) : Option α := getElem? v i
@@ -951,9 +958,11 @@ theorem Slice.mapM_spec {α β} {f : α → Result β} {s : Slice α} {post : Na
     simp only [UScalar.lt_equiv, Usize.ofNatCore_val_eq, spec_ok]
     refine ⟨by grind [List.mapM_Result_length], fun i hi => ?_⟩
     have hlen : i < s.len := by have := List.mapM_Result_length heq; simp [Slice.len] at *; omega
-    have : f s[i] = ok xs[↑i] := List.mapM_Result_ok heq (↑i) (by scalar_tac)
-    specialize hf i hlen; simp [spec, theta, this] at hf
-    convert hf using 1
+    have hthis := List.mapM_Result_ok heq (↑i) (by scalar_tac)
+    specialize hf i hlen; simp only [spec, theta] at hf
+    erw [hthis] at hf
+    simp only [wp_return, getElem_Usize_eq] at hf ⊢
+    exact hf
   case h_2 e heq => simp [hl'] at heq
   case h_3 heq => simp [hl'] at heq
 
