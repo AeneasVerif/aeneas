@@ -118,12 +118,8 @@ theorem Array.repeat_val (n : Usize) (x : α) : (Array.repeat n x).val = List.re
 @[step]
 theorem Array.index_usize_spec {α : Type u} {n : Usize} [Inhabited α] (v: Array α n) (i: Usize)
   (hbound : i.val < v.length) :
-  (v.index_usize i) ⦃ x => x = v.val[i.val]! ⦄ := by
-  simp only [index_usize]
-  simp at *
-  split <;> simp_all only [List.Vector.length_val, List.getElem?_eq_getElem, Option.some.injEq,
-    Option.getD_some, reduceCtorEq]
-  simp
+  (v.index_usize i) ⦃ x => x = v.val[i.val] ⦄ := by
+  grind [index_usize]
 
 def Array.set {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) : Array α n :=
   ⟨ v.val.set i.val x, by have := v.property; simp [*] ⟩
@@ -235,8 +231,7 @@ def Array.index_mut_usize {α : Type u} {n : Usize} (v: Array α n) (i: Usize) :
 @[step]
 theorem Array.index_mut_usize_spec {α : Type u} {n : Usize} [Inhabited α] (v: Array α n) (i: Usize)
   (hbound : i.val < v.length) :
-  v.index_mut_usize i ⦃ x y => y = set v i ∧
-  x = v.val[i.val]! ⦄ := by
+  v.index_mut_usize i ⦃ x back => x = v.val[i.val] ∧ back = set v i ⦄ := by
   simp only [index_mut_usize, Bind.bind, bind]
   have ⟨ x, h ⟩ := spec_imp_exists (index_usize_spec v i hbound)
   simp [h]

@@ -133,10 +133,8 @@ theorem core.slice.Slice.is_empty_spec {T : Type} (s : Slice T) :
 @[step]
 theorem Slice.index_usize_spec {α : Type u} [Inhabited α] (v: Slice α) (i: Usize)
   (hbound : i.val < v.length) :
-  v.index_usize i ⦃ x => x = v.val[i.val]! ⦄ := by
-  simp only [index_usize]
-  simp only [length, getElem?_Usize_eq] at *
-  simp only [List.getElem?_eq_getElem, List.getElem!_eq_getElem?_getD, Option.getD_some, hbound, spec_ok]
+  v.index_usize i ⦃ x => x = v.val[i.val] ⦄ := by
+  grind [index_usize]
 
 @[simp, scalar_tac_simps, simp_lists_hyps_simps, grind =]
 theorem Slice.set_val_eq {α : Type u} (v: Slice α) (i: Usize) (x: α) :
@@ -284,7 +282,7 @@ def Slice.index_mut_usize {α : Type u} (v: Slice α) (i: Usize) :
 @[step]
 theorem Slice.index_mut_usize_spec {α : Type u} [Inhabited α] (v: Slice α) (i: Usize)
   (hbound : i.val < v.length) :
-  v.index_mut_usize i ⦃ p => p = (v.val[i.val]!, Slice.set v i) ⦄ := by
+  v.index_mut_usize i ⦃ x back => x = v.val[i.val] ∧ back = Slice.set v i ⦄ := by
   simp only [index_mut_usize, Bind.bind, bind]
   have ⟨ x, h ⟩ := spec_imp_exists (Slice.index_usize_spec v i hbound)
   simp [h]
@@ -793,10 +791,10 @@ theorem core.slice.Slice.swap_spec {T : Type} [Inhabited T] (s : Slice T) (a b :
   simp only [hav]
   have ⟨bv, hbv⟩ := spec_imp_exists (Slice.index_usize_spec s b hb)
   simp only [hbv]
-  have ⟨s1, hs1⟩ := spec_imp_exists (Slice.update_spec s a (s.val[b.val]!) ha)
+  have ⟨s1, hs1⟩ := spec_imp_exists (Slice.update_spec s a (s.val[b.val]) ha)
   simp only [hs1]
   have hlen1 : b.val < s1.length := by rw [hs1.2, Slice.set_length]; exact hb
-  have ⟨s', hs'⟩ := spec_imp_exists (Slice.update_spec s1 b (s.val[a.val]!) hlen1)
+  have ⟨s', hs'⟩ := spec_imp_exists (Slice.update_spec s1 b (s.val[a.val]) hlen1)
   rw [hs1.2] at hs'
   simp only [hs', spec_ok]
   refine ⟨?_, ?_, ?_, ?_⟩
