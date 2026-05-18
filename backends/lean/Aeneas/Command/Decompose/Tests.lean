@@ -2269,4 +2269,23 @@ fun x => do
 
 end test57_ns
 
+namespace test58
+open Aeneas Aeneas.Std Result
+
+def nested_return (x : U32) : Result ((U32 × U32 × U32) × U32) :=
+  ok ((x, x, x), x)
+
+def caller (x : U32) : Result U32 := do
+  let y ← x + 1#u32
+  let (t, fn) ← nested_return y
+  let (a, b, c) := t
+  let r ← a + b
+  let s ← r + c
+  s + fn
+
+#decompose caller caller.fold
+  letRange 0 1 => caller_prefix
+
+end test58
+
 end Aeneas.Command.Decompose.Tests
