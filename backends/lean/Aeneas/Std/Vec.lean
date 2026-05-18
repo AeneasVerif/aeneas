@@ -13,6 +13,9 @@ namespace Std
 
 open Result Error WP
 
+local macro_rules
+| `(tactic| get_elem_tactic) => `(tactic| grind)
+
 namespace alloc.vec
 
 @[rust_type "alloc::vec::Vec"]
@@ -406,6 +409,16 @@ theorem alloc.vec.Vec.set_getElem!_eq α [Inhabited α] (x : alloc.vec.Vec α) (
   simp only [getElem!_Usize_eq]
   simp only [Vec, set_val_eq, Subtype.ext_iff, List.set_getElem!]
 
+@[simp, scalar_tac_simps, grind =, agrind =]
+theorem alloc.vec.Vec.set_getElem_eq α (x : alloc.vec.Vec α) (i : Usize) (h : i.val < x.length) :
+  x.set i x[i] = x := by
+  have h' : i.val < x.val.length := by
+    simpa using h
+  have hself : x.val.set i.val x.val[i.val] = x.val :=
+    List.set_getElem_self (as := x.val) (i := i.val) (h := h')
+  simp only [alloc.vec.Vec, Subtype.ext_iff, set_val_eq] at hself ⊢
+  exact hself
+
 @[rust_fun
   "alloc::vec::{core::convert::From<alloc::vec::Vec<@T>, [@T; @N]>}::from"]
 def alloc.vec.FromVecArray.from
@@ -437,6 +450,11 @@ def core.convert.FromBoxSliceVec (T : Type) :
 def alloc.vec.Vec.setSlice! {α : Type u} (s : alloc.vec.Vec α) (i : ℕ) (s' : List α) : alloc.vec.Vec α :=
   ⟨s.val.setSlice! i s', by scalar_tac⟩
 
+@[simp, scalar_tac_simps, simp_scalar_safe, simp_lists_safe, grind =, agrind =]
+theorem alloc.vec.Vec.setSlice!_length {α : Type u} (s : alloc.vec.Vec α) (i : ℕ) (s' : List α) :
+  (s.setSlice! i s').length = s.length := by
+  simp only [Vec.length, Vec.setSlice!, List.length_setSlice!]
+
 @[simp_lists_safe, grind =, agrind =]
 theorem alloc.vec.Vec.setSlice!_getElem!_prefix {α} [Inhabited α]
   (s : alloc.vec.Vec α) (s' : List α) (i j : ℕ) (h : j < i) :
@@ -445,17 +463,53 @@ theorem alloc.vec.Vec.setSlice!_getElem!_prefix {α} [Inhabited α]
   simp_lists
 
 @[simp_lists_safe, grind =, agrind =]
+theorem alloc.vec.Vec.setSlice!_getElem_prefix {α}
+  (s : alloc.vec.Vec α) (s' : List α) (i j : ℕ) (h : j < i ∧ j < s.length) :
+  (s.setSlice! i s')[j] = s[j] := by
+  have hj' : j < (s.setSlice! i s').length := by
+    simpa [Vec.setSlice!_length] using h.2
+  have h1 : (s.setSlice! i s')[j]? = s[j]? := by
+    simp only [Vec.getElem?_Nat_eq, Vec.setSlice!]
+    simp_lists [List.setSlice!_getElem?_prefix]
+  simpa [Vec.getElem?_Nat_eq, Vec.getElem_Nat_eq,
+    List.getElem?_eq_getElem hj', List.getElem?_eq_getElem h.2] using h1
+
+@[simp_lists_safe, grind =, agrind =]
 theorem alloc.vec.Vec.setSlice!_getElem!_middle {α} [Inhabited α]
   (s : alloc.vec.Vec α) (s' : List α) (i j : ℕ) (h : i ≤ j ∧ j - i < s'.length ∧ j < s.length) :
   (s.setSlice! i s')[j]! = s'[j - i]! := by
   simp only [Vec.setSlice!, Vec.getElem!_Nat_eq]
   simp_lists
 
+@[simp_lists_safe, grind =, agrind =]
+theorem alloc.vec.Vec.setSlice!_getElem_middle {α}
+  (s : alloc.vec.Vec α) (s' : List α) (i j : ℕ) (h : i ≤ j ∧ j - i < s'.length ∧ j < s.length) :
+  (s.setSlice! i s')[j] = s'[j - i] := by
+  have hj' : j < (s.setSlice! i s').length := by
+    simpa [Vec.setSlice!_length] using h.2.2
+  have hji : j - i < s'.length := h.2.1
+  have h1 : (s.setSlice! i s')[j]? = s'[j - i]? := by
+    simp only [Vec.getElem?_Nat_eq, Vec.setSlice!]
+    simp_lists [List.setSlice!_getElem?_middle]
+  simpa [Vec.getElem?_Nat_eq, Vec.getElem_Nat_eq,
+    List.getElem?_eq_getElem hj', List.getElem?_eq_getElem hji] using h1
+
 theorem alloc.vec.Vec.setSlice!_getElem!_suffix {α} [Inhabited α]
   (s : alloc.vec.Vec α) (s' : List α) (i j : ℕ) (h : i + s'.length ≤ j) :
   (s.setSlice! i s')[j]! = s[j]! := by
   simp only [Vec.setSlice!, Vec.getElem!_Nat_eq]
   simp_lists
+
+theorem alloc.vec.Vec.setSlice!_getElem_suffix {α}
+  (s : alloc.vec.Vec α) (s' : List α) (i j : ℕ) (h : i + s'.length ≤ j ∧ j < s.length) :
+  (s.setSlice! i s')[j] = s[j] := by
+  have hj' : j < (s.setSlice! i s').length := by
+    simpa [Vec.setSlice!_length] using h.2
+  have h1 : (s.setSlice! i s')[j]? = s[j]? := by
+    simp only [Vec.getElem?_Nat_eq, Vec.setSlice!]
+    simp_lists [List.setSlice!_getElem?_suffix]
+  simpa [Vec.getElem?_Nat_eq, Vec.getElem_Nat_eq,
+    List.getElem?_eq_getElem hj', List.getElem?_eq_getElem h.2] using h1
 
 @[rust_fun "alloc::vec::{core::clone::Clone<alloc::vec::Vec<@T>>}::clone"
     (keepParams := [true, false]) (keepTraitClauses := [true, false])]
