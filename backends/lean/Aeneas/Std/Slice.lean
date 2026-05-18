@@ -213,7 +213,6 @@ theorem Slice.getElem_Nat_set_eq
   (a.set i x)[j] = x
   := by grind
 
-@[simp_lists_safe]
 theorem Slice.Inhabited_getElem_eq_getElem! {α} [Inhabited α] (v : Slice α) (i : ℕ) (hi : i < v.length) :
     v[i] = v[i]! := by
   rw [Slice.getElem!_Nat_eq]

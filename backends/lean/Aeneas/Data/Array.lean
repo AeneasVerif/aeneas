@@ -53,7 +53,6 @@ theorem getElem!_setSlice!_same {α} [Inhabited α] (s : Array α) (s' : List α
   (s.setSlice! i s')[j]! = s[j]! := by
   cases h <;> simp_lists [getElem!_setSlice!_prefix, getElem!_setSlice!_suffix]
 
-@[simp_lists_safe]
 def Inhabited_getElem_eq_getElem! {α} [Inhabited α] (l : Array α) (i : ℕ) (hi : i < l.size) :
   l[i] = l[i]! := by
   have : l.toList[i] = l.toList[i]! :=

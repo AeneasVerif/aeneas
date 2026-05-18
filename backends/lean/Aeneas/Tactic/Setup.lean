@@ -29,7 +29,7 @@ elab "#setup_aeneas_simps" : command => do
   let stx ←
     `(command|
       /- Activating the lemmas to convert `get` to `getElem!` and `set` to `set!` -/
-      attribute [local simp]
+      attribute [local simp, local simp_lists_hyps_simps, local simp_lists]
           _root_.List.Inhabited_getElem_eq_getElem!
           _root_.Array.Inhabited_getElem_eq_getElem!
           _root_.Aeneas.Std.Slice.Inhabited_getElem_eq_getElem!

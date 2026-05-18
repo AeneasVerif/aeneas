@@ -70,7 +70,6 @@ theorem getElem!_setSlice!_same {α} {n} [Inhabited α] (s : Vector α n) (s' : 
   (s.setSlice! i s')[j]! = s[j]! := by
   cases h <;> simp_lists [getElem!_setSlice!_prefix, getElem!_setSlice!_suffix]
 
-@[simp_lists_safe]
 def Inhabited_getElem_eq_getElem! {α} {n} [Inhabited α] (l : Vector α n) (i : ℕ) (hi : i < n) :
   l[i] = l[i]! := by
   simp only [getElem_eq_toArray_getElem, Array.Inhabited_getElem_eq_getElem!,
