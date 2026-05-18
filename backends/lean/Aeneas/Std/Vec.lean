@@ -109,7 +109,7 @@ def Vec.set_opt {α : Type u} (v: Vec α) (i: Usize) (x: Option α) : Vec α :=
 
 @[simp, scalar_tac_simps, simp_lists_hyps_simps, grind =, agrind =]
 theorem Vec.set_val_eq {α : Type u} (v: Vec α) (i: Usize) (x: α) :
-  (v.set i x) = v.val.set i.val x := by
+  v.set i x = v.val.set i.val x := by
   simp [set]
 
 @[simp, scalar_tac_simps, simp_lists_hyps_simps, grind =, agrind =]

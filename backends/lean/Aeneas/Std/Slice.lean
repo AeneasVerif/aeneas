@@ -31,7 +31,7 @@ instance [BEq α] : BEq (Slice α) := SubtypeBEq _
 
 instance [BEq α] [LawfulBEq α] : LawfulBEq (Slice α) := SubtypeLawfulBEq _
 
-instance [DecidableEq α] : DecidableEq (Slice α) := inferInstanceAs (DecidableEq { l : List α // _ })
+instance [DecidableEq α] : DecidableEq (Slice α) := inferInstanceAs (DecidableEq { _l : List α // _ })
 
 theorem Slice.length_ineq {α : Type u} (s : Slice α) : s.val.length ≤ Usize.max := by
   cases s; simp[*]
@@ -164,7 +164,8 @@ theorem Slice.getElem!_Usize_set_ne
 @[simp↓, simp_lists_safe↓]
 theorem Slice.getElem_Usize_set_ne
   {α : Type u} (a: Slice α) (i j : Usize) (x: α)
-  (h : i.val ≠ j.val ∧ j.val < a.length) : (a.set i x)[j] = a[j]
+  (h : i.val ≠ j.val ∧ j.val < a.length) :
+  (a.set i x)[j] = a[j]
   := by
   grind
 
@@ -178,7 +179,8 @@ theorem Slice.getElem!_Usize_set_eq
 @[simp↓, simp_lists_safe↓]
 theorem Slice.getElem_Usize_set_eq
   {α : Type u} (a: Slice α) (i j : Usize) (x: α)
-  (h : i = j ∧ j.val < a.length) : (a.set i x)[j] = x
+  (h : i = j ∧ j.val < a.length) :
+  (a.set i x)[j] = x
   := by
   grind
 
@@ -196,7 +198,8 @@ theorem Slice.getElem!_Nat_set_ne
 @[simp↓, simp_lists_safe↓]
 theorem Slice.getElem_Nat_set_ne
   {α : Type u} (a: Slice α) (i : Usize) (j : Nat) (x: α)
-  (h : i.val ≠ j ∧ j < a.length) : (a.set i x)[j] = a[j]
+  (h : i.val ≠ j ∧ j < a.length) :
+  (a.set i x)[j] = a[j]
   := by grind
 
 @[simp↓, simp_lists_safe↓]
@@ -208,7 +211,8 @@ theorem Slice.getElem!_Nat_set_eq
 @[simp↓, simp_lists_safe↓]
 theorem Slice.getElem_Nat_set_eq
   {α : Type u} (a: Slice α) (i : Usize) (j : Nat) (x: α)
-  (h : i.val = j ∧ j < a.length) : (a.set i x)[j] = x
+  (h : i.val = j ∧ j < a.length) :
+  (a.set i x)[j] = x
   := by grind
 
 @[simp_lists_safe]
@@ -219,7 +223,7 @@ theorem Slice.Inhabited_getElem_eq_getElem! {α} [Inhabited α] (v : Slice α) (
 
 theorem Slice.ext_getElem {α} {s1 s2 : Slice α}
     (hlen : s1.length = s2.length)
-    (hget : ∀ (i : Nat) (h1 : i < s1.length) (h2 : i < s2.length), s1[i] = s2[i]) :
+    (hget : ∀ (i : Nat) (_ : i < s1.length) (_ : i < s2.length), s1[i] = s2[i]) :
     s1 = s2 := by
   apply Subtype.ext
   exact List.ext_getElem (by simp_all) fun i h1 h2 => hget i h1 h2
@@ -241,7 +245,8 @@ theorem Slice.getElem!_Nat_setAtNat_eq
 @[simp↓, simp_lists_safe↓]
 theorem Slice.getElem_Nat_setAtNat_eq
   {α : Type u} (v: Slice α) (i: Nat) (x: α)
-  (h : i < v.length) : (v.setAtNat i x).val[i] = x := by
+  (h : i < v.length) :
+  (v.setAtNat i x).val[i] = x := by
   simp only [setAtNat]; grind
 
 @[simp↓, simp_lists_safe↓]
@@ -253,7 +258,8 @@ theorem Slice.getElem!_Nat_setAtNat_ne
 @[simp↓, simp_lists_safe↓]
 theorem Slice.getElem_Nat_setAtNat_ne
   {α : Type u} (v: Slice α) (i j: Nat) (x: α)
-  (h : i ≠ j ∧ j < v.length) : (v.setAtNat i x).val[j] = v.val[j] := by
+  (h : i ≠ j ∧ j < v.length) :
+  (v.setAtNat i x).val[j] = v.val[j] := by
   simp only [setAtNat]; grind
 
 def Slice.update {α : Type u} (v: Slice α) (i: Usize) (x: α) : Result (Slice α) :=
@@ -1021,7 +1027,7 @@ theorem Slice.mapM_spec {α β} {f : α → Result β} {s : Slice α} {post : Na
       have hf' := hf i' (by scalar_tac)
       simp [spec, theta] at hf'
       show ∃ b, f s[i'] = ok b
-      cases hfi : f s[i'] <;> simp_all <;> (erw [hfi] at hf'; exact hf')
+      cases hfi : f s[i'] <;> simp_all
     intro l; induction l with
     | nil => exact fun _ => ⟨[], rfl⟩
     | cons a t ih =>

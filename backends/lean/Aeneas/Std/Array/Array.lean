@@ -157,7 +157,8 @@ theorem Array.getElem!_Usize_set_ne
 @[simp↓, simp_lists_safe↓]
 theorem Array.getElem_Usize_set_ne
   {α : Type u} {N : Usize} (a: Array α N) (i j : Usize) (x: α)
-  (h : i.val ≠ j.val ∧ j.val < a.length) : (a.set i x)[j] = a[j]
+  (h : i.val ≠ j.val ∧ j.val < a.length) :
+  (a.set i x)[j] = a[j]
   := by
   grind
 
@@ -171,7 +172,8 @@ theorem Array.getElem!_Usize_set_eq
 @[simp↓, simp_lists_safe↓]
 theorem Array.getElem_Usize_set_eq
   {α : Type u} {N : Usize} (a: Array α N) (i j : Usize) (x: α)
-  (h : i = j ∧ j.val < a.length) : (a.set i x)[j] = x
+  (h : i = j ∧ j.val < a.length) :
+  (a.set i x)[j] = x
   := by
   grind
 
@@ -189,7 +191,8 @@ theorem Array.getElem!_Nat_set_ne
 @[simp↓, simp_lists_safe↓]
 theorem Array.getElem_Nat_set_ne
   {α : Type u} {N : Usize} (a: Array α N) (i : Usize) (j : Nat) (x: α)
-  (h : i.val ≠ j ∧ j < a.length) : (a.set i x)[j] = a[j]
+  (h : i.val ≠ j ∧ j < a.length) :
+  (a.set i x)[j] = a[j]
   := by grind
 
 @[simp↓, simp_lists_safe↓]
@@ -201,7 +204,8 @@ theorem Array.getElem!_Nat_set_eq
 @[simp↓, simp_lists_safe↓]
 theorem Array.getElem_Nat_set_eq
   {α : Type u} {N : Usize} (a: Array α N) (i : Usize) (j : Nat) (x: α)
-  (h : i.val = j ∧ j < a.length) : (a.set i x)[j] = x
+  (h : i.val = j ∧ j < a.length) :
+  (a.set i x)[j] = x
   := by grind
 
 @[scalar_tac_simps, simp_lists_safe, grind =, agrind =]
