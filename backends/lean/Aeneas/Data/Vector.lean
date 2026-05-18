@@ -22,11 +22,11 @@ theorem getElem!_eq_toArray_getElem! {α} {n} [Inhabited α] (s : Vector α n) (
   s[i]! = s.toArray[i]! := by
   cases s; simp
   unfold instGetElem?OfGetElemOfDecidable decidableGetElem?
-  simp only [getElem_mk, ← Array.getElem_toList, List.Inhabited_getElem_eq_getElem!,
-    dite_eq_ite]; split <;> simp_all only [Option.ite_none_right_eq_some, Option.some.injEq, ite_eq_right_iff]
-  simp only [reduceCtorEq, imp_false, not_lt] at *
-  simp only [outOfBounds, Std.DHashMap.Internal.AssocList.panicWithPosWithDecl_eq,
-    Array.length_toList, not_lt, getElem!_neg, *]
+  simp only [getElem_mk, ← Array.getElem_toList]
+  split
+  · simp_all
+  · simp_all [outOfBounds, Std.DHashMap.Internal.AssocList.panicWithPosWithDecl_eq,
+      Array.length_toList, getElem!_neg]
 
 @[simp, simp_lists_safe]
 theorem getElem!_default [Inhabited α] (ls : Vector α n) (i : ℕ)
