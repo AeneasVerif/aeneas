@@ -10,6 +10,8 @@ import Aeneas.Do.Delab
 open Aeneas.Std
 open Aeneas.Command.Decompose
 
+namespace Aeneas.Command.Decompose.TestsRec
+
 -- ============================================================================
 -- Test 1: partial_fixpoint — extract from inside the else branch
 -- ============================================================================
@@ -39,7 +41,7 @@ info: recPF1_eq : ∀ (n : ℕ),
 #guard_msgs in
 #check @recPF1_eq
 /--
-info: def recPF1_add : ℕ → Result ℕ :=
+info: def Aeneas.Command.Decompose.TestsRec.recPF1_add : ℕ → Result ℕ :=
 fun a => do
   let b ← Result.ok (a + 1)
   Result.ok (b + 2)
@@ -47,7 +49,7 @@ fun a => do
 #guard_msgs in
 #print recPF1_add
 /--
-info: 'recPF1_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.TestsRec.recPF1_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms recPF1_eq
@@ -80,7 +82,7 @@ info: recPF2_eq : ∀ (n : ℕ),
 #guard_msgs in
 #check @recPF2_eq
 /--
-info: def recPF2_base : Result ℕ :=
+info: def Aeneas.Command.Decompose.TestsRec.recPF2_base : Result ℕ :=
 do
   let x ← Result.ok 42
   let y ← Result.ok (x + 1)
@@ -116,7 +118,7 @@ info: recStruct_eq : ∀ (x : List ℕ),
 #guard_msgs in
 #check @recStruct_eq
 /--
-info: def recStruct_inc : ℕ → Result ℕ :=
+info: def Aeneas.Command.Decompose.TestsRec.recStruct_inc : ℕ → Result ℕ :=
 fun rest => Result.ok (rest + 1)
 -/
 #guard_msgs in
@@ -143,7 +145,7 @@ info: recPF3_eq : ∀ (n : ℕ), recPF3 n = if (n == 0) = true then Result.ok 0 
 #guard_msgs in
 #check @recPF3_eq
 /--
-info: def recPF3_else : ℕ → Result ℕ :=
+info: def Aeneas.Command.Decompose.TestsRec.recPF3_else : ℕ → Result ℕ :=
 fun n => do
   let a ← recPF3 (n - 1)
   let b ← Result.ok (a + 1)
@@ -151,3 +153,5 @@ fun n => do
 -/
 #guard_msgs in
 #print recPF3_else
+
+namespace Aeneas.Command.Decompose.TestsRec

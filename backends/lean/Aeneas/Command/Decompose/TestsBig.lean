@@ -9,6 +9,8 @@ import Aeneas.Do.Delab
 open Aeneas.Std
 open Aeneas.Command.Decompose
 
+namespace Aeneas.Command.Decompose.TestsBig
+
 -- ============================================================================
 -- Test 13: Big monadic function (20 bindings) with 4 sequential decompositions
 -- Performance stress test
@@ -39,7 +41,7 @@ def test13 (x : U32) : Result U32 := do
 
 -- Four sequential letRange decompositions splitting the chain into 5-binding chunks
 /--
-warning: #decompose: 'test13_chunk2' has the same definition as 'test13_chunk1' (consider reusing the same name)
+warning: #decompose: 'Aeneas.Command.Decompose.TestsBig.test13_chunk2' has the same definition as 'Aeneas.Command.Decompose.TestsBig.test13_chunk1' (consider reusing the same name)
 -/
 #guard_msgs in
 #decompose test13 test13_eq
@@ -49,7 +51,7 @@ warning: #decompose: 'test13_chunk2' has the same definition as 'test13_chunk1' 
   letRange 1 5 => test13_chunk4
 
 /--
-info: def test13_chunk1 : U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.TestsBig.test13_chunk1 : U32 → Result (UScalar UScalarTy.U32) :=
 fun x => do
   let a0 ← x + 1#u32
   let a1 ← a0 + 1#u32
@@ -60,7 +62,7 @@ fun x => do
 #guard_msgs in
 #print test13_chunk1
 /--
-info: def test13_chunk2 : UScalar UScalarTy.U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.TestsBig.test13_chunk2 : UScalar UScalarTy.U32 → Result (UScalar UScalarTy.U32) :=
 fun a4 => do
   let a5 ← a4 + 1#u32
   let a6 ← a5 + 1#u32
@@ -71,7 +73,7 @@ fun a4 => do
 #guard_msgs in
 #print test13_chunk2
 /--
-info: def test13_chunk3 : UScalar UScalarTy.U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.TestsBig.test13_chunk3 : UScalar UScalarTy.U32 → Result (UScalar UScalarTy.U32) :=
 fun a4 => do
   let a9 ← test13_chunk2 a4
   let a10 ← a9 + 1#u32
@@ -82,7 +84,7 @@ fun a4 => do
 #guard_msgs in
 #print test13_chunk3
 /--
-info: def test13_chunk4 : UScalar UScalarTy.U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.TestsBig.test13_chunk4 : UScalar UScalarTy.U32 → Result (UScalar UScalarTy.U32) :=
 fun a4 => do
   let a13 ← test13_chunk3 a4
   let a14 ← a13 + 1#u32
@@ -104,7 +106,7 @@ info: test13_eq : ∀ (x : U32),
 #guard_msgs in
 #check @test13_eq
 /--
-info: 'test13_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.TestsBig.test13_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test13_eq
@@ -138,7 +140,7 @@ def test14 (x : Nat) : Nat :=
 
 -- Split into 4 chunks
 /--
-warning: #decompose: 'test14_chunk2' has the same definition as 'test14_chunk1' (consider reusing the same name)
+warning: #decompose: 'Aeneas.Command.Decompose.TestsBig.test14_chunk2' has the same definition as 'Aeneas.Command.Decompose.TestsBig.test14_chunk1' (consider reusing the same name)
 -/
 #guard_msgs in
 #decompose test14 test14_eq
@@ -159,7 +161,7 @@ info: test14_eq : ∀ (x : ℕ),
 #guard_msgs in
 #check @test14_eq
 /--
-info: 'test14_eq' depends on axioms: [propext]
+info: 'Aeneas.Command.Decompose.TestsBig.test14_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test14_eq
@@ -259,7 +261,7 @@ def test32 (mode : Bool) (flag : Bool) (x y z w : U32) : Result U32 := do
 
 -- Verify all 10 generated definitions exist
 /--
-info: def test32_tt_comp : U32 →
+info: def Aeneas.Command.Decompose.TestsBig.test32_tt_comp : U32 →
   U32 →
     U32 →
       U32 → Result (UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
@@ -279,7 +281,7 @@ fun x y z w => do
 #guard_msgs in
 #print test32_tt_comp
 /--
-info: def test32_te_comp : U32 →
+info: def Aeneas.Command.Decompose.TestsBig.test32_te_comp : U32 →
   U32 →
     U32 →
       U32 → Result (UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
@@ -299,7 +301,7 @@ fun x y z w => do
 #guard_msgs in
 #print test32_te_comp
 /--
-info: def test32_et_comp : U32 →
+info: def Aeneas.Command.Decompose.TestsBig.test32_et_comp : U32 →
   U32 →
     U32 →
       U32 → Result (UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
@@ -319,7 +321,7 @@ fun x y z w => do
 #guard_msgs in
 #print test32_et_comp
 /--
-info: def test32_ee_comp : U32 →
+info: def Aeneas.Command.Decompose.TestsBig.test32_ee_comp : U32 →
   U32 →
     U32 →
       U32 → Result (UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
@@ -339,7 +341,7 @@ fun x y z w => do
 #guard_msgs in
 #print test32_ee_comp
 /--
-info: def test32_tt : U32 → U32 → U32 → U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.TestsBig.test32_tt : U32 → U32 → U32 → U32 → Result (UScalar UScalarTy.U32) :=
 fun x y z w => do
   let (c0, c3, c6, c9) ← test32_tt_comp x y z w
   let r0 ← c0 + c3
@@ -350,7 +352,7 @@ fun x y z w => do
 #guard_msgs in
 #print test32_tt
 /--
-info: def test32_te : U32 → U32 → U32 → U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.TestsBig.test32_te : U32 → U32 → U32 → U32 → Result (UScalar UScalarTy.U32) :=
 fun x y z w => do
   let (d0, d4, d7, d9) ← test32_te_comp x y z w
   let s0 ← d0 + d4
@@ -361,7 +363,7 @@ fun x y z w => do
 #guard_msgs in
 #print test32_te
 /--
-info: def test32_et : U32 → U32 → U32 → U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.TestsBig.test32_et : U32 → U32 → U32 → U32 → Result (UScalar UScalarTy.U32) :=
 fun x y z w => do
   let (e0, e3, e6, e9) ← test32_et_comp x y z w
   let t0 ← e0 + e3
@@ -372,7 +374,7 @@ fun x y z w => do
 #guard_msgs in
 #print test32_et
 /--
-info: def test32_ee : U32 → U32 → U32 → U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.TestsBig.test32_ee : U32 → U32 → U32 → U32 → Result (UScalar UScalarTy.U32) :=
 fun x y z w => do
   let (f0, f4, f7, f9) ← test32_ee_comp x y z w
   let u0 ← f0 + f4
@@ -383,13 +385,13 @@ fun x y z w => do
 #guard_msgs in
 #print test32_ee
 /--
-info: def test32_then : Bool → U32 → U32 → U32 → U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.TestsBig.test32_then : Bool → U32 → U32 → U32 → U32 → Result (UScalar UScalarTy.U32) :=
 fun flag x y z w => if flag = true then test32_tt x y z w else test32_te x y z w
 -/
 #guard_msgs in
 #print test32_then
 /--
-info: def test32_else : Bool → U32 → U32 → U32 → U32 → Result (UScalar UScalarTy.U32) :=
+info: def Aeneas.Command.Decompose.TestsBig.test32_else : Bool → U32 → U32 → U32 → U32 → Result (UScalar UScalarTy.U32) :=
 fun flag x y z w => if flag = true then test32_et x y z w else test32_ee x y z w
 -/
 #guard_msgs in
@@ -401,7 +403,7 @@ info: test32_eq : ∀ (mode flag : Bool) (x y z w : U32),
 #guard_msgs in
 #check @test32_eq
 /--
-info: 'test32_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.TestsBig.test32_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test32_eq
@@ -440,7 +442,7 @@ def test44 (d : Weekday) : Nat :=
   branch 6 (letRange 0 5) => test44_sun
 
 /--
-info: def test44_mon : ℕ :=
+info: def Aeneas.Command.Decompose.TestsBig.test44_mon : ℕ :=
 let a := 1;
 let b := a + 2;
 let c := b + 3;
@@ -450,7 +452,7 @@ d + 5
 #guard_msgs in
 #print test44_mon
 /--
-info: def test44_tue : ℕ :=
+info: def Aeneas.Command.Decompose.TestsBig.test44_tue : ℕ :=
 let a := 10;
 let b := a + 20;
 let c := b + 30;
@@ -460,7 +462,7 @@ d + 50
 #guard_msgs in
 #print test44_tue
 /--
-info: def test44_wed : ℕ :=
+info: def Aeneas.Command.Decompose.TestsBig.test44_wed : ℕ :=
 let a := 100;
 let b := a + 200;
 let c := b + 300;
@@ -470,7 +472,7 @@ d + 500
 #guard_msgs in
 #print test44_wed
 /--
-info: def test44_thu : ℕ :=
+info: def Aeneas.Command.Decompose.TestsBig.test44_thu : ℕ :=
 let a := 1000;
 let b := a + 2000;
 let c := b + 3000;
@@ -480,7 +482,7 @@ d + 5000
 #guard_msgs in
 #print test44_thu
 /--
-info: def test44_fri : ℕ :=
+info: def Aeneas.Command.Decompose.TestsBig.test44_fri : ℕ :=
 let a := 10000;
 let b := a + 20000;
 let c := b + 30000;
@@ -490,7 +492,7 @@ d + 50000
 #guard_msgs in
 #print test44_fri
 /--
-info: def test44_sat : ℕ :=
+info: def Aeneas.Command.Decompose.TestsBig.test44_sat : ℕ :=
 let a := 100000;
 let b := a + 200000;
 let c := b + 300000;
@@ -500,7 +502,7 @@ d + 500000
 #guard_msgs in
 #print test44_sat
 /--
-info: def test44_sun : ℕ :=
+info: def Aeneas.Command.Decompose.TestsBig.test44_sun : ℕ :=
 let a := 1000000;
 let b := a + 2000000;
 let c := b + 3000000;
@@ -538,7 +540,7 @@ info: test44_eq : ∀ (d : Weekday),
 #guard_msgs in
 #check @test44_eq
 /--
-info: 'test44_eq' depends on axioms: [propext]
+info: 'Aeneas.Command.Decompose.TestsBig.test44_eq' depends on axioms: [propext]
 -/
 #guard_msgs in
 #print axioms test44_eq
@@ -627,7 +629,7 @@ def test55 (v1 : U32) (v2 : U32) (v3 : U32) (v4 : U32) (v5 : U32) (v6 : U32) (v7
   letRange 24 4 => test55_add4
 
 /--
-info: 'test55_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.TestsBig.test55_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test55_eq
@@ -747,7 +749,9 @@ def test56 (b : Bool) (x y : U32) : Result U32 := do
   branch 1 full => test56_else
 
 /--
-info: 'test56_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'Aeneas.Command.Decompose.TestsBig.test56_eq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms test56_eq
+
+end Aeneas.Command.Decompose.TestsBig
