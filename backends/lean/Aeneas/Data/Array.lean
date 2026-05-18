@@ -59,7 +59,7 @@ def Inhabited_getElem_eq_getElem! {α} [Inhabited α] (l : Array α) (i : ℕ) (
     List.Inhabited_getElem_eq_getElem! l.toList i (by simpa using hi)
   simp [← Array.getElem_toList, ← Array.getElem!_toList, this]
 
-@[simp_lists_safe]
+@[simp_lists_safe, simp_lists_hyps_simps]
 theorem set_eq_set! (a : Array α) (i : ℕ) (x : α) (hi : i < a.size) :
   a.set i x hi = a.set! i x := by
   simp only [Array.set, Array.set!, Array.setIfInBounds, hi, ↓reduceDIte]

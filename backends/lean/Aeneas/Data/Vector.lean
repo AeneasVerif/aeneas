@@ -75,7 +75,7 @@ def Inhabited_getElem_eq_getElem! {α} {n} [Inhabited α] (l : Vector α n) (i :
   simp only [getElem_eq_toArray_getElem, Array.Inhabited_getElem_eq_getElem!,
     getElem!_eq_toArray_getElem!]
 
-@[simp_lists_safe]
+@[simp_lists_safe, simp_lists_hyps_simps]
 theorem set_eq_set! (v : Vector α n) (i : ℕ) (x : α) (hi : i < n) :
   v.set i x hi = v.set! i x := by
   simp only [Vector.set, Array.set_eq_set!, Vector.set!]
