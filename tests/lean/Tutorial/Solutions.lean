@@ -2,11 +2,13 @@ import Aeneas
 import Tutorial.Tutorial
 open Aeneas Std Result
 
+local macro_rules
+| `(tactic| get_elem_tactic) => `(tactic| grind)
+
 set_option maxHeartbeats 1000000
 
 namespace tutorial
 
-#setup_aeneas_simps
 
 /- # Basic tactics -/
 
@@ -50,7 +52,7 @@ open CList
 theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
   list_nth_mut1 l i ⦃ x back =>
-    x = l.toList[i.val]! ∧
+    x = l.toList[i.val] ∧
     ∀ x', (back x').toList = l.toList.set i.val x' ⦄ := by
   unfold list_nth_mut1 list_nth_mut1_loop
   split
@@ -99,7 +101,7 @@ theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
 theorem list_nth_mut1_spec' {T: Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
   list_nth_mut1 l i ⦃ x back =>
-    x = l.toList[i.val]! ∧
+    x = l.toList[i.val] ∧
     ∀ x', (back x').toList = l.toList.set i.val x' ⦄ := by
   unfold list_nth_mut1 list_nth_mut1_loop
   split
@@ -124,7 +126,7 @@ theorem list_nth_mut1_spec' {T: Type} [Inhabited T] (l : CList T) (i : U32)
 theorem list_nth_mut1_spec'' {T: Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
   list_nth_mut1 l i ⦃ x back =>
-    x = l.toList[i.val]! ∧
+    x = l.toList[i.val] ∧
     ∀ x', (back x').toList = l.toList.set i.val x' ⦄ := by
   unfold list_nth_mut1 list_nth_mut1_loop
   /- `step*` repeatedly applies `step`, while doing a case disjunction whenever it
@@ -223,8 +225,8 @@ theorem zero_loop_spec
   (x : alloc.vec.Vec U32) (i : Usize) (h : i.val ≤ x.length) :
   zero_loop x i ⦃ x' =>
     x'.length = x.length ∧
-    (∀ j, j < i.val → x'[j]! = x[j]!) ∧
-    (∀ j, i.val ≤ j → j < x.length → x'[j]! = 0#u32) ⦄ := by
+    (∀ j, j < i.val → x'[j] = x[j]) ∧
+    (∀ j, i.val ≤ j → j < x.length → x'[j] = 0#u32) ⦄ := by
   unfold zero_loop
   simp
   split
@@ -247,7 +249,7 @@ termination_by x.length - i.val
 decreasing_by scalar_decr_tac
 
 theorem all_nil_impl_toInt_eq_zero
-  (l : List U32) (h : ∀ (j : ℕ), j < l.length → l[j]! = 0#u32) :
+  (l : List U32) (h : ∀ (j : ℕ), j < l.length → l[j] = 0#u32) :
   toInt l = 0 := by
   match l with
   | [] => simp
@@ -278,7 +280,7 @@ theorem zero_spec (x : alloc.vec.Vec U32) :
  -/
 @[simp]
 theorem toInt_drop (l : List U32) (i : Nat) (h0 : i < l.length) :
-  toInt (l.drop i) = l[i]! + 2 ^ 32 * toInt (l.drop (i + 1)) := by
+  toInt (l.drop i) = l[i] + 2 ^ 32 * toInt (l.drop (i + 1)) := by
   cases l with
   | nil => simp at *
   | cons hd tl =>
@@ -292,7 +294,7 @@ theorem toInt_drop (l : List U32) (i : Nat) (h0 : i < l.length) :
 
 @[simp]
 theorem toInt_update (l : List U32) (i : Nat) (x : U32) (h0 : i < l.length) :
-  toInt (l.set i x) = toInt l + 2 ^ (32 * i) * (x - l[i]!) := by
+  toInt (l.set i x) = toInt l + 2 ^ (32 * i) * (x - l[i]) := by
   cases l with
   | nil => simp at *
   | cons hd tl =>
@@ -330,7 +332,7 @@ theorem add_no_overflow_loop_spec
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (i : Usize)
   (hLength : x.length = y.length)
   -- No overflow occurs when we add the individual thunks
-  (hNoOverflow : ∀ (j : Nat), i.val ≤ j → j < x.length → x[j]!.val + y[j]!.val ≤ U32.max) :
+  (hNoOverflow : ∀ (j : Nat), i.val ≤ j → j < x.length → x[j].val + y[j].val ≤ U32.max) :
   add_no_overflow_loop x y i ⦃ x' =>
     x'.length = x.length ∧
     toInt x' = toInt x + 2 ^ (32 * i.val) * toInt (y.val.drop i.val) ⦄ := by
@@ -350,7 +352,7 @@ decreasing_by scalar_decr_tac
 /-- The proof about `add_no_overflow` -/
 theorem add_no_overflow_spec (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
   (hLength : x.length = y.length)
-  (hNoOverflow : ∀ (j : Nat), j < x.length → x[j]!.val + y[j]!.val ≤ U32.max) :
+  (hNoOverflow : ∀ (j : Nat), j < x.length → x[j].val + y[j].val ≤ U32.max) :
   add_no_overflow x y ⦃ x' =>
     x'.length = y.length ∧
     toInt x' = toInt x + toInt y ⦄ := by

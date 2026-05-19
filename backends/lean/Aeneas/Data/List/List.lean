@@ -41,6 +41,15 @@ attribute [simp] getElem?_cons_zero getElem!_cons_zero
 @[simp] theorem getElem?_cons_nzero (hne : Nat.not_eq i 0) : getElem? ((x :: tl) : List α) i = getElem? tl (i - 1) := by cases i <;> simp_all
 @[simp] theorem getElem!_cons_nzero (x : α) (tl : List α) (i : Nat) [Inhabited α] (hne : Nat.not_eq i 0) : getElem! ((x :: tl) : List α) i = getElem! tl (i - 1) := by cases i <;> simp_all
 
+/-- `getElem` version of `getElem!_cons_nzero`: indexing a cons at position `i > 0` gives the tail element. -/
+@[simp, simp_lists_safe]
+theorem getElem_cons_nzero {α} (hd : α) (tl : List α) (i : Nat)
+    (h : 0 < i ∧ i < 1 + tl.length) :
+    (hd :: tl)[i] = tl[i - 1] := by
+  cases i with
+  | zero => scalar_tac
+  | succ n => simp
+
 def slice (start end_ : Nat) (ls : List α) : List α :=
   (ls.drop start).take (end_ - start)
 

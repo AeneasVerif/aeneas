@@ -1,9 +1,11 @@
 import Aeneas
 open Aeneas Std Result
 
+local macro_rules
+| `(tactic| get_elem_tactic) => `(tactic| grind)
+
 set_option maxHeartbeats 1000000
 
-#setup_aeneas_simps
 
 namespace Tutorial.Solutions
 
@@ -75,7 +77,7 @@ partial_fixpoint
 /-- Theorem about `list_nth` -/
 theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
-  list_nth l i ⦃ x => x = l.toList[i.val]! ⦄
+  list_nth l i ⦃ x => x = l.toList[i.val] ⦄
   := by
   unfold list_nth
   split
@@ -369,7 +371,7 @@ set_option pp.coercions true
 /- Example 1: indexing the first element of the list -/
 example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
   (hEq : i = 0#u32) :
-  (hd :: tl.toList)[i.val]! = hd := by
+  (hd :: tl.toList)[i.val] = hd := by
   have hi : i.val = 0 := by scalar_tac
   simp only [hi]
   --
@@ -379,7 +381,7 @@ example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
 /- Example 2: indexing in the tail -/
 example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
   (hEq : i ≠ 0#u32) :
-  (hd :: tl.toList)[i.val]! = tl.toList[i.val - 1]! := by
+  (hd :: tl.toList)[i.val] = tl.toList[i.val - 1] := by
   -- Note that `scalar_tac` is aware of `Arith.Nat.not_eq`
   have hIndex := List.getElem!_cons_nzero hd tl.toList i.val (by scalar_tac)
   simp only [hIndex]
@@ -393,14 +395,14 @@ example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
    you expect. -/
 example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
   (hEq : i = 0#u32) :
-  (hd :: tl.toList)[i.val]! = hd := by
+  (hd :: tl.toList)[i.val] = hd := by
   simp [hEq]
 
 /- Note that `simp_all` manages to automatically apply `List.index_cons_nzero` below,
    by using the fact that `i ≠ 0#u32`. -/
 example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
   (hEq : i ≠ 0#u32) :
-  (hd :: tl.toList)[i.val]! = tl.toList[i.val - 1]! := by
+  (hd :: tl.toList)[i.val] = tl.toList[i.val - 1] := by
   simp_all
 
 /- Below, you will need to reason about `List.update`.
@@ -435,7 +437,7 @@ example [Inhabited α] (i : U32) (hd : α) (tl : CList α)
 theorem list_nth_mut1_spec {T: Type} [Inhabited T] (l : CList T) (i : U32)
   (h : i.val < l.toList.length) :
   list_nth_mut1 l i ⦃ x back =>
-    x = l.toList[i.val]! ∧
+    x = l.toList[i.val] ∧
     -- Specification of the backward function
     ∀ x', (back x').toList = l.toList.set i.val x' ⦄ := by
   unfold list_nth_mut1 list_nth_mut1_loop
@@ -575,8 +577,8 @@ theorem zero_loop_spec
   (x : alloc.vec.Vec U32) (i : Usize) (h : i.val ≤ x.length) :
   zero_loop x i ⦃ x' =>
     x'.length = x.length ∧
-    (∀ j, j < i.val → x'[j]! = x[j]!) ∧
-    (∀ j, i.val ≤ j → j < x.length → x'[j]! = 0#u32) ⦄ := by
+    (∀ j, j < i.val → x'[j] = x[j]) ∧
+    (∀ j, i.val ≤ j → j < x.length → x'[j] = 0#u32) ⦄ := by
   unfold zero_loop
   simp
   sorry
@@ -591,7 +593,7 @@ def zero (x : alloc.vec.Vec U32) : Result (alloc.vec.Vec U32) :=
     Advice: do the proof of `zero_spec` first, then come back to prove this lemma.
 -/
 theorem all_nil_impl_toInt_eq_zero
-  (l : List U32) (h : ∀ (j : ℕ), j < l.length → l[j]! = 0#u32) :
+  (l : List U32) (h : ∀ (j : ℕ), j < l.length → l[j] = 0#u32) :
   toInt l = 0 := by
   /- There are two ways of proving this theorem.
 
@@ -656,7 +658,7 @@ partial_fixpoint
  -/
 @[simp]
 theorem toInt_drop (l : List U32) (i : Nat) (h0 : i < l.length) :
-  toInt (l.drop i) = l[i]! + 2 ^ 32 * toInt (l.drop (i + 1)) := by
+  toInt (l.drop i) = l[i] + 2 ^ 32 * toInt (l.drop (i + 1)) := by
   sorry
 
 /-- You will need this lemma for the proof of `add_no_overflow_loop_spec`.
@@ -674,7 +676,7 @@ theorem toInt_drop (l : List U32) (i : Nat) (h0 : i < l.length) :
  -/
 @[simp]
 theorem toInt_update (l : List U32) (i : Nat) (x : U32) (h0 : i < l.length) :
-  toInt (l.set i x) = toInt l + 2 ^ (32 * i) * (x - l[i]!) := by
+  toInt (l.set i x) = toInt l + 2 ^ (32 * i) * (x - l[i]) := by
   sorry
 
 /-- The proof about `add_no_overflow_loop`.
@@ -687,7 +689,7 @@ theorem add_no_overflow_loop_spec
   (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32) (i : Usize)
   (hLength : x.length = y.length)
   -- No overflow occurs when we add the individual thunks
-  (hNoOverflow : ∀ (j : Nat), i.val ≤ j → j < x.length → x[j]!.val + y[j]!.val ≤ U32.max) :
+  (hNoOverflow : ∀ (j : Nat), i.val ≤ j → j < x.length → x[j].val + y[j].val ≤ U32.max) :
   add_no_overflow_loop x y i ⦃ x' =>
     x'.length = x.length ∧
     toInt x' = toInt x + 2 ^ (32 * i.val) * toInt (y.val.drop i.val) ⦄ := by
@@ -706,7 +708,7 @@ def add_no_overflow
 /-- The proof about `add_no_overflow` -/
 theorem add_no_overflow_spec (x : alloc.vec.Vec U32) (y : alloc.vec.Vec U32)
   (hLength : x.length = y.length)
-  (hNoOverflow : ∀ (j : Nat), j < x.length → x[j]!.val + y[j]!.val ≤ U32.max) :
+  (hNoOverflow : ∀ (j : Nat), j < x.length → x[j].val + y[j].val ≤ U32.max) :
   add_no_overflow x y ⦃ x' =>
     x'.length = y.length ∧
     toInt x' = toInt x + toInt y ⦄ := by

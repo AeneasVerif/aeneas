@@ -39,6 +39,9 @@ attribute [simp_lists_safe] Fin.getElem!_fin
 attribute [simp_lists_safe] List.length_map List.length_flatMap
 attribute [simp_lists_safe] List.length_cons List.length_nil
 
+-- Automatically go from `getElem!` to `getElem`
+attribute [simp_lists] getElem!_pos
+
 def simpListsTac (config : ScalarTac.CondSimpTacConfig)
   (args : ScalarTac.CondSimpPartialArgs) (loc : Utils.Location) : TacticM Unit := do
   let addSimpThms : TacticM (Array FVarId) := pure #[]

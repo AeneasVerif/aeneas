@@ -24,6 +24,10 @@ elab "#setup_aeneas_simps" : command => do
         /- We often existentially quantify booleans in the specifications -/
         _root_.Bool.exists_bool)
   elabCommand stx.raw
+  let stx ←
+    `(command|
+      attribute [-simp_lists] _root_.getElem!_pos)
+  elabCommand stx.raw
   /- When activating lemmas, we only activate them locally so as not to pollute
      other contexts. -/
   let stx ←
