@@ -2,7 +2,6 @@ import Aeneas
 import Demo.Demo
 open Aeneas Std Result
 
-#setup_aeneas_simps
 
 namespace demo
 
@@ -51,7 +50,7 @@ theorem list_nth_spec {T : Type} [Inhabited T] (l : CList T) (i : U32)
       simp [*]
       step as ⟨ i1 ⟩
       step as ⟨ x ⟩
-      simp_lists [*]
+      simp_lists [*]; grind
 
 theorem i32_id_spec (n : I32) (h : 0 ≤ n.val) :
   i32_id n ⦃ n' => n' = n ⦄ := by
