@@ -267,12 +267,10 @@ structure StepSpecAttr where
   ext  : Extension
   deriving Inhabited
 
-private def generateMvcgenSpec (stx : Syntax) (attrKind : AttributeKind) (thName : Name) :
-    MetaM Unit := do
-  let env ← getEnv
-  let some decl := env.findAsync? thName
-    | throwError "Could not find theorem {thName}"
-  let sig := decl.sig.get
+private def generateMvcgenSpec (stx : Syntax) (attrKind : AttributeKind)
+    (thDecl : AsyncConstantInfo) : MetaM Unit := do
+  let sig := thDecl.sig.get
+  let thName := thDecl.name
   -- Specialise all universe level parameters to 0 so that spec_to_mvcgen {α : Type} applies.
   -- The generated mvcgen_spec is a valid Type-0 instance of the original theorem.
   let zeroLevels := List.replicate sig.levelParams.length Level.zero
@@ -324,7 +322,7 @@ private def saveStepSpecFromThm (ext : Extension) (attrKind : AttributeKind) (st
     -- Also generate a corresponding mvcgen (@[spec]) lemma
     try
       trace[Step] "Registering with mvcgen"
-      MetaM.run' (generateMvcgenSpec stx attrKind thName)
+      MetaM.run' (generateMvcgenSpec stx attrKind thDecl)
     catch e =>
       logWarning m!"Could not generate mvcgen spec for {thName}: {e.toMessageData}"
     pure ()
