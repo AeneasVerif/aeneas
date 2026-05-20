@@ -187,6 +187,42 @@ theorem exists_imp_spec {m:Result α} {P:Post α} :
   (∃ y, m = ok y ∧ P y) → spec m P := by
   exact (spec_equiv_exists m P).2
 
+/-- Partial-correctness variant of `spec`.
+
+`spec_partial x p_ok p_fail p_div` reads as: "if `x` reduces to `ok a` then `p_ok a` holds; if it
+reduces to `fail e` then `p_fail e` holds; if it diverges then `p_div` holds". Unlike `spec`, it
+does not assume the program terminates without exception. -/
+def spec_partial {α} (x : Result α)
+    (p_ok : α → Prop) (p_fail : Error → Prop) (p_div : Prop) : Prop :=
+  match x with
+  | ok a   => p_ok a
+  | fail e => p_fail e
+  | div    => p_div
+
+@[simp, grind =, agrind =]
+theorem spec_partial_ok (a : α) (p_ok : α → Prop) p_fail p_div :
+    spec_partial (ok a) p_ok p_fail p_div ↔ p_ok a := by
+  simp [spec_partial]
+
+@[simp, grind =, agrind =]
+theorem spec_partial_fail (e : Error) p_ok p_fail p_div :
+    spec_partial (α := α) (fail e) p_ok p_fail p_div ↔ p_fail e := by
+  simp [spec_partial]
+
+@[simp, grind =, agrind =]
+theorem spec_partial_div (p_ok : α → Prop) p_fail p_div :
+    spec_partial div p_ok p_fail p_div ↔ p_div := by
+  simp [spec_partial]
+
+/-- Derive a total-correctness `spec` from `spec_partial` by ruling out the failure and divergence
+cases. Used by `@[step]` to generate a step-tactic lemma from a `spec_partial` theorem. -/
+theorem spec_of_spec_partial
+    {α} {x : Result α} {p_ok : α → Prop} {p_fail : Error → Prop} {p_div : Prop}
+    (h : spec_partial x p_ok p_fail p_div)
+    (h_fail : ∀ e, ¬ p_fail e) (h_div : ¬ p_div) :
+    spec x p_ok := by
+  cases x <;> simp_all [spec_partial, spec, theta, wp_return]
+
 end Aeneas.Std.WP
 
 /-
@@ -689,6 +725,19 @@ theorem spec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
   obtain ⟨v, hx, hQv⟩ := spec_imp_exists h
   subst hx
   simp [Triple, WP.wp, PredTrans.apply, hQv]
+
+/-- Lift an Aeneas partial-correctness spec to an mvcgen-compatible `Triple`. -/
+theorem spec_partial_to_mvcgen {α : Type} {x : Result α}
+    {p_ok : α → Prop} {p_fail : Error → Prop} {p_div : Prop}
+    (h : spec_partial x p_ok p_fail p_div)
+    {Q : PostCond α (.except (ULift Error) (.except PUnit .pure))}
+    (h_ok   : ∀ r, p_ok r → (Q.1 r).down)
+    (h_fail : ∀ e, p_fail e → (Q.2.1 (.up e)).down)
+    (h_div  : p_div → (Q.2.2.1 ()).down) :
+    ⦃ ⌜ True ⌝ ⦄ x ⦃ Q ⦄ := by
+  cases x
+    <;> simp only [spec_partial] at h
+    <;> simp [Triple, WP.wp, PredTrans.apply, h_ok, h_fail, h_div, h]
 
 end Aeneas.Std.WP
 
