@@ -205,7 +205,7 @@ partial def analyzePat (pat : Term) (ty : Expr) : ElabM PatShape := do
   let analyzeSubs (subPats : Array Term) (subTypes : List Expr) : ElabM (Array PatShape) :=
     subPats.toList.zip subTypes |>.toArray.mapM fun (p, t) => analyzePat p t
   match pat with
-  | `(_) => return .leaf none
+  | `(_) | `(()) => return .leaf none
   | `($id:ident) => return .leaf (some id)
   | `(($x, $xs,*)) =>
     let subPats : Array Term := #[x] ++ xs.getElems
