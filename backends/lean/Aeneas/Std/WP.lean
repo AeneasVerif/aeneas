@@ -444,9 +444,9 @@ namespace Aeneas.Std.WP
 open Std Result
 open Std.Do
 
-instance Result.instWP : WP Result (.except Error (.except PUnit .pure)) where
+instance Result.instWP : WP Result.{u} (.except (ULift Error) (.except PUnit .pure)) where
   wp x := {
-    apply Q := match x with | .ok a => Q.1 a | .fail e => Q.2.1 e | .div => Q.2.2.1 ()
+    apply Q := match x with | .ok a => Q.1 a | .fail e => Q.2.1 (ULift.up e) | .div => Q.2.2.1 PUnit.unit
     conjunctive Q₁ Q₂ := by
       apply SPred.bientails.of_eq
       cases x <;> simp
@@ -463,14 +463,14 @@ instance : LawfulMonad Result where
     bind_map := by intros; rfl
     bind_assoc := by intros _ _ _ x _ _; cases x <;> rfl
 
-instance Result.instWPMonad : WPMonad Result (.except Error (.except PUnit .pure)) where
+instance Result.instWPMonad : WPMonad Result (.except (ULift Error) (.except PUnit .pure)) where
   wp_pure a := by ext; simp [wp]
   wp_bind x f := by ext Q; cases x <;> simp [wp]
 
-theorem Result.of_wp {α} {x : Result α} (P : Result α → Prop) :
-    (⊢ₛ wp⟦x⟧ post⟨fun a => ⌜P (.ok a)⌝,
-                  fun e => ⌜P (.fail e)⌝,
-                  fun () => ⌜P .div⌝⟩) → P x := by
+theorem Result.of_wp {α : Type u} {x : Result α} (P : Result α → Prop) :
+    (⊢ₛ wp⟦x⟧ (fun a => ⌜P (.ok a)⌝,
+                  fun e => ⌜P (.fail e.down)⌝,
+                  fun .unit => ⌜P .div⌝, .unit)) → P x := by
   intro hspec
   simp only [instWP] at hspec
   split at hspec <;> simp_all
