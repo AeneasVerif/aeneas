@@ -7,7 +7,7 @@ import Aeneas.Tactic.Simp.SimpLemmas
 import AeneasMeta.Async
 import Aeneas.Tactic.Solver.Grind.Init
 import Aeneas.Tactic.Step.InferPost
--- import Aeneas.Do
+import Aeneas.Do
 
 namespace Aeneas
 
