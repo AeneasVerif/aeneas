@@ -333,10 +333,9 @@ let bs_ctx_to_pure_fmt_env (ctx : bs_ctx) : PrintPure.fmt_env =
 
 let ctx_generic_args_to_string (ctx : bs_ctx) (args : T.generic_args) : string =
   let env = bs_ctx_to_fmt_env ctx in
-  Print.Types.generic_args_to_string env args
+  Print.generic_args_to_string env args
 
-let name_to_string (ctx : bs_ctx) =
-  Print.Types.name_to_string (bs_ctx_to_fmt_env ctx)
+let name_to_string (ctx : bs_ctx) = Print.name_to_string (bs_ctx_to_fmt_env ctx)
 
 let symbolic_value_to_string (ctx : bs_ctx) (sv : V.symbolic_value) : string =
   let env = bs_ctx_to_fmt_env ctx in
@@ -373,11 +372,11 @@ let fvar_to_string (ctx : bs_ctx) (v : fvar) : string =
 
 let ty_to_string (ctx : bs_ctx) (ty : T.ty) : string =
   let env = bs_ctx_to_fmt_env ctx in
-  Print.Types.ty_to_string env ty
+  Print.ty_to_string env ty
 
 let type_decl_to_string (ctx : bs_ctx) (def : T.type_decl) : string =
   let env = bs_ctx_to_fmt_env ctx in
-  Print.Types.type_decl_to_string env def
+  Print.type_decl_to_string env def
 
 let pure_type_decl_to_string (ctx : bs_ctx) (def : type_decl) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in
@@ -397,7 +396,7 @@ let symbolic_loop_to_string (ctx : bs_ctx) (e : SymbolicAst.loop) : string =
 
 let fun_id_to_string (ctx : bs_ctx) (id : A.fun_id) : string =
   let env = bs_ctx_to_fmt_env ctx in
-  Print.Types.fun_id_to_string env id
+  Print.fun_id_to_string env id
 
 let fun_sig_to_string (ctx : bs_ctx) (sg : fun_sig) : string =
   let env = bs_ctx_to_pure_fmt_env ctx in

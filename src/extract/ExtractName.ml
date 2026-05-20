@@ -38,14 +38,14 @@ module NameMatcherMap = struct
   let config = default_match_config
   let empty = NMM.empty
 
-  let find_opt (ctx : 'stt ctx) (name : Types.name) (m : 'a t) : 'a option =
+  let find_opt (ctx : ctx) (name : Types.name) (m : 'a t) : 'a option =
     NMM.find_opt ctx config name m
 
-  let find_with_generics_opt (ctx : 'stt ctx) (name : Types.name)
+  let find_with_generics_opt (ctx : ctx) (name : Types.name)
       (g : Types.generic_args) (m : 'a t) : 'a option =
     NMM.find_with_generics_opt ctx config name g m
 
-  let mem (ctx : 'stt ctx) (name : Types.name) (m : 'a t) : bool =
+  let mem (ctx : ctx) (name : Types.name) (m : 'a t) : bool =
     NMM.mem ctx config name m
 
   let of_list (ls : (pattern * 'a) list) : 'a t = NMM.of_list ls
@@ -138,13 +138,13 @@ let pattern_to_trait_impl_extract_name = pattern_to_extract_name None
 (* TODO: this is provisional. We just want to make sure that the extraction
    names we derive from the patterns (for the builtin definitions) are
    consistent with the extraction names we derive from the Rust names *)
-let name_to_simple_name (ctx : 'stt ctx) (n : Types.name) : string list =
+let name_to_simple_name (ctx : ctx) (n : Types.name) : string list =
   let c = default_to_pat_config in
   pattern_to_extract_name None (name_to_pattern ctx c n)
 
 (** If the [prefix] is Some, we attempt to remove the common prefix between
     [prefix] and [name] from [name] *)
-let name_with_generics_to_simple_name (ctx : 'stt ctx)
+let name_with_generics_to_simple_name (ctx : ctx)
     ?(prefix : Types.name option = None) (name : Types.name)
     (p : Types.generic_params) (g : Types.generic_args) : string list =
   let c = default_to_pat_config in

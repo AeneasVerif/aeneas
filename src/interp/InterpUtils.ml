@@ -12,6 +12,42 @@ open ValuesUtils
 (** The local logger *)
 let log = Logging.interp_log
 
+(** Wrapper around {!Charon.GAstUtils.get_target_information} that handles
+    multi-layout crates by raising a recoverable [CFailure] instead of an
+    uncaught [Failure]. *)
+let get_target_information (span : Meta.span) (crate : LlbcAst.crate) =
+  try Charon.GAstUtils.get_target_information crate
+  with Failure _ ->
+    [%craise] span
+      "Multi-target crate with different layouts (e.g., mixed 32-bit and \
+       64-bit targets): cannot determine a unique target pointer size"
+
+let get_target_min_ptr_size (crate : LlbcAst.crate) : int =
+  match crate.target_information with
+  | (_, info) :: infos ->
+      let min = ref info.target_pointer_size in
+      List.iter
+        (fun (_, info) ->
+          if info.target_pointer_size < !min then
+            min := info.target_pointer_size)
+        infos;
+      !min
+  | _ -> [%craise_opt_span] None "Unexpected"
+
+let get_target_ptr_size (span : Meta.span) (crate : LlbcAst.crate) =
+  match crate.target_information with
+  | [ (_, info) ] -> info.target_pointer_size
+  | (_, info) :: rest
+    when List.for_all
+           (fun (_, i) -> i.target_pointer_size = info.target_pointer_size)
+           rest ->
+      (* All targets agree on the layout — safe to use any one. *)
+      info.target_pointer_size
+  | _ ->
+      [%craise] span
+        "Multi-target crate with different pointer sizes (e.g., mixed 32-bit \
+         and 64-bit targets): cannot determine a unique target pointer size"
+
 (** Some utilities *)
 
 let eval_ctx_to_string = Print.Contexts.eval_ctx_to_string
@@ -45,7 +81,7 @@ let inst_fun_sig_to_string = Print.EvalCtx.inst_fun_sig_to_string
 let ty_to_string = Print.EvalCtx.ty_to_string
 let constant_expr_to_string = Print.EvalCtx.constant_expr_to_string
 let unop_to_string = Print.EvalCtx.unop_to_string
-let binop_to_string = Print.Expressions.binop_to_string
+let binop_to_string = Print.binop_to_string
 let generic_args_to_string = Print.EvalCtx.generic_args_to_string
 let trait_ref_to_string = Print.EvalCtx.trait_ref_to_string
 let trait_impl_ref_to_string = Print.EvalCtx.trait_impl_ref_to_string
@@ -62,7 +98,7 @@ let check_ty_is_supported file line (span : Meta.span) (ctx : eval_ctx)
 
 let fn_ptr_to_string (ctx : eval_ctx) (fn_ptr : fn_ptr) : string =
   let env = Print.Contexts.eval_ctx_to_fmt_env ctx in
-  Print.Types.fn_ptr_to_string env fn_ptr
+  Print.fn_ptr_to_string env fn_ptr
 
 let trait_decl_ref_region_binder_to_string =
   Print.EvalCtx.trait_decl_ref_region_binder_to_string

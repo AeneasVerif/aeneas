@@ -4,6 +4,7 @@
 open Types
 open TypesUtils
 open Expressions
+open ExpressionsUtils
 open LlbcAst
 open Utils
 open LlbcAstUtils
@@ -12,27 +13,25 @@ open Errors
 let log = Logging.pre_passes_log
 
 let statement_to_string (crate : crate) =
-  let fmt_env = Print.Crate.crate_to_fmt_env crate in
-  Print.Ast.statement_to_string fmt_env "" "  "
+  let fmt_env = Print.crate_to_fmt_env crate in
+  Print.statement_to_string fmt_env "" "  "
 
 let call_to_string (crate : crate) =
-  let fmt_env = Print.Crate.crate_to_fmt_env crate in
-  Print.Ast.call_to_string fmt_env "  "
+  let fmt_env = Print.crate_to_fmt_env crate in
+  Print.call_to_string fmt_env "  "
 
 let fun_decl_ref_to_string (crate : crate) =
-  let fmt_env = Print.Crate.crate_to_fmt_env crate in
+  let fmt_env = Print.crate_to_fmt_env crate in
   Print.fun_decl_ref_to_string fmt_env
 
 let generic_args_to_string (crate : crate) (generics : generic_args) =
-  let fmt_env = Print.Crate.crate_to_fmt_env crate in
-  let generics, traits = Print.Types.generic_args_to_strings fmt_env generics in
+  let fmt_env = Print.crate_to_fmt_env crate in
+  let generics, traits = Print.generic_args_to_strings fmt_env generics in
   "<" ^ String.concat ", " (generics @ traits) ^ ">"
 
 let generic_params_to_string (crate : crate) (generics : generic_params) =
-  let fmt_env = Print.Crate.crate_to_fmt_env crate in
-  let generics, traits =
-    Print.Types.generic_params_to_strings fmt_env generics
-  in
+  let fmt_env = Print.crate_to_fmt_env crate in
+  let generics, traits = Print.generic_params_to_strings fmt_env generics in
   "<" ^ String.concat ", " (generics @ traits) ^ ">"
 
 (** Erase the useless body regions.
@@ -62,7 +61,7 @@ let erase_body_regions (crate : crate) (f : fun_decl) : fun_decl =
   (* Map  *)
   let body =
     match f.body with
-    | Body body ->
+    | StructuredBody body ->
         let body =
           {
             body with
@@ -74,16 +73,18 @@ let erase_body_regions (crate : crate) (f : fun_decl) : fun_decl =
               };
           }
         in
-        Body { body with body = erase_visitor#visit_block 0 body.body }
+        StructuredBody
+          { body with body = erase_visitor#visit_block 0 body.body }
     | other -> other
   in
 
   let f : fun_decl = { f with body } in
   [%ldebug
+    let env = Print.crate_to_fmt_env crate in
     "Before/after [erase_body_regions]:\n"
-    ^ Print.Crate.crate_fun_decl_to_string crate f0
+    ^ Print.fun_decl_to_string env "" "  " f0
     ^ "\n\n"
-    ^ Print.Crate.crate_fun_decl_to_string crate f];
+    ^ Print.fun_decl_to_string env "" "  " f];
   f
 
 (** Replace the occurrences of [core::intrinsics::unreachable] with
@@ -135,9 +136,9 @@ let remove_unreachable (crate : crate) (f : fun_decl) : fun_decl =
     end
   in
   match f.body with
-  | Body body ->
+  | StructuredBody body ->
       let body = { body with body = visitor#visit_block () body.body } in
-      { f with body = Body body }
+      { f with body = StructuredBody body }
   | _ -> f
 
 (** The Rust compiler generates a unique implementation of [Default] for arrays
@@ -159,7 +160,7 @@ let remove_unreachable (crate : crate) (f : fun_decl) : fun_decl =
     generic in the length of the array, and replace all the other ones with this
     implementation. We also remove the useless implementations. *)
 let update_array_default (crate : crate) : crate =
-  let pctx = Print.Crate.crate_to_fmt_env crate in
+  let pctx = Print.crate_to_fmt_env crate in
   let impl_pat = NameMatcher.parse_pattern "core::default::Default" in
   let mctx = NameMatcher.ctx_from_crate crate in
   let match_name =
@@ -213,8 +214,8 @@ let update_array_default (crate : crate) : crate =
         when Z.to_int nv != 0 -> begin
           (* Save the implementation and the method *)
           impls := TraitImplId.Map.add impl.def_id n !impls;
-          assert (List.length impl.methods = 1);
-          let meth = snd (List.hd impl.methods) in
+          assert (TraitMethodId.Map.cardinal impl.methods = 1);
+          let meth = List.hd (TraitMethodId.Map.values impl.methods) in
           assert (meth.binder_params = empty_generic_params);
           let method_id = meth.binder_value.id in
           methods := FunDeclId.Map.add method_id n !methods;
@@ -642,16 +643,18 @@ let update_loops (crate : crate) (f : fun_decl) : fun_decl =
   (* Map  *)
   let body =
     match f.body with
-    | Body body -> Body { body with body = visitor#visit_block 0 body.body }
+    | StructuredBody body ->
+        StructuredBody { body with body = visitor#visit_block 0 body.body }
     | other -> other
   in
 
   let f : fun_decl = { f with body } in
   [%ldebug
+    let env = Print.crate_to_fmt_env crate in
     "Before/after [update_loops]:\n"
-    ^ Print.Crate.crate_fun_decl_to_string crate f0
+    ^ Print.fun_decl_to_string env "" " " f0
     ^ "\n\n"
-    ^ Print.Crate.crate_fun_decl_to_string crate f];
+    ^ Print.fun_decl_to_string env "" " " f];
   f
 
 (** Inline what comes after an [if then else], a [switch] or a [match], etc.
@@ -726,16 +729,18 @@ let remove_useless_joins (crate : crate) (f : fun_decl) : fun_decl =
 
   let body =
     match f.body with
-    | Body body -> Body { body with body = snd (update_block [] body.body) }
+    | StructuredBody body ->
+        StructuredBody { body with body = snd (update_block [] body.body) }
     | other -> other
   in
 
   let f : fun_decl = { f with body } in
   [%ldebug
+    let env = Print.crate_to_fmt_env crate in
     "Before/after [remove_useless_joins]:\n"
-    ^ Print.Crate.crate_fun_decl_to_string crate f0
+    ^ Print.fun_decl_to_string env "" " " f0
     ^ "\n\n"
-    ^ Print.Crate.crate_fun_decl_to_string crate f];
+    ^ Print.fun_decl_to_string env "" " " f];
   f
 
 (** Remove the use of shallow borrows and the storage live/dead instructions.
@@ -818,16 +823,281 @@ let remove_shallow_borrows_storage_live_dead (crate : crate) (f : fun_decl) :
 
   let body =
     match f.body with
-    | Body body -> Body { body with body = filter_in_body body.body }
+    | StructuredBody body ->
+        StructuredBody { body with body = filter_in_body body.body }
     | other -> other
   in
   let f = { f with body } in
   [%ldebug
+    let env = Print.crate_to_fmt_env crate in
     "Before/after [remove_shallow_borrows]:\n"
-    ^ Print.Crate.crate_fun_decl_to_string crate f0
+    ^ Print.fun_decl_to_string env "" " " f0
     ^ "\n\n"
-    ^ Print.Crate.crate_fun_decl_to_string crate f];
+    ^ Print.fun_decl_to_string env "" " " f];
   f
+
+(** Strip unnecessary [PeTarget] suffixes from function and type names.
+
+    Multi-target extraction appends [PeTarget] to per-target item names to
+    disambiguate items that exist for multiple targets.
+
+    For functions: if the function is not behind a target dispatch (its [src] is
+    NOT [TargetDependentItem]), there is no ambiguity (the function is not used
+    for several targets), so we remove the suffix.
+
+    For types there is no notion of dispatch, meaning we can't use the item
+    source. Instead, we compute a multi-set of base names (names without the
+    [PeTarget] suffix) if a type has a suffix but its base name only appears
+    once, it means there is no collision and the suffix is unnecessary. *)
+let strip_unnecessary_target_suffixes (crate : crate) : crate =
+  let module NameMap = Map.Make (struct
+    type t = Types.name
+
+    let compare = Types.compare_name
+  end) in
+  let add_name acc name =
+    let base = strip_target_suffix name in
+    let count =
+      match NameMap.find_opt base acc with
+      | Some n -> n
+      | None -> 0
+    in
+    NameMap.add base (count + 1) acc
+  in
+  let get_name base_counts name =
+    let base = strip_target_suffix name in
+    if base = name then name
+    else
+      let count =
+        match NameMap.find_opt base base_counts with
+        | Some n -> n
+        | None -> 0
+      in
+      if count <= 1 then base else name
+  in
+  (* --- Functions --- *)
+  (* We also count how many non-dispatch functions share a base name.
+
+     We shouldn't need to do this, but have to do it because of:
+     https://github.com/AeneasVerif/charon/issues/1158
+
+     Generally speaking it's a good way of being defensive against Charon's
+     deduplication bugs.
+  *)
+  let fun_base_counts =
+    FunDeclId.Map.fold
+      (fun _ (f : fun_decl) acc ->
+        match f.src with
+        | TargetDependentItem _ -> acc
+        | _ -> add_name acc f.item_meta.name)
+      crate.fun_decls NameMap.empty
+  in
+  let fun_decls =
+    FunDeclId.Map.map
+      (fun (f : fun_decl) ->
+        match f.src with
+        | TargetDependentItem _ -> f
+        | _ ->
+            let name = get_name fun_base_counts f.item_meta.name in
+            { f with item_meta = { f.item_meta with name } })
+      crate.fun_decls
+  in
+  (* --- Types: strip PeTarget when the base name is unique --- *)
+  let type_base_counts =
+    TypeDeclId.Map.fold
+      (fun _ (td : type_decl) acc -> add_name acc td.item_meta.name)
+      crate.type_decls NameMap.empty
+  in
+  let type_decls =
+    TypeDeclId.Map.map
+      (fun (td : type_decl) ->
+        let name = get_name type_base_counts td.item_meta.name in
+        { td with item_meta = { td.item_meta with name } })
+      crate.type_decls
+  in
+  { crate with fun_decls; type_decls }
+
+(** Remove all occurrences of certain compiler-internal marker traits.
+
+    These traits have no semantic content relevant to verification:
+    - [Pointee], [Thin]: pointer metadata plumbing
+    - [Send], [Sync]: thread-safety markers
+    - [Unpin]: pin-projection marker
+
+    When we will actually need to reason about these, we will capture their
+    semantic content through separation logic predicates.
+
+    We filter out the trait declarations, their impls, and all references (trait
+    refs, clauses, type constraints, parent clauses). *)
+let filter_marker_traits (crate : crate) : crate =
+  let mctx = NameMatcher.ctx_from_crate crate in
+  let pats =
+    List.map NameMatcher.parse_pattern
+      [
+        "core::ptr::metadata::Pointee";
+        "core::ptr::metadata::Thin";
+        "core::marker::Send";
+        "core::marker::Sync";
+        "core::marker::Unpin";
+      ]
+  in
+  let match_config =
+    {
+      NameMatcher.map_vars_to_vars = true;
+      match_with_trait_decl_refs = Config.match_patterns_with_trait_decl_refs;
+    }
+  in
+  (* Collect the trait decl ids to filter *)
+  let filtered_ids =
+    TraitDeclId.Map.fold
+      (fun id (decl : trait_decl) acc ->
+        if
+          List.exists
+            (fun pat ->
+              NameMatcher.match_name mctx match_config pat decl.item_meta.name)
+            pats
+        then TraitDeclId.Set.add id acc
+        else acc)
+      crate.trait_decls TraitDeclId.Set.empty
+  in
+  if TraitDeclId.Set.is_empty filtered_ids then crate
+  else
+    let is_filtered_id id = TraitDeclId.Set.mem id filtered_ids in
+    let is_filtered_ref (tr : trait_ref) : bool =
+      is_filtered_id tr.trait_decl_ref.binder_value.id
+    in
+    let is_filtered_clause (clause : trait_param) : bool =
+      is_filtered_id clause.trait.binder_value.id
+    in
+    let check_not_filtered_type_constraint
+        (c : trait_type_constraint region_binder) : unit =
+      if is_filtered_id c.binder_value.trait_ref.trait_decl_ref.binder_value.id
+      then
+        let span = c.binder_value.trait_ref.trait_decl_ref.binder_value in
+        [%craise_opt_span] None
+          ("Unexpected trait type constraint referencing a filtered marker \
+            trait (id: "
+          ^ TraitDeclId.to_string span.id
+          ^ ")")
+    in
+    (* Remove the trait decls and their impls from declarations and maps *)
+    let filtered_impl_ids =
+      TraitImplId.Map.fold
+        (fun id (impl : trait_impl) acc ->
+          if is_filtered_id impl.impl_trait.id then TraitImplId.Set.add id acc
+          else acc)
+        crate.trait_impls TraitImplId.Set.empty
+    in
+    let declarations =
+      List.filter_map
+        (fun (g : declaration_group) ->
+          match g with
+          | TraitDeclGroup (NonRecGroup id) ->
+              if is_filtered_id id then None else Some g
+          | TraitDeclGroup (RecGroup ids) ->
+              let ids = List.filter (fun id -> not (is_filtered_id id)) ids in
+              if ids <> [] then Some (TraitDeclGroup (RecGroup ids)) else None
+          | TraitImplGroup (NonRecGroup id) ->
+              if TraitImplId.Set.mem id filtered_impl_ids then None else Some g
+          | TraitImplGroup (RecGroup ids) ->
+              let ids =
+                List.filter
+                  (fun id -> not (TraitImplId.Set.mem id filtered_impl_ids))
+                  ids
+              in
+              if ids <> [] then Some (TraitImplGroup (RecGroup ids)) else None
+          | MixedGroup g -> (
+              let is_filtered_item (id : item_id) =
+                match id with
+                | IdTraitDecl id -> is_filtered_id id
+                | IdTraitImpl id -> TraitImplId.Set.mem id filtered_impl_ids
+                | _ -> false
+              in
+              match g with
+              | NonRecGroup id ->
+                  if is_filtered_item id then None else Some (MixedGroup g)
+              | RecGroup ids ->
+                  let ids =
+                    List.filter (fun id -> not (is_filtered_item id)) ids
+                  in
+                  if ids <> [] then Some (MixedGroup (RecGroup ids)) else None)
+          | _ -> Some g)
+        crate.declarations
+    in
+    let trait_decls =
+      TraitDeclId.Map.filter
+        (fun id _ -> not (is_filtered_id id))
+        crate.trait_decls
+    in
+    let trait_impls =
+      TraitImplId.Map.filter
+        (fun id _ -> not (TraitImplId.Set.mem id filtered_impl_ids))
+        crate.trait_impls
+    in
+    let crate = { crate with declarations; trait_decls; trait_impls } in
+    let visitor =
+      object (self)
+        inherit [_] map_crate as super
+
+        method! visit_generic_args env (args : generic_args) =
+          let args = super#visit_generic_args env args in
+          {
+            args with
+            trait_refs =
+              List.filter (fun tr -> not (is_filtered_ref tr)) args.trait_refs;
+          }
+
+        method! visit_generic_params env (params : generic_params) =
+          let params = super#visit_generic_params env params in
+          List.iter check_not_filtered_type_constraint
+            params.trait_type_constraints;
+          {
+            params with
+            trait_clauses =
+              List.filter
+                (fun c -> not (is_filtered_clause c))
+                params.trait_clauses;
+          }
+
+        method! visit_trait_ref_kind env (kind : trait_ref_kind) =
+          match kind with
+          | BuiltinOrAuto (data, parent_refs, types) ->
+              let parent_refs =
+                List.filter (fun tr -> not (is_filtered_ref tr)) parent_refs
+              in
+              let parent_refs =
+                List.map (self#visit_trait_ref env) parent_refs
+              in
+              let types =
+                AssocTypeId.Map.map
+                  (fun t -> self#visit_trait_assoc_ty_impl env t)
+                  types
+              in
+              BuiltinOrAuto (data, parent_refs, types)
+          | _ -> super#visit_trait_ref_kind env kind
+
+        method! visit_trait_decl env (decl : trait_decl) =
+          let decl = super#visit_trait_decl env decl in
+          {
+            decl with
+            implied_clauses =
+              List.filter
+                (fun c -> not (is_filtered_clause c))
+                decl.implied_clauses;
+          }
+
+        method! visit_trait_impl env (impl_ : trait_impl) =
+          let impl_ = super#visit_trait_impl env impl_ in
+          {
+            impl_ with
+            implied_trait_refs =
+              List.filter
+                (fun tr -> not (is_filtered_ref tr))
+                impl_.implied_trait_refs;
+          }
+      end
+    in
+    visitor#visit_crate () crate
 
 (* Remove the type aliases from the type declarations and declaration groups *)
 let filter_type_aliases (crate : crate) : crate =
@@ -878,7 +1148,7 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
   (* Map  *)
   let body =
     match f.body with
-    | Body body ->
+    | StructuredBody body ->
         let new_locals = ref [] in
         let _, gen =
           LocalId.mk_stateful_generator_starting_at_id
@@ -1006,7 +1276,7 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
           | _ -> [ st ]
         in
         let body_body = map_statement decompose_in_statement body.body in
-        Body
+        StructuredBody
           {
             body with
             body = body_body;
@@ -1025,7 +1295,7 @@ let refresh_statement_ids (_ : crate) (f : fun_decl) : fun_decl =
   (* Map  *)
   let body =
     match f.body with
-    | Body body ->
+    | StructuredBody body ->
         let _, gen_id = StatementId.fresh_stateful_generator () in
 
         (* Visit the rvalue *)
@@ -1036,7 +1306,7 @@ let refresh_statement_ids (_ : crate) (f : fun_decl) : fun_decl =
           end
         in
 
-        Body { body with body = visitor#visit_block () body.body }
+        StructuredBody { body with body = visitor#visit_block () body.body }
     | other -> other
   in
   { f with body }
@@ -1099,7 +1369,8 @@ let simplify_panics (crate : crate) (f : fun_decl) : fun_decl =
 
   let body =
     match f.body with
-    | Body body -> Body { body with body = visitor#visit_block () body.body }
+    | StructuredBody body ->
+        StructuredBody { body with body = visitor#visit_block () body.body }
     | other -> other
   in
   { f with body }
@@ -1126,7 +1397,7 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
   (* Map  *)
   let body =
     match f.body with
-    | Body body -> (
+    | StructuredBody body -> (
         let new_locals = ref [] in
         let _, gen =
           LocalId.mk_stateful_generator_starting_at_id
@@ -1163,13 +1434,7 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
                 (* Introduce the intermediate reference *)
                 let local_id =
                   let local_id = fresh_local ref_ty in
-                  let metadata =
-                    Copy
-                      {
-                        kind = PlaceGlobal crate.unit_metadata;
-                        ty = mk_unit_ty;
-                      }
-                  in
+                  let metadata = Constant mk_unit_const in
                   let st =
                     {
                       span;
@@ -1229,7 +1494,7 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
         (* Visit all the statements and decompose the operands *)
         try
           let body_body = map_statement decompose_in_statement body.body in
-          Body
+          StructuredBody
             {
               body with
               body = body_body;
@@ -1241,8 +1506,8 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
             }
         with CFailure error ->
           let mctx = Charon.NameMatcher.ctx_from_crate crate in
-          let fmt_env = Print.Crate.crate_to_fmt_env crate in
-          let name = Print.Types.name_to_string fmt_env f.item_meta.name in
+          let fmt_env = Print.crate_to_fmt_env crate in
+          let name = Print.name_to_string fmt_env f.item_meta.name in
           let name_pattern =
             try
               let c : Charon.NameMatcher.to_pat_config =
@@ -1262,7 +1527,7 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
           [%save_error_opt_span] error.span
             ("Failure when pre- processing: " ^ name
            ^ "; ignoring its body.\nName pattern: '" ^ name_pattern ^ "'");
-          Opaque)
+          OpaqueBody)
     | other -> other
   in
   { f with body }
@@ -1331,7 +1596,8 @@ let replace_static (crate : crate) : crate =
 
     let d = { d with generics; signature } in
     [%ltrace
-      "Updated declaration:\n" ^ Print.Crate.crate_fun_decl_to_string crate d];
+      let env = Print.crate_to_fmt_env crate in
+      "Updated declaration:\n" ^ Print.fun_decl_to_string env "" " " d];
     let crate =
       { crate with fun_decls = FunDeclId.Map.add d.def_id d crate.fun_decls }
     in
@@ -1339,7 +1605,7 @@ let replace_static (crate : crate) : crate =
     (* Update the uses of this definition *)
     let update (f : fun_decl) : fun_decl =
       match f.body with
-      | Body body ->
+      | StructuredBody body ->
           let visitor =
             object
               inherit [_] map_statement
@@ -1365,7 +1631,7 @@ let replace_static (crate : crate) : crate =
           in
 
           let body = { body with body = visitor#visit_block () body.body } in
-          { f with body = Body body }
+          { f with body = StructuredBody body }
       | _ -> f
     in
     let fun_decls = FunDeclId.Map.map update crate.fun_decls in
@@ -1650,13 +1916,13 @@ let simplify_trait_calls (crate : crate) : crate =
                           (TraitImplId.Map.find_opt impl_id crate.trait_impls)
                           "Internal error"
                       in
+                      (* The TryFrom trait has a single method (try_from) *)
                       let method_ref =
-                        snd
-                          ([%unwrap_with_span] span
-                             (List.find_opt
-                                (fun (name, _) -> name = "try_from")
-                                impl.methods)
-                             "Internal error")
+                        [%unwrap_with_span] span
+                          (List.nth_opt
+                             (TraitMethodId.Map.values impl.methods)
+                             0)
+                          "Internal error"
                       in
 
                       [%sanity_check] span
@@ -1745,7 +2011,7 @@ let simplify_trait_calls (crate : crate) : crate =
     (fun _ (f : fun_decl) ->
       if f.item_meta.is_local then visitor#visit_fun_decl_id () f.def_id;
       match f.body with
-      | Body body -> visitor#visit_block () body.body
+      | StructuredBody body -> visitor#visit_block () body.body
       | _ -> ())
     crate.fun_decls;
 
@@ -1755,8 +2021,8 @@ let simplify_trait_calls (crate : crate) : crate =
 
   TraitDeclId.Map.iter
     (fun _ (d : trait_decl) ->
-      List.iter
-        (fun (d : trait_method binder) ->
+      TraitMethodId.Map.iter
+        (fun _ (d : trait_method binder) ->
           visitor#visit_fun_decl_id () d.binder_value.item.id)
         d.methods)
     crate.trait_decls;
@@ -1775,8 +2041,8 @@ let simplify_trait_calls (crate : crate) : crate =
     | None -> ()
     | Some impl ->
         List.iter (visitor#visit_trait_ref ()) impl.implied_trait_refs;
-        List.iter
-          (fun ((_, x) : _ * fun_decl_ref binder) ->
+        TraitMethodId.Map.iter
+          (fun _ (x : fun_decl_ref binder) ->
             visitor#visit_fun_decl_id () x.binder_value.id)
           impl.methods
   done;
@@ -1857,7 +2123,9 @@ let fix_closure_lifetimes (crate : crate) (f : fun_decl) : fun_decl =
              parameters *)
           let signature = { f.signature with output } in
           let f = { f with signature } in
-          [%ltrace "Updated: " ^ Print.Crate.crate_fun_decl_to_string crate f];
+          [%ltrace
+            let env = Print.crate_to_fmt_env crate in
+            "Updated: " ^ Print.fun_decl_to_string env "" " " f];
           f
       | _, _ -> f)
 
@@ -1886,21 +2154,22 @@ let apply_passes (crate : crate) : crate =
     try
       let f = pass crate f in
       [%ltrace
+        let env = Print.crate_to_fmt_env crate in
         "After applying [" ^ pass_name ^ "]:\n"
-        ^ Print.Crate.crate_fun_decl_to_string crate f];
+        ^ Print.fun_decl_to_string env "" " " f];
       f
     with CFailure e ->
       (* The error was already registered, we don't need to register it twice.
          However, we replace the body of the function, and save an error to
          report to the user the fact that we will ignore the function body *)
-      let fmt = Print.Crate.crate_to_fmt_env crate in
+      let fmt = Print.crate_to_fmt_env crate in
       let name = Print.name_to_string fmt f.item_meta.name in
       [%save_error] f.item_meta.span
         ("Ignoring the body of '" ^ name ^ "' because of previous error");
       let msg =
         Errors.format_error_message_with_file_line e.file e.line e.span e.msg
       in
-      { f with body = Error { span = f.item_meta.span; msg } }
+      { f with body = ErrorBody { span = f.item_meta.span; msg } }
   in
   let fun_decls : fun_decl FunDeclId.Map.t =
     let num_decls = FunDeclId.Map.cardinal crate.fun_decls in
@@ -1908,8 +2177,9 @@ let apply_passes (crate : crate) : crate =
         FunDeclId.Map.map
           (fun f ->
             [%ltrace
+              let env = Print.crate_to_fmt_env crate in
               "Before applying the prepasses:\n"
-              ^ Print.Crate.crate_fun_decl_to_string crate f];
+              ^ Print.fun_decl_to_string env "" " " f];
             let f : fun_decl =
               List.fold_left
                 (fun f (name, pass) -> apply_function_pass name pass f)
@@ -1920,10 +2190,12 @@ let apply_passes (crate : crate) : crate =
           crate.fun_decls)
   in
   let crate = { crate with fun_decls } in
+  let crate = strip_unnecessary_target_suffixes crate in
+  let crate = filter_marker_traits crate in
   let crate = filter_type_aliases crate in
   let crate = replace_static crate in
   let crate = remove_vtables crate in
   let crate = rename_type_vars crate in
   let crate = simplify_trait_calls crate in
-  [%ltrace "After pre-passes:\n" ^ Print.Crate.crate_to_string crate ^ "\n"];
+  [%ltrace "After pre-passes:\n" ^ Print.crate_to_string crate ^ "\n"];
   crate

@@ -767,9 +767,8 @@ theorem move_elements_loop_spec
         simp_all [Slots.lookup]
 
     step as ⟨ ntable2, slots2, _, _, _, hLookup2Rev, hLookup21, hLookup22, hIndexNil ⟩
-    . have : i.val < (List.map AList.v slots.val).length := by simp; scalar_tac
-      simp_all [Slots.al_v, List.length_flatten_set_as_int_eq]
-      scalar_tac
+    · grind
+    · grind
 
     have hLookupPreserve :
       (∀ key v, slots.lookup key = some v → ntable2.lookup key = some v) ∧
