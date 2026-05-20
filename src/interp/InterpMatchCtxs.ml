@@ -575,6 +575,12 @@ module MakeMatcher (M : PrimMatcher) : Matcher = struct
             let proj_ty = M.match_rtys ctx0 ctx1 proj0.proj_ty proj1.proj_ty in
             M.match_aproj_loans match_rec ctx0 ctx1 v0.ty pm0 ploans0 v1.ty pm1
               ploans1 ty proj_ty
+        | AEndedProjBorrows aeb0, AEndedProjBorrows aeb1 ->
+            M.match_aended_proj_borrows match_rec ctx0 ctx1 v0.ty pm0 aeb0
+              v1.ty pm1 aeb1 ty
+        | AEndedProjLoans ael0, AEndedProjLoans ael1 ->
+            M.match_aended_proj_loans match_rec ctx0 ctx1 v0.ty pm0 ael0 v1.ty
+              pm1 ael1 ty
         | _ -> [%craise_recover] M.recover M.span "Unreachable"
       end
     | _ ->
@@ -1706,6 +1712,12 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
   let match_aproj_loans _ _ _ _ _ _ _ _ _ _ =
     [%craise_recover] S.recover span "Unreachable"
 
+  let match_aended_proj_borrows _ _ _ _ _ _ _ _ _ _ =
+    [%craise_recover] S.recover span "Unreachable"
+
+  let match_aended_proj_loans _ _ _ _ _ _ _ _ _ _ =
+    [%craise_recover] S.recover span "Unreachable"
+
   let match_avalues _ _ _ _ = [%craise_recover] S.recover span "Unreachable"
 end
 
@@ -2105,6 +2117,45 @@ struct
     let proj : symbolic_proj = { sv_id; proj_ty } in
     let proj = AProjLoans { proj; consumed = []; borrows = [] } in
     { value = ASymbolic (PNone, proj); ty }
+
+  let match_aended_proj_borrows (_match_values : tvalue_matcher)
+      (_ctx0 : eval_ctx) (_ctx1 : eval_ctx) _ty0 pm0 (proj0 : aended_proj_borrows)
+      _ty1 pm1 (proj1 : aended_proj_borrows) ty : tavalue =
+    [%sanity_check_recover] S.recover span (pm0 = PNone && pm1 = PNone);
+    let { mvalues = mv0; loans = loans0 } : aended_proj_borrows = proj0 in
+    let { mvalues = mv1; loans = loans1 } : aended_proj_borrows = proj1 in
+    (* We do not yet support ended borrow projectors with leftover nested
+       loans here. *)
+    [%sanity_check_recover] S.recover span (loans0 = [] && loans1 = []);
+    (* Match the meta-symbolic value id of the consumed value. The
+       [given_back] meta-symbolic value is preserved on the left side: it
+       carries synthesis-only information and is no longer constrained by
+       the runtime semantics once the projector has ended. *)
+    let consumed = match_symbolic_value_ids mv0.consumed mv1.consumed in
+    let mvalues = { mv0 with consumed } in
+    let proj = AEndedProjBorrows { mvalues; loans = [] } in
+    { value = ASymbolic (PNone, proj); ty }
+
+  let match_aended_proj_loans (_match_values : tvalue_matcher)
+      (_ctx0 : eval_ctx) (_ctx1 : eval_ctx) _ty0 pm0 (proj0 : aended_proj_loans)
+      _ty1 pm1 (proj1 : aended_proj_loans) ty : tavalue =
+    [%sanity_check_recover] S.recover span (pm0 = PNone && pm1 = PNone);
+    let { proj = proj0; consumed = consumed0; borrows = borrows0 } :
+        aended_proj_loans =
+      proj0
+    in
+    let { proj = proj1; consumed = consumed1; borrows = borrows1 } :
+        aended_proj_loans =
+      proj1
+    in
+    (* We do not yet support ended loan projectors with leftover nested
+       consumed values or borrows here. *)
+    [%sanity_check_recover] S.recover span (consumed0 = [] && consumed1 = []);
+    [%sanity_check_recover] S.recover span (borrows0 = [] && borrows1 = []);
+    (* Match the meta-symbolic value id of the projector. *)
+    let proj = match_symbolic_value_ids proj0 proj1 in
+    let aproj = AEndedProjLoans { proj; consumed = []; borrows = [] } in
+    { value = ASymbolic (PNone, aproj); ty }
 
   let match_avalues (_ : tvalue_matcher) (ctx0 : eval_ctx) (ctx1 : eval_ctx) v0
       v1 =
