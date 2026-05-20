@@ -609,7 +609,7 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
             { declsToUnfold := #[``Std.WP.curry, ``Std.WP.uncurry']
               addSimpThms :=
                 #[``Std.WP.qimp_spec_iff, ``Std.WP.qimp_iff,
-                  ``Std.WP.imp_and_iff,
+                  ``Std.WP.imp_and_iff, ``Std.WP.imp_exists_iff,
                   ``Prod.forall, ``Prod.exists, ``Std.uncurry_apply_pair,
                   ``forall_unit, ``true_imp_iff] }
             (.targets #[] true)
@@ -1894,6 +1894,34 @@ z_post : ↑z = ↑x + ↑y
       step
       step
       step
+
+  /- Test that manipulates a post-condition containing an ∃ -/
+  /--
+  error: unsolved goals
+case a
+zero : Slice U32 → Result (Slice U32)
+zero_spec :
+  ∀ (s : Slice U32), zero s ⦃ s' => ∃ (h : s'.length = s.length), ∀ (i : ℕ) (x : i < s.length), s'[i] = 0#u32 ⦄
+s s' : Slice U32
+h0 : s'.length = s.length
+h1 : ∀ (i : ℕ) (x : i < s.length), s'[i] = 0#u32
+⊢ (do
+      let _ ← zero s'
+      ok ()) ⦃
+    x✝ => True ⦄
+  -/
+  #guard_msgs in
+  example (zero : Slice U32 → Result (Slice U32))
+    (zero_spec : ∀ s, zero s ⦃ s' =>
+      ∃ (h : s'.length = s.length),
+      (∀ i, (_ : i < s.length) → s'[i]'(by grind) = 0#u32) ⦄)
+    (s : Slice U32) :
+    (do
+      let s' ← zero s
+      let _ ← zero s'
+      pure ()) ⦃ _ => True ⦄ := by
+    step with zero_spec as ⟨ s', h0, h1 ⟩
+
 
   -- `Inhabited α` is not necessary: we add it for the purpose of testing
   theorem get_spec {α} [Inhabited α] (x : Option α) (h : x.isSome) : get x ⦃ _ => True ⦄ := by
