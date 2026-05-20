@@ -212,26 +212,22 @@ section Methods
     withLocalDeclsD ⟨ tys ⟩ k
 end Methods
 
-/- Analyze a goal or a step theorem to decompose its arguments.
-
-  StepSpec theorems should be of the following shape:
-  ```
-  ∀ x1 ... xn, H1 → ... Hn → spec (f x1 ... xn) P
-  ```
--/
-def getStepSpecFunArgsExpr (ty : Expr) :
-  MetaM Expr := do
+/-- Parses a step-spec proposition of the form `∀ x1 … xn, H1 → … Hn → spec(_partial) (f x1 … xn) …`,
+    returning `(isPartial, f x1 … xn)` where `isPartial` is `true` for `spec_partial` and `false`
+    for `spec`. -/
+def parseStepSpec (ty : Expr) : MetaM (Bool × Expr) := do
   let ty := ty.consumeMData
   unless ← isProp ty do
     throwError "Expected a proposition, got {←inferType ty}"
-  -- ty == ∀ xs, spec (f x1 ... xn) P
-  let (xs, xs_bi, ty₂) ← forallMetaTelescope ty
-  trace[Step] "Universally quantified arguments and assumptions: {xs}"
-  -- ty₂ == spec (f x1 ... xn) P
-  let (spec?, args) := ty₂.consumeMData.withApp (fun f args => (f, args))
-  if h: spec?.isConstOf ``Std.WP.spec ∧ args.size = 3
-  then pure args[1] -- this is `f x1 ... xn`
-  else throwError "Expected to be a `spec (f x1 ... xn) P`, got {ty₂}"
+  let (_, _, ty₂) ← forallMetaTelescope ty
+  let (head?, args) := ty₂.consumeMData.withApp (fun f args => (f, args))
+  if h : head?.isConstOf ``Std.WP.spec ∧ args.size = 3 then
+    pure (false, args[1])
+  else if h : head?.isConstOf ``Std.WP.spec_partial ∧ args.size = 5 then
+    pure (true, args[1])
+  else
+    throwError
+      "Expected `spec (f xs) P` or `spec_partial (f xs) P_ok P_fail P_div`, got {ty₂}"
 
 structure Rules where
   rules : DiscrTree Name
@@ -267,63 +263,113 @@ structure StepSpecAttr where
   ext  : Extension
   deriving Inhabited
 
-private def generateMvcgenSpec (stx : Syntax) (attrKind : AttributeKind)
+/-- Register a theorem using `spec` with `step`. -/
+private def saveStepSpecFromThm (ext : Extension) (attrKind : AttributeKind)
+    (thName : Name) (fExpr : Expr) : MetaM Unit := do
+  trace[Step] "Registering spec theorem for expr: {fExpr}"
+  let fKey ← DiscrTree.mkPath fExpr
+  ScopedEnvExtension.add ext (fKey, thName) attrKind
+  trace[Step] "Saved the entry"
+
+/-- Register a theorem using `spec_partial` with `step`. This function generates a auxiliary lemma
+using `spec` instead of `spec_partial` and registers that one with `step`, so that the `step`
+tactic will only ever see `spec`. -/
+private def saveStepPartialSpecFromThm (ext : Extension) (attrKind : AttributeKind) (stx : Syntax)
+    (thDecl : AsyncConstantInfo) (ty fExpr : Expr) : MetaM Unit := do
+  let sig := thDecl.sig.get
+  let levelParams := sig.levelParams
+  let newName ← forallTelescope ty fun fvars _ => do
+    let thConst := Lean.mkConst thDecl.name (levelParams.map Level.param)
+    let thApp := mkAppN thConst fvars
+    let bridge ← mkAppM ``Aeneas.Std.WP.spec_of_spec_partial #[thApp]
+    forallTelescope (← inferType bridge) fun extraFVars _ => do
+      let proof := mkAppN bridge extraFVars
+      let innerTy ← inferType proof
+      let allFVars := fvars ++ extraFVars
+      let proofTerm ← mkLambdaFVars allFVars proof
+      let thmTy ← mkForallFVars allFVars innerTy
+      let name := Name.str thDecl.name "step_spec"
+      let auxDecl : TheoremVal := {
+        name
+        levelParams
+        type  := thmTy
+        value := proofTerm
+      }
+      addDecl (.thmDecl auxDecl)
+      addDeclarationRangesFromSyntax name stx
+      pure name
+  saveStepSpecFromThm ext attrKind newName fExpr
+
+private def saveMvcgenDecl (attrKind : AttributeKind) (stx : Syntax)
+    (originalThDecl : AsyncConstantInfo) (thmTy proofTerm : Expr) : MetaM Unit := do
+  let mvcgenSpecName := Name.str originalThDecl.name "mvcgen_spec"
+  let auxDecl : TheoremVal := {
+    name        := mvcgenSpecName
+    levelParams := originalThDecl.sig.get.levelParams
+    type        := thmTy
+    value       := proofTerm
+  }
+  addDecl (.thmDecl auxDecl)
+  addDeclarationRangesFromSyntax mvcgenSpecName stx
+  -- Register with @[spec] so mvcgen can find it
+  Lean.Attribute.add mvcgenSpecName `spec .missing attrKind
+
+/-- Register a theorem using `spec` with `mvcgen`. -/
+private def saveMvcgenSpecFromThm (stx : Syntax) (attrKind : AttributeKind)
     (thDecl : AsyncConstantInfo) : MetaM Unit := do
   let sig := thDecl.sig.get
   let thName := thDecl.name
   forallTelescope sig.type fun fvars _ => do
-    -- Apply the original theorem to all fvars to get: spec (f args) Q
     let thConst := Lean.mkConst thName (sig.levelParams.map .param)
     let thApp := mkAppN thConst fvars
-    -- Wrap with spec_to_mvcgen to produce: Triple (f args) ⌜True⌝ post⟨...⟩
+    -- Wrap with spec_to_mvcgen to produce a statement about `Triple`.
     let proof ← mkAppM ``Aeneas.Std.WP.spec_to_mvcgen #[thApp]
     let innerTy ← inferType proof
-    -- Re-introduce all fvars as binders
     let proofTerm ← mkLambdaFVars fvars proof
     let thmTy ← mkForallFVars fvars innerTy
-    let mvcgenSpecName := Name.str thName "mvcgen_spec"
-    let auxDecl : TheoremVal := {
-      name        := mvcgenSpecName
-      levelParams := sig.levelParams
-      type        := thmTy
-      value       := proofTerm
-    }
-    addDecl (.thmDecl auxDecl)
-    addDeclarationRangesFromSyntax mvcgenSpecName stx
-    -- Register with @[spec] so mvcgen can find it
-    Lean.Attribute.add mvcgenSpecName `spec .missing attrKind
+    saveMvcgenDecl attrKind stx thDecl thmTy proofTerm
 
-private def saveStepSpecFromThm (ext : Extension) (attrKind : AttributeKind) (stx : Syntax)
+/-- Register a theorem using `spec_partial` with `mvcgen`. -/
+private def saveMvcgenPartialSpecFromThm (stx : Syntax) (attrKind : AttributeKind)
+    (thDecl : AsyncConstantInfo) : MetaM Unit := do
+  let sig := thDecl.sig.get
+  let thName := thDecl.name
+  forallTelescope sig.type fun fvars _ => do
+    let thConst := Lean.mkConst thName (sig.levelParams.map .param)
+    let thApp := mkAppN thConst fvars
+    let bridge ← mkAppOptM ``Aeneas.Std.WP.spec_partial_to_mvcgen
+      #[none, none, none, none, none, some thApp]
+    forallTelescope (← inferType bridge) fun extraFVars _ => do
+      let proof := mkAppN bridge extraFVars
+      let innerTy ← inferType proof
+      let allFVars := fvars ++ extraFVars
+      let proofTerm ← mkLambdaFVars allFVars proof
+      let thmTy ← mkForallFVars allFVars innerTy
+      saveMvcgenDecl attrKind stx thDecl thmTy proofTerm
+
+/-- Register a theorem (either `spec` or `spec_partial`) with `step` and `mvcgen`. -/
+private def applyStepAttr (ext : Extension) (attrKind : AttributeKind) (stx : Syntax)
     (thName : Name) : AttrM Unit := do
-  -- Lookup the theorem
-  let env ← getEnv
   -- Ignore some auxiliary definitions (see the comments for attrIgnoreMutRec)
   attrIgnoreAuxDef thName (pure ()) do
     trace[Step] "Registering `step` theorem for {thName}"
-    let some thDecl := env.findAsync? thName
-      | throwError "Could not find theorem {thName}"
-    let type := thDecl.sig.get.type
-    let fKey ← MetaM.run' (do
+    MetaM.run' do
+      let env ← getEnv
+      let some thDecl := env.findAsync? thName
+        | throwError "Could not find theorem {thName}"
+      let type := thDecl.sig.get.type
       trace[Step] "Theorem: {type}"
-      -- Normalize to eliminate the let-bindings
       let ty ← normalizeLetBindings type
       trace[Step] "Theorem after normalization (to eliminate the let bindings): {ty}"
-      let fExpr ← getStepSpecFunArgsExpr ty
-      trace[Step] "Registering spec theorem for expr: {fExpr}"
-      -- Convert the function expression to a discrimination tree key
-      DiscrTree.mkPath fExpr)
-    -- Save the entry
-    ScopedEnvExtension.add ext (fKey, thName) attrKind
-    trace[Step] "Saved the entry"
-    -- Also generate a corresponding mvcgen (@[spec]) lemma
-    try
-      trace[Step] "Registering with mvcgen"
-      MetaM.run' (generateMvcgenSpec stx attrKind thDecl)
-    catch e =>
-      logWarning m!"Could not generate mvcgen spec for {thName}: {e.toMessageData}"
-    pure ()
+      let (isPartial, fExpr) ← parseStepSpec ty
+      if isPartial then
+        saveStepPartialSpecFromThm ext attrKind stx thDecl ty fExpr
+        saveMvcgenPartialSpecFromThm stx attrKind thDecl
+      else
+        saveStepSpecFromThm ext attrKind thName fExpr
+        saveMvcgenSpecFromThm stx attrKind thDecl
 
-/- Initiliaze the `step` attribute. -/
+/-- Initialize the `step` attribute. -/
 initialize stepAttr : StepSpecAttr ← do
   let ext ← mkExtension `stepMap
   let attrImpl : AttributeImpl := {
@@ -331,7 +377,7 @@ initialize stepAttr : StepSpecAttr ← do
     descr := "Adds theorems to the `step` database"
     add := fun thName stx attrKind => do
       Attribute.Builtin.ensureNoArgs stx
-      saveStepSpecFromThm ext attrKind stx thName
+      applyStepAttr ext attrKind stx thName
     erase := fun thName => do
       let s := ext.getState (← getEnv)
       let s := s.erase thName
@@ -854,7 +900,7 @@ initialize stepPureAttribute : StepPureSpecAttr ← do
         -- Introduce the lifted theorem
         let liftedThmName ← MetaM.run' (liftThm stx thName pat)
         -- Save the lifted theorem to the `step` database
-        saveStepSpecFromThm stepAttr.ext attrKind stx liftedThmName
+        applyStepAttr stepAttr.ext attrKind stx liftedThmName
   }
   registerBuiltinAttribute attrImpl
   pure { attr := attrImpl }
@@ -995,7 +1041,7 @@ initialize stepPureDefAttribute : StepPureDefSpecAttr ← do
         -- Introduce the lifted theorem
         let thmName ← MetaM.run' (mkStepPureDefThm stx pat declName)
         -- Save the lifted theorem to the `step` database
-        saveStepSpecFromThm stepAttr.ext attrKind stx thmName
+        applyStepAttr stepAttr.ext attrKind stx thmName
   }
   registerBuiltinAttribute attrImpl
   pure { attr := attrImpl }
