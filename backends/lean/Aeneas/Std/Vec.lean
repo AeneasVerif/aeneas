@@ -66,7 +66,7 @@ instance {α : Type u} : GetElem (Vec α) Nat α (fun a i => i < a.val.length) w
 
 @[simp, simp_lists_safe, simp_lists_hyps_simps, grind =, agrind =]
 theorem Vec.getElem_Nat_eq {α : Type u} (v : Vec α) (i : Nat) (h : i < v.val.length) :
-    v[i] = v.val[i] := rfl
+    v[i]'h = v.val[i] := rfl
 
 instance {α : Type u} : GetElem? (Vec α) Nat α (fun a i => i < a.val.length) where
   getElem? a i := getElem? a.val i

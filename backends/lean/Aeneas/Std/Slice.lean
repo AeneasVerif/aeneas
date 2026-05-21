@@ -77,7 +77,7 @@ instance {α : Type u} : GetElem (Slice α) Usize α (fun a i => i.val < a.val.l
 
 @[simp, grind =, agrind =, simp_lists_safe, simp_lists_hyps_simps]
 theorem Slice.getElem_Usize_eq {α : Type u} (v : Slice α) (i : Usize) (h : i.val < v.val.length) :
-    v[i] = v.val[i.val] := rfl
+    v[i]'h = v.val[i.val] := rfl
 
 instance {α : Type u} : GetElem? (Slice α) Usize α (fun a i => i < a.val.length) where
   getElem? a i := getElem? a.val i.val
@@ -162,8 +162,8 @@ theorem Slice.getElem!_Usize_set_ne
 @[simp↓, simp_lists_safe↓]
 theorem Slice.getElem_Usize_set_ne
   {α : Type u} (a: Slice α) (i j : Usize) (x: α)
-  (h : i.val ≠ j.val ∧ j.val < a.length) :
-  (a.set i x)[j] = a[j]
+  (h0 : j.val < (a.set i x).length) (h : i.val ≠ j.val) :
+  (a.set i x)[j]'h0 = a[j]
   := by
   grind
 
@@ -177,8 +177,8 @@ theorem Slice.getElem!_Usize_set_eq
 @[simp↓, simp_lists_safe↓]
 theorem Slice.getElem_Usize_set_eq
   {α : Type u} (a: Slice α) (i j : Usize) (x: α)
-  (h : i = j ∧ j.val < a.length) :
-  (a.set i x)[j] = x
+  (h0 : j.val < (a.set i x).length) (h1 : i = j) :
+  (a.set i x)[j]'h0 = x
   := by
   grind
 
@@ -196,8 +196,8 @@ theorem Slice.getElem!_Nat_set_ne
 @[simp↓, simp_lists_safe↓]
 theorem Slice.getElem_Nat_set_ne
   {α : Type u} (a: Slice α) (i : Usize) (j : Nat) (x: α)
-  (h : i.val ≠ j ∧ j < a.length) :
-  (a.set i x)[j] = a[j]
+  (h0 : j < (a.set i x).length) (h1 : i.val ≠ j) :
+  (a.set i x)[j]'h0 = a[j]
   := by grind
 
 @[simp↓, simp_lists_safe↓]
@@ -209,8 +209,8 @@ theorem Slice.getElem!_Nat_set_eq
 @[simp↓, simp_lists_safe↓]
 theorem Slice.getElem_Nat_set_eq
   {α : Type u} (a: Slice α) (i : Usize) (j : Nat) (x: α)
-  (h : i.val = j ∧ j < a.length) :
-  (a.set i x)[j] = x
+  (h0 : j < (a.set i x).length) (h1 : i.val = j) :
+  (a.set i x)[j]'h0 = x
   := by grind
 
 theorem Slice.Inhabited_getElem_eq_getElem! {α} [Inhabited α] (v : Slice α) (i : ℕ) (hi : i < v.length) :

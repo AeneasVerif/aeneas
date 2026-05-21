@@ -83,7 +83,7 @@ instance {α : Type u} {n : Usize} : GetElem (Array α n) Usize α (fun a i => i
 
 @[simp, grind =, agrind =, simp_lists_safe, simp_lists_hyps_simps]
 theorem Array.getElem_Usize_eq {α : Type u} {n : Usize} (v : Array α n) (i : Usize) (h : i.val < v.val.length) :
-    v[i] = v.val[i.val] := rfl
+    v[i]'h = v.val[i.val] := rfl
 
 instance {α : Type u} {n : Usize} : GetElem? (Array α n) Usize α (fun a i => i.val < a.val.length) where
   getElem? a i := getElem? a.val i.val
@@ -187,8 +187,8 @@ theorem Array.getElem!_Nat_set_ne
 @[simp↓, simp_lists_safe↓]
 theorem Array.getElem_Nat_set_ne
   {α : Type u} {N : Usize} (a: Array α N) (i : Usize) (j : Nat) (x: α)
-  (h : i.val ≠ j ∧ j < a.length) :
-  (a.set i x)[j] = a[j]
+  (h0 : j < (a.set i x).length) (h1 : i.val ≠ j) :
+  (a.set i x)[j]'h0 = a[j]
   := by grind
 
 @[simp↓, simp_lists_safe↓]
@@ -200,8 +200,8 @@ theorem Array.getElem!_Nat_set_eq
 @[simp↓, simp_lists_safe↓]
 theorem Array.getElem_Nat_set_eq
   {α : Type u} {N : Usize} (a: Array α N) (i : Usize) (j : Nat) (x: α)
-  (h : i.val = j ∧ j < a.length) :
-  (a.set i x)[j] = x
+  (h0 : j < (a.set i x).length) (h1 : i.val = j) :
+  (a.set i x)[j]'h0 = x
   := by grind
 
 @[scalar_tac_simps, simp_lists_safe, grind =, agrind =]
