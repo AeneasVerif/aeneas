@@ -749,13 +749,13 @@ theorem spec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
   simp [Triple, hQv, WP.wp, PredTrans.apply]
 
 /-- Lift an Aeneas partial-correctness spec to an mvcgen-compatible `Triple`. -/
-theorem spec_partial_to_mvcgen {α : Type} {x : Result α}
+theorem spec_partial_to_mvcgen {α : Type u} {x : Result α}
     {p_ok : α → Prop} {p_fail : Error → Prop} {p_div : Prop}
     (h : spec_partial x p_ok p_fail p_div)
     {Q : PostCond α (.except (ULift Error) (.except PUnit .pure))}
     (h_ok   : ∀ r, p_ok r → (Q.1 r).down)
     (h_fail : ∀ e, p_fail e → (Q.2.1 (.up e)).down)
-    (h_div  : p_div → (Q.2.2.1 ()).down) :
+    (h_div  : p_div → (Q.2.2.1 .unit).down) :
     ⦃ ⌜ True ⌝ ⦄ x ⦃ Q ⦄ := by
   cases x
     <;> simp only [spec_partial] at h
