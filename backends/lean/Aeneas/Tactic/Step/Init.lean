@@ -311,6 +311,7 @@ using `spec` instead of `spec_partial` and registers that one with `step`, so th
 tactic will only ever see `spec`. -/
 private def saveStepPartialSpecFromThm (ext : Extension) (attrKind : AttributeKind) (stx : Syntax)
     (thDecl : AsyncConstantInfo) (ty fExpr : Expr) : MetaM Unit := do
+  trace[Step] "saveStepPartialSpecFromThm: {thDecl.name}"
   let sig := thDecl.sig.get
   let levelParams := sig.levelParams
   let newName ← forallTelescope ty fun fvars _ => do
@@ -348,10 +349,12 @@ private def saveMvcgenDecl (attrKind : AttributeKind) (stx : Syntax)
   addDeclarationRangesFromSyntax mvcgenSpecName stx
   -- Register with @[spec] so mvcgen can find it
   Lean.Attribute.add mvcgenSpecName `spec .missing attrKind
+  trace[Step] "Registered {mvcgenSpecName} as `@[spec]`."
 
 /-- Register a theorem using `spec` with `mvcgen`. -/
 private def saveMvcgenSpecFromThm (stx : Syntax) (attrKind : AttributeKind)
     (thDecl : AsyncConstantInfo) : MetaM Unit := do
+  trace[Step] "saveMvcgenSpecFromThm: {thDecl.name}"
   let sig := thDecl.sig.get
   let thName := thDecl.name
   forallTelescope sig.type fun fvars _ => do
@@ -403,6 +406,7 @@ private def simplifyMvcgenHypotheses (extraMVars : Array Expr) : MetaM Unit := d
 /-- Register a theorem using `spec_partial` with `mvcgen`. -/
 private def saveMvcgenPartialSpecFromThm (stx : Syntax) (attrKind : AttributeKind)
     (thDecl : AsyncConstantInfo) : MetaM Unit := do
+  trace[Step] "saveMvcgenPartialSpecFromThm: {thDecl.name}"
   let sig := thDecl.sig.get
   let thName := thDecl.name
   forallTelescope sig.type fun fvars _ => do
