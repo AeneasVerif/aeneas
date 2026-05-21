@@ -56,8 +56,9 @@ theorem getElem!_setSlice!_same {α} [Inhabited α] (s : Array α) (s' : List α
 @[simp_lists_safe]
 def Inhabited_getElem_eq_getElem! {α} [Inhabited α] (l : Array α) (i : ℕ) (hi : i < l.size) :
   l[i] = l[i]! := by
-  simp only [← getElem_toList, List.Inhabited_getElem_eq_getElem!,
-    ← getElem!_toList]
+  have : l.toList[i] = l.toList[i]! :=
+    List.Inhabited_getElem_eq_getElem! l.toList i (by simpa using hi)
+  simp [← Array.getElem_toList, ← Array.getElem!_toList, this]
 
 @[simp_lists_safe]
 theorem set_eq_set! (a : Array α) (i : ℕ) (x : α) (hi : i < a.size) :
