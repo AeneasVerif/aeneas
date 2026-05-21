@@ -399,13 +399,16 @@ class virtual ['self] iter_tavalue_with_levels =
     [combine]: how to combine booleans [compare_regions]: how to compare regions
 
     TODO: is there a way of deriving such a comparison? TODO: rename *)
-let rec compare_rtys (span : Meta.span) (ctx : eval_ctx) (default : bool)
-    (combine : bool -> bool -> bool)
+let rec compare_rtys ?(allow_erased = false) (span : Meta.span) (ctx : eval_ctx)
+    (default : bool) (combine : bool -> bool -> bool)
     (compare_regions : region -> region -> bool) (ty1 : rty) (ty2 : rty) : bool
     =
-  let compare = compare_rtys span ctx default combine compare_regions in
+  let compare =
+    compare_rtys ~allow_erased span ctx default combine compare_regions
+  in
   (* Sanity check - TODO: don't do this at every recursive call *)
-  [%sanity_check] span (ty_is_rty ty1 && ty_is_rty ty2);
+  [%sanity_check] span
+    (if allow_erased then true else ty_is_rty ty1 && ty_is_rty ty2);
   (* Normalize the associated types *)
   match (ty1, ty2) with
   | TLiteral lit1, TLiteral lit2 ->
@@ -497,7 +500,7 @@ let projections_intersect (span : Meta.span) (ctx : eval_ctx)
   let compare_regions r1 r2 =
     region_in_set ~allow_erased r1 rset1 && region_in_set ~allow_erased r2 rset2
   in
-  compare_rtys span ctx default combine compare_regions ty1 ty2
+  compare_rtys ~allow_erased span ctx default combine compare_regions ty1 ty2
 
 (** Check if the first projection contains the second projection. We use this
     function when checking invariants.
