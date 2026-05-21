@@ -58,8 +58,8 @@ info: Aeneas.Step.SpecPartialTests.myAdd_spec_partial.step_spec (x y : U32) (h :
 /--
 info: Aeneas.Step.SpecPartialTests.myAdd_spec_partial.mvcgen_spec (x y : U32)
   (Q : PostCond U32 (PostShape.except (ULift.{0, 0} Error) (PostShape.except PUnit.{1} PostShape.pure)))
-  (h_ok : ∀ (r : U32), ↑r = ↑x + ↑y → (Q.1 r).down)
-  (h : ↑x + ↑y > U32.max → (Q.2.1 { down := Error.integerOverflow }).down) : ⦃⌜True⌝⦄ myAdd x y ⦃Q⦄
+  (h_ok : ∀ (r : U32), ↑r = ↑x + ↑y → willYield r Q) (h : ↑x + ↑y > U32.max → willFail Error.integerOverflow Q) :
+  ⦃⌜True⌝⦄ myAdd x y ⦃Q⦄
 -/
 #guard_msgs in
 #check myAdd_spec_partial.mvcgen_spec

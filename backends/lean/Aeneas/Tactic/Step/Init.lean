@@ -368,18 +368,15 @@ private def saveMvcgenSpecFromThm (stx : Syntax) (attrKind : AttributeKind)
     saveMvcgenDecl attrKind stx thDecl thmTy proofTerm
 
 section
-open Aeneas.Std
+open Aeneas.Std WP
 
-theorem mvcgen_fail_failEq {α : Type u}
-    {Q : Std.Do.PostCond α (.except (ULift Error) (.except PUnit .pure))}
-    {c : Error} {P : Prop}
-    (h : P → (Q.2.1 (.up c)).down) :
-    ∀ e, (e = c ∧ P) → (Q.2.1 (.up e)).down := by
+theorem mvcgen_fail_failEq {α : Type u} {Q : Std.Do.PostCond α postShape} {c : Error} {P : Prop}
+    (h : P → willFail c Q) :
+    ∀ e, (e = c ∧ P) → willFail e Q := by
   intro e ⟨he, hP⟩; subst he; exact h hP
 
-theorem mvcgen_fail_False {α : Type u}
-    {Q : Std.Do.PostCond α (.except (ULift Error) (.except PUnit .pure))} :
-    ∀ e, False → (Q.2.1 (.up e)).down := by intros; contradiction
+theorem mvcgen_fail_False {α : Type u} {Q : Std.Do.PostCond α postShape} :
+    ∀ e, False → willFail e Q := by intros; contradiction
 
 theorem mvcgen_div_False {P : Prop} :
     False → P := False.elim
