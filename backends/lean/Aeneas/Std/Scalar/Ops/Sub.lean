@@ -42,7 +42,7 @@ theorem UScalar.sub_equiv {ty} (x y : UScalar ty) :
     y.val ≤ x.val ∧
     x.val = z.val + y.val ∧
     z.bv = x.bv - y.bv
-  | fail _ => x.val < y.val
+  | fail e => e = .integerOverflow ∧ x.val < y.val
   | _ => ⊥ := by
   have : x - y = sub x y := by rfl
   simp [this, sub]
@@ -86,13 +86,13 @@ theorem IScalar.sub_equiv {ty} (x y : IScalar ty) :
     IScalar.inBounds ty (x.val - y.val) ∧
     z.val = x.val - y.val ∧
     z.bv = x.bv - y.bv
-  | fail _ => ¬ (IScalar.inBounds ty (x.val - y.val))
+  | fail e => e = .integerOverflow ∧ ¬ (IScalar.inBounds ty (x.val - y.val))
   | _ => ⊥ := by
   have : x - y = sub x y := by rfl
-  simp [this, sub]
-  have h := tryMk_eq ty (↑x - ↑y)
+  simp [this, sub, tryMk, Result.ofOption]
+  have h := tryMkOpt_eq ty (↑x - ↑y)
   simp [inBounds] at h
-  split at h <;> simp_all
+  cases hopt : tryMkOpt ty (↑x - ↑y) <;> simp_all
   apply BitVec.eq_of_toInt_eq
   simp
   have := bmod_pow_numBits_eq_of_lt ty (x.val - y.val) (by omega) (by omega)
@@ -134,30 +134,39 @@ Theorems with a specification which only uses integers
 
 /- Generic theorem - shouldn't be used much -/
 @[step]
-theorem UScalar.sub_spec {ty} {x y : UScalar ty}
-  (h : y.val ≤ x.val) :
-  x - y ⦃ z => z.val = x.val - y.val ∧ y.val ≤ x.val ⦄ := by
+theorem UScalar.sub_spec {ty} {x y : UScalar ty} :
+    spec_partial (x - y)
+      (fun z => z.val = x.val - y.val ∧ y.val ≤ x.val)
+      (fun e => e = .integerOverflow ∧ x.val < y.val)
+      False := by
   have h := @sub_equiv ty x y
-  split at h <;> simp_all
-  omega
+  simp only [spec_partial]
+  split <;> simp_all
 
 /- Generic theorem - shouldn't be used much -/
 @[step]
-theorem IScalar.sub_spec {ty} {x y : IScalar ty}
-  (hmin : IScalar.min ty ≤ ↑x - ↑y)
-  (hmax : ↑x - ↑y ≤ IScalar.max ty) :
-  x - y ⦃ z => (↑z : Int) = ↑x - ↑y ⦄ := by
+theorem IScalar.sub_spec {ty} {x y : IScalar ty} :
+    spec_partial (x - y)
+      (fun z => (↑z : Int) = ↑x - ↑y)
+      (fun e => e = .integerOverflow ∧ (↑x - ↑y < IScalar.min ty ∨ ↑x - ↑y > IScalar.max ty))
+      False := by
   have h := @sub_equiv ty x y
-  split at h <;> simp_all [min, max]
+  simp only [spec_partial]
+  split <;> simp_all [min, max, inBounds]
   omega
 
-uscalar @[step] theorem «%S».sub_spec {x y : «%S»} (h : y.val ≤ x.val) :
-  x - y ⦃ z => z.val = x.val - y.val ∧ y.val ≤ x.val ⦄ :=
-  UScalar.sub_spec h
+uscalar @[step] theorem «%S».sub_spec {x y : «%S»} :
+    spec_partial (x - y)
+      (fun z => z.val = x.val - y.val ∧ y.val ≤ x.val)
+      (fun e => e = .integerOverflow ∧ x.val < y.val)
+      False :=
+  @UScalar.sub_spec _ x y
 
-iscalar @[step] theorem «%S».sub_spec {x y : «%S»}
-  (hmin : «%S».min ≤ ↑x - ↑y) (hmax : ↑x - ↑y ≤ «%S».max) :
-  x - y ⦃ z => (↑z : Int) = ↑x - ↑y ⦄ :=
-  IScalar.sub_spec (by scalar_tac) (by scalar_tac)
+iscalar @[step] theorem «%S».sub_spec {x y : «%S»} :
+    spec_partial (x - y)
+      (fun z => (↑z : Int) = ↑x - ↑y)
+      (fun e => e = .integerOverflow ∧ (↑x - ↑y < «%S».min ∨ ↑x - ↑y > «%S».max))
+      False := by
+  convert @IScalar.sub_spec _ x y <;> scalar_tac
 
 end Aeneas.Std

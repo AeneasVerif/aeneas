@@ -54,16 +54,20 @@ def Array.subslice {α : Type u} {n : Usize} (a : Array α n) (r : Range Usize) 
     fail panic
 
 @[step]
-theorem Array.subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array α n) (r : Range Usize)
-  (h0 : r.start.val < r.end.val) (h1 : r.end.val ≤ a.val.length) :
-  subslice a r ⦃ s =>
-  s.val = a.val.slice r.start.val r.end.val ∧
-  (∀ i, i + r.start.val < r.end.val → s.val[i]! = a.val[r.start.val + i]!) ⦄
+theorem Array.subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array α n) (r : Range Usize) :
+    spec_partial (subslice a r)
+      (fun s =>
+        s.val = a.val.slice r.start.val r.end.val ∧
+        (∀ i, i + r.start.val < r.end.val → s.val[i]! = a.val[r.start.val + i]!))
+      (fun e => e = .panic ∧ ¬ (r.start.val < r.end.val ∧ r.end.val ≤ a.val.length))
+      False
   := by
-  simp only [subslice, true_and, h0, h1, ↓reduceIte, spec_ok, true_and]
-  intro i _
-  have := List.getElem!_slice r.start.val r.end.val i a.val (by scalar_tac)
-  simp only [this]
+  unfold subslice
+  split <;> rename_i h <;> simp [spec_partial]
+  · intro i _
+    have := List.getElem!_slice r.start.val r.end.val i a.val (by scalar_tac)
+    simp only [this]
+  · scalar_tac
 
 
 def Array.update_subslice {α : Type u} {n : Usize} (a : Array α n) (r : Range Usize) (s : Slice α) : Result (Array α n) :=
@@ -79,17 +83,19 @@ def Array.update_subslice {α : Type u} {n : Usize} (a : Array α n) (r : Range 
 -- We should introduce special symbols for the monadic arithmetic operations
 -- (the user will never write those symbols directly).
 @[step]
-theorem Array.update_subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array α n) (r : Range Usize) (s : Slice α)
-  (_ : r.start.val < r.end.val) (_ : r.end.val ≤ a.length) (_ : s.length = r.end.val - r.start.val) :
-  update_subslice a r s ⦃ na =>
-  (∀ i, i < r.start.val → na[i]! = a[i]!) ∧
-  (∀ i, r.start.val ≤ i → i < r.end.val → na[i]! = s[i - r.start.val]!) ∧
-  (∀ i, r.end.val ≤ i → i < n.val → na[i]! = a[i]!) ⦄ := by
-  simp [update_subslice]
-  split
-  . simp [spec_ok]
-    simp_lists
-  . scalar_tac
+theorem Array.update_subslice_spec {α : Type u} {n : Usize} [Inhabited α] (a : Array α n) (r : Range Usize) (s : Slice α) :
+    spec_partial (update_subslice a r s)
+      (fun na =>
+        (∀ i, i < r.start.val → na[i]! = a[i]!) ∧
+        (∀ i, r.start.val ≤ i → i < r.end.val → na[i]! = s[i - r.start.val]!) ∧
+        (∀ i, r.end.val ≤ i → i < n.val → na[i]! = a[i]!))
+      (fun e => e = .panic ∧
+        ¬ (r.start.val < r.end.val ∧ r.end.val ≤ a.length ∧ s.val.length = r.end.val - r.start.val))
+      False := by
+  unfold update_subslice
+  split <;> rename_i h <;> simp [spec_partial]
+  · simp_lists
+  · scalar_tac
 
 @[rust_fun "core::array::{core::ops::index::Index<[@T; @N], @I, @O>}::index"]
 def core.array.Array.index
@@ -242,38 +248,41 @@ theorem Array.index_SliceIndexRangeUsizeSlice {T : Type} {N : Usize}
 
 @[step]
 theorem Array.index_SliceIndexRangeUsizeSlice.step {T : Type} {N : Usize} [Inhabited T]
-    (a : Array T N) (r : core.ops.range.Range Usize)
-    (h0 : r.start ≤ r.end) (h1 : r.end ≤ N) :
-    core.array.Array.index (core.ops.index.IndexSlice
-      (core.slice.index.SliceIndexRangeUsizeSlice T)) a r
-    ⦃ (s : Slice T) =>
-      s.val = a.val.slice r.start r.end ∧
-      s.length = r.end.val - r.start.val ⦄ := by
+    (a : Array T N) (r : core.ops.range.Range Usize) :
+    spec_partial
+      (core.array.Array.index (core.ops.index.IndexSlice
+        (core.slice.index.SliceIndexRangeUsizeSlice T)) a r)
+      (fun (s : Slice T) =>
+        s.val = a.val.slice r.start r.end ∧
+        s.length = r.end.val - r.start.val)
+      (fun e => e = .panic ∧ ¬ (r.start ≤ r.end ∧ r.end ≤ N))
+      False := by
   simp only [Array.index_SliceIndexRangeUsizeSlice]
   have hts : a.to_slice.length = N := by simp [Array.to_slice, Slice.length]
-  simp only [core.slice.index.SliceIndexRangeUsizeSlice.index, UScalar.le_equiv, Slice.length]
-  split
-  · simp [spec_ok, Array.to_slice]; scalar_tac
+  unfold core.slice.index.SliceIndexRangeUsizeSlice.index
+  split <;> rename_i h <;> simp [spec_partial, Array.to_slice, Slice.length]
+  · scalar_tac
   · scalar_tac
 
 @[step]
 theorem Array.index_mut_SliceIndexRangeUsizeSlice.step {T : Type} {N : Usize} [Inhabited T]
-    (a : Array T N) (r : core.ops.range.Range Usize)
-    (h0 : r.start ≤ r.end) (h1 : r.end ≤ N) :
-    core.array.Array.index_mut (core.ops.index.IndexMutSlice
-      (core.slice.index.SliceIndexRangeUsizeSlice T)) a r
-    ⦃ (s : Slice T) (back : Slice T → Array T N) =>
-      s.val = a.val.slice r.start r.end ∧
-      s.length = r.end.val - r.start.val ∧
-      ∀ s', (back s').val = a.val.setSlice! r.start.val s'.val ⦄ := by
+    (a : Array T N) (r : core.ops.range.Range Usize) :
+    spec_partial
+      (core.array.Array.index_mut (core.ops.index.IndexMutSlice
+        (core.slice.index.SliceIndexRangeUsizeSlice T)) a r)
+      (uncurry' fun (s : Slice T) (back : Slice T → Array T N) =>
+        s.val = a.val.slice r.start r.end ∧
+        s.length = r.end.val - r.start.val ∧
+        ∀ s', (back s').val = a.val.setSlice! r.start.val s'.val)
+      (fun e => e = .panic ∧ ¬ (r.start ≤ r.end ∧ r.end ≤ N))
+      False := by
   simp only [core.array.Array.index_mut, core.ops.index.IndexMutSlice,
     core.slice.index.Slice.index_mut]
   have hts : a.to_slice.length = N := by simp [Array.to_slice, Slice.length]
-  simp only [core.slice.index.SliceIndexRangeUsizeSlice.index_mut,
-    UScalar.le_equiv, Slice.length]
-  split
-  · simp [spec_ok, Array.from_slice, Array.to_slice]
-    simp_lists; scalar_tac
+  unfold core.slice.index.SliceIndexRangeUsizeSlice.index_mut
+  split <;> rename_i h <;>
+    simp [spec_partial, Array.from_slice, Array.to_slice, uncurry', Slice.length]
+  · simp_lists; scalar_tac
   · scalar_tac
 
 -- Array index/index_mut with RangeTo
@@ -287,23 +296,23 @@ theorem Array.index_SliceIndexRangeToUsizeSlice {T : Type} {N : Usize}
 
 @[step]
 theorem Array.index_mut_SliceIndexRangeToUsizeSlice {T : Type} {N : Usize}
-    (a : Array T N) (r : core.ops.range.RangeTo Usize)
-    (h : r.end ≤ N) :
-    core.array.Array.index_mut (core.ops.index.IndexMutSlice
-      (core.slice.index.SliceIndexRangeToUsizeSlice T)) a r
-    ⦃ (s : Slice T) (back : Slice T → Array T N) =>
-      s.val = a.val.slice 0 r.end ∧
-      s.length = r.end.val ∧
-      ∀ s', (back s').val = a.val.setSlice! 0 s'.val ⦄ := by
+    (a : Array T N) (r : core.ops.range.RangeTo Usize) :
+    spec_partial
+      (core.array.Array.index_mut (core.ops.index.IndexMutSlice
+        (core.slice.index.SliceIndexRangeToUsizeSlice T)) a r)
+      (uncurry' fun (s : Slice T) (back : Slice T → Array T N) =>
+        s.val = a.val.slice 0 r.end ∧
+        s.length = r.end.val ∧
+        ∀ s', (back s').val = a.val.setSlice! 0 s'.val)
+      (fun e => e = .panic ∧ ¬ r.end ≤ N)
+      False := by
   simp only [core.array.Array.index_mut, core.ops.index.IndexMutSlice,
     core.slice.index.Slice.index_mut]
   have hts : a.to_slice.length = N := by simp [Array.to_slice, Slice.length]
-  simp only [core.slice.index.SliceIndexRangeToUsizeSlice.index_mut,
-    show (r.end : Usize) ≤ a.to_slice.length from by scalar_tac]
-  refine ⟨?_, ?_, ?_⟩
-  · simp [Array.to_slice]
-  · simp [Slice.length]; scalar_tac
-  · intro s'; simp [Array.from_slice, Array.to_slice]
+  unfold core.slice.index.SliceIndexRangeToUsizeSlice.index_mut
+  split <;> rename_i h <;>
+    simp [spec_partial, Array.from_slice, Array.to_slice, uncurry', Slice.length] <;>
+    scalar_tac
 
 -- Array index/index_mut with RangeFrom
 
@@ -316,23 +325,23 @@ theorem Array.index_SliceIndexRangeFromUsizeSlice {T : Type} {N : Usize}
 
 @[step]
 theorem Array.index_mut_SliceIndexRangeFromUsizeSlice {T : Type} {N : Usize}
-    (a : Array T N) (r : core.ops.range.RangeFrom Usize)
-    (h : r.start ≤ N) :
-    core.array.Array.index_mut (core.ops.index.IndexMutSlice
-      (core.slice.index.SliceIndexRangeFromUsizeSlice T)) a r
-    ⦃ (s : Slice T) (back : Slice T → Array T N) =>
-      s.val = a.val.drop r.start ∧
-      s.length = N.val - r.start.val ∧
-      ∀ s', (back s').val = a.val.setSlice! r.start.val s'.val ⦄ := by
+    (a : Array T N) (r : core.ops.range.RangeFrom Usize) :
+    spec_partial
+      (core.array.Array.index_mut (core.ops.index.IndexMutSlice
+        (core.slice.index.SliceIndexRangeFromUsizeSlice T)) a r)
+      (uncurry' fun (s : Slice T) (back : Slice T → Array T N) =>
+        s.val = a.val.drop r.start ∧
+        s.length = N.val - r.start.val ∧
+        ∀ s', (back s').val = a.val.setSlice! r.start.val s'.val)
+      (fun e => e = .panic ∧ ¬ r.start ≤ N)
+      False := by
   simp only [core.array.Array.index_mut, core.ops.index.IndexMutSlice,
     core.slice.index.Slice.index_mut]
   have hts : a.to_slice.length = N := by simp [Array.to_slice, Slice.length]
-  simp only [core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut,
-    Slice.drop,
-    show (r.start : Usize) ≤ a.to_slice.length from by scalar_tac]
-  refine ⟨?_, ?_, ?_⟩
-  · simp [Array.to_slice]
-  · simp [Slice.length, List.length_drop]
-  · intro s'; simp [Array.from_slice, Array.to_slice]
+  unfold core.slice.index.SliceIndexRangeFromUsizeSlice.index_mut
+  split <;> rename_i h <;>
+    simp [spec_partial, Array.from_slice, Array.to_slice, uncurry',
+          Slice.length, Slice.drop, List.length_drop];
+    scalar_tac
 
 end Aeneas.Std

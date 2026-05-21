@@ -116,9 +116,11 @@ theorem Array.repeat_val (n : Usize) (x : α) : (Array.repeat n x).val = List.re
   simp only [Array.repeat]
 
 @[step]
-theorem Array.index_usize_spec {α : Type u} {n : Usize} (v: Array α n) (i: Usize)
-  (hbound : i.val < v.length) :
-  (v.index_usize i) ⦃ x => x = v.val[i.val] ⦄ := by
+theorem Array.index_usize_spec {α : Type u} {n : Usize} (v: Array α n) (i: Usize) :
+    spec_partial (v.index_usize i)
+      (fun x => ∃ _ : i.val < v.length, x = v.val[i.val])
+      (fun e => e = .arrayOutOfBounds ∧ i.val ≥ v.length)
+      False := by
   grind [index_usize]
 
 def Array.set {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) : Array α n :=
@@ -215,13 +217,14 @@ def Array.update {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) : 
     ok ⟨ v.val.set i.val x, by have := v.property; simp [*] ⟩
 
 @[step]
-theorem Array.update_spec {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x : α)
-  (hbound : i.val < v.length) :
-  v.update i x ⦃ nv => nv = v.set i x ⦄
+theorem Array.update_spec {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x : α) :
+    spec_partial (v.update i x)
+      (fun nv => nv = v.set i x)
+      (fun e => e = .arrayOutOfBounds ∧ i.val ≥ v.length)
+      False
   := by
-  simp only [update, set]
-  simp at *
-  split <;> simp_all
+  simp only [spec_partial, update, set]
+  cases hopt : v[i]? <;> simp_all
 
 def Array.index_mut_usize {α : Type u} {n : Usize} (v: Array α n) (i: Usize) :
   Result (α × (α -> Array α n)) := do
@@ -229,12 +232,14 @@ def Array.index_mut_usize {α : Type u} {n : Usize} (v: Array α n) (i: Usize) :
   ok (x, set v i)
 
 @[step]
-theorem Array.index_mut_usize_spec {α : Type u} {n : Usize} (v: Array α n) (i: Usize)
-  (hbound : i.val < v.length) :
-  v.index_mut_usize i ⦃ x back => x = v.val[i.val] ∧ back = set v i ⦄ := by
-  simp only [index_mut_usize, Bind.bind, bind]
-  have ⟨ x, h ⟩ := spec_imp_exists (index_usize_spec v i hbound)
-  simp [h]
+theorem Array.index_mut_usize_spec {α : Type u} {n : Usize} (v: Array α n) (i: Usize) :
+    spec_partial (v.index_mut_usize i)
+      (uncurry' fun x back => ∃ _ : i.val < v.length, x = v.val[i.val] ∧ back = set v i)
+      (fun e => e = .arrayOutOfBounds ∧ i.val ≥ v.length)
+      False := by
+  have h := index_usize_spec v i
+  simp only [spec_partial, index_mut_usize, Bind.bind, bind, uncurry'] at h ⊢
+  cases hres : v.index_usize i <;> simp_all
 
 @[simp]
 theorem Array.set_getElem!_eq {α} {n : Usize} [Inhabited α] (x : Array α n) (i : Usize) :

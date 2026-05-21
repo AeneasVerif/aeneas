@@ -18,7 +18,7 @@ theorem applyF_spec (f : U32 → Result U32) (x : U32)
 info: Try this:
 
   [apply]     let* ⟨ y, y_post ⟩ ← [ +inferPost ] applyF_spec
-    case hf => let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
+    case hf => let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec.step_spec
     agrind
 -/
 #guard_msgs in
@@ -46,8 +46,8 @@ theorem callPair_spec (f g : U32 → Result U32) (xy : U32 × U32)
 info: Try this:
 
   [apply]     let* ⟨ ab, _, ab_post1, ab_post2 ⟩ ← [ +inferPost ] callPair_spec
-    case hf => let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
-    case hg => let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
+    case hf => let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec.step_spec
+    case hg => let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec.step_spec
     agrind
 -/
 #guard_msgs in
@@ -73,10 +73,10 @@ theorem callFThenG_spec (f g : U32 → Result U32) (x : U32)
 info: Try this:
 
   [apply]     let* ⟨ y, y_post ⟩ ← [ +inferPost ] callFThenG_spec
-    case hf => let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
+    case hf => let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec.step_spec
     case hg =>
       intros y a✝
-      let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
+      let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec.step_spec
     agrind
 -/
 #guard_msgs in
@@ -94,7 +94,7 @@ info: Try this:
   [apply]     let* ⟨ y, y_post1, y_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec
     case hf =>
       intros i hi
-      let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
+      let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec.step_spec
     agrind
 -/
 #guard_msgs in
@@ -117,11 +117,11 @@ info: Try this:
   [apply]     let* ⟨ y, y_post1, y_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec
     case hf =>
       intros i hi
-      let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
+      let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec.step_spec
     let* ⟨ z, z_post1, z_post2 ⟩ ← [ +inferPost ] Slice.mapM_spec
     case hf =>
       intros i hi
-      let* ⟨ ⟩ ← [ +inferPost ] U32.mul_spec
+      let* ⟨ ⟩ ← [ +inferPost ] U32.mul_spec.step_spec
     agrind
 -/
 #guard_msgs in
