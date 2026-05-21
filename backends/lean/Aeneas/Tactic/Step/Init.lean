@@ -279,6 +279,10 @@ theorem step_fail_failEq {c : Aeneas.Std.Error} {P : Prop} (h : ¬ P) :
     ∀ e, ¬ (e = c ∧ P) :=
   fun _ h' => h h'.2
 
+/-- For `simplifyStepHypotheses`: turns `∀ e, P` into `P`. -/
+theorem step_fail_remove_forall {P : Prop} (h : P) :
+    ∀ _ : Aeneas.Std.Error, P := fun _ => h
+
 /-- For `simplifyStepHypotheses`: closes `∀ e, ¬ False` when the fail predicate is `False`. -/
 theorem step_fail_False : ∀ (_ : Aeneas.Std.Error), ¬ False :=
   fun _ h => h
@@ -298,6 +302,8 @@ private def simplifyStepHypotheses (extraMVars : Array Expr) : MetaM Unit := do
   trace[Step] "simplifyStepHypotheses: hFail type: {← inferType hFail}"
   try discard <| withReducible <| hFail.mvarId!.applyN (mkConst ``step_fail_failEq) 3
     catch e => trace[Step] "simplifyStepHypotheses: step_fail_failEq failed: {e.toMessageData}"
+  try discard <| withReducible <| hFail.mvarId!.applyN (mkConst ``step_fail_remove_forall) 2
+    catch e => trace[Step] "simplifyStepHypotheses: step_fail_remove_forall failed: {e.toMessageData}"
   try discard <| withReducible <| hFail.mvarId!.applyN (mkConst ``step_fail_False) 0
     catch e => trace[Step] "simplifyStepHypotheses: step_fail_False failed: {e.toMessageData}"
   -- h_div : ¬ p_div
