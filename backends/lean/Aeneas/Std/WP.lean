@@ -687,13 +687,19 @@ namespace Aeneas.Std.WP
 open Std Result
 open Std.Do
 
-instance Result.instWP : WP Result.{u} (.except (ULift Error) (.except PUnit .pure)) where
+abbrev postShape : PostShape := (.except (ULift Error) (.except PUnit .pure))
+
+instance Result.instWP : WP Result.{u} postShape where
   wp x := {
     trans Q := match x with | .ok a => Q.1 a | .fail e => Q.2.1 (ULift.up e) | .div => Q.2.2.1 .unit
     conjunctiveRaw Q₁ Q₂ := by
       apply SPred.bientails.of_eq
       cases x <;> simp
   }
+
+abbrev willYield {α : Type u} (r : α) (Q : PostCond α postShape) : Prop := (Q.1 r).down
+abbrev willFail {α : Type u} (e : Error) (Q : PostCond α postShape) : Prop := (Q.2.1 (.up e)).down
+abbrev willDiverge {α : Type u} (Q : PostCond α postShape) : Prop := (Q.2.2.1 .unit).down
 
 instance : LawfulMonad Result where
     map_const := by intros; rfl
@@ -731,9 +737,9 @@ theorem spec_partial_to_mvcgen {α : Type u} {x : Result α}
     {p_ok : α → Prop} {p_fail : Error → Prop} {p_div : Prop}
     (h : spec_partial x p_ok p_fail p_div)
     {Q : PostCond α (.except (ULift Error) (.except PUnit .pure))}
-    (h_ok   : ∀ r, p_ok r → (Q.1 r).down)
-    (h_fail : ∀ e, p_fail e → (Q.2.1 (.up e)).down)
-    (h_div  : p_div → (Q.2.2.1 .unit).down) :
+    (h_ok   : ∀ r, p_ok r → willYield r Q)
+    (h_fail : ∀ e, p_fail e → willFail e Q)
+    (h_div  : p_div → willDiverge Q) :
     ⦃ ⌜ True ⌝ ⦄ x ⦃ Q ⦄ := by
   cases x
     <;> simp only [spec_partial] at h
