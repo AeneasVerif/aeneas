@@ -2,7 +2,7 @@
 -- [bst]: function definitions
 import Aeneas
 import Bst.Types
-open Aeneas Aeneas.Std Result ControlFlow Error
+open Aeneas Aeneas.Std Result ControlFlow LoopExit Error
 set_option linter.dupNamespace false
 set_option linter.hashCommand false
 set_option linter.unusedVariables false

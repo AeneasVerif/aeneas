@@ -9,6 +9,7 @@ Constants.v
 DefaultedMethod.v 
 Issue194RecursiveStructProjector.v 
 Issue270LoopList.v 
+LoopsNestedControlBackends.v
 NoNestedBorrows.v 
 Paper.v 
 PoloniusList.v 
