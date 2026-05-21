@@ -83,7 +83,7 @@ uscalar @[step_pure overflowing_sub x y]
 theorem core.num.«%S».overflowing_sub_eq (x y : «%S») :
   let z := overflowing_sub x y
   if x.val < y.val then z.fst.val + y.val = x.val + UScalar.size .«%S» ∧ z.snd = true
-  else  z.fst.val = x.val - y.val ∧ z.snd = false
+  else z.fst.val = x.val - y.val ∧ z.snd = false
   := UScalar.overflowing_sub_eq x y
 
 /-!
@@ -91,10 +91,9 @@ theorem core.num.«%S».overflowing_sub_eq (x y : «%S») :
 -/
 
 @[simp]
-theorem UScalar.overflowing_sub_zero {ty} (x: UScalar ty) :
+theorem UScalar.overflowing_sub_zero {ty} (x : UScalar ty) :
   (overflowing_sub x UScalar.zero) = (x, false) := by
   simp [overflowing_sub, UScalar.zero, zero_bv, BitVec.usubOverflow]
-
 
 @[simp]
 theorem IScalar.overflowing_sub_zero {ty} (x : IScalar ty) :
@@ -102,25 +101,24 @@ theorem IScalar.overflowing_sub_zero {ty} (x : IScalar ty) :
   simp [overflowing_sub, hmax, hmin, zero_bv, BitVec.ssubOverflow]
 
 uscalar @[simp]
-theorem core.num.«%S».overflowing_sub_zero(x : «%S») :
+theorem core.num.«%S».overflowing_sub_zero (x : «%S») :
   (overflowing_sub x UScalar.zero) = (x, false) :=
   UScalar.overflowing_sub_zero x
 
 iscalar @[simp]
-theorem core.num.«%S».overflowing_sub_zero(x : «%S») :
+theorem core.num.«%S».overflowing_sub_zero (x : «%S») :
   (overflowing_sub x IScalar.zero) = (x, false) :=
-   IScalar.overflowing_sub_zero x
-
+  IScalar.overflowing_sub_zero x
 
 theorem UScalar.overflowing_zero_sub (x : UScalar ty) :
   overflowing_sub UScalar.zero x = (⟨-x.bv⟩, x.val != 0) := by
-  simp[overflowing_sub, zero_bv, BitVec.usubOverflow]
+  simp [overflowing_sub, zero_bv, BitVec.usubOverflow]
   grind
 
 theorem IScalar.overflowing_zero_sub (x : IScalar ty) :
   (overflowing_sub IScalar.zero x) = (⟨-x.bv⟩, x.bv == IScalar.min ty) := by
-  have hnb : 0 < ty.numBits := by simp[Nat.pos_of_ne_zero, ty.numBits_nonzero]
-  have hhi : x.bv.toInt < 2^(ty.numBits - 1) := by exact BitVec.toInt_lt;
+  have hnb : 0 < ty.numBits := by simp [Nat.pos_of_ne_zero, ty.numBits_nonzero]
+  have hhi : x.bv.toInt < 2^(ty.numBits - 1) := by exact BitVec.toInt_lt
   have hlo : -(2:Int)^(ty.numBits - 1) ≤ x.bv.toInt := by exact BitVec.le_toInt x.bv
   have h2pos : (0:Int) < 2^(ty.numBits - 1) := by simp
   have hmin : ((↑(-(2:Int)^(ty.numBits - 1)) : BitVec ty.numBits)).toInt = -2^(ty.numBits - 1) := by
@@ -132,14 +130,14 @@ theorem IScalar.overflowing_zero_sub (x : IScalar ty) :
   grind
 
 uscalar @[simp]
-theorem core.num.«%S».overflowing_zero_sub(x : «%S») :
+theorem core.num.«%S».overflowing_zero_sub (x : «%S») :
   (overflowing_sub UScalar.zero x) = (⟨-x.bv⟩, x.val != 0) :=
   UScalar.overflowing_zero_sub x
 
 iscalar @[simp]
-theorem core.num.«%S».overflowing_zero_sub(x : «%S») :
+theorem core.num.«%S».overflowing_zero_sub (x : «%S») :
   (overflowing_sub IScalar.zero x) = (⟨-x.bv⟩, x.bv == IScalar.min .«%S») :=
-   IScalar.overflowing_zero_sub x
+  IScalar.overflowing_zero_sub x
 
 /-!
 ## Tests

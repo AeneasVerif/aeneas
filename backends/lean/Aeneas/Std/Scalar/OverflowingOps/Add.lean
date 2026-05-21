@@ -86,11 +86,11 @@ theorem IScalar.overflowing_add_comm {ty} (x y : IScalar ty) :
 
 
 uscalar
-theorem core.num.«%S».overflowing_add_comm(x y : «%S») :
+theorem core.num.«%S».overflowing_add_comm (x y : «%S») :
   overflowing_add x y = overflowing_add y x := UScalar.overflowing_add_comm x y
 
 iscalar
-theorem core.num.«%S».overflowing_add_comm(x y : «%S») :
+theorem core.num.«%S».overflowing_add_comm (x y : «%S») :
   overflowing_add x y = overflowing_add y x := IScalar.overflowing_add_comm x y
 
 theorem UScalar.overflowing_add_assoc {ty} (x y  z : UScalar ty) :
@@ -104,17 +104,17 @@ theorem IScalar.overflowing_add_assoc {ty} (x y  z : IScalar ty) :
   simp [BitVec.add_assoc]
 
 uscalar
-theorem core.num.«%S».overflowing_add_assoc(x y z : «%S») :
+theorem core.num.«%S».overflowing_add_assoc (x y z : «%S») :
   (overflowing_add (overflowing_add x y).1 z).1 = (overflowing_add x (overflowing_add y z).1).1 :=
   UScalar.overflowing_add_assoc x y z
 
 iscalar
-theorem core.num.«%S».overflowing_add_assoc(x y z : «%S») :
+theorem core.num.«%S».overflowing_add_assoc (x y z : «%S») :
   (overflowing_add (overflowing_add x y).1 z).1 = (overflowing_add x (overflowing_add y z).1).1 :=
   IScalar.overflowing_add_assoc x y z
 
 @[simp]
-theorem UScalar.overflowing_add_zero {ty} (x: UScalar ty) :
+theorem UScalar.overflowing_add_zero {ty} (x : UScalar ty) :
   (overflowing_add x UScalar.zero) = (x, false) := by
   simp [overflowing_add, UScalar.zero, BitVec.uaddOverflow, ofNatCore, UScalar.hBounds]
 
@@ -124,17 +124,17 @@ theorem IScalar.overflowing_add_zero {ty} (x : IScalar ty) :
   simp [overflowing_add, BitVec.saddOverflow, hmax, hmin, ofIntCore]
 
 uscalar @[simp]
-theorem core.num.«%S».overflowing_add_zero(x : «%S») :
+theorem core.num.«%S».overflowing_add_zero (x : «%S») :
   (overflowing_add x UScalar.zero) = (x, false) :=
   UScalar.overflowing_add_zero x
 
 iscalar @[simp]
-theorem core.num.«%S».overflowing_add_zero(x : «%S») :
+theorem core.num.«%S».overflowing_add_zero (x : «%S») :
   (overflowing_add x IScalar.zero) = (x, false) :=
-   IScalar.overflowing_add_zero x
+  IScalar.overflowing_add_zero x
 
 @[simp]
-theorem UScalar.overflowing_zero_add {ty} (x: UScalar ty) :
+theorem UScalar.overflowing_zero_add {ty} (x : UScalar ty) :
   (overflowing_add UScalar.zero x) = (x, false) := by
   simp [overflowing_add_comm]
 
@@ -144,14 +144,14 @@ theorem IScalar.overflowing_zero_add {ty} (x : IScalar ty) :
   simp [overflowing_add_comm]
 
 uscalar @[simp]
-theorem core.num.«%S».overflowing_zero_add(x : «%S») :
+theorem core.num.«%S».overflowing_zero_add (x : «%S») :
   (overflowing_add UScalar.zero x) = (x, false) :=
   UScalar.overflowing_zero_add x
 
 iscalar @[simp]
-theorem core.num.«%S».overflowing_zero_add(x : «%S») :
+theorem core.num.«%S».overflowing_zero_add (x : «%S») :
   (overflowing_add IScalar.zero x) = (x, false) :=
-   IScalar.overflowing_zero_add x
+  IScalar.overflowing_zero_add x
 
 /-!
 ## Tests

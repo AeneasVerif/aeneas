@@ -104,9 +104,9 @@ theorem core.num.«%S».overflowing_mul_assoc (x y z : «%S») :
   IScalar.overflowing_mul_assoc x y z
 
 @[simp]
-theorem UScalar.overflowing_mul_zero {ty} (x: UScalar ty) :
+theorem UScalar.overflowing_mul_zero {ty} (x : UScalar ty) :
   (overflowing_mul x UScalar.zero) = (zero, false) := by
-  simp [overflowing_mul, BitVec.umulOverflow,  UScalar.zero, zero_bv]
+  simp [overflowing_mul, BitVec.umulOverflow, UScalar.zero, zero_bv]
   rfl
 
 @[simp]
@@ -115,17 +115,17 @@ theorem IScalar.overflowing_mul_zero {ty} (x : IScalar ty) :
   simp [overflowing_mul, IScalar.zero, BitVec.smulOverflow, zero_bv]; rfl
 
 uscalar @[simp]
-theorem core.num.«%S».overflowing_mul_zero(x : «%S») :
+theorem core.num.«%S».overflowing_mul_zero (x : «%S») :
   (overflowing_mul x UScalar.zero) = (UScalar.zero, false) :=
   UScalar.overflowing_mul_zero x
 
 iscalar @[simp]
-theorem core.num.«%S».overflowing_mul_zero(x : «%S») :
+theorem core.num.«%S».overflowing_mul_zero (x : «%S») :
   (overflowing_mul x IScalar.zero) = (IScalar.zero, false) :=
-   IScalar.overflowing_mul_zero x
+  IScalar.overflowing_mul_zero x
 
 @[simp]
-theorem UScalar.overflowing_zero_mul {ty} (x: UScalar ty) :
+theorem UScalar.overflowing_zero_mul {ty} (x : UScalar ty) :
   (overflowing_mul UScalar.zero x) = (zero, false) := by
   simp [overflowing_mul_comm]
 
@@ -135,17 +135,17 @@ theorem IScalar.overflowing_zero_mul {ty} (x : IScalar ty) :
   simp [overflowing_mul_comm]
 
 uscalar @[simp]
-theorem core.num.«%S».overflowing_zero_mul(x : «%S») :
+theorem core.num.«%S».overflowing_zero_mul (x : «%S») :
   (overflowing_mul UScalar.zero x) = (UScalar.zero, false) :=
   UScalar.overflowing_zero_mul x
 
 iscalar @[simp]
-theorem core.num.«%S».overflowing_zero_mul(x : «%S») :
+theorem core.num.«%S».overflowing_zero_mul (x : «%S») :
   (overflowing_mul IScalar.zero x) = (IScalar.zero, false) :=
-   IScalar.overflowing_zero_mul x
+  IScalar.overflowing_zero_mul x
 
 @[simp]
-theorem UScalar.overflowing_mul_one {ty} (x: UScalar ty) :
+theorem UScalar.overflowing_mul_one {ty} (x : UScalar ty) :
   (overflowing_mul x UScalar.one) = (x, false) := by
   simp [overflowing_mul, UScalar.one, BitVec.umulOverflow, one_bv]
   grind[Nat.one_mod_two_pow, x.hBounds]
@@ -154,20 +154,20 @@ theorem UScalar.overflowing_mul_one {ty} (x: UScalar ty) :
 theorem IScalar.overflowing_mul_one {ty} (x : IScalar ty) :
   (overflowing_mul x IScalar.one) = (x, false) := by
   have hw : 1 < ty.numBits := by
-    simp[IScalarTy.numBits]; grind[System.Platform.numBits_eq]
+    simp [IScalarTy.numBits]; grind [System.Platform.numBits_eq]
   simp [overflowing_mul, IScalar.one, BitVec.smulOverflow, one_bv]
   grind[x.hBounds]
 
 uscalar @[simp]
-theorem core.num.«%S».overflowing_mul_one(x : «%S») :
+theorem core.num.«%S».overflowing_mul_one (x : «%S») :
   (overflowing_mul x UScalar.one) = (x, false) := UScalar.overflowing_mul_one x
 
 iscalar @[simp]
-theorem core.num.«%S».overflowing_mul_one(x : «%S») :
+theorem core.num.«%S».overflowing_mul_one (x : «%S») :
   (overflowing_mul x IScalar.one) = (x, false) := IScalar.overflowing_mul_one x
 
 @[simp]
-theorem UScalar.overflowing_one_mul {ty} (x: UScalar ty) :
+theorem UScalar.overflowing_one_mul {ty} (x : UScalar ty) :
   (overflowing_mul UScalar.one x) = (x, false) := by
   simp [overflowing_mul_comm]
 
@@ -177,11 +177,11 @@ theorem IScalar.overflowing_one_mul {ty} (x : IScalar ty) :
   simp [overflowing_mul_comm]
 
 uscalar @[simp]
-theorem core.num.«%S».overflowing_one_mul(x : «%S») :
+theorem core.num.«%S».overflowing_one_mul (x : «%S») :
   (overflowing_mul UScalar.one x) = (x, false) := UScalar.overflowing_one_mul x
 
 iscalar @[simp]
-theorem core.num.«%S».overflowing_one_mul(x : «%S») :
+theorem core.num.«%S».overflowing_one_mul (x : «%S») :
   (overflowing_mul IScalar.one x) = (x, false) := IScalar.overflowing_one_mul x
 
 /-!
