@@ -38,6 +38,20 @@ example (x y : U32) :
     ⦃ ⌜ True ⌝ ⦄ (myDiv x y) ⦃ ⇓? z => ⌜ z.val = x.val / y.val ⌝ ⦄ := by
   mvcgen
 
+/--
+info: Aeneas.Step.SpecPartialTests.myDiv_spec_partial.step_spec (x y : U32) (h : ¬↑y = 0) : myDiv x y ⦃ z => ↑z = ↑x / ↑y ⦄
+-/
+#guard_msgs in
+#check myDiv_spec_partial.step_spec
+
+/--
+info: Aeneas.Step.SpecPartialTests.myDiv_spec_partial.mvcgen_spec (x y : U32) (Q : PostCond U32 postShape)
+  (h_ok : ∀ (r : U32), ↑r = ↑x / ↑y → willYield r Q) (h_fail : ∀ (e : Error), ↑y = 0 → willFail e Q) :
+  ⦃⌜True⌝⦄ myDiv x y ⦃Q⦄
+-/
+#guard_msgs in
+#check myDiv_spec_partial.mvcgen_spec
+
 
 opaque myAdd (x y : U32) : Result U32
 
