@@ -296,14 +296,14 @@ private def simplifyStepHypotheses (extraMVars : Array Expr) : MetaM Unit := do
   -- h_fail : ∀ e, ¬ p_fail e
   let hFail := extraMVars[0]!
   trace[Step] "simplifyStepHypotheses: hFail type: {← inferType hFail}"
-  try discard <| hFail.mvarId!.applyN (mkConst ``step_fail_failEq) 3
+  try discard <| withReducible <| hFail.mvarId!.applyN (mkConst ``step_fail_failEq) 3
     catch e => trace[Step] "simplifyStepHypotheses: step_fail_failEq failed: {e.toMessageData}"
-  try discard <| hFail.mvarId!.applyN (mkConst ``step_fail_False) 0
+  try discard <| withReducible <| hFail.mvarId!.applyN (mkConst ``step_fail_False) 0
     catch e => trace[Step] "simplifyStepHypotheses: step_fail_False failed: {e.toMessageData}"
   -- h_div : ¬ p_div
   let hDiv := extraMVars[1]!
   trace[Step] "simplifyStepHypotheses: hDiv type: {← inferType hDiv}"
-  try discard <| hDiv.mvarId!.applyN (mkConst ``step_div_False) 0
+  try discard <| withReducible <| hDiv.mvarId!.applyN (mkConst ``step_div_False) 0
     catch e => trace[Step] "simplifyStepHypotheses: step_div_False failed: {e.toMessageData}"
 
 /-- Register a theorem using `spec_partial` with `step`. This function generates a auxiliary lemma
@@ -390,14 +390,14 @@ private def simplifyMvcgenHypotheses (extraMVars : Array Expr) : MetaM Unit := d
   -- fail
   let hFail := extraMVars[2]!
   trace[Step] "simplifyMvcgenHypotheses: hFail type: {← inferType hFail}"
-  try discard <| hFail.mvarId!.applyN (mkConst ``mvcgen_fail_failEq [← mkFreshLevelMVar]) 5
+  try discard <| withReducible <| hFail.mvarId!.applyN (mkConst ``mvcgen_fail_failEq [← mkFreshLevelMVar]) 5
     catch e => trace[Step] "simplifyMvcgenHypotheses: mvcgen_fail_failEq failed: {e.toMessageData}"
-  try discard <| hFail.mvarId!.applyN (mkConst ``mvcgen_fail_False [← mkFreshLevelMVar]) 1
+  try discard <| withReducible <| hFail.mvarId!.applyN (mkConst ``mvcgen_fail_False [← mkFreshLevelMVar]) 1
     catch e => trace[Step] "simplifyMvcgenHypotheses: mvcgen_fail_False failed: {e.toMessageData}"
   -- div
   let hDiv := extraMVars[3]!
   trace[Step] "simplifyMvcgenHypotheses: hDiv type: {← inferType hDiv}"
-  try discard <| hDiv.mvarId!.applyN (mkConst ``mvcgen_div_False) 1
+  try discard <| withReducible <| hDiv.mvarId!.applyN (mkConst ``mvcgen_div_False) 1
     catch e => trace[Step] "simplifyMvcgenHypotheses: mvcgen_div_False failed: {e.toMessageData}"
 
 /-- Register a theorem using `spec_partial` with `mvcgen`. -/
