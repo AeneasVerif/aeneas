@@ -178,33 +178,50 @@ noncomputable instance : MonoBind Result where
     · exact FlatOrder.rel.refl
     · exact FlatOrder.rel.refl
 
--- Allow `partial_fixpoint` to see through `Function.uncurry` in bind continuations.
--- This is needed because the custom `do` elaborator generates
---   `e >>= Function.uncurry fun a b => rest`
--- for tuple-destructuring `let (a, b) ← e`.
+end Order
+
+/-- Aeneas-internal version of `Function.uncurry` for tuple destructuring in bind
+continuations. We use our own copy so that none of the `simp`/`step` attribute
+manipulations we perform on it impact user-written specs that use `Function.uncurry`
+directly.
+
+`uncurry` is purely internal to Aeneas' elaboration pipeline and should never
+be directly manipulated by the user. -/
+@[inline] def uncurry {α β γ} (f : α → β → γ) : α × β → γ :=
+  fun (a, b) => f a b
+
+@[simp, grind =] theorem uncurry_apply_pair {α β γ} (f : α → β → γ) (a : α) (b : β) :
+    uncurry f (a, b) = f a b := rfl
+
+/- Allow `partial_fixpoint` to see through `uncurry` in bind continuations.
+This is needed because the custom `do` elaborator generates
+`e >>= uncurry fun a b => rest` for tuple-destructuring `let (a, b) ← e`. -/
+section
+open Lean.Order
+
 @[partial_fixpoint_monotone]
-theorem Function.monotone_uncurry
+theorem monotone_uncurry
     {α : Type u} {β : Type v} {φ : Sort w} [PartialOrder φ]
     {γ : Sort z} [PartialOrder γ]
     (f : γ → α → β → φ)
     (hmono : monotone f) :
-    monotone (fun x => Function.uncurry (f x)) := by
+    monotone (fun x => uncurry (f x)) := by
   intro x y hxy p
-  simp [Function.uncurry]
+  simp [uncurry]
   exact monotone_apply p.2 _ (monotone_apply p.1 _ hmono) x y hxy
 
 @[partial_fixpoint_monotone]
-theorem Function.monotone_uncurry_applied
+theorem monotone_uncurry_applied
     {α : Type u} {β : Type v} {φ : Sort w} [PartialOrder φ]
     {γ : Sort z} [PartialOrder γ]
     (f : γ → α → β → φ) (p : α × β)
     (hmono : monotone f) :
-    monotone (fun x => Function.uncurry (f x) p) := by
+    monotone (fun x => uncurry (f x) p) := by
   intro x y hxy
-  simp [Function.uncurry]
+  simp [uncurry]
   exact monotone_apply p.2 _ (monotone_apply p.1 _ hmono) x y hxy
 
-end Order
+end
 
 attribute [simp, grind =] Function.uncurry_apply_pair
 

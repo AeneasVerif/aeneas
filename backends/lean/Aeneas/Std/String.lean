@@ -5,6 +5,8 @@ namespace Aeneas.Std
 
 def Str := Slice U8
 
+instance : DecidableEq Str := inferInstanceAs (DecidableEq (Slice U8))
+
 /-- TODO: we shouldn't use `decide +native` but it seems we can't reduce it otherwise. -/
 def toStr (s : String) (h : s.toByteArray.size ≤ U32.max := by decide +native) : Str :=
   ⟨ s.toByteArray.toList.map
@@ -16,5 +18,14 @@ def toStr (s : String) (h : s.toByteArray.size ≤ U32.max := by decide +native)
       sorry ⟩
 
 example : Str := toStr "hello"
+
+/-- Returns the compilation target as a string.
+
+    Used by multi-target dispatch: nothing meaningful can be deduced from
+    its output. -/
+axiom get_target : Result Str
+
+@[step]
+axiom get_target.spec : get_target ⦃ fun _ => True ⦄
 
 end Aeneas.Std

@@ -40,10 +40,12 @@ theorem callPair_spec (f g : U32 → Result U32) (xy : U32 × U32)
   unfold callPair
   step*
 
+-- TODO: fix the output of step*? below (it shouldn't decompose the pair into `ab` and `_`)
+-- TODO: the generated script is actually not correct (there misses calls to `agrind` in the cases `hf` and `hg`)
 /--
 info: Try this:
 
-  [apply]     let* ⟨ ab, ab_post1, ab_post2 ⟩ ← [ +inferPost ] callPair_spec
+  [apply]     let* ⟨ ab, _, ab_post1, ab_post2 ⟩ ← [ +inferPost ] callPair_spec
     case hf => let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
     case hg => let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
     agrind

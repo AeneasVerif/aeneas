@@ -408,8 +408,8 @@ def reduceProdProjs (e : Expr) : MetaM Expr := do
 
 open Std.WP
 
-theorem intro_predn (p : α × β → Prop) : p = predn (fun x y => p (x, y)) := by
-  unfold predn
+theorem intro_uncurry' (p : α × β → Prop) : p = uncurry' (fun x y => p (x, y)) := by
+  unfold uncurry'
   simp only
 
 theorem lift_to_spec x (p0 p1 : α → Prop) (h0 : p0 x) (h1 : p0 = p1) : spec (Std.lift x) p1 := by
@@ -421,22 +421,22 @@ namespace Test
   theorem test_pos_triple (pos_triple : Nat × Nat × Nat) (thm : (fun (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0) pos_triple) :
     Std.lift pos_triple ⦃ x y z => x > 0 ∧ y > 0 ∧ z > 0 ⦄ := by
     --
-    have h := fun x => intro_predn (fun y => match (x, y) with | (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0)
+    have h := fun x => intro_uncurry' (fun y => match (x, y) with | (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0)
     --
-    have h' := intro_predn (fun (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0)
-    replace h := congrArg predn (funext h)
+    have h' := intro_uncurry' (fun (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0)
+    replace h := congrArg uncurry' (funext h)
     replace h := Eq.trans h' h
     clear h'
     --
     replace h := lift_to_spec pos_triple (fun (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0)
-      (predn fun x => predn fun x_1 y => match (x, x_1, y) with | (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0)
+      (uncurry' fun x => uncurry' fun x_1 y => match (x, x_1, y) with | (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0)
       thm h
     exact h
 
   /-- Example which uses tactics -/
   theorem test_pos_triple' (pos_triple : Nat × Nat × Nat) (thm : (fun (x, y, z) => x > 0 ∧ y > 0 ∧ z > 0) pos_triple) :
     Std.lift pos_triple ⦃ x y z => x > 0 ∧ y > 0 ∧ z > 0 ⦄ := by
-    simp -failIfUnchanged -iota only [_root_.Aeneas.Std.lift, _root_.Aeneas.Std.WP.spec_ok, _root_.Aeneas.Std.WP.predn] at thm ⊢
+    simp -failIfUnchanged -iota only [_root_.Aeneas.Std.lift, _root_.Aeneas.Std.WP.spec_ok, _root_.Aeneas.Std.WP.uncurry'] at thm ⊢
     exact thm
 
 end Test
@@ -496,21 +496,21 @@ def liftThmType (thmTy : Expr) (pat : Option Syntax)
   /- Substitute the pattern -/
   let thmTy ← mkPred thmTy pat fvarsPat fvars
   trace[Step] "Theorem after substituting the pattern: {thmTy}"
-  /- Create the nested `predn` -/
-  let rec mkPredn (fvars : List Expr) : MetaM Expr := do
-    withTraceNode `Step (fun _ => pure m!"mkPredn: fvars: {fvars}") do
+  /- Create the nested `uncurry'` -/
+  let rec mkUncurry' (fvars : List Expr) : MetaM Expr := do
+    withTraceNode `Step (fun _ => pure m!"mkUncurry': fvars: {fvars}") do
     match fvars with
     | [] => throwError "Unexpected"
     | [x] =>
       trace[Progres] "Introducing a single lambda: x: {x}, thmTy: {thmTy}"
       mkLambdaFVars #[x] thmTy
     | x :: fvars => do
-      trace[Progres] "Introducing `predn`: x: {x}"
-      let thm ← mkPredn fvars
+      trace[Progres] "Introducing `uncurry'`: x: {x}"
+      let thm ← mkUncurry' fvars
       trace[Progres] "thm: {thm}"
-      mkAppM ``predn #[← mkLambdaFVars #[x] thm]
-  let thmTy ← mkPredn patFVars.toList
-  trace[Step] "result of mkPredn: {thmTy}"
+      mkAppM ``uncurry' #[← mkLambdaFVars #[x] thm]
+  let thmTy ← mkUncurry' patFVars.toList
+  trace[Step] "result of mkUncurry': {thmTy}"
   /- Add the `spec` -/
   let liftExpr ← mkAppM ``Std.lift #[pat]
   trace[Step] "liftExpr: {liftExpr}"
@@ -549,7 +549,7 @@ def liftThm (stx : Syntax) (name : Name) (pat : Option (TSyntax `term))
     | none =>
       `(tactic|
         simp -failIfUnchanged -iota only
-          [_root_.Aeneas.Std.lift, _root_.Aeneas.Std.WP.spec_ok, _root_.Aeneas.Std.WP.predn] <;>
+          [_root_.Aeneas.Std.lift, _root_.Aeneas.Std.WP.spec_ok, _root_.Aeneas.Std.WP.uncurry'] <;>
         exact $(mkIdent name))
     | some stx => pure stx
   let (goals, _) ← runTactic mvar.mvarId! tacticStx
@@ -892,7 +892,7 @@ def mkStepPureDefThm (stx : Syntax) (pat : Option (TSyntax `term)) (n : Name)
   let tacticStx ←
     `(tactic|
         simp only
-          [_root_.Aeneas.Std.lift, _root_.Aeneas.Std.WP.spec_ok, _root_.Aeneas.Std.WP.predn, _root_.implies_true])
+          [_root_.Aeneas.Std.lift, _root_.Aeneas.Std.WP.spec_ok, _root_.Aeneas.Std.WP.uncurry', _root_.implies_true])
   liftThm stx n pat mkPat mkPred suffix (tacticStx := some tacticStx)
 
 local elab "#step_pure_def" id:ident pat:(term)? : command => do
