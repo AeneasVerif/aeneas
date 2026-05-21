@@ -736,7 +736,7 @@ theorem spec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
 theorem spec_partial_to_mvcgen {α : Type u} {x : Result α}
     {p_ok : α → Prop} {p_fail : Error → Prop} {p_div : Prop}
     (h : spec_partial x p_ok p_fail p_div)
-    {Q : PostCond α (.except (ULift Error) (.except PUnit .pure))}
+    {Q : PostCond α postShape}
     (h_ok   : ∀ r, p_ok r → willYield r Q)
     (h_fail : ∀ e, p_fail e → willFail e Q)
     (h_div  : p_div → willDiverge Q) :
