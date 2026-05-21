@@ -21,3 +21,8 @@ private def notCI : Bool := run_io
 lean_exe extract where
   root := `AeneasExtract
   supportInterpreter := false
+
+/-- Extract verification documentation metadata as JSON. -/
+lean_exe doc_extract where
+  root := `AeneasDocExtract
+  supportInterpreter := false
