@@ -88,7 +88,7 @@ info: Try this:
       let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
       agrind
     case hg =>
-      intros y a✝
+      intros y _
       let* ⟨ _, _ ⟩ ← [ +inferPost ] U32.add_spec
       agrind
     agrind

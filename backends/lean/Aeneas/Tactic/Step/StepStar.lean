@@ -687,7 +687,8 @@ where
             let subStx ← subInfo.script.toSyntax
             let introStx : Array Syntax.Tactic ←
               if !introNames.isEmpty then
-                let idents := introNames.map mkIdent
+                let idents := introNames.map fun name =>
+                  mkIdent (if name.isInternal then `_ else name)
                 pure #[← `(tactic| intros $idents*)]
               else pure #[]
             let allTacs := introStx ++ subStx
