@@ -38,4 +38,30 @@ example (x y : U32) :
     ⦃ ⌜ True ⌝ ⦄ (myDiv x y) ⦃ ⇓? z => ⌜ z.val = x.val / y.val ⌝ ⦄ := by
   mvcgen
 
+
+opaque myAdd (x y : U32) : Result U32
+
+@[step]
+axiom myAdd_spec_partial (x y : U32) :
+  spec_partial (myAdd x y)
+    (fun z => z.val = x.val + y.val)
+    (fun e => e = .integerOverflow ∧ x.val + y.val > U32.max)
+    False
+
+/--
+info: Aeneas.Step.SpecPartialTests.myAdd_spec_partial.step_spec (x y : U32) (h : ¬↑x + ↑y > U32.max) :
+  myAdd x y ⦃ z => ↑z = ↑x + ↑y ⦄
+-/
+#guard_msgs in
+#check myAdd_spec_partial.step_spec
+
+/--
+info: Aeneas.Step.SpecPartialTests.myAdd_spec_partial.mvcgen_spec (x y : U32)
+  (Q : PostCond U32 (PostShape.except (ULift.{0, 0} Error) (PostShape.except PUnit.{1} PostShape.pure)))
+  (h_ok : ∀ (r : U32), ↑r = ↑x + ↑y → (Q.1 r).down)
+  (h : ↑x + ↑y > U32.max → (Q.2.1 { down := Error.integerOverflow }).down) : ⦃⌜True⌝⦄ myAdd x y ⦃Q⦄
+-/
+#guard_msgs in
+#check myAdd_spec_partial.mvcgen_spec
+
 end Aeneas.Step.SpecPartialTests
