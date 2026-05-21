@@ -237,13 +237,13 @@ theorem Array.index_mut_usize_spec {α : Type u} {n : Usize} [Inhabited α] (v: 
   simp [h]
 
 @[simp]
-theorem Array.set_getElem!_eq α n [Inhabited α] (x : Array α n) (i : Usize) :
+theorem Array.set_getElem!_eq {α} {n : Usize} [Inhabited α] (x : Array α n) (i : Usize) :
   x.set i (x.val[i.val]!) = x := by
   have := @List.set_getElem_self _ x.val i.val
   simp only [Array, Subtype.ext_iff, set_val_eq, List.set_getElem!]
 
 @[simp]
-theorem Array.set_getElem_eq α n (x : Array α n) (i : Usize) (h : i.val < x.length) :
+theorem Array.set_getElem_eq {α} {n : Usize} (x : Array α n) (i : Usize) (h : i.val < x.length) :
   x.set i x[i] = x := by
   have h' : i.val < x.val.length := by
     simpa using h
@@ -251,6 +251,28 @@ theorem Array.set_getElem_eq α n (x : Array α n) (i : Usize) (h : i.val < x.le
     List.set_getElem_self (as := x.val) (i := i.val) (h := h')
   simp only [Array, Subtype.ext_iff, set_val_eq] at hself ⊢
   exact hself
+
+@[simp↓, simp_lists_safe↓]
+theorem Array.getElem_set_eq {α} {n : Usize} (v : Array α n) (i : Usize) (x : α) (h : i.val < (v.set i x).length) :
+  (v.set i x)[i]'h = x := by
+  cases v
+  unfold set getElem instGetElemArrayUsizeLtNatValLengthValListEq
+  simp only [List.getElem_set_self]
+
+@[simp↓, simp_lists_safe↓]
+theorem Array.getElem_set_eq' {α} {n : Usize} (v : Array α n) (i j : Usize) (x : α) (h : j.val < (v.set i x).length)
+  (h' : i = j) :
+  (v.set i x)[j]'h = x := by
+  simp only [↓getElem_set_eq, h']
+
+@[simp↓, simp_lists_safe↓]
+theorem Array.getElem_set_neq {α} {n : Usize} (v : Array α n) (i j : Usize) (x : α)
+  (h : j.val < (v.set i x).length) (h' : i ≠ j) :
+  (v.set i x)[j]'h = v[j] := by
+  cases v
+  unfold set getElem instGetElemArrayUsizeLtNatValLengthValListEq
+  simp only [ne_eq, UScalar.neq_to_neq_val] at *
+  simp_lists [List.getElem_set_ne]
 
 /-- Small helper (this function doesn't model a specific Rust function) -/
 def Array.clone {α : Type u} {n : Usize} (clone : α → Result α) (s : Array α n) : Result (Array α n) := do
