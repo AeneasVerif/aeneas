@@ -5,6 +5,7 @@ import AeneasMeta.Extensions
 import Aeneas.Tactic.Step.Trace
 import Aeneas.Std.WP
 import AeneasMeta.OptionConfig
+import Mathlib.Order.Defs.LinearOrder
 
 namespace Aeneas
 
@@ -274,45 +275,85 @@ private def saveStepSpecFromThm (ext : Extension) (attrKind : AttributeKind)
 section
 open Aeneas.Std
 
-/-- For `simplifyStepHypotheses`: turns `∀ e, ¬ (e = c ∧ P)` into `¬ P`. -/
-private theorem step_fail_failEq {c : Aeneas.Std.Error} {P : Prop} (h : ¬ P) :
-    ∀ e, ¬ (e = c ∧ P) :=
-  fun _ h' => h h'.2
+/-- For `simplifyStepHypotheses`: rewrites `∀ e, ¬ (e = c ∧ P)` to `¬ P`. -/
+private theorem step_fail_failEq_iff {c : Aeneas.Std.Error} {P : Prop} :
+    (∀ e, ¬ (e = c ∧ P)) ↔ ¬ P :=
+  ⟨fun h hP => h c ⟨rfl, hP⟩, fun h _ h' => h h'.2⟩
 
-/-- For `simplifyStepHypotheses`: turns `∀ e, P` into `P`. -/
-private theorem step_fail_remove_forall {P : Prop} (h : P) :
-    ∀ _ : Aeneas.Std.Error, P := fun _ => h
+/-- For `simplifyStepHypotheses`: rewrites `∀ _ : Error, P` to `P`. -/
+private theorem step_fail_remove_forall_iff {P : Prop} :
+    (∀ _ : Aeneas.Std.Error, P) ↔ P :=
+  ⟨fun h => h Error.panic, fun h _ => h⟩
 
-/-- For `simplifyStepHypotheses`: closes `∀ e, ¬ False` when the fail predicate is `False`. -/
-private theorem step_fail_False : ∀ (_ : Aeneas.Std.Error), ¬ False :=
-  fun _ h => h
+/-- For `simplifyStepHypotheses`: rewrites `∀ e, ¬ False` to `True`. -/
+private theorem step_fail_False_iff :
+    (∀ (_ : Aeneas.Std.Error), ¬ False) ↔ True :=
+  ⟨fun _ => trivial, fun _ _ h => h⟩
 
-/-- For `simplifyStepHypotheses`: closes `¬ False` when the divergence predicate is `False`. -/
-private theorem step_div_False : ¬ False :=
-  fun h => h
+/-- For `simplifyStepHypotheses`: rewrites `¬ False` to `True`. -/
+private theorem step_div_False_iff : (¬ False) ↔ True :=
+  ⟨fun _ => trivial, fun _ h => h⟩
 
 end
 
+/-- Build a `Simp.Context` containing exactly the given lemmas (no default simp set,
+    no simprocs). The resulting `simp` call is equivalent to `simp only [lemmas...]`. -/
+private def mkSimpOnlyContext (lemmas : Array Name) : MetaM Simp.Context := do
+  let mut simpThms : SimpTheorems := {}
+  for thmName in lemmas do
+    simpThms ← simpThms.addConst thmName (post := false) (inv := false)
+  Simp.mkContext
+    (config := { failIfUnchanged := false })
+    (simpTheorems := #[simpThms])
+    (congrTheorems := ← getSimpCongrTheorems)
+
+/-- Recursively split a metavariable whose target is `P ∧ Q` into separate goals
+    for each conjunct, by assigning it to `⟨?m₁, ?m₂⟩`. When at least one split
+    happens, leaf mvars get a fresh `userName` derived from the original mvar's
+    tag with an index suffix appended (e.g. `h_fail` becomes `h_fail_1`,
+    `h_fail_2`, …), so they remain distinct once abstracted. If the target is not
+    an `And`, the mvar is returned unchanged. Returns the list of leaf mvars. -/
+private partial def splitAndGoals (mvarId : MVarId) : MetaM (Array MVarId) := do
+  let target ← instantiateMVars (← mvarId.getType)
+  if target.app2? ``And |>.isNone then
+    return #[mvarId]
+  let baseTag ← mvarId.getTag
+  Prod.snd <$> go baseTag mvarId 0 #[]
+where
+  go (baseTag : Name) (mvarId : MVarId) (idx : Nat) (acc : Array MVarId) :
+      MetaM (Nat × Array MVarId) := do
+    let target ← instantiateMVars (← mvarId.getType)
+    match target.app2? ``And with
+    | some (p, q) =>
+      let m₁ ← mkFreshExprSyntheticOpaqueMVar p
+      let m₂ ← mkFreshExprSyntheticOpaqueMVar q
+      mvarId.assign (← mkAppM ``And.intro #[m₁, m₂])
+      let (idx, acc) ← go baseTag m₁.mvarId! idx acc
+      go baseTag m₂.mvarId! idx acc
+    | none =>
+      if !baseTag.isAnonymous then
+        mvarId.setTag (baseTag.appendIndexAfter (idx + 1))
+      return (idx + 1, acc.push mvarId)
+
+/-- Simp lemmas shared by `simplifyStepHypotheses` and `simplifyMvcgenHypotheses -/
+private def commonPushNotLemmas : Array Name :=
+  #[``gt_iff_lt, ``ge_iff_le, ``not_or, ``not_lt, ``not_le, ``or_imp, ``imp_true_iff, ``not_true,
+    ``true_implies]
+
 /-- Try to simplify the arguments produced by `spec_of_spec_partial` -/
-private def simplifyStepHypotheses (extraMVars : Array Expr) : MetaM Unit := do
-  unless extraMVars.size = 2 do
-    throwError "spec_of_spec_partial: expected 2 extra arguments, got {extraMVars.size}"
-  -- h_fail : ∀ e, ¬ p_fail e
-  let hFail := extraMVars[0]!
-  trace[Step] "simplifyStepHypotheses: hFail type: {← inferType hFail}"
-  -- The numbers passed to `applyN` below specify how many arguments the theorem has beyond
-  -- foralls/implications that are part of the hypothesis we want to simplify.
-  try discard <| withReducible <| hFail.mvarId!.applyN (mkConst ``step_fail_failEq) 3
-    catch e => trace[Step] "simplifyStepHypotheses: step_fail_failEq failed: {e.toMessageData}"
-  try discard <| withReducible <| hFail.mvarId!.applyN (mkConst ``step_fail_remove_forall) 2
-    catch e => trace[Step] "simplifyStepHypotheses: step_fail_remove_forall failed: {e.toMessageData}"
-  try discard <| withReducible <| hFail.mvarId!.applyN (mkConst ``step_fail_False) 0
-    catch e => trace[Step] "simplifyStepHypotheses: step_fail_False failed: {e.toMessageData}"
-  -- h_div : ¬ p_div
-  let hDiv := extraMVars[1]!
-  trace[Step] "simplifyStepHypotheses: hDiv type: {← inferType hDiv}"
-  try discard <| withReducible <| hDiv.mvarId!.applyN (mkConst ``step_div_False) 0
-    catch e => trace[Step] "simplifyStepHypotheses: step_div_False failed: {e.toMessageData}"
+private def simplifyStepHypotheses (mvarFail mvarDiv : Expr) : MetaM Unit := do
+  let simpCtx ← mkSimpOnlyContext (#[
+      ``step_fail_failEq_iff, ``step_fail_remove_forall_iff,
+      ``step_fail_False_iff, ``step_div_False_iff] ++ commonPushNotLemmas)
+  let simplify (mv : Expr) (name : String) : MetaM Unit := do
+    trace[Step] "simplifyStepHypotheses: {name} type: {← inferType mv}"
+    try
+      let (mvarId?, _) ← simpTarget mv.mvarId! simpCtx (simprocs := {})
+      if let some mvarId := mvarId? then
+        discard <| splitAndGoals mvarId
+    catch e => trace[Step] "simplifyStepHypotheses: simp on {name} failed: {e.toMessageData}"
+  simplify mvarFail "hFail"
+  simplify mvarDiv "hDiv"
 
 /-- Register a theorem using `spec_partial` with `step`. This function generates a auxiliary lemma
 using `spec` instead of `spec_partial` and registers that one with `step`, so that the `step`
@@ -327,7 +368,9 @@ private def saveStepPartialSpecFromThm (ext : Extension) (attrKind : AttributeKi
     let thApp := mkAppN thConst fvars
     let bridge ← mkAppM ``Aeneas.Std.WP.spec_of_spec_partial #[thApp]
     let (extraMVars, _, _) ← forallMetaTelescope (← inferType bridge)
-    simplifyStepHypotheses extraMVars
+    unless extraMVars.size = 2 do
+      throwError "spec_of_spec_partial: expected 2 extra arguments, got {extraMVars.size}"
+    simplifyStepHypotheses extraMVars[0]! extraMVars[1]!
     let proof := mkAppN bridge extraMVars
     let { expr := proofAbstracted, .. } ← abstractMVars proof
     let proofTerm ← mkLambdaFVars fvars proofAbstracted
@@ -378,35 +421,39 @@ private def saveMvcgenSpecFromThm (stx : Syntax) (attrKind : AttributeKind)
 section
 open Aeneas.Std WP Result
 
-private theorem mvcgen_fail_failEq {α : Type u} {Q : Std.Do.PostCond α postShape} {c : Error} {P : Prop}
-    (h : P → willFail c Q) :
-    ∀ e, (e = c ∧ P) → willFail e Q := by
-  intro e ⟨he, hP⟩; subst he; exact h hP
+private theorem mvcgen_fail_failEq_iff {α : Type u} {Q : Std.Do.PostCond α postShape}
+    {c : Error} {P : Prop} :
+    (∀ e, (e = c ∧ P) → willFail e Q) ↔ (P → willFail c Q) :=
+  ⟨fun h hP => h c ⟨rfl, hP⟩, fun h _ ⟨he, hP⟩ => he ▸ h hP⟩
 
-private theorem mvcgen_fail_False {α : Type u} {Q : Std.Do.PostCond α postShape} :
-    ∀ e, False → willFail e Q := by intros; contradiction
+private theorem mvcgen_fail_False_iff {α : Type u} {Q : Std.Do.PostCond α postShape} :
+    (∀ e, False → willFail e Q) ↔ True :=
+  ⟨fun _ => trivial, fun _ _ h => h.elim⟩
 
-private theorem mvcgen_div_False {P : Prop} :
-    False → P := False.elim
+private theorem mvcgen_div_False_iff {P : Prop} :
+    (False → P) ↔ True :=
+  ⟨fun _ => trivial, fun _ h => h.elim⟩
+
+private theorem mvcgen_uncurry' {α β} {p : α → β → Prop} {q : α × β → Prop} :
+    (∀ (r : α × β), uncurry' p r → q r) ↔ (∀ (r₁ : α) (r₂ : β), p r₁ r₂ → q (r₁, r₂)) := by simp
 
 end
 
 /-- Try to simplify the arguments produced by `spec_partial_to_mvcgen`. -/
-private def simplifyMvcgenHypotheses (extraMVars : Array Expr) : MetaM Unit := do
-  unless extraMVars.size = 4 do
-    throwError "spec_partial_to_mvcgen: expected 4 extra arguments, got {extraMVars.size}"
-  -- fail
-  let hFail := extraMVars[2]!
-  trace[Step] "simplifyMvcgenHypotheses: hFail type: {← inferType hFail}"
-  try discard <| withReducible <| hFail.mvarId!.applyN (mkConst ``mvcgen_fail_failEq [← mkFreshLevelMVar]) 5
-    catch e => trace[Step] "simplifyMvcgenHypotheses: mvcgen_fail_failEq failed: {e.toMessageData}"
-  try discard <| withReducible <| hFail.mvarId!.applyN (mkConst ``mvcgen_fail_False [← mkFreshLevelMVar]) 1
-    catch e => trace[Step] "simplifyMvcgenHypotheses: mvcgen_fail_False failed: {e.toMessageData}"
-  -- div
-  let hDiv := extraMVars[3]!
-  trace[Step] "simplifyMvcgenHypotheses: hDiv type: {← inferType hDiv}"
-  try discard <| withReducible <| hDiv.mvarId!.applyN (mkConst ``mvcgen_div_False) 1
-    catch e => trace[Step] "simplifyMvcgenHypotheses: mvcgen_div_False failed: {e.toMessageData}"
+private def simplifyMvcgenHypotheses (mvarOk mvarFail mvarDiv : Expr) : MetaM Unit := do
+  let simpCtx ← mkSimpOnlyContext (#[
+      ``mvcgen_fail_failEq_iff, ``mvcgen_fail_False_iff,
+      ``mvcgen_div_False_iff, ``mvcgen_uncurry', ``and_imp] ++ commonPushNotLemmas)
+  let simplify (mv : Expr) (name : String) : MetaM Unit := do
+    trace[Step] "simplifyMvcgenHypotheses: {name} type: {← inferType mv}"
+    try
+      let (mvarId?, _) ← simpTarget mv.mvarId! simpCtx (simprocs := {})
+      if let some mvarId := mvarId? then
+        discard <| splitAndGoals mvarId
+    catch e => trace[Step] "simplifyMvcgenHypotheses: simp on {name} failed: {e.toMessageData}"
+  simplify mvarOk "hOk"
+  simplify mvarFail "hFail"
+  simplify mvarDiv "hDiv"
 
 /-- Register a theorem using `spec_partial` with `mvcgen`. -/
 private def saveMvcgenPartialSpecFromThm (stx : Syntax) (attrKind : AttributeKind)
@@ -420,7 +467,9 @@ private def saveMvcgenPartialSpecFromThm (stx : Syntax) (attrKind : AttributeKin
     let bridge ← mkAppOptM ``Aeneas.Std.WP.spec_partial_to_mvcgen
       #[none, none, none, none, none, some thApp]
     let (extraMVars, _, _) ← forallMetaTelescope (← inferType bridge)
-    simplifyMvcgenHypotheses extraMVars
+    unless extraMVars.size = 4 do
+      throwError "spec_partial_to_mvcgen: expected 4 extra arguments, got {extraMVars.size}"
+    simplifyMvcgenHypotheses extraMVars[1]! extraMVars[2]! extraMVars[3]!
     let proof := mkAppN bridge extraMVars
     let { expr := proofAbstracted, .. } ← abstractMVars proof
     let proofTerm ← mkLambdaFVars fvars proofAbstracted
