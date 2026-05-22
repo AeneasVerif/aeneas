@@ -75,24 +75,6 @@ theorem core.num.«%S».overflowing_div_one (x : «%S») :
   overflowing_div x IScalar.one = .ok (x, false) := IScalar.overflowing_div_one x
 
 @[simp]
-theorem UScalar.overflowing_div_zero {ty} (x : UScalar ty) :
-  overflowing_div x zero = .fail divisionByZero := by
-  simp [overflowing_div, zero_bv]
-
-@[simp]
-theorem IScalar.overflowing_div_zero {ty} (x : IScalar ty) :
-  overflowing_div x zero = .fail divisionByZero := by
-  simp [overflowing_div]
-
-uscalar @[simp]
-theorem core.num.«%S».overflowing_div_zero (x : «%S») :
-  overflowing_div x UScalar.zero = .fail divisionByZero := UScalar.overflowing_div_zero x
-
-iscalar @[simp]
-theorem core.num.«%S».overflowing_div_zero (x : «%S») :
-  overflowing_div x IScalar.zero = .fail divisionByZero := IScalar.overflowing_div_zero x
-
-@[simp]
 theorem UScalar.overflowing_div_self {ty} (x : UScalar ty) (h : x.bv ≠ 0) :
   overflowing_div x x = .ok (one, false) := by
   have h' : x.bv ≠ 0#ty.numBits := by simp; exact Ne.intro h
