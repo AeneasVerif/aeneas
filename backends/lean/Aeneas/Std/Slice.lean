@@ -131,7 +131,7 @@ theorem core.slice.Slice.is_empty_spec {T : Type} (s : Slice T) :
     decide_eq_true_eq]
 
 @[step]
-theorem Slice.index_usize_spec {α : Type u} [Inhabited α] (v: Slice α) (i: Usize)
+theorem Slice.index_usize_spec {α : Type u} (v: Slice α) (i: Usize)
   (hbound : i.val < v.length) :
   v.index_usize i ⦃ x => x = v.val[i.val] ⦄ := by
   grind [index_usize]
@@ -279,17 +279,17 @@ def Slice.index_mut_usize {α : Type u} (v: Slice α) (i: Usize) :
   ok (x, Slice.set v i)
 
 @[step]
-theorem Slice.index_mut_usize_spec {α : Type u} [Inhabited α] (v: Slice α) (i: Usize)
+theorem Slice.index_mut_usize_spec {α : Type u} (v: Slice α) (i: Usize)
   (hbound : i.val < v.length) :
   v.index_mut_usize i ⦃ x back => x = v.val[i.val] ∧ back = Slice.set v i ⦄ := by
   simp only [index_mut_usize, Bind.bind, bind]
   have ⟨ x, h ⟩ := spec_imp_exists (Slice.index_usize_spec v i hbound)
   simp [h]
 
-@[simp]
-theorem Slice.update_index_eq α [Inhabited α] (x : Slice α) (i : Usize) :
-  x.set i (x.val[i.val]!) = x := by
-  simp only [Slice, Subtype.ext_iff, set_val_eq, List.set_getElem!]
+@[simp, simp_lists_safe]
+theorem Slice.update_index_eq α [Inhabited α] (x : Slice α) (i : Usize) (h : i.val < x.val.length) :
+  x.set i (x.val[i.val]'h) = x := by
+  simp only [Slice, Subtype.ext_iff, set_val_eq, List.set_getElem_self]
 
 def Slice.subslice {α : Type u} (s : Slice α) (r : Range Usize) : Result (Slice α) :=
   -- TODO: not completely sure here

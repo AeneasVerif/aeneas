@@ -151,7 +151,7 @@ def Vec.index_usize {α : Type u} (v: Vec α) (i: Usize) : Result α :=
   | some x => ok x
 
 @[step]
-theorem Vec.index_usize_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize)
+theorem Vec.index_usize_spec {α : Type u} (v: Vec α) (i: Usize)
   (hbound : i.val < v.length) :
   v.index_usize i ⦃ x => x = v.val[i.val] ⦄ := by
   simp only [index_usize]
@@ -185,7 +185,7 @@ def Vec.index_mut_usize {α : Type u} (v: Vec α) (i: Usize) :
   | div => div
 
 @[step]
-theorem Vec.index_mut_usize_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize)
+theorem Vec.index_mut_usize_spec {α : Type u} (v: Vec α) (i: Usize)
   (hbound : i.val < v.length) :
   v.index_mut_usize i ⦃ x y => x = v.val[i.val] ∧ y = v.set i ⦄ := by
   simp only [index_mut_usize]

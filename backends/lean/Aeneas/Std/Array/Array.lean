@@ -116,7 +116,7 @@ theorem Array.repeat_val (n : Usize) (x : α) : (Array.repeat n x).val = List.re
   simp only [Array.repeat]
 
 @[step]
-theorem Array.index_usize_spec {α : Type u} {n : Usize} [Inhabited α] (v: Array α n) (i: Usize)
+theorem Array.index_usize_spec {α : Type u} {n : Usize} (v: Array α n) (i: Usize)
   (hbound : i.val < v.length) :
   (v.index_usize i) ⦃ x => x = v.val[i.val] ⦄ := by
   grind [index_usize]
@@ -229,7 +229,7 @@ def Array.index_mut_usize {α : Type u} {n : Usize} (v: Array α n) (i: Usize) :
   ok (x, set v i)
 
 @[step]
-theorem Array.index_mut_usize_spec {α : Type u} {n : Usize} [Inhabited α] (v: Array α n) (i: Usize)
+theorem Array.index_mut_usize_spec {α : Type u} {n : Usize} (v: Array α n) (i: Usize)
   (hbound : i.val < v.length) :
   v.index_mut_usize i ⦃ x back => x = v.val[i.val] ∧ back = set v i ⦄ := by
   simp only [index_mut_usize, Bind.bind, bind]
