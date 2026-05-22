@@ -2636,6 +2636,7 @@ let add_abs_cont_to_abs span (ctx : eval_ctx) (abs : abs) (abs_fun : abs_fun) :
     destructure_abs span abs.kind ~can_end:abs.can_end
       ~destructure_shared_values:true ctx abs
   in
+  let regions = abs.regions.owned in
   [%ldebug "- abs after destructure:\n" ^ abs_to_string span ctx abs];
   (* Retrieve the *mutable* borrows/loans from the abstraction values *)
   let borrows : tevalue list ref = ref [] in
@@ -2676,7 +2677,9 @@ let add_abs_cont_to_abs span (ctx : eval_ctx) (abs : abs) (abs_fun : abs_fun) :
     | ASymbolic (pm, aproj) -> (
         match aproj with
         | AProjLoans { proj = { sv_id; proj_ty }; consumed; borrows } ->
-            if TypesUtils.ty_has_mut_borrows ctx.type_ctx.type_infos proj_ty
+            if
+              TypesUtils.ty_has_mut_borrow_for_region_in_set
+                ctx.type_ctx.type_infos regions proj_ty
             then (
               [%sanity_check] span (consumed = []);
               [%sanity_check] span (borrows = []);
@@ -2689,7 +2692,9 @@ let add_abs_cont_to_abs span (ctx : eval_ctx) (abs : abs) (abs_fun : abs_fun) :
               in
               loans := { value; ty } :: !loans)
         | AProjBorrows { proj = { sv_id; proj_ty }; loans } ->
-            if TypesUtils.ty_has_mut_borrows ctx.type_ctx.type_infos proj_ty
+            if
+              TypesUtils.ty_has_mut_borrow_for_region_in_set
+                ctx.type_ctx.type_infos regions proj_ty
             then (
               [%sanity_check] span (loans = []);
               let value : evalue =
