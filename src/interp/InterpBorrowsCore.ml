@@ -507,15 +507,16 @@ let projections_intersect (span : Meta.span) (ctx : eval_ctx)
 
     The regions in the types shouldn't be erased (this function will raise an
     exception otherwise). *)
-let projection_contains (span : Meta.span) (ctx : eval_ctx)
-    (rset1 : RegionId.Set.t) (ty1 : rty) (rset2 : RegionId.Set.t) (ty2 : rty) :
-    bool =
+let projection_contains ?(allow_erased = false) (span : Meta.span)
+    (ctx : eval_ctx) (rset1 : RegionId.Set.t) (ty1 : rty)
+    (rset2 : RegionId.Set.t) (ty2 : rty) : bool =
   let default = true in
   let combine b1 b2 = b1 && b2 in
   let compare_regions r1 r2 =
-    region_in_set r1 rset1 || not (region_in_set r2 rset2)
+    region_in_set ~allow_erased r1 rset1
+    || not (region_in_set ~allow_erased r2 rset2)
   in
-  compare_rtys span ctx default combine compare_regions ty1 ty2
+  compare_rtys ~allow_erased span ctx default combine compare_regions ty1 ty2
 
 (** Lookup a loan content.
 
@@ -2388,7 +2389,7 @@ and norm_proj_const_generics_union (span : Meta.span) (cg1 : constant_expr)
 
 let norm_proj_ty_contains span ctx (ty1 : rty) (ty2 : rty) : bool =
   let set = RegionId.Set.singleton RegionId.zero in
-  projection_contains span ctx set ty1 set ty2
+  projection_contains span ~allow_erased:true ctx set ty1 set ty2
 
 let norm_proj_tys_intersect span ctx (ty1 : norm_proj_ty) (ty2 : norm_proj_ty) :
     bool =
