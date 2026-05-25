@@ -394,17 +394,6 @@ theorem BitVec.getElem!_cast (x : BitVec n) (h : n = m) (i : ℕ) :
   (x.cast h)[i]! = x[i]! := by
   simp only [getElem!_eq_testBit_toNat, toNat_cast]
 
--- TODO: move
-@[simp_lists_safe, grind =, agrind =]
-theorem List.getElem!_cons_eq_getElem!_sub {α} [Inhabited α] (x : α) (tl : List α) (i : ℕ) (hi : 0 < i) :
-  (x :: tl)[i]! = tl[i - 1]! := by
-  simp only [Nat.not_eq, ne_eq, not_lt_zero', or_true, getElem!_cons_nzero, hi]
-
-@[simp_lists_safe, grind =, agrind =]
-theorem List.getElem!_cons_zero' {α} [Inhabited α] (x : α) (tl : List α) (i : ℕ) (hi : i = 0) :
-  (x :: tl)[i]! = x := by
-  simp only [hi, getElem!_cons_zero]
-
 @[simp, simp_lists_safe, grind =, agrind =]
 theorem BitVec.toLEBytes_getElem!_testBit (v : BitVec w) (i j : ℕ) (hj : j < 8) :
   (v.toLEBytes[i]!).testBit j = v[8 * i + j]! := by
