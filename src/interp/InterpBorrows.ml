@@ -2352,7 +2352,7 @@ let eliminate_ended_shared_loans (span : Meta.span) (ctx : eval_ctx) : eval_ctx
    However we ignore the "fixed" abstractions.
 *)
 let rec simplify_dummy_values_useless_abs_aux (config : config)
-    ~(snapshots : bool) (span : Meta.span) : cm_fun =
+    ~(snapshots : bool) (span : Meta.span) ~(changed : bool ref) : cm_fun =
  fun ctx ->
   let simplify_abs = true in
   let simplify_borrows = true in
@@ -2382,6 +2382,7 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
            we simply ignore it *)
         if not (concrete_borrows_loans_in_value v.value) then (
           [%ldebug "Eliminating the value"];
+          changed := true;
           explore_env ctx env)
         else (
           [%ldebug "Diving into the value"];
@@ -2400,6 +2401,7 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
                     match lookup_shared_reserved_borrows l ctx with
                     | [] ->
                         (* End the loan *)
+                        changed := true;
                         self#visit_value end_borrows value.value
                     | _ -> super#visit_VLoan false lc
                   end
@@ -2430,8 +2432,11 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
               (* If no concrete borrows/loans and we can end borrows (we are not
                  inside a shared loan): replace with bottom *)
               method! visit_value end_borrows v =
-                if end_borrows && not (concrete_borrows_loans_in_value v) then
-                  VBottom
+                if end_borrows && not (concrete_borrows_loans_in_value v) then (
+                  (match v with
+                  | VBottom -> ()
+                  | _ -> changed := true);
+                  VBottom)
                 else super#visit_value end_borrows v
             end
           in
@@ -2440,7 +2445,9 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
           let env = explore_env ctx env in
           (* Check if we eliminated all remaining loans and borrows (we might
              have removed shared loans): we ignore the value if it is the case *)
-          if not (concrete_borrows_loans_in_value v.value) then env
+          if not (concrete_borrows_loans_in_value v.value) then (
+            changed := true;
+            env)
           else EBinding (BDummy vid, v) :: env)
     | EBinding (BVar vid, v) :: env ->
         [%ldebug
@@ -2464,6 +2471,7 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
                   match lookup_shared_reserved_borrows l ctx with
                   | [] ->
                       (* End the loan *)
+                      changed := true;
                       self#visit_value end_borrows value.value
                   | _ -> super#visit_VLoan false lc
                 end
@@ -2490,6 +2498,7 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
                   match lookup_shared_reserved_borrows l ctx with
                   | [] ->
                       (* End the loan *)
+                      changed := true;
                       super#visit_value () value.value
                   | _ -> super#visit_VLoan () lc
                 end
@@ -2500,6 +2509,7 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
               match lookup_shared_reserved_borrows l ctx with
               | [] ->
                   (* End the loan *)
+                  changed := true;
                   super#visit_AEndedSharedLoan () sv child
               | _ -> super#visit_ASharedLoan () pm l sv child
           end
@@ -2535,7 +2545,9 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
             EAbs abs :: explore_env ctx env)
     | b :: env -> b :: explore_env ctx env
   in
-  let rec_call = simplify_dummy_values_useless_abs_aux config span ~snapshots in
+  let rec_call =
+    simplify_dummy_values_useless_abs_aux config span ~snapshots ~changed
+  in
   try
     (* Explore the environment.
 
@@ -2545,14 +2557,17 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
   with
   | FoundAbsId abs_id ->
       (* TODO: generalize so that we can end sub-abstractions *)
+      changed := true;
       let ctx, cc = end_abs config span ~snapshots abs_id 0 ctx in
       comp cc (rec_call ctx)
   | FoundBorrowId bid ->
+      changed := true;
       let ctx, cc = end_borrow config span ~snapshots bid ctx in
       comp cc (rec_call ctx)
   | FoundAbsProj (abs_id, sv) ->
       (* We can end this loan projector (there are no corresponding borrows
          projectors in the context): set it as ended and continue *)
+      changed := true;
       let ctx = update_aproj_loans_to_ended span abs_id sv ctx in
       rec_call ctx
 
@@ -2562,11 +2577,12 @@ let simplify_dummy_values_useless_abs (config : config)
   [%ldebug eval_ctx_to_string ctx0];
   (* Simplify the context as long as it leads to changes - TODO: make this more efficient *)
   let rec simplify ctx0 =
+    let changed = ref false in
     let ctx, cc =
-      simplify_dummy_values_useless_abs_aux config span ~snapshots ctx0
+      simplify_dummy_values_useless_abs_aux config span ~snapshots ~changed ctx0
     in
     Invariants.check_invariants span ctx;
-    if ctx.env = ctx0.env then (
+    if not !changed then (
       [%ldebug "Done:\n" ^ eval_ctx_to_string ctx];
       (ctx, cc))
     else (
