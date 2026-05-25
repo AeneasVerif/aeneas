@@ -912,7 +912,7 @@ let lean_builtin_funs =
     mk_fun
       "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, \
        @T>, &'a @T>}::rev"
-      "core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.rev";
+      "core.slice.iter.Iter.Insts.Iterator.rev";
     (* file: "Aeneas/Std/SliceIter.lean", line: 68 *)
     mk_fun
       "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, \

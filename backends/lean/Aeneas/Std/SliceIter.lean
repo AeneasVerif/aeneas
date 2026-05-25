@@ -128,7 +128,7 @@ def core.slice.iter.Iter.Insts.DoubleEndedIterator (T : Type) :
 /-- `Iter.rev` — wraps the slice iterator in `Rev`. -/
 @[rust_fun
   "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::rev"]
-def core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.rev
+def core.slice.iter.Iter.Insts.Iterator.rev
   {T : Type} {Item : Type}
   (_doubleEndedInst : core.iter.traits.double_ended.DoubleEndedIterator (core.slice.iter.Iter T) Item)
   (it : core.slice.iter.Iter T) :
