@@ -273,6 +273,82 @@ def core.iter.traits.iterator.IteratorRange {A : Type}
   take := core.iter.range.IteratorRange.take StepInst
 }
 
+-- ============================================================================
+-- Rev adapter
+-- ============================================================================
+
+/-- `Rev.next` delegates to `next_back` of the inner DoubleEndedIterator. -/
+@[rust_fun
+  "core::iter::adapters::rev::{core::iter::traits::iterator::Iterator<core::iter::adapters::rev::Rev<@I>, @Clause0_Clause0_Item>}::next"]
+def core.iter.adapters.rev.Rev.Insts.Iterator.next
+  {I : Type} {Item : Type}
+  (doubleEndedInst : core.iter.traits.double_ended.DoubleEndedIterator I Item)
+  (self : core.iter.adapters.rev.Rev I) : Result ((Option Item) × (core.iter.adapters.rev.Rev I)) := do
+  let (opt, iter) ← doubleEndedInst.next_back self.iter
+  ok (opt, ⟨iter⟩)
+
+@[rust_fun
+  "core::iter::adapters::rev::{core::iter::traits::iterator::Iterator<core::iter::adapters::rev::Rev<@I>, @Clause0_Clause0_Item>}::step_by"]
+def core.iter.adapters.rev.Rev.Insts.Iterator.step_by
+  {I : Type} {Item : Type}
+  (_doubleEndedInst : core.iter.traits.double_ended.DoubleEndedIterator I Item)
+  (self : core.iter.adapters.rev.Rev I) (steps : Usize) :
+  Result (core.iter.adapters.step_by.StepBy (core.iter.adapters.rev.Rev I)) :=
+  if steps.val = 0 then .fail .panic
+  else ok ⟨ self, steps ⟩
+
+@[rust_fun
+  "core::iter::adapters::rev::{core::iter::traits::iterator::Iterator<core::iter::adapters::rev::Rev<@I>, @Clause0_Clause0_Item>}::enumerate"]
+def core.iter.adapters.rev.Rev.Insts.Iterator.enumerate
+  {I : Type} {Item : Type}
+  (_doubleEndedInst : core.iter.traits.double_ended.DoubleEndedIterator I Item)
+  (self : core.iter.adapters.rev.Rev I) :
+  Result (core.iter.adapters.enumerate.Enumerate (core.iter.adapters.rev.Rev I)) :=
+  ok { iter := self, count := 0#usize }
+
+@[rust_fun
+  "core::iter::adapters::rev::{core::iter::traits::iterator::Iterator<core::iter::adapters::rev::Rev<@I>, @Clause0_Clause0_Item>}::take"]
+def core.iter.adapters.rev.Rev.Insts.Iterator.take
+  {I : Type} {Item : Type}
+  (_doubleEndedInst : core.iter.traits.double_ended.DoubleEndedIterator I Item)
+  (self : core.iter.adapters.rev.Rev I) (n : Usize) :
+  Result (core.iter.adapters.take.Take (core.iter.adapters.rev.Rev I)) :=
+  ok ⟨ self, n ⟩
+
+@[reducible, rust_trait_impl
+  "core::iter::traits::iterator::Iterator<core::iter::adapters::rev::Rev<@I>, @Clause0_Clause0_Item>"]
+def core.iter.traits.iterator.IteratorRev {I : Type} {Item : Type}
+  (doubleEndedInst : core.iter.traits.double_ended.DoubleEndedIterator I Item) :
+  core.iter.traits.iterator.Iterator (core.iter.adapters.rev.Rev I) Item := {
+  next := core.iter.adapters.rev.Rev.Insts.Iterator.next doubleEndedInst
+  step_by := core.iter.adapters.rev.Rev.Insts.Iterator.step_by doubleEndedInst
+  enumerate := core.iter.adapters.rev.Rev.Insts.Iterator.enumerate doubleEndedInst
+  take := core.iter.adapters.rev.Rev.Insts.Iterator.take doubleEndedInst
+}
+
+/-- Default implementation of `Iterator::rev` — wraps `self` in `Rev`. -/
+@[rust_fun "core::iter::traits::iterator::Iterator::rev"]
+def core.iter.traits.iterator.Iterator.rev.default
+  {Self : Type} {Item1 : Type} {Item2 : Type}
+  (_iteratorInst : core.iter.traits.iterator.Iterator Self Item1)
+  (_doubleEndedInst : core.iter.traits.double_ended.DoubleEndedIterator Self Item2)
+  (self : Self) : Result (core.iter.adapters.rev.Rev Self) :=
+  ok ⟨self⟩
+
+/-- `Range::rev` — wraps the range in `Rev`. -/
+@[rust_fun
+  "core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>}::rev"]
+def core.ops.range.Range.Insts.Iterator.rev
+  {A : Type} {Item : Type} (_stepInst : core.iter.range.Step A)
+  (_doubleEndedInst : core.iter.traits.double_ended.DoubleEndedIterator (core.ops.range.Range A) Item)
+  (range : core.ops.range.Range A) :
+  Result (core.iter.adapters.rev.Rev (core.ops.range.Range A)) :=
+  ok ⟨range⟩
+
+-- ============================================================================
+-- Map adapter
+-- ============================================================================
+
 @[rust_type "core::iter::adapters::map::Map"]
 structure core.iter.adapters.map.Map (I : Type u) (F : Type v) where
   iter : I
