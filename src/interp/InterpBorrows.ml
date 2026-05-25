@@ -403,7 +403,7 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : tvalue)
             if bid' = bid then (
               (* Sanity check *)
               let expected_ty = ty in
-              if nv.ty <> expected_ty then
+              if phys_neq nv.ty expected_ty then
                 [%craise] span
                   ("Value given back doesn't have the proper type:\n\
                     - expected: " ^ ty_to_string ctx ty ^ "\n- received: "
