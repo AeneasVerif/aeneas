@@ -88,7 +88,7 @@ theorem BitVec.getElem_set {n} {bv: BitVec n} {b: Bool} {i: Fin n} {j: Nat}
 := by subst h; ext; rw [cast_eq, cast_eq]
 
 @[simp] theorem BitVec.getElem_ofBoolListLE {ls: List Bool} {i: Nat}
-: ∀ (h: i < ls.length), (BitVec.ofBoolListLE ls)[i] = ls[i]
+: ∀ (h: i < ls.length), (BitVec.ofBoolListLE ls)[i]'h = ls[i]
 := by
   let rec odd_div(x: Nat): (2*x + 1) / 2 = x := by
     cases x
@@ -112,9 +112,9 @@ theorem BitVec.getElem_set {n} {bv: BitVec n} {b: Bool} {i: Fin n} {j: Nat}
       apply BitVec.getElem_ofBoolListLE i_lt
       apply i_lt
 
-@[simp] theorem BitVec.getElem_ofFn {n} (f: Fin n → Bool) (i: Nat) {i_idx: i < n}
-: (BitVec.ofFn f)[i] = f ⟨i, i_idx⟩
-:= by simp [ofFn]
+@[simp] theorem BitVec.getElem_ofFn {n} (f: Fin n → Bool) (i: Nat) (i_idx: i < n)
+: (BitVec.ofFn f)[i]'i_idx = f ⟨i, i_idx⟩
+:= by simp only [ofFn, getElem_cast, getElem_ofBoolListLE, List.getElem_ofFn]
 
 /-!
 # Simp lemmas
