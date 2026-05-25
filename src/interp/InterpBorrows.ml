@@ -565,7 +565,7 @@ let give_back_value (span : Meta.span) (bid : BorrowId.id) (nv : tvalue)
                   (* The loan projector *)
                   let _, ty, _ = ty_as_ref ty in
                   let given_back =
-                    mk_eproj_loans_value_from_symbolic_value
+                    mk_eproj_loans_value_from_symbolic_value ctx.env
                       ctx.type_ctx.type_infos abs.regions.owned sv ty
                   in
                   (* Continue giving back in the child value *)

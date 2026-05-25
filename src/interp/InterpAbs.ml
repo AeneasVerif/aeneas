@@ -125,7 +125,9 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             in
             (* Create the input expression *)
             let input : tevalue =
-              let value = ELoan (EMutLoan (PNone, bid, mk_eignored inner_ty)) in
+              let value =
+                ELoan (EMutLoan (PNone, bid, mk_eignored None inner_ty))
+              in
               { value; ty }
             in
             (* *)
@@ -172,7 +174,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
             in
             (* Create the output expression *)
             let output : tevalue =
-              let ignored = mk_eignored ref_ty in
+              let ignored = mk_eignored None ref_ty in
               let value = EBorrow (EMutBorrow (PNone, bid, ignored)) in
               { value; ty }
             in
@@ -199,7 +201,7 @@ let convert_value_to_abstractions (span : Meta.span) (abs_kind : abs_kind)
           { value; ty = mk_unit_ty }
         in
         (* *)
-        let output = mk_eignored mk_unit_ty in
+        let output = mk_eignored None mk_unit_ty in
         push_abs rid avl (Some output) (Some input)
     | VSymbolic sv ->
         (* Check that there are no nested borrows in the symbolic value -
@@ -268,7 +270,7 @@ let convert_value_to_output_avalues (span : Meta.span) (ctx : eval_ctx)
   (* Convert a value to abstractions *)
   let rec to_output (v : tvalue) (proj_ty : ty) : tavalue list * tevalue =
     match (v.value, proj_ty) with
-    | VLiteral _, _ -> ([], mk_eignored proj_ty)
+    | VLiteral _, _ -> ([], mk_eignored (Some (ctx.env, v)) proj_ty)
     | VBottom, _ -> [%internal_error] span
     | VAdt { variant_id; fields }, TAdt { id; generics } ->
         let field_types =
@@ -308,7 +310,7 @@ let convert_value_to_output_avalues (span : Meta.span) (ctx : eval_ctx)
               in
               (* Create the output expression *)
               let output : tevalue =
-                let ignored = mk_eignored ref_ty in
+                let ignored = mk_eignored (Some (ctx.env, v)) ref_ty in
                 let value = EBorrow (EMutBorrow (pm, bid, ignored)) in
                 { value; ty = proj_ty }
               in
@@ -318,7 +320,7 @@ let convert_value_to_output_avalues (span : Meta.span) (ctx : eval_ctx)
           | VReservedMutBorrow _ ->
               (* This borrow should have been activated *)
               [%craise] span "Unexpected"
-        else ([], mk_eignored proj_ty)
+        else ([], mk_eignored (Some (ctx.env, v)) proj_ty)
     | VLoan _, _ ->
         (* TODO: should we project it or not (in which region abstraction should we put it)?
            We probably need to look at the borrows *inside*. *)
@@ -346,7 +348,7 @@ let convert_value_to_output_avalues (span : Meta.span) (ctx : eval_ctx)
           let output = { value = output; ty = proj_ty } in
           (* *)
           ([ nv ], output)
-        else ([], mk_eignored proj_ty)
+        else ([], mk_eignored (Some (ctx.env, v)) proj_ty)
     | _ -> [%internal_error] span
   in
 
@@ -390,7 +392,10 @@ let convert_value_to_input_avalues (span : Meta.span) (ctx : eval_ctx)
             in
             (* Create the input expression *)
             let input : tevalue =
-              let value = ELoan (EMutLoan (pm, bid, mk_eignored inner_ty)) in
+              let value =
+                ELoan
+                  (EMutLoan (pm, bid, mk_eignored (Some (ctx.env, v)) inner_ty))
+              in
               { value; ty }
             in
             (* *)
@@ -1409,7 +1414,7 @@ let bind_outputs_from_output_input (span : Meta.span) (ctx : eval_ctx)
         [%craise] span "Nested borrows are not supported yet in this case"
     | EMutBorrowInput x ->
         { input with value = EMutBorrowInput (update_input regions x) }
-    | EValue _ | EIgnored -> input
+    | EValue _ | EIgnored _ -> input
   in
   let rec bind_output (regions : RegionId.Set.t) (output : tevalue) : tepat =
     match output.value with
@@ -1493,7 +1498,7 @@ let bind_outputs_from_output_input (span : Meta.span) (ctx : eval_ctx)
     | EValue _ ->
         (* We're not inside a loan or a borrow: simply ignore it *)
         { pat = PIgnored; ty = output.ty }
-    | EIgnored ->
+    | EIgnored _ ->
         (* We're not inside a loan or a borrow: simply ignore it *)
         { pat = PIgnored; ty = output.ty }
   in
@@ -1522,7 +1527,7 @@ let tevalue_get_max_level (v : tevalue) : int =
 let project_output_at_level span (level : int) (v : tevalue) : tevalue =
   let rec project level (v : tevalue) : tevalue =
     let stop (v : tevalue) =
-      if level = 0 then v else { v with value = EIgnored }
+      if level = 0 then v else { v with value = EIgnored None }
     in
     match v.value with
     | ELet _ | EJoinMarkers _ | EBVar _ | EApp _ ->
@@ -1577,7 +1582,7 @@ let project_output_at_level span (level : int) (v : tevalue) : tevalue =
             [%cassert] span (loans = []) "Unimplemented";
             stop v
         | EEmpty -> stop v)
-    | EFVar _ | EValue _ | EIgnored -> stop v
+    | EFVar _ | EValue _ | EIgnored _ -> stop v
     | EMutBorrowInput _ | EBottom -> [%craise] span "Unreachable"
   in
   project level v
@@ -1697,7 +1702,8 @@ let merge_abs_conts_generate_output (span : Meta.span) (_ctx : eval_ctx)
               | [ (pm, fid, ty) ] ->
                   let output : tevalue =
                     {
-                      value = EBorrow (EMutBorrow (pm, bid, mk_eignored ty));
+                      value =
+                        EBorrow (EMutBorrow (pm, bid, mk_eignored None ty));
                       ty;
                     }
                   in
@@ -1712,7 +1718,8 @@ let merge_abs_conts_generate_output (span : Meta.span) (_ctx : eval_ctx)
                   in
                   let output =
                     {
-                      value = EBorrow (EMutBorrow (PNone, bid, mk_eignored tyl));
+                      value =
+                        EBorrow (EMutBorrow (PNone, bid, mk_eignored None tyl));
                       ty = tyl;
                     }
                   in
@@ -1798,7 +1805,7 @@ let merge_abs_conts_generate_input (span : Meta.span) (ctx : eval_ctx)
             in
             let pat : tepat = { pat = POpen fid; ty } in
             let input : tevalue =
-              { value = ELoan (EMutLoan (pm, bid, mk_eignored ty)); ty }
+              { value = ELoan (EMutLoan (pm, bid, mk_eignored None ty)); ty }
             in
             loans := BorrowId.Map.remove bid !loans;
             pats := pat :: !pats;
@@ -2560,9 +2567,15 @@ let project_context (span : Meta.span) (fixed_aids : AbsId.Set.t)
               [%cassert] span (consumed = []) "Not implemented";
               [%cassert] span (borrows = []) "Not implemented";
               EBottom
-          | EProjBorrows { proj = _; loans } ->
+          | EProjBorrows { proj = { sv_id; proj_ty }; loans } ->
               [%cassert] span (loans = []) "Not implemented";
-              if env.inside_output then EIgnored else EBottom
+              if env.inside_output then
+                EIgnored
+                  (Some
+                     ( ctx.env,
+                       mk_tvalue_from_symbolic_value { sv_id; sv_ty = proj_ty }
+                     ))
+              else EBottom
           | EEndedProjLoans { proj = _; consumed; borrows } ->
               [%cassert] span (consumed = []) "Not implemented";
               [%cassert] span (borrows = []) "Not implemented";
@@ -2570,7 +2583,7 @@ let project_context (span : Meta.span) (fixed_aids : AbsId.Set.t)
           | EEndedProjBorrows _ ->
               (* We can't find ended borrows in live abstractions *)
               [%internal_error] span
-          | EEmpty -> EIgnored
+          | EEmpty -> EIgnored None
 
       method! visit_ELoan env lc =
         match lc with
@@ -2593,7 +2606,7 @@ let project_context (span : Meta.span) (fixed_aids : AbsId.Set.t)
               EBorrow (EMutBorrow (PNone, bid, child))
             else (
               [%cassert] span (is_eignored child.value) "Not implemented";
-              if env.inside_output then EIgnored else EBottom)
+              if env.inside_output then EIgnored None else EBottom)
         | EIgnoredMutBorrow _ | EEndedMutBorrow _ | EEndedIgnoredMutBorrow _ ->
             (* Those do not have projection markers *)
             super#visit_EBorrow env lc
@@ -2649,7 +2662,7 @@ let add_abs_cont_to_abs span (ctx : eval_ctx) (abs : abs) (abs_fun : abs_fun) :
         | AMutLoan (pm, bid, child) ->
             [%sanity_check] span (is_aignored child.value);
             let value : evalue =
-              ELoan (EMutLoan (pm, bid, mk_eignored child.ty))
+              ELoan (EMutLoan (pm, bid, mk_eignored None child.ty))
             in
             loans := { value; ty } :: !loans
         | ASharedLoan _ ->
@@ -2665,7 +2678,7 @@ let add_abs_cont_to_abs span (ctx : eval_ctx) (abs : abs) (abs_fun : abs_fun) :
         | AMutBorrow (pm, bid, child) ->
             [%sanity_check] span (is_aignored child.value);
             let value : evalue =
-              EBorrow (EMutBorrow (pm, bid, mk_eignored child.ty))
+              EBorrow (EMutBorrow (pm, bid, mk_eignored None child.ty))
             in
             borrows := { value; ty } :: !borrows
         | ASharedBorrow _ -> (* We ignore shared borrows *) ()

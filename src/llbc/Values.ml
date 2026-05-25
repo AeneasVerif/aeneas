@@ -1136,7 +1136,7 @@ and evalue =
           generating the pure translation.
 
           TODO: this is not very clean. *)
-  | EIgnored
+  | EIgnored of ((env * mvalue)[@opaque]) option
       (** A value which doesn't contain borrows, or which borrows we don't own
           and thus ignore.
 
