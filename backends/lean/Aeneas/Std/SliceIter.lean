@@ -92,6 +92,7 @@ def core.iter.traits.iterator.IteratorSliceIter (T : Type) :
   step_by := core.slice.iter.IteratorSliceIter.step_by
   enumerate := core.slice.iter.IteratorSliceIter.enumerate
   take := core.slice.iter.IteratorSliceIter.take
+  rev := fun self => ok ⟨self⟩
 }
 
 -- ============================================================================
@@ -184,6 +185,7 @@ def core.iter.traits.iterator.IteratorChunksExact (T : Type) :
   step_by := core.slice.iter.IteratorChunksExact.step_by
   enumerate := core.slice.iter.IteratorChunksExact.enumerate
   take := core.slice.iter.IteratorChunksExact.take
+  rev := fun self => ok ⟨self⟩
 }
 
 /-- Split a list into non-overlapping chunks of exactly size `n`, returning the

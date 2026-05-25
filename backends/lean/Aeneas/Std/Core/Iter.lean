@@ -54,7 +54,7 @@ structure core.iter.traits.iterator.Iterator (Self : Type) (Self_Item : Type)
   step_by : Self → Usize → Result (core.iter.adapters.step_by.StepBy Self)
   enumerate : Self → Result (core.iter.adapters.enumerate.Enumerate Self)
   take : Self → Usize → Result (core.iter.adapters.take.Take Self)
-  -- rev : Self → Result (core.iter.adapters.rev.Rev Self) -- requires DoubleEndedIterator, leading to circularity
+  rev : Self → Result (core.iter.adapters.rev.Rev Self)
   -- TODO: collect
 
 @[rust_fun "core::iter::traits::iterator::Iterator::step_by"]
@@ -129,6 +129,7 @@ def core.iter.traits.iterator.IteratorStepBy {I : Type} {Item : Type}
   step_by := core.iter.adapters.step_by.IteratorStepBy.step_by IteratorInst
   enumerate := core.iter.adapters.step_by.IteratorStepBy.enumerate IteratorInst
   take := core.iter.adapters.step_by.IteratorStepBy.take IteratorInst
+  rev := fun self => ok ⟨self⟩
 }
 
 @[rust_trait "core::iter::traits::accum::Sum"]
@@ -271,6 +272,7 @@ def core.iter.traits.iterator.IteratorRange {A : Type}
   step_by := core.iter.range.IteratorRange.step_by StepInst
   enumerate := core.iter.range.IteratorRange.enumerate StepInst
   take := core.iter.range.IteratorRange.take StepInst
+  rev := fun self => ok ⟨self⟩
 }
 
 -- ============================================================================
@@ -324,6 +326,7 @@ def core.iter.traits.iterator.IteratorRev {I : Type} {Item : Type}
   step_by := core.iter.adapters.rev.Rev.Insts.Iterator.step_by doubleEndedInst
   enumerate := core.iter.adapters.rev.Rev.Insts.Iterator.enumerate doubleEndedInst
   take := core.iter.adapters.rev.Rev.Insts.Iterator.take doubleEndedInst
+  rev := fun self => ok ⟨self⟩
 }
 
 /-- Default implementation of `Iterator::rev` — wraps `self` in `Rev`. -/

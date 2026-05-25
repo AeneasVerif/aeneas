@@ -48,6 +48,7 @@ def core.iter.traits.iterator.IteratorVecIntoIter (T : Type) :
   step_by := alloc.vec.into_iter.IteratorIntoIter.step_by
   enumerate := alloc.vec.into_iter.IteratorIntoIter.enumerate
   take := alloc.vec.into_iter.IteratorIntoIter.take
+  rev := fun self => ok ⟨self⟩
 }
 
 @[rust_fun
