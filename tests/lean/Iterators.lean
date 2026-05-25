@@ -465,4 +465,40 @@ def copy_arrays
   := do
   copy_arrays_loop { start := 0#usize, «end» := 256#usize } src dst
 
+/-- [iterators::slice_rev]: loop body 0:
+    Source: 'tests/src/iterators.rs', lines 69:4-69:30 -/
+@[rust_loop_body]
+def slice_rev_loop.body
+  (iter : core.iter.adapters.rev.Rev (core.slice.iter.Iter Std.U8)) :
+  Result (ControlFlow (core.iter.adapters.rev.Rev (core.slice.iter.Iter
+    Std.U8)) Unit)
+  := do
+  let (o, iter1) ←
+    core.iter.adapters.rev.Rev.Insts.Iterator.next
+      (core.slice.iter.Iter.Insts.DoubleEndedIterator Std.U8) iter
+  match o with
+  | none => ok (done ())
+  | some _ => ok (cont iter1)
+
+/-- [iterators::slice_rev]: loop 0:
+    Source: 'tests/src/iterators.rs', lines 69:4-69:30 -/
+@[rust_loop]
+def slice_rev_loop
+  (iter : core.iter.adapters.rev.Rev (core.slice.iter.Iter Std.U8)) :
+  Result Unit
+  := do
+  loop
+    (fun iter1 => slice_rev_loop.body iter1)
+    iter
+
+/-- [iterators::slice_rev]:
+    Source: 'tests/src/iterators.rs', lines 68:0-70:1 -/
+def slice_rev (s : Array Std.U8 256#usize) : Result Unit := do
+  let s1 ← lift (Array.to_slice s)
+  let i ← core.slice.Slice.iter s1
+  let iter ←
+    core.slice.iter.Iter.Insts.Iterator.rev
+      (core.slice.iter.Iter.Insts.DoubleEndedIterator Std.U8) i
+  slice_rev_loop iter
+
 end iterators

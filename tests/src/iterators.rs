@@ -65,6 +65,10 @@ fn copy_arrays(src: &[u8; 256], dst: &mut [u8; 256]) {
     }
 }
 
+fn slice_rev(s: &[u8; 256]) {
+    for _ in s.iter().rev() {}
+}
+
 /*
 fn array_into_iter<const N : usize>(s : &[u8; N]) {
     for _ in s {}
