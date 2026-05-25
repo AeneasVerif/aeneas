@@ -226,8 +226,7 @@ theorem BitVec.and_two_pow_sub_one_eq_mod {w} (x : BitVec w) (n : Nat) :
 
 @[simp, simp_lists_safe, simp_scalar_safe, grind =, agrind =]
 theorem BitVec.shiftLeft_sub_one_eq_mod {w} (x : BitVec w) (n : Nat) :
-  x &&& 1#w <<< n - 1#w = x % 2 ^ n := by
-  simp only [BitVec.ofNat_eq_ofNat]
+  x &&& 1#w <<< n - 1#w = x % 2#w ^ n := by
   simp only [BitVec.shiftLeft_eq_mul_twoPow]
   have : 1#w * BitVec.twoPow w n = 2#w ^ n := by
     have : 1#w = 1 := by simp
