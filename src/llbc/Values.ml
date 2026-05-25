@@ -498,7 +498,7 @@ and aproj =
     of loans. *)
 and aproj_loans = {
   proj : symbolic_proj;
-  consumed : (mconsumed_symb * aproj) list;
+  consumed : ((mconsumed_symb[@equal fun _ _ -> true]) * aproj) list;
       (** The values we consumed because part of the loans in this loan
           projector were ended. For the reason why there is a list, see the
           explanations below. Note that because ending the loan may require
@@ -506,7 +506,7 @@ and aproj_loans = {
           values) we accumulate the consumed values here, and turn the
           [AProjLoans] into an [AEndedProjLoans] only when there are no
           intersecting borrow projectors left in the environment. *)
-  borrows : (mconsumed_symb * aproj) list;
+  borrows : ((mconsumed_symb[@equal fun _ _ -> true]) * aproj) list;
       (** The additional borrow projectors we had to introduce because some
           ancestor region ended *)
 }
@@ -534,7 +534,7 @@ and aproj_loans = {
     ]} *)
 and aproj_borrows = {
   proj : symbolic_proj;
-  loans : (mconsumed_symb * aproj) list;
+  loans : ((mconsumed_symb[@equal fun _ _ -> true]) * aproj) list;
       (** When an ancestor region ends, we may have to project the loans
           corresponding to its given back values. We store them here. *)
 }
@@ -546,22 +546,22 @@ and aended_proj_loans = {
   proj : msymbolic_value_id;
       (** The id of the original symbolic value, that we preserve as a
           meta-value *)
-  consumed : (mconsumed_symb * aproj) list;
+  consumed : ((mconsumed_symb[@equal fun _ _ -> true]) * aproj) list;
       (** The values we consumed because part of the loans in this loan
           projector were ended (for the reason why there is a list, see the
           explanations below). *)
-  borrows : (mconsumed_symb * aproj) list;
+  borrows : ((mconsumed_symb[@equal fun _ _ -> true]) * aproj) list;
       (** The additional borrow projectors we had to introduce because some
           ancestor region ended *)
 }
 
 and aended_proj_borrows = {
-  mvalues : ended_proj_borrow_meta;
+  mvalues : (ended_proj_borrow_meta[@equal fun _ _ -> true]);
       (** This stores, for synthesis purposes:
           - the symbolic value which was consumed upon creating the projection
           - the symbolic value which was generated and given back upon ending
             the borrows *)
-  loans : (mconsumed_symb * aproj) list;
+  loans : ((mconsumed_symb[@equal fun _ _ -> true]) * aproj) list;
 }
 
 (** Abstraction values are used inside of abstractions to properly model
@@ -574,7 +574,7 @@ and avalue =
   | ALoan of aloan_content
   | ABorrow of aborrow_content
   | ASymbolic of proj_marker * aproj
-  | AIgnored of mvalue option
+  | AIgnored of (mvalue option[@equal fun _ _ -> true])
       (** A value which doesn't contain borrows, or which borrows we don't own
           and thus ignore.
 
@@ -747,7 +747,7 @@ and aloan_content =
 and aended_mut_loan = {
   child : tavalue;
   given_back : tavalue;
-  given_back_meta : mvalue;
+  given_back_meta : (mvalue[@equal fun _ _ -> true]);
 }
 
 (** Similar to {!AEndedMutLoan}, for ignored loans. See the comments for
@@ -759,7 +759,7 @@ and aended_mut_loan = {
 and aended_ignored_mut_loan = {
   child : tavalue;
   given_back : tavalue;
-  given_back_meta : mvalue;
+  given_back_meta : (mvalue[@equal fun _ _ -> true]);
 }
 
 (** Note that contrary to {!aloan_content}, here the children avalues are not
@@ -867,7 +867,8 @@ and aborrow_content =
           rules to specifically handle the case of AIgnoredMutBorrow with Some
           borrow id) and also remove the AEndedIgnoredMutBorrow variant. For
           now, we prefer to be more precise that required. *)
-  | AEndedMutBorrow of aended_mut_borrow_meta * tavalue
+  | AEndedMutBorrow of
+      (aended_mut_borrow_meta[@equal fun _ _ -> true]) * tavalue
       (** The sole purpose of {!AEndedMutBorrow} is to store meta information
           for the synthesis, with in particular the (symbolic) value that was
           given back upon ending the borrow. *)
@@ -926,7 +927,7 @@ and aborrow_content =
 and aended_ignored_mut_borrow = {
   child : tavalue;
   given_back : tavalue;
-  given_back_meta : msymbolic_value;
+  given_back_meta : (msymbolic_value[@equal fun _ _ -> true]);
       (** [given_back_meta] is used to store the (symbolic) value we gave back
           upon ending the borrow.
 
@@ -997,7 +998,7 @@ and eproj =
     of loans. *)
 and eproj_loans = {
   proj : esymbolic_proj;
-  consumed : (mconsumed_symb * eproj) list;
+  consumed : ((mconsumed_symb[@equal fun _ _ -> true]) * eproj) list;
       (** The values we consumed because part of the loans in this loan
           projector were ended. For the reason why there is a list, see the
           explanations below. Note that because ending the loan may require
@@ -1005,7 +1006,7 @@ and eproj_loans = {
           values) we accumulate the consumed values here, and turn the
           [EprojLoans] into an [EEndedProjLoans] only when there are no
           intersecting borrow projectors left in the environment. *)
-  borrows : (mconsumed_symb * eproj) list;
+  borrows : ((mconsumed_symb[@equal fun _ _ -> true]) * eproj) list;
       (** The additional borrow projectors we had to introduce because some
           ancestor region ended *)
 }
@@ -1033,7 +1034,7 @@ and eproj_loans = {
     ]} *)
 and eproj_borrows = {
   proj : esymbolic_proj;
-  loans : (mconsumed_symb * eproj) list;
+  loans : ((mconsumed_symb[@equal fun _ _ -> true]) * eproj) list;
       (** When an ancestor region ends, we may have to project the loans
           corresponding to its given back values. We store them here. *)
 }
@@ -1045,22 +1046,22 @@ and eended_proj_loans = {
   proj : msymbolic_value_id;
       (** The id of the original symbolic value, that we preserve as a
           meta-value *)
-  consumed : (mconsumed_symb * eproj) list;
+  consumed : ((mconsumed_symb[@equal fun _ _ -> true]) * eproj) list;
       (** The values we consumed because part of the loans in this loan
           projector were ended (for the reason why there is a list, see the
           explanations below). *)
-  borrows : (mconsumed_symb * eproj) list;
+  borrows : ((mconsumed_symb[@equal fun _ _ -> true]) * eproj) list;
       (** The additional borrow projectors we had to introduce because some
           ancestor region ended *)
 }
 
 and eended_proj_borrows = {
-  mvalues : ended_proj_borrow_meta;
+  mvalues : (ended_proj_borrow_meta[@equal fun _ _ -> true]);
       (** This stores, for synthesis purposes:
           - the symbolic value which was consumed upon creating the projection
           - the symbolic value which was generated and given back upon ending
             the borrows *)
-  loans : (mconsumed_symb * eproj) list;
+  loans : ((mconsumed_symb[@equal fun _ _ -> true]) * eproj) list;
 }
 
 and abs_bvar = { scope : abs_db_scope_id; bvar_id : abs_bvar_id }
@@ -1113,7 +1114,7 @@ and evalue =
   | ELoan of eloan_content
   | EBorrow of eborrow_content
   | ESymbolic of proj_marker * eproj
-  | EValue of (env[@opaque]) * mvalue
+  | EValue of ((env * mvalue)[@opaque] [@equal fun _ _ -> true])
       (** A concrete value, that we remember as a meta-value (together with the
           environment at the time we introduced this evalue - we need this to
           translate the shared borrows, because translating them requires
@@ -1136,7 +1137,7 @@ and evalue =
           generating the pure translation.
 
           TODO: this is not very clean. *)
-  | EIgnored of ((env * mvalue)[@opaque]) option
+  | EIgnored of ((env * mvalue) option[@opaque] [@equal fun _ _ -> true])
       (** A value which doesn't contain borrows, or which borrows we don't own
           and thus ignore.
 
@@ -1152,7 +1153,7 @@ and tepat = { pat : epat; ty : ty  (** The type should have been normalized *) }
 
 and adt_evalue = {
   borrow_proj : bool;
-      (** Was this ADT inroduced because of a borrow projection or a loan
+      (** Was this ADT introduced because of a borrow projection or a loan
           projection? *)
   variant_id : (VariantId.id option[@opaque]);
   fields : tevalue list;
@@ -1282,7 +1283,7 @@ and eloan_content =
 and eended_mut_loan = {
   child : tevalue;
   given_back : tevalue;
-  given_back_meta : mvalue;
+  given_back_meta : (mvalue[@equal fun _ _ -> true]);
 }
 
 (** Similar to {!EEndedMutLoan}, for ignored loans. See the comments for
@@ -1294,7 +1295,7 @@ and eended_mut_loan = {
 and eended_ignored_mut_loan = {
   child : tevalue;
   given_back : tevalue;
-  given_back_meta : mvalue;
+  given_back_meta : (mvalue[@equal fun _ _ -> true]);
 }
 
 (** Note that contrary to {!aloan_content}, here the children evalues are not
@@ -1400,7 +1401,7 @@ and eborrow_content =
 and eended_ignored_mut_borrow = {
   child : tevalue;
   given_back : tevalue;
-  given_back_meta : msymbolic_value;
+  given_back_meta : (msymbolic_value[@equal fun _ _ -> true]);
       (** [given_back_meta] is used to store the (symbolic) value we gave back
           upon ending the borrow.
 

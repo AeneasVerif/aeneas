@@ -2193,7 +2193,7 @@ let abs_is_destructured (span : Meta.span) (destructure_shared_values : bool)
     end
   in
   let abs = visitor#visit_abs () abs in
-  abs = abs'
+  equal_abs abs abs'
 
 exception FoundBorrowId of unique_borrow_id
 exception FoundAbsId of AbsId.id

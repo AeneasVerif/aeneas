@@ -2467,7 +2467,7 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
           if DummyVarId.Set.mem b0 fixed_ids.dids then (
             let v1, env1' = pop_dummy b0 env1 in
             (* Fixed values: the values must be equal *)
-            [%sanity_check_recover] S.recover span (v0 = v1);
+            [%sanity_check_recover] S.recover span (equal_tvalue v0 v1);
             (* The ids present in the left value must be fixed *)
             let ids, _ = compute_tvalue_ids v0 in
             [%sanity_check_recover] S.recover span
@@ -2491,7 +2491,7 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
           [%ldebug "match_envs: matching abs: fixed abs"];
           let abs1, env1' = pop_abs abs0.abs_id env1 in
           (* Still in the prefix: the abstractions must be the same *)
-          [%sanity_check_recover] S.recover span (abs0 = abs1);
+          [%sanity_check_recover] S.recover span (equal_abs abs0 abs1);
           (* Their ids must be fixed *)
           let ids, _ = compute_abs_ids abs0 in
           [%sanity_check_recover] S.recover span
