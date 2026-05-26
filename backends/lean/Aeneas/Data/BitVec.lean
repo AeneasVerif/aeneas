@@ -131,6 +131,7 @@ theorem BitVec.getElem!_eq_false {w : ℕ} (x : BitVec w) (i : ℕ) (hi : w ≤ 
   . omega
   . rfl
 
+@[simp_lists]
 theorem BitVec.getElem!_eq_getElem {w : ℕ} (x : BitVec w) (i : ℕ) (hi : i < w) :
   x[i]! = x[i] := by
   unfold getElem! instGetElem?OfGetElemOfDecidable decidableGetElem?
@@ -150,6 +151,8 @@ theorem BitVec.getElem!_eq_getElem {w : ℕ} (x : BitVec w) (i : ℕ) (hi : i < 
   by_cases i < w
   . simp only [getElem!_eq_getElem, getElem_and, *]
   . simp_all only [not_lt, getElem!_eq_false, Bool.and_self]
+
+attribute [simp_lists] BitVec.getElem_or BitVec.getElem_and BitVec.getElem_xor BitVec.getElem_not
 
 @[simp, simp_lists_safe]
 theorem Bool.toNat_ofNat_mod2 (x : ℕ) : (Bool.ofNat (x % 2)).toNat = x % 2 := by
@@ -254,6 +257,7 @@ theorem BitVec.getElem!_shiftLeft_eq {w} (v : BitVec w) (n i : ℕ) (h : n ≤ i
   simp only [getElem!_eq_testBit_toNat, toNat_shiftLeft, Nat.testBit_mod_two_pow, h, decide_true,
     Nat.testBit_shiftLeft, Bool.true_and]
 
+attribute [simp_lists] BitVec.getElem_shiftLeft
 @[simp, simp_lists_safe, grind =, agrind =]
 theorem BitVec.getElem!_shiftRight {w} (v : BitVec w) (n i : ℕ) :
   (v >>> n)[i]! = v[n + i]! := by
