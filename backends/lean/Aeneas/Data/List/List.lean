@@ -402,7 +402,7 @@ theorem length_flatten_set_eq_disj {α : Type u} (ls : List (List α)) (i : Nat)
   rw [length_flatten_set_eq] <;> simp [*]
 
 grind_pattern length_flatten_set_eq_disj => (ls.set i x).flatten
-grind_pattern [agrind] length_flatten_set_eq_disj => (ls.set i x).flatten
+grind_pattern [grind] length_flatten_set_eq_disj => (ls.set i x).flatten
 
 theorem length_flatten_set_as_int_eq {α : Type u} (ls : List (List α)) (i : Nat) (x : List α)
   (h1 : i < ls.length) :
