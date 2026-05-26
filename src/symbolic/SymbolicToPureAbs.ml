@@ -511,7 +511,7 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
         in
         (ctx, Option.map snd out)
       end
-    | V.EIgnored ->
+    | V.EIgnored _ ->
         let ty = output.ty in
         if
           filter
@@ -741,7 +741,8 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
               in
               mk_adt_texpr span ty variant_id fields)
             (mk_simpl_tuple_texpr span)
-            ~filter ctx input input.ty fields
+            (* Stop filtering once we enter an ADT *)
+            ~filter:false ctx input input.ty fields
         in
         match out with
         | None -> (ctx, false, None)
@@ -824,12 +825,18 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
             [%internal_error] span
       end
     | V.EValue (env, mv) ->
-        [%ldebug "value"];
+        [%ldebug "value: filter = " ^ string_of_bool filter];
         let e = tvalue_to_texpr ctx { ectx with env } mv in
         (ctx, false, Some e)
-    | V.EIgnored ->
-        [%ldebug "ignored"];
+    | V.EIgnored None ->
+        [%ldebug "ignored (None)"];
         (ctx, false, None)
+    | V.EIgnored (Some (env, mv)) ->
+        [%ldebug "ignored (Some): filter = " ^ string_of_bool filter];
+        if filter then (ctx, false, None)
+        else
+          let e = tvalue_to_texpr ctx { ectx with env } mv in
+          (ctx, false, Some e)
     | V.EBottom ->
         [%ldebug "bottom"];
         [%internal_error] span
@@ -1104,7 +1111,7 @@ let rec tevalue_to_given_back_aux ~(filter : bool)
     | ESymbolic (pm, eproj) ->
         [%sanity_check] ctx.span (pm = PNone);
         eproj_to_given_back_aux abs_level current_level mp eproj ev.ty ctx
-    | EIgnored ->
+    | EIgnored _ ->
         (* If we do not filter, we have to create an ignored pattern *)
         if filter then (ctx, None)
         else

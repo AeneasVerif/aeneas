@@ -249,8 +249,8 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
                    simplify the given back value to unit when translating
                    to pure) so we can simply ignore them. *)
                 {
-                  input = Some (mk_eignored mk_unit_ty);
-                  output = Some { value = EIgnored; ty };
+                  input = Some (mk_eignored None mk_unit_ty);
+                  output = Some { value = EIgnored None; ty };
                 }
               in
 
