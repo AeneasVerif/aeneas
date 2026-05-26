@@ -21,6 +21,7 @@ open Lean Lean.Meta Lean.Parser.Tactic Lean.Elab.Tactic
 attribute [simp_lists_safe]
   add_tsub_cancel_right add_tsub_cancel_left
   zero_add add_zero
+  sub_zero Nat.sub_zero
 
 /- Adding theorems about `testBit`.
 
