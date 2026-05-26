@@ -741,7 +741,8 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
               in
               mk_adt_texpr span ty variant_id fields)
             (mk_simpl_tuple_texpr span)
-            ~filter ctx input input.ty fields
+            (* Stop filtering once we enter an ADT *)
+            ~filter:false ctx input input.ty fields
         in
         match out with
         | None -> (ctx, false, None)
