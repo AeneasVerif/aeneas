@@ -12,7 +12,69 @@ set_option maxHeartbeats 1000000
 /- You can set the `maxRecDepth` value with the `-max-recdepth` CLI option -/
 set_option maxRecDepth 2048
 
+/- You can remove the following line by using the CLI option `-all-computable`: -/
+noncomputable section
+
 namespace iterators
+
+/-- [core::iter::adapters::zip::Zip]
+    Source: '/rustc/library/core/src/iter/adapters/zip.rs', lines 15:0-15:20
+    Name pattern: [core::iter::adapters::zip::Zip]
+    Visibility: public -/
+@[rust_type "core::iter::adapters::zip::Zip"]
+axiom core.iter.adapters.zip.Zip (A : Type) (B : Type) : Type
+
+/-- [core::iter::adapters::zip::{core::iter::traits::iterator::Iterator<(Clause0_Item, Clause1_Item)> for core::iter::adapters::zip::Zip<A, B>}::next]:
+    Source: '/rustc/library/core/src/iter/adapters/zip.rs', lines 84:4-84:44
+    Name pattern: [core::iter::adapters::zip::{core::iter::traits::iterator::Iterator<core::iter::adapters::zip::Zip<@A, @B>, (@Clause0_Item, @Clause1_Item)>}::next]
+    Visibility: public -/
+@[rust_fun
+  "core::iter::adapters::zip::{core::iter::traits::iterator::Iterator<core::iter::adapters::zip::Zip<@A, @B>, (@Clause0_Item, @Clause1_Item)>}::next"]
+axiom core.iter.adapters.zip.Zip.Insts.CoreIterTraitsIteratorIteratorPair.next
+  {A : Type} {B : Type} {Clause0_Item : Type} {Clause1_Item : Type}
+  (traitsiteratorIteratorInst : core.iter.traits.iterator.Iterator A
+  Clause0_Item) (traitsiteratorIteratorInst1 :
+  core.iter.traits.iterator.Iterator B Clause1_Item) :
+  core.iter.adapters.zip.Zip A B → Result ((Option (Clause0_Item ×
+    Clause1_Item)) × (core.iter.adapters.zip.Zip A B))
+
+/-- [core::iter::range::{core::iter::traits::iterator::Iterator<A> for core::ops::range::Range<A>}::zip]:
+    Source: '/rustc/library/core/src/iter/range.rs', lines 852:0-852:40
+    Name pattern: [core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>}::zip]
+    Visibility: public -/
+@[rust_fun
+  "core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>}::zip"]
+axiom core.ops.range.Range.Insts.CoreIterTraitsIteratorIterator.zip
+  {A : Type} {U : Type} {Clause1_Item : Type} {Clause1_IntoIter : Type}
+  (StepInst : core.iter.range.Step A) (traitscollectIntoIteratorInst :
+  core.iter.traits.collect.IntoIterator U Clause1_Item Clause1_IntoIter) :
+  core.ops.range.Range A → U → Result (core.iter.adapters.zip.Zip
+    (core.ops.range.Range A) Clause1_IntoIter)
+
+/-- [core::iter::traits::iterator::Iterator::zip]:
+    Source: '/rustc/library/core/src/iter/traits/iterator.rs', lines 626:4-629:24
+    Name pattern: [core::iter::traits::iterator::Iterator::zip]
+    Visibility: public -/
+@[rust_fun "core::iter::traits::iterator::Iterator::zip"]
+axiom core.iter.traits.iterator.Iterator.zip.default
+  {Self : Type} {U : Type} {Clause0_Item : Type} {Clause1_Item : Type}
+  {Clause1_IntoIter : Type} (IteratorInst : core.iter.traits.iterator.Iterator
+  Self Clause0_Item) (collectIntoIteratorInst :
+  core.iter.traits.collect.IntoIterator U Clause1_Item Clause1_IntoIter) :
+  Self → U → Result (core.iter.adapters.zip.Zip Self Clause1_IntoIter)
+
+/-- [core::slice::iter::{core::iter::traits::iterator::Iterator<&'a (T)> for core::slice::iter::Iter<'a, T>}::zip]:
+    Source: '/rustc/library/core/src/slice/iter/macros.rs', lines 153:8-153:45
+    Name pattern: [core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::zip]
+    Visibility: public -/
+@[rust_fun
+  "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::zip"]
+axiom core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.zip
+  {T : Type} {U : Type} {Clause0_Item : Type} {Clause0_IntoIter : Type}
+  (itertraitscollectIntoIteratorInst : core.iter.traits.collect.IntoIterator U
+  Clause0_Item Clause0_IntoIter) :
+  core.slice.iter.Iter T → U → Result (core.iter.adapters.zip.Zip
+    (core.slice.iter.Iter T) Clause0_IntoIter)
 
 /-- [iterators::iter_range]: loop body 0:
     Source: 'tests/src/iterators.rs', lines 5:4-5:28 -/
@@ -464,5 +526,48 @@ def copy_arrays
   Result (Array Std.U8 256#usize)
   := do
   copy_arrays_loop { start := 0#usize, «end» := 256#usize } src dst
+
+/-- [iterators::zip_iter]: loop body 0:
+    Source: 'tests/src/iterators.rs', lines 69:4-69:38
+    Visibility: public -/
+@[rust_loop_body]
+def zip_iter_loop.body
+  (iter : core.iter.adapters.zip.Zip (core.slice.iter.Iter Std.U8)
+  (core.slice.iter.Iter Std.U8)) :
+  Result (ControlFlow (core.iter.adapters.zip.Zip (core.slice.iter.Iter Std.U8)
+    (core.slice.iter.Iter Std.U8)) Unit)
+  := do
+  let (o, iter1) ←
+    core.iter.adapters.zip.Zip.Insts.CoreIterTraitsIteratorIteratorPair.next
+      (core.iter.traits.iterator.IteratorSliceIter Std.U8)
+      (core.iter.traits.iterator.IteratorSliceIter Std.U8) iter
+  match o with
+  | none => ok (done ())
+  | some _ => ok (cont iter1)
+
+/-- [iterators::zip_iter]: loop 0:
+    Source: 'tests/src/iterators.rs', lines 69:4-69:38
+    Visibility: public -/
+@[rust_loop]
+def zip_iter_loop
+  (iter : core.iter.adapters.zip.Zip (core.slice.iter.Iter Std.U8)
+  (core.slice.iter.Iter Std.U8)) :
+  Result Unit
+  := do
+  loop
+    (fun iter1 => zip_iter_loop.body iter1)
+    iter
+
+/-- [iterators::zip_iter]:
+    Source: 'tests/src/iterators.rs', lines 68:0-70:1
+    Visibility: public -/
+def zip_iter (a : Slice Std.U8) (b : Slice Std.U8) : Result Unit := do
+  let i ← core.slice.Slice.iter a
+  let i1 ← core.slice.Slice.iter b
+  let iter ←
+    core.slice.iter.Iter.Insts.CoreIterTraitsIteratorIteratorSharedAT.zip
+      (core.iter.traits.collect.IntoIterator.Blanket
+      (core.iter.traits.iterator.IteratorSliceIter Std.U8)) i i1
+  zip_iter_loop iter
 
 end iterators
