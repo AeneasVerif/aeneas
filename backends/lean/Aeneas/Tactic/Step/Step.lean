@@ -223,13 +223,21 @@ structure Args where
 
    If comp = bind m k then return true and m
    Else return false and comp
+
+   NEW: also looks up which type of spec is being used in the statment,
+   and returns the corresponding SpecInfo
 -/
-def getFirstBind (goalTy : Expr) : MetaM (Bool × Expr) := do
+def getFirstBind (goalTy : Expr) : MetaM (Bool × Expr × SpecInfo) := do
   forallTelescope goalTy fun nvars goalTy => do
 
   let (spec?, args) := goalTy.consumeMData.withApp (fun f args => (f, args))
-  let compTy ← if h: spec?.isConstOf ``Std.WP.spec ∧ args.size = 3
-               then pure (args[1])
+  let name ← match spec? with
+    | Expr.const name _ => pure name
+    | _ => throwError "{spec?} is not a spec statement name"
+  let .some info := specStatementLookup name
+    | throwError "{name} is not a supported spec statement name"
+  let compTy ← if h: args.size = info.arity
+               then pure (args[info.program_index]!)
                else throwError "Goal is not a `spec m P`"
 
   trace[Step] "compTy: {compTy}"
@@ -237,8 +245,8 @@ def getFirstBind (goalTy : Expr) : MetaM (Bool × Expr) := do
   let (bind?, args) := compTy.consumeMData.withApp (fun f args => (f, args))
   trace[Step] "bind?: {bind?}"
   if h: bind?.isConstOf ``bind ∧ args.size = 6
-  then pure (true, args[4])
-  else pure (false, compTy)
+  then pure (true, args[4], info)
+  else pure (false, compTy, info)
 
 /-- Names introduced by the `do` elaborator's `mkPatContinuation` as a
     fallback (`_xN`) when no leaf name is available — e.g. all leaves are
@@ -413,6 +421,7 @@ def getPostNamesFromGoal : TacticM (Array (Option Name)) := do
     let goalTy ← (← getMainGoal).getType
     let goalTy ← instantiateMVars goalTy
     goalTy.consumeMData.withApp fun spec? args => do
+    -- TODO: this could be generalized to work with other specs, like `dspec`
     if spec?.isConstOf ``Std.WP.spec ∧ args.size = 3 then
       getPostNames args[2]!
     else pure #[]
@@ -462,7 +471,7 @@ def trySolveTypeclasses (mvarsIds : List MVarId) : TacticM (List MVarId) := do
 The resulting target should be of the shape:
 `qimp_spec P k Q` (or `qimp P Q`)
 -/
-def tryMatch (isLet : Bool) (th : Expr) :
+def tryMatch (info : SpecInfo) (isLet : Bool) (th : Expr) :
   TacticM (Array MVarId) := do
   withTraceNode `Step (fun _ => pure m!"tryMatch") do
   /- Apply the theorem
@@ -485,17 +494,19 @@ def tryMatch (isLet : Bool) (th : Expr) :
 
   -- `thTy` should be of the shape `spec program post`: we need to retrieve `program`
   let (thHead, thArgs) := thTy.consumeMData.withApp (fun f args => (f, args))
-  if !thHead.isConst || thHead.constName! != ``Std.WP.spec then
+  -- TODO: here is where it should be able to lift from spec to dspec
+  if !thHead.isConst || thHead.constName! != info.name then
     throwError "Not a spec theorem"
+
   let (program, P) ←
-    if h: thArgs.size = 3
-    then pure (thArgs[1], thArgs[2])
+    if h: thArgs.size = info.arity
+    then pure (thArgs[info.program_index]!, thArgs[info.post_index]!)
     else throwError "Not a spec theorem"
 
   let (specMonoBindName, varNum) :=
     if isLet
-    then (``Std.WP.spec_bind', 4)
-    else (``Std.WP.spec_mono', 2)
+    then (``Std.WP.spec_bind', info.mk_spec_bind_skip_args)
+    else (``Std.WP.spec_mono', info.mk_spec_mono_skip_args)
   let specMonoBind ← Term.mkConst specMonoBindName
   let specMonoBindTy ← inferType specMonoBind
   trace[Step] "specMonoBind (isLet:{isLet}): {specMonoBind}: {← inferType specMonoBind}"
@@ -815,13 +826,13 @@ def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option MainGoal)
         pure (some ({goal := ← getMainGoal, outputs, stepState := mainGoal.stepState} : MainGoal))
       else pure none
 
-def stepWith (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
+def stepWith (info : SpecInfo) (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
   TacticM Goals := do
   withTraceNode `Step (fun _ => pure m!"stepWith") do
   -- Save the main goal before tryMatch (needed for lazy grind state initialization)
   let originalGoal ← getMainGoal
   -- Attempt to instantiate the theorem and introduce it in the context
-  let newGoals ← tryMatch isLet th
+  let newGoals ← tryMatch info isLet th
   --
   withMainContext do
   traceGoalWithNode "current goal"
@@ -898,7 +909,7 @@ def getFirstArg (args : Array Expr) : Option Expr := do
 /-- Helper: try to apply a theorem.
 
     Return the list of post-conditions we introduced if it succeeded. -/
-def tryApply (args : Args) (isLet:Bool) (fExpr : Expr) (kind : String) (th : Option Expr) :
+def tryApply (info : SpecInfo) (args : Args) (isLet:Bool) (fExpr : Expr) (kind : String) (th : Option Expr) :
   TacticM (Option Goals) := do
   let res ← do
     match th with
@@ -910,7 +921,7 @@ def tryApply (args : Args) (isLet:Bool) (fExpr : Expr) (kind : String) (th : Opt
       -- Apply the theorem
       let res ← do
         try
-          let res ← stepWith args isLet fExpr th
+          let res ← stepWith info args isLet fExpr th
           pure (some res)
         catch _ => pure none
   match res with
@@ -922,7 +933,7 @@ def tryApply (args : Args) (isLet:Bool) (fExpr : Expr) (kind : String) (th : Opt
 
     -- TODO: check that they are "compatible" with the goal to avoid a potentially expensive unification
 -/
-def tryAssumptions (args : Args) (isLet:Bool) (fExpr : Expr) :
+def tryAssumptions (info : SpecInfo) (args : Args) (isLet:Bool) (fExpr : Expr) :
   TacticM (Option (Goals × UsedTheorem)) := do
   withTraceNode `Step (fun _ => pure m!"tryAssumptions") do run
 where
@@ -933,7 +944,7 @@ where
   for decl in decls.reverse do
     trace[Step] "Trying assumption: {decl.userName} : {decl.type}"
     try
-      let goal ← stepWith args isLet fExpr decl.toExpr
+      let goal ← stepWith info args isLet fExpr decl.toExpr
       return (some (goal, .localHyp decl))
     catch _ => continue
   pure none
@@ -956,18 +967,18 @@ def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
      TODO: we should also check that no quantified variable appears in fExpr.
      If such variables appear, we should just fail because the goal doesn't
      have the proper shape. -/
-  let (goalIsLet, fExpr) ← do
+  let (goalIsLet, fExpr, info) ← do
     withTraceNode `Step (fun _ => pure m!"Calling getFirstBind to deconstruct the target") do
     getFirstBind goalTy
   /- If the user provided a theorem/assumption: use it.
      Otherwise, lookup one. -/
   match withTh with
   | some th => do
-    let goals ← stepWith args goalIsLet fExpr th
+    let goals ← stepWith info args goalIsLet fExpr th
     return (goals, .givenExpr th)
   | none =>
     -- Try all the assumptions one by one and if it fails try to lookup a theorem.
-    if let some res ← tryAssumptions args goalIsLet fExpr then return res
+    if let some res ← tryAssumptions info args goalIsLet fExpr then return res
     /- It failed: lookup the pspec theorems which match the expression *only
        if the function is a constant* -/
     let fIsConst ← do
@@ -990,7 +1001,7 @@ def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
       -- Try the theorems one by one
       for pspec in pspecs do
         let pspecExpr ← Term.mkConst pspec
-        match ← tryApply args goalIsLet fExpr "pspec theorem" pspecExpr with
+        match ← tryApply info args goalIsLet fExpr "pspec theorem" pspecExpr with
         | some goals => return (goals, .stepThm pspec)
         | none => pure ()
       -- It failed: try to use the recursive assumptions
@@ -1005,7 +1016,7 @@ def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
       for decl in decls.reverse do
         trace[Step] "Trying recursive assumption: {decl.userName} : {decl.type}"
         try
-          let goals ← stepWith args goalIsLet fExpr decl.toExpr
+          let goals ← stepWith info args goalIsLet fExpr decl.toExpr
           return (goals, .localHyp decl)
         catch _ => continue
       -- Nothing worked: failed
@@ -1422,8 +1433,9 @@ namespace Test
   open Std Result
 
   -- Show the traces:
-  set_option trace.Step true
+  -- set_option trace.Step true
   -- set_option pp.rawOnError true
+
 
   set_option says.verify true
 
@@ -1492,6 +1504,14 @@ namespace Test
     := by
       unfold simple_converge
       split <;> simp [*]
+
+  example : WP.spec
+    (do let x ← 1#i32 + 2#i32
+        let y ← x + x
+        return y) (fun z => z.val == 10) := by
+    step
+    step
+    sorry
 
   -- -- test out using a spec theorem to prove a dspec
   -- example : WP.dspec

@@ -215,35 +215,51 @@ end Methods
 structure SpecInfo where
   name : Lean.Name
   arity : Nat
-  mk_spec_mono : Array Lean.Expr → Lean.Expr → Lean.Expr
-  mk_spec_bind : Array Lean.Expr → Lean.Expr → Lean.Expr
-  -- discr_tree_key : Array Lean.Expr → Array Lean.Expr
+  -- mk_spec_mono : Array Lean.Expr → Lean.Expr → MetaM Lean.Expr
+  -- mk_spec_bind : Array Lean.Expr → Lean.Expr → MetaM Lean.Expr
+  mk_spec_mono : Name
+  mk_spec_mono_skip_args : Nat -- number of arguments to be inferred, before Result and Post arguments
+  mk_spec_bind : Name
+  mk_spec_bind_skip_args : Nat
   program_index : Nat -- index into the arguments of the Result value
+  post_index : Nat
 
   uncurry_elim_tactics : Array Lean.Name
   qimp_elim_tactics : Array Lean.Name
   deriving Inhabited
 
-unsafe def specStatementLookup : Name → SpecInfo
-  | ``Std.WP.spec => {
+def specStatementLookup : Name → Option SpecInfo
+  | ``Std.WP.spec => .some {
     name := ``Std.WP.spec
     arity := 3
-    mk_spec_mono := fun _args thm => thm
-    mk_spec_bind := fun _args thm => thm
+    -- mk_spec_mono := fun args thm =>
+    --   mkAppOptM ``Std.WP.spec_mono' #[.none, .none, args[1]!, args[2]!, thm]
+    -- mk_spec_bind := fun args thm =>
+    --   mkAppOptM ``Std.WP.spec_bind' #[.none, .none, .none, .none, args[1]!, args[2]!, thm]
+    mk_spec_mono := ``Std.WP.spec_mono'
+    mk_spec_mono_skip_args := 2
+    mk_spec_bind := ``Std.WP.spec_bind'
+    mk_spec_bind_skip_args := 4
     uncurry_elim_tactics := #[]
     qimp_elim_tactics := #[]
     program_index := 1
+    post_index := 2
   }
-  | ``Std.WP.dspec => {
+  | ``Std.WP.dspec => .some {
     name := ``Std.WP.dspec
     arity := 3
-    mk_spec_mono := fun _args thm => thm
-    mk_spec_bind := fun _args thm => thm
+    -- mk_spec_mono := fun _args thm => pure thm
+    -- mk_spec_bind := fun _args thm => pure thm
+    mk_spec_mono := ``Std.WP.spec_mono'
+    mk_spec_mono_skip_args := 2
+    mk_spec_bind := ``Std.WP.spec_bind'
+    mk_spec_bind_skip_args := 4
     uncurry_elim_tactics := #[]
     qimp_elim_tactics := #[]
     program_index := 1
+    post_index := 2
   }
-  | _ => panic! "not a valid spec statement"
+  | _ => .none
 
 /- Analyze a goal or a step theorem to decompose its arguments.
 
@@ -253,7 +269,7 @@ unsafe def specStatementLookup : Name → SpecInfo
   ```
 -/
 def getStepSpecFunArgsExpr (ty : Expr) :
-  MetaM Expr := do
+  MetaM (Expr × SpecInfo) := do
   let ty := ty.consumeMData
   unless ← isProp ty do
     throwError "Expected a proposition, got {←inferType ty}"
@@ -262,8 +278,13 @@ def getStepSpecFunArgsExpr (ty : Expr) :
   trace[Step] "Universally quantified arguments and assumptions: {xs}"
   -- ty₂ == spec (f x1 ... xn) P
   let (spec?, args) := ty₂.consumeMData.withApp (fun f args => (f, args))
-  if h: spec?.isConstOf ``Std.WP.spec ∧ args.size = 3
-  then pure args[1] -- this is `f x1 ... xn`
+  let specName ← match spec? with
+    | Expr.const name _ => pure name
+    | _ => throwError "Not a constant"
+  let .some info := specStatementLookup specName
+    | throwError "{specName} is not a supported spec statement name"
+  if h: args.size = info.arity
+  then pure (args[info.program_index]!, info) -- this is `f x1 ... xn`
   else throwError "Expected to be a `spec (f x1 ... xn) P`, got {ty₂}"
 
 structure Rules where
@@ -315,11 +336,12 @@ private def saveStepSpecFromThm (ext : Extension) (attrKind : AttributeKind) (th
       -- Normalize to eliminate the let-bindings
       let ty ← normalizeLetBindings type
       trace[Step] "Theorem after normalization (to eliminate the let bindings): {ty}"
-      let fExpr ← getStepSpecFunArgsExpr ty
+      let (fExpr, info) ← getStepSpecFunArgsExpr ty
       trace[Step] "Registering spec theorem for expr: {fExpr}"
       -- Convert the function expression to a discrimination tree key
       DiscrTree.mkPath fExpr)
     -- Save the entry
+    -- TODO: use info.name to use a different discrimination tree here!
     ScopedEnvExtension.add ext (fKey, thName) attrKind
     trace[Step] "Saved the entry"
     pure ()
