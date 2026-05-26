@@ -548,7 +548,7 @@ theorem BitVec.testBit_getElem!_toLEBytes {w:ℕ} (x : BitVec w) (i j : ℕ) (h 
   simp_all only [List.getElem!_eq_getElem?_getD, getElem!_eq_testBit_toNat]
 
 theorem BitVec.or_mod_two_pow {n : Nat} (a b : BitVec n) (k : Nat) :
-  (a ||| b) % 2 ^ k = (a % 2 ^ k) ||| (b % 2 ^ k) := by
+  (a ||| b) % 2#n ^ k = (a % 2#n ^ k) ||| (b % 2#n ^ k) := by
   by_cases k < n <;> natify <;> simp
   · have : 2 ^ k < 2 ^ n := by simp_scalar
     cases k
@@ -563,16 +563,16 @@ theorem BitVec.or_mod_two_pow {n : Nat} (a b : BitVec n) (k : Nat) :
 
 @[simp]
 theorem BitVec.or_mod_two_pow_iff_true {n : Nat} (a b : BitVec n) (k : Nat) :
-  ((a ||| b) % 2 ^ k = (a % 2 ^ k) ||| (b % 2 ^ k)) ↔ True := by
+  ((a ||| b) % 2#n ^ k = (a % 2#n ^ k) ||| (b % 2#n ^ k)) ↔ True := by
   simp only [BitVec.or_mod_two_pow]
 
 @[simp]
 theorem BitVec.or_mod_two_pow_iff_true' {n : Nat} (a b : BitVec n) (k : Nat) :
-  ((a % 2 ^ k) ||| (b % 2 ^ k) = (a ||| b) % 2 ^ k) ↔ True := by
+  ((a % 2#n ^ k) ||| (b % 2#n ^ k) = (a ||| b) % 2#n ^ k) ↔ True := by
   simp only [BitVec.or_mod_two_pow]
 
 theorem BitVec.and_mod_two_pow {n : Nat} (a b : BitVec n) (k : Nat) :
-  (a &&& b) % 2 ^ k = (a % 2 ^ k) &&& (b % 2 ^ k) := by
+  (a &&& b) % 2#n ^ k = (a % 2#n ^ k) &&& (b % 2#n ^ k) := by
   by_cases k < n <;> natify <;> simp
   · have : 2 ^ k < 2 ^ n := by simp_scalar
     cases k
@@ -587,16 +587,16 @@ theorem BitVec.and_mod_two_pow {n : Nat} (a b : BitVec n) (k : Nat) :
 
 @[simp]
 theorem BitVec.and_mod_two_pow_iff_true {n : Nat} (a b : BitVec n) (k : Nat) :
-  ((a &&& b) % 2 ^ k = (a % 2 ^ k) &&& (b % 2 ^ k)) ↔ True := by
+  ((a &&& b) % 2#n ^ k = (a % 2#n ^ k) &&& (b % 2#n ^ k)) ↔ True := by
   simp only [BitVec.and_mod_two_pow]
 
 @[simp]
 theorem BitVec.and_mod_two_pow_iff_true' {n : Nat} (a b : BitVec n) (k : Nat) :
-  ((a % 2 ^ k) &&& (b % 2 ^ k) = (a &&& b) % 2 ^ k) ↔ True := by
+  ((a % 2#n ^ k) &&& (b % 2#n ^ k) = (a &&& b) % 2#n ^ k) ↔ True := by
   simp only [BitVec.and_mod_two_pow]
 
 theorem BitVec.xor_mod_two_pow {n : Nat} (a b : BitVec n) (k : Nat) :
-  (a ^^^ b) % 2 ^ k = (a % 2 ^ k) ^^^ (b % 2 ^ k) := by
+  (a ^^^ b) % 2#n ^ k = (a % 2#n ^ k) ^^^ (b % 2#n ^ k) := by
   by_cases k < n <;> natify <;> simp
   · have : 2 ^ k < 2 ^ n := by simp_scalar
     cases k
@@ -611,12 +611,12 @@ theorem BitVec.xor_mod_two_pow {n : Nat} (a b : BitVec n) (k : Nat) :
 
 @[simp]
 theorem BitVec.xor_mod_two_pow_iff_true {n : Nat} (a b : BitVec n) (k : Nat) :
-  ((a ^^^ b) % 2 ^ k = (a % 2 ^ k) ^^^ (b % 2 ^ k)) ↔ True := by
+  ((a ^^^ b) % 2#n ^ k = (a % 2#n ^ k) ^^^ (b % 2#n ^ k)) ↔ True := by
   simp only [BitVec.xor_mod_two_pow]
 
 @[simp]
 theorem BitVec.xor_mod_two_pow_iff_true' {n : Nat} (a b : BitVec n) (k : Nat) :
-  ((a % 2 ^ k) ^^^ (b % 2 ^ k) = (a ^^^ b) % 2 ^ k) ↔ True := by
+  ((a % 2#n ^ k) ^^^ (b % 2#n ^ k) = (a ^^^ b) % 2#n ^ k) ↔ True := by
   simp only [BitVec.xor_mod_two_pow]
 
 @[simp, simp_lists_safe, simp_scalar_safe]
