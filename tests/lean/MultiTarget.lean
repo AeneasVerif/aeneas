@@ -35,7 +35,7 @@ def x86.Sse2.Insts.Multi_targetSimdTraitU128.add
   (a : Std.U128) (b : Std.U128) : Result Std.U128 := do
   ok (core.num.U128.wrapping_add a b)
 
-/-- Trait implementation: [multi_target::x86::{multi_target::SimdTrait<u128> for multi_target::x86::Sse2}::x86_64-apple-darwin]
+/-- Trait implementation: [multi_target::x86::{multi_target::SimdTrait<u128> for multi_target::x86::Sse2}]
     Source: 'tests/src/multi-target.rs', lines 16:4-22:5 -/
 @[reducible]
 def x86.Sse2.Insts.Multi_targetSimdTraitU128 : SimdTrait x86.Sse2 Std.U128 := {
@@ -55,7 +55,7 @@ def arm.Neon.Insts.Multi_targetSimdTraitU128.add
   (a : Std.U128) (b : Std.U128) : Result Std.U128 := do
   ok (core.num.U128.wrapping_add a b)
 
-/-- Trait implementation: [multi_target::arm::{multi_target::SimdTrait<u128> for multi_target::arm::Neon}::aarch64-apple-darwin]
+/-- Trait implementation: [multi_target::arm::{multi_target::SimdTrait<u128> for multi_target::arm::Neon}]
     Source: 'tests/src/multi-target.rs', lines 31:4-37:5 -/
 @[reducible]
 def arm.Neon.Insts.Multi_targetSimdTraitU128 : SimdTrait arm.Neon Std.U128 := {
