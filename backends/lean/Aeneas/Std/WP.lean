@@ -2,6 +2,7 @@ import Aeneas.Std.Primitives
 import Aeneas.Std.Delab
 import Std.Do
 import Aeneas.Tactic.Solver.Grind.Init
+import Aeneas.Std.Spec
 
 namespace Aeneas.Std.WP
 
@@ -14,26 +15,31 @@ def Wp α := Post α → Pre
 
 def wp_return (x:α) : Wp α := fun p => p x
 
-def wp_bind (m:Wp α) (k:α -> Wp β) : Wp β :=
-  fun p => m (fun r => k r p)
-
-def wp_ord (wp1 wp2:Wp α) :=
-  forall p, wp1 p → wp2 p
-
 def theta (m:Result α) : Wp α :=
   match m with
   | ok x => wp_return x
   | fail _ => fun _ => False
   | div => fun _ => False
 
-def p2wp (post:Post α) : Wp α :=
-  fun p => forall r, post r → p r
-
-def spec_general (x:Result α) (p:Post α) :=
-  wp_ord (p2wp p) (theta x)
-
 def spec {α} (x:Result α) (p:Post α) :=
   theta x p
+
+def dspec {α} (x:Result α) (p:Post α) :=
+  match x with
+  | ok x => p x
+  | fail _ => False
+  | div => True
+
+theorem spec_dspec {α} {x : Result α} (p: Post α) : spec x p → dspec x p := by
+  intros s
+  simp [spec, dspec] at *
+  cases x <;> simp at * <;> assumption
+
+
+theorem dspec_admissible {α} (p : Post α )
+  : Lean.Order.admissible (fun x => dspec x p) := by
+  apply Lean.Order.admissible_flatOrder
+  simp [dspec]
 
 /-- Variant of `uncurry` used to decompose tuples in post-conditions.
 
@@ -186,6 +192,26 @@ theorem spec_imp_exists {m:Result α} {P:Post α} :
 theorem exists_imp_spec {m:Result α} {P:Post α} :
   (∃ y, m = ok y ∧ P y) → spec m P := by
   exact (spec_equiv_exists m P).2
+
+-- #register_spec_statement {
+--     name := ``spec
+--     arity := 3
+--     mk_spec_mono := fun _args thm => thm
+--     mk_spec_bind := fun _args thm => thm
+--     uncurry_elim_tactics := #[]
+--     qimp_elim_tactics := #[]
+--     program_index := 1
+--   }
+
+-- #register_spec_statement {
+--     name := ``dspec
+--     arity := 3
+--     mk_spec_mono := fun _args thm => thm
+--     mk_spec_bind := fun _args thm => thm
+--     uncurry_elim_tactics := #[]
+--     qimp_elim_tactics := #[]
+--     program_index := 1
+--   }
 
 end Aeneas.Std.WP
 

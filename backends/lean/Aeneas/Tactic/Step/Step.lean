@@ -1422,7 +1422,7 @@ namespace Test
   open Std Result
 
   -- Show the traces:
-  -- set_option trace.Step true
+  set_option trace.Step true
   -- set_option pp.rawOnError true
 
   set_option says.verify true
@@ -1430,6 +1430,89 @@ namespace Test
   -- The following command displays the database of theorems:
   -- #eval showStoredStepThms
   open alloc.vec
+
+  ---------------------------------------
+
+  -- This section has tests for dspec. TODO: clean these up a bit.
+  -- test proving things about potentially diverging functions.
+  -- this is the output from a simple rust function
+  def simple_diverge (x : Std.I32) : Result Std.I32 := do
+    if x = 0#i32
+    then ok 10#i32
+    -- else if x = 1#i32
+    -- then simple_diverge (← x + 1#i32)
+    else
+      let i1 ← 1#i32 + 1#i32
+      simple_diverge i1
+      -- simple_diverge x
+  partial_fixpoint
+
+  -- -- TODO: if i use unfold then sorry, print proof term, i can see how it proves accessibility
+  -- #check simple_diverge.fixpoint_induct
+  -- @[step]
+  -- theorem test_div (x : Std.I32) : Std.WP.dspec (simple_diverge x) (fun res => res = 10#i32)
+  --   := by
+  --     -- instead of unfold, must use this:
+  --     -- unfold_div (maybe don't need theorem name)
+  --     --
+  --     apply simple_diverge.fixpoint_induct (motive := fun res => WP.dspec res _)
+  --     -- apply simple_diverge.fixpoint_induct (fun f => forall x, WP.dspec (f x) (fun res => res = 10#i32))
+  --     -- apply simple_diverge.fixpoint_induct (fun res => res = 10#i32)
+  --       -- <;> [ apply WP.dspec_admissible ; intros ]
+  --       -- <;> [ sorry ; intros ]
+  --     --
+  --     -- simp only
+  --     -- split
+  --     -- . simp [*]
+  --     -- . step
+  --     --   step
+  --     --   simp [*]
+  --     sorry
+
+  -- #print test_div
+  #print simple_diverge.eq_def
+  #print simple_diverge._proof_4
+
+  -- -- test out using a dspec theorem to prove a dspec.
+  -- example : WP.dspec
+  --   (do let x ← simple_diverge 5#i32
+  --       return x) (fun x => x = 10#i32) := by
+  --     step
+  --     simp [*]
+  --     --
+
+  def simple_converge (x : Std.I32) : Result Std.I32 := do
+    if x = 0#i32
+    then ok 10#i32
+    else ok 10#i32
+
+  @[step]
+  theorem simple_converge_property (x : Std.I32)
+    : Std.WP.spec (simple_converge x) (fun res => res = 10#i32)
+    := by
+      unfold simple_converge
+      split <;> simp [*]
+
+  -- -- test out using a spec theorem to prove a dspec
+  -- example : WP.dspec
+  --   (do let x ← simple_converge 5#i32
+  --       let y ← simple_converge 6#i32
+  --       return x) (fun x => x = 10#i32) := by
+  --     step -- this works because step_bind' is polymorphic over divergence
+  --     step
+  --     simp [*]
+
+  -- -- confirm that you can't use dspec from spec
+  -- example : WP.spec
+  --   (do let x ← simple_diverge 5#i32
+  --       let y ← simple_diverge 6#i32
+  --       return x) (fun x => x = 10#i32) := by
+  --   step -- this should fail!
+  --   step
+  --   simp [*]
+  --   --
+
+  -- ---------------------------------------
 
   /- This test case checks what happens when `step`:
      - manages to solve the current goal

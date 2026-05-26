@@ -212,6 +212,39 @@ section Methods
     withLocalDeclsD ⟨ tys ⟩ k
 end Methods
 
+structure SpecInfo where
+  name : Lean.Name
+  arity : Nat
+  mk_spec_mono : Array Lean.Expr → Lean.Expr → Lean.Expr
+  mk_spec_bind : Array Lean.Expr → Lean.Expr → Lean.Expr
+  -- discr_tree_key : Array Lean.Expr → Array Lean.Expr
+  program_index : Nat -- index into the arguments of the Result value
+
+  uncurry_elim_tactics : Array Lean.Name
+  qimp_elim_tactics : Array Lean.Name
+  deriving Inhabited
+
+unsafe def specStatementLookup : Name → SpecInfo
+  | ``Std.WP.spec => {
+    name := ``Std.WP.spec
+    arity := 3
+    mk_spec_mono := fun _args thm => thm
+    mk_spec_bind := fun _args thm => thm
+    uncurry_elim_tactics := #[]
+    qimp_elim_tactics := #[]
+    program_index := 1
+  }
+  | ``Std.WP.dspec => {
+    name := ``Std.WP.dspec
+    arity := 3
+    mk_spec_mono := fun _args thm => thm
+    mk_spec_bind := fun _args thm => thm
+    uncurry_elim_tactics := #[]
+    qimp_elim_tactics := #[]
+    program_index := 1
+  }
+  | _ => panic! "not a valid spec statement"
+
 /- Analyze a goal or a step theorem to decompose its arguments.
 
   StepSpec theorems should be of the following shape:
