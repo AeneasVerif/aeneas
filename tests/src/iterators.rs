@@ -65,7 +65,7 @@ fn copy_arrays(src: &[u8; 256], dst: &mut [u8; 256]) {
     }
 }
 
-pub fn zip_iter(a: &mut [u8], b: &[u8]) {
+pub fn zip_iter(a: &[u8], b: &[u8]) {
     for _ in a.iter().zip(b.iter()) {}
 }
 
