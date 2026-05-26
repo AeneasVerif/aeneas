@@ -24,8 +24,11 @@ attribute [scalar_tac_simps, grind =, agrind =]
   List.length_nil List.length_cons List.length_append List.length_reverse
   List.append_nil List.nil_append
 
+attribute [agrind =] List.getElem_cons_zero List.set_cons_zero
+
 attribute [simp_lists_safe]
   List.take_of_length_le getElem?_eq_none
+  List.getElem_cons_zero List.set_cons_zero
 
 attribute [simp_lists, grind =, agrind =] map_set
 
@@ -40,6 +43,15 @@ def set_opt (l : List α) (i : Nat) (x : Option α) : List α :=
 attribute [simp] getElem?_cons_zero getElem!_cons_zero
 @[simp] theorem getElem?_cons_nzero (hne : Nat.not_eq i 0) : getElem? ((x :: tl) : List α) i = getElem? tl (i - 1) := by cases i <;> simp_all
 @[simp] theorem getElem!_cons_nzero (x : α) (tl : List α) (i : Nat) [Inhabited α] (hne : Nat.not_eq i 0) : getElem! ((x :: tl) : List α) i = getElem! tl (i - 1) := by cases i <;> simp_all
+
+/-- `getElem` version of `getElem!_cons_nzero`: indexing a cons at position `i > 0` gives the tail element. -/
+@[simp, simp_lists_safe]
+theorem getElem_cons_nzero {α} (hd : α) (tl : List α) (i : Nat)
+    (hi : i < (hd :: tl).length) (h : 0 < i) :
+    (hd :: tl)[i]'hi = tl[i - 1] := by
+  cases i with
+  | zero => scalar_tac
+  | succ n => simp
 
 def slice (start end_ : Nat) (ls : List α) : List α :=
   (ls.drop start).take (end_ - start)
@@ -63,20 +75,28 @@ def resize (l : List α) (new_len : Nat) (x : α) : List α :=
   else []
 
 @[simp] theorem set_cons_nzero x tl i (hne : Nat.not_eq i 0) y : set ((x :: tl) : List α) i y = x :: set tl (i - 1) y := by cases i <;> simp_all
+@[simp_lists_safe] theorem set_cons_nzero' x tl i (hne : 0 < i) y : set ((x :: tl) : List α) i y = x :: set tl (i - 1) y := by cases i <;> simp_all
 
 @[simp] theorem drop_cons_nzero i x tl (hne : Nat.not_eq i 0) : drop i ((x :: tl) : List α) = drop (i - 1) tl := by cases i <;> simp_all [drop]
+@[simp_lists_safe] theorem drop_cons_nzero' i x tl (hne : 0 < i) : drop i ((x :: tl) : List α) = drop (i - 1) tl := by cases i <;> simp_all [drop]
 
 @[simp] theorem take_cons_nzero i x tl (hne : Nat.not_eq i 0) : take i ((x :: tl) : List α) = x :: take (i - 1) tl := by cases i <;> simp_all
+@[simp_lists_safe] theorem take_cons_nzero' i x tl (hne : 0 < i) : take i ((x :: tl) : List α) = x :: take (i - 1) tl := by cases i <;> simp_all
 
-@[simp] theorem slice_nil i j : slice i j ([] : List α) = [] := by simp [slice]
-@[simp] theorem slice_zero ls : slice 0 0 (ls : List α) = [] := by cases ls <;> simp [slice]
+@[simp, simp_lists_safe] theorem slice_nil i j : slice i j ([] : List α) = [] := by simp [slice]
+@[simp, simp_lists_safe] theorem slice_zero ls : slice 0 0 (ls : List α) = [] := by cases ls <;> simp [slice]
 
 @[simp] theorem replicate_cons_nzero i (x : List α) (hne : Nat.not_eq i 0) : replicate i x = x :: replicate (i - 1) x := by
   cases i <;> simp_all [replicate]
 
-@[simp] theorem set_opt_nil i y : set_opt ([] : List α) i y = [] := by simp [set_opt]
-@[simp] theorem set_opt_zero_cons x tl y : set_opt ((x :: tl) : List α) 0 y = y.getD x :: tl := by simp [set_opt]
+@[simp_lists_safe] theorem replicate_cons_nzero' i (x : List α) (hne : 0 < i) : replicate i x = x :: replicate (i - 1) x := by
+  cases i <;> simp_all [replicate]
+
+@[simp, simp_lists_safe] theorem set_opt_nil i y : set_opt ([] : List α) i y = [] := by simp [set_opt]
+@[simp, simp_lists_safe] theorem set_opt_zero_cons x tl y : set_opt ((x :: tl) : List α) 0 y = y.getD x :: tl := by simp [set_opt]
 @[simp] theorem set_opt_cons_nzero x tl i y (hne : Nat.not_eq i 0) : set_opt ((x :: tl) : List α) i y = x :: set_opt tl (i - 1) y := by simp [set_opt]; intro; simp_all
+@[simp_lists_safe] theorem set_opt_cons_nzero' x tl i y (hne : 0 < i) : set_opt ((x :: tl) : List α) i y = x :: set_opt tl (i - 1) y := by simp [set_opt]; intro; simp_all
+
 
 @[simp]
 theorem slice_cons_nzero (i j : Nat) (x : α) (tl : List α) (hne : Nat.not_eq i 0) :
@@ -108,7 +128,9 @@ theorem getElem!_replicate_eq_default {α : Type u} [Inhabited α] (a : α) {n i
     unfold replicate
     cases i <;> simp_all
 
-@[simp]
+-- Note that we introduce more general theorems below that receive two indices `i` and `j`
+-- with the assumption that `i = j`
+@[simp, simp_lists_safe]
 theorem set_getElem! {α} [Inhabited α] (l : List α) (i : Nat) :
   l.set i l[i]! = l := by
   revert i; induction l <;> simp_all
@@ -287,7 +309,7 @@ theorem getElem!_take_eq_default [Inhabited α] (i : Nat) (j : Nat) (ls : List �
   simp only [getElem!_eq_getElem?_getD, getElem?_take_eq_none, Option.getD_none, *]
 
 @[simp]
-theorem getElem?_set_neq
+theorem set_getElem?_neq
   {α : Type u} (l: List α) (i: Nat) (j: Nat) (x: α)
   (h : Nat.not_eq i j) : getElem? (l.set i x) j = getElem? l j
   := by
@@ -301,32 +323,25 @@ theorem getElem?_set_neq
 Otherwise we might lose a lot of time reordering the `set` expressions.
 -/
 @[simp↓, simp_lists_safe↓, grind =]
-theorem getElem!_set_ne
+theorem set_getElem!_ne
   {α : Type u} [Inhabited α] (l: List α) (i: Nat) (j: Nat) (x: α)
   (h : Nat.not_eq i j) : getElem! (l.set i x) j = getElem! l j
   := by
-  have := getElem?_set_neq l i j x h
+  have := set_getElem?_neq l i j x h
   simp_all
 
 @[simp_lists_safe↓, grind =]
-theorem getElem_set_ne'
+theorem set_getElem_ne'
   {α : Type u} (l: List α) (i: Nat) (j: Nat) (x: α)
   (h : i ≠ j ∧ j < l.length) : (l.set i x)[j] = l[j]
   := by
   grind
 
 @[simp↓]
-theorem getElem!_set_not_eq {α : Type u} (l: List α) (i: Nat) (j: Nat) (x: α)
+theorem set_getElem!_not_eq {α : Type u} (l: List α) (i: Nat) (j: Nat) (x: α)
   (h : Nat.not_eq i j ∧ j < l.length) : (l.set i x)[j] = l[j]
   := by
   grind
-
-@[simp]
-theorem getElem!_set
-  {α : Type u} [Inhabited α] (l: List α) (i: Nat) (x: α)
-  (h : i < l.length) : getElem! (l.set i x) i = x
-  := by
-  simp [*]
 
 /-- Using `↓` to eagerly simplify combinations of `set` and `getElem!` in expressions like:
 `(((l.set i0 x0) ...).set in xn)[j]!`
@@ -334,20 +349,19 @@ theorem getElem!_set
 Otherwise we might lose a lot of time reordering the `set` expressions.
 -/
 @[simp_lists_safe↓, grind =]
-theorem getElem!_set'
+theorem set_getElem!_eq
   {α : Type u} [Inhabited α] (l: List α) (i i': Nat) (x: α)
   (h : i' < l.length ∧ i = i') : getElem! (l.set i x) i' = x
   := by
-  simp only [getElem!_set, *]
+  grind
 
 @[simp_lists_safe↓]
-theorem getElem_set''
+theorem set_getElem_eq
   {α : Type u} (l: List α) (i i': Nat) (x: α)
-  (h : i' < l.length ∧ i = i') : (l.set i x)[i'] = x
+  (h : i' < (l.set i x).length) (h' : i = i') : (l.set i x)[i']'h = x
   := by
   simp [*]
 
--- TODO: we need "composite" patterns for scalar_tac here
 theorem length_getElem!_le_length_flatten (ls : List (List α)) :
   forall (i : Nat), (getElem! ls i).length ≤ ls.flatten.length := by
   induction ls <;> intro i <;> simp_all [default]
@@ -393,12 +407,7 @@ theorem getElem!_map_eq {α : Type u} {β : Type v} [Inhabited α] [Inhabited β
   simp only [getElem!_eq_getElem?_getD, length_map, getElem?_eq_getElem, getElem_map,
     Option.getD_some, h1]
 
--- Variant of `getElem_map`
-@[simp_lists_safe]
-theorem getElem_map' {α : Type u} {β : Type v}
-  (ls : List α) (i : Nat) (f : α → β)
-  (h : i < ls.length) :
-  (ls.map f)[i] = f ls[i] := getElem_map ..
+attribute [simp_lists_safe] getElem_map
 
 @[simp]
 theorem getElem!_map_eq' {α : Type u} {β : Type v} [Inhabited α] [Inhabited β]
@@ -496,11 +505,13 @@ theorem getElem!_range (i n: ℕ) :
   rw [getElem!_range']
   simp only [zero_add]
 
-@[simp, simp_lists_safe, grind =] theorem getElem!_range_of_lt (i n: ℕ) (h : i < n) :
+@[simp, simp_lists_safe, grind =]
+theorem getElem!_range_of_lt (i n: ℕ) (h : i < n) :
   (List.range n)[i]! = i := by
   simp [*]
 
-@[simp, simp_lists_safe, grind =] theorem getElem!_range_zero (i n: ℕ) (h : n ≤ i) :
+@[simp, simp_lists_safe, grind =]
+theorem getElem!_range_zero (i n: ℕ) (h : n ≤ i) :
   (List.range n)[i]! = 0 := by
   simp [*]
 
@@ -725,7 +736,6 @@ theorem setSlice!_drop {α} (l : List α) (i : ℕ) :
   by_cases h1: j < l.length <;> simp_lists
   simp_scalar
 
-@[simp_lists_hyps_simps]
 def Inhabited_getElem_eq_getElem! {α} [Inhabited α] (l : List α) (i : ℕ) (hi : i < l.length) :
   l[i] = l[i]! := by
   simp only [List.getElem!_eq_getElem?_getD, List.getElem?_eq_getElem, Option.getD_some, hi]
@@ -753,9 +763,7 @@ theorem getElem!_ofFn {n : ℕ} {α : Type u} [Inhabited α] (f : Fin n → α) 
   simp only [getElem!_eq_getElem?_getD, length_ofFn, getElem?_eq_getElem, List.getElem_ofFn,
     Option.getD_some, hi]
 
-@[simp_lists_safe]
-theorem getElem_ofFn' {n : ℕ} {α : Type u} (f : Fin n → α) (i : ℕ) (hi : i < n) :
-  (List.ofFn f)[i] = f ⟨ i, hi ⟩ := List.getElem_ofFn ..
+attribute [simp_lists_safe] List.getElem_ofFn
 
 attribute [scalar_tac_simps, agrind =]
   List.set_cons_zero List.set_cons_succ List.length_cons List.length_nil List.reverse_cons

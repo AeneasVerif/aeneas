@@ -443,7 +443,7 @@ theorem BitVec.fromLEBytes_getElem! (v : List Byte) (j : ℕ) :
     by_cases hj: j < 8
     . have : j < 8 * (v'.length + 1) := by scalar_tac
       simp_lists
-      erw [getElem!_eq_testBit_toNat]
+      rw [BitVec.getElem_eq_testBit_toNat]
       have : j % 8 = j := by apply Nat.mod_eq_of_lt; omega
       simp [*]
     . have : 0 < j / 8 := by scalar_tac +nonLin
