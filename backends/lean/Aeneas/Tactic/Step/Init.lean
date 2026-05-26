@@ -287,21 +287,28 @@ def getStepSpecFunArgsExpr (ty : Expr) :
   then pure (args[info.program_index]!, info) -- this is `f x1 ... xn`
   else throwError "Expected to be a `spec (f x1 ... xn) P`, got {ty₂}"
 
+deriving instance Ord for Lean.Name
 structure Rules where
-  rules : DiscrTree Name
+  rules : Std.TreeMap Name (DiscrTree Name)
   /- We can't remove keys from a discrimination tree, so to support
      local rules we keep a set of deactivated rules (rules which have
      come out of scope) on the side -/
   deactivated : Std.HashSet Name
 deriving Inhabited
 
-def Rules.empty : Rules := ⟨ DiscrTree.empty, Std.HashSet.emptyWithCapacity ⟩
+def Rules.empty : Rules := ⟨ Std.TreeMap.empty, Std.HashSet.emptyWithCapacity ⟩
 
-def Extension := SimpleScopedEnvExtension (DiscrTreeKey × Name) Rules
+def Extension := SimpleScopedEnvExtension ((Name × DiscrTreeKey) × Name) Rules
 deriving Inhabited
 
-def Rules.insert (r : Rules) (kv : Array DiscrTree.Key × Name) : Rules :=
-  { rules := r.rules.insertKeyValue kv.fst kv.snd,
+def Rules.insert (r : Rules) (kv : (Name × Array DiscrTree.Key) × Name) : Rules :=
+  let ((specName, prog), thm) := kv
+  { rules :=
+    r.rules.insert specName ((match r.rules.get? specName with
+      | .some dt => dt
+      | .none => DiscrTree.empty
+    ).insertKeyValue prog thm)
+    ,
     deactivated := r.deactivated.erase kv.snd }
 
 def Rules.erase (r : Rules) (k : Name) : Rules :=
@@ -331,7 +338,7 @@ private def saveStepSpecFromThm (ext : Extension) (attrKind : AttributeKind) (th
     let some thDecl := env.findAsync? thName
       | throwError "Could not find theorem {thName}"
     let type := thDecl.sig.get.type
-    let fKey ← MetaM.run' (do
+    let (fKey, info) ← MetaM.run' (do
       trace[Step] "Theorem: {type}"
       -- Normalize to eliminate the let-bindings
       let ty ← normalizeLetBindings type
@@ -339,10 +346,10 @@ private def saveStepSpecFromThm (ext : Extension) (attrKind : AttributeKind) (th
       let (fExpr, info) ← getStepSpecFunArgsExpr ty
       trace[Step] "Registering spec theorem for expr: {fExpr}"
       -- Convert the function expression to a discrimination tree key
-      DiscrTree.mkPath fExpr)
+      pure (← DiscrTree.mkPath fExpr, info))
     -- Save the entry
     -- TODO: use info.name to use a different discrimination tree here!
-    ScopedEnvExtension.add ext (fKey, thName) attrKind
+    ScopedEnvExtension.add ext ((info.name, fKey), thName) attrKind
     trace[Step] "Saved the entry"
     pure ()
 
@@ -363,9 +370,10 @@ initialize stepAttr : StepSpecAttr ← do
   registerBuiltinAttribute attrImpl
   pure { attr := attrImpl, ext := ext }
 
-def StepSpecAttr.find? (s : StepSpecAttr) (e : Expr) : MetaM (Array Name) := do
+def StepSpecAttr.find? (s : StepSpecAttr) (info : SpecInfo) (e : Expr) : MetaM (Array Name) := do
   let state := s.ext.getState (← getEnv)
-  let rules ← state.rules.getMatch e
+  -- let rules ← state.rules.getMatch e
+  let rules ← (state.rules.get! info.name).getMatch e
   pure (rules.filter (fun th => th ∉ state.deactivated))
 
 def StepSpecAttr.getState (s : StepSpecAttr) : MetaM Rules := do
@@ -375,8 +383,10 @@ def showStoredStepThms : MetaM Unit := do
   let st ← stepAttr.getState
   -- TODO: how can we iterate over (at least) the values stored in the tree?
   --let s := st.toList.foldl (fun s (f, th) => f!"{s}\n{f} → {th}") f!""
-  let s := f!"{st.rules}, {st.deactivated.toArray}"
-  IO.println s
+  for key in st.rules.keys do
+    let s := f!"thms for {key}: {st.rules.get! key}}"
+    IO.println s
+  IO.println "deactivated: {st.deactivated.toArray}"
 
 /-! # Attribute: `step_pure` -/
 

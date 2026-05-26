@@ -990,7 +990,7 @@ def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
     else do
       trace[Step] "No assumption succeeded: trying to lookup a pspec theorem"
       let pspecs : Array Name ← do
-        let thNames ← stepAttr.find? fExpr
+        let thNames ← stepAttr.find? info fExpr
         /- TODO: because of reduction, there may be several valid theorems (for
            instance for the scalars). We need to sort them from most specific to
            least specific. For now, we assume the most specific theorems are at
@@ -1512,6 +1512,14 @@ namespace Test
     step
     step
     sorry
+
+  example : WP.spec
+    (do let x ← simple_converge 5#i32
+        let y ← simple_converge 6#i32
+        return x) (fun x => x = 10#i32) := by
+      step -- test using spec thm to prove spec
+      step
+      simp [*]
 
   -- -- test out using a spec theorem to prove a dspec
   -- example : WP.dspec
