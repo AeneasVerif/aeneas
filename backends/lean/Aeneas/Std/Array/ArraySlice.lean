@@ -127,13 +127,10 @@ def core.array.TryFromSliceError := Unit
 theorem Array.val_to_slice {α} {n} (a : Array α n) : a.to_slice.val = a.val := by
   simp only [Array.to_slice]
 
-@[simp, simp_lists_safe, simp_scalar_safe, scalar_tac a.to_slice]
+@[simp, simp_lists_safe, simp_scalar_safe, scalar_tac a.to_slice, grind =, agrind =]
 theorem Array.length_to_slice (a : Array α n) :
   a.to_slice.length = n := by
   simp only [Slice.length, Array.to_slice, List.Vector.length_val]
-
-grind_pattern Array.length_to_slice => a.to_slice
-grind_pattern [agrind] Array.length_to_slice => a.to_slice
 
 @[rust_fun "core::array::equality::{core::cmp::PartialEq<[@T; @N], [@U; @N]>}::eq"]
 def core.array.equality.PartialEqArray.eq
