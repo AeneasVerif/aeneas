@@ -216,7 +216,7 @@ let mk_aproj_loans_value_from_symbolic_value (proj_regions : RegionId.Set.t)
       ty = svalue.sv_ty;
     }
 
-let mk_eproj_loans_value_from_symbolic_value
+let mk_eproj_loans_value_from_symbolic_value env
     (type_infos : TypesAnalysis.type_infos) (proj_regions : RegionId.Set.t)
     (svalue : symbolic_value) (proj_ty : ty) : tevalue =
   if ty_has_mut_borrow_for_region_in_set type_infos proj_regions proj_ty then
@@ -232,7 +232,11 @@ let mk_eproj_loans_value_from_symbolic_value
     in
     let av : tevalue = { value = av; ty = svalue.sv_ty } in
     av
-  else { value = EIgnored; ty = svalue.sv_ty }
+  else
+    {
+      value = EIgnored (Some (env, mk_tvalue_from_symbolic_value svalue));
+      ty = svalue.sv_ty;
+    }
 
 (** Create a borrows projector from a symbolic value *)
 let mk_aproj_borrows_from_symbolic_value (span : Meta.span)

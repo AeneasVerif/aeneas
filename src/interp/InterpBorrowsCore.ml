@@ -399,13 +399,16 @@ class virtual ['self] iter_tavalue_with_levels =
     [combine]: how to combine booleans [compare_regions]: how to compare regions
 
     TODO: is there a way of deriving such a comparison? TODO: rename *)
-let rec compare_rtys (span : Meta.span) (ctx : eval_ctx) (default : bool)
-    (combine : bool -> bool -> bool)
+let rec compare_rtys ?(allow_erased = false) (span : Meta.span) (ctx : eval_ctx)
+    (default : bool) (combine : bool -> bool -> bool)
     (compare_regions : region -> region -> bool) (ty1 : rty) (ty2 : rty) : bool
     =
-  let compare = compare_rtys span ctx default combine compare_regions in
+  let compare =
+    compare_rtys ~allow_erased span ctx default combine compare_regions
+  in
   (* Sanity check - TODO: don't do this at every recursive call *)
-  [%sanity_check] span (ty_is_rty ty1 && ty_is_rty ty2);
+  [%sanity_check] span
+    (if allow_erased then true else ty_is_rty ty1 && ty_is_rty ty2);
   (* Normalize the associated types *)
   match (ty1, ty2) with
   | TLiteral lit1, TLiteral lit2 ->
@@ -497,22 +500,23 @@ let projections_intersect (span : Meta.span) (ctx : eval_ctx)
   let compare_regions r1 r2 =
     region_in_set ~allow_erased r1 rset1 && region_in_set ~allow_erased r2 rset2
   in
-  compare_rtys span ctx default combine compare_regions ty1 ty2
+  compare_rtys ~allow_erased span ctx default combine compare_regions ty1 ty2
 
 (** Check if the first projection contains the second projection. We use this
     function when checking invariants.
 
     The regions in the types shouldn't be erased (this function will raise an
     exception otherwise). *)
-let projection_contains (span : Meta.span) (ctx : eval_ctx)
-    (rset1 : RegionId.Set.t) (ty1 : rty) (rset2 : RegionId.Set.t) (ty2 : rty) :
-    bool =
+let projection_contains ?(allow_erased = false) (span : Meta.span)
+    (ctx : eval_ctx) (rset1 : RegionId.Set.t) (ty1 : rty)
+    (rset2 : RegionId.Set.t) (ty2 : rty) : bool =
   let default = true in
   let combine b1 b2 = b1 && b2 in
   let compare_regions r1 r2 =
-    region_in_set r1 rset1 || not (region_in_set r2 rset2)
+    region_in_set ~allow_erased r1 rset1
+    || not (region_in_set ~allow_erased r2 rset2)
   in
-  compare_rtys span ctx default combine compare_regions ty1 ty2
+  compare_rtys ~allow_erased span ctx default combine compare_regions ty1 ty2
 
 (** Lookup a loan content.
 
@@ -1262,22 +1266,27 @@ let update_intersecting_aproj_borrows (span : Meta.span)
         projections_intersect span ctx proj_regions proj.proj_ty
           abs.regions.owned proj'_ty
       in
+      [%ldebug
+        "- proj'_sv_id: "
+        ^ symbolic_value_id_to_pretty_string proj'_sv_id
+        ^ "\n- proj.proj_ty: "
+        ^ ty_to_string ctx proj.proj_ty
+        ^ "\n- proj'_ty: " ^ ty_to_string ctx proj'_ty ^ "\n- owned regions: "
+        ^ RegionId.Set.to_string None abs.regions.owned];
 
-      (* Sanity check: if the projectors use the same symbolic id then:
-         - either the projections intersect
-         - or the loan projector must intersect the outlive projection type of the borrow projector
+      (* We used to check that if the projectors use the same symbolic id then:
+         1. either the projections intersect
+         2. or the loan projector must intersect the outlive projection type of the borrow projector
 
-         Moreover, those two situations are mutually exclusive.
-
-         For example:
-          1. Ex.: we are ending [abs1] below:
+         For instance:
+         1. Ex.: we are ending [abs1] below:
           {[
             abs0 {'a} { AProjLoans (s0 : &'a mut T) [] }
             abs1 {'b} { AProjBorrows (s0 : &'b mut T) }
           ]}
           we can end the loan projector in [abs0].
 
-          2. Ex.: we are ending [abs2] below, and considering [abs1]: we have to
+         2. Ex.: we are ending [abs2] below, and considering [abs1]: we have to
           project the inner borrows inside of [abs1]. However we do not project
           anything into [abs0] (see the case above).
           {[
@@ -1286,19 +1295,13 @@ let update_intersecting_aproj_borrows (span : Meta.span)
             abs2 {'c} { AProjBorrows (s0 : &'c mut &'_ mut T) }
             abs3 {'d} { AProjBorrows (s0 : &'_ mut &'d mut T) }
           ]}
-      *)
-      if !Config.sanity_checks && not intersects_owned then (
-        let outlive_regions =
-          TypesAnalysis.compute_outlive_proj_ty (Some span)
-            ctx.type_ctx.type_decls proj_regions proj.proj_ty
-        in
-        let intersect_outlive =
-          projections_intersect span ctx outlive_regions proj.proj_ty
-            abs.regions.owned proj'_ty
-        in
-        [%sanity_check] span (intersects_owned || intersect_outlive);
-        [%sanity_check] span ((not intersects_owned) || not intersect_outlive));
 
+          But this is actually not true. Consider:
+          {[
+            abs0 {'a} { AProjLoans (s0 : Pair<'a, 'b>) [] }
+            abs1 {'b} { AProjLoans (s0 : Pair<'a, 'b>) [] }
+          ]}
+      *)
       let intersects_outlive = include_outlive && not intersects_owned in
       let intersects_owned = include_owned && intersects_owned in
       let intersects = intersects_owned || intersects_outlive in
@@ -1457,35 +1460,6 @@ let update_intersecting_aproj_loans (span : Meta.span)
     updated_evalue := true;
     esubst ~owned ~outlive abs aproj_loans
   in
-  (* Helper for sanity check: if the symbolic ids are the same then:
-     - either the projections types intersect
-     - or the borrow projection intersects the outlive loan projection
-       and those two situations are mutually exclusive
-  *)
-  let check_proj abs aproj_ty owned =
-    if !Config.sanity_checks then (
-      let outlive_regions =
-        TypesAnalysis.compute_outlive_proj_ty (Some span)
-          ctx.type_ctx.type_decls proj_regions proj.proj_ty
-      in
-      let outlive =
-        projections_intersect span ctx outlive_regions proj.proj_ty
-          abs.regions.owned aproj_ty
-      in
-      [%ldebug
-        "- proj_regions: "
-        ^ RegionId.Set.to_string None proj_regions
-        ^ "\n- proj.proj_ty: "
-        ^ ty_to_string ctx proj.proj_ty
-        ^ "\n- abs.regions.owned: "
-        ^ RegionId.Set.to_string None abs.regions.owned
-        ^ "\n- aproj_loans.proj.proj_ty: " ^ ty_to_string ctx aproj_ty
-        ^ "\n- outlive_regions: "
-        ^ RegionId.Set.to_string None outlive_regions];
-      [%sanity_check] span (owned || outlive);
-      [%sanity_check] span ((not owned) || not outlive))
-  in
-
   (* The visitor *)
   let obj =
     object
@@ -1498,18 +1472,15 @@ let update_intersecting_aproj_loans (span : Meta.span)
             super#visit_aproj abs sproj
         | AProjLoans aproj_loans ->
             let abs = Option.get abs in
-            if proj.sv_id = aproj_loans.proj.sv_id then (
+            if proj.sv_id = aproj_loans.proj.sv_id then
               let owned =
                 projections_intersect span ctx proj_regions proj.proj_ty
                   abs.regions.owned aproj_loans.proj.proj_ty
               in
 
-              (* Sanity check *)
-              check_proj abs aproj_loans.proj.proj_ty owned;
-
               let outlive = include_outlive && not owned in
               let owned = include_owned && owned in
-              update ~owned ~outlive abs aproj_loans)
+              update ~owned ~outlive abs aproj_loans
             else super#visit_aproj (Some abs) sproj
 
       method! visit_eproj abs sproj =
@@ -1518,18 +1489,15 @@ let update_intersecting_aproj_loans (span : Meta.span)
             super#visit_eproj abs sproj
         | EProjLoans aproj_loans ->
             let abs = Option.get abs in
-            if proj.sv_id = aproj_loans.proj.sv_id then (
+            if proj.sv_id = aproj_loans.proj.sv_id then
               let owned =
                 projections_intersect span ctx proj_regions proj.proj_ty
                   abs.regions.owned aproj_loans.proj.proj_ty
               in
 
-              (* Sanity check *)
-              check_proj abs aproj_loans.proj.proj_ty owned;
-
               let outlive = include_outlive && not owned in
               let owned = include_owned && owned in
-              update_evalue ~owned ~outlive abs aproj_loans)
+              update_evalue ~owned ~outlive abs aproj_loans
             else super#visit_eproj (Some abs) sproj
     end
   in
@@ -2421,7 +2389,7 @@ and norm_proj_const_generics_union (span : Meta.span) (cg1 : constant_expr)
 
 let norm_proj_ty_contains span ctx (ty1 : rty) (ty2 : rty) : bool =
   let set = RegionId.Set.singleton RegionId.zero in
-  projection_contains span ctx set ty1 set ty2
+  projection_contains span ~allow_erased:true ctx set ty1 set ty2
 
 let norm_proj_tys_intersect span ctx (ty1 : norm_proj_ty) (ty2 : norm_proj_ty) :
     bool =
