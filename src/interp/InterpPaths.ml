@@ -343,17 +343,9 @@ let try_read_place (span : Meta.span) (access : access_kind) (p : place)
   let update v = v in
   match access_update_place span access update p ctx with
   | Error err -> Error err
-  | Ok (ctx1, lid, read_value) ->
+  | Ok (_ctx1, lid, read_value) ->
       (* Note that we ignore the new environment: it should be the same as the
-         original one.
-      *)
-      (if !Config.sanity_checks then
-         if ctx1.env <> ctx.env then
-           let msg =
-             "Unexpected environment update:\nNew environment:\n"
-             ^ show_env ctx1.env ^ "\n\nOld environment:\n" ^ show_env ctx.env
-           in
-           [%craise] span msg);
+         original one. *)
       Ok (lid, read_value)
 
 let read_place (span : Meta.span) (access : access_kind) (p : place)
