@@ -133,7 +133,14 @@ let run_charon (env : runner_env) (case : Input.t) =
   | SingleFile ->
       let args =
         [
-          env.charon_path; "rustc"; "--dest-file"; llbc_name; "--preset=aeneas";
+          env.charon_path;
+          "rustc";
+          "--dest-file";
+          llbc_name;
+          "--preset=aeneas";
+          "--monomorphize-mut=except-types";
+          "--remove-adt-clauses" (* Shouldn't be necessary *);
+          "--remove-associated-types=*" (* Shouldn't be necessary *);
         ]
         @ case.charon_options
         @ [
