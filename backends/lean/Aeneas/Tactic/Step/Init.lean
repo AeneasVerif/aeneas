@@ -240,8 +240,10 @@ def specStatementLookup : Name → Option SpecInfo
     mk_spec_mono_skip_args := 2
     mk_spec_bind := ``Std.WP.spec_bind'
     mk_spec_bind_skip_args := 4
-    uncurry_elim_tactics := #[]
-    qimp_elim_tactics := #[]
+    uncurry_elim_tactics := #[
+      ``Std.WP.qimp_spec_uncurry', ``Std.WP.qimp_spec_unit, ``Std.WP.qimp_spec_exists
+    ]
+    qimp_elim_tactics := #[ ``Std.WP.qimp_spec_iff, ]
     program_index := 1
     post_index := 2
   }
@@ -252,8 +254,10 @@ def specStatementLookup : Name → Option SpecInfo
     mk_spec_mono_skip_args := 2
     mk_spec_bind := ``Std.WP.dspec_bind'
     mk_spec_bind_skip_args := 4
-    uncurry_elim_tactics := #[]
-    qimp_elim_tactics := #[]
+    uncurry_elim_tactics := #[
+      ``Std.WP.qimp_dspec_uncurry', ``Std.WP.qimp_dspec_unit, ``Std.WP.qimp_dspec_exists
+    ]
+    qimp_elim_tactics := #[ ``Std.WP.qimp_dspec_iff, ]
     program_index := 1
     post_index := 2
   }

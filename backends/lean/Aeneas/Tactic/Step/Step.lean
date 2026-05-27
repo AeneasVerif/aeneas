@@ -589,7 +589,7 @@ def introPrettyEquality (args : Args) (fExpr : Expr) (outputFVars : Array Expr) 
     TODO: we use `simp` a lot, which uselessely explores the monadic term and the post-condition.
     We might want to optimize this.
 -/
-def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
+def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState : StepState) :
   TacticM (Option MainGoal) := do
   withTraceNode `Step (fun _ => pure m!"introOutputs") do
   traceGoalWithNode "Initial goal"
@@ -600,12 +600,11 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
     Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
             { simpThms := #[← stepSimpExt.getTheorems],
               addSimpThms :=
-                #[``Std.WP.qimp_spec_uncurry', ``Std.WP.qimp_spec_unit,
-                  ``Std.WP.qimp_uncurry', ``Std.WP.qimp_unit,
-                  ``Std.WP.qimp_spec_exists, ``Std.WP.qimp_exists,
-                  -- `Prod.forall`/`Prod.exists` split `∀ x : α × β, p x` into
+                info.uncurry_elim_tactics ++
+                #[ -- `Prod.forall`/`Prod.exists` split `∀ x : α × β, p x` into
                   -- `∀ a b, p (a, b)`, so a tuple post-binder produces one
                   -- output per leaf rather than a single pair.
+                  ``Std.WP.qimp_uncurry', ``Std.WP.qimp_unit, ``Std.WP.qimp_exists,
                   ``Prod.forall, ``Prod.exists,
                   ``forall_unit, ``true_imp_iff] }
             (.targets #[] true)
@@ -619,9 +618,8 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
     Simp.simpAt true { maxDischargeDepth := 1, failIfUnchanged := false, iota := false}
             { declsToUnfold := #[``Std.WP.curry, ``Std.WP.uncurry']
               addSimpThms :=
-                #[``Std.WP.qimp_spec_iff, ``Std.WP.qimp_iff,
-                  ``Std.WP.imp_and_iff,
-                  ``Prod.forall, ``Prod.exists, ``Std.uncurry_apply_pair,
+                info.qimp_elim_tactics ++
+                #[ ``Std.WP.qimp_iff, ``Std.WP.imp_and_iff, ``Prod.forall, ``Prod.exists, ``Std.uncurry_apply_pair,
                   ``forall_unit, ``true_imp_iff] }
             (.targets #[] true)
     | trace[Step] "The main goal was solved!"; return none
@@ -852,7 +850,7 @@ def stepWith (info : SpecInfo) (args : Args) (isLet:Bool) (fExpr : Expr) (th : E
   /- Process the main goal -/
   -- Introduce the outputs, including the post-conditions, into the context
   setGoals [mainGoal]
-  let mainGoal ← introOutputs args fExpr stepState
+  let mainGoal ← introOutputs info args fExpr stepState
   /- Simplify the post-conditions in the main goal - note that we waited until now
       because by solving the preconditions we may have instantiated meta-variables.
       We also simplify the goal again (to simplify let-bindings, etc.) -/
@@ -1433,7 +1431,7 @@ namespace Test
   open Std Result
 
   -- Show the traces:
-  set_option trace.Step true
+  -- set_option trace.Step true
   -- set_option pp.rawOnError true
 
 
@@ -1535,6 +1533,7 @@ namespace Test
       step -- TODO: should work!
       step -- need qimp intro tactics!
       simp [*]
+      --
 
   -- requires lifting spec to dspec
   example : WP.dspec
