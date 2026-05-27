@@ -8,6 +8,83 @@ Import ListNotations.
 Local Open Scope Primitives_scope.
 Module DefaultedMethod.
 
+(** Trait declaration: [core::cmp::PartialEq]
+    Source: '/rustc/library/core/src/cmp.rs', lines 251:0-251:65
+    Name pattern: [core::cmp::PartialEq]
+    Visibility: public *)
+Record core_cmp_PartialEq_t (Self : Type) (Rhs : Type)
+  := mkcore_cmp_PartialEq_t {
+  core_cmp_PartialEq_t_eq : Self -> Rhs -> result bool;
+}.
+
+Arguments mkcore_cmp_PartialEq_t { _ } { _ }.
+Arguments core_cmp_PartialEq_t_eq { _ } { _ } _.
+
+(** Trait declaration: [core::cmp::Eq]
+    Source: '/rustc/library/core/src/cmp.rs', lines 338:0-338:58
+    Name pattern: [core::cmp::Eq]
+    Visibility: public *)
+Record core_cmp_Eq_t (Self : Type) := mkcore_cmp_Eq_t {
+  core_cmp_Eq_tcore_cmp_Eq_t_PartialEqInst : core_cmp_PartialEq_t Self Self;
+}.
+
+Arguments mkcore_cmp_Eq_t { _ }.
+Arguments core_cmp_Eq_tcore_cmp_Eq_t_PartialEqInst { _ } _.
+
+(** [core::cmp::Ordering]
+    Source: '/rustc/library/core/src/cmp.rs', lines 396:0-396:17
+    Name pattern: [core::cmp::Ordering]
+    Visibility: public *)
+Inductive core_cmp_Ordering_t :=
+| Core_cmp_Ordering_Less : core_cmp_Ordering_t
+| Core_cmp_Ordering_Equal : core_cmp_Ordering_t
+| Core_cmp_Ordering_Greater : core_cmp_Ordering_t
+.
+
+(** Trait declaration: [core::cmp::PartialOrd]
+    Source: '/rustc/library/core/src/cmp.rs', lines 1358:0-1359:41
+    Name pattern: [core::cmp::PartialOrd]
+    Visibility: public *)
+Record core_cmp_PartialOrd_t (Self : Type) (Rhs : Type)
+  := mkcore_cmp_PartialOrd_t {
+  core_cmp_PartialOrd_tcore_cmp_PartialOrd_t_PartialEqInst :
+    core_cmp_PartialEq_t Self Rhs;
+  core_cmp_PartialOrd_t_partial_cmp : Self -> Rhs -> result (option
+    core_cmp_Ordering_t);
+}.
+
+Arguments mkcore_cmp_PartialOrd_t { _ } { _ }.
+Arguments core_cmp_PartialOrd_tcore_cmp_PartialOrd_t_PartialEqInst { _ } { _ }
+  _.
+Arguments core_cmp_PartialOrd_t_partial_cmp { _ } { _ } _.
+
+(** Trait declaration: [core::cmp::Ord]
+    Source: '/rustc/library/core/src/cmp.rs', lines 973:0-973:73
+    Name pattern: [core::cmp::Ord]
+    Visibility: public *)
+Record core_cmp_Ord_t (Self : Type) := mkcore_cmp_Ord_t {
+  core_cmp_Ord_tcore_cmp_Ord_t_EqInst : core_cmp_Eq_t Self;
+  core_cmp_Ord_tcore_cmp_Ord_t_PartialOrdInst : core_cmp_PartialOrd_t Self
+    Self;
+  core_cmp_Ord_t_cmp : Self -> Self -> result core_cmp_Ordering_t;
+  core_cmp_Ord_t_min : Self -> Self -> result Self;
+}.
+
+Arguments mkcore_cmp_Ord_t { _ }.
+Arguments core_cmp_Ord_tcore_cmp_Ord_t_EqInst { _ } _.
+Arguments core_cmp_Ord_tcore_cmp_Ord_t_PartialOrdInst { _ } _.
+Arguments core_cmp_Ord_t_cmp { _ } _.
+Arguments core_cmp_Ord_t_min { _ } _.
+
+(** [core::cmp::Ord::min]:
+    Source: '/rustc/library/core/src/cmp.rs', lines 1064:4-1066:39
+    Name pattern: [core::cmp::Ord::min]
+    Visibility: public *)
+Axiom core_cmp_Ord_min_default :
+  forall{Self : Type} (ordInst : core_cmp_Ord_t Self),
+        Self -> Self -> result Self
+.
+
 (** [core::cmp::impls::{core::cmp::Ord for i32}::min]:
     Source: '/rustc/library/core/src/cmp.rs', lines 2000:12-2000:33
     Name pattern: [core::cmp::impls::{core::cmp::Ord<i32>}::min]

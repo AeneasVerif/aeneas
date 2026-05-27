@@ -5,6 +5,58 @@ open Primitives
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
+(** Trait declaration: [core::cmp::PartialEq]
+    Source: '/rustc/library/core/src/cmp.rs', lines 251:0-251:65
+    Name pattern: [core::cmp::PartialEq]
+    Visibility: public *)
+noeq type core_cmp_PartialEq_t (self : Type0) (rhs : Type0) = {
+  eq : self -> rhs -> result bool;
+}
+
+(** Trait declaration: [core::cmp::Eq]
+    Source: '/rustc/library/core/src/cmp.rs', lines 338:0-338:58
+    Name pattern: [core::cmp::Eq]
+    Visibility: public *)
+noeq type core_cmp_Eq_t (self : Type0) = {
+  partialEqInst : core_cmp_PartialEq_t self self;
+}
+
+(** [core::cmp::Ordering]
+    Source: '/rustc/library/core/src/cmp.rs', lines 396:0-396:17
+    Name pattern: [core::cmp::Ordering]
+    Visibility: public *)
+type core_cmp_Ordering_t =
+| Core_cmp_Ordering_Less : core_cmp_Ordering_t
+| Core_cmp_Ordering_Equal : core_cmp_Ordering_t
+| Core_cmp_Ordering_Greater : core_cmp_Ordering_t
+
+(** Trait declaration: [core::cmp::PartialOrd]
+    Source: '/rustc/library/core/src/cmp.rs', lines 1358:0-1359:41
+    Name pattern: [core::cmp::PartialOrd]
+    Visibility: public *)
+noeq type core_cmp_PartialOrd_t (self : Type0) (rhs : Type0) = {
+  partialEqInst : core_cmp_PartialEq_t self rhs;
+  partial_cmp : self -> rhs -> result (option core_cmp_Ordering_t);
+}
+
+(** Trait declaration: [core::cmp::Ord]
+    Source: '/rustc/library/core/src/cmp.rs', lines 973:0-973:73
+    Name pattern: [core::cmp::Ord]
+    Visibility: public *)
+noeq type core_cmp_Ord_t (self : Type0) = {
+  eqInst : core_cmp_Eq_t self;
+  partialOrdInst : core_cmp_PartialOrd_t self self;
+  cmp : self -> self -> result core_cmp_Ordering_t;
+  min : self -> self -> result self;
+}
+
+(** [core::cmp::Ord::min]:
+    Source: '/rustc/library/core/src/cmp.rs', lines 1064:4-1066:39
+    Name pattern: [core::cmp::Ord::min]
+    Visibility: public *)
+assume val core_cmp_Ord_min_default
+  (#self : Type0) (ordInst : core_cmp_Ord_t self) : self -> self -> result self
+
 (** [core::cmp::impls::{core::cmp::Ord for i32}::min]:
     Source: '/rustc/library/core/src/cmp.rs', lines 2000:12-2000:33
     Name pattern: [core::cmp::impls::{core::cmp::Ord<i32>}::min]
