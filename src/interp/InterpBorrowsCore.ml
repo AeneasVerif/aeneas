@@ -1542,25 +1542,24 @@ let lookup_aproj_loans_opt (span : Meta.span) (abs_id : AbsId.id)
         if abs.abs_id = abs_id then super#visit_abs (Some abs) abs else ()
 
       method! visit_aproj (abs : abs option) sproj =
-        (match sproj with
+        match sproj with
         | AProjBorrows _ | AEndedProjLoans _ | AEndedProjBorrows _ | AEmpty ->
             super#visit_aproj abs sproj
         | AProjLoans aproj_loan ->
             let abs = Option.get abs in
             [%sanity_check] span (abs.abs_id = abs_id);
-            if aproj_loan.proj.sv_id = sv_id then set_found aproj_loan else ());
-        super#visit_aproj abs sproj
+            if aproj_loan.proj.sv_id = sv_id then set_found aproj_loan
+            else super#visit_aproj (Some abs) sproj
 
       method! visit_eproj (abs : abs option) sproj =
-        (match sproj with
+        match sproj with
         | EProjBorrows _ | EEndedProjLoans _ | EEndedProjBorrows _ | EEmpty ->
             super#visit_eproj abs sproj
         | EProjLoans aproj_loan ->
             let abs = Option.get abs in
             [%sanity_check] span (abs.abs_id = abs_id);
             if aproj_loan.proj.sv_id = sv_id then set_found_eproj aproj_loan
-            else ());
-        super#visit_eproj abs sproj
+            else super#visit_eproj (Some abs) sproj
     end
   in
   (* Apply *)
