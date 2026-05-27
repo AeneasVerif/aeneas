@@ -213,6 +213,32 @@ theorem exists_imp_spec {m:Result α} {P:Post α} :
 --     program_index := 1
 --   }
 
+-- `dspec` theorems
+theorem dspec_mono' {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : spec m P₀):
+  qimp P₀ P₁ → dspec m P₁ := by
+  intros HMonPost
+  revert h
+  unfold dspec
+  cases m <;> grind [qimp]
+
+/-- Implication of a `dspec` predicate with quantifier -/
+def qimp_dspec {α β} (P : α → Prop) (k : α → Result β) (Q : β → Prop) : Prop :=
+  ∀ x, P x → dspec (k x) Q
+
+theorem dspec_bind' {α β} {k : α -> Result β} {Pₖ : Post β} {m : Result α} {Pₘ : Post α} :
+  dspec m Pₘ →
+  (qimp_dspec Pₘ k Pₖ) →
+  dspec (Std.bind m k) Pₖ := by
+  intro Hm Hk
+  cases m
+  · simp
+    apply Hk
+    apply Hm
+  · simp
+    apply Hm
+  · simp
+    apply Hm
+
 end Aeneas.Std.WP
 
 /-

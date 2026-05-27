@@ -248,11 +248,9 @@ def specStatementLookup : Name → Option SpecInfo
   | ``Std.WP.dspec => .some {
     name := ``Std.WP.dspec
     arity := 3
-    -- mk_spec_mono := fun _args thm => pure thm
-    -- mk_spec_bind := fun _args thm => pure thm
-    mk_spec_mono := ``Std.WP.spec_mono'
+    mk_spec_mono := ``Std.WP.dspec_mono'
     mk_spec_mono_skip_args := 2
-    mk_spec_bind := ``Std.WP.spec_bind'
+    mk_spec_bind := ``Std.WP.dspec_bind'
     mk_spec_bind_skip_args := 4
     uncurry_elim_tactics := #[]
     qimp_elim_tactics := #[]

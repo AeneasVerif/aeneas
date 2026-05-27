@@ -505,8 +505,8 @@ def tryMatch (info : SpecInfo) (isLet : Bool) (th : Expr) :
 
   let (specMonoBindName, varNum) :=
     if isLet
-    then (``Std.WP.spec_bind', info.mk_spec_bind_skip_args)
-    else (``Std.WP.spec_mono', info.mk_spec_mono_skip_args)
+    then (info.mk_spec_bind, info.mk_spec_bind_skip_args)
+    else (info.mk_spec_mono, info.mk_spec_mono_skip_args)
   let specMonoBind ← Term.mkConst specMonoBindName
   let specMonoBindTy ← inferType specMonoBind
   trace[Step] "specMonoBind (isLet:{isLet}): {specMonoBind}: {← inferType specMonoBind}"
@@ -1433,7 +1433,7 @@ namespace Test
   open Std Result
 
   -- Show the traces:
-  -- set_option trace.Step true
+  set_option trace.Step true
   -- set_option pp.rawOnError true
 
 
@@ -1520,6 +1520,30 @@ namespace Test
       step -- test using spec thm to prove spec
       step
       simp [*]
+
+  @[step]
+  theorem simple_converge_property_dspec (x : Std.I32)
+    : Std.WP.dspec (simple_converge x) (fun res => res = 10#i32)
+    := by
+      unfold simple_converge
+      split <;> simp [WP.dspec]
+
+  example : WP.dspec
+    (do let x ← simple_converge 5#i32
+        let y ← simple_converge 6#i32
+        return x) (fun x => x = 10#i32) := by
+      step -- TODO: should work!
+      step -- need qimp intro tactics!
+      simp [*]
+
+  -- requires lifting spec to dspec
+  example : WP.dspec
+    (do let x ← 1#i32 + 2#i32
+        let y ← x + x
+        return y) (fun z => z.val == 10) := by
+    step
+    step
+    sorry
 
   -- -- test out using a spec theorem to prove a dspec
   -- example : WP.dspec
