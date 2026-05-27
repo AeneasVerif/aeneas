@@ -6,6 +6,7 @@
 open Types
 open Values
 open Contexts
+open Utils
 open TypesUtils
 open ValuesUtils
 open Cps
@@ -294,10 +295,10 @@ let rec match_types (span : Meta.span) ~(recover : bool) (ctx0 : eval_ctx)
       TAdt { id = id1; generics = generics1 } ) ->
       [%cassert_recover] recover span (id0 = id1) "Not the same ADT ids";
       [%cassert_recover] recover span
-        (generics0.const_generics = generics1.const_generics)
+        (phys_eq generics0.const_generics generics1.const_generics)
         "Not the same const generics";
       [%cassert_recover] recover span
-        (generics0.trait_refs = generics1.trait_refs)
+        (phys_eq generics0.trait_refs generics1.trait_refs)
         "Not the same trait refs";
       let id = id0 in
       let const_generics = generics1.const_generics in
@@ -622,13 +623,13 @@ module MakeJoinMatcher (S : MatchJoinState) : PrimMatcher = struct
     sv
 
   let match_etys _ _ ty0 ty1 =
-    [%sanity_check_recover] S.recover span (ty0 = ty1);
+    [%sanity_check_recover] S.recover span (phys_eq ty0 ty1);
     ty0
 
   let match_rtys _ _ ty0 ty1 =
     (* The types must be equal - in effect, this forbids to match symbolic
        values containing borrows *)
-    [%sanity_check_recover] S.recover span (ty0 = ty1);
+    [%sanity_check_recover] S.recover span (phys_eq ty0 ty1);
     ty0
 
   let match_distinct_literals (_ : tvalue_matcher) (ctx0 : eval_ctx)
@@ -1807,7 +1808,7 @@ struct
 
   (** *)
   let match_etys (_ : eval_ctx) (_ : eval_ctx) ty0 ty1 =
-    if ty0 <> ty1 then raise (Distinct "match_etys") else ty0
+    if phys_neq ty0 ty1 then raise (Distinct "match_etys") else ty0
 
   let match_rtys (ctx0 : eval_ctx) (ctx1 : eval_ctx) ty0 ty1 =
     let match_distinct_types ty0 ty1 =
@@ -1936,7 +1937,7 @@ struct
          instead of relying on [add_strict_or_unchanged], whose [Assert_failure]
          would bypass [try_match_ctxs]'s recovery mechanism. *)
       (match SymbolicValueId.Map.find_opt id0 !S.sid_to_value_map with
-      | Some sv1' when sv1 <> sv1' ->
+      | Some sv1' when phys_neq sv1 sv1' ->
           raise (Distinct "match_symbolic_values: incoherent value mapping")
       | _ -> ());
       S.sid_to_value_map :=
@@ -1960,7 +1961,7 @@ struct
          See the comment in [match_symbolic_values] for why we avoid
          [add_strict_or_unchanged] and check consistency explicitly. *)
       (match SymbolicValueId.Map.find_opt id !S.sid_to_value_map with
-      | Some v' when v <> v' ->
+      | Some v' when phys_neq v v' ->
           raise (Distinct "match_symbolic_with_other: incoherent value mapping")
       | _ -> ());
       S.sid_to_value_map := SymbolicValueId.Map.add id v !S.sid_to_value_map;
@@ -2466,7 +2467,7 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
           if DummyVarId.Set.mem b0 fixed_ids.dids then (
             let v1, env1' = pop_dummy b0 env1 in
             (* Fixed values: the values must be equal *)
-            [%sanity_check_recover] S.recover span (v0 = v1);
+            [%sanity_check_recover] S.recover span (equal_tvalue v0 v1);
             (* The ids present in the left value must be fixed *)
             let ids, _ = compute_tvalue_ids v0 in
             [%sanity_check_recover] S.recover span
@@ -2490,7 +2491,7 @@ let match_ctxs (span : Meta.span) ~(check_equiv : bool)
           [%ldebug "match_envs: matching abs: fixed abs"];
           let abs1, env1' = pop_abs abs0.abs_id env1 in
           (* Still in the prefix: the abstractions must be the same *)
-          [%sanity_check_recover] S.recover span (abs0 = abs1);
+          [%sanity_check_recover] S.recover span (equal_abs abs0 abs1);
           (* Their ids must be fixed *)
           let ids, _ = compute_abs_ids abs0 in
           [%sanity_check_recover] S.recover span

@@ -748,7 +748,7 @@ let join_ctxs (span : Meta.span) (fresh_abs_kind : abs_kind)
            points we might remove/add continuations while the presence/absence
            shouldn't have an impact on the way we match/unify contexts. *)
         [%sanity_check] span
-          ({ abs0 with cont = None } = { abs1 with cont = None });
+          (equal_abs { abs0 with cont = None } { abs1 with cont = None });
         (* Continue *)
         abs :: join_prefixes env0' env1'
     | [] ->
