@@ -963,8 +963,9 @@ let strip_unnecessary_target_suffixes (crate : crate) : crate =
     When we will actually need to reason about these, we will capture their
     semantic content through separation logic predicates.
 
-    We filter out the trait declarations, their impls, and all references (trait
-    refs, clauses, type constraints, parent clauses). *)
+    We filter out the trait declarations, their impls, their associated items,
+    and all references (trait refs, clauses, type constraints, parent clauses).
+*)
 let filter_marker_traits (crate : crate) : crate =
   let mctx = NameMatcher.ctx_from_crate crate in
   let pats =
@@ -1031,6 +1032,34 @@ let filter_marker_traits (crate : crate) : crate =
           else acc)
         crate.trait_impls TraitImplId.Set.empty
     in
+    let item_source_is_filtered (src : item_source) : bool =
+      match src with
+      | TraitDeclItem (trait_ref, _, _) -> is_filtered_id trait_ref.id
+      | TraitImplItem (impl_ref, trait_ref, _, _) ->
+          TraitImplId.Set.mem impl_ref.id filtered_impl_ids
+          || is_filtered_id trait_ref.id
+      | _ -> false
+    in
+    let filtered_global_ids =
+      GlobalDeclId.Map.fold
+        (fun id (decl : global_decl) acc ->
+          if item_source_is_filtered decl.src then GlobalDeclId.Set.add id acc
+          else acc)
+        crate.global_decls GlobalDeclId.Set.empty
+    in
+    let filtered_fun_ids =
+      FunDeclId.Map.fold
+        (fun id (decl : fun_decl) acc ->
+          let init_is_filtered =
+            match decl.is_global_initializer with
+            | None -> false
+            | Some id -> GlobalDeclId.Set.mem id filtered_global_ids
+          in
+          if item_source_is_filtered decl.src || init_is_filtered then
+            FunDeclId.Set.add id acc
+          else acc)
+        crate.fun_decls FunDeclId.Set.empty
+    in
     let declarations =
       List.filter_map
         (fun (g : declaration_group) ->
@@ -1049,9 +1078,30 @@ let filter_marker_traits (crate : crate) : crate =
                   ids
               in
               if ids <> [] then Some (TraitImplGroup (RecGroup ids)) else None
+          | FunGroup (NonRecGroup id) ->
+              if FunDeclId.Set.mem id filtered_fun_ids then None else Some g
+          | FunGroup (RecGroup ids) ->
+              let ids =
+                List.filter
+                  (fun id -> not (FunDeclId.Set.mem id filtered_fun_ids))
+                  ids
+              in
+              if ids <> [] then Some (FunGroup (RecGroup ids)) else None
+          | GlobalGroup (NonRecGroup id) ->
+              if GlobalDeclId.Set.mem id filtered_global_ids then None
+              else Some g
+          | GlobalGroup (RecGroup ids) ->
+              let ids =
+                List.filter
+                  (fun id -> not (GlobalDeclId.Set.mem id filtered_global_ids))
+                  ids
+              in
+              if ids <> [] then Some (GlobalGroup (RecGroup ids)) else None
           | MixedGroup g -> (
               let is_filtered_item (id : item_id) =
                 match id with
+                | IdFun id -> FunDeclId.Set.mem id filtered_fun_ids
+                | IdGlobal id -> GlobalDeclId.Set.mem id filtered_global_ids
                 | IdTraitDecl id -> is_filtered_id id
                 | IdTraitImpl id -> TraitImplId.Set.mem id filtered_impl_ids
                 | _ -> false
@@ -1077,7 +1127,26 @@ let filter_marker_traits (crate : crate) : crate =
         (fun id _ -> not (TraitImplId.Set.mem id filtered_impl_ids))
         crate.trait_impls
     in
-    let crate = { crate with declarations; trait_decls; trait_impls } in
+    let global_decls =
+      GlobalDeclId.Map.filter
+        (fun id _ -> not (GlobalDeclId.Set.mem id filtered_global_ids))
+        crate.global_decls
+    in
+    let fun_decls =
+      FunDeclId.Map.filter
+        (fun id _ -> not (FunDeclId.Set.mem id filtered_fun_ids))
+        crate.fun_decls
+    in
+    let crate =
+      {
+        crate with
+        declarations;
+        trait_decls;
+        trait_impls;
+        global_decls;
+        fun_decls;
+      }
+    in
     let visitor =
       object (self)
         inherit [_] map_crate as super
