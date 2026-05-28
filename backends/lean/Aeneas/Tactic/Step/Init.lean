@@ -275,20 +275,20 @@ section
 open Aeneas.Std
 
 /-- For `simplifyStepHypotheses`: turns `∀ e, ¬ (e = c ∧ P)` into `¬ P`. -/
-theorem step_fail_failEq {c : Aeneas.Std.Error} {P : Prop} (h : ¬ P) :
+private theorem step_fail_failEq {c : Aeneas.Std.Error} {P : Prop} (h : ¬ P) :
     ∀ e, ¬ (e = c ∧ P) :=
   fun _ h' => h h'.2
 
 /-- For `simplifyStepHypotheses`: turns `∀ e, P` into `P`. -/
-theorem step_fail_remove_forall {P : Prop} (h : P) :
+private theorem step_fail_remove_forall {P : Prop} (h : P) :
     ∀ _ : Aeneas.Std.Error, P := fun _ => h
 
 /-- For `simplifyStepHypotheses`: closes `∀ e, ¬ False` when the fail predicate is `False`. -/
-theorem step_fail_False : ∀ (_ : Aeneas.Std.Error), ¬ False :=
+private theorem step_fail_False : ∀ (_ : Aeneas.Std.Error), ¬ False :=
   fun _ h => h
 
 /-- For `simplifyStepHypotheses`: closes `¬ False` when the divergence predicate is `False`. -/
-theorem step_div_False : ¬ False :=
+private theorem step_div_False : ¬ False :=
   fun h => h
 
 end
@@ -300,6 +300,8 @@ private def simplifyStepHypotheses (extraMVars : Array Expr) : MetaM Unit := do
   -- h_fail : ∀ e, ¬ p_fail e
   let hFail := extraMVars[0]!
   trace[Step] "simplifyStepHypotheses: hFail type: {← inferType hFail}"
+  -- The numbers passed to `applyN` below specify how many arguments the theorem has beyond
+  -- foralls/implications that are part of the hypothesis we want to simplify.
   try discard <| withReducible <| hFail.mvarId!.applyN (mkConst ``step_fail_failEq) 3
     catch e => trace[Step] "simplifyStepHypotheses: step_fail_failEq failed: {e.toMessageData}"
   try discard <| withReducible <| hFail.mvarId!.applyN (mkConst ``step_fail_remove_forall) 2
@@ -374,17 +376,17 @@ private def saveMvcgenSpecFromThm (stx : Syntax) (attrKind : AttributeKind)
     saveMvcgenDecl attrKind stx thDecl thmTy proofTerm
 
 section
-open Aeneas.Std WP
+open Aeneas.Std WP Result
 
-theorem mvcgen_fail_failEq {α : Type u} {Q : Std.Do.PostCond α postShape} {c : Error} {P : Prop}
+private theorem mvcgen_fail_failEq {α : Type u} {Q : Std.Do.PostCond α postShape} {c : Error} {P : Prop}
     (h : P → willFail c Q) :
     ∀ e, (e = c ∧ P) → willFail e Q := by
   intro e ⟨he, hP⟩; subst he; exact h hP
 
-theorem mvcgen_fail_False {α : Type u} {Q : Std.Do.PostCond α postShape} :
+private theorem mvcgen_fail_False {α : Type u} {Q : Std.Do.PostCond α postShape} :
     ∀ e, False → willFail e Q := by intros; contradiction
 
-theorem mvcgen_div_False {P : Prop} :
+private theorem mvcgen_div_False {P : Prop} :
     False → P := False.elim
 
 end
@@ -441,11 +443,16 @@ private def applyStepAttr (ext : Extension) (attrKind : AttributeKind) (stx : Sy
       trace[Step] "Theorem after normalization (to eliminate the let bindings): {ty}"
       let (isPartial, fExpr) ← parseStepSpec ty
       if isPartial then
-        saveStepPartialSpecFromThm ext attrKind stx thDecl ty fExpr
-        saveMvcgenPartialSpecFromThm stx attrKind thDecl
+        try saveStepPartialSpecFromThm ext attrKind stx thDecl ty fExpr
+        catch e => logWarning m!"Could not generate step spec for {thName}: {e.toMessageData}"
+        try saveMvcgenPartialSpecFromThm stx attrKind thDecl
+        catch e => logWarning m!"Could not generate mvcgen spec for {thName}: {e.toMessageData}"
       else
-        saveStepSpecFromThm ext attrKind thName fExpr
-        saveMvcgenSpecFromThm stx attrKind thDecl
+        try saveStepSpecFromThm ext attrKind thName fExpr
+        catch e => logWarning m!"Could not save step spec for {thName}: {e.toMessageData}"
+        try saveMvcgenSpecFromThm stx attrKind thDecl
+        catch e => logWarning m!"Could not generate mvcgen spec for {thName}: {e.toMessageData}"
+
 
 /-- Initialize the `step` attribute. -/
 initialize stepAttr : StepSpecAttr ← do
