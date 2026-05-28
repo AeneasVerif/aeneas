@@ -950,9 +950,15 @@ let strip_unnecessary_target_suffixes (crate : crate) : crate =
 (** Remove all occurrences of certain compiler-internal marker traits.
 
     These traits have no semantic content relevant to verification:
+    - [Sized], [MetaSized], [PointeeSized]: type size plumbing
+    - [Destruct]: carries drop information
     - [Pointee], [Thin]: pointer metadata plumbing
     - [Send], [Sync]: thread-safety markers
     - [Unpin]: pin-projection marker
+    - [Tuple]: identifies tuples for use in the [Fn] family of traits
+    - [TrivialClone]: internal marker trait used for some optimizations
+    - [Allocator]: unstable API for custom allocators, present on Box/Vec/etc
+      but not exposed to stable users
 
     When we will actually need to reason about these, we will capture their
     semantic content through separation logic predicates.
@@ -964,11 +970,18 @@ let filter_marker_traits (crate : crate) : crate =
   let pats =
     List.map NameMatcher.parse_pattern
       [
+        "core::marker::Sized";
+        "core::marker::MetaSized";
+        "core::marker::PointeeSized";
+        "core::marker::Destruct";
         "core::ptr::metadata::Pointee";
         "core::ptr::metadata::Thin";
         "core::marker::Send";
         "core::marker::Sync";
         "core::marker::Unpin";
+        "core::marker::Tuple";
+        "core::clone::TrivialClone";
+        "core::alloc::Allocator";
       ]
   in
   let match_config =
