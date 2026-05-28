@@ -471,7 +471,7 @@ def trySolveTypeclasses (mvarsIds : List MVarId) : TacticM (List MVarId) := do
 The resulting target should be of the shape:
 `qimp_spec P k Q` (or `qimp P Q`)
 -/
-def tryMatch (info : SpecInfo) (isLet : Bool) (th : Expr) :
+def tryMatch (info : SpecInfo) (lifting : Option LiftingInfo) (isLet : Bool) (th : Expr) :
   TacticM (Array MVarId) := do
   withTraceNode `Step (fun _ => pure m!"tryMatch") do
   /- Apply the theorem
@@ -492,6 +492,24 @@ def tryMatch (info : SpecInfo) (isLet : Bool) (th : Expr) :
   let th := mkAppN th mvars
   trace[Step] "Uninstantiated theorem: {th}: {← inferType th}"
 
+  -- do lifting if given
+  let (th, thTy) ←
+    match lifting with
+    | .none => pure (th, thTy)
+    | .some lifting => do
+      let liftingThm ← Term.mkConst lifting.conversion_thm
+      trace[Step] "Trying to lift by {liftingThm}"
+      let liftingThmTy ← inferType liftingThm
+      let (liftThmVars, _, _liftThmTy) ← forallMetaBoundedTelescope liftingThmTy lifting.conversion_thm_inferred_args
+      let liftingThmPartiallyApplied ← mkAppOptM' liftingThm (liftThmVars.map some)
+      let liftingThmApplied := mkAppN liftingThmPartiallyApplied #[th]
+      let liftingThmAppliedTy ← inferType liftingThmApplied
+      Lean.Meta.check liftingThmApplied -- need to instantiate the lifting theorem implicit arguments
+      let thTy ← inferType liftingThmApplied
+      let thTy ← normalizeLetBindings thTy
+      trace[Step] "After lifting have: {liftingThmApplied} : {liftingThmAppliedTy}"
+      pure (liftingThmApplied, thTy)
+
   -- `thTy` should be of the shape `spec program post`: we need to retrieve `program`
   let (thHead, thArgs) := thTy.consumeMData.withApp (fun f args => (f, args))
   -- TODO: here is where it should be able to lift from spec to dspec
@@ -510,7 +528,7 @@ def tryMatch (info : SpecInfo) (isLet : Bool) (th : Expr) :
   let specMonoBind ← Term.mkConst specMonoBindName
   let specMonoBindTy ← inferType specMonoBind
   trace[Step] "specMonoBind (isLet:{isLet}): {specMonoBind}: {← inferType specMonoBind}"
-  let (specMonoBindMVars, _, specMonoBindTy) ← forallMetaBoundedTelescope specMonoBindTy varNum
+  let (specMonoBindMVars, _, _specMonoBindTy) ← forallMetaBoundedTelescope specMonoBindTy varNum
   let specMonoBind ← mkAppOptM' specMonoBind (specMonoBindMVars.map some)
   trace[Step] "Uninstantiated specMonoBind: {specMonoBind}: {← inferType specMonoBind}"
 
@@ -824,13 +842,13 @@ def postprocessMainGoal (mainGoal : Option MainGoal) : TacticM (Option MainGoal)
         pure (some ({goal := ← getMainGoal, outputs, stepState := mainGoal.stepState} : MainGoal))
       else pure none
 
-def stepWith (info : SpecInfo) (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
+def stepWith (info : SpecInfo) (lifting : Option LiftingInfo) (args : Args) (isLet:Bool) (fExpr : Expr) (th : Expr) :
   TacticM Goals := do
   withTraceNode `Step (fun _ => pure m!"stepWith") do
   -- Save the main goal before tryMatch (needed for lazy grind state initialization)
   let originalGoal ← getMainGoal
   -- Attempt to instantiate the theorem and introduce it in the context
-  let newGoals ← tryMatch info isLet th
+  let newGoals ← tryMatch info lifting isLet th
   --
   withMainContext do
   traceGoalWithNode "current goal"
@@ -907,7 +925,7 @@ def getFirstArg (args : Array Expr) : Option Expr := do
 /-- Helper: try to apply a theorem.
 
     Return the list of post-conditions we introduced if it succeeded. -/
-def tryApply (info : SpecInfo) (args : Args) (isLet:Bool) (fExpr : Expr) (kind : String) (th : Option Expr) :
+def tryApply (info : SpecInfo) (lifting : Option LiftingInfo) (args : Args) (isLet:Bool) (fExpr : Expr) (kind : String) (th : Option Expr) :
   TacticM (Option Goals) := do
   let res ← do
     match th with
@@ -919,7 +937,7 @@ def tryApply (info : SpecInfo) (args : Args) (isLet:Bool) (fExpr : Expr) (kind :
       -- Apply the theorem
       let res ← do
         try
-          let res ← stepWith info args isLet fExpr th
+          let res ← stepWith info lifting args isLet fExpr th
           pure (some res)
         catch _ => pure none
   match res with
@@ -942,7 +960,8 @@ where
   for decl in decls.reverse do
     trace[Step] "Trying assumption: {decl.userName} : {decl.type}"
     try
-      let goal ← stepWith info args isLet fExpr decl.toExpr
+      -- TODO: do we ever want to do a lifting with an assumption?
+      let goal ← stepWith info .none args isLet fExpr decl.toExpr
       return (some (goal, .localHyp decl))
     catch _ => continue
   pure none
@@ -972,7 +991,7 @@ def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
      Otherwise, lookup one. -/
   match withTh with
   | some th => do
-    let goals ← stepWith info args goalIsLet fExpr th
+    let goals ← stepWith info .none args goalIsLet fExpr th
     return (goals, .givenExpr th)
   | none =>
     -- Try all the assumptions one by one and if it fails try to lookup a theorem.
@@ -987,21 +1006,26 @@ def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
       throwError "Step failed"
     else do
       trace[Step] "No assumption succeeded: trying to lookup a pspec theorem"
-      let pspecs : Array Name ← do
-        let thNames ← stepAttr.find? info fExpr
-        /- TODO: because of reduction, there may be several valid theorems (for
-           instance for the scalars). We need to sort them from most specific to
-           least specific. For now, we assume the most specific theorems are at
-           the end. -/
-        let thNames := thNames.reverse
-        trace[Step] "Looked up pspec theorems: {thNames}"
-        pure thNames
-      -- Try the theorems one by one
-      for pspec in pspecs do
-        let pspecExpr ← Term.mkConst pspec
-        match ← tryApply info args goalIsLet fExpr "pspec theorem" pspecExpr with
-        | some goals => return (goals, .stepThm pspec)
-        | none => pure ()
+      -- Try with info.name theorems directly (the `.none`) as well as any liftings
+      let liftings : Array (Option LiftingInfo) := #[.none] ++ Array.map .some info.liftings
+      for lifting in liftings do
+        let pspecs : Array Name ← do
+          let thNames ← stepAttr.find? -- looks up the theorem in a discrimination tree
+            (match lifting with | .none => info.name | .some l => l.from_statement)
+            fExpr
+          /- TODO: because of reduction, there may be several valid theorems (for
+            instance for the scalars). We need to sort them from most specific to
+            least specific. For now, we assume the most specific theorems are at
+            the end. -/
+          let thNames := thNames.reverse
+          trace[Step] "Looked up pspec theorems: {thNames}"
+          pure thNames
+        -- Try the theorems one by one
+        for pspec in pspecs do
+          let pspecExpr ← Term.mkConst pspec
+          match ← tryApply info lifting args goalIsLet fExpr "pspec theorem" pspecExpr with
+          | some goals => return (goals, .stepThm pspec)
+          | none => pure ()
       -- It failed: try to use the recursive assumptions
       trace[Step] "Failed using a pspec theorem: trying to use a recursive assumption"
       -- We try to apply the assumptions of kind "auxDecl"
@@ -1014,7 +1038,8 @@ def stepAsmsOrLookupTheorem (args : Args) (withTh : Option Expr) :
       for decl in decls.reverse do
         trace[Step] "Trying recursive assumption: {decl.userName} : {decl.type}"
         try
-          let goals ← stepWith info args goalIsLet fExpr decl.toExpr
+          -- TODO: do we ever want to do a lifting for a recursive assumption?
+          let goals ← stepWith info .none args goalIsLet fExpr decl.toExpr
           return (goals, .localHyp decl)
         catch _ => continue
       -- Nothing worked: failed
@@ -1535,12 +1560,22 @@ namespace Test
       simp [*]
       --
 
+  example : WP.spec
+    (do let x ← 1#i32 + 2#i32
+        let y ← x + x
+        return y) (fun z => z.val == 6) := by
+    step
+    step
+    simp [*]
+    --
+
   -- requires lifting spec to dspec
   example : WP.dspec
     (do let x ← 1#i32 + 2#i32
         let y ← x + x
-        return y) (fun z => z.val == 10) := by
+        return y) (fun z => z.val == 6) := by
     step
+    --
     step
     sorry
 

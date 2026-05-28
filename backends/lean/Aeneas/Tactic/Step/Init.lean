@@ -212,30 +212,34 @@ section Methods
     withLocalDeclsD ⟨ tys ⟩ k
 end Methods
 
+structure LiftingInfo where
+  from_statement : Name
+  conversion_thm : Name
+  conversion_thm_inferred_args : Nat
+
 structure SpecInfo where
   name : Lean.Name
   arity : Nat
-  -- mk_spec_mono : Array Lean.Expr → Lean.Expr → MetaM Lean.Expr
-  -- mk_spec_bind : Array Lean.Expr → Lean.Expr → MetaM Lean.Expr
+  program_index : Nat -- index into the arguments of the Result value
+  post_index : Nat
+
   mk_spec_mono : Name
   mk_spec_mono_skip_args : Nat -- number of arguments to be inferred, before Result and Post arguments
   mk_spec_bind : Name
   mk_spec_bind_skip_args : Nat
-  program_index : Nat -- index into the arguments of the Result value
-  post_index : Nat
 
   uncurry_elim_tactics : Array Lean.Name
   qimp_elim_tactics : Array Lean.Name
+
+  liftings : Array LiftingInfo
   deriving Inhabited
 
 def specStatementLookup : Name → Option SpecInfo
   | ``Std.WP.spec => .some {
     name := ``Std.WP.spec
     arity := 3
-    -- mk_spec_mono := fun args thm =>
-    --   mkAppOptM ``Std.WP.spec_mono' #[.none, .none, args[1]!, args[2]!, thm]
-    -- mk_spec_bind := fun args thm =>
-    --   mkAppOptM ``Std.WP.spec_bind' #[.none, .none, .none, .none, args[1]!, args[2]!, thm]
+    program_index := 1
+    post_index := 2
     mk_spec_mono := ``Std.WP.spec_mono'
     mk_spec_mono_skip_args := 2
     mk_spec_bind := ``Std.WP.spec_bind'
@@ -244,12 +248,13 @@ def specStatementLookup : Name → Option SpecInfo
       ``Std.WP.qimp_spec_uncurry', ``Std.WP.qimp_spec_unit, ``Std.WP.qimp_spec_exists
     ]
     qimp_elim_tactics := #[ ``Std.WP.qimp_spec_iff, ]
-    program_index := 1
-    post_index := 2
+    liftings := #[]
   }
   | ``Std.WP.dspec => .some {
     name := ``Std.WP.dspec
     arity := 3
+    program_index := 1
+    post_index := 2
     mk_spec_mono := ``Std.WP.dspec_mono'
     mk_spec_mono_skip_args := 2
     mk_spec_bind := ``Std.WP.dspec_bind'
@@ -258,8 +263,11 @@ def specStatementLookup : Name → Option SpecInfo
       ``Std.WP.qimp_dspec_uncurry', ``Std.WP.qimp_dspec_unit, ``Std.WP.qimp_dspec_exists
     ]
     qimp_elim_tactics := #[ ``Std.WP.qimp_dspec_iff, ]
-    program_index := 1
-    post_index := 2
+    liftings := #[
+      { from_statement := ``Std.WP.spec
+        conversion_thm := ``Std.WP.spec_dspec
+        conversion_thm_inferred_args := 3 }
+    ]
   }
   | _ => .none
 
@@ -372,10 +380,10 @@ initialize stepAttr : StepSpecAttr ← do
   registerBuiltinAttribute attrImpl
   pure { attr := attrImpl, ext := ext }
 
-def StepSpecAttr.find? (s : StepSpecAttr) (info : SpecInfo) (e : Expr) : MetaM (Array Name) := do
+def StepSpecAttr.find? (s : StepSpecAttr) (name : Name) (e : Expr) : MetaM (Array Name) := do
   let state := s.ext.getState (← getEnv)
   -- let rules ← state.rules.getMatch e
-  let rules ← (state.rules.get! info.name).getMatch e
+  let rules ← (state.rules.get! name).getMatch e
   pure (rules.filter (fun th => th ∉ state.deactivated))
 
 def StepSpecAttr.getState (s : StepSpecAttr) : MetaM Rules := do

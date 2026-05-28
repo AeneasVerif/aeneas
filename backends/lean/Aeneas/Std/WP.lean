@@ -30,7 +30,7 @@ def dspec {α} (x:Result α) (p:Post α) :=
   | fail _ => False
   | div => True
 
-theorem spec_dspec {α} {x : Result α} (p: Post α) : spec x p → dspec x p := by
+theorem spec_dspec (α) (x : Result α) (p: Post α) : spec x p → dspec x p := by
   intros s
   simp [spec, dspec] at *
   cases x <;> simp at * <;> assumption
