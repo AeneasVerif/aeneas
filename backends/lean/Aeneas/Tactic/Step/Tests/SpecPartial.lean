@@ -14,6 +14,8 @@ open Aeneas Aeneas.Std Result Std.Do WP
 
 set_option mvcgen.warning false
 
+/- ## Mock division: panics when dividing by zero, but does not specify `Error`. -/
+
 opaque myDiv (x y : U32) : Result U32
 
 @[step]
@@ -45,13 +47,14 @@ info: Aeneas.Step.SpecPartialTests.myDiv_spec_partial.step_spec (x y : U32) (h :
 #check myDiv_spec_partial.step_spec
 
 /--
-info: Aeneas.Step.SpecPartialTests.myDiv_spec_partial.mvcgen_spec (x y : U32) (Q : PostCond U32 postShape)
+info: Aeneas.Step.SpecPartialTests.myDiv_spec_partial.mvcgen_spec (x y : U32) (Q : PostCond U32 Result.postShape)
   (h_ok : ∀ (r : U32), ↑r = ↑x / ↑y → willYield r Q) (h_fail : ∀ (e : Error), ↑y = 0 → willFail e Q) :
   ⦃⌜True⌝⦄ myDiv x y ⦃Q⦄
 -/
 #guard_msgs in
 #check myDiv_spec_partial.mvcgen_spec
 
+/- ## Mock addition: panics on overflow, specifies `Error.integerOverflow` -/
 
 opaque myAdd (x y : U32) : Result U32
 
@@ -70,11 +73,37 @@ info: Aeneas.Step.SpecPartialTests.myAdd_spec_partial.step_spec (x y : U32) (h :
 #check myAdd_spec_partial.step_spec
 
 /--
-info: Aeneas.Step.SpecPartialTests.myAdd_spec_partial.mvcgen_spec (x y : U32) (Q : PostCond U32 postShape)
+info: Aeneas.Step.SpecPartialTests.myAdd_spec_partial.mvcgen_spec (x y : U32) (Q : PostCond U32 Result.postShape)
   (h_ok : ∀ (r : U32), ↑r = ↑x + ↑y → willYield r Q) (h : ↑x + ↑y > U32.max → willFail Error.integerOverflow Q) :
   ⦃⌜True⌝⦄ myAdd x y ⦃Q⦄
 -/
 #guard_msgs in
 #check myAdd_spec_partial.mvcgen_spec
+
+/- ## Mock infinte loop: always diverges -/
+
+opaque infiniteLoop : Result Unit
+
+@[step]
+axiom infiniteLoop_spec_partial :
+  spec_partial infiniteLoop
+    (fun _ => False)
+    (fun _ => False)
+    True
+
+/--
+info: Aeneas.Step.SpecPartialTests.infiniteLoop_spec_partial.step_spec (h : ¬False) (h_div : ¬True) :
+  infiniteLoop ⦃ x✝ => False ⦄
+-/
+#guard_msgs in
+#check infiniteLoop_spec_partial.step_spec
+
+/--
+info: Aeneas.Step.SpecPartialTests.infiniteLoop_spec_partial.mvcgen_spec (Q : PostCond Unit Result.postShape)
+  (h_ok : ∀ (r : Unit), False → willYield r Q) (h_fail : ∀ (e : Error), False → willFail e Q)
+  (h_div : True → willDiverge Q) : ⦃⌜True⌝⦄ infiniteLoop ⦃Q⦄
+-/
+#guard_msgs in
+#check infiniteLoop_spec_partial.mvcgen_spec
 
 end Aeneas.Step.SpecPartialTests

@@ -687,7 +687,7 @@ namespace Aeneas.Std.WP
 open Std Result
 open Std.Do
 
-abbrev postShape : PostShape := (.except (ULift Error) (.except PUnit .pure))
+abbrev Result.postShape : PostShape := (.except (ULift Error) (.except PUnit .pure))
 
 instance Result.instWP : WP Result.{u} postShape where
   wp x := {
@@ -697,9 +697,14 @@ instance Result.instWP : WP Result.{u} postShape where
       cases x <;> simp
   }
 
-abbrev willYield {α : Type u} (r : α) (Q : PostCond α postShape) : Prop := (Q.1 r).down
-abbrev willFail {α : Type u} (e : Error) (Q : PostCond α postShape) : Prop := (Q.2.1 (.up e)).down
-abbrev willDiverge {α : Type u} (Q : PostCond α postShape) : Prop := (Q.2.2.1 .unit).down
+abbrev willYield {α : Type u} (r : α) (Q : PostCond α Result.postShape) : Prop :=
+  (Q.1 r).down
+
+abbrev willFail {α : Type u} (e : Error) (Q : PostCond α Result.postShape) : Prop :=
+  (Q.2.1 (.up e)).down
+
+abbrev willDiverge {α : Type u} (Q : PostCond α Result.postShape) : Prop :=
+  (Q.2.2.1 .unit).down
 
 instance : LawfulMonad Result where
     map_const := by intros; rfl
@@ -736,7 +741,7 @@ theorem spec_to_mvcgen {α : Type u} {x : Result α} {Q : α → Prop}
 theorem spec_partial_to_mvcgen {α : Type u} {x : Result α}
     {p_ok : α → Prop} {p_fail : Error → Prop} {p_div : Prop}
     (h : spec_partial x p_ok p_fail p_div)
-    {Q : PostCond α postShape}
+    {Q : PostCond α Result.postShape}
     (h_ok   : ∀ r, p_ok r → willYield r Q)
     (h_fail : ∀ e, p_fail e → willFail e Q)
     (h_div  : p_div → willDiverge Q) :
