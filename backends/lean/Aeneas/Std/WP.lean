@@ -193,26 +193,6 @@ theorem exists_imp_spec {m:Result α} {P:Post α} :
   (∃ y, m = ok y ∧ P y) → spec m P := by
   exact (spec_equiv_exists m P).2
 
--- #register_spec_statement {
---     name := ``spec
---     arity := 3
---     mk_spec_mono := fun _args thm => thm
---     mk_spec_bind := fun _args thm => thm
---     uncurry_elim_tactics := #[]
---     qimp_elim_tactics := #[]
---     program_index := 1
---   }
-
--- #register_spec_statement {
---     name := ``dspec
---     arity := 3
---     mk_spec_mono := fun _args thm => thm
---     mk_spec_bind := fun _args thm => thm
---     uncurry_elim_tactics := #[]
---     qimp_elim_tactics := #[]
---     program_index := 1
---   }
-
 -- `dspec` theorems
 theorem dspec_mono' {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : spec m P₀):
   qimp P₀ P₁ → dspec m P₁ := by
@@ -805,3 +785,42 @@ theorem loop.spec_decr_nat {α : Type u} {β : Type v}
   apply this
 
 end Aeneas.Std
+
+namespace Aeneas.Std.WP
+-- registers the spec statements for use in the step tactic, see Spec.lean
+#register_spec_statement {
+    name := ``Std.WP.spec
+    arity := 3
+    program_index := 1
+    post_index := 2
+    mk_spec_mono := ``Std.WP.spec_mono'
+    mk_spec_mono_skip_args := 2
+    mk_spec_bind := ``Std.WP.spec_bind'
+    mk_spec_bind_skip_args := 4
+    uncurry_elim_tactics := #[
+      ``Std.WP.qimp_spec_uncurry', ``Std.WP.qimp_spec_unit, ``Std.WP.qimp_spec_exists
+    ]
+    qimp_elim_tactics := #[ ``Std.WP.qimp_spec_iff, ]
+    liftings := #[]
+  }
+
+#register_spec_statement {
+    name := ``Std.WP.dspec
+    arity := 3
+    program_index := 1
+    post_index := 2
+    mk_spec_mono := ``Std.WP.dspec_mono'
+    mk_spec_mono_skip_args := 2
+    mk_spec_bind := ``Std.WP.dspec_bind'
+    mk_spec_bind_skip_args := 4
+    uncurry_elim_tactics := #[
+      ``Std.WP.qimp_dspec_uncurry', ``Std.WP.qimp_dspec_unit, ``Std.WP.qimp_dspec_exists
+    ]
+    qimp_elim_tactics := #[ ``Std.WP.qimp_dspec_iff, ]
+    liftings := #[
+      { from_statement := ``Std.WP.spec
+        conversion_thm := ``Std.WP.spec_dspec
+        conversion_thm_inferred_args := 3 }
+    ]
+  }
+end Aeneas.Std.WP

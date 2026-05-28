@@ -212,65 +212,6 @@ section Methods
     withLocalDeclsD ⟨ tys ⟩ k
 end Methods
 
-structure LiftingInfo where
-  from_statement : Name
-  conversion_thm : Name
-  conversion_thm_inferred_args : Nat
-
-structure SpecInfo where
-  name : Lean.Name
-  arity : Nat
-  program_index : Nat -- index into the arguments of the Result value
-  post_index : Nat
-
-  mk_spec_mono : Name
-  mk_spec_mono_skip_args : Nat -- number of arguments to be inferred, before Result and Post arguments
-  mk_spec_bind : Name
-  mk_spec_bind_skip_args : Nat
-
-  uncurry_elim_tactics : Array Lean.Name
-  qimp_elim_tactics : Array Lean.Name
-
-  liftings : Array LiftingInfo
-  deriving Inhabited
-
-def specStatementLookup : Name → Option SpecInfo
-  | ``Std.WP.spec => .some {
-    name := ``Std.WP.spec
-    arity := 3
-    program_index := 1
-    post_index := 2
-    mk_spec_mono := ``Std.WP.spec_mono'
-    mk_spec_mono_skip_args := 2
-    mk_spec_bind := ``Std.WP.spec_bind'
-    mk_spec_bind_skip_args := 4
-    uncurry_elim_tactics := #[
-      ``Std.WP.qimp_spec_uncurry', ``Std.WP.qimp_spec_unit, ``Std.WP.qimp_spec_exists
-    ]
-    qimp_elim_tactics := #[ ``Std.WP.qimp_spec_iff, ]
-    liftings := #[]
-  }
-  | ``Std.WP.dspec => .some {
-    name := ``Std.WP.dspec
-    arity := 3
-    program_index := 1
-    post_index := 2
-    mk_spec_mono := ``Std.WP.dspec_mono'
-    mk_spec_mono_skip_args := 2
-    mk_spec_bind := ``Std.WP.dspec_bind'
-    mk_spec_bind_skip_args := 4
-    uncurry_elim_tactics := #[
-      ``Std.WP.qimp_dspec_uncurry', ``Std.WP.qimp_dspec_unit, ``Std.WP.qimp_dspec_exists
-    ]
-    qimp_elim_tactics := #[ ``Std.WP.qimp_dspec_iff, ]
-    liftings := #[
-      { from_statement := ``Std.WP.spec
-        conversion_thm := ``Std.WP.spec_dspec
-        conversion_thm_inferred_args := 3 }
-    ]
-  }
-  | _ => .none
-
 /- Analyze a goal or a step theorem to decompose its arguments.
 
   StepSpec theorems should be of the following shape:
@@ -291,7 +232,7 @@ def getStepSpecFunArgsExpr (ty : Expr) :
   let specName ← match spec? with
     | Expr.const name _ => pure name
     | _ => throwError "Not a constant"
-  let .some info := specStatementLookup specName
+  let .some info ← specStatementLookup specName
     | throwError "{specName} is not a supported spec statement name"
   if h: args.size = info.arity
   then pure (args[info.program_index]!, info) -- this is `f x1 ... xn`

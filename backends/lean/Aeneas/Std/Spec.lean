@@ -9,66 +9,60 @@ open Extensions
 -- This file defines an extension for defining spec statements that
 -- can be used with the step tactic.
 
--- structure SpecInfo where
---   name : Lean.Name
---   arity : Nat
---   mk_spec_mono : Array Lean.Expr → Lean.Expr → Lean.Expr
---   mk_spec_bind : Array Lean.Expr → Lean.Expr → Lean.Expr
---   -- discr_tree_key : Array Lean.Expr → Array Lean.Expr
---   program_index : Nat -- index into the arguments of the Result value
 
---   uncurry_elim_tactics : Array Lean.Name
---   qimp_elim_tactics : Array Lean.Name
---   deriving Inhabited -- why does the value type for an extension need to be Inhabited?
+structure LiftingInfo where
+  from_statement : Name
+  conversion_thm : Name
+  conversion_thm_inferred_args : Nat
 
--- structure SpecInfoExtensionState where
---   specInfos : Std.HashMap Name SpecInfo
+structure SpecInfo where
+  name : Lean.Name
+  arity : Nat
+  program_index : Nat -- index into the arguments of the Result value
+  post_index : Nat
 
--- /- Initiliaze the `spec` attribute. -/
--- initialize specAttr : SimpleScopedEnvExtension SpecInfo SpecInfoExtensionState ← do
---   let ext ← registerSimpleScopedEnvExtension {
---     name        := `specStatementRegistrationExtension,
---     initial     := {
---       specInfos := Std.HashMap.emptyWithCapacity
---     },
---     addEntry    := fun state new =>
---       {state with specInfos := state.specInfos.insert new.name new},
---   }
---   pure ext
+  mk_spec_mono : Name
+  mk_spec_mono_skip_args : Nat -- number of arguments to be inferred, before Result and Post arguments
+  mk_spec_bind : Name
+  mk_spec_bind_skip_args : Nat
 
--- syntax (name := register_spec_statement_cmd)
---   "#register_spec_statement " term : command
+  uncurry_elim_tactics : Array Lean.Name
+  qimp_elim_tactics : Array Lean.Name
 
--- @[command_elab register_spec_statement_cmd]
--- unsafe def register_spec_statement : Lean.Elab.Command.CommandElab := fun stx => do
---   let bla := stx[1]
---   let expr ← Command.liftTermElabM do
---     elabTerm bla (some (mkConst ``SpecInfo))
---   let value ← Lean.Elab.Command.liftTermElabM do
---     Lean.Meta.evalExpr SpecInfo (mkConst ``SpecInfo) expr
---   specAttr.add value
+  liftings : Array LiftingInfo
+  deriving Inhabited
 
--- details that are specific to particular kinds of spec statements, like `spec` of `dspec`
--- unsafe def specStatementLookup : Name → SpecInfo
---   | ``Std.WP.spec => {
---     name := ``Std.WP.spec
---     arity := 3
---     mk_spec_mono := fun _args thm => thm
---     mk_spec_bind := fun _args thm => thm
---     uncurry_elim_tactics := #[]
---     qimp_elim_tactics := #[]
---     program_index := 1
---   }
---   | ``Std.WP.dspec => {
---     name := ``Std.WP.dspec
---     arity := 3
---     mk_spec_mono := fun _args thm => thm
---     mk_spec_bind := fun _args thm => thm
---     uncurry_elim_tactics := #[]
---     qimp_elim_tactics := #[]
---     program_index := 1
---   }
---   | _ => panic! "not a valid spec statement"
+structure SpecInfoExtensionState where
+  specInfos : Std.HashMap Name SpecInfo
+  deriving Inhabited
 
+-- /- Initialize the state extension for adding spec theorems -/
+initialize specAttr : SimpleScopedEnvExtension SpecInfo SpecInfoExtensionState  ← do
+  let ext ← registerSimpleScopedEnvExtension {
+    name        := `specStatementRegistrationExtension,
+    initial     := {
+      specInfos := Std.HashMap.emptyWithCapacity
+    },
+    addEntry    := fun state new =>
+      {state with specInfos := state.specInfos.insert new.name new},
+  }
+  pure ext
+
+syntax (name := register_spec_statement_cmd)
+  "#register_spec_statement " term : command
+
+@[command_elab register_spec_statement_cmd]
+unsafe def register_spec_statement : Lean.Elab.Command.CommandElab := fun stx => do
+  let info := stx[1]
+  let expr ← Command.liftTermElabM do
+    elabTerm info (some (mkConst ``SpecInfo))
+  let value ← Lean.Elab.Command.liftTermElabM do
+    Lean.Meta.evalExpr SpecInfo (mkConst ``SpecInfo) expr
+  specAttr.add value
+
+def specStatementLookup (n : Name) : MetaM (Option SpecInfo) := do
+  let env ← getEnv
+  let state := specAttr.getState env
+  return state.specInfos.get? n
 
 end Aeneas

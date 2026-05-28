@@ -234,7 +234,7 @@ def getFirstBind (goalTy : Expr) : MetaM (Bool × Expr × SpecInfo) := do
   let name ← match spec? with
     | Expr.const name _ => pure name
     | _ => throwError "{spec?} is not a spec statement name"
-  let .some info := specStatementLookup name
+  let .some info ← specStatementLookup name
     | throwError "{name} is not a supported spec statement name"
   let compTy ← if h: args.size = info.arity
                then pure (args[info.program_index]!)
