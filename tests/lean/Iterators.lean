@@ -24,7 +24,7 @@ namespace iterators
 @[rust_type "core::iter::adapters::zip::Zip"]
 axiom core.iter.adapters.zip.Zip (A : Type) (B : Type) : Type
 
-/-- [core::iter::adapters::zip::{core::iter::traits::iterator::Iterator<(Clause0_Item, Clause1_Item)> for core::iter::adapters::zip::Zip<A, B>}::next]:
+/-- [core::iter::adapters::zip::{impl core::iter::traits::iterator::Iterator<(Clause0_Item, Clause1_Item)> for core::iter::adapters::zip::Zip<A, B>}::next]:
     Source: '/rustc/library/core/src/iter/adapters/zip.rs', lines 84:4-84:44
     Name pattern: [core::iter::adapters::zip::{core::iter::traits::iterator::Iterator<core::iter::adapters::zip::Zip<@A, @B>, (@Clause0_Item, @Clause1_Item)>}::next]
     Visibility: public -/
@@ -38,7 +38,7 @@ axiom core.iter.adapters.zip.Zip.Insts.CoreIterTraitsIteratorIteratorPair.next
   core.iter.adapters.zip.Zip A B → Result ((Option (Clause0_Item ×
     Clause1_Item)) × (core.iter.adapters.zip.Zip A B))
 
-/-- [core::iter::range::{core::iter::traits::iterator::Iterator<A> for core::ops::range::Range<A>}::zip]:
+/-- [core::iter::range::{impl core::iter::traits::iterator::Iterator<A> for core::ops::range::Range<A>}::zip]:
     Source: '/rustc/library/core/src/iter/range.rs', lines 852:0-852:40
     Name pattern: [core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>}::zip]
     Visibility: public -/
@@ -63,7 +63,7 @@ axiom core.iter.traits.iterator.Iterator.zip.default
   core.iter.traits.collect.IntoIterator U Clause1_Item Clause1_IntoIter) :
   Self → U → Result (core.iter.adapters.zip.Zip Self Clause1_IntoIter)
 
-/-- [core::slice::iter::{core::iter::traits::iterator::Iterator<&'a (T)> for core::slice::iter::Iter<'a, T>}::zip]:
+/-- [core::slice::iter::{impl core::iter::traits::iterator::Iterator<&'a T> for core::slice::iter::Iter<'a, T>}::zip]:
     Source: '/rustc/library/core/src/slice/iter/macros.rs', lines 153:8-153:45
     Name pattern: [core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::zip]
     Visibility: public -/

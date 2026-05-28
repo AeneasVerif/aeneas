@@ -56,14 +56,14 @@ def Wrapper.NM (N1 : Std.Usize) (M1 : Std.Usize) : Result Std.Usize := N1 * M1
 structure Trait (Self : Type) where
   NM : Result Std.Usize
 
-/-- [constants_lean::{constants_lean::Trait for constants_lean::Wrapper<N, M>}::NM]
+/-- [constants_lean::{impl constants_lean::Trait for constants_lean::Wrapper<N, M>}::NM]
     Source: 'tests/src/constants-lean.rs', lines 27:4-27:28 -/
 @[global_simps, irreducible]
 def Wrapper.Insts.Constants_leanTrait.NM (N1 : Std.Usize) (M1 : Std.Usize)
   : Result Std.Usize :=
   N1 * M1
 
-/-- Trait implementation: [constants_lean::{constants_lean::Trait for constants_lean::Wrapper<N, M>}]
+/-- Trait implementation: [constants_lean::{impl constants_lean::Trait for constants_lean::Wrapper<N, M>}]
     Source: 'tests/src/constants-lean.rs', lines 26:0-28:1 -/
 @[reducible]
 def Wrapper.Insts.Constants_leanTrait (N1 : Std.Usize) (M1 : Std.Usize) : Trait
@@ -87,17 +87,17 @@ def Trait1.NM.default {Self : Type} (Trait1Inst : Trait1 Self)
   let i1 ← Trait1Inst.M
   i * i1
 
-/-- [constants_lean::{constants_lean::Trait1 for bool}::M]
+/-- [constants_lean::{impl constants_lean::Trait1 for bool}::M]
     Source: 'tests/src/constants-lean.rs', lines 38:4-38:23 -/
 @[global_simps, irreducible]
 def Bool.Insts.Constants_leanTrait1.M : Std.Usize := 1#usize
 
-/-- [constants_lean::{constants_lean::Trait1 for bool}::N]
+/-- [constants_lean::{impl constants_lean::Trait1 for bool}::N]
     Source: 'tests/src/constants-lean.rs', lines 37:4-37:23 -/
 @[global_simps, irreducible]
 def Bool.Insts.Constants_leanTrait1.N : Std.Usize := 0#usize
 
-/-- Trait implementation: [constants_lean::{constants_lean::Trait1 for bool}]
+/-- Trait implementation: [constants_lean::{impl constants_lean::Trait1 for bool}]
     Source: 'tests/src/constants-lean.rs', lines 36:0-39:1 -/
 @[reducible]
 impl_def Bool.Insts.Constants_leanTrait1 : Trait1 Bool := {

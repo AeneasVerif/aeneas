@@ -20,7 +20,7 @@ namespace issue_charon_1172
 structure Key where
   round_keys : Array (Array Std.U8 16#usize) 29#usize
 
-/-- [issue_charon_1172::{core::default::Default for issue_charon_1172::Key}::default]:
+/-- [issue_charon_1172::{impl core::default::Default for issue_charon_1172::Key}::default]:
     Source: 'tests/src/issue-charon-1172.rs', lines 3:9-3:16
     Visibility: public -/
 def Key.Insts.CoreDefaultDefault.default : Result Key := do
@@ -29,7 +29,7 @@ def Key.Insts.CoreDefaultDefault.default : Result Key := do
       16#usize core.default.DefaultU8)
   ok { round_keys := a }
 
-/-- Trait implementation: [issue_charon_1172::{core::default::Default for issue_charon_1172::Key}]
+/-- Trait implementation: [issue_charon_1172::{impl core::default::Default for issue_charon_1172::Key}]
     Source: 'tests/src/issue-charon-1172.rs', lines 3:9-3:16 -/
 @[reducible]
 def Key.Insts.CoreDefaultDefault : core.default.Default Key := {

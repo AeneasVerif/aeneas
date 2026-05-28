@@ -28,19 +28,19 @@ Definition boolTrait_retTest_default
   Ok true
 .
 
-(** [rename_attribute::{rename_attribute::BoolTrait for bool}::get_bool]:
+(** [rename_attribute::{impl rename_attribute::BoolTrait for bool}::get_bool]:
     Source: 'tests/src/rename_attribute.rs', lines 24:4-26:5
     Visibility: public *)
 Definition BoolImpl_getTest (self : bool) : result bool :=
   Ok self.
 
-(** [rename_attribute::{rename_attribute::BoolTrait for bool}::ret_true]:
+(** [rename_attribute::{impl rename_attribute::BoolTrait for bool}::ret_true]:
     Source: 'tests/src/rename_attribute.rs', lines 23:0-27:1
     Visibility: public *)
 Definition BoolImpl_retTest (self : bool) : result bool :=
   Ok true.
 
-(** Trait implementation: [rename_attribute::{rename_attribute::BoolTrait for bool}]
+(** Trait implementation: [rename_attribute::{impl rename_attribute::BoolTrait for bool}]
     Source: 'tests/src/rename_attribute.rs', lines 23:0-27:1 *)
 Definition BoolImpl : BoolTest_t bool := {|
   BoolTest_t_getTest := BoolImpl_getTest;

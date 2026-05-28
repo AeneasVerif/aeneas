@@ -559,6 +559,8 @@ let () =
       log#error "error: %s\n" s;
       exit 1
   | Ok m ->
+      (* Clear short names to make printing more deterministic. *)
+      let m = { m with short_names = [] } in
       (* Logging *)
       log#linfo (lazy ("Imported: " ^ filename));
       if !print_llbc then
