@@ -394,7 +394,7 @@ def core.default.DefaultArray.default {T : Type} (N : Usize) (defaultInst : core
    the elements to have a default value). We factor the cases where `N` is ≠ 0 in the Lean model.
  -/
 @[reducible, rust_trait_impl "core::default::Default<[@T; @N]>"]
-def core.default.DefaultArray {T : Type} {N : Usize}
+def core.default.DefaultArray {T : Type} (N : Usize)
   (defaultInst : core.default.Default T) : core.default.Default (Array T N) := {
   default := core.default.DefaultArray.default N defaultInst
 }

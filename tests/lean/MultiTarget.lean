@@ -122,13 +122,13 @@ structure Foo.«aarch64-apple-darwin» where
 
 /-- [multi_target::{multi_target::Foo::x86_64-apple-darwin}::f]:
     Source: 'tests/src/multi-target.rs', lines 83:4-83:18 -/
-def «x86_64-apple-darwin».f
+def «Foox86_64-apple-darwin».f
   (self : Foo.«x86_64-apple-darwin») : Result Unit := do
   ok ()
 
 /-- [multi_target::{multi_target::Foo::aarch64-apple-darwin}::f]:
     Source: 'tests/src/multi-target.rs', lines 83:4-83:18 -/
-def «aarch64-apple-darwin».f
+def «Fooaarch64-apple-darwin».f
   (self : Foo.«aarch64-apple-darwin») : Result Unit := do
   ok ()
 
