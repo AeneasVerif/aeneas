@@ -14,6 +14,13 @@ set_option maxRecDepth 2048
 
 namespace adt_borrows
 
+/-- [adt_borrows::MutList]
+    Source: 'tests/src/adt-borrows.rs', lines 227:0-230:1 -/
+@[discriminant isize]
+inductive MutList (T : Type) where
+| Nil : MutList T
+| Cons : T → MutList T → MutList T
+
 /-- [adt_borrows::SharedWrapper]
     Source: 'tests/src/adt-borrows.rs', lines 7:0-7:35 -/
 @[reducible]
@@ -329,13 +336,6 @@ def SharedList.pop
   match self with
   | SharedList.Nil => fail panic
   | SharedList.Cons hd tl => ok (hd, tl)
-
-/-- [adt_borrows::MutList]
-    Source: 'tests/src/adt-borrows.rs', lines 227:0-230:1 -/
-@[discriminant isize]
-inductive MutList (T : Type) where
-| Nil : MutList T
-| Cons : T → MutList T → MutList T
 
 /-- [adt_borrows::{adt_borrows::MutList<'a, T>}::push]:
     Source: 'tests/src/adt-borrows.rs', lines 234:4-236:5
