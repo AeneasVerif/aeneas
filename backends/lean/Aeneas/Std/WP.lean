@@ -704,6 +704,14 @@ theorem Result.of_wp {α} {x : Result α} (P : Result α → Prop) :
   simp only [WP.wp, PredTrans.apply] at hspec
   split at hspec <;> simp_all
 
+/-- Lift an Aeneas step spec to an mvcgen-compatible `Triple`. -/
+theorem spec_to_mvcgen {α : Type} {x : Result α} {Q : α → Prop}
+    (h : spec x Q) :
+    ⦃ ⌜ True ⌝ ⦄ x ⦃ ⇓ r => ⌜ Q r ⌝ ⦄ := by
+  obtain ⟨v, hx, hQv⟩ := spec_imp_exists h
+  subst hx
+  simp [Triple, hQv, WP.wp, PredTrans.apply]
+
 end Aeneas.Std.WP
 
 namespace Aeneas.Std
