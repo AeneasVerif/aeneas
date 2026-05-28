@@ -5,7 +5,7 @@ open Primitives
 
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
-(** [core::cmp::impls::{core::cmp::Ord for i32}::min]:
+(** [core::cmp::impls::{impl core::cmp::Ord for i32}::min]:
     Source: '/rustc/library/core/src/cmp.rs', lines 2000:12-2000:33
     Name pattern: [core::cmp::impls::{core::cmp::Ord<i32>}::min]
     Visibility: public *)
@@ -28,19 +28,19 @@ let trait_provided_method_default
     Source: 'tests/src/defaulted_method.rs', lines 9:0-9:18 *)
 type noOverride_t = unit
 
-(** [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}::required_method]:
+(** [defaulted_method::{impl defaulted_method::Trait for defaulted_method::NoOverride}::required_method]:
     Source: 'tests/src/defaulted_method.rs', lines 14:4-16:5 *)
 let noOverride_Insts_Defaulted_methodTrait_required_method
   (self : noOverride_t) : result u32 =
   Ok 12
 
-(** [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}::provided_method]:
+(** [defaulted_method::{impl defaulted_method::Trait for defaulted_method::NoOverride}::provided_method]:
     Source: 'tests/src/defaulted_method.rs', lines 11:4-13:5 *)
 let noOverride_Insts_Defaulted_methodTrait_provided_method
   (self : noOverride_t) : result u32 =
   Ok 73
 
-(** Trait implementation: [defaulted_method::{defaulted_method::Trait for defaulted_method::NoOverride}]
+(** Trait implementation: [defaulted_method::{impl defaulted_method::Trait for defaulted_method::NoOverride}]
     Source: 'tests/src/defaulted_method.rs', lines 10:0-17:1 *)
 let noOverride_Insts_Defaulted_methodTrait : trait_t noOverride_t = {
   provided_method = noOverride_Insts_Defaulted_methodTrait_provided_method;
@@ -51,19 +51,19 @@ let noOverride_Insts_Defaulted_methodTrait : trait_t noOverride_t = {
     Source: 'tests/src/defaulted_method.rs', lines 19:0-19:19 *)
 type yesOverride_t = unit
 
-(** [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}::required_method]:
+(** [defaulted_method::{impl defaulted_method::Trait for defaulted_method::YesOverride}::required_method]:
     Source: 'tests/src/defaulted_method.rs', lines 21:4-23:5 *)
 let yesOverride_Insts_Defaulted_methodTrait_required_method
   (self : yesOverride_t) : result u32 =
   Ok 42
 
-(** [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}::provided_method]:
+(** [defaulted_method::{impl defaulted_method::Trait for defaulted_method::YesOverride}::provided_method]:
     Source: 'tests/src/defaulted_method.rs', lines 20:0-24:1 *)
 let yesOverride_Insts_Defaulted_methodTrait_provided_method
   (self : yesOverride_t) : result u32 =
   yesOverride_Insts_Defaulted_methodTrait_required_method self
 
-(** Trait implementation: [defaulted_method::{defaulted_method::Trait for defaulted_method::YesOverride}]
+(** Trait implementation: [defaulted_method::{impl defaulted_method::Trait for defaulted_method::YesOverride}]
     Source: 'tests/src/defaulted_method.rs', lines 20:0-24:1 *)
 let yesOverride_Insts_Defaulted_methodTrait : trait_t yesOverride_t = {
   provided_method = yesOverride_Insts_Defaulted_methodTrait_provided_method;

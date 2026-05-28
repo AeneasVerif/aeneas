@@ -146,7 +146,7 @@ partial_fixpoint
 structure Counter (Self : Type) where
   incr : Self → Result (Std.Usize × Self)
 
-/-- [demo::{demo::Counter for usize}::incr]:
+/-- [demo::{impl demo::Counter for usize}::incr]:
     Source: 'tests/src/demo.rs', lines 105:4-109:5
     Visibility: public -/
 def Usize.Insts.DemoCounter.incr
@@ -154,7 +154,7 @@ def Usize.Insts.DemoCounter.incr
   let self1 ← self + 1#usize
   ok (self, self1)
 
-/-- Trait implementation: [demo::{demo::Counter for usize}]
+/-- Trait implementation: [demo::{impl demo::Counter for usize}]
     Source: 'tests/src/demo.rs', lines 104:0-110:1 -/
 @[reducible]
 def Usize.Insts.DemoCounter : Counter Std.Usize := {

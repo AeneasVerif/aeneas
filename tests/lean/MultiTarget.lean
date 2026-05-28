@@ -29,13 +29,13 @@ structure SimdTrait (Self : Type) (Self_Vec : Type) where
 @[reducible]
 def x86.Sse2 := Unit
 
-/-- [multi_target::x86::{multi_target::SimdTrait<u128> for multi_target::x86::Sse2}::add]:
+/-- [multi_target::x86::{impl multi_target::SimdTrait<u128> for multi_target::x86::Sse2}::add]:
     Source: 'tests/src/multi-target.rs', lines 19:8-21:9 -/
 def x86.Sse2.Insts.Multi_targetSimdTraitU128.add
   (a : Std.U128) (b : Std.U128) : Result Std.U128 := do
   ok (core.num.U128.wrapping_add a b)
 
-/-- Trait implementation: [multi_target::x86::{multi_target::SimdTrait<u128> for multi_target::x86::Sse2}]
+/-- Trait implementation: [multi_target::x86::{impl multi_target::SimdTrait<u128> for multi_target::x86::Sse2}]
     Source: 'tests/src/multi-target.rs', lines 16:4-22:5 -/
 @[reducible]
 def x86.Sse2.Insts.Multi_targetSimdTraitU128 : SimdTrait x86.Sse2 Std.U128 := {
@@ -49,13 +49,13 @@ def x86.Sse2.Insts.Multi_targetSimdTraitU128 : SimdTrait x86.Sse2 Std.U128 := {
 @[reducible]
 def arm.Neon := Unit
 
-/-- [multi_target::arm::{multi_target::SimdTrait<u128> for multi_target::arm::Neon}::add]:
+/-- [multi_target::arm::{impl multi_target::SimdTrait<u128> for multi_target::arm::Neon}::add]:
     Source: 'tests/src/multi-target.rs', lines 34:8-36:9 -/
 def arm.Neon.Insts.Multi_targetSimdTraitU128.add
   (a : Std.U128) (b : Std.U128) : Result Std.U128 := do
   ok (core.num.U128.wrapping_add a b)
 
-/-- Trait implementation: [multi_target::arm::{multi_target::SimdTrait<u128> for multi_target::arm::Neon}]
+/-- Trait implementation: [multi_target::arm::{impl multi_target::SimdTrait<u128> for multi_target::arm::Neon}]
     Source: 'tests/src/multi-target.rs', lines 31:4-37:5 -/
 @[reducible]
 def arm.Neon.Insts.Multi_targetSimdTraitU128 : SimdTrait arm.Neon Std.U128 := {

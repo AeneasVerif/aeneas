@@ -34,7 +34,7 @@ axiom wipe_slice {T : Type} : Slice T → Result (Slice T)
 structure Inner where
   buf : Array Std.U8 4#usize
 
-/-- [drop_bug::{core::ops::drop::Drop for drop_bug::Inner}::drop]:
+/-- [drop_bug::{impl core::ops::drop::Drop for drop_bug::Inner}::drop]:
     Source: 'tests/src/drop_bug.rs', lines 31:4-33:5
     Visibility: public -/
 def Inner.Insts.CoreOpsDropDrop.drop (self : Inner) : Result Inner := do
@@ -43,7 +43,7 @@ def Inner.Insts.CoreOpsDropDrop.drop (self : Inner) : Result Inner := do
   let a := to_slice_mut_back s1
   ok { buf := a }
 
-/-- Trait implementation: [drop_bug::{core::ops::drop::Drop for drop_bug::Inner}]
+/-- Trait implementation: [drop_bug::{impl core::ops::drop::Drop for drop_bug::Inner}]
     Source: 'tests/src/drop_bug.rs', lines 30:0-34:1 -/
 @[reducible]
 def Inner.Insts.CoreOpsDropDrop : core.ops.drop.Drop Inner := {
