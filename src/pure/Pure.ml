@@ -631,11 +631,20 @@ and binop =
   | Le of integer_type
   | Ge of integer_type
   | Gt of integer_type
+  | FLt of float_type
+  | FLe of float_type
+  | FGe of float_type
+  | FGt of float_type
   | Add of overflow_mode * integer_type
   | Sub of overflow_mode * integer_type
   | Mul of overflow_mode * integer_type
   | Div of overflow_mode * integer_type
   | Rem of overflow_mode * integer_type
+  | FAdd of float_type
+  | FSub of float_type
+  | FMul of float_type
+  | FDiv of float_type
+  | FRem of float_type
   | AddChecked of integer_type
   | SubChecked of integer_type
   | MulChecked of integer_type
@@ -1202,6 +1211,7 @@ and tpat = { pat : pat; ty : ty }
 type unop =
   | Not of integer_type option
   | Neg of integer_type
+  | FNeg of float_type
   | Cast of cast_kind
   | ArrayToSlice
 

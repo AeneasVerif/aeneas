@@ -24,6 +24,29 @@ let extract_str (_span : Meta.span) (fmt : F.formatter) ~(inside : bool)
   F.pp_print_string fmt s;
   if inside then F.pp_print_string fmt ")"
 
+let lean_float_literal (fv : float_value) : string =
+  let ty = float_name fv.float_ty in
+  let value = String.trim fv.float_value in
+  let lower = String.lowercase_ascii value in
+  let value =
+    match lower with
+    | "nan" | "+nan" | "-nan" -> "(0.0 / 0.0)"
+    | "inf" | "+inf" | "infinity" | "+infinity" -> "(1.0 / 0.0)"
+    | "-inf" | "-infinity" -> "((-1.0) / 0.0)"
+    | _ ->
+        let value =
+          if String.length value > 0 && value.[0] = '+' then
+            String.sub value 1 (String.length value - 1)
+          else value
+        in
+        if
+          String.contains value '.' || String.contains value 'e'
+          || String.contains value 'E'
+        then value
+        else value ^ ".0"
+  in
+  "(" ^ value ^ " : " ^ ty ^ ")"
+
 (** Format a constant value.
 
     Inputs:
@@ -96,6 +119,12 @@ let extract_literal (span : Meta.span) (fmt : F.formatter) ~(is_pattern : bool)
           in
           F.pp_print_string fmt c;
           if inside then F.pp_print_string fmt ")")
+  | VFloat ({ float_ty = F32 | F64; _ } as fv) when backend () = Lean ->
+      [%cassert] span (not is_pattern)
+        "Float literals are not supported in patterns";
+      F.pp_print_string fmt (lean_float_literal fv)
+  | VFloat _ when backend () = Lean ->
+      [%admit_raise] span "Only f32 and f64 are supported" fmt
   | VStr s -> extract_str span ~inside fmt s
   | VChar _ | VFloat _ | VByteStr _ ->
       [%admit_raise] span
