@@ -747,12 +747,8 @@ let remove_useless_joins (crate : crate) (f : fun_decl) : fun_decl =
             match rv with
             | Use _ | RvRef _ | RawPtr _ | NullaryOp _ | Aggregate _ ->
                 (can_inline, st :: ls)
-            | BinaryOp _
-            | UnaryOp _
-            | Discriminant _
-            | Len _
-            | Repeat _
-            | ShallowInitBox _ -> (false, st :: ls))
+            | BinaryOp _ | UnaryOp _ | Discriminant _ | Len _ | Repeat _ ->
+                (false, st :: ls))
         | SetDiscriminant _ | CopyNonOverlapping _ | Assert _ | Call _ | Error _
           -> (false, st :: ls))
   in
