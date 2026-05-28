@@ -1025,23 +1025,30 @@ and eval_switch_raw (config : config) (span : Meta.span) (switch : switch) :
       in
       (* Compose *)
       (ctx_resl, cc_comp cf_eval_op cf_if)
-  | SwitchInt (op, (int_ty : literal_type), stgts, otherwise) ->
+  | SwitchInt (op, (lit_ty : literal_type), stgts, otherwise) ->
       (* Evaluate the operand *)
       let op_v, ctx, cf_eval_op = eval_operand config span op ctx in
       let ctx0 = ctx in
       (* Switch on the value *)
       let ctx_resl, cf_switch =
-        match (op_v.value, int_ty) with
+        match (op_v.value, lit_ty) with
         | VLiteral (VScalar sv), (TInt _ | TUInt _) -> (
             (* Sanity check *)
-            [%sanity_check] span (Scalars.get_ty sv = literal_as_integer int_ty);
+            [%sanity_check] span (Scalars.get_ty sv = literal_as_integer lit_ty);
             (* Find the branch *)
             match
               List.find_opt (fun (svl, _) -> List.mem (VScalar sv) svl) stgts
             with
             | None -> eval_block config otherwise ctx
             | Some (_, tgt) -> eval_block config tgt ctx)
-        | VSymbolic sv, _ ->
+        | VLiteral (VChar cv), TChar -> (
+            (* Find the branch *)
+            match
+              List.find_opt (fun (svl, _) -> List.mem (VChar cv) svl) stgts
+            with
+            | None -> eval_block config otherwise ctx
+            | Some (_, tgt) -> eval_block config tgt ctx)
+        | VSymbolic sv, (TChar | TInt _ | TUInt _) ->
             (* Several branches may be grouped together: every branch is described
                by a pair (list of values, branch expression).
                In order to do a symbolic evaluation, we make this "flat" by
@@ -1055,11 +1062,9 @@ and eval_switch_raw (config : config) (span : Meta.span) (switch : switch) :
             in
             (* Expand the symbolic value *)
             let (ctx_branches, ctx_otherwise), cf_int =
-              expand_symbolic_int span sv
+              expand_symbolic_literal span sv
                 (S.mk_opt_place_from_op span op ctx)
-                (literal_as_integer int_ty)
-                (List.map literal_as_scalar values)
-                ctx
+                lit_ty values ctx
             in
             (* Evaluate the branches: first the "regular" branches *)
             let resl_branches =

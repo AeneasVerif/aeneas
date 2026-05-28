@@ -62,6 +62,7 @@ package «tests» {}
 @[default_target] lean_lib LoopsNested
 @[default_target] lean_lib LoopsNestedRec
 @[default_target] lean_lib LoopsSequences
+@[default_target] lean_lib MatchOnChar
 @[default_target] lean_lib MiniTree
 @[default_target] lean_lib MultiTarget
 @[default_target] lean_lib MutBorrowInSharedBorrow
