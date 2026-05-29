@@ -64,9 +64,9 @@ grind_pattern [agrind] Vec.len_val => v.length
 instance {α : Type u} : GetElem (Vec α) Nat α (fun a i => i < a.val.length) where
   getElem a i h := getElem a.val i h
 
-@[simp, grind =, agrind =, simp_lists_safe, simp_lists_hyps_simps]
+@[simp, simp_lists_safe, simp_lists_hyps_simps, grind =, agrind =]
 theorem Vec.getElem_Nat_eq {α : Type u} (v : Vec α) (i : Nat) (h : i < v.val.length) :
-    v[i] = v.val[i] := rfl
+    v[i]'h = v.val[i] := rfl
 
 instance {α : Type u} : GetElem? (Vec α) Nat α (fun a i => i < a.val.length) where
   getElem? a i := getElem? a.val i
@@ -83,7 +83,7 @@ instance {α : Type u} : GetElem (Vec α) Usize α (fun a i => i < a.val.length)
 
 @[simp, grind =, agrind =, simp_lists_safe, simp_lists_hyps_simps]
 theorem Vec.getElem_Usize_eq {α : Type u} (v : Vec α) (i : Usize) (h : i.val < v.val.length) :
-    v[i] = v.val[i.val] := rfl
+    v[i]'h = v.val[i.val] := rfl
 
 instance {α : Type u} : GetElem? (Vec α) Usize α (fun a i => i < a.val.length) where
   getElem? a i := getElem? a.val i.val
@@ -151,9 +151,9 @@ def Vec.index_usize {α : Type u} (v: Vec α) (i: Usize) : Result α :=
   | some x => ok x
 
 @[step]
-theorem Vec.index_usize_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize)
+theorem Vec.index_usize_spec {α : Type u} (v: Vec α) (i: Usize)
   (hbound : i.val < v.length) :
-  v.index_usize i ⦃ x => x = v.val[i.val]! ⦄ := by
+  v.index_usize i ⦃ x => x = v.val[i.val] ⦄ := by
   simp only [index_usize]
   simp at *
   simp [*]
@@ -185,9 +185,9 @@ def Vec.index_mut_usize {α : Type u} (v: Vec α) (i: Usize) :
   | div => div
 
 @[step]
-theorem Vec.index_mut_usize_spec {α : Type u} [Inhabited α] (v: Vec α) (i: Usize)
+theorem Vec.index_mut_usize_spec {α : Type u} (v: Vec α) (i: Usize)
   (hbound : i.val < v.length) :
-  v.index_mut_usize i ⦃ x y => x = v.val[i.val]! ∧ y = v.set i ⦄ := by
+  v.index_mut_usize i ⦃ x y => x = v.val[i.val] ∧ y = v.set i ⦄ := by
   simp only [index_mut_usize]
   have ⟨ x, h ⟩ := spec_imp_exists (index_usize_spec v i hbound)
   simp [h]
@@ -403,13 +403,13 @@ theorem alloc.vec.Vec.resize_spec {T} (cloneInst : core.clone.Clone T)
   . simp
   . simp [*]
 
-@[simp, scalar_tac_simps, grind =, agrind =]
+@[simp↓, scalar_tac_simps↓, grind =, agrind =]
 theorem alloc.vec.Vec.set_getElem!_eq α [Inhabited α] (x : alloc.vec.Vec α) (i : Usize) :
   x.set i x[i]! = x := by
   simp only [getElem!_Usize_eq]
   simp only [Vec, set_val_eq, Subtype.ext_iff, List.set_getElem!]
 
-@[simp, scalar_tac_simps, grind =, agrind =]
+@[simp↓, scalar_tac_simps, simp_lists_safe, grind =, agrind =]
 theorem alloc.vec.Vec.set_getElem_eq α (x : alloc.vec.Vec α) (i : Usize) (h : i.val < x.length) :
   x.set i x[i] = x := by
   have h' : i.val < x.val.length := by
@@ -418,6 +418,29 @@ theorem alloc.vec.Vec.set_getElem_eq α (x : alloc.vec.Vec α) (i : Usize) (h : 
     List.set_getElem_self (as := x.val) (i := i.val) (h := h')
   simp only [alloc.vec.Vec, Subtype.ext_iff, set_val_eq] at hself ⊢
   exact hself
+
+@[simp_lists_safe↓]
+theorem alloc.vec.Vec.set_getElem_eq' α (x : alloc.vec.Vec α) (i j : Usize) (h : j.val < x.length) (hEq : i = j) :
+  x.set i (x[j]'h) = x := by
+  simp only [hEq, h, set_getElem_eq]
+
+@[simp↓, simp_lists_safe↓]
+theorem alloc.vec.Vec.getElem_set_eq α (v : alloc.vec.Vec α) (i : Usize) (x : α) (h : i.val < (v.set i x).length) :
+  (v.set i x)[i]'h = x := by
+  simp only [getElem_Usize_eq, set_val_eq, List.getElem_set_self]
+
+@[simp↓, simp_lists_safe↓]
+theorem alloc.vec.Vec.getElem_set_eq' α (v : alloc.vec.Vec α) (i j : Usize) (x : α) (h : j.val < (v.set i x).length)
+  (h' : i = j) :
+  (v.set i x)[j]'h = x := by
+  simp only [getElem_Usize_eq, set_val_eq, List.getElem_set_self, h']
+
+@[simp↓, simp_lists_safe↓]
+theorem alloc.vec.Vec.getElem_set_neq α (v : alloc.vec.Vec α) (i j : Usize) (x : α)
+  (h : j.val < (v.set i x).length) (h' : i ≠ j) :
+  (v.set i x)[j]'h = v[j] := by
+  simp only [getElem_Usize_eq, set_val_eq]
+  simp_lists
 
 @[rust_fun
   "alloc::vec::{core::convert::From<alloc::vec::Vec<@T>, [@T; @N]>}::from"]

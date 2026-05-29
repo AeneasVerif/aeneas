@@ -40,7 +40,7 @@ def make : Result Inner := do
     Source: 'tests/src/builtin-auto.rs', lines 17:0-17:30 -/
 structure SuperPointee (Self : Type) where
 
-/-- Trait implementation: [builtin_auto::{builtin_auto::SuperPointee for u32}]
+/-- Trait implementation: [builtin_auto::{impl builtin_auto::SuperPointee for u32}]
     Source: 'tests/src/builtin-auto.rs', lines 19:0-19:28 -/
 @[reducible]
 def U32.Insts.Builtin_autoSuperPointee : SuperPointee Std.U32 := {

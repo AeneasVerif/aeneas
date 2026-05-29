@@ -9,13 +9,13 @@ Local Open Scope Primitives_scope.
 Module Demo.
 
 (** [core::num::{u32}::wrapping_add]:
-    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2397:8-2397:58
+    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2456:8-2456:58
     Name pattern: [core::num::{u32}::wrapping_add]
     Visibility: public *)
 Axiom core_num_U32_wrapping_add : u32 -> u32 -> result u32.
 
 (** [core::num::{u32}::wrapping_sub]:
-    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2434:8-2434:58
+    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2493:8-2493:58
     Name pattern: [core::num::{u32}::wrapping_sub]
     Visibility: public *)
 Axiom core_num_U32_wrapping_sub : u32 -> u32 -> result u32.
@@ -183,7 +183,7 @@ Record Counter_t (Self : Type) := mkCounter_t {
 Arguments mkCounter_t { _ }.
 Arguments Counter_t_incr { _ } _.
 
-(** [demo::{demo::Counter for usize}::incr]:
+(** [demo::{impl demo::Counter for usize}::incr]:
     Source: 'tests/src/demo.rs', lines 105:4-109:5
     Visibility: public *)
 Definition Usize_Insts_DemoCounter_incr
@@ -191,7 +191,7 @@ Definition Usize_Insts_DemoCounter_incr
   self1 <- usize_add self 1%usize; Ok (self, self1)
 .
 
-(** Trait implementation: [demo::{demo::Counter for usize}]
+(** Trait implementation: [demo::{impl demo::Counter for usize}]
     Source: 'tests/src/demo.rs', lines 104:0-110:1 *)
 Definition Usize_Insts_DemoCounter : Counter_t usize := {|
   Counter_t_incr := Usize_Insts_DemoCounter_incr;

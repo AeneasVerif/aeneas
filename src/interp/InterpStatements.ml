@@ -847,9 +847,6 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
                 | Repeat _ ->
                     [%craise] st.span
                       "Repeat should have been removed in a micropass"
-                | ShallowInitBox _ ->
-                    [%craise] st.span
-                      "ShallowInitBox should have been removed in a micropass"
                 | Use _
                 | RvRef
                     ( _,
@@ -1583,7 +1580,7 @@ and eval_function_call_symbolic_from_inst_sig (config : config)
       in
       let output = mk_simpl_etuple ~borrow_proj:true outputs in
       let input =
-        mk_eproj_loans_value_from_symbolic_value ctx.type_ctx.type_infos
+        mk_eproj_loans_value_from_symbolic_value ctx.env ctx.type_ctx.type_infos
           abs.regions.owned ret_spc ret_sv_ty
       in
       let input = EApp (EFunCall abs.abs_id, [ [ input ] ]) in

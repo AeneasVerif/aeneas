@@ -6,13 +6,13 @@ open Primitives
 #set-options "--z3rlimit 50 --fuel 1 --ifuel 1"
 
 (** [core::num::{u32}::wrapping_add]:
-    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2397:8-2397:58
+    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2456:8-2456:58
     Name pattern: [core::num::{u32}::wrapping_add]
     Visibility: public *)
 assume val core_num_U32_wrapping_add : u32 -> u32 -> result u32
 
 (** [core::num::{u32}::wrapping_sub]:
-    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2434:8-2434:58
+    Source: '/rustc/library/core/src/num/uint_macros.rs', lines 2493:8-2493:58
     Name pattern: [core::num::{u32}::wrapping_sub]
     Visibility: public *)
 assume val core_num_U32_wrapping_sub : u32 -> u32 -> result u32
@@ -153,13 +153,13 @@ let rec list_tail
     Visibility: public *)
 noeq type counter_t (self : Type0) = { incr : self -> result (usize & self); }
 
-(** [demo::{demo::Counter for usize}::incr]:
+(** [demo::{impl demo::Counter for usize}::incr]:
     Source: 'tests/src/demo.rs', lines 105:4-109:5
     Visibility: public *)
 let usize_Insts_DemoCounter_incr (self : usize) : result (usize & usize) =
   let* self1 = usize_add self 1 in Ok (self, self1)
 
-(** Trait implementation: [demo::{demo::Counter for usize}]
+(** Trait implementation: [demo::{impl demo::Counter for usize}]
     Source: 'tests/src/demo.rs', lines 104:0-110:1 *)
 let usize_Insts_DemoCounter : counter_t usize = {
   incr = usize_Insts_DemoCounter_incr;
