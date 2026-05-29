@@ -59,6 +59,11 @@
                         '';
                       });
 
+                      containers = oPrev.containers.overrideAttrs (_: {
+                        # Tests include a flaky float computation that fails on macos-aarch64.
+                        doCheck = false;
+                      });
+
                       core_unix = oPrev.core_unix.overrideAttrs (old: {
                         # Work around a compilation error in `musl` when using
                         # GCC 14, where a `struct msghdr` field is incorrectly
@@ -143,9 +148,10 @@
             charon-ml = charon-ml.override { inherit ocamlPackages; };
           };
 
-        mk-aeneas-release = { aeneas, charon-portable }: pkgs.runCommand "aeneas-release.tar.gz" {
-          buildInputs = pkgs.lib.optionals pkgs.stdenv.isDarwin [ pkgs.macdylibbundler ];
-        } ''
+        mk-aeneas-release = { aeneas, charon-portable }: pkgs.runCommand "aeneas-release.tar.gz"
+          {
+            buildInputs = pkgs.lib.optionals pkgs.stdenv.isDarwin [ pkgs.macdylibbundler ];
+          } ''
           mkdir release
           cd release
           cp ${charon-portable}/bin/charon ${charon-portable}/bin/charon-driver .
