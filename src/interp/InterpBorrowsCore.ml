@@ -2305,14 +2305,25 @@ let rec norm_proj_tys_union (span : Meta.span) (ctx : eval_ctx) (ty1 : rty)
         {
           binder_regions = binder_regions1;
           binder_value =
-            { is_unsafe = false; inputs = inputs1; output = output1 };
+            {
+              is_unsafe = false;
+              inputs = inputs1;
+              output = output1;
+              abi = abi1;
+            };
         },
       TFnPtr
         {
           binder_regions = binder_regions2;
           binder_value =
-            { is_unsafe = false; inputs = inputs2; output = output2 };
-        } ) ->
+            {
+              is_unsafe = false;
+              inputs = inputs2;
+              output = output2;
+              abi = abi2;
+            };
+        } )
+    when abi1 = abi2 ->
       (* TODO: general case *)
       [%sanity_check] span (binder_regions1 = []);
       [%sanity_check] span (binder_regions2 = []);
@@ -2321,6 +2332,7 @@ let rec norm_proj_tys_union (span : Meta.span) (ctx : eval_ctx) (ty1 : rty)
           is_unsafe = false;
           inputs = List.map2 (norm_proj_tys_union span ctx) inputs1 inputs2;
           output = norm_proj_tys_union span ctx output1 output2;
+          abi = abi1;
         }
       in
       TFnPtr { binder_regions = []; binder_value }
