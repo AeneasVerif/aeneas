@@ -101,9 +101,12 @@ let strip_target_suffix (n : name) : name =
   | _ -> n
 
 let strip_target_or_instantiated_suffix (n : name) : name =
-  match List.rev n with
-  | (PeTarget _ | PeInstantiated _) :: rest -> List.rev rest
-  | _ -> n
+  let rec strip_all (n : name) : name =
+    match n with
+    | (PeTarget _ | PeInstantiated _) :: rest -> strip_all rest
+    | _ -> List.rev n
+  in
+  strip_all (List.rev n)
 
 (** Extract and strip any trailing [PeTarget] element from a name, returning the
     cleaned name and an optional target suffix string (with [-] replaced by
