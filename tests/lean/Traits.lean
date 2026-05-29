@@ -319,7 +319,8 @@ structure WithConstTy (Self : Type) (Self_V : Type) (Self_W : Type) (LEN :
     Source: 'tests/src/traits.rs', lines 166:4-166:27
     Visibility: public -/
 @[global_simps, irreducible, trait_default]
-def WithConstTy.LEN2.default (Self : Type) (LEN : Std.Usize) : Std.Usize :=
+def WithConstTy.LEN2.default (Self : Type) (Clause0_V : Type) (Clause0_W :
+  Type) (LEN : Std.Usize) : Std.Usize :=
   32#usize
 
 /-- [traits::{impl traits::WithConstTy<u8, u64, 32 : usize> for bool}::f]:
@@ -341,7 +342,7 @@ def Bool.Insts.TraitsWithConstTyU8U6432.LEN1 : Std.Usize := 12#usize
 def Bool.Insts.TraitsWithConstTyU8U6432 : WithConstTy Bool Std.U8 Std.U64
   32#usize := {
   LEN1 := ok Bool.Insts.TraitsWithConstTyU8U6432.LEN1
-  LEN2 := ok (WithConstTy.LEN2.default Bool 32#usize)
+  LEN2 := ok (WithConstTy.LEN2.default Bool Std.U8 Std.U64 32#usize)
   ToU64Inst := U64.Insts.TraitsToU64
   f := Bool.Insts.TraitsWithConstTyU8U6432.f
 }
