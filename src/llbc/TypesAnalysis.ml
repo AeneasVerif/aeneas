@@ -481,9 +481,9 @@ let analyze_full_ty (span : Meta.span option) (updated : bool ref)
         in
         [%cassert_opt_span] span (not has_regions) "Unimplemented";
         ty_info
-    | TPtrMetadata _ -> [%craise_opt_span] span "unsupported: PtrMetadata"
     | TError _ ->
         [%craise_opt_span] span "Found type error in the output of charon"
+    | _ -> [%craise_opt_span] span ("unsupported type: " ^ show_ty ty)
   in
   (* Explore *)
   analyze span expl_info_init ty_info ty
@@ -821,14 +821,9 @@ let compute_outlive_proj_ty (span : Meta.span option)
                back values computed for the generated backward functions may \
                be incorrect.";
             ()
-        | TRawPtr _
-        | TDynTrait _
-        | TFnPtr _
-        | TFnDef _
-        | TPtrMetadata _
         | TError _ ->
-            (* Don't know what to do *)
-            [%craise_opt_span] span "Not handled yet"
+            [%craise_opt_span] span "Found type error in the output of charon"
+        | _ -> [%craise_opt_span] span ("unsupported type: " ^ show_ty ty)
     end
   in
   visitor#visit_ty [] ty;

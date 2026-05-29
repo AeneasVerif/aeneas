@@ -182,9 +182,9 @@ let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
       [%craise_opt_span] span "Arrow types are not supported yet"
   | TDynTrait _ ->
       [%craise_opt_span] span "Dynamic trait types are not supported yet"
-  | TPtrMetadata _ -> [%craise_opt_span] span "unsupported: PtrMetadata"
   | TError _ ->
       [%craise_opt_span] span "Found type error in the output of charon"
+  | _ -> [%craise_opt_span] span ("unsupported type: " ^ T.show_ty ty)
 
 and translate_sgeneric_args (span : Meta.span option)
     (generics : T.generic_args) : generic_args =
@@ -426,9 +426,9 @@ let rec translate_fwd_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
         translate_generic_params span binder.binder_params
       in
       TDynTrait { params }
-  | TPtrMetadata _ -> [%craise_opt_span] span "unsupported: PtrMetadata"
   | TError _ ->
       [%craise_opt_span] span "Found type error in the output of charon"
+  | _ -> [%craise_opt_span] span ("unsupported type: " ^ T.show_ty ty)
 
 and translate_fwd_generic_args (span : Meta.span option)
     (decls_ctx : C.decls_ctx) (generics : T.generic_args) : generic_args =
@@ -538,9 +538,9 @@ and compute_back_ty_num_levels (span : Meta.span option)
         [%craise_opt_span] span "Arrow types are not supported yet"
     | TDynTrait _ ->
         [%craise_opt_span] span "Dynamic trait types are not supported yet"
-    | TPtrMetadata _ -> [%craise_opt_span] span "unsupported: PtrMetadata"
     | TError _ ->
         [%craise_opt_span] span "Found type error in the output of charon"
+    | _ -> [%craise_opt_span] span ("unsupported type: " ^ T.show_ty ty)
   in
   explore T.RegionGroupId.Set.empty ty;
   !max_level
@@ -670,9 +670,9 @@ and translate_back_ty_aux (span : Meta.span option) (decls_ctx : C.decls_ctx)
         [%craise_opt_span] span "Arrow types are not supported yet"
     | TDynTrait _ ->
         [%craise_opt_span] span "Dynamic trait types are not supported yet"
-    | TPtrMetadata _ -> [%craise_opt_span] span "unsupported: PtrMetadata"
     | TError _ ->
         [%craise_opt_span] span "Found type error in the output of charon"
+    | _ -> [%craise_opt_span] span ("unsupported type: " ^ T.show_ty ty)
   in
   explore T.RegionGroupId.Set.empty ty
 
