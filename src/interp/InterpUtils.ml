@@ -840,7 +840,7 @@ let instantiate_fun_sig (span : Meta.span option) (ctx : eval_ctx)
   (* Decompose the signature *)
   let {
     item_binder_params = generics;
-    item_binder_value = { is_unsafe; inputs; output };
+    item_binder_value = { Types.inputs; output; _ };
   } =
     sg
   in
@@ -964,7 +964,7 @@ let instantiate_fun_sig (span : Meta.span option) (ctx : eval_ctx)
     let sg =
       {
         item_binder_params = generics;
-        item_binder_value = { is_unsafe; inputs; output };
+        item_binder_value = { sg.item_binder_value with inputs; output };
       }
     in
     let regions_hierarchy =
