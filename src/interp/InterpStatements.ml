@@ -907,13 +907,13 @@ and eval_statement_raw (config : config) (st : statement) : stl_cm_fun =
   | Continue i -> ([ (ctx, Continue i) ], cf_singleton __FILE__ __LINE__ st.span)
   | StorageLive _ | Nop ->
       ([ (ctx, Unit) ], cf_singleton __FILE__ __LINE__ st.span)
-  | CopyNonOverlapping _ ->
-      [%craise] st.span "CopyNonOverlapping is not supported yet"
   | Loop loop_body ->
       let eval_loop_body = eval_block config loop_body in
       InterpLoops.eval_loop config st.span eval_loop_body ctx
   | Switch switch -> eval_switch config st.span switch ctx
   | Error s -> [%craise] st.span s
+  | _ ->
+      [%craise] st.span ("unsupported statement: " ^ show_statement_kind st.kind)
 
 and eval_rvalue_global (config : config) (span : Meta.span) (dest : place)
     (rv : rvalue) : stl_cm_fun =

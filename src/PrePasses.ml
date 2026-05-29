@@ -749,8 +749,9 @@ let remove_useless_joins (crate : crate) (f : fun_decl) : fun_decl =
                 (can_inline, st :: ls)
             | BinaryOp _ | UnaryOp _ | Discriminant _ | Len _ | Repeat _ ->
                 (false, st :: ls))
-        | SetDiscriminant _ | CopyNonOverlapping _ | Assert _ | Call _ | Error _
-          -> (false, st :: ls))
+        | SetDiscriminant _ | Assert _ | Call _ | Error _ -> (false, st :: ls)
+        | _ -> failwith ("unsupported statement: " ^ show_statement_kind st.kind)
+        )
   in
 
   let body =
@@ -1570,9 +1571,6 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
           let kind =
             match st.kind with
             | Assign (lv, rv) -> Assign (lv, visitor#visit_rvalue mk_unit_ty rv)
-            | CopyNonOverlapping { src; dst; count } ->
-                let src = visitor#visit_operand mk_unit_ty src in
-                CopyNonOverlapping { src; dst; count }
             | Assert ({ cond; expected; check_kind }, on_failure) ->
                 let cond = visitor#visit_operand mk_unit_ty cond in
                 Assert ({ cond; expected; check_kind }, on_failure)
@@ -1593,6 +1591,9 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
             | Switch _
             | Loop _
             | Error _ -> st.kind
+            | _ ->
+                failwith
+                  ("unsupported statement: " ^ show_statement_kind st.kind)
           in
           let st = { st with kind } in
 
