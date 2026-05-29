@@ -300,7 +300,9 @@ noeq type withConstTy_t (self : Type0) (self_v : Type0) (self_w : Type0) (len :
 (** [traits::WithConstTy::LEN2]
     Source: 'tests/src/traits.rs', lines 166:4-166:27
     Visibility: public *)
-let withConstTy_LEN2_default (self : Type0) (len : usize) : usize = 32
+let withConstTy_LEN2_default (self : Type0) (clause0_v : Type0) (clause0_w :
+  Type0) (len : usize) : usize =
+  32
 
 (** [traits::{impl traits::WithConstTy<u8, u64, 32 : usize> for bool}::f]:
     Source: 'tests/src/traits.rs', lines 182:4-182:42
@@ -318,7 +320,7 @@ let bool_Insts_TraitsWithConstTyU8U6432_LEN1 : usize = 12
     Source: 'tests/src/traits.rs', lines 176:0-183:1 *)
 let bool_Insts_TraitsWithConstTyU8U6432 : withConstTy_t bool u8 u64 32 = {
   cLEN1 = Ok bool_Insts_TraitsWithConstTyU8U6432_LEN1;
-  cLEN2 = Ok (withConstTy_LEN2_default bool 32);
+  cLEN2 = Ok (withConstTy_LEN2_default bool u8 u64 32);
   toU64Inst = u64_Insts_TraitsToU64;
   f = bool_Insts_TraitsWithConstTyU8U6432_f;
 }
