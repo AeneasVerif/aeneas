@@ -422,7 +422,8 @@ and translate_function_call_aux (call : S.call) (e : S.expr) (ctx : bs_ctx) :
                     FunDeclId.Map.find fid ctx.fun_ctx.llbc_fun_decls
                   in
                   let name =
-                    LlbcAstUtils.strip_target_suffix decl.item_meta.name
+                    LlbcAstUtils.strip_target_or_instantiated_suffix
+                      decl.item_meta.name
                   in
                   match Collections.List.last name with
                   | PeIdent (s, _) -> s
