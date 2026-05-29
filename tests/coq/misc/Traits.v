@@ -364,7 +364,8 @@ Arguments WithConstTy_t_f { _ } { _ } { _ } { _ } _.
 (** [traits::WithConstTy::LEN2]
     Source: 'tests/src/traits.rs', lines 166:4-166:27
     Visibility: public *)
-Definition withConstTy_LEN2_default (Self : Type) (LEN : usize) : usize :=
+Definition withConstTy_LEN2_default (Self : Type) (Clause0_V : Type) (Clause0_W
+  : Type) (LEN : usize) : usize :=
   32%usize
 .
 
@@ -387,7 +388,7 @@ Definition Bool_Insts_TraitsWithConstTyU8U6432 : WithConstTy_t bool u8 u64
   32%usize := {|
   WithConstTy_tWithConstTy_t_LEN1 := Ok
     Bool_Insts_TraitsWithConstTyU8U6432_LEN1;
-  WithConstTy_tWithConstTy_t_LEN2 := Ok (withConstTy_LEN2_default bool
+  WithConstTy_tWithConstTy_t_LEN2 := Ok (withConstTy_LEN2_default bool u8 u64
     32%usize);
   WithConstTy_tWithConstTy_t_ToU64Inst := U64_Insts_TraitsToU64;
   WithConstTy_t_f := Bool_Insts_TraitsWithConstTyU8U6432_f;
