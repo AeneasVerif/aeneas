@@ -1568,8 +1568,33 @@ let extract_type_decl_gen (ctx : extraction_ctx) (fmt : F.formatter)
      | _ -> []
    in
    let attributes = reducible_attr @ discr_attr in
+   (* Compute the [mutRegions] option for the [rust_type] attribute. *)
+   let mut_regions_attr =
+     match
+       TypeDeclId.Map.find_opt def.def_id ctx.trans_ctx.type_ctx.type_infos
+     with
+     | None -> []
+     | Some info ->
+         let mut_region_ids = info.TypesAnalysis.mut_regions in
+         if T.RegionId.Set.is_empty mut_region_ids then []
+         else
+           let positions =
+             List.filter_map
+               (fun (i, (r : T.region_param)) ->
+                 if T.RegionId.Set.mem r.index mut_region_ids then Some i
+                 else None)
+               (List.mapi (fun i r -> (i, r)) def.llbc_generics.regions)
+           in
+           if positions = [] then []
+           else
+             [
+               "(mutRegions := #["
+               ^ String.concat ", " (List.map string_of_int positions)
+               ^ "])";
+             ]
+   in
    extract_attributes span ctx fmt def.item_meta.name None attributes
-     "rust_type" []
+     "rust_type" mut_regions_attr
      ~is_external:(not def.item_meta.is_local));
   (* Open a box for the definition, so that whenever possible it gets printed on
    * one line. Note however that in the case of Lean line breaks are important

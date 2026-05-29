@@ -142,20 +142,30 @@ let initialize_type_decl_info (span : Meta.span option) (crate : crate)
                   Type: " ^ name_to_string ());
               RegionId.Set.empty)
         | None ->
-            (* No builtin information: print a warning if the type contains region
-               parameters *)
-            if def.generics.regions <> [] then
-              [%warn_opt_span] span
-                ("Found an unknown type declaration with region parameters: as \
-                  we can not know whether the regions are used in mutable \
-                  borrows or not the extracted code may be incorrect.\n\
-                  Type: " ^ name_to_string ());
-            if Config.opaque_types_have_mut_regions_by_default then
+            (* No builtin information: use Charon's per-region [mutability] analysis *)
+            let has_unknown_regions = ref false in
+            let mut_regions =
               RegionId.Set.of_list
-                (List.map
-                   (fun (r : region_param) -> r.index)
+                (List.filter_map
+                   (fun (r : region_param) ->
+                     match r.mutability with
+                     | LtMutable -> Some r.index
+                     | LtUnknown ->
+                         has_unknown_regions := true;
+                         if Config.opaque_types_have_mut_regions_by_default then
+                           Some r.index
+                         else None
+                     | LtShared -> None)
                    def.generics.regions)
-            else RegionId.Set.empty)
+            in
+            if !has_unknown_regions then
+              [%warn_opt_span] span
+                ("Found an unknown type declaration with region parameters for \
+                  which Charon could not determine mutability: we \
+                  conservatively assume they are used in mutable borrows, but \
+                  the extracted code may be incorrect.\n\
+                  Type: " ^ name_to_string ());
+            mut_regions)
     | _ -> RegionId.Set.empty
   in
   initialize_g_type_info is_tuple_struct ~is_rec ~has_regions ~mut_regions
