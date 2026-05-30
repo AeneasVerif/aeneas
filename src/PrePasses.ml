@@ -750,8 +750,9 @@ let remove_useless_joins (crate : crate) (f : fun_decl) : fun_decl =
             | BinaryOp _ | UnaryOp _ | Discriminant _ | Len _ | Repeat _ ->
                 (false, st :: ls))
         | SetDiscriminant _ | Assert _ | Call _ | Error _ -> (false, st :: ls)
-        | _ -> failwith ("unsupported statement: " ^ show_statement_kind st.kind)
-        )
+        | _ ->
+            [%craise] st.span
+              ("unsupported statement: " ^ show_statement_kind st.kind))
   in
 
   let body =
@@ -1592,7 +1593,7 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
             | Loop _
             | Error _ -> st.kind
             | _ ->
-                failwith
+                [%craise] st.span
                   ("unsupported statement: " ^ show_statement_kind st.kind)
           in
           let st = { st with kind } in
