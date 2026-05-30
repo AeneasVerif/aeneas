@@ -2572,7 +2572,8 @@ let rec simplify_dummy_values_useless_abs_aux (config : config)
       rec_call ctx
 
 let simplify_dummy_values_useless_abs (config : config)
-    ?(snapshots : bool = true) (span : Meta.span) : cm_fun =
+    ?(snapshots : bool = true) ?(filter_avalues : bool = true)
+    (span : Meta.span) : cm_fun =
  fun ctx0 ->
   [%ldebug eval_ctx_to_string ctx0];
   (* Simplify the context as long as it leads to changes - TODO: make this more efficient *)
@@ -2590,7 +2591,9 @@ let simplify_dummy_values_useless_abs (config : config)
       comp cc (simplify ctx))
   in
   let ctx, cc = simplify ctx0 in
-  let ctx = eliminate_ended_shared_loans span ctx in
+  let ctx =
+    if filter_avalues then eliminate_ended_shared_loans span ctx else ctx
+  in
   [%ltrace
     "- ctx0:\n" ^ eval_ctx_to_string ctx0 ^ "\n- ctx1:\n"
     ^ if ctx.env = ctx0.env then "UNCHANGED" else eval_ctx_to_string ctx];
