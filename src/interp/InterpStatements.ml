@@ -770,6 +770,12 @@ let rec eval_statement (config : config) (st : statement) : stl_cm_fun =
   (* Sanity check *)
   Invariants.check_invariants st.span ctx;
 
+  (* Simplify the context *)
+  let ctx, cc =
+    comp cc
+      (InterpBorrows.simplify_dummy_values_useless_abs config
+         ~filter_avalues:false st.span ctx)
+  in
   (* Evaluate the statement *)
   comp cc (eval_statement_raw config st ctx)
 
