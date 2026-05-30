@@ -1082,6 +1082,7 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
            call.args_places)
         [ None ]
     in
+    [%sanity_check] ctx.span (List.length output_mpl = List.length abs.avalues);
     let ctx, outputs = abs_to_given_back (Some output_mpl) abs abs_level ctx in
     (* Group the output values together *)
     let output = mk_simpl_tuple_pat outputs in
