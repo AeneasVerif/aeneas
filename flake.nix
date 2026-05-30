@@ -59,11 +59,6 @@
                         '';
                       });
 
-                      containers = oPrev.containers.overrideAttrs (_: {
-                        # Tests include a flaky float computation that fails on macos-aarch64.
-                        doCheck = false;
-                      });
-
                       core_unix = oPrev.core_unix.overrideAttrs (old: {
                         # Work around a compilation error in `musl` when using
                         # GCC 14, where a `struct msghdr` field is incorrectly
