@@ -2215,7 +2215,7 @@ let find_first_endable_loan_proj_in_abs (span : Meta.span) (ctx : eval_ctx)
         | AProjLoans proj ->
             (* Check if there are borrow projectors in the context
                or symbolic values with the same id *)
-            let explore_shared = false in
+            let explore_shared = true in
             (* Look for the symbolic values first *)
             let visitor =
               object
