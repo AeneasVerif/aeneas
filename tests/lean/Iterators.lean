@@ -39,7 +39,7 @@ axiom core.iter.adapters.zip.Zip.Insts.CoreIterTraitsIteratorIteratorPair.next
     Clause1_Item)) × (core.iter.adapters.zip.Zip A B))
 
 /-- [core::iter::range::{impl core::iter::traits::iterator::Iterator<A> for core::ops::range::Range<A>}::zip]:
-    Source: '/rustc/library/core/src/iter/range.rs', lines 852:0-852:40
+    Source: '/rustc/library/core/src/iter/range.rs', lines 980:0-980:40
     Name pattern: [core::iter::range::{core::iter::traits::iterator::Iterator<core::ops::range::Range<@A>, @A>}::zip]
     Visibility: public -/
 @[rust_fun
@@ -52,7 +52,7 @@ axiom core.ops.range.Range.Insts.CoreIterTraitsIteratorIterator.zip
     (core.ops.range.Range A) Clause1_IntoIter)
 
 /-- [core::iter::traits::iterator::Iterator::zip]:
-    Source: '/rustc/library/core/src/iter/traits/iterator.rs', lines 626:4-629:24
+    Source: '/rustc/library/core/src/iter/traits/iterator.rs', lines 631:4-634:24
     Name pattern: [core::iter::traits::iterator::Iterator::zip]
     Visibility: public -/
 @[rust_fun "core::iter::traits::iterator::Iterator::zip"]
