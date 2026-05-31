@@ -9,7 +9,7 @@ Local Open Scope Primitives_scope.
 Module DefaultedMethod.
 
 (** [core::cmp::impls::{impl core::cmp::Ord for i32}::min]:
-    Source: '/rustc/library/core/src/cmp.rs', lines 2000:12-2000:33
+    Source: '/rustc/library/core/src/cmp.rs', lines 2007:12-2007:33
     Name pattern: [core::cmp::impls::{core::cmp::Ord<i32>}::min]
     Visibility: public *)
 Axiom I32_Insts_CoreCmpOrd_min : i32 -> i32 -> result i32.
