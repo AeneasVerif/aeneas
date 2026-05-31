@@ -69,6 +69,10 @@ pub fn zip_iter(a: &[u8], b: &[u8]) {
     for _ in a.iter().zip(b.iter()) {}
 }
 
+fn slice_rev(s: &[u8; 256]) {
+    for _ in s.iter().rev() {}
+}
+
 /*
 fn array_into_iter<const N : usize>(s : &[u8; N]) {
     for _ in s {}

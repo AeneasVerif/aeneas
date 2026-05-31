@@ -92,7 +92,49 @@ def core.iter.traits.iterator.IteratorSliceIter (T : Type) :
   step_by := core.slice.iter.IteratorSliceIter.step_by
   enumerate := core.slice.iter.IteratorSliceIter.enumerate
   take := core.slice.iter.IteratorSliceIter.take
+  rev := fun self => ok ⟨self⟩
 }
+
+-- ============================================================================
+-- DoubleEndedIterator for Iter (slice)
+-- ============================================================================
+
+/-- `next_back` for slice `Iter`: returns the last remaining element.
+    Remaining elements are `slice[i .. slice.length]`.
+    We return `slice[slice.length - 1]` and shrink the slice from the back. -/
+@[rust_fun
+  "core::slice::iter::{core::iter::traits::double_ended::DoubleEndedIterator<core::slice::iter::Iter<'a, @T>, &'_ @T>}::next_back"]
+def core.slice.iter.Iter.Insts.DoubleEndedIterator.next_back
+  {T : Type} (it : core.slice.iter.Iter T) :
+  Result ((Option T) × (core.slice.iter.Iter T)) :=
+  if h : it.i < it.slice.length then
+    let j := it.slice.length - 1
+    have hj : j < it.slice.val.length := by simp_all [j, Slice.length]; omega
+    let x := it.slice.val[j]
+    let newSlice : Slice T := ⟨it.slice.val.take j, by
+      have := it.slice.property
+      simp [List.length_take]
+      omega⟩
+    ok (some x, ⟨newSlice, it.i⟩)
+  else ok (none, it)
+
+@[reducible, rust_trait_impl
+  "core::iter::traits::double_ended::DoubleEndedIterator<core::slice::iter::Iter<'a, @T>, &'_ @T>"]
+def core.slice.iter.Iter.Insts.DoubleEndedIterator (T : Type) :
+  core.iter.traits.double_ended.DoubleEndedIterator (core.slice.iter.Iter T) T := {
+  iteratorInst := core.iter.traits.iterator.IteratorSliceIter T
+  next_back := core.slice.iter.Iter.Insts.DoubleEndedIterator.next_back
+}
+
+/-- `Iter.rev` — wraps the slice iterator in `Rev`. -/
+@[rust_fun
+  "core::slice::iter::{core::iter::traits::iterator::Iterator<core::slice::iter::Iter<'a, @T>, &'a @T>}::rev"]
+def core.slice.iter.Iter.Insts.Iterator.rev
+  {T : Type} {Item : Type}
+  (_doubleEndedInst : core.iter.traits.double_ended.DoubleEndedIterator (core.slice.iter.Iter T) Item)
+  (it : core.slice.iter.Iter T) :
+  Result (core.iter.adapters.rev.Rev (core.slice.iter.Iter T)) :=
+  ok ⟨it⟩
 
 @[rust_type "core::slice::iter::ChunksExact" (body := .opaque)]
 structure core.slice.iter.ChunksExact (T : Type) where
@@ -143,6 +185,7 @@ def core.iter.traits.iterator.IteratorChunksExact (T : Type) :
   step_by := core.slice.iter.IteratorChunksExact.step_by
   enumerate := core.slice.iter.IteratorChunksExact.enumerate
   take := core.slice.iter.IteratorChunksExact.take
+  rev := fun self => ok ⟨self⟩
 }
 
 /-- Split a list into non-overlapping chunks of exactly size `n`, returning the
