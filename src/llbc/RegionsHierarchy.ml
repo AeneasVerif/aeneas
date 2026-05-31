@@ -154,7 +154,7 @@ let compute_regions_hierarchy_for_sig (span : Meta.span option) (crate : crate)
         (* Continue *)
         explore_ty outer ty
     | TRawPtr (ty, _) -> explore_ty outer ty
-    | TTraitType (trait_ref, _) ->
+    | TTraitType (trait_ref, _, _) ->
         (* The trait should reference a clause, and not an implementation
            (otherwise it should have been normalized), or a special builtin
            trait (in particular, [core::marker::DiscriminantKind]) *)
