@@ -62,6 +62,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install nix
+        if: matrix.use_nix_cache
         uses: nixbuild/nix-quick-install-action@v30
         with:
           nix_conf: |
