@@ -11,6 +11,8 @@ BRANCH_PREFIX="${BRANCH_PREFIX:-update-charon}"
 COMMIT_TITLE="Update charon"
 MERGE_QUEUE_POLL_SECONDS="${MERGE_QUEUE_POLL_SECONDS:-30}"
 MERGE_QUEUE_WAIT_TIMEOUT_SECONDS="${MERGE_QUEUE_WAIT_TIMEOUT_SECONDS:-3600}"
+PR_CHECKS_POLL_SECONDS="${PR_CHECKS_POLL_SECONDS:-30}"
+PR_CHECKS_WAIT_TIMEOUT_SECONDS="${PR_CHECKS_WAIT_TIMEOUT_SECONDS:-1800}"
 
 die() {
     echo "error: $*" >&2
@@ -292,6 +294,59 @@ rerun_pr_job() {
     return 1
 }
 
+wait_for_pr_checks_complete() {
+    local repo="$1"
+    local pr="$2"
+    local waited=0
+    local checks_json pending_count total_count pending_names
+
+    while true; do
+        checks_json="$(gh pr checks "$pr" --repo "$repo" --json name,bucket,state 2>/dev/null || true)"
+
+        if ! jq -e 'type == "array"' >/dev/null <<<"$checks_json"; then
+            die "could not inspect checks for $repo PR #$pr"
+        fi
+
+        total_count="$(jq -r 'length' <<<"$checks_json")" ||
+            die "could not parse checks for $repo PR #$pr"
+        pending_count="$(
+            jq -r '[.[] | select(.bucket == "pending")] | length' <<<"$checks_json"
+        )" || die "could not parse pending checks for $repo PR #$pr"
+
+        if (( pending_count == 0 )); then
+            if (( total_count == 0 )); then
+                echo "No checks found on $repo PR #$pr"
+            else
+                echo "All checks on $repo PR #$pr are complete"
+            fi
+            return 0
+        fi
+
+        if (( waited >= PR_CHECKS_WAIT_TIMEOUT_SECONDS )); then
+            pending_names="$(
+                jq -r '[.[] | select(.bucket == "pending") | .name] | join(", ")' \
+                    <<<"$checks_json"
+            )" || pending_names="unknown"
+            die "timed out waiting for $repo PR #$pr checks to complete: $pending_names"
+        fi
+
+        pending_names="$(
+            jq -r '[.[] | select(.bucket == "pending") | .name] | join(", ")' \
+                <<<"$checks_json"
+        )" || pending_names="unknown"
+        echo "Waiting for $repo PR #$pr checks to complete ($pending_count pending): $pending_names"
+        sleep "$PR_CHECKS_POLL_SECONDS"
+        waited=$((waited + PR_CHECKS_POLL_SECONDS))
+    done
+}
+
+rerun_charon_pin_is_merged_job() {
+    local pr="$1"
+
+    wait_for_pr_checks_complete "$THIS_REPO" "$pr"
+    rerun_pr_job "$THIS_REPO" "$pr" "charon-pin-is-merged"
+}
+
 require_cmd git
 require_cmd gh
 require_cmd jq
@@ -396,16 +451,16 @@ fi
 
 if pr_is_merged "$CHARON_REPO" "$charon_pr"; then
     echo "Charon PR #$charon_pr is merged; rerunning $THIS_REPO_NAME job 'charon-pin-is-merged'"
-    rerun_pr_job "$THIS_REPO" "$this_pr" "charon-pin-is-merged"
+    rerun_charon_pin_is_merged_job "$this_pr"
 elif pr_is_in_merge_queue "$CHARON_REPO" "$charon_pr"; then
     echo "Charon PR #$charon_pr is in the merge queue"
     wait_for_pr_merged "$CHARON_REPO" "$charon_pr"
-    rerun_pr_job "$THIS_REPO" "$this_pr" "charon-pin-is-merged"
+    rerun_charon_pin_is_merged_job "$this_pr"
 else
     ensure_charon_pr_mentions_this_pr "$charon_pr" "$this_pr"
     if ! rerun_pr_job "$CHARON_REPO" "$charon_pr" "select-dep-versions"; then
         echo "Continuing to wait for $CHARON_REPO PR #$charon_pr to merge"
     fi
     wait_for_pr_merged "$CHARON_REPO" "$charon_pr" false
-    rerun_pr_job "$THIS_REPO" "$this_pr" "charon-pin-is-merged"
+    rerun_charon_pin_is_merged_job "$this_pr"
 fi
