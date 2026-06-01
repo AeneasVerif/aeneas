@@ -470,7 +470,7 @@ let rec compare_rtys ?(allow_erased = false) (span : Meta.span) (ctx : eval_ctx)
   | TVar id1, TVar id2 ->
       [%sanity_check] span (id1 = id2);
       default
-  | TTraitType _, TTraitType _ ->
+  | TTraitType (_, _, _), TTraitType (_, _, _) ->
       (* The types should have been normalized. If after normalization we
          get trait types, we can consider them as variables *)
       [%sanity_check] span (ty1 = ty2);
@@ -2298,9 +2298,10 @@ let rec norm_proj_tys_union (span : Meta.span) (ctx : eval_ctx) (ty1 : rty)
   | TRawPtr (ty1, rk1), TRawPtr (ty2, rk2) ->
       [%sanity_check] span (rk1 = rk2);
       TRawPtr (norm_proj_tys_union span ctx ty1 ty2, rk1)
-  | TTraitType (tr1, item1), TTraitType (tr2, item2) ->
+  | TTraitType (tr1, item1, generics1), TTraitType (tr2, item2, generics2) ->
       [%sanity_check] span (item1 = item2);
-      TTraitType (norm_proj_trait_refs_union span tr1 tr2, item1)
+      [%sanity_check] span (generics1 = generics2);
+      TTraitType (norm_proj_trait_refs_union span tr1 tr2, item1, generics1)
   | ( TFnPtr
         {
           binder_regions = binder_regions1;

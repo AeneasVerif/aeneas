@@ -18,7 +18,7 @@ noncomputable section
 namespace rust_borrow_check_issues
 
 /-- [core::mem::drop]:
-    Source: '/rustc/library/core/src/mem/mod.rs', lines 971:0-973:24
+    Source: '/rustc/library/core/src/mem/mod.rs', lines 1000:0-1002:24
     Name pattern: [core::mem::drop]
     Visibility: public -/
 @[rust_fun "core::mem::drop"]

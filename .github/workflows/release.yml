@@ -38,31 +38,38 @@ jobs:
       contents: write
       actions: write
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: [self-hosted, linux, nix]
             artifact_name: aeneas-linux-x86_64
             nix_attr: aeneas-static-release
+            use_nix_cache: false
           - os: ubuntu-24.04-arm
             artifact_name: aeneas-linux-aarch64
             nix_attr: aeneas-static-release
+            use_nix_cache: true
           - os: macos-15-intel
             artifact_name: aeneas-macos-x86_64
             nix_attr: aeneas-release
+            use_nix_cache: true
           - os: macos-latest
             artifact_name: aeneas-macos-aarch64
             nix_attr: aeneas-release
+            use_nix_cache: true
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Install nix
+        if: matrix.use_nix_cache
         uses: nixbuild/nix-quick-install-action@v30
         with:
           nix_conf: |
             keep-env-derivations = true
             keep-outputs = true
       - name: Restore Nix Cache
+        if: matrix.use_nix_cache
         id: restore-nix-cache
         uses: nix-community/cache-nix-action/restore@v6
         with:
@@ -110,7 +117,9 @@ jobs:
           elan default $(cat lean-toolchain)
 
           # Fetch pre-compiled Mathlib binaries
-          lake exe cache get
+          if ! lake exe cache get; then
+            echo "::warning::Mathlib cache extraction failed; continuing with source build"
+          fi
 
           # Unset CI to force precompilation of modules, which is disabled by
           # default in CI in lakefile.lean. This ensures releases contain the
@@ -145,7 +154,7 @@ jobs:
           files: ${{ matrix.artifact_name }}.tar.gz
 
       - name: Save Nix Cache
-        if: always()
+        if: ${{ always() && matrix.use_nix_cache }}
         uses: nix-community/cache-nix-action/save@v6
         with:
           primary-key: ${{ steps.restore-nix-cache.outputs.primary-key }}

@@ -18,14 +18,14 @@ noncomputable section
 namespace derive
 
 /-- [core::cmp::impls::{impl core::cmp::PartialEq<bool> for bool}::ne]:
-    Source: '/rustc/library/core/src/cmp.rs', lines 1872:16-1872:50
+    Source: '/rustc/library/core/src/cmp.rs', lines 1879:16-1879:50
     Name pattern: [core::cmp::impls::{core::cmp::PartialEq<bool, bool>}::ne]
     Visibility: public -/
 @[rust_fun "core::cmp::impls::{core::cmp::PartialEq<bool, bool>}::ne"]
 axiom Bool.Insts.CoreCmpPartialEqBool.ne : Bool → Bool → Result Bool
 
 /-- [alloc::boxed::{impl core::cmp::PartialEq<alloc::boxed::Box<T>> for alloc::boxed::Box<T>}::ne]:
-    Source: '/rustc/library/alloc/src/boxed.rs', lines 2100:4-2100:38
+    Source: '/rustc/library/alloc/src/boxed.rs', lines 2109:4-2109:38
     Name pattern: [alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}::ne]
     Visibility: public -/
 @[rust_fun "alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}::ne"]
@@ -93,10 +93,10 @@ def CopyEnumOneVariant.Insts.CoreCmpPartialEqCopyEnumOneVariant :
   ne := CopyEnumOneVariant.Insts.CoreCmpPartialEqCopyEnumOneVariant.ne
 }
 
-/-- [derive::{impl core::cmp::Eq for derive::CopyEnumOneVariant}::assert_receiver_is_total_eq]:
+/-- [derive::{impl core::cmp::Eq for derive::CopyEnumOneVariant}::assert_fields_are_eq]:
     Source: 'tests/src/derive.rs', lines 3:33-3:35
     Visibility: public -/
-def CopyEnumOneVariant.Insts.CoreCmpEq.assert_receiver_is_total_eq
+def CopyEnumOneVariant.Insts.CoreCmpEq.assert_fields_are_eq
   (self : CopyEnumOneVariant) : Result Unit := do
   ok ()
 
@@ -105,8 +105,8 @@ def CopyEnumOneVariant.Insts.CoreCmpEq.assert_receiver_is_total_eq
 @[reducible]
 def CopyEnumOneVariant.Insts.CoreCmpEq : core.cmp.Eq CopyEnumOneVariant := {
   partialEqInst := CopyEnumOneVariant.Insts.CoreCmpPartialEqCopyEnumOneVariant
-  assert_receiver_is_total_eq :=
-    CopyEnumOneVariant.Insts.CoreCmpEq.assert_receiver_is_total_eq
+  assert_fields_are_eq :=
+    CopyEnumOneVariant.Insts.CoreCmpEq.assert_fields_are_eq
 }
 
 /-- [derive::{impl core::fmt::Debug for derive::CopyEnumOneVariant}::fmt]:
@@ -189,10 +189,10 @@ def ScalarEnum.Insts.CoreCmpPartialEqScalarEnum : core.cmp.PartialEq ScalarEnum
   ne := ScalarEnum.Insts.CoreCmpPartialEqScalarEnum.ne
 }
 
-/-- [derive::{impl core::cmp::Eq for derive::ScalarEnum}::assert_receiver_is_total_eq]:
+/-- [derive::{impl core::cmp::Eq for derive::ScalarEnum}::assert_fields_are_eq]:
     Source: 'tests/src/derive.rs', lines 8:33-8:35
     Visibility: public -/
-def ScalarEnum.Insts.CoreCmpEq.assert_receiver_is_total_eq
+def ScalarEnum.Insts.CoreCmpEq.assert_fields_are_eq
   (self : ScalarEnum) : Result Unit := do
   ok ()
 
@@ -201,8 +201,7 @@ def ScalarEnum.Insts.CoreCmpEq.assert_receiver_is_total_eq
 @[reducible]
 def ScalarEnum.Insts.CoreCmpEq : core.cmp.Eq ScalarEnum := {
   partialEqInst := ScalarEnum.Insts.CoreCmpPartialEqScalarEnum
-  assert_receiver_is_total_eq :=
-    ScalarEnum.Insts.CoreCmpEq.assert_receiver_is_total_eq
+  assert_fields_are_eq := ScalarEnum.Insts.CoreCmpEq.assert_fields_are_eq
 }
 
 /-- [derive::{impl core::fmt::Debug for derive::ScalarEnum}::fmt]:
@@ -330,10 +329,10 @@ def CopyEnum.Insts.CoreCmpPartialEqCopyEnum {T : Type} (corecmpPartialEqInst :
   ne := CopyEnum.Insts.CoreCmpPartialEqCopyEnum.ne corecmpPartialEqInst
 }
 
-/-- [derive::{impl core::cmp::Eq for derive::CopyEnum<T>}::assert_receiver_is_total_eq]:
+/-- [derive::{impl core::cmp::Eq for derive::CopyEnum<T>}::assert_fields_are_eq]:
     Source: 'tests/src/derive.rs', lines 16:33-16:35
     Visibility: public -/
-def CopyEnum.Insts.CoreCmpEq.assert_receiver_is_total_eq
+def CopyEnum.Insts.CoreCmpEq.assert_fields_are_eq
   {T : Type} (corecmpEqInst : core.cmp.Eq T) (self : CopyEnum T) :
   Result Unit
   := do
@@ -346,8 +345,8 @@ def CopyEnum.Insts.CoreCmpEq {T : Type} (corecmpEqInst : core.cmp.Eq T) :
   core.cmp.Eq (CopyEnum T) := {
   partialEqInst := CopyEnum.Insts.CoreCmpPartialEqCopyEnum
     corecmpEqInst.partialEqInst
-  assert_receiver_is_total_eq :=
-    CopyEnum.Insts.CoreCmpEq.assert_receiver_is_total_eq corecmpEqInst
+  assert_fields_are_eq := CopyEnum.Insts.CoreCmpEq.assert_fields_are_eq
+    corecmpEqInst
 }
 
 /-- [derive::{impl core::fmt::Debug for derive::CopyEnum<T>}::fmt]:
@@ -492,10 +491,10 @@ def Enum.Insts.CoreCmpPartialEqEnum {T : Type} (corecmpPartialEqInst :
   ne := Enum.Insts.CoreCmpPartialEqEnum.ne corecmpPartialEqInst
 }
 
-/-- [derive::{impl core::cmp::Eq for derive::Enum<T>}::assert_receiver_is_total_eq]:
+/-- [derive::{impl core::cmp::Eq for derive::Enum<T>}::assert_fields_are_eq]:
     Source: 'tests/src/derive.rs', lines 24:27-24:29
     Visibility: public -/
-def Enum.Insts.CoreCmpEq.assert_receiver_is_total_eq
+def Enum.Insts.CoreCmpEq.assert_fields_are_eq
   {T : Type} (corecmpEqInst : core.cmp.Eq T) (self : Enum T) :
   Result Unit
   := do
@@ -507,8 +506,8 @@ def Enum.Insts.CoreCmpEq.assert_receiver_is_total_eq
 def Enum.Insts.CoreCmpEq {T : Type} (corecmpEqInst : core.cmp.Eq T) :
   core.cmp.Eq (Enum T) := {
   partialEqInst := Enum.Insts.CoreCmpPartialEqEnum corecmpEqInst.partialEqInst
-  assert_receiver_is_total_eq :=
-    Enum.Insts.CoreCmpEq.assert_receiver_is_total_eq corecmpEqInst
+  assert_fields_are_eq := Enum.Insts.CoreCmpEq.assert_fields_are_eq
+    corecmpEqInst
 }
 
 /-- [derive::{impl core::fmt::Debug for derive::Enum<T>}::fmt]:
@@ -627,10 +626,10 @@ def List.Insts.CoreCmpPartialEqList {T : Type} (corecmpPartialEqInst :
   ne := List.Insts.CoreCmpPartialEqList.ne corecmpPartialEqInst
 }
 
-/-- [derive::{impl core::cmp::Eq for derive::List<T>}::assert_receiver_is_total_eq]:
+/-- [derive::{impl core::cmp::Eq for derive::List<T>}::assert_fields_are_eq]:
     Source: 'tests/src/derive.rs', lines 34:27-34:29
     Visibility: public -/
-def List.Insts.CoreCmpEq.assert_receiver_is_total_eq
+def List.Insts.CoreCmpEq.assert_fields_are_eq
   {T : Type} (corecmpEqInst : core.cmp.Eq T) (self : List T) :
   Result Unit
   := do
@@ -642,8 +641,8 @@ def List.Insts.CoreCmpEq.assert_receiver_is_total_eq
 def List.Insts.CoreCmpEq {T : Type} (corecmpEqInst : core.cmp.Eq T) :
   core.cmp.Eq (List T) := {
   partialEqInst := List.Insts.CoreCmpPartialEqList corecmpEqInst.partialEqInst
-  assert_receiver_is_total_eq :=
-    List.Insts.CoreCmpEq.assert_receiver_is_total_eq corecmpEqInst
+  assert_fields_are_eq := List.Insts.CoreCmpEq.assert_fields_are_eq
+    corecmpEqInst
 }
 
 /-- [derive::CopyStruct]
@@ -726,10 +725,10 @@ def CopyStruct.Insts.CoreCmpPartialEqCopyStruct {T : Type}
   ne := CopyStruct.Insts.CoreCmpPartialEqCopyStruct.ne corecmpPartialEqInst
 }
 
-/-- [derive::{impl core::cmp::Eq for derive::CopyStruct<T>}::assert_receiver_is_total_eq]:
+/-- [derive::{impl core::cmp::Eq for derive::CopyStruct<T>}::assert_fields_are_eq]:
     Source: 'tests/src/derive.rs', lines 41:33-41:35
     Visibility: public -/
-def CopyStruct.Insts.CoreCmpEq.assert_receiver_is_total_eq
+def CopyStruct.Insts.CoreCmpEq.assert_fields_are_eq
   {T : Type} (corecmpEqInst : core.cmp.Eq T) (self : CopyStruct T) :
   Result Unit
   := do
@@ -742,8 +741,8 @@ def CopyStruct.Insts.CoreCmpEq {T : Type} (corecmpEqInst : core.cmp.Eq T) :
   core.cmp.Eq (CopyStruct T) := {
   partialEqInst := CopyStruct.Insts.CoreCmpPartialEqCopyStruct
     corecmpEqInst.partialEqInst
-  assert_receiver_is_total_eq :=
-    CopyStruct.Insts.CoreCmpEq.assert_receiver_is_total_eq corecmpEqInst
+  assert_fields_are_eq := CopyStruct.Insts.CoreCmpEq.assert_fields_are_eq
+    corecmpEqInst
 }
 
 /-- [derive::{impl core::fmt::Debug for derive::CopyStruct<T>}::fmt]:
@@ -825,10 +824,10 @@ def Struct.Insts.CoreCmpPartialEqStruct {T : Type} (corecmpPartialEqInst :
   ne := Struct.Insts.CoreCmpPartialEqStruct.ne corecmpPartialEqInst
 }
 
-/-- [derive::{impl core::cmp::Eq for derive::Struct<T>}::assert_receiver_is_total_eq]:
+/-- [derive::{impl core::cmp::Eq for derive::Struct<T>}::assert_fields_are_eq]:
     Source: 'tests/src/derive.rs', lines 49:27-49:29
     Visibility: public -/
-def Struct.Insts.CoreCmpEq.assert_receiver_is_total_eq
+def Struct.Insts.CoreCmpEq.assert_fields_are_eq
   {T : Type} (corecmpEqInst : core.cmp.Eq T) (self : Struct T) :
   Result Unit
   := do
@@ -841,8 +840,8 @@ def Struct.Insts.CoreCmpEq {T : Type} (corecmpEqInst : core.cmp.Eq T) :
   core.cmp.Eq (Struct T) := {
   partialEqInst := Struct.Insts.CoreCmpPartialEqStruct
     corecmpEqInst.partialEqInst
-  assert_receiver_is_total_eq :=
-    Struct.Insts.CoreCmpEq.assert_receiver_is_total_eq corecmpEqInst
+  assert_fields_are_eq := Struct.Insts.CoreCmpEq.assert_fields_are_eq
+    corecmpEqInst
 }
 
 /-- [derive::{impl core::fmt::Debug for derive::Struct<T>}::fmt]:
@@ -939,10 +938,10 @@ def Struct6Fields.Insts.CoreCmpPartialEqStruct6Fields : core.cmp.PartialEq
   ne := Struct6Fields.Insts.CoreCmpPartialEqStruct6Fields.ne
 }
 
-/-- [derive::{impl core::cmp::Eq for derive::Struct6Fields}::assert_receiver_is_total_eq]:
+/-- [derive::{impl core::cmp::Eq for derive::Struct6Fields}::assert_fields_are_eq]:
     Source: 'tests/src/derive.rs', lines 54:27-54:29
     Visibility: public -/
-def Struct6Fields.Insts.CoreCmpEq.assert_receiver_is_total_eq
+def Struct6Fields.Insts.CoreCmpEq.assert_fields_are_eq
   (self : Struct6Fields) : Result Unit := do
   ok ()
 
@@ -951,8 +950,7 @@ def Struct6Fields.Insts.CoreCmpEq.assert_receiver_is_total_eq
 @[reducible]
 def Struct6Fields.Insts.CoreCmpEq : core.cmp.Eq Struct6Fields := {
   partialEqInst := Struct6Fields.Insts.CoreCmpPartialEqStruct6Fields
-  assert_receiver_is_total_eq :=
-    Struct6Fields.Insts.CoreCmpEq.assert_receiver_is_total_eq
+  assert_fields_are_eq := Struct6Fields.Insts.CoreCmpEq.assert_fields_are_eq
 }
 
 /-- [derive::{impl core::fmt::Debug for derive::Struct6Fields}::fmt]:

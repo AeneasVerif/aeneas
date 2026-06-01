@@ -63,11 +63,10 @@ def Wrap.Insts.CoreCmpPartialEqWrap : core.cmp.PartialEq Wrap Wrap := {
   eq := Wrap.Insts.CoreCmpPartialEqWrap.eq
 }
 
-/-- [order::{impl core::cmp::Eq for order::Wrap}::assert_receiver_is_total_eq]:
+/-- [order::{impl core::cmp::Eq for order::Wrap}::assert_fields_are_eq]:
     Source: 'tests/src/order.rs', lines 21:20-21:22
     Visibility: public -/
-def Wrap.Insts.CoreCmpEq.assert_receiver_is_total_eq
-  (self : Wrap) : Result Unit := do
+def Wrap.Insts.CoreCmpEq.assert_fields_are_eq (self : Wrap) : Result Unit := do
   ok ()
 
 /-- Trait implementation: [order::{impl core::cmp::Eq for order::Wrap}]
@@ -75,8 +74,7 @@ def Wrap.Insts.CoreCmpEq.assert_receiver_is_total_eq
 @[reducible]
 def Wrap.Insts.CoreCmpEq : core.cmp.Eq Wrap := {
   partialEqInst := Wrap.Insts.CoreCmpPartialEqWrap
-  assert_receiver_is_total_eq :=
-    Wrap.Insts.CoreCmpEq.assert_receiver_is_total_eq
+  assert_fields_are_eq := Wrap.Insts.CoreCmpEq.assert_fields_are_eq
 }
 
 /-- [order::{impl core::cmp::PartialOrd<order::Wrap> for order::Wrap}::partial_cmp]:
