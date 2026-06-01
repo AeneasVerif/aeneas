@@ -304,19 +304,19 @@ let withConstTy_LEN2_default (self : Type0) (clause0_v : Type0) (clause0_w :
   Type0) (len : usize) : usize =
   32
 
-(** [traits::{impl traits::WithConstTy<u8, u64, 32 : usize> for bool}::f]:
+(** [traits::{impl traits::WithConstTy<u8, u64, 32usize> for bool}::f]:
     Source: 'tests/src/traits.rs', lines 182:4-182:42
     Visibility: public *)
 let bool_Insts_TraitsWithConstTyU8U6432_f
   (i : u64) (a : array u8 32) : result u64 =
   Ok i
 
-(** [traits::{impl traits::WithConstTy<u8, u64, 32 : usize> for bool}::LEN1]
+(** [traits::{impl traits::WithConstTy<u8, u64, 32usize> for bool}::LEN1]
     Source: 'tests/src/traits.rs', lines 177:4-177:27
     Visibility: public *)
 let bool_Insts_TraitsWithConstTyU8U6432_LEN1 : usize = 12
 
-(** Trait implementation: [traits::{impl traits::WithConstTy<u8, u64, 32 : usize> for bool}]
+(** Trait implementation: [traits::{impl traits::WithConstTy<u8, u64, 32usize> for bool}]
     Source: 'tests/src/traits.rs', lines 176:0-183:1 *)
 let bool_Insts_TraitsWithConstTyU8U6432 : withConstTy_t bool u8 u64 32 = {
   cLEN1 = Ok bool_Insts_TraitsWithConstTyU8U6432_LEN1;
