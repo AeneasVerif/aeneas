@@ -18,14 +18,14 @@ noncomputable section
 namespace iterators
 
 /-- [core::iter::adapters::zip::Zip]
-    Source: '/rustc/library/core/src/iter/adapters/zip.rs', lines 15:0-15:20
+    Source: '/rustc/library/core/src/iter/adapters/zip.rs', lines 13:0-13:20
     Name pattern: [core::iter::adapters::zip::Zip]
     Visibility: public -/
 @[rust_type "core::iter::adapters::zip::Zip"]
 axiom core.iter.adapters.zip.Zip (A : Type) (B : Type) : Type
 
 /-- [core::iter::adapters::zip::{impl core::iter::traits::iterator::Iterator<(Clause0_Item, Clause1_Item)> for core::iter::adapters::zip::Zip<A, B>}::next]:
-    Source: '/rustc/library/core/src/iter/adapters/zip.rs', lines 84:4-84:44
+    Source: '/rustc/library/core/src/iter/adapters/zip.rs', lines 82:4-82:44
     Name pattern: [core::iter::adapters::zip::{core::iter::traits::iterator::Iterator<core::iter::adapters::zip::Zip<@A, @B>, (@Clause0_Item, @Clause1_Item)>}::next]
     Visibility: public -/
 @[rust_fun
@@ -52,7 +52,7 @@ axiom core.ops.range.Range.Insts.CoreIterTraitsIteratorIterator.zip
     (core.ops.range.Range A) Clause1_IntoIter)
 
 /-- [core::iter::traits::iterator::Iterator::zip]:
-    Source: '/rustc/library/core/src/iter/traits/iterator.rs', lines 631:4-634:24
+    Source: '/rustc/library/core/src/iter/traits/iterator.rs', lines 629:4-632:24
     Name pattern: [core::iter::traits::iterator::Iterator::zip]
     Visibility: public -/
 @[rust_fun "core::iter::traits::iterator::Iterator::zip"]

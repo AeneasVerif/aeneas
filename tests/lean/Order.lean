@@ -77,12 +77,20 @@ def Wrap.Insts.CoreCmpEq : core.cmp.Eq Wrap := {
   assert_fields_are_eq := Wrap.Insts.CoreCmpEq.assert_fields_are_eq
 }
 
+/-- [order::{impl core::cmp::Ord for order::Wrap}::cmp]:
+    Source: 'tests/src/order.rs', lines 21:36-21:39
+    Visibility: public -/
+def Wrap.Insts.CoreCmpOrd.cmp
+  (self : Wrap) (other : Wrap) : Result Ordering := do
+  ok (core.cmp.impls.OrdU64.cmp self other)
+
 /-- [order::{impl core::cmp::PartialOrd<order::Wrap> for order::Wrap}::partial_cmp]:
     Source: 'tests/src/order.rs', lines 21:24-21:34
     Visibility: public -/
 def Wrap.Insts.CoreCmpPartialOrdWrap.partial_cmp
   (self : Wrap) (other : Wrap) : Result (Option Ordering) := do
-  ok (core.cmp.impls.PartialOrdU64.partial_cmp self other)
+  let o ← Wrap.Insts.CoreCmpOrd.cmp self other
+  ok (some o)
 
 /-- Trait implementation: [order::{impl core::cmp::PartialOrd<order::Wrap> for order::Wrap}]
     Source: 'tests/src/order.rs', lines 21:24-21:34 -/
@@ -91,13 +99,6 @@ def Wrap.Insts.CoreCmpPartialOrdWrap : core.cmp.PartialOrd Wrap Wrap := {
   partialEqInst := Wrap.Insts.CoreCmpPartialEqWrap
   partial_cmp := Wrap.Insts.CoreCmpPartialOrdWrap.partial_cmp
 }
-
-/-- [order::{impl core::cmp::Ord for order::Wrap}::cmp]:
-    Source: 'tests/src/order.rs', lines 21:36-21:39
-    Visibility: public -/
-def Wrap.Insts.CoreCmpOrd.cmp
-  (self : Wrap) (other : Wrap) : Result Ordering := do
-  ok (core.cmp.impls.OrdU64.cmp self other)
 
 /-- Trait implementation: [order::{impl core::cmp::Ord for order::Wrap}]
     Source: 'tests/src/order.rs', lines 21:36-21:39 -/

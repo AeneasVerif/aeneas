@@ -25,7 +25,7 @@ namespace rust_borrow_check_issues
 axiom core.mem.drop {T : Type} : T → Result Unit
 
 /-- [core::option::{core::option::Option<T>}::as_mut]:
-    Source: '/rustc/library/core/src/option.rs', lines 766:4-766:52
+    Source: '/rustc/library/core/src/option.rs', lines 763:4-763:52
     Name pattern: [core::option::{core::option::Option<@T>}::as_mut]
     Visibility: public -/
 @[rust_fun "core::option::{core::option::Option<@T>}::as_mut"]
