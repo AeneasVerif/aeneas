@@ -103,24 +103,7 @@ jobs:
             ${{ matrix.os }}-lean-
 
       - name: Pre-compile Lean Library
-        run: |
-          set -eo pipefail
-
-          cd dist_staging/backends/lean
-          cp ../../../backends/lean/lean-toolchain .
-          elan default $(cat lean-toolchain)
-
-          # Fetch pre-compiled Mathlib binaries
-          if ! lake exe cache get; then
-            echo "::warning::Mathlib cache extraction failed; continuing with source build"
-          fi
-
-          # Unset CI to force precompilation of modules, which is disabled by
-          # default in CI in lakefile.lean. This ensures releases contain the
-          # shared libraries required for plugin loading.
-          CI="" lake build
-          # Delete heavy dependency sources to keep the release archive small.
-          rm -rf .lake/packages
+        run: ./scripts/ci-precompile-lean.sh
 
       - name: Re-package Tarball
         run: |
