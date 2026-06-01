@@ -1313,7 +1313,7 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
                           kind =
                             Assign
                               ( { kind = PlaceLocal local_id; ty = str_ty },
-                                Use (Constant new_cv) );
+                                Use (Constant new_cv, NoRetag) );
                           comments_before = [];
                         }
                       in
@@ -2008,7 +2008,7 @@ let simplify_trait_calls (crate : crate) : crate =
             if is_blanket_into_iter d.item_meta.name then (
               (* Replace the call by an assignment *)
               [%sanity_check] span (List.length call.args = 1);
-              let arg = Use (List.hd call.args) in
+              let arg = Use (List.hd call.args, NoRetag) in
               Assign (call.dest, arg))
             else if is_blanket_try_into d.item_meta.name then (
               [%ldebug

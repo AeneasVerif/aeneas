@@ -44,32 +44,32 @@ jobs:
           - os: [self-hosted, linux, nix]
             artifact_name: aeneas-linux-x86_64
             nix_attr: aeneas-static-release
-            use_nix_cache: false
+            nix_machine: true
           - os: ubuntu-24.04-arm
             artifact_name: aeneas-linux-aarch64
             nix_attr: aeneas-static-release
-            use_nix_cache: true
+            nix_machine: false
           - os: macos-15-intel
             artifact_name: aeneas-macos-x86_64
             nix_attr: aeneas-release
-            use_nix_cache: true
+            nix_machine: false
           - os: macos-latest
             artifact_name: aeneas-macos-aarch64
             nix_attr: aeneas-release
-            use_nix_cache: true
+            nix_machine: false
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Install nix
-        if: matrix.use_nix_cache
+        if: ${{ ! matrix.nix_machine }}
         uses: nixbuild/nix-quick-install-action@v30
         with:
           nix_conf: |
             keep-env-derivations = true
             keep-outputs = true
       - name: Restore Nix Cache
-        if: matrix.use_nix_cache
+        if: ${{ ! matrix.nix_machine }}
         id: restore-nix-cache
         uses: nix-community/cache-nix-action/restore@v6
         with:
@@ -82,18 +82,13 @@ jobs:
           set -eo pipefail
 
           nix build -L .#${{ matrix.nix_attr }}
-          cp result ${{ matrix.artifact_name }}.tar.gz
-
-      - name: Unpack Tarball for Post-Processing
-        run: |
-          set -eo pipefail
-
-          mkdir -p dist_staging
-          tar -xzf ${{ matrix.artifact_name }}.tar.gz -C dist_staging
+          mkdir dist_staging
+          cp -R result/. dist_staging/
           # Nix preserves read-only permissions from the store, so we must make files writable.
           chmod -R +w dist_staging
 
       - name: Install elan (Lean toolchain manager)
+        if: ${{ ! matrix.nix_machine }}
         run: |
           set -eo pipefail
 
@@ -112,21 +107,13 @@ jobs:
         run: |
           set -eo pipefail
 
+          script="$PWD/scripts/ci-precompile-lean.sh"
           cd dist_staging/backends/lean
-          cp ../../../backends/lean/lean-toolchain .
-          elan default $(cat lean-toolchain)
-
-          # Fetch pre-compiled Mathlib binaries
-          if ! lake exe cache get; then
-            echo "::warning::Mathlib cache extraction failed; continuing with source build"
+          if [[ "${{ matrix.nix_machine }}" == "true" ]]; then
+            nix develop ../../.. --command "$script"
+          else
+            "$script"
           fi
-
-          # Unset CI to force precompilation of modules, which is disabled by
-          # default in CI in lakefile.lean. This ensures releases contain the
-          # shared libraries required for plugin loading.
-          CI="" lake build
-          # Delete heavy dependency sources to keep the release archive small.
-          rm -rf .lake/packages
 
       - name: Re-package Tarball
         run: |
@@ -154,7 +141,7 @@ jobs:
           files: ${{ matrix.artifact_name }}.tar.gz
 
       - name: Save Nix Cache
-        if: ${{ always() && matrix.use_nix_cache }}
+        if: ${{ always() && ! matrix.nix_machine }}
         uses: nix-community/cache-nix-action/save@v6
         with:
           primary-key: ${{ steps.restore-nix-cache.outputs.primary-key }}

@@ -439,8 +439,8 @@ let value_has_ret_symbolic_value_with_borrow_under_mut span (ctx : eval_ctx)
     compute span-data, to find pretty names. *)
 let rvalue_get_place (rv : rvalue) : place option =
   match rv with
-  | Use (Copy p | Move p) -> Some p
-  | Use (Constant _) -> None
+  | Use ((Copy p | Move p), _) -> Some p
+  | Use (Constant _, _) -> None
   | Len (p, _, _) | RvRef (p, _, _) | RawPtr (p, _, _) -> Some p
   | NullaryOp _
   | UnaryOp _

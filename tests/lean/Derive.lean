@@ -18,14 +18,14 @@ noncomputable section
 namespace derive
 
 /-- [core::cmp::impls::{impl core::cmp::PartialEq<bool> for bool}::ne]:
-    Source: '/rustc/library/core/src/cmp.rs', lines 1879:16-1879:50
+    Source: '/rustc/library/core/src/cmp.rs', lines 1880:16-1880:50
     Name pattern: [core::cmp::impls::{core::cmp::PartialEq<bool, bool>}::ne]
     Visibility: public -/
 @[rust_fun "core::cmp::impls::{core::cmp::PartialEq<bool, bool>}::ne"]
 axiom Bool.Insts.CoreCmpPartialEqBool.ne : Bool → Bool → Result Bool
 
 /-- [alloc::boxed::{impl core::cmp::PartialEq<alloc::boxed::Box<T>> for alloc::boxed::Box<T>}::ne]:
-    Source: '/rustc/library/alloc/src/boxed.rs', lines 2109:4-2109:38
+    Source: '/rustc/library/alloc/src/boxed.rs', lines 2127:4-2127:38
     Name pattern: [alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}::ne]
     Visibility: public -/
 @[rust_fun "alloc::boxed::{core::cmp::PartialEq<Box<@T>, Box<@T>>}::ne"]

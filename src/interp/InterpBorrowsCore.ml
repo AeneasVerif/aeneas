@@ -2274,6 +2274,7 @@ let rec norm_proj_tys_union (span : Meta.span) ?(strict : bool = true)
       TRawPtr (norm_proj_tys_union span ~strict ctx ty1 ty2, rk1)
   | TTraitType (tr1, item1, generics1), TTraitType (tr2, item2, generics2) ->
       [%sanity_check] span (item1 = item2);
+      (* There might be regions but let's ignore this for now... *)
       [%sanity_check] span (generics1 = generics2);
       TTraitType (norm_proj_trait_refs_union span tr1 tr2, item1, generics1)
   | ( TFnPtr

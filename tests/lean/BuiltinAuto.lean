@@ -18,7 +18,7 @@ noncomputable section
 namespace builtin_auto
 
 /-- [core::ptr::null]:
-    Source: '/rustc/library/core/src/ptr/mod.rs', lines 842:0-842:55
+    Source: '/rustc/library/core/src/ptr/mod.rs', lines 854:0-854:55
     Name pattern: [core::ptr::null]
     Visibility: public -/
 @[rust_fun "core::ptr::null"]
