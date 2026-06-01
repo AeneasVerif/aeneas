@@ -108,9 +108,9 @@ jobs:
           set -eo pipefail
 
           if [[ "${{ matrix.nix_machine }}" == "true" ]]; then
-            nix develop --command ./scripts/ci-precompile-lean.sh
+            nix develop --command ./scripts/ci-precompile-lean.sh backends/lean dist_staging/backends/lean
           else
-            ./scripts/ci-precompile-lean.sh
+            ./scripts/ci-precompile-lean.sh backends/lean dist_staging/backends/lean
           fi
 
       - name: Re-package Tarball

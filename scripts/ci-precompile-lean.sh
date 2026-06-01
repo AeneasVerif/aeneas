@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-repo_root="$(cd -- "$script_dir/.." && pwd)"
-lean_dir="$repo_root/dist_staging/backends/lean"
+if [[ $# -ne 2 ]]; then
+  echo "usage: $0 SOURCE_LEAN_DIR TARGET_LEAN_DIR" >&2
+  exit 2
+fi
 
-cd "$lean_dir"
-cp "$repo_root/backends/lean/lean-toolchain" .
+source_dir="$(cd "$1" && pwd)"
+target_dir="$(cd "$2" && pwd)"
+
+cd "$target_dir"
+cp "$source_dir/lean-toolchain" .
 elan default "$(cat lean-toolchain)"
 
 # Fetch pre-compiled Mathlib binaries.
