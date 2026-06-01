@@ -1623,25 +1623,18 @@ and end_proj_loans_symbolic (config : config) (span : Meta.span)
           comp cc
             (end_proj_loans_symbolic config span ~snapshots chain abs_id level
                regions proj ctx))
-  | Some (SharedProjs projs) ->
+  | Some projs ->
       (* We found projectors over shared values: end the abstractions containing
          them at the proper level.  *)
       let ctx, cc =
         let abs_ids =
-          List.map (fun (abs_id, _, level) -> { abs_id; level }) projs
+          List.map
+            (fun (abs_id, _, level) -> { abs_id; level })
+            (projs.shared_projs @ projs.non_shared_projs)
         in
         let abs_ids = AbsIdWithLevelSet.of_list abs_ids in
         (* End the abstractions and continue *)
         end_abs_set_aux config span ~snapshots chain abs_ids ctx
-      in
-      (* End the loan itself *)
-      let ctx = update_aproj_loans_to_ended span abs_id proj.sv_id ctx in
-      (ctx, cc)
-  | Some (NonSharedProj (abs_id', _proj_ty, level')) ->
-      (* We found one projector of borrows in an abstraction: end the abstraction
-         at the corresponding level. *)
-      let ctx, cc =
-        end_abs_aux config span ~snapshots chain abs_id' level' ctx
       in
       (* Retry ending the projector of loans *)
       let ctx, cc =

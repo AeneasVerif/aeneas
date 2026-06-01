@@ -1114,21 +1114,13 @@ let proj_borrows_intersects_proj_loans (span : Meta.span) (ctx : eval_ctx)
   else false
 
 (** Result of looking up aproj_borrows which intersect a given aproj_loans in
-    the context.
-
-    Note that because we we force the expansion of primitively copyable values
-    before giving them to abstractions, we only have the following
-    possibilities:
-    - no aproj_borrows, in which case the symbolic value was either dropped or
-      is in the context
-    - exactly one aproj_borrows over a non-shared value
-    - potentially several aproj_borrows over shared values
-
-    The result contains the ids of the abstractions in which the projectors were
-    found, as well as the projection types used in those abstractions. *)
-type looked_up_aproj_borrows =
-  | NonSharedProj of AbsId.id * rty * abs_level
-  | SharedProjs of (AbsId.id * rty * abs_level) list
+    the context. *)
+type looked_up_aproj_borrows = {
+  non_shared_projs : (AbsId.id * rty * abs_level) list;
+      (** Projections appearing below a regular symbolic borrows projector *)
+  shared_projs : (AbsId.id * rty * abs_level) list;
+      (** Projections appearing below an [aproj_shared_borrows] *)
+}
 
 (** Lookup the aproj_borrows (including aproj_shared_borrows) over a symbolic
     value which intersect a given set of regions.
@@ -1140,17 +1132,13 @@ type looked_up_aproj_borrows =
 let lookup_intersecting_aproj_borrows_opt (span : Meta.span)
     (lookup_shared : bool) (regions : RegionId.Set.t) (proj : symbolic_proj)
     (ctx : eval_ctx) : looked_up_aproj_borrows option =
-  let found : looked_up_aproj_borrows option ref = ref None in
-  let set_non_shared ((id, ty, level) : AbsId.id * rty * abs_level) : unit =
-    match !found with
-    | None -> found := Some (NonSharedProj (id, ty, level))
-    | Some _ -> [%craise] span "Unreachable"
+  let shared_projs = ref [] in
+  let non_shared_projs = ref [] in
+  let add_non_shared (x : AbsId.id * rty * abs_level) : unit =
+    non_shared_projs := x :: !non_shared_projs
   in
   let add_shared (x : AbsId.id * rty * abs_level) : unit =
-    match !found with
-    | None -> found := Some (SharedProjs [ x ])
-    | Some (SharedProjs pl) -> found := Some (SharedProjs (x :: pl))
-    | Some (NonSharedProj _) -> [%craise] span "Unreachable"
+    shared_projs := x :: !shared_projs
   in
   let check_add_proj_borrows (is_shared : bool) (abs : abs) (level : abs_level)
       (proj' : symbolic_proj) =
@@ -1160,7 +1148,7 @@ let lookup_intersecting_aproj_borrows_opt (span : Meta.span)
         (regions, proj.sv_id, proj.proj_ty)
     then
       let x = (abs.abs_id, proj.proj_ty, level) in
-      if is_shared then add_shared x else set_non_shared x
+      if is_shared then add_shared x else add_non_shared x
     else ()
   in
   let visitor =
@@ -1198,27 +1186,10 @@ let lookup_intersecting_aproj_borrows_opt (span : Meta.span)
   (* Visit *)
   visitor#visit_eval_ctx None ctx;
   (* Return *)
-  !found
-
-(** Lookup the aproj_borrows (not aproj_borrows_shared!) over a symbolic value
-    which intersects a given set of regions.
-
-    Note that there should be **at most one** (one reason is that we force the
-    expansion of primitively copyable values before giving them to
-    abstractions).
-
-    Returns the id of the owning abstraction, and the projection type used in
-    this abstraction. *)
-let lookup_intersecting_aproj_borrows_not_shared_opt (span : Meta.span)
-    (regions : RegionId.Set.t) (proj : symbolic_proj) (ctx : eval_ctx) :
-    (AbsId.id * rty * abs_level) option =
-  let lookup_shared = false in
-  match
-    lookup_intersecting_aproj_borrows_opt span lookup_shared regions proj ctx
-  with
-  | None -> None
-  | Some (NonSharedProj (abs_id, rty, level)) -> Some (abs_id, rty, level)
-  | _ -> [%craise] span "Unexpected"
+  let shared_projs = !shared_projs in
+  let non_shared_projs = !non_shared_projs in
+  if shared_projs = [] && non_shared_projs = [] then None
+  else Some { shared_projs; non_shared_projs }
 
 (** Similar to {!lookup_intersecting_aproj_borrows_opt}, but updates the values.
 
@@ -2384,6 +2355,7 @@ and norm_proj_regions_union (span : Meta.span) (r1 : region) (r2 : region) :
   | RVar (Free rid), RErased | RErased, RVar (Free rid) ->
       [%sanity_check] span (rid = RegionId.zero);
       RVar (Free rid)
+  | RErased, RErased -> RErased
   | _ -> [%internal_error] span
 
 and norm_proj_trait_refs_union (span : Meta.span) (tr1 : trait_ref)
