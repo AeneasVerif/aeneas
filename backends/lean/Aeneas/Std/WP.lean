@@ -194,7 +194,7 @@ theorem exists_imp_spec {m:Result α} {P:Post α} :
   exact (spec_equiv_exists m P).2
 
 -- `dspec` theorems
-theorem dspec_mono' {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : spec m P₀):
+theorem dspec_mono' {α} {P₁ : Post α} {m : Result α} {P₀ : Post α} (h : dspec m P₀):
   qimp P₀ P₁ → dspec m P₁ := by
   intros HMonPost
   revert h

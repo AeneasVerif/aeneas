@@ -1466,8 +1466,6 @@ namespace Test
   -- #eval showStoredStepThms
   open alloc.vec
 
-  ---------------------------------------
-
   -- This section has tests for dspec. TODO: clean these up a bit.
   -- test proving things about potentially diverging functions.
   -- this is the output from a simple rust function
@@ -1482,31 +1480,105 @@ namespace Test
       -- simple_diverge x
   partial_fixpoint
 
-  -- -- TODO: if i use unfold then sorry, print proof term, i can see how it proves accessibility
-  -- #check simple_diverge.fixpoint_induct
+  theorem test_div2 (x : Std.I32) : Std.WP.dspec (simple_diverge x) (fun res => res = 10#i32)
+    := by
+      unfold simple_diverge
+      --
+      sorry
+
+  -- TODO: if i use unfold then sorry, print proof term, i can see how it proves admissibility
+  #check simple_diverge.fixpoint_induct
+  @[step]
+  theorem test_div (x : Std.I32) : Std.WP.dspec (simple_diverge x) (fun res => res = 10#i32)
+    := by
+      --
+      revert x
+      apply simple_diverge.fixpoint_induct
+        (motive := fun simple_diverge => ∀ x, WP.dspec (simple_diverge x) (fun res => res = 10#i32))
+      · apply Lean.Order.admissible_pi
+        intros y
+        apply Lean.Order.admissible_apply (fun _ fx => WP.dspec fx _)
+        apply Lean.Order.admissible_flatOrder
+        simp only [WP.dspec]
+      · intros
+        simp only
+        split
+        . simp [*]
+        . step
+          step
+          simp [*]
+
+  def simple_diverge_2 (x y : Std.I32) : Result Std.I32 := do
+    if x = 0#i32
+    then ok 10#i32
+    else
+      let i1 ← x + y
+      simple_diverge_2 i1 i1
+  partial_fixpoint
+
   -- @[step]
-  -- theorem test_div (x : Std.I32) : Std.WP.dspec (simple_diverge x) (fun res => res = 10#i32)
+  -- theorem test_div_2 (x y : Std.I32) : Std.WP.dspec (simple_diverge_2 x y) (fun res => res = 10#i32)
   --   := by
+  --     revert x y
   --     -- instead of unfold, must use this:
   --     -- unfold_div (maybe don't need theorem name)
   --     --
-  --     apply simple_diverge.fixpoint_induct (motive := fun res => WP.dspec res _)
-  --     -- apply simple_diverge.fixpoint_induct (fun f => forall x, WP.dspec (f x) (fun res => res = 10#i32))
-  --     -- apply simple_diverge.fixpoint_induct (fun res => res = 10#i32)
-  --       -- <;> [ apply WP.dspec_admissible ; intros ]
-  --       -- <;> [ sorry ; intros ]
-  --     --
-  --     -- simp only
-  --     -- split
-  --     -- . simp [*]
-  --     -- . step
-  --     --   step
-  --     --   simp [*]
-  --     sorry
+  --     apply simple_diverge_2.fixpoint_induct
+  --       (motive := fun f => ∀ x y, WP.dspec (f x y) (fun res => res = 10#i32))
+  --     · --
+  --       apply Lean.Order.admissible_pi_apply (fun _ fx => WP.dspec fx _)
+  --       intros y
+  --       apply Lean.Order.admissible_pi
+  --       intros y
+  --       -- apply Lean.Order.admissible_apply (fun _ fx => WP.dspec fx _) y
+  --       apply Lean.Order.admissible_apply (fun _ fx => WP.dspec fx _)
+  --       -- refine' (Lean.Order.admissible_apply _ y)
+  --       --
+  --       intros
+  --       apply Lean.Order.admissible_flatOrder
+  --       simp only [WP.dspec]
+  --       --
+  --     · intros
+  --       simp only
+  --       split
+  --       . simp [*]
+  --       . step
+  --         step
+  --         simp [*]
 
-  -- #print test_div
-  #print simple_diverge.eq_def
-  #print simple_diverge._proof_4
+  theorem test_add (α β) (post)
+    : Order.admissible fun (f : α → Result β) => ∀ (x : α), WP.dspec (f x) post := by
+    apply Lean.Order.admissible_pi
+    intros
+    apply Lean.Order.admissible_apply (fun _ fx => WP.dspec fx _)
+    apply Lean.Order.admissible_flatOrder
+    simp only [WP.dspec]
+
+  theorem test_add_more_general (α β) (anything : (α → Result β) → Prop)
+    : Order.admissible fun (f : α → Result β) => anything f := by
+    --
+    sorry
+
+  open Lean.Order
+  def admissible_apply_simpler {α : Sort u}{β : Sort v} [CCPO β] (P : β → Prop) (x : α)
+    (hadm : admissible P) : admissible (fun (f : α → β) => P (f x)) := by
+    apply admissible_apply (fun _ => P) x
+    assumption
+
+  theorem test_add_2 (a1 a2 β) (post)
+    : Order.admissible fun (f : a1 → a2 → Result β) => ∀ (x : a1) (y : a2), WP.dspec (f x y) post := by
+    apply Lean.Order.admissible_pi
+    intros y1
+    apply Lean.Order.admissible_pi
+    intros y2
+    --
+    apply admissible_apply_simpler (β := a2 → Result β) (fun fx => WP.dspec (fx y2) post) y1
+    -- apply Lean.Order.admissible_apply (β := fun _ => a2 → Result β)
+      -- (fun x fx => WP.dspec (fx y2) post) y1
+    apply Lean.Order.admissible_apply (fun _ fx => WP.dspec fx _)
+    apply Lean.Order.admissible_flatOrder
+    simp only [WP.dspec]
+    --
 
   -- -- test out using a dspec theorem to prove a dspec.
   -- example : WP.dspec
@@ -1522,41 +1594,19 @@ namespace Test
     else ok 10#i32
 
   @[step]
-  theorem simple_converge_property (x : Std.I32)
-    : Std.WP.spec (simple_converge x) (fun res => res = 10#i32)
-    := by
-      unfold simple_converge
-      split <;> simp [*]
-
-  example : WP.spec
-    (do let x ← 1#i32 + 2#i32
-        let y ← x + x
-        return y) (fun z => z.val == 10) := by
-    step
-    step
-    sorry
-
-  example : WP.spec
-    (do let x ← simple_converge 5#i32
-        let y ← simple_converge 6#i32
-        return x) (fun x => x = 10#i32) := by
-      step -- test using spec thm to prove spec
-      step
-      simp [*]
-
-  @[step]
   theorem simple_converge_property_dspec (x : Std.I32)
     : Std.WP.dspec (simple_converge x) (fun res => res = 10#i32)
     := by
       unfold simple_converge
       split <;> simp [WP.dspec]
 
+  -- test using dspec theorem to step dspec
   example : WP.dspec
     (do let x ← simple_converge 5#i32
-        let y ← simple_converge 6#i32
+        let _y ← simple_converge 6#i32
         return x) (fun x => x = 10#i32) := by
-      step -- TODO: should work!
-      step -- need qimp intro tactics!
+      step
+      step
       simp [*]
       --
 
@@ -1575,30 +1625,29 @@ namespace Test
         let y ← x + x
         return y) (fun z => z.val == 6) := by
     step
-    --
     step
-    sorry
+    simp [*]
 
-  -- -- test out using a spec theorem to prove a dspec
-  -- example : WP.dspec
-  --   (do let x ← simple_converge 5#i32
-  --       let y ← simple_converge 6#i32
-  --       return x) (fun x => x = 10#i32) := by
-  --     step -- this works because step_bind' is polymorphic over divergence
-  --     step
-  --     simp [*]
+  -- test out using a spec theorem to prove a dspec
+  example : WP.dspec
+    (do let x ← simple_converge 5#i32
+        let _y ← simple_converge 6#i32
+        return x) (fun x => x = 10#i32) := by
+      step
+      step
+      simp [*]
 
-  -- -- confirm that you can't use dspec from spec
-  -- example : WP.spec
-  --   (do let x ← simple_diverge 5#i32
-  --       let y ← simple_diverge 6#i32
-  --       return x) (fun x => x = 10#i32) := by
-  --   step -- this should fail!
-  --   step
-  --   simp [*]
-  --   --
-
-  -- ---------------------------------------
+  -- confirm that you can't use dspec from spec
+  /-- error: Step failed: could not find a local assumption or a theorem to apply -/
+#guard_msgs in
+  example : WP.spec
+    (do let x ← simple_diverge 5#i32
+        let y ← simple_diverge 6#i32
+        return x) (fun x => x = 10#i32) := by
+    step -- this should fail!
+    step
+    simp [*]
+    --
 
   /- This test case checks what happens when `step`:
      - manages to solve the current goal
