@@ -18,7 +18,7 @@ noncomputable section
 namespace issue_804_closure_return_ref
 
 /-- [core::array::from_fn]:
-    Source: '/rustc/library/core/src/array/mod.rs', lines 109:0-111:52
+    Source: '/rustc/library/core/src/array/mod.rs', lines 110:0-112:52
     Name pattern: [core::array::from_fn]
     Visibility: public -/
 @[rust_fun "core::array::from_fn"]
