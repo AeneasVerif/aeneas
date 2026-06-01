@@ -323,20 +323,20 @@ def WithConstTy.LEN2.default (Self : Type) (Clause0_V : Type) (Clause0_W :
   Type) (LEN : Std.Usize) : Std.Usize :=
   32#usize
 
-/-- [traits::{impl traits::WithConstTy<u8, u64, 32 : usize> for bool}::f]:
+/-- [traits::{impl traits::WithConstTy<u8, u64, 32usize> for bool}::f]:
     Source: 'tests/src/traits.rs', lines 182:4-182:42
     Visibility: public -/
 def Bool.Insts.TraitsWithConstTyU8U6432.f
   (i : Std.U64) (a : Array Std.U8 32#usize) : Result Std.U64 := do
   ok i
 
-/-- [traits::{impl traits::WithConstTy<u8, u64, 32 : usize> for bool}::LEN1]
+/-- [traits::{impl traits::WithConstTy<u8, u64, 32usize> for bool}::LEN1]
     Source: 'tests/src/traits.rs', lines 177:4-177:27
     Visibility: public -/
 @[global_simps, irreducible]
 def Bool.Insts.TraitsWithConstTyU8U6432.LEN1 : Std.Usize := 12#usize
 
-/-- Trait implementation: [traits::{impl traits::WithConstTy<u8, u64, 32 : usize> for bool}]
+/-- Trait implementation: [traits::{impl traits::WithConstTy<u8, u64, 32usize> for bool}]
     Source: 'tests/src/traits.rs', lines 176:0-183:1 -/
 @[reducible]
 def Bool.Insts.TraitsWithConstTyU8U6432 : WithConstTy Bool Std.U8 Std.U64
