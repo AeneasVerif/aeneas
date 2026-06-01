@@ -88,6 +88,7 @@ jobs:
           chmod -R +w dist_staging
 
       - name: Install elan (Lean toolchain manager)
+        if: ${{ ! matrix.nix_machine }}
         run: |
           set -eo pipefail
 
@@ -103,7 +104,14 @@ jobs:
             ${{ matrix.os }}-lean-
 
       - name: Pre-compile Lean Library
-        run: ./scripts/ci-precompile-lean.sh
+        run: |
+          set -eo pipefail
+
+          if [[ "${{ matrix.nix_machine }}" == "true" ]]; then
+            nix develop --command ./scripts/ci-precompile-lean.sh
+          else
+            ./scripts/ci-precompile-lean.sh
+          fi
 
       - name: Re-package Tarball
         run: |
