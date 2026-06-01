@@ -378,7 +378,7 @@ structure MutBorrow where
   p : Std.U32
 
 /-- [nested_borrows::{nested_borrows::MutBorrow<'a>}::store]:
-    Source: 'tests/src/nested-borrows.rs', lines 169:4-169:51
+    Source: 'tests/src/nested-borrows.rs', lines 169:4-171:5
     Visibility: public -/
 def MutBorrow.store
   (self : MutBorrow) (v : Std.U32) :
@@ -387,7 +387,7 @@ def MutBorrow.store
   ok ({ p := v }, fun self1 => self1)
 
 /-- [nested_borrows::use_mut_borrow]: loop body 0:
-    Source: 'tests/src/nested-borrows.rs', lines 174:4-177:5
+    Source: 'tests/src/nested-borrows.rs', lines 176:4-179:5
     Visibility: public -/
 @[rust_loop_body]
 def use_mut_borrow_loop.body
@@ -402,7 +402,7 @@ def use_mut_borrow_loop.body
   else ok (done (back i))
 
 /-- [nested_borrows::use_mut_borrow]: loop 0:
-    Source: 'tests/src/nested-borrows.rs', lines 174:4-177:5
+    Source: 'tests/src/nested-borrows.rs', lines 176:4-179:5
     Visibility: public -/
 @[rust_loop]
 def use_mut_borrow_loop
@@ -414,7 +414,7 @@ def use_mut_borrow_loop
     (back, i, i1)
 
 /-- [nested_borrows::use_mut_borrow]:
-    Source: 'tests/src/nested-borrows.rs', lines 172:0-178:1
+    Source: 'tests/src/nested-borrows.rs', lines 174:0-180:1
     Visibility: public -/
 def use_mut_borrow (b : MutBorrow) (n : Std.Usize) : Result MutBorrow := do
   let back ← use_mut_borrow_loop (fun i => i) b.p n 0#usize

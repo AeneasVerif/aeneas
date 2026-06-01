@@ -166,7 +166,9 @@ pub struct MutBorrow<'a> {
 }
 
 impl<'a> MutBorrow<'a> {
-    pub fn store(&mut self, v: u32) { *self.p = v }
+    pub fn store(&mut self, v: u32) {
+        *self.p = v
+    }
 }
 
 pub fn use_mut_borrow(mut b: MutBorrow<'_>, n: usize) {
@@ -176,7 +178,6 @@ pub fn use_mut_borrow(mut b: MutBorrow<'_>, n: usize) {
         i += 1;
     }
 }
-
 
 /*
 pub fn id_mut_mut<'a, 'b, T>(x: &'a mut &'b mut T) -> &'a mut &'b mut T {
