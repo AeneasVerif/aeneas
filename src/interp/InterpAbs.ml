@@ -1619,6 +1619,15 @@ let project_output_at_level span (level : int) (v : tevalue) : tevalue =
 
     TODO: generalize to an arbitrary number of nestings and arbitrary relations
     input/output *)
+
+(** Set [borrow_proj] to the given value in all [EAdt] nodes of a tevalue. *)
+let rec tevalue_set_borrow_proj (bp : bool) (v : tevalue) : tevalue =
+  match v.value with
+  | EAdt { borrow_proj = _; variant_id; fields } ->
+      let fields = List.map (tevalue_set_borrow_proj bp) fields in
+      { v with value = EAdt { borrow_proj = bp; variant_id; fields } }
+  | _ -> v
+
 let abs_cont_destructure_input_output_levels (span : Meta.span) (ctx : eval_ctx)
     (output : tevalue) (input : tevalue) : tevalue * tevalue =
   (* Check if the input is a function call *)
@@ -1644,6 +1653,9 @@ let abs_cont_destructure_input_output_levels (span : Meta.span) (ctx : eval_ctx)
         [%cassert] span (max_level = 1) "Unreachable";
 
         let input1 = project_output_at_level span 1 output in
+        (* input1 was extracted from the borrow output but becomes a loan input:
+           flip borrow_proj to false *)
+        let input1 = tevalue_set_borrow_proj false input1 in
         let output = project_output_at_level span 0 output in
         [%ltrace
           "- input1:\n"

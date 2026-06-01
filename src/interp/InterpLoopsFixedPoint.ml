@@ -327,7 +327,10 @@ let compute_loop_break_context (config : config) (span : Meta.span)
       (* Reorder the fresh abstractions *)
       let break_ctx = reorder_fresh_abs span false fixed_aids break_ctx in
 
-      (* Introduce continuation expressions and destructure the region abstractions. *)
+      (* Introduce continuation expressions and destructure the region abstractions.
+         Also update the kind of any fresh (non-fixed) abstraction to [Loop loop_id]:
+         abstractions introduced by function calls inside the loop body should be
+         treated as loop abstractions. *)
       let add_abs_cont_to_abs (abs : abs) (loop_id : loop_id) : abs =
         InterpAbs.add_abs_cont_to_abs span break_ctx abs
           (ELoop (abs.abs_id, loop_id))
@@ -338,12 +341,17 @@ let compute_loop_break_context (config : config) (span : Meta.span)
             inherit [_] map_eval_ctx
 
             method! visit_abs _ abs =
-              match abs.kind with
-              | Loop loop_id ->
-                  let abs = add_abs_cont_to_abs abs loop_id in
-                  InterpBorrows.destructure_abs span abs.kind ~can_end:true
-                    ~destructure_shared_values:true ctx abs
-              | _ -> abs
+              if AbsId.Set.mem abs.abs_id fixed_aids then abs
+              else
+                match abs.kind with
+                | Loop loop_id ->
+                    let abs = add_abs_cont_to_abs abs loop_id in
+                    InterpBorrows.destructure_abs span abs.kind ~can_end:true
+                      ~destructure_shared_values:true ctx abs
+                | _ ->
+                    (* Fresh non-loop abstraction (e.g., from a function call
+                       inside the loop body): update its kind to [Loop] *)
+                    { abs with kind = Loop loop_id }
           end
         in
         visitor#visit_eval_ctx () ctx
