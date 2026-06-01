@@ -107,10 +107,12 @@ jobs:
         run: |
           set -eo pipefail
 
+          script="$PWD/scripts/ci-precompile-lean.sh"
+          cd dist_staging/backends/lean
           if [[ "${{ matrix.nix_machine }}" == "true" ]]; then
-            nix develop --command ./scripts/ci-precompile-lean.sh backends/lean dist_staging/backends/lean
+            nix develop ../../.. --command "$script"
           else
-            ./scripts/ci-precompile-lean.sh backends/lean dist_staging/backends/lean
+            "$script"
           fi
 
       - name: Re-package Tarball

@@ -1,16 +1,6 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-if [[ $# -ne 2 ]]; then
-  echo "usage: $0 SOURCE_LEAN_DIR TARGET_LEAN_DIR" >&2
-  exit 2
-fi
-
-source_dir="$(cd "$1" && pwd)"
-target_dir="$(cd "$2" && pwd)"
-
-cd "$target_dir"
-cp "$source_dir/lean-toolchain" .
 elan default "$(cat lean-toolchain)"
 
 # Fetch pre-compiled Mathlib binaries.
