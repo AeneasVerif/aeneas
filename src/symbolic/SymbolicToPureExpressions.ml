@@ -1072,18 +1072,27 @@ and translate_end_abstraction_fun_call (ectx : C.eval_ctx) (abs : V.abs)
       !inputs
     in
     (* Retrieve the values given back by this function: those are the output
-     * values. We rely on the fact that there are no nested borrows to use the
-     * meta-place information from the input values given to the forward function
-     * (we need to add [None] for the return avalue) *)
+       values. We rely on the fact that there are no nested borrows to use the
+       meta-place information from the input values given to the forward function
+       (we need to add [None] for the return avalue).
+
+       Note: [simplify_dummy_vales_useless_abs] modifies the structure of the
+       abstractions with the consequence that the avalues don't match the
+       places - we check that the length is the same for this reason.
+       TODO: fix the issue. The problem comes from the fact that [simplify_dummy_vales_useless_abs]
+       sometimes filters avalues. We should store the place the value comes from
+       as meta-information. *)
     let output_mpl =
-      List.append
-        (List.map
-           (translate_opt_mplace (Some call.span) ctx.decls_ctx)
-           call.args_places)
-        [ None ]
+      let mpl =
+        List.append
+          (List.map
+             (translate_opt_mplace (Some call.span) ctx.decls_ctx)
+             call.args_places)
+          [ None ]
+      in
+      if List.length mpl = List.length abs.avalues then Some mpl else None
     in
-    [%sanity_check] ctx.span (List.length output_mpl = List.length abs.avalues);
-    let ctx, outputs = abs_to_given_back (Some output_mpl) abs abs_level ctx in
+    let ctx, outputs = abs_to_given_back output_mpl abs abs_level ctx in
     (* Group the output values together *)
     let output = mk_simpl_tuple_pat outputs in
     (* Translate the next expression *)
