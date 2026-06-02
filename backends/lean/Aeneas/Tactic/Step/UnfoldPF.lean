@@ -87,7 +87,7 @@ open Std Result
     simp only [↓existsAndEq, and_true] at *
     apply h
 
-  theorem WP_func_admissible (α β) (arg) (post)
+  theorem WP_func_admissible (α β : Type) (arg) (post)
     : Order.admissible fun (f : α → Result β) => WP.dspec (f arg) post := by
     apply Lean.Order.admissible_apply (fun _ fx => WP.dspec fx _)
     apply Lean.Order.admissible_flatOrder
@@ -101,51 +101,6 @@ open Std Result
     )
     )
 
-  elab "unfold_div_old" : tactic => do
-    let mut goal ← getMainGoal
-    let ty ← goal.getType
-
-    let (thHead, thArgs) := ty.consumeMData.withApp (fun f args => (f, args))
-    -- TODO: here is where it should be able to lift from spec to dspec
-    if !thHead.isConst || thHead.constName! != ``Std.WP.dspec then
-      throwError "Not dspec statement"
-    -- let .app WP.dspec a b := ty
-    let (func, funcargs) := thArgs[1]!.consumeMData.withApp (fun f args => (f, args))
-    if !func.isConst then
-      throwError "Can only unfold (dspec (func... ) post) when func is a constant"
-
-    let post := thArgs[2]!
-    -- the goal is now split into (dspec (func ..funcargs) post)
-
-    -- let mut vars : Array FVarId := #[]
-
-    -- should we automatically revert variables? could this ever cause a problem?
-    -- -- first, we need to revert free variables that are arguments to the function
-    -- for arg in funcargs do
-    --   -- TODO: maybe its not always a free var, what cases need to be handled here?
-    --   let var := arg.fvarId!
-    --   vars := vars.push var
-    --   (_, goal) ← goal.revert #[var]
-
-
-    -- do some wierd hacky nonsense to get `func.fixpoint_induct`
-    let namee := func.constName!.mkStr "fixpoint_induct"
-    let fi_stx : Syntax ← `(term | $(mkIdent namee))
-    let fixpoint_induct ← Term.elabTerm fi_stx none
-    trace[UnfoldPF] "type of fixpoint_induct is {← inferType fixpoint_induct}"
-
-    -- apply fixpoint_induct
-    let fi_app := mkAppN fixpoint_induct #[
-      .lam `func (← inferType func)
-      (mkAppN (.bvar 0) #[])
-      .default
-    ]
-
-    replaceMainGoal [goal]
-    pure ()
-
-  -- this new version doesn't try to revert the variables, and is more general.
-  -- but it requires that you give it the name of the thing to induct over
   elab "dspec_induction" func:ident : tactic => do
     let mut goal ← getMainGoal
     let ty ← goal.getType
@@ -157,14 +112,8 @@ open Std Result
     let fi_stx : Syntax ← `(term | $(mkIdent namee))
     let fixpoint_induct ← Term.elabTerm fi_stx none
     trace[UnfoldPF] "type of fixpoint_induct is {← inferType fixpoint_induct}"
-    -- apply fixpoint_induct
 
     -- make a type family that abstracts over instances of func in the goal type
-    -- let abs_goal_ty := ty.abstract #[func_expr]
-    -- let abs_goal_ty := (ty.liftLooseBVars 0 1).replace (fun x => if x == func_expr then some (Expr.bvar 0) else none)
-    -- TODO: where i left off is that i need to find instances of func in the goal,
-    -- and then make a tyep family that abstracts over these instances to pass to fixpoint_induct
-
     let func_expr_ty ← inferType func_expr
     let fmvar ← Meta.mkFreshExprMVar (some func_expr_ty)
     let abs_goal_ty := ty.replace (fun x => if x == func_expr then some fmvar else none)
@@ -173,28 +122,38 @@ open Std Result
 
     trace[UnfoldPF] abs_goal_ty
 
-    -- let fi_app := mkAppN fixpoint_induct #[.lam `func (← inferType func_expr)
-      -- (abs_goal_ty.instantiate1 (.bvar 0)) .default
-    -- ]
     let fi_app := mkAppN fixpoint_induct #[abs_goal_ty]
 
-    let [g1, g2] ← goal.apply fi_app
+    let [g_admissible, g_main] ← goal.apply fi_app
       | throwError "bla"
 
 
-    replaceMainGoal [g1, g2]
-    -- setGoals [g1]
-    -- TODO: use withTransparency to stop apply from reducing unecessary things
-    -- TODO: don't evaluate syntax here
-    evalTactic (← `(tactic|prove_admissible))
+    -- prove the admissibility condition. this chunk of code is equivalent to the
+    -- `prove_admissible` tactic above, but apparently calling that directly might cause problems
+    let _ ← withTransparency .none <| do
+      let onError {α} : TacticM α := throwError "failed to prove admissibility condition"
+      let curry_admissible ← mkConstWithFreshMVarLevels `Aeneas.UnfoldPF.curry_admissible
+      let admissible_pi ← mkConstWithFreshMVarLevels `Lean.Order.admissible_pi
+      let WP_func_admissible ← mkConstWithFreshMVarLevels `Aeneas.UnfoldPF.WP_func_admissible
+      let [g_admissible]
+        ← repeat' (fun g => g.apply curry_admissible) [g_admissible] | onError
+      let [g_admissible]
+        ← repeat' (fun g => do
+            let [g] ← (g.apply admissible_pi) | onError
+            pure [(← g.intro1P).snd]
+        ) [g_admissible] | onError
+      let [] ← g_admissible.apply WP_func_admissible | onError
+
+    replaceMainGoal [g_main]
     pure ()
 
-  set_option trace.UnfoldPF true
-  -- #check simple_diverge.fixpoint_induct
+  -- uncomment to see debug traces:
+  -- set_option trace.UnfoldPF true
 
 namespace Test
 
   open Std Result Aeneas.UnfoldPF
+
   def simple_diverge (x : Std.I32) : Result Std.I32 := do
     if x = 0#i32
     then ok 10#i32
@@ -203,28 +162,13 @@ namespace Test
       simple_diverge i1
   partial_fixpoint
 
-  theorem test_div2 (x : Std.I32) : Std.WP.dspec (simple_diverge x) (fun res => res = 10#i32)
+  -- this version demonstrates what the dspec_induction tactic does, just done manually
+  theorem test_div_manual (x : Std.I32) : Std.WP.dspec (simple_diverge x) (fun res => res = 10#i32)
     := by
-      unfold simple_diverge
-      --
-      sorry
-
-  -- TODO: if i use unfold then sorry, print proof term, i can see how it proves admissibility
-  #check simple_diverge.fixpoint_induct
-  @[step]
-  theorem test_div (x : Std.I32) : Std.WP.dspec (simple_diverge x) (fun res => res = 10#i32)
-    := by
-      --
       revert x
       apply simple_diverge.fixpoint_induct
         (motive := fun simple_diverge => ∀ x, WP.dspec (simple_diverge x) (fun res => res = 10#i32))
-      · --
-        prove_admissible
-        -- apply Lean.Order.admissible_pi
-        -- intros y
-        -- apply Lean.Order.admissible_apply (fun _ fx => WP.dspec fx _)
-        -- apply Lean.Order.admissible_flatOrder
-        -- simp only [WP.dspec]
+      · prove_admissible
       · intros
         simp only
         split
@@ -233,7 +177,8 @@ namespace Test
           step
           simp [*]
 
-  theorem test_div' (x : Std.I32) : Std.WP.dspec (simple_diverge x) (fun res => res = 10#i32)
+  -- here, done automatically with the tactic
+  theorem test_div_tactic (x : Std.I32) : Std.WP.dspec (simple_diverge x) (fun res => res = 10#i32)
     := by
       revert x
       dspec_induction simple_diverge
@@ -245,7 +190,6 @@ namespace Test
         step
         simp [*]
 
-
   def simple_diverge_2 (x y : Std.I32) : Result Std.I32 := do
     if x = y#i32
     then ok 10#i32
@@ -255,26 +199,13 @@ namespace Test
       simple_diverge_2 i1 i2
   partial_fixpoint
 
-  theorem test_div_2 (x y : Std.I32) : Std.WP.dspec (simple_diverge_2 x y) (fun res => res = 10#i32)
+  theorem test_div_2_manual (x y : Std.I32) : Std.WP.dspec (simple_diverge_2 x y) (fun res => res = 10#i32)
     := by
       --
       revert x y
       apply simple_diverge_2.fixpoint_induct
         (motive := fun simple_diverge_2 => ∀ x y, WP.dspec (simple_diverge_2 x y) (fun res => res = 10#i32))
-      ·
-        -- apply test_add_2
-        -- apply curry_admissible
-        -- apply Lean.Order.admissible_pi
-        -- intro
-        -- apply Lean.Order.admissible_pi
-        -- intro
-        -- simp only
-        -- apply Lean.Order.admissible_apply (fun _ fx => WP.dspec fx _)
-        -- apply Lean.Order.admissible_flatOrder
-        -- simp only [WP.dspec]
-        ---
-        prove_admissible
-        --
+      · prove_admissible
       · intros
         simp only
         split
@@ -284,7 +215,7 @@ namespace Test
           simp [*]
           --
 
-  theorem test_div_2' (x y : Std.I32) : Std.WP.dspec (simple_diverge_2 x y) (fun res => res = 10#i32)
+  theorem test_div_2_tactic (x y : Std.I32) : Std.WP.dspec (simple_diverge_2 x y) (fun res => res = 10#i32)
     := by
       revert x y
       dspec_induction simple_diverge_2
