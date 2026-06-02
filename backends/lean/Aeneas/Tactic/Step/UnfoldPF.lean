@@ -146,7 +146,7 @@ open Std Result
 
   -- this new version doesn't try to revert the variables, and is more general.
   -- but it requires that you give it the name of the thing to induct over
-  elab "fixpoint_induction" func:ident : tactic => do
+  elab "dspec_induction" func:ident : tactic => do
     let mut goal ← getMainGoal
     let ty ← goal.getType
 
@@ -160,29 +160,37 @@ open Std Result
     -- apply fixpoint_induct
 
     -- make a type family that abstracts over instances of func in the goal type
-    let abs_goal_ty := ty.abstract #[func_expr]
+    -- let abs_goal_ty := ty.abstract #[func_expr]
+    -- let abs_goal_ty := (ty.liftLooseBVars 0 1).replace (fun x => if x == func_expr then some (Expr.bvar 0) else none)
+    -- TODO: where i left off is that i need to find instances of func in the goal,
+    -- and then make a tyep family that abstracts over these instances to pass to fixpoint_induct
 
-    let fi_app := mkAppN fixpoint_induct #[.lam `func (← inferType func_expr)
-      (abs_goal_ty.instantiate1 (.bvar 0)) .default
-    ]
+    let func_expr_ty ← inferType func_expr
+    let fmvar ← Meta.mkFreshExprMVar (some func_expr_ty)
+    let abs_goal_ty := ty.replace (fun x => if x == func_expr then some fmvar else none)
+    let abs_goal_ty := abs_goal_ty.abstract #[fmvar]
+    let abs_goal_ty := Expr.lam `func func_expr_ty abs_goal_ty .default
+
+    trace[UnfoldPF] abs_goal_ty
+
+    -- let fi_app := mkAppN fixpoint_induct #[.lam `func (← inferType func_expr)
+      -- (abs_goal_ty.instantiate1 (.bvar 0)) .default
+    -- ]
+    let fi_app := mkAppN fixpoint_induct #[abs_goal_ty]
 
     let [g1, g2] ← goal.apply fi_app
       | throwError "bla"
 
-    setGoals [g1]
-    evalTactic (← `(tactic|prove_admissible))
 
-    replaceMainGoal [g2]
+    replaceMainGoal [g1, g2]
+    -- setGoals [g1]
+    -- TODO: use withTransparency to stop apply from reducing unecessary things
+    -- TODO: don't evaluate syntax here
+    evalTactic (← `(tactic|prove_admissible))
     pure ()
 
   set_option trace.UnfoldPF true
   -- #check simple_diverge.fixpoint_induct
-
-  theorem test_div_2 (x : Std.I32) : Std.WP.dspec (simple_diverge x) (fun res => res = 10#i32)
-    := by
-    unfold_div
-    --
-    sorry
 
 namespace Test
 
@@ -210,11 +218,13 @@ namespace Test
       revert x
       apply simple_diverge.fixpoint_induct
         (motive := fun simple_diverge => ∀ x, WP.dspec (simple_diverge x) (fun res => res = 10#i32))
-      · apply Lean.Order.admissible_pi
-        intros y
-        apply Lean.Order.admissible_apply (fun _ fx => WP.dspec fx _)
-        apply Lean.Order.admissible_flatOrder
-        simp only [WP.dspec]
+      · --
+        prove_admissible
+        -- apply Lean.Order.admissible_pi
+        -- intros y
+        -- apply Lean.Order.admissible_apply (fun _ fx => WP.dspec fx _)
+        -- apply Lean.Order.admissible_flatOrder
+        -- simp only [WP.dspec]
       · intros
         simp only
         split
@@ -223,40 +233,19 @@ namespace Test
           step
           simp [*]
 
-  theorem test_div_no_revert (x : Std.I32) : Std.WP.dspec (simple_diverge x) (fun res => res = 10#i32)
+  theorem test_div' (x : Std.I32) : Std.WP.dspec (simple_diverge x) (fun res => res = 10#i32)
     := by
-      --
-      apply simple_diverge.fixpoint_induct
-        (motive := fun simple_diverge => ∀ x, WP.dspec (simple_diverge x) (fun res => res = 10#i32))
-      · apply Lean.Order.admissible_pi
-        intros y
-        apply Lean.Order.admissible_apply (fun _ fx => WP.dspec fx _)
-        apply Lean.Order.admissible_flatOrder
-        simp only [WP.dspec]
-        --
-      · intros
-        simp only
-        split
-        . simp [*]
-        . step
-          step
-          simp [*]
+      revert x
+      dspec_induction simple_diverge
+      intros
+      simp only
+      split
+      . simp [*]
+      . step
+        step
+        simp [*]
 
-  theorem test_div_no_revert_no_all (x : Std.I32) : Std.WP.dspec (simple_diverge x) (fun res => res = 10#i32)
-    := by
-      --
-      apply simple_diverge.fixpoint_induct
-        (motive := fun simple_diverge => WP.dspec (simple_diverge x) (fun res => res = 10#i32))
-      · apply Lean.Order.admissible_apply (fun _ fx => WP.dspec fx _)
-        apply Lean.Order.admissible_flatOrder
-        simp only [WP.dspec]
-      · intros
-        simp only
-        split
-        . simp [*]
-        . step
-          step
-          simp [*]
+
   def simple_diverge_2 (x y : Std.I32) : Result Std.I32 := do
     if x = y#i32
     then ok 10#i32
@@ -266,25 +255,6 @@ namespace Test
       simple_diverge_2 i1 i2
   partial_fixpoint
 
-  def admissible_apply_simpler {α : Sort u}{β : Sort v} [CCPO β] (P : β → Prop) (x : α)
-    (hadm : admissible P) : admissible (fun (f : α → β) => P (f x)) := by
-    apply admissible_apply (fun _ => P) x
-    assumption
-
-  theorem test_add_2 (a1 a2 β) (post)
-    : Order.admissible fun (f : a1 → a2 → Result β) => ∀ (x : a1) (y : a2), WP.dspec (f x y) post := by
-    apply Lean.Order.admissible_pi
-    intros y1
-    apply Lean.Order.admissible_pi
-    intros y2
-    --
-    apply admissible_apply_simpler (β := a2 → Result β) (fun fx => WP.dspec (fx y2) post) y1
-    -- apply Lean.Order.admissible_apply (β := fun _ => a2 → Result β)
-      -- (fun x fx => WP.dspec (fx y2) post) y1
-    apply Lean.Order.admissible_apply (fun _ fx => WP.dspec fx _)
-    apply Lean.Order.admissible_flatOrder
-    simp only [WP.dspec]
-
   theorem test_div_2 (x y : Std.I32) : Std.WP.dspec (simple_diverge_2 x y) (fun res => res = 10#i32)
     := by
       --
@@ -293,6 +263,16 @@ namespace Test
         (motive := fun simple_diverge_2 => ∀ x y, WP.dspec (simple_diverge_2 x y) (fun res => res = 10#i32))
       ·
         -- apply test_add_2
+        -- apply curry_admissible
+        -- apply Lean.Order.admissible_pi
+        -- intro
+        -- apply Lean.Order.admissible_pi
+        -- intro
+        -- simp only
+        -- apply Lean.Order.admissible_apply (fun _ fx => WP.dspec fx _)
+        -- apply Lean.Order.admissible_flatOrder
+        -- simp only [WP.dspec]
+        ---
         prove_admissible
         --
       · intros
@@ -303,6 +283,19 @@ namespace Test
           step
           simp [*]
           --
+
+  theorem test_div_2' (x y : Std.I32) : Std.WP.dspec (simple_diverge_2 x y) (fun res => res = 10#i32)
+    := by
+      revert x y
+      dspec_induction simple_diverge_2
+      intros
+      simp only
+      split
+      . simp [*]
+      . step
+        step
+        simp [*]
+
 end Test
 
 
