@@ -1228,6 +1228,129 @@ let filter_marker_traits (crate : crate) : crate =
     in
     visitor#visit_crate () crate
 
+(** Under [-core-models-lib], remove the [assert_receiver_is_total_eq] method
+    from the [core::cmp::Eq] trait declaration, from any impls of [Eq], and drop
+    the corresponding function declarations. This is a Rust-only,
+    [#[doc(hidden)]] method with an empty default body that Aeneas's own
+    standard library handles via a hand-tuned override; an external library like
+    [core_models] doesn't model it, so emitting an impl field for it would not
+    typecheck against [core_models]'s [Eq] structure. *)
+let filter_eq_assert_receiver_method (crate : crate) : crate =
+  if not !Config.core_models_lib then crate
+  else
+    let mctx = NameMatcher.ctx_from_crate crate in
+    let pat = NameMatcher.parse_pattern "core::cmp::Eq" in
+    let match_config =
+      {
+        NameMatcher.map_vars_to_vars = true;
+        match_with_trait_decl_refs = Config.match_patterns_with_trait_decl_refs;
+      }
+    in
+    let eq_id =
+      TraitDeclId.Map.fold
+        (fun id (decl : trait_decl) acc ->
+          if
+            acc = None
+            && NameMatcher.match_name mctx match_config pat decl.item_meta.name
+          then Some id
+          else acc)
+        crate.trait_decls None
+    in
+    match eq_id with
+    | None -> crate
+    | Some eq_id ->
+        let method_name = "assert_receiver_is_total_eq" in
+        let eq_decl = TraitDeclId.Map.find eq_id crate.trait_decls in
+        let filtered_method_ids =
+          TraitMethodId.Map.fold
+            (fun mid (m : trait_method binder) acc ->
+              if m.binder_value.name = method_name then
+                TraitMethodId.Set.add mid acc
+              else acc)
+            eq_decl.methods TraitMethodId.Set.empty
+        in
+        if TraitMethodId.Set.is_empty filtered_method_ids then crate
+        else
+          let trait_decls =
+            TraitDeclId.Map.update eq_id
+              (function
+                | None -> None
+                | Some (d : trait_decl) ->
+                    Some
+                      {
+                        d with
+                        methods =
+                          TraitMethodId.Map.filter
+                            (fun mid _ ->
+                              not
+                                (TraitMethodId.Set.mem mid filtered_method_ids))
+                            d.methods;
+                      })
+              crate.trait_decls
+          in
+          (* Collect fun_decl_ids backing the filtered methods of every [Eq]
+             trait impl, and strip those methods from the impl's method map. *)
+          let dropped_fun_decl_ids = ref FunDeclId.Set.empty in
+          let trait_impls =
+            TraitImplId.Map.map
+              (fun (impl : trait_impl) ->
+                if impl.impl_trait.id <> eq_id then impl
+                else
+                  let methods =
+                    TraitMethodId.Map.filter
+                      (fun mid (m : fun_decl_ref binder) ->
+                        if TraitMethodId.Set.mem mid filtered_method_ids then begin
+                          dropped_fun_decl_ids :=
+                            FunDeclId.Set.add m.binder_value.id
+                              !dropped_fun_decl_ids;
+                          false
+                        end
+                        else true)
+                      impl.methods
+                  in
+                  { impl with methods })
+              crate.trait_impls
+          in
+          let fun_decls =
+            FunDeclId.Map.filter
+              (fun id _ -> not (FunDeclId.Set.mem id !dropped_fun_decl_ids))
+              crate.fun_decls
+          in
+          let declarations =
+            List.filter_map
+              (fun (g : declaration_group) ->
+                match g with
+                | FunGroup (NonRecGroup id) ->
+                    if FunDeclId.Set.mem id !dropped_fun_decl_ids then None
+                    else Some g
+                | FunGroup (RecGroup ids) ->
+                    let ids =
+                      List.filter
+                        (fun id ->
+                          not (FunDeclId.Set.mem id !dropped_fun_decl_ids))
+                        ids
+                    in
+                    if ids = [] then None else Some (FunGroup (RecGroup ids))
+                | MixedGroup g -> (
+                    let is_dropped (id : item_id) =
+                      match id with
+                      | IdFun id -> FunDeclId.Set.mem id !dropped_fun_decl_ids
+                      | _ -> false
+                    in
+                    match g with
+                    | NonRecGroup id ->
+                        if is_dropped id then None else Some (MixedGroup g)
+                    | RecGroup ids ->
+                        let ids =
+                          List.filter (fun id -> not (is_dropped id)) ids
+                        in
+                        if ids = [] then None
+                        else Some (MixedGroup (RecGroup ids)))
+                | _ -> Some g)
+              crate.declarations
+          in
+          { crate with trait_decls; trait_impls; fun_decls; declarations }
+
 (* Remove the type aliases from the type declarations and declaration groups *)
 let filter_type_aliases (crate : crate) : crate =
   let type_decl_is_alias (ty : type_decl) =
@@ -2350,6 +2473,7 @@ let apply_passes (crate : crate) : crate =
   in
   let crate = { crate with fun_decls } in
   let crate = strip_unnecessary_target_suffixes crate in
+  let crate = filter_eq_assert_receiver_method crate in
   let crate = filter_marker_traits crate in
   let crate = filter_type_aliases crate in
   let crate = replace_static crate in

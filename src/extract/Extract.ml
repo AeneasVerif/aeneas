@@ -23,11 +23,149 @@ let generic_args_to_string (ctx : extraction_ctx) =
 let texpr_to_string (ctx : extraction_ctx) =
   PrintPure.texpr_to_string (extraction_ctx_to_fmt_env ctx) false "" "  "
 
+(** Under [-core-models-lib], detect type parameters and trait clauses left
+    dangling by Charon's [hide_allocator] pass (which strips the [A] parameter
+    from [Vec], [Box], etc. and removes the [core::alloc::Allocator] trait
+    declaration but leaves the function-level [A] and [A: Clone]-style clauses
+    in place).
+
+    A type parameter is dropped iff it is unused in the function's inputs,
+    output, and predicates. A trait clause is dropped iff every type variable it
+    references is itself being dropped (i.e., it is "orphan" — only constraining
+    dropped parameters). The "used" set is saturated through trait clauses so
+    that a parameter pulled in by a kept clause is itself kept.
+
+    [scan]: caller-supplied closure that gets invoked with a visitor and may
+    visit any extra structures (e.g. a trait_impl's [impl_trait] /
+    [parent_trait_refs]) so their type variables also count as used. Pass a
+    no-op closure when there is nothing extra to scan.
+
+    [extra_trait_decl_refs] / [extra_trait_refs]: caller-supplied additional
+    things to scan for used type variables. Trait impls in particular have no
+    function-style inputs; instead, the type variables they bind appear in
+    [impl_trait] and the parent trait refs, which the caller passes here.
+
+    Returns [None] if nothing needs filtering. *)
+let compute_allocator_filter
+    ?(extra_trait_decl_refs : Pure.trait_decl_ref list = [])
+    ?(extra_trait_refs : Pure.trait_ref list = [])
+    (generics : Pure.generic_params) (inputs : Pure.ty list)
+    (output : Pure.ty option) (preds : Pure.predicates) :
+    (bool list * bool list) option =
+  let type_params = generics.types in
+  let trait_clauses = generics.trait_clauses in
+  if type_params = [] then None
+  else
+    let used = ref Pure.TypeVarId.Set.empty in
+    let body_visitor =
+      object
+        inherit [_] Pure.iter_type_decl
+        method! visit_type_var_id _ id = used := Pure.TypeVarId.Set.add id !used
+      end
+    in
+    List.iter (body_visitor#visit_ty ()) inputs;
+    (match output with
+    | Some o -> body_visitor#visit_ty () o
+    | None -> ());
+    body_visitor#visit_predicates () preds;
+    List.iter (body_visitor#visit_trait_decl_ref ()) extra_trait_decl_refs;
+    List.iter (body_visitor#visit_trait_ref ()) extra_trait_refs;
+    let clause_tvars (c : Pure.trait_param) : Pure.TypeVarId.Set.t =
+      let s = ref Pure.TypeVarId.Set.empty in
+      let v =
+        object
+          inherit [_] Pure.iter_type_decl
+          method! visit_type_var_id _ id = s := Pure.TypeVarId.Set.add id !s
+        end
+      in
+      v#visit_trait_param () c;
+      !s
+    in
+    let rec saturate () =
+      let changed = ref false in
+      List.iter
+        (fun (c : Pure.trait_param) ->
+          let tvars = clause_tvars c in
+          if
+            Pure.TypeVarId.Set.exists
+              (fun id -> Pure.TypeVarId.Set.mem id !used)
+              tvars
+          then
+            Pure.TypeVarId.Set.iter
+              (fun id ->
+                if not (Pure.TypeVarId.Set.mem id !used) then begin
+                  used := Pure.TypeVarId.Set.add id !used;
+                  changed := true
+                end)
+              tvars)
+        trait_clauses;
+      if !changed then saturate ()
+    in
+    saturate ();
+    let unused_set =
+      List.fold_left
+        (fun acc (p : Pure.type_param) ->
+          if Pure.TypeVarId.Set.mem p.index !used then acc
+          else Pure.TypeVarId.Set.add p.index acc)
+        Pure.TypeVarId.Set.empty type_params
+    in
+    let is_orphan_clause (c : Pure.trait_param) : bool =
+      let tvars = clause_tvars c in
+      (not (Pure.TypeVarId.Set.is_empty tvars))
+      && Pure.TypeVarId.Set.for_all
+           (fun id -> Pure.TypeVarId.Set.mem id unused_set)
+           tvars
+    in
+    let any_orphan = List.exists is_orphan_clause trait_clauses in
+    let any_unused = not (Pure.TypeVarId.Set.is_empty unused_set) in
+    if (not any_orphan) && not any_unused then None
+    else
+      let keep_params =
+        List.map
+          (fun (p : Pure.type_param) ->
+            not (Pure.TypeVarId.Set.mem p.index unused_set))
+          type_params
+      in
+      let keep_trait_clauses =
+        List.map (fun c -> not (is_orphan_clause c)) trait_clauses
+      in
+      Some (keep_params, keep_trait_clauses)
+
 (** Compute the names for all the pure functions generated from a rust function.
 *)
 let extract_fun_decl_register_names (ctx : extraction_ctx)
     (has_decreases_clause : fun_decl -> bool) (def : pure_fun_translation) :
     extraction_ctx =
+  let maybe_register_allocator_filter (ctx : extraction_ctx) : extraction_ctx =
+    if not !Config.core_models_lib then ctx
+    else
+      let sg = def.f.signature in
+      match
+        compute_allocator_filter sg.generics sg.inputs (Some sg.output) sg.preds
+      with
+      | None -> ctx
+      | Some (keep_params, keep_trait_clauses) ->
+          let ctx =
+            if FunDeclId.Map.mem def.f.def_id ctx.funs_filter_type_args_map then
+              ctx
+            else
+              {
+                ctx with
+                funs_filter_type_args_map =
+                  FunDeclId.Map.add def.f.def_id keep_params
+                    ctx.funs_filter_type_args_map;
+              }
+          in
+          if FunDeclId.Map.mem def.f.def_id ctx.funs_filter_trait_clauses_map
+          then ctx
+          else
+            {
+              ctx with
+              funs_filter_trait_clauses_map =
+                FunDeclId.Map.add def.f.def_id keep_trait_clauses
+                  ctx.funs_filter_trait_clauses_map;
+            }
+  in
   (* Use the builtin names if necessary *)
   match def.f.builtin_info with
   | Some info ->
@@ -54,11 +192,13 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
             }
         | _ -> ctx
       in
+      let ctx = maybe_register_allocator_filter ctx in
       let f = def.f in
       let fun_id = (Pure.FunId (FRegular f.def_id), f.loop_id) in
       ctx_add f.item_meta.span (FunId (FromLlbc fun_id)) info.extract_name ctx
   | None ->
       (* Not builtin *)
+      let ctx = maybe_register_allocator_filter ctx in
       (* Register the decrease clauses, if necessary *)
       let register_decreases ctx def =
         if has_decreases_clause def then
@@ -282,7 +422,7 @@ let fun_builtin_filter_types_trait_clauses (ty_to_string : 'a -> string)
     match FunDeclId.Map.find_opt id ctx.funs_filter_trait_clauses_map with
     | None -> Result.Ok clauses
     | Some filter ->
-        if List.length filter <> List.length types then (
+        if List.length filter <> List.length clauses then (
           let decl =
             [%silent_unwrap_opt_span] None (ctx_lookup_fun_decl_info ctx id)
           in
@@ -2978,6 +3118,49 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
               }
         in
         (ctx, Some builtin_info)
+  in
+  (* Under [-core-models-lib], drop dangling allocator-shaped type params and
+     orphan trait clauses (same heuristic as for functions). Trait impls have
+     no "inputs"; the type variables they bind show up in [impl_trait], its
+     parent trait refs, the associated types it implements, and so on. We
+     pass all of those as extra scan context so they don't get wrongly
+     classified as unused. *)
+  let ctx =
+    if not !Config.core_models_lib then ctx
+    else
+      let assoc_tys = List.map (fun (_, _, ty) -> ty) trait_impl.types in
+      match
+        compute_allocator_filter
+          ~extra_trait_decl_refs:[ trait_impl.impl_trait ]
+          ~extra_trait_refs:trait_impl.parent_trait_refs trait_impl.generics
+          assoc_tys None trait_impl.preds
+      with
+      | None -> ctx
+      | Some (keep_params, keep_trait_clauses) ->
+          let ctx =
+            if
+              TraitImplId.Map.mem trait_impl.def_id
+                ctx.trait_impls_filter_type_args_map
+            then ctx
+            else
+              {
+                ctx with
+                trait_impls_filter_type_args_map =
+                  TraitImplId.Map.add trait_impl.def_id keep_params
+                    ctx.trait_impls_filter_type_args_map;
+              }
+          in
+          if
+            TraitImplId.Map.mem trait_impl.def_id
+              ctx.trait_impls_filter_trait_clauses_map
+          then ctx
+          else
+            {
+              ctx with
+              trait_impls_filter_trait_clauses_map =
+                TraitImplId.Map.add trait_impl.def_id keep_trait_clauses
+                  ctx.trait_impls_filter_trait_clauses_map;
+            }
   in
 
   (* Everything is taken care of by {!extract_trait_decl_register_names} *but*

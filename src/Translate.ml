@@ -13,6 +13,12 @@ open Parallel
 (** The local logger *)
 let log = TranslateCore.log
 
+(** When [-core-models-lib] is on, non-local items are skipped from the main
+    extracted files (the user is expected to provide them via a separate Lean
+    library, e.g. [core_models] for [core::*] items). *)
+let skip_for_core_models_lib (is_local : bool) : bool =
+  !Config.core_models_lib && not is_local
+
 (** The result of running the symbolic interpreter on a function:
     - the list of symbolic values used for the input values
     - the generated symbolic AST *)
@@ -766,6 +772,12 @@ let export_types_group (fmt : Format.formatter) (config : gen_config)
   if List.exists (fun b -> b) builtin then
     (* Sanity check *)
     assert (List.for_all (fun b -> b) builtin)
+  else if
+    List.exists
+      (fun (d : Pure.type_decl) ->
+        skip_for_core_models_lib d.item_meta.is_local)
+      defs
+  then ()
   else if List.exists dont_extract defs then
     (* Check if we have to ignore declarations *)
     (* Sanity check *)
@@ -971,6 +983,12 @@ let export_functions_group (fmt : Format.formatter) (config : gen_config)
   if List.exists (fun b -> b) builtin then
     (* Sanity check *)
     assert (List.for_all (fun b -> b) builtin)
+  else if
+    List.exists
+      (fun (trans : pure_fun_translation) ->
+        skip_for_core_models_lib trans.f.item_meta.is_local)
+      pure_ls
+  then ()
   else (
     (* Extract the decrease clauses template bodies. We only generate them for
        the forward functions and the loops (not the decomposed loop bodies). *)
@@ -1034,7 +1052,8 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     config.extract_globals
     && (((not is_opaque) && config.extract_transparent)
        || (is_opaque && config.extract_opaque))
-    && not is_builtin
+    && (not is_builtin)
+    && not (skip_for_core_models_lib global.item_meta.is_local)
   in
   if extract then (
     (* We don't wrap global declaration groups between calls to functions
@@ -1093,7 +1112,10 @@ let export_trait_decl (fmt : Format.formatter) (_config : gen_config)
       (TraitDeclId.Map.find_opt trait_decl_id ctx.trans_trait_decls)
   in
   (* Check if the trait declaration is builtin, in which case we ignore it *)
-  if not (trait_decl_is_builtin ctx trait_decl_id) then (
+  if
+    (not (trait_decl_is_builtin ctx trait_decl_id))
+    && not (skip_for_core_models_lib trait_decl.item_meta.is_local)
+  then (
     let ctx = { ctx with trait_decl_id = Some trait_decl.def_id } in
     if extract_decl then (
       Extract.extract_trait_decl ctx fmt trait_decl;
@@ -1111,7 +1133,10 @@ let export_trait_impl (fmt : Format.formatter) (_config : gen_config)
     [%silent_unwrap_opt_span] None
       (TraitImplId.Map.find_opt trait_impl_id ctx.trans_trait_impls)
   in
-  if not (trait_impl_is_builtin ctx trait_impl_id) then (
+  if
+    (not (trait_impl_is_builtin ctx trait_impl_id))
+    && not (skip_for_core_models_lib trait_impl.item_meta.is_local)
+  then (
     Extract.extract_trait_impl ctx fmt ~is_rec trait_impl;
     EmitJson.record_trait_impl_if_enabled ctx trait_impl)
 
@@ -1366,12 +1391,19 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
       Printf.fprintf out "Module %s.\n" fi.module_name
   | Lean ->
       Printf.fprintf out "import Aeneas\n";
+      if !Config.core_models_lib then Printf.fprintf out "import CoreModels\n";
       (* Add the custom imports *)
       List.iter (fun m -> Printf.fprintf out "import %s\n" m) fi.custom_imports;
       (* Add the custom includes *)
       List.iter (fun m -> Printf.fprintf out "import %s\n" m) fi.custom_includes;
       (* Always open the Primitives namespace *)
-      Printf.fprintf out "open Aeneas Aeneas.Std Result ControlFlow Error\n";
+      if !Config.core_models_lib then begin
+        Printf.fprintf out "open CoreModels Aeneas\n";
+        Printf.fprintf out "open Aeneas.Std hiding namespace core alloc\n";
+        Printf.fprintf out "open Result ControlFlow Error\n"
+      end
+      else
+        Printf.fprintf out "open Aeneas Aeneas.Std Result ControlFlow Error\n";
       (* It happens that we generate duplicated namespaces, like `betree.betree`.
          We deactivate the linter for this, because otherwise it leads to too much
          noise. *)
