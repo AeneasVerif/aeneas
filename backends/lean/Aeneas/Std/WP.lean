@@ -260,6 +260,10 @@ This way we can expressions like: `x + y ⦃ z => ... ⦄` without having to put
 scoped syntax:54 term:55 " ⦃ " term+ " => " term " ⦄" : term
 scoped syntax:54 term:55 " ⦃ " term " ⦄" : term
 
+-- for dspec
+scoped syntax:54 term:55 " div⦃ " term+ " => " term " ⦄" : term
+scoped syntax:54 term:55 " div⦃ " term " ⦄" : term
+
 open Lean PrettyPrinter
 
 /-- Build a `Std.uncurry` chain wrapping a curried lambda over `xs`.
@@ -302,6 +306,9 @@ macro_rules
   | `($e ⦃ $x => $p ⦄) => do
     let post ← mkBinderFun 0 x p
     `(Aeneas.Std.WP.spec $e $post)
+  | `($e div⦃ $x => $p ⦄) => do
+    let post ← mkBinderFun 0 x p
+    `(Aeneas.Std.WP.dspec $e $post)
 
 /-- Macro expansion for multiple elements -/
 macro_rules
@@ -317,10 +324,23 @@ macro_rules
         `(uncurry' $inner)
     let post ← run 0 xs
     `(Aeneas.Std.WP.spec $e $post)
+  | `($e div⦃ $x $xs:term* => $p ⦄) => do
+    let xs := x :: xs.toList
+    let rec run (depth : Nat) (xs : List Term) : MacroM Term := do
+      match xs with
+      | [] => `($p)
+      | [x] => mkBinderFun depth x p
+      | x :: xs =>
+        let xs ← run (depth + 1) xs
+        let inner ← mkBinderFun depth x xs
+        `(uncurry' $inner)
+    let post ← run 0 xs
+    `(Aeneas.Std.WP.dspec $e $post)
 
 /-- Macro expansion for predicate with no arrow -/
 macro_rules
   | `($e ⦃ $p ⦄) => do `(_root_.Aeneas.Std.WP.spec $e $p)
+  | `($e div⦃ $p ⦄) => do `(_root_.Aeneas.Std.WP.dspec $e $p)
 
 /-!
 # Pretty-printing

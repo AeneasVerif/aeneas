@@ -7,7 +7,7 @@ import Aeneas.Tactic.Simp.SimpLemmas
 import AeneasMeta.Async
 import Aeneas.Tactic.Solver.Grind.Init
 import Aeneas.Tactic.Step.InferPost
-import Aeneas.Tactic.Step
+import Aeneas.Tactic.Step.Step
 
 -- tactic for unfolding partial_fixpoint definitions with fixpoint_induct
 -- normally you would use the normal unfold tactic, but that requires the proof to be terminating
@@ -109,6 +109,8 @@ elab "dspec_induction" func:ident : tactic => do
   let ty ← goal.getType
 
   let func_expr ← Term.elabTerm func none
+  let func_expr := func_expr.getAppFn
+  let func_expr_name := func_expr.constName!
 
   -- do some wierd hacky nonsense to get `func.fixpoint_induct`
   let namee := func.getId.mkStr "fixpoint_induct"
@@ -119,17 +121,19 @@ elab "dspec_induction" func:ident : tactic => do
   -- make a type family that abstracts over instances of func in the goal type
   let func_expr_ty ← inferType func_expr
   let fmvar ← Meta.mkFreshExprMVar (some func_expr_ty)
-  let abs_goal_ty := ty.replace (fun x => if x == func_expr then some fmvar else none)
+  -- let abs_goal_ty := ty.replace (fun x => if x == func_expr then some fmvar else none)
+  let abs_goal_ty := ty.replace (fun x => if x.isConstOf func_expr_name then some fmvar else none)
   let abs_goal_ty := abs_goal_ty.abstract #[fmvar]
   let abs_goal_ty := Expr.lam `func func_expr_ty abs_goal_ty .default
 
-  trace[UnfoldPF] abs_goal_ty
+  trace[UnfoldPF] "fixpoint_induct with motive: {abs_goal_ty}"
 
   let fi_app := mkAppN fixpoint_induct #[abs_goal_ty]
 
-  let [g_admissible, g_main] ← goal.apply fi_app
-    | throwError "bla"
+  trace[UnfoldPF] "going to apply {fi_app}"
+  trace[UnfoldPF] "of type : {← inferType fi_app}"
 
+  let [g_admissible, g_main] ← goal.apply fi_app | throwError "this shouldn't happen 1"
 
   -- prove the admissibility condition. this chunk of code is equivalent to the
   -- `prove_admissible` tactic above, but apparently calling that directly might cause problems
@@ -151,11 +155,11 @@ elab "dspec_induction" func:ident : tactic => do
   pure ()
 
 -- uncomment to see debug traces:
--- set_option trace.UnfoldPF true
+set_option trace.UnfoldPF true
 
 namespace Test
 
-open Std Result Aeneas.UnfoldPF
+open Std Result Aeneas.Step
 
 def simple_diverge (x : Std.I32) : Result Std.I32 := do
   if x = 0#i32
@@ -193,21 +197,21 @@ theorem test_div_tactic (x : Std.I32) : Std.WP.dspec (simple_diverge x) (fun res
       step
       simp [*]
 
-def simple_diverge_2 (x y : Std.I32) : Result Std.I32 := do
+def simple_diverge_2' (x y : Std.I32) : Result Std.I32 := do
   if x = y#i32
   then ok 10#i32
   else
     let i1 ← 1#i32 + 1#i32
     let i2 ← 1#i32 + 1#i32
-    simple_diverge_2 i1 i2
+    simple_diverge_2' i1 i2
 partial_fixpoint
 
-theorem test_div_2_manual (x y : Std.I32) : Std.WP.dspec (simple_diverge_2 x y) (fun res => res = 10#i32)
+theorem test_div_2_manual (x y : Std.I32) : Std.WP.dspec (simple_diverge_2' x y) (fun res => res = 10#i32)
   := by
     --
     revert x y
-    apply simple_diverge_2.fixpoint_induct
-      (motive := fun simple_diverge_2 => ∀ x y, WP.dspec (simple_diverge_2 x y) (fun res => res = 10#i32))
+    apply simple_diverge_2'.fixpoint_induct
+      (motive := fun simple_diverge_2' => ∀ x y, WP.dspec (simple_diverge_2' x y) (fun res => res = 10#i32))
     · prove_admissible
     · intros
       simp only
@@ -218,10 +222,10 @@ theorem test_div_2_manual (x y : Std.I32) : Std.WP.dspec (simple_diverge_2 x y) 
         simp [*]
         --
 
-theorem test_div_2_tactic (x y : Std.I32) : Std.WP.dspec (simple_diverge_2 x y) (fun res => res = 10#i32)
+theorem test_div_2_tactic (x y : Std.I32) : Std.WP.dspec (simple_diverge_2' x y) (fun res => res = 10#i32)
   := by
     revert x y
-    dspec_induction simple_diverge_2
+    dspec_induction simple_diverge_2'
     intros
     simp only
     split
@@ -229,6 +233,54 @@ theorem test_div_2_tactic (x y : Std.I32) : Std.WP.dspec (simple_diverge_2 x y) 
     . step
       step
       simp [*]
+
+
+open ControlFlow
+/-- [tutorial::dummy_hash]:
+    Source: 'src/lib.rs', lines 250:0-253:1
+    Visibility: public -/
+def dummy_hash (i : Std.U32) : Result Std.U32 := do
+  ok 1000#u32
+
+/-- [tutorial::pseudo_random]: loop body 0:
+    Source: 'src/lib.rs', lines 258:2-260:3
+    Visibility: public -/
+def pseudo_random_loop.body
+  (state : Std.U32) : Result (ControlFlow Std.U32 Std.U32) := do
+  if state > 100#u32
+  then let state1 ← dummy_hash state
+       ok (cont state1)
+  else ok (done state)
+
+/-- [tutorial::pseudo_random]: loop 0:
+    Source: 'src/lib.rs', lines 258:2-260:3
+    Visibility: public -/
+def pseudo_random_loop (state : Std.U32) : Result Std.U32 := do
+  loop
+    (fun state1 => pseudo_random_loop.body state1)
+    state
+
+/-- [tutorial::pseudo_random]:
+    Source: 'src/lib.rs', lines 255:0-262:1
+    Visibility: public -/
+@[reducible] def pseudo_random : Result Std.U32 := do
+               pseudo_random_loop 0#u32
+
+
+#check loop.fixpoint_induct
+theorem pseudo_random_spec :
+  pseudo_random div⦃fun x => x.val <= 100⦄ := by
+  unfold pseudo_random
+  unfold pseudo_random_loop
+  apply (loop.fixpoint_induct pseudo_random_loop.body
+    (fun func => WP.dspec (func 0#u32) (fun x => ↑x ≤ (100 : Nat))))
+  · prove_admissible
+  · sorry
+  -- apply (loop.fixpoint_induct (fun func =>
+  --     (WP.dspec (func (fun state1 => pseudo_random_loop.body state1) 0#u32) (fun x => ↑x ≤ 100)))))
+  -- dspec_induction loop
+  -- --
+  -- sorry
 
 end Test
 
