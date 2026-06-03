@@ -311,7 +311,7 @@ theorem pseudo_random_spec :
   pseudo_random div⦃fun x => x.val >= 100⦄ := by
   unfold pseudo_random
   unfold pseudo_random_loop
-  -- note here that the use must make a potentially non-obvious decision about
+  -- note here that we must make a potentially non-obvious decision about
   -- what to generalize and how to do the induction
   generalize 0#u32 = x
   revert x

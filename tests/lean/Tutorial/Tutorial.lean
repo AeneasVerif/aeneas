@@ -418,4 +418,36 @@ def add
        alloc.vec.Vec.push x2 i2
   else ok x2
 
+/-- [tutorial::dummy_hash]:
+    Source: 'src/lib.rs', lines 250:0-253:1
+    Visibility: public -/
+def dummy_hash (i : Std.U32) : Result Std.U32 := do
+  ok 1000#u32
+
+/-- [tutorial::pseudo_random]: loop body 0:
+    Source: 'src/lib.rs', lines 258:2-260:3
+    Visibility: public -/
+@[rust_loop_body]
+def pseudo_random_loop.body
+  (state : Std.U32) : Result (ControlFlow Std.U32 Std.U32) := do
+  if state < 100#u32
+  then let state1 ← dummy_hash state
+       ok (cont state1)
+  else ok (done state)
+
+/-- [tutorial::pseudo_random]: loop 0:
+    Source: 'src/lib.rs', lines 258:2-260:3
+    Visibility: public -/
+@[rust_loop]
+def pseudo_random_loop (state : Std.U32) : Result Std.U32 := do
+  loop
+    (fun state1 => pseudo_random_loop.body state1)
+    state
+
+/-- [tutorial::pseudo_random]:
+    Source: 'src/lib.rs', lines 255:0-262:1
+    Visibility: public -/
+@[reducible] def pseudo_random : Result Std.U32 := do
+               pseudo_random_loop 0#u32
+
 end tutorial
