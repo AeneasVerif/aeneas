@@ -110,6 +110,12 @@ def getParamNames (ty : Expr) : MetaM (Array Name) := do
       let localDecl ← x.fvarId!.getDecl
       return localDecl.userName
 
+-- given a function type, return list of input types
+def getInputTypes (ty : Expr) : List Expr :=
+  match ty with
+  | .forallE _ ty body _ => .cons ty (getInputTypes body)
+  | _ => []
+
 elab "dspec_induction" func:ident : tactic => do
   let mut goal ← getMainGoal
   let goalTy ← goal.getType
@@ -145,19 +151,21 @@ elab "dspec_induction" func:ident : tactic => do
     fun (x, b) => if b then some x else none
   let nonconst_args := (args_in_goal.zip constant_params).filterMap
     fun (x, b) => if b then none else some x
-  -- lift these arguments, since they will need to go under a new binder
-  -- let nonconst_args := nonconst_args.map (fun e => e.liftLooseBVars 0 1)
   trace[UnfoldPF] "const_args: {const_args}"
   -- }
 
   -- make a type family that abstracts over instances of func in the goal type
-  let func_expr_ty ← inferType func_expr
-  let fmvar ← Meta.mkFreshExprMVar (some func_expr_ty)
+  -- first, we need to find out what type the motive expects, by inspecting the theorem
+  -- this should be something that inputs all of the nonconst_args
+  let applied_fixpoint_induct_type ← inferType (mkAppN fixpoint_induct const_args)
+  let applied_func_type := (getInputTypes (getInputTypes applied_fixpoint_induct_type).getLast!)[0]!
+  -- let applied_func_type ← inferType func_expr
+  let fmvar ← Meta.mkFreshExprMVar (some applied_func_type)
   let value_to_replace_in_motive := mkAppN fmvar nonconst_args
   let abs_goal_ty := goalTy.replace
     (fun x => if x.getAppFn.isConstOf func_expr_name then some value_to_replace_in_motive else none)
   let abs_goal_ty := abs_goal_ty.abstract #[fmvar]
-  let abs_goal_ty := Expr.lam `func func_expr_ty abs_goal_ty .default
+  let abs_goal_ty := Expr.lam `func applied_func_type abs_goal_ty .default
 
   trace[UnfoldPF] "fixpoint_induct with motive: {abs_goal_ty}"
 
@@ -268,13 +276,8 @@ theorem test_div_2_tactic (x y : Std.I32) : Std.WP.dspec (simple_diverge_2' x y)
       simp [*]
 
 
-namespace TestHash
--- variable (dummy_hash : Std.U32 → Result Std.U32)
 def dummy_hash (i : Std.U32) : Result Std.U32 := do
   ok 1000#u32
-  -- ok dummy_val
-
-#check dummy_hash
 
 open ControlFlow
 
@@ -330,22 +333,8 @@ theorem pseudo_random_spec :
   ·
     simp [*]
     grind
-  -- ·
-  --   simp [*] at *
-  --   subst_vars
-  --   simp only
-  --   simp
-  -- ·
-  --   --
-  --   sorry
-  -- ·
-  --   --
-  --   sorry
-  --
-  -- -- --
-end TestHash
 
-
+-- these two examples demonstrate how .fixpoint_induct theorems can take various forms.
 def first_arg_const (x y : Nat) : Option Nat :=
   if x = 0 then Option.some 0
   else first_arg_const x (y + 1)
