@@ -171,203 +171,233 @@ let update_array_default (crate : crate) : crate =
       }
   in
 
-  (* First detect all the instances of [Default<[T; N]>] (and all the
-     implementations of [Default<[T; N]>::default] *)
-  let merged_impl = ref None in
-  let merged_method = ref None in
-  (* Those maps allow us to do two things:
-     - store the set of trait impls and methods that implement an instance
-       of [Default] for arrays
-     - store for each of those the precise length for which the implementation
-       is specialized (useful later when updating the crate)
-  *)
-  let impls = ref TraitImplId.Map.empty in
-  let methods = ref FunDeclId.Map.empty in
-
-  let visit_trait_impl _id (impl : trait_impl) : trait_impl option =
-    (* Check this is an impl of [Default] for arrays *)
+  (* Helper: check whether a trait impl matches the [Default<[T; N]>] pattern,
+     and if so return its array length [N]. We ignore the case where the length
+     is equal to 0, because in this case rustc uses a different impl which
+     doesn't require that the type of the elements also has a default
+     implementation. *)
+  let matches_default_array (impl : trait_impl) : constant_expr option =
     let trait_decl =
       [%silent_unwrap_opt_span] (Some impl.item_meta.span)
         (TraitDeclId.Map.find_opt impl.impl_trait.id crate.trait_decls)
     in
-    if match_name impl_pat trait_decl.item_meta.name then (
-      [%ldebug
-        "found a matching impl.\n - decl_generics: "
-        ^ Print.generic_args_to_string pctx impl.impl_trait.generics];
-      (* Check the generics. Note that we ignore the case where the length
-         is equal to 0, because in this case rustc uses a different impl
-         which doesn't require that the type of the elements also has a
-         default implementation. *)
+    if not (match_name impl_pat trait_decl.item_meta.name) then None
+    else
       match impl.impl_trait.generics with
       | {
        regions = [];
        types =
          [
            TArray
-             ( (TVar (Free _) as elem_ty),
+             ( TVar (Free _),
                ({ kind = CLiteral (VScalar (UnsignedScalar (Usize, nv))); _ } as
                 n) );
          ];
        const_generics = [];
        trait_refs = _;
       }
-        when Z.to_int nv != 0 -> begin
-          (* Save the implementation and the method *)
+        when Z.to_int nv != 0 -> Some n
+      | _ -> None
+  in
+
+  (* First pass: collect all the trait impls matching [Default<[T; N]>] and
+     their default methods, together with the array length [N]. *)
+  let impls = ref TraitImplId.Map.empty in
+  let methods = ref FunDeclId.Map.empty in
+  TraitImplId.Map.iter
+    (fun _ (impl : trait_impl) ->
+      match matches_default_array impl with
+      | None -> ()
+      | Some n ->
+          [%ldebug
+            "found a matching impl.\n - decl_generics: "
+            ^ Print.generic_args_to_string pctx impl.impl_trait.generics];
           impls := TraitImplId.Map.add impl.def_id n !impls;
-          assert (TraitMethodId.Map.cardinal impl.methods = 1);
+          [%sanity_check_opt_span] None
+            (TraitMethodId.Map.cardinal impl.methods = 1);
           let meth = List.hd (TraitMethodId.Map.values impl.methods) in
-          assert (meth.binder_params = empty_generic_params);
+          [%sanity_check_opt_span] None
+            (meth.binder_params = empty_generic_params);
           let method_id = meth.binder_value.id in
-          methods := FunDeclId.Map.add method_id n !methods;
-          (* Is it the first implementation we find? *)
-          match !merged_impl with
-          | None ->
-              (* Update the implementation in place *)
-              let cg_id = ConstGenericVarId.zero in
-              let cg : Types.constant_expr =
-                { kind = CVar (Free cg_id); ty = TypesUtils.mk_usize_ty }
-              in
-              let generics =
-                {
-                  impl.impl_trait.generics with
-                  types = [ TArray (elem_ty, cg) ];
-                }
-              in
-              let impl_trait = { impl.impl_trait with generics } in
-              let params =
-                {
-                  impl.generics with
-                  const_generics =
-                    [
-                      { index = cg_id; name = "N"; ty = TypesUtils.mk_usize_ty };
-                    ];
-                }
-              in
-              let impl = { impl with impl_trait; generics = params } in
-              (* Register it *)
-              merged_impl := Some impl;
-              merged_method := Some method_id;
-              (* Continue *)
-              Some impl
-          | Some _ ->
-              (* Filter the implementation *)
-              None
-        end
-      | _ -> Some impl)
-    else Some impl
-  in
-  let crate =
-    {
-      crate with
-      trait_impls =
-        TraitImplId.Map.filter_map visit_trait_impl crate.trait_impls;
-    }
-  in
+          methods := FunDeclId.Map.add method_id n !methods)
+    crate.trait_impls;
+  let impls = !impls in
+  let methods = !methods in
 
-  (* Check if we found a default implementation for array. If yes, we need
-     to filter the [default] methods and update all the definitions to make
-     sure they refer to the proper implementations and methods.
-  *)
-  match !merged_impl with
-  | None -> crate
-  | Some merged_impl ->
-      let merged_method = Option.get !merged_method in
-      let impls = !impls in
-      let methods = !methods in
+  (* If we didn't find any matching impl, there is nothing to do. *)
+  if TraitImplId.Map.is_empty impls then crate
+  else
+    (* Pick the impl into which we will merge all the others.  Prefer the smallest id
+       among the impls whose def_id appears in the declarations to extract, so that the
+       merged impl is actually emitted. If none of the matching impls is in the
+       declarations, fall back to the smallest id: the merging is still useful so that
+       builtin name mappings (which match the generic pattern [@T; @N]) can resolve
+       references at use sites. *)
+    let decl_ids = ref TraitImplId.Set.empty in
+    let collect_visitor =
+      object
+        inherit [_] iter_crate
 
-      (* Filter the functions *)
-      let visit_fun id (fdecl : fun_decl) =
-        match FunDeclId.Map.find_opt id methods with
-        | None -> Some fdecl
-        | Some _ ->
-            if id = merged_method then (
-              (* Update the method *)
-              let cg_id = ConstGenericVarId.zero in
-              let cg : Types.constant_expr =
-                { kind = CVar (Free cg_id); ty = TypesUtils.mk_usize_ty }
-              in
-              let sg = fdecl.signature in
-              assert (sg.inputs = []);
-              match sg.output with
-              | TArray ((TVar (Free _) as elem_ty), _) ->
-                  let generics =
-                    {
-                      fdecl.generics with
-                      const_generics =
-                        [
-                          {
-                            index = cg_id;
-                            name = "N";
-                            ty = TypesUtils.mk_usize_ty;
-                          };
-                        ];
-                    }
-                  in
-                  let sg = { sg with output = TArray (elem_ty, cg) } in
-                  let fdecl = { fdecl with signature = sg; generics } in
-                  Some fdecl
-              | _ -> [%internal_error] fdecl.item_meta.span)
-            else (* Filter *)
-              None
+        method! visit_trait_impl_id _ id =
+          TraitImplId.Set.add_in_place id decl_ids
+      end
+    in
+    List.iter (collect_visitor#visit_declaration_group ()) crate.declarations;
+    let impls_in_decls =
+      TraitImplId.Map.filter
+        (fun id _ -> TraitImplId.Set.mem id !decl_ids)
+        impls
+    in
+    let merged_impl_id, _ =
+      if TraitImplId.Map.is_empty impls_in_decls then
+        TraitImplId.Map.min_binding impls
+      else TraitImplId.Map.min_binding impls_in_decls
+    in
+    let merged_impl =
+      [%silent_unwrap_opt_span] None
+        (TraitImplId.Map.find_opt merged_impl_id crate.trait_impls)
+    in
+    let merged_method =
+      let meth = List.hd (TraitMethodId.Map.values merged_impl.methods) in
+      meth.binder_value.id
+    in
+
+    (* Update the chosen merged_impl in place: make it generic in the
+       array length. *)
+    let merged_impl =
+      let cg_id = ConstGenericVarId.zero in
+      let cg : Types.constant_expr =
+        { kind = CVar (Free cg_id); ty = TypesUtils.mk_usize_ty }
       in
-      let filter_ids_visitor =
-        object
-          inherit [_] filter_decl_id
-
-          method! visit_trait_impl_id _ id =
-            match TraitImplId.Map.find_opt id impls with
-            | None -> Some id
-            | Some _ -> if id = merged_impl.def_id then Some id else None
-
-          method! visit_fun_decl_id _ id =
-            match FunDeclId.Map.find_opt id methods with
-            | None -> Some id
-            | Some _ -> if id = merged_method then Some id else None
-        end
+      let elem_ty =
+        match merged_impl.impl_trait.generics.types with
+        | [ TArray ((TVar (Free _) as elem_ty), _) ] -> elem_ty
+        | _ -> [%internal_error] merged_impl.item_meta.span
       in
-      let crate =
+      let generics =
         {
-          crate with
-          fun_decls = FunDeclId.Map.filter_map visit_fun crate.fun_decls;
-          declarations =
-            filter_ids_visitor#visit_declaration_groups () crate.declarations;
+          merged_impl.impl_trait.generics with
+          types = [ TArray (elem_ty, cg) ];
         }
       in
-
-      (* Update all the definitions in the crate *)
-      let visitor =
-        object
-          inherit [_] map_crate_with_span as super
-
-          method! visit_TraitImpl env impl_ref =
-            match TraitImplId.Map.find_opt impl_ref.id impls with
-            | None -> super#visit_TraitImpl env impl_ref
-            | Some n ->
-                super#visit_TraitImpl env
-                  {
-                    id = merged_impl.def_id;
-                    generics = { impl_ref.generics with const_generics = [ n ] };
-                  }
-
-          method! visit_fn_ptr env fn_ptr =
-            match fn_ptr.kind with
-            | FunId (FRegular fid) -> begin
-                match FunDeclId.Map.find_opt fid methods with
-                | None -> super#visit_fn_ptr env fn_ptr
-                | Some n ->
-                    let fn_ptr =
-                      {
-                        kind = FunId (FRegular merged_method);
-                        generics =
-                          { fn_ptr.generics with const_generics = [ n ] };
-                      }
-                    in
-                    super#visit_fn_ptr env fn_ptr
-              end
-            | _ -> super#visit_fn_ptr env fn_ptr
-        end
+      let impl_trait = { merged_impl.impl_trait with generics } in
+      let params =
+        {
+          merged_impl.generics with
+          const_generics =
+            [ { index = cg_id; name = "N"; ty = TypesUtils.mk_usize_ty } ];
+        }
       in
-      visitor#visit_crate None crate
+      { merged_impl with impl_trait; generics = params }
+    in
+
+    (* Replace [merged_impl] in [crate.trait_impls] and filter out the
+       other matching impls. *)
+    let crate =
+      {
+        crate with
+        trait_impls =
+          TraitImplId.Map.filter_map
+            (fun id impl ->
+              if id = merged_impl.def_id then Some merged_impl
+              else if TraitImplId.Map.mem id impls then None
+              else Some impl)
+            crate.trait_impls;
+      }
+    in
+
+    (* Filter the functions *)
+    let visit_fun id (fdecl : fun_decl) =
+      match FunDeclId.Map.find_opt id methods with
+      | None -> Some fdecl
+      | Some _ ->
+          if id = merged_method then (
+            (* Update the method *)
+            let cg_id = ConstGenericVarId.zero in
+            let cg : Types.constant_expr =
+              { kind = CVar (Free cg_id); ty = TypesUtils.mk_usize_ty }
+            in
+            let sg = fdecl.signature in
+            [%sanity_check_opt_span] None (sg.inputs = []);
+            match sg.output with
+            | TArray ((TVar (Free _) as elem_ty), _) ->
+                let generics =
+                  {
+                    fdecl.generics with
+                    const_generics =
+                      [
+                        {
+                          index = cg_id;
+                          name = "N";
+                          ty = TypesUtils.mk_usize_ty;
+                        };
+                      ];
+                  }
+                in
+                let sg = { sg with output = TArray (elem_ty, cg) } in
+                let fdecl = { fdecl with signature = sg; generics } in
+                Some fdecl
+            | _ -> [%internal_error] fdecl.item_meta.span)
+          else (* Filter *)
+            None
+    in
+    let filter_ids_visitor =
+      object
+        inherit [_] filter_decl_id
+
+        method! visit_trait_impl_id _ id =
+          match TraitImplId.Map.find_opt id impls with
+          | None -> Some id
+          | Some _ -> if id = merged_impl.def_id then Some id else None
+
+        method! visit_fun_decl_id _ id =
+          match FunDeclId.Map.find_opt id methods with
+          | None -> Some id
+          | Some _ -> if id = merged_method then Some id else None
+      end
+    in
+    let crate =
+      {
+        crate with
+        fun_decls = FunDeclId.Map.filter_map visit_fun crate.fun_decls;
+        declarations =
+          filter_ids_visitor#visit_declaration_groups () crate.declarations;
+      }
+    in
+
+    (* Update all the definitions in the crate *)
+    let visitor =
+      object
+        inherit [_] map_crate_with_span as super
+
+        method! visit_TraitImpl env impl_ref =
+          match TraitImplId.Map.find_opt impl_ref.id impls with
+          | None -> super#visit_TraitImpl env impl_ref
+          | Some n ->
+              super#visit_TraitImpl env
+                {
+                  id = merged_impl.def_id;
+                  generics = { impl_ref.generics with const_generics = [ n ] };
+                }
+
+        method! visit_fn_ptr env fn_ptr =
+          match fn_ptr.kind with
+          | FunId (FRegular fid) -> begin
+              match FunDeclId.Map.find_opt fid methods with
+              | None -> super#visit_fn_ptr env fn_ptr
+              | Some n ->
+                  let fn_ptr =
+                    {
+                      kind = FunId (FRegular merged_method);
+                      generics = { fn_ptr.generics with const_generics = [ n ] };
+                    }
+                  in
+                  super#visit_fn_ptr env fn_ptr
+            end
+          | _ -> super#visit_fn_ptr env fn_ptr
+      end
+    in
+    visitor#visit_crate None crate
 
 exception FoundStatement of statement
 
@@ -717,14 +747,12 @@ let remove_useless_joins (crate : crate) (f : fun_decl) : fun_decl =
             match rv with
             | Use _ | RvRef _ | RawPtr _ | NullaryOp _ | Aggregate _ ->
                 (can_inline, st :: ls)
-            | BinaryOp _
-            | UnaryOp _
-            | Discriminant _
-            | Len _
-            | Repeat _
-            | ShallowInitBox _ -> (false, st :: ls))
-        | SetDiscriminant _ | CopyNonOverlapping _ | Assert _ | Call _ | Error _
-          -> (false, st :: ls))
+            | BinaryOp _ | UnaryOp _ | Discriminant _ | Len _ | Repeat _ ->
+                (false, st :: ls))
+        | SetDiscriminant _ | Assert _ | Call _ | Error _ -> (false, st :: ls)
+        | _ ->
+            [%craise] st.span
+              ("unsupported statement: " ^ show_statement_kind st.kind))
   in
 
   let body =
@@ -920,25 +948,39 @@ let strip_unnecessary_target_suffixes (crate : crate) : crate =
 (** Remove all occurrences of certain compiler-internal marker traits.
 
     These traits have no semantic content relevant to verification:
+    - [Sized], [MetaSized], [PointeeSized]: type size plumbing
+    - [Destruct]: carries drop information
     - [Pointee], [Thin]: pointer metadata plumbing
     - [Send], [Sync]: thread-safety markers
     - [Unpin]: pin-projection marker
+    - [Tuple]: identifies tuples for use in the [Fn] family of traits
+    - [TrivialClone]: internal marker trait used for some optimizations
+    - [Allocator]: unstable API for custom allocators, present on Box/Vec/etc
+      but not exposed to stable users
 
     When we will actually need to reason about these, we will capture their
     semantic content through separation logic predicates.
 
-    We filter out the trait declarations, their impls, and all references (trait
-    refs, clauses, type constraints, parent clauses). *)
+    We filter out the trait declarations, their impls, their associated items,
+    and all references (trait refs, clauses, type constraints, parent clauses).
+*)
 let filter_marker_traits (crate : crate) : crate =
   let mctx = NameMatcher.ctx_from_crate crate in
   let pats =
     List.map NameMatcher.parse_pattern
       [
+        "core::marker::Sized";
+        "core::marker::MetaSized";
+        "core::marker::PointeeSized";
+        "core::marker::Destruct";
         "core::ptr::metadata::Pointee";
         "core::ptr::metadata::Thin";
         "core::marker::Send";
         "core::marker::Sync";
         "core::marker::Unpin";
+        "core::marker::Tuple";
+        "core::clone::TrivialClone";
+        "core::alloc::Allocator";
       ]
   in
   let match_config =
@@ -988,6 +1030,34 @@ let filter_marker_traits (crate : crate) : crate =
           else acc)
         crate.trait_impls TraitImplId.Set.empty
     in
+    let item_source_is_filtered (src : item_source) : bool =
+      match src with
+      | TraitDeclItem (trait_ref, _, _) -> is_filtered_id trait_ref.id
+      | TraitImplItem (impl_ref, trait_ref, _, _) ->
+          TraitImplId.Set.mem impl_ref.id filtered_impl_ids
+          || is_filtered_id trait_ref.id
+      | _ -> false
+    in
+    let filtered_global_ids =
+      GlobalDeclId.Map.fold
+        (fun id (decl : global_decl) acc ->
+          if item_source_is_filtered decl.src then GlobalDeclId.Set.add id acc
+          else acc)
+        crate.global_decls GlobalDeclId.Set.empty
+    in
+    let filtered_fun_ids =
+      FunDeclId.Map.fold
+        (fun id (decl : fun_decl) acc ->
+          let init_is_filtered =
+            match decl.is_global_initializer with
+            | None -> false
+            | Some id -> GlobalDeclId.Set.mem id filtered_global_ids
+          in
+          if item_source_is_filtered decl.src || init_is_filtered then
+            FunDeclId.Set.add id acc
+          else acc)
+        crate.fun_decls FunDeclId.Set.empty
+    in
     let declarations =
       List.filter_map
         (fun (g : declaration_group) ->
@@ -1006,9 +1076,30 @@ let filter_marker_traits (crate : crate) : crate =
                   ids
               in
               if ids <> [] then Some (TraitImplGroup (RecGroup ids)) else None
+          | FunGroup (NonRecGroup id) ->
+              if FunDeclId.Set.mem id filtered_fun_ids then None else Some g
+          | FunGroup (RecGroup ids) ->
+              let ids =
+                List.filter
+                  (fun id -> not (FunDeclId.Set.mem id filtered_fun_ids))
+                  ids
+              in
+              if ids <> [] then Some (FunGroup (RecGroup ids)) else None
+          | GlobalGroup (NonRecGroup id) ->
+              if GlobalDeclId.Set.mem id filtered_global_ids then None
+              else Some g
+          | GlobalGroup (RecGroup ids) ->
+              let ids =
+                List.filter
+                  (fun id -> not (GlobalDeclId.Set.mem id filtered_global_ids))
+                  ids
+              in
+              if ids <> [] then Some (GlobalGroup (RecGroup ids)) else None
           | MixedGroup g -> (
               let is_filtered_item (id : item_id) =
                 match id with
+                | IdFun id -> FunDeclId.Set.mem id filtered_fun_ids
+                | IdGlobal id -> GlobalDeclId.Set.mem id filtered_global_ids
                 | IdTraitDecl id -> is_filtered_id id
                 | IdTraitImpl id -> TraitImplId.Set.mem id filtered_impl_ids
                 | _ -> false
@@ -1034,7 +1125,26 @@ let filter_marker_traits (crate : crate) : crate =
         (fun id _ -> not (TraitImplId.Set.mem id filtered_impl_ids))
         crate.trait_impls
     in
-    let crate = { crate with declarations; trait_decls; trait_impls } in
+    let global_decls =
+      GlobalDeclId.Map.filter
+        (fun id _ -> not (GlobalDeclId.Set.mem id filtered_global_ids))
+        crate.global_decls
+    in
+    let fun_decls =
+      FunDeclId.Map.filter
+        (fun id _ -> not (FunDeclId.Set.mem id filtered_fun_ids))
+        crate.fun_decls
+    in
+    let crate =
+      {
+        crate with
+        declarations;
+        trait_decls;
+        trait_impls;
+        global_decls;
+        fun_decls;
+      }
+    in
     let visitor =
       object (self)
         inherit [_] map_crate as super
@@ -1203,7 +1313,7 @@ let decompose_str_borrows (_ : crate) (f : fun_decl) : fun_decl =
                           kind =
                             Assign
                               ( { kind = PlaceLocal local_id; ty = str_ty },
-                                Use (Constant new_cv) );
+                                Use (Constant new_cv, NoRetag) );
                           comments_before = [];
                         }
                       in
@@ -1462,9 +1572,6 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
           let kind =
             match st.kind with
             | Assign (lv, rv) -> Assign (lv, visitor#visit_rvalue mk_unit_ty rv)
-            | CopyNonOverlapping { src; dst; count } ->
-                let src = visitor#visit_operand mk_unit_ty src in
-                CopyNonOverlapping { src; dst; count }
             | Assert ({ cond; expected; check_kind }, on_failure) ->
                 let cond = visitor#visit_operand mk_unit_ty cond in
                 Assert ({ cond; expected; check_kind }, on_failure)
@@ -1485,6 +1592,9 @@ let decompose_global_accesses (crate : crate) (f : fun_decl) : fun_decl =
             | Switch _
             | Loop _
             | Error _ -> st.kind
+            | _ ->
+                [%craise] st.span
+                  ("unsupported statement: " ^ show_statement_kind st.kind)
           in
           let st = { st with kind } in
 
@@ -1898,7 +2008,7 @@ let simplify_trait_calls (crate : crate) : crate =
             if is_blanket_into_iter d.item_meta.name then (
               (* Replace the call by an assignment *)
               [%sanity_check] span (List.length call.args = 1);
-              let arg = Use (List.hd call.args) in
+              let arg = Use (List.hd call.args, NoRetag) in
               Assign (call.dest, arg))
             else if is_blanket_try_into d.item_meta.name then (
               [%ldebug

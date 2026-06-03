@@ -175,16 +175,19 @@ let rec translate_sty (span : Meta.span option) (ty : T.ty) : ty =
       let ty = translate span ty in
       let generics = { types = [ ty ]; const_generics = []; trait_refs = [] } in
       TAdt (TBuiltin (TRawPtr mut), generics)
-  | TTraitType (trait_ref, type_name) ->
+  | TTraitType (trait_ref, type_name, generics) ->
       let trait_ref = translate_strait_ref span trait_ref in
+      [%cassert_opt_span] span
+        (generics = TypesUtils.empty_generic_args)
+        "Unimplemented";
       TTraitType (trait_ref, type_name)
   | TFnDef _ | TFnPtr _ ->
       [%craise_opt_span] span "Arrow types are not supported yet"
   | TDynTrait _ ->
       [%craise_opt_span] span "Dynamic trait types are not supported yet"
-  | TPtrMetadata _ -> [%craise_opt_span] span "unsupported: PtrMetadata"
   | TError _ ->
       [%craise_opt_span] span "Found type error in the output of charon"
+  | _ -> [%craise_opt_span] span ("unsupported type: " ^ T.show_ty ty)
 
 and translate_sgeneric_args (span : Meta.span option)
     (generics : T.generic_args) : generic_args =
@@ -389,7 +392,10 @@ let rec translate_fwd_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
       let ty = translate ty in
       let generics = { types = [ ty ]; const_generics = []; trait_refs = [] } in
       TAdt (TBuiltin (TRawPtr mut), generics)
-  | TTraitType (trait_ref, type_name) ->
+  | TTraitType (trait_ref, type_name, generics) ->
+      [%cassert_opt_span] span
+        (generics = TypesUtils.empty_generic_args)
+        "Unimplemented";
       let trait_ref = translate_fwd_trait_ref span decls_ctx trait_ref in
       TTraitType (trait_ref, type_name)
   | TFnDef { binder_regions; binder_value = { kind; generics } } -> (
@@ -426,9 +432,9 @@ let rec translate_fwd_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
         translate_generic_params span binder.binder_params
       in
       TDynTrait { params }
-  | TPtrMetadata _ -> [%craise_opt_span] span "unsupported: PtrMetadata"
   | TError _ ->
       [%craise_opt_span] span "Found type error in the output of charon"
+  | _ -> [%craise_opt_span] span ("unsupported type: " ^ T.show_ty ty)
 
 and translate_fwd_generic_args (span : Meta.span option)
     (decls_ctx : C.decls_ctx) (generics : T.generic_args) : generic_args =
@@ -530,17 +536,20 @@ and compute_back_ty_num_levels (span : Meta.span option)
     | TRawPtr _ ->
         (* TODO: not sure what to do here *)
         save_count outer_regions
-    | TTraitType (trait_ref, _) ->
+    | TTraitType (trait_ref, _, generics) ->
         [%sanity_check_opt_span] span
           (TypesUtils.trait_ref_kind_is_local_clause_or_builtin trait_ref.kind);
+        [%cassert_opt_span] span
+          (generics = TypesUtils.empty_generic_args)
+          "Unimplemented";
         save_count outer_regions
     | TFnDef _ | TFnPtr _ ->
         [%craise_opt_span] span "Arrow types are not supported yet"
     | TDynTrait _ ->
         [%craise_opt_span] span "Dynamic trait types are not supported yet"
-    | TPtrMetadata _ -> [%craise_opt_span] span "unsupported: PtrMetadata"
     | TError _ ->
         [%craise_opt_span] span "Found type error in the output of charon"
+    | _ -> [%craise_opt_span] span ("unsupported type: " ^ T.show_ty ty)
   in
   explore T.RegionGroupId.Set.empty ty;
   !max_level
@@ -662,17 +671,20 @@ and translate_back_ty_aux (span : Meta.span option) (decls_ctx : C.decls_ctx)
     | TRawPtr _ ->
         (* TODO: not sure what to do here *)
         stop outer_regions ty
-    | TTraitType (trait_ref, _) ->
+    | TTraitType (trait_ref, _, generics) ->
         [%sanity_check_opt_span] span
           (TypesUtils.trait_ref_kind_is_local_clause_or_builtin trait_ref.kind);
+        [%cassert_opt_span] span
+          (generics = TypesUtils.empty_generic_args)
+          "Unimplemented";
         stop outer_regions ty
     | TFnDef _ | TFnPtr _ ->
         [%craise_opt_span] span "Arrow types are not supported yet"
     | TDynTrait _ ->
         [%craise_opt_span] span "Dynamic trait types are not supported yet"
-    | TPtrMetadata _ -> [%craise_opt_span] span "unsupported: PtrMetadata"
     | TError _ ->
         [%craise_opt_span] span "Found type error in the output of charon"
+    | _ -> [%craise_opt_span] span ("unsupported type: " ^ T.show_ty ty)
   in
   explore T.RegionGroupId.Set.empty ty
 

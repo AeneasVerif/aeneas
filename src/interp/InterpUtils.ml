@@ -439,16 +439,15 @@ let value_has_ret_symbolic_value_with_borrow_under_mut span (ctx : eval_ctx)
     compute span-data, to find pretty names. *)
 let rvalue_get_place (rv : rvalue) : place option =
   match rv with
-  | Use (Copy p | Move p) -> Some p
-  | Use (Constant _) -> None
+  | Use ((Copy p | Move p), _) -> Some p
+  | Use (Constant _, _) -> None
   | Len (p, _, _) | RvRef (p, _, _) | RawPtr (p, _, _) -> Some p
   | NullaryOp _
   | UnaryOp _
   | BinaryOp _
   | Discriminant _
   | Aggregate _
-  | Repeat _
-  | ShallowInitBox _ -> None
+  | Repeat _ -> None
 
 (** See {!ValuesUtils.symbolic_value_has_borrows} *)
 let symbolic_value_has_borrows span (ctx : eval_ctx) (sv : symbolic_value) :
@@ -841,7 +840,7 @@ let instantiate_fun_sig (span : Meta.span option) (ctx : eval_ctx)
   (* Decompose the signature *)
   let {
     item_binder_params = generics;
-    item_binder_value = { is_unsafe; inputs; output };
+    item_binder_value = { Types.inputs; output; _ };
   } =
     sg
   in
@@ -965,7 +964,7 @@ let instantiate_fun_sig (span : Meta.span option) (ctx : eval_ctx)
     let sg =
       {
         item_binder_params = generics;
-        item_binder_value = { is_unsafe; inputs; output };
+        item_binder_value = { sg.item_binder_value with inputs; output };
       }
     in
     let regions_hierarchy =

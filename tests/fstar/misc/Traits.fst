@@ -27,19 +27,19 @@ noeq type boolTrait_t (self : Type0) = {
 let boolTrait_ret_true_default (#self : Type0) (self1 : self) : result bool =
   Ok true
 
-(** [traits::{traits::BoolTrait for bool}::get_bool]:
+(** [traits::{impl traits::BoolTrait for bool}::get_bool]:
     Source: 'tests/src/traits.rs', lines 14:4-16:5
     Visibility: public *)
 let bool_Insts_TraitsBoolTrait_get_bool (self : bool) : result bool =
   Ok self
 
-(** [traits::{traits::BoolTrait for bool}::ret_true]:
+(** [traits::{impl traits::BoolTrait for bool}::ret_true]:
     Source: 'tests/src/traits.rs', lines 13:0-17:1
     Visibility: public *)
 let bool_Insts_TraitsBoolTrait_ret_true (self : bool) : result bool =
   Ok true
 
-(** Trait implementation: [traits::{traits::BoolTrait for bool}]
+(** Trait implementation: [traits::{impl traits::BoolTrait for bool}]
     Source: 'tests/src/traits.rs', lines 13:0-17:1 *)
 let bool_Insts_TraitsBoolTrait : boolTrait_t bool = {
   get_bool = bool_Insts_TraitsBoolTrait_get_bool;
@@ -53,21 +53,21 @@ let test_bool_trait_bool (x : bool) : result bool =
   let* b = bool_Insts_TraitsBoolTrait_get_bool x in
   if b then bool_Insts_TraitsBoolTrait_ret_true x else Ok false
 
-(** [traits::{traits::BoolTrait for core::option::Option<T>}::get_bool]:
+(** [traits::{impl traits::BoolTrait for core::option::Option<T>}::get_bool]:
     Source: 'tests/src/traits.rs', lines 25:4-30:5
     Visibility: public *)
 let core_option_Option_Insts_TraitsBoolTrait_get_bool
   (#t : Type0) (self : option t) : result bool =
   begin match self with | None -> Ok false | Some _ -> Ok true end
 
-(** [traits::{traits::BoolTrait for core::option::Option<T>}::ret_true]:
+(** [traits::{impl traits::BoolTrait for core::option::Option<T>}::ret_true]:
     Source: 'tests/src/traits.rs', lines 24:0-31:1
     Visibility: public *)
 let core_option_Option_Insts_TraitsBoolTrait_ret_true
   (#t : Type0) (self : option t) : result bool =
   Ok true
 
-(** Trait implementation: [traits::{traits::BoolTrait for core::option::Option<T>}]
+(** Trait implementation: [traits::{impl traits::BoolTrait for core::option::Option<T>}]
     Source: 'tests/src/traits.rs', lines 24:0-31:1 *)
 let core_option_Option_Insts_TraitsBoolTrait (t : Type0) : boolTrait_t (option
   t) = {
@@ -94,19 +94,19 @@ let test_bool_trait
     Visibility: public *)
 noeq type toU64_t (self : Type0) = { to_u64 : self -> result u64; }
 
-(** [traits::{traits::ToU64 for u64}::to_u64]:
+(** [traits::{impl traits::ToU64 for u64}::to_u64]:
     Source: 'tests/src/traits.rs', lines 46:4-48:5
     Visibility: public *)
 let u64_Insts_TraitsToU64_to_u64 (self : u64) : result u64 =
   Ok self
 
-(** Trait implementation: [traits::{traits::ToU64 for u64}]
+(** Trait implementation: [traits::{impl traits::ToU64 for u64}]
     Source: 'tests/src/traits.rs', lines 45:0-49:1 *)
 let u64_Insts_TraitsToU64 : toU64_t u64 = {
   to_u64 = u64_Insts_TraitsToU64_to_u64;
 }
 
-(** [traits::{traits::ToU64 for (A, A)}::to_u64]:
+(** [traits::{impl traits::ToU64 for (A, A)}::to_u64]:
     Source: 'tests/src/traits.rs', lines 52:4-54:5
     Visibility: public *)
 let pair_Insts_TraitsToU64_to_u64
@@ -116,7 +116,7 @@ let pair_Insts_TraitsToU64_to_u64
   let* i1 = toU64Inst.to_u64 x1 in
   u64_add i i1
 
-(** Trait implementation: [traits::{traits::ToU64 for (A, A)}]
+(** Trait implementation: [traits::{impl traits::ToU64 for (A, A)}]
     Source: 'tests/src/traits.rs', lines 51:0-55:1 *)
 let pair_Insts_TraitsToU64 (#a : Type0) (toU64Inst : toU64_t a) : toU64_t (a &
   a) = {
@@ -147,14 +147,14 @@ let h0 (x : u64) : result u64 =
     Visibility: public *)
 type wrapper_t (t : Type0) = { x : t; }
 
-(** [traits::{traits::ToU64 for traits::Wrapper<T>}::to_u64]:
+(** [traits::{impl traits::ToU64 for traits::Wrapper<T>}::to_u64]:
     Source: 'tests/src/traits.rs', lines 77:4-79:5
     Visibility: public *)
 let wrapper_Insts_TraitsToU64_to_u64
   (#t : Type0) (toU64Inst : toU64_t t) (self : wrapper_t t) : result u64 =
   toU64Inst.to_u64 self.x
 
-(** Trait implementation: [traits::{traits::ToU64 for traits::Wrapper<T>}]
+(** Trait implementation: [traits::{impl traits::ToU64 for traits::Wrapper<T>}]
     Source: 'tests/src/traits.rs', lines 76:0-80:1 *)
 let wrapper_Insts_TraitsToU64 (#t : Type0) (toU64Inst : toU64_t t) : toU64_t
   (wrapper_t t) = {
@@ -178,13 +178,13 @@ let h2 (#t : Type0) (toU64Inst : toU64_t t) (x : wrapper_t t) : result u64 =
     Visibility: public *)
 noeq type toType_t (self : Type0) (t : Type0) = { to_type : self -> result t; }
 
-(** [traits::{traits::ToType<bool> for u64}::to_type]:
+(** [traits::{impl traits::ToType<bool> for u64}::to_type]:
     Source: 'tests/src/traits.rs', lines 95:4-97:5
     Visibility: public *)
 let u64_Insts_TraitsToTypeBool_to_type (self : u64) : result bool =
   Ok (self > 0)
 
-(** Trait implementation: [traits::{traits::ToType<bool> for u64}]
+(** Trait implementation: [traits::{impl traits::ToType<bool> for u64}]
     Source: 'tests/src/traits.rs', lines 94:0-98:1 *)
 let u64_Insts_TraitsToTypeBool : toType_t u64 bool = {
   to_type = u64_Insts_TraitsToTypeBool_to_type;
@@ -234,7 +234,7 @@ type testType_t (t : Type0) = t
     Source: 'tests/src/traits.rs', lines 129:8-129:30 *)
 type testType_test_TestType1_t = u64
 
-(** [traits::{traits::TestType<T>}::test::{traits::{traits::TestType<T>}::test::TestTrait for traits::{traits::TestType<T>}::test::TestType1}::test]:
+(** [traits::{traits::TestType<T>}::test::{impl traits::{traits::TestType<T>}::test::TestTrait for traits::{traits::TestType<T>}::test::TestType1}::test]:
     Source: 'tests/src/traits.rs', lines 141:12-143:13 *)
 let testType_test_TestType1_Insts_TraitsTestTypeTestTestTrait_test
   (self : testType_test_TestType1_t) : result bool =
@@ -258,7 +258,7 @@ noeq type testType_test_TestTrait_t (self : Type0) = {
   test : self -> result bool;
 }
 
-(** Trait implementation: [traits::{traits::TestType<T>}::test::{traits::{traits::TestType<T>}::test::TestTrait for traits::{traits::TestType<T>}::test::TestType1}]
+(** Trait implementation: [traits::{traits::TestType<T>}::test::{impl traits::{traits::TestType<T>}::test::TestTrait for traits::{traits::TestType<T>}::test::TestType1}]
     Source: 'tests/src/traits.rs', lines 140:8-144:9 *)
 let testType_test_TestType1_Insts_TraitsTestTypeTestTestTrait :
   testType_test_TestTrait_t testType_test_TestType1_t = {
@@ -270,7 +270,7 @@ let testType_test_TestType1_Insts_TraitsTestTypeTestTestTrait :
     Visibility: public *)
 type boolWrapper_t = bool
 
-(** [traits::{traits::ToType<T> for traits::BoolWrapper}::to_type]:
+(** [traits::{impl traits::ToType<T> for traits::BoolWrapper}::to_type]:
     Source: 'tests/src/traits.rs', lines 158:4-160:5
     Visibility: public *)
 let boolWrapper_Insts_TraitsToType_to_type
@@ -279,7 +279,7 @@ let boolWrapper_Insts_TraitsToType_to_type
   =
   toTypeBoolTInst.to_type self
 
-(** Trait implementation: [traits::{traits::ToType<T> for traits::BoolWrapper}]
+(** Trait implementation: [traits::{impl traits::ToType<T> for traits::BoolWrapper}]
     Source: 'tests/src/traits.rs', lines 154:0-161:1 *)
 let boolWrapper_Insts_TraitsToType (#t : Type0) (toTypeBoolTInst : toType_t
   bool t) : toType_t boolWrapper_t t = {
@@ -300,25 +300,27 @@ noeq type withConstTy_t (self : Type0) (self_v : Type0) (self_w : Type0) (len :
 (** [traits::WithConstTy::LEN2]
     Source: 'tests/src/traits.rs', lines 166:4-166:27
     Visibility: public *)
-let withConstTy_LEN2_default (self : Type0) (len : usize) : usize = 32
+let withConstTy_LEN2_default (self : Type0) (clause0_v : Type0) (clause0_w :
+  Type0) (len : usize) : usize =
+  32
 
-(** [traits::{traits::WithConstTy<u8, u64, 32usize> for bool}::f]:
+(** [traits::{impl traits::WithConstTy<u8, u64, 32usize> for bool}::f]:
     Source: 'tests/src/traits.rs', lines 182:4-182:42
     Visibility: public *)
 let bool_Insts_TraitsWithConstTyU8U6432_f
   (i : u64) (a : array u8 32) : result u64 =
   Ok i
 
-(** [traits::{traits::WithConstTy<u8, u64, 32usize> for bool}::LEN1]
+(** [traits::{impl traits::WithConstTy<u8, u64, 32usize> for bool}::LEN1]
     Source: 'tests/src/traits.rs', lines 177:4-177:27
     Visibility: public *)
 let bool_Insts_TraitsWithConstTyU8U6432_LEN1 : usize = 12
 
-(** Trait implementation: [traits::{traits::WithConstTy<u8, u64, 32usize> for bool}]
+(** Trait implementation: [traits::{impl traits::WithConstTy<u8, u64, 32usize> for bool}]
     Source: 'tests/src/traits.rs', lines 176:0-183:1 *)
 let bool_Insts_TraitsWithConstTyU8U6432 : withConstTy_t bool u8 u64 32 = {
   cLEN1 = Ok bool_Insts_TraitsWithConstTyU8U6432_LEN1;
-  cLEN2 = Ok (withConstTy_LEN2_default bool 32);
+  cLEN2 = Ok (withConstTy_LEN2_default bool u8 u64 32);
   toU64Inst = u64_Insts_TraitsToU64;
   f = bool_Insts_TraitsWithConstTyU8U6432_f;
 }
@@ -428,11 +430,11 @@ noeq type childTrait1_t (self : Type0) = {
   parentTrait1Inst : parentTrait1_t self;
 }
 
-(** Trait implementation: [traits::{traits::ParentTrait1 for usize}]
+(** Trait implementation: [traits::{impl traits::ParentTrait1 for usize}]
     Source: 'tests/src/traits.rs', lines 226:0-226:30 *)
 let usize_Insts_TraitsParentTrait1 : parentTrait1_t usize = ()
 
-(** Trait implementation: [traits::{traits::ChildTrait1 for usize}]
+(** Trait implementation: [traits::{impl traits::ChildTrait1 for usize}]
     Source: 'tests/src/traits.rs', lines 227:0-227:29 *)
 let usize_Insts_TraitsChildTrait1 : childTrait1_t usize = {
   parentTrait1Inst = usize_Insts_TraitsParentTrait1;
@@ -485,23 +487,23 @@ noeq type childTrait2_t (self : Type0) (self_clause0_u : Type0)
   convert : self_clause0_u -> result self_clause0_clause0_target;
 }
 
-(** Trait implementation: [traits::{traits::WithTarget<u32> for u32}]
+(** Trait implementation: [traits::{impl traits::WithTarget<u32> for u32}]
     Source: 'tests/src/traits.rs', lines 266:0-268:1 *)
 let u32_Insts_TraitsWithTargetU32 : withTarget_t u32 u32 = ()
 
-(** Trait implementation: [traits::{traits::ParentTrait2<u32, u32> for u32}]
+(** Trait implementation: [traits::{impl traits::ParentTrait2<u32, u32> for u32}]
     Source: 'tests/src/traits.rs', lines 270:0-272:1 *)
 let u32_Insts_TraitsParentTrait2U32U32 : parentTrait2_t u32 u32 u32 = {
   withTargetInst = u32_Insts_TraitsWithTargetU32;
 }
 
-(** [traits::{traits::ChildTrait2<u32, u32> for u32}::convert]:
+(** [traits::{impl traits::ChildTrait2<u32, u32> for u32}::convert]:
     Source: 'tests/src/traits.rs', lines 275:4-277:5
     Visibility: public *)
 let u32_Insts_TraitsChildTrait2U32U32_convert (x : u32) : result u32 =
   Ok x
 
-(** Trait implementation: [traits::{traits::ChildTrait2<u32, u32> for u32}]
+(** Trait implementation: [traits::{impl traits::ChildTrait2<u32, u32> for u32}]
     Source: 'tests/src/traits.rs', lines 274:0-278:1 *)
 let u32_Insts_TraitsChildTrait2U32U32 : childTrait2_t u32 u32 u32 = {
   parentTrait2Inst = u32_Insts_TraitsParentTrait2U32U32;
@@ -555,25 +557,25 @@ let test_get_trait
     Visibility: public *)
 noeq type trait_t (self : Type0) = { cLEN : result usize; }
 
-(** [traits::{traits::Trait for [T; N]}::LEN]
+(** [traits::{impl traits::Trait for [T; N]}::LEN]
     Source: 'tests/src/traits.rs', lines 317:4-317:25
     Visibility: public *)
 let array_Insts_TraitsTrait_LEN (t : Type0) (n : usize) : usize = n
 
-(** Trait implementation: [traits::{traits::Trait for [T; N]}]
+(** Trait implementation: [traits::{impl traits::Trait for [T; N]}]
     Source: 'tests/src/traits.rs', lines 316:0-318:1 *)
 let array_Insts_TraitsTrait (t : Type0) (n : usize) : trait_t (array t n) = {
   cLEN = Ok (array_Insts_TraitsTrait_LEN t n);
 }
 
-(** [traits::{traits::Trait for traits::Wrapper<T>}::LEN]
+(** [traits::{impl traits::Trait for traits::Wrapper<T>}::LEN]
     Source: 'tests/src/traits.rs', lines 321:4-321:25
     Visibility: public *)
 let wrapper_Insts_TraitsTrait_LEN (#t : Type0) (traitInst : trait_t t)
   : usize =
   0
 
-(** Trait implementation: [traits::{traits::Trait for traits::Wrapper<T>}]
+(** Trait implementation: [traits::{impl traits::Trait for traits::Wrapper<T>}]
     Source: 'tests/src/traits.rs', lines 320:0-322:1 *)
 let wrapper_Insts_TraitsTrait (#t : Type0) (traitInst : trait_t t) : trait_t
   (wrapper_t t) = {
