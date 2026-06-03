@@ -104,31 +104,64 @@ macro "prove_admissible" : tactic =>
   )
   )
 
+def getParamNames (ty : Expr) : MetaM (Array Name) := do
+  forallTelescope ty fun xs _ => do
+    xs.mapM fun x => do
+      let localDecl ← x.fvarId!.getDecl
+      return localDecl.userName
+
 elab "dspec_induction" func:ident : tactic => do
   let mut goal ← getMainGoal
-  let ty ← goal.getType
+  let goalTy ← goal.getType
 
   let func_expr ← Term.elabTerm func none
   let func_expr := func_expr.getAppFn
   let func_expr_name := func_expr.constName!
 
-  -- do some wierd hacky nonsense to get `func.fixpoint_induct`
+  -- do some wierd hacky nonsense to get `func.fixpoint_induct`.
+  -- more obvious methods fail, presumably due to buggy lean behavior
   let namee := func.getId.mkStr "fixpoint_induct"
   let fi_stx : Syntax ← `(term | $(mkIdent namee))
   let fixpoint_induct ← Term.elabTerm fi_stx none
+  let fixpoint_induct := fixpoint_induct.getAppFn
   trace[UnfoldPF] "type of fixpoint_induct is {← inferType fixpoint_induct}"
+
+  -- sadly, there are many possible forms that fixpoint_induct can take.
+  -- we need to reverse engineer which form it is by looking at its type.
+  -- see the examples at the end of this file, it depends on which parameters to the
+  -- original function are unchanged in recursive calls. {
+  let func_params ← getParamNames (← inferType func_expr)
+  let fixpoint_induct_params ← getParamNames (← inferType fixpoint_induct)
+  -- the last 3 parameters are the motive, admissibility, and proof of induction
+  let fixpoint_induct_params := fixpoint_induct_params.extract 0 (fixpoint_induct_params.size - 3)
+  -- which params are constant, these are treated specially by fixpoint_induct
+  let constant_params := func_params.map (fun x => fixpoint_induct_params.contains x)
+  trace[UnfoldPF] "constant_params: {constant_params}"
+  let .some func_application := goalTy.find? (fun e => e.getAppFn.isConstOf func_expr_name)
+  | throwError "no"
+  trace[UnfoldPF] "func app in goal is: {func_application}"
+  let args_in_goal := func_application.getAppArgs
+  let const_args := (args_in_goal.zip constant_params).filterMap
+    fun (x, b) => if b then some x else none
+  let nonconst_args := (args_in_goal.zip constant_params).filterMap
+    fun (x, b) => if b then none else some x
+  -- lift these arguments, since they will need to go under a new binder
+  -- let nonconst_args := nonconst_args.map (fun e => e.liftLooseBVars 0 1)
+  trace[UnfoldPF] "const_args: {const_args}"
+  -- }
 
   -- make a type family that abstracts over instances of func in the goal type
   let func_expr_ty ← inferType func_expr
   let fmvar ← Meta.mkFreshExprMVar (some func_expr_ty)
-  -- let abs_goal_ty := ty.replace (fun x => if x == func_expr then some fmvar else none)
-  let abs_goal_ty := ty.replace (fun x => if x.isConstOf func_expr_name then some fmvar else none)
+  let value_to_replace_in_motive := mkAppN fmvar nonconst_args
+  let abs_goal_ty := goalTy.replace
+    (fun x => if x.getAppFn.isConstOf func_expr_name then some value_to_replace_in_motive else none)
   let abs_goal_ty := abs_goal_ty.abstract #[fmvar]
   let abs_goal_ty := Expr.lam `func func_expr_ty abs_goal_ty .default
 
   trace[UnfoldPF] "fixpoint_induct with motive: {abs_goal_ty}"
 
-  let fi_app := mkAppN fixpoint_induct #[abs_goal_ty]
+  let fi_app := mkAppN fixpoint_induct (const_args ++ #[abs_goal_ty])
 
   trace[UnfoldPF] "going to apply {fi_app}"
   trace[UnfoldPF] "of type : {← inferType fi_app}"
@@ -137,7 +170,7 @@ elab "dspec_induction" func:ident : tactic => do
 
   -- prove the admissibility condition. this chunk of code is equivalent to the
   -- `prove_admissible` tactic above, but apparently calling that directly might cause problems
-  let _ ← withTransparency .none <| do
+  let _ ← withTransparency .default <| do -- using a more restricted reducibility doesn't work on some tests below
     let onError {α} : TacticM α := throwError "failed to prove admissibility condition"
     let curry_admissible ← mkConstWithFreshMVarLevels `Aeneas.UnfoldPF.curry_admissible
     let admissible_pi ← mkConstWithFreshMVarLevels `Lean.Order.admissible_pi
@@ -235,19 +268,22 @@ theorem test_div_2_tactic (x y : Std.I32) : Std.WP.dspec (simple_diverge_2' x y)
       simp [*]
 
 
-open ControlFlow
-/-- [tutorial::dummy_hash]:
-    Source: 'src/lib.rs', lines 250:0-253:1
-    Visibility: public -/
+namespace TestHash
+-- variable (dummy_hash : Std.U32 → Result Std.U32)
 def dummy_hash (i : Std.U32) : Result Std.U32 := do
   ok 1000#u32
+  -- ok dummy_val
+
+#check dummy_hash
+
+open ControlFlow
 
 /-- [tutorial::pseudo_random]: loop body 0:
     Source: 'src/lib.rs', lines 258:2-260:3
     Visibility: public -/
 def pseudo_random_loop.body
   (state : Std.U32) : Result (ControlFlow Std.U32 Std.U32) := do
-  if state > 100#u32
+  if state < 100#u32
   then let state1 ← dummy_hash state
        ok (cont state1)
   else ok (done state)
@@ -267,20 +303,62 @@ def pseudo_random_loop (state : Std.U32) : Result Std.U32 := do
                pseudo_random_loop 0#u32
 
 
-#check loop.fixpoint_induct
+#check @loop.fixpoint_induct
 theorem pseudo_random_spec :
-  pseudo_random div⦃fun x => x.val <= 100⦄ := by
+  pseudo_random div⦃fun x => x.val >= 100⦄ := by
   unfold pseudo_random
   unfold pseudo_random_loop
-  apply (loop.fixpoint_induct pseudo_random_loop.body
-    (fun func => WP.dspec (func 0#u32) (fun x => ↑x ≤ (100 : Nat))))
-  · prove_admissible
-  · sorry
-  -- apply (loop.fixpoint_induct (fun func =>
-  --     (WP.dspec (func (fun state1 => pseudo_random_loop.body state1) 0#u32) (fun x => ↑x ≤ 100)))))
-  -- dspec_induction loop
-  -- --
-  -- sorry
+  -- note here that the use must make a potentially non-obvious decision about
+  -- what to generalize and how to do the induction
+  generalize 0#u32 = x
+  revert x
+  dspec_induction loop
+  intros loop' ih x
+  simp only
+  unfold pseudo_random_loop.body
+  simp
+  by_cases ((↑x : Nat) < 100)
+  ·
+    simp [*]
+    unfold dummy_hash
+    simp
+    -- note that here, i am refraining from using the result of dummy_hash,
+    -- since its supposed to represent a hash function where we can't predict the result,
+    -- but it actually is just a constant
+    step
+    grind
+  ·
+    simp [*]
+    grind
+  -- ·
+  --   simp [*] at *
+  --   subst_vars
+  --   simp only
+  --   simp
+  -- ·
+  --   --
+  --   sorry
+  -- ·
+  --   --
+  --   sorry
+  --
+  -- -- --
+end TestHash
+
+
+def first_arg_const (x y : Nat) : Option Nat :=
+  if x = 0 then Option.some 0
+  else first_arg_const x (y + 1)
+partial_fixpoint
+#check first_arg_const.fixpoint_induct
+
+def second_arg_const (x y : Nat) : Option Nat :=
+  if y = 0 then Option.some 0
+  else second_arg_const (x + 1) y
+partial_fixpoint
+#check second_arg_const.fixpoint_induct
+
+#check forallTelescope
 
 end Test
 
