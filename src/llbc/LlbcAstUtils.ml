@@ -24,6 +24,20 @@ let body_as_body_exn file line f =
 
 let body_is_known (b : body) : bool = Option.is_some (body_as_body b)
 
+let body_as_target_dispatch (b : body) :
+    (string * Types.fun_decl_ref) list option =
+  match b with
+  | TargetDispatchBody targets -> Some targets
+  | _ -> None
+
+let body_is_target_dispatch (b : body) : bool =
+  Option.is_some (body_as_target_dispatch b)
+
+(** A function body is translatable if it is either a structured body (normal
+    case) or a target dispatch body (multi-target). *)
+let body_is_translatable (b : body) : bool =
+  body_is_known b || body_is_target_dispatch b
+
 let lookup_fun_sig (fun_id : fun_id) (fun_decls : fun_decl FunDeclId.Map.t) :
     bound_fun_sig =
   match fun_id with
@@ -75,15 +89,48 @@ let crate_has_opaque_non_builtin_decls (k : crate) (filter_builtin : bool)
   crate_get_opaque_non_builtin_decls k filter_builtin type_decls fun_decls
   <> ([], [])
 
+(** Strip trailing [PeTarget] elements from a name.
+
+    Multi-target extraction appends [PeTarget] to per-target function names.
+    This element doesn't participate in pattern matching (the pattern generator
+    skips it), so we strip it before calling [name_to_pattern] to avoid
+    triggering its roundtrip assertion. *)
+let strip_target_suffix (n : name) : name =
+  match List.rev n with
+  | Types.PeTarget _ :: rest -> List.rev rest
+  | _ -> n
+
+let strip_target_or_instantiated_suffix (n : name) : name =
+  let rec strip_all (n : name) : name =
+    match n with
+    | (PeTarget _ | PeInstantiated _) :: rest -> strip_all rest
+    | _ -> List.rev n
+  in
+  strip_all (List.rev n)
+
+(** Extract and strip any trailing [PeTarget] element from a name, returning the
+    cleaned name and an optional target suffix string (with [-] replaced by
+    [_]). *)
+let extract_target_suffix (name : name) : name * string option =
+  match Collections.List.last name with
+  | PeTarget target ->
+      let target = String.concat "_" (String.split_on_char '-' target) in
+      (Collections.List.prefix (List.length name - 1) name, Some target)
+  | _ -> (name, None)
+
+let add_target_suffix (name : name) (target_suffix : string option) : name =
+  match target_suffix with
+  | None -> name
+  | Some target -> name @ [ PeTarget target ]
+
 let name_to_pattern (span : Meta.span option) (ctx : Charon.NameMatcher.ctx)
     (c : Charon.NameMatcher.to_pat_config) (n : name) =
+  let n = strip_target_suffix n in
   if !Config.fail_hard then Charon.NameMatcher.name_to_pattern ctx c n
   else
     try Charon.NameMatcher.name_to_pattern ctx c n
-    with Not_found ->
-      [%craise_opt_span] span
-        "Could not convert the name to a pattern because of missing \
-         definition(s)"
+    with Not_found | Assert_failure _ ->
+      [%craise_opt_span] span "Could not convert the name to a pattern"
 
 let name_with_crate_to_pattern_string (span : Meta.span option)
     (crate : LlbcAst.crate) (n : Types.name) : string =
@@ -104,10 +151,8 @@ let name_with_generics_to_pattern (span : Meta.span option)
     Charon.NameMatcher.name_with_generics_to_pattern ctx c params n args
   else
     try Charon.NameMatcher.name_with_generics_to_pattern ctx c params n args
-    with Not_found ->
-      [%craise_opt_span] span
-        "Could not convert the name to a pattern because of missing \
-         definition(s)"
+    with Not_found | Assert_failure _ ->
+      [%craise_opt_span] span "Could not convert the name to a pattern"
 
 let name_with_generics_crate_to_pattern_string (span : Meta.span option)
     (crate : LlbcAst.crate) (n : Types.name) (params : Types.generic_params)

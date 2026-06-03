@@ -225,7 +225,7 @@ def getStepSpecFunArgsExpr (ty : Expr) :
   unless ← isProp ty do
     throwError "Expected a proposition, got {←inferType ty}"
   -- ty == ∀ xs, spec (f x1 ... xn) P
-  let (xs, xs_bi, ty₂) ← forallMetaTelescope ty
+  let (xs, _xs_bi, ty₂) ← forallMetaTelescope ty
   trace[Step] "Universally quantified arguments and assumptions: {xs}"
   -- ty₂ == spec (f x1 ... xn) P
   let (spec?, args) := ty₂.consumeMData.withApp (fun f args => (f, args))
@@ -234,7 +234,7 @@ def getStepSpecFunArgsExpr (ty : Expr) :
     | _ => throwError "Not a constant"
   let .some info ← specStatementLookup specName
     | throwError "{specName} is not a supported spec statement name"
-  if h: args.size = info.arity
+  if _h: args.size = info.arity
   then pure (args[info.program_index]!, info) -- this is `f x1 ... xn`
   else throwError "Expected to be a `spec (f x1 ... xn) P`, got {ty₂}"
 
@@ -323,8 +323,9 @@ initialize stepAttr : StepSpecAttr ← do
 
 def StepSpecAttr.find? (s : StepSpecAttr) (name : Name) (e : Expr) : MetaM (Array Name) := do
   let state := s.ext.getState (← getEnv)
-  -- let rules ← state.rules.getMatch e
-  let rules ← (state.rules.get! name).getMatch e
+  let some dtree := state.rules.get? name
+  | throwError "no such spec statement as {name}, its all {state.rules.keys}"
+  let rules ← dtree.getMatch e
   pure (rules.filter (fun th => th ∉ state.deactivated))
 
 def StepSpecAttr.getState (s : StepSpecAttr) : MetaM Rules := do

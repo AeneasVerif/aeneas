@@ -371,4 +371,53 @@ def BitReader.peek
   let i1 ← lift (i &&& 1#u64)
   ok (i1, { data := s, bit_buf := i })
 
+/-- [nested_borrows::MutBorrow]
+    Source: 'tests/src/nested-borrows.rs', lines 164:0-166:1
+    Visibility: public -/
+structure MutBorrow where
+  p : Std.U32
+
+/-- [nested_borrows::{nested_borrows::MutBorrow<'a>}::store]:
+    Source: 'tests/src/nested-borrows.rs', lines 169:4-171:5
+    Visibility: public -/
+def MutBorrow.store
+  (self : MutBorrow) (v : Std.U32) :
+  Result (MutBorrow × (MutBorrow → MutBorrow))
+  := do
+  ok ({ p := v }, fun self1 => self1)
+
+/-- [nested_borrows::use_mut_borrow]: loop body 0:
+    Source: 'tests/src/nested-borrows.rs', lines 176:4-179:5
+    Visibility: public -/
+@[rust_loop_body]
+def use_mut_borrow_loop.body
+  (n : Std.Usize) (back : Std.U32 → Std.U32) (i : Std.U32) (i1 : Std.Usize) :
+  Result (ControlFlow ((Std.U32 → Std.U32) × Std.U32 × Std.Usize) Std.U32)
+  := do
+  if i1 < n
+  then
+    let (b, store_back) ← MutBorrow.store { p := i } 0#u32
+    let i2 ← i1 + 1#usize
+    ok (cont (fun i3 => back (store_back { p := i3 }).p, b.p, i2))
+  else ok (done (back i))
+
+/-- [nested_borrows::use_mut_borrow]: loop 0:
+    Source: 'tests/src/nested-borrows.rs', lines 176:4-179:5
+    Visibility: public -/
+@[rust_loop]
+def use_mut_borrow_loop
+  (back : Std.U32 → Std.U32) (i : Std.U32) (n : Std.Usize) (i1 : Std.Usize) :
+  Result Std.U32
+  := do
+  loop
+    (fun (back1, i2, i3) => use_mut_borrow_loop.body n back1 i2 i3)
+    (back, i, i1)
+
+/-- [nested_borrows::use_mut_borrow]:
+    Source: 'tests/src/nested-borrows.rs', lines 174:0-180:1
+    Visibility: public -/
+def use_mut_borrow (b : MutBorrow) (n : Std.Usize) : Result MutBorrow := do
+  let back ← use_mut_borrow_loop (fun i => i) b.p n 0#usize
+  ok { p := back }
+
 end nested_borrows

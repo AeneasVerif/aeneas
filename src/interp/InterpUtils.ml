@@ -12,6 +12,42 @@ open ValuesUtils
 (** The local logger *)
 let log = Logging.interp_log
 
+(** Wrapper around {!Charon.GAstUtils.get_target_information} that handles
+    multi-layout crates by raising a recoverable [CFailure] instead of an
+    uncaught [Failure]. *)
+let get_target_information (span : Meta.span) (crate : LlbcAst.crate) =
+  try Charon.GAstUtils.get_target_information crate
+  with Failure _ ->
+    [%craise] span
+      "Multi-target crate with different layouts (e.g., mixed 32-bit and \
+       64-bit targets): cannot determine a unique target pointer size"
+
+let get_target_min_ptr_size (crate : LlbcAst.crate) : int =
+  match crate.target_information with
+  | (_, info) :: infos ->
+      let min = ref info.target_pointer_size in
+      List.iter
+        (fun (_, info) ->
+          if info.target_pointer_size < !min then
+            min := info.target_pointer_size)
+        infos;
+      !min
+  | _ -> [%craise_opt_span] None "Unexpected"
+
+let get_target_ptr_size (span : Meta.span) (crate : LlbcAst.crate) =
+  match crate.target_information with
+  | [ (_, info) ] -> info.target_pointer_size
+  | (_, info) :: rest
+    when List.for_all
+           (fun (_, i) -> i.target_pointer_size = info.target_pointer_size)
+           rest ->
+      (* All targets agree on the layout — safe to use any one. *)
+      info.target_pointer_size
+  | _ ->
+      [%craise] span
+        "Multi-target crate with different pointer sizes (e.g., mixed 32-bit \
+         and 64-bit targets): cannot determine a unique target pointer size"
+
 (** Some utilities *)
 
 let eval_ctx_to_string = Print.Contexts.eval_ctx_to_string
@@ -180,7 +216,7 @@ let mk_aproj_loans_value_from_symbolic_value (proj_regions : RegionId.Set.t)
       ty = svalue.sv_ty;
     }
 
-let mk_eproj_loans_value_from_symbolic_value
+let mk_eproj_loans_value_from_symbolic_value env
     (type_infos : TypesAnalysis.type_infos) (proj_regions : RegionId.Set.t)
     (svalue : symbolic_value) (proj_ty : ty) : tevalue =
   if ty_has_mut_borrow_for_region_in_set type_infos proj_regions proj_ty then
@@ -196,7 +232,11 @@ let mk_eproj_loans_value_from_symbolic_value
     in
     let av : tevalue = { value = av; ty = svalue.sv_ty } in
     av
-  else { value = EIgnored; ty = svalue.sv_ty }
+  else
+    {
+      value = EIgnored (Some (env, mk_tvalue_from_symbolic_value svalue));
+      ty = svalue.sv_ty;
+    }
 
 (** Create a borrows projector from a symbolic value *)
 let mk_aproj_borrows_from_symbolic_value (span : Meta.span)
@@ -399,16 +439,15 @@ let value_has_ret_symbolic_value_with_borrow_under_mut span (ctx : eval_ctx)
     compute span-data, to find pretty names. *)
 let rvalue_get_place (rv : rvalue) : place option =
   match rv with
-  | Use (Copy p | Move p) -> Some p
-  | Use (Constant _) -> None
+  | Use ((Copy p | Move p), _) -> Some p
+  | Use (Constant _, _) -> None
   | Len (p, _, _) | RvRef (p, _, _) | RawPtr (p, _, _) -> Some p
   | NullaryOp _
   | UnaryOp _
   | BinaryOp _
   | Discriminant _
   | Aggregate _
-  | Repeat _
-  | ShallowInitBox _ -> None
+  | Repeat _ -> None
 
 (** See {!ValuesUtils.symbolic_value_has_borrows} *)
 let symbolic_value_has_borrows span (ctx : eval_ctx) (sv : symbolic_value) :
@@ -801,7 +840,7 @@ let instantiate_fun_sig (span : Meta.span option) (ctx : eval_ctx)
   (* Decompose the signature *)
   let {
     item_binder_params = generics;
-    item_binder_value = { is_unsafe; inputs; output };
+    item_binder_value = { Types.inputs; output; _ };
   } =
     sg
   in
@@ -925,7 +964,7 @@ let instantiate_fun_sig (span : Meta.span option) (ctx : eval_ctx)
     let sg =
       {
         item_binder_params = generics;
-        item_binder_value = { is_unsafe; inputs; output };
+        item_binder_value = { sg.item_binder_value with inputs; output };
       }
     in
     let regions_hierarchy =

@@ -109,7 +109,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
 
           method! visit_rvalue env rv =
             match rv with
-            | Use (Constant { kind = CTraitConst _; _ }) ->
+            | Use (Constant { kind = CTraitConst _; _ }, _) ->
                 (* We consider that trait constants can fail, similarly to
                    trait methods. *)
                 self#may_fail true
@@ -120,8 +120,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
             | Len _
             | NullaryOp _
             | RawPtr _
-            | Repeat _
-            | ShallowInitBox _ -> ()
+            | Repeat _ -> ()
             | RvRef ({ kind = PlaceGlobal gref; _ }, _, _) -> (
                 (* A reference to a global: propagate can_fail.
 
@@ -177,6 +176,14 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
       group_has_builtin_info := !group_has_builtin_info || has_builtin_info;
       match f.body with
       | StructuredBody body -> obj#visit_block body.body.span body.body
+      | TargetDispatchBody targets ->
+          (* get_target can fail, and so can each target function *)
+          obj#may_fail true;
+          (* Also propagate effects from the target implementations *)
+          List.iter
+            (fun ((_target_name : string), (fdr : Types.fun_decl_ref)) ->
+              obj#visit_fid f.item_meta.span fdr.id)
+            targets
       | _ ->
           let info_can_fail =
             match builtin_info with

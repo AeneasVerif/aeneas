@@ -698,6 +698,11 @@ theorem qimp_unit (P Q : Unit → Prop) :
   qimp P Q ↔ (P () → Q ()) := by
   grind [qimp]
 
+@[simp]
+theorem imp_exists_iff {α} (P : α → Prop) (Q : Prop) :
+  imp (∃ x, P x) Q ↔ (∀ x, imp (P x) Q) := by
+  simp only [imp, forall_exists_index]
+
 /-- Example with a function outputting `()` (we need to eliminate the quantifier) -/
 example :
   (do
@@ -713,6 +718,23 @@ example :
   apply spec_mono'
   · apply massert_spec'; omega
   simp -failIfUnchanged only [qimp_unit, forall_const]
+
+/- Example with a post-condition manipulating an ∃ -/
+example (zero : List Nat → Result (List Nat))
+    (zero_spec : ∀ s, zero s ⦃ s' =>
+      ∃ (h : s'.length = s.length),
+      (∀ i, (_ : i < s.length) → s'[i]'(by grind) = 0) ⦄)
+    (s : List Nat) :
+    (do
+      let _ ← zero s
+      pure ()) ⦃ _ => True ⦄ := by
+  apply spec_bind'
+  · apply zero_spec
+  simp -failIfUnchanged only [qimp_spec_iff, imp_exists_iff]
+  rintro s' h0 h1
+  --
+  simp only [pure, spec_ok]
+
 
 end Aeneas.Std.WP
 
@@ -818,7 +840,8 @@ namespace Aeneas.Std.WP
     mk_spec_bind := ``Std.WP.spec_bind'
     mk_spec_bind_skip_args := 4
     uncurry_elim_tactics := #[
-      ``Std.WP.qimp_spec_uncurry', ``Std.WP.qimp_spec_unit, ``Std.WP.qimp_spec_exists
+      ``Std.WP.qimp_spec_uncurry', ``Std.WP.qimp_spec_unit, ``Std.WP.qimp_spec_exists,
+      ``Std.WP.qimp_spec_iff, ``Std.WP.qimp_iff,
     ]
     qimp_elim_tactics := #[ ``Std.WP.qimp_spec_iff, ]
     liftings := #[]

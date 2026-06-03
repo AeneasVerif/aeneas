@@ -415,16 +415,35 @@ where
         withLocalDecl lname lbinfo ltype fun fvar => do
           let lbody' := lbody.instantiate1 fvar
           let allFVars := fvars.push fvar
-          -- Build the FVarTree, opening any fully-applied uncurries for nested tuples
-          buildFVarTree allFVars 0 lbody' fun tree finalBody => do
-            let leafFVars := tree.fvars
-            let mainName := (← leafFVars[0]!.fvarId!.getDecl).userName
-            let mainType ← inferType leafFVars[0]!
+          -- Check if any fvar is a pair-typed intermediate from nested tuple destructuring.
+          -- These have auto-generated names (starting with `_x`) and indicate that the body
+          -- contains fully-applied uncurries that should be opened. We must NOT open
+          -- destructurings of user-named pair-typed variables (e.g., `let (a,b,c) := t`)
+          -- as those are separate binding entries parsed by `withBindings`.
+          let hasNestedTuple ← allFVars.anyM fun fv => do
+            let decl ← fv.fvarId!.getDecl
+            let fvType ← inferType fv
+            return fvType.isAppOfArity ``Prod 2 && decl.userName.toString.startsWith "_x"
+          if hasNestedTuple then
+            buildFVarTree allFVars 0 lbody' fun tree finalBody => do
+              let leafFVars := tree.fvars
+              let mainName := (← leafFVars[0]!.fvarId!.getDecl).userName
+              let mainType ← inferType leafFVars[0]!
+              let entry : BindingEntry :=
+                { name := mainName, type := mainType, value := computation
+                  fvars := leafFVars, isMonadic := true, monadExpr := some m
+                  fvarTree := tree }
+              withBindings finalBody (acc.push entry) k
+          else
+            -- Simple tuple bind (no nested pair intermediates): flat tree of leaves
+            let tree ← buildTreeFromList (allFVars.toList.map .leaf)
+            let mainName := (← allFVars[0]!.fvarId!.getDecl).userName
+            let mainType ← inferType allFVars[0]!
             let entry : BindingEntry :=
               { name := mainName, type := mainType, value := computation
-                fvars := leafFVars, isMonadic := true, monadExpr := some m
+                fvars := allFVars, isMonadic := true, monadExpr := some m
                 fvarTree := tree }
-            withBindings finalBody (acc.push entry) k
+            withBindings lbody' (acc.push entry) k
       | _ => k acc e
   /-- Given an array of fvars (from opening an uncurry chain) and the body expression
       that follows, build an `FVarTree` that reflects the original nesting structure

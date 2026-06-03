@@ -54,45 +54,83 @@ def u32_use_shift_left (x : Std.U32) : Result Std.U32 := do
 def i32_use_shift_left (x : Std.I32) : Result Std.I32 := do
   x <<< 2#i32
 
-/-- [scalars::add_and]:
+/-- [scalars::u32_use_wrapping_shl]:
     Source: 'tests/src/scalars.rs', lines 35:0-37:1 -/
+def u32_use_wrapping_shl (x : Std.U32) (s : Std.U32) : Result Std.U32 := do
+  ok (core.num.U32.wrapping_shl x s)
+
+/-- [scalars::i32_use_wrapping_shl]:
+    Source: 'tests/src/scalars.rs', lines 39:0-41:1 -/
+def i32_use_wrapping_shl (x : Std.I32) (s : Std.U32) : Result Std.I32 := do
+  ok (core.num.I32.wrapping_shl x s)
+
+/-- [scalars::u32_use_wrapping_shr]:
+    Source: 'tests/src/scalars.rs', lines 43:0-45:1 -/
+def u32_use_wrapping_shr (x : Std.U32) (s : Std.U32) : Result Std.U32 := do
+  ok (core.num.U32.wrapping_shr x s)
+
+/-- [scalars::i32_use_wrapping_shr]:
+    Source: 'tests/src/scalars.rs', lines 47:0-49:1 -/
+def i32_use_wrapping_shr (x : Std.I32) (s : Std.U32) : Result Std.I32 := do
+  ok (core.num.I32.wrapping_shr x s)
+
+/-- [scalars::shr_into_index_mut]:
+    Source: 'tests/src/scalars.rs', lines 55:0-57:1 -/
+def shr_into_index_mut
+  (x : Std.U64) (out : Array Std.U64 2#usize) :
+  Result (Array Std.U64 2#usize)
+  := do
+  let i ← x >>> 20#i32
+  Array.update out 0#usize i
+
+/-- [scalars::shl_into_index_mut]:
+    Source: 'tests/src/scalars.rs', lines 60:0-62:1 -/
+def shl_into_index_mut
+  (x : Std.U64) (out : Array Std.U64 2#usize) :
+  Result (Array Std.U64 2#usize)
+  := do
+  let i ← x <<< 20#i32
+  Array.update out 0#usize i
+
+/-- [scalars::add_and]:
+    Source: 'tests/src/scalars.rs', lines 64:0-66:1 -/
 def add_and (a : Std.U32) (b : Std.U32) : Result Std.U32 := do
   let i ← lift (b &&& a)
   let i1 ← lift (b &&& a)
   i + i1
 
 /-- [scalars::u32_use_rotate_right]:
-    Source: 'tests/src/scalars.rs', lines 39:0-41:1 -/
+    Source: 'tests/src/scalars.rs', lines 68:0-70:1 -/
 def u32_use_rotate_right (x : Std.U32) : Result Std.U32 := do
   ok (core.num.U32.rotate_right x 2#u32)
 
 /-- [scalars::i32_use_rotate_right]:
-    Source: 'tests/src/scalars.rs', lines 43:0-45:1 -/
+    Source: 'tests/src/scalars.rs', lines 72:0-74:1 -/
 def i32_use_rotate_right (x : Std.I32) : Result Std.I32 := do
   ok (core.num.I32.rotate_right x 2#u32)
 
 /-- [scalars::u32_use_rotate_left]:
-    Source: 'tests/src/scalars.rs', lines 47:0-49:1 -/
+    Source: 'tests/src/scalars.rs', lines 76:0-78:1 -/
 def u32_use_rotate_left (x : Std.U32) : Result Std.U32 := do
   ok (core.num.U32.rotate_left x 2#u32)
 
 /-- [scalars::i32_use_rotate_left]:
-    Source: 'tests/src/scalars.rs', lines 51:0-53:1 -/
+    Source: 'tests/src/scalars.rs', lines 80:0-82:1 -/
 def i32_use_rotate_left (x : Std.I32) : Result Std.I32 := do
   ok (core.num.I32.rotate_left x 2#u32)
 
 /-- [scalars::u32_default]:
-    Source: 'tests/src/scalars.rs', lines 55:0-57:1 -/
+    Source: 'tests/src/scalars.rs', lines 84:0-86:1 -/
 def u32_default : Result Std.U32 := do
   ok (core.default.DefaultU32.default)
 
 /-- [scalars::i32_default]:
-    Source: 'tests/src/scalars.rs', lines 59:0-61:1 -/
+    Source: 'tests/src/scalars.rs', lines 88:0-90:1 -/
 def i32_default : Result Std.I32 := do
   ok (core.default.DefaultI32.default)
 
 /-- [scalars::match_usize]:
-    Source: 'tests/src/scalars.rs', lines 63:0-68:1 -/
+    Source: 'tests/src/scalars.rs', lines 92:0-97:1 -/
 def match_usize (x : Std.Usize) : Result Bool := do
   match x.val with
   | 0 => ok true
@@ -101,7 +139,7 @@ def match_usize (x : Std.Usize) : Result Bool := do
   | _ => ok false
 
 /-- [scalars::match_isize]:
-    Source: 'tests/src/scalars.rs', lines 70:0-75:1 -/
+    Source: 'tests/src/scalars.rs', lines 99:0-104:1 -/
 def match_isize (x : Std.Isize) : Result Std.Isize := do
   match x.val with
   | 0 => ok 0#isize
@@ -110,33 +148,33 @@ def match_isize (x : Std.Isize) : Result Std.Isize := do
   | _ => x + 1#isize
 
 /-- [scalars::u32_as_u16]:
-    Source: 'tests/src/scalars.rs', lines 77:0-79:1 -/
+    Source: 'tests/src/scalars.rs', lines 106:0-108:1 -/
 def u32_as_u16 (x : Std.U32) : Result Std.U16 := do
   ok (UScalar.cast .U16 x)
 
 /-- [scalars::u16_as_u32]:
-    Source: 'tests/src/scalars.rs', lines 81:0-83:1 -/
+    Source: 'tests/src/scalars.rs', lines 110:0-112:1 -/
 def u16_as_u32 (x : Std.U16) : Result Std.U32 := do
   ok (UScalar.cast .U32 x)
 
 /-- [scalars::u32_as_i16]:
-    Source: 'tests/src/scalars.rs', lines 85:0-87:1 -/
+    Source: 'tests/src/scalars.rs', lines 114:0-116:1 -/
 def u32_as_i16 (x : Std.U32) : Result Std.I16 := do
   ok (UScalar.hcast .I16 x)
 
 /-- [scalars::i16_as_u32]:
-    Source: 'tests/src/scalars.rs', lines 89:0-91:1 -/
+    Source: 'tests/src/scalars.rs', lines 118:0-120:1 -/
 def i16_as_u32 (x : Std.I16) : Result Std.U32 := do
   ok (IScalar.hcast .U32 x)
 
 /-- [scalars::u32_use_bits]:
-    Source: 'tests/src/scalars.rs', lines 93:0-95:1
+    Source: 'tests/src/scalars.rs', lines 122:0-124:1
     Visibility: public -/
 def u32_use_bits : Result Std.U32 := do
   ok core.num.U32.BITS
 
 /-- [scalars::i32_use_bits]:
-    Source: 'tests/src/scalars.rs', lines 97:0-99:1
+    Source: 'tests/src/scalars.rs', lines 126:0-128:1
     Visibility: public -/
 def i32_use_bits : Result Std.U32 := do
   ok core.num.I32.BITS

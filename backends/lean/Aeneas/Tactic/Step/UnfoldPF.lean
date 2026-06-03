@@ -196,7 +196,7 @@ elab "dspec_induction" func:ident : tactic => do
   pure ()
 
 -- uncomment to see debug traces:
-set_option trace.UnfoldPF true
+-- set_option trace.UnfoldPF true
 
 namespace Test
 
@@ -276,7 +276,7 @@ theorem test_div_2_tactic (x y : Std.I32) : Std.WP.dspec (simple_diverge_2' x y)
       simp [*]
 
 
-def dummy_hash (i : Std.U32) : Result Std.U32 := do
+def dummy_hash (_i : Std.U32) : Result Std.U32 := do
   ok 1000#u32
 
 open ControlFlow
@@ -306,7 +306,6 @@ def pseudo_random_loop (state : Std.U32) : Result Std.U32 := do
                pseudo_random_loop 0#u32
 
 
-#check @loop.fixpoint_induct
 theorem pseudo_random_spec :
   pseudo_random div⦃fun x => x.val >= 100⦄ := by
   unfold pseudo_random
@@ -339,15 +338,12 @@ def first_arg_const (x y : Nat) : Option Nat :=
   if x = 0 then Option.some 0
   else first_arg_const x (y + 1)
 partial_fixpoint
-#check first_arg_const.fixpoint_induct
 
 def second_arg_const (x y : Nat) : Option Nat :=
   if y = 0 then Option.some 0
   else second_arg_const (x + 1) y
 partial_fixpoint
-#check second_arg_const.fixpoint_induct
 
-#check forallTelescope
 
 end Test
 

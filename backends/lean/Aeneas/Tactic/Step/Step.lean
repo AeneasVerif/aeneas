@@ -637,7 +637,8 @@ def introOutputs (info : SpecInfo) (args : Args) (fExpr : Expr) (stepState : Ste
               addSimpThms :=
                 info.qimp_elim_tactics ++
                 #[ ``Std.WP.qimp_iff, ``Std.WP.imp_and_iff, ``Prod.forall, ``Prod.exists, ``Std.uncurry_apply_pair,
-                  ``forall_unit, ``true_imp_iff] }
+                   ``Std.WP.imp_and_iff,  -- ``Std.WP.imp_exists_iff,
+                   ``forall_unit, ``true_imp_iff] }
             (.targets #[] true)
     | trace[Step] "The main goal was solved!"; return none
   traceGoalWithNode "goal after aliminating `qimp_spec` and `qimp` and decomposing the post-condition"
@@ -1881,18 +1882,16 @@ info: example
 
   /- Example with an existential -/
   /--
-  error: unsolved goals
+error: unsolved goals
 case a
 x : U32
 f : U32 → Result U32
 h : ∀ (x : U32), f x ⦃ y => ∃ z > 0, ↑y = ↑x + z ⦄
-y : ℕ
-z : U32
-_✝¹ : y > 0
-_✝ : ↑z = ↑x + y
-⊢ ↑z > ↑x
-  -/
-  #guard_msgs in
+y : U32
+z : ∃ z > 0, ↑y = ↑x + z
+⊢ ↑y > ↑x
+-/
+#guard_msgs in
   example (x : U32) (f : U32 → Result U32) (h : ∀ x, f x ⦃ y => ∃ z, z > 0 ∧ y.val = x.val + z ⦄) :
     f x ⦃ y => y.val > x.val ⦄ := by
     step as ⟨ y, z ⟩
@@ -1929,6 +1928,36 @@ z_post : ↑z = ↑x + ↑y
       step
       step
       step
+
+  /- Test that manipulates a post-condition containing an ∃ -/
+  /--
+warning: Too many ids provided ([some (s'), some (h0), some (h1)]): expected ≤ 2 ids, got 3
+---
+error: unsolved goals
+case a
+zero : Slice U32 → Result (Slice U32)
+zero_spec :
+  ∀ (s : Slice U32), zero s ⦃ s' => ∃ (h : s'.length = s.length), ∀ (i : ℕ) (x : i < s.length), s'[i] = 0#u32 ⦄
+s s' : Slice U32
+h0 : ∃ (h : s'.length = s.length), ∀ (i : ℕ) (x : i < s.length), s'[i] = 0#u32
+⊢ (do
+      let _ ← zero s'
+      ok ()) ⦃
+    x✝ => True ⦄
+-/
+#guard_msgs in
+  example (zero : Slice U32 → Result (Slice U32))
+    (zero_spec : ∀ s, zero s ⦃ s' =>
+      ∃ (h : s'.length = s.length),
+      (∀ i, (_ : i < s.length) → s'[i]'(by grind) = 0#u32) ⦄)
+    (s : Slice U32) :
+    (do
+      let s' ← zero s
+      let _ ← zero s'
+      pure ()) ⦃ _ => True ⦄ := by
+    step with zero_spec as ⟨ s', h0, h1 ⟩
+    --
+
 
   -- `Inhabited α` is not necessary: we add it for the purpose of testing
   theorem get_spec {α} [Inhabited α] (x : Option α) (h : x.isSome) : get x ⦃ _ => True ⦄ := by
