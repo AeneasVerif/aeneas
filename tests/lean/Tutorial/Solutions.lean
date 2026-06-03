@@ -453,7 +453,6 @@ theorem add_with_carry_spec
   simp_all
 
 
-#check @loop.fixpoint_induct
 theorem pseudo_random_spec :
   pseudo_random div⦃fun x => x.val >= 100⦄ := by
   unfold pseudo_random
