@@ -311,6 +311,21 @@ let translate_type_decl (ctx : Contexts.decls_ctx) (def : T.type_decl) :
     match_name_find_opt ctx def.item_meta.name
       (ExtractBuiltin.builtin_types_map ())
   in
+  (* Under [-core-models-lib] the builtin type overrides are disabled, so the
+     lookup above returns [None]. We still need the allocator [keep_params] of
+     types like [IntoIter] so that the dangling allocator type parameter (left
+     by Charon's [hide_allocator] pass) is filtered out, matching the
+     [core_models] library. Recover it from the dedicated, non-disabled map.
+     This only carries [keep_params]; the extract name still comes from the
+     standard name mangling (which, for these types, coincides with the builtin
+     name anyway). *)
+  let builtin_info =
+    if Option.is_some builtin_info || not !Config.core_models_lib then
+      builtin_info
+    else
+      match_name_find_opt ctx def.item_meta.name
+        (ExtractBuiltin.builtin_types_keep_params_map ())
+  in
   {
     def_id;
     name;

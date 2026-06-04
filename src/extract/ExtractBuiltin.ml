@@ -180,6 +180,27 @@ let mk_builtin_types_map () =
 
 let builtin_types_map = mk_memoized mk_builtin_types_map
 
+(** Map from rust type name to its builtin info, restricted to the types that
+    carry a [keep_params] filter (i.e. types from which Charon's
+    [hide_allocator] pass leaves a dangling allocator type parameter, such as
+    [alloc::vec::into_iter::IntoIter]).
+
+    Unlike {!builtin_types_map}, this map is *not* emptied under
+    [-core-models-lib]: even when the builtin type overrides are disabled, we
+    still need to drop the dangling allocator type parameter so that the
+    extracted types match the [core_models] library, which models them without
+    an allocator (e.g. [IntoIter T] rather than [IntoIter T Global]). *)
+let mk_builtin_types_keep_params_map () =
+  NameMatcherMap.of_list
+    (List.filter_map
+       (fun (info : Pure.builtin_type_info) ->
+         match info.keep_params with
+         | Some _ -> Some (info.rust_name, info)
+         | None -> None)
+       lean_builtin_types)
+
+let builtin_types_keep_params_map = mk_memoized mk_builtin_types_keep_params_map
+
 let int_and_smaller_list : (string * string) list =
   let uint_names = List.rev [ "u8"; "u16"; "u32"; "u64"; "u128" ] in
   let int_names = List.rev [ "i8"; "i16"; "i32"; "i64"; "i128" ] in

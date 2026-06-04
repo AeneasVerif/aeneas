@@ -1228,14 +1228,15 @@ let filter_marker_traits (crate : crate) : crate =
     in
     visitor#visit_crate () crate
 
-(** Under [-core-models-lib], remove the [assert_receiver_is_total_eq] method
-    from the [core::cmp::Eq] trait declaration, from any impls of [Eq], and drop
-    the corresponding function declarations. This is a Rust-only,
-    [#[doc(hidden)]] method with an empty default body that Aeneas's own
-    standard library handles via a hand-tuned override; an external library like
-    [core_models] doesn't model it, so emitting an impl field for it would not
-    typecheck against [core_models]'s [Eq] structure. *)
-let filter_eq_assert_receiver_method (crate : crate) : crate =
+(** Under [-core-models-lib], remove the [Eq] marker method (named
+    [assert_fields_are_eq] in current rustc, formerly
+    [assert_receiver_is_total_eq]) from the [core::cmp::Eq] trait declaration,
+    from any impls of [Eq], and drop the corresponding function declarations.
+    This is a Rust-only, [#[doc(hidden)]] method with an empty default body that
+    Aeneas's own standard library handles via a hand-tuned override; an external
+    library like [core_models] doesn't model it, so emitting an impl field for
+    it would not typecheck against [core_models]'s [Eq] structure. *)
+let filter_eq_assert_fields_method (crate : crate) : crate =
   if not !Config.core_models_lib then crate
   else
     let mctx = NameMatcher.ctx_from_crate crate in
@@ -1259,12 +1260,17 @@ let filter_eq_assert_receiver_method (crate : crate) : crate =
     match eq_id with
     | None -> crate
     | Some eq_id ->
-        let method_name = "assert_receiver_is_total_eq" in
+        (* The method is named [assert_fields_are_eq] in current rustc; older
+           versions called it [assert_receiver_is_total_eq]. Match either so the
+           pass is robust across charon updates. *)
+        let method_names =
+          [ "assert_fields_are_eq"; "assert_receiver_is_total_eq" ]
+        in
         let eq_decl = TraitDeclId.Map.find eq_id crate.trait_decls in
         let filtered_method_ids =
           TraitMethodId.Map.fold
             (fun mid (m : trait_method binder) acc ->
-              if m.binder_value.name = method_name then
+              if List.mem m.binder_value.name method_names then
                 TraitMethodId.Set.add mid acc
               else acc)
             eq_decl.methods TraitMethodId.Set.empty
@@ -2473,7 +2479,7 @@ let apply_passes (crate : crate) : crate =
   in
   let crate = { crate with fun_decls } in
   let crate = strip_unnecessary_target_suffixes crate in
-  let crate = filter_eq_assert_receiver_method crate in
+  let crate = filter_eq_assert_fields_method crate in
   let crate = filter_marker_traits crate in
   let crate = filter_type_aliases crate in
   let crate = replace_static crate in

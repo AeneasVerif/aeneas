@@ -49,6 +49,7 @@ let texpr_to_string (ctx : extraction_ctx) =
 let compute_allocator_filter
     ?(extra_trait_decl_refs : Pure.trait_decl_ref list = [])
     ?(extra_trait_refs : Pure.trait_ref list = [])
+    ?(type_args_filter : Pure.type_decl_id -> bool list option = fun _ -> None)
     (generics : Pure.generic_params) (inputs : Pure.ty list)
     (output : Pure.ty option) (preds : Pure.predicates) :
     (bool list * bool list) option =
@@ -56,10 +57,37 @@ let compute_allocator_filter
   let trait_clauses = generics.trait_clauses in
   if type_params = [] then None
   else
+    (* When visiting a type application of an ADT whose own allocator parameter
+       is being filtered (e.g. [IntoIter T A] -> [IntoIter T]), we must not count
+       the type variables that only appear in the dropped argument positions as
+       "used". Otherwise an allocator parameter that only shows up in, say, the
+       output type [IntoIter<T, A>] would be wrongly kept. *)
+    let visit_filtered_ty_args (self : _) (env : unit) (type_id : Pure.type_id)
+        (generics : Pure.generic_args) : bool =
+      match type_id with
+      | TAdtId id -> (
+          match type_args_filter id with
+          | Some keep when List.length keep = List.length generics.types ->
+              List.iter2
+                (fun b ty -> if b then self#visit_ty env ty)
+                keep generics.types;
+              List.iter (self#visit_const_generic env) generics.const_generics;
+              List.iter (self#visit_trait_ref env) generics.trait_refs;
+              true
+          | _ -> false)
+      | _ -> false
+    in
     let used = ref Pure.TypeVarId.Set.empty in
     let body_visitor =
-      object
-        inherit [_] Pure.iter_type_decl
+      object (self)
+        inherit [_] Pure.iter_type_decl as super
+
+        method! visit_ty env t =
+          match t with
+          | Pure.TAdt (type_id, generics)
+            when visit_filtered_ty_args self env type_id generics -> ()
+          | _ -> super#visit_ty env t
+
         method! visit_type_var_id _ id = used := Pure.TypeVarId.Set.add id !used
       end
     in
@@ -73,8 +101,15 @@ let compute_allocator_filter
     let clause_tvars (c : Pure.trait_param) : Pure.TypeVarId.Set.t =
       let s = ref Pure.TypeVarId.Set.empty in
       let v =
-        object
-          inherit [_] Pure.iter_type_decl
+        object (self)
+          inherit [_] Pure.iter_type_decl as super
+
+          method! visit_ty env t =
+            match t with
+            | Pure.TAdt (type_id, generics)
+              when visit_filtered_ty_args self env type_id generics -> ()
+            | _ -> super#visit_ty env t
+
           method! visit_type_var_id _ id = s := Pure.TypeVarId.Set.add id !s
         end
       in
@@ -140,8 +175,12 @@ let extract_fun_decl_register_names (ctx : extraction_ctx)
     if not !Config.core_models_lib then ctx
     else
       let sg = def.f.signature in
+      let type_args_filter id =
+        TypeDeclId.Map.find_opt id ctx.types_filter_type_args_map
+      in
       match
-        compute_allocator_filter sg.generics sg.inputs (Some sg.output) sg.preds
+        compute_allocator_filter ~type_args_filter sg.generics sg.inputs
+          (Some sg.output) sg.preds
       with
       | None -> ctx
       | Some (keep_params, keep_trait_clauses) ->
@@ -3129,11 +3168,14 @@ let extract_trait_impl_register_names (ctx : extraction_ctx)
     if not !Config.core_models_lib then ctx
     else
       let assoc_tys = List.map (fun (_, _, ty) -> ty) trait_impl.types in
+      let type_args_filter id =
+        TypeDeclId.Map.find_opt id ctx.types_filter_type_args_map
+      in
       match
         compute_allocator_filter
           ~extra_trait_decl_refs:[ trait_impl.impl_trait ]
-          ~extra_trait_refs:trait_impl.parent_trait_refs trait_impl.generics
-          assoc_tys None trait_impl.preds
+          ~extra_trait_refs:trait_impl.parent_trait_refs ~type_args_filter
+          trait_impl.generics assoc_tys None trait_impl.preds
       with
       | None -> ctx
       | Some (keep_params, keep_trait_clauses) ->
