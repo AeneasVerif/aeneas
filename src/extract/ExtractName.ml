@@ -64,11 +64,25 @@ let pattern_to_extract_name_visitor =
     List.for_all check
   in
 
+  (* Detect whether a string is a target name.
+     For now we use the fact that these are the only names that are
+     allowed to contain '-' (and they always contain this character).
+
+     TODO: this is a hack. We need to update the name generation by
+     not going through the patterns, but directly to strings. *)
+  let name_is_target (s : string) : bool = String.contains s '-' in
+
   (* Make the names shorter. For now, we simply remove all prefixes. *)
   let rec simplify_name (id : pattern) =
     let shorten (id : pattern) =
       match id with
       | [] | [ _ ] -> id
+      | [ id0; (PIdent (id1_s, _, []) as id1) ] ->
+          (* If the name ends with a target name, we preserve the element before. *)
+          if name_is_target id1_s then
+            let id0 = simplify_name [ id0 ] in
+            id0 @ [ id1 ]
+          else simplify_name [ id1 ]
       | _ :: id -> simplify_name id
     in
     (* We have a special case for the literals *)
@@ -95,8 +109,15 @@ let pattern_to_extract_name_visitor =
       match ty with
       | EComp id ->
           (* Only keep the last ident *)
-          let id = Collections.List.last id in
-          super#visit_PImpl () (EComp [ id ])
+          let id =
+            match List.rev id with
+            | (PIdent (id0_s, _, []) as id0) :: id1 :: _ ->
+                (* Preserve the elem before last if the last elem is a target name *)
+                if name_is_target id0_s then [ id1; id0 ] else [ id0 ]
+            | id0 :: _ -> [ id0 ]
+            | [] -> id
+          in
+          super#visit_PImpl () (EComp id)
       | _ -> super#visit_PImpl () ty
 
     method! visit_EPrimAdt _ adt g =

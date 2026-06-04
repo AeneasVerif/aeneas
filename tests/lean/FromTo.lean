@@ -24,25 +24,25 @@ structure From (Self : Type) (T : Type) where
 structure To (Self : Type) where
   «to» : forall {T : Type} (FromInst : From T Self), Self → Result T
 
-/-- [from_to::{from_to::From<u32> for u32}::from]:
+/-- [from_to::{impl from_to::From<u32> for u32}::from]:
     Source: 'tests/src/from_to.rs', lines 14:4-16:5 -/
 def U32.Insts.From_toFromU32.from (x : Std.U32) : Result Std.U32 := do
   ok x
 
-/-- Trait implementation: [from_to::{from_to::From<u32> for u32}]
+/-- Trait implementation: [from_to::{impl from_to::From<u32> for u32}]
     Source: 'tests/src/from_to.rs', lines 13:0-17:1 -/
 @[reducible]
 def U32.Insts.From_toFromU32 : From Std.U32 Std.U32 := {
   «from» := U32.Insts.From_toFromU32.from
 }
 
-/-- [from_to::{from_to::To for u32}::to]:
+/-- [from_to::{impl from_to::To for u32}::to]:
     Source: 'tests/src/from_to.rs', lines 20:4-22:5 -/
 def U32.Insts.From_toTo.to
   {T : Type} (FromTU32Inst : From T Std.U32) (self : Std.U32) : Result T := do
   FromTU32Inst.«from» self
 
-/-- Trait implementation: [from_to::{from_to::To for u32}]
+/-- Trait implementation: [from_to::{impl from_to::To for u32}]
     Source: 'tests/src/from_to.rs', lines 19:0-23:1 -/
 @[reducible]
 def U32.Insts.From_toTo : To Std.U32 := {

@@ -261,6 +261,52 @@ let ty_has_mut_borrow_for_region_in_pred (infos : TypesAnalysis.type_infos)
     false
   with Found -> true
 
+(** Compute which regions from a set are effectively used as mutable borrows in
+    a type. Note that a mutable borrow below a shared borrow is effectively
+    shared. *)
+let ty_get_mutable_regions (infos : TypesAnalysis.type_infos)
+    (owned_regions : RegionId.Set.t) (ty : rty) : RegionId.Set.t =
+  let result = ref RegionId.Set.empty in
+  let add_region (r : region) =
+    match r with
+    | RVar (Free rid) ->
+        if RegionId.Set.mem rid owned_regions then
+          result := RegionId.Set.add rid !result
+    | _ -> ()
+  in
+
+  let obj =
+    object
+      inherit [_] iter_ty as super
+
+      method! visit_TRef env r ty rkind =
+        match rkind with
+        | RMut ->
+            add_region r;
+            super#visit_TRef env r ty rkind
+        | RShared ->
+            (* Stop there: borrows below shared borrows are effectively shared *)
+            ()
+
+      method! visit_TAdt env tref =
+        (* Lookup the information for this ADT *)
+        begin
+          match tref.id with
+          | TTuple | TBuiltin (TBox | TStr) -> ()
+          | TAdtId adt_id ->
+              (* Check which region parameters are mutable *)
+              let info = TypeDeclId.Map.find adt_id infos in
+              RegionId.iteri
+                (fun adt_rid r ->
+                  if RegionId.Set.mem adt_rid info.mut_regions then add_region r)
+                tref.generics.regions
+        end;
+        super#visit_TAdt env tref
+    end
+  in
+  obj#visit_ty () ty;
+  !result
+
 let ty_has_mut_borrow_for_region_in_set (infos : TypesAnalysis.type_infos)
     (regions : RegionId.Set.t) (ty : ty) : bool =
   ty_has_mut_borrow_for_region_in_pred infos

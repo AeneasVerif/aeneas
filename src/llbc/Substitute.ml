@@ -174,3 +174,13 @@ let generic_args_of_params_erase_regions (span : Meta.span option)
       generics.trait_refs
   in
   { generics with regions; trait_refs }
+
+let type_decl_get_instantiated_variants_fields_types (span : Meta.span)
+    (def : type_decl) (generics : generic_args) :
+    (VariantId.id option * ty list) list =
+  let subst () =
+    Charon.Substitute.type_decl_get_instantiated_variants_fields_types def
+      generics
+  in
+  if !Config.fail_hard then subst ()
+  else try subst () with Failure _ -> [%craise] span "Unexpected error"
