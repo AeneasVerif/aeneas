@@ -15,7 +15,7 @@ set_option maxRecDepth 2048
 
 namespace avl
 
-/-- [avl::{avl::Ord for i32}::cmp]:
+/-- [avl::{impl avl::Ord for i32}::cmp]:
     Source: 'src/avl.rs', lines 7:4-15:5
     Visibility: public -/
 def I32.Insts.AvlOrd.cmp
@@ -26,7 +26,7 @@ def I32.Insts.AvlOrd.cmp
        then ok Ordering.Equal
        else ok Ordering.Greater
 
-/-- Trait implementation: [avl::{avl::Ord for i32}]
+/-- Trait implementation: [avl::{impl avl::Ord for i32}]
     Source: 'src/avl.rs', lines 6:0-16:1 -/
 @[reducible]
 def I32.Insts.AvlOrd : Ord Std.I32 := {

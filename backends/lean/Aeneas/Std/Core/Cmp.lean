@@ -13,12 +13,12 @@ structure core.cmp.PartialEq (Self : Type) (Rhs : Type) where
 @[rust_trait "core::cmp::Eq" (parentClauses := ["partialEqInst"])]
 structure core.cmp.Eq (Self : Type) where
   partialEqInst : core.cmp.PartialEq Self Self
-  assert_receiver_is_total_eq (_ : Self) : Result Unit := .ok ()
+  assert_fields_are_eq (_ : Self) : Result Unit := .ok ()
 
-@[simp, rust_fun "core::cmp::Eq::assert_receiver_is_total_eq"]
-def core.cmp.Eq.assert_receiver_is_total_eq.default
+@[simp, rust_fun "core::cmp::Eq::assert_fields_are_eq"]
+def core.cmp.Eq.assert_fields_are_eq.default
   {Self : Type} (EqInst : core.cmp.Eq Self) (x : Self) : Result Unit :=
-  EqInst.assert_receiver_is_total_eq x
+  EqInst.assert_fields_are_eq x
 
 /- Default method -/
 @[rust_fun "core::cmp::PartialEq::ne"]

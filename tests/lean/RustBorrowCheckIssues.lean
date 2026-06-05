@@ -18,14 +18,14 @@ noncomputable section
 namespace rust_borrow_check_issues
 
 /-- [core::mem::drop]:
-    Source: '/rustc/library/core/src/mem/mod.rs', lines 971:0-973:24
+    Source: '/rustc/library/core/src/mem/mod.rs', lines 1000:0-1002:24
     Name pattern: [core::mem::drop]
     Visibility: public -/
 @[rust_fun "core::mem::drop"]
 axiom core.mem.drop {T : Type} : T → Result Unit
 
 /-- [core::option::{core::option::Option<T>}::as_mut]:
-    Source: '/rustc/library/core/src/option.rs', lines 766:4-766:52
+    Source: '/rustc/library/core/src/option.rs', lines 763:4-763:52
     Name pattern: [core::option::{core::option::Option<@T>}::as_mut]
     Visibility: public -/
 @[rust_fun "core::option::{core::option::Option<@T>}::as_mut"]

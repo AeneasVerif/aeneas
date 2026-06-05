@@ -310,6 +310,12 @@ let compute_tevalue_proj_kind (span : Meta.span) (type_infos : type_infos)
           set_has_loans level;
           set_has_mut_loans level)
 
+      method! visit_EValue (level, _ty) _ _ =
+        (* An EValue is essentially an ended loan: it is a concrete value
+           consumed by the backward function. We treat it as a mutable loan
+           so that the containing ADT is not classified as UnknownProj. *)
+        set_has_mut_loans level
+
       method! visit_ESymbolic (level, ty) pm eproj =
         [%sanity_check] span (pm = PNone);
         match eproj with
@@ -511,7 +517,7 @@ let eoutput_to_pat (ctx : bs_ctx) (fvar_to_texpr : texpr V.AbsFVarId.Map.t ref)
         in
         (ctx, Option.map snd out)
       end
-    | V.EIgnored ->
+    | V.EIgnored _ ->
         let ty = output.ty in
         if
           filter
@@ -718,7 +724,17 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
                       match (f, args) with
                       | (V.ELoop _ | V.EJoin _), [ args ] -> args
                       | V.EFunCall _, _ ->
-                          List.map (mk_simpl_tuple_texpr span) args
+                          (* Filter out empty argument groups (e.g., from
+                             unit return values that got filtered away) *)
+                          let args =
+                            List.filter_map
+                              (fun args ->
+                                match args with
+                                | [] -> None
+                                | _ -> Some (mk_simpl_tuple_texpr span args))
+                              args
+                          in
+                          args
                       | _ -> [%internal_error] span
                     in
                     (Some ([%add_loc] mk_apps span fvar args), can_fail)
@@ -824,12 +840,18 @@ let einput_to_texpr (ctx : bs_ctx) (ectx : C.eval_ctx) (rids : T.RegionId.Set.t)
             [%internal_error] span
       end
     | V.EValue (env, mv) ->
-        [%ldebug "value"];
+        [%ldebug "value: filter = " ^ string_of_bool filter];
         let e = tvalue_to_texpr ctx { ectx with env } mv in
         (ctx, false, Some e)
-    | V.EIgnored ->
-        [%ldebug "ignored"];
+    | V.EIgnored None ->
+        [%ldebug "ignored (None)"];
         (ctx, false, None)
+    | V.EIgnored (Some (env, mv)) ->
+        [%ldebug "ignored (Some): filter = " ^ string_of_bool filter];
+        if filter then (ctx, false, None)
+        else
+          let e = tvalue_to_texpr ctx { ectx with env } mv in
+          (ctx, false, Some e)
     | V.EBottom ->
         [%ldebug "bottom"];
         [%internal_error] span
@@ -1104,7 +1126,7 @@ let rec tevalue_to_given_back_aux ~(filter : bool)
     | ESymbolic (pm, eproj) ->
         [%sanity_check] ctx.span (pm = PNone);
         eproj_to_given_back_aux abs_level current_level mp eproj ev.ty ctx
-    | EIgnored ->
+    | EIgnored _ ->
         (* If we do not filter, we have to create an ignored pattern *)
         if filter then (ctx, None)
         else

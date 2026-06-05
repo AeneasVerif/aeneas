@@ -16,7 +16,7 @@ Module Hashmap_Funs.
 Definition hash_key (k : usize) : result usize :=
   Ok k.
 
-(** [hashmap::{core::clone::Clone for hashmap::Fraction}::clone]:
+(** [hashmap::{impl core::clone::Clone for hashmap::Fraction}::clone]:
     Source: 'tests/src/hashmap.rs', lines 43:9-43:14
     Visibility: public *)
 Definition Fraction_Insts_CoreCloneClone_clone
@@ -24,7 +24,7 @@ Definition Fraction_Insts_CoreCloneClone_clone
   Ok self
 .
 
-(** [hashmap::{core::clone::Clone for hashmap::Fraction}::clone_from]:
+(** [hashmap::{impl core::clone::Clone for hashmap::Fraction}::clone_from]:
     Source: 'tests/src/hashmap.rs', lines 43:9-43:14
     Visibility: public *)
 Definition Fraction_Insts_CoreCloneClone_clone_from
@@ -32,14 +32,14 @@ Definition Fraction_Insts_CoreCloneClone_clone_from
   Fraction_Insts_CoreCloneClone_clone source
 .
 
-(** Trait implementation: [hashmap::{core::clone::Clone for hashmap::Fraction}]
+(** Trait implementation: [hashmap::{impl core::clone::Clone for hashmap::Fraction}]
     Source: 'tests/src/hashmap.rs', lines 43:9-43:14 *)
 Definition Fraction_Insts_CoreCloneClone : core_clone_Clone Fraction_t := {|
   core_clone_Clone_clone := Fraction_Insts_CoreCloneClone_clone;
   core_clone_Clone_clone_from := Fraction_Insts_CoreCloneClone_clone_from;
 |}.
 
-(** Trait implementation: [hashmap::{core::marker::Copy for hashmap::Fraction}]
+(** Trait implementation: [hashmap::{impl core::marker::Copy for hashmap::Fraction}]
     Source: 'tests/src/hashmap.rs', lines 43:16-43:20 *)
 Definition Fraction_Insts_CoreMarkerCopy : core_marker_Copy Fraction_t := {|
   cloneInst := Fraction_Insts_CoreCloneClone;
