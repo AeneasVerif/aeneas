@@ -672,7 +672,7 @@ let export_type (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
   if extract then (
     if extract_decl then (
       Extract.extract_type_decl ctx fmt type_decl_group kind def;
-      Manifest.record_type ctx def);
+      EmitJson.record_type ctx def);
     if extract_extra_info then
       Extract.extract_type_decl_extra_info ctx fmt kind def)
 
@@ -818,11 +818,11 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     let global_pure = GlobalDeclId.Map.find_opt id ctx.trans_globals in
     Extract.extract_global_decl ctx fmt global_pure body config.interface;
     (* Record the global, plus its synthetic init body fn (which would not
-       otherwise reach [Manifest.record_fun] because [extract_definitions]
+       otherwise reach [EmitJson.record_fun] because [extract_definitions]
        skips global-init [FunGroup]s — they're written here instead). *)
-    Manifest.record_fun ctx body;
+    EmitJson.record_fun ctx body;
     match global_pure with
-    | Some g -> Manifest.record_global ctx g
+    | Some g -> EmitJson.record_global ctx g
     | None -> ())
 
 (** Utility.
@@ -905,7 +905,7 @@ let export_functions_group_scc (fmt : Format.formatter) (config : gen_config)
           Some
             (fun () ->
               Extract.extract_fun_decl ctx fmt kind has_decr_clause def;
-              Manifest.record_fun ctx def)
+              EmitJson.record_fun ctx def)
         else None)
       decls
   in
@@ -1251,8 +1251,8 @@ let extract_file (config : gen_config) (ctx : gen_ctx) (fi : extract_file_info)
   let fmt = Format.formatter_of_out_channel out in
 
   (* Tell the manifest accumulator which file/namespace the upcoming
-     declarations will be attributed to. No-op when [-emit-manifest] is off. *)
-  Manifest.begin_file ~filename:fi.filename ~namespace:fi.namespace;
+     declarations will be attributed to. No-op when [-emit-json] is off. *)
+  EmitJson.begin_file ~filename:fi.filename ~namespace:fi.namespace;
 
   (* Print the headers.
    * Note that we don't use the OCaml formatter for purpose: we want to control
@@ -1498,8 +1498,8 @@ let extract_translated_crate (filename : string) (dest_dir : string)
     }
   in
   (* Initialize the manifest accumulator (a module-local singleton). Cheap
-     even when [-emit-manifest] is off — just resets a few empty fields. *)
-  Manifest.init ~dest_dir;
+     even when [-emit-json] is off — just resets a few empty fields. *)
+  EmitJson.init ~dest_dir;
 
   (* Register unique names for all the top-level types, globals, functions...
 
@@ -2076,15 +2076,15 @@ let extract_translated_crate (filename : string) (dest_dir : string)
      in
      extract_file gen_config ctx file_info);
 
-  (* Emit the [manifest.json] sidecar listing every Lean function declaration
-     we just wrote, when [-emit-manifest] is on. No-op otherwise. *)
+  (* Emit the [translation.json] sidecar listing every Lean function declaration
+     we just wrote, when [-emit-json] is on. No-op otherwise. *)
   let aeneas_version =
     match GitVersion.commit with
     | Some h -> h
     | None -> "unknown"
   in
   (match
-     Manifest.write_if_enabled ~aeneas_version ~crate_name:crate.name ~subdir
+     EmitJson.write_if_enabled ~aeneas_version ~crate_name:crate.name ~subdir
        ~llbc_file:filename
    with
   | Some path -> log#linfo (lazy ("Generated: " ^ path))

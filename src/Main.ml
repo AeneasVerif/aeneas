@@ -136,9 +136,9 @@ let () =
       ( "-lean-default-lakefile",
         Arg.Clear lean_gen_lakefile,
         " Generate a default lakefile.lean (Lean only)" );
-      ( "-emit-manifest",
-        Arg.Set emit_manifest,
-        " Emit a manifest.json file alongside the Lean files (Lean only)" );
+      ( "-emit-json",
+        Arg.Set emit_json,
+        " Emit a translation.json file alongside the Lean files (Lean only)" );
       ("-print-llbc", Arg.Set print_llbc, " Print the imported LLBC");
       ( "-abort-on-error",
         Arg.Set fail_hard,
@@ -463,9 +463,9 @@ let () =
   if !set_max_recdepth && not (backend () = Lean) then
     fail_with_error
       "The -max-recdepth option is valid only for the Lean backend";
-  if !emit_manifest && not (backend () = Lean) then
+  if !emit_json && not (backend () = Lean) then
     fail_with_error
-      "The -emit-manifest option is valid only for the Lean backend";
+      "The -emit-json option is valid only for the Lean backend";
 
   check_arg_implies !diagnose_detailed "-diagnose-detailed"
     !diagnose_micro_passes "-diagnose-micro-passes";

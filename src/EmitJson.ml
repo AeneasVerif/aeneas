@@ -1,11 +1,11 @@
-(** Emit a [manifest.json] file alongside the extracted Lean files.
+(** Emit a [translation.json] file alongside the extracted Lean files.
 
-    The manifest contains the Aeneas-only data which connects the Lean
-    translation to the original Rust code. It does NOT duplicate any data
-    already present in the input [.llbc] file.
+    The file contains the Aeneas-only data which connects the Lean translation
+    to the original Rust code. It does NOT duplicate any data already present
+    in the input [.llbc] file.
 
-    The [manifest.json] and the LLBC share the [def_id] field, as the join key
-    linking each manifest entry back to its source declaration in the LLBC. *)
+    The [translation.json] and the LLBC share the [def_id] field, as the join
+    key linking each entry back to its source declaration in the LLBC. *)
 
 (* ------------------------------------------------------------------------ *)
 (* Schema                                                                   *)
@@ -18,7 +18,11 @@
 
 type loop_info = {
   loop_id_idx : int; [@key "id"]
-  loop_pos : int list; [@key "pos"]
+  loop_pos : int list;
+      [@key "pos"]
+      (** Nesting position of this loop in the source function: [[0]] is the
+          first loop at top level, [[0; 1]] is the second nested loop inside
+          it, etc. Mirrors [Pure.fun_decl.loop_pos]. *)
   is_body : bool;
 }
 [@@deriving to_yojson]
@@ -77,10 +81,12 @@ type global_entry = {
 (** Output-routing info: where the manifest itself sits and which backend files
     Aeneas wrote, all chosen by Aeneas based on CLI flags. *)
 type output_info = {
-  dest_dir : string;
   subdir : string option; [@yojson.option]
   llbc_file : string;
+      (** Basename of the [.llbc] input file. Stored as a basename only so that
+          [translation.json] is machine-independent. *)
   lean_files : string list;
+      (** Lean files written, relative to the directory containing this file. *)
 }
 [@@deriving to_yojson]
 
@@ -149,6 +155,7 @@ let init ~(dest_dir : string) : unit =
 (* ------------------------------------------------------------------------ *)
 
 let qualify (basename : string) : string =
+  assert (state.current_lean_file <> "");
   if state.current_lean_namespace = "" then basename
   else state.current_lean_namespace ^ "." ^ basename
 
@@ -211,11 +218,11 @@ let global_entry_of_global_decl (ctx : ExtractBase.extraction_ctx)
   }
 
 (* ------------------------------------------------------------------------ *)
-(* Pipeline hooks (no-ops when [-emit-manifest] is off)                     *)
+(* Pipeline hooks (no-ops when [-emit-json] is off)                         *)
 (* ------------------------------------------------------------------------ *)
 
 let begin_file ~(filename : string) ~(namespace : string) : unit =
-  if !Config.emit_manifest then begin
+  if !Config.emit_json then begin
     let rel_lean_file =
       let dest = Filename.concat state.dest_dir "" in
       let plen = String.length dest in
@@ -229,18 +236,18 @@ let begin_file ~(filename : string) ~(namespace : string) : unit =
   end
 
 let record_fun (ctx : ExtractBase.extraction_ctx) (def : Pure.fun_decl) : unit =
-  if !Config.emit_manifest then
+  if !Config.emit_json then
     state.function_entries <-
       entry_of_fun_decl ctx def :: state.function_entries
 
 let record_type (ctx : ExtractBase.extraction_ctx) (def : Pure.type_decl) : unit
     =
-  if !Config.emit_manifest then
+  if !Config.emit_json then
     state.type_entries <- type_entry_of_type_decl ctx def :: state.type_entries
 
 let record_global (ctx : ExtractBase.extraction_ctx) (def : Pure.global_decl) :
     unit =
-  if !Config.emit_manifest then
+  if !Config.emit_json then
     state.global_entries <-
       global_entry_of_global_decl ctx def :: state.global_entries
 
@@ -250,14 +257,16 @@ let record_global (ctx : ExtractBase.extraction_ctx) (def : Pure.global_decl) :
 
 let write (path : string) (env : envelope) : unit =
   let out = open_out path in
-  Yojson.Safe.pretty_to_channel out (envelope_to_yojson env);
-  output_char out '\n';
-  close_out out
+  Fun.protect
+    ~finally:(fun () -> close_out out)
+    (fun () ->
+      Yojson.Safe.pretty_to_channel out (envelope_to_yojson env);
+      output_char out '\n')
 
 let write_if_enabled ~(aeneas_version : string) ~(crate_name : string)
     ~(subdir : string option) ~(llbc_file : string) : string option =
-  if !Config.emit_manifest then begin
-    let path = Filename.concat state.dest_dir "manifest.json" in
+  if !Config.emit_json then begin
+    let path = Filename.concat state.dest_dir "translation.json" in
     write path
       {
         aeneas_version;
@@ -265,9 +274,8 @@ let write_if_enabled ~(aeneas_version : string) ~(crate_name : string)
         crate_name;
         output =
           {
-            dest_dir = state.dest_dir;
             subdir;
-            llbc_file;
+            llbc_file = Filename.basename llbc_file;
             lean_files = List.rev state.lean_files;
           };
         functions = List.rev state.function_entries;

@@ -83,7 +83,7 @@
   LlbcAstUtils
   LlbcOfJson
   Logging
-  Manifest
+  EmitJson
   Meta
   NameMatcher
   Parallel
