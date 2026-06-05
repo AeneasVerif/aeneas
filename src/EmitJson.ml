@@ -1,8 +1,8 @@
 (** Emit a [translation.json] file alongside the extracted Lean files.
 
     The file contains the Aeneas-only data which connects the Lean translation
-    to the original Rust code. It does NOT duplicate any data already present
-    in the input [.llbc] file.
+    to the original Rust code. It does NOT duplicate any data already present in
+    the input [.llbc] file.
 
     The [translation.json] and the LLBC share the [def_id] field, as the join
     key linking each entry back to its source declaration in the LLBC. *)
@@ -18,11 +18,10 @@
 
 type loop_info = {
   loop_id_idx : int; [@key "id"]
-  loop_pos : int list;
-      [@key "pos"]
+  loop_pos : int list; [@key "pos"]
       (** Nesting position of this loop in the source function: [[0]] is the
-          first loop at top level, [[0; 1]] is the second nested loop inside
-          it, etc. Mirrors [Pure.fun_decl.loop_pos]. *)
+          first loop at top level, [[0; 1]] is the second nested loop inside it,
+          etc. Mirrors [Pure.fun_decl.loop_pos]. *)
   is_body : bool;
 }
 [@@deriving to_yojson]

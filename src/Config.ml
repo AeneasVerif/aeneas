@@ -229,8 +229,8 @@ let generate_lib_entry_point = ref false
 let lean_gen_lakefile = ref false
 
 (** Only for Lean: emit a translation.json file alongside the Lean files. The
-    file connects the Lean declarations produced by Aeneas to the original
-    Rust source. *)
+    file connects the Lean declarations produced by Aeneas to the original Rust
+    source. *)
 let emit_json = ref false
 
 (** If true, treat the unit functions (function taking no inputs and returning

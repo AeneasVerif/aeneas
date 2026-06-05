@@ -464,8 +464,7 @@ let () =
     fail_with_error
       "The -max-recdepth option is valid only for the Lean backend";
   if !emit_json && not (backend () = Lean) then
-    fail_with_error
-      "The -emit-json option is valid only for the Lean backend";
+    fail_with_error "The -emit-json option is valid only for the Lean backend";
 
   check_arg_implies !diagnose_detailed "-diagnose-detailed"
     !diagnose_micro_passes "-diagnose-micro-passes";
