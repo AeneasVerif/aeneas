@@ -2126,7 +2126,7 @@ let simplify_trait_calls (crate : crate) : crate =
     crate.fun_decls;
 
   GlobalDeclId.Map.iter
-    (fun _ (d : global_decl) -> visitor#visit_fun_decl_id () d.init)
+    (fun _ (d : global_decl) -> visitor#visit_constant_expr () d.value)
     crate.global_decls;
 
   TraitDeclId.Map.iter
