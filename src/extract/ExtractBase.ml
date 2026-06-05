@@ -1142,6 +1142,7 @@ let keywords () =
           "prelude";
           "private";
           "protected";
+          "public";
           "raw";
           "record";
           "reduce";
