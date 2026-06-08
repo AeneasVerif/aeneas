@@ -13,10 +13,10 @@ open Lean Lean.Elab Command Term Lean.Meta Tactic
 /- Utility function for proofs of termination (i.e., inside `decreasing_by`).
 
    Clean up the local context by removing all assumptions containing occurrences
-   of `invImage` (those are introduced automatically when doing proofs of
+   of `invImage` or `InvImage` (those are introduced automatically when doing proofs of
    termination). We do so because we often need to simplify the context in the
-   proofs, and if we simplify those assumptions they tend to make the context
-   blow up.
+   proofs, and if we simplify those assumptions they tend to trigger extremely expensive
+   reductions.
 -/
 def removeInvImageAssumptions : TacticM Unit := do
   withMainContext do
@@ -30,7 +30,7 @@ def removeInvImageAssumptions : TacticM Unit := do
       pure (
         b ||
         match e with
-        | .const name _ => name == ``invImage
+        | .const name _ => name == ``invImage || name == ``InvImage
         | _ => false)) false decl.type
   let filtDecls ← liftM (decls.filterM fun decl => do
     if ← isProp decl.type then containsInvertImage decl
@@ -40,9 +40,13 @@ def removeInvImageAssumptions : TacticM Unit := do
      some other assumptions might depend on them -/
   setGoals [← (← getMainGoal).tryClearMany filtDecls]
 
-elab "remove_invImage_assumptions" : tactic =>
+/-- This is the tactic to use to preprocess proofs of termination when the context
+contains elements that shouldn't be there. -/
+elab "decreasing_by_preprocess" : tactic =>
   removeInvImageAssumptions
 
+elab "remove_invImage_assumptions" : tactic =>
+  removeInvImageAssumptions
 
 def clearUnusedDeclsOnePass : TacticM Unit := do
   withMainContext do
