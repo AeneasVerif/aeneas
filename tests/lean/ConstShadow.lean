@@ -25,18 +25,18 @@ structure HasConst (Self : Type) (N1 : Std.Usize) where
 @[reducible]
 def Foo := Unit
 
-/-- [const_shadow::{impl const_shadow::HasConst<4 : usize> for const_shadow::Foo}::get]:
+/-- [const_shadow::{impl const_shadow::HasConst<4usize> for const_shadow::Foo}::get]:
     Source: 'tests/src/const-shadow.rs', lines 23:4-25:5 -/
 def Foo.Insts.Const_shadowHasConst4.get
   (self : Foo) : Result (Array Std.U8 4#usize) := do
   ok (Array.repeat 4#usize 0#u8)
 
-/-- [const_shadow::{impl const_shadow::HasConst<4 : usize> for const_shadow::Foo}::N]
+/-- [const_shadow::{impl const_shadow::HasConst<4usize> for const_shadow::Foo}::N]
     Source: 'tests/src/const-shadow.rs', lines 21:4-21:24 -/
 @[global_simps, irreducible]
 def Foo.Insts.Const_shadowHasConst4.N : Std.Usize := 42#usize
 
-/-- Trait implementation: [const_shadow::{impl const_shadow::HasConst<4 : usize> for const_shadow::Foo}]
+/-- Trait implementation: [const_shadow::{impl const_shadow::HasConst<4usize> for const_shadow::Foo}]
     Source: 'tests/src/const-shadow.rs', lines 20:0-26:1 -/
 @[reducible]
 def Foo.Insts.Const_shadowHasConst4 : HasConst Foo 4#usize := {

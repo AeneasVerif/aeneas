@@ -134,7 +134,9 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
                 in
                 match builtin_info with
                 | Some info -> self#may_fail info.can_fail
-                | None -> self#visit_fid env global.init)
+                | None ->
+                    self#visit_fid env
+                      (Option.get (init_fun_id_of_global global)))
             | UnaryOp (uop, _) -> can_fail := unop_can_fail uop || !can_fail
             | BinaryOp (bop, _, _) ->
                 can_fail := binop_can_fail bop || !can_fail
