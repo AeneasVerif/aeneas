@@ -1142,6 +1142,7 @@ let keywords () =
           "prelude";
           "private";
           "protected";
+          "public";
           "raw";
           "record";
           "reduce";
@@ -1845,7 +1846,7 @@ let ctx_compute_trait_impl_name_raw (ctx : extraction_ctx)
       | _ ->
           (* No renaming.
 
-               Check if it is a blanket impl, in which case we use the trait name. *)
+             Check if it is a blanket impl, in which case we use the trait name. *)
           if is_blanket then
             let params = trait_impl.generics in
             let args = trait_impl.impl_trait.generics in

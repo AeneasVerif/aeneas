@@ -607,7 +607,7 @@ let ctx_type_get_instantiated_variants_fields_types (span : Meta.span)
     (ctx : eval_ctx) (def_id : TypeDeclId.id) (generics : generic_args) :
     (VariantId.id option * ty list) list =
   let def = ctx_lookup_type_decl span ctx def_id in
-  Substitute.type_decl_get_instantiated_variants_fields_types def generics
+  Substitute.type_decl_get_instantiated_variants_fields_types span def generics
 
 (** Same as [ctx_type_get_instantiated_variants_fields_types], but also erases
     the regions *)

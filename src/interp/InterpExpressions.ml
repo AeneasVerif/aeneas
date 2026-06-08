@@ -249,8 +249,8 @@ let rec copy_value (span : Meta.span) (allow_adt_copy : bool) (config : config)
                    simplify the given back value to unit when translating
                    to pure) so we can simply ignore them. *)
                 {
-                  input = Some (mk_eignored mk_unit_ty);
-                  output = Some { value = EIgnored; ty };
+                  input = Some (mk_eignored None mk_unit_ty);
+                  output = Some { value = EIgnored None; ty };
                 }
               in
 
@@ -1428,7 +1428,7 @@ let eval_rvalue_not_global (config : config) (span : Meta.span)
   let wrap_in_result (v, ctx, cc) = (Ok v, ctx, cc) in
   (* Delegate to the proper auxiliary function *)
   match rvalue with
-  | Use op -> wrap_in_result (eval_operand config span op ctx)
+  | Use (op, _) -> wrap_in_result (eval_operand config span op ctx)
   | RvRef (p, bkind, _) ->
       wrap_in_result (eval_rvalue_ref config span p bkind ctx)
   | UnaryOp (unop, op) -> eval_unary_op config span unop op ctx

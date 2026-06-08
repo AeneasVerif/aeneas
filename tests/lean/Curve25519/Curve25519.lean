@@ -20,14 +20,14 @@ namespace curve25519
 @[reducible]
 def Scalar52 := Array Std.U64 5#usize
 
-/-- [curve25519::{core::ops::index::Index<usize, u64> for curve25519::Scalar52}::index]:
+/-- [curve25519::{impl core::ops::index::Index<usize, u64> for curve25519::Scalar52}::index]:
     Source: 'tests/src/curve25519.rs', lines 11:4-13:5
     Visibility: public -/
 def Scalar52.Insts.CoreOpsIndexIndexUsizeU64.index
   (self : Scalar52) (_index : Std.Usize) : Result Std.U64 := do
   Array.index_usize self _index
 
-/-- Trait implementation: [curve25519::{core::ops::index::Index<usize, u64> for curve25519::Scalar52}]
+/-- Trait implementation: [curve25519::{impl core::ops::index::Index<usize, u64> for curve25519::Scalar52}]
     Source: 'tests/src/curve25519.rs', lines 9:0-14:1 -/
 @[reducible]
 def Scalar52.Insts.CoreOpsIndexIndexUsizeU64 : core.ops.index.Index Scalar52

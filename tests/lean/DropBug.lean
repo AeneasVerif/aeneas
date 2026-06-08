@@ -17,6 +17,22 @@ noncomputable section
 
 namespace drop_bug
 
+/-- Trait declaration: [core::ops::drop::Drop]
+    Source: '/rustc/library/core/src/ops/drop.rs', lines 209:0-209:20
+    Name pattern: [core::ops::drop::Drop]
+    Visibility: public -/
+@[rust_trait "core::ops::drop::Drop"]
+structure core.ops.drop.Drop (Self : Type) where
+  drop : Self → Result Self
+
+/-- [core::ops::drop::Drop::drop]:
+    Source: '/rustc/library/core/src/ops/drop.rs', lines 243:4-243:22
+    Name pattern: [core::ops::drop::Drop::drop]
+    Visibility: public -/
+@[rust_fun "core::ops::drop::Drop::drop"]
+axiom core.ops.drop.Drop.drop.default
+  {Self : Type} (DropInst : core.ops.drop.Drop Self) : Self → Result Self
+
 /-- [drop_bug::wipe_slice]:
     Source: 'tests/src/drop_bug.rs', lines 20:0-24:1 -/
 axiom wipe_slice {T : Type} : Slice T → Result (Slice T)
@@ -25,6 +41,22 @@ axiom wipe_slice {T : Type} : Slice T → Result (Slice T)
     Source: 'tests/src/drop_bug.rs', lines 26:0-28:1 -/
 structure Inner where
   buf : Array Std.U8 4#usize
+
+/-- [drop_bug::{impl core::ops::drop::Drop for drop_bug::Inner}::drop]:
+    Source: 'tests/src/drop_bug.rs', lines 31:4-33:5
+    Visibility: public -/
+def Inner.Insts.CoreOpsDropDrop.drop (self : Inner) : Result Inner := do
+  let (s, to_slice_mut_back) ← lift (Array.to_slice_mut self.buf)
+  let s1 ← wipe_slice s
+  let a := to_slice_mut_back s1
+  ok { buf := a }
+
+/-- Trait implementation: [drop_bug::{impl core::ops::drop::Drop for drop_bug::Inner}]
+    Source: 'tests/src/drop_bug.rs', lines 30:0-34:1 -/
+@[reducible]
+def Inner.Insts.CoreOpsDropDrop : core.ops.drop.Drop Inner := {
+  drop := Inner.Insts.CoreOpsDropDrop.drop
+}
 
 /-- [drop_bug::{drop_bug::Inner}::init]:
     Source: 'tests/src/drop_bug.rs', lines 37:4-39:5 -/
