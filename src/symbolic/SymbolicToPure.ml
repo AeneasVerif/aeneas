@@ -345,17 +345,10 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
 
 let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
     global_decl =
-  let {
-    A.item_meta;
-    def_id;
-    generics = llbc_generics;
-    ty;
-    src;
-    init = body_id;
-    _;
-  } =
+  let { A.item_meta; def_id; generics = llbc_generics; ty; src; value; _ } =
     decl
   in
+  let body_id = Option.get (Charon.GAstUtils.init_fun_id_of_global decl) in
   let name =
     Print.name_to_string
       (Print.Contexts.decls_ctx_to_fmt_env ctx)
