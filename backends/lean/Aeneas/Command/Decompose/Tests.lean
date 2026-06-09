@@ -39,8 +39,8 @@ warning: #decompose: 'Aeneas.Command.Decompose.Tests.test1_y' has the same defin
 -/
 #guard_msgs in
 #decompose test1 test1_eq
-  letRange 0 3 => test1_x
-  letRange 1 3 => test1_y
+  letRange 0 3 => test1_x,
+  letRange 1 3 => test1_y,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test1_x : U32 → Result (UScalar UScalarTy.U32) :=
@@ -95,7 +95,7 @@ def test2 (x : U32) : Result U32 := do
   a + b
 
 #decompose test2 test2_eq
-  letRange 0 2 => test2_aux
+  letRange 0 2 => test2_aux,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test2_aux : U32 → Result (UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
@@ -141,9 +141,9 @@ warning: #decompose: 'Aeneas.Command.Decompose.Tests.test3_y' has the same defin
 -/
 #guard_msgs in
 #decompose test3 test3_eq
-  branch 0 (letRange 0 3) => test3_x
-  branch 0 (letRange 1 3) => test3_y
-  branch 0 full => test3_then
+  branch 0 (letRange 0 3) => test3_x,
+  branch 0 (letRange 1 3) => test3_y,
+  branch 0 full => test3_then,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test3_x : U32 → Result (UScalar UScalarTy.U32) :=
@@ -192,7 +192,7 @@ def test4 (x y : U32) : Result U32 := do
   z + 1#u32
 
 #decompose test4 test4_eq
-  full => test4_body
+  full => test4_body,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test4_body : U32 → U32 → Result (UScalar UScalarTy.U32) :=
@@ -223,7 +223,7 @@ def test5 (x : U32) : Result U32 := do
   b + 1#u32
 
 #decompose test5 test5_eq
-  letRange 0 3 => test5_all
+  letRange 0 3 => test5_all,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test5_all : U32 → Result (UScalar UScalarTy.U32) :=
@@ -256,7 +256,7 @@ def test6 (x : Nat) : Nat :=
   c + 4
 
 #decompose test6 test6_eq
-  letRange 0 3 => test6_aux
+  letRange 0 3 => test6_aux,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test6_aux : ℕ → ℕ :=
@@ -293,7 +293,7 @@ noncomputable def test7 (x : U32) (s : Slice U8) : Result U32 := do
   a + 2#u32
 
 #decompose test7 test7_eq
-full => test7_body
+full => test7_body,
 
 -- Verify
 /--
@@ -316,7 +316,7 @@ noncomputable def test8 (x y : U32) : Result U32 := do
 
 -- Extract the two side-effect bindings — continuation uses none of them
 #decompose test8 test8_eq
-  letRange 0 2 => test8_effects
+  letRange 0 2 => test8_effects,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test8_effects : U32 → U32 → Result Unit :=
@@ -352,7 +352,7 @@ def test9 (x y : U32) : Result U32 := do
 
 -- Extract only the first binding
 #decompose test9 test9_eq
-  letRange 0 1 => test9_first
+  letRange 0 1 => test9_first,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test9_first : U32 → Result (UScalar UScalarTy.U32) :=
@@ -387,7 +387,7 @@ def test10 (x : U32) : Result U32 := do
   sum + c
 
 #decompose test10 test10_eq
-  letRange 0 3 => test10_triple
+  letRange 0 3 => test10_triple,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test10_triple : U32 →
@@ -429,7 +429,7 @@ def test11 (x : U32) : Result U32 := do
   s1 + s2
 
 #decompose test11 test11_eq
-  letRange 0 4 => test11_quad
+  letRange 0 4 => test11_quad,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test11_quad : U32 →
@@ -472,8 +472,8 @@ def test12 (x : U32) : Result U32 := do
 
 -- Extract first 2 (one pure, one monadic)
 #decompose test12 test12_eq
-  letRange 0 2 => test12_mixed1
-  letRange 1 2 => test12_mixed2
+  letRange 0 2 => test12_mixed1,
+  letRange 1 2 => test12_mixed2,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test12_mixed1 : U32 → Result (ℕ × UScalar UScalarTy.U32) :=
@@ -527,7 +527,7 @@ def test15 (b1 b2 : Bool) (x : U32) : Result U32 := do
     x + 20#u32
 
 #decompose test15 test15_eq
-  branch 0 (branch 0 (letRange 0 3)) => test15_inner
+  branch 0 (branch 0 (letRange 0 3)) => test15_inner,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test15_inner : U32 → Result (UScalar UScalarTy.U32) :=
@@ -566,7 +566,7 @@ def test16 (x : Nat) : Nat :=
   a + b + x
 
 #decompose test16 test16_eq
-  letRange 0 2 => test16_pair
+  letRange 0 2 => test16_pair,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test16_pair : ℕ → ℕ × ℕ :=
@@ -609,7 +609,7 @@ def test17 (x y : U32) : Result U32 := do
 -- Navigate to binding 0's value (test17_helper x) and extract it
 -- letAt syntax requires parens: letAt 0 (full)
 #decompose test17 test17_eq
-  letAt 0 (full) => test17_inner
+  letAt 0 (full) => test17_inner,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test17_inner : U32 → Result U32 :=
@@ -643,7 +643,7 @@ def test18 (n : Nat) : Nat :=
     0
 
 #decompose test18 test18_eq
-  branch 0 full => test18_then
+  branch 0 full => test18_then,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test18_then : ℕ → ℕ :=
@@ -681,7 +681,7 @@ def test19 (x : U32) : Result U32 :=
 
 -- argArg 0 full: replace the first argument (test19_inner) of test19_fn
 #decompose test19 test19_eq
-  argArg 0 full => test19_extracted
+  argArg 0 full => test19_extracted,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test19_extracted : U32 → Result U32 :=
@@ -712,7 +712,7 @@ def test20 (x : U32) : Result U32 :=
 
 -- Navigate into the lambda argument with argArg 0 (lam 1 ...)
 #decompose test20 test20_eq
-  argArg 0 (lam 1 full) => test20_body
+  argArg 0 (lam 1 full) => test20_body,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test20_body : U32 → U32 → Result (UScalar UScalarTy.U32) :=
@@ -757,7 +757,7 @@ def test21 (n : Nat) : Nat :=
 -- argArg 0 = motive, 1 = discriminant, 2 = zero case, 3 = succ case.
 -- argArg 3 navigates to the successor branch, lam 1 enters the `fun k =>` binder
 #decompose test21 test21_eq
-  argArg 3 (lam 1 (letRange 0 3)) => test21_compute
+  argArg 3 (lam 1 (letRange 0 3)) => test21_compute,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test21_compute : ℕ → ℕ :=
@@ -798,7 +798,7 @@ noncomputable def test22 (x : U32) : Result U32 := do
 
 -- Extract first 2 bindings (2 monadic side-effects, no vars needed by continuation)
 #decompose test22 test22_eq
-  letRange 0 2 => test22_prefix
+  letRange 0 2 => test22_prefix,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test22_prefix : Result Unit :=
@@ -834,7 +834,7 @@ def test23 (n : Nat) (x : U32) (s : Slice U8) (b : Bool) : Result U32 := do
   if len > n then c + 1#u32 else pure c
 
 #decompose test23 test23_eq
-  letRange 0 3 => test23_prefix
+  letRange 0 3 => test23_prefix,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test23_prefix : U32 → Slice U8 → Bool → Result (ℕ × UScalar UScalarTy.U32) :=
@@ -903,12 +903,12 @@ warning: #decompose: 'Aeneas.Command.Decompose.Tests.test24_chunk2' has the same
 -/
 #guard_msgs in
 #decompose test24 test24_eq
-  letRange 0 5 => test24_chunk1
-  letRange 1 5 => test24_chunk2
-  letRange 1 5 => test24_chunk3
-  letRange 1 5 => test24_chunk4
-  letRange 1 5 => test24_chunk5
-  letRange 1 5 => test24_chunk6
+  letRange 0 5 => test24_chunk1,
+  letRange 1 5 => test24_chunk2,
+  letRange 1 5 => test24_chunk3,
+  letRange 1 5 => test24_chunk4,
+  letRange 1 5 => test24_chunk5,
+  letRange 1 5 => test24_chunk6,
 
 /--
 info: test24_eq : ∀ (x : U32),
@@ -943,7 +943,7 @@ def test25 (x : U32) : Result U32 := do
 
 -- Extract bindings 2-4 (which reference a, b from outside the range)
 #decompose test25 test25_eq
-  letRange 2 3 => test25_middle
+  letRange 2 3 => test25_middle,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test25_middle : UScalar UScalarTy.U32 →
@@ -990,7 +990,7 @@ def test26 (x y : U32) : Result U32 := do
 
 -- Navigate to binding 1's value (test26_aux2 y) and extract it
 #decompose test26 test26_eq
-  letAt 1 (full) => test26_extracted
+  letAt 1 (full) => test26_extracted,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test26_extracted : U32 → Result U32 :=
@@ -1027,7 +1027,7 @@ def test27 (b : Bool) (x : Nat) : Nat :=
     x
 
 #decompose test27 test27_eq
-  branch 0 full => test27_then
+  branch 0 full => test27_then,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test27_then : ℕ → ℕ :=
@@ -1062,7 +1062,7 @@ def test28 (x : Nat) : Nat :=
   x + 3
 
 #decompose test28 test28_eq
-  letRange 0 2 => test28_unused
+  letRange 0 2 => test28_unused,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test28_unused : ℕ → ℕ :=
@@ -1092,7 +1092,7 @@ def test29 {α : Type u} (x : α) : α :=
   b
 
 #decompose test29 test29_eq
-  letRange 0 2 => test29_aux
+  letRange 0 2 => test29_aux,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test29_aux.{u} : {α : Type u} → α → α :=
@@ -1131,8 +1131,8 @@ def test30 (b : Bool) (x y : U32) : Result U32 := do
     d + x
 
 #decompose test30 test30_eq
-  branch 0 (letRange 0 2) => test30_then_prefix
-  branch 1 (letRange 0 2) => test30_else_prefix
+  branch 0 (letRange 0 2) => test30_then_prefix,
+  branch 1 (letRange 0 2) => test30_else_prefix,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test30_then_prefix : U32 → Result (UScalar UScalarTy.U32) :=
@@ -1178,7 +1178,7 @@ def test31 {n : Nat} (x : Fin n) : Nat :=
   b
 
 #decompose test31 test31_eq
-  letRange 0 2 => test31_aux
+  letRange 0 2 => test31_aux,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test31_aux : {n : ℕ} → Fin n → ℕ :=
@@ -1217,7 +1217,7 @@ def test33 (n : Nat) : Nat :=
 
 -- Use `branch 1` to enter the successor case (alt index 1), then extract lets
 #decompose test33 test33_eq
-  branch 1 (letRange 0 3) => test33_succ_comp
+  branch 1 (letRange 0 3) => test33_succ_comp,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test33_succ_comp : ℕ → ℕ :=
@@ -1262,8 +1262,8 @@ def test34 (b : Bool) : Nat :=
 
 -- Extract from true branch (alt 0) and false branch (alt 1)
 #decompose test34 test34_eq
-  branch 0 (letRange 0 2) => test34_true_comp
-  branch 1 (letRange 0 2) => test34_false_comp
+  branch 0 (letRange 0 2) => test34_true_comp,
+  branch 1 (letRange 0 2) => test34_false_comp,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test34_true_comp : ℕ :=
@@ -1316,7 +1316,7 @@ def test35 (o : Option Nat) : Nat :=
 
 -- Extract from the some branch (alt 1), which has 1 pattern variable (v)
 #decompose test35 test35_eq
-  branch 1 (letRange 0 3) => test35_some_comp
+  branch 1 (letRange 0 3) => test35_some_comp,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test35_some_comp : ℕ → ℕ :=
@@ -1375,10 +1375,10 @@ def test36 (c : Color) : Nat :=
 
 -- Extract from each branch
 #decompose test36 test36_eq
-  branch 0 (letRange 0 2) => test36_red
-  branch 1 (letRange 0 2) => test36_green
-  branch 2 (letRange 0 2) => test36_blue
-  branch 3 (letRange 0 2) => test36_yellow
+  branch 0 (letRange 0 2) => test36_red,
+  branch 1 (letRange 0 2) => test36_green,
+  branch 2 (letRange 0 2) => test36_blue,
+  branch 3 (letRange 0 2) => test36_yellow,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test36_red : ℕ :=
@@ -1447,7 +1447,7 @@ def test37 (n : Nat) : Nat :=
 
 -- Extract the full successor branch body
 #decompose test37 test37_eq
-  branch 1 full => test37_succ
+  branch 1 full => test37_succ,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test37_succ : ℕ → ℕ :=
@@ -1493,8 +1493,8 @@ def test38 (n : Nat) (b : Bool) : Nat :=
 
 -- Navigate: outer match alt 1 → inner match alt 0 (true) → extract lets
 #decompose test38 test38_eq
-  branch 1 (branch 0 (letRange 0 2)) => test38_succ_true_comp
-  branch 1 (branch 1 (letRange 0 2)) => test38_succ_false_comp
+  branch 1 (branch 0 (letRange 0 2)) => test38_succ_true_comp,
+  branch 1 (branch 1 (letRange 0 2)) => test38_succ_false_comp,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test38_succ_true_comp : ℕ → ℕ :=
@@ -1548,7 +1548,7 @@ def test39 (n : Nat) : Result Nat := do
 
 -- The match is directly at the top of the do-block body, so `branch` works directly
 #decompose test39 test39_eq
-  branch 1 (letRange 0 2) => test39_succ_comp
+  branch 1 (letRange 0 2) => test39_succ_comp,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test39_succ_comp : ℕ → Result ℕ :=
@@ -1593,7 +1593,7 @@ def test40 (p : Point) : Nat :=
 
 -- The Point match has 1 alternative with 2 pattern variables (x, y)
 #decompose test40 test40_eq
-  branch 0 (letRange 0 3) => test40_comp
+  branch 0 (letRange 0 3) => test40_comp,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test40_comp : ℕ → ℕ → ℕ :=
@@ -1637,8 +1637,8 @@ def test41 (s : Nat ⊕ Bool) : Nat :=
 
 -- Extract from the inl branch (alt 0, 1 pattern var) and inr branch (alt 1, 1 pattern var)
 #decompose test41 test41_eq
-  branch 0 (letRange 0 2) => test41_inl_comp
-  branch 1 (letRange 0 2) => test41_inr_comp
+  branch 0 (letRange 0 2) => test41_inl_comp,
+  branch 1 (letRange 0 2) => test41_inr_comp,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test41_inl_comp : ℕ → ℕ :=
@@ -1694,8 +1694,8 @@ def test42 (n : Nat) (flag : Bool) : Nat :=
 
 -- Navigate into match alt 1, then into if-then-else branch 0 (then)
 #decompose test42 test42_eq
-  branch 1 (branch 0 (letRange 0 2)) => test42_succ_then_comp
-  branch 1 (branch 1 (letRange 0 2)) => test42_succ_else_comp
+  branch 1 (branch 0 (letRange 0 2)) => test42_succ_then_comp,
+  branch 1 (branch 1 (letRange 0 2)) => test42_succ_else_comp,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test42_succ_then_comp : ℕ → ℕ :=
@@ -1749,7 +1749,7 @@ def test43 (n : Nat) : Nat :=
     c + k
 
 #decompose test43 test43_eq
-  branch 1 (letRange 0 3) => test43_compute
+  branch 1 (letRange 0 3) => test43_compute,
 
 -- Verify this produces the same result as test21 did with argArg
 /--
@@ -1793,7 +1793,7 @@ error: branch 2: match has only 2 alternative(s) (0-indexed)
 -/
 #guard_msgs in
 #decompose test45 test45_eq
-  branch 2 full => test45_bad
+  branch 2 full => test45_bad,
 
 -- ============================================================================
 -- Test 46: Match on list — nil and cons with multiple pattern variables
@@ -1813,8 +1813,8 @@ def test46 (l : List Nat) : Nat :=
 
 -- nil branch (alt 0): 0 pattern vars, cons branch (alt 1): 2 pattern vars (hd, tl)
 #decompose test46 test46_eq
-  branch 0 (letRange 0 2) => test46_nil_comp
-  branch 1 (letRange 0 3) => test46_cons_comp
+  branch 0 (letRange 0 2) => test46_nil_comp,
+  branch 1 (letRange 0 3) => test46_cons_comp,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test46_nil_comp : ℕ :=
@@ -1862,7 +1862,7 @@ def test47 (x : U32) : Result U32 := do
   b + c
 
 #decompose test47 test47_eq
-  letRange 0 1 => test47_prefix
+  letRange 0 1 => test47_prefix,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test47_prefix : U32 → Result (UScalar UScalarTy.U32) :=
@@ -1896,7 +1896,7 @@ def test48 (x : U32) : Result U32 := do
   c + d
 
 #decompose test48 test48_eq
-  letRange 1 3 => test48_suffix
+  letRange 1 3 => test48_suffix,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test48_suffix : U32 → U32 → Result (UScalar UScalarTy.U32) :=
@@ -1932,7 +1932,7 @@ def test49 (x : U32) : Result U32 := do
   r + d
 
 #decompose test49 test49_eq
-  letRange 0 1 => test49_prefix
+  letRange 0 1 => test49_prefix,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test49_prefix : U32 → Result (UScalar UScalarTy.U32) :=
@@ -1968,7 +1968,7 @@ def test50 (x : U32) : Result U32 := do
 
 -- Extract the first 2 bindings: a ← ..., (b, c) ← ...
 #decompose test50 test50_eq
-  letRange 0 2 => test50_prefix
+  letRange 0 2 => test50_prefix,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test50_prefix : U32 → Result (UScalar UScalarTy.U32 × UScalar UScalarTy.U32) :=
@@ -2007,7 +2007,7 @@ def test51 (x y : U32) : Result U32 := do
 
 -- Extract only the suffix (d, e, terminal)
 #decompose test51 test51_eq
-  letRange 2 3 => test51_suffix
+  letRange 2 3 => test51_suffix,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test51_suffix : UScalar UScalarTy.U32 → U32 → Result (UScalar UScalarTy.U32) :=
@@ -2048,8 +2048,8 @@ def test52 (x y : U32) : Result U32 := do
 
 -- Both ranges extract the same function (add 3 to input), so name reuse should work
 #decompose test52 test52_eq
-  letRange 0 3 => test52_add3
-  letRange 1 3 => test52_add3
+  letRange 0 3 => test52_add3,
+  letRange 1 3 => test52_add3,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test52_add3 : U32 → Result (UScalar UScalarTy.U32) :=
@@ -2093,8 +2093,8 @@ which is not definitionally equal (at reducible transparency)
 -/
 #guard_msgs in
 #decompose test53 test53_eq
-  letRange 0 1 => test53_aux
-  letRange 1 1 => test53_aux
+  letRange 0 1 => test53_aux,
+  letRange 1 1 => test53_aux,
 
 -- ============================================================================
 -- Test 54: Duplicate definition warning — different names, same body
@@ -2115,8 +2115,8 @@ warning: #decompose: 'Aeneas.Command.Decompose.Tests.test54_add3b' has the same 
 -/
 #guard_msgs in
 #decompose test54 test54_eq
-  letRange 0 3 => test54_add3a
-  letRange 1 3 => test54_add3b
+  letRange 0 3 => test54_add3a,
+  letRange 1 3 => test54_add3b,
 
 -- ============================================================================
 -- Test 55: letRange spanning past a tuple-destructuring bind — regression test
@@ -2147,7 +2147,7 @@ def loop (o : Option Usize)
 
 -- letRange 0 8: spans past the tuple bind (binding 6 is `let (_, index_mut_back) ← ...`)
 #decompose loop loop_eq_8
-  branch 1 (letRange 0 8) => loop.body_8
+  branch 1 (letRange 0 8) => loop.body_8,
 
 /--
 info: 'Aeneas.Command.Decompose.Tests.test55_ns.loop_eq_8' depends on axioms: [propext, Classical.choice, Quot.sound]
@@ -2173,7 +2173,7 @@ def f (x : U32) : Result U32 := do
 
 -- Probe 1: trivial first-binding extraction works (no `letAt`).
 #decompose f f_prefix_eq
-  letRange 0 1 => f_prefix
+  letRange 0 1 => f_prefix,
 
 /--
 info: f_prefix_eq : ∀ (x : U32),
@@ -2199,7 +2199,7 @@ fun x => do
 -- Probe 2: `letAt 1 (full)` to extract the value of the *second* binding
 -- (the `c ← b + 1#u32`). The first binding has tuple-destructured `(a, b)`.
 #decompose f f_letat1_eq
-  letAt 1 (full) => f_second_value
+  letAt 1 (full) => f_second_value,
 
 /--
 info: f_letat1_eq : ∀ (x : U32),
@@ -2241,7 +2241,7 @@ def g (x : U32) : Result U32 := do
 
 -- letRange on the first binding works (extracts the whole tuple computation)
 #decompose g g_prefix_eq
-  letRange 0 1 => g_prefix
+  letRange 0 1 => g_prefix,
 
 /--
 info: g_prefix_eq : ∀ (x : U32),
@@ -2284,7 +2284,7 @@ def caller (x : U32) : Result U32 := do
   s + fn
 
 #decompose caller caller.fold
-  letRange 0 1 => caller_prefix
+  letRange 0 1 => caller_prefix,
 
 end test58
 
@@ -2309,7 +2309,7 @@ def add_mul (y x : U32) : Result U32 := do
 
 -- Test single expression RHS clause
 #decompose f f_eq1
-  letRange 0 2 => (add_mul 1#u32)
+  letRange 0 2 => add_mul 1#u32,
 
 /--
 info: f_eq1 : ∀ (x : U32),
@@ -2326,9 +2326,9 @@ info: f_eq1 : ∀ (x : U32),
 
 -- Full test with all three clauses
 #decompose f f_eq
-  letRange 0 2 => (add_mul 1#u32)
-  letRange 1 2 => (add_mul 2#u32)
-  letRange 2 2 => (add_mul 3#u32)
+  letRange 0 2 => add_mul 1#u32,
+  letRange 1 2 => add_mul 2#u32,
+  letRange 2 2 => add_mul 3#u32,
 
 /--
 info: f_eq : ∀ (x : U32),
@@ -2364,8 +2364,8 @@ def g (x : U32) : Result U32 := do
 def add1 (x : U32) : Result U32 := x + 1#u32
 
 #decompose g g_eq
-  letRange 0 1 => g_first
-  letRange 1 1 => (add1)
+  letRange 0 1 => g_first,
+  letRange 1 1 => add1,
 
 /--
 info: def Aeneas.Command.Decompose.Tests.test60.g_first : U32 → Result (UScalar UScalarTy.U32) :=
@@ -2402,7 +2402,7 @@ def h_impl (x : U32) : Result U32 := do
   a + 2#u32
 
 #decompose h h_eq
-  full => (h_impl)
+  full => h_impl,
 
 /--
 info: h_eq : ∀ (x : U32), h x = h_impl x
@@ -2436,7 +2436,7 @@ is not definitionally equal (at default transparency) to the extracted body
 -/
 #guard_msgs in
 #decompose k k_eq
-  full => (k_wrong)
+  full => k_wrong,
 
 end test62
 
@@ -2452,7 +2452,7 @@ def m (x : U32) : Result U32 := do
   b + 3#u32
 
 #decompose m m_eq
-  letRange 0 1 => (fun (x : U32) => x + 1#u32)
+  letRange 0 1 => fun (x : U32) => x + 1#u32,
 
 /--
 info: m_eq : ∀ (x : U32),

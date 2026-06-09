@@ -20,14 +20,20 @@ that can be verified independently.
 
 ```
 #decompose originalFn eqThm
-  pattern₁ => auxName₁
-  pattern₂ => auxName₂
+  pattern₁ => auxName₁,
+  pattern₂ => auxName₂,
   ...
 ```
 
 This creates auxiliary definitions `auxName₁`, `auxName₂`, ... and a theorem `eqThm`
 proving `originalFn args = <body rewritten using the auxiliaries>`. The clauses are
 applied sequentially: each clause sees the body as modified by previous clauses.
+
+Each clause RHS is a term terminated by a comma. If the RHS is an unresolved
+identifier, `#decompose` creates a new auxiliary definition with that name. If
+the RHS is an expression that resolves (an existing function, a partial application,
+a lambda, etc.), `#decompose` checks that it is definitionally equal to the extracted
+sub-expression and uses it directly in the rewrite theorem.
 
 ## Patterns
 
@@ -45,7 +51,7 @@ def f (x : U32) : Result U32 := do
   c + 10#u32               -- terminal (position 3)
 
 #decompose f f_eq
-  letRange 0 3 => f_prefix  -- extracts bindings 0,1,2
+  letRange 0 3 => f_prefix,  -- extracts bindings 0,1,2
 -- f_prefix : U32 → Result U32
 -- f_eq : f x = f_prefix x >>= fun c => c + 10#u32
 ```
@@ -55,7 +61,7 @@ Extract the entire expression at the current position as a new definition.
 
 ```
 #decompose f f_eq
-  full => f_body
+  full => f_body,
 -- f_body x = <entire body of f>
 -- f_eq : f x = f_body x
 ```
@@ -74,7 +80,7 @@ def g (b : Bool) (x : U32) : Result U32 := do
     x + 10#u32
 
 #decompose g g_eq
-  branch 0 (letRange 0 2) => g_then  -- extract from the then-branch
+  branch 0 (letRange 0 2) => g_then,  -- extract from the then-branch
 ```
 
 ### `letAt idx inner`
@@ -106,8 +112,8 @@ def f (x y : U32) : Result U32 := do
   x3 + y3
 
 #decompose f f_eq
-  letRange 0 3 => add3    -- creates `add3`
-  letRange 1 3 => add3    -- reuses `add3` (same body)
+  letRange 0 3 => add3,    -- creates `add3`
+  letRange 1 3 => add3,    -- reuses `add3` (same body)
 -- f_eq : f x y = do
 --   let x3 ← add3 x
 --   let y3 ← add3 y
@@ -127,8 +133,8 @@ existing definition whose value matches the extraction, it is reused.
 
 ## Using expressions on the RHS
 
-Instead of providing a name (which creates a new definition), you can provide an
-arbitrary expression wrapped in parentheses. The expression must be definitionally
+Instead of providing an unresolved name (which creates a new definition), you can
+provide any expression that already resolves. The expression must be definitionally
 equal (at default transparency) to the extracted sub-expression.
 
 ```
@@ -144,8 +150,8 @@ def f (x : U32) : Result U32 := do
   pure x
 
 #decompose f f_eq
-  letRange 0 2 => (add_mul 1#u32)
-  letRange 1 2 => (add_mul 2#u32)
+  letRange 0 2 => add_mul 1#u32,
+  letRange 1 2 => add_mul 2#u32,
 -- f_eq : f x = do
 --   let x ← add_mul 1#u32 x
 --   let x ← add_mul 2#u32 x
@@ -261,11 +267,7 @@ partial def elabDecomposePat : Syntax → Except String DecomposePattern
     return .argArg idx.getNat .full
   | stx => throw s!"Unknown decompose pattern: {stx}"
 
-declare_syntax_cat decompose_rhs (behavior := symbol)
-syntax ident : decompose_rhs
-syntax "(" term ")" : decompose_rhs
-
-syntax decompose_clause := decompose_pat " => " decompose_rhs
+syntax decompose_clause := decompose_pat " => " term ","
 
 syntax (name := decomposeCmd) "#decompose " ident ident (ppLine decompose_clause)* : command
 
@@ -1380,28 +1382,34 @@ def elabDecompose : CommandElab := fun stx => do
       let levelParams := info.levelParams
       let srcIsNoncomputable := isNoncomputable env fnName
 
-      -- Parse all clauses (keep the name syntax for LSP info)
+      -- Parse all clauses
       let mut parsedClauses : Array (DecomposePattern × ClauseRhs) := #[]
       for clauseStx in clauses do
         match clauseStx with
-        | `(decompose_clause| $pat => $rhsStx:decompose_rhs) => do
+        | `(decompose_clause| $pat => $rhsTerm:term ,) => do
           let p ← match elabDecomposePat pat with
             | .ok p => pure p
             | .error msg => throwError msg
-          match rhsStx with
-          | `(decompose_rhs| $name:ident) =>
-            -- Identifier RHS: create or reuse a definition
+          -- Determine mode: if the RHS is a single unresolved identifier, treat it
+          -- as a new definition name. Otherwise, elaborate it as an expression.
+          let isNewName ← match rhsTerm with
+            | `($name:ident) => do
+              let resolved? ← Term.resolveId? name (withInfo := false)
+              pure resolved?.isNone
+            | _ => pure false
+          if isNewName then
+            -- Name mode: create or reuse a definition with this name
+            let name : Ident := ⟨rhsTerm⟩
             let ns ← getCurrNamespace
             let fullName := if ns.isAnonymous then name.getId else ns ++ name.getId
             parsedClauses := parsedClauses.push (p, .defName fullName name)
-          | `(decompose_rhs| ( $term:term )) =>
-            -- Expression RHS: elaborate the term and use it directly
-            let rhsExpr ← Term.elabTerm term none
+          else
+            -- Expression mode: elaborate the term and use it directly
+            let rhsExpr ← Term.elabTerm rhsTerm none
             Term.synthesizeSyntheticMVarsNoPostponing
             let rhsExpr ← instantiateMVars rhsExpr
             let headConsts := collectHeadConsts rhsExpr
             parsedClauses := parsedClauses.push (p, .useExpr rhsExpr headConsts)
-          | _ => throwError "Invalid decompose clause RHS syntax"
         | _ => throwError "Invalid decompose clause syntax"
 
       -- Check if the function has an unfolding equation theorem (recursive functions:
