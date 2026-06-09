@@ -30,7 +30,7 @@ example (a : U32) (h : a.val + 1 ≤ U32.max) :
 def callPair (f : U32 → Result U32) (g : U32 → Result U32) (xy : U32 × U32) : Result (U32 × U32) := do
   let a ← f xy.1
   let b ← g xy.2
-  return (a, b)
+  ok (a, b)
 
 @[step]
 theorem callPair_spec (f g : U32 → Result U32) (xy : U32 × U32)
@@ -40,12 +40,11 @@ theorem callPair_spec (f g : U32 → Result U32) (xy : U32 × U32)
   unfold callPair
   step*
 
--- TODO: fix the output of step*? below (it shouldn't decompose the pair into `ab` and `_`)
 -- TODO: the generated script is actually not correct (there misses calls to `agrind` in the cases `hf` and `hg`)
 /--
 info: Try this:
 
-  [apply]     let* ⟨ ab, _, ab_post1, ab_post2 ⟩ ← [ +inferPost ] callPair_spec
+  [apply]     let* ⟨ ab, ab_post1, ab_post2 ⟩ ← [ +inferPost ] callPair_spec
     case hf => let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
     case hg => let* ⟨ ⟩ ← [ +inferPost ] U32.add_spec
     agrind
@@ -86,7 +85,7 @@ example (x : U32) (h1 : x.val + 1 ≤ U32.max) (h2 : x.val + 2 ≤ U32.max) :
 
 def callSlicemapM (x : Slice U32) : Result (Slice U32) := do
   let y ← x.mapM (fun x => x + 1#u32)
-  return y
+  ok y
 
 /--
 info: Try this:
@@ -109,7 +108,7 @@ example (s : Slice U32) (h : ∀ i (hi : i < s.len), s[i] < U32.max) :
 def callSlicemapMTwice (x : Slice U32) : Result (Slice U32) := do
   let y ← x.mapM (fun x => x + 1#u32)
   let z ← y.mapM (fun x => x * x)
-  return z
+  ok z
 
 /--
 info: Try this:

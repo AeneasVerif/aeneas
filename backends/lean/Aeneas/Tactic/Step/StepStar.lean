@@ -1258,9 +1258,8 @@ example {α : Type}
 error: unsolved goals
 f : Result (Bool × Bool)
 f_spec : f ⦃ x✝ x✝¹ => True ⦄
-x✝¹ x✝ : Bool
-_ : [> let(x✝¹, x✝) ← f <]
-_✝ : True
+x _✝ : Bool
+_ : [> let(x, _✝) ← f <]
 ⊢ False
 -/
 #guard_msgs in
