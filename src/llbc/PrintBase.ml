@@ -704,7 +704,7 @@ module Values = struct
     | ESymbolic (pm, proj) ->
         eproj_to_string ~with_ended env proj |> add_proj_marker pm
     | EValue (_, mv) -> "@mvalue(" ^ tvalue_to_string ~span env mv ^ ")"
-    | EIgnored -> "(_ : " ^ ty_to_string env v.ty ^ ")"
+    | EIgnored _ -> "(_ : " ^ ty_to_string env v.ty ^ ")"
     | EMutBorrowInput x ->
         "@mut_input("
         ^ tevalue_to_string ~span ~with_ended env aenv indent indent_incr x

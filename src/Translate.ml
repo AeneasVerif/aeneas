@@ -781,9 +781,12 @@ let export_global (fmt : Format.formatter) (config : gen_config) (ctx : gen_ctx)
     (id : GlobalDeclId.id) : unit =
   let global_decls = ctx.trans_ctx.crate.global_decls in
   let global = GlobalDeclId.Map.find id global_decls in
+  let global_init =
+    Option.get (Charon.GAstUtils.init_fun_id_of_global global)
+  in
   let trans =
     [%silent_unwrap_opt_span] None
-      (FunDeclId.Map.find_opt global.init ctx.trans_funs)
+      (FunDeclId.Map.find_opt global_init ctx.trans_funs)
   in
   [%sanity_check] global.item_meta.span (trans.loops = [] && trans.bodies = []);
   let body = trans.f in
