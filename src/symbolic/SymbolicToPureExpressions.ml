@@ -1593,10 +1593,10 @@ and translate_intro_symbolic (ectx : C.eval_ctx) (p : S.mplace option)
         let ty =
           match kind with
           | T.FunId (FBuiltin _) -> [%craise] ctx.span "Unimplemented"
-          | T.FunId (FRegular fid) ->
+          | T.FunId (FRegular _) ->
               let sg =
                 [%unwrap_with_span] ctx.span
-                  (FunDeclId.Map.find_opt fid ctx.fun_sigs)
+                  (lookup_fn_ptr_sig ctx kind)
                   "Internal error, please file an issue"
               in
               (* Check that the function lives in the expected effect - otherwise we

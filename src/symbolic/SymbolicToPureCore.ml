@@ -42,7 +42,7 @@ type fun_sig_named_outputs = {
 
 type fun_ctx = {
   llbc_fun_decls : A.fun_decl A.FunDeclId.Map.t;
-  fun_infos : fun_info A.FunDeclId.Map.t;
+  fun_infos : modules_funs_info;
 }
 [@@deriving show]
 
@@ -149,7 +149,7 @@ type bs_ctx = {
   trans_global_decls : global_decl GlobalDeclId.Map.t;
   type_ctx : type_ctx;  (** TODO: remove: this is already in decls_ctx *)
   fun_ctx : fun_ctx;
-  fun_sigs : fun_sigs FunDeclId.Map.t;
+  fun_sigs : fun_sigs A.FunOrMethodId.Map.t;
   fun_decl : A.fun_decl;
   bid : RegionGroupId.id option;
       (** TODO: rename
@@ -330,6 +330,10 @@ let bs_ctx_to_pure_fmt_env (ctx : bs_ctx) : PrintPure.fmt_env =
     pbvars = None;
     pbvars_counter = BVarId.zero;
   }
+
+let lookup_fn_ptr_sig (ctx : bs_ctx) (kind : A.fn_ptr_kind) : fun_sigs option =
+  Option.bind (fun_or_method_id_of_fn_ptr ctx.fun_ctx.fun_infos kind) (fun id ->
+      A.FunOrMethodId.Map.find_opt id ctx.fun_sigs)
 
 let ctx_generic_args_to_string (ctx : bs_ctx) (args : T.generic_args) : string =
   let env = bs_ctx_to_fmt_env ctx in

@@ -345,9 +345,7 @@ let translate_trait_impl (ctx : Contexts.decls_ctx) (trait_impl : A.trait_impl)
 
 let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
     global_decl =
-  let { A.item_meta; def_id; generics = llbc_generics; ty; src; value = _; _ } =
-    decl
-  in
+  let { A.item_meta; def_id; generics = llbc_generics; ty; src; _ } = decl in
   let body_id = Option.get (Charon.GAstUtils.init_fun_id_of_global decl) in
   let name =
     Print.name_to_string
@@ -367,7 +365,9 @@ let translate_global (ctx : Contexts.decls_ctx) (decl : A.global_decl) :
     match builtin_info with
     | Some info -> info.can_fail
     | None -> (
-        match FunDeclId.Map.find_opt body_id ctx.fun_ctx.fun_infos with
+        match
+          FunsAnalysis.lookup_fun_decl_info ctx.fun_ctx.fun_infos body_id
+        with
         | None -> (* Don't know: true by default *) true
         | Some info -> info.can_fail)
   in

@@ -723,12 +723,13 @@ and translate_back_input_ty (span : Meta.span option) (decls_ctx : C.decls_ctx)
 
 (** Small utility. *)
 and compute_raw_fun_effect_info (span : Meta.span option)
-    (fun_infos : fun_info A.FunDeclId.Map.t) (fun_id : A.fn_ptr_kind)
+    (fun_infos : FunsAnalysis.modules_funs_info) (fun_id : A.fn_ptr_kind)
     (gid : T.RegionGroupId.id option) : fun_effect_info =
   match fun_id with
-  | TraitMethod (_, _, fid) | FunId (FRegular fid) ->
+  | TraitMethod _ | FunId (FRegular _) ->
       let info =
-        [%silent_unwrap_opt_span] span (A.FunDeclId.Map.find_opt fid fun_infos)
+        [%silent_unwrap_opt_span] span
+          (FunsAnalysis.lookup_fn_ptr_info fun_infos fun_id)
       in
       {
         (* Note that backward functions can't fail *)
@@ -1186,8 +1187,10 @@ and translate_fun_sig (decls_ctx : C.decls_ctx) (fun_id : A.fun_id)
 and get_fun_effect_info (ctx : bs_ctx) (fun_id : A.fn_ptr_kind)
     (gid : T.RegionGroupId.id option) : fun_effect_info =
   match fun_id with
-  | TraitMethod (_, _, fid) | FunId (FRegular fid) ->
-      let sg = A.FunDeclId.Map.find fid ctx.fun_sigs in
+  | TraitMethod _ | FunId (FRegular _) ->
+      let sg =
+        [%silent_unwrap_opt_span] (Some ctx.span) (lookup_fn_ptr_sig ctx fun_id)
+      in
       let sg = sg.dsg in
       let info =
         match gid with

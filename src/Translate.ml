@@ -107,8 +107,8 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
     (marked_ids : marked_ids)
     (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t)
     (pure_global_decls : Pure.global_decl GlobalDeclId.Map.t)
-    (fun_sigs : SymbolicToPureCore.fun_sigs FunDeclId.Map.t) (fdef : fun_decl) :
-    pure_fun_translation_no_loops =
+    (fun_sigs : SymbolicToPureCore.fun_sigs FunOrMethodId.Map.t)
+    (fdef : fun_decl) : pure_fun_translation_no_loops =
   (* Debug *)
   [%ltrace
     name_to_string trans_ctx fdef.item_meta.name
@@ -271,8 +271,8 @@ let translate_function_to_pure_aux (trans_ctx : trans_ctx)
 let translate_function_to_pure (trans_ctx : trans_ctx) (marked_ids : marked_ids)
     (pure_type_decls : Pure.type_decl Pure.TypeDeclId.Map.t)
     (pure_global_decls : Pure.global_decl Pure.GlobalDeclId.Map.t)
-    (fun_sigs : SymbolicToPureCore.fun_sigs FunDeclId.Map.t) (fdef : fun_decl) :
-    pure_fun_translation_no_loops option =
+    (fun_sigs : SymbolicToPureCore.fun_sigs FunOrMethodId.Map.t)
+    (fdef : fun_decl) : pure_fun_translation_no_loops option =
   try
     Some
       (translate_function_to_pure_aux trans_ctx marked_ids pure_type_decls
@@ -360,7 +360,7 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
 
   (* Compute the fun sigs for the whole crate *)
   let fun_sigs =
-    FunDeclId.Map.of_list
+    FunOrMethodId.Map.of_list
       (List.filter_map
          (fun (fdef : LlbcAst.fun_decl) ->
            try
@@ -375,7 +375,11 @@ let translate_crate_to_pure (crate : crate) (marked_ids : marked_ids) :
              let sg = translate_fun_sig_from_decomposed dsg in
              let ty = PureUtils.mk_arrows sg.inputs sg.output in
              let sg : fun_sigs = { dsg; sg; ty } in
-             Some (fdef.def_id, sg)
+             let id =
+               FunsAnalysis.fun_or_method_id_of_fun_decl_id
+                 trans_ctx.fun_ctx.fun_infos fdef.def_id
+             in
+             Some (id, sg)
            with CFailure error ->
              let name = name_to_string trans_ctx fdef.item_meta.name in
              let name_pattern =
