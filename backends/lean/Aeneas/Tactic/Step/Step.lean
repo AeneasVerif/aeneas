@@ -713,7 +713,7 @@ def introOutputs (args : Args) (fExpr : Expr) (stepState : StepState) :
   /- Now compute the prop-status of the remaining leading binders (these are the
      post-conditions to introduce). -/
   let goal ← getMainGoal
-  let outputIsProp ← do
+  let outputIsProp ← goal.withContext do
     let type ← goal.getType
     let type ← instantiateMVars type
     forallTelescope type.consumeMData fun fvars _ => do
