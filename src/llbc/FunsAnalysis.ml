@@ -109,7 +109,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
 
           method! visit_rvalue env rv =
             match rv with
-            | Use (Constant { kind = CTraitConst _; _ }) ->
+            | Use (Constant { kind = CTraitConst _; _ }, _) ->
                 (* We consider that trait constants can fail, similarly to
                    trait methods. *)
                 self#may_fail true
@@ -120,8 +120,7 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
             | Len _
             | NullaryOp _
             | RawPtr _
-            | Repeat _
-            | ShallowInitBox _ -> ()
+            | Repeat _ -> ()
             | RvRef ({ kind = PlaceGlobal gref; _ }, _, _) -> (
                 (* A reference to a global: propagate can_fail.
 
@@ -135,7 +134,9 @@ let analyze_module (m : crate) (funs_map : fun_decl FunDeclId.Map.t) :
                 in
                 match builtin_info with
                 | Some info -> self#may_fail info.can_fail
-                | None -> self#visit_fid env global.init)
+                | None ->
+                    self#visit_fid env
+                      (Option.get (init_fun_id_of_global global)))
             | UnaryOp (uop, _) -> can_fail := unop_can_fail uop || !can_fail
             | BinaryOp (bop, _, _) ->
                 can_fail := binop_can_fail bop || !can_fail

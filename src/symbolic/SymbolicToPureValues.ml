@@ -386,8 +386,6 @@ let gtranslate_adt_fields ~(project_borrows : bool)
             let info_fields = List.filter_map (fun x -> x) info_fields in
             if info_fields = [] then (ctx, None)
             else
-              (* Note that if there is exactly one field value,
-               * [mk_simpl_tuple_rvalue] is the identity *)
               let info, fields = List.split info_fields in
               (ctx, Some (info, mk_tuple fields))
           else

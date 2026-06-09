@@ -83,7 +83,7 @@ instance {α : Type u} {n : Usize} : GetElem (Array α n) Usize α (fun a i => i
 
 @[simp, grind =, agrind =, simp_lists_safe, simp_lists_hyps_simps]
 theorem Array.getElem_Usize_eq {α : Type u} {n : Usize} (v : Array α n) (i : Usize) (h : i.val < v.val.length) :
-    v[i] = v.val[i.val] := rfl
+    v[i]'h = v.val[i.val] := rfl
 
 instance {α : Type u} {n : Usize} : GetElem? (Array α n) Usize α (fun a i => i.val < a.val.length) where
   getElem? a i := getElem? a.val i.val
@@ -116,14 +116,10 @@ theorem Array.repeat_val (n : Usize) (x : α) : (Array.repeat n x).val = List.re
   simp only [Array.repeat]
 
 @[step]
-theorem Array.index_usize_spec {α : Type u} {n : Usize} [Inhabited α] (v: Array α n) (i: Usize)
+theorem Array.index_usize_spec {α : Type u} {n : Usize} (v: Array α n) (i: Usize)
   (hbound : i.val < v.length) :
-  (v.index_usize i) ⦃ x => x = v.val[i.val]! ⦄ := by
-  simp only [index_usize]
-  simp at *
-  split <;> simp_all only [List.Vector.length_val, List.getElem?_eq_getElem, Option.some.injEq,
-    Option.getD_some, reduceCtorEq]
-  simp
+  (v.index_usize i) ⦃ x => x = v.val[i.val] ⦄ := by
+  grind [index_usize]
 
 def Array.set {α : Type u} {n : Usize} (v: Array α n) (i: Usize) (x: α) : Array α n :=
   ⟨ v.val.set i.val x, by have := v.property; simp [*] ⟩
@@ -191,8 +187,8 @@ theorem Array.getElem!_Nat_set_ne
 @[simp↓, simp_lists_safe↓]
 theorem Array.getElem_Nat_set_ne
   {α : Type u} {N : Usize} (a: Array α N) (i : Usize) (j : Nat) (x: α)
-  (h : i.val ≠ j ∧ j < a.length) :
-  (a.set i x)[j] = a[j]
+  (h0 : j < (a.set i x).length) (h1 : i.val ≠ j) :
+  (a.set i x)[j]'h0 = a[j]
   := by grind
 
 @[simp↓, simp_lists_safe↓]
@@ -204,8 +200,8 @@ theorem Array.getElem!_Nat_set_eq
 @[simp↓, simp_lists_safe↓]
 theorem Array.getElem_Nat_set_eq
   {α : Type u} {N : Usize} (a: Array α N) (i : Usize) (j : Nat) (x: α)
-  (h : i.val = j ∧ j < a.length) :
-  (a.set i x)[j] = x
+  (h0 : j < (a.set i x).length) (h1 : i.val = j) :
+  (a.set i x)[j]'h0 = x
   := by grind
 
 @[scalar_tac_simps, simp_lists_safe, grind =, agrind =]
@@ -233,22 +229,21 @@ def Array.index_mut_usize {α : Type u} {n : Usize} (v: Array α n) (i: Usize) :
   ok (x, set v i)
 
 @[step]
-theorem Array.index_mut_usize_spec {α : Type u} {n : Usize} [Inhabited α] (v: Array α n) (i: Usize)
+theorem Array.index_mut_usize_spec {α : Type u} {n : Usize} (v: Array α n) (i: Usize)
   (hbound : i.val < v.length) :
-  v.index_mut_usize i ⦃ x y => y = set v i ∧
-  x = v.val[i.val]! ⦄ := by
+  v.index_mut_usize i ⦃ x back => x = v.val[i.val] ∧ back = set v i ⦄ := by
   simp only [index_mut_usize, Bind.bind, bind]
   have ⟨ x, h ⟩ := spec_imp_exists (index_usize_spec v i hbound)
   simp [h]
 
 @[simp]
-theorem Array.set_getElem!_eq α n [Inhabited α] (x : Array α n) (i : Usize) :
+theorem Array.set_getElem!_eq {α} {n : Usize} [Inhabited α] (x : Array α n) (i : Usize) :
   x.set i (x.val[i.val]!) = x := by
   have := @List.set_getElem_self _ x.val i.val
   simp only [Array, Subtype.ext_iff, set_val_eq, List.set_getElem!]
 
 @[simp]
-theorem Array.set_getElem_eq α n (x : Array α n) (i : Usize) (h : i.val < x.length) :
+theorem Array.set_getElem_eq {α} {n : Usize} (x : Array α n) (i : Usize) (h : i.val < x.length) :
   x.set i x[i] = x := by
   have h' : i.val < x.val.length := by
     simpa using h
@@ -256,6 +251,28 @@ theorem Array.set_getElem_eq α n (x : Array α n) (i : Usize) (h : i.val < x.le
     List.set_getElem_self (as := x.val) (i := i.val) (h := h')
   simp only [Array, Subtype.ext_iff, set_val_eq] at hself ⊢
   exact hself
+
+@[simp↓, simp_lists_safe↓]
+theorem Array.getElem_set_eq {α} {n : Usize} (v : Array α n) (i : Usize) (x : α) (h : i.val < (v.set i x).length) :
+  (v.set i x)[i]'h = x := by
+  cases v
+  unfold set getElem instGetElemArrayUsizeLtNatValLengthValListEq
+  simp only [List.getElem_set_self]
+
+@[simp↓, simp_lists_safe↓]
+theorem Array.getElem_set_eq' {α} {n : Usize} (v : Array α n) (i j : Usize) (x : α) (h : j.val < (v.set i x).length)
+  (h' : i = j) :
+  (v.set i x)[j]'h = x := by
+  simp only [↓getElem_set_eq, h']
+
+@[simp↓, simp_lists_safe↓]
+theorem Array.getElem_set_neq {α} {n : Usize} (v : Array α n) (i j : Usize) (x : α)
+  (h : j.val < (v.set i x).length) (h' : i ≠ j) :
+  (v.set i x)[j]'h = v[j] := by
+  cases v
+  unfold set getElem instGetElemArrayUsizeLtNatValLengthValListEq
+  simp only [ne_eq, UScalar.neq_to_neq_val] at *
+  simp_lists [List.getElem_set_ne]
 
 /-- Small helper (this function doesn't model a specific Rust function) -/
 def Array.clone {α : Type u} {n : Usize} (clone : α → Result α) (s : Array α n) : Result (Array α n) := do
@@ -377,7 +394,7 @@ def core.default.DefaultArray.default {T : Type} (N : Usize) (defaultInst : core
    the elements to have a default value). We factor the cases where `N` is ≠ 0 in the Lean model.
  -/
 @[reducible, rust_trait_impl "core::default::Default<[@T; @N]>"]
-def core.default.DefaultArray {T : Type} {N : Usize}
+def core.default.DefaultArray {T : Type} (N : Usize)
   (defaultInst : core.default.Default T) : core.default.Default (Array T N) := {
   default := core.default.DefaultArray.default N defaultInst
 }

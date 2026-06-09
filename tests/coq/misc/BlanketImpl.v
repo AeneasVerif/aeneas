@@ -26,14 +26,14 @@ Arguments Trait2_t_foo { _ } _.
 Definition trait2_foo_default (Self : Type) : result unit :=
   Ok tt.
 
-(** [blanket_impl::{blanket_impl::Trait2 for T}::foo]:
+(** [blanket_impl::{impl blanket_impl::Trait2 for T}::foo]:
     Source: 'tests/src/blanket_impl.rs', lines 9:0-9:31 *)
 Definition Trait2_Blanket_foo
   {T : Type} (trait1Inst : Trait1_t T) : result unit :=
   Ok tt
 .
 
-(** Trait implementation: [blanket_impl::{blanket_impl::Trait2 for T}]
+(** Trait implementation: [blanket_impl::{impl blanket_impl::Trait2 for T}]
     Source: 'tests/src/blanket_impl.rs', lines 9:0-9:31 *)
 Definition Trait2_Blanket {T : Type} (trait1Inst : Trait1_t T) : Trait2_t T
   := {|

@@ -175,7 +175,10 @@ and tvalue = { value : value; ty : ty }
 
     TODO: we may want to create wrappers, to prevent accidently mixing meta
     values and regular values. *)
-type mvalue = tvalue [@@deriving show, eq, ord]
+type mvalue = tvalue [@@deriving show, ord]
+
+(** Override: meta-values are irrelevant for symbolic execution equality *)
+let equal_mvalue (_ : mvalue) (_ : mvalue) = true
 
 (** "Meta"-symbolic value.
 
@@ -183,13 +186,21 @@ type mvalue = tvalue [@@deriving show, eq, ord]
 
     TODO: we may want to create wrappers, to prevent mixing meta values and
     regular values. *)
-type msymbolic_value = symbolic_value [@@deriving show, eq, ord]
+type msymbolic_value = symbolic_value [@@deriving show, ord]
+
+(** Override: meta-symbolic values are irrelevant for symbolic execution
+    equality *)
+let equal_msymbolic_value (_ : msymbolic_value) (_ : msymbolic_value) = true
 
 type msymbolic_value_id = symbolic_value_id [@@deriving show, eq, ord]
 
 (** "Meta" symbolic value consumed upon ending a loan *)
 type mconsumed_symb = { sv_id : symbolic_value_id; proj_ty : ty }
-[@@deriving show, eq, ord]
+[@@deriving show, ord]
+
+(** Override: meta-consumed symbols are irrelevant for symbolic execution
+    equality *)
+let equal_mconsumed_symb (_ : mconsumed_symb) (_ : mconsumed_symb) = true
 
 (** "Meta" symbolic value given back upon ending a borrow *)
 type mgiven_back_symb = { sv_id : symbolic_value_id; proj_ty : ty }
@@ -206,14 +217,26 @@ type ended_proj_borrow_meta = {
   consumed : msymbolic_value_id;
   given_back : msymbolic_value;
 }
-[@@deriving show, eq, ord]
+[@@deriving show, ord]
+
+(** Override: ended projection borrow meta is irrelevant for symbolic execution
+    equality *)
+let equal_ended_proj_borrow_meta (_ : ended_proj_borrow_meta)
+    (_ : ended_proj_borrow_meta) =
+  true
 
 type aended_mut_borrow_meta = {
   bid : borrow_id;
   given_back : msymbolic_value;
       (** The value given back upon ending the borrow *)
 }
-[@@deriving show, eq, ord]
+[@@deriving show, ord]
+
+(** Override: aended mut borrow meta is irrelevant for symbolic execution
+    equality *)
+let equal_aended_mut_borrow_meta (_ : aended_mut_borrow_meta)
+    (_ : aended_mut_borrow_meta) =
+  true
 
 type eended_mut_borrow_meta = {
   bid : borrow_id;
@@ -1113,7 +1136,7 @@ and evalue =
   | ELoan of eloan_content
   | EBorrow of eborrow_content
   | ESymbolic of proj_marker * eproj
-  | EValue of (env[@opaque]) * mvalue
+  | EValue of menv * mvalue
       (** A concrete value, that we remember as a meta-value (together with the
           environment at the time we introduced this evalue - we need this to
           translate the shared borrows, because translating them requires
@@ -1136,7 +1159,7 @@ and evalue =
           generating the pure translation.
 
           TODO: this is not very clean. *)
-  | EIgnored
+  | EIgnored of (menv * mvalue) option
       (** A value which doesn't contain borrows, or which borrows we don't own
           and thus ignore.
 
@@ -1152,7 +1175,7 @@ and tepat = { pat : epat; ty : ty  (** The type should have been normalized *) }
 
 and adt_evalue = {
   borrow_proj : bool;
-      (** Was this ADT inroduced because of a borrow projection or a loan
+      (** Was this ADT introduced because of a borrow projection or a loan
           projection? *)
   variant_id : (VariantId.id option[@opaque]);
   fields : tevalue list;
@@ -1520,6 +1543,12 @@ and env_elem =
   | EFrame
 
 and env = env_elem list
+
+(** Wrapper around {!env} that compares as always-equal in derived equality.
+    Used in meta-only positions (EValue, EIgnored) where the environment is
+    stored for pure translation but must not affect symbolic execution
+    convergence. *)
+and menv = (env[@opaque] [@equal fun _ _ -> true])
 [@@deriving
   show,
   ord,

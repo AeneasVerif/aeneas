@@ -13,19 +13,19 @@ include RenameAttribute.Clauses
 let boolTrait_retTest_default (#self : Type0) (self1 : self) : result bool =
   Ok true
 
-(** [rename_attribute::{rename_attribute::BoolTrait for bool}::get_bool]:
+(** [rename_attribute::{impl rename_attribute::BoolTrait for bool}::get_bool]:
     Source: 'tests/src/rename_attribute.rs', lines 24:4-26:5
     Visibility: public *)
 let boolImpl_getTest (self : bool) : result bool =
   Ok self
 
-(** [rename_attribute::{rename_attribute::BoolTrait for bool}::ret_true]:
+(** [rename_attribute::{impl rename_attribute::BoolTrait for bool}::ret_true]:
     Source: 'tests/src/rename_attribute.rs', lines 23:0-27:1
     Visibility: public *)
 let boolImpl_retTest (self : bool) : result bool =
   Ok true
 
-(** Trait implementation: [rename_attribute::{rename_attribute::BoolTrait for bool}]
+(** Trait implementation: [rename_attribute::{impl rename_attribute::BoolTrait for bool}]
     Source: 'tests/src/rename_attribute.rs', lines 23:0-27:1 *)
 let boolImpl : boolTest_t bool = {
   getTest = boolImpl_getTest;
