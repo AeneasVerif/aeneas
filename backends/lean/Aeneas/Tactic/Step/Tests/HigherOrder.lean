@@ -30,7 +30,7 @@ example (a : U32) (h : a.val + 1 ≤ U32.max) :
 def callPair (f : U32 → Result U32) (g : U32 → Result U32) (xy : U32 × U32) : Result (U32 × U32) := do
   let a ← f xy.1
   let b ← g xy.2
-  return (a, b)
+  pure (a, b)
 
 @[step]
 theorem callPair_spec (f g : U32 → Result U32) (xy : U32 × U32)
@@ -86,7 +86,7 @@ example (x : U32) (h1 : x.val + 1 ≤ U32.max) (h2 : x.val + 2 ≤ U32.max) :
 
 def callSlicemapM (x : Slice U32) : Result (Slice U32) := do
   let y ← x.mapM (fun x => x + 1#u32)
-  return y
+  pure y
 
 /--
 info: Try this:
@@ -109,7 +109,7 @@ example (s : Slice U32) (h : ∀ i (hi : i < s.len), s[i] < U32.max) :
 def callSlicemapMTwice (x : Slice U32) : Result (Slice U32) := do
   let y ← x.mapM (fun x => x + 1#u32)
   let z ← y.mapM (fun x => x * x)
-  return z
+  pure z
 
 /--
 info: Try this:

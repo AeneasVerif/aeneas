@@ -207,7 +207,7 @@ partial def analyzePat (pat : Term) (ty : Expr) : ElabM PatShape := do
   match pat with
   | `(_) => return .leaf none
   | `(()) =>
-    unless (← whnf ty).isAppOf ``Unit do
+    unless (← whnf ty).isAppOf ``PUnit do
       throwErrorAt pat "analyzePat: expected unit type for pattern"
     return .leaf none
   | `($id:ident) => return .leaf (some id)
